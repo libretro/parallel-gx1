@@ -285,9 +285,21 @@ all: $(TARGET)
 
 $(OBJECTS): | $(GEN_HEADERS)
 
+# The object list outgrows the 32 KiB Windows command line, so there the
+# linker reads it from a response file ($(file) needs GNU make 4.0, which
+# MSYS2 and the cross toolchains have; the Xcode make is 3.81).
+ifeq ($(OS_WIN),1)
+LINK_OBJECTS = @$(OBJ_DIR)/link-objects.rsp
+else
+LINK_OBJECTS = $(OBJECTS)
+endif
+
 $(TARGET): $(OBJECTS)
 	@$(if $(E),echo LD $@,)
-	$(CXX) -o $@ $(OBJECTS) $(LDFLAGS) $(LIBS)
+ifeq ($(OS_WIN),1)
+	$(file >$(OBJ_DIR)/link-objects.rsp,$(OBJECTS))
+endif
+	$(CXX) -o $@ $(LINK_OBJECTS) $(LDFLAGS) $(LIBS)
 
 $(OBJ_DIR)/%.c.o: %.c
 	@mkdir -p $(@D)
