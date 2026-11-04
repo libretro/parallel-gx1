@@ -37,6 +37,11 @@
 #include <iphlpapi.h>
 #include <ws2tcpip.h>
 
+// MinGW-w64 headers before 12.0 do not define this.
+#ifndef NET_IFINDEX_UNSPECIFIED
+#define NET_IFINDEX_UNSPECIFIED (NET_IFINDEX)(0)
+#endif
+
 #define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
 #define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
 

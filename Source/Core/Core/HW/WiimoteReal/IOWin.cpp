@@ -46,20 +46,37 @@ DYN_FUNC_DECLARE(HidD_GetHidGuid);
 DYN_FUNC_DECLARE(HidD_SetOutputReport);
 DYN_FUNC_DECLARE(HidD_GetProductString);
 
+#ifndef BLUETOOTH_SERVICE_ENABLE
+// MinGW-w64 headers before 12.0 lack these, and declare the in-parameters of
+// BluetoothFindFirstRadio and BluetoothSetServiceState without const. The
+// pointer types follow the Windows SDK signatures.
+#define BLUETOOTH_SERVICE_ENABLE 0x01
+typedef BLUETOOTH_DEVICE_INFO BLUETOOTH_DEVICE_INFO_STRUCT;
+using BluetoothAuthenticateDevice_t = DWORD(WINAPI*)(HWND, HANDLE, BLUETOOTH_DEVICE_INFO*, PWSTR,
+                                                    ULONG);
+using BluetoothFindFirstRadio_t = HBLUETOOTH_RADIO_FIND(WINAPI*)(const BLUETOOTH_FIND_RADIO_PARAMS*,
+                                                                 HANDLE*);
+using BluetoothSetServiceState_t = DWORD(WINAPI*)(HANDLE, const BLUETOOTH_DEVICE_INFO*, const GUID*,
+                                                  DWORD);
+static BluetoothAuthenticateDevice_t pBluetoothAuthenticateDevice = nullptr;
+static BluetoothFindFirstRadio_t pBluetoothFindFirstRadio = nullptr;
+static BluetoothSetServiceState_t pBluetoothSetServiceState = nullptr;
+#else
 #pragma warning(push)
 #pragma warning(disable : 4995)
 DYN_FUNC_DECLARE(BluetoothAuthenticateDevice);
 #pragma warning(pop)
+DYN_FUNC_DECLARE(BluetoothFindFirstRadio);
+DYN_FUNC_DECLARE(BluetoothSetServiceState);
+#endif
 DYN_FUNC_DECLARE(BluetoothAuthenticateDeviceEx);
 DYN_FUNC_DECLARE(BluetoothFindDeviceClose);
 DYN_FUNC_DECLARE(BluetoothFindFirstDevice);
-DYN_FUNC_DECLARE(BluetoothFindFirstRadio);
 DYN_FUNC_DECLARE(BluetoothFindNextDevice);
 DYN_FUNC_DECLARE(BluetoothFindNextRadio);
 DYN_FUNC_DECLARE(BluetoothFindRadioClose);
 DYN_FUNC_DECLARE(BluetoothGetRadioInfo);
 DYN_FUNC_DECLARE(BluetoothRemoveDevice);
-DYN_FUNC_DECLARE(BluetoothSetServiceState);
 DYN_FUNC_DECLARE(BluetoothEnumerateInstalledServices);
 
 #undef DYN_FUNC_DECLARE

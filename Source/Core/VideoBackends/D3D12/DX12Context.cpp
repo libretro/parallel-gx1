@@ -27,7 +27,7 @@ std::unique_ptr<DXContext> g_dx_context;
 static Common::DynamicLibrary s_d3d12_library;
 static PFN_D3D12_CREATE_DEVICE s_d3d12_create_device;
 static PFN_D3D12_GET_DEBUG_INTERFACE s_d3d12_get_debug_interface;
-static PFN_D3D12_SERIALIZE_ROOT_SIGNATURE s_d3d12_serialize_root_signature;
+static decltype(&D3D12SerializeRootSignature) s_d3d12_serialize_root_signature;
 
 DXContext::DXContext() = default;
 

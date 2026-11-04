@@ -1048,6 +1048,8 @@ void InputBackend::PopulateDevices()
 
 }  // namespace ciface::Android
 
+// JNI entry points of the Android app; the libretro core has no Java side.
+#ifndef __LIBRETRO__
 extern "C" {
 
 JNIEXPORT jboolean JNICALL
@@ -1228,3 +1230,4 @@ Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_getDevic
   return CoreDeviceToJava(env, g_controller_interface.FindDevice(qualifier));
 }
 }
+#endif

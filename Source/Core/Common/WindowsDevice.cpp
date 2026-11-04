@@ -28,6 +28,10 @@ CONFIGRET WINAPI CM_Get_Device_Interface_PropertyW(
     PBYTE Buffer,
     PULONG BufferSize,
     ULONG ulFlags);
+CONFIGRET WINAPI CM_Register_Notification(PCM_NOTIFY_FILTER pFilter, PVOID pContext,
+                                          PCM_NOTIFY_CALLBACK pCallback,
+                                          PHCMNOTIFICATION pNotifyContext);
+CONFIGRET WINAPI CM_Unregister_Notification(HCMNOTIFICATION NotifyContext);
 }
 #define CM_Get_Device_Interface_Property CM_Get_Device_Interface_PropertyW
 #endif

@@ -3,7 +3,16 @@
 #pragma once
 
 #include <d3d12.h>
+#include <d3d12sdklayers.h>
 #include <wrl/client.h>
+
+// MinGW-w64 headers before 12.0 do not define these.
+#ifndef D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT
+#define D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT 32
+#endif
+#ifndef D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE
+#define D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE 2048
+#endif
 
 #include "Common/MsgHandler.h"
 #include "VideoBackends/D3DCommon/D3DCommon.h"

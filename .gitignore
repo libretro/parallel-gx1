@@ -48,3 +48,7 @@ CMakeLists.txt.user
 .cache/clangd
 # Ignore CMake user presets
 CMakeUserPresets.json
+# Ignore the libretro core built by the static Makefile
+/parallel_gamecubewii_libretro*.so
+/parallel_gamecubewii_libretro*.dll
+/parallel_gamecubewii_libretro*.dylib
