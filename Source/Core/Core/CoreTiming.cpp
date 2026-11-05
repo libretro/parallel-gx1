@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -435,7 +434,7 @@ void CoreTimingManager::SleepUntil(TimePoint time_point)
     if (use_precision_timer)
       m_precision_cpu_timer.SleepUntil(time_point);
     else
-      std::this_thread::sleep_until(time_point);
+      Common::SleepUntil(time_point);
 
     // Count amount of time sleeping for performance metrics
     const TimePoint time_after_sleep = Clock::now();
@@ -446,7 +445,7 @@ void CoreTimingManager::SleepUntil(TimePoint time_point)
     if (use_precision_timer)
       m_precision_gpu_timer.SleepUntil(time_point);
     else
-      std::this_thread::sleep_until(time_point);
+      Common::SleepUntil(time_point);
   }
 }
 

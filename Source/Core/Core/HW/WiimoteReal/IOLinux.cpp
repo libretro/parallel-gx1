@@ -21,6 +21,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/Network.h"
 #include "Common/ScopeGuard.h"
+#include "Common/Thread.h"
 #include "Common/UnixUtil.h"
 #include "Core/Config/MainSettings.h"
 
@@ -313,7 +314,7 @@ bool WiimoteLinux::ConnectInternal()
                    Common::LastStrerrorString());
       // A socket state is unspecified after connect() fails, so close and recreate it.
       close(descriptor);
-      std::this_thread::sleep_for(std::chrono::milliseconds{500});
+      Common::SleepCurrentThread(500);
     }
 
     return -1;

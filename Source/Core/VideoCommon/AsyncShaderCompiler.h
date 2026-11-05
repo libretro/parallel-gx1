@@ -67,6 +67,9 @@ protected:
   virtual void WorkerThreadExit(void* param);
 
 private:
+  // Waits up to timeout_us for a worker to finish an item; true once nothing is pending.
+  bool WaitForWorkDone(s64 timeout_us);
+
   void WorkerThreadStart();
   void WorkerThreadEntryPoint(void* param);
   void WorkerThreadRun();
@@ -107,6 +110,8 @@ private:
   // the unique_ptr be moved out.
   std::multimap<u32, WorkItemPtr> m_pending_work;
   retro_atomic_int_t m_busy_workers{};
+  // Notified each time a worker finishes an item.
+  retro_eventcount_t m_work_done;
 
   mpsc_stack_t m_completed_work{};
   // Items finished synchronously, when there are no workers. Video thread only.

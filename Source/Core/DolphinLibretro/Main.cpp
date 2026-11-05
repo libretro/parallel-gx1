@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <libretro.h>
 #include <string>
-#include <thread>
 
 #include <fstream>
 #include <vector>
@@ -291,9 +290,7 @@ void retro_run(void)
       Core::StartEmuThread(system, std::move(Core::g_boot_params), wsi);
 
       // Wait until CPU thread has reached Run()
-      auto& cpu_manager = system.GetCPU();
-      while (!cpu_manager.HasCPURunStateBeenReached())
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      system.GetCPU().WaitForCPURunState();
     }
     else
       Core::EmuThread(system, std::move(Core::g_boot_params), wsi);

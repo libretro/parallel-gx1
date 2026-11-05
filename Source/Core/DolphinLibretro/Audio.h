@@ -32,7 +32,6 @@ namespace FrameTiming
   bool IsEnabled();
   void CheckForFastForwarding();
   bool IsFastForwarding();
-  void ThrottleFrame();
 } // namespace FrameTiming
 
 }  // namespace Libretro

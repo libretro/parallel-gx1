@@ -3,6 +3,7 @@
 
 #include "Core/IOS/USB/Bluetooth/LibUSBBluetoothAdapter.h"
 #include "Common/Thread.h"
+#include "Common/Timer.h"
 
 #include <cassert>
 
@@ -11,7 +12,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <ranges>
-#include <thread>
 #include <utility>
 
 #include <libusb.h>
@@ -410,7 +410,7 @@ void LibUSBBluetoothAdapter::SubmitTimedTransfer(TimedTransfer transfer)
   if (Config::Get(Config::MAIN_PRECISION_FRAME_TIMING))
     m_precision_timer.SleepUntil(transfer.target_time);
   else
-    std::this_thread::sleep_until(transfer.target_time);
+    Common::SleepUntil(transfer.target_time);
 
   SubmitTransfer(transfer.transfer);
 }

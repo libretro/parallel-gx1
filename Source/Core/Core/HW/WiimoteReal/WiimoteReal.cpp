@@ -4,7 +4,6 @@
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
 #include <algorithm>
-#include <thread>
 #include <unordered_set>
 
 #include <queues/mpsc_stack.h>
@@ -19,6 +18,7 @@
 #include "Common/Quiesce.h"
 #include "Common/Swap.h"
 #include "Common/Thread.h"
+#include "Common/Timer.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/WiimoteSettings.h"
@@ -438,7 +438,7 @@ bool Wiimote::Write(const WriteRecord& record)
   }
 
   // Write the report at the proper time, mainly for speaker data, not that it will help much.
-  std::this_thread::sleep_until(record.time);
+  Common::SleepUntil(record.time);
   int ret = IOWrite(record.data, record.size);
 
   return ret != 0;

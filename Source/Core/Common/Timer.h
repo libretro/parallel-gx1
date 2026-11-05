@@ -32,6 +32,9 @@ private:
   bool m_running{false};
 };
 
+// Sleeps until target, with the OS sleep's granularity; returns at once if it has passed.
+void SleepUntil(TimePoint target);
+
 class PrecisionTimer
 {
 public:

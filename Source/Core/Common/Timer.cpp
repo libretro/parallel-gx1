@@ -4,8 +4,8 @@
 #include "Common/Timer.h"
 
 #include <chrono>
-#include <thread>
 #include "Common/CommonFuncs.h"
+#include "Common/Thread.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -152,6 +152,12 @@ PrecisionTimer::~PrecisionTimer()
 #endif
 }
 
+void SleepUntil(TimePoint target)
+{
+  SleepCurrentThreadUs(
+      std::chrono::duration_cast<std::chrono::microseconds>(target - Clock::now()).count());
+}
+
 void PrecisionTimer::SleepUntil(Clock::time_point target)
 {
   constexpr auto SPIN_TIME =
@@ -179,7 +185,7 @@ void PrecisionTimer::SleepUntil(Clock::time_point target)
   }
 #else
   // Sleeping on Linux generally isn't as terrible as it is on Windows.
-  std::this_thread::sleep_until(target - SPIN_TIME);
+  Common::SleepUntil(target - SPIN_TIME);
 #endif
 
   // Spin for the remaining time.
@@ -188,7 +194,7 @@ void PrecisionTimer::SleepUntil(Clock::time_point target)
 #if defined(_WIN32)
     YieldProcessor();
 #else
-    std::this_thread::yield();
+    YieldCPU();
 #endif
   }
 }

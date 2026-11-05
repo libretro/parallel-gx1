@@ -3,8 +3,6 @@
 
 #include "VideoCommon/AsyncShaderCompiler.h"
 
-#include <thread>
-
 #include "Common/Assert.h"
 #include "Common/Logging/Log.h"
 #include "Common/Thread.h"
@@ -16,6 +14,7 @@ namespace VideoCommon
 {
 AsyncShaderCompiler::AsyncShaderCompiler()
 {
+  retro_eventcount_init(&m_work_done);
 }
 
 AsyncShaderCompiler::~AsyncShaderCompiler()
@@ -24,6 +23,19 @@ AsyncShaderCompiler::~AsyncShaderCompiler()
   // The work item classes are expected to clean up after themselves.
   ASSERT(!HasWorkerThreads());
   ClearAllWork();
+  retro_eventcount_free(&m_work_done);
+}
+
+bool AsyncShaderCompiler::WaitForWorkDone(s64 timeout_us)
+{
+  const int key = retro_eventcount_prepare_wait(&m_work_done);
+  if (!HasPendingWork())
+  {
+    retro_eventcount_cancel_wait(&m_work_done);
+    return true;
+  }
+  retro_eventcount_commit_wait_timeout(&m_work_done, key, timeout_us);
+  return !HasPendingWork();
 }
 
 void AsyncShaderCompiler::QueueWorkItem(WorkItemPtr item, u32 priority)
@@ -135,14 +147,17 @@ bool AsyncShaderCompiler::WaitUntilCompletion(
   if (!HasPendingWork())
     return true;
 
-  // Wait a second before opening a progress dialog.
+  // Wait a second before reporting progress, woken as each item finishes.
   // This way, if the operation completes quickly, we don't annoy the user.
-  constexpr u32 CHECK_INTERVAL_MS = 1000 / 30;
-  constexpr auto CHECK_INTERVAL = std::chrono::milliseconds(CHECK_INTERVAL_MS);
-  for (u32 i = 0; i < (1000 / CHECK_INTERVAL_MS); i++)
+  constexpr s64 PROGRESS_INTERVAL_US = 1000000 / 30;
+  const TimePoint quiet_until = Clock::now() + std::chrono::seconds(1);
+  for (;;)
   {
-    std::this_thread::sleep_for(std::chrono::milliseconds(CHECK_INTERVAL));
-    if (!HasPendingWork())
+    const s64 left_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(quiet_until - Clock::now()).count();
+    if (left_us <= 0)
+      break;
+    if (WaitForWorkDone(left_us))
       return true;
   }
 
@@ -158,7 +173,7 @@ bool AsyncShaderCompiler::WaitUntilCompletion(
     const size_t remaining_items = m_pending_work.size() + ItemsInSlots();
 
     progress_callback(total_items - remaining_items, total_items);
-    std::this_thread::sleep_for(CHECK_INTERVAL);
+    WaitForWorkDone(PROGRESS_INTERVAL_US);
   }
   return false;
 }
@@ -331,6 +346,7 @@ void AsyncShaderCompiler::WorkerThreadRun(Worker* worker)
       mpsc_stack_push(&m_completed_work, &done->link);
     }
     retro_atomic_fetch_sub_int(&m_busy_workers, 1);
+    retro_eventcount_notify(&m_work_done);
   }
 }
 

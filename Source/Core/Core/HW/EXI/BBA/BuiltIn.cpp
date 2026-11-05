@@ -5,7 +5,6 @@
 
 #include <bit>
 #include <optional>
-#include <thread>
 #include "SFML/Network/IpAddress.hpp"
 #include "SFML/Network/Socket.hpp"
 
@@ -760,7 +759,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
     if (datasize == 0)
     {
       // Make thread less CPU hungry
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      Common::SleepCurrentThread(1);
     }
 
     if (!self->m_read_enabled.IsSet())

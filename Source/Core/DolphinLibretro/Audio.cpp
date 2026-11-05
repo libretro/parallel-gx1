@@ -1,7 +1,6 @@
 #include <libretro.h>
 #include "Audio.h"
 #include "Common/Logging/Log.h"
-#include "Common/Thread.h"
 #include "AudioCommon/SoundStream.h"
 #include "VideoCommon/Present.h"
 #include "DolphinLibretro/Common/Globals.h"
@@ -304,7 +303,6 @@ namespace FrameTiming
   bool g_have_frame_time_cb {false};
 
   static retro_frame_time_callback ftcb = {};
-  static auto last_frame_time = std::chrono::steady_clock::now();
 
   void Reset()
   {
@@ -340,7 +338,6 @@ namespace FrameTiming
       return;
     }
 
-    last_frame_time = std::chrono::steady_clock::now();
     DEBUG_LOG_FMT(VIDEO, "frame timing enabled: target={} usec ({} Hz)",
                   ftcb.reference, refresh_rate);
 
@@ -374,34 +371,6 @@ namespace FrameTiming
 
     // Environment call not supported
     Libretro::Audio::g_is_fast_forwarding = false;
-  }
-
-  void ThrottleFrame()
-  {
-    if (!g_have_frame_time_cb)
-      return;
-
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
-      now - last_frame_time).count();
-
-    retro_usec_t target_us = target_frame_duration_usec.load(std::memory_order_relaxed);
-
-    if (elapsed_us < target_us)
-    {
-      auto sleep_us = target_us - elapsed_us;
-      if (sleep_us > 1000)
-      {
-        Common::SleepCurrentThread((sleep_us - 500) / 1000);
-      }
-
-      while (std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now() - last_frame_time).count() < target_us)
-      {
-      }
-    }
-
-    last_frame_time = std::chrono::steady_clock::now();
   }
 } // namespace FrameTiming
 } // namespace Libretro

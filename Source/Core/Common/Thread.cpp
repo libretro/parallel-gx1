@@ -44,6 +44,12 @@ void SleepCurrentThread(int ms)
   retro_sleep(ms);
 }
 
+void SleepCurrentThreadUs(long long us)
+{
+  if (us > 0)
+    retro_sleep_us((unsigned)us);
+}
+
 void YieldCPU()
 {
   sthread_yield();

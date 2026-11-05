@@ -25,6 +25,10 @@ int CurrentThreadId();
 
 void SleepCurrentThread(int ms);
 
+// Sleeps for us microseconds; returns at once when us is not positive. Callers that
+// sleep until a time point pass the distance to it.
+void SleepCurrentThreadUs(long long us);
+
 // Use this function during a spin-wait to make the current thread
 // relax while another thread is working. This may be more efficient
 // than using events because event functions use kernel calls.
