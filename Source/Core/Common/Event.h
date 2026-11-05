@@ -7,74 +7,94 @@
 // * Set(): triggers the event and wakes up the waiting thread.
 // * Wait(): waits for the event to be triggered.
 // * Reset(): tries to reset the event before the waiting thread sees it was
-//            triggered. Usually a bad idea.
+//   triggered. Usually a bad idea.
 
 #pragma once
 
 #include <chrono>
-#include <condition_variable>
-#include <mutex>
 
-#include "Common/Flag.h"
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 
 namespace Common
 {
+// A lock-free auto-reset event: the signal is one atomic flag, and a thread that has to sleep
+// parks on an eventcount, so Set() takes no lock and makes no syscall while nobody waits.
 class Event final
 {
 public:
+  Event()
+  {
+    retro_atomic_int_init(&m_flag, 0);
+    retro_eventcount_init(&m_wake);
+  }
+  ~Event() { retro_eventcount_free(&m_wake); }
+
+  Event(const Event&) = delete;
+  Event& operator=(const Event&) = delete;
+
   void Set()
   {
-    if (m_flag.TestAndSet())
-    {
-      // Lock and immediately unlock m_mutex.
-      {
-        // Holding the lock at any time between the change of our flag and notify call
-        // is sufficient to prevent a race where both of these actions
-        // happen between the other thread's predicate test and wait call
-        // which would cause wait to block until the next spurious wakeup or timeout.
-
-        // Unlocking before notification is a micro-optimization to prevent
-        // the notified thread from immediately blocking on the mutex.
-        std::lock_guard<std::mutex> lk(m_mutex);
-      }
-
-      m_condvar.notify_one();
-    }
+    if (!retro_atomic_exchange_int(&m_flag, 1))
+      retro_eventcount_notify(&m_wake);
   }
 
   void Wait()
   {
-    if (m_flag.TestAndClear())
-      return;
-
-    std::unique_lock<std::mutex> lk(m_mutex);
-    m_condvar.wait(lk, [&] { return m_flag.TestAndClear(); });
+    while (!TakeSignal())
+    {
+      const int key = retro_eventcount_prepare_wait(&m_wake);
+      if (TakeSignal())
+      {
+        retro_eventcount_cancel_wait(&m_wake);
+        return;
+      }
+      retro_eventcount_commit_wait(&m_wake, key);
+    }
   }
 
   template <class Rep, class Period>
   bool WaitFor(const std::chrono::duration<Rep, Period>& rel_time)
   {
-    if (m_flag.TestAndClear())
+    if (TakeSignal())
       return true;
 
-    std::unique_lock<std::mutex> lk(m_mutex);
-    bool signaled = m_condvar.wait_for(lk, rel_time, [&] { return m_flag.TestAndClear(); });
-
-    return signaled;
+    const auto deadline = std::chrono::steady_clock::now() + rel_time;
+    for (;;)
+    {
+      const auto left = std::chrono::duration_cast<std::chrono::microseconds>(
+          deadline - std::chrono::steady_clock::now());
+      const int key = retro_eventcount_prepare_wait(&m_wake);
+      if (TakeSignal())
+      {
+        retro_eventcount_cancel_wait(&m_wake);
+        return true;
+      }
+      if (left.count() <= 0)
+      {
+        retro_eventcount_cancel_wait(&m_wake);
+        return false;
+      }
+      retro_eventcount_commit_wait_timeout(&m_wake, key, left.count());
+      if (TakeSignal())
+        return true;
+    }
   }
 
   void Reset()
   {
-    // no other action required, since wait loops on
-    // the predicate and any lingering signal will get
-    // cleared on the first iteration
-    m_flag.Clear();
+    // Any lingering signal is dropped; a waiter re-checks the flag on every pass.
+    retro_atomic_store_release_int(&m_flag, 0);
   }
 
 private:
-  Flag m_flag;
-  std::condition_variable m_condvar;
-  std::mutex m_mutex;
+  bool TakeSignal()
+  {
+    return retro_atomic_load_acquire_int(&m_flag) && retro_atomic_exchange_int(&m_flag, 0);
+  }
+
+  retro_atomic_int_t m_flag;
+  retro_eventcount_t m_wake;
 };
 
 }  // namespace Common

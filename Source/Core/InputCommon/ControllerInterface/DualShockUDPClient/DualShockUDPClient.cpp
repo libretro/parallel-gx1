@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <thread>
 #include <tuple>
 
 #include <SFML/Network/SocketSelector.hpp>

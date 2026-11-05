@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Common/Event.h"
+#include "Common/Flag.h"
 #include "Core/HW/GCMemcard/GCIFile.h"
 #include "Core/HW/GCMemcard/GCMemcard.h"
 #include "Core/HW/GCMemcard/GCMemcardBase.h"
