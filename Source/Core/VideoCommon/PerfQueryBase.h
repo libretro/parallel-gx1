@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include <array>
-#include <atomic>
 #include <memory>
+
+#include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
 
@@ -31,7 +31,7 @@ enum PerfQueryGroup
 class PerfQueryBase
 {
 public:
-  PerfQueryBase() : m_query_count(0) {}
+  PerfQueryBase() {}
   virtual ~PerfQueryBase() {}
 
   virtual bool Initialize() { return true; }
@@ -65,8 +65,45 @@ public:
   virtual bool IsFlushed() const { return true; }
 
 protected:
-  std::atomic<u32> m_query_count;
-  std::array<std::atomic<u32>, PQG_NUM_MEMBERS> m_results;
+  /* The GPU thread retires queries while the CPU thread reads results: u32s in atomic words. */
+  u32 QueryCount() const { return static_cast<u32>(retro_atomic_load_acquire_int(&m_query_count)); }
+  void AddQueryCount(u32 count)
+  {
+    retro_atomic_fetch_add_int(&m_query_count, static_cast<int>(count));
+  }
+  void SubQueryCount(u32 count)
+  {
+    retro_atomic_fetch_sub_int(&m_query_count, static_cast<int>(count));
+  }
+  u32 QueryResult(PerfQueryGroup group) const
+  {
+    return static_cast<u32>(retro_atomic_load_acquire_int(&m_results[group]));
+  }
+  void AddQueryResult(PerfQueryGroup group, u32 value)
+  {
+    retro_atomic_fetch_add_int(&m_results[group], static_cast<int>(value));
+  }
+  void SetQueryResult(PerfQueryGroup group, u32 value)
+  {
+    retro_atomic_store_release_int(&m_results[group], static_cast<int>(value));
+  }
+  /* Drops the pending queries and zeroes the results. */
+  void ResetQueryState()
+  {
+    int i;
+    retro_atomic_store_release_int(&m_query_count, 0);
+    for (i = 0; i < PQG_NUM_MEMBERS; i++)
+      retro_atomic_store_release_int(&m_results[i], 0);
+  }
+  void ResetQueryResults()
+  {
+    int i;
+    for (i = 0; i < PQG_NUM_MEMBERS; i++)
+      retro_atomic_store_release_int(&m_results[i], 0);
+  }
+
+  retro_atomic_int_t m_query_count{};
+  retro_atomic_int_t m_results[PQG_NUM_MEMBERS]{};
 };
 
 extern std::unique_ptr<PerfQueryBase> g_perf_query;

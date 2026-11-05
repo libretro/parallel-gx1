@@ -3,7 +3,6 @@
 
 #include "VideoCommon/CommandProcessor.h"
 
-#include <atomic>
 #include <fmt/format.h>
 
 #include "Common/Assert.h"
@@ -34,26 +33,26 @@ static void UpdateInterrupts_Wrapper(Core::System& system, u64 userdata, s64 cyc
 
 void SCPFifoStruct::Init()
 {
-  CPBase = 0;
-  CPEnd = 0;
+  StoreReg(&CPBase, 0);
+  StoreReg(&CPEnd, 0);
   CPHiWatermark = 0;
   CPLoWatermark = 0;
-  CPReadWriteDistance = 0;
-  CPWritePointer = 0;
-  CPReadPointer = 0;
-  CPBreakpoint = 0;
-  SafeCPReadPointer = 0;
+  StoreReg(&CPReadWriteDistance, 0);
+  StoreReg(&CPWritePointer, 0);
+  StoreReg(&CPReadPointer, 0);
+  StoreReg(&CPBreakpoint, 0);
+  StoreReg(&SafeCPReadPointer, 0);
 
-  bFF_GPLinkEnable = 0;
-  bFF_GPReadEnable = 0;
-  bFF_BPEnable = 0;
-  bFF_BPInt = 0;
+  StoreReg(&bFF_GPLinkEnable, 0);
+  StoreReg(&bFF_GPReadEnable, 0);
+  StoreReg(&bFF_BPEnable, 0);
+  StoreReg(&bFF_BPInt, 0);
 
-  bFF_Breakpoint.store(0, std::memory_order_relaxed);
-  bFF_HiWatermark.store(0, std::memory_order_relaxed);
-  bFF_HiWatermarkInt.store(0, std::memory_order_relaxed);
-  bFF_LoWatermark.store(0, std::memory_order_relaxed);
-  bFF_LoWatermarkInt.store(0, std::memory_order_relaxed);
+  StoreReg(&bFF_Breakpoint, 0);
+  StoreReg(&bFF_HiWatermark, 0);
+  StoreReg(&bFF_HiWatermarkInt, 0);
+  StoreReg(&bFF_LoWatermark, 0);
+  StoreReg(&bFF_LoWatermarkInt, 0);
 }
 
 void SCPFifoStruct::DoState(PointerWrap& p)
@@ -94,10 +93,9 @@ void CommandProcessorManager::DoState(PointerWrap& p)
   p.Do(m_interrupt_waiting);
 }
 
-static inline void WriteHigh(std::atomic<u32>& reg, u16 highbits)
+static inline void WriteHigh(retro_atomic_int_t* reg, u16 highbits)
 {
-  reg.store((reg.load(std::memory_order_relaxed) & 0x0000FFFF) | (static_cast<u32>(highbits) << 16),
-            std::memory_order_relaxed);
+  StoreReg(reg, (LoadReg(reg) & 0x0000FFFF) | (static_cast<u32>(highbits) << 16));
 }
 
 CommandProcessorManager::CommandProcessorManager(Core::System& system) : m_system{system}
@@ -232,18 +230,14 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   {
     fifo_rw_distance_lo_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
-      if (fifo_.CPWritePointer.load(std::memory_order_relaxed) >=
-          fifo_.SafeCPReadPointer.load(std::memory_order_relaxed))
+      if (LoadReg(&fifo_.CPWritePointer) >= LoadReg(&fifo_.SafeCPReadPointer))
       {
-        return static_cast<u16>(fifo_.CPWritePointer.load(std::memory_order_relaxed) -
-                                fifo_.SafeCPReadPointer.load(std::memory_order_relaxed));
+        return static_cast<u16>(LoadReg(&fifo_.CPWritePointer) - LoadReg(&fifo_.SafeCPReadPointer));
       }
       else
       {
-        return static_cast<u16>(fifo_.CPEnd.load(std::memory_order_relaxed) -
-                                fifo_.SafeCPReadPointer.load(std::memory_order_relaxed) +
-                                fifo_.CPWritePointer.load(std::memory_order_relaxed) -
-                                fifo_.CPBase.load(std::memory_order_relaxed) + 32);
+        return static_cast<u16>(LoadReg(&fifo_.CPEnd) - LoadReg(&fifo_.SafeCPReadPointer) +
+                                LoadReg(&fifo_.CPWritePointer) - LoadReg(&fifo_.CPBase) + 32);
       }
     });
   }
@@ -262,19 +256,14 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     fifo_rw_distance_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
-      if (fifo_.CPWritePointer.load(std::memory_order_relaxed) >=
-          fifo_.SafeCPReadPointer.load(std::memory_order_relaxed))
+      if (LoadReg(&fifo_.CPWritePointer) >= LoadReg(&fifo_.SafeCPReadPointer))
       {
-        return (fifo_.CPWritePointer.load(std::memory_order_relaxed) -
-                fifo_.SafeCPReadPointer.load(std::memory_order_relaxed)) >>
-               16;
+        return (LoadReg(&fifo_.CPWritePointer) - LoadReg(&fifo_.SafeCPReadPointer)) >> 16;
       }
       else
       {
-        return (fifo_.CPEnd.load(std::memory_order_relaxed) -
-                fifo_.SafeCPReadPointer.load(std::memory_order_relaxed) +
-                fifo_.CPWritePointer.load(std::memory_order_relaxed) -
-                fifo_.CPBase.load(std::memory_order_relaxed) + 32) >>
+        return (LoadReg(&fifo_.CPEnd) - LoadReg(&fifo_.SafeCPReadPointer) +
+                LoadReg(&fifo_.CPWritePointer) - LoadReg(&fifo_.CPBase) + 32) >>
                16;
       }
     });
@@ -284,14 +273,14 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     fifo_rw_distance_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
-      return fifo_.CPReadWriteDistance.load(std::memory_order_relaxed) >> 16;
+      return LoadReg(&fifo_.CPReadWriteDistance) >> 16;
     });
   }
   mmio->Register(base | FIFO_RW_DISTANCE_HI, fifo_rw_distance_hi_r,
                  MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](Core::System& system_, u32, u16 val) {
                    auto& fifo_ = system_.GetCommandProcessor().GetFifo();
                    system_.GetFifo().SyncGPUForRegisterAccess();
-                   WriteHigh(fifo_.CPReadWriteDistance, val & WMASK_HI_RESTRICT);
+                   WriteHigh(&fifo_.CPReadWriteDistance, val & WMASK_HI_RESTRICT);
                    system_.GetFifo().RunGpu();
                  }));
 
@@ -308,15 +297,14 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     fifo_read_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
       auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
-      return fifo_.SafeCPReadPointer.load(std::memory_order_relaxed) >> 16;
+      return LoadReg(&fifo_.SafeCPReadPointer) >> 16;
     });
     fifo_read_hi_w =
         MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](Core::System& system_, u32, u16 val) {
           auto& fifo_ = system_.GetCommandProcessor().GetFifo();
           system_.GetFifo().SyncGPUForRegisterAccess();
-          WriteHigh(fifo_.CPReadPointer, val & WMASK_HI_RESTRICT);
-          fifo_.SafeCPReadPointer.store(fifo_.CPReadPointer.load(std::memory_order_relaxed),
-                                        std::memory_order_relaxed);
+          WriteHigh(&fifo_.CPReadPointer, val & WMASK_HI_RESTRICT);
+          StoreReg(&fifo_.SafeCPReadPointer, LoadReg(&fifo_.CPReadPointer));
         });
   }
   else
@@ -324,13 +312,13 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     fifo_read_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
-      return fifo_.CPReadPointer.load(std::memory_order_relaxed) >> 16;
+      return LoadReg(&fifo_.CPReadPointer) >> 16;
     });
     fifo_read_hi_w =
         MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](Core::System& system_, u32, u16 val) {
           auto& fifo_ = system_.GetCommandProcessor().GetFifo();
           system_.GetFifo().SyncGPUForRegisterAccess();
-          WriteHigh(fifo_.CPReadPointer, val & WMASK_HI_RESTRICT);
+          WriteHigh(&fifo_.CPReadPointer, val & WMASK_HI_RESTRICT);
         });
   }
   mmio->Register(base | FIFO_READ_POINTER_HI, fifo_read_hi_r, fifo_read_hi_w);
@@ -349,9 +337,9 @@ void CommandProcessorManager::GatherPipeBursted()
     {
       // In multibuffer mode is not allowed write in the same FIFO attached to the GPU.
       // Fix Pokemon XD in DC mode.
-      if ((processor_interface.m_fifo_cpu_end == m_fifo.CPEnd.load(std::memory_order_relaxed)) &&
-          (processor_interface.m_fifo_cpu_base == m_fifo.CPBase.load(std::memory_order_relaxed)) &&
-          m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) > 0)
+      if ((processor_interface.m_fifo_cpu_end == LoadReg(&m_fifo.CPEnd)) &&
+          (processor_interface.m_fifo_cpu_base == LoadReg(&m_fifo.CPBase)) &&
+          LoadReg(&m_fifo.CPReadWriteDistance) > 0)
       {
         m_system.GetFifo().FlushGpu();
       }
@@ -361,48 +349,42 @@ void CommandProcessorManager::GatherPipeBursted()
   }
 
   // update the fifo pointer
-  if (m_fifo.CPWritePointer.load(std::memory_order_relaxed) ==
-      m_fifo.CPEnd.load(std::memory_order_relaxed))
+  if (LoadReg(&m_fifo.CPWritePointer) == LoadReg(&m_fifo.CPEnd))
   {
-    m_fifo.CPWritePointer.store(m_fifo.CPBase, std::memory_order_relaxed);
+    StoreReg(&m_fifo.CPWritePointer, LoadReg(&m_fifo.CPBase));
   }
   else
   {
-    m_fifo.CPWritePointer.fetch_add(GPFifo::GATHER_PIPE_SIZE, std::memory_order_relaxed);
+    retro_atomic_fetch_add_int(&m_fifo.CPWritePointer, GPFifo::GATHER_PIPE_SIZE);
   }
 
   if (m_cp_ctrl_reg.GPReadEnable && m_cp_ctrl_reg.GPLinkEnable)
   {
-    processor_interface.m_fifo_cpu_write_pointer =
-        m_fifo.CPWritePointer.load(std::memory_order_relaxed);
-    processor_interface.m_fifo_cpu_base = m_fifo.CPBase.load(std::memory_order_relaxed);
-    processor_interface.m_fifo_cpu_end = m_fifo.CPEnd.load(std::memory_order_relaxed);
+    processor_interface.m_fifo_cpu_write_pointer = LoadReg(&m_fifo.CPWritePointer);
+    processor_interface.m_fifo_cpu_base = LoadReg(&m_fifo.CPBase);
+    processor_interface.m_fifo_cpu_end = LoadReg(&m_fifo.CPEnd);
   }
 
   // If the game is running close to overflowing, make the exception checking more frequent.
-  if (m_fifo.bFF_HiWatermark.load(std::memory_order_relaxed) != 0)
+  if (LoadReg(&m_fifo.bFF_HiWatermark) != 0)
     m_system.GetCoreTiming().ForceExceptionCheck(0);
 
-  m_fifo.CPReadWriteDistance.fetch_add(GPFifo::GATHER_PIPE_SIZE, std::memory_order_seq_cst);
+  retro_atomic_fetch_add_seq_cst_int(&m_fifo.CPReadWriteDistance, GPFifo::GATHER_PIPE_SIZE);
 
   m_system.GetFifo().RunGpu();
 
   ASSERT_MSG(COMMANDPROCESSOR,
-             m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) <=
-                 m_fifo.CPEnd.load(std::memory_order_relaxed) -
-                     m_fifo.CPBase.load(std::memory_order_relaxed),
+             LoadReg(&m_fifo.CPReadWriteDistance) <=
+                 LoadReg(&m_fifo.CPEnd) - LoadReg(&m_fifo.CPBase),
              "FIFO is overflowed by GatherPipe !\nCPU thread is too fast!");
 
   // check if we are in sync
   ASSERT_MSG(COMMANDPROCESSOR,
-             m_fifo.CPWritePointer.load(std::memory_order_relaxed) ==
-                 processor_interface.m_fifo_cpu_write_pointer,
+             LoadReg(&m_fifo.CPWritePointer) == processor_interface.m_fifo_cpu_write_pointer,
              "FIFOs linked but out of sync");
-  ASSERT_MSG(COMMANDPROCESSOR,
-             m_fifo.CPBase.load(std::memory_order_relaxed) == processor_interface.m_fifo_cpu_base,
+  ASSERT_MSG(COMMANDPROCESSOR, LoadReg(&m_fifo.CPBase) == processor_interface.m_fifo_cpu_base,
              "FIFOs linked but out of sync");
-  ASSERT_MSG(COMMANDPROCESSOR,
-             m_fifo.CPEnd.load(std::memory_order_relaxed) == processor_interface.m_fifo_cpu_end,
+  ASSERT_MSG(COMMANDPROCESSOR, LoadReg(&m_fifo.CPEnd) == processor_interface.m_fifo_cpu_end,
              "FIFOs linked but out of sync");
 }
 
@@ -442,26 +424,23 @@ bool CommandProcessorManager::IsInterruptWaiting() const
 void CommandProcessorManager::SetCPStatusFromGPU()
 {
   // breakpoint
-  const bool breakpoint = m_fifo.bFF_Breakpoint.load(std::memory_order_relaxed);
-  if (m_fifo.bFF_BPEnable.load(std::memory_order_relaxed) != 0)
+  const bool breakpoint = LoadReg(&m_fifo.bFF_Breakpoint);
+  if (LoadReg(&m_fifo.bFF_BPEnable) != 0)
   {
-    if (m_fifo.CPBreakpoint.load(std::memory_order_relaxed) ==
-        m_fifo.CPReadPointer.load(std::memory_order_relaxed))
+    if (LoadReg(&m_fifo.CPBreakpoint) == LoadReg(&m_fifo.CPReadPointer))
     {
       if (!breakpoint)
       {
-        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Hit breakpoint at {}",
-                      m_fifo.CPReadPointer.load(std::memory_order_relaxed));
-        m_fifo.bFF_Breakpoint.store(1, std::memory_order_relaxed);
+        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Hit breakpoint at {}", LoadReg(&m_fifo.CPReadPointer));
+        StoreReg(&m_fifo.bFF_Breakpoint, 1);
       }
     }
     else
     {
       if (breakpoint)
       {
-        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Cleared breakpoint at {}",
-                      m_fifo.CPReadPointer.load(std::memory_order_relaxed));
-        m_fifo.bFF_Breakpoint.store(0, std::memory_order_relaxed);
+        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Cleared breakpoint at {}", LoadReg(&m_fifo.CPReadPointer));
+        StoreReg(&m_fifo.bFF_Breakpoint, 0);
       }
     }
   }
@@ -469,26 +448,18 @@ void CommandProcessorManager::SetCPStatusFromGPU()
   {
     if (breakpoint)
     {
-      DEBUG_LOG_FMT(COMMANDPROCESSOR, "Cleared breakpoint at {}",
-                    m_fifo.CPReadPointer.load(std::memory_order_relaxed));
-      m_fifo.bFF_Breakpoint = false;
+      DEBUG_LOG_FMT(COMMANDPROCESSOR, "Cleared breakpoint at {}", LoadReg(&m_fifo.CPReadPointer));
+      StoreReg(&m_fifo.bFF_Breakpoint, 0);
     }
   }
 
   // overflow & underflow check
-  m_fifo.bFF_HiWatermark.store(
-      (m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) > m_fifo.CPHiWatermark),
-      std::memory_order_relaxed);
-  m_fifo.bFF_LoWatermark.store(
-      (m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) < m_fifo.CPLoWatermark),
-      std::memory_order_relaxed);
+  StoreReg(&m_fifo.bFF_HiWatermark, (LoadReg(&m_fifo.CPReadWriteDistance) > m_fifo.CPHiWatermark));
+  StoreReg(&m_fifo.bFF_LoWatermark, (LoadReg(&m_fifo.CPReadWriteDistance) < m_fifo.CPLoWatermark));
 
-  bool bpInt = m_fifo.bFF_Breakpoint.load(std::memory_order_relaxed) &&
-               m_fifo.bFF_BPInt.load(std::memory_order_relaxed);
-  bool ovfInt = m_fifo.bFF_HiWatermark.load(std::memory_order_relaxed) &&
-                m_fifo.bFF_HiWatermarkInt.load(std::memory_order_relaxed);
-  bool undfInt = m_fifo.bFF_LoWatermark.load(std::memory_order_relaxed) &&
-                 m_fifo.bFF_LoWatermarkInt.load(std::memory_order_relaxed);
+  bool bpInt = LoadReg(&m_fifo.bFF_Breakpoint) && LoadReg(&m_fifo.bFF_BPInt);
+  bool ovfInt = LoadReg(&m_fifo.bFF_HiWatermark) && LoadReg(&m_fifo.bFF_HiWatermarkInt);
+  bool undfInt = LoadReg(&m_fifo.bFF_LoWatermark) && LoadReg(&m_fifo.bFF_LoWatermarkInt);
 
   bool interrupt = (bpInt || ovfInt || undfInt) && m_cp_ctrl_reg.GPReadEnable;
 
@@ -514,19 +485,12 @@ void CommandProcessorManager::SetCPStatusFromGPU()
 void CommandProcessorManager::SetCPStatusFromCPU()
 {
   // overflow & underflow check
-  m_fifo.bFF_HiWatermark.store(
-      (m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) > m_fifo.CPHiWatermark),
-      std::memory_order_relaxed);
-  m_fifo.bFF_LoWatermark.store(
-      (m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) < m_fifo.CPLoWatermark),
-      std::memory_order_relaxed);
+  StoreReg(&m_fifo.bFF_HiWatermark, (LoadReg(&m_fifo.CPReadWriteDistance) > m_fifo.CPHiWatermark));
+  StoreReg(&m_fifo.bFF_LoWatermark, (LoadReg(&m_fifo.CPReadWriteDistance) < m_fifo.CPLoWatermark));
 
-  bool bpInt = m_fifo.bFF_Breakpoint.load(std::memory_order_relaxed) &&
-               m_fifo.bFF_BPInt.load(std::memory_order_relaxed);
-  bool ovfInt = m_fifo.bFF_HiWatermark.load(std::memory_order_relaxed) &&
-                m_fifo.bFF_HiWatermarkInt.load(std::memory_order_relaxed);
-  bool undfInt = m_fifo.bFF_LoWatermark.load(std::memory_order_relaxed) &&
-                 m_fifo.bFF_LoWatermarkInt.load(std::memory_order_relaxed);
+  bool bpInt = LoadReg(&m_fifo.bFF_Breakpoint) && LoadReg(&m_fifo.bFF_BPInt);
+  bool ovfInt = LoadReg(&m_fifo.bFF_HiWatermark) && LoadReg(&m_fifo.bFF_HiWatermarkInt);
+  bool undfInt = LoadReg(&m_fifo.bFF_LoWatermark) && LoadReg(&m_fifo.bFF_LoWatermarkInt);
 
   bool interrupt = (bpInt || ovfInt || undfInt) && m_cp_ctrl_reg.GPReadEnable;
 
@@ -552,15 +516,13 @@ void CommandProcessorManager::SetCPStatusFromCPU()
 void CommandProcessorManager::SetCpStatusRegister()
 {
   // Here always there is one fifo attached to the GPU
-  m_cp_status_reg.Breakpoint = m_fifo.bFF_Breakpoint.load(std::memory_order_relaxed);
-  m_cp_status_reg.ReadIdle = !m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) ||
-                             (m_fifo.CPReadPointer.load(std::memory_order_relaxed) ==
-                              m_fifo.CPWritePointer.load(std::memory_order_relaxed));
-  m_cp_status_reg.CommandIdle = !m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed) ||
-                                Fifo::AtBreakpoint(m_system) ||
-                                !m_fifo.bFF_GPReadEnable.load(std::memory_order_relaxed);
-  m_cp_status_reg.UnderflowLoWatermark = m_fifo.bFF_LoWatermark.load(std::memory_order_relaxed);
-  m_cp_status_reg.OverflowHiWatermark = m_fifo.bFF_HiWatermark.load(std::memory_order_relaxed);
+  m_cp_status_reg.Breakpoint = LoadReg(&m_fifo.bFF_Breakpoint);
+  m_cp_status_reg.ReadIdle = !LoadReg(&m_fifo.CPReadWriteDistance) ||
+                             (LoadReg(&m_fifo.CPReadPointer) == LoadReg(&m_fifo.CPWritePointer));
+  m_cp_status_reg.CommandIdle = !LoadReg(&m_fifo.CPReadWriteDistance) ||
+                                Fifo::AtBreakpoint(m_system) || !LoadReg(&m_fifo.bFF_GPReadEnable);
+  m_cp_status_reg.UnderflowLoWatermark = LoadReg(&m_fifo.bFF_LoWatermark);
+  m_cp_status_reg.OverflowHiWatermark = LoadReg(&m_fifo.bFF_HiWatermark);
 
   DEBUG_LOG_FMT(COMMANDPROCESSOR, "\t Read from STATUS_REGISTER : {:04x}", m_cp_status_reg.Hex);
   DEBUG_LOG_FMT(COMMANDPROCESSOR,
@@ -574,21 +536,21 @@ void CommandProcessorManager::SetCpStatusRegister()
 void CommandProcessorManager::SetCpControlRegister()
 {
   // Just before disabling reads, give the GPU a chance to catch up.
-  if (m_fifo.bFF_GPReadEnable.load(std::memory_order_relaxed) && !m_cp_ctrl_reg.GPReadEnable)
+  if (LoadReg(&m_fifo.bFF_GPReadEnable) && !m_cp_ctrl_reg.GPReadEnable)
   {
     m_system.GetFifo().SyncGPUForRegisterAccess();
   }
-  m_fifo.bFF_GPReadEnable.store(m_cp_ctrl_reg.GPReadEnable, std::memory_order_relaxed);
-  m_fifo.bFF_BPInt.store(m_cp_ctrl_reg.BPInt, std::memory_order_relaxed);
-  m_fifo.bFF_BPEnable.store(m_cp_ctrl_reg.BPEnable, std::memory_order_relaxed);
-  m_fifo.bFF_HiWatermarkInt.store(m_cp_ctrl_reg.FifoOverflowIntEnable, std::memory_order_relaxed);
-  m_fifo.bFF_LoWatermarkInt.store(m_cp_ctrl_reg.FifoUnderflowIntEnable, std::memory_order_relaxed);
-  m_fifo.bFF_GPLinkEnable.store(m_cp_ctrl_reg.GPLinkEnable, std::memory_order_relaxed);
+  StoreReg(&m_fifo.bFF_GPReadEnable, m_cp_ctrl_reg.GPReadEnable);
+  StoreReg(&m_fifo.bFF_BPInt, m_cp_ctrl_reg.BPInt);
+  StoreReg(&m_fifo.bFF_BPEnable, m_cp_ctrl_reg.BPEnable);
+  StoreReg(&m_fifo.bFF_HiWatermarkInt, m_cp_ctrl_reg.FifoOverflowIntEnable);
+  StoreReg(&m_fifo.bFF_LoWatermarkInt, m_cp_ctrl_reg.FifoUnderflowIntEnable);
+  StoreReg(&m_fifo.bFF_GPLinkEnable, m_cp_ctrl_reg.GPLinkEnable);
 
   DEBUG_LOG_FMT(COMMANDPROCESSOR, "\t GPREAD {} | BP {} | Int {} | OvF {} | UndF {} | LINK {}",
-                m_fifo.bFF_GPReadEnable.load(std::memory_order_relaxed) ? "ON" : "OFF",
-                m_fifo.bFF_BPEnable.load(std::memory_order_relaxed) ? "ON" : "OFF",
-                m_fifo.bFF_BPInt.load(std::memory_order_relaxed) ? "ON" : "OFF",
+                LoadReg(&m_fifo.bFF_GPReadEnable) ? "ON" : "OFF",
+                LoadReg(&m_fifo.bFF_BPEnable) ? "ON" : "OFF",
+                LoadReg(&m_fifo.bFF_BPInt) ? "ON" : "OFF",
                 m_cp_ctrl_reg.FifoOverflowIntEnable ? "ON" : "OFF",
                 m_cp_ctrl_reg.FifoUnderflowIntEnable ? "ON" : "OFF",
                 m_cp_ctrl_reg.GPLinkEnable ? "ON" : "OFF");
@@ -647,21 +609,17 @@ void CommandProcessorManager::HandleUnknownOpcode(u8 cmd_byte, const u8* buffer,
       "{:#010x}, bFF_GPReadEnable: {}, bFF_BPEnable: {}, bFF_BPInt: {}, bFF_Breakpoint: "
       "{}, bFF_GPLinkEnable: {}, bFF_HiWatermarkInt: {}, bFF_LoWatermarkInt: {}, "
       "approximate PC: {:08x}, approximate LR: {:08x}",
-      cmd_byte, fmt::ptr(buffer), preprocess ? "yes" : "no",
-      m_fifo.CPBase.load(std::memory_order_relaxed), m_fifo.CPEnd.load(std::memory_order_relaxed),
-      m_fifo.CPHiWatermark, m_fifo.CPLoWatermark,
-      m_fifo.CPReadWriteDistance.load(std::memory_order_relaxed),
-      m_fifo.CPWritePointer.load(std::memory_order_relaxed),
-      m_fifo.CPReadPointer.load(std::memory_order_relaxed),
-      m_fifo.CPBreakpoint.load(std::memory_order_relaxed),
-      m_fifo.bFF_GPReadEnable.load(std::memory_order_relaxed) ? "true" : "false",
-      m_fifo.bFF_BPEnable.load(std::memory_order_relaxed) ? "true" : "false",
-      m_fifo.bFF_BPInt.load(std::memory_order_relaxed) ? "true" : "false",
-      m_fifo.bFF_Breakpoint.load(std::memory_order_relaxed) ? "true" : "false",
-      m_fifo.bFF_GPLinkEnable.load(std::memory_order_relaxed) ? "true" : "false",
-      m_fifo.bFF_HiWatermarkInt.load(std::memory_order_relaxed) ? "true" : "false",
-      m_fifo.bFF_LoWatermarkInt.load(std::memory_order_relaxed) ? "true" : "false", ppc_state.pc,
-      LR(ppc_state));
+      cmd_byte, fmt::ptr(buffer), preprocess ? "yes" : "no", LoadReg(&m_fifo.CPBase),
+      LoadReg(&m_fifo.CPEnd), m_fifo.CPHiWatermark, m_fifo.CPLoWatermark,
+      LoadReg(&m_fifo.CPReadWriteDistance), LoadReg(&m_fifo.CPWritePointer),
+      LoadReg(&m_fifo.CPReadPointer), LoadReg(&m_fifo.CPBreakpoint),
+      LoadReg(&m_fifo.bFF_GPReadEnable) ? "true" : "false",
+      LoadReg(&m_fifo.bFF_BPEnable) ? "true" : "false",
+      LoadReg(&m_fifo.bFF_BPInt) ? "true" : "false",
+      LoadReg(&m_fifo.bFF_Breakpoint) ? "true" : "false",
+      LoadReg(&m_fifo.bFF_GPLinkEnable) ? "true" : "false",
+      LoadReg(&m_fifo.bFF_HiWatermarkInt) ? "true" : "false",
+      LoadReg(&m_fifo.bFF_LoWatermarkInt) ? "true" : "false", ppc_state.pc, LR(ppc_state));
 
   if (!m_is_fifo_error_seen && !suppress_panic_alert)
   {

@@ -32,7 +32,7 @@ std::size_t CustomAsset::Load()
   if (load_information.bytes_loaded > 0)
   {
     m_bytes_loaded = load_information.bytes_loaded;
-    m_last_loaded_time = load_time;
+    retro_atomic_store_release_64(&m_last_loaded_time, load_time.time_since_epoch().count());
     retro_atomic_store_release_int(&m_busy, 0);
     return load_information.bytes_loaded;
   }
@@ -52,7 +52,7 @@ std::size_t CustomAsset::Unload()
 
 CustomAsset::TimeType CustomAsset::GetLastLoadedTime() const
 {
-  return m_last_loaded_time;
+  return TimeType(ClockType::duration(retro_atomic_load_acquire_64(&m_last_loaded_time)));
 }
 
 std::size_t CustomAsset::GetHandle() const

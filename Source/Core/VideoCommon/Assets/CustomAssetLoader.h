@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <list>
 #include <vector>
 
@@ -96,6 +95,6 @@ private:
   mpsc_stack_t m_loaded{};
 
   // Change in memory from just-loaded/unloaded asset results yet to be taken by the Manager.
-  std::atomic<s64> m_change_in_memory = 0;
+  retro_atomic_64_t m_change_in_memory{};
 };
 }  // namespace VideoCommon

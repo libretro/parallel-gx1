@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include <atomic>
-
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
+
+#include <retro_atomic.h>
 
 class PointerWrap;
 namespace MMIO
@@ -24,30 +24,41 @@ struct EventType;
 
 namespace CommandProcessor
 {
+/* The FIFO registers the CPU and GPU threads share: u32 values in atomic words. */
+inline u32 LoadReg(const retro_atomic_int_t* reg)
+{
+  return static_cast<u32>(retro_atomic_load_relaxed_int(reg));
+}
+
+inline void StoreReg(retro_atomic_int_t* reg, u32 value)
+{
+  retro_atomic_store_relaxed_int(reg, static_cast<int>(value));
+}
+
 struct SCPFifoStruct
 {
   // fifo registers
-  std::atomic<u32> CPBase = 0;
-  std::atomic<u32> CPEnd = 0;
+  retro_atomic_int_t CPBase{};
+  retro_atomic_int_t CPEnd{};
   u32 CPHiWatermark = 0;
   u32 CPLoWatermark = 0;
-  std::atomic<u32> CPReadWriteDistance = 0;
-  std::atomic<u32> CPWritePointer = 0;
-  std::atomic<u32> CPReadPointer = 0;
-  std::atomic<u32> CPBreakpoint = 0;
-  std::atomic<u32> SafeCPReadPointer = 0;
+  retro_atomic_int_t CPReadWriteDistance{};
+  retro_atomic_int_t CPWritePointer{};
+  retro_atomic_int_t CPReadPointer{};
+  retro_atomic_int_t CPBreakpoint{};
+  retro_atomic_int_t SafeCPReadPointer{};
 
-  std::atomic<u32> bFF_GPLinkEnable = 0;
-  std::atomic<u32> bFF_GPReadEnable = 0;
-  std::atomic<u32> bFF_BPEnable = 0;
-  std::atomic<u32> bFF_BPInt = 0;
-  std::atomic<u32> bFF_Breakpoint = 0;
+  retro_atomic_int_t bFF_GPLinkEnable{};
+  retro_atomic_int_t bFF_GPReadEnable{};
+  retro_atomic_int_t bFF_BPEnable{};
+  retro_atomic_int_t bFF_BPInt{};
+  retro_atomic_int_t bFF_Breakpoint{};
 
-  std::atomic<u32> bFF_LoWatermarkInt = 0;
-  std::atomic<u32> bFF_HiWatermarkInt = 0;
+  retro_atomic_int_t bFF_LoWatermarkInt{};
+  retro_atomic_int_t bFF_HiWatermarkInt{};
 
-  std::atomic<u32> bFF_LoWatermark = 0;
-  std::atomic<u32> bFF_HiWatermark = 0;
+  retro_atomic_int_t bFF_LoWatermark{};
+  retro_atomic_int_t bFF_HiWatermark{};
 
   void Init();
   void DoState(PointerWrap& p);

@@ -1636,7 +1636,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/GBACore.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/SI/SI_DeviceGBAEmu.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/GameFile.cpp \
-	$(CORE_DIR)/Source/Core/UICommon/GameFileCache.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/ResourcePack/Manager.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/ResourcePack/Manifest.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/ResourcePack/ResourcePack.cpp \

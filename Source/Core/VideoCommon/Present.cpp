@@ -107,7 +107,7 @@ Presenter::Presenter()
       video_events.config_changed_event.Register([this](u32 bits) { ConfigChanged(bits); });
 
   m_end_field_hook = video_events.vi_end_field_event.Register(
-      [this] { m_immediate_swap_happened_this_field.store(false, std::memory_order_relaxed); });
+      [this] { retro_atomic_store_relaxed_int(&m_immediate_swap_happened_this_field, 0); });
 }
 
 Presenter::~Presenter()
@@ -120,7 +120,7 @@ bool Presenter::Initialize()
 {
   UpdateDrawRectangle();
 
-  m_immediate_swap_happened_this_field.store(false, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&m_immediate_swap_happened_this_field, 0);
 
   if (!g_gfx->IsHeadless())
   {
@@ -237,7 +237,7 @@ void Presenter::ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
 
 void Presenter::ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height)
 {
-  if (m_immediate_swap_happened_this_field.exchange(true, std::memory_order_relaxed) &&
+  if (retro_atomic_exchange_int(&m_immediate_swap_happened_this_field, 1) &&
       Config::Get(Config::GFX_HACK_CAP_IMMEDIATE_XFB))
   {
     return;
@@ -959,7 +959,7 @@ void Presenter::DoState(PointerWrap& p)
 
     m_next_swap_estimated_ticks = m_last_xfb_ticks;
 
-    m_immediate_swap_happened_this_field.store(false, std::memory_order_relaxed);
+    retro_atomic_store_relaxed_int(&m_immediate_swap_happened_this_field, 0);
 
 #ifdef __LIBRETRO__
     if (g_video_backend && g_video_backend->GetConfigName() != "OGL")

@@ -27,7 +27,6 @@ namespace DiscIO
 {
 enum class WIARVZCompressionType : u32;
 
-// Increment CACHE_REVISION (GameFileCache.cpp) if the enum below is modified
 enum class BlobType
 {
   PLAIN,

@@ -27,20 +27,20 @@ PerfQuery::~PerfQuery() = default;
 
 void PerfQuery::EnableQuery(PerfQueryGroup group)
 {
-  u32 query_count = m_query_count.load(std::memory_order_relaxed);
+  u32 query_count = QueryCount();
 
   // Is this sane?
   if (query_count > m_query_buffer.size() / 2)
   {
     WeakFlush();
-    query_count = m_query_count.load(std::memory_order_relaxed);
+    query_count = QueryCount();
   }
 
   if (m_query_buffer.size() == query_count)
   {
     // TODO
     FlushOne();
-    query_count = m_query_count.load(std::memory_order_relaxed);
+    query_count = QueryCount();
     ERROR_LOG_FMT(VIDEO, "Flushed query buffer early!");
   }
 
@@ -52,7 +52,7 @@ void PerfQuery::EnableQuery(PerfQueryGroup group)
     D3D::context->Begin(entry.query.Get());
     entry.query_group = group;
 
-    m_query_count.fetch_add(1, std::memory_order_relaxed);
+    AddQueryCount(1);
   }
 }
 
@@ -61,8 +61,7 @@ void PerfQuery::DisableQuery(PerfQueryGroup group)
   // stop query
   if (group == PQG_ZCOMP_ZCOMPLOC || group == PQG_ZCOMP)
   {
-    auto& entry = m_query_buffer[(m_query_read_pos + m_query_count.load(std::memory_order_relaxed) +
-                                  m_query_buffer.size() - 1) %
+    auto& entry = m_query_buffer[(m_query_read_pos + QueryCount() + m_query_buffer.size() - 1) %
                                  m_query_buffer.size()];
     D3D::context->End(entry.query.Get());
   }
@@ -70,9 +69,7 @@ void PerfQuery::DisableQuery(PerfQueryGroup group)
 
 void PerfQuery::ResetQuery()
 {
-  m_query_count.store(0, std::memory_order_relaxed);
-  for (auto& result : m_results)
-    result.store(0, std::memory_order_relaxed);
+  ResetQueryState();
 }
 
 u32 PerfQuery::GetQueryResult(PerfQueryType type)
@@ -81,20 +78,19 @@ u32 PerfQuery::GetQueryResult(PerfQueryType type)
 
   if (type == PQ_ZCOMP_INPUT_ZCOMPLOC || type == PQ_ZCOMP_OUTPUT_ZCOMPLOC)
   {
-    result = m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_ZCOMP_INPUT || type == PQ_ZCOMP_OUTPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP);
   }
   else if (type == PQ_BLEND_INPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed) +
-             m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP) + QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_EFB_COPY_CLOCKS)
   {
-    result = m_results[PQG_EFB_COPY_CLOCKS].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_EFB_COPY_CLOCKS);
   }
 
   return result / 4;
@@ -119,11 +115,10 @@ void PerfQuery::FlushOne()
                           g_framebuffer_manager->GetEFBHeight();
   if (g_ActiveConfig.iMultisamples > 1)
     native_res_result /= g_ActiveConfig.iMultisamples;
-  m_results[entry.query_group].fetch_add(static_cast<u32>(native_res_result),
-                                         std::memory_order_relaxed);
+  AddQueryResult(entry.query_group, static_cast<u32>(native_res_result));
 
   m_query_read_pos = (m_query_read_pos + 1) % m_query_buffer.size();
-  m_query_count.fetch_sub(1, std::memory_order_relaxed);
+  SubQueryCount(1);
 }
 
 // TODO: could selectively flush things, but I don't think that will do much
@@ -148,11 +143,10 @@ void PerfQuery::WeakFlush()
       // NOTE: Reported pixel metrics should be referenced to native resolution
       const u64 native_res_result = result * EFB_WIDTH / g_framebuffer_manager->GetEFBWidth() *
                                     EFB_HEIGHT / g_framebuffer_manager->GetEFBHeight();
-      m_results[entry.query_group].store(static_cast<u32>(native_res_result),
-                                         std::memory_order_relaxed);
+      SetQueryResult(entry.query_group, static_cast<u32>(native_res_result));
 
       m_query_read_pos = (m_query_read_pos + 1) % m_query_buffer.size();
-      m_query_count.fetch_sub(1, std::memory_order_relaxed);
+      SubQueryCount(1);
     }
     else
     {
@@ -163,7 +157,7 @@ void PerfQuery::WeakFlush()
 
 bool PerfQuery::IsFlushed() const
 {
-  return m_query_count.load(std::memory_order_relaxed) == 0;
+  return QueryCount() == 0;
 }
 
 }  // namespace DX11

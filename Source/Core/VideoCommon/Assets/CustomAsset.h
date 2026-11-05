@@ -9,7 +9,6 @@
 #include "Common/CommonTypes.h"
 #include "VideoCommon/Assets/CustomAssetLibrary.h"
 
-#include <atomic>
 #include <memory>
 
 namespace VideoCommon
@@ -64,7 +63,7 @@ private:
   // Held (with a CAS) by the one thread loading or unloading; anyone else backs off.
   retro_atomic_int_t m_busy{};
   std::size_t m_bytes_loaded = 0;  // only touched while busy
-  std::atomic<TimeType> m_last_loaded_time = {};
+  retro_atomic_64_t m_last_loaded_time{}; /* TimeType ticks */
 };
 
 // An abstract class that is expected to

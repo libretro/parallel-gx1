@@ -234,7 +234,7 @@ bool CommandBufferManager::CreateSubmitThread()
     SubmitCommandBuffer(submit.command_buffer_index, submit.present_swap_chain,
                         submit.present_image_index);
     CmdBufferResources& resources = m_command_buffers[submit.command_buffer_index];
-    resources.waiting_for_submit.store(false, std::memory_order_release);
+    retro_atomic_store_release_int(&resources.waiting_for_submit, 0);
   });
 
   return true;
@@ -272,10 +272,10 @@ void CommandBufferManager::WaitForCommandBufferCompletion(u32 index)
   CmdBufferResources& resources = m_command_buffers[index];
 
   // Ensure this command buffer has been submitted.
-  if (resources.waiting_for_submit.load(std::memory_order_acquire))
+  if (retro_atomic_load_acquire_int(&resources.waiting_for_submit))
   {
     WaitForWorkerThreadIdle();
-    ASSERT_MSG(VIDEO, !resources.waiting_for_submit.load(std::memory_order_relaxed),
+    ASSERT_MSG(VIDEO, !retro_atomic_load_relaxed_int(&resources.waiting_for_submit),
                "Submit thread is idle but command buffer is still waiting for submission!");
   }
 
@@ -329,7 +329,7 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
   // Submitting off-thread?
   if (m_use_threaded_submission && submit_on_worker_thread && !wait_for_completion)
   {
-    resources.waiting_for_submit.store(true, std::memory_order_relaxed);
+    retro_atomic_store_relaxed_int(&resources.waiting_for_submit, 1);
     // Push to the pending submit queue.
     m_submit_thread.Push({present_swap_chain, present_image_index, m_current_cmd_buffer});
   }

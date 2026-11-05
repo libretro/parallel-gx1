@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include <atomic>
 #include <cstddef>
 #include <optional>
+#include <retro_atomic.h>
 
 #include "Common/BlockingLoop.h"
 #include "Common/CommonTypes.h"
@@ -92,7 +92,7 @@ private:
   Common::BlockingLoop m_gpu_mainloop;
 #ifdef __LIBRETRO__
   // Set by StopGpuLoop(), so that a stop requested before RunGpuLoop() got going still ends it.
-  std::atomic<bool> m_stop_gpu_loop_requested{false};
+  retro_atomic_int_t m_stop_gpu_loop_requested{};
 #endif
 
   Common::Flag m_emu_running_state;
@@ -111,8 +111,8 @@ private:
   // STATE_TO_SAVE
   u8* m_video_buffer = nullptr;
   u8* m_video_buffer_read_ptr = nullptr;
-  std::atomic<u8*> m_video_buffer_write_ptr = nullptr;
-  std::atomic<u8*> m_video_buffer_seen_ptr = nullptr;
+  retro_atomic_ptr_t m_video_buffer_write_ptr{};
+  retro_atomic_ptr_t m_video_buffer_seen_ptr{};
   u8* m_video_buffer_pp_read_ptr = nullptr;
   // The read_ptr is always owned by the GPU thread.  In normal mode, so is the
   // write_ptr, despite it being atomic.  In deterministic GPU thread mode,
@@ -126,7 +126,18 @@ private:
   // polls, it's just atomic.
   // - The pp_read_ptr is the CPU preprocessing version of the read_ptr.
 
-  std::atomic<int> m_sync_ticks = 0;
+  retro_atomic_int_t m_sync_ticks{};
+
+  u8* GetWritePtr() const
+  {
+    return static_cast<u8*>(retro_atomic_load_acquire_ptr(&m_video_buffer_write_ptr));
+  }
+  void SetWritePtr(u8* ptr) { retro_atomic_store_release_ptr(&m_video_buffer_write_ptr, ptr); }
+  u8* GetSeenPtr() const
+  {
+    return static_cast<u8*>(retro_atomic_load_acquire_ptr(&m_video_buffer_seen_ptr));
+  }
+  void SetSeenPtr(u8* ptr) { retro_atomic_store_release_ptr(&m_video_buffer_seen_ptr, ptr); }
   bool m_syncing_suspended = false;
   Common::Event m_sync_wakeup_event;
 

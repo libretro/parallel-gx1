@@ -3,6 +3,8 @@
 
 #include "InputCommon/ControllerInterface/Wiimote/WiimoteController.h"
 
+#include <cstring>
+
 #include "Common/BitUtils.h"
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
@@ -81,14 +83,19 @@ using UndetectableSignedAnalogInput = SignedInput<false>;
 class Motor final : public Core::Device::Output
 {
 public:
-  Motor(std::atomic<ControlState>* value) : m_value(*value) {}
+  Motor(retro_atomic_64_t* value) : m_value(value) {}
 
   std::string GetName() const override { return "Motor"; }
 
-  void SetState(ControlState state) override { m_value = state; }
+  void SetState(ControlState state) override
+  {
+    s64 bits;
+    std::memcpy(&bits, &state, sizeof(bits));
+    retro_atomic_store_release_64(m_value, bits);
+  }
 
 private:
-  std::atomic<ControlState>& m_value;
+  retro_atomic_64_t* m_value;
 };
 
 template <typename T>
@@ -1422,8 +1429,11 @@ void Device::UpdateRumble()
 {
   static constexpr auto rumble_period = std::chrono::milliseconds(100);
 
-  const auto on_time =
-      std::chrono::duration_cast<Clock::duration>(rumble_period * m_rumble_level.load());
+  const s64 bits = retro_atomic_load_acquire_64(&m_rumble_level);
+  ControlState rumble_level;
+  std::memcpy(&rumble_level, &bits, sizeof(rumble_level));
+
+  const auto on_time = std::chrono::duration_cast<Clock::duration>(rumble_period * rumble_level);
   const auto off_time = rumble_period - on_time;
 
   const auto now = Clock::now();

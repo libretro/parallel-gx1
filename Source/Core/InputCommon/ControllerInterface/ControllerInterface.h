@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <memory>
 
@@ -13,6 +12,8 @@
 
 #include "InputCommon/ControllerInterface/CoreDevice.h"
 #include "InputCommon/ControllerInterface/InputBackend.h"
+
+#include <retro_atomic.h>
 
 // enable disable sources
 #define CIFACE_USE_DUALSHOCKUDPCLIENT
@@ -62,7 +63,7 @@ public:
     Other
   };
 
-  ControllerInterface() : m_is_init(false) {}
+  ControllerInterface() {}
   void Initialize(const WindowSystemInfo& wsi);
   // Only call from one thread at a time.
   void ChangeWindow(void* hwnd, WindowChangeReason reason = WindowChangeReason::Other);
@@ -78,7 +79,7 @@ public:
   // Runs a backend's population, holding back the devices-changed callbacks until it is
   // done so they run once for the batch.
   void PlatformPopulateDevices(const std::function<void()>& callback);
-  bool IsInit() const { return m_is_init; }
+  bool IsInit() const { return retro_atomic_load_acquire_int(&m_is_init) != 0; }
   void UpdateInput();
 
   // Set adjustment from the full render window aspect-ratio to the drawn aspect-ratio.
@@ -109,12 +110,12 @@ private:
 
   Common::HookableEvent<> m_devices_changed_event;
 
-  std::atomic<bool> m_is_init;
+  retro_atomic_int_t m_is_init{};
   // Populations in progress on any thread; the last to finish runs the callbacks.
-  std::atomic<int> m_populating_devices_counter;
+  retro_atomic_int_t m_populating_devices_counter{};
   WindowSystemInfo m_wsi;
-  std::atomic<float> m_aspect_ratio_adjustment = 1;
-  std::atomic<bool> m_requested_mouse_centering = false;
+  retro_atomic_int_t m_aspect_ratio_adjustment{0x3f800000}; /* the bits of a float, 1.0f */
+  retro_atomic_int_t m_requested_mouse_centering{};
 
   std::vector<std::unique_ptr<ciface::InputBackend>> m_input_backends;
 };

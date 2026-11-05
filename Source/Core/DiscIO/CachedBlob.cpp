@@ -3,9 +3,9 @@
 
 #include "DiscIO/CachedBlob.h"
 
-#include <atomic>
 #include <chrono>
 
+#include <retro_atomic.h>
 #include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
@@ -29,7 +29,7 @@ public:
 
   ~CacheFiller()
   {
-    m_stop_thread.store(true, std::memory_order_relaxed);
+    retro_atomic_store_relaxed_int(&m_stop_thread, 1);
     Common::JoinThread(m_thread);
   }
 
@@ -69,7 +69,7 @@ private:
 
   CacheState GetCacheState(u64 offset, u64 size)
   {
-    const auto cache_pos = m_cache_filled_pos.load(std::memory_order_acquire);
+    const u64 cache_pos = static_cast<u64>(retro_atomic_load_acquire_64(&m_cache_filled_pos));
 
     const auto end_pos = offset + size;
     if (end_pos > cache_pos)
@@ -131,7 +131,7 @@ private:
 
     while (true)
     {
-      if (m_stop_thread.load(std::memory_order_relaxed))
+      if (retro_atomic_load_relaxed_int(&m_stop_thread))
       {
         INFO_LOG_FMT(DISCIO, "CachedBlobReader: Stopped");
         break;
@@ -164,7 +164,7 @@ private:
       }
 
       read_offset += read_size;
-      m_cache_filled_pos.store(read_offset, std::memory_order_release);
+      retro_atomic_store_release_64(&m_cache_filled_pos, static_cast<s64>(read_offset));
 
       if (const auto now = Clock::now(); now >= next_log_time)
       {
@@ -176,14 +176,14 @@ private:
   }
 
   // The thread has read non-scrubbed bytes into memory up to this point.
-  std::atomic<u64> m_cache_filled_pos{};
+  retro_atomic_64_t m_cache_filled_pos{};
 
   Common::LazyMemoryRegion m_memory_region;
   u8* m_memory_region_data{};
 
   DiscScrubber m_scrubber;
 
-  std::atomic_bool m_stop_thread{};
+  retro_atomic_int_t m_stop_thread{};
   std::unique_ptr<BlobReader> m_thread_reader;  // handed to the thread
   bool m_attempt_to_scrub;
   sthread_t* m_thread = nullptr;

@@ -41,7 +41,7 @@ void PerfQuery::DisableQuery(PerfQueryGroup group)
 
 bool PerfQuery::IsFlushed() const
 {
-  return m_query_count.load(std::memory_order_relaxed) == 0;
+  return QueryCount() == 0;
 }
 
 // TODO: could selectively flush things, but I don't think that will do much
@@ -52,9 +52,7 @@ void PerfQuery::FlushResults()
 
 void PerfQuery::ResetQuery()
 {
-  m_query_count.store(0, std::memory_order_relaxed);
-  for (auto& result : m_results)
-    result.store(0, std::memory_order_relaxed);
+  ResetQueryState();
 }
 
 u32 PerfQuery::GetQueryResult(PerfQueryType type)
@@ -63,20 +61,19 @@ u32 PerfQuery::GetQueryResult(PerfQueryType type)
 
   if (type == PQ_ZCOMP_INPUT_ZCOMPLOC || type == PQ_ZCOMP_OUTPUT_ZCOMPLOC)
   {
-    result = m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_ZCOMP_INPUT || type == PQ_ZCOMP_OUTPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP);
   }
   else if (type == PQ_BLEND_INPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed) +
-             m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP) + QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_EFB_COPY_CLOCKS)
   {
-    result = m_results[PQG_EFB_COPY_CLOCKS].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_EFB_COPY_CLOCKS);
   }
 
   return result / 4;
@@ -97,19 +94,19 @@ PerfQueryGL::~PerfQueryGL()
 
 void PerfQueryGL::EnableQuery(PerfQueryGroup group)
 {
-  u32 query_count = m_query_count.load(std::memory_order_relaxed);
+  u32 query_count = QueryCount();
 
   // Is this sane?
   if (query_count > m_query_buffer.size() / 2)
   {
     WeakFlush();
-    query_count = m_query_count.load(std::memory_order_relaxed);
+    query_count = QueryCount();
   }
 
   if (m_query_buffer.size() == query_count)
   {
     FlushOne();
-    query_count = m_query_count.load(std::memory_order_relaxed);
+    query_count = QueryCount();
     // ERROR_LOG_FMT(VIDEO, "Flushed query buffer early!");
   }
 
@@ -121,7 +118,7 @@ void PerfQueryGL::EnableQuery(PerfQueryGroup group)
     glBeginQuery(m_query_type, entry.query_id);
     entry.query_group = group;
 
-    m_query_count.fetch_add(1, std::memory_order_relaxed);
+    AddQueryCount(1);
   }
 }
 void PerfQueryGL::DisableQuery(PerfQueryGroup group)
@@ -170,10 +167,10 @@ void PerfQueryGL::FlushOne()
   if (g_ActiveConfig.iMultisamples > 1)
     result /= g_ActiveConfig.iMultisamples;
 
-  m_results[entry.query_group].fetch_add(result, std::memory_order_relaxed);
+  AddQueryResult(entry.query_group, result);
 
   m_query_read_pos = (m_query_read_pos + 1) % m_query_buffer.size();
-  m_query_count.fetch_sub(1, std::memory_order_relaxed);
+  SubQueryCount(1);
 }
 
 // TODO: could selectively flush things, but I don't think that will do much
@@ -197,19 +194,19 @@ PerfQueryGLESNV::~PerfQueryGLESNV()
 
 void PerfQueryGLESNV::EnableQuery(PerfQueryGroup group)
 {
-  u32 query_count = m_query_count.load(std::memory_order_relaxed);
+  u32 query_count = QueryCount();
 
   // Is this sane?
   if (query_count > m_query_buffer.size() / 2)
   {
     WeakFlush();
-    query_count = m_query_count.load(std::memory_order_relaxed);
+    query_count = QueryCount();
   }
 
   if (m_query_buffer.size() == query_count)
   {
     FlushOne();
-    query_count = m_query_count.load(std::memory_order_relaxed);
+    query_count = QueryCount();
     // ERROR_LOG_FMT(VIDEO, "Flushed query buffer early!");
   }
 
@@ -221,7 +218,7 @@ void PerfQueryGLESNV::EnableQuery(PerfQueryGroup group)
     glBeginOcclusionQueryNV(entry.query_id);
     entry.query_group = group;
 
-    m_query_count.fetch_add(1, std::memory_order_relaxed);
+    AddQueryCount(1);
   }
 }
 void PerfQueryGLESNV::DisableQuery(PerfQueryGroup group)
@@ -266,11 +263,10 @@ void PerfQueryGLESNV::FlushOne()
   const u64 native_res_result =
       static_cast<u64>(result) * EFB_WIDTH * EFB_HEIGHT /
       (g_framebuffer_manager->GetEFBWidth() * g_framebuffer_manager->GetEFBHeight());
-  m_results[entry.query_group].fetch_add(static_cast<u32>(native_res_result),
-                                         std::memory_order_relaxed);
+  AddQueryResult(entry.query_group, static_cast<u32>(native_res_result));
 
   m_query_read_pos = (m_query_read_pos + 1) % m_query_buffer.size();
-  m_query_count.fetch_sub(1, std::memory_order_relaxed);
+  SubQueryCount(1);
 }
 
 // TODO: could selectively flush things, but I don't think that will do much

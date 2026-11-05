@@ -4,9 +4,10 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <memory>
 #include <vector>
+
+#include <retro_atomic.h>
 
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoCommon/NativeVertexFormat.h"
@@ -29,7 +30,7 @@ private:
   std::array<D3D11_INPUT_ELEMENT_DESC, 32> m_elems{};
   UINT m_num_elems = 0;
 
-  std::atomic<ID3D11InputLayout*> m_layout{nullptr};
+  retro_atomic_ptr_t m_layout{};
 };
 
 class VertexManager : public VertexManagerBase

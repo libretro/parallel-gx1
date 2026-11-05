@@ -4,6 +4,7 @@
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 
 #include <algorithm>
+#include <cstring>
 
 #include "Common/Assert.h"
 #include "Common/Logging/Log.h"
@@ -31,12 +32,12 @@ static thread_local bool tls_is_updating_devices = false;
 
 void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
 {
-  if (m_is_init)
+  if (IsInit())
     return;
 
   m_wsi = wsi;
 
-  m_populating_devices_counter = 1;
+  retro_atomic_store_release_int(&m_populating_devices_counter, 1);
 
 #if defined(CIFACE_USE_ANDROID) && !defined(__LIBRETRO__)
   m_input_backends.emplace_back(ciface::Android::CreateInputBackend(this));
@@ -50,7 +51,7 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
 
   // Don't allow backends to add devices before the first RefreshDevices() as they will be cleaned
   // there. Or they'd end up waiting on the devices mutex if populated from another thread.
-  m_is_init = true;
+  retro_atomic_store_release_int(&m_is_init, 1);
 
   RefreshDevices();
 
@@ -61,13 +62,13 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
     devices_empty = !list || list->devices.empty();
   }
 
-  if (m_populating_devices_counter.fetch_sub(1) == 1 && !devices_empty)
+  if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1 && !devices_empty)
     InvokeDevicesChangedCallbacks();
 }
 
 void ControllerInterface::ChangeWindow(void* hwnd, WindowChangeReason reason)
 {
-  if (!m_is_init)
+  if (!IsInit())
     return;
 
   if (m_wsi.render_window == hwnd)
@@ -85,7 +86,7 @@ void ControllerInterface::ChangeWindow(void* hwnd, WindowChangeReason reason)
 
 void ControllerInterface::RefreshDevices(RefreshReason reason)
 {
-  if (!m_is_init)
+  if (!IsInit())
     return;
 
   // Backends with a hotplug thread may add or remove devices meanwhile; every change is
@@ -94,18 +95,18 @@ void ControllerInterface::RefreshDevices(RefreshReason reason)
   // Instead only refresh devices that require the window handle.
   if (reason == RefreshReason::WindowChangeOnly)
   {
-    m_populating_devices_counter.fetch_add(1);
+    retro_atomic_fetch_add_int(&m_populating_devices_counter, 1);
 
     for (auto& backend : m_input_backends)
       backend->HandleWindowChange();
 
-    if (m_populating_devices_counter.fetch_sub(1) == 1)
+    if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1)
       InvokeDevicesChangedCallbacks();
 
     return;
   }
 
-  m_populating_devices_counter.fetch_add(1);
+  retro_atomic_fetch_add_int(&m_populating_devices_counter, 1);
 
   // Make sure shared_ptr<Device> objects are released before repopulating.
   ClearDevices();
@@ -123,33 +124,33 @@ void ControllerInterface::RefreshDevices(RefreshReason reason)
 
   WiimoteReal::PopulateDevices();
 
-  if (m_populating_devices_counter.fetch_sub(1) == 1)
+  if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1)
     InvokeDevicesChangedCallbacks();
 }
 
 void ControllerInterface::PlatformPopulateDevices(const std::function<void()>& callback)
 {
-  if (!m_is_init)
+  if (!IsInit())
     return;
 
-  m_populating_devices_counter.fetch_add(1);
+  retro_atomic_fetch_add_int(&m_populating_devices_counter, 1);
 
   callback();
 
-  if (m_populating_devices_counter.fetch_sub(1) == 1)
+  if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1)
     InvokeDevicesChangedCallbacks();
 }
 
 // Remove all devices and call library cleanup functions
 void ControllerInterface::Shutdown()
 {
-  if (!m_is_init)
+  if (!IsInit())
     return;
 
   // Prevent additional devices from being added during shutdown.
-  m_is_init = false;
+  retro_atomic_store_release_int(&m_is_init, 0);
   // Additional safety measure to avoid InvokeDevicesChangedCallbacks()
-  m_populating_devices_counter = 1;
+  retro_atomic_store_release_int(&m_populating_devices_counter, 1);
 
   // Update control references so shared_ptr<Device>s are freed up BEFORE we shutdown the backends.
   ClearDevices();
@@ -191,7 +192,7 @@ void ControllerInterface::ClearDevices()
 bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device)
 {
   // If we are shutdown (or in process of shutting down) ignore this request:
-  if (!m_is_init)
+  if (!IsInit())
     return false;
 
   ASSERT_MSG(CONTROLLERINTERFACE, !tls_is_updating_devices,
@@ -236,7 +237,7 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
   });
   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "Added device: {}", device->GetQualifiedName());
 
-  if (!m_populating_devices_counter)
+  if (!retro_atomic_load_acquire_int(&m_populating_devices_counter))
     InvokeDevicesChangedCallbacks();
   return true;
 }
@@ -245,7 +246,7 @@ void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::De
                                        bool force_devices_release)
 {
   // If we are shutdown (or in process of shutting down) ignore this request:
-  if (!m_is_init)
+  if (!IsInit())
     return;
 
   ASSERT_MSG(CONTROLLERINTERFACE, !tls_is_updating_devices,
@@ -265,7 +266,8 @@ void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::De
                }) != 0;
       });
 
-  if (any_removed && (!m_populating_devices_counter || force_devices_release))
+  if (any_removed &&
+      (!retro_atomic_load_acquire_int(&m_populating_devices_counter) || force_devices_release))
     InvokeDevicesChangedCallbacks();
 }
 
@@ -273,8 +275,8 @@ void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::De
 void ControllerInterface::UpdateInput()
 {
   // This should never happen
-  ASSERT(m_is_init);
-  if (!m_is_init)
+  ASSERT(IsInit());
+  if (!IsInit())
     return;
 
   // The devices to remove are collected as weak pointers: they are not kept alive by this, and
@@ -328,12 +330,16 @@ WindowSystemInfo ControllerInterface::GetWindowSystemInfo() const
 
 void ControllerInterface::SetAspectRatioAdjustment(float value)
 {
-  m_aspect_ratio_adjustment = value;
+  int bits;
+  std::memcpy(&bits, &value, sizeof(bits));
+  retro_atomic_store_release_int(&m_aspect_ratio_adjustment, bits);
 }
 
 Common::Vec2 ControllerInterface::GetWindowInputScale() const
 {
-  const auto ar = m_aspect_ratio_adjustment.load();
+  const int bits = retro_atomic_load_acquire_int(&m_aspect_ratio_adjustment);
+  float ar;
+  std::memcpy(&ar, &bits, sizeof(ar));
 
   if (ar > 1)
     return {1.f, ar};
@@ -343,12 +349,12 @@ Common::Vec2 ControllerInterface::GetWindowInputScale() const
 
 void ControllerInterface::SetMouseCenteringRequested(bool center)
 {
-  m_requested_mouse_centering = center;
+  retro_atomic_store_release_int(&m_requested_mouse_centering, center ? 1 : 0);
 }
 
 bool ControllerInterface::IsMouseCenteringRequested() const
 {
-  return m_requested_mouse_centering.load();
+  return retro_atomic_load_acquire_int(&m_requested_mouse_centering) != 0;
 }
 
 // Register a callback to be called when a device is added or removed (as from the input backends'

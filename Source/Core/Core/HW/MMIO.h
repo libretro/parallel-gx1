@@ -4,11 +4,12 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <bit>
 #include <string>
 #include <tuple>
 #include <type_traits>
+
+#include <retro_atomic.h>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -85,19 +86,20 @@ inline u16* LowPart(u32* ptr)
 {
   return (u16*)ptr;
 }
-inline u16* LowPart(std::atomic<u32>* ptr)
+/* A register shared between threads: the halves are its storage, as the CPU sees it. */
+inline u16* LowPart(retro_atomic_int_t* ptr)
 {
-  static_assert(std::atomic<u32>::is_always_lock_free && sizeof(std::atomic<u32>) == sizeof(u32));
-  return LowPart(std::bit_cast<u32*>(ptr));
+  static_assert(sizeof(retro_atomic_int_t) == sizeof(u32));
+  return LowPart(reinterpret_cast<u32*>(ptr));
 }
 inline u16* HighPart(u32* ptr)
 {
   return LowPart(ptr) + 1;
 }
-inline u16* HighPart(std::atomic<u32>* ptr)
+inline u16* HighPart(retro_atomic_int_t* ptr)
 {
-  static_assert(std::atomic<u32>::is_always_lock_free && sizeof(std::atomic<u32>) == sizeof(u32));
-  return HighPart(std::bit_cast<u32*>(ptr));
+  static_assert(sizeof(retro_atomic_int_t) == sizeof(u32));
+  return HighPart(reinterpret_cast<u32*>(ptr));
 }
 }  // namespace Utils
 

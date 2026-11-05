@@ -4,8 +4,8 @@
 #include "InputCommon/ControllerInterface/Android/Android.h"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -16,6 +16,8 @@
 #include <android/input.h>
 #include <android/keycodes.h>
 #include <jni.h>
+
+#include <retro_atomic.h>
 
 #include "Common/Assert.h"
 #include "Common/Contains.h"
@@ -31,6 +33,21 @@
 
 namespace
 {
+/* A ControlState shared between threads lives in an atomic 64-bit word, as its bits. */
+s64 StateToBits(ControlState state)
+{
+  s64 bits;
+  std::memcpy(&bits, &state, sizeof(bits));
+  return bits;
+}
+
+ControlState StateFromBits(s64 bits)
+{
+  ControlState state;
+  std::memcpy(&state, &bits, sizeof(state));
+  return state;
+}
+
 std::string SOURCE = "Android";
 
 jclass s_list_class;
@@ -496,18 +513,21 @@ public:
 
   ControlState GetState() const override
   {
-    m_last_polled.store(Clock::now(), std::memory_order_relaxed);
-    return m_state.load(std::memory_order_relaxed);
+    retro_atomic_store_relaxed_64(&m_last_polled, Clock::now().time_since_epoch().count());
+    return StateFromBits(retro_atomic_load_relaxed_64(&m_state));
   }
 
-  void SetState(ControlState state) { m_state.store(state, std::memory_order_relaxed); }
+  void SetState(ControlState state) { retro_atomic_store_relaxed_64(&m_state, StateToBits(state)); }
 
-  Clock::time_point GetLastPolled() const { return m_last_polled.load(std::memory_order_relaxed); }
+  Clock::time_point GetLastPolled() const
+  {
+    return Clock::time_point(Clock::duration(retro_atomic_load_relaxed_64(&m_last_polled)));
+  }
 
 private:
   std::string m_name;
-  std::atomic<ControlState> m_state = 0;
-  mutable std::atomic<Clock::time_point> m_last_polled{};
+  retro_atomic_64_t m_state{};
+  mutable retro_atomic_64_t m_last_polled{};
 };
 
 class AndroidKey final : public AndroidInput
@@ -556,7 +576,7 @@ public:
 
   ControlState GetState() const override
   {
-    if (m_is_suspended.load(std::memory_order_relaxed))
+    if (retro_atomic_load_relaxed_int(&m_is_suspended))
     {
       IDCache::GetEnvForThread()->CallVoidMethod(
           m_sensor_event_listener, s_sensor_event_listener_request_unsuspend_sensor, m_j_name);
@@ -572,13 +592,13 @@ public:
 
   void NotifyIsSuspended(bool is_suspended)
   {
-    m_is_suspended.store(is_suspended, std::memory_order_relaxed);
+    retro_atomic_store_relaxed_int(&m_is_suspended, is_suspended ? 1 : 0);
   }
 
 private:
   const jobject m_sensor_event_listener;
   const jstring m_j_name;
-  std::atomic<bool> m_is_suspended = true;
+  retro_atomic_int_t m_is_suspended{1};
 };
 
 class AndroidMotor : public Core::Device::Output
@@ -595,7 +615,7 @@ public:
 
   void SetState(ControlState state) override
   {
-    ControlState old_state = m_state.exchange(state, std::memory_order_relaxed);
+    ControlState old_state = StateFromBits(retro_atomic_exchange_64(&m_state, StateToBits(state)));
 
     if (old_state < 0.5 && state >= 0.5)
     {
@@ -612,7 +632,7 @@ public:
 private:
   const jobject m_vibrator;
   const jint m_index;
-  std::atomic<ControlState> m_state = 0;
+  retro_atomic_64_t m_state{};
 };
 
 class AndroidDevice final : public Core::Device

@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <memory>
 #include <vector>
@@ -17,6 +16,8 @@
 #include "Core/HW/WiimoteEmu/MotionPlus.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 #include "InputCommon/ControllerInterface/CoreDevice.h"
+
+#include <retro_atomic.h>
 
 namespace ciface::WiimoteController
 {
@@ -264,7 +265,7 @@ private:
   bool m_rumble = false;
 
   // For pulse of rumble motor to simulate multiple levels.
-  std::atomic<ControlState> m_rumble_level;
+  retro_atomic_64_t m_rumble_level{}; /* the bits of a ControlState */
   Clock::time_point m_last_rumble_change = Clock::now();
 
   // Assume mode is disabled so one gets set.

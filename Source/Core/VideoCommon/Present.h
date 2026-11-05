@@ -13,6 +13,8 @@
 #include <memory>
 #include <tuple>
 
+#include <retro_atomic.h>
+
 class AbstractTexture;
 struct SurfaceInfo;
 enum class AspectMode : int;
@@ -165,7 +167,7 @@ private:
   // Can be used for presentation of ImmediateXFB swaps which don't have timing information.
   u64 m_next_swap_estimated_ticks = 0;
 
-  std::atomic_bool m_immediate_swap_happened_this_field{};
+  retro_atomic_int_t m_immediate_swap_happened_this_field{};
 };
 
 }  // namespace VideoCommon

@@ -8,6 +8,8 @@
 #include <memory>
 #include <vector>
 
+#include <retro_atomic.h>
+
 #include <Common/WorkQueueThread.h>
 #include "Common/Flag.h"
 
@@ -118,7 +120,7 @@ private:
     u64 fence_counter = 0;
     bool init_command_buffer_used = false;
     bool semaphore_used = false;
-    std::atomic<bool> waiting_for_submit{false};
+    retro_atomic_int_t waiting_for_submit{};
     u32 frame_index = 0;
 
     std::vector<std::function<void()>> cleanup_resources;

@@ -97,7 +97,7 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
     {
       // If more memory than allowed has already been loaded, we will load nothing more
       //  until the next ScheduleAssetsToLoad from Manager.
-      if (m_change_in_memory > batch->allowed_memory)
+      if (retro_atomic_load_acquire_64(&m_change_in_memory) > batch->allowed_memory)
         retro_atomic_store_release_size(&batch->cursor, batch->assets.size());
 
       const size_t index = retro_atomic_fetch_add_size(&batch->cursor, 1);
@@ -126,10 +126,10 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
 
     // Unload previously loaded asset. An asset another thread is busy with comes back 0
     // and is skipped; the Manager schedules it again.
-    m_change_in_memory -= item->Unload();
+    retro_atomic_fetch_sub_64(&m_change_in_memory, static_cast<s64>(item->Unload()));
 
     const std::size_t bytes_loaded = item->Load();
-    m_change_in_memory += s64(bytes_loaded);
+    retro_atomic_fetch_add_64(&m_change_in_memory, static_cast<s64>(bytes_loaded));
 
     INFO_LOG_FMT(VIDEO, "CustomAssetLoader thread {} loaded: {} ({})", thread_index,
                  item->GetAssetId(), UICommon::FormatSize(bytes_loaded));
@@ -149,7 +149,7 @@ auto CustomAssetLoader::TakeLoadResults() -> LoadResults
     results.asset_handles.push_back(loaded->handle);
     delete loaded;
   }
-  results.change_in_memory = m_change_in_memory.exchange(0);
+  results.change_in_memory = retro_atomic_exchange_64(&m_change_in_memory, 0);
   return results;
 }
 
@@ -177,7 +177,7 @@ void CustomAssetLoader::Reset(bool restart_worker_threads)
   delete static_cast<Batch*>(retro_atomic_exchange_ptr(&m_batch, nullptr));
   quiesce_deinit(&m_batch_quiesce);
   TakeLoadResults();
-  m_change_in_memory = 0;
+  retro_atomic_store_release_64(&m_change_in_memory, 0);
 
   if (restart_worker_threads)
   {

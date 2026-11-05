@@ -142,7 +142,8 @@ D3DVertexFormat::D3DVertexFormat(const PortableVertexDeclaration& vtx_decl)
 
 D3DVertexFormat::~D3DVertexFormat()
 {
-  ID3D11InputLayout* layout = m_layout.load();
+  ID3D11InputLayout* layout =
+      static_cast<ID3D11InputLayout*>(retro_atomic_load_acquire_ptr(&m_layout));
   if (layout)
     layout->Release();
 }
@@ -151,7 +152,8 @@ ID3D11InputLayout* D3DVertexFormat::GetInputLayout(const void* vs_bytecode, size
 {
   // CreateInputLayout requires a shader input, but it only looks at the signature of the shader,
   // so we don't need to recompute it if the shader changes.
-  ID3D11InputLayout* layout = m_layout.load();
+  ID3D11InputLayout* layout =
+      static_cast<ID3D11InputLayout*>(retro_atomic_load_acquire_ptr(&m_layout));
   if (layout)
     return layout;
 
@@ -161,13 +163,12 @@ ID3D11InputLayout* D3DVertexFormat::GetInputLayout(const void* vs_bytecode, size
 
   // This method can be called from multiple threads, so ensure that only one thread sets the
   // cached input layout pointer. If another thread beats this thread, use the existing layout.
-  ID3D11InputLayout* expected = nullptr;
-  if (!m_layout.compare_exchange_strong(expected, layout))
+  if (!retro_atomic_cas_ptr(&m_layout, nullptr, layout))
   {
     if (layout)
       layout->Release();
 
-    layout = expected;
+    layout = static_cast<ID3D11InputLayout*>(retro_atomic_load_acquire_ptr(&m_layout));
   }
 
   return layout;

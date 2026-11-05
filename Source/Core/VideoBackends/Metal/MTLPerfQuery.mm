@@ -21,8 +21,7 @@ void Metal::PerfQuery::ResetQuery()
 {
   std::lock_guard<std::mutex> lock(m_results_mtx);
   m_current_query++;
-  for (std::atomic<u32>& result : m_results)
-    result.store(0, std::memory_order_relaxed);
+  ResetQueryResults();
 }
 
 u32 Metal::PerfQuery::GetQueryResult(PerfQueryType type)
@@ -30,20 +29,19 @@ u32 Metal::PerfQuery::GetQueryResult(PerfQueryType type)
   u32 result = 0;
   if (type == PQ_ZCOMP_INPUT_ZCOMPLOC || type == PQ_ZCOMP_OUTPUT_ZCOMPLOC)
   {
-    result = m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_ZCOMP_INPUT || type == PQ_ZCOMP_OUTPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP);
   }
   else if (type == PQ_BLEND_INPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed) +
-             m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP) + QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_EFB_COPY_CLOCKS)
   {
-    result = m_results[PQG_EFB_COPY_CLOCKS].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_EFB_COPY_CLOCKS);
   }
 
   return result / 4;
@@ -65,7 +63,7 @@ void Metal::PerfQuery::FlushResults()
 
 bool Metal::PerfQuery::IsFlushed() const
 {
-  return m_query_count.load(std::memory_order_acquire) == 0;
+  return QueryCount() == 0;
 }
 
 void Metal::PerfQuery::ReturnResults(const u64* data, const PerfQueryGroup* groups, size_t count,
@@ -83,10 +81,10 @@ void Metal::PerfQuery::ReturnResults(const u64* data, const PerfQueryGroup* grou
 
         native_res_result /= g_ActiveConfig.iMultisamples;
 
-        m_results[groups[i]].fetch_add(native_res_result, std::memory_order_relaxed);
+        AddQueryResult(groups[i], static_cast<u32>(native_res_result));
       }
     }
-    m_query_count.fetch_sub(1, std::memory_order_release);
+    SubQueryCount(1);
   }
   m_cv.notify_one();
 }

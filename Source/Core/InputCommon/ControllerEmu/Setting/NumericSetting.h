@@ -4,7 +4,7 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
+#include <cstring>
 #include <functional>
 #include <string>
 #include <utility>
@@ -15,8 +15,38 @@
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerInterface/CoreDevice.h"
 
+#include <retro_atomic.h>
+
 namespace ControllerEmu
 {
+/* A setting's value lives in one atomic 64-bit word, as its bits. */
+inline s64 SettingToBits(double value)
+{
+  s64 bits;
+  std::memcpy(&bits, &value, sizeof(bits));
+  return bits;
+}
+inline s64 SettingToBits(int value)
+{
+  return value;
+}
+inline s64 SettingToBits(bool value)
+{
+  return value ? 1 : 0;
+}
+inline void SettingFromBits(s64 bits, double* value)
+{
+  std::memcpy(value, &bits, sizeof(*value));
+}
+inline void SettingFromBits(s64 bits, int* value)
+{
+  *value = static_cast<int>(bits);
+}
+inline void SettingFromBits(s64 bits, bool* value)
+{
+  *value = bits != 0;
+}
+
 enum class SettingType
 {
   Int,
@@ -185,26 +215,36 @@ public:
     // Otherwise settings will all change to 0 when window focus is lost.
     // This is very undesirable for things like battery level or attached extension.
     if (!IsSimpleValue() && ControlReference::GetInputGate())
-      m_value = m_input.GetState<ValueType>();
+      StoreValue(m_input.GetState<ValueType>());
 
-    return m_value;
+    return GetCachedValue();
   }
 
-  ValueType GetCachedValue() const { return m_value; }
+  ValueType GetCachedValue() const
+  {
+    ValueType value;
+    SettingFromBits(retro_atomic_load_relaxed_64(&m_value), &value);
+    return value;
+  }
 
   bool IsSimpleValue() const { return !m_input.HasExpression(); }
 
   virtual void SetValue(const ValueType value)
   {
-    m_value = value;
+    StoreValue(value);
 
     // Clear the expression to use our new "simple" value.
     m_input.SetExpression("");
   }
 
 private:
+  void StoreValue(ValueType value) const
+  {
+    retro_atomic_store_relaxed_64(&m_value, SettingToBits(value));
+  }
+
   // Values are R/W by both UI and CPU threads.
-  mutable std::atomic<ValueType> m_value = {};
+  mutable retro_atomic_64_t m_value{};
 
   // Unfortunately InputReference's state grabbing is non-const requiring mutable here.
   mutable InputReference m_input;

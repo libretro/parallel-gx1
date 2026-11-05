@@ -22,7 +22,7 @@ public:
 
   /// Notify PerfQuery of a new pending encoder
   /// One call to ReturnResults should be made for every call to IncCount
-  void IncCount() { m_query_count.fetch_add(1, std::memory_order_relaxed); }
+  void IncCount() { AddQueryCount(1); }
   /// May be called from any thread
   void ReturnResults(const u64* data, const PerfQueryGroup* groups, size_t count, u32 query_id);
 

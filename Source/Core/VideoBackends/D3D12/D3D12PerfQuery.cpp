@@ -55,7 +55,7 @@ void PerfQuery::EnableQuery(PerfQueryGroup group)
 {
   // Block if there are no free slots.
   // Otherwise, try to keep half of them available.
-  const u32 query_count = m_query_count.load(std::memory_order_relaxed);
+  const u32 query_count = QueryCount();
   if (query_count > m_query_buffer.size() / 2)
   {
     const bool do_resolve = m_unresolved_queries > m_query_buffer.size() / 2;
@@ -88,20 +88,19 @@ void PerfQuery::DisableQuery(PerfQueryGroup group)
     g_dx_context->GetCommandList()->EndQuery(m_query_heap.Get(), D3D12_QUERY_TYPE_OCCLUSION,
                                              m_query_next_pos);
     m_query_next_pos = (m_query_next_pos + 1) % PERF_QUERY_BUFFER_SIZE;
-    m_query_count.fetch_add(1, std::memory_order_relaxed);
+    AddQueryCount(1);
     m_unresolved_queries++;
   }
 }
 
 void PerfQuery::ResetQuery()
 {
-  m_query_count.store(0, std::memory_order_relaxed);
+  retro_atomic_store_release_int(&m_query_count, 0);
   m_unresolved_queries = 0;
   m_query_resolve_pos = 0;
   m_query_readback_pos = 0;
   m_query_next_pos = 0;
-  for (size_t i = 0; i < m_results.size(); ++i)
-    m_results[i].store(0, std::memory_order_relaxed);
+  ResetQueryResults();
   for (auto& entry : m_query_buffer)
   {
     entry.fence_value = 0;
@@ -115,20 +114,19 @@ u32 PerfQuery::GetQueryResult(PerfQueryType type)
   u32 result = 0;
   if (type == PQ_ZCOMP_INPUT_ZCOMPLOC || type == PQ_ZCOMP_OUTPUT_ZCOMPLOC)
   {
-    result = m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_ZCOMP_INPUT || type == PQ_ZCOMP_OUTPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP);
   }
   else if (type == PQ_BLEND_INPUT)
   {
-    result = m_results[PQG_ZCOMP].load(std::memory_order_relaxed) +
-             m_results[PQG_ZCOMP_ZCOMPLOC].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_ZCOMP) + QueryResult(PQG_ZCOMP_ZCOMPLOC);
   }
   else if (type == PQ_EFB_COPY_CLOCKS)
   {
-    result = m_results[PQG_EFB_COPY_CLOCKS].load(std::memory_order_relaxed);
+    result = QueryResult(PQG_EFB_COPY_CLOCKS);
   }
 
   return result / 4;
@@ -142,7 +140,7 @@ void PerfQuery::FlushResults()
 
 bool PerfQuery::IsFlushed() const
 {
-  return m_query_count.load(std::memory_order_relaxed) == 0;
+  return QueryCount() == 0;
 }
 
 void PerfQuery::ResolveQueries()
@@ -180,7 +178,7 @@ void PerfQuery::ReadbackQueries(bool blocking)
   u64 completed_fence_counter = g_dx_context->GetCompletedFenceValue();
 
   // Need to save these since ProcessResults will modify them.
-  const u32 outstanding_queries = m_query_count.load(std::memory_order_relaxed);
+  const u32 outstanding_queries = QueryCount();
   u32 readback_count = 0;
   for (u32 i = 0; i < outstanding_queries; i++)
   {
@@ -218,7 +216,7 @@ void PerfQuery::ReadbackQueries(bool blocking)
 void PerfQuery::AccumulateQueriesFromBuffer(u32 query_count)
 {
   // Should be at maximum query_count queries pending.
-  ASSERT(query_count <= m_query_count.load(std::memory_order_relaxed) &&
+  ASSERT(query_count <= QueryCount() &&
          (m_query_readback_pos + query_count) <= PERF_QUERY_BUFFER_SIZE);
 
   const D3D12_RANGE read_range = {m_query_readback_pos * sizeof(PerfQueryDataType),
@@ -251,15 +249,14 @@ void PerfQuery::AccumulateQueriesFromBuffer(u32 query_count)
                             g_framebuffer_manager->GetEFBHeight();
     if (g_ActiveConfig.iMultisamples > 1)
       native_res_result /= g_ActiveConfig.iMultisamples;
-    m_results[entry.query_group].fetch_add(static_cast<u32>(native_res_result),
-                                           std::memory_order_relaxed);
+    AddQueryResult(entry.query_group, static_cast<u32>(native_res_result));
   }
 
   constexpr D3D12_RANGE write_range = {0, 0};
   m_query_readback_buffer->Unmap(0, &write_range);
 
   m_query_readback_pos = (m_query_readback_pos + query_count) % PERF_QUERY_BUFFER_SIZE;
-  m_query_count.fetch_sub(query_count, std::memory_order_relaxed);
+  SubQueryCount(query_count);
 }
 
 void PerfQuery::PartialFlush(bool resolve, bool blocking)
