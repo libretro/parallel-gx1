@@ -32,9 +32,6 @@
 #define CIFACE_USE_PIPES
 #endif
 #define CIFACE_USE_DUALSHOCKUDPCLIENT
-#if defined(HAVE_SDL3)
-#define CIFACE_USE_SDL
-#endif
 #if defined(HAVE_HIDAPI)
 #define CIFACE_USE_STEAMDECK
 #endif

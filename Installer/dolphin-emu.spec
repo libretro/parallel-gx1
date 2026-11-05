@@ -58,13 +58,11 @@ BuildRequires:  miniupnpc-devel
 BuildRequires:  openal-soft-devel
 #polarssl is now mbedtls:
 BuildRequires:  mbedtls-devel
-BuildRequires:  SDL2-devel
 BuildRequires:  SFML-devel
 %endif
 
 %if 0%{?suse_version}
 BuildRequires:  libminiupnpc-devel
-BuildRequires:  libSDL2-devel
 BuildRequires:  lzo-devel
 BuildRequires:  openal-devel
 BuildRequires:  sfml-devel

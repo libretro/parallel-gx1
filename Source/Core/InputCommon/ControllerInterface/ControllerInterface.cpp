@@ -18,9 +18,6 @@
 #ifdef CIFACE_USE_OSX
 #include "InputCommon/ControllerInterface/Quartz/Quartz.h"
 #endif
-#ifdef CIFACE_USE_SDL
-#include "InputCommon/ControllerInterface/SDL/SDL.h"
-#endif
 #ifdef CIFACE_USE_ANDROID
 #include "InputCommon/ControllerInterface/Android/Android.h"
 #endif
@@ -66,9 +63,6 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
 #endif
 #ifdef CIFACE_USE_OSX
   m_input_backends.emplace_back(ciface::Quartz::CreateInputBackend(this));
-#endif
-#ifdef CIFACE_USE_SDL
-  m_input_backends.emplace_back(ciface::SDL::CreateInputBackend(this));
 #endif
 #if defined(CIFACE_USE_ANDROID) && !defined(__LIBRETRO__)
   m_input_backends.emplace_back(ciface::Android::CreateInputBackend(this));
