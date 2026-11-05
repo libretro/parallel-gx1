@@ -11,10 +11,11 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
-#include <thread>
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+
+#include <features/features_cpu.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
@@ -116,7 +117,7 @@ void CPUInfo::Detect()
 
   // This should be much more reliable and easier than trying to get the number of cores out of the
   // CPUID data ourselves.
-  num_cores = std::max(static_cast<int>(std::thread::hardware_concurrency()), 1);
+  num_cores = std::max(static_cast<int>(cpu_features_get_core_amount()), 1);
 
   // Assume CPU supports the CPUID instruction. Those that don't can barely
   // boot modern OS anyway.

@@ -140,17 +140,26 @@ bool AsyncShaderCompiler::StartWorkerThreads(u32 num_worker_threads)
 
     m_worker_thread_start_result.store(false);
 
-    std::thread thr(&AsyncShaderCompiler::WorkerThreadEntryPoint, this, thread_param);
+    // The new thread takes its parameter before it signals m_init_event.
+    m_starting_thread_param = thread_param;
+    sthread_t* thr = sthread_create(Common::ThreadEntry<&AsyncShaderCompiler::WorkerThreadStart>,
+                                    this);
+    if (!thr)
+    {
+      WorkerThreadExit(thread_param);
+      WARN_LOG_FMT(VIDEO, "Failed to start shader compiler worker thread.");
+      break;
+    }
     m_init_event.Wait();
 
     if (!m_worker_thread_start_result.load())
     {
       WARN_LOG_FMT(VIDEO, "Failed to start shader compiler worker thread.");
-      thr.join();
+      Common::JoinThread(thr);
       break;
     }
 
-    m_worker_threads.push_back(std::move(thr));
+    m_worker_threads.push_back(thr);
   }
 
   return HasWorkerThreads();
@@ -183,8 +192,8 @@ void AsyncShaderCompiler::StopWorkerThreads()
   }
 
   // Wait for worker threads to exit.
-  for (std::thread& thr : m_worker_threads)
-    thr.join();
+  for (sthread_t*& thr : m_worker_threads)
+    Common::JoinThread(thr);
   m_worker_threads.clear();
   m_exit_flag.Clear();
 }
@@ -201,6 +210,11 @@ bool AsyncShaderCompiler::WorkerThreadInitWorkerThread(void* param)
 
 void AsyncShaderCompiler::WorkerThreadExit(void* param)
 {
+}
+
+void AsyncShaderCompiler::WorkerThreadStart()
+{
+  WorkerThreadEntryPoint(m_starting_thread_param);
 }
 
 void AsyncShaderCompiler::WorkerThreadEntryPoint(void* param)

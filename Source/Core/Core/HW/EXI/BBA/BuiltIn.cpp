@@ -5,6 +5,7 @@
 
 #include <bit>
 #include <optional>
+#include <thread>
 #include "SFML/Network/IpAddress.hpp"
 #include "SFML/Network/Socket.hpp"
 
@@ -21,6 +22,7 @@
 #include "Common/MsgHandler.h"
 #include "Common/Network.h"
 #include "Common/ScopeGuard.h"
+#include "Common/Thread.h"
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
 namespace
@@ -116,8 +118,7 @@ void CEXIETHERNET::BuiltInBBAInterface::Deactivate()
   m_upnp_httpd.close();
 
   // Wait for read thread to exit.
-  if (m_read_thread.joinable())
-    m_read_thread.join();
+  Common::JoinThread(m_read_thread);
 }
 
 bool CEXIETHERNET::BuiltInBBAInterface::IsActivated()
@@ -700,8 +701,9 @@ bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
   return true;
 }
 
-void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(CEXIETHERNET::BuiltInBBAInterface* self)
+void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
 {
+  BuiltInBBAInterface* const self = static_cast<BuiltInBBAInterface*>(data);
   std::size_t datasize = 0;
   while (!self->m_read_thread_shutdown.IsSet())
   {
@@ -771,7 +773,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(CEXIETHERNET::BuiltInB
 
 bool CEXIETHERNET::BuiltInBBAInterface::RecvInit()
 {
-  m_read_thread = std::thread(ReadThreadHandler, this);
+  m_read_thread = sthread_create(ReadThreadHandler, this);
   return true;
 }
 

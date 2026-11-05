@@ -4,7 +4,6 @@
 #include "Core/LibusbUtils.h"
 
 #include <mutex>
-#include <thread>
 
 #if defined(__LIBUSB__)
 #include <libusb.h>
@@ -36,7 +35,7 @@ public:
       WARN_LOG_FMT(IOS_USB, "Failed to set LIBUSB_OPTION_USE_USBDK: {}", ErrorWrap(usbdk_ret));
 #endif
     m_event_thread_running.Set();
-    m_event_thread = std::thread(&Impl::EventThread, this);
+    m_event_thread = sthread_create(Common::ThreadEntry<&Impl::EventThread>, this);
   }
 
   ~Impl()
@@ -46,7 +45,7 @@ public:
 #if defined(LIBUSB_API_VERSION) && LIBUSB_API_VERSION >= 0x01000105
     libusb_interrupt_event_handler(m_context);
 #endif
-    m_event_thread.join();
+    Common::JoinThread(m_event_thread);
     libusb_exit(m_context);
   }
 
@@ -58,7 +57,7 @@ public:
 #if defined(LIBUSB_API_VERSION) && LIBUSB_API_VERSION >= 0x01000105
     libusb_interrupt_event_handler(m_context);
 #endif
-    m_event_thread.join();
+    Common::JoinThread(m_event_thread);
     libusb_exit(m_context);
     m_context = nullptr; // clear this so it no longer fires in deconstructor again
   }
@@ -100,7 +99,7 @@ private:
   libusb_context* m_context = nullptr;
   mutable std::mutex m_device_list_mutex;
   Common::Flag m_event_thread_running;
-  std::thread m_event_thread;
+  sthread_t* m_event_thread = nullptr;
 };
 #else
 class Context::Impl

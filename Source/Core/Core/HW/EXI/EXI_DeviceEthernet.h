@@ -6,7 +6,6 @@
 #include <atomic>
 #include <map>
 #include <mutex>
-#include <thread>
 #include <vector>
 #include "SFML/Network/IpAddress.hpp"
 
@@ -17,6 +16,8 @@
 #include <SFML/Network.hpp>
 #ifdef HAVE_CPPIPC
 #include <libipc/ipc.h>
+
+#include <rthreads/rthreads.h>
 #endif
 
 #include "Common/Flag.h"
@@ -349,10 +350,10 @@ private:
   protected:
 #if defined(WIN32) || defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) ||          \
     defined(__OpenBSD__)
-    std::thread readThread;
+    sthread_t* readThread = nullptr;
     Common::Flag readEnabled;
     Common::Flag readThreadShutdown;
-    static void ReadThreadHandler(TAPNetworkInterface* self);
+    static void ReadThreadHandler(void* data);
 #endif
 #if defined(_WIN32)
     HANDLE mHAdapter = INVALID_HANDLE_VALUE;
@@ -417,10 +418,10 @@ private:
     sf::IpAddress m_sf_recipient_ip = sf::IpAddress::Any;
     char m_in_frame[9004]{};
     char m_out_frame[9004]{};
-    std::thread m_read_thread;
+    sthread_t* m_read_thread = nullptr;
     Common::Flag m_read_enabled;
     Common::Flag m_read_thread_shutdown;
-    static void ReadThreadHandler(XLinkNetworkInterface* self);
+    static void ReadThreadHandler(void* data);
 #endif
   };
 
@@ -458,10 +459,10 @@ private:
 #if defined(WIN32) || defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) ||          \
     defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__)
     NetworkRef m_network_ref;
-    std::thread m_read_thread;
+    sthread_t* m_read_thread = nullptr;
     Common::Flag m_read_enabled;
     Common::Flag m_read_thread_shutdown;
-    static void ReadThreadHandler(BuiltInBBAInterface* self);
+    static void ReadThreadHandler(void* data);
 #endif
     void WriteToQueue(std::vector<u8> data);
     bool WillQueueOverrun() const;
@@ -497,7 +498,7 @@ private:
 
     bool m_active{};
     ipc::channel m_channel;
-    std::thread m_read_thread;
+    sthread_t* m_read_thread = nullptr;
     Common::Flag m_read_enabled;
     Common::Flag m_read_thread_shutdown;
 

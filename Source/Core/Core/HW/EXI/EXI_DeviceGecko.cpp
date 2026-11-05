@@ -7,7 +7,6 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <thread>
 #include <vector>
 
 #include <fmt/format.h>
@@ -21,35 +20,35 @@ namespace ExpansionInterface
 {
 u16 GeckoSockServer::server_port;
 int GeckoSockServer::client_count;
-std::thread GeckoSockServer::connectionThread;
+sthread_t* GeckoSockServer::connectionThread = nullptr;
 Common::Flag GeckoSockServer::server_running;
 std::mutex GeckoSockServer::connection_lock;
 std::queue<std::unique_ptr<sf::TcpSocket>> GeckoSockServer::waiting_socks;
 
 GeckoSockServer::GeckoSockServer() : client_running(false)
 {
-  if (!connectionThread.joinable())
-    connectionThread = std::thread(GeckoConnectionWaiter);
+  if (!connectionThread)
+    connectionThread = sthread_create(GeckoConnectionWaiter, nullptr);
 }
 
 GeckoSockServer::~GeckoSockServer()
 {
-  if (clientThread.joinable())
+  if (clientThread)
   {
     --client_count;
 
     client_running.Clear();
-    clientThread.join();
+    Common::JoinThread(clientThread);
   }
 
-  if (client_count <= 0 && connectionThread.joinable())
+  if (client_count <= 0 && connectionThread)
   {
     server_running.Clear();
-    connectionThread.join();
+    Common::JoinThread(connectionThread);
   }
 }
 
-void GeckoSockServer::GeckoConnectionWaiter()
+void GeckoSockServer::GeckoConnectionWaiter(void*)
 {
   Common::SetCurrentThreadName("Gecko Connection Waiter");
 
@@ -93,15 +92,15 @@ bool GeckoSockServer::GetAvailableSock()
   if (!waiting_socks.empty())
   {
     client = std::move(waiting_socks.front());
-    if (clientThread.joinable())
+    if (clientThread)
     {
       client_running.Clear();
-      clientThread.join();
+      Common::JoinThread(clientThread);
 
       recv_fifo = std::deque<u8>();
       send_fifo = std::deque<u8>();
     }
-    clientThread = std::thread(&GeckoSockServer::ClientThread, this);
+    clientThread = sthread_create(Common::ThreadEntry<&GeckoSockServer::ClientThread>, this);
     client_count++;
     waiting_socks.pop();
     sock_filled = true;

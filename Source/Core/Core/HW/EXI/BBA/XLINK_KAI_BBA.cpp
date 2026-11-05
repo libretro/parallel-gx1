@@ -3,6 +3,7 @@
 
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
 #include "SFML/Network/IpAddress.hpp"
@@ -85,7 +86,11 @@ void CEXIETHERNET::XLinkNetworkInterface::Deactivate()
   m_read_thread_shutdown.Set();
 
   // Detach the thread and let it die on its own (leaks ~9kb of memory)
-  m_read_thread.detach();
+  if (m_read_thread)
+  {
+    sthread_detach(m_read_thread);
+    m_read_thread = nullptr;
+  }
 
   // Close the socket
   m_sf_socket.unbind();
@@ -134,9 +139,9 @@ bool CEXIETHERNET::XLinkNetworkInterface::SendFrame(const u8* frame, u32 size)
   }
 }
 
-void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(
-    CEXIETHERNET::XLinkNetworkInterface* self)
+void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
 {
+  XLinkNetworkInterface* const self = static_cast<XLinkNetworkInterface*>(data);
   std::optional<sf::IpAddress> sender;
   u16 port;
 
@@ -291,7 +296,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(
 
 bool CEXIETHERNET::XLinkNetworkInterface::RecvInit()
 {
-  m_read_thread = std::thread(ReadThreadHandler, this);
+  m_read_thread = sthread_create(ReadThreadHandler, this);
   return true;
 }
 

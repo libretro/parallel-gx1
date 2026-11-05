@@ -5,7 +5,8 @@
 
 #include <atomic>
 #include <mutex>
-#include <thread>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
@@ -40,10 +41,10 @@ public:
   u32 DSP_UpdateRate() override;
 
 private:
-  static void DSPThread(DSPLLE* dsp_lle);
+  static void DSPThread(void* data);
 
   DSPCore m_dsp_core;
-  std::thread m_dsp_thread;
+  sthread_t* m_dsp_thread = nullptr;
   std::mutex m_dsp_thread_mutex;
   bool m_is_dsp_on_thread = false;
   Common::Flag m_is_running;

@@ -20,6 +20,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/Network.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Core/HW/EXI/BBA/TAPServerConnection.h"
 #include "SFML/Network/IpAddress.hpp"
 
@@ -142,8 +143,7 @@ void TAPServerConnection::Deactivate()
 {
   m_read_enabled.Clear();
   m_read_shutdown.Set();
-  if (m_read_thread.joinable())
-    m_read_thread.join();
+  Common::JoinThread(m_read_thread);
   m_read_shutdown.Clear();
 
   if (m_fd >= 0)
@@ -158,7 +158,7 @@ bool TAPServerConnection::IsActivated()
 
 bool TAPServerConnection::RecvInit()
 {
-  m_read_thread = std::thread(&TAPServerConnection::ReadThreadHandler, this);
+  m_read_thread = sthread_create(Common::ThreadEntry<&TAPServerConnection::ReadThreadHandler>, this);
   return true;
 }
 

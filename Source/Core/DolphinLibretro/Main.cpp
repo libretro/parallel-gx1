@@ -15,6 +15,7 @@
 #include "Common/FileUtil.h"
 #include "Common/GL/GLContext.h"
 #include "Common/Logging/LogManager.h"
+#include "Common/ParallelFor.h"
 #include "Common/Thread.h"
 #include "Common/scmrev.h"
 #include "Common/Version.h"
@@ -162,6 +163,7 @@ void retro_init(void)
 void retro_deinit(void)
 {
   Libretro::g_emuthread_launched = false;
+  parallel_for_deinit();
 #ifdef PERF_TEST
   perf_cb.perf_log();
 #endif
@@ -286,8 +288,7 @@ void retro_run(void)
     WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
     if (system.IsDualCoreMode())
     {
-      Core::s_emu_thread = std::thread(Core::EmuThread,
-        std::ref(system), std::move(Core::g_boot_params), wsi);
+      Core::StartEmuThread(system, std::move(Core::g_boot_params), wsi);
 
       // Wait until CPU thread has reached Run()
       auto& cpu_manager = system.GetCPU();

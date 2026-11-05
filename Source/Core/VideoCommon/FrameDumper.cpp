@@ -6,6 +6,7 @@
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
 #include "Common/Image.h"
+#include "Common/Thread.h"
 
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
@@ -159,8 +160,7 @@ void FrameDumper::ShutdownFrameDumping()
   // Wake thread up, and wait for it to exit.
   m_frame_dump_thread_running.Clear();
   m_frame_dump_start.Set();
-  if (m_frame_dump_thread.joinable())
-    m_frame_dump_thread.join();
+  Common::JoinThread(m_frame_dump_thread);
   m_frame_dump_render_framebuffer.reset();
   m_frame_dump_render_texture.reset();
 
@@ -174,10 +174,9 @@ void FrameDumper::DumpFrameData(const u8* data, int w, int h, int stride)
 
   if (!m_frame_dump_thread_running.IsSet())
   {
-    if (m_frame_dump_thread.joinable())
-      m_frame_dump_thread.join();
+    Common::JoinThread(m_frame_dump_thread);
     m_frame_dump_thread_running.Set();
-    m_frame_dump_thread = std::thread(&FrameDumper::FrameDumpThreadFunc, this);
+    m_frame_dump_thread = sthread_create(Common::ThreadEntry<&FrameDumper::FrameDumpThreadFunc>, this);
   }
 
   // Wake worker thread up.

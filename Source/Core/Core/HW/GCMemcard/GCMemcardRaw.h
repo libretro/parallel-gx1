@@ -6,7 +6,8 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
+
+#include <rthreads/rthreads.h>
 #include "Common/Event.h"
 #include "Common/Flag.h"
 #include "Core/HW/GCMemcard/GCMemcard.h"
@@ -39,7 +40,7 @@ private:
   std::string m_filename;
   std::unique_ptr<u8[]> m_memcard_data;
   std::unique_ptr<u8[]> m_flush_buffer;
-  std::thread m_flush_thread;
+  sthread_t* m_flush_thread = nullptr;
   std::mutex m_flush_mutex;
   Common::Event m_flush_trigger;
   Common::Flag m_dirty;

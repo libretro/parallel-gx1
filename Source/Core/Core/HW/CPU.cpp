@@ -115,10 +115,10 @@ void CPUManager::Run()
   auto& power_pc = m_system.GetPowerPC();
 
   // Start a separate time tracker thread
-  std::thread timing;
+  sthread_t* timing = nullptr;
   if (Config::Get(Config::MAIN_TIME_TRACKING))
   {
-    timing = std::thread(&CPUManager::StartTimePlayedTimer, this);
+    timing = sthread_create(Common::ThreadEntry<&CPUManager::StartTimePlayedTimer>, this);
   }
 
 #ifdef __LIBRETRO__
@@ -219,10 +219,10 @@ void CPUManager::Run()
     }
   }
 
-  if (timing.joinable())
+  if (timing)
   {
     m_time_played_finish_sync.Set();
-    timing.join();
+    Common::JoinThread(timing);
   }
 
   state_lock.unlock();

@@ -1108,6 +1108,8 @@ DOLPHIN_SOURCES_C :=
 DOLPHIN_SOURCES_CXX :=
 DOLPHIN_SOURCES_ASM :=
 DOLPHIN_SOURCES_OBJCXX :=
+DOLPHIN_SOURCES_C += \
+	$(CORE_DIR)/Source/Core/Common/ParallelFor.c
 DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/AudioCommon/AudioCommon.cpp \
 	$(CORE_DIR)/Source/Core/AudioCommon/Mixer.cpp \

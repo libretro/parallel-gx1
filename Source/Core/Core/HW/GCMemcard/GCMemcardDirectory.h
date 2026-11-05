@@ -5,8 +5,9 @@
 
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/Event.h"
 #include "Common/Flag.h"
@@ -63,5 +64,5 @@ private:
   Common::Event m_flush_trigger;
   std::mutex m_write_mutex;
   Common::Flag m_exiting;
-  std::thread m_flush_thread;
+  sthread_t* m_flush_thread = nullptr;
 };

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <thread>
 
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
@@ -63,7 +62,7 @@ private:
   // Ensures all encoded frames have been written to the output file.
   void FinishFrameData();
 
-  std::thread m_frame_dump_thread;
+  sthread_t* m_frame_dump_thread = nullptr;
   Common::Flag m_frame_dump_thread_running;
 
   // Used to kick frame dump thread.

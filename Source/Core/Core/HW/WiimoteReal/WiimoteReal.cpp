@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <mutex>
+#include <thread>
 #include <unordered_set>
 
 #include <SFML/Network/UdpSocket.hpp>
@@ -590,7 +591,7 @@ void WiimoteScanner::StartThread()
   if (m_scan_thread_running.IsSet())
     return;
   m_scan_thread_running.Set();
-  m_scan_thread = std::thread(&WiimoteScanner::ThreadFunc, this);
+  m_scan_thread = sthread_create(Common::ThreadEntry<&WiimoteScanner::ThreadFunc>, this);
 }
 
 void WiimoteScanner::StopThread()
@@ -605,7 +606,7 @@ void WiimoteScanner::StopThread()
     }
 
     m_scan_thread_running.Clear();
-    m_scan_thread.join();
+    Common::JoinThread(m_scan_thread);
   }
 }
 
@@ -681,7 +682,8 @@ void WiimoteScanner::ThreadFunc()
 #if defined(__LIBRETRO__) && defined(SKIP_WIMOTESCANNER_THREAD)
   return;
 #endif
-  std::thread pool_thread(&WiimoteScanner::PoolThreadFunc, this);
+  sthread_t* pool_thread =
+      sthread_create(Common::ThreadEntry<&WiimoteScanner::PoolThreadFunc>, this);
 
   Common::SetCurrentThreadName("Wiimote Scanning Thread");
 
@@ -776,7 +778,7 @@ void WiimoteScanner::ThreadFunc()
     m_backends.clear();
   }
 
-  pool_thread.join();
+  Common::JoinThread(pool_thread);
 
   NOTICE_LOG_FMT(WIIMOTE, "Wiimote scanning thread has stopped.");
 }
@@ -790,26 +792,26 @@ bool Wiimote::Connect(int index)
 
 void Wiimote::StartThread()
 {
-  if (m_write_thread.joinable())
+  if (m_write_thread)
     return;
 
   m_run_thread.Set();
   // Note that the write thread starts the read thread.
-  m_write_thread = std::thread(&Wiimote::WriteThreadFunc, this);
+  m_write_thread = sthread_create(Common::ThreadEntry<&Wiimote::WriteThreadFunc>, this);
 
   m_thread_ready_event.Wait();
 }
 
 void Wiimote::StopThread()
 {
-  if (!m_write_thread.joinable())
+  if (!m_write_thread)
     return;
 
   m_run_thread.Clear();
   retro_eventcount_notify(&m_write_event);
 
   // Note that the write thread stops the read thread.
-  m_write_thread.join();
+  Common::JoinThread(m_write_thread);
 }
 
 void Wiimote::ReadThreadFunc()
@@ -848,7 +850,7 @@ void Wiimote::WriteThreadFunc()
     return;
   }
 
-  std::thread read_thread{&Wiimote::ReadThreadFunc, this};
+  sthread_t* read_thread = sthread_create(Common::ThreadEntry<&Wiimote::ReadThreadFunc>, this);
 
   // Windows and also the DolphinBar require performing a write
   //  to detect disconnections in a timely manner
@@ -901,7 +903,7 @@ void Wiimote::WriteThreadFunc()
   }
 
   IOWakeup();
-  read_thread.join();
+  Common::JoinThread(read_thread);
 
   NOTICE_LOG_FMT(WIIMOTE, "Disconnecting Wiimote {}.", m_index + 1);
   DisconnectInternal();

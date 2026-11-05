@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <future>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -12,8 +12,11 @@
 
 #include <mbedtls/md5.h>
 
+#include <rthreads/rthreads.h>
+
 #include "Common/CommonTypes.h"
 #include "Common/Crypto/SHA1.h"
+#include "Common/WorkQueueThread.h"
 #include "Core/IOS/ES/Formats.h"
 #include "DiscIO/DiscScrubber.h"
 #include "DiscIO/Volume.h"
@@ -58,6 +61,11 @@ public:
     std::string message;
   };
 
+  RedumpVerifier() = default;
+  ~RedumpVerifier();
+  RedumpVerifier(const RedumpVerifier&) = delete;
+  RedumpVerifier& operator=(const RedumpVerifier&) = delete;
+
   void Start(const Volume& volume);
   Result Finish(const Hashes<std::vector<u8>>& hashes);
 
@@ -91,7 +99,13 @@ private:
   u8 m_disc_number = 0;
   u64 m_size = 0;
 
-  std::future<std::vector<PotentialMatch>> m_future;
+  void MatchThread();
+  std::vector<PotentialMatch> FindPotentialMatches(Platform platform);
+
+  // Looks the disc up in the Redump datfile while the disc is hashed.
+  sthread_t* m_thread = nullptr;
+  Platform m_platform{};
+  std::vector<PotentialMatch> m_potential_matches;
   Result m_result;
 
   static DownloadState m_gc_download_state;
@@ -155,7 +169,8 @@ private:
   void CheckMisc();
   void CheckSuperPaperMario();
   void SetUpHashing();
-  void WaitForAsyncOperations() const;
+  void WaitForAsyncOperations();
+  static void RunAsyncTask(void* ctx, size_t index);
   bool ReadChunkAndWaitForAsyncOperations(u64 bytes_to_read);
 
   void AddProblem(Severity severity, std::string text);
@@ -180,11 +195,7 @@ private:
 
   u64 m_excess_bytes = 0;
   std::vector<u8> m_data;
-  std::future<void> m_crc32_future;
-  std::future<void> m_md5_future;
-  std::future<void> m_sha1_future;
-  std::future<void> m_content_future;
-  std::future<void> m_group_future;
+  std::vector<std::function<void()>> m_async_tasks;
 
   DiscScrubber m_scrubber;
   IOS::ES::TicketReader m_ticket;
@@ -203,6 +214,9 @@ private:
   u64 m_progress = 0;
   u64 m_max_progress = 0;
   DataSizeType m_data_size_type;
+
+  // Declared last so it stops before anything its tasks touch is destroyed.
+  Common::AsyncWorkThreadSP m_async_worker;
 };
 
 }  // namespace DiscIO

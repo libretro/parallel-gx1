@@ -19,6 +19,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Common/Version.h"
 #include "Common/WorkQueueThread.h"
 #include "Core/AchievementApprovedHash.h"
@@ -374,7 +375,12 @@ bool AchievementManager::CanPause()
 
 void AchievementManager::DoIdle()
 {
-  std::thread([this] {
+  Common::StartDetachedThread(Common::ThreadEntry<&AchievementManager::IdleThread>, this);
+}
+
+void AchievementManager::IdleThread()
+{
+  {
     while (true)
     {
       Common::SleepCurrentThread(1000);
@@ -401,7 +407,7 @@ void AchievementManager::DoIdle()
         rc_client_idle(m_client);
       });
     }
-  }).detach();
+  }
 }
 
 std::recursive_mutex& AchievementManager::GetLock()

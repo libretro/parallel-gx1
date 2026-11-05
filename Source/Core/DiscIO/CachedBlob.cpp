@@ -5,11 +5,13 @@
 
 #include <atomic>
 #include <chrono>
-#include <thread>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/MemArena.h"
+#include "Common/Thread.h"
 
 #include "DiscIO/DiscScrubber.h"
 #include "DiscIO/Volume.h"
@@ -20,14 +22,15 @@ class CacheFiller final
 {
 public:
   explicit CacheFiller(std::unique_ptr<BlobReader> reader, bool attempt_to_scrub)
-      : m_thread{&CacheFiller::ThreadFunc, this, std::move(reader), attempt_to_scrub}
+      : m_thread_reader{std::move(reader)}, m_attempt_to_scrub{attempt_to_scrub}
   {
+    m_thread = sthread_create(Common::ThreadEntry<&CacheFiller::ThreadFunc>, this);
   }
 
   ~CacheFiller()
   {
     m_stop_thread.store(true, std::memory_order_relaxed);
-    m_thread.join();
+    Common::JoinThread(m_thread);
   }
 
   bool Read(u64 offset, u64 size, u8* out_ptr)
@@ -81,8 +84,10 @@ private:
     return CacheState::Cached;
   }
 
-  void ThreadFunc(std::unique_ptr<BlobReader> reader, bool attempt_to_scrub)
+  void ThreadFunc()
   {
+    const std::unique_ptr<BlobReader> reader = std::move(m_thread_reader);
+    const bool attempt_to_scrub = m_attempt_to_scrub;
     static constexpr auto PERIODIC_LOG_TIME = std::chrono::seconds{1};
 
     const auto start_time = Clock::now();
@@ -179,7 +184,9 @@ private:
   DiscScrubber m_scrubber;
 
   std::atomic_bool m_stop_thread{};
-  std::thread m_thread;
+  std::unique_ptr<BlobReader> m_thread_reader;  // handed to the thread
+  bool m_attempt_to_scrub;
+  sthread_t* m_thread = nullptr;
 };
 
 class CachedBlobReader final : public BlobReader

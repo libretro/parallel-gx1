@@ -131,8 +131,9 @@ static void CheckKR(const char* name, kern_return_t kr)
   }
 }
 
-static void ExceptionThread(mach_port_t port)
+static void ExceptionThread(void* data)
 {
+  const mach_port_t port = static_cast<mach_port_t>(reinterpret_cast<uintptr_t>(data));
   Common::SetCurrentThreadName("Mach exception thread");
 #pragma pack(4)
   struct alignas(8)
@@ -229,8 +230,8 @@ void InstallExceptionHandler()
   mach_port_t port;
   CheckKR("mach_port_allocate",
           mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &port));
-  std::thread exc_thread(ExceptionThread, port);
-  exc_thread.detach();
+  Common::StartDetachedThread(ExceptionThread,
+                              reinterpret_cast<void*>(static_cast<uintptr_t>(port)));
   // Obtain a send right for thread_set_exception_ports to copy...
   CheckKR("mach_port_insert_right",
           mach_port_insert_right(mach_task_self(), port, port, MACH_MSG_TYPE_MAKE_SEND));

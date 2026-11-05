@@ -7,7 +7,8 @@
 #include <memory>
 #include <mutex>
 #include <set>
-#include <thread>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
@@ -44,6 +45,7 @@ private:
   void StopScanning();
 
   bool UpdateDevices();
+  void ScanThread();
   bool AddNewDevices(DeviceMap* new_devices) const;
   static void WakeupSantrollerDevice(libusb_device* device);
   static void AddEmulatedDevices(DeviceMap* new_devices);
@@ -56,7 +58,7 @@ private:
   std::mutex m_clients_mutex;
 
   Common::Flag m_thread_running;
-  std::thread m_thread;
+  sthread_t* m_thread = nullptr;
   std::mutex m_thread_start_stop_mutex;
   Common::WaitableFlag m_first_scan_complete_flag;
 

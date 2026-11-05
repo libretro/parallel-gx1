@@ -8,8 +8,9 @@
 #include <list>
 #include <mutex>
 #include <set>
-#include <thread>
 #include <vector>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/Flag.h"
 #include "VideoCommon/Assets/CustomAsset.h"
@@ -56,11 +57,18 @@ private:
   bool HasWorkerThreads() const;
   void StopWorkerThreads();
 
+  struct WorkerThread
+  {
+    CustomAssetLoader* owner;
+    u32 index;
+    sthread_t* thread;
+  };
+  static void WorkerThreadEntry(void* data);
   void WorkerThreadRun(u32 thread_index);
 
   Common::Flag m_exit_flag;
 
-  std::vector<std::thread> m_worker_threads;
+  std::vector<WorkerThread> m_worker_threads;
 
   std::mutex m_assets_to_load_lock;
   std::list<CustomAsset*> m_assets_to_load;

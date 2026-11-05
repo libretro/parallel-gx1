@@ -8,7 +8,6 @@
 #include <mutex>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <vector>
 
 #include "Common/Config/Config.h"
@@ -24,6 +23,8 @@
 
 #include <retro_spsc.h>
 #include <rthreads/retro_eventcount.h>
+
+#include <rthreads/rthreads.h>
 
 class PointerWrap;
 
@@ -172,7 +173,7 @@ private:
   // And we track the rumble state to drop unnecessary rumble reports.
   bool m_rumble_state = false;
 
-  std::thread m_write_thread;
+  sthread_t* m_write_thread = nullptr;
   // Whether to keep running the thread.
   Common::Flag m_run_thread;
   // Triggered when the thread has finished ConnectInternal.
@@ -237,7 +238,7 @@ private:
   std::vector<std::unique_ptr<WiimoteScannerBackend>> m_backends;
   mutable std::mutex m_backends_mutex;
 
-  std::thread m_scan_thread;
+  sthread_t* m_scan_thread = nullptr;
   Common::Flag m_scan_thread_running;
   Common::Flag m_populate_devices;
   Common::Event m_scan_mode_changed_or_population_event;

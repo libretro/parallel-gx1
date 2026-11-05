@@ -8,6 +8,7 @@
 
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Core/HW/EXI/EXI_Device.h"
 
 namespace ExpansionInterface
@@ -37,8 +38,7 @@ void CEXIETHERNET::TAPNetworkInterface::Deactivate()
 
   readEnabled.Clear();
   readThreadShutdown.Set();
-  if (readThread.joinable())
-    readThread.join();
+  Common::JoinThread(readThread);
 }
 
 bool CEXIETHERNET::TAPNetworkInterface::IsActivated()
@@ -64,8 +64,9 @@ bool CEXIETHERNET::TAPNetworkInterface::SendFrame(const u8* frame, u32 size)
   }
 }
 
-void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(TAPNetworkInterface* self)
+void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(void* data)
 {
+  TAPNetworkInterface* const self = static_cast<TAPNetworkInterface*>(data);
   while (!self->readThreadShutdown.IsSet())
   {
     fd_set rfds;
@@ -95,7 +96,7 @@ void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(TAPNetworkInterface* s
 
 bool CEXIETHERNET::TAPNetworkInterface::RecvInit()
 {
-  readThread = std::thread(ReadThreadHandler, this);
+  readThread = sthread_create(ReadThreadHandler, this);
   return true;
 }
 

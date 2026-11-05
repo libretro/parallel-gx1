@@ -6,6 +6,7 @@
 #include <libipc/ipc.h>
 
 #include "Common/Logging/Log.h"
+#include "Common/Thread.h"
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
 namespace ExpansionInterface
@@ -33,9 +34,9 @@ void CEXIETHERNET::IPCBBAInterface::Deactivate()
   m_read_enabled.Clear();
   m_read_thread_shutdown.Set();
 
-  if (m_read_thread.joinable())
+  if (m_read_thread)
   {
-    m_read_thread.join();
+    Common::JoinThread(m_read_thread);
   }
 
   m_channel.disconnect();
@@ -67,7 +68,7 @@ bool CEXIETHERNET::IPCBBAInterface::SendFrame(const u8* const frame, const u32 s
 
 bool CEXIETHERNET::IPCBBAInterface::RecvInit()
 {
-  m_read_thread = std::thread(&CEXIETHERNET::IPCBBAInterface::ReadThreadHandler, this);
+  m_read_thread = sthread_create(Common::ThreadEntry<&CEXIETHERNET::IPCBBAInterface::ReadThreadHandler>, this);
   return true;
 }
 

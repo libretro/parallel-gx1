@@ -10,9 +10,10 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <thread>
 #include <utility>
 #include <vector>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
@@ -68,13 +69,15 @@ protected:
   virtual void WorkerThreadExit(void* param);
 
 private:
+  void WorkerThreadStart();
   void WorkerThreadEntryPoint(void* param);
   void WorkerThreadRun();
 
   Common::Flag m_exit_flag;
   Common::Event m_init_event;
 
-  std::vector<std::thread> m_worker_threads;
+  std::vector<sthread_t*> m_worker_threads;
+  void* m_starting_thread_param = nullptr;
   std::atomic_bool m_worker_thread_start_result{false};
 
   // A multimap is used to store the work items. We can't use a priority_queue here, because

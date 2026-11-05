@@ -24,9 +24,17 @@ void CustomAssetLoader::Shutdown()
 
 bool CustomAssetLoader::StartWorkerThreads(u32 num_worker_threads)
 {
+  // Each thread is handed its slot, so the vector must not move once threads are running.
+  m_worker_threads.reserve(num_worker_threads);
   for (u32 i = 0; i < num_worker_threads; i++)
   {
-    m_worker_threads.emplace_back(&CustomAssetLoader::WorkerThreadRun, this, i);
+    WorkerThread& worker = m_worker_threads.emplace_back(WorkerThread{this, i, nullptr});
+    worker.thread = sthread_create(WorkerThreadEntry, &worker);
+    if (!worker.thread)
+    {
+      m_worker_threads.pop_back();
+      break;
+    }
   }
 
   return HasWorkerThreads();
@@ -59,10 +67,16 @@ void CustomAssetLoader::StopWorkerThreads()
   }
 
   // Wait for worker threads to exit.
-  for (std::thread& thr : m_worker_threads)
-    thr.join();
+  for (WorkerThread& worker : m_worker_threads)
+    Common::JoinThread(worker.thread);
   m_worker_threads.clear();
   m_exit_flag.Clear();
+}
+
+void CustomAssetLoader::WorkerThreadEntry(void* data)
+{
+  const WorkerThread* const worker = static_cast<const WorkerThread*>(data);
+  worker->owner->WorkerThreadRun(worker->index);
 }
 
 void CustomAssetLoader::WorkerThreadRun(u32 thread_index)

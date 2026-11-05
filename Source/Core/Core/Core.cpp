@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <atomic>
 #include <functional>
-#include <future>
 #include <mutex>
 #include <optional>
 #include <queue>
@@ -92,25 +91,14 @@ namespace Core
 {
 static bool s_wants_determinism;
 
-#ifdef __LIBRETRO__
 static std::vector<Common::ScopeGuard<Common::MoveOnlyFunction<void()>>> s_emu_thread_scope_guards;
 std::unique_ptr<BootParameters> g_boot_params;
-#endif
 // Declarations and definitions
-#ifndef __LIBRETRO__
-static
-#endif
-std::thread s_emu_thread;
+sthread_t* s_emu_thread = nullptr;
 static Common::HookableEvent<Core::State> s_state_changed_event;
 
 static bool s_is_throttler_temp_disabled = false;
-#ifndef __LIBRETRO__
-static
-#endif
 bool s_frame_step = false;
-#ifndef __LIBRETRO__
-static
-#endif
 std::atomic<bool> s_stop_frame_step;
 
 // Threads other than the CPU thread must hold this when taking on the role of the CPU thread.
@@ -139,9 +127,6 @@ static std::queue<HostJob> s_host_jobs_queue;
 static thread_local bool tls_is_cpu_thread = false;
 static thread_local bool tls_is_gpu_thread = false;
 
-#ifndef __LIBRETRO__
-static
-#endif
 void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
                WindowSystemInfo wsi);
 
@@ -226,7 +211,7 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
 {
   std::lock_guard lock(s_core_mutex);
 
-  if (s_emu_thread.joinable())
+  if (s_emu_thread)
   {
     if (!IsUninitialized(system))
     {
@@ -235,7 +220,7 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
     }
 
     // The Emu Thread was stopped, synchronize with it.
-    s_emu_thread.join();
+    Common::JoinThread(s_emu_thread);
   }
 
   // Drain any left over jobs
@@ -245,23 +230,12 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
   INFO_LOG_FMT(BOOT, "CPU Thread separate = {}", system.IsDualCoreMode() ? "Yes" : "No");
 
   // Manually reactivate the video backend in case a GameINI overrides the video backend setting.
-#ifndef __LIBRETRO__
-  VideoBackendBase::PopulateBackendInfo(wsi);
-
-  // Issue any API calls which must occur on the main thread for the graphics backend.
-  WindowSystemInfo prepared_wsi(wsi);
-  g_video_backend->PrepareWindow(prepared_wsi);
-#endif
 
   // Start the emu thread
   s_state.store(State::Starting);
 
-#ifdef __LIBRETRO__
     // Do not launch EmuThread — Libretro handles it manually
     g_boot_params = std::move(boot);
-#else
-    s_emu_thread = std::thread(EmuThread, std::ref(system), std::move(boot), prepared_wsi);
-#endif
 
   return true;
 }
@@ -394,11 +368,9 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
     }
   }
 
-#ifdef __LIBRETRO__
   // dont enter the blocking loop if in single core mode
   if (!system.IsDualCoreMode())
     return;
-#endif
   // Enter CPU run loop. When we leave it - we are done.
   system.GetCPU().Run();
 
@@ -461,80 +433,54 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
                                                    const WindowSystemInfo& wsi)
 {
   using GuardType = Common::ScopeGuard<Common::MoveOnlyFunction<void()>>;
-  using ReturnType = std::unique_ptr<GuardType>;
-
-  const auto init_video = [&] {
-    DeclareAsGPUThread();
-
-    AsyncRequests::GetInstance()->SetPassthrough(!system.IsDualCoreMode());
-
-#ifdef __LIBRETRO__
-    return true;
-#else
-    // Must happen on the proper thread for some video backends, e.g. OpenGL.
-    return g_video_backend->Initialize(wsi);
-#endif
-  };
-
-  const auto deinit_video = [] {
-    // Clear on screen messages that haven't expired
-#ifndef __LIBRETRO__
-    OSD::ClearMessages();
-
-    g_video_backend->Shutdown();
-#endif
-  };
 
   if (system.IsDualCoreMode())
   {
-    std::promise<bool> init_from_thread;
-
-    // Spawn the GPU thread.
-    std::thread gpu_thread{[&] {
-      Common::SetCurrentThreadName("Video thread");
-
-      const bool is_init = init_video();
-      init_from_thread.set_value(is_init);
-
-      if (!is_init)
-        return;
-
-#ifndef __LIBRETRO__
-      system.GetFifo().RunGpuLoop();
-      INFO_LOG_FMT(CONSOLE, "{}", StopMessage(false, "Video Loop Ended"));
-
-      deinit_video();
-#endif
-    }};
-
-    if (init_from_thread.get_future().get())
-    {
-      // Return a scope guard that signals the GPU thread to stop then joins it.
-      return std::make_unique<GuardType>([&, gpu_thread = std::move(gpu_thread)]() mutable {
-        INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "Wait for Video Loop to exit ..."));
-        system.GetFifo().ExitGpuLoop();
-        gpu_thread.join();
-        INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "GPU thread stopped."));
-      });
-    }
-
-    gpu_thread.join();
-  }
-  else  // SingleCore mode
-  {
-    if (init_video())
-      return std::make_unique<GuardType>(deinit_video);
+    // The frontend runs the GPU loop on its own thread; all that is left here is to make sure
+    // that loop is told to stop.
+    AsyncRequests::GetInstance()->SetPassthrough(false);
+    return std::make_unique<GuardType>([&system] {
+      INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "Wait for Video Loop to exit ..."));
+      system.GetFifo().ExitGpuLoop();
+      INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "GPU thread stopped."));
+    });
   }
 
-  return ReturnType{};
+  DeclareAsGPUThread();
+  AsyncRequests::GetInstance()->SetPassthrough(true);
+  return std::make_unique<GuardType>([] {});
+}
+
+namespace
+{
+struct EmuThreadArgs
+{
+  Core::System* system;
+  std::unique_ptr<BootParameters> boot;
+  WindowSystemInfo wsi;
+};
+
+void EmuThreadEntry(void* data)
+{
+  std::unique_ptr<EmuThreadArgs> args(static_cast<EmuThreadArgs*>(data));
+  EmuThread(*args->system, std::move(args->boot), args->wsi);
+}
+}  // namespace
+
+bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
+                    const WindowSystemInfo& wsi)
+{
+  EmuThreadArgs* const args = new EmuThreadArgs{&system, std::move(boot), wsi};
+  s_emu_thread = sthread_create(EmuThreadEntry, args);
+  if (s_emu_thread)
+    return true;
+  delete args;
+  return false;
 }
 
 // Initialize and create emulation thread
 // Call browser: Init():s_emu_thread().
 // See the BootManager.cpp file description for a complete call schedule.
-#ifndef __LIBRETRO__
-static
-#endif
 void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
                WindowSystemInfo wsi)
 {
@@ -702,9 +648,8 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
 
   UpdateTitle(system);
 
-#ifdef __LIBRETRO__
-  // these are not needed if EmuThread is launched as a std::thread
-  if (!s_emu_thread.joinable())
+  // these are not needed if EmuThread is launched on its own thread
+  if (!s_emu_thread)
   {
     s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
       [g = std::move(flag_guard)]() mutable { g.Exit(); }));
@@ -730,7 +675,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
     s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
       [g = std::move(wiifs_guard)]() mutable { g.Exit(); }));
   }
-#endif
 
   // Become the CPU thread.
   cpu_thread_func(system, savestate_path, delete_savestate);
@@ -885,9 +829,7 @@ static void RestoreStateAndUnlock(Core::System& system, const bool unpause_on_un
 }
 
 void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function
-#ifdef __LIBRETRO__
                     , bool wait_for_completion
-#endif
                   )
 {
   if (IsCPUThread())
@@ -896,9 +838,7 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
     return;
   }
 
-#ifdef __LIBRETRO__
   Common::OneShotEvent cpu_thread_job_finished;
-#endif
 
   // Pause the CPU (set it to stepping mode).
   const bool was_running = PauseAndLock(system);
@@ -907,11 +847,8 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
   {
     // If the core hasn't been started, there is no active CPU thread we can race against.
     function();
-#ifdef __LIBRETRO__
     wait_for_completion = false;
-#endif
   }
-#ifdef __LIBRETRO__
   else if (wait_for_completion)
   {
     // Queue the job function followed by triggering the event.
@@ -920,7 +857,6 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
       cpu_thread_job_finished.Set();
     });
   }
-#endif
   else
   {
     // Queue the job function.
@@ -930,7 +866,6 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
   // Release the CPU thread, and let it execute the callback.
   RestoreStateAndUnlock(system, was_running);
 
-#ifdef __LIBRETRO__
   // If we're waiting for completion, block until the event fires.
   if (wait_for_completion)
   {
@@ -938,7 +873,6 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
     while (!cpu_thread_job_finished.WaitFor(std::chrono::milliseconds(10)))
       Host_YieldToUI();
   }
-#endif
 }
 
 // --- Callbacks for backends / engine ---
@@ -973,14 +907,12 @@ void Callback_NewField(Core::System& system)
   }
 
   AchievementManager::GetInstance().DoFrame();
-#ifdef __LIBRETRO__
   if (system.IsDualCoreMode())
     system.GetFifo().StopGpuLoop();
   // frontend waiting on audio here holds the thread while
   // the frame is presented.
   if (SoundStream* sound_stream = system.GetSoundStream())
     sound_stream->NewField();
-#endif
 }
 
 void UpdateTitle(Core::System& system)
@@ -1009,13 +941,10 @@ void Shutdown(Core::System& system)
   // shut down.
   // For more info read "DirectX Graphics Infrastructure (DXGI): Best Practices"
   // on MSDN.
-  if (s_emu_thread.joinable())
-    s_emu_thread.join();
-#ifdef __LIBRETRO__
+  Common::JoinThread(s_emu_thread);
   for (auto& g : s_emu_thread_scope_guards)
     g.Exit();
   s_emu_thread_scope_guards.clear();
-#endif
 
   // Make sure there's nothing left over in case we're about to exit.
   HostDispatchJobs(system);
@@ -1146,7 +1075,6 @@ CPUThreadGuard::~CPUThreadGuard()
     RestoreStateAndUnlock(m_system, m_was_unpaused);
 }
 
-#ifdef __LIBRETRO__
 void SingleCorePostRunShutdown()
 {
 #ifdef USE_MEMORYWATCHER
@@ -1164,6 +1092,5 @@ void SingleCorePostRunShutdown()
     INFO_LOG_FMT(GDB_STUB, "Killed by CPU shutdown");
   }
 }
-#endif
 
 }  // namespace Core

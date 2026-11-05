@@ -8,7 +8,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <utility>
 
 #include <fmt/format.h>
@@ -78,16 +77,16 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
   // Class members (including inherited ones) have now been initialized, so
   // it's safe to startup the flush thread (which reads them).
   m_flush_buffer = std::make_unique<u8[]>(m_memory_card_size);
-  m_flush_thread = std::thread(&MemoryCard::FlushThread, this);
+  m_flush_thread = sthread_create(Common::ThreadEntry<&MemoryCard::FlushThread>, this);
 }
 
 MemoryCard::~MemoryCard()
 {
-  if (m_flush_thread.joinable())
+  if (m_flush_thread)
   {
     m_flush_trigger.Set();
 
-    m_flush_thread.join();
+    Common::JoinThread(m_flush_thread);
   }
 }
 

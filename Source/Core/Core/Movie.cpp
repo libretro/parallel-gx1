@@ -10,7 +10,6 @@
 #include <locale>
 #include <mbedtls/md.h>
 #include <mutex>
-#include <thread>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -28,6 +27,7 @@
 #include "Common/MsgHandler.h"
 #include "Common/NandPaths.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Common/Timer.h"
 #include "Common/VariantUtil.h"
 #include "Common/Version.h"
@@ -199,8 +199,7 @@ void MovieManager::Init(const BootParameters& boot)
   if (IsPlayingInput())
   {
     ReadHeader();
-    std::thread md5thread(&MovieManager::CheckMD5, this);
-    md5thread.detach();
+    Common::StartDetachedThread(Common::ThreadEntry<&MovieManager::CheckMD5>, this);
     if (strncmp(m_temp_header.gameID.data(), SConfig::GetInstance().GetGameID().c_str(), 6))
     {
       PanicAlertFmtT("The recorded game ({0}) is not the same as the selected game ({1})",
@@ -212,8 +211,7 @@ void MovieManager::Init(const BootParameters& boot)
   if (IsRecordingInput())
   {
     GetSettings();
-    std::thread md5thread(&MovieManager::GetMD5, this);
-    md5thread.detach();
+    Common::StartDetachedThread(Common::ThreadEntry<&MovieManager::GetMD5>, this);
     m_tick_count_at_last_input = 0;
   }
 
@@ -486,8 +484,7 @@ bool MovieManager::BeginRecordingInput(const ControllerTypeArray& controllers,
     State::SaveAs(m_system, save_path);
     m_recording_from_save_state = true;
 
-    std::thread md5thread(&MovieManager::GetMD5, this);
-    md5thread.detach();
+    Common::StartDetachedThread(Common::ThreadEntry<&MovieManager::GetMD5>, this);
     GetSettings();
   }
 

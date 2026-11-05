@@ -78,8 +78,8 @@ static void ResetRumbleLockNeeded();
 static void Reset();
 static void Setup();
 static void ProcessInputPayload(const u8* data, std::size_t size);
-static void ReadThreadFunc();
-static void WriteThreadFunc();
+static void ReadThreadFunc(void*);
+static void WriteThreadFunc(void*);
 
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
 enum class AdapterStatus
@@ -130,9 +130,9 @@ static std::array<PortState, SerialInterface::MAX_SI_CHANNELS> s_port_states;
 static std::array<u8, CONTROLLER_OUTPUT_RUMBLE_PAYLOAD_SIZE> s_controller_write_payload;
 static std::atomic<int> s_controller_write_payload_size{0};
 
-static std::thread s_read_adapter_thread;
+static sthread_t* s_read_adapter_thread = nullptr;
 static Common::Flag s_read_adapter_thread_running;
-static std::thread s_write_adapter_thread;
+static sthread_t* s_write_adapter_thread = nullptr;
 static Common::Flag s_write_adapter_thread_running;
 static Common::Event s_write_happened;
 
@@ -142,7 +142,7 @@ static std::mutex s_read_mutex;
 static std::mutex s_write_mutex;
 #endif
 
-static std::thread s_adapter_detect_thread;
+static sthread_t* s_adapter_detect_thread = nullptr;
 static Common::Flag s_adapter_detect_thread_running;
 
 static Common::Event s_hotplug_event;
@@ -178,7 +178,7 @@ static std::array<std::atomic_bool, SerialInterface::MAX_SI_CHANNELS> s_config_r
 static std::atomic<double> s_adapter_poll_rate{};
 
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION || GCADAPTER_USE_ANDROID_IMPLEMENTATION
-static void ReadThreadFunc()
+static void ReadThreadFunc(void*)
 {
   Common::SetCurrentThreadName("GCAdapter Read Thread");
   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "GCAdapter read thread started");
@@ -209,7 +209,7 @@ static void ReadThreadFunc()
 #endif
 
   s_write_adapter_thread_running.Set(true);
-  s_write_adapter_thread = std::thread(WriteThreadFunc);
+  s_write_adapter_thread = sthread_create(WriteThreadFunc, nullptr);
 
   std::chrono::steady_clock::time_point last_successful_read_time =
       std::chrono::steady_clock::now();
@@ -300,7 +300,7 @@ static void ReadThreadFunc()
     s_controller_write_payload_size.store(0);
     // Kick the waiting event
     s_write_happened.Set();
-    s_write_adapter_thread.join();
+    Common::JoinThread(s_write_adapter_thread);
   }
 
 #if GCADAPTER_USE_ANDROID_IMPLEMENTATION
@@ -315,7 +315,7 @@ static void ReadThreadFunc()
 #endif
 
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION || GCADAPTER_USE_ANDROID_IMPLEMENTATION
-static void WriteThreadFunc()
+static void WriteThreadFunc(void*)
 {
   Common::SetCurrentThreadName("GCAdapter Write Thread");
   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "GCAdapter write thread started");
@@ -411,7 +411,7 @@ Java_org_dolphinemu_dolphinemu_utils_GCAdapter_onAdapterDisconnected(JNIEnv* env
 }
 #endif
 
-static void ScanThreadFunc()
+static void ScanThreadFunc(void*)
 {
   Common::SetCurrentThreadName("GC Adapter Scanning Thread");
   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "GC Adapter scanning thread started");
@@ -513,7 +513,7 @@ static void StartScanThread()
     return;
 #endif
   s_adapter_detect_thread_running.Set(true);
-  s_adapter_detect_thread = std::thread(ScanThreadFunc);
+  s_adapter_detect_thread = sthread_create(ScanThreadFunc, nullptr);
 }
 
 static void StopScanThread()
@@ -521,7 +521,7 @@ static void StopScanThread()
   if (s_adapter_detect_thread_running.TestAndClear())
   {
     s_hotplug_event.Set();
-    s_adapter_detect_thread.join();
+    Common::JoinThread(s_adapter_detect_thread);
   }
 }
 
@@ -617,10 +617,10 @@ static void Setup()
 
   // Make sure the thread isn't in the middle of shutting down while starting a new one
   if (s_read_adapter_thread_running.TestAndClear())
-    s_read_adapter_thread.join();
+    Common::JoinThread(s_read_adapter_thread);
 
   s_read_adapter_thread_running.Set(true);
-  s_read_adapter_thread = std::thread(ReadThreadFunc);
+  s_read_adapter_thread = sthread_create(ReadThreadFunc, nullptr);
 #endif
 }
 #endif
@@ -772,7 +772,7 @@ static void AddGCAdapter(libusb_device* device)
   }
 
   s_read_adapter_thread_running.Set(true);
-  s_read_adapter_thread = std::thread(ReadThreadFunc);
+  s_read_adapter_thread = sthread_create(ReadThreadFunc, nullptr);
 
   s_status = AdapterStatus::Detected;
   if (s_detect_callback != nullptr)
@@ -812,7 +812,7 @@ static void Reset()
 #endif
 
   if (s_read_adapter_thread_running.TestAndClear())
-    s_read_adapter_thread.join();
+    Common::JoinThread(s_read_adapter_thread);
   // The read thread will close the write thread
 
   s_read_thread_has_init.Clear();

@@ -174,7 +174,8 @@ NetKDRequestDevice::NetKDRequestDevice(EmulationKernel& ios, const std::string& 
   m_handle_mail = !ios.GetIOSC().IsUsingDefaultId() && !m_send_list.IsDisabled();
   m_scheduler_work_queue.Reset("WiiConnect24 Scheduler Worker");
 
-  m_scheduler_timer_thread = std::thread([this] { SchedulerTimer(); });
+  m_scheduler_timer_thread =
+      sthread_create(Common::ThreadEntry<&NetKDRequestDevice::SchedulerTimer>, this);
 }
 
 NetKDRequestDevice::~NetKDRequestDevice()
@@ -185,13 +186,13 @@ NetKDRequestDevice::~NetKDRequestDevice()
 
   {
     std::lock_guard lg(m_scheduler_lock);
-    if (!m_scheduler_timer_thread.joinable())
+    if (!m_scheduler_timer_thread)
       return;
 
     m_shutdown_event.Set();
   }
 
-  m_scheduler_timer_thread.join();
+  Common::JoinThread(m_scheduler_timer_thread);
   m_scheduler_work_queue.Shutdown();
   m_work_queue.Shutdown();
 }

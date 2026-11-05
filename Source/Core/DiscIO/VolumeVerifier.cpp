@@ -4,7 +4,7 @@
 #include "DiscIO/VolumeVerifier.h"
 
 #include <algorithm>
-#include <future>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -31,8 +31,10 @@
 #include "Common/Logging/Log.h"
 #include "Common/MinizipUtil.h"
 #include "Common/MsgHandler.h"
+#include "Common/ParallelFor.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Common/Swap.h"
 #include "Common/Version.h"
 #include "Core/IOS/Device.h"
@@ -66,47 +68,59 @@ void RedumpVerifier::Start(const Volume& volume)
   m_disc_number = volume.GetDiscNumber().value_or(0);
   m_size = volume.GetDataSize();
 
-  const Platform platform = volume.GetVolumeType();
+  m_platform = volume.GetVolumeType();
+  m_thread = sthread_create(Common::ThreadEntry<&RedumpVerifier::MatchThread>, this);
+}
 
-  m_future = std::async(std::launch::async, [this, platform]() -> std::vector<PotentialMatch> {
-    std::string system;
-    DownloadState* download_state;
-    switch (platform)
-    {
-    case Platform::GameCubeDisc:
-      system = "gc";
-      download_state = &m_gc_download_state;
-      break;
+RedumpVerifier::~RedumpVerifier()
+{
+  Common::JoinThread(m_thread);
+}
 
-    case Platform::WiiDisc:
-      system = "wii";
-      download_state = &m_wii_download_state;
-      break;
+void RedumpVerifier::MatchThread()
+{
+  m_potential_matches = FindPotentialMatches(m_platform);
+}
 
-    default:
-      m_result.status = Status::Error;
-      return {};
-    }
+std::vector<RedumpVerifier::PotentialMatch> RedumpVerifier::FindPotentialMatches(Platform platform)
+{
+  std::string system;
+  DownloadState* download_state;
+  switch (platform)
+  {
+  case Platform::GameCubeDisc:
+    system = "gc";
+    download_state = &m_gc_download_state;
+    break;
 
-    {
-      std::lock_guard lk(download_state->mutex);
-      download_state->status = DownloadDatfile(system, download_state->status);
-    }
+  case Platform::WiiDisc:
+    system = "wii";
+    download_state = &m_wii_download_state;
+    break;
 
-    switch (download_state->status)
-    {
-    case DownloadStatus::FailButOldCacheAvailable:
-      ERROR_LOG_FMT(DISCIO, "Failed to fetch data from Redump.info, using old cached data instead");
-      [[fallthrough]];
-    case DownloadStatus::Success:
-      return ScanDatfile(ReadDatfile(system), system);
+  default:
+    m_result.status = Status::Error;
+    return {};
+  }
 
-    case DownloadStatus::Fail:
-    default:
-      m_result = {Status::Error, Common::GetStringT("Failed to connect to Redump.info")};
-      return {};
-    }
-  });
+  {
+    std::lock_guard lk(download_state->mutex);
+    download_state->status = DownloadDatfile(system, download_state->status);
+  }
+
+  switch (download_state->status)
+  {
+  case DownloadStatus::FailButOldCacheAvailable:
+    ERROR_LOG_FMT(DISCIO, "Failed to fetch data from Redump.info, using old cached data instead");
+    [[fallthrough]];
+  case DownloadStatus::Success:
+    return ScanDatfile(ReadDatfile(system), system);
+
+  case DownloadStatus::Fail:
+  default:
+    m_result = {Status::Error, Common::GetStringT("Failed to connect to Redump.info")};
+    return {};
+  }
 }
 
 static std::string GetPathForSystem(const std::string& system)
@@ -329,7 +343,8 @@ RedumpVerifier::Result RedumpVerifier::Finish(const Hashes<std::vector<u8>>& has
   if (hashes.crc32.empty() && hashes.md5.empty() && hashes.sha1.empty())
     return m_result;
 
-  const std::vector<PotentialMatch> potential_matches = m_future.get();
+  Common::JoinThread(m_thread);
+  const std::vector<PotentialMatch> potential_matches = std::move(m_potential_matches);
   for (PotentialMatch p : potential_matches)
   {
     if (HashesMatch(hashes.crc32, p.hashes.crc32) && HashesMatch(hashes.md5, p.hashes.md5) &&
@@ -362,6 +377,7 @@ VolumeVerifier::VolumeVerifier(const Volume& volume, bool redump_verification,
 {
   if (!m_calculating_any_hash)
     m_redump_verification = false;
+  m_async_worker.Reset("VolumeVerifier");
 }
 
 VolumeVerifier::~VolumeVerifier()
@@ -1097,18 +1113,14 @@ void VolumeVerifier::SetUpHashing()
   }
 }
 
-void VolumeVerifier::WaitForAsyncOperations() const
+void VolumeVerifier::WaitForAsyncOperations()
 {
-  if (m_crc32_future.valid())
-    m_crc32_future.wait();
-  if (m_md5_future.valid())
-    m_md5_future.wait();
-  if (m_sha1_future.valid())
-    m_sha1_future.wait();
-  if (m_content_future.valid())
-    m_content_future.wait();
-  if (m_group_future.valid())
-    m_group_future.wait();
+  m_async_worker.WaitForCompletion();
+}
+
+void VolumeVerifier::RunAsyncTask(void* ctx, size_t index)
+{
+  (*static_cast<std::vector<std::function<void()>>*>(ctx))[index]();
 }
 
 bool VolumeVerifier::ReadChunkAndWaitForAsyncOperations(u64 bytes_to_read)
@@ -1218,11 +1230,16 @@ void VolumeVerifier::Process()
   m_excess_bytes = excess_bytes;
   const u64 byte_increment = bytes_to_read - excess_bytes;
 
+  // The tasks for this chunk run on the async worker, spread over the parallel_for pool, while
+  // the caller reads the next chunk. The previous chunk's tasks must be done before reuse.
+  WaitForAsyncOperations();
+  m_async_tasks.clear();
+
   if (m_calculating_any_hash)
   {
     if (m_hashes_to_calculate.crc32)
     {
-      m_crc32_future = std::async(std::launch::async, [this, byte_increment] {
+      m_async_tasks.emplace_back([this, byte_increment] {
         m_crc32_context = Common::UpdateCRC32(m_crc32_context, m_data.data(),
                                               static_cast<size_t>(byte_increment));
       });
@@ -1230,14 +1247,14 @@ void VolumeVerifier::Process()
 
     if (m_hashes_to_calculate.md5)
     {
-      m_md5_future = std::async(std::launch::async, [this, byte_increment] {
+      m_async_tasks.emplace_back([this, byte_increment] {
         mbedtls_md5_update_ret(&m_md5_context, m_data.data(), byte_increment);
       });
     }
 
     if (m_hashes_to_calculate.sha1)
     {
-      m_sha1_future = std::async(std::launch::async, [this, byte_increment] {
+      m_async_tasks.emplace_back([this, byte_increment] {
         m_sha1_context->Update(m_data.data(), byte_increment);
       });
     }
@@ -1245,7 +1262,7 @@ void VolumeVerifier::Process()
 
   if (content_read)
   {
-    m_content_future = std::async(std::launch::async, [this, read_failed, content] {
+    m_async_tasks.emplace_back([this, read_failed, content] {
       if (read_failed || !m_volume.CheckContentIntegrity(content, m_data, m_ticket))
       {
         AddProblem(Severity::High, Common::FmtFormatT("Content {0:08x} is corrupt.", content.id));
@@ -1257,8 +1274,7 @@ void VolumeVerifier::Process()
 
   if (group_read)
   {
-    m_group_future = std::async(std::launch::async, [this, read_failed,
-                                                     group_index = m_group_index] {
+    m_async_tasks.emplace_back([this, read_failed, group_index = m_group_index] {
       const GroupToVerify& group = m_groups[group_index];
       u64 offset_in_group = 0;
       for (u64 block_index = group.block_index_start; block_index < group.block_index_end;
@@ -1289,6 +1305,12 @@ void VolumeVerifier::Process()
     });
 
     m_group_index++;
+  }
+
+  if (!m_async_tasks.empty())
+  {
+    m_async_worker.Push(
+        [this] { parallel_for(m_async_tasks.size(), RunAsyncTask, &m_async_tasks); });
   }
 
   m_progress += byte_increment;

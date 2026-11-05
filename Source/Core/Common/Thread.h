@@ -7,6 +7,8 @@
 #include <tuple>
 #endif
 
+#include <rthreads/rthreads.h>
+
 // Don't include Common.h here as it will break LogManager
 #include "Common/CommonTypes.h"
 
@@ -29,6 +31,41 @@ void SleepCurrentThread(int ms);
 void YieldCPU();
 
 void SetCurrentThreadName(const char* name);
+
+// An sthread entry point that calls F on the object passed as the thread's userdata:
+//   m_thread = sthread_create(Common::ThreadEntry<&Foo::Run>, this);
+template <auto F>
+struct ThreadEntryOf;
+template <typename C, void (C::*F)()>
+struct ThreadEntryOf<F>
+{
+  static void Run(void* data) { (static_cast<C*>(data)->*F)(); }
+};
+template <auto F>
+inline void ThreadEntry(void* data)
+{
+  ThreadEntryOf<F>::Run(data);
+}
+
+// Starts a thread nobody joins. Returns false if it couldn't be started.
+inline bool StartDetachedThread(void (*entry)(void*), void* data)
+{
+  sthread_t* const thread = sthread_create(entry, data);
+  if (!thread)
+    return false;
+  sthread_detach(thread);
+  return true;
+}
+
+// Joins and clears an sthread handle; does nothing for a null one.
+inline void JoinThread(sthread_t*& thread)
+{
+  if (thread)
+  {
+    sthread_join(thread);
+    thread = nullptr;
+  }
+}
 
 #ifndef _WIN32
 // Returns the lowest address of the stack and the size of the stack

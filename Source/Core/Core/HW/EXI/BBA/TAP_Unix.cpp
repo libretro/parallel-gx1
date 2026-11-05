@@ -11,6 +11,7 @@
 
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -83,8 +84,7 @@ void CEXIETHERNET::TAPNetworkInterface::Deactivate()
 
   readEnabled.Clear();
   readThreadShutdown.Set();
-  if (readThread.joinable())
-    readThread.join();
+  Common::JoinThread(readThread);
 #else
   NOTIMPLEMENTED("Deactivate");
 #endif
@@ -123,8 +123,9 @@ bool CEXIETHERNET::TAPNetworkInterface::SendFrame(const u8* frame, u32 size)
 }
 
 #ifdef __linux__
-void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(TAPNetworkInterface* self)
+void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(void* data)
 {
+  TAPNetworkInterface* const self = static_cast<TAPNetworkInterface*>(data);
   while (!self->readThreadShutdown.IsSet())
   {
     fd_set rfds;
@@ -156,7 +157,7 @@ void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(TAPNetworkInterface* s
 bool CEXIETHERNET::TAPNetworkInterface::RecvInit()
 {
 #ifdef __linux__
-  readThread = std::thread(ReadThreadHandler, this);
+  readThread = sthread_create(ReadThreadHandler, this);
   return true;
 #else
   NOTIMPLEMENTED("RecvInit");

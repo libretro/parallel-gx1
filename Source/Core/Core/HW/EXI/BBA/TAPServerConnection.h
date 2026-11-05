@@ -5,7 +5,8 @@
 
 #include <functional>
 #include <string>
-#include <thread>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
@@ -37,7 +38,7 @@ private:
   Common::SocketContext m_socket_context;
 
   int m_fd = -1;
-  std::thread m_read_thread;
+  sthread_t* m_read_thread = nullptr;
   Common::Flag m_read_enabled;
   Common::Flag m_read_shutdown;
 

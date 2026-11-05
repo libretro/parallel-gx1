@@ -8,7 +8,6 @@
 #include <mutex>
 #include <ranges>
 #include <set>
-#include <thread>
 #include <utility>
 
 #ifdef __LIBUSB__
@@ -99,24 +98,27 @@ void USBScanner::StartScanning()
 {
   if (m_thread_running.TestAndSet())
   {
-    m_thread = std::thread([this] {
-      Common::SetCurrentThreadName("USB Scan Thread");
-      while (m_thread_running.IsSet())
-      {
-        if (UpdateDevices())
-          m_first_scan_complete_flag.Set(true);
-        Common::SleepCurrentThread(50);
-      }
-      m_devices.clear();
-      m_first_scan_complete_flag.Set(false);
-    });
+    m_thread = sthread_create(Common::ThreadEntry<&USBScanner::ScanThread>, this);
   }
+}
+
+void USBScanner::ScanThread()
+{
+  Common::SetCurrentThreadName("USB Scan Thread");
+  while (m_thread_running.IsSet())
+  {
+    if (UpdateDevices())
+      m_first_scan_complete_flag.Set(true);
+    Common::SleepCurrentThread(50);
+  }
+  m_devices.clear();
+  m_first_scan_complete_flag.Set(false);
 }
 
 void USBScanner::StopScanning()
 {
   if (m_thread_running.TestAndClear())
-    m_thread.join();
+    Common::JoinThread(m_thread);
 }
 
 USBScanner::DeviceMap USBScanner::GetDevices() const

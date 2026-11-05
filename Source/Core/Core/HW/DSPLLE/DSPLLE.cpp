@@ -5,7 +5,6 @@
 
 #include <mutex>
 #include <string>
-#include <thread>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
@@ -51,8 +50,9 @@ void DSPLLE::DoState(PointerWrap& p)
 }
 
 // Regular thread
-void DSPLLE::DSPThread(DSPLLE* dsp_lle)
+void DSPLLE::DSPThread(void* data)
 {
+  DSPLLE* const dsp_lle = static_cast<DSPLLE*>(data);
   Common::SetCurrentThreadName("DSP thread");
 
   while (dsp_lle->m_is_running.IsSet())
@@ -155,7 +155,7 @@ bool DSPLLE::Initialize(bool wii, bool dsp_thread)
   if (dsp_thread)
   {
     m_is_running.Set(true);
-    m_dsp_thread = std::thread(DSPThread, this);
+    m_dsp_thread = sthread_create(DSPThread, this);
   }
 
   return true;
@@ -169,7 +169,7 @@ void DSPLLE::DSP_StopSoundStream()
   m_is_running.Clear();
   m_ppc_event.Set();
   m_dsp_event.Set();
-  m_dsp_thread.join();
+  Common::JoinThread(m_dsp_thread);
 }
 
 void DSPLLE::Shutdown()

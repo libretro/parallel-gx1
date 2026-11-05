@@ -7,6 +7,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Core/HW/EXI/EXI_Device.h"
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
@@ -254,8 +255,7 @@ void CEXIETHERNET::TAPNetworkInterface::Deactivate()
   CancelIoEx(mHAdapter, nullptr);
 
   // Wait for read thread to exit.
-  if (readThread.joinable())
-    readThread.join();
+  Common::JoinThread(readThread);
 
   // Clean-up handles
   CloseHandle(mReadOverlapped.hEvent);
@@ -271,8 +271,9 @@ bool CEXIETHERNET::TAPNetworkInterface::IsActivated()
   return mHAdapter != INVALID_HANDLE_VALUE;
 }
 
-void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(TAPNetworkInterface* self)
+void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(void* data)
 {
+  TAPNetworkInterface* const self = static_cast<TAPNetworkInterface*>(data);
   while (!self->readThreadShutdown.IsSet())
   {
     DWORD transferred;
@@ -359,7 +360,7 @@ bool CEXIETHERNET::TAPNetworkInterface::SendFrame(const u8* frame, u32 size)
 
 bool CEXIETHERNET::TAPNetworkInterface::RecvInit()
 {
-  readThread = std::thread(ReadThreadHandler, this);
+  readThread = sthread_create(ReadThreadHandler, this);
   return true;
 }
 

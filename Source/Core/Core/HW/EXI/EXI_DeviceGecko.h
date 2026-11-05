@@ -8,7 +8,8 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <thread>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
@@ -26,7 +27,7 @@ public:
   // Client for this server object
   std::unique_ptr<sf::TcpSocket> client;
   void ClientThread();
-  std::thread clientThread;
+  sthread_t* clientThread = nullptr;
   std::mutex transfer_lock;
 
   std::deque<u8> send_fifo;
@@ -37,11 +38,11 @@ private:
   Common::Flag client_running;
 
   // Only ever one server thread
-  static void GeckoConnectionWaiter();
+  static void GeckoConnectionWaiter(void*);
 
   static u16 server_port;
   static Common::Flag server_running;
-  static std::thread connectionThread;
+  static sthread_t* connectionThread;
   static std::mutex connection_lock;
   static std::queue<std::unique_ptr<sf::TcpSocket>> waiting_socks;
 };

@@ -130,6 +130,7 @@ public:
 
   bool CanPause();
   void DoIdle();
+  void IdleThread();
 
   std::recursive_mutex& GetLock();
   bool IsHardcoreModeActive() const;

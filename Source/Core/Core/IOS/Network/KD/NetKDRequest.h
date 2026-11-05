@@ -7,7 +7,8 @@
 #include <memory>
 #include <queue>
 #include <string>
-#include <thread>
+
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
@@ -125,6 +126,6 @@ private:
   bool m_handle_mail;
   Common::Event m_shutdown_event;
   std::mutex m_scheduler_lock;
-  std::thread m_scheduler_timer_thread;
+  sthread_t* m_scheduler_timer_thread = nullptr;
 };
 }  // namespace IOS::HLE

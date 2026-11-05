@@ -7,13 +7,11 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <future>
 #include <map>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -23,6 +21,7 @@
 #include "Common/Crypto/AES.h"
 #include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
+#include "Common/ParallelFor.h"
 
 #include "DiscIO/Blob.h"
 #include "DiscIO/DiscExtractor.h"
@@ -483,75 +482,82 @@ bool VolumeWii::CheckBlockIntegrity(u64 block_index, const Partition& partition)
   return CheckBlockIntegrity(block_index, cluster.data(), partition);
 }
 
+namespace
+{
+struct HashJob
+{
+  const std::array<u8, VolumeWii::BLOCK_DATA_SIZE>* in;
+  VolumeWii::HashBlock* out;
+};
+
+// H0 hashes of one block, and that block's entry in the H1 table of its subgroup.
+void HashBlockJob(void* ctx, size_t i)
+{
+  const HashJob* const job = static_cast<const HashJob*>(ctx);
+  VolumeWii::HashBlock* const out = job->out;
+  const size_t h1_base = Common::AlignDown(i, 8);
+
+  for (size_t j = 0; j < 31; ++j)
+    out[i].h0[j] = Common::SHA1::CalculateDigest(job->in[i].data() + j * 0x400, 0x400);
+  out[i].padding_0 = {};
+  out[h1_base].h1[i - h1_base] = Common::SHA1::CalculateDigest(out[i].h0);
+}
+
+struct EncryptJob
+{
+  const std::array<u8, VolumeWii::BLOCK_DATA_SIZE>* in;
+  const VolumeWii::HashBlock* hashes;
+  u8* out;
+  const Common::AES::Context* aes;
+};
+
+void EncryptBlockJob(void* ctx, size_t i)
+{
+  const EncryptJob* const job = static_cast<const EncryptJob*>(ctx);
+  u8* const out_ptr = job->out + i * VolumeWii::BLOCK_TOTAL_SIZE;
+
+  job->aes->CryptIvZero(reinterpret_cast<const u8*>(&job->hashes[i]), out_ptr,
+                        VolumeWii::BLOCK_HEADER_SIZE);
+  job->aes->Crypt(out_ptr + 0x3D0, job->in[i].data(), out_ptr + VolumeWii::BLOCK_HEADER_SIZE,
+                  VolumeWii::BLOCK_DATA_SIZE);
+}
+}  // namespace
+
 bool VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GROUP],
                           HashBlock out[BLOCKS_PER_GROUP],
                           const std::function<bool(size_t block)>& read_function)
 {
-  std::array<std::future<void>, BLOCKS_PER_GROUP> hash_futures;
-  bool success = true;
-
-  for (size_t i = 0; i < BLOCKS_PER_GROUP; ++i)
+  // The reads go through one blob reader, so they stay on this thread; the 64 blocks of hashing
+  // are spread over the shared worker pool.
+  if (read_function)
   {
-    if (read_function && success)
-      success = read_function(i);
-
-    hash_futures[i] = std::async(std::launch::async, [&in, &out, &hash_futures, success, i] {
-      const size_t h1_base = Common::AlignDown(i, 8);
-
-      if (success)
-      {
-        // H0 hashes
-        for (size_t j = 0; j < 31; ++j)
-          out[i].h0[j] = Common::SHA1::CalculateDigest(in[i].data() + j * 0x400, 0x400);
-
-        // H0 padding
-        out[i].padding_0 = {};
-
-        // H1 hash
-        out[h1_base].h1[i - h1_base] = Common::SHA1::CalculateDigest(out[i].h0);
-      }
-
-      if (i % 8 == 7)
-      {
-        for (size_t j = 0; j < 7; ++j)
-          hash_futures[h1_base + j].get();
-
-        if (success)
-        {
-          // H1 padding
-          out[h1_base].padding_1 = {};
-
-          // H1 copies
-          for (size_t j = 1; j < 8; ++j)
-            out[h1_base + j].h1 = out[h1_base].h1;
-
-          // H2 hash
-          out[0].h2[h1_base / 8] = Common::SHA1::CalculateDigest(out[i].h1);
-        }
-
-        if (i == BLOCKS_PER_GROUP - 1)
-        {
-          for (size_t j = 0; j < 7; ++j)
-            hash_futures[j * 8 + 7].get();
-
-          if (success)
-          {
-            // H2 padding
-            out[0].padding_2 = {};
-
-            // H2 copies
-            for (size_t j = 1; j < BLOCKS_PER_GROUP; ++j)
-              out[j].h2 = out[0].h2;
-          }
-        }
-      }
-    });
+    for (size_t i = 0; i < BLOCKS_PER_GROUP; ++i)
+    {
+      if (!read_function(i))
+        return false;
+    }
   }
 
-  // Wait for all the async tasks to finish
-  hash_futures.back().get();
+  HashJob job{in, out};
+  parallel_for(BLOCKS_PER_GROUP, HashBlockJob, &job);
 
-  return success;
+  for (size_t h1_base = 0; h1_base < BLOCKS_PER_GROUP; h1_base += 8)
+  {
+    // H1 padding and copies
+    out[h1_base].padding_1 = {};
+    for (size_t j = 1; j < 8; ++j)
+      out[h1_base + j].h1 = out[h1_base].h1;
+
+    // H2 hash
+    out[0].h2[h1_base / 8] = Common::SHA1::CalculateDigest(out[h1_base].h1);
+  }
+
+  // H2 padding and copies
+  out[0].padding_2 = {};
+  for (size_t j = 1; j < BLOCKS_PER_GROUP; ++j)
+    out[j].h2 = out[0].h2;
+
+  return true;
 }
 
 bool VolumeWii::EncryptGroup(
@@ -586,34 +592,11 @@ bool VolumeWii::EncryptGroup(
   if (hash_exception_callback)
     hash_exception_callback(unencrypted_hashes.data());
 
-  const unsigned int threads =
-      std::min(BLOCKS_PER_GROUP, std::max<unsigned int>(1, std::thread::hardware_concurrency()));
-
-  std::vector<std::future<void>> encryption_futures(threads);
-
   auto aes_context = Common::AES::CreateContextEncrypt(key.data());
 
-  for (size_t i = 0; i < threads; ++i)
-  {
-    encryption_futures[i] = std::async(
-        std::launch::async,
-        [&unencrypted_data, &unencrypted_hashes, &aes_context, &out](size_t start, size_t end) {
-          for (size_t j = start; j < end; ++j)
-          {
-            u8* out_ptr = out->data() + j * BLOCK_TOTAL_SIZE;
-
-            aes_context->CryptIvZero(reinterpret_cast<u8*>(&unencrypted_hashes[j]), out_ptr,
-                                     BLOCK_HEADER_SIZE);
-
-            aes_context->Crypt(out_ptr + 0x3D0, unencrypted_data[j].data(),
-                               out_ptr + BLOCK_HEADER_SIZE, BLOCK_DATA_SIZE);
-          }
-        },
-        i * BLOCKS_PER_GROUP / threads, (i + 1) * BLOCKS_PER_GROUP / threads);
-  }
-
-  for (std::future<void>& future : encryption_futures)
-    future.get();
+  EncryptJob job{unencrypted_data.data(), unencrypted_hashes.data(), out->data(),
+                 aes_context.get()};
+  parallel_for(BLOCKS_PER_GROUP, EncryptBlockJob, &job);
 
   return true;
 }

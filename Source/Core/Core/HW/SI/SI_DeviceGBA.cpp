@@ -8,7 +8,6 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <thread>
 
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
@@ -23,7 +22,7 @@ namespace SerialInterface
 {
 namespace
 {
-std::thread s_connection_thread;
+sthread_t* s_connection_thread = nullptr;
 std::queue<std::unique_ptr<sf::TcpSocket>> s_waiting_socks;
 std::queue<std::unique_ptr<sf::TcpSocket>> s_waiting_clocks;
 std::mutex s_cs_gba;
@@ -36,7 +35,7 @@ constexpr auto SEND_MAX_SIZE = 5, RECV_MAX_SIZE = 5;
 
 // --- GameBoy Advance "Link Cable" ---
 
-static void GBAConnectionWaiter()
+static void GBAConnectionWaiter(void*)
 {
   s_server_running.Set();
 
@@ -81,8 +80,7 @@ static void GBAConnectionWaiter()
 void GBAConnectionWaiter_Shutdown()
 {
   s_server_running.Clear();
-  if (s_connection_thread.joinable())
-    s_connection_thread.join();
+  Common::JoinThread(s_connection_thread);
 }
 
 template <typename T>
@@ -109,8 +107,8 @@ static std::unique_ptr<sf::TcpSocket> GetNextClock()
 
 GBASockServer::GBASockServer()
 {
-  if (!s_connection_thread.joinable())
-    s_connection_thread = std::thread(GBAConnectionWaiter);
+  if (!s_connection_thread)
+    s_connection_thread = sthread_create(GBAConnectionWaiter, nullptr);
 
   s_num_connected = 0;
 }

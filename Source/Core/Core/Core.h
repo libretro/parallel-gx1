@@ -13,7 +13,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <thread>
+#include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Functional.h"
@@ -198,7 +198,10 @@ void UpdateTitle(Core::System& system);
                  WindowSystemInfo wsi);
   void SingleCorePostRunShutdown();
   extern std::unique_ptr<BootParameters> g_boot_params;
-  extern std::thread s_emu_thread;
+  // Starts EmuThread on its own thread (dual core); s_emu_thread is its handle.
+  bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
+                      const WindowSystemInfo& wsi);
+  extern sthread_t* s_emu_thread;
   extern bool s_frame_step;
   extern std::atomic<bool> s_stop_frame_step;
 #endif

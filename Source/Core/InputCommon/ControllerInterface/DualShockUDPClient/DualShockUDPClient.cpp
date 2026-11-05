@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <thread>
 #include <tuple>
 
 #include <SFML/Network/SocketSelector.hpp>
@@ -215,7 +214,7 @@ private:
   std::vector<Server> m_servers;
   u32 m_client_uid = 0;
   SteadyClock::time_point m_next_listports_time;
-  std::thread m_hotplug_thread;
+  sthread_t* m_hotplug_thread = nullptr;
   Common::Flag m_hotplug_thread_running;
   Config::ConfigChangedCallbackID m_config_change_callback_id;
 };
@@ -372,7 +371,7 @@ void InputBackend::StartHotplugThread()
     return;
   }
 
-  m_hotplug_thread = std::thread(&InputBackend::HotplugThreadFunc, this);
+  m_hotplug_thread = sthread_create(Common::ThreadEntry<&InputBackend::HotplugThreadFunc>, this);
 }
 
 void InputBackend::StopHotplugThread()
@@ -384,7 +383,7 @@ void InputBackend::StopHotplugThread()
     return;
   }
 
-  m_hotplug_thread.join();
+  Common::JoinThread(m_hotplug_thread);
 
   for (auto& server : m_servers)
   {
