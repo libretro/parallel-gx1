@@ -24,8 +24,6 @@ const Info<bool> RA_LEADERBOARD_TRACKER_ENABLED{
     {System::Achievements, "Achievements", "LeaderboardTrackerEnabled"}, true};
 const Info<bool> RA_CHALLENGE_INDICATORS_ENABLED{
     {System::Achievements, "Achievements", "ChallengeIndicatorsEnabled"}, true};
-const Info<bool> RA_DISCORD_PRESENCE_ENABLED{
-    {System::Achievements, "Achievements", "DiscordPresenceEnabled"}, false};
 const Info<bool> RA_PROGRESS_ENABLED{{System::Achievements, "Achievements", "ProgressEnabled"},
                                      false};
 }  // namespace Config

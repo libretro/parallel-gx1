@@ -1703,7 +1703,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/EXI_DeviceMic.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/GBACore.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/SI/SI_DeviceGBAEmu.cpp \
-	$(CORE_DIR)/Source/Core/UICommon/DiscordPresence.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/GameFile.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/GameFileCache.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/NetPlayIndex.cpp \

@@ -45,7 +45,6 @@
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/GCAdapter.h"
 
-#include "UICommon/DiscordPresence.h"
 
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/VideoBackendBase.h"
@@ -134,7 +133,6 @@ void Init()
   Config::AddLayer(ConfigLoaders::GenerateBaseConfigLoader());
   SConfig::Init();
   g_Config.Init();
-  Discord::Init();
   Common::Log::LogManager::Init();
   VideoBackendBase::ActivateBackend(Config::Get(Config::MAIN_GFX_BACKEND));
   Statistics::Init();
@@ -150,7 +148,6 @@ void Shutdown()
   GCAdapter::Shutdown();
   WiimoteReal::Shutdown();
   Common::Log::LogManager::Shutdown();
-  Discord::Shutdown();
   g_Config.Shutdown();
   SConfig::Shutdown();
   Config::Shutdown();

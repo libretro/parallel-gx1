@@ -20,7 +20,6 @@ extern const Info<bool> RA_ENCORE_ENABLED;
 extern const Info<bool> RA_SPECTATOR_ENABLED;
 extern const Info<bool> RA_LEADERBOARD_TRACKER_ENABLED;
 extern const Info<bool> RA_CHALLENGE_INDICATORS_ENABLED;
-extern const Info<bool> RA_DISCORD_PRESENCE_ENABLED;
 extern const Info<bool> RA_PROGRESS_ENABLED;
 }  // namespace Config
 

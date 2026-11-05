@@ -36,7 +36,6 @@
 #include "DolphinLibretro/VideoContexts/ContextStatus.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPClient.h"
-#include "UICommon/DiscordPresence.h"
 #include "UICommon/UICommon.h"
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/VideoBackendBase.h"
@@ -325,7 +324,6 @@ bool retro_load_game(const struct retro_game_info* game)
     Config::SetBase(Config::MAIN_GBA_ROM_PATHS[Config::GBPLAYER_GBA_INDEX], std::string{});
   }
 
-  Discord::SetDiscordPresenceEnabled(false);
   Common::SetEnableAlert(false);
   Common::SetAbortOnPanicAlert(false);
   Common::RegisterMsgAlertHandler([](const char* caption, const char* text,

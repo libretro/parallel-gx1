@@ -13,10 +13,8 @@
 #include "Common/Timer.h"
 #include "Common/Version.h"
 #include "Core/Config/MainSettings.h"
-#include "Core/Config/UISettings.h"
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
-#include "Core/Host.h"
 #include "Core/System.h"
 
 namespace IOS::HLE
@@ -147,69 +145,6 @@ IPCReply GetRealProductCode(Core::System& system, const IOCtlVRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-IPCReply SetDiscordClient(Core::System& system, const IOCtlVRequest& request)
-{
-  if (!Config::Get(Config::MAIN_USE_DISCORD_PRESENCE))
-    return IPCReply(IPC_EACCES);
-
-  if (!request.HasNumberOfValidVectors(1, 0))
-    return IPCReply(IPC_EINVAL);
-
-  auto& memory = system.GetMemory();
-  std::string new_client_id =
-      memory.GetString(request.in_vectors[0].address, request.in_vectors[0].size);
-
-  Host_UpdateDiscordClientID(new_client_id);
-
-  return IPCReply(IPC_SUCCESS);
-}
-
-IPCReply SetDiscordPresence(Core::System& system, const IOCtlVRequest& request)
-{
-  if (!Config::Get(Config::MAIN_USE_DISCORD_PRESENCE))
-    return IPCReply(IPC_EACCES);
-
-  if (!request.HasNumberOfValidVectors(10, 0))
-    return IPCReply(IPC_EINVAL);
-
-  auto& memory = system.GetMemory();
-
-  std::string details = memory.GetString(request.in_vectors[0].address, request.in_vectors[0].size);
-  std::string state = memory.GetString(request.in_vectors[1].address, request.in_vectors[1].size);
-  std::string large_image_key =
-      memory.GetString(request.in_vectors[2].address, request.in_vectors[2].size);
-  std::string large_image_text =
-      memory.GetString(request.in_vectors[3].address, request.in_vectors[3].size);
-  std::string small_image_key =
-      memory.GetString(request.in_vectors[4].address, request.in_vectors[4].size);
-  std::string small_image_text =
-      memory.GetString(request.in_vectors[5].address, request.in_vectors[5].size);
-
-  int64_t start_timestamp = memory.Read_U64(request.in_vectors[6].address);
-  int64_t end_timestamp = memory.Read_U64(request.in_vectors[7].address);
-  int party_size = memory.Read_U32(request.in_vectors[8].address);
-  int party_max = memory.Read_U32(request.in_vectors[9].address);
-
-  bool ret = Host_UpdateDiscordPresenceRaw(details, state, large_image_key, large_image_text,
-                                           small_image_key, small_image_text, start_timestamp,
-                                           end_timestamp, party_size, party_max);
-
-  if (!ret)
-    return IPCReply(IPC_EACCES);
-
-  return IPCReply(IPC_SUCCESS);
-}
-
-IPCReply ResetDiscord(const IOCtlVRequest& request)
-{
-  if (!Config::Get(Config::MAIN_USE_DISCORD_PRESENCE))
-    return IPCReply(IPC_EACCES);
-
-  Host_UpdateDiscordClientID();
-
-  return IPCReply(IPC_SUCCESS);
-}
-
 }  // namespace
 
 IPCReply DolphinDevice::GetElapsedTime(const IOCtlVRequest& request) const
@@ -286,11 +221,10 @@ std::optional<IPCReply> DolphinDevice::IOCtlV(const IOCtlVRequest& request)
   case IOCTL_DOLPHIN_GET_REAL_PRODUCTCODE:
     return GetRealProductCode(GetSystem(), request);
   case IOCTL_DOLPHIN_DISCORD_SET_CLIENT:
-    return SetDiscordClient(GetSystem(), request);
   case IOCTL_DOLPHIN_DISCORD_SET_PRESENCE:
-    return SetDiscordPresence(GetSystem(), request);
   case IOCTL_DOLPHIN_DISCORD_RESET:
-    return ResetDiscord(request);
+    // No Discord Rich Presence in the core; answer as Dolphin does with it disabled.
+    return IPCReply(IPC_EACCES);
   case IOCTL_DOLPHIN_GET_SYSTEM_TIME:
     return GetSystemTime(request);
 
