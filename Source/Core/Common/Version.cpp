@@ -71,12 +71,6 @@ const std::string& GetScmDistributorStr()
   return scm_distributor_str;
 }
 
-const std::string& GetScmUpdateTrackStr()
-{
-  static const std::string scm_update_track_str = SCM_UPDATE_TRACK_STR;
-  return scm_update_track_str;
-}
-
 const std::string& GetNetplayDolphinVer()
 {
 #ifdef _WIN32

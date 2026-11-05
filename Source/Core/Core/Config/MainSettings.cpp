@@ -509,13 +509,6 @@ const Info<bool> MAIN_FIFOPLAYER_LOOP_REPLAY{{System::Main, "FifoPlayer", "LoopR
 const Info<bool> MAIN_FIFOPLAYER_EARLY_MEMORY_UPDATES{
     {System::Main, "FifoPlayer", "EarlyMemoryUpdates"}, false};
 
-// Main.AutoUpdate
-
-const Info<std::string> MAIN_AUTOUPDATE_UPDATE_TRACK{{System::Main, "AutoUpdate", "UpdateTrack"},
-                                                     Common::GetScmUpdateTrackStr()};
-const Info<std::string> MAIN_AUTOUPDATE_HASH_OVERRIDE{{System::Main, "AutoUpdate", "HashOverride"},
-                                                      ""};
-
 // Main.Movie
 
 const Info<bool> MAIN_MOVIE_PAUSE_MOVIE{{System::Main, "Movie", "PauseMovie"}, false};

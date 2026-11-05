@@ -83,8 +83,7 @@ SCMREV_STATUS := $(shell \
 		'$(HASH)define SCM_DESC_STR "$(SCM_DESC)"' \
 		'$(HASH)define SCM_BRANCH_STR "$(SCM_BRANCH)"' \
 		'$(HASH)define SCM_COMMITS_AHEAD_MASTER $(SCM_AHEAD)' \
-		'$(HASH)define SCM_DISTRIBUTOR_STR "None"' \
-		'$(HASH)define SCM_UPDATE_TRACK_STR ""' > $(SCMREV_H).tmp; \
+		'$(HASH)define SCM_DISTRIBUTOR_STR "None"' > $(SCMREV_H).tmp; \
 	cmp -s $(SCMREV_H).tmp $(SCMREV_H) || mv -f $(SCMREV_H).tmp $(SCMREV_H); \
 	rm -f $(SCMREV_H).tmp)
 

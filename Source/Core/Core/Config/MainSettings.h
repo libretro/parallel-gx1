@@ -323,11 +323,6 @@ extern const Info<bool> MAIN_GAMELIST_COLUMN_TAGS;
 extern const Info<bool> MAIN_FIFOPLAYER_LOOP_REPLAY;
 extern const Info<bool> MAIN_FIFOPLAYER_EARLY_MEMORY_UPDATES;
 
-// Main.AutoUpdate
-
-extern const Info<std::string> MAIN_AUTOUPDATE_UPDATE_TRACK;
-extern const Info<std::string> MAIN_AUTOUPDATE_HASH_OVERRIDE;
-
 // Main.Movie
 
 extern const Info<bool> MAIN_MOVIE_PAUSE_MOVIE;
