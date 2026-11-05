@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "Core/IOS/Network/KD/NetKDRequest.h"
+#include "Common/Thread.h"
 
 #include <algorithm>
 #include <array>

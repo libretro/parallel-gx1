@@ -14,7 +14,6 @@
 #include "Common/Config/Config.h"
 #include "Common/Event.h"
 #include "Common/Flag.h"
-#include "Common/SPSCQueue.h"
 #include "Common/WorkQueueThread.h"
 
 #include "Core/HW/Wiimote.h"
@@ -22,6 +21,9 @@
 #include "Core/HW/WiimoteCommon/WiimoteHid.h"
 #include "Core/HW/WiimoteCommon/WiimoteReport.h"
 #include "Core/USBUtils.h"
+
+#include <retro_spsc.h>
+#include <rthreads/retro_eventcount.h>
 
 class PointerWrap;
 
@@ -115,14 +117,25 @@ protected:
   u8 m_bt_device_index = 0;
 
 private:
-  struct TimedReport
+  // Reports cross threads as fixed 32-byte records in lock-free rings: a record never straddles
+  // the end of a ring, so the read thread receives straight into one.
+  struct ReadRecord
+  {
+    u8 size;
+    u8 data[MAX_PAYLOAD];
+    u8 pad[32 - 1 - MAX_PAYLOAD];
+  };
+  struct WriteRecord
   {
     TimePoint time;
-    Report report;
+    u8 size;
+    u8 data[MAX_PAYLOAD];
   };
+  static_assert(sizeof(ReadRecord) == 32 && sizeof(WriteRecord) == 32);
 
+  void QueueWrite(TimePoint time, const u8* data, size_t size);
   bool Read();
-  bool Write(const TimedReport& timed_report);
+  bool Write(const WriteRecord& record);
 
   void StartThread();
   void StopThread();
@@ -165,10 +178,10 @@ private:
   // Triggered when the thread has finished ConnectInternal.
   Common::Event m_thread_ready_event;
 
-  Common::SPSCQueue<Report> m_read_reports;
-  Common::SPSCQueue<TimedReport> m_write_reports;
+  retro_spsc_t m_read_reports;
+  retro_spsc_t m_write_reports;
   // Kick the write thread.
-  Common::Event m_write_event;
+  retro_eventcount_t m_write_event;
 
   bool m_speaker_enabled_in_dolphin_config = false;
   int m_balance_board_dump_port = 0;

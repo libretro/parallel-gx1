@@ -3,6 +3,8 @@
 
 #include "Core/HW/WiimoteReal/IOhidapi.h"
 
+#include <cassert>
+
 #if defined(__linux__)
 #include <filesystem>
 #endif

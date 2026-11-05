@@ -9,6 +9,7 @@
 
 #include <SFML/Network/UdpSocket.hpp>
 
+#include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/Swap.h"
@@ -145,8 +146,14 @@ void AddWiimoteToPool(std::unique_ptr<Wiimote> wiimote)
   s_wiimote_pool.emplace_back(WiimotePoolEntry{std::move(wiimote)});
 }
 
+// Records each ring holds: 256 reports is over a second of input at the Wiimote's 200 Hz.
+static constexpr size_t REPORT_RING_RECORDS = 256;
+
 Wiimote::Wiimote()
 {
+  retro_spsc_init(&m_read_reports, REPORT_RING_RECORDS * sizeof(ReadRecord));
+  retro_spsc_init(&m_write_reports, REPORT_RING_RECORDS * sizeof(WriteRecord));
+  retro_eventcount_init(&m_write_event);
   m_config_changed_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
   RefreshConfig();
 }
@@ -154,6 +161,22 @@ Wiimote::Wiimote()
 Wiimote::~Wiimote()
 {
   Config::RemoveConfigChangedCallback(m_config_changed_callback_id);
+  retro_eventcount_free(&m_write_event);
+  retro_spsc_free(&m_write_reports);
+  retro_spsc_free(&m_read_reports);
+}
+
+// Producer side of m_write_reports. A ring this deep is only full when the device has stopped
+// taking reports, and the write thread is about to drop the connection then.
+void Wiimote::QueueWrite(TimePoint time, const u8* data, size_t size)
+{
+  ASSERT(size <= MAX_PAYLOAD);
+  WriteRecord record;
+  record.time = time;
+  record.size = static_cast<u8>(size);
+  std::copy_n(data, size, record.data);
+  retro_spsc_write_frames(&m_write_reports, &record, 1, sizeof(record));
+  retro_eventcount_notify(&m_write_event);
 }
 
 void Wiimote::Shutdown()
@@ -202,8 +225,7 @@ void Wiimote::WriteReport(Report rpt)
   const auto report_time =
       Core::IsCPUThread() ? core_timing.GetTargetHostTime(core_timing.GetTicks()) : Clock::now();
 
-  m_write_reports.Emplace(report_time, std::move(rpt));
-  m_write_event.Set();
+  QueueWrite(report_time, rpt.data(), rpt.size());
 }
 
 // to be called from CPU thread
@@ -232,12 +254,8 @@ void Wiimote::ResetDataReporting()
 
 void Wiimote::ClearReadQueue()
 {
-  Report rpt;
-
-  // The "Clear" function isn't thread-safe :/
-  while (m_read_reports.Pop(rpt))
-  {
-  }
+  // Consumer side: discards what the read thread has delivered so far.
+  retro_spsc_skip(&m_read_reports, retro_spsc_read_avail(&m_read_reports));
 }
 
 void Wiimote::EventLinked()
@@ -293,41 +311,47 @@ void Wiimote::InterruptDataOutput(const u8* data, const u32 size)
 
 bool Wiimote::Read()
 {
-  Report rpt(MAX_PAYLOAD);
-  auto const result = IORead(rpt.data());
+  // Receive straight into the next ring record. With the ring full the core has stopped taking
+  // reports; receive into a scratch record and drop it.
+  ReadRecord scratch;
+  ReadRecord* record = &scratch;
+  void* span;
+  const bool reserved = retro_spsc_write_begin(&m_read_reports, &span) >= sizeof(ReadRecord);
+  if (reserved)
+    record = static_cast<ReadRecord*>(span);
+
+  auto const result = IORead(record->data);
 
   // Drop the report if not connected.
-  if (m_is_linked && result > 0)
+  const bool keep = m_is_linked && result > 0;
+  if (keep && m_balance_board_dump_port > 0 && m_index == WIIMOTE_BALANCE_BOARD)
   {
-    if (m_balance_board_dump_port > 0 && m_index == WIIMOTE_BALANCE_BOARD)
-    {
-      static sf::UdpSocket Socket;
-      (void)Socket.send(rpt.data(), rpt.size(), sf::IpAddress::LocalHost,
-                        m_balance_board_dump_port);
-    }
+    static sf::UdpSocket Socket;
+    (void)Socket.send(record->data, MAX_PAYLOAD, sf::IpAddress::LocalHost,
+                      m_balance_board_dump_port);
+  }
 
-    // Add it to queue
-    rpt.resize(result);
-    m_read_reports.Push(std::move(rpt));
+  if (reserved)
+  {
+    record->size = static_cast<u8>(result);
+    retro_spsc_write_end(&m_read_reports, keep ? sizeof(ReadRecord) : 0);
   }
 
   return result != 0;
 }
 
-bool Wiimote::Write(const TimedReport& timed_report)
+bool Wiimote::Write(const WriteRecord& record)
 {
-  auto const& rpt = timed_report.report;
-
   if (m_balance_board_dump_port > 0 && m_index == WIIMOTE_BALANCE_BOARD)
   {
     static sf::UdpSocket Socket;
-    (void)Socket.send((char*)rpt.data(), rpt.size(), sf::IpAddress::LocalHost,
+    (void)Socket.send(record.data, record.size, sf::IpAddress::LocalHost,
                       m_balance_board_dump_port);
   }
 
   // Write the report at the proper time, mainly for speaker data, not that it will help much.
-  std::this_thread::sleep_until(timed_report.time);
-  int ret = IOWrite(rpt.data(), rpt.size());
+  std::this_thread::sleep_until(record.time);
+  int ret = IOWrite(record.data, record.size);
 
   return ret != 0;
 }
@@ -416,7 +440,13 @@ static bool IsDataReport(const Report& rpt)
 
 bool Wiimote::GetNextReport(Report* report)
 {
-  return m_read_reports.Pop(*report);
+  const void* span;
+  if (retro_spsc_read_begin(&m_read_reports, &span) < sizeof(ReadRecord))
+    return false;
+  const ReadRecord* const record = static_cast<const ReadRecord*>(span);
+  report->assign(record->data, record->data + record->size);
+  retro_spsc_read_end(&m_read_reports, sizeof(ReadRecord));
+  return true;
 }
 
 // Returns the next report that should be sent
@@ -503,15 +533,13 @@ void Wiimote::Prepare()
   const auto now = Clock::now();
 
   // Set reporting mode to non-continuous core buttons and turn on rumble.
-  Report mode_report = {WR_SET_REPORT | BT_OUTPUT, u8(OutputReportID::ReportMode), 1,
-                        u8(InputReportID::ReportCore)};
-  m_write_reports.Emplace(now, std::move(mode_report));
+  const u8 mode_report[] = {WR_SET_REPORT | BT_OUTPUT, u8(OutputReportID::ReportMode), 1,
+                            u8(InputReportID::ReportCore)};
+  QueueWrite(now, mode_report, sizeof(mode_report));
 
   // Request status and turn off rumble.
-  Report req_status_report = {WR_SET_REPORT | BT_OUTPUT, u8(OutputReportID::RequestStatus), 0};
-  m_write_reports.Emplace(now + std::chrono::milliseconds{200}, std::move(req_status_report));
-
-  m_write_event.Set();
+  const u8 req_status_report[] = {WR_SET_REPORT | BT_OUTPUT, u8(OutputReportID::RequestStatus), 0};
+  QueueWrite(now + std::chrono::milliseconds{200}, req_status_report, sizeof(req_status_report));
 }
 
 void Wiimote::EmuStop()
@@ -778,7 +806,7 @@ void Wiimote::StopThread()
     return;
 
   m_run_thread.Clear();
-  m_write_event.Set();
+  retro_eventcount_notify(&m_write_event);
 
   // Note that the write thread stops the read thread.
   m_write_thread.join();
@@ -794,7 +822,7 @@ void Wiimote::ReadThreadFunc()
     {
       WARN_LOG_FMT(WIIMOTE, "Wiimote::Read failed on Wiimote {}.", m_index + 1);
       m_run_thread.Clear();
-      m_write_event.Set();
+      retro_eventcount_notify(&m_write_event);
       break;
     }
   }
@@ -834,11 +862,12 @@ void Wiimote::WriteThreadFunc()
   {
     bool write_success = false;
 
-    if (!m_write_reports.Empty())
+    if (retro_spsc_read_avail(&m_write_reports) >= sizeof(WriteRecord))
     {
       // Send a normal report.
-      write_success = Write(m_write_reports.Front());
-      m_write_reports.Pop();
+      WriteRecord record;
+      retro_spsc_read(&m_write_reports, &record, sizeof(record));
+      write_success = Write(record);
     }
     else if (Clock::now() - last_write_time >= WRITE_TEST_INTERVAL)
     {
@@ -851,7 +880,13 @@ void Wiimote::WriteThreadFunc()
     else
     {
       // Nothing to do. Wait a while for a kick.
-      m_write_event.WaitFor(WRITE_TEST_INTERVAL);
+      const int key = retro_eventcount_prepare_wait(&m_write_event);
+      if (retro_spsc_read_avail(&m_write_reports) >= sizeof(WriteRecord) || !m_run_thread.IsSet())
+        retro_eventcount_cancel_wait(&m_write_event);
+      else
+        retro_eventcount_commit_wait_timeout(
+            &m_write_event, key,
+            std::chrono::duration_cast<std::chrono::microseconds>(WRITE_TEST_INTERVAL).count());
       continue;
     }
 

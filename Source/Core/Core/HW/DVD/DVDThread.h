@@ -10,13 +10,15 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/SPSCQueue.h"
 
 #include "Common/WorkQueueThread.h"
 #include "Core/HW/DVD/DVDInterface.h"
 #include "Core/HW/DVD/FileMonitor.h"
 
 #include "DiscIO/Volume.h"
+
+#include <queues/mpsc_stack.h>
+#include <rthreads/retro_eventcount.h>
 
 class PointerWrap;
 namespace Core
@@ -128,7 +130,19 @@ private:
 
   Common::WorkQueueThreadSP<ReadRequest> m_dvd_thread;
 
-  Common::WaitableSPSCQueue<ReadResult> m_result_queue;
+  // Results travel from the DVD thread to the CPU thread through a lock-free stack; the CPU thread
+  // takes them all at once into m_result_chain, oldest first, and wakes on m_result_ready.
+  struct ResultNode
+  {
+    mpsc_stack_node_t link;
+    ReadResult result;
+  };
+  ResultNode* TakeResult(u64 id);
+  void FreeResults();
+
+  mpsc_stack_t m_result_queue;
+  retro_eventcount_t m_result_ready;
+  mpsc_stack_node_t* m_result_chain = nullptr;  // CPU thread only
   std::map<u64, ReadResult> m_result_map;
 
   std::unique_ptr<DiscIO::Volume> m_disc;

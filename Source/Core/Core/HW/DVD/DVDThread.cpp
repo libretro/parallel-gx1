@@ -13,7 +13,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
-#include "Common/SPSCQueue.h"
 #include "Common/Timer.h"
 
 #include "Core/ConfigManager.h"
@@ -33,9 +32,60 @@ namespace DVD
 {
 DVDThread::DVDThread(Core::System& system) : m_system(system)
 {
+  mpsc_stack_init(&m_result_queue);
+  retro_eventcount_init(&m_result_ready);
 }
 
-DVDThread::~DVDThread() = default;
+DVDThread::~DVDThread()
+{
+  m_dvd_thread.Shutdown();
+  FreeResults();
+  retro_eventcount_free(&m_result_ready);
+}
+
+void DVDThread::FreeResults()
+{
+  mpsc_stack_node_t* node = m_result_chain;
+  m_result_chain = nullptr;
+  while (node)
+  {
+    mpsc_stack_node_t* const next = node->next;
+    delete reinterpret_cast<ResultNode*>(node);
+    node = next;
+  }
+  mpsc_stack_node_t* queued = mpsc_stack_drain(&m_result_queue);
+  while (queued)
+  {
+    mpsc_stack_node_t* const next = queued->next;
+    delete reinterpret_cast<ResultNode*>(queued);
+    queued = next;
+  }
+}
+
+// CPU thread. Unlinks and returns the result with this id, or every result taken so far when
+// id is ~0, without waiting; nullptr when none has arrived.
+DVDThread::ResultNode* DVDThread::TakeResult(u64 id)
+{
+  if (!mpsc_stack_empty(&m_result_queue))
+  {
+    mpsc_stack_node_t* const arrived = mpsc_stack_reverse(mpsc_stack_drain(&m_result_queue));
+    mpsc_stack_node_t** tail = &m_result_chain;
+    while (*tail)
+      tail = &(*tail)->next;
+    *tail = arrived;
+  }
+
+  for (mpsc_stack_node_t** link = &m_result_chain; *link; link = &(*link)->next)
+  {
+    ResultNode* const node = reinterpret_cast<ResultNode*>(*link);
+    if (id == ~u64{0} || node->result.first.id == id)
+    {
+      *link = node->link.next;
+      return node;
+    }
+  }
+  return nullptr;
+}
 
 void DVDThread::Start()
 {
@@ -53,7 +103,7 @@ void DVDThread::Stop()
   m_dvd_thread.Cancel();
   m_dvd_thread.Shutdown();
 
-  m_result_queue.Clear();
+  FreeResults();
   m_result_map.clear();
 
   m_disc.reset();
@@ -65,11 +115,13 @@ void DVDThread::DoState(PointerWrap& p)
   WaitUntilIdle();
 
   // Move all results from result_queue to result_map because
-  // PointerWrap::Do supports std::map but not Common::WaitableSPSCQueue.
+  // PointerWrap::Do supports std::map but not the queue.
   // This won't affect the behavior of FinishRead.
-  ReadResult result;
-  while (m_result_queue.Pop(result))
-    m_result_map.emplace(result.first.id, std::move(result));
+  while (ResultNode* const node = TakeResult(~u64{0}))
+  {
+    m_result_map.emplace(node->result.first.id, std::move(node->result));
+    delete node;
+  }
 
   p.Do(m_result_map);
   p.Do(m_next_id);
@@ -225,16 +277,8 @@ void DVDThread::GlobalFinishRead(Core::System& system, u64 id, s64 cycles_late)
 
 void DVDThread::FinishRead(u64 id, s64 cycles_late)
 {
-  // We can't simply pop result_queue and always get the ReadResult
-  // we want, because the DVD thread may add ReadResults to the queue
-  // in a different order than we want to get them. What we do instead
-  // is to pop the queue until we find the ReadResult we want (the one
-  // whose ID matches userdata), which means we may end up popping
-  // ReadResults that we don't want. We can't add those unwanted results
-  // back to the queue, because the queue can only have one writer.
-  // Instead, we add them to a map that only is used by the CPU thread.
-  // When this function is called again later, it will check the map for
-  // the wanted ReadResult before it starts searching through the queue.
+  // The DVD thread may finish reads in a different order than they are wanted, so results
+  // are looked up by id: in the map a savestate load filled, else among those that arrived.
   ReadResult result;
   auto it = m_result_map.find(id);
   if (it != m_result_map.end())
@@ -244,15 +288,19 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
   }
   else
   {
-    while (true)
+    ResultNode* node;
+    while (!(node = TakeResult(id)))
     {
-      m_result_queue.WaitForData();
-      m_result_queue.Pop(result);
-      if (result.first.id == id)
-        break;
-
-      m_result_map.emplace(result.first.id, std::move(result));
+      const int key = retro_eventcount_prepare_wait(&m_result_ready);
+      if (!mpsc_stack_empty(&m_result_queue))
+      {
+        retro_eventcount_cancel_wait(&m_result_ready);
+        continue;
+      }
+      retro_eventcount_commit_wait(&m_result_ready, key);
     }
+    result = std::move(node->result);
+    delete node;
   }
   // We have now obtained the right ReadResult.
 
@@ -303,6 +351,9 @@ void DVDThread::ProcessReadRequest(ReadRequest&& request)
 
   request.realtime_done_us = Common::Timer::NowUs();
 
-  m_result_queue.Push(ReadResult(std::move(request), std::move(buffer)));
+  ResultNode* const node =
+      new ResultNode{{nullptr}, ReadResult(std::move(request), std::move(buffer))};
+  mpsc_stack_push(&m_result_queue, &node->link);
+  retro_eventcount_notify(&m_result_ready);
 }
 }  // namespace DVD

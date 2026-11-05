@@ -4,7 +4,6 @@
 #include "Core/CoreTiming.h"
 
 #include <algorithm>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -14,7 +13,6 @@
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
-#include "Common/SPSCQueue.h"
 #include "Common/ScopeGuard.h"
 
 #include "Core/AchievementManager.h"
@@ -42,6 +40,7 @@ static void EmptyTimedCallback(Core::System& system, u64 userdata, s64 cyclesLat
 
 CoreTimingManager::CoreTimingManager(Core::System& system) : m_system(system)
 {
+  mpsc_stack_init(&m_ts_queue);
 }
 
 // Changing the CPU speed in Dolphin isn't actually done by changing the physical clock rate,
@@ -122,11 +121,21 @@ void CoreTimingManager::Init()
   });
 }
 
+CoreTimingManager::~CoreTimingManager()
+{
+  mpsc_stack_node_t* node = mpsc_stack_drain(&m_ts_queue);
+  while (node)
+  {
+    mpsc_stack_node_t* const next = node->next;
+    delete reinterpret_cast<ThreadSafeEvent*>(node);
+    node = next;
+  }
+}
+
 void CoreTimingManager::Shutdown()
 {
   m_core_state_changed_hook.reset();
 
-  std::lock_guard lk(m_ts_write_lock);
   MoveEvents();
   ClearPendingEvents();
   UnregisterAllEvents();
@@ -171,7 +180,6 @@ void CoreTimingManager::RefreshConfig()
 
 void CoreTimingManager::DoState(PointerWrap& p)
 {
-  std::lock_guard lk(m_ts_write_lock);
   p.Do(m_globals.slice_length);
   p.Do(m_globals.global_timer);
   p.Do(m_idled_cycles);
@@ -294,8 +302,9 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
                     *event_type->name);
     }
 
-    std::lock_guard lk(m_ts_write_lock);
-    m_ts_queue.Push(Event{cycles_into_future, 0, userdata, event_type});
+    ThreadSafeEvent* const node =
+        new ThreadSafeEvent{{nullptr}, Event{cycles_into_future, 0, userdata, event_type}};
+    mpsc_stack_push(&m_ts_queue, &node->link);
   }
 }
 
@@ -332,10 +341,17 @@ void CoreTimingManager::ForceExceptionCheck(s64 cycles)
 
 void CoreTimingManager::MoveEvents()
 {
-  while (!m_ts_queue.Empty())
+  if (mpsc_stack_empty(&m_ts_queue))
+    return;
+
+  // Oldest first, so events keep the order they were scheduled in.
+  mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_ts_queue));
+  while (node)
   {
-    auto& ev = m_event_queue.emplace_back(m_ts_queue.Front());
-    m_ts_queue.Pop();
+    ThreadSafeEvent* const ts_event = reinterpret_cast<ThreadSafeEvent*>(node);
+    node = node->next;
+    auto& ev = m_event_queue.emplace_back(ts_event->event);
+    delete ts_event;
 
     ev.fifo_order = m_event_fifo_id++;
     ev.time += m_globals.global_timer;

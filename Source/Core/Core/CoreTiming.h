@@ -16,7 +16,6 @@
 // inside callback:
 //   ScheduleEvent(periodInCycles - cyclesLate, callback, "whatever")
 
-#include <mutex>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -25,9 +24,10 @@
 #include "Common/CommonTypes.h"
 #include "Common/Functional.h"
 #include "Common/HookableEvent.h"
-#include "Common/SPSCQueue.h"
 #include "Common/Timer.h"
 #include "Core/CPUThreadConfigCallback.h"
+
+#include <queues/mpsc_stack.h>
 
 class PointerWrap;
 
@@ -92,6 +92,7 @@ class CoreTimingManager
 {
 public:
   explicit CoreTimingManager(Core::System& system);
+  ~CoreTimingManager();
 
   // CoreTiming begins at the boundary of timing slice -1. An initial call to Advance() is
   // required to end slice -1 and start slice 0 before the first cycle of code is executed.
@@ -188,11 +189,15 @@ private:
   // by the standard adaptor class.
   std::vector<Event> m_event_queue;
   u64 m_event_fifo_id = 0;
-  std::mutex m_ts_write_lock;
 
-  // Event objects created from other threads.
-  // The time value of each Event here is a cycles_into_future value.
-  Common::SPSCQueue<Event> m_ts_queue;
+  // Event objects created from other threads, pushed lock-free by any of them and taken all at
+  // once by the CPU thread. The time value of each Event here is a cycles_into_future value.
+  struct ThreadSafeEvent
+  {
+    mpsc_stack_node_t link;
+    Event event;
+  };
+  mpsc_stack_t m_ts_queue;
 
   float m_last_oc_factor = 0.0f;
 

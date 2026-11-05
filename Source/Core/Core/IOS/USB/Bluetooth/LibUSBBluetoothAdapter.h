@@ -7,6 +7,7 @@
 #include <queue>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "Common/Buffer.h"
 #include "Common/Timer.h"
@@ -14,6 +15,11 @@
 
 #include "Core/IOS/USB/Bluetooth/hci.h"
 #include "Core/LibusbUtils.h"
+
+#include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
+#include <retro_spsc.h>
+#include <rthreads/retro_eventcount.h>
 
 struct libusb_device_handle;
 struct libusb_device_descriptor;
@@ -43,7 +49,11 @@ public:
   // Return a packet at the front of the queue, or an empty buffer when nothing is queued.
   // ReceiveHCIEvent is expected to be called regularly to do some internal processing.
   [[nodiscard]] BufferType ReceiveHCIEvent();
-  [[nodiscard]] BufferType ReceiveACLData();
+
+  // The ACL packet at the front of the queue, read in place; empty when nothing is queued.
+  // PopACLData releases it.
+  [[nodiscard]] std::span<const u8> PeekACLData();
+  void PopACLData();
 
   // Schedule a transfer to submit at a specific time.
   void ScheduleBulkTransfer(u8 endpoint, std::span<const u8> data, TimePoint target_time);
@@ -61,28 +71,43 @@ public:
   bool IsWiiBTModule() const;
 
 private:
-  // Inputs will be dropped when queue is full.
-  static constexpr std::size_t MAX_INPUT_QUEUE_SIZE = 100;
+  // Bytes each input ring holds; inputs are dropped when it is full.
+  static constexpr std::size_t INPUT_RING_SIZE = 64 * 1024;
 
   static constexpr u8 INTERFACE = 0x00;
 
   std::string m_last_open_error;
 
+  // Callbacks on the libusb event thread notify this until that thread is joined, which happens
+  // when m_context goes, so it is declared first to be released last.
+  struct TransferFreedEvent
+  {
+    TransferFreedEvent() { retro_eventcount_init(&ec); }
+    ~TransferFreedEvent() { retro_eventcount_free(&ec); }
+    retro_eventcount_t ec;
+  } m_transfer_freed;
+
   LibusbUtils::Context m_context;
   libusb_device_handle* m_handle = nullptr;
 
-  // Protects run-flag and Push'ing to the completed transfer queue.
-  std::mutex m_transfers_mutex;
+  retro_atomic_int_t m_run_input_transfers;
 
-  bool m_run_input_transfers = true;
+  // Callback and worker threads push transfers here, lock-free, when they are ready for clean up.
+  // The node lives in the front of the transfer's own buffer, so this allocates nothing.
+  struct FreeNode
+  {
+    mpsc_stack_node_t link;
+    libusb_transfer* transfer;
+  };
+  static constexpr std::size_t BUFFER_HEADER_SIZE = (sizeof(FreeNode) + 15) & ~std::size_t{15};
+  void QueueFree(libusb_transfer* transfer);
+  mpsc_stack_t m_transfers_to_free;
 
-  // callback/worker threads push transfers here that are ready for clean up.
-  // This avoids locking around m_transfer_buffers.
-  Common::WaitableSPSCQueue<libusb_transfer*> m_transfers_to_free;
-
-  // Incoming packets Push'd from libusb callback thread.
-  Common::SPSCQueue<BufferType> m_hci_event_queue;
-  Common::SPSCQueue<BufferType> m_acl_data_queue;
+  // Incoming packets from the libusb callback thread, each a 16-bit length and the payload.
+  retro_spsc_t m_hci_event_queue;
+  retro_spsc_t m_acl_data_queue;
+  std::size_t m_acl_peeked = 0;
+  std::vector<u8> m_acl_bounce;
 
   // All transfers are alloc'd and kept here until complete.
   std::map<libusb_transfer*, Common::UniqueBuffer<u8>> m_transfer_buffers;
@@ -137,6 +162,7 @@ private:
   void AcknowledgeCommand(std::span<const u8> buffer);
 
   libusb_transfer* AllocateTransfer(std::size_t buffer_size);
+  void Close();
   void FreeTransfer(libusb_transfer*);
   void CleanCompletedTransfers();
 

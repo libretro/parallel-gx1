@@ -3,6 +3,8 @@
 
 #include "Core/IOS/USB/Bluetooth/BTReal.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -302,7 +304,7 @@ void BluetoothRealDevice::TryToFillACLEndpoint()
   auto& core_timing = GetSystem().GetCoreTiming();
   core_timing.Throttle(core_timing.GetTicks());
 
-  const auto buffer = m_lib_usb_bt_adapter->ReceiveACLData();
+  const auto buffer = m_lib_usb_bt_adapter->PeekACLData();
   if (buffer.empty())
     return;
 
@@ -310,6 +312,7 @@ void BluetoothRealDevice::TryToFillACLEndpoint()
 
   m_acl_endpoint->FillBuffer(buffer.data(), buffer.size());
   GetEmulationKernel().EnqueueIPCReply(m_acl_endpoint->ios_request, s32(buffer.size()));
+  m_lib_usb_bt_adapter->PopACLData();
 
   m_acl_endpoint.reset();
 }

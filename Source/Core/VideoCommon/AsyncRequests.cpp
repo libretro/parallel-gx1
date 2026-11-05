@@ -4,43 +4,64 @@
 #include "VideoCommon/AsyncRequests.h"
 
 #include "Core/System.h"
-
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/VertexManagerBase.h"
-#include "VideoCommon/VideoBackendBase.h"
-#include "VideoCommon/VideoEvents.h"
 
 AsyncRequests AsyncRequests::s_singleton;
 
-AsyncRequests::AsyncRequests() = default;
+// Pending requests the ring holds before the CPU thread has to wait for the video thread.
+static constexpr size_t QUEUE_REQUESTS = 1024;
+
+AsyncRequests::AsyncRequests()
+{
+  retro_waitable_spsc_init(&m_queue, QUEUE_REQUESTS * sizeof(Request*));
+  retro_eventcount_init(&m_completed);
+}
+
+AsyncRequests::~AsyncRequests()
+{
+  retro_eventcount_free(&m_completed);
+  retro_waitable_spsc_free(&m_queue);
+}
 
 void AsyncRequests::PullEvents()
 {
-  if (m_queue.Empty())
+  if (retro_spsc_read_avail(&m_queue.queue) < sizeof(Request*))
     return;
 
   // This is only called if the queue isn't empty.
   // So just flush the pipeline to get accurate results.
   g_vertex_manager->Flush();
 
-  while (!m_queue.Empty())
-  {
-    std::invoke(std::move(m_queue.Front()));
-    m_queue.Pop();
-  }
+  Request* request;
+  while (retro_waitable_spsc_read(&m_queue, &request, sizeof(request)) == sizeof(request))
+    request->run(request);
 }
 
-void AsyncRequests::QueueEvent(Event&& event)
+void AsyncRequests::Submit(Request* request)
 {
-  m_queue.Push(std::move(event));
+  // Only waits when the video thread is QUEUE_REQUESTS requests behind.
+  while (!retro_waitable_spsc_wait_writable(&m_queue, sizeof(request), 1000000))
+  {
+  }
+  retro_waitable_spsc_write(&m_queue, &request, sizeof(request));
 
   auto& system = Core::System::GetInstance();
   system.GetFifo().RunGpu();
 }
 
-void AsyncRequests::WaitForEmptyQueue()
+void AsyncRequests::WaitDone(retro_atomic_int_t* done)
 {
-  m_queue.WaitForEmpty();
+  while (!retro_atomic_load_acquire_int(done))
+  {
+    const int key = retro_eventcount_prepare_wait(&m_completed);
+    if (retro_atomic_load_acquire_int(done))
+    {
+      retro_eventcount_cancel_wait(&m_completed);
+      break;
+    }
+    retro_eventcount_commit_wait(&m_completed, key);
+  }
 }
 
 void AsyncRequests::SetPassthrough(bool enable)

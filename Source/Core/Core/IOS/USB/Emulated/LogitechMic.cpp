@@ -3,6 +3,8 @@
 
 #include "Core/IOS/USB/Emulated/LogitechMic.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <utility>
 

@@ -9,14 +9,15 @@
 #include <optional>
 
 #include "Common/CommonTypes.h"
-#include "Common/SPSCQueue.h"
+
+#include <retro_spsc.h>
 
 class PerformanceTracker
 {
 public:
   PerformanceTracker(std::optional<std::string> log_name = std::nullopt,
                      const std::optional<DT> sample_window_duration = std::nullopt);
-  ~PerformanceTracker() = default;
+  ~PerformanceTracker();
 
   PerformanceTracker(const PerformanceTracker&) = delete;
   PerformanceTracker& operator=(const PerformanceTracker&) = delete;
@@ -58,7 +59,8 @@ private:
 
   // Push'd from Count()
   //  and Pop'd from UpdateStats()
-  Common::SPSCQueue<DT> m_raw_dts;
+  // Frame times from Count() to UpdateStats(), lock-free.
+  retro_spsc_t m_raw_dts;
   std::atomic<DT> m_last_raw_dt = DT::zero();
 
   // Amount of time to sample dt's over (defaults to config)

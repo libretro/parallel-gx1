@@ -3,6 +3,8 @@
 
 #include "Core/HW/DVD/AMMediaboard.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <bit>
 #include <random>

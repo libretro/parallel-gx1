@@ -3,6 +3,8 @@
 
 #include "Core/HW/WiimoteReal/IOWin.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <array>
 #include <bit>

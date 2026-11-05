@@ -967,21 +967,9 @@ void Callback_NewField(Core::System& system)
 {
   if (s_frame_step)
   {
-#ifndef __LIBRETRO__
-    // To ensure that s_stop_frame_step is up to date, wait for the GPU thread queue to empty,
-    // since it is may contain a swap event (which will call Callback_FramePresented). This hurts
-    // the performance a little, but luckily, performance matters less when using frame stepping.
-    AsyncRequests::GetInstance()->WaitForEmptyQueue();
-
-    // Only stop the frame stepping if a new frame was displayed
-    // (as opposed to the previous frame being displayed for another frame).
-    if (s_stop_frame_step.load())
-#endif
-    {
-      s_frame_step = false;
-      system.GetCPU().Break();
-      NotifyStateChanged(Core::GetState(system));
-    }
+    s_frame_step = false;
+    system.GetCPU().Break();
+    NotifyStateChanged(Core::GetState(system));
   }
 
   AchievementManager::GetInstance().DoFrame();

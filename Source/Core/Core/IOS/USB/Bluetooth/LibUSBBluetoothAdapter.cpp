@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "Core/IOS/USB/Bluetooth/LibUSBBluetoothAdapter.h"
+#include "Common/Thread.h"
+
+#include <cassert>
 
 #include <algorithm>
 #include <chrono>
@@ -86,6 +89,11 @@ bool LibUSBBluetoothAdapter::IsConfiguredBluetoothDevice(u16 vid, u16 pid)
 
 LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 {
+  retro_atomic_int_init(&m_run_input_transfers, 1);
+  mpsc_stack_init(&m_transfers_to_free);
+  retro_spsc_init_mirrored(&m_hci_event_queue, INPUT_RING_SIZE);
+  retro_spsc_init_mirrored(&m_acl_data_queue, INPUT_RING_SIZE);
+
   if (!m_context.IsValid())
     return;
 
@@ -175,9 +183,15 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 
 LibUSBBluetoothAdapter::~LibUSBBluetoothAdapter()
 {
-  if (m_handle == nullptr)
-    return;
+  if (m_handle != nullptr)
+    Close();
 
+  retro_spsc_free(&m_acl_data_queue);
+  retro_spsc_free(&m_hci_event_queue);
+}
+
+void LibUSBBluetoothAdapter::Close()
+{
   // Wait for completion (or time out) of all HCI commands.
   while (AreCommandsPendingResponse())
   {
@@ -188,16 +202,19 @@ LibUSBBluetoothAdapter::~LibUSBBluetoothAdapter()
   m_output_worker.Shutdown();
 
   // Stop the repeating input transfers.
-  if (std::lock_guard lg{m_transfers_mutex}; true)
-    m_run_input_transfers = false;
+  retro_atomic_store_release_int(&m_run_input_transfers, 0);
 
-  // Cancel all LibUSB transfers.
-  std::ranges::for_each(m_transfer_buffers | std::ranges::views::keys, libusb_cancel_transfer);
-
-  // Wait for transfer callbacks and clean up all the buffers.
+  // Cancel all LibUSB transfers, wait for their callbacks and clean up all the buffers. A
+  // callback that read the run flag before it was cleared may resubmit its transfer after the
+  // cancel, so whatever is still in flight is cancelled again on every pass.
   while (!m_transfer_buffers.empty())
   {
-    m_transfers_to_free.WaitForData();
+    std::ranges::for_each(m_transfer_buffers | std::ranges::views::keys, libusb_cancel_transfer);
+    const int key = retro_eventcount_prepare_wait(&m_transfer_freed.ec);
+    if (!mpsc_stack_empty(&m_transfers_to_free))
+      retro_eventcount_cancel_wait(&m_transfer_freed.ec);
+    else
+      retro_eventcount_commit_wait_timeout(&m_transfer_freed.ec, key, 10000);
     CleanCompletedTransfers();
   }
 
@@ -236,16 +253,29 @@ void LibUSBBluetoothAdapter::Update()
   CleanCompletedTransfers();
 }
 
+// Consumer side of an input ring: the length of the whole packet at its front, or 0.
+static u16 PeekPacketLength(const retro_spsc_t* queue)
+{
+  const std::size_t avail = retro_spsc_read_avail(queue);
+  u16 length;
+  if (avail < sizeof(length))
+    return 0;
+  retro_spsc_peek(queue, &length, sizeof(length));
+  return avail >= sizeof(length) + length ? length : 0;
+}
+
 auto LibUSBBluetoothAdapter::ReceiveHCIEvent() -> BufferType
 {
-  if (m_hci_event_queue.Empty())
+  const u16 length = PeekPacketLength(&m_hci_event_queue);
+  if (length == 0)
   {
     Update();
     return {};
   }
 
-  auto buffer = std::move(m_hci_event_queue.Front());
-  m_hci_event_queue.Pop();
+  BufferType buffer(length);
+  retro_spsc_skip(&m_hci_event_queue, sizeof(length));
+  retro_spsc_read(&m_hci_event_queue, buffer.data(), length);
 
   // We only care about "COMMAND_COMPL" and "COMMAND_STATUS" events here.
   // The controller will reply with one of those for every command.
@@ -264,11 +294,26 @@ auto LibUSBBluetoothAdapter::ReceiveHCIEvent() -> BufferType
   return buffer;
 }
 
-auto LibUSBBluetoothAdapter::ReceiveACLData() -> BufferType
+std::span<const u8> LibUSBBluetoothAdapter::PeekACLData()
 {
-  BufferType buffer;
-  m_acl_data_queue.Pop(buffer);
-  return buffer;
+  const u16 length = PeekPacketLength(&m_acl_data_queue);
+  if (length == 0)
+    return {};
+
+  m_acl_peeked = sizeof(length) + length;
+  const void* span;
+  if (retro_spsc_read_begin(&m_acl_data_queue, &span) >= m_acl_peeked)
+    return {static_cast<const u8*>(span) + sizeof(length), length};
+
+  // Only a ring without a mirror splits a packet at its end.
+  m_acl_bounce.resize(m_acl_peeked);
+  retro_spsc_peek(&m_acl_data_queue, m_acl_bounce.data(), m_acl_peeked);
+  return {m_acl_bounce.data() + sizeof(length), length};
+}
+
+void LibUSBBluetoothAdapter::PopACLData()
+{
+  retro_spsc_skip(&m_acl_data_queue, std::exchange(m_acl_peeked, 0));
 }
 
 bool LibUSBBluetoothAdapter::IsControllerReadyForCommand() const
@@ -305,12 +350,13 @@ void LibUSBBluetoothAdapter::AcknowledgeCommand(std::span<const u8> buffer)
 
 libusb_transfer* LibUSBBluetoothAdapter::AllocateTransfer(std::size_t buffer_size)
 {
-  auto& item =
-      *m_transfer_buffers.emplace(libusb_alloc_transfer(0), Common::UniqueBuffer<u8>{buffer_size})
-           .first;
+  auto& item = *m_transfer_buffers
+                    .emplace(libusb_alloc_transfer(0),
+                             Common::UniqueBuffer<u8>{BUFFER_HEADER_SIZE + buffer_size})
+                    .first;
 
   auto* const transfer = item.first;
-  transfer->buffer = item.second.get();
+  transfer->buffer = item.second.get() + BUFFER_HEADER_SIZE;
 
   return transfer;
 }
@@ -321,11 +367,25 @@ void LibUSBBluetoothAdapter::FreeTransfer(libusb_transfer* transfer)
   m_transfer_buffers.erase(transfer);
 }
 
+// Any thread.
+void LibUSBBluetoothAdapter::QueueFree(libusb_transfer* transfer)
+{
+  FreeNode* const node = reinterpret_cast<FreeNode*>(transfer->buffer - BUFFER_HEADER_SIZE);
+  node->transfer = transfer;
+  mpsc_stack_push(&m_transfers_to_free, &node->link);
+  retro_eventcount_notify(&m_transfer_freed.ec);
+}
+
 void LibUSBBluetoothAdapter::CleanCompletedTransfers()
 {
-  libusb_transfer* transfer{};
-  while (m_transfers_to_free.Pop(transfer))
-    FreeTransfer(transfer);
+  mpsc_stack_node_t* node = mpsc_stack_drain(&m_transfers_to_free);
+  while (node)
+  {
+    // The node is freed with its transfer's buffer.
+    mpsc_stack_node_t* const next = node->next;
+    FreeTransfer(reinterpret_cast<FreeNode*>(node)->transfer);
+    node = next;
+  }
 }
 
 void LibUSBBluetoothAdapter::PushHCICommand(TimedTransfer transfer)
@@ -365,8 +425,7 @@ void LibUSBBluetoothAdapter::SubmitTransfer(libusb_transfer* transfer)
   ERROR_LOG_FMT(IOS_WIIMOTE, "libusb_submit_transfer: {}", LibusbUtils::ErrorWrap(ret));
 
   // Failed transers will not invoke callbacks so we must mark the buffer to be free'd here.
-  std::lock_guard lk{m_transfers_mutex};
-  m_transfers_to_free.Emplace(transfer);
+  QueueFree(transfer);
 }
 
 void LibUSBBluetoothAdapter::ScheduleBulkTransfer(u8 endpoint, std::span<const u8> data,
@@ -520,9 +579,7 @@ bool LibUSBBluetoothAdapter::OpenDevice(const libusb_device_descriptor& device_d
 void LibUSBBluetoothAdapter::HandleOutputTransfer(libusb_transfer* tr)
 {
   HandleTransferError(tr);
-
-  std::lock_guard lg{m_transfers_mutex};
-  m_transfers_to_free.Emplace(tr);
+  QueueFree(tr);
 }
 
 void LibUSBBluetoothAdapter::HandleInputTransfer(libusb_transfer* tr)
@@ -530,15 +587,16 @@ void LibUSBBluetoothAdapter::HandleInputTransfer(libusb_transfer* tr)
   if (tr->status == LIBUSB_TRANSFER_COMPLETED)
   {
     const bool is_hci_event = tr->endpoint == HCI_EVENT;
-    auto& queue = is_hci_event ? m_hci_event_queue : m_acl_data_queue;
+    retro_spsc_t* const queue = is_hci_event ? &m_hci_event_queue : &m_acl_data_queue;
+    const u16 length = static_cast<u16>(tr->actual_length);
 
-    if (queue.Size() < MAX_INPUT_QUEUE_SIZE)
+    if (retro_spsc_write_avail(queue) >= sizeof(length) + length)
     {
-      if (tr->actual_length != 0)
+      if (length != 0)
       {
-        BufferType buffer(tr->actual_length);
-        std::copy_n(tr->buffer, tr->actual_length, buffer.data());
-        queue.Emplace(std::move(buffer));
+        // The consumer only takes a packet once all of it is there.
+        retro_spsc_write(queue, &length, sizeof(length));
+        retro_spsc_write(queue, tr->buffer, length);
       }
 
       m_showed_long_queue_drop = false;
@@ -553,9 +611,7 @@ void LibUSBBluetoothAdapter::HandleInputTransfer(libusb_transfer* tr)
 
   HandleTransferError(tr);
 
-  std::lock_guard lg{m_transfers_mutex};
-
-  if (m_run_input_transfers)
+  if (retro_atomic_load_acquire_int(&m_run_input_transfers))
   {
     // Continuously repeat this input transfer so long as we're still running.
     const auto ret = libusb_submit_transfer(tr);
@@ -566,7 +622,7 @@ void LibUSBBluetoothAdapter::HandleInputTransfer(libusb_transfer* tr)
                   LibusbUtils::ErrorWrap(ret));
   }
 
-  m_transfers_to_free.Emplace(tr);
+  QueueFree(tr);
 }
 
 void LibUSBBluetoothAdapter::HandleTransferError(libusb_transfer* transfer)

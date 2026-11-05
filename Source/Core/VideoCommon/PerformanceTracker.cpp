@@ -23,12 +23,18 @@ PerformanceTracker::PerformanceTracker(std::optional<std::string> log_name,
                                        const std::optional<DT> sample_window_duration)
     : m_log_name{std::move(log_name)}, m_sample_window_duration{sample_window_duration}
 {
+  retro_spsc_init(&m_raw_dts, MAX_DT_QUEUE_SIZE * sizeof(DT));
   Reset();
+}
+
+PerformanceTracker::~PerformanceTracker()
+{
+  retro_spsc_free(&m_raw_dts);
 }
 
 void PerformanceTracker::Reset()
 {
-  m_raw_dts.Clear();
+  retro_spsc_skip(&m_raw_dts, retro_spsc_read_avail(&m_raw_dts));
   m_dt_queue.clear();
 
   m_dt_total = DT::zero();
@@ -54,14 +60,18 @@ void PerformanceTracker::Count()
   }
 
   m_last_raw_dt = diff;
-  m_raw_dts.Push(diff);
+  // A full ring already holds the MAX_DT_QUEUE_SIZE samples UpdateStats keeps.
+  retro_spsc_write_frames(&m_raw_dts, &diff, 1, sizeof(diff));
 }
 
 void PerformanceTracker::UpdateStats()
 {
   DT diff{};
-  while (m_raw_dts.Pop(diff))
+  while (retro_spsc_read_avail(&m_raw_dts) >= sizeof(diff))
+  {
+    retro_spsc_read(&m_raw_dts, &diff, sizeof(diff));
     HandleRawDt(diff);
+  }
 
   // Update Std Dev
   MathUtil::RunningVariance<double> variance;

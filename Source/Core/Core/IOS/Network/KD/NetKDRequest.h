@@ -7,6 +7,7 @@
 #include <memory>
 #include <queue>
 #include <string>
+#include <thread>
 
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
