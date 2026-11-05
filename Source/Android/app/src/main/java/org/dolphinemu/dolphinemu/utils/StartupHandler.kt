@@ -3,26 +3,16 @@
 package org.dolphinemu.dolphinemu.utils
 
 import android.content.ClipData
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.text.TextUtils
 import androidx.fragment.app.FragmentActivity
-import androidx.preference.PreferenceManager
-import org.dolphinemu.dolphinemu.NativeLibrary
 import org.dolphinemu.dolphinemu.activities.EmulationActivity
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 object StartupHandler {
-    private const val SESSION_TIMESTAMP = "SESSION_TIMESTAMP"
-
     @JvmStatic
     fun HandleInit(parent: FragmentActivity) {
-        // Ask the user if he wants to enable analytics if we haven't yet.
-        Analytics.checkAnalyticsInit(parent)
-
         // Set up and/or sync Android TV channels
         if (TvUtil.isLeanback(parent)) {
             TvUtil.scheduleSyncingChannel(parent)
@@ -78,41 +68,5 @@ object StartupHandler {
 
         // Nothing was found
         return null
-    }
-
-    private fun getSessionTimestamp(context: Context): Instant {
-        val preferences = PreferenceManager.getDefaultSharedPreferences(context)
-        val timestamp = preferences.getLong(SESSION_TIMESTAMP, 0)
-        return Instant.ofEpochMilli(timestamp)
-    }
-
-    /**
-     * Called on activity stop / to set timestamp to "now".
-     */
-    @JvmStatic
-    fun updateSessionTimestamp(context: Context) {
-        val preferences = PreferenceManager.getDefaultSharedPreferences(context)
-        val prefsEditor = preferences.edit()
-        prefsEditor.putLong(SESSION_TIMESTAMP, Instant.now().toEpochMilli())
-        prefsEditor.apply()
-    }
-
-    /**
-     * Called on activity start. Generates analytics start event if it's a fresh start of the app, or
-     * if it's a start after a long period of the app not being used (during which time the process
-     * may be restarted for power/memory saving reasons, although app state persists).
-     */
-    @JvmStatic
-    fun reportStartToAnalytics(context: Context, firstStart: Boolean) {
-        val sessionTimestamp = getSessionTimestamp(context)
-        val now = Instant.now()
-        if (firstStart || now.isAfter(sessionTimestamp.plus(6, ChronoUnit.HOURS))) {
-            // Just in case: ensure start event won't be accidentally sent too often.
-            updateSessionTimestamp(context)
-
-            AfterDirectoryInitializationRunner().runWithoutLifecycle(
-                NativeLibrary::ReportStartToAnalytics
-            )
-        }
     }
 }

@@ -40,7 +40,6 @@
 #include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
-#include "Core/DolphinAnalytics.h"
 #include "Core/HW/DVD/DVDInterface.h"
 #include "Core/HW/Wiimote.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
@@ -204,21 +203,6 @@ static bool MsgAlert(const char* caption, const char* text, bool yes_no, Common:
   env->DeleteLocalRef(j_text);
 
   return result != JNI_FALSE;
-}
-
-static std::string GetAnalyticValue(const std::string& key)
-{
-  JNIEnv* env = IDCache::GetEnvForThread();
-
-  jstring j_key = ToJString(env, key);
-  auto j_value = reinterpret_cast<jstring>(env->CallStaticObjectMethod(
-      IDCache::GetAnalyticsClass(), IDCache::GetAnalyticsValue(), j_key));
-  env->DeleteLocalRef(j_key);
-
-  std::string value = GetJString(env, j_value);
-  env->DeleteLocalRef(j_value);
-
-  return value;
 }
 
 extern "C" {
@@ -501,25 +485,12 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_Initialize(J
 {
   UICommon::CreateDirectories();
   Common::RegisterMsgAlertHandler(&MsgAlert);
-  DolphinAnalytics::AndroidSetGetValFunc(&GetAnalyticValue);
 
   WiimoteReal::InitAdapterClass();
   UICommon::Init();
   UICommon::InitControllers(WindowSystemInfo(WindowSystemType::Android, nullptr, nullptr, nullptr));
 
   AchievementManager::GetInstance().Init(nullptr);
-}
-
-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_ReportStartToAnalytics(JNIEnv*,
-                                                                                           jclass)
-{
-  DolphinAnalytics::Instance().ReportDolphinStart(GetAnalyticValue("DEVICE_TYPE"));
-}
-
-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GenerateNewStatisticsId(JNIEnv*,
-                                                                                            jclass)
-{
-  DolphinAnalytics::Instance().GenerateNewIdentity();
 }
 
 // Returns the scale factor for imgui rendering.

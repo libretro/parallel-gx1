@@ -23,9 +23,6 @@ class BaselineProfileGenerator {
             pressHome()
             startActivityAndWait()
 
-            // Dismiss analytics dialog due to issue with finding button
-            device.pressBack()
-
             // Navigate through activities that don't require games
             // TODO: Make all activities testable without having games available (or use homebrew)
             // TODO: Use resource strings to support more languages

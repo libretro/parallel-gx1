@@ -310,19 +310,6 @@ object NativeLibrary {
     external fun Initialize()
 
     /**
-     * Tells analytics that Dolphin has been started.
-     *
-     * Since users typically don't explicitly close Android apps, it's appropriate to
-     * call this not only when the app starts but also when the user returns to the app
-     * after not using it for a significant amount of time.
-     */
-    @JvmStatic
-    external fun ReportStartToAnalytics()
-
-    @JvmStatic
-    external fun GenerateNewStatisticsId()
-
-    /**
      * Begins emulation.
      */
     @JvmStatic

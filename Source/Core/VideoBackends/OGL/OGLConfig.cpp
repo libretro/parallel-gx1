@@ -282,7 +282,6 @@ bool PopulateConfig(GLContext* m_main_gl_context)
     }
   }
 
-  // Copy the GPU name to g_Config, so Analytics can see it.
   g_backend_info.AdapterName = g_ogl_config.gl_renderer;
 
   g_backend_info.bSupportsDualSourceBlend = (GLExtensions::Supports("GL_ARB_blend_func_extended") ||

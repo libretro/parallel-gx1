@@ -3,30 +3,18 @@ package org.dolphinemu.dolphinemu.utils
 import android.app.Activity
 import android.app.Application.ActivityLifecycleCallbacks
 import android.os.Bundle
-import org.dolphinemu.dolphinemu.ui.main.MainView
 
 class ActivityTracker : ActivityLifecycleCallbacks {
     private val resumedActivities = HashSet<Activity>()
     private var backgroundExecutionAllowed = false
-    private var firstStart = true
     var currentActivity : Activity? = null
         private set
 
-    private fun isMainActivity(activity: Activity): Boolean {
-        return activity is MainView
-    }
-
     override fun onActivityCreated(activity: Activity, bundle: Bundle?) {
         currentActivity = activity
-        if (isMainActivity(activity)) {
-            firstStart = bundle == null
-        }
     }
 
-    override fun onActivityStarted(activity: Activity) {
-        StartupHandler.reportStartToAnalytics(activity.applicationContext, firstStart)
-        firstStart = false
-    }
+    override fun onActivityStarted(activity: Activity) {}
 
     override fun onActivityResumed(activity: Activity) {
         currentActivity = activity
@@ -48,11 +36,7 @@ class ActivityTracker : ActivityLifecycleCallbacks {
         }
     }
 
-    override fun onActivityStopped(activity: Activity) {
-        if (isMainActivity(activity)) {
-            StartupHandler.updateSessionTimestamp(activity.applicationContext)
-        }
-    }
+    override fun onActivityStopped(activity: Activity) {}
 
     override fun onActivitySaveInstanceState(activity: Activity, bundle: Bundle) {}
 

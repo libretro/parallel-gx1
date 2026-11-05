@@ -420,7 +420,7 @@ void CoreTimingManager::SleepUntil(TimePoint time_point)
     else
       std::this_thread::sleep_until(time_point);
 
-    // Count amount of time sleeping for analytics
+    // Count amount of time sleeping for performance metrics
     const TimePoint time_after_sleep = Clock::now();
     m_system.GetPerfMetrics().CountThrottleSleep(time_after_sleep - time);
   }

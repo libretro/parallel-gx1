@@ -122,10 +122,6 @@ class UserDataActivity : AppCompatActivity(), ThemeProvider {
 
         setInsets()
         enableScrollTint(this, mBinding.toolbarUserData, mBinding.appbarUserData)
-
-        if (savedInstanceState == null) {
-            Analytics.checkAnalyticsInit(this)
-        }
     }
 
     override fun onSupportNavigateUp(): Boolean {

@@ -32,7 +32,6 @@
 #include "Core/Config/SYSCONFSettings.h"
 #include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/Core.h"
-#include "Core/DolphinAnalytics.h"
 #include "Core/FifoPlayer/FifoDataFile.h"
 #include "Core/HLE/HLE.h"
 #include "Core/HW/DVD/DVDInterface.h"
@@ -285,9 +284,6 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
 
   Config::AddLayer(ConfigLoaders::GenerateGlobalGameConfigLoader(game_id, revision));
   Config::AddLayer(ConfigLoaders::GenerateLocalGameConfigLoader(game_id, revision));
-
-  if (is_running_or_starting)
-    DolphinAnalytics::Instance().ReportGameStart();
 }
 
 void SConfig::SetElfDolID(const std::string& game_id)

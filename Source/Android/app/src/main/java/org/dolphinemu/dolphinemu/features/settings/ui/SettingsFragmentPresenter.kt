@@ -426,20 +426,6 @@ class SettingsFragmentPresenter(
         )
         sl.add(
             SwitchSetting(
-                context, BooleanSetting.MAIN_ANALYTICS_ENABLED, R.string.analytics, 0
-            )
-        )
-        sl.add(
-            RunRunnable(
-                context,
-                R.string.analytics_new_id,
-                0,
-                R.string.analytics_new_id_confirmation,
-                0,
-                true
-            ) { NativeLibrary.GenerateNewStatisticsId() })
-        sl.add(
-            SwitchSetting(
                 context,
                 BooleanSetting.MAIN_ENABLE_SAVESTATES,
                 R.string.enable_save_states,

@@ -17,7 +17,6 @@
 #include "Common/EnumMap.h"
 #include "Common/Logging/Log.h"
 
-#include "Core/DolphinAnalytics.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
@@ -302,21 +301,6 @@ static void CheckCPConfiguration(int vtx_attr_group)
                   g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
                   g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex, xfmem.invtxspec.hex);
 
-    // Analytics reporting so we can discover which games have this problem, that way when we
-    // eventually simulate the behavior we have test cases for it.
-    if (num_cp_colors != xfmem.invtxspec.numcolors) [[unlikely]]
-    {
-      DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::MismatchedGPUColorsBetweenCPAndXF);
-    }
-    if (num_cp_normals != num_xf_normals) [[unlikely]]
-    {
-      DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::MismatchedGPUNormalsBetweenCPAndXF);
-    }
-    if (num_cp_tex_coords != xfmem.invtxspec.numtextures) [[unlikely]]
-    {
-      DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::MismatchedGPUTexCoordsBetweenCPAndXF);
-    }
-
     // Don't bail out, though; we can still render something successfully
     // (real hardware seems to hang in this case, though)
   }
@@ -329,8 +313,6 @@ static void CheckCPConfiguration(int vtx_attr_group)
                  "index A: {:08x}/{:08x}, index B {:08x}/{:08x}.",
                  g_main_cp_state.matrix_index_a.Hex, xfmem.MatrixIndexA.Hex,
                  g_main_cp_state.matrix_index_b.Hex, xfmem.MatrixIndexB.Hex);
-    DolphinAnalytics::Instance().ReportGameQuirk(
-        GameQuirk::MismatchedGPUMatrixIndicesBetweenCPAndXF);
   }
 
   if (g_main_cp_state.vtx_attr[vtx_attr_group].g0.PosFormat >= ComponentFormat::InvalidFloat5)
@@ -340,7 +322,6 @@ static void CheckCPConfiguration(int vtx_attr_group)
                  g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
                  g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
                  g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
-    DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::InvalidPositionComponentFormat);
   }
   if (g_main_cp_state.vtx_attr[vtx_attr_group].g0.NormalFormat >= ComponentFormat::InvalidFloat5)
   {
@@ -349,7 +330,6 @@ static void CheckCPConfiguration(int vtx_attr_group)
                  g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
                  g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
                  g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
-    DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::InvalidNormalComponentFormat);
   }
   for (size_t i = 0; i < 8; i++)
   {
@@ -361,8 +341,6 @@ static void CheckCPConfiguration(int vtx_attr_group)
                    g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
                    g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
                    g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
-      DolphinAnalytics::Instance().ReportGameQuirk(
-          GameQuirk::InvalidTextureCoordinateComponentFormat);
     }
   }
   for (size_t i = 0; i < 2; i++)
@@ -374,7 +352,6 @@ static void CheckCPConfiguration(int vtx_attr_group)
                    g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
                    g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
                    g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
-      DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::InvalidColorComponentFormat);
     }
   }
 }

@@ -1116,7 +1116,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/AudioCommon/SurroundDecoder.cpp \
 	$(CORE_DIR)/Source/Core/AudioCommon/NullSoundStream.cpp \
 	$(CORE_DIR)/Source/Core/AudioCommon/WaveFile.cpp \
-	$(CORE_DIR)/Source/Core/Common/Analytics.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/AssemblerShared.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/AssemblerTables.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/GekkoAssembler.cpp \
@@ -1438,7 +1437,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/Debugger/OSThread.cpp \
 	$(CORE_DIR)/Source/Core/Core/Debugger/PPCDebugInterface.cpp \
 	$(CORE_DIR)/Source/Core/Core/Debugger/RSO.cpp \
-	$(CORE_DIR)/Source/Core/Core/DolphinAnalytics.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAccelerator.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAnalyzer.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAssembler.cpp \

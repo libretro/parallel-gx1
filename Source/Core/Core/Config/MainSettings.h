@@ -271,12 +271,6 @@ extern const Info<std::string> MAIN_THEME_NAME;
 extern const Info<bool> MAIN_PAUSE_ON_FOCUS_LOST;
 extern const Info<bool> MAIN_ENABLE_DEBUGGING;
 
-// Main.Analytics
-
-extern const Info<std::string> MAIN_ANALYTICS_ID;
-extern const Info<bool> MAIN_ANALYTICS_ENABLED;
-extern const Info<bool> MAIN_ANALYTICS_PERMISSION_ASKED;
-
 // Main.GameList
 
 extern const Info<bool> MAIN_GAMELIST_LIST_DRIVES;

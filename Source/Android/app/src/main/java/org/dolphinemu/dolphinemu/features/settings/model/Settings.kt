@@ -123,7 +123,6 @@ class Settings : Closeable {
         const val SECTION_DEBUG = "Debug"
         const val SECTION_EMULATED_USB_DEVICES = "EmulatedUSBDevices"
         const val SECTION_STEREOSCOPY = "Stereoscopy"
-        const val SECTION_ANALYTICS = "Analytics"
         const val SECTION_ACHIEVEMENTS = "Achievements"
     }
 }

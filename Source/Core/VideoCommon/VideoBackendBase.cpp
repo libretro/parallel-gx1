@@ -20,7 +20,6 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
-#include "Core/DolphinAnalytics.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/HW/VideoInterface.h"
 #include "Core/System.h"
@@ -149,7 +148,6 @@ u32 VideoBackendBase::Video_GetQueryResult(PerfQueryType type)
 
 u16 VideoBackendBase::Video_GetBoundingBox(int index)
 {
-  DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::ReadsBoundingBox);
 
   if (!g_ActiveConfig.bBBoxEnable)
   {

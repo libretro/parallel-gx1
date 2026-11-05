@@ -51,9 +51,6 @@ static jmethodID s_netplay_on_traversal_state_changed;
 static jclass s_netplay_player_class;
 static jmethodID s_netplay_player_constructor;
 
-static jclass s_analytics_class;
-static jmethodID s_get_analytics_value;
-
 static jclass s_pair_class;
 static jmethodID s_pair_constructor;
 
@@ -209,16 +206,6 @@ jmethodID GetOnTitleChanged()
 jmethodID GetFinishEmulationActivity()
 {
   return s_finish_emulation_activity;
-}
-
-jclass GetAnalyticsClass()
-{
-  return s_analytics_class;
-}
-
-jmethodID GetAnalyticsValue()
-{
-  return s_get_analytics_value;
 }
 
 jclass GetGameFileClass()
@@ -814,12 +801,6 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
                        "(ILjava/lang/String;Ljava/lang/String;IZLjava/lang/String;)V");
   env->DeleteLocalRef(netplay_player_class);
 
-  const jclass analytics_class = env->FindClass("org/dolphinemu/dolphinemu/utils/Analytics");
-  s_analytics_class = reinterpret_cast<jclass>(env->NewGlobalRef(analytics_class));
-  s_get_analytics_value = env->GetStaticMethodID(s_analytics_class, "getValue",
-                                                 "(Ljava/lang/String;)Ljava/lang/String;");
-  env->DeleteLocalRef(analytics_class);
-
   const jclass pair_class = env->FindClass("androidx/core/util/Pair");
   s_pair_class = reinterpret_cast<jclass>(env->NewGlobalRef(pair_class));
   s_pair_constructor =
@@ -1029,7 +1010,6 @@ JNIEXPORT void JNI_OnUnload(JavaVM* vm, void* reserved)
   env->DeleteGlobalRef(s_game_file_cache_class);
   env->DeleteGlobalRef(s_netplay_session_class);
   env->DeleteGlobalRef(s_netplay_player_class);
-  env->DeleteGlobalRef(s_analytics_class);
   env->DeleteGlobalRef(s_pair_class);
   env->DeleteGlobalRef(s_hash_map_class);
   env->DeleteGlobalRef(s_compress_cb_class);

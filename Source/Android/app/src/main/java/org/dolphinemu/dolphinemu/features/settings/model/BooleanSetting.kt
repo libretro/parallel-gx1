@@ -164,13 +164,6 @@ enum class BooleanSetting(
         "OnScreenDisplayMessages",
         true
     ),
-    MAIN_ANALYTICS_ENABLED(Settings.FILE_DOLPHIN, Settings.SECTION_ANALYTICS, "Enabled", false),
-    MAIN_ANALYTICS_PERMISSION_ASKED(
-        Settings.FILE_DOLPHIN,
-        Settings.SECTION_ANALYTICS,
-        "PermissionAsked",
-        false
-    ),
     MAIN_RECURSIVE_ISO_PATHS(
         Settings.FILE_DOLPHIN,
         Settings.SECTION_INI_GENERAL,

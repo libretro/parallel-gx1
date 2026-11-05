@@ -8,7 +8,6 @@
 
 #include <imgui.h>
 
-#include "Core/DolphinAnalytics.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/System.h"
 
@@ -21,7 +20,6 @@
 Statistics g_stats;
 
 static Common::EventHook s_before_frame_event;
-static Common::EventHook s_after_frame_event;
 
 static bool clear_scissors;
 
@@ -501,18 +499,9 @@ void Statistics::DisplayScissor()
 void Statistics::Init()
 {
   s_before_frame_event = GetVideoEvents().before_frame_event.Register([] { g_stats.ResetFrame(); });
-
-  s_after_frame_event = GetVideoEvents().after_frame_event.Register([](const Core::System& system) {
-    DolphinAnalytics::Instance().ReportPerformanceInfo({
-        .speed_ratio = system.GetSystemTimers().GetEstimatedEmulationPerformance(),
-        .num_prims = g_stats.this_frame.num_prims + g_stats.this_frame.num_dl_prims,
-        .num_draw_calls = g_stats.this_frame.num_draw_calls,
-    });
-  });
 }
 
 void Statistics::Shutdown()
 {
   s_before_frame_event.reset();
-  s_after_frame_event.reset();
 }

@@ -18,7 +18,6 @@
 
 #include "Common/CommonTypes.h"
 #include "Core/DSP/DSPAccelerator.h"
-#include "Core/DolphinAnalytics.h"
 #include "Core/HW/DSP.h"
 #include "Core/HW/DSPHLE/UCodes/AX.h"
 #include "Core/HW/DSPHLE/UCodes/AXStructs.h"
@@ -541,7 +540,6 @@ void ProcessVoice(HLEAccelerator* accelerator, PB_TYPE& pb, const AXBuffers& buf
   if (pb.initial_time_delay.on)
   {
     // TODO
-    DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::UsesAXInitialTimeDelay);
   }
 
 #ifdef AX_WII
@@ -553,12 +551,10 @@ void ProcessVoice(HLEAccelerator* accelerator, PB_TYPE& pb, const AXBuffers& buf
       // Only one filter at most for Wiimotes.
       if (pb.remote_iir.on == 2)
       {
-        DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::UsesAXWiimoteBiquad);
         BiquadFilter(samples, count, pb.remote_iir.biquad);
       }
       else
       {
-        DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::UsesAXWiimoteLowPass);
         LowPassFilter(samples, count, pb.remote_iir.lpf);
       }
     }

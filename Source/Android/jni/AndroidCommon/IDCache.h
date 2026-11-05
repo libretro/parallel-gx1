@@ -18,9 +18,6 @@ jmethodID GetUpdateTouchPointer();
 jmethodID GetOnTitleChanged();
 jmethodID GetFinishEmulationActivity();
 
-jclass GetAnalyticsClass();
-jmethodID GetAnalyticsValue();
-
 jclass GetGameFileClass();
 jfieldID GetGameFilePointer();
 jmethodID GetGameFileConstructor();
