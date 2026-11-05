@@ -184,6 +184,8 @@ void parallel_for(size_t count, parallel_for_fn fn, void *ctx)
    }
 
    retro_atomic_store_release_int(&s_pool.owner, 0);
+   /* parallel_for_deinit may be waiting for the pool to come free. */
+   retro_eventcount_notify(&s_pool.idle);
 }
 
 unsigned parallel_for_threads(void)
@@ -200,8 +202,24 @@ void parallel_for_deinit(void)
 {
    unsigned i;
 
-   while (!retro_atomic_cas_int(&s_pool.owner, 0, 1))
-      sthread_yield();
+   /* Waits for a batch in progress to finish; its owner notifies idle
+    * when it lets go. Without workers there is no idle eventcount and
+    * no batch to wait for: deinit runs once nothing calls in. */
+   while (s_pool.worker_count)
+   {
+      int key;
+      if (retro_atomic_cas_int(&s_pool.owner, 0, 1))
+         break;
+      key = retro_eventcount_prepare_wait(&s_pool.idle);
+      if (retro_atomic_cas_int(&s_pool.owner, 0, 1))
+      {
+         retro_eventcount_cancel_wait(&s_pool.idle);
+         break;
+      }
+      retro_eventcount_commit_wait(&s_pool.idle, key);
+   }
+   if (!s_pool.worker_count)
+      retro_atomic_cas_int(&s_pool.owner, 0, 1);
 
    if (s_pool.worker_count)
    {

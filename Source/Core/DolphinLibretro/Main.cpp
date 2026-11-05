@@ -10,6 +10,7 @@
 #include "AudioCommon/AudioCommon.h"
 #include "Common/ChunkFile.h"
 #include "Common/Event.h"
+#include "Common/FrameClock.h"
 #include "Common/IniFile.h"
 #include "Common/FileUtil.h"
 #include "Common/GL/GLContext.h"
@@ -245,6 +246,9 @@ void retro_reset(void)
 
 void retro_run(void)
 {
+  // One retro_run is one frame of the core's background timebase.
+  frame_clock_advance();
+
   Libretro::Input::InitSensors();
   Libretro::Options::CheckForUpdatedVariables();
   Libretro::FrameTiming::CheckForFastForwarding();
@@ -307,9 +311,6 @@ void retro_run(void)
       g_gfx.reset();
       g_gfx = std::make_unique<Libretro::Video::NullGfx>();
     }
-
-    while (!Core::IsRunningOrStarting(system))
-      Common::SleepCurrentThread(100);
 
     Libretro::g_core_refresh_rate = system.GetVideoInterface().GetTargetRefreshRate();
     Libretro::s_refresh_rate_settled = false;
@@ -499,8 +500,6 @@ void retro_run(void)
   if (Libretro::Options::IsUpdated(Libretro::Options::gfx_hacks::VERTEX_ROUNDING))
     Config::SetBase(Config::GFX_HACK_VERTEX_ROUNDING, Libretro::Options::GetCached<bool>(Libretro::Options::gfx_hacks::VERTEX_ROUNDING, false));
 
-  if (Libretro::Options::IsUpdated(Libretro::Options::gfx_hacks::VI_SKIP))
-    Config::SetBase(Config::GFX_HACK_VI_SKIP, Libretro::Options::GetCached<bool>(Libretro::Options::gfx_hacks::VI_SKIP, false));
 
   if (Libretro::Options::IsUpdated(Libretro::Options::gfx_hacks::FAST_TEXTURE_SAMPLING))
     Config::SetBase(Config::GFX_HACK_FAST_TEXTURE_SAMPLING, Libretro::Options::GetCached<bool>(Libretro::Options::gfx_hacks::FAST_TEXTURE_SAMPLING, true));

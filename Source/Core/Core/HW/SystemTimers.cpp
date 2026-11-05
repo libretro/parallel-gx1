@@ -60,7 +60,6 @@ IPC_HLE_PERIOD: For the Wii Remote this is the call schedule:
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 #include "VideoCommon/Fifo.h"
-#include "VideoCommon/PerformanceMetrics.h"
 
 namespace SystemTimers
 {
@@ -212,11 +211,6 @@ s64 SystemTimersManager::GetLocalTimeRTCOffset() const
   return m_localtime_rtc_offset;
 }
 
-double SystemTimersManager::GetEstimatedEmulationPerformance() const
-{
-  return m_system.GetPerfMetrics().GetMaxSpeed();
-}
-
 // split from Init to break a circular dependency between VideoInterface::Init and
 // SystemTimers::Init
 void SystemTimersManager::PreInit()
@@ -245,7 +239,6 @@ void SystemTimersManager::Init()
     m_ipc_hle_period = GetTicksPerSecond() / freq;
   }
 
-  Common::Timer::IncreaseResolution();
   // store and convert localtime at boot to timebase ticks
   if (Config::Get(Config::MAIN_CUSTOM_RTC_ENABLE))
   {
@@ -290,7 +283,6 @@ void SystemTimersManager::Init()
 
 void SystemTimersManager::Shutdown()
 {
-  Common::Timer::RestoreResolution();
   m_localtime_rtc_offset = 0;
 }
 

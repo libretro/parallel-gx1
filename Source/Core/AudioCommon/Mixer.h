@@ -193,7 +193,6 @@ private:
   bool m_log_dtk_audio = false;
   bool m_log_dsp_audio = false;
 
-  float m_config_emulation_speed;
   bool m_config_audio_preserve_pitch;
   bool m_config_fill_audio_gaps;
   int m_config_audio_buffer_ms;

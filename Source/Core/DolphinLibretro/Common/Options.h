@@ -162,11 +162,9 @@ inline std::string CPUCoreToString(PowerPC::CPUCore core)
 namespace core {
   constexpr const char CPU_CORE[] = "dolphin_cpu_core";
   constexpr const char CPU_CLOCK_RATE[] = "dolphin_cpu_clock_rate";
-  constexpr const char EMULATION_SPEED[] = "dolphin_emulation_speed";
   constexpr const char MAIN_CPU_THREAD[] = "dolphin_main_cpu_thread";
   constexpr const char MAIN_SYNC_GPU[] = "dolphin_sync_gpu";
   constexpr const char MAIN_LOAD_GAME_INTO_MEMORY[] = "dolphin_main_load_game_into_memory";
-  constexpr const char MAIN_PRECISION_FRAME_TIMING[] = "dolphin_precision_frame_timing";
   constexpr const char FASTMEM[] = "dolphin_fastmem";
   constexpr const char FASTMEM_ARENA[] = "dolphin_fastmem_arena";
   constexpr const char MAIN_ACCURATE_CPU_CACHE[] = "dolphin_main_accurate_cpu_cache";
@@ -176,8 +174,6 @@ namespace core {
   constexpr const char LANGUAGE[] = "dolphin_language";
   constexpr const char FAST_DISC_SPEED[] = "dolphin_fast_disc_speed";
   constexpr const char MAIN_MMU[] = "dolphin_main_mmu";
-  constexpr const char RUSH_FRAME_PRESENTATION[] = "dolphin_rush_presentation";
-  constexpr const char SMOOTH_EARLY_PRESENTATION[] = "dolphin_early_presentation";
 }  // namespace core
 
 // ======================================================
@@ -302,7 +298,6 @@ namespace gfx_hacks {
   constexpr const char EFB_SCALED_COPY[] = "dolphin_efb_scaled_copy";
   constexpr const char EFB_EMULATE_FORMAT_CHANGES[] = "dolphin_efb_emulate_format_changes";
   constexpr const char VERTEX_ROUNDING[] = "dolphin_vertex_rounding";
-  constexpr const char VI_SKIP[] = "dolphin_vi_skip";
   constexpr const char FAST_TEXTURE_SAMPLING[] = "dolphin_fast_texture_sampling";
 #ifdef __APPLE__
   constexpr const char NO_MIPMAPPING[] = "dolphin_no_mipmapping";

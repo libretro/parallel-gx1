@@ -12,6 +12,7 @@
 
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
+#include "Common/Flag.h"
 #include "Common/HttpRequest.h"
 #include "Common/WorkQueueThread.h"
 #include "Core/IOS/Device.h"
@@ -133,7 +134,9 @@ private:
   retro_atomic_int_t m_download_span{2};
   retro_atomic_int_t m_mail_span{1};
   bool m_handle_mail;  // set before the threads start
-  Common::Event m_shutdown_event;
+  Common::Flag m_scheduler_running{true};
+  // A minute at 60 frames a second; 50 Hz games schedule a fifth slower, as WC24 allows.
+  static constexpr u64 FRAMES_PER_MINUTE = 60 * 60;
   sthread_t* m_scheduler_timer_thread = nullptr;
 };
 }  // namespace IOS::HLE

@@ -84,7 +84,6 @@
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/OnScreenDisplay.h"
-#include "VideoCommon/PerformanceMetrics.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoEvents.h"
 
@@ -98,7 +97,6 @@ std::unique_ptr<BootParameters> g_boot_params;
 sthread_t* s_emu_thread = nullptr;
 static Common::HookableEvent<Core::State> s_state_changed_event;
 
-static bool s_is_throttler_temp_disabled = false;
 bool s_frame_step = false;
 std::atomic<bool> s_stop_frame_step;
 
@@ -127,16 +125,6 @@ static thread_local bool tls_is_gpu_thread = false;
 
 void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
                WindowSystemInfo wsi);
-
-bool GetIsThrottlerTempDisabled()
-{
-  return s_is_throttler_temp_disabled;
-}
-
-void SetIsThrottlerTempDisabled(bool disable)
-{
-  s_is_throttler_temp_disabled = disable;
-}
 
 void OnFrameEnd(Core::System& system)
 {
@@ -310,7 +298,6 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
     Common::SetCurrentThreadName("CPU-GPU thread");
 
   // Clear performance data collected from previous threads.
-  system.GetPerfMetrics().Reset();
 
   // The JIT need to be able to intercept faults, both for fastmem and for the BLR optimization.
   const bool exception_handler = EMM::IsExceptionHandlerSupported();
@@ -842,9 +829,7 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
   // If we're waiting for completion, block until the event fires.
   if (wait_for_completion)
   {
-    // Periodically yield to the UI thread, so we don't deadlock.
-    while (!cpu_thread_job_finished.WaitFor(std::chrono::milliseconds(10)))
-      Host_YieldToUI();
+    cpu_thread_job_finished.Wait();
   }
 }
 
@@ -853,16 +838,6 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
 // Called from Renderer::Swap (GPU thread) when a frame is presented to the host screen.
 void Callback_FramePresented(const PresentInfo& present_info)
 {
-  auto& perf_metrics = Core::System::GetInstance().GetPerfMetrics();
-  perf_metrics.CountFrame();
-
-  const auto presentation_offset =
-      present_info.actual_present_time - present_info.intended_present_time;
-  perf_metrics.SetLatestFramePresentationOffset(presentation_offset);
-
-  perf_metrics.SetLatestFrameBufferSize(present_info.frame_buffer_width,
-                                        present_info.frame_buffer_height);
-
   if (present_info.reason == PresentInfo::PresentReason::VideoInterfaceDuplicate)
     return;
 

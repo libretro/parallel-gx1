@@ -80,6 +80,8 @@ private:
   std::string m_save_directory;
   Common::Event m_flush_trigger;
   mpsc_stack_t m_flush_jobs{};
-  Common::Flag m_exiting;
+  Common::Flag m_flush_running{true};
+  // The frontend frame of the last block written; the flush waits for a quiet second after it.
+  retro_atomic_64_t m_last_write_frame{};
   sthread_t* m_flush_thread = nullptr;
 };

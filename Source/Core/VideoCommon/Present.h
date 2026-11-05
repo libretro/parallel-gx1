@@ -34,13 +34,12 @@ public:
   Presenter();
   virtual ~Presenter();
 
-  void ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u64 ticks,
-              TimePoint presentation_time);
+  void ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u64 ticks);
   void ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height);
 
-  void SetNextSwapEstimatedTime(u64 ticks, TimePoint host_time);
+  void SetNextSwapEstimatedTicks(u64 ticks);
 
-  void Present(PresentInfo* present_info = nullptr);
+  void Present();
   void ClearLastXfbId() { m_last_xfb_id = std::numeric_limits<u64>::max(); }
 
   bool Initialize();
@@ -164,17 +163,9 @@ private:
   Common::EventHook m_config_changed;
   Common::EventHook m_end_field_hook;
 
-  // Updates state for the SmoothEarlyPresentation setting if enabled.
-  // Returns the desired presentation time regardless.
-  TimePoint GetUpdatedPresentationTime(TimePoint intended_presentation_time);
-
-  // Used by the SmoothEarlyPresentation setting.
-  DT m_presentation_time_offset{};
-
   // Calculated from the previous swap time and current refresh rate.
   // Can be used for presentation of ImmediateXFB swaps which don't have timing information.
   u64 m_next_swap_estimated_ticks = 0;
-  TimePoint m_next_swap_estimated_time{Clock::now()};
 
   std::atomic_bool m_immediate_swap_happened_this_field{};
 };

@@ -70,7 +70,6 @@ namespace Wiimote
 {
 enum class InitializeMode
 {
-  DO_WAIT_FOR_WIIMOTES,
   DO_NOT_WAIT_FOR_WIIMOTES,
 };
 

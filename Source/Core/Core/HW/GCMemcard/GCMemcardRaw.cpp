@@ -3,7 +3,6 @@
 
 #include "Core/HW/GCMemcard/GCMemcardRaw.h"
 
-#include <chrono>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -13,6 +12,7 @@
 
 #include <fmt/format.h>
 
+#include "Common/FrameClock.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
@@ -86,7 +86,8 @@ MemoryCard::~MemoryCard()
 {
   if (m_flush_thread)
   {
-    m_flush_trigger.Set();
+    m_flush_running.Clear();
+    frame_clock_wake_all();
 
     Common::JoinThread(m_flush_thread);
   }
@@ -133,13 +134,14 @@ void MemoryCard::FlushThread()
 
   Common::SetCurrentThreadName(fmt::format("Memcard {} flushing thread", m_card_slot).c_str());
 
-  const auto flush_interval = std::chrono::seconds(15);
+  // About fifteen seconds of frontend frames.
+  constexpr u64 FLUSH_INTERVAL_FRAMES = 15 * 60;
 
   while (true)
   {
-    // If triggered, we're exiting.
-    // If timed out, check if we need to flush.
-    const bool do_exit = m_flush_trigger.WaitFor(flush_interval);
+    // Stopped: flush once more and exit. Otherwise check whether there is anything to flush.
+    const bool do_exit = !frame_clock_wait_until(frame_clock_now() + FLUSH_INTERVAL_FRAMES,
+                                                 m_flush_running.Raw());
     if (!do_exit)
     {
       const bool is_dirty = m_dirty.TestAndClear();

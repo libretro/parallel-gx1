@@ -16,7 +16,6 @@
 #include "Core/PowerPC/GDBStub.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
-#include "Core/TimePlayed.h"
 #include "VideoCommon/Fifo.h"
 #ifdef __LIBRETRO__
 #include "VideoCommon/AsyncRequests.h"
@@ -158,54 +157,9 @@ void CPUManager::ReleaseStepping()
   retro_eventcount_notify(&m_stepping_released);
 }
 
-void CPUManager::StartTimePlayedTimer()
-{
-  Common::SetCurrentThreadName("Play Time Tracker");
-
-  // Use a clock that will appropriately ignore suspended system time.
-  Common::SteadyAwakeClock timer;
-  auto prev_time = timer.now();
-
-  while (true)
-  {
-    TimePlayed time_played;
-    auto curr_time = timer.now();
-
-    // Check that emulation is not paused
-    // If the emulation is paused, wait for SetStepping() to reactivate
-    const State state = LoadState();
-    if (state == State::Running)
-    {
-      const std::string game_id = SConfig::GetInstance().GetGameID();
-      const auto diff_time =
-          std::chrono::duration_cast<std::chrono::milliseconds>(curr_time - prev_time);
-      time_played.AddTime(game_id, diff_time);
-    }
-    else if (state == State::Stepping)
-    {
-      m_time_played_finish_sync.Wait();
-      curr_time = timer.now();
-    }
-
-    prev_time = curr_time;
-
-    if (LoadState() == State::PowerDown)
-      return;
-
-    m_time_played_finish_sync.WaitFor(std::chrono::seconds(30));
-  }
-}
-
 void CPUManager::Run()
 {
   auto& power_pc = m_system.GetPowerPC();
-
-  // Start a separate time tracker thread
-  sthread_t* timing = nullptr;
-  if (Config::Get(Config::MAIN_TIME_TRACKING))
-  {
-    timing = sthread_create(Common::ThreadEntry<&CPUManager::StartTimePlayedTimer>, this);
-  }
 
 #ifdef __LIBRETRO__
   retro_atomic_store_release_int(&m_cpu_run_state_reached, 1);
@@ -321,12 +275,6 @@ void CPUManager::Run()
     case State::PowerDown:
       break;
     }
-  }
-
-  if (timing)
-  {
-    m_time_played_finish_sync.Set();
-    Common::JoinThread(timing);
   }
 
   Host_UpdateDisasmDialog();
@@ -447,7 +395,6 @@ void CPUManager::SetStepping(bool stepping)
   {
     if (!Core::IsCPUThread())
       WakeCPU();
-    m_time_played_finish_sync.Set();
     RunAdjacentSystems(true);
   }
 

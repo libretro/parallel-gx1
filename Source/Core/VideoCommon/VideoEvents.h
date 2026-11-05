@@ -16,23 +16,6 @@ class System;
 
 struct PresentInfo
 {
-  enum class PresentTimeAccuracy
-  {
-    // The Driver/OS has given us an exact timestamp of when the first line of the frame started
-    // scanning out to the monitor
-    PresentOnScreenExact,
-
-    // An approximate timestamp of scanout.
-    PresentOnScreen,
-
-    // Dolphin doesn't have visibility of the present time. But the present operation has
-    // been queued with the GPU driver and will happen in the near future.
-    PresentInProgress,
-
-    // Not implemented
-    Unimplemented,
-  };
-
   enum class PresentReason
   {
     Immediate,                // FIFO is Presenting the XFB immediately, straight after the XFB copy
@@ -49,14 +32,6 @@ struct PresentInfo
 
   // The exact emulated time of the when real hardware would have presented this frame
   u64 emulated_timestamp = 0;
-
-  TimePoint intended_present_time{};
-
-  // AfterPresent only: The actual time the frame was presented
-  TimePoint actual_present_time{};
-
-  // Accuracy of actual_present_time
-  PresentTimeAccuracy present_time_accuracy = PresentTimeAccuracy::Unimplemented;
 
   // Where the presentation of the frame was triggered from
   PresentReason reason = PresentReason::Immediate;

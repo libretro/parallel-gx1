@@ -10,6 +10,7 @@
 
 #include <queues/mpsc_stack.h>
 
+#include "Common/FrameClock.h"
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
 #include "Common/Logging/Log.h"
@@ -102,13 +103,15 @@ static void GBAConnectionWaiter(void*)
       new_client = std::make_unique<sf::TcpSocket>();
     }
 
-    Common::SleepCurrentThread(1);
+    // Look for a connection once a frame.
+    frame_clock_wait_until(frame_clock_now() + 1, s_server_running.Raw());
   }
 }
 
 void GBAConnectionWaiter_Shutdown()
 {
   s_server_running.Clear();
+  frame_clock_wake_all();
   Common::JoinThread(s_connection_thread);
 }
 

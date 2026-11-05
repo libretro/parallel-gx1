@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <atomic>
+#include <retro_atomic.h>
 
 namespace Common
 {
@@ -26,20 +26,19 @@ public:
   // Declared as explicit since we do not want "= true" to work on a flag
   // object - it should be made explicit that a flag is *not* a normal
   // variable.
-  explicit Flag(bool initial_value = false) : m_val(initial_value) {}
-  void Set(bool val = true) { m_val.store(val); }
+  explicit Flag(bool initial_value = false) { retro_atomic_int_init(&m_val, initial_value); }
+  void Set(bool val = true) { retro_atomic_exchange_int(&m_val, val); }
   void Clear() { Set(false); }
-  bool IsSet() const { return m_val.load(); }
-  bool TestAndSet(bool val = true)
-  {
-    bool expected = !val;
-    return m_val.compare_exchange_strong(expected, val);
-  }
+  bool IsSet() const { return retro_atomic_load_seq_cst_int(&m_val) != 0; }
+  bool TestAndSet(bool val = true) { return retro_atomic_cas_int(&m_val, !val, val); }
 
   bool TestAndClear() { return TestAndSet(false); }
 
+  // For waits that take a running flag, such as frame_clock_wait_until.
+  const retro_atomic_int_t* Raw() const { return &m_val; }
+
 private:
-  std::atomic_bool m_val;
+  mutable retro_atomic_int_t m_val;
 };
 
 }  // namespace Common

@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #endif
 
+#include "Common/FrameClock.h"
 #include "Common/BitUtils.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -110,6 +111,7 @@ void CEXIETHERNET::BuiltInBBAInterface::Deactivate()
   // Signal read thread to exit.
   m_read_enabled.Clear();
   m_read_thread_shutdown.Set();
+  frame_clock_wake_all();
   m_active = false;
 
   // Wait for read thread to exit; the network stack is this thread's again after.
@@ -611,6 +613,7 @@ void CEXIETHERNET::BuiltInBBAInterface::Post(Request::Kind kind, std::vector<u8>
 {
   auto* request = new Request{{}, kind, std::move(frame)};
   mpsc_stack_push(&m_requests, &request->link);
+  frame_clock_wake_all();
 }
 
 void CEXIETHERNET::BuiltInBBAInterface::RunRequests()
@@ -758,8 +761,14 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
 
     if (datasize == 0)
     {
-      // Make thread less CPU hungry
-      Common::SleepCurrentThread(1);
+      // Nothing came in: look again next frame, or sooner when the guest sends (see Post).
+      const u64 next = frame_clock_now() + 1;
+      const int key = frame_clock_prepare_wait();
+      if (self->m_read_thread_shutdown.IsSet() || !mpsc_stack_empty(&self->m_requests) ||
+          frame_clock_now() >= next)
+        frame_clock_cancel_wait();
+      else
+        frame_clock_commit_wait(key);
     }
 
     if (!self->m_read_enabled.IsSet())

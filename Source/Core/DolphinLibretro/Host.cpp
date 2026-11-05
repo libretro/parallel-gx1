@@ -67,10 +67,6 @@ bool Host_RendererIsFullscreen()
   return false;
 }
 
-void Host_YieldToUI()
-{
-}
-
 void Host_TitleChanged()
 {
 }

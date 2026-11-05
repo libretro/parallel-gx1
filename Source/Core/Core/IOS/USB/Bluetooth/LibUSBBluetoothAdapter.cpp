@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "Core/IOS/USB/Bluetooth/LibUSBBluetoothAdapter.h"
-#include "Common/Thread.h"
-#include "Common/Timer.h"
 
 #include <cassert>
 
 #include <algorithm>
-#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <ranges>
@@ -21,6 +18,9 @@
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
+#include "Core/CoreTiming.h"
+#include "Core/HW/SystemTimers.h"
+#include "Core/System.h"
 #include "Core/IOS/USB/Bluetooth/RealtekFirmwareLoader.h"
 #include "Core/IOS/USB/Bluetooth/hci.h"
 
@@ -28,7 +28,13 @@ namespace
 {
 constexpr std::size_t BUFFER_SIZE = 1024;
 
-constexpr auto HCI_COMMAND_TIMEOUT = std::chrono::milliseconds{1000};
+// An HCI command not acknowledged within this much emulated time is given up on.
+constexpr u64 HCI_COMMAND_TIMEOUT_MS = 1000;
+
+u64 EmulatedTicks()
+{
+  return Core::System::GetInstance().GetCoreTiming().GetTicks();
+}
 
 constexpr u8 REQUEST_TYPE =
     u8(u8(LIBUSB_ENDPOINT_OUT) | u8(LIBUSB_REQUEST_TYPE_CLASS)) | u8(LIBUSB_RECIPIENT_DEVICE);
@@ -90,6 +96,7 @@ bool LibUSBBluetoothAdapter::IsConfiguredBluetoothDevice(u16 vid, u16 pid)
 LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 {
   retro_atomic_int_init(&m_run_input_transfers, 1);
+  retro_atomic_int_init(&m_input_failed, 0);
   mpsc_stack_init(&m_transfers_to_free);
   retro_spsc_init_mirrored(&m_hci_event_queue, INPUT_RING_SIZE);
   retro_spsc_init_mirrored(&m_acl_data_queue, INPUT_RING_SIZE);
@@ -166,9 +173,6 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 
   StartInputTransfers();
 
-  m_output_worker.Reset("Bluetooth Output",
-                        std::bind_front(&LibUSBBluetoothAdapter::SubmitTimedTransfer, this));
-
   if (IsRealtekVID(m_device_vid) || IsKnownRealtekBluetoothDevice(m_device_vid, m_device_pid))
   {
     INFO_LOG_FMT(IOS_WIIMOTE, "Initializing Realtek Bluetooth device: {:04x}:{:04x}", m_device_vid,
@@ -192,17 +196,14 @@ LibUSBBluetoothAdapter::~LibUSBBluetoothAdapter()
 
 void LibUSBBluetoothAdapter::Close()
 {
-  // Wait for completion (or time out) of all HCI commands.
-  while (AreCommandsPendingResponse())
-  {
-    (void)ReceiveHCIEvent();
-    Common::YieldCPU();
-  }
+  // Commands still awaiting a reply are abandoned with their transfers below.
+  m_pending_hci_transfers = {};
+  m_unacknowledged_commands.clear();
 
-  m_output_worker.Shutdown();
-
-  // Stop the repeating input transfers.
-  retro_atomic_store_release_int(&m_run_input_transfers, 0);
+  // Stop the repeating input transfers. A callback resubmitting meanwhile sees the flag after
+  // its submit and cancels its own transfer (see HandleInputTransfer).
+  retro_atomic_exchange_int(&m_run_input_transfers, 0);
+  retro_atomic_thread_fence_seq_cst();
 
   // Cancel all LibUSB transfers, wait for their callbacks and clean up all the buffers. A
   // callback that read the run flag before it was cleared may resubmit its transfer after the
@@ -210,11 +211,11 @@ void LibUSBBluetoothAdapter::Close()
   while (!m_transfer_buffers.empty())
   {
     std::ranges::for_each(m_transfer_buffers | std::ranges::views::keys, libusb_cancel_transfer);
-    const int key = retro_eventcount_prepare_wait(&m_transfer_freed.ec);
+    const int key = retro_eventcount_prepare_wait(&m_adapter_event.ec);
     if (!mpsc_stack_empty(&m_transfers_to_free))
-      retro_eventcount_cancel_wait(&m_transfer_freed.ec);
+      retro_eventcount_cancel_wait(&m_adapter_event.ec);
     else
-      retro_eventcount_commit_wait_timeout(&m_transfer_freed.ec, key, 10000);
+      retro_eventcount_commit_wait(&m_adapter_event.ec, key);
     CleanCompletedTransfers();
   }
 
@@ -227,10 +228,13 @@ void LibUSBBluetoothAdapter::Close()
 
 void LibUSBBluetoothAdapter::Update()
 {
-  // Remove timed out commands.
-  const auto expired_time = Clock::now() - HCI_COMMAND_TIMEOUT;
+  // Remove timed out commands. Emulated time stands still outside emulation, where the
+  // blocking callers wait for the reply itself.
+  const u64 timeout_ticks = Core::System::GetInstance().GetSystemTimers().GetTicksPerSecond() *
+                            HCI_COMMAND_TIMEOUT_MS / 1000;
+  const u64 now = EmulatedTicks();
   while (!m_unacknowledged_commands.empty() &&
-         m_unacknowledged_commands.front().submit_time < expired_time)
+         now - m_unacknowledged_commands.front().submit_ticks > timeout_ticks)
   {
     WARN_LOG_FMT(IOS_WIIMOTE, "HCI command 0x{:04x} timed out.",
                  m_unacknowledged_commands.front().opcode);
@@ -373,7 +377,7 @@ void LibUSBBluetoothAdapter::QueueFree(libusb_transfer* transfer)
   FreeNode* const node = reinterpret_cast<FreeNode*>(transfer->buffer - BUFFER_HEADER_SIZE);
   node->transfer = transfer;
   mpsc_stack_push(&m_transfers_to_free, &node->link);
-  retro_eventcount_notify(&m_transfer_freed.ec);
+  retro_eventcount_notify(&m_adapter_event.ec);
 }
 
 void LibUSBBluetoothAdapter::CleanCompletedTransfers()
@@ -388,31 +392,19 @@ void LibUSBBluetoothAdapter::CleanCompletedTransfers()
   }
 }
 
-void LibUSBBluetoothAdapter::PushHCICommand(TimedTransfer transfer)
+void LibUSBBluetoothAdapter::PushHCICommand(libusb_transfer* transfer)
 {
   hci_cmd_hdr_t cmd;
-  std::memcpy(&cmd, libusb_control_transfer_get_data(transfer.transfer), sizeof(cmd));
+  std::memcpy(&cmd, libusb_control_transfer_get_data(transfer), sizeof(cmd));
 
-  // Push the time forward so our timeouts work properly if command was queued and delayed.
-  const auto submit_time = std::max(transfer.target_time, Clock::now());
-
-  m_unacknowledged_commands.emplace_back(OutstandingCommand{cmd.opcode, submit_time});
+  // Timed from now, not from when it was queued, so a delayed command gets its full time.
+  m_unacknowledged_commands.emplace_back(OutstandingCommand{cmd.opcode, EmulatedTicks()});
 
   // This function is only invoked when this value is at least 1.
   assert(m_num_hci_command_packets >= 1);
   --m_num_hci_command_packets;
 
-  m_output_worker.EmplaceItem(transfer);
-}
-
-void LibUSBBluetoothAdapter::SubmitTimedTransfer(TimedTransfer transfer)
-{
-  if (Config::Get(Config::MAIN_PRECISION_FRAME_TIMING))
-    m_precision_timer.SleepUntil(transfer.target_time);
-  else
-    Common::SleepUntil(transfer.target_time);
-
-  SubmitTransfer(transfer.transfer);
+  SubmitTransfer(transfer);
 }
 
 void LibUSBBluetoothAdapter::SubmitTransfer(libusb_transfer* transfer)
@@ -428,8 +420,7 @@ void LibUSBBluetoothAdapter::SubmitTransfer(libusb_transfer* transfer)
   QueueFree(transfer);
 }
 
-void LibUSBBluetoothAdapter::ScheduleBulkTransfer(u8 endpoint, std::span<const u8> data,
-                                                  TimePoint target_time)
+void LibUSBBluetoothAdapter::SendBulkTransfer(u8 endpoint, std::span<const u8> data)
 {
   constexpr auto callback = LibUSBMemFunCallback<&LibUSBBluetoothAdapter::HandleOutputTransfer>();
 
@@ -439,12 +430,11 @@ void LibUSBBluetoothAdapter::ScheduleBulkTransfer(u8 endpoint, std::span<const u
 
   std::ranges::copy(data, transfer->buffer);
 
-  m_output_worker.EmplaceItem(transfer, target_time);
+  SubmitTransfer(transfer);
 }
 
-void LibUSBBluetoothAdapter::ScheduleControlTransfer(u8 type, u8 request, u8 value, u8 index,
-                                                     std::span<const u8> data,
-                                                     TimePoint target_time)
+void LibUSBBluetoothAdapter::SendControlTransfer(u8 type, u8 request, u8 value, u8 index,
+                                                 std::span<const u8> data)
 {
   constexpr auto callback = LibUSBMemFunCallback<&LibUSBBluetoothAdapter::HandleOutputTransfer>();
 
@@ -455,22 +445,20 @@ void LibUSBBluetoothAdapter::ScheduleControlTransfer(u8 type, u8 request, u8 val
 
   std::ranges::copy(data, transfer->buffer + LIBUSB_CONTROL_SETUP_SIZE);
 
-  const TimedTransfer timed_transfer{transfer, target_time};
-
   if (IsControllerReadyForCommand())
   {
-    PushHCICommand(timed_transfer);
+    PushHCICommand(transfer);
   }
   else
   {
     DEBUG_LOG_FMT(IOS_WIIMOTE, "Queueing HCI command while controller is busy.");
-    m_pending_hci_transfers.emplace(timed_transfer);
+    m_pending_hci_transfers.emplace(transfer);
   }
 }
 
 void LibUSBBluetoothAdapter::SendControlTransfer(std::span<const u8> data)
 {
-  ScheduleControlTransfer(REQUEST_TYPE, 0, 0, 0, data, Clock::now());
+  SendControlTransfer(REQUEST_TYPE, 0, 0, 0, data);
 }
 
 bool LibUSBBluetoothAdapter::SendBlockingCommand(std::span<const u8> data, std::span<u8> response)
@@ -481,11 +469,25 @@ bool LibUSBBluetoothAdapter::SendBlockingCommand(std::span<const u8> data, std::
 
   while (AreCommandsPendingResponse())
   {
+    // Waits for the input callback to queue an event or to see the device fail.
+    const int key = retro_eventcount_prepare_wait(&m_adapter_event.ec);
+    if (PeekPacketLength(&m_hci_event_queue) == 0 &&
+        !retro_atomic_load_acquire_int(&m_input_failed))
+    {
+      retro_eventcount_commit_wait(&m_adapter_event.ec, key);
+      continue;
+    }
+    retro_eventcount_cancel_wait(&m_adapter_event.ec);
+
     const auto event = ReceiveHCIEvent();
 
     if (event.empty())
     {
-      Common::YieldCPU();
+      if (retro_atomic_load_acquire_int(&m_input_failed))
+      {
+        ERROR_LOG_FMT(IOS_WIIMOTE, "Bluetooth adapter stopped answering HCI commands.");
+        return false;
+      }
       continue;
     }
 
@@ -616,12 +618,22 @@ void LibUSBBluetoothAdapter::HandleInputTransfer(libusb_transfer* tr)
     // Continuously repeat this input transfer so long as we're still running.
     const auto ret = libusb_submit_transfer(tr);
     if (ret == LIBUSB_SUCCESS)
+    {
+      // Close cleared the flag before cancelling; if that was after the check above, this
+      // submit may have missed its cancel, so it cancels itself.
+      retro_atomic_thread_fence_seq_cst();
+      if (!retro_atomic_load_acquire_int(&m_run_input_transfers))
+        libusb_cancel_transfer(tr);
+      retro_eventcount_notify(&m_adapter_event.ec);
       return;
+    }
 
     ERROR_LOG_FMT(IOS_WIIMOTE, "HandleInputTransfer libusb_submit_transfer: {}",
                   LibusbUtils::ErrorWrap(ret));
   }
 
+  // No longer listening: nothing more will arrive for a blocking command to wait on.
+  retro_atomic_store_release_int(&m_input_failed, 1);
   QueueFree(tr);
 }
 

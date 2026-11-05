@@ -13,6 +13,7 @@
 #include <libusb.h>
 #endif
 
+#include "Common/FrameClock.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/Thread.h"
@@ -126,7 +127,8 @@ void USBScanner::ScanThread()
       m_first_scan_complete_flag.Set(true);
     if (m_notify_pending)
       NotifyClients();
-    Common::SleepCurrentThread(50);
+    // Rescan every few frames, about 50 ms.
+    frame_clock_wait_until(frame_clock_now() + 3, m_thread_running.Raw());
   }
   PublishDevices({});
   m_first_scan_complete_flag.Set(false);
@@ -135,7 +137,10 @@ void USBScanner::ScanThread()
 void USBScanner::StopScanning()
 {
   if (m_thread_running.TestAndClear())
+  {
+    frame_clock_wake_all();
     Common::JoinThread(m_thread);
+  }
 }
 
 USBScanner::DeviceMap USBScanner::GetDevices() const

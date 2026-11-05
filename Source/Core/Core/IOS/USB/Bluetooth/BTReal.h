@@ -76,7 +76,6 @@ private:
   std::unique_ptr<USB::V0BulkMessage> m_acl_endpoint;
 
   // Used for proper Bluetooth packet timing, especially for Wii remote speaker data.
-  TimePoint GetTargetTime() const;
 
   void TryToFillHCIEndpoint();
   void TryToFillACLEndpoint();

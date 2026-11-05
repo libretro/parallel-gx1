@@ -101,15 +101,13 @@ void VideoBackendBase::Video_OutputXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride
     return;
 
   auto& system = Core::System::GetInstance();
-  auto& core_timing = system.GetCoreTiming();
 
   if (!g_ActiveConfig.bImmediateXFB)
   {
     system.GetFifo().SyncGPU(Fifo::SyncGPUReason::Swap);
 
-    const TimePoint presentation_time = core_timing.GetTargetHostTime(ticks);
     AsyncRequests::GetInstance()->PushEvent([=] {
-      g_presenter->ViSwap(xfb_addr, fb_width, fb_stride, fb_height, ticks, presentation_time);
+      g_presenter->ViSwap(xfb_addr, fb_width, fb_stride, fb_height, ticks);
     });
   }
 
@@ -121,11 +119,8 @@ void VideoBackendBase::Video_OutputXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride
 
   const auto next_swap_estimated_ticks =
       ticks + (system.GetSystemTimers().GetTicksPerSecond() * refresh_rate_den / refresh_rate_num);
-  const auto next_swap_estimated_time = core_timing.GetTargetHostTime(next_swap_estimated_ticks);
-
-  AsyncRequests::GetInstance()->PushEvent([=] {
-    g_presenter->SetNextSwapEstimatedTime(next_swap_estimated_ticks, next_swap_estimated_time);
-  });
+  AsyncRequests::GetInstance()->PushEvent(
+      [=] { g_presenter->SetNextSwapEstimatedTicks(next_swap_estimated_ticks); });
 }
 
 u32 VideoBackendBase::Video_GetQueryResult(PerfQueryType type)

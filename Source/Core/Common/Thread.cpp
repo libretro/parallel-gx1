@@ -21,7 +21,6 @@
 #include <OS.h>
 #endif
 
-#include <retro_timers.h>
 #include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
@@ -37,22 +36,6 @@ int CurrentThreadId()
 #else
   return 0;
 #endif
-}
-
-void SleepCurrentThread(int ms)
-{
-  retro_sleep(ms);
-}
-
-void SleepCurrentThreadUs(long long us)
-{
-  if (us > 0)
-    retro_sleep_us((unsigned)us);
-}
-
-void YieldCPU()
-{
-  sthread_yield();
 }
 
 void SetCurrentThreadName(const char* name)

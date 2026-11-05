@@ -1110,6 +1110,7 @@ DOLPHIN_SOURCES_ASM :=
 DOLPHIN_SOURCES_OBJCXX :=
 DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/CallGate.c \
+	$(CORE_DIR)/Source/Core/Common/FrameClock.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c
 DOLPHIN_SOURCES_CXX += \
@@ -1259,8 +1260,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/OnScreenUI.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/OpcodeDecoding.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PerfQueryBase.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/PerformanceMetrics.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/PerformanceTracker.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PipelineUtils.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PixelEngine.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PixelShaderGen.cpp \
@@ -1665,7 +1664,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/State.cpp \
 	$(CORE_DIR)/Source/Core/Core/SysConf.cpp \
 	$(CORE_DIR)/Source/Core/Core/System.cpp \
-	$(CORE_DIR)/Source/Core/Core/TimePlayed.cpp \
 	$(CORE_DIR)/Source/Core/Core/TitleDatabase.cpp \
 	$(CORE_DIR)/Source/Core/Core/USBUtils.cpp \
 	$(CORE_DIR)/Source/Core/Core/WC24PatchEngine.cpp \

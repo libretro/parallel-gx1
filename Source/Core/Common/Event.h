@@ -11,7 +11,6 @@
 
 #pragma once
 
-#include <chrono>
 
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
@@ -50,34 +49,6 @@ public:
         return;
       }
       retro_eventcount_commit_wait(&m_wake, key);
-    }
-  }
-
-  template <class Rep, class Period>
-  bool WaitFor(const std::chrono::duration<Rep, Period>& rel_time)
-  {
-    if (TakeSignal())
-      return true;
-
-    const auto deadline = std::chrono::steady_clock::now() + rel_time;
-    for (;;)
-    {
-      const auto left = std::chrono::duration_cast<std::chrono::microseconds>(
-          deadline - std::chrono::steady_clock::now());
-      const int key = retro_eventcount_prepare_wait(&m_wake);
-      if (TakeSignal())
-      {
-        retro_eventcount_cancel_wait(&m_wake);
-        return true;
-      }
-      if (left.count() <= 0)
-      {
-        retro_eventcount_cancel_wait(&m_wake);
-        return false;
-      }
-      retro_eventcount_commit_wait_timeout(&m_wake, key, left.count());
-      if (TakeSignal())
-        return true;
     }
   }
 

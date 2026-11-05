@@ -88,6 +88,8 @@ public:
 
   bool Connect(int index);
   void Prepare();
+  // Wakes the write thread to look at its idle time and delayed reports.
+  void Poke();
 
   virtual bool IsConnected() const = 0;
 
@@ -102,6 +104,9 @@ public:
   int GetIndex() const;
 
 protected:
+  // For waits on the write thread that end when the remote is being disconnected.
+  const retro_atomic_int_t* RunFlag() const { return m_run_thread.Raw(); }
+
   // This needs to be called in derived destructors!
   void Shutdown();
 
@@ -128,13 +133,14 @@ private:
   };
   struct WriteRecord
   {
-    TimePoint time;
+    u64 frame;  // first: the write thread peeks it. Sent once the frame clock reaches it.
     u8 size;
     u8 data[MAX_PAYLOAD];
   };
   static_assert(sizeof(ReadRecord) == 32 && sizeof(WriteRecord) == 32);
 
-  void QueueWrite(TimePoint time, const u8* data, size_t size);
+  void QueueWrite(u64 frame, const u8* data, size_t size);
+  bool IsWriteDue() const;
   bool Read();
   bool Write(const WriteRecord& record);
 
@@ -242,7 +248,7 @@ private:
   sthread_t* m_scan_thread = nullptr;
   Common::Flag m_scan_thread_running;
   Common::Flag m_populate_devices;
-  Common::Event m_scan_mode_changed_or_population_event;
+  retro_atomic_int_t m_scan_requested{};
   std::atomic<WiimoteScanMode> m_scan_mode{WiimoteScanMode::DO_NOT_SCAN};
 };
 

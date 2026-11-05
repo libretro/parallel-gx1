@@ -416,18 +416,12 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::MAIN_DPL2_DECODER, false);
   Config::SetBase(Config::MAIN_AUDIO_FILL_GAPS, false);
 
-  Config::SetBase(Config::MAIN_EMULATION_SPEED,
-                     Libretro::GetOption<double>(core::EMULATION_SPEED, /*def=*/0.0));
   {
     // Overclock (cpu clock rate) — option values in option_defs used strings like "100%" etc.
     double multiplier = Libretro::GetOption<double>(core::CPU_CLOCK_RATE, 1.0);
     Config::SetBase(Config::MAIN_OVERCLOCK, multiplier);
     Config::SetBase(Config::MAIN_OVERCLOCK_ENABLE, multiplier != 1.0);
   }
-
-  Config::SetBase(Config::MAIN_PRECISION_FRAME_TIMING,
-    Libretro::GetOption<bool>(core::MAIN_PRECISION_FRAME_TIMING,
-                            /*def=*/false)); // true is the standalone default
 
   Config::SetBase(Config::MAIN_WIIMOTE_CONTINUOUS_SCANNING,
                   Libretro::GetOption<bool>(sysconf::WIIMOTE_CONTINUOUS_SCANNING,
@@ -439,12 +433,6 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::MAIN_FAST_DISC_SPEED,
                   Libretro::GetOption<bool>(core::FAST_DISC_SPEED, /*def=*/false));
 
-  Config::SetBase(Config::MAIN_RUSH_FRAME_PRESENTATION,
-                  Libretro::GetOption<bool>(core::RUSH_FRAME_PRESENTATION, /*def=*/false));
-
-  Config::SetBase(Config::MAIN_SMOOTH_EARLY_PRESENTATION,
-                  Libretro::GetOption<bool>(core::SMOOTH_EARLY_PRESENTATION, /*def=*/false));
-
   // Main.Interface
   Config::SetBase(Config::MAIN_OSD_MESSAGES,
                      Libretro::GetOption<bool>(main_interface::OSD_ENABLED, /*def=*/true));
@@ -452,7 +440,6 @@ bool retro_load_game(const struct retro_game_info* game)
                      Libretro::GetOption<bool>(main_interface::ENABLE_DEBUGGING, /*def=*/false));
 
   // Main.General
-  Config::SetBase(Config::MAIN_TIME_TRACKING, false);
 
   // Main.DSP
   Config::SetBase(Config::MAIN_DSP_JIT,
@@ -596,8 +583,6 @@ bool retro_load_game(const struct retro_game_info* game)
                  Libretro::GetOption<bool>(gfx_hacks::EFB_EMULATE_FORMAT_CHANGES, /*def=*/false));
   Config::SetBase(Config::GFX_HACK_VERTEX_ROUNDING,
                  Libretro::GetOption<bool>(gfx_hacks::VERTEX_ROUNDING, /*def=*/false));
-  Config::SetBase(Config::GFX_HACK_VI_SKIP,
-                 Libretro::GetOption<bool>(gfx_hacks::VI_SKIP, /*def=*/false));
   Config::SetBase(Config::GFX_HACK_FAST_TEXTURE_SAMPLING,
                  Libretro::GetOption<bool>(gfx_hacks::FAST_TEXTURE_SAMPLING, /*def=*/true));
   #ifdef __APPLE__
@@ -668,8 +653,6 @@ bool retro_load_game(const struct retro_game_info* game)
   }
 #endif
 
-  /* disable throttling emulation to match GetTargetRefreshRate() */
-  Core::SetIsThrottlerTempDisabled(true);
   SConfig::GetInstance().bBootToPause = true;
 
 #ifdef IPHONEOS

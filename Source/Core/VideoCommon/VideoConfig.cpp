@@ -42,9 +42,7 @@ static Common::EventHook s_check_config_event;
 
 static bool IsVSyncActive(bool enabled)
 {
-  // Vsync is disabled when the throttler is disabled by the tab key.
-  return enabled && !Core::GetIsThrottlerTempDisabled() &&
-         Config::Get(Config::MAIN_EMULATION_SPEED) == 1.0;
+  return enabled;
 }
 
 void UpdateActiveConfig()
@@ -182,8 +180,7 @@ void VideoConfig::Refresh()
   bDisableCopyToVRAM = Config::Get(Config::GFX_HACK_DISABLE_COPY_TO_VRAM);
   bDeferEFBCopies = Config::Get(Config::GFX_HACK_DEFER_EFB_COPIES);
   bImmediateXFB = Config::Get(Config::GFX_HACK_IMMEDIATE_XFB);
-  bVISkip = Config::Get(Config::GFX_HACK_VI_SKIP);
-  bSkipPresentingDuplicateXFBs = bVISkip || Config::Get(Config::GFX_HACK_SKIP_DUPLICATE_XFBS);
+  bSkipPresentingDuplicateXFBs = Config::Get(Config::GFX_HACK_SKIP_DUPLICATE_XFBS);
   bCopyEFBScaled = Config::Get(Config::GFX_HACK_COPY_EFB_SCALED);
   bEFBEmulateFormatChanges = Config::Get(Config::GFX_HACK_EFB_EMULATE_FORMAT_CHANGES);
   bVertexRounding = Config::Get(Config::GFX_HACK_VERTEX_ROUNDING);

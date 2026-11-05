@@ -15,7 +15,6 @@
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/CPUThreadConfigCallback.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
@@ -25,7 +24,6 @@
 
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/OnScreenDisplay.h"
-#include "VideoCommon/PerformanceMetrics.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/VideoEvents.h"
@@ -94,9 +92,6 @@ void CoreTimingManager::Init()
   // that slice.
   m_is_global_timer_sane = true;
 
-  // Reset data used by the throttling system
-  ResetThrottle(0);
-
   m_event_fifo_id = 0;
   m_ev_lost = RegisterEvent("_lost_event", &EmptyTimedCallback);
 
@@ -106,19 +101,6 @@ void CoreTimingManager::Init()
 
   m_last_oc_factor = m_config_oc_factor;
   m_globals.last_OC_factor_inverted = m_config_oc_inv_factor;
-
-  m_core_state_changed_hook = Core::AddOnStateChangedCallback([this](Core::State state) {
-    if (state == Core::State::Running)
-    {
-      // We don't want Throttle to attempt catch-up for all the time lost while paused.
-      ResetThrottle(GetTicks());
-    }
-  });
-
-  m_throttled_after_presentation = false;
-  m_frame_hook = m_system.GetVideoEvents().after_present_event.Register([this](const PresentInfo&) {
-    m_throttled_after_presentation.store(false, std::memory_order_relaxed);
-  });
 }
 
 CoreTimingManager::~CoreTimingManager()
@@ -134,13 +116,10 @@ CoreTimingManager::~CoreTimingManager()
 
 void CoreTimingManager::Shutdown()
 {
-  m_core_state_changed_hook.reset();
-
   MoveEvents();
   ClearPendingEvents();
   UnregisterAllEvents();
   CPUThreadConfigCallback::RemoveConfigChangedCallback(m_registered_config_callback_id);
-  m_frame_hook.reset();
 }
 
 void CoreTimingManager::RefreshConfig()
@@ -151,31 +130,6 @@ void CoreTimingManager::RefreshConfig()
                                                        1.0f);
   m_config_oc_inv_factor = 1.0f / m_config_oc_factor;
   m_config_sync_on_skip_idle = Config::Get(Config::MAIN_SYNC_ON_SKIP_IDLE);
-  m_config_rush_frame_presentation = Config::Get(Config::MAIN_RUSH_FRAME_PRESENTATION);
-
-  // We don't want to skip so much throttling that the audio buffer overfills.
-  m_max_throttle_skip_time =
-      std::chrono::milliseconds{Config::Get(Config::MAIN_AUDIO_BUFFER_SIZE)} / 2;
-
-  // A maximum fallback is used to prevent the system from sleeping for
-  // too long or going full speed in an attempt to catch up to timings.
-  m_max_fallback = std::chrono::duration_cast<DT>(DT_ms(Config::Get(Config::MAIN_MAX_FALLBACK)));
-
-  m_max_variance = std::chrono::duration_cast<DT>(DT_ms(Config::Get(Config::MAIN_TIMING_VARIANCE)));
-
-  m_correct_time_drift = Config::Get(Config::MAIN_CORRECT_TIME_DRIFT);
-
-  if (AchievementManager::GetInstance().IsHardcoreModeActive() &&
-      Config::Get(Config::MAIN_EMULATION_SPEED) < 1.0f &&
-      Config::Get(Config::MAIN_EMULATION_SPEED) > 0.0f)
-  {
-    Config::SetCurrent(Config::MAIN_EMULATION_SPEED, 1.0f);
-    OSD::AddMessage("Minimum speed is 100% in Hardcore Mode");
-  }
-
-  UpdateSpeedLimit(GetTicks(), Config::Get(Config::MAIN_EMULATION_SPEED));
-
-  m_use_precision_timer = Config::Get(Config::MAIN_PRECISION_FRAME_TIMING);
 }
 
 void CoreTimingManager::DoState(PointerWrap& p)
@@ -233,10 +187,6 @@ void CoreTimingManager::DoState(PointerWrap& p)
     // The exact layout of the heap in memory is implementation defined, therefore it is platform
     // and library version specific.
     std::ranges::make_heap(m_event_queue, std::ranges::greater{});
-
-    // The stave state has changed the time, so our previous Throttle targets are invalid.
-    // Especially when global_time goes down; So we create a fake throttle update.
-    ResetThrottle(m_globals.global_timer);
   }
 }
 
@@ -403,153 +353,6 @@ void CoreTimingManager::Advance()
   power_pc.CheckExternalExceptions();
 }
 
-TimePoint CoreTimingManager::CalculateTargetHostTimeInternal(s64 target_cycle)
-{
-  const s64 elapsed_cycles = target_cycle - m_throttle_reference_cycle;
-  return m_throttle_reference_time +
-         Clock::duration{std::chrono::seconds{elapsed_cycles}} / m_throttle_adj_clock_per_sec;
-}
-
-bool CoreTimingManager::IsSpeedUnlimited() const
-{
-  return m_throttle_adj_clock_per_sec == 0 || Core::GetIsThrottlerTempDisabled();
-}
-
-TimePoint CoreTimingManager::GetTargetHostTime(s64 target_cycle)
-{
-  if (IsSpeedUnlimited())
-    return Clock::now();
-
-  return CalculateTargetHostTimeInternal(target_cycle);
-}
-
-void CoreTimingManager::SleepUntil(TimePoint time_point)
-{
-  const bool use_precision_timer = m_use_precision_timer.load(std::memory_order_relaxed);
-
-  if (Core::IsCPUThread())
-  {
-    const TimePoint time = Clock::now();
-
-    if (use_precision_timer)
-      m_precision_cpu_timer.SleepUntil(time_point);
-    else
-      Common::SleepUntil(time_point);
-
-    // Count amount of time sleeping for performance metrics
-    const TimePoint time_after_sleep = Clock::now();
-    m_system.GetPerfMetrics().CountThrottleSleep(time_after_sleep - time);
-  }
-  else
-  {
-    if (use_precision_timer)
-      m_precision_gpu_timer.SleepUntil(time_point);
-    else
-      Common::SleepUntil(time_point);
-  }
-}
-
-void CoreTimingManager::Throttle(const s64 target_cycle)
-{
-  const TimePoint time = Clock::now();
-
-  const bool already_throttled =
-      m_throttled_after_presentation.exchange(true, std::memory_order_relaxed);
-
-  // If RushFramePresentation is enabled, try to Throttle just once after each presentation.
-  //  This lowers input latency by speeding through to presentation after grabbing input.
-  // Make sure we don't get too far ahead of proper timing though,
-  //  otherwise the emulator unreasonably speeds through loading screens that don't have XFB copies,
-  //  making audio sound terrible.
-  const bool skip_throttle = already_throttled && m_config_rush_frame_presentation &&
-                             ((GetTargetHostTime(target_cycle) - time) < m_max_throttle_skip_time);
-  if (skip_throttle)
-    return;
-
-  // Measure current performance after throttling.
-  Common::ScopeGuard perf_marker{[&] {
-    m_system.GetPerfMetrics().CountPerformanceMarker(
-        target_cycle, m_system.GetSystemTimers().GetTicksPerSecond());
-  }};
-
-  if (IsSpeedUnlimited())
-  {
-    ResetThrottle(target_cycle);
-    m_throttle_disable_vi_int = false;
-    return;
-  }
-
-  // Push throttle reference values forward by exact seconds.
-  // This avoids drifting from cumulative rounding errors.
-  {
-    const s64 sec_adj = (target_cycle - m_throttle_reference_cycle) / m_throttle_adj_clock_per_sec;
-    const s64 cycle_adj = sec_adj * m_throttle_adj_clock_per_sec;
-
-    m_throttle_reference_cycle += cycle_adj;
-    m_throttle_reference_time += std::chrono::seconds{sec_adj};
-  }
-
-  TimePoint target_time = CalculateTargetHostTimeInternal(target_cycle);
-
-  const TimePoint min_target = time - m_max_fallback;
-
-  // "Correct Time Drift" setting prevents timing relaxing.
-  if (!m_correct_time_drift && target_time < min_target)
-  {
-    // Core is running too slow.. i.e. CPU bottleneck.
-    const DT adjustment = min_target - target_time;
-    DEBUG_LOG_FMT(CORE, "Core can not keep up with timings! [relaxing timings by {} us]",
-                  DT_us(adjustment).count());
-
-    m_throttle_reference_time += adjustment;
-    target_time += adjustment;
-  }
-
-  UpdateVISkip(time, target_time);
-
-  SleepUntil(target_time);
-}
-
-void CoreTimingManager::UpdateSpeedLimit(s64 cycle, double new_speed)
-{
-  m_emulation_speed = new_speed;
-
-  const u32 new_clock_per_sec =
-      std::lround(m_system.GetSystemTimers().GetTicksPerSecond() * new_speed);
-
-  const bool was_limited = m_throttle_adj_clock_per_sec != 0;
-  if (was_limited)
-  {
-    // Adjust throttle reference for graceful clock speed transition.
-    const s64 ticks = cycle - m_throttle_reference_cycle;
-    const s64 new_ticks = ticks * new_clock_per_sec / m_throttle_adj_clock_per_sec;
-    m_throttle_reference_cycle = cycle - new_ticks;
-  }
-
-  m_throttle_adj_clock_per_sec = new_clock_per_sec;
-}
-
-void CoreTimingManager::ResetThrottle(s64 cycle)
-{
-  m_throttle_reference_cycle = cycle;
-  m_throttle_reference_time = Clock::now();
-}
-
-void CoreTimingManager::UpdateVISkip(TimePoint current_time, TimePoint target_time)
-{
-  const DT vi_fallback = std::min(m_max_variance, m_max_fallback);
-
-  // Skip the VI interrupt if the CPU is lagging by a certain amount.
-  // It doesn't matter what amount of lag we skip VI at, as long as it's constant.
-  const TimePoint vi_target = current_time - vi_fallback / 2;
-  m_throttle_disable_vi_int = target_time < vi_target;
-}
-
-bool CoreTimingManager::GetVISkip() const
-{
-  return m_throttle_disable_vi_int && g_ActiveConfig.bVISkip && !Core::WantsDeterminism();
-}
-
 float CoreTimingManager::GetOverclock() const
 {
   return m_config_oc_factor;
@@ -575,10 +378,6 @@ void CoreTimingManager::LogPendingEvents() const
 void CoreTimingManager::AdjustEventQueueTimes(u32 new_ppc_clock, u32 old_ppc_clock)
 {
   const s64 ticks = m_globals.global_timer;
-
-  UpdateSpeedLimit(ticks, m_emulation_speed);
-
-  m_system.GetPerfMetrics().AdjustClockSpeed(ticks, new_ppc_clock, old_ppc_clock);
 
   for (Event& ev : m_event_queue)
   {

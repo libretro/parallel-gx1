@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <chrono>
 
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
@@ -37,6 +36,7 @@ public:
   {
     retro_atomic_int_init(&m_running_state, STATE_DONE);
     retro_atomic_int_init(&m_prepare_state, PREPARE_STOPPED);
+    retro_atomic_int_init(&m_in_run, 0);
     retro_eventcount_init(&m_done);
   }
   ~BlockingLoop()
@@ -86,31 +86,6 @@ public:
     m_may_sleep.Set();
   }
 
-  // Wait for a complete payload run after the last Wakeup() call.
-  // This version will call a yield function every 100ms.
-  // If stopped, this returns immediately.
-  template <class Rep, class Period, typename Functor>
-  void WaitYield(const std::chrono::duration<Rep, Period>& rel_time, Functor yield_func)
-  {
-    const int64_t timeout_us =
-        std::chrono::duration_cast<std::chrono::microseconds>(rel_time).count();
-    while (!IsDone())
-    {
-      const int key = retro_eventcount_prepare_wait(&m_done);
-      if (IsDone())
-      {
-        retro_eventcount_cancel_wait(&m_done);
-        break;
-      }
-      if (!retro_eventcount_commit_wait_timeout(&m_done, key, timeout_us))
-        yield_func();
-    }
-
-    // As we wanted to wait for the other thread, there is likely no work remaining.
-    // So there is no need for a busy loop any more.
-    m_may_sleep.Set();
-  }
-
   // Half start the worker.
   // So this object is in a running state and Wait() will block until the worker calls Run().
   // This may be called from any thread and is supposed to be called at least once before Wait()
@@ -122,9 +97,17 @@ public:
     // sets it up; any other one waits for that, which is a few stores.
     if (!retro_atomic_cas_int(&m_prepare_state, PREPARE_STOPPED, PREPARE_BUSY))
     {
-      while (retro_atomic_load_acquire_int(&m_prepare_state) == PREPARE_BUSY)
-        sthread_yield();
-      return;
+      // The winner notifies m_done once it is set up.
+      for (;;)
+      {
+        const int key = retro_eventcount_prepare_wait(&m_done);
+        if (retro_atomic_load_acquire_int(&m_prepare_state) != PREPARE_BUSY)
+        {
+          retro_eventcount_cancel_wait(&m_done);
+          return;
+        }
+        retro_eventcount_commit_wait(&m_done, key);
+      }
     }
 
     // so the payload will only be executed once without any Wakeup call
@@ -132,19 +115,19 @@ public:
     m_shutdown.Clear();
     m_may_sleep.Set();
     retro_atomic_store_release_int(&m_prepare_state, PREPARE_RUNNING);
+    retro_eventcount_notify(&m_done);
   }
 
   // Main loop of this object.
   // The payload callback is called at least as often as it's needed to match the Wakeup()
   // requirements.
-  // The optional timeout parameter is a timeout for how periodically the payload should be called.
-  // Use timeout = 0 to run without a timeout at all.
   template <class F>
-  void Run(F payload, int64_t timeout = 0)
+  void Run(F payload)
   {
     // Asserts that Prepare is called at least once before we enter the loop.
     // But a good implementation should call this before already.
     Prepare();
+    retro_atomic_store_release_int(&m_in_run, 1);
 
     while (!m_shutdown.IsSet())
     {
@@ -191,19 +174,13 @@ public:
 
       case STATE_SLEEPING:
         // Just relax
-        if (timeout > 0)
-        {
-          m_new_work_event.WaitFor(std::chrono::milliseconds(timeout));
-        }
-        else
-        {
-          m_new_work_event.Wait();
-        }
+        m_new_work_event.Wait();
         break;
       }
     }
 
     // Shutdown down, so get a safe state
+    retro_atomic_store_release_int(&m_in_run, 0);
     retro_atomic_exchange_int(&m_running_state, STATE_DONE);
     retro_atomic_store_release_int(&m_prepare_state, PREPARE_STOPPED);
 
@@ -230,10 +207,14 @@ public:
       Wait();
       break;
     case StopMode::BlockAndGiveUp:
-      WaitYield(std::chrono::milliseconds(100), [&] {
-        // If timed out, assume no one will come along to call Run, so force a break
+      // Prepared but never run: nobody will come along to call Run, so force the stop.
+      if (!retro_atomic_load_acquire_int(&m_in_run))
+      {
         retro_atomic_store_release_int(&m_prepare_state, PREPARE_STOPPED);
-      });
+        retro_eventcount_notify(&m_done);
+        break;
+      }
+      Wait();
       break;
     }
   }
@@ -273,6 +254,7 @@ private:
 
   mutable retro_atomic_int_t m_running_state;  // must be of type RUNNING_TYPE
   mutable retro_atomic_int_t m_prepare_state;  // must be of type PREPARE_TYPE
+  retro_atomic_int_t m_in_run;  // set while Run() is looping
   Flag m_shutdown;                             // If this is set, the loop shall end.
   Event m_new_work_event;
   retro_eventcount_t m_done;

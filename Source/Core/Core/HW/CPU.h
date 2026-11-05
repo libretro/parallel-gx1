@@ -137,7 +137,6 @@ private:
 
   void FlushStepSyncEvent();
   void ExecutePendingJobs();
-  void StartTimePlayedTimer();
   void RunAdjacentSystems(bool running);
   bool SetStateChecked(State s);
   State LoadState() const;
@@ -176,7 +175,6 @@ private:
   retro_atomic_ptr_t m_step_request;
 
   mpsc_stack_t m_pending_jobs;
-  Common::Event m_time_played_finish_sync;
 
   Core::System& m_system;
 #ifdef __LIBRETRO__

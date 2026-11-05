@@ -23,34 +23,10 @@ public:
   // The rest of these functions probably belong somewhere else
   static u64 GetLocalTimeSinceJan1970();
 
-  static void IncreaseResolution();
-  static void RestoreResolution();
-
 private:
   u64 m_start_ms{0};
   u64 m_end_ms{0};
   bool m_running{false};
-};
-
-// Sleeps until target, with the OS sleep's granularity; returns at once if it has passed.
-void SleepUntil(TimePoint target);
-
-class PrecisionTimer
-{
-public:
-  PrecisionTimer();
-  ~PrecisionTimer();
-
-  PrecisionTimer(const PrecisionTimer&) = delete;
-  PrecisionTimer& operator=(const PrecisionTimer&) = delete;
-
-  void SleepUntil(Clock::time_point);
-
-private:
-#ifdef _WIN32
-  // Using void* to avoid including Windows.h in this header just for HANDLE.
-  void* m_timer_handle;
-#endif
 };
 
 // Similar to std::chrono::steady_clock except this clock

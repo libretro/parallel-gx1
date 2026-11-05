@@ -60,7 +60,7 @@ private:
   std::unique_ptr<u8[]> m_flush_buffer;
   mpsc_stack_t m_changes{};
   sthread_t* m_flush_thread = nullptr;
-  Common::Event m_flush_trigger;
+  Common::Flag m_flush_running{true};
   Common::Flag m_dirty;
   u32 m_memory_card_size;
 };

@@ -148,20 +148,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "1.00"
   },
   {
-    Libretro::Options::core::EMULATION_SPEED,
-    "Core > Emulation Speed",
-    "Emulation Speed",
-    "Set speed limit for emulation.",
-    nullptr,
-    CATEGORY_CORE,
-    {
-      { "1.0", "100% (Normal Speed)" },
-      { "0.0", "Unlimited" },
-      { nullptr, nullptr }
-    },
-    "0.0"
-  },
-  {
     Libretro::Options::core::MAIN_CPU_THREAD,
     "Core > Dual Core Mode",
     "Dual Core Mode",
@@ -202,24 +188,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
       { nullptr, nullptr }
     },
     "disabled"
-  },
-  {
-    Libretro::Options::core::MAIN_PRECISION_FRAME_TIMING,
-    "Core > Precision Frame Timing",
-    "Precision Frame Timing",
-    "Use busy-wait for more accurate frame timing.",
-    nullptr,
-    CATEGORY_CORE,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-//#if defined(ANDROID)
-    "disabled"
-//#else
-//    "enabled"
-//#endif
   },
   {
     Libretro::Options::core::FASTMEM,
@@ -347,34 +315,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "Core > Enable MMU",
     "Enable MMU",
     "Enable emulation of the Memory Management Unit.",
-    nullptr,
-    CATEGORY_CORE,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-    "disabled"
-  },
-  {
-    Libretro::Options::core::RUSH_FRAME_PRESENTATION,
-    "Core > Rush Frame Presentation",
-    "Rush Frame Presentation",
-    "Enable rushing frame presentation for lower latency.",
-    nullptr,
-    CATEGORY_CORE,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-    "disabled"
-  },
-  {
-    Libretro::Options::core::SMOOTH_EARLY_PRESENTATION,
-    "Core > Smooth Early Presentation",
-    "Smooth Early Presentation",
-    "Enable smoother early frame presentation timing.",
     nullptr,
     CATEGORY_CORE,
     {
@@ -1443,20 +1383,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "Graphics > Hacks > Vertex Rounding",
     "Vertex Rounding",
     "Round vertex positions to avoid gaps.",
-    nullptr,
-    CATEGORY_GFX_HACKS,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-    "disabled"
-  },
-  {
-    Libretro::Options::gfx_hacks::VI_SKIP,
-    "Graphics > Hacks > VI Skip",
-    "VI Skip",
-    "Skip VI updates to improve performance.",
     nullptr,
     CATEGORY_GFX_HACKS,
     {

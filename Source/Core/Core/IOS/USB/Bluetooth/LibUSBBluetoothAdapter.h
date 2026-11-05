@@ -10,8 +10,6 @@
 #include <vector>
 
 #include "Common/Buffer.h"
-#include "Common/Timer.h"
-#include "Common/WorkQueueThread.h"
 
 #include "Core/IOS/USB/Bluetooth/hci.h"
 #include "Core/LibusbUtils.h"
@@ -55,16 +53,13 @@ public:
   [[nodiscard]] std::span<const u8> PeekACLData();
   void PopACLData();
 
-  // Schedule a transfer to submit at a specific time.
-  void ScheduleBulkTransfer(u8 endpoint, std::span<const u8> data, TimePoint target_time);
-  void ScheduleControlTransfer(u8 type, u8 request, u8 value, u8 index, std::span<const u8> data,
-                               TimePoint target_time);
-
-  // Schedule a transfer to be submitted as soon as possible.
+  // Submit a transfer now; libusb completes it asynchronously.
+  void SendBulkTransfer(u8 endpoint, std::span<const u8> data);
+  void SendControlTransfer(u8 type, u8 request, u8 value, u8 index, std::span<const u8> data);
   void SendControlTransfer(std::span<const u8> data);
 
   // Blocks and eats events until a command complete event of the correct opcode is received.
-  // Returns true on success or false on error or timeout.
+  // Returns true on success or false on error or when the device stops responding.
   // The written response does not include the event header or command complete data.
   bool SendBlockingCommand(std::span<const u8> data, std::span<u8> response);
 
@@ -78,19 +73,22 @@ private:
 
   std::string m_last_open_error;
 
-  // Callbacks on the libusb event thread notify this until that thread is joined, which happens
-  // when m_context goes, so it is declared first to be released last.
-  struct TransferFreedEvent
+  // Notified when a transfer is freed or an input transfer completes. Callbacks on the libusb
+  // event thread notify this until that thread is joined, which happens when m_context goes, so
+  // it is declared first to be released last.
+  struct AdapterEvent
   {
-    TransferFreedEvent() { retro_eventcount_init(&ec); }
-    ~TransferFreedEvent() { retro_eventcount_free(&ec); }
+    AdapterEvent() { retro_eventcount_init(&ec); }
+    ~AdapterEvent() { retro_eventcount_free(&ec); }
     retro_eventcount_t ec;
-  } m_transfer_freed;
+  } m_adapter_event;
 
   LibusbUtils::Context m_context;
   libusb_device_handle* m_handle = nullptr;
 
   retro_atomic_int_t m_run_input_transfers;
+  // Set once an input transfer stops repeating, as when the device is gone.
+  retro_atomic_int_t m_input_failed;
 
   // Callback and worker threads push transfers here, lock-free, when they are ready for clean up.
   // The node lives in the front of the transfer's own buffer, so this allocates nothing.
@@ -112,19 +110,6 @@ private:
   // All transfers are alloc'd and kept here until complete.
   std::map<libusb_transfer*, Common::UniqueBuffer<u8>> m_transfer_buffers;
 
-  struct TimedTransfer
-  {
-    libusb_transfer* transfer{};
-    TimePoint target_time{};
-  };
-
-  // Outgoing data is submitted on a worker thread.
-  // This allows proper packet timing without throttling the core thread.
-  Common::WorkQueueThreadSP<TimedTransfer> m_output_worker;
-
-  // Used by the output worker.
-  Common::PrecisionTimer m_precision_timer;
-
   // Set to reduce OSD and log spam.
   bool m_showed_failed_transfer = false;
   bool m_showed_long_queue_drop = false;
@@ -139,12 +124,12 @@ private:
 
   // HCI commands are queued when the controller isn't ready for them.
   // They will be sent after COMMAND_COMPL or COMMAND_STATUS signal readiness.
-  std::queue<TimedTransfer> m_pending_hci_transfers;
+  std::queue<libusb_transfer*> m_pending_hci_transfers;
 
   struct OutstandingCommand
   {
     u16 opcode{};
-    TimePoint submit_time{};
+    u64 submit_ticks{};  // emulated time
   };
 
   // Sent HCI commands that have yet to receive a COMMAND_COMPL or COMMAND_STATUS response.
@@ -156,7 +141,7 @@ private:
 
   // Give the transfer to the worker and track the command appropriately.
   // This should only be used when IsControllerReadyForCommand is true.
-  void PushHCICommand(TimedTransfer);
+  void PushHCICommand(libusb_transfer*);
 
   template <typename EventType>
   void AcknowledgeCommand(std::span<const u8> buffer);
@@ -168,10 +153,6 @@ private:
 
   // Do some HCI logic and clean up completed transfers.
   void Update();
-
-  // Sleep until the target time and then submit the transfer.
-  // Used by worker thread.
-  void SubmitTimedTransfer(TimedTransfer);
 
   // Immediately submit transfer with libusb.
   void SubmitTransfer(libusb_transfer*);

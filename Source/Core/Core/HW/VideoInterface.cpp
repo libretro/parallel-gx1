@@ -14,7 +14,6 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoCommon/OnScreenDisplay.h"
-#include "VideoCommon/PerformanceMetrics.h"
 
 #include "Core/AchievementManager.h"
 #include "Core/Config/GraphicsSettings.h"
@@ -886,16 +885,6 @@ void VideoInterfaceManager::EndField(FieldType field, u64 ticks)
   if (!Config::Get(Config::GFX_HACK_EARLY_XFB_OUTPUT))
     OutputField(field, ticks);
 
-  // Note: OutputField above doesn't present when using GPU-on-Thread or Early/Immediate XFB,
-  //  giving "VBlank" measurements here poor pacing without a Throttle call.
-  // We'll throttle so long as Immediate XFB isn't enabled.
-  // That setting intends to minimize input latency and throttling would be counterproductive.
-  // The Rush Frame Presentation setting is handled by Throttle itself.
-  const bool is_vblank_data_wanted = !g_ActiveConfig.bImmediateXFB;
-  if (is_vblank_data_wanted)
-    m_system.GetCoreTiming().Throttle(ticks);
-
-  m_system.GetPerfMetrics().CountVBlank();
   m_system.GetVideoEvents().vi_end_field_event.Trigger();
   Core::OnFrameEnd(m_system);
 }
@@ -944,14 +933,9 @@ void VideoInterfaceManager::Update(u64 ticks)
   if (is_at_field_boundary)
     Core::Callback_NewField(m_system);
 
-  auto& core_timing = m_system.GetCoreTiming();
-
   // If an SI poll is scheduled to happen on this half-line, do it!
   if (m_half_line_count == m_half_line_of_next_si_poll)
   {
-    // Throttle before SI poll so user input is taken just before needed. (lower input latency)
-    core_timing.Throttle(ticks);
-
     Core::UpdateInputGate(!Config::Get(Config::MAIN_INPUT_BACKGROUND_INPUT),
                           Config::Get(Config::MAIN_LOCK_CURSOR));
     auto& si = m_system.GetSerialInterface();
@@ -981,10 +965,6 @@ void VideoInterfaceManager::Update(u64 ticks)
   {
     m_ticks_last_line_start = ticks;
   }
-
-  // TODO: Find out why skipping interrupts acts as a frameskip
-  if (core_timing.GetVISkip())
-    return;
 
   // Check if we need to assert IR_INT. Note that the granularity of our current horizontal
   // position is limited to half-lines.

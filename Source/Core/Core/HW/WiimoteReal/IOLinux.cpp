@@ -21,7 +21,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/Network.h"
 #include "Common/ScopeGuard.h"
-#include "Common/Thread.h"
+#include "Common/FrameClock.h"
 #include "Common/UnixUtil.h"
 #include "Core/Config/MainSettings.h"
 
@@ -314,7 +314,9 @@ bool WiimoteLinux::ConnectInternal()
                    Common::LastStrerrorString());
       // A socket state is unspecified after connect() fails, so close and recreate it.
       close(descriptor);
-      Common::SleepCurrentThread(500);
+      // About half a second of frontend frames; give up if the remote is being dropped.
+      if (!frame_clock_wait_until(frame_clock_now() + 30, RunFlag()))
+        return -1;
     }
 
     return -1;

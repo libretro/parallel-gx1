@@ -10,7 +10,6 @@
 class GeometryShaderManager;
 class Interpreter;
 class JitInterface;
-class PerformanceMetrics;
 class PixelShaderManager;
 class SoundStream;
 struct Sram;
@@ -187,7 +186,6 @@ public:
   MemoryInterface::MemoryInterfaceManager& GetMemoryInterface() const;
   PowerPC::MMU& GetMMU() const;
   Movie::MovieManager& GetMovie() const;
-  PerformanceMetrics& GetPerfMetrics() const;
   PixelEngine::PixelEngineManager& GetPixelEngine() const;
   PixelShaderManager& GetPixelShaderManager() const;
   PowerPC::PowerPCManager& GetPowerPC() const;

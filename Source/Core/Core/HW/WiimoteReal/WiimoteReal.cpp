@@ -18,7 +18,7 @@
 #include "Common/Quiesce.h"
 #include "Common/Swap.h"
 #include "Common/Thread.h"
-#include "Common/Timer.h"
+#include "Common/FrameClock.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/WiimoteSettings.h"
@@ -95,17 +95,15 @@ static void EditKnownIds(Edit&& edit)
 
 struct WiimotePoolEntry
 {
-  using Clock = std::chrono::steady_clock;
-
   std::unique_ptr<Wiimote> wiimote;
-  Clock::time_point entry_time = Clock::now();
+  u64 entry_frame = frame_clock_now();
 
   bool IsExpired() const
   {
-    // Keep wii remotes in the pool for a bit before disconnecting them.
-    constexpr auto POOL_TIME = std::chrono::seconds{5};
+    // Keep wii remotes in the pool for a bit, about five seconds, before disconnecting them.
+    constexpr u64 POOL_FRAMES = 5 * 60;
 
-    return (Clock::now() - entry_time) > POOL_TIME;
+    return frame_clock_now() - entry_frame > POOL_FRAMES;
   }
 };
 
@@ -131,8 +129,8 @@ struct ManagerCommand
   std::unique_ptr<Wiimote> wiimote;
   unsigned int index;
 };
+// The manager waits on the frame clock, so posting a command wakes it through that.
 static mpsc_stack_t s_manager_commands;
-static retro_eventcount_t s_manager_wake;
 static retro_atomic_int_t s_manager_running;
 static thread_local bool t_is_manager = false;
 
@@ -141,7 +139,7 @@ static void PostToManager(ManagerCommand::Kind kind, std::unique_ptr<Wiimote> wi
 {
   auto* command = new ManagerCommand{{}, kind, std::move(wiimote), index};
   mpsc_stack_push(&s_manager_commands, &command->link);
-  retro_eventcount_notify(&s_manager_wake);
+  frame_clock_wake_all();
 }
 
 static void PutWiimoteInSlot(unsigned int index, std::unique_ptr<Wiimote> wiimote)
@@ -257,11 +255,11 @@ Wiimote::~Wiimote()
 
 // Producer side of m_write_reports. A ring this deep is only full when the device has stopped
 // taking reports, and the write thread is about to drop the connection then.
-void Wiimote::QueueWrite(TimePoint time, const u8* data, size_t size)
+void Wiimote::QueueWrite(u64 frame, const u8* data, size_t size)
 {
   ASSERT(size <= MAX_PAYLOAD);
   WriteRecord record;
-  record.time = time;
+  record.frame = frame;
   record.size = static_cast<u8>(size);
   std::copy_n(data, size, record.data);
   retro_spsc_write_frames(&m_write_reports, &record, 1, sizeof(record));
@@ -306,14 +304,8 @@ void Wiimote::WriteReport(Report rpt)
     m_rumble_state = new_rumble_state;
   }
 
-  auto& core_timing = Core::System::GetInstance().GetCoreTiming();
-
-  // When invoked from the CPU thread, send the report at the proper time.
-  // From other threads (e.g. on construction/destruction) send the report as soon as possible.
-  const auto report_time =
-      Core::IsCPUThread() ? core_timing.GetTargetHostTime(core_timing.GetTicks()) : Clock::now();
-
-  QueueWrite(report_time, rpt.data(), rpt.size());
+  // Sent as soon as the write thread gets to it.
+  QueueWrite(0, rpt.data(), rpt.size());
 }
 
 // to be called from CPU thread
@@ -428,6 +420,21 @@ bool Wiimote::Read()
   return result != 0;
 }
 
+// Write thread: a report is queued and its frame has come.
+bool Wiimote::IsWriteDue() const
+{
+  if (retro_spsc_read_avail(&m_write_reports) < sizeof(WriteRecord))
+    return false;
+  u64 frame;
+  retro_spsc_peek(&m_write_reports, &frame, sizeof(frame));
+  return frame <= frame_clock_now();
+}
+
+void Wiimote::Poke()
+{
+  retro_eventcount_notify(&m_write_event);
+}
+
 bool Wiimote::Write(const WriteRecord& record)
 {
   if (m_balance_board_dump_port > 0 && m_index == WIIMOTE_BALANCE_BOARD)
@@ -437,8 +444,6 @@ bool Wiimote::Write(const WriteRecord& record)
                       m_balance_board_dump_port);
   }
 
-  // Write the report at the proper time, mainly for speaker data, not that it will help much.
-  Common::SleepUntil(record.time);
   int ret = IOWrite(record.data, record.size);
 
   return ret != 0;
@@ -618,16 +623,16 @@ ButtonData Wiimote::GetCurrentlyPressedButtons()
 
 void Wiimote::Prepare()
 {
-  const auto now = Clock::now();
+  const u64 now = frame_clock_now();
 
   // Set reporting mode to non-continuous core buttons and turn on rumble.
   const u8 mode_report[] = {WR_SET_REPORT | BT_OUTPUT, u8(OutputReportID::ReportMode), 1,
                             u8(InputReportID::ReportCore)};
   QueueWrite(now, mode_report, sizeof(mode_report));
 
-  // Request status and turn off rumble.
+  // Request status and turn off rumble a dozen frames, about 200 ms, later.
   const u8 req_status_report[] = {WR_SET_REPORT | BT_OUTPUT, u8(OutputReportID::RequestStatus), 0};
-  QueueWrite(now + std::chrono::milliseconds{200}, req_status_report, sizeof(req_status_report));
+  QueueWrite(now + 12, req_status_report, sizeof(req_status_report));
 }
 
 void Wiimote::EmuStop()
@@ -695,7 +700,7 @@ void WiimoteScanner::StopThread()
     }
 
     m_scan_thread_running.Clear();
-    retro_eventcount_notify(&s_manager_wake);
+    frame_clock_wake_all();
     Common::JoinThread(m_scan_thread);
   }
 }
@@ -703,7 +708,8 @@ void WiimoteScanner::StopThread()
 void WiimoteScanner::SetScanMode(WiimoteScanMode scan_mode)
 {
   m_scan_mode.store(scan_mode);
-  m_scan_mode_changed_or_population_event.Set();
+  retro_atomic_store_release_int(&m_scan_requested, 1);
+  frame_clock_wake_all();
 }
 
 // Manager only.
@@ -786,31 +792,37 @@ void WiimoteScanner::PoolThreadFunc()
   // Toggle between 1010 and 0101.
   u8 led_value = 0b1010;
 
-  constexpr auto TICK = std::chrono::milliseconds(250);
-  auto next_tick = std::chrono::steady_clock::now();
+  // About a quarter of a second of frontend frames.
+  constexpr u64 TICK_FRAMES = 15;
+  u64 next_tick = frame_clock_now();
 
   while (m_scan_thread_running.IsSet())
   {
     RunManagerCommands();
 
-    const auto now = std::chrono::steady_clock::now();
-    if (now < next_tick)
+    if (frame_clock_now() < next_tick)
     {
-      // Sleep until the next tick or a command, whichever comes first.
-      const int key = retro_eventcount_prepare_wait(&s_manager_wake);
-      if (!mpsc_stack_empty(&s_manager_commands) || !m_scan_thread_running.IsSet())
+      // Wait for the next tick or a command, whichever comes first.
+      const int key = frame_clock_prepare_wait();
+      if (!mpsc_stack_empty(&s_manager_commands) || !m_scan_thread_running.IsSet() ||
+          frame_clock_now() >= next_tick)
       {
-        retro_eventcount_cancel_wait(&s_manager_wake);
+        frame_clock_cancel_wait();
         continue;
       }
-      retro_eventcount_commit_wait_timeout(
-          &s_manager_wake, key,
-          std::chrono::duration_cast<std::chrono::microseconds>(next_tick - now).count());
+      frame_clock_commit_wait(key);
       continue;
     }
-    next_tick = now + TICK;
+    next_tick = frame_clock_now() + TICK_FRAMES;
 
     CheckForDisconnectedWiimotes();
+
+    // Let the write threads look at their idle time and delayed reports.
+    for (unsigned int i = 0; i < MAX_BBMOTES; ++i)
+      if (Wiimote* const wiimote = GetWiimote(i))
+        wiimote->Poke();
+    for (auto& entry : s_wiimote_pool)
+      entry.wiimote->Poke();
 
     // Remove stale pool entries.
     for (auto it = s_wiimote_pool.begin(); it != s_wiimote_pool.end();)
@@ -880,9 +892,24 @@ void WiimoteScanner::ThreadFunc()
     published.push_back(backend.get());
   retro_atomic_store_release_ptr(&m_backends_published, &published);
 
+  // About half a second of frontend frames between looks for remotes.
+  constexpr u64 SCAN_FRAMES = 30;
   while (m_scan_thread_running.IsSet())
   {
-    m_scan_mode_changed_or_population_event.WaitFor(std::chrono::milliseconds(500));
+    const u64 next_scan = frame_clock_now() + SCAN_FRAMES;
+    for (;;)
+    {
+      const int key = frame_clock_prepare_wait();
+      if (!m_scan_thread_running.IsSet() || frame_clock_now() >= next_scan ||
+          retro_atomic_exchange_int(&m_scan_requested, 0))
+      {
+        frame_clock_cancel_wait();
+        break;
+      }
+      frame_clock_commit_wait(key);
+    }
+    if (!m_scan_thread_running.IsSet())
+      break;
 
     // Currently does nothing. To be removed.
     for (const auto& backend : backends)
@@ -1001,9 +1028,9 @@ void Wiimote::WriteThreadFunc()
 
   if (!ok)
   {
-    // try again, it might take a moment to settle
-    Common::SleepCurrentThread(100);
-    ok = ConnectInternal();
+    // try again a few frames later, it might take a moment to settle
+    if (frame_clock_wait_until(frame_clock_now() + 6, m_run_thread.Raw()))
+      ok = ConnectInternal();
   }
 
   m_thread_ready_event.Set();
@@ -1019,22 +1046,24 @@ void Wiimote::WriteThreadFunc()
   //  to detect disconnections in a timely manner
   // If we haven't written a report in some time, attempt a rumble-off report.
   // This also has a minor benefit of preventing rumble from being stuck on.
-  constexpr auto WRITE_TEST_INTERVAL = std::chrono::milliseconds{1000};
+  // About a second of frontend frames. The pool manager pokes this thread every few frames,
+  // so it notices the time passing without a timed wait.
+  constexpr u64 WRITE_TEST_FRAMES = 60;
 
-  TimePoint last_write_time = Clock::now();
+  u64 last_write_frame = frame_clock_now();
 
   while (m_run_thread.IsSet())
   {
     bool write_success = false;
 
-    if (retro_spsc_read_avail(&m_write_reports) >= sizeof(WriteRecord))
+    if (IsWriteDue())
     {
       // Send a normal report.
       WriteRecord record;
       retro_spsc_read(&m_write_reports, &record, sizeof(record));
       write_success = Write(record);
     }
-    else if (Clock::now() - last_write_time >= WRITE_TEST_INTERVAL)
+    else if (frame_clock_now() - last_write_frame >= WRITE_TEST_FRAMES)
     {
       // We haven't written in a while, test a write so we can check for a disconnect.
       DEBUG_LOG_FMT(WIIMOTE, "Sending periodic write test for Wiimote {}.", m_index + 1);
@@ -1044,18 +1073,16 @@ void Wiimote::WriteThreadFunc()
     }
     else
     {
-      // Nothing to do. Wait a while for a kick.
+      // Nothing to do. Wait for a report or a poke.
       const int key = retro_eventcount_prepare_wait(&m_write_event);
-      if (retro_spsc_read_avail(&m_write_reports) >= sizeof(WriteRecord) || !m_run_thread.IsSet())
+      if (IsWriteDue() || !m_run_thread.IsSet())
         retro_eventcount_cancel_wait(&m_write_event);
       else
-        retro_eventcount_commit_wait_timeout(
-            &m_write_event, key,
-            std::chrono::duration_cast<std::chrono::microseconds>(WRITE_TEST_INTERVAL).count());
+        retro_eventcount_commit_wait(&m_write_event, key);
       continue;
     }
 
-    last_write_time = Clock::now();
+    last_write_frame = frame_clock_now();
 
     if (!write_success)
     {
@@ -1095,18 +1122,6 @@ void Initialize(::Wiimote::InitializeMode init_mode)
     s_wiimote_scanner.SetScanMode(WiimoteScanMode::CONTINUOUSLY_SCAN);
   else
     s_wiimote_scanner.SetScanMode(WiimoteScanMode::DO_NOT_SCAN);
-
-  // wait for connection because it should exist before state load
-  if (init_mode == ::Wiimote::InitializeMode::DO_WAIT_FOR_WIIMOTES)
-  {
-    int timeout = 100;
-    s_wiimote_scanner.SetScanMode(WiimoteScanMode::SCAN_ONCE);
-    while (CalculateWantedWiimotes() && timeout)
-    {
-      Common::SleepCurrentThread(100);
-      timeout--;
-    }
-  }
 
   if (s_real_wiimotes_initialized)
     return;

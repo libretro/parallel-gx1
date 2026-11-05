@@ -75,7 +75,7 @@ void FifoManager::PauseAndLock()
   if (!m_system.IsDualCoreMode() || m_use_deterministic_gpu_thread)
     return;
 
-  m_gpu_mainloop.WaitYield(std::chrono::milliseconds(100), Host_YieldToUI);
+  m_gpu_mainloop.Wait();
 }
 
 void FifoManager::RestoreState(const bool was_running)
@@ -400,8 +400,7 @@ void FifoManager::RunGpuLoop()
           g_vertex_manager->Flush();
           g_framebuffer_manager->RefreshPeekCache();
         }
-      },
-      100);
+      });
 #ifdef __LIBRETRO__
   m_stop_gpu_loop_requested.store(false);
 #endif

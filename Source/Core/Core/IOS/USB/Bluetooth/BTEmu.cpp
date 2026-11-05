@@ -336,8 +336,6 @@ void BluetoothEmuDevice::Update()
 
   if (now - m_last_ticks > interval)
   {
-    // Throttle before Wii Remote update so input is taken just before needed. (lower input latency)
-    core_timing.Throttle(now);
     g_controller_interface.SetCurrentInputChannel(ciface::InputChannel::Bluetooth);
     g_controller_interface.UpdateInput();
 

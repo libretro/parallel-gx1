@@ -26,8 +26,6 @@ namespace Core
 {
 class System;
 
-bool GetIsThrottlerTempDisabled();
-void SetIsThrottlerTempDisabled(bool disable);
 
 void Callback_NewField(Core::System& system);
 

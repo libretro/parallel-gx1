@@ -86,10 +86,9 @@ IPCReply GetSpeedLimit(Core::System& system, const IOCtlVRequest& request)
     return IPCReply(IPC_EINVAL);
   }
 
-  const u32 speed_percent = Config::Get(Config::MAIN_EMULATION_SPEED) * 100;
-
+  // The frontend paces the core, which always runs at full speed.
   auto& memory = system.GetMemory();
-  memory.Write_U32(speed_percent, request.io_vectors[0].address);
+  memory.Write_U32(100, request.io_vectors[0].address);
 
   return IPCReply(IPC_SUCCESS);
 }
@@ -107,10 +106,7 @@ IPCReply SetSpeedLimit(Core::System& system, const IOCtlVRequest& request)
     return IPCReply(IPC_EINVAL);
   }
 
-  auto& memory = system.GetMemory();
-  const float speed = float(memory.Read_U32(request.in_vectors[0].address)) / 100.0f;
-  Config::SetCurrent(Config::MAIN_EMULATION_SPEED, speed);
-
+  // The frontend owns pacing; a limit asked for by the guest is accepted and has no effect.
   return IPCReply(IPC_SUCCESS);
 }
 

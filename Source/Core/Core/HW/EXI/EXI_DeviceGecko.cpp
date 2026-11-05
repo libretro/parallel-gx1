@@ -10,6 +10,7 @@
 
 #include <fmt/format.h>
 
+#include "Common/FrameClock.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/Thread.h"
@@ -42,12 +43,14 @@ GeckoSockServer::~GeckoSockServer()
     --client_count;
 
     client_running.Clear();
+    frame_clock_wake_all();
     Common::JoinThread(clientThread);
   }
 
   if (client_count <= 0 && connectionThread)
   {
     server_running.Clear();
+    frame_clock_wake_all();
     Common::JoinThread(connectionThread);
   }
 
@@ -86,7 +89,8 @@ void GeckoSockServer::GeckoConnectionWaiter(void*)
       new_client = std::make_unique<sf::TcpSocket>();
     }
 
-    Common::SleepCurrentThread(1);
+    // Look for a connection once a frame.
+    frame_clock_wait_until(frame_clock_now() + 1, server_running.Raw());
   }
 }
 
@@ -164,8 +168,9 @@ void GeckoSockServer::ClientThread()
       }
     }
 
+    // Idle: look again next frame.
     if (did_nothing)
-      Common::YieldCPU();
+      frame_clock_wait_until(frame_clock_now() + 1, client_running.Raw());
   }
 
   client->disconnect();

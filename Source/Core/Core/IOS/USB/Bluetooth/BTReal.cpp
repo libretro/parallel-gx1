@@ -104,8 +104,8 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
       }
 
       const auto payload = memory.GetSpanForAddress(cmd->data_address).first(cmd->length);
-      m_lib_usb_bt_adapter->ScheduleControlTransfer(cmd->request_type, cmd->request, cmd->value,
-                                                    cmd->index, payload, GetTargetTime());
+      m_lib_usb_bt_adapter->SendControlTransfer(cmd->request_type, cmd->request, cmd->value,
+                                                cmd->index, payload);
 
       if (opcode == HCI_CMD_RESET)
       {
@@ -133,7 +133,7 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
 
     auto& memory = GetSystem().GetMemory();
     const auto payload = memory.GetSpanForAddress(cmd->data_address).first(cmd->length);
-    m_lib_usb_bt_adapter->ScheduleBulkTransfer(cmd->endpoint, payload, GetTargetTime());
+    m_lib_usb_bt_adapter->SendBulkTransfer(cmd->endpoint, payload);
     break;
   }
   // Incoming HCI events
@@ -300,10 +300,6 @@ void BluetoothRealDevice::TryToFillACLEndpoint()
   if (!m_acl_endpoint)
     return;
 
-  // Throttle to minimize input latency.
-  auto& core_timing = GetSystem().GetCoreTiming();
-  core_timing.Throttle(core_timing.GetTicks());
-
   const auto buffer = m_lib_usb_bt_adapter->PeekACLData();
   if (buffer.empty())
     return;
@@ -315,12 +311,6 @@ void BluetoothRealDevice::TryToFillACLEndpoint()
   m_lib_usb_bt_adapter->PopACLData();
 
   m_acl_endpoint.reset();
-}
-
-TimePoint BluetoothRealDevice::GetTargetTime() const
-{
-  auto& core_timing = GetSystem().GetCoreTiming();
-  return core_timing.GetTargetHostTime(core_timing.GetTicks());
 }
 
 void BluetoothRealDevice::DoState(PointerWrap& p)

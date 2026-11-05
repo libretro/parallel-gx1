@@ -26,7 +26,7 @@ AsyncShaderCompiler::~AsyncShaderCompiler()
   retro_eventcount_free(&m_work_done);
 }
 
-bool AsyncShaderCompiler::WaitForWorkDone(s64 timeout_us)
+bool AsyncShaderCompiler::WaitForWorkDone()
 {
   const int key = retro_eventcount_prepare_wait(&m_work_done);
   if (!HasPendingWork())
@@ -34,7 +34,7 @@ bool AsyncShaderCompiler::WaitForWorkDone(s64 timeout_us)
     retro_eventcount_cancel_wait(&m_work_done);
     return true;
   }
-  retro_eventcount_commit_wait_timeout(&m_work_done, key, timeout_us);
+  retro_eventcount_commit_wait(&m_work_done, key);
   return !HasPendingWork();
 }
 
@@ -147,20 +147,6 @@ bool AsyncShaderCompiler::WaitUntilCompletion(
   if (!HasPendingWork())
     return true;
 
-  // Wait a second before reporting progress, woken as each item finishes.
-  // This way, if the operation completes quickly, we don't annoy the user.
-  constexpr s64 PROGRESS_INTERVAL_US = 1000000 / 30;
-  const TimePoint quiet_until = Clock::now() + std::chrono::seconds(1);
-  for (;;)
-  {
-    const s64 left_us =
-        std::chrono::duration_cast<std::chrono::microseconds>(quiet_until - Clock::now()).count();
-    if (left_us <= 0)
-      break;
-    if (WaitForWorkDone(left_us))
-      return true;
-  }
-
   // Grab the number of pending items. We use this to work out how many are left.
   const size_t total_items = m_completed_sync.size() + m_pending_work.size() + ItemsInSlots() +
                             retro_atomic_load_acquire_int(&m_busy_workers) + 1;
@@ -173,7 +159,8 @@ bool AsyncShaderCompiler::WaitUntilCompletion(
     const size_t remaining_items = m_pending_work.size() + ItemsInSlots();
 
     progress_callback(total_items - remaining_items, total_items);
-    WaitForWorkDone(PROGRESS_INTERVAL_US);
+    // Woken as each item finishes, to report it.
+    WaitForWorkDone();
   }
   return false;
 }

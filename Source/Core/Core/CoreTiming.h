@@ -103,7 +103,6 @@ public:
   // doing something evil
   u64 GetTicks() const;
   u64 GetIdleTicks() const;
-  TimePoint GetTargetHostTime(s64 target_cycle);
 
   void RefreshConfig();
 
@@ -160,15 +159,6 @@ public:
   // Directly accessed by the JIT.
   Globals& GetGlobals() { return m_globals; }
 
-  // Throttle the CPU to the specified target cycle.
-  void Throttle(const s64 target_cycle);
-
-  // May be used from CPU or GPU thread.
-  void SleepUntil(TimePoint time_point);
-
-  // Used by VideoInterface
-  bool GetVISkip() const;
-
   float GetOverclock() const;
 
   bool UseSyncOnSkipIdle() const;
@@ -214,37 +204,9 @@ private:
   float m_config_oc_factor = 1.0f;
   float m_config_oc_inv_factor = 1.0f;
   bool m_config_sync_on_skip_idle = false;
-  bool m_config_rush_frame_presentation = false;
-
-  s64 m_throttle_reference_cycle = 0;
-  TimePoint m_throttle_reference_time = Clock::now();
-  u32 m_throttle_adj_clock_per_sec = 0;
-  bool m_throttle_disable_vi_int = false;
-
-  DT m_max_fallback = {};
-  DT m_max_variance = {};
-  bool m_correct_time_drift = false;
-  double m_emulation_speed = 1.0;
-
-  bool IsSpeedUnlimited() const;
-  void UpdateSpeedLimit(s64 cycle, double new_speed);
-  void ResetThrottle(s64 cycle);
-  TimePoint CalculateTargetHostTimeInternal(s64 target_cycle);
-  void UpdateVISkip(TimePoint current_time, TimePoint target_time);
 
   int DowncountToCycles(int downcount) const;
   int CyclesToDowncount(int cycles) const;
-
-  std::atomic_bool m_use_precision_timer = false;
-  Common::PrecisionTimer m_precision_cpu_timer;
-  Common::PrecisionTimer m_precision_gpu_timer;
-
-  Common::EventHook m_core_state_changed_hook;
-  Common::EventHook m_frame_hook;
-
-  // Used to optionally minimize throttling for improving input latency.
-  std::atomic_bool m_throttled_after_presentation = false;
-  DT m_max_throttle_skip_time{};
 };
 
 }  // namespace CoreTiming

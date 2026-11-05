@@ -5,7 +5,6 @@
 #include "Core/HW/EXI/EXI.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -14,6 +13,7 @@
 
 #include <fmt/format.h>
 
+#include "Common/FrameClock.h"
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
@@ -125,7 +125,7 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
                                        const Memcard::HeaderData& header_data, u32 game_id)
     : MemoryCardBase(slot, header_data.m_size_mb), m_game_id(game_id), m_last_block(-1),
       m_hdr(header_data), m_bat1(header_data.m_size_mb), m_saves(0),
-      m_save_directory(std::move(directory)), m_exiting(false)
+      m_save_directory(std::move(directory))
 {
   // Use existing header data if available
   {
@@ -215,19 +215,23 @@ void GCMemcardDirectory::FlushThread()
 
   Common::SetCurrentThreadName(fmt::format("Memcard {} flushing thread", m_card_slot).c_str());
 
-  constexpr std::chrono::seconds flush_interval{1};
+  // About a second of frontend frames.
+  constexpr u64 FLUSH_QUIET_FRAMES = 60;
   while (true)
   {
     // no-op until signalled
     m_flush_trigger.Wait();
-
-    if (m_exiting.TestAndClear())
+    if (!m_flush_running.IsSet())
       return;
-    // no-op as long as signalled within flush_interval
-    while (m_flush_trigger.WaitFor(flush_interval))
+
+    // no-op as long as written to again within the quiet time
+    for (;;)
     {
-      if (m_exiting.TestAndClear())
+      const u64 quiet_from = static_cast<u64>(retro_atomic_load_acquire_64(&m_last_write_frame));
+      if (!frame_clock_wait_until(quiet_from + FLUSH_QUIET_FRAMES, m_flush_running.Raw()))
         return;
+      if (static_cast<u64>(retro_atomic_load_acquire_64(&m_last_write_frame)) == quiet_from)
+        break;
     }
 
     WriteQueuedJobs();
@@ -236,8 +240,9 @@ void GCMemcardDirectory::FlushThread()
 
 GCMemcardDirectory::~GCMemcardDirectory()
 {
-  m_exiting.Set();
+  m_flush_running.Clear();
   m_flush_trigger.Set();
+  frame_clock_wake_all();
 
 #ifdef __LIBRETRO__
   if (m_flush_thread)
@@ -368,6 +373,7 @@ s32 GCMemcardDirectory::Write(u32 dest_address, s32 length, const u8* src_addres
   if (offset + length == Memcard::BLOCK_SIZE)
   {
     QueueDirtySaves();
+    retro_atomic_store_release_64(&m_last_write_frame, static_cast<int64_t>(frame_clock_now()));
     m_flush_trigger.Set();
   }
   return length + extra;

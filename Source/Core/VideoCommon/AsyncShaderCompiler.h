@@ -67,8 +67,8 @@ protected:
   virtual void WorkerThreadExit(void* param);
 
 private:
-  // Waits up to timeout_us for a worker to finish an item; true once nothing is pending.
-  bool WaitForWorkDone(s64 timeout_us);
+  // Waits for a worker to finish an item; true once nothing is pending.
+  bool WaitForWorkDone();
 
   void WorkerThreadStart();
   void WorkerThreadEntryPoint(void* param);

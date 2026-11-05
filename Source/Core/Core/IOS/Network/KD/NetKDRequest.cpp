@@ -13,6 +13,7 @@
 #include "Common/BitUtils.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/FrameClock.h"
 #include "Common/Crypto/HMAC.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
@@ -185,7 +186,8 @@ NetKDRequestDevice::~NetKDRequestDevice()
   if (!m_scheduler_timer_thread)
     return;
 
-  m_shutdown_event.Set();
+  m_scheduler_running.Clear();
+  frame_clock_wake_all();
 
   Common::JoinThread(m_scheduler_timer_thread);
   m_scheduler_work_queue.Shutdown();
@@ -262,7 +264,9 @@ void NetKDRequestDevice::SchedulerTimer()
       }
     }
 
-    if (m_shutdown_event.WaitFor(std::chrono::minutes{1}))
+    // A minute of frontend frames; the scheduler's spans are in minutes.
+    if (!frame_clock_wait_until(frame_clock_now() + FRAMES_PER_MINUTE,
+                                m_scheduler_running.Raw()))
       return;
 
     mail_time_state++;

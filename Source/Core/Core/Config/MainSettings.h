@@ -54,11 +54,6 @@ extern const Info<bool> MAIN_LARGE_ENTRY_POINTS_MAP;
 extern const Info<bool> MAIN_ACCURATE_CPU_CACHE;
 // Should really be in the DSP section, but we're kind of stuck with bad decisions made in the past.
 extern const Info<bool> MAIN_DSP_HLE;
-extern const Info<int> MAIN_MAX_FALLBACK;
-extern const Info<int> MAIN_TIMING_VARIANCE;
-extern const Info<bool> MAIN_CORRECT_TIME_DRIFT;
-extern const Info<bool> MAIN_RUSH_FRAME_PRESENTATION;
-extern const Info<bool> MAIN_SMOOTH_EARLY_PRESENTATION;
 extern const Info<bool> MAIN_CPU_THREAD;
 extern const Info<bool> MAIN_LOAD_GAME_INTO_MEMORY;
 extern const Info<bool> MAIN_SYNC_ON_SKIP_IDLE;
@@ -122,8 +117,6 @@ extern const Info<bool> MAIN_FPRF;
 extern const Info<bool> MAIN_ACCURATE_NANS;
 extern const Info<bool> MAIN_ACCURATE_FMADDS;
 extern const Info<bool> MAIN_DISABLE_ICACHE;
-extern const Info<float> MAIN_EMULATION_SPEED;
-extern const Info<bool> MAIN_PRECISION_FRAME_TIMING;
 extern const Info<float> MAIN_OVERCLOCK;
 extern const Info<bool> MAIN_OVERCLOCK_ENABLE;
 extern const Info<float> MAIN_VI_OVERCLOCK;
@@ -182,7 +175,6 @@ extern const Info<int> MAIN_RENDER_WINDOW_HEIGHT;
 extern const Info<bool> MAIN_RENDER_WINDOW_AUTOSIZE;
 extern const Info<bool> MAIN_KEEP_WINDOW_ON_TOP;
 extern const Info<bool> MAIN_DISABLE_SCREENSAVER;
-extern const Info<bool> MAIN_TIME_TRACKING;
 
 // Main.General
 
