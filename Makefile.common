@@ -1381,7 +1381,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Main.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Video.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/VR.cpp \
-	$(CORE_DIR)/Source/Core/Core/AchievementManager.cpp \
 	$(CORE_DIR)/Source/Core/Core/ActionReplay.cpp \
 	$(CORE_DIR)/Source/Core/Core/ARDecrypt.cpp \
 	$(CORE_DIR)/Source/Core/Core/Boot/Boot_BS2Emu.cpp \
@@ -1392,7 +1391,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/BootManager.cpp \
 	$(CORE_DIR)/Source/Core/Core/CheatGeneration.cpp \
 	$(CORE_DIR)/Source/Core/Core/CheatSearch.cpp \
-	$(CORE_DIR)/Source/Core/Core/Config/AchievementSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/DefaultLocale.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/FreeLookSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/GraphicsSettings.cpp \

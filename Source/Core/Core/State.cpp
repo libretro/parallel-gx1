@@ -198,9 +198,6 @@ void DoState(Core::System& system, PointerWrap& p)
   Gecko::DoState(p);
   p.DoMarker("Gecko");
 
-#ifdef USE_RETRO_ACHIEVEMENTS
-  AchievementManager::GetInstance().DoState(p);
-#endif  // USE_RETRO_ACHIEVEMENTS
 }
 
 static bool CheckIfStateLoadIsAllowed(Core::System& system)

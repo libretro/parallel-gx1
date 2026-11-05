@@ -183,10 +183,6 @@ void LoadPatches()
 
   LoadPatchSection("OnFrame", &s_on_frame, globalIni, localIni);
 
-#ifdef USE_RETRO_ACHIEVEMENTS
-  AchievementManager::GetInstance().FilterApprovedPatches(s_on_frame, sconfig.GetGameID(),
-                                                          sconfig.GetRevision());
-#endif  // USE_RETRO_ACHIEVEMENTS
 
   // Check if I'm syncing Codes
   if (Config::Get(Config::SESSION_CODE_SYNC_OVERRIDE))

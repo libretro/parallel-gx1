@@ -10,7 +10,6 @@
 #include "Common/Timer.h"
 
 #include "Core/AchievementManager.h"
-#include "Core/Config/AchievementSettings.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Movie.h"
@@ -328,80 +327,6 @@ void OnScreenUI::DrawChallengesAndLeaderboards()
 {
   if (!Config::Get(Config::MAIN_OSD_MESSAGES))
     return;
-#ifdef USE_RETRO_ACHIEVEMENTS
-  auto& instance = AchievementManager::GetInstance();
-  std::lock_guard lg{instance.GetLock()};
-  const bool challenge_indicators_enabled = Config::Get(Config::RA_CHALLENGE_INDICATORS_ENABLED);
-  const bool challenges_updated = instance.AreChallengesUpdated();
-  const auto& challenges = instance.GetActiveChallenges();
-
-  if (!challenge_indicators_enabled)
-  {
-    if (challenges_updated)
-      instance.ResetChallengesUpdated();
-    if (!m_challenge_texture_map.empty())
-      m_challenge_texture_map.clear();
-  }
-  else if (challenges_updated || m_challenge_texture_map.size() != challenges.size())
-  {
-    if (challenges_updated)
-      instance.ResetChallengesUpdated();
-    m_challenge_texture_map.clear();
-    for (const auto& name : challenges)
-    {
-      const auto& icon = instance.GetAchievementBadge(name, false);
-      const u32 width = icon.width;
-      const u32 height = icon.height;
-      TextureConfig tex_config(width, height, 1, 1, 1, AbstractTextureFormat::RGBA8, 0,
-                               AbstractTextureType::Texture_2DArray);
-      auto res = m_challenge_texture_map.insert_or_assign(name, g_gfx->CreateTexture(tex_config));
-      res.first->second->Load(0, width, height, width, icon.data.data(),
-                              sizeof(u32) * width * height);
-    }
-  }
-
-  float leaderboard_y = ImGui::GetIO().DisplaySize.y;
-  if (challenge_indicators_enabled && !m_challenge_texture_map.empty())
-  {
-    float scale = ImGui::GetIO().DisplaySize.y / 1024.0;
-    ImGui::SetNextWindowSize(ImVec2(0, 0));
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y), 0,
-                            ImVec2(1, 1));
-    if (ImGui::Begin("Challenges", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs |
-                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav |
-                         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing))
-    {
-      for (auto& [name, texture] : m_challenge_texture_map)
-      {
-        ImGui::Image(*texture.get(), ImVec2(static_cast<float>(texture->GetWidth()) * scale,
-                                            static_cast<float>(texture->GetHeight()) * scale));
-        ImGui::SameLine();
-      }
-    }
-    leaderboard_y -= ImGui::GetWindowHeight();
-    ImGui::End();
-  }
-
-  const auto& leaderboard_progress = instance.GetActiveLeaderboards();
-  if (Config::Get(Config::RA_LEADERBOARD_TRACKER_ENABLED) && !leaderboard_progress.empty())
-  {
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x, leaderboard_y), 0,
-                            ImVec2(1.0, 1.0));
-    ImGui::SetNextWindowSize(ImVec2(0.0f, 0.0f));
-    if (ImGui::Begin("Leaderboards", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs |
-                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav |
-                         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing))
-    {
-      for (const auto& value : leaderboard_progress)
-        ImGui::TextUnformatted(value.c_str());
-    }
-    ImGui::End();
-  }
-#endif  // USE_RETRO_ACHIEVEMENTS
 }
 
 void OnScreenUI::Finalize()

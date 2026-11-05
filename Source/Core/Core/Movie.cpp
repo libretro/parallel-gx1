@@ -34,7 +34,6 @@
 
 #include "Core/AchievementManager.h"
 #include "Core/Boot/Boot.h"
-#include "Core/Config/AchievementSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/WiimoteSettings.h"
 #include "Core/ConfigLoaders/MovieConfigLoader.h"
@@ -905,10 +904,6 @@ bool MovieManager::PlayInput(const std::string& movie_path,
 
     m_recording_from_save_state = true;
 
-#ifdef USE_RETRO_ACHIEVEMENTS
-    // On the chance someone tries to re-enable before the TAS can start
-    Config::SetBase(Config::RA_HARDCORE_ENABLED, false);
-#endif  // USE_RETRO_ACHIEVEMENTS
 
     LoadInput(movie_path);
   }
