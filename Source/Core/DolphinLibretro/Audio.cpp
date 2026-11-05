@@ -154,12 +154,28 @@ void SoundStream::Init()
 
 void SoundStream::Update(unsigned int num_samples)
 {
-  if (g_use_call_back_audio != CallBackMode::PUSH_SAMPLES) {
+  if (g_use_call_back_audio != CallBackMode::PUSH_SAMPLES)
     return;
-  }
+  retro_atomic_fetch_add_int(&m_pending_samples, static_cast<int>(num_samples));
+}
 
+void SoundStream::NewField()
+{
+  retro_atomic_fetch_add_int(&m_pending_fields, 1);
+}
+
+void SoundStream::PushPending()
+{
   if (!batch_cb)
     return;
+  if (const int samples = retro_atomic_exchange_int(&m_pending_samples, 0))
+    PushSamples(static_cast<unsigned int>(samples));
+  for (int fields = retro_atomic_exchange_int(&m_pending_fields, 0); fields > 0; --fields)
+    PushAudioForFrame();
+}
+
+void SoundStream::PushSamples(unsigned int num_samples)
+{
 
   static unsigned pending = 0;
   pending += num_samples;
@@ -217,12 +233,6 @@ void SoundStream::MixAndPush(unsigned int num_samples)
   {
     pending = avail;
   }
-}
-
-// Per frame sync: each field's samples go to the frontend from the CPU thread as the field ends,
-void SoundStream::NewField()
-{
-  PushAudioForFrame();
 }
 
 void SoundStream::PushAudioForFrame()

@@ -243,6 +243,18 @@ public:
   Device::Output* FindOutput(std::string_view name, const Device* def_dev) const;
 
   std::vector<std::shared_ptr<Device>> GetAllDevices() const;
+
+  /* Calls fn(device, ctx) for every device, without copying the list. */
+  void ForEachDevice(void (*fn)(Device* device, void* ctx), void* ctx) const
+  {
+    InputReadScope scope;
+    const DeviceList* const list = PeekDevices();
+    size_t i;
+    if (!list)
+      return;
+    for (i = 0; i < list->devices.size(); i++)
+      fn(list->devices[i].get(), ctx);
+  }
   std::vector<std::string> GetAllDeviceStrings() const;
   bool HasDefaultDevice() const;
   std::string GetDefaultDeviceString() const;

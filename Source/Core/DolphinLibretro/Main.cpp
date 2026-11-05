@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "AudioCommon/AudioCommon.h"
+#include "AudioCommon/SoundStream.h"
 #include "Common/ChunkFile.h"
 #include "Common/Event.h"
 #include "Common/FrameClock.h"
@@ -552,6 +553,11 @@ void retro_run(void)
 
   if (Libretro::Input::g_has_microphone_support)
     poll_microphone();
+
+  // What the frame produced for the frontend, handed over from its own thread.
+  Libretro::Input::FlushOutputs();
+  if (SoundStream* sound_stream = system.GetSoundStream())
+    sound_stream->PushPending();
 }
 
 size_t retro_serialize_size(void)

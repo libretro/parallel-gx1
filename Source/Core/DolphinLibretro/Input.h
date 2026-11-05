@@ -58,6 +58,8 @@ void SetVRMotion(unsigned port, const float accel[3], const float gyro[3], const
 void UpdateAccelerometer(unsigned port);
 void UpdateGyro(unsigned port);
 void Update();
+// From retro_run after the frame: rumble the emulation asked for goes to the frontend.
+void FlushOutputs();
 void Shutdown();
 void ResetControllers(const WiimoteUpdateFlags& f);
 void BluetoothPassthroughBind();

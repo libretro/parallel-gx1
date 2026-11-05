@@ -1,3 +1,4 @@
+#include <retro_atomic.h>
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -317,7 +318,12 @@ private:
     {
     }
     std::string GetName() const override { return m_name; }
-    ControlState GetState() const override { return input_cb(m_port, m_device, m_index, m_id); }
+    /* The state retro_run read; emulation threads never call the frontend themselves. */
+    ControlState GetState() const override { return retro_atomic_load_acquire_int(&m_value); }
+    void Poll()
+    {
+      retro_atomic_store_release_int(&m_value, input_cb(m_port, m_device, m_index, m_id));
+    }
 
   private:
     const unsigned m_port;
@@ -325,6 +331,7 @@ private:
     const unsigned m_index;
     const unsigned m_id;
     const char* m_name;
+    mutable retro_atomic_int_t m_value{};
   };
 
   class Axis : public ciface::Core::Device::Input
@@ -337,7 +344,11 @@ private:
     std::string GetName() const override { return m_name; }
     ControlState GetState() const override
     {
-      return std::max(0.0, input_cb(m_port, m_device, m_index, m_id) / m_range);
+      return std::max(0.0, retro_atomic_load_acquire_int(&m_value) / m_range);
+    }
+    void Poll()
+    {
+      retro_atomic_store_release_int(&m_value, input_cb(m_port, m_device, m_index, m_id));
     }
 
   private:
@@ -347,6 +358,7 @@ private:
     const unsigned m_id;
     const ControlState m_range;
     const char* m_name;
+    mutable retro_atomic_int_t m_value{};
   };
 
   class Motor : public ciface::Core::Device::Output
@@ -354,32 +366,83 @@ private:
   public:
     Motor(u8 port) : m_port(port) {}
     std::string GetName() const override { return "Rumble"; }
+    /* Any thread: kept until retro_run hands it to the frontend. */
     void SetState(ControlState state) override
     {
-      u16 str = std::min(std::max(0.0, state), 1.0) * 0xFFFF;
-
-      if (rumble.set_rumble_state)
-      {
-        rumble.set_rumble_state(m_port, RETRO_RUMBLE_WEAK, str);
-        rumble.set_rumble_state(m_port, RETRO_RUMBLE_STRONG, str);
-      }
+      const u16 str = (u16)(std::min(std::max(0.0, state), 1.0) * 0xFFFF);
+      retro_atomic_store_release_int(&m_wanted, str);
+    }
+    void Flush()
+    {
+      const int wanted = retro_atomic_load_acquire_int(&m_wanted);
+      if (wanted == m_sent || !rumble.set_rumble_state)
+        return;
+      m_sent = wanted;
+      rumble.set_rumble_state(m_port, RETRO_RUMBLE_WEAK, (u16)wanted);
+      rumble.set_rumble_state(m_port, RETRO_RUMBLE_STRONG, (u16)wanted);
     }
 
   private:
     const u8 m_port;
+    retro_atomic_int_t m_wanted{};
+    int m_sent = 0; /* retro_run only */
   };
+  /* A device has a few dozen inputs at most: a joypad 16 buttons, a pointer 20. */
+  enum
+  {
+    MAX_BUTTONS = 32,
+    MAX_AXES = 32,
+    MAX_MOTORS = 2
+  };
+
   void AddButton(unsigned id, const char* name, unsigned index = 0)
   {
-    AddInput(new Button(m_port, m_device, index, id, name));
+    Button* button = new Button(m_port, m_device, index, id, name);
+    if (m_num_buttons < MAX_BUTTONS)
+      m_buttons[m_num_buttons++] = button;
+    AddInput(button);
   }
   void AddAxis(unsigned id, s16 range, const char* name, unsigned index = 0)
   {
-    AddInput(new Axis(m_port, m_device, index, id, range, name));
+    Axis* axis = new Axis(m_port, m_device, index, id, range, name);
+    if (m_num_axes < MAX_AXES)
+      m_axes[m_num_axes++] = axis;
+    AddInput(axis);
   }
-  void AddMotor() { AddOutput(new Motor(m_port)); }
+  void AddMotor()
+  {
+    Motor* motor = new Motor(m_port);
+    if (m_num_motors < MAX_MOTORS)
+      m_motors[m_num_motors++] = motor;
+    AddOutput(motor);
+  }
+
+  /* Owned by the base class's input and output lists. */
+  Button* m_buttons[MAX_BUTTONS];
+  Axis* m_axes[MAX_AXES];
+  Motor* m_motors[MAX_MOTORS];
+  unsigned m_num_buttons = 0;
+  unsigned m_num_axes = 0;
+  unsigned m_num_motors = 0;
 
 public:
   Device(unsigned device, unsigned port);
+  /* retro_run, after poll_cb: reads every input of this device from the frontend. */
+  void Poll()
+  {
+    unsigned i;
+    for (i = 0; i < m_num_buttons; i++)
+      m_buttons[i]->Poll();
+    for (i = 0; i < m_num_axes; i++)
+      m_axes[i]->Poll();
+  }
+  /* retro_run: hands the frontend the rumble the emulation asked for. */
+  void FlushOutputs()
+  {
+    unsigned i;
+    for (i = 0; i < m_num_motors; i++)
+      m_motors[i]->Flush();
+  }
   ciface::Core::DeviceRemoval UpdateInput() override
   {
 #if 0
@@ -903,10 +966,34 @@ static int GetRetroButtonId(const std::string& name)
   return -1;
 }
 
+/* Frontend thread: each libretro device reads its inputs, or flushes its outputs. */
+static void PollDevice(ciface::Core::Device* device, void*)
+{
+  Device* const libretro_device = dynamic_cast<Device*>(device);
+  if (libretro_device)
+    libretro_device->Poll();
+}
+
+static void FlushDevice(ciface::Core::Device* device, void*)
+{
+  Device* const libretro_device = dynamic_cast<Device*>(device);
+  if (libretro_device)
+    libretro_device->FlushOutputs();
+}
+
+void FlushOutputs()
+{
+  g_controller_interface.ForEachDevice(FlushDevice, nullptr);
+}
+
 void Update()
 {
   if (poll_cb)
     poll_cb();
+  /* Every input the emulation may read this frame, read now: the frontend is only ever called
+   * from its own thread, inside retro_run. */
+  if (input_cb)
+    g_controller_interface.ForEachDevice(PollDevice, nullptr);
 #ifdef __ANDROID__
   /* Android doesn't support input polling on all threads by default
    * this will force the poll for this frame to happen in the main thread
