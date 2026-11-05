@@ -13,9 +13,16 @@ CustomAsset::CustomAsset(std::shared_ptr<CustomAssetLibrary> library,
 {
 }
 
+quiesce_t* CustomAsset::DataQuiesce()
+{
+  static quiesce_t s_quiesce;
+  return &s_quiesce;
+}
+
 std::size_t CustomAsset::Load()
 {
-  std::lock_guard lk(m_info_lock);
+  if (!retro_atomic_cas_int(&m_busy, 0, 1))
+    return 0;
   // The load time needs to come from before the data is actually read.
   // Using a time point from after the read marks the asset as more up-to-date than it actually is,
   //  and has potential to race (and not be updated) if a change happens immediately after load.
@@ -26,16 +33,21 @@ std::size_t CustomAsset::Load()
   {
     m_bytes_loaded = load_information.bytes_loaded;
     m_last_loaded_time = load_time;
-    return m_bytes_loaded;
+    retro_atomic_store_release_int(&m_busy, 0);
+    return load_information.bytes_loaded;
   }
+  retro_atomic_store_release_int(&m_busy, 0);
   return 0;
 }
 
 std::size_t CustomAsset::Unload()
 {
-  std::lock_guard lk(m_info_lock);
+  if (!retro_atomic_cas_int(&m_busy, 0, 1))
+    return 0;
   UnloadImpl();
-  return std::exchange(m_bytes_loaded, 0);
+  const std::size_t unloaded = std::exchange(m_bytes_loaded, 0);
+  retro_atomic_store_release_int(&m_busy, 0);
+  return unloaded;
 }
 
 CustomAsset::TimeType CustomAsset::GetLastLoadedTime() const

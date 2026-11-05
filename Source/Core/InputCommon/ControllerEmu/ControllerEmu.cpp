@@ -4,7 +4,6 @@
 #include "InputCommon/ControllerEmu/ControllerEmu.h"
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -18,31 +17,52 @@ namespace ControllerEmu
 {
 // This should theoretically be per EmulatedController instance,
 // though no EmulatedController usually run in parallel, so it makes little difference
-static std::recursive_mutex s_get_state_mutex;
 
 std::string ControlGroupContainer::GetDisplayName() const
 {
   return GetName();
 }
 
-EmulatedController::~EmulatedController() = default;
-
-// This should be called before calling GetState() or State() on a control reference
-// to prevent a race condition.
-// This is a recursive mutex because UpdateReferences is recursive.
-std::unique_lock<std::recursive_mutex> EmulatedController::GetStateLock()
+EmulatedController::~EmulatedController()
 {
-  std::unique_lock<std::recursive_mutex> lock(s_get_state_mutex);
-  return lock;
+  delete static_cast<DefaultDevice*>(retro_atomic_exchange_ptr(&m_default_device, nullptr));
+}
+
+EmulatedController::EmulatedController() = default;
+
+void EmulatedController::FreeDefaultDevice(quiesce_node_t* node)
+{
+  delete reinterpret_cast<DefaultDevice*>(node);
 }
 
 void EmulatedController::UpdateReferences(const ControllerInterface& devi)
 {
-  std::scoped_lock lk(s_get_state_mutex, devi.GetDevicesMutex());
+  retro_atomic_store_release_int(&m_rebind_requested, 1);
+  // Pairs with the fence below: either this thread finds the role free, or the thread that
+  // held it sees the request.
+  retro_atomic_thread_fence_seq_cst();
+  for (;;)
+  {
+    // Someone else is rebinding: they see the request before they stop.
+    if (!retro_atomic_cas_int(&m_rebinding, 0, 1))
+      return;
+    while (retro_atomic_exchange_int(&m_rebind_requested, 0))
+      RebindNow(devi);
+    retro_atomic_store_release_int(&m_rebinding, 0);
+    // A request that came in after the last check, while this thread still held the role.
+    retro_atomic_thread_fence_seq_cst();
+    if (!retro_atomic_load_seq_cst_int(&m_rebind_requested))
+      return;
+  }
+}
 
-  m_default_device_is_connected = devi.HasConnectedDevice(m_default_device);
+void EmulatedController::RebindNow(const ControllerInterface& devi)
+{
+  const ciface::Core::DeviceQualifier default_device = GetDefaultDevice();
+  retro_atomic_store_release_int(&m_default_device_is_connected,
+                                 devi.HasConnectedDevice(default_device));
 
-  ciface::ExpressionParser::ControlEnvironment env(devi, GetDefaultDevice(), m_expression_vars);
+  ciface::ExpressionParser::ControlEnvironment env(devi, default_device, m_expression_vars);
 
   UpdateGroupsReferences(env);
 
@@ -52,48 +72,28 @@ void EmulatedController::UpdateReferences(const ControllerInterface& devi)
 void ControlGroupContainer::UpdateGroupsReferences(
     ciface::ExpressionParser::ControlEnvironment& env)
 {
-  const auto lock = EmulatedController::GetStateLock();
-
   for (auto& group : groups)
     group->UpdateReferences(env);
 }
 
 void EmulatedController::UpdateSingleControlReference(const ControllerInterface& devi,
-                                                      ControlReference* ref)
+                                                      ControlReference*)
 {
-  ciface::ExpressionParser::ControlEnvironment env(devi, GetDefaultDevice(), m_expression_vars);
-
-  const auto lock = GetStateLock();
-  ref->UpdateReference(env);
-
-  env.CleanUnusedVariables();
-}
-
-const ciface::ExpressionParser::ControlEnvironment::VariableContainer&
-EmulatedController::GetExpressionVariables() const
-{
-  return m_expression_vars;
-}
-
-void EmulatedController::ResetExpressionVariables()
-{
-  for (auto& var : m_expression_vars)
-  {
-    if (var.second)
-    {
-      *var.second = 0;
-    }
-  }
+  // The environment's variables belong to the thread doing a rebind, so this is one.
+  UpdateReferences(devi);
 }
 
 bool EmulatedController::IsDefaultDeviceConnected() const
 {
-  return m_default_device_is_connected;
+  return retro_atomic_load_acquire_int(
+             const_cast<retro_atomic_int_t*>(&m_default_device_is_connected)) != 0;
 }
 
-const ciface::Core::DeviceQualifier& EmulatedController::GetDefaultDevice() const
+ciface::Core::DeviceQualifier EmulatedController::GetDefaultDevice() const
 {
-  return m_default_device;
+  ciface::InputReadScope scope;
+  const auto* d = static_cast<const DefaultDevice*>(retro_atomic_load_acquire_ptr(&m_default_device));
+  return d ? d->qualifier : ciface::Core::DeviceQualifier{};
 }
 
 void EmulatedController::SetDefaultDevice(const std::string& device)
@@ -105,15 +105,16 @@ void EmulatedController::SetDefaultDevice(const std::string& device)
 
 void EmulatedController::SetDefaultDevice(ciface::Core::DeviceQualifier devq)
 {
-  m_default_device = std::move(devq);
+  auto* d = new DefaultDevice{{}, std::move(devq)};
+  if (void* old = retro_atomic_exchange_ptr(&m_default_device, d))
+    quiesce_retire(ciface::InputQuiesce(), &static_cast<DefaultDevice*>(old)->node,
+                   FreeDefaultDevice);
 }
 
 ControlGroupContainer::~ControlGroupContainer() = default;
 
 void EmulatedController::LoadConfig(Common::IniFile::Section* sec)
 {
-  const auto lock = EmulatedController::GetStateLock();
-
   std::string defdev;
   if (sec->Get("Device", &defdev, "") && !defdev.empty())
     SetDefaultDevice(defdev);
@@ -129,8 +130,6 @@ void ControlGroupContainer::LoadGroupsConfig(Common::IniFile::Section* sec, cons
 
 void EmulatedController::SaveConfig(Common::IniFile::Section* sec)
 {
-  const auto lock = EmulatedController::GetStateLock();
-
   sec->Set("Device", GetDefaultDevice().ToString(), "");
 
   SaveGroupsConfig(sec, "");
@@ -144,7 +143,6 @@ void ControlGroupContainer::SaveGroupsConfig(Common::IniFile::Section* sec, cons
 
 void EmulatedController::LoadDefaults(const ControllerInterface& ciface)
 {
-  const auto lock = GetStateLock();
   // load an empty inifile section, clears everything
   Common::IniFile::Section sec;
   LoadConfig(&sec);
@@ -154,16 +152,6 @@ void EmulatedController::LoadDefaults(const ControllerInterface& ciface)
   {
     SetDefaultDevice(default_device_string);
   }
-}
-
-void ControlGroupContainer::SetInputOverrideFunction(InputOverrideFunction override_func)
-{
-  m_input_override_function = std::move(override_func);
-}
-
-void ControlGroupContainer::ClearInputOverrideFunction()
-{
-  m_input_override_function = {};
 }
 
 }  // namespace ControllerEmu

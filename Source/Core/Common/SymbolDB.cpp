@@ -5,7 +5,6 @@
 
 #include <cstring>
 #include <map>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -40,7 +39,6 @@ void Symbol::Rename(const std::string& symbol_name)
 
 void SymbolDB::List()
 {
-  std::lock_guard lock(m_mutex);
   for (const auto& func : m_functions)
   {
     DEBUG_LOG_FMT(OSHLE, "{} @ {:08x}: {} bytes (hash {:08x}) : {} calls", func.second.name,
@@ -51,13 +49,11 @@ void SymbolDB::List()
 
 bool SymbolDB::IsEmpty() const
 {
-  std::lock_guard lock(m_mutex);
   return m_functions.empty() && m_notes.empty();
 }
 
 bool SymbolDB::Clear(const char* prefix)
 {
-  std::lock_guard lock(m_mutex);
 
   // TODO: honor prefix
   m_map_name.clear();
@@ -72,7 +68,6 @@ bool SymbolDB::Clear(const char* prefix)
 
 void SymbolDB::Index()
 {
-  std::lock_guard lock(m_mutex);
   Index(&m_functions);
 }
 
@@ -87,7 +82,6 @@ void SymbolDB::Index(XFuncMap* functions)
 
 const Symbol* SymbolDB::GetSymbolFromName(std::string_view name) const
 {
-  std::lock_guard lock(m_mutex);
 
   for (auto& func : m_functions)
   {
@@ -100,7 +94,6 @@ const Symbol* SymbolDB::GetSymbolFromName(std::string_view name) const
 
 std::vector<const Symbol*> SymbolDB::GetSymbolsFromName(std::string_view name) const
 {
-  std::lock_guard lock(m_mutex);
   std::vector<const Symbol*> symbols;
 
   for (auto& func : m_functions)
@@ -114,7 +107,6 @@ std::vector<const Symbol*> SymbolDB::GetSymbolsFromName(std::string_view name) c
 
 const Symbol* SymbolDB::GetSymbolFromHash(u32 hash) const
 {
-  std::lock_guard lock(m_mutex);
 
   auto iter = m_checksum_to_function.find(hash);
   if (iter == m_checksum_to_function.end())
@@ -125,7 +117,6 @@ const Symbol* SymbolDB::GetSymbolFromHash(u32 hash) const
 
 std::vector<const Symbol*> SymbolDB::GetSymbolsFromHash(u32 hash) const
 {
-  std::lock_guard lock(m_mutex);
 
   const auto iter = m_checksum_to_function.find(hash);
 
@@ -137,13 +128,11 @@ std::vector<const Symbol*> SymbolDB::GetSymbolsFromHash(u32 hash) const
 
 void SymbolDB::AddCompleteSymbol(const Symbol& symbol)
 {
-  std::lock_guard lock(m_mutex);
   m_functions[symbol.address] = symbol;
 }
 
 bool SymbolDB::RenameSymbol(const Symbol& symbol, const std::string& symbol_name)
 {
-  std::lock_guard lock(m_mutex);
 
   auto it = m_functions.find(symbol.address);
   if (it == m_functions.end())
@@ -156,7 +145,6 @@ bool SymbolDB::RenameSymbol(const Symbol& symbol, const std::string& symbol_name
 bool SymbolDB::RenameSymbol(const Symbol& symbol, const std::string& symbol_name,
                             const std::string& object_name)
 {
-  std::lock_guard lock(m_mutex);
 
   auto it = m_functions.find(symbol.address);
   if (it == m_functions.end())

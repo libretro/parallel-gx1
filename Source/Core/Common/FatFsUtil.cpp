@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstdlib>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +17,7 @@
 #include "diskio.h"
 // clang-format on
 
+#include <retro_atomic.h>
 #include "Common/Align.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
@@ -34,7 +34,33 @@ enum : u32
   MAX_CLUSTER_SIZE = 64 * SECTOR_SIZE,
 };
 
-static std::mutex s_fatfs_mutex;
+// FatFs keeps global state, so one user at a time. Users are rare and never overlap in
+// practice; one that finds FatFs taken gives up with an error instead of waiting.
+static retro_atomic_int_t s_fatfs_in_use;
+
+namespace
+{
+class FatFsUse
+{
+public:
+  FatFsUse() : m_owned{retro_atomic_cas_int(&s_fatfs_in_use, 0, 1) != 0}
+  {
+    if (!m_owned)
+      ERROR_LOG_FMT(COMMON, "FatFs is busy on another thread");
+  }
+  ~FatFsUse()
+  {
+    if (m_owned)
+      retro_atomic_store_release_int(&s_fatfs_in_use, 0);
+  }
+  FatFsUse(const FatFsUse&) = delete;
+  FatFsUse& operator=(const FatFsUse&) = delete;
+  explicit operator bool() const { return m_owned; }
+
+private:
+  bool m_owned;
+};
+}  // namespace
 static Common::FatFsCallbacks* s_callbacks;
 
 namespace
@@ -201,33 +227,6 @@ extern "C" void* ff_memalloc(UINT msize)
 extern "C" void ff_memfree(void* mblock)
 {
   return std::free(mblock);
-}
-#endif
-
-#if FF_FS_REENTRANT
-extern "C" int ff_cre_syncobj(BYTE vol, FF_SYNC_t* sobj)
-{
-  *sobj = new std::recursive_mutex();
-  return *sobj != nullptr;
-}
-
-extern "C" int ff_req_grant(FF_SYNC_t sobj)
-{
-  std::recursive_mutex* m = reinterpret_cast<std::recursive_mutex*>(sobj);
-  m->lock();
-  return 1;
-}
-
-extern "C" void ff_rel_grant(FF_SYNC_t sobj)
-{
-  std::recursive_mutex* m = reinterpret_cast<std::recursive_mutex*>(sobj);
-  m->unlock();
-}
-
-extern "C" int ff_del_syncobj(FF_SYNC_t sobj)
-{
-  delete reinterpret_cast<std::recursive_mutex*>(sobj);
-  return 1;
 }
 #endif
 
@@ -516,7 +515,9 @@ bool SyncSDFolderToSDImage(const std::function<bool()>& cancelled, bool determin
   }
   size = AlignUp(size, MAX_CLUSTER_SIZE);
 
-  std::lock_guard lk(s_fatfs_mutex);
+  const FatFsUse fatfs_use;
+  if (!fatfs_use)
+    return false;
   SDCardFatFsCallbacks callbacks;
   s_callbacks = &callbacks;
   Common::ScopeGuard callbacks_guard{[] { s_callbacks = nullptr; }};
@@ -763,7 +764,9 @@ bool SyncSDImageToSDFolder(const std::function<bool()>& cancelled)
   if (image_path.empty() || target_dir.empty())
     return false;
 
-  std::lock_guard lk(s_fatfs_mutex);
+  const FatFsUse fatfs_use;
+  if (!fatfs_use)
+    return false;
   SDCardFatFsCallbacks callbacks;
   s_callbacks = &callbacks;
   Common::ScopeGuard callbacks_guard{[] { s_callbacks = nullptr; }};
@@ -837,7 +840,9 @@ bool SyncSDImageToSDFolder(const std::function<bool()>& cancelled)
 
 void RunInFatFsContext(FatFsCallbacks& callbacks, const std::function<void()>& function)
 {
-  std::lock_guard lk(s_fatfs_mutex);
+  const FatFsUse fatfs_use;
+  if (!fatfs_use)
+    return;
   s_callbacks = &callbacks;
   Common::ScopeGuard callbacks_guard{[] { s_callbacks = nullptr; }};
   function();

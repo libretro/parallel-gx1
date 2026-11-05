@@ -6,7 +6,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
@@ -33,6 +32,7 @@ USBHost::USBHost(EmulationKernel& ios, const std::string& device_name)
 USBHost::~USBHost()
 {
   GetSystem().GetUSBScanner().RemoveClient(this);
+  delete static_cast<USBScanner::DeviceMap*>(retro_atomic_exchange_ptr(&m_pending_devices, nullptr));
 }
 
 std::optional<IPCReply> USBHost::Open(const OpenRequest& request)
@@ -56,15 +56,13 @@ void USBHost::DoState(PointerWrap& p)
   {
     // After a state has loaded, there may be insertion hooks for devices that were
     // already plugged in, and which need to be triggered.
-    std::lock_guard lk(m_devices_mutex);
     m_devices.clear();
-    OnDevicesChanged(GetSystem().GetUSBScanner().GetDevices());
+    OnDevicesChangedInternal(GetSystem().GetUSBScanner().GetDevices());
   }
 }
 
 std::shared_ptr<USB::Device> USBHost::GetDeviceById(const u64 device_id) const
 {
-  std::lock_guard lk(m_devices_mutex);
   const auto it = m_devices.find(device_id);
   if (it == m_devices.end())
     return nullptr;
@@ -87,18 +85,30 @@ bool USBHost::ShouldAddDevice(const USB::Device& device) const
 void USBHost::Update()
 {
   if (Core::WantsDeterminism())
+  {
     OnDevicesChangedInternal(GetSystem().GetUSBScanner().GetDevices());
+    return;
+  }
+
+  if (auto* pending = static_cast<USBScanner::DeviceMap*>(
+          retro_atomic_exchange_ptr(&m_pending_devices, nullptr)))
+  {
+    OnDevicesChangedInternal(*pending);
+    delete pending;
+  }
 }
 
+// Scan thread: only the newest list matters, so it replaces any still waiting.
 void USBHost::OnDevicesChanged(const USBScanner::DeviceMap& new_devices)
 {
-  if (!Core::WantsDeterminism())
-    OnDevicesChangedInternal(new_devices);
+  if (Core::WantsDeterminism())
+    return;
+  delete static_cast<USBScanner::DeviceMap*>(
+      retro_atomic_exchange_ptr(&m_pending_devices, new USBScanner::DeviceMap(new_devices)));
 }
 
 void USBHost::OnDevicesChangedInternal(const USBScanner::DeviceMap& new_devices)
 {
-  std::lock_guard lk(m_devices_mutex);
 
   bool changes = false;
 

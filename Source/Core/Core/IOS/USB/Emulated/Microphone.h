@@ -6,10 +6,10 @@
 #include <atomic>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <type_traits>
 #include <vector>
 
+#include <retro_spsc.h>
 #include "Common/CommonTypes.h"
 
 #include <libretro.h>
@@ -62,10 +62,10 @@ private:
   void StreamStop();
 
   virtual u32 GetStreamSize() const = 0;
-  std::vector<SampleType> m_stream_buffer{};
-  u32 m_stream_wpos = 0;
-  u32 m_stream_rpos = 0;
-  u32 m_samples_avail = 0;
+  // Samples from the frontend thread (DataCallback) to the emulation thread
+  // (ReadIntoBuffer). Sized in StreamStart, while nothing polls this microphone.
+  retro_spsc_t m_stream{};
+  bool m_stream_allocated = false;
 
   // TODO: Find how this level is calculated on real hardware
   std::atomic<u16> m_loudness_level = 0;
@@ -104,8 +104,6 @@ private:
     SampleType peak_max = 0;
   };
   Loudness m_loudness;
-
-  mutable std::mutex m_ring_lock;
 
   const MicrophoneState& m_sampler;
 

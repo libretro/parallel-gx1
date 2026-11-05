@@ -5,13 +5,14 @@
 #include <chrono>
 #include <filesystem>
 #include <map>
-#include <mutex>
 #include <string>
 
 #include "VideoCommon/Assets/CustomTextureData.h"
 #include "VideoCommon/Assets/TextureAsset.h"
 #include "VideoCommon/Assets/Types.h"
 #include "VideoCommon/Assets/WatchableFilesystemAssetLibrary.h"
+
+#include "Common/AtomicHashMap.h"
 
 namespace VideoCommon
 {
@@ -33,10 +34,11 @@ private:
   // Gets the asset map given an asset id
   Assets::AssetMap GetAssetMapForID(const AssetID& asset_id) const;
 
-  mutable std::mutex m_asset_map_lock;
-  std::map<AssetID, Assets::AssetMap> m_asset_id_to_asset_map_path;
-
-  mutable std::mutex m_path_map_lock;
-  std::map<std::string, AssetID, std::less<>> m_path_to_asset_id;
+  // Written while mods and texture packs load, read by the loader threads and the file
+  // watcher: lock-free maps, each value swapped whole.
+  Common::AtomicHashMap<AssetID, Assets::AssetMap, 4096, std::hash<std::string_view>>
+      m_asset_id_to_asset_map_path;
+  Common::AtomicHashMap<std::string, AssetID, 4096, std::hash<std::string_view>>
+      m_path_to_asset_id;
 };
 }  // namespace VideoCommon

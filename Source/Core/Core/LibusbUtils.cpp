@@ -3,7 +3,6 @@
 
 #include "Core/LibusbUtils.h"
 
-#include <mutex>
 
 #if defined(__LIBUSB__)
 #include <libusb.h>
@@ -67,8 +66,7 @@ public:
 
   int GetDeviceList(const GetDeviceListCallback& callback) const
   {
-    std::lock_guard lock{m_device_list_mutex};
-
+    // libusb_get_device_list is thread-safe in libusb itself.
     libusb_device** list;
     ssize_t count = libusb_get_device_list(m_context, &list);
     if (count < 0)
@@ -97,7 +95,6 @@ private:
   }
 
   libusb_context* m_context = nullptr;
-  mutable std::mutex m_device_list_mutex;
   Common::Flag m_event_thread_running;
   sthread_t* m_event_thread = nullptr;
 };

@@ -161,14 +161,12 @@ NetKDRequestDevice::NetKDRequestDevice(EmulationKernel& ios, const std::string& 
   return;
 #endif
   // Enable all NWC24 permissions
-  m_scheduler_buffer[1] = Common::swap32(-1);
+  StoreSchedulerWord(1, Common::swap32(-1));
 
   m_work_queue.Reset("WiiConnect24 Worker", [this](const AsyncTask& task) {
     const IPCReply reply = task.handler();
-    {
-      std::lock_guard lg(m_async_reply_lock);
-      m_async_replies.emplace(AsyncReply{task.request, reply.return_value});
-    }
+    auto* async_reply = new AsyncReply{{}, task.request, reply.return_value};
+    mpsc_stack_push(&m_async_replies, &async_reply->link);
   });
 
   m_handle_mail = !ios.GetIOSC().IsUsingDefaultId() && !m_send_list.IsDisabled();
@@ -184,29 +182,54 @@ NetKDRequestDevice::~NetKDRequestDevice()
   if (socket_manager)
     socket_manager->Clean();
 
-  {
-    std::lock_guard lg(m_scheduler_lock);
-    if (!m_scheduler_timer_thread)
-      return;
+  if (!m_scheduler_timer_thread)
+    return;
 
-    m_shutdown_event.Set();
-  }
+  m_shutdown_event.Set();
 
   Common::JoinThread(m_scheduler_timer_thread);
   m_scheduler_work_queue.Shutdown();
   m_work_queue.Shutdown();
+
+  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_async_replies); node;)
+  {
+    auto* reply = reinterpret_cast<AsyncReply*>(node);
+    node = node->next;
+    delete reply;
+  }
 }
 
 void NetKDRequestDevice::Update()
 {
+  // Oldest first, as the workers finished them.
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_async_replies)); node;)
   {
-    std::lock_guard lg(m_async_reply_lock);
-    while (!m_async_replies.empty())
-    {
-      const auto& reply = m_async_replies.front();
-      GetEmulationKernel().EnqueueIPCReply(reply.request, reply.return_value);
-      m_async_replies.pop();
-    }
+    auto* reply = reinterpret_cast<AsyncReply*>(node);
+    node = node->next;
+    GetEmulationKernel().EnqueueIPCReply(reply->request, reply->return_value);
+    delete reply;
+  }
+}
+
+u32 NetKDRequestDevice::LoadSchedulerWord(size_t index) const
+{
+  return static_cast<u32>(
+      retro_atomic_load_acquire_int(const_cast<retro_atomic_int_t*>(&m_scheduler_buffer[index])));
+}
+
+void NetKDRequestDevice::StoreSchedulerWord(size_t index, u32 swapped)
+{
+  retro_atomic_store_release_int(&m_scheduler_buffer[index], static_cast<int>(swapped));
+}
+
+void NetKDRequestDevice::IncrementSchedulerWord(size_t index)
+{
+  int cur = retro_atomic_load_acquire_int(&m_scheduler_buffer[index]);
+  while (!retro_atomic_cas_int(
+      &m_scheduler_buffer[index], cur,
+      static_cast<int>(Common::swap32(Common::swap32(static_cast<u32>(cur)) + 1))))
+  {
+    cur = retro_atomic_load_acquire_int(&m_scheduler_buffer[index]);
   }
 }
 
@@ -221,15 +244,17 @@ void NetKDRequestDevice::SchedulerTimer()
   while (true)
   {
     {
-      std::lock_guard lg(m_scheduler_lock);
-      if (m_mail_span <= mail_time_state && m_handle_mail)
+      if (static_cast<u32>(retro_atomic_load_acquire_int(&m_mail_span)) <= mail_time_state &&
+          m_handle_mail)
       {
         m_scheduler_work_queue.Push([this] { SchedulerWorker(SchedulerEvent::Mail); });
         INFO_LOG_FMT(IOS_WC24, "NET_KD_REQ: Dispatching Mail Task from Scheduler");
         mail_time_state = 0;
       }
 
-      if (m_download_span <= download_time_state && !m_dl_list.IsDisabled())
+      // The worker checks whether downloads are disabled; the list is its.
+      if (static_cast<u32>(retro_atomic_load_acquire_int(&m_download_span)) <=
+          download_time_state)
       {
         INFO_LOG_FMT(IOS_WC24, "NET_KD_REQ: Dispatching Download Task from Scheduler");
         m_scheduler_work_queue.Push([this] { SchedulerWorker(SchedulerEvent::Download); });
@@ -255,10 +280,7 @@ void NetKDRequestDevice::SchedulerWorker(const SchedulerEvent event)
     if (code != NWC24::WC24_OK)
     {
       if (code == NWC24::WC24_ERR_NOT_FOUND)
-      {
-        std::lock_guard lg(m_scheduler_lock);
-        m_download_span = DEFAULT_SCHEDULER_SPAN_MINUTES;
-      }
+        retro_atomic_store_release_int(&m_download_span, DEFAULT_SCHEDULER_SPAN_MINUTES);
 
       LogError(ErrorType::KD_Download, code);
       return;
@@ -340,33 +362,26 @@ void NetKDRequestDevice::LogError(ErrorType error_type, s32 error_code)
     break;
   }
 
-  std::lock_guard lg(m_scheduler_buffer_lock);
-
-  m_scheduler_buffer[32 + (m_error_count % 32)] = Common::swap32(new_code);
-  m_error_count++;
-
-  m_scheduler_buffer[5] = Common::swap32(m_error_count);
-  m_scheduler_buffer[2] = Common::swap32(new_code);
+  const u32 error_index = static_cast<u32>(retro_atomic_fetch_add_int(&m_error_count, 1));
+  StoreSchedulerWord(32 + (error_index % 32), Common::swap32(new_code));
+  StoreSchedulerWord(5, Common::swap32(error_index + 1));
+  StoreSchedulerWord(2, Common::swap32(new_code));
 }
 
 NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
 {
   bool success = false;
   Common::ScopeGuard state_guard([&] {
-    std::lock_guard lg(m_scheduler_buffer_lock);
     if (success)
     {
       // m_scheduler_buffer[11] contains the amount of times we have checked for mail this IOS
       // session.
-      m_scheduler_buffer[11] = Common::swap32(Common::swap32(m_scheduler_buffer[11]) + 1);
+      IncrementSchedulerWord(11);
     }
-    m_scheduler_buffer[4] = static_cast<u32>(CurrentFunction::None);
+    StoreSchedulerWord(4, static_cast<u32>(CurrentFunction::None));
   });
 
-  {
-    std::lock_guard lg(m_scheduler_buffer_lock);
-    m_scheduler_buffer[4] = Common::swap32(static_cast<u32>(CurrentFunction::Check));
-  }
+  StoreSchedulerWord(4, Common::swap32(static_cast<u32>(CurrentFunction::Check)));
 
   u64 random_number{};
   Common::Random::Generate(&random_number, sizeof(u64));
@@ -417,7 +432,6 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
   *mail_flag = std::strncmp(str_mail_flag.data(), m_send_list.GetMailFlag().data(), 22) != 0;
 
   {
-    std::lock_guard scheduler_lg(m_scheduler_lock);
     bool did_parse = TryParse(m_http.GetHeaderValue("X-Wii-Mail-Check-Span"), interval);
     if (did_parse)
     {
@@ -426,17 +440,13 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
         *interval = 1;
       }
 
-      m_mail_span = *interval;
+      retro_atomic_store_release_int(&m_mail_span, static_cast<int>(*interval));
     }
 
-    did_parse = TryParse(m_http.GetHeaderValue("X-Wii-Download-Span"), &m_download_span);
+    u32 download_span = 0;
+    did_parse = TryParse(m_http.GetHeaderValue("X-Wii-Download-Span"), &download_span);
     if (did_parse)
-    {
-      if (m_download_span == 0)
-      {
-        m_download_span = 1;
-      }
-    }
+      retro_atomic_store_release_int(&m_download_span, static_cast<int>(std::max(download_span, 1u)));
   }
 
   success = true;
@@ -521,22 +531,18 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
 {
   bool success = false;
   Common::ScopeGuard exit_guard([&] {
-    std::lock_guard lg(m_scheduler_buffer_lock);
     if (success)
     {
       // m_scheduler_buffer[11] contains the amount of times we have sent for mail this IOS
       // session.
-      m_scheduler_buffer[14] = Common::swap32(Common::swap32(m_scheduler_buffer[14]) + 1);
+      IncrementSchedulerWord(14);
     }
-    m_scheduler_buffer[4] = static_cast<u32>(CurrentFunction::None);
+    StoreSchedulerWord(4, static_cast<u32>(CurrentFunction::None));
 
     m_send_list.WriteSendList();
   });
 
-  {
-    std::lock_guard lg(m_scheduler_buffer_lock);
-    m_scheduler_buffer[4] = Common::swap32(static_cast<u32>(CurrentFunction::Send));
-  }
+  StoreSchedulerWord(4, Common::swap32(static_cast<u32>(CurrentFunction::Send)));
 
   m_send_list.ReadSendList();
   const std::string auth =
@@ -1143,9 +1149,11 @@ std::optional<IPCReply> NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
 
     // On a real Wii, GetSchedulerStat copies memory containing a list of error codes recorded by
     // KD among other things.
-    std::lock_guard lg(m_scheduler_buffer_lock);
+    std::array<u32, 256> buffer;
+    for (size_t i = 0; i < buffer.size(); ++i)
+      buffer[i] = LoadSchedulerWord(i);
     const u32 out_size = std::min(request.buffer_out_size, 256U);
-    memory.CopyToEmu(request.buffer_out, m_scheduler_buffer.data(), out_size);
+    memory.CopyToEmu(request.buffer_out, buffer.data(), out_size);
     break;
   }
 
@@ -1197,9 +1205,10 @@ std::optional<IPCReply> NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
 
     INFO_LOG_FMT(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_KD_GET_TIME_TRIGGERS");
 
-    std::lock_guard lg(m_scheduler_buffer_lock);
-    memory.Write_U32(m_mail_span, request.buffer_out + 4);
-    memory.Write_U32(m_download_span, request.buffer_out + 8);
+    memory.Write_U32(static_cast<u32>(retro_atomic_load_acquire_int(&m_mail_span)),
+                     request.buffer_out + 4);
+    memory.Write_U32(static_cast<u32>(retro_atomic_load_acquire_int(&m_download_span)),
+                     request.buffer_out + 8);
     WriteReturnValue(memory, NWC24::WC24_OK, request.buffer_out);
 
     return_value = IPC_SUCCESS;

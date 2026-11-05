@@ -7,10 +7,14 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
+#include <array>
+
+#include <retro_atomic.h>
+
+#include "Common/CallGate.h"
 #include "Common/CommonTypes.h"
 #include "Core/IOS/USB/Common.h"
 #include "Core/LibusbUtils.h"
@@ -63,12 +67,31 @@ private:
     void HandleTransfer(libusb_transfer* tr,
                         const std::function<s32(const TransferCommand&)>& function);
     void CancelTransfers();
+    // Whether any transfer was ever queued here.
+    bool IsUsed() const { return m_used; }
+
+    TransferEndpoint() = default;
+    TransferEndpoint(const TransferEndpoint&) = delete;
+    TransferEndpoint& operator=(const TransferEndpoint&) = delete;
+    ~TransferEndpoint();
 
   private:
-    std::mutex m_transfers_mutex;
-    std::map<libusb_transfer*, std::unique_ptr<TransferCommand>> m_transfers;
+    // A transfer in flight. Queued by the emulation thread, completed (and freed) by libusb's
+    // event thread, cancelled by the emulation thread: each slot is claimed with a CAS and
+    // given up with an exchange, and a completion waits out a cancel loop that may still be
+    // looking at its transfer before libusb frees it.
+    struct InFlight
+    {
+      libusb_transfer* transfer;
+      std::unique_ptr<TransferCommand> command;
+    };
+    static constexpr size_t MAX_IN_FLIGHT = 64;
+    std::array<retro_atomic_ptr_t, MAX_IN_FLIGHT> m_in_flight{};
+    Common::CallGate m_cancel_gate;
+    bool m_used = false;  // emulation thread
   };
-  std::map<u8, TransferEndpoint> m_transfer_endpoints;
+  // Indexed by endpoint address, so the event thread never looks one up in a changing map.
+  std::array<TransferEndpoint, 256> m_transfer_endpoints;
   static void CtrlTransferCallback(libusb_transfer* transfer);
   static void TransferCallback(libusb_transfer* transfer);
 

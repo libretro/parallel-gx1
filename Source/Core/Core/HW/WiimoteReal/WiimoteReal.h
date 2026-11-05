@@ -5,7 +5,6 @@
 
 #include <atomic>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -21,6 +20,7 @@
 #include "Core/HW/WiimoteCommon/WiimoteReport.h"
 #include "Core/USBUtils.h"
 
+#include <retro_atomic.h>
 #include <retro_spsc.h>
 #include <rthreads/retro_eventcount.h>
 
@@ -235,8 +235,9 @@ private:
   void ThreadFunc();
   void PoolThreadFunc();
 
-  std::vector<std::unique_ptr<WiimoteScannerBackend>> m_backends;
-  mutable std::mutex m_backends_mutex;
+  // The scanner thread's backends, as a std::vector<WiimoteScannerBackend*>* while it runs,
+  // so StopThread can interrupt a search.
+  retro_atomic_ptr_t m_backends_published{};
 
   sthread_t* m_scan_thread = nullptr;
   Common::Flag m_scan_thread_running;
@@ -245,9 +246,9 @@ private:
   std::atomic<WiimoteScanMode> m_scan_mode{WiimoteScanMode::DO_NOT_SCAN};
 };
 
-// Mutex is recursive as ControllerInterface may call AddWiimoteToPool within ProcessWiimotePool.
-extern std::recursive_mutex g_wiimotes_mutex;
-extern std::unique_ptr<Wiimote> g_wiimotes[MAX_BBMOTES];
+// The real remote in a slot, or null. Changed only by the scanner's pool thread, while it holds
+// the CPU thread.
+Wiimote* GetWiimote(unsigned int index);
 
 void AddWiimoteToPool(std::unique_ptr<Wiimote>);
 
@@ -267,5 +268,4 @@ void InitAdapterClass();
 
 void HandleWiimotesInControllerInterfaceSettingChange();
 void PopulateDevices();
-void ProcessWiimotePool();
 }  // namespace WiimoteReal

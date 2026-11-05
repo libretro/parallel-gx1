@@ -52,7 +52,6 @@ namespace Fifo
 class FifoManager;
 }
 class FifoPlayer;
-class FifoRecorder;
 namespace GPFifo
 {
 class GPFifoManager;
@@ -176,7 +175,6 @@ public:
   ExpansionInterface::ExpansionInterfaceManager& GetExpansionInterface() const;
   Fifo::FifoManager& GetFifo() const;
   FifoPlayer& GetFifoPlayer() const;
-  FifoRecorder& GetFifoRecorder() const;
   GeometryShaderManager& GetGeometryShaderManager() const;
   GPFifo::GPFifoManager& GetGPFifo() const;
   HSP::HSPManager& GetHSP() const;

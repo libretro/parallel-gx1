@@ -21,8 +21,12 @@
 namespace ExpansionInterface
 {
 
+// A receive ring this size holds dozens of frames; the guest drains it long before then.
+constexpr size_t MODEM_RECEIVE_RING_SIZE = 256 * 1024;
+
 CEXIModem::CEXIModem(Core::System& system, ModemDeviceType type) : IEXIDevice(system)
 {
+  retro_spsc_init(&m_receive_buffer, MODEM_RECEIVE_RING_SIZE);
   switch (type)
   {
   case ModemDeviceType::TAPSERVER:
@@ -40,6 +44,7 @@ CEXIModem::~CEXIModem()
 {
   m_network_interface->RecvStop();
   m_network_interface->Deactivate();
+  retro_spsc_free(&m_receive_buffer);
 }
 
 bool CEXIModem::IsPresent() const
@@ -54,6 +59,7 @@ void CEXIModem::SetCS(int cs)
 
 bool CEXIModem::IsInterruptSet()
 {
+  SyncReceiveState();
   return !!(m_regs[Register::INTERRUPT_MASK] & m_regs[Register::PENDING_INTERRUPT_MASK]);
 }
 
@@ -153,6 +159,7 @@ u32 CEXIModem::ImmRead(u32 size)
     {
       return 0x02020000;  // Device ID (modem)
     }
+    SyncReceiveState();
     u32 ret = 0;
     for (u8 z = 0; z < size; z++)
     {
@@ -216,11 +223,8 @@ void CEXIModem::HandleReadModemTransfer(void* data, u32 size)
   else if ((m_transfer_descriptor & 0x0F000000) == 0x08000000)
   {
     // Packet receive buffer
-    std::lock_guard<std::mutex> g(m_receive_buffer_lock);
-    const std::size_t bytes_to_copy = std::min<std::size_t>(size, m_receive_buffer.size());
-    std::memcpy(data, m_receive_buffer.data(), bytes_to_copy);
-    m_receive_buffer = m_receive_buffer.substr(bytes_to_copy);
-    OnReceiveBufferSizeChangedLocked(true);
+    retro_spsc_read(&m_receive_buffer, data, size);
+    SyncReceiveState();
   }
   else
   {
@@ -304,15 +308,17 @@ void CEXIModem::SetInterruptFlag(u8 what, bool enabled, bool from_cpu)
       from_cpu ? CoreTiming::FromThread::CPU : CoreTiming::FromThread::NON_CPU, 0);
 }
 
-void CEXIModem::OnReceiveBufferSizeChangedLocked(bool from_cpu)
+void CEXIModem::SyncReceiveState()
 {
-  // The caller is expected to hold m_receive_buffer_lock when calling this.
-  const u16 bytes_available =
-      static_cast<u16>(std::min<std::size_t>(m_receive_buffer.size(), 0x200));
+  const std::size_t received = retro_spsc_read_avail(&m_receive_buffer);
+  const u16 bytes_available = static_cast<u16>(std::min<std::size_t>(received, 0x200));
   m_regs[Register::BYTES_AVAILABLE_HIGH] = (bytes_available >> 8) & 0xFF;
   m_regs[Register::BYTES_AVAILABLE_LOW] = bytes_available & 0xFF;
-  SetInterruptFlag(Interrupt::RECEIVE_BUFFER_ABOVE_THRESHOLD,
-                   m_receive_buffer.size() >= GetRxThreshold(), from_cpu);
+  const bool above = received >= GetRxThreshold();
+  if (above)
+    m_regs[Register::PENDING_INTERRUPT_MASK] |= Interrupt::RECEIVE_BUFFER_ABOVE_THRESHOLD;
+  else
+    m_regs[Register::PENDING_INTERRUPT_MASK] &= ~Interrupt::RECEIVE_BUFFER_ABOVE_THRESHOLD;
   // TODO: There is a second interrupt here, which the GameCube modem library
   // expects to be used when large frames are received. However, the correct
   // semantics for this interrupt aren't obvious. Reverse-engineering some games
@@ -330,16 +336,10 @@ void CEXIModem::SendComplete()
 
 void CEXIModem::AddToReceiveBuffer(std::string&& data)
 {
-  std::lock_guard<std::mutex> g(m_receive_buffer_lock);
-  if (m_receive_buffer.empty())
-  {
-    m_receive_buffer = std::move(data);
-  }
-  else
-  {
-    m_receive_buffer += data;
-  }
-  OnReceiveBufferSizeChangedLocked(false);
+  // Network thread: hand the bytes over and have the CPU thread look at the interrupt.
+  if (retro_spsc_write(&m_receive_buffer, data.data(), data.size()) != data.size())
+    ERROR_LOG_FMT(SP1, "Modem receive ring full; dropped part of a frame");
+  m_system.GetExpansionInterface().ScheduleUpdateInterrupts(CoreTiming::FromThread::NON_CPU, 0);
 }
 
 void CEXIModem::AddATReply(const std::string& data)

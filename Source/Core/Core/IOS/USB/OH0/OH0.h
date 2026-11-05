@@ -5,7 +5,6 @@
 
 #include <map>
 #include <memory>
-#include <mutex>
 #include <set>
 #include <string>
 #include <utility>
@@ -75,6 +74,5 @@ private:
   std::map<USB::DeviceInfo, u32> m_insertion_hooks;
   std::map<u64, u32> m_removal_hooks;
   std::set<u64> m_opened_devices;
-  std::mutex m_hooks_mutex;
 };
 }  // namespace IOS::HLE

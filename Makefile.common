@@ -1159,7 +1159,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/NandPaths.cpp \
 	$(CORE_DIR)/Source/Core/Common/Network.cpp \
 	$(CORE_DIR)/Source/Core/Common/PcapFile.cpp \
-	$(CORE_DIR)/Source/Core/Common/Profiler.cpp \
 	$(CORE_DIR)/Source/Core/Common/Random.cpp \
 	$(CORE_DIR)/Source/Core/Common/SDCardUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/SettingsHandler.cpp \
@@ -1204,7 +1203,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DiscIO/VolumeDisc.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/VolumeFileBlobReader.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/VolumeGC.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/VolumeVerifier.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/VolumeWad.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/VolumeWii.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/WbfsBlob.cpp \
@@ -1440,7 +1438,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/DSPEmulator.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoDataFile.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoPlayer.cpp \
-	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoRecorder.cpp \
 	$(CORE_DIR)/Source/Core/Core/FreeLookManager.cpp \
 	$(CORE_DIR)/Source/Core/Core/GeckoCode.cpp \
 	$(CORE_DIR)/Source/Core/Core/GeckoCodeConfig.cpp \
@@ -1845,8 +1842,7 @@ ifeq ($(OS_ANDROID),1)
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerDroid.cpp \
 	$(CORE_DIR)/Source/Core/Common/MemArenaAndroid.cpp \
 	$(CORE_DIR)/Source/Core/Common/GL/GLInterface/EGL.cpp \
-	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp \
-	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/Touch/InputOverrider.cpp
+	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
 endif
 ifeq ($(OS_APPLE),1)
    DOLPHIN_SOURCES_CXX += \

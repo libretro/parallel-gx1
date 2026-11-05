@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
-#include <mutex>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -36,7 +35,6 @@ PPCSymbolDB::~PPCSymbolDB() = default;
 // Adds the function to the list, unless it's already there
 const Common::Symbol* PPCSymbolDB::AddFunction(const Core::CPUThreadGuard& guard, u32 start_addr)
 {
-  std::lock_guard lock(m_mutex);
 
   // It's already in the list
   if (m_functions.contains(start_addr))
@@ -57,7 +55,6 @@ void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAdd
                                  const std::string& name, const std::string& object_name,
                                  Common::Symbol::Type type)
 {
-  std::lock_guard lock(m_mutex);
   AddKnownSymbol(guard, startAddr, size, name, object_name, type, &m_functions,
                  &m_checksum_to_function);
 }
@@ -106,7 +103,6 @@ void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAdd
 
 void PPCSymbolDB::AddKnownNote(u32 start_addr, u32 size, const std::string& name)
 {
-  std::lock_guard lock(m_mutex);
   AddKnownNote(start_addr, size, name, &m_notes);
 }
 
@@ -124,7 +120,6 @@ void PPCSymbolDB::AddKnownNote(u32 start_addr, u32 size, const std::string& name
 
 void PPCSymbolDB::DetermineNoteLayers()
 {
-  std::lock_guard lock(m_mutex);
   DetermineNoteLayers(&m_notes);
 }
 
@@ -148,7 +143,6 @@ void PPCSymbolDB::DetermineNoteLayers(XNoteMap* notes)
 
 const Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr) const
 {
-  std::lock_guard lock(m_mutex);
   if (m_functions.empty())
     return nullptr;
 
@@ -173,7 +167,6 @@ const Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr) const
 
 const Common::Note* PPCSymbolDB::GetNoteFromAddr(u32 addr) const
 {
-  std::lock_guard lock(m_mutex);
   if (m_notes.empty())
     return nullptr;
 
@@ -204,13 +197,11 @@ const Common::Note* PPCSymbolDB::GetNoteFromAddr(u32 addr) const
 
 void PPCSymbolDB::DeleteFunction(u32 start_address)
 {
-  std::lock_guard lock(m_mutex);
   m_functions.erase(start_address);
 }
 
 void PPCSymbolDB::DeleteNote(u32 start_address)
 {
-  std::lock_guard lock(m_mutex);
   m_notes.erase(start_address);
 }
 
@@ -223,7 +214,6 @@ std::string PPCSymbolDB::GetDescription(u32 addr) const
 
 void PPCSymbolDB::FillInCallers()
 {
-  std::lock_guard lock(m_mutex);
   FillInCallers(&m_functions);
 }
 
@@ -260,7 +250,6 @@ void PPCSymbolDB::FillInCallers(XFuncMap* functions)
 
 void PPCSymbolDB::PrintCalls(u32 funcAddr) const
 {
-  std::lock_guard lock(m_mutex);
 
   const auto iter = m_functions.find(funcAddr);
   if (iter == m_functions.end())
@@ -283,7 +272,6 @@ void PPCSymbolDB::PrintCalls(u32 funcAddr) const
 
 void PPCSymbolDB::PrintCallers(u32 funcAddr) const
 {
-  std::lock_guard lock(m_mutex);
 
   const auto iter = m_functions.find(funcAddr);
   if (iter == m_functions.end())
@@ -303,7 +291,6 @@ void PPCSymbolDB::PrintCallers(u32 funcAddr) const
 
 void PPCSymbolDB::LogFunctionCall(u32 addr)
 {
-  std::lock_guard lock(m_mutex);
 
   auto iter = m_functions.find(addr);
   if (iter == m_functions.end())
@@ -341,7 +328,6 @@ bool PPCSymbolDB::LoadMapOnBoot(const Core::CPUThreadGuard& guard)
     return Clear();
 
   {
-    std::lock_guard lock(m_mutex);
     // If the map is already loaded (such as restarting the same game), skip reloading.
     if (!IsEmpty() && existing_map_file == m_map_name)
       return false;
@@ -615,8 +601,6 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
   Index(&new_functions);
   DetermineNoteLayers(&new_notes);
   FillInCallers(&new_functions);
-
-  std::lock_guard lock(m_mutex);
   std::swap(m_functions, new_functions);
   std::swap(m_notes, new_notes);
   std::swap(m_checksum_to_function, checksum_to_function);
@@ -632,8 +616,6 @@ bool PPCSymbolDB::SaveSymbolMap(const std::string& filename) const
   File::IOFile file(filename, "w");
   if (!file)
     return false;
-
-  std::lock_guard lock(m_mutex);
 
   // Write .text section
   auto function_symbols = m_functions | std::views::filter([](const auto& f) {
@@ -699,8 +681,6 @@ bool PPCSymbolDB::SaveCodeMap(const Core::CPUThreadGuard& guard, const std::stri
 
   // Write ".text" at the top
   f.WriteString(".text\n");
-
-  std::lock_guard lock(m_mutex);
 
   const auto& ppc_debug_interface = guard.GetSystem().GetPowerPC().GetDebugInterface();
 

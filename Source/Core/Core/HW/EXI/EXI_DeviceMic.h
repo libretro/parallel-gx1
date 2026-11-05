@@ -3,8 +3,11 @@
 
 #pragma once
 
-#include <mutex>
 
+#include <retro_atomic.h>
+#include <retro_spsc.h>
+
+#include "Common/CallGate.h"
 #include "Common/CommonTypes.h"
 #include "Core/HW/EXI/EXI_Device.h"
 
@@ -79,21 +82,21 @@ private:
 
   UStatus status;
 
-  std::mutex ring_lock;
-
   // status bits converted to nice numbers
   int sample_rate;
   int buff_size;
   int buff_size_samples;
 
-  // Arbitrarily small ringbuffer used by audio input backend in order to
-  // keep delay tolerable
-  s16* stream_buffer;
-  int stream_size;
-  int stream_wpos;
-  int stream_rpos;
-  int samples_avail;
+  // Samples from the frontend's microphone (written on the frontend thread by
+  // PollLibretroMic) to the emulated one (read on the CPU thread). Small, to keep the delay
+  // tolerable.
+  retro_spsc_t m_stream;
+  // Set by the frontend thread when samples had to be dropped; taken by the CPU thread.
+  retro_atomic_int_t m_overflowed{};
 
-  void* m_retro_mic = nullptr;
+  // The open frontend microphone, or null. The CPU thread opens and closes it; the frontend
+  // thread reads it inside m_mic_gate, so a close waits for a read in progress.
+  retro_atomic_ptr_t m_retro_mic{};
+  Common::CallGate m_mic_gate;
 };
 }  // namespace ExpansionInterface

@@ -6,7 +6,6 @@
 #include <atomic>
 #include <functional>
 #include <memory>
-#include <mutex>
 
 #include "Common/HookableEvent.h"
 #include "Common/Matrix.h"
@@ -76,9 +75,8 @@ public:
   // set force_devices_release to true.
   void RemoveDevice(std::function<bool(const ciface::Core::Device*)> callback,
                     bool force_devices_release = false);
-  // This is mandatory to use on device populations functions that can be called concurrently by
-  // more than one thread, or that are called by a single other thread.
-  // Without this, our devices list might end up in a mixed state.
+  // Runs a backend's population, holding back the devices-changed callbacks until it is
+  // done so they run once for the batch.
   void PlatformPopulateDevices(const std::function<void()>& callback);
   bool IsInit() const { return m_is_init; }
   void UpdateInput();
@@ -111,11 +109,8 @@ private:
 
   Common::HookableEvent<> m_devices_changed_event;
 
-  mutable std::recursive_mutex m_devices_population_mutex;
   std::atomic<bool> m_is_init;
-  // This is now always protected by m_devices_population_mutex, so
-  // it doesn't really need to be a counter or atomic anymore (it could be a raw bool),
-  // but we keep it so for simplicity, in case we changed the design.
+  // Populations in progress on any thread; the last to finish runs the callbacks.
   std::atomic<int> m_populating_devices_counter;
   WindowSystemInfo m_wsi;
   std::atomic<float> m_aspect_ratio_adjustment = 1;

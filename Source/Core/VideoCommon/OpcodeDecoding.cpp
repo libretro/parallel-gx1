@@ -16,7 +16,6 @@
 
 #include "Common/Assert.h"
 #include "Common/Logging/Log.h"
-#include "Core/FifoPlayer/FifoRecorder.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 #include "VideoCommon/BPMemory.h"
@@ -32,7 +31,6 @@
 
 namespace OpcodeDecoder
 {
-bool g_record_fifo_data = false;
 
 template <bool is_preprocess>
 class RunCallback final : public Callback
@@ -227,15 +225,6 @@ public:
   OPCODE_CALLBACK(void OnCommand(const u8* data, u32 size))
   {
     ASSERT(size >= 1);
-    if constexpr (!is_preprocess)
-    {
-      // Display lists get added directly into the FIFO stream since this same callback is used to
-      // process them.
-      if (g_record_fifo_data && static_cast<Opcode>(data[0]) != Opcode::GX_CMD_CALL_DL)
-      {
-        Core::System::GetInstance().GetFifoRecorder().WriteGPCommand(data, size);
-      }
-    }
   }
 
   OPCODE_CALLBACK(CPState& GetCPState())

@@ -132,8 +132,6 @@ std::optional<IPCReply> USBV5ResourceManager::GetDeviceChange(const IOCtlRequest
 {
   if (request.buffer_out_size != 0x180 || m_devicechange_hook_request)
     return IPCReply(IPC_EINVAL);
-
-  std::lock_guard lk{m_devicechange_hook_address_mutex};
   m_devicechange_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), request.address);
   // If there are pending changes, the reply is sent immediately (instead of on device
   // insertion/removal).
@@ -166,8 +164,6 @@ IPCReply USBV5ResourceManager::Shutdown(const IOCtlRequest& request)
   {
     return IPCReply(IPC_EINVAL);
   }
-
-  std::lock_guard lk{m_devicechange_hook_address_mutex};
   if (m_devicechange_hook_request)
   {
     GetEmulationKernel().EnqueueIPCReply(*m_devicechange_hook_request, IPC_SUCCESS);
@@ -196,8 +192,6 @@ std::optional<IPCReply> USBV5ResourceManager::HandleDeviceIOCtl(const IOCtlReque
 {
   if (request.buffer_in == 0 || request.buffer_in_size != 0x20)
     return IPCReply(IPC_EINVAL);
-
-  std::lock_guard lock{m_usbv5_devices_mutex};
   USBV5Device* device = GetUSBV5Device(request.buffer_in);
   if (!device)
     return IPCReply(IPC_EINVAL);
@@ -223,7 +217,6 @@ IPCReply USBV5ResourceManager::GetUSBVersion(const IOCtlRequest& request) const
 void USBV5ResourceManager::OnDeviceChange(const ChangeEvent event,
                                           std::shared_ptr<USB::Device> device)
 {
-  std::lock_guard lock{m_usbv5_devices_mutex};
   const u64 host_device_id = device->GetId();
   if (event == ChangeEvent::Inserted)
   {
@@ -255,12 +248,11 @@ void USBV5ResourceManager::OnDeviceChange(const ChangeEvent event,
 
 void USBV5ResourceManager::OnDeviceChangeEnd()
 {
-  std::lock_guard lk{m_devicechange_hook_address_mutex};
   TriggerDeviceChangeReply();
   ++m_current_device_number;
 }
 
-// Must be called with m_devicechange_hook_address_mutex locked
+// Emulation thread only, like the rest of the host state.
 void USBV5ResourceManager::TriggerDeviceChangeReply()
 {
   if (!m_devicechange_hook_request)
@@ -271,8 +263,6 @@ void USBV5ResourceManager::TriggerDeviceChangeReply()
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
-
-  std::lock_guard lock{m_usbv5_devices_mutex};
   u8 num_devices = 0;
   for (auto it = m_usbv5_devices.crbegin(); it != m_usbv5_devices.crend(); ++it)
   {

@@ -3,12 +3,14 @@
 
 #pragma once
 
+#include <retro_atomic.h>
+
+#include "Common/Quiesce.h"
 #include "Common/CommonTypes.h"
 #include "VideoCommon/Assets/CustomAssetLibrary.h"
 
 #include <atomic>
 #include <memory>
-#include <mutex>
 
 namespace VideoCommon
 {
@@ -28,12 +30,16 @@ public:
   CustomAsset& operator=(const CustomAsset&) = delete;
   CustomAsset& operator=(CustomAsset&&) = delete;
 
-  // Loads the asset from the library returning the number of bytes loaded
+  // Loads the asset from the library returning the number of bytes loaded. Returns 0 without
+  // doing anything when another thread is loading or unloading this asset right now.
   std::size_t Load();
 
   // Unloads the asset data, resets the bytes loaded and
-  // returns the number of bytes unloaded
+  // returns the number of bytes unloaded; 0 if another thread is busy with it.
   std::size_t Unload();
+
+  // Asset data is freed through this once no thread is reading it.
+  static quiesce_t* DataQuiesce();
 
   // Returns the time that the data was last loaded
   TimeType GetLastLoadedTime() const;
@@ -55,8 +61,9 @@ private:
   CustomAssetLibrary::AssetID m_asset_id;
   std::size_t m_handle;
 
-  mutable std::mutex m_info_lock;
-  std::size_t m_bytes_loaded = 0;
+  // Held (with a CAS) by the one thread loading or unloading; anyone else backs off.
+  retro_atomic_int_t m_busy{};
+  std::size_t m_bytes_loaded = 0;  // only touched while busy
   std::atomic<TimeType> m_last_loaded_time = {};
 };
 
@@ -78,24 +85,35 @@ public:
   // they want to handle reloads
   [[nodiscard]] std::shared_ptr<UnderlyingType> GetData() const
   {
-    std::lock_guard lk(m_data_lock);
-    if (m_loaded)
-      return m_data;
-    return nullptr;
+    quiesce_enter(DataQuiesce());
+    const auto* holder = static_cast<const Holder*>(retro_atomic_load_acquire_ptr(&m_data));
+    std::shared_ptr<UnderlyingType> data = holder ? holder->data : nullptr;
+    quiesce_exit(DataQuiesce());
+    return data;
   }
+
+  ~CustomLoadableAsset() override { delete static_cast<Holder*>(retro_atomic_exchange_ptr(&m_data, nullptr)); }
 
 protected:
-  bool m_loaded = false;
-  mutable std::mutex m_data_lock;
-  std::shared_ptr<UnderlyingType> m_data;
+  // Publishes freshly loaded data; null unloads.
+  void SetData(std::shared_ptr<UnderlyingType> data)
+  {
+    Holder* const next = data ? new Holder{{}, std::move(data)} : nullptr;
+    if (void* old = retro_atomic_exchange_ptr(&m_data, next))
+      quiesce_retire(DataQuiesce(), &static_cast<Holder*>(old)->node, FreeHolder);
+  }
 
 private:
-  void UnloadImpl() override
+  struct Holder
   {
-    std::lock_guard lk(m_data_lock);
-    m_loaded = false;
-    m_data.reset();
-  }
+    quiesce_node_t node;  // first: the free callback casts it back
+    std::shared_ptr<UnderlyingType> data;
+  };
+  static void FreeHolder(quiesce_node_t* node) { delete reinterpret_cast<Holder*>(node); }
+
+  void UnloadImpl() override { SetData(nullptr); }
+
+  mutable retro_atomic_ptr_t m_data{};
 };
 
 // A helper struct that contains

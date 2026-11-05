@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <mutex>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -21,15 +20,18 @@
 
 namespace ExpansionInterface
 {
+// The most the emulated microphone can buffer: 64 samples a read, 500 reads deep.
+constexpr size_t MIC_STREAM_BYTES = 64 * 500 * sizeof(s16);
+
 void CEXIMic::StreamInit()
 {
-  stream_buffer = nullptr;
-  samples_avail = stream_wpos = stream_rpos = 0;
+  retro_spsc_init(&m_stream, MIC_STREAM_BYTES);
 }
 
 void CEXIMic::StreamTerminate()
 {
   StreamStop();
+  retro_spsc_free(&m_stream);
 }
 
 void CEXIMic::StreamStart()
@@ -37,55 +39,47 @@ void CEXIMic::StreamStart()
   if (!Libretro::Input::g_has_microphone_support)
     return;
 
-  if (m_retro_mic)
+  if (retro_atomic_load_acquire_ptr(&m_retro_mic))
     StreamStop();
 
-  stream_size = buff_size_samples * 500;
-  stream_buffer = new s16[stream_size];
+  // Start from an empty stream; the consumer side may drop what is there.
+  retro_spsc_skip(&m_stream, retro_spsc_read_avail(&m_stream));
 
   retro_microphone_params_t params{};
   params.rate = sample_rate;
-  m_retro_mic = Libretro::Input::g_microphone_interface.open_mic(&params);
+  retro_microphone_t* mic = Libretro::Input::g_microphone_interface.open_mic(&params);
 
-  if (!m_retro_mic)
+  if (!mic)
   {
     WARN_LOG_FMT(EXPANSIONINTERFACE, "CEXIMic: failed to open GC mic at {}Hz", sample_rate);
     return;
   }
 
-  Libretro::Input::g_microphone_interface.set_mic_state(
-      static_cast<retro_microphone_t*>(m_retro_mic), true);
+  Libretro::Input::g_microphone_interface.set_mic_state(mic, true);
+  retro_atomic_store_release_ptr(&m_retro_mic, mic);
 }
 
 void CEXIMic::StreamStop()
 {
-  if (m_retro_mic)
+  auto* mic = static_cast<retro_microphone_t*>(retro_atomic_exchange_ptr(&m_retro_mic, nullptr));
+  if (mic)
   {
-    Libretro::Input::g_microphone_interface.close_mic(
-        static_cast<retro_microphone_t*>(m_retro_mic));
-    m_retro_mic = nullptr;
+    // A read the frontend thread already started finishes before the mic goes.
+    Common::CallGateClose(&m_mic_gate);
+    Libretro::Input::g_microphone_interface.close_mic(mic);
+    Common::CallGateReopen(&m_mic_gate);
   }
 
-  samples_avail = stream_wpos = stream_rpos = 0;
-
-  delete[] stream_buffer;
-  stream_buffer = nullptr;
+  retro_spsc_skip(&m_stream, retro_spsc_read_avail(&m_stream));
 }
 
 void CEXIMic::StreamReadOne()
 {
-  std::lock_guard lk(ring_lock);
+  if (retro_atomic_exchange_int(&m_overflowed, 0))
+    status.buff_ovrflw = 1;
 
-  if (samples_avail >= buff_size_samples)
-  {
-    s16* last_buffer = &stream_buffer[stream_rpos];
-    std::memcpy(ring_buffer, last_buffer, buff_size);
-
-    samples_avail -= buff_size_samples;
-
-    stream_rpos += buff_size_samples;
-    stream_rpos %= stream_size;
-  }
+  if (retro_spsc_read_avail(&m_stream) >= static_cast<size_t>(buff_size))
+    retro_spsc_read(&m_stream, ring_buffer, buff_size);
 }
 
 // EXI Mic Device
@@ -229,29 +223,24 @@ void CEXIMic::TransferByte(u8& byte)
 
 void CEXIMic::PollLibretroMic()
 {
-  if (!m_retro_mic || !status.is_active)
+  // Frontend thread.
+  if (!Common::CallGateEnter(&m_mic_gate))
     return;
 
-  s16 buf[64];  // max buff_size_samples (ring_base << 2 = 128 bytes / 2 = 64 samples)
-
-  const int frames = Libretro::Input::g_microphone_interface.read_mic(
-      static_cast<retro_microphone_t*>(m_retro_mic), buf, buff_size_samples);
-
-  if (frames <= 0)
-    return;
-
-  std::lock_guard lk(ring_lock);
-  for (int i = 0; i < frames; i++)
+  if (auto* mic = static_cast<retro_microphone_t*>(retro_atomic_load_acquire_ptr(&m_retro_mic)))
   {
-    stream_buffer[stream_wpos] = buf[i];
-    stream_wpos = (stream_wpos + 1) % stream_size;
+    s16 buf[64];  // max buff_size_samples (ring_base << 2 = 128 bytes / 2 = 64 samples)
+
+    const int frames = Libretro::Input::g_microphone_interface.read_mic(mic, buf, std::size(buf));
+    if (frames > 0)
+    {
+      const size_t bytes = frames * sizeof(s16);
+      if (retro_spsc_write(&m_stream, buf, bytes) != bytes)
+        retro_atomic_store_release_int(&m_overflowed, 1);
+    }
   }
-  samples_avail += frames;
-  if (samples_avail > stream_size)
-  {
-    samples_avail = 0;
-    status.buff_ovrflw = 1;
-  }
+
+  Common::CallGateExit(&m_mic_gate);
 }
 
 }  // namespace ExpansionInterface

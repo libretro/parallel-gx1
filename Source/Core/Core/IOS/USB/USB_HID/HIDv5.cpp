@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <mutex>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -57,8 +56,6 @@ std::optional<IPCReply> USB_HIDv5::IOCtlV(const IOCtlVRequest& request)
     // IOS does not check the number of vectors, but let's do that to avoid out-of-bounds reads.
     if (request.in_vectors.size() + request.io_vectors.size() != 2)
       return IPCReply(IPC_EINVAL);
-
-    std::lock_guard lock{m_usbv5_devices_mutex};
     USBV5Device* device = GetUSBV5Device(request.in_vectors[0].address);
     if (!device)
       return IPCReply(IPC_EINVAL);

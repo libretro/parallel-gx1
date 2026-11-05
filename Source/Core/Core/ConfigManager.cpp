@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <fmt/format.h>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -79,6 +78,8 @@ void SConfig::Shutdown()
 SConfig::~SConfig()
 {
   SaveSettings();
+  delete static_cast<Metadata*>(retro_atomic_exchange_ptr(&m_metadata, nullptr));
+  quiesce_deinit(&m_metadata_quiesce);
 }
 
 void SConfig::SaveSettings()
@@ -116,22 +117,43 @@ void SConfig::ResetAllSettings()
   Config::OnConfigChanged();
 }
 
+void SConfig::FreeMetadata(quiesce_node_t* node)
+{
+  delete reinterpret_cast<Metadata*>(node);
+}
+
+SConfig::Metadata SConfig::ReadMetadata() const
+{
+  quiesce_enter(&m_metadata_quiesce);
+  const auto* metadata = static_cast<const Metadata*>(retro_atomic_load_acquire_ptr(&m_metadata));
+  Metadata copy = metadata ? *metadata : Metadata{};
+  quiesce_exit(&m_metadata_quiesce);
+  return copy;
+}
+
+template <typename Edit>
+void SConfig::EditMetadata(Edit&& edit)
+{
+  auto* next = new Metadata(ReadMetadata());
+  next->node = {};
+  edit(*next);
+  if (void* old = retro_atomic_exchange_ptr(&m_metadata, next))
+    quiesce_retire(&m_metadata_quiesce, &static_cast<Metadata*>(old)->node, FreeMetadata);
+}
+
 const std::string SConfig::GetGameID() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_game_id;
+  return ReadMetadata().game_id;
 }
 
 const std::string SConfig::GetGameTDBID() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_gametdb_id;
+  return ReadMetadata().gametdb_id;
 }
 
 const std::string SConfig::GetGameIDElfDol() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_game_id_elf_dol;
+  return ReadMetadata().game_id_elf_dol;
 }
 
 const std::string SConfig::GetGameIDForTextures() const
@@ -141,47 +163,41 @@ const std::string SConfig::GetGameIDForTextures() const
 
 const std::vector<std::string> SConfig::GetGameIDsForTextures() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
+  const Metadata metadata = ReadMetadata();
 
-  if (m_game_id_elf_dol.empty())
-    return {m_game_id};
+  if (metadata.game_id_elf_dol.empty())
+    return {metadata.game_id};
 
-  return {fmt::format("{}-{}", m_game_id_elf_dol, m_game_id), m_game_id};
+  return {fmt::format("{}-{}", metadata.game_id_elf_dol, metadata.game_id), metadata.game_id};
 }
 
 const std::string SConfig::GetTitleName() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_title_name;
+  return ReadMetadata().title_name;
 }
 
 const std::string SConfig::GetTitleDescription() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_title_description;
+  return ReadMetadata().title_description;
 }
 
 u64 SConfig::GetTitleID() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_title_id;
+  return ReadMetadata().title_id;
 }
 
 u16 SConfig::GetRevision() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_revision;
+  return ReadMetadata().revision;
 }
 
 u32 SConfig::GetSimulatedMemorySize() const
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  return m_simulated_memory_size;
+  return ReadMetadata().simulated_memory_size;
 }
 
 void SConfig::ResetRunningGameMetadata()
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
   SetRunningGameMetadata("00000000", "", 0, 0, DiscIO::Region::Unknown, 0);
   SetElfDolID("");
 }
@@ -189,8 +205,6 @@ void SConfig::ResetRunningGameMetadata()
 void SConfig::SetRunningGameMetadata(const DiscIO::Volume& volume,
                                      const DiscIO::Partition& partition)
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-
   if (partition == volume.GetGamePartition())
   {
     SetRunningGameMetadata(volume.GetGameID(), volume.GetGameTDBID(),
@@ -208,7 +222,6 @@ void SConfig::SetRunningGameMetadata(const DiscIO::Volume& volume,
 
 void SConfig::SetRunningGameMetadata(const IOS::ES::TMDReader& tmd, DiscIO::Platform platform)
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
   const u64 tmd_title_id = tmd.GetTitleId();
 
   // If we're launching a disc game, we want to read the revision from
@@ -226,7 +239,6 @@ void SConfig::SetRunningGameMetadata(const IOS::ES::TMDReader& tmd, DiscIO::Plat
 
 void SConfig::SetRunningGameMetadata(const std::string& game_id)
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
   SetRunningGameMetadata(game_id, "", 0, 0, DiscIO::Region::Unknown, 0);
 }
 
@@ -234,15 +246,10 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
                                      u64 title_id, u16 revision, DiscIO::Region region,
                                      u32 simulated_memory_size)
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  const bool was_changed = m_game_id != game_id || m_gametdb_id != gametdb_id ||
-                           m_title_id != title_id || m_revision != revision ||
-                           m_simulated_memory_size != simulated_memory_size;
-  m_game_id = game_id;
-  m_gametdb_id = gametdb_id;
-  m_title_id = title_id;
-  m_revision = revision;
-  m_simulated_memory_size = simulated_memory_size;
+  const Metadata current = ReadMetadata();
+  const bool was_changed = current.game_id != game_id || current.gametdb_id != gametdb_id ||
+                           current.title_id != title_id || current.revision != revision ||
+                           current.simulated_memory_size != simulated_memory_size;
 
   if (game_id.length() == 6)
   {
@@ -258,26 +265,41 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
     m_debugger_game_id.clear();
   }
 
-  if (!was_changed)
-    return;
-
-  if (game_id == "00000000")
+  std::string title_name = current.title_name;
+  std::string title_description = current.title_description;
+  if (was_changed && game_id == "00000000")
   {
-    m_title_name.clear();
-    m_title_description.clear();
-    return;
+    title_name.clear();
+    title_description.clear();
   }
+  else if (was_changed)
+  {
+    const Core::TitleDatabase title_database;
+    auto& system = Core::System::GetInstance();
+    const DiscIO::Language language = GetLanguageAdjustedForRegion(system.IsWii(), region);
+    title_name = title_database.GetTitleName(gametdb_id, language);
+    title_description = title_database.Describe(gametdb_id, language);
+  }
+
+  EditMetadata([&](Metadata& metadata) {
+    metadata.game_id = game_id;
+    metadata.gametdb_id = gametdb_id;
+    metadata.title_id = title_id;
+    metadata.revision = revision;
+    metadata.simulated_memory_size = simulated_memory_size;
+    metadata.title_name = title_name;
+    metadata.title_description = title_description;
+  });
+
+  if (!was_changed || game_id == "00000000")
+    return;
 
   AchievementManager::GetInstance().CloseGame();
 
-  const Core::TitleDatabase title_database;
-  auto& system = Core::System::GetInstance();
-  const DiscIO::Language language = GetLanguageAdjustedForRegion(system.IsWii(), region);
-  m_title_name = title_database.GetTitleName(m_gametdb_id, language);
-  m_title_description = title_database.Describe(m_gametdb_id, language);
-  NOTICE_LOG_FMT(CORE, "Active title: {}", m_title_description);
+  NOTICE_LOG_FMT(CORE, "Active title: {}", title_description);
   Host_TitleChanged();
 
+  auto& system = Core::System::GetInstance();
   const bool is_running_or_starting = Core::IsRunningOrStarting(system);
   if (is_running_or_starting)
     Core::UpdateTitle(system);
@@ -288,8 +310,7 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
 
 void SConfig::SetElfDolID(const std::string& game_id)
 {
-  std::lock_guard<std::recursive_mutex> lock(m_metadata_lock);
-  m_game_id_elf_dol = game_id;
+  EditMetadata([&game_id](Metadata& metadata) { metadata.game_id_elf_dol = game_id; });
 }
 
 void SConfig::OnESTitleChanged()
@@ -546,17 +567,17 @@ DiscIO::Language SConfig::GetLanguageAdjustedForRegion(bool wii, DiscIO::Region 
 
 Common::IniFile SConfig::LoadDefaultGameIni() const
 {
-  return LoadDefaultGameIni(GetGameID(), m_revision);
+  return LoadDefaultGameIni(GetGameID(), GetRevision());
 }
 
 Common::IniFile SConfig::LoadLocalGameIni() const
 {
-  return LoadLocalGameIni(GetGameID(), m_revision);
+  return LoadLocalGameIni(GetGameID(), GetRevision());
 }
 
 Common::IniFile SConfig::LoadGameIni() const
 {
-  return LoadGameIni(GetGameID(), m_revision);
+  return LoadGameIni(GetGameID(), GetRevision());
 }
 
 Common::IniFile SConfig::LoadDefaultGameIni(std::string_view id, std::optional<u16> revision)
@@ -593,7 +614,7 @@ std::string SConfig::GetGameTDBImageRegionCode(bool wii, DiscIO::Region region) 
   {
     // Taiwanese games share the Japanese region code however their title ID ends with 'W'.
     // GameTDB differentiates the covers using the code "ZH".
-    if (m_game_id.size() >= 4 && m_game_id.at(3) == 'W')
+    if (const std::string game_id = GetGameID(); game_id.size() >= 4 && game_id.at(3) == 'W')
       return "ZH";
 
     return "JA";

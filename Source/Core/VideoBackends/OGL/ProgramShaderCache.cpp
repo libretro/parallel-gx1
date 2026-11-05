@@ -50,7 +50,7 @@ static int num_failures = 0;
 
 static GLuint CurrentProgram = 0;
 ProgramShaderCache::PipelineProgramMap ProgramShaderCache::s_pipeline_programs;
-std::mutex ProgramShaderCache::s_pipeline_program_lock;
+quiesce_t ProgramShaderCache::s_pipeline_program_quiesce;
 static std::string s_glsl_header;
 static std::atomic<u64> s_shader_counter{0};
 static thread_local bool s_is_shared_context = false;
@@ -471,8 +471,11 @@ void ProgramShaderCache::Shutdown()
   s_last_VAO = 0;
 
   // All pipeline programs should have been released.
-  DEBUG_ASSERT(s_pipeline_programs.empty());
-  s_pipeline_programs.clear();
+  // Every pipeline is gone by now, and with it every program.
+  s_pipeline_programs.ForEach([](retro_atomic_ptr_t* slot) {
+    DEBUG_ASSERT(!retro_atomic_load_acquire_ptr(slot));
+  });
+  quiesce_deinit(&s_pipeline_program_quiesce);
 }
 
 void ProgramShaderCache::CreateAttributelessVAO()
@@ -540,14 +543,14 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
   PipelineProgramKey key = {vertex_shader ? vertex_shader->GetID() : 0,
                             geometry_shader ? geometry_shader->GetID() : 0,
                             pixel_shader ? pixel_shader->GetID() : 0};
+  retro_atomic_ptr_t* const slot = s_pipeline_programs.Slot(key);
   {
-    std::lock_guard guard{s_pipeline_program_lock};
-    auto iter = s_pipeline_programs.find(key);
-    if (iter != s_pipeline_programs.end())
-    {
-      iter->second->reference_count++;
-      return iter->second.get();
-    }
+    quiesce_enter(&s_pipeline_program_quiesce);
+    auto* existing = static_cast<PipelineProgram*>(retro_atomic_load_acquire_ptr(slot));
+    const bool referenced = existing && TryReference(existing);
+    quiesce_exit(&s_pipeline_program_quiesce);
+    if (referenced)
+      return existing;
   }
 
   std::unique_ptr<PipelineProgram> prog = std::make_unique<PipelineProgram>();
@@ -618,17 +621,6 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
     }
   }
 
-  // Lock to insert. A duplicate program may have been created in the meantime.
-  std::lock_guard guard{s_pipeline_program_lock};
-  auto iter = s_pipeline_programs.find(key);
-  if (iter != s_pipeline_programs.end())
-  {
-    // Destroy this program, and use the one which was created first.
-    prog->shader.Destroy();
-    iter->second->reference_count++;
-    return iter->second.get();
-  }
-
   // Set program variables on the shader which will be returned.
   // This is only needed for drivers which don't support binding layout.
   prog->shader.SetProgramVariables();
@@ -638,8 +630,40 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
   if (s_is_shared_context)
     glFinish();
 
-  auto ip = s_pipeline_programs.emplace(key, std::move(prog));
-  return ip.first->second.get();
+  // Publish it, unless another thread made the same program meanwhile; a dead program in the
+  // slot is simply replaced.
+  for (;;)
+  {
+    quiesce_enter(&s_pipeline_program_quiesce);
+    auto* existing = static_cast<PipelineProgram*>(retro_atomic_load_acquire_ptr(slot));
+    if (existing && TryReference(existing))
+    {
+      quiesce_exit(&s_pipeline_program_quiesce);
+      // Destroy this program, and use the one which was created first.
+      prog->shader.Destroy();
+      return existing;
+    }
+    const bool published = retro_atomic_cas_ptr(slot, existing, prog.get());
+    quiesce_exit(&s_pipeline_program_quiesce);
+    if (published)
+      return prog.release();
+  }
+}
+
+bool ProgramShaderCache::TryReference(PipelineProgram* prog)
+{
+  std::size_t count = prog->reference_count.load();
+  while (count != 0)
+  {
+    if (prog->reference_count.compare_exchange_weak(count, count + 1))
+      return true;
+  }
+  return false;
+}
+
+void ProgramShaderCache::FreePipelineProgram(quiesce_node_t* node)
+{
+  delete reinterpret_cast<PipelineProgram*>(node);
 }
 
 void ProgramShaderCache::ReleasePipelineProgram(PipelineProgram* prog)
@@ -649,10 +673,9 @@ void ProgramShaderCache::ReleasePipelineProgram(PipelineProgram* prog)
 
   prog->shader.Destroy();
 
-  std::lock_guard guard{s_pipeline_program_lock};
-  const auto iter = s_pipeline_programs.find(prog->key);
-  ASSERT(iter != s_pipeline_programs.end() && prog == iter->second.get());
-  s_pipeline_programs.erase(iter);
+  // Unless a newer program already took its slot.
+  retro_atomic_cas_ptr(s_pipeline_programs.Slot(prog->key), prog, nullptr);
+  quiesce_retire(&s_pipeline_program_quiesce, &prog->node, FreePipelineProgram);
 }
 
 void ProgramShaderCache::CreateHeader()

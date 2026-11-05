@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <mutex>
 #include <queue>
 #include <span>
 #include <vector>
@@ -107,7 +106,6 @@ public:
   std::string FindFigure(u32 character) const;
 
 protected:
-  std::mutex m_infinity_mutex;
   std::array<InfinityFigure, 9> m_figures;
 
 private:

@@ -138,15 +138,55 @@ ControlState ReshapableInput::GetDeadzoneRadiusAtAngle(double angle) const
   return GetInputRadiusAtAngle(angle) * GetDeadzonePercentage();
 }
 
+ReshapableInput::~ReshapableInput()
+{
+  delete static_cast<Shape*>(retro_atomic_exchange_ptr(&m_shape, nullptr));
+}
+
+void ReshapableInput::FreeShape(quiesce_node_t* node)
+{
+  delete reinterpret_cast<Shape*>(node);
+}
+
+const ReshapableInput::Shape& ReshapableInput::PeekShape() const
+{
+  static const Shape s_default{};
+  const auto* shape = static_cast<const Shape*>(retro_atomic_load_acquire_ptr(&m_shape));
+  return shape ? *shape : s_default;
+}
+
+template <typename Edit>
+void ReshapableInput::EditShape(Edit&& edit)
+{
+  ciface::InputReadScope scope;
+  for (;;)
+  {
+    void* const cur = retro_atomic_load_acquire_ptr(&m_shape);
+    const Shape& from = cur ? *static_cast<const Shape*>(cur) : PeekShape();
+    auto* next = new Shape{{}, from.calibration, from.center};
+    edit(*next);
+    if (retro_atomic_cas_ptr(&m_shape, cur, next))
+    {
+      if (cur)
+        quiesce_retire(ciface::InputQuiesce(), &static_cast<Shape*>(cur)->node, FreeShape);
+      return;
+    }
+    delete next;
+  }
+}
+
 ControlState ReshapableInput::GetInputRadiusAtAngle(double angle) const
 {
+  ciface::InputReadScope scope;
+  const CalibrationData& calibration = PeekShape().calibration;
+
   // Handle the "default" state.
-  if (m_calibration.empty())
+  if (calibration.empty())
   {
     return GetDefaultInputRadiusAtAngle(angle);
   }
 
-  return GetCalibrationDataRadiusAtAngle(m_calibration, angle);
+  return GetCalibrationDataRadiusAtAngle(calibration, angle);
 }
 
 ControlState ReshapableInput::GetDeadzonePercentage() const
@@ -182,16 +222,19 @@ ControlState ReshapableInput::GetDefaultInputRadiusAtAngle(double angle) const
 
 void ReshapableInput::SetCalibrationToDefault()
 {
-  m_calibration.clear();
+  EditShape([](Shape& shape) { shape.calibration.clear(); });
 }
 
 void ReshapableInput::SetCalibrationFromGate(const StickGate& gate)
 {
-  m_calibration.resize(gate.GetIdealCalibrationSampleCount().value_or(CALIBRATION_SAMPLE_COUNT));
+  CalibrationData calibration(
+      gate.GetIdealCalibrationSampleCount().value_or(CALIBRATION_SAMPLE_COUNT));
 
   u32 i = 0;
-  for (auto& val : m_calibration)
-    val = gate.GetRadiusAtAngle(MathUtil::TAU * i++ / m_calibration.size());
+  for (auto& val : calibration)
+    val = gate.GetRadiusAtAngle(MathUtil::TAU * i++ / calibration.size());
+
+  SetCalibrationData(std::move(calibration));
 }
 
 void ReshapableInput::UpdateCalibrationData(CalibrationData& data, Common::DVec2 point1,
@@ -207,24 +250,26 @@ void ReshapableInput::UpdateCalibrationData(CalibrationData& data, Common::DVec2
   }
 }
 
-const ReshapableInput::CalibrationData& ReshapableInput::GetCalibrationData() const
+ReshapableInput::CalibrationData ReshapableInput::GetCalibrationData() const
 {
-  return m_calibration;
+  ciface::InputReadScope scope;
+  return PeekShape().calibration;
 }
 
 void ReshapableInput::SetCalibrationData(CalibrationData data)
 {
-  m_calibration = std::move(data);
+  EditShape([&data](Shape& shape) { shape.calibration = data; });
 }
 
-const ReshapableInput::ReshapeData& ReshapableInput::GetCenter() const
+ReshapableInput::ReshapeData ReshapableInput::GetCenter() const
 {
-  return m_center;
+  ciface::InputReadScope scope;
+  return PeekShape().center;
 }
 
 void ReshapableInput::SetCenter(ReshapableInput::ReshapeData center)
 {
-  m_center = center;
+  EditShape([&center](Shape& shape) { shape.center = center; });
 }
 
 void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::string& base_name)
@@ -236,19 +281,19 @@ void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::s
   // Special handling for "Modifier" button "Range" settings which default to 50% instead of 100%.
   if (const auto* modifier_input = GetModifierInput())
   {
-    section->Get(group + modifier_input->name + "/Range", &modifier_input->control_ref->range,
-                 50.0);
-    modifier_input->control_ref->range /= 100;
+    double range = 50.0;
+    section->Get(group + modifier_input->name + "/Range", &range, 50.0);
+    modifier_input->control_ref->SetRange(range / 100);
   }
 
   std::string load_str;
   section->Get(group + CALIBRATION_CONFIG_NAME, &load_str, "");
   const auto load_data = SplitString(load_str, ' ');
 
-  m_calibration.assign(load_data.size(), CALIBRATION_DEFAULT_VALUE);
+  CalibrationData calibration(load_data.size(), CALIBRATION_DEFAULT_VALUE);
 
   auto it = load_data.begin();
-  for (auto& sample : m_calibration)
+  for (auto& sample : calibration)
   {
     if (TryParse(*(it++), &sample))
       sample /= CALIBRATION_CONFIG_SCALE;
@@ -257,16 +302,21 @@ void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::s
   section->Get(group + CENTER_CONFIG_NAME, &load_str, "");
   const auto center_data = SplitString(load_str, ' ');
 
-  m_center = Common::DVec2();
+  ReshapeData center = Common::DVec2();
 
   if (center_data.size() == 2)
   {
-    if (TryParse(center_data[0], &m_center.x))
-      m_center.x /= CENTER_CONFIG_SCALE;
+    if (TryParse(center_data[0], &center.x))
+      center.x /= CENTER_CONFIG_SCALE;
 
-    if (TryParse(center_data[1], &m_center.y))
-      m_center.y /= CENTER_CONFIG_SCALE;
+    if (TryParse(center_data[1], &center.y))
+      center.y /= CENTER_CONFIG_SCALE;
   }
+
+  EditShape([&calibration, &center](Shape& shape) {
+    shape.calibration = calibration;
+    shape.center = center;
+  });
 }
 
 void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const std::string& base_name)
@@ -278,19 +328,21 @@ void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const std::s
   // Special handling for "Modifier" button "Range" settings which default to 50% instead of 100%.
   if (const auto* modifier_input = GetModifierInput())
   {
-    section->Set(group + modifier_input->name + "/Range", modifier_input->control_ref->range * 100,
+    section->Set(group + modifier_input->name + "/Range", modifier_input->control_ref->GetRange() * 100,
                  50.0);
   }
 
+  const CalibrationData calibration = GetCalibrationData();
+  const ReshapeData center = GetCenter();
   const std::ranges::transform_view scaled_calibration(
-      m_calibration, [](ControlState val) { return val * CALIBRATION_CONFIG_SCALE; });
+      calibration, [](ControlState val) { return val * CALIBRATION_CONFIG_SCALE; });
   section->Set(group + CALIBRATION_CONFIG_NAME,
                fmt::format("{:.2f}", fmt::join(scaled_calibration, " ")), "");
 
   // Save center value.
   static constexpr char center_format[] = "{:.2f} {:.2f}";
-  const auto center_data = fmt::format(center_format, m_center.x * CENTER_CONFIG_SCALE,
-                                       m_center.y * CENTER_CONFIG_SCALE);
+  const auto center_data = fmt::format(center_format, center.x * CENTER_CONFIG_SCALE,
+                                       center.y * CENTER_CONFIG_SCALE);
   section->Set(group + CENTER_CONFIG_NAME, center_data, fmt::format(center_format, 0.0, 0.0));
 }
 
@@ -298,8 +350,13 @@ ReshapableInput::ReshapeData ReshapableInput::Reshape(ControlState x, ControlSta
                                                       ControlState modifier,
                                                       ControlState clamp) const
 {
-  x -= m_center.x;
-  y -= m_center.y;
+  ReshapeData center;
+  {
+    ciface::InputReadScope scope;
+    center = PeekShape().center;
+  }
+  x -= center.x;
+  y -= center.y;
 
   // We run this even if both x and y will be zero.
   // In that case, std::atan2(0, 0) returns a valid non-NaN value, but the exact value

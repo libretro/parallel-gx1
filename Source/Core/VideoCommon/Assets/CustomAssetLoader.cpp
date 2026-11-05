@@ -60,11 +60,8 @@ void CustomAssetLoader::StopWorkerThreads()
     return;
 
   // Signal worker threads to stop, and wake all of them.
-  {
-    std::lock_guard guard(m_assets_to_load_lock);
-    m_exit_flag.Set();
-    m_worker_thread_wake.notify_all();
-  }
+  m_exit_flag.Set();
+  retro_eventcount_notify(&m_worker_thread_wake);
 
   // Wait for worker threads to exit.
   for (WorkerThread& worker : m_worker_threads)
@@ -79,6 +76,11 @@ void CustomAssetLoader::WorkerThreadEntry(void* data)
   worker->owner->WorkerThreadRun(worker->index);
 }
 
+void CustomAssetLoader::FreeBatch(quiesce_node_t* node)
+{
+  delete reinterpret_cast<Batch*>(node);
+}
+
 void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
 {
 #if defined(__LIBRETRO__) && defined(SKIP_ASSETLOADER_THREAD)
@@ -86,60 +88,69 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
 #endif
   Common::SetCurrentThreadName(fmt::format("Asset Loader {}", thread_index).c_str());
 
-  std::unique_lock load_lock(m_assets_to_load_lock);
-  while (true)
+  while (!m_exit_flag.IsSet())
   {
-    m_worker_thread_wake.wait(load_lock,
-                              [&] { return !m_assets_to_load.empty() || m_exit_flag.IsSet(); });
-
-    if (m_exit_flag.IsSet())
-      return;
-
-    // If more memory than allowed has already been loaded, we will load nothing more
-    //  until the next ScheduleAssetsToLoad from Manager.
-    if (m_change_in_memory > m_allowed_memory)
+    // Claim the next asset of the current batch, if it has one left.
+    CustomAsset* item = nullptr;
+    quiesce_enter(&m_batch_quiesce);
+    if (auto* batch = static_cast<Batch*>(retro_atomic_load_acquire_ptr(&m_batch)))
     {
-      m_assets_to_load.clear();
+      // If more memory than allowed has already been loaded, we will load nothing more
+      //  until the next ScheduleAssetsToLoad from Manager.
+      if (m_change_in_memory > batch->allowed_memory)
+        retro_atomic_store_release_size(&batch->cursor, batch->assets.size());
+
+      const size_t index = retro_atomic_fetch_add_size(&batch->cursor, 1);
+      if (index < batch->assets.size())
+        item = batch->assets[index];
+    }
+    quiesce_exit(&m_batch_quiesce);
+
+    if (!item)
+    {
+      // Nothing left: park until a new batch or the exit flag. The check follows the
+      // registration, so a notify in between is not lost.
+      const int key = retro_eventcount_prepare_wait(&m_worker_thread_wake);
+      bool has_work = m_exit_flag.IsSet();
+      quiesce_enter(&m_batch_quiesce);
+      if (const auto* batch = static_cast<const Batch*>(retro_atomic_load_acquire_ptr(&m_batch)))
+        has_work |= retro_atomic_load_acquire_size(const_cast<retro_atomic_size_t*>(&batch->cursor)) <
+                    batch->assets.size();
+      quiesce_exit(&m_batch_quiesce);
+      if (has_work)
+        retro_eventcount_cancel_wait(&m_worker_thread_wake);
+      else
+        retro_eventcount_commit_wait(&m_worker_thread_wake, key);
       continue;
     }
 
-    auto* const item = m_assets_to_load.front();
-    m_assets_to_load.pop_front();
-
-    // Make sure another thread isn't loading this handle.
-    if (!m_handles_in_progress.insert(item->GetHandle()).second)
-      continue;
-
-    load_lock.unlock();
-
-    // Unload previously loaded asset.
+    // Unload previously loaded asset. An asset another thread is busy with comes back 0
+    // and is skipped; the Manager schedules it again.
     m_change_in_memory -= item->Unload();
 
     const std::size_t bytes_loaded = item->Load();
     m_change_in_memory += s64(bytes_loaded);
 
-    load_lock.lock();
+    INFO_LOG_FMT(VIDEO, "CustomAssetLoader thread {} loaded: {} ({})", thread_index,
+                 item->GetAssetId(), UICommon::FormatSize(bytes_loaded));
 
-    {
-      INFO_LOG_FMT(VIDEO, "CustomAssetLoader thread {} loaded: {} ({})", thread_index,
-                   item->GetAssetId(), UICommon::FormatSize(bytes_loaded));
-
-      std::lock_guard lk{m_assets_loaded_lock};
-      m_asset_handles_loaded.emplace_back(item->GetHandle(), bytes_loaded > 0);
-
-      // Make sure no other threads try to re-process this item.
-      // Manager will take the handles and re-ScheduleAssetsToLoad based on timestamps if needed.
-      std::erase(m_assets_to_load, item);
-    }
-
-    m_handles_in_progress.erase(item->GetHandle());
+    auto* loaded = new Loaded{{}, {item->GetHandle(), bytes_loaded > 0}};
+    mpsc_stack_push(&m_loaded, &loaded->link);
   }
 }
 
 auto CustomAssetLoader::TakeLoadResults() -> LoadResults
 {
-  std::lock_guard guard(m_assets_loaded_lock);
-  return {std::move(m_asset_handles_loaded), m_change_in_memory.exchange(0)};
+  LoadResults results{{}, 0};
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_loaded)); node;)
+  {
+    auto* loaded = reinterpret_cast<Loaded*>(node);
+    node = node->next;
+    results.asset_handles.push_back(loaded->handle);
+    delete loaded;
+  }
+  results.change_in_memory = m_change_in_memory.exchange(0);
+  return results;
 }
 
 void CustomAssetLoader::ScheduleAssetsToLoad(std::list<CustomAsset*> assets_to_load,
@@ -148,11 +159,13 @@ void CustomAssetLoader::ScheduleAssetsToLoad(std::list<CustomAsset*> assets_to_l
   if (assets_to_load.empty()) [[unlikely]]
     return;
 
-  // There's new assets to process, notify worker threads
-  std::lock_guard guard(m_assets_to_load_lock);
-  m_allowed_memory = allowed_memory;
-  m_assets_to_load = std::move(assets_to_load);
-  m_worker_thread_wake.notify_all();
+  // There's new assets to process, publish them and notify worker threads.
+  auto* batch = new Batch{{}, {assets_to_load.begin(), assets_to_load.end()},
+                          static_cast<s64>(allowed_memory), {}};
+  retro_atomic_size_init(&batch->cursor, 0);
+  if (void* old = retro_atomic_exchange_ptr(&m_batch, batch))
+    quiesce_retire(&m_batch_quiesce, &static_cast<Batch*>(old)->node, FreeBatch);
+  retro_eventcount_notify(&m_worker_thread_wake);
 }
 
 void CustomAssetLoader::Reset(bool restart_worker_threads)
@@ -160,9 +173,10 @@ void CustomAssetLoader::Reset(bool restart_worker_threads)
   const std::size_t worker_thread_count = m_worker_threads.size();
   StopWorkerThreads();
 
-  m_assets_to_load.clear();
-  m_asset_handles_loaded.clear();
-  m_allowed_memory = 0;
+  // No worker runs now.
+  delete static_cast<Batch*>(retro_atomic_exchange_ptr(&m_batch, nullptr));
+  quiesce_deinit(&m_batch_quiesce);
+  TakeLoadResults();
   m_change_in_memory = 0;
 
   if (restart_worker_threads)

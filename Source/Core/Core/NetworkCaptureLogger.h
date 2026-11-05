@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <map>
 #include <memory>
-#include <mutex>
+#include <vector>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -17,6 +17,8 @@ using socklen_t = int;
 #include <sys/types.h>
 #endif
 
+#include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
 #include "Common/CommonTypes.h"
 
 namespace Common
@@ -113,8 +115,19 @@ private:
   void LogIPv4(LogType log_type, const u8* data, u16 length, s32 socket, const sockaddr_in& from,
                const sockaddr_in& to);
 
+  // Packets come from the CPU thread, the BBA thread and the network worker. Each one queues
+  // its packet, and whichever finds no writer at work becomes it and writes everything
+  // queued, its own and the others', so nobody waits on the file.
+  struct Packet
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    std::vector<u8> bytes;
+  };
+  void Write(const u8* data, std::size_t length);
+
   std::unique_ptr<Common::PCAP> m_file;
-  std::mutex m_io_mutex;
+  mpsc_stack_t m_packets{};
+  retro_atomic_int_t m_writing{};
   std::map<s32, u32> m_read_sequence_number;
   std::map<s32, u32> m_write_sequence_number;
 };

@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <iterator>
-#include <mutex>
 #include <tuple>
 #include <vector>
 
@@ -47,20 +46,16 @@ static Installation s_code_handler_installed = Installation::Uninstalled;
 // the currently active codes
 static std::vector<GeckoCode> s_active_codes;
 static std::vector<GeckoCode> s_synced_codes;
-static std::mutex s_active_codes_lock;
 
 size_t CountEnabledCodes()
 {
   if (!Config::AreCheatsEnabled())
     return 0;
-
-  std::lock_guard guard(s_active_codes_lock);
   return s_active_codes.size();
 }
 
 void SetActiveCodes(std::span<const GeckoCode> gcodes, const std::string& game_id, u16 revision)
 {
-  std::lock_guard lk(s_active_codes_lock);
 
   s_active_codes.clear();
   if (Config::AreCheatsEnabled())
@@ -96,7 +91,6 @@ void UpdateSyncedCodes(std::span<const GeckoCode> gcodes)
 
 std::vector<GeckoCode> SetAndReturnActiveCodes(std::span<const GeckoCode> gcodes)
 {
-  std::lock_guard lk(s_active_codes_lock);
 
   s_active_codes.clear();
   if (Config::AreCheatsEnabled())
@@ -112,7 +106,7 @@ std::vector<GeckoCode> SetAndReturnActiveCodes(std::span<const GeckoCode> gcodes
   return s_active_codes;
 }
 
-// Requires s_active_codes_lock
+// Emulation thread only, like everything touching the active codes.
 // NOTE: Refer to "codehandleronly.s" from Gecko OS.
 static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
 {
@@ -221,14 +215,12 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
 // modifications will be reset]
 void DoState(PointerWrap& p)
 {
-  std::lock_guard codes_lock(s_active_codes_lock);
   p.Do(s_code_handler_installed);
   // FIXME: The active codes list will disagree with the embedded GCT
 }
 
 void Shutdown()
 {
-  std::lock_guard codes_lock(s_active_codes_lock);
   s_active_codes.clear();
   s_code_handler_installed = Installation::Uninstalled;
 }
@@ -238,9 +230,8 @@ void RunCodeHandler(const Core::CPUThreadGuard& guard)
   if (!Config::AreCheatsEnabled())
     return;
 
-  // NOTE: Need to release the lock because of GUI deadlocks with PanicAlert in HostWrite_*
+  // Emulation thread only; the codes are never touched elsewhere.
   {
-    std::lock_guard codes_lock(s_active_codes_lock);
     if (s_code_handler_installed != Installation::Installed)
     {
       // Don't spam retry if the install failed. The corrupt / missing disk file is not likely to be

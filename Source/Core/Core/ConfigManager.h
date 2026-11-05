@@ -3,12 +3,14 @@
 
 #pragma once
 
-#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <retro_atomic.h>
+
+#include "Common/Quiesce.h"
 #include "Common/CommonTypes.h"
 
 namespace Common
@@ -136,15 +138,29 @@ private:
                               u32 simulated_memory_size);
 
   static SConfig* m_Instance;
-  mutable std::recursive_mutex m_metadata_lock;
 
-  std::string m_game_id;
-  std::string m_game_id_elf_dol;
-  std::string m_gametdb_id;
-  std::string m_title_name;
-  std::string m_title_description;
-  u64 m_title_id;
-  u16 m_revision;
-  // Memory size requested by game's header.
-  u32 m_simulated_memory_size;
+  // The running game's identity: written by the emulation thread at boot and on a title
+  // change, read from any thread. Published whole, each getter copies from one version.
+  struct Metadata
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    std::string game_id;
+    std::string game_id_elf_dol;
+    std::string gametdb_id;
+    std::string title_name;
+    std::string title_description;
+    u64 title_id = 0;
+    u16 revision = 0;
+    // Memory size requested by game's header.
+    u32 simulated_memory_size = 0;
+  };
+  static void FreeMetadata(quiesce_node_t* node);
+  // A copy of the current metadata.
+  Metadata ReadMetadata() const;
+  // Swaps in edit's result, made from a copy of the current metadata. Emulation thread.
+  template <typename Edit>
+  void EditMetadata(Edit&& edit);
+
+  mutable quiesce_t m_metadata_quiesce{};
+  retro_atomic_ptr_t m_metadata{};
 };

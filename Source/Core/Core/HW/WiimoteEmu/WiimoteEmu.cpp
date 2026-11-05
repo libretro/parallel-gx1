@@ -546,7 +546,7 @@ void Wiimote::SetWiimoteDeviceIndex(u8 index)
 void Wiimote::PrepareInput(WiimoteEmu::DesiredWiimoteState* target_state,
                            SensorBarState sensor_bar_state)
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   BuildDesiredWiimoteState(target_state, sensor_bar_state);
 }
 
@@ -676,7 +676,7 @@ void Wiimote::SendDataReport(const DesiredWiimoteState& target_state)
 
 ButtonData Wiimote::GetCurrentlyPressedButtons()
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
 
   ButtonData buttons{};
   m_buttons->GetState(&buttons.hex, button_bitmasks, m_input_override_function);
@@ -823,7 +823,7 @@ bool Wiimote::IsUpright() const
 
 void Wiimote::SetRumble(bool on)
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   m_rumble->controls.front()->control_ref->State(on);
 }
 

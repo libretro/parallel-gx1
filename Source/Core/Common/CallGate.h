@@ -21,4 +21,9 @@ struct CallGate
 bool CallGateEnter(CallGate* gate);
 void CallGateExit(CallGate* gate);
 void CallGateClose(CallGate* gate);
+// Returns once the calls inside now have left, leaving the gate open: for when the caller
+// has already unpublished what those calls might be using.
+void CallGateDrain(CallGate* gate);
+// Undoes one CallGateClose; the gate lets calls in again once every close is undone.
+void CallGateReopen(CallGate* gate);
 }  // namespace Common

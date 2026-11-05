@@ -3,9 +3,9 @@
 
 #include "Core/HW/DSPLLE/DSPLLE.h"
 
-#include <mutex>
 #include <string>
 
+#include "Common/CallGate.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -60,8 +60,8 @@ void DSPLLE::DSPThread(void* data)
     const int cycles = static_cast<int>(dsp_lle->m_cycle_count.load());
     if (cycles > 0)
     {
-      std::unique_lock dsp_thread_lock(dsp_lle->m_dsp_thread_mutex, std::try_to_lock);
-      if (dsp_thread_lock)
+      // Shut while a PauseAndLock holds the DSP; a run already inside finishes first.
+      if (Common::CallGateEnter(&dsp_lle->m_dsp_thread_gate))
       {
         if (dsp_lle->m_dsp_core.IsJITCreated())
         {
@@ -72,6 +72,7 @@ void DSPLLE::DSPThread(void* data)
           dsp_lle->m_dsp_core.GetInterpreter().RunCyclesThread(cycles);
         }
         dsp_lle->m_cycle_count.store(0);
+        Common::CallGateExit(&dsp_lle->m_dsp_thread_gate);
         continue;
       }
     }
@@ -286,12 +287,12 @@ u32 DSPLLE::DSP_UpdateRate()
 
 void DSPLLE::PauseAndLock()
 {
-  m_dsp_thread_mutex.lock();
+  Common::CallGateClose(&m_dsp_thread_gate);
 }
 
 void DSPLLE::UnpauseAndUnlock()
 {
-  m_dsp_thread_mutex.unlock();
+  Common::CallGateReopen(&m_dsp_thread_gate);
 
   if (m_is_dsp_on_thread)
   {

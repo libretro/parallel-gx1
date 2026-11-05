@@ -5,7 +5,6 @@
 
 #include <atomic>
 #include <map>
-#include <mutex>
 #include <vector>
 #include "SFML/Network/IpAddress.hpp"
 
@@ -20,6 +19,7 @@
 #include <rthreads/rthreads.h>
 #endif
 
+#include <queues/mpsc_stack.h>
 #include "Common/Flag.h"
 #include "Common/Network.h"
 #include "Core/HW/EXI/BBA/BuiltIn.h"
@@ -448,7 +448,26 @@ private:
     u8 m_queue_read = 0;
     u8 m_queue_write = 0;
     std::array<std::vector<u8>, 16> m_queue_data;
-    std::mutex m_mtx;
+
+    // The read thread owns the whole network stack. The CPU thread hands it outgoing frames and
+    // start/stop requests through this stack instead of sharing the stack's state.
+    struct Request
+    {
+      enum class Kind
+      {
+        Frame,
+        Start,
+        Stop,
+      };
+      mpsc_stack_node_t link;  // first: the drained chain is cast back
+      Kind kind;
+      std::vector<u8> frame;
+    };
+    mpsc_stack_t m_requests{};
+    void Post(Request::Kind kind, std::vector<u8> frame = {});
+    // Read thread: runs what the CPU thread posted, oldest first.
+    void RunRequests();
+    void ProcessFrame(const u8* frame, u32 size);
     std::string m_local_ip;
     u32 m_current_ip = 0;
     Common::MACAddress m_current_mac{};

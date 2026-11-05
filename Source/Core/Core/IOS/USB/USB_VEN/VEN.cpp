@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
-#include <mutex>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -68,8 +67,6 @@ std::optional<IPCReply> USB_VEN::IOCtlV(const IOCtlVRequest& request)
   {
     if (request.in_vectors.size() + request.io_vectors.size() != s_num_vectors.at(request.request))
       return IPCReply(IPC_EINVAL);
-
-    std::lock_guard lock{m_usbv5_devices_mutex};
     USBV5Device* device = GetUSBV5Device(request.in_vectors[0].address);
     if (!device)
       return IPCReply(IPC_EINVAL);

@@ -34,8 +34,6 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
   if (m_is_init)
     return;
 
-  std::lock_guard lk_population(m_devices_population_mutex);
-
   m_wsi = wsi;
 
   m_populating_devices_counter = 1;
@@ -56,10 +54,12 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
 
   RefreshDevices();
 
-  // Devices writes are already protected by m_devices_population_mutex but this won't hurt
-  m_devices_mutex.lock();
-  const bool devices_empty = m_devices.empty();
-  m_devices_mutex.unlock();
+  bool devices_empty;
+  {
+    ciface::InputReadScope scope;
+    const DeviceList* const list = PeekDevices();
+    devices_empty = !list || list->devices.empty();
+  }
 
   if (m_populating_devices_counter.fetch_sub(1) == 1 && !devices_empty)
     InvokeDevicesChangedCallbacks();
@@ -88,13 +88,8 @@ void ControllerInterface::RefreshDevices(RefreshReason reason)
   if (!m_is_init)
     return;
 
-  // We lock m_devices_population_mutex here to make everything simpler.
-  // Multiple devices classes have their own "hotplug" thread, and can add/remove devices at any
-  // time, while actual writes to "m_devices" are safe, the order in which they happen is not. That
-  // means a thread could be adding devices while we are removing them from a different thread,
-  // or removing them as we are populating them (causing missing or duplicate devices).
-  std::lock_guard lk_population(m_devices_population_mutex);
-
+  // Backends with a hotplug thread may add or remove devices meanwhile; every change is
+  // one swap of the whole list, so each lands complete, before or after this refresh's.
   // If only the window changed, avoid removing and re-adding all devices.
   // Instead only refresh devices that require the window handle.
   if (reason == RefreshReason::WindowChangeOnly)
@@ -137,8 +132,6 @@ void ControllerInterface::PlatformPopulateDevices(const std::function<void()>& c
   if (!m_is_init)
     return;
 
-  std::lock_guard lk_population(m_devices_population_mutex);
-
   m_populating_devices_counter.fetch_add(1);
 
   callback();
@@ -166,8 +159,7 @@ void ControllerInterface::Shutdown()
 
   // Make sure no devices had been added within Shutdown() in the time
   // between checking they checked atomic m_is_init bool and we changed it.
-  // We couldn't have locked m_devices_population_mutex for the whole Shutdown()
-  // as it could cause deadlocks. Note that this is still not 100% safe as some backends are
+  // Note that this is still not 100% safe as some backends are
   // shut down in other places, possibly adding devices after we have shut down, but the chances of
   // that happening are basically zero.
   ClearDevices();
@@ -175,15 +167,11 @@ void ControllerInterface::Shutdown()
 
 void ControllerInterface::ClearDevices()
 {
-  std::lock_guard lk_population(m_devices_population_mutex);
+  const bool cleared = EditDevices([](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
+    if (devices.empty())
+      return false;
 
-  {
-    std::lock_guard lk(m_devices_mutex);
-
-    if (m_devices.empty())
-      return;
-
-    for (const auto& d : m_devices)
+    for (const auto& d : devices)
     {
       // Set outputs to ZERO before destroying device
       for (ciface::Core::Device::Output* o : d->Outputs())
@@ -192,10 +180,12 @@ void ControllerInterface::ClearDevices()
 
     // Devices could still be alive after this as there might be shared ptrs around holding them.
     // The InvokeDevicesChangedCallbacks() underneath should always clean all of them (it needs to).
-    m_devices.clear();
-  }
+    devices.clear();
+    return true;
+  });
 
-  InvokeDevicesChangedCallbacks();
+  if (cleared)
+    InvokeDevicesChangedCallbacks();
 }
 
 bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device)
@@ -208,13 +198,9 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
              "Devices shouldn't be added within input update calls, there is a risk of deadlock "
              "if another thread was already here");
 
-  std::lock_guard lk_population(m_devices_population_mutex);
-
-  {
-    std::lock_guard lk(m_devices_mutex);
-
-    const auto is_id_in_use = [&device, this](int id) {
-      return std::ranges::any_of(m_devices, [&device, &id](const auto& d) {
+  EditDevices([&device](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
+    const auto is_id_in_use = [&device, &devices](int id) {
+      return std::ranges::any_of(devices, [&device, &id](const auto& d) {
         return d->GetSource() == device->GetSource() && d->GetName() == device->GetName() &&
                d->GetId() == id;
       });
@@ -236,8 +222,7 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
       device->SetId(id);
     }
 
-    NOTICE_LOG_FMT(CONTROLLERINTERFACE, "Added device: {}", device->GetQualifiedName());
-    m_devices.emplace_back(std::move(device));
+    devices.emplace_back(device);
 
     // We can't (and don't want) to control the order in which devices are added, but we need
     // their order to be consistent, and we need the same one to always be the first, where present
@@ -245,9 +230,11 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
     // profile, it will automatically select the first device in the list as its default. It would
     // be nice to sort devices by Source then Name then ID, but it's better to leave them sorted by
     // the add order. This also avoids breaking the order on other platforms that are less tested.
-    std::ranges::stable_sort(m_devices, std::ranges::greater{},
+    std::ranges::stable_sort(devices, std::ranges::greater{},
                              &ciface::Core::Device::GetSortPriority);
-  }
+    return true;
+  });
+  NOTICE_LOG_FMT(CONTROLLERINTERFACE, "Added device: {}", device->GetQualifiedName());
 
   if (!m_populating_devices_counter)
     InvokeDevicesChangedCallbacks();
@@ -265,21 +252,18 @@ void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::De
              "Devices shouldn't be removed within input update calls, there is a risk of deadlock "
              "if another thread was already here");
 
-  std::lock_guard lk_population(m_devices_population_mutex);
-
-  bool any_removed;
-  {
-    std::lock_guard lk(m_devices_mutex);
-    const size_t erased = std::erase_if(m_devices, [&callback](const auto& dev) {
-      if (callback(dev.get()))
-      {
-        NOTICE_LOG_FMT(CONTROLLERINTERFACE, "Removed device: {}", dev->GetQualifiedName());
-        return true;
-      }
-      return false;
-    });
-    any_removed = erased != 0;
-  }
+  const bool any_removed =
+      EditDevices([&callback](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
+        return std::erase_if(devices, [&callback](const auto& dev) {
+                 if (callback(dev.get()))
+                 {
+                   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "Removed device: {}",
+                                  dev->GetQualifiedName());
+                   return true;
+                 }
+                 return false;
+               }) != 0;
+      });
 
   if (any_removed && (!m_populating_devices_counter || force_devices_release))
     InvokeDevicesChangedCallbacks();
@@ -293,24 +277,21 @@ void ControllerInterface::UpdateInput()
   if (!m_is_init)
     return;
 
-  // We add the devices to remove while we still have the "m_devices_mutex" locked.
-  // This guarantees that:
-  // -We won't try to lock "m_devices_population_mutex" while it was already locked and waiting
-  //  for "m_devices_mutex", which would result in dead lock.
-  // -We don't keep shared ptrs on devices and thus unwillingly keep them alive even if somebody
-  //  is currently trying to remove them (and needs them destroyed on the spot).
-  // -If somebody else destroyed them in the meantime, we'll know which ones have been destroyed.
+  // The devices to remove are collected as weak pointers: they are not kept alive by this, and
+  // if somebody else removed them meanwhile, we'll know which ones are gone.
   std::vector<std::weak_ptr<ciface::Core::Device>> devices_to_remove;
 
   {
-    std::lock_guard lk_devices(m_devices_mutex);
+    ciface::InputReadScope scope;
 
     tls_is_updating_devices = true;
 
     for (auto& backend : m_input_backends)
       backend->UpdateInput(devices_to_remove);
 
-    for (const auto& d : m_devices)
+    static const std::vector<std::shared_ptr<ciface::Core::Device>> s_no_devices;
+    const DeviceList* const list = PeekDevices();
+    for (const auto& d : list ? list->devices : s_no_devices)
     {
       // Theoretically we could avoid updating input on devices that don't have any references to
       // them, but in practice a few devices types could break in different ways, so we don't

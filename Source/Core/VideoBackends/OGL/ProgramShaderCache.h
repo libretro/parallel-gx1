@@ -5,10 +5,11 @@
 
 #include <atomic>
 #include <memory>
-#include <mutex>
 #include <string_view>
 #include <unordered_map>
 
+#include "Common/AtomicHashMap.h"
+#include "Common/Quiesce.h"
 #include "Common/GL/GLExtensions/GLExtensions.h"
 #include "VideoCommon/AsyncShaderCompiler.h"
 
@@ -58,6 +59,7 @@ struct PipelineProgramKeyHash
 
 struct PipelineProgram
 {
+  quiesce_node_t node{};  // first: the free callback casts it back
   PipelineProgramKey key{};
   SHADER shader;
   std::atomic_size_t reference_count{1};
@@ -104,14 +106,18 @@ public:
   static void ReleasePipelineProgram(PipelineProgram* prog);
 
 private:
+  // Programs are made on the video thread and on the compile workers' shared contexts: one
+  // slot per key, holding the live program. A program whose count fell to 0 is dead and may
+  // be replaced; it is freed once no thread is looking at it.
   using PipelineProgramMap =
-      std::unordered_map<PipelineProgramKey, std::unique_ptr<PipelineProgram>,
-                         PipelineProgramKeyHash>;
+      Common::AtomicSlotMap<PipelineProgramKey, 1024, PipelineProgramKeyHash>;
+  static bool TryReference(PipelineProgram* prog);
+  static void FreePipelineProgram(quiesce_node_t* node);
 
   static void CreateAttributelessVAO();
 
   static PipelineProgramMap s_pipeline_programs;
-  static std::mutex s_pipeline_program_lock;
+  static quiesce_t s_pipeline_program_quiesce;
 
   static u32 s_ubo_buffer_size;
   static s32 s_ubo_align;

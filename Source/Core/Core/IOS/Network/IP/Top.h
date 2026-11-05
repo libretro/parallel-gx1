@@ -3,9 +3,10 @@
 
 #pragma once
 
-#include <mutex>
 #include <queue>
 #include <string>
+
+#include <queues/mpsc_stack.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/SocketContext.h"
@@ -84,6 +85,7 @@ private:
 
   struct AsyncReply
   {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
     IOS::HLE::Request request;
     s32 return_value;
   };
@@ -122,7 +124,7 @@ private:
 
   Common::SocketContext m_socket_context;
   Common::WorkQueueThreadSP<AsyncTask> m_work_queue;
-  std::mutex m_async_reply_lock;
-  std::queue<AsyncReply> m_async_replies;
+  // Replies from the network worker, handed to the emulation thread by Update.
+  mpsc_stack_t m_async_replies{};
 };
 }  // namespace IOS::HLE

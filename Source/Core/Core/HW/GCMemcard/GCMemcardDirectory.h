@@ -3,11 +3,12 @@
 
 #pragma once
 
-#include <mutex>
 #include <string>
 #include <vector>
 
 #include <rthreads/rthreads.h>
+
+#include <queues/mpsc_stack.h>
 
 #include "Common/Event.h"
 #include "Common/Flag.h"
@@ -33,6 +34,7 @@ public:
   GCMemcardDirectory(GCMemcardDirectory&&) = delete;
   GCMemcardDirectory& operator=(GCMemcardDirectory&&) = delete;
 
+  // Writes everything still pending to disk now, on the calling thread.
   void FlushToFile();
   void FlushThread();
   s32 Read(u32 src_address, s32 length, u8* dest_address) override;
@@ -49,6 +51,21 @@ private:
   inline void SyncSaves();
   bool SetUsedBlocks(int save_index);
 
+  // A file to write or retire, made by the CPU thread from its saves and written by the
+  // flush thread, so the two never touch the same data.
+  struct FlushJob
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    std::string filename;
+    bool retire;  // rename to .deleted instead of writing
+    Memcard::DEntry header;
+    std::vector<Memcard::GCMBlock> blocks;
+  };
+  // CPU thread: turns the dirty saves into jobs for the flush thread.
+  void QueueDirtySaves();
+  // Flush thread (or the destructor): writes the queued jobs, the newest per file.
+  void WriteQueuedJobs();
+
   u32 m_game_id;
   s32 m_last_block;
   u8* m_last_block_address;
@@ -62,7 +79,7 @@ private:
 
   std::string m_save_directory;
   Common::Event m_flush_trigger;
-  std::mutex m_write_mutex;
+  mpsc_stack_t m_flush_jobs{};
   Common::Flag m_exiting;
   sthread_t* m_flush_thread = nullptr;
 };

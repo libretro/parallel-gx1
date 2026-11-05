@@ -6,6 +6,9 @@
 #include <cmath>
 #include <memory>
 
+#include <retro_atomic.h>
+
+#include "Common/Quiesce.h"
 #include "InputCommon/ControlReference/ExpressionParser.h"
 #include "InputCommon/ControllerInterface/CoreDevice.h"
 
@@ -44,20 +47,44 @@ public:
 
   int BoundCount() const;
   ciface::ExpressionParser::ParseStatus GetParseStatus() const;
+  // Binds the expression to the devices in env. Builds a new binding and swaps it in, so a
+  // thread reading the old one is never disturbed.
   void UpdateReference(ciface::ExpressionParser::ControlEnvironment& env);
   std::string GetExpression() const;
+  // Whether there is an expression at all, without copying it.
+  bool HasExpression() const;
 
   // Returns a human-readable error description when the given expression is invalid.
   std::optional<std::string> SetExpression(std::string expr);
 
-  ControlState range = 1;
+  ControlState GetRange() const;
+  void SetRange(ControlState range);
 
 protected:
   ControlReference();
-  std::string m_expression;
-  std::unique_ptr<ciface::ExpressionParser::Expression> m_parsed_expression;
-  ciface::ExpressionParser::ParseStatus m_parse_status =
-      ciface::ExpressionParser::ParseStatus::EmptyExpression;
+  ControlReference(const ControlReference&) = delete;
+  ControlReference& operator=(const ControlReference&) = delete;
+
+  // An expression with what it was parsed into. Never changed once published.
+  struct Binding
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    std::string expression;
+    ciface::ExpressionParser::ParseStatus status;
+    std::unique_ptr<ciface::ExpressionParser::Expression> parsed;
+  };
+  static void FreeBinding(quiesce_node_t* node);
+  // Only inside an InputReadScope.
+  Binding* PeekBinding() const
+  {
+    return static_cast<Binding*>(retro_atomic_load_acquire_ptr(&m_binding));
+  }
+  void Publish(Binding* binding);
+
+  mutable retro_atomic_ptr_t m_binding{};
+  retro_atomic_int_t m_has_expression{};
+  // The range as the bits of a double, 1.0 until set.
+  retro_atomic_64_t m_range_bits;
 };
 
 namespace ControllerEmu

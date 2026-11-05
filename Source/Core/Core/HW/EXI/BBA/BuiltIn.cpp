@@ -113,12 +113,13 @@ void CEXIETHERNET::BuiltInBBAInterface::Deactivate()
   m_read_thread_shutdown.Set();
   m_active = false;
 
+  // Wait for read thread to exit; the network stack is this thread's again after.
+  Common::JoinThread(m_read_thread);
+
+  RunRequests();
   m_network_ref.Clear();
   m_arp_table.clear();
   m_upnp_httpd.close();
-
-  // Wait for read thread to exit.
-  Common::JoinThread(m_read_thread);
 }
 
 bool CEXIETHERNET::BuiltInBBAInterface::IsActivated()
@@ -607,16 +608,65 @@ const Common::MACAddress& CEXIETHERNET::BuiltInBBAInterface::ResolveAddress(u32 
   }
 }
 
+void CEXIETHERNET::BuiltInBBAInterface::Post(Request::Kind kind, std::vector<u8> frame)
+{
+  auto* request = new Request{{}, kind, std::move(frame)};
+  mpsc_stack_push(&m_requests, &request->link);
+}
+
+void CEXIETHERNET::BuiltInBBAInterface::RunRequests()
+{
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_requests)); node;)
+  {
+    auto* request = reinterpret_cast<Request*>(node);
+    node = node->next;
+    switch (request->kind)
+    {
+    case Request::Kind::Frame:
+      ProcessFrame(request->frame.data(), static_cast<u32>(request->frame.size()));
+      break;
+    case Request::Kind::Start:
+      InitUDPPort(26502);  // Kirby Air Ride
+      InitUDPPort(26512);  // Mario Kart: Double Dash!! and 1080° Avalanche
+      break;
+    case Request::Kind::Stop:
+      m_network_ref.Clear();
+      m_queue_read = 0;
+      m_queue_write = 0;
+      break;
+    }
+    delete request;
+  }
+}
+
 bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
 {
-  std::lock_guard<std::mutex> lock(m_mtx);
+  // CPU thread: check the frame and hand it to the read thread, which owns the network stack.
+  const std::optional<u16> ethertype = Common::PacketView(frame, size).GetEtherType();
+  if (!ethertype.has_value())
+  {
+    ERROR_LOG_FMT(SP1, "Unable to send frame with invalid ethernet header");
+    return false;
+  }
+  if (*ethertype != Common::IPV4_ETHERTYPE && *ethertype != Common::ARP_ETHERTYPE)
+  {
+    ERROR_LOG_FMT(SP1, "Unsupported EtherType {:#06x}", *ethertype);
+    return false;
+  }
+  Post(Request::Kind::Frame, std::vector<u8>(frame, frame + size));
+  m_eth_ref->SendComplete();
+  return true;
+}
+
+void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
+{
   const Common::PacketView view(frame, size);
 
   const std::optional<u16> ethertype = view.GetEtherType();
   if (!ethertype.has_value())
   {
     ERROR_LOG_FMT(SP1, "Unable to send frame with invalid ethernet header");
-    return false;
+    return;
   }
 
   switch (*ethertype)
@@ -627,7 +677,7 @@ bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
     if (!ip_proto.has_value())
     {
       ERROR_LOG_FMT(SP1, "Unable to send frame with invalid IP header");
-      return false;
+      return;
     }
 
     switch (*ip_proto)
@@ -638,7 +688,7 @@ bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
       if (!udp_packet.has_value())
       {
         ERROR_LOG_FMT(SP1, "Unable to send frame with invalid UDP header");
-        return false;
+        return;
       }
 
       if (ntohs(udp_packet->udp_header.destination_port) == 67)
@@ -658,7 +708,7 @@ bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
       if (!tcp_packet.has_value())
       {
         ERROR_LOG_FMT(SP1, "Unable to send frame with invalid TCP header");
-        return false;
+        return;
       }
 
       HandleTCPFrame(*tcp_packet);
@@ -685,7 +735,7 @@ bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
     if (!arp_packet.has_value())
     {
       ERROR_LOG_FMT(SP1, "Unable to send frame with invalid ARP header");
-      return false;
+      return;
     }
 
     HandleARP(*arp_packet);
@@ -694,11 +744,9 @@ bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
 
   default:
     ERROR_LOG_FMT(SP1, "Unsupported EtherType {:#06x}", *ethertype);
-    return false;
+    return;
   }
 
-  m_eth_ref->SendComplete();
-  return true;
 }
 
 void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
@@ -707,6 +755,8 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
   std::size_t datasize = 0;
   while (!self->m_read_thread_shutdown.IsSet())
   {
+    self->RunRequests();
+
     if (datasize == 0)
     {
       // Make thread less CPU hungry
@@ -724,7 +774,6 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
     if ((wp - rp) >= 8)
       continue;
 
-    std::lock_guard<std::mutex> lock(self->m_mtx);
     // process queue file first
     if (self->m_queue_read != self->m_queue_write)
     {
@@ -781,17 +830,14 @@ void CEXIETHERNET::BuiltInBBAInterface::RecvStart()
 {
   if (m_read_enabled.IsSet())
     return;
-  InitUDPPort(26502);  // Kirby Air Ride
-  InitUDPPort(26512);  // Mario Kart: Double Dash!! and 1080° Avalanche
+  Post(Request::Kind::Start);
   m_read_enabled.Set();
 }
 
 void CEXIETHERNET::BuiltInBBAInterface::RecvStop()
 {
   m_read_enabled.Clear();
-  m_network_ref.Clear();
-  m_queue_read = 0;
-  m_queue_write = 0;
+  Post(Request::Kind::Stop);
 }
 }  // namespace ExpansionInterface
 

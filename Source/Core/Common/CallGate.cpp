@@ -36,6 +36,9 @@ bool CallGateEnter(CallGate* gate)
   // Counted before the check, the closer's store before its read: either the closer sees
   // this call or this sees the gate closed.
   retro_atomic_fetch_add_seq_cst_int(&gate->calls, 1);
+  // Orders the count before every later load of the caller's, not just the one below, so a
+  // CallGateDrain that unpublished something first is seen to.
+  retro_atomic_thread_fence_seq_cst();
   if (retro_atomic_load_seq_cst_int(&gate->closed))
   {
     retro_atomic_fetch_add_seq_cst_int(&gate->calls, -1);
@@ -59,6 +62,12 @@ void CallGateExit(CallGate* gate)
 void CallGateClose(CallGate* gate)
 {
   retro_atomic_fetch_add_seq_cst_int(&gate->closed, 1);
+  CallGateDrain(gate);
+}
+
+void CallGateDrain(CallGate* gate)
+{
+  retro_atomic_thread_fence_seq_cst();
   const int own = OwnCalls(gate);
   for (;;)
   {
@@ -72,5 +81,9 @@ void CallGateClose(CallGate* gate)
     }
     retro_eventcount_commit_wait(Left(), key);
   }
+}
+void CallGateReopen(CallGate* gate)
+{
+  retro_atomic_fetch_add_seq_cst_int(&gate->closed, -1);
 }
 }  // namespace Common

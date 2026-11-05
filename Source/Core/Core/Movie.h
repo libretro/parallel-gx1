@@ -4,12 +4,14 @@
 #pragma once
 
 #include <array>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <retro_atomic.h>
+
+#include "Common/Quiesce.h"
 #include "Common/CommonTypes.h"
 #include "Core/HW/WiimoteEmu/DesiredWiimoteState.h"
 
@@ -269,8 +271,17 @@ private:
   std::string m_current_file_name;
 
   // m_input_display is used by both CPU and GPU (is mutable).
-  std::mutex m_input_display_lock;
-  std::array<std::string, 8> m_input_display;
+  // One string per pad and Wii remote, written by the CPU thread and shown by the GPU thread:
+  // each is published whole and freed through m_input_display_quiesce.
+  struct DisplayString
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    std::string text;
+  };
+  static void FreeDisplayString(quiesce_node_t* node);
+  void SetInputDisplay(int index, std::string text);
+  std::array<retro_atomic_ptr_t, 8> m_input_display{};
+  mutable quiesce_t m_input_display_quiesce{};
 
   Core::System& m_system;
 };

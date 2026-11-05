@@ -5,12 +5,12 @@
 
 #include <algorithm>
 #include <array>
-#include <mutex>
 #include <utility>
 
 #include <fmt/ostream.h>
 
 #include "Core/HLE/HLE.h"
+
 
 s32 CachedInterpreterEmitter::PoisonCallback(std::ostream& stream, const void* operands)
 {
@@ -89,8 +89,6 @@ s32 CachedInterpreter::CheckIdle(std::ostream& stream, const CheckIdleOperands& 
   return sizeof(AnyCallback) + sizeof(operands);
 }
 
-static std::once_flag s_sorted_lookup_flag;
-
 std::size_t CachedInterpreter::Disassemble(const JitBlock& block, std::ostream& stream)
 {
   using LookupKV = std::pair<AnyCallback, AnyDisassemble>;
@@ -118,11 +116,14 @@ std::size_t CachedInterpreter::Disassemble(const JitBlock& block, std::ostream& 
 
 #undef LOOKUP_KV
 
-  std::call_once(s_sorted_lookup_flag, [] {
+  // Sorted once per process; a function-local static is initialized exactly once.
+  static const bool s_sorted = [] {
     const auto end = std::ranges::sort(sorted_lookup, {}, &LookupKV::first);
     ASSERT_MSG(DYNA_REC, std::ranges::adjacent_find(sorted_lookup, {}, &LookupKV::first) == end,
                "Sorted lookup should not contain duplicate keys.");
-  });
+    return true;
+  }();
+  (void)s_sorted;
 
   std::size_t instruction_count = 0;
   for (const u8* normal_entry = block.normalEntry; normal_entry != block.near_end;

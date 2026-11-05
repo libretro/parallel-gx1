@@ -9,7 +9,6 @@
 #include <iterator>
 #include <locale>
 #include <mbedtls/md.h>
-#include <mutex>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -107,7 +106,25 @@ MovieManager::MovieManager(Core::System& system) : m_system(system)
 {
 }
 
-MovieManager::~MovieManager() = default;
+MovieManager::~MovieManager()
+{
+  for (auto& slot : m_input_display)
+    delete static_cast<DisplayString*>(retro_atomic_exchange_ptr(&slot, nullptr));
+  quiesce_deinit(&m_input_display_quiesce);
+}
+
+void MovieManager::FreeDisplayString(quiesce_node_t* node)
+{
+  delete reinterpret_cast<DisplayString*>(node);
+}
+
+void MovieManager::SetInputDisplay(int index, std::string text)
+{
+  auto* next = new DisplayString{{}, std::move(text)};
+  if (void* old = retro_atomic_exchange_ptr(&m_input_display[index], next))
+    quiesce_retire(&m_input_display_quiesce, &static_cast<DisplayString*>(old)->node,
+                   FreeDisplayString);
+}
 
 // NOTE: GPU Thread
 std::string MovieManager::GetInputDisplay()
@@ -132,17 +149,24 @@ std::string MovieManager::GetInputDisplay()
 
   std::string input_display;
   {
-    std::lock_guard guard(m_input_display_lock);
+    quiesce_enter(&m_input_display_quiesce);
+    const auto text = [this](int index) -> const std::string& {
+      static const std::string s_empty;
+      const auto* display =
+          static_cast<const DisplayString*>(retro_atomic_load_acquire_ptr(&m_input_display[index]));
+      return display ? display->text : s_empty;
+    };
     for (int i = 0; i < 4; ++i)
     {
       if (IsUsingPad(i))
-        input_display += m_input_display[i] + '\n';
+        input_display += text(i) + '\n';
     }
     for (int i = 0; i < 4; ++i)
     {
       if (IsUsingWiimote(i))
-        input_display += m_input_display[i + 4] + '\n';
+        input_display += text(i + 4) + '\n';
     }
+    quiesce_exit(&m_input_display_quiesce);
   }
   return input_display;
 }
@@ -216,8 +240,8 @@ void MovieManager::Init(const BootParameters& boot)
 
   memset(&m_pad_state, 0, sizeof(m_pad_state));
 
-  for (auto& disp : m_input_display)
-    disp.clear();
+  for (int i = 0; i < static_cast<int>(m_input_display.size()); ++i)
+    SetInputDisplay(i, {});
 
   if (!IsMovieActive())
   {
@@ -758,8 +782,7 @@ void MovieManager::CheckPadStatus(const GCPadStatus* PadStatus, int controllerID
   {
     std::string display_str = GenerateInputDisplayString(m_pad_state, controllerID);
 
-    std::lock_guard guard(m_input_display_lock);
-    m_input_display[controllerID] = std::move(display_str);
+    SetInputDisplay(controllerID, std::move(display_str));
   }
 }
 
@@ -784,8 +807,7 @@ void MovieManager::CheckWiimoteStatus(int wiimote, const DesiredWiimoteState& de
   {
     std::string display_str = GenerateWiiInputDisplayString(wiimote, desired_state);
 
-    std::lock_guard guard(m_input_display_lock);
-    m_input_display[wiimote + 4] = std::move(display_str);
+    SetInputDisplay(wiimote + 4, std::move(display_str));
   }
 
   if (IsRecordingInput())
@@ -1186,8 +1208,7 @@ void MovieManager::PlayController(GCPadStatus* PadStatus, int controllerID)
   {
     std::string display_str = GenerateInputDisplayString(m_pad_state, controllerID);
 
-    std::lock_guard guard(m_input_display_lock);
-    m_input_display[controllerID] = std::move(display_str);
+    SetInputDisplay(controllerID, std::move(display_str));
   }
 
   CheckInputEnd();

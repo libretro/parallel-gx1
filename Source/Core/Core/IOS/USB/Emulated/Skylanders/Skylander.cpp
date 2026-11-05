@@ -4,7 +4,6 @@
 #include "Core/IOS/USB/Emulated/Skylanders/Skylander.h"
 
 #include <map>
-#include <mutex>
 #include <vector>
 
 #include "AudioCommon/AudioCommon.h"
@@ -1090,7 +1089,6 @@ void SkylanderUSB::ScheduleTransfer(std::unique_ptr<TransferCommand> command,
 
 void SkylanderPortal::Activate()
 {
-  std::lock_guard lock(sky_mutex);
   if (m_activated)
   {
     // If the portal was already active no change is needed
@@ -1112,7 +1110,6 @@ void SkylanderPortal::Activate()
 
 void SkylanderPortal::Deactivate()
 {
-  std::lock_guard lock(sky_mutex);
 
   for (auto& s : skylanders)
   {
@@ -1131,14 +1128,12 @@ void SkylanderPortal::Deactivate()
 
 bool SkylanderPortal::IsActivated()
 {
-  std::lock_guard lock(sky_mutex);
 
   return m_activated;
 }
 
 void SkylanderPortal::UpdateStatus()
 {
-  std::lock_guard lock(sky_mutex);
 
   if (!m_status_updated)
   {
@@ -1162,7 +1157,6 @@ void SkylanderPortal::UpdateStatus()
 // 0x03 = trap
 void SkylanderPortal::SetLEDs(u8 side, u8 red, u8 green, u8 blue)
 {
-  std::lock_guard lock(sky_mutex);
   if (side == 0x00)
   {
     m_color_right.red = red;
@@ -1195,7 +1189,6 @@ void SkylanderPortal::SetLEDs(u8 side, u8 red, u8 green, u8 blue)
 
 std::array<u8, 64> SkylanderPortal::GetStatus()
 {
-  std::lock_guard lock(sky_mutex);
 
   u32 status = 0;
   u8 active = 0x00;
@@ -1233,8 +1226,6 @@ void SkylanderPortal::QueryBlock(u8 sky_num, u8 block, u8* reply_buf)
   if (!IsSkylanderNumberValid(sky_num) || !IsBlockNumberValid(block))
     return;
 
-  std::lock_guard lock(sky_mutex);
-
   const auto& skylander = skylanders[sky_num];
 
   reply_buf[0] = 'Q';
@@ -1254,8 +1245,6 @@ void SkylanderPortal::WriteBlock(u8 sky_num, u8 block, const u8* to_write_buf, u
 {
   if (!IsSkylanderNumberValid(sky_num) || !IsBlockNumberValid(block))
     return;
-
-  std::lock_guard lock(sky_mutex);
 
   auto& skylander = skylanders[sky_num];
 
@@ -1280,7 +1269,6 @@ bool SkylanderPortal::RemoveSkylander(u8 sky_num)
     return false;
 
   DEBUG_LOG_FMT(IOS_USB, "Cleared Skylander from slot {}", sky_num);
-  std::lock_guard lock(sky_mutex);
   auto& skylander = skylanders[sky_num];
 
   if (skylander.figure->FileIsOpen())
@@ -1302,7 +1290,6 @@ bool SkylanderPortal::RemoveSkylander(u8 sky_num)
 
 u8 SkylanderPortal::LoadSkylander(std::unique_ptr<SkylanderFigure> figure)
 {
-  std::lock_guard lock(sky_mutex);
 
   u32 sky_serial = 0;
   std::array<u8, 0x10> block = {};

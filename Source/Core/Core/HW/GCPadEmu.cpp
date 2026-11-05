@@ -142,7 +142,7 @@ GCPadStatus GCPad::GetInput() const
 {
   using ControllerEmu::MapFloat;
 
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   GCPadStatus pad = {};
 
   if (!(m_always_connected_setting.GetValue() || IsDefaultDeviceConnected() ||
@@ -187,7 +187,7 @@ GCPadStatus GCPad::GetInput() const
 
 void GCPad::SetOutput(const ControlState strength)
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   m_rumble->controls[0]->control_ref->State(strength);
 }
 
@@ -273,7 +273,7 @@ bool GCPad::GetMicButton() const
       return true;
   return false;
 #else
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   return m_mic->controls.back()->GetState<bool>();
 #endif
 }

@@ -43,14 +43,19 @@ void CustomAssetCache::Reset()
   m_pending_assets = {};
   m_asset_handle_to_data.clear();
   m_asset_id_to_handle.clear();
-  m_dirty_assets.clear();
+  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_dirty_assets); node;)
+  {
+    auto* dirty = reinterpret_cast<DirtyAsset*>(node);
+    node = node->next;
+    delete dirty;
+  }
   m_ram_used = 0;
 }
 
 void CustomAssetCache::MarkAssetDirty(const CustomAssetLibrary::AssetID& asset_id)
 {
-  std::lock_guard guard(m_dirty_mutex);
-  m_dirty_assets.insert(asset_id);
+  auto* dirty = new DirtyAsset{{}, asset_id};
+  mpsc_stack_push(&m_dirty_assets, &dirty->link);
 }
 
 void CustomAssetCache::MarkAssetPending(CustomAsset* asset)
@@ -85,10 +90,14 @@ void CustomAssetCache::Update()
 
 void CustomAssetCache::ProcessDirtyAssets()
 {
-  decltype(m_dirty_assets) dirty_assets;
-
-  if (const auto lk = std::unique_lock{m_dirty_mutex, std::try_to_lock})
-    std::swap(dirty_assets, m_dirty_assets);
+  std::set<CustomAssetLibrary::AssetID> dirty_assets;
+  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_dirty_assets); node;)
+  {
+    auto* dirty = reinterpret_cast<DirtyAsset*>(node);
+    node = node->next;
+    dirty_assets.insert(std::move(dirty->id));
+    delete dirty;
+  }
 
   const auto now = CustomAsset::ClockType::now();
   for (const auto& asset_id : dirty_assets)

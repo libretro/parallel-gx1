@@ -4,14 +4,15 @@
 #pragma once
 
 #include <atomic>
-#include <condition_variable>
 #include <list>
-#include <mutex>
-#include <set>
 #include <vector>
 
+#include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 #include <rthreads/rthreads.h>
 
+#include "Common/Quiesce.h"
 #include "Common/Flag.h"
 #include "VideoCommon/Assets/CustomAsset.h"
 
@@ -23,8 +24,8 @@ namespace VideoCommon
 class CustomAssetLoader
 {
 public:
-  CustomAssetLoader() = default;
-  ~CustomAssetLoader() = default;
+  CustomAssetLoader() { retro_eventcount_init(&m_worker_thread_wake); }
+  ~CustomAssetLoader() { retro_eventcount_free(&m_worker_thread_wake); }
   CustomAssetLoader(const CustomAssetLoader&) = delete;
   CustomAssetLoader(CustomAssetLoader&&) = delete;
   CustomAssetLoader& operator=(const CustomAssetLoader&) = delete;
@@ -70,21 +71,31 @@ private:
 
   std::vector<WorkerThread> m_worker_threads;
 
-  std::mutex m_assets_to_load_lock;
-  std::list<CustomAsset*> m_assets_to_load;
+  // One ScheduleAssetsToLoad's assets, published whole. Workers claim the next one with an
+  // atomic add on the cursor; a newer batch replaces it, and it is freed once no worker is
+  // still looking at it.
+  struct Batch
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    std::vector<CustomAsset*> assets;
+    s64 allowed_memory;
+    retro_atomic_size_t cursor;
+  };
+  static void FreeBatch(quiesce_node_t* node);
+  quiesce_t m_batch_quiesce{};
+  retro_atomic_ptr_t m_batch{};
+  // Notified after a batch is published or the exit flag is set.
+  retro_eventcount_t m_worker_thread_wake;
 
-  std::condition_variable m_worker_thread_wake;
-
-  std::vector<AssetHandle> m_asset_handles_loaded;
-
-  // Memory available to load new assets.
-  s64 m_allowed_memory = 0;
+  // Results for TakeLoadResults, pushed by the workers.
+  struct Loaded
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    AssetHandle handle;
+  };
+  mpsc_stack_t m_loaded{};
 
   // Change in memory from just-loaded/unloaded asset results yet to be taken by the Manager.
   std::atomic<s64> m_change_in_memory = 0;
-
-  std::mutex m_assets_loaded_lock;
-
-  std::set<std::size_t> m_handles_in_progress;
 };
 }  // namespace VideoCommon

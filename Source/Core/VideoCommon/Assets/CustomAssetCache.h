@@ -15,6 +15,7 @@
 #include "VideoCommon/Assets/CustomAsset.h"
 #include "VideoCommon/Assets/CustomAssetLibrary.h"
 #include "VideoCommon/Assets/CustomAssetLoader.h"
+#include <queues/mpsc_stack.h>
 
 namespace VideoCommon
 {
@@ -190,8 +191,13 @@ private:
   // A calculated amount of memory to avoid exceeding.
   u64 m_max_ram_available = 0;
 
-  std::mutex m_dirty_mutex;
-  std::set<CustomAssetLibrary::AssetID> m_dirty_assets;
+  // Asset IDs the file watcher saw change, taken by ProcessDirtyAssets.
+  struct DirtyAsset
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    CustomAssetLibrary::AssetID id;
+  };
+  mpsc_stack_t m_dirty_assets{};
 
   CustomAssetLoader m_asset_loader;
 };

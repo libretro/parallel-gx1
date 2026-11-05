@@ -7,9 +7,11 @@
 #include <bitset>
 #include <cstddef>
 #include <memory>
-#include <mutex>
 #include <unordered_map>
 
+#include <retro_atomic.h>
+
+#include "Common/AtomicHashMap.h"
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
 #include "VideoBackends/D3D/D3DBase.h"
@@ -36,11 +38,12 @@ public:
   static D3D11_PRIMITIVE_TOPOLOGY GetPrimitiveTopology(PrimitiveType primitive);
 
 private:
-  std::unordered_map<u32, ComPtr<ID3D11DepthStencilState>> m_depth;
-  std::unordered_map<u32, ComPtr<ID3D11RasterizerState>> m_raster;
-  std::unordered_map<u32, ComPtr<ID3D11BlendState>> m_blend;
-  std::unordered_map<SamplerState, ComPtr<ID3D11SamplerState>> m_sampler;
-  std::mutex m_lock;
+  // Filled from the video thread and the shader compile workers alike; each slot holds one
+  // reference to its state object.
+  Common::AtomicSlotMap<u32> m_depth;
+  Common::AtomicSlotMap<u32> m_raster;
+  Common::AtomicSlotMap<u32> m_blend;
+  Common::AtomicSlotMap<SamplerState> m_sampler;
 };
 
 namespace D3D

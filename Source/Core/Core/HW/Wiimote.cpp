@@ -83,7 +83,7 @@ HIDWiimote* GetHIDWiimoteSource(unsigned int index)
     break;
 
   case WiimoteSource::Real:
-    hid_source = WiimoteReal::g_wiimotes[index].get();
+    hid_source = WiimoteReal::GetWiimote(index);
     break;
 
   default:

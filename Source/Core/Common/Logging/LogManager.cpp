@@ -7,13 +7,18 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
-#include <fstream>
 #include <memory>
-#include <mutex>
 #include <string>
 
 #include <fmt/chrono.h>
 #include <fmt/format.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
@@ -32,13 +37,33 @@ const Config::Info<bool> LOGGER_WRITE_TO_WINDOW{
 const Config::Info<LogLevel> LOGGER_VERBOSITY{{Config::System::Logger, "Options", "Verbosity"},
                                               LogLevel::LNOTICE};
 
+// Any thread may log. The file is opened for appending, where the OS makes each write land
+// whole at the end, so a message is one write and nothing is shared in user space.
 class FileLogListener : public LogListener
 {
 public:
   FileLogListener(const std::string& filename)
   {
-    File::OpenFStream(m_logfile, filename, std::ios::app);
+    File::CreateFullPath(filename);
+#ifdef _WIN32
+    m_file = CreateFileW(UTF8ToWString(filename).c_str(), FILE_APPEND_DATA,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                         FILE_ATTRIBUTE_NORMAL, nullptr);
+#else
+    m_file = open(filename.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+#endif
     SetEnable(true);
+  }
+
+  ~FileLogListener() override
+  {
+#ifdef _WIN32
+    if (m_file != INVALID_HANDLE_VALUE)
+      CloseHandle(m_file);
+#else
+    if (m_file >= 0)
+      close(m_file);
+#endif
   }
 
   void Log(LogLevel, const char* msg) override
@@ -46,18 +71,30 @@ public:
     if (!IsEnabled() || !IsValid())
       return;
 
-    std::lock_guard<std::mutex> lk(m_log_lock);
-    m_logfile << msg << std::flush;
+    const size_t length = std::strlen(msg);
+#ifdef _WIN32
+    DWORD written;
+    WriteFile(m_file, msg, static_cast<DWORD>(length), &written, nullptr);
+#else
+    [[maybe_unused]] const ssize_t written = write(m_file, msg, length);
+#endif
   }
 
-  bool IsValid() const { return m_logfile.good(); }
-  bool IsEnabled() const { return m_enable; }
-  void SetEnable(bool enable) { m_enable = enable; }
+#ifdef _WIN32
+  bool IsValid() const { return m_file != INVALID_HANDLE_VALUE; }
+#else
+  bool IsValid() const { return m_file >= 0; }
+#endif
+  bool IsEnabled() const { return m_enable.load(std::memory_order_relaxed); }
+  void SetEnable(bool enable) { m_enable.store(enable, std::memory_order_relaxed); }
 
 private:
-  std::mutex m_log_lock;
-  std::ofstream m_logfile;
-  bool m_enable;
+#ifdef _WIN32
+  HANDLE m_file = INVALID_HANDLE_VALUE;
+#else
+  int m_file = -1;
+#endif
+  std::atomic<bool> m_enable{false};
 };
 
 void GenericLogFmtImpl(LogLevel level, LogType type, const char* file, int line,

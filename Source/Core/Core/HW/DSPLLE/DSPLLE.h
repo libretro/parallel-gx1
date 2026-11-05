@@ -4,10 +4,10 @@
 #pragma once
 
 #include <atomic>
-#include <mutex>
 
 #include <rthreads/rthreads.h>
 
+#include "Common/CallGate.h"
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
 #include "Core/DSP/DSPCore.h"
@@ -45,7 +45,7 @@ private:
 
   DSPCore m_dsp_core;
   sthread_t* m_dsp_thread = nullptr;
-  std::mutex m_dsp_thread_mutex;
+  Common::CallGate m_dsp_thread_gate;
   bool m_is_dsp_on_thread = false;
   Common::Flag m_is_running;
   std::atomic<u32> m_cycle_count{};

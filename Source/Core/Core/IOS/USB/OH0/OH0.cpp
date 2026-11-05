@@ -70,7 +70,6 @@ std::optional<IPCReply> OH0::IOCtlV(const IOCtlVRequest& request)
 void OH0::DoState(PointerWrap& p)
 {
   {
-    std::lock_guard lk(m_devices_mutex);
     if (p.IsReadMode() && !m_devices.empty())
     {
       Core::DisplayMessage("It is suggested that you unplug and replug all connected USB devices.",
@@ -113,7 +112,6 @@ IPCReply OH0::GetDeviceList(const IOCtlVRequest& request) const
 
   const u8 interface_class = memory.Read_U8(request.in_vectors[1].address);
   u8 entries_count = 0;
-  std::lock_guard lk(m_devices_mutex);
   for (const auto& device : m_devices)
   {
     if (entries_count >= max_entries_count)
@@ -170,7 +168,6 @@ IPCReply OH0::SetRhPortStatus(const IOCtlVRequest& request)
 
 std::optional<IPCReply> OH0::RegisterRemovalHook(const u64 device_id, const IOCtlRequest& request)
 {
-  std::lock_guard lock{m_hooks_mutex};
   // IOS only allows a single device removal hook.
   const bool inserted = m_removal_hooks.try_emplace(device_id, request.address).second;
   if (!inserted)
@@ -190,8 +187,6 @@ std::optional<IPCReply> OH0::RegisterInsertionHook(const IOCtlVRequest& request)
   const u16 pid = memory.Read_U16(request.in_vectors[1].address);
   if (HasDeviceWithVidPid(vid, pid))
     return IPCReply(IPC_SUCCESS);
-
-  std::lock_guard lock{m_hooks_mutex};
   // TODO: figure out whether IOS allows more than one hook.
   m_insertion_hooks[{vid, pid}] = request.address;
   return std::nullopt;
@@ -210,7 +205,6 @@ std::optional<IPCReply> OH0::RegisterInsertionHookWithID(const IOCtlVRequest& re
   const bool trigger_only_for_new_device = memory.Read_U8(request.in_vectors[2].address) == 1;
   if (!trigger_only_for_new_device && HasDeviceWithVidPid(vid, pid))
     return IPCReply(IPC_SUCCESS);
-  std::lock_guard lock{m_hooks_mutex};
   // TODO: figure out whether IOS allows more than one hook.
   m_insertion_hooks.insert({{vid, pid}, request.address});
   // The output vector is overwritten with an ID to use with ioctl 31 for cancelling the hook.
@@ -230,7 +224,6 @@ std::optional<IPCReply> OH0::RegisterClassChangeHook(const IOCtlVRequest& reques
 
 bool OH0::HasDeviceWithVidPid(const u16 vid, const u16 pid) const
 {
-  std::lock_guard lk(m_devices_mutex);
   return std::ranges::any_of(m_devices, [=](const auto& device) {
     return device.second->GetVid() == vid && device.second->GetPid() == pid;
   });
@@ -248,7 +241,6 @@ void OH0::OnDeviceChange(const ChangeEvent event, std::shared_ptr<USB::Device> d
 
     // This fixes a problem where Rock Band 3 randomly fails to detect reconnected microphones.
     // Real IOS behavior untested.
-    std::lock_guard lk(m_devices_mutex);
     m_opened_devices.erase(device->GetId());
   }
 }
@@ -256,7 +248,6 @@ void OH0::OnDeviceChange(const ChangeEvent event, std::shared_ptr<USB::Device> d
 template <typename T>
 void OH0::TriggerHook(std::map<T, u32>& hooks, T value, const ReturnCode return_value)
 {
-  std::lock_guard lk{m_hooks_mutex};
   const auto hook = hooks.find(value);
   if (hook == hooks.end())
     return;
@@ -267,7 +258,6 @@ void OH0::TriggerHook(std::map<T, u32>& hooks, T value, const ReturnCode return_
 
 std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
 {
-  std::lock_guard lk(m_devices_mutex);
 
   bool has_device_with_vid_pid = false;
   for (const auto& device : m_devices)
@@ -291,7 +281,6 @@ std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
 void OH0::DeviceClose(const u64 device_id)
 {
   TriggerHook(m_removal_hooks, device_id, IPC_ENOENT);
-  std::lock_guard lk(m_devices_mutex);
   m_opened_devices.erase(device_id);
 }
 

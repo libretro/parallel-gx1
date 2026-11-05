@@ -114,7 +114,7 @@ ControllerEmu::ControlGroup* GCKeyboard::GetGroup(KeyboardGroup group)
 
 KeyboardStatus GCKeyboard::GetInput() const
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
 
   KeyboardStatus kb = {};
 

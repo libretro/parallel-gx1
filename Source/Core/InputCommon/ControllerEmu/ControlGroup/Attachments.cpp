@@ -40,7 +40,7 @@ NumericSetting<int>& Attachments::GetSelectionSetting()
   return m_selection_setting;
 }
 
-SubscribableSettingValue<int>& Attachments::GetAttachmentSetting()
+SettingValue<int>& Attachments::GetAttachmentSetting()
 {
   return m_selection_value;
 }

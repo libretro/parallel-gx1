@@ -30,7 +30,6 @@
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/FifoPlayer/FifoPlayer.h"
-#include "Core/FifoPlayer/FifoRecorder.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
@@ -1348,14 +1347,6 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
   //       to have a unique and valid address. This could result in a regular texture and a tmem
   //       texture aliasing onto the same texture cache entry.
 
-  // If we are recording a FifoLog, keep track of what memory we read. FifoRecorder does
-  // its own memory modification tracking independent of the texture hashing below.
-  if (OpcodeDecoder::g_record_fifo_data && !texture_info.IsFromTmem())
-  {
-    Core::System::GetInstance().GetFifoRecorder().UseMemory(texture_info.GetRawAddress(),
-                                                            texture_info.GetFullLevelSize(),
-                                                            MemoryUpdate::Type::TextureMap);
-  }
 
   // TODO: This doesn't hash GB tiles for preloaded RGBA8 textures (instead, it's hashing more data
   // from the low tmem bank than it should)
@@ -2500,18 +2491,6 @@ void TextureCacheBase::CopyRenderTargetToTexture(
       }
     }
     ++iter.first;
-  }
-
-  if (OpcodeDecoder::g_record_fifo_data)
-  {
-    // Mark the memory behind this efb copy as dynamically generated for the Fifo log
-    u32 address = dstAddr;
-    for (u32 i = 0; i < num_blocks_y; i++)
-    {
-      Core::System::GetInstance().GetFifoRecorder().UseMemory(address, bytes_per_row,
-                                                              MemoryUpdate::Type::TextureMap, true);
-      address += dstStride;
-    }
   }
 
   // Even if the copy is deferred, still compute the hash. This way if the copy is used as a texture

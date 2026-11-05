@@ -345,14 +345,35 @@ void StateManager::Restore()
 #endif
 }  // namespace D3D
 
-StateCache::~StateCache() = default;
+// Creating the same state twice is harmless (D3D11 hands back the same object), so a thread
+// that loses the race releases its copy and returns the published one.
+template <typename T>
+static T* Publish(retro_atomic_ptr_t* slot, ComPtr<T>&& state)
+{
+  T* const created = state.Detach();
+  if (!created || retro_atomic_cas_ptr(slot, nullptr, created))
+    return created;
+  created->Release();
+  return static_cast<T*>(retro_atomic_load_acquire_ptr(slot));
+}
+
+StateCache::~StateCache()
+{
+  const auto release = [](retro_atomic_ptr_t* slot) {
+    if (auto* state = static_cast<IUnknown*>(retro_atomic_exchange_ptr(slot, nullptr)))
+      state->Release();
+  };
+  m_sampler.ForEach(release);
+  m_blend.ForEach(release);
+  m_raster.ForEach(release);
+  m_depth.ForEach(release);
+}
 
 ID3D11SamplerState* StateCache::Get(SamplerState state)
 {
-  std::lock_guard<std::mutex> guard(m_lock);
-  auto it = m_sampler.find(state);
-  if (it != m_sampler.end())
-    return it->second.Get();
+  retro_atomic_ptr_t* const slot = m_sampler.Slot(state);
+  if (auto* cached = static_cast<ID3D11SamplerState*>(retro_atomic_load_acquire_ptr(slot)))
+    return cached;
 
   D3D11_SAMPLER_DESC sampdc = CD3D11_SAMPLER_DESC(CD3D11_DEFAULT());
   if (state.tm0.mipmap_filter == FilterMode::Linear)
@@ -395,15 +416,14 @@ ID3D11SamplerState* StateCache::Get(SamplerState state)
   ComPtr<ID3D11SamplerState> res;
   HRESULT hr = D3D::device->CreateSamplerState(&sampdc, &res);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D sampler state failed: {}", DX11HRWrap(hr));
-  return m_sampler.emplace(state, std::move(res)).first->second.Get();
+  return Publish(slot, std::move(res));
 }
 
 ID3D11BlendState* StateCache::Get(BlendingState state)
 {
-  std::lock_guard<std::mutex> guard(m_lock);
-  auto it = m_blend.find(state.hex);
-  if (it != m_blend.end())
-    return it->second.Get();
+  retro_atomic_ptr_t* const slot = m_blend.Slot(state.hex);
+  if (auto* cached = static_cast<ID3D11BlendState*>(retro_atomic_load_acquire_ptr(slot)))
+    return cached;
 
   if (state.logic_op_enable && g_backend_info.bSupportsLogicOp)
   {
@@ -430,7 +450,7 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
     HRESULT hr = D3D::device1->CreateBlendState1(&desc, &res);
     if (SUCCEEDED(hr))
     {
-      return m_blend.emplace(state.hex, std::move(res)).first->second.Get();
+      return Publish(slot, std::move(res));
     }
     WARN_LOG_FMT(VIDEO, "Creating D3D blend state failed with an error: {}", DX11HRWrap(hr));
   }
@@ -472,15 +492,14 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
   ComPtr<ID3D11BlendState> res;
   HRESULT hr = D3D::device->CreateBlendState(&desc, &res);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D blend state failed: {}", DX11HRWrap(hr));
-  return m_blend.emplace(state.hex, std::move(res)).first->second.Get();
+  return Publish(slot, std::move(res));
 }
 
 ID3D11RasterizerState* StateCache::Get(RasterizationState state)
 {
-  std::lock_guard<std::mutex> guard(m_lock);
-  auto it = m_raster.find(state.hex);
-  if (it != m_raster.end())
-    return it->second.Get();
+  retro_atomic_ptr_t* const slot = m_raster.Slot(state.hex);
+  if (auto* cached = static_cast<ID3D11RasterizerState*>(retro_atomic_load_acquire_ptr(slot)))
+    return cached;
 
   static constexpr std::array<D3D11_CULL_MODE, 4> cull_modes = {
       {D3D11_CULL_NONE, D3D11_CULL_BACK, D3D11_CULL_FRONT, D3D11_CULL_BACK}};
@@ -493,15 +512,14 @@ ID3D11RasterizerState* StateCache::Get(RasterizationState state)
   ComPtr<ID3D11RasterizerState> res;
   HRESULT hr = D3D::device->CreateRasterizerState(&desc, &res);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D rasterizer state failed: {}", DX11HRWrap(hr));
-  return m_raster.emplace(state.hex, std::move(res)).first->second.Get();
+  return Publish(slot, std::move(res));
 }
 
 ID3D11DepthStencilState* StateCache::Get(DepthState state)
 {
-  std::lock_guard<std::mutex> guard(m_lock);
-  auto it = m_depth.find(state.hex);
-  if (it != m_depth.end())
-    return it->second.Get();
+  retro_atomic_ptr_t* const slot = m_depth.Slot(state.hex);
+  if (auto* cached = static_cast<ID3D11DepthStencilState*>(retro_atomic_load_acquire_ptr(slot)))
+    return cached;
 
   D3D11_DEPTH_STENCIL_DESC depthdc = CD3D11_DEPTH_STENCIL_DESC(CD3D11_DEFAULT());
 
@@ -535,7 +553,7 @@ ID3D11DepthStencilState* StateCache::Get(DepthState state)
   ComPtr<ID3D11DepthStencilState> res;
   HRESULT hr = D3D::device->CreateDepthStencilState(&depthdc, &res);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D depth stencil state failed: {}", DX11HRWrap(hr));
-  return m_depth.emplace(state.hex, std::move(res)).first->second.Get();
+  return Publish(slot, std::move(res));
 }
 
 D3D11_PRIMITIVE_TOPOLOGY StateCache::GetPrimitiveTopology(PrimitiveType primitive)

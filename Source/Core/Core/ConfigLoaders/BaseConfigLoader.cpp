@@ -8,9 +8,10 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <variant>
+
+#include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
@@ -28,25 +29,24 @@
 #include "Core/SysConf.h"
 #include "Core/System.h"
 
-static bool s_sysconf_controlled_by_guest = false;
-static std::recursive_mutex s_sysconf_lock;
+// Once the guest has SYSCONF, the host neither loads nor saves it, so the host's own accesses
+// (config load and save) and the guest's never overlap; the hand-over itself is this flag.
+static retro_atomic_int_t s_sysconf_controlled_by_guest;
 
 namespace ConfigLoaders
 {
 void TransferSYSCONFControlToGuest()
 {
-  std::lock_guard lock(s_sysconf_lock);
 
-  ASSERT(!s_sysconf_controlled_by_guest);
-  s_sysconf_controlled_by_guest = true;
+  const int was_controlled = retro_atomic_exchange_int(&s_sysconf_controlled_by_guest, 1);
+  ASSERT(!was_controlled);
 }
 
 void TransferSYSCONFControlFromGuest(WriteBackChangedValues write_back_changed_values)
 {
-  std::lock_guard lock(s_sysconf_lock);
 
-  ASSERT(s_sysconf_controlled_by_guest);
-  s_sysconf_controlled_by_guest = false;
+  const int was_controlled = retro_atomic_exchange_int(&s_sysconf_controlled_by_guest, 0);
+  ASSERT(was_controlled);
 
   if (write_back_changed_values == WriteBackChangedValues::No)
     return;
@@ -83,8 +83,8 @@ void TransferSYSCONFControlFromGuest(WriteBackChangedValues write_back_changed_v
 void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip,
                    std::function<bool(const Config::Location&)> predicate)
 {
-  std::lock_guard lock(s_sysconf_lock);
-  if (skip == SkipIfControlledByGuest::Yes && s_sysconf_controlled_by_guest)
+  if (skip == SkipIfControlledByGuest::Yes &&
+      retro_atomic_load_acquire_int(&s_sysconf_controlled_by_guest))
     return;
 
   IOS::HLE::Kernel ios;
@@ -233,8 +233,7 @@ public:
 private:
   void LoadFromSYSCONF(Config::Layer* layer)
   {
-    std::lock_guard lock(s_sysconf_lock);
-    if (s_sysconf_controlled_by_guest)
+    if (retro_atomic_load_acquire_int(&s_sysconf_controlled_by_guest))
       return;
 
     IOS::HLE::Kernel ios;

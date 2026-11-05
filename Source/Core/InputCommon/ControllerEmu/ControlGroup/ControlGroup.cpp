@@ -76,8 +76,9 @@ void ControlGroup::LoadConfig(Common::IniFile::Section* sec, const std::string& 
     }
 
     // range
-    sec->Get(group + c->name + "/Range", &c->control_ref->range, 100.0);
-    c->control_ref->range /= 100;
+    double range = 100.0;
+    sec->Get(group + c->name + "/Range", &range, 100.0);
+    c->control_ref->SetRange(range / 100);
   }
 }
 
@@ -101,7 +102,7 @@ void ControlGroup::SaveConfig(Common::IniFile::Section* sec, const std::string& 
     sec->Set(group + c->name, expression, "");
 
     // range
-    sec->Set(group + c->name + "/Range", c->control_ref->range * 100.0, 100.0);
+    sec->Set(group + c->name + "/Range", c->control_ref->GetRange() * 100.0, 100.0);
   }
 }
 

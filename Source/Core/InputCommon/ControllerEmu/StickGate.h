@@ -6,7 +6,10 @@
 #include <optional>
 #include <vector>
 
+#include <retro_atomic.h>
+
 #include "Common/Matrix.h"
+#include "Common/Quiesce.h"
 
 #include "InputCommon/ControllerEmu/ControlGroup/ControlGroup.h"
 #include "InputCommon/ControllerEmu/Setting/NumericSetting.h"
@@ -99,11 +102,15 @@ public:
                                     Common::DVec2 point2);
   static ControlState GetCalibrationDataRadiusAtAngle(const CalibrationData& data, double angle);
 
-  const CalibrationData& GetCalibrationData() const;
+  CalibrationData GetCalibrationData() const;
   void SetCalibrationData(CalibrationData data);
 
-  const ReshapeData& GetCenter() const;
+  ReshapeData GetCenter() const;
   void SetCenter(ReshapeData center);
+
+  ~ReshapableInput() override;
+  ReshapableInput(const ReshapableInput&) = delete;
+  ReshapableInput& operator=(const ReshapableInput&) = delete;
 
   static constexpr const char* X_INPUT_OVERRIDE = "X";
   static constexpr const char* Y_INPUT_OVERRIDE = "Y";
@@ -119,9 +126,23 @@ private:
   void LoadConfig(Common::IniFile::Section*, const std::string& base_name) override;
   void SaveConfig(Common::IniFile::Section*, const std::string& base_name) override;
 
-  CalibrationData m_calibration;
+  // Calibration and center, read on every poll and set from the configuration: published
+  // whole, so a poll never sees half of a change.
+  struct Shape
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    CalibrationData calibration;
+    ReshapeData center;
+  };
+  static void FreeShape(quiesce_node_t* node);
+  // Only inside an InputReadScope.
+  const Shape& PeekShape() const;
+  // Swaps in edit's result, made from a copy of the current shape.
+  template <typename Edit>
+  void EditShape(Edit&& edit);
+
+  mutable retro_atomic_ptr_t m_shape{};
   SettingValue<double> m_deadzone_setting;
-  ReshapeData m_center;
 };
 
 }  // namespace ControllerEmu

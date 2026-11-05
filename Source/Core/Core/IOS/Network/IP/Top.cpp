@@ -101,10 +101,8 @@ NetIPTopDevice::NetIPTopDevice(EmulationKernel& ios, const std::string& device_n
 
   m_work_queue.Reset("Network Worker", [this](const AsyncTask& task) {
     const IPCReply reply = task.handler();
-    {
-      std::lock_guard lg(m_async_reply_lock);
-      m_async_replies.emplace(AsyncReply{task.request, reply.return_value});
-    }
+    auto* async_reply = new AsyncReply{{}, task.request, reply.return_value};
+    mpsc_stack_push(&m_async_replies, &async_reply->link);
   });
 }
 
@@ -565,14 +563,13 @@ std::optional<IPCReply> NetIPTopDevice::IOCtlV(const IOCtlVRequest& request)
 
 void NetIPTopDevice::Update()
 {
+  // Oldest first, as the worker finished them.
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_async_replies)); node;)
   {
-    std::lock_guard lg(m_async_reply_lock);
-    while (!m_async_replies.empty())
-    {
-      const auto& reply = m_async_replies.front();
-      GetEmulationKernel().EnqueueIPCReply(reply.request, reply.return_value);
-      m_async_replies.pop();
-    }
+    auto* reply = reinterpret_cast<AsyncReply*>(node);
+    node = node->next;
+    GetEmulationKernel().EnqueueIPCReply(reply->request, reply->return_value);
+    delete reply;
   }
   GetEmulationKernel().GetSocketManager()->Update();
 }

@@ -4,7 +4,6 @@
 #pragma once
 
 #include <map>
-#include <mutex>
 #include <queue>
 #include <vector>
 
@@ -147,8 +146,6 @@ public:
 private:
   static bool IsSkylanderNumberValid(u8 sky_num);
   static bool IsBlockNumberValid(u8 block);
-
-  std::mutex sky_mutex;
 
   bool m_activated = true;
   bool m_status_updated = false;

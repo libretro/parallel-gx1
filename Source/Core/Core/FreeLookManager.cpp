@@ -237,7 +237,7 @@ void FreeLookController::Update()
 
 void FreeLookController::UpdateInput(CameraControllerInput* camera_controller)
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   // Preserve the old controller gate state
   const auto old_gate = ControlReference::GetInputGate();
   Common::ScopeGuard gate_guard{[old_gate] { ControlReference::SetInputGate(old_gate); }};

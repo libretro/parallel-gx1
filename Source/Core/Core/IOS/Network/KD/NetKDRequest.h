@@ -5,7 +5,6 @@
 
 #include <array>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <string>
 
@@ -21,6 +20,8 @@
 #include "Core/IOS/Network/KD/NWC24Config.h"
 #include "Core/IOS/Network/KD/NWC24DL.h"
 #include "Core/IOS/Network/KD/NetKDTime.h"
+#include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
 
 namespace IOS::HLE
 {
@@ -49,9 +50,16 @@ private:
 
   struct AsyncReply
   {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
     IOS::HLE::Request request;
     s32 return_value;
   };
+
+  // The scheduler buffer is read by the emulation thread and written by both worker threads,
+  // a word at a time; the words are kept byte-swapped as the guest reads them.
+  u32 LoadSchedulerWord(size_t index) const;
+  void StoreSchedulerWord(size_t index, u32 swapped);
+  void IncrementSchedulerWord(size_t index);
 
   template <typename Method, typename Request>
   std::optional<IPCReply> LaunchAsyncTask(Method method, const Request& request)
@@ -114,19 +122,18 @@ private:
   NWC24::Mail::WC24FriendList m_friend_list;
   Common::WorkQueueThreadSP<AsyncTask> m_work_queue;
   Common::AsyncWorkThreadSP m_scheduler_work_queue;
-  std::mutex m_async_reply_lock;
-  std::mutex m_scheduler_buffer_lock;
-  std::queue<AsyncReply> m_async_replies;
-  u32 m_error_count = 0;
-  std::array<u32, 256> m_scheduler_buffer{};
+  // Replies from the worker threads, handed to the emulation thread by Update.
+  mpsc_stack_t m_async_replies{};
+  retro_atomic_int_t m_error_count{};
+  std::array<retro_atomic_int_t, 256> m_scheduler_buffer{};
   std::shared_ptr<NetKDTimeDevice> m_time_device;
   // TODO: Maybe move away from Common::HttpRequest?
   Common::HttpRequest m_http{std::chrono::minutes{1}};
-  u32 m_download_span = 2;
-  u32 m_mail_span = 1;
-  bool m_handle_mail;
+  // Minutes between scheduled tasks, set by the workers from server replies.
+  retro_atomic_int_t m_download_span{2};
+  retro_atomic_int_t m_mail_span{1};
+  bool m_handle_mail;  // set before the threads start
   Common::Event m_shutdown_event;
-  std::mutex m_scheduler_lock;
   sthread_t* m_scheduler_timer_thread = nullptr;
 };
 }  // namespace IOS::HLE

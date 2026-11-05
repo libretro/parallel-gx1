@@ -6,7 +6,6 @@
 #include "Common/CommonPaths.h"
 #include "Common/EnumMap.h"
 #include "Common/FileUtil.h"
-#include "Common/Profiler.h"
 #include "Common/Timer.h"
 
 #include "Core/Config/GraphicsSettings.h"
@@ -305,10 +304,6 @@ void OnScreenUI::DrawDebugText()
 
   if (g_ActiveConfig.bOverlayScissorStats)
     g_stats.DisplayScissor();
-
-  const std::string profile_output = Common::Profiler::ToString();
-  if (!profile_output.empty())
-    ImGui::TextUnformatted(profile_output.c_str());
 }
 
 void OnScreenUI::Finalize()

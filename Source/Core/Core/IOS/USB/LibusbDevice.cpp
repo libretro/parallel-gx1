@@ -9,7 +9,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -176,10 +175,9 @@ int LibusbDevice::CancelTransfer(const u8 endpoint)
 {
   INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Cancelling transfers (endpoint {:#x})", m_vid, m_pid,
                m_active_interface, endpoint);
-  const auto iterator = m_transfer_endpoints.find(endpoint);
-  if (iterator == m_transfer_endpoints.cend())
+  if (!m_transfer_endpoints[endpoint].IsUsed())
     return IPC_ENOENT;
-  iterator->second.CancelTransfers();
+  m_transfer_endpoints[endpoint].CancelTransfers();
   return IPC_SUCCESS;
 }
 
@@ -472,23 +470,50 @@ static const std::map<u8, const char*> s_transfer_types = {
 void LibusbDevice::TransferEndpoint::AddTransfer(std::unique_ptr<TransferCommand> command,
                                                  libusb_transfer* transfer)
 {
-  std::lock_guard lk{m_transfers_mutex};
-  m_transfers.emplace(transfer, std::move(command));
+  m_used = true;
+  auto* in_flight = new InFlight{transfer, std::move(command)};
+  for (auto& slot : m_in_flight)
+  {
+    if (!retro_atomic_load_acquire_ptr(&slot) && retro_atomic_cas_ptr(&slot, nullptr, in_flight))
+      return;
+  }
+  // More than MAX_IN_FLIGHT outstanding on one endpoint: the reply goes out when it completes,
+  // it just cannot be cancelled.
+  ERROR_LOG_FMT(IOS_USB, "Too many transfers in flight on one endpoint");
+  delete in_flight;
+}
+
+LibusbDevice::TransferEndpoint::~TransferEndpoint()
+{
+  for (auto& slot : m_in_flight)
+    delete static_cast<InFlight*>(retro_atomic_exchange_ptr(&slot, nullptr));
 }
 
 void LibusbDevice::TransferEndpoint::HandleTransfer(
     libusb_transfer* transfer, const std::function<s32(const TransferCommand&)>& fn)
 {
-  std::lock_guard lk{m_transfers_mutex};
-  const auto iterator = m_transfers.find(transfer);
-  if (iterator == m_transfers.cend())
+  // libusb's event thread: completions never run concurrently with each other.
+  std::unique_ptr<InFlight> in_flight;
+  for (auto& slot : m_in_flight)
+  {
+    auto* candidate = static_cast<InFlight*>(retro_atomic_load_acquire_ptr(&slot));
+    if (candidate && candidate->transfer == transfer)
+    {
+      in_flight.reset(static_cast<InFlight*>(retro_atomic_exchange_ptr(&slot, nullptr)));
+      break;
+    }
+  }
+  // A cancel loop that read the slot before it emptied may still be cancelling this
+  // transfer; libusb frees it once this returns.
+  Common::CallGateDrain(&m_cancel_gate);
+  if (!in_flight)
   {
     ERROR_LOG_FMT(IOS_USB, "No such transfer");
     return;
   }
 
   const std::unique_ptr<u8[]> buffer(transfer->buffer);
-  const auto& cmd = *iterator->second.get();
+  const auto& cmd = *in_flight->command;
   const auto* device = static_cast<LibusbDevice*>(transfer->user_data);
   s32 return_value = LIBUSB_SUCCESS;
   switch (transfer->status)
@@ -512,17 +537,18 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(
     break;
   }
   cmd.OnTransferComplete(return_value);
-  m_transfers.erase(transfer);
 }
 
 void LibusbDevice::TransferEndpoint::CancelTransfers()
 {
-  std::lock_guard lk(m_transfers_mutex);
-  if (m_transfers.empty())
-    return;
-  INFO_LOG_FMT(IOS_USB, "Cancelling {} transfer(s)", m_transfers.size());
-  for (const auto& pending_transfer : m_transfers)
-    libusb_cancel_transfer(pending_transfer.first);
+  // Never shut: completions only wait for this loop to finish.
+  Common::CallGateEnter(&m_cancel_gate);
+  for (auto& slot : m_in_flight)
+  {
+    if (const auto* in_flight = static_cast<const InFlight*>(retro_atomic_load_acquire_ptr(&slot)))
+      libusb_cancel_transfer(in_flight->transfer);
+  }
+  Common::CallGateExit(&m_cancel_gate);
 }
 
 int LibusbDevice::GetNumberOfAltSettings(const u8 interface_number)

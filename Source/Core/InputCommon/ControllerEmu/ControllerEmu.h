@@ -5,10 +5,11 @@
 
 #include <cmath>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <type_traits>
 #include <vector>
+
+#include <retro_atomic.h>
 
 #include "Common/BitUtils.h"
 #include "Common/Common.h"
@@ -223,9 +224,6 @@ public:
 
   void UpdateGroupsReferences(ciface::ExpressionParser::ControlEnvironment& env);
 
-  void SetInputOverrideFunction(InputOverrideFunction override_func);
-  void ClearInputOverrideFunction();
-
   std::vector<std::unique_ptr<ControlGroup>> groups;
 
 protected:
@@ -244,30 +242,40 @@ public:
   void LoadConfig(Common::IniFile::Section* sec);
   void SaveConfig(Common::IniFile::Section* sec);
 
+  EmulatedController();
+  EmulatedController(const EmulatedController&) = delete;
+  EmulatedController& operator=(const EmulatedController&) = delete;
+
   bool IsDefaultDeviceConnected() const;
-  const ciface::Core::DeviceQualifier& GetDefaultDevice() const;
+  ciface::Core::DeviceQualifier GetDefaultDevice() const;
   void SetDefaultDevice(const std::string& device);
   void SetDefaultDevice(ciface::Core::DeviceQualifier devq);
 
+  // Rebinds every control to the current devices. Any thread may ask; one thread at a time
+  // does the work, and one asking while it runs has its request done by that thread before
+  // it stops, so nobody waits for anybody.
   void UpdateReferences(const ControllerInterface& devi);
   void UpdateSingleControlReference(const ControllerInterface& devi, ControlReference* ref);
 
-  // This returns a lock that should be held before calling State() on any control
-  // references and GetState(), by extension. This prevents a race condition
-  // which happens while handling a hotplug event because a control reference's State()
-  // could be called before we have finished updating the reference.
-  [[nodiscard]] static std::unique_lock<std::recursive_mutex> GetStateLock();
-  const ciface::ExpressionParser::ControlEnvironment::VariableContainer&
-  GetExpressionVariables() const;
-
-  // Resets the values while keeping the list.
-  void ResetExpressionVariables();
-
-protected:
-  ciface::ExpressionParser::ControlEnvironment::VariableContainer m_expression_vars;
+  // Reading input takes no lock: bindings are swapped whole and freed only once no reader
+  // is inside. Kept so callers can mark a whole controller read as one input scope.
+  [[nodiscard]] static ciface::InputReadScope ReadScope() { return {}; }
 
 private:
-  ciface::Core::DeviceQualifier m_default_device;
-  bool m_default_device_is_connected{false};
+  struct DefaultDevice
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    ciface::Core::DeviceQualifier qualifier;
+  };
+  static void FreeDefaultDevice(quiesce_node_t* node);
+  void RebindNow(const ControllerInterface& devi);
+
+  // Only touched by the thread doing a rebind.
+  ciface::ExpressionParser::ControlEnvironment::VariableContainer m_expression_vars;
+
+  mutable retro_atomic_ptr_t m_default_device{};  // DefaultDevice*
+  retro_atomic_int_t m_default_device_is_connected{};
+  retro_atomic_int_t m_rebind_requested{};
+  retro_atomic_int_t m_rebinding{};
 };
 }  // namespace ControllerEmu

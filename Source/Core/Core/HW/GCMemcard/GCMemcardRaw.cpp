@@ -4,9 +4,10 @@
 #include "Core/HW/GCMemcard/GCMemcardRaw.h"
 
 #include <chrono>
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -77,6 +78,7 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
   // Class members (including inherited ones) have now been initialized, so
   // it's safe to startup the flush thread (which reads them).
   m_flush_buffer = std::make_unique<u8[]>(m_memory_card_size);
+  memcpy(&m_flush_buffer[0], &m_memcard_data[0], m_memory_card_size);
   m_flush_thread = sthread_create(Common::ThreadEntry<&MemoryCard::FlushThread>, this);
 }
 
@@ -87,6 +89,38 @@ MemoryCard::~MemoryCard()
     m_flush_trigger.Set();
 
     Common::JoinThread(m_flush_thread);
+  }
+  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_changes); node;)
+  {
+    mpsc_stack_node_t* const next = node->next;
+    std::free(node);
+    node = next;
+  }
+}
+
+void MemoryCard::PostChange(u32 offset, u32 length, const u8* data)
+{
+  auto* change = static_cast<Change*>(
+      std::malloc(offsetof(Change, data) + (data ? length : 0) + 1));
+  change->offset = offset;
+  change->length = length;
+  change->fill = data == nullptr;
+  if (data)
+    memcpy(change->data, data, length);
+  mpsc_stack_push(&m_changes, &change->link);
+}
+
+void MemoryCard::ApplyChanges()
+{
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_changes)); node;)
+  {
+    auto* change = reinterpret_cast<Change*>(node);
+    node = node->next;
+    if (change->fill)
+      memset(&m_flush_buffer[change->offset], 0xFF, change->length);
+    else
+      memcpy(&m_flush_buffer[change->offset], change->data, change->length);
+    std::free(change);
   }
 }
 
@@ -145,10 +179,7 @@ void MemoryCard::FlushThread()
       return;
     }
 
-    {
-      std::unique_lock l(m_flush_mutex);
-      memcpy(&m_flush_buffer[0], &m_memcard_data[0], m_memory_card_size);
-    }
+    ApplyChanges();
     file.WriteBytes(&m_flush_buffer[0], m_memory_card_size);
 
     if (do_exit)
@@ -186,10 +217,8 @@ s32 MemoryCard::Write(u32 dest_address, s32 length, const u8* src_address)
     return -1;
   }
 
-  {
-    std::unique_lock l(m_flush_mutex);
-    memcpy(&m_memcard_data[dest_address], src_address, length);
-  }
+  memcpy(&m_memcard_data[dest_address], src_address, length);
+  PostChange(dest_address, length, src_address);
   MakeDirty();
   return length;
 }
@@ -201,20 +230,15 @@ void MemoryCard::ClearBlock(u32 address)
     PanicAlertFmtT("MemoryCard: ClearBlock called on invalid address ({0:#x})", address);
     return;
   }
-  else
-  {
-    std::unique_lock l(m_flush_mutex);
-    memset(&m_memcard_data[address], 0xFF, Memcard::BLOCK_SIZE);
-  }
+  memset(&m_memcard_data[address], 0xFF, Memcard::BLOCK_SIZE);
+  PostChange(address, Memcard::BLOCK_SIZE, nullptr);
   MakeDirty();
 }
 
 void MemoryCard::ClearAll()
 {
-  {
-    std::unique_lock l(m_flush_mutex);
-    memset(&m_memcard_data[0], 0xFF, m_memory_card_size);
-  }
+  memset(&m_memcard_data[0], 0xFF, m_memory_card_size);
+  PostChange(0, m_memory_card_size, nullptr);
   MakeDirty();
 }
 
@@ -223,4 +247,7 @@ void MemoryCard::DoState(PointerWrap& p)
   p.Do(m_card_slot);
   p.Do(m_memory_card_size);
   p.DoArray(&m_memcard_data[0], m_memory_card_size);
+  // A loaded state replaces the whole card; the flush thread gets it as one change.
+  if (p.IsReadMode())
+    PostChange(0, m_memory_card_size, &m_memcard_data[0]);
 }

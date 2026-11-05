@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cstdlib>
 
+#include <retro_atomic.h>
+
 #include "Common/CommonFuncs.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -35,15 +37,14 @@
 #include "Common/JITMemoryTracker.h"
 #ifdef __LIBRETRO__
 #include <algorithm>
-#include <mutex>
 #include <vector>
 #include "DolphinLibretro/Common/Globals.h"
 static void* s_last_exec_rw = nullptr;
 static unsigned s_last_exec_mode = 0;
 // Regions the frontend allocated for us. Whether they are dual-mapped says
 // nothing about who owns them, so ownership is recorded rather than inferred.
-static std::mutex s_frontend_regions_mutex;
-static std::vector<void*> s_frontend_regions;
+// Slots claimed and released with a CAS; a handful of regions at most.
+static retro_atomic_ptr_t s_frontend_regions[64];
 #endif
 #endif
 
@@ -84,9 +85,10 @@ void* AllocateExecutableMemory(size_t size)
       s_last_exec_mode = alloc.mode;
       SetJitType(alloc.mode == RETRO_EXEC_MEM_MODE_DUAL_MAP ? JitType::LuckTXM :
                                                               JitType::Legacy);
+      for (auto& slot : s_frontend_regions)
       {
-        std::scoped_lock lk(s_frontend_regions_mutex);
-        s_frontend_regions.push_back(alloc.rx);
+        if (!retro_atomic_load_acquire_ptr(&slot) && retro_atomic_cas_ptr(&slot, nullptr, alloc.rx))
+          break;
       }
       g_jit_memory_tracker.RegisterJITRegion(alloc.rx, size);
       return alloc.rx;
@@ -423,12 +425,10 @@ void FreeExecutableMemory(void* ptr, size_t size)
   g_jit_memory_tracker.UnregisterJITRegion(ptr);
 #endif
 #if defined(IPHONEOS) && defined(__LIBRETRO__)
+  for (auto& slot : s_frontend_regions)
   {
-    std::scoped_lock lk(s_frontend_regions_mutex);
-    auto it = std::find(s_frontend_regions.begin(), s_frontend_regions.end(), ptr);
-    if (it != s_frontend_regions.end())
+    if (retro_atomic_cas_ptr(&slot, ptr, nullptr))
     {
-      s_frontend_regions.erase(it);
       struct retro_exec_mem_free f = {};
       f.rx = ptr;
       if (Libretro::environ_cb)

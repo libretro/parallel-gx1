@@ -5,7 +5,6 @@
 
 #include <array>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <vector>
 
@@ -22,11 +21,16 @@ u16 GeckoSockServer::server_port;
 int GeckoSockServer::client_count;
 sthread_t* GeckoSockServer::connectionThread = nullptr;
 Common::Flag GeckoSockServer::server_running;
-std::mutex GeckoSockServer::connection_lock;
-std::queue<std::unique_ptr<sf::TcpSocket>> GeckoSockServer::waiting_socks;
+mpsc_stack_t GeckoSockServer::waiting_socks;
+std::deque<std::unique_ptr<sf::TcpSocket>> GeckoSockServer::taken_socks;
+
+// Bytes held each way; the Gecko moves one at a time, so this is ample.
+constexpr size_t GECKO_FIFO_SIZE = 64 * 1024;
 
 GeckoSockServer::GeckoSockServer() : client_running(false)
 {
+  retro_spsc_init(&send_fifo, GECKO_FIFO_SIZE);
+  retro_spsc_init(&recv_fifo, GECKO_FIFO_SIZE);
   if (!connectionThread)
     connectionThread = sthread_create(GeckoConnectionWaiter, nullptr);
 }
@@ -46,6 +50,9 @@ GeckoSockServer::~GeckoSockServer()
     server_running.Clear();
     Common::JoinThread(connectionThread);
   }
+
+  retro_spsc_free(&send_fifo);
+  retro_spsc_free(&recv_fifo);
 }
 
 void GeckoSockServer::GeckoConnectionWaiter(void*)
@@ -73,8 +80,8 @@ void GeckoSockServer::GeckoConnectionWaiter(void*)
   {
     if (server.accept(*new_client) == sf::Socket::Status::Done)
     {
-      std::lock_guard lk(connection_lock);
-      waiting_socks.push(std::move(new_client));
+      auto* waiting = new WaitingSock{{}, std::move(new_client)};
+      mpsc_stack_push(&waiting_socks, &waiting->link);
 
       new_client = std::make_unique<sf::TcpSocket>();
     }
@@ -87,22 +94,30 @@ bool GeckoSockServer::GetAvailableSock()
 {
   bool sock_filled = false;
 
-  std::lock_guard lk(connection_lock);
-
-  if (!waiting_socks.empty())
+  // The stack gives the newest first; queue them oldest first.
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&waiting_socks)); node;)
   {
-    client = std::move(waiting_socks.front());
+    auto* waiting = reinterpret_cast<WaitingSock*>(node);
+    node = node->next;
+    taken_socks.push_back(std::move(waiting->socket));
+    delete waiting;
+  }
+
+  if (!taken_socks.empty())
+  {
+    client = std::move(taken_socks.front());
     if (clientThread)
     {
       client_running.Clear();
       Common::JoinThread(clientThread);
 
-      recv_fifo = std::deque<u8>();
-      send_fifo = std::deque<u8>();
+      // Both ends are quiet now.
+      retro_spsc_clear(&recv_fifo);
+      retro_spsc_clear(&send_fifo);
     }
     clientThread = sthread_create(Common::ThreadEntry<&GeckoSockServer::ClientThread>, this);
     client_count++;
-    waiting_socks.pop();
+    taken_socks.pop_front();
     sock_filled = true;
   }
 
@@ -122,8 +137,6 @@ void GeckoSockServer::ClientThread()
     bool did_nothing = true;
 
     {
-      std::lock_guard lk(transfer_lock);
-
       // what's an ideal buffer size?
       std::array<char, 128> buffer;
       std::size_t got = 0;
@@ -135,20 +148,21 @@ void GeckoSockServer::ClientThread()
       {
         did_nothing = false;
 
-        recv_fifo.insert(recv_fifo.end(), buffer.data(), buffer.data() + got);
+        // A full ring drops the excess; a guest that stopped reading would never take it.
+        retro_spsc_write(&recv_fifo, buffer.data(), got);
       }
 
-      if (!send_fifo.empty())
+      if (const size_t pending = retro_spsc_read_avail(&send_fifo))
       {
         did_nothing = false;
 
-        std::vector<char> packet(send_fifo.begin(), send_fifo.end());
-        send_fifo.clear();
+        std::vector<char> packet(pending);
+        retro_spsc_read(&send_fifo, packet.data(), pending);
 
         if (client->send(&packet[0], packet.size()) == sf::Socket::Status::Disconnected)
           client_running.Clear();
       }
-    }  // unlock transfer
+    }
 
     if (did_nothing)
       Common::YieldCPU();
@@ -187,12 +201,9 @@ void CEXIGecko::ImmReadWrite(u32& _uData, u32 _uSize)
   // |= 0x08000000 if successful
   case CMD_RECV:
   {
-    std::lock_guard lk(transfer_lock);
-    if (!recv_fifo.empty())
-    {
-      _uData = 0x08000000 | (recv_fifo.front() << 16);
-      recv_fifo.pop_front();
-    }
+    u8 byte;
+    if (retro_spsc_read(&recv_fifo, &byte, 1) == 1)
+      _uData = 0x08000000 | (byte << 16);
     break;
   }
 
@@ -200,8 +211,8 @@ void CEXIGecko::ImmReadWrite(u32& _uData, u32 _uSize)
   // |= 0x04000000 if successful
   case CMD_SEND:
   {
-    std::lock_guard lk(transfer_lock);
-    send_fifo.push_back(_uData >> 20);
+    const u8 byte = static_cast<u8>(_uData >> 20);
+    retro_spsc_write(&send_fifo, &byte, 1);
     _uData = 0x04000000;
     break;
   }
@@ -216,8 +227,7 @@ void CEXIGecko::ImmReadWrite(u32& _uData, u32 _uSize)
   // |= 0x04000000 if data in recv FIFO
   case CMD_CHK_RX:
   {
-    std::lock_guard lk(transfer_lock);
-    _uData = recv_fifo.empty() ? 0 : 0x04000000;
+    _uData = retro_spsc_read_avail(&recv_fifo) ? 0x04000000 : 0;
     break;
   }
 

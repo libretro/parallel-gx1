@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -231,7 +230,7 @@ void GCMemcardDirectory::FlushThread()
         return;
     }
 
-    FlushToFile();
+    WriteQueuedJobs();
   }
 }
 
@@ -307,7 +306,6 @@ s32 GCMemcardDirectory::Read(u32 src_address, s32 length, u8* dest_address)
 
 s32 GCMemcardDirectory::Write(u32 dest_address, s32 length, const u8* src_address)
 {
-  std::unique_lock l(m_write_mutex);
   if (length != 0x80)
     INFO_LOG_FMT(EXPANSIONINTERFACE, "Writing to {:#x}. Length: {:#x}", dest_address, length);
   const s32 block = dest_address / Memcard::BLOCK_SIZE;
@@ -365,11 +363,13 @@ s32 GCMemcardDirectory::Write(u32 dest_address, s32 length, const u8* src_addres
 
   memcpy(m_last_block_address + offset, src_address, length);
 
-  l.unlock();
   if (extra)
     extra = Write(dest_address + length, extra, src_address + length);
   if (offset + length == Memcard::BLOCK_SIZE)
+  {
+    QueueDirtySaves();
     m_flush_trigger.Set();
+  }
   return length + extra;
 }
 
@@ -578,8 +578,14 @@ bool GCMemcardDirectory::SetUsedBlocks(int save_index)
 
 void GCMemcardDirectory::FlushToFile()
 {
-  std::unique_lock l(m_write_mutex);
-  Memcard::DEntry invalid;
+  QueueDirtySaves();
+  WriteQueuedJobs();
+}
+
+void GCMemcardDirectory::QueueDirtySaves()
+{
+  const auto post = [this](FlushJob* job) { mpsc_stack_push(&m_flush_jobs, &job->link); };
+
   for (Memcard::GCIFile& save : m_saves)
   {
     if (save.m_dirty)
@@ -615,40 +621,12 @@ void GCMemcardDirectory::FlushToFile()
           }
           save.m_filename = default_save_name;
         }
-        File::IOFile gci(save.m_filename, "wb");
-        if (gci)
-        {
-          gci.WriteBytes(&save.m_gci_header, Memcard::DENTRY_SIZE);
-          for (const Memcard::GCMBlock& block : save.m_save_data)
-            gci.WriteBytes(block.m_block.data(), Memcard::BLOCK_SIZE);
-
-          if (gci.IsGood())
-          {
-            Core::DisplayMessage("Wrote save contents to GCI Folder", 4000);
-          }
-          else
-          {
-            Core::DisplayMessage(
-                fmt::format("Failed to write save contents to {}", save.m_filename), 10000);
-            ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to save data to {}", save.m_filename);
-          }
-        }
-        else
-        {
-          Core::DisplayMessage(
-              fmt::format("Failed to open file at {} for writing", save.m_filename), 10000);
-          ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to open file at {} for writing",
-                        save.m_filename);
-        }
+        post(new FlushJob{{}, save.m_filename, false, save.m_gci_header, save.m_save_data});
       }
       else if (save.m_filename.length() != 0)
       {
         save.m_dirty = false;
-        std::string& old_name = save.m_filename;
-        std::string deleted_name = old_name + ".deleted";
-        if (File::Exists(deleted_name))
-          File::Delete(deleted_name);
-        File::Rename(old_name, deleted_name);
+        post(new FlushJob{{}, save.m_filename, true, {}, {}});
         save.m_filename.clear();
         save.m_save_data.clear();
         save.m_used_blocks.clear();
@@ -667,17 +645,67 @@ void GCMemcardDirectory::FlushToFile()
       save.m_save_data.clear();
     }
   }
-#if _WRITE_MC_HEADER
-  u8 mc[BLOCK_SIZE * MC_FST_BLOCKS];
-  Read(0, BLOCK_SIZE * MC_FST_BLOCKS, mc);
-  File::IOFile hdrfile(m_save_directory + MC_HDR, "wb");
-  hdrfile.WriteBytes(mc, BLOCK_SIZE * MC_FST_BLOCKS);
-#endif
+}
+
+void GCMemcardDirectory::WriteQueuedJobs()
+{
+  // Oldest first, so a later job for the same file wins.
+  std::vector<std::unique_ptr<FlushJob>> jobs;
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_flush_jobs)); node;)
+  {
+    auto* job = reinterpret_cast<FlushJob*>(node);
+    node = node->next;
+    jobs.emplace_back(job);
+  }
+
+  for (size_t i = 0; i < jobs.size(); ++i)
+  {
+    const FlushJob& job = *jobs[i];
+    const bool superseded = std::any_of(jobs.begin() + i + 1, jobs.end(),
+                                        [&job](const auto& later) {
+                                          return later->filename == job.filename;
+                                        });
+    if (superseded)
+      continue;
+
+    if (job.retire)
+    {
+      const std::string deleted_name = job.filename + ".deleted";
+      if (File::Exists(deleted_name))
+        File::Delete(deleted_name);
+      File::Rename(job.filename, deleted_name);
+      continue;
+    }
+
+    File::IOFile gci(job.filename, "wb");
+    if (gci)
+    {
+      gci.WriteBytes(&job.header, Memcard::DENTRY_SIZE);
+      for (const Memcard::GCMBlock& block : job.blocks)
+        gci.WriteBytes(block.m_block.data(), Memcard::BLOCK_SIZE);
+
+      if (gci.IsGood())
+      {
+        Core::DisplayMessage("Wrote save contents to GCI Folder", 4000);
+      }
+      else
+      {
+        Core::DisplayMessage(fmt::format("Failed to write save contents to {}", job.filename),
+                             10000);
+        ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to save data to {}", job.filename);
+      }
+    }
+    else
+    {
+      Core::DisplayMessage(fmt::format("Failed to open file at {} for writing", job.filename),
+                           10000);
+      ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to open file at {} for writing", job.filename);
+    }
+  }
 }
 
 void GCMemcardDirectory::DoState(PointerWrap& p)
 {
-  std::unique_lock l(m_write_mutex);
   m_last_block = -1;
   m_last_block_address = nullptr;
   p.Do(m_save_directory);

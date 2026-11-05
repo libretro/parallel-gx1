@@ -5,7 +5,6 @@
 
 #include <array>
 #include <bit>
-#include <mutex>
 #include <span>
 #include <vector>
 
@@ -468,7 +467,6 @@ void InfinityBase::GetPresentFigures(u8 sequence, std::array<u8, 32>& reply_buf)
 
 void InfinityBase::GetFigureIdentifier(u8 fig_num, u8 sequence, std::array<u8, 32>& reply_buf)
 {
-  std::lock_guard lock(m_infinity_mutex);
 
   InfinityFigure& figure = GetFigureByOrder(fig_num);
 
@@ -486,7 +484,6 @@ void InfinityBase::GetFigureIdentifier(u8 fig_num, u8 sequence, std::array<u8, 3
 
 void InfinityBase::QueryBlock(u8 fig_num, u8 block, std::array<u8, 32>& reply_buf, u8 sequence)
 {
-  std::lock_guard lock(m_infinity_mutex);
 
   InfinityFigure& figure = GetFigureByOrder(fig_num);
 
@@ -513,7 +510,6 @@ void InfinityBase::QueryBlock(u8 fig_num, u8 block, std::array<u8, 32>& reply_bu
 void InfinityBase::WriteBlock(u8 fig_num, u8 block, const u8* to_write_buf,
                               std::array<u8, 32>& reply_buf, u8 sequence)
 {
-  std::lock_guard lock(m_infinity_mutex);
 
   InfinityFigure& figure = GetFigureByOrder(fig_num);
 
@@ -594,7 +590,6 @@ std::string
 InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE>& buf,
                          File::IOFile in_file, FigureUIPosition position)
 {
-  std::lock_guard lock(m_infinity_mutex);
   u8 order_added;
 
   std::vector<u8> sha1_calc = {SHA1_CONSTANT.begin(), SHA1_CONSTANT.end() - 1};
@@ -642,7 +637,6 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
 
 void InfinityBase::RemoveFigure(FigureUIPosition position)
 {
-  std::lock_guard lock(m_infinity_mutex);
   InfinityFigure& figure = m_figures[static_cast<u8>(position)];
 
   if (figure.inf_file.IsOpen())

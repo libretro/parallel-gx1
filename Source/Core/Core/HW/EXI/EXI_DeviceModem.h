@@ -3,10 +3,12 @@
 
 #pragma once
 
-#include <mutex>
 
 #include "Core/HW/EXI/BBA/TAPServerConnection.h"
 #include "Core/HW/EXI/EXI_Device.h"
+
+#include <retro_spsc.h>
+
 
 class PointerWrap;
 
@@ -83,7 +85,8 @@ private:
   void SetInterruptFlag(u8 what, bool enabled, bool from_cpu);
   void HandleReadModemTransfer(void* data, u32 size);
   void HandleWriteModemTransfer(const void* data, u32 size);
-  void OnReceiveBufferSizeChangedLocked(bool from_cpu);
+  // CPU thread: brings the receive registers and interrupt in line with the ring.
+  void SyncReceiveState();
   void SendComplete();
   void AddToReceiveBuffer(std::string&& data);
   void RunAllPendingATCommands();
@@ -155,8 +158,9 @@ private:
   std::string m_at_command_data;
   std::string m_at_reply_data;
   std::string m_send_buffer;
-  std::mutex m_receive_buffer_lock;
-  std::string m_receive_buffer;
+  // Received bytes, written by the network thread and read by the CPU thread, which alone
+  // touches m_regs.
+  retro_spsc_t m_receive_buffer;
   std::array<u8, 0x20> m_regs{};
 };
 }  // namespace ExpansionInterface

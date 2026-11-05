@@ -6,20 +6,37 @@
 #include <chrono>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include <retro_atomic.h>
+
 #include "Common/CommonTypes.h"
+#include "Common/Quiesce.h"
 
 // idk in case I wanted to change it to double or something, idk what's best
 typedef double ControlState;
 
 namespace ciface
 {
+// Everything the input code shares between threads (the device list, control bindings,
+// stick calibration) is published whole and freed through this quiesce, so reading input
+// takes no lock and a reconfiguration never waits for a reader.
+quiesce_t* InputQuiesce();
+
+// Marks the calling thread as reading input for its lifetime. Nests.
+class InputReadScope final
+{
+public:
+  InputReadScope() { quiesce_enter(InputQuiesce()); }
+  ~InputReadScope() { quiesce_exit(InputQuiesce()); }
+  InputReadScope(const InputReadScope&) = delete;
+  InputReadScope& operator=(const InputReadScope&) = delete;
+};
+
 // 100Hz which homebrew docs very roughly imply is within WiiMote normal
 // range, used for periodic haptic effects though often ignored by devices
 // TODO: Make this configurable.
@@ -233,13 +250,58 @@ public:
 
   bool HasConnectedDevice(const DeviceQualifier& qualifier) const;
 
-  std::recursive_mutex& GetDevicesMutex() const { return m_devices_mutex; }
+  DeviceContainer() = default;
+  ~DeviceContainer();
+  DeviceContainer(const DeviceContainer&) = delete;
+  DeviceContainer& operator=(const DeviceContainer&) = delete;
 
 protected:
-  // Exclusively needed when reading/writing the "m_devices" array.
-  // Not needed when individually reading/writing a single device ptr.
-  mutable std::recursive_mutex m_devices_mutex;
-  std::vector<std::shared_ptr<Device>> m_devices;
+  // The devices, sorted by priority. Never changed once published: a writer copies it,
+  // edits the copy and swaps it in, and the old one is freed once no reader is inside.
+  struct DeviceList
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    std::vector<std::shared_ptr<Device>> devices;
+  };
+
+  // The current list, or null for none. Only inside an InputReadScope.
+  const DeviceList* PeekDevices() const
+  {
+    return static_cast<const DeviceList*>(retro_atomic_load_acquire_ptr(&m_device_list));
+  }
+
+  // Swaps in edit's result, made from a copy of the current devices. edit returns false to
+  // leave the list as it is; it may run more than once if another thread swaps in a list
+  // meanwhile. Returns whether a list was swapped in.
+  template <typename Edit>
+  bool EditDevices(Edit&& edit)
+  {
+    InputReadScope scope;
+    for (;;)
+    {
+      void* const cur = retro_atomic_load_acquire_ptr(&m_device_list);
+      auto* next = new DeviceList{{}, {}};
+      if (cur)
+        next->devices = static_cast<const DeviceList*>(cur)->devices;
+      if (!edit(next->devices))
+      {
+        delete next;
+        return false;
+      }
+      if (retro_atomic_cas_ptr(&m_device_list, cur, next))
+      {
+        if (cur)
+          quiesce_retire(InputQuiesce(), &static_cast<DeviceList*>(cur)->node, FreeDeviceList);
+        return true;
+      }
+      delete next;
+    }
+  }
+
+private:
+  static void FreeDeviceList(quiesce_node_t* node);
+
+  mutable retro_atomic_ptr_t m_device_list{};
 };
 
 // Wait for inputs on supplied devices.

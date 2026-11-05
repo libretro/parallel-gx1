@@ -24,7 +24,6 @@
 #include <atomic>
 #include <bit>
 #include <iterator>
-#include <mutex>
 #include <string>
 #include <utility>
 #include <variant>
@@ -82,8 +81,8 @@ enum
   SUB_MASTER_CODE = 0x03,
 };
 
-// General lock. Protects codes list and internal log.
-static std::mutex s_lock;
+// Codes list and internal log: emulation thread only. Cheats are changed through
+// RunOnCPUThread, the patch engine runs on it, and nothing else touches them.
 static std::vector<ARCode> s_active_codes;
 static std::vector<ARCode> s_synced_codes;
 static std::vector<std::string> s_internal_log;
@@ -117,8 +116,6 @@ void ApplyCodes(std::span<const ARCode> codes, const std::string& game_id, u16 r
 {
   if (!Config::AreCheatsEnabled())
     return;
-
-  std::lock_guard guard(s_lock);
   s_disable_logging = false;
   s_active_codes.clear();
 
@@ -149,7 +146,6 @@ std::vector<ARCode> ApplyAndReturnCodes(std::span<const ARCode> codes)
 {
   if (Config::AreCheatsEnabled())
   {
-    std::lock_guard guard(s_lock);
     s_disable_logging = false;
     s_active_codes.clear();
     std::copy_if(codes.begin(), codes.end(), std::back_inserter(s_active_codes),
@@ -167,7 +163,6 @@ void AddCode(ARCode code)
 
   if (code.enabled)
   {
-    std::lock_guard guard(s_lock);
     s_disable_logging = false;
     s_active_codes.emplace_back(std::move(code));
   }
@@ -177,8 +172,6 @@ size_t CountEnabledCodes()
 {
   if (!Config::AreCheatsEnabled())
     return 0;
-
-  std::lock_guard guard(s_lock);
   return s_active_codes.size();
 }
 
@@ -357,13 +350,11 @@ void EnableSelfLogging(bool enable)
 
 std::vector<std::string> GetSelfLog()
 {
-  std::lock_guard guard(s_lock);
   return s_internal_log;
 }
 
 void ClearSelfLog()
 {
-  std::lock_guard guard(s_lock);
   s_internal_log.clear();
 }
 
@@ -1011,7 +1002,6 @@ void RunAllActive(const Core::CPUThreadGuard& cpu_guard)
   // If the mutex is idle then acquiring it should be cheap, fast mutexes
   // are only atomic ops unless contested. It should be rare for this to
   // be contested.
-  std::lock_guard guard(s_lock);
   std::erase_if(s_active_codes, [&cpu_guard](const ARCode& code) {
     const bool success = RunCodeLocked(cpu_guard, code);
     LogInfo("\n");

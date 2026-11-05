@@ -6,10 +6,10 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 
+#include <retro_atomic.h>
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
@@ -49,13 +49,16 @@ protected:
   std::optional<IPCReply> HandleTransfer(const std::shared_ptr<USB::Device>& device, u32 request,
                                          const std::function<s32()>& submit) const;
 
+  // Emulation thread only. Device lists from the scan thread wait in m_pending_devices until
+  // Update takes them, so this and everything derived from it in the subclasses stay on one
+  // thread.
   std::map<u64, std::shared_ptr<USB::Device>> m_devices;
-  mutable std::recursive_mutex m_devices_mutex;
 
 private:
   void Update() override;
   void OnDevicesChangedInternal(const USBScanner::DeviceMap& new_devices);
 
   bool m_has_initialised = false;
+  retro_atomic_ptr_t m_pending_devices{};  // USBScanner::DeviceMap*
 };
 }  // namespace IOS::HLE

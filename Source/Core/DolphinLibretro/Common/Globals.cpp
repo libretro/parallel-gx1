@@ -12,7 +12,8 @@ namespace Input
 retro_microphone_interface g_microphone_interface{};
 bool g_has_microphone_support = false;
 bool g_gc_mic_button[4];
-std::vector<IOS::HLE::USB::Microphone*> g_active_microphones{};
+retro_atomic_ptr_t g_active_microphones[MAX_ACTIVE_MICROPHONES];
+Common::CallGate g_microphone_poll_gate;
 } // namespace Input
 
 namespace Video

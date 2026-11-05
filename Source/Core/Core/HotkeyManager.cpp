@@ -354,7 +354,7 @@ void HotkeyManager::GetInput(HotkeyStatus* kb, bool ignore_focus)
   for (size_t key = 0; key < bitmasks.size(); key++)
     bitmasks[key] = static_cast<u32>(1 << key);
 
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   for (std::size_t group = 0; group < s_groups_info.size(); group++)
   {
     if (s_groups_info[group].ignore_focus != ignore_focus)

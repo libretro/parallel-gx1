@@ -7,7 +7,6 @@
 #pragma once
 
 #include <map>
-#include <mutex>
 #include <set>
 #include <string>
 #include <string_view>
@@ -94,6 +93,8 @@ enum
   FFLAG_STRAIGHT = (1 << 5)
 };
 
+// Used by the emulation (CPU) thread alone: boot fills it before that thread runs, and every
+// later reader and writer (HLE, the JIT, the interpreter, the debugger stub) runs on it.
 class SymbolDB
 {
 public:
@@ -122,7 +123,6 @@ public:
   template <typename F>
   void ForEachSymbol(F f) const
   {
-    std::lock_guard lock(m_mutex);
     for (const auto& [addr, symbol] : m_functions)
       f(symbol);
   }
@@ -130,7 +130,6 @@ public:
   template <typename F>
   void ForEachSymbolWithMutation(F f)
   {
-    std::lock_guard lock(m_mutex);
     for (auto& [addr, symbol] : m_functions)
     {
       f(symbol);
@@ -141,7 +140,6 @@ public:
   template <typename F>
   void ForEachNote(F f) const
   {
-    std::lock_guard lock(m_mutex);
     for (const auto& [addr, note] : m_notes)
       f(note);
   }
@@ -149,7 +147,6 @@ public:
   template <typename F>
   void ForEachNoteWithMutation(F f)
   {
-    std::lock_guard lock(m_mutex);
     for (auto& [addr, note] : m_notes)
     {
       f(note);
@@ -169,6 +166,5 @@ protected:
   XNoteMap m_notes;
   XFuncPtrMap m_checksum_to_function;
   std::string m_map_name;
-  mutable std::recursive_mutex m_mutex;
 };
 }  // namespace Common

@@ -5,11 +5,14 @@
 
 #include <map>
 #include <memory>
-#include <mutex>
 #include <set>
 
 #include <rthreads/rthreads.h>
 
+#include <retro_atomic.h>
+
+#include "Common/CallGate.h"
+#include "Common/Quiesce.h"
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
 #include "Common/WaitableFlag.h"
@@ -51,15 +54,36 @@ private:
   static void AddEmulatedDevices(DeviceMap* new_devices);
   static void AddDevice(std::unique_ptr<USB::Device> device, DeviceMap* new_devices);
 
-  DeviceMap m_devices;
-  mutable std::mutex m_devices_mutex;
+  // The device list and the clients are each published whole: the scan thread replaces the
+  // list, the emulation thread (the only one adding and removing clients) replaces the set.
+  // Old copies go once no reader is inside m_quiesce.
+  struct Devices
+  {
+    quiesce_node_t node;  // first: the free callback casts it back
+    DeviceMap map;
+  };
+  struct Clients
+  {
+    quiesce_node_t node;  // first, as above
+    std::set<USBHost*> set;
+  };
+  static void FreeDevices(quiesce_node_t* node);
+  static void FreeClients(quiesce_node_t* node);
+  void PublishDevices(DeviceMap map);
+  // Tells the clients about the current devices. Scan thread.
+  void NotifyClients();
 
-  std::set<USBHost*> m_clients;
-  std::mutex m_clients_mutex;
+  mutable quiesce_t m_quiesce{};
+  retro_atomic_ptr_t m_devices{};
+  retro_atomic_ptr_t m_clients{};
+  // The scan thread is inside it while calling clients, so RemoveClient can wait that out
+  // before its caller goes away.
+  Common::CallGate m_notify_gate;
+  // A notification skipped while a removal had the gate shut; the next scan sends it.
+  bool m_notify_pending = false;
 
   Common::Flag m_thread_running;
   sthread_t* m_thread = nullptr;
-  std::mutex m_thread_start_stop_mutex;
   Common::WaitableFlag m_first_scan_complete_flag;
 
   LibusbUtils::Context m_context;

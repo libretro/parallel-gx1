@@ -11,84 +11,98 @@ namespace Common
 {
 JITMemoryTracker::JITMemoryTracker() = default;
 
+JITMemoryTracker::~JITMemoryTracker()
+{
+  for (auto& slot : m_jit_regions)
+    delete static_cast<JITRegionInfo*>(retro_atomic_exchange_ptr(&slot, nullptr));
+  quiesce_deinit(&m_quiesce);
+}
+
+void JITMemoryTracker::FreeRegion(quiesce_node_t* node)
+{
+  delete reinterpret_cast<JITRegionInfo*>(node);
+}
+
 void JITMemoryTracker::RegisterJITRegion(void* ptr, size_t size)
 {
-  std::scoped_lock lk(m_mutex);
-
-  if (m_jit_regions.find(ptr) != m_jit_regions.end())
+  quiesce_enter(&m_quiesce);
+  const bool known = FindRegion(ptr) != nullptr;
+  quiesce_exit(&m_quiesce);
+  if (known)
   {
     PanicAlertFmt("JITMemoryTracker: region {} already registered", ptr);
     return;
   }
 
-  m_jit_regions[ptr] = {ptr, size, 0};
+  auto* info = new JITRegionInfo{{}, ptr, size, 0};
+  for (auto& slot : m_jit_regions)
+  {
+    if (!retro_atomic_load_acquire_ptr(&slot) && retro_atomic_cas_ptr(&slot, nullptr, info))
+      return;
+  }
+  PanicAlertFmt("JITMemoryTracker: more than {} JIT regions", MAX_REGIONS);
+  delete info;
 }
 
 void JITMemoryTracker::UnregisterJITRegion(void* ptr)
 {
-  std::scoped_lock lk(m_mutex);
-
-  m_jit_regions.erase(ptr);
+  for (auto& slot : m_jit_regions)
+  {
+    auto* info = static_cast<JITRegionInfo*>(retro_atomic_load_acquire_ptr(&slot));
+    if (info && info->start_ptr == ptr && retro_atomic_cas_ptr(&slot, info, nullptr))
+    {
+      quiesce_retire(&m_quiesce, &info->node, FreeRegion);
+      return;
+    }
+  }
 }
 
 JITMemoryTracker::JITRegionInfo* JITMemoryTracker::FindRegion(void* ptr)
 {
-  if (m_jit_regions.find(ptr) != m_jit_regions.end())
+  JITRegionInfo* containing = nullptr;
+  for (auto& slot : m_jit_regions)
   {
-    return &m_jit_regions[ptr];
+    auto* info = static_cast<JITRegionInfo*>(retro_atomic_load_acquire_ptr(&slot));
+    if (!info)
+      continue;
+    if (info->start_ptr == ptr)
+      return info;
+    void* region_end = static_cast<void*>(static_cast<u8*>(info->start_ptr) + info->size);
+    if (!containing && ptr >= info->start_ptr && ptr <= region_end)
+      containing = info;
   }
-
-  for (auto& info : m_jit_regions)
-  {
-    void* region_end = static_cast<void*>(static_cast<u8*>(info.first) + info.second.size);
-    if (ptr >= info.first && ptr <= region_end)
-    {
-      return &info.second;
-    }
-  }
-
-  return nullptr;
+  return containing;
 }
 
 void JITMemoryTracker::JITRegionWriteEnableExecuteDisable(void* ptr)
 {
-  std::scoped_lock lk(m_mutex);
-
+  quiesce_enter(&m_quiesce);
   JITRegionInfo* info = FindRegion(ptr);
 
-  if (!info)
+  if (info)
   {
-    return;
-  }
+    if (info->nest_counter == 0)
+      UnWriteProtectMemory(info->start_ptr, info->size, false);
 
-  if (info->nest_counter == 0)
-  {
-    UnWriteProtectMemory(info->start_ptr, info->size, false);
+    info->nest_counter++;
   }
-
-  info->nest_counter++;
+  quiesce_exit(&m_quiesce);
 }
 
 void JITMemoryTracker::JITRegionWriteDisableExecuteEnable(void* ptr)
 {
-  std::scoped_lock lk(m_mutex);
-
+  quiesce_enter(&m_quiesce);
   JITRegionInfo* info = FindRegion(ptr);
 
-  if (!info)
+  if (info)
   {
-    return;
-  }
+    info->nest_counter--;
 
-  info->nest_counter--;
-
-  if (info->nest_counter < 0)
-  {
-    PanicAlertFmt("JITMemoryTracker: Nest counter underflow for region {}", ptr);
+    if (info->nest_counter < 0)
+      PanicAlertFmt("JITMemoryTracker: Nest counter underflow for region {}", ptr);
+    else if (info->nest_counter == 0)
+      WriteProtectMemory(info->start_ptr, info->size, true);
   }
-  else if (info->nest_counter == 0)
-  {
-    WriteProtectMemory(info->start_ptr, info->size, true);
-  }
+  quiesce_exit(&m_quiesce);
 }
 }  // namespace Common

@@ -13,11 +13,7 @@ CustomAssetLibrary::LoadInfo TextureAsset::LoadImpl(const CustomAssetLibrary::As
   const auto loaded_info = m_owning_library->LoadTexture(asset_id, potential_data.get());
   if (loaded_info.bytes_loaded == 0)
     return {};
-  {
-    std::lock_guard lk(m_data_lock);
-    m_loaded = true;
-    m_data = std::move(potential_data);
-  }
+  SetData(std::move(potential_data));
   return loaded_info;
 }
 }  // namespace VideoCommon

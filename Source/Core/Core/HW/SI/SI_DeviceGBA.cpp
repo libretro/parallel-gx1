@@ -6,8 +6,9 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <mutex>
 #include <queue>
+
+#include <queues/mpsc_stack.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
@@ -23,10 +24,40 @@ namespace SerialInterface
 namespace
 {
 sthread_t* s_connection_thread = nullptr;
-std::queue<std::unique_ptr<sf::TcpSocket>> s_waiting_socks;
-std::queue<std::unique_ptr<sf::TcpSocket>> s_waiting_clocks;
-std::mutex s_cs_gba;
-std::mutex s_cs_gba_clk;
+// Accepted sockets, pushed by the connection thread and taken by the CPU thread, which keeps
+// its own queue of them oldest first.
+struct WaitingSock
+{
+  mpsc_stack_node_t link;  // first: the drained chain is cast back
+  std::unique_ptr<sf::TcpSocket> socket;
+};
+mpsc_stack_t s_waiting_socks;
+mpsc_stack_t s_waiting_clocks;
+std::queue<std::unique_ptr<sf::TcpSocket>> s_taken_socks;
+std::queue<std::unique_ptr<sf::TcpSocket>> s_taken_clocks;
+
+void PushSock(mpsc_stack_t* stack, std::unique_ptr<sf::TcpSocket> socket)
+{
+  auto* waiting = new WaitingSock{{}, std::move(socket)};
+  mpsc_stack_push(stack, &waiting->link);
+}
+
+std::unique_ptr<sf::TcpSocket> TakeSock(mpsc_stack_t* stack,
+                                        std::queue<std::unique_ptr<sf::TcpSocket>>& taken)
+{
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(stack)); node;)
+  {
+    auto* waiting = reinterpret_cast<WaitingSock*>(node);
+    node = node->next;
+    taken.push(std::move(waiting->socket));
+    delete waiting;
+  }
+  if (taken.empty())
+    return nullptr;
+  std::unique_ptr<sf::TcpSocket> socket = std::move(taken.front());
+  taken.pop();
+  return socket;
+}
 int s_num_connected;
 Common::Flag s_server_running;
 }  // namespace
@@ -60,15 +91,13 @@ static void GBAConnectionWaiter(void*)
   {
     if (server.accept(*new_client) == sf::Socket::Status::Done)
     {
-      std::lock_guard lk(s_cs_gba);
-      s_waiting_socks.push(std::move(new_client));
+      PushSock(&s_waiting_socks, std::move(new_client));
 
       new_client = std::make_unique<sf::TcpSocket>();
     }
     if (clock_server.accept(*new_client) == sf::Socket::Status::Done)
     {
-      std::lock_guard lk(s_cs_gba_clk);
-      s_waiting_clocks.push(std::move(new_client));
+      PushSock(&s_waiting_clocks, std::move(new_client));
 
       new_client = std::make_unique<sf::TcpSocket>();
     }
@@ -83,26 +112,14 @@ void GBAConnectionWaiter_Shutdown()
   Common::JoinThread(s_connection_thread);
 }
 
-template <typename T>
-static std::unique_ptr<T> MoveFromFront(std::queue<std::unique_ptr<T>>& ptrs)
-{
-  if (ptrs.empty())
-    return nullptr;
-  std::unique_ptr<T> ptr = std::move(ptrs.front());
-  ptrs.pop();
-  return ptr;
-}
-
 static std::unique_ptr<sf::TcpSocket> GetNextSock()
 {
-  std::lock_guard lk(s_cs_gba);
-  return MoveFromFront(s_waiting_socks);
+  return TakeSock(&s_waiting_socks, s_taken_socks);
 }
 
 static std::unique_ptr<sf::TcpSocket> GetNextClock()
 {
-  std::lock_guard lk(s_cs_gba_clk);
-  return MoveFromFront(s_waiting_clocks);
+  return TakeSock(&s_waiting_clocks, s_taken_clocks);
 }
 
 GBASockServer::GBASockServer()

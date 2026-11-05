@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <mutex>
 #include <ranges>
 #include <set>
 #include <utility>
@@ -34,6 +33,26 @@ namespace IOS::HLE
 USBScanner::~USBScanner()
 {
   StopScanning();
+  delete static_cast<Devices*>(retro_atomic_exchange_ptr(&m_devices, nullptr));
+  delete static_cast<Clients*>(retro_atomic_exchange_ptr(&m_clients, nullptr));
+  quiesce_deinit(&m_quiesce);
+}
+
+void USBScanner::FreeDevices(quiesce_node_t* node)
+{
+  delete reinterpret_cast<Devices*>(node);
+}
+
+void USBScanner::FreeClients(quiesce_node_t* node)
+{
+  delete reinterpret_cast<Clients*>(node);
+}
+
+void USBScanner::PublishDevices(DeviceMap map)
+{
+  auto* next = new Devices{{}, std::move(map)};
+  if (void* old = retro_atomic_exchange_ptr(&m_devices, next))
+    quiesce_retire(&m_quiesce, &static_cast<Devices*>(old)->node, FreeDevices);
 }
 
 #if defined(__LIBRETRO__) && defined(__LIBUSB__)
@@ -52,19 +71,15 @@ void USBScanner::WaitForFirstScan()
   }
 }
 
+// Clients come and go on the emulation thread only, so each change is a plain swap.
 bool USBScanner::AddClient(USBHost* client)
 {
-  bool should_start_scanning;
-  bool client_is_new;
-
-  std::lock_guard thread_lock(m_thread_start_stop_mutex);
-
-  {
-    std::lock_guard clients_lock(m_clients_mutex);
-    should_start_scanning = m_clients.empty();
-    auto [it, newly_added] = m_clients.insert(client);
-    client_is_new = newly_added;
-  }
+  const auto* cur = static_cast<const Clients*>(retro_atomic_load_acquire_ptr(&m_clients));
+  auto* next = new Clients{{}, cur ? cur->set : std::set<USBHost*>{}};
+  const bool should_start_scanning = next->set.empty();
+  const bool client_is_new = next->set.insert(client).second;
+  if (void* old = retro_atomic_exchange_ptr(&m_clients, next))
+    quiesce_retire(&m_quiesce, &static_cast<Clients*>(old)->node, FreeClients);
 
   if (should_start_scanning)
     StartScanning();
@@ -74,24 +89,24 @@ bool USBScanner::AddClient(USBHost* client)
 
 bool USBScanner::RemoveClient(USBHost* client)
 {
-  std::lock_guard thread_lock(m_thread_start_stop_mutex);
+  const auto* cur = static_cast<const Clients*>(retro_atomic_load_acquire_ptr(&m_clients));
+  if (!cur || !cur->set.contains(client))
+    return false;
 
-  bool client_was_removed;
-  bool should_stop_scanning;
+  auto* next = new Clients{{}, cur->set};
+  next->set.erase(client);
+  const bool should_stop_scanning = next->set.empty();
+  if (void* old = retro_atomic_exchange_ptr(&m_clients, next))
+    quiesce_retire(&m_quiesce, &static_cast<Clients*>(old)->node, FreeClients);
 
-  {
-    std::lock_guard clients_lock(m_clients_mutex);
-    const bool was_empty = m_clients.empty();
-    client_was_removed = m_clients.erase(client) != 0;
-    should_stop_scanning = !was_empty && m_clients.empty();
-  }
+  // The scan thread may be calling this client from the old set; let it finish.
+  Common::CallGateClose(&m_notify_gate);
+  Common::CallGateReopen(&m_notify_gate);
 
-  // The scan thread might be trying to lock m_clients_mutex, so we need to not hold a lock on
-  // m_clients_mutex when trying to join with the scan thread.
   if (should_stop_scanning)
     StopScanning();
 
-  return client_was_removed;
+  return true;
 }
 
 void USBScanner::StartScanning()
@@ -109,9 +124,11 @@ void USBScanner::ScanThread()
   {
     if (UpdateDevices())
       m_first_scan_complete_flag.Set(true);
+    if (m_notify_pending)
+      NotifyClients();
     Common::SleepCurrentThread(50);
   }
-  m_devices.clear();
+  PublishDevices({});
   m_first_scan_complete_flag.Set(false);
 }
 
@@ -123,8 +140,11 @@ void USBScanner::StopScanning()
 
 USBScanner::DeviceMap USBScanner::GetDevices() const
 {
-  std::lock_guard lk(m_devices_mutex);
-  return m_devices;
+  quiesce_enter(&m_quiesce);
+  const auto* devices = static_cast<const Devices*>(retro_atomic_load_acquire_ptr(&m_devices));
+  DeviceMap copy = devices ? devices->map : DeviceMap{};
+  quiesce_exit(&m_quiesce);
+  return copy;
 }
 
 // This is called from the scan thread. Returns false if we failed to update the device list.
@@ -134,17 +154,39 @@ bool USBScanner::UpdateDevices()
   if (!AddNewDevices(&new_devices))
     return false;
 
-  std::lock_guard lk(m_devices_mutex);
-  if (!std::ranges::equal(std::views::keys(m_devices), std::views::keys(new_devices)))
+  // Only this thread replaces the list, so the current one stays valid here.
+  const auto* devices = static_cast<const Devices*>(retro_atomic_load_acquire_ptr(&m_devices));
+  static const DeviceMap s_none;
+  const DeviceMap& current = devices ? devices->map : s_none;
+  if (!std::ranges::equal(std::views::keys(current), std::views::keys(new_devices)))
   {
-    m_devices = std::move(new_devices);
-
-    std::lock_guard clients_lock(m_clients_mutex);
-    for (USBHost* client : m_clients)
-      client->OnDevicesChanged(m_devices);
+    PublishDevices(std::move(new_devices));
+    NotifyClients();
   }
 
   return true;
+}
+
+void USBScanner::NotifyClients()
+{
+  if (!Common::CallGateEnter(&m_notify_gate))
+  {
+    m_notify_pending = true;
+    return;
+  }
+  m_notify_pending = false;
+
+  quiesce_enter(&m_quiesce);
+  const auto* devices = static_cast<const Devices*>(retro_atomic_load_acquire_ptr(&m_devices));
+  const auto* clients = static_cast<const Clients*>(retro_atomic_load_acquire_ptr(&m_clients));
+  if (devices && clients)
+  {
+    for (USBHost* client : clients->set)
+      client->OnDevicesChanged(devices->map);
+  }
+  quiesce_exit(&m_quiesce);
+
+  Common::CallGateExit(&m_notify_gate);
 }
 
 bool USBScanner::AddNewDevices(DeviceMap* new_devices) const

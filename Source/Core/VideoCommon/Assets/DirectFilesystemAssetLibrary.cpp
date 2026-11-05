@@ -70,51 +70,31 @@ CustomAssetLibrary::LoadInfo DirectFilesystemAssetLibrary::LoadTexture(const Ass
 void DirectFilesystemAssetLibrary::SetAssetIDMapData(const AssetID& asset_id,
                                                      VideoCommon::Assets::AssetMap asset_path_map)
 {
-  VideoCommon::Assets::AssetMap previous_asset_map;
+  if (const auto previous_asset_map = m_asset_id_to_asset_map_path.Get(asset_id))
   {
-    std::lock_guard lk(m_asset_map_lock);
-    previous_asset_map = m_asset_id_to_asset_map_path[asset_id];
+    for (const auto& [name, path] : *previous_asset_map)
+      m_path_to_asset_id.Erase(PathToString(path));
   }
 
-  {
-    std::lock_guard lk(m_path_map_lock);
-    for (const auto& [name, path] : previous_asset_map)
-    {
-      m_path_to_asset_id.erase(PathToString(path));
-    }
+  for (const auto& [name, path] : asset_path_map)
+    m_path_to_asset_id.Set(PathToString(path), asset_id);
 
-    for (const auto& [name, path] : asset_path_map)
-    {
-      m_path_to_asset_id[PathToString(path)] = asset_id;
-    }
-  }
-
-  {
-    std::lock_guard lk(m_asset_map_lock);
-    m_asset_id_to_asset_map_path[asset_id] = std::move(asset_path_map);
-  }
+  m_asset_id_to_asset_map_path.Set(asset_id, std::move(asset_path_map));
 }
 
 void DirectFilesystemAssetLibrary::PathModified(std::string_view path)
 {
-  std::lock_guard lk(m_path_map_lock);
-  if (const auto iter = m_path_to_asset_id.find(path); iter != m_path_to_asset_id.end())
+  if (const auto asset_id = m_path_to_asset_id.Get(path))
   {
     auto& system = Core::System::GetInstance();
     auto& resource_manager = system.GetCustomResourceManager();
-    resource_manager.MarkAssetDirty(iter->second);
+    resource_manager.MarkAssetDirty(*asset_id);
   }
 }
 
 VideoCommon::Assets::AssetMap
 DirectFilesystemAssetLibrary::GetAssetMapForID(const AssetID& asset_id) const
 {
-  std::lock_guard lk(m_asset_map_lock);
-  if (auto iter = m_asset_id_to_asset_map_path.find(asset_id);
-      iter != m_asset_id_to_asset_map_path.end())
-  {
-    return iter->second;
-  }
-  return {};
+  return m_asset_id_to_asset_map_path.Get(asset_id).value_or(VideoCommon::Assets::AssetMap{});
 }
 }  // namespace VideoCommon

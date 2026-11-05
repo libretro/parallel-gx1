@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -47,7 +46,6 @@ constexpr std::array<const char*, 3> s_patch_type_strings{{
 
 static std::vector<Patch> s_on_frame;
 static std::vector<std::size_t> s_on_frame_memory;
-static std::mutex s_on_frame_memory_mutex;
 
 const char* PatchTypeAsString(PatchType type)
 {
@@ -254,7 +252,6 @@ static void ApplyPatches(const Core::CPUThreadGuard& guard, const std::vector<Pa
 static void ApplyMemoryPatches(const Core::CPUThreadGuard& guard,
                                std::span<const std::size_t> memory_patch_indices)
 {
-  std::lock_guard lock(s_on_frame_memory_mutex);
   for (std::size_t index : memory_patch_indices)
   {
     guard.GetSystem().GetPowerPC().GetDebugInterface().ApplyExistingPatch(guard, index);
@@ -291,13 +288,11 @@ static bool IsStackValid(const Core::CPUThreadGuard& guard)
 
 void AddMemoryPatch(std::size_t index)
 {
-  std::lock_guard lock(s_on_frame_memory_mutex);
   s_on_frame_memory.push_back(index);
 }
 
 void RemoveMemoryPatch(std::size_t index)
 {
-  std::lock_guard lock(s_on_frame_memory_mutex);
   std::erase(s_on_frame_memory, index);
 }
 

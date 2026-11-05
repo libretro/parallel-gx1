@@ -3,6 +3,10 @@
 #include <libretro.h>
 #include <vector>
 
+#include <retro_atomic.h>
+
+#include "Common/CallGate.h"
+
 #include "Core/ActionReplay.h"
 #include "Core/GeckoCode.h"
 #include "Core/IOS/USB/Emulated/Microphone.h"
@@ -20,7 +24,11 @@ namespace Input
 extern retro_microphone_interface g_microphone_interface;
 extern bool g_has_microphone_support;
 extern bool g_gc_mic_button[4];
-extern std::vector<IOS::HLE::USB::Microphone*> g_active_microphones;
+// Open emulated USB microphones, polled by the frontend thread inside
+// g_microphone_poll_gate; the emulation thread adds and removes them.
+constexpr int MAX_ACTIVE_MICROPHONES = 4;
+extern retro_atomic_ptr_t g_active_microphones[MAX_ACTIVE_MICROPHONES];
+extern Common::CallGate g_microphone_poll_gate;
 } // namespace Input
 
 namespace Video

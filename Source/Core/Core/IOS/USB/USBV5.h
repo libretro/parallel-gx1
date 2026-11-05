@@ -6,7 +6,6 @@
 #include <array>
 #include <functional>
 #include <memory>
-#include <mutex>
 
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Device.h"
@@ -91,7 +90,6 @@ protected:
   virtual bool HasInterfaceNumberInIDs() const = 0;
 
   bool m_has_pending_changes = true;
-  std::mutex m_devicechange_hook_address_mutex;
   std::unique_ptr<IOCtlRequest> m_devicechange_hook_request;
 
   // Each interface of a USB device is internally considered as a unique device.
@@ -104,7 +102,6 @@ protected:
     u64 host_id = 0;
   };
   std::array<USBV5Device, 32> m_usbv5_devices{};
-  mutable std::mutex m_usbv5_devices_mutex;
   u16 m_current_device_number = 0x21;
 };
 }  // namespace IOS::HLE

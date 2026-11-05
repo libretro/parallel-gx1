@@ -1967,8 +1967,15 @@ void poll_microphone()
 
   if (system.IsWii() && (s_wii_speak_enabled || s_logi_microphone_enabled))
   {
-    for (auto* mic : Libretro::Input::g_active_microphones)
-      mic->PollRetroArchMic();
+    if (Common::CallGateEnter(&Libretro::Input::g_microphone_poll_gate))
+    {
+      for (auto& slot : Libretro::Input::g_active_microphones)
+      {
+        if (auto* mic = static_cast<IOS::HLE::USB::Microphone*>(retro_atomic_load_acquire_ptr(&slot)))
+          mic->PollRetroArchMic();
+      }
+      Common::CallGateExit(&Libretro::Input::g_microphone_poll_gate);
+    }
   }
   else if(s_gc_mic_enabled)
   {

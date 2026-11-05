@@ -15,6 +15,16 @@
 
 #include "Common/MathUtil.h"
 
+namespace ciface
+{
+static quiesce_t s_input_quiesce;
+
+quiesce_t* InputQuiesce()
+{
+  return &s_input_quiesce;
+}
+}  // namespace ciface
+
 namespace ciface::Core
 {
 // Compared to an input's current state (ideally 1.0) minus abs(initial_state) (ideally 0.0).
@@ -245,10 +255,28 @@ bool DeviceQualifier::operator==(const DeviceQualifier& devq) const
   return std::tie(cid, name, source) == std::tie(devq.cid, devq.name, devq.source);
 }
 
+static const std::vector<std::shared_ptr<Device>>& NoDevices()
+{
+  static const std::vector<std::shared_ptr<Device>> s_none;
+  return s_none;
+}
+
+void DeviceContainer::FreeDeviceList(quiesce_node_t* node)
+{
+  delete reinterpret_cast<DeviceList*>(node);
+}
+
+DeviceContainer::~DeviceContainer()
+{
+  delete static_cast<DeviceList*>(retro_atomic_exchange_ptr(&m_device_list, nullptr));
+}
+
 std::shared_ptr<Device> DeviceContainer::FindDevice(const DeviceQualifier& devq) const
 {
-  std::lock_guard lk(m_devices_mutex);
-  for (const auto& d : m_devices)
+  InputReadScope scope;
+  const DeviceList* const list = PeekDevices();
+  const auto& devices = list ? list->devices : NoDevices();
+  for (const auto& d : devices)
   {
     if (devq == d.get())
       return d;
@@ -259,19 +287,21 @@ std::shared_ptr<Device> DeviceContainer::FindDevice(const DeviceQualifier& devq)
 
 std::vector<std::shared_ptr<Device>> DeviceContainer::GetAllDevices() const
 {
-  std::lock_guard lk(m_devices_mutex);
-
-  return m_devices;
+  InputReadScope scope;
+  const DeviceList* const list = PeekDevices();
+  return list ? list->devices : std::vector<std::shared_ptr<Device>>{};
 }
 
 std::vector<std::string> DeviceContainer::GetAllDeviceStrings() const
 {
-  std::lock_guard lk(m_devices_mutex);
+  InputReadScope scope;
+  const DeviceList* const list = PeekDevices();
+  const auto& devices = list ? list->devices : NoDevices();
 
   std::vector<std::string> device_strings;
   DeviceQualifier device_qualifier;
 
-  for (const auto& d : m_devices)
+  for (const auto& d : devices)
   {
     device_qualifier.FromDevice(d.get());
     device_strings.emplace_back(device_qualifier.ToString());
@@ -282,20 +312,24 @@ std::vector<std::string> DeviceContainer::GetAllDeviceStrings() const
 
 bool DeviceContainer::HasDefaultDevice() const
 {
-  std::lock_guard lk(m_devices_mutex);
+  InputReadScope scope;
+  const DeviceList* const list = PeekDevices();
+  const auto& devices = list ? list->devices : NoDevices();
   // Devices are already sorted by priority
-  return !m_devices.empty() && m_devices[0]->GetSortPriority() >= 0;
+  return !devices.empty() && devices[0]->GetSortPriority() >= 0;
 }
 
 std::string DeviceContainer::GetDefaultDeviceString() const
 {
-  std::lock_guard lk(m_devices_mutex);
+  InputReadScope scope;
+  const DeviceList* const list = PeekDevices();
+  const auto& devices = list ? list->devices : NoDevices();
   // Devices are already sorted by priority
-  if (m_devices.empty() || m_devices[0]->GetSortPriority() < 0)
+  if (devices.empty() || devices[0]->GetSortPriority() < 0)
     return "";
 
   DeviceQualifier device_qualifier;
-  device_qualifier.FromDevice(m_devices[0].get());
+  device_qualifier.FromDevice(devices[0].get());
   return device_qualifier.ToString();
 }
 
@@ -308,8 +342,10 @@ Device::Input* DeviceContainer::FindInput(std::string_view name, const Device* d
       return inp;
   }
 
-  std::lock_guard lk(m_devices_mutex);
-  for (const auto& d : m_devices)
+  InputReadScope scope;
+  const DeviceList* const list = PeekDevices();
+  const auto& devices = list ? list->devices : NoDevices();
+  for (const auto& d : devices)
   {
     Device::Input* const i = d->FindInput(name);
 

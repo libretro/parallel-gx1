@@ -64,7 +64,7 @@ ControllerEmu::ControlGroup* GBAPad::GetGroup(GBAPadGroup group) const
 
 GCPadStatus GBAPad::GetInput()
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   GCPadStatus pad = {};
 
   // Buttons
@@ -83,7 +83,7 @@ GCPadStatus GBAPad::GetInput()
 
 void GBAPad::SetReset(bool reset)
 {
-  const auto lock = GetStateLock();
+  const auto input_scope = ReadScope();
   m_reset_pending = reset;
 }
 

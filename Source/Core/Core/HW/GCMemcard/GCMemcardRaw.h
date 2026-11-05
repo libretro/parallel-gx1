@@ -4,10 +4,11 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <string>
 
+#include <queues/mpsc_stack.h>
 #include <rthreads/rthreads.h>
+
 #include "Common/Event.h"
 #include "Common/Flag.h"
 #include "Core/HW/GCMemcard/GCMemcard.h"
@@ -31,6 +32,21 @@ public:
   void DoState(PointerWrap& p) override;
 
 private:
+  // A change the flush thread has yet to copy into its own buffer: length bytes at offset,
+  // taken from data, or set to 0xFF when fill.
+  struct Change
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    u32 offset;
+    u32 length;
+    bool fill;
+    u8 data[1];
+  };
+  // CPU thread: hands a change to the flush thread.
+  void PostChange(u32 offset, u32 length, const u8* data);
+  // Flush thread: applies what was posted, oldest first.
+  void ApplyChanges();
+
   bool IsAddressInBounds(u32 address, u32 length) const
   {
     const u64 end_address = static_cast<u64>(address) + static_cast<u64>(length);
@@ -38,10 +54,12 @@ private:
   }
 
   std::string m_filename;
+  // The card as the emulated side sees it; CPU thread only.
   std::unique_ptr<u8[]> m_memcard_data;
+  // The flush thread's own copy, brought up to date from m_changes before each write.
   std::unique_ptr<u8[]> m_flush_buffer;
+  mpsc_stack_t m_changes{};
   sthread_t* m_flush_thread = nullptr;
-  std::mutex m_flush_mutex;
   Common::Event m_flush_trigger;
   Common::Flag m_dirty;
   u32 m_memory_card_size;

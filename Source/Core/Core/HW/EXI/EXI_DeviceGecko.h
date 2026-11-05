@@ -6,9 +6,10 @@
 #include <SFML/Network.hpp>
 #include <deque>
 #include <memory>
-#include <mutex>
 #include <queue>
 
+#include <queues/mpsc_stack.h>
+#include <retro_spsc.h>
 #include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
@@ -28,10 +29,10 @@ public:
   std::unique_ptr<sf::TcpSocket> client;
   void ClientThread();
   sthread_t* clientThread = nullptr;
-  std::mutex transfer_lock;
 
-  std::deque<u8> send_fifo;
-  std::deque<u8> recv_fifo;
+  // Bytes between the emulated Gecko (CPU thread) and the client thread, one ring each way.
+  retro_spsc_t send_fifo;  // CPU thread -> client
+  retro_spsc_t recv_fifo;  // client -> CPU thread
 
 private:
   static int client_count;
@@ -43,8 +44,15 @@ private:
   static u16 server_port;
   static Common::Flag server_running;
   static sthread_t* connectionThread;
-  static std::mutex connection_lock;
-  static std::queue<std::unique_ptr<sf::TcpSocket>> waiting_socks;
+  // Accepted sockets, pushed by the connection thread and taken by the CPU thread.
+  struct WaitingSock
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    std::unique_ptr<sf::TcpSocket> socket;
+  };
+  static mpsc_stack_t waiting_socks;
+  // The CPU thread's own queue of them, oldest first.
+  static std::deque<std::unique_ptr<sf::TcpSocket>> taken_socks;
 };
 
 class CEXIGecko : public IEXIDevice, private GeckoSockServer

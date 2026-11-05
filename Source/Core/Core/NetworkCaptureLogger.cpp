@@ -86,7 +86,43 @@ PCAPSSLCaptureLogger::PCAPSSLCaptureLogger()
       new File::IOFile(filepath, "wb", File::SharedAccess::Read), Common::PCAP::LinkType::Ethernet);
 }
 
-PCAPSSLCaptureLogger::~PCAPSSLCaptureLogger() = default;
+PCAPSSLCaptureLogger::~PCAPSSLCaptureLogger()
+{
+  // Nothing logs any more; write what is still queued.
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_packets)); node;)
+  {
+    auto* packet = reinterpret_cast<Packet*>(node);
+    node = node->next;
+    m_file->AddPacket(packet->bytes.data(), packet->bytes.size());
+    delete packet;
+  }
+}
+
+void PCAPSSLCaptureLogger::Write(const u8* data, std::size_t length)
+{
+  auto* packet = new Packet{{}, std::vector<u8>(data, data + length)};
+  mpsc_stack_push(&m_packets, &packet->link);
+  // Pairs with the writer's fence: it either sees this packet or this thread sees it gone.
+  retro_atomic_thread_fence_seq_cst();
+
+  for (;;)
+  {
+    if (!retro_atomic_cas_int(&m_writing, 0, 1))
+      return;  // the writer at work takes this packet too
+    for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_packets)); node;)
+    {
+      auto* queued = reinterpret_cast<Packet*>(node);
+      node = node->next;
+      m_file->AddPacket(queued->bytes.data(), queued->bytes.size());
+      delete queued;
+    }
+    retro_atomic_store_release_int(&m_writing, 0);
+    // A packet queued after the drain, by a thread that saw this one still writing.
+    retro_atomic_thread_fence_seq_cst();
+    if (mpsc_stack_empty(&m_packets))
+      return;
+  }
+}
 
 void PCAPSSLCaptureLogger::OnNewSocket(s32 socket)
 {
@@ -123,9 +159,8 @@ void PCAPSSLCaptureLogger::LogBBA(const void* data, std::size_t length)
   if (!Config::Get(Config::MAIN_NETWORK_DUMP_BBA))
     return;
 
-  // Concurrency between CEXIETHERNET's RecvHandlePacket and SendFromDirectFIFO
-  const std::lock_guard lock(m_io_mutex);
-  m_file->AddPacket(static_cast<const u8*>(data), length);
+  // CEXIETHERNET's RecvHandlePacket and SendFromDirectFIFO run on different threads.
+  Write(static_cast<const u8*>(data), length);
 }
 
 void PCAPSSLCaptureLogger::Log(LogType log_type, const void* data, std::size_t length, s32 socket,
@@ -208,7 +243,7 @@ void PCAPSSLCaptureLogger::LogIPv4(LogType log_type, const u8* data, u16 length,
   }
 
   packet.insert(packet.end(), data, data + length);
-  m_file->AddPacket(packet.data(), packet.size());
+  Write(packet.data(), packet.size());
 }
 
 NetworkCaptureType PCAPSSLCaptureLogger::GetCaptureType() const

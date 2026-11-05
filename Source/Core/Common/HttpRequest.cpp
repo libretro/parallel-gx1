@@ -5,7 +5,6 @@
 
 #include <chrono>
 #include <cstddef>
-#include <mutex>
 
 #include <curl/curl.h>
 
@@ -41,7 +40,6 @@ public:
   std::string EscapeComponent(const std::string& string);
 
 private:
-  static inline std::once_flag s_curl_was_initialized;
   ProgressCallback m_callback;
   Headers m_response_headers;
   std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> m_curl{nullptr, curl_easy_cleanup};
@@ -120,7 +118,12 @@ int HttpRequest::Impl::CurlProgressCallback(Impl* impl, curl_off_t dltotal, curl
 HttpRequest::Impl::Impl(std::chrono::milliseconds timeout_ms, ProgressCallback callback)
     : m_callback(std::move(callback))
 {
-  std::call_once(s_curl_was_initialized, [] { curl_global_init(CURL_GLOBAL_DEFAULT); });
+  // Once per process; a function-local static is initialized exactly once.
+  static const bool s_curl_initialized = [] {
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    return true;
+  }();
+  (void)s_curl_initialized;
 
   m_curl.reset(curl_easy_init());
   if (!m_curl)

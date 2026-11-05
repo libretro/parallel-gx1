@@ -26,6 +26,8 @@ Microphone::Microphone(const MicrophoneState& sampler) : m_sampler(sampler)
 Microphone::~Microphone()
 {
   StreamTerminate();
+  if (m_stream_allocated)
+    retro_spsc_free(&m_stream);
 }
 
 void Microphone::Initialize()
@@ -62,18 +64,19 @@ void Microphone::StreamStart(u32 sampling_rate)
     return;
   }
 
-  {
-    std::lock_guard lock(m_ring_lock);
-    m_stream_buffer.resize(GetStreamSize());
-    m_stream_wpos = 0;
-    m_stream_rpos = 0;
-    m_samples_avail = 0;
-  }
+  // Not being polled (StreamStop ran or it never started), so the ring is this thread's.
+  if (m_stream_allocated)
+    retro_spsc_free(&m_stream);
+  m_stream_allocated = retro_spsc_init(&m_stream, GetStreamSize() * sizeof(SampleType));
 
   Libretro::Input::g_microphone_interface.set_mic_state(
     static_cast<retro_microphone_t*>(m_retro_mic), true);
 
-  Libretro::Input::g_active_microphones.push_back(this);
+  for (auto& slot : Libretro::Input::g_active_microphones)
+  {
+    if (!retro_atomic_load_acquire_ptr(&slot) && retro_atomic_cas_ptr(&slot, nullptr, this))
+      break;
+  }
 
   INFO_LOG_FMT(IOS_USB, "Microphone: opened mic at {}Hz", sampling_rate);
 }
@@ -83,7 +86,10 @@ void Microphone::StreamStop()
   if (!m_retro_mic)
     return;
 
-  std::erase(Libretro::Input::g_active_microphones, this);
+  for (auto& slot : Libretro::Input::g_active_microphones)
+    retro_atomic_cas_ptr(&slot, this, nullptr);
+  // A poll of this microphone already under way finishes before it closes.
+  Common::CallGateDrain(&Libretro::Input::g_microphone_poll_gate);
   Libretro::Input::g_microphone_interface.close_mic(
       static_cast<retro_microphone_t*>(m_retro_mic));
   m_retro_mic = nullptr;
@@ -108,8 +114,6 @@ void Microphone::PollRetroArchMic()
 
 long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
 {
-  std::lock_guard lock(m_ring_lock);
-
   // Skip data if sampling is off or mute is on
   if (!m_sampler.IsSampleOn() || m_sampler.IsMuted())
     return nframes;
@@ -120,21 +124,17 @@ long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
     return MathUtil::SaturatingCast<SampleType>(sample * gain);
   };
 
-  const u32 stream_size = GetStreamSize();
   const bool are_samples_byte_swapped = AreSamplesByteSwapped();
+  std::vector<SampleType> converted;
+  converted.reserve(buffer.size());
   for (const SampleType le_sample : std::ranges::transform_view(buffer, apply_gain))
   {
     UpdateLoudness(le_sample);
-    m_stream_buffer[m_stream_wpos] =
-        are_samples_byte_swapped ? Common::swap16(le_sample) : le_sample;
-    m_stream_wpos = (m_stream_wpos + 1) % stream_size;
+    converted.push_back(are_samples_byte_swapped ? Common::swap16(le_sample) : le_sample);
   }
 
-  m_samples_avail += nframes;
-  if (m_samples_avail > stream_size)
-  {
-    m_samples_avail = stream_size;
-  }
+  // A full ring keeps the older samples; the guest is behind and will catch up on those.
+  retro_spsc_write(&m_stream, converted.data(), converted.size() * sizeof(SampleType));
 
   return nframes;
 }
@@ -143,21 +143,15 @@ u16 Microphone::ReadIntoBuffer(u8* ptr, u32 size)
 {
   static constexpr u32 SINGLE_READ_SIZE = BUFF_SIZE_SAMPLES * sizeof(SampleType);
 
-  std::lock_guard lock(m_ring_lock);
-
-  const u32 stream_size = GetStreamSize();
   u8* begin = ptr;
+  if (!m_stream_allocated)
+    return 0;
   for (u8* end = begin + size; ptr < end; ptr += SINGLE_READ_SIZE, size -= SINGLE_READ_SIZE)
   {
-    if (size < SINGLE_READ_SIZE || m_samples_avail < BUFF_SIZE_SAMPLES)
+    if (size < SINGLE_READ_SIZE || retro_spsc_read_avail(&m_stream) < SINGLE_READ_SIZE)
       break;
 
-    SampleType* last_buffer = &m_stream_buffer[m_stream_rpos];
-    std::memcpy(ptr, last_buffer, SINGLE_READ_SIZE);
-
-    m_samples_avail -= BUFF_SIZE_SAMPLES;
-    m_stream_rpos += BUFF_SIZE_SAMPLES;
-    m_stream_rpos %= stream_size;
+    retro_spsc_read(&m_stream, ptr, SINGLE_READ_SIZE);
   }
   return static_cast<u16>(ptr - begin);
 }
@@ -196,8 +190,8 @@ void Microphone::UpdateLoudness(const SampleType sample)
 
 bool Microphone::HasData(u32 sample_count = BUFF_SIZE_SAMPLES) const
 {
-  std::lock_guard lock(m_ring_lock);
-  return m_samples_avail >= sample_count;
+  return m_stream_allocated &&
+         retro_spsc_read_avail(&m_stream) >= sample_count * sizeof(SampleType);
 }
 
 Microphone::FloatType Microphone::ComputeGain(FloatType relative_db) const

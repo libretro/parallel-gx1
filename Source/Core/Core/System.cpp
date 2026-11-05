@@ -9,7 +9,6 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/CoreTiming.h"
 #include "Core/FifoPlayer/FifoPlayer.h"
-#include "Core/FifoPlayer/FifoRecorder.h"
 #include "Core/HW/AudioInterface.h"
 #include "Core/HW/CPU.h"
 #include "Core/HW/DSP.h"
@@ -57,7 +56,7 @@ struct System::Impl
         m_serial_interface(system), m_system_timers(system), m_video_interface(system),
         m_interpreter(system, m_power_pc.GetPPCState(), m_mmu, m_power_pc.GetBranchWatch(),
                       m_power_pc.GetSymbolDB()),
-        m_jit_interface(system), m_fifo_player(system), m_fifo_recorder(system), m_movie(system)
+        m_jit_interface(system), m_fifo_player(system), m_movie(system)
   {
   }
 
@@ -104,7 +103,6 @@ struct System::Impl
   JitInterface m_jit_interface;
   VideoCommon::CustomResourceManager m_custom_resource_manager;
   FifoPlayer m_fifo_player;
-  FifoRecorder m_fifo_recorder;
   Movie::MovieManager m_movie;
 };
 
@@ -210,11 +208,6 @@ Fifo::FifoManager& System::GetFifo() const
 FifoPlayer& System::GetFifoPlayer() const
 {
   return m_impl->m_fifo_player;
-}
-
-FifoRecorder& System::GetFifoRecorder() const
-{
-  return m_impl->m_fifo_recorder;
 }
 
 GeometryShaderManager& System::GetGeometryShaderManager() const

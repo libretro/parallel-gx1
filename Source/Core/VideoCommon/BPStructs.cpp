@@ -14,7 +14,6 @@
 #include "Common/Logging/Log.h"
 
 #include "Core/FifoPlayer/FifoPlayer.h"
-#include "Core/FifoPlayer/FifoRecorder.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/VideoInterface.h"
 #include "Core/System.h"
@@ -417,9 +416,6 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     auto& memory = system.GetMemory();
     memory.CopyFromEmu(s_tex_mem.data() + tmem_addr, addr, tmem_transfer_count);
 
-    if (OpcodeDecoder::g_record_fifo_data)
-      system.GetFifoRecorder().UseMemory(addr, tmem_transfer_count, MemoryUpdate::Type::TMEM);
-
     TMEM::InvalidateAll();
 
     return;
@@ -641,12 +637,6 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
           tmem_addr_odd += TMEM_LINE_SIZE;
           bytes_read += TMEM_LINE_SIZE * 2;
         }
-      }
-
-      if (OpcodeDecoder::g_record_fifo_data)
-      {
-        Core::System::GetInstance().GetFifoRecorder().UseMemory(src_addr, bytes_read,
-                                                                MemoryUpdate::Type::TMEM);
       }
 
       TMEM::InvalidateAll();
