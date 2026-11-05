@@ -6,11 +6,11 @@
 #include <algorithm>
 #include <atomic>
 #include <map>
-#include <mutex>
 #include <string>
 
 #include <fmt/format.h>
 #include <imgui.h>
+#include <queues/mpsc_stack.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
@@ -53,8 +53,23 @@ struct Message
   const VideoCommon::CustomTextureData::ArraySlice::Level* icon;
   std::unique_ptr<AbstractTexture> texture;
 };
+// Owned by the video thread, which draws them.
 static std::multimap<MessageType, Message> s_messages;
-static std::mutex s_messages_mutex;
+
+// Messages posted from any thread, waiting for the next DrawMessages to take them in.
+struct PostedMessage
+{
+  mpsc_stack_node_t link;  // first: the drained chain is cast back
+  MessageType type;
+  Message message;
+};
+static mpsc_stack_t s_posted_messages;
+
+static void Post(MessageType type, Message message)
+{
+  auto* posted = new PostedMessage{{}, type, std::move(message)};
+  mpsc_stack_push(&s_posted_messages, &posted->link);
+}
 
 static ImVec4 ARGBToImVec4(const u32 argb)
 {
@@ -133,23 +148,13 @@ static float DrawMessage(int index, Message& msg, const ImVec2& position, int ti
 void AddTypedMessage(MessageType type, std::string message, u32 ms, u32 argb,
                      const VideoCommon::CustomTextureData::ArraySlice::Level* icon)
 {
-  std::lock_guard lock{s_messages_mutex};
-
-  // A message may hold a reference to a texture that can only be destroyed on the video thread, so
-  // only mark the old typed message (if any) for removal. It will be discarded on the next call to
-  // DrawMessages().
-  auto range = s_messages.equal_range(type);
-  for (auto it = range.first; it != range.second; ++it)
-    it->second.should_discard = true;
-
-  s_messages.emplace(type, Message(std::move(message), ms, argb, icon));
+  Post(type, Message(std::move(message), ms, argb, icon));
 }
 
 void AddMessage(std::string message, u32 ms, u32 argb,
                 const VideoCommon::CustomTextureData::ArraySlice::Level* icon)
 {
-  std::lock_guard lock{s_messages_mutex};
-  s_messages.emplace(MessageType::Typeless, Message(std::move(message), ms, argb, icon));
+  Post(MessageType::Typeless, Message(std::move(message), ms, argb, icon));
 }
 
 void DrawMessages()
@@ -160,7 +165,20 @@ void DrawMessages()
   float current_y = TOP_MARGIN * ImGui::GetIO().DisplayFramebufferScale.y + s_obscured_pixels_top;
   int index = 0;
 
-  std::lock_guard lock{s_messages_mutex};
+  // Take in what was posted, oldest first. A new typed message replaces the one of its type.
+  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&s_posted_messages)); node;)
+  {
+    auto* posted = reinterpret_cast<PostedMessage*>(node);
+    node = node->next;
+    if (posted->type != MessageType::Typeless)
+    {
+      auto range = s_messages.equal_range(posted->type);
+      for (auto it = range.first; it != range.second; ++it)
+        it->second.should_discard = true;
+    }
+    s_messages.emplace(posted->type, std::move(posted->message));
+    delete posted;
+  }
 
   for (auto it = s_messages.begin(); it != s_messages.end();)
   {
@@ -188,12 +206,6 @@ void DrawMessages()
     if (draw_messages)
       current_y += DrawMessage(index++, msg, ImVec2(current_x, current_y), time_left);
   }
-}
-
-void ClearMessages()
-{
-  std::lock_guard lock{s_messages_mutex};
-  s_messages.clear();
 }
 
 void SetObscuredPixelsLeft(int width)

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <mutex>
+#include <retro_atomic.h>
 
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
@@ -192,7 +192,8 @@ public:
   AlphaReadMode GetAlphaReadMode() const { return m_alpha_read.read_mode; }
 
 private:
-  void RaiseEvent(int cycles_into_future);
+  // Merges set into the pending word and schedules the CPU-thread event unless one already is.
+  void RaiseEvent(int set, int keep, int cycles_into_future);
   void UpdateInterrupts();
   void SetTokenFinish_OnMainThread(u64 userdata, s64 cycles_late);
 
@@ -207,12 +208,13 @@ private:
   UPEAlphaReadReg m_alpha_read;
   UPECtrlReg m_control;
 
-  std::mutex m_token_finish_mutex;
+  // What the video thread hands the CPU thread, in one word so it is taken whole: the
+  // pending token in the low 16 bits and the PENDING_* flags above them.
+  static constexpr int PENDING_TOKEN_INT = 1 << 16;
+  static constexpr int PENDING_FINISH_INT = 1 << 17;
+  static constexpr int PENDING_EVENT_RAISED = 1 << 18;
+  retro_atomic_int_t m_pending{};
   u16 m_token = 0;
-  u16 m_token_pending = 0;
-  bool m_token_interrupt_pending = false;
-  bool m_finish_interrupt_pending = false;
-  bool m_event_raised = false;
 
   bool m_signal_token_interrupt = false;
   bool m_signal_finish_interrupt = false;

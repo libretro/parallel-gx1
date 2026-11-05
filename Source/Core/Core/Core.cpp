@@ -6,14 +6,15 @@
 #include <algorithm>
 #include <atomic>
 #include <functional>
-#include <mutex>
 #include <optional>
-#include <queue>
+#include <deque>
+#include <memory>
 #include <utility>
 #include <variant>
 
 #include <fmt/chrono.h>
 #include <fmt/format.h>
+#include <queues/mpsc_stack.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -29,7 +30,7 @@
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
-#include "Common/OneShotEvent.h"
+#include "Common/Event.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
@@ -101,11 +102,6 @@ static bool s_is_throttler_temp_disabled = false;
 bool s_frame_step = false;
 std::atomic<bool> s_stop_frame_step;
 
-// Threads other than the CPU thread must hold this when taking on the role of the CPU thread.
-// The CPU thread is not required to hold this when doing normal work, but must hold it if writing
-// to s_state.
-static std::recursive_mutex s_core_mutex;
-
 // The value Paused is never stored in this variable. The core is considered to be in
 // the Paused state if this variable is Running and the CPU reports that it's stepping.
 static std::atomic<State> s_state = State::Uninitialized;
@@ -118,11 +114,13 @@ static void Callback_FramePresented(const PresentInfo& present_info);
 
 struct HostJob
 {
+  mpsc_stack_node_t link;  // first: the drained chain is cast back to jobs
   std::function<void(Core::System&)> job;
   bool run_after_stop;
 };
-static std::mutex s_host_jobs_lock;
-static std::queue<HostJob> s_host_jobs_queue;
+// Pushed from any thread; the host thread moves them in order into s_host_jobs_ready.
+static mpsc_stack_t s_host_jobs_queue;
+static std::deque<std::unique_ptr<HostJob>> s_host_jobs_ready;
 
 static thread_local bool tls_is_cpu_thread = false;
 static thread_local bool tls_is_gpu_thread = false;
@@ -209,8 +207,6 @@ bool WantsDeterminism()
 // BootManager.cpp
 bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
 {
-  std::lock_guard lock(s_core_mutex);
-
   if (s_emu_thread)
   {
     if (!IsUninitialized(system))
@@ -252,15 +248,12 @@ static void ResetRumble()
 // Called from GUI thread
 void Stop(Core::System& system)  // - Hammertime!
 {
+  State state = s_state.load();
+  do
   {
-    std::lock_guard lock(s_core_mutex);
-
-    const State state = s_state.load();
     if (state == State::Stopping || state == State::Uninitialized)
       return;
-
-    s_state.store(State::Stopping);
-  }
+  } while (!s_state.compare_exchange_weak(state, State::Stopping));
 
   NotifyStateChanged(State::Stopping);
 
@@ -336,8 +329,6 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
   }
 
   {
-    std::unique_lock core_lock(s_core_mutex);
-
     // If s_state is Starting, change it to Running. But if it's already been set to Stopping
     // because another thread called Stop, don't change it.
     State expected = State::Starting;
@@ -404,8 +395,6 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
     system.GetPowerPC().InjectExternalCPUCore(cpu_core.get());
 
     {
-      std::lock_guard core_lock(s_core_mutex);
-
       // If s_state is Starting, change it to Running. But if it's already been set to Stopping
       // because another thread called Stop, don't change it.
       State expected = State::Starting;
@@ -486,10 +475,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
 {
   NotifyStateChanged(State::Starting);
   Common::ScopeGuard flag_guard{[] {
-    {
-      std::lock_guard lock(s_core_mutex);
-      s_state.store(State::Uninitialized);
-    }
+    s_state.store(State::Uninitialized);
 
     NotifyStateChanged(State::Uninitialized);
 
@@ -686,8 +672,6 @@ void SetState(Core::System& system, State state, bool report_state_change,
               bool override_achievement_restrictions)
 {
   {
-    std::lock_guard lock(s_core_mutex);
-
     // State cannot be controlled until the CPU Thread is operational
     if (s_state.load() != State::Running)
       return;
@@ -781,8 +765,6 @@ void SaveScreenShot(std::string_view name)
 
 static bool PauseAndLock(Core::System& system)
 {
-  s_core_mutex.lock();
-
   if (!IsRunning(system))
     return true;
 
@@ -804,8 +786,6 @@ static bool PauseAndLock(Core::System& system)
 
 static void RestoreStateAndUnlock(Core::System& system, const bool unpause_on_unlock)
 {
-  Common::ScopeGuard scope_guard([] { s_core_mutex.unlock(); });
-
   if (!IsRunning(system))
     return;
 
@@ -831,7 +811,7 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
     return;
   }
 
-  Common::OneShotEvent cpu_thread_job_finished;
+  Common::Event cpu_thread_job_finished;
 
   // Pause the CPU (set it to stepping mode).
   const bool was_running = PauseAndLock(system);
@@ -983,14 +963,10 @@ void QueueHostJob(std::function<void(Core::System&)> job, bool run_during_stop)
   if (!job)
     return;
 
-  bool send_message = false;
-  {
-    std::lock_guard guard(s_host_jobs_lock);
-    send_message = s_host_jobs_queue.empty();
-    s_host_jobs_queue.emplace(HostJob{std::move(job), run_during_stop});
-  }
+  auto* host_job = new HostJob{{}, std::move(job), run_during_stop};
+  mpsc_stack_push(&s_host_jobs_queue, &host_job->link);
   // If the the queue was empty then kick the Host to come and get this job.
-  if (send_message)
+  if (!host_job->link.next)
     Host_Message(HostMessageID::WMUserJobDispatch);
 }
 
@@ -999,22 +975,31 @@ void HostDispatchJobs(Core::System& system)
   // WARNING: This should only run on the Host Thread.
   // NOTE: This function is potentially re-entrant. If a job calls
   //   Core::Stop for instance then we'll enter this a second time.
-  std::unique_lock guard(s_host_jobs_lock);
-  while (!s_host_jobs_queue.empty())
+  for (;;)
   {
-    HostJob job = std::move(s_host_jobs_queue.front());
-    s_host_jobs_queue.pop();
+    // The stack gives the newest first; append them oldest first behind what is left.
+    const size_t at = s_host_jobs_ready.size();
+    for (mpsc_stack_node_t* node = mpsc_stack_drain(&s_host_jobs_queue); node;)
+    {
+      mpsc_stack_node_t* next = node->next;
+      s_host_jobs_ready.emplace(s_host_jobs_ready.begin() + at,
+                                reinterpret_cast<HostJob*>(node));
+      node = next;
+    }
+    if (s_host_jobs_ready.empty())
+      return;
 
-    if (!job.run_after_stop)
+    std::unique_ptr<HostJob> job = std::move(s_host_jobs_ready.front());
+    s_host_jobs_ready.pop_front();
+
+    if (!job->run_after_stop)
     {
       const State state = s_state.load();
       if (state == State::Stopping || state == State::Uninitialized)
         continue;
     }
 
-    guard.unlock();
-    job.job(system);
-    guard.lock();
+    job->job(system);
   }
 }
 
@@ -1026,8 +1011,6 @@ void DoFrameStep(Core::System& system)
     OSD::AddMessage("Frame stepping is disabled in RetroAchievements hardcore mode");
     return;
   }
-
-  std::lock_guard lock(s_core_mutex);
 
   if (GetState(system) == State::Paused)
   {

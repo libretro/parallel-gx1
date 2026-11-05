@@ -1,6 +1,5 @@
 #include <libretro.h>
 #include <atomic>
-#include <condition_variable>
 #include "Core/State.h"
 #include "Core/System.h"
 #include "AudioCommon/SoundStream.h"

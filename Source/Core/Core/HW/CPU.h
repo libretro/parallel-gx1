@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include <condition_variable>
-#include <mutex>
-#include <queue>
+#include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 
 #include "Common/Event.h"
 #include "Common/Functional.h"
@@ -86,8 +86,9 @@ public:
   // Get current CPU Thread State
   State GetState() const;
 
+
   // Direct State Access (Raw pointer for embedding into JIT Blocks)
-  // Strictly read-only. A lock is required to change the value.
+  // Strictly read-only.
   const State* GetStatePtr() const;
 
   // Locks the CPU Thread (waiting for it to become idle). While this lock is held, the CPU Thread
@@ -110,51 +111,62 @@ public:
 #ifdef __LIBRETRO__
   bool HasCPURunStateBeenReached() const
   {
-    return cpu_run_state_reached.load(std::memory_order_acquire);
+    return retro_atomic_load_acquire_int(&m_cpu_run_state_reached) != 0;
   }
 #endif
 private:
-  void FlushStepSyncEventLocked();
-  void ExecutePendingJobs(std::unique_lock<std::mutex>& state_lock);
+  struct Job
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back to jobs
+    Common::MoveOnlyFunction<void()> function;
+  };
+
+  void FlushStepSyncEvent();
+  void ExecutePendingJobs();
   void StartTimePlayedTimer();
   void RunAdjacentSystems(bool running);
-  bool SetStateLocked(State s);
+  bool SetStateChecked(State s);
+  State LoadState() const;
+  // Marks the CPU thread active unless the state it is about to run in was changed or a pause
+  // asked for meanwhile; false means it backed off and must look again.
+  bool TryEnterActive(State expected);
+  void LeaveActive();
+  // Waits for the CPU thread to leave the state it was running in.
+  void WaitForIdle();
+  void ClaimStepping();
+  void ReleaseStepping();
+  void WakeCPU() { retro_eventcount_notify(&m_cpu_wake); }
 
-  // CPU Thread execution state.
-  // Requires m_state_change_lock to modify the value.
-  // Read access is unsynchronized.
-  State m_state = State::PowerDown;
+  // CPU Thread execution state, a State. Written by the host threads and the CPU thread with
+  // seq_cst stores, read by the JIT through GetStatePtr.
+  retro_atomic_int_t m_state;
 
-  // Synchronizes SetStepping and PauseAndLock so only one instance can be
-  // active at a time. Simplifies code by eliminating several edge cases where
-  // the SetStepping(true)/PauseAndLock(true) case must release the state lock
-  // and wait for the CPU Thread which would otherwise require additional flags.
-  // NOTE: When using the stepping lock, it must always be acquired first. If
-  //   the lock is acquired after the state lock then that is guaranteed to
-  //   deadlock because of the order inversion. (A -> X,Y; B -> Y,X; A waits for
-  //   B, B waits for A)
-  std::mutex m_stepping_lock;
-  // Protected by m_stepping_lock.
+  // Only one SetStepping or PauseAndLock is in progress at a time: they may wait for the CPU
+  // thread, and two waiting together would need extra flags to tell their requests apart.
+  retro_atomic_int_t m_stepping_claimed;
+  retro_eventcount_t m_stepping_released;
+  // Only touched by the thread holding the stepping claim.
   bool m_have_fake_cpu_thread = false;
 
-  // Primary lock. Protects changing m_state, requesting instruction stepping and
-  // pause-and-locking.
-  std::mutex m_state_change_lock;
-  // When m_state_cpu_thread_active changes to false
-  std::condition_variable m_state_cpu_idle_cvar;
-  // When m_state changes / m_state_paused_and_locked becomes false (for CPU Thread only)
-  std::condition_variable m_state_cpu_cvar;
-  bool m_state_cpu_thread_active = false;
-  bool m_state_paused_and_locked = false;
-  bool m_state_system_request_stepping = false;
-  bool m_state_cpu_step_instruction = false;
-  Common::Event* m_state_cpu_step_instruction_sync = nullptr;
-  std::queue<Common::MoveOnlyFunction<void()>> m_pending_jobs;
+  // The CPU thread is inside RunLoop or SingleStep.
+  retro_atomic_int_t m_cpu_thread_active;
+  retro_atomic_int_t m_paused_and_locked;
+  retro_atomic_int_t m_system_request_stepping;
+  // Wakes the CPU thread: state changed, a pause ended, a step was asked for.
+  retro_eventcount_t m_cpu_wake;
+  // Wakes threads waiting for the CPU thread to go idle.
+  retro_eventcount_t m_cpu_idle;
+
+  // A step request: null for none, STEP_NO_EVENT for one nobody waits on, or the Event to set
+  // once the step is done. Exchanged whole, so a request and its event never come apart.
+  retro_atomic_ptr_t m_step_request;
+
+  mpsc_stack_t m_pending_jobs;
   Common::Event m_time_played_finish_sync;
 
   Core::System& m_system;
 #ifdef __LIBRETRO__
-  std::atomic<bool> cpu_run_state_reached{false};
+  retro_atomic_int_t m_cpu_run_state_reached;
 #endif
 };
 }  // namespace CPU

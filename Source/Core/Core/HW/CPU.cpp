@@ -3,9 +3,6 @@
 
 #include "Core/HW/CPU.h"
 
-#include <condition_variable>
-#include <mutex>
-#include <queue>
 
 #include "AudioCommon/AudioCommon.h"
 #include "Common/Event.h"
@@ -27,50 +24,134 @@
 
 namespace CPU
 {
+// Stands in for the Event of a step request that has none; never dereferenced.
+static Common::Event* const STEP_NO_EVENT = reinterpret_cast<Common::Event*>(alignof(void*));
+
 CPUManager::CPUManager(Core::System& system) : m_system(system)
 {
+  retro_atomic_int_init(&m_state, static_cast<int>(State::PowerDown));
+  retro_atomic_int_init(&m_stepping_claimed, 0);
+  retro_atomic_int_init(&m_cpu_thread_active, 0);
+  retro_atomic_int_init(&m_paused_and_locked, 0);
+  retro_atomic_int_init(&m_system_request_stepping, 0);
+  retro_atomic_ptr_init(&m_step_request, nullptr);
+  mpsc_stack_init(&m_pending_jobs);
+  retro_eventcount_init(&m_stepping_released);
+  retro_eventcount_init(&m_cpu_wake);
+  retro_eventcount_init(&m_cpu_idle);
+#ifdef __LIBRETRO__
+  retro_atomic_int_init(&m_cpu_run_state_reached, 0);
+#endif
 }
-CPUManager::~CPUManager() = default;
+
+CPUManager::~CPUManager()
+{
+  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_pending_jobs); node;)
+  {
+    Job* job = reinterpret_cast<Job*>(node);
+    node = node->next;
+    delete job;
+  }
+  retro_eventcount_free(&m_cpu_idle);
+  retro_eventcount_free(&m_cpu_wake);
+  retro_eventcount_free(&m_stepping_released);
+}
+
+State CPUManager::LoadState() const
+{
+  return static_cast<State>(retro_atomic_load_seq_cst_int(&m_state));
+}
 
 void CPUManager::Init(PowerPC::CPUCore cpu_core)
 {
   m_system.GetPowerPC().Init(cpu_core);
-  m_state = State::Stepping;
+  retro_atomic_store_release_int(&m_state, static_cast<int>(State::Stepping));
 }
 
 void CPUManager::Shutdown()
 {
   Stop();
 #ifdef __LIBRETRO__
-  cpu_run_state_reached.store(false, std::memory_order_release);
+  retro_atomic_store_release_int(&m_cpu_run_state_reached, 0);
 #endif
   m_system.GetPowerPC().Shutdown();
 }
 
-// Requires holding m_state_change_lock
-void CPUManager::FlushStepSyncEventLocked()
+void CPUManager::FlushStepSyncEvent()
 {
-  if (!m_state_cpu_step_instruction)
-    return;
-
-  if (m_state_cpu_step_instruction_sync)
-  {
-    m_state_cpu_step_instruction_sync->Set();
-    m_state_cpu_step_instruction_sync = nullptr;
-  }
-  m_state_cpu_step_instruction = false;
+  auto* event = static_cast<Common::Event*>(retro_atomic_exchange_ptr(&m_step_request, nullptr));
+  if (event && event != STEP_NO_EVENT)
+    event->Set();
 }
 
-void CPUManager::ExecutePendingJobs(std::unique_lock<std::mutex>& state_lock)
+void CPUManager::ExecutePendingJobs()
 {
-  while (!m_pending_jobs.empty())
+  // The stack hands them back newest first; run them in the order they were added.
+  mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_pending_jobs));
+  while (node)
   {
-    auto callback = std::move(m_pending_jobs.front());
-    m_pending_jobs.pop();
-    state_lock.unlock();
-    callback();
-    state_lock.lock();
+    Job* job = reinterpret_cast<Job*>(node);
+    node = node->next;
+    job->function();
+    delete job;
   }
+}
+
+bool CPUManager::TryEnterActive(State expected)
+{
+  // Dekker with the pausing side, which stores its request and then reads this flag: either
+  // the request is seen here, or the flag is seen there and the pauser waits for it to drop.
+  retro_atomic_fetch_add_seq_cst_int(&m_cpu_thread_active, 1);
+  retro_atomic_thread_fence_seq_cst();
+  if (!retro_atomic_load_seq_cst_int(&m_paused_and_locked) && LoadState() == expected)
+    return true;
+  LeaveActive();
+  return false;
+}
+
+void CPUManager::LeaveActive()
+{
+  retro_atomic_fetch_add_seq_cst_int(&m_cpu_thread_active, -1);
+  retro_eventcount_notify(&m_cpu_idle);
+}
+
+void CPUManager::WaitForIdle()
+{
+  retro_atomic_thread_fence_seq_cst();
+  for (;;)
+  {
+    if (!retro_atomic_load_seq_cst_int(&m_cpu_thread_active))
+      return;
+    const int key = retro_eventcount_prepare_wait(&m_cpu_idle);
+    if (!retro_atomic_load_seq_cst_int(&m_cpu_thread_active))
+    {
+      retro_eventcount_cancel_wait(&m_cpu_idle);
+      return;
+    }
+    retro_eventcount_commit_wait(&m_cpu_idle, key);
+  }
+}
+
+void CPUManager::ClaimStepping()
+{
+  for (;;)
+  {
+    if (retro_atomic_cas_int(&m_stepping_claimed, 0, 1))
+      return;
+    const int key = retro_eventcount_prepare_wait(&m_stepping_released);
+    if (!retro_atomic_load_seq_cst_int(&m_stepping_claimed))
+    {
+      retro_eventcount_cancel_wait(&m_stepping_released);
+      continue;
+    }
+    retro_eventcount_commit_wait(&m_stepping_released, key);
+  }
+}
+
+void CPUManager::ReleaseStepping()
+{
+  retro_atomic_store_release_int(&m_stepping_claimed, 0);
+  retro_eventcount_notify(&m_stepping_released);
 }
 
 void CPUManager::StartTimePlayedTimer()
@@ -88,14 +169,15 @@ void CPUManager::StartTimePlayedTimer()
 
     // Check that emulation is not paused
     // If the emulation is paused, wait for SetStepping() to reactivate
-    if (m_state == State::Running)
+    const State state = LoadState();
+    if (state == State::Running)
     {
       const std::string game_id = SConfig::GetInstance().GetGameID();
       const auto diff_time =
           std::chrono::duration_cast<std::chrono::milliseconds>(curr_time - prev_time);
       time_played.AddTime(game_id, diff_time);
     }
-    else if (m_state == State::Stepping)
+    else if (state == State::Stepping)
     {
       m_time_played_finish_sync.Wait();
       curr_time = timer.now();
@@ -103,7 +185,7 @@ void CPUManager::StartTimePlayedTimer()
 
     prev_time = curr_time;
 
-    if (m_state == State::PowerDown)
+    if (LoadState() == State::PowerDown)
       return;
 
     m_time_played_finish_sync.WaitFor(std::chrono::seconds(30));
@@ -122,21 +204,32 @@ void CPUManager::Run()
   }
 
 #ifdef __LIBRETRO__
-  cpu_run_state_reached.store(true, std::memory_order_release);
+  retro_atomic_store_release_int(&m_cpu_run_state_reached, 1);
 #endif
-  std::unique_lock state_lock(m_state_change_lock);
-  while (m_state != State::PowerDown)
+  while (LoadState() != State::PowerDown)
   {
-    m_state_cpu_cvar.wait(state_lock, [this] { return !m_state_paused_and_locked; });
-    ExecutePendingJobs(state_lock);
+    // Wait out a PauseAndLock: the host thread is standing in for this one.
+    for (;;)
+    {
+      if (!retro_atomic_load_seq_cst_int(&m_paused_and_locked))
+        break;
+      const int key = retro_eventcount_prepare_wait(&m_cpu_wake);
+      if (!retro_atomic_load_seq_cst_int(&m_paused_and_locked))
+      {
+        retro_eventcount_cancel_wait(&m_cpu_wake);
+        break;
+      }
+      retro_eventcount_commit_wait(&m_cpu_wake, key);
+    }
+    ExecutePendingJobs();
     CPUThreadConfigCallback::CheckForConfigChanges();
 
     Common::Event gdb_step_sync_event;
-    switch (m_state)
+    switch (LoadState())
     {
     case State::Running:
-      m_state_cpu_thread_active = true;
-      state_lock.unlock();
+      if (!TryEnterActive(State::Running))
+        break;
 
       // Adjust PC when debugging
       // SingleStep so that the "continue", "step over" and "step out" debugger functions
@@ -146,28 +239,33 @@ void CPUManager::Run()
       if (power_pc.GetBreakPoints().IsAddressBreakPoint(power_pc.GetPPCState().pc) ||
           power_pc.GetMemChecks().HasAny())
       {
-        m_state = State::Stepping;
+        // Only from Running, so a pause or stop that came in meanwhile is not undone.
+        int expected = static_cast<int>(State::Running);
+        const bool swapped =
+            retro_atomic_cas_int(&m_state, expected, static_cast<int>(State::Stepping));
         PowerPC::CoreMode old_mode = power_pc.GetMode();
         power_pc.SetMode(PowerPC::CoreMode::Interpreter);
         power_pc.SingleStep();
         power_pc.SetMode(old_mode);
-        m_state = State::Running;
+        if (swapped)
+        {
+          expected = static_cast<int>(State::Stepping);
+          retro_atomic_cas_int(&m_state, expected, static_cast<int>(State::Running));
+        }
       }
 
       // Enter a fast runloop
       power_pc.RunLoop();
 
-      state_lock.lock();
-      m_state_cpu_thread_active = false;
-      m_state_cpu_idle_cvar.notify_all();
+      LeaveActive();
       break;
 
     case State::Stepping:
       // Wait for step command.
-      m_state_cpu_cvar.wait(state_lock, [this, &state_lock, &gdb_step_sync_event] {
-        ExecutePendingJobs(state_lock);
+      for (;;)
+      {
+        ExecutePendingJobs();
         CPUThreadConfigCallback::CheckForConfigChanges();
-        state_lock.unlock();
         if (GDBStub::IsActive() && GDBStub::HasControl())
         {
           if (!GDBStub::JustConnected())
@@ -177,40 +275,41 @@ void CPUManager::Run()
           if (GDBStub::HasControl())
           {
             // Make sure the previous step by gdb was serviced
-            if (m_state_cpu_step_instruction_sync &&
-                m_state_cpu_step_instruction_sync != &gdb_step_sync_event)
-            {
-              m_state_cpu_step_instruction_sync->Set();
-            }
-
-            m_state_cpu_step_instruction = true;
-            m_state_cpu_step_instruction_sync = &gdb_step_sync_event;
+            auto* previous = static_cast<Common::Event*>(
+                retro_atomic_exchange_ptr(&m_step_request, &gdb_step_sync_event));
+            if (previous && previous != STEP_NO_EVENT && previous != &gdb_step_sync_event)
+              previous->Set();
           }
         }
-        state_lock.lock();
-        return m_state_cpu_step_instruction || !IsStepping();
-      });
+        if (retro_atomic_load_acquire_ptr(&m_step_request) || !IsStepping())
+          break;
+        const int key = retro_eventcount_prepare_wait(&m_cpu_wake);
+        if (retro_atomic_load_acquire_ptr(&m_step_request) || !IsStepping())
+        {
+          retro_eventcount_cancel_wait(&m_cpu_wake);
+          break;
+        }
+        retro_eventcount_commit_wait(&m_cpu_wake, key);
+      }
       if (!IsStepping())
       {
         // Signal event if the mode changes.
-        FlushStepSyncEventLocked();
+        FlushStepSyncEvent();
         continue;
       }
-      if (m_state_paused_and_locked)
+      if (retro_atomic_load_seq_cst_int(&m_paused_and_locked))
         continue;
 
       // Do step
-      m_state_cpu_thread_active = true;
-      state_lock.unlock();
+      if (!TryEnterActive(State::Stepping))
+        continue;
 
       power_pc.SingleStep();
 
-      state_lock.lock();
-      m_state_cpu_thread_active = false;
-      m_state_cpu_idle_cvar.notify_all();
+      LeaveActive();
 
       // Update disasm dialog
-      FlushStepSyncEventLocked();
+      FlushStepSyncEvent();
       Host_UpdateDisasmDialog();
       break;
 
@@ -225,7 +324,6 @@ void CPUManager::Run()
     Common::JoinThread(timing);
   }
 
-  state_lock.unlock();
   Host_UpdateDisasmDialog();
 }
 
@@ -249,47 +347,43 @@ void CPUManager::RunSingleFrame()
 }
 #endif
 
-// Requires holding m_state_change_lock
 void CPUManager::RunAdjacentSystems(bool running)
 {
   // NOTE: We're assuming these will not try to call Break or SetStepping.
   m_system.GetFifo().EmulatorState(running);
   // Core is responsible for shutting down the sound stream.
-  if (m_state != State::PowerDown)
+  if (LoadState() != State::PowerDown)
     AudioCommon::SetSoundStreamRunning(m_system, running);
 }
 
 void CPUManager::Stop()
 {
   // Change state and wait for it to be acknowledged.
-  // We don't need the stepping lock because State::PowerDown is a priority state which
+  // We don't need the stepping claim because State::PowerDown is a priority state which
   // will stick permanently.
-  std::unique_lock state_lock(m_state_change_lock);
-  m_state = State::PowerDown;
-  m_state_cpu_cvar.notify_one();
-
-  while (m_state_cpu_thread_active)
-  {
-    m_state_cpu_idle_cvar.wait(state_lock);
-  }
+  retro_atomic_exchange_int(&m_state, static_cast<int>(State::PowerDown));
+  WakeCPU();
+  WaitForIdle();
 
   RunAdjacentSystems(false);
-  FlushStepSyncEventLocked();
+  FlushStepSyncEvent();
 }
 
 bool CPUManager::IsStepping() const
 {
-  return m_state == State::Stepping;
+  return LoadState() == State::Stepping;
 }
 
 State CPUManager::GetState() const
 {
-  return m_state;
+  return LoadState();
 }
 
 const State* CPUManager::GetStatePtr() const
 {
-  return &m_state;
+  // The JIT reads the word directly; the atomic has the layout of the int it holds.
+  static_assert(sizeof(m_state) == sizeof(State));
+  return reinterpret_cast<const State*>(&m_state);
 }
 
 void CPUManager::Reset()
@@ -298,7 +392,6 @@ void CPUManager::Reset()
 
 void CPUManager::StepOpcode(Common::Event* event)
 {
-  std::lock_guard state_lock(m_state_change_lock);
   // If we're not stepping then this is pointless
   if (!IsStepping())
   {
@@ -308,66 +401,67 @@ void CPUManager::StepOpcode(Common::Event* event)
   }
 
   // Potential race where the previous step has not been serviced yet.
-  if (m_state_cpu_step_instruction_sync && m_state_cpu_step_instruction_sync != event)
-    m_state_cpu_step_instruction_sync->Set();
-
-  m_state_cpu_step_instruction = true;
-  m_state_cpu_step_instruction_sync = event;
-  m_state_cpu_cvar.notify_one();
+  auto* previous = static_cast<Common::Event*>(
+      retro_atomic_exchange_ptr(&m_step_request, event ? event : STEP_NO_EVENT));
+  if (previous && previous != STEP_NO_EVENT && previous != event)
+    previous->Set();
+  WakeCPU();
 }
 
-// Requires m_state_change_lock
-bool CPUManager::SetStateLocked(State s)
+// PowerDown sticks: a state change after it is refused.
+bool CPUManager::SetStateChecked(State s)
 {
-  if (m_state == State::PowerDown)
-    return false;
+  int cur = retro_atomic_load_seq_cst_int(&m_state);
+  for (;;)
+  {
+    if (cur == static_cast<int>(State::PowerDown))
+      return false;
+    if (retro_atomic_cas_int(&m_state, cur, static_cast<int>(s)))
+      break;
+    cur = retro_atomic_load_seq_cst_int(&m_state);
+  }
   if (s == State::Stepping)
     m_system.GetPowerPC().GetBreakPoints().ClearTemporary();
-  m_state = s;
   return true;
 }
 
 void CPUManager::SetStepping(bool stepping)
 {
-  std::lock_guard stepping_lock(m_stepping_lock);
-  std::unique_lock state_lock(m_state_change_lock);
+  ClaimStepping();
 
   if (stepping)
   {
-    SetStateLocked(State::Stepping);
+    SetStateChecked(State::Stepping);
 
     if (!Core::IsCPUThread())
-    {
-      while (m_state_cpu_thread_active)
-        m_state_cpu_idle_cvar.wait(state_lock);
-    }
+      WaitForIdle();
 
     RunAdjacentSystems(false);
   }
-  else if (SetStateLocked(State::Running))
+  else if (SetStateChecked(State::Running))
   {
     if (!Core::IsCPUThread())
-      m_state_cpu_cvar.notify_one();
+      WakeCPU();
     m_time_played_finish_sync.Set();
     RunAdjacentSystems(true);
   }
+
+  ReleaseStepping();
 }
 
 void CPUManager::Break()
 {
-  std::lock_guard state_lock(m_state_change_lock);
-
   // If another thread is trying to PauseAndLock then we need to remember this
   // for later to ignore the unpause_on_unlock.
-  if (m_state_paused_and_locked)
+  if (retro_atomic_load_seq_cst_int(&m_paused_and_locked))
   {
-    m_state_system_request_stepping = true;
+    retro_atomic_store_release_int(&m_system_request_stepping, 1);
     return;
   }
 
   // We'll deadlock if we synchronize, the CPU may block waiting for our caller to
   // finish resulting in the CPU loop never terminating.
-  SetStateLocked(State::Stepping);
+  SetStateChecked(State::Stepping);
   RunAdjacentSystems(false);
 }
 
@@ -379,20 +473,14 @@ void CPUManager::Continue()
 
 bool CPUManager::PauseAndLock()
 {
-  m_stepping_lock.lock();
+  ClaimStepping();
 
-  std::unique_lock state_lock(m_state_change_lock);
-  m_state_paused_and_locked = true;
+  retro_atomic_exchange_int(&m_paused_and_locked, 1);
 
-  const bool was_unpaused = m_state == State::Running;
-  SetStateLocked(State::Stepping);
+  const bool was_unpaused = LoadState() == State::Running;
+  SetStateChecked(State::Stepping);
 
-  while (m_state_cpu_thread_active)
-  {
-    m_state_cpu_idle_cvar.wait(state_lock);
-  }
-
-  state_lock.unlock();
+  WaitForIdle();
 
   // NOTE: It would make more sense for Core::DeclareAsCPUThread() to keep a
   //   depth counter instead of being a boolean.
@@ -407,35 +495,33 @@ bool CPUManager::PauseAndLock()
 
 void CPUManager::RestoreStateAndUnlock(const bool unpause_on_unlock)
 {
-  // Only need the stepping lock for this
+  // Only need the stepping claim for this
   if (m_have_fake_cpu_thread)
   {
     m_have_fake_cpu_thread = false;
     Core::UndeclareAsCPUThread();
   }
 
+  if (retro_atomic_exchange_int(&m_system_request_stepping, 0))
   {
-    std::lock_guard state_lock(m_state_change_lock);
-    if (m_state_system_request_stepping)
-    {
-      m_state_system_request_stepping = false;
-    }
-    else if (unpause_on_unlock)
-    {
-      SetStateLocked(State::Running);
-    }
-    m_state_paused_and_locked = false;
-    m_state_cpu_cvar.notify_one();
-
-    RunAdjacentSystems(m_state == State::Running);
+    // A Break came in while paused: stay stepping.
   }
-  m_stepping_lock.unlock();
+  else if (unpause_on_unlock)
+  {
+    SetStateChecked(State::Running);
+  }
+  retro_atomic_exchange_int(&m_paused_and_locked, 0);
+  WakeCPU();
+
+  RunAdjacentSystems(LoadState() == State::Running);
+
+  ReleaseStepping();
 }
 
 void CPUManager::AddCPUThreadJob(Common::MoveOnlyFunction<void()> function)
 {
-  std::unique_lock state_lock(m_state_change_lock);
-  m_pending_jobs.push(std::move(function));
+  Job* job = new Job{{}, std::move(function)};
+  mpsc_stack_push(&m_pending_jobs, &job->link);
 }
 
 }  // namespace CPU

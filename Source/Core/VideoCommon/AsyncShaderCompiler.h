@@ -3,21 +3,19 @@
 
 #pragma once
 
-#include <atomic>
-#include <condition_variable>
-#include <deque>
+#include <array>
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
-#include <utility>
 #include <vector>
 
+#include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 #include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
-#include "Common/Flag.h"
 
 namespace VideoCommon
 {
@@ -73,22 +71,46 @@ private:
   void WorkerThreadEntryPoint(void* param);
   void WorkerThreadRun();
 
-  Common::Flag m_exit_flag;
+  // A worker holds up to SLOTS items handed over by the video thread: one it may be
+  // compiling and one to start right after, so it seldom idles until the next hand-over.
+  static constexpr size_t SLOTS = 2;
+  struct Worker
+  {
+    AsyncShaderCompiler* owner;
+    void* param;
+    sthread_t* thread = nullptr;
+    std::array<retro_atomic_ptr_t, SLOTS> slots{};  // WorkItem*, written by the video thread
+    retro_eventcount_t wake;                        // when a slot fills or on exit
+  };
+
+  // A finished item on its way back to the video thread.
+  struct Completed
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    WorkItemPtr item;
+  };
+
+  static void WorkerThreadStart(void* worker);
+  void WorkerThreadEntryPoint(Worker* worker);
+  void WorkerThreadRun(Worker* worker);
+  // Hands the most urgent pending items to the workers' empty slots. Video thread only.
+  void FeedWorkers();
+  size_t ItemsInSlots() const;
+
+  retro_atomic_int_t m_exit_flag{};
   Common::Event m_init_event;
+  retro_atomic_int_t m_worker_thread_start_result{};
 
-  std::vector<sthread_t*> m_worker_threads;
-  void* m_starting_thread_param = nullptr;
-  std::atomic_bool m_worker_thread_start_result{false};
+  std::vector<std::unique_ptr<Worker>> m_workers;
 
-  // A multimap is used to store the work items. We can't use a priority_queue here, because
-  // there's no way to obtain a non-const reference, which we need for the unique_ptr.
+  // Owned by the video thread alone. A multimap keeps the items in priority order and lets
+  // the unique_ptr be moved out.
   std::multimap<u32, WorkItemPtr> m_pending_work;
-  std::mutex m_pending_work_lock;
-  std::condition_variable m_worker_thread_wake;
-  std::atomic_size_t m_busy_workers{0};
+  retro_atomic_int_t m_busy_workers{};
 
-  std::deque<WorkItemPtr> m_completed_work;
-  std::mutex m_completed_work_lock;
+  mpsc_stack_t m_completed_work{};
+  // Items finished synchronously, when there are no workers. Video thread only.
+  std::vector<WorkItemPtr> m_completed_sync;
 };
 
 }  // namespace VideoCommon

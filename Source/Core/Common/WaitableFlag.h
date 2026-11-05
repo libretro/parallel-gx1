@@ -1,69 +1,57 @@
 // Copyright 2025 Dolphin Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Wrapper around Flag that lets callers wait for the flag to change.
-
 #pragma once
 
-#include <chrono>
-#include <condition_variable>
-#include <mutex>
-
-#include "Common/Flag.h"
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 
 namespace Common
 {
+// A flag other threads can wait to see at a given value. Setting it is one atomic exchange,
+// plus a wake only when the value changed; waiters park on an eventcount.
 class WaitableFlag final
 {
 public:
+  WaitableFlag()
+  {
+    retro_atomic_int_init(&m_flag, 0);
+    retro_eventcount_init(&m_changed);
+  }
+  ~WaitableFlag() { retro_eventcount_free(&m_changed); }
+
+  WaitableFlag(const WaitableFlag&) = delete;
+  WaitableFlag& operator=(const WaitableFlag&) = delete;
+
   void Set(bool value = true)
   {
-    if (m_flag.TestAndSet(value))
-    {
-      // Lock and immediately unlock m_mutex.
-      {
-        // Holding the lock at any time between the change of our flag and notify call
-        // is sufficient to prevent a race where both of these actions
-        // happen between the other thread's predicate test and wait call
-        // which would cause wait to block until the next spurious wakeup or timeout.
-
-        // Unlocking before notification is a micro-optimization to prevent
-        // the notified thread from immediately blocking on the mutex.
-        std::lock_guard<std::mutex> lk(m_mutex);
-      }
-
-      m_condvar.notify_all();
-    }
+    if (retro_atomic_exchange_int(&m_flag, value ? 1 : 0) != (value ? 1 : 0))
+      retro_eventcount_notify(&m_changed);
   }
 
   void Reset() { Set(false); }
 
   void Wait(bool expected_value)
   {
-    if (m_flag.IsSet() == expected_value)
-      return;
-
-    std::unique_lock<std::mutex> lk(m_mutex);
-    m_condvar.wait(lk, [&] { return m_flag.IsSet() == expected_value; });
-  }
-
-  template <class Rep, class Period>
-  bool WaitFor(bool expected_value, const std::chrono::duration<Rep, Period>& rel_time)
-  {
-    if (m_flag.IsSet() == expected_value)
-      return true;
-
-    std::unique_lock<std::mutex> lk(m_mutex);
-    bool signaled =
-        m_condvar.wait_for(lk, rel_time, [&] { return m_flag.IsSet() == expected_value; });
-
-    return signaled;
+    for (;;)
+    {
+      if (Is(expected_value))
+        return;
+      const int key = retro_eventcount_prepare_wait(&m_changed);
+      if (Is(expected_value))
+      {
+        retro_eventcount_cancel_wait(&m_changed);
+        return;
+      }
+      retro_eventcount_commit_wait(&m_changed, key);
+    }
   }
 
 private:
-  Flag m_flag;
-  std::condition_variable m_condvar;
-  std::mutex m_mutex;
+  bool Is(bool value) { return (retro_atomic_load_acquire_int(&m_flag) != 0) == value; }
+
+  retro_atomic_int_t m_flag;
+  retro_eventcount_t m_changed;
 };
 
 }  // namespace Common

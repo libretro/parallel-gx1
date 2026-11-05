@@ -6,12 +6,13 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"
@@ -46,10 +47,56 @@ static NativeVertexFormatMap s_native_vertex_map;
 static NativeVertexFormat* s_current_vtx_fmt;
 u32 g_current_components;
 
-typedef std::unordered_map<VertexLoaderUID, std::unique_ptr<VertexLoaderBase>> VertexLoaderMap;
-static std::mutex s_vertex_loader_map_lock;
-static VertexLoaderMap s_vertex_loader_map;
-// TODO - change into array of pointers. Keep a map of all seen so far.
+// Every loader made so far, shared by the main and the preprocessing thread. Entries are only
+// ever added while both run, so each bucket is a list pushed at its head with a CAS and read
+// without a lock; Clear frees it all once neither thread is decoding.
+namespace
+{
+struct LoaderEntry
+{
+  LoaderEntry* next;  // fixed once published
+  VertexLoaderUID uid;
+  std::unique_ptr<VertexLoaderBase> loader;
+};
+constexpr size_t LOADER_BUCKETS = 1024;
+}  // namespace
+static retro_atomic_ptr_t s_vertex_loaders[LOADER_BUCKETS];
+
+static VertexLoaderBase* FindLoader(LoaderEntry* entry, const LoaderEntry* stop,
+                                    const VertexLoaderUID& uid)
+{
+  for (; entry != stop; entry = entry->next)
+  {
+    if (entry->uid == uid)
+      return entry->loader.get();
+  }
+  return nullptr;
+}
+
+// The loader for uid, made from desc and attr if this is the first time it is seen.
+static VertexLoaderBase* GetOrAddLoader(const VertexLoaderUID& uid, const TVtxDesc& desc,
+                                        const VAT& attr)
+{
+  retro_atomic_ptr_t* bucket = &s_vertex_loaders[uid.GetHash() % LOADER_BUCKETS];
+  auto* head = static_cast<LoaderEntry*>(retro_atomic_load_acquire_ptr(bucket));
+  if (VertexLoaderBase* found = FindLoader(head, nullptr, uid))
+    return found;
+
+  auto* entry = new LoaderEntry{head, uid, VertexLoaderBase::CreateVertexLoader(desc, attr)};
+  while (!retro_atomic_cas_ptr(bucket, entry->next, entry))
+  {
+    // Someone else pushed meanwhile: it may be the same loader, made on the other thread.
+    auto* newer = static_cast<LoaderEntry*>(retro_atomic_load_acquire_ptr(bucket));
+    if (VertexLoaderBase* found = FindLoader(newer, entry->next, uid))
+    {
+      delete entry;
+      return found;
+    }
+    entry->next = newer;
+  }
+  INCSTAT(g_stats.num_vertex_loaders);
+  return entry->loader.get();
+}
 
 Common::EnumMap<u8*, CPArray::TexCoord7> cached_arraybases;
 
@@ -70,8 +117,16 @@ void Init()
 
 void Clear()
 {
-  std::lock_guard<std::mutex> lk(s_vertex_loader_map_lock);
-  s_vertex_loader_map.clear();
+  for (auto& bucket : s_vertex_loaders)
+  {
+    auto* entry = static_cast<LoaderEntry*>(retro_atomic_exchange_ptr(&bucket, nullptr));
+    while (entry)
+    {
+      LoaderEntry* next = entry->next;
+      delete entry;
+      entry = next;
+    }
+  }
   s_native_vertex_map.clear();
 }
 
@@ -227,21 +282,9 @@ VertexLoaderBase* GetOrCreateLoader(int vtx_attr_group)
   bool check_for_native_format = !IsPreprocess;
 
   VertexLoaderUID uid(state->vtx_desc, state->vtx_attr[vtx_attr_group]);
-  std::lock_guard<std::mutex> lk(s_vertex_loader_map_lock);
-  VertexLoaderMap::iterator iter = s_vertex_loader_map.find(uid);
-  if (iter != s_vertex_loader_map.end())
-  {
-    loader = iter->second.get();
-    check_for_native_format &= !loader->m_native_vertex_format;
-  }
-  else
-  {
-    auto [it, added] = s_vertex_loader_map.try_emplace(
-        uid,
-        VertexLoaderBase::CreateVertexLoader(state->vtx_desc, state->vtx_attr[vtx_attr_group]));
-    loader = it->second.get();
-    INCSTAT(g_stats.num_vertex_loaders);
-  }
+  loader = GetOrAddLoader(uid, state->vtx_desc, state->vtx_attr[vtx_attr_group]);
+  // Only the main thread sets the native format, so it alone reads it.
+  check_for_native_format &= !loader->m_native_vertex_format;
   if (check_for_native_format)
   {
     // search for a cached native vertex format

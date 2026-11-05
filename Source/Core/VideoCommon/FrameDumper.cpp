@@ -37,6 +37,7 @@ FrameDumper::FrameDumper()
 FrameDumper::~FrameDumper()
 {
   ShutdownFrameDumping();
+  delete static_cast<std::string*>(retro_atomic_exchange_ptr(&m_screenshot_request, nullptr));
 }
 
 void FrameDumper::DumpCurrentFrame(const AbstractTexture* src_texture,
@@ -221,15 +222,13 @@ void FrameDumper::FrameDumpThreadFunc()
     auto frame = m_frame_dump_data;
 
     // Save screenshot
-    if (m_screenshot_request.TestAndClear())
+    if (auto* name = static_cast<std::string*>(
+            retro_atomic_exchange_ptr(&m_screenshot_request, nullptr)))
     {
-      std::lock_guard<std::mutex> lk(m_screenshot_lock);
+      if (DumpFrameToPNG(frame, *name))
+        OSD::AddMessage("Screenshot saved to " + *name);
 
-      if (DumpFrameToPNG(frame, m_screenshot_name))
-        OSD::AddMessage("Screenshot saved to " + m_screenshot_name);
-
-      // Reset settings
-      m_screenshot_name.clear();
+      delete name;
       m_screenshot_completed.Set();
     }
 
@@ -339,14 +338,13 @@ void FrameDumper::DumpFrameToImage(const FrameData& frame)
 
 void FrameDumper::SaveScreenshot(std::string filename)
 {
-  std::lock_guard<std::mutex> lk(m_screenshot_lock);
-  m_screenshot_name = std::move(filename);
-  m_screenshot_request.Set();
+  delete static_cast<std::string*>(
+      retro_atomic_exchange_ptr(&m_screenshot_request, new std::string(std::move(filename))));
 }
 
 bool FrameDumper::IsFrameDumping() const
 {
-  if (m_screenshot_request.IsSet())
+  if (retro_atomic_load_acquire_ptr(const_cast<retro_atomic_ptr_t*>(&m_screenshot_request)))
     return true;
 
   if (Config::Get(Config::MAIN_MOVIE_DUMP_FRAMES))

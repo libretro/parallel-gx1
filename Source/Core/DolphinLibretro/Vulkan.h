@@ -17,7 +17,6 @@ void Init(VkInstance instance, VkPhysicalDevice gpu, VkSurfaceKHR surface,
 void SetSurfaceSize(uint32_t width, uint32_t height);
 void SetHWRenderInterface(retro_hw_render_interface* hw_render_interface);
 void Shutdown();
-void WaitForPresentation();
 VkSurfaceKHR GetSurface();
 }  // namespace Vk
 }  // namespace Video

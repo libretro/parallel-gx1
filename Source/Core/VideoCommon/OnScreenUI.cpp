@@ -9,7 +9,6 @@
 #include "Common/Profiler.h"
 #include "Common/Timer.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Movie.h"
@@ -28,7 +27,6 @@
 #include "VideoCommon/VideoConfig.h"
 
 #include <inttypes.h>
-#include <mutex>
 
 #include <imgui.h>
 #include <implot.h>
@@ -37,8 +35,6 @@ namespace VideoCommon
 {
 bool OnScreenUI::Initialize(u32 width, u32 height, float scale)
 {
-  std::unique_lock<std::mutex> imgui_lock(m_imgui_mutex);
-
   if (!IMGUI_CHECKVERSION())
   {
     PanicAlertFmt("ImGui version check failed");
@@ -100,15 +96,13 @@ bool OnScreenUI::Initialize(u32 width, u32 height, float scale)
 
   m_imgui_last_frame_time = Common::Timer::NowUs();
   m_ready = true;
-  BeginImGuiFrameUnlocked(width, height);  // lock is already held
+  BeginImGuiFrame(width, height);
 
   return true;
 }
 
 OnScreenUI::~OnScreenUI()
 {
-  std::unique_lock<std::mutex> imgui_lock(m_imgui_mutex);
-
   ImGui::EndFrame();
   ImPlot::DestroyContext();
   ImGui::DestroyContext();
@@ -182,12 +176,6 @@ bool OnScreenUI::RecompileImGuiPipeline()
 }
 
 void OnScreenUI::BeginImGuiFrame(u32 width, u32 height)
-{
-  std::unique_lock<std::mutex> imgui_lock(m_imgui_mutex);
-  BeginImGuiFrameUnlocked(width, height);
-}
-
-void OnScreenUI::BeginImGuiFrameUnlocked(u32 width, u32 height)
 {
   m_backbuffer_width = width;
   m_backbuffer_height = height;
@@ -323,21 +311,12 @@ void OnScreenUI::DrawDebugText()
     ImGui::TextUnformatted(profile_output.c_str());
 }
 
-void OnScreenUI::DrawChallengesAndLeaderboards()
-{
-  if (!Config::Get(Config::MAIN_OSD_MESSAGES))
-    return;
-}
-
 void OnScreenUI::Finalize()
 {
-  auto lock = GetImGuiLock();
-
   auto& perf_metrics = Core::System::GetInstance().GetPerfMetrics();
   perf_metrics.DrawImGuiStats(m_backbuffer_scale);
   DrawDebugText();
   OSD::DrawMessages();
-  DrawChallengesAndLeaderboards();
   ImGui::Render();
 
   // Check for font changes
@@ -438,11 +417,6 @@ void OnScreenUI::UpdateImguiTexture(ImTextureData* tex)
   }
 }
 
-std::unique_lock<std::mutex> OnScreenUI::GetImGuiLock()
-{
-  return std::unique_lock<std::mutex>(m_imgui_mutex);
-}
-
 void OnScreenUI::SetScale(float backbuffer_scale)
 {
   ImGui::GetIO().DisplayFramebufferScale.x = backbuffer_scale;
@@ -458,59 +432,4 @@ void OnScreenUI::SetScale(float backbuffer_scale)
 
   m_backbuffer_scale = backbuffer_scale;
 }
-void OnScreenUI::SetKeyMap(const DolphinKeyMap& key_map)
-{
-  static constexpr DolphinKeyMap dolphin_to_imgui_map = {
-      ImGuiKey_Tab,       ImGuiKey_LeftArrow, ImGuiKey_RightArrow, ImGuiKey_UpArrow,
-      ImGuiKey_DownArrow, ImGuiKey_PageUp,    ImGuiKey_PageDown,   ImGuiKey_Home,
-      ImGuiKey_End,       ImGuiKey_Insert,    ImGuiKey_Delete,     ImGuiKey_Backspace,
-      ImGuiKey_Space,     ImGuiKey_Enter,     ImGuiKey_Escape,     ImGuiKey_KeypadEnter,
-      ImGuiKey_A,         ImGuiKey_C,         ImGuiKey_V,          ImGuiKey_X,
-      ImGuiKey_Y,         ImGuiKey_Z,
-  };
-
-  auto lock = GetImGuiLock();
-
-  if (!ImGui::GetCurrentContext())
-    return;
-
-  m_dolphin_to_imgui_map.clear();
-  for (int dolphin_key = 0; dolphin_key <= static_cast<int>(DolphinKey::Z); dolphin_key++)
-  {
-    const int imgui_key = dolphin_to_imgui_map[DolphinKey(dolphin_key)];
-    if (imgui_key >= 0)
-    {
-      const int mapped_key = key_map[DolphinKey(dolphin_key)];
-      m_dolphin_to_imgui_map[mapped_key & 0x1FF] = imgui_key;
-    }
-  }
-}
-
-void OnScreenUI::SetKey(u32 key, bool is_down, const char* chars)
-{
-  auto lock = GetImGuiLock();
-  if (auto iter = m_dolphin_to_imgui_map.find(key); iter != m_dolphin_to_imgui_map.end())
-    ImGui::GetIO().AddKeyEvent((ImGuiKey)iter->second, is_down);
-
-  if (chars)
-    ImGui::GetIO().AddInputCharactersUTF8(chars);
-}
-
-void OnScreenUI::SetMousePos(float x, float y)
-{
-  auto lock = GetImGuiLock();
-
-  ImGui::GetIO().AddMousePosEvent(x, y);
-}
-
-void OnScreenUI::SetMousePress(u32 button_mask)
-{
-  auto lock = GetImGuiLock();
-
-  for (size_t i = 0; i < std::size(ImGui::GetIO().MouseDown); i++)
-  {
-    ImGui::GetIO().AddMouseButtonEvent(static_cast<int>(i), (button_mask & (1u << i)) != 0);
-  }
-}
-
 }  // namespace VideoCommon

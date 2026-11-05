@@ -23,6 +23,7 @@ AsyncShaderCompiler::~AsyncShaderCompiler()
   // Pending work can be left at shutdown.
   // The work item classes are expected to clean up after themselves.
   ASSERT(!HasWorkerThreads());
+  ClearAllWork();
 }
 
 void AsyncShaderCompiler::QueueWorkItem(WorkItemPtr item, u32 priority)
@@ -31,53 +32,100 @@ void AsyncShaderCompiler::QueueWorkItem(WorkItemPtr item, u32 priority)
   if (!HasWorkerThreads())
   {
     item->Compile();
-    m_completed_work.push_back(std::move(item));
+    m_completed_sync.push_back(std::move(item));
   }
   else
   {
-    std::lock_guard guard(m_pending_work_lock);
     m_pending_work.emplace(priority, std::move(item));
-    m_worker_thread_wake.notify_one();
+    FeedWorkers();
   }
+}
+
+void AsyncShaderCompiler::FeedWorkers()
+{
+  for (auto& worker : m_workers)
+  {
+    if (m_pending_work.empty())
+      return;
+    bool filled = false;
+    for (auto& slot : worker->slots)
+    {
+      if (m_pending_work.empty())
+        break;
+      if (retro_atomic_load_acquire_ptr(&slot))
+        continue;
+      auto iter = m_pending_work.begin();
+      // The worker clears a slot only after taking its item, so an empty one stays empty
+      // until this thread fills it.
+      retro_atomic_store_release_ptr(&slot, iter->second.release());
+      m_pending_work.erase(iter);
+      filled = true;
+    }
+    if (filled)
+      retro_eventcount_notify(&worker->wake);
+  }
+}
+
+size_t AsyncShaderCompiler::ItemsInSlots() const
+{
+  size_t count = 0;
+  for (const auto& worker : m_workers)
+  {
+    for (const auto& slot : worker->slots)
+      count += retro_atomic_load_acquire_ptr(const_cast<retro_atomic_ptr_t*>(&slot)) != nullptr;
+  }
+  return count;
 }
 
 void AsyncShaderCompiler::RetrieveWorkItems()
 {
-  std::deque<WorkItemPtr> completed_work;
-  {
-    std::lock_guard guard(m_completed_work_lock);
-    m_completed_work.swap(completed_work);
-  }
+  // Workers that finished take their next items now, before this thread runs the retrievals.
+  FeedWorkers();
 
-  while (!completed_work.empty())
+  std::vector<WorkItemPtr> sync_work;
+  sync_work.swap(m_completed_sync);
+  for (auto& item : sync_work)
+    item->Retrieve();
+
+  // The stack hands them back newest first; retrieve them in the order they finished.
+  mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_completed_work));
+  while (node)
   {
-    completed_work.front()->Retrieve();
-    completed_work.pop_front();
+    Completed* done = reinterpret_cast<Completed*>(node);
+    node = node->next;
+    done->item->Retrieve();
+    delete done;
   }
 }
 
 bool AsyncShaderCompiler::HasPendingWork()
 {
-  std::lock_guard guard(m_pending_work_lock);
-  return !m_pending_work.empty() || m_busy_workers.load() != 0;
+  FeedWorkers();
+  return !m_pending_work.empty() || ItemsInSlots() != 0 ||
+         retro_atomic_load_acquire_int(&m_busy_workers) != 0;
 }
 
 bool AsyncShaderCompiler::HasCompletedWork()
 {
-  std::lock_guard guard(m_completed_work_lock);
-  return !m_completed_work.empty();
+  return !m_completed_sync.empty() || !mpsc_stack_empty(&m_completed_work);
 }
 
 void AsyncShaderCompiler::ClearAllWork()
 {
+  m_pending_work.clear();
+
+  for (auto& worker : m_workers)
   {
-    std::lock_guard guard(m_pending_work_lock);
-    m_pending_work.clear();
+    for (auto& slot : worker->slots)
+      delete static_cast<WorkItem*>(retro_atomic_exchange_ptr(&slot, nullptr));
   }
 
+  m_completed_sync.clear();
+  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_completed_work); node;)
   {
-    std::lock_guard guard(m_completed_work_lock);
-    m_completed_work.clear();
+    Completed* done = reinterpret_cast<Completed*>(node);
+    node = node->next;
+    delete done;
   }
 }
 
@@ -99,24 +147,15 @@ bool AsyncShaderCompiler::WaitUntilCompletion(
   }
 
   // Grab the number of pending items. We use this to work out how many are left.
-  size_t total_items;
-  {
-    // Safe to hold both locks here, since nowhere else does.
-    std::lock_guard pending_guard(m_pending_work_lock);
-    std::lock_guard completed_guard(m_completed_work_lock);
-    total_items = m_completed_work.size() + m_pending_work.size() + m_busy_workers.load() + 1;
-  }
+  const size_t total_items = m_completed_sync.size() + m_pending_work.size() + ItemsInSlots() +
+                            retro_atomic_load_acquire_int(&m_busy_workers) + 1;
 
   // Update progress while the compiles complete.
   while (Core::GetState(Core::System::GetInstance()) != Core::State::Stopping)
   {
-    size_t remaining_items;
-    {
-      std::lock_guard pending_guard(m_pending_work_lock);
-      if (m_pending_work.empty() && !m_busy_workers.load())
-        return true;
-      remaining_items = m_pending_work.size();
-    }
+    if (!HasPendingWork())
+      return true;
+    const size_t remaining_items = m_pending_work.size() + ItemsInSlots();
 
     progress_callback(total_items - remaining_items, total_items);
     std::this_thread::sleep_for(CHECK_INTERVAL);
@@ -138,28 +177,31 @@ bool AsyncShaderCompiler::StartWorkerThreads(u32 num_worker_threads)
       break;
     }
 
-    m_worker_thread_start_result.store(false);
+    retro_atomic_store_release_int(&m_worker_thread_start_result, 0);
 
-    // The new thread takes its parameter before it signals m_init_event.
-    m_starting_thread_param = thread_param;
-    sthread_t* thr = sthread_create(Common::ThreadEntry<&AsyncShaderCompiler::WorkerThreadStart>,
-                                    this);
-    if (!thr)
+    auto worker = std::make_unique<Worker>();
+    worker->owner = this;
+    worker->param = thread_param;
+    retro_eventcount_init(&worker->wake);
+    worker->thread = sthread_create(&AsyncShaderCompiler::WorkerThreadStart, worker.get());
+    if (!worker->thread)
     {
+      retro_eventcount_free(&worker->wake);
       WorkerThreadExit(thread_param);
       WARN_LOG_FMT(VIDEO, "Failed to start shader compiler worker thread.");
       break;
     }
     m_init_event.Wait();
 
-    if (!m_worker_thread_start_result.load())
+    if (!retro_atomic_load_acquire_int(&m_worker_thread_start_result))
     {
       WARN_LOG_FMT(VIDEO, "Failed to start shader compiler worker thread.");
-      Common::JoinThread(thr);
+      Common::JoinThread(worker->thread);
+      retro_eventcount_free(&worker->wake);
       break;
     }
 
-    m_worker_threads.push_back(thr);
+    m_workers.push_back(std::move(worker));
   }
 
   return HasWorkerThreads();
@@ -167,7 +209,7 @@ bool AsyncShaderCompiler::StartWorkerThreads(u32 num_worker_threads)
 
 bool AsyncShaderCompiler::ResizeWorkerThreads(u32 num_worker_threads)
 {
-  if (m_worker_threads.size() == num_worker_threads)
+  if (m_workers.size() == num_worker_threads)
     return true;
 
   StopWorkerThreads();
@@ -176,7 +218,7 @@ bool AsyncShaderCompiler::ResizeWorkerThreads(u32 num_worker_threads)
 
 bool AsyncShaderCompiler::HasWorkerThreads() const
 {
-  return !m_worker_threads.empty();
+  return !m_workers.empty();
 }
 
 void AsyncShaderCompiler::StopWorkerThreads()
@@ -185,17 +227,23 @@ void AsyncShaderCompiler::StopWorkerThreads()
     return;
 
   // Signal worker threads to stop, and wake all of them.
-  {
-    std::lock_guard guard(m_pending_work_lock);
-    m_exit_flag.Set();
-    m_worker_thread_wake.notify_all();
-  }
+  retro_atomic_store_release_int(&m_exit_flag, 1);
+  for (auto& worker : m_workers)
+    retro_eventcount_notify(&worker->wake);
 
-  // Wait for worker threads to exit.
-  for (sthread_t*& thr : m_worker_threads)
-    Common::JoinThread(thr);
-  m_worker_threads.clear();
-  m_exit_flag.Clear();
+  // Wait for worker threads to exit. What they still held goes back to the pending queue.
+  for (auto& worker : m_workers)
+  {
+    Common::JoinThread(worker->thread);
+    retro_eventcount_free(&worker->wake);
+    for (auto& slot : worker->slots)
+    {
+      if (auto* item = static_cast<WorkItem*>(retro_atomic_exchange_ptr(&slot, nullptr)))
+        m_pending_work.emplace(0u, WorkItemPtr(item));
+    }
+  }
+  m_workers.clear();
+  retro_atomic_store_release_int(&m_exit_flag, 0);
 }
 
 bool AsyncShaderCompiler::WorkerThreadInitMainThread(void** param)
@@ -212,56 +260,77 @@ void AsyncShaderCompiler::WorkerThreadExit(void* param)
 {
 }
 
-void AsyncShaderCompiler::WorkerThreadStart()
+void AsyncShaderCompiler::WorkerThreadStart(void* worker)
 {
-  WorkerThreadEntryPoint(m_starting_thread_param);
+  Worker* const w = static_cast<Worker*>(worker);
+  w->owner->WorkerThreadEntryPoint(w);
 }
 
-void AsyncShaderCompiler::WorkerThreadEntryPoint(void* param)
+void AsyncShaderCompiler::WorkerThreadEntryPoint(Worker* worker)
 {
   Common::SetCurrentThreadName("AsyncShaderCompiler Worker");
 
   // Initialize worker thread with backend-specific method.
-  if (!WorkerThreadInitWorkerThread(param))
+  if (!WorkerThreadInitWorkerThread(worker->param))
   {
     WARN_LOG_FMT(VIDEO, "Failed to initialize shader compiler worker.");
-    m_worker_thread_start_result.store(false);
+    retro_atomic_store_release_int(&m_worker_thread_start_result, 0);
     m_init_event.Set();
     return;
   }
 
-  m_worker_thread_start_result.store(true);
+  retro_atomic_store_release_int(&m_worker_thread_start_result, 1);
   m_init_event.Set();
 
-  WorkerThreadRun();
+  WorkerThreadRun(worker);
 
-  WorkerThreadExit(param);
+  WorkerThreadExit(worker->param);
 }
 
-void AsyncShaderCompiler::WorkerThreadRun()
+void AsyncShaderCompiler::WorkerThreadRun(Worker* worker)
 {
-  std::unique_lock pending_lock(m_pending_work_lock);
-  while (!m_exit_flag.IsSet())
+  size_t next = 0;
+  for (;;)
   {
-    m_worker_thread_wake.wait(pending_lock);
+    if (retro_atomic_load_acquire_int(&m_exit_flag))
+      return;
 
-    while (!m_pending_work.empty() && !m_exit_flag.IsSet())
+    // Take the slots in turn, so items run in the order they were handed over.
+    WorkItem* item = nullptr;
+    for (size_t i = 0; i < SLOTS && !item; ++i)
     {
-      m_busy_workers++;
-      auto iter = m_pending_work.begin();
-      WorkItemPtr item(std::move(iter->second));
-      m_pending_work.erase(iter);
-      pending_lock.unlock();
-
-      if (item->Compile())
+      retro_atomic_ptr_t* slot = &worker->slots[(next + i) % SLOTS];
+      if (retro_atomic_load_acquire_ptr(slot))
       {
-        std::lock_guard completed_guard(m_completed_work_lock);
-        m_completed_work.push_back(std::move(item));
+        // Busy before the slot empties, so the video thread never sees neither.
+        retro_atomic_fetch_add_int(&m_busy_workers, 1);
+        item = static_cast<WorkItem*>(retro_atomic_exchange_ptr(slot, nullptr));
+        if (!item)  // cleared by ClearAllWork meanwhile
+          retro_atomic_fetch_sub_int(&m_busy_workers, 1);
+        next = (next + i + 1) % SLOTS;
       }
-
-      pending_lock.lock();
-      m_busy_workers--;
     }
+
+    if (!item)
+    {
+      const int key = retro_eventcount_prepare_wait(&worker->wake);
+      bool any = retro_atomic_load_acquire_int(&m_exit_flag) != 0;
+      for (auto& slot : worker->slots)
+        any |= retro_atomic_load_acquire_ptr(&slot) != nullptr;
+      if (any)
+        retro_eventcount_cancel_wait(&worker->wake);
+      else
+        retro_eventcount_commit_wait(&worker->wake, key);
+      continue;
+    }
+
+    WorkItemPtr owned(item);
+    if (owned->Compile())
+    {
+      auto* done = new Completed{{}, std::move(owned)};
+      mpsc_stack_push(&m_completed_work, &done->link);
+    }
+    retro_atomic_fetch_sub_int(&m_busy_workers, 1);
   }
 }
 

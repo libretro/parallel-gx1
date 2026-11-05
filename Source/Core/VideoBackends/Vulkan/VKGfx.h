@@ -88,8 +88,6 @@ public:
   void ExecuteCommandBuffer(bool execute_off_thread, bool wait_for_completion = false);
 
 private:
-  void CheckForSurfaceChange();
-  void CheckForSurfaceResize();
 
   void ResetSamplerStates();
 

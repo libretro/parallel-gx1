@@ -3,8 +3,6 @@
 
 #include "VideoCommon/PixelEngine.h"
 
-#include <mutex>
-
 #include "Common/BitField.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -44,10 +42,23 @@ void PixelEngineManager::DoState(PointerWrap& p)
   p.Do(m_control);
 
   p.Do(m_token);
-  p.Do(m_token_pending);
-  p.Do(m_token_interrupt_pending);
-  p.Do(m_finish_interrupt_pending);
-  p.Do(m_event_raised);
+  // Saved as the separate fields it once was, so states stay compatible.
+  const int pending = retro_atomic_load_acquire_int(&m_pending);
+  u16 token_pending = static_cast<u16>(pending);
+  bool token_interrupt_pending = (pending & PENDING_TOKEN_INT) != 0;
+  bool finish_interrupt_pending = (pending & PENDING_FINISH_INT) != 0;
+  bool event_raised = (pending & PENDING_EVENT_RAISED) != 0;
+  p.Do(token_pending);
+  p.Do(token_interrupt_pending);
+  p.Do(finish_interrupt_pending);
+  p.Do(event_raised);
+  if (p.IsReadMode())
+  {
+    retro_atomic_store_release_int(
+        &m_pending, token_pending | (token_interrupt_pending ? PENDING_TOKEN_INT : 0) |
+                        (finish_interrupt_pending ? PENDING_FINISH_INT : 0) |
+                        (event_raised ? PENDING_EVENT_RAISED : 0));
+  }
 
   p.Do(m_signal_token_interrupt);
   p.Do(m_signal_finish_interrupt);
@@ -63,10 +74,7 @@ void PixelEngineManager::Init()
   m_alpha_read.hex = 0;
 
   m_token = 0;
-  m_token_pending = 0;
-  m_token_interrupt_pending = false;
-  m_finish_interrupt_pending = false;
-  m_event_raised = false;
+  retro_atomic_store_release_int(&m_pending, 0);
 
   m_signal_token_interrupt = false;
   m_signal_finish_interrupt = false;
@@ -179,35 +187,35 @@ void PixelEngineManager::SetTokenFinish_OnMainThread_Static(Core::System& system
 
 void PixelEngineManager::SetTokenFinish_OnMainThread(u64 userdata, s64 cycles_late)
 {
-  std::unique_lock lk(m_token_finish_mutex);
-  m_event_raised = false;
+  // Take the flags, leave the token: the next event reads it again.
+  int pending = retro_atomic_load_acquire_int(&m_pending);
+  while (!retro_atomic_cas_int(&m_pending, pending, pending & 0xFFFF))
+    pending = retro_atomic_load_acquire_int(&m_pending);
 
-  m_token = m_token_pending;
+  m_token = static_cast<u16>(pending);
 
-  if (m_token_interrupt_pending)
+  if (pending & PENDING_TOKEN_INT)
   {
-    m_token_interrupt_pending = false;
     m_signal_token_interrupt = true;
     UpdateInterrupts();
   }
 
-  if (m_finish_interrupt_pending)
+  if (pending & PENDING_FINISH_INT)
   {
-    m_finish_interrupt_pending = false;
     m_signal_finish_interrupt = true;
     UpdateInterrupts();
   }
 }
 
 // Raise the event handler above on the CPU thread.
-// m_token_finish_mutex must be locked.
 // THIS IS EXECUTED FROM VIDEO THREAD
-void PixelEngineManager::RaiseEvent(int cycles_into_future)
+void PixelEngineManager::RaiseEvent(int set, int keep, int cycles_into_future)
 {
-  if (m_event_raised)
+  int pending = retro_atomic_load_acquire_int(&m_pending);
+  while (!retro_atomic_cas_int(&m_pending, pending, (pending & keep) | set | PENDING_EVENT_RAISED))
+    pending = retro_atomic_load_acquire_int(&m_pending);
+  if (pending & PENDING_EVENT_RAISED)
     return;
-
-  m_event_raised = true;
 
   CoreTiming::FromThread from = CoreTiming::FromThread::NON_CPU;
   s64 cycles = 0;  // we don't care about timings for dual core mode.
@@ -228,12 +236,7 @@ void PixelEngineManager::SetToken(const u16 token, const bool interrupt, int cyc
 {
   DEBUG_LOG_FMT(PIXELENGINE, "VIDEO Backend raises INT_CAUSE_PE_TOKEN (btw, token: {:04x})", token);
 
-  std::lock_guard lk(m_token_finish_mutex);
-
-  m_token_pending = token;
-  m_token_interrupt_pending |= interrupt;
-
-  RaiseEvent(cycles_into_future);
+  RaiseEvent(token | (interrupt ? PENDING_TOKEN_INT : 0), ~0xFFFF, cycles_into_future);
 }
 
 // SetFinish
@@ -242,11 +245,7 @@ void PixelEngineManager::SetFinish(int cycles_into_future)
 {
   DEBUG_LOG_FMT(PIXELENGINE, "VIDEO Set Finish");
 
-  std::lock_guard lk(m_token_finish_mutex);
-
-  m_finish_interrupt_pending |= true;
-
-  RaiseEvent(cycles_into_future);
+  RaiseEvent(PENDING_FINISH_INT, ~0, cycles_into_future);
 }
 
 }  // namespace PixelEngine

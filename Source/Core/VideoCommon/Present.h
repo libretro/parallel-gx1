@@ -3,22 +3,18 @@
 
 #pragma once
 
-#include "Common/Flag.h"
 #include "Common/MathUtil.h"
 
-#include "VideoCommon/OnScreenUIKeyMap.h"
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/TextureConfig.h"
 #include "VideoCommon/VideoCommon.h"
 
 #include <array>
 #include <memory>
-#include <mutex>
 #include <tuple>
 
 class AbstractTexture;
 struct SurfaceInfo;
-enum class DolphinKey;
 enum class AspectMode : int;
 
 namespace VideoCommon
@@ -94,19 +90,6 @@ public:
                                  const MathUtil::Rectangle<int>& source_rc);
 
   VideoCommon::PostProcessing* GetPostProcessor() const { return m_post_processor.get(); }
-  // Final surface changing
-  // This is called when the surface is resized (WX) or the window changes (Android).
-  void ChangeSurface(void* new_surface_handle);
-  void ResizeSurface();
-  bool SurfaceResizedTestAndClear() { return m_surface_resized.TestAndClear(); }
-  bool SurfaceChangedTestAndClear() { return m_surface_changed.TestAndClear(); }
-  void* GetNewSurfaceHandle();
-
-  void SetKeyMap(const DolphinKeyMap& key_map);
-
-  void SetKey(u32 key, bool is_down, const char* chars);
-  void SetMousePos(float x, float y);
-  void SetMousePress(u32 button_mask);
 
   int FrameCount() const { return m_frame_count; }
 
@@ -137,7 +120,6 @@ private:
   std::tuple<MathUtil::Rectangle<int>, MathUtil::Rectangle<int>>
   ConvertStereoRectangle(const MathUtil::Rectangle<int>& rc) const;
 
-  std::mutex m_swap_mutex;
 
   // Backbuffer (window) size and render area
   int m_backbuffer_width = 0;
@@ -145,9 +127,6 @@ private:
   float m_backbuffer_scale = 1.0f;
   AbstractTextureFormat m_backbuffer_format = AbstractTextureFormat::Undefined;
 
-  void* m_new_surface_handle = nullptr;
-  Common::Flag m_surface_changed;
-  Common::Flag m_surface_resized;
 
   // The presentation rectangle.
   // Width and height correspond to the final output resolution.

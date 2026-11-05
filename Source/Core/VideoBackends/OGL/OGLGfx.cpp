@@ -409,8 +409,6 @@ void OGLGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEn
 
 bool OGLGfx::BindBackbuffer(const ClearColor& clear_color)
 {
-  CheckForSurfaceChange();
-  CheckForSurfaceResize();
   SetAndClearFramebuffer(m_system_framebuffer.get(), clear_color);
   return true;
 }
@@ -455,33 +453,6 @@ void OGLGfx::Flush()
 void OGLGfx::WaitForGPUIdle()
 {
   glFinish();
-}
-
-void OGLGfx::CheckForSurfaceChange()
-{
-  if (!g_presenter->SurfaceChangedTestAndClear())
-    return;
-
-  m_main_gl_context->UpdateSurface(g_presenter->GetNewSurfaceHandle());
-
-  u32 width = m_main_gl_context->GetBackBufferWidth();
-  u32 height = m_main_gl_context->GetBackBufferHeight();
-
-  // With a surface change, the window likely has new dimensions.
-  g_presenter->SetBackbuffer(width, height);
-  m_system_framebuffer->UpdateDimensions(width, height);
-}
-
-void OGLGfx::CheckForSurfaceResize()
-{
-  if (!g_presenter->SurfaceResizedTestAndClear())
-    return;
-
-  m_main_gl_context->Update();
-  u32 width = m_main_gl_context->GetBackBufferWidth();
-  u32 height = m_main_gl_context->GetBackBufferHeight();
-  g_presenter->SetBackbuffer(width, height);
-  m_system_framebuffer->UpdateDimensions(width, height);
 }
 
 void OGLGfx::BeginUtilityDrawing()

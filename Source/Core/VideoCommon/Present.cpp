@@ -606,26 +606,6 @@ void Presenter::ReleaseXFBContentLock()
     m_xfb_entry->ReleaseContentLock();
 }
 
-void Presenter::ChangeSurface(void* new_surface_handle)
-{
-  std::lock_guard<std::mutex> lock(m_swap_mutex);
-  m_new_surface_handle = new_surface_handle;
-  m_surface_changed.Set();
-}
-
-void Presenter::ResizeSurface()
-{
-  std::lock_guard<std::mutex> lock(m_swap_mutex);
-  m_surface_resized.Set();
-}
-
-void* Presenter::GetNewSurfaceHandle()
-{
-  void* handle = m_new_surface_handle;
-  m_new_surface_handle = nullptr;
-  return handle;
-}
-
 u32 Presenter::AutoIntegralScale() const
 {
   // Take the source/native resolution (XFB) and stretch it on the target (window) aspect ratio.
@@ -975,8 +955,6 @@ void Presenter::Present(PresentInfo* present_info)
 
   // Present to the window system.
   {
-    std::lock_guard<std::mutex> guard(m_swap_mutex);
-
     if (present_info != nullptr)
     {
 #ifndef __LIBRETRO__
@@ -1032,30 +1010,6 @@ TimePoint Presenter::GetUpdatedPresentationTime(TimePoint intended_presentation_
   m_presentation_time_offset += (arrival_offset - m_presentation_time_offset) / adjustment_divisor;
 
   return intended_presentation_time + m_presentation_time_offset;
-}
-
-void Presenter::SetKeyMap(const DolphinKeyMap& key_map)
-{
-  if (m_onscreen_ui)
-    m_onscreen_ui->SetKeyMap(key_map);
-}
-
-void Presenter::SetKey(u32 key, bool is_down, const char* chars)
-{
-  if (m_onscreen_ui)
-    m_onscreen_ui->SetKey(key, is_down, chars);
-}
-
-void Presenter::SetMousePos(float x, float y)
-{
-  if (m_onscreen_ui)
-    m_onscreen_ui->SetMousePos(x, y);
-}
-
-void Presenter::SetMousePress(u32 button_mask)
-{
-  if (m_onscreen_ui)
-    m_onscreen_ui->SetMousePress(button_mask);
 }
 
 void Presenter::DoState(PointerWrap& p)

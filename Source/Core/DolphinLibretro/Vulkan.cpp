@@ -3,10 +3,8 @@
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 
 #include <cassert>
-#include <condition_variable>
 #include <cstring>
 #include <libretro_vulkan.h>
-#include <mutex>
 #include <vector>
 
 #include "Core/Config/MainSettings.h"
@@ -90,8 +88,6 @@ struct VkSwapchainKHR_T
 {
   uint32_t count;
   std::vector<VkSwapchainImage> images;
-  std::mutex mutex;
-  std::condition_variable condVar;
   int current_index;
   VkExtent2D extent;
 };
@@ -397,12 +393,6 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkQueuePresentKHR(VkQueue queue,
                                                         const VkPresentInfoKHR* pPresentInfo)
 {
   VkSwapchainKHR_T* swapchain = (VkSwapchainKHR_T*)pPresentInfo->pSwapchains[0];
-  std::unique_lock<std::mutex> lock(swapchain->mutex);
-#if 0
-	if(chain.current_index >= 0)
-		chain.condVar.wait(lock);
-#endif
-
   chain.current_index = pPresentInfo->pImageIndices[0];
 #if 0
   vulkan->set_image(vulkan->handle, &swapchain->images[pPresentInfo->pImageIndices[0]].retro_image,
@@ -412,7 +402,6 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkQueuePresentKHR(VkQueue queue,
   vulkan->set_image(vulkan->handle, &swapchain->images[pPresentInfo->pImageIndices[0]].retro_image,
                     0, nullptr, vulkan->queue_index);
 #endif
-  swapchain->condVar.notify_all();
   // The whole image Dolphin presented into, as the other backends hand over
   // their backbuffer: the picture is letterboxed or stretched over all of it
   uint32_t out_w = swapchain->extent.width;
@@ -427,17 +416,6 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkQueuePresentKHR(VkQueue queue,
 
   video_cb(RETRO_HW_FRAME_BUFFER_VALID, out_w, out_h, 0);
   return VK_SUCCESS;
-}
-
-void WaitForPresentation()
-{
-  std::unique_lock<std::mutex> lock(chain.mutex);
-  if (chain.current_index < 0)
-    chain.condVar.wait(lock);
-#if 0
-	chain.current_index = -1;
-	chain.condVar.notify_all();
-#endif
 }
 
 static VKAPI_ATTR void VKAPI_CALL vkDestroyInstance(VkInstance instance,

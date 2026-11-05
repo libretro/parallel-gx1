@@ -45,7 +45,6 @@ void AddTypedMessage(MessageType type, std::string message, u32 ms = Duration::S
 
 // Draw the current messages on the screen. Only call once per frame.
 void DrawMessages();
-void ClearMessages();
 
 void SetObscuredPixelsLeft(int width);
 void SetObscuredPixelsTop(int height);

@@ -7,8 +7,6 @@
 #include <filesystem>
 #include <locale>
 #include <map>
-#include <mutex>
-#include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,6 +17,8 @@
 
 #include <lz4.h>
 #include <lzo/lzo1x.h>
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 
 #include "Common/Buffer.h"
 #include "Common/ChunkFile.h"
@@ -31,7 +31,6 @@
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Common/TimeUtil.h"
-#include "Common/TransferableSharedMutex.h"
 #include "Common/Version.h"
 #include "Common/WorkQueueThread.h"
 
@@ -82,13 +81,60 @@ static u32 s_last_state_size = 0;
 // Holding an "exclusive" lock will:
 // 1. Ensure all previous save tasks have been completely written to the file system.
 // 2. Prevent new tasks from starting.
-static Common::TransferableSharedMutex s_state_saves_in_progress;
+static retro_atomic_int_t s_state_saves_in_progress;
+static retro_eventcount_t* StateSavesDone()
+{
+  static retro_eventcount_t ec;
+  static const bool init = retro_eventcount_init(&ec);
+  (void)init;
+  return &ec;
+}
+
+// Held by a save task from the moment it is queued until it is on disk.
+class StateSaveTask
+{
+public:
+  StateSaveTask() { retro_atomic_fetch_add_seq_cst_int(&s_state_saves_in_progress, 1); }
+  StateSaveTask(StateSaveTask&& other) noexcept : m_held{other.m_held} { other.m_held = false; }
+  StateSaveTask& operator=(StateSaveTask&& other) noexcept
+  {
+    std::swap(m_held, other.m_held);
+    return *this;
+  }
+  StateSaveTask(const StateSaveTask&) = delete;
+  StateSaveTask& operator=(const StateSaveTask&) = delete;
+  ~StateSaveTask()
+  {
+    if (m_held && retro_atomic_fetch_add_seq_cst_int(&s_state_saves_in_progress, -1) == 1)
+      retro_eventcount_notify(StateSavesDone());
+  }
+
+private:
+  bool m_held = true;
+};
+
+// Returns once every save task queued so far is on disk.
+static void WaitForStateSaves()
+{
+  for (;;)
+  {
+    if (!retro_atomic_load_seq_cst_int(&s_state_saves_in_progress))
+      return;
+    const int key = retro_eventcount_prepare_wait(StateSavesDone());
+    if (!retro_atomic_load_seq_cst_int(&s_state_saves_in_progress))
+    {
+      retro_eventcount_cancel_wait(StateSavesDone());
+      return;
+    }
+    retro_eventcount_commit_wait(StateSavesDone(), key);
+  }
+}
 
 struct CompressAndDumpStateArgs
 {
   Common::UniqueBuffer<u8> buffer;
   std::string filename;
-  std::shared_lock<decltype(s_state_saves_in_progress)> task_lock;
+  StateSaveTask task_lock;
 };
 
 // Queue for compressing and writing savestates to disk.
@@ -127,9 +173,9 @@ static constexpr bool s_use_compression = true;
 // Acquired for tasks that will write state save data to the filesystem.
 // This allows for later waiting on completion of said tasks when necessary.
 // We want to maintain a proper order of async operations, e.g. Save, Save, GetInfoString.
-[[nodiscard]] static auto GetStateSaveTaskLock()
+[[nodiscard]] static StateSaveTask GetStateSaveTaskLock()
 {
-  return std::shared_lock{s_state_saves_in_progress};
+  return StateSaveTask{};
 }
 
 static bool ReadHeader(const std::string& filename, StateHeader& header);
@@ -603,7 +649,7 @@ static bool ReadHeader(const std::string& filename, StateHeader& header)
 
 std::string GetInfoStringOfSlot(u32 slot, bool translate)
 {
-  std::lock_guard lk{s_state_saves_in_progress};
+  WaitForStateSaves();
 
   std::string filename = MakeStateFilename(slot);
   if (!File::Exists(filename))
@@ -618,7 +664,7 @@ std::string GetInfoStringOfSlot(u32 slot, bool translate)
 
 u64 GetUnixTimeOfSlot(u32 slot)
 {
-  std::lock_guard lk{s_state_saves_in_progress};
+  WaitForStateSaves();
 
   State::StateHeader header;
   if (!ReadHeader(MakeStateFilename(slot), header))
@@ -886,8 +932,7 @@ void Init(Core::System& system)
                                    std::bind_front(&CompressAndDumpState, std::ref(system)));
 
   s_flush_unsaved_data_hook = UICommon::AddFlushUnsavedDataCallback([] {
-    // Holding the lock for any amount of time means there are no pending state save tasks.
-    std::lock_guard lk{s_state_saves_in_progress};
+    WaitForStateSaves();
   });
 }
 

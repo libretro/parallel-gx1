@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <string>
+
+#include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
@@ -95,10 +98,10 @@ private:
   FFMpegFrameDump m_ffmpeg_dump;
 
   // Screenshots
-  Common::Flag m_screenshot_request;
+  // The file name of a requested screenshot, a std::string*, or null for none. Handed to the
+  // dump thread whole, so a request and its name never come apart.
+  retro_atomic_ptr_t m_screenshot_request{};
   Common::Event m_screenshot_completed;
-  std::mutex m_screenshot_lock;
-  std::string m_screenshot_name;
 
   Common::EventHook m_frame_end_handle;
 };
