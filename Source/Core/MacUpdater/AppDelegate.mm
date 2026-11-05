@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-// Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
 
 @interface AppDelegate ()
 

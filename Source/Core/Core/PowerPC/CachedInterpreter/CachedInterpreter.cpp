@@ -426,12 +426,6 @@ bool CachedInterpreter::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
   return true;
 }
 
-void CachedInterpreter::EraseSingleBlock(const JitBlock& block)
-{
-  m_block_cache.EraseSingleBlock(block);
-  FreeRanges();
-}
-
 std::vector<JitBase::MemoryStats> CachedInterpreter::GetMemoryStats() const
 {
   return {{"free", m_free_ranges.get_stats()}};

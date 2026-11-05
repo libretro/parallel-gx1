@@ -3,7 +3,6 @@
 
 #include <Cocoa/Cocoa.h>
 
-// Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
 
 int main(int argc, const char** argv)
 {

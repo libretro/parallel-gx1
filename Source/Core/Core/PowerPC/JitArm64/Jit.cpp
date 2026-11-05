@@ -1081,12 +1081,6 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
   exit(-1);
 }
 
-void JitArm64::EraseSingleBlock(const JitBlock& block)
-{
-  blocks.EraseSingleBlock(block);
-  FreeRanges();
-}
-
 std::vector<JitBase::MemoryStats> JitArm64::GetMemoryStats() const
 {
   return {{"near_0", m_free_ranges_near_0.get_stats()},

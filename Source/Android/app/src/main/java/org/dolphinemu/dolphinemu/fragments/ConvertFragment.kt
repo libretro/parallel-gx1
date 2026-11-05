@@ -236,9 +236,6 @@ class ConvertFragment : Fragment(), View.OnClickListener {
     private fun populateBlockSize() {
         when (format.getValue(requireContext())) {
             BLOB_TYPE_GCZ -> {
-                // In the equivalent DolphinQt code, we have some logic for avoiding block sizes that can
-                // trigger bugs in Dolphin versions older than 5.0-11893, but it was too annoying to port.
-                // TODO: Port it?
                 populateDropdown(
                     binding.blockSize,
                     binding.dropdownBlockSize,
@@ -355,7 +352,7 @@ class ConvertFragment : Fragment(), View.OnClickListener {
             }
 
             COMPRESSION_ZSTD -> {
-                // TODO: Query DiscIO for the supported compression levels, like we do in DolphinQt?
+                // TODO: Query DiscIO for the supported compression levels?
                 populateDropdown(
                     binding.compressionLevel,
                     binding.dropdownCompressionLevel,

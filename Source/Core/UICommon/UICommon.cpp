@@ -51,10 +51,6 @@
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
-#ifdef HAVE_QTDBUS
-#include "UICommon/DBusUtils.h"
-#endif
-
 #if defined(__APPLE__) && !defined(__LIBRETRO__)
 #include <IOKit/pwr_mgt/IOPMLib.h>
 #endif
@@ -506,10 +502,6 @@ void InhibitScreenSaver(bool inhibit)
 {
   // Inhibit the screensaver. Depending on the operating system this may also
   // disable low-power states and/or screen dimming.
-
-#ifdef HAVE_QTDBUS
-  DBusUtils::InhibitScreenSaver(inhibit);
-#endif
 
 #ifdef _WIN32
   // Prevents Windows from sleeping, turning off the display, or idling

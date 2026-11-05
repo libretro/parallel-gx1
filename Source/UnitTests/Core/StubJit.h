@@ -21,7 +21,6 @@ public:
   // JitBase methods
   JitBaseBlockCache* GetBlockCache() override { return nullptr; }
   void Jit(u32) override {}
-  void EraseSingleBlock(const JitBlock&) override {}
   std::vector<MemoryStats> GetMemoryStats() const override { return {}; }
   std::size_t DisassembleNearCode(const JitBlock&, std::ostream&) const override { return 0; }
   std::size_t DisassembleFarCode(const JitBlock&, std::ostream&) const override { return 0; }

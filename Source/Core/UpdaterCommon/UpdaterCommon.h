@@ -12,7 +12,6 @@
 
 #include "Common/CommonTypes.h"
 
-// Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
 
 struct Manifest
 {

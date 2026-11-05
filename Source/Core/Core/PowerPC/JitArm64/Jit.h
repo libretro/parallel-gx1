@@ -50,7 +50,6 @@ public:
   void Jit(u32 em_address) override;
   void Jit(u32 em_address, bool clear_cache_and_retry_on_failure);
 
-  void EraseSingleBlock(const JitBlock& block) override;
   std::vector<MemoryStats> GetMemoryStats() const override;
 
   std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const override;

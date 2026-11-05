@@ -210,9 +210,6 @@ void LogManager::Log(LogLevel level, LogType type, const char* file, int line, c
 
 std::string LogManager::GetTimestamp()
 {
-  // NOTE: the Qt LogWidget hardcodes the expected length of the timestamp portion of the log line,
-  // so ensure they stay in sync
-
   // We want milliseconds *and not hours*, so can't directly use STL formatters
   const auto now = std::chrono::system_clock::now();
   const auto now_s = std::chrono::floor<std::chrono::seconds>(now);

@@ -148,7 +148,6 @@ void ControllerInterface::RefreshDevices(RefreshReason reason)
   // Some of these calls won't immediately populate devices, but will do it async
   // with their own PlatformPopulateDevices().
   // This means that devices might end up in different order, unless we override their priority.
-  // It also means they might appear as "disconnected" in the Qt UI for a tiny bit of time.
   // This helps the emulation and host thread to not stall when repopulating devices for any reason.
   // Every platform that adds a device that is meant to be used as default device should try to not
   // do it async, to not risk the emulated controllers default config loading not finding a default

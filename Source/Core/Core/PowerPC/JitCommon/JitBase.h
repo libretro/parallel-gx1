@@ -213,8 +213,6 @@ public:
 
   virtual void Jit(u32 em_address) = 0;
 
-  virtual void EraseSingleBlock(const JitBlock& block) = 0;
-
   // Memory region name, free size, and fragmentation ratio
   using MemoryStats = std::pair<std::string_view, std::pair<std::size_t, double>>;
   virtual std::vector<MemoryStats> GetMemoryStats() const = 0;

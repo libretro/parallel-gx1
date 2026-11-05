@@ -241,12 +241,6 @@ void JitInterface::ClearSafe()
     m_jit->GetBlockCache()->Clear();
 }
 
-void JitInterface::EraseSingleBlock(const JitBlock& block)
-{
-  if (m_jit)
-    m_jit->EraseSingleBlock(block);
-}
-
 std::vector<JitBase::MemoryStats> JitInterface::GetMemoryStats() const
 {
   if (m_jit)

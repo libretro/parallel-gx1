@@ -37,8 +37,6 @@ Source/Core/Common/scmrev.h
 .idea/
 # Ignore Visual Studio Code's working dir
 /.vscode/
-# Ignore flatpak-builder's cache dir
-.flatpak-builder
 
 # clangd cache for Neovim
 .cache/clangd

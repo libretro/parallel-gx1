@@ -15,7 +15,6 @@
 #include "UpdaterCommon/UI.h"
 #include "UpdaterCommon/UpdaterCommon.h"
 
-// Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {

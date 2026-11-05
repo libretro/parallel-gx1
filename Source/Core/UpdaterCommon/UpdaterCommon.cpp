@@ -37,7 +37,6 @@
 #include <filesystem>
 #endif
 
-// Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
 
 // Public key used to verify update manifests.
 const std::array<u8, 32> UPDATE_PUB_KEY = {

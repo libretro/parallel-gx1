@@ -402,26 +402,6 @@ void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
   }
 }
 
-void JitBaseBlockCache::EraseSingleBlock(const JitBlock& block)
-{
-  const auto equal_range = block_map.equal_range(block.physicalAddress);
-  const auto block_map_iter = std::ranges::find(equal_range.first, equal_range.second, &block,
-                                                [](const auto& kv) { return &kv.second; });
-  if (block_map_iter == equal_range.second) [[unlikely]]
-    return;
-
-  JitBlock& mutable_block = block_map_iter->second;
-
-  for (auto [range_start, range_end] : mutable_block.physical_addresses)
-  {
-    for (u32 i = range_start & BLOCK_RANGE_MAP_MASK; i < range_end; i += BLOCK_RANGE_SIZE)
-      block_range_map[i].erase(&mutable_block);
-  }
-
-  DestroyBlock(mutable_block);
-  block_map.erase(block_map_iter);  // The original JitBlock reference is now dangling.
-}
-
 u32* JitBaseBlockCache::GetBlockBitSet() const
 {
   return valid_block.m_valid_block.get();

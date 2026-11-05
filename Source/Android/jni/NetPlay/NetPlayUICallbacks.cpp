@@ -115,8 +115,8 @@ void NetPlayUICallbacks::StopGame()
   });
 }
 
-// Only used by Qt UI code, never by the C++ core. On Android, hosting state
-// is tracked in Kotlin (NetplaySession.isHosting).
+// Never used by the C++ core. On Android, hosting state is tracked in Kotlin
+// (NetplaySession.isHosting).
 bool NetPlayUICallbacks::IsHosting() const
 {
   return false;

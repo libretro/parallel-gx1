@@ -1284,12 +1284,6 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
   return true;
 }
 
-void Jit64::EraseSingleBlock(const JitBlock& block)
-{
-  blocks.EraseSingleBlock(block);
-  FreeRanges();
-}
-
 std::vector<JitBase::MemoryStats> Jit64::GetMemoryStats() const
 {
   return {{"near", m_free_ranges_near.get_stats()}, {"far", m_free_ranges_far.get_stats()}};

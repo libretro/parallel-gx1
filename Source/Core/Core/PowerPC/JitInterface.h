@@ -70,11 +70,6 @@ public:
   // the JIT'ed code.
   void ClearSafe();
 
-  // DolphinQt's JITWidget needs EraseSingleBlock. Nothing else (from outside of the Core) should
-  // use it, or else JitBlockTableModel will contain a dangling reference. If something else from
-  // outside of the Core *must* use this, consider reworking the logic in JITWidget.
-  void EraseSingleBlock(const JitBlock& block);
-
   // Memory region name, free size, and fragmentation ratio
   using MemoryStats = std::pair<std::string_view, std::pair<std::size_t, double>>;
   std::vector<MemoryStats> GetMemoryStats() const;

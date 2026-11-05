@@ -185,7 +185,6 @@ public:
   void InvalidateICache(u32 address, u32 length, bool forced);
   void InvalidateICacheLine(u32 address);
   void ErasePhysicalRange(u32 address, u32 length);
-  void EraseSingleBlock(const JitBlock& block);
 
   u32* GetBlockBitSet() const;
 

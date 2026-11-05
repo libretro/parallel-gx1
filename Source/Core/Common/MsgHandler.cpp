@@ -41,14 +41,7 @@ bool DefaultMsgHandler(const char* caption, const char* text, bool yes_no, MsgTy
 #endif
 }
 
-// Default (non) translator
-std::string DefaultStringTranslator(const char* text)
-{
-  return text;
-}
-
 MsgAlertHandler s_msg_handler = DefaultMsgHandler;
-StringTranslator s_str_translator = DefaultStringTranslator;
 bool s_alert_enabled = true;
 bool s_abort_on_panic_alert = false;
 
@@ -88,17 +81,10 @@ Log::LogLevel GetMessageAlertLogLevel(const MsgType style)
 }
 }  // Anonymous namespace
 
-// Select which of these functions that are used for message boxes. If
-// Qt is enabled we will use QtMsgAlertHandler() that is defined in Main.cpp
+// Select the function that is used for message boxes.
 void RegisterMsgAlertHandler(MsgAlertHandler handler)
 {
   s_msg_handler = handler;
-}
-
-// Select translation function.
-void RegisterStringTranslator(StringTranslator translator)
-{
-  s_str_translator = translator;
 }
 
 // enable/disable the alert handler
@@ -114,7 +100,7 @@ void SetAbortOnPanicAlert(bool should_abort)
 
 std::string GetStringT(const char* string)
 {
-  return s_str_translator(string);
+  return string;
 }
 
 static bool ShowMessageAlert(std::string_view text, bool yes_no, Common::Log::LogType log_type,
