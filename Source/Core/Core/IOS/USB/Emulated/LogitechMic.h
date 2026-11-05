@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -18,9 +17,9 @@ class LogitechMicState final : public MicrophoneState
 {
 public:
   // Use atomic for members concurrently used by the data callback
-  std::atomic<bool> mute;
-  std::atomic<u8> volume;
-  std::atomic<u32> sample_rate = DEFAULT_SAMPLING_RATE;
+  retro_atomic_int_t mute{};
+  retro_atomic_int_t volume{};                                             /* u8 */
+  retro_atomic_int_t sample_rate{static_cast<int>(DEFAULT_SAMPLING_RATE)}; /* u32 */
 
   static constexpr u32 DEFAULT_SAMPLING_RATE = 48000;
 

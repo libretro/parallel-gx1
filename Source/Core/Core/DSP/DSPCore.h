@@ -5,10 +5,11 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <string>
+
+#include <retro_atomic.h>
 
 #include "Common/Event.h"
 #include "Core/DSP/DSPAnalyzer.h"
@@ -428,7 +429,8 @@ struct SDSP
 
   u8 reg_stack_ptrs[4]{};
   u8 exceptions = 0;  // pending exceptions
-  std::atomic<bool> external_interrupt_waiting = false;
+  /* Nonzero when the CPU raised an interrupt; the DSP JIT reads it as a 32-bit word. */
+  retro_atomic_int_t external_interrupt_waiting{};
   bool reset_dspjit_codespace = false;
 
   // DSP hardware stacks. They're mapped to a bunch of registers, such that writes
@@ -447,8 +449,11 @@ struct SDSP
   u16* coef = nullptr;
 
 private:
-  auto& GetMailbox(Mailbox mailbox) { return m_mailbox[static_cast<u32>(mailbox)]; }
-  const auto& GetMailbox(Mailbox mailbox) const { return m_mailbox[static_cast<u32>(mailbox)]; }
+  retro_atomic_int_t* GetMailbox(Mailbox mailbox) { return &m_mailbox[static_cast<u32>(mailbox)]; }
+  const retro_atomic_int_t* GetMailbox(Mailbox mailbox) const
+  {
+    return &m_mailbox[static_cast<u32>(mailbox)];
+  }
 
   void FreeMemoryPages();
 
@@ -468,7 +473,7 @@ private:
   std::array<u16, 256> m_ifx_regs{};
 
   std::unique_ptr<Accelerator> m_accelerator;
-  std::array<std::atomic<u32>, 2> m_mailbox;
+  retro_atomic_int_t m_mailbox[2]{}; /* u32 values */
   DSPCore& m_dsp_core;
   Analyzer m_analyzer;
 };

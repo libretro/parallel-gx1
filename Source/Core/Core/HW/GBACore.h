@@ -12,6 +12,9 @@
 #include <string_view>
 #include <vector>
 
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
+
 #include <mgba/core/core.h>
 #include <mgba/core/interface.h>
 #if !defined(_WIN32)
@@ -164,7 +167,9 @@ private:
 
   // Set by the GBA thread after filling in the above buffer.
   u8 m_response_size{};  // State saved.
-  std::atomic_bool m_command_pending{};
+  retro_atomic_int_t m_command_pending{};
+  /* Notified when the GBA thread clears m_command_pending. */
+  retro_eventcount_t m_command_done;
 
   // The entire threaded GBA runs within events pushed to this queue.
   Common::WorkQueueThreadSP<SyncEvent> m_event_thread;

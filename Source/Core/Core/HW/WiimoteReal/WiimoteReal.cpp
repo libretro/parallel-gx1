@@ -340,7 +340,7 @@ void Wiimote::ClearReadQueue()
 
 void Wiimote::EventLinked()
 {
-  m_is_linked = true;
+  retro_atomic_store_release_int(&m_is_linked, 1);
 
   ClearReadQueue();
   ResetDataReporting();
@@ -403,7 +403,7 @@ bool Wiimote::Read()
   auto const result = IORead(record->data);
 
   // Drop the report if not connected.
-  const bool keep = m_is_linked && result > 0;
+  const bool keep = retro_atomic_load_acquire_int(&m_is_linked) != 0 && result > 0;
   if (keep && m_balance_board_dump_port > 0 && m_index == WIIMOTE_BALANCE_BOARD)
   {
     static sf::UdpSocket Socket;
@@ -637,7 +637,7 @@ void Wiimote::Prepare()
 
 void Wiimote::EmuStop()
 {
-  m_is_linked = false;
+  retro_atomic_store_release_int(&m_is_linked, 0);
 
   ResetDataReporting();
   DisablePowerAssertionInternal();
@@ -707,7 +707,7 @@ void WiimoteScanner::StopThread()
 
 void WiimoteScanner::SetScanMode(WiimoteScanMode scan_mode)
 {
-  m_scan_mode.store(scan_mode);
+  retro_atomic_store_release_int(&m_scan_mode, static_cast<int>(scan_mode));
   retro_atomic_store_release_int(&m_scan_requested, 1);
   frame_clock_wake_all();
 }
@@ -933,8 +933,17 @@ void WiimoteScanner::ThreadFunc()
     }
 
     // Stop scanning if not in continuous mode.
-    auto scan_mode = WiimoteScanMode::SCAN_ONCE;
-    m_scan_mode.compare_exchange_strong(scan_mode, WiimoteScanMode::DO_NOT_SCAN);
+    WiimoteScanMode scan_mode;
+    for (;;)
+    {
+      scan_mode = static_cast<WiimoteScanMode>(retro_atomic_load_acquire_int(&m_scan_mode));
+      if (scan_mode != WiimoteScanMode::SCAN_ONCE ||
+          retro_atomic_cas_int(&m_scan_mode, static_cast<int>(WiimoteScanMode::SCAN_ONCE),
+                               static_cast<int>(WiimoteScanMode::DO_NOT_SCAN)))
+      {
+        break;
+      }
+    }
 
     // When not scanning we still look for already attached devices.
     // This allows Windows, hidapi, and DolphinBar remotes to be quickly discovered.

@@ -160,7 +160,7 @@ u16 Microphone::GetLoudnessLevel() const
 {
   if (m_sampler.IsMuted() || IsMicrophoneMuted())
     return 0;
-  return m_loudness_level;
+  return static_cast<u16>(retro_atomic_load_acquire_int(&m_loudness_level));
 }
 
 // Based on graphical cues on Monster Hunter 3, the level seems properly displayed with values
@@ -178,7 +178,8 @@ void Microphone::UpdateLoudness(const SampleType sample)
   if (m_loudness.samples_count >= m_loudness.SAMPLES_NEEDED)
   {
     const FloatType amp_db = m_loudness.GetAmplitudeDb();
-    m_loudness_level = static_cast<u16>((amp_db - m_loudness.DB_MIN) / UNIT);
+    retro_atomic_store_release_int(&m_loudness_level,
+                                   static_cast<u16>((amp_db - m_loudness.DB_MIN) / UNIT));
 
 #ifdef WII_SPEAK_LOG_STATS
     m_loudness.LogStats();

@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <cstdarg>
 #include <memory>
 #include <string>
@@ -14,6 +13,8 @@
 #include "Common/Config/Config.h"
 #include "Common/EnumMap.h"
 #include "Common/Logging/Log.h"
+
+#include <retro_atomic.h>
 
 namespace Common::Log
 {
@@ -91,7 +92,7 @@ private:
   static std::string GetTimestamp();
   void SetEffectiveLogLevel();
 
-  std::atomic<LogLevel> m_effective_level;
+  retro_atomic_int_t m_effective_level{}; /* a LogLevel */
   Config::ConfigChangedCallbackID m_config_changed_callback_id;
   EnumMap<LogContainer, LAST_LOG_TYPE> m_log{};
   std::array<std::unique_ptr<LogListener>, LogListener::NUMBER_OF_LISTENERS> m_listeners{};

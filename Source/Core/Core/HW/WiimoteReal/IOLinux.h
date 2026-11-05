@@ -5,8 +5,6 @@
 
 #if defined(__linux__) && HAVE_BLUEZ
 
-#include <atomic>
-
 #include "Common/Network.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
@@ -56,7 +54,7 @@ private:
   int m_device_sock{-1};
 
   // FYI: Atomic because UI calls IsReady.
-  std::atomic<bool> m_is_device_open{};
+  retro_atomic_int_t m_is_device_open{};
 };
 
 }  // namespace WiimoteReal

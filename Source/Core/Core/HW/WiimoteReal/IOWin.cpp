@@ -582,7 +582,7 @@ WiimoteScannerWindows::WiimoteScannerWindows()
   init_lib();
 
   m_device_change_notification.Register([this](Common::DeviceChangeNotification::EventType) {
-    m_devices_changed.store(true, std::memory_order_release);
+    retro_atomic_store_release_int(&m_devices_changed, 1);
   });
 }
 
@@ -663,7 +663,7 @@ bool WiimoteWindows::ConnectInternal()
     return false;
   }
 
-  m_is_connected.store(true, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&m_is_connected, 1);
   return true;
 }
 
@@ -672,7 +672,7 @@ void WiimoteWindows::DisconnectInternal()
   if (!IsConnected())
     return;
 
-  m_is_connected.store(false, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&m_is_connected, 0);
   CloseHandle(std::exchange(m_dev_handle, nullptr));
 }
 
@@ -683,7 +683,7 @@ std::string WiimoteWindows::GetId() const
 
 bool WiimoteWindows::IsConnected() const
 {
-  return m_is_connected.load(std::memory_order_relaxed);
+  return retro_atomic_load_relaxed_int(&m_is_connected) != 0;
 }
 
 int WiimoteWindows::OverlappedRead(u8* data, DWORD size)
@@ -927,7 +927,7 @@ static std::vector<WiimoteScannerWindows::EnumeratedWiimoteInterface> GetAllWiim
 
 auto WiimoteScannerWindows::FindWiimoteHIDDevices() -> FindResults
 {
-  if (m_devices_changed.exchange(false, std::memory_order_acquire))
+  if (retro_atomic_exchange_int(&m_devices_changed, 0))
   {
     m_wiimote_hid_interfaces = GetAllWiimoteHIDInterfaces();
     INFO_LOG_FMT(WIIMOTE, "Found {} HID interface(s).", m_wiimote_hid_interfaces.size());

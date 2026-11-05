@@ -90,7 +90,7 @@ int Interpreter::RunCyclesThread(int cycles)
     if ((state.control_reg & CR_HALT) != 0)
       return 0;
 
-    if (state.external_interrupt_waiting.exchange(false, std::memory_order_acquire))
+    if (retro_atomic_exchange_int(&state.external_interrupt_waiting, 0))
     {
       m_dsp_core.CheckExternalInterrupt();
     }

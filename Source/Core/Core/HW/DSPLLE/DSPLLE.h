@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include <atomic>
-
+#include <retro_atomic.h>
 #include <rthreads/rthreads.h>
 
 #include "Common/CallGate.h"
@@ -48,7 +47,7 @@ private:
   call_gate_t m_dsp_thread_gate{};
   bool m_is_dsp_on_thread = false;
   Common::Flag m_is_running;
-  std::atomic<u32> m_cycle_count{};
+  retro_atomic_int_t m_cycle_count{};
 
   Common::Event m_dsp_event;
   Common::Event m_ppc_event;

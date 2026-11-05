@@ -6,7 +6,6 @@
 #ifdef _WIN32
 #include <windows.h>
 
-#include <atomic>
 #include <vector>
 
 #include "Common/SocketContext.h"
@@ -49,7 +48,7 @@ private:
   OVERLAPPED m_hid_overlap_read{};
   OVERLAPPED m_hid_overlap_write{};
 
-  std::atomic_bool m_is_connected{};
+  retro_atomic_int_t m_is_connected{};
 };
 
 class WiimoteScannerWindows final : public WiimoteScannerBackend
@@ -77,7 +76,7 @@ private:
 
   // This vector is updated after we receive a device change notification.
   std::vector<EnumeratedWiimoteInterface> m_wiimote_hid_interfaces;
-  std::atomic_bool m_devices_changed{true};
+  retro_atomic_int_t m_devices_changed{1};
 
   Common::DeviceChangeNotification m_device_change_notification;
 };

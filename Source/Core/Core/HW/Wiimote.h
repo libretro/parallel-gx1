@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"

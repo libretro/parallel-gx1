@@ -4,8 +4,6 @@
 
 #include "Core/DSP/DSPCore.h"
 
-#include <atomic>
-
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/MemoryUtil.h"
@@ -20,19 +18,19 @@ void SDSP::InitializeIFX()
 {
   m_ifx_regs.fill(0);
 
-  GetMailbox(Mailbox::CPU).store(0);
-  GetMailbox(Mailbox::DSP).store(0);
+  retro_atomic_store_release_int(GetMailbox(Mailbox::CPU), 0);
+  retro_atomic_store_release_int(GetMailbox(Mailbox::DSP), 0);
 }
 
 u32 SDSP::PeekMailbox(Mailbox mailbox) const
 {
-  return GetMailbox(mailbox).load();
+  return static_cast<u32>(retro_atomic_load_acquire_int(GetMailbox(mailbox)));
 }
 
 u16 SDSP::ReadMailboxLow(Mailbox mailbox)
 {
-  const u32 value = GetMailbox(mailbox).load(std::memory_order_acquire);
-  GetMailbox(mailbox).store(value & ~0x80000000, std::memory_order_release);
+  const u32 value = static_cast<u32>(retro_atomic_load_acquire_int(GetMailbox(mailbox)));
+  retro_atomic_store_release_int(GetMailbox(mailbox), static_cast<int>(value & ~0x80000000));
 
 #if defined(_DEBUG) || defined(DEBUGFAST)
   const char* const type = mailbox == Mailbox::DSP ? "DSP" : "CPU";
@@ -51,10 +49,10 @@ u16 SDSP::ReadMailboxHigh(Mailbox mailbox)
 
 void SDSP::WriteMailboxLow(Mailbox mailbox, u16 value)
 {
-  const u32 old_value = GetMailbox(mailbox).load(std::memory_order_acquire);
+  const u32 old_value = static_cast<u32>(retro_atomic_load_acquire_int(GetMailbox(mailbox)));
   const u32 new_value = (old_value & ~0xffff) | value;
 
-  GetMailbox(mailbox).store(new_value | 0x80000000, std::memory_order_release);
+  retro_atomic_store_release_int(GetMailbox(mailbox), static_cast<int>(new_value | 0x80000000));
 
 #if defined(_DEBUG) || defined(DEBUGFAST)
   const char* const type = mailbox == Mailbox::DSP ? "DSP" : "CPU";
@@ -65,10 +63,10 @@ void SDSP::WriteMailboxLow(Mailbox mailbox, u16 value)
 
 void SDSP::WriteMailboxHigh(Mailbox mailbox, u16 value)
 {
-  const u32 old_value = GetMailbox(mailbox).load(std::memory_order_acquire);
+  const u32 old_value = static_cast<u32>(retro_atomic_load_acquire_int(GetMailbox(mailbox)));
   const u32 new_value = (old_value & 0xffff) | (value << 16);
 
-  GetMailbox(mailbox).store(new_value & ~0x80000000, std::memory_order_release);
+  retro_atomic_store_release_int(GetMailbox(mailbox), static_cast<int>(new_value & ~0x80000000));
 }
 
 void SDSP::WriteIFX(u32 address, u16 value)

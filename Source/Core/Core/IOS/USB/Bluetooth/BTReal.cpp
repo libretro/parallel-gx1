@@ -168,12 +168,12 @@ void BluetoothRealDevice::TryToFillHCIEndpoint()
   if (!m_hci_endpoint)
     return;
 
-  if (m_sync_button_state == SyncButtonState::Pressed)
+  if (GetSyncButtonState() == SyncButtonState::Pressed)
   {
     Core::DisplayMessage("Scanning for Wii Remotes", 2000);
     FakeSyncButtonPressedEvent(*m_hci_endpoint);
   }
-  else if (m_sync_button_state == SyncButtonState::LongPressed)
+  else if (GetSyncButtonState() == SyncButtonState::LongPressed)
   {
     Core::DisplayMessage("Reset saved Wii Remote pairings", 2000);
     FakeSyncButtonHeldEvent(*m_hci_endpoint);
@@ -347,30 +347,30 @@ void BluetoothRealDevice::DoState(PointerWrap& p)
 
 void BluetoothRealDevice::UpdateSyncButtonState(const bool is_held)
 {
-  if (m_sync_button_state == SyncButtonState::Unpressed && is_held)
+  if (GetSyncButtonState() == SyncButtonState::Unpressed && is_held)
   {
     m_sync_button_held_timer.Start();
-    m_sync_button_state = SyncButtonState::Held;
+    SetSyncButtonState(SyncButtonState::Held);
   }
 
-  if (m_sync_button_state == SyncButtonState::Held && is_held &&
+  if (GetSyncButtonState() == SyncButtonState::Held && is_held &&
       m_sync_button_held_timer.ElapsedMs() > SYNC_BUTTON_HOLD_MS_TO_RESET)
-    m_sync_button_state = SyncButtonState::LongPressed;
-  else if (m_sync_button_state == SyncButtonState::Held && !is_held)
-    m_sync_button_state = SyncButtonState::Pressed;
+    SetSyncButtonState(SyncButtonState::LongPressed);
+  else if (GetSyncButtonState() == SyncButtonState::Held && !is_held)
+    SetSyncButtonState(SyncButtonState::Pressed);
 
-  if (m_sync_button_state == SyncButtonState::Ignored && !is_held)
-    m_sync_button_state = SyncButtonState::Unpressed;
+  if (GetSyncButtonState() == SyncButtonState::Ignored && !is_held)
+    SetSyncButtonState(SyncButtonState::Unpressed);
 }
 
 void BluetoothRealDevice::TriggerSyncButtonPressedEvent()
 {
-  m_sync_button_state = SyncButtonState::Pressed;
+  SetSyncButtonState(SyncButtonState::Pressed);
 }
 
 void BluetoothRealDevice::TriggerSyncButtonHeldEvent()
 {
-  m_sync_button_state = SyncButtonState::LongPressed;
+  SetSyncButtonState(SyncButtonState::LongPressed);
 }
 
 void BluetoothRealDevice::SendHCIResetCommand()
@@ -468,7 +468,7 @@ void BluetoothRealDevice::FakeSyncButtonPressedEvent(USB::V0IntrMessage& ctrl)
   NOTICE_LOG_FMT(IOS_WIIMOTE, "Faking 'sync button pressed' (0x08) event packet");
   constexpr u8 payload[1] = {0x08};
   FakeSyncButtonEvent(ctrl, payload);
-  m_sync_button_state = SyncButtonState::Ignored;
+  SetSyncButtonState(SyncButtonState::Ignored);
 }
 
 // When the red sync button is held for 10 seconds, a HCI event with payload 09 is sent.
@@ -477,7 +477,7 @@ void BluetoothRealDevice::FakeSyncButtonHeldEvent(USB::V0IntrMessage& ctrl)
   NOTICE_LOG_FMT(IOS_WIIMOTE, "Faking 'sync button held' (0x09) event packet");
   constexpr u8 payload[1] = {0x09};
   FakeSyncButtonEvent(ctrl, payload);
-  m_sync_button_state = SyncButtonState::Ignored;
+  SetSyncButtonState(SyncButtonState::Ignored);
 }
 
 void BluetoothRealDevice::LoadLinkKeys()

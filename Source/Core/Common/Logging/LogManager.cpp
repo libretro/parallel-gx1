@@ -4,7 +4,6 @@
 #include "Common/Logging/LogManager.h"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <memory>
@@ -85,8 +84,8 @@ public:
 #else
   bool IsValid() const { return m_file >= 0; }
 #endif
-  bool IsEnabled() const { return m_enable.load(std::memory_order_relaxed); }
-  void SetEnable(bool enable) { m_enable.store(enable, std::memory_order_relaxed); }
+  bool IsEnabled() const { return retro_atomic_load_relaxed_int(&m_enable) != 0; }
+  void SetEnable(bool enable) { retro_atomic_store_relaxed_int(&m_enable, enable ? 1 : 0); }
 
 private:
 #ifdef _WIN32
@@ -94,7 +93,7 @@ private:
 #else
   int m_file = -1;
 #endif
-  std::atomic<bool> m_enable{false};
+  retro_atomic_int_t m_enable{};
 };
 
 void GenericLogFmtImpl(LogLevel level, LogType type, const char* file, int line,
@@ -270,7 +269,7 @@ void LogManager::LogWithFullPath(LogLevel level, LogType type, const char* file,
 
 LogLevel LogManager::GetEffectiveLogLevel() const
 {
-  return m_effective_level.load(std::memory_order_relaxed);
+  return static_cast<LogLevel>(retro_atomic_load_relaxed_int(&m_effective_level));
 }
 
 void LogManager::SetConfigLogLevel(const LogLevel level)
@@ -283,7 +282,7 @@ void LogManager::SetEffectiveLogLevel()
 {
   const LogLevel clamped_level =
       std::clamp(Config::Get(LOGGER_VERBOSITY), LogLevel::LNOTICE, MAX_EFFECTIVE_LOGLEVEL);
-  m_effective_level.store(clamped_level, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&m_effective_level, static_cast<int>(clamped_level));
 }
 
 void LogManager::SetEnable(LogType type, bool enable)

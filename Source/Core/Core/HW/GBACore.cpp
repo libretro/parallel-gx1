@@ -165,6 +165,8 @@ Core::Core(::Core::System& system, int device_number)
   ConditionInit(&m_core_sync.videoFrameRequiredCond);
   ConditionInit(&m_core_sync.audioRequiredCond);
   MutexInit(&m_core_sync.audioBufferMutex);
+
+  retro_eventcount_init(&m_command_done);
 }
 
 Core::~Core()
@@ -176,6 +178,8 @@ Core::~Core()
   ConditionDeinit(&m_core_sync.videoFrameRequiredCond);
   ConditionDeinit(&m_core_sync.audioRequiredCond);
   MutexDeinit(&m_core_sync.audioBufferMutex);
+
+  retro_eventcount_free(&m_command_done);
 }
 
 bool Core::Start(u64 gc_ticks)
@@ -535,7 +539,7 @@ void Core::SendJoybusCommand(u64 gc_ticks, int transfer_time, u8* buffer, u16 ke
   m_joybus_command = GBASIOJOYCommand(buffer[0]);
   std::copy_n(buffer + 1, m_joybus_buffer.size(), m_joybus_buffer.data());
 
-  m_command_pending.store(true, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&m_command_pending, 1);
 
   PushEvent({
       .event_type = SyncEventType::RunCommand,
@@ -546,7 +550,24 @@ void Core::SendJoybusCommand(u64 gc_ticks, int transfer_time, u8* buffer, u16 ke
 
 int Core::GetJoybusResponse(u8* data_out)
 {
-  m_command_pending.wait(true, std::memory_order_acquire);
+  /* The GBA thread answers the command in emulated time; wait for its reply. */
+  for (;;)
+  {
+    int key;
+
+    if (retro_atomic_load_acquire_int(&m_command_pending) == 0)
+      break;
+
+    key = retro_eventcount_prepare_wait(&m_command_done);
+
+    if (retro_atomic_load_acquire_int(&m_command_pending) == 0)
+    {
+      retro_eventcount_cancel_wait(&m_command_done);
+      break;
+    }
+
+    retro_eventcount_commit_wait(&m_command_done, key);
+  }
 
   std::copy_n(m_joybus_buffer.data(), m_response_size, data_out);
   return m_response_size;
@@ -581,8 +602,8 @@ void Core::HandleEvent(SyncEvent event)
     m_response_size = 0;
   }
 
-  m_command_pending.store(false, std::memory_order_release);
-  m_command_pending.notify_one();
+  retro_atomic_store_release_int(&m_command_pending, 0);
+  retro_eventcount_notify(&m_command_done);
 
   RunFor(m_joybus_command_transfer_time);
 }

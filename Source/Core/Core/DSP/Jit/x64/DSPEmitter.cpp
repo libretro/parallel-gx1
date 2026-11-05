@@ -50,7 +50,7 @@ DSPEmitter::~DSPEmitter()
 
 u16 DSPEmitter::RunCycles(u16 cycles)
 {
-  if (m_dsp_core.DSPState().external_interrupt_waiting.exchange(false, std::memory_order_acquire))
+  if (retro_atomic_exchange_int(&m_dsp_core.DSPState().external_interrupt_waiting, 0))
   {
     m_dsp_core.CheckExternalInterrupt();
     m_dsp_core.CheckExceptions();
@@ -441,7 +441,7 @@ void DSPEmitter::CompileDispatcher()
   FixupBranch exceptionExit;
   if (Host::OnThread())
   {
-    CMP(8, M_SDSP_external_interrupt_waiting(), Imm8(0));
+    CMP(32, M_SDSP_external_interrupt_waiting(), Imm32(0));
     exceptionExit = J_CC(CC_NE);
   }
 
@@ -494,8 +494,7 @@ Gen::OpArg DSPEmitter::M_SDSP_control_reg()
 
 Gen::OpArg DSPEmitter::M_SDSP_external_interrupt_waiting()
 {
-  static_assert(decltype(SDSP::external_interrupt_waiting)::is_always_lock_free &&
-                sizeof(SDSP::external_interrupt_waiting) == sizeof(u8));
+  static_assert(sizeof(SDSP::external_interrupt_waiting) == sizeof(u32));
 
   return MDisp(R15, static_cast<int>(offsetof(SDSP, external_interrupt_waiting)));
 }

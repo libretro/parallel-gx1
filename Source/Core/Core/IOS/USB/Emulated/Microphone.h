@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include <atomic>
 #include <limits>
 #include <memory>
 #include <type_traits>
 #include <vector>
 
+#include <retro_atomic.h>
 #include <retro_spsc.h>
 #include "Common/CommonTypes.h"
 
@@ -68,7 +68,7 @@ private:
   bool m_stream_allocated = false;
 
   // TODO: Find how this level is calculated on real hardware
-  std::atomic<u16> m_loudness_level = 0;
+  retro_atomic_int_t m_loudness_level{}; /* u16 */
   struct Loudness
   {
     void Update(SampleType sample);

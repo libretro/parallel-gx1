@@ -5,6 +5,8 @@
 
 #include <optional>
 
+#include <retro_atomic.h>
+
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
@@ -29,17 +31,18 @@ static std::array<u8, MAX_BBMOTES> s_last_connect_request_counter;
 
 namespace WiimoteCommon
 {
-static std::array<std::atomic<WiimoteSource>, MAX_BBMOTES> s_wiimote_sources;
+static retro_atomic_int_t s_wiimote_sources[MAX_BBMOTES]; /* WiimoteSource values */
 static std::optional<Config::ConfigChangedCallbackID> s_config_callback_id = std::nullopt;
 
 WiimoteSource GetSource(unsigned int index)
 {
-  return s_wiimote_sources[index];
+  return static_cast<WiimoteSource>(retro_atomic_load_acquire_int(&s_wiimote_sources[index]));
 }
 
 void OnSourceChanged(unsigned int index, WiimoteSource source)
 {
-  const WiimoteSource previous_source = s_wiimote_sources[index].exchange(source);
+  const WiimoteSource previous_source = static_cast<WiimoteSource>(
+      retro_atomic_exchange_int(&s_wiimote_sources[index], static_cast<int>(source)));
 
   if (previous_source == source)
   {

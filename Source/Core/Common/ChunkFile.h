@@ -33,6 +33,8 @@
 #include "Common/Flag.h"
 #include "Common/Inline.h"
 
+#include <retro_atomic.h>
+
 // Wrapper class
 class PointerWrap
 {
@@ -254,13 +256,21 @@ public:
       flag.Set(s);
   }
 
-  template <typename T>
-  void Do(std::atomic<T>& atomic)
+  /* An atomic word goes into the state as its plain value. */
+  void Do(retro_atomic_int_t& atomic)
   {
-    T temp = atomic.load(std::memory_order_relaxed);
+    s32 temp = static_cast<s32>(retro_atomic_load_relaxed_int(&atomic));
     Do(temp);
     if (IsReadMode())
-      atomic.store(temp, std::memory_order_relaxed);
+      retro_atomic_store_relaxed_int(&atomic, static_cast<int>(temp));
+  }
+
+  void Do(retro_atomic_64_t& atomic)
+  {
+    s64 temp = static_cast<s64>(retro_atomic_load_relaxed_64(&atomic));
+    Do(temp);
+    if (IsReadMode())
+      retro_atomic_store_relaxed_64(&atomic, temp);
   }
 
   template <typename T>

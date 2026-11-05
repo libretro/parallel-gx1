@@ -21,7 +21,6 @@
 #include "Core/ActionReplay.h"
 
 #include <algorithm>
-#include <atomic>
 #include <bit>
 #include <iterator>
 #include <string>
@@ -42,6 +41,8 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Debugger/PPCDebugInterface.h"
 #include "Core/PowerPC/MMU.h"
+
+#include <retro_atomic.h>
 
 namespace ActionReplay
 {
@@ -86,7 +87,7 @@ enum
 static std::vector<ARCode> s_active_codes;
 static std::vector<ARCode> s_synced_codes;
 static std::vector<std::string> s_internal_log;
-static std::atomic<bool> s_use_internal_log{false};
+static retro_atomic_int_t s_use_internal_log;
 // pointer to the code currently being run, (used by log messages that include the code name)
 static const ARCode* s_current_code = nullptr;
 static bool s_disable_logging = false;
@@ -320,7 +321,7 @@ static void VLogInfo(std::string_view format, fmt::format_args args)
   if (s_disable_logging)
     return;
 
-  const bool use_internal_log = s_use_internal_log.load(std::memory_order_relaxed);
+  const bool use_internal_log = retro_atomic_load_relaxed_int(&s_use_internal_log) != 0;
   if constexpr (Common::Log::MAX_EFFECTIVE_LOGLEVEL < Common::Log::LogLevel::LINFO)
   {
     if (!use_internal_log)
@@ -345,7 +346,7 @@ static void LogInfo(std::string_view format, const Args&... args)
 
 void EnableSelfLogging(bool enable)
 {
-  s_use_internal_log.store(enable, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&s_use_internal_log, enable ? 1 : 0);
 }
 
 std::vector<std::string> GetSelfLog()
@@ -360,7 +361,7 @@ void ClearSelfLog()
 
 bool IsSelfLogging()
 {
-  return s_use_internal_log.load(std::memory_order_relaxed);
+  return retro_atomic_load_relaxed_int(&s_use_internal_log) != 0;
 }
 
 // ----------------------

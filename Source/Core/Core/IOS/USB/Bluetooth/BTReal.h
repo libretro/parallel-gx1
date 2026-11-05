@@ -5,12 +5,13 @@
 
 #if defined(__LIBUSB__)
 #include <array>
-#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
 #include <queue>
 #include <string>
+
+#include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Timer.h"
@@ -60,7 +61,15 @@ private:
 
   static constexpr u32 SYNC_BUTTON_HOLD_MS_TO_RESET = 10000;
 
-  std::atomic<SyncButtonState> m_sync_button_state{SyncButtonState::Unpressed};
+  retro_atomic_int_t m_sync_button_state{}; /* a SyncButtonState; 0 is Unpressed */
+  SyncButtonState GetSyncButtonState() const
+  {
+    return static_cast<SyncButtonState>(retro_atomic_load_acquire_int(&m_sync_button_state));
+  }
+  void SetSyncButtonState(SyncButtonState state)
+  {
+    retro_atomic_store_release_int(&m_sync_button_state, static_cast<int>(state));
+  }
   Common::Timer m_sync_button_held_timer;
 
   // Enqueued when we observe a command to which we need to fake a reply.

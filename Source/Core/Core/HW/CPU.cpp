@@ -287,8 +287,6 @@ void CPUManager::RunSingleFrame()
 
   Core::HostDispatchJobs(system);
 
-  Core::s_stop_frame_step.store(false);
-
   Core::s_frame_step = true;
 
   SetState(system, Core::State::Running, false, true);

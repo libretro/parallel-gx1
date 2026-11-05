@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -17,8 +16,8 @@ class WiiSpeakState final : public MicrophoneState
 {
 public:
   // Use atomic for members concurrently used by the data callback
-  std::atomic<bool> sample_on;
-  std::atomic<bool> mute;
+  retro_atomic_int_t sample_on{};
+  retro_atomic_int_t mute{};
   int freq;
   int gain;
   bool ec_reset;

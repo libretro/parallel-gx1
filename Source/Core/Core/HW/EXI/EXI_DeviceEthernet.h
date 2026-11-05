@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <map>
 #include <vector>
 #include "SFML/Network/IpAddress.hpp"
@@ -16,6 +15,7 @@
 #ifdef HAVE_CPPIPC
 #include <libipc/ipc.h>
 
+#include <retro_atomic.h>
 #include <rthreads/rthreads.h>
 #endif
 
@@ -273,7 +273,7 @@ private:
 
     u8 revision_id = 0;  // 0xf0
     u8 interrupt_mask = 0;
-    std::atomic<u8> interrupt = 0;
+    retro_atomic_int_t interrupt{}; /* u8; the receive thread raises TRANSFER */
     u16 device_id = 0xD107;
     u8 acstart = 0x4E;
     u32 hash_challenge = 0;

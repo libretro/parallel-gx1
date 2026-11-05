@@ -3,15 +3,15 @@
 
 #include "Core/CPUThreadConfigCallback.h"
 
-#include <atomic>
-
 #include "Common/Assert.h"
 #include "Common/Config/Config.h"
 #include "Core/Core.h"
 
+#include <retro_atomic.h>
+
 namespace
 {
-std::atomic<bool> s_should_run_callbacks = false;
+retro_atomic_int_t s_should_run_callbacks;
 
 static std::vector<
     std::pair<CPUThreadConfigCallback::ConfigChangedCallbackID, Config::ConfigChangedCallback>>
@@ -29,12 +29,12 @@ void OnConfigChanged()
 {
   if (Core::IsCPUThread())
   {
-    s_should_run_callbacks.store(false, std::memory_order_relaxed);
+    retro_atomic_store_relaxed_int(&s_should_run_callbacks, 0);
     RunCallbacks();
   }
   else
   {
-    s_should_run_callbacks.store(true, std::memory_order_relaxed);
+    retro_atomic_store_relaxed_int(&s_should_run_callbacks, 1);
   }
 }
 
@@ -69,7 +69,7 @@ void CheckForConfigChanges()
 {
   DEBUG_ASSERT(Core::IsCPUThread());
 
-  if (s_should_run_callbacks.exchange(false, std::memory_order_relaxed))
+  if (retro_atomic_exchange_int(&s_should_run_callbacks, 0))
     RunCallbacks();
 }
 

@@ -202,7 +202,6 @@ void UpdateTitle(Core::System& system);
                       const WindowSystemInfo& wsi);
   extern sthread_t* s_emu_thread;
   extern bool s_frame_step;
-  extern std::atomic<bool> s_stop_frame_step;
 #endif
 
 }  // namespace Core

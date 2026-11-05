@@ -4,17 +4,17 @@
 #include "Core/Core.h"
 
 #include <algorithm>
-#include <atomic>
-#include <functional>
-#include <optional>
 #include <deque>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <variant>
 
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -97,17 +97,31 @@ sthread_t* s_emu_thread = nullptr;
 static Common::HookableEvent<Core::State> s_state_changed_event;
 
 bool s_frame_step = false;
-std::atomic<bool> s_stop_frame_step;
 
 // The value Paused is never stored in this variable. The core is considered to be in
 // the Paused state if this variable is Running and the CPU reports that it's stepping.
-static std::atomic<State> s_state = State::Uninitialized;
+static retro_atomic_int_t s_state; /* a State; 0 is Uninitialized */
+
+static State LoadState(void)
+{
+  return static_cast<State>(retro_atomic_load_acquire_int(&s_state));
+}
+
+static void StoreState(State state)
+{
+  retro_atomic_store_release_int(&s_state, static_cast<int>(state));
+}
+
+/* Starting becomes Running, unless another thread already set Stopping. */
+static void StartingToRunning(void)
+{
+  retro_atomic_cas_int(&s_state, static_cast<int>(State::Starting),
+                       static_cast<int>(State::Running));
+}
 
 #ifdef USE_MEMORYWATCHER
 static std::unique_ptr<MemoryWatcher> s_memory_watcher;
 #endif
-
-static void Callback_FramePresented(const PresentInfo& present_info);
 
 struct HostJob
 {
@@ -155,18 +169,18 @@ void DisplayMessage(std::string message, int)
 
 bool IsRunning(Core::System& system)
 {
-  return s_state.load() == State::Running;
+  return LoadState() == State::Running;
 }
 
 bool IsRunningOrStarting(Core::System& system)
 {
-  const State state = s_state.load();
+  const State state = LoadState();
   return state == State::Running || state == State::Starting;
 }
 
 bool IsUninitialized(Core::System& system)
 {
-  return s_state.load() == State::Uninitialized;
+  return LoadState() == State::Uninitialized;
 }
 
 bool IsCPUThread()
@@ -209,10 +223,10 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
   // Manually reactivate the video backend in case a GameINI overrides the video backend setting.
 
   // Start the emu thread
-  s_state.store(State::Starting);
+  StoreState(State::Starting);
 
-    // Do not launch EmuThread — Libretro handles it manually
-    g_boot_params = std::move(boot);
+  // Do not launch EmuThread — Libretro handles it manually
+  g_boot_params = std::move(boot);
 
   return true;
 }
@@ -229,12 +243,14 @@ static void ResetRumble()
 // Called from GUI thread
 void Stop(Core::System& system)  // - Hammertime!
 {
-  State state = s_state.load();
+  State state;
   do
   {
+    state = LoadState();
     if (state == State::Stopping || state == State::Uninitialized)
       return;
-  } while (!s_state.compare_exchange_weak(state, State::Stopping));
+  } while (
+      !retro_atomic_cas_int(&s_state, static_cast<int>(state), static_cast<int>(State::Stopping)));
 
   NotifyStateChanged(State::Stopping);
 
@@ -308,12 +324,7 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
       File::Delete(*savestate_path);
   }
 
-  {
-    // If s_state is Starting, change it to Running. But if it's already been set to Stopping
-    // because another thread called Stop, don't change it.
-    State expected = State::Starting;
-    s_state.compare_exchange_strong(expected, State::Running);
-  }
+  StartingToRunning();
 
   {
 #ifndef _WIN32
@@ -374,12 +385,7 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
   {
     system.GetPowerPC().InjectExternalCPUCore(cpu_core.get());
 
-    {
-      // If s_state is Starting, change it to Running. But if it's already been set to Stopping
-      // because another thread called Stop, don't change it.
-      State expected = State::Starting;
-      s_state.compare_exchange_strong(expected, State::Running);
-    }
+    StartingToRunning();
 
     CPUSetInitialExecutionState(system);
 
@@ -455,7 +461,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
 {
   NotifyStateChanged(State::Starting);
   Common::ScopeGuard flag_guard{[] {
-    s_state.store(State::Uninitialized);
+    StoreState(State::Uninitialized);
 
     NotifyStateChanged(State::Uninitialized);
 
@@ -594,9 +600,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
   // This adds the SyncGPU handler to CoreTiming, so now CoreTiming::Advance might block.
   system.GetFifo().Prepare();
 
-  const Common::EventHook frame_presented =
-      GetVideoEvents().after_present_event.Register(&Core::Callback_FramePresented);
-
   // Setup our core
   if (Config::Get(Config::MAIN_CPU_CORE) != PowerPC::CPUCore::Interpreter)
   {
@@ -645,7 +648,7 @@ void SetState(Core::System& system, State state, bool report_state_change,
 {
   {
     // State cannot be controlled until the CPU Thread is operational
-    if (s_state.load() != State::Running)
+    if (LoadState() != State::Running)
       return;
 
     switch (state)
@@ -677,7 +680,7 @@ void SetState(Core::System& system, State state, bool report_state_change,
 
 State GetState(Core::System& system)
 {
-  const State state = s_state.load();
+  const State state = LoadState();
   if (state == State::Running && system.GetCPU().IsStepping())
     return State::Paused;
   else
@@ -819,15 +822,6 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
 }
 
 // --- Callbacks for backends / engine ---
-
-// Called from Renderer::Swap (GPU thread) when a frame is presented to the host screen.
-void Callback_FramePresented(const PresentInfo& present_info)
-{
-  if (present_info.reason == PresentInfo::PresentReason::VideoInterfaceDuplicate)
-    return;
-
-  s_stop_frame_step.store(true);
-}
 
 // Called from VideoInterface::Update (CPU thread) at emulated field boundaries
 /* The field's audio ends here: its length is the emulated time since the last field at the
@@ -983,7 +977,7 @@ void HostDispatchJobs(Core::System& system)
 
     if (!job->run_after_stop)
     {
-      const State state = s_state.load();
+      const State state = LoadState();
       if (state == State::Stopping || state == State::Uninitialized)
         continue;
     }
@@ -1004,7 +998,6 @@ void DoFrameStep(Core::System& system)
   if (GetState(system) == State::Paused)
   {
     // if already paused, frame advance for 1 frame
-    s_stop_frame_step = false;
     s_frame_step = true;
     SetState(system, State::Running, false);
   }

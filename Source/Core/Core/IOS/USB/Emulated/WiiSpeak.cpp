@@ -13,12 +13,12 @@ namespace IOS::HLE::USB
 {
 bool WiiSpeakState::IsSampleOn() const
 {
-  return sample_on;
+  return retro_atomic_load_acquire_int(&sample_on) != 0;
 }
 
 bool WiiSpeakState::IsMuted() const
 {
-  return mute;
+  return retro_atomic_load_acquire_int(&mute) != 0;
 }
 
 u32 WiiSpeakState::GetDefaultSamplingRate() const
@@ -288,7 +288,7 @@ void WiiSpeak::SetRegister(const std::unique_ptr<CtrlMessage>& cmd)
   switch (reg)
   {
   case SAMPLER_STATE:
-    m_sampler.sample_on = !!arg1;
+    retro_atomic_store_release_int(&m_sampler.sample_on, arg1 != 0);
     break;
   case SAMPLER_FREQ:
     switch (arg1)
@@ -358,7 +358,7 @@ void WiiSpeak::SetRegister(const std::unique_ptr<CtrlMessage>& cmd)
     }
     break;
   case SAMPLER_MUTE:
-    m_sampler.mute = !!arg1;
+    retro_atomic_store_release_int(&m_sampler.mute, arg1 != 0);
     break;
   default:
     WARN_LOG_FMT(IOS_USB,
@@ -382,7 +382,7 @@ void WiiSpeak::GetRegister(const std::unique_ptr<CtrlMessage>& cmd) const
   switch (reg)
   {
   case SAMPLER_STATE:
-    memory.Write_U16(m_sampler.sample_on ? 1 : 0, arg1);
+    memory.Write_U16(m_sampler.IsSampleOn() ? 1 : 0, arg1);
     break;
   case SAMPLER_FREQ:
     switch (m_sampler.freq)
@@ -452,7 +452,7 @@ void WiiSpeak::GetRegister(const std::unique_ptr<CtrlMessage>& cmd) const
     }
     break;
   case SAMPLER_MUTE:
-    memory.Write_U16(m_sampler.mute ? 1 : 0, arg1);
+    memory.Write_U16(m_sampler.IsMuted() ? 1 : 0, arg1);
     break;
   default:
     WARN_LOG_FMT(IOS_USB,

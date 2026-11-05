@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -170,7 +169,7 @@ private:
 
   void RefreshConfig();
 
-  std::atomic<bool> m_is_linked = false;
+  retro_atomic_int_t m_is_linked{};
 
   // We track the speaker state to convert unnecessary speaker data into rumble reports.
   bool m_speaker_enable = false;
@@ -249,7 +248,7 @@ private:
   Common::Flag m_scan_thread_running;
   Common::Flag m_populate_devices;
   retro_atomic_int_t m_scan_requested{};
-  std::atomic<WiimoteScanMode> m_scan_mode{WiimoteScanMode::DO_NOT_SCAN};
+  retro_atomic_int_t m_scan_mode{}; /* a WiimoteScanMode; 0 is DO_NOT_SCAN */
 };
 
 // The real remote in a slot, or null. Changed only by the scanner's pool thread, while it holds

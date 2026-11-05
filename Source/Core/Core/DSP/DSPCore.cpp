@@ -210,7 +210,7 @@ void SDSP::SetException(ExceptionType exception)
 
 void SDSP::SetExternalInterrupt(bool val)
 {
-  external_interrupt_waiting.store(val, std::memory_order_release);
+  retro_atomic_store_release_int(&external_interrupt_waiting, val ? 1 : 0);
 }
 
 void SDSP::CheckExternalInterrupt()

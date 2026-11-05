@@ -124,7 +124,7 @@ bool CEXIETHERNET::IsPresent() const
 
 bool CEXIETHERNET::IsInterruptSet()
 {
-  return !!(exi_status.interrupt & exi_status.interrupt_mask);
+  return !!(retro_atomic_load_acquire_int(&exi_status.interrupt) & exi_status.interrupt_mask);
 }
 
 void CEXIETHERNET::ImmWrite(u32 data, u32 size)
@@ -163,7 +163,7 @@ void CEXIETHERNET::ImmWrite(u32 data, u32 size)
     switch (transfer.address)
     {
     case INTERRUPT:
-      exi_status.interrupt &= data ^ 0xff;
+      retro_atomic_fetch_and_int(&exi_status.interrupt, data ^ 0xff);
       // raise back if there is still data
       if (page_ptr(BBA_RRP) != page_ptr(BBA_RWP))
       {
@@ -171,7 +171,7 @@ void CEXIETHERNET::ImmWrite(u32 data, u32 size)
         {
           mBbaMem[BBA_IR] |= INT_R;
 
-          exi_status.interrupt |= exi_status.TRANSFER;
+          retro_atomic_fetch_or_int(&exi_status.interrupt, exi_status.TRANSFER);
         }
       }
 
@@ -209,7 +209,7 @@ u32 CEXIETHERNET::ImmRead(u32 size)
       ret = exi_status.acstart;
       break;
     case INTERRUPT:
-      ret = exi_status.interrupt;
+      ret = static_cast<u8>(retro_atomic_load_acquire_int(&exi_status.interrupt));
       break;
     }
 
@@ -471,7 +471,7 @@ void CEXIETHERNET::SendComplete()
   {
     mBbaMem[BBA_IR] |= INT_T;
 
-    exi_status.interrupt |= exi_status.TRANSFER;
+    retro_atomic_fetch_or_int(&exi_status.interrupt, exi_status.TRANSFER);
     m_system.GetExpansionInterface().ScheduleUpdateInterrupts(CoreTiming::FromThread::CPU, 0);
   }
 
@@ -643,7 +643,7 @@ bool CEXIETHERNET::RecvHandlePacket()
   {
     mBbaMem[BBA_IR] |= INT_R;
 
-    exi_status.interrupt |= exi_status.TRANSFER;
+    retro_atomic_fetch_or_int(&exi_status.interrupt, exi_status.TRANSFER);
     m_system.GetExpansionInterface().ScheduleUpdateInterrupts(CoreTiming::FromThread::NON_CPU, 0);
   }
   else

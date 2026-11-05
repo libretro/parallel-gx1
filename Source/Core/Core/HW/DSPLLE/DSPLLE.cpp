@@ -57,7 +57,7 @@ void DSPLLE::DSPThread(void* data)
 
   while (dsp_lle->m_is_running.IsSet())
   {
-    const int cycles = static_cast<int>(dsp_lle->m_cycle_count.load());
+    const int cycles = retro_atomic_load_acquire_int(&dsp_lle->m_cycle_count);
     if (cycles > 0)
     {
       // Shut while a PauseAndLock holds the DSP; a run already inside finishes first.
@@ -72,7 +72,7 @@ void DSPLLE::DSPThread(void* data)
         {
           dsp_lle->m_dsp_core.GetInterpreter().RunCyclesThread(cycles);
         }
-        dsp_lle->m_cycle_count.store(0);
+        retro_atomic_store_release_int(&dsp_lle->m_cycle_count, 0);
         call_gate_exit(&dsp_lle->m_dsp_thread_gate, &frame);
         continue;
       }
@@ -276,7 +276,7 @@ void DSPLLE::DSP_Update(int cycles)
   {
     // Wait for DSP thread to complete its cycle. Note: this logic should be thought through.
     m_ppc_event.Wait();
-    m_cycle_count.fetch_add(dsp_cycles);
+    retro_atomic_fetch_add_int(&m_cycle_count, static_cast<int>(dsp_cycles));
     m_dsp_event.Set();
   }
 }

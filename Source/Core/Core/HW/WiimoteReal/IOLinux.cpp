@@ -91,7 +91,7 @@ bool WiimoteScannerLinux::Open()
     return false;
   }
 
-  m_is_device_open.store(true, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&m_is_device_open, 1);
   return true;
 }
 
@@ -105,7 +105,7 @@ void WiimoteScannerLinux::Close()
   if (!IsReady())
     return;
 
-  m_is_device_open.store(false, std::memory_order_relaxed);
+  retro_atomic_store_relaxed_int(&m_is_device_open, 0);
 
   close(std::exchange(m_device_sock, -1));
   m_device_id = -1;
@@ -113,7 +113,7 @@ void WiimoteScannerLinux::Close()
 
 bool WiimoteScannerLinux::IsReady() const
 {
-  return m_is_device_open.load(std::memory_order_relaxed);
+  return retro_atomic_load_relaxed_int(&m_is_device_open) != 0;
 }
 
 struct InquiryRequest : hci_inquiry_req

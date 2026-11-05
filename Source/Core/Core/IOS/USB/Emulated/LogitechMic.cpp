@@ -56,7 +56,7 @@ bool LogitechMicState::IsSampleOn() const
 
 bool LogitechMicState::IsMuted() const
 {
-  return mute;
+  return retro_atomic_load_acquire_int(&mute) != 0;
 }
 
 u32 LogitechMicState::GetDefaultSamplingRate() const
@@ -86,7 +86,11 @@ private:
   {
     return Config::Get(Config::MAIN_LOGITECH_MIC_MUTED[m_index]);
   }
-  u32 GetStreamSize() const override { return BUFF_SIZE_SAMPLES * m_sampler.sample_rate / 250; }
+  u32 GetStreamSize() const override
+  {
+    return BUFF_SIZE_SAMPLES *
+           static_cast<u32>(retro_atomic_load_acquire_int(&m_sampler.sample_rate)) / 250;
+  }
 
   const LogitechMicState& m_sampler;
   const u8 m_index;
@@ -227,7 +231,7 @@ int LogitechMic::GetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   {
   case USBGETAID(FeatureUnitControlSelector::Mute, RequestCode::GetCur, 0x0200):
   {
-    memory.Write_U8(m_sampler.mute ? 1 : 0, cmd->data_address);
+    memory.Write_U8(m_sampler.IsMuted() ? 1 : 0, cmd->data_address);
     ret = 1;
     break;
   }
@@ -235,7 +239,8 @@ int LogitechMic::GetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   {
     if (cn < 1 || cn == 0xff)
     {
-      const uint16_t vol = (m_sampler.volume * 0x8800 + 127) / 255 + 0x8000;
+      const uint16_t vol =
+          (retro_atomic_load_acquire_int(&m_sampler.volume) * 0x8800 + 127) / 255 + 0x8000;
       DEBUG_LOG_FMT(IOS_USB, "GetAudioControl: Get volume {:04x}", vol);
       memory.Write_U16(vol, cmd->data_address);
       ret = 2;
@@ -300,8 +305,8 @@ int LogitechMic::SetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   {
   case USBGETAID(FeatureUnitControlSelector::Mute, RequestCode::SetCur, 0x0200):
   {
-    m_sampler.mute = memory.Read_U8(cmd->data_address) & 0x01;
-    DEBUG_LOG_FMT(IOS_USB, "SetAudioControl: Setting mute to {}", m_sampler.mute.load());
+    retro_atomic_store_release_int(&m_sampler.mute, memory.Read_U8(cmd->data_address) & 0x01);
+    DEBUG_LOG_FMT(IOS_USB, "SetAudioControl: Setting mute to {}", m_sampler.IsMuted());
     ret = 0;
     break;
   }
@@ -317,11 +322,10 @@ int LogitechMic::SetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
       vol = (vol * 255 + 0x4400) / 0x8800;
       vol = std::min<uint16_t>(vol, 255);
 
-      if (m_sampler.volume != vol)
-        m_sampler.volume = static_cast<u8>(vol);
+      retro_atomic_store_release_int(&m_sampler.volume, static_cast<u8>(vol));
 
       DEBUG_LOG_FMT(IOS_USB, "SetAudioControl: Setting volume to [{:02x}] [original={:04x}]",
-                    m_sampler.volume.load(), original_vol);
+                    retro_atomic_load_acquire_int(&m_sampler.volume), original_vol);
 
       ret = 0;
     }
@@ -368,9 +372,9 @@ int LogitechMic::EndpointAudioControl(std::unique_ptr<CtrlMessage>& cmd)
       const uint32_t sr = memory.Read_U8(cmd->data_address) |
                           (memory.Read_U8(cmd->data_address + 1) << 8) |
                           (memory.Read_U8(cmd->data_address + 2) << 16);
-      if (m_sampler.sample_rate != sr)
+      if (static_cast<u32>(retro_atomic_load_acquire_int(&m_sampler.sample_rate)) != sr)
       {
-        m_sampler.sample_rate = sr;
+        retro_atomic_store_release_int(&m_sampler.sample_rate, static_cast<int>(sr));
         if (m_microphone != nullptr)
         {
           DEBUG_LOG_FMT(IOS_USB, "EndpointAudioControl: Setting sampling rate to {:d}", sr);
@@ -388,9 +392,10 @@ int LogitechMic::EndpointAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   }
   case USBGETAID(EndpointControlSelector::SamplingFreq, RequestCode::GetCur, ENDPOINT_AUDIO_IN):
   {
-    memory.Write_U8(m_sampler.sample_rate & 0xff, cmd->data_address + 2);
-    memory.Write_U8((m_sampler.sample_rate >> 8) & 0xff, cmd->data_address + 1);
-    memory.Write_U8((m_sampler.sample_rate >> 16) & 0xff, cmd->data_address);
+    const u32 sample_rate = static_cast<u32>(retro_atomic_load_acquire_int(&m_sampler.sample_rate));
+    memory.Write_U8(sample_rate & 0xff, cmd->data_address + 2);
+    memory.Write_U8((sample_rate >> 8) & 0xff, cmd->data_address + 1);
+    memory.Write_U8((sample_rate >> 16) & 0xff, cmd->data_address);
     ret = 3;
     break;
   }
