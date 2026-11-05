@@ -55,7 +55,7 @@ bool Disassemble(std::span<const u16> code, bool line_numbers, std::string& text
   return success;
 }
 
-// NOTE: This code is called from DSPTool and UnitTests, which do not use the logging system.
+// NOTE: This code is called from UnitTests, which do not use the logging system.
 // Thus, fmt::print is used instead of the log system.
 bool Compare(std::span<const u16> code1, std::span<const u16> code2)
 {

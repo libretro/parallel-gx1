@@ -32,9 +32,9 @@ struct fmt::formatter<DSP::DSPAssembler::LocationContext>
   auto format(const DSP::DSPAssembler::LocationContext& loc, FormatContext& ctx) const
   {
     // Trim trailing newlines
-    // TODO: Ideally, we shouldn't be getting any newlines at all here, but
-    // DSPTool uses File::ReadFileToString, which opens the file in binary mode,
-    // so we get \r endings on Windows.  This leads to bad results when printing the string.
+    // TODO: Ideally, we shouldn't be getting any newlines at all here, but sources read with
+    // File::ReadFileToString are opened in binary mode, so we get \r endings on Windows.
+    // This leads to bad results when printing the string.
     std::string trimmed_line = loc.line_text;
     // while (trimmed_line.ends_with('\r') || trimmed_line.ends_with('\n'))
     while (!trimmed_line.empty() && (trimmed_line.back() == '\r' || trimmed_line.back() == '\n'))
