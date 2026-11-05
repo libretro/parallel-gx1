@@ -185,7 +185,7 @@ else ifneq (,$(filter android-arm64 android-x86_64,$(platform)))
    FLAGS   += -DANDROID -DHAVE_EGL=1 -I$(CORE_DIR)/Source/Android -funwind-tables
    LDFLAGS += -static-libstdc++
    HAVE_BUNDLED_ICONV := 1
-   LIBS += -lEGL -lOpenSLES -landroid -llog -latomic -lm -ldl
+   LIBS += -lEGL -landroid -llog -latomic -lm -ldl
 
 # Windows (MinGW-w64, native MSYS2 or cross)
 else

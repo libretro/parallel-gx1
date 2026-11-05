@@ -1114,7 +1114,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/AudioCommon/AudioCommon.cpp \
 	$(CORE_DIR)/Source/Core/AudioCommon/Mixer.cpp \
 	$(CORE_DIR)/Source/Core/AudioCommon/SurroundDecoder.cpp \
-	$(CORE_DIR)/Source/Core/AudioCommon/NullSoundStream.cpp \
 	$(CORE_DIR)/Source/Core/AudioCommon/WaveFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/AssemblerShared.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/AssemblerTables.cpp \
@@ -1800,7 +1799,6 @@ ifeq ($(HAVE_CPPIPC),1)
 endif
 ifeq ($(OS_WIN),1)
    DOLPHIN_SOURCES_CXX += \
-	$(CORE_DIR)/Source/Core/AudioCommon/OpenALStream.cpp \
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerWin.cpp \
 	$(CORE_DIR)/Source/Core/Common/MemArenaWin.cpp \
 	$(CORE_DIR)/Source/Core/Common/WindowsRegistry.cpp \
@@ -1868,7 +1866,6 @@ ifeq ($(OS_ANDROID),1)
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Android/jni/AndroidCommon/AndroidCommon.cpp \
 	$(CORE_DIR)/Source/Android/jni/AndroidCommon/IDCache.cpp \
-	$(CORE_DIR)/Source/Core/AudioCommon/OpenSLESStream.cpp \
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerDroid.cpp \
 	$(CORE_DIR)/Source/Core/Common/MemArenaAndroid.cpp \
 	$(CORE_DIR)/Source/Core/Common/GL/GLInterface/EGL.cpp \
@@ -2192,10 +2189,10 @@ ifeq ($(OS_WIN),1)
 	-D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS \
 	-D_SCL_SECURE_NO_WARNINGS -D_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING \
 	-D_WINSOCK_DEPRECATED_NO_WARNINGS -DSTRSAFE_NO_DEPRECATE -DHID_API_NO_EXPORT_DEFINE \
-	-I$(EXT_DIR)/OpenAL/include -I$(EXT_DIR)/wil/include -I$(EXT_DIR)/ed25519
+	-I$(EXT_DIR)/wil/include -I$(EXT_DIR)/ed25519
 endif
 ifeq ($(OS_ANDROID),1)
-   DOLPHIN_FLAGS += -DENABLE_VFS_FD -DCIFACE_USE_ANDROID -DHAVE_OPENSL_ES=1 \
+   DOLPHIN_FLAGS += -DENABLE_VFS_FD -DCIFACE_USE_ANDROID \
 	-I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadrenotools/lib/linkernsbypass
 endif
 

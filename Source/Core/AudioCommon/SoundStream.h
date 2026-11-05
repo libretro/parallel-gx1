@@ -8,24 +8,31 @@
 #include "AudioCommon/Mixer.h"
 #include "Common/CommonTypes.h"
 
-class SoundStream
+// The libretro audio output: owns the mixer and hands its output to the frontend.
+// Implemented in DolphinLibretro/Audio.cpp.
+class SoundStream final
 {
-protected:
-  std::unique_ptr<Mixer> m_mixer;
-
 public:
-  SoundStream(unsigned int backendSampleRate = 48000) : m_mixer(new Mixer(backendSampleRate)) {}
-  virtual ~SoundStream() {}
-  static bool IsValid() { return false; }
+  static constexpr unsigned int MIN_SAMPLES = 96;
+  static constexpr unsigned int MAX_SAMPLES = 1024;
+
+  SoundStream();
+
   Mixer* GetMixer() const { return m_mixer.get(); }
-  virtual bool Init() { return false; }
-  virtual void SetVolume(int) {}
-  // Returns true if successful.
-  virtual bool SetRunning(bool running) { return false; }
-#ifdef __LIBRETRO__
-  virtual void Update(unsigned int num_samples) {}
-  virtual void ProcessCallBack() {}
+
+  void Init();
+  // After the DSP has pushed num_samples into the mixer
+  void Update(unsigned int num_samples);
+  // From the frontend's audio callback
+  void ProcessCallBack();
   // On the CPU thread at each emulated field boundary
-  virtual void NewField() {}
-#endif
+  void NewField();
+
+private:
+  void PushAudioForFrame();
+  void MixAndPush(unsigned int num_samples);
+
+  std::unique_ptr<Mixer> m_mixer;
+  s16 m_buffer[MAX_SAMPLES * 2];
+  unsigned int m_sample_rate;
 };

@@ -6,8 +6,6 @@
 #include <algorithm>
 #include <utility>
 
-#include <fmt/format.h>
-
 #include "Core/Config/MainSettings.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
@@ -70,30 +68,17 @@ class MicrophoneLogitech final : public Microphone
 {
 public:
   explicit MicrophoneLogitech(const LogitechMicState& sampler, u8 index)
-      : Microphone(sampler, fmt::format("Logitech Mic {}", index)), m_sampler(sampler),
+      : Microphone(sampler), m_sampler(sampler),
         m_index(index)
   {
   }
 
 private:
-#ifdef HAVE_CUBEB
-  std::string GetInputDeviceId() const override
-  {
-    return Config::Get(Config::MAIN_LOGITECH_MIC_MICROPHONE[m_index]);
-  }
-  std::string GetCubebStreamName() const override
-  {
-    return fmt::format("Dolphin Emulated Logitech USB Microphone {}", m_index);
-  }
-#endif
-
-#if defined(HAVE_CUBEB) || defined(__LIBRETRO__)
   s16 GetVolumeModifier() const override
   {
     return Config::Get(Config::MAIN_LOGITECH_MIC_VOLUME_MODIFIER[m_index]);
   }
   bool AreSamplesByteSwapped() const override { return false; }
-#endif
 
   bool IsMicrophoneMuted() const override
   {

@@ -32,26 +32,16 @@ class MicrophoneWiiSpeak final : public Microphone
 {
 public:
   explicit MicrophoneWiiSpeak(const WiiSpeakState& sampler)
-      : Microphone(sampler, "Wii Speak Worker")
+      : Microphone(sampler)
   {
   }
 
 private:
-#ifdef HAVE_CUBEB
-  std::string GetInputDeviceId() const override
-  {
-    return Config::Get(Config::MAIN_WII_SPEAK_MICROPHONE);
-  }
-  std::string GetCubebStreamName() const override { return "Dolphin Emulated Wii Speak"; }
-#endif
-
-#if defined(HAVE_CUBEB) || defined(__LIBRETRO__)
   s16 GetVolumeModifier() const override
   {
     return Config::Get(Config::MAIN_WII_SPEAK_VOLUME_MODIFIER);
   }
   bool AreSamplesByteSwapped() const override { return true; }
-#endif
 
   bool IsMicrophoneMuted() const override { return Config::Get(Config::MAIN_WII_SPEAK_MUTED); }
   u32 GetStreamSize() const override { return BUFF_SIZE_SAMPLES * 500; }
@@ -270,8 +260,8 @@ int WiiSpeak::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
   // so the length of a single frame should be 1 ms.
   //
   // Monster Hunter 3 and the Wii Speak Channel use cmd->length=0x100, allowing 256/2 samples
-  // (i.e. 128 samples in 16-bit mono) per frame transfer. The Microphone class is using cubeb
-  // configured with a sample rate of 8000.
+  // (i.e. 128 samples in 16-bit mono) per frame transfer. The Microphone class opens the
+  // frontend microphone with a sample rate of 8000.
   //
   // Based on USB sniffing using Wireshark + Dolphin USB passthrough:
   //  - 125 frames are received per second (i.e. timing 8 ms per frame)

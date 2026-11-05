@@ -14,18 +14,6 @@
 #include "Core/USBUtils.h"
 #include "DiscIO/Enums.h"
 
-// DSP Backend Types
-#define BACKEND_NULLSOUND _trans("No Audio Output")
-#define BACKEND_ALSA "ALSA"
-#define BACKEND_CUBEB "Cubeb"
-#define BACKEND_OPENAL "OpenAL"
-#define BACKEND_PULSEAUDIO "Pulse"
-#define BACKEND_OPENSLES "OpenSLES"
-#define BACKEND_WASAPI _trans("WASAPI (Exclusive Mode)")
-#ifdef __LIBRETRO__
-  #define BACKEND_LIBRETRO "Libretro"
-#endif
-
 namespace PowerPC
 {
 enum class CPUCore;
@@ -80,7 +68,6 @@ extern const Info<int> MAIN_GC_LANGUAGE;
 extern const Info<bool> MAIN_OVERRIDE_REGION_SETTINGS;
 extern const Info<bool> MAIN_DPL2_DECODER;
 extern const Info<AudioCommon::DPL2Quality> MAIN_DPL2_QUALITY;
-extern const Info<int> MAIN_AUDIO_LATENCY;
 extern const Info<int> MAIN_AUDIO_BUFFER_SIZE;
 extern const Info<bool> MAIN_AUDIO_FILL_GAPS;
 extern const Info<bool> MAIN_AUDIO_PRESERVE_PITCH;
@@ -180,13 +167,6 @@ extern const Info<bool> MAIN_DSP_JIT;
 extern const Info<bool> MAIN_DUMP_AUDIO;
 extern const Info<bool> MAIN_DUMP_AUDIO_SILENT;
 extern const Info<bool> MAIN_DUMP_UCODE;
-extern const Info<std::string> MAIN_AUDIO_BACKEND;
-extern const Info<int> MAIN_AUDIO_VOLUME;
-extern const Info<bool> MAIN_AUDIO_MUTED;
-extern const Info<bool> MAIN_AUDIO_MUTE_ON_DISABLED_SPEED_LIMIT;
-#ifdef _WIN32
-extern const Info<std::string> MAIN_WASAPI_DEVICE;
-#endif
 
 bool ShouldUseDPL2Decoder();
 

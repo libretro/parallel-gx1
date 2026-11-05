@@ -8,43 +8,20 @@
 #include <ranges>
 #include <span>
 
-#ifdef HAVE_CUBEB
-#include <cubeb/cubeb.h>
-
-#include "AudioCommon/CubebUtils.h"
-#endif
-
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
 #include "Common/Swap.h"
 #include "Core/Core.h"
 #include "Core/System.h"
 
-#ifdef _WIN32
-#include <objbase.h>
-#endif
-
-#ifdef ANDROID
-#include "jni/AndroidCommon/IDCache.h"
-#endif
-
-#ifdef __LIBRETRO__
 #include <libretro.h>
 #include "DolphinLibretro/Common/Globals.h"
-#endif
 
 namespace IOS::HLE::USB
 {
-#ifdef HAVE_CUBEB
-Microphone::Microphone(const MicrophoneState& sampler, std::string worker_name)
-    : m_sampler(sampler), m_worker(std::move(worker_name))
+Microphone::Microphone(const MicrophoneState& sampler) : m_sampler(sampler)
 {
 }
-#else
-Microphone::Microphone(const MicrophoneState& sampler, std::string worker_name) : m_sampler(sampler)
-{
-}
-#endif
 
 Microphone::~Microphone()
 {
@@ -56,8 +33,6 @@ void Microphone::Initialize()
   StreamInit();
 }
 
-#ifndef HAVE_CUBEB
-#ifdef __LIBRETRO__
 void Microphone::StreamInit()
 {
   StreamStart(m_sampler.GetDefaultSamplingRate());
@@ -130,135 +105,7 @@ void Microphone::PollRetroArchMic()
   if (frames > 0)
     DataCallback(buf.data(), frames);
 }
-#else
-void Microphone::StreamInit()
-{
-}
 
-void Microphone::StreamStart(u32 /* sampling_rate */)
-{
-}
-
-void Microphone::StreamStop()
-{
-}
-
-void Microphone::StreamTerminate()
-{
-}
-#endif
-#else
-void Microphone::StreamInit()
-{
-  if (!m_worker.Execute([this] { m_cubeb_ctx = CubebUtils::GetContext(); }))
-  {
-    ERROR_LOG_FMT(IOS_USB, "Failed to init microphone stream");
-    return;
-  }
-
-  // TODO: Not here but rather inside the WiiSpeak device if possible?
-  StreamStart(m_sampler.GetDefaultSamplingRate());
-}
-
-void Microphone::StreamTerminate()
-{
-  StreamStop();
-
-  if (m_cubeb_ctx)
-    m_worker.Execute([this] { m_cubeb_ctx.reset(); });
-}
-
-static void StateCallback(cubeb_stream* stream, void* user_data, cubeb_state state)
-{
-}
-
-void Microphone::StreamStart(u32 sampling_rate)
-{
-  if (!m_cubeb_ctx)
-    return;
-
-  m_worker.Execute([this, sampling_rate] {
-#ifdef ANDROID
-    JNIEnv* env = IDCache::GetEnvForThread();
-    if (jboolean result = env->CallStaticBooleanMethod(
-            IDCache::GetPermissionHandlerClass(),
-            IDCache::GetPermissionHandlerHasRecordAudioPermission(), nullptr);
-        result == JNI_FALSE)
-    {
-      env->CallStaticVoidMethod(IDCache::GetPermissionHandlerClass(),
-                                IDCache::GetPermissionHandlerRequestRecordAudioPermission(),
-                                nullptr);
-    }
-#endif
-
-    cubeb_stream_params params{};
-    params.format = CUBEB_SAMPLE_S16LE;
-    params.rate = sampling_rate;
-    params.channels = 1;
-    params.layout = CUBEB_LAYOUT_MONO;
-
-    std::lock_guard lock(m_ring_lock);
-    u32 minimum_latency;
-    if (cubeb_get_min_latency(m_cubeb_ctx.get(), &params, &minimum_latency) != CUBEB_OK)
-    {
-      WARN_LOG_FMT(IOS_USB, "Error getting minimum latency");
-      minimum_latency = 16;
-    }
-
-    cubeb_devid input_device = CubebUtils::GetInputDeviceById(GetInputDeviceId());
-    if (cubeb_stream_init(m_cubeb_ctx.get(), &m_cubeb_stream, GetCubebStreamName().c_str(),
-                          input_device, &params, nullptr, nullptr,
-                          std::max<u32>(16, minimum_latency), CubebDataCallback, StateCallback,
-                          this) != CUBEB_OK)
-    {
-      ERROR_LOG_FMT(IOS_USB, "Error initializing cubeb stream");
-      return;
-    }
-
-    if (cubeb_stream_start(m_cubeb_stream) != CUBEB_OK)
-    {
-      ERROR_LOG_FMT(IOS_USB, "Error starting cubeb stream");
-      return;
-    }
-
-    m_stream_buffer.resize(GetStreamSize());
-    m_stream_wpos = 0;
-    INFO_LOG_FMT(IOS_USB, "started cubeb stream");
-  });
-}
-
-void Microphone::StreamStop()
-{
-  if (!m_cubeb_stream)
-    return;
-
-  m_worker.Execute([this] {
-    if (cubeb_stream_stop(m_cubeb_stream) != CUBEB_OK)
-      ERROR_LOG_FMT(IOS_USB, "Error stopping cubeb stream");
-    cubeb_stream_destroy(m_cubeb_stream);
-    m_cubeb_stream = nullptr;
-  });
-}
-
-long Microphone::CubebDataCallback(cubeb_stream* stream, void* user_data, const void* input_buffer,
-                                   void* /*output_buffer*/, long nframes)
-{
-  // Skip data when core isn't running
-  if (Core::GetState(Core::System::GetInstance()) != Core::State::Running)
-    return nframes;
-
-  auto* mic = static_cast<Microphone*>(user_data);
-
-  // Skip data when HLE Wii Speak is muted
-  // TODO: Update cubeb and use cubeb_stream_set_input_mute
-  if (mic->IsMicrophoneMuted())
-    return nframes;
-
-  return mic->DataCallback(static_cast<const SampleType*>(input_buffer), nframes);
-}
-#endif
-
-#if defined(HAVE_CUBEB) || defined(__LIBRETRO__)
 long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
 {
   std::lock_guard lock(m_ring_lock);
@@ -291,7 +138,6 @@ long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
 
   return nframes;
 }
-#endif
 
 u16 Microphone::ReadIntoBuffer(u8* ptr, u32 size)
 {

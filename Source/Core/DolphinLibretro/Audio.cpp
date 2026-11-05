@@ -2,8 +2,7 @@
 #include "Audio.h"
 #include "Common/Logging/Log.h"
 #include "Common/Thread.h"
-#include "Core/Config/MainSettings.h"
-#include "AudioCommon/AudioCommon.h"
+#include "AudioCommon/SoundStream.h"
 #include "VideoCommon/Present.h"
 #include "DolphinLibretro/Common/Globals.h"
 
@@ -36,10 +35,9 @@ unsigned int GetCoreSampleRate()
   // when called from retro_run
   SoundStream* sound_stream = Core::System::GetInstance().GetSoundStream();
   double sampleRate = LEGACY_DEFAULT_SAMPLE_RATE;
-  if (sound_stream && sound_stream->GetMixer() &&
-      sound_stream->GetMixer()->GetSampleRate() != 0)
+  if (sound_stream && sound_stream->GetMixer()->GetSampleRate() != 0)
     return sound_stream->GetMixer()->GetSampleRate();
-  // used in Stream constructor
+  // used in SoundStream constructor
   if (Core::System::GetInstance().IsWii())
     return sampleRate;
   else if (sampleRate == 32000u)
@@ -63,8 +61,7 @@ unsigned int GetActiveSampleRate()
   // when called from retro_run
   SoundStream* sound_stream = Core::System::GetInstance().GetSoundStream();
 
-  if (sound_stream && sound_stream->GetMixer() &&
-    sound_stream->GetMixer()->GetSampleRate() != 0)
+  if (sound_stream && sound_stream->GetMixer()->GetSampleRate() != 0)
     return sound_stream->GetMixer()->GetSampleRate();
 
   // this is more or less how the core has used audio for several years
@@ -135,34 +132,34 @@ inline unsigned GetSamplesForFrame(unsigned sample_rate)
   double frame_time_sec =
       FrameTiming::target_frame_duration_usec.load(std::memory_order_relaxed) * 1e-6;
   return std::clamp(static_cast<unsigned>(std::lround(frame_time_sec * sample_rate)),
-                    MIN_SAMPLES, MAX_SAMPLES);
+                    SoundStream::MIN_SAMPLES, SoundStream::MAX_SAMPLES);
 }
 
-bool Stream::Init()
+} // namespace Audio
+} // namespace Libretro
+
+using namespace Libretro::Audio;
+
+SoundStream::SoundStream()
+    : m_mixer(std::make_unique<Mixer>(GetActiveSampleRate())), m_sample_rate(DEFAULT_SAMPLE_RATE)
+{
+}
+
+void SoundStream::Init()
 {
   // this is called much later than retro_get_system_av_info when not using callbacks
   m_sample_rate = GetActiveSampleRate();
 
-  GetMixer()->SetSampleRate(m_sample_rate);
-
-  return true;
+  m_mixer->SetSampleRate(m_sample_rate);
 }
 
-bool Stream::IsValid()
-{
-  if(batch_cb)
-    return true;
-
-  return false;
-}
-
-void Stream::Update(unsigned int num_samples)
+void SoundStream::Update(unsigned int num_samples)
 {
   if (g_use_call_back_audio != CallBackMode::PUSH_SAMPLES) {
     return;
   }
 
-  if (!m_mixer || !batch_cb)
+  if (!batch_cb)
     return;
 
   static unsigned pending = 0;
@@ -193,7 +190,7 @@ void Stream::Update(unsigned int num_samples)
   }
 }
 
-void Stream::MixAndPush(unsigned int num_samples)
+void SoundStream::MixAndPush(unsigned int num_samples)
 {
   static unsigned pending = 0;
   pending += num_samples;
@@ -224,14 +221,14 @@ void Stream::MixAndPush(unsigned int num_samples)
 }
 
 // Per frame sync: each field's samples go to the frontend from the CPU thread as the field ends,
-void Stream::NewField()
+void SoundStream::NewField()
 {
   PushAudioForFrame();
 }
 
-void Stream::PushAudioForFrame()
+void SoundStream::PushAudioForFrame()
 {
-  if (g_use_call_back_audio != CallBackMode::SYNC_PER_FRAME || !m_mixer || !batch_cb)
+  if (g_use_call_back_audio != CallBackMode::SYNC_PER_FRAME || !batch_cb)
     return;
 
   // The DSP fills the mixer at the game's refresh rate, not the
@@ -260,9 +257,9 @@ void Stream::PushAudioForFrame()
 // Output is 48000 Hz (Wii) (or 48043 Hz for GameCube)
 // Wii: Uses divisor 1125 * 2 = 2250 = exactly 48000 Hz
 // GameCube: Uses divisor 1124 * 2 = 2248 = 48043 Hz
-void Stream::ProcessCallBack()
+void SoundStream::ProcessCallBack()
 {
-  if (!m_mixer || !batch_cb || !Libretro::g_emuthread_launched ||
+  if (!batch_cb || !Libretro::g_emuthread_launched ||
       g_use_call_back_audio != CallBackMode::ASYNC_CALLBACK)
     return;
 
@@ -297,8 +294,9 @@ void Stream::ProcessCallBack()
   m_mixer->Mix(m_buffer, to_mix);
   batch_cb(m_buffer, to_mix);
 }
-} // namespace Audio
 
+namespace Libretro
+{
 namespace FrameTiming
 {
   std::atomic<retro_usec_t> target_frame_duration_usec{16667};
@@ -371,27 +369,6 @@ namespace FrameTiming
     if (Libretro::environ_cb(RETRO_ENVIRONMENT_GET_FASTFORWARDING, &is_fast_forwarding))
     {
       Libretro::Audio::g_is_fast_forwarding = is_fast_forwarding;
-
-      if (is_fast_forwarding)
-      {
-        if (!Config::Get(Config::MAIN_AUDIO_MUTED) &&
-            Config::Get(Config::MAIN_AUDIO_MUTE_ON_DISABLED_SPEED_LIMIT))
-        {
-          Config::SetCurrent(Config::MAIN_AUDIO_MUTED, true);
-          AudioCommon::UpdateSoundStream(Core::System::GetInstance());
-        }
-      }
-      else
-      {
-        if (Config::Get(Config::MAIN_AUDIO_MUTED) &&
-                Config::GetActiveLayerForConfig(Config::MAIN_AUDIO_MUTED) ==
-                    Config::LayerType::CurrentRun)
-        {
-          Config::DeleteKey(Config::LayerType::CurrentRun, Config::MAIN_AUDIO_MUTED);
-          AudioCommon::UpdateSoundStream(Core::System::GetInstance());
-        }
-      }
-
       return;
     }
 

@@ -38,7 +38,6 @@ public:
   u32 GetSampleRate() const { return m_output_sample_rate; }
   void SetSampleRate(u32 output_sample_rate) { m_output_sample_rate = output_sample_rate; }
 
-  // Note: NullSoundStream sets the sample rate to 0.
   bool IsOutputSampleRateValid() const { return m_output_sample_rate != 0; }
 
   void SetDMAInputSampleRateDivisor(u32 rate_divisor);

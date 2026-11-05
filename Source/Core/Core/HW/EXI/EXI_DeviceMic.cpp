@@ -7,12 +7,6 @@
 #include <cstring>
 #include <mutex>
 
-#if defined(HAVE_CUBEB)
-#include <cubeb/cubeb.h>
-#include "AudioCommon/CubebUtils.h"
-#endif
-
-#include "AudioCommon/CubebUtils.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 
@@ -22,14 +16,8 @@
 #include "Core/HW/SystemTimers.h"
 #include "Core/System.h"
 
-#ifdef _WIN32
-#include <objbase.h>
-#endif
-
-#ifdef __LIBRETRO__
 #include <libretro.h>
 #include "DolphinLibretro/Common/Globals.h"
-#endif
 
 namespace ExpansionInterface
 {
@@ -37,73 +25,15 @@ void CEXIMic::StreamInit()
 {
   stream_buffer = nullptr;
   samples_avail = stream_wpos = stream_rpos = 0;
-
-#ifdef HAVE_CUBEB
-#ifdef _WIN32
-  if (!m_coinit_success)
-    return;
-  m_work_queue.PushBlocking([this] {
-#endif
-    m_cubeb_ctx = CubebUtils::GetContext();
-#ifdef _WIN32
-  });
-#endif
-#endif
 }
 
 void CEXIMic::StreamTerminate()
 {
   StreamStop();
-
-#ifdef HAVE_CUBEB
-  if (m_cubeb_ctx)
-  {
-#ifdef _WIN32
-    if (!m_coinit_success)
-      return;
-    m_work_queue.PushBlocking([this] {
-#endif
-      m_cubeb_ctx.reset();
-#ifdef _WIN32
-    });
-#endif
-  }
-#endif
 }
-
-#ifdef HAVE_CUBEB
-static void state_callback(cubeb_stream* stream, void* user_data, cubeb_state state)
-{
-}
-
-long CEXIMic::DataCallback(cubeb_stream* stream, void* user_data, const void* input_buffer,
-                           void* /*output_buffer*/, long nframes)
-{
-  CEXIMic* mic = static_cast<CEXIMic*>(user_data);
-
-  std::lock_guard lk(mic->ring_lock);
-
-  const s16* buff_in = static_cast<const s16*>(input_buffer);
-  for (long i = 0; i < nframes; i++)
-  {
-    mic->stream_buffer[mic->stream_wpos] = buff_in[i];
-    mic->stream_wpos = (mic->stream_wpos + 1) % mic->stream_size;
-  }
-
-  mic->samples_avail += nframes;
-  if (mic->samples_avail > mic->stream_size)
-  {
-    mic->samples_avail = 0;
-    mic->status.buff_ovrflw = 1;
-  }
-
-  return nframes;
-}
-#endif
 
 void CEXIMic::StreamStart()
 {
-#ifdef __LIBRETRO__
   if (!Libretro::Input::g_has_microphone_support)
     return;
 
@@ -125,78 +55,16 @@ void CEXIMic::StreamStart()
 
   Libretro::Input::g_microphone_interface.set_mic_state(
       static_cast<retro_microphone_t*>(m_retro_mic), true);
-
-#elif defined(HAVE_CUBEB)
-  if (!m_cubeb_ctx)
-    return;
-
-#ifdef _WIN32
-  if (!m_coinit_success)
-    return;
-  m_work_queue.PushBlocking([this] {
-#endif
-    // Open stream with current parameters
-    stream_size = buff_size_samples * 500;
-    stream_buffer = new s16[stream_size];
-
-    cubeb_stream_params params{};
-    params.format = CUBEB_SAMPLE_S16LE;
-    params.rate = sample_rate;
-    params.channels = 1;
-    params.layout = CUBEB_LAYOUT_MONO;
-
-    u32 minimum_latency;
-    if (cubeb_get_min_latency(m_cubeb_ctx.get(), &params, &minimum_latency) != CUBEB_OK)
-    {
-      WARN_LOG_FMT(EXPANSIONINTERFACE, "Error getting minimum latency");
-    }
-
-    if (cubeb_stream_init(m_cubeb_ctx.get(), &m_cubeb_stream,
-                          "Dolphin Emulated GameCube Microphone", nullptr, &params, nullptr,
-                          nullptr, std::max<u32>(buff_size_samples, minimum_latency), DataCallback,
-                          state_callback, this) != CUBEB_OK)
-    {
-      ERROR_LOG_FMT(EXPANSIONINTERFACE, "Error initializing cubeb stream");
-      return;
-    }
-
-    if (cubeb_stream_start(m_cubeb_stream) != CUBEB_OK)
-    {
-      ERROR_LOG_FMT(EXPANSIONINTERFACE, "Error starting cubeb stream");
-      return;
-    }
-
-    INFO_LOG_FMT(EXPANSIONINTERFACE, "started cubeb stream");
-#ifdef _WIN32
-  });
-#endif
-#endif
 }
 
 void CEXIMic::StreamStop()
 {
-#ifdef __LIBRETRO__
   if (m_retro_mic)
   {
     Libretro::Input::g_microphone_interface.close_mic(
         static_cast<retro_microphone_t*>(m_retro_mic));
     m_retro_mic = nullptr;
   }
-#elif defined(HAVE_CUBEB)
-  if (m_cubeb_stream)
-  {
-#ifdef _WIN32
-    m_work_queue.PushBlocking([this] {
-#endif
-      if (cubeb_stream_stop(m_cubeb_stream) != CUBEB_OK)
-        ERROR_LOG_FMT(EXPANSIONINTERFACE, "Error stopping cubeb stream");
-      cubeb_stream_destroy(m_cubeb_stream);
-      m_cubeb_stream = nullptr;
-#ifdef _WIN32
-    });
-#endif
-  }
-#endif
 
   samples_avail = stream_wpos = stream_rpos = 0;
 
@@ -231,10 +99,6 @@ u8 const CEXIMic::exi_id[] = {0, 0x0a, 0, 0, 0};
 
 CEXIMic::CEXIMic(Core::System& system, int index)
     : IEXIDevice(system), slot(index)
-#ifdef _WIN32
-      ,
-      m_work_queue("Mic Worker")
-#endif
 {
   m_position = 0;
   command = 0;
@@ -249,31 +113,12 @@ CEXIMic::CEXIMic(Core::System& system, int index)
 
   next_int_ticks = 0;
 
-#ifdef _WIN32
-  m_work_queue.PushBlocking([this] {
-    auto result = ::CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
-    m_coinit_success = result == S_OK;
-    m_should_couninit = result == S_OK || result == S_FALSE;
-  });
-#endif
-
   StreamInit();
 }
 
 CEXIMic::~CEXIMic()
 {
   StreamTerminate();
-
-#ifdef _WIN32
-  if (m_should_couninit)
-  {
-    m_work_queue.PushBlocking([this] {
-      m_should_couninit = false;
-      CoUninitialize();
-    });
-  }
-  m_coinit_success = false;
-#endif
 }
 
 bool CEXIMic::IsPresent() const
@@ -382,7 +227,6 @@ void CEXIMic::TransferByte(u8& byte)
   m_position++;
 }
 
-#ifdef __LIBRETRO__
 void CEXIMic::PollLibretroMic()
 {
   if (!m_retro_mic || !status.is_active)
@@ -409,6 +253,5 @@ void CEXIMic::PollLibretroMic()
     status.buff_ovrflw = 1;
   }
 }
-#endif
 
 }  // namespace ExpansionInterface

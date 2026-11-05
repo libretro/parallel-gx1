@@ -73,7 +73,6 @@ const Info<bool> MAIN_OVERRIDE_REGION_SETTINGS{{System::Main, "Core", "OverrideR
 const Info<bool> MAIN_DPL2_DECODER{{System::Main, "Core", "DPL2Decoder"}, false};
 const Info<AudioCommon::DPL2Quality> MAIN_DPL2_QUALITY{{System::Main, "Core", "DPL2Quality"},
                                                        AudioCommon::GetDefaultDPL2Quality()};
-const Info<int> MAIN_AUDIO_LATENCY{{System::Main, "Core", "AudioLatency"}, 20};
 const Info<int> MAIN_AUDIO_BUFFER_SIZE{{System::Main, "Core", "AudioBufferSize"}, 80};
 const Info<bool> MAIN_AUDIO_FILL_GAPS{{System::Main, "Core", "AudioFillGaps"}, true};
 const Info<bool> MAIN_AUDIO_PRESERVE_PITCH{{System::Main, "Core", "AudioPreservePitch"}, false};
@@ -312,15 +311,6 @@ const Info<bool> MAIN_DSP_JIT{{System::Main, "DSP", "EnableJIT"}, true};
 const Info<bool> MAIN_DUMP_AUDIO{{System::Main, "DSP", "DumpAudio"}, false};
 const Info<bool> MAIN_DUMP_AUDIO_SILENT{{System::Main, "DSP", "DumpAudioSilent"}, false};
 const Info<bool> MAIN_DUMP_UCODE{{System::Main, "DSP", "DumpUCode"}, false};
-const Info<std::string> MAIN_AUDIO_BACKEND{{System::Main, "DSP", "Backend"},
-                                           AudioCommon::GetDefaultSoundBackend()};
-const Info<int> MAIN_AUDIO_VOLUME{{System::Main, "DSP", "Volume"}, 100};
-const Info<bool> MAIN_AUDIO_MUTED{{System::Main, "DSP", "Muted"}, false};
-const Info<bool> MAIN_AUDIO_MUTE_ON_DISABLED_SPEED_LIMIT{
-    {System::Main, "DSP", "MuteOnDisabledSpeedLimit"}, false};
-#ifdef _WIN32
-const Info<std::string> MAIN_WASAPI_DEVICE{{System::Main, "DSP", "WASAPIDevice"}, "default"};
-#endif
 
 bool ShouldUseDPL2Decoder()
 {

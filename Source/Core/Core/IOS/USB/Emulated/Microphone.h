@@ -12,16 +12,7 @@
 
 #include "Common/CommonTypes.h"
 
-#ifdef HAVE_CUBEB
-#include "AudioCommon/CubebUtils.h"
-
-struct cubeb;
-struct cubeb_stream;
-#endif
-
-#ifdef __LIBRETRO__
 #include <libretro.h>
-#endif
 
 namespace IOS::HLE::USB
 {
@@ -42,7 +33,7 @@ public:
   using SampleType = s16;
   using UnsignedSampleType = std::make_unsigned_t<SampleType>;
 
-  Microphone(const MicrophoneState& sampler, std::string worker_name);
+  explicit Microphone(const MicrophoneState& sampler);
   virtual ~Microphone();
 
   void Initialize();
@@ -52,25 +43,14 @@ public:
   FloatType ComputeGain(FloatType relative_db) const;
   void SetSamplingRate(u32 sampling_rate);
 
-#ifdef __LIBRETRO__
   void PollRetroArchMic();
-#endif
 
 protected:
   static constexpr u32 BUFF_SIZE_SAMPLES = 32;
 
 private:
-#ifdef HAVE_CUBEB
-  static long CubebDataCallback(cubeb_stream* stream, void* user_data, const void* input_buffer,
-                                void* output_buffer, long nframes);
-  virtual std::string GetInputDeviceId() const = 0;
-  virtual std::string GetCubebStreamName() const = 0;
-#endif
-
-#if defined(HAVE_CUBEB) || defined(__LIBRETRO__)
   virtual s16 GetVolumeModifier() const = 0;
   virtual bool AreSamplesByteSwapped() const = 0;
-#endif
 
   long DataCallback(const SampleType* input_buffer, long nframes);
   virtual bool IsMicrophoneMuted() const = 0;
@@ -129,15 +109,7 @@ private:
 
   const MicrophoneState& m_sampler;
 
-#ifdef HAVE_CUBEB
-  std::shared_ptr<cubeb> m_cubeb_ctx = nullptr;
-  cubeb_stream* m_cubeb_stream = nullptr;
-  CubebUtils::CoInitSyncWorker m_worker;
-#endif
-
-#ifdef __LIBRETRO__
   void* m_retro_mic = nullptr;
   u32 m_current_sampling_rate = 0;
-#endif
 };
 }  // namespace IOS::HLE::USB

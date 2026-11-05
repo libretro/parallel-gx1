@@ -413,7 +413,6 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::MAIN_GC_LANGUAGE, DiscIO::ToGameCubeLanguage(static_cast<DiscIO::Language>(language)));
 
   Config::SetBase(Config::MAIN_DPL2_DECODER, false);
-  Config::SetBase(Config::MAIN_AUDIO_LATENCY, 0);
   Config::SetBase(Config::MAIN_AUDIO_FILL_GAPS, false);
 
   Config::SetBase(Config::MAIN_EMULATION_SPEED,
@@ -458,8 +457,6 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::MAIN_DSP_JIT,
                      Libretro::GetOption<bool>(audio::DSP_JIT, /*def=*/true));
   Config::SetBase(Config::MAIN_DUMP_AUDIO, false);
-
-  Config::SetBase(Config::MAIN_AUDIO_BACKEND, BACKEND_LIBRETRO);
 
   // Main.BluetoothPassthrough
   Config::SetBase(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED,
