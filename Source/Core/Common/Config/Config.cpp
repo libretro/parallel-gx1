@@ -188,7 +188,6 @@ const std::string& GetLayerName(LayerType layer)
       {LayerType::Base, "Base"},
       {LayerType::GlobalGame, "Global GameINI"},
       {LayerType::LocalGame, "Local GameINI"},
-      {LayerType::Netplay, "Netplay"},
       {LayerType::Movie, "Movie"},
       {LayerType::CommandLine, "Command Line"},
       {LayerType::CurrentRun, "Current Run"},

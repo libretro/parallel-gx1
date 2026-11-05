@@ -16,6 +16,9 @@
 //                                      CBoot::EmulatedBS2_Wii() / GC() or Load_BS2()
 
 #include "Core/BootManager.h"
+#include "VideoCommon/VideoConfig.h"
+#include "Core/HW/EXI/EXI_Device.h"
+#include "Core/Config/SYSCONFSettings.h"
 
 #include <fmt/format.h>
 
@@ -31,7 +34,6 @@
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigLoaders/BaseConfigLoader.h"
-#include "Core/ConfigLoaders/NetPlayConfigLoader.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/HW/EXI/EXI.h"
@@ -39,7 +41,6 @@
 #include "Core/HW/SI/SI_Device.h"
 #include "Core/HW/Sram.h"
 #include "Core/Movie.h"
-#include "Core/NetPlayProto.h"
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
@@ -78,16 +79,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
           File::DeleteDirRecursively(movie_path);
       }
     }
-  }
-
-  if (NetPlay::IsNetPlayRunning())
-  {
-    const NetPlay::NetSettings* netplay_settings = boot->boot_session_data.GetNetplaySettings();
-    if (!netplay_settings)
-      return false;
-
-    Config::AddLayer(ConfigLoaders::GenerateNetPlayConfigLoader(*netplay_settings));
-    StartUp.bCopyWiiSaveNetplay = netplay_settings->savedata_load;
   }
 
   // Override out-of-region languages/countries to prevent games from crashing or behaving oddly
@@ -265,7 +256,6 @@ void RestoreConfig()
 
   Config::ClearCurrentRunLayer();
   Config::RemoveLayer(Config::LayerType::Movie);
-  Config::RemoveLayer(Config::LayerType::Netplay);
   Config::RemoveLayer(Config::LayerType::GlobalGame);
   Config::RemoveLayer(Config::LayerType::LocalGame);
   SConfig::GetInstance().ResetRunningGameMetadata();

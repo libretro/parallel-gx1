@@ -387,29 +387,6 @@ const BlobReader& VolumeWii::GetBlobReader() const
   return *m_reader;
 }
 
-std::array<u8, 20> VolumeWii::GetSyncHash() const
-{
-  auto context = Common::SHA1::CreateContext();
-
-  // Disc header
-  ReadAndAddToSyncHash(context.get(), 0, 0x80, PARTITION_NONE);
-
-  // Region code
-  ReadAndAddToSyncHash(context.get(), 0x4E000, 4, PARTITION_NONE);
-
-  // The data offset of the game partition - an important factor for disc drive timings
-  const u64 data_offset = PartitionOffsetToRawOffset(0, GetGamePartition());
-  context->Update(reinterpret_cast<const u8*>(&data_offset), sizeof(data_offset));
-
-  // TMD
-  AddTMDToSyncHash(context.get(), GetGamePartition());
-
-  // Game partition contents
-  AddGamePartitionToSyncHash(context.get());
-
-  return context->Finish();
-}
-
 bool VolumeWii::CheckH3TableIntegrity(const Partition& partition) const
 {
   auto it = m_partitions.find(partition);

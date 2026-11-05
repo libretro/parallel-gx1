@@ -21,8 +21,6 @@
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
 #include "Core/Movie.h"
-#include "Core/NetPlayClient.h"
-#include "Core/NetPlayProto.h"
 #include "Core/SysConf.h"
 #include "Core/System.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
@@ -61,9 +59,7 @@ BluetoothEmuDevice::BluetoothEmuDevice(EmulationKernel& ios, const std::string& 
     DEBUG_LOG_FMT(IOS_WIIMOTE, "Wii Remote {} BT ID {:x},{:x},{:x},{:x},{:x},{:x}", i, tmp_bd[0],
                   tmp_bd[1], tmp_bd[2], tmp_bd[3], tmp_bd[4], tmp_bd[5]);
 
-    const unsigned int hid_source_number =
-        NetPlay::IsNetPlayRunning() ? NetPlay::NetPlay_GetLocalWiimoteForSlot(i) : i;
-    m_wiimotes[i] = std::make_unique<WiimoteDevice>(this, tmp_bd, hid_source_number);
+    m_wiimotes[i] = std::make_unique<WiimoteDevice>(this, tmp_bd, i);
   }
 
   bt_dinf.num_registered = MAX_BBMOTES;
@@ -350,35 +346,6 @@ void BluetoothEmuDevice::Update()
 
     for (size_t i = 0; i < m_wiimotes.size(); ++i)
       next_call[i] = m_wiimotes[i]->PrepareInput(&wiimote_states[i]);
-
-    if (NetPlay::IsNetPlayRunning())
-    {
-      std::array<WiimoteEmu::SerializedWiimoteState, MAX_BBMOTES> serialized;
-      std::array<NetPlay::NetPlayClient::WiimoteDataBatchEntry, MAX_BBMOTES> batch;
-      size_t batch_count = 0;
-      for (size_t i = 0; i < 4; ++i)
-      {
-        if (next_call[i] == WiimoteDevice::NextUpdateInputCall::None)
-          continue;
-        serialized[i] = WiimoteEmu::SerializeDesiredState(wiimote_states[i]);
-        batch[batch_count].state = &serialized[i];
-        batch[batch_count].wiimote = static_cast<int>(i);
-        ++batch_count;
-      }
-
-      if (batch_count > 0)
-      {
-        NetPlay::NetPlay_GetWiimoteData(
-            std::span<NetPlay::NetPlayClient::WiimoteDataBatchEntry>(batch.data(), batch_count));
-
-        for (size_t i = 0; i < batch_count; ++i)
-        {
-          const int wiimote = batch[i].wiimote;
-          if (!WiimoteEmu::DeserializeDesiredState(&wiimote_states[wiimote], serialized[wiimote]))
-            PanicAlertFmtT("Received invalid Wii Remote data from Netplay.");
-        }
-      }
-    }
 
     auto& movie = Core::System::GetInstance().GetMovie();
     for (int i = 0; i != MAX_WIIMOTES; ++i)

@@ -49,7 +49,6 @@ public:
   DataSizeType GetDataSizeType() const override;
   u64 GetRawSize() const override;
   const BlobReader& GetBlobReader() const override;
-  std::array<u8, 20> GetSyncHash() const override;
 
   const BootID* GetTriforceBootID() const { return &m_triforce_header; }
 

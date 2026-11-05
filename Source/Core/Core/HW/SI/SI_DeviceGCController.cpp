@@ -15,7 +15,6 @@
 #include "Core/HW/SI/SI_Device.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/Movie.h"
-#include "Core/NetPlayProto.h"
 #include "Core/System.h"
 #include "InputCommon/GCPadStatus.h"
 
@@ -119,10 +118,7 @@ void CSIDevice_GCController::HandleMoviePadStatus(Movie::MovieManager& movie, in
                                                   GCPadStatus* pad_status)
 {
   movie.SetPolledDevice();
-  if (NetPlay_GetInput(device_number, pad_status))
-  {
-  }
-  else if (movie.IsPlayingInput())
+  if (movie.IsPlayingInput())
   {
     movie.PlayController(pad_status, device_number);
     movie.InputUpdate();
@@ -140,14 +136,7 @@ void CSIDevice_GCController::HandleMoviePadStatus(Movie::MovieManager& movie, in
 
 GCPadStatus CSIDevice_GCController::GetPadStatus()
 {
-  GCPadStatus pad_status = {};
-
-  // For netplay, the local controllers are polled in GetNetPads(), and
-  // the remote controllers receive their status there as well
-  if (!NetPlay::IsNetPlayRunning())
-  {
-    pad_status = Pad::GetStatus(m_device_number);
-  }
+  GCPadStatus pad_status = Pad::GetStatus(m_device_number);
 
   HandleMoviePadStatus(m_system.GetMovie(), m_device_number, &pad_status);
 
@@ -298,8 +287,7 @@ void CSIDevice_GCController::SendCommand(u32 command, u8 poll)
   {
     const u32 type = controller_command.parameter1;  // 0 = stop, 1 = rumble, 2 = stop hard
 
-    // get the correct pad number that should rumble locally when using netplay
-    const int pad_num = NetPlay_InGamePadToLocalPad(m_device_number);
+    const int pad_num = m_device_number;
 
     if (pad_num < 4)
     {

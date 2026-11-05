@@ -155,7 +155,6 @@ void SaveScreenShot(std::string_view name);
 // This displays messages in a user-visible way.
 void DisplayMessage(std::string message, int time_in_ms);
 
-void FrameUpdateOnCPUThread();
 void OnFrameEnd(Core::System& system);
 
 // Run a function on the CPU thread, asynchronously.

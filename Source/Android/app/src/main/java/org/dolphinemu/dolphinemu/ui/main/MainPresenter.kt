@@ -21,7 +21,6 @@ import org.dolphinemu.dolphinemu.features.settings.ui.MenuTag
 import org.dolphinemu.dolphinemu.features.sysupdate.ui.SystemMenuNotInstalledDialogFragment
 import org.dolphinemu.dolphinemu.features.sysupdate.ui.SystemUpdateProgressBarDialogFragment
 import org.dolphinemu.dolphinemu.features.sysupdate.ui.SystemUpdateViewModel
-import org.dolphinemu.dolphinemu.features.netplay.ui.NetplaySetupActivity
 import org.dolphinemu.dolphinemu.fragments.AboutDialogFragment
 import org.dolphinemu.dolphinemu.model.GameFileCache
 import org.dolphinemu.dolphinemu.services.GameFileCacheManager
@@ -186,11 +185,6 @@ class MainPresenter(private val mainView: MainView, private val activity: Fragme
             AfterDirectoryInitializationRunner().runWithLifecycle(
                 activity
             ) { requestNandBinFile.launch("*/*") }
-            true
-        }
-
-        R.id.menu_netplay -> {
-            NetplaySetupActivity.launch(activity)
             true
         }
 

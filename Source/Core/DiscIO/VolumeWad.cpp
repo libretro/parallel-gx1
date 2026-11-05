@@ -333,18 +333,4 @@ const BlobReader& VolumeWAD::GetBlobReader() const
   return *m_reader;
 }
 
-std::array<u8, 20> VolumeWAD::GetSyncHash() const
-{
-  // We can skip hashing the contents since the TMD contains hashes of the contents.
-  // We specifically don't hash the ticket, since its console ID can differ without any problems.
-
-  auto context = Common::SHA1::CreateContext();
-
-  AddTMDToSyncHash(context.get(), PARTITION_NONE);
-
-  ReadAndAddToSyncHash(context.get(), m_opening_bnr_offset, m_opening_bnr_size, PARTITION_NONE);
-
-  return context->Finish();
-}
-
 }  // namespace DiscIO

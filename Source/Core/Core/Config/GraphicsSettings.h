@@ -55,8 +55,6 @@ extern const Info<bool> GFX_SHOW_SPEED;
 extern const Info<bool> GFX_SHOW_SPEED_COLORS;
 extern const Info<bool> GFX_MOVABLE_PERFORMANCE_METRICS;
 extern const Info<int> GFX_PERF_SAMP_WINDOW;
-extern const Info<bool> GFX_SHOW_NETPLAY_PING;
-extern const Info<bool> GFX_SHOW_NETPLAY_MESSAGES;
 extern const Info<bool> GFX_LOG_RENDER_TIME_TO_FILE;
 extern const Info<bool> GFX_OVERLAY_STATS;
 extern const Info<bool> GFX_OVERLAY_PROJ_STATS;

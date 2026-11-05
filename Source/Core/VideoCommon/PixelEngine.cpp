@@ -196,8 +196,6 @@ void PixelEngineManager::SetTokenFinish_OnMainThread(u64 userdata, s64 cycles_la
     m_finish_interrupt_pending = false;
     m_signal_finish_interrupt = true;
     UpdateInterrupts();
-    lk.unlock();
-    Core::FrameUpdateOnCPUThread();
   }
 }
 

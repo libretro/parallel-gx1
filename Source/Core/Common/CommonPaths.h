@@ -140,10 +140,8 @@
 #define GC_SRAM "SRAM.raw"
 #define GC_MEMCARDA "MemoryCardA"
 #define GC_MEMCARDB "MemoryCardB"
-#define GC_MEMCARD_NETPLAY "NetPlayTemp"
 
 #define GBA_BIOS "gba_bios.bin"
-#define GBA_SAVE_NETPLAY "NetPlayTemp"
 
 #define WII_STATE "state.dat"
 

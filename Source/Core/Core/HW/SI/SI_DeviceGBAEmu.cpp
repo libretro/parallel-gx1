@@ -18,7 +18,6 @@
 #include "Core/HW/SI/SI_DeviceGCController.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/Host.h"
-#include "Core/NetPlayProto.h"
 #include "Core/System.h"
 
 namespace SerialInterface
@@ -122,9 +121,7 @@ int CSIDevice_GBAEmu::TransferInterval()
 
 DataResponse CSIDevice_GBAEmu::GetData(u32& hi, u32& low)
 {
-  GCPadStatus pad_status{};
-  if (!NetPlay::IsNetPlayRunning())
-    pad_status = Pad::GetGBAStatus(m_device_number);
+  GCPadStatus pad_status = Pad::GetGBAStatus(m_device_number);
   SerialInterface::CSIDevice_GCController::HandleMoviePadStatus(m_system.GetMovie(),
                                                                 m_device_number, &pad_status);
 

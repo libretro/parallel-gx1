@@ -69,7 +69,6 @@ public:
   u64 GetRawSize() const override;
   const BlobReader& GetBlobReader() const override;
 
-  std::array<u8, 20> GetSyncHash() const override;
 
 private:
   std::unique_ptr<BlobReader> m_reader;

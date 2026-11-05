@@ -57,7 +57,6 @@
 #include "Core/HW/WiimoteEmu/ExtensionPort.h"
 #include "Core/IOS/USB/Bluetooth/BTEmu.h"
 #include "Core/IOS/USB/Bluetooth/WiimoteDevice.h"
-#include "Core/NetPlayProto.h"
 #include "Core/State.h"
 #include "Core/System.h"
 #include "Core/WiiUtils.h"
@@ -460,12 +459,7 @@ bool MovieManager::BeginRecordingInput(const ControllerTypeArray& controllers,
   m_total_tick_count = m_tick_count_at_last_input = 0;
   m_bongos = 0;
   m_memcards = 0;
-  if (NetPlay::IsNetPlayRunning())
-  {
-    m_net_play = true;
-    m_recording_start_time = ExpansionInterface::CEXIIPL::NetPlay_GetEmulatedTime();
-  }
-  else if (Config::Get(Config::MAIN_CUSTOM_RTC_ENABLE))
+  if (Config::Get(Config::MAIN_CUSTOM_RTC_ENABLE))
   {
     m_recording_start_time = Config::Get(Config::MAIN_CUSTOM_RTC_VALUE);
   }
@@ -1362,7 +1356,7 @@ void MovieManager::GetSettings()
   const bool slot_b_has_gci_folder = slot_b_type == EXIDeviceType::MemoryCardFolder;
 
   m_save_config = true;
-  m_net_play = NetPlay::IsNetPlayRunning();
+  m_net_play = false;
   if (m_system.IsWii())
   {
     u64 title_id = SConfig::GetInstance().GetTitleID();

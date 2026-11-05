@@ -13,7 +13,6 @@
 #include "Core/Config/AchievementSettings.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
-#include "Core/Config/NetplaySettings.h"
 #include "Core/Movie.h"
 #include "Core/System.h"
 
@@ -22,8 +21,6 @@
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/AbstractStagingTexture.h"
 #include "VideoCommon/FramebufferShaderGen.h"
-#include "VideoCommon/NetPlayChatUI.h"
-#include "VideoCommon/NetPlayGolfUI.h"
 #include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/PerformanceMetrics.h"
 #include "VideoCommon/Present.h"
@@ -315,12 +312,6 @@ void OnScreenUI::DrawDebugText()
 
   if (g_ActiveConfig.bOverlayStats)
     g_stats.Display();
-
-  if (Config::Get(Config::GFX_SHOW_NETPLAY_MESSAGES) && g_netplay_chat_ui)
-    g_netplay_chat_ui->Display();
-
-  if (Config::Get(Config::NETPLAY_GOLF_MODE_OVERLAY) && g_netplay_golf_ui)
-    g_netplay_golf_ui->Display();
 
   if (g_ActiveConfig.bOverlayProjStats)
     g_stats.DisplayProj();

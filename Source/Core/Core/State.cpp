@@ -44,7 +44,6 @@
 #include "Core/HW/Memmap.h"
 #include "Core/HW/Wiimote.h"
 #include "Core/Movie.h"
-#include "Core/NetPlayProto.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 
@@ -208,12 +207,6 @@ static bool CheckIfStateLoadIsAllowed(Core::System& system)
 {
   if (!Core::IsRunningOrStarting(system))
     return false;
-
-  if (NetPlay::IsNetPlayRunning())
-  {
-    OSD::AddMessage("Loading savestates is disabled in Netplay to prevent desyncs");
-    return false;
-  }
 
   if (AchievementManager::GetInstance().IsHardcoreModeActive())
   {

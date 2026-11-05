@@ -55,43 +55,6 @@ std::string Volume::FilterGameID(std::span<const char> data)
   return string;
 }
 
-template <typename T>
-static void AddToSyncHash(Common::SHA1::Context* context, const T& data)
-{
-  static_assert(std::is_trivially_copyable_v<T>);
-  context->Update(reinterpret_cast<const u8*>(&data), sizeof(data));
-}
-
-void Volume::ReadAndAddToSyncHash(Common::SHA1::Context* context, u64 offset, u64 length,
-                                  const Partition& partition) const
-{
-  std::vector<u8> buffer(length);
-  if (Read(offset, length, buffer.data(), partition))
-    context->Update(buffer);
-}
-
-void Volume::AddTMDToSyncHash(Common::SHA1::Context* context, const Partition& partition) const
-{
-  // We want to hash some important parts of the TMD, but nothing that changes when fakesigning.
-  // (Fakesigned WADs are very popular, and we don't want people with properly signed WADs to
-  // unnecessarily be at a disadvantage due to most netplay partners having fakesigned WADs.)
-
-  const IOS::ES::TMDReader& tmd = GetTMD(partition);
-  if (!tmd.IsValid())
-    return;
-
-  AddToSyncHash(context, tmd.GetIOSId());
-  AddToSyncHash(context, tmd.GetTitleId());
-  AddToSyncHash(context, tmd.GetTitleFlags());
-  AddToSyncHash(context, tmd.GetGroupId());
-  AddToSyncHash(context, tmd.GetRegion());
-  AddToSyncHash(context, tmd.GetTitleVersion());
-  AddToSyncHash(context, tmd.GetBootIndex());
-
-  for (const IOS::ES::Content& content : tmd.GetContents())
-    AddToSyncHash(context, content);
-}
-
 std::map<Language, std::string> Volume::ReadWiiNames(std::span<const char16_t> data)
 {
   std::map<Language, std::string> names;

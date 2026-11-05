@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "Core/HW/GCMemcard/GCMemcardDirectory.h"
+#include "Core/HW/EXI/EXI.h"
 
 #include <algorithm>
 #include <chrono>
@@ -35,7 +36,6 @@
 #include "Core/HW/GCMemcard/GCMemcard.h"
 #include "Core/HW/GCMemcard/GCMemcardUtils.h"
 #include "Core/HW/Sram.h"
-#include "Core/NetPlayProto.h"
 
 static const char* MC_HDR = "MC_SYSTEM_AREA";
 
@@ -120,61 +120,6 @@ bool GCMemcardDirectory::LoadGCI(Memcard::GCIFile gci)
   SetUsedBlocks(idx);
 
   return true;
-}
-
-// This is only used by NetPlay but it made sense to put it here to keep the relevant code together
-std::vector<std::string> GCMemcardDirectory::GetFileNamesForGameID(const std::string& directory,
-                                                                   const std::string& game_id)
-{
-  std::vector<std::string> filenames;
-
-  u32 game_code = 0;
-  if (game_id.length() >= 4 && game_id != "00000000")
-    game_code = Common::swap32(reinterpret_cast<const u8*>(game_id.c_str()));
-
-  std::vector<Memcard::DEntry> loaded_saves;
-  for (const std::string& file_name : Common::DoFileSearch(directory, ".gci"))
-  {
-    File::IOFile gci_file(file_name, "rb");
-    if (!gci_file)
-      continue;
-
-    Memcard::GCIFile gci;
-    gci.m_filename = file_name;
-    gci.m_dirty = false;
-    if (!gci_file.ReadBytes(&gci.m_gci_header, Memcard::DENTRY_SIZE))
-      continue;
-
-    const auto same_identity_save_it =
-        std::ranges::find_if(loaded_saves, [&gci](const Memcard::DEntry& entry) {
-          return Memcard::HasSameIdentity(gci.m_gci_header, entry);
-        });
-    if (same_identity_save_it != loaded_saves.end())
-      continue;
-
-    const u16 num_blocks = gci.m_gci_header.m_block_count;
-    // largest number of free blocks on a memory card
-    // in reality, there are not likely any valid gci files > 251 blocks
-    if (num_blocks > 2043)
-      continue;
-
-    const u32 size = num_blocks * Memcard::BLOCK_SIZE;
-    const u64 file_size = gci_file.GetSize();
-    if (file_size != size + Memcard::DENTRY_SIZE)
-      continue;
-
-    // There's technically other available block checks to prevent overfilling the virtual memory
-    // card (see above method), but since we're only loading the saves for one GameID here, we're
-    // definitely not going to run out of space.
-
-    if (game_code == Common::swap32(gci.m_gci_header.m_gamecode.data()))
-    {
-      loaded_saves.push_back(gci.m_gci_header);
-      filenames.push_back(file_name);
-    }
-  }
-
-  return filenames;
 }
 
 GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface::Slot slot,

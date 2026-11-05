@@ -135,20 +135,9 @@ public:
   virtual u64 GetRawSize() const = 0;
   virtual const BlobReader& GetBlobReader() const = 0;
 
-  // This hash is intended to be (but is not guaranteed to be):
-  // 1. Identical for discs with no differences that affect netplay/TAS sync
-  // 2. Different for discs with differences that affect netplay/TAS sync
-  // 3. Much faster than hashing the entire disc
-  // The way the hash is calculated may change with updates to Dolphin.
-  virtual std::array<u8, 20> GetSyncHash() const = 0;
-
 protected:
   std::string DecodeString(std::span<const char> data) const;
   static std::string FilterGameID(std::span<const char> data);
-
-  void ReadAndAddToSyncHash(Common::SHA1::Context* context, u64 offset, u64 length,
-                            const Partition& partition) const;
-  void AddTMDToSyncHash(Common::SHA1::Context* context, const Partition& partition) const;
 
   virtual u32 GetOffsetShift() const { return 0; }
   static std::map<Language, std::string> ReadWiiNames(std::span<const char16_t> data);

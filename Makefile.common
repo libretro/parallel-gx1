@@ -512,22 +512,6 @@ MBEDTLS_SOURCES_C += \
 	$(CORE_DIR)/Externals/mbedtls/library/x509write_crt.c \
 	$(CORE_DIR)/Externals/mbedtls/library/x509write_csr.c
 
-# ENET
-ENET_SOURCES_C :=
-ENET_SOURCES_CXX :=
-ENET_SOURCES_ASM :=
-ENET_SOURCES_OBJCXX :=
-ENET_SOURCES_C += \
-	$(CORE_DIR)/Externals/enet/enet/callbacks.c \
-	$(CORE_DIR)/Externals/enet/enet/compress.c \
-	$(CORE_DIR)/Externals/enet/enet/host.c \
-	$(CORE_DIR)/Externals/enet/enet/list.c \
-	$(CORE_DIR)/Externals/enet/enet/packet.c \
-	$(CORE_DIR)/Externals/enet/enet/peer.c \
-	$(CORE_DIR)/Externals/enet/enet/protocol.c \
-	$(CORE_DIR)/Externals/enet/enet/unix.c \
-	$(CORE_DIR)/Externals/enet/enet/win32.c
-
 # FMT
 FMT_SOURCES_C :=
 FMT_SOURCES_CXX :=
@@ -1150,7 +1134,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Debug/Watches.cpp \
 	$(CORE_DIR)/Source/Core/Common/DirectIOFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/DynamicLibrary.cpp \
-	$(CORE_DIR)/Source/Core/Common/ENet.cpp \
 	$(CORE_DIR)/Source/Core/Common/FatFsUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/FileSearch.cpp \
 	$(CORE_DIR)/Source/Core/Common/FilesystemWatcher.cpp \
@@ -1173,7 +1156,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Network.cpp \
 	$(CORE_DIR)/Source/Core/Common/PcapFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/Profiler.cpp \
-	$(CORE_DIR)/Source/Core/Common/QoSSession.cpp \
 	$(CORE_DIR)/Source/Core/Common/Random.cpp \
 	$(CORE_DIR)/Source/Core/Common/SDCardUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/SettingsHandler.cpp \
@@ -1184,7 +1166,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Thread.cpp \
 	$(CORE_DIR)/Source/Core/Common/Timer.cpp \
 	$(CORE_DIR)/Source/Core/Common/TimeUtil.cpp \
-	$(CORE_DIR)/Source/Core/Common/TraversalClient.cpp \
 	$(CORE_DIR)/Source/Core/Common/UPnP.cpp \
 	$(CORE_DIR)/Source/Core/Common/Version.cpp \
 	$(CORE_DIR)/Source/Core/Common/GL/GLContext.cpp \
@@ -1280,8 +1261,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/HiresTextures.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/LightingShaderGen.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/NetPlayChatUI.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/NetPlayGolfUI.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/OnScreenDisplay.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/OnScreenUI.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/OpcodeDecoding.cpp \
@@ -1429,7 +1408,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/Config/FreeLookSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/GraphicsSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/MainSettings.cpp \
-	$(CORE_DIR)/Source/Core/Core/Config/NetplaySettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/SessionSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/SYSCONFSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/UISettings.cpp \
@@ -1438,7 +1416,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/GameConfigLoader.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/IsSettingSaveable.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/MovieConfigLoader.cpp \
-	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/NetPlayConfigLoader.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigManager.cpp \
 	$(CORE_DIR)/Source/Core/Core/Core.cpp \
 	$(CORE_DIR)/Source/Core/Core/CoreTiming.cpp \
@@ -1664,9 +1641,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/LibusbUtils.cpp \
 	$(CORE_DIR)/Source/Core/Core/MemTools.cpp \
 	$(CORE_DIR)/Source/Core/Core/Movie.cpp \
-	$(CORE_DIR)/Source/Core/Core/NetPlayClient.cpp \
-	$(CORE_DIR)/Source/Core/Core/NetPlayCommon.cpp \
-	$(CORE_DIR)/Source/Core/Core/NetPlayServer.cpp \
 	$(CORE_DIR)/Source/Core/Core/NetworkCaptureLogger.cpp \
 	$(CORE_DIR)/Source/Core/Core/PatchEngine.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/BreakPoints.cpp \
@@ -1716,7 +1690,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/SI/SI_DeviceGBAEmu.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/GameFile.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/GameFileCache.cpp \
-	$(CORE_DIR)/Source/Core/UICommon/NetPlayIndex.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/ResourcePack/Manager.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/ResourcePack/Manifest.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/ResourcePack/ResourcePack.cpp \
@@ -1999,18 +1972,6 @@ endif
 
 MBEDTLS_FLAGS := -w -O2 -I$(EXT_DIR)/mbedtls/include -I$(EXT_DIR)/mbedtls/library
 
-ENET_FLAGS := -w -I$(EXT_DIR)/enet/enet/include
-ifneq ($(OS_WIN),1)
-   ENET_FLAGS += -DHAS_FCNTL=1 -DHAS_GETADDRINFO=1 -DHAS_GETNAMEINFO=1 \
-	-DHAS_INET_NTOP=1 -DHAS_INET_PTON=1 -DHAS_MSGHDR_FLAGS=1 -DHAS_POLL=1 \
-	-DHAS_SOCKLEN_T=1
-   ifeq ($(OS_UNIX),1)
-      ENET_FLAGS += -DHAS_GETHOSTBYADDR_R=1 -DHAS_GETHOSTBYNAME_R=1
-   else ifeq ($(OS_ANDROID),1)
-      ENET_FLAGS += -DHAS_GETHOSTBYNAME_R=1
-   endif
-endif
-
 FMT_FLAGS := -w -I$(EXT_DIR)/fmt/fmt/include
 
 GLSLANG_FLAGS := -w -DENABLE_OPT=0 -DENABLE_SPIRV \
@@ -2170,7 +2131,7 @@ DOLPHIN_FLAGS := \
 	-I$(SRC_DIR)/DolphinLibretro/Common -I$(SRC_DIR)/DolphinLibretro/VideoContexts \
 	-I$(EXT_DIR)/libretro-common/include \
 	-I$(EXT_DIR)/Vulkan-Headers/include -I$(EXT_DIR)/VulkanMemoryAllocator/include \
-	-I$(EXT_DIR)/enet/enet/include -I$(EXT_DIR)/fmt/fmt/include \
+	-I$(EXT_DIR)/fmt/fmt/include \
 	-I$(EXT_DIR)/mbedtls/include -I$(EXT_DIR)/minizip-ng/minizip-ng \
 	$(ZLIB_INC) $(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 -I$(EXT_DIR)/expr/include \
@@ -2240,7 +2201,7 @@ endif
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
-	MGBA GLSLANG SFML ENET FMT PUGIXML XXHASH IMGUI IMPLOT TINYGLTF FATFS \
+	MGBA GLSLANG SFML FMT PUGIXML XXHASH IMGUI IMPLOT TINYGLTF FATFS \
 	FREESURROUND
 ifeq ($(ARCH_X86_64),1)
    LIB_GROUPS += BDISASM

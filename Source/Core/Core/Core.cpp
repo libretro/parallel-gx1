@@ -62,8 +62,6 @@
 #include "Core/IOS/IOS.h"
 #include "Core/MemTools.h"
 #include "Core/Movie.h"
-#include "Core/NetPlayClient.h"
-#include "Core/NetPlayProto.h"
 #include "Core/PatchEngine.h"
 #include "Core/PowerPC/GDBStub.h"
 #include "Core/PowerPC/JitInterface.h"
@@ -155,12 +153,6 @@ bool GetIsThrottlerTempDisabled()
 void SetIsThrottlerTempDisabled(bool disable)
 {
   s_is_throttler_temp_disabled = disable;
-}
-
-void FrameUpdateOnCPUThread()
-{
-  if (NetPlay::IsNetPlayRunning())
-    NetPlay::NetPlayClient::SendTimeBase();
 }
 
 void OnFrameEnd(Core::System& system)
@@ -614,8 +606,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
   AudioCommon::InitSoundStream(system);
   Common::ScopeGuard audio_guard([&system] { AudioCommon::ShutdownSoundStream(system); });
 
-  HW::Init(system,
-           NetPlay::IsNetPlayRunning() ? &(boot_session_data.GetNetplaySettings()->sram) : nullptr);
+  HW::Init(system, nullptr);
 
   Common::ScopeGuard hw_guard{[&system] {
     INFO_LOG_FMT(CONSOLE, "{}", StopMessage(false, "Shutting down HW"));
@@ -686,7 +677,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
       if (!bsd_ptr)
         return;
       Core::CleanUpWiiFileSystemContents(*bsd_ptr);
-      bsd_ptr->InvokeWiiSyncCleanup();
     }
   };
   if (system.IsWii())
@@ -1060,7 +1050,7 @@ void UpdateWantDeterminism(Core::System& system, bool initial)
   // For now, this value is not itself configurable.  Instead, individual
   // settings that depend on it, such as GPU determinism mode. should have
   // override options for testing,
-  bool new_want_determinism = system.GetMovie().IsMovieActive() || NetPlay::IsNetPlayRunning();
+  bool new_want_determinism = system.GetMovie().IsMovieActive();
   if (new_want_determinism != s_wants_determinism || initial)
   {
     NOTICE_LOG_FMT(COMMON, "Want determinism <- {}", new_want_determinism ? "true" : "false");

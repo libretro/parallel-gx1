@@ -10,7 +10,6 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/HW/GCPad.h"
-#include "Core/NetPlayProto.h"
 #include "Core/System.h"
 #include "InputCommon/GCAdapter.h"
 
@@ -22,22 +21,13 @@ CSIDevice_GCAdapter::CSIDevice_GCAdapter(Core::System& system, SIDevices device,
   // Make sure PAD_GET_ORIGIN gets set due to a newly connected device.
   GCAdapter::ResetDeviceType(m_device_number);
 
-  // get the correct pad number that should rumble locally when using netplay
-  const int pad_num = NetPlay_InGamePadToLocalPad(m_device_number);
-  if (pad_num < 4)
-    m_simulate_konga = Config::Get(Config::GetInfoForSimulateKonga(pad_num));
+  if (m_device_number < 4)
+    m_simulate_konga = Config::Get(Config::GetInfoForSimulateKonga(m_device_number));
 }
 
 GCPadStatus CSIDevice_GCAdapter::GetPadStatus()
 {
-  GCPadStatus pad_status = {};
-
-  // For netplay, the local controllers are polled in GetNetPads(), and
-  // the remote controllers receive their status there as well
-  if (!NetPlay::IsNetPlayRunning())
-  {
-    pad_status = GCAdapter::Input(m_device_number);
-  }
+  GCPadStatus pad_status = GCAdapter::Input(m_device_number);
 
   HandleMoviePadStatus(m_system.GetMovie(), m_device_number, &pad_status);
 

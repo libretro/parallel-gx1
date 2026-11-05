@@ -12,8 +12,6 @@ Dolphin includes or links code of the following third-party software projects:
    [MIT](https://github.com/mutouyun/cpp-ipc/blob/master/LICENSE)
 - [cwdemangle](https://github.com/encounter/cwdemangle)
    [CC0-1.0](https://github.com/encounter/cwdemangle/blob/main/LICENSE)
-- [ENet](http://enet.bespin.org/):
-   [MIT](http://enet.bespin.org/License.html)
 - [expr](https://github.com/zserge/expr):
    [MIT](https://github.com/zserge/expr/blob/master/LICENSE)
 - [FatFs](http://elm-chan.org/fsw/ff/00index_e.html):

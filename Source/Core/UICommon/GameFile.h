@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Core/SyncIdentifier.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Enums.h"
 
@@ -82,15 +81,6 @@ public:
   // 0 is the first disc, 1 is the second disc
   u8 GetDiscNumber() const { return m_disc_number; }
   bool IsTwoDiscGame() const { return m_is_two_disc_game; }
-  std::string GetNetPlayName(const Core::TitleDatabase& title_database) const;
-
-  // This function is slow
-  std::array<u8, 20> GetSyncHash() const;
-  // This function is slow
-  NetPlay::SyncIdentifier GetSyncIdentifier() const;
-  // This function is slow if all of game_id, revision, disc_number, is_datel are identical
-  NetPlay::SyncIdentifierComparison
-  CompareSyncIdentifier(const NetPlay::SyncIdentifier& sync_identifier) const;
 
   std::string GetWiiFSPath() const;
   DiscIO::Region GetRegion() const { return m_region; }

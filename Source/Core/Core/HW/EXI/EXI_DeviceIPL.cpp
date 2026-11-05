@@ -26,7 +26,6 @@
 #include "Core/HW/Sram.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/Movie.h"
-#include "Core/NetPlayProto.h"
 #include "Core/System.h"
 
 #include "DiscIO/Enums.h"
@@ -406,13 +405,6 @@ u32 CEXIIPL::GetEmulatedTime(Core::System& system, u32 epoch)
   if (movie.IsMovieActive())
   {
     ltime = movie.GetRecordingStartTime();
-
-    // let's keep time moving forward, regardless of what it starts at
-    ltime += system.GetCoreTiming().GetTicks() / system.GetSystemTimers().GetTicksPerSecond();
-  }
-  else if (NetPlay::IsNetPlayRunning())
-  {
-    ltime = NetPlay_GetEmulatedTime();
 
     // let's keep time moving forward, regardless of what it starts at
     ltime += system.GetCoreTiming().GetTicks() / system.GetSystemTimers().GetTicksPerSecond();

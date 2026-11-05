@@ -48,7 +48,6 @@ struct SConfig
   bool bJITNoBlockCache = false;
   bool bJITNoBlockLinking = false;
 
-  bool bCopyWiiSaveNetplay = true;
 
   DiscIO::Region m_region;
 

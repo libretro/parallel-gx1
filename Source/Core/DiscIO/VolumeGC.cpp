@@ -178,15 +178,6 @@ bool VolumeGC::IsDatelDisc() const
   return GetGameID() == "DTLX01" || !GetBootDOLOffset(*this, PARTITION_NONE).has_value();
 }
 
-std::array<u8, 20> VolumeGC::GetSyncHash() const
-{
-  auto context = Common::SHA1::CreateContext();
-
-  AddGamePartitionToSyncHash(context.get());
-
-  return context->Finish();
-}
-
 VolumeGC::ConvertedGCBanner VolumeGC::LoadBannerFile() const
 {
   // There is at least one Triforce game that has an opening.bnr file but from a different game.

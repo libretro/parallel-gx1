@@ -71,22 +71,6 @@ const std::string& GetScmDistributorStr()
   return scm_distributor_str;
 }
 
-const std::string& GetNetplayDolphinVer()
-{
-#ifdef _WIN32
-  static const std::string netplay_dolphin_ver = SCM_DESC_STR " Windows";
-#elif __APPLE__
-  static const std::string netplay_dolphin_ver = SCM_DESC_STR " macOS";
-#elif ANDROID
-  static const std::string netplay_dolphin_ver = SCM_DESC_STR " Android";
-#elif __linux__
-  static const std::string netplay_dolphin_ver = SCM_DESC_STR " Linux";
-#else
-  static const std::string netplay_dolphin_ver = SCM_DESC_STR;
-#endif
-  return netplay_dolphin_ver;
-}
-
 int GetScmCommitsAheadMaster()
 {
   // Note this macro can be empty if the master branch does not exist.

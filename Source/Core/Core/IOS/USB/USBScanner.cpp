@@ -27,7 +27,6 @@
 #include "Core/IOS/USB/Emulated/WiiSpeak.h"
 #include "Core/IOS/USB/Host.h"
 #include "Core/IOS/USB/LibusbDevice.h"
-#include "Core/NetPlayProto.h"
 #include "Core/System.h"
 #include "Core/USBUtils.h"
 
@@ -183,24 +182,24 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
 
 void USBScanner::AddEmulatedDevices(DeviceMap* new_devices)
 {
-  if (Config::Get(Config::MAIN_EMULATE_SKYLANDER_PORTAL) && !NetPlay::IsNetPlayRunning())
+  if (Config::Get(Config::MAIN_EMULATE_SKYLANDER_PORTAL))
   {
     auto skylanderportal = std::make_unique<USB::SkylanderUSB>();
     AddDevice(std::move(skylanderportal), new_devices);
   }
-  if (Config::Get(Config::MAIN_EMULATE_INFINITY_BASE) && !NetPlay::IsNetPlayRunning())
+  if (Config::Get(Config::MAIN_EMULATE_INFINITY_BASE))
   {
     auto infinity_base = std::make_unique<USB::InfinityUSB>();
     AddDevice(std::move(infinity_base), new_devices);
   }
-  if (Config::Get(Config::MAIN_EMULATE_WII_SPEAK) && !NetPlay::IsNetPlayRunning())
+  if (Config::Get(Config::MAIN_EMULATE_WII_SPEAK))
   {
     auto wii_speak = std::make_unique<USB::WiiSpeak>();
     AddDevice(std::move(wii_speak), new_devices);
   }
   for (u8 index = 0; index != Config::EMULATED_LOGITECH_MIC_COUNT; ++index)
   {
-    if (Config::Get(Config::MAIN_EMULATE_LOGITECH_MIC[index]) && !NetPlay::IsNetPlayRunning())
+    if (Config::Get(Config::MAIN_EMULATE_LOGITECH_MIC[index]))
     {
       auto logitech_mic = std::make_unique<USB::LogitechMic>(index);
       AddDevice(std::move(logitech_mic), new_devices);

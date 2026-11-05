@@ -33,7 +33,6 @@
 #include "Core/Core.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/Host.h"
-#include "Core/NetPlayProto.h"
 #include "Core/System.h"
 
 #ifdef ANDROID
@@ -246,8 +245,7 @@ bool Core::Start(u64 gc_ticks)
     m_core->getGameInfo(m_core, &info);
     m_game_title = info.title;
 
-    m_save_path = NetPlay::IsNetPlayRunning() ? NetPlay::GetGBASavePath(m_device_number) :
-                                                GetSavePath(m_rom_path, m_device_number);
+    m_save_path = GetSavePath(m_rom_path, m_device_number);
     if (!m_save_path.empty() && !LoadSave(m_save_path.c_str()))
       return false;
   }

@@ -15,7 +15,6 @@ enum class LayerType
   GlobalGame,
   LocalGame,
   Movie,
-  Netplay,
   CurrentRun,
   Meta,
 };
@@ -38,7 +37,6 @@ enum class System
 
 constexpr std::array<LayerType, 7> SEARCH_ORDER{{
     LayerType::CurrentRun,
-    LayerType::Netplay,
     LayerType::Movie,
     LayerType::LocalGame,
     LayerType::GlobalGame,
