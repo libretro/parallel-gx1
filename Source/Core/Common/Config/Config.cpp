@@ -4,39 +4,86 @@
 #include "Common/Config/Config.h"
 
 #include <algorithm>
-#include <atomic>
+#include <cstdlib>
 #include <map>
-#include <mutex>
-#include <shared_mutex>
+#include <type_traits>
 #include <utility>
-#include <vector>
 
+#include <retro_atomic.h>
+#include "Common/CallGate.h"
 #include "Common/Projection.h"
+#include "Common/Quiesce.h"
 
 namespace Config
 {
-using Layers = std::map<LayerType, std::shared_ptr<Layer>>;
+// Every structure here is read far more often than written, and read from any thread: a
+// published pointer per entry, swapped whole by writers and freed once no reader is inside.
 
-static Layers s_layers;
-static std::vector<std::pair<ConfigChangedCallbackID, ConfigChangedCallback>> s_callbacks;
-static size_t s_next_callback_id = 0;
-static std::atomic<u32> s_callback_guards = 0;
-static std::atomic<u64> s_config_version = 0;
+namespace
+{
+struct LayerRef
+{
+  quiesce_node_t node;  // first: the free callback casts it back to the whole
+  std::shared_ptr<Layer> layer;
+};
 
-static std::shared_mutex s_layers_rw_lock;
-static std::recursive_mutex s_callbacks_lock;
+struct CallbackRef
+{
+  quiesce_node_t node;  // first, as above
+  size_t id;
+  ConfigChangedCallback func;
+  Common::CallGate gate;
+};
 
-using ReadLock = std::shared_lock<std::shared_mutex>;
-using WriteLock = std::unique_lock<std::shared_mutex>;
+// Callbacks registered at once; Dolphin uses a few dozen.
+constexpr size_t MAX_CALLBACKS = 128;
+constexpr size_t NUM_LAYERS = static_cast<size_t>(LayerType::Meta);
+
+}  // namespace
+
+static quiesce_t s_quiesce;
+static quiesce_t s_info_quiesce;
+static retro_atomic_ptr_t s_layers[NUM_LAYERS];
+static retro_atomic_ptr_t s_callbacks[MAX_CALLBACKS];
+static retro_atomic_size_t s_next_callback_id;
+static retro_atomic_int_t s_callback_guards;
+static retro_atomic_64_t s_config_version;
+
+quiesce_t* detail::InfoQuiesce()
+{
+  return &s_info_quiesce;
+}
+
+static void FreeLayerRef(quiesce_node_t* node)
+{
+  delete reinterpret_cast<LayerRef*>(node);
+}
+
+static void FreeCallbackRef(quiesce_node_t* node)
+{
+  delete reinterpret_cast<CallbackRef*>(node);
+}
+
+// Callers are inside s_quiesce; the Layer stays alive until they leave.
+static Layer* PeekLayer(LayerType type)
+{
+  const auto* ref =
+      static_cast<const LayerRef*>(retro_atomic_load_acquire_ptr(&s_layers[size_t(type)]));
+  return ref ? ref->layer.get() : nullptr;
+}
+
+static void PublishLayer(LayerType type, std::shared_ptr<Layer> layer)
+{
+  LayerRef* ref = layer ? new LayerRef{{}, std::move(layer)} : nullptr;
+  void* old = retro_atomic_exchange_ptr(&s_layers[size_t(type)], ref);
+  if (old)
+    quiesce_retire(&s_quiesce, &static_cast<LayerRef*>(old)->node, FreeLayerRef);
+}
 
 static void AddLayerInternal(std::shared_ptr<Layer> layer)
 {
-  {
-    WriteLock lock(s_layers_rw_lock);
-
-    const Config::LayerType layer_type = layer->GetLayer();
-    s_layers.insert_or_assign(layer_type, std::move(layer));
-  }
+  const Config::LayerType layer_type = layer->GetLayer();
+  PublishLayer(layer_type, std::move(layer));
   OnConfigChanged();
 }
 
@@ -47,47 +94,51 @@ void AddLayer(std::unique_ptr<ConfigLayerLoader> loader)
 
 std::shared_ptr<Layer> GetLayer(LayerType layer)
 {
-  ReadLock lock(s_layers_rw_lock);
-
   std::shared_ptr<Layer> result;
-  const auto it = s_layers.find(layer);
-  if (it != s_layers.end())
-  {
-    result = it->second;
-  }
+  quiesce_enter(&s_quiesce);
+  const auto* ref =
+      static_cast<const LayerRef*>(retro_atomic_load_acquire_ptr(&s_layers[size_t(layer)]));
+  if (ref)
+    result = ref->layer;
+  quiesce_exit(&s_quiesce);
   return result;
 }
 
 void RemoveLayer(LayerType layer)
 {
-  {
-    WriteLock lock(s_layers_rw_lock);
-
-    s_layers.erase(layer);
-  }
+  PublishLayer(layer, nullptr);
   OnConfigChanged();
 }
 
 ConfigChangedCallbackID AddConfigChangedCallback(ConfigChangedCallback func)
 {
-  std::lock_guard lock(s_callbacks_lock);
-  const ConfigChangedCallbackID callback_id{s_next_callback_id};
-  ++s_next_callback_id;
-  s_callbacks.emplace_back(std::make_pair(callback_id, std::move(func)));
-  return callback_id;
+  auto* ref = new CallbackRef{{}, 0, std::move(func), {}};
+  ref->id = retro_atomic_fetch_add_size(&s_next_callback_id, 1);
+  for (auto& slot : s_callbacks)
+  {
+    if (!retro_atomic_load_acquire_ptr(&slot) && retro_atomic_cas_ptr(&slot, nullptr, ref))
+      return ConfigChangedCallbackID{ref->id};
+  }
+  // More live callbacks than MAX_CALLBACKS: a leak in the caller, not a load to grow for.
+  std::abort();
 }
 
 void RemoveConfigChangedCallback(ConfigChangedCallbackID callback_id)
 {
-  std::lock_guard lock(s_callbacks_lock);
-  for (auto it = s_callbacks.begin(); it != s_callbacks.end(); ++it)
+  quiesce_enter(&s_quiesce);
+  for (auto& slot : s_callbacks)
   {
-    if (it->first == callback_id)
-    {
-      s_callbacks.erase(it);
-      return;
-    }
+    auto* ref = static_cast<CallbackRef*>(retro_atomic_load_acquire_ptr(&slot));
+    if (!ref || ref->id != callback_id.id || !retro_atomic_cas_ptr(&slot, ref, nullptr))
+      continue;
+
+    // A trigger on another thread may still be inside it, and the caller is about to free
+    // whatever it captured.
+    Common::CallGateClose(&ref->gate);
+    quiesce_retire(&s_quiesce, &ref->node, FreeCallbackRef);
+    break;
   }
+  quiesce_exit(&s_quiesce);
 }
 
 void OnConfigChanged()
@@ -95,42 +146,53 @@ void OnConfigChanged()
   // Increment the config version to invalidate caches.
   // To ensure that getters do not return stale data, this should always be done
   // even when callbacks are suppressed.
-  s_config_version.fetch_add(1, std::memory_order_relaxed);
+  retro_atomic_fetch_add_64(&s_config_version, 1);
 
-  if (s_callback_guards)
+  if (retro_atomic_load_acquire_int(&s_callback_guards))
     return;
 
-  std::lock_guard lock(s_callbacks_lock);
-
-  for (const auto& callback : s_callbacks)
-    callback.second();
+  quiesce_enter(&s_quiesce);
+  for (auto& slot : s_callbacks)
+  {
+    auto* ref = static_cast<CallbackRef*>(retro_atomic_load_acquire_ptr(&slot));
+    if (!ref)
+      continue;
+    if (Common::CallGateEnter(&ref->gate))
+    {
+      ref->func();
+      Common::CallGateExit(&ref->gate);
+    }
+  }
+  quiesce_exit(&s_quiesce);
 }
 
 u64 GetConfigVersion()
 {
-  return s_config_version.load(std::memory_order_relaxed);
+  return static_cast<u64>(retro_atomic_load_acquire_64(&s_config_version));
 }
 
 // Explicit load and save of layers
 void Load()
 {
+  quiesce_enter(&s_quiesce);
+  for (size_t i = 0; i < NUM_LAYERS; ++i)
   {
-    ReadLock lock(s_layers_rw_lock);
-
-    for (auto& layer : s_layers)
-      layer.second->Load();
+    if (Layer* layer = PeekLayer(LayerType(i)))
+      layer->Load();
   }
+  quiesce_exit(&s_quiesce);
   OnConfigChanged();
 }
 
 void Save()
 {
+  quiesce_enter(&s_quiesce);
+  for (size_t i = 0; i < NUM_LAYERS; ++i)
   {
-    ReadLock lock(s_layers_rw_lock);
-
-    for (auto& layer : s_layers)
-      layer.second->Save();
+    if (Layer* layer = PeekLayer(LayerType(i)))
+      layer->Save();
   }
+  quiesce_exit(&s_quiesce);
   OnConfigChanged();
 }
 
@@ -142,16 +204,13 @@ void Init()
 
 void Shutdown()
 {
-  WriteLock lock(s_layers_rw_lock);
-
-  s_layers.clear();
+  for (size_t i = 0; i < NUM_LAYERS; ++i)
+    PublishLayer(LayerType(i), nullptr);
 }
 
 void ClearCurrentRunLayer()
 {
-  WriteLock lock(s_layers_rw_lock);
-
-  s_layers.insert_or_assign(LayerType::CurrentRun, std::make_shared<Layer>(LayerType::CurrentRun));
+  PublishLayer(LayerType::CurrentRun, std::make_shared<Layer>(LayerType::CurrentRun));
 }
 
 static const std::map<System, std::string> system_to_name = {
@@ -197,49 +256,48 @@ const std::string& GetLayerName(LayerType layer)
 
 LayerType GetActiveLayerForConfig(const Location& config)
 {
-  ReadLock lock(s_layers_rw_lock);
-
-  for (auto layer : SEARCH_ORDER)
+  // If config is not present in any layer, base layer is considered active.
+  LayerType result = LayerType::Base;
+  quiesce_enter(&s_quiesce);
+  for (auto type : SEARCH_ORDER)
   {
-    const auto it = s_layers.find(layer);
-    if (it != s_layers.end())
+    const Layer* layer = type == LayerType::Meta ? nullptr : PeekLayer(type);
+    if (layer && layer->Exists(config))
     {
-      if (it->second->Exists(config))
-        return layer;
+      result = type;
+      break;
     }
   }
-
-  // If config is not present in any layer, base layer is considered active.
-  return LayerType::Base;
+  quiesce_exit(&s_quiesce);
+  return result;
 }
 
 std::optional<std::string> GetAsString(const Location& config)
 {
   std::optional<std::string> result;
-  ReadLock lock(s_layers_rw_lock);
-
-  for (auto layer : SEARCH_ORDER)
+  quiesce_enter(&s_quiesce);
+  for (auto type : SEARCH_ORDER)
   {
-    const auto it = s_layers.find(layer);
-    if (it != s_layers.end())
+    const Layer* layer = type == LayerType::Meta ? nullptr : PeekLayer(type);
+    if (layer)
     {
-      result = it->second->Get<std::string>(config);
+      result = layer->Get<std::string>(config);
       if (result.has_value())
         break;
     }
   }
-
+  quiesce_exit(&s_quiesce);
   return result;
 }
 
 ConfigChangeCallbackGuard::ConfigChangeCallbackGuard()
 {
-  ++s_callback_guards;
+  retro_atomic_inc_int(&s_callback_guards);
 }
 
 ConfigChangeCallbackGuard::~ConfigChangeCallbackGuard()
 {
-  if (--s_callback_guards)
+  if (retro_atomic_fetch_sub_int(&s_callback_guards, 1) != 1)
     return;
 
   OnConfigChanged();

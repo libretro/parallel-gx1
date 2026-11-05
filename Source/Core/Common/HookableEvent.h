@@ -3,13 +3,15 @@
 
 #pragma once
 
-#include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <memory>
-#include <mutex>
-#include <vector>
 
+#include <retro_atomic.h>
+
+#include "Common/CallGate.h"
 #include "Common/Logging/Log.h"
+#include "Common/Quiesce.h"
 
 namespace Common
 {
@@ -43,6 +45,10 @@ using EventHook = std::unique_ptr<HookBase>;
 //   my_lovely_event.Trigger("Hello world", 42);
 //
 
+// Listeners are published as an immutable array, replaced whole on every register and
+// unregister, so triggering takes no lock. A hook registered from inside a callback is first
+// called by the next Trigger; one destroyed from inside is not called again, and destroying a
+// hook while another thread is inside its callback waits for that call to return.
 template <typename... CallbackArgs>
 class HookableEvent
 {
@@ -53,50 +59,104 @@ public:
   [[nodiscard]] EventHook Register(CallbackType callback)
   {
     DEBUG_LOG_FMT(COMMON, "Registering event hook handler");
-    std::lock_guard lg(m_storage->listeners_mutex);
-
-    auto& new_listener =
-        m_storage->listeners.emplace_back(std::make_unique<Listener>(std::move(callback)));
-
-    return std::make_unique<HookImpl>(m_storage, new_listener.get());
+    auto* listener = new Listener{{}, std::move(callback), {}};
+    m_storage->Replace(nullptr, listener);
+    return std::make_unique<HookImpl>(m_storage, listener);
   }
 
   // Invokes all registered callbacks.
-  // Hooks added from within a callback will be invoked.
-  // Hooks removed from within a callback will be skipped,
-  //  but destruction of the hook's callback will be delayed until Trigger() completes.
   void Trigger(const CallbackArgs&... args)
   {
-    std::lock_guard lg(m_storage->listeners_mutex);
-    m_storage->is_triggering = true;
-
-    // Avoiding an actual iterator because the container may be modified.
-    for (std::size_t i = 0; i != m_storage->listeners.size(); ++i)
+    Storage* const storage = m_storage.get();
+    quiesce_enter(&storage->quiesce);
+    if (const auto* list = static_cast<const List*>(retro_atomic_load_acquire_ptr(&storage->list)))
     {
-      auto& listener = m_storage->listeners[i];
-
-      if (listener->is_pending_removal)
-        continue;
-
-      std::invoke(listener->callback, args...);
+      for (std::size_t i = 0; i != list->count; ++i)
+      {
+        Listener* const listener = list->items[i];
+        if (!Common::CallGateEnter(&listener->gate))
+          continue;
+        std::invoke(listener->callback, args...);
+        Common::CallGateExit(&listener->gate);
+      }
     }
-
-    m_storage->is_triggering = false;
-    std::erase_if(m_storage->listeners, std::mem_fn(&Listener::is_pending_removal));
+    quiesce_exit(&storage->quiesce);
   }
 
 private:
+  // node first: the free callbacks cast it back to the whole.
   struct Listener
   {
+    quiesce_node_t node;
     const CallbackType callback;
-    bool is_pending_removal{};
+    Common::CallGate gate;
+
+    static void Free(quiesce_node_t* node) { delete reinterpret_cast<Listener*>(node); }
+  };
+
+  struct List
+  {
+    quiesce_node_t node;
+    std::size_t count;
+    Listener* items[1];  // count of them
+
+    static List* Make(std::size_t count)
+    {
+      const std::size_t n = count ? count : 1;
+      void* mem = ::operator new(offsetof(List, items) + n * sizeof(Listener*));
+      List* list = static_cast<List*>(mem);
+      list->node = {};
+      list->count = count;
+      return list;
+    }
+    static void Free(quiesce_node_t* node) { ::operator delete(node); }
   };
 
   struct Storage
   {
-    std::recursive_mutex listeners_mutex;
-    std::vector<std::unique_ptr<Listener>> listeners;
-    bool is_triggering{};
+    quiesce_t quiesce{};
+    retro_atomic_ptr_t list{};
+
+    ~Storage()
+    {
+      quiesce_deinit(&quiesce);
+      if (auto* l = static_cast<List*>(retro_atomic_load_acquire_ptr(&list)))
+      {
+        for (std::size_t i = 0; i != l->count; ++i)
+          delete l->items[i];
+        List::Free(&l->node);
+      }
+    }
+
+    // Publishes the current list with remove taken out and add put in.
+    void Replace(Listener* remove, Listener* add)
+    {
+      quiesce_enter(&quiesce);
+      for (;;)
+      {
+        void* cur = retro_atomic_load_acquire_ptr(&list);
+        const List* old = static_cast<const List*>(cur);
+        const std::size_t old_count = old ? old->count : 0;
+        List* next = List::Make(old_count + (add ? 1 : 0));
+        std::size_t n = 0;
+        for (std::size_t i = 0; i != old_count; ++i)
+        {
+          if (old->items[i] != remove)
+            next->items[n++] = old->items[i];
+        }
+        if (add)
+          next->items[n++] = add;
+        next->count = n;
+        if (retro_atomic_cas_ptr(&list, cur, next))
+        {
+          if (old)
+            quiesce_retire(&quiesce, &static_cast<List*>(cur)->node, List::Free);
+          break;
+        }
+        List::Free(&next->node);
+      }
+      quiesce_exit(&quiesce);
+    }
   };
 
   struct HookImpl final : HookBase
@@ -117,20 +177,9 @@ private:
 
       DEBUG_LOG_FMT(COMMON, "Removing event hook handler");
 
-      std::lock_guard lg(storage->listeners_mutex);
-
-      if (storage->is_triggering)
-      {
-        // Just mark our listener for removal.
-        // Trigger() will erase it for us.
-        listener_ptr->is_pending_removal = true;
-      }
-      else
-      {
-        // Remove our listener.
-        storage->listeners.erase(std::ranges::find_if(
-            storage->listeners, [&](auto& ptr) { return ptr.get() == listener_ptr; }));
-      }
+      storage->Replace(listener_ptr, nullptr);
+      Common::CallGateClose(&listener_ptr->gate);
+      quiesce_retire(&storage->quiesce, &listener_ptr->node, Listener::Free);
     }
 
     const std::weak_ptr<Storage> weak_storage;
