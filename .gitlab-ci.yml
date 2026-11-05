@@ -8,7 +8,7 @@
 .core-defs:
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
-    CORENAME: parallel_gamecubewii
+    CORENAME: parallel_gx1
 
 # Inclusion templates, required for the build to work
 include:

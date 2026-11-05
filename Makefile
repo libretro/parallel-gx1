@@ -4,7 +4,7 @@ LINK_STATIC_LIBCPLUSPLUS = 1
 LTO ?=
 
 CORE_DIR := .
-TARGET_NAME := parallel_gamecubewii
+TARGET_NAME := parallel_gx1
 
 ifeq ($(ECHO),1)
    E := 1
