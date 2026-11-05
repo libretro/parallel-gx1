@@ -246,8 +246,9 @@ void retro_reset(void)
 
 void retro_run(void)
 {
-  // One retro_run is one frame of the core's background timebase.
-  frame_clock_advance();
+  // One retro_run is one frame of the core's timebase, as long as the frontend was told.
+  const double frame_hz = Libretro::g_core_refresh_rate > 1.0 ? Libretro::g_core_refresh_rate : 60.0;
+  frame_clock_advance(static_cast<unsigned>(std::lround(1e6 / frame_hz)));
 
   Libretro::Input::InitSensors();
   Libretro::Options::CheckForUpdatedVariables();

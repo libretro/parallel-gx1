@@ -19,7 +19,7 @@ namespace VideoCommon
 class CustomAsset
 {
 public:
-  using ClockType = std::chrono::steady_clock;
+  using ClockType = Clock;
   using TimeType = ClockType::time_point;
 
   CustomAsset(std::shared_ptr<CustomAssetLibrary> library, CustomAssetLibrary::AssetID asset_id,

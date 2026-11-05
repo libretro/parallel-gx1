@@ -16,26 +16,15 @@
 
 namespace Common
 {
-template <typename Clock, typename Duration>
-static typename Clock::rep time_now()
-{
-  return std::chrono::time_point_cast<Duration>(Clock::now()).time_since_epoch().count();
-}
-
-template <typename Duration>
-static auto steady_time_now()
-{
-  return time_now<std::chrono::steady_clock, Duration>();
-}
-
+// Elapsed time is the frontend's: the frame clock, not the host's.
 u64 Timer::NowUs()
 {
-  return steady_time_now<std::chrono::microseconds>();
+  return frame_clock_time_us();
 }
 
 u64 Timer::NowMs()
 {
-  return steady_time_now<std::chrono::milliseconds>();
+  return frame_clock_time_us() / 1000;
 }
 
 void Timer::Start()
@@ -88,39 +77,6 @@ u64 Timer::GetLocalTimeSinceJan1970()
   tzDiff = sysTime - mktime(gmTime);
 
   return static_cast<u64>(sysTime + tzDiff + tzDST);
-#endif
-}
-
-// Results are appropriately slewed on Linux, but not on Windows, macOS, or FreeBSD.
-// Clocks with that functionality seem to not be available there.
-auto SteadyAwakeClock::now() -> time_point
-{
-#if defined(_WIN32)
-  // The count is system time "in units of 100 nanoseconds".
-  using InterruptDuration = std::chrono::duration<ULONGLONG, std::ratio<100, std::nano::den>::type>;
-
-  ULONGLONG interrupt_time{};
-  if (!QueryUnbiasedInterruptTime(&interrupt_time))
-    ERROR_LOG_FMT(COMMON, "QueryUnbiasedInterruptTime");
-
-  return time_point{InterruptDuration{interrupt_time}};
-#else
-  // Note that Linux's CLOCK_MONOTONIC "does not count time that the system is suspended".
-  // This is in contrast to the behavior on macOS and FreeBSD.
-  static constexpr auto clock_id =
-#if defined(__linux__)
-      CLOCK_MONOTONIC;
-#elif defined(__APPLE__)
-      CLOCK_UPTIME_RAW;
-#else
-      CLOCK_UPTIME;
-#endif
-
-  timespec ts{};
-  if (clock_gettime(clock_id, &ts) != 0)
-    ERROR_LOG_FMT(COMMON, "clock_gettime: {}", LastStrerrorString());
-
-  return time_point{std::chrono::seconds{ts.tv_sec} + std::chrono::nanoseconds{ts.tv_nsec}};
 #endif
 }
 

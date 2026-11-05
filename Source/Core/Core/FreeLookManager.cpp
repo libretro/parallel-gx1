@@ -248,11 +248,11 @@ void FreeLookController::UpdateInput(CameraControllerInput* camera_controller)
   if (m_last_free_look_rotate_time)
   {
     using seconds = std::chrono::duration<float, std::ratio<1>>;
-    dt = std::chrono::duration_cast<seconds>(std::chrono::steady_clock::now() -
+    dt = std::chrono::duration_cast<seconds>(Clock::now() -
                                              *m_last_free_look_rotate_time)
              .count();
   }
-  m_last_free_look_rotate_time = std::chrono::steady_clock::now();
+  m_last_free_look_rotate_time = Clock::now();
 
   const auto gyro_motion_rad_velocity =
       m_rotation_gyro->GetState() ? *m_rotation_gyro->GetState() : Common::Vec3{};

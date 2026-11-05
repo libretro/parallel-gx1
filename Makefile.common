@@ -1407,7 +1407,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/CoreTiming.cpp \
 	$(CORE_DIR)/Source/Core/Core/CPUThreadConfigCallback.cpp \
 	$(CORE_DIR)/Source/Core/Core/Debugger/BranchWatch.cpp \
-	$(CORE_DIR)/Source/Core/Core/Debugger/CodeTrace.cpp \
 	$(CORE_DIR)/Source/Core/Core/Debugger/Debugger_SymbolMap.cpp \
 	$(CORE_DIR)/Source/Core/Core/Debugger/Dump.cpp \
 	$(CORE_DIR)/Source/Core/Core/Debugger/OSThread.cpp \

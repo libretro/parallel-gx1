@@ -85,7 +85,6 @@ jmethodID s_dolphin_vibrator_manager_get_vibrator_ids;
 
 jintArray s_keycodes_array;
 
-using Clock = std::chrono::steady_clock;
 constexpr Clock::duration ACTIVE_INPUT_TIMEOUT = std::chrono::milliseconds(1000);
 
 std::unordered_map<jint, ciface::Core::DeviceQualifier> s_device_id_to_device_qualifier;

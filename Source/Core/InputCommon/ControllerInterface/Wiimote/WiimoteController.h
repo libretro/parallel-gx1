@@ -38,7 +38,6 @@ public:
   Core::DeviceRemoval UpdateInput() override;
 
 private:
-  using Clock = std::chrono::steady_clock;
 
   enum class ExtensionID
   {

@@ -264,7 +264,6 @@ void DVDThread::StartReadInternal(bool copy_to_ram, u32 output_address, u64 dvd_
   request.id = id;
 
   request.time_started_ticks = core_timing.GetTicks();
-  request.realtime_started_us = Common::Timer::NowUs();
 
   m_dvd_thread.Push(std::move(request));
   core_timing.ScheduleEvent(ticks_until_completion, m_finish_read, id);
@@ -307,12 +306,7 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
   const ReadRequest& request = result.first;
   const std::vector<u8>& buffer = result.second;
 
-  DEBUG_LOG_FMT(DVDINTERFACE,
-                "Disc has been read. Real time: {} us. "
-                "Real time including delay: {} us. "
-                "Emulated time including delay: {} us.",
-                request.realtime_done_us - request.realtime_started_us,
-                Common::Timer::NowUs() - request.realtime_started_us,
+  DEBUG_LOG_FMT(DVDINTERFACE, "Disc has been read. Emulated time including delay: {} us.",
                 (m_system.GetCoreTiming().GetTicks() - request.time_started_ticks) /
                     (m_system.GetSystemTimers().GetTicksPerSecond() / 1000000));
 
@@ -349,7 +343,6 @@ void DVDThread::ProcessReadRequest(ReadRequest&& request)
   if (!m_disc->Read(request.dvd_offset, request.length, buffer.data(), request.partition))
     buffer.resize(0);
 
-  request.realtime_done_us = Common::Timer::NowUs();
 
   ResultNode* const node =
       new ResultNode{{nullptr}, ReadResult(std::move(request), std::move(buffer))};

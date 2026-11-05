@@ -18,10 +18,15 @@ extern "C" {
  * the frontend's pace, stop while it pauses, and never sleep or read a
  * clock. */
 
-/* Called once per retro_run, by the frontend's thread. */
-void frame_clock_advance(void);
+/* Called once per retro_run, by the frontend's thread, with the length
+ * of a frame at the refresh rate the core reports. */
+void frame_clock_advance(unsigned frame_us);
 
 uint64_t frame_clock_now(void);
+
+/* The sum of the frame lengths so far, in microseconds: the core's
+ * idea of elapsed time, paced by the frontend. */
+uint64_t frame_clock_time_us(void);
 
 /* Blocks until frame target has begun or *running reads zero. running
  * may be NULL. Returns false when no longer running. Whoever clears

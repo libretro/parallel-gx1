@@ -32,7 +32,7 @@ static bool s_frontend_flat = false;
 // heading the cursor is measured from.
 static bool s_have_controller_velocity = false;
 static Common::Vec3 s_controller_velocity;
-static std::chrono::steady_clock::time_point s_controller_time;
+static Clock::time_point s_controller_time;
 static bool s_have_point_forward = false;
 static Common::Quaternion s_point_forward = Common::Quaternion::Identity();
 
@@ -168,7 +168,7 @@ static void UpdateVRMotion()
   const Common::Quaternion to_remote = remote.Conjugate();
 
   Common::Vec3 acceleration(0.0f, G, 0.0f);
-  const auto now = std::chrono::steady_clock::now();
+  const auto now = Clock::now();
   if (aim.flags & RETRO_VR_POSE_LINEAR_VELOCITY_VALID)
   {
     const Common::Vec3 velocity(aim.linear_velocity[0], aim.linear_velocity[1],

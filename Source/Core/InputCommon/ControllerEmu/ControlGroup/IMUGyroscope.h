@@ -31,7 +31,6 @@ public:
   bool IsCalibrating() const;
 
 private:
-  using Clock = std::chrono::steady_clock;
 
   bool AreInputsBound() const;
   bool CanCalibrate() const;

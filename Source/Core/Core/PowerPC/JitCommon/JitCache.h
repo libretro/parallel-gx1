@@ -66,8 +66,6 @@ struct JitBlock : public JitBlockData
   // Software profiling data for JIT block.
   struct ProfileData
   {
-    using Clock = std::chrono::steady_clock;
-
     static void BeginProfiling(ProfileData* data);
     static void EndProfiling(ProfileData* data, u32 downcount_amount);
 

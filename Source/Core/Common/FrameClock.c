@@ -8,6 +8,7 @@
 #include <rthreads/retro_eventcount.h>
 
 static retro_atomic_64_t  s_frame;
+static retro_atomic_64_t  s_time_us;
 static retro_atomic_ptr_t s_tick; /* retro_eventcount_t*, made on first use */
 
 static retro_eventcount_t *frame_clock_tick(void)
@@ -27,8 +28,9 @@ static retro_eventcount_t *frame_clock_tick(void)
    return ec;
 }
 
-void frame_clock_advance(void)
+void frame_clock_advance(unsigned frame_us)
 {
+   retro_atomic_fetch_add_64(&s_time_us, (int64_t)frame_us);
    retro_atomic_fetch_add_64(&s_frame, 1);
    retro_eventcount_notify(frame_clock_tick());
 }
@@ -36,6 +38,11 @@ void frame_clock_advance(void)
 uint64_t frame_clock_now(void)
 {
    return (uint64_t)retro_atomic_load_acquire_64(&s_frame);
+}
+
+uint64_t frame_clock_time_us(void)
+{
+   return (uint64_t)retro_atomic_load_acquire_64(&s_time_us);
 }
 
 bool frame_clock_wait_until(uint64_t target, const retro_atomic_int_t *running)

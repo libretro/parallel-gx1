@@ -116,8 +116,6 @@ private:
 
     // Only used for logging
     u64 time_started_ticks = 0;
-    u64 realtime_started_us = 0;
-    u64 realtime_done_us = 0;
   };
 
   void ProcessReadRequest(ReadRequest&& read_request);

@@ -40,7 +40,7 @@ const Config::Info<bool> SERVERS_ENABLED{{Config::System::DualShockUDPClient, "S
 }  // namespace Settings
 
 // Clock type used for querying timeframes
-using SteadyClock = std::chrono::steady_clock;
+using SteadyClock = Clock;
 
 class Device final : public Core::Device
 {

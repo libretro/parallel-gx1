@@ -349,7 +349,7 @@ void WiiSocket::Update(bool read, bool write, bool except)
         case -SO_EAGAIN:
         case -SO_EALREADY:
         case -SO_EINPROGRESS:
-          if (std::chrono::steady_clock::now() > GetTimeout())
+          if (Clock::now() > GetTimeout())
           {
             ReturnValue = -SO_ENETUNREACH;
             ResetTimeout();
@@ -841,7 +841,7 @@ const WiiSocket::Timeout& WiiSocket::GetTimeout()
 {
   if (!timeout.has_value())
   {
-    timeout = std::chrono::steady_clock::now() +
+    timeout = Clock::now() +
               std::chrono::seconds(Config::Get(Config::MAIN_NETWORK_TIMEOUT));
   }
   return *timeout;
@@ -1050,7 +1050,7 @@ void WiiSockMan::UpdatePollCommands()
   if (pending_polls.empty())
     return;
 
-  const auto now = std::chrono::high_resolution_clock::now();
+  const auto now = Clock::now();
   const auto elapsed_d = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time);
   const auto elapsed = elapsed_d.count();
   last_time = now;

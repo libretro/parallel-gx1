@@ -30,7 +30,7 @@ namespace
 u64 GetTickCountStd()
 {
   using namespace std::chrono;
-  return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+  return duration_cast<milliseconds>(Clock::now().time_since_epoch()).count();
 }
 
 std::vector<u8> BuildFINFrame(StackRef* ref)

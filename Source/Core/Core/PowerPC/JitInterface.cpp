@@ -134,7 +134,7 @@ void JitInterface::JitBlockLogDump(const Core::CPUThreadGuard& guard, std::FILE*
   if (m_jit->IsProfilingEnabled())
   {
     u64 overall_cycles_spent = 0;
-    JitBlock::ProfileData::Clock::duration overall_time_spent = {};
+    Clock::duration overall_time_spent = {};
     m_jit->GetBlockCache()->RunOnBlocks(guard, [&](const JitBlock& block) {
       overall_cycles_spent += block.profile_data->cycles_spent;
       overall_time_spent += block.profile_data->time_spent;
@@ -146,7 +146,7 @@ void JitInterface::JitBlockLogDump(const Core::CPUThreadGuard& guard, std::FILE*
 
       const double cycles_percent =
           overall_cycles_spent == 0 ? double{} : 100.0 * data->cycles_spent / overall_cycles_spent;
-      const double time_percent = overall_time_spent == JitBlock::ProfileData::Clock::duration{} ?
+      const double time_percent = overall_time_spent == Clock::duration{} ?
                                       double{} :
                                       100.0 * data->time_spent.count() / overall_time_spent.count();
       const double cycles_average = data->run_count == 0 ?

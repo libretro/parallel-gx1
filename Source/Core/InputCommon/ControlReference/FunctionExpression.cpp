@@ -9,7 +9,6 @@
 
 namespace ciface::ExpressionParser
 {
-using Clock = std::chrono::steady_clock;
 using FSec = std::chrono::duration<ControlState>;
 
 // usage: toggle(toggle_state_input, [clear_state_input])
