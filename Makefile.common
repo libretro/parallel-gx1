@@ -142,6 +142,20 @@ ifeq ($(OS_WIN),1)
 	$(CORE_DIR)/Externals/Bochs_disasm/stdafx.cc
 endif
 
+# LIBRETRO_COMMON
+LIBRETRO_COMMON_SOURCES_C :=
+LIBRETRO_COMMON_SOURCES_CXX :=
+LIBRETRO_COMMON_SOURCES_ASM :=
+LIBRETRO_COMMON_SOURCES_OBJCXX :=
+LIBRETRO_COMMON_SOURCES_C += \
+	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
+	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
+	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
+	$(CORE_DIR)/Externals/libretro-common/queues/retro_waitable_spsc.c \
+	$(CORE_DIR)/Externals/libretro-common/rthreads/retro_eventcount.c \
+	$(CORE_DIR)/Externals/libretro-common/rthreads/rthreads.c \
+	$(CORE_DIR)/Externals/libretro-common/time/rtime.c
+
 # FATFS
 FATFS_SOURCES_C :=
 FATFS_SOURCES_CXX :=
@@ -1960,6 +1974,8 @@ BDISASM_FLAGS := -w -I$(EXT_DIR)/Bochs_disasm
 
 FATFS_FLAGS := -w -I$(EXT_DIR)/FatFs
 
+LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -I$(EXT_DIR)/libretro-common/include
+
 FREESURROUND_FLAGS    := -w -I$(EXT_DIR)/FreeSurround/include
 FREESURROUND_CXXFLAGS := -std=c++14
 
@@ -2223,7 +2239,7 @@ else ifeq ($(ARCH_ARM64),1)
 endif
 
 # Libraries in link order; the optional ones only where they are built.
-LIB_GROUPS := DOLPHIN CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
+LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
 	MGBA GLSLANG SFML ENET FMT PUGIXML XXHASH IMGUI IMPLOT TINYGLTF FATFS \
 	FREESURROUND
 ifeq ($(ARCH_X86_64),1)
