@@ -11,13 +11,10 @@
 #include <memory>
 #include <unordered_set>
 
-class AbstractTexture;
 namespace VideoCommon
 {
-class AsyncShaderCompiler;
 class CustomAssetCache;
 class CustomResourceManager;
-class TexturePool;
 
 // A resource is an abstract object that maintains
 // relationships between assets (ex: a material that references a texture),
@@ -32,13 +29,7 @@ public:
     std::shared_ptr<CustomAssetLibrary> asset_library;
     CustomAssetCache* asset_cache;
     CustomResourceManager* resource_manager;
-    TexturePool* texture_pool;
     Common::AsyncWorkThreadSP* worker_queue;
-    AsyncShaderCompiler* shader_compiler;
-    AbstractTexture* invalid_array_texture;
-    AbstractTexture* invalid_color_texture;
-    AbstractTexture* invalid_cubemap_texture;
-    AbstractTexture* invalid_transparent_texture;
   };
   explicit Resource(ResourceContext resource_context);
 

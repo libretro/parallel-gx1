@@ -59,7 +59,6 @@ void VideoBackend::FillBackendInfo()
   g_backend_info.bSupportsBBox = true;
   g_backend_info.bSupportsGSInstancing = true;
   g_backend_info.bSupportsPaletteConversion = true;
-  g_backend_info.bSupportsPostProcessing = true;
   g_backend_info.bSupportsClipControl = true;
   g_backend_info.bSupportsSSAA = true;
   g_backend_info.bSupportsFragmentStoresAndAtomics = true;

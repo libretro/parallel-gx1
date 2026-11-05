@@ -119,7 +119,6 @@ enum ConfigChangeBits : u32
   CONFIG_CHANGE_BIT_VSYNC = (1 << 6),
   CONFIG_CHANGE_BIT_BBOX = (1 << 7),
   CONFIG_CHANGE_BIT_ASPECT_RATIO = (1 << 8),
-  CONFIG_CHANGE_BIT_POST_PROCESSING_SHADER = (1 << 9),
   CONFIG_CHANGE_BIT_HDR = (1 << 10),
 };
 
@@ -148,7 +147,6 @@ struct BackendInfo
   bool bSupportsBindingLayout = false;  // Needed by ShaderGen, so must stay in VideoCommon
   bool bSupportsBBox = false;
   bool bSupportsGSInstancing = false;  // Needed by GeometryShaderGen, so must stay in VideoCommon
-  bool bSupportsPostProcessing = false;
   bool bSupportsPaletteConversion = false;
   bool bSupportsClipControl = false;  // Needed by VertexShaderGen, so must stay in VideoCommon
   bool bSupportsSSAA = false;
@@ -221,7 +219,6 @@ struct VideoConfig final
   TextureFilteringMode texture_filtering_mode = TextureFilteringMode::Default;
   OutputResamplingMode output_resampling_mode = OutputResamplingMode::Default;
   AnisotropicFilteringMode iMaxAnisotropy = AnisotropicFilteringMode::Default;
-  std::string sPostProcessingShader;
   bool bForceTrueColor = false;
   bool bDisableCopyFilter = false;
   bool bArbitraryMipmapDetection = false;

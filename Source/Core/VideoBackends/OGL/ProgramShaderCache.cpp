@@ -227,12 +227,9 @@ void ProgramShaderCache::UploadConstants()
   auto& pixel_shader_manager = system.GetPixelShaderManager();
   auto& vertex_shader_manager = system.GetVertexShaderManager();
   auto& geometry_shader_manager = system.GetGeometryShaderManager();
-  if (pixel_shader_manager.dirty || vertex_shader_manager.dirty || geometry_shader_manager.dirty ||
-      pixel_shader_manager.custom_constants_dirty)
+  if (pixel_shader_manager.dirty || vertex_shader_manager.dirty || geometry_shader_manager.dirty)
   {
-    const u32 custom_constants_size = static_cast<u32>(
-        Common::AlignUp(pixel_shader_manager.custom_constants.size(), s_ubo_align));
-    auto buffer = s_buffer->Map(s_ubo_buffer_size + custom_constants_size, s_ubo_align);
+    auto buffer = s_buffer->Map(s_ubo_buffer_size, s_ubo_align);
 
     memcpy(buffer.first, &pixel_shader_manager.constants, sizeof(PixelShaderConstants));
 
@@ -241,17 +238,10 @@ void ProgramShaderCache::UploadConstants()
     memcpy(buffer.first + size, &vertex_shader_manager.constants, sizeof(VertexShaderConstants));
     size += Common::AlignUp(sizeof(VertexShaderConstants), s_ubo_align);
 
-    if (!pixel_shader_manager.custom_constants.empty())
-    {
-      memcpy(buffer.first + size, pixel_shader_manager.custom_constants.data(),
-             pixel_shader_manager.custom_constants.size());
-      size += custom_constants_size;
-    }
-
     memcpy(buffer.first + size, &geometry_shader_manager.constants,
            sizeof(GeometryShaderConstants));
 
-    s_buffer->Unmap(s_ubo_buffer_size + custom_constants_size);
+    s_buffer->Unmap(s_ubo_buffer_size);
 
     glBindBufferRange(GL_UNIFORM_BUFFER, 1, s_buffer->m_buffer, buffer.second,
                       sizeof(PixelShaderConstants));
@@ -259,22 +249,14 @@ void ProgramShaderCache::UploadConstants()
     glBindBufferRange(GL_UNIFORM_BUFFER, 2, s_buffer->m_buffer, buffer.second + size,
                       sizeof(VertexShaderConstants));
     size += Common::AlignUp(sizeof(VertexShaderConstants), s_ubo_align);
-
-    if (!pixel_shader_manager.custom_constants.empty())
-    {
-      glBindBufferRange(GL_UNIFORM_BUFFER, 3, s_buffer->m_buffer, buffer.second + size,
-                        pixel_shader_manager.custom_constants.size());
-      size += Common::AlignUp(pixel_shader_manager.custom_constants.size(), s_ubo_align);
-    }
     glBindBufferRange(GL_UNIFORM_BUFFER, 4, s_buffer->m_buffer, buffer.second + size,
                       sizeof(GeometryShaderConstants));
 
     pixel_shader_manager.dirty = false;
     vertex_shader_manager.dirty = false;
     geometry_shader_manager.dirty = false;
-    pixel_shader_manager.custom_constants_dirty = false;
 
-    ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, s_ubo_buffer_size + custom_constants_size);
+    ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, s_ubo_buffer_size);
   }
 }
 

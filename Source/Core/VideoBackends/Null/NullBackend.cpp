@@ -35,7 +35,6 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
   g_backend_info.bSupportsBindingLayout = true;
   g_backend_info.bSupportsBBox = true;
   g_backend_info.bSupportsGSInstancing = true;
-  g_backend_info.bSupportsPostProcessing = false;
   g_backend_info.bSupportsPaletteConversion = true;
   g_backend_info.bSupportsClipControl = true;
   g_backend_info.bSupportsSSAA = true;

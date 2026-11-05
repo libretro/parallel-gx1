@@ -3,7 +3,6 @@
 
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionFactory.h"
 
-#include "VideoCommon/GraphicsModSystem/Runtime/Actions/CustomPipelineAction.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/Actions/MoveAction.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/Actions/PrintAction.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/Actions/ScaleAction.h"
@@ -29,10 +28,6 @@ std::unique_ptr<GraphicsModAction> Create(std::string_view name, const picojson:
   else if (name == ScaleAction::factory_name)
   {
     return ScaleAction::Create(json_data);
-  }
-  else if (name == CustomPipelineAction::factory_name)
-  {
-    return CustomPipelineAction::Create(json_data, std::move(library));
   }
 
   return nullptr;

@@ -54,10 +54,6 @@ public:
   PixelShaderConstants constants{};
   bool dirty = false;
 
-  // Constants for custom shaders
-  std::span<u8> custom_constants;
-  bool custom_constants_dirty = false;
-
 private:
   bool m_fog_range_adjusted_changed = false;
   bool m_viewport_changed = false;

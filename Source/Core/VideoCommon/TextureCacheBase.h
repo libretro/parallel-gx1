@@ -41,7 +41,6 @@ namespace VideoCommon
 {
 class CustomTextureData;
 class GameTextureAsset;
-class MaterialResource;
 }  // namespace VideoCommon
 
 constexpr std::string_view EFB_DUMP_PREFIX = "efb1";
@@ -415,7 +414,6 @@ private:
   void DoSaveState(PointerWrap& p);
   void DoLoadState(PointerWrap& p);
 
-  void ApplyMaterialToCacheEntry(const VideoCommon::MaterialResource& material, TCacheEntry* entry);
 
   // m_textures_by_address is the authoritive version of what's actually "in" the texture cache
   // but it's possible for invalidated TCache entries to live on elsewhere

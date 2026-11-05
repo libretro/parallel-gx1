@@ -108,14 +108,6 @@ public:
     m_pending.vertexConstants = buffer;
   }
 
-  void SetCustomConstants(ID3D11Buffer* buffer)
-  {
-    if (m_current.customConstants != buffer)
-      m_dirtyFlags.set(DirtyFlag_CustomConstants);
-
-    m_pending.customConstants = buffer;
-  }
-
   void SetGeometryConstants(ID3D11Buffer* buffer)
   {
     if (m_current.geometryConstants != buffer)
@@ -240,7 +232,6 @@ private:
     DirtyFlag_Sampler0 = DirtyFlag_Texture0 + VideoCommon::MAX_PIXEL_SHADER_SAMPLERS,
     DirtyFlag_PixelConstants = DirtyFlag_Sampler0 + VideoCommon::MAX_PIXEL_SHADER_SAMPLERS,
     DirtyFlag_VertexConstants,
-    DirtyFlag_CustomConstants,  // Custom shader constants used by both vertex/pixel stages
     DirtyFlag_GeometryConstants,
 
     DirtyFlag_VertexBuffer,
@@ -266,7 +257,6 @@ private:
     std::array<ID3D11SamplerState*, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> samplers;
     std::array<ID3D11Buffer*, 2> pixelConstants;
     ID3D11Buffer* vertexConstants;
-    ID3D11Buffer* customConstants;
     ID3D11Buffer* geometryConstants;
     ID3D11Buffer* vertexBuffer;
     ID3D11Buffer* indexBuffer;

@@ -105,15 +105,8 @@ static_assert(sizeof(vertex_shader_uid_data) == 28, "vertex_shader_uid_data shou
 
 using VertexShaderUid = ShaderUid<vertex_shader_uid_data>;
 
-struct CustomVertexContents
-{
-  std::string_view shader = "";
-  std::string_view uniforms = "";
-};
-
 VertexShaderUid GetVertexShaderUid();
 ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& host_config,
-                                    const vertex_shader_uid_data* uid_data,
-                                    CustomVertexContents custom_contents);
+                                    const vertex_shader_uid_data* uid_data);
 void WriteVertexBody(APIType api_type, const ShaderHostConfig& host_config,
                      const vertex_shader_uid_data* uid_data, ShaderCode& out);

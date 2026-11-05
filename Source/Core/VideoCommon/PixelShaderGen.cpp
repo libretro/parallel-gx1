@@ -746,8 +746,7 @@ static void WriteFragmentDefinitions(APIType api_type, const ShaderHostConfig& h
                                      const pixel_shader_uid_data* uid_data, ShaderCode& out);
 
 ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& host_config,
-                                   const pixel_shader_uid_data* uid_data,
-                                   CustomPixelContents custom_contents)
+                                   const pixel_shader_uid_data* uid_data)
 {
   ShaderCode out;
 
@@ -896,13 +895,6 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
     }
   }
 
-  if (!custom_contents.uniforms.empty())
-  {
-    out.Write("UBO_BINDING(std140, 3) uniform CustomShaderBlock {{\n");
-    out.Write("{}", custom_contents.uniforms);
-    out.Write("}} custom_uniforms;\n");
-  }
-
   if (per_pixel_lighting)
   {
     GenerateLightingShaderHeader(out, uid_data->lighting);
@@ -911,20 +903,11 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
   WriteFragmentDefinitions(api_type, host_config, uid_data, out);
   WriteEmulatedFragmentBodyHeader(api_type, host_config, uid_data, out);
 
-  if (custom_contents.shader.empty())
-  {
-    out.Write("void process_fragment(in DolphinFragmentInput frag_input, out DolphinFragmentOutput "
-              "frag_output)\n");
-    out.Write("{{\n");
-
-    out.Write("\tdolphin_process_emulated_fragment(frag_input, frag_output);\n");
-
-    out.Write("}}\n");
-  }
-  else
-  {
-    out.Write("{}\n", custom_contents.shader);
-  }
+  out.Write("void process_fragment(in DolphinFragmentInput frag_input, out DolphinFragmentOutput "
+            "frag_output)\n");
+  out.Write("{{\n");
+  out.Write("\tdolphin_process_emulated_fragment(frag_input, frag_output);\n");
+  out.Write("}}\n");
 
   out.Write("void main()\n{{\n");
   out.Write("\tfloat4 rawpos = gl_FragCoord;\n");
@@ -987,9 +970,6 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
   {
     out.Write("\tfrag_input.tex{0} = vec3(0, 0, 0);\n", i);
   }
-
-  if (!custom_contents.shader.empty())
-    GenerateCustomLighting(&out, uid_data->lighting);
 
   out.Write("\tDolphinFragmentOutput frag_output;\n");
   out.Write("\tprocess_fragment(frag_input, frag_output);\n");
@@ -2025,16 +2005,6 @@ void WriteFragmentBody(APIType api_type, const ShaderHostConfig& host_config,
 static void WriteFragmentDefinitions(APIType api_type, const ShaderHostConfig& host_config,
                                      const pixel_shader_uid_data* uid_data, ShaderCode& out)
 {
-  out.Write("struct DolphinLightData\n");
-  out.Write("{{\n");
-  out.Write("\tfloat3 position;\n");
-  out.Write("\tfloat3 direction;\n");
-  out.Write("\tfloat3 color;\n");
-  out.Write("\tuint attenuation_type;\n");
-  out.Write("\tfloat4 cosatt;\n");
-  out.Write("\tfloat4 distatt;\n");
-  out.Write("}};\n\n");
-
   out.Write("struct DolphinFragmentInput\n");
   out.Write("{{\n");
   out.Write("\tvec4 color_0;\n");
@@ -2046,19 +2016,6 @@ static void WriteFragmentDefinitions(APIType api_type, const ShaderHostConfig& h
   {
     out.Write("\tvec3 tex{};\n", i);
   }
-  out.Write("\n");
-
-  out.Write("\tDolphinLightData[8] lights_chan0_color;\n");
-  out.Write("\tDolphinLightData[8] lights_chan0_alpha;\n");
-  out.Write("\tDolphinLightData[8] lights_chan1_color;\n");
-  out.Write("\tDolphinLightData[8] lights_chan1_alpha;\n");
-  out.Write("\tfloat4[2] ambient_lighting;\n");
-  out.Write("\tfloat4[2] base_material;\n");
-  out.Write("\tuint light_chan0_color_count;\n");
-  out.Write("\tuint light_chan0_alpha_count;\n");
-  out.Write("\tuint light_chan1_color_count;\n");
-  out.Write("\tuint light_chan1_alpha_count;\n");
-
   out.Write("}};\n\n");
 
   out.Write("struct DolphinFragmentOutput\n");
@@ -2066,16 +2023,6 @@ static void WriteFragmentDefinitions(APIType api_type, const ShaderHostConfig& h
   out.Write("\tivec4 main;\n");
   out.Write("\tivec4 last_texture;\n");
   out.Write("}};\n\n");
-
-  // CUSTOM_SHADER_LIGHTING_ATTENUATION_TYPE "enum" values
-  out.Write("const uint CUSTOM_SHADER_LIGHTING_ATTENUATION_TYPE_NONE = {}u;\n",
-            static_cast<u32>(AttenuationFunc::None));
-  out.Write("const uint CUSTOM_SHADER_LIGHTING_ATTENUATION_TYPE_POINT = {}u;\n",
-            static_cast<u32>(AttenuationFunc::Spec));
-  out.Write("const uint CUSTOM_SHADER_LIGHTING_ATTENUATION_TYPE_DIR = {}u;\n",
-            static_cast<u32>(AttenuationFunc::Dir));
-  out.Write("const uint CUSTOM_SHADER_LIGHTING_ATTENUATION_TYPE_SPOT = {}u;\n",
-            static_cast<u32>(AttenuationFunc::Spot));
 }
 
 static void WriteEmulatedFragmentBodyHeader(APIType api_type, const ShaderHostConfig& host_config,

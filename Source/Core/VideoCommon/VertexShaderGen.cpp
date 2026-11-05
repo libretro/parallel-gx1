@@ -360,8 +360,7 @@ static void WriteEmulatedVertexBodyHeader(APIType api_type, const ShaderHostConf
 }
 
 ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& host_config,
-                                    const vertex_shader_uid_data* uid_data,
-                                    CustomVertexContents custom_contents)
+                                    const vertex_shader_uid_data* uid_data)
 {
   ShaderCode out;
 
@@ -379,13 +378,6 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
 
   out.Write("{}", s_shader_uniforms);
   out.Write("}};\n");
-
-  if (!custom_contents.uniforms.empty())
-  {
-    out.Write("UBO_BINDING(std140, 3) uniform CustomShaderBlock {{\n");
-    out.Write("{}", custom_contents.uniforms);
-    out.Write("}} custom_uniforms;\n");
-  }
 
   if (uid_data->vs_expand != VSExpand::None)
   {
@@ -558,20 +550,11 @@ ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& ho
   WriteVertexStructs(api_type, host_config, uid_data, out);
   WriteEmulatedVertexBodyHeader(api_type, host_config, uid_data, out);
 
-  if (custom_contents.shader.empty())
-  {
-    out.Write("void process_vertex(in DolphinVertexInput vertex_input, out DolphinVertexOutput "
-              "vertex_output)\n");
-    out.Write("{{\n");
-
-    out.Write("\tdolphin_process_emulated_vertex(vertex_input, vertex_output);\n");
-
-    out.Write("}}\n");
-  }
-  else
-  {
-    out.Write("{}\n", custom_contents.shader);
-  }
+  out.Write("void process_vertex(in DolphinVertexInput vertex_input, out DolphinVertexOutput "
+            "vertex_output)\n");
+  out.Write("{{\n");
+  out.Write("\tdolphin_process_emulated_vertex(vertex_input, vertex_output);\n");
+  out.Write("}}\n");
 
   out.Write("void main()\n{{\n");
 

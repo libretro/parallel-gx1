@@ -254,28 +254,11 @@ void VertexManager::UpdatePixelShaderConstants()
     pixel_shader_manager.dirty = false;
   }
 
-  if (pixel_shader_manager.custom_constants_dirty)
-  {
-    StateTracker::GetInstance()->SetGXUniformBuffer(
-        UBO_DESCRIPTOR_SET_BINDING_CUST, m_uniform_stream_buffer->GetBuffer(),
-        m_uniform_stream_buffer->GetCurrentOffset(),
-        static_cast<u32>(pixel_shader_manager.custom_constants.size()));
-    std::memcpy(m_uniform_stream_buffer->GetCurrentHostPointer(),
-                pixel_shader_manager.custom_constants.data(),
-                pixel_shader_manager.custom_constants.size());
-    m_uniform_stream_buffer->CommitMemory(
-        static_cast<u32>(pixel_shader_manager.custom_constants.size()));
-    pixel_shader_manager.custom_constants_dirty = false;
-  }
 }
 
 bool VertexManager::ReserveConstantStorage()
 {
-  auto& system = Core::System::GetInstance();
-  auto& pixel_shader_manager = system.GetPixelShaderManager();
-  const u32 custom_constants_size = static_cast<u32>(pixel_shader_manager.custom_constants.size());
-
-  if (m_uniform_stream_buffer->ReserveMemory(m_uniform_buffer_reserve_size + custom_constants_size,
+  if (m_uniform_stream_buffer->ReserveMemory(m_uniform_buffer_reserve_size,
                                              g_vulkan_context->GetUniformBufferAlignment()))
   {
     return true;
@@ -296,8 +279,6 @@ void VertexManager::UploadAllConstants()
   auto& system = Core::System::GetInstance();
   auto& pixel_shader_manager = system.GetPixelShaderManager();
 
-  const u32 custom_constants_size = static_cast<u32>(pixel_shader_manager.custom_constants.size());
-
   // We are free to re-use parts of the buffer now since we're uploading all constants.
   const u32 ub_alignment = static_cast<u32>(g_vulkan_context->GetUniformBufferAlignment());
   const u32 pixel_constants_offset = 0;
@@ -305,9 +286,8 @@ void VertexManager::UploadAllConstants()
       Common::AlignUp(pixel_constants_offset + sizeof(PixelShaderConstants), ub_alignment);
   const u32 geometry_constants_offset =
       Common::AlignUp(vertex_constants_offset + sizeof(VertexShaderConstants), ub_alignment);
-  const u32 custom_pixel_constants_offset =
-      Common::AlignUp(geometry_constants_offset + sizeof(GeometryShaderConstants), ub_alignment);
-  const u32 allocation_size = custom_pixel_constants_offset + custom_constants_size;
+  const u32 allocation_size =
+      static_cast<u32>(geometry_constants_offset + sizeof(GeometryShaderConstants));
 
   // Allocate everything at once.
   // We should only be here if the buffer was full and a command buffer was submitted anyway.
@@ -330,13 +310,6 @@ void VertexManager::UploadAllConstants()
       m_uniform_stream_buffer->GetCurrentOffset() + vertex_constants_offset,
       sizeof(VertexShaderConstants));
 
-  if (!pixel_shader_manager.custom_constants.empty())
-  {
-    StateTracker::GetInstance()->SetGXUniformBuffer(
-        UBO_DESCRIPTOR_SET_BINDING_CUST, m_uniform_stream_buffer->GetBuffer(),
-        m_uniform_stream_buffer->GetCurrentOffset() + custom_pixel_constants_offset,
-        custom_constants_size);
-  }
   StateTracker::GetInstance()->SetGXUniformBuffer(
       UBO_DESCRIPTOR_SET_BINDING_GS, m_uniform_stream_buffer->GetBuffer(),
       m_uniform_stream_buffer->GetCurrentOffset() + geometry_constants_offset,
@@ -349,12 +322,6 @@ void VertexManager::UploadAllConstants()
               &vertex_shader_manager.constants, sizeof(VertexShaderConstants));
   std::memcpy(m_uniform_stream_buffer->GetCurrentHostPointer() + geometry_constants_offset,
               &geometry_shader_manager.constants, sizeof(GeometryShaderConstants));
-  if (!pixel_shader_manager.custom_constants.empty())
-  {
-    std::memcpy(m_uniform_stream_buffer->GetCurrentHostPointer() + custom_pixel_constants_offset,
-                pixel_shader_manager.custom_constants.data(),
-                pixel_shader_manager.custom_constants.size());
-  }
 
   // Finally, flush buffer memory after copying
   m_uniform_stream_buffer->CommitMemory(allocation_size);

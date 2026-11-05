@@ -20,11 +20,7 @@ namespace VideoCommon
 class DirectFilesystemAssetLibrary final : public WatchableFilesystemAssetLibrary
 {
 public:
-  LoadInfo LoadTexture(const AssetID& asset_id, TextureAndSamplerData* data) override;
   LoadInfo LoadTexture(const AssetID& asset_id, CustomTextureData* data) override;
-  LoadInfo LoadRasterSurfaceShader(const AssetID& asset_id, RasterSurfaceShaderData* data) override;
-  LoadInfo LoadMaterial(const AssetID& asset_id, MaterialData* data) override;
-  LoadInfo LoadMesh(const AssetID& asset_id, MeshData* data) override;
 
   // Assigns the asset id to a map of files, how this map is read is dependent on the data
   // For instance, a raw texture would expect the map to have a single entry and load that

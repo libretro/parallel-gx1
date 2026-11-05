@@ -59,7 +59,6 @@ void StateManager::Apply()
 
   const bool dirtyConstants = m_dirtyFlags.test(DirtyFlag_PixelConstants) ||
                               m_dirtyFlags.test(DirtyFlag_VertexConstants) ||
-                              m_dirtyFlags.test(DirtyFlag_CustomConstants) ||
                               m_dirtyFlags.test(DirtyFlag_GeometryConstants);
   const bool dirtyShaders = m_dirtyFlags.test(DirtyFlag_PixelShader) ||
                             m_dirtyFlags.test(DirtyFlag_VertexShader) ||
@@ -83,13 +82,6 @@ void StateManager::Apply()
       D3D::context->VSSetConstantBuffers(0, 1, &m_pending.vertexConstants);
       D3D::context->VSSetConstantBuffers(1, 1, &m_pending.vertexConstants);
       m_current.vertexConstants = m_pending.vertexConstants;
-    }
-
-    if (m_current.customConstants != m_pending.customConstants)
-    {
-      D3D::context->PSSetConstantBuffers(2, 1, &m_pending.customConstants);
-      D3D::context->VSSetConstantBuffers(2, 1, &m_pending.customConstants);
-      m_current.customConstants = m_pending.customConstants;
     }
 
     if (m_current.geometryConstants != m_pending.geometryConstants)
@@ -332,8 +324,6 @@ void StateManager::Restore()
   D3D::context->PSSetConstantBuffers(0, 2, m_pending.pixelConstants.data());
   D3D::context->VSSetConstantBuffers(0, 1, &m_pending.vertexConstants);
   D3D::context->VSSetConstantBuffers(1, 1, &m_pending.vertexConstants);
-  D3D::context->PSSetConstantBuffers(2, 1, &m_pending.customConstants);
-  D3D::context->VSSetConstantBuffers(2, 1, &m_pending.customConstants);
   D3D::context->GSSetConstantBuffers(0, 1, &m_pending.geometryConstants);
   D3D::context->IASetVertexBuffers(0, 1, &m_pending.vertexBuffer, &m_pending.vertexBufferStride,
                                    &m_pending.vertexBufferOffset);

@@ -1219,12 +1219,8 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/CustomAssetLoader.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/CustomTextureData.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/DirectFilesystemAssetLibrary.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Assets/MaterialAsset.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Assets/MeshAsset.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Assets/ShaderAsset.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/TextureAsset.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/TextureAssetUtils.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Assets/TextureSamplerValue.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AsyncRequests.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AsyncShaderCompiler.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/BoundingBox.cpp \
@@ -1249,13 +1245,10 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsModGroup.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsTarget.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsTargetGroup.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/CustomPipelineAction.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/MoveAction.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/PrintAction.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/ScaleAction.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/SkipAction.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/CustomPipeline.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/CustomShaderCache.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/FBInfo.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionFactory.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.cpp \
@@ -1276,13 +1269,8 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/Present.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/RenderState.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/CustomResourceManager.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Resources/InvalidTextures.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Resources/MaterialResource.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/Resource.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Resources/ShaderResource.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Resources/TextureAndSamplerResource.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/TextureDataResource.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Resources/TexturePool.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderCache.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderCompileUtils.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderGenCommon.cpp \

@@ -395,16 +395,6 @@ void Presenter::OnBackbufferSet(bool size_changed, bool is_first_set)
 
 void Presenter::ConfigChanged(u32 changed_bits)
 {
-  // Check for post-processing shader changes. Done up here as it doesn't affect anything outside
-  // the post-processor. Note that options are applied every frame, so no need to check those.
-  if (changed_bits & ConfigChangeBits::CONFIG_CHANGE_BIT_POST_PROCESSING_SHADER && m_post_processor)
-  {
-    // The existing shader must not be in use when it's destroyed
-    g_gfx->WaitForGPUIdle();
-
-    m_post_processor->RecompileShader();
-  }
-
   // Stereo mode change requires recompiling our post processing pipeline and imgui pipelines for
   // rendering the UI.
   if (changed_bits & ConfigChangeBits::CONFIG_CHANGE_BIT_STEREO_MODE)
