@@ -357,21 +357,28 @@ static T* Publish(retro_atomic_ptr_t* slot, ComPtr<T>&& state)
   return static_cast<T*>(retro_atomic_load_acquire_ptr(slot));
 }
 
+static void ReleaseSlot(retro_atomic_ptr_t* slot, void* ctx)
+{
+  IUnknown* state = static_cast<IUnknown*>(retro_atomic_exchange_ptr(slot, nullptr));
+  if (state)
+    state->Release();
+}
+
 StateCache::~StateCache()
 {
-  const auto release = [](retro_atomic_ptr_t* slot) {
-    if (auto* state = static_cast<IUnknown*>(retro_atomic_exchange_ptr(slot, nullptr)))
-      state->Release();
-  };
-  m_sampler.ForEach(release);
-  m_blend.ForEach(release);
-  m_raster.ForEach(release);
-  m_depth.ForEach(release);
+  atomic_slot_map_t* maps[4] = {m_sampler, m_blend, m_raster, m_depth};
+  int i;
+  for (i = 0; i < 4; i++)
+  {
+    atomic_slot_map_for_each(maps[i], ReleaseSlot, nullptr);
+    atomic_slot_map_free(maps[i]);
+  }
 }
 
 ID3D11SamplerState* StateCache::Get(SamplerState state)
 {
-  retro_atomic_ptr_t* const slot = m_sampler.Slot(state);
+  const u64 key = state.Hex();
+  retro_atomic_ptr_t* const slot = atomic_slot_map_slot(m_sampler, &key, sizeof(key));
   if (auto* cached = static_cast<ID3D11SamplerState*>(retro_atomic_load_acquire_ptr(slot)))
     return cached;
 
@@ -421,7 +428,7 @@ ID3D11SamplerState* StateCache::Get(SamplerState state)
 
 ID3D11BlendState* StateCache::Get(BlendingState state)
 {
-  retro_atomic_ptr_t* const slot = m_blend.Slot(state.hex);
+  retro_atomic_ptr_t* const slot = atomic_slot_map_slot(m_blend, &state.hex, sizeof(state.hex));
   if (auto* cached = static_cast<ID3D11BlendState*>(retro_atomic_load_acquire_ptr(slot)))
     return cached;
 
@@ -497,7 +504,7 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
 
 ID3D11RasterizerState* StateCache::Get(RasterizationState state)
 {
-  retro_atomic_ptr_t* const slot = m_raster.Slot(state.hex);
+  retro_atomic_ptr_t* const slot = atomic_slot_map_slot(m_raster, &state.hex, sizeof(state.hex));
   if (auto* cached = static_cast<ID3D11RasterizerState*>(retro_atomic_load_acquire_ptr(slot)))
     return cached;
 
@@ -517,7 +524,7 @@ ID3D11RasterizerState* StateCache::Get(RasterizationState state)
 
 ID3D11DepthStencilState* StateCache::Get(DepthState state)
 {
-  retro_atomic_ptr_t* const slot = m_depth.Slot(state.hex);
+  retro_atomic_ptr_t* const slot = atomic_slot_map_slot(m_depth, &state.hex, sizeof(state.hex));
   if (auto* cached = static_cast<ID3D11DepthStencilState*>(retro_atomic_load_acquire_ptr(slot)))
     return cached;
 

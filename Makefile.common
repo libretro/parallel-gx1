@@ -1078,6 +1078,7 @@ DOLPHIN_SOURCES_ASM :=
 DOLPHIN_SOURCES_OBJCXX :=
 DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/AudioCommon/FieldAudio.c \
+	$(CORE_DIR)/Source/Core/Common/AtomicMap.c \
 	$(CORE_DIR)/Source/Core/Common/CallGate.c \
 	$(CORE_DIR)/Source/Core/Common/FrameClock.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \

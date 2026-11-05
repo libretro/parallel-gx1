@@ -11,7 +11,7 @@
 
 #include <retro_atomic.h>
 
-#include "Common/AtomicHashMap.h"
+#include "Common/AtomicMap.h"
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
 #include "VideoBackends/D3D/D3DBase.h"
@@ -39,11 +39,11 @@ public:
 
 private:
   // Filled from the video thread and the shader compile workers alike; each slot holds one
-  // reference to its state object.
-  Common::AtomicSlotMap<u32> m_depth;
-  Common::AtomicSlotMap<u32> m_raster;
-  Common::AtomicSlotMap<u32> m_blend;
-  Common::AtomicSlotMap<SamplerState> m_sampler;
+  // reference to its state object. Keyed by the state's hex word(s).
+  atomic_slot_map_t* m_depth = atomic_slot_map_new(1024);
+  atomic_slot_map_t* m_raster = atomic_slot_map_new(1024);
+  atomic_slot_map_t* m_blend = atomic_slot_map_new(1024);
+  atomic_slot_map_t* m_sampler = atomic_slot_map_new(1024);
 };
 
 namespace D3D

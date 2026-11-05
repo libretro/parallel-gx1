@@ -4,7 +4,6 @@
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 
 #include <array>
-#include <atomic>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -49,10 +48,10 @@ static std::unique_ptr<StreamBuffer> s_buffer;
 static int num_failures = 0;
 
 static GLuint CurrentProgram = 0;
-ProgramShaderCache::PipelineProgramMap ProgramShaderCache::s_pipeline_programs;
+atomic_slot_map_t* ProgramShaderCache::s_pipeline_programs;
 quiesce_t ProgramShaderCache::s_pipeline_program_quiesce;
 static std::string s_glsl_header;
-static std::atomic<u64> s_shader_counter{0};
+static retro_atomic_64_t s_shader_counter;
 static thread_local bool s_is_shared_context = false;
 
 static std::string GetGLSLVersionString()
@@ -203,12 +202,11 @@ bool PipelineProgramKey::operator<(const PipelineProgramKey& rhs) const
          std::tie(rhs.vertex_shader_id, rhs.geometry_shader_id, rhs.pixel_shader_id);
 }
 
-std::size_t PipelineProgramKeyHash::operator()(const PipelineProgramKey& key) const
+static_assert(sizeof(PipelineProgramKey) == 3 * sizeof(u64), "the key's bytes are the key");
+
+static void AssertSlotEmpty(retro_atomic_ptr_t* slot, void* ctx)
 {
-  // We would really want std::hash_combine for this..
-  std::hash<u64> hasher;
-  return hasher(key.vertex_shader_id) + hasher(key.geometry_shader_id) +
-         hasher(key.pixel_shader_id);
+  DEBUG_ASSERT(!retro_atomic_load_acquire_ptr(slot));
 }
 
 StreamBuffer* ProgramShaderCache::GetUniformBuffer()
@@ -438,6 +436,8 @@ bool ProgramShaderCache::CheckProgramLinkResult(GLuint id, std::string_view vcod
 
 void ProgramShaderCache::Init()
 {
+  s_pipeline_programs = atomic_slot_map_new(1024);
+
   // We have to get the UBO alignment here because
   // if we generate a buffer that isn't aligned
   // then the UBO will fail.
@@ -472,9 +472,9 @@ void ProgramShaderCache::Shutdown()
 
   // All pipeline programs should have been released.
   // Every pipeline is gone by now, and with it every program.
-  s_pipeline_programs.ForEach([](retro_atomic_ptr_t* slot) {
-    DEBUG_ASSERT(!retro_atomic_load_acquire_ptr(slot));
-  });
+  atomic_slot_map_for_each(s_pipeline_programs, AssertSlotEmpty, nullptr);
+  atomic_slot_map_free(s_pipeline_programs);
+  s_pipeline_programs = nullptr;
   quiesce_deinit(&s_pipeline_program_quiesce);
 }
 
@@ -543,7 +543,7 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
   PipelineProgramKey key = {vertex_shader ? vertex_shader->GetID() : 0,
                             geometry_shader ? geometry_shader->GetID() : 0,
                             pixel_shader ? pixel_shader->GetID() : 0};
-  retro_atomic_ptr_t* const slot = s_pipeline_programs.Slot(key);
+  retro_atomic_ptr_t* const slot = atomic_slot_map_slot(s_pipeline_programs, &key, sizeof(key));
   {
     quiesce_enter(&s_pipeline_program_quiesce);
     auto* existing = static_cast<PipelineProgram*>(retro_atomic_load_acquire_ptr(slot));
@@ -652,13 +652,14 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
 
 bool ProgramShaderCache::TryReference(PipelineProgram* prog)
 {
-  std::size_t count = prog->reference_count.load();
-  while (count != 0)
+  for (;;)
   {
-    if (prog->reference_count.compare_exchange_weak(count, count + 1))
+    const int count = retro_atomic_load_acquire_int(&prog->reference_count);
+    if (count == 0)
+      return false;
+    if (retro_atomic_cas_int(&prog->reference_count, count, count + 1))
       return true;
   }
-  return false;
 }
 
 void ProgramShaderCache::FreePipelineProgram(quiesce_node_t* node)
@@ -668,13 +669,14 @@ void ProgramShaderCache::FreePipelineProgram(quiesce_node_t* node)
 
 void ProgramShaderCache::ReleasePipelineProgram(PipelineProgram* prog)
 {
-  if (--prog->reference_count > 0)
+  if (retro_atomic_fetch_sub_int(&prog->reference_count, 1) > 1)
     return;
 
   prog->shader.Destroy();
 
   // Unless a newer program already took its slot.
-  retro_atomic_cas_ptr(s_pipeline_programs.Slot(prog->key), prog, nullptr);
+  retro_atomic_cas_ptr(atomic_slot_map_slot(s_pipeline_programs, &prog->key, sizeof(prog->key)),
+                       prog, nullptr);
   quiesce_retire(&s_pipeline_program_quiesce, &prog->node, FreePipelineProgram);
 }
 
@@ -910,7 +912,7 @@ void ProgramShaderCache::CreateHeader()
 
 u64 ProgramShaderCache::GenerateShaderID()
 {
-  return s_shader_counter++;
+  return static_cast<u64>(retro_atomic_fetch_add_64(&s_shader_counter, 1));
 }
 
 bool SharedContextAsyncShaderCompiler::WorkerThreadInitMainThread(void** param)

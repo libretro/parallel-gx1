@@ -35,7 +35,42 @@ std::size_t GetAssetSize(const CustomTextureData& data)
   }
   return total;
 }
+
+// The maps' values: each begins with the node the map frees it through.
+struct AssetMapValue
+{
+  quiesce_node_t node;
+  Assets::AssetMap map;
+};
+
+struct AssetIDValue
+{
+  quiesce_node_t node;
+  CustomAssetLibrary::AssetID asset_id;
+};
+
+void FreeAssetMapValue(quiesce_node_t* node)
+{
+  delete reinterpret_cast<AssetMapValue*>(node);
+}
+
+void FreeAssetIDValue(quiesce_node_t* node)
+{
+  delete reinterpret_cast<AssetIDValue*>(node);
+}
 }  // namespace
+
+DirectFilesystemAssetLibrary::DirectFilesystemAssetLibrary()
+    : m_asset_id_to_asset_map_path(atomic_value_map_new(4096, FreeAssetMapValue)),
+      m_path_to_asset_id(atomic_value_map_new(4096, FreeAssetIDValue))
+{
+}
+
+DirectFilesystemAssetLibrary::~DirectFilesystemAssetLibrary()
+{
+  atomic_value_map_free(m_path_to_asset_id);
+  atomic_value_map_free(m_asset_id_to_asset_map_path);
+}
 
 CustomAssetLibrary::LoadInfo DirectFilesystemAssetLibrary::LoadTexture(const AssetID& asset_id,
                                                                        CustomTextureData* data)
@@ -70,31 +105,67 @@ CustomAssetLibrary::LoadInfo DirectFilesystemAssetLibrary::LoadTexture(const Ass
 void DirectFilesystemAssetLibrary::SetAssetIDMapData(const AssetID& asset_id,
                                                      VideoCommon::Assets::AssetMap asset_path_map)
 {
-  if (const auto previous_asset_map = m_asset_id_to_asset_map_path.Get(asset_id))
+  AssetMapValue* value;
+
+  atomic_value_map_enter(m_asset_id_to_asset_map_path);
+  value = reinterpret_cast<AssetMapValue*>(
+      atomic_value_map_get(m_asset_id_to_asset_map_path, asset_id.data(), asset_id.size()));
+  if (value)
   {
-    for (const auto& [name, path] : *previous_asset_map)
-      m_path_to_asset_id.Erase(PathToString(path));
+    for (const auto& [name, path] : value->map)
+    {
+      const std::string key = PathToString(path);
+      atomic_value_map_set(m_path_to_asset_id, key.data(), key.size(), nullptr);
+    }
   }
+  atomic_value_map_exit(m_asset_id_to_asset_map_path);
 
   for (const auto& [name, path] : asset_path_map)
-    m_path_to_asset_id.Set(PathToString(path), asset_id);
+  {
+    const std::string key = PathToString(path);
+    AssetIDValue* id_value = new AssetIDValue{{}, asset_id};
+    atomic_value_map_set(m_path_to_asset_id, key.data(), key.size(), &id_value->node);
+  }
 
-  m_asset_id_to_asset_map_path.Set(asset_id, std::move(asset_path_map));
+  value = new AssetMapValue{{}, std::move(asset_path_map)};
+  atomic_value_map_set(m_asset_id_to_asset_map_path, asset_id.data(), asset_id.size(),
+                       &value->node);
 }
 
 void DirectFilesystemAssetLibrary::PathModified(std::string_view path)
 {
-  if (const auto asset_id = m_path_to_asset_id.Get(path))
+  AssetID asset_id;
+  bool found = false;
+
+  atomic_value_map_enter(m_path_to_asset_id);
+  const AssetIDValue* value = reinterpret_cast<const AssetIDValue*>(
+      atomic_value_map_get(m_path_to_asset_id, path.data(), path.size()));
+  if (value)
+  {
+    asset_id = value->asset_id;
+    found = true;
+  }
+  atomic_value_map_exit(m_path_to_asset_id);
+
+  if (found)
   {
     auto& system = Core::System::GetInstance();
     auto& resource_manager = system.GetCustomResourceManager();
-    resource_manager.MarkAssetDirty(*asset_id);
+    resource_manager.MarkAssetDirty(asset_id);
   }
 }
 
 VideoCommon::Assets::AssetMap
 DirectFilesystemAssetLibrary::GetAssetMapForID(const AssetID& asset_id) const
 {
-  return m_asset_id_to_asset_map_path.Get(asset_id).value_or(VideoCommon::Assets::AssetMap{});
+  VideoCommon::Assets::AssetMap result;
+
+  atomic_value_map_enter(m_asset_id_to_asset_map_path);
+  const AssetMapValue* value = reinterpret_cast<const AssetMapValue*>(
+      atomic_value_map_get(m_asset_id_to_asset_map_path, asset_id.data(), asset_id.size()));
+  if (value)
+    result = value->map;
+  atomic_value_map_exit(m_asset_id_to_asset_map_path);
+  return result;
 }
 }  // namespace VideoCommon

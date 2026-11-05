@@ -12,7 +12,7 @@
 #include "VideoCommon/Assets/Types.h"
 #include "VideoCommon/Assets/WatchableFilesystemAssetLibrary.h"
 
-#include "Common/AtomicHashMap.h"
+#include "Common/AtomicMap.h"
 
 namespace VideoCommon
 {
@@ -21,6 +21,11 @@ namespace VideoCommon
 class DirectFilesystemAssetLibrary final : public WatchableFilesystemAssetLibrary
 {
 public:
+  DirectFilesystemAssetLibrary();
+  ~DirectFilesystemAssetLibrary() override;
+  DirectFilesystemAssetLibrary(const DirectFilesystemAssetLibrary&) = delete;
+  DirectFilesystemAssetLibrary& operator=(const DirectFilesystemAssetLibrary&) = delete;
+
   LoadInfo LoadTexture(const AssetID& asset_id, CustomTextureData* data) override;
 
   // Assigns the asset id to a map of files, how this map is read is dependent on the data
@@ -35,10 +40,8 @@ private:
   Assets::AssetMap GetAssetMapForID(const AssetID& asset_id) const;
 
   // Written while mods and texture packs load, read by the loader threads and the file
-  // watcher: lock-free maps, each value swapped whole.
-  Common::AtomicHashMap<AssetID, Assets::AssetMap, 4096, std::hash<std::string_view>>
-      m_asset_id_to_asset_map_path;
-  Common::AtomicHashMap<std::string, AssetID, 4096, std::hash<std::string_view>>
-      m_path_to_asset_id;
+  // watcher: lock-free maps keyed by the string's bytes, each value swapped whole.
+  atomic_value_map_t* m_asset_id_to_asset_map_path;  // AssetMapValue
+  atomic_value_map_t* m_path_to_asset_id;            // AssetIDValue
 };
 }  // namespace VideoCommon
