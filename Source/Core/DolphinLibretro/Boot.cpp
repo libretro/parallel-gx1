@@ -305,6 +305,15 @@ bool retro_load_game(const struct retro_game_info* game)
 #endif
 
   UICommon::SetUserDirectory(user_dir);
+  /* Shader caches live in the system directory whatever the save directory is: they belong to
+   * the core and the host's GPU, not to a game's saves. */
+  if (system_dir && *system_dir)
+  {
+    const std::string shader_dir = std::string(system_dir) + DIR_SEP "dolphin-emu" DIR_SEP
+                                   "User" DIR_SEP "Cache" DIR_SEP "Shaders" DIR_SEP;
+    File::CreateFullPath(shader_dir);
+    File::SetUserPath(D_SHADERCACHE_IDX, shader_dir);
+  }
   UICommon::CreateDirectories();
   UICommon::Init();
   Libretro::Log::Init();
