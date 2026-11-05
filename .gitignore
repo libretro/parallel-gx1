@@ -41,6 +41,6 @@ Source/Core/Common/scmrev.h
 # clangd cache for Neovim
 .cache/clangd
 # Ignore the libretro core built by the static Makefile
-/parallel_gamecubewii_libretro*.so
-/parallel_gamecubewii_libretro*.dll
-/parallel_gamecubewii_libretro*.dylib
+/parallel_gx1_libretro*.so
+/parallel_gx1_libretro*.dll
+/parallel_gx1_libretro*.dylib
