@@ -6,7 +6,7 @@
 #include <map>
 #include <vector>
 
-#include "AudioCommon/AudioCommon.h"
+#include "AudioCommon/FieldAudio.h"
 #include "Common/Logging/Log.h"
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
@@ -1038,10 +1038,8 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
   // echo the request as the response and respond immediately
   if (cmd->length > 32 && cmd->length <= 64)
   {
-    // Play audio through Portal Mixer
-    // Audio is unsigned 16 bit, supplied as 64 bytes which is 32 samples
-    SoundStream* sound_stream = system.GetSoundStream();
-    sound_stream->GetMixer()->PushSkylanderPortalSamples(buf, cmd->length / 2);
+    /* The portal's speaker: 32 little-endian mono samples, mixed in where the output is now. */
+    field_audio_mix_mono_le(FIELD_AUDIO_PORTAL, buf, cmd->length / 2);
 
     std::array<u8, 64> audio_interrupt_response = {};
     u8* audio_buf = audio_interrupt_response.data();

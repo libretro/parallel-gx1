@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "AudioCommon/AudioCommon.h"
+#include "AudioCommon/FieldAudio.h"
 
 #include "Common/Align.h"
 #include "Common/BitField.h"
@@ -217,9 +217,8 @@ void DVDInterface::DTKStreamingCallback(DIInterruptType interrupt_type,
     const u32 pending_blocks = std::min(m_pending_blocks, MAX_POSSIBLE_BLOCKS);
     ProcessDTKSamples(temp_pcm.data(), pending_blocks, audio_data);
 
-    SoundStream* sound_stream = m_system.GetSoundStream();
-    sound_stream->GetMixer()->PushStreamingSamples(temp_pcm.data(),
-                                                   pending_blocks * StreamADPCM::SAMPLES_PER_BLOCK);
+    field_audio_mix_be_rl(FIELD_AUDIO_STREAM, temp_pcm.data(),
+                          pending_blocks * StreamADPCM::SAMPLES_PER_BLOCK);
 
     if (m_stream && ai.IsPlaying())
     {
@@ -241,7 +240,7 @@ void DVDInterface::DTKStreamingCallback(DIInterruptType interrupt_type,
   // Read the next chunk of audio data asynchronously.
   s64 ticks_to_dtk = m_system.GetSystemTimers().GetTicksPerSecond() * s64(m_pending_blocks) *
                      StreamADPCM::SAMPLES_PER_BLOCK * sample_rate_divisor /
-                     Mixer::FIXED_SAMPLE_RATE_DIVIDEND;
+                     FIELD_AUDIO_RATE_DIVIDEND;
   ticks_to_dtk -= cycles_late;
   if (read_length > 0)
   {

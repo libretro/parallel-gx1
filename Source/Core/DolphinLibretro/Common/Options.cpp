@@ -530,21 +530,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
     },
     "enabled"
   },
-  {
-    Libretro::Options::audio::CALL_BACK_AUDIO,
-    "Audio / DSP > Async Audio Callback",
-    "Async Audio Callback",
-    "Use asynchronous audio callbacks.",
-    "Pushes audio asynchronously instead of synchronously. Restart core to take affect.",
-    CATEGORY_AUDIO,
-    {
-      { "0", "Sync - Dolphin will push samples" },
-      { "1",  "Sync - Per Frame using target refresh rate" },
-      { "2",  "Async - driven by callbacks using refresh rate and audio buffer status" },
-      { nullptr, nullptr }
-    },
-    "1"
-  },
 
   // ========== SYSCONF (GC) ==========
   {

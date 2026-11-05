@@ -25,7 +25,7 @@
 
 #include <memory>
 
-#include "AudioCommon/AudioCommon.h"
+#include "AudioCommon/FieldAudio.h"
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -423,7 +423,7 @@ void DSPManager::UpdateDSPSlice(int cycles)
 // This happens at 4 khz, since 32 bytes at 4khz = 4 bytes at 32 khz (16bit stereo pcm)
 void DSPManager::UpdateAudioDMA()
 {
-  static short zero_samples[8 * 2] = {0};
+  static const s16 zero_samples[8 * 2] = {0};
   if (m_audio_dma.AudioDMAControl.Enable)
   {
     // Read audio at g_audioDMA.current_source_address in RAM and push onto an
@@ -431,7 +431,7 @@ void DSPManager::UpdateAudioDMA()
     // streaming output.
     auto& memory = m_system.GetMemory();
     void* address = memory.GetPointerForRange(m_audio_dma.current_source_address, 32);
-    AudioCommon::SendAIBuffer(m_system, static_cast<short*>(address), 8);
+    field_audio_push_dma(static_cast<const s16*>(address), 8);
 
     if (m_audio_dma.remaining_blocks_count != 0)
     {
@@ -449,7 +449,7 @@ void DSPManager::UpdateAudioDMA()
   }
   else
   {
-    AudioCommon::SendAIBuffer(m_system, &zero_samples[0], 8);
+    field_audio_push_dma(zero_samples, 8);
   }
 }
 

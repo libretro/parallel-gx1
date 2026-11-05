@@ -8,7 +8,6 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#include "AudioCommon/AudioCommon.h"
 #include "Common/Assert.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -63,12 +62,6 @@ const Info<bool> MAIN_ENABLE_CHEATS{{System::Main, "Core", "EnableCheats"}, fals
 const Info<int> MAIN_GC_LANGUAGE{{System::Main, "Core", "SelectedLanguage"}, 0};
 const Info<bool> MAIN_OVERRIDE_REGION_SETTINGS{{System::Main, "Core", "OverrideRegionSettings"},
                                                false};
-const Info<bool> MAIN_DPL2_DECODER{{System::Main, "Core", "DPL2Decoder"}, false};
-const Info<AudioCommon::DPL2Quality> MAIN_DPL2_QUALITY{{System::Main, "Core", "DPL2Quality"},
-                                                       AudioCommon::GetDefaultDPL2Quality()};
-const Info<int> MAIN_AUDIO_BUFFER_SIZE{{System::Main, "Core", "AudioBufferSize"}, 80};
-const Info<bool> MAIN_AUDIO_FILL_GAPS{{System::Main, "Core", "AudioFillGaps"}, true};
-const Info<bool> MAIN_AUDIO_PRESERVE_PITCH{{System::Main, "Core", "AudioPreservePitch"}, false};
 const Info<std::string> MAIN_MEMCARD_A_PATH{{System::Main, "Core", "MemcardAPath"}, ""};
 const Info<std::string> MAIN_MEMCARD_B_PATH{{System::Main, "Core", "MemcardBPath"}, ""};
 const Info<std::string>& GetInfoForMemcardPath(ExpansionInterface::Slot slot)
@@ -291,14 +284,7 @@ const Info<bool> MAIN_DISABLE_SCREENSAVER{{System::Main, "Display", "DisableScre
 const Info<bool> MAIN_DSP_THREAD{{System::Main, "DSP", "DSPThread"}, false};
 const Info<bool> MAIN_DSP_CAPTURE_LOG{{System::Main, "DSP", "CaptureLog"}, false};
 const Info<bool> MAIN_DSP_JIT{{System::Main, "DSP", "EnableJIT"}, true};
-const Info<bool> MAIN_DUMP_AUDIO{{System::Main, "DSP", "DumpAudio"}, false};
-const Info<bool> MAIN_DUMP_AUDIO_SILENT{{System::Main, "DSP", "DumpAudioSilent"}, false};
 const Info<bool> MAIN_DUMP_UCODE{{System::Main, "DSP", "DumpUCode"}, false};
-
-bool ShouldUseDPL2Decoder()
-{
-  return Get(MAIN_DPL2_DECODER) && !Get(MAIN_DSP_HLE);
-}
 
 // Main.General
 
@@ -642,18 +628,6 @@ const Info<std::string> MAIN_TRIFORCE_IP_REDIRECTIONS{
 
 // Main.WiimoteAudioRouting
 
-const Info<bool> MAIN_WIIMOTE_AUDIO_ROUTING_ENABLED{
-    {System::Main, "Core", "WiimoteAudioRoutingEnabled"}, false};
-const std::array<Info<bool>, WIIMOTE_SPEAKER_COUNT> MAIN_WIIMOTE_AUDIO_OUTPUT_ENABLED{
-    Info<bool>{{System::Main, "Core", "Wiimote1AudioOutputEnabled"}, false},
-    Info<bool>{{System::Main, "Core", "Wiimote2AudioOutputEnabled"}, false},
-    Info<bool>{{System::Main, "Core", "Wiimote3AudioOutputEnabled"}, false},
-    Info<bool>{{System::Main, "Core", "Wiimote4AudioOutputEnabled"}, false}};
-const std::array<Info<std::string>, WIIMOTE_SPEAKER_COUNT> MAIN_WIIMOTE_AUDIO_OUTPUT_DEVICE{
-    Info<std::string>{{System::Main, "Core", "Wiimote1AudioOutputDevice"}, ""},
-    Info<std::string>{{System::Main, "Core", "Wiimote2AudioOutputDevice"}, ""},
-    Info<std::string>{{System::Main, "Core", "Wiimote3AudioOutputDevice"}, ""},
-    Info<std::string>{{System::Main, "Core", "Wiimote4AudioOutputDevice"}, ""}};
 
 // The reason we need this function is because some memory card code
 // expects to get a non-NTSC-K region even if we're emulating an NTSC-K Wii.

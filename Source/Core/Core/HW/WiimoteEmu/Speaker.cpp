@@ -5,8 +5,8 @@
 
 #include <cassert>
 
-#include "AudioCommon/AudioCommon.h"
 
+#include "AudioCommon/FieldAudio.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 
@@ -56,86 +56,68 @@ static s16 adpcm_yamaha_expand_nibble(ADPCMState& s, u8 nibble)
 
 void SpeakerLogic::SpeakerData(const u8* data, int length, float speaker_pan)
 {
-  // TODO: should we still process samples for the decoder state?
-  if (!m_speaker_enabled)
+  /* Each sample is mixed into the console's output as it is decoded, at the remote's rate:
+   * nothing is collected first. */
+  enum field_audio_mix mix;
+  unsigned rate_dividend, volume_divisor, left, right;
+  double volume;
+  int i;
+
+  if (!m_speaker_enabled || reg_data.sample_rate == 0 || length == 0)
     return;
-
-  if (reg_data.sample_rate == 0 || length == 0)
+  if (m_wiimote_index >= 4)
     return;
+  mix = (enum field_audio_mix)(FIELD_AUDIO_WIIMOTE0 + m_wiimote_index);
 
-  // Even if volume is zero we process samples to maintain proper decoder state.
-
-  // Potentially 40 resulting samples.
-  std::array<s16, WiimoteCommon::OutputReportSpeakerData::DATA_SIZE * 2> samples;
-  assert(length * 2 <= static_cast<int>(samples.size()));
-
-  unsigned int sample_rate_dividend, sample_length;
-  u8 volume_divisor;
-
+  /* Following details from http://wiibrew.org/wiki/Wiimote#Speaker */
   if (reg_data.format == SpeakerLogic::DATA_FORMAT_PCM)
   {
-    // 8 bit PCM
-    for (int i = 0; i < length; ++i)
-    {
-      samples[i] = ((s16)(s8)data[i]) * 0x100;
-    }
-
-    // Following details from http://wiibrew.org/wiki/Wiimote#Speaker
-    sample_rate_dividend = 12000000;
+    rate_dividend = 12000000;
     volume_divisor = 0xff;
-    sample_length = (unsigned int)length;
   }
   else if (reg_data.format == SpeakerLogic::DATA_FORMAT_ADPCM)
   {
-    // 4 bit Yamaha ADPCM (same as dreamcast)
-    for (int i = 0; i < length; ++i)
-    {
-      samples[i * 2] = adpcm_yamaha_expand_nibble(adpcm_state, (data[i] >> 4) & 0xf);
-      samples[i * 2 + 1] = adpcm_yamaha_expand_nibble(adpcm_state, data[i] & 0xf);
-    }
-
-    // Following details from http://wiibrew.org/wiki/Wiimote#Speaker
-    sample_rate_dividend = 6000000;
-    volume_divisor = 0x7F;
-    sample_length = (unsigned int)length * 2;
+    rate_dividend = 6000000;
+    volume_divisor = 0x7f;
   }
   else
   {
     ERROR_LOG_FMT(IOS_WIIMOTE, "Unknown speaker format {:x}", reg_data.format);
     return;
   }
-
   if (reg_data.volume > volume_divisor)
-  {
-    DEBUG_LOG_FMT(IOS_WIIMOTE, "Wiimote volume is higher than suspected maximum!");
     volume_divisor = reg_data.volume;
+
+  /* 0 to 255, the pan only ever turning one side down: at 0 the remote plays at its own level. */
+  volume = reg_data.volume * 256.0 / volume_divisor;
+  if (speaker_pan < -1.f)
+    speaker_pan = -1.f;
+  if (speaker_pan > 1.f)
+    speaker_pan = 1.f;
+  left = (unsigned)((speaker_pan > 0.f ? 1.f - speaker_pan : 1.f) * volume);
+  right = (unsigned)((speaker_pan < 0.f ? 1.f + speaker_pan : 1.f) * volume);
+  field_audio_mix_set_volume(mix, left > 255 ? 255 : left, right > 255 ? 255 : right);
+  /* ADPCM's rate is thought to be twice the register's (3000 x2 = 6000). */
+  field_audio_mix_set_rate(mix, FIELD_AUDIO_RATE_DIVIDEND /
+                                    (rate_dividend / reg_data.sample_rate * 2));
+
+  if (reg_data.format == SpeakerLogic::DATA_FORMAT_PCM)
+  {
+    for (i = 0; i < length; ++i)
+    {
+      const s16 sample = (s16)((s8)data[i] * 0x100);
+      field_audio_mix_frame(mix, sample, sample);
+    }
+    return;
   }
-
-  // SetWiimoteSpeakerVolume expects values from 0 to 255.
-  // Multiply by 256, floor to int, and clamp to 255 for a uniformly mapped conversion.
-  const double volume = float(reg_data.volume) * 256.f / volume_divisor;
-
-  // This used the "Constant Power Pan Law", but it is undesirable
-  // if the pan is 0, and it implied that the loudness of a wiimote speaker
-  // is equal to the loudness of your device speakers, which isn't true at all.
-  // This way, if the pan is 0, it's like if it is not there.
-  // We should play the samples from the wiimote at the native volume they came with,
-  // because you can lower their volume from the Wii settings and because they are
-  // already extremely low quality, so any additional quality loss isn't welcome.
-  speaker_pan = std::clamp(speaker_pan, -1.f, 1.f);
-  const u32 l_volume = std::min(u32(std::min(1.f - speaker_pan, 1.f) * volume), 255u);
-  const u32 r_volume = std::min(u32(std::min(1.f + speaker_pan, 1.f) * volume), 255u);
-
-  auto& system = Core::System::GetInstance();
-  SoundStream* sound_stream = system.GetSoundStream();
-
-  sound_stream->GetMixer()->SetWiimoteSpeakerVolume(m_wiimote_index, l_volume, r_volume);
-
-  // ADPCM sample rate is thought to be x2.(3000 x2 = 6000).
-  const unsigned int sample_rate = sample_rate_dividend / reg_data.sample_rate;
-  sound_stream->GetMixer()->PushWiimoteSpeakerSamples(
-      m_wiimote_index, samples.data(), sample_length,
-      Mixer::FIXED_SAMPLE_RATE_DIVIDEND / (sample_rate * 2));
+  /* 4 bit Yamaha ADPCM (same as dreamcast) */
+  for (i = 0; i < length; ++i)
+  {
+    const s16 high = adpcm_yamaha_expand_nibble(adpcm_state, (data[i] >> 4) & 0xf);
+    const s16 low = adpcm_yamaha_expand_nibble(adpcm_state, data[i] & 0xf);
+    field_audio_mix_frame(mix, high, high);
+    field_audio_mix_frame(mix, low, low);
+  }
 }
 
 void SpeakerLogic::Reset()

@@ -47,7 +47,7 @@ public:
   void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
 
   // Get the audio rate divisors (divisors for 48KHz or 32KHz only)
-  // Mixer::FIXED_SAMPLE_RATE_DIVIDEND will be the dividend used for these divisors
+  // FIELD_AUDIO_RATE_DIVIDEND will be the dividend used for these divisors
   u32 GetAIDSampleRateDivisor() const;
   u32 GetAISSampleRateDivisor() const;
 

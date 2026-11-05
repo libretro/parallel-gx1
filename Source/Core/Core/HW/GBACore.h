@@ -25,7 +25,6 @@
 #include "Common/WorkQueueThread.h"
 
 class GBAHostInterface;
-class Mixer;
 class PointerWrap;
 
 namespace Core
@@ -46,7 +45,6 @@ struct SIODriver : GBASIODriver
 struct AVStream : mAVStream
 {
   Core* core;
-  Mixer* mixer;
 };
 
 struct CoreInfo
@@ -94,6 +92,7 @@ public:
 
   mPlatform GetPlatform() const { return m_core->platform(m_core); }
   u32 GetAudioSampleRate() const { return m_core->audioSampleRate(m_core); }
+  int GetDeviceNumber() const { return m_device_number; }
 
   void ImportState(std::string_view state_path);
   void ExportState(std::string_view state_path);

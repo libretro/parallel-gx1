@@ -165,17 +165,6 @@ FATFS_SOURCES_C += \
 	$(CORE_DIR)/Externals/FatFs/ff.c \
 	$(CORE_DIR)/Externals/FatFs/ffunicode.c
 
-# FREESURROUND
-FREESURROUND_SOURCES_C :=
-FREESURROUND_SOURCES_CXX :=
-FREESURROUND_SOURCES_ASM :=
-FREESURROUND_SOURCES_OBJCXX :=
-FREESURROUND_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/FreeSurround/source/ChannelMaps.cpp \
-	$(CORE_DIR)/Externals/FreeSurround/source/KissFFT.cpp \
-	$(CORE_DIR)/Externals/FreeSurround/source/KissFFTR.cpp \
-	$(CORE_DIR)/Externals/FreeSurround/source/FreeSurroundDecoder.cpp
-
 # LZO
 LZO_SOURCES_C :=
 LZO_SOURCES_CXX :=
@@ -1088,15 +1077,12 @@ DOLPHIN_SOURCES_CXX :=
 DOLPHIN_SOURCES_ASM :=
 DOLPHIN_SOURCES_OBJCXX :=
 DOLPHIN_SOURCES_C += \
+	$(CORE_DIR)/Source/Core/AudioCommon/FieldAudio.c \
 	$(CORE_DIR)/Source/Core/Common/CallGate.c \
 	$(CORE_DIR)/Source/Core/Common/FrameClock.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c
 DOLPHIN_SOURCES_CXX += \
-	$(CORE_DIR)/Source/Core/AudioCommon/AudioCommon.cpp \
-	$(CORE_DIR)/Source/Core/AudioCommon/Mixer.cpp \
-	$(CORE_DIR)/Source/Core/AudioCommon/SurroundDecoder.cpp \
-	$(CORE_DIR)/Source/Core/AudioCommon/WaveFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/AssemblerShared.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/AssemblerTables.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/GekkoAssembler.cpp \
@@ -1908,8 +1894,6 @@ FATFS_FLAGS := -w -I$(EXT_DIR)/FatFs
 
 LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -DHAVE_THREAD_STORAGE -I$(EXT_DIR)/libretro-common/include
 
-FREESURROUND_FLAGS    := -w -I$(EXT_DIR)/FreeSurround/include
-FREESURROUND_CXXFLAGS := -std=c++14
 
 LZO_FLAGS := -w -I$(EXT_DIR)/LZO
 
@@ -2089,7 +2073,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
 	-I$(EXT_DIR)/glslang/glslang -I$(GEN_DIR)/include $(MGBA_INC) \
 	-I$(EXT_DIR)/libspng/libspng/spng -I$(EXT_DIR)/xxhash/xxHash \
-	-I$(EXT_DIR)/tinygltf -I$(EXT_DIR)/FreeSurround/include \
+	-I$(EXT_DIR)/tinygltf \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib -I$(EXT_DIR)/Bochs_disasm \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include \
@@ -2151,8 +2135,7 @@ endif
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
-	MGBA GLSLANG SFML FMT PUGIXML XXHASH TINYGLTF FATFS \
-	FREESURROUND
+	MGBA GLSLANG SFML FMT PUGIXML XXHASH TINYGLTF FATFS
 ifeq ($(ARCH_X86_64),1)
    LIB_GROUPS += BDISASM
 endif

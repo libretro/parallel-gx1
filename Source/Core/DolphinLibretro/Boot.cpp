@@ -409,9 +409,6 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::SYSCONF_LANGUAGE, language);
   Config::SetBase(Config::MAIN_GC_LANGUAGE, DiscIO::ToGameCubeLanguage(static_cast<DiscIO::Language>(language)));
 
-  Config::SetBase(Config::MAIN_DPL2_DECODER, false);
-  Config::SetBase(Config::MAIN_AUDIO_FILL_GAPS, false);
-
   {
     // Overclock (cpu clock rate) — option values in option_defs used strings like "100%" etc.
     double multiplier = Libretro::GetOption<double>(core::CPU_CLOCK_RATE, 1.0);
@@ -438,7 +435,6 @@ bool retro_load_game(const struct retro_game_info* game)
   // Main.DSP
   Config::SetBase(Config::MAIN_DSP_JIT,
                      Libretro::GetOption<bool>(audio::DSP_JIT, /*def=*/true));
-  Config::SetBase(Config::MAIN_DUMP_AUDIO, false);
 
   // Main.BluetoothPassthrough
   Config::SetBase(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED,
@@ -681,8 +677,6 @@ bool retro_load_game(const struct retro_game_info* game)
   NOTICE_LOG_FMT(BOOT, "Fastmem enabled = {}", (Config::Get(Config::MAIN_FASTMEM)) ? "Yes" : "No");
   NOTICE_LOG_FMT(BOOT, "JIT debug enabled = {}", Config::IsDebuggingEnabled() ? "Yes" : "No");
 
-  Libretro::FrameTiming::Init();
-  Libretro::Audio::Init();
   Libretro::Video::Init();
   // The hardware renderer was asked for and no hardware context was granted (e.g. no GLES 3): fail the load so the
   // frontend reports it, rather than run on the null backend behind a black screen.

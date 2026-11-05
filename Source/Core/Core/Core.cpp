@@ -20,7 +20,7 @@
 #include <windows.h>
 #endif
 
-#include "AudioCommon/AudioCommon.h"
+#include "AudioCommon/FieldAudio.h"
 
 #include "Common/Assert.h"
 #include "Common/CPUDetect.h"
@@ -515,9 +515,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
   system.GetMovie().Init(*boot);
   Common::ScopeGuard movie_guard([&system] { system.GetMovie().Shutdown(); });
 
-  AudioCommon::InitSoundStream(system);
-  Common::ScopeGuard audio_guard([&system] { AudioCommon::ShutdownSoundStream(system); });
-
   HW::Init(system, nullptr);
 
   Common::ScopeGuard hw_guard{[&system] {
@@ -556,8 +553,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
     PanicAlertFmt("Failed to initialize DSP emulation!");
     return;
   }
-
-  AudioCommon::PostInitSoundStream(system);
 
   // Set execution state to known values (CPU/FIFO/Audio Paused)
   system.GetCPU().Break();
@@ -634,9 +629,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
           if (vg_ptr) vg_ptr->Exit();
       }));
     }
-
-    s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
-      [g = std::move(audio_guard)]() mutable { g.Exit(); }));
 
     s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
       [g = std::move(wiifs_guard)]() mutable { g.Exit(); }));
@@ -838,6 +830,35 @@ void Callback_FramePresented(const PresentInfo& present_info)
 }
 
 // Called from VideoInterface::Update (CPU thread) at emulated field boundaries
+/* The field's audio ends here: its length is the emulated time since the last field at the
+ * output rate, the remainder carried so no sample is gained or lost over time. CPU thread. */
+static void SealFieldAudio(Core::System& system)
+{
+  static u64 s_last_ticks = 0;
+  static u64 s_remainder = 0;
+  const u64 ticks = system.GetCoreTiming().GetTicks();
+  const u64 per_second = system.GetSystemTimers().GetTicksPerSecond();
+  const u64 divisor = field_audio_output_divisor();
+  u64 scaled, denominator, frames;
+
+  if (ticks < s_last_ticks || per_second == 0 || divisor == 0)
+  {
+    /* A loaded state or a new boot: the time since the last field means nothing. */
+    s_last_ticks = ticks;
+    s_remainder = 0;
+    field_audio_seal(0);
+    return;
+  }
+  scaled = (ticks - s_last_ticks) * FIELD_AUDIO_RATE_DIVIDEND + s_remainder;
+  denominator = per_second * divisor;
+  frames = scaled / denominator;
+  s_remainder = scaled % denominator;
+  s_last_ticks = ticks;
+  if (frames > FIELD_AUDIO_MAX_FRAMES)
+    frames = FIELD_AUDIO_MAX_FRAMES;
+  field_audio_seal((unsigned)frames);
+}
+
 void Callback_NewField(Core::System& system)
 {
   if (s_frame_step)
@@ -848,12 +869,12 @@ void Callback_NewField(Core::System& system)
   }
 
   AchievementManager::GetInstance().DoFrame();
+
+  // Sealed before the GPU loop is let go, so the retro_run this field ends finds it.
+  SealFieldAudio(system);
+
   if (system.IsDualCoreMode())
     system.GetFifo().StopGpuLoop();
-  // frontend waiting on audio here holds the thread while
-  // the frame is presented.
-  if (SoundStream* sound_stream = system.GetSoundStream())
-    sound_stream->NewField();
 }
 
 void UpdateTitle(Core::System& system)

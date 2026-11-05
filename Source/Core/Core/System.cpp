@@ -5,7 +5,6 @@
 
 #include <memory>
 
-#include "AudioCommon/SoundStream.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/CoreTiming.h"
 #include "Core/FifoPlayer/FifoPlayer.h"
@@ -62,9 +61,6 @@ struct System::Impl
   // Built first since other constructors may register hooks right away.
   VideoEvents m_video_events;
 
-  std::unique_ptr<SoundStream> m_sound_stream;
-  bool m_sound_stream_running = false;
-  bool m_audio_dump_started = false;
 
   std::unique_ptr<IOS::HLE::EmulationKernel> m_ios;
 
@@ -116,36 +112,6 @@ void System::Initialize()
   m_mmu_enabled = Config::Get(Config::MAIN_MMU);
   m_pause_on_panic_enabled = Config::Get(Config::MAIN_PAUSE_ON_PANIC);
   m_simulated_memory_size = SConfig::GetInstance().GetSimulatedMemorySize();
-}
-
-SoundStream* System::GetSoundStream() const
-{
-  return m_impl->m_sound_stream.get();
-}
-
-void System::SetSoundStream(std::unique_ptr<SoundStream> sound_stream)
-{
-  m_impl->m_sound_stream = std::move(sound_stream);
-}
-
-bool System::IsSoundStreamRunning() const
-{
-  return m_impl->m_sound_stream_running;
-}
-
-void System::SetSoundStreamRunning(bool running)
-{
-  m_impl->m_sound_stream_running = running;
-}
-
-bool System::IsAudioDumpStarted() const
-{
-  return m_impl->m_audio_dump_started;
-}
-
-void System::SetAudioDumpStarted(bool started)
-{
-  m_impl->m_audio_dump_started = started;
 }
 
 IOS::HLE::EmulationKernel* System::GetIOS() const

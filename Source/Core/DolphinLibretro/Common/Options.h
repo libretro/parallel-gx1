@@ -182,7 +182,6 @@ namespace core {
   namespace audio {
   constexpr const char DSP_HLE[] = "dolphin_dsp_hle";
   constexpr const char DSP_JIT[] = "dolphin_dsp_jit";
-  constexpr const char CALL_BACK_AUDIO[] = "dolphin_call_back_audio_method";
 }  // namespace audio
 
 // ======================================================

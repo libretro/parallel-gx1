@@ -40,7 +40,7 @@ This file mainly deals with the [Drive I/F], however [AIDFR] controls
 
 #include <algorithm>
 
-#include "AudioCommon/AudioCommon.h"
+#include "AudioCommon/FieldAudio.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Core/CoreTiming.h"
@@ -71,8 +71,8 @@ enum
 };
 
 AudioInterfaceManager::AudioInterfaceManager(Core::System& system)
-    : m_ais_sample_rate_divisor(Mixer::FIXED_SAMPLE_RATE_DIVIDEND / 48000),
-      m_aid_sample_rate_divisor(Mixer::FIXED_SAMPLE_RATE_DIVIDEND / 32000), m_system(system)
+    : m_ais_sample_rate_divisor(FIELD_AUDIO_RATE_DIVIDEND / 48000),
+      m_aid_sample_rate_divisor(FIELD_AUDIO_RATE_DIVIDEND / 32000), m_system(system)
 {
 }
 
@@ -89,8 +89,12 @@ void AudioInterfaceManager::DoState(PointerWrap& p)
   p.Do(m_aid_sample_rate_divisor);
   p.Do(m_cpu_cycles_per_sample);
 
-  SoundStream* sound_stream = m_system.GetSoundStream();
-  sound_stream->GetMixer()->DoState(p);
+  if (p.IsReadMode())
+  {
+    field_audio_set_dma_rate(m_aid_sample_rate_divisor);
+    field_audio_mix_set_rate(FIELD_AUDIO_STREAM, m_ais_sample_rate_divisor);
+    field_audio_mix_set_volume(FIELD_AUDIO_STREAM, m_volume.left, m_volume.right);
+  }
 }
 
 void AudioInterfaceManager::UpdateInterrupts()
@@ -126,7 +130,7 @@ int AudioInterfaceManager::GetAIPeriod() const
 {
   u64 period = m_cpu_cycles_per_sample * (m_interrupt_timing - m_sample_counter);
   u64 s_period =
-      m_cpu_cycles_per_sample * Mixer::FIXED_SAMPLE_RATE_DIVIDEND / m_ais_sample_rate_divisor;
+      m_cpu_cycles_per_sample * FIELD_AUDIO_RATE_DIVIDEND / m_ais_sample_rate_divisor;
   if (period == 0)
     return static_cast<int>(s_period);
   return static_cast<int>(std::min(period, s_period));
@@ -167,8 +171,7 @@ void AudioInterfaceManager::SetAIDSampleRate(SampleRate sample_rate)
     m_aid_sample_rate_divisor = Get48KHzSampleRateDivisor();
   }
 
-  SoundStream* sound_stream = m_system.GetSoundStream();
-  sound_stream->GetMixer()->SetDMAInputSampleRateDivisor(m_aid_sample_rate_divisor);
+  field_audio_set_dma_rate(m_aid_sample_rate_divisor);
 }
 
 void AudioInterfaceManager::SetAISSampleRate(SampleRate sample_rate)
@@ -185,13 +188,13 @@ void AudioInterfaceManager::SetAISSampleRate(SampleRate sample_rate)
   }
 
   m_cpu_cycles_per_sample = static_cast<u64>(m_system.GetSystemTimers().GetTicksPerSecond()) *
-                            m_ais_sample_rate_divisor / Mixer::FIXED_SAMPLE_RATE_DIVIDEND;
-  SoundStream* sound_stream = m_system.GetSoundStream();
-  sound_stream->GetMixer()->SetStreamInputSampleRateDivisor(m_ais_sample_rate_divisor);
+                            m_ais_sample_rate_divisor / FIELD_AUDIO_RATE_DIVIDEND;
+  field_audio_mix_set_rate(FIELD_AUDIO_STREAM, m_ais_sample_rate_divisor);
 }
 
 void AudioInterfaceManager::Init()
 {
+  field_audio_reset();
   m_control.hex = 0;
   SetAISSampleRate(SampleRate::AI48KHz);
   SetAIDSampleRate(SampleRate::AI32KHz);
@@ -281,9 +284,8 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
                    auto& ai = system.GetAudioInterface();
                    ai.m_volume.hex = val;
-                   SoundStream* sound_stream = system.GetSoundStream();
-                   sound_stream->GetMixer()->SetStreamingVolume(ai.m_volume.left,
-                                                                ai.m_volume.right);
+                   field_audio_mix_set_volume(FIELD_AUDIO_STREAM, ai.m_volume.left,
+                                          ai.m_volume.right);
                  }));
 
   mmio->Register(base | AI_SAMPLE_COUNTER, MMIO::ComplexRead<u32>([](Core::System& system, u32) {

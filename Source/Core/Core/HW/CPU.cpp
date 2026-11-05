@@ -4,7 +4,6 @@
 #include "Core/HW/CPU.h"
 
 
-#include "AudioCommon/AudioCommon.h"
 #include "Common/Event.h"
 #include "Common/Thread.h"
 #include "Common/Timer.h"
@@ -304,9 +303,6 @@ void CPUManager::RunAdjacentSystems(bool running)
 {
   // NOTE: We're assuming these will not try to call Break or SetStepping.
   m_system.GetFifo().EmulatorState(running);
-  // Core is responsible for shutting down the sound stream.
-  if (LoadState() != State::PowerDown)
-    AudioCommon::SetSoundStreamRunning(m_system, running);
 }
 
 void CPUManager::Stop()

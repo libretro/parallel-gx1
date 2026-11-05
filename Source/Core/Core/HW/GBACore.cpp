@@ -16,8 +16,8 @@
 #include <mz_zip.h>
 #include <mz_zip_rw.h>
 
-#include "AudioCommon/AudioCommon.h"
 
+#include "AudioCommon/FieldAudio.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
@@ -459,44 +459,51 @@ void Core::AddCallbacks()
   m_core->addCoreCallbacks(m_core, &callbacks);
 }
 
-static void ReadAudioBufferIntoMixer(mAudioBuffer* audio_buffer, Mixer* mixer,
-                                     std::size_t device_number)
+/* GBA thread: mGBA's samples are read straight into this GBA's ring, which the CPU thread
+ * mixes into the console's output as the field ends. */
+static void QueueAudioBuffer(mAVStream* stream, mAudioBuffer* audio_buffer)
 {
-  std::array<s16, AUDIO_BUFFER_SIZE> sample_buffer;
-  const auto read_size = sample_buffer.size() / audio_buffer->channels;
-  while (true)
+  Core* const core = static_cast<AVStream*>(stream)->core;
+  const unsigned gba = (unsigned)core->GetDeviceNumber();
+  for (;;)
   {
-    const auto sample_count = mAudioBufferRead(audio_buffer, sample_buffer.data(), read_size);
-    if (sample_count == 0)
-      break;
-    mixer->PushGBASamples(device_number, sample_buffer.data(), sample_count);
+    int16_t* frames;
+    size_t room = field_audio_gba_write_begin(gba, &frames);
+    size_t read;
+    if (room == 0)
+    {
+      /* The console has not taken the last ones: these are let go. */
+      mAudioBufferClear(audio_buffer);
+      return;
+    }
+    read = mAudioBufferRead(audio_buffer, frames, room);
+    field_audio_gba_write_end(gba, read);
+    if (read < room)
+      return;
   }
+}
+
+static void AudioRateChanged(mAVStream* stream, unsigned rate)
+{
+  Core* const core = static_cast<AVStream*>(stream)->core;
+  field_audio_gba_set_rate_hz((unsigned)core->GetDeviceNumber(), rate);
 }
 
 void Core::SetAVStream()
 {
   m_stream = {
       .core = this,
-      .mixer = m_system.GetSoundStream()->GetMixer(),
   };
 
   m_stream.videoDimensionsChanged = [](mAVStream* stream, unsigned /*width*/, unsigned /*height*/) {
     auto* core = static_cast<AVStream*>(stream)->core;
     core->SetVideoBuffer();
   };
-  m_stream.audioRateChanged = [](mAVStream* stream, unsigned rate) {
-    auto* const av_stream = static_cast<AVStream*>(stream);
-    auto* const core = av_stream->core;
-    auto* const audio_buffer = core->GetAudioBuffer();
-    ReadAudioBufferIntoMixer(audio_buffer, av_stream->mixer, av_stream->core->m_device_number);
-    av_stream->mixer->SetGBAInputSampleRate(core->m_device_number, rate);
-  };
-  m_stream.postAudioBuffer = [](mAVStream* stream, mAudioBuffer* audio_buffer) {
-    auto* const av_stream = static_cast<AVStream*>(stream);
-    ReadAudioBufferIntoMixer(audio_buffer, av_stream->mixer, av_stream->core->m_device_number);
-  };
+  m_stream.audioRateChanged = AudioRateChanged;
+  m_stream.postAudioBuffer = QueueAudioBuffer;
 
   m_core->setAVStream(m_core, &m_stream);
+  field_audio_gba_set_rate_hz((unsigned)m_device_number, GetAudioSampleRate());
 }
 
 void Core::SetupEvent()

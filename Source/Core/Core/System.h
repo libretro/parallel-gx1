@@ -11,7 +11,6 @@ class GeometryShaderManager;
 class Interpreter;
 class JitInterface;
 class PixelShaderManager;
-class SoundStream;
 struct Sram;
 class VertexShaderManager;
 struct VideoEvents;
@@ -153,13 +152,6 @@ public:
   void SetIsTriforce(bool is_triforce) { m_is_triforce = is_triforce; }
   void SetIsWii(bool is_wii) { m_is_wii = is_wii; }
   void SetIsBranchWatchIgnoreApploader(bool enable) { m_branch_watch_ignore_apploader = enable; }
-
-  SoundStream* GetSoundStream() const;
-  void SetSoundStream(std::unique_ptr<SoundStream> sound_stream);
-  bool IsSoundStreamRunning() const;
-  void SetSoundStreamRunning(bool running);
-  bool IsAudioDumpStarted() const;
-  void SetAudioDumpStarted(bool started);
 
   IOS::HLE::EmulationKernel* GetIOS() const;
   void SetIOS(std::unique_ptr<IOS::HLE::EmulationKernel> ios);

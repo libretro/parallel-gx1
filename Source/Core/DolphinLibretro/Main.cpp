@@ -7,8 +7,6 @@
 #include <fstream>
 #include <vector>
 
-#include "AudioCommon/AudioCommon.h"
-#include "AudioCommon/SoundStream.h"
 #include "Common/ChunkFile.h"
 #include "Common/Event.h"
 #include "Common/FrameClock.h"
@@ -236,7 +234,7 @@ void retro_get_system_av_info(retro_system_av_info* info)
   if (fps <= 0.0)
     fps = (retro_get_region() == RETRO_REGION_NTSC) ? (60.0 / 1.001) : 50.0;
   info->timing.fps = fps;
-  info->timing.sample_rate = Libretro::Audio::GetActiveSampleRate();
+  info->timing.sample_rate = Libretro::Audio::GetSampleRate();
 }
 
 void retro_reset(void)
@@ -252,7 +250,6 @@ void retro_run(void)
 
   Libretro::Input::InitSensors();
   Libretro::Options::CheckForUpdatedVariables();
-  Libretro::FrameTiming::CheckForFastForwarding();
   if (Libretro::Options::IsUpdated(Libretro::Options::main_interface::LOG_LEVEL))
   {
 #if defined(_DEBUG)
@@ -410,11 +407,6 @@ void retro_run(void)
 
     Libretro::g_core_refresh_rate = new_rate;
 
-    // Re-pace the audio-callback frame timing to the new rate (PAL60 50->60).
-    if (Libretro::FrameTiming::IsEnabled() && new_rate > 1.0)
-      Libretro::FrameTiming::target_frame_duration_usec.store(
-          static_cast<retro_usec_t>(lround(1e6 / new_rate)), std::memory_order_relaxed);
-
     retro_system_av_info info;
     retro_get_system_av_info(&info);
 
@@ -554,10 +546,10 @@ void retro_run(void)
   if (Libretro::Input::g_has_microphone_support)
     poll_microphone();
 
-  // What the frame produced for the frontend, handed over from its own thread.
+  // What the frame produced for the frontend, handed over from its own thread: the rumble
+  // asked for and the field's audio.
   Libretro::Input::FlushOutputs();
-  if (SoundStream* sound_stream = system.GetSoundStream())
-    sound_stream->PushPending();
+  Libretro::Audio::PushFields();
 }
 
 size_t retro_serialize_size(void)

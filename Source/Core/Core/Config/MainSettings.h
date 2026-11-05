@@ -21,7 +21,6 @@ enum class CPUCore;
 
 namespace AudioCommon
 {
-enum class DPL2Quality;
 }
 
 namespace ExpansionInterface
@@ -61,11 +60,6 @@ extern const Info<std::string> MAIN_DEFAULT_ISO;
 extern const Info<bool> MAIN_ENABLE_CHEATS;
 extern const Info<int> MAIN_GC_LANGUAGE;
 extern const Info<bool> MAIN_OVERRIDE_REGION_SETTINGS;
-extern const Info<bool> MAIN_DPL2_DECODER;
-extern const Info<AudioCommon::DPL2Quality> MAIN_DPL2_QUALITY;
-extern const Info<int> MAIN_AUDIO_BUFFER_SIZE;
-extern const Info<bool> MAIN_AUDIO_FILL_GAPS;
-extern const Info<bool> MAIN_AUDIO_PRESERVE_PITCH;
 extern const Info<std::string> MAIN_MEMCARD_A_PATH;
 extern const Info<std::string> MAIN_MEMCARD_B_PATH;
 const Info<std::string>& GetInfoForMemcardPath(ExpansionInterface::Slot slot);
@@ -157,11 +151,8 @@ extern const Info<bool> MAIN_WII_WIILINK_ENABLE;
 extern const Info<bool> MAIN_DSP_THREAD;
 extern const Info<bool> MAIN_DSP_CAPTURE_LOG;
 extern const Info<bool> MAIN_DSP_JIT;
-extern const Info<bool> MAIN_DUMP_AUDIO;
-extern const Info<bool> MAIN_DUMP_AUDIO_SILENT;
 extern const Info<bool> MAIN_DUMP_UCODE;
 
-bool ShouldUseDPL2Decoder();
 
 // Main.Display
 
@@ -356,9 +347,6 @@ extern const Info<std::string> MAIN_TRIFORCE_IP_REDIRECTIONS;
 
 static constexpr std::size_t WIIMOTE_SPEAKER_COUNT = 4;
 
-extern const Info<bool> MAIN_WIIMOTE_AUDIO_ROUTING_ENABLED;
-extern const std::array<Info<bool>, WIIMOTE_SPEAKER_COUNT> MAIN_WIIMOTE_AUDIO_OUTPUT_ENABLED;
-extern const std::array<Info<std::string>, WIIMOTE_SPEAKER_COUNT> MAIN_WIIMOTE_AUDIO_OUTPUT_DEVICE;
 
 // GameCube path utility functions
 
