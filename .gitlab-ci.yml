@@ -8,45 +8,48 @@
 .core-defs:
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
-    CORENAME: dolphin
-    CORE_ARGS: -DLIBRETRO=ON -DENABLE_LTO=ON
-    
+    CORENAME: parallel_gamecubewii
+
 # Inclusion templates, required for the build to work
 include:
   ################################## DESKTOPS ################################
   # Windows
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/windows-cmake-mingw.yml'
+    file: '/windows-x64-mingw.yml'
 
   # Linux 64-bit
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/linux-cmake.yml'
+    file: '/linux-x64.yml'
+
+  # Linux ARM 64-bit
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/linux-aarch64.yml'
 
   # MacOS x64
   - project: 'libretro-infrastructure/ci-templates'
-    file: 'osx-cmake-x86.yml'
+    file: '/osx-x64.yml'
 
   # MacOS arm64
   - project: 'libretro-infrastructure/ci-templates'
-    file: 'osx-cmake-arm64.yml'
+    file: '/osx-arm64.yml'
 
   ################################## CELLULAR ################################
   # Android
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/android-cmake.yml'
+    file: '/android-make.yml'
 
   # iOS arm64
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/ios-cmake.yml'
+    file: '/ios-arm64.yml'
 
   # tvOS arm64
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/tvos-cmake.yml'
+    file: '/tvos-arm64.yml'
 
   ################################## MISC ####################################
   # webOS aarch64
   - project: 'libretro-infrastructure/ci-templates'
-    file: '/webos-cmake.yml'
+    file: '/webos-make.yml'
 
 # Stages for building
 stages:
@@ -61,20 +64,13 @@ stages:
 # Windows 64-bit
 libretro-build-windows-x64:
   extends:
-    - .libretro-windows-cmake-x86_64
+    - .libretro-windows-x64-mingw-make-default
     - .core-defs
-  image: $CI_SERVER_HOST:5050/libretro-infrastructure/libretro-build-mxe-win-cross-cores:gcc16
-  variables:
-    EXTRA_PATH: Binaries
-  before_script:
-    - export NUMPROC=$(($(nproc)/5))
-    - if builtin type -P ccache &> /dev/null; then ccache -V &> /dev/null; fi
-    - mv /usr/lib/mxe/usr/x86_64-w64-mingw32.static/lib/libcurl.a .
 
 # Linux 64-bit
 libretro-build-linux-x64:
   extends:
-    - .libretro-linux-cmake-x86_64
+    - .libretro-linux-x64-make-default
     - .core-defs
   image: $CI_SERVER_HOST:5050/libretro-infrastructure/libretro-build-amd64-ubuntu:backports
   variables:
@@ -84,7 +80,7 @@ libretro-build-linux-x64:
 # Linux ARM 64-bit
 libretro-build-linux-aarch64:
   extends:
-    - .libretro-linux-cmake-aarch64
+    - .libretro-linux-aarch64-make-default
     - .core-defs
   variables:
     CC: /usr/bin/gcc-14
@@ -95,63 +91,49 @@ libretro-build-osx-x64:
   tags:
     - mac-apple-silicon
   extends:
-    - .libretro-osx-cmake-x86
+    - .libretro-osx-x64-make-default
     - .core-defs
   variables:
-    CORE_ARGS: -DLIBRETRO=ON -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_SYSTEM_PROCESSOR=x86_64
+    arch: x86_64
 
 # macOS arm64
 libretro-build-osx-arm64:
   extends:
-    - .libretro-osx-cmake-arm64
+    - .libretro-osx-arm64-make-default
     - .core-defs
 
 ################################### CELLULAR #################################
 # Android ARMv8a
 android-arm64-v8a:
   extends:
-    - .libretro-android-cmake-arm64-v8a
+    - .libretro-android-make-arm64-v8a
     - .core-defs
-
-# Android ARMv7a (for play only)
-#android-armeabi-v7a:
-#  extends:
-#    - .libretro-android-cmake-armeabi-v7a
-#    - .core-defs
-#  variables:
-#    API_LEVEL: 24
-#    CORE_ARGS: -DLIBRETRO=ON -DENABLE_LTO=ON -DENABLE_GENERIC=ON
 
 # Android x86_64 (for play only)
 android-x86_64:
   extends:
-    - .libretro-android-cmake-x86_64
+    - .libretro-android-make-x86_64
     - .core-defs
-  variables:
-    API_LEVEL: 24
-    CORE_ARGS: -DLIBRETRO=ON -DENABLE_LTO=ON
 
 # iOS arm64
 libretro-build-ios-arm64:
   extends:
-    - .libretro-ios-cmake-arm64
+    - .libretro-ios-arm64-make-default
     - .core-defs
   variables:
-    CMAKE_ADDL_COMP_FLAGS: ""
-    IOS_MINVER: 14.0
+    IOS_MINVER: "14.0"
 
 # tvOS arm64
 libretro-build-tvos-arm64:
   extends:
-    - .libretro-tvos-cmake-arm64
+    - .libretro-tvos-arm64-make-default
     - .core-defs
   variables:
-    CMAKE_ADDL_COMP_FLAGS: ""
-    MINVER: 14.0
+    MINVER: "14.0"
 
 ################################## MISC ####################################
 # webOS aarch64
 libretro-build-webos-aarch64:
   extends:
-    - .libretro-webos-cmake-aarch64
+    - .libretro-webos-aarch64-make-default
     - .core-defs

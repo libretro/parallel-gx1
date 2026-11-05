@@ -9,7 +9,6 @@
 #   HAVE_VULKAN HAVE_D3D HAVE_SPIRV_CROSS
 #   HAVE_BUNDLED_ICONV                       Externals/libiconv instead of libc
 #
-# The lists mirror what the CMake -DLIBRETRO=ON build links into the core.
 # Units only the standalone frontends use are left out.
 
 EXT_DIR := $(CORE_DIR)/Externals
@@ -18,7 +17,7 @@ SRC_DIR := $(CORE_DIR)/Source/Core
 # ----------------------------------------------------------------------------
 # Generated files
 # ----------------------------------------------------------------------------
-# Plain substitutions of the templates the CMake build configures. The
+# Plain substitutions of the upstream templates. The
 # per-platform configure results (curl_config.h, the libusb, libiconv and
 # libcharset config.h, mGBA's flags.h) are checked in under
 # Externals/<library>/makefile instead.
@@ -1962,7 +1961,7 @@ endif
 # ----------------------------------------------------------------------------
 # <LIB>_FLAGS applies to every object of that library, <LIB>_CFLAGS and
 # <LIB>_CXXFLAGS to its C and C++ objects only. Third-party code builds
-# with warnings off, as in the CMake build.
+# with warnings off.
 
 BDISASM_FLAGS := -w -I$(EXT_DIR)/Bochs_disasm
 
@@ -2151,9 +2150,7 @@ SPIRV_CROSS_CXXFLAGS := -std=c++11
 ADRENOTOOLS_FLAGS := -w -I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadrenotools \
 	-I$(EXT_DIR)/libadrenotools/lib/linkernsbypass
 
-# Dolphin itself: every Source/ unit shares one set, the union of what the
-# CMake targets core, common, videocommon, the video backends, inputcommon,
-# audiocommon, discio, uicommon and dolphin_libretro see.
+# Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
 	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC -DSPNG_STATIC \
@@ -2206,9 +2203,9 @@ ifeq ($(OS_ANDROID),1)
 	-I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadrenotools/lib/linkernsbypass
 endif
 
-# Per-file additions, as the CMake build sets them.
+# Per-file additions.
 ifeq ($(OS_WIN),1)
-   # watcher's Windows backend throws; CMake gives its users -fexceptions on MinGW.
+   # watcher's Windows backend throws.
    FILE_FLAGS_$(abspath $(SRC_DIR)/Common/FilesystemWatcher.cpp) := -fexceptions
 endif
 ifeq ($(ARCH_X86_64),1)

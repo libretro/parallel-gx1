@@ -38,30 +38,27 @@ Dolphin can only be installed on devices that satisfy the above requirements. At
 
 ## Building
 
-You may find building instructions on the appropriate wiki page for your operating system:
-
-* [Windows](https://github.com/dolphin-emu/dolphin/wiki/Building-for-Windows)
-* [Linux](https://github.com/dolphin-emu/dolphin/wiki/Building-for-Linux)
-* [macOS](https://github.com/dolphin-emu/dolphin/wiki/Building-for-macOS)
-* [Android](#android-specific-instructions) <!-- TODO: Create a "Building for Android" wiki page and link it here -->
-* [OpenBSD](https://github.com/dolphin-emu/dolphin/wiki/Building-for-OpenBSD) (unsupported)
-
-Before building, make sure to pull all submodules:
+This tree builds the parallel_gamecubewii libretro core with the static Makefile.
+Pull all submodules first:
 
 ```sh
 git submodule update --init --recursive
 ```
 
-### Android-specific instructions
+Then run `make` from the top of the tree. Linux, macOS and Windows (MSYS2, any
+environment) are detected; other targets take `platform=`:
 
-These instructions assume familiarity with Android development. If you do not have an
-Android dev environment set up, see [AndroidSetup.md](AndroidSetup.md).
+| Target | Command | Output |
+|---|---|---|
+| Linux, webOS | `make` | `parallel_gamecubewii_libretro.so` |
+| Windows (MinGW-w64) | `make` | `parallel_gamecubewii_libretro.dll` |
+| macOS | `make` | `parallel_gamecubewii_libretro.dylib` |
+| iOS | `make platform=ios-arm64` | `parallel_gamecubewii_libretro_ios.dylib` |
+| tvOS | `make platform=tvos-arm64` | `parallel_gamecubewii_libretro_tvos.dylib` |
+| Android | `make platform=android-arm64` (or `android-x86_64`), NDK from `ANDROID_NDK_ROOT` | `parallel_gamecubewii_libretro_android.so` |
 
-If using Android Studio, import the Gradle project located in `./Source/Android`.
-
-Android apps are compiled using a build system called Gradle. Dolphin's native component,
-however, is compiled using CMake. The Gradle script will attempt to run a CMake build
-automatically while building the Java code.
+Cross builds pass the compilers, e.g. `make CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++`.
+`DEBUG=1`, `LTO=-flto` and `SANITIZER=address,undefined` are available everywhere.
 
 ## Uninstalling
 

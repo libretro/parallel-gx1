@@ -10,10 +10,6 @@ indent_style = space
 insert_final_newline = true
 max_line_length = 100
 
-[{CMakeLists.txt,*.cmake}]
-indent_style = space
-insert_final_newline = true
-
 [.editorconfig]
 insert_final_newline = true
 

@@ -6,8 +6,6 @@ Thumbs.db
 Externals/mGBA/version.c
 Source/Core/Common/scmrev.h
 # Ignore files output by build
-/cmake-build-debug
-/cmake-build-release
 /[Bb]uild*/
 /[Bb]inary*/
 /obj/
@@ -26,8 +24,6 @@ Source/Core/Common/scmrev.h
 *.VC.db
 .vs*/
 /Source/enc_temp_folder/
-# Ignore build info file created by QtCreator
-CMakeLists.txt.user
 # Ignore files created by posix people
 *~
 # Ignore vim swapfiles
@@ -46,8 +42,6 @@ CMakeLists.txt.user
 
 # clangd cache for Neovim
 .cache/clangd
-# Ignore CMake user presets
-CMakeUserPresets.json
 # Ignore the libretro core built by the static Makefile
 /parallel_gamecubewii_libretro*.so
 /parallel_gamecubewii_libretro*.dll

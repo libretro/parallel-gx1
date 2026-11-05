@@ -38,7 +38,7 @@ ifneq (,$(filter win win64,$(platform)))
 endif
 
 # webOS SDK toolchains are plain Linux cross compilers; their name is what
-# tells them apart, as in the CMake build.
+# tells them apart.
 ifneq (,$(findstring webos,$(CC)))
    ifneq (,$(findstring unix,$(platform)))
       override platform := webos
