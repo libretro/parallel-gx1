@@ -45,7 +45,7 @@ private:
 
   DSPCore m_dsp_core;
   sthread_t* m_dsp_thread = nullptr;
-  Common::CallGate m_dsp_thread_gate;
+  call_gate_t m_dsp_thread_gate{};
   bool m_is_dsp_on_thread = false;
   Common::Flag m_is_running;
   std::atomic<u32> m_cycle_count{};

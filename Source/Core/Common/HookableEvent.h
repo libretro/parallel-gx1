@@ -74,10 +74,11 @@ public:
       for (std::size_t i = 0; i != list->count; ++i)
       {
         Listener* const listener = list->items[i];
-        if (!Common::CallGateEnter(&listener->gate))
+        call_gate_frame_t frame;
+        if (!call_gate_enter(&listener->gate, &frame))
           continue;
         std::invoke(listener->callback, args...);
-        Common::CallGateExit(&listener->gate);
+        call_gate_exit(&listener->gate, &frame);
       }
     }
     quiesce_exit(&storage->quiesce);
@@ -89,7 +90,7 @@ private:
   {
     quiesce_node_t node;
     const CallbackType callback;
-    Common::CallGate gate;
+    call_gate_t gate;
 
     static void Free(quiesce_node_t* node) { delete reinterpret_cast<Listener*>(node); }
   };
@@ -178,7 +179,7 @@ private:
       DEBUG_LOG_FMT(COMMON, "Removing event hook handler");
 
       storage->Replace(listener_ptr, nullptr);
-      Common::CallGateClose(&listener_ptr->gate);
+      call_gate_close(&listener_ptr->gate);
       quiesce_retire(&storage->quiesce, &listener_ptr->node, Listener::Free);
     }
 

@@ -505,7 +505,7 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(
   }
   // A cancel loop that read the slot before it emptied may still be cancelling this
   // transfer; libusb frees it once this returns.
-  Common::CallGateDrain(&m_cancel_gate);
+  call_gate_drain(&m_cancel_gate);
   if (!in_flight)
   {
     ERROR_LOG_FMT(IOS_USB, "No such transfer");
@@ -542,13 +542,14 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(
 void LibusbDevice::TransferEndpoint::CancelTransfers()
 {
   // Never shut: completions only wait for this loop to finish.
-  Common::CallGateEnter(&m_cancel_gate);
+  call_gate_frame_t frame;
+  call_gate_enter(&m_cancel_gate, &frame);
   for (auto& slot : m_in_flight)
   {
     if (const auto* in_flight = static_cast<const InFlight*>(retro_atomic_load_acquire_ptr(&slot)))
       libusb_cancel_transfer(in_flight->transfer);
   }
-  Common::CallGateExit(&m_cancel_gate);
+  call_gate_exit(&m_cancel_gate, &frame);
 }
 
 int LibusbDevice::GetNumberOfAltSettings(const u8 interface_number)

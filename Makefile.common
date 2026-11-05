@@ -1109,6 +1109,7 @@ DOLPHIN_SOURCES_CXX :=
 DOLPHIN_SOURCES_ASM :=
 DOLPHIN_SOURCES_OBJCXX :=
 DOLPHIN_SOURCES_C += \
+	$(CORE_DIR)/Source/Core/Common/CallGate.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c
 DOLPHIN_SOURCES_CXX += \
@@ -1123,7 +1124,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Assembler/GekkoLexer.cpp \
 	$(CORE_DIR)/Source/Core/Common/Assembler/GekkoParser.cpp \
 	$(CORE_DIR)/Source/Core/Common/ColorUtil.cpp \
-	$(CORE_DIR)/Source/Core/Common/CallGate.cpp \
 	$(CORE_DIR)/Source/Core/Common/CommonFuncs.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/Config.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/ConfigInfo.cpp \
@@ -1932,7 +1932,7 @@ BDISASM_FLAGS := -w -I$(EXT_DIR)/Bochs_disasm
 
 FATFS_FLAGS := -w -I$(EXT_DIR)/FatFs
 
-LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -I$(EXT_DIR)/libretro-common/include
+LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -DHAVE_THREAD_STORAGE -I$(EXT_DIR)/libretro-common/include
 
 FREESURROUND_FLAGS    := -w -I$(EXT_DIR)/FreeSurround/include
 FREESURROUND_CXXFLAGS := -std=c++14
@@ -2107,7 +2107,7 @@ ADRENOTOOLS_FLAGS := -w -I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadre
 
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
-	-DENABLE_DIRECTORIES -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
+	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
 	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC -DSPNG_STATIC \
 	-DCURL_STATICLIB -DIMGUI_USER_CONFIG=\"imgui_user_config.h\" \
 	-DTINYGLTF_NOEXCEPTION -DTINYGLTF_NO_EXTERNAL_IMAGE -DTINYGLTF_USE_CPP14 \

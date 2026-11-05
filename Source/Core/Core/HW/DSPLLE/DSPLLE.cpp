@@ -61,7 +61,8 @@ void DSPLLE::DSPThread(void* data)
     if (cycles > 0)
     {
       // Shut while a PauseAndLock holds the DSP; a run already inside finishes first.
-      if (Common::CallGateEnter(&dsp_lle->m_dsp_thread_gate))
+      call_gate_frame_t frame;
+      if (call_gate_enter(&dsp_lle->m_dsp_thread_gate, &frame))
       {
         if (dsp_lle->m_dsp_core.IsJITCreated())
         {
@@ -72,7 +73,7 @@ void DSPLLE::DSPThread(void* data)
           dsp_lle->m_dsp_core.GetInterpreter().RunCyclesThread(cycles);
         }
         dsp_lle->m_cycle_count.store(0);
-        Common::CallGateExit(&dsp_lle->m_dsp_thread_gate);
+        call_gate_exit(&dsp_lle->m_dsp_thread_gate, &frame);
         continue;
       }
     }
@@ -287,12 +288,12 @@ u32 DSPLLE::DSP_UpdateRate()
 
 void DSPLLE::PauseAndLock()
 {
-  Common::CallGateClose(&m_dsp_thread_gate);
+  call_gate_close(&m_dsp_thread_gate);
 }
 
 void DSPLLE::UnpauseAndUnlock()
 {
-  Common::CallGateReopen(&m_dsp_thread_gate);
+  call_gate_reopen(&m_dsp_thread_gate);
 
   if (m_is_dsp_on_thread)
   {

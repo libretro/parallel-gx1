@@ -97,6 +97,6 @@ private:
   // The open frontend microphone, or null. The CPU thread opens and closes it; the frontend
   // thread reads it inside m_mic_gate, so a close waits for a read in progress.
   retro_atomic_ptr_t m_retro_mic{};
-  Common::CallGate m_mic_gate;
+  call_gate_t m_mic_gate{};
 };
 }  // namespace ExpansionInterface

@@ -65,9 +65,9 @@ void CEXIMic::StreamStop()
   if (mic)
   {
     // A read the frontend thread already started finishes before the mic goes.
-    Common::CallGateClose(&m_mic_gate);
+    call_gate_close(&m_mic_gate);
     Libretro::Input::g_microphone_interface.close_mic(mic);
-    Common::CallGateReopen(&m_mic_gate);
+    call_gate_reopen(&m_mic_gate);
   }
 
   retro_spsc_skip(&m_stream, retro_spsc_read_avail(&m_stream));
@@ -224,7 +224,8 @@ void CEXIMic::TransferByte(u8& byte)
 void CEXIMic::PollLibretroMic()
 {
   // Frontend thread.
-  if (!Common::CallGateEnter(&m_mic_gate))
+  call_gate_frame_t frame;
+  if (!call_gate_enter(&m_mic_gate, &frame))
     return;
 
   if (auto* mic = static_cast<retro_microphone_t*>(retro_atomic_load_acquire_ptr(&m_retro_mic)))
@@ -240,7 +241,7 @@ void CEXIMic::PollLibretroMic()
     }
   }
 
-  Common::CallGateExit(&m_mic_gate);
+  call_gate_exit(&m_mic_gate, &frame);
 }
 
 }  // namespace ExpansionInterface

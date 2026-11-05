@@ -32,7 +32,7 @@ struct CallbackRef
   quiesce_node_t node;  // first, as above
   size_t id;
   ConfigChangedCallback func;
-  Common::CallGate gate;
+  call_gate_t gate;
 };
 
 // Callbacks registered at once; Dolphin uses a few dozen.
@@ -134,7 +134,7 @@ void RemoveConfigChangedCallback(ConfigChangedCallbackID callback_id)
 
     // A trigger on another thread may still be inside it, and the caller is about to free
     // whatever it captured.
-    Common::CallGateClose(&ref->gate);
+    call_gate_close(&ref->gate);
     quiesce_retire(&s_quiesce, &ref->node, FreeCallbackRef);
     break;
   }
@@ -157,10 +157,11 @@ void OnConfigChanged()
     auto* ref = static_cast<CallbackRef*>(retro_atomic_load_acquire_ptr(&slot));
     if (!ref)
       continue;
-    if (Common::CallGateEnter(&ref->gate))
+    call_gate_frame_t frame;
+    if (call_gate_enter(&ref->gate, &frame))
     {
       ref->func();
-      Common::CallGateExit(&ref->gate);
+      call_gate_exit(&ref->gate, &frame);
     }
   }
   quiesce_exit(&s_quiesce);

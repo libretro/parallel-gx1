@@ -28,7 +28,7 @@ extern bool g_gc_mic_button[4];
 // g_microphone_poll_gate; the emulation thread adds and removes them.
 constexpr int MAX_ACTIVE_MICROPHONES = 4;
 extern retro_atomic_ptr_t g_active_microphones[MAX_ACTIVE_MICROPHONES];
-extern Common::CallGate g_microphone_poll_gate;
+extern call_gate_t g_microphone_poll_gate;
 } // namespace Input
 
 namespace Video

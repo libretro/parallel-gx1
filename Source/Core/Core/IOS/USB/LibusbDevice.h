@@ -87,7 +87,7 @@ private:
     };
     static constexpr size_t MAX_IN_FLIGHT = 64;
     std::array<retro_atomic_ptr_t, MAX_IN_FLIGHT> m_in_flight{};
-    Common::CallGate m_cancel_gate;
+    call_gate_t m_cancel_gate{};
     bool m_used = false;  // emulation thread
   };
   // Indexed by endpoint address, so the event thread never looks one up in a changing map.

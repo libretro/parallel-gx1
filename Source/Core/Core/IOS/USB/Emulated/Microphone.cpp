@@ -89,7 +89,7 @@ void Microphone::StreamStop()
   for (auto& slot : Libretro::Input::g_active_microphones)
     retro_atomic_cas_ptr(&slot, this, nullptr);
   // A poll of this microphone already under way finishes before it closes.
-  Common::CallGateDrain(&Libretro::Input::g_microphone_poll_gate);
+  call_gate_drain(&Libretro::Input::g_microphone_poll_gate);
   Libretro::Input::g_microphone_interface.close_mic(
       static_cast<retro_microphone_t*>(m_retro_mic));
   m_retro_mic = nullptr;

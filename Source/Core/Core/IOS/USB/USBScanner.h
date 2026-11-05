@@ -78,7 +78,7 @@ private:
   retro_atomic_ptr_t m_clients{};
   // The scan thread is inside it while calling clients, so RemoveClient can wait that out
   // before its caller goes away.
-  Common::CallGate m_notify_gate;
+  call_gate_t m_notify_gate{};
   // A notification skipped while a removal had the gate shut; the next scan sends it.
   bool m_notify_pending = false;
 

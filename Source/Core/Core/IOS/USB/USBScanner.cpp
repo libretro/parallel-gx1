@@ -100,8 +100,8 @@ bool USBScanner::RemoveClient(USBHost* client)
     quiesce_retire(&m_quiesce, &static_cast<Clients*>(old)->node, FreeClients);
 
   // The scan thread may be calling this client from the old set; let it finish.
-  Common::CallGateClose(&m_notify_gate);
-  Common::CallGateReopen(&m_notify_gate);
+  call_gate_close(&m_notify_gate);
+  call_gate_reopen(&m_notify_gate);
 
   if (should_stop_scanning)
     StopScanning();
@@ -169,7 +169,8 @@ bool USBScanner::UpdateDevices()
 
 void USBScanner::NotifyClients()
 {
-  if (!Common::CallGateEnter(&m_notify_gate))
+  call_gate_frame_t frame;
+  if (!call_gate_enter(&m_notify_gate, &frame))
   {
     m_notify_pending = true;
     return;
@@ -186,7 +187,7 @@ void USBScanner::NotifyClients()
   }
   quiesce_exit(&m_quiesce);
 
-  Common::CallGateExit(&m_notify_gate);
+  call_gate_exit(&m_notify_gate, &frame);
 }
 
 bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
