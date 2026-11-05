@@ -10,14 +10,30 @@ ifeq ($(ECHO),1)
    E := 1
 endif
 
+# Windows is recognised from the environment every Windows shell sets (all
+# MSYS2 environments included, whatever uname -s reports there) or from a
+# MinGW-w64 compiler, so a cross build needs only CC/CXX.
 ifeq ($(platform),)
    platform = unix
-   ifeq ($(shell uname -s),)
+   UNAME_S := $(shell uname -s 2>/dev/null)
+   ifeq ($(OS),Windows_NT)
       platform = win
-   else ifneq ($(findstring Darwin,$(shell uname -s)),)
+   else ifeq ($(UNAME_S),)
+      platform = win
+   else ifneq ($(findstring Darwin,$(UNAME_S)),)
       platform = osx
-   else ifneq ($(findstring MINGW,$(shell uname -s)),)
+   else ifneq (,$(findstring mingw,$(shell $(CC) -dumpmachine 2>/dev/null)))
       platform = win
+   endif
+endif
+
+# make's built-in default compiler is cc, which MinGW-w64 does not ship.
+ifneq (,$(filter win win64,$(platform)))
+   ifeq ($(origin CC),default)
+      CC := gcc
+   endif
+   ifeq ($(origin CXX),default)
+      CXX := g++
    endif
 endif
 
