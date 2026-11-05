@@ -195,16 +195,4 @@ private:
 // Factory function - examines the path to choose the right type of BlobReader, and returns one.
 std::unique_ptr<BlobReader> CreateBlobReader(const std::string& filename);
 
-using CompressCB = std::function<bool(const std::string& text, float percent)>;
-
-bool ConvertToGCZ(BlobReader* infile, const std::string& infile_path,
-                  const std::string& outfile_path, u32 sub_type, int sector_size,
-                  const CompressCB& callback);
-bool ConvertToPlain(BlobReader* infile, const std::string& infile_path,
-                    const std::string& outfile_path, const CompressCB& callback);
-bool ConvertToWIAOrRVZ(BlobReader* infile, const std::string& infile_path,
-                       const std::string& outfile_path, bool rvz,
-                       WIARVZCompressionType compression_type, int compression_level,
-                       int chunk_size, const CompressCB& callback);
-
 }  // namespace DiscIO

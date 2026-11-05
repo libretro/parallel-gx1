@@ -16,21 +16,6 @@
 #include "InputCommon/ControllerInterface/InputBackend.h"
 
 // enable disable sources
-#if defined(_WIN32) && !defined(__LIBRETRO__)
-#define CIFACE_USE_WIN32
-#endif
-#ifdef HAVE_X11
-#define CIFACE_USE_XLIB
-#endif
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-#define CIFACE_USE_OSX
-#endif
-#if defined(HAVE_LIBEVDEV) && defined(HAVE_LIBUDEV)
-#define CIFACE_USE_EVDEV
-#endif
-#if defined(USE_PIPES)
-#define CIFACE_USE_PIPES
-#endif
 #define CIFACE_USE_DUALSHOCKUDPCLIENT
 #if defined(HAVE_HIDAPI)
 #define CIFACE_USE_STEAMDECK

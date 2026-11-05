@@ -42,8 +42,6 @@ Dolphin includes or links code of the following third-party software projects:
    [GPLv2+](http://www.oberhumer.com/opensource/gpl.html)
 - [mGBA](http://mgba.io)
    [MPL 2.0](https://github.com/mgba-emu/mgba/blob/master/LICENSE)
-- [MiniUPnPc](http://miniupnp.free.fr/):
-   [BSD 3-Clause](https://github.com/miniupnp/miniupnp/blob/master/miniupnpc/LICENSE)
 - [Microsoft Visual C++ Runtime Library](http://www.microsoft.com/en-us/download/details.aspx?id=40784):
    [System Library if not distributed](https://www.gnu.org/licenses/gpl-faq.html#WindowsRuntimeAndGPL)
 - [OpenGL Header (MESA)](http://mesa3d.org/):

@@ -1166,7 +1166,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Thread.cpp \
 	$(CORE_DIR)/Source/Core/Common/Timer.cpp \
 	$(CORE_DIR)/Source/Core/Common/TimeUtil.cpp \
-	$(CORE_DIR)/Source/Core/Common/UPnP.cpp \
 	$(CORE_DIR)/Source/Core/Common/Version.cpp \
 	$(CORE_DIR)/Source/Core/Common/GL/GLContext.cpp \
 	$(CORE_DIR)/Source/Core/Common/GL/GLUtil.cpp \

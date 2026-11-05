@@ -9,23 +9,8 @@
 #include "Common/Logging/Log.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
-#ifdef CIFACE_USE_WIN32
-#include "InputCommon/ControllerInterface/Win32/Win32.h"
-#endif
-#ifdef CIFACE_USE_XLIB
-#include "InputCommon/ControllerInterface/Xlib/XInput2.h"
-#endif
-#ifdef CIFACE_USE_OSX
-#include "InputCommon/ControllerInterface/Quartz/Quartz.h"
-#endif
 #ifdef CIFACE_USE_ANDROID
 #include "InputCommon/ControllerInterface/Android/Android.h"
-#endif
-#ifdef CIFACE_USE_EVDEV
-#include "InputCommon/ControllerInterface/evdev/evdev.h"
-#endif
-#ifdef CIFACE_USE_PIPES
-#include "InputCommon/ControllerInterface/Pipes/Pipes.h"
 #endif
 #ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
 #include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPClient.h"
@@ -55,23 +40,8 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
 
   m_populating_devices_counter = 1;
 
-#if defined(CIFACE_USE_WIN32)
-  m_input_backends.emplace_back(ciface::Win32::CreateInputBackend(this));
-#endif
-#ifdef CIFACE_USE_XLIB
-  m_input_backends.emplace_back(ciface::XInput2::CreateInputBackend(this));
-#endif
-#ifdef CIFACE_USE_OSX
-  m_input_backends.emplace_back(ciface::Quartz::CreateInputBackend(this));
-#endif
 #if defined(CIFACE_USE_ANDROID) && !defined(__LIBRETRO__)
   m_input_backends.emplace_back(ciface::Android::CreateInputBackend(this));
-#endif
-#ifdef CIFACE_USE_EVDEV
-  m_input_backends.emplace_back(ciface::evdev::CreateInputBackend(this));
-#endif
-#ifdef CIFACE_USE_PIPES
-  m_input_backends.emplace_back(ciface::Pipes::CreateInputBackend(this));
 #endif
 #ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
   m_input_backends.emplace_back(ciface::DualShockUDPClient::CreateInputBackend(this));
