@@ -49,7 +49,6 @@
 #include "UICommon/UICommon.h"
 
 #include "VideoCommon/FrameDumpFFMpeg.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/VideoBackendBase.h"
 
 namespace State
@@ -190,9 +189,8 @@ void DoState(Core::System& system, PointerWrap& p)
   p.Do(is_wii);
   if (is_wii != is_wii_currently)
   {
-    OSD::AddMessage(fmt::format("Cannot load a savestate created under {} mode in {} mode",
-                                is_wii ? "Wii" : "GC", is_wii_currently ? "Wii" : "GC"),
-                    OSD::Duration::NORMAL, OSD::Color::RED);
+    Core::DisplayMessage(fmt::format("Cannot load a savestate created under {} mode in {} mode",
+                                is_wii ? "Wii" : "GC", is_wii_currently ? "Wii" : "GC"));
     p.SetMeasureMode();
     return;
   }
@@ -205,7 +203,7 @@ void DoState(Core::System& system, PointerWrap& p)
   p.Do(state_mem2_size);
   if (state_mem1_size != memory.GetRamSizeReal() || state_mem2_size != memory.GetExRamSizeReal())
   {
-    OSD::AddMessage(fmt::format("Memory size mismatch!\n"
+    Core::DisplayMessage(fmt::format("Memory size mismatch!\n"
                                 "Current | MEM1 {:08X} ({:3}MB)    MEM2 {:08X} ({:3}MB)\n"
                                 "State   | MEM1 {:08X} ({:3}MB)    MEM2 {:08X} ({:3}MB)",
                                 memory.GetRamSizeReal(), memory.GetRamSizeReal() / 0x100000U,
@@ -253,7 +251,7 @@ static bool CheckIfStateLoadIsAllowed(Core::System& system)
 
   if (AchievementManager::GetInstance().IsHardcoreModeActive())
   {
-    OSD::AddMessage("Loading savestates is disabled in RetroAchievements hardcore mode");
+    Core::DisplayMessage("Loading savestates is disabled in RetroAchievements hardcore mode");
     return false;
   }
 
@@ -773,7 +771,7 @@ static bool ValidateHeaders(const StateHeader& header)
         loaded_str.empty() ?
             "This savestate was created using an incompatible version of Dolphin" :
             "This savestate was created using the incompatible version " + loaded_str;
-    Core::DisplayMessage(message, OSD::Duration::NORMAL);
+    Core::DisplayMessage(message);
   }
 
   return success;
@@ -808,7 +806,7 @@ static void LoadFileStateData(const std::string& filename, Common::UniqueBuffer<
   {
   case CompressionType::LZ4:
   {
-    Core::DisplayMessage("Decompressing State...", OSD::Duration::SHORT);
+    Core::DisplayMessage("Decompressing State...");
     if (!DecompressLZ4(buffer, extended_header.base_header.uncompressed_size, f))
       return;
 
@@ -897,7 +895,7 @@ static void LoadAsFromCore(Core::System& system, std::string filename)
     }
     else
     {
-      Core::DisplayMessage("The savestate could not be loaded", OSD::Duration::NORMAL);
+      Core::DisplayMessage("The savestate could not be loaded");
 
       // since we could be in an inconsistent state now (and might crash or whatever), undo.
       UndoLoadState(system);

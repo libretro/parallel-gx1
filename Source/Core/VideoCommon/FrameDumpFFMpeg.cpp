@@ -39,7 +39,6 @@ extern "C" {
 #include "Core/HW/VideoInterface.h"
 #include "Core/System.h"
 
-#include "VideoCommon/OnScreenDisplay.h"
 
 struct FrameDumpContext
 {
@@ -192,7 +191,7 @@ bool FFMpegFrameDump::PrepareEncoding(int w, int h, u64 start_ticks, u32 savesta
   if (!success)
   {
     CloseVideoFile();
-    OSD::AddMessage("FrameDump Start failed");
+    Core::DisplayMessage("FrameDump Start failed");
   }
   return success;
 }
@@ -344,7 +343,7 @@ bool FFMpegFrameDump::CreateVideoFile()
                  m_context->stream->time_base.num);
   }
 
-  OSD::AddMessage(fmt::format("Dumping Frames to \"{}\" ({}x{})", dump_path, m_context->width,
+  Core::DisplayMessage(fmt::format("Dumping Frames to \"{}\" ({}x{})", dump_path, m_context->width,
                               m_context->height));
   return true;
 }
@@ -470,7 +469,7 @@ void FFMpegFrameDump::Stop()
   CloseVideoFile();
 
   NOTICE_LOG_FMT(FRAMEDUMP, "Stopping frame dump");
-  OSD::AddMessage("Stopped dumping frames");
+  Core::DisplayMessage("Stopped dumping frames");
 }
 
 bool FFMpegFrameDump::IsStarted() const

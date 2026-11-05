@@ -83,7 +83,6 @@
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/FrameDumper.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoEvents.h"
 
@@ -148,16 +147,10 @@ std::string StopMessage(bool main_thread, std::string_view message)
                      Common::CurrentThreadId(), message);
 }
 
-void DisplayMessage(std::string message, int time_in_ms)
+void DisplayMessage(std::string message, int)
 {
-  if (!IsRunningOrStarting(Core::System::GetInstance()))
-    return;
-
-  // Actually displaying non-ASCII could cause things to go pear-shaped
-  if (!std::ranges::all_of(message, Common::IsPrintableCharacter))
-    return;
-
-  OSD::AddMessage(std::move(message), time_in_ms);
+  // Nothing is drawn over the game: the message goes to the log.
+  NOTICE_LOG_FMT(CORE, "{}", message);
 }
 
 bool IsRunning(Core::System& system)
@@ -983,7 +976,7 @@ void DoFrameStep(Core::System& system)
 {
   if (AchievementManager::GetInstance().IsHardcoreModeActive())
   {
-    OSD::AddMessage("Frame stepping is disabled in RetroAchievements hardcore mode");
+    Core::DisplayMessage("Frame stepping is disabled in RetroAchievements hardcore mode");
     return;
   }
 

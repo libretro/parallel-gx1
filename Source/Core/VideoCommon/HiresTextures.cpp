@@ -19,9 +19,9 @@
 #include "Core/ConfigManager.h"
 #include "Core/System.h"
 #include "VideoCommon/Assets/DirectFilesystemAssetLibrary.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/Resources/CustomResourceManager.h"
 #include "VideoCommon/VideoConfig.h"
+#include "Core/Core.h"
 
 constexpr std::string_view s_format_prefix{"tex1_"};
 
@@ -155,7 +155,7 @@ void HiresTexture::Update()
     message = fmt::format("Found '{}' custom textures for '{}'",
                           s_hires_texture_id_to_arbmipmap.size(), game_id_display);
   }
-  OSD::AddMessage(message, 10000);
+  Core::DisplayMessage(message, 10000);
 }
 
 void HiresTexture::Clear()

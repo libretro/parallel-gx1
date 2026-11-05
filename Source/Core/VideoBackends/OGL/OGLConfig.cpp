@@ -19,7 +19,6 @@
 
 #include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/FramebufferManager.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/VideoConfig.h"
 
 #ifdef __LIBRETRO__
@@ -735,16 +734,16 @@ bool PopulateConfig(GLContext* m_main_gl_context)
   g_Config.VerifyValidity();
   UpdateActiveConfig();
 
-  OSD::AddMessage(fmt::format("Video Info: {}, {}, {}", g_ogl_config.gl_vendor,
+  Core::DisplayMessage(fmt::format("Video Info: {}, {}, {}", g_ogl_config.gl_vendor,
                               g_ogl_config.gl_renderer, g_ogl_config.gl_version),
                   5000);
 
   if (!g_ogl_config.bSupportsGLBufferStorage && !g_ogl_config.bSupportsGLPinnedMemory)
   {
-    OSD::AddMessage(fmt::format("Your OpenGL driver does not support {}_buffer_storage.",
+    Core::DisplayMessage(fmt::format("Your OpenGL driver does not support {}_buffer_storage.",
                                 m_main_gl_context->IsGLES() ? "EXT" : "ARB"),
                     60000);
-    OSD::AddMessage("This device's performance may be poor.", 60000);
+    Core::DisplayMessage("This device's performance may be poor.", 60000);
   }
 
   INFO_LOG_FMT(VIDEO, "Video Info: {}, {}, {}", g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,

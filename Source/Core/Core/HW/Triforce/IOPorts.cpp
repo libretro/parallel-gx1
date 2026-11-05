@@ -19,7 +19,7 @@
 #include "Core/System.h"
 
 #include "InputCommon/GCPadStatus.h"
-#include "VideoCommon/OnScreenDisplay.h"
+#include "Core/Core.h"
 
 namespace Triforce
 {
@@ -152,8 +152,7 @@ void Common_IOAdapter::Update()
       else
       {
         // Trying to access the test menu without SegaBoot present will cause a crash.
-        OSD::AddMessage("Test menu is disabled due to missing SegaBoot.", OSD::Duration::NORMAL,
-                        OSD::Color::RED);
+        Core::DisplayMessage("Test menu is disabled due to missing SegaBoot.");
       }
     }
 

@@ -23,7 +23,6 @@
 #include "Core/System.h"
 
 #include "VideoCommon/Fifo.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/VideoEvents.h"

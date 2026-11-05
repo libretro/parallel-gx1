@@ -15,8 +15,8 @@
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AbstractStagingTexture.h"
 #include "VideoCommon/AbstractTexture.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/Present.h"
+#include "Core/Core.h"
 
 // The video encoder needs the image to be a multiple of x samples.
 static constexpr int VIDEO_ENCODER_LCM = 4;
@@ -226,7 +226,7 @@ void FrameDumper::FrameDumpThreadFunc()
             retro_atomic_exchange_ptr(&m_screenshot_request, nullptr)))
     {
       if (DumpFrameToPNG(frame, *name))
-        OSD::AddMessage("Screenshot saved to " + *name);
+        Core::DisplayMessage("Screenshot saved to " + *name);
 
       delete name;
       m_screenshot_completed.Set();

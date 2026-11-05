@@ -19,7 +19,6 @@ enum class AspectMode : int;
 
 namespace VideoCommon
 {
-class OnScreenUI;
 class PostProcessing;
 #ifdef __LIBRETRO__
 extern bool g_is_duplicate_frame;
@@ -146,7 +145,6 @@ private:
   int m_last_window_request_height = 0;
 
   std::unique_ptr<VideoCommon::PostProcessing> m_post_processor;
-  std::unique_ptr<VideoCommon::OnScreenUI> m_onscreen_ui;
 
   u64 m_frame_count = 0;
   u64 m_present_count = 0;

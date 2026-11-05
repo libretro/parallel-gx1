@@ -151,7 +151,8 @@ void SaveScreenShot();
 void SaveScreenShot(std::string_view name);
 
 // This displays messages in a user-visible way.
-void DisplayMessage(std::string message, int time_in_ms);
+// Logs a message meant for the user; the core draws nothing over the game.
+void DisplayMessage(std::string message, int time_in_ms = 0);
 
 void OnFrameEnd(Core::System& system);
 

@@ -13,7 +13,6 @@
 #include "Common/Config/Config.h"
 #include "Common/Logging/Log.h"
 
-#include "VideoCommon/OnScreenDisplay.h"
 
 #include "Core/AchievementManager.h"
 #include "Core/Config/GraphicsSettings.h"
@@ -192,7 +191,7 @@ void VideoInterfaceManager::RefreshConfig()
   {
     Config::SetCurrent(Config::MAIN_VI_OVERCLOCK, 1.0f);
     m_config_vi_oc_factor = 1.0f;
-    OSD::AddMessage("Minimum VBI frequency is 100% in Hardcore Mode");
+    Core::DisplayMessage("Minimum VBI frequency is 100% in Hardcore Mode");
   }
   UpdateRefreshRate();
 }

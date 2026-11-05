@@ -63,10 +63,6 @@ struct ScissorRect
 // rectangle exists is based on games only wanting to draw one rectangle, and accidentally
 // configuring the scissor offset and size of the scissor rectangle such that multiple show up;
 // there are no known games where this is not the case.
-//
-// An ImGui overlay that displays the scissor rectangle configuration as well as the generated
-// rectangles is available by setting OverlayScissorStats (GFX_OVERLAY_SCISSOR_STATS)
-// under [Settings] to True in GFX.ini.
 struct ScissorResult
 {
   ScissorResult(ScissorPos scissor_top_left, ScissorPos scissor_bottom_right,

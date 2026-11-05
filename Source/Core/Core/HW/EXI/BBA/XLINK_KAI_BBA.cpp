@@ -7,7 +7,7 @@
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
 #include "SFML/Network/IpAddress.hpp"
-#include "VideoCommon/OnScreenDisplay.h"
+#include "Core/Core.h"
 
 #include <cstring>
 #include <optional>
@@ -109,7 +109,7 @@ bool CEXIETHERNET::XLinkNetworkInterface::SendFrame(const u8* frame, u32 size)
     // Has the user been told the connection failed?
     if (!m_bba_failure_notified)
     {
-      OSD::AddMessage("XLink Kai BBA not connected", 30000);
+      Core::DisplayMessage("XLink Kai BBA not connected", 30000);
       m_bba_failure_notified = true;
     }
 
@@ -203,7 +203,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
       if (control_msg.starts_with("connected"))
       {
         NOTICE_LOG_FMT(SP1, "XLink Kai BBA connected");
-        OSD::AddMessage("XLink Kai BBA connected", 4500);
+        Core::DisplayMessage("XLink Kai BBA connected", 4500);
 
         self->m_bba_link_up = true;
         // TODO (in EXI_DeviceEthernet.cpp) bring the BBA link up here
@@ -233,7 +233,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
       {
         NOTICE_LOG_FMT(SP1, "XLink Kai BBA disconnected");
         // Show OSD message for 15 seconds to make sure the user sees it
-        OSD::AddMessage("XLink Kai BBA disconnected", 15000);
+        Core::DisplayMessage("XLink Kai BBA disconnected", 15000);
 
         // TODO (TODO in EXI_DeviceEthernet.cpp) bring the BBA link down here
         self->m_bba_link_up = false;
@@ -271,7 +271,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
 
         NOTICE_LOG_FMT(SP1, "XLink Kai message: {}", msg);
         // Show OSD message for 15 seconds to make sure the user sees it
-        OSD::AddMessage(std::move(msg), 15000);
+        Core::DisplayMessage(std::move(msg), 15000);
       }
       // chat;message_text;
       else if (control_msg.starts_with("chat"))
@@ -279,7 +279,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
         std::string msg = control_msg.substr(5, control_msg.length() - 1);
 
         NOTICE_LOG_FMT(SP1, "XLink Kai chat: {}", msg);
-        OSD::AddMessage(std::move(msg), 5000);
+        Core::DisplayMessage(std::move(msg), 5000);
       }
       // directmessage;message_text;
       else if (control_msg.starts_with("directmessage"))
@@ -287,7 +287,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
         std::string msg = control_msg.substr(14, control_msg.length() - 1);
 
         NOTICE_LOG_FMT(SP1, "XLink Kai direct message: {}", msg);
-        OSD::AddMessage(std::move(msg), 5000);
+        Core::DisplayMessage(std::move(msg), 5000);
       }
       // else junk/unsupported control message
     }

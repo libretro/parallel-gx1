@@ -46,7 +46,6 @@
 #include "VideoBackends/OGL/OGLGfx.h"
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/Fifo.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/TextureConfig.h"
 #include "VideoCommon/VideoCommon.h"
@@ -743,16 +742,16 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
 {
   if (!Config::AreCheatsEnabled())
   {
-    OSD::AddMessage("You cannot apply any cheats until you have enabled the following option:\n"
-      "Core > Internal Cheats - set this to ON", OSD::Duration::VERY_LONG, OSD::Color::RED);
+    Core::DisplayMessage("You cannot apply any cheats until you have enabled the following option:\n"
+      "Core > Internal Cheats - set this to ON");
     return;
   }
 
   const bool importCheats = Libretro::GetOption<bool>(Libretro::Options::retroarch_core::CHEATS_IMPORT, true);
   if (!importCheats)
   {
-    OSD::AddMessage("You cannot apply any cheats until you enabled the following option:\n"
-      "Core > Automatically Import Cheats into RetroArch - set this to ON", OSD::Duration::VERY_LONG, OSD::Color::RED);
+    Core::DisplayMessage("You cannot apply any cheats until you enabled the following option:\n"
+      "Core > Automatically Import Cheats into RetroArch - set this to ON");
     return;
   }
 

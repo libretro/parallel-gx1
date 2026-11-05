@@ -16,7 +16,7 @@
 #include "Core/HW/DSPLLE/DSPSymbols.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
-#include "VideoCommon/OnScreenDisplay.h"
+#include "Core/Core.h"
 
 // The user of the DSPCore library must supply a few functions so that the
 // emulation core can access the environment it runs in. If the emulation
@@ -51,7 +51,7 @@ void DMAFromDSP(const u16* src, u32 addr, u32 size)
 
 void OSD_AddMessage(std::string str, u32 ms)
 {
-  OSD::AddMessage(std::move(str), ms);
+  Core::DisplayMessage(std::move(str), ms);
 }
 
 bool OnThread()

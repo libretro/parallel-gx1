@@ -630,27 +630,6 @@ ifeq ($(OS_MACOS),1)
 	$(CORE_DIR)/Externals/libusb/libusb/libusb/os/darwin_usb.c
 endif
 
-# IMGUI
-IMGUI_SOURCES_C :=
-IMGUI_SOURCES_CXX :=
-IMGUI_SOURCES_ASM :=
-IMGUI_SOURCES_OBJCXX :=
-IMGUI_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/imgui/imgui/imgui.cpp \
-	$(CORE_DIR)/Externals/imgui/imgui/imgui_demo.cpp \
-	$(CORE_DIR)/Externals/imgui/imgui/imgui_draw.cpp \
-	$(CORE_DIR)/Externals/imgui/imgui/imgui_tables.cpp \
-	$(CORE_DIR)/Externals/imgui/imgui/imgui_widgets.cpp
-
-# IMPLOT
-IMPLOT_SOURCES_C :=
-IMPLOT_SOURCES_CXX :=
-IMPLOT_SOURCES_ASM :=
-IMPLOT_SOURCES_OBJCXX :=
-IMPLOT_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/implot/implot/implot.cpp \
-	$(CORE_DIR)/Externals/implot/implot/implot_items.cpp
-
 # LIBCHARSET
 LIBCHARSET_SOURCES_C :=
 LIBCHARSET_SOURCES_CXX :=
@@ -1256,8 +1235,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/HiresTextures.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/LightingShaderGen.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/OnScreenDisplay.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/OnScreenUI.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/OpcodeDecoding.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PerfQueryBase.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PipelineUtils.cpp \
@@ -1977,14 +1954,6 @@ endif
 
 LIBUSB_FLAGS := -w -I$(EXT_DIR)/libusb/makefile -I$(EXT_DIR)/libusb/libusb/libusb
 
-IMGUI_FLAGS := -w -DIMGUI_USER_CONFIG=\"imgui_user_config.h\" \
-	-I$(EXT_DIR)/imgui -I$(EXT_DIR)/imgui/imgui -I$(EXT_DIR)/fmt/fmt/include
-IMGUI_CXXFLAGS := -std=c++20
-
-IMPLOT_FLAGS := $(IMGUI_FLAGS) -I$(EXT_DIR)/implot/implot -I$(EXT_DIR)/implot/imgui \
-	-include $(EXT_DIR)/implot/implot_isnan_fix.h
-IMPLOT_CXXFLAGS := -std=c++20
-
 LIBCHARSET_FLAGS := -w -D_ALL_SOURCE -D_DARWIN_C_SOURCE -D_GNU_SOURCE \
 	-D_HPUX_ALT_XOPEN_SOCKET_API -D_MINIX -D_NETBSD_SOURCE -D_OPENBSD_SOURCE \
 	-D_POSIX_1_SOURCE -D_POSIX_PTHREAD_SEMANTICS -D_POSIX_SOURCE -D_TANDEM_SOURCE \
@@ -2106,7 +2075,7 @@ ADRENOTOOLS_FLAGS := -w -I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadre
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
 	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC -DSPNG_STATIC \
-	-DCURL_STATICLIB -DIMGUI_USER_CONFIG=\"imgui_user_config.h\" \
+	-DCURL_STATICLIB \
 	-DTINYGLTF_NOEXCEPTION -DTINYGLTF_NO_EXTERNAL_IMAGE -DTINYGLTF_USE_CPP14 \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
 	-I$(EXT_DIR)/picojson -I$(GEN_DIR)/Source/Core \
@@ -2120,7 +2089,6 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
 	-I$(EXT_DIR)/glslang/glslang -I$(GEN_DIR)/include $(MGBA_INC) \
 	-I$(EXT_DIR)/libspng/libspng/spng -I$(EXT_DIR)/xxhash/xxHash \
-	-I$(EXT_DIR)/imgui -I$(EXT_DIR)/imgui/imgui -I$(EXT_DIR)/implot/implot \
 	-I$(EXT_DIR)/tinygltf -I$(EXT_DIR)/FreeSurround/include \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib -I$(EXT_DIR)/Bochs_disasm \
@@ -2183,7 +2151,7 @@ endif
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
-	MGBA GLSLANG SFML FMT PUGIXML XXHASH IMGUI IMPLOT TINYGLTF FATFS \
+	MGBA GLSLANG SFML FMT PUGIXML XXHASH TINYGLTF FATFS \
 	FREESURROUND
 ifeq ($(ARCH_X86_64),1)
    LIB_GROUPS += BDISASM

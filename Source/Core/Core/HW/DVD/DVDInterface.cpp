@@ -45,7 +45,6 @@
 #include "DiscIO/VolumeDisc.h"
 #include "DiscIO/VolumeWii.h"
 
-#include "VideoCommon/OnScreenDisplay.h"
 
 // The minimum time it takes for the DVD drive to process a command (in microseconds)
 constexpr u64 MINIMUM_COMMAND_LATENCY_US = 300;
@@ -404,9 +403,9 @@ void DVDInterface::SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
 
     if (!blob.HasFastRandomAccessInBlock() && blob.GetBlockSize() > 0x200000)
     {
-      OSD::AddMessage("You are running a disc image with a very large block size.", 60000);
-      OSD::AddMessage("This will likely lead to performance problems.", 60000);
-      OSD::AddMessage("You can use Dolphin's convert feature to reduce the block size.", 60000);
+      Core::DisplayMessage("You are running a disc image with a very large block size.", 60000);
+      Core::DisplayMessage("This will likely lead to performance problems.", 60000);
+      Core::DisplayMessage("You can use Dolphin's convert feature to reduce the block size.", 60000);
     }
   }
 
@@ -1132,7 +1131,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     {
       m_system.GetCoreTiming().ScheduleEvent(
           force_eject ? 0 : m_system.GetSystemTimers().GetTicksPerSecond() / 2, m_auto_change_disc);
-      OSD::AddMessage("Changing discs automatically...", OSD::Duration::NORMAL);
+      Core::DisplayMessage("Changing discs automatically...");
     }
     else if (force_eject)
     {

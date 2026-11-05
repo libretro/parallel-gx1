@@ -189,7 +189,6 @@ namespace core {
 // Interface
 // ======================================================
 namespace main_interface {
-  constexpr const char OSD_ENABLED[] = "dolphin_osd_enabled";
   constexpr const char LOG_LEVEL[] = "dolphin_log_level";
   constexpr const char LOG_BOOT[] = "dolphin_log_boot_enabled";
   constexpr const char LOG_CORE[] = "dolphin_log_core_enabled";

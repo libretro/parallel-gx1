@@ -35,7 +35,6 @@
 #include "Core/System.h"
 
 #include "DiscIO/CachedBlob.h"
-#include "VideoCommon/OnScreenDisplay.h"
 
 #if defined(__linux__) or defined(__APPLE__) or defined(__FreeBSD__) or defined(__NetBSD__) or     \
     defined(__OpenBSD__) or defined(__HAIKU__)
@@ -982,7 +981,7 @@ static u32 NetDIMMBind(GuestSocket guest_socket, const GuestSocketAddress& guest
                                  ntohs(adjusted_ipv4port.port));
     ERROR_LOG_FMT(AMMEDIABOARD, "NetDIMMBind: {} with error {}: {}", msg, err,
                   Common::DecodeNetworkError(err));
-    OSD::AddMessage(msg, OSD::Duration::SHORT, OSD::Color::RED);
+    Core::DisplayMessage(msg);
   }
 
   return bind_result;

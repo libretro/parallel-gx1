@@ -26,7 +26,6 @@
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/FreeLookCamera.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
-#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/ShaderGenCommon.h"
 #include "VideoCommon/TextureCacheBase.h"
@@ -103,19 +102,6 @@ void VideoConfig::Refresh()
   iCropCustomRight = Config::Get(Config::GFX_CROP_CUSTOM_RIGHT);
   iCropCustomBottom = Config::Get(Config::GFX_CROP_CUSTOM_BOTTOM);
   iSafeTextureCache_ColorSamples = Config::Get(Config::GFX_SAFE_TEXTURE_CACHE_COLOR_SAMPLES);
-  bShowFPS = Config::Get(Config::GFX_SHOW_FPS);
-  bShowFTimes = Config::Get(Config::GFX_SHOW_FTIMES);
-  bShowVPS = Config::Get(Config::GFX_SHOW_VPS);
-  bShowVTimes = Config::Get(Config::GFX_SHOW_VTIMES);
-  bShowGraphs = Config::Get(Config::GFX_SHOW_GRAPHS);
-  bShowSpeed = Config::Get(Config::GFX_SHOW_SPEED);
-  bShowSpeedColors = Config::Get(Config::GFX_SHOW_SPEED_COLORS);
-  iPerfSampleUSec = Config::Get(Config::GFX_PERF_SAMP_WINDOW) * 1000;
-  bLogRenderTimeToFile = Config::Get(Config::GFX_LOG_RENDER_TIME_TO_FILE);
-  bOverlayStats = Config::Get(Config::GFX_OVERLAY_STATS);
-  bOverlayProjStats = Config::Get(Config::GFX_OVERLAY_PROJ_STATS);
-  bOverlayScissorStats = Config::Get(Config::GFX_OVERLAY_SCISSOR_STATS);
-  bShowInternalResolution = Config::Get(Config::GFX_SHOW_INTERNAL_RESOLUTION);
   bDumpTextures = Config::Get(Config::GFX_DUMP_TEXTURES);
   bDumpMipmapTextures = Config::Get(Config::GFX_DUMP_MIP_TEXTURES);
   bDumpBaseTextures = Config::Get(Config::GFX_DUMP_BASE_TEXTURES);
@@ -213,7 +199,7 @@ void VideoConfig::VerifyValidity()
   {
     if (!g_backend_info.bSupportsGeometryShaders)
     {
-      OSD::AddMessage(
+      Core::DisplayMessage(
           "Stereoscopic 3D isn't supported by your GPU, support for OpenGL 3.2 is required.",
           10000);
       stereo_mode = StereoMode::Off;
@@ -380,7 +366,7 @@ void CheckForConfigChanges()
   // Reload shaders if host config has changed.
   if (changed_bits & (CONFIG_CHANGE_BIT_HOST_CONFIG | CONFIG_CHANGE_BIT_MULTISAMPLES))
   {
-    OSD::AddMessage("Video config changed, reloading shaders.", OSD::Duration::NORMAL);
+    Core::DisplayMessage("Video config changed, reloading shaders.");
     g_gfx->WaitForGPUIdle();
     g_vertex_manager->InvalidatePipelineObject();
     g_shader_cache->SetHostConfig(new_host_config);

@@ -652,48 +652,4 @@ std::string GenerateEFBRestorePixelShader()
   return code.GetBuffer();
 }
 
-std::string GenerateImGuiVertexShader()
-{
-  ShaderCode code;
-
-  // Uniform buffer contains the viewport size, and we transform in the vertex shader.
-  EmitUniformBufferDeclaration(code);
-  code.Write("{{\n"
-             "float2 u_rcp_viewport_size_mul2;\n"
-             "}};\n\n");
-
-  EmitVertexMainDeclaration(code, 1, 1, true, 1, 1);
-  code.Write("{{\n"
-             "  v_tex0 = float3(rawtex0.xy, 0.0);\n"
-             "  v_col0 = rawcolor0;\n"
-             "  opos = float4(rawpos.x * u_rcp_viewport_size_mul2.x - 1.0,"
-             "                1.0 - rawpos.y * u_rcp_viewport_size_mul2.y, 0.0, 1.0);\n");
-
-  // NDC space is flipped in Vulkan.
-  if (GetAPIType() == APIType::Vulkan)
-    code.Write("  opos.y = -opos.y;\n");
-
-  code.Write("}}\n");
-  return code.GetBuffer();
-}
-
-std::string GenerateImGuiPixelShader(bool linear_space_output)
-{
-  ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, false);
-  EmitPixelMainDeclaration(code, 1, 1);
-  code.Write("{{\n"
-             "  ocol0 = ");
-  EmitSampleTexture(code, 0, "float3(v_tex0.xy, 0.0)");
-  // We approximate to gamma 2.2 instead of sRGB as it barely matters for this case.
-  // Note that if HDR is enabled, ideally we should multiply by
-  // the paper white brightness for readability.
-  if (linear_space_output)
-    code.Write(" * pow(v_col0, float4(2.2f, 2.2f, 2.2f, 1.0f));\n}}\n");
-  else
-    code.Write(" * v_col0;\n}}\n");
-
-  return code.GetBuffer();
-}
-
 }  // namespace FramebufferShaderGen

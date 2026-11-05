@@ -84,9 +84,6 @@ struct Statistics
   void ResetFrame();
   void SwapDL();
   void AddScissorRect();
-  void Display() const;
-  void DisplayProj() const;
-  void DisplayScissor();
 
   static void Init();
   static void Shutdown();

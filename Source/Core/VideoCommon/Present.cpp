@@ -17,7 +17,6 @@
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/FramebufferManager.h"
-#include "VideoCommon/OnScreenUI.h"
 #include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoConfig.h"
@@ -130,14 +129,6 @@ bool Presenter::Initialize()
     m_post_processor = std::make_unique<VideoCommon::PostProcessing>();
     if (!m_post_processor->Initialize(m_backbuffer_format))
       return false;
-
-    m_onscreen_ui = std::make_unique<OnScreenUI>();
-    if (!m_onscreen_ui->Initialize(m_backbuffer_width, m_backbuffer_height, m_backbuffer_scale))
-      return false;
-
-    // Draw a blank frame (and complete OnScreenUI initialization)
-    g_gfx->BindBackbuffer({{0.0f, 0.0f, 0.0f, 1.0f}});
-    g_gfx->PresentBackbuffer();
   }
 
   return true;
@@ -366,8 +357,6 @@ void Presenter::SetBackbuffer(SurfaceInfo info)
   m_backbuffer_height = info.height;
   m_backbuffer_scale = info.scale;
   m_backbuffer_format = info.format;
-  if (m_onscreen_ui)
-    m_onscreen_ui->SetScale(info.scale);
 
   OnBackbufferSet(size_changed, is_first);
 }
@@ -391,12 +380,9 @@ void Presenter::OnBackbufferSet(bool size_changed, bool is_first_set)
 
 void Presenter::ConfigChanged(u32 changed_bits)
 {
-  // Stereo mode change requires recompiling our post processing pipeline and imgui pipelines for
-  // rendering the UI.
+  // Stereo mode change requires recompiling our post processing pipeline.
   if (changed_bits & ConfigChangeBits::CONFIG_CHANGE_BIT_STEREO_MODE)
   {
-    if (m_onscreen_ui)
-      m_onscreen_ui->RecompileImGuiPipeline();
     if (m_post_processor)
       m_post_processor->RecompilePipeline();
   }
@@ -902,7 +888,7 @@ void Presenter::Present()
 {
   m_present_count++;
 
-  if (g_gfx->IsHeadless() || (!m_onscreen_ui && !m_xfb_entry))
+  if (g_gfx->IsHeadless() || !m_xfb_entry)
     return;
 
   if (!g_gfx->SupportsUtilityDrawing())
@@ -942,13 +928,6 @@ void Presenter::Present()
     RenderXFBToScreen(render_target_rc, m_xfb_entry->texture.get(), render_source_rc);
   }
 
-  if (m_onscreen_ui)
-  {
-    m_onscreen_ui->Finalize();
-    if (backbuffer_bound)
-      m_onscreen_ui->DrawImGui();
-  }
-
   // Present to the window system.
   g_gfx->PresentBackbuffer();
 
@@ -959,9 +938,6 @@ void Presenter::Present()
     const MathUtil::Rectangle<int> rect = AdjustForCustomCrop(m_xfb_rect);
     SetSuggestedWindowSize(rect.GetWidth(), rect.GetHeight());
   }
-
-  if (m_onscreen_ui)
-    m_onscreen_ui->BeginImGuiFrame(m_backbuffer_width, m_backbuffer_height);
 
   g_gfx->EndUtilityDrawing();
 }

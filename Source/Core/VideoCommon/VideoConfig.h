@@ -246,21 +246,8 @@ struct VideoConfig final
   } color_correction;
 
   // Information
-  bool bShowFPS = false;
-  bool bShowFTimes = false;
-  bool bShowVPS = false;
-  bool bShowVTimes = false;
-  bool bShowGraphs = false;
-  bool bShowSpeed = false;
-  bool bShowSpeedColors = false;
-  int iPerfSampleUSec = 0;
-  bool bOverlayStats = false;
-  bool bOverlayProjStats = false;
-  bool bOverlayScissorStats = false;
-  bool bShowInternalResolution = false;
   bool bTexFmtOverlayEnable = false;
   bool bTexFmtOverlayCenter = false;
-  bool bLogRenderTimeToFile = false;
 
   // Render
   bool bWireFrame = false;

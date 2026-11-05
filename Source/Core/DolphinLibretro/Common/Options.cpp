@@ -327,20 +327,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
 
   // ========== Main.Interface ==========
   {
-    Libretro::Options::main_interface::OSD_ENABLED,
-    "Interface > On-Screen Display",
-    "On-Screen Display",
-    "Show OSD messages.",
-    nullptr,
-    CATEGORY_INTERFACE,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-    "enabled"
-  },
-  {
     Libretro::Options::main_interface::LOG_LEVEL,
     "Interface > Log Level",
     "Log Level",

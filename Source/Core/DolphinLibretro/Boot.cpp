@@ -43,7 +43,6 @@
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/Resources/CustomResourceManager.h"
 #include "VideoCommon/Fifo.h"
-#include "VideoCommon/OnScreenDisplay.h"
 
 namespace fs = std::filesystem;
 
@@ -362,11 +361,8 @@ bool retro_load_game(const struct retro_game_info* game)
         GECKO_CODE_HANDLER);
 #endif
 
-    //OSD::AddMessage(missing_core_files_msg, OSD::Duration::VERY_LONG, OSD::Color::RED);
-
     Libretro::Log::LogFrontEnd(
-      Common::Log::LogLevel::LERROR, missing_core_files_msg.c_str(),
-      OSD::Duration::VERY_LONG);
+      Common::Log::LogLevel::LERROR, missing_core_files_msg.c_str(), 10000);
 
     ERROR_LOG_FMT(BOOT, "{}", missing_core_files_msg);
   }
@@ -434,8 +430,6 @@ bool retro_load_game(const struct retro_game_info* game)
                   Libretro::GetOption<bool>(core::FAST_DISC_SPEED, /*def=*/false));
 
   // Main.Interface
-  Config::SetBase(Config::MAIN_OSD_MESSAGES,
-                     Libretro::GetOption<bool>(main_interface::OSD_ENABLED, /*def=*/true));
   Config::SetBase(Config::MAIN_ENABLE_DEBUGGING,
                      Libretro::GetOption<bool>(main_interface::ENABLE_DEBUGGING, /*def=*/false));
 
@@ -680,7 +674,7 @@ bool retro_load_game(const struct retro_game_info* game)
 
     Config::SetBase(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
 
-    OSD::AddMessage("CPU: Just in time compiler disabled as unavailable on your system", OSD::Duration::NORMAL);
+    Core::DisplayMessage("CPU: Just in time compiler disabled as unavailable on your system");
   }
 #endif
   NOTICE_LOG_FMT(BOOT, "CPU Core: {}", Libretro::Options::CPUCoreToString(Config::Get(Config::MAIN_CPU_CORE)));

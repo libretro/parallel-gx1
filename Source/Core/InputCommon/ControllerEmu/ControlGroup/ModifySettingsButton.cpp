@@ -9,7 +9,7 @@
 #include <utility>
 
 #include "InputCommon/ControllerEmu/Control/Control.h"
-#include "VideoCommon/OnScreenDisplay.h"
+#include "Core/Core.h"
 
 namespace ControllerEmu
 {
@@ -46,9 +46,9 @@ void ModifySettingsButton::UpdateState()
         m_associated_settings[i] = !m_associated_settings[i];
 
         if (m_associated_settings[i])
-          OSD::AddMessage(controls[i]->ui_name + ": on");
+          Core::DisplayMessage(controls[i]->ui_name + ": on");
         else
-          OSD::AddMessage(controls[i]->ui_name + ": off");
+          Core::DisplayMessage(controls[i]->ui_name + ": off");
 
         m_threshold_exceeded[i] = true;
       }
