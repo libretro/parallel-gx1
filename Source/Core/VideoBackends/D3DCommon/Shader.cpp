@@ -7,10 +7,12 @@
 #include <optional>
 #include <string_view>
 
+#include <cstdio>
+#include <cstring>
+
 #include <fmt/format.h>
-#include <glslang/SPIRV/disassemble.h>
+#include <gfx/shaders/rslc.h>
 #include <wrl/client.h>
-#include "spirv_hlsl.hpp"
 
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
@@ -21,7 +23,6 @@
 #include "Common/Version.h"
 
 #include "VideoCommon/ShaderCompileUtils.h"
-#include "VideoCommon/Spirv.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -63,6 +64,10 @@ constexpr std::string_view SHADER_HEADER = R"(
   #define lerp mix
 
   #define API_D3D 1
+
+  // rslc reads the Vulkan names of these
+  #define gl_VertexID gl_VertexIndex
+  #define gl_InstanceID gl_InstanceIndex
 )";
 constexpr std::string_view COMPUTE_SHADER_HEADER = R"(
   // Target GLSL 4.5.
@@ -89,78 +94,59 @@ constexpr std::string_view COMPUTE_SHADER_HEADER = R"(
   #define API_D3D 1
 )";
 
-std::optional<std::string> GetHLSLFromSPIRV(SPIRV::CodeVector spv, D3D_FEATURE_LEVEL feature_level)
-{
-  spirv_cross::CompilerHLSL::Options options;
-  switch (feature_level)
-  {
-  case D3D_FEATURE_LEVEL_10_0:
-    options.shader_model = 40;
-    break;
-  case D3D_FEATURE_LEVEL_10_1:
-    options.shader_model = 41;
-    break;
-  default:
-    options.shader_model = 50;
-    break;
-  };
-
-  spirv_cross::CompilerHLSL compiler(std::move(spv));
-  compiler.set_hlsl_options(options);
-
-  return compiler.compile();
-}
-
-std::optional<SPIRV::CodeVector> GetSpirv(ShaderStage stage, std::string_view source,
-                                          glslang::TShader::Includer* shader_includer)
-{
-  switch (stage)
-  {
-  case ShaderStage::Vertex:
-  {
-    const auto full_source = fmt::format("{}{}", SHADER_HEADER, source);
-    return SPIRV::CompileVertexShader(full_source, APIType::D3D, glslang::EShTargetSpv_1_0,
-                                      shader_includer);
-  }
-
-  case ShaderStage::Geometry:
-  {
-    // Spirv cross does not currently support hlsl geometry shaders
-    return std::nullopt;
-  }
-
-  case ShaderStage::Pixel:
-  {
-    const auto full_source = fmt::format("{}{}", SHADER_HEADER, source);
-    return SPIRV::CompileFragmentShader(full_source, APIType::D3D, glslang::EShTargetSpv_1_0,
-                                        shader_includer);
-  }
-
-  case ShaderStage::Compute:
-  {
-    const auto full_source = fmt::format("{}{}", COMPUTE_SHADER_HEADER, source);
-    return SPIRV::CompileComputeShader(full_source, APIType::D3D, glslang::EShTargetSpv_1_0,
-                                       shader_includer);
-  }
-  };
-
-  return std::nullopt;
-}
-
+/* The stage's HLSL, printed by rslc from the GLSL the generators write;
+ * a geometry stage is written in HLSL already. A stage rslc refuses is
+ * logged and written to the dump directory with the reason. */
 std::optional<std::string> GetHLSL(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
                                    std::string_view source,
                                    VideoCommon::ShaderIncluder* shader_includer)
 {
+  static int num_failures;
+  char err[1024];
+  struct rslc_opts opts;
+  struct rslc_result result;
+  enum rslc_stage rstage;
+  std::string full;
+  std::optional<std::string> hlsl;
+  FILE* f;
+
   if (stage == ShaderStage::Geometry)
-  {
     return std::string{source};
-  }
-  else if (const auto spirv = GetSpirv(stage, source, shader_includer))
+
+  rstage = stage == ShaderStage::Vertex ? RSLC_STAGE_VERTEX :
+           stage == ShaderStage::Pixel  ? RSLC_STAGE_FRAGMENT :
+                                          RSLC_STAGE_COMPUTE;
+  full.append(stage == ShaderStage::Compute ? COMPUTE_SHADER_HEADER : SHADER_HEADER);
+  full.append(source);
+
+  memset(&opts, 0, sizeof(opts));
+  opts.dst = RSLC_DST_HLSL;
+  opts.version = feature_level == D3D_FEATURE_LEVEL_10_0 ? 40 :
+                 feature_level == D3D_FEATURE_LEVEL_10_1 ? 41 :
+                                                           50;
+  opts.err = err;
+  opts.err_cap = sizeof(err);
+  err[0] = '\0';
+  if (rslc_compile(full.data(), full.size(), rstage, &opts, &result))
   {
-    return GetHLSLFromSPIRV(std::move(*spirv), feature_level);
+    hlsl = std::string(result.text);
+    rslc_result_free(&result, &opts);
+    return hlsl;
   }
 
-  return std::nullopt;
+  ERROR_LOG_FMT(VIDEO, "rslc could not print the HLSL of a shader: {}", err);
+  {
+    std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
+    File::CreateFullPath(path);
+    f = fopen(path.c_str(), "wb");
+    if (f)
+    {
+      fwrite(full.data(), 1, full.size(), f);
+      fprintf(f, "\n/* rslc: %s */\n", err);
+      fclose(f);
+    }
+  }
+  return hlsl;
 }
 }  // namespace
 
@@ -269,14 +255,8 @@ Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::s
     file << "\n";
     file << "Dolphin Version: " + Common::GetScmRevStr() + "\n";
     file << "Video Backend: " + g_video_backend->GetDisplayName();
-
-    if (const auto spirv = GetSpirv(stage, source, shader_includer))
-    {
-      file << "\nOriginal Source: \n";
-      file << source << std::endl;
-      file << "SPIRV: \n";
-      spv::Disassemble(file, *spirv);
-    }
+    file << "\nOriginal Source: \n";
+    file << source << std::endl;
     file.close();
 
     PanicAlertFmt("Failed to compile {}: {}\nDebug info ({}):\n{}", filename, Common::HRWrap(hr),

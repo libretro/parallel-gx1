@@ -198,7 +198,6 @@ else
    HAVE_HIDAPI      := 1
    HAVE_CPPIPC      := 1
    HAVE_D3D         := 1
-   HAVE_SPIRV_CROSS := 1
    LDFLAGS += -static-libgcc -static-libstdc++ -static
    LIBS += -lsetupapi -lcfgmgr32 -lshlwapi -liphlpapi -lwinmm -lws2_32 -lbcrypt \
 	-ladvapi32 -lcrypt32 -lsecur32 -lole32 -loleaut32 -luuid -lshell32 \
