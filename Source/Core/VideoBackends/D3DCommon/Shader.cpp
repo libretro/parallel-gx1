@@ -93,11 +93,12 @@ constexpr std::string_view COMPUTE_SHADER_HEADER = R"(
   #define API_D3D 1
 )";
 
-/* The stage's HLSL, printed by rslc from the GLSL the generators write;
- * a geometry stage is written in HLSL already. A stage rslc refuses is
- * logged and written to the dump directory with the reason. */
-std::optional<std::string> GetHLSL(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
-                                   std::string_view source)
+/* A stage's bytecode, compiled by rslc from the GLSL the generators write
+ * to shader model 4.0, 4.1 or 5.0 by the feature level. A stage rslc
+ * refuses is logged and written to the dump directory with the reason. */
+std::optional<AbstractShader::BinaryData> CompileWithRslc(D3D_FEATURE_LEVEL feature_level,
+                                                          ShaderStage stage,
+                                                          std::string_view source)
 {
   static int num_failures;
   char err[1024];
@@ -105,11 +106,8 @@ std::optional<std::string> GetHLSL(D3D_FEATURE_LEVEL feature_level, ShaderStage 
   struct rslc_result result;
   enum rslc_stage rstage;
   std::string full;
-  std::optional<std::string> hlsl;
+  std::optional<AbstractShader::BinaryData> code;
   FILE* f;
-
-  if (stage == ShaderStage::Geometry)
-    return std::string{source};
 
   rstage = stage == ShaderStage::Vertex ? RSLC_STAGE_VERTEX :
            stage == ShaderStage::Pixel  ? RSLC_STAGE_FRAGMENT :
@@ -118,7 +116,7 @@ std::optional<std::string> GetHLSL(D3D_FEATURE_LEVEL feature_level, ShaderStage 
   full.append(source);
 
   memset(&opts, 0, sizeof(opts));
-  opts.dst = RSLC_DST_HLSL;
+  opts.dst = RSLC_DST_DXBC;
   opts.version = feature_level == D3D_FEATURE_LEVEL_10_0 ? 40 :
                  feature_level == D3D_FEATURE_LEVEL_10_1 ? 41 :
                                                            50;
@@ -127,12 +125,15 @@ std::optional<std::string> GetHLSL(D3D_FEATURE_LEVEL feature_level, ShaderStage 
   err[0] = '\0';
   if (rslc_compile(full.data(), full.size(), rstage, &opts, &result))
   {
-    hlsl = std::string(result.text);
+    {
+      const u8* bytes = reinterpret_cast<const u8*>(result.spirv);
+      code = AbstractShader::BinaryData(bytes, bytes + result.spirv_len * sizeof(uint32_t));
+    }
     rslc_result_free(&result, &opts);
-    return hlsl;
+    return code;
   }
 
-  ERROR_LOG_FMT(VIDEO, "rslc could not print the HLSL of a shader: {}", err);
+  ERROR_LOG_FMT(VIDEO, "rslc could not compile a shader: {}", err);
   {
     std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
     File::CreateFullPath(path);
@@ -144,7 +145,7 @@ std::optional<std::string> GetHLSL(D3D_FEATURE_LEVEL feature_level, ShaderStage 
       fclose(f);
     }
   }
-  return hlsl;
+  return code;
 }
 }  // namespace
 
@@ -226,9 +227,9 @@ static const char* GetCompileTarget(D3D_FEATURE_LEVEL feature_level, ShaderStage
 std::optional<Shader::BinaryData>
 Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::string_view source)
 {
-  const auto hlsl = GetHLSL(feature_level, stage, source);
-  if (!hlsl)
-    return std::nullopt;
+  /* the geometry stage is written in HLSL: the runtime compiler builds it */
+  if (stage != ShaderStage::Geometry)
+    return CompileWithRslc(feature_level, stage, source);
 
   static constexpr D3D_SHADER_MACRO macros[] = {{"API_D3D", "1"}, {nullptr, nullptr}};
   const UINT flags = g_ActiveConfig.bEnableValidationLayer ?
@@ -238,7 +239,7 @@ Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::s
 
   Microsoft::WRL::ComPtr<ID3DBlob> code;
   Microsoft::WRL::ComPtr<ID3DBlob> errors;
-  HRESULT hr = d3d_compile(hlsl->data(), hlsl->size(), nullptr, macros, nullptr, "main", target,
+  HRESULT hr = d3d_compile(source.data(), source.size(), nullptr, macros, nullptr, "main", target,
                            flags, 0, &code, &errors);
   if (FAILED(hr))
   {
@@ -246,14 +247,12 @@ Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::s
     std::string filename = VideoBackendBase::BadShaderFilename(target, num_failures++);
     std::ofstream file;
     File::OpenFStream(file, filename, std::ios_base::out);
-    file.write(hlsl->data(), hlsl->size());
+    file.write(source.data(), source.size());
     file << "\n";
     file.write(static_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize());
     file << "\n";
     file << "Dolphin Version: " + Common::GetScmRevStr() + "\n";
-    file << "Video Backend: " + g_video_backend->GetDisplayName();
-    file << "\nOriginal Source: \n";
-    file << source << std::endl;
+    file << "Video Backend: " + g_video_backend->GetDisplayName() << std::endl;
     file.close();
 
     PanicAlertFmt("Failed to compile {}: {}\nDebug info ({}):\n{}", filename, Common::HRWrap(hr),

@@ -139,6 +139,7 @@ LIBRETRO_COMMON_SOURCES_OBJCXX :=
 LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
+	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_dxbc.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_emit.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_front.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_ir.c \
