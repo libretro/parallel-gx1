@@ -847,6 +847,7 @@ void retro_unload_game(void)
   Libretro::Video::D3D11Lock();
   if (Core::IsRunning(system))
   {
+    Libretro::FinishFieldInFlight();
     Core::Stop(system);
 #if defined(__LIBUSB__)
     system.ShutdownUSBScanner();
@@ -893,6 +894,7 @@ static bool retro_set_eject_state(bool ejected)
 
   eject_state = ejected;
 
+  Libretro::FinishFieldInFlight();
   Core::RunOnCPUThread(Core::System::GetInstance(), [ejected] {
     auto& system = Core::System::GetInstance();
     Core::CPUThreadGuard guard{system};

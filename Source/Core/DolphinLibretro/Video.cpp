@@ -834,8 +834,9 @@ bool CreateDevice2(retro_vulkan_context* context, VkInstance instance, VkPhysica
 #endif
 
 /* The frontend's callback, behind one that counts what each retro_run
- * hands over: a run whose fields only repeated the last picture draws
- * nothing and reports a repeat, with the last picture's size. */
+ * hands over: a run whose fields only repeated the last picture, or that
+ * ran out of time before its field ended, draws nothing and reports a
+ * repeat, with the last picture's size. */
 static retro_video_refresh_t s_frontend_video_cb;
 static unsigned s_frames_sent;
 static unsigned s_last_width;
@@ -854,8 +855,16 @@ static void CountedVideoRefresh(const void* data, unsigned width, unsigned heigh
 
 void EndFrame()
 {
-  if (!s_frames_sent && s_last_width && s_last_height)
+  if (!s_frames_sent)
   {
+    /* before the first picture, the size the frontend was told */
+    if (!s_last_width || !s_last_height)
+    {
+      retro_system_av_info info;
+      retro_get_system_av_info(&info);
+      s_last_width = info.geometry.base_width;
+      s_last_height = info.geometry.base_height;
+    }
     OutputRepeat();
     s_frontend_video_cb(nullptr, s_last_width, s_last_height, 0);
   }

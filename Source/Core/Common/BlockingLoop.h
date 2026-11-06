@@ -4,6 +4,9 @@
 #pragma once
 
 
+#include <cstdint>
+
+#include <features/features_cpu.h>
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
 #include <rthreads/rthreads.h>
@@ -173,8 +176,15 @@ public:
         [[fallthrough]];
 
       case STATE_SLEEPING:
-        // Just relax
-        m_new_work_event.Wait();
+        // Just relax, no longer than the sleep bound lets
+        if (!m_sleep_deadline_us)
+          m_new_work_event.Wait();
+        else
+        {
+          const int64_t left = m_sleep_deadline_us - (int64_t)cpu_features_get_time_usec();
+          if (left > 0)
+            m_new_work_event.WaitFor(left);
+        }
         break;
       }
     }
@@ -229,6 +239,13 @@ public:
   // the busy loop to the sleeping way.
   void AllowSleep() { m_may_sleep.Set(); }
 
+  /* A time, in cpu_features_get_time_usec() microseconds of the wall
+   * clock (not the frame clock, which only moves between runs), past
+   * which Run() does not sleep waiting for work, so that its payload gets
+   * to see the time is up; 0 for none. Set by the thread that calls
+   * Run(), around it. */
+  void SetSleepDeadline(int64_t deadline_us) { m_sleep_deadline_us = deadline_us; }
+
 private:
   bool IsStopped() const
   {
@@ -262,6 +279,8 @@ private:
   // If this is set, we fall back from the busy loop to an event based synchronization.
   // This variable is set to true after a timeout or if Wait() is called.
   Flag m_may_sleep;
+
+  int64_t m_sleep_deadline_us = 0;
 };
 
 }  // namespace Common

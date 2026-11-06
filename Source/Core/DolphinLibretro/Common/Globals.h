@@ -17,6 +17,14 @@ extern retro_environment_t environ_cb;
 extern bool g_emuthread_launched;
 extern std::vector<Gecko::GeckoCode> g_gecko_codes;
 extern std::vector<ActionReplay::ARCode> g_ar_codes;
+
+/* retro_run may return with the field it started still running on the
+ * CPU thread, when that thread is held up. Whatever pauses the CPU
+ * thread from the frontend's (a savestate, a cheat, a disc change,
+ * unloading) first runs the GPU until that field ends, so the CPU thread
+ * is paused at a field's end as it would be after a full retro_run, and
+ * never waiting on the GPU, which only this thread runs. */
+void FinishFieldInFlight();
 inline constexpr unsigned g_gbplayer_subsystem_id = 0x101;
 
 namespace Input

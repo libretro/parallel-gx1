@@ -22,6 +22,12 @@ enum class AspectMode : int;
 namespace VideoCommon
 {
 class PostProcessing;
+#ifdef __LIBRETRO__
+/* Set while retro_run runs the emulation, the only time the frontend
+ * takes pictures: a field swapped at any other time, while a state is
+ * saved or loaded say, is not presented, and the next field is. */
+extern bool g_frontend_takes_frames;
+#endif
 // Presenter is a class that deals with putting the final XFB on the screen.
 // It also handles post-processing.
 class Presenter

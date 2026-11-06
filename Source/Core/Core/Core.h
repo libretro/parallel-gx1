@@ -187,6 +187,8 @@ void QueueHostJob(std::function<void(Core::System&)> job, bool run_during_stop =
 void HostDispatchJobs(Core::System& system);
 
 void DoFrameStep(Core::System& system);
+/* Whether a frame step has the CPU thread running to the end of a field. */
+bool IsFrameStepping();
 
 void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 

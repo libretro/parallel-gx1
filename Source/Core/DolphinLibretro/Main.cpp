@@ -109,6 +109,21 @@ static void ApplyAspectMode()
   else
     Config::SetCurrent(Config::GFX_ASPECT_RATIO, AspectMode::Stretch);
 }
+
+void FinishFieldInFlight()
+{
+  Core::System& system = Core::System::GetInstance();
+
+  /* without the video backend, after the context is gone, there is no
+   * GPU to run */
+  if (!system.IsDualCoreMode() || !Core::IsRunning(system) || !g_vertex_manager)
+    return;
+  /* stepping is what the end of a field leaves; a field's end already
+   * asked for stops the loop at once, so it is run until the CPU thread
+   * has really stopped */
+  while (Core::IsFrameStepping() && Core::GetState(system) == Core::State::Running)
+    system.GetFifo().RunGpuLoop(0);
+}
 }  // namespace Libretro
 
 extern "C" {
@@ -544,15 +559,24 @@ void retro_run(void)
   RETRO_PERFORMANCE_START(dolphin_main_func);
 
   Libretro::Video::D3D11Lock();
+  VideoCommon::g_frontend_takes_frames = true;
   if (system.IsDualCoreMode())
   {
+    /* two of the frontend's frames, and never more than 40 ms: a field
+     * held up on the CPU thread, by a disc read or anything else, leaves
+     * this run to report a repeat and the rest of the field to the next */
+    s64 budget_us = (s64)(2000000.0 / frame_hz);
+    if (budget_us > 40000)
+      budget_us = 40000;
+
     Core::DoFrameStep(system);
-    system.GetFifo().RunGpuLoop();
+    system.GetFifo().RunGpuLoop(budget_us);
   }
   else
   {
     system.GetCPU().RunSingleFrame();
   }
+  VideoCommon::g_frontend_takes_frames = false;
   Libretro::Video::D3D11Unlock();
 
   RETRO_PERFORMANCE_STOP(dolphin_main_func);
@@ -568,6 +592,7 @@ void retro_run(void)
   Libretro::Audio::PushFields();
 }
 
+
 size_t retro_serialize_size(void)
 {
   size_t size = 0;
@@ -575,6 +600,8 @@ size_t retro_serialize_size(void)
   Core::System& system = Core::System::GetInstance();
   if (!Core::IsRunning(system))
     return 0;
+
+  Libretro::FinishFieldInFlight();
 
   AsyncRequests* ar = AsyncRequests::GetInstance();
 
@@ -599,6 +626,8 @@ bool retro_serialize(void* data, size_t size)
   Core::System& system = Core::System::GetInstance();
   if (!Core::IsRunning(system))
     return false;
+
+  Libretro::FinishFieldInFlight();
 
   AsyncRequests* ar = AsyncRequests::GetInstance();
 
@@ -630,6 +659,8 @@ bool retro_unserialize(const void* data, size_t size)
   Core::System& system = Core::System::GetInstance();
   if (!Core::IsRunning(system))
     return false;
+
+  Libretro::FinishFieldInFlight();
 
   AsyncRequests* ar = AsyncRequests::GetInstance();
 
@@ -750,6 +781,7 @@ void retro_cheat_reset(void)
   if (!Config::AreCheatsEnabled() || !importCheats)
     return;
 
+  Libretro::FinishFieldInFlight();
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     PatchEngine::Shutdown();
   }, true);
@@ -781,6 +813,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
   // Look up by code as index is unreliable
   enable_cheat_by_code(enabled, code);
 
+  Libretro::FinishFieldInFlight();
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     // Apply Action Replay
     ActionReplay::ApplyCodes(Libretro::g_ar_codes, game_id, game_revision);

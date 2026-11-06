@@ -12,6 +12,8 @@
 #pragma once
 
 
+#include <cstdint>
+
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
 
@@ -50,6 +52,24 @@ public:
       }
       retro_eventcount_commit_wait(&m_wake, key);
     }
+  }
+
+  /* As Wait(), for at most timeout_us microseconds; true if the event
+   * was set (and is taken), false if the time ran out first. */
+  bool WaitFor(int64_t timeout_us)
+  {
+    while (!TakeSignal())
+    {
+      const int key = retro_eventcount_prepare_wait(&m_wake);
+      if (TakeSignal())
+      {
+        retro_eventcount_cancel_wait(&m_wake);
+        return true;
+      }
+      if (!retro_eventcount_commit_wait_timeout(&m_wake, key, timeout_us))
+        return TakeSignal();
+    }
+    return true;
   }
 
   void Reset()

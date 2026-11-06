@@ -27,6 +27,10 @@ std::unique_ptr<VideoCommon::Presenter> g_presenter;
 
 namespace VideoCommon
 {
+#ifdef __LIBRETRO__
+bool g_frontend_takes_frames = false;
+#endif
+
 // Stretches the native/internal analog resolution aspect ratio from ~4:3 to ~16:9
 static float SourceAspectRatioToWidescreen(float source_aspect)
 {
@@ -205,6 +209,14 @@ void Presenter::ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
   auto& video_events = GetVideoEvents();
 
   video_events.before_present_event.Trigger(present_info);
+
+#ifdef __LIBRETRO__
+  if (!g_frontend_takes_frames)
+  {
+    m_last_xfb_id = std::numeric_limits<u64>::max();
+    return;
+  }
+#endif
 
   if (!is_duplicate || !g_ActiveConfig.bSkipPresentingDuplicateXFBs)
   {

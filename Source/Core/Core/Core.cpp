@@ -989,6 +989,11 @@ void HostDispatchJobs(Core::System& system)
   }
 }
 
+bool IsFrameStepping()
+{
+  return s_frame_step;
+}
+
 // NOTE: Host Thread
 void DoFrameStep(Core::System& system)
 {

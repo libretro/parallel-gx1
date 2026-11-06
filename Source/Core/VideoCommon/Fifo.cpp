@@ -3,6 +3,8 @@
 
 #include "VideoCommon/Fifo.h"
 
+#include <features/features_cpu.h>
+
 #include <cstring>
 
 #include "Common/Assert.h"
@@ -298,13 +300,26 @@ void FifoManager::ResetVideoBuffer()
 
 // Description: Main FIFO update loop
 // Purpose: Keep the Core HW updated about the CPU-GPU distance
-void FifoManager::RunGpuLoop()
+void FifoManager::RunGpuLoop(s64 budget_us)
 {
+  /* Past the deadline the loop stops even though the field has not ended,
+   * the CPU thread being held up by something, a disc read say: the
+   * frontend's frame is not held up with it. */
+  const s64 deadline_us = budget_us ? (s64)cpu_features_get_time_usec() + budget_us : 0;
+  bool out_of_time = false;
+  u32 chunks = 0;
+
+  m_gpu_mainloop.SetSleepDeadline(deadline_us);
   m_gpu_mainloop.Run(
-      [this] {
+      [&] {
 #ifdef __LIBRETRO__
         if (retro_atomic_load_acquire_int(&m_stop_gpu_loop_requested))
           m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
+        else if (deadline_us && (s64)cpu_features_get_time_usec() >= deadline_us)
+        {
+          out_of_time = true;
+          m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
+        }
 #endif
 
         // Run events from the CPU thread.
@@ -340,6 +355,13 @@ void FifoManager::RunGpuLoop()
             if (m_config_sync_gpu &&
                 retro_atomic_load_seq_cst_int(&m_sync_ticks) < m_config_sync_gpu_min_distance)
               break;
+            /* the clock read every 64 chunks of 32 bytes */
+            if (deadline_us && !(++chunks & 63) && (s64)cpu_features_get_time_usec() >= deadline_us)
+            {
+              out_of_time = true;
+              m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
+              break;
+            }
 
             u32 cyclesExecuted = 0;
             u32 readPtr = LoadReg(&fifo.CPReadPointer);
@@ -390,6 +412,10 @@ void FifoManager::RunGpuLoop()
             AsyncRequests::GetInstance()->PullEvents();
           }
 
+          /* the rest of the fifo is the next run's */
+          if (out_of_time)
+            return;
+
           // fast skip remaining GPU time if fifo is empty
           if (retro_atomic_load_seq_cst_int(&m_sync_ticks) > 0)
           {
@@ -404,8 +430,12 @@ void FifoManager::RunGpuLoop()
           g_framebuffer_manager->RefreshPeekCache();
         }
       });
+  m_gpu_mainloop.SetSleepDeadline(0);
 #ifdef __LIBRETRO__
-  retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 0);
+  /* a field's end that came while the loop was out of time is kept for
+   * the next run, which then finishes that field's work and stops */
+  if (!out_of_time)
+    retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 0);
 #endif
 }
 
