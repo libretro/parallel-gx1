@@ -47,6 +47,8 @@ VKTexture::~VKTexture()
 {
   StateTracker::GetInstance()->UnbindTexture(m_view);
   g_command_buffer_mgr->DeferImageViewDestruction(m_view);
+  if (m_view_2d != VK_NULL_HANDLE)
+    g_command_buffer_mgr->DeferImageViewDestruction(m_view_2d);
 
   // If we don't have device memory allocated, the image is not owned by us (e.g. swapchain)
   if (m_alloc != VK_NULL_HANDLE)
@@ -127,8 +129,14 @@ std::unique_ptr<VKTexture> VKTexture::Create(const TextureConfig& tex_config, st
     PanicAlertFmt("Unhandled texture type.");
     return nullptr;
   }
-  if (!texture->CreateView(image_view_type))
+  if (!texture->CreateView(image_view_type, &texture->m_view))
     return nullptr;
+  if (tex_config.type == AbstractTextureType::Texture_2DArray && tex_config.layers == 1 &&
+      tex_config.IsRenderTarget() &&
+      !texture->CreateView(VK_IMAGE_VIEW_TYPE_2D, &texture->m_view_2d))
+  {
+    return nullptr;
+  }
 
   return texture;
 }
@@ -138,13 +146,13 @@ std::unique_ptr<VKTexture> VKTexture::CreateAdopted(const TextureConfig& tex_con
 {
   std::unique_ptr<VKTexture> texture = std::make_unique<VKTexture>(
       tex_config, VmaAllocation(VK_NULL_HANDLE), image, "", layout, ComputeImageLayout::Undefined);
-  if (!texture->CreateView(view_type))
+  if (!texture->CreateView(view_type, &texture->m_view))
     return nullptr;
 
   return texture;
 }
 
-bool VKTexture::CreateView(VkImageViewType type)
+bool VKTexture::CreateView(VkImageViewType type, VkImageView* view)
 {
   VkImageViewCreateInfo view_info = {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -157,7 +165,7 @@ bool VKTexture::CreateView(VkImageViewType type)
        VK_COMPONENT_SWIZZLE_IDENTITY},
       {GetImageViewAspectForFormat(GetFormat()), 0, GetLevels(), 0, GetLayers()}};
 
-  VkResult res = vkCreateImageView(g_vulkan_context->GetDevice(), &view_info, nullptr, &m_view);
+  VkResult res = vkCreateImageView(g_vulkan_context->GetDevice(), &view_info, nullptr, view);
   if (res != VK_SUCCESS)
   {
     LOG_VULKAN_ERROR(res, "vkCreateImageView failed: ");

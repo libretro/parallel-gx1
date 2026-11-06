@@ -12,7 +12,6 @@
 #ifdef HAS_VULKAN
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 #include "VideoBackends/Vulkan/StateTracker.h"
-#include "VideoBackends/Vulkan/VulkanContext.h"
 #endif
 
 namespace Libretro
@@ -232,15 +231,6 @@ VKOutput::~VKOutput()
 
 void VKOutput::DropDirect()
 {
-  /* the frontend's frames that read it were submitted before anything
-   * the core submits next, so it goes once that completes */
-  if (m_direct_image.image_view != VK_NULL_HANDLE)
-  {
-    if (Vulkan::g_command_buffer_mgr)
-      Vulkan::g_command_buffer_mgr->DeferImageViewDestruction(m_direct_image.image_view);
-    else
-      vkDestroyImageView(Vulkan::g_vulkan_context->GetDevice(), m_direct_image.image_view, nullptr);
-  }
   memset(&m_direct_image, 0, sizeof(m_direct_image));
   m_direct = nullptr;
 }
@@ -333,9 +323,14 @@ bool VKOutput::PresentTexture(const AbstractTexture* texture, u32 width, u32 hei
   Vulkan::VKTexture* vk_texture =
       const_cast<Vulkan::VKTexture*>(static_cast<const Vulkan::VKTexture*>(texture));
   retro_vulkan_image image;
-  VkImageView view = VK_NULL_HANDLE;
+
+  /* the texture's own 2D view of its one layer: the frontend's shaders
+   * read a 2D image */
+  if (vk_texture->GetView2D() == VK_NULL_HANDLE)
+    return false;
 
   memset(&image, 0, sizeof(image));
+  image.image_view = vk_texture->GetView2D();
   image.image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   image.create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   image.create_info.image = vk_texture->GetImage();
@@ -350,15 +345,6 @@ bool VKOutput::PresentTexture(const AbstractTexture* texture, u32 width, u32 hei
   image.create_info.subresourceRange.levelCount = 1;
   image.create_info.subresourceRange.baseArrayLayer = 0;
   image.create_info.subresourceRange.layerCount = 1;
-  /* a view per picture: an image's handle can come back for another one
-   * once it is destroyed, so none is kept for the next */
-  if (vkCreateImageView(Vulkan::g_vulkan_context->GetDevice(), &image.create_info, nullptr,
-                        &view) != VK_SUCCESS)
-  {
-    return false;
-  }
-  image.image_view = view;
-
   vk_texture->TransitionToLayout(Vulkan::g_command_buffer_mgr->GetCurrentCommandBuffer(),
                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   Vulkan::g_command_buffer_mgr->SubmitCommandBuffer(false, false, true);

@@ -52,6 +52,9 @@ public:
 
   VkImage GetImage() const { return m_image; }
   VkImageView GetView() const { return m_view; }
+  /* A 2D view of a render target's one layer, for whoever reads it as a
+   * plain 2D image: the frontend, when it is handed on; null otherwise. */
+  VkImageView GetView2D() const { return m_view_2d; }
   VkImageLayout GetLayout() const { return m_layout; }
   VkFormat GetVkFormat() const { return GetVkFormatForHostTextureFormat(m_config.format); }
   bool IsAdopted() const { return m_alloc != VmaAllocation(VK_NULL_HANDLE); }
@@ -72,11 +75,12 @@ public:
   void PrepareForRenderPass(VkCommandBuffer command_buffer) const;
 
 private:
-  bool CreateView(VkImageViewType type);
+  bool CreateView(VkImageViewType type, VkImageView* view);
 
   VmaAllocation m_alloc;
   VkImage m_image;
   VkImageView m_view = VK_NULL_HANDLE;
+  VkImageView m_view_2d = VK_NULL_HANDLE;
   mutable VkImageLayout m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
   mutable ComputeImageLayout m_compute_layout = ComputeImageLayout::Undefined;
   mutable bool m_written_since_last_layout_change = false;

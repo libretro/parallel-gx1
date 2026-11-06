@@ -98,9 +98,9 @@ private:
   retro_vulkan_image m_images[OUTPUT_MAX_SLOTS];
   std::unique_ptr<Vulkan::VKTexture> m_textures[OUTPUT_MAX_SLOTS];
   std::unique_ptr<Vulkan::VKFramebuffer> m_framebuffers[OUTPUT_MAX_SLOTS];
-  /* A texture handed on where it is, with a 2D view of its one layer of
-   * its own, made for it: the frontend reads it until another picture is
-   * handed on, so it is kept in shader-read layout meanwhile. */
+  /* A texture handed on where it is, through its 2D view: the frontend
+   * reads it until another picture is handed on, so it is kept in
+   * shader-read layout meanwhile. */
   retro_vulkan_image m_direct_image;
   Vulkan::VKTexture* m_direct;
   retro_hw_render_interface_vulkan* m_iface;
