@@ -113,20 +113,6 @@ public:
   {
     return retro_atomic_load_acquire_int(&m_cpu_run_state_reached) != 0;
   }
-  // Blocks until the CPU thread has entered its run loop.
-  void WaitForCPURunState()
-  {
-    for (;;)
-    {
-      const int key = retro_eventcount_prepare_wait(&m_run_state_event);
-      if (HasCPURunStateBeenReached())
-      {
-        retro_eventcount_cancel_wait(&m_run_state_event);
-        return;
-      }
-      retro_eventcount_commit_wait(&m_run_state_event, key);
-    }
-  }
 #endif
 private:
   struct Job
@@ -179,7 +165,6 @@ private:
   Core::System& m_system;
 #ifdef __LIBRETRO__
   retro_atomic_int_t m_cpu_run_state_reached;
-  retro_eventcount_t m_run_state_event;
 #endif
 };
 }  // namespace CPU

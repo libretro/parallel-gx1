@@ -62,11 +62,32 @@ void ShaderCache::InitializeShaderCache()
   {
     LoadCaches();
     LoadPipelineUIDCache();
+#ifdef __LIBRETRO__
+    if (g_ActiveConfig.UsingUberShaders())
+      LoadUberPipelineUIDCache();
+#endif
   }
 
+#ifdef __LIBRETRO__
+  /* With ubershaders, every draw without its specialized pipeline yet is
+   * drawn with an ubershader one. The ones this game drew with before are
+   * built before it starts, as a draw would otherwise build its own on
+   * the spot; every other one there can be, and the specialized ones
+   * known, go on building in the background while it runs. Without
+   * threads to build on, the asynchronous modes draw as Synchronous does
+   * (VertexManagerBase::UpdatePipelineObject), and nothing more is built
+   * before the game starts than that would. */
+  if (g_ActiveConfig.UsingUberShaders() && CanCompileInBackground())
+  {
+    CompileMissingUberPipelines();
+    WaitForAsyncCompiler();
+    QueueUberShaderPipelines();
+  }
+#else
   // Queue ubershader precompiling if required.
   if (g_ActiveConfig.UsingUberShaders())
     QueueUberShaderPipelines();
+#endif
 
   // Compile all known UIDs.
   CompileMissingPipelines();
@@ -75,6 +96,11 @@ void ShaderCache::InitializeShaderCache()
 
   // Switch to the runtime shader compiler thread configuration.
   m_async_shader_compiler->ResizeWorkerThreads(g_ActiveConfig.GetShaderCompilerThreads());
+}
+
+bool ShaderCache::CanCompileInBackground() const
+{
+  return m_async_shader_compiler && m_async_shader_compiler->HasWorkerThreads();
 }
 
 void ShaderCache::Reload()
@@ -155,6 +181,12 @@ std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const
 const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineUid& uid)
 {
   auto it = m_gx_uber_pipeline_cache.find(uid);
+#ifdef __LIBRETRO__
+  /* every one a draw uses is recorded, to be built before the game
+   * starts next time */
+  if (m_gx_uber_pipeline_uid_cache_file.IsOpen() && !m_recorded_uber_pipeline_uids.contains(uid))
+    AppendGXUberPipelineUID(uid);
+#endif
   if (it != m_gx_uber_pipeline_cache.end() && !it->second.second)
     return it->second.first.get();
 
@@ -853,9 +885,95 @@ void ShaderCache::ClosePipelineUIDCache()
     WARN_LOG_FMT(VIDEO, "Writing pipeline UIDs to cache failed.");
   }
   m_pending_gx_pipeline_uids.clear();
+  if (m_gx_uber_pipeline_uid_cache_file.IsOpen() && !m_pending_gx_uber_pipeline_uids.empty() &&
+      !m_gx_uber_pipeline_uid_cache_file.WriteArray(m_pending_gx_uber_pipeline_uids.data(),
+                                                     m_pending_gx_uber_pipeline_uids.size()))
+  {
+    WARN_LOG_FMT(VIDEO, "Writing ubershader pipeline UIDs to cache failed.");
+  }
+  m_pending_gx_uber_pipeline_uids.clear();
+  m_recorded_uber_pipeline_uids.clear();
+  m_gx_uber_pipeline_uid_cache_file.Close();
 #endif
   m_gx_pipeline_uid_cache_file.Close();
 }
+
+#ifdef __LIBRETRO__
+void ShaderCache::LoadUberPipelineUIDCache()
+{
+  const u32 magic = 0x44495555;  // UUID
+  const u32 header_size = sizeof(u32) + sizeof(u32);
+  const std::string filename =
+      File::GetUserPath(D_CACHE_IDX) + SConfig::GetInstance().GetGameID() + ".uberuidcache";
+  File::IOFile& file = m_gx_uber_pipeline_uid_cache_file;
+  bool valid = false;
+
+  if (file.Open(filename, "rb+"))
+  {
+    u32 existing_magic;
+    u32 existing_version;
+    if (file.ReadBytes(&existing_magic, sizeof(existing_magic)) &&
+        file.ReadBytes(&existing_version, sizeof(existing_version)) && existing_magic == magic &&
+        existing_version == GX_PIPELINE_UID_VERSION)
+    {
+      const u64 file_size = file.GetSize();
+      const u64 count = (file_size - header_size) / sizeof(SerializedGXUberPipelineUid);
+      u64 i;
+
+      valid = file_size == count * sizeof(SerializedGXUberPipelineUid) + header_size;
+      for (i = 0; valid && i < count; i++)
+      {
+        SerializedGXUberPipelineUid serialized_uid;
+        GXUberPipelineUid real_uid;
+        if (!file.ReadBytes(&serialized_uid, sizeof(serialized_uid)))
+        {
+          valid = false;
+          break;
+        }
+        UnserializePipelineUid(serialized_uid, real_uid);
+        /* known, not built: built with the ubershaders before the game
+         * starts */
+        if (!m_gx_uber_pipeline_cache.contains(real_uid))
+          m_gx_uber_pipeline_cache[real_uid].second = false;
+        m_recorded_uber_pipeline_uids.insert(real_uid);
+      }
+      if (valid)
+        valid = file.Seek(file_size, File::SeekOrigin::Begin);
+    }
+    if (!valid)
+      file.Close();
+  }
+  if (!file.IsOpen() && file.Open(filename, "wb"))
+  {
+    file.WriteBytes(&magic, sizeof(magic));
+    file.WriteBytes(&GX_PIPELINE_UID_VERSION, sizeof(GX_PIPELINE_UID_VERSION));
+  }
+  /* what a session adds is written when the cache closes: room enough
+   * that adding is no allocation in the middle of a game */
+  m_pending_gx_uber_pipeline_uids.reserve(1024);
+  m_pending_gx_pipeline_uids.reserve(1024);
+}
+
+void ShaderCache::AppendGXUberPipelineUID(const GXUberPipelineUid& config)
+{
+  SerializedGXUberPipelineUid disk_uid;
+
+  if (!m_gx_uber_pipeline_uid_cache_file.IsOpen())
+    return;
+  SerializePipelineUid(config, disk_uid);
+  m_pending_gx_uber_pipeline_uids.push_back(disk_uid);
+  m_recorded_uber_pipeline_uids.insert(config);
+}
+
+void ShaderCache::CompileMissingUberPipelines()
+{
+  for (auto& it : m_gx_uber_pipeline_cache)
+  {
+    if (!it.second.first && !it.second.second)
+      QueueUberPipelineCompile(it.first, COMPILE_PRIORITY_UBERSHADER_PIPELINE);
+  }
+}
+#endif
 
 void ShaderCache::AddSerializedGXPipelineUID(const SerializedGXPipelineUid& uid)
 {

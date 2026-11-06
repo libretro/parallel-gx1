@@ -508,7 +508,11 @@ bool retro_load_game(const struct retro_game_info* game)
                   static_cast<ShaderCompilationMode>(
                     Libretro::GetOption<int>(
                       gfx_settings::SHADER_COMPILATION_MODE,
-                      static_cast<int>(ShaderCompilationMode::Synchronous))));
+                      static_cast<int>(ShaderCompilationMode::AsynchronousUberShaders))));
+  /* as many compiler threads as the machine has to spare, for building
+   * pipelines both before the game starts and while it runs */
+  Config::SetBase(Config::GFX_SHADER_COMPILER_THREADS, -1);
+  Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, -1);
 
   Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING,
     Libretro::GetOption<bool>(gfx_settings::WAIT_FOR_SHADERS, /*def=*/false));

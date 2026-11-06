@@ -880,6 +880,15 @@ void VertexManagerBase::UpdatePipelineObject()
   case ShaderCompilationMode::AsynchronousUberShaders:
   case ShaderCompilationMode::AsynchronousSkipRendering:
   {
+#ifdef __LIBRETRO__
+    /* no threads to build on: asking for the pipeline in the background
+     * would build it on the spot, then an ubershader one besides */
+    if (!g_shader_cache->CanCompileInBackground())
+    {
+      m_current_pipeline_object = g_shader_cache->GetPipelineForUid(m_current_pipeline_config);
+      return;
+    }
+#endif
     // Can we background compile shaders? If so, get the pipeline asynchronously.
     auto res = g_shader_cache->GetPipelineForUidAsync(m_current_pipeline_config);
     if (res)

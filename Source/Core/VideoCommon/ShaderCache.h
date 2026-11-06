@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <map>
+#include <set>
 #include <memory>
 #include <optional>
 #include <string>
@@ -46,6 +47,10 @@ namespace VideoCommon
 class ShaderCache final
 {
 public:
+  /* Whether pipelines can build on threads of their own: without, asking
+   * for one in the background builds it on the spot all the same. */
+  bool CanCompileInBackground() const;
+
   ShaderCache();
   ~ShaderCache();
 
@@ -164,6 +169,12 @@ private:
                                                std::unique_ptr<AbstractPipeline> pipeline);
   void AddSerializedGXPipelineUID(const SerializedGXPipelineUid& uid);
   void AppendGXPipelineUID(const GXPipelineUid& config);
+#ifdef __LIBRETRO__
+  void LoadUberPipelineUIDCache();
+  void AppendGXUberPipelineUID(const GXUberPipelineUid& config);
+  /* queues the ubershader pipelines known and not built yet */
+  void CompileMissingUberPipelines();
+#endif
 
   // ASync Compiler Methods
   void QueueVertexShaderCompile(const VertexShaderUid& uid, u32 priority);
@@ -234,6 +245,13 @@ private:
   File::IOFile m_gx_pipeline_uid_cache_file;
 #ifdef __LIBRETRO__
   std::vector<SerializedGXPipelineUid> m_pending_gx_pipeline_uids;
+  /* The ubershader pipelines a game drew with, as for the specialized
+   * ones: compiled while the game boots next time, so a hybrid draw
+   * finds its ubershader ready instead of building it on the spot. */
+  File::IOFile m_gx_uber_pipeline_uid_cache_file;
+  std::vector<SerializedGXUberPipelineUid> m_pending_gx_uber_pipeline_uids;
+  /* those already in the file or written to it this session */
+  std::set<GXUberPipelineUid> m_recorded_uber_pipeline_uids;
 #endif
   Common::LinearDiskCache<SerializedGXPipelineUid, u8> m_gx_pipeline_disk_cache;
   Common::LinearDiskCache<SerializedGXUberPipelineUid, u8> m_gx_uber_pipeline_disk_cache;

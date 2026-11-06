@@ -39,7 +39,6 @@ CPUManager::CPUManager(Core::System& system) : m_system(system)
   retro_eventcount_init(&m_cpu_idle);
 #ifdef __LIBRETRO__
   retro_atomic_int_init(&m_cpu_run_state_reached, 0);
-  retro_eventcount_init(&m_run_state_event);
 #endif
 }
 
@@ -51,9 +50,6 @@ CPUManager::~CPUManager()
     node = node->next;
     delete job;
   }
-#ifdef __LIBRETRO__
-  retro_eventcount_free(&m_run_state_event);
-#endif
   retro_eventcount_free(&m_cpu_idle);
   retro_eventcount_free(&m_cpu_wake);
   retro_eventcount_free(&m_stepping_released);
@@ -162,7 +158,6 @@ void CPUManager::Run()
 
 #ifdef __LIBRETRO__
   retro_atomic_store_release_int(&m_cpu_run_state_reached, 1);
-  retro_eventcount_notify(&m_run_state_event);
 #endif
   while (LoadState() != State::PowerDown)
   {

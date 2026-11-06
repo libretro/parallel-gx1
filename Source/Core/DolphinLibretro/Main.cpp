@@ -333,8 +333,13 @@ void retro_run(void)
     {
       Core::StartEmuThread(system, std::move(Core::g_boot_params), wsi);
 
-      // Wait until CPU thread has reached Run()
-      system.GetCPU().WaitForCPURunState();
+      /* until the CPU thread has reached its run loop, this thread runs
+       * the GPU: what the CPU thread does first may wait on it, as the
+       * FIFO player clearing the EFB does */
+      Libretro::Video::D3D11Lock();
+      while (!system.GetCPU().HasCPURunStateBeenReached())
+        system.GetFifo().RunGpuLoop(5000);
+      Libretro::Video::D3D11Unlock();
     }
     else
       Core::EmuThread(system, std::move(Core::g_boot_params), wsi);

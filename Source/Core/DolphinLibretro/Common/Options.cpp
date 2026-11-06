@@ -863,17 +863,20 @@ static struct retro_core_option_v2_definition option_defs[] = {
     Libretro::Options::gfx_settings::SHADER_COMPILATION_MODE,
     "Graphics > Settings > Shader Compilation",
     "Shader Compilation",
-    "Control shader compilation.",
+    "Control shader compilation. Async (UberShaders) draws with ubershaders, built before the "
+    "game starts, while each draw's own pipeline builds in the background: exact rendering "
+    "without compilation stutter, at some GPU cost while new pipelines build. Synchronous "
+    "builds each new pipeline when it is first drawn, stuttering.",
     nullptr,
     CATEGORY_GFX_SETTINGS,
     {
+      { "2", "Async (UberShaders)" }, // ShaderCompilationMode::AsynchronousUberShaders
       { "0", "Synchronous" }, // ShaderCompilationMode::Synchronous
       { "3", "Async (Skip Rendering)" }, // ShaderCompilationMode::AsynchronousSkipRendering
       { "1", "Sync (UberShaders)" }, // ShaderCompilationMode::SynchronousUberShaders
-      { "2", "Async (UberShaders)" }, // ShaderCompilationMode::AsynchronousUberShaders
       { nullptr, nullptr }
     },
-    "0"
+    "2"
   },
   {
     Libretro::Options::gfx_settings::WAIT_FOR_SHADERS,
