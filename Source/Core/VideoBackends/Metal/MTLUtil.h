@@ -22,7 +22,6 @@ struct DeviceFeatures
   /// On discrete GPUs, this tends to be faster if the copy is able to operate in parallel with a
   /// previous render.  This is the case unless a game uses features like bbox or texture downloads.
   bool manual_buffer_upload;
-  bool subgroup_ops;
 };
 
 extern DeviceFeatures g_features;

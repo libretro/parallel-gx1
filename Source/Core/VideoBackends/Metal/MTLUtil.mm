@@ -3,17 +3,20 @@
 
 #include "VideoBackends/Metal/MTLUtil.h"
 
-#include <fstream>
 #include <string>
 
-#include <TargetConditionals.h>
-#include <spirv_msl.hpp>
+#include <cstdio>
+#include <cstring>
 
+#include <TargetConditionals.h>
+#include <gfx/shaders/rslc.h>
+
+#include "Common/FileUtil.h"
+#include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 
-#include "VideoCommon/Constants.h"
 #include "VideoCommon/DriverDetails.h"
-#include "VideoCommon/Spirv.h"
+#include "VideoCommon/VideoBackendBase.h"
 
 Metal::DeviceFeatures Metal::g_features;
 
@@ -91,153 +94,6 @@ void Metal::Util::PopulateBackendInfoAdapters(BackendInfo* backend_info,
   }
 }
 
-/// For testing driver brokenness
-static bool RenderSinglePixel(id<MTLDevice> dev, id<MTLFunction> vs, id<MTLFunction> fs,  //
-                              u32 px_in, u32* px_out)
-{
-  auto pdesc = MRCTransfer([MTLRenderPipelineDescriptor new]);
-  [pdesc setVertexFunction:vs];
-  [pdesc setFragmentFunction:fs];
-  [[pdesc colorAttachments][0] setPixelFormat:MTLPixelFormatRGBA8Unorm];
-  auto pipe = MRCTransfer([dev newRenderPipelineStateWithDescriptor:pdesc error:nil]);
-  if (!pipe)
-    return false;
-  auto buf = MRCTransfer([dev newBufferWithLength:4 options:MTLResourceStorageModeShared]);
-  memcpy([buf contents], &px_in, sizeof(px_in));
-  auto tdesc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-                                                                  width:1
-                                                                 height:1
-                                                              mipmapped:false];
-  [tdesc setUsage:MTLTextureUsageRenderTarget];
-  auto tex = MRCTransfer([dev newTextureWithDescriptor:tdesc]);
-  auto q = MRCTransfer([dev newCommandQueue]);
-  id<MTLCommandBuffer> cmdbuf = [q commandBuffer];
-
-  id<MTLBlitCommandEncoder> upload_encoder = [cmdbuf blitCommandEncoder];
-  [upload_encoder copyFromBuffer:buf
-                    sourceOffset:0
-               sourceBytesPerRow:4
-             sourceBytesPerImage:4
-                      sourceSize:MTLSizeMake(1, 1, 1)
-                       toTexture:tex
-                destinationSlice:0
-                destinationLevel:0
-               destinationOrigin:MTLOriginMake(0, 0, 0)];
-  [upload_encoder endEncoding];
-
-  auto rpdesc = MRCTransfer([MTLRenderPassDescriptor new]);
-  [[rpdesc colorAttachments][0] setTexture:tex];
-  [[rpdesc colorAttachments][0] setLoadAction:MTLLoadActionLoad];
-  [[rpdesc colorAttachments][0] setStoreAction:MTLStoreActionStore];
-  id<MTLRenderCommandEncoder> renc = [cmdbuf renderCommandEncoderWithDescriptor:rpdesc];
-  [renc setRenderPipelineState:pipe];
-  [renc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-  [renc endEncoding];
-
-  id<MTLBlitCommandEncoder> download_encoder = [cmdbuf blitCommandEncoder];
-  [download_encoder copyFromTexture:tex
-                        sourceSlice:0
-                        sourceLevel:0
-                       sourceOrigin:MTLOriginMake(0, 0, 0)
-                         sourceSize:MTLSizeMake(1, 1, 1)
-                           toBuffer:buf
-                  destinationOffset:0
-             destinationBytesPerRow:4
-           destinationBytesPerImage:4];
-  [download_encoder endEncoding];
-
-  [cmdbuf commit];
-  [cmdbuf waitUntilCompleted];
-
-  memcpy(px_out, [buf contents], sizeof(*px_out));
-  return [cmdbuf status] == MTLCommandBufferStatusCompleted;
-}
-
-static bool DetectIntelGPUFBFetch(id<MTLDevice> dev)
-{
-  // Even though it's nowhere in the feature set tables, some Intel GPUs support fbfetch!
-  // Annoyingly, the Haswell compiler successfully makes a pipeline but actually miscompiles it and
-  // doesn't insert any fbfetch instructions.
-  // The Broadwell compiler inserts the Skylake fbfetch instruction,
-  // but Broadwell doesn't support that.  It seems to make the shader not do anything.
-  // So we actually have to test the thing
-
-  static constexpr const char* shader = R"(
-vertex float4 fs_triangle(uint vid [[vertex_id]]) {
-  return float4(vid & 1 ? 3 : -1, vid & 2 ? 3 : -1, 0, 1);
-}
-fragment float4 fbfetch_test(float4 in [[color(0), raster_order_group(0)]]) {
-  return in * 2;
-}
-)";
-  auto lib = MRCTransfer([dev newLibraryWithSource:[NSString stringWithUTF8String:shader]
-                                           options:nil
-                                             error:nil]);
-  if (!lib)
-    return false;
-  u32 outpx;
-  bool ok = RenderSinglePixel(dev,                                                     //
-                              MRCTransfer([lib newFunctionWithName:@"fs_triangle"]),   //
-                              MRCTransfer([lib newFunctionWithName:@"fbfetch_test"]),  //
-                              0x11223344, &outpx);
-  if (!ok)
-    return false;
-
-  // Proper fbfetch will double contents, Haswell will return black, and Broadwell will do nothing
-  if (outpx == 0x22446688)
-    return true;  // Skylake+
-  else if (outpx == 0x11223344)
-    return false;  // Broadwell
-  else
-    return false;  // Haswell
-}
-
-enum class DetectionResult
-{
-  Yes,
-  No,
-  Unsure
-};
-
-static DetectionResult DetectInvertedIsHelper(id<MTLDevice> dev)
-{
-  static constexpr const char* shader = R"(
-vertex float4 fs_triangle(uint vid [[vertex_id]]) {
-  return float4(vid & 1 ? 3 : -1, vid & 2 ? 3 : -1, 0, 1);
-}
-fragment float4 is_helper_test() {
-  float val = metal::simd_is_helper_thread() ? 1 : 0.5;
-  return float4(val, metal::dfdx(val) + 0.5, metal::dfdy(val) + 0.5, 0);
-}
-)";
-
-  auto lib = MRCTransfer([dev newLibraryWithSource:[NSString stringWithUTF8String:shader]
-                                           options:nil
-                                             error:nil]);
-  if (!lib)
-    return DetectionResult::Unsure;
-
-  u32 outpx;
-  bool ok = RenderSinglePixel(dev,                                                       //
-                              MRCTransfer([lib newFunctionWithName:@"fs_triangle"]),     //
-                              MRCTransfer([lib newFunctionWithName:@"is_helper_test"]),  //
-                              0, &outpx);
-
-  // The pixel itself should not be a helper thread (0.5)
-  // The pixels to its right and below should be helper threads (1.0)
-  // Correctly working would therefore be 0.5 for the pixel and (0.5 + 0.5) for the derivatives
-  // Inverted would be 1.0 for the pixel and (-0.5 + 0.5) for the derivatives
-  if (!ok)
-    return DetectionResult::Unsure;
-  if (outpx == 0xffff80)
-    return DetectionResult::No;  // Working correctly
-  if (outpx == 0x0000ff)
-    return DetectionResult::Yes;  // Inverted
-  WARN_LOG_FMT(VIDEO, "metal::simd_is_helper_thread might be broken! Test shader returned {:06x}!",
-               outpx);
-  return DetectionResult::Unsure;
-}
-
 void Metal::Util::PopulateBackendInfoFeatures(const VideoConfig& config, BackendInfo* backend_info,
                                               id<MTLDevice> device)
 {
@@ -267,8 +123,6 @@ void Metal::Util::PopulateBackendInfoFeatures(const VideoConfig& config, Backend
     supports_bcn = [device supportsBCTextureCompression];
   backend_info->bSupportsST3CTextures = supports_bcn;
   backend_info->bSupportsBPTCTextures = supports_bcn;
-
-  backend_info->bSupportsFramebufferFetch = true;
 #endif
 
   backend_info->AAModes.clear();
@@ -298,24 +152,9 @@ void Metal::Util::PopulateBackendInfoFeatures(const VideoConfig& config, Backend
     break;
   }
 
-  g_features.subgroup_ops =
-      [device supportsFamily:MTLGPUFamilyMac2] || [device supportsFamily:MTLGPUFamilyApple7];
-  if (g_features.subgroup_ops)
-  {
-    DetectionResult result = DetectInvertedIsHelper(device);
-    if (result != DetectionResult::Unsure)
-    {
-      bool is_helper_inverted = result == DetectionResult::Yes;
-      if (is_helper_inverted != DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
-        DriverDetails::OverrideBug(DriverDetails::BUG_INVERTED_IS_HELPER, is_helper_inverted);
-    }
-  }
-
-  backend_info->bSupportsFramebufferFetch = [device supportsFamily:MTLGPUFamilyApple1];
-#if TARGET_OS_OSX
-  if (vendor == DriverDetails::VENDOR_INTEL)
-    backend_info->bSupportsFramebufferFetch |= DetectIntelGPUFBFetch(device);
-#endif
+  /* rslc has no form of a subpass input: blending is not emulated
+   * through framebuffer fetch */
+  backend_info->bSupportsFramebufferFetch = false;
 
   if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DYNAMIC_SAMPLER_INDEXING))
     backend_info->bSupportsDynamicSamplerIndexing = false;
@@ -381,28 +220,54 @@ MTLPixelFormat Metal::Util::FromAbstract(AbstractTextureFormat format)
 
 // MARK: Shader Translation
 
-static const std::string_view SHADER_HEADER = R"(
-// Target GLSL 4.5.
+/* The stages' headers. A binding is the Metal index the backend binds
+ * the resource at, as rslc prints it: the vertex stage's uniform blocks
+ * at buffers 1 and 2 (the expand block), its vertex loader input at
+ * buffer 0; the pixel stage's blocks at buffers 0 and 1, the bounding
+ * box at buffer 2; textures and samplers at their own index; compute's
+ * block at buffer 0, its buffers at 2 and 3, its images after the eight
+ * samplers. */
+static const std::string_view VERTEX_SHADER_HEADER = R"(
 #version 450 core
-// Always available on Metal
-#extension GL_EXT_shader_8bit_storage : require
-#extension GL_EXT_shader_16bit_storage : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
-
 #define ATTRIBUTE_LOCATION(x) layout(location = x)
 #define FRAGMENT_OUTPUT_LOCATION(x) layout(location = x)
 #define FRAGMENT_OUTPUT_LOCATION_INDEXED(x, y) layout(location = x, index = y)
-#define UBO_BINDING(packing, x) layout(packing, set = 0, binding = (x - 1))
-#define SAMPLER_BINDING(x) layout(set = 1, binding = x)
-#define TEXEL_BUFFER_BINDING(x) layout(set = 1, binding = (x + 8))
-#define SSBO_BINDING(x) layout(std430, set = 2, binding = x)
-#define INPUT_ATTACHMENT_BINDING(x, y, z) layout(set = x, binding = y, input_attachment_index = z)
+#define SAMPLER_BINDING(x) layout(binding = x)
+#define TEXEL_BUFFER_BINDING(x) layout(binding = (x + 8))
 #define VARYING_LOCATION(x) layout(location = x)
 #define FORCE_EARLY_Z layout(early_fragment_tests) in
+#define UBO_BINDING(packing, x) layout(packing, binding = (1 + (x) / 4))
+#define SSBO_BINDING(x) layout(std430, binding = ((x) - 1))
 
-// Metal framebuffer fetch helpers.
-#define FB_FETCH_VALUE subpassLoad(in_ocol0)
+// hlsl to glsl function translation
+#define API_METAL 1
+#define float2 vec2
+#define float3 vec3
+#define float4 vec4
+#define uint2 uvec2
+#define uint3 uvec3
+#define uint4 uvec4
+#define int2 ivec2
+#define int3 ivec3
+#define int4 ivec4
+#define frac fract
+#define lerp mix
+
+// These were changed in Vulkan
+#define gl_VertexID gl_VertexIndex
+#define gl_InstanceID gl_InstanceIndex
+)";
+static const std::string_view PIXEL_SHADER_HEADER = R"(
+#version 450 core
+#define ATTRIBUTE_LOCATION(x) layout(location = x)
+#define FRAGMENT_OUTPUT_LOCATION(x) layout(location = x)
+#define FRAGMENT_OUTPUT_LOCATION_INDEXED(x, y) layout(location = x, index = y)
+#define SAMPLER_BINDING(x) layout(binding = x)
+#define TEXEL_BUFFER_BINDING(x) layout(binding = (x + 8))
+#define VARYING_LOCATION(x) layout(location = x)
+#define FORCE_EARLY_Z layout(early_fragment_tests) in
+#define UBO_BINDING(packing, x) layout(packing, binding = ((x) - 1))
+#define SSBO_BINDING(x) layout(std430, binding = ((x) + 2))
 
 // hlsl to glsl function translation
 #define API_METAL 1
@@ -423,18 +288,11 @@ static const std::string_view SHADER_HEADER = R"(
 #define gl_InstanceID gl_InstanceIndex
 )";
 static const std::string_view COMPUTE_SHADER_HEADER = R"(
-// Target GLSL 4.5.
 #version 450 core
-// Always available on Metal
-#extension GL_EXT_shader_8bit_storage : require
-#extension GL_EXT_shader_16bit_storage : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
-
-#define UBO_BINDING(packing, x) layout(packing, set = 0, binding = (x - 1))
-#define SAMPLER_BINDING(x) layout(set = 1, binding = x)
-#define SSBO_BINDING(x) layout(std430, set = 2, binding = x)
-#define IMAGE_BINDING(format, x) layout(format, set = 3, binding = x)
+#define UBO_BINDING(packing, x) layout(packing, binding = ((x) - 1))
+#define SAMPLER_BINDING(x) layout(binding = x)
+#define SSBO_BINDING(x) layout(std430, binding = ((x) + 2))
+#define IMAGE_BINDING(format, x) layout(format, binding = (8 + (x)))
 
 // hlsl to glsl function translation
 #define API_METAL 1
@@ -450,17 +308,6 @@ static const std::string_view COMPUTE_SHADER_HEADER = R"(
 #define frac fract
 #define lerp mix
 )";
-static const std::string_view SUBGROUP_HELPER_HEADER = R"(
-#extension GL_KHR_shader_subgroup_basic : enable
-#extension GL_KHR_shader_subgroup_arithmetic : enable
-#extension GL_KHR_shader_subgroup_ballot : enable
-
-#define SUPPORTS_SUBGROUP_REDUCTION 1
-#define IS_HELPER_INVOCATION gl_HelperInvocation
-#define IS_FIRST_ACTIVE_INVOCATION (subgroupElect())
-#define SUBGROUP_MIN(value) value = subgroupMin(value)
-#define SUBGROUP_MAX(value) value = subgroupMax(value)
-)";
 
 static const std::string_view MSL_HEADER =
     // We know our shader generator leaves unused variables.
@@ -474,123 +321,62 @@ static constexpr std::pair<std::string_view, std::string_view> MSL_FIXUPS[] = {
      "_Pragma(\"unroll\") for (uint chan = 0u; chan < 2u; chan++)"},
 };
 
-static constexpr spirv_cross::MSLResourceBinding
-MakeResourceBinding(spv::ExecutionModel stage, u32 set, u32 binding,  //
-                    u32 msl_buffer, u32 msl_texture, u32 msl_sampler)
-{
-  spirv_cross::MSLResourceBinding resource;
-  resource.stage = stage;
-  resource.desc_set = set;
-  resource.binding = binding;
-  resource.msl_buffer = msl_buffer;
-  resource.msl_texture = msl_texture;
-  resource.msl_sampler = msl_sampler;
-  return resource;
-}
-
 std::optional<std::string>
 Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
 {
+  static int num_failures;
+  char err[1024];
+  struct rslc_opts opts;
+  struct rslc_result result;
+  enum rslc_stage rstage;
   std::string full_source;
+  std::string compiled;
+  FILE* f;
 
-  std::string_view header = stage == ShaderStage::Compute ? COMPUTE_SHADER_HEADER : SHADER_HEADER;
-  full_source.reserve(header.size() + SUBGROUP_HELPER_HEADER.size() + source.size());
-
-  full_source.append(header);
-  if (Metal::g_features.subgroup_ops)
-    full_source.append(SUBGROUP_HELPER_HEADER);
-  if (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
-  {
-    full_source.append("#define gl_HelperInvocation !gl_HelperInvocation "
-                       "// Work around broken AMD Metal driver\n");
-  }
-  if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD))
-    full_source.append("#define BROKEN_SUBGROUP_WITH_DISCARD 1\n");
-  full_source.append(source);
-
-  std::optional<SPIRV::CodeVector> code;
   switch (stage)
   {
   case ShaderStage::Vertex:
-    code = SPIRV::CompileVertexShader(full_source, APIType::Metal, glslang::EShTargetSpv_1_5);
-    break;
-  case ShaderStage::Geometry:
-    PanicAlertFmt("Tried to compile geometry shader for Metal, but Metal doesn't support them!");
+    rstage = RSLC_STAGE_VERTEX;
+    full_source.append(VERTEX_SHADER_HEADER);
     break;
   case ShaderStage::Pixel:
-    code = SPIRV::CompileFragmentShader(full_source, APIType::Metal, glslang::EShTargetSpv_1_5);
+    rstage = RSLC_STAGE_FRAGMENT;
+    full_source.append(PIXEL_SHADER_HEADER);
     break;
   case ShaderStage::Compute:
-    code = SPIRV::CompileComputeShader(full_source, APIType::Metal, glslang::EShTargetSpv_1_5);
+    rstage = RSLC_STAGE_COMPUTE;
+    full_source.append(COMPUTE_SHADER_HEADER);
     break;
-  }
-  if (!code.has_value())
+  default:
+    PanicAlertFmt("Tried to compile geometry shader for Metal, but Metal doesn't support them!");
     return std::nullopt;
-
-  // clang-format off
-  static const spirv_cross::MSLResourceBinding resource_bindings[] = {
-      MakeResourceBinding(spv::ExecutionModelVertex,    0, 0, 1, 0, 0), // vs/ubo
-      MakeResourceBinding(spv::ExecutionModelVertex,    0, 1, 1, 0, 0), // vs/ubo
-      MakeResourceBinding(spv::ExecutionModelVertex,    0, 3, 2, 0, 0), // vs/ubo
-      MakeResourceBinding(spv::ExecutionModelVertex,    2, 1, 0, 0, 0), // vs/ssbo
-      MakeResourceBinding(spv::ExecutionModelFragment,  0, 0, 0, 0, 0), // vs/ubo
-      MakeResourceBinding(spv::ExecutionModelFragment,  0, 1, 1, 0, 0), // vs/ubo
-      // Dynamic list initialized below      Fragment,  1, N, 0, N, N   // ps/samp0-N
-      MakeResourceBinding(spv::ExecutionModelFragment,  2, 0, 2, 0, 0), // ps/ssbo
-      MakeResourceBinding(spv::ExecutionModelGLCompute, 0, 1, 0, 0, 0), // cs/ubo
-      // Dynamic list initialized below      GLCompute, 1, N, 0, N, N,  // cs/samp0-N
-      MakeResourceBinding(spv::ExecutionModelGLCompute, 2, 0, 2, 0, 0), // cs/ssbo
-      MakeResourceBinding(spv::ExecutionModelGLCompute, 2, 1, 3, 0, 0), // cs/ssbo
-      // Dynamic list initialized below      GLCompute, 3, N, 0, N, 0,  // cs/img0-N
-  };
-
-  spirv_cross::CompilerMSL::Options options;
-#if TARGET_OS_OSX
-  options.platform = spirv_cross::CompilerMSL::Options::macOS;
-#elif TARGET_OS_IOS
-  options.platform = spirv_cross::CompilerMSL::Options::iOS;
-  // Otherwise SPIRV-Cross will try to compile subgroup ops to quad ops instead
-  // (And crash because there's no quad_min or quad_max)
-  options.ios_use_simdgroup_functions = Metal::g_features.subgroup_ops;
-#else
-  #error What platform is this?
-#endif
-  // clang-format on
-
-  spirv_cross::CompilerMSL compiler(std::move(*code));
-
-  options.set_msl_version(2, 3);
-  options.use_framebuffer_fetch_subpasses = true;
-  compiler.set_msl_options(options);
-
-  for (auto& binding : resource_bindings)
-    compiler.add_msl_resource_binding(binding);
-  if (stage == ShaderStage::Pixel)
-  {
-    for (u32 i = 0; i < VideoCommon::MAX_PIXEL_SHADER_SAMPLERS; i++)  // ps/samp0-N
-    {
-      compiler.add_msl_resource_binding(
-          MakeResourceBinding(spv::ExecutionModelFragment, 1, i, 0, i, i));
-    }
   }
-  else if (stage == ShaderStage::Compute)
+  full_source.append(source);
+
+  memset(&opts, 0, sizeof(opts));
+  opts.dst = RSLC_DST_MSL;
+  opts.version = 23;   /* MSL 2.3 */
+  opts.err = err;
+  opts.err_cap = sizeof(err);
+  err[0] = '\0';
+  if (!rslc_compile(full_source.data(), full_source.size(), rstage, &opts, &result))
   {
-    u32 img = 0;
-    u32 smp = 0;
-    for (u32 i = 0; i < VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS; i++)  // cs/samp0-N
+    std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
+    ERROR_LOG_FMT(VIDEO, "rslc could not print the MSL of a shader: {}", err);
+    File::CreateFullPath(path);
+    f = fopen(path.c_str(), "wb");
+    if (f)
     {
-      compiler.add_msl_resource_binding(
-          MakeResourceBinding(spv::ExecutionModelGLCompute, 1, i, 0, img++, smp++));
+      fwrite(full_source.data(), 1, full_source.size(), f);
+      fprintf(f, "\n/* rslc: %s */\n", err);
+      fclose(f);
     }
-    for (u32 i = 0; i < VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS; i++)  // cs/img0-N
-    {
-      compiler.add_msl_resource_binding(
-          MakeResourceBinding(spv::ExecutionModelGLCompute, 3, i, 0, img++, 0));
-    }
+    return std::nullopt;
   }
+  compiled = result.text;
+  rslc_result_free(&result, &opts);
 
   std::string output(MSL_HEADER);
-  std::string compiled = compiler.compile();
   std::string_view remaining = compiled;
   while (!remaining.empty())
   {

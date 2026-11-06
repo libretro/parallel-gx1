@@ -522,15 +522,17 @@ UBO_BINDING(std140, 1) uniform UBO {
 
 #if defined(API_METAL)
 
+// The buffers are read a word at a time: bytes and halves are picked out
+// of it, the first in the low bits.
 #if defined(TEXEL_BUFFER_FORMAT_R8)
-  SSBO_BINDING(0) readonly buffer Input { uint8_t s_input_buffer[]; };
-  #define FETCH(offset) uint(s_input_buffer[offset])
+  SSBO_BINDING(0) readonly buffer Input { uint s_input_buffer[]; };
+  #define FETCH(offset) ((s_input_buffer[uint(offset) >> 2] >> ((uint(offset) & 3u) << 3)) & 0xFFu)
 #elif defined(TEXEL_BUFFER_FORMAT_R16)
-  SSBO_BINDING(0) readonly buffer Input { uint16_t s_input_buffer[]; };
-  #define FETCH(offset) uint(s_input_buffer[offset])
+  SSBO_BINDING(0) readonly buffer Input { uint s_input_buffer[]; };
+  #define FETCH(offset) ((s_input_buffer[uint(offset) >> 1] >> ((uint(offset) & 1u) << 4)) & 0xFFFFu)
 #elif defined(TEXEL_BUFFER_FORMAT_RGBA8)
-  SSBO_BINDING(0) readonly buffer Input { u8vec4 s_input_buffer[]; };
-  #define FETCH(offset) uvec4(s_input_buffer[offset])
+  SSBO_BINDING(0) readonly buffer Input { uint s_input_buffer[]; };
+  #define FETCH(offset) ((uvec4(s_input_buffer[uint(offset)]) >> uvec4(0u, 8u, 16u, 24u)) & 0xFFu)
 #elif defined(TEXEL_BUFFER_FORMAT_R32G32)
   SSBO_BINDING(0) readonly buffer Input { uvec2 s_input_buffer[]; };
   #define FETCH(offset) s_input_buffer[offset]
@@ -539,8 +541,8 @@ UBO_BINDING(std140, 1) uniform UBO {
 #endif
 
 #ifdef HAS_PALETTE
-  SSBO_BINDING(1) readonly buffer Palette { uint16_t s_palette_buffer[]; };
-  #define FETCH_PALETTE(offset) uint(s_palette_buffer[offset])
+  SSBO_BINDING(1) readonly buffer Palette { uint s_palette_buffer[]; };
+  #define FETCH_PALETTE(offset) ((s_palette_buffer[uint(offset) >> 1] >> ((uint(offset) & 1u) << 4)) & 0xFFFFu)
 #endif
 
 #else
@@ -1181,7 +1183,7 @@ float4 DecodePixel(int val)
   ss << "\n";
 
   if (api_type == APIType::Metal)
-    ss << "SSBO_BINDING(0) readonly buffer Palette { uint16_t palette[]; };\n";
+    ss << "SSBO_BINDING(0) readonly buffer Palette { uint palette[]; };\n";
   else
     ss << "TEXEL_BUFFER_BINDING(0) uniform usamplerBuffer samp0;\n";
   ss << "SAMPLER_BINDING(1) uniform sampler2DArray samp1;\n";
@@ -1206,7 +1208,7 @@ float4 DecodePixel(int val)
   ss << "  float3 coords = v_tex0;\n";
   ss << "  int src = int(round(texture(samp1, coords).r * multiplier));\n";
   if (api_type == APIType::Metal)
-    ss << "  src = int(palette[uint(src)]);\n";
+    ss << "  src = int((palette[uint(src) >> 1] >> ((uint(src) & 1u) << 4)) & 0xFFFFu);\n";
   else
     ss << "  src = int(texelFetch(samp0, src + texel_buffer_offset).r);\n";
 
