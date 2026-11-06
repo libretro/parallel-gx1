@@ -53,9 +53,6 @@ public:
   // Returns a list of AA modes.
   static std::vector<u32> GetAAModes(u32 adapter_index);
 
-  // Creates new device and context.
-  static bool Create(u32 adapter_index, bool enable_debug_layer);
-
   // Destroys active context.
   static void Destroy();
 
@@ -96,6 +93,9 @@ public:
 
   // Fence value for current command list.
   u64 GetCurrentFenceValue() const { return m_current_fence_value; }
+
+  // The fence the queue signals each command list's value on.
+  ID3D12Fence* GetFence() const { return m_fence.Get(); }
 
   // Last "completed" fence.
   u64 GetCompletedFenceValue() const { return m_completed_fence_value; }
@@ -154,9 +154,6 @@ private:
 
   DXContext();
 
-  bool CreateDXGIFactory(bool enable_debug_layer);
-  bool CreateDevice(u32 adapter_index, bool enable_debug_layer);
-  bool CreateCommandQueue();
   bool CreateFence();
   bool CreateDescriptorHeaps();
   bool CreateRootSignatures();
@@ -169,7 +166,6 @@ private:
   void DestroyPendingResources(CommandListResources& cmdlist);
 
   ComPtr<IDXGIFactory> m_dxgi_factory;
-  ComPtr<ID3D12Debug> m_debug_interface;
   ComPtr<ID3D12Device> m_device;
   ComPtr<ID3D12CommandQueue> m_command_queue;
 

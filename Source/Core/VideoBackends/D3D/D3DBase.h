@@ -15,7 +15,6 @@
 namespace DX11
 {
 using Microsoft::WRL::ComPtr;
-class SwapChain;
 
 namespace D3D
 {
@@ -25,7 +24,6 @@ extern ComPtr<ID3D11Device1> device1;
 extern ComPtr<ID3D11DeviceContext> context;
 extern D3D_FEATURE_LEVEL feature_level;
 
-bool Create(u32 adapter_index, bool enable_debug_layer);
 void Destroy();
 
 // Returns a list of supported AA modes for the current device.

@@ -9,13 +9,13 @@
 #include "VideoBackends/D3D12/Common.h"
 #include "VideoBackends/D3D12/D3D12BoundingBox.h"
 #include "VideoBackends/D3D12/D3D12PerfQuery.h"
-#include "VideoBackends/D3D12/D3D12SwapChain.h"
 #include "VideoBackends/D3D12/DX12Context.h"
 #include "VideoBackends/D3D12/DX12Pipeline.h"
 #include "VideoBackends/D3D12/DX12Shader.h"
 #include "VideoBackends/D3D12/DX12Texture.h"
 #include "VideoBackends/D3D12/DX12VertexFormat.h"
 #include "VideoBackends/D3D12/DescriptorHeapManager.h"
+#include "VideoCommon/FrameOutput.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -28,8 +28,8 @@ static bool UsesDynamicVertexLoader(const AbstractPipeline* pipeline)
          (g_ActiveConfig.UseVSForLinePointExpand() && usage != AbstractPipelineUsage::Utility);
 }
 
-Gfx::Gfx(std::unique_ptr<SwapChain> swap_chain, float backbuffer_scale)
-    : m_backbuffer_scale(backbuffer_scale), m_swap_chain(std::move(swap_chain))
+Gfx::Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
+    : m_backbuffer_scale(backbuffer_scale), m_output(std::move(output))
 {
   m_state.root_signature = g_dx_context->GetGXRootSignature();
 
@@ -44,7 +44,7 @@ Gfx::~Gfx() = default;
 
 bool Gfx::IsHeadless() const
 {
-  return !m_swap_chain;
+  return !m_output;
 }
 
 std::unique_ptr<AbstractTexture> Gfx::CreateTexture(const TextureConfig& config,
@@ -370,55 +370,31 @@ void Gfx::DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u
 
 bool Gfx::BindBackbuffer(const ClearColor& clear_color)
 {
-  CheckForSwapChainChanges();
-  SetAndClearFramebuffer(m_swap_chain->GetCurrentFramebuffer(), clear_color);
+  AbstractFramebuffer* fb = m_output->Acquire();
+  if (!fb)
+    return false;
+  SetAndClearFramebuffer(fb, clear_color);
   return true;
-}
-
-void Gfx::CheckForSwapChainChanges()
-{
-  if (!m_swap_chain->CheckForFullscreenChange())
-    return;
-
-  // The swap chain could be in use from a previous frame.
-  WaitForGPUIdle();
-  m_swap_chain->ResizeSwapChain();
-  g_presenter->SetBackbuffer(m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
 }
 
 void Gfx::PresentBackbuffer()
 {
+  /* the output leaves its texture in the state the frontend reads it in
+   * and submits the command list itself */
   m_current_framebuffer = nullptr;
-
-  m_swap_chain->GetCurrentTexture()->TransitionToState(D3D12_RESOURCE_STATE_PRESENT);
-  ExecuteCommandList(false);
-
-  m_swap_chain->Present();
+  m_output->Present();
 }
 
 SurfaceInfo Gfx::GetSurfaceInfo() const
 {
-  return {m_swap_chain ? static_cast<u32>(m_swap_chain->GetWidth()) : 0,
-          m_swap_chain ? static_cast<u32>(m_swap_chain->GetHeight()) : 0, m_backbuffer_scale,
-          m_swap_chain ? m_swap_chain->GetFormat() : AbstractTextureFormat::Undefined};
+  return {m_output ? m_output->GetWidth() : 0, m_output ? m_output->GetHeight() : 0,
+          m_backbuffer_scale,
+          m_output ? m_output->GetFormat() : AbstractTextureFormat::Undefined};
 }
 
 void Gfx::OnConfigChanged(u32 bits)
 {
   AbstractGfx::OnConfigChanged(bits);
-
-  // For quad-buffered stereo we need to change the layer count, so recreate the swap chain.
-  if (m_swap_chain && bits & CONFIG_CHANGE_BIT_STEREO_MODE)
-  {
-    ExecuteCommandList(true);
-    m_swap_chain->SetStereo(SwapChain::WantsStereo());
-  }
-
-  if (m_swap_chain && bits & CONFIG_CHANGE_BIT_HDR)
-  {
-    ExecuteCommandList(true);
-    m_swap_chain->SetHDR(SwapChain::WantsHDR());
-  }
 
   // Wipe sampler cache if force texture filtering or anisotropy changes.
   if (bits & (CONFIG_CHANGE_BIT_ANISOTROPY | CONFIG_CHANGE_BIT_FORCE_TEXTURE_FILTERING))

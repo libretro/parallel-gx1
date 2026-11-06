@@ -10,17 +10,17 @@
 #include "VideoCommon/AbstractGfx.h"
 
 class BoundingBox;
+class FrameOutput;
 
 namespace DX11
 {
-class SwapChain;
 class DXTexture;
 class DXFramebuffer;
 
 class Gfx final : public ::AbstractGfx
 {
 public:
-  Gfx(std::unique_ptr<SwapChain> swap_chain, float backbuffer_scale);
+  Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale);
   ~Gfx() override;
 
   StateCache& GetStateCache() { return m_state_cache; }
@@ -64,22 +64,16 @@ public:
                              u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z) override;
   bool BindBackbuffer(const ClearColor& clear_color = {}) override;
   void PresentBackbuffer() override;
-  void SetFullscreen(bool enable_fullscreen) override;
-  bool IsFullscreen() const override;
 
   void Flush() override;
   void WaitForGPUIdle() override;
 
-  void OnConfigChanged(u32 bits) override;
-
   SurfaceInfo GetSurfaceInfo() const override;
 
 private:
-  void CheckForSwapChainChanges();
-
   StateCache m_state_cache;
 
   float m_backbuffer_scale;
-  std::unique_ptr<SwapChain> m_swap_chain;
+  std::unique_ptr<FrameOutput> m_output;
 };
 }  // namespace DX11

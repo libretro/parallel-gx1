@@ -12,9 +12,10 @@
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/Constants.h"
 
+class FrameOutput;
+
 namespace Vulkan
 {
-class SwapChain;
 class StagingTexture2D;
 class VKFramebuffer;
 class VKPipeline;
@@ -23,7 +24,7 @@ class VKTexture;
 class VKGfx final : public ::AbstractGfx
 {
 public:
-  VKGfx(std::unique_ptr<SwapChain> swap_chain, float backbuffer_scale);
+  VKGfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale);
   ~VKGfx() override;
 
   static VKGfx* GetInstance() { return static_cast<VKGfx*>(g_gfx.get()); }
@@ -50,7 +51,6 @@ public:
                                                    const void* cache_data = nullptr,
                                                    size_t cache_data_length = 0) override;
 
-  SwapChain* GetSwapChain() const { return m_swap_chain.get(); }
 
   void Flush() override;
   void WaitForGPUIdle() override;
@@ -77,8 +77,6 @@ public:
                              u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z) override;
   bool BindBackbuffer(const ClearColor& clear_color = {}) override;
   void PresentBackbuffer() override;
-  void SetFullscreen(bool enable_fullscreen) override;
-  bool IsFullscreen() const override;
 
   SurfaceInfo GetSurfaceInfo() const override;
 
@@ -90,10 +88,9 @@ private:
 
   void ResetSamplerStates();
 
-  void OnSwapChainResized();
   void BindFramebuffer(VKFramebuffer* fb);
 
-  std::unique_ptr<SwapChain> m_swap_chain;
+  std::unique_ptr<FrameOutput> m_output;
   float m_backbuffer_scale;
 
   // Keep a copy of sampler states to avoid cache lookups every draw

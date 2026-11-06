@@ -1278,6 +1278,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Log.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Main.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Video.cpp \
+	$(CORE_DIR)/Source/Core/DolphinLibretro/Output.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/VR.cpp \
 	$(CORE_DIR)/Source/Core/Core/ActionReplay.cpp \
 	$(CORE_DIR)/Source/Core/Core/ARDecrypt.cpp \
@@ -1637,7 +1638,6 @@ ifeq ($(HAVE_VULKAN),1)
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKGfx.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKShader.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKStreamBuffer.cpp \
-	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKSwapChain.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKTexture.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKVertexFormat.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKVertexManager.cpp \
@@ -1679,7 +1679,6 @@ ifeq ($(HAVE_D3D),1)
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3DCommon/D3DCommon.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3DCommon/Shader.cpp \
-	$(CORE_DIR)/Source/Core/VideoBackends/D3DCommon/SwapChain.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DBase.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DBoundingBox.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DMain.cpp \
@@ -1687,7 +1686,6 @@ ifeq ($(HAVE_D3D),1)
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DPerfQuery.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DGfx.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DState.cpp \
-	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DSwapChain.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/D3DVertexManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/DXPipeline.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D/DXShader.cpp \
@@ -1696,7 +1694,6 @@ ifeq ($(HAVE_D3D),1)
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D12/D3D12PerfQuery.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D12/D3D12Gfx.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D12/D3D12StreamBuffer.cpp \
-	$(CORE_DIR)/Source/Core/VideoBackends/D3D12/D3D12SwapChain.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D12/D3D12VertexManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D12/DescriptorAllocator.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/D3D12/DescriptorHeapManager.cpp \

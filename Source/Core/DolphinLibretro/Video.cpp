@@ -3,6 +3,7 @@
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #endif
 #include "DolphinLibretro/Video.h"
+#include "DolphinLibretro/Output.h"
 
 #include <cassert>
 #include <memory>
@@ -53,7 +54,6 @@
 #ifdef HAS_VULKAN
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoBackends/Vulkan/ObjectCache.h"
-#include "VideoBackends/Vulkan/VKSwapChain.h"
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 #include "VideoBackends/Vulkan/StateTracker.h"
 #include "VideoBackends/Vulkan/VKGfx.h"
@@ -231,6 +231,22 @@ bool SetHWRender(retro_hw_context_type type, const int version_major, const int 
     hw_render.version_minor = 0;
     if (environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render))
     {
+      /* version 2 of the interface, when the frontend has it: the frame
+       * is read where it is drawn, not copied */
+      static const struct retro_hw_render_context_negotiation_interface_d3d12 negotiation = {
+          RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_D3D12,
+          RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_D3D12_VERSION,
+          RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2};
+      struct retro_hw_render_context_negotiation_interface probe;
+      probe.interface_type = RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_D3D12;
+      probe.interface_version = 0;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT,
+                     &probe) &&
+          probe.interface_version >= 1)
+      {
+        environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE,
+                   (void*)&negotiation);
+      }
       Config::SetBase(Config::MAIN_GFX_BACKEND, "D3D12");
       success = true;
     }
@@ -292,11 +308,6 @@ void ContextReset(void)
       return;
     }
     Vk::SetHWRenderInterface(vulkan);
-
-    int efbScale = Libretro::Options::GetCached<int>(
-      Libretro::Options::gfx_settings::EFB_SCALE, 1);
-    Vk::SetSurfaceSize(GetAdjustedBaseWidth() * efbScale,
-                       GetAdjustedBaseHeight() * efbScale);
   }
 #endif
 
@@ -357,11 +368,12 @@ void ContextReset(void)
     d3d11->FillD3DBackendInfo();
     UpdateActiveConfig();
 
-    std::unique_ptr<DX11SwapChain> swap_chain = std::make_unique<DX11SwapChain>(
-      wsi, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale,
-      nullptr, nullptr);
+    std::unique_ptr<DX11Output> output = std::make_unique<DX11Output>(
+      GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale);
+    if (!output->Create())
+      return;
 
-    auto gfx = std::make_unique<DX11::Gfx>(std::move(swap_chain), wsi.render_surface_scale);
+    auto gfx = std::make_unique<DX11::Gfx>(std::move(output), wsi.render_surface_scale);
     auto vertex_manager = std::make_unique<DX11::VertexManager>();
     auto perf_query = std::make_unique<DX11::PerfQuery>();
     auto bounding_box = std::make_unique<DX11::D3DBoundingBox>();
@@ -387,10 +399,12 @@ void ContextReset(void)
       return;
     }
 
-    if (d3d12->interface_version != RETRO_HW_RENDER_INTERFACE_D3D12_VERSION)
+    if (d3d12->interface_version != RETRO_HW_RENDER_INTERFACE_D3D12_VERSION &&
+        d3d12->interface_version != RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2)
     {
-      ERROR_LOG_FMT(VIDEO, "HW render interface mismatch, expected {}, got {}!",
-                RETRO_HW_RENDER_INTERFACE_D3D12_VERSION, d3d12->interface_version);
+      ERROR_LOG_FMT(VIDEO, "HW render interface mismatch, expected {} or {}, got {}!",
+                RETRO_HW_RENDER_INTERFACE_D3D12_VERSION,
+                RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2, d3d12->interface_version);
       return;
     }
 
@@ -434,17 +448,15 @@ void ContextReset(void)
 
     UpdateActiveConfig();
 
-    auto swap_chain = std::make_unique<DX12SwapChain>(
-        wsi, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale, d3d12);
-
-    if (!swap_chain->Initialize())
+    std::unique_ptr<DX12Output> output = std::make_unique<DX12Output>(
+        d3d12, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale);
+    if (!output->Create())
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to initialize swap chain buffers");
       DX12::DXContext::Destroy();
       return;
     }
 
-    auto gfx = std::make_unique<DX12::Gfx>(std::move(swap_chain), wsi.render_surface_scale);
+    auto gfx = std::make_unique<DX12::Gfx>(std::move(output), wsi.render_surface_scale);
     auto vertex_manager = std::make_unique<DX12::VertexManager>();
     auto perf_query = std::make_unique<DX12::PerfQuery>();
     auto bounding_box = std::make_unique<DX12::D3D12BoundingBox>();
@@ -479,18 +491,12 @@ bool Video_InitializeBackend()
 #ifdef HAS_VULKAN
   if (hw_render.context_type == RETRO_HW_CONTEXT_VULKAN)
   {
-    bool enable_surface = wsi.type != WindowSystemType::Headless;
-    VkSurfaceKHR surface = Libretro::Video::Vk::GetSurface();
-
     // Since VulkanContext maintains a copy of the device features and properties, we can use this
     // to initialize the backend information, so that we don't need to enumerate everything again.
     Vulkan::VulkanContext::PopulateBackendInfoFeatures(&g_backend_info, Vulkan::g_vulkan_context->GetPhysicalDevice(),
                                               Vulkan::g_vulkan_context->GetDeviceInfo());
     Vulkan::VulkanContext::PopulateBackendInfoMultisampleModes(
         &g_backend_info, Vulkan::g_vulkan_context->GetPhysicalDevice(), Vulkan::g_vulkan_context->GetDeviceInfo());
-    g_backend_info.bSupportsExclusiveFullscreen =
-        enable_surface && Vulkan::g_vulkan_context->SupportsExclusiveFullscreen(wsi, surface);
-
     UpdateActiveConfig();
 
     // Remaining classes are also dependent on object cache.
@@ -501,23 +507,9 @@ bool Video_InitializeBackend()
       return false;
     }
 
-    // Create swap chain. This has to be done early so that the target size is correct for auto-scale.
-    std::unique_ptr<Vulkan::SwapChain> swap_chain;
-    if (surface != VK_NULL_HANDLE)
-    {
-      swap_chain = Vulkan::SwapChain::Create(wsi, surface, g_ActiveConfig.bVSyncActive);
-      if (!swap_chain)
-      {
-        PanicAlertFmt("Failed to create Vulkan swap chain.");
-        return false;
-      }
-    }
-
     // Create command buffers. We do this separately because the other classes depend on it.
     Vulkan::g_command_buffer_mgr = std::make_unique<Vulkan::CommandBufferManager>(g_Config.bBackendMultithreading);
-    size_t swapchain_image_count =
-        surface != VK_NULL_HANDLE ? swap_chain->GetSwapChainImageCount() : 0;
-    if (!Vulkan::g_command_buffer_mgr->Initialize(swapchain_image_count))
+    if (!Vulkan::g_command_buffer_mgr->Initialize())
     {
       PanicAlertFmt("Failed to create Vulkan command buffers");
       return false;
@@ -529,7 +521,15 @@ bool Video_InitializeBackend()
       return false;
     }
 
-    auto gfx = std::make_unique<Vulkan::VKGfx>(std::move(swap_chain), wsi.render_surface_scale);
+    /* where the picture goes: the frontend's sync images, sized as the
+     * frame the frontend was told of */
+    std::unique_ptr<VKOutput> output = std::make_unique<VKOutput>(
+        Vk::GetHWRenderInterface(), GetAdjustedBaseWidth() * efbScale,
+        GetAdjustedBaseHeight() * efbScale);
+    if (!output->Create())
+      return false;
+
+    auto gfx = std::make_unique<Vulkan::VKGfx>(std::move(output), wsi.render_surface_scale);
     auto vertex_manager = std::make_unique<Vulkan::VertexManager>();
     auto perf_query = std::make_unique<Vulkan::PerfQuery>();
     auto bounding_box = std::make_unique<Vulkan::VKBoundingBox>();
@@ -671,7 +671,7 @@ static bool CreateDeviceInternal(
 
   Vulkan::LoadVulkanLibrary();
 
-  Init(instance, gpu, surface, get_instance_proc_addr, required_device_extensions,
+  Init(instance, gpu, get_instance_proc_addr, required_device_extensions,
        num_required_device_extensions, required_device_layers, num_required_device_layers,
        required_features, create_device_wrapper, opaque);
 
@@ -708,8 +708,16 @@ static bool CreateDeviceInternal(
   context->device = Vulkan::g_vulkan_context->GetDevice();
   context->queue = Vulkan::g_vulkan_context->GetGraphicsQueue();
   context->queue_family_index = Vulkan::g_vulkan_context->GetGraphicsQueueFamilyIndex();
+  /* the frontend presents; the queue the surface takes may be another
+   * family's */
   context->presentation_queue = context->queue;
   context->presentation_queue_family_index = context->queue_family_index;
+  if (Vulkan::g_vulkan_context->GetPresentQueue() != VK_NULL_HANDLE)
+  {
+    context->presentation_queue = Vulkan::g_vulkan_context->GetPresentQueue();
+    context->presentation_queue_family_index =
+        Vulkan::g_vulkan_context->GetPresentQueueFamilyIndex();
+  }
 
   return true;
 }

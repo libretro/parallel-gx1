@@ -651,12 +651,6 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   if (enable_surface && !AddExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, true))
     return false;
 
-#ifdef SUPPORTS_VULKAN_EXCLUSIVE_FULLSCREEN
-  // VK_EXT_full_screen_exclusive
-  if (AddExtension(VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME, true))
-    INFO_LOG_FMT(VIDEO, "Using VK_EXT_full_screen_exclusive for exclusive fullscreen.");
-#endif
-
   AddExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, false);
   AddExtension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME, false);
   AddExtension("VK_KHR_portability_subset", false);
@@ -1134,54 +1128,5 @@ void VulkanContext::InitDriverDetails()
                       static_cast<double>(m_device_info.driverVersion),
                       DriverDetails::Family::UNKNOWN, std::move(device_name));
 }
-
-bool VulkanContext::SupportsExclusiveFullscreen(const WindowSystemInfo& wsi, VkSurfaceKHR surface)
-{
-#ifdef SUPPORTS_VULKAN_EXCLUSIVE_FULLSCREEN
-  if (!surface || !vkGetPhysicalDeviceSurfaceCapabilities2KHR ||
-      !SupportsDeviceExtension(VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME))
-  {
-    return false;
-  }
-
-  VkPhysicalDeviceSurfaceInfo2KHR si = {};
-  si.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR;
-  si.surface = surface;
-
-  auto platform_info = GetPlatformExclusiveFullscreenInfo(wsi);
-  si.pNext = &platform_info;
-
-  VkSurfaceCapabilities2KHR caps = {};
-  caps.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR;
-
-  VkSurfaceCapabilitiesFullScreenExclusiveEXT fullscreen_caps = {};
-  fullscreen_caps.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_FULL_SCREEN_EXCLUSIVE_EXT;
-  fullscreen_caps.fullScreenExclusiveSupported = VK_TRUE;
-  caps.pNext = &fullscreen_caps;
-
-  VkResult res = vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_physical_device, &si, &caps);
-  if (res != VK_SUCCESS)
-  {
-    LOG_VULKAN_ERROR(res, "vkGetPhysicalDeviceSurfaceCapabilities2KHR failed:");
-    return false;
-  }
-
-  return fullscreen_caps.fullScreenExclusiveSupported;
-#else
-  return false;
-#endif
-}
-
-#ifdef WIN32
-VkSurfaceFullScreenExclusiveWin32InfoEXT
-VulkanContext::GetPlatformExclusiveFullscreenInfo(const WindowSystemInfo& wsi)
-{
-  VkSurfaceFullScreenExclusiveWin32InfoEXT info = {};
-  info.sType = VK_STRUCTURE_TYPE_SURFACE_FULL_SCREEN_EXCLUSIVE_WIN32_INFO_EXT;
-  info.hmonitor =
-      MonitorFromWindow(static_cast<HWND>(wsi.render_surface), MONITOR_DEFAULTTOPRIMARY);
-  return info;
-}
-#endif
 
 }  // namespace Vulkan

@@ -16,11 +16,11 @@
 #include "VideoBackends/Vulkan/StateTracker.h"
 #include "VideoBackends/Vulkan/VKPipeline.h"
 #include "VideoBackends/Vulkan/VKShader.h"
-#include "VideoBackends/Vulkan/VKSwapChain.h"
 #include "VideoBackends/Vulkan/VKTexture.h"
 #include "VideoBackends/Vulkan/VKVertexFormat.h"
 
 #include "VideoCommon/DriverDetails.h"
+#include "VideoCommon/FrameOutput.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/RenderState.h"
@@ -28,8 +28,8 @@
 
 namespace Vulkan
 {
-VKGfx::VKGfx(std::unique_ptr<SwapChain> swap_chain, float backbuffer_scale)
-    : m_swap_chain(std::move(swap_chain)), m_backbuffer_scale(backbuffer_scale)
+VKGfx::VKGfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
+    : m_output(std::move(output)), m_backbuffer_scale(backbuffer_scale)
 {
   UpdateActiveConfig();
   for (SamplerState& sampler_state : m_sampler_states)
@@ -44,7 +44,7 @@ VKGfx::~VKGfx() = default;
 
 bool VKGfx::IsHeadless() const
 {
-  return m_swap_chain == nullptr;
+  return m_output == nullptr;
 }
 
 std::unique_ptr<AbstractTexture> VKGfx::CreateTexture(const TextureConfig& config,
@@ -219,139 +219,27 @@ void VKGfx::WaitForGPUIdle()
 
 bool VKGfx::BindBackbuffer(const ClearColor& clear_color)
 {
-  StateTracker::GetInstance()->EndRenderPass();
+  AbstractFramebuffer* fb;
 
+  StateTracker::GetInstance()->EndRenderPass();
   g_command_buffer_mgr->WaitForWorkerThreadIdle();
 
-  // Handle host window resizes.
-
-  // Check for exclusive fullscreen request.
-  if (m_swap_chain->GetCurrentFullscreenState() != m_swap_chain->GetNextFullscreenState() &&
-      !m_swap_chain->SetFullscreenState(m_swap_chain->GetNextFullscreenState()))
-  {
-    // if it fails, don't keep trying
-    m_swap_chain->SetNextFullscreenState(m_swap_chain->GetCurrentFullscreenState());
-  }
-
-  const bool present_fail = g_command_buffer_mgr->CheckLastPresentFail();
-  VkResult res = present_fail ? g_command_buffer_mgr->GetLastPresentResult() :
-                                m_swap_chain->AcquireNextImage();
-
-  if (res == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT &&
-      !m_swap_chain->GetCurrentFullscreenState())
-  {
-    // AMD's binary driver as of 21.3 seems to return exclusive fullscreen lost even when it was
-    // never requested, so long as the caller requested it to be application controlled. Handle
-    // this ignoring the lost result and just continuing as normal if we never acquired it.
-    res = VK_SUCCESS;
-    if (present_fail)
-    {
-      // We still need to acquire an image.
-      res = m_swap_chain->AcquireNextImage();
-    }
-  }
-
-  if (res != VK_SUCCESS)
-  {
-    // Execute cmdbuffer before resizing, as the last frame could still be presenting.
-    ExecuteCommandBuffer(false, true);
-
-    // Was this a lost exclusive fullscreen?
-    if (res == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)
-    {
-      // The present keeps returning exclusive mode lost unless we re-create the swap chain.
-      INFO_LOG_FMT(VIDEO, "Lost exclusive fullscreen.");
-      m_swap_chain->RecreateSwapChain();
-    }
-    else if (res == VK_SUBOPTIMAL_KHR || res == VK_ERROR_OUT_OF_DATE_KHR)
-    {
-      INFO_LOG_FMT(VIDEO, "Resizing swap chain due to suboptimal/out-of-date");
-      m_swap_chain->ResizeSwapChain();
-    }
-    else
-    {
-      ERROR_LOG_FMT(VIDEO, "Unknown present error {:#010X} {}, please report.",
-                    std::to_underlying(res), VkResultToString(res));
-      m_swap_chain->RecreateSwapChain();
-    }
-
-    res = m_swap_chain->AcquireNextImage();
-    if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR)
-    {
-      if (res == VK_ERROR_OUT_OF_DATE_KHR)
-      {
-        INFO_LOG_FMT(VIDEO, "Swapchain still out of date, will try again next frame...");
-      }
-      else
-      {
-        PanicAlertFmt("Failed to grab image from swap chain: {:#010X} {}", std::to_underlying(res),
-                      VkResultToString(res));
-      }
-    }
-  }
-
-  if (!m_swap_chain->IsCurrentImageValid())
+  /* the output makes its image ready to draw into, outside a render pass */
+  fb = m_output->Acquire();
+  if (!fb)
     return false;
-
-  // Transition from undefined (or present src, but it can be substituted) to
-  // color attachment ready for writing. These transitions must occur outside
-  // a render pass, unless the render pass declares a self-dependency.
-  if (auto* tex = m_swap_chain->GetCurrentTexture())
-  {
-    tex->OverrideImageLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-    tex->TransitionToLayout(
-        g_command_buffer_mgr->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-  }
-  if(auto* chain = m_swap_chain->GetCurrentFramebuffer())
-  {
-    SetAndClearFramebuffer(chain,
-                           ClearColor{{0.0f, 0.0f, 0.0f, 1.0f}});
-  }
+  SetAndClearFramebuffer(fb, clear_color);
   return true;
 }
 
 void VKGfx::PresentBackbuffer()
 {
-  // End drawing to backbuffer
+  /* the output leaves its image readable, submits and hands it on */
   StateTracker::GetInstance()->EndRenderPass();
-
-  if (m_swap_chain->IsCurrentImageValid())
-  {
-    // Transition the backbuffer to PRESENT_SRC to ensure all commands drawing
-    // to it have finished before present.
-    if (auto* tex = m_swap_chain->GetCurrentTexture())
-    {
-      tex->TransitionToLayout(
-        g_command_buffer_mgr->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-    }
-
-    // Submit the current command buffer, signaling rendering finished semaphore when it's done
-    // Because this final command buffer is rendering to the swap chain, we need to wait for
-    // the available semaphore to be signaled before executing the buffer. This final submission
-    // can happen off-thread in the background while we're preparing the next frame.
-    g_command_buffer_mgr->SubmitCommandBuffer(true, false, true, m_swap_chain->GetSwapChain(),
-                                              m_swap_chain->GetCurrentImageIndex());
-  }
-  else
-  {
-    g_command_buffer_mgr->SubmitCommandBuffer(true, false, true);
-  }
+  m_output->Present();
 
   // New cmdbuffer, so invalidate state.
   StateTracker::GetInstance()->InvalidateCachedState();
-}
-
-void VKGfx::SetFullscreen(bool enable_fullscreen)
-{
-  if (!m_swap_chain->IsFullscreenSupported())
-    return;
-
-  m_swap_chain->SetNextFullscreenState(enable_fullscreen);
-}
-
-bool VKGfx::IsFullscreen() const
-{
-  return m_swap_chain && m_swap_chain->GetCurrentFullscreenState();
 }
 
 void VKGfx::ExecuteCommandBuffer(bool submit_off_thread, bool wait_for_completion)
@@ -370,31 +258,12 @@ void VKGfx::OnConfigChanged(u32 bits)
   if (bits & CONFIG_CHANGE_BIT_HOST_CONFIG)
     g_object_cache->ReloadPipelineCache();
 
-  // For vsync, we need to change the present mode, which means recreating the swap chain.
-  if (m_swap_chain && (bits & CONFIG_CHANGE_BIT_VSYNC))
-  {
-    ExecuteCommandBuffer(false, true);
-    m_swap_chain->SetVSync(g_ActiveConfig.bVSyncActive);
-  }
-
-  // For quad-buffered stereo we need to change the layer count, so recreate the swap chain.
-  if (m_swap_chain && ((bits & CONFIG_CHANGE_BIT_STEREO_MODE) || (bits & CONFIG_CHANGE_BIT_HDR)))
-  {
-    ExecuteCommandBuffer(false, true);
-    m_swap_chain->RecreateSwapChain();
-  }
-
   // Wipe sampler cache if force texture filtering or anisotropy changes.
   if (bits & (CONFIG_CHANGE_BIT_ANISOTROPY | CONFIG_CHANGE_BIT_FORCE_TEXTURE_FILTERING))
   {
     ExecuteCommandBuffer(false, true);
     ResetSamplerStates();
   }
-}
-
-void VKGfx::OnSwapChainResized()
-{
-  g_presenter->SetBackbuffer(m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
 }
 
 void VKGfx::BindFramebuffer(VKFramebuffer* fb)
@@ -581,9 +450,9 @@ void VKGfx::DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x,
 
 SurfaceInfo VKGfx::GetSurfaceInfo() const
 {
-  return {m_swap_chain ? m_swap_chain->GetWidth() : 1u,
-          m_swap_chain ? m_swap_chain->GetHeight() : 0u, m_backbuffer_scale,
-          m_swap_chain ? m_swap_chain->GetTextureFormat() : AbstractTextureFormat::Undefined};
+  return {m_output ? m_output->GetWidth() : 1u, m_output ? m_output->GetHeight() : 0u,
+          m_backbuffer_scale,
+          m_output ? m_output->GetFormat() : AbstractTextureFormat::Undefined};
 }
 
 }  // namespace Vulkan

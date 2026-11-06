@@ -15,7 +15,6 @@
 #include "VideoBackends/D3D/D3DBoundingBox.h"
 #include "VideoBackends/D3D/D3DGfx.h"
 #include "VideoBackends/D3D/D3DPerfQuery.h"
-#include "VideoBackends/D3D/D3DSwapChain.h"
 #include "VideoBackends/D3D/D3DVertexManager.h"
 #include "VideoBackends/D3DCommon/D3DCommon.h"
 
@@ -144,30 +143,11 @@ void VideoBackend::FillBackendInfo()
   }
 }
 
+/* The frontend owns the device and the window: Libretro::Video brings
+ * the backend up on the device it is handed. */
 bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
 {
-  if (!D3D::Create(g_Config.iAdapter, g_Config.bEnableValidationLayer))
-    return false;
-
-  FillBackendInfo();
-  UpdateActiveConfig();
-
-  std::unique_ptr<SwapChain> swap_chain;
-  if (wsi.render_surface && !(swap_chain = SwapChain::Create(wsi)))
-  {
-    PanicAlertFmtT("Failed to create D3D swap chain");
-    ShutdownShared();
-    D3D::Destroy();
-    return false;
-  }
-
-  auto gfx = std::make_unique<DX11::Gfx>(std::move(swap_chain), wsi.render_surface_scale);
-  auto vertex_manager = std::make_unique<VertexManager>();
-  auto perf_query = std::make_unique<PerfQuery>();
-  auto bounding_box = std::make_unique<D3DBoundingBox>();
-
-  return InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
-                          std::move(bounding_box));
+  return false;
 }
 
 void VideoBackend::Shutdown()

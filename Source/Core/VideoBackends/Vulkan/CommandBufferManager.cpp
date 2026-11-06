@@ -32,9 +32,9 @@ CommandBufferManager::~CommandBufferManager()
   DestroyCommandBuffers();
 }
 
-bool CommandBufferManager::Initialize(size_t swapchain_image_count)
+bool CommandBufferManager::Initialize()
 {
-  if (!CreateCommandBuffers(swapchain_image_count))
+  if (!CreateCommandBuffers())
     return false;
 
   if (m_use_threaded_submission && !CreateSubmitThread())
@@ -43,18 +43,14 @@ bool CommandBufferManager::Initialize(size_t swapchain_image_count)
   return true;
 }
 
-bool CommandBufferManager::CreateCommandBuffers(size_t swapchain_image_count)
+bool CommandBufferManager::CreateCommandBuffers()
 {
-  static constexpr VkSemaphoreCreateInfo semaphore_create_info = {
-      VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, nullptr, 0};
-
   VkDevice device = g_vulkan_context->GetDevice();
   VkResult res;
 
   for (CmdBufferResources& resources : m_command_buffers)
   {
     resources.init_command_buffer_used = false;
-    resources.semaphore_used = false;
 
     VkCommandPoolCreateInfo pool_info = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr, 0,
                                          g_vulkan_context->GetGraphicsQueueFamilyIndex()};
@@ -86,26 +82,6 @@ bool CommandBufferManager::CreateCommandBuffers(size_t swapchain_image_count)
       LOG_VULKAN_ERROR(res, "vkCreateFence failed: ");
       return false;
     }
-
-    res = vkCreateSemaphore(device, &semaphore_create_info, nullptr, &resources.semaphore);
-    if (res != VK_SUCCESS)
-    {
-      LOG_VULKAN_ERROR(res, "vkCreateSemaphore failed: ");
-      return false;
-    }
-  }
-
-  m_present_semaphores.reserve(swapchain_image_count);
-  for (uint32_t i = 0; i < swapchain_image_count; i++)
-  {
-    VkSemaphore present_semaphore;
-    res = vkCreateSemaphore(device, &semaphore_create_info, nullptr, &present_semaphore);
-    if (res != VK_SUCCESS)
-    {
-      LOG_VULKAN_ERROR(res, "vkCreateSemaphore failed: ");
-      return false;
-    }
-    m_present_semaphores.push_back(present_semaphore);
   }
 
   // Activate the first command buffer. BeginCommandBuffer moves forward, so start with the last
@@ -131,9 +107,6 @@ void CommandBufferManager::DestroyCommandBuffers()
     for (auto& it : resources.cleanup_resources)
       it();
 
-    if (resources.semaphore != VK_NULL_HANDLE)
-      vkDestroySemaphore(device, resources.semaphore, nullptr);
-
     if (resources.fence != VK_NULL_HANDLE)
       vkDestroyFence(device, resources.fence, nullptr);
   }
@@ -144,11 +117,6 @@ void CommandBufferManager::DestroyCommandBuffers()
     {
       vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
     }
-  }
-
-  for (VkSemaphore present_semaphore : m_present_semaphores)
-  {
-    vkDestroySemaphore(device, present_semaphore, nullptr);
   }
 }
 
@@ -231,8 +199,7 @@ VkDescriptorSet CommandBufferManager::AllocateDescriptorSet(VkDescriptorSetLayou
 bool CommandBufferManager::CreateSubmitThread()
 {
   m_submit_thread.Reset("VK submission thread", [this](PendingCommandBufferSubmit submit) {
-    SubmitCommandBuffer(submit.command_buffer_index, submit.present_swap_chain,
-                        submit.present_image_index);
+    SubmitCommandBuffer(submit.command_buffer_index);
     CmdBufferResources& resources = m_command_buffers[submit.command_buffer_index];
     retro_atomic_store_release_int(&resources.waiting_for_submit, 0);
   });
@@ -309,9 +276,7 @@ void CommandBufferManager::WaitForCommandBufferCompletion(u32 index)
 }
 
 void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
-                                               bool wait_for_completion, bool advance_to_next_frame,
-                                               VkSwapchainKHR present_swap_chain,
-                                               uint32_t present_image_index)
+                                               bool wait_for_completion, bool advance_to_next_frame)
 {
   // End the current command buffer.
   CmdBufferResources& resources = GetCurrentCmdBufferResources();
@@ -331,14 +296,14 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
   {
     retro_atomic_store_relaxed_int(&resources.waiting_for_submit, 1);
     // Push to the pending submit queue.
-    m_submit_thread.Push({present_swap_chain, present_image_index, m_current_cmd_buffer});
+    m_submit_thread.Push({m_current_cmd_buffer});
   }
   else
   {
     WaitForWorkerThreadIdle();
 
     // Pass through to normal submission path.
-    SubmitCommandBuffer(m_current_cmd_buffer, present_swap_chain, present_image_index);
+    SubmitCommandBuffer(m_current_cmd_buffer);
     if (wait_for_completion)
       WaitForCommandBufferCompletion(m_current_cmd_buffer);
   }
@@ -389,19 +354,16 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
   BeginCommandBuffer();
 }
 
-void CommandBufferManager::SubmitCommandBuffer(u32 command_buffer_index,
-                                               VkSwapchainKHR present_swap_chain,
-                                               u32 present_image_index)
+void CommandBufferManager::SubmitCommandBuffer(u32 command_buffer_index)
 {
   CmdBufferResources& resources = m_command_buffers[command_buffer_index];
 
   // This may be executed on the worker thread, so don't modify any state of the manager class.
-  uint32_t wait_bits = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
   VkSubmitInfo submit_info = {VK_STRUCTURE_TYPE_SUBMIT_INFO,
                               nullptr,
                               0,
                               nullptr,
-                              &wait_bits,
+                              nullptr,
                               static_cast<u32>(resources.command_buffers.size()),
                               resources.command_buffers.data(),
                               0,
@@ -414,18 +376,6 @@ void CommandBufferManager::SubmitCommandBuffer(u32 command_buffer_index,
     submit_info.pCommandBuffers = &resources.command_buffers[1];
   }
 
-  if (resources.semaphore_used)
-  {
-    submit_info.pWaitSemaphores = &resources.semaphore;
-    submit_info.waitSemaphoreCount = 1;
-  }
-
-  if (present_swap_chain != VK_NULL_HANDLE)
-  {
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = &m_present_semaphores[present_image_index];
-  }
-
   VkResult res =
       vkQueueSubmit(g_vulkan_context->GetGraphicsQueue(), 1, &submit_info, resources.fence);
   if (res != VK_SUCCESS)
@@ -433,41 +383,6 @@ void CommandBufferManager::SubmitCommandBuffer(u32 command_buffer_index,
     LOG_VULKAN_ERROR(res, "vkQueueSubmit failed: ");
     PanicAlertFmt("Failed to submit command buffer: {} ({})", VkResultToString(res),
                   static_cast<int>(res));
-  }
-
-  // Do we have a swap chain to present?
-  if (present_swap_chain != VK_NULL_HANDLE)
-  {
-    // Should have a signal semaphore.
-    VkPresentInfoKHR present_info = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                                     nullptr,
-                                     1,
-                                     &m_present_semaphores[present_image_index],
-                                     1,
-                                     &present_swap_chain,
-                                     &present_image_index,
-                                     nullptr};
-
-    m_last_present_result = vkQueuePresentKHR(g_vulkan_context->GetPresentQueue(), &present_info);
-    if (m_last_present_result != VK_SUCCESS)
-    {
-      // VK_ERROR_OUT_OF_DATE_KHR is not fatal, just means we need to recreate our swap chain.
-      if (m_last_present_result != VK_ERROR_OUT_OF_DATE_KHR &&
-          m_last_present_result != VK_SUBOPTIMAL_KHR &&
-          m_last_present_result != VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT)
-      {
-        LOG_VULKAN_ERROR(m_last_present_result, "vkQueuePresentKHR failed: ");
-      }
-
-      // Don't treat VK_SUBOPTIMAL_KHR as fatal on Android. Android 10+ requires prerotation.
-      // See https://twitter.com/Themaister/status/1207062674011574273
-#ifdef VK_USE_PLATFORM_ANDROID_KHR
-      if (m_last_present_result != VK_SUBOPTIMAL_KHR)
-        m_last_present_failed.Set();
-#else
-      m_last_present_failed.Set();
-#endif
-    }
   }
 }
 
@@ -503,7 +418,6 @@ void CommandBufferManager::BeginCommandBuffer()
 
   // Reset upload command buffer state
   resources.init_command_buffer_used = false;
-  resources.semaphore_used = false;
   resources.fence_counter = m_next_fence_counter++;
   resources.frame_index = m_current_frame;
   m_current_cmd_buffer = next_buffer_index;

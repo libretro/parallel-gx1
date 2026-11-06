@@ -11,7 +11,6 @@
 #include <retro_atomic.h>
 
 #include <Common/WorkQueueThread.h>
-#include "Common/Flag.h"
 
 #include "VideoBackends/Vulkan/Constants.h"
 
@@ -23,7 +22,7 @@ public:
   explicit CommandBufferManager(bool use_threaded_submission);
   ~CommandBufferManager();
 
-  bool Initialize(size_t swapchain_image_count);
+  bool Initialize();
 
   // These command buffers are allocated per-frame. They are valid until the command buffer
   // is submitted, after that you should call these functions again.
@@ -55,22 +54,6 @@ public:
     return resources.fence_counter;
   }
 
-  // Returns the semaphore for the current command buffer, which can be used to ensure the
-  // swap chain image is ready before the command buffer executes.
-  // Once you've confirmed that the semaphore will be signalled this frame, call
-  // `MarkCurrentCommandBufferSemaphoreUsed`.
-  VkSemaphore GetCurrentCommandBufferSemaphore()
-  {
-    return m_command_buffers[m_current_cmd_buffer].semaphore;
-  }
-
-  // Marks the current command buffer's semaphore as used, so we'll wait on it in the next
-  // command buffer submission.
-  void MarkCurrentCommandBufferSemaphoreUsed()
-  {
-    m_command_buffers[m_current_cmd_buffer].semaphore_used = true;
-  }
-
   // Ensure that the worker thread has submitted any previous command buffers and is idle.
   void WaitForWorkerThreadIdle();
 
@@ -79,13 +62,7 @@ public:
   void WaitForFenceCounter(u64 fence_counter);
 
   void SubmitCommandBuffer(bool submit_on_worker_thread, bool wait_for_completion,
-                           bool advance_to_next_frame = false,
-                           VkSwapchainKHR present_swap_chain = VK_NULL_HANDLE,
-                           uint32_t present_image_index = 0xFFFFFFFF);
-
-  // Was the last present submitted to the queue a failure? If so, we must recreate our swapchain.
-  bool CheckLastPresentFail() { return m_last_present_failed.TestAndClear(); }
-  VkResult GetLastPresentResult() const { return m_last_present_result; }
+                           bool advance_to_next_frame = false);
 
   // Schedule a vulkan resource for destruction later on. This will occur when the command buffer
   // is next re-used, and the GPU has finished working with the specified resource.
@@ -96,14 +73,13 @@ public:
   void DeferImageViewDestruction(VkImageView object);
 
 private:
-  bool CreateCommandBuffers(size_t swapchain_image_count);
+  bool CreateCommandBuffers();
   void DestroyCommandBuffers();
 
   bool CreateSubmitThread();
 
   void WaitForCommandBufferCompletion(u32 command_buffer_index);
-  void SubmitCommandBuffer(u32 command_buffer_index, VkSwapchainKHR present_swap_chain,
-                           u32 present_image_index);
+  void SubmitCommandBuffer(u32 command_buffer_index);
   void BeginCommandBuffer();
 
   VkDescriptorPool CreateDescriptorPool(u32 descriptor_sizes);
@@ -116,10 +92,8 @@ private:
     VkCommandPool command_pool = VK_NULL_HANDLE;
     std::array<VkCommandBuffer, 2> command_buffers = {};
     VkFence fence = VK_NULL_HANDLE;
-    VkSemaphore semaphore = VK_NULL_HANDLE;
     u64 fence_counter = 0;
     bool init_command_buffer_used = false;
-    bool semaphore_used = false;
     retro_atomic_int_t waiting_for_submit{};
     u32 frame_index = 0;
 
@@ -150,14 +124,9 @@ private:
   // Threaded command buffer execution
   struct PendingCommandBufferSubmit
   {
-    VkSwapchainKHR present_swap_chain;
-    u32 present_image_index;
     u32 command_buffer_index;
   };
   Common::WorkQueueThreadSP<PendingCommandBufferSubmit> m_submit_thread;
-  std::vector<VkSemaphore> m_present_semaphores = {};
-  Common::Flag m_last_present_failed;
-  VkResult m_last_present_result = VK_SUCCESS;
   bool m_use_threaded_submission = false;
   u32 m_descriptor_set_count = DESCRIPTOR_SETS_PER_POOL;
 };

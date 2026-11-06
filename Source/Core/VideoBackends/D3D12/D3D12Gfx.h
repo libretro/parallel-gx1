@@ -7,9 +7,10 @@
 
 #include "VideoBackends/D3D12/DescriptorAllocator.h"
 #include "VideoBackends/D3D12/DescriptorHeapManager.h"
-#include "VideoBackends/D3D12/D3D12SwapChain.h"
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/Constants.h"
+
+class FrameOutput;
 
 namespace DX12
 {
@@ -17,12 +18,11 @@ class DXFramebuffer;
 class DXTexture;
 class DXShader;
 class DXPipeline;
-class SwapChain;
 
 class Gfx final : public ::AbstractGfx
 {
 public:
-  Gfx(std::unique_ptr<SwapChain> swap_chain, float backbuffer_scale);
+  Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale);
   ~Gfx() override;
 
   static Gfx* GetInstance() { return static_cast<Gfx*>(g_gfx.get()); }
@@ -138,7 +138,6 @@ private:
         DirtyState_DescriptorHeaps | DirtyState_VS_SRV | DirtyState_VS_SRV_Descriptor
   };
 
-  void CheckForSwapChainChanges();
 
   void BindFramebuffer(DXFramebuffer* fb);
   void SetRootSignatures();
@@ -153,7 +152,7 @@ private:
   float m_backbuffer_scale;
 
   // Owned objects
-  std::unique_ptr<SwapChain> m_swap_chain;
+  std::unique_ptr<FrameOutput> m_output;
 
   // Current state
   struct

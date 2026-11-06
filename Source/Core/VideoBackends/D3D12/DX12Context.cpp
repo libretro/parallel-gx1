@@ -25,8 +25,6 @@ std::unique_ptr<DXContext> g_dx_context;
 
 // Private D3D12 state
 static Common::DynamicLibrary s_d3d12_library;
-static PFN_D3D12_CREATE_DEVICE s_d3d12_create_device;
-static PFN_D3D12_GET_DEBUG_INTERFACE s_d3d12_get_debug_interface;
 static decltype(&D3D12SerializeRootSignature) s_d3d12_serialize_root_signature;
 
 DXContext::DXContext() = default;
@@ -99,37 +97,6 @@ bool DXContext::SupportsTextureFormat(DXGI_FORMAT format)
          (support.Support1 & required) == required;
 }
 
-bool DXContext::Create(u32 adapter_index, bool enable_debug_layer)
-{
-  ASSERT(!g_dx_context);
-  if (!s_d3d12_library.Open("d3d12.dll") ||
-      !s_d3d12_library.GetSymbol("D3D12CreateDevice", &s_d3d12_create_device) ||
-      !s_d3d12_library.GetSymbol("D3D12GetDebugInterface", &s_d3d12_get_debug_interface) ||
-      !s_d3d12_library.GetSymbol("D3D12SerializeRootSignature", &s_d3d12_serialize_root_signature))
-  {
-    PanicAlertFmtT("d3d12.dll could not be loaded.");
-    s_d3d12_library.Close();
-    return false;
-  }
-
-  if (!D3DCommon::LoadLibraries())
-  {
-    s_d3d12_library.Close();
-    return false;
-  }
-
-  g_dx_context.reset(new DXContext());
-  if (!g_dx_context->CreateDXGIFactory(enable_debug_layer) ||
-      !g_dx_context->CreateDevice(adapter_index, enable_debug_layer) ||
-      !g_dx_context->CreateCommandQueue() || !g_dx_context->CreateFence())
-  {
-    Destroy();
-    return false;
-  }
-
-  return true;
-}
-
 bool DXContext::CreateGlobalResources()
 {
   return g_dx_context->CreateDescriptorHeaps() && g_dx_context->CreateRootSignatures() &&
@@ -142,82 +109,8 @@ void DXContext::Destroy()
     g_dx_context.reset();
 
   s_d3d12_serialize_root_signature = nullptr;
-  s_d3d12_get_debug_interface = nullptr;
-  s_d3d12_create_device = nullptr;
   s_d3d12_library.Close();
   D3DCommon::UnloadLibraries();
-}
-
-bool DXContext::CreateDXGIFactory(bool enable_debug_layer)
-{
-  m_dxgi_factory = D3DCommon::CreateDXGIFactory(enable_debug_layer);
-  return m_dxgi_factory != nullptr;
-}
-
-bool DXContext::CreateDevice(u32 adapter_index, bool enable_debug_layer)
-{
-  ComPtr<IDXGIAdapter> adapter;
-  HRESULT hr = m_dxgi_factory->EnumAdapters(adapter_index, &adapter);
-  if (FAILED(hr))
-  {
-    ERROR_LOG_FMT(VIDEO, "Adapter {} not found, using default: {}", adapter_index, DX12HRWrap(hr));
-    adapter = nullptr;
-  }
-
-  // Enabling the debug layer will fail if the Graphics Tools feature is not installed.
-  if (enable_debug_layer)
-  {
-    hr = s_d3d12_get_debug_interface(IID_PPV_ARGS(&m_debug_interface));
-    if (SUCCEEDED(hr))
-    {
-      m_debug_interface->EnableDebugLayer();
-    }
-    else
-    {
-      ERROR_LOG_FMT(VIDEO, "Debug layer requested but not available: {}", DX12HRWrap(hr));
-      enable_debug_layer = false;
-    }
-  }
-
-  // Create the actual device.
-  hr = s_d3d12_create_device(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create D3D12 device: {}", DX12HRWrap(hr));
-  if (FAILED(hr))
-    return false;
-
-  if (enable_debug_layer)
-  {
-    ComPtr<ID3D12InfoQueue> info_queue;
-    if (SUCCEEDED(m_device.As(&info_queue)))
-    {
-      info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-      info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
-
-      D3D12_INFO_QUEUE_FILTER filter = {};
-      std::array<D3D12_MESSAGE_ID, 5> id_list{
-          D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
-          D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
-          D3D12_MESSAGE_ID_CREATEGRAPHICSPIPELINESTATE_RENDERTARGETVIEW_NOT_SET,
-          D3D12_MESSAGE_ID_CREATEINPUTLAYOUT_TYPE_MISMATCH,
-          D3D12_MESSAGE_ID_DRAW_EMPTY_SCISSOR_RECTANGLE,
-      };
-      filter.DenyList.NumIDs = static_cast<UINT>(id_list.size());
-      filter.DenyList.pIDList = id_list.data();
-      info_queue->PushStorageFilter(&filter);
-    }
-  }
-
-  return true;
-}
-
-bool DXContext::CreateCommandQueue()
-{
-  const D3D12_COMMAND_QUEUE_DESC queue_desc = {D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                               D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-                                               D3D12_COMMAND_QUEUE_FLAG_NONE};
-  HRESULT hr = m_device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&m_command_queue));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create command queue: {}", DX12HRWrap(hr));
-  return SUCCEEDED(hr);
 }
 
 bool DXContext::CreateFence()
@@ -593,8 +486,6 @@ bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueu
   ASSERT(!g_dx_context);
 
   if (!s_d3d12_library.Open("d3d12.dll") ||
-      !s_d3d12_library.GetSymbol("D3D12CreateDevice", &s_d3d12_create_device) ||
-      !s_d3d12_library.GetSymbol("D3D12GetDebugInterface", &s_d3d12_get_debug_interface) ||
       !s_d3d12_library.GetSymbol("D3D12SerializeRootSignature", &s_d3d12_serialize_root_signature))
   {
     ERROR_LOG_FMT(VIDEO, "d3d12.dll could not be loaded.");

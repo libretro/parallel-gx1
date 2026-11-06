@@ -14,7 +14,6 @@
 #include "VideoBackends/D3D12/D3D12BoundingBox.h"
 #include "VideoBackends/D3D12/D3D12Gfx.h"
 #include "VideoBackends/D3D12/D3D12PerfQuery.h"
-#include "VideoBackends/D3D12/D3D12SwapChain.h"
 #include "VideoBackends/D3D12/D3D12VertexManager.h"
 #include "VideoBackends/D3D12/DX12Context.h"
 
@@ -103,42 +102,11 @@ void VideoBackend::FillBackendInfo()
   }
 }
 
+/* The frontend owns the device and the window: Libretro::Video brings
+ * the backend up on the device and queue it is handed. */
 bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
 {
-  if (!DXContext::Create(g_Config.iAdapter, g_Config.bEnableValidationLayer))
-  {
-    PanicAlertFmtT("Failed to create D3D12 context");
-    return false;
-  }
-
-  FillBackendInfo();
-  UpdateActiveConfig();
-
-  if (!g_dx_context->CreateGlobalResources())
-  {
-    PanicAlertFmtT("Failed to create D3D12 global resources");
-    DXContext::Destroy();
-    ShutdownShared();
-    return false;
-  }
-
-  std::unique_ptr<SwapChain> swap_chain;
-  if (wsi.render_surface && !(swap_chain = SwapChain::Create(wsi)))
-  {
-    PanicAlertFmtT("Failed to create D3D swap chain");
-    DXContext::Destroy();
-    ShutdownShared();
-    return false;
-  }
-
-  // Create main wrapper instances.
-  auto gfx = std::make_unique<DX12::Gfx>(std::move(swap_chain), wsi.render_surface_scale);
-  auto vertex_manager = std::make_unique<DX12::VertexManager>();
-  auto perf_query = std::make_unique<DX12::PerfQuery>();
-  auto bounding_box = std::make_unique<DX12::D3D12BoundingBox>();
-
-  return InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
-                          std::move(bounding_box));
+  return false;
 }
 
 void VideoBackend::Shutdown()

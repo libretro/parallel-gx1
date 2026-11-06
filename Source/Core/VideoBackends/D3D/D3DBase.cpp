@@ -29,110 +29,11 @@ ComPtr<ID3D11Device1> device1;
 ComPtr<ID3D11DeviceContext> context;
 D3D_FEATURE_LEVEL feature_level;
 
-static ComPtr<ID3D11Debug> s_debug;
-
 constexpr std::array<D3D_FEATURE_LEVEL, 3> s_supported_feature_levels{
     D3D_FEATURE_LEVEL_11_0,
     D3D_FEATURE_LEVEL_10_1,
     D3D_FEATURE_LEVEL_10_0,
 };
-
-bool Create(u32 adapter_index, bool enable_debug_layer)
-{
-  PFN_D3D11_CREATE_DEVICE d3d11_create_device;
-  if (!s_d3d11_library.Open("d3d11.dll") ||
-      !s_d3d11_library.GetSymbol("D3D11CreateDevice", &d3d11_create_device))
-  {
-    PanicAlertFmtT("Failed to load d3d11.dll");
-    s_d3d11_library.Close();
-    return false;
-  }
-
-  if (!D3DCommon::LoadLibraries())
-  {
-    s_d3d11_library.Close();
-    return false;
-  }
-
-  dxgi_factory = D3DCommon::CreateDXGIFactory(enable_debug_layer);
-  if (!dxgi_factory)
-  {
-    PanicAlertFmtT("Failed to create DXGI factory");
-    D3DCommon::UnloadLibraries();
-    s_d3d11_library.Close();
-    return false;
-  }
-
-  ComPtr<IDXGIAdapter> adapter;
-  HRESULT hr = dxgi_factory->EnumAdapters(adapter_index, &adapter);
-  if (FAILED(hr))
-  {
-    WARN_LOG_FMT(VIDEO, "Adapter {} not found, using default: {}", adapter_index, DX11HRWrap(hr));
-    adapter = nullptr;
-  }
-
-  // Creating debug devices can sometimes fail if the user doesn't have the correct
-  // version of the DirectX SDK. If it does, simply fallback to a non-debug device.
-  if (enable_debug_layer)
-  {
-    hr = d3d11_create_device(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
-                             D3D11_CREATE_DEVICE_DEBUG, s_supported_feature_levels.data(),
-                             static_cast<UINT>(s_supported_feature_levels.size()),
-                             D3D11_SDK_VERSION, &device, &feature_level, &context);
-
-    // Debugbreak on D3D error
-    if (SUCCEEDED(hr) && SUCCEEDED(hr = device.As(&s_debug)))
-    {
-      ComPtr<ID3D11InfoQueue> info_queue;
-      if (SUCCEEDED(s_debug.As(&info_queue)))
-      {
-        info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, true);
-        info_queue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, true);
-
-        D3D11_MESSAGE_ID hide[] = {D3D11_MESSAGE_ID_SETPRIVATEDATA_CHANGINGPARAMS};
-
-        D3D11_INFO_QUEUE_FILTER filter = {};
-        filter.DenyList.NumIDs = sizeof(hide) / sizeof(D3D11_MESSAGE_ID);
-        filter.DenyList.pIDList = hide;
-        info_queue->AddStorageFilterEntries(&filter);
-      }
-    }
-    else
-    {
-      WARN_LOG_FMT(VIDEO, "Debug layer requested but not available: {}", DX11HRWrap(hr));
-    }
-  }
-
-  if (!enable_debug_layer || FAILED(hr))
-  {
-    hr = d3d11_create_device(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0,
-                             s_supported_feature_levels.data(),
-                             static_cast<UINT>(s_supported_feature_levels.size()),
-                             D3D11_SDK_VERSION, &device, &feature_level, &context);
-  }
-
-  if (FAILED(hr))
-  {
-    PanicAlertFmtT(
-        "Failed to initialize Direct3D.\nMake sure your video card supports at least D3D 10.0\n{0}",
-        DX11HRWrap(hr));
-    dxgi_factory.Reset();
-    D3DCommon::UnloadLibraries();
-    s_d3d11_library.Close();
-    return false;
-  }
-
-  hr = device.As(&device1);
-  if (FAILED(hr))
-  {
-    WARN_LOG_FMT(VIDEO,
-                 "Missing Direct3D 11.1 support. Logical operations will not be supported.\n{}",
-                 DX11HRWrap(hr));
-  }
-
-  stateman = std::make_unique<StateManager>();
-  return true;
-}
 
 void Destroy()
 {
@@ -148,19 +49,6 @@ void Destroy()
   device1.Reset();
 
   auto remaining_references = device.Reset();
-  if (s_debug)
-  {
-    --remaining_references;  // the debug interface increases the refcount of the device, subtract
-                             // that.
-    if (remaining_references)
-    {
-      // print out alive objects, but only if we actually have pending references
-      // note this will also print out internal live objects to the debug console
-      s_debug->ReportLiveDeviceObjects((D3D11_RLDO_FLAGS)(D3D11_RLDO_SUMMARY | D3D11_RLDO_DETAIL));
-    }
-    s_debug.Reset();
-  }
-
   if (remaining_references)
     ERROR_LOG_FMT(VIDEO, "Unreleased references: {}.", remaining_references);
   else

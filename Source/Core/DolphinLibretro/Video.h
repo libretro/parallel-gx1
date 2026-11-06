@@ -18,16 +18,15 @@
 #include "VideoBackends/D3D/D3DState.h"
 #include "VideoBackends/D3D/DXShader.h"
 #include "VideoBackends/D3D/DXTexture.h"
-#include "VideoBackends/D3D/D3DSwapChain.h"
 #include "VideoBackends/D3D12/DX12Context.h"
 #include "VideoBackends/D3D12/DX12Texture.h"
-#include "VideoBackends/D3D12/D3D12SwapChain.h"
 #endif
 #ifdef HAS_VULKAN
 #ifndef __APPLE__
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #endif
 #include "VideoBackends/Vulkan/VulkanContext.h"
+#include "VideoBackends/Vulkan/VKTexture.h"
 #include "DolphinLibretro/Vulkan.h"
 #include <libretro_vulkan.h>
 #endif
@@ -76,167 +75,6 @@ public:
     UpdateActiveConfig();
   }
 };
-
-#ifdef _WIN32
-class DX11SwapChain : public DX11::SwapChain
-{
-public:
-  DX11SwapChain(const WindowSystemInfo& wsi, int width, int height,
-                IDXGIFactory* dxgi_factory, ID3D11Device* d3d_device)
-      : DX11::SwapChain(wsi, dxgi_factory, d3d_device)
-  {
-    m_width = width;
-    m_height = height;
-    m_stereo = WantsStereo();
-    CreateSwapChainBuffers();
-  }
-
-  bool Present() override
-  {
-    auto* tex = GetTexture();
-    if (!tex)
-    {
-        ERROR_LOG_FMT(VIDEO, "Present aborted: no swap chain texture");
-        return false;
-    }
-
-    auto* srv = tex->GetD3DSRV();
-    if (!srv)
-    {
-        ERROR_LOG_FMT(VIDEO, "Present aborted: no SRV for swap chain texture");
-        return false;
-    }
-
-    ID3D11RenderTargetView* nullView = nullptr;
-    DX11::D3D::context->OMSetRenderTargets(1, &nullView, nullptr);
-    DX11::D3D::context->PSSetShaderResources(0, 1, &srv);
-    // None of the core's constant buffers left for the frontend's shader
-    // passes, which bind theirs only for the stages that use them: a pass
-    // read the core's 64 bytes at the vertex shader's slot 1 (D3D11)
-    ID3D11Buffer* null_buffers[3] = {};
-    DX11::D3D::context->VSSetConstantBuffers(0, 3, null_buffers);
-    DX11::D3D::context->PSSetConstantBuffers(0, 3, null_buffers);
-    DX11::D3D::context->GSSetConstantBuffers(0, 1, null_buffers);
-
-    Libretro::Video::video_cb(RETRO_HW_FRAME_BUFFER_VALID,
-                              m_width, m_height,
-                              m_width);
-
-    DX11::D3D::stateman->Restore();
-    return true;
-  }
-
-protected:
-  bool CreateSwapChainBuffers() override
-  {
-    TextureConfig config(m_width, m_height, 1, 1, 1,
-                         AbstractTextureFormat::RGBA8,
-                         AbstractTextureFlag_RenderTarget,
-                         AbstractTextureType::Texture_2D);
-
-    auto tex = DX11::DXTexture::Create(config, "LibretroSwapChainTexture");
-    if (!tex)
-    {
-      ERROR_LOG_FMT(VIDEO, "Backbuffer texture creation failed");
-      return false;
-    }
-    SetTexture(std::move(tex));
-
-    auto fb = DX11::DXFramebuffer::Create(GetTexture(), nullptr, {});
-    if (!fb)
-    {
-      ERROR_LOG_FMT(VIDEO, "Backbuffer framebuffer creation failed");
-      return false;
-    }
-    SetFramebuffer(std::move(fb));
-
-    return true;
-  }
-};
-
-class DX12SwapChain : public DX12::SwapChain
-{
-public:
-  DX12SwapChain(const WindowSystemInfo& wsi, int width, int height,
-                retro_hw_render_interface_d3d12* d3d12_interface)
-      : DX12::SwapChain(wsi, nullptr, nullptr),
-        m_d3d12_interface(d3d12_interface)
-  {
-    m_width = width;
-    m_height = height;
- }
-
-  bool Initialize()
-  {
-    return CreateSwapChainBuffers();
-  }
-
-  bool Present() override
-  {
-    if (m_buffers.empty() || !m_buffers[m_current_buffer].texture)
-    {
-      ERROR_LOG_FMT(VIDEO, "Present aborted: no swap chain texture");
-      return false;
-    }
-
-    auto* texture = m_buffers[m_current_buffer].texture.get();
-
-    texture->TransitionToState(m_d3d12_interface->required_state);
-
-    m_d3d12_interface->set_texture(
-      m_d3d12_interface->handle,
-      texture->GetResource(),
-      DXGI_FORMAT_R8G8B8A8_UNORM
-    );
-
-    Libretro::Video::video_cb(RETRO_HW_FRAME_BUFFER_VALID,
-                              m_width, m_height,
-                              m_width);
-
-    return true;
-  }
-
-protected:
-  bool CreateSwapChainBuffers() override
-  {
-    m_buffers.clear();
-    m_buffers.resize(1);
-
-    TextureConfig config(m_width, m_height, 1, 1, 1,
-                         AbstractTextureFormat::RGBA8,
-                         AbstractTextureFlag_RenderTarget,
-                         AbstractTextureType::Texture_2D);
-
-    m_buffers[0].texture = DX12::DXTexture::Create(config, "LibretroSwapChainTexture");
-    if (!m_buffers[0].texture)
-    {
-      ERROR_LOG_FMT(VIDEO, "Backbuffer texture creation failed");
-      return false;
-    }
-
-    m_buffers[0].framebuffer = DX12::DXFramebuffer::Create(
-        m_buffers[0].texture.get(), nullptr, {});
-    if (!m_buffers[0].framebuffer)
-    {
-      ERROR_LOG_FMT(VIDEO, "Backbuffer framebuffer creation failed");
-      return false;
-    }
-
-    m_current_buffer = 0;
-
-    return true;
-  }
-
-  void DestroySwapChainBuffers() override
-  {
-    m_buffers.clear();
-  }
-
-private:
-  retro_hw_render_interface_d3d12* m_d3d12_interface;
-};
-
-#endif
 
 #ifdef HAS_VULKAN
 namespace Vk

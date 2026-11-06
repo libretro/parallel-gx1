@@ -22,12 +22,12 @@
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoBackends/D3D/D3DBoundingBox.h"
 #include "VideoBackends/D3D/D3DState.h"
-#include "VideoBackends/D3D/D3DSwapChain.h"
 #include "VideoBackends/D3D/DXPipeline.h"
 #include "VideoBackends/D3D/DXShader.h"
 #include "VideoBackends/D3D/DXTexture.h"
 
 #include "VideoCommon/BPFunctions.h"
+#include "VideoCommon/FrameOutput.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/RenderState.h"
@@ -36,8 +36,8 @@
 
 namespace DX11
 {
-Gfx::Gfx(std::unique_ptr<SwapChain> swap_chain, float backbuffer_scale)
-    : m_backbuffer_scale(backbuffer_scale), m_swap_chain(std::move(swap_chain))
+Gfx::Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
+    : m_backbuffer_scale(backbuffer_scale), m_output(std::move(output))
 {
 }
 
@@ -45,7 +45,7 @@ Gfx::~Gfx() = default;
 
 bool Gfx::IsHeadless() const
 {
-  return !m_swap_chain;
+  return !m_output;
 }
 
 std::unique_ptr<AbstractTexture> Gfx::CreateTexture(const TextureConfig& config,
@@ -159,34 +159,16 @@ void Gfx::DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u
 
 bool Gfx::BindBackbuffer(const ClearColor& clear_color)
 {
-  CheckForSwapChainChanges();
-  SetAndClearFramebuffer(m_swap_chain->GetFramebuffer(), clear_color);
+  AbstractFramebuffer* fb = m_output->Acquire();
+  if (!fb)
+    return false;
+  SetAndClearFramebuffer(fb, clear_color);
   return true;
 }
 
 void Gfx::PresentBackbuffer()
 {
-  m_swap_chain->Present();
-}
-
-void Gfx::OnConfigChanged(u32 bits)
-{
-  AbstractGfx::OnConfigChanged(bits);
-
-  // Quad-buffer changes require swap chain recreation.
-  if (bits & CONFIG_CHANGE_BIT_STEREO_MODE && m_swap_chain)
-    m_swap_chain->SetStereo(SwapChain::WantsStereo());
-
-  if (bits & CONFIG_CHANGE_BIT_HDR && m_swap_chain)
-    m_swap_chain->SetHDR(SwapChain::WantsHDR());
-}
-
-void Gfx::CheckForSwapChainChanges()
-{
-  if (!m_swap_chain->CheckForFullscreenChange())
-    return;
-  m_swap_chain->ResizeSwapChain();
-  g_presenter->SetBackbuffer(m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
+  m_output->Present();
 }
 
 void Gfx::SetFramebuffer(AbstractFramebuffer* framebuffer)
@@ -251,22 +233,11 @@ void Gfx::WaitForGPUIdle()
   D3D::context->Flush();
 }
 
-void Gfx::SetFullscreen(bool enable_fullscreen)
-{
-  if (m_swap_chain)
-    m_swap_chain->SetFullscreen(enable_fullscreen);
-}
-
-bool Gfx::IsFullscreen() const
-{
-  return m_swap_chain && m_swap_chain->GetFullscreen();
-}
-
 SurfaceInfo Gfx::GetSurfaceInfo() const
 {
-  return {m_swap_chain ? static_cast<u32>(m_swap_chain->GetWidth()) : 0,
-          m_swap_chain ? static_cast<u32>(m_swap_chain->GetHeight()) : 0, m_backbuffer_scale,
-          m_swap_chain ? m_swap_chain->GetFormat() : AbstractTextureFormat::Undefined};
+  return {m_output ? m_output->GetWidth() : 0, m_output ? m_output->GetHeight() : 0,
+          m_backbuffer_scale,
+          m_output ? m_output->GetFormat() : AbstractTextureFormat::Undefined};
 }
 
 }  // namespace DX11
