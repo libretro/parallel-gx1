@@ -6,6 +6,7 @@
 #include "DolphinLibretro/Common/Globals.h"
 #include "VideoCommon/TextureConfig.h"
 #ifdef _WIN32
+#include "VideoBackends/D3D/D3DGfx.h"
 #include "VideoBackends/D3D12/D3D12Gfx.h"
 #endif
 #ifdef HAS_VULKAN
@@ -37,50 +38,84 @@ static TextureConfig OutputConfig(u32 width, u32 height)
 #endif
 
 #ifdef _WIN32
-DX11Output::DX11Output(u32 width, u32 height) : m_width(width), m_height(height)
+DX11Output::DX11Output(retro_hw_render_interface_d3d11* v2, u32 width, u32 height)
+    : m_v2(v2), m_width(width), m_height(height), m_current(0)
 {
 }
 
 bool DX11Output::Create()
 {
-  m_texture = DX11::DXTexture::Create(OutputConfig(m_width, m_height), "LibretroOutput");
-  if (!m_texture)
+  const unsigned mask = m_v2 ? m_v2->get_sync_index_mask(m_v2->handle) : 1u;
+  const u32 count = SlotCount(mask);
+  u32 i;
+
+  for (i = 0; i < count; i++)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to create the output texture");
-    return false;
-  }
-  m_framebuffer = DX11::DXFramebuffer::Create(m_texture.get(), nullptr, {});
-  if (!m_framebuffer)
-  {
-    ERROR_LOG_FMT(VIDEO, "Failed to create the output framebuffer");
-    return false;
+    if (!(mask & (1u << i)))
+      continue;
+    m_textures[i] = DX11::DXTexture::Create(OutputConfig(m_width, m_height), "LibretroOutput");
+    if (!m_textures[i])
+    {
+      ERROR_LOG_FMT(VIDEO, "Failed to create output texture {}", i);
+      return false;
+    }
+    m_framebuffers[i] = DX11::DXFramebuffer::Create(m_textures[i].get(), nullptr, {});
+    if (!m_framebuffers[i])
+    {
+      ERROR_LOG_FMT(VIDEO, "Failed to create output framebuffer {}", i);
+      return false;
+    }
   }
   return true;
 }
 
 AbstractFramebuffer* DX11Output::Acquire()
 {
-  /* the frontend read the last picture inside video_refresh */
-  return m_framebuffer.get();
+  unsigned depth;
+  /* version 1: the frontend read the last picture inside video_refresh;
+   * version 2: it is done with this index's texture once the wait
+   * returns, which needs the context lock released */
+  if (!m_v2)
+    return m_framebuffers[0].get();
+  m_current = m_v2->get_sync_index(m_v2->handle);
+  depth = D3D11Suspend();
+  m_v2->wait_sync_index(m_v2->handle);
+  D3D11Resume(depth);
+  return m_framebuffers[m_current].get();
 }
 
 void DX11Output::Present()
 {
-  ID3D11ShaderResourceView* srv = m_texture->GetD3DSRV();
-  ID3D11RenderTargetView* null_view = nullptr;
-  /* none of the core's constant buffers left for the frontend's shader
-   * passes, which bind theirs only for the stages that use them */
-  ID3D11Buffer* null_buffers[3] = {nullptr, nullptr, nullptr};
+  unsigned depth;
 
-  DX11::D3D::context->OMSetRenderTargets(1, &null_view, nullptr);
-  DX11::D3D::context->PSSetShaderResources(0, 1, &srv);
-  DX11::D3D::context->VSSetConstantBuffers(0, 3, null_buffers);
-  DX11::D3D::context->PSSetConstantBuffers(0, 3, null_buffers);
-  DX11::D3D::context->GSSetConstantBuffers(0, 1, null_buffers);
+  if (m_v2)
+  {
+    m_v2->set_texture(m_v2->handle, m_textures[m_current]->GetD3DTexture());
+    depth = D3D11Suspend();
+    video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_width, m_height, 0);
+    /* rebinds everything if the frontend drew meanwhile */
+    D3D11Resume(depth);
+    return;
+  }
 
-  video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_width, m_height, 0);
+  {
+    ID3D11ShaderResourceView* srv = m_textures[0]->GetD3DSRV();
+    ID3D11RenderTargetView* null_view = nullptr;
+    /* none of the core's constant buffers left for the frontend's
+     * shader passes, which bind theirs only for the stages that use
+     * them */
+    ID3D11Buffer* null_buffers[3] = {nullptr, nullptr, nullptr};
 
-  DX11::D3D::stateman->Restore();
+    DX11::D3D::context->OMSetRenderTargets(1, &null_view, nullptr);
+    DX11::D3D::context->PSSetShaderResources(0, 1, &srv);
+    DX11::D3D::context->VSSetConstantBuffers(0, 3, null_buffers);
+    DX11::D3D::context->PSSetConstantBuffers(0, 3, null_buffers);
+    DX11::D3D::context->GSSetConstantBuffers(0, 1, null_buffers);
+
+    video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_width, m_height, 0);
+
+    static_cast<DX11::Gfx*>(g_gfx.get())->RestoreContext();
+  }
 }
 
 DX12Output::DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 height)

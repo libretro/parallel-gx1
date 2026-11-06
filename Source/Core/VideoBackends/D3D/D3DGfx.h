@@ -70,9 +70,14 @@ public:
 
   SurfaceInfo GetSurfaceInfo() const override;
 
+  // Binds everything again after the frontend used the context.
+  void RestoreContext();
+
 private:
   StateCache m_state_cache;
 
+  D3D11_VIEWPORT m_viewport = {};
+  D3D11_RECT m_scissor = {};
   float m_backbuffer_scale;
   std::unique_ptr<FrameOutput> m_output;
 };

@@ -543,6 +543,7 @@ void retro_run(void)
   RETRO_PERFORMANCE_INIT(dolphin_main_func);
   RETRO_PERFORMANCE_START(dolphin_main_func);
 
+  Libretro::Video::D3D11Lock();
   if (system.IsDualCoreMode())
   {
     Core::DoFrameStep(system);
@@ -552,6 +553,7 @@ void retro_run(void)
   {
     system.GetCPU().RunSingleFrame();
   }
+  Libretro::Video::D3D11Unlock();
 
   RETRO_PERFORMANCE_STOP(dolphin_main_func);
 
@@ -577,10 +579,12 @@ size_t retro_serialize_size(void)
   if (system.IsDualCoreMode())
     ar->SetPassthrough(true);
 
+  Libretro::Video::D3D11Lock();
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     PointerWrap p((u8**)&size, sizeof(size_t), PointerWrap::Mode::Measure);
     State::DoState(Core::System::GetInstance(), p);
     }, true);  // wait = true
+  Libretro::Video::D3D11Unlock();
 
   if (system.IsDualCoreMode())
     ar->SetPassthrough(false);
@@ -603,10 +607,12 @@ bool retro_serialize(void* data, size_t size)
   if (!was_cpu)
     Core::DeclareAsCPUThread();
 
+  Libretro::Video::D3D11Lock();
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     PointerWrap p((u8**)&data, size, PointerWrap::Mode::Write);
     State::DoState(Core::System::GetInstance(), p);
   }, true);
+  Libretro::Video::D3D11Unlock();
 
   if (!was_cpu)
     Core::UndeclareAsCPUThread();
@@ -632,10 +638,12 @@ bool retro_unserialize(const void* data, size_t size)
   if (!was_cpu)
     Core::DeclareAsCPUThread();
 
+  Libretro::Video::D3D11Lock();
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     PointerWrap p((u8**)&data, size, PointerWrap::Mode::Read);
     State::DoState(Core::System::GetInstance(), p);
   }, true);
+  Libretro::Video::D3D11Unlock();
 
   if (!was_cpu)
     Core::UndeclareAsCPUThread();

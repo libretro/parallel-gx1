@@ -843,6 +843,8 @@ void retro_unload_game(void)
 {
   auto& system = Core::System::GetInstance();
 
+  /* the video backend's teardown uses the context */
+  Libretro::Video::D3D11Lock();
   if (Core::IsRunning(system))
   {
     Core::Stop(system);
@@ -855,6 +857,7 @@ void retro_unload_game(void)
 
   if (!g_context_status.IsDestroyed() && g_video_backend)
     g_video_backend->Shutdown();
+  Libretro::Video::D3D11Unlock();
 
   // these are disabled in Shutdown on fullscreen/window toggle
   system.GetFifo().Shutdown();

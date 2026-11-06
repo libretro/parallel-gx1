@@ -18,12 +18,14 @@ enum
 };
 
 #ifdef _WIN32
-/* Direct3D 11: one target, which the frontend reads from pixel shader
- * slot 0 while video_refresh runs. */
+/* Direct3D 11: with version 2 of the interface one target per sync
+ * index, named with set_texture and read where it is; with version 1
+ * one target, which the frontend reads from pixel shader slot 0 while
+ * video_refresh runs. */
 class DX11Output final : public FrameOutput
 {
 public:
-  DX11Output(u32 width, u32 height);
+  DX11Output(retro_hw_render_interface_d3d11* v2, u32 width, u32 height);
   bool Create();
 
   AbstractFramebuffer* Acquire() override;
@@ -33,10 +35,12 @@ public:
   AbstractTextureFormat GetFormat() const override { return AbstractTextureFormat::RGBA8; }
 
 private:
-  std::unique_ptr<DX11::DXTexture> m_texture;
-  std::unique_ptr<DX11::DXFramebuffer> m_framebuffer;
+  std::unique_ptr<DX11::DXTexture> m_textures[OUTPUT_MAX_SLOTS];
+  std::unique_ptr<DX11::DXFramebuffer> m_framebuffers[OUTPUT_MAX_SLOTS];
+  retro_hw_render_interface_d3d11* m_v2;   /* NULL on version 1 */
   u32 m_width;
   u32 m_height;
+  u32 m_current;
 };
 
 /* Direct3D 12: with version 2 of the interface one target per sync

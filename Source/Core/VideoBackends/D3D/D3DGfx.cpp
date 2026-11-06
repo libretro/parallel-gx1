@@ -124,17 +124,25 @@ void Gfx::SetPipeline(const AbstractPipeline* pipeline)
 void Gfx::SetScissorRect(const MathUtil::Rectangle<int>& rc)
 {
   // TODO: Move to stateman
-  const CD3D11_RECT rect(rc.left, rc.top, std::max(rc.right, rc.left + 1),
-                         std::max(rc.bottom, rc.top + 1));
-  D3D::context->RSSetScissorRects(1, &rect);
+  m_scissor = CD3D11_RECT(rc.left, rc.top, std::max(rc.right, rc.left + 1),
+                          std::max(rc.bottom, rc.top + 1));
+  D3D::context->RSSetScissorRects(1, &m_scissor);
 }
 
 void Gfx::SetViewport(float x, float y, float width, float height, float near_depth,
                       float far_depth)
 {
   // TODO: Move to stateman
-  const CD3D11_VIEWPORT vp(x, y, width, height, near_depth, far_depth);
-  D3D::context->RSSetViewports(1, &vp);
+  m_viewport = CD3D11_VIEWPORT(x, y, width, height, near_depth, far_depth);
+  D3D::context->RSSetViewports(1, &m_viewport);
+}
+
+/* Everything bound on the context, again, after someone else used it. */
+void Gfx::RestoreContext()
+{
+  D3D::stateman->Restore();
+  D3D::context->RSSetViewports(1, &m_viewport);
+  D3D::context->RSSetScissorRects(1, &m_scissor);
 }
 
 void Gfx::Draw(u32 base_vertex, u32 num_vertices)

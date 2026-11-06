@@ -70,6 +70,10 @@ namespace Video
 #ifdef _WIN32
 static Common::DynamicLibrary d3d11_library;
 static Common::DynamicLibrary d3d12_library;
+/* Direct3D 11 version 2: the interface, and the levels of its context
+ * lock this thread holds */
+static retro_hw_render_interface_d3d11* s_d3d11_v2;
+static unsigned s_d3d11_depth;
 #endif
 
 int GetAdjustedBaseWidth()
@@ -158,6 +162,46 @@ void Init()
     Config::SetBase(Config::MAIN_GFX_BACKEND, "Null");
 }
 
+void D3D11Lock(void)
+{
+#ifdef _WIN32
+  bool used;
+  if (!s_d3d11_v2)
+    return;
+  used = s_d3d11_v2->lock_context(s_d3d11_v2->handle);
+  /* the frontend had the context: everything bound goes back */
+  if (s_d3d11_depth++ == 0 && used && g_gfx && DX11::D3D::stateman)
+    static_cast<DX11::Gfx*>(g_gfx.get())->RestoreContext();
+#endif
+}
+
+void D3D11Unlock(void)
+{
+#ifdef _WIN32
+  if (!s_d3d11_v2 || !s_d3d11_depth)
+    return;
+  s_d3d11_depth--;
+  s_d3d11_v2->unlock_context(s_d3d11_v2->handle);
+#endif
+}
+
+unsigned D3D11Suspend(void)
+{
+  unsigned depth = 0;
+#ifdef _WIN32
+  depth = s_d3d11_depth;
+  while (s_d3d11_depth)
+    D3D11Unlock();
+#endif
+  return depth;
+}
+
+void D3D11Resume(unsigned depth)
+{
+  while (depth--)
+    D3D11Lock();
+}
+
 bool SetHWRender(retro_hw_context_type type, const int version_major, const int version_minor)
 {
   DEBUG_LOG_FMT(VIDEO, "Video - SetHWRender!");
@@ -222,6 +266,22 @@ bool SetHWRender(retro_hw_context_type type, const int version_major, const int 
     hw_render.version_minor = 0;
     if (environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render))
     {
+      /* version 2 of the interface, when the frontend has it: the frame
+       * is read where it is drawn, from whichever thread presents */
+      static const struct retro_hw_render_context_negotiation_interface_d3d11 negotiation = {
+          RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_D3D11,
+          RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_D3D11_VERSION,
+          RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2};
+      struct retro_hw_render_context_negotiation_interface probe;
+      probe.interface_type = RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_D3D11;
+      probe.interface_version = 0;
+      if (environ_cb(RETRO_ENVIRONMENT_GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT,
+                     &probe) &&
+          probe.interface_version >= 1)
+      {
+        environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE,
+                   (void*)&negotiation);
+      }
       Config::SetBase(Config::MAIN_GFX_BACKEND, "D3D");
       success = true;
     }
@@ -285,6 +345,64 @@ bool SetHWRender(retro_hw_context_type type, const int version_major, const int 
   return success;
 }
 
+#ifdef _WIN32
+/* The Direct3D 11 backend on the frontend's device, with the context
+ * lock held. */
+static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, const WindowSystemInfo& wsi,
+                              int efbScale)
+{
+  DX11::D3D::device = d3d->device;
+  DX11::D3D::context = d3d->context;
+  DX11::D3D::feature_level = d3d->featureLevel;
+
+  if (!d3d11_library.IsOpen() && !d3d11_library.Open("d3d11.dll"))
+  {
+    d3d11_library.Close();
+    ERROR_LOG_FMT(VIDEO, "Failed to load D3D11 Libraries");
+    return;
+  }
+
+  if (!D3DCommon::LoadLibraries())
+  {
+    ERROR_LOG_FMT(VIDEO, "Failed to load the dxgi library");
+    return;
+  }
+
+  if (FAILED(DX11::D3D::device.As(&DX11::D3D::device1)))
+  {
+    WARN_LOG_FMT(VIDEO, "Missing Direct3D 11.1 support. Logical operations will not be supported.");
+    g_backend_info.bSupportsLogicOp = false;
+  }
+
+  DX11::D3D::stateman = std::make_unique<DX11::D3D::StateManager>();
+
+  DX11::VideoBackend* d3d11 = static_cast<DX11::VideoBackend*>(g_video_backend);
+
+  if (!d3d11)
+  {
+    WARN_LOG_FMT(VIDEO, "D3D11 backend is null");
+    return;
+  }
+
+  d3d11->FillD3DBackendInfo();
+  UpdateActiveConfig();
+
+  std::unique_ptr<DX11Output> output = std::make_unique<DX11Output>(
+    s_d3d11_v2, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale);
+  if (!output->Create())
+    return;
+
+  auto gfx = std::make_unique<DX11::Gfx>(std::move(output), wsi.render_surface_scale);
+  auto vertex_manager = std::make_unique<DX11::VertexManager>();
+  auto perf_query = std::make_unique<DX11::PerfQuery>();
+  auto bounding_box = std::make_unique<DX11::D3DBoundingBox>();
+
+  if(d3d11->InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
+                             std::move(bounding_box)))
+    g_context_status.MarkInitialized();
+}
+#endif
+
 void ContextReset(void)
 {
   DEBUG_LOG_FMT(VIDEO, "Video - ContextReset!");
@@ -326,62 +444,19 @@ void ContextReset(void)
       ERROR_LOG_FMT(VIDEO, "Failed to get HW rendering interface!");
       return;
     }
-    if (d3d->interface_version != RETRO_HW_RENDER_INTERFACE_D3D11_VERSION)
+    if (d3d->interface_version != RETRO_HW_RENDER_INTERFACE_D3D11_VERSION &&
+        d3d->interface_version != RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2)
     {
-      ERROR_LOG_FMT(VIDEO, "HW render interface mismatch, expected {}, got {}!",
-                RETRO_HW_RENDER_INTERFACE_D3D11_VERSION, d3d->interface_version);
+      ERROR_LOG_FMT(VIDEO, "HW render interface mismatch, expected {} or {}, got {}!",
+                RETRO_HW_RENDER_INTERFACE_D3D11_VERSION,
+                RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2, d3d->interface_version);
       return;
     }
-    DX11::D3D::device = d3d->device;
-    DX11::D3D::context = d3d->context;
-    DX11::D3D::feature_level = d3d->featureLevel;
-
-    if (!d3d11_library.IsOpen() && !d3d11_library.Open("d3d11.dll"))
-    {
-      d3d11_library.Close();
-      ERROR_LOG_FMT(VIDEO, "Failed to load D3D11 Libraries");
-      return;
-    }
-
-    if (!D3DCommon::LoadLibraries())
-    {
-      ERROR_LOG_FMT(VIDEO, "Failed to load the dxgi library");
-      return;
-    }
-
-    if (FAILED(DX11::D3D::device.As(&DX11::D3D::device1)))
-    {
-      WARN_LOG_FMT(VIDEO, "Missing Direct3D 11.1 support. Logical operations will not be supported.");
-      g_backend_info.bSupportsLogicOp = false;
-    }
-
-    DX11::D3D::stateman = std::make_unique<DX11::D3D::StateManager>();
-
-    DX11::VideoBackend* d3d11 = static_cast<DX11::VideoBackend*>(g_video_backend);
-
-    if (!d3d11)
-    {
-      WARN_LOG_FMT(VIDEO, "D3D11 backend is null");
-      return;
-    }
-
-    d3d11->FillD3DBackendInfo();
-    UpdateActiveConfig();
-
-    std::unique_ptr<DX11Output> output = std::make_unique<DX11Output>(
-      GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale);
-    if (!output->Create())
-      return;
-
-    auto gfx = std::make_unique<DX11::Gfx>(std::move(output), wsi.render_surface_scale);
-    auto vertex_manager = std::make_unique<DX11::VertexManager>();
-    auto perf_query = std::make_unique<DX11::PerfQuery>();
-    auto bounding_box = std::make_unique<DX11::D3DBoundingBox>();
-
-    if(d3d11->InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
-                               std::move(bounding_box)))
-      g_context_status.MarkInitialized();
-
+    s_d3d11_v2 = d3d->interface_version >= RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2 ? d3d : nullptr;
+    s_d3d11_depth = 0;
+    D3D11Lock();
+    ContextResetD3D11(d3d, wsi, efbScale);
+    D3D11Unlock();
     return;
   }
 
@@ -554,6 +629,9 @@ void ContextDestroy(void)
 
   g_context_status.MarkDestroyed();
 
+  /* the backend's teardown uses the context */
+  D3D11Lock();
+
 #ifdef HAS_OPENGL
   if (g_gfx &&
       Config::Get(Config::MAIN_GFX_BACKEND) == "OGL")
@@ -608,6 +686,11 @@ void ContextDestroy(void)
   case RETRO_HW_CONTEXT_NONE:
     break;
   }
+  D3D11Unlock();
+#ifdef _WIN32
+  s_d3d11_v2 = nullptr;
+  s_d3d11_depth = 0;
+#endif
 }
 #ifdef HAS_VULKAN
 namespace Vk

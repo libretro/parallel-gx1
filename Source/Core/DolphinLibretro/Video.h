@@ -43,6 +43,17 @@ bool SetHWRender(retro_hw_context_type type, const int version_major = -1, const
 void ContextReset(void);
 void ContextDestroy(void);
 
+/* Direct3D 11 version 2 shares the immediate context with the frontend
+ * by taking turns: the core holds the lock around everything it does
+ * with the context, and never across video_refresh or a return to the
+ * frontend. Recursive; no-ops on other APIs and on version 1. */
+void D3D11Lock(void);
+void D3D11Unlock(void);
+/* Releases every level held, for video_refresh or a wait on the
+ * frontend; returns them for D3D11Resume. */
+unsigned D3D11Suspend(void);
+void D3D11Resume(unsigned depth);
+
 class SWGfx : public SW::SWGfx
 {
 public:

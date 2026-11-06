@@ -338,6 +338,15 @@ void StateManager::Restore()
   D3D::context->OMSetBlendState(m_pending.blendState, nullptr, 0xFFFFFFFF);
   D3D::context->OMSetDepthStencilState(m_pending.depthState, 0);
   D3D::context->RSSetState(m_pending.rasterizerState);
+  /* the compute stage's, as last set */
+  D3D::context->CSSetShader(m_compute_shader, nullptr, 0);
+  D3D::context->CSSetConstantBuffers(0, 1, &m_compute_constants);
+  D3D::context->CSSetShaderResources(0, static_cast<u32>(m_compute_textures.size()),
+                                     m_compute_textures.data());
+  D3D::context->CSSetSamplers(0, static_cast<u32>(m_compute_samplers.size()),
+                              m_compute_samplers.data());
+  D3D::context->CSSetUnorderedAccessViews(0, static_cast<u32>(m_compute_images.size()),
+                                          m_compute_images.data(), nullptr);
 
   m_current = m_pending;
   m_dirtyFlags = 0;
