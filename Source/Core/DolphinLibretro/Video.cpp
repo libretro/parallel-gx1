@@ -719,6 +719,13 @@ void ContextDestroy(void)
 #ifdef HAS_VULKAN
 namespace Vk
 {
+/* The instance the frontend makes for the core: the version the loader
+ * has, up to 1.2, as the backend calls the 1.1 functions (the Properties2
+ * and Features2 queries and the feature chain they fill) where the device
+ * has them, which a 1.0 instance leaves the loader emulating without the
+ * chain. */
+static u32 s_instance_api_version = VK_API_VERSION_1_0;
+
 const VkApplicationInfo* GetApplicationInfo(void)
 {
   static VkApplicationInfo app_info{VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -726,7 +733,10 @@ const VkApplicationInfo* GetApplicationInfo(void)
   app_info.applicationVersion = 5;  // TODO: extract from Common::scm_desc_str
   app_info.pEngineName = "Dolphin-Emu";
   app_info.engineVersion = 2;
-  app_info.apiVersion = VK_API_VERSION_1_0;
+  s_instance_api_version = Vulkan::LoadVulkanLibrary() ?
+                               Vulkan::VulkanContext::GetInstanceAPIVersion() :
+                               VK_API_VERSION_1_0;
+  app_info.apiVersion = s_instance_api_version;
   return &app_info;
 }
 
@@ -803,7 +813,7 @@ static bool CreateDeviceInternal(
   if (gpu == VK_NULL_HANDLE)
     gpu = gpu_list[0];
   Vulkan::g_vulkan_context =
-      Vulkan::VulkanContext::Create(instance, gpu, surface, false, false, VK_API_VERSION_1_0);
+      Vulkan::VulkanContext::Create(instance, gpu, surface, false, false, s_instance_api_version);
   if (!Vulkan::g_vulkan_context)
   {
     ERROR_LOG_FMT(VIDEO, "Failed to create Vulkan device");

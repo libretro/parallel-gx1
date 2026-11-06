@@ -62,6 +62,9 @@ public:
   // Determines if the Vulkan validation layer is available on the system.
   static bool CheckValidationLayerAvailablility();
 
+  // The instance version to ask for: the highest up to 1.2 the loader has (the library loaded).
+  static u32 GetInstanceAPIVersion();
+
   // Helper method to create a Vulkan instance.
   static VkInstance CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils,
                                          bool enable_validation_layer, u32* out_vk_api_version);

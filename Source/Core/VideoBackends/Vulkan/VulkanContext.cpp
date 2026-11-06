@@ -222,6 +222,11 @@ static u32 getAPIVersion()
   return used_version;
 }
 
+u32 VulkanContext::GetInstanceAPIVersion()
+{
+  return getAPIVersion();
+}
+
 VkInstance VulkanContext::CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils,
                                                bool enable_validation_layer,
                                                u32* out_vk_api_version)
@@ -596,7 +601,9 @@ std::unique_ptr<VulkanContext> VulkanContext::Create(VkInstance instance, VkPhys
 
   // Attempt to create the device.
   if (!context->CreateDevice(surface, enable_validation_layer) ||
-      !context->CreateAllocator(vk_api_version))
+      !context->CreateAllocator(std::min(
+          vk_api_version, VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(context->m_device_info.apiVersion),
+                                              VK_API_VERSION_MINOR(context->m_device_info.apiVersion), 0))))
   {
     // Since we are destroying the instance, we're also responsible for destroying the surface.
     if (surface != VK_NULL_HANDLE)
