@@ -55,17 +55,26 @@ class DX12Output final : public FrameOutput
 {
 public:
   DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 height);
+  ~DX12Output() override;
   bool Create();
 
   AbstractFramebuffer* Acquire() override;
   void Present() override;
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
+  void Repeat() override;
   u32 GetWidth() const override { return m_width; }
   u32 GetHeight() const override { return m_height; }
   AbstractTextureFormat GetFormat() const override { return AbstractTextureFormat::RGBA8; }
 
 private:
+  void Hand(DX12::DXTexture* texture, u32 width, u32 height);
+
   std::unique_ptr<DX12::DXTexture> m_textures[OUTPUT_MAX_SLOTS];
   std::unique_ptr<DX12::DXFramebuffer> m_framebuffers[OUTPUT_MAX_SLOTS];
+  /* A texture handed on where it is: version 2 reads it until another
+   * picture is handed on, so it is kept in the state the frontend reads
+   * it in meanwhile. */
+  DX12::DXTexture* m_direct;
   retro_hw_render_interface_d3d12* m_iface;
   u32 m_width;
   u32 m_height;

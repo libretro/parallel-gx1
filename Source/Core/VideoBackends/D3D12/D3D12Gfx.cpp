@@ -385,6 +385,13 @@ void Gfx::PresentBackbuffer()
   m_output->Present();
 }
 
+bool Gfx::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
+{
+  /* the output leaves the texture in the state the frontend reads it in
+   * and submits the command list itself */
+  return m_output->PresentTexture(texture, width, height);
+}
+
 SurfaceInfo Gfx::GetSurfaceInfo() const
 {
   return {m_output ? m_output->GetWidth() : 0, m_output ? m_output->GetHeight() : 0,

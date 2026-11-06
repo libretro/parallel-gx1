@@ -146,9 +146,16 @@ bool DX11Output::PresentTexture(const AbstractTexture* texture, u32 width, u32 h
 }
 
 DX12Output::DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 height)
-    : m_iface(iface), m_width(width), m_height(height), m_current(0),
+    : m_direct(nullptr), m_iface(iface), m_width(width), m_height(height), m_current(0),
       m_v2(iface->interface_version >= RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2)
 {
+  s_active = this;
+}
+
+DX12Output::~DX12Output()
+{
+  if (s_active == this)
+    s_active = nullptr;
 }
 
 bool DX12Output::Create()
@@ -191,7 +198,33 @@ AbstractFramebuffer* DX12Output::Acquire()
 
 void DX12Output::Present()
 {
-  DX12::DXTexture* texture = m_textures[m_current].get();
+  m_direct = nullptr;
+  Hand(m_textures[m_current].get(), m_width, m_height);
+}
+
+bool DX12Output::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
+{
+  /* version 1 copies it inside video_refresh, version 2 reads it where it
+   * is; neither waits on a sync index, as none of the output's textures
+   * is drawn into */
+  m_direct = const_cast<DX12::DXTexture*>(static_cast<const DX12::DXTexture*>(texture));
+  Hand(m_direct, width, height);
+  return true;
+}
+
+void DX12Output::Repeat()
+{
+  /* version 2 reads the texture again: back to the state it reads it in
+   * if the core used it in another one meanwhile, a copy's source say,
+   * ahead of the frontend's next frame on the queue */
+  if (!m_v2 || !m_direct || m_direct->GetState() == m_iface->required_state)
+    return;
+  m_direct->TransitionToState(m_iface->required_state);
+  DX12::Gfx::GetInstance()->ExecuteCommandList(false);
+}
+
+void DX12Output::Hand(DX12::DXTexture* texture, u32 width, u32 height)
+{
   u64 fence_value;
 
   texture->TransitionToState(m_iface->required_state);
@@ -209,7 +242,7 @@ void DX12Output::Present()
     m_iface->set_texture(m_iface->handle, texture->GetResource(), DXGI_FORMAT_R8G8B8A8_UNORM);
   }
 
-  video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_width, m_height, 0);
+  video_cb(RETRO_HW_FRAME_BUFFER_VALID, width, height, 0);
 }
 #endif
 
