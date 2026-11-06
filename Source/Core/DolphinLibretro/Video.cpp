@@ -855,7 +855,10 @@ static void CountedVideoRefresh(const void* data, unsigned width, unsigned heigh
 void EndFrame()
 {
   if (!s_frames_sent && s_last_width && s_last_height)
+  {
+    OutputRepeat();
     s_frontend_video_cb(nullptr, s_last_width, s_last_height, 0);
+  }
   s_frames_sent = 0;
 }
 }  // namespace Video

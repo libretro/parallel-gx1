@@ -9,6 +9,10 @@ namespace Libretro
 {
 namespace Video
 {
+/* The output in use, told when the frontend is about to show the last
+ * picture again. */
+void OutputRepeat();
+
 /* What each sync index of the frontend can name: the frontend reads the
  * picture where it is drawn, so there is one target per index the
  * frontend can be reading from while the next picture is drawn. */
@@ -77,18 +81,28 @@ class VKOutput final : public FrameOutput
 {
 public:
   VKOutput(retro_hw_render_interface_vulkan* iface, u32 width, u32 height);
+  ~VKOutput() override;
   bool Create();
 
   AbstractFramebuffer* Acquire() override;
   void Present() override;
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
+  void Repeat() override;
   u32 GetWidth() const override { return m_width; }
   u32 GetHeight() const override { return m_height; }
   AbstractTextureFormat GetFormat() const override { return AbstractTextureFormat::RGBA8; }
 
 private:
+  void DropDirect();
+
   retro_vulkan_image m_images[OUTPUT_MAX_SLOTS];
   std::unique_ptr<Vulkan::VKTexture> m_textures[OUTPUT_MAX_SLOTS];
   std::unique_ptr<Vulkan::VKFramebuffer> m_framebuffers[OUTPUT_MAX_SLOTS];
+  /* A texture handed on where it is, with a 2D view of its one layer of
+   * its own, made for it: the frontend reads it until another picture is
+   * handed on, so it is kept in shader-read layout meanwhile. */
+  retro_vulkan_image m_direct_image;
+  Vulkan::VKTexture* m_direct;
   retro_hw_render_interface_vulkan* m_iface;
   u32 m_width;
   u32 m_height;

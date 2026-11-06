@@ -34,6 +34,10 @@ public:
     return false;
   }
 
+  /* Whoever shows the pictures is about to show the last one handed on
+   * again: what it reads is left the way it reads it. */
+  virtual void Repeat() {}
+
   virtual u32 GetWidth() const = 0;
   virtual u32 GetHeight() const = 0;
   virtual AbstractTextureFormat GetFormat() const = 0;

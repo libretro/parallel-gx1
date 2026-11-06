@@ -242,6 +242,19 @@ void VKGfx::PresentBackbuffer()
   StateTracker::GetInstance()->InvalidateCachedState();
 }
 
+bool VKGfx::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
+{
+  bool presented;
+
+  /* the output makes the texture readable outside a render pass, submits
+   * on this thread and hands it on */
+  StateTracker::GetInstance()->EndRenderPass();
+  g_command_buffer_mgr->WaitForWorkerThreadIdle();
+  presented = m_output->PresentTexture(texture, width, height);
+  StateTracker::GetInstance()->InvalidateCachedState();
+  return presented;
+}
+
 void VKGfx::ExecuteCommandBuffer(bool submit_off_thread, bool wait_for_completion)
 {
   StateTracker::GetInstance()->EndRenderPass();

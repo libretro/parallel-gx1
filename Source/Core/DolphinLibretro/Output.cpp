@@ -11,12 +11,22 @@
 #endif
 #ifdef HAS_VULKAN
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
+#include "VideoBackends/Vulkan/StateTracker.h"
+#include "VideoBackends/Vulkan/VulkanContext.h"
 #endif
 
 namespace Libretro
 {
 namespace Video
 {
+static FrameOutput* s_active;
+
+void OutputRepeat()
+{
+  if (s_active)
+    s_active->Repeat();
+}
+
 #if defined(_WIN32) || defined(HAS_VULKAN)
 /* The sync indices a mask names: one past the highest set bit. */
 static u32 SlotCount(unsigned mask)
@@ -206,9 +216,33 @@ void DX12Output::Present()
 
 #ifdef HAS_VULKAN
 VKOutput::VKOutput(retro_hw_render_interface_vulkan* iface, u32 width, u32 height)
-    : m_iface(iface), m_width(width), m_height(height), m_current(0)
+    : m_direct(nullptr), m_iface(iface), m_width(width), m_height(height), m_current(0)
 {
   memset(m_images, 0, sizeof(m_images));
+  memset(&m_direct_image, 0, sizeof(m_direct_image));
+  s_active = this;
+}
+
+VKOutput::~VKOutput()
+{
+  if (s_active == this)
+    s_active = nullptr;
+  DropDirect();
+}
+
+void VKOutput::DropDirect()
+{
+  /* the frontend's frames that read it were submitted before anything
+   * the core submits next, so it goes once that completes */
+  if (m_direct_image.image_view != VK_NULL_HANDLE)
+  {
+    if (Vulkan::g_command_buffer_mgr)
+      Vulkan::g_command_buffer_mgr->DeferImageViewDestruction(m_direct_image.image_view);
+    else
+      vkDestroyImageView(Vulkan::g_vulkan_context->GetDevice(), m_direct_image.image_view, nullptr);
+  }
+  memset(&m_direct_image, 0, sizeof(m_direct_image));
+  m_direct = nullptr;
 }
 
 bool VKOutput::Create()
@@ -289,8 +323,67 @@ void VKOutput::Present()
                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   Vulkan::g_command_buffer_mgr->SubmitCommandBuffer(false, false, true);
 
+  DropDirect();
   m_iface->set_image(m_iface->handle, &m_images[m_current], 0, nullptr, m_iface->queue_index);
   video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_width, m_height, 0);
+}
+
+bool VKOutput::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
+{
+  Vulkan::VKTexture* vk_texture =
+      const_cast<Vulkan::VKTexture*>(static_cast<const Vulkan::VKTexture*>(texture));
+  retro_vulkan_image image;
+  VkImageView view = VK_NULL_HANDLE;
+
+  memset(&image, 0, sizeof(image));
+  image.image_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  image.create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  image.create_info.image = vk_texture->GetImage();
+  image.create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  image.create_info.format = vk_texture->GetVkFormat();
+  image.create_info.components.r = VK_COMPONENT_SWIZZLE_R;
+  image.create_info.components.g = VK_COMPONENT_SWIZZLE_G;
+  image.create_info.components.b = VK_COMPONENT_SWIZZLE_B;
+  image.create_info.components.a = VK_COMPONENT_SWIZZLE_A;
+  image.create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  image.create_info.subresourceRange.baseMipLevel = 0;
+  image.create_info.subresourceRange.levelCount = 1;
+  image.create_info.subresourceRange.baseArrayLayer = 0;
+  image.create_info.subresourceRange.layerCount = 1;
+  /* a view per picture: an image's handle can come back for another one
+   * once it is destroyed, so none is kept for the next */
+  if (vkCreateImageView(Vulkan::g_vulkan_context->GetDevice(), &image.create_info, nullptr,
+                        &view) != VK_SUCCESS)
+  {
+    return false;
+  }
+  image.image_view = view;
+
+  vk_texture->TransitionToLayout(Vulkan::g_command_buffer_mgr->GetCurrentCommandBuffer(),
+                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  Vulkan::g_command_buffer_mgr->SubmitCommandBuffer(false, false, true);
+
+  DropDirect();
+  m_direct_image = image;
+  m_direct = vk_texture;
+  m_iface->set_image(m_iface->handle, &m_direct_image, 0, nullptr, m_iface->queue_index);
+  video_cb(RETRO_HW_FRAME_BUFFER_VALID, width, height, 0);
+  return true;
+}
+
+void VKOutput::Repeat()
+{
+  /* the core may have read the texture since in a layout of its own, a
+   * copy's source say: back to the one the frontend reads it in, ahead
+   * of the frontend's next frame on the queue */
+  if (!m_direct || m_direct->GetLayout() == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    return;
+  Vulkan::StateTracker::GetInstance()->EndRenderPass();
+  Vulkan::g_command_buffer_mgr->WaitForWorkerThreadIdle();
+  m_direct->TransitionToLayout(Vulkan::g_command_buffer_mgr->GetCurrentCommandBuffer(),
+                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  Vulkan::g_command_buffer_mgr->SubmitCommandBuffer(false, false, false);
+  Vulkan::StateTracker::GetInstance()->InvalidateCachedState();
 }
 #endif
 }  // namespace Video
