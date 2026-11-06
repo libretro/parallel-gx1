@@ -372,6 +372,20 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
   }
 }
 
+/* In single core, the FIFO player's CPU core stays injected after the
+ * thread function returns: RunSingleFrame runs it a field at a time, and
+ * it is taken out at unload, before the hardware it drives is shut down. */
+static std::unique_ptr<CPUCoreBase> s_fifo_cpu_core;
+
+static void DetachFifoCPUCore()
+{
+  Core::System& system = Core::System::GetInstance();
+
+  system.GetPowerPC().InjectExternalCPUCore(nullptr);
+  s_fifo_cpu_core.reset();
+  system.GetFifoPlayer().Close();
+}
+
 static void FifoPlayerThread(Core::System& system, const std::optional<std::string> savestate_path,
                              bool delete_savestate)
 {
@@ -388,6 +402,13 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
     StartingToRunning();
 
     CPUSetInitialExecutionState(system);
+
+    // dont enter the blocking loop if in single core mode
+    if (!system.IsDualCoreMode())
+    {
+      s_fifo_cpu_core = std::move(cpu_core);
+      return;
+    }
 
     system.GetCPU().Run();
 
@@ -901,6 +922,8 @@ void Shutdown(Core::System& system)
   // For more info read "DirectX Graphics Infrastructure (DXGI): Best Practices"
   // on MSDN.
   Common::JoinThread(s_emu_thread);
+  if (s_fifo_cpu_core)
+    DetachFifoCPUCore();
   for (auto& g : s_emu_thread_scope_guards)
     g.Exit();
   s_emu_thread_scope_guards.clear();
