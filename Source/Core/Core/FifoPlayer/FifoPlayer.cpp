@@ -731,8 +731,9 @@ void FifoPlayer::WaitForGPUInactive()
   auto& core_timing = m_system.GetCoreTiming();
   auto& cpu = m_system.GetCPU();
 
-  // Sleep while the GPU is active
-  while (!IsIdleSet() && cpu.GetState() != CPU::State::PowerDown)
+  // Idle while the GPU is active, and not once the CPU is asked to stop running: a pause (a
+  // savestate, say) waits for this thread while the GPU loop it would wait for is held with it.
+  while (!IsIdleSet() && cpu.GetState() == CPU::State::Running)
   {
     core_timing.Idle();
     core_timing.Advance();
