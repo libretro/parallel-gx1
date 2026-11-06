@@ -428,9 +428,8 @@ void VulkanContext::PopulateBackendInfo(BackendInfo* backend_info)
   backend_info->bSupportsPaletteConversion = true;          // Assumed support.
   backend_info->bSupportsClipControl = true;                // Assumed support.
   backend_info->bSupportsMultithreading = true;             // Assumed support.
-  // rslc has no compute stage yet.
-  backend_info->bSupportsComputeShaders = false;
-  backend_info->bSupportsGPUTextureDecoding = false;
+  backend_info->bSupportsComputeShaders = true;             // Assumed support.
+  backend_info->bSupportsGPUTextureDecoding = true;         // Assumed support.
   backend_info->bSupportsBitfield = true;                   // Assumed support.
   backend_info->bSupportsPartialDepthCopies = true;         // Assumed support.
   backend_info->bSupportsShaderBinaries = true;             // Assumed support.

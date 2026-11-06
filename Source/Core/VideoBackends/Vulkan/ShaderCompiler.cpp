@@ -63,6 +63,29 @@ static const char SHADER_HEADER[] = R"(
   #define gl_VertexID gl_VertexIndex
   #define gl_InstanceID gl_InstanceIndex
 )";
+static const char COMPUTE_SHADER_HEADER[] = R"(
+  // Target GLSL 4.5.
+  #version 450 core
+  // All resources are packed into one descriptor set for compute.
+  #define UBO_BINDING(packing, x) layout(packing, set = 0, binding = (x - 1))
+  #define SAMPLER_BINDING(x) layout(set = 0, binding = (1 + x))
+  #define TEXEL_BUFFER_BINDING(x) layout(set = 0, binding = (9 + x))
+  #define IMAGE_BINDING(format, x) layout(format, set = 0, binding = (11 + x))
+
+  // hlsl to glsl function translation
+  #define API_VULKAN 1
+  #define float2 vec2
+  #define float3 vec3
+  #define float4 vec4
+  #define uint2 uvec2
+  #define uint3 uvec3
+  #define uint4 uvec4
+  #define int2 ivec2
+  #define int3 ivec3
+  #define int4 ivec4
+  #define frac fract
+  #define lerp mix
+)";
 /* The stage's full text: the header, then the generator's source. Subgroup
  * operations are not offered to the generators: rslc has no form of them. */
 static std::string GetShaderCode(std::string_view source, std::string_view header)
@@ -102,7 +125,8 @@ static std::optional<SPIRVCodeVector> Compile(std::string_view source_code, enum
   char err[1024];
   struct rslc_opts opts;
   struct rslc_result result;
-  std::string source = GetShaderCode(source_code, SHADER_HEADER);
+  std::string source = GetShaderCode(
+      source_code, stage == RSLC_STAGE_COMPUTE ? COMPUTE_SHADER_HEADER : SHADER_HEADER);
   std::optional<SPIRVCodeVector> spv;
 
   memset(&opts, 0, sizeof(opts));
@@ -138,10 +162,9 @@ std::optional<SPIRVCodeVector> CompileFragmentShader(std::string_view source_cod
   return Compile(source_code, RSLC_STAGE_FRAGMENT, "ps");
 }
 
-/* rslc has no compute stage yet: GPU texture decoding falls back to the CPU. */
 std::optional<SPIRVCodeVector> CompileComputeShader(std::string_view source_code,
                                                     VideoCommon::ShaderIncluder* shader_includer)
 {
-  return std::nullopt;
+  return Compile(source_code, RSLC_STAGE_COMPUTE, "cs");
 }
 }  // namespace Vulkan::ShaderCompiler
