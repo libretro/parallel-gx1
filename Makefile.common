@@ -150,6 +150,9 @@ LIBRETRO_COMMON_SOURCES_OBJCXX :=
 LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
+	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_emit.c \
+	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_front.c \
+	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_ir.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_waitable_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/rthreads/retro_eventcount.c \
@@ -1892,7 +1895,9 @@ BDISASM_FLAGS := -w -I$(EXT_DIR)/Bochs_disasm
 
 FATFS_FLAGS := -w -I$(EXT_DIR)/FatFs
 
-LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -DHAVE_THREAD_STORAGE -I$(EXT_DIR)/libretro-common/include
+# RSLC_EXTENDED: rslc takes the stages and types the core's shaders use.
+LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -DHAVE_THREAD_STORAGE -DRSLC_EXTENDED \
+	-I$(EXT_DIR)/libretro-common/include
 
 
 LZO_FLAGS := -w -I$(EXT_DIR)/LZO

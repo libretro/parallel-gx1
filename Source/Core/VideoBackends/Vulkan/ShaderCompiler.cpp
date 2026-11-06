@@ -6,10 +6,16 @@
 #include <cstddef>
 #include <string>
 
+#include <cstdio>
+#include <cstring>
+
+#include <gfx/shaders/rslc.h>
+
+#include "Common/FileUtil.h"
+#include "Common/Logging/Log.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/DriverDetails.h"
-#include "VideoCommon/ShaderCompileUtils.h"
-#include "VideoCommon/Spirv.h"
+#include "VideoCommon/VideoBackendBase.h"
 
 namespace Vulkan::ShaderCompiler
 {
@@ -57,99 +63,85 @@ static const char SHADER_HEADER[] = R"(
   #define gl_VertexID gl_VertexIndex
   #define gl_InstanceID gl_InstanceIndex
 )";
-static const char COMPUTE_SHADER_HEADER[] = R"(
-  // Target GLSL 4.5.
-  #version 450 core
-  // All resources are packed into one descriptor set for compute.
-  #define UBO_BINDING(packing, x) layout(packing, set = 0, binding = (x - 1))
-  #define SAMPLER_BINDING(x) layout(set = 0, binding = (1 + x))
-  #define TEXEL_BUFFER_BINDING(x) layout(set = 0, binding = (9 + x))
-  #define IMAGE_BINDING(format, x) layout(format, set = 0, binding = (11 + x))
-
-  // hlsl to glsl function translation
-  #define API_VULKAN 1
-  #define float2 vec2
-  #define float3 vec3
-  #define float4 vec4
-  #define uint2 uvec2
-  #define uint3 uvec3
-  #define uint4 uvec4
-  #define int2 ivec2
-  #define int3 ivec3
-  #define int4 ivec4
-  #define frac fract
-  #define lerp mix
-)";
-static const char SUBGROUP_HELPER_HEADER[] = R"(
-  #extension GL_KHR_shader_subgroup_basic : enable
-  #extension GL_KHR_shader_subgroup_arithmetic : enable
-  #extension GL_KHR_shader_subgroup_ballot : enable
-  #extension GL_KHR_shader_subgroup_shuffle : enable
-
-  #define SUPPORTS_SUBGROUP_REDUCTION 1
-  #define IS_HELPER_INVOCATION gl_HelperInvocation
-  #define IS_FIRST_ACTIVE_INVOCATION (subgroupElect())
-  #define SUBGROUP_MIN(value) value = subgroupMin(value)
-  #define SUBGROUP_MAX(value) value = subgroupMax(value)
-)";
-
+/* The stage's full text: the header, then the generator's source. Subgroup
+ * operations are not offered to the generators: rslc has no form of them. */
 static std::string GetShaderCode(std::string_view source, std::string_view header)
 {
   std::string full_source_code;
-  if (!header.empty())
+  full_source_code.reserve(header.size() + source.size());
+  full_source_code.append(header);
+  if (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
   {
-    constexpr size_t subgroup_helper_header_length = std::size(SUBGROUP_HELPER_HEADER) - 1;
-    full_source_code.reserve(header.size() + subgroup_helper_header_length + source.size());
-    full_source_code.append(header);
-    if (g_vulkan_context->SupportsShaderSubgroupOperations())
-      full_source_code.append(SUBGROUP_HELPER_HEADER, subgroup_helper_header_length);
-    if (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
-    {
-      full_source_code.append("#define gl_HelperInvocation !gl_HelperInvocation "
-                              "// Work around broken AMD Metal driver\n");
-    }
-    if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD))
-      full_source_code.append("#define BROKEN_SUBGROUP_WITH_DISCARD 1\n");
-    full_source_code.append(source);
+    full_source_code.append("#define gl_HelperInvocation !gl_HelperInvocation "
+                            "// Work around broken AMD Metal driver\n");
   }
-
+  full_source_code.append(source);
   return full_source_code;
 }
 
-static glslang::EShTargetLanguageVersion GetLanguageVersion()
+/* A failed stage is logged and written to the dump directory with the error. */
+static void ReportFailure(const char* stage_name, const std::string& source, const char* err)
 {
-  // Sub-group operations require Vulkan 1.1 and SPIR-V 1.3.
-  if (g_vulkan_context->SupportsShaderSubgroupOperations())
-    return glslang::EShTargetSpv_1_3;
+  static int counter;
+  std::string path = VideoBackendBase::BadShaderFilename(stage_name, counter++);
+  FILE* f;
 
-  return glslang::EShTargetSpv_1_0;
+  ERROR_LOG_FMT(VIDEO, "rslc could not compile a {} shader: {}", stage_name, err);
+  File::CreateFullPath(path);
+  f = fopen(path.c_str(), "wb");
+  if (!f)
+    return;
+  fwrite(source.data(), 1, source.size(), f);
+  fprintf(f, "\n/* rslc: %s */\n", err);
+  fclose(f);
+}
+
+static std::optional<SPIRVCodeVector> Compile(std::string_view source_code, enum rslc_stage stage,
+                                              const char* stage_name)
+{
+  char err[1024];
+  struct rslc_opts opts;
+  struct rslc_result result;
+  std::string source = GetShaderCode(source_code, SHADER_HEADER);
+  std::optional<SPIRVCodeVector> spv;
+
+  memset(&opts, 0, sizeof(opts));
+  opts.dst = RSLC_DST_SPIRV;
+  opts.err = err;
+  opts.err_cap = sizeof(err);
+  err[0] = '\0';
+  if (!rslc_compile(source.data(), source.size(), stage, &opts, &result))
+  {
+    ReportFailure(stage_name, source, err);
+    return spv;
+  }
+  spv = SPIRVCodeVector(result.spirv, result.spirv + result.spirv_len);
+  rslc_result_free(&result, &opts);
+  return spv;
 }
 
 std::optional<SPIRVCodeVector> CompileVertexShader(std::string_view source_code,
                                                    VideoCommon::ShaderIncluder* shader_includer)
 {
-  return SPIRV::CompileVertexShader(GetShaderCode(source_code, SHADER_HEADER), APIType::Vulkan,
-                                    GetLanguageVersion(), shader_includer);
+  return Compile(source_code, RSLC_STAGE_VERTEX, "vs");
 }
 
 std::optional<SPIRVCodeVector> CompileGeometryShader(std::string_view source_code,
                                                      VideoCommon::ShaderIncluder* shader_includer)
 {
-  return SPIRV::CompileGeometryShader(GetShaderCode(source_code, SHADER_HEADER), APIType::Vulkan,
-                                      GetLanguageVersion(), shader_includer);
+  return Compile(source_code, RSLC_STAGE_GEOMETRY, "gs");
 }
 
 std::optional<SPIRVCodeVector> CompileFragmentShader(std::string_view source_code,
                                                      VideoCommon::ShaderIncluder* shader_includer)
 {
-  return SPIRV::CompileFragmentShader(GetShaderCode(source_code, SHADER_HEADER), APIType::Vulkan,
-                                      GetLanguageVersion(), shader_includer);
+  return Compile(source_code, RSLC_STAGE_FRAGMENT, "ps");
 }
 
+/* rslc has no compute stage yet: GPU texture decoding falls back to the CPU. */
 std::optional<SPIRVCodeVector> CompileComputeShader(std::string_view source_code,
                                                     VideoCommon::ShaderIncluder* shader_includer)
 {
-  return SPIRV::CompileComputeShader(GetShaderCode(source_code, COMPUTE_SHADER_HEADER),
-                                     APIType::Vulkan, GetLanguageVersion(), shader_includer);
+  return std::nullopt;
 }
 }  // namespace Vulkan::ShaderCompiler
