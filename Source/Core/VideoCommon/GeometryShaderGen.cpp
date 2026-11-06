@@ -17,12 +17,6 @@ constexpr Common::EnumMap<const char*, PrimitiveType::TriangleStrip> primitives_
     "triangles",
     "triangles",
 };
-constexpr Common::EnumMap<const char*, PrimitiveType::TriangleStrip> primitives_d3d{
-    "point",
-    "line",
-    "triangle",
-    "triangle",
-};
 
 constexpr Common::EnumMap<u32, PrimitiveType::TriangleStrip> vertex_in_map{1u, 2u, 3u, 3u};
 constexpr Common::EnumMap<u32, PrimitiveType::TriangleStrip> vertex_out_map{4u, 4u, 4u, 3u};
@@ -69,119 +63,63 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
   if (wireframe)
     vertex_out++;
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
+  // Insert layout parameters
+  if (host_config.backend_gs_instancing)
   {
-    // Insert layout parameters
-    if (host_config.backend_gs_instancing)
-    {
-      out.Write("layout({}, invocations = {}) in;\n", primitives_ogl[primitive_type],
-                stereo ? 2 : 1);
-      out.Write("layout({}_strip, max_vertices = {}) out;\n", wireframe ? "line" : "triangle",
-                vertex_out);
-    }
-    else
-    {
-      out.Write("layout({}) in;\n", primitives_ogl[primitive_type]);
-      out.Write("layout({}_strip, max_vertices = {}) out;\n", wireframe ? "line" : "triangle",
-                stereo ? vertex_out * 2 : vertex_out);
-    }
+    out.Write("layout({}, invocations = {}) in;\n", primitives_ogl[primitive_type],
+              stereo ? 2 : 1);
+    out.Write("layout({}_strip, max_vertices = {}) out;\n", wireframe ? "line" : "triangle",
+              vertex_out);
+  }
+  else
+  {
+    out.Write("layout({}) in;\n", primitives_ogl[primitive_type]);
+    out.Write("layout({}_strip, max_vertices = {}) out;\n", wireframe ? "line" : "triangle",
+              stereo ? vertex_out * 2 : vertex_out);
   }
 
   out.Write("{}", s_lighting_struct);
 
-  // uniforms
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-    out.Write("UBO_BINDING(std140, 4) uniform GSBlock {{\n");
-  else
-    out.Write("cbuffer GSBlock {{\n");
+  /* uniforms; Direct3D binds the stage's block at b0 */
+  out.Write("UBO_BINDING(std140, {}) uniform GSBlock {{\n", api_type == APIType::D3D ? 1 : 4);
 
   out.Write("{}", s_geometry_shader_uniforms);
   out.Write("}};\n");
 
   out.Write("struct VS_OUTPUT {{\n");
-  GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, host_config, "",
-                          ShaderStage::Geometry);
+  GenerateVSOutputMembers(out, uid_data->numTexGens, host_config, "");
   out.Write("}};\n");
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-  {
-    if (host_config.backend_gs_instancing)
-      out.Write("#define InstanceID gl_InvocationID\n");
+  if (host_config.backend_gs_instancing)
+    out.Write("#define InstanceID gl_InvocationID\n");
 
-    out.Write("VARYING_LOCATION(0) in VertexData {{\n");
-    GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, host_config,
-                            GetInterpolationQualifier(msaa, ssaa, true, true),
-                            ShaderStage::Geometry);
-    out.Write("}} vs[{}];\n", vertex_in);
+  out.Write("VARYING_LOCATION(0) in VertexData {{\n");
+  GenerateVSOutputMembers(out, uid_data->numTexGens, host_config,
+                          GetInterpolationQualifier(msaa, ssaa, true, true));
+  out.Write("}} vs[{}];\n", vertex_in);
 
-    out.Write("VARYING_LOCATION(0) out VertexData {{\n");
-    GenerateVSOutputMembers(out, api_type, uid_data->numTexGens, host_config,
-                            GetInterpolationQualifier(msaa, ssaa, true, false),
-                            ShaderStage::Geometry);
+  out.Write("VARYING_LOCATION(0) out VertexData {{\n");
+  GenerateVSOutputMembers(out, uid_data->numTexGens, host_config,
+                          GetInterpolationQualifier(msaa, ssaa, true, false));
 
-    out.Write("}} ps;\n");
-    if (stereo && !host_config.backend_gl_layer_in_fs)
-      out.Write("flat out int layer;");
+  out.Write("}} ps;\n");
+  if (stereo && !host_config.backend_gl_layer_in_fs)
+    out.Write("flat out int layer;");
 
-    out.Write("void main()\n{{\n");
-  }
-  else  // D3D
-  {
-    out.Write("struct VertexData {{\n");
-    out.Write("\tVS_OUTPUT o;\n");
-
-    if (stereo)
-    {
-      out.Write("\tuint layer : SV_RenderTargetArrayIndex;\n");
-    }
-    out.Write("\tfloat4 posout : SV_Position;\n");
-
-    out.Write("}};\n");
-
-    if (host_config.backend_gs_instancing)
-    {
-      out.Write("[maxvertexcount({})]\n[instance({})]\n", vertex_out, stereo ? 2 : 1);
-      out.Write("void main({} VS_OUTPUT o[{}], inout {}Stream<VertexData> output, in uint "
-                "InstanceID : SV_GSInstanceID)\n{{\n",
-                primitives_d3d[primitive_type], vertex_in, wireframe ? "Line" : "Triangle");
-    }
-    else
-    {
-      out.Write("[maxvertexcount({})]\n", stereo ? vertex_out * 2 : vertex_out);
-      out.Write("void main({} VS_OUTPUT o[{}], inout {}Stream<VertexData> output)\n{{\n",
-                primitives_d3d[primitive_type], vertex_in, wireframe ? "Line" : "Triangle");
-    }
-
-    out.Write("\tVertexData ps;\n");
-  }
+  out.Write("void main()\n{{\n");
 
   if (primitive_type == PrimitiveType::Lines)
   {
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-    {
-      out.Write("\tVS_OUTPUT start, end;\n");
-      AssignVSOutputMembers(out, "start", "vs[0]", uid_data->numTexGens, host_config);
-      AssignVSOutputMembers(out, "end", "vs[1]", uid_data->numTexGens, host_config);
-    }
-    else
-    {
-      out.Write("\tVS_OUTPUT start = o[0];\n"
-                "\tVS_OUTPUT end = o[1];\n");
-    }
+    out.Write("\tVS_OUTPUT start, end;\n");
+    AssignVSOutputMembers(out, "start", "vs[0]", uid_data->numTexGens, host_config);
+    AssignVSOutputMembers(out, "end", "vs[1]", uid_data->numTexGens, host_config);
 
     GenerateLineOffset(out, "\t", "\t\t", "end.pos", "start.pos", "");
   }
   else if (primitive_type == PrimitiveType::Points)
   {
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-    {
-      out.Write("\tVS_OUTPUT center;\n");
-      AssignVSOutputMembers(out, "center", "vs[0]", uid_data->numTexGens, host_config);
-    }
-    else
-    {
-      out.Write("\tVS_OUTPUT center = o[0];\n");
-    }
+    out.Write("\tVS_OUTPUT center;\n");
+    AssignVSOutputMembers(out, "center", "vs[0]", uid_data->numTexGens, host_config);
 
     // Offset from center to upper right vertex
     // Lerp PointSize/2 from [0,0..VpWidth,VpHeight] to [-1,1..1,-1]
@@ -208,23 +146,16 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
   else
     out.Write("\tint i = 0;\n");
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-  {
-    out.Write("\tVS_OUTPUT f;\n");
-    AssignVSOutputMembers(out, "f", "vs[i]", uid_data->numTexGens, host_config);
+  out.Write("\tVS_OUTPUT f;\n");
+  AssignVSOutputMembers(out, "f", "vs[i]", uid_data->numTexGens, host_config);
 
-    if (host_config.backend_depth_clamp &&
-        DriverDetails::HasBug(DriverDetails::BUG_BROKEN_CLIP_DISTANCE))
-    {
-      // On certain GPUs we have to consume the clip distance from the vertex shader
-      // or else the other vertex shader outputs will get corrupted.
-      out.Write("\tf.clipDist0 = gl_in[i].gl_ClipDistance[0];\n"
-                "\tf.clipDist1 = gl_in[i].gl_ClipDistance[1];\n");
-    }
-  }
-  else
+  if (host_config.backend_depth_clamp &&
+      DriverDetails::HasBug(DriverDetails::BUG_BROKEN_CLIP_DISTANCE))
   {
-    out.Write("\tVS_OUTPUT f = o[i];\n");
+    // On certain GPUs we have to consume the clip distance from the vertex shader
+    // or else the other vertex shader outputs will get corrupted.
+    out.Write("\tf.clipDist0 = gl_in[i].gl_ClipDistance[0];\n"
+              "\tf.clipDist1 = gl_in[i].gl_ClipDistance[1];\n");
   }
 
   if (stereo)
@@ -318,44 +249,28 @@ static void EmitVertex(ShaderCode& out, const ShaderHostConfig& host_config,
   if (wireframe && first_vertex)
     out.Write("\tif (i == 0) first = {};\n", vertex);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-  {
-    // Vulkan NDC space has Y pointing down (right-handed NDC space).
-    if (api_type == APIType::Vulkan)
-      out.Write("\tgl_Position = float4({0}.pos.x, -{0}.pos.y, {0}.pos.z, {0}.pos.w);\n", vertex);
-    else
-      out.Write("\tgl_Position = {}.pos;\n", vertex);
-
-    if (host_config.backend_depth_clamp)
-    {
-      out.Write("\tgl_ClipDistance[0] = {}.clipDist0;\n", vertex);
-      out.Write("\tgl_ClipDistance[1] = {}.clipDist1;\n", vertex);
-    }
-    AssignVSOutputMembers(out, "ps", vertex, uid_data->numTexGens, host_config);
-  }
+  // Vulkan NDC space has Y pointing down (right-handed NDC space).
+  if (api_type == APIType::Vulkan)
+    out.Write("\tgl_Position = float4({0}.pos.x, -{0}.pos.y, {0}.pos.z, {0}.pos.w);\n", vertex);
   else
+    out.Write("\tgl_Position = {}.pos;\n", vertex);
+
+  if (host_config.backend_depth_clamp)
   {
-    out.Write("\tps.o = {};\n", vertex);
-    out.Write("\tps.posout = {}.pos;\n", vertex);
+    out.Write("\tgl_ClipDistance[0] = {}.clipDist0;\n", vertex);
+    out.Write("\tgl_ClipDistance[1] = {}.clipDist1;\n", vertex);
   }
+  AssignVSOutputMembers(out, "ps", vertex, uid_data->numTexGens, host_config);
 
   if (stereo)
   {
     // Select the output layer
-    if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-      out.Write("\tgl_Layer = eye;\n");
-    else
-    {
-      out.Write("\tps.layer = eye;\n");
-    }
+    out.Write("\tgl_Layer = eye;\n");
     if (!host_config.backend_gl_layer_in_fs)
       out.Write("\tlayer = eye;\n");
   }
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-    out.Write("\tEmitVertex();\n");
-  else
-    out.Write("\toutput.Append(ps);\n");
+  out.Write("\tEmitVertex();\n");
 }
 
 static void EndPrimitive(ShaderCode& out, const ShaderHostConfig& host_config,
@@ -365,10 +280,7 @@ static void EndPrimitive(ShaderCode& out, const ShaderHostConfig& host_config,
   if (wireframe)
     EmitVertex(out, host_config, uid_data, "first", api_type, wireframe, stereo);
 
-  if (api_type == APIType::OpenGL || api_type == APIType::Vulkan)
-    out.Write("\tEndPrimitive();\n");
-  else
-    out.Write("\toutput.RestartStrip();\n");
+  out.Write("\tEndPrimitive();\n");
 }
 
 void EnumerateGeometryShaderUids(const std::function<void(const GeometryShaderUid&)>& callback)

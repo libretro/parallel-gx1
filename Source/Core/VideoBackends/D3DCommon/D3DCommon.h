@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <d3dcompiler.h>
+#include <d3dcommon.h>
 #include <dxgiformat.h>
 #include <string>
 #include <vector>
@@ -17,7 +17,7 @@ enum class AbstractTextureFormat : u32;
 
 namespace D3DCommon
 {
-// Loading dxgi.dll and d3dcompiler.dll
+// Loading dxgi.dll
 bool LoadLibraries();
 void UnloadLibraries();
 
@@ -26,9 +26,6 @@ std::vector<std::string> GetAdapterNames();
 
 // Helper function which creates a DXGI factory.
 Microsoft::WRL::ComPtr<IDXGIFactory> CreateDXGIFactory(bool debug_device);
-
-// Globally-accessible D3DCompiler function.
-extern pD3DCompile d3d_compile;
 
 // Helpers for texture format conversion.
 DXGI_FORMAT GetDXGIFormatForAbstractFormat(AbstractTextureFormat format, bool typeless);

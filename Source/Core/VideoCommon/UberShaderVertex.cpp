@@ -58,7 +58,7 @@ ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config
   }
 
   out.Write("struct VS_OUTPUT {{\n");
-  GenerateVSOutputMembers(out, api_type, num_texgen, host_config, "", ShaderStage::Vertex);
+  GenerateVSOutputMembers(out, num_texgen, host_config, "");
   out.Write("}};\n\n");
 
   WriteIsNanHeader(out, api_type);
@@ -162,9 +162,8 @@ float3 load_input_float3_rawtex(uint vtx_offset, uint attr_offset) {{
   if (host_config.backend_geometry_shaders)
   {
     out.Write("VARYING_LOCATION(0) out VertexData {{\n");
-    GenerateVSOutputMembers(out, api_type, num_texgen, host_config,
-                            GetInterpolationQualifier(msaa, ssaa, true, false),
-                            ShaderStage::Vertex);
+    GenerateVSOutputMembers(out, num_texgen, host_config,
+                            GetInterpolationQualifier(msaa, ssaa, true, false));
     out.Write("}} vs;\n");
   }
   else

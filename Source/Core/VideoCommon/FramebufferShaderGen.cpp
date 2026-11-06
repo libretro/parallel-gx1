@@ -200,48 +200,8 @@ std::string GenerateScreenQuadVertexShader()
 std::string GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors)
 {
   ShaderCode code;
-  if (GetAPIType() == APIType::D3D)
-  {
-    code.Write("struct VS_OUTPUT\n"
-               "{{\n");
-    for (u32 i = 0; i < num_tex; i++)
-      code.Write("  float3 tex{} : TEXCOORD{};\n", i, i);
-    for (u32 i = 0; i < num_colors; i++)
-      code.Write("  float4 color{} : TEXCOORD{};\n", i, i + num_tex);
-    code.Write("  float4 position : SV_Position;\n"
-               "}};\n");
-
-    code.Write("struct GS_OUTPUT\n"
-               "{{");
-    for (u32 i = 0; i < num_tex; i++)
-      code.Write("  float3 tex{} : TEXCOORD{};\n", i, i);
-    for (u32 i = 0; i < num_colors; i++)
-      code.Write("  float4 color{} : TEXCOORD{};\n", i, i + num_tex);
-    code.Write("  float4 position : SV_Position;\n"
-               "  uint slice : SV_RenderTargetArrayIndex;\n"
-               "}};\n\n");
-
-    code.Write("[maxvertexcount(6)]\n"
-               "void main(triangle VS_OUTPUT vso[3], inout TriangleStream<GS_OUTPUT> output)\n"
-               "{{\n"
-               "  for (uint slice = 0; slice < 2u; slice++)\n"
-               "  {{\n"
-               "    for (int i = 0; i < 3; i++)\n"
-               "    {{\n"
-               "      GS_OUTPUT gso;\n"
-               "      gso.position = vso[i].position;\n");
-    for (u32 i = 0; i < num_tex; i++)
-      code.Write("      gso.tex{} = float3(vso[i].tex{}.xy, float(slice));\n", i, i);
-    for (u32 i = 0; i < num_colors; i++)
-      code.Write("      gso.color{} = vso[i].color{};\n", i, i);
-    code.Write("      gso.slice = slice;\n"
-               "      output.Append(gso);\n"
-               "    }}\n"
-               "    output.RestartStrip();\n"
-               "  }}\n"
-               "}}\n");
-  }
-  else if (GetAPIType() == APIType::OpenGL || GetAPIType() == APIType::Vulkan)
+  if (GetAPIType() == APIType::D3D || GetAPIType() == APIType::OpenGL ||
+      GetAPIType() == APIType::Vulkan)
   {
     code.Write("layout(triangles) in;\n"
                "layout(triangle_strip, max_vertices = 6) out;\n");

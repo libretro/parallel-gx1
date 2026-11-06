@@ -128,8 +128,8 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
   if (host_config.backend_geometry_shaders)
   {
     out.Write("VARYING_LOCATION(0) in VertexData {{\n");
-    GenerateVSOutputMembers(out, api_type, numTexgen, host_config,
-                            GetInterpolationQualifier(msaa, ssaa, true, true), ShaderStage::Pixel);
+    GenerateVSOutputMembers(out, numTexgen, host_config,
+                            GetInterpolationQualifier(msaa, ssaa, true, true));
 
     out.Write("}};\n\n");
     if (stereo && !host_config.backend_gl_layer_in_fs)

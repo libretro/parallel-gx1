@@ -325,12 +325,6 @@ void ContextReset(void)
     DX11::D3D::context = d3d->context;
     DX11::D3D::feature_level = d3d->featureLevel;
 
-    if (!d3d->D3DCompile)
-    {
-      ERROR_LOG_FMT(VIDEO, "D3DCompile function pointer is null!");
-      return;
-    }
-
     if (!d3d11_library.IsOpen() && !d3d11_library.Open("d3d11.dll"))
     {
       d3d11_library.Close();
@@ -340,12 +334,9 @@ void ContextReset(void)
 
     if (!D3DCommon::LoadLibraries())
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to load dxgi or d3dcompiler Libraries");
+      ERROR_LOG_FMT(VIDEO, "Failed to load the dxgi library");
       return;
     }
-
-    // was overriden in LoadLibraries
-    D3DCommon::d3d_compile = d3d->D3DCompile;
 
     if (FAILED(DX11::D3D::device.As(&DX11::D3D::device1)))
     {
@@ -412,7 +403,7 @@ void ContextReset(void)
 
     if (!D3DCommon::LoadLibraries())
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to load dxgi or d3dcompiler Libraries");
+      ERROR_LOG_FMT(VIDEO, "Failed to load the dxgi library");
       return;
     }
 
@@ -599,7 +590,6 @@ void ContextDestroy(void)
     DX11::D3D::device = nullptr;
     DX11::D3D::device1 = nullptr;
     DX11::D3D::context = nullptr;
-    D3DCommon::d3d_compile = nullptr;
     DX11::D3D::stateman.reset();
     D3DCommon::UnloadLibraries();
     d3d11_library.Close();

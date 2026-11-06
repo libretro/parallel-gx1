@@ -19,10 +19,7 @@
 
 namespace D3DCommon
 {
-pD3DCompile d3d_compile;
-
 static Common::DynamicLibrary s_dxgi_library;
-static Common::DynamicLibrary s_d3dcompiler_library;
 static bool s_libraries_loaded = false;
 
 static HRESULT (*create_dxgi_factory)(REFIID riid, _COM_Outptr_ void** ppFactory);
@@ -39,21 +36,10 @@ bool LoadLibraries()
     return false;
   }
 
-  if (!s_d3dcompiler_library.Open(D3DCOMPILER_DLL_A))
-  {
-    PanicAlertFmtT("Failed to load {0}. If you are using Windows 7, try installing the "
-                   "KB4019990 update package.",
-                   D3DCOMPILER_DLL_A);
-    s_dxgi_library.Close();
-    return false;
-  }
-
   // Required symbols.
-  if (!s_d3dcompiler_library.GetSymbol("D3DCompile", &d3d_compile) ||
-      !s_dxgi_library.GetSymbol("CreateDXGIFactory", &create_dxgi_factory))
+  if (!s_dxgi_library.GetSymbol("CreateDXGIFactory", &create_dxgi_factory))
   {
     PanicAlertFmtT("Failed to find one or more D3D symbols");
-    s_d3dcompiler_library.Close();
     s_dxgi_library.Close();
     return false;
   }
@@ -68,8 +54,6 @@ void UnloadLibraries()
 {
   create_dxgi_factory = nullptr;
   create_dxgi_factory2 = nullptr;
-  d3d_compile = nullptr;
-  s_d3dcompiler_library.Close();
   s_dxgi_library.Close();
   s_libraries_loaded = false;
 }
