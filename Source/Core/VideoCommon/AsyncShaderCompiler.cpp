@@ -271,6 +271,9 @@ void AsyncShaderCompiler::WorkerThreadStart(void* worker)
 void AsyncShaderCompiler::WorkerThreadEntryPoint(Worker* worker)
 {
   Common::SetCurrentThreadName("AsyncShaderCompiler Worker");
+  /* what is compiled in the background waits; the frame being emulated
+   * does not, on a machine with fewer cores than busy threads */
+  Common::LowerCurrentThreadPriority();
 
   // Initialize worker thread with backend-specific method.
   if (!WorkerThreadInitWorkerThread(worker->param))

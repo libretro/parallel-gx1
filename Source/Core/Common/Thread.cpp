@@ -11,6 +11,11 @@
 #include <unistd.h>
 #endif
 
+#ifdef __linux__
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#endif
+
 #ifdef __APPLE__
 #include <mach/mach.h>
 #elif defined BSD4_4 || defined __FreeBSD__ || defined __OpenBSD__
@@ -41,6 +46,16 @@ int CurrentThreadId()
 void SetCurrentThreadName(const char* name)
 {
   sthread_setname(name);
+}
+
+void LowerCurrentThreadPriority()
+{
+#ifdef _WIN32
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+#elif defined(__linux__)
+  /* Linux keeps a nice value per thread: this one only */
+  setpriority(PRIO_PROCESS, (id_t)syscall(SYS_gettid), 5);
+#endif
 }
 
 #ifndef _WIN32

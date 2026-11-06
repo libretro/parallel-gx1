@@ -25,6 +25,11 @@ int CurrentThreadId();
 
 void SetCurrentThreadName(const char* name);
 
+// Below the threads that emulate, where the OS allows it: Windows and Linux.
+// For background work, which then takes no time from a frame while one is
+// being emulated, only what is left over.
+void LowerCurrentThreadPriority();
+
 // An sthread entry point that calls F on the object passed as the thread's userdata:
 //   m_thread = sthread_create(Common::ThreadEntry<&Foo::Run>, this);
 template <auto F>
