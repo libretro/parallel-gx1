@@ -86,18 +86,32 @@ static const char COMPUTE_SHADER_HEADER[] = R"(
   #define frac fract
   #define lerp mix
 )";
-/* The stage's full text: the header, then the generator's source. Subgroup
- * operations are not offered to the generators: rslc has no form of them. */
+/* The bounding box's subgroup reduction, where the device runs subgroup
+ * operations in the pixel stage; the stages that use it are SPIR-V 1.3. */
+static const char SUBGROUP_HELPER_HEADER[] =
+    "#extension GL_KHR_shader_subgroup_basic : enable\n"
+    "#extension GL_KHR_shader_subgroup_arithmetic : enable\n"
+    "#define SUPPORTS_SUBGROUP_REDUCTION 1\n"
+    "#define IS_HELPER_INVOCATION gl_HelperInvocation\n"
+    "#define IS_FIRST_ACTIVE_INVOCATION (subgroupElect())\n"
+    "#define SUBGROUP_MIN(value) value = subgroupMin(value)\n"
+    "#define SUBGROUP_MAX(value) value = subgroupMax(value)\n";
+
+/* The stage's full text: the header, then the generator's source. */
 static std::string GetShaderCode(std::string_view source, std::string_view header)
 {
   std::string full_source_code;
-  full_source_code.reserve(header.size() + source.size());
+  full_source_code.reserve(header.size() + sizeof(SUBGROUP_HELPER_HEADER) + source.size());
   full_source_code.append(header);
+  if (g_vulkan_context->SupportsShaderSubgroupOperations())
+    full_source_code.append(SUBGROUP_HELPER_HEADER, sizeof(SUBGROUP_HELPER_HEADER) - 1);
   if (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
   {
     full_source_code.append("#define gl_HelperInvocation !gl_HelperInvocation "
                             "// Work around broken AMD Metal driver\n");
   }
+  if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD))
+    full_source_code.append("#define BROKEN_SUBGROUP_WITH_DISCARD 1\n");
   full_source_code.append(source);
   return full_source_code;
 }

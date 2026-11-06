@@ -94,21 +94,13 @@ void Metal::Util::PopulateBackendInfoAdapters(BackendInfo* backend_info,
   }
 }
 
-#if TARGET_OS_OSX
-/* Some Intel GPUs fetch from the framebuffer though no feature set says
- * so, and others build the pipeline but leave the fetch out: draw one
- * pixel whose shader doubles what it reads, and check it doubled. */
-static bool DetectIntelGPUFBFetch(id<MTLDevice> dev)
+/* Draws one pixel over px_in with the library's fs_triangle and the
+ * named fragment function and reads it back to px_out, for the probes of
+ * driver behaviour. False when the library, the pipeline or the draw
+ * fails. */
+static bool RenderSinglePixel(id<MTLDevice> dev, const char* shader, NSString* fs_name, u32 px_in,
+                              u32* px_out)
 {
-  static const char shader[] =
-      "vertex float4 fs_triangle(uint vid [[vertex_id]]) {\n"
-      "  return float4(vid & 1 ? 3 : -1, vid & 2 ? 3 : -1, 0, 1);\n"
-      "}\n"
-      "fragment float4 fbfetch_test(float4 in [[color(0), raster_order_group(0)]]) {\n"
-      "  return in * 2;\n"
-      "}\n";
-  const u32 px_in = 0x11223344;
-  u32 px_out = 0;
   bool ok = false;
   id<MTLLibrary> lib;
   id<MTLFunction> vs;
@@ -128,7 +120,7 @@ static bool DetectIntelGPUFBFetch(id<MTLDevice> dev)
   if (!lib)
     return false;
   vs = [lib newFunctionWithName:@"fs_triangle"];
-  fs = [lib newFunctionWithName:@"fbfetch_test"];
+  fs = [lib newFunctionWithName:fs_name];
   pdesc = [MTLRenderPipelineDescriptor new];
   [pdesc setVertexFunction:vs];
   [pdesc setFragmentFunction:fs];
@@ -185,7 +177,7 @@ static bool DetectIntelGPUFBFetch(id<MTLDevice> dev)
     [cmdbuf commit];
     [cmdbuf waitUntilCompleted];
 
-    memcpy(&px_out, [buf contents], sizeof(px_out));
+    memcpy(px_out, [buf contents], sizeof(*px_out));
     ok = [cmdbuf status] == MTLCommandBufferStatusCompleted;
   }
 
@@ -197,11 +189,54 @@ static bool DetectIntelGPUFBFetch(id<MTLDevice> dev)
   [fs release];
   [vs release];
   [lib release];
+  return ok;
+}
 
-  /* Skylake and later double it; Broadwell leaves it, Haswell blackens it */
-  return ok && px_out == 0x22446688;
+#define PROBE_TRIANGLE                                                                         \
+  "vertex float4 fs_triangle(uint vid [[vertex_id]]) {\n"                                       \
+  "  return float4(vid & 1 ? 3 : -1, vid & 2 ? 3 : -1, 0, 1);\n"                                 \
+  "}\n"
+
+#if TARGET_OS_OSX
+/* Some Intel GPUs fetch from the framebuffer though no feature set says
+ * so, and others build the pipeline but leave the fetch out: the pixel
+ * doubles what it reads, which Skylake and later do; Broadwell leaves
+ * it and Haswell blackens it. */
+static bool DetectIntelGPUFBFetch(id<MTLDevice> dev)
+{
+  static const char shader[] =
+      PROBE_TRIANGLE
+      "fragment float4 fbfetch_test(float4 in [[color(0), raster_order_group(0)]]) {\n"
+      "  return in * 2;\n"
+      "}\n";
+  u32 px = 0;
+  return RenderSinglePixel(dev, shader, @"fbfetch_test", 0x11223344, &px) && px == 0x22446688;
 }
 #endif
+
+/* Whether simd_is_helper_thread() answers inverted: the drawn pixel is
+ * no helper (0.5) and its right and lower neighbours are (1.0), so a
+ * working driver gives 0.5 and derivatives of 0.5 + 0.5, an inverted one
+ * 1.0 and derivatives of -0.5 + 0.5. 1 inverted, 0 working, -1 unsure. */
+static int DetectInvertedIsHelper(id<MTLDevice> dev)
+{
+  static const char shader[] =
+      PROBE_TRIANGLE
+      "fragment float4 is_helper_test() {\n"
+      "  float val = metal::simd_is_helper_thread() ? 1 : 0.5;\n"
+      "  return float4(val, metal::dfdx(val) + 0.5, metal::dfdy(val) + 0.5, 0);\n"
+      "}\n";
+  u32 px = 0;
+  if (!RenderSinglePixel(dev, shader, @"is_helper_test", 0, &px))
+    return -1;
+  if (px == 0xffff80)
+    return 0;
+  if (px == 0x0000ff)
+    return 1;
+  WARN_LOG_FMT(VIDEO, "metal::simd_is_helper_thread might be broken! Test shader returned {:06x}!",
+               px);
+  return -1;
+}
 
 void Metal::Util::PopulateBackendInfoFeatures(const VideoConfig& config, BackendInfo* backend_info,
                                               id<MTLDevice> device)
@@ -259,6 +294,16 @@ void Metal::Util::PopulateBackendInfoFeatures(const VideoConfig& config, Backend
     g_features.manual_buffer_upload = false;
 #endif
     break;
+  }
+
+  g_features.subgroup_ops =
+      [device supportsFamily:MTLGPUFamilyMac2] || [device supportsFamily:MTLGPUFamilyApple7];
+  if (g_features.subgroup_ops)
+  {
+    int inverted = DetectInvertedIsHelper(device);
+    if (inverted >= 0 &&
+        (inverted != 0) != DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
+      DriverDetails::OverrideBug(DriverDetails::BUG_INVERTED_IS_HELPER, inverted != 0);
   }
 
   backend_info->bSupportsFramebufferFetch = [device supportsFamily:MTLGPUFamilyApple1];
@@ -424,6 +469,18 @@ static const std::string_view COMPUTE_SHADER_HEADER = R"(
 #define lerp mix
 )";
 
+/* The bounding box's subgroup reduction, where the GPU has simdgroup
+ * functions; rslc prints it with them. */
+static const std::string_view SUBGROUP_HELPER_HEADER = R"(
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#define SUPPORTS_SUBGROUP_REDUCTION 1
+#define IS_HELPER_INVOCATION gl_HelperInvocation
+#define IS_FIRST_ACTIVE_INVOCATION (subgroupElect())
+#define SUBGROUP_MIN(value) value = subgroupMin(value)
+#define SUBGROUP_MAX(value) value = subgroupMax(value)
+)";
+
 static const std::string_view MSL_HEADER =
     // We know our shader generator leaves unused variables.
     "#pragma clang diagnostic ignored \"-Wunused-variable\"\n"
@@ -466,6 +523,15 @@ Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
     PanicAlertFmt("Tried to compile geometry shader for Metal, but Metal doesn't support them!");
     return std::nullopt;
   }
+  if (Metal::g_features.subgroup_ops)
+    full_source.append(SUBGROUP_HELPER_HEADER);
+  if (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
+  {
+    full_source.append("#define gl_HelperInvocation !gl_HelperInvocation "
+                       "// Work around broken AMD Metal driver\n");
+  }
+  if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD))
+    full_source.append("#define BROKEN_SUBGROUP_WITH_DISCARD 1\n");
   full_source.append(source);
 
   memset(&opts, 0, sizeof(opts));
