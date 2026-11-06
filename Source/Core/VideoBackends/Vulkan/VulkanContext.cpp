@@ -428,7 +428,7 @@ void VulkanContext::PopulateBackendInfo(BackendInfo* backend_info)
   backend_info->bSupportsPaletteConversion = true;          // Assumed support.
   backend_info->bSupportsClipControl = true;                // Assumed support.
   backend_info->bSupportsMultithreading = true;             // Assumed support.
-  // rslc has no compute stage, storage buffers or atomics yet.
+  // rslc has no compute stage yet.
   backend_info->bSupportsComputeShaders = false;
   backend_info->bSupportsGPUTextureDecoding = false;
   backend_info->bSupportsBitfield = true;                   // Assumed support.
@@ -456,8 +456,8 @@ void VulkanContext::PopulateBackendInfo(BackendInfo* backend_info)
   backend_info->bSupportsLodBiasInSampler = false;          // Dependent on OS.
   backend_info->bSupportsSettingObjectNames = false;        // Dependent on features.
   backend_info->bSupportsPartialMultisampleResolve = true;  // Assumed support.
-  backend_info->bSupportsDynamicVertexLoader = false;       // Needs storage buffers.
-  backend_info->bSupportsVSLinePointExpand = false;         // Needs storage buffers.
+  backend_info->bSupportsDynamicVertexLoader = true;        // Assumed support.
+  backend_info->bSupportsVSLinePointExpand = true;          // Assumed support.
   backend_info->bSupportsHDROutput = true;                  // Assumed support.
   backend_info->bSupportsUnrestrictedDepthRange = false;    // Dependent on features.
 }
@@ -481,8 +481,8 @@ void VulkanContext::PopulateBackendInfoFeatures(BackendInfo* backend_info, VkPhy
   backend_info->bSupportsDualSourceBlend = info.dualSrcBlend;
   backend_info->bSupportsGeometryShaders = info.geometryShader;
   backend_info->bSupportsGSInstancing = info.geometryShader;
-  // The bounding box needs storage buffers and atomics, which rslc has no form of yet.
-  backend_info->bSupportsBBox = backend_info->bSupportsFragmentStoresAndAtomics = false;
+  backend_info->bSupportsBBox = backend_info->bSupportsFragmentStoresAndAtomics =
+      info.fragmentStoresAndAtomics;
   backend_info->bSupportsSSAA = info.sampleRateShading;
   backend_info->bSupportsLogicOp = info.logicOp;
 
