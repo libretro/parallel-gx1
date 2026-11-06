@@ -58,6 +58,9 @@ void D3D11Resume(unsigned depth);
  * over; when nothing new was shown, the frontend is told the last picture
  * repeats, so every run reports one frame. */
 void EndFrame();
+/* A picture the frontend reads inside video_refresh (D3D11 version 1),
+ * reported at once: the first of the run. */
+void RefreshNow(unsigned width, unsigned height);
 
 /* The GPU loop on a thread of its own, for the APIs whose frontend
  * interface lets another thread submit (Vulkan): the frontend's thread

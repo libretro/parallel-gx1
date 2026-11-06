@@ -20,10 +20,10 @@ namespace Video
 {
 static FrameOutput* s_active;
 
-void OutputRepeat()
+void OutputKeepReadable()
 {
   if (s_active)
-    s_active->Repeat();
+    s_active->KeepReadable();
 }
 
 void OutputHandOver()
@@ -249,7 +249,7 @@ void DX11Output::Present()
     DX11::D3D::context->PSSetConstantBuffers(0, 3, null_buffers);
     DX11::D3D::context->GSSetConstantBuffers(0, 1, null_buffers);
 
-    video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_width, m_height, 0);
+    RefreshNow(m_width, m_height);
 
     static_cast<DX11::Gfx*>(g_gfx.get())->RestoreContext();
   }
@@ -428,7 +428,7 @@ bool DX12Output::HandOver()
   return true;
 }
 
-void DX12Output::Repeat()
+void DX12Output::KeepReadable()
 {
   /* threaded, every execution already leaves it readable */
   if (m_threaded)
@@ -686,7 +686,7 @@ bool VKOutput::PresentTexture(const AbstractTexture* texture, u32 width, u32 hei
   return true;
 }
 
-void VKOutput::Repeat()
+void VKOutput::KeepReadable()
 {
   /* threaded, every submission already leaves it readable */
   if (m_threaded)

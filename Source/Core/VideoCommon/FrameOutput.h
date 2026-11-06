@@ -34,9 +34,10 @@ public:
     return false;
   }
 
-  /* Whoever shows the pictures is about to show the last one handed on
-   * again: what it reads is left the way it reads it. */
-  virtual void Repeat() {}
+  /* Whoever shows the pictures is about to read the last one handed on,
+   * again or for the first time, the core having gone on drawing since:
+   * what it reads is left the way it reads it. */
+  virtual void KeepReadable() {}
 
   /* Whether a texture handed on with PresentTexture may still be read by
    * whoever shows the pictures, now or later: the caller keeps it alive

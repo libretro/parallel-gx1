@@ -11,9 +11,10 @@ namespace Libretro
 {
 namespace Video
 {
-/* The output in use, told when the frontend is about to show the last
- * picture again, and asked to hand over what another thread published. */
-void OutputRepeat();
+/* The output in use, told when the frontend is about to read the last
+ * picture handed on, and asked to hand over what another thread
+ * published. */
+void OutputKeepReadable();
 void OutputHandOver();
 
 /* A threaded output's pictures between the GPU thread, which publishes
@@ -129,7 +130,7 @@ public:
   AbstractFramebuffer* Acquire() override;
   void Present() override;
   bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
-  void Repeat() override;
+  void KeepReadable() override;
   bool IsTextureHeld(const AbstractTexture* texture) override;
   bool HandOver() override;
   u32 GetWidth() const override { return m_width; }
@@ -176,7 +177,7 @@ public:
   AbstractFramebuffer* Acquire() override;
   void Present() override;
   bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
-  void Repeat() override;
+  void KeepReadable() override;
   bool IsTextureHeld(const AbstractTexture* texture) override;
   bool HandOver() override;
   u32 GetWidth() const override { return m_width; }

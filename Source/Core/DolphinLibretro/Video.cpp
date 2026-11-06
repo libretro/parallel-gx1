@@ -992,14 +992,30 @@ void GpuThreadUnpark()
 /* The frontend's callback, behind one that counts what each retro_run
  * hands over: a run whose fields only repeated the last picture, or that
  * ran out of time before its field ended, draws nothing and reports a
- * repeat, with the last picture's size. */
+ * repeat, with the last picture's size.
+ *
+ * A picture drawn or handed over on the hardware is reported at the end
+ * of the run, the last one drawn: the GPU loop can catch up on two
+ * fields in one run, after one that ran out of time, and the frontend
+ * takes one frame a run. Pictures in memory, and those the frontend
+ * reads inside the callback, go to it at once, the first of a run. */
 static retro_video_refresh_t s_frontend_video_cb;
 static unsigned s_frames_sent;
+static bool s_frame_drawn;
 static unsigned s_last_width;
 static unsigned s_last_height;
 
 static void CountedVideoRefresh(const void* data, unsigned width, unsigned height, size_t pitch)
 {
+  if (data == RETRO_HW_FRAME_BUFFER_VALID)
+  {
+    s_frame_drawn = true;
+    s_last_width = width;
+    s_last_height = height;
+    return;
+  }
+  if (s_frames_sent)
+    return;
   s_frames_sent++;
   if (data)
   {
@@ -1009,9 +1025,27 @@ static void CountedVideoRefresh(const void* data, unsigned width, unsigned heigh
   s_frontend_video_cb(data, width, height, pitch);
 }
 
+void RefreshNow(unsigned width, unsigned height)
+{
+  if (s_frames_sent)
+    return;
+  s_frames_sent++;
+  s_frame_drawn = false;
+  s_last_width = width;
+  s_last_height = height;
+  s_frontend_video_cb(RETRO_HW_FRAME_BUFFER_VALID, width, height, 0);
+}
+
 void EndFrame()
 {
   OutputHandOver();
+  if (s_frame_drawn && !s_frames_sent)
+  {
+    OutputKeepReadable();
+    s_frames_sent++;
+    s_frontend_video_cb(RETRO_HW_FRAME_BUFFER_VALID, s_last_width, s_last_height, 0);
+  }
+  s_frame_drawn = false;
   if (!s_frames_sent)
   {
     /* before the first picture, the size the frontend was told */
@@ -1022,7 +1056,7 @@ void EndFrame()
       s_last_width = info.geometry.base_width;
       s_last_height = info.geometry.base_height;
     }
-    OutputRepeat();
+    OutputKeepReadable();
     s_frontend_video_cb(nullptr, s_last_width, s_last_height, 0);
   }
   s_frames_sent = 0;
