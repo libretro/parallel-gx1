@@ -46,6 +46,8 @@
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/Present.h"
+#include "VideoCommon/VertexManagerBase.h"
+#include "DolphinLibretro/Log.h"
 #include "VideoCommon/TextureConfig.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
@@ -287,6 +289,16 @@ void retro_run(void)
       !Libretro::g_emuthread_launched)
   {
     WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
+    /* The video backend did not come up (the log says why): booting would
+     * draw through it at once, so stop here instead. */
+    if (!g_vertex_manager)
+    {
+      ERROR_LOG_FMT(BOOT, "The video backend failed to initialize; not booting.");
+      Libretro::Log::DoLogFrontEnd(RETRO_LOG_ERROR,
+                                   "The video driver failed to initialize; see the log.", 5000);
+      Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
+      return;
+    }
     if (system.IsDualCoreMode())
     {
       Core::StartEmuThread(system, std::move(Core::g_boot_params), wsi);
