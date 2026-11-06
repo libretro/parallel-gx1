@@ -6,7 +6,7 @@
 #   OS_WIN / OS_ANDROID / OS_UNIX            OS family (OS_UNIX: Linux, webOS)
 #   OS_APPLE, with OS_MACOS or OS_IOS        Apple (OS_IOS covers iOS and tvOS)
 #   HAVE_LIBUSB HAVE_HIDAPI HAVE_CPPIPC      optional components
-#   HAVE_VULKAN HAVE_D3D HAVE_SPIRV_CROSS
+#   HAVE_VULKAN HAVE_D3D
 #   HAVE_BUNDLED_ICONV                       Externals/libiconv instead of libc
 #
 # Units only the standalone frontends use are left out.
@@ -23,7 +23,6 @@ SRC_DIR := $(CORE_DIR)/Source/Core
 # Externals/<library>/makefile instead.
 ZLIBNG_DIR      := $(EXT_DIR)/zlib-ng/zlib-ng
 ZLIBNG_GEN_DIR  := $(GEN_DIR)/Externals/zlib-ng/zlib-ng
-GLSLANG_GEN_DIR := $(GEN_DIR)/include/glslang
 SCMREV_H        := $(GEN_DIR)/Source/Core/Common/scmrev.h
 MGBA_VERSION_C  := $(GEN_DIR)/Externals/mGBA/mgba/version.c
 
@@ -31,8 +30,7 @@ GEN_HEADERS := \
 	$(SCMREV_H) \
 	$(ZLIBNG_GEN_DIR)/zlib.h \
 	$(ZLIBNG_GEN_DIR)/zconf.h \
-	$(ZLIBNG_GEN_DIR)/zlib_name_mangling.h \
-	$(GLSLANG_GEN_DIR)/build_info.h
+	$(ZLIBNG_GEN_DIR)/zlib_name_mangling.h
 
 $(ZLIBNG_GEN_DIR)/zlib.h: $(ZLIBNG_DIR)/zlib.h.in
 	@mkdir -p $(@D)
@@ -49,15 +47,6 @@ $(ZLIBNG_GEN_DIR)/zconf.h: $(ZLIBNG_DIR)/zconf.h.in
 $(ZLIBNG_GEN_DIR)/zlib_name_mangling.h: $(ZLIBNG_DIR)/zlib_name_mangling.h.empty
 	@mkdir -p $(@D)
 	cp $< $@
-
-GLSLANG_VERSION := $(shell sed -n 's/^\#\# \([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*/\1 \2 \3/p' $(EXT_DIR)/glslang/glslang/CHANGES.md | head -n 1)
-
-$(GLSLANG_GEN_DIR)/build_info.h: $(EXT_DIR)/glslang/glslang/build_info.h.tmpl $(EXT_DIR)/glslang/glslang/CHANGES.md
-	@mkdir -p $(@D)
-	sed -e 's/@major@/$(word 1,$(GLSLANG_VERSION))/' \
-	    -e 's/@minor@/$(word 2,$(GLSLANG_VERSION))/' \
-	    -e 's/@patch@/$(word 3,$(GLSLANG_VERSION))/' \
-	    -e 's/@flavor@//' $< > $@
 
 # scmrev.h and mGBA's version.c carry the revision the tree is at, so they
 # are rewritten at parse time, but only touched when their content changes.
@@ -512,62 +501,6 @@ FMT_SOURCES_OBJCXX :=
 FMT_SOURCES_CXX += \
 	$(CORE_DIR)/Externals/fmt/fmt/src/format.cc \
 	$(CORE_DIR)/Externals/fmt/fmt/src/os.cc
-
-# GLSLANG
-GLSLANG_SOURCES_C :=
-GLSLANG_SOURCES_CXX :=
-GLSLANG_SOURCES_ASM :=
-GLSLANG_SOURCES_OBJCXX :=
-GLSLANG_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/stub.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/CInterface/glslang_c_interface.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/GenericCodeGen/CodeGen.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/GenericCodeGen/Link.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/glslang_tab.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/attribute.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/Constant.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/iomapper.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/InfoSink.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/Initialize.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/IntermTraverse.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/Intermediate.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/ParseContextBase.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/ParseHelper.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/PoolAlloc.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/RemoveTree.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/Scan.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/ShaderLang.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/SpirvIntrinsics.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/SymbolTable.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/Versions.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/intermOut.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/limits.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/linkValidate.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/parseConst.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/reflection.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/preprocessor/Pp.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/preprocessor/PpAtom.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/preprocessor/PpContext.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/preprocessor/PpScanner.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/preprocessor/PpTokens.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/MachineIndependent/propagateNoContraction.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/GlslangToSpv.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/InReadableOrder.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/Logger.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/SpvBuilder.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/SpvPostProcess.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/doc.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/SpvTools.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/disassemble.cpp \
-	$(CORE_DIR)/Externals/glslang/glslang/SPIRV/CInterface/spirv_c_interface.cpp
-ifneq ($(OS_WIN),1)
-   GLSLANG_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/OSDependent/Unix/ossource.cpp
-endif
-ifeq ($(OS_WIN),1)
-   GLSLANG_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/glslang/glslang/glslang/OSDependent/Windows/ossource.cpp
-endif
 
 # HIDAPI
 HIDAPI_SOURCES_C :=
@@ -1645,11 +1578,6 @@ ifneq (,$(filter 1,$(OS_UNIX) $(OS_APPLE)))
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerNix.cpp
 endif
-# Metal still takes its shaders through glslang and SPIRV-Cross
-ifeq ($(HAVE_SPIRV_CROSS),1)
-   DOLPHIN_SOURCES_CXX += \
-	$(CORE_DIR)/Source/Core/VideoCommon/Spirv.cpp
-endif
 ifeq ($(OS_UNIX),1)
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/MemArenaUnix.cpp
@@ -1854,24 +1782,6 @@ CPPIPC_SOURCES_CXX += \
 	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/new.cpp \
 	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/new_delete_resource.cpp
 
-# SPIRV_CROSS
-SPIRV_CROSS_SOURCES_C :=
-SPIRV_CROSS_SOURCES_CXX :=
-SPIRV_CROSS_SOURCES_ASM :=
-SPIRV_CROSS_SOURCES_OBJCXX :=
-SPIRV_CROSS_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_cfg.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_cpp.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_cross.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_cross_c.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_cross_parsed_ir.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_cross_util.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_glsl.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_hlsl.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_msl.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_parser.cpp \
-	$(CORE_DIR)/Externals/spirv_cross/SPIRV-Cross/spirv_reflect.cpp
-
 # ADRENOTOOLS
 ADRENOTOOLS_SOURCES_C :=
 ADRENOTOOLS_SOURCES_CXX :=
@@ -1924,16 +1834,6 @@ endif
 MBEDTLS_FLAGS := -w -O2 -I$(EXT_DIR)/mbedtls/include -I$(EXT_DIR)/mbedtls/library
 
 FMT_FLAGS := -w -I$(EXT_DIR)/fmt/fmt/include
-
-GLSLANG_FLAGS := -w -DENABLE_OPT=0 -DENABLE_SPIRV \
-	-I$(EXT_DIR)/glslang/glslang -I$(GEN_DIR)/include \
-	-isystem $(EXT_DIR)/glslang/glslang/Public -isystem $(EXT_DIR)/glslang
-GLSLANG_CXXFLAGS := -std=c++17 -fno-rtti
-ifeq ($(OS_WIN),1)
-   GLSLANG_FLAGS += -DGLSLANG_OSINCLUDE_WIN32
-else
-   GLSLANG_FLAGS += -DGLSLANG_OSINCLUDE_UNIX
-endif
 
 HIDAPI_FLAGS := -w -I$(EXT_DIR)/hidapi/hidapi-src/hidapi
 ifeq ($(OS_UNIX),1)
@@ -2056,10 +1956,6 @@ CPPIPC_FLAGS := -w -O2 -DUNICODE -D_UNICODE -fexceptions \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/src/libipc/platform/linux
 CPPIPC_CXXFLAGS := -std=gnu++17
 
-SPIRV_CROSS_FLAGS := -w -DSPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS \
-	-I$(EXT_DIR)/spirv_cross/SPIRV-Cross/include -I$(EXT_DIR)/spirv_cross/SPIRV-Cross
-SPIRV_CROSS_CXXFLAGS := -std=c++11
-
 ADRENOTOOLS_FLAGS := -w -I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadrenotools \
 	-I$(EXT_DIR)/libadrenotools/lib/linkernsbypass
 
@@ -2079,13 +1975,12 @@ DOLPHIN_FLAGS := \
 	$(ZLIB_INC) $(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 -I$(EXT_DIR)/expr/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
-	-I$(EXT_DIR)/glslang/glslang -I$(GEN_DIR)/include $(MGBA_INC) \
+	$(MGBA_INC) \
 	-I$(EXT_DIR)/libspng/libspng/spng -I$(EXT_DIR)/xxhash/xxHash \
 	-I$(EXT_DIR)/tinygltf \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib -I$(EXT_DIR)/Bochs_disasm \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include \
-	-isystem $(EXT_DIR)/glslang/glslang/Public -isystem $(EXT_DIR)/glslang \
 	-isystem $(EXT_DIR)/libusb/libusb/libusb -isystem $(EXT_DIR)/watcher/watcher/include \
 	-Wall -Wtype-limits -Wsign-compare -Wignored-qualifiers -Wuninitialized -Wshadow \
 	-Winit-self -Wmissing-declarations -Wimplicit-fallthrough -Werror=format -Wno-trigraphs
@@ -2098,10 +1993,6 @@ ifeq ($(HAVE_CPPIPC),1)
 endif
 ifeq ($(HAVE_HIDAPI),1)
    DOLPHIN_FLAGS += -DHAVE_HIDAPI=1
-endif
-ifeq ($(HAVE_SPIRV_CROSS),1)
-   DOLPHIN_FLAGS += -DSPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS \
-	-I$(EXT_DIR)/spirv_cross/SPIRV-Cross/include -I$(EXT_DIR)/spirv_cross/SPIRV-Cross
 endif
 ifeq ($(OS_WIN),1)
    DOLPHIN_FLAGS += -DNOMINMAX -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN \
@@ -2158,9 +2049,6 @@ ifeq ($(HAVE_BUNDLED_ICONV),1)
 endif
 ifeq ($(HAVE_CPPIPC),1)
    LIB_GROUPS += CPPIPC
-endif
-ifeq ($(HAVE_SPIRV_CROSS),1)
-   LIB_GROUPS += GLSLANG SPIRV_CROSS
 endif
 ifeq ($(OS_ANDROID),1)
    ifeq ($(ARCH_ARM64),1)

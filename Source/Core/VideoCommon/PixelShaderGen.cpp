@@ -831,7 +831,8 @@ ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& hos
 
     if (use_framebuffer_fetch)
     {
-      // Subpass inputs will be converted to framebuffer fetch by SPIRV-Cross.
+      // A subpass input for the framebuffer read; no backend reports framebuffer fetch
+      // here while rslc has no form of one.
       out.Write("INPUT_ATTACHMENT_BINDING(0, 0, 0) uniform subpassInput in_ocol0;\n");
     }
   }

@@ -81,7 +81,6 @@ HAVE_LIBUSB        := 0
 HAVE_HIDAPI        := 0
 HAVE_CPPIPC        := 0
 HAVE_D3D           := 0
-HAVE_SPIRV_CROSS   := 0
 HAVE_BUNDLED_ICONV := 0
 
 FLAGS    :=
@@ -129,7 +128,6 @@ else ifeq ($(platform), osx)
    LDFLAGS += $(TARGET_RULE) -Wl,-dead_strip
    HAVE_LIBUSB        := 1
    HAVE_HIDAPI        := 1
-   HAVE_SPIRV_CROSS   := 1
    HAVE_BUNDLED_ICONV := 1
    LIBS += -framework AppKit -framework CoreFoundation -framework Foundation \
 	-framework IOKit -framework CoreServices -framework IOBluetooth \
@@ -160,7 +158,6 @@ else ifneq (,$(filter ios-arm64 tvos-arm64,$(platform)))
    CXX     = c++ -arch arm64 -isysroot $(IOSSDK)
    FLAGS   += $(MINVER_FLAG) -DIPHONEOS
    LDFLAGS += $(MINVER_FLAG)
-   HAVE_SPIRV_CROSS   := 1
    HAVE_BUNDLED_ICONV := 1
    LIBS += -framework CoreFoundation -framework Foundation -framework IOKit -lobjc -lresolv
 

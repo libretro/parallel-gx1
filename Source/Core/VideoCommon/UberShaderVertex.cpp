@@ -77,7 +77,7 @@ SSBO_BINDING(1) readonly restrict buffer Vertices {{
       // Write a function to get an offset into vertex_buffer corresponding to this vertex.
       // This must be done differently for D3D compared to OpenGL/Vulkan/Metal, as on OpenGL, etc.,
       // gl_VertexID starts counting at the base vertex specified in glDrawElementsBaseVertex,
-      // while on D3D, SV_VertexID (which spirv-cross translates gl_VertexID into) starts counting
+      // while on D3D, SV_VertexID (which gl_VertexID becomes there) starts counting
       // at 0 regardless of the BaseVertexLocation value passed to DrawIndexed.  In both cases,
       // offset 0 of vertex_buffer corresponds to index 0 with basevertex set to 0, so we have to
       // manually apply the basevertex offset for D3D

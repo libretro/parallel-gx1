@@ -170,7 +170,7 @@ void GenerateVSOutputMembers(ShaderCode& object, APIType api_type, u32 texgens,
                              const ShaderHostConfig& host_config, std::string_view qualifier,
                              ShaderStage stage)
 {
-  // SPIRV-Cross names all semantics as "TEXCOORD"
+  // rslc names all semantics as "TEXCOORD", as SPIRV-Cross did
   // Unfortunately Geometry shaders (which also uses this function)
   // aren't supported.  The output semantic name needs to match
   // up with the input semantic name for both the next stage (pixel shader)
