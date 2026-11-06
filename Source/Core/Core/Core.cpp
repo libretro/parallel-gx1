@@ -663,7 +663,10 @@ void SetState(Core::System& system, State state, bool report_state_change,
     case State::Running:
     {
       system.GetCPU().SetStepping(false);
-      Wiimote::Resume();
+      /* a frame step runs for one frame only: nothing for the remotes to
+       * resume, and nothing posted to their manager every frame */
+      if (report_state_change)
+        Wiimote::Resume();
       break;
     }
     default:

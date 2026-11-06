@@ -5,6 +5,7 @@
 
 #include <concepts>
 #include <functional>
+#include <new>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -46,10 +47,12 @@ public:
       {
         Owned* const self = static_cast<Owned*>(r);
         std::invoke(self->fn);
-        delete self;
+        self->~Owned();
       }
     };
-    Submit(new Owned{{&Owned::Run}, Fn(std::forward<F>(callback))});
+    static_assert(sizeof(Owned) <= SLOT_SIZE && alignof(Owned) <= SLOT_ALIGN,
+                  "an event's callback does not fit a slot");
+    Submit(new (NextSlot()) Owned{{&Owned::Run}, Fn(std::forward<F>(callback))});
   }
 
   template <std::invocable<> F>
@@ -98,11 +101,31 @@ private:
     void (*run)(Request*);
   };
 
+  /* Events are built in slots taken in turn, never on the heap: at most
+   * QUEUE_REQUESTS wait in the ring and one runs, so a slot comes round
+   * again only once the event built in it is done. */
+  enum
+  {
+    QUEUE_REQUESTS = 1024,
+    SLOT_COUNT = 2048,
+    SLOT_SIZE = 64,
+    SLOT_ALIGN = 16
+  };
+
+  void* NextSlot()
+  {
+    void* slot = m_slots[m_next_slot & (SLOT_COUNT - 1)];
+    m_next_slot++;
+    return slot;
+  }
+
   void Submit(Request* request);
   void WaitDone(retro_atomic_int_t* done);
 
   static AsyncRequests s_singleton;
 
+  alignas(SLOT_ALIGN) unsigned char m_slots[SLOT_COUNT][SLOT_SIZE];
+  unsigned m_next_slot = 0;
   retro_waitable_spsc_t m_queue;
   retro_eventcount_t m_completed;
   bool m_passthrough = true;

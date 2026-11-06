@@ -9,9 +9,6 @@
 
 AsyncRequests AsyncRequests::s_singleton;
 
-// Pending requests the ring holds before the CPU thread has to wait for the video thread.
-static constexpr size_t QUEUE_REQUESTS = 1024;
-
 AsyncRequests::AsyncRequests()
 {
   retro_waitable_spsc_init(&m_queue, QUEUE_REQUESTS * sizeof(Request*));

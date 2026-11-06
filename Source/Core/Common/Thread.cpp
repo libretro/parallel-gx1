@@ -45,10 +45,18 @@ void SetCurrentThreadName(const char* name)
 
 #ifndef _WIN32
 
+/* A thread's stack does not move: asked once per thread, as glibc's
+ * pthread_getattr_np allocates. */
+static thread_local void* s_stack_addr;
+static thread_local size_t s_stack_size;
+
 std::tuple<void*, size_t> GetCurrentThreadStack()
 {
   void* stack_addr;
   size_t stack_size;
+
+  if (s_stack_size)
+    return std::make_tuple(s_stack_addr, s_stack_size);
 
   pthread_t self = pthread_self();
 
@@ -77,6 +85,8 @@ std::tuple<void*, size_t> GetCurrentThreadStack()
   pthread_attr_destroy(&attr);
 #endif
 
+  s_stack_addr = stack_addr;
+  s_stack_size = stack_size;
   return std::make_tuple(stack_addr, stack_size);
 }
 
