@@ -492,7 +492,7 @@ JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_Initialize(J
   AchievementManager::GetInstance().Init(nullptr);
 }
 
-// Returns the scale factor for imgui rendering.
+// Returns the render surface scale factor.
 // Based on the scaledDensity of the device's display metrics.
 static float GetRenderSurfaceScale(JNIEnv* env)
 {

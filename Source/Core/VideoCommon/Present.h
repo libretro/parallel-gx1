@@ -26,7 +26,7 @@ class PostProcessing;
 extern bool g_is_duplicate_frame;
 #endif
 // Presenter is a class that deals with putting the final XFB on the screen.
-// It also handles the ImGui UI and post-processing.
+// It also handles post-processing.
 class Presenter
 {
 public:
