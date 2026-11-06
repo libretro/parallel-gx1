@@ -1238,9 +1238,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/Resource.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/TextureDataResource.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderCache.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/ShaderCompileUtils.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderGenCommon.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Spirv.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Statistics.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/TextureCacheBase.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/TextureConfig.cpp \
@@ -1646,6 +1644,11 @@ DOLPHIN_SOURCES_CXX += \
 ifneq (,$(filter 1,$(OS_UNIX) $(OS_APPLE)))
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerNix.cpp
+endif
+# Metal still takes its shaders through glslang and SPIRV-Cross
+ifeq ($(HAVE_SPIRV_CROSS),1)
+   DOLPHIN_SOURCES_CXX += \
+	$(CORE_DIR)/Source/Core/VideoCommon/Spirv.cpp
 endif
 ifeq ($(OS_UNIX),1)
    DOLPHIN_SOURCES_CXX += \
@@ -2140,7 +2143,7 @@ endif
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
-	MGBA GLSLANG SFML FMT PUGIXML XXHASH TINYGLTF FATFS
+	MGBA SFML FMT PUGIXML XXHASH TINYGLTF FATFS
 ifeq ($(ARCH_X86_64),1)
    LIB_GROUPS += BDISASM
 endif
@@ -2157,7 +2160,7 @@ ifeq ($(HAVE_CPPIPC),1)
    LIB_GROUPS += CPPIPC
 endif
 ifeq ($(HAVE_SPIRV_CROSS),1)
-   LIB_GROUPS += SPIRV_CROSS
+   LIB_GROUPS += GLSLANG SPIRV_CROSS
 endif
 ifeq ($(OS_ANDROID),1)
    ifeq ($(ARCH_ARM64),1)
