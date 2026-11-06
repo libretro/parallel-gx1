@@ -14,7 +14,6 @@
 // every derived class that needs it
 namespace VideoCommon
 {
-class ShaderIncluder;
 }
 
 enum class ShaderStage

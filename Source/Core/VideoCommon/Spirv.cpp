@@ -159,7 +159,7 @@ const TBuiltInResource* GetCompilerResourceLimits()
 std::optional<SPIRV::CodeVector>
 CompileShaderToSPV(EShLanguage stage, APIType api_type,
                    glslang::EShTargetLanguageVersion language_version, const char* stage_filename,
-                   std::string_view source, glslang::TShader::Includer* shader_includer)
+                   std::string_view source)
 {
   if (!InitializeGlslang())
     return std::nullopt;
@@ -209,7 +209,7 @@ CompileShaderToSPV(EShLanguage stage, APIType api_type,
   };
 
   if (!shader->parse(GetCompilerResourceLimits(), default_version, profile, false, true, messages,
-                     shader_includer ? *shader_includer : forbid_includer))
+                     forbid_includer))
   {
     DumpBadShader("Failed to parse shader");
     return std::nullopt;
@@ -277,34 +277,26 @@ CompileShaderToSPV(EShLanguage stage, APIType api_type,
 namespace SPIRV
 {
 std::optional<CodeVector> CompileVertexShader(std::string_view source_code, APIType api_type,
-                                              glslang::EShTargetLanguageVersion language_version,
-                                              glslang::TShader::Includer* shader_includer)
+                                              glslang::EShTargetLanguageVersion language_version)
 {
-  return CompileShaderToSPV(EShLangVertex, api_type, language_version, "vs", source_code,
-                            shader_includer);
+  return CompileShaderToSPV(EShLangVertex, api_type, language_version, "vs", source_code);
 }
 
 std::optional<CodeVector> CompileGeometryShader(std::string_view source_code, APIType api_type,
-                                                glslang::EShTargetLanguageVersion language_version,
-                                                glslang::TShader::Includer* shader_includer)
+                                                glslang::EShTargetLanguageVersion language_version)
 {
-  return CompileShaderToSPV(EShLangGeometry, api_type, language_version, "gs", source_code,
-                            shader_includer);
+  return CompileShaderToSPV(EShLangGeometry, api_type, language_version, "gs", source_code);
 }
 
 std::optional<CodeVector> CompileFragmentShader(std::string_view source_code, APIType api_type,
-                                                glslang::EShTargetLanguageVersion language_version,
-                                                glslang::TShader::Includer* shader_includer)
+                                                glslang::EShTargetLanguageVersion language_version)
 {
-  return CompileShaderToSPV(EShLangFragment, api_type, language_version, "ps", source_code,
-                            shader_includer);
+  return CompileShaderToSPV(EShLangFragment, api_type, language_version, "ps", source_code);
 }
 
 std::optional<CodeVector> CompileComputeShader(std::string_view source_code, APIType api_type,
-                                               glslang::EShTargetLanguageVersion language_version,
-                                               glslang::TShader::Includer* shader_includer)
+                                               glslang::EShTargetLanguageVersion language_version)
 {
-  return CompileShaderToSPV(EShLangCompute, api_type, language_version, "cs", source_code,
-                            shader_includer);
+  return CompileShaderToSPV(EShLangCompute, api_type, language_version, "cs", source_code);
 }
 }  // namespace SPIRV

@@ -22,7 +22,6 @@
 #include "Common/StringUtil.h"
 #include "Common/Version.h"
 
-#include "VideoCommon/ShaderCompileUtils.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -98,8 +97,7 @@ constexpr std::string_view COMPUTE_SHADER_HEADER = R"(
  * a geometry stage is written in HLSL already. A stage rslc refuses is
  * logged and written to the dump directory with the reason. */
 std::optional<std::string> GetHLSL(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
-                                   std::string_view source,
-                                   VideoCommon::ShaderIncluder* shader_includer)
+                                   std::string_view source)
 {
   static int num_failures;
   char err[1024];
@@ -226,10 +224,9 @@ static const char* GetCompileTarget(D3D_FEATURE_LEVEL feature_level, ShaderStage
 }
 
 std::optional<Shader::BinaryData>
-Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::string_view source,
-                      VideoCommon::ShaderIncluder* shader_includer)
+Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::string_view source)
 {
-  const auto hlsl = GetHLSL(feature_level, stage, source, shader_includer);
+  const auto hlsl = GetHLSL(feature_level, stage, source);
   if (!hlsl)
     return std::nullopt;
 

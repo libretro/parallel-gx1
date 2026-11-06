@@ -33,7 +33,6 @@ public:
   CreateStagingTexture(StagingTextureType type, const TextureConfig& config) override;
   std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,
-                         VideoCommon::ShaderIncluder* shader_includer,
                          std::string_view name) override;
   std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,

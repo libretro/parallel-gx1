@@ -412,7 +412,7 @@ bool FramebufferManager::CompileConversionPipelines()
     EFBReinterpretType convtype = static_cast<EFBReinterpretType>(i);
     std::unique_ptr<AbstractShader> pixel_shader = g_gfx->CreateShaderFromSource(
         ShaderStage::Pixel,
-        FramebufferShaderGen::GenerateFormatConversionShader(convtype, GetEFBSamples()), nullptr,
+        FramebufferShaderGen::GenerateFormatConversionShader(convtype, GetEFBSamples()),
         fmt::format("Framebuffer conversion pixel shader {}", convtype));
     if (!pixel_shader)
       return false;
@@ -643,8 +643,7 @@ bool FramebufferManager::CompileReadbackPipelines()
   if (IsEFBMultisampled())
   {
     auto depth_resolve_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Pixel, FramebufferShaderGen::GenerateResolveDepthPixelShader(GetEFBSamples()),
-        nullptr, "Depth resolve pixel shader");
+        ShaderStage::Pixel, FramebufferShaderGen::GenerateResolveDepthPixelShader(GetEFBSamples()), "Depth resolve pixel shader");
     if (!depth_resolve_shader)
       return false;
 
@@ -658,7 +657,7 @@ bool FramebufferManager::CompileReadbackPipelines()
       config.framebuffer_state.color_texture_format = GetEFBColorFormat();
       auto color_resolve_shader = g_gfx->CreateShaderFromSource(
           ShaderStage::Pixel,
-          FramebufferShaderGen::GenerateResolveColorPixelShader(GetEFBSamples()), nullptr,
+          FramebufferShaderGen::GenerateResolveColorPixelShader(GetEFBSamples()),
           "Color resolve pixel shader");
       if (!color_resolve_shader)
         return false;
@@ -672,7 +671,7 @@ bool FramebufferManager::CompileReadbackPipelines()
 
   // EFB restore pipeline
   auto restore_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateEFBRestorePixelShader(), nullptr,
+      ShaderStage::Pixel, FramebufferShaderGen::GenerateEFBRestorePixelShader(),
       "EFB restore pixel shader");
   if (!restore_shader)
     return false;
@@ -885,7 +884,7 @@ void FramebufferManager::ClearEFB(const MathUtil::Rectangle<int>& rc, bool color
 bool FramebufferManager::CompileClearPipelines()
 {
   auto vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateClearVertexShader(), nullptr,
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateClearVertexShader(),
       "Clear vertex shader");
   if (!vertex_shader)
     return false;
@@ -1060,7 +1059,7 @@ bool FramebufferManager::CompilePokePipelines()
     return false;
 
   auto poke_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateEFBPokeVertexShader(), nullptr,
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateEFBPokeVertexShader(),
       "EFB poke vertex shader");
   if (!poke_vertex_shader)
     return false;

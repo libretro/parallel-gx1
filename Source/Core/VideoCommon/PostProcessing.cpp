@@ -670,14 +670,13 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
 
 bool PostProcessing::CompileShaders()
 {
-  m_vertex_shader = g_gfx->CreateShaderFromSource(ShaderStage::Vertex, VertexShaderSource(),
-                                                  nullptr, "Present vertex shader");
+  m_vertex_shader = g_gfx->CreateShaderFromSource(ShaderStage::Vertex, VertexShaderSource(), "Present vertex shader");
   m_copy_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, PixelShaderSource(s_copy_pixel_shader), nullptr,
+      ShaderStage::Pixel, PixelShaderSource(s_copy_pixel_shader),
       "Present copy pixel shader");
   // Optional: without it the output is copied uncorrected.
   m_correction_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, PixelShaderSource(s_correction_pixel_shader), nullptr,
+      ShaderStage::Pixel, PixelShaderSource(s_correction_pixel_shader),
       "Present correction pixel shader");
 
   if (!m_vertex_shader || !m_copy_pixel_shader)

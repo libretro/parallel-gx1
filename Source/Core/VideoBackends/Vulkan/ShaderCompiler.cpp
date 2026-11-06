@@ -144,26 +144,22 @@ static std::optional<SPIRVCodeVector> Compile(std::string_view source_code, enum
   return spv;
 }
 
-std::optional<SPIRVCodeVector> CompileVertexShader(std::string_view source_code,
-                                                   VideoCommon::ShaderIncluder* shader_includer)
+std::optional<SPIRVCodeVector> CompileVertexShader(std::string_view source_code)
 {
   return Compile(source_code, RSLC_STAGE_VERTEX, "vs");
 }
 
-std::optional<SPIRVCodeVector> CompileGeometryShader(std::string_view source_code,
-                                                     VideoCommon::ShaderIncluder* shader_includer)
+std::optional<SPIRVCodeVector> CompileGeometryShader(std::string_view source_code)
 {
   return Compile(source_code, RSLC_STAGE_GEOMETRY, "gs");
 }
 
-std::optional<SPIRVCodeVector> CompileFragmentShader(std::string_view source_code,
-                                                     VideoCommon::ShaderIncluder* shader_includer)
+std::optional<SPIRVCodeVector> CompileFragmentShader(std::string_view source_code)
 {
   return Compile(source_code, RSLC_STAGE_FRAGMENT, "ps");
 }
 
-std::optional<SPIRVCodeVector> CompileComputeShader(std::string_view source_code,
-                                                    VideoCommon::ShaderIncluder* shader_includer)
+std::optional<SPIRVCodeVector> CompileComputeShader(std::string_view source_code)
 {
   return Compile(source_code, RSLC_STAGE_COMPUTE, "cs");
 }

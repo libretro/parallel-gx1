@@ -37,7 +37,6 @@ struct SurfaceInfo
 namespace VideoCommon
 {
 class AsyncShaderCompiler;
-class ShaderIncluder;
 }  // namespace VideoCommon
 
 using ClearColor = std::array<float, 4>;
@@ -113,7 +112,6 @@ public:
   // Shader modules/objects.
   virtual std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,
-                         VideoCommon::ShaderIncluder* shader_includer = nullptr,
                          std::string_view name = "") = 0;
   virtual std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage,
                                                                  const void* data, size_t length,

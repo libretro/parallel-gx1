@@ -425,7 +425,7 @@ ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) con
 {
   const ShaderCode source_code =
       UberShader::GenVertexShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer(), nullptr,
+  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer(),
                                        fmt::to_string(*uid.GetUidData()));
 }
 
@@ -441,7 +441,7 @@ ShaderCache::CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const
 {
   const ShaderCode source_code =
       UberShader::GenPixelShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer(), nullptr,
+  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer(),
                                        fmt::to_string(*uid.GetUidData()));
 }
 
@@ -538,7 +538,7 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
   const ShaderCode source_code =
       GenerateGeometryShaderCode(m_api_type, m_host_config, uid.GetUidData());
   std::unique_ptr<AbstractShader> shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code.GetBuffer(), nullptr,
+      g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code.GetBuffer(),
                                     fmt::format("Geometry shader: {}", *uid.GetUidData()));
 
   auto& entry = m_gs_cache.shader_map[uid];
@@ -1259,7 +1259,7 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
 
   auto shader_code = TextureConversionShaderGen::GeneratePixelShader(m_api_type, uid.GetUidData());
   auto shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_code.GetBuffer(), nullptr,
+      ShaderStage::Pixel, shader_code.GetBuffer(),
       fmt::format("EFB copy to VRAM pixel shader: {}", *uid.GetUidData()));
   if (!shader)
   {
@@ -1291,7 +1291,7 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   const std::string shader_code =
       TextureConversionShaderTiled::GenerateEncodingShader(uid, m_api_type);
   const auto shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_code, nullptr,
+      g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_code,
                                     fmt::format("EFB copy to RAM pixel shader: {}", uid));
   if (!shader)
   {
@@ -1314,34 +1314,31 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
 bool ShaderCache::CompileSharedPipelines()
 {
   m_screen_quad_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateScreenQuadVertexShader(), nullptr,
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateScreenQuadVertexShader(),
       "Screen quad vertex shader");
   m_texture_copy_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateTextureCopyVertexShader(), nullptr,
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateTextureCopyVertexShader(),
       "Texture copy vertex shader");
   m_efb_copy_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, TextureConversionShaderGen::GenerateVertexShader(m_api_type).GetBuffer(),
-      nullptr, "EFB copy vertex shader");
+      ShaderStage::Vertex, TextureConversionShaderGen::GenerateVertexShader(m_api_type).GetBuffer(), "EFB copy vertex shader");
   if (!m_screen_quad_vertex_shader || !m_texture_copy_vertex_shader || !m_efb_copy_vertex_shader)
     return false;
 
   if (UseGeometryShaderForEFBCopies())
   {
     m_texcoord_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(1, 0),
-        nullptr, "Texcoord passthrough geometry shader");
+        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(1, 0), "Texcoord passthrough geometry shader");
     m_color_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(0, 1),
-        nullptr, "Color passthrough geometry shader");
+        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(0, 1), "Color passthrough geometry shader");
     if (!m_texcoord_geometry_shader || !m_color_geometry_shader)
       return false;
   }
 
   m_texture_copy_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateTextureCopyPixelShader(), nullptr,
+      ShaderStage::Pixel, FramebufferShaderGen::GenerateTextureCopyPixelShader(),
       "Texture copy pixel shader");
   m_color_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateColorPixelShader(), nullptr,
+      ShaderStage::Pixel, FramebufferShaderGen::GenerateColorPixelShader(),
       "Color pixel shader");
   if (!m_texture_copy_pixel_shader || !m_color_pixel_shader)
     return false;
@@ -1378,8 +1375,7 @@ bool ShaderCache::CompileSharedPipelines()
       TLUTFormat format = static_cast<TLUTFormat>(i);
       auto shader = g_gfx->CreateShaderFromSource(
           ShaderStage::Pixel,
-          TextureConversionShaderTiled::GeneratePaletteConversionShader(format, m_api_type),
-          nullptr, fmt::format("Palette conversion pixel shader: {}", format));
+          TextureConversionShaderTiled::GeneratePaletteConversionShader(format, m_api_type), fmt::format("Palette conversion pixel shader: {}", format));
       if (!shader)
         return false;
 
@@ -1414,7 +1410,7 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
     return nullptr;
 
   std::unique_ptr<AbstractShader> shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_source, nullptr,
+      ShaderStage::Pixel, shader_source,
       fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format));
   if (!shader)
     return nullptr;
@@ -1454,7 +1450,7 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
           fmt::format("Texture decoding compute shader: {}", format);
 
   std::unique_ptr<AbstractShader> shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source, nullptr, name);
+      g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source, name);
   if (!shader)
     return nullptr;
 
