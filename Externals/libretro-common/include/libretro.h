@@ -304,6 +304,33 @@ extern "C" {
  */
 #define RETRO_DEVICE_POINTER      6
 
+/**
+ * A controller's touchpad, such as the DualShock 4's or the DualSense's.
+ *
+ * It is not the screen: \c RETRO_DEVICE_POINTER is, and a core can read
+ * both at once - a handheld's front touchscreen through the pointer and
+ * its rear touchpad through this, for example.
+ *
+ * Read per port, with the pointer's IDs:
+ * \c RETRO_DEVICE_ID_POINTER_X and \c RETRO_DEVICE_ID_POINTER_Y give a
+ * finger's place, -0x7fff to 0x7fff across the touchpad's surface;
+ * \c RETRO_DEVICE_ID_POINTER_PRESSED whether that finger is on it; and
+ * \c RETRO_DEVICE_ID_POINTER_COUNT how many fingers are.
+ *
+ * The index is the touchpad times 16 plus the finger: 0 is the first
+ * finger on the port's first touchpad, 1 the second, and 16 the first
+ * finger on a second touchpad. As with the pointer, fingers are counted
+ * among those on the surface: index 0 is the first one down.
+ *
+ * A port whose controller has no touchpad answers 0 to every query.
+ * The frontend sets <tt>(1 << RETRO_DEVICE_TOUCHPAD)</tt> in
+ * \c RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES where it can read
+ * controllers' touchpads at all.
+ *
+ * @see RETRO_DEVICE_POINTER
+ */
+#define RETRO_DEVICE_TOUCHPAD     7
+
 /** @} */
 
 /** @defgroup RETRO_DEVICE_ID_JOYPAD RetroPad Input
@@ -2743,142 +2770,95 @@ enum retro_mod
 #define RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS_2 87
 
 /**
- * Queries whether the active video driver can present a 10-bit-per-channel
- * (30-bit) source surface end to end, i.e. whether a frame submitted as
- * #RETRO_PIXEL_FORMAT_XRGB2101010 reaches the display without the frontend
- * narrowing it to 8 bits per channel.
- *
- * Unlike SET_PIXEL_FORMAT, which accepts XRGB2101010 unconditionally and
- * transparently down-converts when the driver cannot present 10-bit, this
- * lets a core discover the real capability so it can avoid pointless work:
- * a core that has both a 10-bit and an 8-bit output path should prefer the
- * 8-bit path when this returns \c false, since emitting 10-bit only to have
- * the frontend narrow it wastes effort and, for content that starts at 8
- * bits, is a no-op round trip; going straight to 8 bits also rounds rather
- * than truncates.
- *
- * The result may change across a driver reinit (e.g. the user switches
- * video driver or toggles HDR), so a core that cares should query it when
- * (re)choosing its pixel format rather than caching it indefinitely.
- *
- * @param[out] data <tt>bool *</tt>.
- * Set to \c true if a 10-bit source surface is presented natively, \c false
- * if XRGB2101010 frames are down-converted to 8-bit.
- * @return \c true if the environment call is recognised (the value at
- * \c data is then valid), \c false if it is unsupported (an older frontend);
- * a core must treat "unsupported" as "no guarantee of native 10-bit".
+ * Queries the frontend's HDR presentation contract.
+ * Call from the emulation thread, as with video format negotiation.
+ * data points to struct retro_hdr_metadata. The caller zeroes it and sets
+ * version = 1 and size = sizeof(struct retro_hdr_metadata) before calling.
+ * Unknown versions and undersized buffers return false without modification.
+ * Larger buffers are accepted; bytes beyond the version-1 layout are untouched.
+ * Re-query after presentation or settings changes. This replaces experimental
+ * commands 88-92; those numbers must not be reused.
  */
-#define RETRO_ENVIRONMENT_GET_SCREEN_10BPC_CAPABLE (88 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#define RETRO_ENVIRONMENT_GET_HDR_METADATA (101 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /**
- * Queries the luminance, in nits, that the frontend treats as SDR paper
- * white when presenting HDR content.
- *
- * Only meaningful together with #RETRO_PIXEL_FORMAT_HDR10_2101010: a core
- * encoding absolute luminance itself has to know where the user expects
- * ordinary, non-glowing image content to sit, otherwise the whole frame is
- * either dim or searing.  The value corresponds to the frontend's HDR paper
- * white setting; typical values are 100-400.
- *
- * The user can change it at any time, so a core should re-query it when it
- * rebuilds its colour tables rather than caching it forever.
- *
- * @param[out] data <tt>float *</tt>.
- * Set to the paper white luminance in nits.
- * @return \c true if the call is recognised and the value is valid, \c false
- * on a frontend that does not implement it; callers should then assume a
- * sensible default (200 nits).
+ * Queries presentation state and optional display capabilities together.
+ * data points to struct retro_display_metadata, with version = 1 and size set
+ * by the caller as above. The frontend fills the nested HDR header itself.
+ * Unknown geometry/capabilities are zero. No raw EDID or display identity is
+ * exposed. The HDR block describes presentation, not panel capability.
  */
-#define RETRO_ENVIRONMENT_GET_HDR_PAPER_WHITE_NITS (89 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+#define RETRO_ENVIRONMENT_GET_DISPLAY_METADATA (102 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
-/**
- * Queries the colour-gamut treatment the frontend applies to SDR content
- * when presenting HDR.
- *
- * Only meaningful together with #RETRO_PIXEL_FORMAT_HDR10_2101010.  A core
- * emitting that format performs its own Rec.709 -> Rec.2020 rotation, and
- * has to make the same choice the frontend makes for SDR content, or a
- * scene will change saturation when the user switches the core between an
- * SDR format and HDR10.  The values match the frontend's "Colour Boost"
- * setting:
- *
- *   0 Accurate -- proper Rec.709 -> Rec.2020 conversion, no boost
- *   1 Expanded -- Rec.709 -> a slightly wider space
- *   2 Wide     -- Rec.709 -> DCI-P3
- *   3 Super    -- no rotation at all; values stay Rec.709 and the boost
- *                 comes from the display interpreting them as Rec.2020
- *
- * A core should re-query this when it rebuilds its colour tables, since the
- * user can change it at any time.
- *
- * @param[out] data <tt>unsigned *</tt>.
- * Set to one of the values above.
- * @return \c true if the call is recognised, \c false on a frontend that
- * does not implement it; callers should then assume 0 (Accurate).
- */
-#define RETRO_ENVIRONMENT_GET_HDR_EXPAND_GAMUT (90 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+/* Native core-input formats, independent of output mode or display bit depth. */
+#define RETRO_HDR_SOURCE_FORMAT_HDR10_2101010 (1u << 0)
+/* RETRO_PIXEL_FORMAT_SCRGB_RGBA16F core input.
+ * Do not advertise solely because an FP16 output framebuffer exists. */
+#define RETRO_HDR_SOURCE_FORMAT_SCRGB_RGBA16F (1u << 1)
 
-/**
- * Queries which HDR output mode the frontend is presenting with.
- *
- * Only meaningful together with #RETRO_PIXEL_FORMAT_HDR10_2101010.  Both
- * output modes accept the same PQ Rec.2020 frame, but they do not treat its
- * primaries identically: an HDR10 swapchain presents the samples as-is,
- * while an scRGB swapchain converts them and applies a Rec.2020 -> Rec.709
- * rotation on the way.  A core that encodes its own gamut -- which it must,
- * to honour #RETRO_ENVIRONMENT_GET_HDR_EXPAND_GAMUT -- therefore has to know
- * which of the two it is feeding, or its colour choice is undone by that
- * rotation on one of them.
- *
- * Values:
- *   0  HDR output is off
- *   1  HDR10 (PQ, Rec.2020 swapchain); samples are presented unchanged
- *   2  scRGB (linear FP16, Rec.709); the frontend applies Rec.2020 ->
- *      Rec.709 to the decoded samples
- *
- * The user can switch this at any time, so a core should re-query it when it
- * rebuilds its colour tables rather than caching it indefinitely.
- *
- * @param[out] data <tt>unsigned *</tt>.
- * Set to one of the values above.
- * @return \c true if the call is recognised, \c false on a frontend that
- * does not implement it; callers should then assume 1 (HDR10), which is the
- * mode that needs no compensation.
- */
-#define RETRO_ENVIRONMENT_GET_HDR_OUTPUT_MODE (91 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+struct retro_hdr_metadata
+{
+   unsigned version;
+   unsigned size;
+   /* 0 = SDR or no active output, 1 = PQ Rec.2020, 2 = linear Rec.709. */
+   unsigned output_mode;
+   /* RETRO_HDR_SOURCE_FORMAT_* mask; zero means none known.
+    * Before video init this reports configured capability; SET_PIXEL_FORMAT
+    * must still accept the requested format. Ignore unknown bits. */
+   uint32_t source_formats;
+   float paper_white_nits;
+   /* Effective frontend target, including a display-peak override. */
+   float max_nits;
+   float min_nits;
+   /* SDR expansion: 0 accurate, 1 expanded, 2 P3, 3 unrotated. */
+   unsigned expand_gamut;
+   /* Content light levels, zero when unknown; never inferred from peak. */
+   float max_cll;
+   float max_fall;
+   /* H.273 codes; zero when unspecified. Linear transfer is 8, PQ is 16. */
+   unsigned color_primaries;
+   unsigned transfer_function;
+   /* For accepted HDR10_2101010 input: no creative curve, paper-white scale
+    * or SDR gamut expansion. PQ-to-linear/gamut conversion remains required
+    * for scRGB. Does not override a shader preset's existing contract. */
+   bool passthrough;
+   /* 0 = full-spectrum rational; other operators are not implemented. */
+   unsigned tonemap_operator;
+   uint32_t reserved[8];
+};
 
-/**
- * Queries the peak luminance the frontend is presenting to, in cd/m2 (nits).
- *
- * Only meaningful together with #RETRO_PIXEL_FORMAT_HDR10_2101010.  A core
- * emitting HDR10 encodes absolute luminance itself, so it decides where its
- * brightest content lands.  #RETRO_ENVIRONMENT_GET_HDR_PAPER_WHITE_NITS says
- * where ordinary content sits; this says how much room there is above it.  The
- * gap between the two is the entire headroom a core has for highlights, and
- * without it a core has to guess - a guess that is too dark on a bright display
- * and clips on a dim one.
- *
- * This is what the *display* can do, not what the content wants, so it is a
- * ceiling to roll off toward rather than a level to target.  A core should not
- * assume anything it emits below this value is reproduced exactly; displays
- * tone map internally, and many report a peak they can only hold over a small
- * window.
- *
- * May be lower than paper white if the user has configured it so.  A core
- * should treat that as zero headroom and clamp to paper white rather than
- * producing a negative range.
- *
- * The user can change this at any time, so a core should re-query it rather
- * than caching it indefinitely.
- *
- * @param[out] data <tt>float *</tt>.
- * Set to the peak luminance in nits.
- * @return \c true if the call is recognised, \c false on a frontend that does
- * not implement it; callers should then fall back to a sensible default.
- * 1000 nits is a reasonable assumption, being both the HDR10 reference peak
- * and roughly what mid-range HDR displays achieve.
- */
-#define RETRO_ENVIRONMENT_GET_HDR_MAX_NITS (92 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+struct retro_display_geometry
+{
+   unsigned native_width;
+   unsigned native_height;
+   unsigned width_mm;
+   unsigned height_mm;
+   unsigned refresh_min_mHz;
+   unsigned refresh_max_mHz;
+};
+
+struct retro_display_color_caps
+{
+   float peak_nits;
+   float min_nits;
+   float max_frame_avg_nits;
+   /* CIE xy / 10000: Rx,Ry,Gx,Gy,Bx,By,Wx,Wy. All zero = unknown. */
+   uint16_t primaries_xy[8];
+   /* Bit 0 SDR, bit 1 PQ, bit 2 HLG. Zero = unknown. */
+   unsigned supported_eotf_mask;
+   unsigned edid_gamma_x100;
+   /* 0 unknown, 1 user, 2 EDID/CTA, 3 platform API. */
+   unsigned capability_source;
+};
+
+struct retro_display_metadata
+{
+   unsigned version;
+   unsigned size;
+   struct retro_display_geometry geo;
+   struct retro_hdr_metadata hdr;
+   struct retro_display_color_caps caps;
+};
 
 /**
  * Negotiates multi-channel audio output.
@@ -3202,12 +3182,14 @@ struct retro_vr_frame_state {
 #define RETRO_ENVIRONMENT_GET_VR_HEAD_POSE (98 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 
 /* Frontend H.264 decoding to CPU-readable 8-bit YUV 4:2:0 planes.
- * Version must be initialized to 1 before querying. Calls for each decoder
+ * Versions 1, 2 and 3 are supported. Initialize the version before querying.
+ * Version 1 writes only the original prefix through close. Calls for each decoder
  * are serialized by the core; close all decoders before context teardown.
  * Unsupported frontends return false. Input is one Annex-B access unit.
  * Planes remain valid until decode, drain or close. */
 #define RETRO_ENVIRONMENT_GET_VIDEO_DECODE_INTERFACE (99 | RETRO_ENVIRONMENT_EXPERIMENTAL)
-#define RETRO_VIDEO_DECODE_INTERFACE_VERSION 1
+#define RETRO_VIDEO_DECODE_INTERFACE_VERSION 3
+#define RETRO_VIDEO_DECODE_DEFER_PLANES (1u << 0)
 
 struct retro_video_decode_frame
 {
@@ -3215,6 +3197,29 @@ struct retro_video_decode_frame
    unsigned strides[3];
    unsigned width, height;
    bool hardware;
+};
+
+enum retro_video_decode_gpu_api
+{
+   RETRO_VIDEO_DECODE_GPU_VULKAN = 1,
+   RETRO_VIDEO_DECODE_GPU_D3D11 = 2
+};
+
+/* Version 3 GPU output. Vulkan uses same-device VkImage/views and timeline
+ * semaphores; D3D11 uses shared NT handles. Wait on wait_value before GPU
+ * reads, preserve layout, and signal done_value after the final GPU read.
+ * An unused lease is returned with abandon. Close/context destruction
+ * requires all leases to have completed; handles must never be cached
+ * beyond their lease. Chroma views are R8/R8G8 (8-bit 4:2:0).
+ * The copy is independent of subsequent decode/drain output. */
+struct retro_video_decode_gpu_frame
+{
+   uint64_t image, plane_views[2];
+   uint64_t wait, wait_value, done, done_value;
+   void (*abandon)(void *owner, uint64_t done, uint64_t done_value);
+   void *owner;
+   unsigned width, height, layout, yuv, pixfmt, array_slice, crop_x, crop_y;
+   unsigned api;
 };
 
 struct retro_video_decode_interface
@@ -3227,6 +3232,23 @@ struct retro_video_decode_interface
    /* 1: frame ready; 0: no more frames; -1: failure. */
    int (*drain)(void *decoder, struct retro_video_decode_frame *frame);
    void (*close)(void *decoder);
+   /* Version 2: flags=0 preserves eager CPU planes. DEFER_PLANES returns
+    * width/height/hardware with null planes; get_frame materializes them.
+    * Output expires on the next decode/drain/close. No GPU handle is leased.
+    * 2: hardware busy; retry decode_ex with the same live input pointer
+    * and size, or retry drain_ex later. Do not consume another access unit.
+    * Unsupported flag bits fail without consuming input. */
+   int (*decode_ex)(void *decoder, const uint8_t *data, size_t size,
+         struct retro_video_decode_frame *frame, unsigned flags);
+   int (*drain_ex)(void *decoder, struct retro_video_decode_frame *frame,
+         unsigned flags);
+   /* 1: CPU planes ready; -1: no current output or readback failure.
+    * Repeated calls reuse the same CPU copy. */
+   int (*get_frame)(void *decoder, struct retro_video_decode_frame *frame);
+   /* Version 3: export the current deferred output once. 1 leased,
+    * 2 busy (retry later), -1 unavailable/error. CPU get_frame remains
+    * valid until decode/drain. Failed calls acquire no lease. */
+   int (*get_gpu_frame)(void *decoder, struct retro_video_decode_gpu_frame *frame);
 };
 
 
@@ -3428,6 +3450,167 @@ struct retro_vr_controller_poses
 {
    /** Indexed by enum retro_vr_hand. */
    struct retro_vr_hand_state hands[RETRO_VR_HAND_COUNT];
+};
+
+/**
+ * const struct retro_hw_render_upscaler_interface ** --
+ * The frontend's temporal upscaler, for a hardware-rendered core: how the
+ * core learns that an upscaler (NVIDIA DLSS Super Resolution; the same
+ * contract serves FSR and XeSS) is taking its frames and what render size
+ * it wants, and how it hands over the depth, motion vectors and jitter
+ * the upscaler needs beside the color image it already presents.
+ *
+ * Call it first in retro_load_game, beside SET_HW_RENDER: there it
+ * returns false and tells the frontend to make the context for the
+ * upscaler, which loads its libraries and adds what they need to the
+ * context; a frontend does neither for a core that has not asked. Then
+ * call after the hardware context is reset (context_reset), once; the
+ * interface is valid until context_destroy. Returns false when the
+ * frontend has no upscaler for this context type or video driver; the
+ * core then renders as it always has. A core that never calls this is
+ * unaffected: the frontend shows its frames as they are.
+ *
+ * @see retro_hw_render_upscaler_interface
+ */
+#define RETRO_ENVIRONMENT_GET_HW_RENDER_UPSCALER_INTERFACE (103 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+
+#define RETRO_HW_RENDER_UPSCALER_INTERFACE_VERSION 1
+
+/**
+ * An image of the hardware context's API, named the way the color image
+ * is in the context's own render interface:
+ * - Vulkan: image is the VkImage, view a VkImageView over it (one mip,
+ *   one layer), format the VkFormat, state the VkImageLayout the image is
+ *   in when the frontend reads it (VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+ *   or VK_IMAGE_LAYOUT_GENERAL); created with VK_IMAGE_USAGE_SAMPLED_BIT.
+ * - Direct3D 12: image is the ID3D12Resource *, view 0, format the
+ *   DXGI_FORMAT, state the D3D12_RESOURCE_STATES it is in.
+ * image 0 is no image.
+ */
+struct retro_hw_upscaler_image
+{
+   uint64_t image;
+   uint64_t view;
+   unsigned format;
+   unsigned state;
+   unsigned width;
+   unsigned height;
+};
+
+/* Flags of retro_hw_upscaler_inputs. */
+/** The motion vectors include this frame's jitter; the upscaler takes it
+ * back out with jitter_x/y. Without it they are the unjittered motion. */
+#define RETRO_HW_UPSCALER_MV_JITTERED     (1 << 0)
+/** Depth runs 1 at the near plane to 0 at the far plane. */
+#define RETRO_HW_UPSCALER_DEPTH_INVERTED  (1 << 1)
+/** The color image is linear light, unbounded (scRGB, a float format),
+ * not display-encoded SDR. */
+#define RETRO_HW_UPSCALER_HDR             (1 << 2)
+/** Nothing of the previous frames applies to this one (a cut, a reset,
+ * a state load): the upscaler starts its history over. */
+#define RETRO_HW_UPSCALER_RESET           (1 << 3)
+/** The motion vectors are at the output size rather than the render
+ * size. */
+#define RETRO_HW_UPSCALER_MV_OUTPUT_RES   (1 << 4)
+
+/**
+ * What a frame brings beside its color image. Pixel coordinates have
+ * (0,0) at the top left and +y down, in texels of the render size (the
+ * color image's), for motion vectors and jitter alike.
+ */
+struct retro_hw_upscaler_inputs
+{
+   /** RETRO_HW_UPSCALER_* bits. */
+   unsigned flags;
+   /** Two-channel float (RG16F or RG32F): for every pixel, how far the
+    * surface seen there moved from the previous frame to this one, in
+    * pixels, after mv_scale. Required. */
+   struct retro_hw_upscaler_image motion_vectors;
+   /** Depth: any one-channel or depth(-stencil) format. Required. */
+   struct retro_hw_upscaler_image depth;
+   /** Optional: a 1x1 single float of the frame's exposure; none makes
+    * the upscaler measure it. */
+   struct retro_hw_upscaler_image exposure;
+   /** Optional: a one-channel mask, 1 where the color is translucent or
+    * has no depth or motion of its own (particles, overlays). */
+   struct retro_hw_upscaler_image transparency_mask;
+   /** The sub-pixel offset the projection was shifted by this frame, in
+    * render pixels, each in [-0.5, 0.5]; a Halton (2,3) sequence works
+    * well. (0,0) when the frame was not jittered. */
+   float jitter_x;
+   float jitter_y;
+   /** Multiplied into the motion vectors as stored; 1 when they are in
+    * pixels already. 0 reads as 1. Negative flips an axis. */
+   float mv_scale_x;
+   float mv_scale_y;
+   /** Exposure applied to the color before it was stored, and a scale
+    * on the exposure used. 0 reads as 1. */
+   float pre_exposure;
+   float exposure_scale;
+   /** This frame's duration in milliseconds, 0 when unknown. */
+   float frame_time_ms;
+};
+
+/**
+ * What the upscaler wants, read before rendering a frame.
+ */
+struct retro_hw_upscaler_request
+{
+   /** The size the upscaler produces: the content's size on screen. */
+   unsigned output_width;
+   unsigned output_height;
+   /** The size it wants to be fed, the best for its mode: render and hand
+    * over frames of this size. A frame of another size within the range
+    * below is taken and scaled from what it is; outside it, shown without
+    * upscaling. */
+   unsigned render_width;
+   unsigned render_height;
+   unsigned min_render_width;
+   unsigned min_render_height;
+   unsigned max_render_width;
+   unsigned max_render_height;
+   /** Reserved, 0. */
+   unsigned flags;
+   /** The texture LOD bias the core should render with so textures keep
+    * their detail at the output size: log2(render / output) - 1. */
+   float mip_bias;
+};
+
+/**
+ * @see RETRO_ENVIRONMENT_GET_HW_RENDER_UPSCALER_INTERFACE
+ */
+struct retro_hw_render_upscaler_interface
+{
+   /** RETRO_HW_RENDER_UPSCALER_INTERFACE_VERSION. */
+   unsigned interface_version;
+
+   /** Opaque, passed to every function here. */
+   void *handle;
+
+   /**
+    * Whether an upscaler will take the next frame, and what it wants:
+    * true with @request filled, or false with it untouched when none is
+    * active, in which case the core renders as it always has. Read it
+    * every frame before rendering; the answer changes when the user turns
+    * the upscaler on or off, resizes the window or picks another mode.
+    * While it answers true the core renders at render_width x
+    * render_height with sub-pixel jitter and without temporal or
+    * post-process anti-aliasing of its own, which would fight the
+    * upscaler's.
+    */
+   bool (*get_request)(void *handle, struct retro_hw_upscaler_request *request);
+
+   /**
+    * This frame's depth, motion vectors and jitter, called before the
+    * color image is handed over (set_image, set_texture) and
+    * retro_video_refresh_t is called. @inputs must stay valid until
+    * retro_video_refresh_t returns; its images for as long as the color
+    * image of the same frame, under the same sync index rules, and they
+    * are complete when it is: the semaphores or fence that cover the
+    * color image cover them. A frame without a call, or with NULL, has
+    * no inputs and is shown without upscaling.
+    */
+   void (*set_inputs)(void *handle, const struct retro_hw_upscaler_inputs *inputs);
 };
 
 /* Speaker positions, as bits of a layout mask; a frame's channels are
@@ -4312,6 +4495,12 @@ enum retro_hw_render_interface_type
     * @see retro_hw_render_interface_gskit_ps2
     */
    RETRO_HW_RENDER_INTERFACE_GSKIT_PS2  = 5,
+
+   /**
+    * PlayStation 3 RSX (PSL1GHT).
+    * @see retro_hw_render_interface_rsx in libretro_rsx.h
+    */
+   RETRO_HW_RENDER_INTERFACE_RSX        = 6,
 
    /** @private Defined to ensure <tt>sizeof(retro_hw_render_interface_type) == sizeof(int)</tt>.
     * Do not use. */
@@ -5377,7 +5566,9 @@ struct retro_log_callback
 /** Indicates CPU support for the ASIMD instruction set. */
 #define RETRO_SIMD_ASIMD    (1 << 21)
 
-/** Indicates CPU support for the AVX512 instruction set. */
+/** Indicates CPU support for the AVX-512 x86-64-v4 baseline:
+ * AVX-512 F, CD, BW, DQ and VL are all present and the OS saves
+ * ZMM state. */
 #define RETRO_SIMD_AVX512   (1 << 22)
 
 /** Indicates CPU support for the LZCNT instruction (x86 ABM / ARM CLZ). */
@@ -5777,6 +5968,55 @@ enum retro_sensor_action
  * @see https://en.wikipedia.org/wiki/Lux for a table of common lux values.
  */
 #define RETRO_SENSOR_ILLUMINANCE 6
+/** @} */
+
+/** @defgroup RETRO_SENSOR_SUBDEVICE Sensor Sub-Device Index
+ * @{
+ */
+
+/**
+ * The number of bits that a sub-device index is shifted by within a sensor ID
+ * or a \c retro_sensor_action.
+ *
+ * Addresses more than one sensor of the same kind on a single port.
+ * Index 0 denotes the controller itself and encodes to the values already in
+ * use (<tt>RETRO_SENSOR_SUBDEVICE(0, id) == id</tt>). Index 1 denotes the part
+ * of the controller held in the left hand: a Wii Remote's Nunchuk, or the
+ * left Joy-Con of a pair held as one controller (whose index 0 is the right
+ * one). Higher indices are left for controllers with more parts.
+ *
+ * A core learns whether the frontend has a sub-device's sensor from the
+ * enable action, \c retro_set_sensor_state_t returning \c true for it; a
+ * reading of 0 says nothing, as a frontend without it returns 0 for every
+ * read. For instance:
+ * @code
+ * bool nunchuk = sensor.set_sensor_state(port, (enum retro_sensor_action)
+ *       RETRO_SENSOR_SUBDEVICE(1, RETRO_SENSOR_ACCELEROMETER_ENABLE), 100);
+ * float x      = sensor.get_sensor_input(port,
+ *       RETRO_SENSOR_SUBDEVICE(1, RETRO_SENSOR_ACCELEROMETER_X));
+ * @endcode
+ *
+ * @note \c retro_sensor_action is an enum, so an encoded action must be cast at
+ * the call site. \c RETRO_SENSOR_DUMMY pins the underlying type to \c int, so
+ * the encoded value is in range.
+ *
+ * @see RETRO_SENSOR_ID
+ * @see retro_sensor_action
+ */
+#define RETRO_SENSOR_INDEX_SHIFT 8
+
+/** Mask of the bits below the sub-device index. */
+#define RETRO_SENSOR_INDEX_MASK ((1u << RETRO_SENSOR_INDEX_SHIFT) - 1u)
+
+/** Returns the sub-device index encoded in \c id; 0 is the controller itself. */
+#define RETRO_SENSOR_INDEX(id) ((unsigned)(id) >> RETRO_SENSOR_INDEX_SHIFT)
+
+/** Returns the sensor ID or action in \c id, without its sub-device index. */
+#define RETRO_SENSOR_BASE(id) ((unsigned)(id) & RETRO_SENSOR_INDEX_MASK)
+
+/** Addresses sensor \c id on sub-device \c index of a port. */
+#define RETRO_SENSOR_SUBDEVICE(index, id) \
+   ((unsigned)((((unsigned)(index)) << RETRO_SENSOR_INDEX_SHIFT) | ((unsigned)(id))))
 /** @} */
 
 /**
@@ -6406,6 +6646,9 @@ enum retro_hw_context_type
    /* Direct3D9, see RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE */
    RETRO_HW_CONTEXT_D3D9             = 10,
 
+   /* PlayStation 3 RSX, see libretro_rsx.h */
+   RETRO_HW_CONTEXT_RSX              = 11,
+
    /** Dummy value to ensure sizeof(enum retro_hw_context_type) == sizeof(int). Do not use. */
    RETRO_HW_CONTEXT_DUMMY = INT_MAX
 };
@@ -6985,18 +7228,41 @@ enum retro_pixel_format
     * A frontend that accepts this format MUST pass the samples through to an
     * HDR10 (PQ / Rec.2020) swapchain without re-encoding them: no inverse
     * tonemap, no Rec.709->Rec.2020 rotation, no paper-white scaling, since
-    * the core has already applied all of it.  A frontend that cannot present
-    * HDR10 natively must reject the format from SET_PIXEL_FORMAT rather than
+    * the core has already applied all of it.  For scRGB output the frontend must instead decode PQ, rotate Rec.2020
+    * to linear Rec.709 and scale to the platform reference white, without
+    * a second creative curve. A frontend without either path must reject the format from SET_PIXEL_FORMAT rather than
     * silently down-converting -- PQ samples interpreted as SDR look badly
     * wrong, so the usual transparent narrowing is not safe here.  Cores
     * should therefore keep an SDR path and fall back when this is refused.
     *
-    * Cores should query #RETRO_ENVIRONMENT_GET_HDR_PAPER_WHITE_NITS to learn
+    * Cores should query #RETRO_ENVIRONMENT_GET_HDR_METADATA to learn
     * the luminance the user considers "SDR white" and map their normal
     * output to it; content authored above that value is what produces the
     * HDR effect.
     */
    RETRO_PIXEL_FORMAT_HDR10_2101010 = 4,
+
+   /**
+    * FP16 linear scRGB with Rec.709/sRGB primaries and D65 white.
+    *
+    * Each pixel is four IEEE 754 binary16 samples in memory order R, G, B, A,
+    * with each 16-bit sample in native byte order. Alpha is ignored; cores
+    * should set it to 1.0. Each pixel occupies 8 bytes; pitch is in bytes.
+    * RGB samples must be finite. Negative values and values above 1.0 are
+    * valid and must not be clamped during upload or intermediate storage.
+    *
+    * RGB 1.0 represents 80 cd/m^2, independent of frontend paper white and
+    * platform output units. There is no gamma/PQ transfer to decode. Cores
+    * can use GET_HDR_METADATA paper_white_nits / 80.0 for their SDR white.
+    *
+    * An accepting frontend must preserve linear HDR values, converting
+    * primaries, transfer and reference-white units on the GPU as required
+    * by its output. Do not apply SDR expansion or a second paper-white
+    * scale. Unsupported paths must reject SET_PIXEL_FORMAT; cores must
+    * check its result and retain an SDR fallback. The corresponding
+    * source_formats bit is RETRO_HDR_SOURCE_FORMAT_SCRGB_RGBA16F.
+    */
+   RETRO_PIXEL_FORMAT_SCRGB_RGBA16F = 5,
 
    /** 
     * @private Defined to ensure that <tt>sizeof(retro_pixel_format) == sizeof(int)</tt>.
