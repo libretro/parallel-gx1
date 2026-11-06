@@ -341,6 +341,11 @@ static void pr_type(struct rslc_pr *p, const struct rslc_type *t)
          pr_s(p, t->kind == RSLC_TY_SAMPLER2DARRAY ? "sampler2DArray"
                : t->kind == RSLC_TY_SAMPLER2DMSARRAY ? "sampler2DMSArray" : "samplerBuffer");
          break;
+      case RSLC_TY_SUBPASSINPUT:
+         /* MSL alone prints one: the attachment's value, read as a
+          * fragment input */
+         pr_s(p, "float4");
+         break;
       case RSLC_TY_IMAGE2D:
       case RSLC_TY_IMAGE2DARRAY:
          if (p->hlsl)
@@ -436,8 +441,10 @@ static const char *pr_block_instance(struct rslc_pr *p, unsigned block)
 {
    const struct rslc_blockdecl *b = &p->c->prog.blocks[block];
    const char *forced = NULL;
-   /* the frontend's names are for its two blocks; further ones keep theirs */
-   if (p->names && block < 2)
+   /* the frontend's names are for its two blocks; further ones keep
+    * theirs. Without RSLC_EXTENDED every block is one of those two,
+    * so the index test folds away. */
+   if (p->names && (RSLC_MAX_BLOCKS == 2 || block < 2))
       forced = b->push ? p->names->push_instance : p->names->ubo_instance;
    if (forced)
       return forced;
@@ -1903,6 +1910,9 @@ static void pr_msl_builtin(struct rslc_pr *p, const struct rslc_node *n)
          }
          return;
       }
+      case RSLC_BFN_SUBPASSLOAD:
+         pr_expr(p, rslc_list_item(p->c, list, 0), PR_PREC_POSTFIX);
+         return;
       case RSLC_BFN_IMAGESIZE:
       {
          const struct rslc_type *it = pr_arg_type(p, list, 0);
@@ -2481,7 +2491,7 @@ static void pr_msl_env(struct rslc_pr *p, const struct rslc_func *f, bool decl, 
          continue;
       }
 #ifdef RSLC_EXTENDED
-      if (v->storage == RSLC_ST_IMAGE)
+      if (v->storage == RSLC_ST_IMAGE || v->storage == RSLC_ST_SUBPASS)
       {
          if (decl)
          {
@@ -2618,7 +2628,7 @@ static void pr_msl_env_mark(struct rslc_pr *p, uint8_t *env, uint32_t node, bool
             case RSLC_ST_IN: case RSLC_ST_OUT: case RSLC_ST_BUILTIN:
             case RSLC_ST_GLOBAL: case RSLC_ST_SAMPLER:
 #ifdef RSLC_EXTENDED
-            case RSLC_ST_IMAGE: case RSLC_ST_SHARED:
+            case RSLC_ST_IMAGE: case RSLC_ST_SHARED: case RSLC_ST_SUBPASS:
 #endif
                slot = n->a;
                break;
@@ -6356,6 +6366,21 @@ static bool pr_msl(struct rslc_pr *p, struct rslc_result *result)
       pr_u(p, pr_msl_index(v->binding));
       pr_s(p, ")]]");
    }
+   /* an input attachment is the colour attachment's value on entry */
+   for (i = 1; i < pr->nvars; i++)
+   {
+      const struct rslc_var *v = pr->vars[i];
+      if (v->storage != RSLC_ST_SUBPASS || !menv[i])
+         continue;
+      if (!first)
+         pr_s(p, ", ");
+      first = false;
+      pr_s(p, "float4 ");
+      pr_var_name(p, v);
+      pr_s(p, " [[color(");
+      pr_u(p, v->member);
+      pr_s(p, ")]]");
+   }
 #endif
    for (i = 1; i < pr->nvars; i++)
    {
@@ -6636,6 +6661,15 @@ bool rslc_emit_text(struct rslc_ctx *c, struct rslc_result *result)
       rslc_err(c, p->hlsl ? "hlsl: no geometry stage yet" : "msl: no geometry stage", NULL, 0);
       return false;
    }
+   /* an input attachment has a form in MSL alone */
+   if (!p->msl)
+      for (k = 1; k < pr->nvars; k++)
+         if (pr->vars[k]->storage == RSLC_ST_SUBPASS)
+         {
+            rslc_err(c, p->hlsl ? "hlsl: no form of subpassInput" : "glsl: no form of subpassInput",
+                  NULL, pr->vars[k]->line);
+            return false;
+         }
    if (p->hlsl && c->stage == RSLC_STAGE_COMPUTE)
    {
       uint32_t k;

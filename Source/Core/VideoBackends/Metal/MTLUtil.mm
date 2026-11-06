@@ -94,6 +94,115 @@ void Metal::Util::PopulateBackendInfoAdapters(BackendInfo* backend_info,
   }
 }
 
+#if TARGET_OS_OSX
+/* Some Intel GPUs fetch from the framebuffer though no feature set says
+ * so, and others build the pipeline but leave the fetch out: draw one
+ * pixel whose shader doubles what it reads, and check it doubled. */
+static bool DetectIntelGPUFBFetch(id<MTLDevice> dev)
+{
+  static const char shader[] =
+      "vertex float4 fs_triangle(uint vid [[vertex_id]]) {\n"
+      "  return float4(vid & 1 ? 3 : -1, vid & 2 ? 3 : -1, 0, 1);\n"
+      "}\n"
+      "fragment float4 fbfetch_test(float4 in [[color(0), raster_order_group(0)]]) {\n"
+      "  return in * 2;\n"
+      "}\n";
+  const u32 px_in = 0x11223344;
+  u32 px_out = 0;
+  bool ok = false;
+  id<MTLLibrary> lib;
+  id<MTLFunction> vs;
+  id<MTLFunction> fs;
+  MTLRenderPipelineDescriptor* pdesc;
+  id<MTLRenderPipelineState> pipe = nil;
+  id<MTLBuffer> buf = nil;
+  MTLTextureDescriptor* tdesc;
+  id<MTLTexture> tex = nil;
+  id<MTLCommandQueue> q = nil;
+  id<MTLCommandBuffer> cmdbuf;
+  id<MTLBlitCommandEncoder> blit;
+  MTLRenderPassDescriptor* rpdesc;
+  id<MTLRenderCommandEncoder> renc;
+
+  lib = [dev newLibraryWithSource:[NSString stringWithUTF8String:shader] options:nil error:nil];
+  if (!lib)
+    return false;
+  vs = [lib newFunctionWithName:@"fs_triangle"];
+  fs = [lib newFunctionWithName:@"fbfetch_test"];
+  pdesc = [MTLRenderPipelineDescriptor new];
+  [pdesc setVertexFunction:vs];
+  [pdesc setFragmentFunction:fs];
+  [[pdesc colorAttachments][0] setPixelFormat:MTLPixelFormatRGBA8Unorm];
+  if (vs && fs)
+    pipe = [dev newRenderPipelineStateWithDescriptor:pdesc error:nil];
+  if (pipe)
+  {
+    buf = [dev newBufferWithLength:4 options:MTLResourceStorageModeShared];
+    memcpy([buf contents], &px_in, sizeof(px_in));
+    tdesc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                                               width:1
+                                                              height:1
+                                                           mipmapped:false];
+    [tdesc setUsage:MTLTextureUsageRenderTarget];
+    tex = [dev newTextureWithDescriptor:tdesc];
+    q = [dev newCommandQueue];
+    cmdbuf = [q commandBuffer];
+
+    blit = [cmdbuf blitCommandEncoder];
+    [blit copyFromBuffer:buf
+               sourceOffset:0
+          sourceBytesPerRow:4
+        sourceBytesPerImage:4
+                 sourceSize:MTLSizeMake(1, 1, 1)
+                  toTexture:tex
+           destinationSlice:0
+           destinationLevel:0
+          destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+
+    rpdesc = [MTLRenderPassDescriptor new];
+    [[rpdesc colorAttachments][0] setTexture:tex];
+    [[rpdesc colorAttachments][0] setLoadAction:MTLLoadActionLoad];
+    [[rpdesc colorAttachments][0] setStoreAction:MTLStoreActionStore];
+    renc = [cmdbuf renderCommandEncoderWithDescriptor:rpdesc];
+    [renc setRenderPipelineState:pipe];
+    [renc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+    [renc endEncoding];
+    [rpdesc release];
+
+    blit = [cmdbuf blitCommandEncoder];
+    [blit copyFromTexture:tex
+                     sourceSlice:0
+                     sourceLevel:0
+                    sourceOrigin:MTLOriginMake(0, 0, 0)
+                      sourceSize:MTLSizeMake(1, 1, 1)
+                        toBuffer:buf
+               destinationOffset:0
+          destinationBytesPerRow:4
+        destinationBytesPerImage:4];
+    [blit endEncoding];
+
+    [cmdbuf commit];
+    [cmdbuf waitUntilCompleted];
+
+    memcpy(&px_out, [buf contents], sizeof(px_out));
+    ok = [cmdbuf status] == MTLCommandBufferStatusCompleted;
+  }
+
+  [q release];
+  [tex release];
+  [buf release];
+  [pipe release];
+  [pdesc release];
+  [fs release];
+  [vs release];
+  [lib release];
+
+  /* Skylake and later double it; Broadwell leaves it, Haswell blackens it */
+  return ok && px_out == 0x22446688;
+}
+#endif
+
 void Metal::Util::PopulateBackendInfoFeatures(const VideoConfig& config, BackendInfo* backend_info,
                                               id<MTLDevice> device)
 {
@@ -152,9 +261,11 @@ void Metal::Util::PopulateBackendInfoFeatures(const VideoConfig& config, Backend
     break;
   }
 
-  /* rslc has no form of a subpass input: blending is not emulated
-   * through framebuffer fetch */
-  backend_info->bSupportsFramebufferFetch = false;
+  backend_info->bSupportsFramebufferFetch = [device supportsFamily:MTLGPUFamilyApple1];
+#if TARGET_OS_OSX
+  if (vendor == DriverDetails::VENDOR_INTEL)
+    backend_info->bSupportsFramebufferFetch |= DetectIntelGPUFBFetch(device);
+#endif
 
   if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DYNAMIC_SAMPLER_INDEXING))
     backend_info->bSupportsDynamicSamplerIndexing = false;
@@ -268,6 +379,10 @@ static const std::string_view PIXEL_SHADER_HEADER = R"(
 #define FORCE_EARLY_Z layout(early_fragment_tests) in
 #define UBO_BINDING(packing, x) layout(packing, binding = ((x) - 1))
 #define SSBO_BINDING(x) layout(std430, binding = ((x) + 2))
+#define INPUT_ATTACHMENT_BINDING(x, y, z) layout(set = x, binding = y, input_attachment_index = z)
+
+// Metal framebuffer fetch helpers.
+#define FB_FETCH_VALUE subpassLoad(in_ocol0)
 
 // hlsl to glsl function translation
 #define API_METAL 1

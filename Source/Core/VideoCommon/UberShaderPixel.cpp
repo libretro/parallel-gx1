@@ -98,8 +98,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
 
     if (use_framebuffer_fetch)
     {
-      // A subpass input for the framebuffer read; no backend reports framebuffer fetch
-      // here while rslc has no form of one.
+      // rslc prints a subpass input as Metal's framebuffer fetch.
       out.Write("INPUT_ATTACHMENT_BINDING(0, 0, 0) uniform subpassInput in_ocol0;\n");
     }
   }
