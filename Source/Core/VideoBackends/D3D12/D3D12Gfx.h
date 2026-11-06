@@ -74,6 +74,7 @@ public:
   bool BindBackbuffer(const ClearColor& clear_color = {}) override;
   void PresentBackbuffer() override;
   bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
+  bool IsTextureHeld(const AbstractTexture* texture) override;
 
   SurfaceInfo GetSurfaceInfo() const override;
 

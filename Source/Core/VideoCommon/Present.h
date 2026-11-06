@@ -156,6 +156,19 @@ private:
 
   void ReleaseHandedEntry();
 
+  /* The XFB copies handed on in place that whoever shows the pictures may
+   * still read, from another thread with a threaded output: kept alive,
+   * so their textures go to nothing else, until the output lets them go. */
+  enum
+  {
+    HELD_ENTRIES = 4
+  };
+  RcTcacheEntry m_held_entries[HELD_ENTRIES];
+
+  /* Lets go of those the output no longer holds; the index of a free
+   * place, or -1. */
+  int PruneHeldEntries();
+
   // Tracking of XFB textures so we don't render duplicate frames.
   u64 m_last_xfb_id = std::numeric_limits<u64>::max();
 

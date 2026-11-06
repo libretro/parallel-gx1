@@ -398,6 +398,9 @@ void DXContext::ExecuteCommandList(bool wait_for_completion)
 {
   CommandListResources& res = m_command_lists[m_current_command_list];
 
+  if (m_before_execute)
+    m_before_execute(m_before_execute_opaque);
+
   // Close and queue command list.
   HRESULT hr = res.command_list->Close();
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to close command list: {}", DX12HRWrap(hr));

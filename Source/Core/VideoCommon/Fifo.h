@@ -73,8 +73,9 @@ public:
   void GpuMaySleep();
   /* Runs the GPU until the CPU thread ends the field or, when budget_us
    * is not 0, until that many microseconds have gone by: the field's
-   * remaining work is left for the next call then. */
-  void RunGpuLoop(s64 budget_us);
+   * remaining work is left for the next call then. True when the field
+   * ended. */
+  bool RunGpuLoop(s64 budget_us);
   void ExitGpuLoop();
   void EmulatorState(bool running);
   void ResetVideoBuffer();

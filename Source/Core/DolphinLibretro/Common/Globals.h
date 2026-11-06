@@ -25,6 +25,8 @@ extern std::vector<ActionReplay::ARCode> g_ar_codes;
  * is paused at a field's end as it would be after a full retro_run, and
  * never waiting on the GPU, which only this thread runs. */
 void FinishFieldInFlight();
+/* After what FinishFieldInFlight was for: a parked GPU thread goes on. */
+void ResumeAfterField();
 inline constexpr unsigned g_gbplayer_subsystem_id = 0x101;
 
 namespace Input

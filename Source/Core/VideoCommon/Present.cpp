@@ -932,6 +932,7 @@ void Presenter::Present()
 
   /* what the frontend shows now was drawn */
   ReleaseHandedEntry();
+  PruneHeldEntries();
 
   if (m_xfb_entry)
   {
@@ -976,12 +977,41 @@ bool Presenter::PresentXFBInPlace()
     return false;
   }
 
-  if (!g_gfx->PresentTexture(texture, static_cast<u32>(width), static_cast<u32>(height)))
-    return false;
+  {
+    const int free_place = PruneHeldEntries();
+    int i;
+
+    /* every place held is one more picture in flight than an output
+     * keeps: drawn this time */
+    if (free_place < 0)
+      return false;
+    if (!g_gfx->PresentTexture(texture, static_cast<u32>(width), static_cast<u32>(height)))
+      return false;
+    for (i = 0; i < HELD_ENTRIES && m_held_entries[i] != m_xfb_entry; i++)
+    {
+    }
+    if (i == HELD_ENTRIES)
+      m_held_entries[free_place] = m_xfb_entry;
+  }
 
   ReleaseHandedEntry();
   m_handed_entry = m_xfb_entry;
   return true;
+}
+
+int Presenter::PruneHeldEntries()
+{
+  int free_place = -1;
+  int i;
+
+  for (i = 0; i < HELD_ENTRIES; i++)
+  {
+    if (m_held_entries[i] && !g_gfx->IsTextureHeld(m_held_entries[i]->texture.get()))
+      m_held_entries[i].reset();
+    if (!m_held_entries[i])
+      free_place = i;
+  }
+  return free_place;
 }
 
 void Presenter::ReleaseHandedEntry()

@@ -255,6 +255,11 @@ bool VKGfx::PresentTexture(const AbstractTexture* texture, u32 width, u32 height
   return presented;
 }
 
+bool VKGfx::IsTextureHeld(const AbstractTexture* texture)
+{
+  return m_output->IsTextureHeld(texture);
+}
+
 void VKGfx::ExecuteCommandBuffer(bool submit_off_thread, bool wait_for_completion)
 {
   StateTracker::GetInstance()->EndRenderPass();

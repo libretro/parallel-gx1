@@ -392,6 +392,11 @@ bool Gfx::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
   return m_output->PresentTexture(texture, width, height);
 }
 
+bool Gfx::IsTextureHeld(const AbstractTexture* texture)
+{
+  return m_output->IsTextureHeld(texture);
+}
+
 SurfaceInfo Gfx::GetSurfaceInfo() const
 {
   return {m_output ? m_output->GetWidth() : 0, m_output ? m_output->GetHeight() : 0,

@@ -848,6 +848,7 @@ void retro_unload_game(void)
   if (Core::IsRunning(system))
   {
     Libretro::FinishFieldInFlight();
+    Libretro::Video::GpuThreadStop();
     Core::Stop(system);
 #if defined(__LIBUSB__)
     system.ShutdownUSBScanner();
@@ -907,6 +908,7 @@ static bool retro_set_eject_state(bool ejected)
       system.GetDVDInterface().ChangeDisc(guard, path);
     }
   }, true); // wait_for_completion = true
+  Libretro::ResumeAfterField();
 
   return true;
 }

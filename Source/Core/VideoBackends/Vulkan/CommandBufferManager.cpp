@@ -280,6 +280,8 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
 {
   // End the current command buffer.
   CmdBufferResources& resources = GetCurrentCmdBufferResources();
+  if (m_before_submit)
+    m_before_submit(m_before_submit_opaque, GetCurrentCommandBuffer());
   for (VkCommandBuffer command_buffer : resources.command_buffers)
   {
     VkResult res = vkEndCommandBuffer(command_buffer);

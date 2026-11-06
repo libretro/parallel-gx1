@@ -300,7 +300,7 @@ void FifoManager::ResetVideoBuffer()
 
 // Description: Main FIFO update loop
 // Purpose: Keep the Core HW updated about the CPU-GPU distance
-void FifoManager::RunGpuLoop(s64 budget_us)
+bool FifoManager::RunGpuLoop(s64 budget_us)
 {
   /* Past the deadline the loop stops even though the field has not ended,
    * the CPU thread being held up by something, a disc read say: the
@@ -437,6 +437,7 @@ void FifoManager::RunGpuLoop(s64 budget_us)
   if (!out_of_time)
     retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 0);
 #endif
+  return !out_of_time;
 }
 
 void FifoManager::FlushGpu()

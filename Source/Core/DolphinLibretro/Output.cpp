@@ -26,6 +26,134 @@ void OutputRepeat()
     s_active->Repeat();
 }
 
+void OutputHandOver()
+{
+  if (s_active)
+    s_active->HandOver();
+}
+
+void QueueInit(OutputQueue* queue)
+{
+  memset(queue, 0, sizeof(*queue));
+  queue->lock = slock_new();
+}
+
+void QueueFree(OutputQueue* queue)
+{
+  if (queue->lock)
+    slock_free(queue->lock);
+  queue->lock = nullptr;
+}
+
+static bool QueueInUse(const OutputQueue* queue, int kind, u32 index)
+{
+  return (queue->pending.kind == kind && queue->pending.index == index) ||
+         (queue->taking.kind == kind && queue->taking.index == index) ||
+         (queue->handed.kind == kind && queue->handed.index == index);
+}
+
+u32 QueueAcquireTarget(OutputQueue* queue)
+{
+  u32 i;
+
+  slock_lock(queue->lock);
+  /* the picture published and neither handed over nor being handed
+   * over is not wanted any more: drawn into again, in place */
+  if (queue->pending.kind == PUB_TARGET &&
+      queue->pending.generation != queue->handed.generation &&
+      !(queue->taking.kind != PUB_NONE &&
+        queue->taking.generation == queue->pending.generation))
+  {
+    i = queue->pending.index;
+    queue->pending.kind = PUB_NONE;
+  }
+  else
+  {
+    for (i = 0; i < QUEUE_IMAGES && QueueInUse(queue, PUB_TARGET, i); i++)
+    {
+    }
+  }
+  slock_unlock(queue->lock);
+  return i;
+}
+
+u32 QueueFreeDirect(OutputQueue* queue)
+{
+  u32 i;
+
+  slock_lock(queue->lock);
+  for (i = 0; i < QUEUE_DIRECT && QueueInUse(queue, PUB_DIRECT, i); i++)
+  {
+  }
+  slock_unlock(queue->lock);
+  return i;
+}
+
+void QueuePublish(OutputQueue* queue, int kind, u32 index, const void* texture, u32 width,
+                  u32 height, u64 fence_value)
+{
+  slock_lock(queue->lock);
+  queue->pending.kind = kind;
+  queue->pending.index = index;
+  queue->pending.texture = texture;
+  queue->pending.width = width;
+  queue->pending.height = height;
+  queue->pending.fence_value = fence_value;
+  queue->pending.generation = ++queue->generation;
+  slock_unlock(queue->lock);
+}
+
+bool QueueTake(OutputQueue* queue, Published* out)
+{
+  bool fresh;
+
+  slock_lock(queue->lock);
+  fresh = queue->pending.kind != PUB_NONE &&
+          queue->pending.generation != queue->handed.generation;
+  if (fresh)
+  {
+    queue->taking = queue->pending;
+    *out = queue->taking;
+  }
+  slock_unlock(queue->lock);
+  return fresh;
+}
+
+void QueueHanded(OutputQueue* queue)
+{
+  slock_lock(queue->lock);
+  queue->handed = queue->taking;
+  queue->taking.kind = PUB_NONE;
+  slock_unlock(queue->lock);
+}
+
+bool QueueHolds(OutputQueue* queue, const void* texture)
+{
+  bool held;
+
+  slock_lock(queue->lock);
+  held = (queue->pending.kind == PUB_DIRECT && queue->pending.texture == texture) ||
+         (queue->taking.kind == PUB_DIRECT && queue->taking.texture == texture) ||
+         (queue->handed.kind == PUB_DIRECT && queue->handed.texture == texture);
+  slock_unlock(queue->lock);
+  return held;
+}
+
+u32 QueueHeldDirect(OutputQueue* queue, const void** textures)
+{
+  u32 n = 0;
+
+  slock_lock(queue->lock);
+  if (queue->pending.kind == PUB_DIRECT)
+    textures[n++] = queue->pending.texture;
+  if (queue->taking.kind == PUB_DIRECT)
+    textures[n++] = queue->taking.texture;
+  if (queue->handed.kind == PUB_DIRECT)
+    textures[n++] = queue->handed.texture;
+  slock_unlock(queue->lock);
+  return n;
+}
+
 #if defined(_WIN32) || defined(HAS_VULKAN)
 /* The sync indices a mask names: one past the highest set bit. */
 static u32 SlotCount(unsigned mask)
@@ -145,10 +273,15 @@ bool DX11Output::PresentTexture(const AbstractTexture* texture, u32 width, u32 h
   return true;
 }
 
-DX12Output::DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 height)
-    : m_direct(nullptr), m_iface(iface), m_width(width), m_height(height), m_current(0),
+DX12Output::DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 height,
+                       bool threaded)
+    : m_threaded(threaded), m_direct(nullptr), m_iface(iface), m_width(width),
+      m_height(height), m_current(0),
       m_v2(iface->interface_version >= RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2)
 {
+  memset(&m_queue, 0, sizeof(m_queue));
+  if (m_threaded)
+    QueueInit(&m_queue);
   s_active = this;
 }
 
@@ -156,11 +289,17 @@ DX12Output::~DX12Output()
 {
   if (s_active == this)
     s_active = nullptr;
+  if (m_threaded && DX12::g_dx_context)
+    DX12::g_dx_context->SetBeforeExecute(nullptr, nullptr);
+  QueueFree(&m_queue);
 }
 
 bool DX12Output::Create()
 {
-  const unsigned mask = m_v2 ? m_iface->get_sync_index_mask(m_iface->handle) : 1u;
+  /* threaded, the targets are this output's own, not the sync indices' */
+  const unsigned mask = m_threaded ? (1u << QUEUE_IMAGES) - 1 :
+                        m_v2       ? m_iface->get_sync_index_mask(m_iface->handle) :
+                                     1u;
   const u32 count = SlotCount(mask);
   u32 i;
 
@@ -181,11 +320,19 @@ bool DX12Output::Create()
       return false;
     }
   }
+  if (m_threaded)
+    DX12::g_dx_context->SetBeforeExecute(BeforeExecute, this);
   return true;
 }
 
 AbstractFramebuffer* DX12Output::Acquire()
 {
+  if (m_threaded)
+  {
+    /* a target the frontend does not read */
+    m_current = QueueAcquireTarget(&m_queue);
+    return m_framebuffers[m_current].get();
+  }
   if (m_v2)
   {
     /* the frontend is done with what it read from this index's texture
@@ -199,6 +346,11 @@ AbstractFramebuffer* DX12Output::Acquire()
 void DX12Output::Present()
 {
   m_direct = nullptr;
+  if (m_threaded)
+  {
+    Publish(PUB_TARGET, m_current, m_textures[m_current].get(), m_width, m_height);
+    return;
+  }
   Hand(m_textures[m_current].get(), m_width, m_height);
 }
 
@@ -208,12 +360,79 @@ bool DX12Output::PresentTexture(const AbstractTexture* texture, u32 width, u32 h
    * is; neither waits on a sync index, as none of the output's textures
    * is drawn into */
   m_direct = const_cast<DX12::DXTexture*>(static_cast<const DX12::DXTexture*>(texture));
+  if (m_threaded)
+  {
+    Publish(PUB_DIRECT, QueueFreeDirect(&m_queue), m_direct, width, height);
+    return true;
+  }
   Hand(m_direct, width, height);
+  return true;
+}
+
+void DX12Output::Publish(int kind, u32 index, DX12::DXTexture* texture, u32 width, u32 height)
+{
+  u64 fence_value;
+
+  texture->TransitionToState(m_iface->required_state);
+  fence_value = DX12::g_dx_context->GetCurrentFenceValue();
+  DX12::Gfx::GetInstance()->ExecuteCommandList(false);
+  QueuePublish(&m_queue, kind, index, texture, width, height, fence_value);
+}
+
+void DX12Output::BeforeExecute(void* opaque)
+{
+  DX12Output* self = static_cast<DX12Output*>(opaque);
+  const void* held[3];
+  u32 n;
+  u32 i;
+
+  /* the frontend executes whenever its frame is due: whatever it may read
+   * is left in the state it reads it in by every execution of the core's,
+   * should the core have used it in another since, as a copy's source
+   * say */
+  n = QueueHeldDirect(&self->m_queue, held);
+  for (i = 0; i < n; i++)
+  {
+    const DX12::DXTexture* texture = static_cast<const DX12::DXTexture*>(held[i]);
+    if (texture->GetState() != self->m_iface->required_state)
+      texture->TransitionToState(self->m_iface->required_state);
+  }
+}
+
+bool DX12Output::IsTextureHeld(const AbstractTexture* texture)
+{
+  if (!m_threaded)
+    return texture == m_direct;
+  return QueueHolds(&m_queue, texture);
+}
+
+bool DX12Output::HandOver()
+{
+  Published picture;
+  ID3D12Resource* resource;
+
+  if (!m_threaded || !QueueTake(&m_queue, &picture))
+    return false;
+  resource = static_cast<const DX12::DXTexture*>(picture.texture)->GetResource();
+  if (m_v2)
+  {
+    m_iface->set_texture_fenced(m_iface->handle, resource, DXGI_FORMAT_R8G8B8A8_UNORM,
+                                DX12::g_dx_context->GetFence(), picture.fence_value);
+  }
+  else
+  {
+    m_iface->set_texture(m_iface->handle, resource, DXGI_FORMAT_R8G8B8A8_UNORM);
+  }
+  video_cb(RETRO_HW_FRAME_BUFFER_VALID, picture.width, picture.height, 0);
+  QueueHanded(&m_queue);
   return true;
 }
 
 void DX12Output::Repeat()
 {
+  /* threaded, every execution already leaves it readable */
+  if (m_threaded)
+    return;
   /* version 2 reads the texture again: back to the state it reads it in
    * if the core used it in another one meanwhile, a copy's source say,
    * ahead of the frontend's next frame on the queue */
@@ -247,11 +466,17 @@ void DX12Output::Hand(DX12::DXTexture* texture, u32 width, u32 height)
 #endif
 
 #ifdef HAS_VULKAN
-VKOutput::VKOutput(retro_hw_render_interface_vulkan* iface, u32 width, u32 height)
-    : m_direct(nullptr), m_iface(iface), m_width(width), m_height(height), m_current(0)
+VKOutput::VKOutput(retro_hw_render_interface_vulkan* iface, u32 width, u32 height,
+                   bool threaded)
+    : m_threaded(threaded), m_direct(nullptr), m_iface(iface), m_width(width),
+      m_height(height), m_current(0)
 {
+  memset(&m_queue, 0, sizeof(m_queue));
+  memset(m_direct_images, 0, sizeof(m_direct_images));
   memset(m_images, 0, sizeof(m_images));
   memset(&m_direct_image, 0, sizeof(m_direct_image));
+  if (m_threaded)
+    QueueInit(&m_queue);
   s_active = this;
 }
 
@@ -259,6 +484,9 @@ VKOutput::~VKOutput()
 {
   if (s_active == this)
     s_active = nullptr;
+  if (m_threaded && Vulkan::g_command_buffer_mgr)
+    Vulkan::g_command_buffer_mgr->SetBeforeSubmit(nullptr, nullptr);
+  QueueFree(&m_queue);
   DropDirect();
 }
 
@@ -270,7 +498,9 @@ void VKOutput::DropDirect()
 
 bool VKOutput::Create()
 {
-  const unsigned mask = m_iface->get_sync_index_mask(m_iface->handle);
+  /* threaded, the images are this output's own, not the sync indices' */
+  const unsigned mask = m_threaded ? (1u << QUEUE_IMAGES) - 1 :
+                                     m_iface->get_sync_index_mask(m_iface->handle);
   const u32 count = SlotCount(mask);
   u32 i;
 
@@ -308,6 +538,51 @@ bool VKOutput::Create()
     image->create_info.subresourceRange.baseArrayLayer = 0;
     image->create_info.subresourceRange.layerCount = 1;
   }
+  if (m_threaded)
+    Vulkan::g_command_buffer_mgr->SetBeforeSubmit(BeforeSubmit, this);
+  return true;
+}
+
+void VKOutput::BeforeSubmit(void* opaque, VkCommandBuffer command_buffer)
+{
+  VKOutput* self = static_cast<VKOutput*>(opaque);
+  const void* held[3];
+  u32 n;
+  u32 i;
+
+  /* the frontend submits whenever its frame is due: whatever it may read
+   * is left readable by every submission of the core's, should the core
+   * have read it in another layout since, as a copy's source say */
+  n = QueueHeldDirect(&self->m_queue, held);
+  for (i = 0; i < n; i++)
+  {
+    const Vulkan::VKTexture* texture = static_cast<const Vulkan::VKTexture*>(held[i]);
+    if (texture->GetLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+      texture->TransitionToLayout(command_buffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  }
+}
+
+bool VKOutput::IsTextureHeld(const AbstractTexture* texture)
+{
+  if (!m_threaded)
+    return texture == m_direct;
+  return QueueHolds(&m_queue, texture);
+}
+
+bool VKOutput::HandOver()
+{
+  Published picture;
+  retro_vulkan_image* image;
+
+  if (!m_threaded || !QueueTake(&m_queue, &picture))
+    return false;
+  image = picture.kind == PUB_TARGET ? &m_images[picture.index] :
+                                       &m_direct_images[picture.index];
+  m_iface->set_image(m_iface->handle, image, 0, nullptr, m_iface->queue_index);
+  video_cb(RETRO_HW_FRAME_BUFFER_VALID, picture.width, picture.height, 0);
+  /* the frontend's frame that reads it is submitted: the one shown before
+   * is free from here on */
+  QueueHanded(&m_queue);
   return true;
 }
 
@@ -315,10 +590,18 @@ AbstractFramebuffer* VKOutput::Acquire()
 {
   Vulkan::VKTexture* texture;
 
-  /* the frontend is done with what it read from this index's image last
-   * time it was handed over */
-  m_iface->wait_sync_index(m_iface->handle);
-  m_current = m_iface->get_sync_index(m_iface->handle);
+  if (m_threaded)
+  {
+    /* an image the frontend does not read */
+    m_current = QueueAcquireTarget(&m_queue);
+  }
+  else
+  {
+    /* the frontend is done with what it read from this index's image
+     * last time it was handed over */
+    m_iface->wait_sync_index(m_iface->handle);
+    m_current = m_iface->get_sync_index(m_iface->handle);
+  }
   texture = m_textures[m_current].get();
   if (!texture)
     return nullptr;
@@ -347,6 +630,11 @@ void VKOutput::Present()
   Vulkan::g_command_buffer_mgr->SubmitCommandBuffer(false, false, true);
 
   DropDirect();
+  if (m_threaded)
+  {
+    QueuePublish(&m_queue, PUB_TARGET, m_current, texture, m_width, m_height, 0);
+    return;
+  }
   m_iface->set_image(m_iface->handle, &m_images[m_current], 0, nullptr, m_iface->queue_index);
   video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_width, m_height, 0);
 }
@@ -383,6 +671,14 @@ bool VKOutput::PresentTexture(const AbstractTexture* texture, u32 width, u32 hei
   Vulkan::g_command_buffer_mgr->SubmitCommandBuffer(false, false, true);
 
   DropDirect();
+  if (m_threaded)
+  {
+    /* a slot for its description the frontend is not using */
+    const u32 slot = QueueFreeDirect(&m_queue);
+    m_direct_images[slot] = image;
+    QueuePublish(&m_queue, PUB_DIRECT, slot, vk_texture, width, height, 0);
+    return true;
+  }
   m_direct_image = image;
   m_direct = vk_texture;
   m_iface->set_image(m_iface->handle, &m_direct_image, 0, nullptr, m_iface->queue_index);
@@ -392,6 +688,9 @@ bool VKOutput::PresentTexture(const AbstractTexture* texture, u32 width, u32 hei
 
 void VKOutput::Repeat()
 {
+  /* threaded, every submission already leaves it readable */
+  if (m_threaded)
+    return;
   /* the core may have read the texture since in a layout of its own, a
    * copy's source say: back to the one the frontend reads it in, ahead
    * of the frontend's next frame on the queue */

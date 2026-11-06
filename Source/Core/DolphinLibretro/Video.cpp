@@ -50,6 +50,10 @@
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
+#include "VideoCommon/Present.h"
+
+#include <features/features_cpu.h>
+#include <rthreads/rthreads.h>
 
 #ifdef HAS_VULKAN
 #include "VideoBackends/Vulkan/VulkanContext.h"
@@ -67,6 +71,19 @@ namespace Libretro
 extern std::vector<std::string> g_normalized_game_paths;
 namespace Video
 {
+/* The GPU thread (see GpuThreadMain). Its loop runs the GPU in slices of
+ * a few milliseconds, so a request to park or quit is seen that soon; a
+ * slice that ends a field counts it. */
+static sthread_t* s_gpu_thread;
+static slock_t* s_gpu_lock;
+static scond_t* s_gpu_cond;
+static bool s_gpu_wanted;
+static bool s_gpu_quit;
+static bool s_gpu_park;
+static bool s_gpu_parked;
+static unsigned s_gpu_fields;
+static unsigned s_gpu_fields_seen;
+
 #ifdef _WIN32
 static Common::DynamicLibrary d3d11_library;
 static Common::DynamicLibrary d3d12_library;
@@ -523,8 +540,10 @@ void ContextReset(void)
 
     UpdateActiveConfig();
 
+    s_gpu_wanted = Config::Get(Config::MAIN_CPU_THREAD);
     std::unique_ptr<DX12Output> output = std::make_unique<DX12Output>(
-        d3d12, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale);
+        d3d12, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale,
+        s_gpu_wanted);
     if (!output->Create())
     {
       DX12::DXContext::Destroy();
@@ -598,9 +617,10 @@ bool Video_InitializeBackend()
 
     /* where the picture goes: the frontend's sync images, sized as the
      * frame the frontend was told of */
+    s_gpu_wanted = Config::Get(Config::MAIN_CPU_THREAD);
     std::unique_ptr<VKOutput> output = std::make_unique<VKOutput>(
         Vk::GetHWRenderInterface(), GetAdjustedBaseWidth() * efbScale,
-        GetAdjustedBaseHeight() * efbScale);
+        GetAdjustedBaseHeight() * efbScale, s_gpu_wanted);
     if (!output->Create())
       return false;
 
@@ -626,6 +646,10 @@ bool Video_InitializeBackend()
 void ContextDestroy(void)
 {
   DEBUG_LOG_FMT(VIDEO, "Video - ContextDestroy!");
+
+  /* the backend goes away with the context: its thread first */
+  GpuThreadStop();
+  s_gpu_wanted = false;
 
   g_context_status.MarkDestroyed();
 
@@ -833,6 +857,138 @@ bool CreateDevice2(retro_vulkan_context* context, VkInstance instance, VkPhysica
 }  // namespace Vk
 #endif
 
+
+enum
+{
+  GPU_SLICE_US = 5000
+};
+
+static void GpuThreadMain(void* data)
+{
+  Core::System& system = Core::System::GetInstance();
+  (void)data;
+
+  Core::DeclareAsGPUThread();
+  slock_lock(s_gpu_lock);
+  for (;;)
+  {
+    bool ended;
+    if (s_gpu_quit)
+      break;
+    if (s_gpu_park)
+    {
+      s_gpu_parked = true;
+      scond_broadcast(s_gpu_cond);
+      while (s_gpu_park && !s_gpu_quit)
+        scond_wait(s_gpu_cond, s_gpu_lock);
+      s_gpu_parked = false;
+      continue;
+    }
+    slock_unlock(s_gpu_lock);
+    ended = system.GetFifo().RunGpuLoop(GPU_SLICE_US);
+    slock_lock(s_gpu_lock);
+    if (ended)
+    {
+      s_gpu_fields++;
+      scond_broadcast(s_gpu_cond);
+    }
+  }
+  s_gpu_parked = true;
+  scond_broadcast(s_gpu_cond);
+  slock_unlock(s_gpu_lock);
+}
+
+bool GpuThreadWanted()
+{
+  return s_gpu_wanted;
+}
+
+bool GpuThreadRunning()
+{
+  return s_gpu_thread != nullptr;
+}
+
+void GpuThreadEnsure()
+{
+  if (s_gpu_thread || !s_gpu_wanted || !Core::System::GetInstance().IsDualCoreMode())
+    return;
+  if (!s_gpu_lock)
+  {
+    s_gpu_lock = slock_new();
+    s_gpu_cond = scond_new();
+  }
+  s_gpu_quit = false;
+  s_gpu_park = false;
+  s_gpu_parked = false;
+  s_gpu_fields_seen = s_gpu_fields;
+  VideoCommon::g_frontend_takes_frames = true;
+  s_gpu_thread = sthread_create(GpuThreadMain, nullptr);
+}
+
+void GpuThreadStop()
+{
+  if (!s_gpu_thread)
+    return;
+  slock_lock(s_gpu_lock);
+  s_gpu_quit = true;
+  scond_broadcast(s_gpu_cond);
+  slock_unlock(s_gpu_lock);
+  sthread_join(s_gpu_thread);
+  s_gpu_thread = nullptr;
+  VideoCommon::g_frontend_takes_frames = false;
+}
+
+bool GpuThreadWaitField(int64_t deadline_us)
+{
+  bool ended;
+
+  if (!s_gpu_thread)
+    return false;
+  slock_lock(s_gpu_lock);
+  while (s_gpu_fields == s_gpu_fields_seen && !s_gpu_quit)
+  {
+    if (!deadline_us)
+      scond_wait(s_gpu_cond, s_gpu_lock);
+    else
+    {
+      const int64_t left = deadline_us - (int64_t)cpu_features_get_time_usec();
+      if (left <= 0)
+        break;
+      scond_wait_timeout(s_gpu_cond, s_gpu_lock, left);
+    }
+  }
+  ended = s_gpu_fields != s_gpu_fields_seen;
+  s_gpu_fields_seen = s_gpu_fields;
+  slock_unlock(s_gpu_lock);
+  return ended;
+}
+
+void GpuThreadPark()
+{
+  if (!s_gpu_thread)
+    return;
+  slock_lock(s_gpu_lock);
+  s_gpu_park = true;
+  scond_broadcast(s_gpu_cond);
+  while (!s_gpu_parked)
+    scond_wait(s_gpu_cond, s_gpu_lock);
+  slock_unlock(s_gpu_lock);
+  /* a field swapped while the frontend's thread has the video state,
+   * a savestate's say, is not presented */
+  VideoCommon::g_frontend_takes_frames = false;
+}
+
+void GpuThreadUnpark()
+{
+  if (!s_gpu_thread)
+    return;
+  VideoCommon::g_frontend_takes_frames = true;
+  slock_lock(s_gpu_lock);
+  s_gpu_park = false;
+  scond_broadcast(s_gpu_cond);
+  slock_unlock(s_gpu_lock);
+}
+
 /* The frontend's callback, behind one that counts what each retro_run
  * hands over: a run whose fields only repeated the last picture, or that
  * ran out of time before its field ended, draws nothing and reports a
@@ -855,6 +1011,7 @@ static void CountedVideoRefresh(const void* data, unsigned width, unsigned heigh
 
 void EndFrame()
 {
+  OutputHandOver();
   if (!s_frames_sent)
   {
     /* before the first picture, the size the frontend was told */

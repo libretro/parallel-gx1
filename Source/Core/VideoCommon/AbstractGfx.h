@@ -117,6 +117,10 @@ public:
     return false;
   }
 
+  /* Whether a texture given to PresentTexture may still be read by whoever
+   * shows the pictures; kept alive by the caller until it is not. */
+  virtual bool IsTextureHeld(const AbstractTexture* texture) { return false; }
+
   // Shader modules/objects.
   virtual std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,

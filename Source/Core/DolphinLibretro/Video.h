@@ -54,9 +54,29 @@ void D3D11Unlock(void);
 unsigned D3D11Suspend(void);
 void D3D11Resume(unsigned depth);
 
-/* At the end of each retro_run: when nothing new was shown, the frontend
- * is told the last picture repeats, so every run reports one frame. */
+/* At the end of each retro_run: what the GPU thread finished is handed
+ * over; when nothing new was shown, the frontend is told the last picture
+ * repeats, so every run reports one frame. */
 void EndFrame();
+
+/* The GPU loop on a thread of its own, for the APIs whose frontend
+ * interface lets another thread submit (Vulkan): the frontend's thread
+ * starts each field and takes what is done when its frame is due, and a
+ * shader compiled or anything else slow on the GPU side holds up only
+ * that thread. Pictures are published by the output and handed over by
+ * EndFrame. */
+bool GpuThreadWanted();
+bool GpuThreadRunning();
+void GpuThreadEnsure();
+void GpuThreadStop();
+/* Waits, until deadline_us of cpu_features_get_time_usec() or with 0 for
+ * as long as it takes, for a field to end on the GPU thread since the
+ * last call; true if one did. */
+bool GpuThreadWaitField(int64_t deadline_us);
+/* Stops the GPU thread between two runs of its loop, so the frontend's
+ * thread may use the video state, and lets it go again. */
+void GpuThreadPark();
+void GpuThreadUnpark();
 
 class SWGfx : public SW::SWGfx
 {

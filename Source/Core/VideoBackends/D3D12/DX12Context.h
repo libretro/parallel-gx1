@@ -115,6 +115,15 @@ public:
   // Executes the current command list.
   void ExecuteCommandList(bool wait_for_completion);
 
+  /* Called with the current command list open before it is executed:
+   * what the frontend reads at any time, from another thread, is put back
+   * in the state it reads it in, so every execution leaves it so. */
+  void SetBeforeExecute(void (*callback)(void* opaque), void* opaque)
+  {
+    m_before_execute = callback;
+    m_before_execute_opaque = opaque;
+  }
+
   // Waits for a specific fence.
   void WaitForFence(u64 fence);
 
@@ -190,6 +199,8 @@ private:
   ComPtr<ID3D12RootSignature> m_compute_root_signature;
 
   StreamBuffer m_texture_upload_buffer;
+  void (*m_before_execute)(void* opaque) = nullptr;
+  void* m_before_execute_opaque = nullptr;
 };
 
 extern std::unique_ptr<DXContext> g_dx_context;

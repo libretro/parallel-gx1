@@ -184,6 +184,11 @@ bool Gfx::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
   return m_output->PresentTexture(texture, width, height);
 }
 
+bool Gfx::IsTextureHeld(const AbstractTexture* texture)
+{
+  return m_output->IsTextureHeld(texture);
+}
+
 void Gfx::SetFramebuffer(AbstractFramebuffer* framebuffer)
 {
   if (m_current_framebuffer == framebuffer)

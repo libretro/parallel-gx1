@@ -38,6 +38,16 @@ public:
    * again: what it reads is left the way it reads it. */
   virtual void Repeat() {}
 
+  /* Whether a texture handed on with PresentTexture may still be read by
+   * whoever shows the pictures, now or later: the caller keeps it alive
+   * until it is not. */
+  virtual bool IsTextureHeld(const AbstractTexture* texture) { return false; }
+
+  /* An output that publishes pictures from another thread: hands the
+   * newest one over to whoever shows them, on that one's thread; true if
+   * there was one. */
+  virtual bool HandOver() { return false; }
+
   virtual u32 GetWidth() const = 0;
   virtual u32 GetHeight() const = 0;
   virtual AbstractTextureFormat GetFormat() const = 0;

@@ -64,6 +64,16 @@ public:
   void SubmitCommandBuffer(bool submit_on_worker_thread, bool wait_for_completion,
                            bool advance_to_next_frame = false);
 
+  /* Called with the current command buffer before it ends: what the
+   * frontend reads at any time, from another thread, is put back in the
+   * layout it reads it in, so every submission leaves it so. */
+  void SetBeforeSubmit(void (*callback)(void* opaque, VkCommandBuffer command_buffer),
+                       void* opaque)
+  {
+    m_before_submit = callback;
+    m_before_submit_opaque = opaque;
+  }
+
   // Schedule a vulkan resource for destruction later on. This will occur when the command buffer
   // is next re-used, and the GPU has finished working with the specified resource.
   void DeferBufferViewDestruction(VkBufferView object);
@@ -129,6 +139,8 @@ private:
   Common::WorkQueueThreadSP<PendingCommandBufferSubmit> m_submit_thread;
   bool m_use_threaded_submission = false;
   u32 m_descriptor_set_count = DESCRIPTOR_SETS_PER_POOL;
+  void (*m_before_submit)(void* opaque, VkCommandBuffer command_buffer) = nullptr;
+  void* m_before_submit_opaque = nullptr;
 };
 
 extern std::unique_ptr<CommandBufferManager> g_command_buffer_mgr;

@@ -1,4 +1,5 @@
 
+#include <features/features_cpu.h>
 #include <cmath>
 #include <cstdint>
 #include <libretro.h>
@@ -118,11 +119,25 @@ void FinishFieldInFlight()
    * GPU to run */
   if (!system.IsDualCoreMode() || !Core::IsRunning(system) || !g_vertex_manager)
     return;
+  if (Libretro::Video::GpuThreadRunning())
+  {
+    /* the GPU thread finishes the field; parked then, until
+     * ResumeAfterField, so this thread has the video state */
+    while (Core::IsFrameStepping() && Core::GetState(system) == Core::State::Running)
+      Libretro::Video::GpuThreadWaitField((int64_t)cpu_features_get_time_usec() + 10000);
+    Libretro::Video::GpuThreadPark();
+    return;
+  }
   /* stepping is what the end of a field leaves; a field's end already
    * asked for stops the loop at once, so it is run until the CPU thread
    * has really stopped */
   while (Core::IsFrameStepping() && Core::GetState(system) == Core::State::Running)
     system.GetFifo().RunGpuLoop(0);
+}
+
+void ResumeAfterField()
+{
+  Libretro::Video::GpuThreadUnpark();
 }
 }  // namespace Libretro
 
@@ -558,8 +573,6 @@ void retro_run(void)
   RETRO_PERFORMANCE_INIT(dolphin_main_func);
   RETRO_PERFORMANCE_START(dolphin_main_func);
 
-  Libretro::Video::D3D11Lock();
-  VideoCommon::g_frontend_takes_frames = true;
   if (system.IsDualCoreMode())
   {
     /* two of the frontend's frames, and never more than 40 ms: a field
@@ -569,15 +582,32 @@ void retro_run(void)
     if (budget_us > 40000)
       budget_us = 40000;
 
-    Core::DoFrameStep(system);
-    system.GetFifo().RunGpuLoop(budget_us);
+    if (Libretro::Video::GpuThreadWanted())
+    {
+      /* the GPU thread runs the field; this thread waits for it no
+       * longer than the budget, and EndFrame hands over what is done */
+      Libretro::Video::GpuThreadEnsure();
+      Core::DoFrameStep(system);
+      Libretro::Video::GpuThreadWaitField((int64_t)cpu_features_get_time_usec() + budget_us);
+    }
+    else
+    {
+      Libretro::Video::D3D11Lock();
+      VideoCommon::g_frontend_takes_frames = true;
+      Core::DoFrameStep(system);
+      system.GetFifo().RunGpuLoop(budget_us);
+      VideoCommon::g_frontend_takes_frames = false;
+      Libretro::Video::D3D11Unlock();
+    }
   }
   else
   {
+    Libretro::Video::D3D11Lock();
+    VideoCommon::g_frontend_takes_frames = true;
     system.GetCPU().RunSingleFrame();
+    VideoCommon::g_frontend_takes_frames = false;
+    Libretro::Video::D3D11Unlock();
   }
-  VideoCommon::g_frontend_takes_frames = false;
-  Libretro::Video::D3D11Unlock();
 
   RETRO_PERFORMANCE_STOP(dolphin_main_func);
 
@@ -617,6 +647,7 @@ size_t retro_serialize_size(void)
 
   if (system.IsDualCoreMode())
     ar->SetPassthrough(false);
+  Libretro::ResumeAfterField();
 
   return size;
 }
@@ -650,6 +681,7 @@ bool retro_serialize(void* data, size_t size)
 
   if (system.IsDualCoreMode())
     ar->SetPassthrough(false);
+  Libretro::ResumeAfterField();
 
   return true;
 }
@@ -683,6 +715,7 @@ bool retro_unserialize(const void* data, size_t size)
 
   if (system.IsDualCoreMode())
     ar->SetPassthrough(false);
+  Libretro::ResumeAfterField();
 
   return true;
 }
@@ -785,6 +818,7 @@ void retro_cheat_reset(void)
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     PatchEngine::Shutdown();
   }, true);
+  Libretro::ResumeAfterField();
 
   Libretro::reload_cheats_from_ini();
 }
@@ -821,5 +855,6 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
     // Apply Gecko
     Gecko::SetActiveCodes(Libretro::g_gecko_codes, game_id, game_revision);
   }, true);
+  Libretro::ResumeAfterField();
 }
 } // extern "C"
