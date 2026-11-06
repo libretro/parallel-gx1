@@ -397,6 +397,36 @@ void StateTracker::BindDynamicState(VkCommandBuffer command_buffer, u32 state)
   m_dynamic_fence = fence;
 }
 
+/* The same blending for every colour attachment, set when it, or the
+ * attachments, differ from what this command buffer has set already. */
+void StateTracker::BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend, u32 attachments)
+{
+  VkBool32 enable[8];
+  VkColorBlendEquationEXT equation[8];
+  VkColorComponentFlags write_mask[8];
+  const u64 fence = g_command_buffer_mgr->GetCurrentFenceCounter();
+  u32 i;
+
+  if (fence == m_dynamic_blend_fence && blend == m_dynamic_blend &&
+      attachments == m_dynamic_blend_attachments)
+  {
+    return;
+  }
+  VKPipeline::GetDynamicBlendState(blend, &enable[0], &equation[0], &write_mask[0]);
+  for (i = 1; i < attachments; i++)
+  {
+    enable[i] = enable[0];
+    equation[i] = equation[0];
+    write_mask[i] = write_mask[0];
+  }
+  vkCmdSetColorBlendEnableEXT(command_buffer, 0, attachments, enable);
+  vkCmdSetColorBlendEquationEXT(command_buffer, 0, attachments, equation);
+  vkCmdSetColorWriteMaskEXT(command_buffer, 0, attachments, write_mask);
+  m_dynamic_blend = blend;
+  m_dynamic_blend_attachments = attachments;
+  m_dynamic_blend_fence = fence;
+}
+
 bool StateTracker::Bind()
 {
   // Must have a pipeline.
@@ -433,10 +463,17 @@ bool StateTracker::Bind()
     /* a pipeline with the state built in leaves it undefined for the next */
     if (!m_pipeline->GetDynamicState())
       m_dynamic_fence = 0;
+    if (!m_pipeline->GetDynamicBlend())
+      m_dynamic_blend_fence = 0;
   }
 
   if (m_pipeline->GetDynamicState())
     BindDynamicState(command_buffer, m_pipeline->GetDynamicState());
+  if (m_pipeline->GetDynamicBlend())
+  {
+    BindDynamicBlend(command_buffer, m_pipeline->GetDynamicBlend(),
+                     m_pipeline->GetColorAttachmentCount());
+  }
 
   if (m_dirty_flags & DIRTY_FLAG_VIEWPORT)
     vkCmdSetViewport(command_buffer, 0, 1, &m_viewport);

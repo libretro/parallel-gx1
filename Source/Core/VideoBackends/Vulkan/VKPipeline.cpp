@@ -155,9 +155,12 @@ void VKPipeline::ResetSharedPipelines()
 
 VKPipeline::VKPipeline(const AbstractPipelineConfig& config, VkPipeline pipeline,
                        VkPipelineLayout pipeline_layout, AbstractPipelineUsage usage,
-                       u32 dynamic_state, VKSharedPipeline* shared)
+                       u32 dynamic_state, u32 dynamic_blend, VKSharedPipeline* shared)
     : AbstractPipeline(config), m_pipeline(pipeline), m_pipeline_layout(pipeline_layout),
-      m_shared(shared), m_usage(usage), m_dynamic_state(dynamic_state)
+      m_shared(shared), m_usage(usage), m_dynamic_state(dynamic_state),
+      m_dynamic_blend(dynamic_blend),
+      m_color_attachments(1u + static_cast<u32>(
+                                   config.framebuffer_state.additional_color_attachment_count))
 {
 }
 
@@ -338,6 +341,24 @@ GetVulkanAttachmentBlendState(const BlendingState& state, AbstractPipelineUsage 
   return vk_state;
 }
 
+void VKPipeline::GetDynamicBlendState(u32 dynamic_blend, VkBool32* enable,
+                                      VkColorBlendEquationEXT* equation,
+                                      VkColorComponentFlags* write_mask)
+{
+  BlendingState state;
+  state.hex = dynamic_blend & (VK_DYNAMIC_BLEND_MASK | VK_DYNAMIC_BLEND_DUAL_SRC);
+  const VkPipelineColorBlendAttachmentState vk_state =
+      GetVulkanAttachmentBlendState(state, AbstractPipelineUsage::GX);
+  *enable = vk_state.blendEnable;
+  equation->srcColorBlendFactor = vk_state.srcColorBlendFactor;
+  equation->dstColorBlendFactor = vk_state.dstColorBlendFactor;
+  equation->colorBlendOp = vk_state.colorBlendOp;
+  equation->srcAlphaBlendFactor = vk_state.srcAlphaBlendFactor;
+  equation->dstAlphaBlendFactor = vk_state.dstAlphaBlendFactor;
+  equation->alphaBlendOp = vk_state.alphaBlendOp;
+  *write_mask = vk_state.colorWriteMask;
+}
+
 static VkPipelineColorBlendStateCreateInfo
 GetVulkanColorBlendState(const BlendingState& state,
                          const VkPipelineColorBlendAttachmentState* attachments,
@@ -410,10 +431,12 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
     return nullptr;
   }
 
-  /* Cull mode and depth state set per draw: the pipeline is built, and
-   * shared, with them left out of its key. */
+  /* Cull mode and depth state set per draw, and blending with them where
+   * the device allows it: the pipeline is built, and shared, with them
+   * left out of its key. */
   AbstractPipelineConfig build = config;
   u32 dynamic_bits = 0;
+  u32 dynamic_blend = 0;
   VKSharedKey key;
   u32 hash = 0;
   if (config.usage != AbstractPipelineUsage::Utility &&
@@ -427,6 +450,12 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
                      << VK_DYNAMIC_DEPTH_OP_SHIFT);
     build.rasterization_state.cull_mode = CullMode::None;
     build.depth_state.hex = 0;
+    if (g_vulkan_context->SupportsDynamicBlending())
+    {
+      dynamic_blend = VK_DYNAMIC_BLEND_USED |
+                      (config.blending_state.hex & (VK_DYNAMIC_BLEND_MASK | VK_DYNAMIC_BLEND_DUAL_SRC));
+      build.blending_state.hex &= ~VK_DYNAMIC_BLEND_MASK;
+    }
     key.vertex_format = build.vertex_format;
     key.vertex_shader = ShaderUid(build.vertex_shader);
     key.geometry_shader = ShaderUid(build.geometry_shader);
@@ -440,7 +469,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
     if (shared)
     {
       return std::make_unique<VKPipeline>(config, shared->pipeline, pipeline_layout, config.usage,
-                                          dynamic_bits, shared);
+                                          dynamic_bits, dynamic_blend, shared);
     }
   }
 
@@ -523,7 +552,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
   VkPipelineDepthStencilStateCreateInfo depth_stencil_state =
       GetVulkanDepthStencilState(build.depth_state);
   VkPipelineColorBlendAttachmentState blend_attachment_state =
-      GetVulkanAttachmentBlendState(config.blending_state, config.usage);
+      GetVulkanAttachmentBlendState(build.blending_state, config.usage);
 
   // Right now all our attachments have the same state
   VkPipelineColorBlendAttachmentState blend_attachment_states[8];
@@ -532,7 +561,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
   for (u32 i = 0; i < num_attachments; i++)
     blend_attachment_states[i] = blend_attachment_state;
   VkPipelineColorBlendStateCreateInfo blend_state =
-      GetVulkanColorBlendState(config.blending_state, blend_attachment_states, num_attachments);
+      GetVulkanColorBlendState(build.blending_state, blend_attachment_states, num_attachments);
 
   static const VkDepthClampRangeEXT clamp_range = {0.0f, MAX_EFB_DEPTH};
   static const VkPipelineViewportDepthClampControlCreateInfoEXT depth_clamp_state = {
@@ -556,16 +585,22 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
 
   // Viewport and scissor are set per draw, and cull mode and depth state with them where the
   // device allows it.
-  static const VkDynamicState dynamic_states[6] = {
-      VK_DYNAMIC_STATE_VIEWPORT,           VK_DYNAMIC_STATE_SCISSOR,
-      VK_DYNAMIC_STATE_CULL_MODE_EXT,      VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE_EXT,
-      VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE_EXT, VK_DYNAMIC_STATE_DEPTH_COMPARE_OP_EXT,
+  static const VkDynamicState dynamic_states[9] = {
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR,
+      VK_DYNAMIC_STATE_CULL_MODE_EXT,
+      VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE_EXT,
+      VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE_EXT,
+      VK_DYNAMIC_STATE_DEPTH_COMPARE_OP_EXT,
+      VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT,
+      VK_DYNAMIC_STATE_COLOR_BLEND_EQUATION_EXT,
+      VK_DYNAMIC_STATE_COLOR_WRITE_MASK_EXT,
   };
   const VkPipelineDynamicStateCreateInfo dynamic_state = {
       VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, nullptr,
-      0,                         // VkPipelineDynamicStateCreateFlags    flags
-      dynamic_bits ? 6u : 2u,    // uint32_t dynamicStateCount
-      dynamic_states             // const VkDynamicState*                pDynamicStates
+      0,  // VkPipelineDynamicStateCreateFlags    flags
+      dynamic_blend ? 9u : dynamic_bits ? 6u : 2u,  // uint32_t dynamicStateCount
+      dynamic_states  // const VkDynamicState*                pDynamicStates
   };
 
   // Combine to full pipeline info structure.
@@ -602,7 +637,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
   }
 
   return std::make_unique<VKPipeline>(config, pipeline, pipeline_layout, config.usage,
-                                      dynamic_bits,
+                                      dynamic_bits, dynamic_blend,
                                       dynamic_bits ? SharedInsert(&key, hash, pipeline) : nullptr);
 }
 }  // namespace Vulkan

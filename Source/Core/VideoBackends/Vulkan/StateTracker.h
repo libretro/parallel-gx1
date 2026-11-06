@@ -79,6 +79,7 @@ public:
 
 private:
   void BindDynamicState(VkCommandBuffer command_buffer, u32 state);
+  void BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend, u32 attachments);
   // Number of descriptor sets for game draws.
   enum
   {
@@ -135,7 +136,10 @@ private:
   // cull mode and depth state set per draw (VK_DYNAMIC_*), and the command buffer they were set
   // in (its fence counter): 0 when they are not set in the current one
   u64 m_dynamic_fence = 0;
+  u64 m_dynamic_blend_fence = 0;
   u32 m_dynamic_state = 0;
+  u32 m_dynamic_blend = 0;
+  u32 m_dynamic_blend_attachments = 0;
 
   // pipeline state
   const VKPipeline* m_pipeline = nullptr;

@@ -209,6 +209,9 @@ VULKAN_DEVICE_ENTRY_POINT(vkCmdSetCullModeEXT, false)
 VULKAN_DEVICE_ENTRY_POINT(vkCmdSetDepthTestEnableEXT, false)
 VULKAN_DEVICE_ENTRY_POINT(vkCmdSetDepthWriteEnableEXT, false)
 VULKAN_DEVICE_ENTRY_POINT(vkCmdSetDepthCompareOpEXT, false)
+VULKAN_DEVICE_ENTRY_POINT(vkCmdSetColorBlendEnableEXT, false)
+VULKAN_DEVICE_ENTRY_POINT(vkCmdSetColorBlendEquationEXT, false)
+VULKAN_DEVICE_ENTRY_POINT(vkCmdSetColorWriteMaskEXT, false)
 
 #ifdef SUPPORTS_VULKAN_EXCLUSIVE_FULLSCREEN
 VULKAN_DEVICE_ENTRY_POINT(vkAcquireFullScreenExclusiveModeEXT, false)

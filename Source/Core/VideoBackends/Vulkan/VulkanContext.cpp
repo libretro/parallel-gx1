@@ -678,6 +678,24 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
     if (eds.extendedDynamicState)
       m_extended_dynamic_state = AddExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, false);
   }
+  m_dynamic_blending = false;
+  if (m_extended_dynamic_state &&
+      Common::Contains(available_extension_list,
+                       std::string_view{VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME},
+                       &VkExtensionProperties::extensionName))
+  {
+    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT eds3 = {};
+    VkPhysicalDeviceFeatures2 features2 = {};
+    eds3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features2.pNext = &eds3;
+    vkGetPhysicalDeviceFeatures2(m_physical_device, &features2);
+    if (eds3.extendedDynamicState3ColorBlendEnable && eds3.extendedDynamicState3ColorBlendEquation &&
+        eds3.extendedDynamicState3ColorWriteMask)
+    {
+      m_dynamic_blending = AddExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, false);
+    }
+  }
 
   if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DEPTH_CLAMP_CONTROL))
   {
@@ -829,6 +847,16 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
     eds_features.pNext = const_cast<void*>(device_info.pNext);
     device_info.pNext = &eds_features;
   }
+  VkPhysicalDeviceExtendedDynamicState3FeaturesEXT eds3_features = {};
+  if (m_dynamic_blending)
+  {
+    eds3_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+    eds3_features.extendedDynamicState3ColorBlendEnable = VK_TRUE;
+    eds3_features.extendedDynamicState3ColorBlendEquation = VK_TRUE;
+    eds3_features.extendedDynamicState3ColorWriteMask = VK_TRUE;
+    eds3_features.pNext = const_cast<void*>(device_info.pNext);
+    device_info.pNext = &eds3_features;
+  }
 
   // Enable debug layer on debug builds
   if (enable_validation_layer)
@@ -850,8 +878,12 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   m_extended_dynamic_state = m_extended_dynamic_state && vkCmdSetCullModeEXT &&
                              vkCmdSetDepthTestEnableEXT && vkCmdSetDepthWriteEnableEXT &&
                              vkCmdSetDepthCompareOpEXT;
-  INFO_LOG_FMT(VIDEO, "Vulkan: cull mode and depth state {}", m_extended_dynamic_state ?
-                          "set per draw" : "in each pipeline");
+  m_dynamic_blending = m_extended_dynamic_state && m_dynamic_blending &&
+                       vkCmdSetColorBlendEnableEXT && vkCmdSetColorBlendEquationEXT &&
+                       vkCmdSetColorWriteMaskEXT;
+  INFO_LOG_FMT(VIDEO, "Vulkan: cull mode and depth state {}, blending {}",
+               m_extended_dynamic_state ? "set per draw" : "in each pipeline",
+               m_dynamic_blending ? "set per draw" : "in each pipeline");
 
   // Grab the graphics and present queues.
   vkGetDeviceQueue(m_device, m_graphics_queue_family_index, 0, &m_graphics_queue);

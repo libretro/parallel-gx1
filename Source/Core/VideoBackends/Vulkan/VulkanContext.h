@@ -115,6 +115,9 @@ public:
    * (VK_EXT_extended_dynamic_state): pipelines differing only there are
    * one pipeline */
   bool SupportsExtendedDynamicState() const { return m_extended_dynamic_state; }
+  /* blending, its equation and the colour write mask set per draw as well
+   * (VK_EXT_extended_dynamic_state3), with the state above */
+  bool SupportsDynamicBlending() const { return m_dynamic_blending; }
 
   // Helpers for getting constants
   VkDeviceSize GetUniformBufferAlignment() const
@@ -156,6 +159,7 @@ private:
 
   std::vector<std::string> m_device_extensions;
   bool m_extended_dynamic_state = false;
+  bool m_dynamic_blending = false;
 #ifdef __LIBRETRO__
   VmaVulkanFunctions m_vulkan_functions = {};
 #endif
