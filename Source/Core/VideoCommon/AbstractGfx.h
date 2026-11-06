@@ -109,6 +109,14 @@ public:
   // Presents the backbuffer to the window system, or "swaps buffers".
   virtual void PresentBackbuffer() {}
 
+  /* Presents the top-left width x height of a texture as the picture, in
+   * place of BindBackbuffer, a draw and PresentBackbuffer; false when the
+   * backend cannot, and nothing was done. */
+  virtual bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
+  {
+    return false;
+  }
+
   // Shader modules/objects.
   virtual std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,

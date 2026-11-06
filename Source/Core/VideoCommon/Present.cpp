@@ -136,6 +136,11 @@ bool Presenter::FetchXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_heigh
   {
     // Game is blanking the screen
     m_xfb_entry.reset();
+    if (m_handed_entry && !m_handed_locked)
+    {
+      m_handed_entry->AcquireContentLock();
+      m_handed_locked = true;
+    }
     m_xfb_rect = MathUtil::Rectangle<int>();
     m_last_xfb_id = std::numeric_limits<u64>::max();
   }
@@ -889,6 +894,13 @@ void Presenter::Present()
 
   UpdateDrawRectangle();
 
+  if (PresentXFBInPlace())
+  {
+    const MathUtil::Rectangle<int> rect = AdjustForCustomCrop(m_xfb_rect);
+    SetSuggestedWindowSize(rect.GetWidth(), rect.GetHeight());
+    return;
+  }
+
   g_gfx->BeginUtilityDrawing();
   const bool backbuffer_bound = g_gfx->BindBackbuffer({{0.0f, 0.0f, 0.0f, 1.0f}});
 
@@ -906,6 +918,9 @@ void Presenter::Present()
   // Present to the window system.
   g_gfx->PresentBackbuffer();
 
+  /* what the frontend shows now was drawn */
+  ReleaseHandedEntry();
+
   if (m_xfb_entry)
   {
     // Update the window size based on the frame that was just rendered.
@@ -915,6 +930,54 @@ void Presenter::Present()
   }
 
   g_gfx->EndUtilityDrawing();
+}
+
+bool Presenter::PresentXFBInPlace()
+{
+  const AbstractTexture* texture = m_xfb_entry->texture.get();
+  const TextureConfig& config = texture->GetConfig();
+  MathUtil::Rectangle<int> target_rc = GetTargetRectangle();
+  MathUtil::Rectangle<int> source_rc = AdjustForCustomCrop(m_xfb_rect);
+  int width;
+  int height;
+
+  AdjustRectanglesToFitBounds(&target_rc, &source_rc, m_backbuffer_width, m_backbuffer_height);
+  width = source_rc.GetWidth();
+  height = source_rc.GetHeight();
+
+  /* what the draw would do is a copy: one layer, no correction or
+   * resampling, the whole backbuffer from the texture's top-left corner
+   * at the same size */
+  if (g_ActiveConfig.stereo_mode != StereoMode::Off ||
+      g_ActiveConfig.color_correction.bCorrectColorSpace ||
+      g_ActiveConfig.color_correction.bCorrectGamma ||
+      g_ActiveConfig.output_resampling_mode != OutputResamplingMode::Default ||
+      m_backbuffer_format != AbstractTextureFormat::RGBA8 ||
+      config.format != AbstractTextureFormat::RGBA8 || config.layers != 1 || config.levels != 1)
+  {
+    return false;
+  }
+  if (source_rc.left != 0 || source_rc.top != 0 || target_rc.left != 0 || target_rc.top != 0 ||
+      target_rc.GetWidth() != width || target_rc.GetHeight() != height ||
+      width != m_backbuffer_width || height != m_backbuffer_height)
+  {
+    return false;
+  }
+
+  if (!g_gfx->PresentTexture(texture, static_cast<u32>(width), static_cast<u32>(height)))
+    return false;
+
+  ReleaseHandedEntry();
+  m_handed_entry = m_xfb_entry;
+  return true;
+}
+
+void Presenter::ReleaseHandedEntry()
+{
+  if (m_handed_locked)
+    m_handed_entry->ReleaseContentLock();
+  m_handed_locked = false;
+  m_handed_entry.reset();
 }
 
 void Presenter::DoState(PointerWrap& p)

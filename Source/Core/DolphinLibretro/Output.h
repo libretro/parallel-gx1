@@ -30,6 +30,7 @@ public:
 
   AbstractFramebuffer* Acquire() override;
   void Present() override;
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
   u32 GetWidth() const override { return m_width; }
   u32 GetHeight() const override { return m_height; }
   AbstractTextureFormat GetFormat() const override { return AbstractTextureFormat::RGBA8; }

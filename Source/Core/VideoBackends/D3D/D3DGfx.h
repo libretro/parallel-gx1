@@ -64,6 +64,7 @@ public:
                              u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z) override;
   bool BindBackbuffer(const ClearColor& clear_color = {}) override;
   void PresentBackbuffer() override;
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
 
   void Flush() override;
   void WaitForGPUIdle() override;

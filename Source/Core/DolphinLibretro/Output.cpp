@@ -118,6 +118,24 @@ void DX11Output::Present()
   }
 }
 
+bool DX11Output::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
+{
+  unsigned depth;
+
+  /* version 2 only: version 1 reads pixel shader slot 0, which needs a
+   * view of one 2D texture. The immediate context orders the frontend's
+   * reads before anything drawn into the texture after; no sync index
+   * is waited on, as none of the output's targets is drawn into. */
+  if (!m_v2)
+    return false;
+  m_v2->set_texture(m_v2->handle,
+                    static_cast<const DX11::DXTexture*>(texture)->GetD3DTexture());
+  depth = D3D11Suspend();
+  video_cb(RETRO_HW_FRAME_BUFFER_VALID, width, height, 0);
+  D3D11Resume(depth);
+  return true;
+}
+
 DX12Output::DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 height)
     : m_iface(iface), m_width(width), m_height(height), m_current(0),
       m_v2(iface->interface_version >= RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2)

@@ -80,6 +80,11 @@ public:
 
   void ReleaseXFBContentLock();
 
+  /* Hands the frontend the XFB texture itself when drawing it would be a
+   * plain copy of all of it onto all of the backbuffer; false when that
+   * takes a draw, or the backend only hands on its own targets. */
+  bool PresentXFBInPlace();
+
   // Draws the specified XFB buffer to the screen, performing any post-processing.
   // Assumes that the backbuffer has already been bound and cleared.
   virtual void RenderXFBToScreen(const MathUtil::Rectangle<int>& target_rc,
@@ -135,6 +140,15 @@ private:
   RcTcacheEntry m_xfb_entry;
   // Internal resolution multiplier scaled XFB size
   MathUtil::Rectangle<int> m_xfb_rect{0, 0, MAX_XFB_WIDTH, MAX_XFB_HEIGHT};
+
+  /* The XFB copy last handed on in place, while the frontend shows it.
+   * Fields that repeat it keep it as m_xfb_entry, locked; fields that
+   * blank the screen present nothing, so it is locked here until a
+   * picture replaces it. */
+  RcTcacheEntry m_handed_entry;
+  bool m_handed_locked = false;
+
+  void ReleaseHandedEntry();
 
   // Tracking of XFB textures so we don't render duplicate frames.
   u64 m_last_xfb_id = std::numeric_limits<u64>::max();
