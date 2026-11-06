@@ -24,6 +24,9 @@ public:
 
   VkShaderModule GetShaderModule() const { return m_module; }
   VkPipeline GetComputePipeline() const { return m_compute_pipeline; }
+  /* unique among the shaders made since the backend came up: a shader
+   * made where a destroyed one was is another shader */
+  u32 GetUid() const { return m_uid; }
   BinaryData GetBinary() const override;
 
   static std::unique_ptr<VKShader> CreateFromSource(ShaderStage stage, std::string_view source,
@@ -36,6 +39,7 @@ private:
   VkShaderModule m_module;
   VkPipeline m_compute_pipeline;
   std::string m_name;
+  u32 m_uid;
 };
 
 }  // namespace Vulkan

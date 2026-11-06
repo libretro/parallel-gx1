@@ -369,6 +369,34 @@ void StateTracker::SetScissor(const VkRect2D& scissor)
   m_dirty_flags |= DIRTY_FLAG_SCISSOR;
 }
 
+/* Sets what differs from what this command buffer has set already. */
+void StateTracker::BindDynamicState(VkCommandBuffer command_buffer, u32 state)
+{
+  const u64 fence = g_command_buffer_mgr->GetCurrentFenceCounter();
+  u32 changed = state ^ m_dynamic_state;
+  if (fence != m_dynamic_fence)
+    changed = ~0u;
+  if (!changed)
+    return;
+  if (changed & VK_DYNAMIC_CULL_MASK)
+    vkCmdSetCullModeEXT(command_buffer, state & VK_DYNAMIC_CULL_MASK);
+  if (changed & VK_DYNAMIC_DEPTH_TEST)
+    vkCmdSetDepthTestEnableEXT(command_buffer, (state & VK_DYNAMIC_DEPTH_TEST) ? VK_TRUE : VK_FALSE);
+  if (changed & VK_DYNAMIC_DEPTH_WRITE)
+  {
+    vkCmdSetDepthWriteEnableEXT(command_buffer,
+                                (state & VK_DYNAMIC_DEPTH_WRITE) ? VK_TRUE : VK_FALSE);
+  }
+  if (changed & VK_DYNAMIC_DEPTH_OP_MASK)
+  {
+    vkCmdSetDepthCompareOpEXT(command_buffer, static_cast<VkCompareOp>(
+                                                  (state & VK_DYNAMIC_DEPTH_OP_MASK) >>
+                                                  VK_DYNAMIC_DEPTH_OP_SHIFT));
+  }
+  m_dynamic_state = state;
+  m_dynamic_fence = fence;
+}
+
 bool StateTracker::Bind()
 {
   // Must have a pipeline.
@@ -400,7 +428,15 @@ bool StateTracker::Bind()
     vkCmdBindIndexBuffer(command_buffer, m_index_buffer, m_index_buffer_offset, m_index_type);
 
   if (m_dirty_flags & DIRTY_FLAG_PIPELINE)
+  {
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->GetVkPipeline());
+    /* a pipeline with the state built in leaves it undefined for the next */
+    if (!m_pipeline->GetDynamicState())
+      m_dynamic_fence = 0;
+  }
+
+  if (m_pipeline->GetDynamicState())
+    BindDynamicState(command_buffer, m_pipeline->GetDynamicState());
 
   if (m_dirty_flags & DIRTY_FLAG_VIEWPORT)
     vkCmdSetViewport(command_buffer, 0, 1, &m_viewport);

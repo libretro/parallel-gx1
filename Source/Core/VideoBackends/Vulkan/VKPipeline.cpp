@@ -5,6 +5,8 @@
 
 #include <array>
 
+#include <retro_atomic.h>
+
 #include "Common/Assert.h"
 #include "Common/EnumMap.h"
 #include "Common/MsgHandler.h"
@@ -17,15 +19,156 @@
 
 namespace Vulkan
 {
+/* Pipelines that differ only in what is set per draw are one VkPipeline,
+ * found in an open-addressed table every thread building pipelines reads
+ * and adds to without a lock. A slot goes from free to building to ready,
+ * and to dead when the last pipeline using it goes: it is never free
+ * again until the backend comes up again, so a search ends at the first
+ * free slot. Its key is written once, before it is ready. */
+#define SHARED_SLOTS 16384u
+#define SHARED_PROBES 64u
+
+enum
+{
+  SHARED_FREE = 0,
+  SHARED_BUILDING,
+  SHARED_READY,
+  SHARED_DEAD
+};
+
+struct VKSharedKey
+{
+  const NativeVertexFormat* vertex_format;
+  u32 vertex_shader;
+  u32 geometry_shader;
+  u32 pixel_shader;
+  u32 rasterization;
+  u32 blending;
+  u32 framebuffer;
+  u32 usage;
+};
+
+struct VKSharedPipeline
+{
+  VkPipeline pipeline;
+  VKSharedKey key;
+  u32 hash;
+  retro_atomic_int_t state;
+  retro_atomic_int_t refs;
+};
+
+static VKSharedPipeline s_shared[SHARED_SLOTS];
+
+static u32 ShaderUid(const AbstractShader* shader)
+{
+  return shader ? static_cast<const VKShader*>(shader)->GetUid() : 0u;
+}
+
+static u32 HashMix(u32 h, u32 v)
+{
+  h ^= v;
+  h *= 0x01000193u;
+  return h ^ (h >> 15);
+}
+
+static u32 HashSharedKey(const VKSharedKey* key)
+{
+  const uintptr_t vf = reinterpret_cast<uintptr_t>(key->vertex_format);
+  u32 h = 0x811c9dc5u;
+  h = HashMix(h, static_cast<u32>(vf));
+  h = HashMix(h, static_cast<u32>(static_cast<u64>(vf) >> 32));
+  h = HashMix(h, key->vertex_shader);
+  h = HashMix(h, key->geometry_shader);
+  h = HashMix(h, key->pixel_shader);
+  h = HashMix(h, key->rasterization);
+  h = HashMix(h, key->blending);
+  h = HashMix(h, key->framebuffer);
+  return HashMix(h, key->usage);
+}
+
+static bool SharedKeyEqual(const VKSharedKey* a, const VKSharedKey* b)
+{
+  return a->vertex_format == b->vertex_format && a->vertex_shader == b->vertex_shader &&
+         a->geometry_shader == b->geometry_shader && a->pixel_shader == b->pixel_shader &&
+         a->rasterization == b->rasterization && a->blending == b->blending &&
+         a->framebuffer == b->framebuffer && a->usage == b->usage;
+}
+
+/* A ready slot with the key, its count raised: one whose last user is
+ * going is passed over, as its count is never raised from zero. */
+static VKSharedPipeline* SharedFind(const VKSharedKey* key, u32 hash)
+{
+  u32 i;
+  for (i = 0; i < SHARED_PROBES; i++)
+  {
+    VKSharedPipeline* s = &s_shared[(hash + i) & (SHARED_SLOTS - 1)];
+    const int state = retro_atomic_load_acquire_int(&s->state);
+    if (state == SHARED_FREE)
+      return nullptr;
+    if (state != SHARED_READY || s->hash != hash || !SharedKeyEqual(&s->key, key))
+      continue;
+    for (;;)
+    {
+      const int refs = retro_atomic_load_acquire_int(&s->refs);
+      if (refs <= 0)
+        break;
+      if (retro_atomic_cas_int(&s->refs, refs, refs + 1))
+        return s;
+    }
+  }
+  return nullptr;
+}
+
+/* The first free slot on the key's chain, or none: the pipeline is then
+ * its own. */
+static VKSharedPipeline* SharedInsert(const VKSharedKey* key, u32 hash, VkPipeline pipeline)
+{
+  u32 i;
+  for (i = 0; i < SHARED_PROBES; i++)
+  {
+    VKSharedPipeline* s = &s_shared[(hash + i) & (SHARED_SLOTS - 1)];
+    if (retro_atomic_load_acquire_int(&s->state) != SHARED_FREE ||
+        !retro_atomic_cas_int(&s->state, SHARED_FREE, SHARED_BUILDING))
+    {
+      continue;
+    }
+    s->key = *key;
+    s->hash = hash;
+    s->pipeline = pipeline;
+    retro_atomic_store_relaxed_int(&s->refs, 1);
+    retro_atomic_store_release_int(&s->state, SHARED_READY);
+    return s;
+  }
+  return nullptr;
+}
+
+void VKPipeline::ResetSharedPipelines()
+{
+  u32 i;
+  for (i = 0; i < SHARED_SLOTS; i++)
+  {
+    retro_atomic_store_relaxed_int(&s_shared[i].refs, 0);
+    retro_atomic_store_relaxed_int(&s_shared[i].state, SHARED_FREE);
+  }
+  retro_atomic_thread_fence_release();
+}
+
 VKPipeline::VKPipeline(const AbstractPipelineConfig& config, VkPipeline pipeline,
-                       VkPipelineLayout pipeline_layout, AbstractPipelineUsage usage)
+                       VkPipelineLayout pipeline_layout, AbstractPipelineUsage usage,
+                       u32 dynamic_state, VKSharedPipeline* shared)
     : AbstractPipeline(config), m_pipeline(pipeline), m_pipeline_layout(pipeline_layout),
-      m_usage(usage)
+      m_shared(shared), m_usage(usage), m_dynamic_state(dynamic_state)
 {
 }
 
 VKPipeline::~VKPipeline()
 {
+  if (m_shared)
+  {
+    if (retro_atomic_fetch_sub_int(&m_shared->refs, 1) != 1)
+      return;
+    retro_atomic_store_release_int(&m_shared->state, SHARED_DEAD);
+  }
   vkDestroyPipeline(g_vulkan_context->GetDevice(), m_pipeline, nullptr);
 }
 
@@ -37,13 +180,12 @@ static bool IsStripPrimitiveTopology(VkPrimitiveTopology topology)
          topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
 }
 
+static const VkCullModeFlags s_cull_modes[4] = {VK_CULL_MODE_NONE, VK_CULL_MODE_BACK_BIT,
+                                                VK_CULL_MODE_FRONT_BIT, VK_CULL_MODE_FRONT_AND_BACK};
+
 static VkPipelineRasterizationStateCreateInfo
 GetVulkanRasterizationState(const RasterizationState& state)
 {
-  static constexpr std::array<VkCullModeFlags, 4> cull_modes = {
-      {VK_CULL_MODE_NONE, VK_CULL_MODE_BACK_BIT, VK_CULL_MODE_FRONT_BIT,
-       VK_CULL_MODE_FRONT_AND_BACK}};
-
   bool depth_clamp = g_backend_info.bSupportsDepthClamp;
 
   return {
@@ -53,7 +195,7 @@ GetVulkanRasterizationState(const RasterizationState& state)
       depth_clamp,           // VkBool32                                  depthClampEnable
       VK_FALSE,              // VkBool32                                  rasterizerDiscardEnable
       VK_POLYGON_MODE_FILL,  // VkPolygonMode                             polygonMode
-      cull_modes[u32(state.cull_mode.Value())],  // VkCullModeFlags        cullMode
+      s_cull_modes[u32(state.cull_mode.Value())],  // VkCullModeFlags     cullMode
       VK_FRONT_FACE_CLOCKWISE,                   // VkFrontFace            frontFace
       VK_FALSE,  // VkBool32                                              depthBiasEnable
       0.0f,      // float                                                 depthBiasConstantFactor
@@ -79,42 +221,37 @@ static VkPipelineMultisampleStateCreateInfo GetVulkanMultisampleState(const Fram
   };
 }
 
-static VkPipelineDepthStencilStateCreateInfo GetVulkanDepthStencilState(const DepthState& state)
+static VkCompareOp GetVulkanCompareOp(CompareMode func)
 {
   // Less/greater are swapped due to inverted depth.
-  VkCompareOp compare_op;
-  bool inverted_depth = !g_backend_info.bSupportsReversedDepthRange;
-  switch (state.func)
+  const bool inverted_depth = !g_backend_info.bSupportsReversedDepthRange;
+  switch (func)
   {
   case CompareMode::Never:
-    compare_op = VK_COMPARE_OP_NEVER;
-    break;
+    return VK_COMPARE_OP_NEVER;
   case CompareMode::Less:
-    compare_op = inverted_depth ? VK_COMPARE_OP_GREATER : VK_COMPARE_OP_LESS;
-    break;
+    return inverted_depth ? VK_COMPARE_OP_GREATER : VK_COMPARE_OP_LESS;
   case CompareMode::Equal:
-    compare_op = VK_COMPARE_OP_EQUAL;
-    break;
+    return VK_COMPARE_OP_EQUAL;
   case CompareMode::LEqual:
-    compare_op = inverted_depth ? VK_COMPARE_OP_GREATER_OR_EQUAL : VK_COMPARE_OP_LESS_OR_EQUAL;
-    break;
+    return inverted_depth ? VK_COMPARE_OP_GREATER_OR_EQUAL : VK_COMPARE_OP_LESS_OR_EQUAL;
   case CompareMode::Greater:
-    compare_op = inverted_depth ? VK_COMPARE_OP_LESS : VK_COMPARE_OP_GREATER;
-    break;
+    return inverted_depth ? VK_COMPARE_OP_LESS : VK_COMPARE_OP_GREATER;
   case CompareMode::NEqual:
-    compare_op = VK_COMPARE_OP_NOT_EQUAL;
-    break;
+    return VK_COMPARE_OP_NOT_EQUAL;
   case CompareMode::GEqual:
-    compare_op = inverted_depth ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_GREATER_OR_EQUAL;
-    break;
+    return inverted_depth ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_GREATER_OR_EQUAL;
   case CompareMode::Always:
-    compare_op = VK_COMPARE_OP_ALWAYS;
-    break;
+    return VK_COMPARE_OP_ALWAYS;
   default:
-    PanicAlertFmt("Invalid compare mode {}", state.func);
-    compare_op = VK_COMPARE_OP_ALWAYS;
-    break;
+    PanicAlertFmt("Invalid compare mode {}", func);
+    return VK_COMPARE_OP_ALWAYS;
   }
+}
+
+static VkPipelineDepthStencilStateCreateInfo GetVulkanDepthStencilState(const DepthState& state)
+{
+  const VkCompareOp compare_op = GetVulkanCompareOp(state.func);
 
   return {
       VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,  // VkStructureType sType
@@ -273,6 +410,40 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
     return nullptr;
   }
 
+  /* Cull mode and depth state set per draw: the pipeline is built, and
+   * shared, with them left out of its key. */
+  AbstractPipelineConfig build = config;
+  u32 dynamic_bits = 0;
+  VKSharedKey key;
+  u32 hash = 0;
+  if (config.usage != AbstractPipelineUsage::Utility &&
+      g_vulkan_context->SupportsExtendedDynamicState())
+  {
+    VKSharedPipeline* shared;
+    dynamic_bits = VK_DYNAMIC_USED | s_cull_modes[u32(config.rasterization_state.cull_mode.Value())] |
+                    (config.depth_state.test_enable ? VK_DYNAMIC_DEPTH_TEST : 0u) |
+                    (config.depth_state.update_enable ? VK_DYNAMIC_DEPTH_WRITE : 0u) |
+                    (static_cast<u32>(GetVulkanCompareOp(config.depth_state.func))
+                     << VK_DYNAMIC_DEPTH_OP_SHIFT);
+    build.rasterization_state.cull_mode = CullMode::None;
+    build.depth_state.hex = 0;
+    key.vertex_format = build.vertex_format;
+    key.vertex_shader = ShaderUid(build.vertex_shader);
+    key.geometry_shader = ShaderUid(build.geometry_shader);
+    key.pixel_shader = ShaderUid(build.pixel_shader);
+    key.rasterization = build.rasterization_state.hex;
+    key.blending = build.blending_state.hex;
+    key.framebuffer = build.framebuffer_state.hex;
+    key.usage = static_cast<u32>(build.usage);
+    hash = HashSharedKey(&key);
+    shared = SharedFind(&key, hash);
+    if (shared)
+    {
+      return std::make_unique<VKPipeline>(config, shared->pipeline, pipeline_layout, config.usage,
+                                          dynamic_bits, shared);
+    }
+  }
+
   // Declare descriptors for empty vertex buffers/attributes
   static const VkPipelineVertexInputStateCreateInfo empty_vertex_input_state = {
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,  // VkStructureType sType
@@ -296,7 +467,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP}};
   VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, nullptr, 0,
-      vk_primitive_topologies[static_cast<u32>(config.rasterization_state.primitive.Value())],
+      vk_primitive_topologies[static_cast<u32>(build.rasterization_state.primitive.Value())],
       VK_FALSE};
 
   // See Vulkan spec, section 19:
@@ -346,25 +517,22 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
 
   // Fill in Vulkan descriptor structs from our state structures.
   VkPipelineRasterizationStateCreateInfo rasterization_state =
-      GetVulkanRasterizationState(config.rasterization_state);
+      GetVulkanRasterizationState(build.rasterization_state);
   VkPipelineMultisampleStateCreateInfo multisample_state =
       GetVulkanMultisampleState(config.framebuffer_state);
   VkPipelineDepthStencilStateCreateInfo depth_stencil_state =
-      GetVulkanDepthStencilState(config.depth_state);
+      GetVulkanDepthStencilState(build.depth_state);
   VkPipelineColorBlendAttachmentState blend_attachment_state =
       GetVulkanAttachmentBlendState(config.blending_state, config.usage);
 
-  std::vector<VkPipelineColorBlendAttachmentState> blend_attachment_states;
-  blend_attachment_states.push_back(blend_attachment_state);
   // Right now all our attachments have the same state
-  for (u8 i = 0; i < static_cast<u8>(config.framebuffer_state.additional_color_attachment_count);
-       i++)
-  {
-    blend_attachment_states.push_back(blend_attachment_state);
-  }
+  VkPipelineColorBlendAttachmentState blend_attachment_states[8];
+  const u32 num_attachments =
+      1 + static_cast<u32>(config.framebuffer_state.additional_color_attachment_count);
+  for (u32 i = 0; i < num_attachments; i++)
+    blend_attachment_states[i] = blend_attachment_state;
   VkPipelineColorBlendStateCreateInfo blend_state =
-      GetVulkanColorBlendState(config.blending_state, blend_attachment_states.data(),
-                               static_cast<uint32_t>(blend_attachment_states.size()));
+      GetVulkanColorBlendState(config.blending_state, blend_attachment_states, num_attachments);
 
   static const VkDepthClampRangeEXT clamp_range = {0.0f, MAX_EFB_DEPTH};
   static const VkPipelineViewportDepthClampControlCreateInfoEXT depth_clamp_state = {
@@ -386,16 +554,18 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
       &scissor    // const VkRect2D*                       pScissors
   };
 
-  // Set viewport and scissor dynamic state so we can change it elsewhere.
-  static const std::array<VkDynamicState, 2> dynamic_states{
-      VK_DYNAMIC_STATE_VIEWPORT,
-      VK_DYNAMIC_STATE_SCISSOR,
+  // Viewport and scissor are set per draw, and cull mode and depth state with them where the
+  // device allows it.
+  static const VkDynamicState dynamic_states[6] = {
+      VK_DYNAMIC_STATE_VIEWPORT,           VK_DYNAMIC_STATE_SCISSOR,
+      VK_DYNAMIC_STATE_CULL_MODE_EXT,      VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE_EXT,
+      VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE_EXT, VK_DYNAMIC_STATE_DEPTH_COMPARE_OP_EXT,
   };
-  static const VkPipelineDynamicStateCreateInfo dynamic_state = {
+  const VkPipelineDynamicStateCreateInfo dynamic_state = {
       VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, nullptr,
-      0,                                        // VkPipelineDynamicStateCreateFlags    flags
-      static_cast<u32>(dynamic_states.size()),  // uint32_t dynamicStateCount
-      dynamic_states.data()  // const VkDynamicState*                pDynamicStates
+      0,                         // VkPipelineDynamicStateCreateFlags    flags
+      dynamic_bits ? 6u : 2u,    // uint32_t dynamicStateCount
+      dynamic_states             // const VkDynamicState*                pDynamicStates
   };
 
   // Combine to full pipeline info structure.
@@ -431,6 +601,8 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
     return VK_NULL_HANDLE;
   }
 
-  return std::make_unique<VKPipeline>(config, pipeline, pipeline_layout, config.usage);
+  return std::make_unique<VKPipeline>(config, pipeline, pipeline_layout, config.usage,
+                                      dynamic_bits,
+                                      dynamic_bits ? SharedInsert(&key, hash, pipeline) : nullptr);
 }
 }  // namespace Vulkan

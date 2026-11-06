@@ -68,6 +68,7 @@ VULKAN_INSTANCE_ENTRY_POINT(vkQueueInsertDebugUtilsLabelEXT, false)
 VULKAN_INSTANCE_ENTRY_POINT(vkSetDebugUtilsObjectTagEXT, false)
 VULKAN_INSTANCE_ENTRY_POINT(vkSubmitDebugUtilsMessageEXT, false)
 VULKAN_INSTANCE_ENTRY_POINT(vkGetPhysicalDeviceProperties2, false)
+VULKAN_INSTANCE_ENTRY_POINT(vkGetPhysicalDeviceFeatures2, false)
 VULKAN_INSTANCE_ENTRY_POINT(vkGetPhysicalDeviceSurfaceCapabilities2KHR, false)
 VULKAN_INSTANCE_ENTRY_POINT(vkSetDebugUtilsObjectNameEXT, false)
 
@@ -204,6 +205,10 @@ VULKAN_DEVICE_ENTRY_POINT(vkGetBufferMemoryRequirements2, false)
 VULKAN_DEVICE_ENTRY_POINT(vkGetImageMemoryRequirements2, false)
 VULKAN_DEVICE_ENTRY_POINT(vkBindBufferMemory2, false)
 VULKAN_DEVICE_ENTRY_POINT(vkBindImageMemory2, false)
+VULKAN_DEVICE_ENTRY_POINT(vkCmdSetCullModeEXT, false)
+VULKAN_DEVICE_ENTRY_POINT(vkCmdSetDepthTestEnableEXT, false)
+VULKAN_DEVICE_ENTRY_POINT(vkCmdSetDepthWriteEnableEXT, false)
+VULKAN_DEVICE_ENTRY_POINT(vkCmdSetDepthCompareOpEXT, false)
 
 #ifdef SUPPORTS_VULKAN_EXCLUSIVE_FULLSCREEN
 VULKAN_DEVICE_ENTRY_POINT(vkAcquireFullScreenExclusiveModeEXT, false)

@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Vulkan/ObjectCache.h"
 
+#include "VideoBackends/Vulkan/VKPipeline.h"
+
 #include <algorithm>
 #include <array>
 #include <type_traits>
@@ -35,6 +37,8 @@ ObjectCache::~ObjectCache()
 
 bool ObjectCache::Initialize()
 {
+  VKPipeline::ResetSharedPipelines();
+
   if (!CreateDescriptorSetLayouts())
     return false;
 

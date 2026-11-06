@@ -662,6 +662,23 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   AddExtension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME, false);
   AddExtension("VK_KHR_portability_subset", false);
 
+  /* the extension is enabled only with its feature there to enable */
+  m_extended_dynamic_state = false;
+  if (m_device_info.apiVersion >= VK_API_VERSION_1_1 && vkGetPhysicalDeviceFeatures2 &&
+      Common::Contains(available_extension_list,
+                       std::string_view{VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME},
+                       &VkExtensionProperties::extensionName))
+  {
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT eds = {};
+    VkPhysicalDeviceFeatures2 features2 = {};
+    eds.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features2.pNext = &eds;
+    vkGetPhysicalDeviceFeatures2(m_physical_device, &features2);
+    if (eds.extendedDynamicState)
+      m_extended_dynamic_state = AddExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, false);
+  }
+
   if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DEPTH_CLAMP_CONTROL))
   {
     // Unrestricted depth range is one of the few extensions that changes the behavior
@@ -804,6 +821,15 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   VkPhysicalDeviceFeatures device_features = m_device_info.features();
   device_info.pEnabledFeatures = &device_features;
 
+  VkPhysicalDeviceExtendedDynamicStateFeaturesEXT eds_features = {};
+  if (m_extended_dynamic_state)
+  {
+    eds_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+    eds_features.extendedDynamicState = VK_TRUE;
+    eds_features.pNext = const_cast<void*>(device_info.pNext);
+    device_info.pNext = &eds_features;
+  }
+
   // Enable debug layer on debug builds
   if (enable_validation_layer)
   {
@@ -821,6 +847,11 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   // With the device created, we can fill the remaining entry points.
   if (!LoadVulkanDeviceFunctions(m_device))
     return false;
+  m_extended_dynamic_state = m_extended_dynamic_state && vkCmdSetCullModeEXT &&
+                             vkCmdSetDepthTestEnableEXT && vkCmdSetDepthWriteEnableEXT &&
+                             vkCmdSetDepthCompareOpEXT;
+  INFO_LOG_FMT(VIDEO, "Vulkan: cull mode and depth state {}", m_extended_dynamic_state ?
+                          "set per draw" : "in each pipeline");
 
   // Grab the graphics and present queues.
   vkGetDeviceQueue(m_device, m_graphics_queue_family_index, 0, &m_graphics_queue);

@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Vulkan/VKShader.h"
 
+#include <retro_atomic.h>
+
 #include "Common/Align.h"
 
 #include "VideoBackends/Vulkan/ObjectCache.h"
@@ -13,10 +15,17 @@
 
 namespace Vulkan
 {
+static retro_atomic_int_t s_next_uid;
+
+static u32 NextUid()
+{
+  return (u32)retro_atomic_fetch_add_int(&s_next_uid, 1) + 1u;
+}
+
 VKShader::VKShader(ShaderStage stage, std::vector<u32> spv, VkShaderModule mod,
                    std::string_view name)
     : AbstractShader(stage), m_spv(std::move(spv)), m_module(mod),
-      m_compute_pipeline(VK_NULL_HANDLE), m_name(name)
+      m_compute_pipeline(VK_NULL_HANDLE), m_name(name), m_uid(NextUid())
 {
   if (!m_name.empty() && g_backend_info.bSupportsSettingObjectNames)
   {
@@ -31,7 +40,7 @@ VKShader::VKShader(ShaderStage stage, std::vector<u32> spv, VkShaderModule mod,
 
 VKShader::VKShader(std::vector<u32> spv, VkPipeline compute_pipeline, std::string_view name)
     : AbstractShader(ShaderStage::Compute), m_spv(std::move(spv)), m_module(VK_NULL_HANDLE),
-      m_compute_pipeline(compute_pipeline), m_name(name)
+      m_compute_pipeline(compute_pipeline), m_name(name), m_uid(NextUid())
 {
   if (!m_name.empty() && g_backend_info.bSupportsSettingObjectNames)
   {

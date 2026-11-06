@@ -111,6 +111,10 @@ public:
   bool SupportsPreciseOcclusionQueries() const { return m_device_info.occlusionQueryPrecise; }
   u32 GetShaderSubgroupSize() const { return m_device_info.subgroupSize; }
   bool SupportsShaderSubgroupOperations() const { return m_device_info.shaderSubgroupOperations; }
+  /* cull mode and depth test, write and compare set per draw
+   * (VK_EXT_extended_dynamic_state): pipelines differing only there are
+   * one pipeline */
+  bool SupportsExtendedDynamicState() const { return m_extended_dynamic_state; }
 
   // Helpers for getting constants
   VkDeviceSize GetUniformBufferAlignment() const
@@ -151,6 +155,7 @@ private:
   PhysicalDeviceInfo m_device_info;
 
   std::vector<std::string> m_device_extensions;
+  bool m_extended_dynamic_state = false;
 #ifdef __LIBRETRO__
   VmaVulkanFunctions m_vulkan_functions = {};
 #endif

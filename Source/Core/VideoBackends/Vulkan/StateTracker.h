@@ -78,6 +78,7 @@ public:
   bool IsWithinRenderArea(s32 x, s32 y, u32 width, u32 height) const;
 
 private:
+  void BindDynamicState(VkCommandBuffer command_buffer, u32 state);
   // Number of descriptor sets for game draws.
   enum
   {
@@ -130,6 +131,11 @@ private:
   VkBuffer m_index_buffer = VK_NULL_HANDLE;
   VkDeviceSize m_index_buffer_offset = 0;
   VkIndexType m_index_type = VK_INDEX_TYPE_UINT16;
+
+  // cull mode and depth state set per draw (VK_DYNAMIC_*), and the command buffer they were set
+  // in (its fence counter): 0 when they are not set in the current one
+  u64 m_dynamic_fence = 0;
+  u32 m_dynamic_state = 0;
 
   // pipeline state
   const VKPipeline* m_pipeline = nullptr;
