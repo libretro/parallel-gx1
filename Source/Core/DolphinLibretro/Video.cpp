@@ -833,10 +833,36 @@ bool CreateDevice2(retro_vulkan_context* context, VkInstance instance, VkPhysica
 }  // namespace Vk
 #endif
 
+/* The frontend's callback, behind one that counts what each retro_run
+ * hands over: a run whose fields only repeated the last picture draws
+ * nothing and reports a repeat, with the last picture's size. */
+static retro_video_refresh_t s_frontend_video_cb;
+static unsigned s_frames_sent;
+static unsigned s_last_width;
+static unsigned s_last_height;
+
+static void CountedVideoRefresh(const void* data, unsigned width, unsigned height, size_t pitch)
+{
+  s_frames_sent++;
+  if (data)
+  {
+    s_last_width = width;
+    s_last_height = height;
+  }
+  s_frontend_video_cb(data, width, height, pitch);
+}
+
+void EndFrame()
+{
+  if (!s_frames_sent && s_last_width && s_last_height)
+    s_frontend_video_cb(nullptr, s_last_width, s_last_height, 0);
+  s_frames_sent = 0;
+}
 }  // namespace Video
 }  // namespace Libretro
 
 void retro_set_video_refresh(retro_video_refresh_t cb)
 {
-  Libretro::Video::video_cb = cb;
+  Libretro::Video::s_frontend_video_cb = cb;
+  Libretro::Video::video_cb = Libretro::Video::CountedVideoRefresh;
 }

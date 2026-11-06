@@ -22,9 +22,6 @@ enum class AspectMode : int;
 namespace VideoCommon
 {
 class PostProcessing;
-#ifdef __LIBRETRO__
-extern bool g_is_duplicate_frame;
-#endif
 // Presenter is a class that deals with putting the final XFB on the screen.
 // It also handles post-processing.
 class Presenter

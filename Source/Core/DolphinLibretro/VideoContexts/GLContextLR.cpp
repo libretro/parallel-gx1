@@ -347,8 +347,8 @@ bool GLContextLR::Initialize(const WindowSystemInfo& wsi, bool stereo, bool core
 
 void GLContextLR::Swap()
 {
-  Libretro::Video::video_cb(VideoCommon::g_is_duplicate_frame ? nullptr : RETRO_HW_FRAME_BUFFER_VALID,
-        m_backbuffer_width, m_backbuffer_height, 0);
+  Libretro::Video::video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_backbuffer_width, m_backbuffer_height,
+                            0);
 }
 
 std::unique_ptr<GLContext> GLContextLR::CreateSharedContext()

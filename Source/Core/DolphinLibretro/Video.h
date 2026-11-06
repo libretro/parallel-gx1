@@ -54,6 +54,10 @@ void D3D11Unlock(void);
 unsigned D3D11Suspend(void);
 void D3D11Resume(unsigned depth);
 
+/* At the end of each retro_run: when nothing new was shown, the frontend
+ * is told the last picture repeats, so every run reports one frame. */
+void EndFrame();
+
 class SWGfx : public SW::SWGfx
 {
 public:

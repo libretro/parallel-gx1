@@ -557,6 +557,8 @@ void retro_run(void)
 
   RETRO_PERFORMANCE_STOP(dolphin_main_func);
 
+  Libretro::Video::EndFrame();
+
   if (Libretro::Input::g_has_microphone_support)
     poll_microphone();
 
