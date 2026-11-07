@@ -79,9 +79,7 @@ public:
   void ExitGpuLoop();
   void EmulatorState(bool running);
   void ResetVideoBuffer();
-#ifdef __LIBRETRO__
   void StopGpuLoop();
-#endif
 
 private:
   void RefreshConfig();
@@ -94,10 +92,8 @@ private:
   static constexpr u32 FIFO_SIZE = 2 * 1024 * 1024;
 
   Common::BlockingLoop m_gpu_mainloop;
-#ifdef __LIBRETRO__
   // Set by StopGpuLoop(), so that a stop requested before RunGpuLoop() got going still ends it.
   retro_atomic_int_t m_stop_gpu_loop_requested{};
-#endif
 
   Common::Flag m_emu_running_state;
 

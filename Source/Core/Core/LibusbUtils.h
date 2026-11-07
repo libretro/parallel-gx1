@@ -33,7 +33,7 @@ public:
 
   operator libusb_context*() const;
   bool IsValid() const;
-#if defined(__LIBRETRO__) && defined(__LIBUSB__)
+#if defined(__LIBUSB__)
   void Shutdown();
 #endif
 

@@ -67,12 +67,10 @@ public:
 
   static constexpr u32 BUFFER_SIZE = 128;
 
-#ifdef __LIBRETRO__
   void ChangeDevice(SIDevices device, int channel)
   {
     AddDevice(device, channel);
   }
-#endif
 
 private:
   // SI Interrupt Types

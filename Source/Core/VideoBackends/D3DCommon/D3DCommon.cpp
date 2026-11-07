@@ -86,11 +86,9 @@ std::vector<std::string> GetAdapterNames()
   Microsoft::WRL::ComPtr<IDXGIFactory> factory;
   HRESULT hr = E_FAIL;
 
-#ifdef __LIBRETRO__
   if (create_dxgi_factory2)
     hr = create_dxgi_factory2(0, IID_PPV_ARGS(&factory));
   else if (create_dxgi_factory)
-#endif
     hr = create_dxgi_factory(IID_PPV_ARGS(&factory));
 
   if (FAILED(hr))

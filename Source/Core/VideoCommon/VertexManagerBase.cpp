@@ -544,10 +544,8 @@ void VertexManagerBase::Flush()
   CalculateNormals(VertexLoaderManager::GetCurrentVertexFormat());
   // Calculate ZSlope for zfreeze
   const auto used_textures = UsedTextures();
-#ifdef __LIBRETRO__
   bool vr_textured = false;
   bool vr_samples_copy = false;
-#endif
   std::vector<std::string> texture_names;
   Common::SmallVector<u32, 8> texture_units;
   std::array<SamplerState, 8> samplers;
@@ -560,10 +558,8 @@ void VertexManagerBase::Flush()
         const auto cache_entry = g_texture_cache->Load(i);
         if (!cache_entry)
           continue;
-#ifdef __LIBRETRO__
         vr_textured = true;
         vr_samples_copy |= cache_entry->IsCopy();
-#endif
         const float custom_tex_scale = cache_entry->GetWidth() / float(cache_entry->native_width);
         samplers[i] = TextureCacheBase::GetSamplerState(
             i, custom_tex_scale, cache_entry->is_custom_tex, cache_entry->has_arbitrary_mips);
@@ -576,10 +572,8 @@ void VertexManagerBase::Flush()
         const auto cache_entry = g_texture_cache->Load(i);
         if (cache_entry)
         {
-#ifdef __LIBRETRO__
           vr_textured = true;
           vr_samples_copy |= cache_entry->IsCopy();
-#endif
           bool named = false;
           for (const auto& name : texture_names)
             named = named || name == cache_entry->texture_info_name;
@@ -596,10 +590,8 @@ void VertexManagerBase::Flush()
       }
     }
   }
-#ifdef __LIBRETRO__
   g_libretro_vr_camera.draw_textured = vr_textured;
   g_libretro_vr_camera.draw_samples_copy = vr_samples_copy;
-#endif
   vertex_shader_manager.SetConstants(texture_names, xf_state_manager);
   if (!bpmem.genMode.zfreeze)
   {
@@ -882,7 +874,6 @@ void VertexManagerBase::UpdatePipelineObject()
   case ShaderCompilationMode::AsynchronousUberShaders:
   case ShaderCompilationMode::AsynchronousSkipRendering:
   {
-#ifdef __LIBRETRO__
     /* no threads to build on: asking for the pipeline in the background
      * would build it on the spot, then an ubershader one besides */
     if (!g_shader_cache->CanCompileInBackground())
@@ -890,7 +881,6 @@ void VertexManagerBase::UpdatePipelineObject()
       m_current_pipeline_object = g_shader_cache->GetPipelineForUid(m_current_pipeline_config);
       return;
     }
-#endif
     // Can we background compile shaders? If so, get the pipeline asynchronously.
     auto res = g_shader_cache->GetPipelineForUidAsync(m_current_pipeline_config);
     if (res && (!*res || (*res)->IsReady()))
@@ -899,12 +889,10 @@ void VertexManagerBase::UpdatePipelineObject()
       m_current_pipeline_object = *res;
       return;
     }
-#ifdef __LIBRETRO__
     /* built and still compiling on the driver's threads: asked again
      * next draw, until it is ready */
     if (res)
       m_pipeline_config_changed = true;
-#endif
 
     if (g_ActiveConfig.iShaderCompilationMode == ShaderCompilationMode::AsynchronousUberShaders)
     {

@@ -94,12 +94,10 @@ public:
 
   SurfaceInfo GetSurfaceInfo() const override;
 
-#ifdef __LIBRETRO__
   void SetSystemFrameBuffer(GLuint fbo)
   {
     m_system_framebuffer->SetFBO(fbo);
   }
-#endif
 
 private:
 

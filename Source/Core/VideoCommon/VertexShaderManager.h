@@ -16,7 +16,6 @@ class PointerWrap;
 struct PortableVertexDeclaration;
 class XFStateManager;
 
-#ifdef __LIBRETRO__
 // Head-tracked camera for the libretro core's immersive VR mode.
 struct LibretroVRCamera
 {
@@ -47,7 +46,6 @@ struct LibretroVRCamera
   bool draw_samples_copy = false;
 };
 extern LibretroVRCamera g_libretro_vr_camera;
-#endif
 
 // The non-API dependent parts.
 class alignas(16) VertexShaderManager

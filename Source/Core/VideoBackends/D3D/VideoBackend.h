@@ -22,9 +22,7 @@ public:
 
   static constexpr const char* CONFIG_NAME = "D3D";
 
-#ifdef __LIBRETRO__
   void FillD3DBackendInfo() { FillBackendInfo(); }
-#endif
 private:
   void FillBackendInfo();
 };

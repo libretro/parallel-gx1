@@ -139,9 +139,7 @@ public:
   // Re-creates the root signature. Call when the host config changes (e.g. bbox/per-pixel shading).
   void RecreateGXRootSignature();
 
-#ifdef __LIBRETRO__
   static bool CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueue* queue);
-#endif
 
 private:
   // Number of command lists. One is being built while the other(s) are executed.

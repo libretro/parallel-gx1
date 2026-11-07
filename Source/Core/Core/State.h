@@ -11,9 +11,7 @@
 #include <type_traits>
 
 #include "Common/CommonTypes.h"
-#ifdef __LIBRETRO__
 #include "Common/ChunkFile.h"
-#endif
 
 namespace Core
 {
@@ -110,7 +108,5 @@ void UndoLoadState(Core::System& system);
 using AfterLoadCallbackFunc = std::function<void()>;
 void SetOnAfterLoadCallback(AfterLoadCallbackFunc callback);
 
-#ifdef __LIBRETRO__
 void DoState(Core::System& system, PointerWrap& p);
-#endif
 }  // namespace State

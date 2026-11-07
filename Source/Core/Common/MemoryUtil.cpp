@@ -35,7 +35,6 @@
 
 #ifdef IPHONEOS
 #include "Common/JITMemoryTracker.h"
-#ifdef __LIBRETRO__
 #include <vector>
 #include "DolphinLibretro/Common/Globals.h"
 static void* s_last_exec_rw = nullptr;
@@ -44,7 +43,6 @@ static unsigned s_last_exec_mode = 0;
 // nothing about who owns them, so ownership is recorded rather than inferred.
 // Slots claimed and released with a CAS; a handful of regions at most.
 static retro_atomic_ptr_t s_frontend_regions[64];
-#endif
 #endif
 
 #ifdef IPHONEOS
@@ -70,7 +68,7 @@ static JITMemoryTracker g_jit_memory_tracker;
 
 void* AllocateExecutableMemory(size_t size)
 {
-#if defined(IPHONEOS) && defined(__LIBRETRO__)
+#if defined(IPHONEOS)
   {
     struct retro_exec_mem_alloc alloc = {};
     alloc.version = 1;
@@ -369,7 +367,7 @@ size_t MemPhysical()
 #if defined(__APPLE__) && defined(__aarch64__)
 ptrdiff_t AllocateWritableRegionAndGetDiff(void* rx_ptr, size_t size)
 {
-#if defined(IPHONEOS) && defined(__LIBRETRO__)
+#if defined(IPHONEOS)
   if (s_last_exec_rw && s_last_exec_mode == RETRO_EXEC_MEM_MODE_DUAL_MAP)
   {
     ptrdiff_t diff = static_cast<u8*>(s_last_exec_rw) - static_cast<u8*>(rx_ptr);
@@ -405,7 +403,7 @@ ptrdiff_t AllocateWritableRegionAndGetDiff(void* rx_ptr, size_t size)
 
 void FreeWritableRegion(void* rx_ptr, size_t size, ptrdiff_t diff)
 {
-#if defined(IPHONEOS) && defined(__LIBRETRO__)
+#if defined(IPHONEOS)
   // Frontend owns the writable region; nothing to do here.
   // FreeExecutableMemory will tell the frontend to free everything.
 #else
@@ -422,8 +420,6 @@ void FreeExecutableMemory(void* ptr, size_t size)
     return;
 #ifdef IPHONEOS
   g_jit_memory_tracker.UnregisterJITRegion(ptr);
-#endif
-#if defined(IPHONEOS) && defined(__LIBRETRO__)
   for (auto& slot : s_frontend_regions)
   {
     if (retro_atomic_cas_ptr(&slot, ptr, nullptr))

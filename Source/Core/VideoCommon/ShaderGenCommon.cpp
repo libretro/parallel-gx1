@@ -91,7 +91,7 @@ std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool 
     ShaderHostConfig host_config = ShaderHostConfig::GetCurrent();
     filename += fmt::format("-{:06X}", host_config.bits);
 
-#if defined(__LIBRETRO__) && defined(__WEBOS__)
+#if defined(__WEBOS__)
     // The webOS core option toggles binding layout, which changes the
     // generated GLSL
     if (g_backend_info.bSupportsBindingLayout)

@@ -39,9 +39,6 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
 
   retro_atomic_store_release_int(&m_populating_devices_counter, 1);
 
-#if defined(CIFACE_USE_ANDROID) && !defined(__LIBRETRO__)
-  m_input_backends.emplace_back(ciface::Android::CreateInputBackend(this));
-#endif
 #ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
   m_input_backends.emplace_back(ciface::DualShockUDPClient::CreateInputBackend(this));
 #endif

@@ -866,7 +866,7 @@ void WiimoteScanner::PopulateDevices()
 
 void WiimoteScanner::ThreadFunc()
 {
-#if defined(__LIBRETRO__) && defined(SKIP_WIMOTESCANNER_THREAD)
+#if defined(SKIP_WIMOTESCANNER_THREAD)
   return;
 #endif
   retro_atomic_store_release_int(&s_manager_running, 1);

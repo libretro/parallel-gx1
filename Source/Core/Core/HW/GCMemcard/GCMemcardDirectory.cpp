@@ -204,11 +204,9 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
   m_dir2 = m_dir1;
   m_bat2 = m_bat1;
 
-#if defined(__LIBRETRO__) && defined(SKIP_GCMEMCARD_THREAD)
-  return;
-#endif
-
+#if !defined(SKIP_GCMEMCARD_THREAD)
   m_flush_thread = sthread_create(Common::ThreadEntry<&GCMemcardDirectory::FlushThread>, this);
+#endif
 }
 
 void GCMemcardDirectory::FlushThread()
@@ -249,9 +247,7 @@ GCMemcardDirectory::~GCMemcardDirectory()
   m_flush_trigger.Set();
   frame_clock_wake_all();
 
-#ifdef __LIBRETRO__
   if (m_flush_thread)
-#endif
     Common::JoinThread(m_flush_thread);
 
   FlushToFile();

@@ -83,7 +83,7 @@ void CustomAssetLoader::FreeBatch(quiesce_node_t* node)
 
 void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
 {
-#if defined(__LIBRETRO__) && defined(SKIP_ASSETLOADER_THREAD)
+#if defined(SKIP_ASSETLOADER_THREAD)
   return;
 #endif
   Common::SetCurrentThreadName(fmt::format("Asset Loader {}", thread_index).c_str());

@@ -42,17 +42,6 @@ static Common::DynamicLibrary s_vulkan_module;
 
 static bool OpenVulkanLibrary(bool force_system_library)
 {
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-  // Check if a path to a specific Vulkan library has been specified.
-  char* libvulkan_env = getenv("LIBVULKAN_PATH");
-  if (libvulkan_env && s_vulkan_module.Open(libvulkan_env))
-    return true;
-
-  // Use the libMoltenVK.dylib from the application bundle.
-  std::string filename = File::GetBundleDirectory() + "/Contents/Frameworks/libMoltenVK.dylib";
-  return s_vulkan_module.Open(filename.c_str());
-#else
-
 #if defined(ANDROID) && _M_ARM_64
   const std::string& driver_lib_name = g_Config.customDriverLibraryName;
 
@@ -73,10 +62,8 @@ static bool OpenVulkanLibrary(bool force_system_library)
       INFO_LOG_FMT(HOST_GPU, "Successfully loaded driver: {}", driver_lib_name);
       return true;
     }
-    else
-    {
-      WARN_LOG_FMT(HOST_GPU, "Loading driver {} failed.", driver_lib_name);
-    }
+
+    WARN_LOG_FMT(HOST_GPU, "Loading driver {} failed.", driver_lib_name);
   }
 #endif
 
@@ -88,7 +75,6 @@ static bool OpenVulkanLibrary(bool force_system_library)
   // Android devices may not have libvulkan.so.1, only libvulkan.so.
   filename = Common::DynamicLibrary::GetVersionedFilename("vulkan");
   return s_vulkan_module.Open(filename.c_str());
-#endif
 }
 
 bool LoadVulkanLibrary(bool force_system_library)

@@ -284,7 +284,7 @@ IOS::HLE::USBScanner& System::GetUSBScanner() const
   return m_impl->m_usb_scanner;
 }
 
-#if defined(__LIBRETRO__) && defined(__LIBUSB__)
+#if defined(__LIBUSB__)
 void System::ShutdownUSBScanner()
 {
   m_impl->m_usb_scanner.Shutdown();

@@ -295,7 +295,7 @@ void StateManager::SyncComputeBindings()
     start = end;
   }
 }
-#ifdef __LIBRETRO__
+
 // Rebinds everything Apply() binds after the frontend drew with the shared
 // context: its shader passes overwrite constant buffer slots that m_current
 // still records as ours, which turned the picture black with a preset.
@@ -351,7 +351,6 @@ void StateManager::Restore()
   m_current = m_pending;
   m_dirtyFlags = 0;
 }
-#endif
 }  // namespace D3D
 
 // Creating the same state twice is harmless (D3D11 hands back the same object), so a thread

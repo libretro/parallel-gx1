@@ -43,10 +43,6 @@
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-#include <IOKit/pwr_mgt/IOPMLib.h>
-#endif
-
 namespace UICommon
 {
 static Config::ConfigChangedCallbackID s_config_changed_callback_id;
@@ -182,15 +178,6 @@ void InitControllers(const WindowSystemInfo& wsi)
 
 void ShutdownControllers()
 {
-#ifndef __LIBRETRO__
-  Pad::Shutdown();
-  Pad::ShutdownGBA();
-  Keyboard::Shutdown();
-  Wiimote::Shutdown();
-  HotkeyManagerEmu::Shutdown();
-  FreeLook::Shutdown();
-#endif
-
   g_controller_interface.Shutdown();
 }
 
@@ -320,28 +307,6 @@ void InhibitScreenSaver(bool inhibit)
   // Prevents Windows from sleeping, turning off the display, or idling
   SetThreadExecutionState(ES_CONTINUOUS |
                           (inhibit ? (ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED) : 0));
-#endif
-
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-  static IOPMAssertionID s_power_assertion = kIOPMNullAssertionID;
-  if (inhibit)
-  {
-    CFStringRef reason_for_activity = CFSTR("Emulation Running");
-    if (IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep,
-                                    kIOPMAssertionLevelOn, reason_for_activity,
-                                    &s_power_assertion) != kIOReturnSuccess)
-    {
-      s_power_assertion = kIOPMNullAssertionID;
-    }
-  }
-  else
-  {
-    if (s_power_assertion != kIOPMNullAssertionID)
-    {
-      IOPMAssertionRelease(s_power_assertion);
-      s_power_assertion = kIOPMNullAssertionID;
-    }
-  }
 #endif
 }
 

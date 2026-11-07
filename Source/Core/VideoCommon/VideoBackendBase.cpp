@@ -37,9 +37,6 @@
 #ifdef HAS_VULKAN
 #include "VideoBackends/Vulkan/VideoBackend.h"
 #endif
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-#include "VideoBackends/Metal/VideoBackend.h"
-#endif
 
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AsyncRequests.h"
@@ -66,9 +63,7 @@
 #include "VideoCommon/VideoState.h"
 #include "VideoCommon/Widescreen.h"
 #include "VideoCommon/XFStateManager.h"
-#ifdef __LIBRETRO__
 #include "DolphinLibretro/VideoContexts/ContextStatus.h"
-#endif
 
 VideoBackendBase* g_video_backend = nullptr;
 
@@ -215,9 +210,6 @@ const std::vector<std::unique_ptr<VideoBackendBase>>& VideoBackendBase::GetAvail
     backends.push_back(std::make_unique<Vulkan::VideoBackend>());
 #endif
 #endif
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-    backends.emplace(backends.begin(), std::make_unique<Metal::VideoBackend>());
-#endif
 #ifdef HAS_OPENGL
     backends.push_back(std::make_unique<SW::VideoSoftware>());
 #endif
@@ -260,10 +252,8 @@ void VideoBackendBase::PopulateBackendInfo(const WindowSystemInfo& wsi)
   ActivateBackend(Config::Get(Config::MAIN_GFX_BACKEND));
   g_backend_info.DisplayName = g_video_backend->GetDisplayName();
   g_video_backend->InitBackendInfo(wsi);
-#ifdef __LIBRETRO__
   if (g_backend_info.api_type == APIType::Nothing)
     return;
-#endif
   // We validate the config after initializing the backend info, as system-specific settings
   // such as anti-aliasing, or the selected adapter may be invalid, and should be checked.
   g_Config.VerifyValidity();
@@ -305,17 +295,13 @@ bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
                                         std::unique_ptr<EFBInterfaceBase> efb_interface,
                                         std::unique_ptr<TextureCacheBase> texture_cache)
 {
-#ifdef __LIBRETRO__
   const bool is_initialized = g_context_status.IsInitialized();
   if(!is_initialized)
   {
-#endif
     memset(reinterpret_cast<u8*>(&g_main_cp_state), 0, sizeof(g_main_cp_state));
     memset(reinterpret_cast<u8*>(&g_preprocess_cp_state), 0, sizeof(g_preprocess_cp_state));
     s_tex_mem.fill(0);
-#ifdef __LIBRETRO__
   }
-#endif
   // do not initialize again for the config window
   m_initialized = true;
 
@@ -347,10 +333,8 @@ bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
     return false;
   }
 
-#ifdef __LIBRETRO__
   if(is_initialized)
     return true;
-#endif
   auto& system = Core::System::GetInstance();
   auto& command_processor = system.GetCommandProcessor();
   command_processor.Init();
@@ -404,7 +388,4 @@ void VideoBackendBase::ShutdownShared()
   m_initialized = false;
 
   VertexLoaderManager::Clear();
-#ifndef __LIBRETRO__
-  system.GetFifo().Shutdown();
-#endif
 }

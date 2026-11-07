@@ -15,11 +15,7 @@ public:
 
   ScopeGuard(ScopeGuard&& other) : m_finalizer(std::move(other.m_finalizer))
   {
-#ifdef __LIBRETRO__
     other.m_finalizer.reset();
-#else
-    other.Dismiss();
-#endif
   }
 
   ~ScopeGuard() { Exit(); }

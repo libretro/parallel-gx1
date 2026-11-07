@@ -27,9 +27,7 @@ std::unique_ptr<VideoCommon::Presenter> g_presenter;
 
 namespace VideoCommon
 {
-#ifdef __LIBRETRO__
 bool g_frontend_takes_frames = false;
-#endif
 
 // Stretches the native/internal analog resolution aspect ratio from ~4:3 to ~16:9
 static float SourceAspectRatioToWidescreen(float source_aspect)
@@ -210,13 +208,11 @@ void Presenter::ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
 
   video_events.before_present_event.Trigger(present_info);
 
-#ifdef __LIBRETRO__
   if (!g_frontend_takes_frames)
   {
     m_last_xfb_id = std::numeric_limits<u64>::max();
     return;
   }
-#endif
 
   if (!is_duplicate || !g_ActiveConfig.bSkipPresentingDuplicateXFBs)
   {
@@ -1041,14 +1037,10 @@ void Presenter::DoState(PointerWrap& p)
 
     retro_atomic_store_relaxed_int(&m_immediate_swap_happened_this_field, 0);
 
-#ifdef __LIBRETRO__
     /* shown inside the next retro_run, where the frontend takes pictures,
      * by the next field: never taken for a repeat of what was shown
      * before the load */
     m_last_xfb_id = std::numeric_limits<u64>::max();
-#else
-    ImmediateSwap(m_last_xfb_addr, m_last_xfb_width, m_last_xfb_stride, m_last_xfb_height);
-#endif
   }
 }
 

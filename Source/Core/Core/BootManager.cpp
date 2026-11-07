@@ -22,9 +22,7 @@
 
 #include <fmt/format.h>
 
-#ifdef __LIBRETRO__
 #include "Common/CommonPaths.h"
-#endif
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
@@ -179,7 +177,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
 
   AchievementManager::GetInstance().CloseGame();
 
-#ifdef __LIBRETRO__
   // For Libretro we check for the IPL file here, the disc region is known by now
   // so we can easily get the correct path to check.
   if (!system.IsWii() && !Config::Get(Config::MAIN_SKIP_IPL))
@@ -222,7 +219,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
       Config::SetCurrent(Config::MAIN_SKIP_IPL, true);
     }
   }
-#endif
 
   const bool load_ipl = !system.IsWii() && !Config::Get(Config::MAIN_SKIP_IPL) &&
                         std::holds_alternative<BootParameters::Disc>(boot->parameters);

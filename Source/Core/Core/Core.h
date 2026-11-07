@@ -157,9 +157,7 @@ void DisplayMessage(std::string message, int time_in_ms = 0);
 
 // Run a function on the CPU thread, asynchronously.
 void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function
-#ifdef __LIBRETRO__
   , bool wait_for_completion = false
-#endif
 );
 
 // for calling back into UI code without introducing a dependency on it in core
@@ -193,16 +191,14 @@ void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 
 void UpdateTitle(Core::System& system);
 
-#ifdef __LIBRETRO__
-  void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
-                 WindowSystemInfo wsi);
-  void SingleCorePostRunShutdown();
-  extern std::unique_ptr<BootParameters> g_boot_params;
-  // Starts EmuThread on its own thread (dual core); s_emu_thread is its handle.
-  bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
-                      const WindowSystemInfo& wsi);
-  extern sthread_t* s_emu_thread;
-  extern bool s_frame_step;
-#endif
+void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
+		WindowSystemInfo wsi);
+void SingleCorePostRunShutdown();
+extern std::unique_ptr<BootParameters> g_boot_params;
+// Starts EmuThread on its own thread (dual core); s_emu_thread is its handle.
+bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
+		const WindowSystemInfo& wsi);
+extern sthread_t* s_emu_thread;
+extern bool s_frame_step;
 
 }  // namespace Core

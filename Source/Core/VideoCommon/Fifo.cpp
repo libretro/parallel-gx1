@@ -140,7 +140,6 @@ void FifoManager::ExitGpuLoop()
   m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
 }
 
-#ifdef __LIBRETRO__
 // Called by the CPU thread at the end of the frame. It can get there before the frontend
 // thread has entered RunGpuLoop(); the loop of the last frame then still counts as stopped
 // and this Stop() does nothing, so the request is kept for RunGpuLoop() to act on.
@@ -149,7 +148,6 @@ void FifoManager::StopGpuLoop()
   retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 1);
   m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
 }
-#endif
 
 void FifoManager::EmulatorState(bool running)
 {
@@ -312,7 +310,6 @@ bool FifoManager::RunGpuLoop(s64 budget_us)
   m_gpu_mainloop.SetSleepDeadline(deadline_us);
   m_gpu_mainloop.Run(
       [&] {
-#ifdef __LIBRETRO__
         if (retro_atomic_load_acquire_int(&m_stop_gpu_loop_requested))
           m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
         else if (deadline_us && (s64)cpu_features_get_time_usec() >= deadline_us)
@@ -320,7 +317,6 @@ bool FifoManager::RunGpuLoop(s64 budget_us)
           out_of_time = true;
           m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
         }
-#endif
 
         // Run events from the CPU thread.
         AsyncRequests::GetInstance()->PullEvents();
@@ -431,12 +427,10 @@ bool FifoManager::RunGpuLoop(s64 budget_us)
         }
       });
   m_gpu_mainloop.SetSleepDeadline(0);
-#ifdef __LIBRETRO__
   /* a field's end that came while the loop was out of time is kept for
    * the next run, which then finishes that field's work and stops */
   if (!out_of_time)
     retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 0);
-#endif
   return !out_of_time;
 }
 

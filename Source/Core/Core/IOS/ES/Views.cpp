@@ -16,9 +16,7 @@
 #include "Core/IOS/VersionInfo.h"
 #include "Core/System.h"
 
-#ifdef __LIBRETRO__
 #include "DolphinLibretro/Common/Globals.h"
-#endif
 
 namespace IOS::HLE
 {
@@ -62,7 +60,6 @@ IPCReply ESDevice::GetTicketViewCount(const IOCtlVRequest& request)
     WARN_LOG_FMT(IOS_ES, "GetViewCount: Faking IOS title {:016x} being present", TitleID);
   }
 
-#ifdef __LIBRETRO__
   // Only the disc is booted, so the Wii Menu has no ticket. A game returning to it (HOME menu → Wii Menu,
   // OSReturnToMenu) asks for its ticket views first and stalls on none, a black screen. Ask the frontend to close the
   // game instead, as a real Wii returns to its menu.
@@ -72,7 +69,6 @@ IPCReply ESDevice::GetTicketViewCount(const IOCtlVRequest& request)
     if (Libretro::environ_cb)
       Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, nullptr);
   }
-#endif
 
   INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETVIEWCNT for titleID: {:016x} (View Count = {})", TitleID,
                view_count);

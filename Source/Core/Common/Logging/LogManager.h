@@ -36,9 +36,7 @@ public:
     FILE_LISTENER = 0,
     CONSOLE_LISTENER,
     LOG_WINDOW_LISTENER,
-#ifdef __LIBRETRO__
     CUSTOM_LISTENER,
-#endif
     NUMBER_OF_LISTENERS  // Must be last
   };
 };

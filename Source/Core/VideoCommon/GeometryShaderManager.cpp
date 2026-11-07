@@ -9,11 +9,9 @@
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/XFMemory.h"
-#ifdef __LIBRETRO__
 #include <cmath>
 
 #include "VideoCommon/VertexShaderManager.h"
-#endif
 
 static constexpr int LINE_PT_TEX_OFFSETS[8] = {0, 16, 8, 4, 2, 1, 1, 1};
 
@@ -62,13 +60,10 @@ void GeometryShaderManager::SetConstants(PrimitiveType prim)
       constants.stereoparams[1] = g_ActiveConfig.bStereoSwapEyes ? -offset : offset;
     }
     else
-    {
       constants.stereoparams[0] = constants.stereoparams[1] = 0;
-    }
 
     constants.stereoparams[2] = g_ActiveConfig.stereo_convergence;
 
-#ifdef __LIBRETRO__
     if (g_libretro_vr_camera.applied)
     {
       // Move each eye onto its own headset frustum as well as separating it. The shader adds
@@ -91,7 +86,6 @@ void GeometryShaderManager::SetConstants(PrimitiveType prim)
       constants.stereoparams[1] = -eye_offset;
       constants.stereoparams[2] = 0.0f;
     }
-#endif
 
     dirty = true;
   }

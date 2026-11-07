@@ -21,9 +21,7 @@
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/VideoConfig.h"
 
-#ifdef __LIBRETRO__
 #include "DolphinLibretro/Common/Options.h"
-#endif
 
 namespace OGL
 {

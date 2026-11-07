@@ -48,7 +48,6 @@ public:
     libusb_exit(m_context);
   }
 
-#ifdef __LIBRETRO__
   void Shutdown()
   {
     if (!m_context || !m_event_thread_running.TestAndClear())
@@ -60,7 +59,6 @@ public:
     libusb_exit(m_context);
     m_context = nullptr; // clear this so it no longer fires in deconstructor again
   }
-#endif
 
   libusb_context* GetContext() const { return m_context; }
 
@@ -113,7 +111,7 @@ Context::Context() : m_impl{std::make_unique<Impl>()}
 
 Context::~Context() = default;
 
-#if defined(__LIBUSB__) && defined(__LIBRETRO__)
+#if defined(__LIBUSB__)
 void Context::Shutdown()
 {
   if(m_impl)

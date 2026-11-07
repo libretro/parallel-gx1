@@ -482,7 +482,6 @@ void DXContext::WaitForFence(u64 fence)
   }
 }
 
-#ifdef __LIBRETRO__
 // a seperate function is needed to bind externally managed device to dolphin
 bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueue* queue)
 {
@@ -534,5 +533,4 @@ bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueu
 
   return true;
 }
-#endif
 }  // namespace DX12

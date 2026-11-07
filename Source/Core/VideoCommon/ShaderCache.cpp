@@ -62,13 +62,10 @@ void ShaderCache::InitializeShaderCache()
   {
     LoadCaches();
     LoadPipelineUIDCache();
-#ifdef __LIBRETRO__
     if (g_ActiveConfig.UsingUberShaders())
       LoadUberPipelineUIDCache();
-#endif
   }
 
-#ifdef __LIBRETRO__
   /* With ubershaders, every draw without its specialized pipeline yet is
    * drawn with an ubershader one. The ones this game drew with before are
    * built before it starts, as a draw would otherwise build its own on
@@ -87,11 +84,6 @@ void ShaderCache::InitializeShaderCache()
     if (m_async_shader_compiler->HasWorkerThreads())
       QueueUberShaderPipelines();
   }
-#else
-  // Queue ubershader precompiling if required.
-  if (g_ActiveConfig.UsingUberShaders())
-    QueueUberShaderPipelines();
-#endif
 
   // Compile all known UIDs.
   CompileMissingPipelines();
@@ -202,12 +194,10 @@ std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const
 const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineUid& uid)
 {
   auto it = m_gx_uber_pipeline_cache.find(uid);
-#ifdef __LIBRETRO__
   /* every one a draw uses is recorded, to be built before the game
    * starts next time */
   if (m_gx_uber_pipeline_uid_cache_file.IsOpen() && !m_recorded_uber_pipeline_uids.contains(uid))
     AppendGXUberPipelineUID(uid);
-#endif
   if (it != m_gx_uber_pipeline_cache.end() && !it->second.second)
     return it->second.first.get();
 
@@ -909,7 +899,6 @@ void ShaderCache::LoadPipelineUIDCache()
 void ShaderCache::ClosePipelineUIDCache()
 {
   // This is left as a method in case we need to append extra data to the file in the future.
-#ifdef __LIBRETRO__
   if (m_gx_pipeline_uid_cache_file.IsOpen() && !m_pending_gx_pipeline_uids.empty() &&
       !m_gx_pipeline_uid_cache_file.WriteArray(m_pending_gx_pipeline_uids.data(),
                                                 m_pending_gx_pipeline_uids.size()))
@@ -926,11 +915,9 @@ void ShaderCache::ClosePipelineUIDCache()
   m_pending_gx_uber_pipeline_uids.clear();
   m_recorded_uber_pipeline_uids.clear();
   m_gx_uber_pipeline_uid_cache_file.Close();
-#endif
   m_gx_pipeline_uid_cache_file.Close();
 }
 
-#ifdef __LIBRETRO__
 void ShaderCache::LoadUberPipelineUIDCache()
 {
   const u32 magic = 0x44495555;  // UUID
@@ -1006,7 +993,6 @@ void ShaderCache::CompileMissingUberPipelines()
       QueueUberPipelineCompile(it.first, COMPILE_PRIORITY_UBERSHADER_PIPELINE);
   }
 }
-#endif
 
 void ShaderCache::AddSerializedGXPipelineUID(const SerializedGXPipelineUid& uid)
 {
@@ -1029,16 +1015,8 @@ void ShaderCache::AppendGXPipelineUID(const GXPipelineUid& config)
 
   SerializedGXPipelineUid disk_uid;
   SerializePipelineUid(config, disk_uid);
-#ifdef __LIBRETRO__
   // Keep filesystem writes off the draw path. Save on reload or shutdown.
   m_pending_gx_pipeline_uids.push_back(disk_uid);
-#else
-  if (!m_gx_pipeline_uid_cache_file.WriteBytes(&disk_uid, sizeof(disk_uid)))
-  {
-    WARN_LOG_FMT(VIDEO, "Writing pipeline UID to cache failed, closing file.");
-    m_gx_pipeline_uid_cache_file.Close();
-  }
-#endif
 }
 
 void ShaderCache::QueueVertexShaderCompile(const VertexShaderUid& uid, u32 priority)

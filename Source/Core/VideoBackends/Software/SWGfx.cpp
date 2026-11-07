@@ -5,9 +5,7 @@
 
 #include <algorithm>
 
-#ifdef __LIBRETRO__
 #include "DolphinLibretro/Common/Globals.h"
-#endif
 
 #include "VideoBackends/Software/EfbCopy.h"
 #include "VideoBackends/Software/Rasterizer.h"
@@ -132,9 +130,7 @@ void SWGfx::ShowImage(const AbstractTexture* source_texture,
       *dst++ = (static_cast<u32>(s[0]) << 16) | (static_cast<u32>(s[1]) << 8) | s[2];
   }
 
-#ifdef __LIBRETRO__
   Libretro::Video::video_cb(m_picture.data(), width, height, width * 4);
-#endif
 }
 
 void SWGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable,

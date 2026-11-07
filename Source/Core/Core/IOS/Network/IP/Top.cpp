@@ -95,7 +95,7 @@ const char* GaiStrError(s32 error)
 NetIPTopDevice::NetIPTopDevice(EmulationKernel& ios, const std::string& device_name)
     : EmulationDevice(ios, device_name)
 {
-#if defined(__LIBRETRO__) && defined(SKIP_NETWORK_WORKER_THREAD)
+#if defined(SKIP_NETWORK_WORKER_THREAD)
   return;
 #endif
 

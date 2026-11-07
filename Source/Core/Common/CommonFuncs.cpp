@@ -98,7 +98,6 @@ std::optional<std::wstring> GetModuleName(void* hInstance)
 }
 #endif
 
-#ifdef __LIBRETRO__
 bool is_uwp()
 {
 #if defined(_WIN32)
@@ -111,6 +110,5 @@ bool is_uwp()
   return false;
 #endif
 }
-#endif
 
 }  // namespace Common

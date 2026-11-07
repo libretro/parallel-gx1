@@ -25,7 +25,6 @@
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/XFMemory.h"
 #include "VideoCommon/XFStateManager.h"
-#ifdef __LIBRETRO__
 #include "Core/System.h"
 #include "VideoCommon/GeometryShaderManager.h"
 
@@ -62,7 +61,6 @@ static bool LibretroVRCameraChanged()
          screen != g_libretro_vr_camera.screen_applied ||
          ((camera || screen) && g_libretro_vr_camera.dirty);
 }
-#endif
 
 void VertexShaderManager::Init()
 {
@@ -147,7 +145,6 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
   PRIM_LOG("Projection: {} {} {} {} {} {}", rawProjection[0], rawProjection[1], rawProjection[2],
            rawProjection[3], rawProjection[4], rawProjection[5]);
 
-#ifdef __LIBRETRO__
   const bool use_vr_camera = UseLibretroVRCamera();
   const bool use_vr_screen = UseLibretroVRScreen();
   LibretroVRCamera& vr = g_libretro_vr_camera;
@@ -184,14 +181,11 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
     Core::System::GetInstance().GetGeometryShaderManager().SetProjectionChanged();
   vr.applied = use_vr_camera;
   vr.screen_applied = use_vr_screen;
-#endif
 
   auto corrected_matrix = Common::Matrix44::FromArray(m_projection_matrix);
 
-#ifdef __LIBRETRO__
   if (use_vr_camera)
     corrected_matrix *= g_libretro_vr_camera.view;
-#endif
 
   if (g_freelook_camera.IsActive() && xfmem.projection.type == ProjectionType::Perspective)
     corrected_matrix *= g_freelook_camera.GetView();
@@ -204,9 +198,7 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
 void VertexShaderManager::SetProjectionMatrix(XFStateManager& xf_state_manager)
 {
   if (xf_state_manager.DidProjectionChange() || g_freelook_camera.GetController()->IsDirty()
-#ifdef __LIBRETRO__
       || LibretroVRCameraChanged()
-#endif
   )
   {
     xf_state_manager.ResetProjection();
@@ -499,9 +491,7 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
 
   if (xf_state_manager.DidProjectionChange() || g_freelook_camera.GetController()->IsDirty() ||
       !projection_actions.empty() || m_projection_graphics_mod_change
-#ifdef __LIBRETRO__
       || LibretroVRCameraChanged()
-#endif
   )
   {
     xf_state_manager.ResetProjection();

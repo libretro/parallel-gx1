@@ -223,6 +223,4 @@ void CreateSystemMenuTitleDirs();
 
 void AddRiivolutionPatches(BootParameters* boot_params,
                            std::vector<DiscIO::Riivolution::Patch> riivolution_patches);
-#ifdef __LIBRETRO__
 std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::string& folder_path);
-#endif

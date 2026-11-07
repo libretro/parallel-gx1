@@ -219,9 +219,7 @@ public:
   // state changes
   void Apply();
 
-#ifdef __LIBRETRO__
   void Restore();
-#endif
   // Binds constant buffers/textures/samplers to the compute shader stage.
   // We don't track these explicitly because it's not often-used.
   void SetComputeUAV(u32 index, ID3D11UnorderedAccessView* uav);

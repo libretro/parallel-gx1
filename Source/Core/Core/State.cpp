@@ -178,9 +178,6 @@ static constexpr bool s_use_compression = true;
 
 static bool ReadHeader(const std::string& filename, StateHeader& header);
 
-#ifndef __LIBRETRO__
-static
-#endif
 void DoState(Core::System& system, PointerWrap& p)
 {
   bool is_wii = system.IsWii() || system.IsMIOS();
@@ -921,15 +918,14 @@ void SetOnAfterLoadCallback(AfterLoadCallbackFunc callback)
 
 void Init(Core::System& system)
 {
-#if defined(__LIBRETRO__) && defined(SKIP_SAVESTATE_THREAD)
-  return;
-#endif
+#if !defined(SKIP_SAVESTATE_THREAD)
   s_compress_and_dump_thread.Reset("Savestate Worker",
                                    std::bind_front(&CompressAndDumpState, std::ref(system)));
 
   s_flush_unsaved_data_hook = UICommon::AddFlushUnsavedDataCallback([] {
     WaitForStateSaves();
   });
+#endif
 }
 
 void Shutdown()

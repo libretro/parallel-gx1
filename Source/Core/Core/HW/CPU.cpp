@@ -16,9 +16,7 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 #include "VideoCommon/Fifo.h"
-#ifdef __LIBRETRO__
 #include "VideoCommon/AsyncRequests.h"
-#endif
 
 namespace CPU
 {
@@ -37,9 +35,7 @@ CPUManager::CPUManager(Core::System& system) : m_system(system)
   retro_eventcount_init(&m_stepping_released);
   retro_eventcount_init(&m_cpu_wake);
   retro_eventcount_init(&m_cpu_idle);
-#ifdef __LIBRETRO__
   retro_atomic_int_init(&m_cpu_run_state_reached, 0);
-#endif
 }
 
 CPUManager::~CPUManager()
@@ -69,9 +65,7 @@ void CPUManager::Init(PowerPC::CPUCore cpu_core)
 void CPUManager::Shutdown()
 {
   Stop();
-#ifdef __LIBRETRO__
   retro_atomic_store_release_int(&m_cpu_run_state_reached, 0);
-#endif
   m_system.GetPowerPC().Shutdown();
 }
 
@@ -156,9 +150,7 @@ void CPUManager::Run()
 {
   auto& power_pc = m_system.GetPowerPC();
 
-#ifdef __LIBRETRO__
   retro_atomic_store_release_int(&m_cpu_run_state_reached, 1);
-#endif
   while (LoadState() != State::PowerDown)
   {
     // Wait out a PauseAndLock: the host thread is standing in for this one.
@@ -274,7 +266,6 @@ void CPUManager::Run()
   Host_UpdateDisasmDialog();
 }
 
-#ifdef __LIBRETRO__
 void CPUManager::RunSingleFrame()
 {
   auto& system = Core::System::GetInstance();
@@ -290,7 +281,6 @@ void CPUManager::RunSingleFrame()
 
   AsyncRequests::GetInstance()->PullEvents();
 }
-#endif
 
 void CPUManager::RunAdjacentSystems(bool running)
 {

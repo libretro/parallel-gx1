@@ -56,7 +56,7 @@ void USBScanner::PublishDevices(DeviceMap map)
     quiesce_retire(&m_quiesce, &static_cast<Devices*>(old)->node, FreeDevices);
 }
 
-#if defined(__LIBRETRO__) && defined(__LIBUSB__)
+#if defined(__LIBUSB__)
 void USBScanner::Shutdown()
 {
   if(m_context)

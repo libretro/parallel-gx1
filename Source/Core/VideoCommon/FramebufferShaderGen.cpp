@@ -232,11 +232,9 @@ std::string GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors)
     // We have to explicitly unroll this loop otherwise the GL compiler gets cranky.
     for (u32 v = 0; v < 3; v++)
     {
-#ifdef __LIBRETRO__
       // Outputs are undefined after EmitVertex()
       if (v > 0)
         code.Write("    gl_Layer = j;\n");
-#endif
       code.Write("    gl_Position = gl_in[{}].gl_Position;\n", v);
       for (u32 i = 0; i < num_tex; i++)
       {

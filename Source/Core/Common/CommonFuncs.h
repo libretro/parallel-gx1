@@ -5,10 +5,8 @@
 
 #ifdef _WIN32
 #include <optional>
-#ifdef __LIBRETRO__
 #include <windows.h>
 #include <appmodel.h>
-#endif
 #endif
 #include <string>
 #ifdef __MINGW32__
@@ -85,7 +83,5 @@ struct MacOSVersion  // NSOperatingSystemVersion
 MacOSVersion GetMacOSVersion();
 #endif
 
-#ifdef __LIBRETRO__
 extern bool is_uwp();
-#endif
 }  // namespace Common
