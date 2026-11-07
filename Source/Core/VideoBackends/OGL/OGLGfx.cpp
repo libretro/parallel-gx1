@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <string_view>
+#include "VideoCommon/VideoBackendKind.h"
 
 namespace OGL
 {
@@ -123,6 +124,7 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
       m_current_blend_state(RenderState::GetInvalidBlendingState()),
       m_backbuffer_scale(backbuffer_scale)
 {
+  g_video_backend_kind = VIDEO_BACKEND_OGL;
   // Create the window framebuffer.
   if (!m_main_gl_context->IsHeadless())
   {

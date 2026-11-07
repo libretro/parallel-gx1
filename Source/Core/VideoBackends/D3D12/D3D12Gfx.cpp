@@ -18,6 +18,7 @@
 #include "VideoCommon/FrameOutput.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/VideoConfig.h"
+#include "VideoCommon/VideoBackendKind.h"
 
 namespace DX12
 {
@@ -31,6 +32,7 @@ static bool UsesDynamicVertexLoader(const AbstractPipeline* pipeline)
 Gfx::Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
     : m_backbuffer_scale(backbuffer_scale), m_output(std::move(output))
 {
+  g_video_backend_kind = VIDEO_BACKEND_D3D12;
   m_state.root_signature = g_dx_context->GetGXRootSignature();
 
   for (u32 i = 0; i < VideoCommon::MAX_PIXEL_SHADER_SAMPLERS; i++)

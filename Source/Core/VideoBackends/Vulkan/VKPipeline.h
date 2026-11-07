@@ -36,7 +36,7 @@ public:
   explicit VKPipeline(const AbstractPipelineConfig& config, VkPipeline pipeline,
                       VkPipelineLayout pipeline_layout, AbstractPipelineUsage usage,
                       u32 dynamic_state, u32 dynamic_blend, VKSharedPipeline* shared);
-  ~VKPipeline() override;
+  ~VKPipeline();
 
   VkPipeline GetVkPipeline() const { return m_pipeline; }
   VkPipelineLayout GetVkPipelineLayout() const { return m_pipeline_layout; }

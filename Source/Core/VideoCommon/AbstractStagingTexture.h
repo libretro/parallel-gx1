@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include <cstddef>
+#include <memory>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -21,7 +24,6 @@ class AbstractStagingTexture
 {
 public:
   explicit AbstractStagingTexture(StagingTextureType type, const TextureConfig& c);
-  virtual ~AbstractStagingTexture();
 
   const TextureConfig& GetConfig() const { return m_config; }
   u32 GetWidth() const { return m_config.width; }
@@ -39,9 +41,8 @@ public:
   size_t GetMappedStride() const { return m_map_stride; }
   // Copies from the GPU texture object to the staging texture, which can be mapped/read by the CPU.
   // Both src_rect and dst_rect must be with within the bounds of the the specified textures.
-  virtual void CopyFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& src_rect,
-                               u32 src_layer, u32 src_level,
-                               const MathUtil::Rectangle<int>& dst_rect) = 0;
+  void CopyFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& src_rect,
+                       u32 src_layer, u32 src_level, const MathUtil::Rectangle<int>& dst_rect);
 
   // Wrapper for copying a whole layer of a texture to a readback texture.
   // Assumes that the level of src texture and this texture have the same dimensions.
@@ -49,9 +50,8 @@ public:
 
   // Copies from this staging texture to a GPU texture.
   // Both src_rect and dst_rect must be with within the bounds of the the specified textures.
-  virtual void CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
-                             const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
-                             u32 dst_level) = 0;
+  void CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
+                     const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer, u32 dst_level);
 
   // Wrapper for copying a whole layer of a texture to a readback texture.
   // Assumes that the level of src texture and this texture have the same dimensions.
@@ -61,16 +61,16 @@ public:
   // The Map call may not perform synchronization. If the contents of the staging texture
   // has been updated by a CopyFromTexture call, you must call Flush() first.
   // If persistent mapping is supported in the backend, this may be a no-op.
-  virtual bool Map() = 0;
+  bool Map();
 
   // Unmaps the CPU-readable copy of the texture. May be a no-op on backends which
   // support persistent-mapped buffers.
-  virtual void Unmap() = 0;
+  void Unmap();
 
   // Flushes pending writes from the CPU to the GPU, and reads from the GPU to the CPU.
   // This may cause a command buffer flush depending on if one has occurred between the last
   // call to CopyFromTexture()/CopyToTexture() and the Flush() call.
-  virtual void Flush() = 0;
+  void Flush();
 
   // Reads the specified rectangle from the staging texture to out_ptr, with the specified stride
   // (length in bytes of each row). CopyFromTexture must be called first. The contents of any

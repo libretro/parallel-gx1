@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include <cstddef>
+#include <memory>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -15,21 +18,19 @@ class AbstractTexture
 {
 public:
   explicit AbstractTexture(const TextureConfig& c);
-  virtual ~AbstractTexture() = default;
 
-
-  virtual void CopyRectangleFromTexture(const AbstractTexture* src,
-                                        const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
-                                        u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
-                                        u32 dst_layer, u32 dst_level) = 0;
-  virtual void ResolveFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& rect,
-                                  u32 layer, u32 level) = 0;
-  virtual void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer,
-                    size_t buffer_size, u32 layer = 0) = 0;
+  void CopyRectangleFromTexture(const AbstractTexture* src,
+                                const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
+                                u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
+                                u32 dst_layer, u32 dst_level);
+  void ResolveFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& rect,
+                          u32 layer, u32 level);
+  void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer,
+            size_t buffer_size, u32 layer = 0);
 
   // Hints to the backend that we have finished rendering to this texture, and it will be used
   // as a shader resource and sampled. For Vulkan, this transitions the image layout.
-  virtual void FinishedRendering();
+  void FinishedRendering();
 
   u32 GetWidth() const { return m_config.width; }
   u32 GetHeight() const { return m_config.height; }

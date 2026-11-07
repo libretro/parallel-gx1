@@ -15,7 +15,7 @@ namespace DX12
 class DXShader final : public D3DCommon::Shader
 {
 public:
-  ~DXShader() override;
+  ~DXShader();
 
   ID3D12PipelineState* GetComputePipeline() const { return m_compute_pipeline.Get(); }
   D3D12_SHADER_BYTECODE GetD3DByteCode() const;

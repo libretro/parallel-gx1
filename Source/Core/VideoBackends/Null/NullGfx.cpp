@@ -9,12 +9,14 @@
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/VideoConfig.h"
+#include "VideoCommon/VideoBackendKind.h"
 
 namespace Null
 {
 // Init functions
 NullGfx::NullGfx()
 {
+  g_video_backend_kind = VIDEO_BACKEND_NULL;
   UpdateActiveConfig();
 }
 
@@ -45,17 +47,11 @@ std::unique_ptr<AbstractStagingTexture> NullGfx::CreateStagingTexture(StagingTex
   return std::make_unique<NullStagingTexture>(type, config);
 }
 
-class NullShader final : public AbstractShader
-{
-public:
-  explicit NullShader(ShaderStage stage) : AbstractShader(stage) {}
-};
-
 std::unique_ptr<AbstractShader>
 NullGfx::CreateShaderFromSource(ShaderStage stage, std::string_view /* source */,
                                 std::string_view /* name */)
 {
-  return std::make_unique<NullShader>(stage);
+  return std::make_unique<AbstractShader>(stage);
 }
 
 std::unique_ptr<AbstractShader> NullGfx::CreateShaderFromBinary(ShaderStage stage,
@@ -63,18 +59,14 @@ std::unique_ptr<AbstractShader> NullGfx::CreateShaderFromBinary(ShaderStage stag
                                                                 size_t /* length */,
                                                                 std::string_view /* name */)
 {
-  return std::make_unique<NullShader>(stage);
+  return std::make_unique<AbstractShader>(stage);
 }
-
-class NullPipeline final : public AbstractPipeline
-{
-};
 
 std::unique_ptr<AbstractPipeline> NullGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                           const void* cache_data,
                                                           size_t cache_data_length)
 {
-  return std::make_unique<NullPipeline>();
+  return std::make_unique<AbstractPipeline>();
 }
 
 std::unique_ptr<AbstractFramebuffer>

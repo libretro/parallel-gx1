@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include <string>
 
 #include <retro_atomic.h>

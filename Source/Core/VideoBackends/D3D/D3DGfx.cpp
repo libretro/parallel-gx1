@@ -33,12 +33,14 @@
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/XFMemory.h"
+#include "VideoCommon/VideoBackendKind.h"
 
 namespace DX11
 {
 Gfx::Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
     : m_backbuffer_scale(backbuffer_scale), m_output(std::move(output))
 {
+  g_video_backend_kind = VIDEO_BACKEND_D3D11;
 }
 
 Gfx::~Gfx() = default;

@@ -16,7 +16,7 @@ public:
   DXPipeline(const AbstractPipelineConfig& config, ID3D12PipelineState* pipeline,
              ID3D12RootSignature* root_signature, AbstractPipelineUsage usage,
              D3D12_PRIMITIVE_TOPOLOGY primitive_topology, bool use_integer_rtv);
-  ~DXPipeline() override;
+  ~DXPipeline();
 
   static std::unique_ptr<DXPipeline> Create(const AbstractPipelineConfig& config,
                                             const void* cache_data, size_t cache_data_size);
@@ -27,7 +27,7 @@ public:
   D3D12_PRIMITIVE_TOPOLOGY GetPrimitiveTopology() const { return m_primitive_topology; }
   bool UseIntegerRTV() const { return m_use_integer_rtv; }
 
-  CacheData GetCacheData() const override;
+  CacheData GetCacheData() const;
 
 private:
   ID3D12PipelineState* m_pipeline;

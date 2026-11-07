@@ -20,20 +20,20 @@ namespace DX12
 class DXTexture final : public AbstractTexture
 {
 public:
-  ~DXTexture() override;
+  ~DXTexture();
 
   static std::unique_ptr<DXTexture> Create(const TextureConfig& config, std::string_view name);
   static std::unique_ptr<DXTexture> CreateAdopted(ID3D12Resource* resource);
 
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
-            u32 layer) override;
+            u32 layer);
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
                                 u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
-                                u32 dst_layer, u32 dst_level) override;
+                                u32 dst_layer, u32 dst_level);
   void ResolveFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& rect,
-                          u32 layer, u32 level) override;
-  void FinishedRendering() override;
+                          u32 layer, u32 level);
+  void FinishedRendering();
 
   ID3D12Resource* GetResource() const { return m_resource.Get(); }
   const DescriptorHandle& GetSRVDescriptor() const { return m_srv_descriptor; }
@@ -65,7 +65,7 @@ private:
 class DXFramebuffer final : public AbstractFramebuffer
 {
 public:
-  ~DXFramebuffer() override;
+  ~DXFramebuffer();
 
   const DescriptorHandle& GetIntRTVDescriptor() const { return m_int_rtv_descriptor; }
   const DescriptorHandle& GetDSVDescriptor() const { return m_dsv_descriptor; }
@@ -110,18 +110,18 @@ private:
 class DXStagingTexture final : public AbstractStagingTexture
 {
 public:
-  ~DXStagingTexture() override;
+  ~DXStagingTexture();
 
   void CopyFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& src_rect,
                        u32 src_layer, u32 src_level,
-                       const MathUtil::Rectangle<int>& dst_rect) override;
+                       const MathUtil::Rectangle<int>& dst_rect);
   void CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
                      const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
-                     u32 dst_level) override;
+                     u32 dst_level);
 
-  bool Map() override;
-  void Unmap() override;
-  void Flush() override;
+  bool Map();
+  void Unmap();
+  void Flush();
 
   static std::unique_ptr<DXStagingTexture> Create(StagingTextureType type,
                                                   const TextureConfig& config);

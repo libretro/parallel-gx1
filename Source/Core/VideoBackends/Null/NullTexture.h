@@ -22,29 +22,29 @@ public:
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
                                 u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
-                                u32 dst_layer, u32 dst_level) override;
+                                u32 dst_layer, u32 dst_level);
   void ResolveFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& rect,
-                          u32 layer, u32 level) override;
+                          u32 layer, u32 level);
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
-            u32 layer) override;
+            u32 layer);
 };
 
 class NullStagingTexture final : public AbstractStagingTexture
 {
 public:
   explicit NullStagingTexture(StagingTextureType type, const TextureConfig& config);
-  ~NullStagingTexture() override;
+  ~NullStagingTexture();
 
   void CopyFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& src_rect,
                        u32 src_layer, u32 src_level,
-                       const MathUtil::Rectangle<int>& dst_rect) override;
+                       const MathUtil::Rectangle<int>& dst_rect);
   void CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
                      const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
-                     u32 dst_level) override;
+                     u32 dst_level);
 
-  bool Map() override;
-  void Unmap() override;
-  void Flush() override;
+  bool Map();
+  void Unmap();
+  void Flush();
 
 private:
   std::vector<u8> m_texture_buf;

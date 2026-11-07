@@ -17,10 +17,14 @@
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/VideoCommon.h"
+#include "VideoCommon/VideoBackendKind.h"
 
 namespace SW
 {
-SWGfx::SWGfx() = default;
+SWGfx::SWGfx()
+{
+  g_video_backend_kind = VIDEO_BACKEND_SOFTWARE;
+}
 
 SWGfx::~SWGfx() = default;
 
@@ -60,20 +64,11 @@ bool SWGfx::BindBackbuffer(const ClearColor& clear_color)
   return true;
 }
 
-class SWShader final : public AbstractShader
-{
-public:
-  explicit SWShader(ShaderStage stage) : AbstractShader(stage) {}
-  ~SWShader() override = default;
-
-  BinaryData GetBinary() const override { return {}; }
-};
-
 std::unique_ptr<AbstractShader>
 SWGfx::CreateShaderFromSource(ShaderStage stage, std::string_view /* source */,
                               std::string_view /* name */)
 {
-  return std::make_unique<SWShader>(stage);
+  return std::make_unique<AbstractShader>(stage);
 }
 
 std::unique_ptr<AbstractShader> SWGfx::CreateShaderFromBinary(ShaderStage stage,
@@ -81,21 +76,14 @@ std::unique_ptr<AbstractShader> SWGfx::CreateShaderFromBinary(ShaderStage stage,
                                                               size_t /* length */,
                                                               std::string_view /* name */)
 {
-  return std::make_unique<SWShader>(stage);
+  return std::make_unique<AbstractShader>(stage);
 }
-
-class SWPipeline final : public AbstractPipeline
-{
-public:
-  SWPipeline() = default;
-  ~SWPipeline() override = default;
-};
 
 std::unique_ptr<AbstractPipeline> SWGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                         const void* cache_data,
                                                         size_t cache_data_length)
 {
-  return std::make_unique<SWPipeline>();
+  return std::make_unique<AbstractPipeline>();
 }
 
 // Called on the GPU thread. The frontend takes the picture in memory, in

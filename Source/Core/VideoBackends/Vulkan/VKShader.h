@@ -20,14 +20,14 @@ class VKShader final : public AbstractShader
 public:
   VKShader(ShaderStage stage, std::vector<u32> spv, VkShaderModule mod, std::string_view name);
   VKShader(std::vector<u32> spv, VkPipeline compute_pipeline, std::string_view name);
-  ~VKShader() override;
+  ~VKShader();
 
   VkShaderModule GetShaderModule() const { return m_module; }
   VkPipeline GetComputePipeline() const { return m_compute_pipeline; }
   /* unique among the shaders made since the backend came up: a shader
    * made where a destroyed one was is another shader */
   u32 GetUid() const { return m_uid; }
-  BinaryData GetBinary() const override;
+  BinaryData GetBinary() const;
 
   static std::unique_ptr<VKShader> CreateFromSource(ShaderStage stage, std::string_view source,
                                                     std::string_view name);

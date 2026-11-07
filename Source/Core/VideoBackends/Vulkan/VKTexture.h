@@ -33,7 +33,7 @@ public:
   VKTexture(const TextureConfig& tex_config, const vk_heap_alloc_t& alloc, VkImage image,
             std::string_view name, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED,
             ComputeImageLayout compute_layout = ComputeImageLayout::Undefined);
-  ~VKTexture() override;
+  ~VKTexture();
 
   static VkFormat GetLinearFormat(VkFormat format);
   static VkFormat GetVkFormatForHostTextureFormat(AbstractTextureFormat format);
@@ -43,12 +43,12 @@ public:
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
                                 u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
-                                u32 dst_layer, u32 dst_level) override;
+                                u32 dst_layer, u32 dst_level);
   void ResolveFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& rect,
-                          u32 layer, u32 level) override;
+                          u32 layer, u32 level);
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
-            u32 layer) override;
-  void FinishedRendering() override;
+            u32 layer);
+  void FinishedRendering();
 
   VkImage GetImage() const { return m_image; }
   VkImageView GetView() const { return m_view; }
@@ -99,18 +99,18 @@ public:
                    std::unique_ptr<StagingBuffer> buffer, VkImage linear_image,
                    const vk_heap_alloc_t& linear_image_alloc);
 
-  ~VKStagingTexture() override;
+  ~VKStagingTexture();
 
   void CopyFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& src_rect,
                        u32 src_layer, u32 src_level,
-                       const MathUtil::Rectangle<int>& dst_rect) override;
+                       const MathUtil::Rectangle<int>& dst_rect);
   void CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
                      const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
-                     u32 dst_level) override;
+                     u32 dst_level);
 
-  bool Map() override;
-  void Unmap() override;
-  void Flush() override;
+  bool Map();
+  void Unmap();
+  void Flush();
 
   static std::unique_ptr<VKStagingTexture> Create(StagingTextureType type,
                                                   const TextureConfig& config);
@@ -136,7 +136,7 @@ public:
                 std::vector<AbstractTexture*> additional_color_attachments, u32 width, u32 height,
                 u32 layers, u32 samples, VkFramebuffer fb, VkRenderPass load_render_pass,
                 VkRenderPass discard_render_pass, VkRenderPass clear_render_pass);
-  ~VKFramebuffer() override;
+  ~VKFramebuffer();
 
   VkFramebuffer GetFB() const { return m_fb; }
   VkRect2D GetRect() const { return VkRect2D{{0, 0}, {m_width, m_height}}; }

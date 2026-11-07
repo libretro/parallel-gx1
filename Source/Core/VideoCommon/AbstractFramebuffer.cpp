@@ -18,8 +18,6 @@ AbstractFramebuffer::AbstractFramebuffer(AbstractTexture* color_attachment,
 {
 }
 
-AbstractFramebuffer::~AbstractFramebuffer() = default;
-
 bool AbstractFramebuffer::ValidateConfig(
     const AbstractTexture* color_attachment, const AbstractTexture* depth_attachment,
     const std::vector<AbstractTexture*>& additional_color_attachments)

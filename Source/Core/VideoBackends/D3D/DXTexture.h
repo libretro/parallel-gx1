@@ -232,7 +232,7 @@ namespace DX11
 class DXTexture final : public AbstractTexture
 {
 public:
-  ~DXTexture() override;
+  ~DXTexture();
 
   static std::unique_ptr<DXTexture> Create(const TextureConfig& config, std::string_view name);
   static std::unique_ptr<DXTexture> CreateAdopted(ComPtr<ID3D11Texture2D> texture);
@@ -240,11 +240,11 @@ public:
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
                                 u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
-                                u32 dst_layer, u32 dst_level) override;
+                                u32 dst_layer, u32 dst_level);
   void ResolveFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& rect,
-                          u32 layer, u32 level) override;
+                          u32 layer, u32 level);
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
-            u32 layer) override;
+            u32 layer);
 
   ID3D11Texture2D* GetD3DTexture() const { return m_texture.Get(); }
   ID3D11ShaderResourceView* GetD3DSRV() const { return m_srv.Get(); }
@@ -266,18 +266,18 @@ class DXStagingTexture final : public AbstractStagingTexture
 {
 public:
   DXStagingTexture() = delete;
-  ~DXStagingTexture() override;
+  ~DXStagingTexture();
 
   void CopyFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& src_rect,
                        u32 src_layer, u32 src_level,
-                       const MathUtil::Rectangle<int>& dst_rect) override;
+                       const MathUtil::Rectangle<int>& dst_rect);
   void CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
                      const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
-                     u32 dst_level) override;
+                     u32 dst_level);
 
-  bool Map() override;
-  void Unmap() override;
-  void Flush() override;
+  bool Map();
+  void Unmap();
+  void Flush();
 
   static std::unique_ptr<DXStagingTexture> Create(StagingTextureType type,
                                                   const TextureConfig& config);
@@ -298,7 +298,7 @@ public:
                 u32 height, u32 layers, u32 samples, ComPtr<ID3D11RenderTargetView> rtv,
                 ComPtr<ID3D11RenderTargetView> integer_rtv, ComPtr<ID3D11DepthStencilView> dsv,
                 std::vector<ComPtr<ID3D11RenderTargetView>> additional_rtvs);
-  ~DXFramebuffer() override;
+  ~DXFramebuffer();
 
   ID3D11RenderTargetView* const* GetRTVArray() const { return m_render_targets_raw.data(); }
   ID3D11RenderTargetView* const* GetIntegerRTVArray() const { return m_integer_rtv.GetAddressOf(); }

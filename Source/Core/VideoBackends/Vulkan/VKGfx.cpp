@@ -25,12 +25,14 @@
 #include "VideoCommon/Present.h"
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/VideoConfig.h"
+#include "VideoCommon/VideoBackendKind.h"
 
 namespace Vulkan
 {
 VKGfx::VKGfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
     : m_output(std::move(output)), m_backbuffer_scale(backbuffer_scale)
 {
+  g_video_backend_kind = VIDEO_BACKEND_VULKAN;
   UpdateActiveConfig();
   for (SamplerState& sampler_state : m_sampler_states)
     sampler_state = RenderState::GetPointSamplerState();

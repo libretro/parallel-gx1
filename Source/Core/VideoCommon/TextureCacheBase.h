@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include <array>
 #include <filesystem>
 #include <fmt/format.h>

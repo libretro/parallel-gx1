@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include "Common/CommonTypes.h"
 #include "VideoCommon/TextureConfig.h"
 

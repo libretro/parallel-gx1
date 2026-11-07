@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include <cstddef>
 #include <string>
 #include <utility>
@@ -76,7 +78,6 @@ class AbstractPipeline
 public:
   AbstractPipeline() = default;
   explicit AbstractPipeline(const AbstractPipelineConfig& config) : m_config(config) {}
-  virtual ~AbstractPipeline() = default;
 
   AbstractPipelineConfig m_config;
 
@@ -84,11 +85,11 @@ public:
   // compiled shader ISA. The abstract shaders and creation struct are still required to create
   // pipeline objects, the cache is optionally used by the driver to speed up compilation.
   using CacheData = std::vector<u8>;
-  virtual CacheData GetCacheData() const { return {}; }
+  CacheData GetCacheData() const;
 
   // Whether the pipeline can be drawn with without waiting for its compile, which a driver may
   // still be running on threads of its own. Asking does not wait.
-  virtual bool IsReady() const { return true; }
+  bool IsReady() const;
   // Whether its compile is still running; once not, IsReady tells whether it succeeded.
-  virtual bool IsBuilding() const { return false; }
+  bool IsBuilding() const;
 };

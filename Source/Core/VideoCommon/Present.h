@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include "Common/MathUtil.h"
 
 #include "VideoCommon/TextureCacheBase.h"

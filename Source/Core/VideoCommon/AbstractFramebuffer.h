@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
+#include <memory>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -23,7 +26,6 @@ public:
                       std::vector<AbstractTexture*> additional_color_attachments,
                       AbstractTextureFormat color_format, AbstractTextureFormat depth_format,
                       u32 width, u32 height, u32 layers, u32 samples);
-  virtual ~AbstractFramebuffer();
 
   static bool ValidateConfig(const AbstractTexture* color_attachment,
                              const AbstractTexture* depth_attachment,

@@ -15,8 +15,6 @@ AbstractStagingTexture::AbstractStagingTexture(StagingTextureType type, const Te
 {
 }
 
-AbstractStagingTexture::~AbstractStagingTexture() = default;
-
 void AbstractStagingTexture::CopyFromTexture(const AbstractTexture* src, u32 src_layer,
                                              u32 src_level)
 {

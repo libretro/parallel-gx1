@@ -17,7 +17,7 @@ public:
   explicit OGLPipeline(const AbstractPipelineConfig& config, const GLVertexFormat* vertex_format,
                        RasterizationState rasterization_state, DepthState depth_state,
                        BlendingState blending_state, PipelineProgram* program, GLenum gl_primitive);
-  ~OGLPipeline() override;
+  ~OGLPipeline();
 
   const GLVertexFormat* GetVertexFormat() const { return m_vertex_format; }
   const RasterizationState& GetRasterizationState() const { return m_rasterization_state; }
@@ -26,9 +26,9 @@ public:
   const PipelineProgram* GetProgram() const { return m_program; }
   bool HasVertexInput() const { return m_vertex_format != nullptr; }
   GLenum GetGLPrimitive() const { return m_gl_primitive; }
-  CacheData GetCacheData() const override;
-  bool IsReady() const override { return ProgramShaderCache::FinishLink(m_program, false); }
-  bool IsBuilding() const override
+  CacheData GetCacheData() const;
+  bool IsReady() const { return ProgramShaderCache::FinishLink(m_program, false); }
+  bool IsBuilding() const
   {
     ProgramShaderCache::FinishLink(m_program, false);
     return m_program->link_pending;

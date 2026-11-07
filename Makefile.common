@@ -1130,6 +1130,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/BPFunctions.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/BPMemory.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/BPStructs.cpp \
+	$(CORE_DIR)/Source/Core/VideoCommon/BackendObjects.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/CommandProcessor.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/CPMemory.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/CPUCull.cpp \

@@ -17,7 +17,7 @@ class DXShader final : public D3DCommon::Shader
 public:
   DXShader(ShaderStage stage, BinaryData bytecode, ID3D11DeviceChild* shader,
            std::string_view name);
-  ~DXShader() override;
+  ~DXShader();
 
   ID3D11VertexShader* GetD3DVertexShader() const;
   ID3D11GeometryShader* GetD3DGeometryShader() const;

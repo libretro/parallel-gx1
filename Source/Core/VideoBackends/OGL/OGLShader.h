@@ -19,7 +19,7 @@ public:
   explicit OGLShader(ShaderStage stage, GLenum gl_type, GLuint gl_id, std::string source,
                      std::string name);
   explicit OGLShader(GLuint gl_compute_program_id, std::string source, std::string name);
-  ~OGLShader() override;
+  ~OGLShader();
 
   u64 GetID() const { return m_id; }
   GLenum GetGLShaderType() const { return m_type; }

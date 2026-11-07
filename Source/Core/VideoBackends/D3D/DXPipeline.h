@@ -19,7 +19,7 @@ public:
              ID3D11PixelShader* pixel_shader, ID3D11RasterizerState* rasterizer_state,
              ID3D11DepthStencilState* depth_state, ID3D11BlendState* blend_state,
              D3D11_PRIMITIVE_TOPOLOGY primitive_topology, bool use_logic_op);
-  ~DXPipeline() override;
+  ~DXPipeline();
 
   ID3D11InputLayout* GetInputLayout() const { return m_input_layout.Get(); }
   ID3D11VertexShader* GetVertexShader() const { return m_vertex_shader.Get(); }
