@@ -67,11 +67,6 @@ public:
 
   static constexpr u32 BUFFER_SIZE = 128;
 
-  void ChangeDevice(SIDevices device, int channel)
-  {
-    AddDevice(device, channel);
-  }
-
 private:
   // SI Interrupt Types
   enum SIInterruptType

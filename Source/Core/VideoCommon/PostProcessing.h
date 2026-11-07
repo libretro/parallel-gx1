@@ -29,6 +29,9 @@ public:
 
   void BlitFromTexture(const MathUtil::Rectangle<int>& dst, const MathUtil::Rectangle<int>& src,
                        const AbstractTexture* src_tex, int src_layer = -1);
+  /* src_tex's src, point sampled, into dst's colour; its alpha is left */
+  void BlitScreen(const MathUtil::Rectangle<int>& dst, const MathUtil::Rectangle<int>& src,
+                  const AbstractTexture* src_tex);
 
 private:
   bool IsColorCorrectionActive() const;
@@ -43,6 +46,7 @@ private:
   std::unique_ptr<AbstractShader> m_correction_pixel_shader;
   std::unique_ptr<AbstractPipeline> m_copy_pipeline;
   std::unique_ptr<AbstractPipeline> m_correction_pipeline;
+  std::unique_ptr<AbstractPipeline> m_screen_pipeline;
   std::vector<u8> m_uniform_staging_buffer;
 
   AbstractTextureFormat m_framebuffer_format = AbstractTextureFormat::Undefined;

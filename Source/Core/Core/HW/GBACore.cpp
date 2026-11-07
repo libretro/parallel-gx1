@@ -34,6 +34,7 @@
 #include "Core/HW/SystemTimers.h"
 #include "Core/Host.h"
 #include "Core/System.h"
+#include "VideoCommon/GBAScreens.h"
 
 namespace HW::GBA
 {
@@ -278,12 +279,18 @@ bool Core::Start(u64 gc_ticks)
 
   m_event_thread.Reset(fmt::format("GBA{}", m_device_number + 1),
                        std::bind_front(&Core::HandleEvent, this));
+  if (m_device_number < GBA_SCREENS)
+    GBAScreenStart((unsigned)m_device_number, DetachScreen, this);
   return true;
 }
 
 void Core::Stop()
 {
   m_event_thread.Shutdown();
+  /* the GBA's thread is gone: nothing renders into a lent buffer now */
+  if (m_device_number < GBA_SCREENS)
+    GBAScreenStop((unsigned)m_device_number);
+  m_screen = false;
 
   if (m_core)
   {
@@ -410,10 +417,53 @@ void Core::SetVideoBuffer()
   {
     u32 width;
     u32 height;
+    size_t stride;
+    u32* const lent = m_screen ? GBAScreenBuffer((unsigned)m_device_number, &stride) : nullptr;
     m_core->currentVideoSize(m_core, &width, &height);
     m_video_buffer.resize(std::size_t{width} * height);
-    m_core->setVideoBuffer(m_core, m_video_buffer.data(), width);
+    if (lent)
+    {
+      m_core->setVideoBuffer(m_core, lent, stride);
+    }
+    else
+    {
+      m_screen = false;
+      m_core->setVideoBuffer(m_core, m_video_buffer.data(), width);
+    }
   }
+}
+
+/* GBA thread, as a frame ends: the next one goes into the buffer the
+ * screen lends, or the GBA's own */
+void Core::ScreenFrameEnded(void* context)
+{
+  Core* const core = static_cast<Core*>(context);
+  u32 width;
+  u32 height;
+  size_t stride;
+  u32* next;
+
+  core->m_core->currentVideoSize(core->m_core, &width, &height);
+  next = GBAScreenFrameEnd((unsigned)core->m_device_number, width, height, &stride);
+  if (next)
+  {
+    core->m_core->setVideoBuffer(core->m_core, next, stride);
+    core->m_screen = true;
+  }
+  else if (core->m_screen)
+  {
+    core->m_screen = false;
+    core->m_core->setVideoBuffer(core->m_core, core->m_video_buffer.data(), width);
+  }
+}
+
+/* Any thread: the GBA's thread lets go of its screen's buffer next. */
+void Core::DetachScreen(void* context)
+{
+  Core* const core = static_cast<Core*>(context);
+  SyncEvent event{};
+  event.event_type = SyncEventType::DetachScreen;
+  core->PushEvent(event);
 }
 
 void Core::SetAudioBufferSize()
@@ -429,6 +479,8 @@ void Core::AddCallbacks()
     auto core = static_cast<Core*>(context);
     core->m_core->setKeys(core->m_core, core->m_keys);
   };
+  if (m_device_number < GBA_SCREENS)
+    callbacks.videoFrameEnded = ScreenFrameEnded;
   m_core->addCoreCallbacks(m_core, &callbacks);
 }
 
@@ -554,6 +606,20 @@ void Core::PushEvent(SyncEvent event)
 
 void Core::HandleEvent(SyncEvent event)
 {
+  if (event.event_type == SyncEventType::DetachScreen)
+  {
+    if (m_screen)
+    {
+      u32 width;
+      u32 height;
+      m_screen = false;
+      m_core->currentVideoSize(m_core, &width, &height);
+      m_core->setVideoBuffer(m_core, m_video_buffer.data(), width);
+    }
+    GBAScreenDetached((unsigned)m_device_number);
+    return;
+  }
+
   m_keys = event.keys;
 
   RunUntil(event.run_until_ticks);

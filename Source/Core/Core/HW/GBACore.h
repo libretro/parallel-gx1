@@ -103,6 +103,8 @@ private:
   {
     TimeSync,
     RunCommand,
+    /* let go of the screen buffer the GPU lent */
+    DetachScreen,
   };
   struct SyncEvent
   {
@@ -118,6 +120,8 @@ private:
 
   void SetSIODriver();
   void SetVideoBuffer();
+  static void ScreenFrameEnded(void* context);
+  static void DetachScreen(void* context);
   void SetAudioBufferSize();
   void AddCallbacks();
   void SetAVStream();
@@ -126,6 +130,8 @@ private:
   const int m_device_number;
 
   bool m_started = false;
+  /* mGBA renders into a buffer its screen lent, not m_video_buffer */
+  bool m_screen = false;
   std::string m_rom_path;
   std::string m_save_path;
   std::array<u8, 20> m_rom_hash{};

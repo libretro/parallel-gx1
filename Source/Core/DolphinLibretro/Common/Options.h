@@ -216,6 +216,7 @@ namespace sysconf_gc {
   constexpr const char SP1_DEVICE[] = "dolphin_gc_sp1";
   constexpr const char ENABLE_GAMECUBE_MIC[] = "dolphin_enable_gamecube_mic";
   constexpr const char HOTKEY_ACTIVATE_MICROPHONE[] = "dolphin_hotkey_activate_microphone";
+  constexpr const char GBA_SCREENS[] = "dolphin_gba_screens";
 }
 
 // ======================================================

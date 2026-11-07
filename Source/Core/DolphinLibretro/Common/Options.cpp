@@ -568,6 +568,20 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "disabled"
   },
   {
+    Libretro::Options::sysconf_gc::GBA_SCREENS,
+    "System Configuration (GC) > GBA Screens",
+    "GBA Screens",
+    "Show the screens of the Game Boy Advances on the controller ports (the 'Game Boy Advance' controller type) along the bottom right of the picture.",
+    nullptr,
+    CATEGORY_GC,
+    {
+      { "disabled", nullptr },
+      { "enabled",  nullptr },
+      { nullptr, nullptr }
+    },
+    "enabled"
+  },
+  {
     Libretro::Options::sysconf_gc::HOTKEY_ACTIVATE_MICROPHONE,
     "System Configuration (GC) > Microphone Button",
     "Microphone Button",

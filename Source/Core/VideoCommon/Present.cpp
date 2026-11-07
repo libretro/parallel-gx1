@@ -17,6 +17,7 @@
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/FramebufferManager.h"
+#include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoConfig.h"
@@ -902,7 +903,9 @@ void Presenter::Present()
 
   UpdateDrawRectangle();
 
-  if (PresentXFBInPlace())
+  /* the GBAs' screens go over the picture: drawn then, not handed on */
+  const bool gba_screens = GBAScreensUpdate();
+  if (!gba_screens && PresentXFBInPlace())
   {
     const MathUtil::Rectangle<int> rect = AdjustForCustomCrop(m_xfb_rect);
     SetSuggestedWindowSize(rect.GetWidth(), rect.GetHeight());
@@ -921,6 +924,8 @@ void Presenter::Present()
     AdjustRectanglesToFitBounds(&render_target_rc, &render_source_rc, m_backbuffer_width,
                                 m_backbuffer_height);
     RenderXFBToScreen(render_target_rc, m_xfb_entry->texture.get(), render_source_rc);
+    if (gba_screens)
+      GBAScreensDraw(m_post_processor.get(), m_backbuffer_width, m_backbuffer_height);
   }
 
   // Present to the window system.

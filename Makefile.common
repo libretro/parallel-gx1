@@ -1164,6 +1164,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/PixelEngine.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PixelShaderGen.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PixelShaderManager.cpp \
+	$(CORE_DIR)/Source/Core/VideoCommon/GBAScreens.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PostProcessing.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Present.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/RenderState.cpp \

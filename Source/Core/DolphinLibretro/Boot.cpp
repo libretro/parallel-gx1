@@ -42,6 +42,7 @@
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/Resources/CustomResourceManager.h"
 #include "VideoCommon/Fifo.h"
+#include "VideoCommon/GBAScreens.h"
 
 
 namespace Libretro
@@ -317,6 +318,14 @@ bool retro_load_game(const struct retro_game_info* game)
     File::SetUserPath(D_SHADERCACHE_IDX, shader_dir);
   }
   UICommon::CreateDirectories();
+  /* the GBAs on the controller ports boot from the BIOS in the system
+   * directory when it is there, where the frontend's GBA cores look too */
+  if (system_dir && *system_dir)
+  {
+    const std::string gba_bios = std::string(system_dir) + DIR_SEP GBA_BIOS;
+    if (File::Exists(gba_bios))
+      Config::SetBase(Config::MAIN_GBA_BIOS_PATH, gba_bios);
+  }
   UICommon::Init();
   Libretro::Log::Init();
 
@@ -464,6 +473,7 @@ bool retro_load_game(const struct retro_game_info* game)
 
     Config::SetBase(Config::MAIN_SERIAL_PORT_1, device);
   }
+  GBAScreensSetShown(Libretro::GetOption<bool>(sysconf_gc::GBA_SCREENS, /*def=*/true));
 
   // SYSCONF.IPL
   Config::SetBase(Config::SYSCONF_WIDESCREEN,

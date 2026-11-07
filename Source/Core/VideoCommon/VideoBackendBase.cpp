@@ -47,6 +47,7 @@
 #include "VideoCommon/EFBInterface.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/FrameDumper.h"
+#include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
@@ -367,6 +368,8 @@ void VideoBackendBase::ShutdownShared()
   auto& system = Core::System::GetInstance();
   system.GetCustomResourceManager().Shutdown();
   g_frame_dumper.reset();
+  /* the GBAs render into the GPU's memory: given back before it goes */
+  GBAScreensRevoke();
   g_presenter.reset();
 
   if (g_shader_cache)

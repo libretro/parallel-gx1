@@ -621,6 +621,7 @@ void PostProcessing::RecompilePipeline()
 {
   m_copy_pipeline.reset();
   m_correction_pipeline.reset();
+  m_screen_pipeline.reset();
   CompilePipelines();
 }
 
@@ -668,6 +669,29 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
   g_gfx->Draw(0, 3);
 }
 
+void PostProcessing::BlitScreen(const MathUtil::Rectangle<int>& dst,
+                                const MathUtil::Rectangle<int>& src,
+                                const AbstractTexture* src_tex)
+{
+  if (g_gfx->GetCurrentFramebuffer()->GetColorFormat() != m_framebuffer_format)
+  {
+    m_framebuffer_format = g_gfx->GetCurrentFramebuffer()->GetColorFormat();
+    RecompilePipeline();
+  }
+  if (!m_screen_pipeline)
+    return;
+
+  g_gfx->SetSamplerState(0, RenderState::GetPointSamplerState());
+  g_gfx->SetTexture(0, src_tex);
+  FillUniformBuffer(src, src_tex, 0, dst, dst);
+  g_vertex_manager->UploadUtilityUniforms(m_uniform_staging_buffer.data(),
+                                          static_cast<u32>(m_uniform_staging_buffer.size()));
+  g_gfx->SetViewportAndScissor(
+      g_gfx->ConvertFramebufferRectangle(dst, g_gfx->GetCurrentFramebuffer()));
+  g_gfx->SetPipeline(m_screen_pipeline.get());
+  g_gfx->Draw(0, 3);
+}
+
 bool PostProcessing::CompileShaders()
 {
   m_vertex_shader = g_gfx->CreateShaderFromSource(ShaderStage::Vertex, VertexShaderSource(), "Present vertex shader");
@@ -709,6 +733,9 @@ bool PostProcessing::CompilePipelines()
 
   config.pixel_shader = m_copy_pixel_shader.get();
   m_copy_pipeline = g_gfx->CreatePipeline(config);
+
+  config.blending_state.alpha_update = false;
+  m_screen_pipeline = g_gfx->CreatePipeline(config);
   return m_copy_pipeline != nullptr;
 }
 

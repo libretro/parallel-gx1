@@ -45,6 +45,7 @@
 #include "VideoBackends/OGL/OGLGfx.h"
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/Fifo.h"
+#include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "DolphinLibretro/Log.h"
@@ -299,6 +300,12 @@ void retro_run(void)
       Libretro::Options::core::CPU_CLOCK_RATE);
     Config::SetCurrent(Config::MAIN_OVERCLOCK, cpuClock);
     Config::SetCurrent(Config::MAIN_OVERCLOCK_ENABLE, cpuClock != 1.0);
+  }
+
+  if (Libretro::Options::IsUpdated(Libretro::Options::sysconf_gc::GBA_SCREENS))
+  {
+    GBAScreensSetShown(Libretro::Options::GetCached<bool>(
+      Libretro::Options::sysconf_gc::GBA_SCREENS, true));
   }
 
   if (Libretro::Options::IsUpdated(Libretro::Options::gfx_settings::WIDESCREEN_HACK))
