@@ -271,14 +271,23 @@ static bool CopySysmenuFilesToFS(FS::FileSystem* fs, const std::string& host_sou
       if (fs->GetMetadata(IOS::SYSMENU_UID, IOS::SYSMENU_UID, nand_path).has_value())
         continue;
 
+      // written into the NAND from the mapping where the host file has one
       File::IOFile host_file{host_path, "rb"};
-      std::vector<u8> file_data(host_file.GetSize());
-      if (!host_file.ReadBytes(file_data.data(), file_data.size()))
-        return false;
+      u64 size = 0;
+      const u8* data = host_file.GetMappedPtr(&size);
+      std::vector<u8> file_data;
+      if (!data)
+      {
+        file_data.resize(host_file.GetSize());
+        if (!host_file.ReadBytes(file_data.data(), file_data.size()))
+          return false;
+        data = file_data.data();
+        size = file_data.size();
+      }
 
       const auto nand_file =
           fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, nand_path, public_modes);
-      if (!nand_file || !nand_file->Write(file_data.data(), file_data.size()))
+      if (!nand_file || !nand_file->Write(data, size))
         return false;
     }
   }

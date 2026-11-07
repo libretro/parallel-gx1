@@ -5,12 +5,14 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <queues/mpsc_stack.h>
 #include <rthreads/rthreads.h>
 
 #include "Common/Event.h"
 #include "Common/Flag.h"
+#include "Common/IOFile.h"
 #include "Core/HW/GCMemcard/GCMemcard.h"
 #include "Core/HW/GCMemcard/GCMemcardBase.h"
 
@@ -44,8 +46,10 @@ private:
   };
   // CPU thread: hands a change to the flush thread.
   void PostChange(u32 offset, u32 length, const u8* data);
-  // Flush thread: applies what was posted, oldest first.
+  // Flush thread: applies what was posted, oldest first, marking the blocks it touched.
   void ApplyChanges();
+  // Flush thread: writes the marked blocks, a run of them at a time, or the whole card.
+  bool WriteChanges(File::IOFile& file, bool whole);
 
   bool IsAddressInBounds(u32 address, u32 length) const
   {
@@ -59,6 +63,8 @@ private:
   // The flush thread's own copy, brought up to date from m_changes before each write.
   std::unique_ptr<u8[]> m_flush_buffer;
   mpsc_stack_t m_changes{};
+  // Flush thread: one flag per block, set where m_flush_buffer differs from the file.
+  std::vector<u8> m_flush_dirty;
   sthread_t* m_flush_thread = nullptr;
   Common::Flag m_flush_running{true};
   Common::Flag m_dirty;

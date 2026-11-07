@@ -12,6 +12,7 @@
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
+#include "Common/IOFile.h"
 
 #include "Core/AchievementManager.h"
 #include "Core/Config/MainSettings.h"
@@ -19,6 +20,7 @@
 #include "Core/Host.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
 namespace Gecko
@@ -110,15 +112,16 @@ std::vector<GeckoCode> SetAndReturnActiveCodes(std::span<const GeckoCode> gcodes
 // NOTE: Refer to "codehandleronly.s" from Gecko OS.
 static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
 {
-  std::string data;
-  if (!File::ReadFileToString(File::GetSysDirectory() + GECKO_CODE_HANDLER, data))
+  File::IOFile handler(File::GetSysDirectory() + GECKO_CODE_HANDLER, "rb");
+  if (!handler)
   {
     ERROR_LOG_FMT(ACTIONREPLAY,
                   "Could not enable cheats because " GECKO_CODE_HANDLER " was missing.");
     return Installation::Failed;
   }
 
-  if (data.size() > INSTALLER_END_ADDRESS - INSTALLER_BASE_ADDRESS - CODE_SIZE)
+  const u64 handler_size = handler.GetSize();
+  if (handler_size > INSTALLER_END_ADDRESS - INSTALLER_BASE_ADDRESS - CODE_SIZE)
   {
     ERROR_LOG_FMT(ACTIONREPLAY, GECKO_CODE_HANDLER " is too big. The file may be corrupt.");
     return Installation::Failed;
@@ -130,12 +133,17 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
     mmio_addr = 0xCD;
   }
 
-  // Install code handler
-  for (u32 i = 0; i < data.size(); ++i)
-    PowerPC::MMU::HostWrite<u8>(guard, data[i], INSTALLER_BASE_ADDRESS + i);
+  // Install code handler, from the file straight into emulated memory
+  {
+    u8* const dest =
+        guard.GetSystem().GetMemory().GetPointerForRange(INSTALLER_BASE_ADDRESS, handler_size);
+    if (!dest || !handler.ReadBytes(dest, handler_size))
+      return Installation::Failed;
+  }
+  const u32 data_size = static_cast<u32>(handler_size);
 
   // Patch the code handler to the current system type (Gamecube/Wii)
-  for (u32 h = 0; h < data.length(); h += 4)
+  for (u32 h = 0; h < data_size; h += 4)
   {
     // Patch MMIO address
     if (PowerPC::MMU::HostRead<u32>(guard, INSTALLER_BASE_ADDRESS + h) ==
@@ -147,7 +155,7 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   }
 
   const u32 codelist_base_address =
-      INSTALLER_BASE_ADDRESS + static_cast<u32>(data.size()) - CODE_SIZE;
+      INSTALLER_BASE_ADDRESS + data_size - CODE_SIZE;
   const u32 codelist_end_address = INSTALLER_END_ADDRESS;
 
   // Write a magic value to 'gameid' (codehandleronly does not actually read this).

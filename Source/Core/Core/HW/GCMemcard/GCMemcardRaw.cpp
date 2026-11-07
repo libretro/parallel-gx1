@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdlib>
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -44,11 +45,13 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
     // Measure size of the existing memcard file.
     m_memory_card_size = (u32)file.GetSize();
     m_nintendo_card_id = m_memory_card_size / SIZE_TO_Mb;
-    m_memcard_data = std::make_unique<u8[]>(m_memory_card_size);
-    memset(&m_memcard_data[0], 0xFF, m_memory_card_size);
+    m_memcard_data = std::make_unique_for_overwrite<u8[]>(m_memory_card_size);
 
     INFO_LOG_FMT(EXPANSIONINTERFACE, "Reading memory card {}", m_filename);
-    file.ReadBytes(&m_memcard_data[0], m_memory_card_size);
+    size_t got = 0;
+    file.ReadArray(&m_memcard_data[0], m_memory_card_size, &got);
+    if (got < m_memory_card_size)
+      memset(&m_memcard_data[got], 0xFF, m_memory_card_size - got);
   }
   else
   {
@@ -79,6 +82,7 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
   // it's safe to startup the flush thread (which reads them).
   m_flush_buffer = std::make_unique<u8[]>(m_memory_card_size);
   memcpy(&m_flush_buffer[0], &m_memcard_data[0], m_memory_card_size);
+  m_flush_dirty.assign((m_memory_card_size + Memcard::BLOCK_SIZE - 1) / Memcard::BLOCK_SIZE, 0);
   m_flush_thread = sthread_create(Common::ThreadEntry<&MemoryCard::FlushThread>, this);
 }
 
@@ -121,8 +125,52 @@ void MemoryCard::ApplyChanges()
       memset(&m_flush_buffer[change->offset], 0xFF, change->length);
     else
       memcpy(&m_flush_buffer[change->offset], change->data, change->length);
+    if (change->length)
+    {
+      const u32 last = (change->offset + change->length - 1) / Memcard::BLOCK_SIZE;
+      for (u32 block = change->offset / Memcard::BLOCK_SIZE; block <= last; block++)
+        m_flush_dirty[block] = 1;
+    }
     std::free(change);
   }
+}
+
+bool MemoryCard::WriteChanges(File::IOFile& file, bool whole)
+{
+  const u32 blocks = static_cast<u32>(m_flush_dirty.size());
+  u32 block = 0;
+
+  // a block stays marked until it is written
+  if (whole)
+  {
+    if (!file.WriteBytes(&m_flush_buffer[0], m_memory_card_size))
+      return false;
+    std::fill(m_flush_dirty.begin(), m_flush_dirty.end(), u8(0));
+    return true;
+  }
+
+  while (block < blocks)
+  {
+    u32 end;
+    if (!m_flush_dirty[block])
+    {
+      block++;
+      continue;
+    }
+    for (end = block; end < blocks && m_flush_dirty[end]; end++)
+    {
+    }
+    const u32 offset = block * Memcard::BLOCK_SIZE;
+    const u32 length = std::min(end * Memcard::BLOCK_SIZE, m_memory_card_size) - offset;
+    if (!file.Seek(offset, File::SeekOrigin::Begin) ||
+        !file.WriteBytes(&m_flush_buffer[offset], length))
+    {
+      return false;
+    }
+    std::fill(m_flush_dirty.begin() + block, m_flush_dirty.begin() + end, u8(0));
+    block = end;
+  }
+  return true;
 }
 
 void MemoryCard::FlushThread()
@@ -153,7 +201,9 @@ void MemoryCard::FlushThread()
 
     // Opening the file is purposefully done each iteration to ensure the
     // file doesn't disappear out from under us after the first check.
+    // Only the blocks that changed are written over a card of the right size.
     File::IOFile file(m_filename, "r+b");
+    bool whole = !file || file.GetSize() != m_memory_card_size;
 
     if (!file)
     {
@@ -182,7 +232,8 @@ void MemoryCard::FlushThread()
     }
 
     ApplyChanges();
-    file.WriteBytes(&m_flush_buffer[0], m_memory_card_size);
+    if (!WriteChanges(file, whole))
+      m_dirty.Set();
 
     if (do_exit)
       return;

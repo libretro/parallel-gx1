@@ -22,6 +22,8 @@
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
+
+#include <streams/file_stream.h>
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
@@ -683,30 +685,20 @@ void GCMemcardDirectory::WriteQueuedJobs()
       continue;
     }
 
-    File::IOFile gci(job.filename, "wb");
-    if (gci)
+    // replaced whole or left as it was: a save is never half written
+    RFILE* gci = filestream_open_atomic(job.filename.c_str());
+    if (!gci)
     {
-      gci.WriteBytes(&job.header, Memcard::DENTRY_SIZE);
-      for (const Memcard::GCMBlock& block : job.blocks)
-        gci.WriteBytes(block.m_block.data(), Memcard::BLOCK_SIZE);
-
-      if (gci.IsGood())
-      {
-        Core::DisplayMessage("Wrote save contents to GCI Folder", 4000);
-      }
-      else
-      {
-        Core::DisplayMessage(fmt::format("Failed to write save contents to {}", job.filename),
-                             10000);
-        ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to save data to {}", job.filename);
-      }
-    }
-    else
-    {
-      Core::DisplayMessage(fmt::format("Failed to open file at {} for writing", job.filename),
-                           10000);
       ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to open file at {} for writing", job.filename);
+      continue;
     }
+    static_assert(sizeof(Memcard::GCMBlock) == Memcard::BLOCK_SIZE);
+    const s64 blocks_size = s64(job.blocks.size()) * Memcard::BLOCK_SIZE;
+    const bool ok =
+        filestream_write(gci, &job.header, Memcard::DENTRY_SIZE) == Memcard::DENTRY_SIZE &&
+        (!blocks_size || filestream_write(gci, job.blocks.data(), blocks_size) == blocks_size);
+    if (filestream_commit_atomic(gci, job.filename.c_str(), ok) != 0)
+      ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to save data to {}", job.filename);
   }
 }
 

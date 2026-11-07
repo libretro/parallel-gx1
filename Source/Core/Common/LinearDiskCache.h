@@ -7,11 +7,15 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <cstdint>
 #include <type_traits>
+#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
 #include "Common/Version.h"
+
+#include <streams/file_stream.h>
 
 // On disk format:
 // header{
@@ -62,49 +66,33 @@ public:
     // close any currently opened file
     Close();
     m_num_entries = 0;
-
-    // try opening for reading/writing
-    m_file.Open(filename, "r+b");
-
-    const u64 file_size = m_file.GetSize();
-
     m_header.Init();
-    if (m_file.IsOpen() && ValidateHeader())
+
+    u64 valid_end = 0;
     {
-      // good header, read some key/value pairs
-      K key;
-
-      std::unique_ptr<V[]> value = nullptr;
-      u32 value_size = 0;
-      u32 entry_number = 0;
-      u64 last_valid_value_start = m_file.Tell();
-
-      while (m_file.ReadArray(&value_size, 1))
+      // Entries are walked where they lie in the mapped file and values handed to the
+      // reader from there, copied only when misaligned for V or when the file is not mapped.
+      File::IOFile in(filename, "rb");
+      u64 size = 0;
+      const u8* map = in.GetMappedPtr(&size);
+      std::unique_ptr<u8[]> owned;
+      if (in && !map && (size = in.GetSize()) != 0)
       {
-        const u64 next_extent = m_file.Tell() + sizeof(value_size) + value_size;
-        if (next_extent > file_size)
-          break;
-
-        value = std::make_unique_for_overwrite<V[]>(value_size);
-
-        // read key/value and pass to reader
-        if (m_file.ReadArray(&key, 1) && m_file.ReadArray(value.get(), value_size) &&
-            m_file.ReadArray(&entry_number, 1) && entry_number == m_num_entries + 1)
-        {
-          last_valid_value_start = m_file.Tell();
-          reader.Read(key, value.get(), value_size);
-        }
-        else
-        {
-          break;
-        }
-
-        m_num_entries++;
+        owned = std::make_unique_for_overwrite<u8[]>(size);
+        if (in.ReadBytes(owned.get(), size))
+          map = owned.get();
       }
-      m_file.ClearError();
-      m_file.Seek(last_valid_value_start, File::SeekOrigin::Begin);
+      if (map && size >= sizeof(Header) && !std::memcmp(&m_header, map, sizeof(Header)))
+        valid_end = ReadEntries(map, size, reader);
+    }
 
-      return m_num_entries;
+    if (valid_end)
+    {
+      // appends go after the last whole entry
+      m_file.Open(filename, "r+b");
+      if (m_file.IsOpen() && m_file.Seek(valid_end, File::SeekOrigin::Begin))
+        return m_num_entries;
+      m_num_entries = 0;
     }
 
     // failed to open file for reading or bad header
@@ -115,6 +103,30 @@ public:
     return 0;
   }
 
+  // Replaces the file with a store of this one entry, atomically, unless it already holds
+  // exactly that.
+  static bool WriteSingle(const std::string& filename, const K& key, const V* value,
+                          u32 value_size)
+  {
+    LinearDiskCache cache;
+    const size_t value_bytes = size_t(value_size) * sizeof(V);
+    const u32 entry_number = 1;
+    std::vector<u8> out(sizeof(Header) + sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32));
+    u8* p = out.data();
+
+    cache.m_header.Init();
+    std::memcpy(p, &cache.m_header, sizeof(Header));
+    p += sizeof(Header);
+    std::memcpy(p, &value_size, sizeof(u32));
+    std::memcpy(p + sizeof(u32), &key, sizeof(K));
+    if (value_bytes)
+      std::memcpy(p + sizeof(u32) + sizeof(K), value, value_bytes);
+    std::memcpy(p + sizeof(u32) + sizeof(K) + value_bytes, &entry_number, sizeof(u32));
+    if (filestream_matches_buf(filename.c_str(), out.data(), out.size()))
+      return true;
+    return filestream_write_file_atomic(filename.c_str(), out.data(), s64(out.size()));
+  }
+
   void Sync() { m_file.Flush(); }
   void Close()
   {
@@ -122,28 +134,70 @@ public:
       m_file.Close();
   }
 
-  // Appends a key-value pair to the store.
+  // Appends a key-value pair to the store, in one write.
   void Append(const K& key, const V* value, u32 value_size)
   {
-    // TODO: Should do a check that we don't already have "key"? (I think each caller does that
-    // already.)
-    m_file.WriteArray(&value_size, 1);
-    m_file.WriteArray(&key, 1);
-    m_file.WriteArray(value, value_size);
+    const size_t value_bytes = size_t(value_size) * sizeof(V);
+    const size_t entry_bytes = sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
+    u8* out;
+
+    if (m_append_buffer.size() < entry_bytes)
+      m_append_buffer.resize(entry_bytes);
+    out = m_append_buffer.data();
     m_num_entries++;
-    m_file.WriteArray(&m_num_entries, 1);
+    std::memcpy(out, &value_size, sizeof(u32));
+    std::memcpy(out + sizeof(u32), &key, sizeof(K));
+    if (value_bytes)
+      std::memcpy(out + sizeof(u32) + sizeof(K), value, value_bytes);
+    std::memcpy(out + sizeof(u32) + sizeof(K) + value_bytes, &m_num_entries, sizeof(u32));
+    m_file.WriteBytes(out, entry_bytes);
   }
 
 private:
-  void WriteHeader() { m_file.WriteArray(&m_header, 1); }
-  bool ValidateHeader()
+  // Hands each whole entry of [base, base + size) after the header to the reader; returns
+  // the offset where the last whole one ends.
+  u64 ReadEntries(const u8* base, u64 size, LinearDiskCacheReader<K, V>& reader)
   {
-    char file_header[sizeof(Header)];
+    std::unique_ptr<V[]> aligned;
+    u32 aligned_capacity = 0;
+    u64 pos = sizeof(Header);
 
-    return (m_file.ReadArray(file_header, sizeof(Header)) &&
-            !memcmp((const char*)&m_header, file_header, sizeof(Header)));
+    for (;;)
+    {
+      u32 value_size;
+      u32 entry_number;
+      K key;
+      if (size - pos < sizeof(u32) + sizeof(K))
+        break;
+      std::memcpy(&value_size, base + pos, sizeof(u32));
+      const u64 value_bytes = u64(value_size) * sizeof(V);
+      if (size - pos - sizeof(u32) - sizeof(K) < value_bytes + sizeof(u32))
+        break;
+      std::memcpy(&key, base + pos + sizeof(u32), sizeof(K));
+      const u8* value = base + pos + sizeof(u32) + sizeof(K);
+      std::memcpy(&entry_number, value + value_bytes, sizeof(u32));
+      if (entry_number != m_num_entries + 1)
+        break;
+
+      if (reinterpret_cast<uintptr_t>(value) % alignof(V) != 0)
+      {
+        if (aligned_capacity < value_size)
+        {
+          aligned = std::make_unique_for_overwrite<V[]>(value_size);
+          aligned_capacity = value_size;
+        }
+        std::memcpy(aligned.get(), value, value_bytes);
+        value = reinterpret_cast<const u8*>(aligned.get());
+      }
+      reader.Read(key, reinterpret_cast<const V*>(value), value_size);
+
+      m_num_entries++;
+      pos += sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
+    }
+    return pos;
   }
 
+  void WriteHeader() { m_file.WriteArray(&m_header, 1); }
   struct Header
   {
     void Init()
@@ -162,6 +216,7 @@ private:
   } m_header;
 
   File::IOFile m_file;
+  std::vector<u8> m_append_buffer;
   u32 m_num_entries = 0;
 };
 }  // namespace Common

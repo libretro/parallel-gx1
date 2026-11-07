@@ -505,27 +505,6 @@ void ObjectCache::DestroyRenderPassCache()
   m_render_pass_cache.clear();
 }
 
-class PipelineCacheReadCallback : public Common::LinearDiskCacheReader<u32, u8>
-{
-public:
-  PipelineCacheReadCallback(std::vector<u8>* data) : m_data(data) {}
-  void Read(const u32& key, const u8* value, u32 value_size) override
-  {
-    m_data->resize(value_size);
-    if (value_size > 0)
-      memcpy(m_data->data(), value, value_size);
-  }
-
-private:
-  std::vector<u8>* m_data;
-};
-
-class PipelineCacheReadIgnoreCallback : public Common::LinearDiskCacheReader<u32, u8>
-{
-public:
-  void Read(const u32& key, const u8* value, u32 value_size) override {}
-};
-
 bool ObjectCache::CreatePipelineCache()
 {
   // Vulkan pipeline caches can be shared between games for shader compile time reduction.
@@ -552,38 +531,60 @@ bool ObjectCache::CreatePipelineCache()
 
 bool ObjectCache::LoadPipelineCache()
 {
+  // The cache is made from the stored blob where it lies in the mapped file.
+  struct Reader final : Common::LinearDiskCacheReader<u32, u8>
+  {
+    explicit Reader(ObjectCache* cache_) : cache(cache_) {}
+    void Read(const u32& key, const u8* value, u32 value_size) override
+    {
+      if (++count != 1 || !value_size)
+        return;
+      if (!cache->ValidatePipelineCache(value, value_size))
+      {
+        invalid = true;
+        return;
+      }
+      VkPipelineCacheCreateInfo info = {
+          VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,  // VkStructureType            sType
+          nullptr,                                       // const void*                pNext
+          0,                                             // VkPipelineCacheCreateFlags flags
+          value_size,                                    // size_t initialDataSize
+          value                                          // const void*                pInitialData
+      };
+      result = vkCreatePipelineCache(g_vulkan_context->GetDevice(), &info, nullptr,
+                                     &cache->m_pipeline_cache);
+    }
+    ObjectCache* cache;
+    VkResult result = VK_INCOMPLETE;
+    u32 count = 0;
+    bool invalid = false;
+  };
+
   // We have to keep the pipeline cache file name around since when we save it
   // we delete the old one, by which time the game's unique ID is already cleared.
   m_pipeline_cache_filename = GetDiskShaderCacheFileName(APIType::Vulkan, "Pipeline", false, true);
 
-  std::vector<u8> disk_data;
-  Common::LinearDiskCache<u32, u8> disk_cache;
-  PipelineCacheReadCallback read_callback(&disk_data);
-  if (disk_cache.OpenAndRead(m_pipeline_cache_filename, read_callback) != 1)
-    disk_data.clear();
+  Reader reader(this);
+  {
+    Common::LinearDiskCache<u32, u8> disk_cache;
+    disk_cache.OpenAndRead(m_pipeline_cache_filename, reader);
+  }
 
-  if (!disk_data.empty() && !ValidatePipelineCache(disk_data.data(), disk_data.size()))
+  if (reader.invalid)
   {
     // Don't use this data. In fact, we should delete it to prevent it from being used next time.
     File::Delete(m_pipeline_cache_filename);
     return CreatePipelineCache();
   }
-
-  VkPipelineCacheCreateInfo info = {
-      VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,  // VkStructureType            sType
-      nullptr,                                       // const void*                pNext
-      0,                                             // VkPipelineCacheCreateFlags flags
-      disk_data.size(),                              // size_t                     initialDataSize
-      disk_data.data()                               // const void*                pInitialData
-  };
-
-  VkResult res =
-      vkCreatePipelineCache(g_vulkan_context->GetDevice(), &info, nullptr, &m_pipeline_cache);
-  if (res == VK_SUCCESS)
+  if (reader.count == 1 && reader.result == VK_SUCCESS)
     return true;
-
-  // Failed to create pipeline cache, try with it empty.
-  LOG_VULKAN_ERROR(res, "vkCreatePipelineCache failed, trying empty cache: ");
+  if (reader.count > 1 && m_pipeline_cache != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineCache(g_vulkan_context->GetDevice(), m_pipeline_cache, nullptr);
+    m_pipeline_cache = VK_NULL_HANDLE;
+  }
+  if (reader.result != VK_INCOMPLETE && reader.result != VK_SUCCESS)
+    LOG_VULKAN_ERROR(reader.result, "vkCreatePipelineCache failed, trying empty cache: ");
   return CreatePipelineCache();
 }
 
@@ -677,17 +678,9 @@ void ObjectCache::SavePipelineCache()
     return;
   }
 
-  // Delete the old cache and re-create.
-  File::Delete(m_pipeline_cache_filename);
-
-  // We write a single key of 1, with the entire pipeline cache data.
-  // Not ideal, but our disk cache class does not support just writing a single blob
-  // of data without specifying a key.
-  Common::LinearDiskCache<u32, u8> disk_cache;
-  PipelineCacheReadIgnoreCallback callback;
-  disk_cache.OpenAndRead(m_pipeline_cache_filename, callback);
-  disk_cache.Append(1, data.data(), static_cast<u32>(data.size()));
-  disk_cache.Close();
+  // A single key of 1 with the whole pipeline cache, written only when it changed.
+  Common::LinearDiskCache<u32, u8>::WriteSingle(m_pipeline_cache_filename, 1, data.data(),
+                                                static_cast<u32>(data.size()));
 }
 
 void ObjectCache::ReloadPipelineCache()

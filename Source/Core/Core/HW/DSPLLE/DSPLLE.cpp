@@ -3,6 +3,7 @@
 
 #include "Core/HW/DSPLLE/DSPLLE.h"
 
+#include <cstring>
 #include <string>
 
 #include "Common/CallGate.h"
@@ -11,6 +12,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
 #include "Common/FileUtil.h"
+#include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/Thread.h"
 #include "Core/Config/MainSettings.h"
@@ -85,20 +87,25 @@ void DSPLLE::DSPThread(void* data)
 
 static bool LoadDSPRom(u16* rom, const std::string& filename, u32 size_in_bytes)
 {
-  std::string bytes;
-  if (!File::ReadFileToString(filename, bytes))
+  File::IOFile file(filename, "rb");
+  if (!file)
     return false;
 
-  if (bytes.size() != size_in_bytes)
+  if (file.GetSize() != size_in_bytes)
   {
-    ERROR_LOG_FMT(DSPLLE, "{} has a wrong size ({}, expected {})", filename, bytes.size(),
+    ERROR_LOG_FMT(DSPLLE, "{} has a wrong size ({}, expected {})", filename, file.GetSize(),
                   size_in_bytes);
     return false;
   }
 
-  const u16* words = reinterpret_cast<const u16*>(bytes.c_str());
+  // swapped from the mapping where the file has one, else in place
+  const u8* map = file.GetMappedPtr();
+  if (map)
+    std::memcpy(rom, map, size_in_bytes);
+  else if (!file.ReadBytes(rom, size_in_bytes))
+    return false;
   for (u32 i = 0; i < size_in_bytes / 2; ++i)
-    rom[i] = Common::swap16(words[i]);
+    rom[i] = Common::swap16(rom[i]);
 
   return true;
 }
