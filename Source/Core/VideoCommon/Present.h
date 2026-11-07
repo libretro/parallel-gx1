@@ -110,7 +110,7 @@ private:
   // Returns true the contents have changed since last time
   bool FetchXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u64 ticks);
 
-  void ProcessFrameDumping(u64 ticks) const;
+  void ProcessFrameDumping() const;
 
   void OnBackBufferSizeChanged();
 

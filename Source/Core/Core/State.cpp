@@ -45,7 +45,6 @@
 
 #include "UICommon/UICommon.h"
 
-#include "VideoCommon/FrameDumpFFMpeg.h"
 #include "VideoCommon/VideoBackendBase.h"
 
 namespace State

@@ -221,7 +221,7 @@ void Presenter::ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
   if (!is_duplicate || !g_ActiveConfig.bSkipPresentingDuplicateXFBs)
   {
     Present();
-    ProcessFrameDumping(ticks);
+    ProcessFrameDumping();
 
     video_events.after_present_event.Trigger(present_info);
   }
@@ -253,7 +253,7 @@ void Presenter::ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_
   video_events.before_present_event.Trigger(present_info);
 
   Present();
-  ProcessFrameDumping(ticks);
+  ProcessFrameDumping();
 
   video_events.after_present_event.Trigger(present_info);
 }
@@ -263,7 +263,7 @@ void Presenter::SetNextSwapEstimatedTicks(u64 ticks)
   m_next_swap_estimated_ticks = ticks;
 }
 
-void Presenter::ProcessFrameDumping(u64 ticks) const
+void Presenter::ProcessFrameDumping() const
 {
   if (g_frame_dumper->IsFrameDumping() && m_xfb_entry)
   {
@@ -302,18 +302,10 @@ void Presenter::ProcessFrameDumping(u64 ticks) const
     int width = target_rect.GetWidth();
     int height = target_rect.GetHeight();
 
-    const int resolution_lcm = g_frame_dumper->GetRequiredResolutionLeastCommonMultiple();
-
-    // Ensure divisibility by the dumper LCM and a min of 1 to make it compatible with all the
-    // video encoders. Note that this is theoretically only necessary when recording videos and not
-    // screenshots.
-    // We always scale positively to make sure the least amount of information is lost.
-    //
-    // TODO: this should be added as black padding on the edges by the frame dumper.
-    if ((width % resolution_lcm) != 0 || width == 0)
-      width += resolution_lcm - (width % resolution_lcm);
-    if ((height % resolution_lcm) != 0 || height == 0)
-      height += resolution_lcm - (height % resolution_lcm);
+    if (width == 0)
+      width = 1;
+    if (height == 0)
+      height = 1;
 
     // Remove any black borders, there would be no point in including them in the recording
     target_rect.left = 0;
@@ -323,8 +315,7 @@ void Presenter::ProcessFrameDumping(u64 ticks) const
 
     // TODO: any scaling done by this won't be gamma corrected,
     // we should either apply post processing as well, or port its gamma correction code
-    g_frame_dumper->DumpCurrentFrame(m_xfb_entry->texture.get(), m_xfb_rect, target_rect, ticks,
-                                     m_frame_count);
+    g_frame_dumper->DumpCurrentFrame(m_xfb_entry->texture.get(), m_xfb_rect, target_rect);
   }
 }
 

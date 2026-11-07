@@ -15,12 +15,20 @@
 #include "Common/MathUtil.h"
 #include "Common/Thread.h"
 
-#include "VideoCommon/FrameDumpFFMpeg.h"
 #include "VideoCommon/VideoEvents.h"
 
 class AbstractStagingTexture;
 class AbstractTexture;
 class AbstractFramebuffer;
+
+/* A frame read back, handed to the dump thread to be written as an image. */
+struct FrameData
+{
+  const u8* data = nullptr;
+  int width = 0;
+  int height = 0;
+  int stride = 0;
+};
 
 class FrameDumper
 {
@@ -34,21 +42,15 @@ public:
   // Fills the frame dump staging texture with the current XFB texture.
   void DumpCurrentFrame(const AbstractTexture* src_texture,
                         const MathUtil::Rectangle<int>& src_rect,
-                        const MathUtil::Rectangle<int>& target_rect, u64 ticks, int frame_number);
+                        const MathUtil::Rectangle<int>& target_rect);
 
   void SaveScreenshot(std::string filename);
 
   bool IsFrameDumping() const;
-  int GetRequiredResolutionLeastCommonMultiple() const;
-
-  void DoState(PointerWrap& p);
 
 private:
   // NOTE: The methods below are called on the framedumping thread.
   void FrameDumpThreadFunc();
-  bool StartFrameDumpToFFMPEG(const FrameData&);
-  void DumpFrameToFFMPEG(const FrameData&);
-  void StopFrameDumpToFFMPEG();
   std::string GetFrameDumpNextImageFileName() const;
   bool StartFrameDumpToImage(const FrameData&);
   void DumpFrameToImage(const FrameData&);
@@ -76,9 +78,6 @@ private:
   // Set by frame dump thread on frame completion.
   Common::Event m_frame_dump_done;
 
-  // Holds emulation state during the last swap when dumping.
-  FrameState m_last_frame_state;
-
   // Communication of frame between video and dump threads.
   FrameData m_frame_dump_data;
 
@@ -96,8 +95,6 @@ private:
 
   // Used to generate screenshot names.
   u32 m_frame_dump_image_counter = 0;
-
-  FFMpegFrameDump m_ffmpeg_dump;
 
   // Screenshots
   // The file name of a requested screenshot, a std::string*, or null for none. Handed to the

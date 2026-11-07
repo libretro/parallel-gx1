@@ -95,7 +95,6 @@ void VideoCommon_DoState(PointerWrap& p)
   p.DoMarker("TextureCache");
 
   g_presenter->DoState(p);
-  g_frame_dumper->DoState(p);
   p.DoMarker("Presenter");
 
   g_bounding_box->DoState(p);

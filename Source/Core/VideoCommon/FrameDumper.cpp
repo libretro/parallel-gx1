@@ -18,9 +18,6 @@
 #include "VideoCommon/Present.h"
 #include "Core/Core.h"
 
-// The video encoder needs the image to be a multiple of x samples.
-static constexpr int VIDEO_ENCODER_LCM = 4;
-
 static bool DumpFrameToPNG(const FrameData& frame, const std::string& file_name)
 {
   return Common::ConvertRGBAToRGBAndSavePNG(file_name, frame.data, frame.width, frame.height,
@@ -42,8 +39,7 @@ FrameDumper::~FrameDumper()
 
 void FrameDumper::DumpCurrentFrame(const AbstractTexture* src_texture,
                                    const MathUtil::Rectangle<int>& src_rect,
-                                   const MathUtil::Rectangle<int>& target_rect, u64 ticks,
-                                   int frame_number)
+                                   const MathUtil::Rectangle<int>& target_rect)
 {
   int source_width = src_rect.GetWidth();
   int source_height = src_rect.GetHeight();
@@ -68,7 +64,6 @@ void FrameDumper::DumpCurrentFrame(const AbstractTexture* src_texture,
 
   m_frame_dump_readback_texture->CopyFromTexture(src_texture, copy_rect, 0, 0,
                                                  m_frame_dump_readback_texture->GetRect());
-  m_last_frame_state = m_ffmpeg_dump.FetchState(ticks, frame_number);
   m_frame_dump_needs_flush = true;
 }
 
@@ -171,7 +166,7 @@ void FrameDumper::ShutdownFrameDumping()
 
 void FrameDumper::DumpFrameData(const u8* data, int w, int h, int stride)
 {
-  m_frame_dump_data = FrameData{data, w, h, stride, m_last_frame_state};
+  m_frame_dump_data = FrameData{data, w, h, stride};
 
   if (!m_frame_dump_thread_running.IsSet())
   {
@@ -200,18 +195,7 @@ void FrameDumper::FrameDumpThreadFunc()
 {
   Common::SetCurrentThreadName("FrameDumping");
 
-  bool dump_to_ffmpeg = !Config::Get(Config::GFX_DUMP_FRAMES_AS_IMAGES);
   bool frame_dump_started = false;
-
-// If Dolphin was compiled without ffmpeg, we only support dumping to images.
-#if !defined(HAVE_FFMPEG)
-  if (dump_to_ffmpeg)
-  {
-    WARN_LOG_FMT(VIDEO, "FrameDump: Dolphin was not compiled with FFmpeg, using fallback option. "
-                        "Frames will be saved as PNG images instead.");
-    dump_to_ffmpeg = false;
-  }
-#endif
 
   while (true)
   {
@@ -236,10 +220,7 @@ void FrameDumper::FrameDumpThreadFunc()
     {
       if (!frame_dump_started)
       {
-        if (dump_to_ffmpeg)
-          frame_dump_started = StartFrameDumpToFFMPEG(frame);
-        else
-          frame_dump_started = StartFrameDumpToImage(frame);
+        frame_dump_started = StartFrameDumpToImage(frame);
 
         // Stop frame dumping if we fail to start.
         if (!frame_dump_started)
@@ -248,62 +229,12 @@ void FrameDumper::FrameDumpThreadFunc()
 
       // If we failed to start frame dumping, don't write a frame.
       if (frame_dump_started)
-      {
-        if (dump_to_ffmpeg)
-          DumpFrameToFFMPEG(frame);
-        else
-          DumpFrameToImage(frame);
-      }
+        DumpFrameToImage(frame);
     }
 
     m_frame_dump_done.Set();
   }
-
-  if (frame_dump_started)
-  {
-    // No additional cleanup is needed when dumping to images.
-    if (dump_to_ffmpeg)
-      StopFrameDumpToFFMPEG();
-  }
 }
-
-#if defined(HAVE_FFMPEG)
-
-bool FrameDumper::StartFrameDumpToFFMPEG(const FrameData& frame)
-{
-  // If dumping started at boot, the start time must be set to the boot time to maintain audio sync.
-  // TODO: Perhaps we should care about this when starting dumping in the middle of emulation too,
-  // but it's less important there since the first frame to dump usually gets delivered quickly.
-  const u64 start_ticks = frame.state.frame_number == 0 ? 0 : frame.state.ticks;
-  return m_ffmpeg_dump.Start(frame.width, frame.height, start_ticks);
-}
-
-void FrameDumper::DumpFrameToFFMPEG(const FrameData& frame)
-{
-  m_ffmpeg_dump.AddFrame(frame);
-}
-
-void FrameDumper::StopFrameDumpToFFMPEG()
-{
-  m_ffmpeg_dump.Stop();
-}
-
-#else
-
-bool FrameDumper::StartFrameDumpToFFMPEG(const FrameData&)
-{
-  return false;
-}
-
-void FrameDumper::DumpFrameToFFMPEG(const FrameData&)
-{
-}
-
-void FrameDumper::StopFrameDumpToFFMPEG()
-{
-}
-
-#endif  // defined(HAVE_FFMPEG)
 
 std::string FrameDumper::GetFrameDumpNextImageFileName() const
 {
@@ -353,17 +284,4 @@ bool FrameDumper::IsFrameDumping() const
   return false;
 }
 
-int FrameDumper::GetRequiredResolutionLeastCommonMultiple() const
-{
-  if (Config::Get(Config::MAIN_MOVIE_DUMP_FRAMES))
-    return VIDEO_ENCODER_LCM;
-  return 1;
-}
-
-void FrameDumper::DoState(PointerWrap& p)
-{
-#ifdef HAVE_FFMPEG
-  m_ffmpeg_dump.DoState(p);
-#endif
-}
 std::unique_ptr<FrameDumper> g_frame_dumper;
