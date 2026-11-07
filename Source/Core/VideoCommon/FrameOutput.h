@@ -17,41 +17,40 @@ class AbstractTexture;
 class FrameOutput
 {
 public:
-  virtual ~FrameOutput() {}
+  /* Each backend has one output class, and these call it directly
+   * (g_video_backend_kind, DolphinLibretro/Output.cpp); what one does
+   * not do itself, these answer. */
 
   /* The framebuffer this frame's picture goes into, once whoever shows
    * the pictures is done with what it last read from it. */
-  virtual AbstractFramebuffer* Acquire() = 0;
+  AbstractFramebuffer* Acquire();
 
   /* The picture is complete: hands it on. */
-  virtual void Present() = 0;
+  void Present();
 
   /* Hands on the top-left width x height of a texture as the picture,
    * where it is, in place of one drawn into what Acquire returns; false
    * when this output only hands on its own targets. The caller keeps the
    * texture and its contents as they are for as long as it is the last
    * picture handed on. */
-  virtual bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
-  {
-    return false;
-  }
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height);
 
   /* Whoever shows the pictures is about to read the last one handed on,
    * again or for the first time, the core having gone on drawing since:
    * what it reads is left the way it reads it. */
-  virtual void KeepReadable() {}
+  void KeepReadable();
 
   /* Whether a texture handed on with PresentTexture may still be read by
    * whoever shows the pictures, now or later: the caller keeps it alive
    * until it is not. */
-  virtual bool IsTextureHeld(const AbstractTexture* texture) { return false; }
+  bool IsTextureHeld(const AbstractTexture* texture);
 
   /* An output that publishes pictures from another thread: hands the
    * newest one over to whoever shows them, on that one's thread; true if
    * there was one. */
-  virtual bool HandOver() { return false; }
+  bool HandOver();
 
-  virtual u32 GetWidth() const = 0;
-  virtual u32 GetHeight() const = 0;
-  virtual AbstractTextureFormat GetFormat() const = 0;
+  u32 GetWidth() const;
+  u32 GetHeight() const;
+  AbstractTextureFormat GetFormat() const { return AbstractTextureFormat::RGBA8; }
 };

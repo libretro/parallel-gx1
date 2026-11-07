@@ -119,12 +119,11 @@ public:
   DX11Output(retro_hw_render_interface_d3d11* v2, u32 width, u32 height);
   bool Create();
 
-  AbstractFramebuffer* Acquire() override;
-  void Present() override;
-  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
-  u32 GetWidth() const override { return m_width; }
-  u32 GetHeight() const override { return m_height; }
-  AbstractTextureFormat GetFormat() const override { return AbstractTextureFormat::RGBA8; }
+  AbstractFramebuffer* Acquire();
+  void Present();
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height);
+  u32 GetWidth() const { return m_width; }
+  u32 GetHeight() const { return m_height; }
 
 private:
   std::unique_ptr<DX11::DXTexture> m_textures[OUTPUT_MAX_SLOTS];
@@ -146,18 +145,17 @@ class DX12Output final : public FrameOutput
 {
 public:
   DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 height, bool threaded);
-  ~DX12Output() override;
+  ~DX12Output();
   bool Create();
 
-  AbstractFramebuffer* Acquire() override;
-  void Present() override;
-  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
-  void KeepReadable() override;
-  bool IsTextureHeld(const AbstractTexture* texture) override;
-  bool HandOver() override;
-  u32 GetWidth() const override { return m_width; }
-  u32 GetHeight() const override { return m_height; }
-  AbstractTextureFormat GetFormat() const override { return AbstractTextureFormat::RGBA8; }
+  AbstractFramebuffer* Acquire();
+  void Present();
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height);
+  void KeepReadable();
+  bool IsTextureHeld(const AbstractTexture* texture);
+  bool HandOver();
+  u32 GetWidth() const { return m_width; }
+  u32 GetHeight() const { return m_height; }
 
 private:
   void Hand(DX12::DXTexture* texture, u32 width, u32 height);
@@ -193,18 +191,17 @@ class VKOutput final : public FrameOutput
 {
 public:
   VKOutput(retro_hw_render_interface_vulkan* iface, u32 width, u32 height, bool threaded);
-  ~VKOutput() override;
+  ~VKOutput();
   bool Create();
 
-  AbstractFramebuffer* Acquire() override;
-  void Present() override;
-  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
-  void KeepReadable() override;
-  bool IsTextureHeld(const AbstractTexture* texture) override;
-  bool HandOver() override;
-  u32 GetWidth() const override { return m_width; }
-  u32 GetHeight() const override { return m_height; }
-  AbstractTextureFormat GetFormat() const override { return AbstractTextureFormat::RGBA8; }
+  AbstractFramebuffer* Acquire();
+  void Present();
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height);
+  void KeepReadable();
+  bool IsTextureHeld(const AbstractTexture* texture);
+  bool HandOver();
+  u32 GetWidth() const { return m_width; }
+  u32 GetHeight() const { return m_height; }
 
 private:
   void DropDirect();

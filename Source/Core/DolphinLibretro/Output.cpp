@@ -5,6 +5,7 @@
 #include "Common/Logging/Log.h"
 #include "DolphinLibretro/Common/Globals.h"
 #include "VideoCommon/TextureConfig.h"
+#include "VideoCommon/VideoBackendKind.h"
 #ifdef _WIN32
 #include "VideoBackends/D3D/D3DGfx.h"
 #include "VideoBackends/D3D12/D3D12Gfx.h"
@@ -13,6 +14,159 @@
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 #include "VideoBackends/Vulkan/StateTracker.h"
 #endif
+
+/* FrameOutput calls the output of the backend in use. */
+#ifdef _WIN32
+#define OUTPUT_D3D11_CASE(call)                                                                    \
+  case VIDEO_BACKEND_D3D11:                                                                        \
+    return static_cast<Libretro::Video::DX11Output*>(this)->call;
+#define OUTPUT_D3D12_CASE(call)                                                                    \
+  case VIDEO_BACKEND_D3D12:                                                                        \
+    return static_cast<Libretro::Video::DX12Output*>(this)->call;
+#else
+#define OUTPUT_D3D11_CASE(call)
+#define OUTPUT_D3D12_CASE(call)
+#endif
+#ifdef HAS_VULKAN
+#define OUTPUT_VULKAN_CASE(call)                                                                   \
+  case VIDEO_BACKEND_VULKAN:                                                                       \
+    return static_cast<Libretro::Video::VKOutput*>(this)->call;
+#else
+#define OUTPUT_VULKAN_CASE(call)
+#endif
+
+void std::default_delete<FrameOutput>::operator()(FrameOutput* object) const
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef _WIN32
+  case VIDEO_BACKEND_D3D11:
+    delete static_cast<Libretro::Video::DX11Output*>(object);
+    return;
+  case VIDEO_BACKEND_D3D12:
+    delete static_cast<Libretro::Video::DX12Output*>(object);
+    return;
+#endif
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    delete static_cast<Libretro::Video::VKOutput*>(object);
+    return;
+#endif
+  default:
+    return;
+  }
+}
+
+AbstractFramebuffer* FrameOutput::Acquire()
+{
+  switch (g_video_backend_kind)
+  {
+    OUTPUT_D3D11_CASE(Acquire())
+    OUTPUT_D3D12_CASE(Acquire())
+    OUTPUT_VULKAN_CASE(Acquire())
+  default:
+    return nullptr;
+  }
+}
+
+void FrameOutput::Present()
+{
+  switch (g_video_backend_kind)
+  {
+    OUTPUT_D3D11_CASE(Present())
+    OUTPUT_D3D12_CASE(Present())
+    OUTPUT_VULKAN_CASE(Present())
+  default:
+    return;
+  }
+}
+
+bool FrameOutput::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
+{
+  switch (g_video_backend_kind)
+  {
+    OUTPUT_D3D11_CASE(PresentTexture(texture, width, height))
+    OUTPUT_D3D12_CASE(PresentTexture(texture, width, height))
+    OUTPUT_VULKAN_CASE(PresentTexture(texture, width, height))
+  default:
+    return false;
+  }
+}
+
+void FrameOutput::KeepReadable()
+{
+  switch (g_video_backend_kind)
+  {
+    OUTPUT_D3D12_CASE(KeepReadable())
+    OUTPUT_VULKAN_CASE(KeepReadable())
+  default:
+    return;
+  }
+}
+
+bool FrameOutput::IsTextureHeld(const AbstractTexture* texture)
+{
+  switch (g_video_backend_kind)
+  {
+    OUTPUT_D3D12_CASE(IsTextureHeld(texture))
+    OUTPUT_VULKAN_CASE(IsTextureHeld(texture))
+  default:
+    return false;
+  }
+}
+
+bool FrameOutput::HandOver()
+{
+  switch (g_video_backend_kind)
+  {
+    OUTPUT_D3D12_CASE(HandOver())
+    OUTPUT_VULKAN_CASE(HandOver())
+  default:
+    return false;
+  }
+}
+
+u32 FrameOutput::GetWidth() const
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef _WIN32
+  case VIDEO_BACKEND_D3D11:
+    return static_cast<const Libretro::Video::DX11Output*>(this)->GetWidth();
+  case VIDEO_BACKEND_D3D12:
+    return static_cast<const Libretro::Video::DX12Output*>(this)->GetWidth();
+#endif
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    return static_cast<const Libretro::Video::VKOutput*>(this)->GetWidth();
+#endif
+  default:
+    return 0;
+  }
+}
+
+u32 FrameOutput::GetHeight() const
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef _WIN32
+  case VIDEO_BACKEND_D3D11:
+    return static_cast<const Libretro::Video::DX11Output*>(this)->GetHeight();
+  case VIDEO_BACKEND_D3D12:
+    return static_cast<const Libretro::Video::DX12Output*>(this)->GetHeight();
+#endif
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    return static_cast<const Libretro::Video::VKOutput*>(this)->GetHeight();
+#endif
+  default:
+    return 0;
+  }
+}
+
+#undef OUTPUT_D3D11_CASE
+#undef OUTPUT_D3D12_CASE
+#undef OUTPUT_VULKAN_CASE
 
 namespace Libretro
 {
