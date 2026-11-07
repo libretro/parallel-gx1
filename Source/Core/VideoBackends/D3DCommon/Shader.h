@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include <optional>
 #include <string_view>
 #include "VideoBackends/D3DCommon/D3DCommon.h"
 #include "VideoCommon/AbstractShader.h"
+#include "VideoCommon/ShaderBinary.h"
 
 namespace D3DCommon
 {
@@ -15,19 +15,26 @@ class Shader : public AbstractShader
 public:
   ~Shader();
 
-  const BinaryData& GetByteCode() const { return m_bytecode; }
+  const u8* GetByteCode() const { return m_bytecode.code; }
+  size_t GetByteCodeSize() const { return m_bytecode.size; }
 
-  BinaryData GetBinary() const;
+  const u8* GetBinary(size_t* size) const
+  {
+    *size = m_bytecode.size;
+    return m_bytecode.code;
+  }
 
-  static std::optional<BinaryData> CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
-                                                 std::string_view source);
-
-  static BinaryData CreateByteCode(const void* data, size_t length);
+  /* Compiles a stage to DXBC into *bytecode, which owns rslc's result
+   * block then. False, with the failure logged and dumped, if rslc
+   * refused it. */
+  static bool CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
+                            std::string_view source, ShaderBinary* bytecode);
 
 protected:
-  Shader(ShaderStage stage, BinaryData bytecode);
+  /* Takes the bytecode's block. */
+  Shader(ShaderStage stage, ShaderBinary bytecode);
 
-  BinaryData m_bytecode;
+  ShaderBinary m_bytecode;
 };
 
 }  // namespace D3DCommon

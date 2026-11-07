@@ -11,17 +11,17 @@
 
 namespace DX12
 {
-DXShader::DXShader(ShaderStage stage, BinaryData bytecode, std::string_view name)
-    : D3DCommon::Shader(stage, std::move(bytecode)), m_name(UTF8ToWString(name))
+DXShader::DXShader(ShaderStage stage, ShaderBinary bytecode, std::string_view name)
+    : D3DCommon::Shader(stage, bytecode), m_name(UTF8ToWString(name))
 {
 }
 
 DXShader::~DXShader() = default;
 
-std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, BinaryData bytecode,
+std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
                                                        std::string_view name)
 {
-  std::unique_ptr<DXShader> shader(new DXShader(stage, std::move(bytecode), name));
+  std::unique_ptr<DXShader> shader(new DXShader(stage, bytecode, name));
   if (stage == ShaderStage::Compute && !shader->CreateComputePipeline())
     return nullptr;
 
@@ -31,16 +31,16 @@ std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, Binary
 std::unique_ptr<DXShader> DXShader::CreateFromSource(ShaderStage stage, std::string_view source,
                                                      std::string_view name)
 {
-  auto bytecode = CompileShader(g_dx_context->GetFeatureLevel(), stage, source);
-  if (!bytecode)
+  ShaderBinary bytecode;
+  if (!CompileShader(g_dx_context->GetFeatureLevel(), stage, source, &bytecode))
     return nullptr;
 
-  return CreateFromBytecode(stage, std::move(*bytecode), name);
+  return CreateFromBytecode(stage, bytecode, name);
 }
 
 D3D12_SHADER_BYTECODE DXShader::GetD3DByteCode() const
 {
-  return D3D12_SHADER_BYTECODE{m_bytecode.data(), m_bytecode.size()};
+  return D3D12_SHADER_BYTECODE{m_bytecode.code, m_bytecode.size};
 }
 
 bool DXShader::CreateComputePipeline()

@@ -88,9 +88,8 @@ constexpr std::string_view COMPUTE_SHADER_HEADER = R"(
 /* A stage's bytecode, compiled by rslc from the GLSL the generators write
  * to shader model 4.0, 4.1 or 5.0 by the feature level. A stage rslc
  * refuses is logged and written to the dump directory with the reason. */
-std::optional<AbstractShader::BinaryData> CompileWithRslc(D3D_FEATURE_LEVEL feature_level,
-                                                          ShaderStage stage,
-                                                          std::string_view source)
+bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::string_view source,
+                     ShaderBinary* bytecode)
 {
   static int num_failures;
   char err[1024];
@@ -98,7 +97,6 @@ std::optional<AbstractShader::BinaryData> CompileWithRslc(D3D_FEATURE_LEVEL feat
   struct rslc_result result;
   enum rslc_stage rstage;
   std::string full;
-  std::optional<AbstractShader::BinaryData> code;
 
   rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
            stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
@@ -115,14 +113,14 @@ std::optional<AbstractShader::BinaryData> CompileWithRslc(D3D_FEATURE_LEVEL feat
   opts.err = err;
   opts.err_cap = sizeof(err);
   err[0] = '\0';
+  ShaderBinaryInit(bytecode);
   if (rslc_compile(full.data(), full.size(), rstage, &opts, &result))
   {
-    {
-      const u8* bytes = reinterpret_cast<const u8*>(result.spirv);
-      code = AbstractShader::BinaryData(bytes, bytes + result.spirv_len * sizeof(uint32_t));
-    }
-    rslc_result_free(&result, &opts);
-    return code;
+    /* the result block is kept whole: the code points into it */
+    bytecode->block = result.blob;
+    bytecode->code = reinterpret_cast<const u8*>(result.spirv);
+    bytecode->size = result.spirv_len * sizeof(uint32_t);
+    return true;
   }
 
   ERROR_LOG_FMT(VIDEO, "rslc could not compile a shader: {}", err);
@@ -131,36 +129,25 @@ std::optional<AbstractShader::BinaryData> CompileWithRslc(D3D_FEATURE_LEVEL feat
     File::CreateFullPath(path);
     File::WriteStringToFile(path, fmt::format("{}\n/* rslc: {} */\n", full, err));
   }
-  return code;
+  return false;
 }
 }  // namespace
 
 namespace D3DCommon
 {
-Shader::Shader(ShaderStage stage, BinaryData bytecode)
-    : AbstractShader(stage), m_bytecode(std::move(bytecode))
+Shader::Shader(ShaderStage stage, ShaderBinary bytecode) : AbstractShader(stage), m_bytecode(bytecode)
 {
 }
 
-Shader::~Shader() = default;
-
-AbstractShader::BinaryData Shader::GetBinary() const
+Shader::~Shader()
 {
-  return m_bytecode;
+  ShaderBinaryFree(&m_bytecode);
 }
 
-std::optional<Shader::BinaryData>
-Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::string_view source)
+bool Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
+                           std::string_view source, ShaderBinary* bytecode)
 {
-  return CompileWithRslc(feature_level, stage, source);
-}
-
-AbstractShader::BinaryData Shader::CreateByteCode(const void* data, size_t length)
-{
-  const auto* const begin = static_cast<const u8*>(data);
-  const auto* const end = begin + length;
-
-  return {begin, end};
+  return CompileWithRslc(feature_level, stage, source, bytecode);
 }
 
 }  // namespace D3DCommon

@@ -15,7 +15,8 @@ namespace DX11
 class DXShader final : public D3DCommon::Shader
 {
 public:
-  DXShader(ShaderStage stage, BinaryData bytecode, ID3D11DeviceChild* shader,
+  /* Takes the bytecode's block. */
+  DXShader(ShaderStage stage, ShaderBinary bytecode, ID3D11DeviceChild* shader,
            std::string_view name);
   ~DXShader();
 
@@ -24,7 +25,8 @@ public:
   ID3D11PixelShader* GetD3DPixelShader() const;
   ID3D11ComputeShader* GetD3DComputeShader() const;
 
-  static std::unique_ptr<DXShader> CreateFromBytecode(ShaderStage stage, BinaryData bytecode,
+  /* Takes the bytecode's block: the shader keeps it, or it is freed. */
+  static std::unique_ptr<DXShader> CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
                                                       std::string_view name);
 
 private:

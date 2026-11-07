@@ -49,8 +49,8 @@ std::unique_ptr<DXPipeline> DXPipeline::Create(const AbstractPipelineConfig& con
   ID3D11InputLayout* input_layout =
       config.vertex_format ?
           const_cast<D3DVertexFormat*>(static_cast<const D3DVertexFormat*>(config.vertex_format))
-              ->GetInputLayout(vertex_shader->GetByteCode().data(),
-                               vertex_shader->GetByteCode().size()) :
+              ->GetInputLayout(vertex_shader->GetByteCode(),
+                               vertex_shader->GetByteCodeSize()) :
           nullptr;
 
   // Only use the integer RTV if logic op is supported, and enabled.

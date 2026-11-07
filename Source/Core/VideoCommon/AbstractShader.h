@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -29,8 +28,8 @@ public:
 
   // Shader binaries represent the input source code in a lower-level form. e.g. SPIR-V or DXBC.
   // The shader source code is not required to create a shader object from the binary.
-  using BinaryData = std::vector<u8>;
-  BinaryData GetBinary() const;
+  // Lent for the shader's lifetime: nullptr with *size 0 where there is none.
+  const u8* GetBinary(size_t* size) const;
 
 protected:
   ShaderStage m_stage;

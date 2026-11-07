@@ -3,32 +3,15 @@
 
 #pragma once
 
-#include <cstddef>
-#include <optional>
 #include <string_view>
-#include <vector>
 
 #include "Common/CommonTypes.h"
-
-namespace VideoCommon
-{
-}
+#include "VideoCommon/AbstractShader.h"
+#include "VideoCommon/ShaderBinary.h"
 
 namespace Vulkan::ShaderCompiler
 {
-// SPIR-V compiled code type
-using SPIRVCodeType = u32;
-using SPIRVCodeVector = std::vector<SPIRVCodeType>;
-
-// Compile a vertex shader to SPIR-V.
-std::optional<SPIRVCodeVector> CompileVertexShader(std::string_view source_code);
-
-// Compile a geometry shader to SPIR-V.
-std::optional<SPIRVCodeVector> CompileGeometryShader(std::string_view source_code);
-
-// Compile a fragment shader to SPIR-V.
-std::optional<SPIRVCodeVector> CompileFragmentShader(std::string_view source_code);
-
-// Compile a compute shader to SPIR-V.
-std::optional<SPIRVCodeVector> CompileComputeShader(std::string_view source_code);
+/* Compiles a stage to SPIR-V into *spirv, which owns rslc's result block
+ * then. False, with the failure logged and dumped, if rslc refused it. */
+bool Compile(ShaderStage stage, std::string_view source_code, ShaderBinary* spirv);
 }  // namespace Vulkan::ShaderCompiler

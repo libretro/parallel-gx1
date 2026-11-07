@@ -499,9 +499,10 @@ const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
-      auto binary = shader->GetBinary();
-      if (!binary.empty())
-        m_vs_cache.disk_cache.Append(uid, binary.data(), static_cast<u32>(binary.size()));
+      size_t binary_size;
+      const u8* binary = shader->GetBinary(&binary_size);
+      if (binary_size)
+        m_vs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
@@ -521,9 +522,10 @@ const AbstractShader* ShaderCache::InsertVertexUberShader(const UberShader::Vert
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
-      auto binary = shader->GetBinary();
-      if (!binary.empty())
-        m_uber_vs_cache.disk_cache.Append(uid, binary.data(), static_cast<u32>(binary.size()));
+      size_t binary_size;
+      const u8* binary = shader->GetBinary(&binary_size);
+      if (binary_size)
+        m_uber_vs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
@@ -543,9 +545,10 @@ const AbstractShader* ShaderCache::InsertPixelShader(const PixelShaderUid& uid,
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
-      auto binary = shader->GetBinary();
-      if (!binary.empty())
-        m_ps_cache.disk_cache.Append(uid, binary.data(), static_cast<u32>(binary.size()));
+      size_t binary_size;
+      const u8* binary = shader->GetBinary(&binary_size);
+      if (binary_size)
+        m_ps_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
@@ -565,9 +568,10 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
-      auto binary = shader->GetBinary();
-      if (!binary.empty())
-        m_uber_ps_cache.disk_cache.Append(uid, binary.data(), static_cast<u32>(binary.size()));
+      size_t binary_size;
+      const u8* binary = shader->GetBinary(&binary_size);
+      if (binary_size)
+        m_uber_ps_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
@@ -592,9 +596,10 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
-      auto binary = shader->GetBinary();
-      if (!binary.empty())
-        m_gs_cache.disk_cache.Append(uid, binary.data(), static_cast<u32>(binary.size()));
+      size_t binary_size;
+      const u8* binary = shader->GetBinary(&binary_size);
+      if (binary_size)
+        m_gs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
     }
     entry.shader = std::move(shader);
   }

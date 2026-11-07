@@ -75,17 +75,20 @@ std::unique_ptr<AbstractShader>
 Gfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
                             std::string_view name)
 {
-  auto bytecode = DXShader::CompileShader(D3D::feature_level, stage, source);
-  if (!bytecode)
+  ShaderBinary bytecode;
+  if (!DXShader::CompileShader(D3D::feature_level, stage, source, &bytecode))
     return nullptr;
 
-  return DXShader::CreateFromBytecode(stage, std::move(*bytecode), name);
+  return DXShader::CreateFromBytecode(stage, bytecode, name);
 }
 
 std::unique_ptr<AbstractShader> Gfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                             size_t length, std::string_view name)
 {
-  return DXShader::CreateFromBytecode(stage, DXShader::CreateByteCode(data, length), name);
+  ShaderBinary bytecode;
+  if (!ShaderBinaryCopy(&bytecode, data, length))
+    return nullptr;
+  return DXShader::CreateFromBytecode(stage, bytecode, name);
 }
 
 std::unique_ptr<AbstractPipeline> Gfx::CreatePipeline(const AbstractPipelineConfig& config,

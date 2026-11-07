@@ -127,48 +127,37 @@ static void ReportFailure(const char* stage_name, const std::string& source, con
   File::WriteStringToFile(path, fmt::format("{}\n/* rslc: {} */\n", source, err));
 }
 
-static std::optional<SPIRVCodeVector> Compile(std::string_view source_code, enum rslc_stage stage,
-                                              const char* stage_name)
+bool Compile(ShaderStage stage, std::string_view source_code, ShaderBinary* spirv)
 {
   char err[1024];
   struct rslc_opts opts;
   struct rslc_result result;
+  const enum rslc_stage rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
+                                 stage == ShaderStage::Geometry ? RSLC_STAGE_GEOMETRY :
+                                 stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
+                                                                  RSLC_STAGE_COMPUTE;
+  const char* const stage_name = stage == ShaderStage::Vertex   ? "vs" :
+                                 stage == ShaderStage::Geometry ? "gs" :
+                                 stage == ShaderStage::Pixel    ? "ps" :
+                                                                  "cs";
   std::string source = GetShaderCode(
-      source_code, stage == RSLC_STAGE_COMPUTE ? COMPUTE_SHADER_HEADER : SHADER_HEADER);
-  std::optional<SPIRVCodeVector> spv;
+      source_code, rstage == RSLC_STAGE_COMPUTE ? COMPUTE_SHADER_HEADER : SHADER_HEADER);
 
+  ShaderBinaryInit(spirv);
   memset(&opts, 0, sizeof(opts));
   opts.dst = RSLC_DST_SPIRV;
   opts.err = err;
   opts.err_cap = sizeof(err);
   err[0] = '\0';
-  if (!rslc_compile(source.data(), source.size(), stage, &opts, &result))
+  if (!rslc_compile(source.data(), source.size(), rstage, &opts, &result))
   {
     ReportFailure(stage_name, source, err);
-    return spv;
+    return false;
   }
-  spv = SPIRVCodeVector(result.spirv, result.spirv + result.spirv_len);
-  rslc_result_free(&result, &opts);
-  return spv;
-}
-
-std::optional<SPIRVCodeVector> CompileVertexShader(std::string_view source_code)
-{
-  return Compile(source_code, RSLC_STAGE_VERTEX, "vs");
-}
-
-std::optional<SPIRVCodeVector> CompileGeometryShader(std::string_view source_code)
-{
-  return Compile(source_code, RSLC_STAGE_GEOMETRY, "gs");
-}
-
-std::optional<SPIRVCodeVector> CompileFragmentShader(std::string_view source_code)
-{
-  return Compile(source_code, RSLC_STAGE_FRAGMENT, "ps");
-}
-
-std::optional<SPIRVCodeVector> CompileComputeShader(std::string_view source_code)
-{
-  return Compile(source_code, RSLC_STAGE_COMPUTE, "cs");
+  /* the result block is kept whole: the words point into it */
+  spirv->block = result.blob;
+  spirv->code = reinterpret_cast<const u8*>(result.spirv);
+  spirv->size = result.spirv_len * sizeof(uint32_t);
+  return true;
 }
 }  // namespace Vulkan::ShaderCompiler

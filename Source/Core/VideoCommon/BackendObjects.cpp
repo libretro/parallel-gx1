@@ -64,22 +64,23 @@ void std::default_delete<AbstractShader>::operator()(AbstractShader* object) con
   }
 }
 
-AbstractShader::BinaryData AbstractShader::GetBinary() const
+const u8* AbstractShader::GetBinary(size_t* size) const
 {
   switch (g_video_backend_kind)
   {
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
-    return static_cast<const Vulkan::VKShader*>(this)->GetBinary();
+    return static_cast<const Vulkan::VKShader*>(this)->GetBinary(size);
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
-    return static_cast<const DX11::DXShader*>(this)->GetBinary();
+    return static_cast<const DX11::DXShader*>(this)->GetBinary(size);
   case VIDEO_BACKEND_D3D12:
-    return static_cast<const DX12::DXShader*>(this)->GetBinary();
+    return static_cast<const DX12::DXShader*>(this)->GetBinary(size);
 #endif
   default:
-    return {};
+    *size = 0;
+    return nullptr;
   }
 }
 
