@@ -89,7 +89,7 @@ void D3DBoundingBox::Read(u32 index, u32 length, BBoxType* values)
 
 void D3DBoundingBox::Write(u32 index, const BBoxType* values, u32 length)
 {
-  D3D11_BOX box{index * sizeof(BBoxType),
+  D3D11_BOX box{static_cast<UINT>(index * sizeof(BBoxType)),
                 0,
                 0,
                 static_cast<u32>((index + length) * sizeof(BBoxType)),

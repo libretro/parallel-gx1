@@ -7,6 +7,7 @@
 #include <functional>  // for hash
 
 #include "Common/CommonTypes.h"
+#include "VideoCommon/AbstractDeleters.h"
 #include "VideoCommon/CPMemory.h"
 
 // m_components
@@ -129,7 +130,7 @@ class NativeVertexFormat
 {
 public:
   NativeVertexFormat(const PortableVertexDeclaration& vtx_decl) : m_decl(vtx_decl) {}
-  virtual ~NativeVertexFormat() {}
+  ~NativeVertexFormat() = default;
 
   NativeVertexFormat(const NativeVertexFormat&) = delete;
   NativeVertexFormat& operator=(const NativeVertexFormat&) = delete;

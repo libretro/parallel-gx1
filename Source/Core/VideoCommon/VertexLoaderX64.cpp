@@ -80,30 +80,30 @@ void VertexLoaderX64::ReadVertex(OpArg data, VertexComponentFormat attribute,
                                  bool dequantize, u8 scaling_exponent,
                                  AttributeFormat* native_format)
 {
-  using ShuffleRow = std::array<__m128i, 3>;
-  static const Common::EnumMap<ShuffleRow, ComponentFormat::InvalidFloat7> shuffle_lut = {
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFF00L),   // 1x u8
+  // by format, then by count
+  static const __m128i shuffle_lut[8][3] = {
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFF00L),   // 1x u8
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFF01L, 0xFFFFFF00L),   // 2x u8
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFF02L, 0xFFFFFF01L, 0xFFFFFF00L)},  // 3x u8
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00FFFFFFL),   // 1x s8
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00FFFFFFL),   // 1x s8
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0x01FFFFFFL, 0x00FFFFFFL),   // 2x s8
                  _mm_set_epi32(0xFFFFFFFFL, 0x02FFFFFFL, 0x01FFFFFFL, 0x00FFFFFFL)},  // 3x s8
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFF0001L),   // 1x u16
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFF0001L),   // 1x u16
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFF0203L, 0xFFFF0001L),   // 2x u16
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFF0405L, 0xFFFF0203L, 0xFFFF0001L)},  // 3x u16
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x0001FFFFL),   // 1x s16
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x0001FFFFL),   // 1x s16
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0x0203FFFFL, 0x0001FFFFL),   // 2x s16
                  _mm_set_epi32(0xFFFFFFFFL, 0x0405FFFFL, 0x0203FFFFL, 0x0001FFFFL)},  // 3x s16
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x float
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x float
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0x04050607L, 0x00010203L),   // 2x float
                  _mm_set_epi32(0xFFFFFFFFL, 0x08090A0BL, 0x04050607L, 0x00010203L)},  // 3x float
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x invalid
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x invalid
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0x04050607L, 0x00010203L),   // 2x invalid
                  _mm_set_epi32(0xFFFFFFFFL, 0x08090A0BL, 0x04050607L, 0x00010203L)},  // 3x invalid
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x invalid
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x invalid
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0x04050607L, 0x00010203L),   // 2x invalid
                  _mm_set_epi32(0xFFFFFFFFL, 0x08090A0BL, 0x04050607L, 0x00010203L)},  // 3x invalid
-      ShuffleRow{_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x invalid
+      {_mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0xFFFFFFFFL, 0x00010203L),   // 1x invalid
                  _mm_set_epi32(0xFFFFFFFFL, 0xFFFFFFFFL, 0x04050607L, 0x00010203L),   // 2x invalid
                  _mm_set_epi32(0xFFFFFFFFL, 0x08090A0BL, 0x04050607L, 0x00010203L)},  // 3x invalid
   };
@@ -184,7 +184,7 @@ void VertexLoaderX64::ReadVertex(OpArg data, VertexComponentFormat attribute,
     else
       MOVD_xmm(coords, data);
 
-    PSHUFB(coords, MPIC(&shuffle_lut[format][count_in - 1]));
+    PSHUFB(coords, MPIC(&shuffle_lut[static_cast<int>(format)][count_in - 1]));
 
     // Sign-extend.
     if (format == ComponentFormat::Byte)

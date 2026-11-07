@@ -16,12 +16,42 @@
 #include "VideoBackends/OGL/OGLVertexManager.h"
 #endif
 #ifdef HAS_VULKAN
+#include "VideoBackends/Vulkan/VKVertexFormat.h"
 #include "VideoBackends/Vulkan/VKVertexManager.h"
 #endif
 #ifdef _WIN32
 #include "VideoBackends/D3D/D3DVertexManager.h"
 #include "VideoBackends/D3D12/D3D12VertexManager.h"
+#include "VideoBackends/D3D12/DX12VertexFormat.h"
 #endif
+
+void std::default_delete<NativeVertexFormat>::operator()(NativeVertexFormat* object) const
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef HAS_OPENGL
+  case VIDEO_BACKEND_OGL:
+    delete static_cast<OGL::GLVertexFormat*>(object);
+    return;
+#endif
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    delete static_cast<Vulkan::VertexFormat*>(object);
+    return;
+#endif
+#ifdef _WIN32
+  case VIDEO_BACKEND_D3D11:
+    delete static_cast<DX11::D3DVertexFormat*>(object);
+    return;
+  case VIDEO_BACKEND_D3D12:
+    delete static_cast<DX12::DXVertexFormat*>(object);
+    return;
+#endif
+  default:
+    delete object;
+    return;
+  }
+}
 
 void std::default_delete<VertexManagerBase>::operator()(VertexManagerBase* object) const
 {

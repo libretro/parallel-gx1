@@ -14,11 +14,11 @@
 namespace OGL
 {
 class StreamBuffer;
-class GLVertexFormat : public NativeVertexFormat
+class GLVertexFormat final : public NativeVertexFormat
 {
 public:
   GLVertexFormat(const PortableVertexDeclaration& vtx_decl);
-  ~GLVertexFormat() override;
+  ~GLVertexFormat();
 
   GLuint VAO;
 };

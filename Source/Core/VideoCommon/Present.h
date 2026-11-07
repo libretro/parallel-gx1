@@ -30,13 +30,13 @@ class PostProcessing;
 extern bool g_frontend_takes_frames;
 // Presenter is a class that deals with putting the final XFB on the screen.
 // It also handles post-processing.
-class Presenter
+class Presenter final
 {
 public:
   using ClearColor = std::array<float, 4>;
 
   Presenter();
-  virtual ~Presenter();
+  ~Presenter();
 
   void ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u64 ticks);
   void ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height);
@@ -93,9 +93,9 @@ public:
 
   // Draws the specified XFB buffer to the screen, performing any post-processing.
   // Assumes that the backbuffer has already been bound and cleared.
-  virtual void RenderXFBToScreen(const MathUtil::Rectangle<int>& target_rc,
-                                 const AbstractTexture* source_texture,
-                                 const MathUtil::Rectangle<int>& source_rc);
+  void RenderXFBToScreen(const MathUtil::Rectangle<int>& target_rc,
+                         const AbstractTexture* source_texture,
+                         const MathUtil::Rectangle<int>& source_rc);
 
   VideoCommon::PostProcessing* GetPostProcessor() const { return m_post_processor.get(); }
 

@@ -17,11 +17,11 @@ enum class ShaderAttrib : u32;
 
 namespace DX11
 {
-class D3DVertexFormat : public NativeVertexFormat
+class D3DVertexFormat final : public NativeVertexFormat
 {
 public:
   D3DVertexFormat(const PortableVertexDeclaration& vtx_decl);
-  ~D3DVertexFormat() override;
+  ~D3DVertexFormat();
   ID3D11InputLayout* GetInputLayout(const void* vs_bytecode, size_t vs_bytecode_size);
 
 private:

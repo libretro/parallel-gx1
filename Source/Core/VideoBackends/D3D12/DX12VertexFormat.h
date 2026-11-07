@@ -13,7 +13,7 @@ enum class ShaderAttrib : u32;
 
 namespace DX12
 {
-class DXVertexFormat : public NativeVertexFormat
+class DXVertexFormat final : public NativeVertexFormat
 {
 public:
   static const u32 MAX_VERTEX_ATTRIBUTES = 16;
