@@ -139,4 +139,18 @@ private:
   bool m_good;
 };
 
+// A whole file lent for reading: straight from its mapping where the file
+// is mapped, from one malloc'd buffer otherwise. data stays NULL and size 0
+// when the file can't be read.
+struct FileLoan
+{
+  IOFile file;
+  const u8* data;
+  u64 size;
+  u8* owned;
+};
+
+bool LoanFile(FileLoan* loan, const char* path);
+void EndLoan(FileLoan* loan);
+
 }  // namespace File

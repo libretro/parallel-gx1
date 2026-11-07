@@ -155,60 +155,18 @@ constexpr std::array<u8, 32> s_root_ca_hash = {{0xc5, 0xb0, 0xf8, 0xdf, 0xce, 0x
                                                 0xc2, 0x09, 0xdc, 0x17, 0x7d, 0x24, 0x3c, 0x8d,
                                                 0xf2, 0xbd, 0xdf, 0x9e, 0x39, 0x17, 0x1e, 0x5f}};
 
-/* A certificate file, lent from its mapping where the file is mapped and
- * read into one malloc'd buffer otherwise. */
-struct CertFile
-{
-  File::IOFile file;
-  const u8* data;
-  size_t size;
-  u8* owned;
-};
-
-static void FreeCertFile(CertFile* cert)
-{
-  std::free(cert->owned);
-  cert->owned = nullptr;
-  cert->data = nullptr;
-  cert->size = 0;
-  cert->file.Close();
-}
-
 /* name is appended to the session Wii root; data stays NULL and size 0
  * when the file is missing, unreadable or not the expected one */
-static bool LoadCertFile(CertFile* cert, const char* name, const std::array<u8, 32>& correct_hash,
-                         bool silent)
+static bool LoadCertFile(File::FileLoan* cert, const char* name,
+                         const std::array<u8, 32>& correct_hash, bool silent)
 {
   char path[PATH_MAX_LENGTH];
   u8 hash[32];
-  u64 map_size = 0;
-  const u8* map;
 
-  cert->data = nullptr;
-  cert->size = 0;
-  cert->owned = nullptr;
   std::snprintf(path, sizeof(path), "%s/%s", File::GetUserPath(D_SESSION_WIIROOT_IDX).c_str(),
                 name);
 
-  cert->file.Open(path, "rb");
-  map = cert->file.GetMappedPtr(&map_size);
-  if (map)
-  {
-    cert->data = map;
-    cert->size = size_t(map_size);
-  }
-  else if (cert->file)
-  {
-    const size_t size = size_t(cert->file.GetSize());
-    cert->owned = static_cast<u8*>(std::malloc(size ? size : 1));
-    if (cert->owned && cert->file.ReadBytes(cert->owned, size))
-    {
-      cert->data = cert->owned;
-      cert->size = size;
-    }
-  }
-
-  if (!cert->data)
+  if (!File::LoanFile(cert, path))
   {
     ERROR_LOG_FMT(IOS_SSL, "Failed to read {}", path);
     if (!silent)
@@ -218,11 +176,10 @@ static bool LoadCertFile(CertFile* cert, const char* name, const std::array<u8, 
                      "instructions on setting up Wii networking.",
                      path);
     }
-    FreeCertFile(cert);
     return false;
   }
 
-  mbedtls_sha256_ret(cert->data, cert->size, hash, 0);
+  mbedtls_sha256_ret(cert->data, size_t(cert->size), hash, 0);
   if (std::memcmp(hash, correct_hash.data(), sizeof(hash)) != 0)
   {
     ERROR_LOG_FMT(IOS_SSL, "Wrong hash for {}", path);
@@ -233,7 +190,7 @@ static bool LoadCertFile(CertFile* cert, const char* name, const std::array<u8, 
                      "instructions on setting up Wii networking.",
                      path);
     }
-    FreeCertFile(cert);
+    File::EndLoan(cert);
     return false;
   }
   return true;
@@ -443,8 +400,8 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     if (IsSSLIDValid(sslID))
     {
       WII_SSL* ssl = &_SSL[sslID];
-      CertFile client_cert;
-      CertFile client_key;
+      File::FileLoan client_cert;
+      File::FileLoan client_key;
       const bool have_cert =
           LoadCertFile(&client_cert, "clientca.pem", s_client_cert_hash, m_cert_error_shown);
       const bool have_key =
@@ -454,10 +411,10 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
       if (!have_cert || !have_key)
         m_cert_error_shown = true;
 
-      int ret = mbedtls_x509_crt_parse(&ssl->clicert, client_cert.data, client_cert.size);
-      int pk_ret = mbedtls_pk_parse_key(&ssl->pk, client_key.data, client_key.size, nullptr, 0);
-      FreeCertFile(&client_cert);
-      FreeCertFile(&client_key);
+      int ret = mbedtls_x509_crt_parse(&ssl->clicert, client_cert.data, size_t(client_cert.size));
+      int pk_ret = mbedtls_pk_parse_key(&ssl->pk, client_key.data, size_t(client_key.size), nullptr, 0);
+      File::EndLoan(&client_cert);
+      File::EndLoan(&client_key);
       if (ret || pk_ret)
       {
         mbedtls_x509_crt_free(&ssl->clicert);
@@ -512,12 +469,12 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     if (IsSSLIDValid(sslID))
     {
       WII_SSL* ssl = &_SSL[sslID];
-      CertFile root_ca;
+      File::FileLoan root_ca;
       if (!LoadCertFile(&root_ca, "rootca.pem", s_root_ca_hash, m_cert_error_shown))
         m_cert_error_shown = true;
 
-      int ret = mbedtls_x509_crt_parse(&ssl->cacert, root_ca.data, root_ca.size);
-      FreeCertFile(&root_ca);
+      int ret = mbedtls_x509_crt_parse(&ssl->cacert, root_ca.data, size_t(root_ca.size));
+      File::EndLoan(&root_ca);
       if (ret)
       {
         mbedtls_x509_crt_free(&ssl->clicert);

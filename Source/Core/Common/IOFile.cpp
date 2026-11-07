@@ -3,6 +3,7 @@
 
 #include "Common/IOFile.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -224,6 +225,48 @@ bool IOFile::Resize(u64 size)
   if (!m_file || filestream_truncate(m_file, (int64_t)size) != 0)
     m_good = false;
   return m_good;
+}
+
+bool LoanFile(FileLoan* loan, const char* path)
+{
+  u64 map_size = 0;
+  const u8* map;
+
+  loan->data = nullptr;
+  loan->size = 0;
+  loan->owned = nullptr;
+  if (!loan->file.Open(path, "rb"))
+    return false;
+
+  map = loan->file.GetMappedPtr(&map_size);
+  if (map)
+  {
+    loan->data = map;
+    loan->size = map_size;
+    return true;
+  }
+
+  {
+    const u64 size = loan->file.GetSize();
+    loan->owned = static_cast<u8*>(std::malloc(size ? size_t(size) : 1));
+    if (!loan->owned || !loan->file.ReadBytes(loan->owned, size_t(size)))
+    {
+      EndLoan(loan);
+      return false;
+    }
+    loan->data = loan->owned;
+    loan->size = size;
+  }
+  return true;
+}
+
+void EndLoan(FileLoan* loan)
+{
+  std::free(loan->owned);
+  loan->owned = nullptr;
+  loan->data = nullptr;
+  loan->size = 0;
+  loan->file.Close();
 }
 
 }  // namespace File
