@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include <rthreads/rthreads.h>
+#include <retro_atomic.h>
 
 #include "DolphinLibretro/Video.h"
 #include "VideoCommon/FrameOutput.h"
@@ -48,20 +48,42 @@ struct Published
   u32 width;
   u32 height;
   u64 fence_value;
-  u64 generation;
 };
 
+/* A published picture's description, written by the GPU thread and read
+ * by the frontend's; relaxed fields, ordered by the generation that
+ * names the slot. */
+struct PublishedSlot
+{
+  retro_atomic_int_t kind;
+  retro_atomic_int_t index;
+  retro_atomic_int_t width;
+  retro_atomic_int_t height;
+  retro_atomic_ptr_t texture;
+  retro_atomic_64_t fence_value;
+};
+
+/* Lock-free: one producer (the GPU thread) and one consumer (the
+ * frontend's thread).
+ *   pending  generation published last, slot generation & 3, with
+ *            QUEUE_TAKEN set once the consumer took it; 0 when none.
+ *            The consumer claims it, and the producer reclaims an
+ *            untaken one, each with a CAS: exactly one of them wins.
+ *   taking   the picture the consumer is handing over, handed the one
+ *            handed last, each (kind << 8 | index) + 1 or 0; written
+ *            only by the consumer, taking before its claim.
+ * The rest is the producer's own. */
 struct OutputQueue
 {
-  slock_t* lock;
-  Published pending;
-  Published taking;
-  Published handed;
-  u64 generation;
+  PublishedSlot slots[4];
+  retro_atomic_int_t pending;
+  retro_atomic_int_t taking;
+  retro_atomic_int_t handed;
+  int generation;
+  const void* direct_textures[QUEUE_DIRECT];
 };
 
 void QueueInit(OutputQueue* queue);
-void QueueFree(OutputQueue* queue);
 /* GPU thread: the image to draw the next picture into */
 u32 QueueAcquireTarget(OutputQueue* queue);
 /* GPU thread: a description's slot the frontend is not using */

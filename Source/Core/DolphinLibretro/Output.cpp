@@ -32,48 +32,83 @@ void OutputHandOver()
     s_active->HandOver();
 }
 
+enum
+{
+  QUEUE_TAKEN = 0x40000000,
+  QUEUE_GENERATION_MASK = 0x3fffffff
+};
+
+static int QueueTag(int kind, u32 index)
+{
+  return ((kind << 8) | int(index)) + 1;
+}
+
 void QueueInit(OutputQueue* queue)
 {
-  memset(queue, 0, sizeof(*queue));
-  queue->lock = slock_new();
+  u32 i;
+
+  for (i = 0; i < 4; i++)
+  {
+    retro_atomic_int_init(&queue->slots[i].kind, PUB_NONE);
+    retro_atomic_int_init(&queue->slots[i].index, 0);
+    retro_atomic_int_init(&queue->slots[i].width, 0);
+    retro_atomic_int_init(&queue->slots[i].height, 0);
+    retro_atomic_store_relaxed_ptr(&queue->slots[i].texture, nullptr);
+    retro_atomic_64_init(&queue->slots[i].fence_value, 0);
+  }
+  retro_atomic_int_init(&queue->pending, 0);
+  retro_atomic_int_init(&queue->taking, 0);
+  retro_atomic_int_init(&queue->handed, 0);
+  queue->generation = 0;
+  for (i = 0; i < QUEUE_DIRECT; i++)
+    queue->direct_textures[i] = nullptr;
 }
 
-void QueueFree(OutputQueue* queue)
+static PublishedSlot* QueueSlot(OutputQueue* queue, int pending)
 {
-  if (queue->lock)
-    slock_free(queue->lock);
-  queue->lock = nullptr;
+  return &queue->slots[pending & 3];
 }
 
-static bool QueueInUse(const OutputQueue* queue, int kind, u32 index)
+/* GPU thread: whether an image or description is published, being handed
+ * over or handed; the consumer only ever newly holds the pending one */
+static bool QueueInUse(OutputQueue* queue, int kind, u32 index)
 {
-  return (queue->pending.kind == kind && queue->pending.index == index) ||
-         (queue->taking.kind == kind && queue->taking.index == index) ||
-         (queue->handed.kind == kind && queue->handed.index == index);
+  const int tag = QueueTag(kind, index);
+  const int pending = retro_atomic_load_acquire_int(&queue->pending);
+
+  if (pending)
+  {
+    PublishedSlot* slot = QueueSlot(queue, pending);
+    if (retro_atomic_load_relaxed_int(&slot->kind) == kind &&
+        u32(retro_atomic_load_relaxed_int(&slot->index)) == index)
+    {
+      return true;
+    }
+  }
+  return retro_atomic_load_acquire_int(&queue->taking) == tag ||
+         retro_atomic_load_acquire_int(&queue->handed) == tag;
 }
 
 u32 QueueAcquireTarget(OutputQueue* queue)
 {
+  const int pending = retro_atomic_load_acquire_int(&queue->pending);
   u32 i;
 
-  slock_lock(queue->lock);
-  /* the picture published and neither handed over nor being handed
-   * over is not wanted any more: drawn into again, in place */
-  if (queue->pending.kind == PUB_TARGET &&
-      queue->pending.generation != queue->handed.generation &&
-      !(queue->taking.kind != PUB_NONE &&
-        queue->taking.generation == queue->pending.generation))
+  /* the picture published and not taken is not wanted any more: drawn
+   * into again, in place, unless the consumer claims it first */
+  if (pending && !(pending & QUEUE_TAKEN))
   {
-    i = queue->pending.index;
-    queue->pending.kind = PUB_NONE;
-  }
-  else
-  {
-    for (i = 0; i < QUEUE_IMAGES && QueueInUse(queue, PUB_TARGET, i); i++)
+    PublishedSlot* slot = QueueSlot(queue, pending);
+    if (retro_atomic_load_relaxed_int(&slot->kind) == PUB_TARGET &&
+        retro_atomic_cas_int(&queue->pending, pending, 0))
     {
+      return u32(retro_atomic_load_relaxed_int(&slot->index));
     }
   }
-  slock_unlock(queue->lock);
+
+  for (i = 0; i < QUEUE_IMAGES && QueueInUse(queue, PUB_TARGET, i); i++)
+  {
+  }
   return i;
 }
 
@@ -81,77 +116,112 @@ u32 QueueFreeDirect(OutputQueue* queue)
 {
   u32 i;
 
-  slock_lock(queue->lock);
   for (i = 0; i < QUEUE_DIRECT && QueueInUse(queue, PUB_DIRECT, i); i++)
   {
   }
-  slock_unlock(queue->lock);
   return i;
 }
 
 void QueuePublish(OutputQueue* queue, int kind, u32 index, const void* texture, u32 width,
                   u32 height, u64 fence_value)
 {
-  slock_lock(queue->lock);
-  queue->pending.kind = kind;
-  queue->pending.index = index;
-  queue->pending.texture = texture;
-  queue->pending.width = width;
-  queue->pending.height = height;
-  queue->pending.fence_value = fence_value;
-  queue->pending.generation = ++queue->generation;
-  slock_unlock(queue->lock);
+  PublishedSlot* slot;
+  int generation = (queue->generation + 1) & QUEUE_GENERATION_MASK;
+
+  if (!generation)
+    generation = 1;
+  queue->generation = generation;
+
+  slot = QueueSlot(queue, generation);
+  retro_atomic_store_relaxed_int(&slot->kind, kind);
+  retro_atomic_store_relaxed_int(&slot->index, int(index));
+  retro_atomic_store_relaxed_int(&slot->width, int(width));
+  retro_atomic_store_relaxed_int(&slot->height, int(height));
+  retro_atomic_store_relaxed_ptr(&slot->texture, const_cast<void*>(texture));
+  retro_atomic_store_relaxed_64(&slot->fence_value, s64(fence_value));
+  if (kind == PUB_DIRECT && index < QUEUE_DIRECT)
+    queue->direct_textures[index] = texture;
+
+  /* the slot's fields before the generation that names it */
+  retro_atomic_exchange_int(&queue->pending, generation);
 }
 
 bool QueueTake(OutputQueue* queue, Published* out)
 {
-  bool fresh;
-
-  slock_lock(queue->lock);
-  fresh = queue->pending.kind != PUB_NONE &&
-          queue->pending.generation != queue->handed.generation;
-  if (fresh)
+  for (;;)
   {
-    queue->taking = queue->pending;
-    *out = queue->taking;
+    const int pending = retro_atomic_load_acquire_int(&queue->pending);
+    PublishedSlot* slot;
+
+    if (!pending || (pending & QUEUE_TAKEN))
+      return false;
+
+    slot = QueueSlot(queue, pending);
+    out->kind = retro_atomic_load_relaxed_int(&slot->kind);
+    out->index = u32(retro_atomic_load_relaxed_int(&slot->index));
+    out->width = u32(retro_atomic_load_relaxed_int(&slot->width));
+    out->height = u32(retro_atomic_load_relaxed_int(&slot->height));
+    out->texture = retro_atomic_load_relaxed_ptr(&slot->texture);
+    out->fence_value = u64(retro_atomic_load_relaxed_64(&slot->fence_value));
+
+    /* held before claimed, so the producer never sees it free in between;
+     * the copy is whole if the claim succeeds, as the slot is rewritten
+     * only after four more publishes */
+    retro_atomic_store_release_int(&queue->taking, QueueTag(out->kind, out->index));
+    if (retro_atomic_cas_int(&queue->pending, pending, pending | QUEUE_TAKEN))
+      return true;
+    retro_atomic_store_release_int(&queue->taking, 0);
   }
-  slock_unlock(queue->lock);
-  return fresh;
 }
 
 void QueueHanded(OutputQueue* queue)
 {
-  slock_lock(queue->lock);
-  queue->handed = queue->taking;
-  queue->taking.kind = PUB_NONE;
-  slock_unlock(queue->lock);
+  retro_atomic_store_release_int(&queue->handed, retro_atomic_load_relaxed_int(&queue->taking));
+  retro_atomic_store_release_int(&queue->taking, 0);
 }
 
-bool QueueHolds(OutputQueue* queue, const void* texture)
+/* GPU thread: the texture of a held description */
+static const void* QueueHeldTexture(OutputQueue* queue, int tag)
 {
-  bool held;
+  const int kind = (tag - 1) >> 8;
+  const u32 index = u32((tag - 1) & 0xff);
 
-  slock_lock(queue->lock);
-  held = (queue->pending.kind == PUB_DIRECT && queue->pending.texture == texture) ||
-         (queue->taking.kind == PUB_DIRECT && queue->taking.texture == texture) ||
-         (queue->handed.kind == PUB_DIRECT && queue->handed.texture == texture);
-  slock_unlock(queue->lock);
-  return held;
+  if (!tag || kind != PUB_DIRECT || index >= QUEUE_DIRECT)
+    return nullptr;
+  return queue->direct_textures[index];
 }
 
 u32 QueueHeldDirect(OutputQueue* queue, const void** textures)
 {
+  const int pending = retro_atomic_load_acquire_int(&queue->pending);
+  const void* texture;
   u32 n = 0;
 
-  slock_lock(queue->lock);
-  if (queue->pending.kind == PUB_DIRECT)
-    textures[n++] = queue->pending.texture;
-  if (queue->taking.kind == PUB_DIRECT)
-    textures[n++] = queue->taking.texture;
-  if (queue->handed.kind == PUB_DIRECT)
-    textures[n++] = queue->handed.texture;
-  slock_unlock(queue->lock);
+  if (pending)
+  {
+    PublishedSlot* slot = QueueSlot(queue, pending);
+    if (retro_atomic_load_relaxed_int(&slot->kind) == PUB_DIRECT)
+      textures[n++] = retro_atomic_load_relaxed_ptr(&slot->texture);
+  }
+  if ((texture = QueueHeldTexture(queue, retro_atomic_load_acquire_int(&queue->taking))))
+    textures[n++] = texture;
+  if ((texture = QueueHeldTexture(queue, retro_atomic_load_acquire_int(&queue->handed))))
+    textures[n++] = texture;
   return n;
+}
+
+bool QueueHolds(OutputQueue* queue, const void* texture)
+{
+  const void* held[3];
+  u32 n = QueueHeldDirect(queue, held);
+  u32 i;
+
+  for (i = 0; i < n; i++)
+  {
+    if (held[i] == texture)
+      return true;
+  }
+  return false;
 }
 
 #if defined(_WIN32) || defined(HAS_VULKAN)
@@ -279,9 +349,7 @@ DX12Output::DX12Output(retro_hw_render_interface_d3d12* iface, u32 width, u32 he
       m_height(height), m_current(0),
       m_v2(iface->interface_version >= RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2)
 {
-  memset(&m_queue, 0, sizeof(m_queue));
-  if (m_threaded)
-    QueueInit(&m_queue);
+  QueueInit(&m_queue);
   s_active = this;
 }
 
@@ -291,7 +359,6 @@ DX12Output::~DX12Output()
     s_active = nullptr;
   if (m_threaded && DX12::g_dx_context)
     DX12::g_dx_context->SetBeforeExecute(nullptr, nullptr);
-  QueueFree(&m_queue);
 }
 
 bool DX12Output::Create()
@@ -471,12 +538,10 @@ VKOutput::VKOutput(retro_hw_render_interface_vulkan* iface, u32 width, u32 heigh
     : m_threaded(threaded), m_direct(nullptr), m_iface(iface), m_width(width),
       m_height(height), m_current(0)
 {
-  memset(&m_queue, 0, sizeof(m_queue));
+  QueueInit(&m_queue);
   memset(m_direct_images, 0, sizeof(m_direct_images));
   memset(m_images, 0, sizeof(m_images));
   memset(&m_direct_image, 0, sizeof(m_direct_image));
-  if (m_threaded)
-    QueueInit(&m_queue);
   s_active = this;
 }
 
@@ -486,7 +551,6 @@ VKOutput::~VKOutput()
     s_active = nullptr;
   if (m_threaded && Vulkan::g_command_buffer_mgr)
     Vulkan::g_command_buffer_mgr->SetBeforeSubmit(nullptr, nullptr);
-  QueueFree(&m_queue);
   DropDirect();
 }
 
