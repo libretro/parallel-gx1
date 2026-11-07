@@ -62,8 +62,6 @@ private:
   DescriptorHandle m_srv_descriptor = {};
   DescriptorHandle m_uav_descriptor = {};
 
-  std::wstring m_name;
-
   mutable D3D12_RESOURCE_STATES m_state;
 };
 

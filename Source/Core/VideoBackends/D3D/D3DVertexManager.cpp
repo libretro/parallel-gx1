@@ -72,7 +72,7 @@ CreateTexelBufferView(ID3D11Buffer* buffer, TexelBufferFormat format, DXGI_FORMA
     , 0, -1);
 #else
   );
-#endif;
+#endif
   HRESULT hr = D3D::device->CreateShaderResourceView(buffer, &srv_desc, &srv);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create SRV for texel buffer: {}", DX11HRWrap(hr));
   return srv;

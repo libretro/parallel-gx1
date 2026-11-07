@@ -47,12 +47,10 @@ static ComPtr<ID3D12Resource> CreateTextureUploadBuffer(u32 buffer_size)
 
 DXTexture::DXTexture(const TextureConfig& config, ID3D12Resource* resource,
                      D3D12_RESOURCE_STATES state, std::string_view name)
-    : AbstractTexture(config), m_resource(resource), m_state(state), m_name(UTF8ToWString(name))
+    : AbstractTexture(config), m_resource(resource), m_state(state)
 {
-  if (!m_name.empty())
-  {
-    resource->SetName(m_name.c_str());
-  }
+  if (!name.empty())
+    resource->SetName(UTF8ToWString(name).c_str());
 }
 
 DXTexture::~DXTexture()
