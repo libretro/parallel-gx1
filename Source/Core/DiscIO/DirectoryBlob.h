@@ -268,28 +268,30 @@ public:
   void SetKey(std::array<u8, VolumeWii::AES_KEY_SIZE> key) { m_key = key; }
 
 private:
-  void SetDiscType(std::optional<bool> is_wii, std::span<const u8> disc_header);
+  void SetDiscType(std::optional<bool> is_wii, const u8* disc_header);
   void SetBI2FromFile(const std::string& bi2_path);
-  void SetBI2(std::vector<u8> bi2);
+  // takes over the reference; bi2_size is the size before padding
+  void SetBI2(ContentBlob* bi2, u64 bi2_size);
 
   // Returns DOL address
   u64 SetApploaderFromFile(const std::string& path);
-  u64 SetApploader(std::vector<u8> apploader, const std::string& log_path);
+  // takes over the reference
+  u64 SetApploader(ContentBlob* apploader, const std::string& log_path);
   // Returns FST address
-  u64 SetDOLFromFile(const std::string& path, u64 dol_address, std::vector<u8>* disc_header);
-  u64 SetDOL(FSTBuilderNode dol_node, u64 dol_address, std::vector<u8>* disc_header);
+  u64 SetDOLFromFile(const std::string& path, u64 dol_address, u8* disc_header);
+  u64 SetDOL(FSTBuilderNode dol_node, u64 dol_address, u8* disc_header);
 
   void BuildFSTFromFolder(const std::string& fst_root_path, u64 fst_address,
-                          std::vector<u8>* disc_header);
+                          u8* disc_header);
   void BuildFST(std::vector<FSTBuilderNode> root_nodes, u64 fst_address,
-                std::vector<u8>* disc_header);
+                u8* disc_header);
 
   // FST creation
-  void WriteEntryData(std::vector<u8>* fst_data, u32* entry_offset, u8 type, u32 name_offset,
+  void WriteEntryData(u8* fst_data, u32* entry_offset, u8 type, u32 name_offset,
                       u64 data_offset, u64 length, u32 address_shift);
-  void WriteEntryName(std::vector<u8>* fst_data, u32* name_offset, const std::string& name,
+  void WriteEntryName(u8* fst_data, u32* name_offset, const std::string& name,
                       u64 name_table_offset);
-  void WriteDirectory(std::vector<u8>* fst_data, std::vector<FSTBuilderNode>* parent_entries,
+  void WriteDirectory(u8* fst_data, std::vector<FSTBuilderNode>* parent_entries,
                       u32* fst_offset, u32* name_offset, u64* data_offset, u32 parent_entry_index,
                       u64 name_table_offset);
 
@@ -366,11 +368,12 @@ private:
   bool EncryptPartitionData(u64 offset, u64 size, u8* buffer, u64 partition_data_offset,
                             u64 partition_data_decrypted_size);
 
-  void SetNonpartitionDiscHeaderFromFile(std::span<const u8> partition_header,
+  void SetNonpartitionDiscHeaderFromFile(const u8* partition_header,
                                          const std::string& game_partition_root);
-  void SetNonpartitionDiscHeader(std::span<const u8> partition_header, std::vector<u8> header_bin);
+  void SetNonpartitionDiscHeader(const u8* partition_header, const u8* header_bin,
+                                 size_t header_bin_size);
   void SetWiiRegionDataFromFile(const std::string& game_partition_root);
-  void SetWiiRegionData(std::span<const u8> wii_region_data, const std::string& log_path);
+  void SetWiiRegionData(const u8* wii_region_data, size_t size, const std::string& log_path);
   void SetPartitions(std::vector<PartitionWithType>&& partitions);
   void SetPartitionHeader(DirectoryBlobPartition* partition, u64 partition_address);
 
