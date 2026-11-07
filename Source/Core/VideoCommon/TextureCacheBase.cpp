@@ -424,6 +424,9 @@ TextureCacheBase::~TextureCacheBase()
 {
   TexIndexFree(&m_textures_by_hash);
   TexIndexFree(&m_textures_by_address);
+  while (m_texture_pool_count)
+    DropPooledTexture(m_texture_pool_count - 1);
+  free(m_texture_pool);
   Common::FreeAlignedMemory(m_temp);
   m_temp = nullptr;
 }
@@ -449,7 +452,8 @@ void TextureCacheBase::Invalidate()
   TexIndexClear(&m_textures_by_hash);
   TexIndexClear(&m_textures_by_address);
 
-  m_texture_pool.clear();
+  while (m_texture_pool_count)
+    DropPooledTexture(m_texture_pool_count - 1);
 }
 
 void TextureCacheBase::OnConfigChanged(const VideoConfig& config)
@@ -520,22 +524,17 @@ void TextureCacheBase::Cleanup(int _frameCount)
     }
   }
 
-  TexPool::iterator iter2 = m_texture_pool.begin();
-  TexPool::iterator tcend2 = m_texture_pool.end();
-  while (iter2 != tcend2)
+  size_t slot = 0;
+  while (slot < m_texture_pool_count)
   {
-    if (iter2->second.frameCount == FRAMECOUNT_INVALID)
-    {
-      iter2->second.frameCount = _frameCount;
-    }
-    if (_frameCount > TEXTURE_POOL_KILL_THRESHOLD + iter2->second.frameCount)
-    {
-      iter2 = m_texture_pool.erase(iter2);
-    }
+    TexPoolSlot* const pooled = &m_texture_pool[slot];
+    if (pooled->frameCount == FRAMECOUNT_INVALID)
+      pooled->frameCount = _frameCount;
+    /* the last one moves into the slot: looked at next */
+    if (_frameCount > TEXTURE_POOL_KILL_THRESHOLD + pooled->frameCount)
+      DropPooledTexture(slot);
     else
-    {
-      ++iter2;
-    }
+      slot++;
   }
 }
 
@@ -728,9 +727,7 @@ void TextureCacheBase::ScaleTextureCacheEntryTo(RcTcacheEntry& entry, u32 new_wi
 
   // At this point new_texture has the old texture in it,
   // we can potentially reuse this, so let's move it back to the pool
-  auto config = new_texture->texture->GetConfig();
-  m_texture_pool.emplace(
-      config, TexPoolEntry(std::move(new_texture->texture), std::move(new_texture->framebuffer)));
+  PoolTexture(std::move(new_texture->texture), std::move(new_texture->framebuffer));
 }
 
 bool TextureCacheBase::CheckReadbackTexture(u32 width, u32 height, AbstractTextureFormat format)
@@ -3038,12 +3035,15 @@ RcTcacheEntry TextureCacheBase::AllocateCacheEntry(const TextureConfig& config)
 std::optional<TextureCacheBase::TexPoolEntry>
 TextureCacheBase::AllocateTexture(const TextureConfig& config)
 {
-  TexPool::iterator iter = FindMatchingTextureFromPool(config);
-  if (iter != m_texture_pool.end())
+  const size_t slot = FindMatchingTextureFromPool(config);
+  if (slot != m_texture_pool_count)
   {
-    auto entry = std::move(iter->second);
-    m_texture_pool.erase(iter);
-    return std::move(entry);
+    TexPoolSlot* const pooled = &m_texture_pool[slot];
+    TexPoolEntry entry(std::unique_ptr<AbstractTexture>(pooled->texture),
+                       std::unique_ptr<AbstractFramebuffer>(pooled->framebuffer));
+    entry.frameCount = pooled->frameCount;
+    m_texture_pool[slot] = m_texture_pool[--m_texture_pool_count];
+    return entry;
   }
 
   std::unique_ptr<AbstractTexture> texture = g_gfx->CreateTexture(config);
@@ -3070,19 +3070,62 @@ TextureCacheBase::AllocateTexture(const TextureConfig& config)
   return TexPoolEntry(std::move(texture), std::move(framebuffer));
 }
 
-TextureCacheBase::TexPool::iterator
-TextureCacheBase::FindMatchingTextureFromPool(const TextureConfig& config)
+/* the config packed as its hash packs it */
+static u64 PoolId(const TextureConfig& c)
+{
+  return static_cast<u64>(c.flags) << 58 | static_cast<u64>(c.format) << 50 |
+         static_cast<u64>(c.layers) << 48 | static_cast<u64>(c.levels) << 32 |
+         static_cast<u64>(c.height) << 16 | static_cast<u64>(c.width);
+}
+
+void TextureCacheBase::PoolTexture(std::unique_ptr<AbstractTexture> texture,
+                                   std::unique_ptr<AbstractFramebuffer> framebuffer)
+{
+  TexPoolSlot* pooled;
+  if (m_texture_pool_count == m_texture_pool_cap)
+  {
+    const size_t cap = m_texture_pool_cap ? m_texture_pool_cap * 2 : 64;
+    TexPoolSlot* const grown =
+        static_cast<TexPoolSlot*>(realloc(m_texture_pool, cap * sizeof(*grown)));
+    if (!grown)
+      return;  // the texture goes
+    m_texture_pool = grown;
+    m_texture_pool_cap = cap;
+  }
+  pooled = &m_texture_pool[m_texture_pool_count++];
+  pooled->config = texture->GetConfig();
+  pooled->id = PoolId(pooled->config);
+  pooled->frameCount = FRAMECOUNT_INVALID;
+  pooled->framebuffer = framebuffer.release();
+  pooled->texture = texture.release();
+}
+
+void TextureCacheBase::DropPooledTexture(size_t slot)
+{
+  TexPoolSlot* const pooled = &m_texture_pool[slot];
+  /* the framebuffer before the texture it draws into */
+  std::unique_ptr<AbstractFramebuffer>(pooled->framebuffer).reset();
+  std::unique_ptr<AbstractTexture>(pooled->texture).reset();
+  *pooled = m_texture_pool[--m_texture_pool_count];
+}
+
+size_t TextureCacheBase::FindMatchingTextureFromPool(const TextureConfig& config) const
 {
   // Find a texture from the pool that does not have a frameCount of FRAMECOUNT_INVALID.
   // This prevents a texture from being used twice in a single frame with different data,
   // which potentially means that a driver has to maintain two copies of the texture anyway.
   // Render-target textures are fine through, as they have to be generated in a separate pass.
   // As non-render-target textures are usually static, this should not matter much.
-  auto range = m_texture_pool.equal_range(config);
-  auto matching_iter = std::find_if(range.first, range.second, [](const auto& iter) {
-    return iter.first.IsRenderTarget() || iter.second.frameCount != FRAMECOUNT_INVALID;
-  });
-  return matching_iter != range.second ? matching_iter : m_texture_pool.end();
+  const u64 id = PoolId(config);
+  size_t slot;
+  for (slot = 0; slot < m_texture_pool_count; slot++)
+  {
+    const TexPoolSlot* const pooled = &m_texture_pool[slot];
+    if (pooled->id == id && pooled->config == config &&
+        (config.IsRenderTarget() || pooled->frameCount != FRAMECOUNT_INVALID))
+      break;
+  }
+  return slot;
 }
 
 TexIndexNode* TextureCacheBase::GetTexCacheIter(TCacheEntry* entry)
@@ -3169,9 +3212,7 @@ void TextureCacheBase::ReleaseToPool(TCacheEntry* entry)
 {
   if (!entry->texture)
     return;
-  auto config = entry->texture->GetConfig();
-  m_texture_pool.emplace(config,
-                         TexPoolEntry(std::move(entry->texture), std::move(entry->framebuffer)));
+  PoolTexture(std::move(entry->texture), std::move(entry->framebuffer));
 }
 
 bool TextureCacheBase::CreateUtilityTextures()

@@ -458,7 +458,15 @@ private:
     TexIndexNode* second;
   };
 
-  using TexPool = std::unordered_multimap<TextureConfig, TexPoolEntry>;
+  // A texture kept for reuse: by its config, packed into id to compare first
+  struct TexPoolSlot
+  {
+    u64 id;
+    TextureConfig config;
+    AbstractTexture* texture;
+    AbstractFramebuffer* framebuffer;
+    int frameCount;
+  };
 
   static bool DidLinkedAssetsChange(const TCacheEntry& entry);
 
@@ -489,7 +497,12 @@ private:
 
   RcTcacheEntry AllocateCacheEntry(const TextureConfig& config);
   std::optional<TexPoolEntry> AllocateTexture(const TextureConfig& config);
-  TexPool::iterator FindMatchingTextureFromPool(const TextureConfig& config);
+  // The slot of a pooled texture to reuse for config, or m_texture_pool_count.
+  size_t FindMatchingTextureFromPool(const TextureConfig& config) const;
+  void PoolTexture(std::unique_ptr<AbstractTexture> texture,
+                   std::unique_ptr<AbstractFramebuffer> framebuffer);
+  // Deletes the slot's texture; the last slot takes its place.
+  void DropPooledTexture(size_t slot);
   TexIndexNode* GetTexCacheIter(TCacheEntry* entry);
 
   // Return all possible overlapping textures. As addr+size of the textures is not
@@ -536,7 +549,9 @@ private:
   // It's valid for textures to be in here after they've been invalidated
   std::array<RcTcacheEntry, 8> m_bound_textures{};
 
-  TexPool m_texture_pool;
+  TexPoolSlot* m_texture_pool = nullptr;
+  size_t m_texture_pool_count = 0;
+  size_t m_texture_pool_cap = 0;
   u64 m_last_entry_id = 0;
 
   // Backup configuration values
