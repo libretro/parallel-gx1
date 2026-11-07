@@ -697,6 +697,35 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
     }
   }
 
+  m_fast_linking = false;
+  if (m_extended_dynamic_state && vkGetPhysicalDeviceProperties2 &&
+      Common::Contains(available_extension_list,
+                       std::string_view{VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME},
+                       &VkExtensionProperties::extensionName) &&
+      Common::Contains(available_extension_list,
+                       std::string_view{VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME},
+                       &VkExtensionProperties::extensionName))
+  {
+    VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gpl = {};
+    VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT gpl_props = {};
+    VkPhysicalDeviceFeatures2 features2 = {};
+    VkPhysicalDeviceProperties2 properties2 = {};
+    gpl.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT;
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features2.pNext = &gpl;
+    vkGetPhysicalDeviceFeatures2(m_physical_device, &features2);
+    gpl_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT;
+    properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties2.pNext = &gpl_props;
+    vkGetPhysicalDeviceProperties2(m_physical_device, &properties2);
+    /* without fast linking, a link may cost what a whole pipeline does */
+    if (gpl.graphicsPipelineLibrary && gpl_props.graphicsPipelineLibraryFastLinking)
+    {
+      m_fast_linking = AddExtension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME, false) &&
+                       AddExtension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME, false);
+    }
+  }
+
   if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DEPTH_CLAMP_CONTROL))
   {
     // Unrestricted depth range is one of the few extensions that changes the behavior
@@ -847,6 +876,14 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
     eds_features.pNext = const_cast<void*>(device_info.pNext);
     device_info.pNext = &eds_features;
   }
+  VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gpl_features = {};
+  if (m_fast_linking)
+  {
+    gpl_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT;
+    gpl_features.graphicsPipelineLibrary = VK_TRUE;
+    gpl_features.pNext = const_cast<void*>(device_info.pNext);
+    device_info.pNext = &gpl_features;
+  }
   VkPhysicalDeviceExtendedDynamicState3FeaturesEXT eds3_features = {};
   if (m_dynamic_blending)
   {
@@ -881,9 +918,11 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   m_dynamic_blending = m_extended_dynamic_state && m_dynamic_blending &&
                        vkCmdSetColorBlendEnableEXT && vkCmdSetColorBlendEquationEXT &&
                        vkCmdSetColorWriteMaskEXT;
-  INFO_LOG_FMT(VIDEO, "Vulkan: cull mode and depth state {}, blending {}",
+  m_fast_linking = m_fast_linking && m_extended_dynamic_state;
+  INFO_LOG_FMT(VIDEO, "Vulkan: cull mode and depth state {}, blending {}, pipelines {}",
                m_extended_dynamic_state ? "set per draw" : "in each pipeline",
-               m_dynamic_blending ? "set per draw" : "in each pipeline");
+               m_dynamic_blending ? "set per draw" : "in each pipeline",
+               m_fast_linking ? "linked from libraries" : "built whole");
 
   // Grab the graphics and present queues.
   vkGetDeviceQueue(m_device, m_graphics_queue_family_index, 0, &m_graphics_queue);

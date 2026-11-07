@@ -118,6 +118,10 @@ public:
   /* blending, its equation and the colour write mask set per draw as well
    * (VK_EXT_extended_dynamic_state3), with the state above */
   bool SupportsDynamicBlending() const { return m_dynamic_blending; }
+  /* pipelines linked fast from libraries of their parts
+   * (VK_EXT_graphics_pipeline_library with fast linking), with the state
+   * above set per draw */
+  bool SupportsFastLinking() const { return m_fast_linking; }
 
   // Helpers for getting constants
   VkDeviceSize GetUniformBufferAlignment() const
@@ -160,6 +164,7 @@ private:
   std::vector<std::string> m_device_extensions;
   bool m_extended_dynamic_state = false;
   bool m_dynamic_blending = false;
+  bool m_fast_linking = false;
 #ifdef __LIBRETRO__
   VmaVulkanFunctions m_vulkan_functions = {};
 #endif

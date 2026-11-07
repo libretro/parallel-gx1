@@ -54,6 +54,9 @@ public:
   /* Forgets every shared pipeline; only with none alive, as the backend
    * comes up. */
   static void ResetSharedPipelines();
+  /* Destroys the pipeline libraries kept for linking; at shutdown, with no
+   * pipeline left. */
+  static void DestroySharedLibraries();
 
 private:
   VkPipeline m_pipeline;

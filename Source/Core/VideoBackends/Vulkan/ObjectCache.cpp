@@ -27,6 +27,7 @@ ObjectCache::ObjectCache() = default;
 
 ObjectCache::~ObjectCache()
 {
+  VKPipeline::DestroySharedLibraries();
   DestroyPipelineCache();
   DestroySamplers();
   DestroyPipelineLayouts();

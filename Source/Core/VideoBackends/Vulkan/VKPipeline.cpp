@@ -5,6 +5,8 @@
 
 #include <array>
 
+#include <cstring>
+
 #include <retro_atomic.h>
 
 #include "Common/Assert.h"
@@ -151,6 +153,166 @@ void VKPipeline::ResetSharedPipelines()
     retro_atomic_store_relaxed_int(&s_shared[i].state, SHARED_FREE);
   }
   retro_atomic_thread_fence_release();
+}
+
+/* Pipeline libraries, of the four parts a pipeline is linked from, are
+ * kept in the same table, their key's usage carrying which part they are:
+ * they stay, counted once, until DestroySharedLibraries. */
+#define SHARED_LIBRARY_SHIFT 8
+
+void VKPipeline::DestroySharedLibraries()
+{
+  u32 i;
+  for (i = 0; i < SHARED_SLOTS; i++)
+  {
+    VKSharedPipeline* s = &s_shared[i];
+    if (retro_atomic_load_acquire_int(&s->state) != SHARED_READY ||
+        !(s->key.usage >> SHARED_LIBRARY_SHIFT))
+    {
+      continue;
+    }
+    vkDestroyPipeline(g_vulkan_context->GetDevice(), s->pipeline, nullptr);
+    retro_atomic_store_relaxed_int(&s->refs, 0);
+    retro_atomic_store_release_int(&s->state, SHARED_DEAD);
+  }
+}
+
+/* The library for one part, found or built from the parts of info it
+ * takes; *owned when the table had no room for it, and the caller
+ * destroys it once linked. */
+static VkPipeline GetPipelineLibrary(const VKSharedKey* key,
+                                     const VkGraphicsPipelineCreateInfo* info,
+                                     VkGraphicsPipelineLibraryFlagsEXT part, bool* owned)
+{
+  const u32 hash = HashSharedKey(key);
+  VKSharedPipeline* s = SharedFind(key, hash);
+  VkGraphicsPipelineLibraryCreateInfoEXT library_info;
+  VkGraphicsPipelineCreateInfo library_create;
+  VkPipeline library;
+
+  *owned = false;
+  if (s)
+  {
+    library = s->pipeline;
+    retro_atomic_fetch_sub_int(&s->refs, 1);
+    return library;
+  }
+  library_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
+  library_info.pNext = info->pNext;
+  library_info.flags = part;
+  library_create = *info;
+  library_create.pNext = &library_info;
+  library_create.flags |= VK_PIPELINE_CREATE_LIBRARY_BIT_KHR;
+  if (vkCreateGraphicsPipelines(g_vulkan_context->GetDevice(), g_object_cache->GetPipelineCache(),
+                                1, &library_create, nullptr, &library) != VK_SUCCESS)
+  {
+    return VK_NULL_HANDLE;
+  }
+  if (!SharedInsert(key, hash, library))
+    *owned = true;
+  return library;
+}
+
+/* A pipeline linked from the libraries of its four parts, each found or
+ * built with only what that part takes: the vertex input, the vertex and
+ * geometry shaders, the pixel shader, and the colour output. With cull
+ * mode, depth state and blending set per draw, the parts are shared by
+ * most of the pipelines asked for, and linking without link-time
+ * optimisation costs a fraction of building the pipeline. */
+static VkPipeline LinkPipeline(const AbstractPipelineConfig& build, const VKSharedKey* key,
+                               const VkGraphicsPipelineCreateInfo* info)
+{
+  static const VkGraphicsPipelineLibraryFlagsEXT parts[4] = {
+      VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
+      VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT,
+      VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT,
+      VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT,
+  };
+  VkGraphicsPipelineCreateInfo part_info[4];
+  VKSharedKey part_key[4];
+  VkPipeline libraries[4];
+  bool owned[4];
+  VkPipelineLibraryCreateInfoKHR link_info;
+  VkGraphicsPipelineCreateInfo link;
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  u32 i;
+
+  for (i = 0; i < 4; i++)
+  {
+    part_info[i] = *info;
+    part_info[i].stageCount = 0;
+    part_info[i].pStages = nullptr;
+    part_info[i].pVertexInputState = nullptr;
+    part_info[i].pInputAssemblyState = nullptr;
+    part_info[i].pViewportState = nullptr;
+    part_info[i].pRasterizationState = nullptr;
+    part_info[i].pMultisampleState = nullptr;
+    part_info[i].pDepthStencilState = nullptr;
+    part_info[i].pColorBlendState = nullptr;
+    memset(&part_key[i], 0, sizeof(part_key[i]));
+    part_key[i].usage = key->usage | ((i + 1) << SHARED_LIBRARY_SHIFT);
+  }
+  /* vertex input: the vertex layout and the topology */
+  part_info[0].pVertexInputState = info->pVertexInputState;
+  part_info[0].pInputAssemblyState = info->pInputAssemblyState;
+  part_info[0].layout = VK_NULL_HANDLE;
+  part_info[0].renderPass = VK_NULL_HANDLE;
+  part_info[0].pDynamicState = nullptr;
+  part_key[0].vertex_format = key->vertex_format;
+  part_key[0].rasterization = static_cast<u32>(build.rasterization_state.primitive.Value());
+  /* the vertex and geometry shaders, all stages but the last */
+  part_info[1].stageCount = info->stageCount - 1;
+  part_info[1].pStages = info->pStages;
+  part_info[1].pViewportState = info->pViewportState;
+  part_info[1].pRasterizationState = info->pRasterizationState;
+  part_key[1].vertex_shader = key->vertex_shader;
+  part_key[1].geometry_shader = key->geometry_shader;
+  part_key[1].rasterization = key->rasterization;
+  part_key[1].framebuffer = key->framebuffer;
+  /* the pixel shader */
+  part_info[2].stageCount = 1;
+  part_info[2].pStages = info->pStages + info->stageCount - 1;
+  part_info[2].pMultisampleState = info->pMultisampleState;
+  part_info[2].pDepthStencilState = info->pDepthStencilState;
+  part_key[2].pixel_shader = key->pixel_shader;
+  part_key[2].framebuffer = key->framebuffer;
+  /* the colour output */
+  part_info[3].pMultisampleState = info->pMultisampleState;
+  part_info[3].pColorBlendState = info->pColorBlendState;
+  part_info[3].layout = VK_NULL_HANDLE;
+  part_key[3].blending = key->blending;
+  part_key[3].framebuffer = key->framebuffer;
+
+  for (i = 0; i < 4; i++)
+  {
+    libraries[i] = GetPipelineLibrary(&part_key[i], &part_info[i], parts[i], &owned[i]);
+    if (libraries[i] == VK_NULL_HANDLE)
+      break;
+  }
+  if (i == 4)
+  {
+    link_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR;
+    link_info.pNext = nullptr;
+    link_info.libraryCount = 4;
+    link_info.pLibraries = libraries;
+    memset(&link, 0, sizeof(link));
+    link.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    link.pNext = &link_info;
+    link.layout = info->layout;
+    link.basePipelineIndex = -1;
+    if (vkCreateGraphicsPipelines(g_vulkan_context->GetDevice(),
+                                  g_object_cache->GetPipelineCache(), 1, &link, nullptr,
+                                  &pipeline) != VK_SUCCESS)
+    {
+      pipeline = VK_NULL_HANDLE;
+    }
+  }
+  while (i--)
+  {
+    if (owned[i])
+      vkDestroyPipeline(g_vulkan_context->GetDevice(), libraries[i], nullptr);
+  }
+  return pipeline;
 }
 
 VKPipeline::VKPipeline(const AbstractPipelineConfig& config, VkPipeline pipeline,
@@ -626,14 +788,25 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
       -1                     // int32_t                                          basePipelineIndex
   };
 
-  VkPipeline pipeline;
-  VkResult res =
-      vkCreateGraphicsPipelines(g_vulkan_context->GetDevice(), g_object_cache->GetPipelineCache(),
-                                1, &pipeline_info, nullptr, &pipeline);
-  if (res != VK_SUCCESS)
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  /* Ubershader pipelines, built on the spot when a draw needs one, are
+   * linked from libraries where the device can; a link that fails builds
+   * the pipeline whole. */
+  if (config.usage == AbstractPipelineUsage::GXUber && dynamic_bits &&
+      g_vulkan_context->SupportsFastLinking())
   {
-    LOG_VULKAN_ERROR(res, "vkCreateGraphicsPipelines failed: ");
-    return VK_NULL_HANDLE;
+    pipeline = LinkPipeline(build, &key, &pipeline_info);
+  }
+  if (pipeline == VK_NULL_HANDLE)
+  {
+    VkResult res =
+        vkCreateGraphicsPipelines(g_vulkan_context->GetDevice(), g_object_cache->GetPipelineCache(),
+                                  1, &pipeline_info, nullptr, &pipeline);
+    if (res != VK_SUCCESS)
+    {
+      LOG_VULKAN_ERROR(res, "vkCreateGraphicsPipelines failed: ");
+      return VK_NULL_HANDLE;
+    }
   }
 
   return std::make_unique<VKPipeline>(config, pipeline, pipeline_layout, config.usage,
