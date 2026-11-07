@@ -13,7 +13,6 @@
 #include <mz_zip_rw.h>
 
 #include "Common/CommonPaths.h"
-#include "Common/Contains.h"
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
@@ -26,6 +25,16 @@
 
 namespace ResourcePack
 {
+static bool PackProvides(const ResourcePack& pack, const std::string& texture)
+{
+  for (const std::string& provided : pack.GetTextures())
+  {
+    if (provided == texture)
+      return true;
+  }
+  return false;
+}
+
 constexpr char TEXTURE_PATH[] = HIRES_TEXTURES_DIR DIR_SEP;
 
 ResourcePack::ResourcePack(const std::string& path) : m_path(path)
@@ -200,7 +209,7 @@ bool ResourcePack::Install(const std::string& path)
     bool provided_by_other_pack = false;
     for (const auto& pack : GetHigherPriorityPacks(*this))
     {
-      if (Common::Contains(pack->GetTextures(), texture))
+      if (PackProvides(*pack, texture))
       {
         provided_by_other_pack = true;
         break;
@@ -265,7 +274,7 @@ bool ResourcePack::Uninstall(const std::string& path)
     // Check if a higher priority pack already provides a given texture, don't delete it
     for (const auto& pack : GetHigherPriorityPacks(*this))
     {
-      if (::ResourcePack::IsInstalled(*pack) && Common::Contains(pack->GetTextures(), texture))
+      if (::ResourcePack::IsInstalled(*pack) && PackProvides(*pack, texture))
       {
         provided_by_other_pack = true;
         break;
@@ -278,7 +287,7 @@ bool ResourcePack::Uninstall(const std::string& path)
     // Check if a lower priority pack provides a given texture - if so, install it.
     for (auto& pack : lower)
     {
-      if (::ResourcePack::IsInstalled(*pack) && Common::Contains(pack->GetTextures(), texture))
+      if (::ResourcePack::IsInstalled(*pack) && PackProvides(*pack, texture))
       {
         pack->Install(path);
 
@@ -304,7 +313,7 @@ bool ResourcePack::Uninstall(const std::string& path)
 
     while (dir.length() > (path + TEXTURE_PATH).length())
     {
-      const auto is_empty = Common::DoFileSearch(dir).empty();
+      const auto is_empty = Common::DoFileSearchAll(dir).empty();
 
       if (is_empty)
         File::DeleteDir(dir);

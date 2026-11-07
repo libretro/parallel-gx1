@@ -3,7 +3,6 @@
 
 #include "Common/Config/Config.h"
 
-#include <algorithm>
 #include <cstdlib>
 #include <map>
 #include <type_traits>
@@ -11,7 +10,6 @@
 
 #include <retro_atomic.h>
 #include "Common/CallGate.h"
-#include "Common/Projection.h"
 #include "Common/Quiesce.h"
 
 namespace Config
@@ -235,9 +233,11 @@ const std::string& GetSystemName(System system)
 
 std::optional<System> GetSystemFromName(const std::string& name)
 {
-  const auto system = std::ranges::find(system_to_name, name, Common::Projection::Value{});
-  if (system != system_to_name.end())
-    return system->first;
+  for (const auto& entry : system_to_name)
+  {
+    if (entry.second == name)
+      return entry.first;
+  }
 
   return {};
 }

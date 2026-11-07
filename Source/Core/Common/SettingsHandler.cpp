@@ -5,7 +5,6 @@
 
 #include "Common/SettingsHandler.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <ctime>
 #include <string>
@@ -94,9 +93,10 @@ void SettingsWriter::WriteLine(std::string_view str)
   // instead of decoding all the data. To avoid this: If the data we just wrote contains
   // a null byte, add an LF right before the line to prod the values into being different,
   // just like Nintendo does. Due to the chosen key, LF itself never encodes into a null byte.
-  const auto begin = m_buffer.cbegin() + old_position;
-  const auto end = m_buffer.cbegin() + m_position;
-  if (std::find(begin, end, 0) != end)
+  bool has_null = false;
+  for (size_t i = old_position; i < m_position; i++)
+    has_null = has_null || m_buffer[i] == 0;
+  if (has_null)
   {
     m_key = old_key;
     m_position = old_position;

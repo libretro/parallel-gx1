@@ -3,7 +3,6 @@
 
 #include "Common/StringUtil.h"
 
-#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstdarg>
@@ -255,8 +254,11 @@ std::string_view StripQuotes(std::string_view s)
 // Turns "\n\rhello" into "  hello".
 void ReplaceBreaksWithSpaces(std::string& str)
 {
-  std::ranges::replace(str, '\r', ' ');
-  std::ranges::replace(str, '\n', ' ');
+  for (char& c : str)
+  {
+    if (c == '\r' || c == '\n')
+      c = ' ';
+  }
 }
 
 void TruncateToCString(std::string* s)
@@ -416,7 +418,10 @@ void StringPopBackIf(std::string* s, char c)
 
 size_t StringUTF8CodePointCount(std::string_view str)
 {
-  return str.size() - std::ranges::count_if(str, [](char c) -> bool { return (c & 0xC0) == 0x80; });
+  size_t continuation_bytes = 0;
+  for (const char c : str)
+    continuation_bytes += (c & 0xC0) == 0x80;
+  return str.size() - continuation_bytes;
 }
 
 constexpr char32_t UNICODE_REPLACEMENT_CHARACTER = 0xfffd;
@@ -437,8 +442,8 @@ requires(sizeof(CharType) == 1)
 class UTF8Decoder
 {
 public:
-  constexpr explicit UTF8Decoder(std::span<const CharType> chars)
-      : m_ptr{chars.data()}, m_end_ptr{m_ptr + chars.size()}
+  constexpr UTF8Decoder(const CharType* chars, size_t count)
+      : m_ptr{chars}, m_end_ptr{chars + count}
   {
   }
 
@@ -564,8 +569,8 @@ requires(sizeof(CharType) == 2)
 class UTF16Decoder
 {
 public:
-  constexpr explicit UTF16Decoder(std::span<const CharType> chars)
-      : m_ptr{chars.data()}, m_end_ptr{m_ptr + chars.size()}
+  constexpr UTF16Decoder(const CharType* chars, size_t count)
+      : m_ptr{chars}, m_end_ptr{chars + count}
   {
   }
 
@@ -647,7 +652,7 @@ ReEncodeString(std::basic_string_view<InputCharType> input)
   // Handle the unlikely case of integer overflow in the buffer size.
   const auto input_size = buffer_size / encoder.GetMaxUnitsPerCodePoint();
 
-  Decoder decoder{std::span{input}.first(input_size)};
+  Decoder decoder{input.data(), input_size};
 
   std::basic_string<ResultCharType> result;
   result.resize_and_overwrite(buffer_size, [&](ResultCharType* buf, std::size_t) {
@@ -732,9 +737,12 @@ std::string CP1252ToUTF8(std::string_view input)
 
 std::string UTF16BEToUTF8(const char16_t* str, size_t max_size)
 {
-  const char16_t* str_end = std::find(str, str + max_size, '\0');
-  std::wstring result(static_cast<size_t>(str_end - str), '\0');
-  std::transform(str, str_end, result.begin(), static_cast<u16 (&)(u16)>(Common::swap16));
+  size_t length = 0;
+  while (length < max_size && str[length])
+    length++;
+  std::wstring result(length, '\0');
+  for (size_t i = 0; i < length; i++)
+    result[i] = static_cast<wchar_t>(Common::swap16(static_cast<u16>(str[i])));
   return WStringToUTF8(result);
 }
 
@@ -830,8 +838,10 @@ std::string WStringToUTF8(std::wstring_view input)
 
 std::string UTF16BEToUTF8(const char16_t* str, size_t max_size)
 {
-  const char16_t* str_end = std::find(str, str + max_size, '\0');
-  return CodeToUTF8("UTF-16BE", std::u16string_view(str, static_cast<size_t>(str_end - str)));
+  size_t length = 0;
+  while (length < max_size && str[length])
+    length++;
+  return CodeToUTF8("UTF-16BE", std::u16string_view(str, length));
 }
 
 #endif
@@ -908,18 +918,26 @@ std::string GetEscapedHtml(std::string html)
 
 void ToLower(std::string* str)
 {
-  std::ranges::transform(*str, str->begin(), static_cast<char (&)(char)>(Common::ToLower));
+  for (char& c : *str)
+    c = Common::ToLower(c);
 }
 
 void ToUpper(std::string* str)
 {
-  std::ranges::transform(*str, str->begin(), static_cast<char (&)(char)>(Common::ToUpper));
+  for (char& c : *str)
+    c = Common::ToUpper(c);
 }
 
 bool CaseInsensitiveEquals(std::string_view a, std::string_view b)
 {
-  return std::ranges::equal(
-      a, b, [](char ca, char cb) { return Common::ToLower(ca) == Common::ToLower(cb); });
+  if (a.size() != b.size())
+    return false;
+  for (size_t i = 0; i < a.size(); i++)
+  {
+    if (Common::ToLower(a[i]) != Common::ToLower(b[i]))
+      return false;
+  }
+  return true;
 }
 
 bool CaseInsensitiveContains(std::string_view haystack, std::string_view needle)
@@ -929,23 +947,34 @@ bool CaseInsensitiveContains(std::string_view haystack, std::string_view needle)
 
   for (size_t i = 0; i + needle.size() <= haystack.size(); ++i)
   {
-    if (std::ranges::equal(needle, haystack.substr(i, needle.size()),
-                           [](char a, char b) { return Common::ToLower(a) == Common::ToLower(b); }))
-    {
+    if (CaseInsensitiveEquals(needle, haystack.substr(i, needle.size())))
       return true;
-    }
   }
   return false;
 }
 
 bool CaseInsensitiveLess::operator()(std::string_view a, std::string_view b) const
 {
-  return std::ranges::lexicographical_compare(
-      a, b, [](char ca, char cb) { return Common::ToLower(ca) < Common::ToLower(cb); });
+  const size_t count = a.size() < b.size() ? a.size() : b.size();
+  for (size_t i = 0; i < count; i++)
+  {
+    const char ca = Common::ToLower(a[i]);
+    const char cb = Common::ToLower(b[i]);
+    if (ca != cb)
+      return ca < cb;
+  }
+  return a.size() < b.size();
 }
 
-std::string BytesToHexString(std::span<const u8> bytes)
+std::string BytesToHexString(const u8* bytes, size_t size)
 {
-  return fmt::format("{:02x}", fmt::join(bytes, ""));
+  static const char digits[] = "0123456789abcdef";
+  std::string result(size * 2, '\0');
+  for (size_t i = 0; i < size; i++)
+  {
+    result[i * 2] = digits[bytes[i] >> 4];
+    result[i * 2 + 1] = digits[bytes[i] & 0xF];
+  }
+  return result;
 }
 }  // namespace Common

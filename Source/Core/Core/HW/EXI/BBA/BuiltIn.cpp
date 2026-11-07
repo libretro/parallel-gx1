@@ -210,7 +210,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleARP(const Common::ARPPacket& packe
 void CEXIETHERNET::BuiltInBBAInterface::HandleDHCP(const Common::UDPPacket& packet)
 {
   const auto& [hwdata, ip, udp_header, ip_options, data] = packet;
-  const Common::DHCPPacket dhcp(packet.data);
+  const Common::DHCPPacket dhcp(packet.data.data(), packet.data.size());
   const Common::DHCPBody& request = dhcp.body;
   sockaddr_in from;
   sockaddr_in to;
@@ -235,16 +235,16 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleDHCP(const Common::UDPPacket& pack
   (dhcp.options.size() == 0 || dhcp.options[0].size() < 2 || dhcp.options[0].at(2) == 1) ?
       reply.AddOption(53, {2}) :  // default, send a suggestion
       reply.AddOption(53, {5});
-  reply.AddOption(54, ip_part);                                    // dhcp server ip
-  reply.AddOption(51, timeout_24h);                                // lease time 24h
-  reply.AddOption(58, timeout_24h);                                // renewal time
-  reply.AddOption(59, timeout_24h);                                // rebind time
-  reply.AddOption(1, {255, 255, 255, 0});                          // submask
+  reply.AddOption(54, ip_part.data(), ip_part.size());  // dhcp server ip
+  reply.AddOption(51, timeout_24h.data(), timeout_24h.size());  // lease time 24h
+  reply.AddOption(58, timeout_24h.data(), timeout_24h.size());  // renewal time
+  reply.AddOption(59, timeout_24h.data(), timeout_24h.size());  // rebind time
+  reply.AddOption(1, {255, 255, 255, 0});  // submask
   reply.AddOption(28, {ip_part[0], ip_part[1], ip_part[2], 255});  // broadcast ip
-  reply.AddOption(6, ip_part);                                     // dns server
-  reply.AddOption(15, {0x6c, 0x61, 0x6e});                         // domain name "lan"
-  reply.AddOption(3, ip_part);                                     // router ip
-  reply.AddOption(255, {});                                        // end
+  reply.AddOption(6, ip_part.data(), ip_part.size());  // dns server
+  reply.AddOption(15, {0x6c, 0x61, 0x6e});  // domain name "lan"
+  reply.AddOption(3, ip_part.data(), ip_part.size());  // router ip
+  reply.AddOption(255, {});  // end
 
   const Common::UDPPacket response(m_current_mac, m_router_mac, from, to, reply.Build());
 

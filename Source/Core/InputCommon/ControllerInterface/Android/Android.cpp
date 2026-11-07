@@ -20,7 +20,6 @@
 #include <retro_atomic.h>
 
 #include "Common/Assert.h"
-#include "Common/Contains.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 
@@ -1203,7 +1202,10 @@ Java_org_dolphinemu_dolphinemu_features_input_model_ControllerInterface_notifySe
 
   for (ciface::Core::Device::Input* input : device->Inputs())
   {
-    if (Common::Contains(axis_names, input->GetName()))
+    bool is_axis = false;
+    for (const auto& axis_name : axis_names)
+      is_axis = is_axis || axis_name == input->GetName();
+    if (is_axis)
     {
       auto casted_input = static_cast<ciface::Android::AndroidSensorAxis*>(input);
       casted_input->NotifyIsSuspended(static_cast<bool>(suspended));

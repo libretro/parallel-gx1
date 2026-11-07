@@ -6,7 +6,6 @@
 #include <array>
 #include <limits>
 #include <memory>
-#include <span>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -24,7 +23,6 @@ class Context
 public:
   virtual ~Context() = default;
   virtual void Update(const u8* msg, size_t len) = 0;
-  void Update(std::span<const u8> msg) { return Update(msg.data(), msg.size()); }
   void Update(std::string_view msg)
   {
     return Update(reinterpret_cast<const u8*>(msg.data()), msg.size());

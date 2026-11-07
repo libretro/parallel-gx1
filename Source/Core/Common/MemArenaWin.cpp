@@ -3,7 +3,6 @@
 
 #include "Common/MemArena.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <string>
@@ -222,7 +221,19 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
   }
 
   // find closest region that is <= the given address by using upper bound and decrementing
-  auto it = std::ranges::upper_bound(regions, address, {}, &WindowsMemoryRegion::m_start);
+  auto it = regions.begin();
+  {
+    size_t lo = 0, hi = regions.size();
+    while (lo < hi)
+    {
+      const size_t mid = lo + (hi - lo) / 2;
+      if (address < regions[mid].m_start)
+        hi = mid;
+      else
+        lo = mid + 1;
+    }
+    it += lo;
+  }
   if (it == regions.begin())
   {
     // this should never happen, implies that the given address is before the start of the
@@ -391,7 +402,19 @@ bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
   }
 
   // there should be a mapping that matches the request exactly, find it
-  auto it = std::ranges::lower_bound(regions, address, {}, &WindowsMemoryRegion::m_start);
+  auto it = regions.begin();
+  {
+    size_t lo = 0, hi = regions.size();
+    while (lo < hi)
+    {
+      const size_t mid = lo + (hi - lo) / 2;
+      if (regions[mid].m_start < address)
+        lo = mid + 1;
+      else
+        hi = mid;
+    }
+    it += lo;
+  }
   if (it == regions.end() || it->m_start != address || it->m_size != size)
   {
     // didn't find it, we were given bogus input
@@ -477,7 +500,7 @@ size_t MemArena::GetPageSize() const
   {
     // In this case, we can only map pages that are 64K aligned.
     // See https://devblogs.microsoft.com/oldnewthing/20031008-00/?p=42223
-    return std::max<size_t>(si.dwPageSize, 64 * 1024);
+    return si.dwPageSize > 64 * 1024 ? size_t(si.dwPageSize) : size_t(64 * 1024);
   }
 
   return si.dwPageSize;

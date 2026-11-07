@@ -33,7 +33,6 @@
 
 #include "Common/SDCardUtil.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -184,7 +183,7 @@ static bool write_empty(File::IOFile& file, std::size_t count)
   count *= BYTES_PER_SECTOR;
   while (count > 0)
   {
-    const std::size_t len = std::min(sizeof(empty), count);
+    const std::size_t len = count < sizeof(empty) ? count : sizeof(empty);
 
     if (!file.WriteBytes(empty, len))
       return false;

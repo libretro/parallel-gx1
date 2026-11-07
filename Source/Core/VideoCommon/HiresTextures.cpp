@@ -92,8 +92,10 @@ void HiresTexture::Update()
     // Watch this directory for any texture reloads
     s_file_library->Watch(texture_directory);
 
+    const std::string_view texture_directory_view{texture_directory};
     const auto texture_paths =
-        Common::DoFileSearch(texture_directory, extensions, /*recursive*/ true);
+        Common::DoFileSearch(&texture_directory_view, 1, extensions.data(), extensions.size(),
+                             /*recursive*/ true);
 
     bool failed_insert = false;
     for (auto& path : texture_paths)

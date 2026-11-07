@@ -3,7 +3,6 @@
 
 #include "Common/IniFile.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <map>
 #include <string>
@@ -86,8 +85,14 @@ bool IniFile::Section::Delete(std::string_view key)
     return false;
 
   values.erase(it);
-  keys_order.erase(std::ranges::find_if(
-      keys_order, [&](std::string_view v) { return CaseInsensitiveEquals(key, v); }));
+  for (auto order_it = keys_order.begin(); order_it != keys_order.end(); ++order_it)
+  {
+    if (CaseInsensitiveEquals(key, *order_it))
+    {
+      keys_order.erase(order_it);
+      break;
+    }
+  }
   return true;
 }
 

@@ -3,7 +3,6 @@
 
 #include "Common/NandPaths.h"
 
-#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -11,7 +10,6 @@
 #include <fmt/ranges.h>
 
 #include "Common/CommonTypes.h"
-#include "Common/Contains.h"
 #include "Common/FileUtil.h"
 #include "Common/StringUtil.h"
 
@@ -119,13 +117,20 @@ bool IsTitlePath(const std::string& path, std::optional<FromWhichRoot> from, u64
 static bool IsIllegalCharacter(char c)
 {
   static constexpr char illegal_chars[] = {'\"', '*', '/', ':', '<', '>', '?', '\\', '|', '\x7f'};
-  return static_cast<unsigned char>(c) <= 0x1F || Common::Contains(illegal_chars, c);
+  if (static_cast<unsigned char>(c) <= 0x1F)
+    return true;
+  for (const char illegal : illegal_chars)
+  {
+    if (c == illegal)
+      return true;
+  }
+  return false;
 }
 
 std::string EscapeFileName(const std::string& filename)
 {
   // Prevent paths from containing special names like ., .., ..., ...., and so on
-  if (std::ranges::all_of(filename, [](char c) { return c == '.'; }))
+  if (filename.find_first_not_of('.') == std::string::npos)
     return ReplaceAll(filename, ".", "__2e__");
 
   // Escape all double underscores since we will use double underscores for our escape sequences
@@ -182,7 +187,13 @@ std::string UnescapeFileName(const std::string& filename)
 
 bool IsFileNameSafe(const std::string_view filename)
 {
-  return !filename.empty() && !std::ranges::all_of(filename, [](char c) { return c == '.'; }) &&
-         std::ranges::none_of(filename, IsIllegalCharacter);
+  if (filename.empty() || filename.find_first_not_of('.') == std::string_view::npos)
+    return false;
+  for (const char c : filename)
+  {
+    if (IsIllegalCharacter(c))
+      return false;
+  }
+  return true;
 }
 }  // namespace Common

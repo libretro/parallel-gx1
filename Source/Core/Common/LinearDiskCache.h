@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <string>
@@ -226,8 +225,8 @@ private:
     {
       // Null-terminator is intentionally not copied.
       std::memcpy(&id, "DCAC", sizeof(u32));
-      std::memcpy(ver, Common::GetScmRevGitStr().c_str(),
-                  std::min(Common::GetScmRevGitStr().size(), sizeof(ver)));
+      const std::string& rev = Common::GetScmRevGitStr();
+      std::memcpy(ver, rev.c_str(), rev.size() < sizeof(ver) ? rev.size() : sizeof(ver));
     }
 
     u32 id = 0;

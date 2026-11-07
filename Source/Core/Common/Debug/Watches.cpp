@@ -3,9 +3,6 @@
 
 #include "Common/Debug/Watches.h"
 
-#include <algorithm>
-#include <locale>
-#include <sstream>
 
 #include <fmt/format.h>
 
@@ -43,7 +40,16 @@ const std::vector<Watch>& Watches::GetWatches() const
 
 void Watches::UnsetWatch(u32 address)
 {
-  std::erase_if(m_watches, [address](const auto& watch) { return watch.address == address; });
+  size_t kept = 0;
+  for (size_t i = 0; i < m_watches.size(); i++)
+  {
+    if (m_watches[i].address == address)
+      continue;
+    if (i != kept)
+      m_watches[kept] = std::move(m_watches[i]);
+    kept++;
+  }
+  m_watches.erase(m_watches.begin() + kept, m_watches.end());
 }
 
 void Watches::UpdateWatch(std::size_t index, u32 address, std::string name)
@@ -79,38 +85,17 @@ void Watches::DisableWatch(std::size_t index)
 
 bool Watches::HasEnabledWatch(u32 address) const
 {
-  return std::ranges::any_of(m_watches, [address](const auto& watch) {
-    return watch.address == address && watch.is_enabled == Watch::State::Enabled;
-  });
+  for (const auto& watch : m_watches)
+  {
+    if (watch.address == address && watch.is_enabled == Watch::State::Enabled)
+      return true;
+  }
+  return false;
 }
 
 void Watches::RemoveWatch(std::size_t index)
 {
   m_watches.erase(m_watches.begin() + index);
-}
-
-void Watches::LoadFromStrings(std::span<const std::string> watches)
-{
-  for (const std::string& watch : watches)
-  {
-    std::istringstream ss(watch);
-    ss.imbue(std::locale::classic());
-    u32 address;
-    std::string name;
-    ss >> std::hex >> address;
-    ss >> std::ws;
-    std::getline(ss, name);
-    SetWatch(address, name);
-  }
-}
-
-std::vector<std::string> Watches::SaveToStrings() const
-{
-  std::vector<std::string> watches;
-  watches.reserve(m_watches.size());
-  for (const auto& watch : m_watches)
-    watches.emplace_back(fmt::format("{:x} {}", watch.address, watch.name));
-  return watches;
 }
 
 void Watches::Clear()

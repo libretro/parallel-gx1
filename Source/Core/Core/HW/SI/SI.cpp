@@ -167,7 +167,8 @@ void SerialInterfaceManager::RunSIBuffer(u64 user_data, s64 cycles_late)
       WARN_LOG_FMT(
           SERIALINTERFACE,
           "RunSIBuffer: expected_response_length({}) != actual_response_length({}): request: {}",
-          expected_response_length, actual_response_length, Common::BytesToHexString(request_copy));
+          expected_response_length, actual_response_length,
+          Common::BytesToHexString(request_copy.data(), request_copy.size()));
 #else
       WARN_LOG_FMT(SERIALINTERFACE,
                    "RunSIBuffer: expected_response_length({}) != actual_response_length({})",

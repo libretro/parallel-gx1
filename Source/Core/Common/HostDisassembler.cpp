@@ -3,7 +3,8 @@
 
 #include "Common/HostDisassembler.h"
 
-#include <span>
+#include "Common/StringUtil.h"
+
 
 #include <fmt/format.h>
 #include <fmt/ostream.h>
@@ -74,16 +75,16 @@ std::size_t HostDisassemblerLLVM::Disassemble(const u8* begin, const u8* end, st
       {
         // If we are on an architecture that has a fixed instruction
         // size, we can continue onward past this bad instruction.
-        fmt::println(stream, "{}\tInvalid inst: {:02x}", fmt::ptr(begin),
-                     fmt::join(std::span{begin, m_instruction_size}, ""));
+        fmt::println(stream, "{}\tInvalid inst: {}", fmt::ptr(begin),
+                     Common::BytesToHexString(begin, m_instruction_size));
         begin += m_instruction_size;
       }
       else
       {
         // We can't continue if we are on an architecture that has flexible
         // instruction sizes. Dump the rest of the block instead.
-        fmt::println(stream, "{}\tInvalid inst: {:02x}", fmt::ptr(begin),
-                     fmt::join(std::span{begin, end}, ""));
+        fmt::println(stream, "{}\tInvalid inst: {}", fmt::ptr(begin),
+                     Common::BytesToHexString(begin, size_t(end - begin)));
         break;
       }
     }
@@ -153,6 +154,7 @@ std::unique_ptr<HostDisassembler> HostDisassembler::Factory(Platform arch)
 
 std::size_t HostDisassembler::Disassemble(const u8* begin, const u8* end, std::ostream& stream)
 {
-  fmt::println(stream, "{}\t{:02x}", fmt::ptr(begin), fmt::join(std::span{begin, end}, ""));
+  fmt::println(stream, "{}\t{}", fmt::ptr(begin),
+               Common::BytesToHexString(begin, size_t(end - begin)));
   return 0;
 }

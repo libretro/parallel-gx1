@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <concepts>
@@ -101,23 +100,28 @@ struct Rectangle
   // this Clamp.
   void ClampLL(T x1, T y1, T x2, T y2)
   {
-    left = std::clamp(left, x1, x2);
-    right = std::clamp(right, x1, x2);
-    top = std::clamp(top, y2, y1);
-    bottom = std::clamp(bottom, y2, y1);
+    left = ClampValue(left, x1, x2);
+    right = ClampValue(right, x1, x2);
+    top = ClampValue(top, y2, y1);
+    bottom = ClampValue(bottom, y2, y1);
   }
 
   // If the rectangle is in a coordinate system with an upper-left origin,
   // use this Clamp.
   void ClampUL(T x1, T y1, T x2, T y2)
   {
-    left = std::clamp(left, x1, x2);
-    right = std::clamp(right, x1, x2);
-    top = std::clamp(top, y1, y2);
-    bottom = std::clamp(bottom, y1, y2);
+    left = ClampValue(left, x1, x2);
+    right = ClampValue(right, x1, x2);
+    top = ClampValue(top, y1, y2);
+    bottom = ClampValue(bottom, y1, y2);
   }
 
 private:
+  static constexpr T ClampValue(T value, T low, T high)
+  {
+    return value < low ? low : (high < value ? high : value);
+  }
+
   constexpr T GetDistance(T a, T b) const
   {
     if constexpr (std::is_unsigned<T>())

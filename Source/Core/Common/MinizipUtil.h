@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <algorithm>
 
 #include <mz.h>
 #include <mz_zip.h>
@@ -29,7 +28,8 @@ inline bool ReadFileFromZip(void* zip_reader, u8* destination, u64 len)
   {
     // NOTE: multiples of 4G can't cause read_len == 0 && bytes_to_go > 0, as MAX_BUFFER_SIZE is
     // small.
-    const u32 read_len = static_cast<u32>(std::min(bytes_to_go, MAX_BUFFER_SIZE));
+    const u32 read_len =
+        static_cast<u32>(bytes_to_go < MAX_BUFFER_SIZE ? bytes_to_go : u64(MAX_BUFFER_SIZE));
     const int rv = mz_zip_reader_entry_read(zip_reader, destination, read_len);
     if (rv < 0)
       return false;

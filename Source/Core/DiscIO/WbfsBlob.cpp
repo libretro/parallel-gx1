@@ -38,7 +38,7 @@ WbfsFileReader::WbfsFileReader(File::DirectIOFile file, const std::string& path)
   m_wlba_table.resize(m_blocks_per_disc);
   m_files[0].file.Seek(m_hd_sector_size + WII_DISC_HEADER_SIZE /*+ i * m_disc_info_size*/,
                        File::SeekOrigin::Begin);
-  m_files[0].file.Read(Common::AsWritableU8Span(m_wlba_table));
+  m_files[0].file.Read(reinterpret_cast<u8*>(m_wlba_table.data()), m_wlba_table.size() * sizeof(m_wlba_table[0]));
   for (size_t i = 0; i < m_blocks_per_disc; i++)
     m_wlba_table[i] = Common::swap16(m_wlba_table[i]);
 }
@@ -93,7 +93,7 @@ bool WbfsFileReader::ReadHeader()
 {
   // Read hd size info
   m_files[0].file.Seek(0, File::SeekOrigin::Begin);
-  m_files[0].file.Read(Common::AsWritableU8Span(m_header));
+  m_files[0].file.Read(reinterpret_cast<u8*>(&m_header), sizeof(m_header));
   if (m_header.magic != WBFS_MAGIC)
     return false;
 

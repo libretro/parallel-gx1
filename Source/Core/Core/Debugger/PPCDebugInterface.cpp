@@ -13,7 +13,6 @@
 #include <fmt/format.h>
 
 #include "Common/Align.h"
-#include "Common/Contains.h"
 #include "Common/GekkoDisassembler.h"
 #include "Common/StringUtil.h"
 
@@ -158,16 +157,6 @@ void PPCDebugInterface::RemoveWatch(std::size_t index)
   return m_watches.RemoveWatch(index);
 }
 
-void PPCDebugInterface::LoadWatchesFromStrings(std::span<const std::string> watches)
-{
-  m_watches.LoadFromStrings(watches);
-}
-
-std::vector<std::string> PPCDebugInterface::SaveWatchesToStrings() const
-{
-  return m_watches.SaveToStrings();
-}
-
 void PPCDebugInterface::ClearWatches()
 {
   m_watches.Clear();
@@ -254,7 +243,10 @@ Common::Debug::Threads PPCDebugInterface::GetThreads(const Core::CPUThreadGuard&
   const auto insert_threads = [&guard, &threads, &visited_addrs](u32 addr, auto get_next_addr) {
     while (addr != 0 && PowerPC::MMU::HostIsRAMAddress(guard, addr))
     {
-      if (Common::Contains(visited_addrs, addr))
+      bool visited = false;
+      for (const u32 visited_addr : visited_addrs)
+        visited = visited || visited_addr == addr;
+      if (visited)
         break;
       visited_addrs.push_back(addr);
       auto thread = std::make_unique<Core::Debug::OSThreadView>(guard, addr);

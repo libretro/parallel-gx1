@@ -3,7 +3,6 @@
 
 #include "Common/Debug/MemoryPatches.h"
 
-#include <algorithm>
 #include <utility>
 
 namespace Common::Debug
@@ -62,12 +61,13 @@ const std::vector<MemoryPatch>& MemoryPatches::GetPatches() const
 
 void MemoryPatches::UnsetPatch(const Core::CPUThreadGuard& guard, u32 address)
 {
-  const auto it = std::ranges::find(m_patches, address, &MemoryPatch::address);
+  std::size_t index = 0;
+  while (index < m_patches.size() && m_patches[index].address != address)
+    index++;
 
-  if (it == m_patches.end())
+  if (index == m_patches.size())
     return;
 
-  const std::size_t index = std::distance(m_patches.begin(), it);
   RemovePatch(guard, index);
 }
 
@@ -89,9 +89,12 @@ void MemoryPatches::DisablePatch(const Core::CPUThreadGuard& guard, std::size_t 
 
 bool MemoryPatches::HasEnabledPatch(u32 address) const
 {
-  return std::ranges::any_of(m_patches, [address](const MemoryPatch& patch) {
-    return patch.address == address && patch.is_enabled == MemoryPatch::State::Enabled;
-  });
+  for (const MemoryPatch& patch : m_patches)
+  {
+    if (patch.address == address && patch.is_enabled == MemoryPatch::State::Enabled)
+      return true;
+  }
+  return false;
 }
 
 void MemoryPatches::RemovePatch(const Core::CPUThreadGuard& guard, std::size_t index)

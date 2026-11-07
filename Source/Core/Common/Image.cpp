@@ -27,14 +27,14 @@ static auto make_spng_ctx(int flags)
   return std::unique_ptr<spng_ctx, decltype(&spng_free)>(spng_ctx_new(flags), spng_free);
 }
 
-bool LoadPNG(std::span<const u8> input, Common::UniqueBuffer<u8>* data_out, u32* width_out,
-             u32* height_out)
+bool LoadPNG(const u8* input, size_t input_size, Common::UniqueBuffer<u8>* data_out,
+             u32* width_out, u32* height_out)
 {
   auto ctx = make_spng_ctx(0);
   if (!ctx)
     return false;
 
-  if (spng_set_png_buffer(ctx.get(), input.data(), input.size()))
+  if (spng_set_png_buffer(ctx.get(), input, input_size))
     return false;
 
   spng_ihdr ihdr{};

@@ -537,7 +537,7 @@ void MagneticCardReader::ReadCardFile()
     auto& track_data = m_card_data[track_num];
     track_data.emplace();
 
-    if (!file.Read(*track_data))
+    if (!file.Read(track_data->data(), track_data->size()))
     {
       ERROR_LOG_FMT(SERIALINTERFACE_CARD, "File read failed.");
       track_data.reset();
@@ -545,7 +545,7 @@ void MagneticCardReader::ReadCardFile()
     }
 
     DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "ReadCardFile: track:{} data:{}", track_num,
-                  HexDump(*track_data));
+                  HexDump(track_data->data(), track_data->size()));
   }
 }
 
@@ -572,12 +572,12 @@ void MagneticCardReader::WriteCardFile()
     }
 
     DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "WriteCardFile: track:{} data:{}", track_num,
-                  HexDump(*track_data));
+                  HexDump(track_data->data(), track_data->size()));
 
     // FYI: Our simple file format assumes contiguously filled tracks.
     // I don't think games ever just skip the 2nd track,
     //  but we better write out every used tracks at the correct offset in case they do.
-    if (!file.OffsetWrite(track_num * TRACK_SIZE, *track_data))
+    if (!file.OffsetWrite(track_num * TRACK_SIZE, track_data->data(), track_data->size()))
     {
       ERROR_LOG_FMT(SERIALINTERFACE_CARD, "File write failed.");
     }
@@ -663,7 +663,7 @@ void MagneticCardReader::Update()
 
 bool MagneticCardReader::ReceivePacket(std::span<const u8> packet)
 {
-  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: {}", HexDump(packet));
+  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: {}", HexDump(packet.data(), packet.size()));
 
   if (packet.size() < 6)
   {

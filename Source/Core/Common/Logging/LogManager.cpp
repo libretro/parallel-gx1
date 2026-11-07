@@ -3,7 +3,6 @@
 
 #include "Common/Logging/LogManager.h"
 
-#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <memory>
@@ -280,8 +279,10 @@ void LogManager::SetConfigLogLevel(const LogLevel level)
 
 void LogManager::SetEffectiveLogLevel()
 {
-  const LogLevel clamped_level =
-      std::clamp(Config::Get(LOGGER_VERBOSITY), LogLevel::LNOTICE, MAX_EFFECTIVE_LOGLEVEL);
+  const LogLevel level = Config::Get(LOGGER_VERBOSITY);
+  const LogLevel clamped_level = level < LogLevel::LNOTICE         ? LogLevel::LNOTICE :
+                                 level > MAX_EFFECTIVE_LOGLEVEL ? MAX_EFFECTIVE_LOGLEVEL :
+                                                                  level;
   retro_atomic_store_relaxed_int(&m_effective_level, static_cast<int>(clamped_level));
 }
 

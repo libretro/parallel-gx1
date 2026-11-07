@@ -6,7 +6,6 @@
 #include <array>
 #include <initializer_list>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -185,11 +184,11 @@ static_assert(sizeof(DHCPBody) == DHCPBody::SIZE);
 struct DHCPPacket
 {
   DHCPPacket();
-  DHCPPacket(std::span<const u8> data);
-  void AddOption(u8 fnc, std::span<const u8> params);
+  DHCPPacket(const u8* data, size_t size);
+  void AddOption(u8 fnc, const u8* params, size_t size);
   void AddOption(u8 fnc, std::initializer_list<u8> params)
   {
-    AddOption(fnc, {params.begin(), params.end()});
+    AddOption(fnc, params.begin(), params.size());
   }
   std::vector<u8> Build() const;
 

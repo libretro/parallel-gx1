@@ -3,7 +3,6 @@
 
 #include "Common/Arm64Emitter.h"
 
-#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstring>

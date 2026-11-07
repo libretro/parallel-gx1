@@ -6,7 +6,6 @@
 
 #include "Common/CWDemangler.h"
 
-#include <algorithm>
 #include <cctype>
 #include <map>
 
@@ -32,7 +31,12 @@ struct ParseDigitsResult
 
 inline static bool IsAscii(std::string_view s)
 {
-  return std::ranges::none_of(s, [](u8 c) { return c > 127; });
+  for (const char c : s)
+  {
+    if (static_cast<u8>(c) > 127)
+      return false;
+  }
+  return true;
 }
 
 static const std::map<std::string_view, std::string_view> operators = {

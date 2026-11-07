@@ -617,9 +617,15 @@ IPRedirections GetIPRedirections()
   IPRedirections result;
 
   const auto ip_redirections_str = Config::Get(Config::MAIN_TRIFORCE_IP_REDIRECTIONS);
-  for (auto&& ip_pair : ip_redirections_str | std::views::split(','))
+  const std::string_view redirections{ip_redirections_str};
+  size_t start = 0;
+  while (start <= redirections.size())
   {
-    const auto ip_pair_str = std::string_view{ip_pair};
+    size_t end = redirections.find(',', start);
+    if (end == std::string_view::npos)
+      end = redirections.size();
+    const std::string_view ip_pair_str = redirections.substr(start, end - start);
+    start = end + 1;
     const auto parts = ParseIPRedirection(ip_pair_str);
     if (parts.has_value())
     {

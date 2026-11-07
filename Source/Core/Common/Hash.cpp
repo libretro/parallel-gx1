@@ -3,7 +3,6 @@
 
 #include "Common/Hash.h"
 
-#include <algorithm>
 #include <bit>
 #include <cstring>
 
@@ -100,7 +99,7 @@ static u64 GetMurmurHash3(const u8* src, u32 len, u32 samples)
   const int nblocks = len / 16;
   u32 Step = (len / 8);
   if (samples == 0)
-    samples = std::max(Step, 1u);
+    samples = Step ? Step : 1u;
   Step = Step / samples;
   if (Step < 1)
     Step = 1;
@@ -256,7 +255,7 @@ static u64 GetMurmurHash3(const u8* src, u32 len, u32 samples)
   const int nblocks = len / 8;
   u32 Step = (len / 4);
   if (samples == 0)
-    samples = std::max(Step, 1u);
+    samples = Step ? Step : 1u;
   Step = Step / samples;
   if (Step < 1)
     Step = 1;
@@ -339,7 +338,7 @@ static u64 GetHash64_SSE42_CRC32(const u8* src, u32 len, u32 samples)
   const u64* data = (const u64*)src;
   const u64* end = data + Step;
   if (samples == 0)
-    samples = std::max(Step, 1u);
+    samples = Step ? Step : 1u;
   Step = Step / samples;
   if (Step < 1)
     Step = 1;
@@ -379,7 +378,7 @@ static u64 GetHash64_ARMv8_CRC32(const u8* src, u32 len, u32 samples)
   const u64* data = (const u64*)src;
   const u64* end = data + Step;
   if (samples == 0)
-    samples = std::max(Step, 1u);
+    samples = Step ? Step : 1u;
   Step = Step / samples;
   if (Step < 1)
     Step = 1;

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <span>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -76,15 +75,7 @@ public:
 
   // These explicit offset versions entirely ignore the current file position.
   bool OffsetRead(u64 offset, u8* out_ptr, u64 size);
-  bool OffsetRead(u64 offset, std::span<u8> out_data)
-  {
-    return OffsetRead(offset, out_data.data(), out_data.size());
-  }
   bool OffsetWrite(u64 offset, const u8* in_ptr, u64 size);
-  bool OffsetWrite(auto offset, std::span<const u8> in_data)
-  {
-    return OffsetWrite(offset, in_data.data(), in_data.size());
-  }
 
   // size octets at offset, lent from the mapping: nullptr when the file is not
   // mapped or the range runs past its end. Valid until the file is closed.
@@ -106,7 +97,6 @@ public:
     m_current_offset += size;
     return true;
   }
-  bool Read(std::span<u8> out_data) { return Read(out_data.data(), out_data.size()); }
 
   bool Write(const u8* in_ptr, u64 size)
   {
@@ -115,7 +105,6 @@ public:
     m_current_offset += size;
     return true;
   }
-  bool Write(std::span<const u8> in_data) { return Write(in_data.data(), in_data.size()); }
 
   // Returns 0 on error.
   u64 GetSize() const;

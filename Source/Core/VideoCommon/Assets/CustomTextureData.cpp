@@ -581,7 +581,7 @@ bool LoadPNGTexture(CustomTextureData::ArraySlice::Level* level, std::span<const
   if (!level) [[unlikely]]
     return false;
 
-  if (!Common::LoadPNG(buffer, &level->data, &level->width, &level->height))
+  if (!Common::LoadPNG(buffer.data(), buffer.size(), &level->data, &level->width, &level->height))
     return false;
 
   if (level->data.empty())

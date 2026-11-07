@@ -3,7 +3,6 @@
 
 #include "Common/Network.h"
 
-#include <algorithm>
 #include <bit>
 #include <string_view>
 #include <vector>
@@ -101,9 +100,12 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
 {
   // TODO: This could be optimized and improved a lot.
 
-  auto read_pos = std::ranges::find_first_of(subject, std::string_view{"-/:"});
+  size_t read_index = subject.find_first_of("-/:");
+  if (read_index == std::string_view::npos)
+    read_index = subject.size();
+  auto read_pos = subject.begin() + read_index;
 
-  const auto first_ip_octets = SplitStringIntoArray<4>({subject.begin(), read_pos}, '.');
+  const auto first_ip_octets = SplitStringIntoArray<4>(subject.substr(0, read_index), '.');
 
   if (!first_ip_octets.has_value())
     return std::nullopt;  // Wrong number of octets.
@@ -131,7 +133,9 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
     // Read last IP.
     ++read_pos;
 
-    const auto last_ip_end = std::ranges::find(read_pos, subject.end(), ':');
+    auto last_ip_end = read_pos;
+    while (last_ip_end != subject.end() && *last_ip_end != ':')
+      ++last_ip_end;
     const auto last_ip_octets = SplitString({read_pos, last_ip_end}, '.');
 
     // Copy octets from first_ip when less than 4 are specified.
@@ -142,8 +146,8 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
     if (octet_share_count >= 4)
       return std::nullopt;  // Too many octets.
 
-    std::copy_n(result->first.ip_address.begin(), octet_share_count,
-                result->last.ip_address.begin());
+    std::memcpy(result->last.ip_address.data(), result->first.ip_address.data(),
+                octet_share_count);
 
     std::size_t i = octet_share_count;
     for (auto&& octet_str : last_ip_octets)
@@ -247,10 +251,10 @@ MACAddress GenerateMacAddress(const MACConsumer type)
   switch (type)
   {
   case MACConsumer::BBA:
-    std::ranges::copy(oui_bba, mac.begin());
+    std::memcpy(mac.data(), oui_bba.data(), oui_bba.size());
     break;
   case MACConsumer::IOS:
-    std::ranges::copy(oui_ios, mac.begin());
+    std::memcpy(mac.data(), oui_ios.data(), oui_ios.size());
     break;
   }
 
@@ -299,8 +303,10 @@ std::optional<MACAddress> StringToMacAddress(std::string_view mac_string)
 
 std::string BluetoothAddressToString(BluetoothAddress bdaddr)
 {
-  std::ranges::reverse(bdaddr);
-  return MacAddressToString(std::bit_cast<MACAddress>(bdaddr));
+  MACAddress mac;
+  for (size_t i = 0; i < mac.size(); i++)
+    mac[i] = bdaddr[mac.size() - 1 - i];
+  return MacAddressToString(mac);
 }
 
 std::optional<BluetoothAddress> StringToBluetoothAddress(std::string_view str)
@@ -308,8 +314,10 @@ std::optional<BluetoothAddress> StringToBluetoothAddress(std::string_view str)
   auto result = StringToMacAddress(str);
   if (!result)
     return std::nullopt;
-  std::ranges::reverse(*result);
-  return std::bit_cast<BluetoothAddress>(*result);
+  BluetoothAddress bdaddr;
+  for (size_t i = 0; i < bdaddr.size(); i++)
+    bdaddr[i] = (*result)[bdaddr.size() - 1 - i];
+  return bdaddr;
 }
 
 EthernetHeader::EthernetHeader() = default;
@@ -462,14 +470,14 @@ DHCPBody::DHCPBody(u32 transaction, const MACAddress& client_address, u32 new_ip
 
 DHCPPacket::DHCPPacket() = default;
 
-DHCPPacket::DHCPPacket(std::span<const u8> data)
+DHCPPacket::DHCPPacket(const u8* data, size_t size)
 {
-  if (data.size() < DHCPBody::SIZE)
+  if (size < DHCPBody::SIZE)
     return;
-  body = Common::BitCastPtr<DHCPBody>(data.data());
+  body = Common::BitCastPtr<DHCPBody>(data);
   std::size_t offset = DHCPBody::SIZE;
 
-  while (offset < data.size() - 1)
+  while (offset < size - 1)
   {
     const u8 fnc = data[offset];
     if (fnc == 0)
@@ -480,21 +488,20 @@ DHCPPacket::DHCPPacket(std::span<const u8> data)
     if (fnc == 255)
       break;
     const u8 len = data[offset + 1];
-    const auto opt_begin = data.begin() + offset;
+    const u8* const opt_begin = data + offset;
     offset += 2 + len;
-    if (offset > data.size())
+    if (offset > size)
       break;
-    const auto opt_end = data.begin() + offset;
-    options.emplace_back(opt_begin, opt_end);
+    options.emplace_back(opt_begin, data + offset);
   }
 }
 
-void DHCPPacket::AddOption(u8 fnc, std::span<const u8> params)
+void DHCPPacket::AddOption(u8 fnc, const u8* params, size_t size)
 {
-  if (params.size() > 255)
+  if (size > 255)
     return;
-  std::vector<u8> opt = {fnc, u8(params.size())};
-  opt.insert(opt.end(), params.begin(), params.end());
+  std::vector<u8> opt = {fnc, u8(size)};
+  opt.insert(opt.end(), params, params + size);
   options.emplace_back(std::move(opt));
 }
 

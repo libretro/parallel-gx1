@@ -22,7 +22,6 @@
 #include "Common/Buffer.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
-#include "Common/Contains.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
@@ -306,11 +305,14 @@ struct SlotWithTimestamp
 }  // namespace
 
 // Returns first slot number (1-based indexing) not in the vector.
-static std::optional<u32> GetEmptySlot(std::span<const SlotWithTimestamp> used_slots)
+static std::optional<u32> GetEmptySlot(const std::vector<SlotWithTimestamp>& used_slots)
 {
   for (u32 i = 1; i <= NUM_STATES; ++i)
   {
-    if (!Common::Contains(used_slots, i, &SlotWithTimestamp::slot))
+    bool used = false;
+    for (const SlotWithTimestamp& used_slot : used_slots)
+      used = used || used_slot.slot == i;
+    if (!used)
       return i;
   }
   return std::nullopt;

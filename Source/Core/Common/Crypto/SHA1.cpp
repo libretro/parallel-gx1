@@ -3,7 +3,7 @@
 
 #include "SHA1.h"
 
-#include <algorithm>
+#include <cstring>
 #include <array>
 #include <memory>
 
@@ -81,13 +81,13 @@ protected:
       // Not enough to fill block.
       if (len < count_to_fill_block)
       {
-        std::copy_n(msg, len, m_block.data() + m_block_position);
+        std::memcpy(m_block.data() + m_block_position, msg, len);
 
         m_block_position += len;
         return;
       }
 
-      std::copy_n(msg, count_to_fill_block, m_block.data() + m_block_position);
+      std::memcpy(m_block.data() + m_block_position, msg, count_to_fill_block);
       ProcessBlock(m_block.data());
 
       msg += count_to_fill_block;
@@ -105,7 +105,7 @@ protected:
     }
 
     // Copy any remaining partial data into block.
-    std::copy_n(msg, len, m_block.data() + m_block_position);
+    std::memcpy(m_block.data() + m_block_position, msg, len);
     m_block_position += len;
   }
 
@@ -119,13 +119,13 @@ protected:
     if (m_block_position > MSG_LEN_POS)
     {
       // Pad current block and process it
-      std::fill(m_block.begin() + m_block_position, m_block.end(), 0x00);
+      std::memset(m_block.data() + m_block_position, 0, m_block.size() - m_block_position);
       ProcessBlock(m_block.data());
       m_block_position = 0;
     }
 
     // Pad block.
-    std::fill(m_block.data() + m_block_position, m_block.data() + MSG_LEN_POS, 0x00);
+    std::memset(m_block.data() + m_block_position, 0, MSG_LEN_POS - m_block_position);
     m_block_position = MSG_LEN_POS;
 
     // Write the message length.

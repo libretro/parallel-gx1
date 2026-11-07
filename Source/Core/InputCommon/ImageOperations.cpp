@@ -54,7 +54,7 @@ std::optional<ImagePixelData> LoadImage(const std::string& path)
 
   ImagePixelData image;
   Common::UniqueBuffer<u8> data;
-  if (!Common::LoadPNG(buffer, &data, &image.width, &image.height))
+  if (!Common::LoadPNG(buffer.data(), buffer.size(), &data, &image.width, &image.height))
     return std::nullopt;
 
   image.pixels.resize(image.width * image.height);

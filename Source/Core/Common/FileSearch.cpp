@@ -3,7 +3,6 @@
 
 #include "Common/FileSearch.h"
 
-#include <algorithm>
 #include <cstring>
 
 #include <retro_dirent.h>
@@ -32,16 +31,17 @@ static bool EndsWithNoCase(const char* name, size_t name_len, std::string_view e
   return true;
 }
 
-static bool MatchesAny(const char* name, size_t name_len, std::span<const std::string_view> exts)
+static bool MatchesAny(const char* name, size_t name_len, const std::string_view* exts,
+                       size_t ext_count)
 {
   size_t i;
-  for (i = 0; i < exts.size(); i++)
+  for (i = 0; i < ext_count; i++)
     if (EndsWithNoCase(name, name_len, exts[i]))
       return true;
   return false;
 }
 
-static void Search(const std::string& directory, std::span<const std::string_view> exts,
+static void Search(const std::string& directory, const std::string_view* exts, size_t ext_count,
                    bool recursive, std::vector<std::string>* result)
 {
   struct RDIR* dir = retro_opendir_include_hidden(directory.c_str(), true);
@@ -62,35 +62,79 @@ static void Search(const std::string& directory, std::span<const std::string_vie
       path += DIR_SEP_CHR;
     path.append(name, name_len);
 
-    if (exts.empty() || (!is_dir && MatchesAny(name, name_len, exts)))
+    if (!ext_count || (!is_dir && MatchesAny(name, name_len, exts, ext_count)))
       result->push_back(path);
     if (is_dir && recursive)
-      Search(path, exts, true, result);
+      Search(path, exts, ext_count, true, result);
   }
   retro_closedir(dir);
 }
 
-std::vector<std::string> DoFileSearch(std::span<const std::string_view> directories,
-                                      std::span<const std::string_view> exts, bool recursive)
+static void SiftDown(std::string* paths, size_t root, size_t count)
+{
+  for (;;)
+  {
+    size_t child = root * 2 + 1;
+    if (child >= count)
+      return;
+    if (child + 1 < count && paths[child] < paths[child + 1])
+      child++;
+    if (!(paths[root] < paths[child]))
+      return;
+    paths[root].swap(paths[child]);
+    root = child;
+  }
+}
+
+std::vector<std::string> DoFileSearch(const std::string_view* directories, size_t directory_count,
+                                      const std::string_view* exts, size_t ext_count,
+                                      bool recursive)
 {
   std::vector<std::string> result;
-  for (const auto& directory : directories)
+  size_t i;
+  for (i = 0; i < directory_count; i++)
   {
-    std::string dir(directory);
+    std::string dir(directories[i]);
     while (dir.size() > 1 && (dir.back() == DIR_SEP_CHR || dir.back() == '\\'))
       dir.pop_back();
-    Search(dir, exts, recursive, &result);
+    Search(dir, exts, ext_count, recursive, &result);
   }
 
-  // Remove duplicates (the caller gave e.g. duplicate or overlapping directories).
-  std::ranges::sort(result);
-  const auto unique_result = std::ranges::unique(result);
-  result.erase(unique_result.begin(), unique_result.end());
+  // Sort in place (heap sort) and drop duplicates (the caller gave e.g.
+  // duplicate or overlapping directories).
+  const size_t count = result.size();
+  if (count > 1)
+  {
+    for (i = count / 2; i > 0; i--)
+      SiftDown(result.data(), i - 1, count);
+    for (i = count - 1; i > 0; i--)
+    {
+      result[0].swap(result[i]);
+      SiftDown(result.data(), 0, i);
+    }
+    size_t kept = 1;
+    for (i = 1; i < count; i++)
+    {
+      if (result[i] != result[kept - 1])
+      {
+        if (i != kept)
+          result[kept].swap(result[i]);
+        kept++;
+      }
+    }
+    result.resize(kept);
+  }
 
   // Dolphin expects to be able to use "/" (DIR_SEP) everywhere.
 #ifdef _WIN32
   for (auto& path : result)
-    std::ranges::replace(path, '\\', DIR_SEP_CHR);
+  {
+    for (char& c : path)
+    {
+      if (c == '\\')
+        c = DIR_SEP_CHR;
+    }
+  }
 #endif
 
   return result;

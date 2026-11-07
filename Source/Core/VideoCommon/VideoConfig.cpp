@@ -8,7 +8,6 @@
 
 #include "Common/CPUDetect.h"
 #include "Common/CommonTypes.h"
-#include "Common/Contains.h"
 
 #include "Core/CPUThreadConfigCallback.h"
 #include "Core/Config/GraphicsSettings.h"
@@ -192,8 +191,13 @@ void VideoConfig::VerifyValidity()
   if (iAdapter < 0 || iAdapter > ((int)g_backend_info.Adapters.size() - 1))
     iAdapter = 0;
 
-  if (!Common::Contains(g_backend_info.AAModes, iMultisamples))
-    iMultisamples = 1;
+  {
+    bool supported = false;
+    for (const u32 mode : g_backend_info.AAModes)
+      supported = supported || mode == iMultisamples;
+    if (!supported)
+      iMultisamples = 1;
+  }
 
   if (stereo_mode != StereoMode::Off)
   {

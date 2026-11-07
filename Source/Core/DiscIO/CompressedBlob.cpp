@@ -43,7 +43,7 @@ bool CompressedBlobReader::Initialize()
 {
   m_file_size = m_file.GetSize();
   m_file.Seek(0, File::SeekOrigin::Begin);
-  if (!m_file.Read(Common::AsWritableU8Span(m_header)))
+  if (!m_file.Read(reinterpret_cast<u8*>(&m_header), sizeof(m_header)))
     return false;
 
   if (m_header.magic_cookie != GCZ_MAGIC)
@@ -75,11 +75,11 @@ bool CompressedBlobReader::Initialize()
 
   // cache block pointers and hashes
   m_block_pointers.resize(m_header.num_blocks);
-  if (!m_file.Read(Common::AsWritableU8Span(m_block_pointers)))
+  if (!m_file.Read(reinterpret_cast<u8*>(m_block_pointers.data()), m_block_pointers.size() * sizeof(m_block_pointers[0])))
     return false;
 
   m_hashes.resize(m_header.num_blocks);
-  if (!m_file.Read(Common::AsWritableU8Span(m_hashes)))
+  if (!m_file.Read(reinterpret_cast<u8*>(m_hashes.data()), m_hashes.size() * sizeof(m_hashes[0])))
     return false;
 
   m_data_offset = header_size;
@@ -252,7 +252,7 @@ bool CompressedBlobReader::ValidateBlockPointers() const
 bool IsGCZBlob(File::DirectIOFile& file)
 {
   CompressedBlobHeader header;
-  return file.OffsetRead(0, Common::AsWritableU8Span(header)) && header.magic_cookie == GCZ_MAGIC;
+  return file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header)) && header.magic_cookie == GCZ_MAGIC;
 }
 
 }  // namespace DiscIO

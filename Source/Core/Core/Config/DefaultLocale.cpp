@@ -16,7 +16,6 @@
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/Contains.h"
 #include "Common/StringUtil.h"
 #include "Core/Host.h"
 #include "DiscIO/Enums.h"
@@ -29,6 +28,16 @@ static std::vector<std::string> GetPreferredLocales()
   return locales;
 }
 
+static bool LocaleHas(const std::vector<std::string>& split_locale, const char* part)
+{
+  for (const std::string& s : split_locale)
+  {
+    if (s == part)
+      return true;
+  }
+  return false;
+}
+
 static std::optional<DiscIO::Language> TryParseLanguage(const std::string& locale)
 {
   const std::vector<std::string> split_locale = SplitString(locale, '-');
@@ -38,13 +47,13 @@ static std::optional<DiscIO::Language> TryParseLanguage(const std::string& local
   // Special handling of Chinese due to its two writing systems
   if (split_locale[0] == "zh")
   {
-    if (Common::Contains(split_locale, "Hans"))
+    if (LocaleHas(split_locale, "Hans"))
       return DiscIO::Language::SimplifiedChinese;
-    if (Common::Contains(split_locale, "Hant"))
+    if (LocaleHas(split_locale, "Hant"))
       return DiscIO::Language::TraditionalChinese;
 
     // Mainland China and Singapore use simplified characters
-    if (Common::Contains(split_locale, "CN") || Common::Contains(split_locale, "SG"))
+    if (LocaleHas(split_locale, "CN") || LocaleHas(split_locale, "SG"))
       return DiscIO::Language::SimplifiedChinese;
     else
       return DiscIO::Language::TraditionalChinese;

@@ -9,7 +9,6 @@
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
-#include "Common/Contains.h"
 #include "Common/EnumMap.h"
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
@@ -581,7 +580,10 @@ void VertexManagerBase::Flush()
           vr_textured = true;
           vr_samples_copy |= cache_entry->IsCopy();
 #endif
-          if (!Common::Contains(texture_names, cache_entry->texture_info_name))
+          bool named = false;
+          for (const auto& name : texture_names)
+            named = named || name == cache_entry->texture_info_name;
+          if (!named)
           {
             texture_names.push_back(cache_entry->texture_info_name);
             texture_units.push_back(i);

@@ -220,7 +220,7 @@ std::unique_ptr<BlobReader> CreateBlobReader(const std::string& filename)
 {
   File::DirectIOFile file(filename, File::AccessMode::Read);
   u32 magic;
-  if (!file.Read(Common::AsWritableU8Span(magic)))
+  if (!file.Read(reinterpret_cast<u8*>(&magic), sizeof(magic)))
     return nullptr;
 
   // Conveniently, every supported file format (except for plain disc images and

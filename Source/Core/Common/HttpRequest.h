@@ -8,7 +8,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -51,12 +50,13 @@ public:
   std::string GetHeaderValue(std::string_view name) const;
   Response Get(const std::string& url, const Headers& headers = {},
                AllowedReturnCodes codes = AllowedReturnCodes::Ok_Only);
-  Response Post(const std::string& url, std::span<const u8> payload, const Headers& headers = {},
+  Response Post(const std::string& url, const u8* payload, size_t size,
+                const Headers& headers = {},
                 AllowedReturnCodes codes = AllowedReturnCodes::Ok_Only);
   Response Post(const std::string& url, std::string_view payload, const Headers& headers = {},
                 AllowedReturnCodes codes = AllowedReturnCodes::Ok_Only);
 
-  Response PostMultiform(const std::string& url, std::span<Multiform> multiform,
+  Response PostMultiform(const std::string& url, const Multiform* multiform, size_t multiform_count,
                          const Headers& headers = {},
                          AllowedReturnCodes codes = AllowedReturnCodes::Ok_Only);
 

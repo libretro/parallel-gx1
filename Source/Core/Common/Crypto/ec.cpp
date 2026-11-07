@@ -4,7 +4,7 @@
 
 #include "Common/Crypto/ec.h"
 
-#include <algorithm>
+#include <cstring>
 #include <cstring>
 
 #include "Common/Crypto/bn.h"
@@ -22,7 +22,12 @@ struct Elt
 {
   bool IsZero() const
   {
-    return std::ranges::all_of(data, [](u8 b) { return b == 0; });
+    for (const u8 b : data)
+    {
+      if (b)
+        return false;
+    }
+    return true;
   }
 
   void MulX()
@@ -65,7 +70,7 @@ struct Elt
     wide[30] &= 1;
 
     Elt result;
-    std::copy(wide.cbegin() + 30, wide.cend(), result.data.begin());
+    std::memcpy(result.data.data(), wide.data() + 30, wide.size() - 30);
     return result;
   }
 
@@ -134,7 +139,7 @@ struct Point
 {
   Point() = default;
   constexpr explicit Point(Elt x, Elt y) : m_data{{x, y}} {}
-  explicit Point(const u8* data) { std::copy_n(data, sizeof(m_data), Data()); }
+  explicit Point(const u8* data) { std::memcpy(Data(), data, sizeof(m_data)); }
 
   bool IsZero() const { return X().IsZero() && Y().IsZero(); }
   Elt& X() { return m_data[0]; }
@@ -239,7 +244,7 @@ Signature Sign(const u8* key, const u8* hash)
   //	S = m**-1*(e + Rk) (mod N)
 
   u8 kk[30];
-  std::copy_n(key, sizeof(kk), kk);
+  std::memcpy(kk, key, sizeof(kk));
   if (bn_compare(kk, ec_N, sizeof(kk)) >= 0)
     bn_sub_modulus(kk, ec_N, sizeof(kk));
   Elt s;
@@ -250,8 +255,8 @@ Signature Sign(const u8* key, const u8* hash)
   bn_mul(s.data.data(), minv, kk, ec_N, 30);
 
   Signature signature;
-  std::ranges::copy(r.data, signature.begin());
-  std::ranges::copy(s.data, signature.begin() + 30);
+  std::memcpy(signature.data(), r.data.data(), r.data.size());
+  std::memcpy(signature.data() + 30, s.data.data(), s.data.size());
   return signature;
 }
 
@@ -281,7 +286,7 @@ PublicKey PrivToPub(const u8* key)
 {
   const Point data = key * ec_G;
   PublicKey result;
-  std::copy_n(data.Data(), result.size(), result.begin());
+  std::memcpy(result.data(), data.Data(), result.size());
   return result;
 }
 
@@ -289,7 +294,7 @@ std::array<u8, 60> ComputeSharedSecret(const u8* private_key, const u8* public_k
 {
   std::array<u8, 60> shared_secret;
   const Point data = private_key * Point{public_key};
-  std::copy_n(data.Data(), shared_secret.size(), shared_secret.begin());
+  std::memcpy(shared_secret.data(), data.Data(), shared_secret.size());
   return shared_secret;
 }
 }  // namespace Common::ec

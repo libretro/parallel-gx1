@@ -39,7 +39,7 @@ bool NFSFileReader::ReadKey(const std::string& path, const std::string& director
 
   const std::string key_path = parent + "code/htk.bin";
   File::DirectIOFile key_file(key_path, File::AccessMode::Read);
-  if (!key_file.Read(*key_out))
+  if (!key_file.Read(key_out->data(), key_out->size()))
   {
     ERROR_LOG_FMT(DISCIO, "Failed to read from {}", key_path);
     return false;
@@ -140,7 +140,7 @@ std::unique_ptr<NFSFileReader> NFSFileReader::Create(File::DirectIOFile first_fi
     return nullptr;
 
   NFSHeader header;
-  if (!first_file.OffsetRead(0, Common::AsWritableU8Span(header)) || header.magic != NFS_MAGIC)
+  if (!first_file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header)) || header.magic != NFS_MAGIC)
     return nullptr;
 
   std::vector<NFSLBARange> lba_ranges = GetLBARanges(header);

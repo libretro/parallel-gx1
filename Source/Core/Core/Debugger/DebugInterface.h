@@ -41,8 +41,6 @@ public:
   virtual void DisableWatch(std::size_t index) = 0;
   virtual bool HasEnabledWatch(u32 address) const = 0;
   virtual void RemoveWatch(std::size_t index) = 0;
-  virtual void LoadWatchesFromStrings(std::span<const std::string> watches) = 0;
-  virtual std::vector<std::string> SaveWatchesToStrings() const = 0;
   virtual void ClearWatches() = 0;
 
   // Memory Patches

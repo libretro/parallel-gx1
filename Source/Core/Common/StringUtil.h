@@ -12,8 +12,6 @@
 #include <iomanip>
 #include <limits>
 #include <locale>
-#include <ranges>
-#include <span>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -166,11 +164,6 @@ std::string ValueToString(Common::Enum auto value)
 // Generates an hexdump-like representation of a binary data blob.
 std::string HexDump(const u8* data, size_t size);
 
-inline auto HexDump(std::span<const u8> data)
-{
-  return HexDump(data.data(), data.size());
-}
-
 namespace Common
 {
 std::from_chars_result FromChars(std::string_view sv, std::integral auto& value, int base = 10)
@@ -200,13 +193,21 @@ std::optional<std::array<std::string_view, Count>> SplitStringIntoArray(std::str
   result.emplace();
 
   std::size_t index = 0;
-  for (auto&& item : subject | std::views::split(delim))
+  std::size_t start = 0;
+  for (;;)
   {
     // Too many delim.
     if (index == Count)
       return std::nullopt;
 
-    (*result)[index++] = std::string_view{item};
+    const std::size_t end = subject.find(delim, start);
+    if (end == std::string_view::npos)
+    {
+      (*result)[index++] = subject.substr(start);
+      break;
+    }
+    (*result)[index++] = subject.substr(start, end - start);
+    start = end + 1;
   }
 
   // Too few delim.
@@ -352,5 +353,5 @@ struct CaseInsensitiveLess
   bool operator()(std::string_view a, std::string_view b) const;
 };
 
-std::string BytesToHexString(std::span<const u8> bytes);
+std::string BytesToHexString(const u8* bytes, size_t size);
 }  // namespace Common

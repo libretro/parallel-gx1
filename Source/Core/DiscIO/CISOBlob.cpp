@@ -17,7 +17,7 @@ CISOFileReader::CISOFileReader(File::DirectIOFile file) : m_file(std::move(file)
   m_size = m_file.GetSize();
 
   CISOHeader header;
-  m_file.OffsetRead(0, Common::AsWritableU8Span(header));
+  m_file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header));
 
   m_block_size = header.block_size;
 
@@ -29,7 +29,7 @@ CISOFileReader::CISOFileReader(File::DirectIOFile file) : m_file(std::move(file)
 std::unique_ptr<CISOFileReader> CISOFileReader::Create(File::DirectIOFile file)
 {
   CISOHeader header;
-  if (file.OffsetRead(0, Common::AsWritableU8Span(header)) && header.magic == CISO_MAGIC)
+  if (file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header)) && header.magic == CISO_MAGIC)
   {
     return std::unique_ptr<CISOFileReader>(new CISOFileReader(std::move(file)));
   }

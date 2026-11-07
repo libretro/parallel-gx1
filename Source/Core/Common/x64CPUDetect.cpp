@@ -8,7 +8,6 @@
 #include <processthreadsapi.h>
 #endif
 
-#include <algorithm>
 #include <cstring>
 #include <string>
 
@@ -117,7 +116,9 @@ void CPUInfo::Detect()
 
   // This should be much more reliable and easier than trying to get the number of cores out of the
   // CPUID data ourselves.
-  num_cores = std::max(static_cast<int>(cpu_features_get_core_amount()), 1);
+  num_cores = static_cast<int>(cpu_features_get_core_amount());
+  if (num_cores < 1)
+    num_cores = 1;
 
   // Assume CPU supports the CPUID instruction. Those that don't can barely
   // boot modern OS anyway.

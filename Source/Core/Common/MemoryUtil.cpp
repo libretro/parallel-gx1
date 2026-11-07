@@ -36,7 +36,6 @@
 #ifdef IPHONEOS
 #include "Common/JITMemoryTracker.h"
 #ifdef __LIBRETRO__
-#include <algorithm>
 #include <vector>
 #include "DolphinLibretro/Common/Globals.h"
 static void* s_last_exec_rw = nullptr;

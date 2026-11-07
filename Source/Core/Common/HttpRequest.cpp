@@ -33,7 +33,7 @@ public:
   s32 GetLastResponseCode();
   Response Fetch(const std::string& url, Method method, const Headers& headers, const u8* payload,
                  size_t size, AllowedReturnCodes codes = AllowedReturnCodes::Ok_Only,
-                 std::span<Multiform> multiform = {});
+                 const Multiform* multiform = nullptr, size_t multiform_count = 0);
 
   static int CurlProgressCallback(Impl* impl, curl_off_t dltotal, curl_off_t dlnow,
                                   curl_off_t ultotal, curl_off_t ulnow);
@@ -94,10 +94,10 @@ HttpRequest::Response HttpRequest::Get(const std::string& url, const Headers& he
   return m_impl->Fetch(url, Impl::Method::GET, headers, nullptr, 0, codes);
 }
 
-HttpRequest::Response HttpRequest::Post(const std::string& url, std::span<const u8> payload,
+HttpRequest::Response HttpRequest::Post(const std::string& url, const u8* payload, size_t size,
                                         const Headers& headers, AllowedReturnCodes codes)
 {
-  return m_impl->Fetch(url, Impl::Method::POST, headers, payload.data(), payload.size(), codes);
+  return m_impl->Fetch(url, Impl::Method::POST, headers, payload, size, codes);
 }
 
 HttpRequest::Response HttpRequest::Post(const std::string& url, std::string_view payload,
@@ -175,10 +175,12 @@ void HttpRequest::Impl::UseIPv4()
 }
 
 HttpRequest::Response HttpRequest::PostMultiform(const std::string& url,
-                                                 std::span<Multiform> multiform,
-                                                 const Headers& headers, AllowedReturnCodes codes)
+                                                 const Multiform* multiform,
+                                                 size_t multiform_count, const Headers& headers,
+                                                 AllowedReturnCodes codes)
 {
-  return m_impl->Fetch(url, Impl::Method::POST, headers, nullptr, 0, codes, multiform);
+  return m_impl->Fetch(url, Impl::Method::POST, headers, nullptr, 0, codes, multiform,
+                       multiform_count);
 }
 
 void HttpRequest::Impl::FollowRedirects(long max)
@@ -233,12 +235,13 @@ static size_t header_callback(char* buffer, size_t size, size_t nitems, void* us
 HttpRequest::Response HttpRequest::Impl::Fetch(const std::string& url, Method method,
                                                const Headers& headers, const u8* payload,
                                                size_t size, AllowedReturnCodes codes,
-                                               std::span<Multiform> multiform)
+                                               const Multiform* multiform,
+                                               size_t multiform_count)
 {
   m_response_headers.clear();
   curl_easy_setopt(m_curl.get(), CURLOPT_POST, method == Method::POST);
   curl_easy_setopt(m_curl.get(), CURLOPT_URL, url.c_str());
-  if (method == Method::POST && multiform.empty())
+  if (method == Method::POST && !multiform_count)
   {
     curl_easy_setopt(m_curl.get(), CURLOPT_POSTFIELDS, payload);
     curl_easy_setopt(m_curl.get(), CURLOPT_POSTFIELDSIZE, size);
@@ -246,11 +249,12 @@ HttpRequest::Response HttpRequest::Impl::Fetch(const std::string& url, Method me
 
   curl_mime* form = nullptr;
   Common::ScopeGuard multiform_guard{[&form] { curl_mime_free(form); }};
-  if (!multiform.empty())
+  if (multiform_count)
   {
     form = curl_mime_init(m_curl.get());
-    for (const auto& value : multiform)
+    for (size_t i = 0; i < multiform_count; i++)
     {
+      const Multiform& value = multiform[i];
       curl_mimepart* part = curl_mime_addpart(form);
       curl_mime_name(part, value.name.c_str());
       curl_mime_data(part, value.data.c_str(), value.data.size());

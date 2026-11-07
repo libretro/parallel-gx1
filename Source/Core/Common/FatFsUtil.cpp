@@ -3,7 +3,6 @@
 
 #include "Common/FatFsUtil.h"
 
-#include <algorithm>
 #include <cstdlib>
 #include <string>
 #include <string_view>
@@ -129,7 +128,7 @@ u32 GetSystemTimeFAT()
   fattime |= tm.tm_mday << 16;
   fattime |= tm.tm_hour << 11;
   fattime |= tm.tm_min << 5;
-  fattime |= std::min(tm.tm_sec, 59) >> 1;
+  fattime |= (tm.tm_sec < 59 ? tm.tm_sec : 59) >> 1;
   return fattime;
 }
 }  // namespace
@@ -395,7 +394,8 @@ static bool Pack(const std::function<bool()>& cancelled, const File::FSTEntry& e
       if (cancelled())
         return false;
 
-      u32 chunk_size = static_cast<u32>(std::min(size, static_cast<u64>(tmp_buffer.size())));
+      u32 chunk_size =
+          static_cast<u32>(size < tmp_buffer.size() ? size : u64(tmp_buffer.size()));
       if (!src.ReadBytes(tmp_buffer.data(), chunk_size))
       {
         ERROR_LOG_FMT(COMMON, "Failed to read data from file at {}", entry.physicalName);
@@ -477,9 +477,38 @@ static bool Pack(const std::function<bool()>& cancelled, const File::FSTEntry& e
   return true;
 }
 
+static void SiftDown(File::FSTEntry* entries, size_t root, size_t count)
+{
+  for (;;)
+  {
+    size_t child = root * 2 + 1;
+    if (child >= count)
+      return;
+    if (child + 1 < count && entries[child].virtualName < entries[child + 1].virtualName)
+      child++;
+    if (!(entries[root].virtualName < entries[child].virtualName))
+      return;
+    std::swap(entries[root], entries[child]);
+    root = child;
+  }
+}
+
 static void SortFST(File::FSTEntry* root)
 {
-  std::ranges::sort(root->children, {}, &File::FSTEntry::virtualName);
+  // in-place heap sort by name
+  File::FSTEntry* const entries = root->children.data();
+  const size_t count = root->children.size();
+  size_t i;
+  if (count > 1)
+  {
+    for (i = count / 2; i > 0; i--)
+      SiftDown(entries, i - 1, count);
+    for (i = count - 1; i > 0; i--)
+    {
+      std::swap(entries[0], entries[i]);
+      SiftDown(entries, 0, i);
+    }
+  }
   for (auto& child : root->children)
     SortFST(&child);
 }
@@ -511,7 +540,10 @@ bool SyncSDFolderToSDImage(const std::function<bool()>& cancelled, bool determin
   {
     size = GetSize(root);
     // Allocate a reasonable amount of free space
-    size += std::clamp(size / 2, MebibytesToBytes(512), GibibytesToBytes(8));
+    const u64 extra = size / 2;
+    size += extra < MebibytesToBytes(512) ? MebibytesToBytes(512) :
+            extra > GibibytesToBytes(8)  ? GibibytesToBytes(8) :
+                                           extra;
   }
   size = AlignUp(size, MAX_CLUSTER_SIZE);
 
@@ -629,7 +661,7 @@ static bool Unpack(const std::function<bool()>& cancelled, const std::string& pa
       if (cancelled())
         return false;
 
-      u32 chunk_size = std::min(size, static_cast<u32>(tmp_buffer.size()));
+      u32 chunk_size = size < tmp_buffer.size() ? size : static_cast<u32>(tmp_buffer.size());
       u32 read_size;
       const auto read_error_code = f_read(&src, tmp_buffer.data(), chunk_size, &read_size);
       if (read_error_code != FR_OK)
@@ -721,7 +753,7 @@ static bool Unpack(const std::function<bool()>& cancelled, const std::string& pa
     // Check for path traversal attacks.
     const bool is_path_traversal_attack =
         childname.contains('\\') || childname.contains('/') ||
-        std::ranges::all_of(childname, [](char c) { return c == '.'; });
+        childname.find_first_not_of('.') == std::string::npos;
     if (is_path_traversal_attack)
     {
       ERROR_LOG_FMT(

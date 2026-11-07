@@ -422,7 +422,7 @@ void DeckReader::HandleFirmwareUpdate()
   {
     if (m_firmware_dump_file.IsOpen())
     {
-      if (!m_firmware_dump_file.Write(input_span))
+      if (!m_firmware_dump_file.Write(input_span.data(), input_span.size()))
       {
         ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Failed to write {} bytes to firmware.",
                       input_span.size());

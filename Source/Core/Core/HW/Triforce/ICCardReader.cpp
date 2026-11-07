@@ -45,9 +45,9 @@ bool LoadCardData(const std::string& filename, std::span<u8> data)
     WARN_LOG_FMT(SERIALINTERFACE_CARD, "Unexpected size of {} for file: {}", file_size, filename);
   }
 
-  const auto read_size = std::min<u64>(file_size, data.size());
+  const u64 read_size = file_size < data.size() ? file_size : u64(data.size());
 
-  if (!file.Read(std::span{data}.first(read_size)))
+  if (!file.Read(data.data(), read_size))
   {
     ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Failed to read from file: {}", filename);
     return false;
@@ -322,7 +322,8 @@ void ICCardReader::Update()
 
     m_is_field_on = false;
 
-    std::ranges::for_each(m_ic_cards, &ICCard::SetIdle);
+    for (auto& card : m_ic_cards)
+      card->SetIdle();
 
     break;
   }
@@ -345,7 +346,9 @@ void ICCardReader::Update()
 
     INFO_LOG_FMT(SERIALINTERFACE_CARD, "InsertCheck: {}", unknown_parameter);
 
-    const bool is_card_present = std::ranges::any_of(m_ic_cards, std::not_fn(&ICCard::IsHalted));
+    bool is_card_present = false;
+    for (const auto& card : m_ic_cards)
+      is_card_present = is_card_present || !card->IsHalted();
 
     if (is_card_present &&
         m_card_present_insert_check_count <
@@ -376,8 +379,10 @@ void ICCardReader::Update()
     {
       reply_payload_span = (*first_non_halted_card)->GetUID();
 
-      const bool additional_cards =
-          std::ranges::count_if(m_ic_cards, std::not_fn(&ICCard::IsHalted)) > 1;
+      size_t active_cards = 0;
+      for (const auto& card : m_ic_cards)
+        active_cards += !card->IsHalted();
+      const bool additional_cards = active_cards > 1;
 
       // Avalon seems to like a value of 0x00 or 0x01. 0x01 causes two cards to be processed.
       status_code = additional_cards ? 0x01 : 0x00;
@@ -622,7 +627,7 @@ std::span<const u8> ICCardReader::ICCard::ReadData(u16 page, u16 page_count)
 
   const auto read_span = std::span{m_data}.subspan(byte_offset, byte_count);
 
-  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "\n{}", HexDump(read_span));
+  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "\n{}", HexDump(read_span.data(), read_span.size()));
 
   return read_span;
 }
@@ -648,9 +653,9 @@ bool ICCardReader::ICCard::WriteData(u16 page, std::span<const u8> write_span)
     return false;
   }
 
-  std::ranges::copy(write_span, m_data.data() + byte_offset);
+  std::memcpy(m_data.data() + byte_offset, write_span.data(), write_span.size());
 
-  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "\n{}", HexDump(write_span));
+  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "\n{}", HexDump(write_span.data(), write_span.size()));
 
   FlushData(byte_offset, u32(write_span.size()));
 
@@ -683,7 +688,7 @@ u16 ICCardReader::ICCard::DecreaseUseCount(u16 page, u16 amount)
 void ICCardReader::ICCard::FlushData(u32 byte_offset, u32 byte_count)
 {
   File::DirectIOFile file{m_filename, File::AccessMode::Write, File::OpenMode::Always};
-  if (!file.OffsetWrite(byte_offset, std::span{m_data}.subspan(byte_offset, byte_count)))
+  if (!file.OffsetWrite(byte_offset, m_data.data() + byte_offset, byte_count))
   {
     ERROR_LOG_FMT(SERIALINTERFACE_CARD, "FlushData: Failed to write to: {}", m_filename);
   }
@@ -755,7 +760,8 @@ void ICCardReader::InsertCard()
   NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "InsertCard");
 
   CreateCards(1);
-  std::ranges::for_each(m_ic_cards, &ICCard::Initialize);
+  for (auto& card : m_ic_cards)
+    card->Initialize();
 }
 
 void ICCardReader::EjectCard()

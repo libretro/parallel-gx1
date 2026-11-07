@@ -49,7 +49,7 @@ namespace DiscIO
 std::unique_ptr<TGCFileReader> TGCFileReader::Create(File::DirectIOFile file)
 {
   TGCHeader header;
-  if (file.OffsetRead(0, Common::AsWritableU8Span(header)) && header.magic == TGC_MAGIC)
+  if (file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header)) && header.magic == TGC_MAGIC)
   {
     return std::unique_ptr<TGCFileReader>(new TGCFileReader(std::move(file)));
   }
@@ -59,14 +59,14 @@ std::unique_ptr<TGCFileReader> TGCFileReader::Create(File::DirectIOFile file)
 
 TGCFileReader::TGCFileReader(File::DirectIOFile file) : m_file(std::move(file))
 {
-  m_file.OffsetRead(0, Common::AsWritableU8Span(m_header));
+  m_file.OffsetRead(0, reinterpret_cast<u8*>(&m_header), sizeof(m_header));
 
   m_size = m_file.GetSize();
 
   const u32 fst_offset = Common::swap32(m_header.fst_real_offset);
   const u32 fst_size = Common::swap32(m_header.fst_size);
   m_fst.resize(fst_size);
-  if (!m_file.OffsetRead(fst_offset, m_fst))
+  if (!m_file.OffsetRead(fst_offset, m_fst.data(), m_fst.size()))
   {
     m_fst.clear();
   }

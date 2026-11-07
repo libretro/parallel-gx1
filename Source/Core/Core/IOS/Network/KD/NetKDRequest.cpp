@@ -419,15 +419,14 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
   const std::string hmac_message =
       fmt::format("{}\nw{:016}\n{}\n{}", random_number, m_config.Id(), str_mail_flag, str_interval);
   std::array<u8, 20> hashed{};
-  Common::HMAC::HMACWithSHA1(
-      MAIL_CHECK_KEY,
-      std::span<const u8>(reinterpret_cast<const u8*>(hmac_message.data()), hmac_message.size()),
-      hashed.data());
+  Common::HMAC::HMACWithSHA1(MAIL_CHECK_KEY.data(), MAIL_CHECK_KEY.size(),
+                             reinterpret_cast<const u8*>(hmac_message.data()),
+                             hmac_message.size(), hashed.data());
 
   // On a real Wii, strncmp is used to compare both hashes. This means that it is a case-sensitive
   // comparison. KD will generate a lowercase hash as well as expect a lowercase hash from the
   // server.
-  if (Common::BytesToHexString(hashed) != server_hmac)
+  if (Common::BytesToHexString(hashed.data(), hashed.size()) != server_hmac)
   {
     ERROR_LOG_FMT(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Server HMAC is invalid.");
     return NWC24::WC24_ERR_SERVER;
@@ -598,7 +597,7 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
   }
 
   const Common::HttpRequest::Response response =
-      m_http.PostMultiform(m_config.GetSendURL(), multiform);
+      m_http.PostMultiform(m_config.GetSendURL(), multiform.data(), multiform.size());
 
   if (!response)
   {

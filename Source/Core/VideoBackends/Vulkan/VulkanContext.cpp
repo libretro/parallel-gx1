@@ -8,7 +8,6 @@
 #include <cstring>
 
 #include "Common/Assert.h"
-#include "Common/Contains.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 
@@ -18,6 +17,28 @@
 namespace Vulkan
 {
 static constexpr const char* VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
+
+static bool HasExtension(const std::vector<VkExtensionProperties>& list, const char* name)
+{
+  size_t i;
+  for (i = 0; i < list.size(); i++)
+  {
+    if (!std::strcmp(list[i].extensionName, name))
+      return true;
+  }
+  return false;
+}
+
+static bool HasLayer(const std::vector<VkLayerProperties>& list, const char* name)
+{
+  size_t i;
+  for (i = 0; i < list.size(); i++)
+  {
+    if (!std::strcmp(list[i].layerName, name))
+      return true;
+  }
+  return false;
+}
 
 std::unique_ptr<VulkanContext> g_vulkan_context;
 
@@ -169,12 +190,10 @@ bool VulkanContext::CheckValidationLayerAvailablility()
   res = vkEnumerateInstanceLayerProperties(&layer_count, layer_list.data());
   ASSERT(res == VK_SUCCESS);
 
-  bool supports_validation_layers = Common::Contains(
-      layer_list, std::string_view{VALIDATION_LAYER_NAME}, &VkLayerProperties::layerName);
+  bool supports_validation_layers = HasLayer(layer_list, VALIDATION_LAYER_NAME);
 
   bool supports_debug_utils =
-      Common::Contains(extension_list, std::string_view{VK_EXT_DEBUG_UTILS_EXTENSION_NAME},
-                       &VkExtensionProperties::extensionName);
+      HasExtension(extension_list, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
   if (!supports_debug_utils && supports_validation_layers)
   {
@@ -193,8 +212,7 @@ bool VulkanContext::CheckValidationLayerAvailablility()
                                                  extension_list.data());
     ASSERT(res == VK_SUCCESS);
     supports_debug_utils =
-        Common::Contains(extension_list, std::string_view{VK_EXT_DEBUG_UTILS_EXTENSION_NAME},
-                         &VkExtensionProperties::extensionName);
+        HasExtension(extension_list, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   }
 
   // Check for both VK_EXT_debug_utils and VK_LAYER_KHRONOS_validation
@@ -330,10 +348,8 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
 
   auto AddExtension = [&](const char* name, bool required) {
     bool extension_supported =
-        Common::Contains(available_extension_list, std::string_view{name},
-                         &VkExtensionProperties::extensionName) ||
-        Common::Contains(validation_layer_extension_list, std::string_view{name},
-                         &VkExtensionProperties::extensionName);
+        HasExtension(available_extension_list, name) ||
+        HasExtension(validation_layer_extension_list, name);
 
     if (extension_supported)
     {
@@ -641,8 +657,7 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
     INFO_LOG_FMT(VIDEO, "Available extension: {}", extension_properties.extensionName);
 
   auto AddExtension = [&](const char* name, bool required) {
-    if (Common::Contains(available_extension_list, std::string_view{name},
-                         &VkExtensionProperties::extensionName))
+    if (HasExtension(available_extension_list, name))
     {
       INFO_LOG_FMT(VIDEO, "Enabling extension: {}", name);
       m_device_extensions.push_back(name);
@@ -664,9 +679,7 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   /* the extension is enabled only with its feature there to enable */
   m_extended_dynamic_state = false;
   if (m_device_info.apiVersion >= VK_API_VERSION_1_1 && vkGetPhysicalDeviceFeatures2 &&
-      Common::Contains(available_extension_list,
-                       std::string_view{VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME},
-                       &VkExtensionProperties::extensionName))
+      HasExtension(available_extension_list, VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME))
   {
     VkPhysicalDeviceExtendedDynamicStateFeaturesEXT eds = {};
     VkPhysicalDeviceFeatures2 features2 = {};
@@ -679,9 +692,7 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   }
   m_dynamic_blending = false;
   if (m_extended_dynamic_state &&
-      Common::Contains(available_extension_list,
-                       std::string_view{VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME},
-                       &VkExtensionProperties::extensionName))
+      HasExtension(available_extension_list, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME))
   {
     VkPhysicalDeviceExtendedDynamicState3FeaturesEXT eds3 = {};
     VkPhysicalDeviceFeatures2 features2 = {};
@@ -698,12 +709,8 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
 
   m_fast_linking = false;
   if (m_extended_dynamic_state && vkGetPhysicalDeviceProperties2 &&
-      Common::Contains(available_extension_list,
-                       std::string_view{VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME},
-                       &VkExtensionProperties::extensionName) &&
-      Common::Contains(available_extension_list,
-                       std::string_view{VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME},
-                       &VkExtensionProperties::extensionName))
+      HasExtension(available_extension_list, VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME) &&
+      HasExtension(available_extension_list, VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME))
   {
     VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gpl = {};
     VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT gpl_props = {};

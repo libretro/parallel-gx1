@@ -52,7 +52,7 @@ template <bool RVZ>
 bool WIARVZFileReader<RVZ>::Initialize(const std::string& path)
 {
   if (!m_file.Seek(0, File::SeekOrigin::Begin) ||
-      !m_file.Read(Common::AsWritableU8Span(m_header_1)))
+      !m_file.Read(reinterpret_cast<u8*>(&m_header_1), sizeof(m_header_1)))
   {
     return false;
   }
@@ -90,7 +90,7 @@ bool WIARVZFileReader<RVZ>::Initialize(const std::string& path)
     return false;
 
   std::vector<u8> header_2(header_2_size);
-  if (!m_file.Read(header_2))
+  if (!m_file.Read(header_2.data(), header_2.size()))
     return false;
 
   const auto header_2_actual_hash = Common::SHA1::CalculateDigest(header_2);
@@ -126,7 +126,8 @@ bool WIARVZFileReader<RVZ>::Initialize(const std::string& path)
   const size_t number_of_partition_entries = Common::swap32(m_header_2.number_of_partition_entries);
   const size_t partition_entry_size = Common::swap32(m_header_2.partition_entry_size);
   std::vector<u8> partition_entries(partition_entry_size * number_of_partition_entries);
-  if (!m_file.OffsetRead(Common::swap64(m_header_2.partition_entries_offset), partition_entries))
+  if (!m_file.OffsetRead(Common::swap64(m_header_2.partition_entries_offset),
+                         partition_entries.data(), partition_entries.size()))
   {
     return false;
   }

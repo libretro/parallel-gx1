@@ -7,7 +7,6 @@
 #include <cstring>
 #include <sstream>
 #include <string>
-#include <algorithm>
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -232,7 +231,9 @@ void CPUInfo::Detect()
   bFMA = true;
   bFlushToZero = true;
 
-  num_cores = std::max(static_cast<int>(cpu_features_get_core_amount()), 1);
+  num_cores = static_cast<int>(cpu_features_get_core_amount());
+  if (num_cores < 1)
+    num_cores = 1;
 
 #ifdef __APPLE__
   SysctlByName(&model_name, "machdep.cpu.brand_string");

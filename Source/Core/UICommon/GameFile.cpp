@@ -434,7 +434,7 @@ bool GameFile::ReadPNGBanner(const std::string& path)
 
   GameBanner& banner = m_pending.custom_banner;
   Common::UniqueBuffer<u8> data_out;
-  if (!Common::LoadPNG(png_data, &data_out, &banner.width, &banner.height))
+  if (!Common::LoadPNG(png_data.data(), png_data.size(), &data_out, &banner.width, &banner.height))
     return false;
 
   // Make an ARGB copy of the RGBA data
