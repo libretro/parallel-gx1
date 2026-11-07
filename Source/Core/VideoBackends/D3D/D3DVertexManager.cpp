@@ -80,24 +80,28 @@ CreateTexelBufferView(ID3D11Buffer* buffer, TexelBufferFormat format, DXGI_FORMA
 
 VertexManager::VertexManager() = default;
 
-VertexManager::~VertexManager() = default;
+VertexManager::~VertexManager()
+{
+  UnmapBuffers();
+}
 
 bool VertexManager::Initialize()
 {
   if (!BaseInitialize())
     return false;
 
-  CD3D11_BUFFER_DESC bufdesc((VERTEX_STREAM_BUFFER_SIZE + INDEX_STREAM_BUFFER_SIZE) / BUFFER_COUNT,
-                             D3D11_BIND_INDEX_BUFFER | D3D11_BIND_VERTEX_BUFFER,
-                             D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
-
-  for (auto& buffer : m_buffers)
-  {
-    HRESULT hr = D3D::device->CreateBuffer(&bufdesc, nullptr, &buffer);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create buffer: {}", DX11HRWrap(hr));
-    if (buffer)
-      D3DCommon::SetDebugObjectName(buffer.Get(), "Buffer of VertexManager");
-  }
+  const CD3D11_BUFFER_DESC vertex_desc(VERTEX_STREAM_BUFFER_SIZE, D3D11_BIND_VERTEX_BUFFER,
+                                       D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
+  const CD3D11_BUFFER_DESC index_desc(INDEX_STREAM_BUFFER_SIZE, D3D11_BIND_INDEX_BUFFER,
+                                      D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
+  HRESULT hr = D3D::device->CreateBuffer(&vertex_desc, nullptr, &m_vertex_buffer);
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create vertex buffer: {}", DX11HRWrap(hr));
+  hr = D3D::device->CreateBuffer(&index_desc, nullptr, &m_index_buffer);
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create index buffer: {}", DX11HRWrap(hr));
+  if (!m_vertex_buffer || !m_index_buffer)
+    return false;
+  D3DCommon::SetDebugObjectName(m_vertex_buffer.Get(), "VertexManager vertex buffer");
+  D3DCommon::SetDebugObjectName(m_index_buffer.Get(), "VertexManager index buffer");
 
   m_vertex_constant_buffer = AllocateConstantBuffer(sizeof(VertexShaderConstants));
   m_geometry_constant_buffer = AllocateConstantBuffer(sizeof(GeometryShaderConstants));
@@ -107,7 +111,7 @@ bool VertexManager::Initialize()
 
   CD3D11_BUFFER_DESC texel_buf_desc(TEXEL_STREAM_BUFFER_SIZE, D3D11_BIND_SHADER_RESOURCE,
                                     D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
-  HRESULT hr = D3D::device->CreateBuffer(&texel_buf_desc, nullptr, &m_texel_buffer);
+  hr = D3D::device->CreateBuffer(&texel_buf_desc, nullptr, &m_texel_buffer);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating texel buffer failed: {}", DX11HRWrap(hr));
   if (!m_texel_buffer)
     return false;
@@ -218,57 +222,81 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
   return true;
 }
 
+void VertexManager::UnmapBuffers()
+{
+  if (!m_buffers_mapped)
+    return;
+  D3D::context->Unmap(m_vertex_buffer.Get(), 0);
+  D3D::context->Unmap(m_index_buffer.Get(), 0);
+  m_buffers_mapped = false;
+}
+
 void VertexManager::ResetBuffer(u32 vertex_stride)
 {
-  m_base_buffer_pointer = m_cpu_vertex_buffer.data();
+  D3D11_MAPPED_SUBRESOURCE vertex_map;
+  D3D11_MAPPED_SUBRESOURCE index_map;
+  D3D11_MAP vertex_map_type = D3D11_MAP_WRITE_NO_OVERWRITE;
+  D3D11_MAP index_map_type = D3D11_MAP_WRITE_NO_OVERWRITE;
+  u32 vertex_cursor = m_vertex_cursor;
+  u32 index_cursor = m_index_cursor;
+
+  /* a batch dropped unsent still holds them */
+  UnmapBuffers();
+  D3D::stateman->UnbindInputBuffers();
+
+  if (vertex_stride > 0 && (vertex_cursor % vertex_stride) != 0)
+    vertex_cursor += vertex_stride - (vertex_cursor % vertex_stride);
+  if (vertex_cursor + MAXVBUFFERSIZE > VERTEX_STREAM_BUFFER_SIZE)
+  {
+    vertex_cursor = 0;
+    vertex_map_type = D3D11_MAP_WRITE_DISCARD;
+  }
+  if (index_cursor + MAXIBUFFERSIZE * sizeof(u16) > INDEX_STREAM_BUFFER_SIZE)
+  {
+    index_cursor = 0;
+    index_map_type = D3D11_MAP_WRITE_DISCARD;
+  }
+
+  if (FAILED(D3D::context->Map(m_vertex_buffer.Get(), 0, vertex_map_type, 0, &vertex_map)))
+  {
+    BaseResetBuffer(vertex_stride);
+    return;
+  }
+  if (FAILED(D3D::context->Map(m_index_buffer.Get(), 0, index_map_type, 0, &index_map)))
+  {
+    D3D::context->Unmap(m_vertex_buffer.Get(), 0);
+    BaseResetBuffer(vertex_stride);
+    return;
+  }
+  m_buffers_mapped = true;
+  m_vertex_cursor = vertex_cursor;
+  m_index_cursor = index_cursor;
+
+  m_base_buffer_pointer = static_cast<u8*>(vertex_map.pData) + vertex_cursor;
   m_cur_buffer_pointer = m_base_buffer_pointer;
-  m_end_buffer_pointer = m_base_buffer_pointer + m_cpu_vertex_buffer.size();
-  m_index_generator.Start(m_cpu_index_buffer.data());
+  m_end_buffer_pointer = m_base_buffer_pointer + MAXVBUFFERSIZE;
+  m_index_generator.Start(
+      reinterpret_cast<u16*>(static_cast<u8*>(index_map.pData) + index_cursor));
 }
 
 void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,
                                  u32* out_base_vertex, u32* out_base_index)
 {
-  D3D11_MAPPED_SUBRESOURCE map;
+  const u32 vertex_data_size = num_vertices * vertex_stride;
+  const u32 index_data_size = num_indices * sizeof(u16);
 
-  u32 vertexBufferSize = Common::AlignUp(num_vertices * vertex_stride, sizeof(u16));
-  u32 indexBufferSize = num_indices * sizeof(u16);
-  u32 totalBufferSize = vertexBufferSize + indexBufferSize;
+  *out_base_vertex = vertex_stride > 0 ? (m_vertex_cursor / vertex_stride) : 0;
+  *out_base_index = m_index_cursor / sizeof(u16);
 
-  u32 cursor = m_buffer_cursor;
-  u32 padding = vertex_stride > 0 ? (m_buffer_cursor % vertex_stride) : 0;
-  if (padding)
-  {
-    cursor += vertex_stride - padding;
-  }
+  UnmapBuffers();
+  m_vertex_cursor += vertex_data_size;
+  m_index_cursor += index_data_size;
 
-  D3D11_MAP MapType = D3D11_MAP_WRITE_NO_OVERWRITE;
-  if (cursor + totalBufferSize >= BUFFER_SIZE)
-  {
-    // Wrap around
-    m_current_buffer = (m_current_buffer + 1) % BUFFER_COUNT;
-    cursor = 0;
-    MapType = D3D11_MAP_WRITE_DISCARD;
-  }
+  ADDSTAT(g_stats.this_frame.bytes_vertex_streamed, vertex_data_size);
+  ADDSTAT(g_stats.this_frame.bytes_index_streamed, index_data_size);
 
-  *out_base_vertex = vertex_stride > 0 ? (cursor / vertex_stride) : 0;
-  *out_base_index = (cursor + vertexBufferSize) / sizeof(u16);
-
-  D3D::context->Map(m_buffers[m_current_buffer].Get(), 0, MapType, 0, &map);
-  u8* mappedData = static_cast<u8*>(map.pData);
-  if (vertexBufferSize > 0)
-    std::memcpy(mappedData + cursor, m_base_buffer_pointer, vertexBufferSize);
-  if (indexBufferSize > 0)
-    std::memcpy(mappedData + cursor + vertexBufferSize, m_cpu_index_buffer.data(), indexBufferSize);
-  D3D::context->Unmap(m_buffers[m_current_buffer].Get(), 0);
-
-  m_buffer_cursor = cursor + totalBufferSize;
-
-  ADDSTAT(g_stats.this_frame.bytes_vertex_streamed, vertexBufferSize);
-  ADDSTAT(g_stats.this_frame.bytes_index_streamed, indexBufferSize);
-
-  D3D::stateman->SetVertexBuffer(m_buffers[m_current_buffer].Get(), vertex_stride, 0);
-  D3D::stateman->SetIndexBuffer(m_buffers[m_current_buffer].Get());
+  D3D::stateman->SetVertexBuffer(m_vertex_buffer.Get(), vertex_stride, 0);
+  D3D::stateman->SetIndexBuffer(m_index_buffer.Get());
 }
 
 void VertexManager::UploadUniforms()

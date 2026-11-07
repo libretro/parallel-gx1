@@ -138,6 +138,10 @@ public:
     m_pending.indexBuffer = buffer;
   }
 
+  // Takes the vertex and index buffers off the input assembler now, so
+  // they can stay mapped through draws that use neither.
+  void UnbindInputBuffers();
+
   void SetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY topology)
   {
     if (m_current.topology != topology)

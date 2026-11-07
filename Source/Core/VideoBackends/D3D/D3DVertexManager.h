@@ -58,15 +58,16 @@ protected:
   void UploadUniforms();
 
 private:
-  static constexpr u32 BUFFER_COUNT = 2;
-  static constexpr u32 BUFFER_SIZE =
-      (VERTEX_STREAM_BUFFER_SIZE + INDEX_STREAM_BUFFER_SIZE) / BUFFER_COUNT;
-
   bool MapTexelBuffer(u32 required_size, D3D11_MAPPED_SUBRESOURCE& sr);
+  void UnmapBuffers();
 
-  ComPtr<ID3D11Buffer> m_buffers[BUFFER_COUNT] = {};
-  u32 m_current_buffer = 0;
-  u32 m_buffer_cursor = 0;
+  /* A batch's vertices and indices are decoded straight into these, mapped
+   * from the batch's start to its commit. */
+  ComPtr<ID3D11Buffer> m_vertex_buffer;
+  ComPtr<ID3D11Buffer> m_index_buffer;
+  u32 m_vertex_cursor = 0;
+  u32 m_index_cursor = 0;
+  bool m_buffers_mapped = false;
 
   ComPtr<ID3D11Buffer> m_vertex_constant_buffer = nullptr;
   ComPtr<ID3D11Buffer> m_geometry_constant_buffer = nullptr;

@@ -26,6 +26,25 @@ std::unique_ptr<StateManager> stateman;
 StateManager::StateManager() = default;
 StateManager::~StateManager() = default;
 
+void StateManager::UnbindInputBuffers()
+{
+  ID3D11Buffer* const no_buffer = nullptr;
+  const UINT zero = 0;
+
+  if (m_current.vertexBuffer)
+    D3D::context->IASetVertexBuffers(0, 1, &no_buffer, &zero, &zero);
+  if (m_current.indexBuffer)
+    D3D::context->IASetIndexBuffer(nullptr, DXGI_FORMAT_R16_UINT, 0);
+  m_current.vertexBuffer = nullptr;
+  m_current.vertexBufferStride = 0;
+  m_current.vertexBufferOffset = 0;
+  m_current.indexBuffer = nullptr;
+  m_pending.vertexBuffer = nullptr;
+  m_pending.vertexBufferStride = 0;
+  m_pending.vertexBufferOffset = 0;
+  m_pending.indexBuffer = nullptr;
+}
+
 void StateManager::Apply()
 {
   if (m_dirtyFlags.none())
