@@ -3,6 +3,8 @@
 
 #include "VideoBackends/D3D12/D3D12BoundingBox.h"
 
+#include <cstring>
+
 #include "Common/Assert.h"
 #include "Common/Logging/Log.h"
 
@@ -26,7 +28,7 @@ bool D3D12BoundingBox::Initialize()
   return true;
 }
 
-std::vector<BBoxType> D3D12BoundingBox::Read(u32 index, u32 length)
+void D3D12BoundingBox::Read(u32 index, u32 length, BBoxType* values)
 {
   // Copy from GPU->CPU buffer, and wait for the GPU to finish the copy.
   ResourceBarrier(g_dx_context->GetCommandList(), m_gpu_buffer.Get(),
@@ -38,27 +40,25 @@ std::vector<BBoxType> D3D12BoundingBox::Read(u32 index, u32 length)
   Gfx::GetInstance()->ExecuteCommandList(true);
 
   // Read back to cached values.
-  std::vector<BBoxType> values(length);
+  std::memset(values, 0, sizeof(BBoxType) * length);
   static constexpr D3D12_RANGE read_range = {0, BUFFER_SIZE};
   void* mapped_pointer;
   HRESULT hr = m_readback_buffer->Map(0, &read_range, &mapped_pointer);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Map bounding box CPU buffer failed: {}", DX12HRWrap(hr));
   if (FAILED(hr))
-    return values;
+    return;
 
   // Copy out the values we want
-  std::memcpy(values.data(), static_cast<const u8*>(mapped_pointer) + sizeof(BBoxType) * index,
+  std::memcpy(values, static_cast<const u8*>(mapped_pointer) + sizeof(BBoxType) * index,
               sizeof(BBoxType) * length);
 
   static constexpr D3D12_RANGE write_range = {0, 0};
   m_readback_buffer->Unmap(0, &write_range);
-
-  return values;
 }
 
-void D3D12BoundingBox::Write(u32 index, std::span<const BBoxType> values)
+void D3D12BoundingBox::Write(u32 index, const BBoxType* values, u32 length)
 {
-  const u32 copy_size = static_cast<u32>(values.size() * sizeof(BBoxType));
+  const u32 copy_size = static_cast<u32>(length * sizeof(BBoxType));
   if (!m_upload_buffer.ReserveMemory(copy_size, sizeof(BBoxType)))
   {
     WARN_LOG_FMT(VIDEO, "Executing command list while waiting for space in bbox stream buffer");
@@ -71,7 +71,7 @@ void D3D12BoundingBox::Write(u32 index, std::span<const BBoxType> values)
   }
 
   const u32 upload_buffer_offset = m_upload_buffer.GetCurrentOffset();
-  std::memcpy(m_upload_buffer.GetCurrentHostPointer(), values.data(), copy_size);
+  std::memcpy(m_upload_buffer.GetCurrentHostPointer(), values, copy_size);
   m_upload_buffer.CommitMemory(copy_size);
 
   ResourceBarrier(g_dx_context->GetCommandList(), m_gpu_buffer.Get(),

@@ -12,14 +12,17 @@ namespace OGL
 {
 class OGLBoundingBox final : public BoundingBox
 {
-public:
-  ~OGLBoundingBox() override;
+  /* called by the base class as this backend */
+  friend class ::BoundingBox;
 
-  bool Initialize() override;
+public:
+  ~OGLBoundingBox();
+
+  bool Initialize();
 
 protected:
-  std::vector<BBoxType> Read(u32 index, u32 length) override;
-  void Write(u32 index, std::span<const BBoxType> values) override;
+  void Read(u32 index, u32 length, BBoxType* values);
+  void Write(u32 index, const BBoxType* values, u32 length);
 
 private:
   GLuint m_buffer_id = 0;

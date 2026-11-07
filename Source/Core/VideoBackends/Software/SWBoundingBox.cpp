@@ -43,21 +43,15 @@ void Update(u16 left, u16 right, u16 top, u16 bottom)
 
 namespace SW
 {
-std::vector<BBoxType> SWBoundingBox::Read(u32 index, u32 length)
+void SWBoundingBox::Read(u32 index, u32 length, BBoxType* values)
 {
-  std::vector<BBoxType> values(length);
-
   for (u32 i = 0; i < length; i++)
-  {
     values[i] = BBoxManager::GetCoordinate(static_cast<BBoxManager::Coordinate>(index + i));
-  }
-
-  return values;
 }
 
-void SWBoundingBox::Write(u32 index, std::span<const BBoxType> values)
+void SWBoundingBox::Write(u32 index, const BBoxType* values, u32 length)
 {
-  for (size_t i = 0; i < values.size(); i++)
+  for (u32 i = 0; i < length; i++)
   {
     BBoxManager::SetCoordinate(static_cast<BBoxManager::Coordinate>(index + i), values[i]);
   }

@@ -8,6 +8,7 @@
 #include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
+#include "VideoCommon/AbstractDeleters.h"
 
 enum PerfQueryType
 {
@@ -28,13 +29,15 @@ enum PerfQueryGroup
   PQG_NUM_MEMBERS,
 };
 
+/* The backend's queries are called by the backend in use
+ * (BackendPixelEngine.cpp); with none, nothing is counted. */
 class PerfQueryBase
 {
 public:
   PerfQueryBase() {}
-  virtual ~PerfQueryBase() {}
+  ~PerfQueryBase() {}
 
-  virtual bool Initialize() { return true; }
+  bool Initialize();
 
   // Checks if performance queries are enabled in the gameini configuration.
   // NOTE: Called from CPU+GPU thread
@@ -44,25 +47,25 @@ public:
   // The call to EnableQuery() should be placed immediately before the draw command, otherwise
   // there is a risk of GPU resets if the query is left open and the buffer is submitted during
   // resource binding (D3D12/Vulkan).
-  virtual void EnableQuery(PerfQueryGroup type) {}
+  void EnableQuery(PerfQueryGroup type);
 
   // Stop querying the specified value for the following host GPU commands
-  virtual void DisableQuery(PerfQueryGroup type) {}
+  void DisableQuery(PerfQueryGroup type);
 
   // Reset query counters to zero and drop any pending queries
-  virtual void ResetQuery() {}
+  void ResetQuery();
 
   // Return the measured value for the specified query type
   // NOTE: Called from CPU thread
-  virtual u32 GetQueryResult(PerfQueryType type) { return 0; }
+  u32 GetQueryResult(PerfQueryType type);
 
   // Request the value of any pending queries - causes a pipeline flush and thus should be used
   // carefully!
-  virtual void FlushResults() {}
+  void FlushResults();
 
   // True if there are no further pending query results
   // NOTE: Called from CPU thread
-  virtual bool IsFlushed() const { return true; }
+  bool IsFlushed() const;
 
 protected:
   /* The GPU thread retires queries while the CPU thread reads results: u32s in atomic words. */

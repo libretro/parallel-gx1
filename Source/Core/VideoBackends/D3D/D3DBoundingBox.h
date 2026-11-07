@@ -12,14 +12,17 @@ namespace DX11
 {
 class D3DBoundingBox final : public BoundingBox
 {
-public:
-  ~D3DBoundingBox() override;
+  /* called by the base class as this backend */
+  friend class ::BoundingBox;
 
-  bool Initialize() override;
+public:
+  ~D3DBoundingBox();
+
+  bool Initialize();
 
 protected:
-  std::vector<BBoxType> Read(u32 index, u32 length) override;
-  void Write(u32 index, std::span<const BBoxType> values) override;
+  void Read(u32 index, u32 length, BBoxType* values);
+  void Write(u32 index, const BBoxType* values, u32 length);
 
 private:
   ComPtr<ID3D11Buffer> m_buffer;

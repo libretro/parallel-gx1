@@ -3,15 +3,11 @@
 
 #include "VideoCommon/BoundingBox.h"
 
-#include <algorithm>
-
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
-
-#include <algorithm>
 
 std::unique_ptr<BoundingBox> g_bounding_box;
 
@@ -34,7 +30,10 @@ void BoundingBox::Flush()
 
   m_is_valid = false;
 
-  if (std::ranges::none_of(m_dirty, std::identity{}))
+  u32 dirty = 0;
+  for (u32 i = 0; i < NUM_BBOX_VALUES; ++i)
+    dirty |= m_dirty[i];
+  if (!dirty)
     return;
 
   // TODO: Does this make any difference over just writing all the values?
@@ -51,7 +50,7 @@ void BoundingBox::Flush()
     for (u32 i = start; i < end; ++i)
       m_dirty[i] = false;
 
-    Write(start, std::span(m_values.begin() + start, m_values.begin() + end));
+    Write(start, m_values.data() + start, end - start);
   }
 }
 
@@ -60,7 +59,8 @@ void BoundingBox::Readback()
   if (!g_backend_info.bSupportsBBox)
     return;
 
-  auto read_values = Read(0, NUM_BBOX_VALUES);
+  BBoxType read_values[NUM_BBOX_VALUES];
+  Read(0, NUM_BBOX_VALUES, read_values);
 
   // Preserve dirty values, that way we don't need to sync.
   for (u32 i = 0; i < NUM_BBOX_VALUES; i++)
@@ -114,20 +114,18 @@ void BoundingBox::DoState(PointerWrap& p)
   p.Do(m_is_valid);
 
   // We handle saving the backend values specially rather than using Readback() and Flush() so that
-  // we don't mess up the current cache state
-  std::vector<BBoxType> backend_values(NUM_BBOX_VALUES);
-  if (p.IsReadMode())
+  // we don't mess up the current cache state. Stored as a counted array.
+  BBoxType backend_values[NUM_BBOX_VALUES] = {};
+  u32 count = NUM_BBOX_VALUES;
+  if (!p.IsReadMode() && g_backend_info.bSupportsBBox)
+    Read(0, NUM_BBOX_VALUES, backend_values);
+  p.Do(count);
+  if (count != NUM_BBOX_VALUES)
   {
-    p.Do(backend_values);
-
-    if (g_backend_info.bSupportsBBox)
-      Write(0, backend_values);
+    p.SetMeasureMode();
+    return;
   }
-  else
-  {
-    if (g_backend_info.bSupportsBBox)
-      backend_values = Read(0, NUM_BBOX_VALUES);
-
-    p.Do(backend_values);
-  }
+  p.DoArray(backend_values, NUM_BBOX_VALUES);
+  if (p.IsReadMode() && g_backend_info.bSupportsBBox)
+    Write(0, backend_values, NUM_BBOX_VALUES);
 }

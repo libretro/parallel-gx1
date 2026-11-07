@@ -29,9 +29,9 @@ bool OGLBoundingBox::Initialize()
   return true;
 }
 
-std::vector<BBoxType> OGLBoundingBox::Read(u32 index, u32 length)
+void OGLBoundingBox::Read(u32 index, u32 length, BBoxType* values)
 {
-  std::vector<BBoxType> values(length);
+  std::memset(values, 0, sizeof(BBoxType) * length);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_buffer_id);
 
   // Using glMapBufferRange to read back the contents of the SSBO is extremely slow
@@ -49,7 +49,7 @@ std::vector<BBoxType> OGLBoundingBox::Read(u32 index, u32 length)
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(BBoxType) * index,
-                       sizeof(BBoxType) * length, values.data());
+                       sizeof(BBoxType) * length, values);
   }
   else
   {
@@ -58,7 +58,7 @@ std::vector<BBoxType> OGLBoundingBox::Read(u32 index, u32 length)
                                  GL_MAP_READ_BIT);
     if (ptr)
     {
-      std::memcpy(values.data(), static_cast<const u8*>(ptr) + sizeof(BBoxType) * index,
+      std::memcpy(values, static_cast<const u8*>(ptr) + sizeof(BBoxType) * index,
                   sizeof(BBoxType) * length);
 
       glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -66,14 +66,13 @@ std::vector<BBoxType> OGLBoundingBox::Read(u32 index, u32 length)
   }
 
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-  return values;
 }
 
-void OGLBoundingBox::Write(u32 index, std::span<const BBoxType> values)
+void OGLBoundingBox::Write(u32 index, const BBoxType* values, u32 length)
 {
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_buffer_id);
   glBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(BBoxType) * index,
-                  sizeof(BBoxType) * values.size(), values.data());
+                  sizeof(BBoxType) * length, values);
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 }
 

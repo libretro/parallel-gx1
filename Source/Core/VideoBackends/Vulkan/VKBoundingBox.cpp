@@ -35,7 +35,7 @@ bool VKBoundingBox::Initialize()
   return true;
 }
 
-std::vector<BBoxType> VKBoundingBox::Read(u32 index, u32 length)
+void VKBoundingBox::Read(u32 index, u32 length, BBoxType* values)
 {
   // Can't be done within a render pass.
   StateTracker::GetInstance()->EndRenderPass();
@@ -68,14 +68,11 @@ std::vector<BBoxType> VKBoundingBox::Read(u32 index, u32 length)
   // Cache is now valid.
   m_readback_buffer->InvalidateCPUCache();
 
-  // Read out the values and return
-  std::vector<BBoxType> values(length);
-  m_readback_buffer->Read(index * sizeof(BBoxType), values.data(), length * sizeof(BBoxType),
-                          false);
-  return values;
+  // Read out the values
+  m_readback_buffer->Read(index * sizeof(BBoxType), values, length * sizeof(BBoxType), false);
 }
 
-void VKBoundingBox::Write(u32 index, std::span<const BBoxType> values)
+void VKBoundingBox::Write(u32 index, const BBoxType* values, u32 length)
 {
   // We can't issue vkCmdUpdateBuffer within a render pass.
   // However, the writes must be serialized, so we can't put it in the init buffer.
@@ -89,7 +86,7 @@ void VKBoundingBox::Write(u32 index, std::span<const BBoxType> values)
 
   // Write the values to the GPU buffer
   vkCmdUpdateBuffer(g_command_buffer_mgr->GetCurrentCommandBuffer(), m_gpu_buffer,
-                    index * sizeof(BBoxType), values.size() * sizeof(BBoxType), values.data());
+                    index * sizeof(BBoxType), length * sizeof(BBoxType), values);
 
   // Restore fragment shader access to the buffer.
   StagingBuffer::BufferMemoryBarrier(

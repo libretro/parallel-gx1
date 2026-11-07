@@ -5,10 +5,9 @@
 
 #include <array>
 #include <memory>
-#include <span>
-#include <vector>
 
 #include "Common/CommonTypes.h"
+#include "VideoCommon/AbstractDeleters.h"
 
 class PixelShaderManager;
 class PointerWrap;
@@ -16,11 +15,13 @@ class PointerWrap;
 using BBoxType = s32;
 constexpr u32 NUM_BBOX_VALUES = 4;
 
+/* The backend's bounding box is called by the backend in use
+ * (BackendPixelEngine.cpp); with none, nothing is kept on the GPU. */
 class BoundingBox
 {
 public:
   explicit BoundingBox() = default;
-  virtual ~BoundingBox() = default;
+  ~BoundingBox() = default;
 
   bool IsEnabled() const { return m_is_active; }
   void Enable(PixelShaderManager& pixel_shader_manager);
@@ -35,11 +36,11 @@ public:
 
   // Initialize, Read, and Write are only safe to call if the backend supports bounding box,
   // otherwise unexpected exceptions can occur
-  virtual bool Initialize() = 0;
+  bool Initialize();
 
 protected:
-  virtual std::vector<BBoxType> Read(u32 index, u32 length) = 0;
-  virtual void Write(u32 index, std::span<const BBoxType> values) = 0;
+  void Read(u32 index, u32 length, BBoxType* values);
+  void Write(u32 index, const BBoxType* values, u32 length);
 
 private:
   void Readback();

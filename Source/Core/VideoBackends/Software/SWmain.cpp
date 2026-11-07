@@ -15,6 +15,7 @@
 #include "VideoBackends/Software/SWBoundingBox.h"
 #include "VideoBackends/Software/SWEfbInterface.h"
 #include "VideoBackends/Software/SWGfx.h"
+#include "VideoBackends/Software/SWPerfQuery.h"
 #include "VideoBackends/Software/SWVertexLoader.h"
 #include "VideoBackends/Software/TextureCache.h"
 
@@ -23,19 +24,6 @@
 
 namespace SW
 {
-class PerfQuery : public PerfQueryBase
-{
-public:
-  PerfQuery() {}
-  ~PerfQuery() override {}
-  void EnableQuery(PerfQueryGroup type) override {}
-  void DisableQuery(PerfQueryGroup type) override {}
-  void ResetQuery() override { EfbInterface::ResetPerfQuery(); }
-  u32 GetQueryResult(PerfQueryType type) override { return EfbInterface::GetPerfQueryResult(type); }
-  void FlushResults() override {}
-  bool IsFlushed() const override { return true; }
-};
-
 std::string VideoSoftware::GetConfigName() const
 {
   return CONFIG_NAME;

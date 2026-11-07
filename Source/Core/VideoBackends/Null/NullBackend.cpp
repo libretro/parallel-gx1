@@ -10,10 +10,10 @@
 
 #include "Common/Common.h"
 
-#include "VideoBackends/Null/NullBoundingBox.h"
 #include "VideoBackends/Null/NullGfx.h"
 #include "VideoBackends/Null/NullVertexManager.h"
-#include "VideoBackends/Null/PerfQuery.h"
+#include "VideoCommon/BoundingBox.h"
+#include "VideoCommon/PerfQueryBase.h"
 #include "VideoBackends/Null/TextureCache.h"
 
 #include "VideoCommon/VideoCommon.h"
@@ -67,7 +67,7 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
 bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
 {
   return InitializeShared(std::make_unique<NullGfx>(), std::make_unique<VertexManager>(),
-                          std::make_unique<PerfQuery>(), std::make_unique<NullBoundingBox>(),
+                          std::make_unique<PerfQueryBase>(), std::make_unique<BoundingBox>(),
                           std::make_unique<NullEFBInterface>(), std::make_unique<TextureCache>());
 }
 

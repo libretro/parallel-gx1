@@ -4,9 +4,10 @@
 
 #include <memory>
 
-/* The abstract GPU objects, the Gfx and the vertex manager are deleted as
- * the backend's own classes (VideoBackendKind, BackendObjects.cpp,
- * BackendGfx.cpp, BackendVertexManager.cpp): they have no virtual
+/* The abstract GPU objects, the Gfx, the vertex manager, the bounding box
+ * and the queries are deleted as the backend's own classes
+ * (VideoBackendKind, BackendObjects.cpp, BackendGfx.cpp,
+ * BackendVertexManager.cpp, BackendPixelEngine.cpp): they have no virtual
  * destructor.
  * Declared before any std::unique_ptr of them is, so headers that only
  * name these types include this. */
@@ -17,6 +18,8 @@ class AbstractPipeline;
 class AbstractShader;
 class AbstractStagingTexture;
 class AbstractTexture;
+class BoundingBox;
+class PerfQueryBase;
 class VertexManagerBase;
 
 #define ABSTRACT_GPU_OBJECT_DELETER(type)                                                         \
@@ -37,6 +40,8 @@ ABSTRACT_GPU_OBJECT_DELETER(AbstractPipeline)
 ABSTRACT_GPU_OBJECT_DELETER(AbstractShader)
 ABSTRACT_GPU_OBJECT_DELETER(AbstractStagingTexture)
 ABSTRACT_GPU_OBJECT_DELETER(AbstractTexture)
+ABSTRACT_GPU_OBJECT_DELETER(BoundingBox)
+ABSTRACT_GPU_OBJECT_DELETER(PerfQueryBase)
 ABSTRACT_GPU_OBJECT_DELETER(VertexManagerBase)
 
 #undef ABSTRACT_GPU_OBJECT_DELETER

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -70,33 +71,31 @@ bool D3DBoundingBox::Initialize()
   return true;
 }
 
-std::vector<BBoxType> D3DBoundingBox::Read(u32 index, u32 length)
+void D3DBoundingBox::Read(u32 index, u32 length, BBoxType* values)
 {
-  std::vector<BBoxType> values(length);
+  std::memset(values, 0, sizeof(BBoxType) * length);
   D3D::context->CopyResource(m_staging_buffer.Get(), m_buffer.Get());
 
   D3D11_MAPPED_SUBRESOURCE map;
   HRESULT hr = D3D::context->Map(m_staging_buffer.Get(), 0, D3D11_MAP_READ, 0, &map);
   if (SUCCEEDED(hr))
   {
-    std::memcpy(values.data(), static_cast<const u8*>(map.pData) + sizeof(BBoxType) * index,
+    std::memcpy(values, static_cast<const u8*>(map.pData) + sizeof(BBoxType) * index,
                 sizeof(BBoxType) * length);
 
     D3D::context->Unmap(m_staging_buffer.Get(), 0);
   }
-
-  return values;
 }
 
-void D3DBoundingBox::Write(u32 index, std::span<const BBoxType> values)
+void D3DBoundingBox::Write(u32 index, const BBoxType* values, u32 length)
 {
   D3D11_BOX box{index * sizeof(BBoxType),
                 0,
                 0,
-                static_cast<u32>((index + values.size()) * sizeof(BBoxType)),
+                static_cast<u32>((index + length) * sizeof(BBoxType)),
                 1,
                 1};
-  D3D::context->UpdateSubresource(m_buffer.Get(), 0, &box, values.data(), 0, 0);
+  D3D::context->UpdateSubresource(m_buffer.Get(), 0, &box, values, 0, 0);
 }
 
 }  // namespace DX11

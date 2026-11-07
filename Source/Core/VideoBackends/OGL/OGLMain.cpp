@@ -207,7 +207,7 @@ bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
   g_sampler_cache = std::make_unique<SamplerCache>();
 
   auto vertex_manager = std::make_unique<VertexManager>();
-  auto perf_query = GetPerfQuery(gfx->IsGLES());
+  auto perf_query = std::make_unique<PerfQuery>(gfx->IsGLES());
   auto bounding_box = std::make_unique<OGLBoundingBox>();
 
   return InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),

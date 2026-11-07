@@ -9,18 +9,21 @@
 
 namespace DX11
 {
-class PerfQuery : public PerfQueryBase
+class PerfQuery final : public PerfQueryBase
 {
+  /* called by the base class as this backend */
+  friend class ::PerfQueryBase;
+
 public:
   PerfQuery();
-  ~PerfQuery() override;
+  ~PerfQuery();
 
-  void EnableQuery(PerfQueryGroup group) override;
-  void DisableQuery(PerfQueryGroup group) override;
-  void ResetQuery() override;
-  u32 GetQueryResult(PerfQueryType type) override;
-  void FlushResults() override;
-  bool IsFlushed() const override;
+  void EnableQuery(PerfQueryGroup group);
+  void DisableQuery(PerfQueryGroup group);
+  void ResetQuery();
+  u32 GetQueryResult(PerfQueryType type);
+  void FlushResults();
+  bool IsFlushed() const;
 
 private:
   struct ActiveQuery
