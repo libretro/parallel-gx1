@@ -13,7 +13,6 @@ enum class StereoMode : int;
 enum class StereoPerEyeResolution : int;
 enum class TextureFilteringMode : int;
 enum class AnisotropicFilteringMode : int;
-enum class OutputResamplingMode : int;
 enum class ColorCorrectionRegion : int;
 enum class TriState : int;
 enum class FrameDumpResolutionType : int;
@@ -103,7 +102,6 @@ extern const Info<bool> GFX_MODS_ENABLE;
 extern const Info<TextureFilteringMode> GFX_ENHANCE_FORCE_TEXTURE_FILTERING;
 // NOTE - this is x in (1 << x)
 extern const Info<AnisotropicFilteringMode> GFX_ENHANCE_MAX_ANISOTROPY;
-extern const Info<OutputResamplingMode> GFX_ENHANCE_OUTPUT_RESAMPLING;
 extern const Info<bool> GFX_ENHANCE_FORCE_TRUE_COLOR;
 extern const Info<bool> GFX_ENHANCE_DISABLE_COPY_FILTER;
 extern const Info<bool> GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION;

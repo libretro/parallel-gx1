@@ -1074,25 +1074,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "disabled"
   },
   {
-    Libretro::Options::gfx_enhancements::GFX_ENHANCE_OUTPUT_RESAMPLING,
-    "Graphics > Enhancements > Output Resampling",
-    "Output Resampling",
-    "Select the resampling filter used when scaling the final image.",
-    nullptr,
-    CATEGORY_GFX_ENHANCEMENTS,
-    {
-      { "0", "Default" },
-      { "1", "Bilinear" },
-      { "2", "B-Spline" },
-      { "3","Mitchell-Netravali" },
-      { "4", "Catmull-Rom" },
-      { "5", "Sharp Bilinear" },
-      { "6", "Area Sampling" },
-      { nullptr, nullptr }
-    },
-    "0"
-  },
-  {
     Libretro::Options::gfx_enhancements::FORCE_TRUE_COLOR,
     "Graphics > Enhancements > Force True Color",
     "Force True Color",

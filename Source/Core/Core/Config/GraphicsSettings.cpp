@@ -123,8 +123,6 @@ const Info<TextureFilteringMode> GFX_ENHANCE_FORCE_TEXTURE_FILTERING{
     {System::GFX, "Enhancements", "ForceTextureFiltering"}, TextureFilteringMode::Default};
 const Info<AnisotropicFilteringMode> GFX_ENHANCE_MAX_ANISOTROPY{
     {System::GFX, "Enhancements", "MaxAnisotropy"}, AnisotropicFilteringMode::Default};
-const Info<OutputResamplingMode> GFX_ENHANCE_OUTPUT_RESAMPLING{
-    {System::GFX, "Enhancements", "OutputResampling"}, OutputResamplingMode::Default};
 const Info<bool> GFX_ENHANCE_FORCE_TRUE_COLOR{{System::GFX, "Enhancements", "ForceTrueColor"},
                                               true};
 const Info<bool> GFX_ENHANCE_DISABLE_COPY_FILTER{{System::GFX, "Enhancements", "DisableCopyFilter"},

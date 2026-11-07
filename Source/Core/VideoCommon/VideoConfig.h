@@ -65,17 +65,6 @@ enum class AnisotropicFilteringMode : int
   Force16x = 4,
 };
 
-enum class OutputResamplingMode : int
-{
-  Default,
-  Bilinear,
-  BSpline,
-  MitchellNetravali,
-  CatmullRom,
-  SharpBilinear,
-  AreaSampling,
-};
-
 enum class ColorCorrectionRegion : int
 {
   SMPTE_NTSCM,
@@ -217,7 +206,6 @@ struct VideoConfig final
   bool bSSAA = false;
   int iEFBScale = 0;
   TextureFilteringMode texture_filtering_mode = TextureFilteringMode::Default;
-  OutputResamplingMode output_resampling_mode = OutputResamplingMode::Default;
   AnisotropicFilteringMode iMaxAnisotropy = AnisotropicFilteringMode::Default;
   bool bForceTrueColor = false;
   bool bDisableCopyFilter = false;

@@ -270,7 +270,6 @@ namespace gfx_enhancements {
   constexpr const char FORCE_TEXTURE_FILTERING_MODE[] = "dolphin_force_texture_filtering_mode";
   constexpr const char LOAD_CUSTOM_TEXTURES[] = "dolphin_load_custom_textures";
   constexpr const char CACHE_CUSTOM_TEXTURES[] = "dolphin_cache_custom_textures";
-  constexpr const char GFX_ENHANCE_OUTPUT_RESAMPLING[] = "dolphin_enhance_output_resampling";
   constexpr const char FORCE_TRUE_COLOR[] = "dolphin_force_true_color";
   constexpr const char GFX_ENHANCE_DISABLE_COPY_FILTER[] = "dolphin_disable_copy_filter";
   constexpr const char GFX_ENHANCE_HDR_OUTPUT[] = "dolphin_enhance_hdr_output";

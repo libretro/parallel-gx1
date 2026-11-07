@@ -546,12 +546,6 @@ bool retro_load_game(const struct retro_game_info* game)
                       gfx_enhancements::MAX_ANISOTROPY,
                       static_cast<int>(AnisotropicFilteringMode::Force1x))));
 
-  Config::SetBase(Config::GFX_ENHANCE_OUTPUT_RESAMPLING,
-                  static_cast<OutputResamplingMode>(
-                    Libretro::GetOption<int>(
-                      gfx_enhancements::GFX_ENHANCE_OUTPUT_RESAMPLING,
-                        static_cast<int>(OutputResamplingMode::Default))));
-
   Config::SetBase(Config::GFX_ENHANCE_FORCE_TRUE_COLOR,
                           Libretro::GetOption<bool>(gfx_enhancements::FORCE_TRUE_COLOR,
                                                     /*def=*/true));

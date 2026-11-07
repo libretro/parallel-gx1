@@ -968,7 +968,6 @@ bool Presenter::PresentXFBInPlace()
   if (g_ActiveConfig.stereo_mode != StereoMode::Off ||
       g_ActiveConfig.color_correction.bCorrectColorSpace ||
       g_ActiveConfig.color_correction.bCorrectGamma ||
-      g_ActiveConfig.output_resampling_mode != OutputResamplingMode::Default ||
       m_backbuffer_format != AbstractTextureFormat::RGBA8 ||
       config.format != AbstractTextureFormat::RGBA8 || config.layers != 1 || config.levels != 1)
   {
