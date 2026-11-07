@@ -5,16 +5,13 @@
 
 #include <array>
 #include <cstddef>
-#include <cstdio>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "Common/CommonTypes.h"
 
-#ifdef __LIBRETRO__
-#include "Common/Logging/Log.h"
-#include "DolphinLibretro/Common/VFile.h"
-#endif
+struct RFILE;
 
 namespace File
 {
@@ -31,14 +28,12 @@ enum class SharedAccess
   Read,
 };
 
-// simple wrapper for cstdlib file functions to
-// hopefully will make error checking easier
-// and make forgetting an fclose() harder
+// A file through libretro-common's filestream: the frontend's VFS where it
+// has one, libretro-common's own implementation otherwise.
 class IOFile
 {
 public:
   IOFile();
-  IOFile(std::FILE* file);
   IOFile(const std::string& filename, const char openmode[],
          SharedAccess sh = SharedAccess::Default);
 
@@ -60,37 +55,11 @@ public:
   requires(std::is_trivially_copyable_v<T>)
   bool ReadArray(T* elements, size_t count, size_t* num_read = nullptr)
   {
-#ifdef __LIBRETRO__
-    if (Libretro::VFile::HasVFS())
-    {
-      if (!IsOpen())
-      {
-        m_good = false;
-        return m_good;
-      }
-
-      int64_t bytes_read = Libretro::VFile::ReadBytes(m_vfs_handle,
-                                                     elements,
-                                                     static_cast<uint64_t>(count * sizeof(T)));
-
-      size_t read_count = (bytes_read >= 0) ? static_cast<size_t>(bytes_read) / sizeof(T) : 0;
-
-      if (read_count != count)
-        m_good = false;
-
-      if (num_read)
-        *num_read = read_count;
-
-      return m_good;
-    }
-#endif
-    size_t read_count = 0;
-    if (!IsOpen() || count != (read_count = std::fread(elements, sizeof(T), count, m_file)))
+    const size_t read_count = RawRead(elements, count * sizeof(T)) / sizeof(T);
+    if (read_count != count)
       m_good = false;
-
     if (num_read)
       *num_read = read_count;
-
     return m_good;
   }
 
@@ -98,38 +67,8 @@ public:
   requires(std::is_trivially_copyable_v<T>)
   bool WriteArray(const T* elements, size_t count)
   {
-  #ifdef __LIBRETRO__
-    if (Libretro::VFile::HasVFS())
-    {
-      if (!IsOpen())
-      {
-        m_good = false;
-        return m_good;
-      }
-
-      const uint64_t bytes_to_write = static_cast<uint64_t>(count * sizeof(T));
-      int64_t bytes_written = Libretro::VFile::WriteBytes(m_vfs_handle, elements, bytes_to_write);
-
-      if (bytes_written < 0)
-      {
-        m_good = false;
-        return m_good;
-      }
-
-      size_t write_count = static_cast<size_t>(bytes_written) / sizeof(T);
-      if (write_count != count)
-      {
-        m_good = false;
-        return m_good;
-      }
-
-      return m_good;
-    }
-  #endif
-
-    if (!IsOpen() || count != std::fwrite(elements, sizeof(T), count, m_file))
+    if (!RawWrite(elements, count * sizeof(T)))
       m_good = false;
-
     return m_good;
   }
 
@@ -154,29 +93,26 @@ public:
 
   bool WriteString(std::string_view str) { return WriteBytes(str.data(), str.size()); }
 
-  bool IsOpen() const
-  {
-#ifdef __LIBRETRO__
-    if (Libretro::VFile::HasVFS())
-      return nullptr != m_vfs_handle;
-#endif
-    return nullptr != m_file;
-  }
+  // Writes length zero octets.
+  bool WriteZeros(size_t length);
+
+  bool IsOpen() const { return m_file != nullptr; }
   // m_good is set to false when a read, write or other function fails
   bool IsGood() const { return m_good; }
   explicit operator bool() const { return IsGood() && IsOpen(); }
-  std::FILE* GetHandle()
-  {
-#ifdef __LIBRETRO__
-    if (Libretro::VFile::HasVFS())
-      ERROR_LOG_FMT(COMMON, "VFS: Attempt to use std::FILE which should not happen in VFS mode");
-#endif
-    return m_file; 
-  }
-#ifdef __LIBRETRO__
-  retro_vfs_file_handle* GetVFSHandle() { return m_vfs_handle; }
-#endif
-  void SetHandle(std::FILE* file);
+  RFILE* GetHandle() { return m_file; }
+
+  // The whole file, read-only, where it is memory-mapped (a file opened for
+  // reading by the local implementation); nullptr otherwise. Valid until close.
+  const u8* GetMappedPtr(u64* size = nullptr);
+
+  // Up to length octets at the position, lent rather than copied, the position
+  // moving past them; nullptr when nothing there can be lent. Valid until the
+  // next call on this file.
+  const u8* View(size_t length, size_t* lent);
+
+  // Asks the OS to start reading [offset, offset + length) in; returns at once.
+  void Prefetch(u64 offset, u64 length);
 
   bool Seek(s64 offset, SeekOrigin origin);
   u64 Tell() const;
@@ -185,24 +121,14 @@ public:
   bool Flush();
 
   // clear error state
-  void ClearError()
-  {
-    m_good = true;
-#ifdef __LIBRETRO__
-    if (Libretro::VFile::HasVFS())
-      return;
-#endif
-    if (IsOpen())
-      std::clearerr(m_file);
-  }
+  void ClearError() { m_good = true; }
 
 private:
-  std::FILE* m_file;
-  bool m_good;
+  size_t RawRead(void* data, size_t length);
+  bool RawWrite(const void* data, size_t length);
 
-#ifdef __LIBRETRO__
-  retro_vfs_file_handle* m_vfs_handle = nullptr;
-#endif
+  RFILE* m_file;
+  bool m_good;
 };
 
 }  // namespace File

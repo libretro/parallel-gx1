@@ -2,8 +2,7 @@
 #include <libretro.h>
 #include <string>
 #include <functional>
-#include <filesystem>
-#include <fstream>
+#include <iterator>
 
 #include "Common/CommonPaths.h"
 #include "Common/Thread.h"
@@ -29,7 +28,7 @@
 #include "DolphinLibretro/Audio.h"
 #include "DolphinLibretro/Input.h"
 #include "DolphinLibretro/Log.h"
-#include "DolphinLibretro/Common/VFile.h"
+#include <vfs/vfs_hybrid.h>
 #include "DolphinLibretro/Common/Globals.h"
 #include "DolphinLibretro/Common/Options.h"
 #include "DolphinLibretro/Video.h"
@@ -44,7 +43,6 @@
 #include "VideoCommon/Resources/CustomResourceManager.h"
 #include "VideoCommon/Fifo.h"
 
-namespace fs = std::filesystem;
 
 namespace Libretro
 {
@@ -117,62 +115,43 @@ void generate_cht_from_ini(std::string fileName)
   if (!File::CreateFullPath(cheatFile))
     return;
 
-  std::ofstream out(cheatFile);
-  if (!out.is_open())
-  {
-    ERROR_LOG_FMT(BOOT, "Cheats: unable to create a new cht file at: {}", cheatFile);
-    return;
-  }
-
-  out << "cheats = " << total << "\n\n";
-
+  // built whole, written in one go
+  std::string out = fmt::format("cheats = {}\n\n", total);
   size_t cheat_index = 0;
 
-  // -------------------------
-  // Action Replay
-  // -------------------------
   for (const auto& c : Libretro::g_ar_codes)
   {
     std::string code;
-
     for (const auto& op : c.ops)
     {
       if (!code.empty())
         code += "+";
-
-      code += fmt::format("{:08X} {:08X}", op.cmd_addr, op.value);
+      fmt::format_to(std::back_inserter(code), "{:08X} {:08X}", op.cmd_addr, op.value);
     }
-
-    out << "cheat" << cheat_index << "_desc = \"" << c.name << "\"\n";
-    out << "cheat" << cheat_index << "_code = \"" << code << "\"\n";
-    out << "cheat" << cheat_index << "_enable = " << (c.enabled ? "true" : "false") << "\n\n";
-
-    cheat_index++;
+    fmt::format_to(std::back_inserter(out),
+                   "cheat{0}_desc = \"{1}\"\ncheat{0}_code = \"{2}\"\ncheat{0}_enable = {3}\n\n",
+                   cheat_index++, c.name, code, c.enabled ? "true" : "false");
   }
 
-  // -------------------------
-  // Gecko
-  // -------------------------
   for (const auto& c : Libretro::g_gecko_codes)
   {
     std::string code;
-
     for (const auto& line : c.codes)
     {
       if (!code.empty())
-          code += "+";
-
+        code += "+";
       code += line.original_line;
     }
-
-    out << "cheat" << cheat_index << "_desc = \"" << c.name << "\"\n";
-    out << "cheat" << cheat_index << "_code = \"" << code << "\"\n";
-    out << "cheat" << cheat_index << "_enable = " << (c.enabled ? "true" : "false") << "\n\n";
-
-    cheat_index++;
+    fmt::format_to(std::back_inserter(out),
+                   "cheat{0}_desc = \"{1}\"\ncheat{0}_code = \"{2}\"\ncheat{0}_enable = {3}\n\n",
+                   cheat_index++, c.name, code, c.enabled ? "true" : "false");
   }
 
-  out.close();
+  if (!File::WriteStringToFile(cheatFile, out))
+  {
+    ERROR_LOG_FMT(BOOT, "Cheats: unable to create a new cht file at: {}", cheatFile);
+    return;
+  }
 
   INFO_LOG_FMT(BOOT, "Cheats: cht file created successfully at: {}", cheatFile);
 }
@@ -207,6 +186,29 @@ static void SetRegionFreeFallback(const BootParameters& boot_params)
 
 } // namespace Libretro
 
+/* The path without its last component, and its last component, either
+ * separator taken and trailing ones ignored. */
+static std::string PathParent(const std::string& path)
+{
+  size_t end = path.find_last_not_of("/\\");
+  size_t slash;
+  if (end == std::string::npos)
+    return std::string();
+  slash = path.find_last_of("/\\", end);
+  return slash == std::string::npos ? std::string() : path.substr(0, slash);
+}
+
+static std::string PathLast(const std::string& path)
+{
+  size_t end = path.find_last_not_of("/\\");
+  size_t slash;
+  if (end == std::string::npos)
+    return std::string();
+  slash = path.find_last_of("/\\", end);
+  return path.substr(slash == std::string::npos ? 0 : slash + 1,
+                     end - (slash == std::string::npos ? 0 : slash + 1) + 1);
+}
+
 bool retro_load_game(const struct retro_game_info* game)
 {
   Libretro::ResetDiskControlState();
@@ -229,12 +231,12 @@ bool retro_load_game(const struct retro_game_info* game)
    */
   if (Libretro::GBPlayer_active)
   {
-    std::filesystem::path gba_content_dir = std::filesystem::path("");
+    std::string gba_content_dir;
     if (!Libretro::GBPlayer_rom_path.empty())
-      gba_content_dir = std::filesystem::path(Libretro::GBPlayer_rom_path).parent_path().filename().string();
+      gba_content_dir = PathLast(PathParent(Libretro::GBPlayer_rom_path));
 
     Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &gba_save_dir);
-    std::filesystem::path base = std::filesystem::path(gba_save_dir);
+    std::string base = gba_save_dir ? gba_save_dir : "";
 
     bool core_sort = false;
     retro_system_info sys_info{};
@@ -242,21 +244,21 @@ bool retro_load_game(const struct retro_game_info* game)
     const std::string library_name = sys_info.library_name;
 
     if (!base.empty() && !library_name.empty())
-      core_sort = Common::CaseInsensitiveEquals(base.filename().string(), library_name);
+      core_sort = Common::CaseInsensitiveEquals(PathLast(base), library_name);
     if (core_sort)
-      base = base.parent_path();
+      base = PathParent(base);
 
     bool content_sort = false;
     std::string gc_content_dir;
     if (!gba_content_dir.empty() && !base.empty())
-      content_sort = Common::CaseInsensitiveEquals(base.filename().string(), gba_content_dir.string());
+      content_sort = Common::CaseInsensitiveEquals(PathLast(base), gba_content_dir);
     if (content_sort)
     {
-      gc_content_dir = std::filesystem::path(game->path).parent_path().filename().string();
-      base = base.parent_path();
+      gc_content_dir = PathLast(PathParent(game->path));
+      base = PathParent(base);
     }
 
-    rebuild_save_dir = base.string();
+    rebuild_save_dir = base;
     if (content_sort)
       rebuild_save_dir = rebuild_save_dir + DIR_SEP + gc_content_dir;
     if (core_sort)
@@ -290,7 +292,7 @@ bool retro_load_game(const struct retro_game_info* game)
 
   using namespace Libretro::Options;
   Libretro::Options::Init();
-  Libretro::VFile::Init();
+  vfs_hybrid_init(Libretro::environ_cb, nullptr);
 
 #ifdef ANDROID
   static bool sysdir_set = false;
@@ -704,13 +706,11 @@ bool retro_load_game(const struct retro_game_info* game)
   NOTICE_LOG_FMT(VIDEO, "Using GFX backend: {}", Config::Get(Config::MAIN_GFX_BACKEND));
 
   std::vector<std::string> normalized_game_paths;
-  normalized_game_paths.push_back(Libretro::VFile::NormalizePath(game->path));
+  normalized_game_paths.push_back(game->path);
   std::string folder_path_str;
   std::string filename_str;
   std::string extension;
   SplitPath(normalized_game_paths.front(), &folder_path_str, &filename_str, &extension);
-  fs::path folder_path(folder_path_str);
-  fs::path filename(filename_str);
   std::transform(extension.begin(), extension.end(), extension.begin(),
                 [](unsigned char c){ return std::tolower(c); });
 
@@ -722,7 +722,6 @@ bool retro_load_game(const struct retro_game_info* game)
     size_t last_slash = normalized_game_paths.front().find_last_of("\\/");
     if (last_slash != std::string::npos)
       folder_path_str = normalized_game_paths.front().substr(0, last_slash + 1);
-    folder_path = fs::path(folder_path_str);
   }
 #endif
 
@@ -737,7 +736,7 @@ bool retro_load_game(const struct retro_game_info* game)
   }
 
   for (auto& normalized_game_path : normalized_game_paths)
-    Libretro::disk_paths.push_back(Libretro::VFile::DenormalizePath(normalized_game_path));
+    Libretro::disk_paths.push_back(normalized_game_path);
 
   Libretro::Input::Init(wsi);
 
@@ -914,7 +913,7 @@ static bool retro_set_eject_state(bool ejected)
       system.GetDVDInterface().EjectDisc(guard, DVD::EjectCause::User);
     else if (disk_index < disk_paths.size())
     {
-      const std::string path = Libretro::VFile::NormalizePath(disk_paths[disk_index]);
+      const std::string& path = disk_paths[disk_index];
       system.GetDVDInterface().ChangeDisc(guard, path);
     }
   }, true); // wait_for_completion = true

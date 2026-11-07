@@ -12,13 +12,14 @@
 
 #include "Common/IOFile.h"
 #include "Common/MathUtil.h"
+#include "Common/FileUtil.h"
 #include "Common/StringUtil.h"
 
 namespace DiscIO
 {
 static std::string MakeAbsolute(const std::string& directory, const std::string& path)
 {
-  return PathToString(StringToPath(directory) / StringToPath(path));
+  return File::JoinPath(directory, path);
 }
 
 std::optional<GameModDescriptor> ParseGameModDescriptorFile(const std::string& filename)

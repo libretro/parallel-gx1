@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <fstream>
 #include <map>
 #include <string>
 #include <string_view>
@@ -13,6 +12,8 @@
 #include <vector>
 
 #include "Common/FileUtil.h"
+
+#include <streams/file_stream.h>
 #include "Common/StringUtil.h"
 
 namespace Common
@@ -242,38 +243,22 @@ bool IniFile::Load(const std::string& filename, bool keep_current_data)
     sections.clear();
   // first section consists of the comments before the first real section
 
-  // Open file
-  std::ifstream in;
-  File::OpenFStream(in, filename, std::ios::in);
-
-  if (in.fail())
+  File::LineReader in(filename);
+  if (!in.IsOpen())
     return false;
 
   Section* current_section = nullptr;
   bool first_line = true;
-  while (!in.eof())
+  const char* text;
+  size_t length;
+  while (in.Next(&text, &length))
   {
-    std::string line_str;
-    if (!std::getline(in, line_str))
-    {
-      if (in.eof())
-        return true;
-      else
-        return false;
-    }
-
-    std::string_view line = line_str;
+    std::string_view line(text, length);
 
     // Skips the UTF-8 BOM at the start of files. Notepad likes to add this.
     if (first_line && line.substr(0, 3) == "\xEF\xBB\xBF")
       line.remove_prefix(3);
     first_line = false;
-
-#ifndef _WIN32
-    // Check for CRLF eol and convert it to LF
-    if (!line.empty() && line.back() == '\r')
-      line.remove_suffix(1);
-#endif
 
     if (!line.empty())
     {
@@ -312,44 +297,47 @@ bool IniFile::Load(const std::string& filename, bool keep_current_data)
     }
   }
 
-  in.close();
   return true;
 }
 
 bool IniFile::Save(const std::string& filename)
 {
-  std::ofstream out;
-  std::string temp = File::GetTempFilenameForAtomicWrite(filename);
-  File::OpenFStream(out, temp, std::ios::out);
-
-  if (out.fail())
-  {
-    return false;
-  }
+  std::string out;
 
   for (const Section& section : sections)
   {
     if (!section.keys_order.empty() || !section.m_lines.empty())
-      out << '[' << section.name << ']' << std::endl;
+    {
+      out += '[';
+      out += section.name;
+      out += "]\n";
+    }
 
     if (section.keys_order.empty())
     {
       for (const std::string& s : section.m_lines)
-        out << s << std::endl;
+      {
+        out += s;
+        out += '\n';
+      }
     }
     else
     {
       for (const std::string& kvit : section.keys_order)
       {
         auto pair = section.values.find(kvit);
-        out << pair->first << " = " << pair->second << std::endl;
+        out += pair->first;
+        out += " = ";
+        out += pair->second;
+        out += '\n';
       }
     }
   }
 
-  out.close();
-
-  return File::RenameSync(temp, filename);
+  // an unchanged file is left alone; a changed one is replaced whole or not at all
+  if (filestream_matches_buf(filename.c_str(), out.data(), out.size()))
+    return true;
+  return filestream_write_file_atomic(filename.c_str(), out.data(), s64(out.size()));
 }
 
 // Unit test. TODO: Move to the real unit test framework.

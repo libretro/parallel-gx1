@@ -3,9 +3,9 @@
 
 #include "Common/JsonUtil.h"
 
-#include <fstream>
 
 #include "Common/FileUtil.h"
+#include "Common/IOFile.h"
 
 picojson::object ToJsonObject(const Common::Vec3& vec)
 {
@@ -45,24 +45,32 @@ std::optional<bool> ReadBoolFromJson(const picojson::object& obj, const std::str
 
 bool JsonToFile(const std::string& filename, const picojson::value& root, bool prettify)
 {
-  std::ofstream json_stream;
-  File::OpenFStream(json_stream, filename, std::ios_base::out);
-  if (!json_stream.is_open())
-  {
-    return false;
-  }
-  json_stream << root.serialize(prettify);
-  return true;
+  const std::string json = root.serialize(prettify);
+  return File::WriteStringToFile(filename, json);
 }
 
 bool JsonFromFile(const std::string& filename, picojson::value* root, std::string* error)
 {
+  File::IOFile file(filename, "rb");
   std::string json_data;
-  if (!File::ReadFileToString(filename, json_data))
-  {
+  const char* begin;
+  u64 size;
+
+  if (!file)
     return false;
+
+  // parsed straight from the mapping where the file has one
+  begin = reinterpret_cast<const char*>(file.GetMappedPtr(&size));
+  if (!begin)
+  {
+    json_data.resize(file.GetSize());
+    if (!file.ReadArray(json_data.data(), json_data.size()))
+      return false;
+    begin = json_data.data();
+    size = json_data.size();
   }
 
-  *error = picojson::parse(*root, json_data);
+  error->clear();
+  picojson::parse(*root, begin, begin + size, error);
   return error->empty();
 }

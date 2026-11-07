@@ -3,8 +3,8 @@
 
 #include "Common/CPUDetect.h"
 
+#include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <sstream>
 #include <string>
 #include <algorithm>
@@ -106,26 +106,28 @@ static bool Read_ID_AA64MMFR1_EL1(u64* value)
 
 static bool ReadDeviceTree(std::string* value, const std::string& name)
 {
-  const std::string path = std::string("/proc/device-tree/") + name;
-  std::ifstream file;
-  File::OpenFStream(file, path.c_str(), std::ios_base::in);
-  if (!file)
+  File::LineReader file(std::string("/proc/device-tree/") + name);
+  const char* text;
+  size_t length;
+  size_t end = 0;
+  if (!file.Next(&text, &length))
     return false;
 
-  file >> *value;
+  // the first word, as a stream extraction takes it
+  while (end < length && text[end] && text[end] != ' ' && text[end] != '\t')
+    end++;
+  value->assign(text, end);
   return true;
 }
 
 static std::string ReadCpuinfoField(const std::string& field)
 {
-  std::string line;
-  std::ifstream file;
-  File::OpenFStream(file, "/proc/cpuinfo", std::ios_base::in);
-  if (!file)
-    return {};
-
-  while (std::getline(file, line))
+  File::LineReader file("/proc/cpuinfo");
+  const char* text;
+  size_t length;
+  while (file.Next(&text, &length))
   {
+    const std::string line(text, length);
     if (!line.starts_with(field))
       continue;
     auto non_tab = line.find_first_not_of("\t", field.length());
@@ -143,13 +145,13 @@ static std::string ReadCpuinfoField(const std::string& field)
 
 static bool Read_MIDR_EL1_Sysfs(u64* value)
 {
-  std::ifstream file;
-  File::OpenFStream(file, "/sys/devices/system/cpu/cpu0/regs/identification/midr_el1",
-                    std::ios_base::in);
-  if (!file)
+  File::LineReader file("/sys/devices/system/cpu/cpu0/regs/identification/midr_el1");
+  const char* text;
+  size_t length;
+  if (!file.Next(&text, &length))
     return false;
 
-  file >> std::hex >> *value;
+  *value = std::strtoull(std::string(text, length).c_str(), nullptr, 16);
   return true;
 }
 

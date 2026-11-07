@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
-#include <fstream>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -60,41 +59,23 @@
 #include "DiscIO/VolumeDisc.h"
 #include "DiscIO/VolumeWad.h"
 
-#ifndef __LIBRETRO__
-static
-#endif
-std::vector<std::string> ReadM3UFile(const std::string& m3u_path,
-                                            const std::string& folder_path)
+static void PushLine(void* ud, const char* text, size_t length)
+{
+  static_cast<std::vector<std::string>*>(ud)->emplace_back(text, length);
+}
+
+std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::string& folder_path)
 {
   std::vector<std::string> result;
   std::vector<std::string> nonexistent;
   std::vector<std::string> lines;
-  std::string newline;
 
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    lines = Libretro::VFile::ReadLines(m3u_path);
-  }
-  else
-#endif
-  {
-    std::ifstream s;
-    File::OpenFStream(s, m3u_path, std::ios_base::in);
-
-    while (std::getline(s, newline))
-      lines.push_back(newline);
-  }
+  File::ForEachLine(m3u_path, PushLine, &lines);
 
   for (std::string& line : lines)
   {
     // This is the UTF-8 representation of U+FEFF.
     constexpr std::string_view utf8_bom = "\xEF\xBB\xBF";
-
-#ifndef _WIN32
-    if (line.ends_with('\r'))
-      line.pop_back();
-#endif
 
     if (line.starts_with(utf8_bom))
     {
@@ -104,7 +85,7 @@ std::vector<std::string> ReadM3UFile(const std::string& m3u_path,
 
     if (!line.empty() && line.front() != '#')  // Comments start with #
     {
-      const std::string path_to_add = PathToString(StringToPath(folder_path) / StringToPath(line));
+      const std::string path_to_add = File::JoinPath(folder_path, line);
       (File::Exists(path_to_add) ? result : nonexistent).push_back(path_to_add);
     }
   }

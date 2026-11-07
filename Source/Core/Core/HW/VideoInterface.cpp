@@ -885,7 +885,6 @@ void VideoInterfaceManager::EndField(FieldType field, u64 ticks)
     OutputField(field, ticks);
 
   m_system.GetVideoEvents().vi_end_field_event.Trigger();
-  Core::OnFrameEnd(m_system);
 }
 
 // Purpose: Send VI interrupt when triggered

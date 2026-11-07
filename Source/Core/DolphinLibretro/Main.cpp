@@ -5,7 +5,6 @@
 #include <libretro.h>
 #include <string>
 
-#include <fstream>
 #include <vector>
 
 #include "Common/ChunkFile.h"

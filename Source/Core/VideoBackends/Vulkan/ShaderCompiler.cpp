@@ -121,16 +121,10 @@ static void ReportFailure(const char* stage_name, const std::string& source, con
 {
   static int counter;
   std::string path = VideoBackendBase::BadShaderFilename(stage_name, counter++);
-  FILE* f;
 
   ERROR_LOG_FMT(VIDEO, "rslc could not compile a {} shader: {}", stage_name, err);
   File::CreateFullPath(path);
-  f = fopen(path.c_str(), "wb");
-  if (!f)
-    return;
-  fwrite(source.data(), 1, source.size(), f);
-  fprintf(f, "\n/* rslc: %s */\n", err);
-  fclose(f);
+  File::WriteStringToFile(path, fmt::format("{}\n/* rslc: {} */\n", source, err));
 }
 
 static std::optional<SPIRVCodeVector> Compile(std::string_view source_code, enum rslc_stage stage,

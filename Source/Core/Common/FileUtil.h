@@ -3,23 +3,12 @@
 
 #pragma once
 
-#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <sys/stat.h>
-
 #include "Common/CommonTypes.h"
-
-#ifdef _WIN32
-#include "Common/StringUtil.h"
-#endif
-
-#ifdef ANDROID
-#include "Common/StringUtil.h"
-#include "jni/AndroidCommon/AndroidCommon.h"
-#endif
+#include "Common/IOFile.h"
 
 // User directory indices for GetUserPath
 enum
@@ -112,10 +101,7 @@ struct FSTEntry
   std::vector<FSTEntry> children;
 };
 
-// The functions in this class are functionally identical to the standalone functions
-// below, but if you are going to be calling more than one of the functions using the
-// same path, creating a single FileInfo object and calling its functions multiple
-// times is faster than calling standalone functions multiple times.
+// What a path is, found once for the queries a caller makes of it.
 class FileInfo final
 {
 public:
@@ -123,18 +109,18 @@ public:
   explicit FileInfo(const char* path);
 
   // Returns true if the path exists
-  bool Exists() const;
+  bool Exists() const { return m_exists; }
   // Returns true if the path exists and is a directory
-  bool IsDirectory() const;
+  bool IsDirectory() const { return m_is_directory; }
   // Returns true if the path exists and is a file
-  bool IsFile() const;
+  bool IsFile() const { return m_exists && !m_is_directory; }
   // Returns the size of a file (or returns 0 if the path doesn't refer to a file)
-  u64 GetSize() const;
+  u64 GetSize() const { return m_size; }
 
 private:
-  std::filesystem::file_status m_status;
-  std::uintmax_t m_size;
-  bool m_exists;
+  u64 m_size = 0;
+  bool m_exists = false;
+  bool m_is_directory = false;
 };
 
 // Returns true if the path exists
@@ -148,9 +134,6 @@ bool IsFile(const std::string& path);
 
 // Returns the size of a file (or returns 0 if the path isn't a file that exists)
 u64 GetSize(const std::string& path);
-
-// Overloaded GetSize, accepts FILE*
-u64 GetSize(FILE* f);
 
 // Creates a single directory. Returns true if successful or if the path already exists.
 bool CreateDir(const std::string& filename);
@@ -181,10 +164,7 @@ bool DeleteDir(const std::string& filename,
 // renames file srcFilename to destFilename, returns true on success
 bool Rename(const std::string& srcFilename, const std::string& destFilename);
 
-// ditto, but syncs the source file and, on Unix, syncs the directories after rename
-bool RenameSync(const std::string& srcFilename, const std::string& destFilename);
-
-// Copies a file at source_path to destination_path, as if by std::filesystem::copy_file().
+// Copies a file at source_path to destination_path.
 // If a file already exists at destination_path it is overwritten. Returns true on success.
 bool CopyRegularFile(std::string_view source_path, std::string_view destination_path);
 
@@ -197,11 +177,8 @@ FSTEntry ScanDirectoryTree(const std::string& directory, bool recursive);
 // deletes the given directory and anything under it. Returns true on success.
 bool DeleteDirRecursively(const std::string& directory);
 
-// Returns the current directory
-std::string GetCurrentDir();
-
-// Copies source_path to dest_path, as if by std::filesystem::copy(). Returns true on success or if
-// the source and destination are already the same (as determined by std::filesystem::equivalent()).
+// Copies source_path to dest_path, directories recursively. Returns true on success or if the
+// source and destination are the same path.
 bool Copy(std::string_view source_path, std::string_view dest_path,
           bool overwrite_existing = false);
 
@@ -211,12 +188,6 @@ bool Copy(std::string_view source_path, std::string_view dest_path,
 // guarantee on the state is given on failure; the move may have completely failed or partially
 // completed.
 bool MoveWithOverwrite(std::string_view source_path, std::string_view dest_path);
-
-// Set the current directory to given directory
-bool SetCurrentDir(const std::string& directory);
-
-// Creates and returns the path to a new temporary directory.
-std::string CreateTempDir();
 
 // Get a filename that can hopefully be atomically renamed to the given path.
 std::string GetTempFilenameForAtomicWrite(std::string path);
@@ -229,47 +200,45 @@ const std::string& GetUserPath(unsigned int dir_index);
 // Rebuilds internal directory structure to compensate for the new directory
 void SetUserPath(unsigned int dir_index, std::string path);
 
-// probably doesn't belong here
-std::string GetThemeDir(const std::string& theme_name);
-
 // Returns the path to where the sys file are
 const std::string& GetSysDirectory();
 
-#if defined(__LIBRETRO__) && !defined(ANDROID)
-void SetSysDirectory(const std::string& path);
-#endif
 
-#ifdef ANDROID
 void SetSysDirectory(const std::string& path);
+#ifdef ANDROID
 void SetGpuDriverDirectories(const std::string& path, const std::string& lib_path);
 const std::string GetGpuDriverDirectory(unsigned int dir_index);
 #endif
 
-#ifdef __APPLE__
-std::string GetBundleDirectory();
-#endif
+// The lines of a file, one Next() at a time, without their line endings ("\n" or "\r\n").
+// Lines are lent from the file's mapping where it has one, else from a window read a block
+// at a time; each is valid until the next call.
+class LineReader final
+{
+public:
+  explicit LineReader(const std::string& filename);
+  bool IsOpen() const { return m_file.IsOpen(); }
+  bool Next(const char** text, size_t* length);
 
-std::string GetExePath();
-std::string GetExeDirectory();
+private:
+  IOFile m_file;
+  std::vector<char> m_window;
+  const char* m_map = nullptr;
+  size_t m_size = 0;   // mapped length, or octets held in the window
+  size_t m_pos = 0;    // the next line's start
+  bool m_eof = false;
+};
+
+// path taken relative to directory, unless path is absolute.
+std::string JoinPath(const std::string& directory, const std::string& path);
+
+// Calls line(ud, text, length) for each line of the file, without its line ending ("\n" or
+// "\r\n"). Lines are lent from the file's mapping where it has one, else from a window read
+// a block at a time; valid only during the call. False if the file cannot be opened.
+bool ForEachLine(const std::string& filename, void (*line)(void* ud, const char* text, size_t length),
+                 void* ud);
 
 bool WriteStringToFile(const std::string& filename, std::string_view str);
 bool ReadFileToString(const std::string& filename, std::string& str);
-
-// To deal with Windows not fully supporting UTF-8 and Android not fully supporting paths.
-template <typename T>
-void OpenFStream(T& fstream, const std::string& filename, std::ios_base::openmode openmode)
-{
-#ifdef _MSC_VER
-  fstream.open(UTF8ToTStr(filename).c_str(), openmode);
-#else
-#ifdef ANDROID
-  // Unfortunately it seems like the non-standard __open is the only way to use a file descriptor
-  if (IsPathAndroidContent(filename))
-    fstream.__open(OpenAndroidContent(filename, OpenModeToAndroid(openmode)), openmode);
-  else
-#endif
-    fstream.open(filename.c_str(), openmode);
-#endif
-}
 
 }  // namespace File

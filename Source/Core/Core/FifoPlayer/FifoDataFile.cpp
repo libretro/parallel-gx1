@@ -373,8 +373,7 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
 
 void FifoDataFile::PadFile(size_t numBytes, File::IOFile& file)
 {
-  for (size_t i = 0; i < numBytes; ++i)
-    fputc(0, file.GetHandle());
+  file.WriteZeros(numBytes);
 }
 
 void FifoDataFile::SetFlag(u32 flag, bool set)

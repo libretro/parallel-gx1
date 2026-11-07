@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdlib>
-#include <fstream>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -128,16 +127,15 @@ void MEGASignatureDB::Clear()
 
 bool MEGASignatureDB::Load(const std::string& file_path)
 {
-  std::ifstream ifs;
-  File::OpenFStream(ifs, file_path, std::ios_base::in);
-
-  if (!ifs)
+  File::LineReader reader(file_path);
+  if (!reader.IsOpen())
     return false;
 
-  std::string line;
-  for (size_t i = 1; std::getline(ifs, line); ++i)
+  const char* text;
+  size_t length;
+  for (size_t i = 1; reader.Next(&text, &length); ++i)
   {
-    std::istringstream iss(line);
+    std::istringstream iss(std::string(text, length));
     MEGASignature sig;
 
     if (GetCode(&sig, &iss) && GetName(&sig, &iss) && GetRefs(&sig, &iss))

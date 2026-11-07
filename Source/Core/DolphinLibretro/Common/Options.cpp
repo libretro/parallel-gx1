@@ -1792,24 +1792,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
   },
 #endif  // HAS_OPENGL/__WEBOS__
   {
-    Libretro::Options::retroarch_core::ENABLE_LIBRETRO_VFS,
-    "RetroArch core > Enable Virtual File System (VFS)",
-    "Enable Virtual File System (VFS)",
-    "Enable VFS for SAF/SMB etc. Requires core RESTART. This feature is NEW and EXPERIMENTAL. Backup your saves regularly.",
-    nullptr,
-    CATEGORY_RETROARCH_CORE,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-#if defined(ANDROID) || defined(__WEBOS__)
-    "enabled" // enable by default because of SAF (android play version) / storage (webOS)
-#else
-    "disabled"
-#endif
-  },
-  {
     Libretro::Options::retroarch_core::ENABLE_DEFAULT_MOUSE_BINDINGS,
     "RetroArch core > Enable Default Mouse Bindings",
     "Enable Default Mouse Bindings",

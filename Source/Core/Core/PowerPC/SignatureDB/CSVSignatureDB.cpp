@@ -4,7 +4,6 @@
 #include "Core/PowerPC/SignatureDB/CSVSignatureDB.h"
 
 #include <cstdio>
-#include <fstream>
 #include <sstream>
 
 #include <fmt/format.h>
@@ -17,15 +16,15 @@
 // Checksum | Size | Symbol | [Object Location |] Object Name
 bool CSVSignatureDB::Load(const std::string& file_path)
 {
-  std::string line;
-  std::ifstream ifs;
-  File::OpenFStream(ifs, file_path, std::ios_base::in);
-
-  if (!ifs)
+  File::LineReader reader(file_path);
+  if (!reader.IsOpen())
     return false;
-  for (size_t i = 1; std::getline(ifs, line); i += 1)
+
+  const char* text;
+  size_t length;
+  for (size_t i = 1; reader.Next(&text, &length); i += 1)
   {
-    std::istringstream iss(line);
+    std::istringstream iss(std::string(text, length));
     u32 checksum, size;
     std::string tab, symbol, object_location, object_name;
 

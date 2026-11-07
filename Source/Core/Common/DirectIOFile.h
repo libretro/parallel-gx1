@@ -39,16 +39,18 @@ enum class OpenMode
   Create,
 };
 
-// This file wrapper avoids use of the underlying system file position.
-// It keeps track of its own file position and read/write calls directly use it.
-// This makes copied handles entirely thread safe.
+// A file read and written at offsets of its own keeping, through
+// libretro-common's filestream. A file opened for reading alone is
+// memory-mapped where the platform can: OffsetRead() then copies straight
+// out of the mapping, View() lends from it without copying, and both are
+// thread safe on one object. Otherwise one object is one thread's; copies
+// open handles of their own.
 class DirectIOFile final
 {
 public:
   DirectIOFile();
   ~DirectIOFile();
 
-  // Copies and moves are allowed.
   DirectIOFile(const DirectIOFile&);
   DirectIOFile& operator=(const DirectIOFile&);
   DirectIOFile(DirectIOFile&&);
@@ -62,12 +64,9 @@ public:
 
   bool Close();
 
-  bool IsOpen() const;
+  bool IsOpen() const { return m_file != nullptr; }
 
-  // An offset from the start of the file may be specified directly.
   // These explicit offset versions entirely ignore the current file position.
-  // They are thread safe, even when used on the same object.
-
   bool OffsetRead(u64 offset, u8* out_ptr, u64 size);
   bool OffsetRead(u64 offset, std::span<u8> out_data)
   {
@@ -78,6 +77,17 @@ public:
   {
     return OffsetWrite(offset, in_data.data(), in_data.size());
   }
+
+  // size octets at offset, lent from the mapping: nullptr when the file is not
+  // mapped or the range runs past its end. Valid until the file is closed.
+  const u8* View(u64 offset, u64 size) const
+  {
+    return (m_map && offset <= m_map_size && size <= m_map_size - offset) ? m_map + offset :
+                                                                            nullptr;
+  }
+
+  // Asks the OS to start reading [offset, offset + size) in; returns at once.
+  void Prefetch(u64 offset, u64 size) const;
 
   // These Read/Write functions advance the current position on success.
 
@@ -109,56 +119,25 @@ public:
 
   bool Flush();
 
-  auto GetHandle() const
-  {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    ERROR_LOG_FMT(COMMON, "VFS: Attempt to use std::FILE in DirectIO which should not happen in VFS mode");
-#endif
-
-#if defined(_WIN32)
-    return m_handle;
-#else
-    return m_fd;
-#endif
-  }
-
 private:
   void Swap(DirectIOFile& other);
   DirectIOFile Duplicate() const;
 
-#if defined(_WIN32)
-  // A workaround to avoid including <windows.h> in this header.
-  // HANDLE is just void* and INVALID_HANDLE_VALUE is -1.
-  using HandleType = void*;
-  HandleType m_handle{HandleType(-1)};
-#else
-  using HandleType = int;
-  HandleType m_fd{-1};
-#endif
-
-  u64 m_current_offset{};
-
-#ifdef __LIBRETRO__
-  retro_vfs_file_handle* m_vfs_handle = nullptr;
   std::string m_path;
-  unsigned m_mode{};
-  unsigned m_hints{};
+  RFILE* m_file = nullptr;
+  const u8* m_map = nullptr;
+  u64 m_map_size = 0;
+  u64 m_current_offset = 0;
+  unsigned m_mode = 0;
 
   friend bool Resize(DirectIOFile& file, u64 size);
-#endif
 };
-
-// These take an open file handle to avoid failures from other processes trying to open our files.
-// This is mainly an issue on Windows.
 
 bool Resize(DirectIOFile& file, u64 size);
 
 // Attempts to replace a destination file if one already exists.
-// Note: Windows uses `file`. Elsewhere uses `source_path`, but `file` is checked for openness.
 bool Rename(DirectIOFile& file, const std::string& source_path,
             const std::string& destination_path);
-// Note: Ditto, only Windows actually uses the file handle. Provide both.
 bool Delete(DirectIOFile& file, const std::string& filename);
 
 }  // namespace File

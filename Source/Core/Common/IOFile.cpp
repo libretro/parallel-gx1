@@ -3,55 +3,58 @@
 
 #include "Common/IOFile.h"
 
-#include <cstdio>
+#include <cstring>
 #include <string>
 
-#ifdef _WIN32
-#include <io.h>
-#include <share.h>
-#include "Common/CommonFuncs.h"
-#include "Common/StringUtil.h"
-#else
-#include <unistd.h>
-#endif
-
-#ifdef ANDROID
-#include <algorithm>
-
-#include "jni/AndroidCommon/AndroidCommon.h"
-#endif
+#include <streams/file_stream.h>
 
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
-
-#ifdef __LIBRETRO__
-#include "DolphinLibretro/Common/VFile.h"
-#endif
 
 namespace File
 {
-IOFile::IOFile() : m_file(nullptr), m_good(true)
-#ifdef __LIBRETRO__
-, m_vfs_handle{nullptr}
-#endif
+/* fopen() modes in filestream's terms. "a" positions at the end once,
+ * at open: nothing in the tree mixes seeks with appends. */
+static unsigned ModeFromString(const char* openmode, bool* append)
 {
+  bool read = false, write = false, plus = false;
+  const char* p;
+  *append = false;
+  for (p = openmode; *p; p++)
+  {
+    switch (*p)
+    {
+    case 'r':
+      read = true;
+      break;
+    case 'w':
+      write = true;
+      break;
+    case 'a':
+      *append = true;
+      break;
+    case '+':
+      plus = true;
+      break;
+    default:
+      break;
+    }
+  }
+  if (*append)
+    return RETRO_VFS_FILE_ACCESS_WRITE | RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING |
+           (plus ? RETRO_VFS_FILE_ACCESS_READ : 0);
+  if (read && plus)
+    return RETRO_VFS_FILE_ACCESS_READ_WRITE | RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
+  if (write)
+    return plus ? RETRO_VFS_FILE_ACCESS_READ_WRITE : RETRO_VFS_FILE_ACCESS_WRITE;
+  return RETRO_VFS_FILE_ACCESS_READ;
 }
 
-IOFile::IOFile(std::FILE* file) : m_file(file), m_good(true)
+IOFile::IOFile() : m_file(nullptr), m_good(true)
 {
-#ifdef __LIBRETRO__
-  m_vfs_handle = nullptr;
-
-  if (Libretro::VFile::HasVFS())
-    ERROR_LOG_FMT(COMMON, "VFS: Attempt to use IOFile::IOFile with a std::FILE which should not happen");
-#endif
 }
 
 IOFile::IOFile(const std::string& filename, const char openmode[], SharedAccess sh)
     : m_file(nullptr), m_good(true)
-#ifdef __LIBRETRO__
-, m_vfs_handle{nullptr}
-#endif
 {
   Open(filename, openmode, sh);
 }
@@ -62,9 +65,6 @@ IOFile::~IOFile()
 }
 
 IOFile::IOFile(IOFile&& other) noexcept : m_file(nullptr), m_good(true)
-#ifdef __LIBRETRO__
-, m_vfs_handle{nullptr}
-#endif
 {
   Swap(other);
 }
@@ -77,185 +77,152 @@ IOFile& IOFile::operator=(IOFile&& other) noexcept
 
 void IOFile::Swap(IOFile& other) noexcept
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    std::swap(m_vfs_handle, other.m_vfs_handle);
-#endif
-  std::swap(m_file, other.m_file);
-  std::swap(m_good, other.m_good);
+  RFILE* file = m_file;
+  bool good = m_good;
+  m_file = other.m_file;
+  m_good = other.m_good;
+  other.m_file = file;
+  other.m_good = good;
 }
 
-bool IOFile::Open(const std::string& filename, const char openmode[],
-                  [[maybe_unused]] SharedAccess sh)
+bool IOFile::Open(const std::string& filename, const char openmode[], SharedAccess)
 {
+  bool append;
+  unsigned mode;
+
   Close();
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    m_vfs_handle = Libretro::VFile::Open(filename, openmode);
-    m_good = m_vfs_handle != nullptr;
-    return m_good;
-  }
-#endif
-
-#ifdef _WIN32
-  if (sh == SharedAccess::Default)
-  {
-    m_good = _tfopen_s(&m_file, UTF8ToTStr(filename).c_str(), UTF8ToTStr(openmode).c_str()) == 0;
-  }
-  else if (sh == SharedAccess::Read)
-  {
-    m_file = _tfsopen(UTF8ToTStr(filename).c_str(), UTF8ToTStr(openmode).c_str(), SH_DENYWR);
-    m_good = m_file != nullptr;
-  }
-#else
-#ifdef ANDROID
-  if (IsPathAndroidContent(filename))
-    m_file = fdopen(OpenAndroidContent(filename, OpenModeToAndroid(openmode)), openmode);
-  else
-#endif
-    m_file = std::fopen(filename.c_str(), openmode);
-
+  mode = ModeFromString(openmode, &append);
+  /* read-only files are mapped where the platform can: reads copy straight
+   * out of the page cache, and GetMappedPtr()/View() lend without copying */
+  m_file = filestream_open(filename.c_str(), mode,
+                           mode == RETRO_VFS_FILE_ACCESS_READ ?
+                               RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS :
+                               RETRO_VFS_FILE_ACCESS_HINT_NONE);
   m_good = m_file != nullptr;
-#endif
-
+  if (m_good && append && filestream_seek(m_file, 0, RETRO_VFS_SEEK_POSITION_END) < 0)
+    m_good = false;
   return m_good;
 }
 
 bool IOFile::Close()
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    if (!IsOpen() || 0 != Libretro::VFile::Close(m_vfs_handle))
-      m_good = false;
-
-    m_vfs_handle = nullptr;
-    return m_good;
-  }
-#endif
-
-  if (!IsOpen() || 0 != std::fclose(m_file))
+  if (!m_file || filestream_close(m_file) != 0)
     m_good = false;
-
   m_file = nullptr;
   return m_good;
 }
 
-void IOFile::SetHandle(std::FILE* file)
+size_t IOFile::RawRead(void* data, size_t length)
 {
-  Close();
-  ClearError();
-  m_file = file;
+  int64_t got;
+  if (!m_file)
+    return 0;
+  if (!length)
+    return 0;
+  got = filestream_read(m_file, data, (int64_t)length);
+  return got > 0 ? (size_t)got : 0;
+}
+
+bool IOFile::RawWrite(const void* data, size_t length)
+{
+  if (!m_file)
+    return false;
+  if (!length)
+    return true;
+  return filestream_write(m_file, data, (int64_t)length) == (int64_t)length;
+}
+
+bool IOFile::WriteZeros(size_t length)
+{
+  static const u8 zeros[4096] = {};
+  while (length && m_good)
+  {
+    const size_t n = length < sizeof(zeros) ? length : sizeof(zeros);
+    WriteBytes(zeros, n);
+    length -= n;
+  }
+  return m_good;
+}
+
+const u8* IOFile::GetMappedPtr(u64* size)
+{
+  int64_t len = 0;
+  const u8* ptr = m_file ? filestream_get_mapped_ptr(m_file, &len) : nullptr;
+  if (size)
+    *size = ptr ? (u64)len : 0;
+  return ptr;
+}
+
+const u8* IOFile::View(size_t length, size_t* lent)
+{
+  const uint8_t* ptr = nullptr;
+  const int64_t n = m_file ? filestream_view(m_file, (int64_t)length, &ptr) : -1;
+  if (n <= 0)
+  {
+    *lent = 0;
+    return nullptr;
+  }
+  *lent = (size_t)n;
+  return ptr;
+}
+
+void IOFile::Prefetch(u64 offset, u64 length)
+{
+  if (m_file)
+    filestream_prefetch(m_file, offset, length);
 }
 
 u64 IOFile::GetSize() const
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    if (IsOpen())
-      return Libretro::VFile::GetSize(m_vfs_handle);
-    else
-      return 0;
-  }
-#endif
-
-  if (IsOpen())
-    return File::GetSize(m_file);
-  else
+  int64_t size;
+  if (!m_file)
     return 0;
+  size = filestream_get_size(m_file);
+  return size > 0 ? (u64)size : 0;
 }
 
 bool IOFile::Seek(s64 offset, SeekOrigin origin)
 {
-  int fseek_origin;
+  int whence;
   switch (origin)
   {
   case SeekOrigin::Begin:
-    fseek_origin = SEEK_SET;
+    whence = RETRO_VFS_SEEK_POSITION_START;
     break;
   case SeekOrigin::Current:
-    fseek_origin = SEEK_CUR;
+    whence = RETRO_VFS_SEEK_POSITION_CURRENT;
     break;
   case SeekOrigin::End:
-    fseek_origin = SEEK_END;
+    whence = RETRO_VFS_SEEK_POSITION_END;
     break;
   default:
     return false;
   }
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    if (!IsOpen() || 0 != Libretro::VFile::Seek(m_vfs_handle, offset, fseek_origin))
-      m_good = false;
-
-    return m_good;
-  }
-#endif
-
-  if (!IsOpen() || 0 != fseeko(m_file, offset, fseek_origin))
+  if (!m_file || filestream_seek(m_file, offset, whence) < 0)
     m_good = false;
-
   return m_good;
 }
 
 u64 IOFile::Tell() const
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    if (IsOpen())
-      return Libretro::VFile::Tell(m_vfs_handle);
-    else
-      return UINT64_MAX;
-  }
-#endif
-  if (IsOpen())
-    return ftello(m_file);
-  else
+  int64_t pos;
+  if (!m_file)
     return UINT64_MAX;
+  pos = filestream_tell(m_file);
+  return pos < 0 ? UINT64_MAX : (u64)pos;
 }
 
 bool IOFile::Flush()
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    if (!IsOpen() || 0 != Libretro::VFile::Flush(m_vfs_handle))
-      m_good = false;
-
-    return m_good;
-  }
-#endif
-  if (!IsOpen() || 0 != std::fflush(m_file))
+  if (!m_file || filestream_flush(m_file) != 0)
     m_good = false;
-
   return m_good;
 }
 
 bool IOFile::Resize(u64 size)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    if (!IsOpen() || 0 != Libretro::VFile::Resize(m_vfs_handle, size))
-      m_good = false;
-
-    return m_good;
-  }
-#endif
-
-#ifdef _WIN32
-  if (!IsOpen() || 0 != _chsize_s(_fileno(m_file), size))
-#else
-  // TODO: handle 64bit and growing
-  if (!IsOpen() || 0 != ftruncate(fileno(m_file), size))
-#endif
+  if (!m_file || filestream_truncate(m_file, (int64_t)size) != 0)
     m_good = false;
-
   return m_good;
 }
 

@@ -137,17 +137,30 @@ LIBRETRO_COMMON_SOURCES_CXX :=
 LIBRETRO_COMMON_SOURCES_ASM :=
 LIBRETRO_COMMON_SOURCES_OBJCXX :=
 LIBRETRO_COMMON_SOURCES_C += \
+	$(CORE_DIR)/Externals/libretro-common/compat/compat_posix_string.c \
+	$(CORE_DIR)/Externals/libretro-common/compat/compat_strcasestr.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
+	$(CORE_DIR)/Externals/libretro-common/compat/fopen_utf8.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_utf.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
+	$(CORE_DIR)/Externals/libretro-common/file/file_path.c \
+	$(CORE_DIR)/Externals/libretro-common/file/file_path_io.c \
+	$(CORE_DIR)/Externals/libretro-common/file/retro_dirent.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_dxbc.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_emit.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_front.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_ir.c \
+	$(CORE_DIR)/Externals/libretro-common/memmap/memmap.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_waitable_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/rthreads/retro_eventcount.c \
 	$(CORE_DIR)/Externals/libretro-common/rthreads/rthreads.c \
-	$(CORE_DIR)/Externals/libretro-common/time/rtime.c
+	$(CORE_DIR)/Externals/libretro-common/streams/file_stream.c \
+	$(CORE_DIR)/Externals/libretro-common/string/rstrtod.c \
+	$(CORE_DIR)/Externals/libretro-common/string/stdstring.c \
+	$(CORE_DIR)/Externals/libretro-common/time/rtime.c \
+	$(CORE_DIR)/Externals/libretro-common/vfs/vfs_hybrid.c \
+	$(CORE_DIR)/Externals/libretro-common/vfs/vfs_implementation.c
 
 # FATFS
 FATFS_SOURCES_C :=
@@ -1077,7 +1090,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/GL/GLContext.cpp \
 	$(CORE_DIR)/Source/Core/Common/GL/GLUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/GL/GLExtensions/GLExtensions.cpp \
-	$(CORE_DIR)/Source/Core/DolphinLibretro/Common/VFile.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Common/Globals.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Common/Options.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp \
@@ -1807,6 +1819,9 @@ FATFS_FLAGS := -w -I$(EXT_DIR)/FatFs
 # RSLC_EXTENDED: rslc takes the stages and types the core's shaders use.
 LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -DHAVE_THREAD_STORAGE -DRSLC_EXTENDED \
 	-I$(EXT_DIR)/libretro-common/include
+ifneq ($(OS_WIN),1)
+   LIBRETRO_COMMON_FLAGS += -DHAVE_MMAP
+endif
 
 
 LZO_FLAGS := -w -I$(EXT_DIR)/LZO

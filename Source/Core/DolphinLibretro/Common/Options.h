@@ -346,7 +346,6 @@ namespace retroarch_core {
   constexpr const char SUPPORTS_GL_BASE_VERTEX[] = "dolphin_supports_gl_base_vertex";
 #endif
 
-  constexpr const char ENABLE_LIBRETRO_VFS[] = "dolphin_libretro_vfs_enabled";
   constexpr const char ENABLE_DEFAULT_MOUSE_BINDINGS[] = "dolphin_default_mouse_bindings_enabled";
   constexpr const char ENABLE_LOG_POPUPS[] = "dolphin_log_popups_enabled";
 }  // namespace retroarch_core

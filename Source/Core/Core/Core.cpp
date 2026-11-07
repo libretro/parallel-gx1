@@ -70,10 +70,6 @@
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
-#ifdef USE_MEMORYWATCHER
-#include "Core/MemoryWatcher.h"
-#endif
-
 #include "DiscIO/RiivolutionPatcher.h"
 
 #include "InputCommon/ControlReference/ControlReference.h"
@@ -119,10 +115,6 @@ static void StartingToRunning(void)
                        static_cast<int>(State::Running));
 }
 
-#ifdef USE_MEMORYWATCHER
-static std::unique_ptr<MemoryWatcher> s_memory_watcher;
-#endif
-
 struct HostJob
 {
   mpsc_stack_node_t link;  // first: the drained chain is cast back to jobs
@@ -138,19 +130,6 @@ static thread_local bool tls_is_gpu_thread = false;
 
 void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
                WindowSystemInfo wsi);
-
-void OnFrameEnd(Core::System& system)
-{
-#ifdef USE_MEMORYWATCHER
-  if (s_memory_watcher)
-  {
-    ASSERT(IsCPUThread());
-    const CPUThreadGuard guard(system);
-
-    s_memory_watcher->Step(guard);
-  }
-#endif
-}
 
 // Display messages and return values
 
@@ -313,10 +292,6 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
   if (exception_handler)
     EMM::InstallExceptionHandler();
 
-#ifdef USE_MEMORYWATCHER
-  s_memory_watcher = std::make_unique<MemoryWatcher>();
-#endif
-
   if (savestate_path)
   {
     ::State::LoadAs(system, *savestate_path);
@@ -355,10 +330,6 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
     return;
   // Enter CPU run loop. When we leave it - we are done.
   system.GetCPU().Run();
-
-#ifdef USE_MEMORYWATCHER
-  s_memory_watcher.reset();
-#endif
 
   if (exception_handler)
     EMM::UninstallExceptionHandler();
@@ -1066,10 +1037,6 @@ CPUThreadGuard::~CPUThreadGuard()
 
 void SingleCorePostRunShutdown()
 {
-#ifdef USE_MEMORYWATCHER
-  s_memory_watcher.reset();
-#endif
-
   if (EMM::IsExceptionHandlerSupported())
     EMM::UninstallExceptionHandler();
 

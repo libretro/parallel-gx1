@@ -363,8 +363,8 @@ bool PPCSymbolDB::LoadMapOnBoot(const Core::CPUThreadGuard& guard)
 // bad=true means carefully load map files that might not be from exactly the right version
 bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filename, bool bad)
 {
-  File::IOFile f(filename, "r");
-  if (!f)
+  File::LineReader f(filename);
+  if (!f.IsOpen())
     return false;
 
   XFuncMap new_functions;
@@ -380,8 +380,16 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
 
   char line[512];
   std::string section_name;
-  while (fgets(line, 512, f.GetHandle()))
+  const char* text;
+  size_t text_length;
+  while (f.Next(&text, &text_length))
   {
+    // as the line a 512-octet fgets() gives
+    if (text_length > sizeof(line) - 2)
+      text_length = sizeof(line) - 2;
+    std::memcpy(line, text, text_length);
+    line[text_length] = '\n';
+    line[text_length + 1] = '\0';
     size_t length = strlen(line);
     if (length < 4)
       continue;

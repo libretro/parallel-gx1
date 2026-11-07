@@ -55,6 +55,11 @@ bool LoadPNG(std::span<const u8> input, Common::UniqueBuffer<u8>* data_out, u32*
   return true;
 }
 
+static int WritePNGStream(spng_ctx*, void* user, void* data, size_t length)
+{
+  return static_cast<File::IOFile*>(user)->WriteBytes(data, length) ? 0 : SPNG_IO_ERROR;
+}
+
 bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u32 width,
              u32 height, u32 stride, int level)
 {
@@ -80,7 +85,7 @@ bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u
     return false;
 
   auto outfile = File::IOFile(path, "wb");
-  if (spng_set_png_file(ctx.get(), outfile.GetHandle()))
+  if (!outfile || spng_set_png_stream(ctx.get(), WritePNGStream, &outfile))
     return false;
 
   if (spng_set_option(ctx.get(), SPNG_IMG_COMPRESSION_LEVEL, level))

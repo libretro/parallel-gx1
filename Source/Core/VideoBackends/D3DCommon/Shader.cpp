@@ -99,7 +99,6 @@ std::optional<AbstractShader::BinaryData> CompileWithRslc(D3D_FEATURE_LEVEL feat
   enum rslc_stage rstage;
   std::string full;
   std::optional<AbstractShader::BinaryData> code;
-  FILE* f;
 
   rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
            stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
@@ -130,13 +129,7 @@ std::optional<AbstractShader::BinaryData> CompileWithRslc(D3D_FEATURE_LEVEL feat
   {
     std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
     File::CreateFullPath(path);
-    f = fopen(path.c_str(), "wb");
-    if (f)
-    {
-      fwrite(full.data(), 1, full.size(), f);
-      fprintf(f, "\n/* rslc: %s */\n", err);
-      fclose(f);
-    }
+    File::WriteStringToFile(path, fmt::format("{}\n/* rslc: {} */\n", full, err));
   }
   return code;
 }

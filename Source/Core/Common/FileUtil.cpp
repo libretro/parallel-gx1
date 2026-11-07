@@ -3,67 +3,21 @@
 
 #include "Common/FileUtil.h"
 
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #include <cstring>
-#include <fcntl.h>
-#include <filesystem>
-#include <limits.h>
-#include <stack>
 #include <string>
-#include <system_error>
 #include <vector>
 
-#include "Common/CommonFuncs.h"
+#include <file/file_path.h>
+#include <retro_dirent.h>
+#include <streams/file_stream.h>
+
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #ifdef ANDROID
 #include "Common/Assert.h"
 #endif
-#ifdef __APPLE__
-#include "Common/DynamicLibrary.h"
-#endif
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
-#include "Common/StringUtil.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#include <commdlg.h>  // for GetSaveFileName
-#include <direct.h>   // getcwd
-#include <io.h>
-#include <objbase.h>  // guid stuff
-#include <share.h>
-#include <shellapi.h>
-#include <shlwapi.h>
-#else
-#include <libgen.h>
-#include <stdlib.h>
-#include <unistd.h>
-#endif
-
-#if defined(__APPLE__)
-#include <CoreFoundation/CFBundle.h>
-#include <CoreFoundation/CFString.h>
-#include <CoreFoundation/CFURL.h>
-#include <mach-o/dyld.h>
-#include <sys/param.h>
-#endif
-
-#ifdef ANDROID
-#include "jni/AndroidCommon/AndroidCommon.h"
-#endif
-
-#if defined(__FreeBSD__)
-#include <sys/sysctl.h>
-#endif
-
-#ifdef __LIBRETRO__
-#include "DolphinLibretro/Common/VFile.h"
-#endif
-
-namespace fs = std::filesystem;
 
 namespace File
 {
@@ -71,22 +25,8 @@ namespace File
 static std::string s_android_sys_directory;
 static std::string s_android_driver_directory;
 static std::string s_android_lib_directory;
-#endif
-
-#if defined(__LIBRETRO__) && !defined(ANDROID)
+#else
 static std::string s_libretro_sys_directory;
-#endif
-
-#ifdef __APPLE__
-static Common::DynamicLibrary s_security_framework;
-
-using DolSecTranslocateIsTranslocatedURL = Boolean (*)(CFURLRef path, bool* isTranslocated,
-                                                       CFErrorRef* __nullable error);
-using DolSecTranslocateCreateOriginalPathForURL = CFURLRef
-__nullable (*)(CFURLRef translocatedPath, CFErrorRef* __nullable error);
-
-static DolSecTranslocateIsTranslocatedURL s_is_translocated_url;
-static DolSecTranslocateCreateOriginalPathForURL s_create_orig_path;
 #endif
 
 FileInfo::FileInfo(const std::string& path) : FileInfo(path.c_str())
@@ -95,810 +35,319 @@ FileInfo::FileInfo(const std::string& path) : FileInfo(path.c_str())
 
 FileInfo::FileInfo(const char* path)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
+  const int flags = path_stat(path);
+  m_exists = (flags & RETRO_VFS_STAT_IS_VALID) != 0;
+  m_is_directory = (flags & RETRO_VFS_STAT_IS_DIRECTORY) != 0;
+  if (m_exists && !m_is_directory)
   {
-    Libretro::VFile::FileInfo(m_status, m_size, m_exists, path);
-    return;
-  }
-#endif
-#ifdef ANDROID
-  if (IsPathAndroidContent(path))
-  {
-    const jlong result = GetAndroidContentSizeAndIsDirectory(path);
-    m_status.type((result == -2) ? fs::file_type::directory : fs::file_type::regular);
-    m_size = (result >= 0) ? result : 0;
-    m_exists = result != -1;
-  }
-  else
-#endif
-  {
-    const auto fs_path = StringToPath(path);
-    std::error_code error;
-    m_status = fs::status(fs_path, error);
-    m_size = fs::file_size(fs_path, error);
-    if (error)
-      m_size = 0;
-    m_exists = fs::exists(m_status);
+    const int64_t size = path_get_size(path);
+    m_size = size > 0 ? u64(size) : 0;
   }
 }
 
-bool FileInfo::Exists() const
-{
-  return m_exists;
-}
-
-bool FileInfo::IsDirectory() const
-{
-  return fs::is_directory(m_status);
-}
-
-bool FileInfo::IsFile() const
-{
-  return Exists() ? !fs::is_directory(m_status) : false;
-}
-
-u64 FileInfo::GetSize() const
-{
-  if (!IsFile())
-    return 0;
-  return m_size;
-}
-
-// Returns true if the path exists
 bool Exists(const std::string& path)
 {
-#ifdef __LIBRETRO__
-  if(Libretro::VFile::HasVFS())
-    return Libretro::VFile::Exists(path);
-#endif
-
-  return FileInfo(path).Exists();
+  return path_is_valid(path.c_str());
 }
 
-// Returns true if the path exists and is a directory
 bool IsDirectory(const std::string& path)
 {
-#ifdef __LIBRETRO__
-  if(Libretro::VFile::HasVFS())
-    return Libretro::VFile::IsDirectory(path);
-#endif
-  return FileInfo(path).IsDirectory();
+  return path_is_directory(path.c_str());
 }
 
-// Returns true if the path exists and is a file
 bool IsFile(const std::string& path)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::IsFile(path);
-#endif
-  return FileInfo(path).IsFile();
+  const int flags = path_stat(path.c_str());
+  return (flags & RETRO_VFS_STAT_IS_VALID) && !(flags & RETRO_VFS_STAT_IS_DIRECTORY);
 }
 
-// Deletes a given filename, return true on success
-// Doesn't supports deleting a directory
+u64 GetSize(const std::string& path)
+{
+  int64_t size;
+  if (!IsFile(path))
+    return 0;
+  size = path_get_size(path.c_str());
+  return size > 0 ? u64(size) : 0;
+}
+
 bool Delete(const std::string& filename, IfAbsentBehavior behavior)
 {
+  const int flags = path_stat(filename.c_str());
+
   DEBUG_LOG_FMT(COMMON, "{}: file {}", __func__, filename);
 
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::Delete(filename);
-#endif
-
-#ifdef ANDROID
-  if (filename.starts_with("content://"))
-  {
-    const bool success = DeleteAndroidContent(filename);
-    if (!success)
-      WARN_LOG_FMT(COMMON, "{} failed on {}", __func__, filename);
-    return success;
-  }
-#endif
-
-  auto native_path = StringToPath(filename);
-  std::error_code error;
-  auto status = fs::status(native_path, error);
-
   // Return true because we care about the file not being there, not the actual delete.
-  if (!fs::exists(status))
+  if (!(flags & RETRO_VFS_STAT_IS_VALID))
   {
     if (behavior == IfAbsentBehavior::ConsoleWarning)
-    {
       WARN_LOG_FMT(COMMON, "{}: {} does not exist", __func__, filename);
-    }
     return true;
   }
 
-  // fs::remove can only delete an empty directory. Legacy dolphin behavior is just to bail.
-  if (fs::is_directory(status))
+  if (flags & RETRO_VFS_STAT_IS_DIRECTORY)
   {
     WARN_LOG_FMT(COMMON, "{} failed: {} is a directory", __func__, filename);
     return false;
   }
 
-  if (!fs::remove(native_path, error))
+  if (filestream_delete(filename.c_str()) != 0)
   {
-    WARN_LOG_FMT(COMMON, "{}: failed on {}: {}", __func__, filename, error.message());
+    WARN_LOG_FMT(COMMON, "{}: failed on {}", __func__, filename);
     return false;
   }
-
   return true;
 }
 
 bool CreateDir(const std::string& path)
 {
   DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, path);
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::CreateDir(path);
-#endif
-
-  std::error_code error;
-  auto native_path = StringToPath(path);
-  bool success = fs::create_directory(native_path, error);
-  // If the path was not created, check if it was a pre-existing directory
-  std::error_code error_ignored;
-  if (!success && fs::is_directory(native_path, error_ignored))
-    success = true;
-  if (!success)
-    ERROR_LOG_FMT(COMMON, "{}: failed on {}: {}", __func__, path, error.message());
-  return success;
+  if (path_mkdir(path.c_str()))
+    return true;
+  ERROR_LOG_FMT(COMMON, "{}: failed on {}", __func__, path);
+  return false;
 }
 
 bool CreateDirs(std::string_view path)
 {
-  DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, path);
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::CreateDirs(path);
-#endif
-
-  std::error_code error;
-  auto native_path = StringToPath(path);
-  bool success = fs::create_directories(native_path, error);
-  // If the path was not created, check if it was a pre-existing directory
-  std::error_code error_ignored;
-  if (!success && fs::is_directory(native_path, error_ignored))
-    success = true;
-  if (!success)
-    ERROR_LOG_FMT(COMMON, "{}: failed on {}: {}", __func__, path, error.message());
-  return success;
+  return CreateDir(std::string(path));
 }
 
 bool CreateFullPath(std::string_view fullPath)
 {
-  DEBUG_LOG_FMT(COMMON, "{}: path {}", __func__, fullPath);
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::CreateFullPath(fullPath);
+  const std::string path(fullPath);
+#ifdef _WIN32
+  const size_t slash = path.find_last_of("/\\");
+#else
+  const size_t slash = path.find_last_of(DIR_SEP_CHR);
 #endif
 
-  std::error_code error;
-  auto native_path = StringToPath(fullPath).parent_path();
-  bool success = fs::create_directories(native_path, error);
-  // If the path was not created, check if it was a pre-existing directory
-  std::error_code error_ignored;
-  if (!success && fs::is_directory(native_path, error_ignored))
-    success = true;
-  if (!success)
-    ERROR_LOG_FMT(COMMON, "{}: failed on {}: {}", __func__, fullPath, error.message());
-  return success;
+  DEBUG_LOG_FMT(COMMON, "{}: path {}", __func__, fullPath);
+  if (slash == std::string::npos || slash == 0)
+    return true;
+  return CreateDir(path.substr(0, slash));
 }
 
-// Deletes a directory filename, returns true on success
 bool DeleteDir(const std::string& filename, IfAbsentBehavior behavior)
 {
+  const int flags = path_stat(filename.c_str());
+
   DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, filename);
 
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::DeleteDir(filename);
-#endif
-
-  auto native_path = StringToPath(filename);
-  std::error_code error;
-  auto status = fs::status(native_path, error);
-
   // Return true because we care about the directory not being there, not the actual delete.
-  if (!fs::exists(status))
+  if (!(flags & RETRO_VFS_STAT_IS_VALID))
   {
     if (behavior == IfAbsentBehavior::ConsoleWarning)
-    {
       WARN_LOG_FMT(COMMON, "{}: {} does not exist", __func__, filename);
-    }
     return true;
   }
 
-  // check if a directory
-  if (!fs::is_directory(status))
+  if (!(flags & RETRO_VFS_STAT_IS_DIRECTORY))
   {
     ERROR_LOG_FMT(COMMON, "{}: Not a directory {}", __func__, filename);
     return false;
   }
 
-  if (!fs::remove(native_path, error))
+  if (!path_rmdir(filename.c_str()))
   {
-    WARN_LOG_FMT(COMMON, "{}: failed on {}: {}", __func__, filename, error.message());
+    WARN_LOG_FMT(COMMON, "{}: failed on {}", __func__, filename);
     return false;
   }
-
   return true;
 }
 
-// renames file srcFilename to destFilename, returns true on success
+// Replaces destFilename if it exists.
 bool Rename(const std::string& srcFilename, const std::string& destFilename)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::Rename(srcFilename, destFilename);
-#endif
   DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, srcFilename, destFilename);
-  std::error_code error;
-  std::filesystem::rename(StringToPath(srcFilename), StringToPath(destFilename), error);
-  if (error)
+  if (filestream_rename(srcFilename.c_str(), destFilename.c_str()) == 0)
+    return true;
+  // a frontend VFS may refuse to replace
+  if (IsFile(destFilename) && filestream_delete(destFilename.c_str()) == 0 &&
+      filestream_rename(srcFilename.c_str(), destFilename.c_str()) == 0)
   {
-    ERROR_LOG_FMT(COMMON, "{} failed: {} --> {}: {}", __func__, srcFilename, destFilename,
-                  error.message());
+    return true;
   }
-  return !error;
-}
-
-#ifndef _WIN32
-static void FSyncPath(const char* path)
-{
-  int fd = open(path, O_RDONLY);
-  if (fd != -1)
-  {
-    fsync(fd);
-    close(fd);
-  }
-}
-#endif
-
-bool RenameSync(const std::string& srcFilename, const std::string& destFilename)
-{
-  if (!Rename(srcFilename, destFilename))
-    return false;
-#ifdef _WIN32
-  int fd = -1;
-  // XXX is this really needed?
-  errno_t err = _wsopen_s(&fd, UTF8ToWString(srcFilename).c_str(), _O_RDONLY, _SH_DENYNO,
-                          _S_IREAD | _S_IWRITE);
-  if (!err && fd >= 0)
-  {
-    if (_commit(fd) != 0)
-      ERROR_LOG_FMT(COMMON, "{} sync failed on {}: {}", __func__, srcFilename, err);
-    close(fd);
-  }
-#else
-  char* path = strdup(srcFilename.c_str());
-  FSyncPath(path);
-  FSyncPath(dirname(path));
-  free(path);
-  path = strdup(destFilename.c_str());
-  FSyncPath(dirname(path));
-  free(path);
-#endif
-  return true;
+  ERROR_LOG_FMT(COMMON, "{} failed: {} --> {}", __func__, srcFilename, destFilename);
+  return false;
 }
 
 bool CopyRegularFile(std::string_view source_path, std::string_view destination_path)
 {
+  const std::string src(source_path);
+  const std::string dst(destination_path);
+
   DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, source_path, destination_path);
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::CopyRegularFile(source_path, destination_path);
-#endif
-
-  auto src_path = StringToPath(source_path);
-  auto dst_path = StringToPath(destination_path);
-  std::error_code error;
-  bool copied = fs::copy_file(src_path, dst_path, fs::copy_options::overwrite_existing, error);
-  if (!copied)
-  {
-    ERROR_LOG_FMT(COMMON, "{}: failed {} --> {}: {}", __func__, source_path, destination_path,
-                  error.message());
-  }
-  return copied;
+  if (filestream_copy(src.c_str(), dst.c_str()) == 0)
+    return true;
+  ERROR_LOG_FMT(COMMON, "{}: failed {} --> {}", __func__, source_path, destination_path);
+  return false;
 }
 
-// Returns the size of a file (or returns 0 if the path isn't a file that exists)
-u64 GetSize(const std::string& path)
-{
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::GetSize(path);
-#endif
-  return FileInfo(path).GetSize();
-}
-
-// Overloaded GetSize, accepts FILE*
-u64 GetSize(FILE* f)
-{
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-  {
-    ERROR_LOG_FMT(COMMON, "GetSize: call using FILE when VFS is in use. This should not happen");
-    return 0;
-  }
-#endif
-  // can't use off_t here because it can be 32-bit
-  const u64 pos = ftello(f);
-  if (fseeko(f, 0, SEEK_END) != 0)
-  {
-    ERROR_LOG_FMT(COMMON, "GetSize: seek failed {}: {}", fmt::ptr(f), Common::LastStrerrorString());
-    return 0;
-  }
-
-  const u64 size = ftello(f);
-  if ((size != pos) && (fseeko(f, pos, SEEK_SET) != 0))
-  {
-    ERROR_LOG_FMT(COMMON, "GetSize: seek failed {}: {}", fmt::ptr(f), Common::LastStrerrorString());
-    return 0;
-  }
-
-  return size;
-}
-
-// creates an empty file filename, returns true on success
 bool CreateEmptyFile(const std::string& filename)
 {
   DEBUG_LOG_FMT(COMMON, "CreateEmptyFile: {}", filename);
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::CreateEmptyFile(filename);
-#endif
   if (!File::IOFile(filename, "wb"))
   {
-    ERROR_LOG_FMT(COMMON, "CreateEmptyFile: failed {}: {}", filename, Common::LastStrerrorString());
+    ERROR_LOG_FMT(COMMON, "CreateEmptyFile: failed {}", filename);
     return false;
   }
-
   return true;
 }
 
-#ifdef ANDROID
-static FSTEntry ScanDirectoryTreeAndroidContent(std::string directory, bool recursive)
+static bool IsDotEntry(const char* name)
 {
-  FSTEntry parent_entry;
-  parent_entry.physicalName = directory;
-  parent_entry.isDirectory = true;
-  parent_entry.size = 0;
-
-  for (const auto& child_name : GetAndroidContentChildNames(directory))
-  {
-    const auto physical_name = directory + DIR_SEP + child_name;
-    const FileInfo file_info(physical_name);
-    FSTEntry entry;
-
-    entry.isDirectory = file_info.IsDirectory();
-    if (entry.isDirectory)
-    {
-      if (recursive)
-        entry = ScanDirectoryTreeAndroidContent(physical_name, true);
-      else
-        entry.size = 0;
-      parent_entry.size += entry.size;
-    }
-    else
-    {
-      entry.size = file_info.GetSize();
-    }
-    entry.virtualName = child_name;
-    entry.physicalName = physical_name;
-
-    ++parent_entry.size;
-    parent_entry.children.push_back(entry);
-  }
-
-  return parent_entry;
+  return name[0] == '.' && (!name[1] || (name[1] == '.' && !name[2]));
 }
-#endif
 
-// Recursive or non-recursive list of files and directories under directory.
+static void ScanInto(FSTEntry* parent, bool recursive)
+{
+  struct RDIR* dir = retro_opendir_include_hidden(parent->physicalName.c_str(), true);
+  size_t i;
+
+  if (!dir)
+    return;
+  while (retro_readdir(dir))
+  {
+    const char* name = retro_dirent_get_name(dir);
+    FSTEntry entry;
+    int64_t size = 0;
+
+    if (!name || IsDotEntry(name))
+      continue;
+    entry.isDirectory = retro_dirent_is_dir(dir, nullptr);
+    if (!entry.isDirectory && retro_dirent_stat(dir, &size, nullptr) && size > 0)
+      entry.size = u64(size);
+    entry.virtualName = name;
+    entry.physicalName = parent->physicalName;
+    if (!entry.physicalName.empty() && entry.physicalName.back() != DIR_SEP_CHR)
+      entry.physicalName += DIR_SEP_CHR;
+    entry.physicalName += name;
+    parent->children.push_back(std::move(entry));
+  }
+  retro_closedir(dir);
+
+  // A directory's size is the recursive count of its children.
+  parent->size += parent->children.size();
+  for (i = 0; i < parent->children.size(); i++)
+  {
+    FSTEntry& child = parent->children[i];
+    if (!child.isDirectory)
+      continue;
+    if (recursive)
+      ScanInto(&child, true);
+    parent->size += child.size;
+  }
+}
+
 FSTEntry ScanDirectoryTree(const std::string& directory, bool recursive)
 {
-  DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, directory);
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::ScanDirectoryTree(directory, recursive);
-#endif
-
-#ifdef ANDROID
-  if (IsPathAndroidContent(directory))
-    return ScanDirectoryTreeAndroidContent(directory, recursive);
-#endif
-
-  auto path_to_physical_name = [](const fs::path& path) {
-#ifdef _WIN32
-    return WStringToUTF8(path.generic_wstring());
-#else
-    return PathToString(path);
-#endif
-  };
-
-  auto dirent_to_fstent = [&](const fs::directory_entry& entry) {
-    return FSTEntry{
-        .isDirectory = entry.is_directory(),
-        .size = entry.is_directory() || entry.is_fifo() ? 0 : entry.file_size(),
-        .physicalName = path_to_physical_name(entry.path()),
-        .virtualName = PathToString(entry.path().filename()),
-    };
-  };
-
-  auto calc_dir_size = [](FSTEntry* dir) {
-    dir->size += dir->children.size();
-    for (auto& child : dir->children)
-      if (child.isDirectory)
-        dir->size += child.size;
-  };
-
-  const auto directory_path = StringToPath(directory);
-
   FSTEntry parent_entry;
-  parent_entry.physicalName = path_to_physical_name(directory_path);
-  parent_entry.isDirectory = fs::is_directory(directory_path);
-  parent_entry.size = 0;
 
-  std::error_code error;
-  if (recursive)
-  {
-    int prev_depth = 0;
-    std::stack<FSTEntry*> dir_fsts;
-    dir_fsts.push(&parent_entry);
-    for (auto it = fs::recursive_directory_iterator(directory_path, error);
-         it != fs::recursive_directory_iterator(); it.increment(error))
-    {
-      const int cur_depth = it.depth();
-      if (cur_depth > prev_depth)
-      {
-        dir_fsts.push(&dir_fsts.top()->children.back());
-      }
-      else if (cur_depth < prev_depth)
-      {
-        while (dir_fsts.size() != static_cast<size_t>(cur_depth) + 1u)
-        {
-          calc_dir_size(dir_fsts.top());
-          dir_fsts.pop();
-        }
-      }
-      dir_fsts.top()->children.emplace_back(dirent_to_fstent(*it));
-      prev_depth = cur_depth;
-    }
-    while (dir_fsts.size())
-    {
-      calc_dir_size(dir_fsts.top());
-      dir_fsts.pop();
-    }
-  }
-  else
-  {
-    for (auto it = fs::directory_iterator(directory_path, error); it != fs::directory_iterator();
-         it.increment(error))
-    {
-      parent_entry.children.emplace_back(dirent_to_fstent(*it));
-    }
-    calc_dir_size(&parent_entry);
-  }
-
-  if (error)
-  {
-    // NOTE Possibly partial file list still returned
-    ERROR_LOG_FMT(COMMON, "{} error on {}: {}", __func__, directory, error.message());
-  }
-
+  DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, directory);
+  parent_entry.physicalName = directory;
+  while (parent_entry.physicalName.size() > 1 && parent_entry.physicalName.back() == DIR_SEP_CHR)
+    parent_entry.physicalName.pop_back();
+  parent_entry.isDirectory = IsDirectory(directory);
+  if (parent_entry.isDirectory)
+    ScanInto(&parent_entry, recursive);
   return parent_entry;
 }
 
-// Deletes the given directory and anything under it. Returns true on success.
+static bool DeleteTree(const FSTEntry& dir)
+{
+  bool ok = true;
+  for (const FSTEntry& child : dir.children)
+  {
+    if (child.isDirectory)
+      ok = DeleteTree(child) && ok;
+    else
+      ok = filestream_delete(child.physicalName.c_str()) == 0 && ok;
+  }
+  return path_rmdir(dir.physicalName.c_str()) && ok;
+}
+
 bool DeleteDirRecursively(const std::string& directory)
 {
   DEBUG_LOG_FMT(COMMON, "{}: {}", __func__, directory);
+  if (!IsDirectory(directory))
+    return true;
+  if (DeleteTree(ScanDirectoryTree(directory, true)))
+    return true;
+  ERROR_LOG_FMT(COMMON, "{}: {} failed", __func__, directory);
+  return false;
+}
 
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::DeleteDir(directory, true);
-#endif
-
-  std::error_code error;
-  const std::uintmax_t num_removed = std::filesystem::remove_all(StringToPath(directory), error);
-  const bool success = num_removed != static_cast<std::uintmax_t>(-1) && !error;
-  if (!success)
-    ERROR_LOG_FMT(COMMON, "{}: {} failed. {}", __func__, directory, error.message());
-  return success;
+static bool CopyTree(const FSTEntry& src, const std::string& dst, bool overwrite_existing)
+{
+  bool ok = CreateDir(dst);
+  for (const FSTEntry& child : src.children)
+  {
+    const std::string to = dst + DIR_SEP_CHR + child.virtualName;
+    if (child.isDirectory)
+      ok = CopyTree(child, to, overwrite_existing) && ok;
+    else if (overwrite_existing || !Exists(to))
+      ok = CopyRegularFile(child.physicalName, to) && ok;
+  }
+  return ok;
 }
 
 bool Copy(std::string_view source_path, std::string_view dest_path, bool overwrite_existing)
 {
+  const std::string src(source_path);
+  const std::string dst(dest_path);
+
   DEBUG_LOG_FMT(COMMON, "{}: {} --> {} ({})", __func__, source_path, dest_path,
                 overwrite_existing ? "overwrite" : "preserve");
-
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::CopyRegularFile(source_path, dest_path, overwrite_existing);
-#endif
-
-  auto src_path = StringToPath(source_path);
-  auto dst_path = StringToPath(dest_path);
-  std::error_code error;
-  auto options = fs::copy_options::recursive;
-  if (overwrite_existing)
-    options |= fs::copy_options::overwrite_existing;
-  fs::copy(src_path, dst_path, options, error);
-  if (error)
-  {
-    std::error_code error_ignored;
-    if (fs::equivalent(src_path, dst_path, error_ignored))
-      return true;
-
-    ERROR_LOG_FMT(COMMON, "{}: failed {} --> {} ({}): {}", __func__, source_path, dest_path,
-                  overwrite_existing ? "overwrite" : "preserve", error.message());
-    return false;
-  }
-  return true;
+  if (src == dst)
+    return true;
+  if (IsDirectory(src))
+    return CopyTree(ScanDirectoryTree(src, true), dst, overwrite_existing);
+  if (!overwrite_existing && Exists(dst))
+    return true;
+  return CopyRegularFile(src, dst);
 }
 
-static bool MoveWithOverwrite(const std::filesystem::path& src, const std::filesystem::path& dst,
-                              std::error_code& error)
+static bool MoveTree(const std::string& src, const std::string& dst)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::MoveWithOverwrite(src.string(), dst.string());
-#endif
-
-  fs::rename(src, dst, error);
-  if (!error)
+  // a rename moves it whole when the destination does not stand in the way
+  if (filestream_rename(src.c_str(), dst.c_str()) == 0)
     return true;
+  if (!IsDirectory(src))
+    return Rename(src, dst);
 
-  // rename failed, try fallbacks
-
-  if (!fs::is_directory(src))
-  {
-    // src is not a directory (ie, probably a file), try to copy file + delete
-    if (!fs::copy_file(src, dst, fs::copy_options::overwrite_existing, error))
-      return false;
-    if (!fs::remove(src, error))
-      return false;
-    return true;
-  }
-
-  // src is a directory, recurse into it and try to move all sub-elements one by one
-  // this usually happens because the target is a non-empty directory
-  for (fs::directory_iterator it(src, error); it != fs::directory_iterator(); it.increment(error))
-  {
-    if (error)
-      return false;
-    if (!MoveWithOverwrite(it->path(), dst / it->path().filename(), error))
-      return false;
-  }
-  if (error)
-    return false;
-
-  // all sub-elements moved, remove top directory
-  if (!fs::remove(src, error))
-    return false;
-
-  return true;
+  // src is a directory and dst a non-empty one: move the contents one by one
+  const FSTEntry tree = ScanDirectoryTree(src, false);
+  bool ok = CreateDir(dst);
+  for (const FSTEntry& child : tree.children)
+    ok = MoveTree(child.physicalName, dst + DIR_SEP_CHR + child.virtualName) && ok;
+  return path_rmdir(src.c_str()) && ok;
 }
 
 bool MoveWithOverwrite(std::string_view source_path, std::string_view dest_path)
 {
   DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, source_path, dest_path);
-  auto src_path = StringToPath(source_path);
-  auto dst_path = StringToPath(dest_path);
-  std::error_code error;
-  if (!MoveWithOverwrite(src_path, dst_path, error))
-  {
-    ERROR_LOG_FMT(COMMON, "{}: failed {} --> {}: {}", __func__, source_path, dest_path,
-                  error.message());
-  }
+  if (!MoveTree(std::string(source_path), std::string(dest_path)))
+    ERROR_LOG_FMT(COMMON, "{}: failed {} --> {}", __func__, source_path, dest_path);
   return true;
-}
-
-// Returns the current directory
-std::string GetCurrentDir()
-{
-  std::error_code error;
-  auto directory = PathToString(fs::current_path(error));
-  if (error)
-  {
-    ERROR_LOG_FMT(COMMON, "{} failed: {}", __func__, error.message());
-    return {};
-  }
-  return directory;
-}
-
-// Sets the current directory to the given directory
-bool SetCurrentDir(const std::string& directory)
-{
-  std::error_code error;
-  fs::current_path(StringToPath(directory), error);
-  if (error)
-  {
-    ERROR_LOG_FMT(COMMON, "{} failed: {}", __func__, error.message());
-    return false;
-  }
-  return true;
-}
-
-std::string CreateTempDir()
-{
-#ifdef _WIN32
-  TCHAR temp[MAX_PATH];
-  if (!GetTempPath(MAX_PATH, temp))
-    return "";
-
-  GUID guid;
-  if (FAILED(CoCreateGuid(&guid)))
-  {
-    return "";
-  }
-  OLECHAR tguid[40]{};
-  if (!StringFromGUID2(guid, tguid, _countof(tguid)))
-  {
-    return "";
-  }
-  std::string dir = TStrToUTF8(temp) + "/" + TStrToUTF8(tguid);
-  if (!CreateDir(dir))
-    return "";
-  dir = ReplaceAll(dir, "\\", DIR_SEP);
-  return dir;
-#else
-  const char* base = getenv("TMPDIR") ?: "/tmp";
-  std::string path = std::string(base) + "/DolphinWii.XXXXXX";
-  if (!mkdtemp(&path[0]))
-    return "";
-  return path;
-#endif
 }
 
 std::string GetTempFilenameForAtomicWrite(std::string path)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return path + ".xxx";
-#endif
-  std::error_code error;
-  auto absolute_path = fs::absolute(StringToPath(path), error);
-  if (!error)
-    path = PathToString(absolute_path);
   return std::move(path) + ".xxx";
-}
-
-#if defined(__APPLE__)
-std::string GetBundleDirectory()
-{
-  CFURLRef bundle_ref = CFBundleCopyBundleURL(CFBundleGetMainBundle());
-
-#ifndef IPHONEOS
-  // Starting in macOS Sierra, apps downloaded from the Internet may be
-  // "translocated" to a read-only DMG and executed from there. This is
-  // done to prevent a scenario where an attacker can replace a trusted
-  // app's resources to load untrusted code.
-  //
-  // We should return Dolphin's actual location on the filesystem in
-  // this function, so bundle_ref will be untranslocated if necessary.
-  //
-  // More information: https://objective-see.com/blog/blog_0x15.html
-
-  // The APIs to deal with translocated paths are private, so we have
-  // to dynamically load them from the Security framework.
-  //
-  // The headers can be found under "Security" on opensource.apple.com:
-  // Security/OSX/libsecurity_translocate/lib/SecTranslocate.h
-  if (!s_security_framework.IsOpen())
-  {
-    s_security_framework.Open("/System/Library/Frameworks/Security.framework/Security");
-    s_security_framework.GetSymbol("SecTranslocateIsTranslocatedURL", &s_is_translocated_url);
-    s_security_framework.GetSymbol("SecTranslocateCreateOriginalPathForURL", &s_create_orig_path);
-  }
-
-  bool is_translocated = false;
-  s_is_translocated_url(bundle_ref, &is_translocated, nullptr);
-
-  if (is_translocated)
-  {
-    CFURLRef untranslocated_ref = s_create_orig_path(bundle_ref, nullptr);
-    CFRelease(bundle_ref);
-    bundle_ref = untranslocated_ref;
-  }
-#endif
-
-  char app_bundle_path[MAXPATHLEN];
-  CFStringRef bundle_path = CFURLCopyFileSystemPath(bundle_ref, kCFURLPOSIXPathStyle);
-  CFStringGetFileSystemRepresentation(bundle_path, app_bundle_path, sizeof(app_bundle_path));
-  CFRelease(bundle_ref);
-  CFRelease(bundle_path);
-
-  return app_bundle_path;
-}
-#endif
-
-std::string GetExePath()
-{
-#ifdef _WIN32
-  auto exe_path = Common::GetModuleName(nullptr);
-  if (!exe_path)
-    return {};
-  std::error_code error;
-  auto exe_path_absolute = fs::absolute(exe_path.value(), error);
-  if (error)
-    return {};
-  return PathToString(exe_path_absolute);
-#elif defined(__APPLE__)
-  return GetBundleDirectory();
-#elif defined(__FreeBSD__)
-  int name[4]{CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
-  size_t length = 0;
-  if (sysctl(name, 4, nullptr, &length, nullptr, 0) != 0 || length == 0)
-    return {};
-  std::string dolphin_exe_path(length, '\0');
-  if (sysctl(name, 4, dolphin_exe_path.data(), &length, nullptr, 0) != 0)
-    return {};
-  return dolphin_exe_path;
-#else
-  char dolphin_exe_path[PATH_MAX];
-  ssize_t len = ::readlink("/proc/self/exe", dolphin_exe_path, sizeof(dolphin_exe_path));
-  if (len == -1 || len == sizeof(dolphin_exe_path))
-  {
-    len = 0;
-  }
-  dolphin_exe_path[len] = '\0';
-  return dolphin_exe_path;
-#endif
-}
-
-std::string GetExeDirectory()
-{
-  return PathToString(StringToPath(GetExePath()).parent_path());
-}
-
-static std::string CreateSysDirectoryPath()
-{
-#define SYS_FOLDER_NAME "Sys"
-#if defined __APPLE__
-#define SYSDATA_DIR "Contents/Resources/" SYS_FOLDER_NAME
-#else
-#define SYSDATA_DIR DATA_DIR SYS_FOLDER_NAME
-#endif
-
-  std::string sys_directory;
-
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-  sys_directory = GetBundleDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
-#elif defined ANDROID
-  sys_directory = s_android_sys_directory + DIR_SEP;
-  ASSERT_MSG(COMMON, !s_android_sys_directory.empty(), "Sys directory has not been set");
-#elif defined __LIBRETRO__
-  sys_directory = s_libretro_sys_directory + DIR_SEP;
-#else
-  const std::string local_sys_directory = GetExeDirectory() + DIR_SEP SYS_FOLDER_NAME DIR_SEP;
-  if (IsDirectory(local_sys_directory))
-    sys_directory = local_sys_directory;
-  else
-    sys_directory = SYSDATA_DIR DIR_SEP;
-
-#endif
-
-  INFO_LOG_FMT(COMMON, "CreateSysDirectoryPath: Setting to {}", sys_directory);
-  return sys_directory;
 }
 
 const std::string& GetSysDirectory()
 {
-  static const std::string sys_directory = CreateSysDirectoryPath();
+#ifdef ANDROID
+  static const std::string sys_directory = s_android_sys_directory + DIR_SEP;
+  ASSERT_MSG(COMMON, !s_android_sys_directory.empty(), "Sys directory has not been set");
+#else
+  static const std::string sys_directory = s_libretro_sys_directory + DIR_SEP;
+#endif
   return sys_directory;
 }
 
-#if defined(__LIBRETRO__) && !defined(ANDROID)
+#ifndef ANDROID
 void SetSysDirectory(const std::string& path)
 {
   INFO_LOG_FMT(COMMON, "Setting Sys directory to {}", path);
@@ -1024,9 +473,6 @@ static void RebuildUserDirectories(unsigned int dir_index)
 
     s_user_paths[D_ASM_ROOT_IDX] = s_user_paths[D_USER_IDX] + ASSEMBLY_DIR DIR_SEP;
 
-    // The shader cache has moved to the cache directory, so remove the old one.
-    // TODO: remove that someday.
-    File::DeleteDirRecursively(s_user_paths[D_USER_IDX] + SHADERCACHE_LEGACY_DIR DIR_SEP);
     break;
 
   case D_CONFIG_IDX:
@@ -1124,41 +570,110 @@ void SetUserPath(unsigned int dir_index, std::string path)
   RebuildUserDirectories(dir_index);
 }
 
-std::string GetThemeDir(const std::string& theme_name)
+std::string JoinPath(const std::string& directory, const std::string& path)
 {
-  std::string dir = File::GetUserPath(D_THEMES_IDX) + theme_name + "/";
-  if (Exists(dir))
-    return dir;
+  std::string joined;
+  if (directory.empty() || path_is_absolute(path.c_str()))
+    return path;
+  joined = directory;
+  if (joined.back() != DIR_SEP_CHR && joined.back() != '\\')
+    joined += DIR_SEP_CHR;
+  return joined + path;
+}
 
-  // If the theme doesn't exist in the user dir, load from shared directory
-  dir = GetSysDirectory() + THEMES_DIR "/" + theme_name + "/";
-  if (Exists(dir))
-    return dir;
+LineReader::LineReader(const std::string& filename) : m_file(filename, "rb")
+{
+  u64 size;
+  if (!m_file)
+    return;
+  m_map = reinterpret_cast<const char*>(m_file.GetMappedPtr(&size));
+  if (m_map)
+    m_size = size_t(size);
+  else
+    m_window.resize(64 * 1024);
+}
 
-  // If the theme doesn't exist at all, load the default theme
-  return GetSysDirectory() + THEMES_DIR "/" DEFAULT_THEME_DIR "/";
+bool LineReader::Next(const char** text, size_t* length)
+{
+  const char* base;
+  const char* nl;
+  size_t len;
+
+  if (!m_file.IsOpen())
+    return false;
+
+  for (;;)
+  {
+    base = m_map ? m_map : m_window.data();
+    nl = static_cast<const char*>(std::memchr(base + m_pos, '\n', m_size - m_pos));
+    if (nl || m_map || m_eof)
+      break;
+
+    // keep the partial line, then fill behind it; the window grows only
+    // for a line longer than it
+    std::memmove(m_window.data(), m_window.data() + m_pos, m_size - m_pos);
+    m_size -= m_pos;
+    m_pos = 0;
+    if (m_size == m_window.size())
+      m_window.resize(m_window.size() * 2);
+    {
+      size_t got = 0;
+      m_file.ReadArray(m_window.data() + m_size, m_window.size() - m_size, &got);
+      m_file.ClearError();
+      if (!got)
+        m_eof = true;
+      m_size += got;
+    }
+  }
+
+  if (nl)
+    len = size_t(nl - (base + m_pos));
+  else if (m_pos < m_size)
+    len = m_size - m_pos;
+  else
+    return false;
+
+  *text = base + m_pos;
+  m_pos += len + (nl ? 1 : 0);
+  if (len && (*text)[len - 1] == '\r')
+    len--;
+  *length = len;
+  return true;
+}
+
+bool ForEachLine(const std::string& filename, void (*line)(void* ud, const char* text, size_t length),
+                 void* ud)
+{
+  LineReader reader(filename);
+  const char* text;
+  size_t length;
+
+  if (!reader.IsOpen())
+    return false;
+  while (reader.Next(&text, &length))
+    line(ud, text, length);
+  return true;
 }
 
 bool WriteStringToFile(const std::string& filename, std::string_view str)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::WriteStringToFile(filename, str);
-#endif
-  return File::IOFile(filename, "wb").WriteBytes(str.data(), str.size());
+  return filestream_write_file(filename.c_str(), str.data(), s64(str.size()));
 }
 
 bool ReadFileToString(const std::string& filename, std::string& str)
 {
-#ifdef __LIBRETRO__
-  if (Libretro::VFile::HasVFS())
-    return Libretro::VFile::ReadFileToString(filename, str);
-#endif
   File::IOFile file(filename, "rb");
+  u64 size;
+  const u8* map;
 
   if (!file)
     return false;
-
+  map = file.GetMappedPtr(&size);
+  if (map)
+  {
+    str.assign(reinterpret_cast<const char*>(map), size);
+    return true;
+  }
   str.resize(file.GetSize());
   return file.ReadArray(str.data(), str.size());
 }

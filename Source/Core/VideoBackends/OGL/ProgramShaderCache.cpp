@@ -4,7 +4,6 @@
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 
 #include <array>
-#include <fstream>
 #include <memory>
 #include <string>
 
@@ -391,13 +390,10 @@ bool ProgramShaderCache::CheckShaderCompileResult(GLuint id, GLenum type, std::s
       ERROR_LOG_FMT(VIDEO, "{} failed compilation:\n{}", prefix, info_log);
 
       std::string filename = VideoBackendBase::BadShaderFilename(prefix, num_failures++);
-      std::ofstream file;
-      File::OpenFStream(file, filename, std::ios_base::out);
-      file << s_glsl_header << code << info_log;
-      file << "\n";
-      file << "Dolphin Version: " + Common::GetScmRevStr() + "\n";
-      file << "Video Backend: " + g_video_backend->GetDisplayName();
-      file.close();
+      File::WriteStringToFile(filename,
+                              fmt::format("{}{}{}\nDolphin Version: {}\nVideo Backend: {}",
+                                          s_glsl_header, code, info_log, Common::GetScmRevStr(),
+                                          g_video_backend->GetDisplayName()));
 
       PanicAlertFmt("Failed to compile {} shader: {}\n"
                     "Debug info ({}, {}, {}):\n{}",
@@ -429,20 +425,16 @@ bool ProgramShaderCache::CheckProgramLinkResult(GLuint id, std::string_view vcod
     {
       ERROR_LOG_FMT(VIDEO, "Program failed linking:\n{}", info_log);
       std::string filename = VideoBackendBase::BadShaderFilename("p", num_failures++);
-      std::ofstream file;
-      File::OpenFStream(file, filename, std::ios_base::out);
+      std::string dump;
       if (!vcode.empty())
-        file << s_glsl_header << vcode << '\n';
+        dump += fmt::format("{}{}\n", s_glsl_header, vcode);
       if (!gcode.empty())
-        file << s_glsl_header << gcode << '\n';
+        dump += fmt::format("{}{}\n", s_glsl_header, gcode);
       if (!pcode.empty())
-        file << s_glsl_header << pcode << '\n';
-
-      file << info_log;
-      file << "\n";
-      file << "Dolphin Version: " + Common::GetScmRevStr() + "\n";
-      file << "Video Backend: " + g_video_backend->GetDisplayName();
-      file.close();
+        dump += fmt::format("{}{}\n", s_glsl_header, pcode);
+      dump += fmt::format("{}\nDolphin Version: {}\nVideo Backend: {}", info_log,
+                          Common::GetScmRevStr(), g_video_backend->GetDisplayName());
+      File::WriteStringToFile(filename, dump);
 
       PanicAlertFmt("Failed to link shaders: {}\n"
                     "Debug info ({}, {}, {}):\n{}",

@@ -154,7 +154,6 @@ void SaveScreenShot(std::string_view name);
 // Logs a message meant for the user; the core draws nothing over the game.
 void DisplayMessage(std::string message, int time_in_ms = 0);
 
-void OnFrameEnd(Core::System& system);
 
 // Run a function on the CPU thread, asynchronously.
 void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function

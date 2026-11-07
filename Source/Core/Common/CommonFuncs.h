@@ -34,9 +34,6 @@
 #define unlink _unlink
 #define vscprintf _vscprintf
 
-// 64 bit offsets for Windows
-#define fseeko _fseeki64
-#define ftello _ftelli64
 #define atoll _atoi64
 #ifndef __MINGW32__
 #define stat _stat64
