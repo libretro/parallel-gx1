@@ -243,7 +243,7 @@ struct TCacheEntry
 
 using RcTcacheEntry = std::shared_ptr<TCacheEntry>;
 
-class TextureCacheBase
+class TextureCacheBase final
 {
 public:
   // Minimal version of TCacheEntry just for TexPool
@@ -265,7 +265,7 @@ public:
   };
 
   TextureCacheBase();
-  virtual ~TextureCacheBase();
+  ~TextureCacheBase();
 
   bool Initialize();
   void Shutdown();
@@ -285,7 +285,7 @@ public:
   RcTcacheEntry GetXFBTexture(u32 address, u32 width, u32 height, u32 stride,
                               MathUtil::Rectangle<int>* display_rect);
 
-  virtual void BindTextures(BitSet32 used_textures, const std::array<SamplerState, 8>& samplers);
+  void BindTextures(BitSet32 used_textures, const std::array<SamplerState, 8>& samplers);
   void CopyRenderTargetToTexture(u32 dstAddr, EFBCopyFormat dstFormat, u32 width, u32 height,
                                  u32 dstStride, bool is_depth_copy,
                                  const MathUtil::Rectangle<int>& srcRect, bool isIntensity,
@@ -331,12 +331,12 @@ protected:
                           u32 aligned_height, u32 row_stride, const u8* palette,
                           TLUTFormat palette_format);
 
-  virtual void CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams& params, u32 native_width,
+  void CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams& params, u32 native_width,
                        u32 bytes_per_row, u32 num_blocks_y, u32 memory_stride,
                        const MathUtil::Rectangle<int>& src_rect, bool scale_by_half,
                        bool linear_filter, float y_scale, float gamma, bool clamp_top,
                        bool clamp_bottom, const std::array<u32, 3>& filter_coefficients);
-  virtual void CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_copy,
+  void CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_copy,
                                    const MathUtil::Rectangle<int>& src_rect, bool scale_by_half,
                                    bool linear_filter, EFBCopyFormat dst_format, bool is_intensity,
                                    float gamma, bool clamp_top, bool clamp_bottom,

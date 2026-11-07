@@ -33,6 +33,8 @@
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
+#include "VideoBackends/Software/TextureEncoder.h"
+
 #include "VideoCommon/AbstractFramebuffer.h"
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AbstractStagingTexture.h"
@@ -55,6 +57,7 @@
 #include "VideoCommon/TextureDecoder.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
+#include "VideoCommon/VideoBackendKind.h"
 #include "VideoCommon/VideoConfig.h"
 
 static const u64 TEXHASH_INVALID = 0;
@@ -2890,6 +2893,10 @@ void TextureCacheBase::CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_c
                                            bool clamp_top, bool clamp_bottom,
                                            const std::array<u32, 3>& filter_coefficients)
 {
+  // the null and software renderers keep no copies in VRAM
+  if (g_video_backend_kind == VIDEO_BACKEND_NULL || g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
+    return;
+
   // Flush EFB pokes first, as they're expected to be included.
   g_framebuffer_manager->FlushEFBPokes();
 
@@ -2966,6 +2973,16 @@ void TextureCacheBase::CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams&
                                bool clamp_top, bool clamp_bottom,
                                const std::array<u32, 3>& filter_coefficients)
 {
+  if (g_video_backend_kind == VIDEO_BACKEND_NULL)
+    return;
+  // the software renderer encodes straight from its EFB
+  if (g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
+  {
+    TextureEncoder::Encode(dst, params, native_width, bytes_per_row, num_blocks_y, memory_stride,
+                           src_rect, scale_by_half, y_scale, gamma);
+    return;
+  }
+
   // Flush EFB pokes first, as they're expected to be included.
   g_framebuffer_manager->FlushEFBPokes();
 

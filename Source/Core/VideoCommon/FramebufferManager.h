@@ -93,7 +93,6 @@ public:
   // Recompile shaders, use when MSAA mode changes.
   void RecompileShaders();
 
-  // This is virtual, because D3D has both normalized and integer framebuffers.
   void BindEFBFramebuffer();
 
   // Resolve color/depth textures to a non-msaa texture, and return it.

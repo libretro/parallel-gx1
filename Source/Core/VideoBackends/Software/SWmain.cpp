@@ -17,7 +17,6 @@
 #include "VideoBackends/Software/SWGfx.h"
 #include "VideoBackends/Software/SWPerfQuery.h"
 #include "VideoBackends/Software/SWVertexLoader.h"
-#include "VideoBackends/Software/TextureCache.h"
 
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
@@ -84,7 +83,7 @@ bool VideoSoftware::Initialize(const WindowSystemInfo& wsi)
   return InitializeShared(std::make_unique<SWGfx>(),
                           std::make_unique<SWVertexLoader>(), std::make_unique<PerfQuery>(),
                           std::make_unique<SWBoundingBox>(), std::make_unique<SWEFBInterface>(),
-                          std::make_unique<TextureCache>());
+                          std::make_unique<TextureCacheBase>());
 }
 
 void VideoSoftware::Shutdown()
