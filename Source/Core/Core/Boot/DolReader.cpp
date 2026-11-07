@@ -5,8 +5,6 @@
 
 #include <cstring>
 #include <string>
-#include <utility>
-#include <vector>
 
 #include "Common/Align.h"
 #include "Common/BitUtils.h"
@@ -16,29 +14,25 @@
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
-DolReader::DolReader(std::vector<u8> buffer) : BootExecutableReader(std::move(buffer))
-{
-  m_is_valid = Initialize(m_bytes);
-}
-
-DolReader::DolReader(File::IOFile file) : BootExecutableReader(std::move(file))
-{
-  m_is_valid = Initialize(m_bytes);
-}
-
 DolReader::DolReader(const std::string& filename) : BootExecutableReader(filename)
 {
-  m_is_valid = Initialize(m_bytes);
+  m_is_valid = Initialize();
+}
+
+DolReader::DolReader(u8* data, size_t size, bool take_ownership)
+    : BootExecutableReader(data, size, take_ownership)
+{
+  m_is_valid = Initialize();
 }
 
 DolReader::~DolReader() = default;
 
-bool DolReader::Initialize(std::span<const u8> buffer)
+bool DolReader::Initialize()
 {
-  if (buffer.size() < sizeof(DolHeader) || buffer.size() > UINT32_MAX)
+  if (m_size < sizeof(DolHeader) || m_size > UINT32_MAX)
     return false;
 
-  std::memcpy(&m_dolheader, buffer.data(), sizeof(DolHeader));
+  std::memcpy(&m_dolheader, m_bytes, sizeof(DolHeader));
 
   // swap memory
   u32* p = (u32*)&m_dolheader;
@@ -67,15 +61,16 @@ bool DolReader::Initialize(std::span<const u8> buffer)
                    i);
     }
 
-    if (buffer.size() < m_dolheader.m_text_offset[i] + section_size)
+    if (m_size < m_dolheader.m_text_offset[i] + section_size)
       return false;
 
-    auto& section = m_sections.emplace_back();
+    LoadableSection& section = m_sections[m_num_sections++];
     section.m_address = m_dolheader.m_text_address[i];
     section.m_header_section_size = m_dolheader.m_text_size[i];
-    section.m_data = buffer.subspan(m_dolheader.m_text_offset[i], section_size);
+    section.m_data = m_bytes + m_dolheader.m_text_offset[i];
+    section.m_size = static_cast<u32>(section_size);
 
-    const u8* const begin = section.m_data.data();
+    const u8* const begin = section.m_data;
     const u8* const end = begin + section_size;
     for (const u8* ptr = begin; ptr < end; ptr += 4)
     {
@@ -102,21 +97,22 @@ bool DolReader::Initialize(std::span<const u8> buffer)
                    i);
     }
 
-    if (buffer.size() < section_offset + section_size)
+    if (m_size < section_offset + section_size)
       return false;
 
-    auto& section = m_sections.emplace_back();
+    LoadableSection& section = m_sections[m_num_sections++];
     section.m_address = m_dolheader.m_data_address[i];
     section.m_header_section_size = m_dolheader.m_data_size[i];
-    section.m_data = buffer.subspan(section_offset, section_size);
+    section.m_data = m_bytes + section_offset;
+    section.m_size = static_cast<u32>(section_size);
 
     // Check if this dol contains an ancast image
     // The ancast image will always be in the first data section
     if (i == 0 && section.m_header_section_size > sizeof(EspressoAncastHeader) &&
         section.m_address == ESPRESSO_ANCAST_LOCATION_VIRT &&
-        Common::swap32(section.m_data.data()) == ANCAST_MAGIC)
+        Common::swap32(section.m_data) == ANCAST_MAGIC)
     {
-      m_ancast_index = m_sections.size() - 1;
+      m_ancast_index = m_num_sections - 1;
     }
   }
 
@@ -133,13 +129,14 @@ bool DolReader::LoadIntoMemory(Core::System& system, bool only_in_mem1) const
 
   auto& memory = system.GetMemory();
 
-  // load all loadable sections
-  for (auto& section : m_sections)
+  // load all loadable sections, straight from the file's mapping where it has one
+  for (int i = 0; i < m_num_sections; i++)
   {
-    if (only_in_mem1 && section.m_address + section.m_data.size() >= memory.GetRamSizeReal())
+    const LoadableSection& section = m_sections[i];
+    if (only_in_mem1 && section.m_address + section.m_size >= memory.GetRamSizeReal())
       continue;
 
-    memory.CopyToEmu(section.m_address, section.m_data.data(), section.m_data.size());
+    memory.CopyToEmu(section.m_address, section.m_data, section.m_size);
   }
 
   return true;
@@ -148,10 +145,10 @@ bool DolReader::LoadIntoMemory(Core::System& system, bool only_in_mem1) const
 // On a real console this would be done in the Espresso bootrom
 bool DolReader::LoadAncastIntoMemory(Core::System& system) const
 {
-  const LoadableSection& section = m_sections[m_ancast_index.value()];
+  const LoadableSection& section = m_sections[m_ancast_index];
   const u32 section_address = m_dolheader.m_data_address[0];
   const EspressoAncastHeader header =
-      Common::BitCastPtr<EspressoAncastHeader>(section.m_data.data());
+      Common::BitCastPtr<EspressoAncastHeader>(section.m_data);
 
   // Verify header block size
   if (Common::swap32(header.header_block.header_block_size) != sizeof(AncastHeaderBlock))
@@ -187,7 +184,7 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
 
   // Verify the body hash
   const auto digest = Common::SHA1::CalculateDigest(
-      section.m_data.data() + sizeof(EspressoAncastHeader), body_size);
+      section.m_data + sizeof(EspressoAncastHeader), body_size);
   if (digest != header.info_block.body_hash)
   {
     ERROR_LOG_FMT(BOOT, "Ancast: Body hash mismatch");
@@ -218,18 +215,17 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
 
   static constexpr u8 vwii_ancast_iv[0x10] = {0x59, 0x6d, 0x5a, 0x9a, 0xd7, 0x05, 0xf9, 0x4f,
                                               0xe1, 0x58, 0x02, 0x6f, 0xea, 0xa7, 0xb8, 0x87};
-  std::vector<u8> decrypted(body_size);
-  if (!ctx->Crypt(vwii_ancast_iv, section.m_data.data() + sizeof(EspressoAncastHeader),
-                  decrypted.data(), body_size))
-    return false;
-
   auto& memory = system.GetMemory();
 
-  // Copy the Ancast header to the emu
+  // The body is decrypted straight into emulated memory, behind its header.
+  u8* const body =
+      memory.GetPointerForRange(section_address + sizeof(EspressoAncastHeader), body_size);
+  if (!body ||
+      !ctx->Crypt(vwii_ancast_iv, section.m_data + sizeof(EspressoAncastHeader), body, body_size))
+  {
+    return false;
+  }
   memory.CopyToEmu(section_address, &header, sizeof(EspressoAncastHeader));
-
-  // Copy the decrypted body to the emu
-  memory.CopyToEmu(section_address + sizeof(EspressoAncastHeader), decrypted.data(), body_size);
 
   return true;
 }

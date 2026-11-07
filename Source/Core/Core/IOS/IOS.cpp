@@ -4,6 +4,7 @@
 #include "Core/IOS/IOS.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <array>
 #include <map>
 #include <memory>
@@ -401,20 +402,29 @@ u16 EmulationKernel::GetGidForPPC() const
   return m_ppc_gid;
 }
 
-static std::vector<u8> ReadBootContent(FSCore& fs, const std::string& path, size_t max_size,
-                                       Ticks ticks = {})
+// The file, in memory from malloc() for the caller to free; nullptr when it cannot be read or
+// is larger than a nonzero max_size.
+static u8* ReadBootContent(FSCore& fs, const std::string& path, size_t max_size, size_t* size,
+                           Ticks ticks = {})
 {
   const auto fd = fs.Open(0, 0, path, FS::Mode::Read, {}, ticks);
+  u8* buffer;
   if (fd.Get() < 0)
-    return {};
+    return nullptr;
 
   const size_t file_size = fs.GetFileStatus(fd.Get(), ticks)->size;
-  if (max_size != 0 && file_size > max_size)
-    return {};
+  if (!file_size || (max_size != 0 && file_size > max_size))
+    return nullptr;
 
-  std::vector<u8> buffer(file_size);
-  if (!fs.Read(fd.Get(), buffer.data(), buffer.size(), ticks))
-    return {};
+  buffer = static_cast<u8*>(std::malloc(file_size));
+  if (!buffer)
+    return nullptr;
+  if (!fs.Read(fd.Get(), buffer, file_size, ticks))
+  {
+    std::free(buffer);
+    return nullptr;
+  }
+  *size = file_size;
   return buffer;
 }
 
@@ -425,7 +435,9 @@ bool EmulationKernel::BootstrapPPC(const std::string& boot_content_path)
   // Seeking and processing overhead is ignored as most time is spent reading from the NAND.
   u64 ticks = 0;
 
-  const DolReader dol{ReadBootContent(GetFSCore(), boot_content_path, 0, &ticks)};
+  size_t dol_size = 0;
+  u8* const dol_bytes = ReadBootContent(GetFSCore(), boot_content_path, 0, &dol_size, &ticks);
+  const DolReader dol{dol_bytes, dol_size, true};
 
   if (!dol.IsValid())
     return false;
@@ -447,29 +459,32 @@ bool EmulationKernel::BootstrapPPC(const std::string& boot_content_path)
   return true;
 }
 
+// An ARM boot binary: a header, then the ELF the PPC side loads.
 struct ARMBinary final
 {
-  explicit ARMBinary(std::vector<u8>&& bytes) : m_bytes(std::move(bytes)) {}
+  ARMBinary(u8* bytes, size_t size) : m_bytes(bytes), m_size(bytes ? size : 0) {}
+  ~ARMBinary() { std::free(m_bytes); }
+  ARMBinary(const ARMBinary&) = delete;
+  ARMBinary& operator=(const ARMBinary&) = delete;
+
   bool IsValid() const
   {
     // The header is at least 0x10.
-    if (m_bytes.size() < 0x10)
+    if (m_size < 0x10)
       return false;
-    return m_bytes.size() >= (GetHeaderSize() + GetElfOffset() + GetElfSize());
+    return m_size >= u64(GetHeaderSize()) + GetElfOffset() + GetElfSize();
   }
 
-  std::vector<u8> GetElf() const
-  {
-    const auto iterator = m_bytes.cbegin() + GetHeaderSize() + GetElfOffset();
-    return std::vector<u8>(iterator, iterator + GetElfSize());
-  }
+  // The ELF where it lies in the binary, for a reader to rewrite in place.
+  u8* GetElf() { return m_bytes + GetHeaderSize() + GetElfOffset(); }
 
-  u32 GetHeaderSize() const { return Common::swap32(m_bytes.data()); }
-  u32 GetElfOffset() const { return Common::swap32(m_bytes.data() + 0x4); }
-  u32 GetElfSize() const { return Common::swap32(m_bytes.data() + 0x8); }
+  u32 GetHeaderSize() const { return Common::swap32(m_bytes); }
+  u32 GetElfOffset() const { return Common::swap32(m_bytes + 0x4); }
+  u32 GetElfSize() const { return Common::swap32(m_bytes + 0x8); }
 
 private:
-  std::vector<u8> m_bytes;
+  u8* m_bytes;
+  size_t m_size;
 };
 
 static void FinishIOSBoot(Core::System& system, u64 ios_title_id)
@@ -506,11 +521,13 @@ bool EmulationKernel::BootIOS(const u64 ios_title_id, HangPPC hang_ppc,
     // Load the ARM binary to memory (if possible).
     // Because we do not actually emulate the Starlet, only load the sections that are in MEM1.
 
-    ARMBinary binary{ReadBootContent(GetFSCore(), boot_content_path, 0xB00000)};
+    size_t binary_size = 0;
+    u8* const binary_bytes = ReadBootContent(GetFSCore(), boot_content_path, 0xB00000, &binary_size);
+    ARMBinary binary{binary_bytes, binary_size};
     if (!binary.IsValid())
       return false;
 
-    ElfReader elf{binary.GetElf()};
+    ElfReader elf{binary.GetElf(), binary.GetElfSize(), false};
     if (!elf.LoadIntoMemory(m_system, true))
       return false;
   }

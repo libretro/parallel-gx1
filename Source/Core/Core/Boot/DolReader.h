@@ -3,30 +3,21 @@
 
 #pragma once
 
-#include <optional>
-#include <span>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Core/Boot/Boot.h"
-
-namespace File
-{
-class IOFile;
-}
 
 class DolReader final : public BootExecutableReader
 {
 public:
   explicit DolReader(const std::string& filename);
-  explicit DolReader(File::IOFile file);
-  explicit DolReader(std::vector<u8> buffer);
+  DolReader(u8* data, size_t size, bool take_ownership);
   ~DolReader() override;
 
   bool IsValid() const override { return m_is_valid; }
   bool IsWii() const override { return m_is_wii; }
-  bool IsAncast() const { return m_ancast_index.has_value(); }
+  bool IsAncast() const { return m_ancast_index >= 0; }
   u32 GetEntryPoint() const override { return m_dolheader.m_entrypoint; }
   bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const override;
   bool LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db,
@@ -61,19 +52,20 @@ private:
 
   struct LoadableSection
   {
+    const u8* m_data;
+    u32 m_size;
     u32 m_address;
     u32 m_header_section_size;
-    std::span<const u8> m_data;
   };
 
-  std::vector<LoadableSection> m_sections;
+  LoadableSection m_sections[DOL_NUM_TEXT + DOL_NUM_DATA];
+  int m_num_sections = 0;
+  int m_ancast_index = -1;
 
   bool m_is_valid;
   bool m_is_wii;
-  std::optional<std::size_t> m_ancast_index;
 
-  // Copy sections to internal buffers
-  bool Initialize(std::span<const u8> buffer);
+  bool Initialize();
 
   bool LoadAncastIntoMemory(Core::System& system) const;
 };

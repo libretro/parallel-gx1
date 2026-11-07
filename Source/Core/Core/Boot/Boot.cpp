@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <numeric>
@@ -651,22 +652,55 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 }
 
 BootExecutableReader::BootExecutableReader(const std::string& file_name)
-    : BootExecutableReader(File::IOFile{file_name, "rb"})
+    : m_file(file_name, "rb")
+{
+  u64 size = 0;
+  const u8* map = m_file.GetMappedPtr(&size);
+  if (map)
+  {
+    m_bytes = map;
+    m_size = size_t(size);
+    return;
+  }
+  size = m_file.GetSize();
+  if (!size || !(m_mutable = static_cast<u8*>(std::malloc(size_t(size)))))
+    return;
+  m_owned = true;
+  if (!m_file.ReadBytes(m_mutable, size_t(size)))
+    size = 0;
+  m_file.Close();
+  m_bytes = m_mutable;
+  m_size = size_t(size);
+}
+
+BootExecutableReader::BootExecutableReader(u8* data, size_t size, bool take_ownership)
+    : m_bytes(data), m_size(data ? size : 0), m_mutable(data), m_owned(take_ownership)
 {
 }
 
-BootExecutableReader::BootExecutableReader(File::IOFile file)
+BootExecutableReader::~BootExecutableReader()
 {
-  file.Seek(0, File::SeekOrigin::Begin);
-  m_bytes.resize(file.GetSize());
-  file.ReadBytes(m_bytes.data(), m_bytes.size());
+  if (m_owned)
+    std::free(m_mutable);
 }
 
-BootExecutableReader::BootExecutableReader(std::vector<u8> bytes) : m_bytes(std::move(bytes))
+u8* BootExecutableReader::MutableBytes()
 {
+  if (!m_mutable && m_size)
+  {
+    m_mutable = static_cast<u8*>(std::malloc(m_size));
+    if (!m_mutable)
+    {
+      m_size = 0;
+      return nullptr;
+    }
+    std::memcpy(m_mutable, m_bytes, m_size);
+    m_owned = true;
+    m_bytes = m_mutable;
+    m_file.Close();
+  }
+  return m_mutable;
 }
-
-BootExecutableReader::~BootExecutableReader() = default;
 
 void StateFlags::UpdateChecksum()
 {

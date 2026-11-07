@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "Common/IOFile.h"
 #include "Core/IOS/IOSC.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Enums.h"
@@ -169,10 +170,15 @@ private:
 class BootExecutableReader
 {
 public:
+  // The executable lent from the file's mapping where it has one, else read into memory.
   explicit BootExecutableReader(const std::string& file_name);
-  explicit BootExecutableReader(File::IOFile file);
-  explicit BootExecutableReader(std::vector<u8> buffer);
+  // The executable at data, lent by the caller, who keeps it alive and lets the reader
+  // rewrite it in place; freed with free() by the reader when take_ownership.
+  BootExecutableReader(u8* data, size_t size, bool take_ownership);
   virtual ~BootExecutableReader();
+
+  BootExecutableReader(const BootExecutableReader&) = delete;
+  BootExecutableReader& operator=(const BootExecutableReader&) = delete;
 
   virtual u32 GetEntryPoint() const = 0;
   virtual bool IsValid() const = 0;
@@ -182,7 +188,16 @@ public:
                            const std::string& filename) const = 0;
 
 protected:
-  std::vector<u8> m_bytes;
+  // The executable's octets, read-only.
+  const u8* m_bytes = nullptr;
+  size_t m_size = 0;
+  // The same octets, writable, copied out of a mapping on first use.
+  u8* MutableBytes();
+
+private:
+  File::IOFile m_file;
+  u8* m_mutable = nullptr;
+  bool m_owned = false;
 };
 
 struct StateFlags

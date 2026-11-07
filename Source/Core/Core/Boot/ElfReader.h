@@ -26,8 +26,7 @@ class ElfReader final : public BootExecutableReader
 {
 public:
   explicit ElfReader(const std::string& filename);
-  explicit ElfReader(File::IOFile file);
-  explicit ElfReader(std::vector<u8> buffer);
+  ElfReader(u8* data, size_t size, bool take_ownership);
   ~ElfReader() override;
   u32 Read32(int off) const { return base32[off >> 2]; }
   // Quick accessors
