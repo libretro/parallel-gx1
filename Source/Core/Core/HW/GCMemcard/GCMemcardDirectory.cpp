@@ -342,7 +342,7 @@ s32 GCMemcardDirectory::Write(u32 dest_address, s32 length, const u8* src_addres
       s32 bytes_written = 0;
       while (length > 0)
       {
-        const s32 to_write = std::min<s32>(Memcard::DENTRY_SIZE, length);
+        const s32 to_write = length < (s32)Memcard::DENTRY_SIZE ? length : (s32)Memcard::DENTRY_SIZE;
         bytes_written +=
             DirectoryWrite(dest_address + bytes_written, to_write, src_address + bytes_written);
         length -= to_write;
@@ -758,7 +758,7 @@ void MigrateFromMemcardFile(const std::string& directory_name, ExpansionInterfac
 
         std::string filepath =
             directory_name + DIR_SEP + Memcard::GenerateFilename(savefile->dir_entry) + ".gci";
-        Memcard::WriteSavefile(filepath, *savefile, Memcard::SavefileFormat::GCI);
+        Memcard::WriteGCISavefile(filepath, *savefile);
       }
     }
   }

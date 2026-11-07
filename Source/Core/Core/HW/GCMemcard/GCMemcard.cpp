@@ -3,7 +3,6 @@
 
 #include "Core/HW/GCMemcard/GCMemcard.h"
 
-#include <algorithm>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -31,6 +30,18 @@ static constexpr std::optional<u64> BytesToMegabits(u64 bytes)
 
 namespace Memcard
 {
+// unused areas hold 0xFF throughout
+static bool IsFilledWithFF(const u8* data, size_t size)
+{
+  size_t i;
+  for (i = 0; i < size; i++)
+  {
+    if (data[i] != 0xFF)
+      return false;
+  }
+  return true;
+}
+
 bool GCMemcardErrorCode::HasCriticalErrors() const
 {
   return Test(GCMemcardValidityIssues::FAILED_TO_OPEN) || Test(GCMemcardValidityIssues::IO_ERROR) ||
@@ -99,8 +110,13 @@ std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::str
       MBIT_SIZE_MEMORY_CARD_2043,
   }};
 
-  if (!std::ranges::any_of(valid_megabits,
-                           [filesize_megabits](u64 mbits) { return mbits == filesize_megabits; }))
+  size_t size_index;
+  for (size_index = 0; size_index < valid_megabits.size(); size_index++)
+  {
+    if (valid_megabits[size_index] == filesize_megabits)
+      break;
+  }
+  if (size_index == valid_megabits.size())
   {
     error_code.Set(GCMemcardValidityIssues::INVALID_CARD_SIZE);
     return std::make_pair(error_code, std::nullopt);
@@ -467,7 +483,7 @@ std::optional<std::vector<u8>> GCMemcard::GetSaveDataBytes(u8 save_index, size_t
   if (offset >= file_size)
     return std::nullopt;
 
-  const size_t bytes_to_copy = std::min(length, file_size - offset);
+  const size_t bytes_to_copy = length < file_size - offset ? length : file_size - offset;
   std::vector<u8> result;
   result.reserve(bytes_to_copy);
 
@@ -490,7 +506,8 @@ std::optional<std::vector<u8>> GCMemcard::GetSaveDataBytes(u8 save_index, size_t
     const GCMBlock& block = m_data_blocks[current_block - MC_FST_BLOCKS];
     const size_t bytes_in_current_block_left = BLOCK_SIZE - offset_in_current_block;
     const size_t bytes_in_current_block_left_to_copy =
-        std::min(bytes_remaining, bytes_in_current_block_left);
+        bytes_remaining < bytes_in_current_block_left ? bytes_remaining :
+                                                        bytes_in_current_block_left;
 
     const auto data_to_copy_begin = block.m_block.begin() + offset_in_current_block;
     const auto data_to_copy_end = data_to_copy_begin + bytes_in_current_block_left_to_copy;
@@ -569,8 +586,13 @@ u16 BlockAlloc::NextFreeBlock(u16 max_block, u16 starting_block) const
 {
   if (m_free_blocks > 0)
   {
-    starting_block = std::clamp<u16>(starting_block, MC_FST_BLOCKS, BAT_SIZE + MC_FST_BLOCKS);
-    max_block = std::clamp<u16>(max_block, MC_FST_BLOCKS, BAT_SIZE + MC_FST_BLOCKS);
+    const u16 last_block = BAT_SIZE + MC_FST_BLOCKS;
+    starting_block = starting_block < MC_FST_BLOCKS ? MC_FST_BLOCKS :
+                     starting_block > last_block    ? last_block :
+                                                      starting_block;
+    max_block = max_block < MC_FST_BLOCKS ? MC_FST_BLOCKS :
+                max_block > last_block    ? last_block :
+                                            max_block;
     for (u16 i = starting_block; i < max_block; ++i)
       if (m_map[i - MC_FST_BLOCKS] == 0)
         return i;
@@ -1294,8 +1316,8 @@ GCMemcardErrorCode Header::CheckForErrors(u16 card_size_mbits) const
     error_code.Set(GCMemcardValidityIssues::MISMATCHED_CARD_SIZE);
 
   // unused areas, should always be filled with 0xFF
-  if (std::ranges::any_of(m_unused_1, [](u8 val) { return val != 0xFF; }) ||
-      std::ranges::any_of(m_unused_2, [](u8 val) { return val != 0xFF; }))
+  if (!IsFilledWithFF(m_unused_1.data(), m_unused_1.size()) ||
+      !IsFilledWithFF(m_unused_2.data(), m_unused_2.size()))
   {
     error_code.Set(GCMemcardValidityIssues::DATA_IN_UNUSED_AREA);
   }
@@ -1359,7 +1381,7 @@ GCMemcardErrorCode Directory::CheckForErrors() const
     error_code.Set(GCMemcardValidityIssues::INVALID_CHECKSUM);
 
   // unused area, should always be filled with 0xFF
-  if (std::ranges::any_of(m_padding, [](u8 val) { return val != 0xFF; }))
+  if (!IsFilledWithFF(m_padding.data(), m_padding.size()))
     error_code.Set(GCMemcardValidityIssues::DATA_IN_UNUSED_AREA);
 
   return error_code;

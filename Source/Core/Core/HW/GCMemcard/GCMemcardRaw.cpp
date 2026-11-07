@@ -83,8 +83,8 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
   // it's safe to startup the flush thread (which reads them).
   m_flush_buffer = std::make_unique<u8[]>(m_memory_card_size);
   memcpy(&m_flush_buffer[0], &m_memcard_data[0], m_memory_card_size);
-  m_num_blocks = std::min<u32>((m_memory_card_size + Memcard::BLOCK_SIZE - 1) / Memcard::BLOCK_SIZE,
-                               MAX_BLOCKS);
+  const u32 num_blocks = (m_memory_card_size + Memcard::BLOCK_SIZE - 1) / Memcard::BLOCK_SIZE;
+  m_num_blocks = num_blocks < MAX_BLOCKS ? num_blocks : MAX_BLOCKS;
   m_flush_thread = sthread_create(Common::ThreadEntry<&MemoryCard::FlushThread>, this);
 }
 
@@ -168,7 +168,9 @@ bool MemoryCard::WriteChanges(File::IOFile& file, bool whole)
     {
     }
     const u32 offset = block * Memcard::BLOCK_SIZE;
-    const u32 length = std::min(end * Memcard::BLOCK_SIZE, m_memory_card_size) - offset;
+    const u32 end_offset = end * Memcard::BLOCK_SIZE;
+    const u32 length =
+        (end_offset < m_memory_card_size ? end_offset : m_memory_card_size) - offset;
     if (!file.Seek(offset, File::SeekOrigin::Begin) ||
         !file.WriteBytes(&m_flush_buffer[offset], length))
     {
