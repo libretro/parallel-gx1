@@ -330,17 +330,79 @@ void DXTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
     g_dx_context->GetTextureUploadBuffer().CommitMemory(upload_size);
   }
 
-  // Issue copy from buffer->texture.
+  CopyFromUpload(upload_buffer_resource, upload_buffer_offset, upload_stride, level, layer, width,
+                 height);
+}
+
+/* A load lent to its writer: one at a time, as they all go through the upload stream buffer. */
+static struct
+{
+  u32 offset;
+  u32 size;
+  u32 stride;
+  u32 level;
+  u32 layer;
+  u32 width;
+  u32 height;
+} s_lent_load;
+
+u8* DXTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer)
+{
+  constexpr u32 STAGING_BUFFER_UPLOAD_THRESHOLD = 1024 * 1024 * 4;
+  const u32 stride = CalculateStrideForFormat(m_config.format, row_length);
+  StreamBuffer& stream_buffer = g_dx_context->GetTextureUploadBuffer();
+
+  /* the writer's rows are where the copy reads them only at the placement alignment */
+  if ((stride % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) != 0 || size >= STAGING_BUFFER_UPLOAD_THRESHOLD)
+    return nullptr;
+
+  TransitionToState(D3D12_RESOURCE_STATE_COPY_DEST);
+  if (!stream_buffer.ReserveMemory(static_cast<u32>(size), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT))
+  {
+    WARN_LOG_FMT(VIDEO,
+                 "Executing command list while waiting for space in texture upload buffer");
+    Gfx::GetInstance()->ExecuteCommandList(false);
+    if (!stream_buffer.ReserveMemory(static_cast<u32>(size),
+                                     D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT))
+    {
+      return nullptr;
+    }
+  }
+
+  s_lent_load.offset = stream_buffer.GetCurrentOffset();
+  s_lent_load.size = static_cast<u32>(size);
+  s_lent_load.stride = stride;
+  s_lent_load.level = level;
+  s_lent_load.layer = layer;
+  s_lent_load.width = width;
+  s_lent_load.height = height;
+  return static_cast<u8*>(stream_buffer.GetCurrentHostPointer());
+}
+
+void DXTexture::CommitLoad()
+{
+  StreamBuffer& stream_buffer = g_dx_context->GetTextureUploadBuffer();
+
+  stream_buffer.CommitMemory(s_lent_load.size);
+  CopyFromUpload(stream_buffer.GetBuffer(), s_lent_load.offset, s_lent_load.stride,
+                 s_lent_load.level, s_lent_load.layer, s_lent_load.width, s_lent_load.height);
+}
+
+/* The copy from upload memory; the texture is in COPY_DEST already. */
+void DXTexture::CopyFromUpload(ID3D12Resource* buffer, u32 offset, u32 stride, u32 level,
+                               u32 layer, u32 width, u32 height)
+{
+  const u32 block_size = GetBlockSizeForFormat(GetFormat());
   const u32 aligned_width = Common::AlignUp(width, block_size);
   const u32 aligned_height = Common::AlignUp(height, block_size);
   const D3D12_TEXTURE_COPY_LOCATION dst_loc = {m_resource.Get(),
                                                D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
                                                {static_cast<UINT>(CalcSubresource(level, layer))}};
   const D3D12_TEXTURE_COPY_LOCATION src_loc = {
-      upload_buffer_resource,
+      buffer,
       D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-      {{upload_buffer_offset, D3DCommon::GetDXGIFormatForAbstractFormat(m_config.format, false),
-        aligned_width, aligned_height, 1, upload_stride}}};
+      {{offset, D3DCommon::GetDXGIFormatForAbstractFormat(m_config.format, false), aligned_width,
+        aligned_height, 1, stride}}};
   const D3D12_BOX src_box{0, 0, 0, aligned_width, aligned_height, 1};
   g_dx_context->GetCommandList()->CopyTextureRegion(&dst_loc, 0, 0, 0, &src_loc, &src_box);
 

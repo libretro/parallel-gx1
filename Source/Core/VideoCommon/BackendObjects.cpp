@@ -345,6 +345,45 @@ void AbstractTexture::Load(u32 level, u32 width, u32 height, u32 row_length, con
   }
 }
 
+u8* AbstractTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size,
+                              u32 layer)
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    return static_cast<Vulkan::VKTexture*>(this)->LendLoad(level, width, height, row_length, size,
+                                                           layer);
+#endif
+#ifdef _WIN32
+  case VIDEO_BACKEND_D3D12:
+    return static_cast<DX12::DXTexture*>(this)->LendLoad(level, width, height, row_length, size,
+                                                         layer);
+#endif
+  default:
+    return nullptr;
+  }
+}
+
+void AbstractTexture::CommitLoad()
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    static_cast<Vulkan::VKTexture*>(this)->CommitLoad();
+    return;
+#endif
+#ifdef _WIN32
+  case VIDEO_BACKEND_D3D12:
+    static_cast<DX12::DXTexture*>(this)->CommitLoad();
+    return;
+#endif
+  default:
+    return;
+  }
+}
+
 void AbstractTexture::FinishedRendering()
 {
   switch (g_video_backend_kind)

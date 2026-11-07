@@ -48,6 +48,8 @@ public:
                           u32 layer, u32 level);
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
             u32 layer);
+  u8* LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer);
+  void CommitLoad();
   void FinishedRendering();
 
   VkImage GetImage() const { return m_image; }
@@ -76,6 +78,8 @@ public:
 
 private:
   bool CreateView(VkImageViewType type, VkImageView* view);
+  void CopyFromUpload(VkBuffer buffer, VkDeviceSize offset, u32 level, u32 layer, u32 width,
+                      u32 height, u32 row_length);
 
   vk_heap_alloc_t m_alloc;
   VkImage m_image;

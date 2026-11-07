@@ -398,7 +398,6 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
       if (!stream_buffer->ReserveMemory(upload_size, upload_alignment))
         PanicAlertFmt("Failed to allocate space in texture upload buffer");
     }
-    // Copy to the streaming buffer.
     upload_buffer = stream_buffer->GetBuffer();
     upload_buffer_offset = stream_buffer->GetCurrentOffset();
     std::memcpy(stream_buffer->GetCurrentHostPointer(), buffer, upload_size);
@@ -421,17 +420,74 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
     temp_buffer->Unmap();
   }
 
-  // Copy from the streaming buffer to the actual image.
+  CopyFromUpload(upload_buffer, upload_buffer_offset, level, layer, width, height, row_length);
+}
+
+/* A load lent to its writer: one at a time, as they all go through the upload stream buffer. */
+static struct
+{
+  VkDeviceSize offset;
+  u32 size;
+  u32 level;
+  u32 layer;
+  u32 width;
+  u32 height;
+  u32 row_length;
+} s_lent_load;
+
+u8* VKTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer)
+{
+  StreamBuffer* const stream_buffer = g_object_cache->GetTextureUploadBuffer();
+  const u32 upload_alignment = static_cast<u32>(g_vulkan_context->GetBufferImageGranularity());
+
+  if (size > STAGING_TEXTURE_UPLOAD_THRESHOLD)
+    return nullptr;
+
+  TransitionToLayout(g_command_buffer_mgr->GetCurrentInitCommandBuffer(),
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  if (!stream_buffer->ReserveMemory(static_cast<u32>(size), upload_alignment))
+  {
+    WARN_LOG_FMT(VIDEO,
+                 "Executing command list while waiting for space in texture upload buffer");
+    VKGfx::GetInstance()->ExecuteCommandBuffer(false);
+    if (!stream_buffer->ReserveMemory(static_cast<u32>(size), upload_alignment))
+      return nullptr;
+  }
+
+  s_lent_load.offset = stream_buffer->GetCurrentOffset();
+  s_lent_load.size = static_cast<u32>(size);
+  s_lent_load.level = level;
+  s_lent_load.layer = layer;
+  s_lent_load.width = std::max(1u, std::min(width, GetWidth() >> level));
+  s_lent_load.height = std::max(1u, std::min(height, GetHeight() >> level));
+  s_lent_load.row_length = row_length;
+  return stream_buffer->GetCurrentHostPointer();
+}
+
+void VKTexture::CommitLoad()
+{
+  StreamBuffer* const stream_buffer = g_object_cache->GetTextureUploadBuffer();
+
+  stream_buffer->CommitMemory(s_lent_load.size);
+  CopyFromUpload(stream_buffer->GetBuffer(), s_lent_load.offset, s_lent_load.level,
+                 s_lent_load.layer, s_lent_load.width, s_lent_load.height,
+                 s_lent_load.row_length);
+}
+
+/* The image copy from upload memory; the image is in TRANSFER_DST already. */
+void VKTexture::CopyFromUpload(VkBuffer buffer, VkDeviceSize offset, u32 level, u32 layer,
+                               u32 width, u32 height, u32 row_length)
+{
   VkBufferImageCopy image_copy = {
-      upload_buffer_offset,                          // VkDeviceSize             bufferOffset
+      offset,                                        // VkDeviceSize             bufferOffset
       row_length,                                    // uint32_t                 bufferRowLength
       0,                                             // uint32_t                 bufferImageHeight
       {VK_IMAGE_ASPECT_COLOR_BIT, level, layer, 1},  // VkImageSubresourceLayers imageSubresource
       {0, 0, 0},                                     // VkOffset3D               imageOffset
       {width, height, 1}                             // VkExtent3D               imageExtent
   };
-  vkCmdCopyBufferToImage(g_command_buffer_mgr->GetCurrentInitCommandBuffer(), upload_buffer,
-                         m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
+  vkCmdCopyBufferToImage(g_command_buffer_mgr->GetCurrentInitCommandBuffer(), buffer, m_image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
 
   // Preemptively transition to shader read only after uploading the last mip level, as we're
   // likely finished with writes to this texture for now. We can't do this in common with a

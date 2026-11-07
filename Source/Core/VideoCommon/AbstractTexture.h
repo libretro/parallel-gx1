@@ -27,6 +27,11 @@ public:
                           u32 layer, u32 level);
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer,
             size_t buffer_size, u32 layer = 0);
+  // The backend's upload memory for a Load its caller writes in place: size bytes, rows
+  // row_length texels apart, lent until CommitLoad, which uploads them. nullptr when the backend
+  // lends none for it: the caller writes its own memory and Loads that.
+  u8* LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer = 0);
+  void CommitLoad();
 
   // Hints to the backend that we have finished rendering to this texture, and it will be used
   // as a shader resource and sampled. For Vulkan, this transitions the image layout.

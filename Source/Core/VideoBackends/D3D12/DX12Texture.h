@@ -27,6 +27,8 @@ public:
 
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
             u32 layer);
+  u8* LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer);
+  void CommitLoad();
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
                                 u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
@@ -47,6 +49,9 @@ public:
   void DestroyResource();
 
 private:
+  void CopyFromUpload(ID3D12Resource* buffer, u32 offset, u32 stride, u32 level, u32 layer,
+                      u32 width, u32 height);
+
   DXTexture(const TextureConfig& config, ID3D12Resource* resource, D3D12_RESOURCE_STATES state,
             std::string_view name);
 

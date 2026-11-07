@@ -1104,12 +1104,18 @@ public:
 
   void AddLevel(u32 width, u32 height, u32 row_length, const u8* buffer)
   {
-    levels.push_back({{width, height, row_length}, buffer});
+    if (level_count == MAX_LEVELS)
+      return;
+    levels[level_count].shape.width = width;
+    levels[level_count].shape.height = height;
+    levels[level_count].shape.row_length = row_length;
+    levels[level_count].pixels = buffer;
+    level_count++;
   }
 
   bool HasArbitraryMipmaps(u8* downsample_buffer) const
   {
-    if (levels.size() < 2)
+    if (level_count < 2)
       return false;
 
     if (!g_ActiveConfig.bArbitraryMipmapDetection)
@@ -1126,7 +1132,7 @@ public:
 
     float total_diff = 0.f;
 
-    for (std::size_t i = 0; i < levels.size() - 1; ++i)
+    for (u32 i = 0; i < level_count - 1; ++i)
     {
       const auto& level = levels[i];
       const auto& mip = levels[i + 1];
@@ -1150,7 +1156,7 @@ public:
       std::swap(src, dst);
     }
 
-    auto all_levels = total_diff / (levels.size() - 1);
+    auto all_levels = total_diff / (level_count - 1);
     return all_levels > threshold;
   }
 
@@ -1235,7 +1241,10 @@ private:
              2.56f;
     }
   };
-  std::vector<Level> levels;
+  // a GX texture has at most 11: 1024 down to 1
+  static constexpr u32 MAX_LEVELS = 16;
+  Level levels[MAX_LEVELS];
+  u32 level_count = 0;
 };
 
 TCacheEntry* TextureCacheBase::Load(u32 stage)
@@ -1679,6 +1688,8 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
         !(texture_info.IsFromTmem() && texture_info.GetTextureFormat() == TextureFormat::RGBA8);
 
     ArbitraryMipmapDetector arbitrary_mip_detector;
+    // nothing reads the decoded levels back without the mipmap detection
+    const bool lend_loads = !g_ActiveConfig.bArbitraryMipmapDetection;
 
     // Initialized to null because only software loading uses this buffer
     u8* dst_buffer = nullptr;
@@ -1710,22 +1721,34 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
 
       CheckTempSize(total_texture_size);
       dst_buffer = m_temp;
+      /* decoded straight into the backend's upload memory, unless the mipmap detection reads
+       * the levels back */
+      u8* const lent = lend_loads ? entry->texture->LendLoad(0, width, height, expanded_width,
+                                                             decoded_texture_size) :
+                                    nullptr;
+      u8* const decoded = lent ? lent : dst_buffer;
       if (!(texture_info.GetTextureFormat() == TextureFormat::RGBA8 && texture_info.IsFromTmem()))
       {
-        TexDecoder_Decode(dst_buffer, texture_info.GetData(), expanded_width, expanded_height,
+        TexDecoder_Decode(decoded, texture_info.GetData(), expanded_width, expanded_height,
                           texture_info.GetTextureFormat(), texture_info.GetTlutAddress(),
                           texture_info.GetTlutFormat());
       }
       else
       {
-        TexDecoder_DecodeRGBA8FromTmem(dst_buffer, texture_info.GetData(),
+        TexDecoder_DecodeRGBA8FromTmem(decoded, texture_info.GetData(),
                                        texture_info.GetTmemOddAddress(), expanded_width,
                                        expanded_height);
       }
 
-      entry->texture->Load(0, width, height, expanded_width, dst_buffer, decoded_texture_size);
-
-      arbitrary_mip_detector.AddLevel(width, height, expanded_width, dst_buffer);
+      if (lent)
+      {
+        entry->texture->CommitLoad();
+      }
+      else
+      {
+        entry->texture->Load(0, width, height, expanded_width, dst_buffer, decoded_texture_size);
+        arbitrary_mip_detector.AddLevel(width, height, expanded_width, dst_buffer);
+      }
 
       dst_buffer += decoded_texture_size;
     }
@@ -1753,15 +1776,27 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
         // No need to call CheckTempSize here, as the whole buffer is preallocated at the beginning
         const u32 decoded_mip_size =
             mip_level.GetExpandedWidth() * sizeof(u32) * mip_level.GetExpandedHeight();
-        TexDecoder_Decode(dst_buffer, mip_level.GetData(), mip_level.GetExpandedWidth(),
-                          mip_level.GetExpandedHeight(), texture_info.GetTextureFormat(),
-                          texture_info.GetTlutAddress(), texture_info.GetTlutFormat());
-        entry->texture->Load(mip_level.GetLevel(), mip_level.GetRawWidth(),
-                             mip_level.GetRawHeight(), mip_level.GetExpandedWidth(), dst_buffer,
-                             decoded_mip_size);
-
-        arbitrary_mip_detector.AddLevel(mip_level.GetRawWidth(), mip_level.GetRawHeight(),
-                                        mip_level.GetExpandedWidth(), dst_buffer);
+        u8* const lent =
+            lend_loads ? entry->texture->LendLoad(mip_level.GetLevel(), mip_level.GetRawWidth(),
+                                                  mip_level.GetRawHeight(),
+                                                  mip_level.GetExpandedWidth(), decoded_mip_size) :
+                         nullptr;
+        TexDecoder_Decode(lent ? lent : dst_buffer, mip_level.GetData(),
+                          mip_level.GetExpandedWidth(), mip_level.GetExpandedHeight(),
+                          texture_info.GetTextureFormat(), texture_info.GetTlutAddress(),
+                          texture_info.GetTlutFormat());
+        if (lent)
+        {
+          entry->texture->CommitLoad();
+        }
+        else
+        {
+          entry->texture->Load(mip_level.GetLevel(), mip_level.GetRawWidth(),
+                               mip_level.GetRawHeight(), mip_level.GetExpandedWidth(), dst_buffer,
+                               decoded_mip_size);
+          arbitrary_mip_detector.AddLevel(mip_level.GetRawWidth(), mip_level.GetRawHeight(),
+                                          mip_level.GetExpandedWidth(), dst_buffer);
+        }
 
         dst_buffer += decoded_mip_size;
       }
@@ -1876,9 +1911,19 @@ RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height
                           width, height, stride, s_tex_mem.data(), entry->format.tlutfmt))
   {
     const u32 decoded_size = width * height * sizeof(u32);
-    CheckTempSize(decoded_size);
-    TexDecoder_DecodeXFB(m_temp, src_data, width, height, stride);
-    entry->texture->Load(0, width, height, width, m_temp, decoded_size);
+    /* decoded straight into the backend's upload memory where it lends some */
+    u8* const lent = entry->texture->LendLoad(0, width, height, width, decoded_size);
+    if (lent)
+    {
+      TexDecoder_DecodeXFB(lent, src_data, width, height, stride);
+      entry->texture->CommitLoad();
+    }
+    else
+    {
+      CheckTempSize(decoded_size);
+      TexDecoder_DecodeXFB(m_temp, src_data, width, height, stride);
+      entry->texture->Load(0, width, height, width, m_temp, decoded_size);
+    }
   }
 
   // Stitch any VRAM copies into the new RAM copy.
