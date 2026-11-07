@@ -251,7 +251,6 @@ struct VideoConfig final
 
   // Render
   bool bWireFrame = false;
-  bool bDisableFog = false;
 
   // Utility
   bool bDumpTextures = false;

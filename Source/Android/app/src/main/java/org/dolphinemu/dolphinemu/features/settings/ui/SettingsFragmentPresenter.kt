@@ -1721,14 +1721,6 @@ class SettingsFragmentPresenter(
         sl.add(
             SwitchSetting(
                 context,
-                BooleanSetting.GFX_DISABLE_FOG,
-                R.string.disable_fog,
-                R.string.disable_fog_description
-            )
-        )
-        sl.add(
-            SwitchSetting(
-                context,
                 BooleanSetting.GFX_ENHANCE_DISABLE_COPY_FILTER,
                 R.string.disable_copy_filter,
                 R.string.disable_copy_filter_description

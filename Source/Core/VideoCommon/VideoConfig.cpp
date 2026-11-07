@@ -117,7 +117,6 @@ void VideoConfig::Refresh()
   bTexFmtOverlayEnable = Config::Get(Config::GFX_TEXFMT_OVERLAY_ENABLE);
   bTexFmtOverlayCenter = Config::Get(Config::GFX_TEXFMT_OVERLAY_CENTER);
   bWireFrame = Config::Get(Config::GFX_ENABLE_WIREFRAME);
-  bDisableFog = Config::Get(Config::GFX_DISABLE_FOG);
   bBorderlessFullscreen = Config::Get(Config::GFX_BORDERLESS_FULLSCREEN);
   bEnableValidationLayer = Config::Get(Config::GFX_ENABLE_VALIDATION_LAYER);
   bBackendMultithreading = Config::Get(Config::GFX_BACKEND_MULTITHREADING);

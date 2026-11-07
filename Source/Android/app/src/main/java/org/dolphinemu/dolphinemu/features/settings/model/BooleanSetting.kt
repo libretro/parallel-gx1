@@ -753,7 +753,6 @@ enum class BooleanSetting(
         false
     ),
     GFX_ENABLE_WIREFRAME(Settings.FILE_GFX, Settings.SECTION_GFX_SETTINGS, "WireFrame", false),
-    GFX_DISABLE_FOG(Settings.FILE_GFX, Settings.SECTION_GFX_SETTINGS, "DisableFog", false),
     GFX_ENABLE_VALIDATION_LAYER(
         Settings.FILE_GFX,
         Settings.SECTION_GFX_SETTINGS,

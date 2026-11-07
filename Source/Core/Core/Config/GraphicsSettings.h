@@ -74,7 +74,6 @@ extern const Info<int> GFX_MAX_EFB_SCALE;
 extern const Info<bool> GFX_TEXFMT_OVERLAY_ENABLE;
 extern const Info<bool> GFX_TEXFMT_OVERLAY_CENTER;
 extern const Info<bool> GFX_ENABLE_WIREFRAME;
-extern const Info<bool> GFX_DISABLE_FOG;
 extern const Info<bool> GFX_BORDERLESS_FULLSCREEN;
 extern const Info<bool> GFX_ENABLE_VALIDATION_LAYER;
 extern const Info<bool> GFX_BACKEND_MULTITHREADING;

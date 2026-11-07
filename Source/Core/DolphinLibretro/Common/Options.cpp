@@ -983,20 +983,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "enabled"
   },
   {
-    Libretro::Options::gfx_settings::DISABLE_FOG,
-    "Graphics > Settings > Disable Fog",
-    "Disable Fog",
-    "Disable fog rendering effects. May improve performance but reduces visual accuracy.",
-    nullptr,
-    CATEGORY_GFX_SETTINGS,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-    "disabled"
-  },
-  {
     Libretro::Options::gfx_settings::MODS_ENABLE,
     "Graphics > Settings > Enable Mods",
     "Enable Mods",

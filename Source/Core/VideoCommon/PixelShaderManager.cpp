@@ -87,7 +87,7 @@ void PixelShaderManager::SetConstants()
   {
     // set by two components, so keep changed flag here
     // TODO: try to split both registers and move this logic to the shader
-    if (!g_ActiveConfig.bDisableFog && bpmem.fogRange.Base.Enabled == 1)
+    if (bpmem.fogRange.Base.Enabled == 1)
     {
       // bpmem.fogRange.Base.Center : center of the viewport in x axis. observation:
       // bpmem.fogRange.Base.Center = realcenter + 342;
@@ -388,9 +388,6 @@ void PixelShaderManager::SetTexCoordChanged(u8 texmapid)
 
 void PixelShaderManager::SetFogColorChanged()
 {
-  if (g_ActiveConfig.bDisableFog)
-    return;
-
   constants.fogcolor[0] = bpmem.fog.color.r;
   constants.fogcolor[1] = bpmem.fog.color.g;
   constants.fogcolor[2] = bpmem.fog.color.b;
@@ -399,30 +396,16 @@ void PixelShaderManager::SetFogColorChanged()
 
 void PixelShaderManager::SetFogParamChanged()
 {
-  if (!g_ActiveConfig.bDisableFog)
-  {
-    constants.fogf[0] = bpmem.fog.GetA();
-    constants.fogf[1] = bpmem.fog.GetC();
-    constants.fogi[1] = bpmem.fog.b_magnitude;
-    constants.fogi[3] = bpmem.fog.b_shift;
-    constants.fogParam3 = bpmem.fog.c_proj_fsel.hex;
-  }
-  else
-  {
-    constants.fogf[0] = 0.f;
-    constants.fogf[1] = 0.f;
-    constants.fogi[1] = 1;
-    constants.fogi[3] = 1;
-    constants.fogParam3 = 0;
-  }
+  constants.fogf[0] = bpmem.fog.GetA();
+  constants.fogf[1] = bpmem.fog.GetC();
+  constants.fogi[1] = bpmem.fog.b_magnitude;
+  constants.fogi[3] = bpmem.fog.b_shift;
+  constants.fogParam3 = bpmem.fog.c_proj_fsel.hex;
   dirty = true;
 }
 
 void PixelShaderManager::SetFogRangeAdjustChanged()
 {
-  if (g_ActiveConfig.bDisableFog)
-    return;
-
   m_fog_range_adjusted_changed = true;
 
   if (constants.fogRangeBase != bpmem.fogRange.Base.hex)

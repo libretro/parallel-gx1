@@ -511,8 +511,6 @@ bool retro_load_game(const struct retro_game_info* game)
                   Libretro::GetOption<bool>(gfx_settings::ENABLE_PIXEL_LIGHTING, /*def=*/false));
   Config::SetBase(Config::GFX_FAST_DEPTH_CALC,
                  Libretro::GetOption<bool>(gfx_settings::FAST_DEPTH_CALCULATION, /*def=*/true));
-  Config::SetBase(Config::GFX_DISABLE_FOG,
-                  Libretro::GetOption<bool>(gfx_settings::DISABLE_FOG, /*def=*/false));
   Config::SetBase(Config::GFX_EFB_SCALE,
                  Libretro::GetOption<int>(gfx_settings::EFB_SCALE, /*def=*/1));
   Config::SetBase(Config::GFX_BACKEND_MULTITHREADING, false);
