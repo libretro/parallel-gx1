@@ -132,6 +132,8 @@ private:
 
   mutable u64 m_last_decrypted_block;
   mutable u8 m_last_decrypted_block_data[BLOCK_DATA_SIZE]{};
+  // An encrypted block read from a reader that cannot lend it.
+  mutable u8 m_read_block[BLOCK_TOTAL_SIZE];
 };
 
 }  // namespace DiscIO

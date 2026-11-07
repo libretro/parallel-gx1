@@ -183,14 +183,11 @@ bool VolumeWii::Read(u64 offset, u64 length, u8* buffer, const Partition& partit
   }
 
   Common::AES::Context* aes_context = nullptr;
-  std::unique_ptr<u8[]> read_buffer = nullptr;
   if (m_has_encryption)
   {
     aes_context = partition_details.key->get();
     if (!aes_context)
       return false;
-
-    read_buffer = std::make_unique<u8[]>(BLOCK_TOTAL_SIZE);
   }
 
   while (length > 0)
@@ -198,33 +195,42 @@ bool VolumeWii::Read(u64 offset, u64 length, u8* buffer, const Partition& partit
     // Calculate offsets
     u64 block_offset_on_disc = partition_data_offset + offset / BLOCK_DATA_SIZE * BLOCK_TOTAL_SIZE;
     u64 data_offset_in_block = offset % BLOCK_DATA_SIZE;
+    u64 copy_size = std::min(length, BLOCK_DATA_SIZE - data_offset_in_block);
 
     if (m_last_decrypted_block != block_offset_on_disc)
     {
+      // A whole block's data goes straight to the caller; a part goes through the
+      // decrypted-block cache. An encrypted block is decrypted where it lies in the image
+      // when the reader can lend it, else read into the volume's own block buffer.
+      const bool whole = copy_size == BLOCK_DATA_SIZE;
+      u8* const out = whole ? buffer : m_last_decrypted_block_data;
       if (m_has_encryption)
       {
-        // Read the current block
-        if (!m_reader->Read(block_offset_on_disc, BLOCK_TOTAL_SIZE, read_buffer.get()))
-          return false;
-
-        // Decrypt the block's data
-        DecryptBlockData(read_buffer.get(), m_last_decrypted_block_data, aes_context);
-      }
-      else
-      {
-        // Read the current block
-        if (!m_reader->Read(block_offset_on_disc + BLOCK_HEADER_SIZE, BLOCK_DATA_SIZE,
-                            m_last_decrypted_block_data))
+        const u8* block = m_reader->View(block_offset_on_disc, BLOCK_TOTAL_SIZE);
+        if (!block)
         {
-          return false;
+          if (!m_reader->Read(block_offset_on_disc, BLOCK_TOTAL_SIZE, m_read_block))
+            return false;
+          block = m_read_block;
         }
+        DecryptBlockData(block, out, aes_context);
+      }
+      else if (!m_reader->Read(block_offset_on_disc + BLOCK_HEADER_SIZE, BLOCK_DATA_SIZE, out))
+      {
+        return false;
       }
 
+      if (whole)
+      {
+        length -= copy_size;
+        buffer += copy_size;
+        offset += copy_size;
+        continue;
+      }
       m_last_decrypted_block = block_offset_on_disc;
     }
 
     // Copy the decrypted data
-    u64 copy_size = std::min(length, BLOCK_DATA_SIZE - data_offset_in_block);
     memcpy(buffer, &m_last_decrypted_block_data[data_offset_in_block],
            static_cast<size_t>(copy_size));
 
