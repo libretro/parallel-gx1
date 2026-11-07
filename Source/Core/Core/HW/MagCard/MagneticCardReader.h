@@ -9,7 +9,6 @@
 
 #include <array>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -111,7 +110,7 @@ protected:
     ResetSpecifications = 0x32,
   };
 
-  bool ReceivePacket(std::span<const u8> packet);
+  bool ReceivePacket(const u8* packet, std::size_t size);
   void BuildPacket();
 
   void StepStateMachine(DT elapsed_time);

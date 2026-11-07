@@ -8,6 +8,7 @@
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
+#include "Common/StringUtil.h"
 #include "Common/Swap.h"
 
 #include "Core/HW/GCPad.h"
@@ -55,8 +56,7 @@ void MarioKartGPCommon_IOAdapter::Update()
   analog_inputs[2] = Common::ExpandValue<u16>(pad_status.triggerLeft, 8);
 }
 
-void MarioKartGPCommon_IOAdapter::HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                                              std::span<const u8> bits_cleared)
+void MarioKartGPCommon_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared)
 {
   if (bits_set[0] & 0x80u)
     m_steering_wheel->Reset();
@@ -80,37 +80,34 @@ void MarioKartGPCommon_IOAdapter::HandleGenericOutputsChanged(std::span<const u8
 
 void MarioKartGPSteeringWheel::Update()
 {
-  constexpr std::size_t REQUEST_SIZE = 10;
-
   std::size_t rx_position = 0;
   while (true)
   {
-    const auto rx_span = GetRxByteSpan().subspan(rx_position);
-
-    if (rx_span.size() < REQUEST_SIZE)
+    if (GetRxByteCount() - rx_position < REQUEST_SIZE)
       break;  // Wait for more data.
 
-    ProcessRequest(rx_span.first<REQUEST_SIZE>());
+    ProcessRequest(GetRxBytes() + rx_position);
     rx_position += REQUEST_SIZE;
   }
 
   ConsumeRxBytes(rx_position);
 }
 
-void MarioKartGPSteeringWheel::ProcessRequest(std::span<const u8> request)
+void MarioKartGPSteeringWheel::ProcessRequest(const u8* request)
 {
-  DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Request: {:02x}", fmt::join(request, " "));
+  DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Request: {}",
+                Common::BytesToHexString(request, REQUEST_SIZE));
 
-  const u32 cmd = Common::swap32(request.data());
+  const u32 cmd = Common::swap32(request);
   if (cmd != 0xffffff01)
   {
     WARN_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Unknown command: {:08x}", cmd);
     return;
   }
 
-  const u16 centering_force = Common::swap16(request.data() + 4);
-  const u16 friction_force = Common::swap16(request.data() + 6);
-  const u16 roll = Common::swap16(request.data() + 8);
+  const u16 centering_force = Common::swap16(request + 4);
+  const u16 friction_force = Common::swap16(request + 6);
+  const u16 roll = Common::swap16(request + 8);
 
   DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: FFB: {:04x} {:04x} {:04x}", centering_force,
                 friction_force, roll);
@@ -119,7 +116,7 @@ void MarioKartGPSteeringWheel::ProcessRequest(std::span<const u8> request)
   {
   case 0:
     // The game seems to expect this on power up.
-    WriteTxBytes(ACK_NO_ERROR);
+    WriteTxBytes(ACK_NO_ERROR.data(), ACK_NO_ERROR.size());
     ++m_init_state;
     break;
 
@@ -131,12 +128,12 @@ void MarioKartGPSteeringWheel::ProcessRequest(std::span<const u8> request)
 
     if (m_init_state == 1)
     {
-      WriteTxBytes(ACK_POWER_OFF);
+      WriteTxBytes(ACK_POWER_OFF.data(), ACK_POWER_OFF.size());
       ++m_init_state;
     }
     else
     {
-      WriteTxBytes(ACK_POWER_ON);
+      WriteTxBytes(ACK_POWER_ON.data(), ACK_POWER_ON.size());
       m_init_state = 1;
     }
     break;

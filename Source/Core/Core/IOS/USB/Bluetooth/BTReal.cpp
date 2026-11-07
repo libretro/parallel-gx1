@@ -5,11 +5,9 @@
 
 #include <cassert>
 
-#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
-#include <ranges>
 #include <string>
 #include <utility>
 
@@ -92,9 +90,9 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
         memory.CopyFromEmu(&delete_cmd, cmd->data_address, sizeof(delete_cmd));
 
         if (delete_cmd.delete_all != 0)
-          m_link_keys.clear();
+          m_link_key_count = 0;
         else
-          m_link_keys.erase(delete_cmd.bdaddr);
+          EraseLinkKey(delete_cmd.bdaddr);
       }
       else if (opcode == HCI_CMD_SNIFF_MODE)
       {
@@ -102,9 +100,13 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
         DEBUG_LOG_FMT(IOS_WIIMOTE, "HCI_CMD_SNIFF_MODE");
       }
 
-      const auto payload = memory.GetSpanForAddress(cmd->data_address).first(cmd->length);
-      m_lib_usb_bt_adapter->SendControlTransfer(cmd->request_type, cmd->request, cmd->value,
-                                                cmd->index, payload);
+      // Lent from guest memory; the adapter copies it into the transfer.
+      const u8* const payload = memory.GetPointerForRange(cmd->data_address, cmd->length);
+      if (payload)
+      {
+        m_lib_usb_bt_adapter->SendControlTransfer(cmd->request_type, cmd->request, cmd->value,
+                                                  cmd->index, payload, cmd->length);
+      }
 
       if (opcode == HCI_CMD_RESET)
       {
@@ -131,8 +133,9 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
     }
 
     auto& memory = GetSystem().GetMemory();
-    const auto payload = memory.GetSpanForAddress(cmd->data_address).first(cmd->length);
-    m_lib_usb_bt_adapter->SendBulkTransfer(cmd->endpoint, payload);
+    const u8* const payload = memory.GetPointerForRange(cmd->data_address, cmd->length);
+    if (payload)
+      m_lib_usb_bt_adapter->SendBulkTransfer(cmd->endpoint, payload, cmd->length);
     break;
   }
   // Incoming HCI events
@@ -210,7 +213,9 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
 
     hci_link_key_notification_ep notification;
     std::memcpy(&notification, buffer.data() + sizeof(hci_event_hdr_t), sizeof(notification));
-    std::ranges::copy(notification.key, std::begin(m_link_keys[notification.bdaddr]));
+    linkkey_t key;
+    std::memcpy(key.data(), notification.key, key.size());
+    SetLinkKey(notification.bdaddr, key);
   }
 
   if (m_lib_usb_bt_adapter->IsWiiBTModule())
@@ -280,7 +285,7 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
     payload.command.latency = 10000;
     payload.command.delay_variation = 0xffffffff;
 
-    m_lib_usb_bt_adapter->SendControlTransfer(Common::AsU8Span(payload));
+    m_lib_usb_bt_adapter->SendControlTransfer(&payload, sizeof(payload));
   }
   else if (event == HCI_EVENT_QOS_SETUP_COMPL)
   {
@@ -299,14 +304,15 @@ void BluetoothRealDevice::TryToFillACLEndpoint()
   if (!m_acl_endpoint)
     return;
 
-  const auto buffer = m_lib_usb_bt_adapter->PeekACLData();
-  if (buffer.empty())
+  std::size_t size;
+  const u8* const buffer = m_lib_usb_bt_adapter->PeekACLData(&size);
+  if (!buffer)
     return;
 
-  assert(buffer.size() <= m_acl_endpoint->length);
+  assert(size <= m_acl_endpoint->length);
 
-  m_acl_endpoint->FillBuffer(buffer.data(), buffer.size());
-  GetEmulationKernel().EnqueueIPCReply(m_acl_endpoint->ios_request, s32(buffer.size()));
+  m_acl_endpoint->FillBuffer(buffer, size);
+  GetEmulationKernel().EnqueueIPCReply(m_acl_endpoint->ios_request, s32(size));
   m_lib_usb_bt_adapter->PopACLData();
 
   m_acl_endpoint.reset();
@@ -376,8 +382,8 @@ void BluetoothRealDevice::TriggerSyncButtonHeldEvent()
 void BluetoothRealDevice::SendHCIResetCommand()
 {
   INFO_LOG_FMT(IOS_WIIMOTE, "SendHCIResetCommand");
-  m_lib_usb_bt_adapter->SendControlTransfer(
-      Common::AsU8Span(hci_cmd_hdr_t{.opcode = HCI_CMD_RESET, .length = 0}));
+  const hci_cmd_hdr_t reset{.opcode = HCI_CMD_RESET, .length = 0};
+  m_lib_usb_bt_adapter->SendControlTransfer(&reset, sizeof(reset));
 }
 
 void BluetoothRealDevice::SendHCIDeleteLinkKeyCommand()
@@ -388,17 +394,18 @@ void BluetoothRealDevice::SendHCIDeleteLinkKeyCommand()
   payload.command.bdaddr = {};
   payload.command.delete_all = 0x01;
 
-  m_lib_usb_bt_adapter->SendControlTransfer(Common::AsU8Span(payload));
+  m_lib_usb_bt_adapter->SendControlTransfer(&payload, sizeof(payload));
 }
 
 bool BluetoothRealDevice::SendHCIStoreLinkKeyCommand()
 {
-  if (m_link_keys.empty())
+  if (!m_link_key_count)
     return false;
 
   // Range: 0x01 to 0x0B per Bluetooth spec.
   static constexpr std::size_t MAX_LINK_KEYS = 0x0B;
-  const auto num_link_keys = u8(std::min(m_link_keys.size(), MAX_LINK_KEYS));
+  const auto num_link_keys =
+      u8(m_link_key_count < MAX_LINK_KEYS ? m_link_key_count : MAX_LINK_KEYS);
 
   INFO_LOG_FMT(IOS_WIIMOTE, "SendHCIStoreLinkKeyCommand num_link_keys: {}", num_link_keys);
 
@@ -421,11 +428,10 @@ bool BluetoothRealDevice::SendHCIStoreLinkKeyCommand()
   payload.header.length = payload_size - sizeof(payload.header);
   payload.command.num_keys_write = num_link_keys;
 
-  int index = 0;
-  for (auto& [bdaddr, linkkey] : m_link_keys | std::views::take(num_link_keys))
-    payload.link_keys[index++] = {bdaddr, linkkey};
+  for (u8 index = 0; index < num_link_keys; index++)
+    payload.link_keys[index] = {m_link_keys[index].bdaddr, m_link_keys[index].linkkey};
 
-  m_lib_usb_bt_adapter->SendControlTransfer(Common::AsU8Span(payload).first(payload_size));
+  m_lib_usb_bt_adapter->SendControlTransfer(&payload, payload_size);
   return true;
 }
 
@@ -450,15 +456,51 @@ void BluetoothRealDevice::FakeVendorCommandReply(u16 opcode, USB::V0IntrMessage&
   GetEmulationKernel().EnqueueIPCReply(ctrl.ios_request, s32(sizeof(payload)));
 }
 
-void BluetoothRealDevice::FakeSyncButtonEvent(USB::V0IntrMessage& ctrl, std::span<const u8> payload)
+void BluetoothRealDevice::FakeSyncButtonEvent(USB::V0IntrMessage& ctrl, const u8* payload,
+                                              std::size_t size)
 {
-  const hci_event_hdr_t hci_event{.event = HCI_EVENT_VENDOR, .length = u8(payload.size())};
+  const hci_event_hdr_t hci_event{.event = HCI_EVENT_VENDOR, .length = u8(size)};
 
   auto& memory = GetSystem().GetMemory();
 
   memory.CopyToEmu(ctrl.data_address, &hci_event, sizeof(hci_event));
-  memory.CopyToEmu(ctrl.data_address + sizeof(hci_event), payload.data(), payload.size());
-  GetEmulationKernel().EnqueueIPCReply(ctrl.ios_request, s32(sizeof(hci_event) + payload.size()));
+  memory.CopyToEmu(ctrl.data_address + sizeof(hci_event), payload, size);
+  GetEmulationKernel().EnqueueIPCReply(ctrl.ios_request, s32(sizeof(hci_event) + size));
+}
+
+void BluetoothRealDevice::SetLinkKey(const bdaddr_t& bdaddr, const linkkey_t& linkkey)
+{
+  // sorted by address: find the slot, replace or insert
+  std::size_t index = 0;
+  while (index < m_link_key_count && m_link_keys[index].bdaddr < bdaddr)
+    index++;
+  if (index < m_link_key_count && m_link_keys[index].bdaddr == bdaddr)
+  {
+    m_link_keys[index].linkkey = linkkey;
+    return;
+  }
+  if (m_link_key_count == MAX_STORED_LINK_KEYS)
+  {
+    WARN_LOG_FMT(IOS_WIIMOTE, "Too many link keys; dropping one.");
+    return;
+  }
+  for (std::size_t i = m_link_key_count; i > index; i--)
+    m_link_keys[i] = m_link_keys[i - 1];
+  m_link_keys[index] = {bdaddr, linkkey};
+  m_link_key_count++;
+}
+
+void BluetoothRealDevice::EraseLinkKey(const bdaddr_t& bdaddr)
+{
+  for (std::size_t index = 0; index < m_link_key_count; index++)
+  {
+    if (m_link_keys[index].bdaddr != bdaddr)
+      continue;
+    for (std::size_t i = index + 1; i < m_link_key_count; i++)
+      m_link_keys[i - 1] = m_link_keys[i];
+    m_link_key_count--;
+    return;
+  }
 }
 
 // When the red sync button is pressed, a HCI event is generated.
@@ -467,7 +509,7 @@ void BluetoothRealDevice::FakeSyncButtonPressedEvent(USB::V0IntrMessage& ctrl)
 {
   NOTICE_LOG_FMT(IOS_WIIMOTE, "Faking 'sync button pressed' (0x08) event packet");
   constexpr u8 payload[1] = {0x08};
-  FakeSyncButtonEvent(ctrl, payload);
+  FakeSyncButtonEvent(ctrl, payload, sizeof(payload));
   SetSyncButtonState(SyncButtonState::Ignored);
 }
 
@@ -476,7 +518,7 @@ void BluetoothRealDevice::FakeSyncButtonHeldEvent(USB::V0IntrMessage& ctrl)
 {
   NOTICE_LOG_FMT(IOS_WIIMOTE, "Faking 'sync button held' (0x09) event packet");
   constexpr u8 payload[1] = {0x09};
-  FakeSyncButtonEvent(ctrl, payload);
+  FakeSyncButtonEvent(ctrl, payload, sizeof(payload));
   SetSyncButtonState(SyncButtonState::Ignored);
 }
 
@@ -501,8 +543,9 @@ void BluetoothRealDevice::LoadLinkKeys()
       continue;
     }
 
-    auto& mac = *address;
-    std::ranges::reverse(mac);
+    bdaddr_t mac;
+    for (std::size_t i = 0; i < mac.size(); i++)
+      mac[i] = (*address)[mac.size() - 1 - i];
 
     const auto key_string = pair.substr(index + 1);
     linkkey_t key{};
@@ -510,18 +553,21 @@ void BluetoothRealDevice::LoadLinkKeys()
     for (size_t i = 0; i < key_string.length() && pos != key.size(); i += 2)
       TryParse(std::string(key_string.substr(i, 2)), &key[pos++], 16);
 
-    m_link_keys[mac] = key;
+    SetLinkKey(mac, key);
   }
 }
 
 void BluetoothRealDevice::SaveLinkKeys()
 {
   std::string config_string;
-  for (const auto& [bdaddr, linkkey] : m_link_keys)
+  for (std::size_t index = 0; index < m_link_key_count; index++)
   {
+    const bdaddr_t& bdaddr = m_link_keys[index].bdaddr;
+    const linkkey_t& linkkey = m_link_keys[index].linkkey;
     bdaddr_t address;
     // Reverse the address so that it is stored in the correct order in the config file
-    std::ranges::reverse_copy(bdaddr, address.begin());
+    for (std::size_t i = 0; i < address.size(); i++)
+      address[i] = bdaddr[address.size() - 1 - i];
 
     config_string += Common::MacAddressToString(address);
     config_string += '=';

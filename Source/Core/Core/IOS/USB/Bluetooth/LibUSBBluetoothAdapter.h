@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <map>
 #include <queue>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -48,20 +46,22 @@ public:
   // ReceiveHCIEvent is expected to be called regularly to do some internal processing.
   [[nodiscard]] BufferType ReceiveHCIEvent();
 
-  // The ACL packet at the front of the queue, read in place; empty when nothing is queued.
+  // The ACL packet at the front of the queue, read in place; nullptr when nothing is queued.
   // PopACLData releases it.
-  [[nodiscard]] std::span<const u8> PeekACLData();
+  [[nodiscard]] const u8* PeekACLData(std::size_t* size);
   void PopACLData();
 
   // Submit a transfer now; libusb completes it asynchronously.
-  void SendBulkTransfer(u8 endpoint, std::span<const u8> data);
-  void SendControlTransfer(u8 type, u8 request, u8 value, u8 index, std::span<const u8> data);
-  void SendControlTransfer(std::span<const u8> data);
+  void SendBulkTransfer(u8 endpoint, const u8* data, std::size_t size);
+  void SendControlTransfer(u8 type, u8 request, u8 value, u8 index, const u8* data,
+                           std::size_t size);
+  void SendControlTransfer(const void* data, std::size_t size);
 
   // Blocks and eats events until a command complete event of the correct opcode is received.
   // Returns true on success or false on error or when the device stops responding.
   // The written response does not include the event header or command complete data.
-  bool SendBlockingCommand(std::span<const u8> data, std::span<u8> response);
+  bool SendBlockingCommand(const void* data, std::size_t size, void* response,
+                           std::size_t response_size);
 
   bool IsWiiBTModule() const;
 
@@ -91,11 +91,14 @@ private:
   retro_atomic_int_t m_input_failed;
 
   // Callback and worker threads push transfers here, lock-free, when they are ready for clean up.
-  // The node lives in the front of the transfer's own buffer, so this allocates nothing.
+  // The node lives in the front of the transfer's own buffer, so this allocates nothing; the
+  // same header links every live transfer for Close to cancel.
   struct FreeNode
   {
     mpsc_stack_node_t link;
     libusb_transfer* transfer;
+    FreeNode* prev;
+    FreeNode* next;
   };
   static constexpr std::size_t BUFFER_HEADER_SIZE = (sizeof(FreeNode) + 15) & ~std::size_t{15};
   void QueueFree(libusb_transfer* transfer);
@@ -107,8 +110,8 @@ private:
   std::size_t m_acl_peeked = 0;
   std::vector<u8> m_acl_bounce;
 
-  // All transfers are alloc'd and kept here until complete.
-  std::map<libusb_transfer*, Common::UniqueBuffer<u8>> m_transfer_buffers;
+  // All transfers are alloc'd and linked here until complete.
+  FreeNode* m_live_transfers = nullptr;
 
   // Set to reduce OSD and log spam.
   bool m_showed_failed_transfer = false;
@@ -144,7 +147,7 @@ private:
   void PushHCICommand(libusb_transfer*);
 
   template <typename EventType>
-  void AcknowledgeCommand(std::span<const u8> buffer);
+  void AcknowledgeCommand(const u8* buffer, std::size_t size);
 
   libusb_transfer* AllocateTransfer(std::size_t buffer_size);
   void Close();

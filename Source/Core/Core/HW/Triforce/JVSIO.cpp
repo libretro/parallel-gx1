@@ -3,8 +3,7 @@
 
 #include "Core/HW/Triforce/JVSIO.h"
 
-#include <numeric>
-#include <optional>
+#include <cstring>
 #include <vector>
 
 #include <fmt/ranges.h>
@@ -12,7 +11,7 @@
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
-#include "Common/ScopeGuard.h"
+#include "Common/StringUtil.h"
 #include "Common/Swap.h"
 
 namespace
@@ -117,13 +116,10 @@ enum class JVSIOCommand : u8
 class JVSIORequestReader
 {
 public:
-  explicit JVSIORequestReader(std::span<const u8> data)
-      : m_data{data.data()}, m_data_end{data.data() + data.size()}
-  {
-  }
+  JVSIORequestReader(const u8* data, std::size_t size) : m_data{data}, m_data_end{data + size} {}
 
-  // Returns a span of all remaining bytes.
-  constexpr std::span<const u8> PeekBytes() const { return {m_data, m_data_end}; }
+  // The remaining bytes, lent; RemainingByteCount() of them.
+  constexpr const u8* PeekBytes() const { return m_data; }
 
   // Returns the remaining readable byte count.
   constexpr std::size_t RemainingByteCount() const { return std::size_t(m_data_end - m_data); }
@@ -152,13 +148,10 @@ public:
 
   void AddData(u8 value) { m_buffer.emplace_back(value); }
 
-  void AddData(std::span<const u8> data)
+  void AddData(const void* data, std::size_t size)
   {
-#if defined(__cpp_lib_containers_ranges)
-    m_buffer.append_range(data);
-#else
-    m_buffer.insert(m_buffer.end(), data.begin(), data.end());
-#endif
+    const u8* const bytes = static_cast<const u8*>(data);
+    m_buffer.insert(m_buffer.end(), bytes, bytes + size);
   }
 
   void StartFrame(u8 destination_node)
@@ -189,7 +182,9 @@ public:
     m_buffer[2] = u8(status_code);
 
     // Write checksum.
-    const u8 checksum = std::accumulate(m_buffer.begin(), m_buffer.end(), u8{});
+    u8 checksum = 0;
+    for (const u8 byte_value : m_buffer)
+      checksum += byte_value;
     AddData(checksum);
   }
 
@@ -208,29 +203,33 @@ private:
   std::size_t m_last_report_code_index{};
 };
 
-// Attempts to decode exactly output.size() bytes.
-// On success, returns the number of escaped bytes read.
-static std::optional<std::size_t> UnescapeData(std::span<const u8> input, std::span<u8> output)
+// Attempts to decode exactly output_size bytes.
+// On success, stores the number of escaped bytes read.
+static bool UnescapeData(const u8* input, std::size_t input_size, u8* output,
+                         std::size_t output_size, std::size_t* escaped_size)
 {
-  auto in = input.begin();
-  const auto in_end = input.end();
+  const u8* in = input;
+  const u8* const in_end = input + input_size;
 
-  auto out = output.begin();
-  const auto out_end = output.end();
+  u8* out = output;
+  u8* const out_end = output + output_size;
 
   while (true)
   {
     if (out == out_end)
-      return in - input.begin();  // Success.
+    {
+      *escaped_size = std::size_t(in - input);  // Success.
+      return true;
+    }
 
     if (in == in_end)
-      return std::nullopt;
+      return false;
 
     u8 byte_value = *(in++);
     if (byte_value == JVSIO_MARK)
     {
       if (in == in_end)
-        return std::nullopt;
+        return false;
 
       byte_value = *(in++) + 0x01;
     }
@@ -246,8 +245,8 @@ JVSIOBoard::JVSIOBoard(IOPorts* io_ports) : m_io_ports{io_ports}
 void JVSIOBoard::Update()
 {
   // Update coin counters.
-  const auto coin_inputs = m_io_ports->GetCoinInputs();
-  for (std::size_t i = 0; i != coin_inputs.size(); ++i)
+  const bool* const coin_inputs = m_io_ports->GetCoinInputs();
+  for (std::size_t i = 0; i != IOPorts::COIN_SLOT_COUNT; ++i)
   {
     if (!std::exchange(m_coin_prev_states[i], coin_inputs[i]) && coin_inputs[i])
       ++m_coin_counts[i];
@@ -255,12 +254,13 @@ void JVSIOBoard::Update()
 
   while (true)
   {
-    const auto rx_span = GetRxByteSpan();
+    const u8* const rx = GetRxBytes();
+    const std::size_t rx_size = GetRxByteCount();
 
-    if (rx_span.empty())
+    if (!rx_size)
       break;  // Wait for more data.
 
-    if (rx_span[0] != JVSIO_SYNC)
+    if (rx[0] != JVSIO_SYNC)
     {
       ERROR_LOG_FMT(SERIALINTERFACE_JVSIO, "Expected JVSIO_SYNC");
       ConsumeRxBytes(1);
@@ -270,25 +270,23 @@ void JVSIOBoard::Update()
     std::array<u8, 2 + 255> unescaped_data;
 
     // Read 2 header bytes.
-    const auto header_escaped_size =
-        UnescapeData(rx_span.subspan(1), std::span{unescaped_data}.first(2));
-
-    if (!header_escaped_size.has_value())
+    std::size_t header_escaped_size;
+    if (!UnescapeData(rx + 1, rx_size - 1, unescaped_data.data(), 2, &header_escaped_size))
       break;  // Wait for more data.
 
     const u8 destination_node = unescaped_data[0];
     const u8 payload_size = unescaped_data[1];
 
     // Read remaining frame bytes.
-    const auto payload_escaped_size =
-        UnescapeData(rx_span.subspan(1 + *header_escaped_size),
-                     std::span{unescaped_data}.subspan(2, payload_size));
-
-    if (!payload_escaped_size.has_value())
+    std::size_t payload_escaped_size;
+    if (!UnescapeData(rx + 1 + header_escaped_size, rx_size - 1 - header_escaped_size,
+                      unescaped_data.data() + 2, payload_size, &payload_escaped_size))
+    {
       break;  // Wait for more data.
+    }
 
-    Common::ScopeGuard consume_frame{
-        [&] { ConsumeRxBytes(1 + *header_escaped_size + *payload_escaped_size); }};
+    // The frame is consumed whatever happens below; the bytes stay unescaped on the stack.
+    ConsumeRxBytes(1 + header_escaped_size + payload_escaped_size);
 
     if (payload_size < 1)
     {
@@ -297,9 +295,9 @@ void JVSIOBoard::Update()
     }
 
     // Verify checksum.
-    const auto range_to_checksum = std::span{unescaped_data}.first(payload_size + 1);
-    const u8 expected_checksum =
-        std::accumulate(range_to_checksum.begin(), range_to_checksum.end(), u8());
+    u8 expected_checksum = 0;
+    for (std::size_t i = 0; i < std::size_t(payload_size) + 1; i++)
+      expected_checksum += unescaped_data[i];
     if (expected_checksum != unescaped_data[payload_size + 1])
     {
       ERROR_LOG_FMT(SERIALINTERFACE_JVSIO, "Bad checksum");
@@ -307,11 +305,11 @@ void JVSIOBoard::Update()
       JVSIOResponseWriter writer{&m_last_response};
       writer.StartFrame(JVSIO_HOST_ADDRESS);
       writer.EndFrame(JVSIOStatusCode::ChecksumError);
-      WriteResponse(m_last_response);
+      WriteResponse(m_last_response.data(), m_last_response.size());
       continue;
     }
 
-    JVSIORequestReader request{range_to_checksum.subspan(2)};
+    JVSIORequestReader request{unescaped_data.data() + 2, std::size_t(payload_size) - 1};
 
     if (destination_node == JVSIO_BROADCAST_ADDRESS)
     {
@@ -382,7 +380,7 @@ void JVSIOBoard::ProcessBroadcastRequest(JVSIORequestReader* request)
     writer.StartFrame(JVSIO_HOST_ADDRESS);
     writer.AddData(u8(JVSIOReportCode::Okay));
     writer.EndFrame(JVSIOStatusCode::Okay);
-    WriteResponse(m_last_response);
+    WriteResponse(m_last_response.data(), m_last_response.size());
     break;
   }
   default:
@@ -394,11 +392,11 @@ void JVSIOBoard::ProcessBroadcastRequest(JVSIORequestReader* request)
 void JVSIOBoard::ProcessUnicastRequest(JVSIORequestReader* request)
 {
   if (request->RemainingByteCount() > 0 &&
-      JVSIOCommand(request->PeekBytes().front()) == JVSIOCommand::DataRetransmit)
+      JVSIOCommand(request->PeekBytes()[0]) == JVSIOCommand::DataRetransmit)
   {
     request->SkipBytes(1);
     INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "DataRetransmit");
-    WriteResponse(m_last_response);
+    WriteResponse(m_last_response.data(), m_last_response.size());
     return;
   }
 
@@ -441,15 +439,16 @@ void JVSIOBoard::ProcessUnicastRequest(JVSIORequestReader* request)
     }
   }
 
-  WriteResponse(m_last_response);
+  WriteResponse(m_last_response.data(), m_last_response.size());
 }
 
-void JVSIOBoard::WriteResponse(std::span<const u8> response)
+void JVSIOBoard::WriteResponse(const u8* response, std::size_t size)
 {
   WriteTxByte(JVSIO_SYNC);
 
-  for (const u8 byte_value : response)
+  for (std::size_t i = 0; i < size; i++)
   {
+    const u8 byte_value = response[i];
     const bool needs_escaping = byte_value == JVSIO_SYNC || byte_value == JVSIO_MARK;
     if (needs_escaping)
     {
@@ -487,14 +486,15 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
   }
   case JVSIOCommand::MainID:
   {
-    const auto remaining_bytes = ctx.request.PeekBytes();
-    const auto null_iter = std::ranges::find(remaining_bytes, u8{});
+    const u8* const remaining_bytes = ctx.request.PeekBytes();
+    const std::size_t remaining_count = ctx.request.RemainingByteCount();
+    const void* const null_byte = std::memchr(remaining_bytes, 0, remaining_count);
 
-    if (null_iter == remaining_bytes.end())
+    if (!null_byte)
       return JVSIOReportCode::ParameterDataError;
 
-    std::string_view main_id_str{reinterpret_cast<const char*>(remaining_bytes.data()),
-                                 reinterpret_cast<const char*>(std::to_address(null_iter))};
+    std::string_view main_id_str{reinterpret_cast<const char*>(remaining_bytes),
+                                 std::size_t(static_cast<const u8*>(null_byte) - remaining_bytes)};
     ctx.request.SkipBytes(main_id_str.size() + 1);
 
     INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "MainID: {}", main_id_str);
@@ -515,10 +515,13 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
 
     for (u8 player_index = 0; player_index != player_count; ++player_index)
     {
-      const auto switch_inputs = m_io_ports->GetSwitchInputs(player_index);
-      const auto bytes_to_use = std::min<std::size_t>(bytes_per_player, switch_inputs.size());
+      const u8* const switch_inputs = m_io_ports->GetSwitchInputs(player_index);
+      const std::size_t bytes_to_use =
+          bytes_per_player < IOPorts::SWITCH_INPUT_BYTES_PER_PLAYER ?
+              bytes_per_player :
+              IOPorts::SWITCH_INPUT_BYTES_PER_PLAYER;
 
-      ctx.response.AddData(switch_inputs.first(bytes_to_use));
+      ctx.response.AddData(switch_inputs, bytes_to_use);
 
       // Pad data if the game requests more inputs than we have (unlikely).
       for (std::size_t i = bytes_to_use; i != bytes_per_player; ++i)
@@ -536,15 +539,23 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
 
     DEBUG_LOG_FMT(SERIALINTERFACE_JVSIO, "AnalogInput: channel_count:{}", channel_count);
 
-    const auto analog_inputs = m_io_ports->GetAnalogInputs();
-    const auto inputs_to_use = std::min<std::size_t>(channel_count, analog_inputs.size());
+    const u16* const analog_inputs = m_io_ports->GetAnalogInputs();
+    const std::size_t inputs_to_use = channel_count < IOPorts::ANALOG_INPUT_COUNT ?
+                                          channel_count :
+                                          IOPorts::ANALOG_INPUT_COUNT;
 
-    for (auto value : analog_inputs.first(inputs_to_use))
-      ctx.response.AddData(Common::AsU8Span(Common::swap16(value)));
+    for (std::size_t i = 0; i != inputs_to_use; ++i)
+    {
+      ctx.response.AddData(u8(analog_inputs[i] >> 8));
+      ctx.response.AddData(u8(analog_inputs[i]));
+    }
 
     // Pad data if the game requests more inputs than we have (unlikely).
     for (std::size_t i = inputs_to_use; i != channel_count; ++i)
-      ctx.response.AddData(Common::AsU8Span(Common::swap16(IOPorts::NEUTRAL_ANALOG_VALUE)));
+    {
+      ctx.response.AddData(u8(IOPorts::NEUTRAL_ANALOG_VALUE >> 8));
+      ctx.response.AddData(u8(IOPorts::NEUTRAL_ANALOG_VALUE));
+    }
 
     return JVSIOReportCode::Okay;
   }
@@ -558,11 +569,11 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
     if (ctx.request.RemainingByteCount() < byte_count)
       return JVSIOReportCode::ParameterSizeError;
 
-    const auto output_span = ctx.request.PeekBytes().first(byte_count);
+    const u8* const outputs = ctx.request.PeekBytes();
 
-    DEBUG_LOG_FMT(SERIALINTERFACE_JVSIO, "GenericOutput: {}", fmt::join(output_span, " "));
+    DEBUG_LOG_FMT(SERIALINTERFACE_JVSIO, "GenericOutput: {}", Common::BytesToHexString(outputs, byte_count));
 
-    m_io_ports->SetGenericOutputs(output_span);
+    m_io_ports->SetGenericOutputs(outputs, byte_count);
 
     ctx.request.SkipBytes(byte_count);
 
@@ -593,10 +604,10 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
 
       // Top 2 bits contain the condition code.
       // Bottom 14 bits contain the coin count.
-      const Common::BigEndianValue<u16> data{
-          u16((u32(condition_code) << 14) | (coin_count & 0x3fffu))};
+      const u16 data = u16((u32(condition_code) << 14) | (coin_count & 0x3fffu));
 
-      ctx.response.AddData(Common::AsU8Span(data));
+      ctx.response.AddData(u8(data >> 8));
+      ctx.response.AddData(u8(data));
     }
 
     return JVSIOReportCode::Okay;
@@ -617,7 +628,10 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
     NOTICE_LOG_FMT(SERIALINTERFACE_JVSIO, "CoinCounter: slot:{} adjustment:{}", slot, adjustment);
 
     if (slot < m_coin_counts.size())
-      m_coin_counts[slot] = std::clamp(m_coin_counts[slot] + adjustment, 0, 0x3fff);
+    {
+      const s32 count = m_coin_counts[slot] + adjustment;
+      m_coin_counts[slot] = u16(count < 0 ? 0 : count > 0x3fff ? 0x3fff : count);
+    }
 
     return JVSIOReportCode::Okay;
   }
@@ -636,8 +650,8 @@ auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> 
   case JVSIOCommand::IOIdentify:
   {
     INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "IOIdentify");
-    ctx.response.AddData(
-        Common::AsU8Span(std::span{"namco ltd.;FCA-1;Ver1.01;JPN,Multipurpose + Rotary Encoder"}));
+    static const char id[] = "namco ltd.;FCA-1;Ver1.01;JPN,Multipurpose + Rotary Encoder";
+    ctx.response.AddData(id, sizeof(id));
     return JVSIOReportCode::Okay;
   }
   case JVSIOCommand::FeatureCheck:
@@ -652,7 +666,7 @@ auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> 
         {JVSIOFeature::GeneralPurposeOutput, 6},
         {JVSIOFeature::AnalogOutput, 4},
     });
-    ctx.response.AddData(Common::AsU8Span(features));
+    ctx.response.AddData(features.data(), sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
     return JVSIOReportCode::Okay;
@@ -671,10 +685,8 @@ auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> 
       if (ctx.request.RemainingByteCount() < param_size)
         return JVSIOReportCode::ParameterSizeError;
 
-      const auto params = ctx.request.PeekBytes().first(param_size);
-
-      INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "NAMCO_COMMAND({:02x}): {:02x}", namco_command,
-                   fmt::join(params, " "));
+      INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "NAMCO_COMMAND({:02x}): {}", namco_command,
+                   Common::BytesToHexString(ctx.request.PeekBytes(), param_size));
 
       ctx.request.SkipBytes(param_size);
       ctx.response.AddData(0xff);
@@ -699,8 +711,8 @@ auto Sega_837_13551_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
   case JVSIOCommand::IOIdentify:
   {
     INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "IOIdentify");
-    ctx.response.AddData(
-        Common::AsU8Span(std::span{"SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551 ;Ver1.00;98/10"}));
+    static const char id[] = "SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551 ;Ver1.00;98/10";
+    ctx.response.AddData(id, sizeof(id));
     return JVSIOReportCode::Okay;
   }
   case JVSIOCommand::FeatureCheck:
@@ -712,7 +724,7 @@ auto Sega_837_13551_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
         {JVSIOFeature::AnalogInput, 8},
         {JVSIOFeature::GeneralPurposeOutput, 6},
     });
-    ctx.response.AddData(Common::AsU8Span(features));
+    ctx.response.AddData(features.data(), sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
     return JVSIOReportCode::Okay;
@@ -729,8 +741,8 @@ auto Sega_837_13844_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
   case JVSIOCommand::IOIdentify:
   {
     INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "IOIdentify");
-    ctx.response.AddData(Common::AsU8Span(
-        std::span{"SEGA ENTERPRISES,LTD.;837-13844-01 I/O CNTL BD2 ;Ver1.00;99/07"}));
+    static const char id[] = "SEGA ENTERPRISES,LTD.;837-13844-01 I/O CNTL BD2 ;Ver1.00;99/07";
+    ctx.response.AddData(id, sizeof(id));
     return JVSIOReportCode::Okay;
   }
   case JVSIOCommand::FeatureCheck:
@@ -742,7 +754,7 @@ auto Sega_837_13844_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
         {JVSIOFeature::AnalogInput, 8},
         {JVSIOFeature::GeneralPurposeOutput, 22},
     });
-    ctx.response.AddData(Common::AsU8Span(features));
+    ctx.response.AddData(features.data(), sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
     return JVSIOReportCode::Okay;

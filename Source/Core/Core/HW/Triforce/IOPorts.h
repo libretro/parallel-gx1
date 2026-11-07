@@ -5,7 +5,6 @@
 
 #include <array>
 #include <memory>
-#include <span>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -30,28 +29,38 @@ class IOPorts
 public:
   void Update();
 
-  std::span<u8> GetStatusSwitches() { return m_status_switches; }
-  std::span<const u8> GetStatusSwitches() const { return m_status_switches; }
+  // STATUS_SWITCH_BYTE_COUNT bytes
+  u8* GetStatusSwitches() { return m_status_switches.data(); }
+  const u8* GetStatusSwitches() const { return m_status_switches.data(); }
 
   u8* GetSystemInputs() { return &m_system_inputs; }
   const u8* GetSystemInputs() const { return &m_system_inputs; }
 
-  std::span<u8> GetSwitchInputs(u32 player_index);
-  std::span<const u8> GetSwitchInputs(u32 player_index) const;
+  // SWITCH_INPUT_BYTES_PER_PLAYER bytes
+  u8* GetSwitchInputs(u32 player_index);
+  const u8* GetSwitchInputs(u32 player_index) const;
 
-  std::span<u16> GetAnalogInputs() { return m_analog_inputs; }
-  std::span<const u16> GetAnalogInputs() const { return m_analog_inputs; }
+  // ANALOG_INPUT_COUNT values
+  u16* GetAnalogInputs() { return m_analog_inputs.data(); }
+  const u16* GetAnalogInputs() const { return m_analog_inputs.data(); }
 
-  std::span<const u8> GetGenericOutputs() const { return m_generic_outputs; }
+  // GENERIC_OUTPUT_BYTE_COUNT bytes
+  const u8* GetGenericOutputs() const { return m_generic_outputs.data(); }
 
-  void SetGenericOutputs(std::span<const u8> bytes);
+  void SetGenericOutputs(const u8* bytes, std::size_t size);
   void ResetGenericOutputs();
 
   static constexpr std::size_t PLAYER_COUNT = 2;
   static constexpr std::size_t COIN_SLOT_COUNT = 2;
 
-  std::span<bool, COIN_SLOT_COUNT> GetCoinInputs() { return m_coin_inputs; }
-  std::span<const bool, COIN_SLOT_COUNT> GetCoinInputs() const { return m_coin_inputs; }
+  // COIN_SLOT_COUNT flags
+  bool* GetCoinInputs() { return m_coin_inputs.data(); }
+  const bool* GetCoinInputs() const { return m_coin_inputs.data(); }
+
+  static constexpr std::size_t STATUS_SWITCH_BYTE_COUNT = 2;
+  static constexpr std::size_t SWITCH_INPUT_BYTES_PER_PLAYER = 2;
+  static constexpr std::size_t ANALOG_INPUT_COUNT = 8;
+  static constexpr std::size_t GENERIC_OUTPUT_BYTE_COUNT = 4;
 
   void AddIOAdapter(std::unique_ptr<IOAdapter> adapter);
 
@@ -62,20 +71,14 @@ public:
 private:
   std::vector<std::unique_ptr<IOAdapter>> m_io_adapters;
 
-  std::array<u8, 2> m_status_switches{0xff, 0xff};
+  std::array<u8, STATUS_SWITCH_BYTE_COUNT> m_status_switches{0xff, 0xff};
 
   // The first byte in JVSIO switch input data.
   u8 m_system_inputs = 0x00;
 
-  static constexpr std::size_t SWITCH_INPUT_BYTES_PER_PLAYER = 2;
-
   std::array<u8, PLAYER_COUNT * SWITCH_INPUT_BYTES_PER_PLAYER> m_switch_inputs{};
 
-  static constexpr std::size_t ANALOG_INPUT_COUNT = 8;
-
   std::array<u16, ANALOG_INPUT_COUNT> m_analog_inputs{};
-
-  static constexpr std::size_t GENERIC_OUTPUT_BYTE_COUNT = 4;
 
   std::array<u8, GENERIC_OUTPUT_BYTE_COUNT> m_generic_outputs{};
 
@@ -103,8 +106,7 @@ protected:
   IOPorts* GetIOPorts() { return m_io_ports; }
 
   // Invoked with newly set and cleared bits.
-  virtual void HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                           std::span<const u8> bits_cleared);
+  virtual void HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared);
 
 private:
   void SetIOPorts(IOPorts* io_ports) { m_io_ports = io_ports; }
@@ -144,8 +146,7 @@ protected:
   static constexpr u8 SLOT_A_LOCK_BIT = 0x40;
   static constexpr u8 SLOT_B_LOCK_BIT = 0x10;
 
-  void HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                   std::span<const u8> bits_cleared) override;
+  void HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared) override;
 
 private:
   std::array<ICCardReader*, IOPorts::PLAYER_COUNT> const m_card_readers;
@@ -160,8 +161,7 @@ public:
   }
 
 protected:
-  void HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                   std::span<const u8> bits_cleared) override;
+  void HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared) override;
 
 private:
   static constexpr u8 SLOT_A_EJECT_BIT = 0x80;
@@ -181,8 +181,7 @@ public:
   void Update() override;
 
 protected:
-  void HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                   std::span<const u8> bits_cleared) override;
+  void HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared) override;
 
 private:
   static constexpr u8 SLOT_A_LOCK_BIT = 0x40;

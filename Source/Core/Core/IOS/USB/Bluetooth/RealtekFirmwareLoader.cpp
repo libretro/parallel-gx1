@@ -8,7 +8,6 @@
 
 #include "Core/IOS/USB/Bluetooth/RealtekFirmwareLoader.h"
 
-#include <algorithm>
 
 #include "Common/BitUtils.h"
 #include "Common/FileUtil.h"
@@ -203,22 +202,27 @@ bool IsKnownRealtekBluetoothDevice(u16 vid, u16 pid)
       {0x0cb5, 0xc547},
   };
 
-  return std::ranges::find(realtek_ids, std::pair(vid, pid)) != std::end(realtek_ids);
+  for (const auto& id : realtek_ids)
+  {
+    if (id.first == vid && id.second == pid)
+      return true;
+  }
+  return false;
 }
 
 // Returns the data to be loaded, or an empty buffer on error.
-static Common::UniqueBuffer<char> ParseFirmware(std::span<const char> fw_data,
-                                                std::span<const char> cfg_data,
+static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t fw_size,
+                                                const char* cfg_data, std::size_t cfg_size,
                                                 const hci_read_local_ver_rp& local_ver,
                                                 u8 rom_version)
 {
-  if (fw_data.size() < sizeof(rtl_epatch_header))
+  if (fw_size < sizeof(rtl_epatch_header))
   {
     ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized firmware file");
     return {};
   }
 
-  const rtl_epatch_header epatch_info = Common::BitCastPtr<rtl_epatch_header>(fw_data.data());
+  const rtl_epatch_header epatch_info = Common::BitCastPtr<rtl_epatch_header>(fw_data);
   if (std::memcmp(epatch_info.signature.data(), RTL_EPATCH_SIGNATURE.data(),
                   epatch_info.signature.size()) != 0)
   {
@@ -240,8 +244,9 @@ static Common::UniqueBuffer<char> ParseFirmware(std::span<const char> fw_data,
   INFO_LOG_FMT(IOS_WIIMOTE, "fw_version={} num_patches={}", epatch_info.fw_version, num_patches);
 
   static constexpr u8 EXTENSION_SIGNATURE[] = {0x51, 0x04, 0xfd, 0x77};
-  const auto extension = fw_data.last(std::size(EXTENSION_SIGNATURE));
-  if (std::memcmp(extension.data(), EXTENSION_SIGNATURE, extension.size()) != 0)
+  const char* const extension = fw_data + fw_size - sizeof(EXTENSION_SIGNATURE);
+  if (fw_size < sizeof(rtl_epatch_header) + sizeof(EXTENSION_SIGNATURE) ||
+      std::memcmp(extension, EXTENSION_SIGNATURE, sizeof(EXTENSION_SIGNATURE)) != 0)
   {
     ERROR_LOG_FMT(IOS_WIIMOTE, "Bad extension section signature");
     return {};
@@ -249,7 +254,7 @@ static Common::UniqueBuffer<char> ParseFirmware(std::span<const char> fw_data,
 
   // Look for the project ID starting from the end of the file.
   int project_id = -1;
-  for (auto iter = extension.begin(); iter >= fw_data.begin() + (sizeof(rtl_epatch_header) + 3);)
+  for (const char* iter = extension; iter >= fw_data + (sizeof(rtl_epatch_header) + 3);)
   {
     const u8 opcode = *--iter;
     const u8 length = *--iter;
@@ -289,9 +294,16 @@ static Common::UniqueBuffer<char> ParseFirmware(std::span<const char> fw_data,
   };
 
   // Verify that the project ID is what we expect for our LMP subversion.
-  const auto* const it =
-      std::ranges::find(subver_project_ids, project_id, &LMPSubverProjectID::project_id);
-  if (it == std::end(subver_project_ids) || it->lmp_subver != local_ver.lmp_subversion)
+  const LMPSubverProjectID* it = nullptr;
+  for (const LMPSubverProjectID& entry : subver_project_ids)
+  {
+    if (entry.project_id == project_id)
+    {
+      it = &entry;
+      break;
+    }
+  }
+  if (!it || it->lmp_subver != local_ver.lmp_subversion)
   {
     ERROR_LOG_FMT(IOS_WIIMOTE, "Unexpected project_id: {}", project_id);
     return {};
@@ -299,13 +311,13 @@ static Common::UniqueBuffer<char> ParseFirmware(std::span<const char> fw_data,
 
   // Structure is:
   // u16 chip_ids[num_patches]; u16 patch_lengths[num_patches]; u32 patch_offsets[num_patches];
-  if (fw_data.size() <
+  if (fw_size <
       sizeof(rtl_epatch_header) + num_patches * (sizeof(u16) + sizeof(u16) + sizeof(u32)))
   {
     ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized firmware file");
     return {};
   }
-  const auto* chip_id_base = fw_data.data() + sizeof(rtl_epatch_header);
+  const char* chip_id_base = fw_data + sizeof(rtl_epatch_header);
   const auto* const patch_length_base = chip_id_base + (sizeof(u16) * num_patches);
   const auto* const patch_offset_base = patch_length_base + (sizeof(u16) * num_patches);
   for (int i = 0; i != num_patches; ++i)
@@ -318,21 +330,22 @@ static Common::UniqueBuffer<char> ParseFirmware(std::span<const char> fw_data,
 
       INFO_LOG_FMT(IOS_WIIMOTE, "Patch length:{} offset:{}", patch_length, patch_offset);
 
-      if (patch_offset + patch_length > fw_data.size())
+      if (patch_offset + patch_length > fw_size)
       {
         ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized firmware file");
         return {};
       }
 
-      auto result = Common::UniqueBuffer<char>{patch_length + cfg_data.size()};
-      std::copy_n(fw_data.data() + patch_offset, patch_length - sizeof(fw_version), result.data());
+      auto result = Common::UniqueBuffer<char>{patch_length + cfg_size};
+      std::memcpy(result.data(), fw_data + patch_offset, patch_length - sizeof(fw_version));
 
       // The last 4 bytes are replaced with fw_version.
       std::memcpy(result.data() + patch_length - sizeof(fw_version), &fw_version,
                   sizeof(fw_version));
 
       // Append the config binary.
-      std::ranges::copy(cfg_data, result.data() + patch_length);
+      if (cfg_size)
+        std::memcpy(result.data() + patch_length, cfg_data, cfg_size);
 
       return result;
     }
@@ -343,58 +356,59 @@ static Common::UniqueBuffer<char> ParseFirmware(std::span<const char> fw_data,
 }
 
 // Loads the provided data on the adapter.
-static bool LoadFirmware(LibUSBBluetoothAdapter& adapter, std::span<const char> data)
+static bool WriteFirmwareBlock(LibUSBBluetoothAdapter& adapter, const void* block,
+                               std::size_t size)
 {
-  if (data.empty())
+  rtl_download_response result{};
+  if (!adapter.SendBlockingCommand(block, size, &result, sizeof(result)))
+    return false;
+
+  if (result.status != 0x00)
+  {
+    ERROR_LOG_FMT(IOS_WIIMOTE, "Bad load firmware status: 0x{:02x}", result.status);
+    return false;
+  }
+
+  return true;
+}
+
+static bool LoadFirmware(LibUSBBluetoothAdapter& adapter, const char* data, std::size_t size)
+{
+  if (!size)
   {
     ERROR_LOG_FMT(IOS_WIIMOTE, "Firmware data is empty");
     return false;
   }
 
-  INFO_LOG_FMT(IOS_WIIMOTE, "Loading firmware, total size: {}", data.size());
+  INFO_LOG_FMT(IOS_WIIMOTE, "Loading firmware, total size: {}", size);
 
   HCICommandPayload<0xfc20, rtl_download_cmd> payload{};
 
-  const auto write_block = [&](std::span<const u8> block) {
-    rtl_download_response result{};
-    if (!adapter.SendBlockingCommand(block, Common::AsWritableU8Span(result)))
-      return false;
-
-    if (result.status != 0x00)
-    {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "Bad load firmware status: 0x{:02x}", result.status);
-      return false;
-    }
-
-    return true;
-  };
-
   // Write all blocks except the last one.
-  auto block_iter = data.begin();
-  while (data.end() - block_iter > rtl_download_cmd::DATA_LEN)
+  std::size_t offset = 0;
+  while (size - offset > rtl_download_cmd::DATA_LEN)
   {
-    const auto block_end = block_iter + rtl_download_cmd::DATA_LEN;
-    std::copy(block_iter, block_end, payload.command.data.data());
+    std::memcpy(payload.command.data.data(), data + offset, rtl_download_cmd::DATA_LEN);
 
-    if (!write_block(Common::AsU8Span(payload)))
+    if (!WriteFirmwareBlock(adapter, &payload, sizeof(payload)))
       return false;
 
     if (++payload.command.index == 0x80)
       payload.command.index = 1;
 
-    block_iter = block_end;
+    offset += rtl_download_cmd::DATA_LEN;
   }
 
   // Write the last block.
-  const auto last_block_size = data.end() - block_iter;
-  const auto bytes_short_of_full_block = rtl_download_cmd::DATA_LEN - last_block_size;
+  const std::size_t last_block_size = size - offset;
+  const std::size_t bytes_short_of_full_block = rtl_download_cmd::DATA_LEN - last_block_size;
 
   // Mark data end.
   payload.command.index |= 0x80u;
-  payload.header.length -= bytes_short_of_full_block;
-  std::copy(block_iter, data.end(), payload.command.data.data());
+  payload.header.length -= u8(bytes_short_of_full_block);
+  std::memcpy(payload.command.data.data(), data + offset, last_block_size);
 
-  if (!write_block(Common::AsU8Span(payload).first(sizeof(payload) - bytes_short_of_full_block)))
+  if (!WriteFirmwareBlock(adapter, &payload, sizeof(payload) - bytes_short_of_full_block))
     return false;
 
   NOTICE_LOG_FMT(IOS_WIIMOTE, "Loading firmware complete");
@@ -521,9 +535,9 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
 {
   // Read local version.
   hci_read_local_ver_rp local_ver{};
-  if (!adapter.SendBlockingCommand(
-          Common::AsU8Span(hci_cmd_hdr_t{.opcode = HCI_CMD_READ_LOCAL_VER, .length = 0}),
-          Common::AsWritableU8Span(local_ver)))
+  const hci_cmd_hdr_t read_local_ver{.opcode = HCI_CMD_READ_LOCAL_VER, .length = 0};
+  if (!adapter.SendBlockingCommand(&read_local_ver, sizeof(read_local_ver), &local_ver,
+                                   sizeof(local_ver)))
   {
     return false;
   }
@@ -581,13 +595,14 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
       return false;
     }
 
-    return LoadFirmware(adapter, fw_data);
+    return LoadFirmware(adapter, fw_data.data(), fw_data.size());
   }
 
   // Read ROM version.
   rtl_rom_version_evt read_rom_ver{};
-  if (!adapter.SendBlockingCommand(Common::AsU8Span(hci_cmd_hdr_t{.opcode = 0xfc6d, .length = 0}),
-                                   Common::AsWritableU8Span(read_rom_ver)))
+  const hci_cmd_hdr_t read_rom{.opcode = 0xfc6d, .length = 0};
+  if (!adapter.SendBlockingCommand(&read_rom, sizeof(read_rom), &read_rom_ver,
+                                   sizeof(read_rom_ver)))
   {
     return false;
   }
@@ -604,6 +619,7 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
   std::string config_data;
   File::ReadFileToString(config_path, config_data);
 
-  const auto firmware = ParseFirmware(fw_data, config_data, local_ver, rom_version);
-  return LoadFirmware(adapter, firmware);
+  const auto firmware = ParseFirmware(fw_data.data(), fw_data.size(), config_data.data(),
+                                     config_data.size(), local_ver, rom_version);
+  return LoadFirmware(adapter, firmware.data(), firmware.size());
 }

@@ -5,7 +5,6 @@
 
 #include <array>
 #include <optional>
-#include <span>
 #include <string_view>
 
 #include "Common/ChunkFile.h"
@@ -75,7 +74,7 @@ struct MediaBoardRange
   u8* buffer;
   std::size_t buffer_size;
 
-  MediaBoardRange(u32 start_, u32 size_, std::span<u8> buffer_);
+  MediaBoardRange(u32 start_, u32 size_, u8* buffer_, std::size_t buffer_size_);
 };
 
 enum class AMMBDICommand : u16

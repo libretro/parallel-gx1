@@ -3,7 +3,8 @@
 
 #include "Core/HW/Triforce/Touchscreen.h"
 
-#include <numeric>
+
+#include <cstddef>
 
 #include "Common/BitUtils.h"
 #include "Common/Logging/Log.h"
@@ -34,12 +35,12 @@ namespace Triforce
 
 void Touchscreen::Update()
 {
-  if (const auto input = GetRxByteSpan(); !input.empty())
+  if (const std::size_t input_size = GetRxByteCount())
   {
     // The Key of Avalon doesn't write to the device, it only reads.
     WARN_LOG_FMT(SERIALINTERFACE_AMBB, "Unexpected write of {} bytes to touchscreen.",
-                 input.size());
-    ConsumeRxBytes(input.size());
+                 input_size);
+    ConsumeRxBytes(input_size);
   }
 
   // Our touchscreen conveniently produces exactly one packet every Update cycle.
@@ -64,9 +65,13 @@ void Touchscreen::Update()
       .pressure = pad_status.triggerRight,
   };
 
-  packet.checksum = std::accumulate(&packet.lead_in, &packet.checksum, u8{0xaa});
+  const u8* const packet_bytes = reinterpret_cast<const u8*>(&packet);
+  u8 checksum = 0xaa;
+  for (std::size_t i = 0; i < offsetof(SmartSetDataPacket, checksum); i++)
+    checksum += packet_bytes[i];
+  packet.checksum = checksum;
 
-  WriteTxBytes(Common::AsU8Span(packet));
+  WriteTxBytes(packet_bytes, sizeof(packet));
 }
 
 }  // namespace Triforce

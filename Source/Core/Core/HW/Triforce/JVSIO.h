@@ -5,7 +5,6 @@
 
 #include <array>
 #include <expected>
-#include <span>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -49,7 +48,7 @@ private:
   void ProcessBroadcastRequest(JVSIORequestReader* request);
   void ProcessUnicastRequest(JVSIORequestReader* request);
 
-  void WriteResponse(std::span<const u8> response);
+  void WriteResponse(const u8* response, std::size_t size);
 
   // 0 == address not yet assigned.
   u8 m_client_address = 0;

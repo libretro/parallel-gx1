@@ -31,7 +31,9 @@ private:
   // Unless FirmwareUpdate temporarily cuts off the IC Card Reader ?
   ICCardReader m_ic_card_reader{0};
 
+  void HandleCommand();
   void HandleFirmwareUpdate();
+  void WriteTxU32BE(u32 value);
 
   u8 m_firmware_update_timeout = 0;
 

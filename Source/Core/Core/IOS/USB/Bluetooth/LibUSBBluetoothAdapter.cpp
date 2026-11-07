@@ -5,10 +5,8 @@
 
 #include <cassert>
 
-#include <algorithm>
 #include <cstdlib>
 #include <cstring>
-#include <ranges>
 #include <utility>
 
 #include <libusb.h>
@@ -208,9 +206,10 @@ void LibUSBBluetoothAdapter::Close()
   // Cancel all LibUSB transfers, wait for their callbacks and clean up all the buffers. A
   // callback that read the run flag before it was cleared may resubmit its transfer after the
   // cancel, so whatever is still in flight is cancelled again on every pass.
-  while (!m_transfer_buffers.empty())
+  while (m_live_transfers)
   {
-    std::ranges::for_each(m_transfer_buffers | std::ranges::views::keys, libusb_cancel_transfer);
+    for (FreeNode* node = m_live_transfers; node; node = node->next)
+      libusb_cancel_transfer(node->transfer);
     const int key = retro_eventcount_prepare_wait(&m_adapter_event.ec);
     if (!mpsc_stack_empty(&m_transfers_to_free))
       retro_eventcount_cancel_wait(&m_adapter_event.ec);
@@ -287,32 +286,33 @@ auto LibUSBBluetoothAdapter::ReceiveHCIEvent() -> BufferType
   const auto event = buffer[0];
   if (event == HCI_EVENT_COMMAND_COMPL)
   {
-    AcknowledgeCommand<hci_command_compl_ep>(buffer);
+    AcknowledgeCommand<hci_command_compl_ep>(buffer.data(), buffer.size());
   }
   else if (event == HCI_EVENT_COMMAND_STATUS)
   {
-    AcknowledgeCommand<hci_command_status_ep>(buffer);
+    AcknowledgeCommand<hci_command_status_ep>(buffer.data(), buffer.size());
   }
 
   Update();
   return buffer;
 }
 
-std::span<const u8> LibUSBBluetoothAdapter::PeekACLData()
+const u8* LibUSBBluetoothAdapter::PeekACLData(std::size_t* size)
 {
   const u16 length = PeekPacketLength(&m_acl_data_queue);
+  *size = length;
   if (length == 0)
-    return {};
+    return nullptr;
 
   m_acl_peeked = sizeof(length) + length;
-  const void* span;
-  if (retro_spsc_read_begin(&m_acl_data_queue, &span) >= m_acl_peeked)
-    return {static_cast<const u8*>(span) + sizeof(length), length};
+  const void* ring;
+  if (retro_spsc_read_begin(&m_acl_data_queue, &ring) >= m_acl_peeked)
+    return static_cast<const u8*>(ring) + sizeof(length);
 
   // Only a ring without a mirror splits a packet at its end.
   m_acl_bounce.resize(m_acl_peeked);
   retro_spsc_peek(&m_acl_data_queue, m_acl_bounce.data(), m_acl_peeked);
-  return {m_acl_bounce.data() + sizeof(length), length};
+  return m_acl_bounce.data() + sizeof(length);
 }
 
 void LibUSBBluetoothAdapter::PopACLData()
@@ -326,23 +326,27 @@ bool LibUSBBluetoothAdapter::IsControllerReadyForCommand() const
 }
 
 template <typename EventType>
-void LibUSBBluetoothAdapter::AcknowledgeCommand(std::span<const u8> buffer)
+void LibUSBBluetoothAdapter::AcknowledgeCommand(const u8* buffer, std::size_t size)
 {
-  if (buffer.size() < sizeof(hci_event_hdr_t) + sizeof(EventType)) [[unlikely]]
+  if (size < sizeof(hci_event_hdr_t) + sizeof(EventType)) [[unlikely]]
   {
     WARN_LOG_FMT(IOS_WIIMOTE, "Undersized HCI event");
     return;
   }
 
   EventType ev;
-  std::memcpy(&ev, buffer.data() + sizeof(hci_event_hdr_t), sizeof(ev));
+  std::memcpy(&ev, buffer + sizeof(hci_event_hdr_t), sizeof(ev));
 
-  const auto it =
-      std::ranges::find(m_unacknowledged_commands, ev.opcode, &OutstandingCommand::opcode);
-  if (it != m_unacknowledged_commands.end())
+  std::size_t index = 0;
+  while (index < m_unacknowledged_commands.size() &&
+         m_unacknowledged_commands[index].opcode != ev.opcode)
+  {
+    index++;
+  }
+  if (index < m_unacknowledged_commands.size())
   {
     DEBUG_LOG_FMT(IOS_WIIMOTE, "HCI command acknowledged: 0x{:04x}", ev.opcode);
-    m_unacknowledged_commands.erase(it);
+    m_unacknowledged_commands.erase(m_unacknowledged_commands.begin() + index);
   }
   else if (ev.opcode != 0x0000)
   {
@@ -354,28 +358,45 @@ void LibUSBBluetoothAdapter::AcknowledgeCommand(std::span<const u8> buffer)
 
 libusb_transfer* LibUSBBluetoothAdapter::AllocateTransfer(std::size_t buffer_size)
 {
-  auto& item = *m_transfer_buffers
-                    .emplace(libusb_alloc_transfer(0),
-                             Common::UniqueBuffer<u8>{BUFFER_HEADER_SIZE + buffer_size})
-                    .first;
+  // One block: the free-list node and live-list links, then the transfer's bytes.
+  u8* const block = static_cast<u8*>(std::malloc(BUFFER_HEADER_SIZE + buffer_size));
+  libusb_transfer* const transfer = block ? libusb_alloc_transfer(0) : nullptr;
+  if (!transfer)
+  {
+    std::free(block);
+    return nullptr;
+  }
 
-  auto* const transfer = item.first;
-  transfer->buffer = item.second.get() + BUFFER_HEADER_SIZE;
+  FreeNode* const node = reinterpret_cast<FreeNode*>(block);
+  node->transfer = transfer;
+  node->prev = nullptr;
+  node->next = m_live_transfers;
+  if (m_live_transfers)
+    m_live_transfers->prev = node;
+  m_live_transfers = node;
 
+  transfer->buffer = block + BUFFER_HEADER_SIZE;
   return transfer;
 }
 
 void LibUSBBluetoothAdapter::FreeTransfer(libusb_transfer* transfer)
 {
+  FreeNode* const node = reinterpret_cast<FreeNode*>(transfer->buffer - BUFFER_HEADER_SIZE);
+  if (node->prev)
+    node->prev->next = node->next;
+  else
+    m_live_transfers = node->next;
+  if (node->next)
+    node->next->prev = node->prev;
   libusb_free_transfer(transfer);
-  m_transfer_buffers.erase(transfer);
+  std::free(node);
 }
 
 // Any thread.
 void LibUSBBluetoothAdapter::QueueFree(libusb_transfer* transfer)
 {
+  // node->transfer was set at allocation; only the free-list link is written here.
   FreeNode* const node = reinterpret_cast<FreeNode*>(transfer->buffer - BUFFER_HEADER_SIZE);
-  node->transfer = transfer;
   mpsc_stack_push(&m_transfers_to_free, &node->link);
   retro_eventcount_notify(&m_adapter_event.ec);
 }
@@ -420,30 +441,34 @@ void LibUSBBluetoothAdapter::SubmitTransfer(libusb_transfer* transfer)
   QueueFree(transfer);
 }
 
-void LibUSBBluetoothAdapter::SendBulkTransfer(u8 endpoint, std::span<const u8> data)
+void LibUSBBluetoothAdapter::SendBulkTransfer(u8 endpoint, const u8* data, std::size_t size)
 {
   constexpr auto callback = LibUSBMemFunCallback<&LibUSBBluetoothAdapter::HandleOutputTransfer>();
 
-  auto* const transfer = AllocateTransfer(data.size());
-  libusb_fill_bulk_transfer(transfer, m_handle, endpoint, transfer->buffer, int(data.size()),
-                            callback, this, 0);
+  auto* const transfer = AllocateTransfer(size);
+  if (!transfer)
+    return;
+  libusb_fill_bulk_transfer(transfer, m_handle, endpoint, transfer->buffer, int(size), callback,
+                            this, 0);
 
-  std::ranges::copy(data, transfer->buffer);
+  std::memcpy(transfer->buffer, data, size);
 
   SubmitTransfer(transfer);
 }
 
 void LibUSBBluetoothAdapter::SendControlTransfer(u8 type, u8 request, u8 value, u8 index,
-                                                 std::span<const u8> data)
+                                                 const u8* data, std::size_t size)
 {
   constexpr auto callback = LibUSBMemFunCallback<&LibUSBBluetoothAdapter::HandleOutputTransfer>();
 
-  auto* const transfer = AllocateTransfer(data.size() + LIBUSB_CONTROL_SETUP_SIZE);
+  auto* const transfer = AllocateTransfer(size + LIBUSB_CONTROL_SETUP_SIZE);
+  if (!transfer)
+    return;
 
-  libusb_fill_control_setup(transfer->buffer, type, request, value, index, u16(data.size()));
+  libusb_fill_control_setup(transfer->buffer, type, request, value, index, u16(size));
   libusb_fill_control_transfer(transfer, m_handle, transfer->buffer, callback, this, 0);
 
-  std::ranges::copy(data, transfer->buffer + LIBUSB_CONTROL_SETUP_SIZE);
+  std::memcpy(transfer->buffer + LIBUSB_CONTROL_SETUP_SIZE, data, size);
 
   if (IsControllerReadyForCommand())
   {
@@ -456,16 +481,18 @@ void LibUSBBluetoothAdapter::SendControlTransfer(u8 type, u8 request, u8 value, 
   }
 }
 
-void LibUSBBluetoothAdapter::SendControlTransfer(std::span<const u8> data)
+void LibUSBBluetoothAdapter::SendControlTransfer(const void* data, std::size_t size)
 {
-  SendControlTransfer(REQUEST_TYPE, 0, 0, 0, data);
+  SendControlTransfer(REQUEST_TYPE, 0, 0, 0, static_cast<const u8*>(data), size);
 }
 
-bool LibUSBBluetoothAdapter::SendBlockingCommand(std::span<const u8> data, std::span<u8> response)
+bool LibUSBBluetoothAdapter::SendBlockingCommand(const void* data, std::size_t size,
+                                                 void* response, std::size_t response_size)
 {
-  SendControlTransfer(data);
+  SendControlTransfer(data, size);
 
-  const hci_cmd_hdr_t cmd = Common::BitCastPtr<hci_cmd_hdr_t>(data.data());
+  hci_cmd_hdr_t cmd;
+  std::memcpy(&cmd, data, sizeof(cmd));
 
   while (AreCommandsPendingResponse())
   {
@@ -505,14 +532,14 @@ bool LibUSBBluetoothAdapter::SendBlockingCommand(std::span<const u8> data, std::
     if (compl_event.opcode != cmd.opcode)
       continue;
 
-    if (event.size() < sizeof(hci_event_hdr_t) + sizeof(hci_command_compl_ep) + response.size())
+    if (event.size() < sizeof(hci_event_hdr_t) + sizeof(hci_command_compl_ep) + response_size)
     {
       ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized command result");
       break;
     }
 
-    std::copy_n(event.data() + sizeof(hci_event_hdr_t) + sizeof(hci_command_compl_ep),
-                response.size(), response.data());
+    std::memcpy(response, event.data() + sizeof(hci_event_hdr_t) + sizeof(hci_command_compl_ep),
+                response_size);
     return true;
   }
 

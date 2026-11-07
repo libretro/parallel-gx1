@@ -3,7 +3,6 @@
 
 #include "Core/HW/Triforce/SerialDevice.h"
 
-#include <algorithm>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
@@ -11,21 +10,18 @@
 namespace Triforce
 {
 
-void SerialDevice::WriteRxBytes(std::span<const u8> bytes)
+void SerialDevice::WriteRxBytes(const u8* bytes, std::size_t size)
 {
-#if defined(__cpp_lib_containers_ranges)
-  m_rx_buffer.append_range(bytes);
-#else
-  m_rx_buffer.insert(m_rx_buffer.end(), bytes.begin(), bytes.end());
-#endif
+  m_rx_buffer.insert(m_rx_buffer.end(), bytes, bytes + size);
 }
 
-void SerialDevice::TakeTxBytes(std::span<u8> bytes)
+void SerialDevice::TakeTxBytes(u8* bytes, std::size_t size)
 {
-  DEBUG_ASSERT(m_tx_buffer.size() >= bytes.size());
+  DEBUG_ASSERT(m_tx_buffer.size() >= size);
 
-  std::copy_n(m_tx_buffer.begin(), bytes.size(), bytes.data());
-  m_tx_buffer.erase(m_tx_buffer.begin(), m_tx_buffer.begin() + bytes.size());
+  for (std::size_t i = 0; i < size; i++)
+    bytes[i] = m_tx_buffer[i];
+  m_tx_buffer.erase(m_tx_buffer.begin(), m_tx_buffer.begin() + size);
 }
 
 void SerialDevice::ConsumeRxBytes(std::size_t count)
@@ -35,13 +31,9 @@ void SerialDevice::ConsumeRxBytes(std::size_t count)
   m_rx_buffer.erase(m_rx_buffer.begin(), m_rx_buffer.begin() + count);
 }
 
-void SerialDevice::WriteTxBytes(std::span<const u8> bytes)
+void SerialDevice::WriteTxBytes(const u8* bytes, std::size_t size)
 {
-#if defined(__cpp_lib_containers_ranges)
-  m_tx_buffer.append_range(bytes);
-#else
-  m_tx_buffer.insert(m_tx_buffer.end(), bytes.begin(), bytes.end());
-#endif
+  m_tx_buffer.insert(m_tx_buffer.end(), bytes, bytes + size);
 }
 
 void SerialDevice::PassThroughTxBytes(SerialDevice& other)
@@ -49,20 +41,12 @@ void SerialDevice::PassThroughTxBytes(SerialDevice& other)
   // The destination buffer will often be empty or near-empty.
   if (m_tx_buffer.size() < other.m_tx_buffer.size()) [[likely]]
   {
-#if defined(__cpp_lib_containers_ranges)
-    other.m_tx_buffer.prepend_range(m_tx_buffer);
-#else
     other.m_tx_buffer.insert(other.m_tx_buffer.begin(), m_tx_buffer.begin(), m_tx_buffer.end());
-#endif
     m_tx_buffer.swap(other.m_tx_buffer);
   }
   else
   {
-#if defined(__cpp_lib_containers_ranges)
-    m_tx_buffer.append_range(other.m_tx_buffer);
-#else
     m_tx_buffer.insert(m_tx_buffer.end(), other.m_tx_buffer.begin(), other.m_tx_buffer.end());
-#endif
   }
 
   other.m_tx_buffer.clear();

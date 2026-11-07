@@ -3,13 +3,13 @@
 
 #include "Core/HW/Triforce/FZeroAX.h"
 
-#include <numeric>
 
 #include <fmt/ranges.h>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
+#include "Common/StringUtil.h"
 #include "Common/Swap.h"
 
 #include "Core/HW/GCPad.h"
@@ -81,8 +81,7 @@ void FZeroAXCommon_IOAdapter::Update()
   analog_inputs[6] = IOPorts::NEUTRAL_ANALOG_VALUE;
 }
 
-void FZeroAXCommon_IOAdapter::HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                                          std::span<const u8> bits_cleared)
+void FZeroAXCommon_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared)
 {
   const u8 bits_changed_0 = bits_set[0] | bits_cleared[0];
 
@@ -111,7 +110,7 @@ void FZeroAXDeluxe_IOAdapter::Update()
   const auto generic_outputs = io_ports->GetGenericOutputs();
 
   // Not fully understood trickery to satisfy the game's initialization sequence.
-  const u16 seat_state = Common::swap16(generic_outputs.data() + 1) >> 2;
+  const u16 seat_state = Common::swap16(generic_outputs + 1) >> 2;
   switch (seat_state)
   {
   case 0x70:
@@ -186,21 +185,20 @@ void FZeroAXDeluxe_IOAdapter::DoState(PointerWrap& p)
 
 void FZeroAXSteeringWheel::Update()
 {
-  constexpr std::size_t REQUEST_SIZE = 4;
-
   std::size_t rx_position = 0;
   while (true)
   {
-    const auto rx_span = GetRxByteSpan().subspan(rx_position);
-
-    if (rx_span.size() < REQUEST_SIZE)
+    if (GetRxByteCount() - rx_position < REQUEST_SIZE)
       break;  // Wait for more data.
 
-    const auto request = rx_span.first<REQUEST_SIZE>();
+    const u8* const request = GetRxBytes() + rx_position;
 
     // The first byte is XOR'd with 0x80.
     // The last byte is an XOR of the previous bytes.
-    if (std::accumulate(request.begin(), request.end(), u8{0x80}, std::bit_xor{}) != 0)
+    u8 checksum = 0x80;
+    for (std::size_t i = 0; i < REQUEST_SIZE; i++)
+      checksum ^= request[i];
+    if (checksum != 0)
     {
       WARN_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Bad checksum!");
       ++rx_position;
@@ -214,9 +212,10 @@ void FZeroAXSteeringWheel::Update()
   ConsumeRxBytes(rx_position);
 }
 
-void FZeroAXSteeringWheel::ProcessRequest(std::span<const u8> request)
+void FZeroAXSteeringWheel::ProcessRequest(const u8* request)
 {
-  DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Request: {:02x}", fmt::join(request, " "));
+  DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Request: {}",
+                Common::BytesToHexString(request, REQUEST_SIZE));
 
   // The first byte is XOR'd with 0x80.
   const u8 cmd = request[0] ^ 0x80u;
@@ -258,7 +257,8 @@ void FZeroAXSteeringWheel::ProcessRequest(std::span<const u8> request)
   }
 
   // Simple 4 byte response.
-  WriteTxBytes(std::array<u8, 4>{});
+  static const u8 response[4] = {};
+  WriteTxBytes(response, sizeof(response));
 }
 
 bool FZeroAXSteeringWheel::IsInitializing() const

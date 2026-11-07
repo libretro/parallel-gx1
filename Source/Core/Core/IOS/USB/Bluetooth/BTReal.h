@@ -6,7 +6,6 @@
 #if defined(__LIBUSB__)
 #include <array>
 #include <functional>
-#include <map>
 #include <memory>
 #include <queue>
 #include <string>
@@ -75,10 +74,20 @@ private:
   // Enqueued when we observe a command to which we need to fake a reply.
   std::queue<std::function<void(USB::V0IntrMessage&)>> m_fake_replies;
 
-  // This stores the address of paired devices and associated link keys.
+  // This stores the address of paired devices and associated link keys, sorted by address.
   // It is needed because some adapters forget all stored link keys when they are reset,
   // which breaks pairings because the Wii relies on the Bluetooth module to remember them.
-  std::map<bdaddr_t, linkkey_t> m_link_keys;
+  struct LinkKeyEntry
+  {
+    bdaddr_t bdaddr;
+    linkkey_t linkkey;
+  };
+  static constexpr std::size_t MAX_STORED_LINK_KEYS = 64;
+  LinkKeyEntry m_link_keys[MAX_STORED_LINK_KEYS];
+  std::size_t m_link_key_count = 0;
+
+  void SetLinkKey(const bdaddr_t& bdaddr, const linkkey_t& linkkey);
+  void EraseLinkKey(const bdaddr_t& bdaddr);
 
   // Endpoints provided by the emulated software.
   std::unique_ptr<USB::V0IntrMessage> m_hci_endpoint;
@@ -97,7 +106,7 @@ private:
 
   void FakeVendorCommandReply(u16 opcode, USB::V0IntrMessage& ctrl);
 
-  void FakeSyncButtonEvent(USB::V0IntrMessage& ctrl, std::span<const u8> payload);
+  void FakeSyncButtonEvent(USB::V0IntrMessage& ctrl, const u8* payload, std::size_t size);
   void FakeSyncButtonPressedEvent(USB::V0IntrMessage& ctrl);
   void FakeSyncButtonHeldEvent(USB::V0IntrMessage& ctrl);
 

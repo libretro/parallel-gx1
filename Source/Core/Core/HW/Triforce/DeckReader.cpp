@@ -14,7 +14,6 @@
 #include "Common/FileUtil.h"
 #include "Common/JsonUtil.h"
 #include "Common/Logging/Log.h"
-#include "Common/ScopeGuard.h"
 #include "Common/Swap.h"
 
 #include "Core/ConfigManager.h"
@@ -156,12 +155,21 @@ namespace Triforce
 
 void DeckReader::Update()
 {
-  Common::ScopeGuard update_ic_card_reader{[this] {
-    // Update and take any response data from the IC card reader.
-    m_ic_card_reader.Update();
-    PassThroughTxBytes(m_ic_card_reader);
-  }};
+  HandleCommand();
 
+  // Update and take any response data from the IC card reader.
+  m_ic_card_reader.Update();
+  PassThroughTxBytes(m_ic_card_reader);
+}
+
+void DeckReader::WriteTxU32BE(u32 value)
+{
+  const u8 bytes[4] = {u8(value >> 24), u8(value >> 16), u8(value >> 8), u8(value)};
+  WriteTxBytes(bytes, sizeof(bytes));
+}
+
+void DeckReader::HandleCommand()
+{
   // All Deck Reader commands are exactly one byte (except FirmwareUpdate).
   // Responses must be the correct length, which varies by command.
   // Only the ReadCard response actually includes some kind of length field.
@@ -177,12 +185,13 @@ void DeckReader::Update()
     return;
   }
 
-  const auto input_span = GetRxByteSpan();
+  const u8* const input = GetRxBytes();
+  const std::size_t input_size = GetRxByteCount();
 
-  if (input_span.empty())
+  if (!input_size)
     return;  // Wait for more data.
 
-  const u8 cd_reader_command = input_span.front();
+  const u8 cd_reader_command = input[0];
 
   if (cd_reader_command == 0x00)
   {
@@ -191,16 +200,16 @@ void DeckReader::Update()
     // How does the actual hardware deal with this ?
     // Does the Deck Reader really parse the IC Card Reader commands ?
 
-    if (input_span.size() < 4)
+    if (input_size < 4)
       return;  // Wait for more data.
 
-    const u16 input_payload_size = Common::swap16(input_span.data() + 2);
+    const u16 input_payload_size = Common::swap16(input + 2);
     const u32 total_request_size = input_payload_size + 5u;
 
-    if (input_span.size() >= total_request_size)
+    if (input_size >= total_request_size)
     {
       // Forward the data to the attached IC Card Reader.
-      m_ic_card_reader.WriteRxBytes(input_span.first(total_request_size));
+      m_ic_card_reader.WriteRxBytes(input, total_request_size);
       ConsumeRxBytes(total_request_size);
     }
 
@@ -208,7 +217,8 @@ void DeckReader::Update()
   }
 
   // Write header.
-  WriteTxBytes(std::array<u8, 2>{0xaa, cd_reader_command});
+  WriteTxByte(0xaa);
+  WriteTxByte(cd_reader_command);
 
   switch (CDReaderCommand(cd_reader_command))
   {
@@ -236,10 +246,12 @@ void DeckReader::Update()
   {
     INFO_LOG_FMT(SERIALINTERFACE_CARD, "ProgramVersion");
 
-    WriteTxBytes(Common::AsU8Span((CDR_PROGRAM_VERSION)));
+    WriteTxBytes(reinterpret_cast<const u8*>(CDR_PROGRAM_VERSION.data()),
+                 CDR_PROGRAM_VERSION.size());
 
     // Pad with zeros.
-    WriteTxBytes(std::array<u8, EXPECTED_VERSION_STR_LENGTH - CDR_PROGRAM_VERSION.size()>{});
+    for (std::size_t i = CDR_PROGRAM_VERSION.size(); i < EXPECTED_VERSION_STR_LENGTH; i++)
+      WriteTxByte(0x00);
 
     break;
   }
@@ -247,10 +259,11 @@ void DeckReader::Update()
   {
     INFO_LOG_FMT(SERIALINTERFACE_CARD, "BootVersion");
 
-    WriteTxBytes(Common::AsU8Span(CDR_BOOT_VERSION));
+    WriteTxBytes(reinterpret_cast<const u8*>(CDR_BOOT_VERSION.data()), CDR_BOOT_VERSION.size());
 
     // Pad with zeros.
-    WriteTxBytes(std::array<u8, EXPECTED_VERSION_STR_LENGTH - CDR_BOOT_VERSION.size()>{});
+    for (std::size_t i = CDR_BOOT_VERSION.size(); i < EXPECTED_VERSION_STR_LENGTH; i++)
+      WriteTxByte(0x00);
 
     break;
   }
@@ -259,8 +272,7 @@ void DeckReader::Update()
     INFO_LOG_FMT(SERIALINTERFACE_CARD, "ProgramChecksum");
 
     // Avalon seems to not care about the actual value.
-    Common::BigEndianValue<u32> fake_checksum{0x89abcdef};
-    WriteTxBytes(Common::AsU8Span(fake_checksum));
+    WriteTxU32BE(0x89abcdef);
 
     break;
   }
@@ -269,8 +281,7 @@ void DeckReader::Update()
     INFO_LOG_FMT(SERIALINTERFACE_CARD, "BootChecksum");
 
     // Avalon seems to not care about the actual value.
-    Common::BigEndianValue<u32> fake_checksum{0x01234567};
-    WriteTxBytes(Common::AsU8Span(fake_checksum));
+    WriteTxU32BE(0x01234567);
 
     break;
   }
@@ -280,8 +291,8 @@ void DeckReader::Update()
 
     // FYI: If `header[1] != 0x68` the game inspects some bits and 9 bytes. Some error state ?
 
-    std::array<u8, 10> response{};
-    WriteTxBytes(response);
+    for (int i = 0; i < 10; i++)
+      WriteTxByte(0x00);
 
     break;
   }
@@ -289,8 +300,7 @@ void DeckReader::Update()
   {
     INFO_LOG_FMT(SERIALINTERFACE_CARD, "ShutterGet");
 
-    Common::BigEndianValue<u32> shutter_time{SHUTTER_TIME};
-    WriteTxBytes(Common::AsU8Span(shutter_time));
+    WriteTxU32BE(SHUTTER_TIME);
 
     break;
   }
@@ -298,8 +308,7 @@ void DeckReader::Update()
   {
     INFO_LOG_FMT(SERIALINTERFACE_CARD, "ShutterAuto");
 
-    Common::BigEndianValue<u32> shutter_time{SHUTTER_TIME};
-    WriteTxBytes(Common::AsU8Span(shutter_time));
+    WriteTxU32BE(SHUTTER_TIME);
 
     break;
   }
@@ -338,19 +347,22 @@ void DeckReader::Update()
     if (is_deck_empty)
     {
       // I think this means that there are no cards or maybe "not ready".
-      WriteTxBytes(std::array<u8, 2>{0xaa, 0x52});
+      WriteTxByte(0xaa);
+      WriteTxByte(0x52);
     }
     else
     {
       // We've had one, yes, but what about second header ?
-      WriteTxBytes(std::array<u8, 2>{0xaa, u8(CDReaderCommand::ReadCard)});
+      WriteTxByte(0xaa);
+      WriteTxByte(u8(CDReaderCommand::ReadCard));
 
       if (const auto deck = LoadCardDeckFromFile())
       {
         // What happens with more than 30 cards ?
         WriteTxByte(u8(deck->size() * sizeof(CardIdentifier)));
 
-        WriteTxBytes(Common::AsU8Span(*deck));
+        WriteTxBytes(reinterpret_cast<const u8*>(deck->data()),
+                     deck->size() * sizeof(CardIdentifier));
       }
       else
       {
@@ -402,16 +414,17 @@ void DeckReader::Update()
 
 void DeckReader::HandleFirmwareUpdate()
 {
-  const auto input_span = GetRxByteSpan();
+  const u8* const input = GetRxBytes();
+  const std::size_t input_size = GetRxByteCount();
 
   // No idea how the real hardware works.
   // There doesn't seem to be any sort of size field so.. here's a timeout.
-  if (input_span.empty())
+  if (!input_size)
   {
     if (--m_firmware_update_timeout == 0)
     {
-      constexpr std::array<u8, 3> fw_update_done{0xaa, u8(CDReaderCommand::FirmwareUpdate), 0x00};
-      WriteTxBytes(fw_update_done);
+      static const u8 fw_update_done[3] = {0xaa, u8(CDReaderCommand::FirmwareUpdate), 0x00};
+      WriteTxBytes(fw_update_done, sizeof(fw_update_done));
 
       INFO_LOG_FMT(SERIALINTERFACE_CARD, "Fake FirmwareUpdate done.");
 
@@ -422,14 +435,13 @@ void DeckReader::HandleFirmwareUpdate()
   {
     if (m_firmware_dump_file.IsOpen())
     {
-      if (!m_firmware_dump_file.Write(input_span.data(), input_span.size()))
+      if (!m_firmware_dump_file.Write(input, input_size))
       {
-        ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Failed to write {} bytes to firmware.",
-                      input_span.size());
+        ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Failed to write {} bytes to firmware.", input_size);
       }
     }
 
-    ConsumeRxBytes(input_span.size());
+    ConsumeRxBytes(input_size);
     m_firmware_update_timeout = FIRMWARE_UPDATE_TIMEOUT;
   }
 }

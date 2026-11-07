@@ -997,7 +997,7 @@ void WiimoteDevice::InterruptDataInputCallback(u8 hid_type, const u8* data, u32 
   data_frame.header.dcid = channel->remote_cid;
   data_frame.header.length = u16(sizeof(hid_type) + size);
   data_frame.hid_type = hid_type;
-  std::copy_n(data, size, data_frame.data.data());
+  std::memcpy(data_frame.data.data(), data, size);
 
   const u32 data_frame_size = data_frame.header.length + sizeof(l2cap_hdr_t);
 

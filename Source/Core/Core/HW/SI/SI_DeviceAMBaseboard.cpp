@@ -3,8 +3,7 @@
 
 #include "Core/HW/SI/SI_DeviceAMBaseboard.h"
 
-#include <algorithm>
-#include <numeric>
+#include <cstring>
 #include <string>
 
 #include <fmt/format.h>
@@ -244,8 +243,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
       {
       case GCAMCommand::StatusSwitches:
       {
-        const auto status_switches = m_io_ports.GetStatusSwitches();
-        const auto out_length = u8(status_switches.size());
+        const u8* const status_switches = m_io_ports.GetStatusSwitches();
+        const auto out_length = u8(Triforce::IOPorts::STATUS_SWITCH_BYTE_COUNT);
 
         if (!validate_data_in_out(1, 2 + out_length, "StatusSwitches"))
           break;
@@ -257,7 +256,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = out_length;
 
-        std::ranges::copy(status_switches, data_out.data() + data_offset);
+        std::memcpy(data_out.data() + data_offset, status_switches, out_length);
 
         data_offset += out_length;
         break;
@@ -415,7 +414,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
 
         if (m_serial_device_a != nullptr)
         {
-          m_serial_device_a->WriteRxBytes({data_in, in_length});
+          m_serial_device_a->WriteRxBytes(data_in, in_length);
         }
 
         data_in += in_length;
@@ -432,7 +431,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
 
         if (m_serial_device_b != nullptr)
         {
-          m_serial_device_b->WriteRxBytes({data_in, in_length});
+          m_serial_device_b->WriteRxBytes(data_in, in_length);
         }
 
         data_in += in_length;
@@ -448,7 +447,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(in_length, 0, "JVSIO"))
           break;
 
-        m_jvs_io_board->WriteRxBytes({data_in, in_length});
+        m_jvs_io_board->WriteRxBytes(data_in, in_length);
         data_in += in_length;
 
         m_jvs_io_board->Update();
@@ -466,9 +465,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = u8(out_length);
 
-        const auto out_span = std::span{data_out}.subspan(data_offset, out_length);
-
-        m_jvs_io_board->TakeTxBytes(out_span);
+        m_jvs_io_board->TakeTxBytes(data_out.data() + data_offset, out_length);
 
         data_offset += out_length;
         break;
@@ -506,8 +503,9 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
 
       serial_device->Update();
 
-      const auto out_length =
-          std::min(u32(serial_device->GetTxByteCount()), SERIAL_PORT_MAX_READ_SIZE);
+      const u32 tx_count = u32(serial_device->GetTxByteCount());
+      const u32 out_length =
+          tx_count < SERIAL_PORT_MAX_READ_SIZE ? tx_count : SERIAL_PORT_MAX_READ_SIZE;
 
       if (out_length == 0)
         return;
@@ -520,9 +518,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
       data_out[data_offset++] = u8(cmd);
       data_out[data_offset++] = u8(out_length);
 
-      const auto out_span = std::span{data_out}.subspan(data_offset, out_length);
-
-      serial_device->TakeTxBytes(out_span);
+      serial_device->TakeTxBytes(data_out.data() + data_offset, out_length);
 
       data_offset += out_length;
     };
@@ -534,10 +530,13 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
     data_out[1] = data_offset - response_header_size;  // Length
 
     // Zero-fill the rest of the buffer.
-    std::fill(data_out.data() + data_offset, data_out.data() + usable_out_size, 0x00);
+    std::memset(data_out.data() + data_offset, 0x00, usable_out_size - data_offset);
 
     // Compute the checksum (bitwise-xor of additive sum).
-    const u8 checksum = ~std::accumulate(data_out.data(), data_out.data() + data_offset, u8{});
+    u8 sum = 0;
+    for (u32 i = 0; i < data_offset; i++)
+      sum += data_out[i];
+    const u8 checksum = u8(~sum);
     data_out.back() = checksum;
 
     DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "Command response: {}",
@@ -553,7 +552,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
     if (!buffer_has_data)
       return 0;
 
-    std::ranges::copy(response_buffer, buffer);
+    std::memcpy(buffer, response_buffer.data(), response_buffer.size());
     return int(response_buffer.size());
   }
   default:

@@ -4,7 +4,6 @@
 #pragma once
 
 #include <deque>
-#include <span>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -26,24 +25,26 @@ public:
   SerialDevice(SerialDevice&&) = delete;
   SerialDevice& operator=(SerialDevice&&) = delete;
 
-  void WriteRxBytes(std::span<const u8> bytes);
+  void WriteRxBytes(const u8* bytes, std::size_t size);
 
   std::size_t GetTxByteCount() const { return m_tx_buffer.size(); }
 
-  // Caller should ensure GetTxByteCount() >= byte.size().
-  void TakeTxBytes(std::span<u8> bytes);
+  // Caller should ensure GetTxByteCount() >= size.
+  void TakeTxBytes(u8* bytes, std::size_t size);
 
   virtual void Update() = 0;
 
   virtual void DoState(PointerWrap& p);
 
 protected:
-  std::span<const u8> GetRxByteSpan() const { return m_rx_buffer; }
+  // Pending received bytes, lent until the next Rx write or consume.
+  const u8* GetRxBytes() const { return m_rx_buffer.data(); }
+  std::size_t GetRxByteCount() const { return m_rx_buffer.size(); }
 
   void ConsumeRxBytes(std::size_t count);
 
   void WriteTxByte(u8 byte) { m_tx_buffer.emplace_back(byte); }
-  void WriteTxBytes(std::span<const u8> bytes);
+  void WriteTxBytes(const u8* bytes, std::size_t size);
 
   // Transfer the entirety of other's tx buffer to this tx buffer.
   void PassThroughTxBytes(SerialDevice& other);

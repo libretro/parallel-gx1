@@ -3,7 +3,8 @@
 
 #include "Core/HW/Triforce/IOPorts.h"
 
-#include <algorithm>
+
+#include <cstring>
 
 #include <fmt/ranges.h>
 
@@ -31,23 +32,22 @@ void IOPorts::Update()
   m_analog_inputs.fill(NEUTRAL_ANALOG_VALUE);
   m_coin_inputs.fill(false);
 
-  std::ranges::for_each(m_io_adapters, &IOAdapter::Update);
+  for (auto& adapter : m_io_adapters)
+    adapter->Update();
 }
 
-std::span<u8> IOPorts::GetSwitchInputs(u32 player_index)
+u8* IOPorts::GetSwitchInputs(u32 player_index)
 {
   ASSERT(player_index < PLAYER_COUNT);
 
-  return std::span{m_switch_inputs}.subspan(SWITCH_INPUT_BYTES_PER_PLAYER * player_index,
-                                            SWITCH_INPUT_BYTES_PER_PLAYER);
+  return m_switch_inputs.data() + SWITCH_INPUT_BYTES_PER_PLAYER * player_index;
 }
 
-std::span<const u8> IOPorts::GetSwitchInputs(u32 player_index) const
+const u8* IOPorts::GetSwitchInputs(u32 player_index) const
 {
   ASSERT(player_index < PLAYER_COUNT);
 
-  return std::span{m_switch_inputs}.subspan(SWITCH_INPUT_BYTES_PER_PLAYER * player_index,
-                                            SWITCH_INPUT_BYTES_PER_PLAYER);
+  return m_switch_inputs.data() + SWITCH_INPUT_BYTES_PER_PLAYER * player_index;
 }
 
 void IOPorts::DoState(PointerWrap& p)
@@ -71,19 +71,17 @@ void IOPorts::AddIOAdapter(std::unique_ptr<IOAdapter> adapter)
 IOAdapter::IOAdapter() = default;
 IOAdapter::~IOAdapter() = default;
 
-void IOPorts::SetGenericOutputs(std::span<const u8> bytes)
+void IOPorts::SetGenericOutputs(const u8* bytes, std::size_t size)
 {
-  if (bytes.size() > m_generic_outputs.size())
+  if (size > m_generic_outputs.size())
   {
-    WARN_LOG_FMT(SERIALINTERFACE_JVSIO, "SetGenericOutputs: Unexpected byte count: {}",
-                 bytes.size());
+    WARN_LOG_FMT(SERIALINTERFACE_JVSIO, "SetGenericOutputs: Unexpected byte count: {}", size);
   }
 
-  const auto bytes_to_copy = std::min(bytes.size(), GENERIC_OUTPUT_BYTE_COUNT);
+  const std::size_t bytes_to_copy =
+      size < GENERIC_OUTPUT_BYTE_COUNT ? size : GENERIC_OUTPUT_BYTE_COUNT;
 
-  const bool no_change = std::ranges::equal(bytes.first(bytes_to_copy),
-                                            std::span{m_generic_outputs}.first(bytes_to_copy));
-  if (no_change)
+  if (!std::memcmp(bytes, m_generic_outputs.data(), bytes_to_copy))
     return;
 
   decltype(m_generic_outputs) bits_set{};
@@ -103,13 +101,14 @@ void IOPorts::SetGenericOutputs(std::span<const u8> bytes)
 
   for (auto& adapter : m_io_adapters)
   {
-    adapter->HandleGenericOutputsChanged(bits_set, bits_cleared);
+    adapter->HandleGenericOutputsChanged(bits_set.data(), bits_cleared.data());
   }
 }
 
 void IOPorts::ResetGenericOutputs()
 {
-  SetGenericOutputs(std::array<u8, GENERIC_OUTPUT_BYTE_COUNT>{});
+  static const u8 cleared[GENERIC_OUTPUT_BYTE_COUNT] = {};
+  SetGenericOutputs(cleared, sizeof(cleared));
 }
 
 void IOAdapter::Update()
@@ -120,8 +119,7 @@ void IOAdapter::DoState(PointerWrap& p)
 {
 }
 
-void IOAdapter::HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                            std::span<const u8> bits_cleared)
+void IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared)
 {
 }
 
@@ -279,8 +277,7 @@ void VirtuaStriker4Common_IOAdapter::Update()
   }
 }
 
-void VirtuaStriker4Common_IOAdapter::HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                                                 std::span<const u8> bits_cleared)
+void VirtuaStriker4Common_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared)
 {
   const u8 bits_changed_0 = bits_set[0] | bits_cleared[0];
 
@@ -297,8 +294,7 @@ void VirtuaStriker4Common_IOAdapter::HandleGenericOutputsChanged(std::span<const
   }
 }
 
-void VirtuaStriker4_2006_IOAdapter::HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                                                std::span<const u8> bits_cleared)
+void VirtuaStriker4_2006_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared)
 {
   (void)bits_cleared;
 
@@ -357,8 +353,7 @@ void GekitouProYakyuu_IOAdapter::Update()
   }
 }
 
-void GekitouProYakyuu_IOAdapter::HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                                             std::span<const u8> bits_cleared)
+void GekitouProYakyuu_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared)
 {
   (void)bits_set;
 

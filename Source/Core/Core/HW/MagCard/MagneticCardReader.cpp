@@ -7,8 +7,7 @@
 
 #include "Core/HW/MagCard/MagneticCardReader.h"
 
-#include <algorithm>
-#include <numeric>
+#include <cstring>
 
 #include "Common/DirectIOFile.h"
 #include "Common/FileUtil.h"
@@ -21,11 +20,10 @@
 namespace
 {
 
-void AppendRange(auto* container, const auto& range)
+void AppendBytes(std::vector<u8>* container, const void* data, std::size_t size)
 {
-  const auto prev_size = container->size();
-  container->resize(prev_size + range.size());
-  std::ranges::copy(range, container->data() + prev_size);
+  const u8* const bytes = static_cast<const u8*>(data);
+  container->insert(container->end(), bytes, bytes + size);
 }
 
 }  // namespace
@@ -191,7 +189,7 @@ void MagneticCardReader::Command_33_ReadData()
         return;
       }
 
-      AppendRange(&m_command_payload, *track_data);
+      AppendBytes(&m_command_payload, track_data->data(), track_data->size());
     }
     break;
   }
@@ -224,7 +222,7 @@ void MagneticCardReader::Command_35_GetData()
         return;
       }
 
-      AppendRange(&m_command_payload, *track_data);
+      AppendBytes(&m_command_payload, track_data->data(), track_data->size());
     }
     break;
   default:
@@ -263,10 +261,11 @@ void MagneticCardReader::Command_53_WriteData()
 
   const auto track_indices = GetTrackIndicesForTrackType(track);
   const auto proper_payload_size = track_indices.size() * TRACK_SIZE;
-  const auto payload = std::span{m_current_packet}.subspan(3);
+  const u8* const payload = m_current_packet.data() + 3;
+  const std::size_t payload_size = m_current_packet.size() - 3;
 
   if (mode != Mode::Standard || !IsCardLoaded() || track_indices.size() == 0 ||
-      payload.size() != proper_payload_size)
+      payload_size != proper_payload_size)
   {
     WARN_LOG_FMT(SERIALINTERFACE_CARD, "Command_53_WriteData: Failed.");
     SetPError(P::ILLEGAL_ERR);
@@ -280,7 +279,7 @@ void MagneticCardReader::Command_53_WriteData()
   {
     auto& track_data = m_card_data[track_index];
     track_data.emplace();
-    std::ranges::copy(payload.subspan(track_index * TRACK_SIZE, TRACK_SIZE), track_data->data());
+    std::memcpy(track_data->data(), payload + track_index * TRACK_SIZE, TRACK_SIZE);
   }
 
   Core::DisplayMessage("Writing Magnetic Card", 4000);
@@ -501,7 +500,7 @@ void MagneticCardReader::Command_D0_ControlShutter()
 
 void MagneticCardReader::Command_F0_GetVersion()
 {
-  AppendRange(&m_command_payload, VERSION_STRING);
+  AppendBytes(&m_command_payload, VERSION_STRING.data(), VERSION_STRING.size());
 
   m_status.SoftReset();
   FinishCommand();
@@ -531,7 +530,8 @@ void MagneticCardReader::ReadCardFile()
     ERROR_LOG_FMT(SERIALINTERFACE_CARD, "ReadCardFile: Incorrect card file size: {}", file_size);
   }
 
-  const auto tracks_to_read = std::min<u32>(complete_track_count, NUM_TRACKS);
+  const u32 tracks_to_read =
+      complete_track_count < NUM_TRACKS ? u32(complete_track_count) : u32(NUM_TRACKS);
   for (u32 track_num = 0; track_num != tracks_to_read; ++track_num)
   {
     auto& track_data = m_card_data[track_num];
@@ -602,11 +602,12 @@ void MagneticCardReader::Update()
 {
   while (true)
   {
-    const auto read = GetRxByteSpan();
-    if (read.empty())
+    const u8* const read = GetRxBytes();
+    const std::size_t read_size = GetRxByteCount();
+    if (!read_size)
       break;
 
-    const u8 first_byte = read.front();
+    const u8 first_byte = read[0];
     if (first_byte == ENQUIRY)
     {
       // ENQUIRY
@@ -639,14 +640,14 @@ void MagneticCardReader::Update()
     // This is a command packet. The next byte provides the size.
     // Upon read they ACK or NACK and start processing of a command.
 
-    if (read.size() < 2)
+    if (read_size < 2)
       break;  // Wait for more data.
 
     const std::size_t packet_size = read[1];
-    if (packet_size > read.size() - 2)
+    if (packet_size > read_size - 2)
       break;  // Wait for more data.
 
-    if (ReceivePacket(read.subspan(2, packet_size)))
+    if (ReceivePacket(read + 2, packet_size))
     {
       DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "Writing ACK");
       WriteTxByte(ACK);
@@ -661,17 +662,17 @@ void MagneticCardReader::Update()
   }
 }
 
-bool MagneticCardReader::ReceivePacket(std::span<const u8> packet)
+bool MagneticCardReader::ReceivePacket(const u8* packet, std::size_t size)
 {
-  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: {}", HexDump(packet.data(), packet.size()));
+  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: {}", HexDump(packet, size));
 
-  if (packet.size() < 6)
+  if (size < 6)
   {
     WARN_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: Bad packet size!");
     return false;
   }
 
-  if (packet[packet.size() - 2] != END_OF_TEXT)
+  if (packet[size - 2] != END_OF_TEXT)
   {
     WARN_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: Missing END_OF_TEXT!");
     return false;
@@ -679,7 +680,10 @@ bool MagneticCardReader::ReceivePacket(std::span<const u8> packet)
 
   // The final byte is an XOR checksum of all previous bytes,
   //  including the count byte that we already chopped off.
-  if (std::accumulate(packet.begin(), packet.end(), u8(packet.size()), std::bit_xor{}) != 0)
+  u8 checksum = u8(size);
+  for (std::size_t i = 0; i < size; i++)
+    checksum ^= packet[i];
+  if (checksum != 0)
   {
     WARN_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: Bad checksum!");
     return false;
@@ -708,8 +712,7 @@ bool MagneticCardReader::ReceivePacket(std::span<const u8> packet)
   // Copy the payload.
   // We're skipping the command number and the host's 3 status bytes,
   //  and dropping the END_OF_TEXT and checksum.
-  m_current_packet.resize(packet.size() - 6);
-  std::ranges::copy(packet.subspan(4, m_current_packet.size()), m_current_packet.data());
+  m_current_packet.assign(packet + 4, packet + size - 2);
 
   // TODO: Is this sensible for every command ?
   m_status.SoftReset();
@@ -861,23 +864,21 @@ void MagneticCardReader::BuildPacket()
 
   WriteTxByte(START_OF_TEXT);  // Not included in the checksum.
 
-  const auto lead_in = std::to_array<u8>({
-      payload_size,
-      GetCurrentCommand(),
-      GetPositionValue(),
-      u8(m_status.p),
-      u8(m_status.s),
-  });
-  WriteTxBytes(lead_in);
+  const u8 lead_in[5] = {
+      payload_size, GetCurrentCommand(), GetPositionValue(), u8(m_status.p), u8(m_status.s),
+  };
+  WriteTxBytes(lead_in, sizeof(lead_in));
 
-  WriteTxBytes(m_command_payload);
+  WriteTxBytes(m_command_payload.data(), m_command_payload.size());
 
   WriteTxByte(END_OF_TEXT);
 
   // Checksum is XOR of bytes after START_OF_TEXT.
-  const u8 packet_checksum = std::accumulate(lead_in.begin(), lead_in.end(), u8{}, std::bit_xor{}) ^
-                             std::accumulate(m_command_payload.begin(), m_command_payload.end(),
-                                             END_OF_TEXT, std::bit_xor{});
+  u8 packet_checksum = END_OF_TEXT;
+  for (const u8 b : lead_in)
+    packet_checksum ^= b;
+  for (const u8 b : m_command_payload)
+    packet_checksum ^= b;
   WriteTxByte(packet_checksum);
 }
 

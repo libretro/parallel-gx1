@@ -22,7 +22,9 @@ public:
   void DoState(PointerWrap&) override;
 
 private:
-  void ProcessRequest(std::span<const u8>);
+  static constexpr std::size_t REQUEST_SIZE = 4;
+
+  void ProcessRequest(const u8* request);
 
   u8 m_init_state = 0;
 
@@ -41,8 +43,7 @@ public:
   void Update() override;
 
 protected:
-  void HandleGenericOutputsChanged(std::span<const u8> bits_set,
-                                   std::span<const u8> bits_cleared) override;
+  void HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared) override;
 
 private:
   FZeroAXSteeringWheel* const m_steering_wheel;

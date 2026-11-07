@@ -5,7 +5,6 @@
 
 #include <array>
 #include <memory>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -39,7 +38,7 @@ public:
 private:
   void CreateCards(u8 card_count);
 
-  void SendReply(u8 command, u16 status_code, std::span<const u8> payload);
+  void SendReply(u8 command, u16 status_code, const u8* payload, std::size_t payload_size);
 
   static constexpr std::size_t IC_PAGE_SIZE = 8;
   static constexpr u32 IC_PAGE_COUNT = 256;
@@ -60,10 +59,10 @@ private:
     const UID& GetUID() const { return m_uid; }
     bool IsHalted() const { return m_current_state == State::Halted; }
 
-    // Returns an empty span on error.
-    std::span<const u8> ReadData(u16 page, u16 page_count);
+    // The card's own bytes, lent; nullptr on error.
+    const u8* ReadData(u16 page, u16 page_count, std::size_t* size);
 
-    bool WriteData(u16 page, std::span<const u8> write_span);
+    bool WriteData(u16 page, const u8* data, std::size_t size);
 
     // Returns the new value.
     u16 DecreaseUseCount(u16 page, u16 amount);
