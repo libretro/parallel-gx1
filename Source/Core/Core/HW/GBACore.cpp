@@ -18,12 +18,12 @@
 
 
 #include "AudioCommon/FieldAudio.h"
+#include "Core/HW/GBAVFile.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/Crypto/SHA1.h"
 #include "Common/FileUtil.h"
-#include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/MinizipUtil.h"
 #include "Common/ScopeGuard.h"
@@ -34,10 +34,6 @@
 #include "Core/HW/SystemTimers.h"
 #include "Core/Host.h"
 #include "Core/System.h"
-
-#ifdef ANDROID
-#include "jni/AndroidCommon/AndroidCommon.h"
-#endif
 
 namespace HW::GBA
 {
@@ -65,14 +61,20 @@ static VFile* OpenROM_Archive(const char* path)
       VDirFindFirst(archive, [](VFile* vf_) { return mCoreIsCompatible(vf_) != mPLATFORM_NONE; });
   if (vf_archive)
   {
-    size_t size = static_cast<size_t>(vf_archive->size(vf_archive));
-
-    std::vector<u8> buffer(size);
-    vf_archive->seek(vf_archive, 0, SEEK_SET);
-    vf_archive->read(vf_archive, buffer.data(), size);
+    // read straight into the memory file the core will map
+    const size_t size = static_cast<size_t>(vf_archive->size(vf_archive));
+    vf = VFileMemChunk(nullptr, size);
+    if (vf)
+    {
+      void* dst = vf->map(vf, size, MAP_WRITE);
+      vf_archive->seek(vf_archive, 0, SEEK_SET);
+      if (!dst || vf_archive->read(vf_archive, dst, size) != static_cast<ssize_t>(size))
+      {
+        vf->close(vf);
+        vf = nullptr;
+      }
+    }
     vf_archive->close(vf_archive);
-
-    vf = VFileMemChunk(buffer.data(), size);
   }
   archive->close(archive);
   return vf;
@@ -96,12 +98,13 @@ static VFile* OpenROM_Zip(const char* path)
     if (mz_zip_reader_entry_get_info(zip_reader, &info) != MZ_OK || !info->uncompressed_size)
       continue;
 
-    std::vector<u8> buffer(info->uncompressed_size);
-    if (!Common::ReadFileFromZip(zip_reader, &buffer))
+    // inflated straight into the memory file the core will map
+    vf = VFileMemChunk(nullptr, static_cast<size_t>(info->uncompressed_size));
+    if (!vf)
       continue;
-
-    vf = VFileMemChunk(buffer.data(), info->uncompressed_size);
-    if (mCoreIsCompatible(vf) != mPLATFORM_NONE)
+    void* dst = vf->map(vf, static_cast<size_t>(info->uncompressed_size), MAP_WRITE);
+    if (dst && Common::ReadFileFromZip(zip_reader, static_cast<u8*>(dst), info->uncompressed_size) &&
+        mCoreIsCompatible(vf) != mPLATFORM_NONE)
     {
       vf->seek(vf, 0, SEEK_SET);
       break;
@@ -115,11 +118,7 @@ static VFile* OpenROM_Zip(const char* path)
 
 static VFile* OpenReadOnlyFile(const char* path)
 {
-#ifdef ANDROID
-  if (IsPathAndroidContent(path))
-    return VFileFromFD(OpenAndroidContent(path, "r"));
-#endif
-  return VFileOpen(path, O_RDONLY);
+  return gba_vfile_open(path, 0);
 }
 
 static VFile* OpenROM(const char* rom_path)
@@ -337,23 +336,6 @@ void Core::SetHost(std::weak_ptr<GBAHostInterface> host)
   m_host = std::move(host);
 }
 
-void Core::SetForceDisconnect(bool force_disconnect)
-{
-  m_force_disconnect = force_disconnect;
-}
-
-void Core::EReaderQueueCard(std::string_view card_path)
-{
-  Flush();
-  if (!GetCoreInfo().has_ereader)
-    return;
-
-  File::IOFile file(std::string(card_path), "rb");
-  std::vector<u8> core_state(file.GetSize());
-  file.ReadBytes(core_state.data(), core_state.size());
-  GBACartEReaderQueueCard(static_cast<::GBA*>(m_core->board), core_state.data(), core_state.size());
-}
-
 bool Core::LoadBIOS(const char* bios_path)
 {
   VFile* vf = OpenReadOnlyFile(bios_path);
@@ -375,7 +357,7 @@ bool Core::LoadBIOS(const char* bios_path)
 
 bool Core::LoadSave(const char* save_path)
 {
-  VFile* vf = VFileOpen(save_path, O_CREAT | O_RDWR);
+  VFile* vf = gba_vfile_open(save_path, 1);
   if (!vf)
   {
     PanicAlertFmtT("Error: GBA{0} failed to open the save in {1}", m_device_number + 1, save_path);
@@ -592,7 +574,7 @@ void Core::HandleEvent(SyncEvent event)
   if (event.event_type != SyncEventType::RunCommand)
     return;
 
-  if (m_link_enabled && !m_force_disconnect)
+  if (m_link_enabled)
   {
     m_response_size =
         u8(GBASIOJOYSendCommand(&m_sio_driver, m_joybus_command, m_joybus_buffer.data()));
@@ -633,66 +615,6 @@ void Core::RunUntil(u64 gc_ticks)
 void Core::RunFor(u64 gc_ticks)
 {
   RunUntil(m_last_gc_ticks + gc_ticks);
-}
-
-void Core::ImportState(std::string_view state_path)
-{
-  Flush();
-  if (!IsStarted())
-    return;
-
-  std::vector<u8> core_state(m_core->stateSize(m_core));
-  File::IOFile file(std::string(state_path), "rb");
-  if (core_state.size() != file.GetSize())
-    return;
-
-  file.ReadBytes(core_state.data(), core_state.size());
-  m_core->loadState(m_core, core_state.data());
-}
-
-void Core::ExportState(std::string_view state_path)
-{
-  Flush();
-  if (!IsStarted())
-    return;
-
-  std::vector<u8> core_state(m_core->stateSize(m_core));
-  m_core->saveState(m_core, core_state.data());
-
-  File::IOFile file(std::string(state_path), "wb");
-  file.WriteBytes(core_state.data(), core_state.size());
-}
-
-void Core::ImportSave(std::string_view save_path)
-{
-  Flush();
-  if (!IsStarted())
-    return;
-
-  File::IOFile file(std::string(save_path), "rb");
-  std::vector<u8> save_file(file.GetSize());
-  if (!file.ReadBytes(save_file.data(), save_file.size()))
-    return;
-
-  m_core->savedataRestore(m_core, save_file.data(), save_file.size(), true);
-  m_core->reset(m_core);
-}
-
-void Core::ExportSave(std::string_view save_path)
-{
-  Flush();
-  if (!IsStarted())
-    return;
-
-  File::IOFile file(std::string(save_path), "wb");
-
-  void* sram = nullptr;
-  size_t size = m_core->savedataClone(m_core, &sram);
-  if (!sram)
-    return;
-
-  file.WriteBytes(sram, size);
-  free(sram);
 }
 
 void Core::DoState(PointerWrap& p)
@@ -751,35 +673,6 @@ void Core::DoState(PointerWrap& p)
     if (auto host = m_host.lock())
       host->FrameEnded(m_video_buffer);
   }
-}
-
-bool Core::GetRomInfo(const char* rom_path, std::array<u8, 20>& hash, std::string& title)
-{
-  VFile* rom = OpenROM(rom_path);
-  if (!rom)
-    return false;
-
-  hash = GetROMHash(rom);
-
-  mCore* core = mCoreFindVF(rom);
-  if (!core)
-  {
-    rom->close(rom);
-    return false;
-  }
-  core->init(core);
-  if (!core->loadROM(core, rom))
-  {
-    rom->close(rom);
-    return false;
-  }
-
-  mGameInfo info;
-  core->getGameInfo(core, &info);
-  title = info.title;
-
-  core->deinit(core);
-  return true;
 }
 
 std::string Core::GetSavePath(std::string_view rom_path, int device_number)

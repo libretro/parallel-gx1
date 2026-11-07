@@ -78,8 +78,6 @@ public:
   CoreInfo GetCoreInfo() const;
 
   void SetHost(std::weak_ptr<GBAHostInterface> host);
-  void SetForceDisconnect(bool force_disconnect);
-  void EReaderQueueCard(std::string_view card_path);
 
   void SyncJoybus(u64 gc_ticks, u16 keys);
   void SendJoybusCommand(u64 gc_ticks, int transfer_time, u8* buffer, u16 keys);
@@ -97,13 +95,8 @@ public:
   u32 GetAudioSampleRate() const { return m_core->audioSampleRate(m_core); }
   int GetDeviceNumber() const { return m_device_number; }
 
-  void ImportState(std::string_view state_path);
-  void ExportState(std::string_view state_path);
-  void ImportSave(std::string_view save_path);
-  void ExportSave(std::string_view save_path);
   void DoState(PointerWrap& p);
 
-  static bool GetRomInfo(const char* rom_path, std::array<u8, 20>& hash, std::string& title);
   static std::string GetSavePath(std::string_view rom_path, int device_number);
 
 private:
@@ -154,7 +147,6 @@ private:
   u64 m_gc_ticks_remainder = 0;
   u16 m_keys = 0;
   bool m_link_enabled = false;
-  bool m_force_disconnect = false;
 
   std::weak_ptr<GBAHostInterface> m_host;
 
