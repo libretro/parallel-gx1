@@ -1861,6 +1861,28 @@ static void GetDisplayRectForXFBEntry(TCacheEntry* entry, u32 width, u32 height,
   display_rect->bottom = static_cast<int>(height * entry->GetHeight() / entry->native_height);
 }
 
+/* Whether an XFB in RAM holds only what XFB copies kept in VRAM leave
+ * there: such a copy is gone once the cache is (the video backend made
+ * again, a state loaded), and RAM has no picture to give in its place. */
+static bool XFBMemoryUninitialized(const u8* src, u32 width, u32 height, u32 stride)
+{
+  const u32 bytes_per_row = width * 2;
+  u32 y;
+
+  for (y = 0; y < height; y++)
+  {
+    const u8* row = src + y * stride;
+    u32 x;
+
+    for (x = 0; x < bytes_per_row; x += 2)
+    {
+      if (row[x] != 1 || row[x + 1] != 254)
+        return false;
+    }
+  }
+  return true;
+}
+
 RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height, u32 stride,
                                               MathUtil::Rectangle<int>* display_rect)
 {
@@ -1889,6 +1911,8 @@ RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height
     GetDisplayRectForXFBEntry(entry.get(), width, height, display_rect);
     return entry;
   }
+  if (XFBMemoryUninitialized(src_data, width, height, stride))
+    return {};
 
   // Create a new VRAM texture, and fill it with the data from guest RAM.
   entry = AllocateCacheEntry(TextureConfig(width, height, 1, 1, 1, AbstractTextureFormat::RGBA8,
