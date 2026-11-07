@@ -987,11 +987,13 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
   u64 ticket_size;
   if (wrapped_partition)
   {
-    const std::span<const u8> new_ticket =
-        m_wrapped_volume->GetTicket(*wrapped_partition).GetBytes();
-    ticket_size = std::min<u64>(new_ticket.size(), WII_PARTITION_TICKET_SIZE);
-    m_nonpartition_contents.AddBytes(partition_address + WII_PARTITION_TICKET_ADDRESS,
-                                     new_ticket.data(), size_t(ticket_size));
+    size_t new_ticket_size;
+    const u8* const new_ticket =
+        m_wrapped_volume->GetTicket(*wrapped_partition).GetBytes(&new_ticket_size);
+    ticket_size = new_ticket_size < WII_PARTITION_TICKET_SIZE ? new_ticket_size :
+                                                                WII_PARTITION_TICKET_SIZE;
+    m_nonpartition_contents.AddBytes(partition_address + WII_PARTITION_TICKET_ADDRESS, new_ticket,
+                                     size_t(ticket_size));
   }
   else
   {
@@ -1003,10 +1005,11 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
   u64 tmd_size;
   if (wrapped_partition)
   {
-    const std::span<const u8> new_tmd = m_wrapped_volume->GetTMD(*wrapped_partition).GetBytes();
-    tmd_size = std::min<u64>(new_tmd.size(), IOS::ES::MAX_TMD_SIZE);
-    m_nonpartition_contents.AddBytes(partition_address + TMD_OFFSET, new_tmd.data(),
-                                     size_t(tmd_size));
+    size_t new_tmd_size;
+    const u8* const new_tmd =
+        m_wrapped_volume->GetTMD(*wrapped_partition).GetBytes(&new_tmd_size);
+    tmd_size = new_tmd_size < IOS::ES::MAX_TMD_SIZE ? new_tmd_size : IOS::ES::MAX_TMD_SIZE;
+    m_nonpartition_contents.AddBytes(partition_address + TMD_OFFSET, new_tmd, size_t(tmd_size));
   }
   else
   {
@@ -1075,10 +1078,14 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
   m_nonpartition_contents.AddBytes(partition_address + WII_PARTITION_TICKET_SIZE,
                                    partition_header, sizeof(partition_header));
 
-  std::vector<u8> ticket_buffer(ticket_size);
-  m_nonpartition_contents.Read(partition_address + WII_PARTITION_TICKET_ADDRESS, ticket_size,
-                               ticket_buffer.data(), this);
-  IOS::ES::TicketReader ticket(std::move(ticket_buffer));
+  // read straight into the reader
+  IOS::ES::TicketReader ticket;
+  u8* const ticket_bytes = ticket.ResizeBytes(ticket_size);
+  if (ticket_bytes)
+  {
+    m_nonpartition_contents.Read(partition_address + WII_PARTITION_TICKET_ADDRESS, ticket_size,
+                                 ticket_bytes, this);
+  }
   if (ticket.IsValid())
     partition->SetKey(ticket.GetTitleKey());
 }

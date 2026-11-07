@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -125,13 +124,14 @@ public:
     No,
     Yes,
   };
-  ReturnCode ImportTicket(std::span<const u8> ticket_bytes, std::span<const u8> cert_chain,
+  ReturnCode ImportTicket(const u8* ticket_bytes, size_t ticket_size, const u8* cert_chain,
+                          size_t cert_chain_size,
                           TicketImportType type = TicketImportType::PossiblyPersonalised,
                           VerifySignature verify_signature = VerifySignature::Yes);
-  ReturnCode ImportTmd(Context& context, std::span<const u8> tmd_bytes, u64 caller_title_id,
+  ReturnCode ImportTmd(Context& context, const u8* tmd_bytes, size_t tmd_size, u64 caller_title_id,
                        u32 caller_title_flags);
-  ReturnCode ImportTitleInit(Context& context, std::span<const u8> tmd_bytes,
-                             std::span<const u8> cert_chain,
+  ReturnCode ImportTitleInit(Context& context, const u8* tmd_bytes, size_t tmd_size,
+                             const u8* cert_chain, size_t cert_chain_size,
                              VerifySignature verify_signature = VerifySignature::Yes);
   ReturnCode ImportContentBegin(Context& context, u64 title_id, u32 content_id);
   ReturnCode ImportContentData(Context& context, u32 content_fd, const u8* data, u32 data_size);
@@ -153,8 +153,8 @@ public:
   ReturnCode GetDeviceId(u32* device_id) const;
   ReturnCode GetTitleId(u64* device_id) const;
 
-  ReturnCode VerifySign(const std::vector<u8>& hash, const std::vector<u8>& ecc_signature,
-                        const std::vector<u8>& certs);
+  ReturnCode VerifySign(const u8* hash, size_t hash_size, const u8* ecc_signature,
+                        const u8* certs, size_t certs_size);
 
   // Views
   ReturnCode GetTicketFromView(const u8* ticket_view, u8* ticket, u32* ticket_size,
@@ -180,9 +180,11 @@ public:
   // The caller is responsible for using IOSC_DeleteObject.
   ReturnCode VerifyContainer(VerifyContainerType type, VerifyMode mode,
                              const ES::SignedBlobReader& signed_blob,
-                             std::span<const u8> cert_chain, u32* issuer_handle = nullptr);
+                             const u8* cert_chain, size_t cert_chain_size,
+                             u32* issuer_handle = nullptr);
   ReturnCode VerifyContainer(VerifyContainerType type, VerifyMode mode,
-                             const ES::CertReader& certificate, std::span<const u8> cert_chain,
+                             const ES::CertReader& certificate, const u8* cert_chain,
+                             size_t cert_chain_size,
                              u32 certificate_iosc_handle);
 
 private:
@@ -201,7 +203,8 @@ private:
   bool IsActiveTitlePermittedByTicket(const u8* ticket_view) const;
 
   bool IsIssuerCorrect(VerifyContainerType type, const ES::CertReader& issuer_cert) const;
-  ReturnCode ReadCertStore(std::vector<u8>* buffer) const;
+  // The store in one malloc'd buffer, *bytes; free() it when done.
+  ReturnCode ReadCertStore(u8** bytes, size_t* size) const;
   ReturnCode WriteNewCertToStore(const ES::CertReader& cert);
 
   ReturnCode CheckStreamKeyPermissions(u32 uid, const u8* ticket_view,
@@ -376,8 +379,8 @@ private:
   IPCReply SeekContent(u32 uid, const IOCtlVRequest& request);
 
   // Title information
-  IPCReply GetTitleCount(std::span<const u64> titles, const IOCtlVRequest& request);
-  IPCReply GetTitles(std::span<const u64> titles, const IOCtlVRequest& request);
+  IPCReply GetTitleCount(size_t title_count, const IOCtlVRequest& request);
+  IPCReply GetTitles(const u64* titles, size_t title_count, const IOCtlVRequest& request);
   IPCReply GetOwnedTitleCount(const IOCtlVRequest& request);
   IPCReply GetOwnedTitles(const IOCtlVRequest& request);
   IPCReply GetTitleCount(const IOCtlVRequest& request);
@@ -416,7 +419,7 @@ private:
 
   void FinishInit();
 
-  s32 WriteSystemFile(const std::string& path, std::span<const u8> data, Ticks ticks = {});
+  s32 WriteSystemFile(const std::string& path, const u8* data, u32 size, Ticks ticks = {});
   s32 WriteLaunchFile(const ES::TMDReader& tmd, Ticks ticks = {});
   bool BootstrapPPC();
 

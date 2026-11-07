@@ -11,7 +11,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -172,16 +171,21 @@ class SignedBlobReader
 public:
   SignedBlobReader() = default;
   // Copies the bytes.
-  explicit SignedBlobReader(std::span<const u8> bytes);
+  SignedBlobReader(const u8* bytes, size_t size);
   SignedBlobReader(const SignedBlobReader& other);
   SignedBlobReader(SignedBlobReader&& other) noexcept;
   SignedBlobReader& operator=(const SignedBlobReader& other);
   SignedBlobReader& operator=(SignedBlobReader&& other) noexcept;
   ~SignedBlobReader();
 
-  std::span<const u8> GetBytes() const { return {m_bytes, m_size}; }
+  // The bytes, lent; *size gets how many.
+  const u8* GetBytes(size_t* size) const
+  {
+    *size = m_size;
+    return m_bytes;
+  }
   // Copies the bytes.
-  void SetBytes(std::span<const u8> bytes);
+  void SetBytes(const u8* bytes, size_t size);
   // Room for size bytes, to be filled in place - read straight from a file
   // or a disc. What was there up to size is kept. Returns nullptr, with
   // nothing held, when there is no memory.
@@ -194,8 +198,8 @@ public:
   bool IsSignatureValid() const;
 
   SignatureType GetSignatureType() const;
-  // The signature, lent from the blob.
-  std::span<const u8> GetSignatureData() const;
+  // The signature, lent from the blob; *size gets its size.
+  const u8* GetSignatureData(size_t* size) const;
   size_t GetSignatureSize() const;
   // Returns the whole issuer chain.
   // Example: Root-CA00000001 if the blob was signed by CA00000001, which is signed by the Root.
@@ -214,7 +218,7 @@ class TMDReader final : public SignedBlobReader
 {
 public:
   TMDReader() = default;
-  explicit TMDReader(std::span<const u8> bytes);
+  TMDReader(const u8* bytes, size_t size);
 
   bool IsValid() const;
 
@@ -253,13 +257,14 @@ class TicketReader final : public SignedBlobReader
 {
 public:
   TicketReader() = default;
-  explicit TicketReader(std::span<const u8> bytes);
+  TicketReader(const u8* bytes, size_t size);
 
   bool IsValid() const;
   bool IsV1Ticket() const;
 
-  // The ticket with this ID, lent from the blob; empty when there is none.
-  std::span<const u8> GetRawTicket(u64 ticket_id) const;
+  // The ticket with this ID, lent from the blob, *size bytes of it; NULL
+  // when there is none.
+  const u8* GetRawTicket(u64 ticket_id, size_t* size) const;
   size_t GetNumberOfTickets() const;
 
   // Returns a "raw" ticket view, without byte swapping. Intended for use from ES.
@@ -268,6 +273,8 @@ public:
   // more than just one ticket and generate ticket views for them, so we implement it too.
   // Written to out, which has sizeof(TicketView) bytes.
   void GetRawTicketView(u32 ticket_num, u8* out) const;
+  // The view of ticket ticket_num in tickets, read where they lie.
+  static void GetRawTicketView(const u8* tickets, u32 ticket_num, u8* out);
 
   u8 GetVersion() const;
   u32 GetDeviceId() const;
@@ -339,7 +346,7 @@ class CertReader final : public SignedBlobReader
 public:
   // The certificate at the start of bytes, which may go on past it; only
   // the certificate is copied.
-  explicit CertReader(std::span<const u8> bytes);
+  CertReader(const u8* bytes, size_t size);
 
   bool IsValid() const;
 
@@ -349,13 +356,13 @@ public:
   PublicKeyType GetPublicKeyType() const;
   // Returns the public key bytes + any other data associated with it.
   // For RSA public keys, this includes 4 bytes for the exponent at the end.
-  // Lent from the certificate.
-  std::span<const u8> GetPublicKey() const;
+  // Lent from the certificate; *size gets its size.
+  const u8* GetPublicKey(size_t* size) const;
 
 private:
   bool m_is_valid = false;
 };
 
-std::map<std::string, CertReader> ParseCertChain(std::span<const u8> chain);
+std::map<std::string, CertReader> ParseCertChain(const u8* chain, size_t size);
 }  // namespace ES
 }  // namespace IOS

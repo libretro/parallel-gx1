@@ -3,7 +3,6 @@
 
 #include "Core/IOS/ES/ES.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <vector>
@@ -101,7 +100,8 @@ IPCReply ESDevice::GetTicketViews(const IOCtlVRequest& request)
   }
   else if (ticket.IsValid())
   {
-    u32 number_of_views = std::min(maxViews, static_cast<u32>(ticket.GetNumberOfTickets()));
+    const u32 ticket_count = static_cast<u32>(ticket.GetNumberOfTickets());
+    u32 number_of_views = maxViews < ticket_count ? maxViews : ticket_count;
     // written straight into guest memory
     u8* const views = memory.GetPointerForRange(request.io_vectors[0].address,
                                                 number_of_views * sizeof(ES::TicketView));
@@ -142,8 +142,9 @@ ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* tic
   }
 
   // Handle GetTicketFromView or GetV0TicketFromView
-  const std::span<const u8> ticket_bytes = installed_ticket.GetRawTicket(ticket_id);
-  if (ticket_bytes.empty())
+  size_t ticket_bytes_size;
+  const u8* const ticket_bytes = installed_ticket.GetRawTicket(ticket_id, &ticket_bytes_size);
+  if (!ticket_bytes)
     return ES_NO_TICKET;
 
   if (!m_title_context.active)
@@ -152,9 +153,9 @@ ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* tic
   // Check for permission to export the ticket.
   const u32 title_identifier = static_cast<u32>(m_title_context.tmd.GetTitleId());
   const u32 permitted_title_mask =
-      Common::swap32(ticket_bytes.data() + offsetof(ES::Ticket, permitted_title_mask));
+      Common::swap32(ticket_bytes + offsetof(ES::Ticket, permitted_title_mask));
   const u32 permitted_title_id =
-      Common::swap32(ticket_bytes.data() + offsetof(ES::Ticket, permitted_title_id));
+      Common::swap32(ticket_bytes + offsetof(ES::Ticket, permitted_title_id));
   const u8 title_export_allowed = ticket_bytes[offsetof(ES::Ticket, title_export_allowed)];
 
   // This is the check present in IOS. The 5 does not correspond to any known constant, sadly.
@@ -164,7 +165,7 @@ ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* tic
     return ES_EACCES;
   }
 
-  std::ranges::copy(ticket_bytes, ticket);
+  std::memcpy(ticket, ticket_bytes, ticket_bytes_size);
   return IPC_SUCCESS;
 }
 
@@ -417,9 +418,7 @@ IPCReply ESDevice::DIGetTicketView(const IOCtlVRequest& request)
         memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::Ticket));
     if (!ticket_bytes)
       return IPCReply(ES_EINVAL);
-    const ES::TicketReader ticket{std::span<const u8>(ticket_bytes, sizeof(ES::Ticket))};
-
-    ticket.GetRawTicketView(0, view);
+    ES::TicketReader::GetRawTicketView(ticket_bytes, 0, view);
   }
 
   return IPCReply(IPC_SUCCESS);
@@ -435,8 +434,9 @@ IPCReply ESDevice::DIGetTMDSize(const IOCtlVRequest& request)
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
-  memory.Write_U32(static_cast<u32>(m_core.m_title_context.tmd.GetBytes().size()),
-                   request.io_vectors[0].address);
+  size_t tmd_size;
+  m_core.m_title_context.tmd.GetBytes(&tmd_size);
+  memory.Write_U32(static_cast<u32>(tmd_size), request.io_vectors[0].address);
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -455,12 +455,13 @@ IPCReply ESDevice::DIGetTMD(const IOCtlVRequest& request)
   if (!m_core.m_title_context.active)
     return IPCReply(ES_EINVAL);
 
-  const std::span<const u8> tmd_bytes = m_core.m_title_context.tmd.GetBytes();
+  size_t tmd_bytes_size;
+  const u8* const tmd_bytes = m_core.m_title_context.tmd.GetBytes(&tmd_bytes_size);
 
-  if (static_cast<u32>(tmd_bytes.size()) > tmd_size)
+  if (static_cast<u32>(tmd_bytes_size) > tmd_size)
     return IPCReply(ES_EINVAL);
 
-  memory.CopyToEmu(request.io_vectors[0].address, tmd_bytes.data(), tmd_bytes.size());
+  memory.CopyToEmu(request.io_vectors[0].address, tmd_bytes, tmd_bytes_size);
   return IPCReply(IPC_SUCCESS);
 }
 }  // namespace IOS::HLE

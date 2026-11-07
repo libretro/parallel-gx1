@@ -3,7 +3,6 @@
 
 #include "Core/IOS/ES/ES.h"
 
-#include <algorithm>
 #include <cstdio>
 #include <memory>
 #include <utility>
@@ -179,8 +178,8 @@ void ESDevice::FinishInit()
 
 void TitleContext::Clear()
 {
-  ticket.SetBytes({});
-  tmd.SetBytes({});
+  ticket.ResizeBytes(0);
+  tmd.ResizeBytes(0);
   active = false;
 }
 
@@ -406,13 +405,20 @@ s32 ESDevice::WriteLaunchFile(const ES::TMDReader& tmd, Ticks ticks)
 {
   GetEmulationKernel().GetFSCore().DeleteFile(PID_KERNEL, PID_KERNEL, SPACE_FILE_PATH, ticks);
 
-  std::vector<u8> launch_data(sizeof(u64) + sizeof(ES::TicketView));
+  size_t tmd_size;
+  const u8* const tmd_bytes = tmd.GetBytes(&tmd_size);
+  const size_t launch_size = sizeof(u64) + sizeof(ES::TicketView) + tmd_size;
+  u8* const launch_data = static_cast<u8*>(std::calloc(1, launch_size));
+  if (!launch_data)
+    return ES_EIO;
   const u64 title_id = tmd.GetTitleId();
-  std::memcpy(launch_data.data(), &title_id, sizeof(title_id));
+  std::memcpy(launch_data, &title_id, sizeof(title_id));
   // We're supposed to write a ticket view here, but we don't use it for anything (other than
   // to take up space in the NAND and slow down launches) so don't bother.
-  launch_data.insert(launch_data.end(), tmd.GetBytes().begin(), tmd.GetBytes().end());
-  return WriteSystemFile(LAUNCH_FILE_PATH, launch_data, ticks);
+  std::memcpy(launch_data + sizeof(u64) + sizeof(ES::TicketView), tmd_bytes, tmd_size);
+  const s32 ret = WriteSystemFile(LAUNCH_FILE_PATH, launch_data, u32(launch_size), ticks);
+  std::free(launch_data);
+  return ret;
 }
 
 bool ESDevice::LaunchPPCTitle(u64 title_id)
@@ -477,7 +483,12 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   // Otherwise, assume that the PPC title can now be launched directly.
   // Unlike IOS, we won't bother checking the title ID in the launch file. (It's not useful.)
   fs_core.DeleteFile(PID_KERNEL, PID_KERNEL, LAUNCH_FILE_PATH, &ticks);
-  WriteSystemFile(SPACE_FILE_PATH, std::vector<u8>(SPACE_FILE_SIZE), &ticks);
+  {
+    u8* const space = static_cast<u8*>(std::calloc(1, SPACE_FILE_SIZE));
+    if (space)
+      WriteSystemFile(SPACE_FILE_PATH, space, u32(SPACE_FILE_SIZE), &ticks);
+    std::free(space);
+  }
 
   m_core.m_title_context.Update(tmd, ticket, DiscIO::Platform::WiiWAD);
   INFO_LOG_FMT(IOS_ES, "LaunchPPCTitle: Title context changed: {:016x}", tmd.GetTitleId());
@@ -547,13 +558,24 @@ void ESDevice::DoState(PointerWrap& p)
 
 ESDevice::ContextArray::iterator ESDevice::FindActiveContext(s32 fd)
 {
-  return std::ranges::find_if(
-      m_contexts, [fd](const auto& context) { return context.ipc_fd == fd && context.active; });
+  auto it = m_contexts.begin();
+  for (; it != m_contexts.end(); ++it)
+  {
+    if (it->ipc_fd == fd && it->active)
+      break;
+  }
+  return it;
 }
 
 ESDevice::ContextArray::iterator ESDevice::FindInactiveContext()
 {
-  return std::ranges::find_if(m_contexts, [](const auto& context) { return !context.active; });
+  auto it = m_contexts.begin();
+  for (; it != m_contexts.end(); ++it)
+  {
+    if (!it->active)
+      break;
+  }
+  return it;
 }
 
 std::optional<IPCReply> ESDevice::Open(const OpenRequest& request)
@@ -826,7 +848,9 @@ static ReturnCode WriteTmdForDiVerify(FS::FileSystem* fs, const ES::TMDReader& t
     const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, internal_modes);
     if (!file)
       return FS::ConvertResult(file.error());
-    if (!file->Write(tmd.GetBytes().data(), tmd.GetBytes().size()))
+    size_t tmd_size;
+    const u8* const tmd_bytes = tmd.GetBytes(&tmd_size);
+    if (!file->Write(tmd_bytes, tmd_size))
       return ES_EIO;
   }
 
@@ -942,20 +966,25 @@ ReturnCode ESCore::SetUpStreamKey(const u32 uid, const u8* ticket_view, const ES
   // Unlike the other "get ticket from view" function, this returns a FS error, not ES_NO_TICKET.
   if (!installed_ticket.IsValid())
     return FS_ENOENT;
-  const std::span<const u8> ticket_bytes = installed_ticket.GetRawTicket(ticket_id);
-  if (ticket_bytes.empty())
+  size_t ticket_size;
+  const u8* const ticket_bytes = installed_ticket.GetRawTicket(ticket_id, &ticket_size);
+  if (!ticket_bytes)
     return ES_NO_TICKET;
 
-  std::vector<u8> cert_store;
-  ret = ReadCertStore(&cert_store);
+  u8* cert_store;
+  size_t cert_store_size;
+  ret = ReadCertStore(&cert_store, &cert_store_size);
   if (ret != IPC_SUCCESS)
     return ret;
 
-  ret = VerifyContainer(VerifyContainerType::TMD, VerifyMode::UpdateCertStore, tmd, cert_store);
-  if (ret != IPC_SUCCESS)
-    return ret;
-  ret = VerifyContainer(VerifyContainerType::Ticket, VerifyMode::UpdateCertStore, installed_ticket,
-                        cert_store);
+  ret = VerifyContainer(VerifyContainerType::TMD, VerifyMode::UpdateCertStore, tmd, cert_store,
+                        cert_store_size);
+  if (ret == IPC_SUCCESS)
+  {
+    ret = VerifyContainer(VerifyContainerType::Ticket, VerifyMode::UpdateCertStore,
+                          installed_ticket, cert_store, cert_store_size);
+  }
+  std::free(cert_store);
   if (ret != IPC_SUCCESS)
     return ret;
 
@@ -992,9 +1021,11 @@ IPCReply ESDevice::SetUpStreamKey(const Context& context, const IOCtlVRequest& r
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::vector<u8> tmd_bytes(request.in_vectors[1].size);
-  memory.CopyFromEmu(tmd_bytes.data(), request.in_vectors[1].address, tmd_bytes.size());
-  const ES::TMDReader tmd{std::move(tmd_bytes)};
+  // read into the reader straight from guest memory
+  ES::TMDReader tmd;
+  u8* const tmd_bytes = tmd.ResizeBytes(request.in_vectors[1].size);
+  if (tmd_bytes)
+    memory.CopyFromEmu(tmd_bytes, request.in_vectors[1].address, request.in_vectors[1].size);
 
   if (!tmd.IsValid())
     return IPCReply(ES_EINVAL);
@@ -1048,38 +1079,52 @@ bool ESCore::IsIssuerCorrect(VerifyContainerType type, const ES::CertReader& iss
 
 static const std::string CERT_STORE_PATH = "/sys/cert.sys";
 
-ReturnCode ESCore::ReadCertStore(std::vector<u8>* buffer) const
+ReturnCode ESCore::ReadCertStore(u8** bytes, size_t* size) const
 {
+  *bytes = nullptr;
+  *size = 0;
   const auto store_file =
       m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH, FS::Mode::Read);
   if (!store_file)
     return FS::ConvertResult(store_file.error());
 
-  buffer->resize(store_file->GetStatus()->size);
-  if (!store_file->Read(buffer->data(), buffer->size()))
+  const u32 store_size = store_file->GetStatus()->size;
+  u8* const store = static_cast<u8*>(std::malloc(store_size ? store_size : 1));
+  if (!store)
     return ES_SHORT_READ;
+  if (store_size && !store_file->Read(store, store_size))
+  {
+    std::free(store);
+    return ES_SHORT_READ;
+  }
+  *bytes = store;
+  *size = store_size;
   return IPC_SUCCESS;
 }
 
 ReturnCode ESCore::WriteNewCertToStore(const ES::CertReader& cert)
 {
   // Read the current store to determine if the new cert needs to be written.
-  std::vector<u8> current_store;
-  const ReturnCode ret = ReadCertStore(&current_store);
+  u8* current_store;
+  size_t current_store_size;
+  const ReturnCode ret = ReadCertStore(&current_store, &current_store_size);
   if (ret == IPC_SUCCESS)
   {
-    const std::map<std::string, ES::CertReader> certs = ES::ParseCertChain(current_store);
+    const std::map<std::string, ES::CertReader> certs =
+        ES::ParseCertChain(current_store, current_store_size);
+    std::free(current_store);
     // The cert is already present in the store. Nothing to do.
     if (certs.contains(cert.GetName()))
       return IPC_SUCCESS;
   }
 
   // Otherwise, write the new cert at the end of the store.
+  size_t cert_size;
   const auto store_file =
       m_ios.GetFS()->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH,
                                        {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read});
   if (!store_file || !store_file->Seek(0, FS::SeekMode::End) ||
-      !store_file->Write(cert.GetBytes().data(), cert.GetBytes().size()))
+      !store_file->Write(cert.GetBytes(&cert_size), cert_size))
   {
     return ES_EIO;
   }
@@ -1088,7 +1133,8 @@ ReturnCode ESCore::WriteNewCertToStore(const ES::CertReader& cert)
 
 ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
                                    const ES::SignedBlobReader& signed_blob,
-                                   std::span<const u8> cert_chain, u32* issuer_handle_out)
+                                   const u8* cert_chain, size_t cert_chain_size,
+                                   u32* issuer_handle_out)
 {
   if (!signed_blob.IsSignatureValid())
     return ES_EINVAL;
@@ -1101,7 +1147,8 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
     return ES_EINVAL;
 
   // Find the direct issuer and the CA certificates for the blob.
-  const std::map<std::string, ES::CertReader> certs = ES::ParseCertChain(cert_chain);
+  const std::map<std::string, ES::CertReader> certs =
+      ES::ParseCertChain(cert_chain, cert_chain_size);
   const auto issuer_cert_iterator = certs.find(parents[2]);
   const auto ca_cert_iterator = certs.find(parents[1]);
   if (issuer_cert_iterator == certs.end() || ca_cert_iterator == certs.end())
@@ -1150,8 +1197,10 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
   }
 
   // Verify the signature.
-  const std::span<const u8> signature = signed_blob.GetSignatureData();
-  ret = iosc.VerifyPublicKeySign(signed_blob.GetSha1(), issuer_handle, signature, PID_ES);
+  size_t signature_size;
+  const u8* const signature = signed_blob.GetSignatureData(&signature_size);
+  ret = iosc.VerifyPublicKeySign(signed_blob.GetSha1(), issuer_handle, signature, signature_size,
+                                 PID_ES);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG_FMT(IOS_ES, "VerifyContainer: IOSC_VerifyPublicKeySign failed with error {}",
@@ -1184,11 +1233,11 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
 }
 
 ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
-                                   const ES::CertReader& cert, std::span<const u8> cert_chain,
-                                   u32 certificate_iosc_handle)
+                                   const ES::CertReader& cert, const u8* cert_chain,
+                                   size_t cert_chain_size, u32 certificate_iosc_handle)
 {
   IOSC::Handle issuer_handle;
-  ReturnCode ret = VerifyContainer(type, mode, cert, cert_chain, &issuer_handle);
+  ReturnCode ret = VerifyContainer(type, mode, cert, cert_chain, cert_chain_size, &issuer_handle);
   // Import the signed blob.
   if (ret == IPC_SUCCESS)
   {

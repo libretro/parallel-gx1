@@ -132,16 +132,19 @@ IPCReply ESDevice::Sign(const IOCtlVRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-ReturnCode ESCore::VerifySign(const std::vector<u8>& hash, const std::vector<u8>& ecc_signature,
-                              const std::vector<u8>& certs_bytes)
+ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_signature,
+                              const u8* certs_bytes, size_t certs_size)
 {
-  const std::map<std::string, ES::CertReader> certs = ES::ParseCertChain(certs_bytes);
+  const std::map<std::string, ES::CertReader> certs = ES::ParseCertChain(certs_bytes, certs_size);
   if (certs.empty())
     return ES_EINVAL;
 
-  const auto ap_iterator = std::ranges::find_if(certs, [](const auto& entry) {
-    return entry.first.length() > 2 && entry.first.compare(0, 2, "AP") == 0;
-  });
+  auto ap_iterator = certs.begin();
+  for (; ap_iterator != certs.end(); ++ap_iterator)
+  {
+    if (ap_iterator->first.length() > 2 && ap_iterator->first.compare(0, 2, "AP") == 0)
+      break;
+  }
   if (ap_iterator == certs.end())
     return ES_UNKNOWN_ISSUER;
   const ES::CertReader& ap = ap_iterator->second;
@@ -161,7 +164,7 @@ ReturnCode ESCore::VerifySign(const std::vector<u8>& hash, const std::vector<u8>
   Common::ScopeGuard handle_guard{[&] { iosc.DeleteObject(ng_cert, PID_ES); }};
 
   ret = VerifyContainer(VerifyContainerType::Device, VerifyMode::DoNotUpdateCertStore, ng,
-                        certs_bytes, ng_cert);
+                        certs_bytes, certs_size, ng_cert);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG_FMT(IOS_ES, "VerifySign: VerifyContainer(ng) failed with error {}",
@@ -169,7 +172,9 @@ ReturnCode ESCore::VerifySign(const std::vector<u8>& hash, const std::vector<u8>
     return ret;
   }
 
-  ret = iosc.VerifyPublicKeySign(ap.GetSha1(), ng_cert, ap.GetSignatureData(), PID_ES);
+  size_t ap_signature_size;
+  const u8* const ap_signature = ap.GetSignatureData(&ap_signature_size);
+  ret = iosc.VerifyPublicKeySign(ap.GetSha1(), ng_cert, ap_signature, ap_signature_size, PID_ES);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG_FMT(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(ap) failed with error {}",
@@ -183,7 +188,8 @@ ReturnCode ESCore::VerifySign(const std::vector<u8>& hash, const std::vector<u8>
     return ret;
   Common::ScopeGuard handle2_guard{[&] { iosc.DeleteObject(ap_cert, PID_ES); }};
 
-  ret = iosc.ImportPublicKey(ap_cert, ap.GetPublicKey().data(), nullptr, PID_ES);
+  size_t ap_key_size;
+  ret = iosc.ImportPublicKey(ap_cert, ap.GetPublicKey(&ap_key_size), nullptr, PID_ES);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG_FMT(IOS_ES, "VerifySign: IOSC_ImportPublicKey(ap) failed with error {}",
@@ -191,8 +197,9 @@ ReturnCode ESCore::VerifySign(const std::vector<u8>& hash, const std::vector<u8>
     return ret;
   }
 
-  const auto hash_digest = Common::SHA1::CalculateDigest(hash);
-  ret = iosc.VerifyPublicKeySign(hash_digest, ap_cert, ecc_signature, PID_ES);
+  const auto hash_digest = Common::SHA1::CalculateDigest(hash, hash_size);
+  ret = iosc.VerifyPublicKeySign(hash_digest, ap_cert, ecc_signature,
+                                 sizeof(Common::ec::Signature), PID_ES);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG_FMT(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(data) failed with error {}",
@@ -214,15 +221,20 @@ IPCReply ESDevice::VerifySign(const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::vector<u8> hash(request.in_vectors[0].size);
-  memory.CopyFromEmu(hash.data(), request.in_vectors[0].address, hash.size());
+  // all three read where they lie in guest memory
+  const u8* const hash =
+      memory.GetPointerForRange(request.in_vectors[0].address, request.in_vectors[0].size);
+  const u8* const ecc_signature =
+      memory.GetPointerForRange(request.in_vectors[1].address, request.in_vectors[1].size);
+  const u8* const certs =
+      memory.GetPointerForRange(request.in_vectors[2].address, request.in_vectors[2].size);
+  if ((!hash && request.in_vectors[0].size) || !ecc_signature ||
+      (!certs && request.in_vectors[2].size))
+  {
+    return IPCReply(ES_EINVAL);
+  }
 
-  std::vector<u8> ecc_signature(request.in_vectors[1].size);
-  memory.CopyFromEmu(ecc_signature.data(), request.in_vectors[1].address, ecc_signature.size());
-
-  std::vector<u8> certs(request.in_vectors[2].size);
-  memory.CopyFromEmu(certs.data(), request.in_vectors[2].address, certs.size());
-
-  return IPCReply(m_core.VerifySign(hash, ecc_signature, certs));
+  return IPCReply(m_core.VerifySign(hash, request.in_vectors[0].size, ecc_signature, certs,
+                                    request.in_vectors[2].size));
 }
 }  // namespace IOS::HLE

@@ -316,7 +316,9 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
     }
 
     File::IOFile tmd_file(WFS::NativePath(tmd_path), "wb");
-    tmd_file.WriteBytes(m_tmd.GetBytes().data(), m_tmd.GetBytes().size());
+    size_t tmd_size;
+    const u8* const tmd_bytes = m_tmd.GetBytes(&tmd_size);
+    tmd_file.WriteBytes(tmd_bytes, tmd_size);
     break;
   }
 

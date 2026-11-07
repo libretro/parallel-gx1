@@ -3,7 +3,6 @@
 
 #include "Core/IOS/IOSC.h"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -327,7 +326,7 @@ ReturnCode IOSC::ComputeSharedKey(Handle dest_handle, Handle private_handle, Han
   const auto sha1 = Common::SHA1::CalculateDigest(shared_secret.data(), shared_secret.size() / 2);
 
   dest_entry->data.resize(AES128_KEY_SIZE);
-  std::copy_n(sha1.cbegin(), AES128_KEY_SIZE, dest_entry->data.begin());
+  std::memcpy(dest_entry->data.data(), sha1.data(), AES128_KEY_SIZE);
   return IPC_SUCCESS;
 }
 
@@ -372,7 +371,7 @@ ReturnCode IOSC::Decrypt(Handle key_handle, u8* iv, const u8* input, size_t size
 }
 
 ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle signer_handle,
-                                     std::span<const u8> signature, u32 pid) const
+                                     const u8* signature, size_t signature_size, u32 pid) const
 {
   if (!HasOwnership(signer_handle, pid))
     return IOSC_EACCES;
@@ -392,7 +391,7 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
   {
     const size_t expected_key_size = entry->subtype == ObjectSubType::RSA2048 ? 0x100 : 0x200;
     ASSERT(entry->data.size() == expected_key_size);
-    ASSERT(signature.size() == expected_key_size);
+    ASSERT(signature_size == expected_key_size);
 
     mbedtls_rsa_context rsa;
     mbedtls_rsa_init(&rsa, MBEDTLS_RSA_PKCS_V15, 0);
@@ -403,14 +402,16 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
     rsa.len = entry->data.size();
 
     int ret = mbedtls_rsa_pkcs1_verify(&rsa, nullptr, nullptr, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA1,
-                                       0, sha1.data(), signature.data());
+                                       0, sha1.data(), signature);
     if (ret != 0 && m_console_type == ConsoleType::RVT)
     {
       // Some dev signatures do not have proper PKCS#1 padding. Just powmod and check it ends with
       // digest.
-      std::vector<u8> result(signature.size());
-      if (mbedtls_rsa_public(&rsa, signature.data(), result.data()) == 0 &&
-          memcmp(&result[result.size() - sha1.size()], sha1.data(), sha1.size()) == 0)
+      // at most a 4096-bit key: the result fits on the stack
+      u8 result[0x200];
+      if (signature_size <= sizeof(result) &&
+          mbedtls_rsa_public(&rsa, signature, result) == 0 &&
+          memcmp(&result[signature_size - sha1.size()], sha1.data(), sha1.size()) == 0)
       {
         ret = 0;
       }
@@ -428,7 +429,7 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
   {
     ASSERT(entry->data.size() == sizeof(CertECC::public_key));
 
-    const bool ok = Common::ec::VerifySignature(entry->data.data(), signature.data(), sha1.data());
+    const bool ok = Common::ec::VerifySignature(entry->data.data(), signature, sha1.data());
     return ok ? IPC_SUCCESS : IOSC_FAIL_CHECKVALUE;
   }
   default:
@@ -453,14 +454,19 @@ ReturnCode IOSC::ImportCertificate(const ES::CertReader& cert, Handle signer_han
   if (!cert.IsValid())
     return IOSC_INVALID_FORMAT;
 
-  const std::span<const u8> signature = cert.GetSignatureData();
-  if (VerifyPublicKeySign(cert.GetSha1(), signer_handle, signature, pid) != IPC_SUCCESS)
+  size_t signature_size;
+  const u8* const signature = cert.GetSignatureData(&signature_size);
+  if (VerifyPublicKeySign(cert.GetSha1(), signer_handle, signature, signature_size, pid) !=
+      IPC_SUCCESS)
+  {
     return IOSC_FAIL_CHECKVALUE;
+  }
 
-  const std::span<const u8> public_key = cert.GetPublicKey();
+  size_t public_key_size;
+  const u8* const public_key = cert.GetPublicKey(&public_key_size);
   const bool is_rsa = cert.GetSignatureType() != SignatureType::ECC;
-  const u8* exponent = is_rsa ? (public_key.data() + public_key.size() - 4) : nullptr;
-  return ImportPublicKey(dest_handle, public_key.data(), exponent, pid);
+  const u8* exponent = is_rsa ? (public_key + public_key_size - 4) : nullptr;
+  return ImportPublicKey(dest_handle, public_key, exponent, pid);
 }
 
 ReturnCode IOSC::GetOwnership(Handle handle, u32* owner) const
@@ -551,7 +557,7 @@ void IOSC::Sign(u8* sig_out, u8* ap_cert_out, u64 title_id, const u8* data, u32 
   // Sign the data.
   const auto data_digest = Common::SHA1::CalculateDigest(data, data_size);
   const auto signature = Common::ec::Sign(ap_priv.data(), data_digest.data());
-  std::ranges::copy(signature, sig_out);
+  std::memcpy(sig_out, signature.data(), signature.size());
 }
 
 void IOSC::LoadDefaultEntries()
@@ -669,7 +675,13 @@ IOSC::KeyEntry::KeyEntry(ObjectType type_, ObjectSubType subtype_, std::vector<u
 
 IOSC::KeyEntries::iterator IOSC::FindFreeEntry()
 {
-  return std::ranges::find_if(m_key_entries, [](const auto& entry) { return !entry.in_use; });
+  auto it = m_key_entries.begin();
+  for (; it != m_key_entries.end(); ++it)
+  {
+    if (!it->in_use)
+      break;
+  }
+  return it;
 }
 
 IOSC::KeyEntry* IOSC::FindEntry(Handle handle)

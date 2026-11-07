@@ -3,7 +3,6 @@
 
 #include "Core/IOS/ES/ES.h"
 
-#include <algorithm>
 #include <array>
 #include <string>
 #include <unordered_set>
@@ -82,7 +81,12 @@ static bool IsValidPartOfTitleID(const std::string& string)
 {
   if (string.length() != 8)
     return false;
-  return std::ranges::all_of(string, Common::IsXDigit);
+  for (const char c : string)
+  {
+    if (!Common::IsXDigit(c))
+      return false;
+  }
+  return true;
 }
 
 static std::vector<u64> GetTitlesInTitleOrImport(FS::FileSystem* fs, const std::string& titles_dir)
@@ -191,29 +195,45 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
 
   std::vector<ES::Content> stored_contents;
 
-  std::copy_if(contents.begin(), contents.end(), std::back_inserter(stored_contents),
-               [this, &tmd, check_content_hashes](const ES::Content& content) {
-                 const auto fs = m_ios.GetFS();
+  const auto fs = m_ios.GetFS();
+  for (const ES::Content& content : contents)
+  {
+    const std::string path = GetContentPath(tmd.GetTitleId(), content);
+    if (path.empty())
+      continue;
 
-                 const std::string path = GetContentPath(tmd.GetTitleId(), content);
-                 if (path.empty())
-                   return false;
+    // Check whether the content file exists.
+    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
+    if (!file.has_value())
+      continue;
 
-                 // Check whether the content file exists.
-                 const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
-                 if (!file.has_value())
-                   return false;
+    // If content hash checks are disabled, all we have to do is check for existence.
+    if (check_content_hashes == CheckContentHashes::No)
+    {
+      stored_contents.push_back(content);
+      continue;
+    }
 
-                 // If content hash checks are disabled, all we have to do is check for existence.
-                 if (check_content_hashes == CheckContentHashes::No)
-                   return true;
-
-                 // Otherwise, check whether the installed content SHA1 matches the expected hash.
-                 std::vector<u8> content_data(file->GetStatus()->size);
-                 if (!file->Read(content_data.data(), content_data.size()))
-                   return false;
-                 return Common::SHA1::CalculateDigest(content_data) == content.sha1;
-               });
+    // Otherwise, check whether the installed content SHA1 matches the expected hash, hashing
+    // the content in chunks rather than reading it whole.
+    std::unique_ptr<Common::SHA1::Context> sha1 = Common::SHA1::CreateContext();
+    u8 chunk[2048];
+    u32 left = file->GetStatus()->size;
+    bool ok = true;
+    while (left)
+    {
+      const u32 n = left < sizeof(chunk) ? left : u32(sizeof(chunk));
+      if (!file->Read(chunk, n))
+      {
+        ok = false;
+        break;
+      }
+      sha1->Update(chunk, n);
+      left -= n;
+    }
+    if (ok && sha1->Finish() == content.sha1)
+      stored_contents.push_back(content);
+  }
 
   return stored_contents;
 }
@@ -221,10 +241,16 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
 u32 ESCore::GetSharedContentsCount() const
 {
   const auto entries = m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, "/shared1");
-  return static_cast<u32>(std::ranges::count_if(*entries, [this](const std::string& entry) {
-    return !m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, "/shared1/" + entry) &&
-           entry.size() == 12 && entry.compare(8, 4, ".app") == 0;
-  }));
+  u32 count = 0;
+  for (const std::string& entry : *entries)
+  {
+    if (!m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, "/shared1/" + entry) &&
+        entry.size() == 12 && entry.compare(8, 4, ".app") == 0)
+    {
+      ++count;
+    }
+  }
+  return count;
 }
 
 std::vector<std::array<u8, 20>> ESCore::GetSharedContents() const
@@ -361,7 +387,9 @@ bool ESCore::WriteImportTMD(const ES::TMDReader& tmd)
   const std::string tmd_path = "/tmp/title.tmd";
   {
     const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, tmd_path, content_dir_modes);
-    if (!file || !file->Write(tmd.GetBytes().data(), tmd.GetBytes().size()))
+    size_t tmd_size;
+    const u8* const tmd_bytes = tmd.GetBytes(&tmd_size);
+    if (!file || !file->Write(tmd_bytes, tmd_size))
       return false;
   }
 
@@ -405,7 +433,7 @@ std::string ESCore::GetContentPath(const u64 title_id, const ES::Content& conten
   return fmt::format("{}/{:08x}.app", Common::GetTitleContentPath(title_id), content.id);
 }
 
-s32 ESDevice::WriteSystemFile(const std::string& path, std::span<const u8> data, Ticks ticks)
+s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size, Ticks ticks)
 {
   auto& fs = GetEmulationKernel().GetFSCore();
   const std::string tmp_path = "/tmp/" + PathToFileName(path);
@@ -426,7 +454,7 @@ s32 ESDevice::WriteSystemFile(const std::string& path, std::span<const u8> data,
     return fd.Get();
   }
 
-  if (fs.Write(fd.Get(), data.data(), u32(data.size()), {}, ticks) != s32(data.size()))
+  if (fs.Write(fd.Get(), data, size, {}, ticks) != s32(size))
   {
     ERROR_LOG_FMT(IOS_ES, "Failed to write to temporary file {}", tmp_path);
     return ES_EIO;

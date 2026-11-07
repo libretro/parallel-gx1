@@ -3,7 +3,6 @@
 
 #include "Core/IOS/ES/ES.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <utility>
 #include <vector>
@@ -35,8 +34,9 @@ static ReturnCode WriteTicket(FS::FileSystem* fs, const ES::TicketReader& ticket
   if (!file)
     return FS::ConvertResult(file.error());
 
-  const std::span<const u8> raw_ticket = ticket.GetBytes();
-  return file->Write(raw_ticket.data(), raw_ticket.size()) ? IPC_SUCCESS : ES_EIO;
+  size_t raw_ticket_size;
+  const u8* const raw_ticket = ticket.GetBytes(&raw_ticket_size);
+  return file->Write(raw_ticket, raw_ticket_size) ? IPC_SUCCESS : ES_EIO;
 }
 
 void ESCore::TitleImportExportContext::DoState(PointerWrap& p)
@@ -50,29 +50,25 @@ void ESCore::TitleImportExportContext::DoState(PointerWrap& p)
   p.Do(content.buffer);
 }
 
-// An IPC input vector's bytes, where they lie in guest memory; an empty one
-// is empty wherever it points.
+// An IPC input vector's bytes, lent where they lie in guest memory; an empty
+// one is empty wherever it points.
 static bool GuestBytes(const Memory::MemoryManager& memory, const IOCtlVRequest::IOVector& vector,
-                       std::span<const u8>* out)
+                       const u8** out)
 {
-  const u8* bytes;
   if (!vector.size)
   {
-    *out = {};
+    *out = nullptr;
     return true;
   }
-  bytes = memory.GetPointerForRange(vector.address, vector.size);
-  if (!bytes)
-    return false;
-  *out = {bytes, vector.size};
-  return true;
+  *out = memory.GetPointerForRange(vector.address, vector.size);
+  return *out != nullptr;
 }
 
-ReturnCode ESCore::ImportTicket(std::span<const u8> ticket_bytes,
-                                std::span<const u8> cert_chain, TicketImportType type,
+ReturnCode ESCore::ImportTicket(const u8* ticket_bytes, size_t ticket_size, const u8* cert_chain,
+                                size_t cert_chain_size, TicketImportType type,
                                 VerifySignature verify_signature)
 {
-  ES::TicketReader ticket{ticket_bytes};
+  ES::TicketReader ticket{ticket_bytes, ticket_size};
   if (!ticket.IsValid())
     return ES_EINVAL;
 
@@ -97,8 +93,9 @@ ReturnCode ESCore::ImportTicket(std::span<const u8> ticket_bytes,
 
   if (verify_signature != VerifySignature::No)
   {
-    const ReturnCode verify_ret = VerifyContainer(VerifyContainerType::Ticket,
-                                                  VerifyMode::UpdateCertStore, ticket, cert_chain);
+    const ReturnCode verify_ret =
+        VerifyContainer(VerifyContainerType::Ticket, VerifyMode::UpdateCertStore, ticket,
+                        cert_chain, cert_chain_size);
     if (verify_ret != IPC_SUCCESS)
       return verify_ret;
   }
@@ -119,14 +116,15 @@ IPCReply ESDevice::ImportTicket(const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::span<const u8> bytes;
-  std::span<const u8> cert_chain;
+  const u8* bytes;
+  const u8* cert_chain;
   if (!GuestBytes(memory, request.in_vectors[0], &bytes) ||
       !GuestBytes(memory, request.in_vectors[1], &cert_chain))
   {
     return IPCReply(ES_EINVAL);
   }
-  return IPCReply(m_core.ImportTicket(bytes, cert_chain));
+  return IPCReply(m_core.ImportTicket(bytes, request.in_vectors[0].size, cert_chain,
+                                      request.in_vectors[1].size));
 }
 
 constexpr std::array<u8, 16> NULL_KEY{};
@@ -161,7 +159,7 @@ static void ResetTitleImportContext(ESCore::Context* context, IOSC& iosc)
   context->title_import_export = {};
 }
 
-ReturnCode ESCore::ImportTmd(Context& context, std::span<const u8> tmd_bytes,
+ReturnCode ESCore::ImportTmd(Context& context, const u8* tmd_bytes, size_t tmd_size,
                              u64 caller_title_id, u32 caller_title_flags)
 {
   INFO_LOG_FMT(IOS_ES, "ImportTmd");
@@ -169,17 +167,19 @@ ReturnCode ESCore::ImportTmd(Context& context, std::span<const u8> tmd_bytes,
   // Ioctlv 0x2b writes the TMD to /tmp/title.tmd (for imports) and doesn't seem to write it
   // to either /import or /title. So here we simply have to set the import TMD.
   ResetTitleImportContext(&context, m_ios.GetIOSC());
-  context.title_import_export.tmd.SetBytes(tmd_bytes);
+  context.title_import_export.tmd.SetBytes(tmd_bytes, tmd_size);
   if (!context.title_import_export.tmd.IsValid())
     return ES_EINVAL;
 
-  std::vector<u8> cert_store;
-  ReturnCode ret = ReadCertStore(&cert_store);
+  u8* cert_store;
+  size_t cert_store_size;
+  ReturnCode ret = ReadCertStore(&cert_store, &cert_store_size);
   if (ret != IPC_SUCCESS)
     return ret;
 
   ret = VerifyContainer(VerifyContainerType::TMD, VerifyMode::UpdateCertStore,
-                        context.title_import_export.tmd, cert_store);
+                        context.title_import_export.tmd, cert_store, cert_store_size);
+  std::free(cert_store);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG_FMT(IOS_ES, "ImportTmd: VerifyContainer failed with error {}",
@@ -217,15 +217,15 @@ IPCReply ESDevice::ImportTmd(Context& context, const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::span<const u8> tmd;
+  const u8* tmd;
   if (!GuestBytes(memory, request.in_vectors[0], &tmd))
     return IPCReply(ES_EINVAL);
-  return IPCReply(m_core.ImportTmd(context, tmd, m_core.m_title_context.tmd.GetTitleId(),
+  return IPCReply(m_core.ImportTmd(context, tmd, request.in_vectors[0].size,
+                                   m_core.m_title_context.tmd.GetTitleId(),
                                    m_core.m_title_context.tmd.GetTitleFlags()));
 }
 
-static ReturnCode InitTitleImportKey(std::span<const u8> ticket_bytes, IOSC& iosc,
-                                     IOSC::Handle* handle)
+static ReturnCode InitTitleImportKey(const u8* ticket_bytes, IOSC& iosc, IOSC::Handle* handle)
 {
   ReturnCode ret =
       iosc.CreateObject(handle, IOSC::TYPE_SECRET_KEY, IOSC::ObjectSubType::AES128, PID_ES);
@@ -233,7 +233,7 @@ static ReturnCode InitTitleImportKey(std::span<const u8> ticket_bytes, IOSC& ios
     return ret;
 
   std::array<u8, 16> iv{};
-  std::copy_n(&ticket_bytes[offsetof(ES::Ticket, title_id)], sizeof(u64), iv.begin());
+  std::memcpy(iv.data(), ticket_bytes + offsetof(ES::Ticket, title_id), sizeof(u64));
   const u8 index = ticket_bytes[offsetof(ES::Ticket, common_key_index)];
   if (index >= IOSC::COMMON_KEY_HANDLES.size())
     return ES_INVALID_TICKET;
@@ -242,16 +242,16 @@ static ReturnCode InitTitleImportKey(std::span<const u8> ticket_bytes, IOSC& ios
                               &ticket_bytes[offsetof(ES::Ticket, title_key)], PID_ES);
 }
 
-ReturnCode ESCore::ImportTitleInit(Context& context, std::span<const u8> tmd_bytes,
-                                   std::span<const u8> cert_chain,
+ReturnCode ESCore::ImportTitleInit(Context& context, const u8* tmd_bytes, size_t tmd_size,
+                                   const u8* cert_chain, size_t cert_chain_size,
                                    VerifySignature verify_signature)
 {
   INFO_LOG_FMT(IOS_ES, "ImportTitleInit");
   ResetTitleImportContext(&context, m_ios.GetIOSC());
-  context.title_import_export.tmd.SetBytes(tmd_bytes);
+  context.title_import_export.tmd.SetBytes(tmd_bytes, tmd_size);
   if (!context.title_import_export.tmd.IsValid())
   {
-    ERROR_LOG_FMT(IOS_ES, "Invalid TMD while adding title (size = {})", tmd_bytes.size());
+    ERROR_LOG_FMT(IOS_ES, "Invalid TMD while adding title (size = {})", tmd_size);
     return ES_EINVAL;
   }
 
@@ -263,7 +263,7 @@ ReturnCode ESCore::ImportTitleInit(Context& context, std::span<const u8> tmd_byt
   if (verify_signature != VerifySignature::No)
   {
     ret = VerifyContainer(VerifyContainerType::TMD, VerifyMode::UpdateCertStore,
-                          context.title_import_export.tmd, cert_chain);
+                          context.title_import_export.tmd, cert_chain, cert_chain_size);
     if (ret != IPC_SUCCESS)
       return ret;
   }
@@ -274,18 +274,21 @@ ReturnCode ESCore::ImportTitleInit(Context& context, std::span<const u8> tmd_byt
 
   if (verify_signature != VerifySignature::No)
   {
-    std::vector<u8> cert_store;
-    ret = ReadCertStore(&cert_store);
+    u8* cert_store;
+    size_t cert_store_size;
+    ret = ReadCertStore(&cert_store, &cert_store_size);
     if (ret != IPC_SUCCESS)
       return ret;
 
     ret = VerifyContainer(VerifyContainerType::Ticket, VerifyMode::DoNotUpdateCertStore, ticket,
-                          cert_store);
+                          cert_store, cert_store_size);
+    std::free(cert_store);
     if (ret != IPC_SUCCESS)
       return ret;
   }
 
-  ret = InitTitleImportKey(ticket.GetBytes(), m_ios.GetIOSC(),
+  size_t ticket_size;
+  ret = InitTitleImportKey(ticket.GetBytes(&ticket_size), m_ios.GetIOSC(),
                            &context.title_import_export.key_handle);
   if (ret != IPC_SUCCESS)
     return ret;
@@ -308,14 +311,15 @@ IPCReply ESDevice::ImportTitleInit(Context& context, const IOCtlVRequest& reques
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::span<const u8> tmd;
-  std::span<const u8> certs;
+  const u8* tmd;
+  const u8* certs;
   if (!GuestBytes(memory, request.in_vectors[0], &tmd) ||
       !GuestBytes(memory, request.in_vectors[1], &certs))
   {
     return IPCReply(ES_EINVAL);
   }
-  return IPCReply(m_core.ImportTitleInit(context, tmd, certs));
+  return IPCReply(m_core.ImportTitleInit(context, tmd, request.in_vectors[0].size, certs,
+                                         request.in_vectors[1].size));
 }
 
 ReturnCode ESCore::ImportContentBegin(Context& context, u64 title_id, u32 content_id)
@@ -397,9 +401,9 @@ IPCReply ESDevice::ImportContentData(Context& context, const IOCtlVRequest& requ
   return IPCReply(m_core.ImportContentData(context, content_fd, data_start, data_size));
 }
 
-static bool CheckIfContentHashMatches(std::span<const u8> content, const ES::Content& info)
+static bool CheckIfContentHashMatches(const u8* content, const ES::Content& info)
 {
-  return Common::SHA1::CalculateDigest(content.data(), info.size) == info.sha1;
+  return Common::SHA1::CalculateDigest(content, info.size) == info.sha1;
 }
 
 static std::string GetImportContentPath(u64 title_id, u32 content_id)
@@ -414,11 +418,11 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
   if (!context.title_import_export.valid || !context.title_import_export.content.valid)
     return ES_EINVAL;
 
-  std::vector<u8> decrypted_data(context.title_import_export.content.buffer.size());
+  // decrypted in place: the encrypted bytes are not needed after
+  u8* const decrypted_data = context.title_import_export.content.buffer.data();
   const ReturnCode decrypt_ret = m_ios.GetIOSC().Decrypt(
       context.title_import_export.key_handle, context.title_import_export.content.iv.data(),
-      context.title_import_export.content.buffer.data(),
-      context.title_import_export.content.buffer.size(), decrypted_data.data(), PID_ES);
+      decrypted_data, context.title_import_export.content.buffer.size(), decrypted_data, PID_ES);
   if (decrypt_ret != IPC_SUCCESS)
     return decrypt_ret;
 
@@ -451,7 +455,7 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
   {
     constexpr FS::Modes content_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None};
     const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, content_modes);
-    if (!file || !file->Write(decrypted_data.data(), content_info.size))
+    if (!file || !file->Write(decrypted_data, content_info.size))
     {
       ERROR_LOG_FMT(IOS_ES, "ImportContentEnd: Failed to write to {}", temp_path);
       return ES_EIO;
@@ -487,18 +491,25 @@ static bool HasAllRequiredContents(Kernel& ios, const ES::TMDReader& tmd)
   const u64 title_id = tmd.GetTitleId();
   const std::vector<ES::Content> contents = tmd.GetContents();
   const ES::SharedContentMap shared_content_map{ios.GetFSCore()};
-  return std::ranges::all_of(contents, [&](const ES::Content& content) {
+  for (const ES::Content& content : contents)
+  {
     if (content.IsOptional())
-      return true;
+      continue;
 
     if (content.IsShared())
-      return shared_content_map.GetFilenameFromSHA1(content.sha1).has_value();
+    {
+      if (!shared_content_map.GetFilenameFromSHA1(content.sha1).has_value())
+        return false;
+      continue;
+    }
 
     // Note: the import hasn't been finalised yet, so the whole title directory
     // is still in /import, not /title.
     const std::string path = GetImportContentPath(title_id, content.id);
-    return ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path).has_value();
-  });
+    if (!ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path).has_value())
+      return false;
+  }
+  return true;
 }
 
 ReturnCode ESCore::ImportTitleDone(Context& context)
@@ -547,7 +558,9 @@ IPCReply ESDevice::ImportTitleDone(Context& context, const IOCtlVRequest& reques
 ReturnCode ESCore::ImportTitleCancel(Context& context)
 {
   // The TMD buffer can exist without a valid title import context.
-  if (context.title_import_export.tmd.GetBytes().empty() ||
+  size_t tmd_size;
+  context.title_import_export.tmd.GetBytes(&tmd_size);
+  if (!tmd_size ||
       context.title_import_export.content.valid)
     return ES_EINVAL;
 
@@ -616,14 +629,15 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
   const u64 ticket_id = Common::swap64(ticket_view + offsetof(ES::TicketView, ticket_id));
   ticket.DeleteTicket(ticket_id);
 
-  const std::span<const u8> new_ticket = ticket.GetBytes();
+  size_t new_ticket_size;
+  const u8* const new_ticket = ticket.GetBytes(&new_ticket_size);
 
-  if (!new_ticket.empty())
+  if (new_ticket_size)
   {
     ASSERT(ticket.IsValid());
     ASSERT(ticket.IsV1Ticket() == was_v1_ticket);
     const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, ticket_path, FS::Mode::ReadWrite);
-    if (!file || !file->Write(new_ticket.data(), new_ticket.size()))
+    if (!file || !file->Write(new_ticket, new_ticket_size))
       return ES_EIO;
   }
   else
@@ -737,11 +751,12 @@ ReturnCode ESCore::ExportTitleInit(Context& context, u64 title_id, u8* tmd_bytes
   if (ret != IPC_SUCCESS)
     return ret;
 
-  const std::span<const u8> raw_tmd = context.title_import_export.tmd.GetBytes();
-  if (tmd_size != raw_tmd.size())
+  size_t raw_tmd_size;
+  const u8* const raw_tmd = context.title_import_export.tmd.GetBytes(&raw_tmd_size);
+  if (tmd_size != raw_tmd_size)
     return ES_EINVAL;
 
-  std::copy_n(raw_tmd.cbegin(), raw_tmd.size(), tmd_bytes);
+  std::memcpy(tmd_bytes, raw_tmd, raw_tmd_size);
 
   context.title_import_export.valid = true;
   return IPC_SUCCESS;
@@ -820,8 +835,8 @@ ReturnCode ESCore::ExportContentData(Context& context, u32 content_fd, u8* data,
     return ES_EINVAL;
   }
 
-  std::vector<u8> buffer(data_size);
-  const s32 read_size = ReadContent(content_fd, buffer.data(), static_cast<u32>(buffer.size()), 0);
+  // Read into the guest's buffer and encrypted there, in place.
+  const s32 read_size = ReadContent(content_fd, data, data_size, 0);
   if (read_size < 0)
   {
     CloseContent(content_fd, 0);
@@ -830,18 +845,13 @@ ReturnCode ESCore::ExportContentData(Context& context, u32 content_fd, u8* data,
   }
 
   // IOS aligns the buffer to 32 bytes. Since we also need to align it to 16 bytes,
-  // let's just follow IOS here.
-  buffer.resize(Common::AlignUp(buffer.size(), 32));
+  // let's just follow IOS here; what was not read, and the padding, are zeroes.
+  const u32 aligned_size = Common::AlignUp(data_size, 32u);
+  std::memset(data + read_size, 0, aligned_size - static_cast<u32>(read_size));
 
-  std::vector<u8> output(buffer.size());
-  const ReturnCode encrypt_ret = m_ios.GetIOSC().Encrypt(
-      context.title_import_export.key_handle, context.title_import_export.content.iv.data(),
-      buffer.data(), buffer.size(), output.data(), PID_ES);
-  if (encrypt_ret != IPC_SUCCESS)
-    return encrypt_ret;
-
-  std::ranges::copy(output, data);
-  return IPC_SUCCESS;
+  return m_ios.GetIOSC().Encrypt(context.title_import_export.key_handle,
+                                 context.title_import_export.content.iv.data(), data, aligned_size,
+                                 data, PID_ES);
 }
 
 IPCReply ESDevice::ExportContentData(Context& context, const IOCtlVRequest& request)
@@ -901,18 +911,31 @@ ReturnCode ESCore::DeleteSharedContent(const std::array<u8, 20>& sha1) const
 
   // Check whether the shared content is used by a system title.
   const std::vector<u64> titles = GetInstalledTitles();
-  const bool is_used_by_system_title = std::ranges::any_of(titles, [&](u64 id) {
+  bool is_used_by_system_title = false;
+  for (const u64 id : titles)
+  {
     if (!ES::IsTitleType(id, ES::TitleType::System))
-      return false;
+      continue;
 
     const auto tmd = FindInstalledTMD(id);
     if (!tmd.IsValid())
-      return true;
+    {
+      is_used_by_system_title = true;
+      break;
+    }
 
     const auto contents = tmd.GetContents();
-    return std::ranges::any_of(contents,
-                               [&sha1](const auto& content) { return content.sha1 == sha1; });
-  });
+    for (const auto& content : contents)
+    {
+      if (content.sha1 == sha1)
+      {
+        is_used_by_system_title = true;
+        break;
+      }
+    }
+    if (is_used_by_system_title)
+      break;
+  }
 
   // Any shared content used by a system title cannot be deleted.
   if (is_used_by_system_title)

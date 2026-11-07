@@ -727,8 +727,9 @@ std::optional<IPCReply> DIDevice::IOCtlV(const IOCtlVRequest& request)
     // Read TMD to the buffer
     auto& dvd_thread = system.GetDVDThread();
     const ES::TMDReader tmd = dvd_thread.GetTMD(m_current_partition);
-    const std::span<const u8> raw_tmd = tmd.GetBytes();
-    memory.CopyToEmu(request.io_vectors[0].address, raw_tmd.data(), raw_tmd.size());
+    size_t raw_tmd_size;
+    const u8* const raw_tmd = tmd.GetBytes(&raw_tmd_size);
+    memory.CopyToEmu(request.io_vectors[0].address, raw_tmd, raw_tmd_size);
 
     ReturnCode es_result = GetEmulationKernel().GetESDevice()->DIVerify(
         tmd, dvd_thread.GetTicket(m_current_partition));

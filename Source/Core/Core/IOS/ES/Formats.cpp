@@ -3,7 +3,6 @@
 
 #include "Core/IOS/ES/Formats.h"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdlib>
@@ -75,14 +74,14 @@ bool operator==(const Content& lhs, const Content& rhs)
   return fields(lhs) == fields(rhs);
 }
 
-SignedBlobReader::SignedBlobReader(std::span<const u8> bytes)
+SignedBlobReader::SignedBlobReader(const u8* bytes, size_t size)
 {
-  SetBytes(bytes);
+  SetBytes(bytes, size);
 }
 
 SignedBlobReader::SignedBlobReader(const SignedBlobReader& other)
 {
-  SetBytes(other.GetBytes());
+  SetBytes(other.m_bytes, other.m_size);
 }
 
 SignedBlobReader::SignedBlobReader(SignedBlobReader&& other) noexcept
@@ -95,7 +94,7 @@ SignedBlobReader::SignedBlobReader(SignedBlobReader&& other) noexcept
 SignedBlobReader& SignedBlobReader::operator=(const SignedBlobReader& other)
 {
   if (this != &other)
-    SetBytes(other.GetBytes());
+    SetBytes(other.m_bytes, other.m_size);
   return *this;
 }
 
@@ -117,11 +116,11 @@ SignedBlobReader::~SignedBlobReader()
   std::free(m_bytes);
 }
 
-void SignedBlobReader::SetBytes(std::span<const u8> bytes)
+void SignedBlobReader::SetBytes(const u8* bytes, size_t size)
 {
-  u8* const dst = ResizeBytes(bytes.size());
-  if (dst && !bytes.empty())
-    std::memmove(dst, bytes.data(), bytes.size());
+  u8* const dst = ResizeBytes(size);
+  if (dst)
+    std::memmove(dst, bytes, size);
 }
 
 u8* SignedBlobReader::ResizeBytes(size_t size)
@@ -189,24 +188,22 @@ SignatureType SignedBlobReader::GetSignatureType() const
   return static_cast<SignatureType>(Common::swap32(m_bytes));
 }
 
-template <typename T>
-static std::span<const u8> DetailGetSignatureData(const u8* begin)
-{
-  return {begin + offsetof(T, sig), sizeof(T::sig)};
-}
-
-std::span<const u8> SignedBlobReader::GetSignatureData() const
+const u8* SignedBlobReader::GetSignatureData(size_t* size) const
 {
   switch (GetSignatureType())
   {
   case SignatureType::RSA4096:
-    return DetailGetSignatureData<SignatureRSA4096>(m_bytes);
+    *size = sizeof(SignatureRSA4096::sig);
+    return m_bytes + offsetof(SignatureRSA4096, sig);
   case SignatureType::RSA2048:
-    return DetailGetSignatureData<SignatureRSA2048>(m_bytes);
+    *size = sizeof(SignatureRSA2048::sig);
+    return m_bytes + offsetof(SignatureRSA2048, sig);
   case SignatureType::ECC:
-    return DetailGetSignatureData<SignatureECC>(m_bytes);
+    *size = sizeof(SignatureECC::sig);
+    return m_bytes + offsetof(SignatureECC, sig);
   default:
-    return {};
+    *size = 0;
+    return nullptr;
   }
 }
 
@@ -263,7 +260,7 @@ bool IsValidTMDSize(size_t size)
   return size >= sizeof(TMDHeader) && size <= 0x49e4;
 }
 
-TMDReader::TMDReader(std::span<const u8> bytes) : SignedBlobReader(bytes)
+TMDReader::TMDReader(const u8* bytes, size_t size) : SignedBlobReader(bytes, size)
 {
 }
 
@@ -369,7 +366,13 @@ std::string TMDReader::GetGameID() const
   std::memcpy(game_id, m_bytes + offsetof(TMDHeader, title_id) + 4, 4);
   std::memcpy(game_id + 4, m_bytes + offsetof(TMDHeader, group_id), 2);
 
-  if (std::ranges::all_of(game_id, Common::IsAlnum))
+  size_t i;
+  for (i = 0; i < sizeof(game_id); i++)
+  {
+    if (!Common::IsAlnum(game_id[i]))
+      break;
+  }
+  if (i == sizeof(game_id))
     return std::string(game_id, sizeof(game_id));
 
   return fmt::format("{:016x}", GetTitleId());
@@ -378,10 +381,14 @@ std::string TMDReader::GetGameID() const
 std::string TMDReader::GetGameTDBID() const
 {
   const u8* begin = m_bytes + offsetof(TMDHeader, title_id) + 4;
-  const u8* end = begin + 4;
-
-  if (std::all_of(begin, end, Common::IsAlnum))
-    return std::string(begin, end);
+  size_t i;
+  for (i = 0; i < 4; i++)
+  {
+    if (!Common::IsAlnum(static_cast<char>(begin[i])))
+      break;
+  }
+  if (i == 4)
+    return std::string(reinterpret_cast<const char*>(begin), 4);
 
   return fmt::format("{:016x}", GetTitleId());
 }
@@ -403,7 +410,7 @@ bool TMDReader::GetContent(u16 index, Content* content) const
   content->index = Common::swap16(content_base + offsetof(Content, index));
   content->type = Common::swap16(content_base + offsetof(Content, type));
   content->size = Common::swap64(content_base + offsetof(Content, size));
-  std::copy_n(content_base + offsetof(Content, sha1), content->sha1.size(), content->sha1.begin());
+  std::memcpy(content->sha1.data(), content_base + offsetof(Content, sha1), content->sha1.size());
 
   return true;
 }
@@ -432,7 +439,7 @@ bool TMDReader::FindContentById(u32 id, Content* content) const
   return false;
 }
 
-TicketReader::TicketReader(std::span<const u8> bytes) : SignedBlobReader(bytes)
+TicketReader::TicketReader(const u8* bytes, size_t size) : SignedBlobReader(bytes, size)
 {
 }
 
@@ -473,24 +480,34 @@ u32 TicketReader::GetTicketSize() const
   return sizeof(Ticket);
 }
 
-std::span<const u8> TicketReader::GetRawTicket(u64 ticket_id_to_find) const
+const u8* TicketReader::GetRawTicket(u64 ticket_id_to_find, size_t* size) const
 {
   const size_t ticket_size = GetTicketSize();
-  for (size_t i = 0; i < GetNumberOfTickets(); ++i)
+  const size_t num_tickets = GetNumberOfTickets();
+  for (size_t i = 0; i < num_tickets; ++i)
   {
     const u8* const ticket_begin = m_bytes + ticket_size * i;
     const u64 ticket_id = Common::swap64(ticket_begin + offsetof(ES::Ticket, ticket_id));
     if (ticket_id == ticket_id_to_find)
-      return {ticket_begin, ticket_size};
+    {
+      *size = ticket_size;
+      return ticket_begin;
+    }
   }
-  return {};
+  *size = 0;
+  return nullptr;
 }
 
 void TicketReader::GetRawTicketView(u32 ticket_num, u8* out) const
 {
+  GetRawTicketView(m_bytes, ticket_num, out);
+}
+
+void TicketReader::GetRawTicketView(const u8* tickets, u32 ticket_num, u8* out)
+{
   // A ticket view is composed of a version + part of a ticket starting from the ticket_id field.
-  const u8* const ticket_start = m_bytes + sizeof(Ticket) * ticket_num;
-  out[0] = GetVersion();
+  const u8* const ticket_start = tickets + sizeof(Ticket) * ticket_num;
+  out[0] = tickets[offsetof(Ticket, version)];
   out[1] = 0;
   out[2] = 0;
   out[3] = 0;
@@ -523,7 +540,7 @@ u8 TicketReader::GetCommonKeyIndex() const
 std::array<u8, 16> TicketReader::GetTitleKey(const HLE::IOSC& iosc) const
 {
   u8 iv[16] = {};
-  std::copy_n(&m_bytes[offsetof(Ticket, title_id)], sizeof(Ticket::title_id), iv);
+  std::memcpy(iv, m_bytes + offsetof(Ticket, title_id), sizeof(Ticket::title_id));
 
   u8 index = m_bytes[offsetof(Ticket, common_key_index)];
   if (index >= HLE::IOSC::COMMON_KEY_HANDLES.size())
@@ -598,14 +615,14 @@ HLE::ReturnCode TicketReader::Unpersonalise(HLE::IOSC& iosc)
     return ret;
 
   std::array<u8, 16> iv{};
-  std::copy_n(ticket_begin + offsetof(Ticket, ticket_id), sizeof(Ticket::ticket_id), iv.begin());
+  std::memcpy(iv.data(), ticket_begin + offsetof(Ticket, ticket_id), sizeof(Ticket::ticket_id));
 
   std::array<u8, 16> key{};
   ret = iosc.Decrypt(key_handle, iv.data(), ticket_begin + offsetof(Ticket, title_key),
                      sizeof(Ticket::title_key), key.data(), PID_ES);
   // Finally, IOS copies the decrypted title key back to the ticket buffer.
   if (ret == IPC_SUCCESS)
-    std::ranges::copy(key, ticket_begin + offsetof(Ticket, title_key));
+    std::memcpy(ticket_begin + offsetof(Ticket, title_key), key.data(), key.size());
 
   return ret;
 }
@@ -645,8 +662,16 @@ SharedContentMap::~SharedContentMap() = default;
 std::optional<std::string>
 SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const
 {
-  const auto it = std::ranges::find(m_entries, sha1, &Entry::sha1);
-  if (it == m_entries.end())
+  const Entry* it = nullptr;
+  for (const Entry& entry : m_entries)
+  {
+    if (std::memcmp(entry.sha1.data(), sha1.data(), sha1.size()) == 0)
+    {
+      it = &entry;
+      break;
+    }
+  }
+  if (!it)
     return {};
 
   const std::string_view id_string(reinterpret_cast<const char*>(it->id.data()), it->id.size());
@@ -743,8 +768,12 @@ UIDSys::UIDSys(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
 
 u32 UIDSys::GetUIDFromTitle(u64 title_id) const
 {
-  const auto it = std::ranges::find(m_entries, title_id, Common::Projection::Value{});
-  return (it == m_entries.end()) ? 0 : it->first;
+  for (const auto& entry : m_entries)
+  {
+    if (entry.second == title_id)
+      return entry.first;
+  }
+  return 0;
 }
 
 u32 UIDSys::GetNextUID() const
@@ -783,12 +812,10 @@ u32 UIDSys::GetOrInsertUIDForTitle(const u64 title_id)
   return uid;
 }
 
-CertReader::CertReader(std::span<const u8> bytes)
+CertReader::CertReader(const u8* data, size_t size)
 {
   // the signature type and public key type are read where the bytes lie,
   // and only the certificate they make is copied
-  const u8* const data = bytes.data();
-  const size_t size = bytes.size();
   if (size < sizeof(u32))
     return;
   const SignatureType signature_type = static_cast<SignatureType>(Common::swap32(data));
@@ -812,24 +839,22 @@ CertReader::CertReader(std::span<const u8> bytes)
   const PublicKeyType public_key_type = static_cast<PublicKeyType>(
       Common::swap32(data + signature_size + offsetof(CertHeader, public_key_type)));
 
-  using CertStructInfo = std::tuple<SignatureType, PublicKeyType, size_t>;
-  static constexpr std::array<CertStructInfo, 4> types{{
-      {SignatureType::RSA4096, PublicKeyType::RSA2048, sizeof(CertRSA4096RSA2048)},
-      {SignatureType::RSA2048, PublicKeyType::RSA2048, sizeof(CertRSA2048RSA2048)},
-      {SignatureType::RSA2048, PublicKeyType::ECC, sizeof(CertRSA2048ECC)},
-      {SignatureType::ECC, PublicKeyType::ECC, sizeof(CertECC)},
-  }};
-
-  const auto info = std::ranges::find_if(types, [&](const CertStructInfo& entry) {
-    return size >= std::get<2>(entry) && std::get<0>(entry) == signature_type &&
-           std::get<1>(entry) == public_key_type;
-  });
-
-  if (info == types.cend())
+  size_t cert_size;
+  if (signature_type == SignatureType::RSA4096 && public_key_type == PublicKeyType::RSA2048)
+    cert_size = sizeof(CertRSA4096RSA2048);
+  else if (signature_type == SignatureType::RSA2048 && public_key_type == PublicKeyType::RSA2048)
+    cert_size = sizeof(CertRSA2048RSA2048);
+  else if (signature_type == SignatureType::RSA2048 && public_key_type == PublicKeyType::ECC)
+    cert_size = sizeof(CertRSA2048ECC);
+  else if (signature_type == SignatureType::ECC && public_key_type == PublicKeyType::ECC)
+    cert_size = sizeof(CertECC);
+  else
+    return;
+  if (size < cert_size)
     return;
 
-  SetBytes(bytes.first(std::get<2>(*info)));
-  m_is_valid = m_size == std::get<2>(*info);
+  SetBytes(data, cert_size);
+  m_is_valid = m_size == cert_size;
 }
 
 bool CertReader::IsValid() const
@@ -856,41 +881,45 @@ PublicKeyType CertReader::GetPublicKeyType() const
   return static_cast<PublicKeyType>(Common::swap32(m_bytes + offset));
 }
 
-template <typename T>
-static std::span<const u8> DetailGetPublicKey(const u8* begin, size_t extra_data = 0)
+const u8* CertReader::GetPublicKey(size_t* size) const
 {
-  return {begin + offsetof(T, public_key), sizeof(T::public_key) + extra_data};
-}
-
-std::span<const u8> CertReader::GetPublicKey() const
-{
+  // RSA keys carry their 4-byte exponent after them
   switch (GetSignatureType())
   {
   case SignatureType::RSA4096:
-    return DetailGetPublicKey<CertRSA4096RSA2048>(m_bytes, 4);
+    *size = sizeof(CertRSA4096RSA2048::public_key) + 4;
+    return m_bytes + offsetof(CertRSA4096RSA2048, public_key);
   case SignatureType::RSA2048:
     if (GetPublicKeyType() == PublicKeyType::RSA2048)
-      return DetailGetPublicKey<CertRSA2048RSA2048>(m_bytes, 4);
-    return DetailGetPublicKey<CertRSA2048ECC>(m_bytes);
+    {
+      *size = sizeof(CertRSA2048RSA2048::public_key) + 4;
+      return m_bytes + offsetof(CertRSA2048RSA2048, public_key);
+    }
+    *size = sizeof(CertRSA2048ECC::public_key);
+    return m_bytes + offsetof(CertRSA2048ECC, public_key);
   case SignatureType::ECC:
-    return DetailGetPublicKey<CertECC>(m_bytes);
+    *size = sizeof(CertECC::public_key);
+    return m_bytes + offsetof(CertECC, public_key);
   default:
-    return {};
+    *size = 0;
+    return nullptr;
   }
 }
 
-std::map<std::string, CertReader> ParseCertChain(std::span<const u8> chain)
+std::map<std::string, CertReader> ParseCertChain(const u8* chain, size_t size)
 {
   std::map<std::string, CertReader> certs;
 
   size_t processed = 0;
-  while (processed != chain.size())
+  while (processed != size)
   {
-    CertReader cert_reader{chain.subspan(processed)};
+    CertReader cert_reader{chain + processed, size - processed};
     if (!cert_reader.IsValid())
       return certs;
 
-    processed += cert_reader.GetBytes().size();
+    size_t cert_size;
+    cert_reader.GetBytes(&cert_size);
+    processed += cert_size;
     std::string name = cert_reader.GetName();
     certs.emplace(std::move(name), std::move(cert_reader));
   }
