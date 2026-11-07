@@ -80,10 +80,6 @@ namespace MemoryInterface
 {
 class MemoryInterfaceManager;
 }
-namespace Movie
-{
-class MovieManager;
-}
 namespace PixelEngine
 {
 class PixelEngineManager;
@@ -177,7 +173,6 @@ public:
   Memory::MemoryManager& GetMemory() const;
   MemoryInterface::MemoryInterfaceManager& GetMemoryInterface() const;
   PowerPC::MMU& GetMMU() const;
-  Movie::MovieManager& GetMovie() const;
   PixelEngine::PixelEngineManager& GetPixelEngine() const;
   PixelShaderManager& GetPixelShaderManager() const;
   PowerPC::PowerPCManager& GetPowerPC() const;

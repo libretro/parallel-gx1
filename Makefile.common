@@ -1299,7 +1299,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/BaseConfigLoader.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/GameConfigLoader.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/IsSettingSaveable.cpp \
-	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/MovieConfigLoader.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigManager.cpp \
 	$(CORE_DIR)/Source/Core/Core/Core.cpp \
 	$(CORE_DIR)/Source/Core/Core/CoreTiming.cpp \
@@ -1522,7 +1521,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/IOS/WFS/WFSSRV.cpp \
 	$(CORE_DIR)/Source/Core/Core/LibusbUtils.cpp \
 	$(CORE_DIR)/Source/Core/Core/MemTools.cpp \
-	$(CORE_DIR)/Source/Core/Core/Movie.cpp \
 	$(CORE_DIR)/Source/Core/Core/NetworkCaptureLogger.cpp \
 	$(CORE_DIR)/Source/Core/Core/PatchEngine.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/BreakPoints.cpp \

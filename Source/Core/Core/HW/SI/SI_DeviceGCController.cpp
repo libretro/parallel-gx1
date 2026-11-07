@@ -14,7 +14,6 @@
 #include "Core/HW/SI/SI.h"
 #include "Core/HW/SI/SI_Device.h"
 #include "Core/HW/SystemTimers.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 #include "InputCommon/GCPadStatus.h"
 
@@ -114,31 +113,9 @@ int CSIDevice_GCController::RunBuffer(u8* buffer, int request_length)
   return 0;
 }
 
-void CSIDevice_GCController::HandleMoviePadStatus(Movie::MovieManager& movie, int device_number,
-                                                  GCPadStatus* pad_status)
-{
-  movie.SetPolledDevice();
-  if (movie.IsPlayingInput())
-  {
-    movie.PlayController(pad_status, device_number);
-    movie.InputUpdate();
-  }
-  else if (movie.IsRecordingInput())
-  {
-    movie.RecordInput(pad_status, device_number);
-    movie.InputUpdate();
-  }
-  else
-  {
-    movie.CheckPadStatus(pad_status, device_number);
-  }
-}
-
 GCPadStatus CSIDevice_GCController::GetPadStatus()
 {
   GCPadStatus pad_status = Pad::GetStatus(m_device_number);
-
-  HandleMoviePadStatus(m_system.GetMovie(), m_device_number, &pad_status);
 
   // Our GCAdapter code sets PAD_GET_ORIGIN when a new device has been connected.
   // Watch for this to calibrate real controllers on connection.

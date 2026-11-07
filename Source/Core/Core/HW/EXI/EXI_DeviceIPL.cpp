@@ -25,7 +25,6 @@
 #include "Core/CoreTiming.h"
 #include "Core/HW/Sram.h"
 #include "Core/HW/SystemTimers.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 
 #include "DiscIO/Enums.h"
@@ -399,22 +398,8 @@ void CEXIIPL::TransferByte(u8& data)
 
 u32 CEXIIPL::GetEmulatedTime(Core::System& system, u32 epoch)
 {
-  u64 ltime = 0;
-
-  auto& movie = system.GetMovie();
-  if (movie.IsMovieActive())
-  {
-    ltime = movie.GetRecordingStartTime();
-
-    // let's keep time moving forward, regardless of what it starts at
-    ltime += system.GetCoreTiming().GetTicks() / system.GetSystemTimers().GetTicksPerSecond();
-  }
-  else
-  {
-    ASSERT(!Core::WantsDeterminism());
-    ltime = Common::Timer::GetLocalTimeSinceJan1970() -
-            system.GetSystemTimers().GetLocalTimeRTCOffset();
-  }
+  const u64 ltime = Common::Timer::GetLocalTimeSinceJan1970() -
+                    system.GetSystemTimers().GetLocalTimeRTCOffset();
 
   return static_cast<u32>(ltime) - epoch;
 }

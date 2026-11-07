@@ -26,7 +26,6 @@
 #include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/SI/SI.h"
 #include "Core/HW/SystemTimers.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 
 #include "DiscIO/Enums.h"
@@ -897,12 +896,6 @@ void VideoInterfaceManager::Update(u64 ticks)
 
   const bool is_at_field_boundary =
       m_half_line_count == odd_field_begin || m_half_line_count == even_field_begin;
-
-  // Movie's frame counter should be updated before actually rendering the frame,
-  // in case frame counter display is enabled
-
-  if (is_at_field_boundary)
-    m_system.GetMovie().FrameUpdate();
 
   // If this half-line is at some boundary of the "active video lines" in either field, we either
   // need to (a) send a request to the GPU thread to actually render the XFB, or (b) increment

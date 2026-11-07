@@ -40,7 +40,6 @@
 #include "Core/HW/HW.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/Wiimote.h"
-#include "Core/Movie.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 
@@ -210,9 +209,16 @@ void DoState(Core::System& system, PointerWrap& p)
     return;
   }
 
-  // Movie must be done before the video backend, because the window is redrawn in the video backend
-  // state load, and the frame number must be up-to-date.
-  system.GetMovie().DoState(p);
+  // The movie counters, kept for the state layout: no movie is ever recorded or played.
+  {
+    u64 movie_counters[4] = {};
+    bool movie_polled = false;
+    u64 movie_tick_count_at_last_input = 0;
+    for (u64& counter : movie_counters)
+      p.Do(counter);
+    p.Do(movie_polled);
+    p.Do(movie_tick_count_at_last_input);
+  }
   p.DoMarker("Movie");
 
   // Begin with video backend, so that it gets a chance to clear its caches and writeback modified
@@ -482,11 +488,7 @@ static void CompressAndDumpState(Core::System& system, const CompressAndDumpStat
     }
   }
 
-  auto& movie = system.GetMovie();
-  if ((movie.IsMovieActive()) && !movie.IsJustStartingRecordingInputFromSaveState())
-    movie.SaveRecording(dtmname);
-  else if (!movie.IsMovieActive())
-    File::Delete(dtmname);
+  File::Delete(dtmname);
 
   // Move written state to final location.
   // TODO: This should also be atomic. This is possible on all systems, but needs a special
@@ -847,14 +849,10 @@ static void LoadAsFromCore(Core::System& system, std::string filename)
   s_compress_and_dump_thread.WaitForCompletion();
 
   // Save temp buffer for undo load state
-  auto& movie = system.GetMovie();
-  if (!movie.IsJustStartingRecordingInputFromSaveState())
   {
     SaveToBuffer(system, s_undo_load_buffer);
     const std::string dtmpath = File::GetUserPath(D_STATESAVES_IDX) + "undo.dtm";
-    if (movie.IsMovieActive())
-      movie.SaveRecording(dtmpath);
-    else if (File::Exists(dtmpath))
+    if (File::Exists(dtmpath))
       File::Delete(dtmpath);
   }
 
@@ -878,15 +876,6 @@ static void LoadAsFromCore(Core::System& system, std::string filename)
     if (loaded_successfully)
     {
       Core::DisplayMessage(fmt::format("Loaded State from {}", filename), 2000);
-      if (File::Exists(filename + ".dtm"))
-      {
-        movie.LoadInput(filename + ".dtm");
-      }
-      else if (!movie.IsJustStartingRecordingInputFromSaveState() &&
-               !movie.IsJustStartingPlayingInputFromSaveState())
-      {
-        movie.EndPlayInput(false);
-      }
     }
     else
     {
@@ -998,25 +987,7 @@ void UndoLoadState(Core::System& system)
       return;
     }
 
-    auto& movie = system.GetMovie();
-    if (movie.IsMovieActive())
-    {
-      // Note: Only the CPU thread writes to "undo.dtm".
-      const std::string dtmpath = File::GetUserPath(D_STATESAVES_IDX) + "undo.dtm";
-      if (File::Exists(dtmpath))
-      {
-        LoadFromBuffer(system, s_undo_load_buffer);
-        movie.LoadInput(dtmpath);
-      }
-      else
-      {
-        PanicAlertFmtT("No undo.dtm found, aborting undo load state to prevent movie desyncs");
-      }
-    }
-    else
-    {
-      LoadFromBuffer(system, s_undo_load_buffer);
-    }
+    LoadFromBuffer(system, s_undo_load_buffer);
   });
 }
 

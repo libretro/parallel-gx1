@@ -20,7 +20,6 @@
 #include "Core/HW/WiimoteEmu/DesiredWiimoteState.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
-#include "Core/Movie.h"
 #include "Core/SysConf.h"
 #include "Core/System.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
@@ -348,16 +347,6 @@ void BluetoothEmuDevice::Update()
 
     for (size_t i = 0; i < m_wiimotes.size(); ++i)
       next_call[i] = m_wiimotes[i]->PrepareInput(&wiimote_states[i]);
-
-    auto& movie = Core::System::GetInstance().GetMovie();
-    for (int i = 0; i != MAX_WIIMOTES; ++i)
-    {
-      if (next_call[i] == WiimoteDevice::NextUpdateInputCall::None)
-        continue;
-
-      movie.PlayWiimote(i, &wiimote_states[i]);
-      movie.CheckWiimoteStatus(i, wiimote_states[i]);
-    }
 
     for (size_t i = 0; i < m_wiimotes.size(); ++i)
       m_wiimotes[i]->UpdateInput(next_call[i], wiimote_states[i]);

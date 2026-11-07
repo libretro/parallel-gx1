@@ -23,7 +23,6 @@
 #include "Common/Swap.h"
 #include "Core/IOS/ES/ES.h"
 #include "Core/IOS/IOS.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
@@ -322,9 +321,8 @@ void HostFileSystem::DoState(PointerWrap& p)
   // then a call to p.DoExternal() will be used to skip over reading the contents of the "/"
   // directory (it skips over the number of bytes specified by size_of_nand)
 
-  auto& movie = Core::System::GetInstance().GetMovie();
-
-  const bool is_full_nand_wanted = movie.IsMovieActive() && Core::WiiRootIsTemporary();
+  // No movie is ever recorded, so the full NAND is never wanted.
+  const bool is_full_nand_wanted = false;
 
   bool is_full_nand_in_state = is_full_nand_wanted;
   p.Do(is_full_nand_in_state);

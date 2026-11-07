@@ -24,7 +24,6 @@
 #include "Core/IOS/FS/FileSystem.h"
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/Uids.h"
-#include "Core/Movie.h"
 #include "Core/SysConf.h"
 #include "Core/System.h"
 
@@ -85,15 +84,6 @@ static void RestoreFile(const std::string& path_in_nand)
     DeleteBackupFile(file_name);
 }
 
-static void CopySave(FS::FileSystem* source, FS::FileSystem* dest, const u64 title_id)
-{
-  dest->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, Common::GetTitleDataPath(title_id) + '/',
-                       0, {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
-  const auto source_save = WiiSave::MakeNandStorage(source, title_id);
-  const auto dest_save = WiiSave::MakeNandStorage(dest, title_id);
-  WiiSave::Copy(source_save.get(), dest_save.get());
-}
-
 static bool CopyNandFile(FS::FileSystem* source_fs, const std::string& source_file,
                          FS::FileSystem* dest_fs, const std::string& dest_file)
 {
@@ -121,37 +111,6 @@ static bool CopyNandFile(FS::FileSystem* source_fs, const std::string& source_fi
     return false;
 
   return true;
-}
-
-static void InitializeDeterministicWiiSaves(FS::FileSystem* session_fs,
-                                            const BootSessionData& boot_session_data)
-{
-  auto& movie = Core::System::GetInstance().GetMovie();
-  const u64 title_id = SConfig::GetInstance().GetTitleID();
-  const auto configured_fs = FS::MakeFileSystem(FS::Location::Configured);
-  if (movie.IsRecordingInput())
-  {
-    // TODO: Check for the actual save data
-    const std::string path = Common::GetTitleDataPath(title_id) + "/banner.bin";
-    movie.SetClearSave(!configured_fs->GetMetadata(IOS::PID_KERNEL, IOS::PID_KERNEL, path));
-  }
-
-  if (movie.IsMovieActive() && !movie.IsStartingFromClearSave())
-  {
-    auto* source_fs = configured_fs.get();
-    INFO_LOG_FMT(CORE, "Wii Save Init: Copying from configured_fs to session_fs.");
-
-    // Copy the current user's save to the Blank NAND
-    INFO_LOG_FMT(CORE, "Wii Save Init: Copying {0:016x}.", title_id);
-    CopySave(source_fs, session_fs, title_id);
-
-    // Copy Mii data
-    if (!CopyNandFile(source_fs, Common::GetMiiDatabasePath(), session_fs,
-                      Common::GetMiiDatabasePath()))
-    {
-      WARN_LOG_FMT(CORE, "Failed to copy Mii database to the NAND");
-    }
-  }
 }
 
 static void MoveToBackupIfExists(const std::string& path)
@@ -313,8 +272,6 @@ void InitializeWiiFileSystemContents(
     // Generate a SYSCONF with default settings for the temporary Wii NAND.
     SysConf sysconf{fs};
     sysconf.Save();
-
-    InitializeDeterministicWiiSaves(fs.get(), boot_session_data);
   }
 
   if (save_redirect)

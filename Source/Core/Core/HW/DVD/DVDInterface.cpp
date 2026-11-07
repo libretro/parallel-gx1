@@ -36,7 +36,6 @@
 #include "Core/HW/SystemTimers.h"
 #include "Core/IOS/DI/DI.h"
 #include "Core/IOS/IOS.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 
 #include "DiscIO/Blob.h"
@@ -499,7 +498,6 @@ void DVDInterface::ChangeDisc(const Core::CPUThreadGuard& guard, const std::stri
   m_disc_path_to_insert = new_path;
   m_system.GetCoreTiming().ScheduleEvent(m_system.GetSystemTimers().GetTicksPerSecond(),
                                          m_insert_disc);
-  m_system.GetMovie().SignalDiscChange(new_path);
 
   for (size_t i = 0; i < m_auto_disc_change_paths.size(); ++i)
   {
@@ -1125,7 +1123,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
 
     const bool force_eject = eject && !kill;
 
-    if (Config::Get(Config::MAIN_AUTO_DISC_CHANGE) && !m_system.GetMovie().IsPlayingInput() &&
+    if (Config::Get(Config::MAIN_AUTO_DISC_CHANGE) &&
         m_system.GetDVDThread().IsInsertedDiscRunning() && !m_auto_disc_change_paths.empty())
     {
       m_system.GetCoreTiming().ScheduleEvent(

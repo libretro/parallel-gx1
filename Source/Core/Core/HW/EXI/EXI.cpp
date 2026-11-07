@@ -20,7 +20,6 @@
 #include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/Sram.h"
 #include "Core/HW/SystemTimers.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 
 #include "DiscIO/Enums.h"
@@ -35,33 +34,7 @@ ExpansionInterfaceManager::~ExpansionInterfaceManager() = default;
 
 void ExpansionInterfaceManager::AddMemoryCard(Slot slot)
 {
-  EXIDeviceType memorycard_device;
-
-  auto& movie = m_system.GetMovie();
-  if (movie.IsPlayingInput() && movie.IsConfigSaved())
-  {
-    if (movie.IsUsingMemcard(slot))
-    {
-      memorycard_device = Config::Get(Config::GetInfoForEXIDevice(slot));
-      if (memorycard_device != EXIDeviceType::MemoryCardFolder &&
-          memorycard_device != EXIDeviceType::MemoryCard)
-      {
-        PanicAlertFmtT(
-            "The movie indicates that a memory card should be inserted into {0:n}, but one is not "
-            "currently inserted (instead, {1} is inserted).  For the movie to sync properly, "
-            "please change the selected device to Memory Card or GCI Folder.",
-            slot, Common::GetStringT(fmt::format("{:n}", memorycard_device).c_str()));
-      }
-    }
-    else
-    {
-      memorycard_device = EXIDeviceType::None;
-    }
-  }
-  else
-  {
-    memorycard_device = Config::Get(Config::GetInfoForEXIDevice(slot));
-  }
+  const EXIDeviceType memorycard_device = Config::Get(Config::GetInfoForEXIDevice(slot));
 
   m_channels[SlotToEXIChannel(slot)]->AddDevice(memorycard_device, SlotToEXIDevice(slot));
 }

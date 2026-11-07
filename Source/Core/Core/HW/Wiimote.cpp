@@ -19,7 +19,6 @@
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/USB/Bluetooth/BTEmu.h"
 #include "Core/IOS/USB/Bluetooth/WiimoteDevice.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 #include "Core/WiiUtils.h"
 
@@ -194,11 +193,6 @@ void Initialize(InitializeMode init_mode)
   WiimoteCommon::RefreshConfig();
 
   WiimoteReal::Initialize(init_mode);
-
-  // Reload Wiimotes with our settings
-  auto& movie = Core::System::GetInstance().GetMovie();
-  if (movie.IsMovieActive())
-    movie.ChangeWiiPads();
 }
 
 void ResetAllWiimotes()

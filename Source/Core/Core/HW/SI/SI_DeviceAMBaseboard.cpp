@@ -30,7 +30,6 @@
 #include "Core/HW/Triforce/JVSIO.h"
 #include "Core/HW/Triforce/MarioKartGP.h"
 #include "Core/HW/Triforce/Touchscreen.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 
 namespace

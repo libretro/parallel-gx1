@@ -32,7 +32,6 @@
 #include "Core/HW/Memmap.h"
 #include "Core/HW/Sram.h"
 #include "Core/HW/SystemTimers.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 #include "DiscIO/Enums.h"
 
@@ -148,26 +147,14 @@ CEXIMemoryCard::CEXIMemoryCard(Core::System& system, const Slot slot, bool gci_f
 }
 
 std::pair<std::string /* path */, bool /* migrate */>
-CEXIMemoryCard::GetGCIFolderPath(Slot card_slot, AllowMovieFolder allow_movie_folder,
-                                 Movie::MovieManager& movie)
+CEXIMemoryCard::GetGCIFolderPath(Slot card_slot)
 {
   std::string path_override = Config::Get(Config::GetInfoForGCIPathOverride(card_slot));
 
   if (!path_override.empty())
     return {std::move(path_override), false};
 
-  const bool use_movie_folder = allow_movie_folder == AllowMovieFolder::Yes &&
-                                movie.IsPlayingInput() && movie.IsConfigSaved() &&
-                                movie.IsUsingMemcard(card_slot) && movie.IsStartingFromClearSave();
-
   const DiscIO::Region region = Config::ToGameCubeRegion(SConfig::GetInstance().m_region);
-  if (use_movie_folder)
-  {
-    return {fmt::format("{}{}/Movie/Card {}", File::GetUserPath(D_GCUSER_IDX),
-                        Config::GetDirectoryForRegion(region), s_card_short_names[card_slot]),
-            false};
-  }
-
   return {Config::GetGCIFolderPath(card_slot, region), true};
 }
 
@@ -182,7 +169,7 @@ void CEXIMemoryCard::SetupGciFolder(const Memcard::HeaderData& header_data)
   }
 
   const auto [dir_path, migrate] =
-      GetGCIFolderPath(m_card_slot, AllowMovieFolder::Yes, m_system.GetMovie());
+      GetGCIFolderPath(m_card_slot);
 
   const File::FileInfo file_info(dir_path);
   if (!file_info.Exists())
@@ -218,18 +205,8 @@ void CEXIMemoryCard::SetupGciFolder(const Memcard::HeaderData& header_data)
 
 void CEXIMemoryCard::SetupRawMemcard(u16 size_mb)
 {
-  std::string filename;
-  auto& movie = m_system.GetMovie();
-  if (movie.IsPlayingInput() && movie.IsConfigSaved() && movie.IsUsingMemcard(m_card_slot) &&
-      movie.IsStartingFromClearSave())
-  {
-    filename = File::GetUserPath(D_GCUSER_IDX) +
-               fmt::format("Movie{}.raw", s_card_short_names[m_card_slot]);
-  }
-  else
-  {
-    filename = Config::GetMemcardPath(m_card_slot, SConfig::GetInstance().m_region, size_mb);
-  }
+  const std::string filename =
+      Config::GetMemcardPath(m_card_slot, SConfig::GetInstance().m_region, size_mb);
 
   m_memory_card = std::make_unique<MemoryCard>(filename, m_card_slot, size_mb);
 }
@@ -501,11 +478,9 @@ void CEXIMemoryCard::TransferByte(u8& byte)
 
 void CEXIMemoryCard::DoState(PointerWrap& p)
 {
-  // for movie sync, we need to save/load memory card contents (and other data) in savestates.
-  // otherwise, we'll assume the user wants to keep their memcards and saves separate,
-  // unless we're loading (in which case we let the savestate contents decide, in order to stay
-  // aligned with them).
-  bool storeContents = m_system.GetMovie().IsMovieActive();
+  // Card contents are kept out of states (only movie sync stored them); a loaded state that
+  // has them still decides, to stay aligned with it.
+  bool storeContents = false;
   p.Do(storeContents);
 
   if (storeContents)

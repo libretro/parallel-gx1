@@ -38,7 +38,6 @@
 #include "Core/HW/SI/SI.h"
 #include "Core/HW/SI/SI_Device.h"
 #include "Core/HW/Sram.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
@@ -57,27 +56,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
 
   if (!StartUp.SetPathsAndGameMetadata(system, *boot))
     return false;
-
-  // Movie settings
-  auto& movie = system.GetMovie();
-  if (movie.IsPlayingInput() && movie.IsConfigSaved())
-  {
-    for (ExpansionInterface::Slot slot : ExpansionInterface::MEMCARD_SLOTS)
-    {
-      if (movie.IsUsingMemcard(slot) && movie.IsStartingFromClearSave() && !system.IsWii())
-      {
-        const auto raw_path =
-            File::GetUserPath(D_GCUSER_IDX) +
-            fmt::format("Movie{}.raw", slot == ExpansionInterface::Slot::A ? 'A' : 'B');
-        if (File::Exists(raw_path))
-          File::Delete(raw_path);
-
-        const auto movie_path = File::GetUserPath(D_GCUSER_IDX) + "Movie";
-        if (File::Exists(movie_path))
-          File::DeleteDirRecursively(movie_path);
-      }
-    }
-  }
 
   // Override out-of-region languages/countries to prevent games from crashing or behaving oddly
   if (!Config::Get(Config::MAIN_OVERRIDE_REGION_SETTINGS))

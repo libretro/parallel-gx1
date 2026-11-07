@@ -27,7 +27,6 @@
 #include "Core/HW/EXI/EXI_DeviceBaseboard.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/Network/Socket.h"
-#include "Core/Movie.h"
 #include "Core/System.h"
 
 #include "DiscIO/CachedBlob.h"

@@ -61,7 +61,6 @@
 #include "Core/Host.h"
 #include "Core/IOS/IOS.h"
 #include "Core/MemTools.h"
-#include "Core/Movie.h"
 #include "Core/PatchEngine.h"
 #include "Core/PowerPC/GDBStub.h"
 #include "Core/PowerPC/JitInterface.h"
@@ -510,9 +509,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
 
   FreeLook::LoadInputConfig();
 
-  system.GetMovie().Init(*boot);
-  Common::ScopeGuard movie_guard([&system] { system.GetMovie().Shutdown(); });
-
   HW::Init(system, nullptr);
 
   Common::ScopeGuard hw_guard{[&system] {
@@ -610,9 +606,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
   {
     s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
       [g = std::move(flag_guard)]() mutable { g.Exit(); }));
-
-    s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
-      [g = std::move(movie_guard)]() mutable { g.Exit(); }));
 
     s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
       [g = std::move(hw_guard)]() mutable { g.Exit(); }));
@@ -921,7 +914,8 @@ void UpdateWantDeterminism(Core::System& system, bool initial)
   // For now, this value is not itself configurable.  Instead, individual
   // settings that depend on it, such as GPU determinism mode. should have
   // override options for testing,
-  bool new_want_determinism = system.GetMovie().IsMovieActive();
+  // Only a movie wanted determinism, and none is ever recorded or played.
+  const bool new_want_determinism = false;
   if (new_want_determinism != s_wants_determinism || initial)
   {
     NOTICE_LOG_FMT(COMMON, "Want determinism <- {}", new_want_determinism ? "true" : "false");
