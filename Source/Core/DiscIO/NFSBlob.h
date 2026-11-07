@@ -6,7 +6,6 @@
 #include <array>
 #include <limits>
 #include <memory>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -69,8 +68,8 @@ private:
   static std::vector<File::DirectIOFile> OpenFiles(const std::string& directory,
                                                    File::DirectIOFile first_file,
                                                    u64 expected_raw_size, u64* raw_size_out);
-  static u64 CalculateExpectedRawSize(std::span<const NFSLBARange> lba_ranges);
-  static u64 CalculateExpectedDataSize(std::span<const NFSLBARange> lba_ranges);
+  static u64 CalculateExpectedRawSize(const NFSLBARange* lba_ranges, size_t count);
+  static u64 CalculateExpectedDataSize(const NFSLBARange* lba_ranges, size_t count);
 
   NFSFileReader(std::vector<NFSLBARange> lba_ranges, std::vector<File::DirectIOFile> files, Key key,
                 u64 raw_size);

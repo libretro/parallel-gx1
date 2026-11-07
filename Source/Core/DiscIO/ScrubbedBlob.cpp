@@ -3,7 +3,7 @@
 
 #include "DiscIO/ScrubbedBlob.h"
 
-#include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -47,12 +47,12 @@ bool ScrubbedBlob::Read(u64 offset, u64 size, u8* out_ptr)
   while (size > 0)
   {
     constexpr size_t CLUSTER_SIZE = DiscScrubber::CLUSTER_SIZE;
-    const u64 bytes_to_read =
-        std::min(Common::AlignDown(offset + CLUSTER_SIZE, CLUSTER_SIZE) - offset, size);
+    const u64 cluster_left = Common::AlignDown(offset + CLUSTER_SIZE, CLUSTER_SIZE) - offset;
+    const u64 bytes_to_read = cluster_left < size ? cluster_left : size;
 
     if (m_scrubber.CanBlockBeScrubbed(offset))
     {
-      std::fill_n(out_ptr, bytes_to_read, 0);
+      std::memset(out_ptr, 0, bytes_to_read);
     }
     else
     {

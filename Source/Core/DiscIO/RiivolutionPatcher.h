@@ -4,7 +4,6 @@
 #pragma once
 
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -81,10 +80,11 @@ enum class PatchIndex
   DolphinSysFiles,
 };
 
-void ApplyPatchesToFiles(std::span<const Patch> patches, PatchIndex index,
+void ApplyPatchesToFiles(const Patch* patches, size_t patch_count, PatchIndex index,
                          std::vector<FSTBuilderNode>* fst, FSTBuilderNode* dol_node);
-void ApplyGeneralMemoryPatches(const Core::CPUThreadGuard& guard, std::span<const Patch> patches);
-void ApplyApploaderMemoryPatches(const Core::CPUThreadGuard& guard, std::span<const Patch> patches,
-                                 u32 ram_address, u32 ram_length);
-std::optional<SavegameRedirect> ExtractSavegameRedirect(std::span<const Patch> riivolution_patches);
+void ApplyGeneralMemoryPatches(const Core::CPUThreadGuard& guard, const Patch* patches,
+                               size_t patch_count);
+void ApplyApploaderMemoryPatches(const Core::CPUThreadGuard& guard, const Patch* patches,
+                                 size_t patch_count, u32 ram_address, u32 ram_length);
+std::optional<SavegameRedirect> ExtractSavegameRedirect(const Patch* patches, size_t patch_count);
 }  // namespace DiscIO::Riivolution

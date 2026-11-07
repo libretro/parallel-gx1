@@ -79,7 +79,8 @@ bool WiiEncryptionCache::EncryptGroups(u64 offset, u64 size, u8* out_ptr, u64 pa
       return false;
 
     const u64 offset_in_group = offset % VolumeWii::GROUP_TOTAL_SIZE;
-    const u64 bytes_to_read = std::min(VolumeWii::GROUP_TOTAL_SIZE - offset_in_group, size);
+    const u64 group_left = VolumeWii::GROUP_TOTAL_SIZE - offset_in_group;
+    const u64 bytes_to_read = group_left < size ? group_left : size;
     std::memcpy(out_ptr, group->data() + offset_in_group, bytes_to_read);
 
     offset += bytes_to_read;

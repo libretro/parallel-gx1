@@ -233,7 +233,7 @@ private:
                             WIARVZCompressionType compression_type, u32 exception_lists = 0,
                             u32 rvz_packed_size = 0, u64 data_offset = 0);
 
-  static bool ApplyHashExceptions(std::span<const HashExceptionEntry> exception_list,
+  static bool ApplyHashExceptions(const HashExceptionEntry* exception_list, size_t count,
                                   VolumeWii::HashBlock hash_blocks[VolumeWii::BLOCKS_PER_GROUP]);
 
   static std::string VersionToString(u32 version);

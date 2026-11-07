@@ -102,7 +102,8 @@ private:
 
     // Returns CLUSTER_SIZE or smaller at the end of the file.
     const auto get_read_size = [&](u64 pos) {
-      return std::min<u64>(total_size - pos, DiscScrubber::CLUSTER_SIZE);
+      const u64 left = total_size - pos;
+      return left < u64(DiscScrubber::CLUSTER_SIZE) ? left : u64(DiscScrubber::CLUSTER_SIZE);
     };
 
     // Used for periodic progress logging.

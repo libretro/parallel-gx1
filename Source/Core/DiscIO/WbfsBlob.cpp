@@ -3,7 +3,6 @@
 
 #include "DiscIO/WbfsBlob.h"
 
-#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -130,7 +129,8 @@ bool WbfsFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
     auto& data_file = SeekToCluster(offset, &read_size);
     if (read_size == 0)
       return false;
-    read_size = std::min(read_size, nbytes);
+    if (nbytes < read_size)
+      read_size = nbytes;
 
     if (!data_file.Read(out_ptr, read_size))
     {
@@ -163,7 +163,8 @@ File::DirectIOFile& WbfsFileReader::SeekToCluster(u64 offset, u64* available)
         {
           u64 till_end_of_file = file_entry.size - (final_address - file_entry.base_address);
           u64 till_end_of_sector = m_wbfs_sector_size - cluster_offset;
-          *available = std::min(till_end_of_file, till_end_of_sector);
+          *available =
+              till_end_of_file < till_end_of_sector ? till_end_of_file : till_end_of_sector;
         }
 
         return file_entry.file;

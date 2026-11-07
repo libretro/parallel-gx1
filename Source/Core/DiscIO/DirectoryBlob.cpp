@@ -3,7 +3,6 @@
 
 #include "DiscIO/DirectoryBlob.h"
 
-#include <algorithm>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -288,7 +287,8 @@ u64 DiscContentContainer::CheckSizeAndAdd(u64 offset, const std::string& path)
 
 u64 DiscContentContainer::CheckSizeAndAdd(u64 offset, u64 max_size, const std::string& path)
 {
-  const u64 size = std::min(File::GetSize(path), max_size);
+  const u64 file_size = File::GetSize(path);
+  const u64 size = file_size < max_size ? file_size : max_size;
   Add(offset, size, ContentFile(path, 0));
   return size;
 }
@@ -301,7 +301,9 @@ bool DiscContentContainer::ReadContent(const DiscContent* content, u64* offset, 
 
   if (offset_in_content >= content->size)
     return true;
-  bytes_to_read = std::min(content->size - offset_in_content, *length);
+  bytes_to_read = content->size - offset_in_content;
+  if (*length < bytes_to_read)
+    bytes_to_read = *length;
 
   switch (content->type)
   {
@@ -397,7 +399,10 @@ static std::optional<PartitionType> ParsePartitionDirectoryName(const std::strin
     }
 
     // e.g. "P0"
-    if (std::all_of(name.cbegin() + 1, name.cend(), [](char c) { return c >= '0' && c <= '9'; }))
+    size_t digits = 1;
+    while (digits < name.size() && name[digits] >= '0' && name[digits] <= '9')
+      digits++;
+    if (digits == name.size())
     {
       u32 result;
       if (TryParse(name.substr(1), &result))
@@ -887,7 +892,8 @@ void DirectoryBlobReader::SetWiiRegionData(const u8* wii_region_data, size_t siz
   std::memset(region_data + 0x10, 0x80, WII_REGION_DATA_SIZE - 0x10);
   Write32(INVALID_REGION, 0, region_data);
 
-  std::memcpy(region_data, wii_region_data, std::min<size_t>(size, WII_REGION_DATA_SIZE));
+  std::memcpy(region_data, wii_region_data,
+              size < WII_REGION_DATA_SIZE ? size_t(size) : size_t(WII_REGION_DATA_SIZE));
 
   if (size < 0x4)
     ERROR_LOG_FMT(DISCIO, "Couldn't read region from {}", log_path);
@@ -898,17 +904,26 @@ void DirectoryBlobReader::SetWiiRegionData(const u8* wii_region_data, size_t siz
                               ContentMemory(blob, 0));
 }
 
+static bool PartitionLess(const DirectoryBlobReader::PartitionWithType& lhs,
+                          const DirectoryBlobReader::PartitionWithType& rhs)
+{
+  if (lhs.type == rhs.type)
+    return lhs.partition.GetRootDirectory() < rhs.partition.GetRootDirectory();
+
+  // Ascending sort by partition type, except Update (1) comes before before Game (0)
+  return (lhs.type > PartitionType::Update || rhs.type > PartitionType::Update) ?
+             lhs.type < rhs.type :
+             lhs.type > rhs.type;
+}
+
 void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partitions)
 {
-  std::ranges::sort(partitions, [](const PartitionWithType& lhs, const PartitionWithType& rhs) {
-    if (lhs.type == rhs.type)
-      return lhs.partition.GetRootDirectory() < rhs.partition.GetRootDirectory();
-
-    // Ascending sort by partition type, except Update (1) comes before before Game (0)
-    return (lhs.type > PartitionType::Update || rhs.type > PartitionType::Update) ?
-               lhs.type < rhs.type :
-               lhs.type > rhs.type;
-  });
+  // a handful of partitions: insertion sort
+  for (size_t i = 1; i < partitions.size(); i++)
+  {
+    for (size_t j = i; j > 0 && PartitionLess(partitions[j], partitions[j - 1]); j--)
+      std::swap(partitions[j], partitions[j - 1]);
+  }
 
   u32 subtable_1_size = 0;
   while (subtable_1_size < partitions.size() && subtable_1_size < 3 &&
@@ -945,7 +960,10 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
       offset_in_table = PARTITION_SUBTABLE2_OFFSET;
 
     if (partitions[i].type == PartitionType::Game)
-      partition_address = std::max(partition_address, STANDARD_GAME_PARTITION_ADDRESS);
+    {
+      if (partition_address < STANDARD_GAME_PARTITION_ADDRESS)
+        partition_address = STANDARD_GAME_PARTITION_ADDRESS;
+    }
 
     Write32(static_cast<u32>(partition_address >> 2), u32(offset_in_table), partition_table);
     offset_in_table += 4;
@@ -1360,7 +1378,8 @@ u64 DirectoryBlobPartition::SetApploader(ContentBlob* apploader, const std::stri
     if (apploader)
     {
       if (header)
-        std::memcpy(ContentBlobData(header), ContentBlobData(apploader), size_t(std::min<u64>(size, 0x20)));
+        std::memcpy(ContentBlobData(header), ContentBlobData(apploader),
+                    size < 0x20 ? size_t(size) : size_t(0x20));
       ContentBlobRelease(apploader);
     }
     apploader = header;
@@ -1438,13 +1457,17 @@ static void ConvertUTF8NamesToSHIFTJIS(std::vector<FSTBuilderNode>* fst)
   }
 }
 
-static u32 ComputeNameSize(std::span<const FSTBuilderNode> files)
+static u32 ComputeNameSize(const FSTBuilderNode* files, size_t count)
 {
   u32 name_size = 0;
-  for (const FSTBuilderNode& entry : files)
+  for (size_t i = 0; i < count; i++)
   {
+    const FSTBuilderNode& entry = files[i];
     if (entry.IsFolder())
-      name_size += ComputeNameSize(entry.GetFolderContent());
+    {
+      const std::vector<FSTBuilderNode>& children = entry.GetFolderContent();
+      name_size += ComputeNameSize(children.data(), children.size());
+    }
     name_size += static_cast<u32>(entry.m_filename.length() + 1);
   }
   return name_size;
@@ -1471,6 +1494,38 @@ static bool NameLess(const FSTBuilderNode& one, const FSTBuilderNode& two)
   return one.m_filename < two.m_filename;
 }
 
+// In-place heap sort: no allocation, O(n log n); names are unique so
+// stability does not matter.
+static void SiftDown(FSTBuilderNode* nodes, size_t root, size_t count)
+{
+  for (;;)
+  {
+    size_t child = root * 2 + 1;
+    if (child >= count)
+      return;
+    if (child + 1 < count && NameLess(nodes[child], nodes[child + 1]))
+      child++;
+    if (!NameLess(nodes[root], nodes[child]))
+      return;
+    std::swap(nodes[root], nodes[child]);
+    root = child;
+  }
+}
+
+static void SortByName(FSTBuilderNode* nodes, size_t count)
+{
+  size_t i;
+  if (count < 2)
+    return;
+  for (i = count / 2; i > 0; i--)
+    SiftDown(nodes, i - 1, count);
+  for (i = count - 1; i > 0; i--)
+  {
+    std::swap(nodes[0], nodes[i]);
+    SiftDown(nodes, 0, i);
+  }
+}
+
 static size_t RecalculateFolderSizes(std::vector<FSTBuilderNode>* fst)
 {
   size_t size = 0;
@@ -1491,7 +1546,7 @@ void DirectoryBlobPartition::BuildFST(std::vector<FSTBuilderNode> root_nodes, u6
 {
   ConvertUTF8NamesToSHIFTJIS(&root_nodes);
 
-  u32 name_table_size = Common::AlignUp(ComputeNameSize(root_nodes), 1ull << m_address_shift);
+  u32 name_table_size = Common::AlignUp(ComputeNameSize(root_nodes.data(), root_nodes.size()), 1ull << m_address_shift);
 
   // 1 extra for the root entry
   u64 total_entries = RecalculateFolderSizes(&root_nodes) + 1;
@@ -1563,7 +1618,7 @@ void DirectoryBlobPartition::WriteDirectory(u8* fst_data,
   std::vector<FSTBuilderNode>& sorted_entries = *parent_entries;
 
   // Sort for determinism
-  std::ranges::sort(sorted_entries, NameLess);
+  SortByName(sorted_entries.data(), sorted_entries.size());
 
   for (FSTBuilderNode& entry : sorted_entries)
   {
@@ -1614,7 +1669,8 @@ void DirectoryBlobPartition::WriteDirectory(u8* fst_data,
 static size_t ReadFileToBuffer(const std::string& path, u8* buffer, size_t size)
 {
   File::DirectIOFile file(path, File::AccessMode::Read);
-  const size_t n = size_t(std::min<u64>(file.GetSize(), size));
+  const u64 file_size = file.GetSize();
+  const size_t n = file_size < size ? size_t(file_size) : size;
   return n && file.OffsetRead(0, buffer, n) ? n : 0;
 }
 
@@ -1622,7 +1678,9 @@ static void PadToAddress(u64 start_address, u64* address, u64* length, u8** buff
 {
   if (start_address > *address && *length > 0)
   {
-    u64 padBytes = std::min(start_address - *address, *length);
+    u64 padBytes = start_address - *address;
+    if (*length < padBytes)
+      padBytes = *length;
     memset(*buffer, 0, (size_t)padBytes);
     *length -= padBytes;
     *buffer += padBytes;

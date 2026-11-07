@@ -7,7 +7,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -89,8 +88,8 @@ public:
   }
   virtual std::vector<u8> GetContent(u16 index) const { return {}; }
   virtual std::vector<u64> GetContentOffsets() const { return {}; }
-  virtual bool CheckContentIntegrity(const IOS::ES::Content& content,
-                                     std::span<const u8> encrypted_data,
+  virtual bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
+                                     size_t encrypted_size,
                                      const IOS::ES::TicketReader& ticket) const
   {
     return false;
@@ -145,11 +144,11 @@ public:
   virtual const BlobReader& GetBlobReader() const = 0;
 
 protected:
-  std::string DecodeString(std::span<const char> data) const;
-  static std::string FilterGameID(std::span<const char> data);
+  std::string DecodeString(const char* data, size_t size) const;
+  static std::string FilterGameID(const char* data, size_t size);
 
   virtual u32 GetOffsetShift() const { return 0; }
-  static std::map<Language, std::string> ReadWiiNames(std::span<const char16_t> data);
+  static std::map<Language, std::string> ReadWiiNames(const char16_t* data, size_t size);
 
   static constexpr size_t NUMBER_OF_LANGUAGES = 10;
   static constexpr size_t NAME_CHARS_LENGTH = 42;

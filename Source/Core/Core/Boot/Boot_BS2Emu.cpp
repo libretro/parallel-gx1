@@ -210,7 +210,8 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
                  ram_address, length);
     DVDRead(system, volume, dvd_offset, ram_address, length, partition);
 
-    DiscIO::Riivolution::ApplyApploaderMemoryPatches(guard, riivolution_patches, ram_address,
+    DiscIO::Riivolution::ApplyApploaderMemoryPatches(guard, riivolution_patches.data(),
+                                                     riivolution_patches.size(), ram_address,
                                                      length);
 
     ppc_state.gpr[3] = 0x81300004;

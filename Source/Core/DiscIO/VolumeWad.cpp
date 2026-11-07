@@ -3,11 +3,9 @@
 
 #include "DiscIO/VolumeWad.h"
 
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -150,23 +148,37 @@ std::vector<u64> VolumeWAD::GetContentOffsets() const
   return content_offsets;
 }
 
-bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content,
-                                      std::span<const u8> encrypted_data,
+bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
+                                      size_t encrypted_size,
                                       const IOS::ES::TicketReader& ticket) const
 {
-  if (encrypted_data.size() != Common::AlignUp(content.size, 0x40))
+  if (encrypted_size != Common::AlignUp(content.size, 0x40))
     return false;
 
   auto context = Common::AES::CreateContextDecrypt(ticket.GetTitleKey().data());
 
-  std::array<u8, 16> iv{};
+  u8 iv[16] = {};
   iv[0] = static_cast<u8>(content.index >> 8);
   iv[1] = static_cast<u8>(content.index & 0xFF);
 
-  std::vector<u8> decrypted_data(encrypted_data.size());
-  context->Crypt(iv.data(), encrypted_data.data(), decrypted_data.data(), decrypted_data.size());
+  // Decrypt and hash in chunks: in CBC the IV of each chunk is the last
+  // encrypted block before it, so the borrowed input is never copied whole.
+  std::unique_ptr<Common::SHA1::Context> sha1 = Common::SHA1::CreateContext();
+  u8 chunk[2048];
+  u64 left_to_hash = content.size;
+  size_t offset = 0;
+  while (offset < encrypted_size)
+  {
+    const size_t left = encrypted_size - offset;
+    const size_t n = left < sizeof(chunk) ? left : sizeof(chunk);
+    context->Crypt(offset ? encrypted_data + offset - 16 : iv, encrypted_data + offset, chunk, n);
+    const size_t hashed = left_to_hash < n ? size_t(left_to_hash) : n;
+    sha1->Update(chunk, hashed);
+    left_to_hash -= hashed;
+    offset += n;
+  }
 
-  return Common::SHA1::CalculateDigest(decrypted_data.data(), content.size) == content.sha1;
+  return sha1->Finish() == content.sha1;
 }
 
 IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const
@@ -205,14 +217,21 @@ IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const
     offset += Common::AlignUp(content.size, 0x40);
   }
 
-  std::vector<u8> content_data(Common::AlignUp(smallest_content.size, 0x40));
-  if (!m_reader->Read(offset_of_smallest_content, content_data.size(), content_data.data()))
+  const size_t content_size = size_t(Common::AlignUp(smallest_content.size, 0x40));
+  u8* const content_data = static_cast<u8*>(std::malloc(content_size ? content_size : 1));
+  if (!content_data)
     return m_ticket;
+  if (!m_reader->Read(offset_of_smallest_content, content_size, content_data))
+  {
+    std::free(content_data);
+    return m_ticket;
+  }
 
   const u8 specified_index = m_ticket.GetCommonKeyIndex();
   if (specified_index < IOS::HLE::IOSC::COMMON_KEY_HANDLES.size() &&
-      CheckContentIntegrity(smallest_content, content_data, m_ticket))
+      CheckContentIntegrity(smallest_content, content_data, content_size, m_ticket))
   {
+    std::free(content_data);
     return m_ticket;  // The common key index is already correct
   }
 
@@ -223,10 +242,14 @@ IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const
     if (i != specified_index)
     {
       new_ticket.OverwriteCommonKeyIndex(i);
-      if (CheckContentIntegrity(smallest_content, content_data, new_ticket))
+      if (CheckContentIntegrity(smallest_content, content_data, content_size, new_ticket))
+      {
+        std::free(content_data);
         return new_ticket;  // We've found the common key index that should be used
+      }
     }
   }
+  std::free(content_data);
 
   ERROR_LOG_FMT(DISCIO, "Couldn't find valid common key for WAD file ({} specified)",
                 specified_index);
@@ -259,7 +282,7 @@ std::string VolumeWAD::GetMakerID(const Partition& partition) const
   if (!Common::IsPrintableCharacter(temp[0]) || !Common::IsPrintableCharacter(temp[1]))
     return "00";
 
-  return FilterGameID(temp);
+  return FilterGameID(temp, sizeof(temp));
 }
 
 std::optional<u64> VolumeWAD::GetTitleID(const Partition& partition) const
@@ -295,10 +318,10 @@ std::map<Language, std::string> VolumeWAD::GetLongNames() const
   if (!m_tmd.IsValid() || !IOS::ES::IsChannel(m_tmd.GetTitleId()))
     return {};
 
-  std::vector<char16_t> names(NAMES_TOTAL_CHARS);
-  if (!Read(m_opening_bnr_offset + 0x9C, NAMES_TOTAL_BYTES, reinterpret_cast<u8*>(names.data())))
+  char16_t names[NAMES_TOTAL_CHARS];
+  if (!Read(m_opening_bnr_offset + 0x9C, NAMES_TOTAL_BYTES, reinterpret_cast<u8*>(names)))
     return std::map<Language, std::string>();
-  return ReadWiiNames(names);
+  return ReadWiiNames(names, NAMES_TOTAL_CHARS);
 }
 
 std::vector<u32> VolumeWAD::GetBanner(u32* width, u32* height) const

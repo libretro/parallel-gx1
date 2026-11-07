@@ -48,15 +48,15 @@ std::string VolumeDisc::GetGameID(const Partition& partition) const
     }
 
     const std::string maker_id{GetMakerID()};
-    memcpy(id + 4, maker_id.c_str(), std::min<std::size_t>(maker_id.size(), 2));
+    memcpy(id + 4, maker_id.c_str(), maker_id.size() < 2 ? maker_id.size() : 2);
 
-    return FilterGameID(id);
+    return FilterGameID(id, sizeof(id));
   }
 
   if (!Read(0, sizeof(id), reinterpret_cast<u8*>(id), partition))
     return std::string();
 
-  return FilterGameID(id);
+  return FilterGameID(id, sizeof(id));
 }
 
 Country VolumeDisc::GetCountry(const Partition& partition) const
@@ -138,7 +138,7 @@ std::string VolumeDisc::GetMakerID(const Partition& partition) const
   if (!Read(0x4, sizeof(maker_id), reinterpret_cast<u8*>(&maker_id), partition))
     return std::string();
 
-  return FilterGameID(maker_id);
+  return FilterGameID(maker_id, sizeof(maker_id));
 }
 
 std::optional<u16> VolumeDisc::GetRevision(const Partition& partition) const
@@ -155,13 +155,13 @@ std::string VolumeDisc::GetInternalName(const Partition& partition) const
   if (GetVolumeType() == Platform::Triforce)
   {
     const BootID* boot_id = static_cast<const VolumeGC*>(this)->GetTriforceBootID();
-    return DecodeString(boot_id->game_name);
+    return DecodeString(boot_id->game_name.data(), boot_id->game_name.size());
   }
 
   if (!Read(0x20, sizeof(name), reinterpret_cast<u8*>(&name), partition))
     return std::string();
 
-  return DecodeString(name);
+  return DecodeString(name, sizeof(name));
 }
 
 std::string VolumeDisc::GetApploaderDate(const Partition& partition) const
@@ -171,7 +171,7 @@ std::string VolumeDisc::GetApploaderDate(const Partition& partition) const
   if (!Read(0x2440, sizeof(date), reinterpret_cast<u8*>(&date), partition))
     return std::string();
 
-  return DecodeString(date);
+  return DecodeString(date, sizeof(date));
 }
 
 std::optional<u8> VolumeDisc::GetDiscNumber(const Partition& partition) const

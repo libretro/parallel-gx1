@@ -342,7 +342,6 @@ public:
   std::string GetCompressionMethod() const override { return {}; }
   std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
 
-private:
   struct PartitionWithType
   {
     PartitionWithType(DirectoryBlobPartition&& partition_, PartitionType type_)
@@ -353,6 +352,8 @@ private:
     DirectoryBlobPartition partition;
     PartitionType type;
   };
+
+private:
 
   explicit DirectoryBlobReader(const std::string& game_partition_root,
                                const std::string& true_root);

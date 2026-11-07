@@ -3,7 +3,6 @@
 
 #include "DiscIO/WIACompression.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -22,6 +21,11 @@
 
 namespace DiscIO
 {
+static size_t MinSize(size_t a, size_t b)
+{
+  return a < b ? a : b;
+}
+
 static u32 LZMA2DictionarySize(u8 p)
 {
   return (static_cast<u32>(2) | (p & 1)) << (p / 2 + 11);
@@ -33,7 +37,7 @@ bool NoneDecompressor::Decompress(const DecompressionBuffer& in, DecompressionBu
                                   size_t* in_bytes_read)
 {
   const size_t length =
-      std::min(in.bytes_written - *in_bytes_read, out->data.size() - out->bytes_written);
+      MinSize(in.bytes_written - *in_bytes_read, out->data.size() - out->bytes_written);
 
   std::memcpy(out->data.data() + out->bytes_written, in.data.data() + *in_bytes_read, length);
 
@@ -66,8 +70,8 @@ bool PurgeDecompressor::Decompress(const DecompressionBuffer& in, DecompressionB
   {
     if (m_segment_bytes_written == 0 && *in_bytes_read == in.data.size() - Common::SHA1::DIGEST_LEN)
     {
-      const size_t zeroes_to_write = std::min<size_t>(m_decompressed_size - m_out_bytes_written,
-                                                      out->data.size() - out->bytes_written);
+      const size_t zeroes_to_write = MinSize(size_t(m_decompressed_size - m_out_bytes_written),
+                                             out->data.size() - out->bytes_written);
 
       std::memset(out->data.data() + out->bytes_written, 0, zeroes_to_write);
 
@@ -94,7 +98,7 @@ bool PurgeDecompressor::Decompress(const DecompressionBuffer& in, DecompressionB
     if (m_segment_bytes_written < sizeof(m_segment))
     {
       const size_t bytes_to_copy =
-          std::min(in.bytes_written - *in_bytes_read, sizeof(m_segment) - m_segment_bytes_written);
+          MinSize(in.bytes_written - *in_bytes_read, sizeof(m_segment) - m_segment_bytes_written);
 
       std::memcpy(reinterpret_cast<u8*>(&m_segment) + m_segment_bytes_written,
                   in.data.data() + *in_bytes_read, bytes_to_copy);
@@ -114,7 +118,7 @@ bool PurgeDecompressor::Decompress(const DecompressionBuffer& in, DecompressionB
     if (m_out_bytes_written < offset)
     {
       const size_t zeroes_to_write =
-          std::min(offset - m_out_bytes_written, out->data.size() - out->bytes_written);
+          MinSize(offset - m_out_bytes_written, out->data.size() - out->bytes_written);
 
       std::memset(out->data.data() + out->bytes_written, 0, zeroes_to_write);
 
@@ -124,8 +128,8 @@ bool PurgeDecompressor::Decompress(const DecompressionBuffer& in, DecompressionB
 
     if (m_out_bytes_written >= offset && m_out_bytes_written < offset + size)
     {
-      const size_t bytes_to_copy = std::min(
-          std::min(offset + size - m_out_bytes_written, out->data.size() - out->bytes_written),
+      const size_t bytes_to_copy = MinSize(
+          MinSize(offset + size - m_out_bytes_written, out->data.size() - out->bytes_written),
           in.bytes_written - *in_bytes_read);
 
       std::memcpy(out->data.data() + out->bytes_written, in.data.data() + *in_bytes_read,
@@ -365,7 +369,7 @@ bool RVZPackDecompressor::Decompress(const DecompressionBuffer& in, Decompressio
       m_size = size & 0x7FFFFFFF;
     }
 
-    size_t bytes_to_write = std::min<size_t>(m_size, out->data.size() - out->bytes_written);
+    size_t bytes_to_write = MinSize(size_t(m_size), out->data.size() - out->bytes_written);
     if (m_junk)
     {
       m_lfg.GetBytes(bytes_to_write, out->data.data() + out->bytes_written);
@@ -376,7 +380,7 @@ bool RVZPackDecompressor::Decompress(const DecompressionBuffer& in, Decompressio
       if (m_decompressed.bytes_written != m_decompressed_bytes_read)
       {
         bytes_to_write =
-            std::min(bytes_to_write, m_decompressed.bytes_written - m_decompressed_bytes_read);
+            MinSize(bytes_to_write, m_decompressed.bytes_written - m_decompressed_bytes_read);
 
         std::memcpy(out->data.data() + out->bytes_written,
                     m_decompressed.data.data() + m_decompressed_bytes_read, bytes_to_write);
@@ -464,10 +468,11 @@ bool PurgeCompressor::Compress(const u8* data, size_t size)
 
   while (true)
   {
-    const auto first_non_zero =
-        std::find_if(data + bytes_read, data + size, [](u8 x) { return x != 0; });
+    size_t first_non_zero = bytes_read;
+    while (first_non_zero < size && data[first_non_zero] == 0)
+      first_non_zero++;
 
-    const u32 non_zero_data_start = static_cast<u32>(first_non_zero - data);
+    const u32 non_zero_data_start = static_cast<u32>(first_non_zero);
     if (non_zero_data_start == size)
       break;
 

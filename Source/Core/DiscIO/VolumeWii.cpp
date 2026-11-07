@@ -3,14 +3,12 @@
 
 #include "DiscIO/VolumeWii.h"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstring>
 #include <map>
 #include <memory>
 #include <optional>
-#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -198,7 +196,8 @@ bool VolumeWii::Read(u64 offset, u64 length, u8* buffer, const Partition& partit
     // Calculate offsets
     u64 block_offset_on_disc = partition_data_offset + offset / BLOCK_DATA_SIZE * BLOCK_TOTAL_SIZE;
     u64 data_offset_in_block = offset % BLOCK_DATA_SIZE;
-    u64 copy_size = std::min(length, BLOCK_DATA_SIZE - data_offset_in_block);
+    const u64 block_left = BLOCK_DATA_SIZE - data_offset_in_block;
+    u64 copy_size = length < block_left ? length : block_left;
 
     if (m_last_decrypted_block != block_offset_on_disc)
     {
@@ -258,9 +257,10 @@ bool VolumeWii::HasWiiEncryption() const
 
 std::vector<Partition> VolumeWii::GetPartitions() const
 {
-  std::vector<Partition> partitions(m_partitions.size());
-  const auto partitions_view = std::views::keys(m_partitions);
-  std::ranges::copy(partitions_view, partitions.begin());
+  std::vector<Partition> partitions;
+  partitions.reserve(m_partitions.size());
+  for (const auto& partition : m_partitions)
+    partitions.push_back(partition.first);
   return partitions;
 }
 
@@ -342,10 +342,10 @@ Region VolumeWii::GetRegion() const
 
 std::map<Language, std::string> VolumeWii::GetLongNames() const
 {
-  std::vector<char16_t> names(NAMES_TOTAL_CHARS);
-  names.resize(ReadFile(*this, GetGamePartition(), "opening.bnr",
-                        reinterpret_cast<u8*>(names.data()), NAMES_TOTAL_BYTES, 0x5C));
-  return ReadWiiNames(names);
+  char16_t names[NAMES_TOTAL_CHARS];
+  const u64 read = ReadFile(*this, GetGamePartition(), "opening.bnr",
+                            reinterpret_cast<u8*>(names), NAMES_TOTAL_BYTES, 0x5C);
+  return ReadWiiNames(names, size_t(read));
 }
 
 std::vector<u32> VolumeWii::GetBanner(u32* width, u32* height) const

@@ -3,7 +3,7 @@
 
 #include "DiscIO/CISOBlob.h"
 
-#include <algorithm>
+#include <cstring>
 #include <memory>
 #include <utility>
 
@@ -61,7 +61,8 @@ bool CISOFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
   {
     u64 const block = offset / m_block_size;
     u64 const data_offset = offset % m_block_size;
-    u64 const bytes_to_read = std::min(m_block_size - data_offset, nbytes);
+    u64 const block_left = m_block_size - data_offset;
+    u64 const bytes_to_read = block_left < nbytes ? block_left : nbytes;
 
     if (block < CISO_MAP_SIZE && UNUSED_BLOCK_ID != m_ciso_map[block])
     {
@@ -73,7 +74,7 @@ bool CISOFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
     }
     else
     {
-      std::fill_n(out_ptr, bytes_to_read, 0);
+      std::memset(out_ptr, 0, bytes_to_read);
     }
 
     out_ptr += bytes_to_read;

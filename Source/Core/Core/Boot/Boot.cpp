@@ -646,7 +646,8 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
   if (!std::visit(BootTitle(system, guard, boot->riivolution_patches), boot->parameters))
     return false;
 
-  DiscIO::Riivolution::ApplyGeneralMemoryPatches(guard, boot->riivolution_patches);
+  DiscIO::Riivolution::ApplyGeneralMemoryPatches(guard, boot->riivolution_patches.data(),
+                                                 boot->riivolution_patches.size());
 
   return true;
 }
@@ -752,11 +753,14 @@ void AddRiivolutionPatches(BootParameters* boot_params,
       std::move(disc.volume),
       [&](std::vector<DiscIO::FSTBuilderNode>* fst) {
         DiscIO::Riivolution::ApplyPatchesToFiles(
-            riivolution_patches, DiscIO::Riivolution::PatchIndex::DolphinSysFiles, fst, nullptr);
+            riivolution_patches.data(), riivolution_patches.size(),
+            DiscIO::Riivolution::PatchIndex::DolphinSysFiles, fst, nullptr);
       },
       [&](std::vector<DiscIO::FSTBuilderNode>* fst, DiscIO::FSTBuilderNode* dol_node) {
-        DiscIO::Riivolution::ApplyPatchesToFiles(
-            riivolution_patches, DiscIO::Riivolution::PatchIndex::FileSystem, fst, dol_node);
+        DiscIO::Riivolution::ApplyPatchesToFiles(riivolution_patches.data(),
+                                                 riivolution_patches.size(),
+                                                 DiscIO::Riivolution::PatchIndex::FileSystem, fst,
+                                                 dol_node);
       }));
   boot_params->riivolution_patches = std::move(riivolution_patches);
 }

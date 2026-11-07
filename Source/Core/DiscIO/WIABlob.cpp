@@ -3,7 +3,6 @@
 
 #include "DiscIO/WIABlob.h"
 
-#include <algorithm>
 #include <array>
 #include <cstring>
 #include <expected>
@@ -98,7 +97,8 @@ bool WIARVZFileReader<RVZ>::Initialize(const std::string& path)
   if (m_header_1.header_2_hash != header_2_actual_hash)
     return false;
 
-  std::memcpy(&m_header_2, header_2.data(), std::min(header_2.size(), sizeof(WIAHeader2)));
+  std::memcpy(&m_header_2, header_2.data(),
+              header_2.size() < sizeof(WIAHeader2) ? header_2.size() : sizeof(WIAHeader2));
 
   if (m_header_2.compressor_data_size > sizeof(WIAHeader2::compressor_data) ||
       header_2_size < header_2_min_size + m_header_2.compressor_data_size)
@@ -135,7 +135,9 @@ bool WIARVZFileReader<RVZ>::Initialize(const std::string& path)
   if (m_header_2.partition_entries_hash != partition_entries_actual_hash)
     return false;
 
-  const size_t copy_length = std::min(partition_entry_size, sizeof(PartitionEntry));
+  const size_t copy_length = partition_entry_size < sizeof(PartitionEntry) ?
+                                 partition_entry_size :
+                                 sizeof(PartitionEntry);
   const size_t memset_length = sizeof(PartitionEntry) - copy_length;
   u8* ptr = partition_entries.data();
   m_partition_entries.resize(number_of_partition_entries);
@@ -285,7 +287,8 @@ bool WIARVZFileReader<RVZ>::Read(u64 offset, u64 size, u8* out_ptr)
 
   if (offset < sizeof(WIAHeader2::disc_header))
   {
-    const u64 bytes_to_read = std::min(sizeof(WIAHeader2::disc_header) - offset, size);
+    const u64 header_left = sizeof(WIAHeader2::disc_header) - offset;
+    const u64 bytes_to_read = header_left < size ? header_left : size;
     std::memcpy(out_ptr, m_header_2.disc_header.data() + offset, bytes_to_read);
     offset += bytes_to_read;
     size -= bytes_to_read;
@@ -334,7 +337,8 @@ bool WIARVZFileReader<RVZ>::Read(u64 offset, u64 size, u8* out_ptr)
         if (offset < data_offset)
           return false;
 
-        const u64 bytes_to_read = std::min(data_size - (offset - data_offset), size);
+        const u64 data_left = data_size - (offset - data_offset);
+        const u64 bytes_to_read = data_left < size ? data_left : size;
 
         m_exception_list.clear();
         m_write_to_exception_list = true;
@@ -349,7 +353,8 @@ bool WIARVZFileReader<RVZ>::Read(u64 offset, u64 size, u8* out_ptr)
                     VolumeWii::HashBlock hash_blocks[VolumeWii::BLOCKS_PER_GROUP], u64 offset_) {
                   // EncryptGroups calls ReadWiiDecrypted, which calls ReadFromGroups,
                   // which populates m_exception_list when m_write_to_exception_list == true
-                  if (!ApplyHashExceptions(m_exception_list, hash_blocks))
+                  if (!ApplyHashExceptions(m_exception_list.data(), m_exception_list.size(),
+                                           hash_blocks))
                     hash_exception_error = true;
                 }))
         {
@@ -440,7 +445,9 @@ bool WIARVZFileReader<RVZ>::ReadWiiDecrypted(u64 offset, u64 size, u8* out_ptr,
     if (!ReadFromGroups(
             &offset, &size, &out_ptr, chunk_size, VolumeWii::BLOCK_DATA_SIZE, data_offset,
             data_size, Common::swap32(data.group_index), Common::swap32(data.number_of_groups),
-            std::max<u32>(1, static_cast<u32>(chunk_size / VolumeWii::GROUP_DATA_SIZE))))
+            chunk_size >= VolumeWii::GROUP_DATA_SIZE ?
+                static_cast<u32>(chunk_size / VolumeWii::GROUP_DATA_SIZE) :
+                1u))
     {
       return false;
     }
@@ -476,9 +483,11 @@ bool WIARVZFileReader<RVZ>::ReadFromGroups(u64* offset, u64* size, u8** out_ptr,
     const u64 group_offset_in_data = i * chunk_size;
     const u64 offset_in_group = *offset - group_offset_in_data - data_offset;
 
-    chunk_size = std::min(chunk_size, data_size - group_offset_in_data);
+    if (data_size - group_offset_in_data < chunk_size)
+      chunk_size = data_size - group_offset_in_data;
 
-    const u64 bytes_to_read = std::min(chunk_size - offset_in_group, *size);
+    const u64 group_left = chunk_size - offset_in_group;
+    const u64 bytes_to_read = group_left < *size ? group_left : *size;
     u32 group_data_size = Common::swap32(group.data_size);
 
     WIARVZCompressionType compression_type = m_compression_type;
@@ -647,7 +656,9 @@ bool WIARVZFileReader<RVZ>::Chunk::Read(u64 offset, u64 size, u8* out_ptr)
           m_offset_in_file;
 
       // Ensure we don't read too much.
-      bytes_to_read = std::min<u64>(m_in.data.size() - m_in.bytes_written, bytes_to_read);
+      const u64 in_left = m_in.data.size() - m_in.bytes_written;
+      if (in_left < bytes_to_read)
+        bytes_to_read = in_left;
     }
 
     if (bytes_to_read == 0)
@@ -821,11 +832,12 @@ size_t WIARVZFileReader<RVZ>::Chunk::GetOutBytesWrittenExcludingExceptions() con
 
 template <bool RVZ>
 bool WIARVZFileReader<RVZ>::ApplyHashExceptions(
-    std::span<const HashExceptionEntry> exception_list,
+    const HashExceptionEntry* exception_list, size_t count,
     VolumeWii::HashBlock hash_blocks[VolumeWii::BLOCKS_PER_GROUP])
 {
-  for (const HashExceptionEntry& exception : exception_list)
+  for (size_t i = 0; i < count; i++)
   {
+    const HashExceptionEntry& exception = exception_list[i];
     const u16 offset = Common::swap16(exception.offset);
 
     const size_t block_index = offset / VolumeWii::BLOCK_HEADER_SIZE;

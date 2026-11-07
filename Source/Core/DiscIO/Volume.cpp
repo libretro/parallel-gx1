@@ -4,11 +4,9 @@
 #include "DiscIO/Volume.h"
 
 #include <cstring>
-#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -36,34 +34,38 @@ const IOS::ES::TicketReader Volume::INVALID_TICKET{};
 const IOS::ES::TMDReader Volume::INVALID_TMD{};
 const std::vector<u8> Volume::INVALID_CERT_CHAIN{};
 
-std::string Volume::DecodeString(std::span<const char> data) const
+std::string Volume::DecodeString(const char* data, size_t size) const
 {
   // strnlen to trim null bytes
-  std::string string(data.data(), strnlen(data.data(), data.size()));
+  std::string string(data, strnlen(data, size));
   return GetRegion() == Region::NTSC_J ? SHIFTJISToUTF8(string) : CP1252ToUTF8(string);
 }
 
-std::string Volume::FilterGameID(std::span<const char> data)
+std::string Volume::FilterGameID(const char* data, size_t size)
 {
-  std::string string(data.data(), data.size());
+  std::string string(data, size);
 
   // We don't want game IDs to contain characters that are unprintable or might cause path
   // traversal. Game IDs normally only contain ASCII uppercase letters and numbers,
   // but GNHE5d contains a lowercase letter, so let's allow all ASCII letters and numbers.
-  std::ranges::replace_if(string, std::not_fn(Common::IsAlnum), '-');
+  for (char& c : string)
+  {
+    if (!Common::IsAlnum(c))
+      c = '-';
+  }
 
   return string;
 }
 
-std::map<Language, std::string> Volume::ReadWiiNames(std::span<const char16_t> data)
+std::map<Language, std::string> Volume::ReadWiiNames(const char16_t* data, size_t size)
 {
   std::map<Language, std::string> names;
   for (size_t i = 0; i < NUMBER_OF_LANGUAGES; ++i)
   {
     const size_t name_start = NAME_CHARS_LENGTH * i;
-    if (name_start + NAME_CHARS_LENGTH <= data.size())
+    if (name_start + NAME_CHARS_LENGTH <= size)
     {
-      const std::string name = UTF16BEToUTF8(data.data() + name_start, NAME_CHARS_LENGTH);
+      const std::string name = UTF16BEToUTF8(data + name_start, NAME_CHARS_LENGTH);
       if (!name.empty())
         names[static_cast<Language>(i)] = name;
     }

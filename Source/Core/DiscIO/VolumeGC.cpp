@@ -257,23 +257,23 @@ VolumeGC::ConvertedGCBanner VolumeGC::ExtractBannerInformation(const GCBanner& b
     const GCBannerInformation& info = banner_file.information[i];
     Language language = static_cast<Language>(static_cast<int>(start_language) + i);
 
-    std::string description = DecodeString(info.description);
+    std::string description = DecodeString(info.description, sizeof(info.description));
     if (!description.empty())
       banner.descriptions.emplace(language, description);
 
-    std::string short_name = DecodeString(info.short_name);
+    std::string short_name = DecodeString(info.short_name, sizeof(info.short_name));
     if (!short_name.empty())
       banner.short_names.emplace(language, short_name);
 
-    std::string long_name = DecodeString(info.long_name);
+    std::string long_name = DecodeString(info.long_name, sizeof(info.long_name));
     if (!long_name.empty())
       banner.long_names.emplace(language, long_name);
 
-    std::string short_maker = DecodeString(info.short_maker);
+    std::string short_maker = DecodeString(info.short_maker, sizeof(info.short_maker));
     if (!short_maker.empty())
       banner.short_makers.emplace(language, short_maker);
 
-    std::string long_maker = DecodeString(info.long_maker);
+    std::string long_maker = DecodeString(info.long_maker, sizeof(info.long_maker));
     if (!long_maker.empty())
       banner.long_makers.emplace(language, long_maker);
   }

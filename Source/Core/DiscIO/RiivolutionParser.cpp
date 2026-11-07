@@ -3,7 +3,6 @@
 
 #include "DiscIO/RiivolutionParser.h"
 
-#include <algorithm>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -146,8 +145,16 @@ std::optional<Disc> ParseString(std::string_view xml, std::string xml_path)
       const std::string macro_id = macro_node.attribute("id").as_string();
       for (auto& section : disc.m_sections)
       {
-        auto option_to_clone = std::ranges::find(section.m_options, macro_id, &Option::m_id);
-        if (option_to_clone == section.m_options.end())
+        const Option* option_to_clone = nullptr;
+        for (const Option& option : section.m_options)
+        {
+          if (option.m_id == macro_id)
+          {
+            option_to_clone = &option;
+            break;
+          }
+        }
+        if (!option_to_clone)
           continue;
 
         Option cloned_option = *option_to_clone;
@@ -218,7 +225,7 @@ std::optional<Disc> ParseString(std::string_view xml, std::string xml_path)
   return disc;
 }
 
-static bool CheckRegion(std::span<const std::string> xml_regions, std::string_view game_region)
+static bool CheckRegion(const std::vector<std::string>& xml_regions, std::string_view game_region)
 {
   if (xml_regions.empty())
     return true;
@@ -304,8 +311,16 @@ std::vector<Patch> Disc::GeneratePatches(const std::string& game_id) const
       const Choice& choice = option.m_choices[selected - 1];
       for (const auto& patch_ref : choice.m_patch_references)
       {
-        const auto patch = std::ranges::find(m_patches, patch_ref.m_id, &Patch::m_id);
-        if (patch == m_patches.end())
+        const Patch* patch = nullptr;
+        for (const Patch& candidate : m_patches)
+        {
+          if (candidate.m_id == patch_ref.m_id)
+          {
+            patch = &candidate;
+            break;
+          }
+        }
+        if (!patch)
           continue;
 
         std::vector<std::pair<std::string, std::string_view>> replacements;

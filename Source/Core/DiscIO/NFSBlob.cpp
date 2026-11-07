@@ -3,7 +3,6 @@
 
 #include "DiscIO/NFSBlob.h"
 
-#include <algorithm>
 #include <array>
 #include <cstring>
 #include <memory>
@@ -51,8 +50,9 @@ bool NFSFileReader::ReadKey(const std::string& path, const std::string& director
 
 std::vector<NFSLBARange> NFSFileReader::GetLBARanges(const NFSHeader& header)
 {
+  const size_t stored_count = Common::swap32(header.lba_range_count);
   const size_t lba_range_count =
-      std::min<size_t>(Common::swap32(header.lba_range_count), header.lba_ranges.size());
+      stored_count < header.lba_ranges.size() ? stored_count : header.lba_ranges.size();
 
   std::vector<NFSLBARange> lba_ranges;
   lba_ranges.reserve(lba_range_count);
@@ -105,20 +105,24 @@ std::vector<File::DirectIOFile> NFSFileReader::OpenFiles(const std::string& dire
   return files;
 }
 
-u64 NFSFileReader::CalculateExpectedRawSize(std::span<const NFSLBARange> lba_ranges)
+u64 NFSFileReader::CalculateExpectedRawSize(const NFSLBARange* lba_ranges, size_t count)
 {
   u64 total_blocks = 0;
-  for (const NFSLBARange& range : lba_ranges)
-    total_blocks += range.num_blocks;
+  for (size_t i = 0; i < count; i++)
+    total_blocks += lba_ranges[i].num_blocks;
 
   return sizeof(NFSHeader) + total_blocks * BLOCK_SIZE;
 }
 
-u64 NFSFileReader::CalculateExpectedDataSize(std::span<const NFSLBARange> lba_ranges)
+u64 NFSFileReader::CalculateExpectedDataSize(const NFSLBARange* lba_ranges, size_t count)
 {
   u32 greatest_block_index = 0;
-  for (const NFSLBARange& range : lba_ranges)
-    greatest_block_index = std::max(greatest_block_index, range.start_block + range.num_blocks);
+  for (size_t i = 0; i < count; i++)
+  {
+    const u32 end = lba_ranges[i].start_block + lba_ranges[i].num_blocks;
+    if (end > greatest_block_index)
+      greatest_block_index = end;
+  }
 
   return u64(greatest_block_index) * BLOCK_SIZE;
 }
@@ -141,7 +145,7 @@ std::unique_ptr<NFSFileReader> NFSFileReader::Create(File::DirectIOFile first_fi
 
   std::vector<NFSLBARange> lba_ranges = GetLBARanges(header);
 
-  const u64 expected_raw_size = CalculateExpectedRawSize(lba_ranges);
+  const u64 expected_raw_size = CalculateExpectedRawSize(lba_ranges.data(), lba_ranges.size());
 
   u64 raw_size;
   std::vector<File::DirectIOFile> files =
@@ -159,7 +163,7 @@ NFSFileReader::NFSFileReader(std::vector<NFSLBARange> lba_ranges,
     : m_lba_ranges(std::move(lba_ranges)), m_files(std::move(files)),
       m_aes_context(Common::AES::CreateContextDecrypt(key.data())), m_raw_size(raw_size), m_key(key)
 {
-  m_data_size = CalculateExpectedDataSize(m_lba_ranges);
+  m_data_size = CalculateExpectedDataSize(m_lba_ranges.data(), m_lba_ranges.size());
 }
 
 std::unique_ptr<BlobReader> NFSFileReader::CopyReader() const
@@ -285,7 +289,8 @@ bool NFSFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
       m_current_logical_block_index = logical_block_index;
     }
 
-    const u64 bytes_to_copy = std::min(nbytes, BLOCK_SIZE - offset_in_block);
+    const u64 block_left = BLOCK_SIZE - offset_in_block;
+    const u64 bytes_to_copy = nbytes < block_left ? nbytes : block_left;
     std::memcpy(out_ptr, m_current_block_decrypted.data() + offset_in_block, bytes_to_copy);
 
     offset += bytes_to_copy;

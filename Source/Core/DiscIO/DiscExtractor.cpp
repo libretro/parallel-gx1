@@ -3,7 +3,6 @@
 
 #include "DiscIO/DiscExtractor.h"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -28,7 +27,8 @@ u64 ReadFile(const Volume& volume, const Partition& partition, const FileInfo* f
   if (!file_info || file_info->IsDirectory() || offset_in_file >= file_info->GetSize())
     return 0;
 
-  const u64 read_length = std::min(max_buffer_size, file_info->GetSize() - offset_in_file);
+  const u64 file_left = file_info->GetSize() - offset_in_file;
+  const u64 read_length = max_buffer_size < file_left ? max_buffer_size : file_left;
 
   DEBUG_LOG_FMT(DISCIO, "Reading {:x} bytes at {:x} from file {}. Offset: {:x} Size: {:x}",
                 read_length, offset_in_file, file_info->GetPath(), file_info->GetOffset(),
@@ -61,7 +61,7 @@ bool ExportData(const Volume& volume, const Partition& partition, u64 offset, u6
   while (size)
   {
     // Limit read size to 128 MB
-    const size_t read_size = static_cast<size_t>(std::min<u64>(size, 0x08000000));
+    const size_t read_size = static_cast<size_t>(size < 0x08000000 ? size : 0x08000000);
 
     std::vector<u8> buffer(read_size);
 

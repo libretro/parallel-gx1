@@ -69,7 +69,8 @@ bool SplitPlainFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
     {
       auto& f = file.file;
       const u64 offset_in_file = current_offset - file.offset;
-      const u64 current_read = std::min(file.size - offset_in_file, rest);
+      const u64 file_left = file.size - offset_in_file;
+      const u64 current_read = file_left < rest ? file_left : rest;
       if (!f.OffsetRead(offset_in_file, out, current_read))
         return false;
 

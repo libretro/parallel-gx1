@@ -3,7 +3,6 @@
 
 #include "DiscIO/FileBlob.h"
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>

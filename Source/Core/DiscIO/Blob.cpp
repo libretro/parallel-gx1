@@ -3,7 +3,7 @@
 
 #include "DiscIO/Blob.h"
 
-#include <algorithm>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -62,7 +62,7 @@ std::string GetName(BlobType blob_type, bool translate)
 
 void SectorReader::SetSectorSize(int blocksize)
 {
-  m_block_size = std::max(blocksize, 0);
+  m_block_size = blocksize > 0 ? blocksize : 0;
   for (auto& cache_entry : m_cache)
   {
     cache_entry.Reset();
@@ -72,7 +72,7 @@ void SectorReader::SetSectorSize(int blocksize)
 
 void SectorReader::SetChunkSize(int block_cnt)
 {
-  m_chunk_blocks = std::max(block_cnt, 1);
+  m_chunk_blocks = block_cnt > 1 ? block_cnt : 1;
   // Clear cache and resize the data arrays
   SetSectorSize(m_block_size);
 }
@@ -81,13 +81,14 @@ SectorReader::~SectorReader() = default;
 
 const SectorReader::Cache* SectorReader::FindCacheLine(u64 block_num)
 {
-  auto itr =
-      std::ranges::find_if(m_cache, [&](const Cache& entry) { return entry.Contains(block_num); });
-  if (itr == m_cache.end())
-    return nullptr;
-
-  itr->MarkUsed();
-  return &*itr;
+  for (Cache& entry : m_cache)
+  {
+    if (!entry.Contains(block_num))
+      continue;
+    entry.MarkUsed();
+    return &entry;
+  }
+  return nullptr;
 }
 
 SectorReader::Cache* SectorReader::GetEmptyCacheLine()
@@ -148,9 +149,9 @@ bool SectorReader::Read(u64 offset, u64 size, u8* out_ptr)
     // Cache entries are aligned chunks, we may not want to read from the start
     u32 read_offset = static_cast<u32>(block - cache->block_idx) * m_block_size + position_in_block;
     u32 can_read = m_block_size * cache->num_blocks - read_offset;
-    u32 was_read = static_cast<u32>(std::min<u64>(can_read, remain));
+    u32 was_read = static_cast<u32>(can_read < remain ? u64(can_read) : remain);
 
-    std::copy_n(cache->data.begin() + read_offset, was_read, out_ptr);
+    std::memcpy(out_ptr, cache->data.data() + read_offset, was_read);
 
     offset += was_read;
     out_ptr += was_read;
@@ -181,13 +182,18 @@ u32 SectorReader::ReadChunk(u8* buffer, u64 chunk_num)
   // read a whole chunk. We need to clamp down in that case.
   u64 end_block = (GetDataSize() + m_block_size - 1) / m_block_size;
   if (end_block)
-    cnt_blocks = static_cast<u32>(std::min<u64>(m_chunk_blocks, end_block - block_num));
+  {
+    const u64 blocks_left = end_block - block_num;
+    cnt_blocks = static_cast<u32>(u64(m_chunk_blocks) < blocks_left ? u64(m_chunk_blocks) :
+                                                                        blocks_left);
+  }
 
   if (ReadMultipleAlignedBlocks(block_num, cnt_blocks, buffer))
   {
     if (cnt_blocks < m_chunk_blocks)
     {
-      std::fill(buffer + cnt_blocks * m_block_size, buffer + m_chunk_blocks * m_block_size, 0u);
+      std::memset(buffer + cnt_blocks * m_block_size, 0,
+                  (m_chunk_blocks - cnt_blocks) * m_block_size);
     }
     return cnt_blocks;
   }
@@ -200,7 +206,7 @@ u32 SectorReader::ReadChunk(u8* buffer, u64 chunk_num)
     {
       if (!GetBlock(block_num + i, buffer))
       {
-        std::fill_n(buffer, (cnt_blocks - i) * m_block_size, 0u);
+        std::memset(buffer, 0, (cnt_blocks - i) * m_block_size);
         return i;
       }
       buffer += m_block_size;

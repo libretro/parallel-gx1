@@ -2,7 +2,6 @@
 
 #include "DiscIO/LaggedFibonacciGenerator.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstring>
 
@@ -68,18 +67,20 @@ bool LaggedFibonacciGenerator::GetSeed(const u32* data, size_t size, size_t data
     return false;
 
   // If the data doesn't look like something we can regenerate, return early to save time
-  if (!std::all_of(data, data + LFG_K, [](u32 x) {
-        return (Common::swap32(x) & 0x00C00000) == (Common::swap32(x) >> 2 & 0x00C00000);
-      }))
+  for (size_t i = 0; i < LFG_K; i++)
   {
-    return false;
+    const u32 x = Common::swap32(data[i]);
+    if ((x & 0x00C00000) != (x >> 2 & 0x00C00000))
+      return false;
   }
 
   const size_t data_offset_mod_k = data_offset % LFG_K;
   const size_t data_offset_div_k = data_offset / LFG_K;
 
-  std::copy_n(data, LFG_K - data_offset_mod_k, lfg->m_buffer.data() + data_offset_mod_k);
-  std::copy_n(data + LFG_K - data_offset_mod_k, data_offset_mod_k, lfg->m_buffer.data());
+  std::memcpy(lfg->m_buffer.data() + data_offset_mod_k, data,
+              (LFG_K - data_offset_mod_k) * sizeof(u32));
+  std::memcpy(lfg->m_buffer.data(), data + LFG_K - data_offset_mod_k,
+              data_offset_mod_k * sizeof(u32));
 
   lfg->Backward(0, data_offset_mod_k);
 
@@ -99,7 +100,8 @@ void LaggedFibonacciGenerator::GetBytes(size_t count, u8* out)
 {
   while (count > 0)
   {
-    const size_t length = std::min(count, LFG_K * sizeof(u32) - m_position_bytes);
+    const size_t buffer_left = LFG_K * sizeof(u32) - m_position_bytes;
+    const size_t length = count < buffer_left ? count : buffer_left;
 
     std::memcpy(out, reinterpret_cast<u8*>(m_buffer.data()) + m_position_bytes, length);
 
@@ -151,11 +153,11 @@ void LaggedFibonacciGenerator::Forward()
 
 void LaggedFibonacciGenerator::Backward(size_t start_word, size_t end_word)
 {
-  const size_t loop_end = std::max(LFG_J, start_word);
-  for (size_t i = std::min(end_word, LFG_K); i > loop_end; --i)
+  const size_t loop_end = LFG_J > start_word ? LFG_J : start_word;
+  for (size_t i = end_word < LFG_K ? end_word : LFG_K; i > loop_end; --i)
     m_buffer[i - 1] ^= m_buffer[i - 1 - LFG_J];
 
-  for (size_t i = std::min(end_word, LFG_J); i > start_word; --i)
+  for (size_t i = end_word < LFG_J ? end_word : LFG_J; i > start_word; --i)
     m_buffer[i - 1] ^= m_buffer[i - 1 + LFG_K - LFG_J];
 }
 

@@ -3,7 +3,6 @@
 
 #include "DiscIO/RiivolutionPatcher.h"
 
-#include <algorithm>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -102,7 +101,7 @@ FileDataLoaderHostFS::MakeAbsoluteFromRelative(std::string_view external_relativ
         result.pop_back();
       result.pop_back();
     }
-    else if (std::ranges::all_of(element, [](char c) { return c == '.'; }))
+    else if (element.find_first_not_of('.') == std::string_view::npos)
     {
       // This is a triple, quadruple, etc. dot.
       // Some file systems treat this as several 'up' path traversals, but Riivolution does not.
@@ -243,14 +242,17 @@ static void ApplyPatchToFile(const Patch& patch, FSTBuilderNode* file_node,
   auto& content = std::get<std::vector<BuilderContentSource>>(file_node->m_content);
 
   const u64 raw_external_filesize = *f;
-  const u64 external_file_offset = std::min(raw_external_file_offset, raw_external_filesize);
+  const u64 external_file_offset = raw_external_file_offset < raw_external_filesize ?
+                                       raw_external_file_offset :
+                                       raw_external_filesize;
   const u64 external_filesize = raw_external_filesize - external_file_offset;
 
   const u64 patch_start = file_patch_offset;
   const u64 patch_size = file_patch_length == 0 ? external_filesize : file_patch_length;
   const u64 patch_end = patch_start + patch_size;
 
-  const u64 target_filesize = resize ? patch_end : std::max(file_node->m_size, patch_end);
+  const u64 target_filesize =
+      resize || patch_end > file_node->m_size ? patch_end : file_node->m_size;
 
   size_t insert_where = 0;
   if (patch_start >= file_node->m_size)
@@ -307,7 +309,8 @@ static void ApplyPatchToFile(const Patch& patch, FSTBuilderNode* file_node,
   if (patch_size > 0 && external_filesize > 0)
   {
     BuilderContentSource source = patch.m_file_data_loader->MakeContentSource(
-        external_filename, external_file_offset, std::min(patch_size, external_filesize),
+        external_filename, external_file_offset,
+        patch_size < external_filesize ? patch_size : external_filesize,
         patch_start);
     content.emplace(content.begin() + insert_where, std::move(source));
     ++insert_where;
@@ -342,11 +345,17 @@ static FSTBuilderNode* FindFileNodeInFST(std::string_view path, std::vector<FSTB
   const size_t path_separator = path.find('/');
   const bool is_file = path_separator == std::string_view::npos;
   const std::string_view name = is_file ? path : path.substr(0, path_separator);
-  const auto it = std::ranges::find_if(*fst, [&](const FSTBuilderNode& node) {
-    return Common::CaseInsensitiveEquals(node.m_filename, name);
-  });
+  FSTBuilderNode* it = nullptr;
+  for (FSTBuilderNode& node : *fst)
+  {
+    if (Common::CaseInsensitiveEquals(node.m_filename, name))
+    {
+      it = &node;
+      break;
+    }
+  }
 
-  if (it == fst->end())
+  if (!it)
   {
     if (!create_if_not_exists)
       return nullptr;
@@ -367,7 +376,7 @@ static FSTBuilderNode* FindFileNodeInFST(std::string_view path, std::vector<FSTB
   if (is_file != is_existing_node_file)
     return nullptr;
   if (is_file)
-    return &*it;
+    return it;
 
   return FindFileNodeInFST(path.substr(path_separator + 1),
                            &std::get<std::vector<FSTBuilderNode>>(it->m_content),
@@ -464,11 +473,12 @@ static void ApplyFolderPatchToFST(const Patch& patch, const Folder& folder,
   ApplyFolderPatchToFST(patch, folder, fst, dol_node, folder.m_disc, folder.m_external);
 }
 
-void ApplyPatchesToFiles(std::span<const Patch> patches, PatchIndex index,
+void ApplyPatchesToFiles(const Patch* patches, size_t patch_count, PatchIndex index,
                          std::vector<FSTBuilderNode>* fst, FSTBuilderNode* dol_node)
 {
-  for (const auto& patch : patches)
+  for (size_t i = 0; i < patch_count; i++)
   {
+    const Patch& patch = patches[i];
     const auto& file_patches =
         index == PatchIndex::DolphinSysFiles ? patch.m_sys_file_patches : patch.m_file_patches;
     const auto& folder_patches =
@@ -482,10 +492,10 @@ void ApplyPatchesToFiles(std::span<const Patch> patches, PatchIndex index,
   }
 }
 
-static bool MemoryMatchesAt(const Core::CPUThreadGuard& guard, u32 offset,
-                            std::span<const u8> value)
+static bool MemoryMatchesAt(const Core::CPUThreadGuard& guard, u32 offset, const u8* value,
+                            size_t value_size)
 {
-  for (u32 i = 0; i < value.size(); ++i)
+  for (u32 i = 0; i < value_size; ++i)
   {
     auto result = PowerPC::MMU::HostTryRead<u8>(guard, offset + i);
     if (!result || result->value != value[i])
@@ -494,34 +504,34 @@ static bool MemoryMatchesAt(const Core::CPUThreadGuard& guard, u32 offset,
   return true;
 }
 
-static void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, u32 offset,
-                             std::span<const u8> value, std::span<const u8> original)
+static void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, u32 offset, const u8* value,
+                             size_t value_size, const u8* original, size_t original_size)
 {
   if (AchievementManager::GetInstance().IsHardcoreModeActive())
     return;
 
-  if (value.empty())
+  if (!value_size)
     return;
 
-  if (!original.empty() && !MemoryMatchesAt(guard, offset, original))
+  if (original_size && !MemoryMatchesAt(guard, offset, original, original_size))
     return;
 
   auto& system = guard.GetSystem();
-  const u32 size = static_cast<u32>(value.size());
+  const u32 size = static_cast<u32>(value_size);
   for (u32 i = 0; i < size; ++i)
     PowerPC::MMU::HostTryWrite<u8>(guard, value[i], offset + i);
   const u32 overlapping_hook_count = HLE::UnpatchRange(system, offset, offset + size);
   if (overlapping_hook_count != 0)
   {
     WARN_LOG_FMT(OSHLE, "Riivolution memory patch overlaps {} HLE hook(s) at {:08x} (size: {})",
-                 overlapping_hook_count, offset, value.size());
+                 overlapping_hook_count, offset, value_size);
   }
 }
 
 // The patch's value: lent from its value file, or the parsed bytes as they
 // are; File::EndLoan(loan) when done either way.
-static std::span<const u8> GetMemoryPatchValue(const Patch& patch, const Memory& memory_patch,
-                                               ::File::FileLoan* loan)
+static const u8* GetMemoryPatchValue(const Patch& patch, const Memory& memory_patch,
+                                     ::File::FileLoan* loan, size_t* size)
 {
   loan->data = nullptr;
   loan->size = 0;
@@ -529,10 +539,15 @@ static std::span<const u8> GetMemoryPatchValue(const Patch& patch, const Memory&
   if (!memory_patch.m_valuefile.empty())
   {
     if (!patch.m_file_data_loader->LoanFileContents(memory_patch.m_valuefile, loan))
-      return {};
-    return std::span<const u8>(loan->data, size_t(loan->size));
+    {
+      *size = 0;
+      return nullptr;
+    }
+    *size = size_t(loan->size);
+    return loan->data;
   }
-  return memory_patch.m_value;
+  *size = memory_patch.m_value.size();
+  return memory_patch.m_value.data();
 }
 
 static void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, const Patch& patch,
@@ -542,8 +557,10 @@ static void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, const Patch& pat
     return;
 
   ::File::FileLoan loan;
-  ApplyMemoryPatch(guard, memory_patch.m_offset | 0x80000000,
-                   GetMemoryPatchValue(patch, memory_patch, &loan), memory_patch.m_original);
+  size_t value_size;
+  const u8* const value = GetMemoryPatchValue(patch, memory_patch, &loan, &value_size);
+  ApplyMemoryPatch(guard, memory_patch.m_offset | 0x80000000, value, value_size,
+                   memory_patch.m_original.data(), memory_patch.m_original.size());
   ::File::EndLoan(&loan);
 }
 
@@ -557,10 +574,13 @@ static void ApplySearchMemoryPatch(const Core::CPUThreadGuard& guard, const Patc
   for (u32 i = 0; i < length - (stride - 1); i += stride)
   {
     const u32 address = ram_start + i;
-    if (MemoryMatchesAt(guard, address, memory_patch.m_original))
+    if (MemoryMatchesAt(guard, address, memory_patch.m_original.data(),
+                        memory_patch.m_original.size()))
     {
       ::File::FileLoan loan;
-      ApplyMemoryPatch(guard, address, GetMemoryPatchValue(patch, memory_patch, &loan), {});
+      size_t value_size;
+      const u8* const value = GetMemoryPatchValue(patch, memory_patch, &loan, &value_size);
+      ApplyMemoryPatch(guard, address, value, value_size, nullptr, 0);
       ::File::EndLoan(&loan);
       break;
     }
@@ -568,14 +588,15 @@ static void ApplySearchMemoryPatch(const Core::CPUThreadGuard& guard, const Patc
 }
 
 static void ApplyOcarinaPattern(const Core::CPUThreadGuard& guard, const Memory& memory_patch,
-                                std::span<const u8> value, u32 ram_start, u32 length)
+                                const u8* value, size_t value_size, u32 ram_start,
+                                u32 length)
 {
   auto& system = guard.GetSystem();
   for (u32 i = 0; i < length; i += 4)
   {
     // first find the pattern
     const u32 address = ram_start + i;
-    if (MemoryMatchesAt(guard, address, value))
+    if (MemoryMatchesAt(guard, address, value, value_size))
     {
       for (; i < length; i += 4)
       {
@@ -608,19 +629,22 @@ static void ApplyOcarinaMemoryPatch(const Core::CPUThreadGuard& guard, const Pat
   if (memory_patch.m_offset == 0)
     return;
   ::File::FileLoan loan;
-  const std::span<const u8> value = GetMemoryPatchValue(patch, memory_patch, &loan);
-  if (!value.empty())
-    ApplyOcarinaPattern(guard, memory_patch, value, ram_start, length);
+  size_t value_size;
+  const u8* const value = GetMemoryPatchValue(patch, memory_patch, &loan, &value_size);
+  if (value_size)
+    ApplyOcarinaPattern(guard, memory_patch, value, value_size, ram_start, length);
   ::File::EndLoan(&loan);
 }
 
-void ApplyGeneralMemoryPatches(const Core::CPUThreadGuard& guard, std::span<const Patch> patches)
+void ApplyGeneralMemoryPatches(const Core::CPUThreadGuard& guard, const Patch* patches,
+                               size_t patch_count)
 {
   const auto& system = guard.GetSystem();
   const auto& system_memory = system.GetMemory();
 
-  for (const auto& patch : patches)
+  for (size_t i = 0; i < patch_count; i++)
   {
+    const Patch& patch = patches[i];
     for (const auto& memory : patch.m_memory_patches)
     {
       if (memory.m_ocarina)
@@ -634,11 +658,12 @@ void ApplyGeneralMemoryPatches(const Core::CPUThreadGuard& guard, std::span<cons
   }
 }
 
-void ApplyApploaderMemoryPatches(const Core::CPUThreadGuard& guard, std::span<const Patch> patches,
-                                 u32 ram_address, u32 ram_length)
+void ApplyApploaderMemoryPatches(const Core::CPUThreadGuard& guard, const Patch* patches,
+                                 size_t patch_count, u32 ram_address, u32 ram_length)
 {
-  for (const auto& patch : patches)
+  for (size_t i = 0; i < patch_count; i++)
   {
+    const Patch& patch = patches[i];
     for (const auto& memory : patch.m_memory_patches)
     {
       if (!memory.m_ocarina && !memory.m_search)
@@ -652,10 +677,11 @@ void ApplyApploaderMemoryPatches(const Core::CPUThreadGuard& guard, std::span<co
   }
 }
 
-std::optional<SavegameRedirect> ExtractSavegameRedirect(std::span<const Patch> riivolution_patches)
+std::optional<SavegameRedirect> ExtractSavegameRedirect(const Patch* patches, size_t patch_count)
 {
-  for (const auto& patch : riivolution_patches)
+  for (size_t i = 0; i < patch_count; i++)
   {
+    const Patch& patch = patches[i];
     if (!patch.m_savegame_patches.empty())
     {
       const auto& save_patch = patch.m_savegame_patches[0];

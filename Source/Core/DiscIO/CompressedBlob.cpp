@@ -3,7 +3,6 @@
 
 #include "DiscIO/CompressedBlob.h"
 
-#include <algorithm>
 #include <cstring>
 #include <expected>
 #include <memory>
@@ -178,7 +177,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
 
   if (uncompressed)
   {
-    std::copy_n(m_zlib_buffer.begin(), m_header.block_size, out_ptr);
+    std::memcpy(out_ptr, m_zlib_buffer.data(), m_header.block_size);
   }
   else
   {

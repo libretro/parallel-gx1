@@ -3,9 +3,7 @@
 
 #include "DiscIO/DiscUtils.h"
 
-#include <algorithm>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -40,7 +38,10 @@ std::string NameForPartitionType(u32 partition_type, bool include_prefix)
                                       static_cast<char>((partition_type >> 16) & 0xFF),
                                       static_cast<char>((partition_type >> 8) & 0xFF),
                                       static_cast<char>(partition_type & 0xFF)};
-    if (std::ranges::all_of(type_as_game_id, Common::IsAlnum))
+    bool all_alnum = true;
+    for (const char c : type_as_game_id)
+      all_alnum = all_alnum && Common::IsAlnum(c);
+    if (all_alnum)
     {
       return include_prefix ? "P-" + type_as_game_id : type_as_game_id;
     }
@@ -89,7 +90,8 @@ std::optional<u32> GetBootDOLSize(const Volume& volume, const Partition& partiti
     const std::optional<u32> size = volume.ReadSwapped<u32>(dol_offset + 0x90 + i * 4, partition);
     if (!offset || !size)
       return {};
-    dol_size = std::max(*offset + *size, dol_size);
+    if (*offset + *size > dol_size)
+      dol_size = *offset + *size;
   }
 
   // Iterate through the 11 data segments
@@ -99,7 +101,8 @@ std::optional<u32> GetBootDOLSize(const Volume& volume, const Partition& partiti
     const std::optional<u32> size = volume.ReadSwapped<u32>(dol_offset + 0xac + i * 4, partition);
     if (!offset || !size)
       return {};
-    dol_size = std::max(*offset + *size, dol_size);
+    if (*offset + *size > dol_size)
+      dol_size = *offset + *size;
   }
 
   return dol_size;
@@ -123,6 +126,9 @@ std::optional<u64> GetFSTSize(const Volume& volume, const Partition& partition)
   return volume.ReadSwappedAndShifted(0x428, partition);
 }
 
+static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition* partitions,
+                                      size_t partition_count);
+
 u64 GetBiggestReferencedOffset(const Volume& volume)
 {
   std::vector<Partition> partitions = volume.GetPartitions();
@@ -131,14 +137,18 @@ u64 GetBiggestReferencedOffset(const Volume& volume)
   // This can happen when certain programs that create WBFS files scrub the entirety of
   // the Masterpiece partitions in Super Smash Bros. Brawl without removing them from
   // the partition table. https://bugs.dolphin-emu.org/issues/8733
-  std::erase_if(partitions, [&](const Partition& partition) {
-    return volume.ReadSwapped<u32>(0x18, partition) != WII_DISC_MAGIC;
-  });
+  size_t kept = 0;
+  for (size_t i = 0; i < partitions.size(); i++)
+  {
+    if (volume.ReadSwapped<u32>(0x18, partitions[i]) == WII_DISC_MAGIC)
+      partitions[kept++] = partitions[i];
+  }
+  partitions.resize(kept);
 
   if (partitions.empty())
     partitions.push_back(PARTITION_NONE);
 
-  return GetBiggestReferencedOffset(volume, partitions);
+  return GetBiggestReferencedOffset(volume, partitions.data(), partitions.size());
 }
 
 static u64 GetBiggestReferencedOffset(const Volume& volume, const FileInfo& file_info)
@@ -147,7 +157,11 @@ static u64 GetBiggestReferencedOffset(const Volume& volume, const FileInfo& file
   {
     u64 biggest_offset = 0;
     for (const FileInfo& f : file_info)
-      biggest_offset = std::max(biggest_offset, GetBiggestReferencedOffset(volume, f));
+    {
+      const u64 offset = GetBiggestReferencedOffset(volume, f);
+      if (offset > biggest_offset)
+        biggest_offset = offset;
+    }
     return biggest_offset;
   }
   else
@@ -156,16 +170,19 @@ static u64 GetBiggestReferencedOffset(const Volume& volume, const FileInfo& file
   }
 }
 
-u64 GetBiggestReferencedOffset(const Volume& volume, std::span<const Partition> partitions)
+static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition* partitions,
+                                      size_t partition_count)
 {
   const u64 disc_header_size = volume.GetVolumeType() == Platform::GameCubeDisc ? 0x460 : 0x50000;
   u64 biggest_offset = disc_header_size;
-  for (const Partition& partition : partitions)
+  for (size_t i = 0; i < partition_count; i++)
   {
+    const Partition& partition = partitions[i];
     if (partition != PARTITION_NONE)
     {
       const u64 offset = volume.PartitionOffsetToRawOffset(0x440, partition);
-      biggest_offset = std::max(biggest_offset, offset);
+      if (offset > biggest_offset)
+        biggest_offset = offset;
     }
 
     const std::optional<u64> dol_offset = GetBootDOLOffset(volume, partition);
@@ -175,7 +192,8 @@ u64 GetBiggestReferencedOffset(const Volume& volume, std::span<const Partition> 
       if (dol_size)
       {
         const u64 offset = volume.PartitionOffsetToRawOffset(*dol_offset + *dol_size, partition);
-        biggest_offset = std::max(biggest_offset, offset);
+        if (offset > biggest_offset)
+        biggest_offset = offset;
       }
     }
 
@@ -184,7 +202,8 @@ u64 GetBiggestReferencedOffset(const Volume& volume, std::span<const Partition> 
     if (fst_offset && fst_size)
     {
       const u64 offset = volume.PartitionOffsetToRawOffset(*fst_offset + *fst_size, partition);
-      biggest_offset = std::max(biggest_offset, offset);
+      if (offset > biggest_offset)
+        biggest_offset = offset;
     }
 
     const FileSystem* fs = volume.GetFileSystem(partition);
@@ -192,7 +211,8 @@ u64 GetBiggestReferencedOffset(const Volume& volume, std::span<const Partition> 
     {
       const u64 offset_in_partition = GetBiggestReferencedOffset(volume, fs->GetRoot());
       const u64 offset = volume.PartitionOffsetToRawOffset(offset_in_partition, partition);
-      biggest_offset = std::max(biggest_offset, offset);
+      if (offset > biggest_offset)
+        biggest_offset = offset;
     }
   }
   return biggest_offset;

@@ -3,7 +3,7 @@
 
 #include "DiscIO/TGCBlob.h"
 
-#include <algorithm>
+#include <cstring>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -22,13 +22,15 @@ u32 SubtractBE32(u32 minuend_be, u32 subtrahend_le)
 void Replace(u64 offset, u64 size, u8* out_ptr, u64 replace_offset, u64 replace_size,
              const u8* replace_ptr)
 {
-  const u64 replace_start = std::max(offset, replace_offset);
-  const u64 replace_end = std::min(offset + size, replace_offset + replace_size);
+  const u64 replace_start = offset > replace_offset ? offset : replace_offset;
+  const u64 end = offset + size;
+  const u64 replace_limit = replace_offset + replace_size;
+  const u64 replace_end = end < replace_limit ? end : replace_limit;
 
   if (replace_end > replace_start)
   {
-    std::copy_n(replace_ptr + (replace_start - replace_offset), replace_end - replace_start,
-                out_ptr + (replace_start - offset));
+    std::memcpy(out_ptr + (replace_start - offset),
+                replace_ptr + (replace_start - replace_offset), replace_end - replace_start);
   }
 }
 
@@ -80,7 +82,9 @@ TGCFileReader::TGCFileReader(File::DirectIOFile file) : m_file(std::move(file))
                               Common::swap32(m_header.tgc_header_size);
 
   const size_t claimed_fst_entries = Common::swap32(m_fst.data() + 8);
-  const size_t fst_entries = std::min(claimed_fst_entries, m_fst.size() / FST_ENTRY_SIZE);
+  const size_t stored_fst_entries = m_fst.size() / FST_ENTRY_SIZE;
+  const size_t fst_entries =
+      claimed_fst_entries < stored_fst_entries ? claimed_fst_entries : stored_fst_entries;
   for (size_t i = 0; i < fst_entries; ++i)
   {
     // If this is a file (as opposed to a directory)...

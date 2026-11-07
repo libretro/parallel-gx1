@@ -6,7 +6,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -39,7 +38,8 @@ public:
   GetCertificateChain(const Partition& partition = PARTITION_NONE) const override;
   std::vector<u8> GetContent(u16 index) const override;
   std::vector<u64> GetContentOffsets() const override;
-  bool CheckContentIntegrity(const IOS::ES::Content& content, std::span<const u8> encrypted_data,
+  bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
+                             size_t encrypted_size,
                              const IOS::ES::TicketReader& ticket) const override;
   IOS::ES::TicketReader GetTicketWithFixedCommonKey() const override;
   std::string GetGameID(const Partition& partition = PARTITION_NONE) const override;
