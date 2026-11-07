@@ -56,11 +56,19 @@ public:
   DirectIOFile(DirectIOFile&&);
   DirectIOFile& operator=(DirectIOFile&&);
 
-  explicit DirectIOFile(const std::string& path, AccessMode access_mode,
-                        OpenMode open_mode = OpenMode::Default);
+  DirectIOFile(const char* path, AccessMode access_mode, OpenMode open_mode = OpenMode::Default);
+  DirectIOFile(const std::string& path, AccessMode access_mode,
+               OpenMode open_mode = OpenMode::Default)
+      : DirectIOFile(path.c_str(), access_mode, open_mode)
+  {
+  }
 
+  bool Open(const char* path, AccessMode access_mode, OpenMode open_mode = OpenMode::Default);
   bool Open(const std::string& path, AccessMode access_mode,
-            OpenMode open_mode = OpenMode::Default);
+            OpenMode open_mode = OpenMode::Default)
+  {
+    return Open(path.c_str(), access_mode, open_mode);
+  }
 
   bool Close();
 
@@ -123,7 +131,7 @@ private:
   void Swap(DirectIOFile& other);
   DirectIOFile Duplicate() const;
 
-  std::string m_path;
+  char* m_path = nullptr;  // malloc'd, for Duplicate()
   RFILE* m_file = nullptr;
   const u8* m_map = nullptr;
   u64 m_map_size = 0;

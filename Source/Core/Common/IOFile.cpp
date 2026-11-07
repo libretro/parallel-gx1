@@ -53,7 +53,7 @@ IOFile::IOFile() : m_file(nullptr), m_good(true)
 {
 }
 
-IOFile::IOFile(const std::string& filename, const char openmode[], SharedAccess sh)
+IOFile::IOFile(const char* filename, const char openmode[], SharedAccess sh)
     : m_file(nullptr), m_good(true)
 {
   Open(filename, openmode, sh);
@@ -85,7 +85,7 @@ void IOFile::Swap(IOFile& other) noexcept
   other.m_good = good;
 }
 
-bool IOFile::Open(const std::string& filename, const char openmode[], SharedAccess)
+bool IOFile::Open(const char* filename, const char openmode[], SharedAccess)
 {
   bool append;
   unsigned mode;
@@ -94,7 +94,7 @@ bool IOFile::Open(const std::string& filename, const char openmode[], SharedAcce
   mode = ModeFromString(openmode, &append);
   /* read-only files are mapped where the platform can: reads copy straight
    * out of the page cache, and GetMappedPtr()/View() lend without copying */
-  m_file = filestream_open(filename.c_str(), mode,
+  m_file = filestream_open(filename, mode,
                            mode == RETRO_VFS_FILE_ACCESS_READ ?
                                RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS :
                                RETRO_VFS_FILE_ACCESS_HINT_NONE);

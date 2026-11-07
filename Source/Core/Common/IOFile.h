@@ -34,8 +34,12 @@ class IOFile
 {
 public:
   IOFile();
+  IOFile(const char* filename, const char openmode[], SharedAccess sh = SharedAccess::Default);
   IOFile(const std::string& filename, const char openmode[],
-         SharedAccess sh = SharedAccess::Default);
+         SharedAccess sh = SharedAccess::Default)
+      : IOFile(filename.c_str(), openmode, sh)
+  {
+  }
 
   ~IOFile();
 
@@ -47,8 +51,12 @@ public:
 
   void Swap(IOFile& other) noexcept;
 
+  bool Open(const char* filename, const char openmode[], SharedAccess sh = SharedAccess::Default);
   bool Open(const std::string& filename, const char openmode[],
-            SharedAccess sh = SharedAccess::Default);
+            SharedAccess sh = SharedAccess::Default)
+  {
+    return Open(filename.c_str(), openmode, sh);
+  }
   bool Close();
 
   template <typename T>

@@ -124,19 +124,39 @@ private:
 };
 
 // Returns true if the path exists
-bool Exists(const std::string& path);
+bool Exists(const char* path);
+inline bool Exists(const std::string& path)
+{
+  return Exists(path.c_str());
+}
 
 // Returns true if the path exists and is a directory
-bool IsDirectory(const std::string& path);
+bool IsDirectory(const char* path);
+inline bool IsDirectory(const std::string& path)
+{
+  return IsDirectory(path.c_str());
+}
 
 // Returns true if the path exists and is a file
-bool IsFile(const std::string& path);
+bool IsFile(const char* path);
+inline bool IsFile(const std::string& path)
+{
+  return IsFile(path.c_str());
+}
 
 // Returns the size of a file (or returns 0 if the path isn't a file that exists)
-u64 GetSize(const std::string& path);
+u64 GetSize(const char* path);
+inline u64 GetSize(const std::string& path)
+{
+  return GetSize(path.c_str());
+}
 
 // Creates a single directory. Returns true if successful or if the path already exists.
-bool CreateDir(const std::string& filename);
+bool CreateDir(const char* filename);
+inline bool CreateDir(const std::string& filename)
+{
+  return CreateDir(filename.c_str());
+}
 
 // Creates directories recursively. Returns true if successful or if the path already exists.
 bool CreateDirs(std::string_view filename);
@@ -154,15 +174,27 @@ enum class IfAbsentBehavior
 
 // Deletes a given filename, return true on success
 // Doesn't supports deleting a directory
-bool Delete(const std::string& filename,
-            IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning);
+bool Delete(const char* filename, IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning);
+inline bool Delete(const std::string& filename,
+                   IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning)
+{
+  return Delete(filename.c_str(), behavior);
+}
 
 // Deletes a directory filename, returns true on success
-bool DeleteDir(const std::string& filename,
-               IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning);
+bool DeleteDir(const char* filename, IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning);
+inline bool DeleteDir(const std::string& filename,
+                      IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning)
+{
+  return DeleteDir(filename.c_str(), behavior);
+}
 
 // renames file srcFilename to destFilename, returns true on success
-bool Rename(const std::string& srcFilename, const std::string& destFilename);
+bool Rename(const char* srcFilename, const char* destFilename);
+inline bool Rename(const std::string& srcFilename, const std::string& destFilename)
+{
+  return Rename(srcFilename.c_str(), destFilename.c_str());
+}
 
 // Copies a file at source_path to destination_path.
 // If a file already exists at destination_path it is overwritten. Returns true on success.

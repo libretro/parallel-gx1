@@ -3,8 +3,8 @@
 
 #include "Common/DirectIOFile.h"
 
+#include <cstdlib>
 #include <cstring>
-#include <utility>
 
 #include <streams/file_stream.h>
 
@@ -18,6 +18,7 @@ DirectIOFile::DirectIOFile() = default;
 DirectIOFile::~DirectIOFile()
 {
   Close();
+  std::free(m_path);
 }
 
 DirectIOFile::DirectIOFile(const DirectIOFile& other)
@@ -42,12 +43,12 @@ DirectIOFile& DirectIOFile::operator=(DirectIOFile&& other)
   return *this;
 }
 
-DirectIOFile::DirectIOFile(const std::string& path, AccessMode access_mode, OpenMode open_mode)
+DirectIOFile::DirectIOFile(const char* path, AccessMode access_mode, OpenMode open_mode)
 {
   Open(path, access_mode, open_mode);
 }
 
-bool DirectIOFile::Open(const std::string& path, AccessMode access_mode, OpenMode open_mode)
+bool DirectIOFile::Open(const char* path, AccessMode access_mode, OpenMode open_mode)
 {
   unsigned mode;
   int64_t map_len = 0;
@@ -63,7 +64,7 @@ bool DirectIOFile::Open(const std::string& path, AccessMode access_mode, OpenMod
 
   if (open_mode == OpenMode::Existing || open_mode == OpenMode::Create)
   {
-    const bool exists = filestream_exists(path.c_str());
+    const bool exists = filestream_exists(path);
     if (exists != (open_mode == OpenMode::Existing))
       return false;
   }
@@ -77,14 +78,20 @@ bool DirectIOFile::Open(const std::string& path, AccessMode access_mode, OpenMod
   if (open_mode != OpenMode::Truncate && mode != RETRO_VFS_FILE_ACCESS_READ)
     mode |= RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING;
 
-  m_file = filestream_open(path.c_str(), mode,
+  m_file = filestream_open(path, mode,
                            mode == RETRO_VFS_FILE_ACCESS_READ ?
                                RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS :
                                RETRO_VFS_FILE_ACCESS_HINT_NONE);
   if (!m_file)
     return false;
 
-  m_path = path;
+  std::free(m_path);
+  {
+    const size_t len = std::strlen(path) + 1;
+    m_path = static_cast<char*>(std::malloc(len));
+    if (m_path)
+      std::memcpy(m_path, path, len);
+  }
   m_mode = mode;
   m_current_offset = 0;
   m_map = filestream_get_mapped_ptr(m_file, &map_len);
@@ -176,12 +183,24 @@ bool DirectIOFile::Flush()
 
 void DirectIOFile::Swap(DirectIOFile& other)
 {
-  std::swap(m_path, other.m_path);
-  std::swap(m_file, other.m_file);
-  std::swap(m_map, other.m_map);
-  std::swap(m_map_size, other.m_map_size);
-  std::swap(m_current_offset, other.m_current_offset);
-  std::swap(m_mode, other.m_mode);
+  char* const path = m_path;
+  RFILE* const file = m_file;
+  const u8* const map = m_map;
+  const u64 map_size = m_map_size;
+  const u64 current_offset = m_current_offset;
+  const unsigned mode = m_mode;
+  m_path = other.m_path;
+  m_file = other.m_file;
+  m_map = other.m_map;
+  m_map_size = other.m_map_size;
+  m_current_offset = other.m_current_offset;
+  m_mode = other.m_mode;
+  other.m_path = path;
+  other.m_file = file;
+  other.m_map = map;
+  other.m_map_size = map_size;
+  other.m_current_offset = current_offset;
+  other.m_mode = mode;
 }
 
 DirectIOFile DirectIOFile::Duplicate() const
@@ -189,12 +208,12 @@ DirectIOFile DirectIOFile::Duplicate() const
   DirectIOFile result;
   int64_t map_len = 0;
 
-  if (!IsOpen())
+  if (!IsOpen() || !m_path)
     return result;
 
   // a handle of its own, never truncating what this one holds
   result.m_file = filestream_open(
-      m_path.c_str(),
+      m_path,
       m_mode == RETRO_VFS_FILE_ACCESS_READ ? m_mode :
                                              m_mode | RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING,
       m_mode == RETRO_VFS_FILE_ACCESS_READ ? RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS :
@@ -203,7 +222,12 @@ DirectIOFile DirectIOFile::Duplicate() const
   if (!result.m_file)
     return result;
 
-  result.m_path = m_path;
+  {
+    const size_t len = std::strlen(m_path) + 1;
+    result.m_path = static_cast<char*>(std::malloc(len));
+    if (result.m_path)
+      std::memcpy(result.m_path, m_path, len);
+  }
   result.m_mode = m_mode;
   result.m_current_offset = m_current_offset;
   result.m_map = filestream_get_mapped_ptr(result.m_file, &map_len);

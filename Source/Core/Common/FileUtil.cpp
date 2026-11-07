@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <file/file_path.h>
+#include <retro_miscellaneous.h>
 #include <retro_dirent.h>
 #include <streams/file_stream.h>
 
@@ -46,34 +47,34 @@ FileInfo::FileInfo(const char* path)
   }
 }
 
-bool Exists(const std::string& path)
+bool Exists(const char* path)
 {
-  return path_is_valid(path.c_str());
+  return path_is_valid(path);
 }
 
-bool IsDirectory(const std::string& path)
+bool IsDirectory(const char* path)
 {
-  return path_is_directory(path.c_str());
+  return path_is_directory(path);
 }
 
-bool IsFile(const std::string& path)
+bool IsFile(const char* path)
 {
-  const int flags = path_stat(path.c_str());
+  const int flags = path_stat(path);
   return (flags & RETRO_VFS_STAT_IS_VALID) && !(flags & RETRO_VFS_STAT_IS_DIRECTORY);
 }
 
-u64 GetSize(const std::string& path)
+u64 GetSize(const char* path)
 {
   int64_t size;
   if (!IsFile(path))
     return 0;
-  size = path_get_size(path.c_str());
+  size = path_get_size(path);
   return size > 0 ? u64(size) : 0;
 }
 
-bool Delete(const std::string& filename, IfAbsentBehavior behavior)
+bool Delete(const char* filename, IfAbsentBehavior behavior)
 {
-  const int flags = path_stat(filename.c_str());
+  const int flags = path_stat(filename);
 
   DEBUG_LOG_FMT(COMMON, "{}: file {}", __func__, filename);
 
@@ -91,7 +92,7 @@ bool Delete(const std::string& filename, IfAbsentBehavior behavior)
     return false;
   }
 
-  if (filestream_delete(filename.c_str()) != 0)
+  if (filestream_delete(filename) != 0)
   {
     WARN_LOG_FMT(COMMON, "{}: failed on {}", __func__, filename);
     return false;
@@ -99,10 +100,10 @@ bool Delete(const std::string& filename, IfAbsentBehavior behavior)
   return true;
 }
 
-bool CreateDir(const std::string& path)
+bool CreateDir(const char* path)
 {
   DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, path);
-  if (path_mkdir(path.c_str()))
+  if (path_mkdir(path))
     return true;
   ERROR_LOG_FMT(COMMON, "{}: failed on {}", __func__, path);
   return false;
@@ -110,27 +111,42 @@ bool CreateDir(const std::string& path)
 
 bool CreateDirs(std::string_view path)
 {
-  return CreateDir(std::string(path));
+  char buf[PATH_MAX_LENGTH];
+  if (path.size() >= sizeof(buf))
+    return false;
+  std::memcpy(buf, path.data(), path.size());
+  buf[path.size()] = '\0';
+  return CreateDir(buf);
 }
 
 bool CreateFullPath(std::string_view fullPath)
 {
-  const std::string path(fullPath);
-#ifdef _WIN32
-  const size_t slash = path.find_last_of("/\\");
-#else
-  const size_t slash = path.find_last_of(DIR_SEP_CHR);
-#endif
+  char buf[PATH_MAX_LENGTH];
+  size_t slash = fullPath.size();
 
   DEBUG_LOG_FMT(COMMON, "{}: path {}", __func__, fullPath);
-  if (slash == std::string::npos || slash == 0)
+  // the directory part: up to the last separator
+  while (slash && fullPath[slash - 1] != '/'
+#ifdef _WIN32
+         && fullPath[slash - 1] != '\\'
+#endif
+  )
+  {
+    slash--;
+  }
+  if (slash <= 1)
     return true;
-  return CreateDir(path.substr(0, slash));
+  slash--;
+  if (slash >= sizeof(buf))
+    return false;
+  std::memcpy(buf, fullPath.data(), slash);
+  buf[slash] = '\0';
+  return CreateDir(buf);
 }
 
-bool DeleteDir(const std::string& filename, IfAbsentBehavior behavior)
+bool DeleteDir(const char* filename, IfAbsentBehavior behavior)
 {
-  const int flags = path_stat(filename.c_str());
+  const int flags = path_stat(filename);
 
   DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, filename);
 
@@ -148,7 +164,7 @@ bool DeleteDir(const std::string& filename, IfAbsentBehavior behavior)
     return false;
   }
 
-  if (!path_rmdir(filename.c_str()))
+  if (!path_rmdir(filename))
   {
     WARN_LOG_FMT(COMMON, "{}: failed on {}", __func__, filename);
     return false;
@@ -157,14 +173,14 @@ bool DeleteDir(const std::string& filename, IfAbsentBehavior behavior)
 }
 
 // Replaces destFilename if it exists.
-bool Rename(const std::string& srcFilename, const std::string& destFilename)
+bool Rename(const char* srcFilename, const char* destFilename)
 {
   DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, srcFilename, destFilename);
-  if (filestream_rename(srcFilename.c_str(), destFilename.c_str()) == 0)
+  if (filestream_rename(srcFilename, destFilename) == 0)
     return true;
   // a frontend VFS may refuse to replace
-  if (IsFile(destFilename) && filestream_delete(destFilename.c_str()) == 0 &&
-      filestream_rename(srcFilename.c_str(), destFilename.c_str()) == 0)
+  if (IsFile(destFilename) && filestream_delete(destFilename) == 0 &&
+      filestream_rename(srcFilename, destFilename) == 0)
   {
     return true;
   }
