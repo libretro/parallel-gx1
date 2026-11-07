@@ -64,6 +64,17 @@ bool VolumeGC::Read(u64 offset, u64 length, u8* buffer, const Partition& partiti
   return m_reader->Read(offset, length, buffer);
 }
 
+const u8* VolumeGC::View(u64 offset, u64 length, const Partition& partition) const
+{
+  return partition == PARTITION_NONE ? m_reader->View(offset, length) : nullptr;
+}
+
+void VolumeGC::Prefetch(u64 offset, u64 length, const Partition& partition) const
+{
+  if (partition == PARTITION_NONE)
+    m_reader->Prefetch(offset, length);
+}
+
 const FileSystem* VolumeGC::GetFileSystem(const Partition& partition) const
 {
   return m_file_system->get();

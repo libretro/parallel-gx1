@@ -143,6 +143,11 @@ private:
   mpsc_stack_node_t* m_result_chain = nullptr;  // CPU thread only
   std::map<u64, ReadResult> m_result_map;
 
+  // Reads the disc image can lend: no DVD thread and no buffer, the bytes copied straight
+  // from the image when they are due. Their pages are prefetched when the read starts.
+  void MaterializeLentReads();
+  std::vector<ReadRequest> m_lent_reads;  // CPU thread only
+
   std::unique_ptr<DiscIO::Volume> m_disc;
 
   FileMonitor::FileLogger m_file_logger;

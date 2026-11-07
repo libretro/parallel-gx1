@@ -43,6 +43,15 @@ public:
   Volume() {}
   virtual ~Volume() {}
   virtual bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const = 0;
+  // What Read() would put in buffer, lent from the image instead, valid while this volume
+  // lives; nullptr when it cannot be lent (compressed, encrypted or assembled images).
+  // Thread-safe.
+  virtual const u8* View(u64 offset, u64 length, const Partition& partition) const
+  {
+    return nullptr;
+  }
+  // Asks the OS to start reading what View() lends; returns at once.
+  virtual void Prefetch(u64 offset, u64 length, const Partition& partition) const {}
   template <typename T>
   std::optional<T> ReadSwapped(u64 offset, const Partition& partition) const
   {

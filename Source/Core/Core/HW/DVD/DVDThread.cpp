@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -96,6 +97,7 @@ void DVDThread::Start()
   m_next_id = 0;
 
   m_dvd_thread.Reset("DVD thread", std::bind_front(&DVDThread::ProcessReadRequest, this));
+  m_lent_reads.reserve(16);
 }
 
 void DVDThread::Stop()
@@ -105,6 +107,7 @@ void DVDThread::Stop()
 
   FreeResults();
   m_result_map.clear();
+  m_lent_reads.clear();
 
   m_disc.reset();
 }
@@ -122,6 +125,12 @@ void DVDThread::DoState(PointerWrap& p)
     m_result_map.emplace(node->result.first.id, std::move(node->result));
     delete node;
   }
+  // Lent reads are saved as the results the DVD thread would have made; a state loaded has
+  // only those.
+  if (p.IsReadMode())
+    m_lent_reads.clear();
+  else
+    MaterializeLentReads();
 
   p.Do(m_result_map);
   p.Do(m_next_id);
@@ -155,6 +164,8 @@ void DVDThread::DoState(PointerWrap& p)
 void DVDThread::SetDisc(std::unique_ptr<DiscIO::Volume> disc)
 {
   WaitUntilIdle();
+  // what was read from the disc going away stays read
+  MaterializeLentReads();
   m_disc = std::move(disc);
 }
 
@@ -265,8 +276,31 @@ void DVDThread::StartReadInternal(bool copy_to_ram, u32 output_address, u64 dvd_
 
   request.time_started_ticks = core_timing.GetTicks();
 
-  m_dvd_thread.Push(std::move(request));
+  if (m_disc && m_disc->View(dvd_offset, length, partition))
+  {
+    m_file_logger.Log(*m_disc, partition, dvd_offset);
+    m_disc->Prefetch(dvd_offset, length, partition);
+    m_lent_reads.push_back(request);
+  }
+  else
+  {
+    m_dvd_thread.Push(std::move(request));
+  }
   core_timing.ScheduleEvent(ticks_until_completion, m_finish_read, id);
+}
+
+void DVDThread::MaterializeLentReads()
+{
+  for (const ReadRequest& request : m_lent_reads)
+  {
+    const u8* data = m_disc ? m_disc->View(request.dvd_offset, request.length, request.partition) :
+                              nullptr;
+    std::vector<u8> buffer;
+    if (data)
+      buffer.assign(data, data + request.length);
+    m_result_map.emplace(request.id, ReadResult(request, std::move(buffer)));
+  }
+  m_lent_reads.clear();
 }
 
 void DVDThread::GlobalFinishRead(Core::System& system, u64 id, s64 cycles_late)
@@ -276,6 +310,25 @@ void DVDThread::GlobalFinishRead(Core::System& system, u64 id, s64 cycles_late)
 
 void DVDThread::FinishRead(u64 id, s64 cycles_late)
 {
+  for (size_t i = 0; i < m_lent_reads.size(); i++)
+  {
+    if (m_lent_reads[i].id != id)
+      continue;
+
+    const ReadRequest request = m_lent_reads[i];
+    m_lent_reads[i] = m_lent_reads.back();
+    m_lent_reads.pop_back();
+
+    // the disc is the one the read started on: a change materializes lent reads first
+    const u8* data = m_disc->View(request.dvd_offset, request.length, request.partition);
+    if (request.copy_to_ram)
+      m_system.GetMemory().CopyToEmu(request.output_address, data, request.length);
+    m_system.GetDVDInterface().FinishExecutingCommand(
+        request.reply_type, DVD::DIInterruptType::TCINT, cycles_late,
+        std::span<const u8>(data, request.length));
+    return;
+  }
+
   // The DVD thread may finish reads in a different order than they are wanted, so results
   // are looked up by id: in the map a savestate load filled, else among those that arrived.
   ReadResult result;

@@ -96,6 +96,12 @@ public:
     return false;
   }
 
+  // size octets at offset as they lie in the file, lent rather than copied, valid while
+  // this reader lives; nullptr where the format or the file cannot lend them. Thread-safe.
+  virtual const u8* View(u64 offset, u64 size) const { return nullptr; }
+  // Asks the OS to start reading what View(offset, size) lends; returns at once.
+  virtual void Prefetch(u64 offset, u64 size) const {}
+
   // Returns true only for CachedBlobReader.
   virtual bool IsCached() const { return false; }
 

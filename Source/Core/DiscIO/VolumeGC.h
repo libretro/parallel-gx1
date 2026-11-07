@@ -32,6 +32,8 @@ public:
   ~VolumeGC() override;
   bool Read(u64 offset, u64 length, u8* buffer,
             const Partition& partition = PARTITION_NONE) const override;
+  const u8* View(u64 offset, u64 length, const Partition& partition) const override;
+  void Prefetch(u64 offset, u64 length, const Partition& partition) const override;
   const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const override;
   std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const override;
   std::map<Language, std::string> GetShortNames() const override;

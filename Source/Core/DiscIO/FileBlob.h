@@ -30,6 +30,8 @@ public:
   std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
 
   bool Read(u64 offset, u64 nbytes, u8* out_ptr) override;
+  const u8* View(u64 offset, u64 size) const override { return m_file.View(offset, size); }
+  void Prefetch(u64 offset, u64 size) const override { m_file.Prefetch(offset, size); }
 
 private:
   PlainFileReader(File::DirectIOFile file);
