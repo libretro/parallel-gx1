@@ -112,7 +112,7 @@ VertexManagerBase::VertexManagerBase()
 
 VertexManagerBase::~VertexManagerBase() = default;
 
-bool VertexManagerBase::Initialize()
+bool VertexManagerBase::BaseInitialize()
 {
   auto& video_events = GetVideoEvents();
 
@@ -142,8 +142,8 @@ bool VertexManagerBase::AreAllVerticesCulled(VertexLoaderBase* loader,
   return m_cpu_cull.AreAllVerticesCulled(loader, primitive, src, count);
 }
 
-DataReader VertexManagerBase::PrepareForAdditionalData(OpcodeDecoder::Primitive primitive,
-                                                       u32 count, u32 stride, bool cullall)
+DataReader VertexManagerBase::BasePrepareForAdditionalData(OpcodeDecoder::Primitive primitive,
+                                                           u32 count, u32 stride, bool cullall)
 {
   // Flush all EFB pokes. Since the buffer is shared, we can't draw pokes+primitives concurrently.
   g_framebuffer_manager->FlushEFBPokes();
@@ -326,7 +326,7 @@ auto VertexManagerBase::ResetFlushAspectRatioCount() -> FlushStatistics
   return result;
 }
 
-void VertexManagerBase::ResetBuffer(u32 vertex_stride)
+void VertexManagerBase::BaseResetBuffer(u32 vertex_stride)
 {
   m_base_buffer_pointer = m_cpu_vertex_buffer.data();
   m_cur_buffer_pointer = m_cpu_vertex_buffer.data();
@@ -334,14 +334,7 @@ void VertexManagerBase::ResetBuffer(u32 vertex_stride)
   m_index_generator.Start(m_cpu_index_buffer.data());
 }
 
-void VertexManagerBase::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,
-                                     u32* out_base_vertex, u32* out_base_index)
-{
-  *out_base_vertex = 0;
-  *out_base_index = 0;
-}
-
-void VertexManagerBase::DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex)
+void VertexManagerBase::BaseDrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex)
 {
   // If bounding box is enabled, we need to flush any changes first, then invalidate what we have.
   if (g_bounding_box->IsEnabled() && g_ActiveConfig.bBBoxEnable && g_backend_info.bSupportsBBox)
@@ -350,10 +343,6 @@ void VertexManagerBase::DrawCurrentBatch(u32 base_index, u32 num_indices, u32 ba
   }
 
   g_gfx->DrawIndexed(base_index, num_indices, base_vertex);
-}
-
-void VertexManagerBase::UploadUniforms()
-{
 }
 
 void VertexManagerBase::InvalidateConstants()
@@ -365,10 +354,6 @@ void VertexManagerBase::InvalidateConstants()
   vertex_shader_manager.dirty = true;
   geometry_shader_manager.dirty = true;
   pixel_shader_manager.dirty = true;
-}
-
-void VertexManagerBase::UploadUtilityUniforms(const void* uniforms, u32 uniforms_size)
-{
 }
 
 void VertexManagerBase::UploadUtilityVertices(const void* vertices, u32 vertex_stride,
@@ -397,20 +382,6 @@ u32 VertexManagerBase::GetTexelBufferElementSize(TexelBufferFormat buffer_format
 {
   // R8 - 1, R16 - 2, RGBA8 - 4, R32G32 - 8
   return 1u << static_cast<u32>(buffer_format);
-}
-
-bool VertexManagerBase::UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
-                                          u32* out_offset)
-{
-  return false;
-}
-
-bool VertexManagerBase::UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
-                                          u32* out_offset, const void* palette_data,
-                                          u32 palette_size, TexelBufferFormat palette_format,
-                                          u32* palette_offset)
-{
-  return false;
 }
 
 BitSet32 VertexManagerBase::UsedTextures() const

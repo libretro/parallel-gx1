@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
 #include "Common/MathUtil.h"
@@ -100,16 +102,16 @@ public:
   static constexpr u32 TEXEL_STREAM_BUFFER_SIZE = 16 * 1024 * 1024;
 
   VertexManagerBase();
-  virtual ~VertexManagerBase();
+  ~VertexManagerBase();
 
-  virtual bool Initialize();
+  bool Initialize();
 
   PrimitiveType GetCurrentPrimitiveType() const { return m_current_primitive_type; }
   void AddIndices(OpcodeDecoder::Primitive primitive, u32 num_vertices);
   bool AreAllVerticesCulled(VertexLoaderBase* loader, OpcodeDecoder::Primitive primitive,
                             const u8* src, u32 count);
-  virtual DataReader PrepareForAdditionalData(OpcodeDecoder::Primitive primitive, u32 count,
-                                              u32 stride, bool cullall);
+  DataReader PrepareForAdditionalData(OpcodeDecoder::Primitive primitive, u32 count, u32 stride,
+                                      bool cullall);
   /// Switch cullall off after a call to PrepareForAdditionalData with cullall true
   /// Expects that you will add a nonzero number of primitives before the next flush
   /// Returns whether cullall was changed (false if cullall was already off)
@@ -134,7 +136,7 @@ public:
   }
 
   // Utility pipeline drawing (e.g. EFB copies, post-processing, UI).
-  virtual void UploadUtilityUniforms(const void* uniforms, u32 uniforms_size);
+  void UploadUtilityUniforms(const void* uniforms, u32 uniforms_size);
   void UploadUtilityVertices(const void* vertices, u32 vertex_stride, u32 num_vertices,
                              const u16* indices, u32 num_indices, u32* out_base_vertex,
                              u32* out_base_index);
@@ -144,14 +146,14 @@ public:
   static u32 GetTexelBufferElementSize(TexelBufferFormat buffer_format);
 
   // Texel buffer, used for palette conversion.
-  virtual bool UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
-                                 u32* out_offset);
+  bool UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
+                         u32* out_offset);
 
   // The second set of parameters uploads a second blob in the same buffer, used for GPU texture
   // decoding for palette textures, as both the texture data and palette must be uploaded.
-  virtual bool UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
-                                 u32* out_offset, const void* palette_data, u32 palette_size,
-                                 TexelBufferFormat palette_format, u32* out_palette_offset);
+  bool UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
+                         u32* out_offset, const void* palette_data, u32 palette_size,
+                         TexelBufferFormat palette_format, u32* out_palette_offset);
 
   // Call if active config changes
   void OnConfigChange();
@@ -173,17 +175,25 @@ protected:
   static void InvalidateConstants();
 
   // Prepares the buffer for the next batch of vertices.
-  virtual void ResetBuffer(u32 vertex_stride);
+  void ResetBuffer(u32 vertex_stride);
 
   // Commits/uploads the current batch of vertices.
-  virtual void CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,
-                            u32* out_base_vertex, u32* out_base_index);
+  void CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices, u32* out_base_vertex,
+                    u32* out_base_index);
 
   // Uploads uniform buffers for GX draws.
-  virtual void UploadUniforms();
+  void UploadUniforms();
 
   // Issues the draw call for the current batch in the backend.
-  virtual void DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex);
+  void DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex);
+
+  /* What a backend does not do itself (BackendVertexManager.cpp), and what
+   * it calls on to. */
+  bool BaseInitialize();
+  DataReader BasePrepareForAdditionalData(OpcodeDecoder::Primitive primitive, u32 count,
+                                          u32 stride, bool cullall);
+  void BaseResetBuffer(u32 vertex_stride);
+  void BaseDrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex);
 
   u32 GetRemainingSize() const;
   u32 GetRemainingIndices(OpcodeDecoder::Primitive primitive) const;

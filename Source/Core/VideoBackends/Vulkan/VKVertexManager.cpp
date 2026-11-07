@@ -58,7 +58,7 @@ VertexManager::~VertexManager()
 
 bool VertexManager::Initialize()
 {
-  if (!VertexManagerBase::Initialize())
+  if (!BaseInitialize())
     return false;
 
   m_vertex_stream_buffer =

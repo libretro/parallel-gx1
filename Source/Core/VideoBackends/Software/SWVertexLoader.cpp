@@ -35,7 +35,7 @@ DataReader SWVertexLoader::PrepareForAdditionalData(OpcodeDecoder::Primitive pri
                                                     u32 stride, bool cullall)
 {
   // The software renderer needs cullall to be false for zfreeze to work
-  return VertexManagerBase::PrepareForAdditionalData(primitive, count, stride, false);
+  return BasePrepareForAdditionalData(primitive, count, stride, false);
 }
 
 void SWVertexLoader::DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex)

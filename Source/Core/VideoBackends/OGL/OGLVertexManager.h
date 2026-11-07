@@ -27,27 +27,30 @@ public:
 // Other functionality is moving out.
 class VertexManager final : public VertexManagerBase
 {
+  /* called by the base class as this backend */
+  friend class ::VertexManagerBase;
+
 public:
   VertexManager();
-  ~VertexManager() override;
+  ~VertexManager();
 
-  bool Initialize() override;
+  bool Initialize();
 
-  void UploadUtilityUniforms(const void* uniforms, u32 uniforms_size) override;
+  void UploadUtilityUniforms(const void* uniforms, u32 uniforms_size);
   bool UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
-                         u32* out_offset) override;
+                         u32* out_offset);
   bool UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format, u32* out_offset,
                          const void* palette_data, u32 palette_size,
-                         TexelBufferFormat palette_format, u32* out_palette_offset) override;
+                         TexelBufferFormat palette_format, u32* out_palette_offset);
 
   GLuint GetVertexBufferHandle() const;
   GLuint GetIndexBufferHandle() const;
 
 protected:
-  void ResetBuffer(u32 vertex_stride) override;
+  void ResetBuffer(u32 vertex_stride);
   void CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices, u32* out_base_vertex,
-                    u32* out_base_index) override;
-  void UploadUniforms() override;
+                    u32* out_base_index);
+  void UploadUniforms();
 
 private:
   std::unique_ptr<StreamBuffer> m_vertex_buffer;

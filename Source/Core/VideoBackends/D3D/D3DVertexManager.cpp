@@ -84,7 +84,7 @@ VertexManager::~VertexManager() = default;
 
 bool VertexManager::Initialize()
 {
-  if (!VertexManagerBase::Initialize())
+  if (!BaseInitialize())
     return false;
 
   CD3D11_BUFFER_DESC bufdesc((VERTEX_STREAM_BUFFER_SIZE + INDEX_STREAM_BUFFER_SIZE) / BUFFER_COUNT,

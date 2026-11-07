@@ -50,7 +50,7 @@ VertexManager::~VertexManager()
 
 bool VertexManager::Initialize()
 {
-  if (!VertexManagerBase::Initialize())
+  if (!BaseInitialize())
     return false;
 
   m_vertex_buffer = StreamBuffer::Create(GL_ARRAY_BUFFER, VERTEX_STREAM_BUFFER_SIZE);

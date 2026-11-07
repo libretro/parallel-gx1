@@ -30,7 +30,7 @@ VertexManager::~VertexManager() = default;
 
 bool VertexManager::Initialize()
 {
-  if (!VertexManagerBase::Initialize())
+  if (!BaseInitialize())
     return false;
 
   if (!m_vertex_stream_buffer.AllocateBuffer(VERTEX_STREAM_BUFFER_SIZE) ||

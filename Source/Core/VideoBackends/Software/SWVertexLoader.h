@@ -15,15 +15,18 @@
 
 class SWVertexLoader final : public VertexManagerBase
 {
+  /* called by the base class as this backend */
+  friend class ::VertexManagerBase;
+
 public:
   SWVertexLoader();
-  ~SWVertexLoader() override;
+  ~SWVertexLoader();
 
   DataReader PrepareForAdditionalData(OpcodeDecoder::Primitive primitive, u32 count, u32 stride,
-                                      bool cullall) override;
+                                      bool cullall);
 
 protected:
-  void DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex) override;
+  void DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex);
 
   void SetFormat();
   void ParseVertex(const PortableVertexDeclaration& vdec, int index);

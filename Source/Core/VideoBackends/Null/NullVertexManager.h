@@ -9,11 +9,14 @@ namespace Null
 {
 class VertexManager final : public VertexManagerBase
 {
+  /* called by the base class as this backend */
+  friend class ::VertexManagerBase;
+
 public:
   VertexManager();
-  ~VertexManager() override;
+  ~VertexManager();
 
 protected:
-  void DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex) override;
+  void DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex);
 };
 }  // namespace Null
