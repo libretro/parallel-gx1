@@ -4,9 +4,10 @@
 #pragma once
 
 #include <Metal/Metal.h>
-#include <atomic>
 #include <memory>
 #include <vector>
+
+#include <retro_atomic.h>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -72,7 +73,7 @@ public:
   bool HasUnflushedData() { return static_cast<bool>(m_current_render_cmdbuf); }
   bool GPUBusy()
   {
-    return m_current_draw != 1 + m_last_finished_draw.load(std::memory_order_acquire);
+    return m_current_draw != 1 + u64(retro_atomic_load_acquire_64(&m_last_finished_draw));
   }
   void ReloadSamplers();
   void NotifyOfCPUGPUSync()
@@ -186,7 +187,7 @@ private:
   CPUBuffer m_texture_upload_buffer;
   BufferPair m_upload_buffers[static_cast<int>(UploadBuffer::Last) + 1];
   u64 m_current_draw = 1;
-  std::atomic<u64> m_last_finished_draw{0};
+  retro_atomic_64_t m_last_finished_draw;
 
   MRCOwned<id<MTLTexture>> m_dummy_texture;
 

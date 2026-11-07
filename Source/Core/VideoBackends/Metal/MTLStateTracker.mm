@@ -106,6 +106,7 @@ void Metal::StateTracker::UsageTracker::Reset(size_t new_size)
 
 Metal::StateTracker::StateTracker() : m_backref(std::make_shared<Backref>(this))
 {
+  retro_atomic_64_init(&m_last_finished_draw, 0);
   m_flags.should_apply_label = true;
   m_fence = MRCTransfer([g_device newFence]);
   m_resolve_pass_desc = MRCTransfer([MTLRenderPassDescriptor new]);
@@ -142,7 +143,7 @@ Metal::StateTracker::Map Metal::StateTracker::AllocateForTextureUpload(size_t am
 {
   amt = (amt + 15) & ~15ull;
   CPUBuffer& buffer = m_texture_upload_buffer;
-  u64 last_draw = m_last_finished_draw.load(std::memory_order_acquire);
+  u64 last_draw = u64(retro_atomic_load_acquire_64(&m_last_finished_draw));
   bool needs_new = buffer.usage.PrepareForAllocation(last_draw, amt);
   if (needs_new) [[unlikely]]
   {
@@ -170,7 +171,7 @@ Metal::StateTracker::Map Metal::StateTracker::AllocateForTextureUpload(size_t am
 std::pair<void*, size_t> Metal::StateTracker::Preallocate(UploadBuffer buffer_idx, size_t amt)
 {
   BufferPair& buffer = m_upload_buffers[static_cast<int>(buffer_idx)];
-  u64 last_draw = m_last_finished_draw.load(std::memory_order_acquire);
+  u64 last_draw = u64(retro_atomic_load_acquire_64(&m_last_finished_draw));
   size_t base_pos = buffer.usage.Pos();
   bool needs_new = buffer.usage.PrepareForAllocation(last_draw, amt);
   bool needs_upload = needs_new || buffer.usage.Pos() == 0;
@@ -422,8 +423,8 @@ void Metal::StateTracker::FlushEncoders()
         {
           // We can do the update non-atomically because we only ever update under the lock
           u64 newval =
-              std::max(draw, tracker->m_last_finished_draw.load(std::memory_order_relaxed));
-          tracker->m_last_finished_draw.store(newval, std::memory_order_release);
+              std::max(draw, u64(retro_atomic_load_relaxed_64(&tracker->m_last_finished_draw)));
+          retro_atomic_store_release_64(&tracker->m_last_finished_draw, int64_t(newval));
           if (q)
           {
             if (PerfQuery* query = static_cast<PerfQuery*>(g_perf_query.get()))
