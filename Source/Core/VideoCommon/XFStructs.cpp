@@ -44,13 +44,8 @@ static void XFRegWritten(Core::System& system, XFStateManager& xf_state_manager,
       break;
 
     case XFMEM_CLIPDISABLE:
-    {
-      ClipDisable setting{.hex = value};
-      if (setting.disable_clipping_detection)
-      if (setting.disable_trivial_rejection)
-      if (setting.disable_cpoly_clipping_acceleration)
+      // Clipping hints: nothing to do with them
       break;
-    }
 
     case XFMEM_VTXSPECS:  //__GXXfVtxSpecs, wrote 0004
       VertexLoaderManager::g_needs_cp_xf_consistency_check = true;
