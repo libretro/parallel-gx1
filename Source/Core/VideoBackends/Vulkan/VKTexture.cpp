@@ -822,6 +822,7 @@ std::unique_ptr<VKStagingTexture> VKStagingTexture::Create(StagingTextureType ty
     return nullptr;
   staging_tex->m_map_pointer = staging_tex->m_staging_buffer->GetMapPointer();
   staging_tex->m_map_stride = stride;
+  staging_tex->m_persistent_map = type == StagingTextureType::Upload;
   return staging_tex;
 }
 
@@ -915,7 +916,7 @@ void VKStagingTexture::CopyFromTexture(const AbstractTexture* src,
   src_tex->TransitionToLayout(g_command_buffer_mgr->GetCurrentCommandBuffer(), old_layout);
 
   m_needs_flush = true;
-  m_flush_fence_counter = g_command_buffer_mgr->GetCurrentFenceCounter();
+  m_transfer_fence = g_command_buffer_mgr->GetCurrentFenceCounter();
 }
 
 void VKStagingTexture::CopyFromTextureToLinearImage(const VKTexture* src_tex,
@@ -1007,7 +1008,7 @@ void VKStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, A
   dst_tex->TransitionToLayout(g_command_buffer_mgr->GetCurrentCommandBuffer(), old_layout);
 
   m_needs_flush = true;
-  m_flush_fence_counter = g_command_buffer_mgr->GetCurrentFenceCounter();
+  m_transfer_fence = g_command_buffer_mgr->GetCurrentFenceCounter();
 }
 
 bool VKStagingTexture::Map()
@@ -1027,7 +1028,7 @@ void VKStagingTexture::Flush()
     return;
 
   // Is this copy in the current command buffer?
-  if (g_command_buffer_mgr->GetCurrentFenceCounter() == m_flush_fence_counter)
+  if (g_command_buffer_mgr->GetCurrentFenceCounter() == m_transfer_fence)
   {
     // Execute the command buffer and wait for it to finish.
     VKGfx::GetInstance()->ExecuteCommandBuffer(false, true);
@@ -1035,7 +1036,7 @@ void VKStagingTexture::Flush()
   else
   {
     // Wait for the GPU to finish with it.
-    g_command_buffer_mgr->WaitForFenceCounter(m_flush_fence_counter);
+    g_command_buffer_mgr->WaitForFenceCounter(m_transfer_fence);
   }
 
   // For readback textures, invalidate the CPU cache as there is new data there.

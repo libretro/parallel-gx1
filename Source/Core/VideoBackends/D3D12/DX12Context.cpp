@@ -425,6 +425,11 @@ void DXContext::DestroyPendingResources(CommandListResources& cmdlist)
   cmdlist.pending_resources.clear();
 }
 
+bool FenceValueDone(u64 fence_value)
+{
+  return g_dx_context->GetFence()->GetCompletedValue() >= fence_value;
+}
+
 void DXContext::WaitForFence(u64 fence)
 {
   if (m_completed_fence_value >= fence)

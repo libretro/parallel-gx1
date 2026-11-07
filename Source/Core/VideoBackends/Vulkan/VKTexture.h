@@ -127,7 +127,6 @@ private:
   std::unique_ptr<StagingBuffer> m_staging_buffer;
   VkImage m_linear_image = VK_NULL_HANDLE;
   vk_heap_alloc_t m_linear_image_alloc = {};
-  u64 m_flush_fence_counter = 0;
 };
 
 class VKFramebuffer final : public AbstractFramebuffer

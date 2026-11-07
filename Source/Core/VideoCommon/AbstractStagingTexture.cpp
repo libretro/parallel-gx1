@@ -8,6 +8,7 @@
 
 #include "Common/Assert.h"
 #include "VideoCommon/AbstractTexture.h"
+#include "VideoCommon/VideoConfig.h"
 
 AbstractStagingTexture::AbstractStagingTexture(StagingTextureType type, const TextureConfig& c)
     : m_type(type), m_config(c), m_texel_size(AbstractTexture::GetTexelSizeForFormat(c.format))
@@ -129,4 +130,45 @@ bool AbstractStagingTexture::PrepareForAccess()
     Flush();
   }
   return IsMapped() || Map();
+}
+
+#ifdef HAS_VULKAN
+namespace Vulkan
+{
+bool FenceCounterDone(u64 fence_counter);
+}
+#endif
+#ifdef _WIN32
+namespace DX12
+{
+bool FenceValueDone(u64 fence_value);
+}
+#endif
+#ifdef HAS_OPENGL
+namespace OGL
+{
+bool SyncDone(void* sync);
+}
+#endif
+
+bool StagingTransferDone(const AbstractStagingTexture* staging)
+{
+  switch (g_backend_info.api_type)
+  {
+#ifdef HAS_VULKAN
+  case APIType::Vulkan:
+    return Vulkan::FenceCounterDone(staging->m_transfer_fence);
+#endif
+#ifdef _WIN32
+  case APIType::D3D:
+    /* only Direct3D 12's upload memory stays mapped */
+    return DX12::FenceValueDone(staging->m_transfer_fence);
+#endif
+#ifdef HAS_OPENGL
+  case APIType::OpenGL:
+    return OGL::SyncDone(staging->m_transfer_sync);
+#endif
+  default:
+    return true;
+  }
 }

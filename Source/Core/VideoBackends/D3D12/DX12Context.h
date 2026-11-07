@@ -202,6 +202,9 @@ private:
 
 extern std::unique_ptr<DXContext> g_dx_context;
 
+// Whether the queue passed fence_value; never waits.
+bool FenceValueDone(u64 fence_value);
+
 // Wrapper for HRESULT to be used with fmt.  Note that we can't create a fmt::formatter directly
 // for HRESULT as HRESULT is simply a typedef on long and not a distinct type.
 // Unlike the version in Common, this variant also knows to call GetDeviceRemovedReason if needed.

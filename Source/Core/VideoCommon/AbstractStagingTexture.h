@@ -11,6 +11,11 @@
 #include "VideoCommon/TextureConfig.h"
 
 class AbstractTexture;
+class AbstractStagingTexture;
+
+// Whether the GPU is done with the last copy from or to staging, upload memory that stays
+// mapped (m_persistent_map); never waits.
+bool StagingTransferDone(const AbstractStagingTexture* staging);
 
 class AbstractStagingTexture
 {
@@ -78,6 +83,14 @@ public:
   // changes, call CopyToTexture() to update the GPU copy.
   void WriteTexels(const MathUtil::Rectangle<int>& rect, const void* in_ptr, u32 in_stride);
   void WriteTexel(u32 x, u32 y, const void* in_ptr);
+
+  // Set by the backend. What the GPU signals once the last copy is done: a Vulkan fence counter
+  // or a Direct3D 12 fence value, and for OpenGL the copy's sync object.
+  u64 m_transfer_fence = 0;
+  void* m_transfer_sync = nullptr;
+  // Upload memory that Map() leaves mapped for good, so another thread may write it while the
+  // GPU copies from another one; m_transfer_fence or m_transfer_sync tells when it is done.
+  bool m_persistent_map = false;
 
 protected:
   bool PrepareForAccess();

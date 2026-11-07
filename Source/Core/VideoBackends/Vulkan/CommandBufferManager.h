@@ -60,6 +60,8 @@ public:
   // Wait for a fence to be completed.
   // Also invokes callbacks for completion.
   void WaitForFenceCounter(u64 fence_counter);
+  // Whether the work of fence_counter is done; never waits.
+  bool PollFenceCounter(u64 fence_counter);
 
   void SubmitCommandBuffer(bool submit_on_worker_thread, bool wait_for_completion,
                            bool advance_to_next_frame = false);
@@ -144,5 +146,8 @@ private:
 };
 
 extern std::unique_ptr<CommandBufferManager> g_command_buffer_mgr;
+
+// Whether the GPU did the work of fence_counter; never waits.
+bool FenceCounterDone(u64 fence_counter);
 
 }  // namespace Vulkan

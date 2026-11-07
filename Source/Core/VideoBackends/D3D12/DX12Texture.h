@@ -131,7 +131,6 @@ private:
                    u32 stride, u32 buffer_size);
 
   ComPtr<ID3D12Resource> m_resource;
-  u64 m_completed_fence = 0;
   u32 m_buffer_size;
 };
 

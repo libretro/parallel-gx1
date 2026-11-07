@@ -234,6 +234,35 @@ void CommandBufferManager::WaitForFenceCounter(u64 fence_counter)
   WaitForCommandBufferCompletion(index);
 }
 
+bool CommandBufferManager::PollFenceCounter(u64 fence_counter)
+{
+  u32 index;
+
+  if (m_completed_fence_counter >= fence_counter)
+    return true;
+
+  // The first command buffer which covers this counter value, if submitted.
+  index = (m_current_cmd_buffer + 1) % NUM_COMMAND_BUFFERS;
+  while (index != m_current_cmd_buffer)
+  {
+    if (m_command_buffers[index].fence_counter >= fence_counter)
+      break;
+    index = (index + 1) % NUM_COMMAND_BUFFERS;
+  }
+  if (index == m_current_cmd_buffer ||
+      retro_atomic_load_acquire_int(&m_command_buffers[index].waiting_for_submit))
+  {
+    return false;
+  }
+  return vkGetFenceStatus(g_vulkan_context->GetDevice(), m_command_buffers[index].fence) ==
+         VK_SUCCESS;
+}
+
+bool FenceCounterDone(u64 fence_counter)
+{
+  return g_command_buffer_mgr->PollFenceCounter(fence_counter);
+}
+
 void CommandBufferManager::WaitForCommandBufferCompletion(u32 index)
 {
   CmdBufferResources& resources = m_command_buffers[index];

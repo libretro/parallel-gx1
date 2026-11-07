@@ -416,8 +416,8 @@ OGLStagingTexture::OGLStagingTexture(StagingTextureType type, const TextureConfi
 
 OGLStagingTexture::~OGLStagingTexture()
 {
-  if (m_fence != nullptr)
-    glDeleteSync(m_fence);
+  if (m_transfer_sync != nullptr)
+    glDeleteSync(static_cast<GLsync>(m_transfer_sync));
   if (m_map_pointer)
   {
     glBindBuffer(GL_PIXEL_PACK_BUFFER, m_buffer_name);
@@ -474,8 +474,10 @@ std::unique_ptr<OGLStagingTexture> OGLStagingTexture::Create(StagingTextureType 
   }
   glBindBuffer(target, 0);
 
-  return std::unique_ptr<OGLStagingTexture>(
+  std::unique_ptr<OGLStagingTexture> staging_tex(
       new OGLStagingTexture(type, config, target, buffer, buffer_size, buffer_ptr, stride));
+  staging_tex->m_persistent_map = buffer_ptr && type == StagingTextureType::Upload;
+  return staging_tex;
 }
 
 void OGLStagingTexture::CopyFromTexture(const AbstractTexture* src,
@@ -538,11 +540,11 @@ void OGLStagingTexture::CopyFromTexture(const AbstractTexture* src,
   // If we support buffer storage, create a fence for synchronization.
   if (UsePersistentStagingBuffers())
   {
-    if (m_fence != nullptr)
-      glDeleteSync(m_fence);
+    if (m_transfer_sync != nullptr)
+      glDeleteSync(static_cast<GLsync>(m_transfer_sync));
 
     glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
-    m_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    m_transfer_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     glFlush();
   }
 
@@ -599,10 +601,10 @@ void OGLStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect,
   // If we support buffer storage, create a fence for synchronization.
   if (UsePersistentStagingBuffers())
   {
-    if (m_fence != nullptr)
-      glDeleteSync(m_fence);
+    if (m_transfer_sync != nullptr)
+      glDeleteSync(static_cast<GLsync>(m_transfer_sync));
 
-    m_fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    m_transfer_sync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     glFlush();
   }
 
@@ -612,16 +614,16 @@ void OGLStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect,
 void OGLStagingTexture::Flush()
 {
   // No-op when not using buffer storage, as the transfers happen on Map().
-  // m_fence will always be zero in this case.
-  if (m_fence == nullptr)
+  // m_transfer_sync will always be zero in this case.
+  if (m_transfer_sync == nullptr)
   {
     m_needs_flush = false;
     return;
   }
 
-  glClientWaitSync(m_fence, 0, GL_TIMEOUT_IGNORED);
-  glDeleteSync(m_fence);
-  m_fence = nullptr;
+  glClientWaitSync(static_cast<GLsync>(m_transfer_sync), 0, GL_TIMEOUT_IGNORED);
+  glDeleteSync(static_cast<GLsync>(m_transfer_sync));
+  m_transfer_sync = nullptr;
   m_needs_flush = false;
 }
 
@@ -758,4 +760,13 @@ void OGLFramebuffer::UpdateDimensions(u32 width, u32 height)
   m_height = height;
 }
 
+bool SyncDone(void* sync)
+{
+  GLenum result;
+
+  if (!sync)
+    return true;
+  result = glClientWaitSync(static_cast<GLsync>(sync), 0, 0);
+  return result == GL_ALREADY_SIGNALED || result == GL_CONDITION_SATISFIED;
+}
 }  // namespace OGL

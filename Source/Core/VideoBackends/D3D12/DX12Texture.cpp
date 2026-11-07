@@ -658,6 +658,8 @@ DXStagingTexture::DXStagingTexture(StagingTextureType type, const TextureConfig&
     : AbstractStagingTexture(type, config), m_resource(resource), m_buffer_size(buffer_size)
 {
   m_map_stride = stride;
+  /* an upload heap may stay mapped while the GPU copies from it */
+  m_persistent_map = type == StagingTextureType::Upload;
 }
 
 DXStagingTexture::~DXStagingTexture()
@@ -703,7 +705,7 @@ void DXStagingTexture::CopyFromTexture(const AbstractTexture* src,
 
   // Data is ready when the current command list is complete.
   m_needs_flush = true;
-  m_completed_fence = g_dx_context->GetCurrentFenceValue();
+  m_transfer_fence = g_dx_context->GetCurrentFenceValue();
 }
 
 void DXStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
@@ -722,10 +724,10 @@ void DXStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, A
   const D3D12_RESOURCE_STATES old_state = dst_tex->GetState();
   dst_tex->TransitionToState(D3D12_RESOURCE_STATE_COPY_DEST);
 
-  // Can't copy while it's mapped like in Vulkan.
-  Unmap();
+  // Copy from host-visible memory -> VRAM; an upload heap stays mapped.
+  if (m_type != StagingTextureType::Upload)
+    Unmap();
 
-  // Copy from VRAM -> host-visible memory.
   const D3D12_TEXTURE_COPY_LOCATION dst_loc = {
       dst_tex->GetResource(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
       static_cast<UINT>(dst_tex->CalcSubresource(dst_level, dst_layer))};
@@ -744,7 +746,7 @@ void DXStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, A
 
   // Data is ready when the current command list is complete.
   m_needs_flush = true;
-  m_completed_fence = g_dx_context->GetCurrentFenceValue();
+  m_transfer_fence = g_dx_context->GetCurrentFenceValue();
 }
 
 bool DXStagingTexture::Map()
@@ -781,10 +783,10 @@ void DXStagingTexture::Flush()
   // If the completed fence is the same as the current command buffer fence, we need to execute
   // the current list and wait for it to complete. This is the slowest path. Otherwise, if the
   // command list with the copy has been submitted, we only need to wait for the fence.
-  if (m_completed_fence == g_dx_context->GetCurrentFenceValue())
+  if (m_transfer_fence == g_dx_context->GetCurrentFenceValue())
     Gfx::GetInstance()->ExecuteCommandList(true);
   else
-    g_dx_context->WaitForFence(m_completed_fence);
+    g_dx_context->WaitForFence(m_transfer_fence);
 }
 
 std::unique_ptr<DXStagingTexture> DXStagingTexture::Create(StagingTextureType type,

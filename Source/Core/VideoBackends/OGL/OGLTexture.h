@@ -95,7 +95,6 @@ private:
   GLenum m_target;
   GLuint m_buffer_name;
   size_t m_buffer_size;
-  GLsync m_fence = nullptr;
 };
 
 class OGLFramebuffer final : public AbstractFramebuffer
@@ -119,5 +118,8 @@ public:
 protected:
   GLuint m_fbo;
 };
+
+// Whether the GPU passed a staging copy's sync object; never waits.
+bool SyncDone(void* sync);
 
 }  // namespace OGL
