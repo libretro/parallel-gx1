@@ -49,10 +49,8 @@ void QueueInit(OutputQueue* queue)
 
   for (i = 0; i < 4; i++)
   {
-    retro_atomic_int_init(&queue->slots[i].kind, PUB_NONE);
-    retro_atomic_int_init(&queue->slots[i].index, 0);
-    retro_atomic_int_init(&queue->slots[i].width, 0);
-    retro_atomic_int_init(&queue->slots[i].height, 0);
+    retro_atomic_int_init(&queue->slots[i].kind_index, PUB_NONE << 8);
+    retro_atomic_int_init(&queue->slots[i].size, 0);
     retro_atomic_store_relaxed_ptr(&queue->slots[i].texture, nullptr);
     retro_atomic_64_init(&queue->slots[i].fence_value, 0);
   }
@@ -76,14 +74,10 @@ static bool QueueInUse(OutputQueue* queue, int kind, u32 index)
   const int tag = QueueTag(kind, index);
   const int pending = retro_atomic_load_acquire_int(&queue->pending);
 
-  if (pending)
+  if (pending &&
+      retro_atomic_load_relaxed_int(&QueueSlot(queue, pending)->kind_index) == tag - 1)
   {
-    PublishedSlot* slot = QueueSlot(queue, pending);
-    if (retro_atomic_load_relaxed_int(&slot->kind) == kind &&
-        u32(retro_atomic_load_relaxed_int(&slot->index)) == index)
-    {
-      return true;
-    }
+    return true;
   }
   return retro_atomic_load_acquire_int(&queue->taking) == tag ||
          retro_atomic_load_acquire_int(&queue->handed) == tag;
@@ -98,12 +92,9 @@ u32 QueueAcquireTarget(OutputQueue* queue)
    * into again, in place, unless the consumer claims it first */
   if (pending && !(pending & QUEUE_TAKEN))
   {
-    PublishedSlot* slot = QueueSlot(queue, pending);
-    if (retro_atomic_load_relaxed_int(&slot->kind) == PUB_TARGET &&
-        retro_atomic_cas_int(&queue->pending, pending, 0))
-    {
-      return u32(retro_atomic_load_relaxed_int(&slot->index));
-    }
+    const int kind_index = retro_atomic_load_relaxed_int(&QueueSlot(queue, pending)->kind_index);
+    if ((kind_index >> 8) == PUB_TARGET && retro_atomic_cas_int(&queue->pending, pending, 0))
+      return u32(kind_index & 0xff);
   }
 
   for (i = 0; i < QUEUE_IMAGES && QueueInUse(queue, PUB_TARGET, i); i++)
@@ -133,10 +124,8 @@ void QueuePublish(OutputQueue* queue, int kind, u32 index, const void* texture, 
   queue->generation = generation;
 
   slot = QueueSlot(queue, generation);
-  retro_atomic_store_relaxed_int(&slot->kind, kind);
-  retro_atomic_store_relaxed_int(&slot->index, int(index));
-  retro_atomic_store_relaxed_int(&slot->width, int(width));
-  retro_atomic_store_relaxed_int(&slot->height, int(height));
+  retro_atomic_store_relaxed_int(&slot->kind_index, QueueTag(kind, index) - 1);
+  retro_atomic_store_relaxed_int(&slot->size, int((width << 16) | (height & 0xffff)));
   retro_atomic_store_relaxed_ptr(&slot->texture, const_cast<void*>(texture));
   retro_atomic_store_relaxed_64(&slot->fence_value, s64(fence_value));
   if (kind == PUB_DIRECT && index < QUEUE_DIRECT)
@@ -157,10 +146,14 @@ bool QueueTake(OutputQueue* queue, Published* out)
       return false;
 
     slot = QueueSlot(queue, pending);
-    out->kind = retro_atomic_load_relaxed_int(&slot->kind);
-    out->index = u32(retro_atomic_load_relaxed_int(&slot->index));
-    out->width = u32(retro_atomic_load_relaxed_int(&slot->width));
-    out->height = u32(retro_atomic_load_relaxed_int(&slot->height));
+    {
+      const int kind_index = retro_atomic_load_relaxed_int(&slot->kind_index);
+      const u32 size = u32(retro_atomic_load_relaxed_int(&slot->size));
+      out->kind = kind_index >> 8;
+      out->index = u32(kind_index & 0xff);
+      out->width = size >> 16;
+      out->height = size & 0xffff;
+    }
     out->texture = retro_atomic_load_relaxed_ptr(&slot->texture);
     out->fence_value = u64(retro_atomic_load_relaxed_64(&slot->fence_value));
 
@@ -200,7 +193,7 @@ u32 QueueHeldDirect(OutputQueue* queue, const void** textures)
   if (pending)
   {
     PublishedSlot* slot = QueueSlot(queue, pending);
-    if (retro_atomic_load_relaxed_int(&slot->kind) == PUB_DIRECT)
+    if ((retro_atomic_load_relaxed_int(&slot->kind_index) >> 8) == PUB_DIRECT)
       textures[n++] = retro_atomic_load_relaxed_ptr(&slot->texture);
   }
   if ((texture = QueueHeldTexture(queue, retro_atomic_load_acquire_int(&queue->taking))))

@@ -55,10 +55,10 @@ struct Published
  * names the slot. */
 struct PublishedSlot
 {
-  retro_atomic_int_t kind;
-  retro_atomic_int_t index;
-  retro_atomic_int_t width;
-  retro_atomic_int_t height;
+  /* kind << 8 | index */
+  retro_atomic_int_t kind_index;
+  /* width << 16 | height */
+  retro_atomic_int_t size;
   retro_atomic_ptr_t texture;
   retro_atomic_64_t fence_value;
 };
