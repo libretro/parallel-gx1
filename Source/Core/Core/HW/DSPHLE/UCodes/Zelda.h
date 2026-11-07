@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <algorithm>
 #include <array>
 
 #include "Common/CommonTypes.h"
@@ -63,7 +62,7 @@ private:
       s32 tmp = (u32)(*buf)[i] * (u32)vol;
       tmp >>= 16 - B;
 
-      (*buf)[i] = (s16)std::clamp(tmp, -0x8000, 0x7FFF);
+      (*buf)[i] = (s16)SaturateS16(tmp);
     }
   }
   template <size_t N>
@@ -105,7 +104,7 @@ private:
     while (count--)
     {
       s32 vol_src = ((s32)*src++ * (s32)vol) >> 15;
-      *dst++ += std::clamp(vol_src, -0x8000, 0x7FFF);
+      *dst++ += SaturateS16(vol_src);
     }
   }
 

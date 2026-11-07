@@ -3,9 +3,7 @@
 
 #include "Core/HW/DSPHLE/UCodes/Zelda.h"
 
-#include <algorithm>
 #include <array>
-#include <map>
 
 #include "Common/BitField.h"
 #include "Common/ChunkFile.h"
@@ -74,7 +72,13 @@ enum ZeldaUCodeFlag
   COMBINED_CMD_0D = 0x00000400,
 };
 
-static const std::map<u32, u32> UCODE_FLAGS = {
+struct UCodeFlags
+{
+  u32 crc;
+  u32 flags;
+};
+
+static const UCodeFlags UCODE_FLAGS[] = {
     // GameCube IPL/BIOS, NTSC.
     {0x24B22038, LIGHT_PROTOCOL | FOUR_MIXING_DESTS | TINY_VPB | VOLUME_EXPLICIT_STEP | NO_CMD_0D |
                      WEIRD_CMD_0C},
@@ -120,11 +124,17 @@ static const std::map<u32, u32> UCODE_FLAGS = {
 ZeldaUCode::ZeldaUCode(DSPHLE* dsphle, u32 crc)
     : UCodeInterface(dsphle, crc), m_renderer(dsphle->GetSystem())
 {
-  auto it = UCODE_FLAGS.find(crc);
-  if (it == UCODE_FLAGS.end())
+  size_t i;
+  m_flags = 0;
+  for (i = 0; i < sizeof(UCODE_FLAGS) / sizeof(UCODE_FLAGS[0]); i++)
+  {
+    if (UCODE_FLAGS[i].crc == crc)
+      break;
+  }
+  if (i == sizeof(UCODE_FLAGS) / sizeof(UCODE_FLAGS[0]))
     PanicAlertFmt("No flags definition found for Zelda CRC {:08x}", crc);
-
-  m_flags = it->second;
+  else
+    m_flags = UCODE_FLAGS[i].flags;
   m_renderer.SetFlags(m_flags);
 
   INFO_LOG_FMT(DSPHLE, "Zelda UCode loaded, crc={:08x}, flags={:08x}", crc, m_flags);
@@ -630,8 +640,9 @@ void ZeldaUCode::RenderAudio()
 
     // TODO: Find out the actual hardware behavior for the case where
     //       (m_rendering_voices_per_frame >> 4) >= m_sync_voice_skip_flags.size()
-    const u16 number_of_voices = std::min(m_rendering_voices_per_frame,
-                                          static_cast<u16>(m_sync_voice_skip_flags.size() << 4));
+    const u16 max_voices = static_cast<u16>(m_sync_voice_skip_flags.size() << 4);
+    const u16 number_of_voices =
+        m_rendering_voices_per_frame < max_voices ? m_rendering_voices_per_frame : max_voices;
     while (m_rendering_curr_voice < number_of_voices)
     {
       // If we are not meant to render this voice yet, go back to message
@@ -1121,7 +1132,7 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
           for (u16 j = 0; j < 8; ++j)
             sample += (s32)buffer[i + j] * rpb.filter_coeffs[j];
           sample >>= 15;
-          buffer[i] = std::clamp(sample, -0x8000, 0x7FFF);
+          buffer[i] = SaturateS16(sample);
         }
       };
 
@@ -1215,7 +1226,7 @@ void ZeldaAudioRenderer::ApplyLowPassFilter(MixingBuffer* buf, VPB* vpb)
     tmp *= coeff;
     tmp >>= 7;
     tmp += yn1;
-    s16 yn0 = std::clamp<s64>(tmp, -0x8000, 0x7FFF);
+    s16 yn0 = (s16)SaturateS16(tmp);
     (*buf)[i] = yn0;
 
     yn1 = yn0;
@@ -1241,7 +1252,7 @@ void ZeldaAudioRenderer::ApplyBiquadFilter(MixingBuffer* buf, VPB* vpb)
     tmp += vpb->biquad_bn2 * xn2;
     tmp += vpb->biquad_an1 * yn1;
     tmp += vpb->biquad_an2 * yn2;
-    s16 yn0 = std::clamp<s64>(tmp >> 15, -0x8000, 0x7FFF);
+    s16 yn0 = (s16)SaturateS16(tmp >> 15);
     (*buf)[i] = yn0;
 
     xn2 = xn1;
@@ -1539,12 +1550,24 @@ void ZeldaAudioRenderer::LoadInputSamples(MixingBuffer* buffer, VPB* vpb)
       u16 idx;
       bool variable_step;
     };
-    std::map<u16, PatternInfo> samples_source_to_pattern = {
-        {VPB::SRC_CONST_PATTERN_0, {0, false}}, {VPB::SRC_CONST_PATTERN_0_VARIABLE_STEP, {0, true}},
-        {VPB::SRC_CONST_PATTERN_1, {1, false}}, {VPB::SRC_CONST_PATTERN_2, {2, false}},
-        {VPB::SRC_CONST_PATTERN_3, {3, false}},
-    };
-    auto& pattern_info = samples_source_to_pattern[vpb->samples_source_type];
+    PatternInfo pattern_info = {0, false};
+    switch (vpb->samples_source_type)
+    {
+    case VPB::SRC_CONST_PATTERN_0_VARIABLE_STEP:
+      pattern_info.variable_step = true;
+      break;
+    case VPB::SRC_CONST_PATTERN_1:
+      pattern_info.idx = 1;
+      break;
+    case VPB::SRC_CONST_PATTERN_2:
+      pattern_info.idx = 2;
+      break;
+    case VPB::SRC_CONST_PATTERN_3:
+      pattern_info.idx = 3;
+      break;
+    default:
+      break;
+    }
     u16 pattern_offset = pattern_info.idx * PATTERN_SIZE;
     s16* pattern = m_const_patterns.data() + pattern_offset;
 
@@ -1630,7 +1653,7 @@ void ZeldaAudioRenderer::Resample(VPB* vpb, const s16* src, MixingBuffer* dst)
         dst_sample_unclamped += (s64)2 * coeffs[i] * input[i];
       dst_sample_unclamped >>= 16;
 
-      dst_sample = (s16)std::clamp<s64>(dst_sample_unclamped, -0x8000, 0x7FFF);
+      dst_sample = (s16)SaturateS16(dst_sample_unclamped);
 
       pos += ratio;
     }
@@ -1693,7 +1716,10 @@ void ZeldaAudioRenderer::DownloadPCMSamplesFromARAM(s16* dst, VPB* vpb, u16 requ
       vpb->SetCurrentARAMAddr(vpb->GetBaseAddress() + vpb->GetCurrentPosition() * sizeof(T));
     }
 
-    u16 samples_to_download = std::min(vpb->GetRemainingLength(), (u32)requested_samples_count);
+    const u32 remaining_length = vpb->GetRemainingLength();
+    u16 samples_to_download = remaining_length < (u32)requested_samples_count ?
+                                  (u16)remaining_length :
+                                  (u16)requested_samples_count;
     T* src_ptr = reinterpret_cast<T*>(GetARAMPointerForRange(
         m_system, m_aram_base_addr, vpb->GetCurrentARAMAddr(), samples_to_download * sizeof(T)));
 
@@ -1736,7 +1762,9 @@ void ZeldaAudioRenderer::DownloadAFCSamplesFromARAM(s16* dst, VPB* vpb, u16 requ
   while (true)
   {
     // Try to push currently cached/already decoded samples.
-    u16 remaining_to_output = std::min(vpb->afc_remaining_decoded_samples, requested_samples_count);
+    u16 remaining_to_output = vpb->afc_remaining_decoded_samples < requested_samples_count ?
+                                  vpb->afc_remaining_decoded_samples :
+                                  requested_samples_count;
     s16* base = &vpb->afc_remaining_samples[0x10 - vpb->afc_remaining_decoded_samples];
     for (size_t i = 0; i < remaining_to_output; ++i)
       *dst++ = base[i];
@@ -1878,7 +1906,7 @@ void ZeldaAudioRenderer::DecodeAFC(VPB* vpb, s16* dst, size_t block_count)
     {
       s32 sample = delta * nibble + yn1 * m_afc_coeffs[idx * 2] + yn2 * m_afc_coeffs[idx * 2 + 1];
       sample >>= 11;
-      sample = std::clamp(sample, -0x8000, 0x7fff);
+      sample = SaturateS16(sample);
       *dst++ = (s16)sample;
       yn2 = yn1;
       yn1 = sample;

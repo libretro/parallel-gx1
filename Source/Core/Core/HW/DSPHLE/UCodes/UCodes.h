@@ -23,6 +23,12 @@ class DSPHLE;
 #define UCODE_INIT_AUDIO_SYSTEM 0x00000001
 #define UCODE_NULL 0xFFFFFFFF
 
+// a mixed sample saturated to the s16 range
+static inline s32 SaturateS16(s64 sample)
+{
+  return sample < -0x8000 ? -0x8000 : sample > 0x7FFF ? 0x7FFF : (s32)sample;
+}
+
 class UCodeInterface
 {
 public:

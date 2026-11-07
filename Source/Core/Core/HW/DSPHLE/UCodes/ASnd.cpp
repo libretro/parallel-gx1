@@ -6,8 +6,6 @@
 
 #include "Core/HW/DSPHLE/UCodes/ASnd.h"
 
-#include <algorithm>
-
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/Swap.h"
@@ -338,12 +336,12 @@ void ASndUCode::DoMixing(u32 return_mail)
       // "Mix right sample section"
       s32 sample_r = static_cast<s16>(m_output_buffer[buffer_offset]);
       sample_r += m_current_voice.right;
-      sample_r = std::clamp(sample_r, -32768, 32767);
+      sample_r = SaturateS16(sample_r);
       m_output_buffer[buffer_offset++] = sample_r;
       // "Mix left sample section"
       s32 sample_l = static_cast<s16>(m_output_buffer[buffer_offset]);
       sample_l += m_current_voice.left;
-      sample_l = std::clamp(sample_l, -32768, 32767);
+      sample_l = SaturateS16(sample_l);
       m_output_buffer[buffer_offset++] = sample_l;
       // "adds the counter with the voice frequency and test if it >=48000 to get the next sample"
       m_current_voice.counter += m_current_voice.freq;
