@@ -26,7 +26,7 @@
 
 namespace Vulkan
 {
-VKTexture::VKTexture(const TextureConfig& tex_config, VmaAllocation alloc, VkImage image,
+VKTexture::VKTexture(const TextureConfig& tex_config, const vk_heap_alloc_t& alloc, VkImage image,
                      std::string_view name, VkImageLayout layout /* = VK_IMAGE_LAYOUT_UNDEFINED */,
                      ComputeImageLayout compute_layout /* = ComputeImageLayout::Undefined */)
     : AbstractTexture(tex_config), m_alloc(alloc), m_image(image), m_layout(layout),
@@ -51,7 +51,7 @@ VKTexture::~VKTexture()
     g_command_buffer_mgr->DeferImageViewDestruction(m_view_2d);
 
   // If we don't have device memory allocated, the image is not owned by us (e.g. swapchain)
-  if (m_alloc != VK_NULL_HANDLE)
+  if (m_alloc.memory != VK_NULL_HANDLE)
   {
     g_command_buffer_mgr->DeferImageDestruction(m_image, m_alloc);
   }
@@ -88,23 +88,13 @@ std::unique_ptr<VKTexture> VKTexture::Create(const TextureConfig& tex_config, st
                                   nullptr,
                                   VK_IMAGE_LAYOUT_UNDEFINED};
 
-  VmaAllocationCreateInfo alloc_create_info = {};
-  alloc_create_info.flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
-  alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-  alloc_create_info.pool = VK_NULL_HANDLE;
-  alloc_create_info.pUserData = nullptr;
-  alloc_create_info.priority =
-      tex_config.IsComputeImage() || tex_config.IsRenderTarget() ? 1.0 : 0.0;
-  alloc_create_info.requiredFlags = 0;
-  alloc_create_info.preferredFlags = 0;
-
   VkImage image = VK_NULL_HANDLE;
-  VmaAllocation alloc = VK_NULL_HANDLE;
-  VkResult res = vmaCreateImage(g_vulkan_context->GetMemoryAllocator(), &image_info,
-                                &alloc_create_info, &image, &alloc, nullptr);
+  vk_heap_alloc_t alloc;
+  VkResult res = vk_heap_create_image(g_vulkan_context->GetHeap(), &image_info, VK_HEAP_DEVICE,
+                                      &image, &alloc);
   if (res != VK_SUCCESS)
   {
-    LOG_VULKAN_ERROR(res, "vmaCreateImage failed: ");
+    LOG_VULKAN_ERROR(res, "vk_heap_create_image failed: ");
     return nullptr;
   }
 
@@ -145,7 +135,7 @@ std::unique_ptr<VKTexture> VKTexture::CreateAdopted(const TextureConfig& tex_con
                                                     VkImageViewType view_type, VkImageLayout layout)
 {
   std::unique_ptr<VKTexture> texture = std::make_unique<VKTexture>(
-      tex_config, VmaAllocation(VK_NULL_HANDLE), image, "", layout, ComputeImageLayout::Undefined);
+      tex_config, vk_heap_alloc_t{}, image, "", layout, ComputeImageLayout::Undefined);
   if (!texture->CreateView(view_type, &texture->m_view))
     return nullptr;
 
@@ -766,7 +756,7 @@ void VKTexture::PrepareForRenderPass(VkCommandBuffer command_buffer) const
 
 VKStagingTexture::VKStagingTexture(PrivateTag, StagingTextureType type, const TextureConfig& config,
                                    std::unique_ptr<StagingBuffer> buffer, VkImage linear_image,
-                                   VmaAllocation linear_image_alloc)
+                                   const vk_heap_alloc_t& linear_image_alloc)
     : AbstractStagingTexture(type, config), m_staging_buffer(std::move(buffer)),
       m_linear_image(linear_image), m_linear_image_alloc(linear_image_alloc)
 {
@@ -805,7 +795,7 @@ std::unique_ptr<VKStagingTexture> VKStagingTexture::Create(StagingTextureType ty
   }
 
   VkBuffer buffer;
-  VmaAllocation alloc;
+  vk_heap_alloc_t alloc;
   char* map_ptr;
   if (!StagingBuffer::AllocateBuffer(buffer_type, buffer_size, buffer_usage, &buffer, &alloc,
                                      &map_ptr))
@@ -815,11 +805,11 @@ std::unique_ptr<VKStagingTexture> VKStagingTexture::Create(StagingTextureType ty
 
   // Linear image
   VkImage linear_image = VK_NULL_HANDLE;
-  VmaAllocation linear_image_alloc = VK_NULL_HANDLE;
+  vk_heap_alloc_t linear_image_alloc = {};
   if (DriverDetails::HasBug(DriverDetails::BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY) &&
       type == StagingTextureType::Readback && config.samples == 1)
   {
-    std::tie(linear_image, linear_image_alloc) = CreateLinearImage(type, config);
+    linear_image = CreateLinearImage(type, config, &linear_image_alloc);
   }
 
   std::unique_ptr<StagingBuffer> staging_buffer =
@@ -835,8 +825,8 @@ std::unique_ptr<VKStagingTexture> VKStagingTexture::Create(StagingTextureType ty
   return staging_tex;
 }
 
-std::pair<VkImage, VmaAllocation> VKStagingTexture::CreateLinearImage(StagingTextureType type,
-                                                                      const TextureConfig& config)
+VkImage VKStagingTexture::CreateLinearImage(StagingTextureType type, const TextureConfig& config,
+                                            vk_heap_alloc_t* alloc)
 {
   // Create a intermediate texture with linear tiling
   VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -862,28 +852,19 @@ std::pair<VkImage, VmaAllocation> VKStagingTexture::CreateLinearImage(StagingTex
   if (res != VK_SUCCESS)
   {
     LOG_VULKAN_ERROR(res, "Linear images are not supported for the staging texture: ");
-    return std::make_pair<VkImage, VmaAllocation>(VK_NULL_HANDLE, VK_NULL_HANDLE);
+    *alloc = {};
+    return VK_NULL_HANDLE;
   }
-
-  VmaAllocationCreateInfo alloc_create_info = {};
-  alloc_create_info.flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
-  alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-  alloc_create_info.pool = VK_NULL_HANDLE;
-  alloc_create_info.pUserData = nullptr;
-  alloc_create_info.priority = 0.0;
-  alloc_create_info.requiredFlags = 0;
-  alloc_create_info.preferredFlags = 0;
 
   VkImage image;
-  VmaAllocation alloc;
-  res = vmaCreateImage(g_vulkan_context->GetMemoryAllocator(), &image_info, &alloc_create_info,
-                       &image, &alloc, nullptr);
+  res = vk_heap_create_image(g_vulkan_context->GetHeap(), &image_info, VK_HEAP_DEVICE, &image,
+                             alloc);
   if (res != VK_SUCCESS)
   {
-    LOG_VULKAN_ERROR(res, "vmaCreateImage failed: ");
-    return std::make_pair<VkImage, VmaAllocation>(VK_NULL_HANDLE, VK_NULL_HANDLE);
+    LOG_VULKAN_ERROR(res, "vk_heap_create_image failed: ");
+    return VK_NULL_HANDLE;
   }
-  return std::make_pair(image, alloc);
+  return image;
 }
 
 void VKStagingTexture::CopyFromTexture(const AbstractTexture* src,

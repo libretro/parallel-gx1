@@ -18,7 +18,6 @@ StreamBuffer::StreamBuffer(VkBufferUsageFlags usage, u32 size) : m_usage(usage),
 
 StreamBuffer::~StreamBuffer()
 {
-  // VMA_ALLOCATION_CREATE_MAPPED_BIT automatically handles unmapping for us
   if (m_buffer != VK_NULL_HANDLE)
     g_command_buffer_mgr->DeferBufferDestruction(m_buffer, m_alloc);
 }
@@ -46,38 +45,27 @@ bool StreamBuffer::AllocateBuffer()
       nullptr                                // const uint32_t*        pQueueFamilyIndices
   };
 
-  VmaAllocationCreateInfo alloc_create_info = {};
-  alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                            VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT |
-                            VMA_ALLOCATION_CREATE_MAPPED_BIT;
-  alloc_create_info.usage =
-      VMA_MEMORY_USAGE_AUTO_PREFER_HOST;  // Host visible VRAM is slower in practice
-  alloc_create_info.pool = VK_NULL_HANDLE;
-  alloc_create_info.pUserData = nullptr;
-  alloc_create_info.priority = 0.0;
-  alloc_create_info.requiredFlags = 0;
-  alloc_create_info.preferredFlags = 0;
-
+  // Host-visible system memory, mapped for the buffer's life: vertices,
+  // indices and uniforms are written straight into what the GPU reads.
+  // Host visible VRAM is slower in practice.
   VkBuffer buffer = VK_NULL_HANDLE;
-  VmaAllocation alloc = VK_NULL_HANDLE;
-  VmaAllocationInfo alloc_info;
-  VkResult res = vmaCreateBuffer(g_vulkan_context->GetMemoryAllocator(), &buffer_create_info,
-                                 &alloc_create_info, &buffer, &alloc, &alloc_info);
+  vk_heap_alloc_t alloc;
+  VkResult res = vk_heap_create_buffer(g_vulkan_context->GetHeap(), &buffer_create_info,
+                                       VK_HEAP_UPLOAD, &buffer, &alloc);
   if (res != VK_SUCCESS)
   {
-    LOG_VULKAN_ERROR(res, "vmaCreateBuffer failed: ");
+    LOG_VULKAN_ERROR(res, "vk_heap_create_buffer failed: ");
     return false;
   }
 
   // Destroy the backings for the buffer after the command buffer executes
-  // VMA_ALLOCATION_CREATE_MAPPED_BIT automatically handles unmapping for us
   if (m_buffer != VK_NULL_HANDLE)
     g_command_buffer_mgr->DeferBufferDestruction(m_buffer, m_alloc);
 
   // Replace with the new buffer
   m_buffer = buffer;
   m_alloc = alloc;
-  m_host_pointer = static_cast<u8*>(alloc_info.pMappedData);
+  m_host_pointer = static_cast<u8*>(alloc.mapped);
   m_current_offset = 0;
   m_current_gpu_position = 0;
   m_tracked_fences.clear();
@@ -156,10 +144,8 @@ void StreamBuffer::CommitMemory(u32 final_num_bytes)
   ASSERT((m_current_offset + final_num_bytes) <= m_size);
   ASSERT(final_num_bytes <= m_last_allocation_size);
 
-  // For non-coherent mappings, flush the memory range
-  // vmaFlushAllocation checks whether the allocation uses a coherent memory type internally
-  vmaFlushAllocation(g_vulkan_context->GetMemoryAllocator(), m_alloc, m_current_offset,
-                     final_num_bytes);
+  // For non-coherent mappings, flush the memory range; nothing to do on coherent memory
+  vk_heap_flush(g_vulkan_context->GetHeap(), &m_alloc, m_current_offset, final_num_bytes);
 
   m_current_offset += final_num_bytes;
 }

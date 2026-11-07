@@ -132,8 +132,8 @@ VulkanContext::VulkanContext(VkInstance instance, VkPhysicalDevice physical_devi
 
 VulkanContext::~VulkanContext()
 {
-  if (m_allocator != VK_NULL_HANDLE)
-    vmaDestroyAllocator(m_allocator);
+  if (m_heap_ready)
+    vk_heap_shutdown(&m_heap);
   if (m_device != VK_NULL_HANDLE)
     vkDestroyDevice(m_device, nullptr);
 
@@ -659,7 +659,6 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
     return false;
 
   AddExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, false);
-  AddExtension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME, false);
   AddExtension("VK_KHR_portability_subset", false);
 
   /* the extension is enabled only with its feature there to enable */
@@ -935,100 +934,66 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
 
 bool VulkanContext::CreateAllocator(u32 vk_api_version)
 {
-  VmaAllocatorCreateInfo allocator_info = {};
-  allocator_info.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
-  allocator_info.physicalDevice = m_physical_device;
-  allocator_info.device = m_device;
-  allocator_info.preferredLargeHeapBlockSize = 64 << 20;
-  allocator_info.pAllocationCallbacks = nullptr;
-  allocator_info.pDeviceMemoryCallbacks = nullptr;
-  allocator_info.pHeapSizeLimit = nullptr;
-  allocator_info.instance = m_instance;
-  allocator_info.vulkanApiVersion = vk_api_version;
-  allocator_info.pTypeExternalMemoryHandleTypes = nullptr;
-#ifdef __LIBRETRO__
-  PFN_vkGetInstanceProcAddr gip = vkGetInstanceProcAddr;
+  VkPhysicalDeviceMemoryProperties props;
+  VkPhysicalDeviceProperties device_props;
+  vk_heap_fns_t fns;
+
+  vkGetPhysicalDeviceMemoryProperties(m_physical_device, &props);
+  vkGetPhysicalDeviceProperties(m_physical_device, &device_props);
+
+  fns.allocate_memory = vkAllocateMemory;
+  fns.free_memory = vkFreeMemory;
+  fns.map_memory = vkMapMemory;
+  fns.unmap_memory = vkUnmapMemory;
+  fns.flush_ranges = vkFlushMappedMemoryRanges;
+  fns.invalidate_ranges = vkInvalidateMappedMemoryRanges;
+  fns.create_buffer = vkCreateBuffer;
+  fns.destroy_buffer = vkDestroyBuffer;
+  fns.create_image = vkCreateImage;
+  fns.destroy_image = vkDestroyImage;
+  fns.buffer_requirements = vkGetBufferMemoryRequirements;
+  fns.image_requirements = vkGetImageMemoryRequirements;
+  fns.buffer_requirements2 = nullptr;
+  fns.image_requirements2 = nullptr;
+  fns.bind_buffer = vkBindBufferMemory;
+  fns.bind_image = vkBindImageMemory;
+
+  // Dedicated allocations: core in 1.1, or the two KHR extensions on 1.0.
+  // The frontend may hand over vkGetInstanceProcAddr alone.
   PFN_vkGetDeviceProcAddr gdp = vkGetDeviceProcAddr;
-
-  if (!gip) {
-    ERROR_LOG_FMT(VIDEO, "vkGetInstanceProcAddr is null");
-    return false;
-  }
-  if (!gdp) {
-    gdp = reinterpret_cast<PFN_vkGetDeviceProcAddr>(gip(m_instance, "vkGetDeviceProcAddr"));
-    if (!gdp) {
-      ERROR_LOG_FMT(VIDEO, "vkGetDeviceProcAddr is null");
-      return false;
-    }
-  }
-
-  VmaVulkanFunctions funcs = {};
-  funcs.vkGetInstanceProcAddr = gip;
-  funcs.vkGetDeviceProcAddr = gdp;
-
-  funcs.vkGetPhysicalDeviceMemoryProperties2KHR =
-      reinterpret_cast<PFN_vkGetPhysicalDeviceMemoryProperties2KHR>(
-          gip(m_instance, "vkGetPhysicalDeviceMemoryProperties2KHR"));
-  if (!funcs.vkGetPhysicalDeviceMemoryProperties2KHR) {
-    funcs.vkGetPhysicalDeviceMemoryProperties2KHR =
-        reinterpret_cast<PFN_vkGetPhysicalDeviceMemoryProperties2KHR>(
-            gip(m_instance, "vkGetPhysicalDeviceMemoryProperties2"));
-  }
-  if (!funcs.vkGetPhysicalDeviceMemoryProperties2KHR) {
-    ERROR_LOG_FMT(VIDEO, "Failed to load vkGetPhysicalDeviceMemoryProperties2(KHR)");
-    return false;
-  }
-
-  funcs.vkGetBufferMemoryRequirements2KHR =
-      reinterpret_cast<PFN_vkGetBufferMemoryRequirements2KHR>(
-          gdp(m_device, "vkGetBufferMemoryRequirements2KHR"));
-  if (!funcs.vkGetBufferMemoryRequirements2KHR) {
-    funcs.vkGetBufferMemoryRequirements2KHR =
-        reinterpret_cast<PFN_vkGetBufferMemoryRequirements2KHR>(
-            gdp(m_device, "vkGetBufferMemoryRequirements2"));
-  }
-
-  funcs.vkGetImageMemoryRequirements2KHR =
-      reinterpret_cast<PFN_vkGetImageMemoryRequirements2KHR>(
-          gdp(m_device, "vkGetImageMemoryRequirements2KHR"));
-  if (!funcs.vkGetImageMemoryRequirements2KHR) {
-    funcs.vkGetImageMemoryRequirements2KHR =
-        reinterpret_cast<PFN_vkGetImageMemoryRequirements2KHR>(
-            gdp(m_device, "vkGetImageMemoryRequirements2"));
-  }
-
-  funcs.vkBindBufferMemory2KHR =
-      reinterpret_cast<PFN_vkBindBufferMemory2KHR>(
-          gdp(m_device, "vkBindBufferMemory2KHR"));
-  if (!funcs.vkBindBufferMemory2KHR) {
-    funcs.vkBindBufferMemory2KHR =
-        reinterpret_cast<PFN_vkBindBufferMemory2KHR>(
-            gdp(m_device, "vkBindBufferMemory2"));
-  }
-
-  funcs.vkBindImageMemory2KHR =
-      reinterpret_cast<PFN_vkBindImageMemory2KHR>(
-          gdp(m_device, "vkBindImageMemory2KHR"));
-  if (!funcs.vkBindImageMemory2KHR) {
-    funcs.vkBindImageMemory2KHR =
-        reinterpret_cast<PFN_vkBindImageMemory2KHR>(
-            gdp(m_device, "vkBindImageMemory2"));
-  }
-
-  allocator_info.pVulkanFunctions = &funcs;
-#else
-  allocator_info.pVulkanFunctions = nullptr;
-#endif
-  if (SupportsDeviceExtension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME))
-    allocator_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
-
-  VkResult res = vmaCreateAllocator(&allocator_info, &m_allocator);
-  if (res != VK_SUCCESS)
+  if (!gdp && vkGetInstanceProcAddr)
   {
-    LOG_VULKAN_ERROR(res, "vmaCreateAllocator failed: ");
-    return false;
+    gdp = reinterpret_cast<PFN_vkGetDeviceProcAddr>(
+        vkGetInstanceProcAddr(m_instance, "vkGetDeviceProcAddr"));
+  }
+  if (gdp && vk_api_version >= VK_API_VERSION_1_1)
+  {
+    fns.buffer_requirements2 = reinterpret_cast<PFN_vkGetBufferMemoryRequirements2>(
+        gdp(m_device, "vkGetBufferMemoryRequirements2"));
+    fns.image_requirements2 = reinterpret_cast<PFN_vkGetImageMemoryRequirements2>(
+        gdp(m_device, "vkGetImageMemoryRequirements2"));
+  }
+  else if (gdp && SupportsDeviceExtension(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME) &&
+           SupportsDeviceExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME))
+  {
+    fns.buffer_requirements2 = reinterpret_cast<PFN_vkGetBufferMemoryRequirements2>(
+        gdp(m_device, "vkGetBufferMemoryRequirements2KHR"));
+    fns.image_requirements2 = reinterpret_cast<PFN_vkGetImageMemoryRequirements2>(
+        gdp(m_device, "vkGetImageMemoryRequirements2KHR"));
+  }
+  if (!fns.buffer_requirements2 || !fns.image_requirements2)
+  {
+    fns.buffer_requirements2 = nullptr;
+    fns.image_requirements2 = nullptr;
   }
 
+  if (!vk_heap_init(&m_heap, m_device, &props, device_props.limits.nonCoherentAtomSize, &fns, 0,
+                    0))
+  {
+    ERROR_LOG_FMT(VIDEO, "Vulkan: device memory entry points are missing");
+    return false;
+  }
+  m_heap_ready = true;
   return true;
 }
 

@@ -134,7 +134,7 @@ public:
   // Returns true if the specified extension is supported and enabled.
   bool SupportsDeviceExtension(const char* name) const;
 
-  VmaAllocator GetMemoryAllocator() const { return m_allocator; }
+  vk_heap_t* GetHeap() { return &m_heap; }
 
 private:
   static bool SelectInstanceExtensions(std::vector<const char*>* extension_list,
@@ -149,7 +149,8 @@ private:
   VkInstance m_instance = VK_NULL_HANDLE;
   VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
   VkDevice m_device = VK_NULL_HANDLE;
-  VmaAllocator m_allocator = VK_NULL_HANDLE;
+  vk_heap_t m_heap = {};
+  bool m_heap_ready = false;
 
   VkQueue m_graphics_queue = VK_NULL_HANDLE;
   u32 m_graphics_queue_family_index = 0;
@@ -165,9 +166,6 @@ private:
   bool m_extended_dynamic_state = false;
   bool m_dynamic_blending = false;
   bool m_fast_linking = false;
-#ifdef __LIBRETRO__
-  VmaVulkanFunctions m_vulkan_functions = {};
-#endif
 };
 
 extern std::unique_ptr<VulkanContext> g_vulkan_context;

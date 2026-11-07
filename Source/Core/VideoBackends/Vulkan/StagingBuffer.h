@@ -13,7 +13,7 @@ namespace Vulkan
 class StagingBuffer
 {
 public:
-  StagingBuffer(STAGING_BUFFER_TYPE type, VkBuffer buffer, VmaAllocation allocation,
+  StagingBuffer(STAGING_BUFFER_TYPE type, VkBuffer buffer, const vk_heap_alloc_t& allocation,
                 VkDeviceSize size, char* map_ptr);
   virtual ~StagingBuffer();
 
@@ -58,7 +58,7 @@ public:
 
   // Allocates the resources needed to create a staging buffer.
   static bool AllocateBuffer(STAGING_BUFFER_TYPE type, VkDeviceSize size, VkBufferUsageFlags usage,
-                             VkBuffer* out_buffer, VmaAllocation* out_alloc, char** out_map_ptr);
+                             VkBuffer* out_buffer, vk_heap_alloc_t* out_alloc, char** out_map_ptr);
 
   // Wrapper for creating an barrier on a buffer
   static void BufferMemoryBarrier(VkCommandBuffer command_buffer, VkBuffer buffer,
@@ -70,7 +70,7 @@ public:
 protected:
   STAGING_BUFFER_TYPE m_type;
   VkBuffer m_buffer;
-  VmaAllocation m_alloc;
+  vk_heap_alloc_t m_alloc;
   VkDeviceSize m_size;
 
   char* m_map_pointer = nullptr;

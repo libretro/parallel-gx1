@@ -44,7 +44,7 @@ private:
   u32 m_last_allocation_size = 0;
 
   VkBuffer m_buffer = VK_NULL_HANDLE;
-  VmaAllocation m_alloc = VK_NULL_HANDLE;
+  vk_heap_alloc_t m_alloc = {};
   u8* m_host_pointer = nullptr;
 
   // List of fences and the corresponding positions in the buffer

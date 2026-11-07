@@ -18,7 +18,7 @@ VKBoundingBox::~VKBoundingBox()
 {
   if (m_gpu_buffer != VK_NULL_HANDLE)
   {
-    vmaDestroyBuffer(g_vulkan_context->GetMemoryAllocator(), m_gpu_buffer, m_gpu_allocation);
+    vk_heap_destroy_buffer(g_vulkan_context->GetHeap(), m_gpu_buffer, &m_gpu_allocation);
   }
 }
 
@@ -114,22 +114,13 @@ bool VKBoundingBox::CreateGPUBuffer()
       nullptr                                // const uint32_t*        pQueueFamilyIndices
   };
 
-  VmaAllocationCreateInfo alloc_create_info = {};
-  alloc_create_info.flags = VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
-  alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-  alloc_create_info.pool = VK_NULL_HANDLE;
-  alloc_create_info.pUserData = nullptr;
-  alloc_create_info.priority = 0.0;
-  alloc_create_info.requiredFlags = 0;
-  alloc_create_info.preferredFlags = 0;
-
   VkBuffer buffer;
-  VmaAllocation alloc;
-  VkResult res = vmaCreateBuffer(g_vulkan_context->GetMemoryAllocator(), &info, &alloc_create_info,
-                                 &buffer, &alloc, nullptr);
+  vk_heap_alloc_t alloc;
+  VkResult res =
+      vk_heap_create_buffer(g_vulkan_context->GetHeap(), &info, VK_HEAP_DEVICE, &buffer, &alloc);
   if (res != VK_SUCCESS)
   {
-    LOG_VULKAN_ERROR(res, "vmaCreateBuffer failed: ");
+    LOG_VULKAN_ERROR(res, "vk_heap_create_buffer failed: ");
     return false;
   }
 

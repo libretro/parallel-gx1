@@ -30,7 +30,7 @@ public:
   };
 
   VKTexture() = delete;
-  VKTexture(const TextureConfig& tex_config, VmaAllocation alloc, VkImage image,
+  VKTexture(const TextureConfig& tex_config, const vk_heap_alloc_t& alloc, VkImage image,
             std::string_view name, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED,
             ComputeImageLayout compute_layout = ComputeImageLayout::Undefined);
   ~VKTexture() override;
@@ -57,7 +57,7 @@ public:
   VkImageView GetView2D() const { return m_view_2d; }
   VkImageLayout GetLayout() const { return m_layout; }
   VkFormat GetVkFormat() const { return GetVkFormatForHostTextureFormat(m_config.format); }
-  bool IsAdopted() const { return m_alloc != VmaAllocation(VK_NULL_HANDLE); }
+  bool IsAdopted() const { return m_alloc.memory != VK_NULL_HANDLE; }
 
   static std::unique_ptr<VKTexture> Create(const TextureConfig& tex_config, std::string_view name);
   static std::unique_ptr<VKTexture>
@@ -77,7 +77,7 @@ public:
 private:
   bool CreateView(VkImageViewType type, VkImageView* view);
 
-  VmaAllocation m_alloc;
+  vk_heap_alloc_t m_alloc;
   VkImage m_image;
   VkImageView m_view = VK_NULL_HANDLE;
   VkImageView m_view_2d = VK_NULL_HANDLE;
@@ -97,7 +97,7 @@ public:
   VKStagingTexture() = delete;
   VKStagingTexture(PrivateTag, StagingTextureType type, const TextureConfig& config,
                    std::unique_ptr<StagingBuffer> buffer, VkImage linear_image,
-                   VmaAllocation linear_image_alloc);
+                   const vk_heap_alloc_t& linear_image_alloc);
 
   ~VKStagingTexture() override;
 
@@ -115,8 +115,9 @@ public:
   static std::unique_ptr<VKStagingTexture> Create(StagingTextureType type,
                                                   const TextureConfig& config);
 
-  static std::pair<VkImage, VmaAllocation> CreateLinearImage(StagingTextureType type,
-                                                             const TextureConfig& config);
+  // Returns VK_NULL_HANDLE when linear images are not to be had.
+  static VkImage CreateLinearImage(StagingTextureType type, const TextureConfig& config,
+                                   vk_heap_alloc_t* alloc);
 
 private:
   void CopyFromTextureToLinearImage(const VKTexture* src_tex,
@@ -125,7 +126,7 @@ private:
 
   std::unique_ptr<StagingBuffer> m_staging_buffer;
   VkImage m_linear_image = VK_NULL_HANDLE;
-  VmaAllocation m_linear_image_alloc = VK_NULL_HANDLE;
+  vk_heap_alloc_t m_linear_image_alloc = {};
   u64 m_flush_fence_counter = 0;
 };
 

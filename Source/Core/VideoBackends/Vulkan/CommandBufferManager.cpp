@@ -432,11 +432,13 @@ void CommandBufferManager::DeferBufferViewDestruction(VkBufferView object)
       [object] { vkDestroyBufferView(g_vulkan_context->GetDevice(), object, nullptr); });
 }
 
-void CommandBufferManager::DeferBufferDestruction(VkBuffer buffer, VmaAllocation alloc)
+void CommandBufferManager::DeferBufferDestruction(VkBuffer buffer, const vk_heap_alloc_t& alloc)
 {
   CmdBufferResources& cmd_buffer_resources = GetCurrentCmdBufferResources();
-  cmd_buffer_resources.cleanup_resources.push_back(
-      [buffer, alloc] { vmaDestroyBuffer(g_vulkan_context->GetMemoryAllocator(), buffer, alloc); });
+  vk_heap_alloc_t owned = alloc;
+  cmd_buffer_resources.cleanup_resources.push_back([buffer, owned]() mutable {
+    vk_heap_destroy_buffer(g_vulkan_context->GetHeap(), buffer, &owned);
+  });
 }
 
 void CommandBufferManager::DeferFramebufferDestruction(VkFramebuffer object)
@@ -446,11 +448,13 @@ void CommandBufferManager::DeferFramebufferDestruction(VkFramebuffer object)
       [object] { vkDestroyFramebuffer(g_vulkan_context->GetDevice(), object, nullptr); });
 }
 
-void CommandBufferManager::DeferImageDestruction(VkImage image, VmaAllocation alloc)
+void CommandBufferManager::DeferImageDestruction(VkImage image, const vk_heap_alloc_t& alloc)
 {
   CmdBufferResources& cmd_buffer_resources = GetCurrentCmdBufferResources();
-  cmd_buffer_resources.cleanup_resources.push_back(
-      [image, alloc] { vmaDestroyImage(g_vulkan_context->GetMemoryAllocator(), image, alloc); });
+  vk_heap_alloc_t owned = alloc;
+  cmd_buffer_resources.cleanup_resources.push_back([image, owned]() mutable {
+    vk_heap_destroy_image(g_vulkan_context->GetHeap(), image, &owned);
+  });
 }
 
 void CommandBufferManager::DeferImageViewDestruction(VkImageView object)

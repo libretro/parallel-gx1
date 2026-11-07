@@ -1635,6 +1635,8 @@ ifeq ($(ARCH_X86_64),1)
 	$(CORE_DIR)/Source/Core/Core/PowerPC/Jit64Common/TrampolineCache.cpp
 endif
 ifeq ($(HAVE_VULKAN),1)
+   DOLPHIN_SOURCES_C += \
+	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/VKHeap.c
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/CommandBufferManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Vulkan/ObjectCache.cpp \
@@ -1979,7 +1981,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/picojson -I$(GEN_DIR)/Source/Core \
 	-I$(SRC_DIR)/DolphinLibretro/Common -I$(SRC_DIR)/DolphinLibretro/VideoContexts \
 	-I$(EXT_DIR)/libretro-common/include \
-	-I$(EXT_DIR)/Vulkan-Headers/include -I$(EXT_DIR)/VulkanMemoryAllocator/include \
+	-I$(EXT_DIR)/Vulkan-Headers/include \
 	-I$(EXT_DIR)/fmt/fmt/include \
 	-I$(EXT_DIR)/mbedtls/include -I$(EXT_DIR)/minizip-ng/minizip-ng \
 	$(ZLIB_INC) $(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \

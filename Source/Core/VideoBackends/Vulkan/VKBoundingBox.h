@@ -33,7 +33,7 @@ private:
   bool CreateReadbackBuffer();
 
   VkBuffer m_gpu_buffer = VK_NULL_HANDLE;
-  VmaAllocation m_gpu_allocation = VK_NULL_HANDLE;
+  vk_heap_alloc_t m_gpu_allocation = {};
 
   static constexpr size_t BUFFER_SIZE = sizeof(BBoxType) * NUM_BBOX_VALUES;
 

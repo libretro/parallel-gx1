@@ -13,7 +13,7 @@
 
 namespace Vulkan
 {
-StagingBuffer::StagingBuffer(STAGING_BUFFER_TYPE type, VkBuffer buffer, VmaAllocation alloc,
+StagingBuffer::StagingBuffer(STAGING_BUFFER_TYPE type, VkBuffer buffer, const vk_heap_alloc_t& alloc,
                              VkDeviceSize size, char* map_ptr)
     : m_type(type), m_buffer(buffer), m_alloc(alloc), m_size(size), m_map_pointer(map_ptr)
 {
@@ -52,19 +52,18 @@ void StagingBuffer::BufferMemoryBarrier(VkCommandBuffer command_buffer, VkBuffer
 
 bool StagingBuffer::Map()
 {
-  // The staging buffer is permanently mapped and VMA handles the mapping for us
+  // The staging buffer's memory is mapped for as long as it lives
   return true;
 }
 
 void StagingBuffer::Unmap()
 {
-  // The staging buffer is permanently mapped and VMA handles the unmapping for us
 }
 
 void StagingBuffer::FlushCPUCache(VkDeviceSize offset, VkDeviceSize size)
 {
-  // vmaFlushAllocation checks whether the allocation uses a coherent memory type internally
-  vmaFlushAllocation(g_vulkan_context->GetMemoryAllocator(), m_alloc, offset, size);
+  // nothing to do on coherent memory
+  vk_heap_flush(g_vulkan_context->GetHeap(), &m_alloc, offset, size);
 }
 
 void StagingBuffer::InvalidateGPUCache(VkCommandBuffer command_buffer,
@@ -98,8 +97,8 @@ void StagingBuffer::FlushGPUCache(VkCommandBuffer command_buffer, VkAccessFlagBi
 
 void StagingBuffer::InvalidateCPUCache(VkDeviceSize offset, VkDeviceSize size)
 {
-  // vmaInvalidateAllocation checks whether the allocation uses a coherent memory type internally
-  vmaInvalidateAllocation(g_vulkan_context->GetMemoryAllocator(), m_alloc, offset, size);
+  // nothing to do on coherent memory
+  vk_heap_invalidate(g_vulkan_context->GetHeap(), &m_alloc, offset, size);
 }
 
 void StagingBuffer::Read(VkDeviceSize offset, void* data, size_t size, bool invalidate_caches)
@@ -123,7 +122,7 @@ void StagingBuffer::Write(VkDeviceSize offset, const void* data, size_t size,
 
 bool StagingBuffer::AllocateBuffer(STAGING_BUFFER_TYPE type, VkDeviceSize size,
                                    VkBufferUsageFlags usage, VkBuffer* out_buffer,
-                                   VmaAllocation* out_alloc, char** out_map_ptr)
+                                   vk_heap_alloc_t* out_alloc, char** out_map_ptr)
 {
   VkBufferCreateInfo buffer_create_info = {
       VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,  // VkStructureType        sType
@@ -136,59 +135,30 @@ bool StagingBuffer::AllocateBuffer(STAGING_BUFFER_TYPE type, VkDeviceSize size,
       nullptr                                // const uint32_t*        pQueueFamilyIndices
   };
 
-  VmaAllocationCreateInfo alloc_create_info = {};
-  alloc_create_info.flags =
-      VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
-  alloc_create_info.usage = VMA_MEMORY_USAGE_AUTO;
-  alloc_create_info.pool = VK_NULL_HANDLE;
-  alloc_create_info.pUserData = nullptr;
-  alloc_create_info.priority = 0.0;
-  alloc_create_info.preferredFlags = 0;
-  alloc_create_info.requiredFlags = 0;
-
+  // Where cached memory is slow to read back, coherent memory is taken
+  // whatever else it is, cached if there is such.
+  vk_heap_usage heap_usage = type == STAGING_BUFFER_TYPE_UPLOAD ? VK_HEAP_UPLOAD : VK_HEAP_READBACK;
   if (DriverDetails::HasBug(DriverDetails::BUG_SLOW_CACHED_READBACK_MEMORY)) [[unlikely]]
-  {
-    // If there is no memory type that is both CACHED and COHERENT,
-    // pick the one that is COHERENT
-    alloc_create_info.usage = VMA_MEMORY_USAGE_UNKNOWN;
-    alloc_create_info.requiredFlags =
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    alloc_create_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-  }
-  else
-  {
-    if (type == STAGING_BUFFER_TYPE_UPLOAD)
-      alloc_create_info.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    else
-      alloc_create_info.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-  }
+    heap_usage = VK_HEAP_HOST_COHERENT;
 
-  VmaAllocationInfo alloc_info;
-  VkResult res = vmaCreateBuffer(g_vulkan_context->GetMemoryAllocator(), &buffer_create_info,
-                                 &alloc_create_info, out_buffer, out_alloc, &alloc_info);
-
-  if (type == STAGING_BUFFER_TYPE_UPLOAD)
-  {
-    VkMemoryPropertyFlags flags = 0;
-    vmaGetMemoryTypeProperties(g_vulkan_context->GetMemoryAllocator(), alloc_info.memoryType,
-                               &flags);
-    if (!(flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
-    {
-      WARN_LOG_FMT(VIDEO, "Vulkan: Failed to find a coherent memory type for uploads, this will "
-                          "affect performance.");
-    }
-  }
-
-  *out_map_ptr = static_cast<char*>(alloc_info.pMappedData);
-
+  VkResult res = vk_heap_create_buffer(g_vulkan_context->GetHeap(), &buffer_create_info,
+                                       heap_usage, out_buffer, out_alloc);
   if (res != VK_SUCCESS)
   {
-    LOG_VULKAN_ERROR(res, "vmaCreateBuffer failed: ");
+    LOG_VULKAN_ERROR(res, "vk_heap_create_buffer failed: ");
+    *out_map_ptr = nullptr;
     return false;
   }
 
-  VkMemoryPropertyFlags flags = 0;
-  vmaGetAllocationMemoryProperties(g_vulkan_context->GetMemoryAllocator(), *out_alloc, &flags);
+  if (type == STAGING_BUFFER_TYPE_UPLOAD &&
+      !(vk_heap_flags(g_vulkan_context->GetHeap(), out_alloc) &
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
+  {
+    WARN_LOG_FMT(VIDEO, "Vulkan: Failed to find a coherent memory type for uploads, this will "
+                        "affect performance.");
+  }
+
+  *out_map_ptr = static_cast<char*>(out_alloc->mapped);
   return true;
 }
 
@@ -196,7 +166,7 @@ std::unique_ptr<StagingBuffer> StagingBuffer::Create(STAGING_BUFFER_TYPE type, V
                                                      VkBufferUsageFlags usage)
 {
   VkBuffer buffer;
-  VmaAllocation alloc;
+  vk_heap_alloc_t alloc;
   char* map_ptr;
   if (!AllocateBuffer(type, size, usage, &buffer, &alloc, &map_ptr))
     return nullptr;
