@@ -535,7 +535,8 @@ std::unique_ptr<OGLStagingTexture> OGLStagingTexture::Create(StagingTextureType 
     GLenum map_flags;
     if (type == StagingTextureType::Readback)
     {
-      buffer_flags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT;
+      /* read by the CPU only: kept where its reads are cached */
+      buffer_flags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_CLIENT_STORAGE_BIT;
       map_flags = GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT;
     }
     else if (type == StagingTextureType::Upload)
