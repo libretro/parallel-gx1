@@ -66,7 +66,8 @@ struct CD3D11_UNORDERED_ACCESS_VIEW_DESC : public D3D11_UNORDERED_ACCESS_VIEW_DE
                                     UINT firstArraySlice = 0,
                                     UINT arraySize = (UINT)-1)
   {
-    std::memset(this, 0, sizeof(*this));
+    std::memset(static_cast<D3D11_UNORDERED_ACCESS_VIEW_DESC*>(this), 0,
+                sizeof(D3D11_UNORDERED_ACCESS_VIEW_DESC));
     Format = fmt;
     ViewDimension = dim;
     switch (dim)
@@ -105,7 +106,8 @@ struct CD3D11_UNORDERED_ACCESS_VIEW_DESC : public D3D11_UNORDERED_ACCESS_VIEW_DE
                                     UINT firstArraySlice = 0,
                                     UINT arraySize = (UINT)-1)
   {
-    std::memset(this, 0, sizeof(*this));
+    std::memset(static_cast<D3D11_UNORDERED_ACCESS_VIEW_DESC*>(this), 0,
+                sizeof(D3D11_UNORDERED_ACCESS_VIEW_DESC));
     ViewDimension = dim;
 
     D3D11_TEXTURE2D_DESC tex{};
@@ -148,7 +150,8 @@ struct CD3D11_DEPTH_STENCIL_VIEW_DESC : public D3D11_DEPTH_STENCIL_VIEW_DESC
                                  UINT arraySize = (UINT)-1,
                                  UINT flags = 0)
   {
-    std::memset(this, 0, sizeof(*this));
+    std::memset(static_cast<D3D11_DEPTH_STENCIL_VIEW_DESC*>(this), 0,
+                sizeof(D3D11_DEPTH_STENCIL_VIEW_DESC));
     Format = format;
     ViewDimension = viewDimension;
     Flags = flags;
@@ -190,7 +193,8 @@ struct CD3D11_DEPTH_STENCIL_VIEW_DESC : public D3D11_DEPTH_STENCIL_VIEW_DESC
                                  UINT arraySize = (UINT)-1,
                                  UINT flags = 0)
   {
-    std::memset(this, 0, sizeof(*this));
+    std::memset(static_cast<D3D11_DEPTH_STENCIL_VIEW_DESC*>(this), 0,
+                sizeof(D3D11_DEPTH_STENCIL_VIEW_DESC));
     ViewDimension = viewDimension;
     Flags = flags;
 
