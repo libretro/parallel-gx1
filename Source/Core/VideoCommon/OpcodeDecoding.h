@@ -57,63 +57,25 @@ enum class Primitive : u8
   GX_DRAW_POINTS = 0x7           // 0xB8
 };
 
-// Interface for the Run and RunCommand functions below.
-// The functions themselves are templates so that the compiler generates separate versions for each
-// callback (with the callback functions inlined), so the callback doesn't actually need to be
-// publicly inherited.
-// Compilers don't generate warnings for failed inlining with virtual functions, so this define
-// allows disabling the use of virtual functions to generate those warnings.  However, this means
-// that missing functions will generate errors on their use in RunCommand, instead of in the
-// subclass, which can be confusing.
-#define OPCODE_CALLBACK_USE_INHERITANCE
-
-#ifdef OPCODE_CALLBACK_USE_INHERITANCE
-#define OPCODE_CALLBACK(sig) DOLPHIN_FORCE_INLINE sig override
-#define OPCODE_CALLBACK_NOINLINE(sig) sig override
-#else
+// The callback the Run and RunCommand functions below call. They are templates, so the compiler
+// generates a version for each callback class with its functions inlined; this base only names
+// the classes that may be passed. Each class has these, as plain members:
+//   void OnXF(u16 address, u8 count, const u8* data);  // any XF command
+//   void OnCP(u8 command, u32 value);  // any CP command; updates GetCPState() with LoadCPReg
+//   void OnBP(u8 command, u32 value);  // any BP command
+//   void OnIndexedLoad(CPArray array, u32 index, u16 address, u8 size);
+//   void OnPrimitiveCommand(Primitive primitive, u8 vat, u32 vertex_size, u16 num_vertices,
+//                           const u8* vertex_data);
+//   void OnDisplayList(u32 address, u32 size);
+//   void OnNop(u32 count);  // consecutive NOPs, merged into one call
+//   void OnUnknown(u8 opcode, const u8* data);  // an unknown or unimplemented one; data[0] is it
+//   void OnCommand(const u8* data, u32 size);  // after any of the above; data[0] is the opcode
+//   CPState& GetCPState();  // for vertex decoding; CP commands change it
+//   u32 GetVertexSize(u8 vat);
 #define OPCODE_CALLBACK(sig) DOLPHIN_FORCE_INLINE sig
 #define OPCODE_CALLBACK_NOINLINE(sig) sig
-#endif
 class Callback
 {
-#ifdef OPCODE_CALLBACK_USE_INHERITANCE
-public:
-  virtual ~Callback() = default;
-
-  // Called on any XF command.
-  virtual void OnXF(u16 address, u8 count, const u8* data) = 0;
-  // Called on any CP command.
-  // Subclasses should update the CP state with GetCPState().LoadCPReg(command, value) so that
-  // primitive commands decode properly.
-  virtual void OnCP(u8 command, u32 value) = 0;
-  // Called on any BP command.
-  virtual void OnBP(u8 command, u32 value) = 0;
-  // Called on any indexed XF load command.
-  virtual void OnIndexedLoad(CPArray array, u32 index, u16 address, u8 size) = 0;
-  // Called on any primitive command.
-  virtual void OnPrimitiveCommand(OpcodeDecoder::Primitive primitive, u8 vat, u32 vertex_size,
-                                  u16 num_vertices, const u8* vertex_data) = 0;
-  // Called on a display list.
-  virtual void OnDisplayList(u32 address, u32 size) = 0;
-  // Called on any NOP commands (which are all merged into a single call).
-  virtual void OnNop(u32 count) = 0;
-  // Called on an unknown opcode, or an opcode that is known but not implemented.
-  // data[0] is opcode.
-  virtual void OnUnknown(u8 opcode, const u8* data) = 0;
-
-  // Called on ANY command.  The first byte of data is the opcode.  Size will be at least 1.
-  // This function is called after one of the above functions is called.
-  virtual void OnCommand(const u8* data, u32 size) = 0;
-
-  // Get the current CP state.  Needed for vertex decoding; will also be mutated for CP commands.
-  virtual CPState& GetCPState() = 0;
-
-  virtual u32 GetVertexSize(u8 vat)
-  {
-    const CPState& cpmem = GetCPState();
-    return VertexLoaderBase::GetVertexSize(cpmem.vtx_desc, cpmem.vtx_attr[vat]);
-  }
-#endif
 };
 
 namespace detail

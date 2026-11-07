@@ -34,7 +34,7 @@
 
 namespace
 {
-class FifoPlaybackAnalyzer : public OpcodeDecoder::Callback
+class FifoPlaybackAnalyzer final : public OpcodeDecoder::Callback
 {
 public:
   static void AnalyzeFrames(FifoDataFile* file, std::vector<AnalyzedFrameInfo>& frame_info);
@@ -55,6 +55,10 @@ public:
   OPCODE_CALLBACK(void OnCommand(const u8* data, u32 size));
 
   OPCODE_CALLBACK(CPState& GetCPState()) { return m_cpmem; }
+  OPCODE_CALLBACK(u32 GetVertexSize(u8 vat))
+  {
+    return VertexLoaderBase::GetVertexSize(m_cpmem.vtx_desc, m_cpmem.vtx_attr[vat]);
+  }
 
   bool m_start_of_primitives = false;
   bool m_end_of_primitives = false;
