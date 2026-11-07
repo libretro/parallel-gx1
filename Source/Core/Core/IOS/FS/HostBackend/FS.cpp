@@ -3,12 +3,12 @@
 
 #include "Core/IOS/FS/HostBackend/FS.h"
 
-#include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <expected>
 #include <optional>
 #include <string_view>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 
 #include <fmt/format.h>
@@ -58,7 +58,8 @@ struct SerializedFstEntry
   std::string_view GetName() const { return {name.data(), strnlen(name.data(), name.size())}; }
   void SetName(std::string_view new_name)
   {
-    std::memcpy(name.data(), new_name.data(), std::min(name.size(), new_name.length()));
+    const size_t size = new_name.length() < name.size() ? new_name.length() : name.size();
+    std::memcpy(name.data(), new_name.data(), size);
   }
 
   /// File name
@@ -150,7 +151,10 @@ HostFileSystem::HostFileSystem(std::string root_path, std::vector<NandRedirect> 
   LoadFst();
 }
 
-HostFileSystem::~HostFileSystem() = default;
+HostFileSystem::~HostFileSystem()
+{
+  CloseAllHandles();
+}
 
 std::string HostFileSystem::GetFstFilePath() const
 {
@@ -249,10 +253,18 @@ HostFileSystem::FstEntry* HostFileSystem::GetFstEntryForPath(const std::string& 
   for (const std::string& component : SplitString(std::string(path.substr(1)), '/'))
   {
     complete_path += '/' + component;
-    const auto next = std::ranges::find(entry->children, component, &FstEntry::name);
-    if (next != entry->children.end())
+    FstEntry* next = nullptr;
+    for (FstEntry& child : entry->children)
     {
-      entry = &*next;
+      if (child.name == component)
+      {
+        next = &child;
+        break;
+      }
+    }
+    if (next)
+    {
+      entry = next;
     }
     else
     {
@@ -288,10 +300,14 @@ void HostFileSystem::DoState(PointerWrap& p)
   //    of them were open, it would make DoStateRead/DoStateWriteOrMeasure's calls to OpenFile fail.
   // 4. Create a copy of m_handles that we can restore later in case we're writing/measuring,
   //    because OpenFile happily stomps over elements in m_handles that have opened set to false.
-  auto handles_copy = std::move(m_handles);
-  m_handles = {};
-  for (Handle& handle : handles_copy)
-    handle.host_file.reset();
+  Handle handles_copy[NUM_HANDLES];
+  int i;
+  for (i = 0; i < NUM_HANDLES; i++)
+  {
+    handles_copy[i] = m_handles[i];
+    handles_copy[i].host_file = -1;
+  }
+  CloseAllHandles();
 
   // The format for the next part of the save state is follows:
   // 1. bool is_full_nand_in_state (movie active && temporary wii root)
@@ -327,7 +343,8 @@ void HostFileSystem::DoState(PointerWrap& p)
       }
     }
 
-    m_handles = std::move(handles_copy);
+    for (i = 0; i < NUM_HANDLES; i++)
+      m_handles[i] = std::move(handles_copy[i]);
   }
   else  // case where we're in read mode.
   {
@@ -345,8 +362,9 @@ void HostFileSystem::DoState(PointerWrap& p)
     }
   }
 
-  for (Handle& handle : m_handles)
+  for (i = 0; i < NUM_HANDLES; i++)
   {
+    Handle& handle = m_handles[i];
     p.Do(handle.opened);
     p.Do(handle.mode);
     p.Do(handle.wii_path);
@@ -368,19 +386,26 @@ ResultCode HostFileSystem::Format(Uid uid)
   ResetFst();
   SaveFst();
   // Reset and close all handles.
-  m_handles = {};
+  CloseAllHandles();
   return ResultCode::Success;
 }
 
 ResultCode HostFileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::string& path,
                                                  FileAttribute attr, Modes modes, bool is_file)
 {
-  if (!IsValidNonRootPath(path) || !std::ranges::all_of(path, Common::IsPrintableCharacter))
-  {
+  if (!IsValidNonRootPath(path))
     return ResultCode::Invalid;
+
+  int depth = 0;
+  for (const char c : path)
+  {
+    if (!Common::IsPrintableCharacter(c))
+      return ResultCode::Invalid;
+    if (c == '/')
+      depth++;
   }
 
-  if (!is_file && std::ranges::count(path, '/') > int(MaxPathDepth))
+  if (!is_file && depth > int(MaxPathDepth))
     return ResultCode::TooManyPathComponents;
 
   const auto split_path = SplitPathAndBasename(path);
@@ -429,16 +454,24 @@ ResultCode HostFileSystem::CreateDirectory(Uid uid, Gid gid, const std::string& 
 
 bool HostFileSystem::IsFileOpened(const std::string& path) const
 {
-  return std::ranges::any_of(m_handles, [&path](const Handle& handle) {
-    return handle.opened && handle.wii_path == path;
-  });
+  int i;
+  for (i = 0; i < NUM_HANDLES; i++)
+  {
+    if (m_handles[i].opened && m_handles[i].wii_path == path)
+      return true;
+  }
+  return false;
 }
 
 bool HostFileSystem::IsDirectoryInUse(const std::string& path) const
 {
-  return std::ranges::any_of(m_handles, [&path](const Handle& handle) {
-    return handle.opened && handle.wii_path.starts_with(path);
-  });
+  int i;
+  for (i = 0; i < NUM_HANDLES; i++)
+  {
+    if (m_handles[i].opened && m_handles[i].wii_path.starts_with(path))
+      return true;
+  }
+  return false;
 }
 
 ResultCode HostFileSystem::Delete(Uid uid, Gid gid, const std::string& path)
@@ -466,9 +499,14 @@ ResultCode HostFileSystem::Delete(Uid uid, Gid gid, const std::string& path)
   else
     return ResultCode::InUse;
 
-  const auto it = std::ranges::find(parent->children, split_path.file_name, &FstEntry::name);
-  if (it != parent->children.end())
-    parent->children.erase(it);
+  for (size_t i = 0; i < parent->children.size(); i++)
+  {
+    if (parent->children[i].name == split_path.file_name)
+    {
+      parent->children.erase(parent->children.begin() + i);
+      break;
+    }
+  }
   SaveFst();
 
   return ResultCode::Success;
@@ -555,14 +593,15 @@ ResultCode HostFileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
   new_entry->name = split_new_path.file_name;
 
   // Finally, remove the child from the old parent and move it to the new parent.
-  const auto it =
-      std::ranges::find(old_parent->children, split_old_path.file_name, &FstEntry::name);
-  if (it != old_parent->children.end())
+  for (size_t i = 0; i < old_parent->children.size(); i++)
   {
-    new_entry->data = it->data;
-    new_entry->children = it->children;
-
-    old_parent->children.erase(it);
+    FstEntry& old_entry = old_parent->children[i];
+    if (old_entry.name != split_old_path.file_name)
+      continue;
+    new_entry->data = old_entry.data;
+    new_entry->children = std::move(old_entry.children);
+    old_parent->children.erase(old_parent->children.begin() + i);
+    break;
   }
 
   SaveFst();
@@ -593,34 +632,57 @@ Result<std::vector<std::string>> HostFileSystem::ReadDirectory(Uid uid, Gid gid,
   // Sort files according to their order in the FST tree (issue 10234).
   // The result should look like this:
   //     [FilesNotInFst, ..., OldestFileInFst, ..., NewestFileInFst]
-  std::unordered_map<std::string_view, int> sort_keys;
-  sort_keys.reserve(entry->children.size());
-  for (size_t i = 0; i < entry->children.size(); ++i)
-    sort_keys.emplace(entry->children[i].name, int(i));
-
-  const auto get_key = [&sort_keys](std::string_view key) {
-    const auto it = sort_keys.find(key);
-    // As a fallback, files that are not in the FST are put at the beginning.
-    return it != sort_keys.end() ? it->second : -1;
-  };
-
-  // Now sort in reverse order because Nintendo traverses a linked list
-  // in which new elements are inserted at the front.
-  std::ranges::sort(host_entry.children,
-                    [&get_key](const File::FSTEntry& one, const File::FSTEntry& two) {
-                      const int key1 = get_key(one.virtualName);
-                      const int key2 = get_key(two.virtualName);
-                      if (key1 != key2)
-                        return key1 > key2;
-
-                      // For files that are not in the FST, sort lexicographically to ensure that
-                      // results are consistent no matter what the underlying filesystem is.
-                      return one.virtualName > two.virtualName;
-                    });
-
+  const size_t count = host_entry.children.size();
   std::vector<std::string> output;
-  for (const File::FSTEntry& child : host_entry.children)
-    output.emplace_back(child.virtualName);
+  if (!count)
+    return output;
+
+  // key: position in the FST; files that are not in the FST go first
+  int* const keys = static_cast<int*>(std::malloc(count * (sizeof(int) + sizeof(size_t))));
+  if (!keys)
+    return std::unexpected{ResultCode::UnknownError};
+  size_t* const order = reinterpret_cast<size_t*>(keys + count);
+  for (size_t i = 0; i < count; i++)
+  {
+    const std::string& name = host_entry.children[i].virtualName;
+    keys[i] = -1;
+    for (size_t j = 0; j < entry->children.size(); j++)
+    {
+      if (entry->children[j].name == name)
+      {
+        keys[i] = int(j);
+        break;
+      }
+    }
+  }
+
+  // Insertion sort in reverse order because Nintendo traverses a linked list in
+  // which new elements are inserted at the front. Files that are not in the FST
+  // sort lexicographically so results do not depend on the host filesystem.
+  for (size_t i = 0; i < count; i++)
+  {
+    size_t j = i;
+    while (j > 0)
+    {
+      const size_t prev = order[j - 1];
+      const int key1 = keys[i];
+      const int key2 = keys[prev];
+      const bool before = key1 != key2 ?
+                              key1 > key2 :
+                              host_entry.children[i].virtualName >
+                                  host_entry.children[prev].virtualName;
+      if (!before)
+        break;
+      order[j] = prev;
+      j--;
+    }
+    order[j] = i;
+  }
+
+  output.reserve(count);
+  for (size_t i = 0; i < count; i++)
+    output.push_back(std::move(host_entry.children[order[i]].virtualName));
+  std::free(keys);
   return output;
 }
 

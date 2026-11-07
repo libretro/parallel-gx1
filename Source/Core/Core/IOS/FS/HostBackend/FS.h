@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <map>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -78,10 +75,26 @@ private:
     bool opened = false;
     Mode mode = Mode::None;
     std::string wii_path;
-    std::shared_ptr<File::IOFile> host_file;
+    /// index into m_host_files, -1 when none
+    int host_file = -1;
     u32 file_offset = 0;
   };
+  /// One host file shared by every guest handle open on the same path, so all
+  /// accesses to it are strongly ordered like on the Wii.
+  struct HostFile
+  {
+    File::IOFile file;
+    std::string host_path;
+    u32 refs = 0;
+  };
+  enum
+  {
+    NUM_HANDLES = 16
+  };
   Handle* AssignFreeHandle();
+  File::IOFile* GetHostFile(const Handle* handle);
+  void CloseHandle(Handle* handle);
+  void CloseAllHandles();
   Handle* GetHandleFromFd(Fd fd);
   Fd ConvertHandleToFd(const Handle* handle) const;
 
@@ -91,7 +104,8 @@ private:
     bool is_redirect;
   };
   HostFilename BuildFilename(const std::string& wii_path) const;
-  std::shared_ptr<File::IOFile> OpenHostFile(const std::string& host_path);
+  int OpenHostFile(const std::string& host_path);
+  void ReleaseHostFile(int index);
 
   ResultCode CreateFileOrDirectory(Uid uid, Gid gid, const std::string& path,
                                    FileAttribute attribute, Modes modes, bool is_file);
@@ -117,8 +131,8 @@ private:
   /// filesystem root manually.
   FstEntry m_root_entry{};
   std::string m_root_path;
-  std::map<std::string, std::weak_ptr<File::IOFile>> m_open_files;
-  std::array<Handle, 16> m_handles{};
+  HostFile m_host_files[NUM_HANDLES];
+  Handle m_handles[NUM_HANDLES];
 
   FstEntry m_redirect_fst{};
   std::vector<NandRedirect> m_nand_redirects;
