@@ -360,6 +360,7 @@ void VideoBackendBase::ShutdownShared()
   g_perf_query.reset();
   g_graphics_mod_manager.reset();
   g_texture_cache.reset();
+  TCacheEntryPoolFree();
   g_framebuffer_manager.reset();
   g_shader_cache.reset();
   g_vertex_manager.reset();

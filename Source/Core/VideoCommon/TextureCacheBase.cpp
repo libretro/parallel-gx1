@@ -15,6 +15,9 @@
 #include <pmmintrin.h>
 #endif
 
+#include <stdlib.h>
+#include <new>
+
 #include <fmt/format.h>
 
 #include "Common/Align.h"
@@ -75,12 +78,76 @@ TCacheEntry::TCacheEntry(std::unique_ptr<AbstractTexture> tex,
 {
 }
 
-TCacheEntry::~TCacheEntry()
+TCacheEntry::~TCacheEntry() = default;
+
+/* The entry pool: chunks of entries, the free ones in a list through
+ * their own storage. */
+enum
 {
-  for (auto& reference : references)
-    reference->references.erase(this);
+  TCACHE_ENTRY_CHUNK = 64
+};
+union TCacheEntrySlot
+{
+  TCacheEntrySlot* next_free;
+  alignas(TCacheEntry) unsigned char storage[sizeof(TCacheEntry)];
+};
+struct TCacheEntryChunk
+{
+  TCacheEntryChunk* next;
+  TCacheEntrySlot slots[TCACHE_ENTRY_CHUNK];
+};
+static TCacheEntryChunk* s_entry_chunks;
+static TCacheEntrySlot* s_entry_free;
+static size_t s_entries_alive;
+
+TCacheEntry* TCacheEntryNew(std::unique_ptr<AbstractTexture> tex,
+                            std::unique_ptr<AbstractFramebuffer> fb)
+{
+  TCacheEntrySlot* slot;
+  if (!s_entry_free)
+  {
+    TCacheEntryChunk* chunk = static_cast<TCacheEntryChunk*>(malloc(sizeof(TCacheEntryChunk)));
+    size_t i;
+    if (!chunk)
+      return nullptr;
+    chunk->next = s_entry_chunks;
+    s_entry_chunks = chunk;
+    for (i = 0; i < TCACHE_ENTRY_CHUNK; i++)
+    {
+      chunk->slots[i].next_free = s_entry_free;
+      s_entry_free = &chunk->slots[i];
+    }
+  }
+  slot = s_entry_free;
+  s_entry_free = slot->next_free;
+  s_entries_alive++;
+  return new (slot->storage) TCacheEntry(std::move(tex), std::move(fb));
+}
+
+void TCacheEntryRelease(TCacheEntry* entry)
+{
+  TCacheEntrySlot* const slot = reinterpret_cast<TCacheEntrySlot*>(entry);
+  for (auto& reference : entry->references)
+    reference->references.erase(entry);
   ASSERT_MSG(VIDEO, g_texture_cache, "Texture cache destroyed before TCacheEntry was destroyed");
-  g_texture_cache->ReleaseToPool(this);
+  g_texture_cache->ReleaseToPool(entry);
+  entry->~TCacheEntry();
+  slot->next_free = s_entry_free;
+  s_entry_free = slot;
+  s_entries_alive--;
+}
+
+void TCacheEntryPoolFree()
+{
+  if (s_entries_alive)
+    return;
+  while (s_entry_chunks)
+  {
+    TCacheEntryChunk* const next = s_entry_chunks->next;
+    free(s_entry_chunks);
+    s_entry_chunks = next;
+  }
+  s_entry_free = nullptr;
 }
 
 void TextureCacheBase::CheckTempSize(size_t required_size)
@@ -708,8 +775,13 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
     // Even if the texture isn't valid, we still need to create the cache entry object
     // to update the point in the state state. We'll just throw it away if it's invalid.
     auto tex = DeserializeTexture(p);
-    auto entry =
-        std::make_shared<TCacheEntry>(std::move(tex->texture), std::move(tex->framebuffer));
+    RcTcacheEntry entry(TCacheEntryNew(std::move(tex->texture), std::move(tex->framebuffer)));
+    if (!entry)
+    {
+      TCacheEntry unread(nullptr, nullptr);
+      unread.DoState(p);
+      continue;
+    }
     entry->textures_by_hash_iter = m_textures_by_hash.end();
     entry->DoState(p);
     if (entry->texture && commit_state)
@@ -2714,8 +2786,10 @@ RcTcacheEntry TextureCacheBase::AllocateCacheEntry(const TextureConfig& config)
   if (!alloc)
     return {};
 
-  auto cacheEntry =
-      std::make_shared<TCacheEntry>(std::move(alloc->texture), std::move(alloc->framebuffer));
+  RcTcacheEntry cacheEntry(
+      TCacheEntryNew(std::move(alloc->texture), std::move(alloc->framebuffer)));
+  if (!cacheEntry)
+    return {};
   cacheEntry->textures_by_hash_iter = m_textures_by_hash.end();
   cacheEntry->id = m_last_entry_id++;
   return cacheEntry;

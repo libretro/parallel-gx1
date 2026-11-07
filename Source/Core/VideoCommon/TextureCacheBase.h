@@ -119,6 +119,8 @@ struct fmt::formatter<EFBCopyParams>
   }
 };
 
+class RcTcacheEntry;
+
 struct TCacheEntry
 {
   // common members
@@ -140,6 +142,7 @@ struct TCacheEntry
   bool is_xfb_container = false;
   u64 id = 0;
   u32 content_semaphore = 0;  // Counts up
+  u32 refs = 0;               // the RcTcacheEntry handles naming it
 
   // Indicates that this TCacheEntry has been invalided from m_textures_by_address
   bool invalidated = false;
@@ -156,7 +159,7 @@ struct TCacheEntry
 
   // Keep an iterator to the entry in m_textures_by_hash, so it does not need to be searched when
   // removing the cache entry
-  std::multimap<u64, std::shared_ptr<TCacheEntry>>::iterator textures_by_hash_iter;
+  std::multimap<u64, RcTcacheEntry>::iterator textures_by_hash_iter;
 
   // This is used to keep track of both:
   //   * efb copies used by this partially updated texture
@@ -241,7 +244,73 @@ struct TCacheEntry
   void DoState(PointerWrap& p);
 };
 
-using RcTcacheEntry = std::shared_ptr<TCacheEntry>;
+/* Cache entries come from a pool kept for the core's life and are handed
+ * back to it when the last handle goes: none is allocated once the pool
+ * has grown to what a game keeps. Video thread only. */
+TCacheEntry* TCacheEntryNew(std::unique_ptr<AbstractTexture> tex,
+                            std::unique_ptr<AbstractFramebuffer> fb);
+void TCacheEntryRelease(TCacheEntry* entry);
+/* Frees the pool's memory when no entry is alive. */
+void TCacheEntryPoolFree();
+
+/* A counted handle to a cache entry. */
+class RcTcacheEntry
+{
+public:
+  RcTcacheEntry() : m_entry(nullptr) {}
+  RcTcacheEntry(std::nullptr_t) : m_entry(nullptr) {}
+  explicit RcTcacheEntry(TCacheEntry* entry) : m_entry(entry)
+  {
+    if (entry)
+      entry->refs++;
+  }
+  RcTcacheEntry(const RcTcacheEntry& other) : m_entry(other.m_entry)
+  {
+    if (m_entry)
+      m_entry->refs++;
+  }
+  RcTcacheEntry(RcTcacheEntry&& other) noexcept : m_entry(other.m_entry)
+  {
+    other.m_entry = nullptr;
+  }
+  ~RcTcacheEntry() { reset(); }
+  RcTcacheEntry& operator=(const RcTcacheEntry& other)
+  {
+    if (other.m_entry)
+      other.m_entry->refs++;
+    reset();
+    m_entry = other.m_entry;
+    return *this;
+  }
+  RcTcacheEntry& operator=(RcTcacheEntry&& other) noexcept
+  {
+    if (this != &other)
+    {
+      reset();
+      m_entry = other.m_entry;
+      other.m_entry = nullptr;
+    }
+    return *this;
+  }
+  void reset()
+  {
+    TCacheEntry* const entry = m_entry;
+    m_entry = nullptr;
+    if (entry && --entry->refs == 0)
+      TCacheEntryRelease(entry);
+  }
+  TCacheEntry* get() const { return m_entry; }
+  TCacheEntry* operator->() const { return m_entry; }
+  TCacheEntry& operator*() const { return *m_entry; }
+  explicit operator bool() const { return m_entry != nullptr; }
+  bool operator==(const RcTcacheEntry& other) const { return m_entry == other.m_entry; }
+  bool operator!=(const RcTcacheEntry& other) const { return m_entry != other.m_entry; }
+  bool operator==(std::nullptr_t) const { return m_entry == nullptr; }
+  bool operator!=(std::nullptr_t) const { return m_entry != nullptr; }
+
+private:
+  TCacheEntry* m_entry;
+};
 
 class TextureCacheBase final
 {
