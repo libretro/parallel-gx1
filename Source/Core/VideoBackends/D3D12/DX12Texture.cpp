@@ -260,7 +260,7 @@ void DXTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
   ID3D12Resource* upload_buffer_resource;
   void* upload_buffer_ptr;
   u32 upload_buffer_offset;
-  if (upload_size >= STAGING_BUFFER_UPLOAD_THRESHOLD)
+  if (upload_size > STAGING_BUFFER_UPLOAD_THRESHOLD)
   {
     const D3D12_RANGE read_range = {0, 0};
     staging_buffer = CreateTextureUploadBuffer(upload_size);
@@ -353,7 +353,7 @@ u8* DXTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t
   StreamBuffer& stream_buffer = g_dx_context->GetTextureUploadBuffer();
 
   /* the writer's rows are where the copy reads them only at the placement alignment */
-  if ((stride % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) != 0 || size >= STAGING_BUFFER_UPLOAD_THRESHOLD)
+  if ((stride % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) != 0 || size > STAGING_BUFFER_UPLOAD_THRESHOLD)
     return nullptr;
 
   TransitionToState(D3D12_RESOURCE_STATE_COPY_DEST);
