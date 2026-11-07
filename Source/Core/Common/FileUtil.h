@@ -59,10 +59,6 @@ enum
   D_GBASAVES_IDX,
   D_WIISDCARDSYNCFOLDER_IDX,
   D_WIISYSCONF_IDX,
-  D_GPU_DRIVERS_EXTRACTED,
-  D_GPU_DRIVERS_TMP,
-  D_GPU_DRIVERS_HOOKS,
-  D_GPU_DRIVERS_FILE_REDIRECT,
   D_ASM_ROOT_IDX,
   D_BANNERS_WIIROOT_IDX,
   FIRST_FILE_USER_PATH_IDX,
@@ -237,10 +233,6 @@ const std::string& GetSysDirectory();
 
 
 void SetSysDirectory(const std::string& path);
-#ifdef ANDROID
-void SetGpuDriverDirectories(const std::string& path, const std::string& lib_path);
-const std::string GetGpuDriverDirectory(unsigned int dir_index);
-#endif
 
 // The lines of a file, one Next() at a time, without their line endings ("\n" or "\r\n").
 // Lines are lent from the file's mapping where it has one, else from a window read a block

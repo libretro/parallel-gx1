@@ -3,18 +3,9 @@
 
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 
-#if defined(ANDROID)
-#include <adrenotools/driver.h>
-#include <dlfcn.h>
-#endif
-
 #include "Common/DynamicLibrary.h"
 #if defined(__APPLE__)
 #include "Common/FileUtil.h"
-#elif defined(ANDROID) && _M_ARM_64
-#include "Common/FileUtil.h"
-
-#include "VideoCommon/VideoConfig.h"
 #endif
 
 #define VULKAN_MODULE_ENTRY_POINT(name, required) PFN_##name name;
@@ -40,34 +31,8 @@ static void ResetVulkanLibraryFunctionPointers()
 
 static Common::DynamicLibrary s_vulkan_module;
 
-static bool OpenVulkanLibrary(bool force_system_library)
+static bool OpenVulkanLibrary()
 {
-#if defined(ANDROID) && _M_ARM_64
-  const std::string& driver_lib_name = g_Config.customDriverLibraryName;
-
-  if (!force_system_library && !driver_lib_name.empty() && SupportsCustomDriver())
-  {
-    std::string tmp_dir = File::GetGpuDriverDirectory(D_GPU_DRIVERS_TMP);
-    std::string hook_dir = File::GetGpuDriverDirectory(D_GPU_DRIVERS_HOOKS);
-    std::string file_redirect_dir = File::GetGpuDriverDirectory(D_GPU_DRIVERS_FILE_REDIRECT);
-    std::string driver_dir = File::GetGpuDriverDirectory(D_GPU_DRIVERS_EXTRACTED);
-    INFO_LOG_FMT(HOST_GPU, "Loading driver: {}", driver_lib_name);
-
-    s_vulkan_module = adrenotools_open_libvulkan(
-        RTLD_NOW, ADRENOTOOLS_DRIVER_FILE_REDIRECT | ADRENOTOOLS_DRIVER_CUSTOM, tmp_dir.c_str(),
-        hook_dir.c_str(), driver_dir.c_str(), driver_lib_name.c_str(), file_redirect_dir.c_str(),
-        nullptr);
-    if (s_vulkan_module.IsOpen())
-    {
-      INFO_LOG_FMT(HOST_GPU, "Successfully loaded driver: {}", driver_lib_name);
-      return true;
-    }
-
-    WARN_LOG_FMT(HOST_GPU, "Loading driver {} failed.", driver_lib_name);
-  }
-#endif
-
-  WARN_LOG_FMT(HOST_GPU, "Loading system driver");
   std::string filename = Common::DynamicLibrary::GetVersionedFilename("vulkan", 1);
   if (s_vulkan_module.Open(filename.c_str()))
     return true;
@@ -77,9 +42,9 @@ static bool OpenVulkanLibrary(bool force_system_library)
   return s_vulkan_module.Open(filename.c_str());
 }
 
-bool LoadVulkanLibrary(bool force_system_library)
+bool LoadVulkanLibrary()
 {
-  if (!s_vulkan_module.IsOpen() && !OpenVulkanLibrary(force_system_library))
+  if (!s_vulkan_module.IsOpen() && !OpenVulkanLibrary())
     return false;
 
 #define VULKAN_MODULE_ENTRY_POINT(name, required)                                                  \
@@ -230,19 +195,5 @@ void LogVulkanResult(Common::Log::LogLevel level, const char* func_name, const i
   GENERIC_LOG_FMT(Common::Log::LogType::VIDEO, level, "({}:{}) {} ({}: {})", func_name, line, msg,
                   static_cast<int>(res), VkResultToString(res));
 }
-
-#ifdef ANDROID
-static bool CheckKgslPresent()
-{
-  constexpr auto KgslPath{"/dev/kgsl-3d0"};
-
-  return access(KgslPath, F_OK) == 0;
-}
-
-bool SupportsCustomDriver()
-{
-  return android_get_device_api_level() >= 28 && CheckKgslPresent();
-}
-#endif
 
 }  // namespace Vulkan

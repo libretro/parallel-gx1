@@ -177,8 +177,6 @@ void VideoConfig::Refresh()
 
   bGraphicMods = Config::Get(Config::GFX_MODS_ENABLE);
 
-  customDriverLibraryName = Config::Get(Config::GFX_DRIVER_LIB_NAME);
-
   vertex_loader_type = Config::Get(Config::GFX_VERTEX_LOADER_TYPE);
 }
 

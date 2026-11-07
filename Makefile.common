@@ -1780,21 +1780,6 @@ CPPIPC_SOURCES_CXX += \
 	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/new.cpp \
 	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/new_delete_resource.cpp
 
-# ADRENOTOOLS
-ADRENOTOOLS_SOURCES_C :=
-ADRENOTOOLS_SOURCES_CXX :=
-ADRENOTOOLS_SOURCES_ASM :=
-ADRENOTOOLS_SOURCES_OBJCXX :=
-ifeq ($(OS_ANDROID),1)
-   ifeq ($(ARCH_ARM64),1)
-      ADRENOTOOLS_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/libadrenotools/lib/linkernsbypass/android_linker_ns.cpp \
-	$(CORE_DIR)/Externals/libadrenotools/lib/linkernsbypass/elf_soname_patcher.cpp \
-	$(CORE_DIR)/Externals/libadrenotools/src/bcenabler.cpp \
-	$(CORE_DIR)/Externals/libadrenotools/src/driver.cpp
-   endif
-endif
-
 # ----------------------------------------------------------------------------
 # Per-library flags
 # ----------------------------------------------------------------------------
@@ -1956,9 +1941,6 @@ CPPIPC_FLAGS := -w -O2 -DUNICODE -D_UNICODE -fexceptions \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/src/libipc/platform/linux
 CPPIPC_CXXFLAGS := -std=gnu++17
 
-ADRENOTOOLS_FLAGS := -w -I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadrenotools \
-	-I$(EXT_DIR)/libadrenotools/lib/linkernsbypass
-
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
@@ -2002,8 +1984,7 @@ ifeq ($(OS_WIN),1)
 	-I$(EXT_DIR)/wil/include -I$(EXT_DIR)/ed25519
 endif
 ifeq ($(OS_ANDROID),1)
-   DOLPHIN_FLAGS += -DENABLE_VFS_FD \
-	-I$(EXT_DIR)/libadrenotools/include -I$(EXT_DIR)/libadrenotools/lib/linkernsbypass
+   DOLPHIN_FLAGS += -DENABLE_VFS_FD
 endif
 
 # Per-file additions.
@@ -2049,9 +2030,4 @@ ifeq ($(HAVE_BUNDLED_ICONV),1)
 endif
 ifeq ($(HAVE_CPPIPC),1)
    LIB_GROUPS += CPPIPC
-endif
-ifeq ($(OS_ANDROID),1)
-   ifeq ($(ARCH_ARM64),1)
-      LIB_GROUPS += ADRENOTOOLS
-   endif
 endif
