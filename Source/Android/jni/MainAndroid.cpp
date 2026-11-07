@@ -262,11 +262,6 @@ JNIEXPORT jstring JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_GetGitRev
   return ToJString(env, Common::GetScmRevGitStr());
 }
 
-JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_SaveScreenShot(JNIEnv*, jclass)
-{
-  Core::SaveScreenShot();
-}
-
 JNIEXPORT void JNICALL Java_org_dolphinemu_dolphinemu_NativeLibrary_eglBindAPI(JNIEnv*, jclass,
                                                                                jint api)
 {

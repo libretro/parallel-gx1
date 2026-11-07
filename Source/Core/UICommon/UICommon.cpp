@@ -55,7 +55,6 @@ static void CreateDumpPath(std::string path)
   File::CreateFullPath(File::GetUserPath(D_DUMPAUDIO_IDX));
   File::CreateFullPath(File::GetUserPath(D_DUMPDSP_IDX));
   File::CreateFullPath(File::GetUserPath(D_DUMPSSL_IDX));
-  File::CreateFullPath(File::GetUserPath(D_DUMPFRAMES_IDX));
   File::CreateFullPath(File::GetUserPath(D_DUMPOBJECTS_IDX));
   File::CreateFullPath(File::GetUserPath(D_DUMPTEXTURES_IDX));
   File::CreateFullPath(File::GetUserPath(D_DUMPDEBUG_IDX));
@@ -262,7 +261,6 @@ void CreateDirectories()
   File::CreateFullPath(File::GetUserPath(D_GRAPHICSMOD_IDX));
   File::CreateFullPath(File::GetUserPath(D_LOGS_IDX));
   File::CreateFullPath(File::GetUserPath(D_MAPS_IDX));
-  File::CreateFullPath(File::GetUserPath(D_SCREENSHOTS_IDX));
   File::CreateFullPath(File::GetUserPath(D_RETROACHIEVEMENTSCACHE_IDX));
   File::CreateFullPath(File::GetUserPath(D_STATESAVES_IDX));
   File::CreateFullPath(File::GetUserPath(D_ASM_ROOT_IDX));

@@ -15,7 +15,6 @@
 
 #include "Present.h"
 #include "VideoCommon/AbstractGfx.h"
-#include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/PostProcessing.h"
@@ -221,7 +220,6 @@ void Presenter::ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
   if (!is_duplicate || !g_ActiveConfig.bSkipPresentingDuplicateXFBs)
   {
     Present();
-    ProcessFrameDumping();
 
     video_events.after_present_event.Trigger(present_info);
   }
@@ -253,7 +251,6 @@ void Presenter::ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_
   video_events.before_present_event.Trigger(present_info);
 
   Present();
-  ProcessFrameDumping();
 
   video_events.after_present_event.Trigger(present_info);
 }
@@ -261,62 +258,6 @@ void Presenter::ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_
 void Presenter::SetNextSwapEstimatedTicks(u64 ticks)
 {
   m_next_swap_estimated_ticks = ticks;
-}
-
-void Presenter::ProcessFrameDumping() const
-{
-  if (g_frame_dumper->IsFrameDumping() && m_xfb_entry)
-  {
-    MathUtil::Rectangle<int> target_rect;
-    switch (Config::Get(Config::GFX_FRAME_DUMPS_RESOLUTION_TYPE))
-    {
-    default:
-    case FrameDumpResolutionType::WindowResolution:
-    {
-      if (!g_gfx->IsHeadless())
-      {
-        target_rect = GetTargetRectangle();
-        break;
-      }
-      [[fallthrough]];
-    }
-    case FrameDumpResolutionType::XFBAspectRatioCorrectedResolution:
-    {
-      target_rect = m_xfb_rect;
-      const bool allow_stretch = false;
-      auto [float_width, float_height] =
-          ScaleToDisplayAspectRatio(m_xfb_rect.GetWidth(), m_xfb_rect.GetHeight(), allow_stretch);
-      const float draw_aspect_ratio = CalculateDrawAspectRatio(allow_stretch);
-      auto [int_width, int_height] =
-          FindClosestIntegerResolution(float_width, float_height, draw_aspect_ratio);
-      target_rect = MathUtil::Rectangle<int>(0, 0, int_width, int_height);
-      break;
-    }
-    case FrameDumpResolutionType::XFBRawResolution:
-    {
-      target_rect = m_xfb_rect;
-      break;
-    }
-    }
-
-    int width = target_rect.GetWidth();
-    int height = target_rect.GetHeight();
-
-    if (width == 0)
-      width = 1;
-    if (height == 0)
-      height = 1;
-
-    // Remove any black borders, there would be no point in including them in the recording
-    target_rect.left = 0;
-    target_rect.top = 0;
-    target_rect.right = width;
-    target_rect.bottom = height;
-
-    // TODO: any scaling done by this won't be gamma corrected,
-    // we should either apply post processing as well, or port its gamma correction code
-    g_frame_dumper->DumpCurrentFrame(m_xfb_entry->texture.get(), m_xfb_rect, target_rect);
-  }
 }
 
 void Presenter::SetBackbuffer(int backbuffer_width, int backbuffer_height)

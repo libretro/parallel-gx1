@@ -46,7 +46,6 @@
 #include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/EFBInterface.h"
 #include "VideoCommon/Fifo.h"
-#include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/GeometryShaderManager.h"
@@ -316,7 +315,6 @@ bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
   g_efb_interface = std::move(efb_interface);
 
   g_presenter = std::make_unique<VideoCommon::Presenter>();
-  g_frame_dumper = std::make_unique<FrameDumper>();
   g_framebuffer_manager = std::make_unique<FramebufferManager>();
   g_shader_cache = std::make_unique<VideoCommon::ShaderCache>();
   g_graphics_mod_manager = std::make_unique<GraphicsModManager>();
@@ -367,7 +365,6 @@ void VideoBackendBase::ShutdownShared()
 {
   auto& system = Core::System::GetInstance();
   system.GetCustomResourceManager().Shutdown();
-  g_frame_dumper.reset();
   /* the GBAs render into the GPU's memory: given back before it goes */
   GBAScreensRevoke();
   g_presenter.reset();

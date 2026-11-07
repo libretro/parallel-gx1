@@ -79,16 +79,6 @@ enum class TriState : int
   Auto
 };
 
-enum class FrameDumpResolutionType : int
-{
-  // Window resolution (not including potential back buffer black borders)
-  WindowResolution,
-  // The aspect ratio corrected XFB resolution (XFB pixels might not have been square)
-  XFBAspectRatioCorrectedResolution,
-  // The raw unscaled XFB resolution (based on "internal resolution" scale)
-  XFBRawResolution,
-};
-
 enum class VertexLoaderType : int
 {
   Native,

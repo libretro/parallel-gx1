@@ -15,7 +15,6 @@ enum class TextureFilteringMode : int;
 enum class AnisotropicFilteringMode : int;
 enum class ColorCorrectionRegion : int;
 enum class TriState : int;
-enum class FrameDumpResolutionType : int;
 enum class VertexLoaderType : int;
 
 namespace Config
@@ -53,8 +52,6 @@ extern const Info<bool> GFX_HIRES_TEXTURES;
 extern const Info<bool> GFX_CACHE_HIRES_TEXTURES;
 extern const Info<bool> GFX_DUMP_EFB_TARGET;
 extern const Info<bool> GFX_DUMP_XFB_TARGET;
-extern const Info<FrameDumpResolutionType> GFX_FRAME_DUMPS_RESOLUTION_TYPE;
-extern const Info<int> GFX_PNG_COMPRESSION_LEVEL;
 extern const Info<bool> GFX_ENABLE_GPU_TEXTURE_DECODING;
 extern const Info<bool> GFX_ENABLE_PIXEL_LIGHTING;
 extern const Info<bool> GFX_FAST_DEPTH_CALC;

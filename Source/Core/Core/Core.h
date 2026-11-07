@@ -147,9 +147,6 @@ void SetState(Core::System& system, State state, bool report_state_change = true
               bool override_achievement_restrictions = false);
 State GetState(Core::System& system);
 
-void SaveScreenShot();
-void SaveScreenShot(std::string_view name);
-
 // This displays messages in a user-visible way.
 // Logs a message meant for the user; the core draws nothing over the game.
 void DisplayMessage(std::string message, int time_in_ms = 0);

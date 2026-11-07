@@ -11,7 +11,6 @@
 #include "VideoCommon/CPMemory.h"
 #include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/Fifo.h"
-#include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/PixelEngine.h"

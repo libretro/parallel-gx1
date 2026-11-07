@@ -123,30 +123,4 @@ bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u
                width, height, path, level, timer.ElapsedMs());
   return true;
 }
-
-static Common::UniqueBuffer<u8> RGBAToRGB(const u8* input, u32 width, u32 height, u32 row_stride)
-{
-  Common::UniqueBuffer<u8> buffer;
-  buffer.reset(width * height * 3);
-
-  std::size_t buffer_index = 0;
-  for (u32 y = 0; y < height; ++y)
-  {
-    const u8* pos = input + y * row_stride;
-    for (u32 x = 0; x < width; ++x)
-    {
-      buffer[buffer_index++] = pos[x * 4];
-      buffer[buffer_index++] = pos[x * 4 + 1];
-      buffer[buffer_index++] = pos[x * 4 + 2];
-    }
-  }
-  return buffer;
-}
-
-bool ConvertRGBAToRGBAndSavePNG(const std::string& path, const u8* input, u32 width, u32 height,
-                                u32 stride, int level)
-{
-  const auto data = RGBAToRGB(input, width, height, stride);
-  return SavePNG(path, data.data(), ImageByteFormat::RGB, width, height, width * 3, level);
-}
 }  // namespace Common

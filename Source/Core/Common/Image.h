@@ -21,6 +21,4 @@ enum class ImageByteFormat
 
 bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u32 width,
              u32 height, u32 stride, int level = 6);
-bool ConvertRGBAToRGBAndSavePNG(const std::string& path, const u8* input, u32 width, u32 height,
-                                u32 stride, int level);
 }  // namespace Common

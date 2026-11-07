@@ -1141,7 +1141,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/Fifo.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/FramebufferManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/FramebufferShaderGen.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/FrameDumper.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/FreeLookCamera.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GeometryShaderGen.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GeometryShaderManager.cpp \
