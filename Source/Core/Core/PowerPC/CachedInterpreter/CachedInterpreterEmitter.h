@@ -106,5 +106,5 @@ private:
 class CachedInterpreterCodeBlock : public Common::CodeBlock<CachedInterpreterEmitter, false>
 {
 private:
-  void PoisonMemory() override;
+  void PoisonMemory(size_t size) override;
 };

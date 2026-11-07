@@ -1217,10 +1217,10 @@ public:
 class X64CodeBlock : public Common::CodeBlock<XEmitter>
 {
 private:
-  void PoisonMemory() override
+  void PoisonMemory(size_t size) override
   {
     // x86/64: 0xCC = breakpoint
-    memset(region, 0xCC, region_size);
+    memset(region, 0xCC, size);
   }
 };
 

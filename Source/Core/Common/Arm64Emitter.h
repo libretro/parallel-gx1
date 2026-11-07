@@ -1483,7 +1483,9 @@ private:
 class ARM64CodeBlock : public Common::CodeBlock<ARM64XEmitter>
 {
 private:
-  void PoisonMemory() override
+  // The JIT writes its regions through emitters of other blocks, past what this block's own
+  // pointers say: the whole region is poisoned, whatever size was written.
+  void PoisonMemory(size_t /*size*/) override
   {
     // If our memory isn't a multiple of u32 then this won't write the last remaining bytes with
     // anything

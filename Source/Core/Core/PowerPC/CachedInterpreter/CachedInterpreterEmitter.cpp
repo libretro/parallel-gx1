@@ -31,10 +31,13 @@ s32 CachedInterpreterEmitter::PoisonCallback(PowerPC::PowerPCState& ppc_state, c
   return 0;
 }
 
-void CachedInterpreterCodeBlock::PoisonMemory()
+void CachedInterpreterCodeBlock::PoisonMemory(size_t size)
 {
   DEBUG_ASSERT(reinterpret_cast<std::uintptr_t>(region) % alignof(AnyCallback) == 0);
   DEBUG_ASSERT(region_size % sizeof(AnyCallback) == 0);
-  std::fill(reinterpret_cast<AnyCallback*>(region),
-            reinterpret_cast<AnyCallback*>(region + region_size), AnyCallbackCast(PoisonCallback));
+  size = (size + sizeof(AnyCallback) - 1) / sizeof(AnyCallback) * sizeof(AnyCallback);
+  if (size > region_size)
+    size = region_size;
+  std::fill(reinterpret_cast<AnyCallback*>(region), reinterpret_cast<AnyCallback*>(region + size),
+            AnyCallbackCast(PoisonCallback));
 }
