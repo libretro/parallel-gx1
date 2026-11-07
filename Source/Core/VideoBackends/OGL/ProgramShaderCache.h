@@ -121,12 +121,4 @@ private:
   static GLuint s_last_VAO;
 };
 
-class SharedContextAsyncShaderCompiler : public VideoCommon::AsyncShaderCompiler
-{
-protected:
-  bool WorkerThreadInitMainThread(void** param) override;
-  bool WorkerThreadInitWorkerThread(void* param) override;
-  void WorkerThreadExit(void* param) override;
-};
-
 }  // namespace OGL

@@ -699,9 +699,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
                                                g_backend_info.bSupportsComputeShaders &&
                                                g_ogl_config.bSupportsImageLoadStore;
 
-  // Background compiling is supported only when shared contexts aren't broken.
-  g_backend_info.bSupportsBackgroundCompiling =
-      !DriverDetails::HasBug(DriverDetails::BUG_SHARED_CONTEXT_SHADER_COMPILATION);
+  // Programs are compiled on the frontend's context alone: the core makes no contexts of its own.
+  g_backend_info.bSupportsBackgroundCompiling = false;
 
   // Program binaries are supported on GL4.1+, ARB_get_program_binary, or ES3.
   if (supports_glsl_cache)

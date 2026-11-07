@@ -671,7 +671,7 @@ void OGLGfx::UnbindTexture(const AbstractTexture* texture)
 
 std::unique_ptr<VideoCommon::AsyncShaderCompiler> OGLGfx::CreateAsyncShaderCompiler()
 {
-  return std::make_unique<SharedContextAsyncShaderCompiler>();
+  return std::make_unique<VideoCommon::AsyncShaderCompiler>();
 }
 
 bool OGLGfx::IsGLES() const

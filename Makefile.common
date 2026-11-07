@@ -1733,7 +1733,6 @@ ifeq ($(OS_ANDROID),1)
 	$(CORE_DIR)/Source/Android/jni/AndroidCommon/IDCache.cpp \
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerDroid.cpp \
 	$(CORE_DIR)/Source/Core/Common/MemArenaAndroid.cpp \
-	$(CORE_DIR)/Source/Core/Common/GL/GLInterface/EGL.cpp \
 	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/Android/Android.cpp
 endif
 ifeq ($(OS_APPLE),1)

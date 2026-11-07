@@ -31,8 +31,6 @@ public:
 
   virtual bool IsHeadless() const;
 
-  virtual std::unique_ptr<GLContext> CreateSharedContext();
-
   virtual bool MakeCurrent();
   virtual bool ClearCurrent();
 
@@ -57,7 +55,6 @@ protected:
   // Window dimensions.
   u32 m_backbuffer_width = 0;
   u32 m_backbuffer_height = 0;
-  bool m_is_shared = false;
 
   // A list of desktop OpenGL versions to attempt to create a context for.
   // (4.6-3.2, geometry shaders is a minimum requirement since we're using core profile).

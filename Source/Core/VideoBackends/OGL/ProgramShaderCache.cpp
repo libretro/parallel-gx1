@@ -52,7 +52,6 @@ atomic_slot_map_t* ProgramShaderCache::s_pipeline_programs;
 quiesce_t ProgramShaderCache::s_pipeline_program_quiesce;
 static std::string s_glsl_header;
 static retro_atomic_64_t s_shader_counter;
-static thread_local bool s_is_shared_context = false;
 
 static std::string GetGLSLVersionString()
 {
@@ -586,7 +585,7 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
     // We temporarily change the vertex array to the pipeline's vertex format.
     // This can prevent the NVIDIA OpenGL driver from recompiling on first use.
     GLuint vao = vertex_format ? vertex_format->VAO : s_attributeless_VAO;
-    if (s_is_shared_context || vao != s_last_VAO)
+    if (vao != s_last_VAO)
       glBindVertexArray(vao);
 
     // Attach shaders.
@@ -608,7 +607,7 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
     glLinkProgram(prog->shader.glprogid);
 
     // Restore VAO binding after linking.
-    if (!s_is_shared_context && vao != s_last_VAO)
+    if (vao != s_last_VAO)
       glBindVertexArray(s_last_VAO);
 
     if (!CheckProgramLinkResult(prog->shader.glprogid,
@@ -624,11 +623,6 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
   // Set program variables on the shader which will be returned.
   // This is only needed for drivers which don't support binding layout.
   prog->shader.SetProgramVariables();
-
-  // If this is a shared context, ensure we sync before we return the program to
-  // the main thread. If we don't do this, some driver can lock up (e.g. AMD).
-  if (s_is_shared_context)
-    glFinish();
 
   // Publish it, unless another thread made the same program meanwhile; a dead program in the
   // slot is simply replaced.
@@ -915,48 +909,4 @@ u64 ProgramShaderCache::GenerateShaderID()
   return static_cast<u64>(retro_atomic_fetch_add_64(&s_shader_counter, 1));
 }
 
-bool SharedContextAsyncShaderCompiler::WorkerThreadInitMainThread(void** param)
-{
-  std::unique_ptr<GLContext> context = GetOGLGfx()->GetMainGLContext()->CreateSharedContext();
-  if (!context)
-  {
-    PanicAlertFmt("Failed to create shared context for shader compiling.");
-    return false;
-  }
-
-  *param = context.release();
-  return true;
-}
-
-bool SharedContextAsyncShaderCompiler::WorkerThreadInitWorkerThread(void* param)
-{
-  GLContext* context = static_cast<GLContext*>(param);
-  if (!context->MakeCurrent())
-    return false;
-
-  s_is_shared_context = true;
-
-  // Make the state match the main context to have a better chance of avoiding recompiles.
-  if (!context->IsGLES())
-    glEnable(GL_PROGRAM_POINT_SIZE);
-  if (g_backend_info.bSupportsClipControl)
-    glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
-  if (g_backend_info.bSupportsDepthClamp)
-  {
-    glEnable(GL_CLIP_DISTANCE0);
-    glEnable(GL_CLIP_DISTANCE1);
-    glEnable(GL_DEPTH_CLAMP);
-  }
-  if (g_backend_info.bSupportsPrimitiveRestart)
-    GLUtil::EnablePrimitiveRestart(context);
-
-  return true;
-}
-
-void SharedContextAsyncShaderCompiler::WorkerThreadExit(void* param)
-{
-  GLContext* context = static_cast<GLContext*>(param);
-  context->ClearCurrent();
-  delete context;
-}
 }  // namespace OGL

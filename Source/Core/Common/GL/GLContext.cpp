@@ -5,27 +5,7 @@
 
 #include "Common/GL/GLContext.h"
 
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-#include "Common/GL/GLInterface/AGL.h"
-#endif
-#if defined(_WIN32)
-#include "Common/GL/GLInterface/WGL.h"
-#endif
-#if defined(__HAIKU__)
-#include "Common/GL/GLInterface/BGL.h"
-#endif
-#if HAVE_EGL
-#include "Common/GL/GLInterface/EGL.h"
-#if HAVE_X11
-#include "Common/GL/GLInterface/EGLX11.h"
-#endif
-#if defined(ANDROID) && !defined(__LIBRETRO__)
-#include "Common/GL/GLInterface/EGLAndroid.h"
-#endif
-#endif
-#if defined(__LIBRETRO__)
 #include "DolphinLibretro/VideoContexts/GLContextLR.h"
-#endif
 
 const std::array<std::pair<int, int>, 9> GLContext::s_desktop_opengl_versions = {
     {{4, 6}, {4, 5}, {4, 4}, {4, 3}, {4, 2}, {4, 1}, {4, 0}, {3, 3}, {3, 2}}};
@@ -40,11 +20,6 @@ bool GLContext::Initialize(const WindowSystemInfo& wsi, bool stereo, bool core)
 bool GLContext::IsHeadless() const
 {
   return true;
-}
-
-std::unique_ptr<GLContext> GLContext::CreateSharedContext()
-{
-  return nullptr;
 }
 
 bool GLContext::MakeCurrent()
@@ -82,34 +57,8 @@ std::unique_ptr<GLContext> GLContext::Create(const WindowSystemInfo& wsi, bool s
                                              bool prefer_gles)
 {
   std::unique_ptr<GLContext> context;
-#if defined(__APPLE__) && !defined(__LIBRETRO__)
-  if (wsi.type == WindowSystemType::MacOS || wsi.type == WindowSystemType::Headless)
-    context = std::make_unique<GLContextAGL>();
-#endif
-#if defined(_WIN32) && !defined(__LIBRETRO__)
-  if (wsi.type == WindowSystemType::Windows)
-    context = std::make_unique<GLContextWGL>();
-#endif
-#if defined(ANDROID) && !defined(__LIBRETRO__)
-  if (wsi.type == WindowSystemType::Android)
-    context = std::make_unique<GLContextEGLAndroid>();
-#endif
-#if defined(__HAIKU__)
-  if (wsi.type == WindowSystemType::Haiku)
-    context = std::make_unique<GLContextBGL>();
-#endif
-#if HAVE_EGL
-#if HAVE_X11
-  if (wsi.type == WindowSystemType::X11)
-    context = std::make_unique<GLContextEGLX11>();
-#endif
-  if (wsi.type == WindowSystemType::Headless || wsi.type == WindowSystemType::FBDev)
-    context = std::make_unique<GLContextEGL>();
-#endif
-#if defined(__LIBRETRO__)
   if (wsi.type == WindowSystemType::Libretro)
     context = std::make_unique<GLContextLR>();
-#endif
   if (!context)
     return nullptr;
 

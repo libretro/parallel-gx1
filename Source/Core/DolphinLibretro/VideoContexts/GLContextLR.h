@@ -17,10 +17,6 @@ public:
   bool IsInitialized() const { return m_initialized; }
   void Shutdown();
 
-  // libretro has no API for additional contexts, so this creates one directly through
-  // EGL/GLX, sharing with whatever frontend context is current on the calling thread.
-  std::unique_ptr<GLContext> CreateSharedContext() override;
-
 private:
   bool m_initialized = false;
 };
