@@ -297,7 +297,7 @@ bool DXContext::CreateComputeRootSignature()
 
 bool DXContext::CreateTextureUploadBuffer()
 {
-  if (!m_texture_upload_buffer.AllocateBuffer(TEXTURE_UPLOAD_BUFFER_SIZE))
+  if (!m_texture_upload_buffer.AllocateBuffer(TEXTURE_UPLOAD_BUFFER_SIZE, true))
   {
     PanicAlertFmt("Failed to create texture upload buffer");
     return false;

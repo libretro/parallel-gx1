@@ -17,7 +17,9 @@ public:
   StreamBuffer();
   ~StreamBuffer();
 
-  bool AllocateBuffer(u32 size);
+  // cpu_cached: CPU-cached system memory, for memory written in place (texels decoded into it);
+  // the upload heap when the device has none
+  bool AllocateBuffer(u32 size, bool cpu_cached = false);
 
   ID3D12Resource* GetBuffer() const { return m_buffer; }
   D3D12_GPU_VIRTUAL_ADDRESS GetGPUPointer() const { return m_gpu_pointer; }

@@ -16,7 +16,7 @@ namespace Vulkan
 class StreamBuffer
 {
 public:
-  StreamBuffer(VkBufferUsageFlags usage, u32 size);
+  StreamBuffer(VkBufferUsageFlags usage, u32 size, enum vk_heap_usage heap_usage);
   ~StreamBuffer();
 
   VkBuffer GetBuffer() const { return m_buffer; }
@@ -27,7 +27,9 @@ public:
   bool ReserveMemory(u32 num_bytes, u32 alignment);
   void CommitMemory(u32 final_num_bytes);
 
-  static std::unique_ptr<StreamBuffer> Create(VkBufferUsageFlags usage, u32 size);
+  // heap_usage: VK_HEAP_UPLOAD, or VK_HEAP_UPLOAD_CACHED for memory written in place
+  static std::unique_ptr<StreamBuffer> Create(VkBufferUsageFlags usage, u32 size,
+                                              enum vk_heap_usage heap_usage = VK_HEAP_UPLOAD);
 
 private:
   bool AllocateBuffer();
@@ -38,6 +40,7 @@ private:
   bool WaitForClearSpace(u32 num_bytes);
 
   VkBufferUsageFlags m_usage;
+  enum vk_heap_usage m_heap_usage;
   u32 m_size;
   u32 m_current_offset = 0;
   u32 m_current_gpu_position = 0;

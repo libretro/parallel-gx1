@@ -27,6 +27,11 @@ static void vk_heap_usage_flags(enum vk_heap_usage usage, VkMemoryPropertyFlags 
           * for the CPU to stream into, cached memory is no gain for it */
          *avoided   = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
          break;
+      case VK_HEAP_UPLOAD_CACHED:
+         *required  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+         *preferred = VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+         *avoided   = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+         break;
       case VK_HEAP_READBACK:
          *required  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
          *preferred = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;

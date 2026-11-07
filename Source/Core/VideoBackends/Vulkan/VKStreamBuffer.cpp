@@ -12,7 +12,8 @@
 
 namespace Vulkan
 {
-StreamBuffer::StreamBuffer(VkBufferUsageFlags usage, u32 size) : m_usage(usage), m_size(size)
+StreamBuffer::StreamBuffer(VkBufferUsageFlags usage, u32 size, enum vk_heap_usage heap_usage)
+    : m_usage(usage), m_heap_usage(heap_usage), m_size(size)
 {
 }
 
@@ -22,9 +23,10 @@ StreamBuffer::~StreamBuffer()
     g_command_buffer_mgr->DeferBufferDestruction(m_buffer, m_alloc);
 }
 
-std::unique_ptr<StreamBuffer> StreamBuffer::Create(VkBufferUsageFlags usage, u32 size)
+std::unique_ptr<StreamBuffer> StreamBuffer::Create(VkBufferUsageFlags usage, u32 size,
+                                                   enum vk_heap_usage heap_usage)
 {
-  std::unique_ptr<StreamBuffer> buffer = std::make_unique<StreamBuffer>(usage, size);
+  std::unique_ptr<StreamBuffer> buffer = std::make_unique<StreamBuffer>(usage, size, heap_usage);
   if (!buffer->AllocateBuffer())
     return nullptr;
 
@@ -46,12 +48,12 @@ bool StreamBuffer::AllocateBuffer()
   };
 
   // Host-visible system memory, mapped for the buffer's life: vertices,
-  // indices and uniforms are written straight into what the GPU reads.
+  // indices, uniforms and texels are written straight into what the GPU reads.
   // Host visible VRAM is slower in practice.
   VkBuffer buffer = VK_NULL_HANDLE;
   vk_heap_alloc_t alloc;
   VkResult res = vk_heap_create_buffer(g_vulkan_context->GetHeap(), &buffer_create_info,
-                                       VK_HEAP_UPLOAD, &buffer, &alloc);
+                                       m_heap_usage, &buffer, &alloc);
   if (res != VK_SUCCESS)
   {
     LOG_VULKAN_ERROR(res, "vk_heap_create_buffer failed: ");

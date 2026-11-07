@@ -90,6 +90,10 @@ enum vk_heap_usage
     * coherent where there is such, in system memory rather than the
     * device-local window, which is slower for the CPU to stream into */
    VK_HEAP_UPLOAD,
+   /* written by the CPU in place, not in streaks (texels decoded into it),
+    * read by the GPU once: host-visible, cached where there is such, in
+    * system memory */
+   VK_HEAP_UPLOAD_CACHED,
    /* written by the GPU, read by the CPU: host-visible, cached where there
     * is such */
    VK_HEAP_READBACK,

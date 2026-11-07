@@ -29,9 +29,11 @@ StreamBuffer::~StreamBuffer()
     m_buffer->Release();
 }
 
-bool StreamBuffer::AllocateBuffer(u32 size)
+bool StreamBuffer::AllocateBuffer(u32 size, bool cpu_cached)
 {
-  static const D3D12_HEAP_PROPERTIES heap_properties = {D3D12_HEAP_TYPE_UPLOAD};
+  static const D3D12_HEAP_PROPERTIES upload_heap = {D3D12_HEAP_TYPE_UPLOAD};
+  static const D3D12_HEAP_PROPERTIES cached_heap = {
+      D3D12_HEAP_TYPE_CUSTOM, D3D12_CPU_PAGE_PROPERTY_WRITE_BACK, D3D12_MEMORY_POOL_L0, 0, 0};
   const D3D12_RESOURCE_DESC resource_desc = {D3D12_RESOURCE_DIMENSION_BUFFER,
                                              0,
                                              size,
@@ -43,9 +45,19 @@ bool StreamBuffer::AllocateBuffer(u32 size)
                                              D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
                                              D3D12_RESOURCE_FLAG_NONE};
 
-  HRESULT hr = g_dx_context->GetDevice()->CreateCommittedResource(
-      &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ,
-      nullptr, IID_PPV_ARGS(&m_buffer));
+  HRESULT hr = E_FAIL;
+  if (cpu_cached)
+  {
+    hr = g_dx_context->GetDevice()->CreateCommittedResource(
+        &cached_heap, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS(&m_buffer));
+  }
+  if (FAILED(hr))
+  {
+    hr = g_dx_context->GetDevice()->CreateCommittedResource(
+        &upload_heap, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr, IID_PPV_ARGS(&m_buffer));
+  }
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to allocate buffer of size {}: {}", size,
              DX12HRWrap(hr));
   if (FAILED(hr))
