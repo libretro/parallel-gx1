@@ -138,6 +138,10 @@ private:
   ResultNode* TakeResult(u64 id);
   void FreeResults();
 
+  // Results go back for the DVD thread to fill again, buffers and all.
+  ResultNode* TakeFreeResult();
+  mpsc_stack_t m_free_results;
+  mpsc_stack_node_t* m_worker_free = nullptr;  // DVD thread only
   mpsc_stack_t m_result_queue;
   retro_eventcount_t m_result_ready;
   mpsc_stack_node_t* m_result_chain = nullptr;  // CPU thread only
