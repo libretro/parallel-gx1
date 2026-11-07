@@ -3,6 +3,7 @@
 
 #include "Core/HW/DVD/DVDThread.h"
 
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <optional>
@@ -45,28 +46,25 @@ DVDThread::~DVDThread()
   retro_eventcount_free(&m_result_ready);
 }
 
-void DVDThread::FreeResults()
+void DVDThread::FreeResultList(mpsc_stack_node_t* node)
 {
-  mpsc_stack_node_t* node = m_result_chain;
-  m_result_chain = nullptr;
   while (node)
   {
     mpsc_stack_node_t* const next = node->next;
-    delete reinterpret_cast<ResultNode*>(node);
+    std::free(reinterpret_cast<ResultNode*>(node)->data);
+    std::free(node);
     node = next;
   }
-  mpsc_stack_node_t* lists[3] = {mpsc_stack_drain(&m_result_queue),
-                                 mpsc_stack_drain(&m_free_results), m_worker_free};
+}
+
+void DVDThread::FreeResults()
+{
+  FreeResultList(m_result_chain);
+  m_result_chain = nullptr;
+  FreeResultList(mpsc_stack_drain(&m_result_queue));
+  FreeResultList(mpsc_stack_drain(&m_free_results));
+  FreeResultList(m_worker_free);
   m_worker_free = nullptr;
-  for (mpsc_stack_node_t* queued : lists)
-  {
-    while (queued)
-    {
-      mpsc_stack_node_t* const next = queued->next;
-      delete reinterpret_cast<ResultNode*>(queued);
-      queued = next;
-    }
-  }
 }
 
 // CPU thread. Unlinks and returns the result with this id, or every result taken so far when
@@ -85,7 +83,7 @@ DVDThread::ResultNode* DVDThread::TakeResult(u64 id)
   for (mpsc_stack_node_t** link = &m_result_chain; *link; link = &(*link)->next)
   {
     ResultNode* const node = reinterpret_cast<ResultNode*>(*link);
-    if (id == ~u64{0} || node->result.first.id == id)
+    if (id == ~u64{0} || node->request.id == id)
     {
       *link = node->link.next;
       return node;
@@ -103,7 +101,6 @@ void DVDThread::Start()
   m_next_id = 0;
 
   m_dvd_thread.Reset("DVD thread", std::bind_front(&DVDThread::ProcessReadRequest, this));
-  m_lent_reads.reserve(16);
 }
 
 void DVDThread::Stop()
@@ -113,7 +110,7 @@ void DVDThread::Stop()
 
   FreeResults();
   m_result_map.clear();
-  m_lent_reads.clear();
+  m_num_lent_reads = 0;
 
   m_disc.reset();
 }
@@ -128,13 +125,15 @@ void DVDThread::DoState(PointerWrap& p)
   // This won't affect the behavior of FinishRead.
   while (ResultNode* const node = TakeResult(~u64{0}))
   {
-    m_result_map.emplace(node->result.first.id, std::move(node->result));
-    delete node;
+    m_result_map.emplace(node->request.id,
+                         ReadResult(node->request, std::vector<u8>(node->data,
+                                                                   node->data + node->size)));
+    mpsc_stack_push(&m_free_results, &node->link);
   }
   // Lent reads are saved as the results the DVD thread would have made; a state loaded has
   // only those.
   if (p.IsReadMode())
-    m_lent_reads.clear();
+    m_num_lent_reads = 0;
   else
     MaterializeLentReads();
 
@@ -282,11 +281,11 @@ void DVDThread::StartReadInternal(bool copy_to_ram, u32 output_address, u64 dvd_
 
   request.time_started_ticks = core_timing.GetTicks();
 
-  if (m_disc && m_disc->View(dvd_offset, length, partition))
+  if (m_num_lent_reads < MAX_LENT_READS && m_disc && m_disc->View(dvd_offset, length, partition))
   {
     m_file_logger.Log(*m_disc, partition, dvd_offset);
     m_disc->Prefetch(dvd_offset, length, partition);
-    m_lent_reads.push_back(request);
+    m_lent_reads[m_num_lent_reads++] = request;
   }
   else
   {
@@ -297,8 +296,9 @@ void DVDThread::StartReadInternal(bool copy_to_ram, u32 output_address, u64 dvd_
 
 void DVDThread::MaterializeLentReads()
 {
-  for (const ReadRequest& request : m_lent_reads)
+  for (int i = 0; i < m_num_lent_reads; i++)
   {
+    const ReadRequest& request = m_lent_reads[i];
     const u8* data = m_disc ? m_disc->View(request.dvd_offset, request.length, request.partition) :
                               nullptr;
     std::vector<u8> buffer;
@@ -306,7 +306,7 @@ void DVDThread::MaterializeLentReads()
       buffer.assign(data, data + request.length);
     m_result_map.emplace(request.id, ReadResult(request, std::move(buffer)));
   }
-  m_lent_reads.clear();
+  m_num_lent_reads = 0;
 }
 
 void DVDThread::GlobalFinishRead(Core::System& system, u64 id, s64 cycles_late)
@@ -316,14 +316,13 @@ void DVDThread::GlobalFinishRead(Core::System& system, u64 id, s64 cycles_late)
 
 void DVDThread::FinishRead(u64 id, s64 cycles_late)
 {
-  for (size_t i = 0; i < m_lent_reads.size(); i++)
+  for (int i = 0; i < m_num_lent_reads; i++)
   {
     if (m_lent_reads[i].id != id)
       continue;
 
     const ReadRequest request = m_lent_reads[i];
-    m_lent_reads[i] = m_lent_reads.back();
-    m_lent_reads.pop_back();
+    m_lent_reads[i] = m_lent_reads[--m_num_lent_reads];
 
     // the disc is the one the read started on: a change materializes lent reads first
     const u8* data = m_disc->View(request.dvd_offset, request.length, request.partition);
@@ -360,8 +359,9 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
   }
   // We have now obtained the right ReadResult.
 
-  const ReadRequest& request = node ? node->result.first : result.first;
-  const std::vector<u8>& buffer = node ? node->result.second : result.second;
+  const ReadRequest& request = node ? node->request : result.first;
+  const u8* const data = node ? node->data : result.second.data();
+  const size_t size = node ? node->size : result.second.size();
 
   DEBUG_LOG_FMT(DVDINTERFACE, "Disc has been read. Emulated time including delay: {} us.",
                 (m_system.GetCoreTiming().GetTicks() - request.time_started_ticks) /
@@ -369,7 +369,7 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
 
   auto& dvd_interface = m_system.GetDVDInterface();
   DVD::DIInterruptType interrupt;
-  if (buffer.size() != request.length)
+  if (size != request.length)
   {
     PanicAlertFmtT("The disc could not be read (at {0:#x} - {1:#x}).", request.dvd_offset,
                    request.dvd_offset + request.length);
@@ -382,14 +382,15 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
     if (request.copy_to_ram)
     {
       auto& memory = m_system.GetMemory();
-      memory.CopyToEmu(request.output_address, buffer.data(), request.length);
+      memory.CopyToEmu(request.output_address, data, request.length);
     }
 
     interrupt = DVD::DIInterruptType::TCINT;
   }
 
   // Notify the emulated software that the command has been executed
-  dvd_interface.FinishExecutingCommand(request.reply_type, interrupt, cycles_late, buffer);
+  dvd_interface.FinishExecutingCommand(request.reply_type, interrupt, cycles_late,
+                                       std::span<const u8>(data, size));
 
   if (node)
     mpsc_stack_push(&m_free_results, &node->link);
@@ -403,7 +404,7 @@ DVDThread::ResultNode* DVDThread::TakeFreeResult()
     m_worker_free = mpsc_stack_drain(&m_free_results);
   node = m_worker_free;
   if (!node)
-    return new ResultNode{{nullptr}, ReadResult()};
+    return static_cast<ResultNode*>(std::calloc(1, sizeof(ResultNode)));
   m_worker_free = node->next;
   return reinterpret_cast<ResultNode*>(node);
 }
@@ -413,11 +414,23 @@ void DVDThread::ProcessReadRequest(ReadRequest&& request)
   m_file_logger.Log(*m_disc, request.partition, request.dvd_offset);
 
   ResultNode* const node = TakeFreeResult();
-  std::vector<u8>& buffer = node->result.second;
-  buffer.resize(request.length);
-  if (!m_disc->Read(request.dvd_offset, request.length, buffer.data(), request.partition))
-    buffer.resize(0);
-  node->result.first = std::move(request);
+  node->request = request;
+  node->size = 0;
+  if (node->capacity < request.length)
+  {
+    // grows to the largest read, then stays
+    u8* const grown = static_cast<u8*>(std::realloc(node->data, request.length));
+    if (grown)
+    {
+      node->data = grown;
+      node->capacity = request.length;
+    }
+  }
+  if (node->capacity >= request.length &&
+      m_disc->Read(request.dvd_offset, request.length, node->data, request.partition))
+  {
+    node->size = request.length;
+  }
 
   mpsc_stack_push(&m_result_queue, &node->link);
   retro_eventcount_notify(&m_result_ready);

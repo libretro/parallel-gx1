@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <algorithm>
+#include <bit>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -82,7 +83,8 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
   // it's safe to startup the flush thread (which reads them).
   m_flush_buffer = std::make_unique<u8[]>(m_memory_card_size);
   memcpy(&m_flush_buffer[0], &m_memcard_data[0], m_memory_card_size);
-  m_flush_dirty.assign((m_memory_card_size + Memcard::BLOCK_SIZE - 1) / Memcard::BLOCK_SIZE, 0);
+  m_num_blocks = std::min<u32>((m_memory_card_size + Memcard::BLOCK_SIZE - 1) / Memcard::BLOCK_SIZE,
+                               MAX_BLOCKS);
   m_flush_thread = sthread_create(Common::ThreadEntry<&MemoryCard::FlushThread>, this);
 }
 
@@ -128,8 +130,11 @@ void MemoryCard::ApplyChanges()
     if (change->length)
     {
       const u32 last = (change->offset + change->length - 1) / Memcard::BLOCK_SIZE;
-      for (u32 block = change->offset / Memcard::BLOCK_SIZE; block <= last; block++)
-        m_flush_dirty[block] = 1;
+      for (u32 block = change->offset / Memcard::BLOCK_SIZE; block <= last && block < MAX_BLOCKS;
+           block++)
+      {
+        m_flush_dirty[block >> 5] |= 1u << (block & 31);
+      }
     }
     std::free(change);
   }
@@ -137,7 +142,6 @@ void MemoryCard::ApplyChanges()
 
 bool MemoryCard::WriteChanges(File::IOFile& file, bool whole)
 {
-  const u32 blocks = static_cast<u32>(m_flush_dirty.size());
   u32 block = 0;
 
   // a block stays marked until it is written
@@ -145,19 +149,22 @@ bool MemoryCard::WriteChanges(File::IOFile& file, bool whole)
   {
     if (!file.WriteBytes(&m_flush_buffer[0], m_memory_card_size))
       return false;
-    std::fill(m_flush_dirty.begin(), m_flush_dirty.end(), u8(0));
+    std::memset(m_flush_dirty, 0, sizeof(m_flush_dirty));
     return true;
   }
 
-  while (block < blocks)
+  while (block < m_num_blocks)
   {
     u32 end;
-    if (!m_flush_dirty[block])
+    u32 word = m_flush_dirty[block >> 5] >> (block & 31);
+    if (!word)
     {
-      block++;
+      // the rest of this word is clean
+      block = (block | 31) + 1;
       continue;
     }
-    for (end = block; end < blocks && m_flush_dirty[end]; end++)
+    block += static_cast<u32>(std::countr_zero(word));
+    for (end = block + 1; end < m_num_blocks && (m_flush_dirty[end >> 5] >> (end & 31)) & 1; end++)
     {
     }
     const u32 offset = block * Memcard::BLOCK_SIZE;
@@ -167,8 +174,8 @@ bool MemoryCard::WriteChanges(File::IOFile& file, bool whole)
     {
       return false;
     }
-    std::fill(m_flush_dirty.begin() + block, m_flush_dirty.begin() + end, u8(0));
-    block = end;
+    for (; block < end; block++)
+      m_flush_dirty[block >> 5] &= ~(1u << (block & 31));
   }
   return true;
 }
@@ -203,7 +210,8 @@ void MemoryCard::FlushThread()
     // file doesn't disappear out from under us after the first check.
     // Only the blocks that changed are written over a card of the right size.
     File::IOFile file(m_filename, "r+b");
-    bool whole = !file || file.GetSize() != m_memory_card_size;
+    bool whole = !file || file.GetSize() != m_memory_card_size ||
+                 m_memory_card_size > MAX_BLOCKS * Memcard::BLOCK_SIZE;
 
     if (!file)
     {

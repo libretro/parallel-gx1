@@ -53,14 +53,18 @@ private:
 
   // A file to write or retire, made by the CPU thread from its saves and written by the
   // flush thread, so the two never touch the same data.
+  // One malloc'd block: the job, then its save blocks, then its file name.
   struct FlushJob
   {
     mpsc_stack_node_t link;  // first: the drained chain is cast back
-    std::string filename;
+    const char* filename;    // in the tail
+    u32 num_blocks;
     bool retire;  // rename to .deleted instead of writing
     Memcard::DEntry header;
-    std::vector<Memcard::GCMBlock> blocks;
+    u8 tail[1];  // num_blocks * BLOCK_SIZE octets, then the name
   };
+  // CPU thread: hands a job for the save to the flush thread.
+  void PostFlushJob(const Memcard::GCIFile& save, bool retire);
   // CPU thread: turns the dirty saves into jobs for the flush thread.
   void QueueDirtySaves();
   // Flush thread (or the destructor): writes the queued jobs, the newest per file.

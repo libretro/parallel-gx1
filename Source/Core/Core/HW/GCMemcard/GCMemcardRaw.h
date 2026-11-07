@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include <queues/mpsc_stack.h>
 #include <rthreads/rthreads.h>
@@ -63,8 +62,13 @@ private:
   // The flush thread's own copy, brought up to date from m_changes before each write.
   std::unique_ptr<u8[]> m_flush_buffer;
   mpsc_stack_t m_changes{};
-  // Flush thread: one flag per block, set where m_flush_buffer differs from the file.
-  std::vector<u8> m_flush_dirty;
+  // Flush thread: one bit per block, set where m_flush_buffer differs from the file.
+  enum
+  {
+    MAX_BLOCKS = 2048  // the largest card, 128 Mbit, in 8 KiB blocks
+  };
+  u32 m_flush_dirty[MAX_BLOCKS / 32] = {};
+  u32 m_num_blocks = 0;
   sthread_t* m_flush_thread = nullptr;
   Common::Flag m_flush_running{true};
   Common::Flag m_dirty;

@@ -132,10 +132,14 @@ private:
   // takes them all at once into m_result_chain, oldest first, and wakes on m_result_ready.
   struct ResultNode
   {
-    mpsc_stack_node_t link;
-    ReadResult result;
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    ReadRequest request;
+    u8* data;       // malloc'd, kept across uses
+    u32 size;       // octets read; not request.length when the read failed
+    u32 capacity;
   };
   ResultNode* TakeResult(u64 id);
+  static void FreeResultList(mpsc_stack_node_t* node);
   void FreeResults();
 
   // Results go back for the DVD thread to fill again, buffers and all.
@@ -150,7 +154,12 @@ private:
   // Reads the disc image can lend: no DVD thread and no buffer, the bytes copied straight
   // from the image when they are due. Their pages are prefetched when the read starts.
   void MaterializeLentReads();
-  std::vector<ReadRequest> m_lent_reads;  // CPU thread only
+  enum
+  {
+    MAX_LENT_READS = 16
+  };
+  ReadRequest m_lent_reads[MAX_LENT_READS];  // CPU thread only
+  int m_num_lent_reads = 0;
 
   std::unique_ptr<DiscIO::Volume> m_disc;
 

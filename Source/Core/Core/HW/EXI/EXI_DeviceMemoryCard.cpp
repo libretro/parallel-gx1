@@ -3,6 +3,7 @@
 
 #include "Core/HW/EXI/EXI_DeviceMemoryCard.h"
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <memory>
@@ -308,15 +309,18 @@ void CEXIMemoryCard::SetCS(int cs)
     case Command::PageProgram:
       if (m_position >= 5)
       {
-        int count = m_position - 5;
-        int i = 0;
+        u32 count = m_position - 5;
+        u32 i = 0;
         m_status &= ~MC_STATUS_BUSY;
 
-        while (count--)
+        // a run at a time, up to the end of the buffer or of the 512-byte page it wraps in
+        while (count)
         {
-          m_memory_card->Write(m_address, 1, &(m_programming_buffer[i++]));
-          i &= 127;
-          m_address = (m_address & ~0x1FF) | ((m_address + 1) & 0x1FF);
+          const u32 run = std::min({count, 128 - i, 0x200 - (m_address & 0x1FF)});
+          m_memory_card->Write(m_address, run, &m_programming_buffer[i]);
+          i = (i + run) & 127;
+          m_address = (m_address & ~0x1FF) | ((m_address + run) & 0x1FF);
+          count -= run;
         }
 
         CmdDoneLater(5000);

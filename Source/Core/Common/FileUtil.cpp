@@ -3,6 +3,7 @@
 
 #include "Common/FileUtil.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -588,9 +589,19 @@ LineReader::LineReader(const std::string& filename) : m_file(filename, "rb")
     return;
   m_map = reinterpret_cast<const char*>(m_file.GetMappedPtr(&size));
   if (m_map)
+  {
     m_size = size_t(size);
-  else
-    m_window.resize(64 * 1024);
+    return;
+  }
+  m_window_size = 64 * 1024;
+  m_window = static_cast<char*>(std::malloc(m_window_size));
+  if (!m_window)
+    m_file.Close();
+}
+
+LineReader::~LineReader()
+{
+  std::free(m_window);
 }
 
 bool LineReader::Next(const char** text, size_t* length)
@@ -604,21 +615,30 @@ bool LineReader::Next(const char** text, size_t* length)
 
   for (;;)
   {
-    base = m_map ? m_map : m_window.data();
+    base = m_map ? m_map : m_window;
     nl = static_cast<const char*>(std::memchr(base + m_pos, '\n', m_size - m_pos));
     if (nl || m_map || m_eof)
       break;
 
     // keep the partial line, then fill behind it; the window grows only
     // for a line longer than it
-    std::memmove(m_window.data(), m_window.data() + m_pos, m_size - m_pos);
+    std::memmove(m_window, m_window + m_pos, m_size - m_pos);
     m_size -= m_pos;
     m_pos = 0;
-    if (m_size == m_window.size())
-      m_window.resize(m_window.size() * 2);
+    if (m_size == m_window_size)
+    {
+      char* const grown = static_cast<char*>(std::realloc(m_window, m_window_size * 2));
+      if (!grown)
+      {
+        m_eof = true;
+        continue;
+      }
+      m_window = grown;
+      m_window_size *= 2;
+    }
     {
       size_t got = 0;
-      m_file.ReadArray(m_window.data() + m_size, m_window.size() - m_size, &got);
+      m_file.ReadArray(m_window + m_size, m_window_size - m_size, &got);
       m_file.ClearError();
       if (!got)
         m_eof = true;

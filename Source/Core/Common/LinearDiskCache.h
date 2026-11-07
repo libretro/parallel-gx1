@@ -5,11 +5,10 @@
 
 #include <algorithm>
 #include <cstring>
-#include <memory>
+#include <cstdlib>
 #include <string>
 #include <cstdint>
 #include <type_traits>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
@@ -75,15 +74,16 @@ public:
       File::IOFile in(filename, "rb");
       u64 size = 0;
       const u8* map = in.GetMappedPtr(&size);
-      std::unique_ptr<u8[]> owned;
-      if (in && !map && (size = in.GetSize()) != 0)
+      u8* owned = nullptr;
+      if (in && !map && (size = in.GetSize()) != 0 &&
+          (owned = static_cast<u8*>(std::malloc(size_t(size)))) != nullptr &&
+          in.ReadBytes(owned, size_t(size)))
       {
-        owned = std::make_unique_for_overwrite<u8[]>(size);
-        if (in.ReadBytes(owned.get(), size))
-          map = owned.get();
+        map = owned;
       }
       if (map && size >= sizeof(Header) && !std::memcmp(&m_header, map, sizeof(Header)))
         valid_end = ReadEntries(map, size, reader);
+      std::free(owned);
     }
 
     if (valid_end)
@@ -111,8 +111,13 @@ public:
     LinearDiskCache cache;
     const size_t value_bytes = size_t(value_size) * sizeof(V);
     const u32 entry_number = 1;
-    std::vector<u8> out(sizeof(Header) + sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32));
-    u8* p = out.data();
+    const size_t out_size = sizeof(Header) + sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
+    u8* const out = static_cast<u8*>(std::malloc(out_size));
+    u8* p = out;
+    bool ok;
+
+    if (!out)
+      return false;
 
     cache.m_header.Init();
     std::memcpy(p, &cache.m_header, sizeof(Header));
@@ -122,10 +127,16 @@ public:
     if (value_bytes)
       std::memcpy(p + sizeof(u32) + sizeof(K), value, value_bytes);
     std::memcpy(p + sizeof(u32) + sizeof(K) + value_bytes, &entry_number, sizeof(u32));
-    if (filestream_matches_buf(filename.c_str(), out.data(), out.size()))
-      return true;
-    return filestream_write_file_atomic(filename.c_str(), out.data(), s64(out.size()));
+    ok = filestream_matches_buf(filename.c_str(), out, out_size) ||
+         filestream_write_file_atomic(filename.c_str(), out, s64(out_size));
+    std::free(out);
+    return ok;
   }
+
+  LinearDiskCache() = default;
+  ~LinearDiskCache() { std::free(m_append_buffer); }
+  LinearDiskCache(const LinearDiskCache&) = delete;
+  LinearDiskCache& operator=(const LinearDiskCache&) = delete;
 
   void Sync() { m_file.Flush(); }
   void Close()
@@ -141,9 +152,16 @@ public:
     const size_t entry_bytes = sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
     u8* out;
 
-    if (m_append_buffer.size() < entry_bytes)
-      m_append_buffer.resize(entry_bytes);
-    out = m_append_buffer.data();
+    if (m_append_capacity < entry_bytes)
+    {
+      // grows to the largest entry, then stays
+      u8* const grown = static_cast<u8*>(std::realloc(m_append_buffer, entry_bytes));
+      if (!grown)
+        return;
+      m_append_buffer = grown;
+      m_append_capacity = entry_bytes;
+    }
+    out = m_append_buffer;
     m_num_entries++;
     std::memcpy(out, &value_size, sizeof(u32));
     std::memcpy(out + sizeof(u32), &key, sizeof(K));
@@ -158,7 +176,7 @@ private:
   // the offset where the last whole one ends.
   u64 ReadEntries(const u8* base, u64 size, LinearDiskCacheReader<K, V>& reader)
   {
-    std::unique_ptr<V[]> aligned;
+    V* aligned = nullptr;
     u32 aligned_capacity = 0;
     u64 pos = sizeof(Header);
 
@@ -183,17 +201,21 @@ private:
       {
         if (aligned_capacity < value_size)
         {
-          aligned = std::make_unique_for_overwrite<V[]>(value_size);
+          V* const grown = static_cast<V*>(std::realloc(aligned, size_t(value_bytes)));
+          if (!grown)
+            break;
+          aligned = grown;
           aligned_capacity = value_size;
         }
-        std::memcpy(aligned.get(), value, value_bytes);
-        value = reinterpret_cast<const u8*>(aligned.get());
+        std::memcpy(aligned, value, size_t(value_bytes));
+        value = reinterpret_cast<const u8*>(aligned);
       }
       reader.Read(key, reinterpret_cast<const V*>(value), value_size);
 
       m_num_entries++;
       pos += sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
     }
+    std::free(aligned);
     return pos;
   }
 
@@ -216,7 +238,8 @@ private:
   } m_header;
 
   File::IOFile m_file;
-  std::vector<u8> m_append_buffer;
+  u8* m_append_buffer = nullptr;
+  size_t m_append_capacity = 0;
   u32 m_num_entries = 0;
 };
 }  // namespace Common

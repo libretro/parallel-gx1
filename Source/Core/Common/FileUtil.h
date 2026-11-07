@@ -217,15 +217,19 @@ class LineReader final
 {
 public:
   explicit LineReader(const std::string& filename);
+  ~LineReader();
+  LineReader(const LineReader&) = delete;
+  LineReader& operator=(const LineReader&) = delete;
   bool IsOpen() const { return m_file.IsOpen(); }
   bool Next(const char** text, size_t* length);
 
 private:
   IOFile m_file;
-  std::vector<char> m_window;
   const char* m_map = nullptr;
-  size_t m_size = 0;   // mapped length, or octets held in the window
-  size_t m_pos = 0;    // the next line's start
+  char* m_window = nullptr;  // malloc'd, when the file is not mapped
+  size_t m_window_size = 0;
+  size_t m_size = 0;  // mapped length, or octets held in the window
+  size_t m_pos = 0;   // the next line's start
   bool m_eof = false;
 };
 
