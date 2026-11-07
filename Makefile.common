@@ -1108,7 +1108,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DiscIO/Filesystem.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/GameModDescriptor.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/LaggedFibonacciGenerator.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/NANDImporter.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/NFSBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/RiivolutionParser.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/RiivolutionPatcher.cpp \
