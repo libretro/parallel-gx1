@@ -13,13 +13,20 @@
 
 #include "Common/GL/GLExtensions/GLExtensions.h"
 
-#if defined(HAVE_EGL)
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
+/* Shared contexts for the shader compiler's threads, made from the
+ * frontend's: EGL, then GLX, on every Unix but Apple's, and WGL on
+ * Windows, all loaded at runtime from whichever libraries the frontend
+ * has, so the core links none of them. */
+#if (defined(__unix__) || defined(__ANDROID__)) && !defined(__APPLE__)
+#define LR_SHARED_EGL 1
+#if !defined(__ANDROID__)
+#define LR_SHARED_GLX 1
 #endif
-
-#if defined(HAVE_X11)
 #include "Common/DynamicLibrary.h"
+#endif
+#if defined(_WIN32)
+#define LR_SHARED_WGL 1
+#include <windows.h>
 #endif
 
 namespace
@@ -46,11 +53,74 @@ CurrentGLVersion QueryCurrentGLVersion(bool gles)
   return v;
 }
 
-#if defined(HAVE_EGL)
+#if defined(LR_SHARED_EGL)
+// EGL is loaded at runtime, from the library the frontend already has loaded.
+namespace EGL
+{
+using EGLDisplay = void*;
+using EGLContext = void*;
+using EGLSurface = void*;
+using EGLConfig = void*;
+using EGLint = int;
+using EGLBoolean = unsigned int;
+using EGLenum = unsigned int;
+
+constexpr EGLint EGL_TRUE = 1;
+constexpr EGLint EGL_NONE = 0x3038;
+constexpr EGLint EGL_CONFIG_ID = 0x3028;
+constexpr EGLint EGL_EXTENSIONS = 0x3055;
+constexpr EGLint EGL_HEIGHT = 0x3056;
+constexpr EGLint EGL_WIDTH = 0x3057;
+constexpr EGLint EGL_CONTEXT_CLIENT_VERSION = 0x3098;
+constexpr EGLint EGL_CONTEXT_MAJOR_VERSION_KHR = 0x3098;
+constexpr EGLint EGL_CONTEXT_MINOR_VERSION_KHR = 0x30FB;
+constexpr EGLint EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR = 0x30FD;
+constexpr EGLint EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR = 0x1;
+constexpr EGLint EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR = 0x2;
+constexpr EGLenum EGL_OPENGL_ES_API = 0x30A0;
+constexpr EGLenum EGL_OPENGL_API = 0x30A2;
+
+EGLBoolean (*BindAPI)(EGLenum);
+EGLContext (*GetCurrentContext)();
+EGLDisplay (*GetCurrentDisplay)();
+EGLBoolean (*QueryContext)(EGLDisplay, EGLContext, EGLint, EGLint*);
+EGLBoolean (*ChooseConfig)(EGLDisplay, const EGLint*, EGLConfig*, EGLint, EGLint*);
+EGLContext (*CreateContext)(EGLDisplay, EGLConfig, EGLContext, const EGLint*);
+EGLint (*GetError)();
+const char* (*QueryString)(EGLDisplay, EGLint);
+EGLSurface (*CreatePbufferSurface)(EGLDisplay, EGLConfig, const EGLint*);
+EGLBoolean (*DestroyContext)(EGLDisplay, EGLContext);
+EGLBoolean (*DestroySurface)(EGLDisplay, EGLSurface);
+EGLBoolean (*MakeCurrent)(EGLDisplay, EGLSurface, EGLSurface, EGLContext);
+
+bool Load()
+{
+  static Common::DynamicLibrary libegl;
+  static const bool loaded = [] {
+    if (!libegl.Open("libEGL.so.1") && !libegl.Open("libEGL.so"))
+      return false;
+    return libegl.GetSymbol("eglBindAPI", &BindAPI) &&
+           libegl.GetSymbol("eglGetCurrentContext", &GetCurrentContext) &&
+           libegl.GetSymbol("eglGetCurrentDisplay", &GetCurrentDisplay) &&
+           libegl.GetSymbol("eglQueryContext", &QueryContext) &&
+           libegl.GetSymbol("eglChooseConfig", &ChooseConfig) &&
+           libegl.GetSymbol("eglCreateContext", &CreateContext) &&
+           libegl.GetSymbol("eglGetError", &GetError) &&
+           libegl.GetSymbol("eglQueryString", &QueryString) &&
+           libegl.GetSymbol("eglCreatePbufferSurface", &CreatePbufferSurface) &&
+           libegl.GetSymbol("eglDestroyContext", &DestroyContext) &&
+           libegl.GetSymbol("eglDestroySurface", &DestroySurface) &&
+           libegl.GetSymbol("eglMakeCurrent", &MakeCurrent);
+  }();
+  return loaded;
+}
+}  // namespace EGL
+
 class GLContextLRSharedEGL final : public GLContext
 {
 public:
-  GLContextLRSharedEGL(Mode mode, EGLDisplay display, EGLContext context, EGLSurface surface)
+  GLContextLRSharedEGL(Mode mode, EGL::EGLDisplay display, EGL::EGLContext context,
+                       EGL::EGLSurface surface)
       : m_display(display), m_context(context), m_surface(surface)
   {
     m_opengl_mode = mode;
@@ -59,24 +129,26 @@ public:
 
   ~GLContextLRSharedEGL() override
   {
-    if (eglGetCurrentContext() == m_context)
+    if (EGL::GetCurrentContext() == m_context)
       ClearCurrent();
-    if (m_surface != EGL_NO_SURFACE)
-      eglDestroySurface(m_display, m_surface);
-    eglDestroyContext(m_display, m_context);
+    if (m_surface)
+      EGL::DestroySurface(m_display, m_surface);
+    EGL::DestroyContext(m_display, m_context);
   }
 
   bool IsHeadless() const override { return true; }
 
   bool MakeCurrent() override
   {
-    eglBindAPI(m_opengl_mode == Mode::OpenGLES ? EGL_OPENGL_ES_API : EGL_OPENGL_API);
-    return eglMakeCurrent(m_display, m_surface, m_surface, m_context) == EGL_TRUE;
+    EGL::BindAPI(m_opengl_mode == Mode::OpenGLES ? EGL::EGL_OPENGL_ES_API : EGL::EGL_OPENGL_API);
+    return EGL::MakeCurrent(m_display, m_surface, m_surface, m_context) ==
+           static_cast<EGL::EGLBoolean>(EGL::EGL_TRUE);
   }
 
   bool ClearCurrent() override
   {
-    return eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT) == EGL_TRUE;
+    return EGL::MakeCurrent(m_display, nullptr, nullptr, nullptr) ==
+           static_cast<EGL::EGLBoolean>(EGL::EGL_TRUE);
   }
 
   void* GetFuncAddress(const std::string& name) override
@@ -85,65 +157,72 @@ public:
   }
 
 private:
-  EGLDisplay m_display;
-  EGLContext m_context;
-  EGLSurface m_surface;
+  EGL::EGLDisplay m_display;
+  EGL::EGLContext m_context;
+  EGL::EGLSurface m_surface;
 };
 
 std::unique_ptr<GLContext> CreateSharedEGL(GLContext::Mode mode)
 {
-  const bool gles = mode == GLContext::Mode::OpenGLES;
-  eglBindAPI(gles ? EGL_OPENGL_ES_API : EGL_OPENGL_API);
-
-  const EGLContext share = eglGetCurrentContext();
-  const EGLDisplay display = eglGetCurrentDisplay();
-  if (share == EGL_NO_CONTEXT || display == EGL_NO_DISPLAY)
+  if (!EGL::Load())
     return nullptr;
 
-  EGLint config_id = 0;
-  eglQueryContext(display, share, EGL_CONFIG_ID, &config_id);
-  const EGLint config_attribs[] = {EGL_CONFIG_ID, config_id, EGL_NONE};
-  EGLConfig config = nullptr;
-  EGLint num_configs = 0;
-  if (!eglChooseConfig(display, config_attribs, &config, 1, &num_configs) || num_configs < 1)
+  const EGL::EGLContext share = EGL::GetCurrentContext();
+  const EGL::EGLDisplay display = EGL::GetCurrentDisplay();
+  if (!share || !display)
+    return nullptr;
+
+  const bool gles = mode == GLContext::Mode::OpenGLES;
+  EGL::BindAPI(gles ? EGL::EGL_OPENGL_ES_API : EGL::EGL_OPENGL_API);
+
+  EGL::EGLint config_id = 0;
+  EGL::QueryContext(display, share, EGL::EGL_CONFIG_ID, &config_id);
+  const EGL::EGLint config_attribs[] = {EGL::EGL_CONFIG_ID, config_id, EGL::EGL_NONE};
+  EGL::EGLConfig config = nullptr;
+  EGL::EGLint num_configs = 0;
+  if (!EGL::ChooseConfig(display, config_attribs, &config, 1, &num_configs) || num_configs < 1)
     config = nullptr;  // EGL_NO_CONFIG_KHR, frontend may have used EGL_KHR_no_config_context
 
   const CurrentGLVersion ver = QueryCurrentGLVersion(gles);
-  std::vector<EGLint> ctx_attribs = {EGL_CONTEXT_MAJOR_VERSION_KHR, ver.major,
-                                     EGL_CONTEXT_MINOR_VERSION_KHR, ver.minor};
+  EGL::EGLint ctx_attribs[7];
+  int n = 0;
+  ctx_attribs[n++] = EGL::EGL_CONTEXT_MAJOR_VERSION_KHR;
+  ctx_attribs[n++] = ver.major;
+  ctx_attribs[n++] = EGL::EGL_CONTEXT_MINOR_VERSION_KHR;
+  ctx_attribs[n++] = ver.minor;
   if (!gles)
   {
-    ctx_attribs.push_back(EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR);
-    ctx_attribs.push_back(ver.core_profile ? EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR :
-                                             EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR);
+    ctx_attribs[n++] = EGL::EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR;
+    ctx_attribs[n++] = ver.core_profile ? EGL::EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR :
+                                          EGL::EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR;
   }
-  ctx_attribs.push_back(EGL_NONE);
+  ctx_attribs[n] = EGL::EGL_NONE;
 
-  EGLContext context = eglCreateContext(display, config, share, ctx_attribs.data());
-  if (context == EGL_NO_CONTEXT)
+  EGL::EGLContext context = EGL::CreateContext(display, config, share, ctx_attribs);
+  if (!context)
   {
     // No EGL_KHR_create_context, fall back to the basic attributes.
-    const EGLint es_attribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    const EGLint gl_attribs[] = {EGL_NONE};
-    context = eglCreateContext(display, config, share, gles ? es_attribs : gl_attribs);
+    const EGL::EGLint es_attribs[] = {EGL::EGL_CONTEXT_CLIENT_VERSION, 3, EGL::EGL_NONE};
+    const EGL::EGLint gl_attribs[] = {EGL::EGL_NONE};
+    context = EGL::CreateContext(display, config, share, gles ? es_attribs : gl_attribs);
   }
-  if (context == EGL_NO_CONTEXT)
+  if (!context)
   {
-    WARN_LOG_FMT(VIDEO, "Shared context: eglCreateContext failed {:#06x}", eglGetError());
+    WARN_LOG_FMT(VIDEO, "Shared context: eglCreateContext failed {:#06x}", EGL::GetError());
     return nullptr;
   }
 
   // Worker contexts never draw, so avoid a surface when possible.
-  EGLSurface surface = EGL_NO_SURFACE;
-  const char* exts = eglQueryString(display, EGL_EXTENSIONS);
+  EGL::EGLSurface surface = nullptr;
+  const char* exts = EGL::QueryString(display, EGL::EGL_EXTENSIONS);
   if (!exts || !strstr(exts, "EGL_KHR_surfaceless_context"))
   {
-    const EGLint pbuffer_attribs[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE};
-    surface = config ? eglCreatePbufferSurface(display, config, pbuffer_attribs) : EGL_NO_SURFACE;
-    if (surface == EGL_NO_SURFACE)
+    const EGL::EGLint pbuffer_attribs[] = {EGL::EGL_WIDTH, 1, EGL::EGL_HEIGHT, 1, EGL::EGL_NONE};
+    surface = config ? EGL::CreatePbufferSurface(display, config, pbuffer_attribs) : nullptr;
+    if (!surface)
     {
       WARN_LOG_FMT(VIDEO, "Shared context: no surfaceless support and pbuffer creation failed");
-      eglDestroyContext(display, context);
+      EGL::DestroyContext(display, context);
       return nullptr;
     }
   }
@@ -151,9 +230,9 @@ std::unique_ptr<GLContext> CreateSharedEGL(GLContext::Mode mode)
   INFO_LOG_FMT(VIDEO, "Created EGL shared context for shader compiling");
   return std::make_unique<GLContextLRSharedEGL>(mode, display, context, surface);
 }
-#endif  // HAVE_EGL
+#endif  // LR_SHARED_EGL
 
-#if defined(HAVE_X11)
+#if defined(LR_SHARED_GLX)
 // GLX is loaded at runtime (rather than including GL/glx.h, which conflicts with Dolphin's GL
 // loader, and linking libGL), using whichever libGL the frontend already has loaded.
 namespace GLX
@@ -177,6 +256,8 @@ GLXContext (*GetCurrentContext)();
 Display* (*GetCurrentDisplay)();
 int (*QueryContext)(Display*, GLXContext, int, int*);
 GLXFBConfig* (*ChooseFBConfig)(Display*, int, const int*, int*);
+GLXFBConfig* (*GetFBConfigs)(Display*, int, int*);
+int (*GetFBConfigAttrib)(Display*, GLXFBConfig, int, int*);
 void* (*GetProcAddressARB)(const unsigned char*);
 int (*MakeContextCurrent)(Display*, GLXDrawable, GLXDrawable, GLXContext);
 void (*DestroyContext)(Display*, GLXContext);
@@ -198,6 +279,8 @@ bool Load()
            libgl.GetSymbol("glXGetCurrentDisplay", &GetCurrentDisplay) &&
            libgl.GetSymbol("glXQueryContext", &QueryContext) &&
            libgl.GetSymbol("glXChooseFBConfig", &ChooseFBConfig) &&
+           libgl.GetSymbol("glXGetFBConfigs", &GetFBConfigs) &&
+           libgl.GetSymbol("glXGetFBConfigAttrib", &GetFBConfigAttrib) &&
            libgl.GetSymbol("glXGetProcAddressARB", &GetProcAddressARB) &&
            libgl.GetSymbol("glXMakeContextCurrent", &MakeContextCurrent) &&
            libgl.GetSymbol("glXDestroyContext", &DestroyContext) &&
@@ -265,14 +348,35 @@ std::unique_ptr<GLContext> CreateSharedGLX(GLContext::Mode mode)
   GLX::QueryContext(display, share, GLX::GLX_FBCONFIG_ID, &fbconfig_id);
   const int fb_attribs[] = {GLX::GLX_FBCONFIG_ID, fbconfig_id, 0};
   int num_configs = 0;
+  GLX::GLXFBConfig config = nullptr;
   GLX::GLXFBConfig* configs = GLX::ChooseFBConfig(display, screen, fb_attribs, &num_configs);
-  if (!configs || num_configs < 1)
+  if (configs && num_configs > 0)
+    config = configs[0];
+  else
+  {
+    /* Mesa keeps its default attributes beside the ID and may match none:
+     * the screen's configs, for the one with the ID */
+    int i;
+    if (configs)
+      GLX::XFree(configs);
+    configs = GLX::GetFBConfigs(display, screen, &num_configs);
+    for (i = 0; configs && i < num_configs && !config; i++)
+    {
+      int id = 0;
+      if (GLX::GetFBConfigAttrib(display, configs[i], GLX::GLX_FBCONFIG_ID, &id) == 0 &&
+          id == fbconfig_id)
+      {
+        config = configs[i];
+      }
+    }
+  }
+  if (configs)
+    GLX::XFree(configs);
+  if (!config)
   {
     WARN_LOG_FMT(VIDEO, "Shared context: no GLXFBConfig matching frontend context");
     return nullptr;
   }
-  GLX::GLXFBConfig config = configs[0];
-  GLX::XFree(configs);
 
   const bool gles = mode == GLContext::Mode::OpenGLES;
   const CurrentGLVersion ver = QueryCurrentGLVersion(gles);
@@ -301,7 +405,156 @@ std::unique_ptr<GLContext> CreateSharedGLX(GLContext::Mode mode)
   INFO_LOG_FMT(VIDEO, "Created GLX shared context for shader compiling");
   return std::make_unique<GLContextLRSharedGLX>(mode, display, context);
 }
-#endif  // HAVE_X11
+#endif  // LR_SHARED_GLX
+#if defined(LR_SHARED_WGL)
+namespace WGL
+{
+constexpr int WGL_CONTEXT_MAJOR_VERSION_ARB = 0x2091;
+constexpr int WGL_CONTEXT_MINOR_VERSION_ARB = 0x2092;
+constexpr int WGL_CONTEXT_PROFILE_MASK_ARB = 0x9126;
+constexpr int WGL_CONTEXT_CORE_PROFILE_BIT_ARB = 0x1;
+constexpr int WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB = 0x2;
+constexpr int WGL_CONTEXT_ES2_PROFILE_BIT_EXT = 0x4;
+
+HGLRC(WINAPI* GetCurrentContext)();
+HDC(WINAPI* GetCurrentDC)();
+BOOL(WINAPI* MakeCurrent)(HDC, HGLRC);
+BOOL(WINAPI* DeleteContext)(HGLRC);
+PROC(WINAPI* GetExtProc)(LPCSTR);
+HGLRC(WINAPI* CreateContextAttribsARB)(HDC, HGLRC, const int*);
+HANDLE(WINAPI* CreatePbufferARB)(HDC, int, int, int, const int*);
+HDC(WINAPI* GetPbufferDCARB)(HANDLE);
+int(WINAPI* ReleasePbufferDCARB)(HANDLE, HDC);
+BOOL(WINAPI* DestroyPbufferARB)(HANDLE);
+
+/* opengl32 from the frontend, and the extensions with its context current */
+bool Load()
+{
+  HMODULE gl = GetModuleHandleA("opengl32.dll");
+  if (!gl)
+    return false;
+  GetCurrentContext = reinterpret_cast<decltype(GetCurrentContext)>(
+      reinterpret_cast<void*>(GetProcAddress(gl, "wglGetCurrentContext")));
+  GetCurrentDC = reinterpret_cast<decltype(GetCurrentDC)>(
+      reinterpret_cast<void*>(GetProcAddress(gl, "wglGetCurrentDC")));
+  MakeCurrent = reinterpret_cast<decltype(MakeCurrent)>(
+      reinterpret_cast<void*>(GetProcAddress(gl, "wglMakeCurrent")));
+  DeleteContext = reinterpret_cast<decltype(DeleteContext)>(
+      reinterpret_cast<void*>(GetProcAddress(gl, "wglDeleteContext")));
+  GetExtProc = reinterpret_cast<decltype(GetExtProc)>(
+      reinterpret_cast<void*>(GetProcAddress(gl, "wglGetProcAddress")));
+  if (!GetCurrentContext || !GetCurrentDC || !MakeCurrent || !DeleteContext || !GetExtProc)
+    return false;
+  CreateContextAttribsARB = reinterpret_cast<decltype(CreateContextAttribsARB)>(
+      reinterpret_cast<void*>(GetExtProc("wglCreateContextAttribsARB")));
+  CreatePbufferARB = reinterpret_cast<decltype(CreatePbufferARB)>(
+      reinterpret_cast<void*>(GetExtProc("wglCreatePbufferARB")));
+  GetPbufferDCARB = reinterpret_cast<decltype(GetPbufferDCARB)>(
+      reinterpret_cast<void*>(GetExtProc("wglGetPbufferDCARB")));
+  ReleasePbufferDCARB = reinterpret_cast<decltype(ReleasePbufferDCARB)>(
+      reinterpret_cast<void*>(GetExtProc("wglReleasePbufferDCARB")));
+  DestroyPbufferARB = reinterpret_cast<decltype(DestroyPbufferARB)>(
+      reinterpret_cast<void*>(GetExtProc("wglDestroyPbufferARB")));
+  return CreateContextAttribsARB != nullptr;
+}
+}  // namespace WGL
+
+class GLContextLRSharedWGL final : public GLContext
+{
+public:
+  GLContextLRSharedWGL(Mode mode, HDC dc, HGLRC context, HANDLE pbuffer)
+      : m_dc(dc), m_context(context), m_pbuffer(pbuffer)
+  {
+    m_opengl_mode = mode;
+    m_is_shared = true;
+  }
+
+  ~GLContextLRSharedWGL() override
+  {
+    if (WGL::GetCurrentContext() == m_context)
+      ClearCurrent();
+    WGL::DeleteContext(m_context);
+    if (m_pbuffer)
+    {
+      WGL::ReleasePbufferDCARB(m_pbuffer, m_dc);
+      WGL::DestroyPbufferARB(m_pbuffer);
+    }
+  }
+
+  bool IsHeadless() const override { return true; }
+  bool MakeCurrent() override { return WGL::MakeCurrent(m_dc, m_context) != FALSE; }
+  bool ClearCurrent() override { return WGL::MakeCurrent(nullptr, nullptr) != FALSE; }
+
+  void* GetFuncAddress(const std::string& name) override
+  {
+    return reinterpret_cast<void*>(Libretro::Video::hw_render.get_proc_address(name.c_str()));
+  }
+
+private:
+  HDC m_dc;
+  HGLRC m_context;
+  HANDLE m_pbuffer;
+};
+
+/* A context sharing the frontend's, current on a 1x1 pbuffer of the
+ * frontend's pixel format, or on the frontend's own DC without
+ * WGL_ARB_pbuffer. */
+std::unique_ptr<GLContext> CreateSharedWGL(GLContext::Mode mode)
+{
+  if (!WGL::Load())
+    return nullptr;
+
+  const HGLRC share = WGL::GetCurrentContext();
+  const HDC frontend_dc = WGL::GetCurrentDC();
+  if (!share || !frontend_dc)
+    return nullptr;
+
+  const bool gles = mode == GLContext::Mode::OpenGLES;
+  const CurrentGLVersion ver = QueryCurrentGLVersion(gles);
+  const int profile = gles ? WGL::WGL_CONTEXT_ES2_PROFILE_BIT_EXT :
+                      ver.core_profile ? WGL::WGL_CONTEXT_CORE_PROFILE_BIT_ARB :
+                                         WGL::WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+  const int ctx_attribs[] = {WGL::WGL_CONTEXT_MAJOR_VERSION_ARB, ver.major,
+                             WGL::WGL_CONTEXT_MINOR_VERSION_ARB, ver.minor,
+                             WGL::WGL_CONTEXT_PROFILE_MASK_ARB,  profile,
+                             0};
+
+  HANDLE pbuffer = nullptr;
+  HDC dc = frontend_dc;
+  if (WGL::CreatePbufferARB && WGL::GetPbufferDCARB && WGL::ReleasePbufferDCARB &&
+      WGL::DestroyPbufferARB)
+  {
+    const int pbuffer_attribs[] = {0};
+    pbuffer = WGL::CreatePbufferARB(frontend_dc, GetPixelFormat(frontend_dc), 1, 1,
+                                    pbuffer_attribs);
+    HDC pbuffer_dc = pbuffer ? WGL::GetPbufferDCARB(pbuffer) : nullptr;
+    if (pbuffer_dc)
+      dc = pbuffer_dc;
+    else if (pbuffer)
+    {
+      WGL::DestroyPbufferARB(pbuffer);
+      pbuffer = nullptr;
+    }
+  }
+
+  const HGLRC context = WGL::CreateContextAttribsARB(dc, share, ctx_attribs);
+  if (!context)
+  {
+    WARN_LOG_FMT(VIDEO, "Shared context: wglCreateContextAttribsARB failed {:#x}", GetLastError());
+    if (pbuffer)
+    {
+      WGL::ReleasePbufferDCARB(pbuffer, dc);
+      WGL::DestroyPbufferARB(pbuffer);
+    }
+    return nullptr;
+  }
+
+  INFO_LOG_FMT(VIDEO, "Created WGL shared context for shader compiling ({})",
+               pbuffer ? "pbuffer" : "frontend DC");
+  return std::make_unique<GLContextLRSharedWGL>(mode, dc, context, pbuffer);
+}
+#endif  // LR_SHARED_WGL
+
 }  // namespace
 
 GLContextLR::GLContextLR()
@@ -351,15 +604,20 @@ void GLContextLR::Swap()
                             0);
 }
 
+
 std::unique_ptr<GLContext> GLContextLR::CreateSharedContext()
 {
   // Must be called on the thread the frontend's context is current on.
-#if defined(HAVE_EGL)
+#if defined(LR_SHARED_EGL)
   if (auto context = CreateSharedEGL(m_opengl_mode))
     return context;
 #endif
-#if defined(HAVE_X11)
+#if defined(LR_SHARED_GLX)
   if (auto context = CreateSharedGLX(m_opengl_mode))
+    return context;
+#endif
+#if defined(LR_SHARED_WGL)
+  if (auto context = CreateSharedWGL(m_opengl_mode))
     return context;
 #endif
   return nullptr;
