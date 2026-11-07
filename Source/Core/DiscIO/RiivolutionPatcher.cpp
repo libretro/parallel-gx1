@@ -172,20 +172,14 @@ FileDataLoaderHostFS::GetExternalFileSize(std::string_view external_relative_pat
   return f.GetSize();
 }
 
-std::vector<u8> FileDataLoaderHostFS::GetFileContents(std::string_view external_relative_path)
+bool FileDataLoaderHostFS::LoanFileContents(std::string_view external_relative_path,
+                                            ::File::FileLoan* loan)
 {
   auto path = MakeAbsoluteFromRelative(external_relative_path);
-  if (!path)
-    return {};
-  ::File::IOFile f(*path, "rb");
-  if (!f)
-    return {};
-  const u64 length = f.GetSize();
-  std::vector<u8> value;
-  value.resize(length);
-  if (!f.ReadBytes(value.data(), length))
-    return {};
-  return value;
+  loan->data = nullptr;
+  loan->size = 0;
+  loan->owned = nullptr;
+  return path && ::File::LoanFile(loan, path->c_str());
 }
 
 std::vector<FileDataLoader::Node>
@@ -524,10 +518,20 @@ static void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, u32 offset,
   }
 }
 
-static std::vector<u8> GetMemoryPatchValue(const Patch& patch, const Memory& memory_patch)
+// The patch's value: lent from its value file, or the parsed bytes as they
+// are; File::EndLoan(loan) when done either way.
+static std::span<const u8> GetMemoryPatchValue(const Patch& patch, const Memory& memory_patch,
+                                               ::File::FileLoan* loan)
 {
+  loan->data = nullptr;
+  loan->size = 0;
+  loan->owned = nullptr;
   if (!memory_patch.m_valuefile.empty())
-    return patch.m_file_data_loader->GetFileContents(memory_patch.m_valuefile);
+  {
+    if (!patch.m_file_data_loader->LoanFileContents(memory_patch.m_valuefile, loan))
+      return {};
+    return std::span<const u8>(loan->data, size_t(loan->size));
+  }
   return memory_patch.m_value;
 }
 
@@ -537,8 +541,10 @@ static void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, const Patch& pat
   if (memory_patch.m_offset == 0)
     return;
 
+  ::File::FileLoan loan;
   ApplyMemoryPatch(guard, memory_patch.m_offset | 0x80000000,
-                   GetMemoryPatchValue(patch, memory_patch), memory_patch.m_original);
+                   GetMemoryPatchValue(patch, memory_patch, &loan), memory_patch.m_original);
+  ::File::EndLoan(&loan);
 }
 
 static void ApplySearchMemoryPatch(const Core::CPUThreadGuard& guard, const Patch& patch,
@@ -553,21 +559,17 @@ static void ApplySearchMemoryPatch(const Core::CPUThreadGuard& guard, const Patc
     const u32 address = ram_start + i;
     if (MemoryMatchesAt(guard, address, memory_patch.m_original))
     {
-      ApplyMemoryPatch(guard, address, GetMemoryPatchValue(patch, memory_patch), {});
+      ::File::FileLoan loan;
+      ApplyMemoryPatch(guard, address, GetMemoryPatchValue(patch, memory_patch, &loan), {});
+      ::File::EndLoan(&loan);
       break;
     }
   }
 }
 
-static void ApplyOcarinaMemoryPatch(const Core::CPUThreadGuard& guard, const Patch& patch,
-                                    const Memory& memory_patch, u32 ram_start, u32 length)
+static void ApplyOcarinaPattern(const Core::CPUThreadGuard& guard, const Memory& memory_patch,
+                                std::span<const u8> value, u32 ram_start, u32 length)
 {
-  if (memory_patch.m_offset == 0)
-    return;
-  const std::vector<u8> value = GetMemoryPatchValue(patch, memory_patch);
-  if (value.empty())
-    return;
-
   auto& system = guard.GetSystem();
   for (u32 i = 0; i < length; i += 4)
   {
@@ -598,6 +600,18 @@ static void ApplyOcarinaMemoryPatch(const Core::CPUThreadGuard& guard, const Pat
       return;
     }
   }
+}
+
+static void ApplyOcarinaMemoryPatch(const Core::CPUThreadGuard& guard, const Patch& patch,
+                                    const Memory& memory_patch, u32 ram_start, u32 length)
+{
+  if (memory_patch.m_offset == 0)
+    return;
+  ::File::FileLoan loan;
+  const std::span<const u8> value = GetMemoryPatchValue(patch, memory_patch, &loan);
+  if (!value.empty())
+    ApplyOcarinaPattern(guard, memory_patch, value, ram_start, length);
+  ::File::EndLoan(&loan);
 }
 
 void ApplyGeneralMemoryPatches(const Core::CPUThreadGuard& guard, std::span<const Patch> patches)

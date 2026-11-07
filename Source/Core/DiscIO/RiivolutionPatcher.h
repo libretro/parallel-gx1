@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "Common/IOFile.h"
 #include "DiscIO/DirectoryBlob.h"
 #include "DiscIO/RiivolutionParser.h"
 
@@ -36,7 +37,9 @@ public:
 
   virtual ~FileDataLoader();
   virtual std::optional<u64> GetExternalFileSize(std::string_view external_relative_path) = 0;
-  virtual std::vector<u8> GetFileContents(std::string_view external_relative_path) = 0;
+  // The whole file, lent; File::EndLoan() when done.
+  virtual bool LoanFileContents(std::string_view external_relative_path,
+                                ::File::FileLoan* loan) = 0;
   virtual std::vector<Node> GetFolderContents(std::string_view external_relative_path) = 0;
   virtual BuilderContentSource MakeContentSource(std::string_view external_relative_path,
                                                  u64 external_offset, u64 external_size,
@@ -55,7 +58,7 @@ public:
                        std::string_view patch_root);
 
   std::optional<u64> GetExternalFileSize(std::string_view external_relative_path) override;
-  std::vector<u8> GetFileContents(std::string_view external_relative_path) override;
+  bool LoanFileContents(std::string_view external_relative_path, ::File::FileLoan* loan) override;
   std::vector<FileDataLoader::Node>
   GetFolderContents(std::string_view external_relative_path) override;
   BuilderContentSource MakeContentSource(std::string_view external_relative_path,
