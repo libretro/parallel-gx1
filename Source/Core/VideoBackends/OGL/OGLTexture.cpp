@@ -10,6 +10,7 @@
 
 #include "VideoBackends/OGL/OGLConfig.h"
 #include "VideoBackends/OGL/OGLGfx.h"
+#include "VideoBackends/OGL/OGLStreamBuffer.h"
 
 #include "VideoCommon/VideoConfig.h"
 
@@ -397,6 +398,93 @@ void OGLTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8
 
   if (row_length != width)
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+}
+
+/* What textures lend for loads they write in place: a pixel unpack stream, mapped for good in
+ * client memory. One load at a time is lent. */
+enum
+{
+  UPLOAD_BUFFER_SIZE = 32 * 1024 * 1024
+};
+static std::unique_ptr<StreamBuffer> s_upload_buffer;
+static bool s_upload_buffer_tried;
+static struct
+{
+  u32 offset;
+  u32 size;
+  u32 level;
+  u32 layer;
+  u32 width;
+  u32 height;
+  u32 row_length;
+} s_lent_load;
+
+void OGLTexture::DestroyUploadBuffer()
+{
+  s_upload_buffer.reset();
+  s_upload_buffer_tried = false;
+}
+
+u8* OGLTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer)
+{
+  std::pair<u8*, u32> mapped;
+
+  if (IsCompressedFormat(m_config.format) || !g_ogl_config.bSupportsTextureStorage ||
+      m_config.type == AbstractTextureType::Texture_CubeMap || level >= m_config.levels ||
+      layer >= m_config.layers || width != std::max(1U, m_config.width >> level) ||
+      height != std::max(1U, m_config.height >> level) || size > UPLOAD_BUFFER_SIZE / 4)
+  {
+    return nullptr;
+  }
+  if (!s_upload_buffer_tried)
+  {
+    s_upload_buffer_tried = true;
+    s_upload_buffer =
+        StreamBuffer::CreatePersistentClient(GL_PIXEL_UNPACK_BUFFER, UPLOAD_BUFFER_SIZE);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  }
+  if (!s_upload_buffer)
+    return nullptr;
+
+  mapped = s_upload_buffer->Map(static_cast<u32>(size), 4);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+  s_lent_load.offset = mapped.second;
+  s_lent_load.size = static_cast<u32>(size);
+  s_lent_load.level = level;
+  s_lent_load.layer = layer;
+  s_lent_load.width = width;
+  s_lent_load.height = height;
+  s_lent_load.row_length = row_length;
+  return mapped.first;
+}
+
+void OGLTexture::CommitLoad()
+{
+  const GLenum target = GetGLTarget();
+  const GLenum gl_format = GetGLFormatForTextureFormat(m_config.format);
+  const GLenum gl_type = GetGLTypeForTextureFormat(m_config.format);
+  const void* const offset =
+      reinterpret_cast<const void*>(static_cast<uintptr_t>(s_lent_load.offset));
+
+  s_upload_buffer->Unmap(s_lent_load.size);
+  glActiveTexture(GL_MUTABLE_TEXTURE_INDEX);
+  glBindTexture(target, m_texId);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, s_upload_buffer->m_buffer);
+  if (s_lent_load.row_length != s_lent_load.width)
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, s_lent_load.row_length);
+  if (m_config.type == AbstractTextureType::Texture_2D)
+  {
+    glTexSubImage2D(target, s_lent_load.level, 0, 0, s_lent_load.width, s_lent_load.height,
+                    gl_format, gl_type, offset);
+  }
+  else
+  {
+    glTexSubImage3D(target, s_lent_load.level, 0, 0, s_lent_load.layer, s_lent_load.width,
+                    s_lent_load.height, 1, gl_format, gl_type, offset);
+  }
+  if (s_lent_load.row_length != s_lent_load.width)
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+  glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 }
 
 GLenum OGLTexture::GetGLFormatForImageTexture() const

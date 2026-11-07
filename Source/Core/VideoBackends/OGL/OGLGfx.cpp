@@ -200,6 +200,7 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
 
 OGLGfx::~OGLGfx()
 {
+  OGLTexture::DestroyUploadBuffer();
   glDeleteFramebuffers(1, &m_shared_draw_framebuffer);
   glDeleteFramebuffers(1, &m_shared_read_framebuffer);
 }

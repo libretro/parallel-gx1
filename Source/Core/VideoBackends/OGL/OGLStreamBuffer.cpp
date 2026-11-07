@@ -213,7 +213,7 @@ public:
 class BufferStorage : public StreamBuffer
 {
 public:
-  BufferStorage(u32 type, u32 size, bool _coherent = true)
+  BufferStorage(u32 type, u32 size, bool _coherent = true, bool client_storage = false)
       : StreamBuffer(type, size), coherent(_coherent)
   {
     CreateFences();
@@ -221,11 +221,11 @@ public:
 
     // PERSISTANT_BIT to make sure that the buffer can be used while mapped
     // COHERENT_BIT is set so we don't have to use a MemoryBarrier on write
-    // CLIENT_STORAGE_BIT is set since we access the buffer more frequently on the client side then
-    // server side
+    // CLIENT_STORAGE_BIT asks for client memory, cached, for what the CPU writes in place
     glBufferStorage(m_buffertype, m_size, nullptr,
                     GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT |
-                        (coherent ? GL_MAP_COHERENT_BIT : 0));
+                        (coherent ? GL_MAP_COHERENT_BIT : 0) |
+                        (client_storage ? GL_CLIENT_STORAGE_BIT : 0));
     m_pointer =
         (u8*)glMapBufferRange(m_buffertype, 0, m_size,
                               GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT |
@@ -342,6 +342,16 @@ public:
 
   u8* m_pointer;
 };
+
+std::unique_ptr<StreamBuffer> StreamBuffer::CreatePersistentClient(u32 type, u32 size)
+{
+  if (!g_ogl_config.bSupportsGLSync || !g_ogl_config.bSupportsGLBufferStorage ||
+      DriverDetails::HasBug(DriverDetails::BUG_BROKEN_BUFFER_STORAGE))
+  {
+    return nullptr;
+  }
+  return std::make_unique<BufferStorage>(type, size, true, true);
+}
 
 // Chooses the best streaming method based on the supported extensions and known issues
 std::unique_ptr<StreamBuffer> StreamBuffer::Create(u32 type, u32 size)

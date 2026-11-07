@@ -30,6 +30,10 @@ public:
                           u32 layer, u32 level);
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
             u32 layer);
+  u8* LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer);
+  void CommitLoad();
+  // The upload stream textures lend: gone before the context
+  static void DestroyUploadBuffer();
 
   GLuint GetGLTextureId() const { return m_texId; }
   GLenum GetGLTarget() const

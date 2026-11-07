@@ -16,6 +16,9 @@ class StreamBuffer
 {
 public:
   static std::unique_ptr<StreamBuffer> Create(u32 type, u32 size);
+  // Mapped for good, in client memory: what the CPU writes in place goes straight into what the
+  // GPU reads. nullptr without buffer storage.
+  static std::unique_ptr<StreamBuffer> CreatePersistentClient(u32 type, u32 size);
   virtual ~StreamBuffer();
 
   u32 GetGLBufferId() const { return m_buffer; }

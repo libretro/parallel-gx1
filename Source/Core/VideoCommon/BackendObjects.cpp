@@ -350,6 +350,11 @@ u8* AbstractTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, 
 {
   switch (g_video_backend_kind)
   {
+#ifdef HAS_OPENGL
+  case VIDEO_BACKEND_OGL:
+    return static_cast<OGL::OGLTexture*>(this)->LendLoad(level, width, height, row_length, size,
+                                                         layer);
+#endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
     return static_cast<Vulkan::VKTexture*>(this)->LendLoad(level, width, height, row_length, size,
@@ -369,6 +374,11 @@ void AbstractTexture::CommitLoad()
 {
   switch (g_video_backend_kind)
   {
+#ifdef HAS_OPENGL
+  case VIDEO_BACKEND_OGL:
+    static_cast<OGL::OGLTexture*>(this)->CommitLoad();
+    return;
+#endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
     static_cast<Vulkan::VKTexture*>(this)->CommitLoad();
