@@ -4,7 +4,6 @@
 #pragma once
 
 #include <fmt/format.h>
-#include <functional>
 
 #include "Common/CommonTypes.h"
 
@@ -29,7 +28,12 @@ using GeometryShaderUid = ShaderUid<geometry_shader_uid_data>;
 ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& host_config,
                                       const geometry_shader_uid_data* uid_data);
 GeometryShaderUid GetGeometryShaderUid(PrimitiveType primitive_type);
-void EnumerateGeometryShaderUids(const std::function<void(const GeometryShaderUid&)>& callback);
+/* Every geometry shader UID, into uids: returns how many. */
+enum
+{
+  GEOMETRY_SHADER_UIDS = 27
+};
+u32 EnumerateGeometryShaderUids(GeometryShaderUid* uids);
 
 template <>
 struct fmt::formatter<geometry_shader_uid_data>

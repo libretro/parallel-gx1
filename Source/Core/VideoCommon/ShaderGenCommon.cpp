@@ -3,12 +3,72 @@
 
 #include "VideoCommon/ShaderGenCommon.h"
 
+#include <stdarg.h>
+#include <stdio.h>
+
 #include <fmt/format.h>
 
 #include "Common/FileUtil.h"
 #include "Core/ConfigManager.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
+
+void ShaderCode::Printf(const char* format, ...)
+{
+  char line[512];
+  va_list ap;
+  int n;
+
+  /* a line formats on the stack; longer goes through the text's own */
+  va_start(ap, format);
+  n = vsnprintf(line, sizeof(line), format, ap);
+  va_end(ap);
+  if (n >= 0 && static_cast<size_t>(n) < sizeof(line))
+  {
+    shader_text_putn(&m_text, line, static_cast<size_t>(n));
+    return;
+  }
+  va_start(ap, format);
+  n = vsnprintf(nullptr, 0, format, ap);
+  va_end(ap);
+  if (n < 0)
+    return;
+  {
+    char* const big = static_cast<char*>(malloc(static_cast<size_t>(n) + 1));
+    if (!big)
+      return;
+    va_start(ap, format);
+    vsnprintf(big, static_cast<size_t>(n) + 1, format, ap);
+    va_end(ap);
+    shader_text_putn(&m_text, big, static_cast<size_t>(n));
+    free(big);
+  }
+}
+
+void WriteSwitchTree(ShaderCode& out, const char* variable, const char* const* values,
+                     const char* const* names, u32 indent, u32 low, u32 high)
+{
+  u32 mid;
+
+  // Each generated statement is for low <= x < high
+  if (high == low + 1)
+  {
+    // Down to 1 case (low <= x < low + 1 means x == low)
+    // Note that this indentation behaves poorly for multi-line code
+    out.Indent(indent);
+    out.Printf("%s  // %s (%u)\n", values[low], names[low], low);
+    return;
+  }
+  mid = low + ((high - low) / 2);
+  out.Indent(indent);
+  out.Printf("if (%s < %uu) {\n", variable, mid);
+  WriteSwitchTree(out, variable, values, names, indent + 2, low, mid);
+  out.Indent(indent);
+  out.Puts("} else {\n");
+  WriteSwitchTree(out, variable, values, names, indent + 2, mid, high);
+  out.Indent(indent);
+  out.Puts("}\n");
+}
 
 ShaderHostConfig ShaderHostConfig::GetCurrent()
 {
@@ -107,17 +167,18 @@ void WriteIsNanHeader(ShaderCode& out, APIType api_type)
 {
   if (api_type == APIType::D3D)
   {
-    out.Write("bool dolphin_isnan(float f) {{\n"
+    out.Puts("bool dolphin_isnan(float f) {\n"
               "  // Workaround for the HLSL compiler deciding that isnan can never be true and\n"
               "  // optimising away the call, even though the value can actually be NaN\n"
               "  // Just look for the bit pattern that indicates NaN instead\n"
               "  return (floatBitsToInt(f) & 0x7FFFFFFF) > 0x7F800000;\n"
-              "}}\n\n");
+              "}\n"
+              "\n");
     // If isfinite is needed, (floatBitsToInt(f) & 0x7F800000) != 0x7F800000 can be used
   }
   else
   {
-    out.Write("#define dolphin_isnan(f) isnan(f)\n");
+    out.Puts("#define dolphin_isnan(f) isnan(f)\n");
   }
 }
 
@@ -129,35 +190,35 @@ void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
   // ==============================================
   if (!host_config.backend_bitfield)
   {
-    out.Write("uint bitfieldExtract(uint val, int off, int size) {{\n"
+    out.Puts("uint bitfieldExtract(uint val, int off, int size) {\n"
               "  // This built-in function is only supported in OpenGL 4.0+ and ES 3.1+\n"
-              "  // Microsoft's HLSL compiler automatically optimises this to a bitfield extract "
-              "instruction.\n"
+              "  // Microsoft's HLSL compiler automatically optimises this to a bitfield extract instruction.\n"
               "  uint mask = uint((1 << size) - 1);\n"
               "  return uint(val >> off) & mask;\n"
-              "}}\n\n");
-    out.Write("int bitfieldExtract(int val, int off, int size) {{\n"
+              "}\n"
+              "\n");
+    out.Puts("int bitfieldExtract(int val, int off, int size) {\n"
               "  // This built-in function is only supported in OpenGL 4.0+ and ES 3.1+\n"
-              "  // Microsoft's HLSL compiler automatically optimises this to a bitfield extract "
-              "instruction.\n"
+              "  // Microsoft's HLSL compiler automatically optimises this to a bitfield extract instruction.\n"
               "  return ((val << (32 - size - off)) >> (32 - size));\n"
-              "}}\n\n");
+              "}\n"
+              "\n");
   }
 }
 
-static void DefineOutputMember(ShaderCode& object, std::string_view qualifier,
-                               std::string_view type, std::string_view name, int var_index)
+static void DefineOutputMember(ShaderCode& object, const char* qualifier,
+                               const char* type, const char* name, int var_index)
 {
-  object.Write("\t{} {} {}", qualifier, type, name);
+  object.Printf("\t%s %s %s", qualifier, type, name);
 
   if (var_index != -1)
-    object.Write("{}", var_index);
+    object.Printf("%d", var_index);
 
-  object.Write(";\n");
+  object.Puts(";\n");
 }
 
 void GenerateVSOutputMembers(ShaderCode& object, u32 texgens, const ShaderHostConfig& host_config,
-                             std::string_view qualifier)
+                             const char* qualifier)
 {
   DefineOutputMember(object, qualifier, "float4", "pos", -1);
   DefineOutputMember(object, qualifier, "float4", "colors_", 0);
@@ -182,101 +243,119 @@ void GenerateVSOutputMembers(ShaderCode& object, u32 texgens, const ShaderHostCo
   }
 }
 
-void AssignVSOutputMembers(ShaderCode& object, std::string_view a, std::string_view b, u32 texgens,
+void AssignVSOutputMembers(ShaderCode& object, const char* a, const char* b, u32 texgens,
                            const ShaderHostConfig& host_config)
 {
-  object.Write("\t{}.pos = {}.pos;\n", a, b);
-  object.Write("\t{}.colors_0 = {}.colors_0;\n", a, b);
-  object.Write("\t{}.colors_1 = {}.colors_1;\n", a, b);
+  object.Printf("\t%s.pos = %s.pos;\n", a, b);
+  object.Printf("\t%s.colors_0 = %s.colors_0;\n", a, b);
+  object.Printf("\t%s.colors_1 = %s.colors_1;\n", a, b);
 
   for (unsigned int i = 0; i < texgens; ++i)
-    object.Write("\t{}.tex{} = {}.tex{};\n", a, i, b, i);
+    object.Printf("\t%s.tex%u = %s.tex%u;\n", a, i, b, i);
 
   if (!host_config.fast_depth_calc)
-    object.Write("\t{}.clipPos = {}.clipPos;\n", a, b);
+    object.Printf("\t%s.clipPos = %s.clipPos;\n", a, b);
 
   if (host_config.per_pixel_lighting)
   {
-    object.Write("\t{}.Normal = {}.Normal;\n", a, b);
-    object.Write("\t{}.WorldPos = {}.WorldPos;\n", a, b);
+    object.Printf("\t%s.Normal = %s.Normal;\n", a, b);
+    object.Printf("\t%s.WorldPos = %s.WorldPos;\n", a, b);
   }
 
   if (host_config.backend_geometry_shaders)
   {
-    object.Write("\t{}.clipDist0 = {}.clipDist0;\n", a, b);
-    object.Write("\t{}.clipDist1 = {}.clipDist1;\n", a, b);
+    object.Printf("\t%s.clipDist0 = %s.clipDist0;\n", a, b);
+    object.Printf("\t%s.clipDist1 = %s.clipDist1;\n", a, b);
   }
 }
 
-void GenerateLineOffset(ShaderCode& object, std::string_view indent0, std::string_view indent1,
-                        std::string_view pos_a, std::string_view pos_b, std::string_view sign)
+void GenerateLineOffset(ShaderCode& object, const char* indent0, const char* indent1,
+                        const char* pos_a, const char* pos_b, const char* sign)
 {
   // GameCube/Wii's line drawing algorithm is a little quirky. It does not
   // use the correct line caps. Instead, the line caps are vertical or
   // horizontal depending the slope of the line.
-  object.Write("{indent0}float2 offset;\n"
-               "{indent0}float2 to = abs({pos_a}.xy / {pos_a}.w - {pos_b}.xy / {pos_b}.w);\n"
-               // FIXME: What does real hardware do when line is at a 45-degree angle?
-               // FIXME: Lines aren't drawn at the correct width. See Twilight Princess map.
-               "{indent0}if (" I_LINEPTPARAMS ".y * to.y > " I_LINEPTPARAMS ".x * to.x) {{\n"
-               // Line is more tall. Extend geometry left and right.
-               // Lerp LineWidth/2 from [0..VpWidth] to [-1..1]
-               "{indent1}offset = float2({sign}" I_LINEPTPARAMS ".z / " I_LINEPTPARAMS ".x, 0);\n"
-               "{indent0}}} else {{\n"
-               // Line is more wide. Extend geometry up and down.
-               // Lerp LineWidth/2 from [0..VpHeight] to [1..-1]
-               "{indent1}offset = float2(0, {sign}-" I_LINEPTPARAMS ".z / " I_LINEPTPARAMS ".y);\n"
-               "{indent0}}}\n",
-               fmt::arg("indent0", indent0), fmt::arg("indent1", indent1),  //
-               fmt::arg("pos_a", pos_a), fmt::arg("pos_b", pos_b), fmt::arg("sign", sign));
+  object.Printf("%sfloat2 offset;\n", indent0);
+  object.Printf("%sfloat2 to = abs(%s.xy / %s.w - %s.xy / %s.w);\n", indent0, pos_a, pos_a, pos_b,
+                pos_b);
+  // FIXME: What does real hardware do when line is at a 45-degree angle?
+  // FIXME: Lines aren't drawn at the correct width. See Twilight Princess map.
+  object.Printf("%sif (" I_LINEPTPARAMS ".y * to.y > " I_LINEPTPARAMS ".x * to.x) {\n", indent0);
+  // Line is more tall. Extend geometry left and right.
+  // Lerp LineWidth/2 from [0..VpWidth] to [-1..1]
+  object.Printf("%soffset = float2(%s" I_LINEPTPARAMS ".z / " I_LINEPTPARAMS ".x, 0);\n", indent1,
+                sign);
+  object.Printf("%s} else {\n", indent0);
+  // Line is more wide. Extend geometry up and down.
+  // Lerp LineWidth/2 from [0..VpHeight] to [1..-1]
+  object.Printf("%soffset = float2(0, %s-" I_LINEPTPARAMS ".z / " I_LINEPTPARAMS ".y);\n", indent1,
+                sign);
+  object.Printf("%s}\n", indent0);
 }
 
-void GenerateVSLineExpansion(ShaderCode& object, std::string_view indent, u32 texgens)
+void GenerateVSLineExpansion(ShaderCode& object, const char* indent, u32 texgens)
 {
-  std::string indent1 = std::string(indent) + "  ";
-  object.Write("{0}other_pos = float4(dot(" I_PROJECTION "[0], other_pos), dot(" I_PROJECTION
-               "[1], other_pos), dot(" I_PROJECTION "[2], other_pos), dot(" I_PROJECTION
-               "[3], other_pos));\n"
-               "\n"
-               "{0}float expand_sign = is_right ? 1.0f : -1.0f;\n",
-               indent);
+  char indent1[64];
+  snprintf(indent1, sizeof(indent1), "%s  ", indent);
+  object.Printf("%sother_pos = float4(dot("
+            I_PROJECTION
+            "[0], other_pos), dot("
+            I_PROJECTION
+            "[1], other_pos), dot("
+            I_PROJECTION
+            "[2], other_pos), dot("
+            I_PROJECTION
+            "[3], other_pos));\n"
+            "\n"
+            "%sfloat expand_sign = is_right ? 1.0f : -1.0f;\n", indent, indent);
   GenerateLineOffset(object, indent, indent1, "o.pos", "other_pos", "expand_sign * ");
-  object.Write("\n"
-               "{}o.pos.xy += offset * o.pos.w;\n",
-               indent);
+  object.Printf("\n"
+            "%so.pos.xy += offset * o.pos.w;\n", indent);
   if (texgens > 0)
   {
-    object.Write("{}if ((" I_TEXOFFSET "[2] != 0) && is_right) {{\n", indent);
-    object.Write("{}  float texOffset = 1.0 / float(" I_TEXOFFSET "[2]);\n", indent);
+    object.Printf("%sif (("
+              I_TEXOFFSET
+              "[2] != 0) && is_right) {\n", indent);
+    object.Printf("%s  float texOffset = 1.0 / float("
+              I_TEXOFFSET
+              "[2]);\n", indent);
     for (u32 i = 0; i < texgens; i++)
     {
-      object.Write("{}  if (((" I_TEXOFFSET "[0] >> {}) & 0x1) != 0)\n", indent, i);
-      object.Write("{}    o.tex{}.x += texOffset;\n", indent, i);
+      object.Printf("%s  if ((("
+                I_TEXOFFSET
+                "[0] >> %u) & 0x1) != 0)\n", indent, i);
+      object.Printf("%s    o.tex%u.x += texOffset;\n", indent, i);
     }
-    object.Write("{}}}\n", indent);
+    object.Printf("%s}\n", indent);
   }
 }
 
-void GenerateVSPointExpansion(ShaderCode& object, std::string_view indent, u32 texgens)
+void GenerateVSPointExpansion(ShaderCode& object, const char* indent, u32 texgens)
 {
-  object.Write(
-      "{0}float2 expand_sign = float2(is_right ? 1.0f : -1.0f, is_bottom ? -1.0f : 1.0f);\n"
-      "{0}float2 offset = expand_sign * " I_LINEPTPARAMS ".ww / " I_LINEPTPARAMS ".xy;\n"
-      "{0}o.pos.xy += offset * o.pos.w;\n",
-      indent);
+  object.Printf("%sfloat2 expand_sign = float2(is_right ? 1.0f : -1.0f, is_bottom ? -1.0f : 1.0f);\n"
+            "%sfloat2 offset = expand_sign * "
+            I_LINEPTPARAMS
+            ".ww / "
+            I_LINEPTPARAMS
+            ".xy;\n"
+            "%so.pos.xy += offset * o.pos.w;\n", indent, indent, indent);
   if (texgens > 0)
   {
-    object.Write("{0}if (" I_TEXOFFSET "[3] != 0) {{\n"
-                 "{0}  float texOffsetMagnitude = 1.0f / float(" I_TEXOFFSET "[3]);\n"
-                 "{0}  float2 texOffset = float2(is_right ? texOffsetMagnitude : 0.0f, "
-                 "is_bottom ? texOffsetMagnitude : 0.0f);",
-                 indent);
+    object.Printf("%sif ("
+              I_TEXOFFSET
+              "[3] != 0) {\n"
+              "%s  float texOffsetMagnitude = 1.0f / float("
+              I_TEXOFFSET
+              "[3]);\n"
+              "%s  float2 texOffset = float2(is_right ? texOffsetMagnitude : 0.0f, is_bottom ? texOffsetMagnitude : 0.0f);", indent, indent, indent);
     for (u32 i = 0; i < texgens; i++)
     {
-      object.Write("{}  if (((" I_TEXOFFSET "[1] >> {}) & 0x1) != 0)\n", indent, i);
-      object.Write("{}    o.tex{}.xy += texOffset;\n", indent, i);
+      object.Printf("%s  if ((("
+                I_TEXOFFSET
+                "[1] >> %u) & 0x1) != 0)\n", indent, i);
+      object.Printf("%s    o.tex%u.xy += texOffset;\n", indent, i);
     }
-    object.Write("{}}}\n", indent);
+    object.Printf("%s}\n", indent);
   }
 }
 

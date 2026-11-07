@@ -85,6 +85,12 @@ public:
     }
   }
 
+  /* the name, or nullptr where there is none */
+  constexpr const char* Name(const T& e) const
+  {
+    return m_names.InBounds(e) ? m_names[e] : nullptr;
+  }
+
 protected:
   // This is needed because std::array deduces incorrectly if nullptr is included in the list
   using array_type = Common::EnumMap<const char*, last_member>;

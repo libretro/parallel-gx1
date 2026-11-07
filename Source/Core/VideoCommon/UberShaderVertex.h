@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include "VideoCommon/PixelShaderGen.h"
 
 namespace UberShader
@@ -23,7 +22,12 @@ VertexShaderUid GetVertexShaderUid();
 
 ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config,
                            const vertex_ubershader_uid_data* uid_data);
-void EnumerateVertexShaderUids(const std::function<void(const VertexShaderUid&)>& callback);
+/* Every vertex ubershader UID, into uids: returns how many. */
+enum
+{
+  VERTEX_UBERSHADER_UIDS = 9
+};
+u32 EnumerateVertexShaderUids(VertexShaderUid* uids);
 }  // namespace UberShader
 
 template <>

@@ -4,10 +4,10 @@
 #pragma once
 
 #include <optional>
-#include <string>
 #include <utility>
 
 #include "Common/CommonTypes.h"
+#include "VideoCommon/ShaderGenCommon.h"
 
 enum class APIType;
 enum class TextureFormat;
@@ -20,7 +20,7 @@ namespace TextureConversionShaderTiled
 {
 u16 GetEncodedSampleCount(EFBCopyFormat format);
 
-std::string GenerateEncodingShader(const EFBCopyParams& params, APIType api_type);
+ShaderCode GenerateEncodingShader(const EFBCopyParams& params, APIType api_type);
 
 // Information required to compile and dispatch a texture decoding shader.
 struct DecodingShaderInfo
@@ -42,10 +42,10 @@ const DecodingShaderInfo* GetDecodingShaderInfo(TextureFormat format);
 std::pair<u32, u32> GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height);
 
 // Returns the GLSL string containing the texture decoding shader for the specified format.
-std::string GenerateDecodingShader(TextureFormat format, std::optional<TLUTFormat> palette_format,
+ShaderCode GenerateDecodingShader(TextureFormat format, std::optional<TLUTFormat> palette_format,
                                    APIType api_type);
 
 // Returns the GLSL string containing the palette conversion shader for the specified format.
-std::string GeneratePaletteConversionShader(TLUTFormat palette_format, APIType api_type);
+ShaderCode GeneratePaletteConversionShader(TLUTFormat palette_format, APIType api_type);
 
 }  // namespace TextureConversionShaderTiled

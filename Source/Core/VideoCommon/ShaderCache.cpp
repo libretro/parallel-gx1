@@ -1326,19 +1326,30 @@ void ShaderCache::QueueUberShaderPipelines()
       };
 
   // Populate the pipeline configs with empty entries, these will be compiled afterwards.
-  UberShader::EnumerateVertexShaderUids([&](const UberShader::VertexShaderUid& vuid) {
-    UberShader::EnumeratePixelShaderUids([&](const UberShader::PixelShaderUid& puid) {
+  UberShader::VertexShaderUid vuids[UberShader::VERTEX_UBERSHADER_UIDS];
+  UberShader::PixelShaderUid puids[UberShader::PIXEL_UBERSHADER_UIDS];
+  GeometryShaderUid guids[GEOMETRY_SHADER_UIDS];
+  const u32 num_vuids = UberShader::EnumerateVertexShaderUids(vuids);
+  const u32 num_puids = UberShader::EnumeratePixelShaderUids(puids);
+  const u32 num_guids = EnumerateGeometryShaderUids(guids);
+  for (u32 v = 0; v < num_vuids; v++)
+  {
+    const UberShader::VertexShaderUid& vuid = vuids[v];
+    for (u32 p = 0; p < num_puids; p++)
+    {
       // UIDs must have compatible texgens, a mismatching combination will never be queried.
-      if (vuid.GetUidData()->num_texgens != puid.GetUidData()->num_texgens)
-        return;
+      if (vuid.GetUidData()->num_texgens != puids[p].GetUidData()->num_texgens)
+        continue;
 
-      UberShader::PixelShaderUid cleared_puid = puid;
+      UberShader::PixelShaderUid cleared_puid = puids[p];
       UberShader::ClearUnusedPixelShaderUidBits(m_api_type, m_host_config, &cleared_puid);
-      EnumerateGeometryShaderUids([&](const GeometryShaderUid& guid) {
+      for (u32 g = 0; g < num_guids; g++)
+      {
+        const GeometryShaderUid& guid = guids[g];
         if (guid.GetUidData()->numTexGens != vuid.GetUidData()->num_texgens ||
             (!guid.GetUidData()->IsPassthrough() && !m_host_config.backend_geometry_shaders))
         {
-          return;
+          continue;
         }
         BlendingState blend = RenderState::GetNoBlendingBlendState();
         QueueDummyPipeline(vuid, guid, cleared_puid, blend);
@@ -1379,9 +1390,9 @@ void ShaderCache::QueueUberShaderPipelines()
             QueueDummyPipeline(vuid, guid, cleared_puid, blend);
           }
         }
-      });
-    });
-  });
+      }
+    }
+  }
 }
 
 const AbstractPipeline*
@@ -1422,10 +1433,10 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   if (iter != m_efb_copy_to_ram_pipelines.end())
     return iter->second.get();
 
-  const std::string shader_code =
+  const ShaderCode shader_code =
       TextureConversionShaderTiled::GenerateEncodingShader(uid, m_api_type);
   const auto shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_code,
+      g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_code.GetBuffer(),
                                     fmt::format("EFB copy to RAM pixel shader: {}", uid));
   if (!shader)
   {
@@ -1448,10 +1459,10 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
 bool ShaderCache::CompileSharedPipelines()
 {
   m_screen_quad_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateScreenQuadVertexShader(),
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateScreenQuadVertexShader().GetBuffer(),
       "Screen quad vertex shader");
   m_texture_copy_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateTextureCopyVertexShader(),
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateTextureCopyVertexShader().GetBuffer(),
       "Texture copy vertex shader");
   m_efb_copy_vertex_shader = g_gfx->CreateShaderFromSource(
       ShaderStage::Vertex, TextureConversionShaderGen::GenerateVertexShader(m_api_type).GetBuffer(), "EFB copy vertex shader");
@@ -1461,18 +1472,18 @@ bool ShaderCache::CompileSharedPipelines()
   if (UseGeometryShaderForEFBCopies())
   {
     m_texcoord_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(1, 0), "Texcoord passthrough geometry shader");
+        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(1, 0).GetBuffer(), "Texcoord passthrough geometry shader");
     m_color_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(0, 1), "Color passthrough geometry shader");
+        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(0, 1).GetBuffer(), "Color passthrough geometry shader");
     if (!m_texcoord_geometry_shader || !m_color_geometry_shader)
       return false;
   }
 
   m_texture_copy_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateTextureCopyPixelShader(),
+      ShaderStage::Pixel, FramebufferShaderGen::GenerateTextureCopyPixelShader().GetBuffer(),
       "Texture copy pixel shader");
   m_color_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateColorPixelShader(),
+      ShaderStage::Pixel, FramebufferShaderGen::GenerateColorPixelShader().GetBuffer(),
       "Color pixel shader");
   if (!m_texture_copy_pixel_shader || !m_color_pixel_shader)
     return false;
@@ -1509,7 +1520,7 @@ bool ShaderCache::CompileSharedPipelines()
       TLUTFormat format = static_cast<TLUTFormat>(i);
       auto shader = g_gfx->CreateShaderFromSource(
           ShaderStage::Pixel,
-          TextureConversionShaderTiled::GeneratePaletteConversionShader(format, m_api_type), fmt::format("Palette conversion pixel shader: {}", format));
+          TextureConversionShaderTiled::GeneratePaletteConversionShader(format, m_api_type).GetBuffer(), fmt::format("Palette conversion pixel shader: {}", format));
       if (!shader)
         return false;
 
@@ -1538,13 +1549,13 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   if (!inserted)
     return iter->second.get();
 
-  std::string shader_source =
+  const ShaderCode shader_source =
       FramebufferShaderGen::GenerateTextureReinterpretShader(from_format, to_format);
-  if (shader_source.empty())
+  if (shader_source.GetBuffer().empty())
     return nullptr;
 
   std::unique_ptr<AbstractShader> shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_source,
+      ShaderStage::Pixel, shader_source.GetBuffer(),
       fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format));
   if (!shader)
     return nullptr;
@@ -1573,9 +1584,9 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
   if (!inserted)
     return iter->second.get();
 
-  const std::string shader_source =
+  const ShaderCode shader_source =
       TextureConversionShaderTiled::GenerateDecodingShader(format, palette_format, APIType::OpenGL);
-  if (shader_source.empty())
+  if (shader_source.GetBuffer().empty())
     return nullptr;
 
   const std::string name =
@@ -1584,7 +1595,7 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
           fmt::format("Texture decoding compute shader: {}", format);
 
   std::unique_ptr<AbstractShader> shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source, name);
+      g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source.GetBuffer(), name);
   if (!shader)
     return nullptr;
 

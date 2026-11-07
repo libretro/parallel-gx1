@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include "Common/CommonTypes.h"
 #include "VideoCommon/ShaderGenCommon.h"
 
@@ -31,7 +30,12 @@ PixelShaderUid GetPixelShaderUid();
 ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
                           const pixel_ubershader_uid_data* uid_data);
 
-void EnumeratePixelShaderUids(const std::function<void(const PixelShaderUid&)>& callback);
+/* Every pixel ubershader UID, into uids: returns how many. */
+enum
+{
+  PIXEL_UBERSHADER_UIDS = 108
+};
+u32 EnumeratePixelShaderUids(PixelShaderUid* uids);
 void ClearUnusedPixelShaderUidBits(APIType api_type, const ShaderHostConfig& host_config,
                                    PixelShaderUid* uid);
 }  // namespace UberShader

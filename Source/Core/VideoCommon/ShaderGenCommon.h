@@ -3,13 +3,11 @@
 
 #pragma once
 
+#include <cstdio>
 #include <cstring>
-#include <functional>
-#include <iterator>
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <vector>
 
 #include <fmt/format.h>
 
@@ -20,6 +18,7 @@
 #include "Common/TypeUtils.h"
 
 #include "VideoCommon/AbstractShader.h"
+#include "VideoCommon/ShaderText.h"
 #include "VideoCommon/VideoCommon.h"
 
 /**
@@ -27,7 +26,7 @@
  * (GenerateVertexShader, GenerateGeometryShader, GeneratePixelShader)
  * In particular, this includes the shader code generator (ShaderCode).
  * A different class (ShaderUid) can be used to uniquely identify each ShaderCode object.
- * More interesting things can be done with this, e.g. ShaderConstantProfile checks what shader
+ * More interesting things can be done with this, e.g. checking what shader
  * constants are being used. This can be used to optimize buffer management.
  * If the class does not use one or more of these methods (e.g. Uid class does not need code), the
  * method will be defined as a no-op by the base class, and the call
@@ -105,44 +104,48 @@ private:
 class ShaderCode : public ShaderGeneratorInterface
 {
 public:
-  ShaderCode() { m_buffer.reserve(16384); }
-  const std::string& GetBuffer() const { return m_buffer; }
+  ShaderCode() { shader_text_init(&m_text, 16384); }
+  ~ShaderCode() { shader_text_free(&m_text); }
+  ShaderCode(ShaderCode&& other) noexcept : m_text(other.m_text) { shader_text_init(&other.m_text, 0); }
+  ShaderCode(const ShaderCode&) = delete;
+  ShaderCode& operator=(const ShaderCode&) = delete;
+  ShaderCode& operator=(ShaderCode&&) = delete;
 
-  // Writes format strings using fmtlib format strings.
-  template <typename... Args>
-  void Write(fmt::format_string<Args...> format, Args&&... args)
+  /* lent: valid until the code is written to again or goes */
+  std::string_view GetBuffer() const
   {
-    fmt::format_to(std::back_inserter(m_buffer), format, std::forward<Args>(args)...);
+    return std::string_view(shader_text_data(&m_text), shader_text_len(&m_text));
   }
+  /* the same, NUL terminated */
+  const char* CStr() const { return shader_text_data(&m_text); }
+  shader_text* Text() { return &m_text; }
+
+  /* text as it is */
+  void Puts(const char* s) { shader_text_puts(&m_text, s); }
+  void Putn(const char* s, size_t n) { shader_text_putn(&m_text, s, n); }
+  void Indent(unsigned n) { shader_text_indent(&m_text, n); }
+  /* printf-style */
+  void Printf(const char* format, ...) SHADER_TEXT_PRINTF(2, 3);
 
 protected:
-  std::string m_buffer;
+  shader_text m_text;
 };
 
-/**
- * Generates a shader constant profile which can be used to query which constants are used in a
- * shader
- */
-class ShaderConstantProfile : public ShaderGeneratorInterface
+// An enum as shader text writes it: 0x<value>u and its name in a comment, from
+// ShaderEnumValue and ShaderEnumName.
+template <typename T>
+unsigned ShaderEnumValue(T e)
 {
-public:
-  ShaderConstantProfile(int num_constants) { constant_usage.resize(num_constants); }
-  void SetConstantsUsed(unsigned int first_index, unsigned int last_index)
-  {
-    for (unsigned int i = first_index; i < last_index + 1; ++i)
-      constant_usage[i] = true;
-  }
-
-  bool ConstantIsUsed(unsigned int index) const
-  {
-    // TODO: Not ready for usage yet
-    return true;
-    // return constant_usage[index];
-  }
-
-private:
-  std::vector<bool> constant_usage;  // TODO: Is vector<bool> appropriate here?
-};
+  return static_cast<unsigned>(static_cast<std::make_unsigned_t<std::underlying_type_t<T>>>(
+      static_cast<std::underlying_type_t<T>>(e)));
+}
+template <typename T>
+const char* ShaderEnumName(T e)
+{
+  static constexpr fmt::formatter<T> formatter{};
+  const char* const name = formatter.Name(e);
+  return name ? name : "Invalid";
+}
 
 // Host config contains the settings which can influence generated shaders.
 union ShaderHostConfig
@@ -192,17 +195,17 @@ void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
                                 const ShaderHostConfig& host_config);
 
 void GenerateVSOutputMembers(ShaderCode& object, u32 texgens, const ShaderHostConfig& host_config,
-                             std::string_view qualifier);
+                             const char* qualifier);
 
-void AssignVSOutputMembers(ShaderCode& object, std::string_view a, std::string_view b, u32 texgens,
+void AssignVSOutputMembers(ShaderCode& object, const char* a, const char* b, u32 texgens,
                            const ShaderHostConfig& host_config);
 
-void GenerateLineOffset(ShaderCode& object, std::string_view indent0, std::string_view indent1,
-                        std::string_view pos_a, std::string_view pos_b, std::string_view sign);
+void GenerateLineOffset(ShaderCode& object, const char* indent0, const char* indent1,
+                        const char* pos_a, const char* pos_b, const char* sign);
 
-void GenerateVSLineExpansion(ShaderCode& object, std::string_view indent, u32 texgens);
+void GenerateVSLineExpansion(ShaderCode& object, const char* indent, u32 texgens);
 
-void GenerateVSPointExpansion(ShaderCode& object, std::string_view indent, u32 texgens);
+void GenerateVSPointExpansion(ShaderCode& object, const char* indent, u32 texgens);
 
 // We use the flag "centroid" to fix some MSAA rendering bugs. With MSAA, the
 // pixel shader will be executed for each pixel which has at least one passed sample.
@@ -215,46 +218,43 @@ void GenerateVSPointExpansion(ShaderCode& object, std::string_view indent, u32 t
 const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interface_block = false,
                                       bool in = false);
 
-// bitfieldExtract generator for BitField types
+// bitfieldExtract generator for BitField types: the text in a buffer of its own, for the
+// statement it is written in.
+struct ShaderBitfieldExtract
+{
+  char text[128];
+};
 template <auto ptr_to_bitfield_member>
-std::string BitfieldExtract(std::string_view source)
+ShaderBitfieldExtract BitfieldExtract(const char* source)
 {
   using BitFieldT = Common::MemberType<ptr_to_bitfield_member>;
-  return fmt::format("bitfieldExtract({}({}), {}, {})", BitFieldT::IsSigned() ? "int" : "uint",
-                     source, static_cast<u32>(BitFieldT::StartBit()),
-                     static_cast<u32>(BitFieldT::NumBits()));
+  ShaderBitfieldExtract extract;
+  snprintf(extract.text, sizeof(extract.text), "bitfieldExtract(%s(%s), %u, %u)",
+           BitFieldT::IsSigned() ? "int" : "uint", source,
+           static_cast<u32>(BitFieldT::StartBit()), static_cast<u32>(BitFieldT::NumBits()));
+  return extract;
 }
 
+// A tree of ifs on variable, values[i] written where it is i: indexes low <= i < high.
+void WriteSwitchTree(ShaderCode& out, const char* variable, const char* const* values,
+                     const char* const* names, u32 indent, u32 low, u32 high);
+
 template <auto last_member>
-void WriteSwitch(ShaderCode& out, APIType ApiType, std::string_view variable,
-                 const Common::EnumMap<std::string_view, last_member>& values, int indent,
-                 bool break_)
+void WriteSwitch(ShaderCode& out, const char* variable,
+                 const Common::EnumMap<const char*, last_member>& values, u32 indent)
 {
   using enum_type = decltype(last_member);
+  const u32 count = static_cast<u32>(last_member) + 1;
+  const char* value_texts[static_cast<u32>(last_member) + 1];
+  const char* names[static_cast<u32>(last_member) + 1];
+  u32 i;
 
-  // Generate a tree of if statements recursively
-  // std::function must be used because auto won't capture before initialization and thus can't be
-  // used recursively
-  std::function<void(u32, u32, u32)> BuildTree = [&](u32 cur_indent, u32 low, u32 high) {
-    // Each generated statement is for low <= x < high
-    if (high == low + 1)
-    {
-      // Down to 1 case (low <= x < low + 1 means x == low)
-      const enum_type key = static_cast<enum_type>(low);
-      // Note that this indentation behaves poorly for multi-line code
-      out.Write("{:{}}{}  // {}\n", "", cur_indent, values[key], key);
-    }
-    else
-    {
-      u32 mid = low + ((high - low) / 2);
-      out.Write("{:{}}if ({} < {}u) {{\n", "", cur_indent, variable, mid);
-      BuildTree(cur_indent + 2, low, mid);
-      out.Write("{:{}}}} else {{\n", "", cur_indent);
-      BuildTree(cur_indent + 2, mid, high);
-      out.Write("{:{}}}}\n", "", cur_indent);
-    }
-  };
-  BuildTree(indent, 0, static_cast<u32>(last_member) + 1);
+  for (i = 0; i < count; i++)
+  {
+    value_texts[i] = values[static_cast<enum_type>(i)];
+    names[i] = ShaderEnumName(static_cast<enum_type>(i));
+  }
+  WriteSwitchTree(out, variable, value_texts, names, indent, 0, count);
 }
 
 // Constant variable names

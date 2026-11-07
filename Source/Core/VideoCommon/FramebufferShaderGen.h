@@ -3,25 +3,25 @@
 
 #pragma once
 
-#include <string>
 #include "Common/CommonTypes.h"
+#include "VideoCommon/ShaderGenCommon.h"
 
 enum class EFBReinterpretType;
 enum class TextureFormat;
 
 namespace FramebufferShaderGen
 {
-std::string GenerateScreenQuadVertexShader();
-std::string GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors);
-std::string GenerateTextureCopyVertexShader();
-std::string GenerateTextureCopyPixelShader();
-std::string GenerateResolveColorPixelShader(u32 samples);
-std::string GenerateResolveDepthPixelShader(u32 samples);
-std::string GenerateClearVertexShader();
-std::string GenerateEFBPokeVertexShader();
-std::string GenerateColorPixelShader();
-std::string GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samples);
-std::string GenerateTextureReinterpretShader(TextureFormat from_format, TextureFormat to_format);
-std::string GenerateEFBRestorePixelShader();
+ShaderCode GenerateScreenQuadVertexShader();
+ShaderCode GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors);
+ShaderCode GenerateTextureCopyVertexShader();
+ShaderCode GenerateTextureCopyPixelShader();
+ShaderCode GenerateResolveColorPixelShader(u32 samples);
+ShaderCode GenerateResolveDepthPixelShader(u32 samples);
+ShaderCode GenerateClearVertexShader();
+ShaderCode GenerateEFBPokeVertexShader();
+ShaderCode GenerateColorPixelShader();
+ShaderCode GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samples);
+ShaderCode GenerateTextureReinterpretShader(TextureFormat from_format, TextureFormat to_format);
+ShaderCode GenerateEFBRestorePixelShader();
 
 }  // namespace FramebufferShaderGen

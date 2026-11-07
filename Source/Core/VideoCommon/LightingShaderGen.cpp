@@ -24,55 +24,43 @@ static void GenerateLightShader(ShaderCode& object, const LightingUidData& uid_d
   {
   case AttenuationFunc::None:
   case AttenuationFunc::Dir:
-    object.Write("ldir = normalize(" LIGHT_POS ".xyz - pos.xyz);\n", LIGHT_POS_PARAMS(index));
-    object.Write("attn = 1.0;\n");
-    object.Write("if (length(ldir) == 0.0)\n\t ldir = _normal;\n");
+    object.Printf("ldir = normalize(%s[%d].pos.xyz - pos.xyz);\n", (I_LIGHTS), (index));
+    object.Puts("attn = 1.0;\n");
+    object.Puts("if (length(ldir) == 0.0)\n"
+              "\t ldir = _normal;\n");
     break;
   case AttenuationFunc::Spec:
-    object.Write("ldir = normalize(" LIGHT_POS ".xyz - pos.xyz);\n", LIGHT_POS_PARAMS(index));
-    object.Write("attn = (dot(_normal, ldir) >= 0.0) ? max(0.0, dot(_normal, " LIGHT_DIR
-                 ".xyz)) : 0.0;\n",
-                 LIGHT_DIR_PARAMS(index));
-    object.Write("cosAttn = " LIGHT_COSATT ".xyz;\n", LIGHT_COSATT_PARAMS(index));
-    object.Write("distAttn = {}(" LIGHT_DISTATT ".xyz);\n",
-                 (diffusefunc == DiffuseFunc::None) ? "" : "normalize",
-                 LIGHT_DISTATT_PARAMS(index));
-    object.Write("attn = max(0.0f, dot(cosAttn, float3(1.0, attn, attn*attn))) / dot(distAttn, "
-                 "float3(1.0, attn, attn*attn));\n");
+    object.Printf("ldir = normalize(%s[%d].pos.xyz - pos.xyz);\n", (I_LIGHTS), (index));
+    object.Printf("attn = (dot(_normal, ldir) >= 0.0) ? max(0.0, dot(_normal, %s[%d].dir.xyz)) : 0.0;\n", (I_LIGHTS), (index));
+    object.Printf("cosAttn = %s[%d].cosatt.xyz;\n", (I_LIGHTS), (index));
+    object.Printf("distAttn = %s(%s[%d].distatt.xyz);\n", (diffusefunc == DiffuseFunc::None) ? "" : "normalize", (I_LIGHTS), (index));
+    object.Puts("attn = max(0.0f, dot(cosAttn, float3(1.0, attn, attn*attn))) / dot(distAttn, float3(1.0, attn, attn*attn));\n");
     break;
   case AttenuationFunc::Spot:
-    object.Write("ldir = " LIGHT_POS ".xyz - pos.xyz;\n", LIGHT_POS_PARAMS(index));
-    object.Write("dist2 = dot(ldir, ldir);\n"
-                 "dist = sqrt(dist2);\n"
-                 "ldir = ldir / dist;\n"
-                 "attn = max(0.0, dot(ldir, " LIGHT_DIR ".xyz));\n",
-                 LIGHT_DIR_PARAMS(index));
+    object.Printf("ldir = %s[%d].pos.xyz - pos.xyz;\n", (I_LIGHTS), (index));
+    object.Printf("dist2 = dot(ldir, ldir);\n"
+              "dist = sqrt(dist2);\n"
+              "ldir = ldir / dist;\n"
+              "attn = max(0.0, dot(ldir, %s[%d].dir.xyz));\n", (I_LIGHTS), (index));
     // attn*attn may overflow
-    object.Write("attn = max(0.0, " LIGHT_COSATT ".x + " LIGHT_COSATT ".y*attn + " LIGHT_COSATT
-                 ".z*attn*attn) / dot(" LIGHT_DISTATT ".xyz, float3(1.0,dist,dist2));\n",
-                 LIGHT_COSATT_PARAMS(index), LIGHT_COSATT_PARAMS(index), LIGHT_COSATT_PARAMS(index),
-                 LIGHT_DISTATT_PARAMS(index));
+    object.Printf("attn = max(0.0, %s[%d].cosatt.x + %s[%d].cosatt.y*attn + %s[%d].cosatt.z*attn*attn) / dot(%s[%d].distatt.xyz, float3(1.0,dist,dist2));\n", (I_LIGHTS), (index), (I_LIGHTS), (index), (I_LIGHTS), (index), (I_LIGHTS), (index));
     break;
   }
 
   switch (diffusefunc)
   {
   case DiffuseFunc::None:
-    object.Write("lacc.{} += int{}(round(attn * float{}(" LIGHT_COL ")));\n", swizzle,
-                 swizzle_components, swizzle_components, LIGHT_COL_PARAMS(index, swizzle));
+    object.Printf("lacc.%s += int%s(round(attn * float%s(%s[%d].color.%s)));\n", swizzle, swizzle_components, swizzle_components, (I_LIGHTS), (index), (swizzle));
     break;
   case DiffuseFunc::Sign:
   case DiffuseFunc::Clamp:
-    object.Write("lacc.{} += int{}(round(attn * {}dot(ldir, _normal)) * float{}(" LIGHT_COL
-                 ")));\n",
-                 swizzle, swizzle_components, diffusefunc != DiffuseFunc::Sign ? "max(0.0," : "(",
-                 swizzle_components, LIGHT_COL_PARAMS(index, swizzle));
+    object.Printf("lacc.%s += int%s(round(attn * %sdot(ldir, _normal)) * float%s(%s[%d].color.%s)));\n", swizzle, swizzle_components, diffusefunc != DiffuseFunc::Sign ? "max(0.0," : "(", swizzle_components, (I_LIGHTS), (index), (swizzle));
     break;
   default:
     ASSERT(false);
   }
 
-  object.Write("\n");
+  object.Puts("\n");
 }
 
 // vertex shader
@@ -82,30 +70,29 @@ void GenerateLightingShaderHeader(ShaderCode& object, const LightingUidData& uid
 {
   for (u32 j = 0; j < NUM_XF_COLOR_CHANNELS; j++)
   {
-    object.Write("vec4 dolphin_calculate_lighting_chn{}(vec4 base_color, vec3 pos, vec3 _normal)\n",
-                 j);
-    object.Write("{{\n");
+    object.Printf("vec4 dolphin_calculate_lighting_chn%u(vec4 base_color, vec3 pos, vec3 _normal)\n", j);
+    object.Puts("{\n");
 
-    object.Write("\tint4 lacc;\n"
-                 "\tvec3 ldir, h, cosAttn, distAttn;\n"
-                 "\tfloat dist, dist2, attn;\n");
+    object.Puts("\tint4 lacc;\n"
+              "\tvec3 ldir, h, cosAttn, distAttn;\n"
+              "\tfloat dist, dist2, attn;\n");
 
     const bool colormatsource = !!(uid_data.matsource & (1 << j));
     if (colormatsource)  // from vertex
-      object.Write("\tint4 mat = int4(round(base_color * 255.0));\n");
+      object.Puts("\tint4 mat = int4(round(base_color * 255.0));\n");
     else  // from color
-      object.Write("\tint4 mat = {}[{}];\n", I_MATERIALS, j + 2);
+      object.Printf("\tint4 mat = %s[%u];\n", I_MATERIALS, j + 2);
 
     if ((uid_data.enablelighting & (1 << j)) != 0)
     {
       if ((uid_data.ambsource & (1 << j)) != 0)  // from vertex
-        object.Write("\tlacc = int4(round(base_color * 255.0));\n");
+        object.Puts("\tlacc = int4(round(base_color * 255.0));\n");
       else  // from color
-        object.Write("\tlacc = {}[{}];\n", I_MATERIALS, j);
+        object.Printf("\tlacc = %s[%u];\n", I_MATERIALS, j);
     }
     else
     {
-      object.Write("\tlacc = int4(255, 255, 255, 255);\n");
+      object.Puts("\tlacc = int4(255, 255, 255, 255);\n");
     }
 
     // check if alpha is different
@@ -113,21 +100,21 @@ void GenerateLightingShaderHeader(ShaderCode& object, const LightingUidData& uid
     if (alphamatsource != colormatsource)
     {
       if (alphamatsource)  // from vertex
-        object.Write("\tmat.w = int(round(base_color.w * 255.0));\n");
+        object.Puts("\tmat.w = int(round(base_color.w * 255.0));\n");
       else  // from color
-        object.Write("\tmat.w = {}[{}].w;\n", I_MATERIALS, j + 2);
+        object.Printf("\tmat.w = %s[%u].w;\n", I_MATERIALS, j + 2);
     }
 
     if ((uid_data.enablelighting & (1 << (j + 2))) != 0)
     {
       if ((uid_data.ambsource & (1 << (j + 2))) != 0)  // from vertex
-        object.Write("\tlacc.w = int(round(base_color.w * 255.0));\n");
+        object.Puts("\tlacc.w = int(round(base_color.w * 255.0));\n");
       else  // from color
-        object.Write("\tlacc.w = {}[{}].w;\n", I_MATERIALS, j);
+        object.Printf("\tlacc.w = %s[%u].w;\n", I_MATERIALS, j);
     }
     else
     {
-      object.Write("\tlacc.w = 255;\n");
+      object.Puts("\tlacc.w = 255;\n");
     }
 
     if ((uid_data.enablelighting & (1 << j)) != 0)  // Color lights
@@ -146,9 +133,10 @@ void GenerateLightingShaderHeader(ShaderCode& object, const LightingUidData& uid
           GenerateLightShader(object, uid_data, i, j + 2, true);
       }
     }
-    object.Write("\tlacc = clamp(lacc, 0, 255);\n");
-    object.Write("\treturn vec4((mat * (lacc + (lacc >> 7))) >> 8) / 255.0;\n");
-    object.Write("}}\n\n");
+    object.Puts("\tlacc = clamp(lacc, 0, 255);\n");
+    object.Puts("\treturn vec4((mat * (lacc + (lacc >> 7))) >> 8) / 255.0;\n");
+    object.Puts("}\n"
+              "\n");
   }
 }
 
