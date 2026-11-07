@@ -29,7 +29,6 @@ enum class System
   GFX,
   Logger,
   DualShockUDPClient,
-  FreeLook,
   Session,
   GameSettingsOnly,
   Achievements,

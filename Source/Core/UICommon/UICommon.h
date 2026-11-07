@@ -23,7 +23,6 @@ void Shutdown();
 [[nodiscard]] Common::EventHook AddFlushUnsavedDataCallback(std::function<void()> callback);
 void FlushUnsavedData();
 
-void InitControllers(const WindowSystemInfo& wsi);
 void ShutdownControllers();
 
 void InhibitScreenSaver(bool inhibit);

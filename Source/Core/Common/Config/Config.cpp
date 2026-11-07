@@ -221,7 +221,6 @@ static const std::map<System, std::string> system_to_name = {
     {System::Logger, "Logger"},
     {System::SYSCONF, "SYSCONF"},
     {System::DualShockUDPClient, "DualShockUDPClient"},
-    {System::FreeLook, "FreeLook"},
     {System::Session, "Session"},
     {System::GameSettingsOnly, "GameSettingsOnly"},
     {System::Achievements, "Achievements"}};

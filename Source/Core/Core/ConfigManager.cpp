@@ -101,7 +101,6 @@ void SConfig::ResetAllSettings()
   File::Delete(File::GetUserPath(F_GFXCONFIG_IDX));
   File::Delete(File::GetUserPath(F_LOGGERCONFIG_IDX));
   File::Delete(File::GetUserPath(F_DUALSHOCKUDPCLIENTCONFIG_IDX));
-  File::Delete(File::GetUserPath(F_FREELOOKCONFIG_IDX));
   File::Delete(File::GetUserPath(F_RETROACHIEVEMENTSCONFIG_IDX));
   File::Delete(File::GetUserPath(F_WIISYSCONF_IDX));
 

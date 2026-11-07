@@ -16,7 +16,6 @@
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/CPMemory.h"
 #include "VideoCommon/FramebufferManager.h"
-#include "VideoCommon/FreeLookCamera.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionData.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
 #include "VideoCommon/Statistics.h"
@@ -82,17 +81,14 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
   {
   case ProjectionType::Perspective:
   {
-    const Common::Vec2 fov_multiplier = g_freelook_camera.IsActive() ?
-                                            g_freelook_camera.GetFieldOfViewMultiplier() :
-                                            Common::Vec2{1, 1};
-    m_projection_matrix[0] = rawProjection[0] * g_ActiveConfig.fAspectRatioHackW * fov_multiplier.x;
+    m_projection_matrix[0] = rawProjection[0] * g_ActiveConfig.fAspectRatioHackW;
     m_projection_matrix[1] = 0.0f;
-    m_projection_matrix[2] = rawProjection[1] * g_ActiveConfig.fAspectRatioHackW * fov_multiplier.x;
+    m_projection_matrix[2] = rawProjection[1] * g_ActiveConfig.fAspectRatioHackW;
     m_projection_matrix[3] = 0.0f;
 
     m_projection_matrix[4] = 0.0f;
-    m_projection_matrix[5] = rawProjection[2] * g_ActiveConfig.fAspectRatioHackH * fov_multiplier.y;
-    m_projection_matrix[6] = rawProjection[3] * g_ActiveConfig.fAspectRatioHackH * fov_multiplier.y;
+    m_projection_matrix[5] = rawProjection[2] * g_ActiveConfig.fAspectRatioHackH;
+    m_projection_matrix[6] = rawProjection[3] * g_ActiveConfig.fAspectRatioHackH;
     m_projection_matrix[7] = 0.0f;
 
     m_projection_matrix[8] = 0.0f;
@@ -187,17 +183,12 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
   if (use_vr_camera)
     corrected_matrix *= g_libretro_vr_camera.view;
 
-  if (g_freelook_camera.IsActive() && xfmem.projection.type == ProjectionType::Perspective)
-    corrected_matrix *= g_freelook_camera.GetView();
-
-  g_freelook_camera.GetController()->SetClean();
-
   return corrected_matrix;
 }
 
 void VertexShaderManager::SetProjectionMatrix(XFStateManager& xf_state_manager)
 {
-  if (xf_state_manager.DidProjectionChange() || g_freelook_camera.GetController()->IsDirty()
+  if (xf_state_manager.DidProjectionChange()
       || LibretroVRCameraChanged()
   )
   {
@@ -489,7 +480,7 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
     }
   }
 
-  if (xf_state_manager.DidProjectionChange() || g_freelook_camera.GetController()->IsDirty() ||
+  if (xf_state_manager.DidProjectionChange() ||
       !projection_actions.empty() || m_projection_graphics_mod_change
       || LibretroVRCameraChanged()
   )
@@ -558,10 +549,51 @@ void VertexShaderManager::TransformToClipSpace(const float* data, float* out, u3
       t[0] * proj_matrix[12] + t[1] * proj_matrix[13] + t[2] * proj_matrix[14] + proj_matrix[15];
 }
 
+/* Savestates carry a free look camera after the projection: written as one
+ * at rest, its six-axis kind, and read past whichever kind was saved. */
+static void DoCameraState(PointerWrap& p)
+{
+  bool present = true;
+  int kind = 0;
+  float speed = 60.0f;
+  float fov_x = 1.0f;
+  float fov_y = 1.0f;
+
+  p.Do(present);
+  if (!present)
+    return;
+  p.Do(kind);
+  p.Do(speed);
+  p.Do(fov_x);
+  p.Do(fov_y);
+  if (kind == 1 || kind == 2)
+  {
+    Common::Vec3 rotation{};
+    Common::Quaternion rotate_quat = Common::Quaternion::Identity();
+    p.Do(rotation);
+    p.Do(rotate_quat);
+    if (kind == 1)
+    {
+      Common::Vec3 position{};
+      p.Do(position);
+    }
+    else
+    {
+      float distance = 0.0f;
+      p.Do(distance);
+    }
+  }
+  else
+  {
+    Common::Matrix44 view = Common::Matrix44::Identity();
+    p.Do(view);
+  }
+}
+
 void VertexShaderManager::DoState(PointerWrap& p)
 {
   p.DoArray(m_projection_matrix);
-  g_freelook_camera.DoState(p);
+  DoCameraState(p);
 
   p.Do(constants);
 

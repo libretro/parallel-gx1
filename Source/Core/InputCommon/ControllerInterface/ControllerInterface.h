@@ -25,14 +25,13 @@ namespace ciface
 {
 // A thread local "input channel" is maintained to handle the state of relative inputs.
 // This allows simultaneous use of relative inputs across different input contexts.
-// e.g. binding relative mouse movements to both GameCube controllers and FreeLook.
+// e.g. binding relative mouse movements to both GameCube controllers and Wii Remotes.
 // These operate at different rates and processing one would break the other without separate state.
 enum class InputChannel
 {
   Host,
   SerialInterface,
   Bluetooth,
-  FreeLook,
   Count,
 };
 

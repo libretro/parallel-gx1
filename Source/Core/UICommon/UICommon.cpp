@@ -23,13 +23,11 @@
 #include "Core/ConfigLoaders/BaseConfigLoader.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
-#include "Core/FreeLookManager.h"
 #include "Core/HW/GBAPad.h"
 #include "Core/HW/GCKeyboard.h"
 #include "Core/HW/GCPad.h"
 #include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/Wiimote.h"
-#include "Core/HotkeyManager.h"
 #include "Core/IOS/IOS.h"
 #include "Core/IOS/STM/STM.h"
 #include "Core/System.h"
@@ -150,29 +148,6 @@ void FlushUnsavedData()
 {
   INFO_LOG_FMT(CORE, "Flushing unsaved data...");
   s_flush_unsaved_data_event_hook.Trigger();
-}
-
-void InitControllers(const WindowSystemInfo& wsi)
-{
-  if (g_controller_interface.IsInit())
-    return;
-
-  g_controller_interface.Initialize(wsi);
-
-  if (!g_controller_interface.HasDefaultDevice())
-  {
-    // Note that the CI default device could be still temporarily removed at any time
-    WARN_LOG_FMT(CONTROLLERINTERFACE, "No default device has been added in time. Premade control "
-                                      "mappings intended for the default device may not work.");
-  }
-
-  GCAdapter::Init();
-  Pad::Initialize();
-  Pad::InitializeGBA();
-  Keyboard::Initialize();
-  Wiimote::Initialize(Wiimote::InitializeMode::DO_NOT_WAIT_FOR_WIIMOTES);
-  HotkeyManagerEmu::Initialize();
-  FreeLook::Initialize();
 }
 
 void ShutdownControllers()

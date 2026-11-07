@@ -1143,7 +1143,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/Fifo.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/FramebufferManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/FramebufferShaderGen.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/FreeLookCamera.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GeometryShaderGen.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GeometryShaderManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsMod.cpp \
@@ -1294,7 +1293,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/CheatGeneration.cpp \
 	$(CORE_DIR)/Source/Core/Core/CheatSearch.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/DefaultLocale.cpp \
-	$(CORE_DIR)/Source/Core/Core/Config/FreeLookSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/GraphicsSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/MainSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/SessionSettings.cpp \
@@ -1338,14 +1336,12 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/DSPEmulator.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoDataFile.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoPlayer.cpp \
-	$(CORE_DIR)/Source/Core/Core/FreeLookManager.cpp \
 	$(CORE_DIR)/Source/Core/Core/GeckoCode.cpp \
 	$(CORE_DIR)/Source/Core/Core/GeckoCodeConfig.cpp \
 	$(CORE_DIR)/Source/Core/Core/HLE/HLE_Misc.cpp \
 	$(CORE_DIR)/Source/Core/Core/HLE/HLE_OS.cpp \
 	$(CORE_DIR)/Source/Core/Core/HLE/HLE_VarArgs.cpp \
 	$(CORE_DIR)/Source/Core/Core/HLE/HLE.cpp \
-	$(CORE_DIR)/Source/Core/Core/HotkeyManager.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/AddressSpace.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/AudioInterface.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/CPU.cpp \

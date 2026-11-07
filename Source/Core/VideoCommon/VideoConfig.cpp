@@ -22,7 +22,6 @@
 #include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/FramebufferManager.h"
-#include "VideoCommon/FreeLookCamera.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/ShaderGenCommon.h"
@@ -293,7 +292,6 @@ void CheckForConfigChanges()
   UpdateActiveConfig();
   g_vertex_manager->OnConfigChange();
 
-  g_freelook_camera.RefreshConfig();
 
   if (g_ActiveConfig.bGraphicMods && !old_graphics_mods_enabled)
   {

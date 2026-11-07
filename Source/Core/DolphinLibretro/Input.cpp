@@ -15,7 +15,6 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/WiimoteSettings.h"
 #include "Core/ConfigManager.h"
-#include "Core/FreeLookManager.h"
 #include "Core/HW/EXI/EXI.h"
 #include "Core/HW/EXI/EXI_Device.h"
 #include "Core/HW/EXI/EXI_DeviceMic.h"
@@ -637,7 +636,6 @@ void Init(const WindowSystemInfo& wsi)
   Pad::Initialize();
   Pad::InitializeGBA();
   Keyboard::Initialize();
-  FreeLook::Initialize();
 
   port_max = (Core::System::GetInstance().IsWii() &&
     Libretro::Options::GetCached<int>(Libretro::Options::sysconf::ALT_GC_PORTS_ON_WII)) ? 8 : 4;

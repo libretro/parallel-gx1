@@ -46,7 +46,6 @@
 #include "Core/CoreTiming.h"
 #include "Core/DSPEmulator.h"
 #include "Core/FifoPlayer/FifoPlayer.h"
-#include "Core/FreeLookManager.h"
 #include "Core/HLE/HLE.h"
 #include "Core/HW/CPU.h"
 #include "Core/HW/DSP.h"
@@ -505,8 +504,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
   }};
 
   // Wiimote input config is loaded in OnESTitleChanged
-
-  FreeLook::LoadInputConfig();
 
   HW::Init(system, nullptr);
 
