@@ -10,9 +10,6 @@
 #include "Common/Logging/Log.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
-#ifdef CIFACE_USE_ANDROID
-#include "InputCommon/ControllerInterface/Android/Android.h"
-#endif
 #ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
 #include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPClient.h"
 #endif

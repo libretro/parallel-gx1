@@ -109,10 +109,9 @@ void VideoBackend::FillBackendInfo()
   g_backend_info.bSupportsCoarseDerivatives = true;
   g_backend_info.bSupportsTextureQueryLevels = true;
   g_backend_info.bSupportsLodBiasInSampler = true;
-  if (Common::is_uwp())
-    g_backend_info.bSupportsLogicOp = false;
-  else
-    g_backend_info.bSupportsSettingObjectNames = true;
+  g_backend_info.bSupportsLogicOp =
+      !Common::is_uwp() && D3D::SupportsLogicOp(g_Config.iAdapter);
+  g_backend_info.bSupportsSettingObjectNames = true;
   g_backend_info.bSupportsPartialMultisampleResolve = true;
   g_backend_info.bSupportsDynamicVertexLoader = false;
   g_backend_info.bSupportsHDROutput = true;
