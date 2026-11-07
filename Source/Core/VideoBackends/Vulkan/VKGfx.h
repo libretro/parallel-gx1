@@ -25,62 +25,62 @@ class VKGfx final : public ::AbstractGfx
 {
 public:
   VKGfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale);
-  ~VKGfx() override;
+  ~VKGfx();
 
   static VKGfx* GetInstance() { return static_cast<VKGfx*>(g_gfx.get()); }
 
-  bool IsHeadless() const override;
+  bool IsHeadless() const;
 
   std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config,
-                                                 std::string_view name) override;
+                                                 std::string_view name);
   std::unique_ptr<AbstractStagingTexture>
-  CreateStagingTexture(StagingTextureType type, const TextureConfig& config) override;
+  CreateStagingTexture(StagingTextureType type, const TextureConfig& config);
   std::unique_ptr<AbstractFramebuffer>
   CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                    std::vector<AbstractTexture*> additional_color_attachments) override;
+                    std::vector<AbstractTexture*> additional_color_attachments);
 
   std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,
-                         std::string_view name) override;
+                         std::string_view name);
   std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,
-                                                         std::string_view name) override;
+                                                         std::string_view name);
   std::unique_ptr<NativeVertexFormat>
-  CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl) override;
+  CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl);
   std::unique_ptr<AbstractPipeline> CreatePipeline(const AbstractPipelineConfig& config,
                                                    const void* cache_data = nullptr,
-                                                   size_t cache_data_length = 0) override;
+                                                   size_t cache_data_length = 0);
 
 
-  void Flush() override;
-  void WaitForGPUIdle() override;
-  void OnConfigChanged(u32 bits) override;
+  void Flush();
+  void WaitForGPUIdle();
+  void OnConfigChanged(u32 bits);
 
   void ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_enable, bool alpha_enable,
-                   bool z_enable, u32 color, u32 z) override;
+                   bool z_enable, u32 color, u32 z);
 
-  void SetPipeline(const AbstractPipeline* pipeline) override;
-  void SetFramebuffer(AbstractFramebuffer* framebuffer) override;
-  void SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer) override;
+  void SetPipeline(const AbstractPipeline* pipeline);
+  void SetFramebuffer(AbstractFramebuffer* framebuffer);
+  void SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer);
   void SetAndClearFramebuffer(AbstractFramebuffer* framebuffer, const ClearColor& color_value = {},
-                              float depth_value = 0.0f) override;
-  void SetScissorRect(const MathUtil::Rectangle<int>& rc) override;
-  void SetTexture(u32 index, const AbstractTexture* texture) override;
-  void SetSamplerState(u32 index, const SamplerState& state) override;
-  void SetComputeImageTexture(u32 index, AbstractTexture* texture, bool read, bool write) override;
-  void UnbindTexture(const AbstractTexture* texture) override;
+                              float depth_value = 0.0f);
+  void SetScissorRect(const MathUtil::Rectangle<int>& rc);
+  void SetTexture(u32 index, const AbstractTexture* texture);
+  void SetSamplerState(u32 index, const SamplerState& state);
+  void SetComputeImageTexture(u32 index, AbstractTexture* texture, bool read, bool write);
+  void UnbindTexture(const AbstractTexture* texture);
   void SetViewport(float x, float y, float width, float height, float near_depth,
-                   float far_depth) override;
-  void Draw(u32 base_vertex, u32 num_vertices) override;
-  void DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex) override;
+                   float far_depth);
+  void Draw(u32 base_vertex, u32 num_vertices);
+  void DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex);
   void DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
-                             u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z) override;
-  bool BindBackbuffer(const ClearColor& clear_color = {}) override;
-  void PresentBackbuffer() override;
-  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height) override;
-  bool IsTextureHeld(const AbstractTexture* texture) override;
+                             u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z);
+  bool BindBackbuffer(const ClearColor& clear_color = {});
+  void PresentBackbuffer();
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height);
+  bool IsTextureHeld(const AbstractTexture* texture);
 
-  SurfaceInfo GetSurfaceInfo() const override;
+  SurfaceInfo GetSurfaceInfo() const;
 
   // Completes the current render pass, executes the command buffer, and restores state ready for
   // next render. Use when you want to kick the current buffer to make room for new data.

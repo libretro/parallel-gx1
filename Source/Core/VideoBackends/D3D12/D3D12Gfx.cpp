@@ -144,7 +144,7 @@ void Gfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_enab
 
   // Anything left over, fall back to clear triangle.
   if (color_enable || alpha_enable || z_enable)
-    ::AbstractGfx::ClearRegion(target_rc, color_enable, alpha_enable, z_enable, color, z);
+    BaseClearRegion(target_rc, color_enable, alpha_enable, z_enable, color, z);
 }
 
 void Gfx::SetPipeline(const AbstractPipeline* pipeline)
@@ -408,7 +408,7 @@ SurfaceInfo Gfx::GetSurfaceInfo() const
 
 void Gfx::OnConfigChanged(u32 bits)
 {
-  AbstractGfx::OnConfigChanged(bits);
+  BaseOnConfigChanged(bits);
 
   // Wipe sampler cache if force texture filtering or anisotropy changes.
   if (bits & (CONFIG_CHANGE_BIT_ANISOTROPY | CONFIG_CHANGE_BIT_FORCE_TEXTURE_FILTERING))

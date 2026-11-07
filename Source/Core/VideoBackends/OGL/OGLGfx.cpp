@@ -436,7 +436,7 @@ void OGLGfx::PresentBackbuffer()
 
 void OGLGfx::OnConfigChanged(u32 bits)
 {
-  AbstractGfx::OnConfigChanged(bits);
+  BaseOnConfigChanged(bits);
 
   if (bits & CONFIG_CHANGE_BIT_VSYNC && !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VSYNC))
     m_main_gl_context->SwapInterval(g_ActiveConfig.bVSyncActive);
@@ -459,7 +459,7 @@ void OGLGfx::WaitForGPUIdle()
 
 void OGLGfx::BeginUtilityDrawing()
 {
-  AbstractGfx::BeginUtilityDrawing();
+  BaseBeginUtilityDrawing();
   if (g_backend_info.bSupportsDepthClamp)
   {
     glDisable(GL_CLIP_DISTANCE0);
@@ -469,7 +469,7 @@ void OGLGfx::BeginUtilityDrawing()
 
 void OGLGfx::EndUtilityDrawing()
 {
-  AbstractGfx::EndUtilityDrawing();
+  BaseEndUtilityDrawing();
   if (g_backend_info.bSupportsDepthClamp)
   {
     glEnable(GL_CLIP_DISTANCE0);

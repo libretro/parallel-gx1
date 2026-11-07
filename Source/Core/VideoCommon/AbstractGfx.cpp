@@ -21,17 +21,12 @@ AbstractGfx::AbstractGfx()
       GetVideoEvents().config_changed_event.Register([this](u32 bits) { OnConfigChanged(bits); });
 }
 
-bool AbstractGfx::IsHeadless() const
-{
-  return true;
-}
-
-void AbstractGfx::BeginUtilityDrawing()
+void AbstractGfx::BaseBeginUtilityDrawing()
 {
   g_vertex_manager->Flush();
 }
 
-void AbstractGfx::EndUtilityDrawing()
+void AbstractGfx::BaseEndUtilityDrawing()
 {
   // Reset framebuffer. Pipeline will be reset at next draw.
   g_framebuffer_manager->BindEFBFramebuffer();
@@ -44,23 +39,23 @@ void AbstractGfx::EndUtilityDrawing()
   SetScissorRect(m_viewport_and_scissor.scissor_rect);
 }
 
-void AbstractGfx::SetFramebuffer(AbstractFramebuffer* framebuffer)
+void AbstractGfx::BaseSetFramebuffer(AbstractFramebuffer* framebuffer)
 {
   m_current_framebuffer = framebuffer;
 }
 
-void AbstractGfx::SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer)
+void AbstractGfx::BaseSetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer)
 {
   m_current_framebuffer = framebuffer;
 }
 
-void AbstractGfx::SetAndClearFramebuffer(AbstractFramebuffer* framebuffer,
-                                         const ClearColor& color_value, float depth_value)
+void AbstractGfx::BaseSetAndClearFramebuffer(AbstractFramebuffer* framebuffer,
+                                             const ClearColor& color_value, float depth_value)
 {
   m_current_framebuffer = framebuffer;
 }
 
-void AbstractGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable,
+void AbstractGfx::BaseClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable,
                               bool alphaEnable, bool zEnable, u32 color, u32 z)
 {
   // This is a generic fallback for any ClearRegion operations that backends don't support.
@@ -105,7 +100,7 @@ void AbstractGfx::SetViewportAndScissor(const MathUtil::Rectangle<int>& rect, fl
   SetScissorRect(rect);
 }
 
-void AbstractGfx::ScaleTexture(AbstractFramebuffer* dst_framebuffer,
+void AbstractGfx::BaseScaleTexture(AbstractFramebuffer* dst_framebuffer,
                                const MathUtil::Rectangle<int>& dst_rect,
                                const AbstractTexture* src_texture,
                                const MathUtil::Rectangle<int>& src_rect)
@@ -167,12 +162,12 @@ AbstractGfx::ConvertFramebufferRectangle(const MathUtil::Rectangle<int>& rect, u
   return ret;
 }
 
-std::unique_ptr<VideoCommon::AsyncShaderCompiler> AbstractGfx::CreateAsyncShaderCompiler()
+std::unique_ptr<VideoCommon::AsyncShaderCompiler> AbstractGfx::BaseCreateAsyncShaderCompiler()
 {
   return std::make_unique<VideoCommon::AsyncShaderCompiler>();
 }
 
-void AbstractGfx::OnConfigChanged(u32 changed_bits)
+void AbstractGfx::BaseOnConfigChanged(u32 changed_bits)
 {
   // If there's any shader changes, wait for the GPU to finish before destroying anything.
   if (changed_bits & (CONFIG_CHANGE_BIT_HOST_CONFIG | CONFIG_CHANGE_BIT_MULTISAMPLES))

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "VideoCommon/AbstractDeleters.h"
+
 #include "Common/HookableEvent.h"
 #include "Common/MathUtil.h"
 
@@ -50,53 +52,45 @@ class AbstractGfx
 {
 public:
   AbstractGfx();
-  virtual ~AbstractGfx() = default;
 
-  virtual bool IsHeadless() const = 0;
+  bool IsHeadless() const;
 
   // Does the backend support drawing a UI or doing post-processing
-  virtual bool SupportsUtilityDrawing() const { return true; }
+  bool SupportsUtilityDrawing() const;
 
-  virtual void SetPipeline(const AbstractPipeline* pipeline) {}
-  virtual void SetScissorRect(const MathUtil::Rectangle<int>& rc) {}
-  virtual void SetTexture(u32 index, const AbstractTexture* texture) {}
-  virtual void SetSamplerState(u32 index, const SamplerState& state) {}
-  virtual void SetComputeImageTexture(u32 index, AbstractTexture* texture, bool read, bool write) {}
-  virtual void UnbindTexture(const AbstractTexture* texture) {}
-  virtual void SetViewport(float x, float y, float width, float height, float near_depth,
-                           float far_depth)
-  {
-  }
-  virtual void SetFullscreen(bool enable_fullscreen) {}
-  virtual bool IsFullscreen() const { return false; }
-  virtual void BeginUtilityDrawing();
-  virtual void EndUtilityDrawing();
-  virtual std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config,
-                                                         std::string_view name = "") = 0;
-  virtual std::unique_ptr<AbstractStagingTexture>
-  CreateStagingTexture(StagingTextureType type, const TextureConfig& config) = 0;
-  virtual std::unique_ptr<AbstractFramebuffer>
+  void SetPipeline(const AbstractPipeline* pipeline);
+  void SetScissorRect(const MathUtil::Rectangle<int>& rc);
+  void SetTexture(u32 index, const AbstractTexture* texture);
+  void SetSamplerState(u32 index, const SamplerState& state);
+  void SetComputeImageTexture(u32 index, AbstractTexture* texture, bool read, bool write);
+  void UnbindTexture(const AbstractTexture* texture);
+  void SetViewport(float x, float y, float width, float height, float near_depth, float far_depth);
+  void BeginUtilityDrawing();
+  void EndUtilityDrawing();
+  std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config,
+                                                 std::string_view name = "");
+  std::unique_ptr<AbstractStagingTexture> CreateStagingTexture(StagingTextureType type,
+                                                               const TextureConfig& config);
+  std::unique_ptr<AbstractFramebuffer>
   CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                    std::vector<AbstractTexture*> additional_color_attachments = {}) = 0;
+                    std::vector<AbstractTexture*> additional_color_attachments = {});
 
   // Framebuffer operations.
-  virtual void SetFramebuffer(AbstractFramebuffer* framebuffer);
-  virtual void SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer);
-  virtual void SetAndClearFramebuffer(AbstractFramebuffer* framebuffer,
-                                      const ClearColor& color_value = {}, float depth_value = 0.0f);
+  void SetFramebuffer(AbstractFramebuffer* framebuffer);
+  void SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer);
+  void SetAndClearFramebuffer(AbstractFramebuffer* framebuffer, const ClearColor& color_value = {},
+                              float depth_value = 0.0f);
 
-  virtual void ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable,
-                           bool alphaEnable, bool zEnable, u32 color, u32 z);
+  void ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable, bool alphaEnable,
+                   bool zEnable, u32 color, u32 z);
 
   // Drawing with currently-bound pipeline state.
-  virtual void Draw(u32 base_vertex, u32 num_vertices) {}
-  virtual void DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex) {}
+  void Draw(u32 base_vertex, u32 num_vertices);
+  void DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex);
 
   // Dispatching compute shaders with currently-bound state.
-  virtual void DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
-                                     u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z)
-  {
-  }
+  void DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
+                             u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z);
 
   // Binds the backbuffer for rendering. The buffer will be cleared immediately after binding.
   // This is where any window size changes are detected, therefore m_backbuffer_width and/or
@@ -104,35 +98,30 @@ public:
   // If this returns false, a problem occurred binding the backbuffer.
   // Don't render anything to it, but still call `PresentBackbuffer`, which will reset any
   // per-frame resources and prepare for the next frame.
-  virtual bool BindBackbuffer(const ClearColor& clear_color = {}) { return true; }
+  bool BindBackbuffer(const ClearColor& clear_color = {});
 
   // Presents the backbuffer to the window system, or "swaps buffers".
-  virtual void PresentBackbuffer() {}
+  void PresentBackbuffer();
 
   /* Presents the top-left width x height of a texture as the picture, in
    * place of BindBackbuffer, a draw and PresentBackbuffer; false when the
    * backend cannot, and nothing was done. */
-  virtual bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
-  {
-    return false;
-  }
+  bool PresentTexture(const AbstractTexture* texture, u32 width, u32 height);
 
   /* Whether a texture given to PresentTexture may still be read by whoever
    * shows the pictures; kept alive by the caller until it is not. */
-  virtual bool IsTextureHeld(const AbstractTexture* texture) { return false; }
+  bool IsTextureHeld(const AbstractTexture* texture);
 
   // Shader modules/objects.
-  virtual std::unique_ptr<AbstractShader>
-  CreateShaderFromSource(ShaderStage stage, std::string_view source,
-                         std::string_view name = "") = 0;
-  virtual std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage,
-                                                                 const void* data, size_t length,
-                                                                 std::string_view name = "") = 0;
-  virtual std::unique_ptr<NativeVertexFormat>
-  CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl) = 0;
-  virtual std::unique_ptr<AbstractPipeline> CreatePipeline(const AbstractPipelineConfig& config,
-                                                           const void* cache_data = nullptr,
-                                                           size_t cache_data_length = 0) = 0;
+  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, std::string_view source,
+                                                         std::string_view name = "");
+  std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
+                                                         size_t length, std::string_view name = "");
+  std::unique_ptr<NativeVertexFormat>
+  CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl);
+  std::unique_ptr<AbstractPipeline> CreatePipeline(const AbstractPipelineConfig& config,
+                                                   const void* cache_data = nullptr,
+                                                   size_t cache_data_length = 0);
 
   AbstractFramebuffer* GetCurrentFramebuffer() const { return m_current_framebuffer; }
 
@@ -156,10 +145,8 @@ public:
                              float max_depth = 1.0f);
 
   // Scales a GPU texture using a copy shader.
-  virtual void ScaleTexture(AbstractFramebuffer* dst_framebuffer,
-                            const MathUtil::Rectangle<int>& dst_rect,
-                            const AbstractTexture* src_texture,
-                            const MathUtil::Rectangle<int>& src_rect);
+  void ScaleTexture(AbstractFramebuffer* dst_framebuffer, const MathUtil::Rectangle<int>& dst_rect,
+                    const AbstractTexture* src_texture, const MathUtil::Rectangle<int>& src_rect);
 
   // Converts an upper-left to lower-left if required by the backend, optionally
   // clamping to the framebuffer size.
@@ -169,33 +156,46 @@ public:
   ConvertFramebufferRectangle(const MathUtil::Rectangle<int>& rect,
                               const AbstractFramebuffer* framebuffer) const;
 
-  virtual void Flush() {}
-  virtual void WaitForGPUIdle() {}
+  void Flush();
+  void WaitForGPUIdle();
 
   // For opengl's glDrawBuffer
-  virtual void SelectLeftBuffer() {}
-  virtual void SelectRightBuffer() {}
-  virtual void SelectMainBuffer() {}
+  void SelectLeftBuffer();
+  void SelectRightBuffer();
+  void SelectMainBuffer();
 
   // A simple presentation fallback, only used by video software
-  virtual void ShowImage(const AbstractTexture* source_texture,
-                         const MathUtil::Rectangle<int>& source_rc)
-  {
-  }
+  void ShowImage(const AbstractTexture* source_texture, const MathUtil::Rectangle<int>& source_rc);
 
-  virtual std::unique_ptr<VideoCommon::AsyncShaderCompiler> CreateAsyncShaderCompiler();
+  std::unique_ptr<VideoCommon::AsyncShaderCompiler> CreateAsyncShaderCompiler();
 
   // Called when the configuration changes, and backend structures need to be updated.
-  virtual void OnConfigChanged(u32 changed_bits);
+  void OnConfigChanged(u32 changed_bits);
 
   // Returns true if a layer-expanding geometry shader should be used when rendering
   // the user interface on the output buffer.
   bool UseGeometryShaderForUI() const;
 
   // Returns info about the main surface (aka backbuffer)
-  virtual SurfaceInfo GetSurfaceInfo() const = 0;
+  SurfaceInfo GetSurfaceInfo() const;
 
 protected:
+  // What a backend's Gfx does not do itself; it may also call these from its own.
+  void BaseBeginUtilityDrawing();
+  void BaseEndUtilityDrawing();
+  void BaseSetFramebuffer(AbstractFramebuffer* framebuffer);
+  void BaseSetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer);
+  void BaseSetAndClearFramebuffer(AbstractFramebuffer* framebuffer, const ClearColor& color_value,
+                                  float depth_value);
+  void BaseClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable,
+                       bool alphaEnable, bool zEnable, u32 color, u32 z);
+  void BaseScaleTexture(AbstractFramebuffer* dst_framebuffer,
+                        const MathUtil::Rectangle<int>& dst_rect,
+                        const AbstractTexture* src_texture,
+                        const MathUtil::Rectangle<int>& src_rect);
+  std::unique_ptr<VideoCommon::AsyncShaderCompiler> BaseCreateAsyncShaderCompiler();
+  void BaseOnConfigChanged(u32 changed_bits);
+
   AbstractFramebuffer* m_current_framebuffer = nullptr;
   const AbstractPipeline* m_current_pipeline = nullptr;
 

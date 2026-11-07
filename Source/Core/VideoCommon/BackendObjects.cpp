@@ -237,27 +237,33 @@ void AbstractTexture::CopyRectangleFromTexture(const AbstractTexture* src,
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
-    static_cast<Null::NullTexture*>(this)->CopyRectangleFromTexture(src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
+    static_cast<Null::NullTexture*>(this)->CopyRectangleFromTexture(
+        src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
     return;
   case VIDEO_BACKEND_SOFTWARE:
-    static_cast<SW::SWTexture*>(this)->CopyRectangleFromTexture(src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
+    static_cast<SW::SWTexture*>(this)->CopyRectangleFromTexture(src, src_rect, src_layer, src_level,
+                                                                dst_rect, dst_layer, dst_level);
     return;
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
-    static_cast<OGL::OGLTexture*>(this)->CopyRectangleFromTexture(src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
+    static_cast<OGL::OGLTexture*>(this)->CopyRectangleFromTexture(
+        src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
     return;
 #endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
-    static_cast<Vulkan::VKTexture*>(this)->CopyRectangleFromTexture(src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
+    static_cast<Vulkan::VKTexture*>(this)->CopyRectangleFromTexture(
+        src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
     return;
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
-    static_cast<DX11::DXTexture*>(this)->CopyRectangleFromTexture(src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
+    static_cast<DX11::DXTexture*>(this)->CopyRectangleFromTexture(
+        src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
     return;
   case VIDEO_BACKEND_D3D12:
-    static_cast<DX12::DXTexture*>(this)->CopyRectangleFromTexture(src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
+    static_cast<DX12::DXTexture*>(this)->CopyRectangleFromTexture(
+        src, src_rect, src_layer, src_level, dst_rect, dst_layer, dst_level);
     return;
 #endif
   default:
@@ -266,8 +272,7 @@ void AbstractTexture::CopyRectangleFromTexture(const AbstractTexture* src,
 }
 
 void AbstractTexture::ResolveFromTexture(const AbstractTexture* src,
-                                         const MathUtil::Rectangle<int>& rect, u32 layer,
-                                         u32 level)
+                                         const MathUtil::Rectangle<int>& rect, u32 layer, u32 level)
 {
   switch (g_video_backend_kind)
   {
@@ -300,33 +305,39 @@ void AbstractTexture::ResolveFromTexture(const AbstractTexture* src,
   }
 }
 
-void AbstractTexture::Load(u32 level, u32 width, u32 height, u32 row_length,
-                           const u8* buffer, size_t buffer_size, u32 layer)
+void AbstractTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer,
+                           size_t buffer_size, u32 layer)
 {
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
-    static_cast<Null::NullTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size, layer);
+    static_cast<Null::NullTexture*>(this)->Load(level, width, height, row_length, buffer,
+                                                buffer_size, layer);
     return;
   case VIDEO_BACKEND_SOFTWARE:
-    static_cast<SW::SWTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size, layer);
+    static_cast<SW::SWTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size,
+                                            layer);
     return;
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
-    static_cast<OGL::OGLTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size, layer);
+    static_cast<OGL::OGLTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size,
+                                              layer);
     return;
 #endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
-    static_cast<Vulkan::VKTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size, layer);
+    static_cast<Vulkan::VKTexture*>(this)->Load(level, width, height, row_length, buffer,
+                                                buffer_size, layer);
     return;
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
-    static_cast<DX11::DXTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size, layer);
+    static_cast<DX11::DXTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size,
+                                              layer);
     return;
   case VIDEO_BACKEND_D3D12:
-    static_cast<DX12::DXTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size, layer);
+    static_cast<DX12::DXTexture*>(this)->Load(level, width, height, row_length, buffer, buffer_size,
+                                              layer);
     return;
 #endif
   default:
@@ -397,27 +408,33 @@ void AbstractStagingTexture::CopyFromTexture(const AbstractTexture* src,
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
-    static_cast<Null::NullStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level, dst_rect);
+    static_cast<Null::NullStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer,
+                                                                  src_level, dst_rect);
     return;
   case VIDEO_BACKEND_SOFTWARE:
-    static_cast<SW::SWStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level, dst_rect);
+    static_cast<SW::SWStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level,
+                                                              dst_rect);
     return;
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
-    static_cast<OGL::OGLStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level, dst_rect);
+    static_cast<OGL::OGLStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level,
+                                                                dst_rect);
     return;
 #endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
-    static_cast<Vulkan::VKStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level, dst_rect);
+    static_cast<Vulkan::VKStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer,
+                                                                  src_level, dst_rect);
     return;
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
-    static_cast<DX11::DXStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level, dst_rect);
+    static_cast<DX11::DXStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level,
+                                                                dst_rect);
     return;
   case VIDEO_BACKEND_D3D12:
-    static_cast<DX12::DXStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level, dst_rect);
+    static_cast<DX12::DXStagingTexture*>(this)->CopyFromTexture(src, src_rect, src_layer, src_level,
+                                                                dst_rect);
     return;
 #endif
   default:
@@ -427,33 +444,39 @@ void AbstractStagingTexture::CopyFromTexture(const AbstractTexture* src,
 
 void AbstractStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect,
                                            AbstractTexture* dst,
-                                           const MathUtil::Rectangle<int>& dst_rect,
-                                           u32 dst_layer, u32 dst_level)
+                                           const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
+                                           u32 dst_level)
 {
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
-    static_cast<Null::NullStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer, dst_level);
+    static_cast<Null::NullStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer,
+                                                                dst_level);
     return;
   case VIDEO_BACKEND_SOFTWARE:
-    static_cast<SW::SWStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer, dst_level);
+    static_cast<SW::SWStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer,
+                                                            dst_level);
     return;
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
-    static_cast<OGL::OGLStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer, dst_level);
+    static_cast<OGL::OGLStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer,
+                                                              dst_level);
     return;
 #endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
-    static_cast<Vulkan::VKStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer, dst_level);
+    static_cast<Vulkan::VKStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer,
+                                                                dst_level);
     return;
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
-    static_cast<DX11::DXStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer, dst_level);
+    static_cast<DX11::DXStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer,
+                                                              dst_level);
     return;
   case VIDEO_BACKEND_D3D12:
-    static_cast<DX12::DXStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer, dst_level);
+    static_cast<DX12::DXStagingTexture*>(this)->CopyToTexture(src_rect, dst, dst_rect, dst_layer,
+                                                              dst_level);
     return;
 #endif
   default:

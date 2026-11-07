@@ -206,7 +206,7 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
   if (!color_enable && !alpha_enable && !z_enable)
     return;
 
-  AbstractGfx::ClearRegion(target_rc, color_enable, alpha_enable, z_enable, color, z);
+  BaseClearRegion(target_rc, color_enable, alpha_enable, z_enable, color, z);
 }
 
 void VKGfx::Flush()
@@ -273,7 +273,7 @@ void VKGfx::ExecuteCommandBuffer(bool submit_off_thread, bool wait_for_completio
 
 void VKGfx::OnConfigChanged(u32 bits)
 {
-  AbstractGfx::OnConfigChanged(bits);
+  BaseOnConfigChanged(bits);
 
   if (bits & CONFIG_CHANGE_BIT_HOST_CONFIG)
     g_object_cache->ReloadPipelineCache();

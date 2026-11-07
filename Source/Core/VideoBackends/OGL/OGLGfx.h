@@ -18,62 +18,62 @@ class OGLGfx final : public AbstractGfx
 {
 public:
   OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scale);
-  ~OGLGfx() override;
+  ~OGLGfx();
 
-  bool IsHeadless() const override;
+  bool IsHeadless() const;
 
   std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config,
-                                                 std::string_view name) override;
+                                                 std::string_view name);
   std::unique_ptr<AbstractStagingTexture>
-  CreateStagingTexture(StagingTextureType type, const TextureConfig& config) override;
+  CreateStagingTexture(StagingTextureType type, const TextureConfig& config);
   std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,
-                         std::string_view name) override;
+                         std::string_view name);
   std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,
-                                                         std::string_view name) override;
+                                                         std::string_view name);
   std::unique_ptr<NativeVertexFormat>
-  CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl) override;
+  CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl);
   std::unique_ptr<AbstractPipeline> CreatePipeline(const AbstractPipelineConfig& config,
                                                    const void* cache_data = nullptr,
-                                                   size_t cache_data_length = 0) override;
+                                                   size_t cache_data_length = 0);
   std::unique_ptr<AbstractFramebuffer>
   CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                    std::vector<AbstractTexture*> additional_color_attachments) override;
+                    std::vector<AbstractTexture*> additional_color_attachments);
 
-  void SetPipeline(const AbstractPipeline* pipeline) override;
-  void SetFramebuffer(AbstractFramebuffer* framebuffer) override;
-  void SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer) override;
+  void SetPipeline(const AbstractPipeline* pipeline);
+  void SetFramebuffer(AbstractFramebuffer* framebuffer);
+  void SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer);
   void SetAndClearFramebuffer(AbstractFramebuffer* framebuffer, const ClearColor& color_value = {},
-                              float depth_value = 0.0f) override;
+                              float depth_value = 0.0f);
   void ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable, bool alphaEnable,
-                   bool zEnable, u32 color, u32 z) override;
-  void SetScissorRect(const MathUtil::Rectangle<int>& rc) override;
-  void SetTexture(u32 index, const AbstractTexture* texture) override;
-  void SetSamplerState(u32 index, const SamplerState& state) override;
-  void SetComputeImageTexture(u32 index, AbstractTexture* texture, bool read, bool write) override;
-  void UnbindTexture(const AbstractTexture* texture) override;
+                   bool zEnable, u32 color, u32 z);
+  void SetScissorRect(const MathUtil::Rectangle<int>& rc);
+  void SetTexture(u32 index, const AbstractTexture* texture);
+  void SetSamplerState(u32 index, const SamplerState& state);
+  void SetComputeImageTexture(u32 index, AbstractTexture* texture, bool read, bool write);
+  void UnbindTexture(const AbstractTexture* texture);
   void SetViewport(float x, float y, float width, float height, float near_depth,
-                   float far_depth) override;
-  void Draw(u32 base_vertex, u32 num_vertices) override;
-  void DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex) override;
+                   float far_depth);
+  void Draw(u32 base_vertex, u32 num_vertices);
+  void DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex);
   void DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
-                             u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z) override;
-  bool BindBackbuffer(const ClearColor& clear_color = {}) override;
-  void PresentBackbuffer() override;
+                             u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z);
+  bool BindBackbuffer(const ClearColor& clear_color = {});
+  void PresentBackbuffer();
 
-  void BeginUtilityDrawing() override;
-  void EndUtilityDrawing() override;
+  void BeginUtilityDrawing();
+  void EndUtilityDrawing();
 
-  void Flush() override;
-  void WaitForGPUIdle() override;
-  void OnConfigChanged(u32 bits) override;
+  void Flush();
+  void WaitForGPUIdle();
+  void OnConfigChanged(u32 bits);
 
-  void SelectLeftBuffer() override;
-  void SelectRightBuffer() override;
-  void SelectMainBuffer() override;
+  void SelectLeftBuffer();
+  void SelectRightBuffer();
+  void SelectMainBuffer();
 
-  std::unique_ptr<VideoCommon::AsyncShaderCompiler> CreateAsyncShaderCompiler() override;
+  std::unique_ptr<VideoCommon::AsyncShaderCompiler> CreateAsyncShaderCompiler();
 
   // Only call methods from this on the GPU thread.
   GLContext* GetMainGLContext() const { return m_main_gl_context.get(); }
@@ -92,7 +92,7 @@ public:
   // Restores FBO binding after it's been changed.
   void RestoreFramebufferBinding();
 
-  SurfaceInfo GetSurfaceInfo() const override;
+  SurfaceInfo GetSurfaceInfo() const;
 
   void SetSystemFrameBuffer(GLuint fbo)
   {
