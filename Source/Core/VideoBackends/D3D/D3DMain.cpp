@@ -37,39 +37,9 @@ std::string VideoBackend::GetDisplayName() const
   return _trans("Direct3D 11");
 }
 
-std::optional<std::string> VideoBackend::GetWarningMessage() const
-{
-  std::optional<std::string> result;
-
-  // If relevant, show a warning about partial DX11.1 support
-  // This is being called BEFORE FillBackendInfo is called for this backend,
-  // so query for logic op support manually
-  bool supportsLogicOp = false;
-  if (D3DCommon::LoadLibraries())
-  {
-    supportsLogicOp = D3D::SupportsLogicOp(g_Config.iAdapter);
-    D3DCommon::UnloadLibraries();
-  }
-
-  if (!supportsLogicOp)
-  {
-    result = _trans("The Direct3D 11 renderer requires support for features not supported by your "
-                    "system configuration. You may still use this backend, but you will encounter "
-                    "graphical artifacts in certain games.\n"
-                    "\n"
-                    "Do you really want to switch to Direct3D 11? If unsure, select 'No'.");
-  }
-
-  return result;
-}
-
 void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
 {
-  if (!D3DCommon::LoadLibraries())
-    return;
-
   FillBackendInfo();
-  D3DCommon::UnloadLibraries();
 }
 
 void VideoBackend::FillBackendInfo()
@@ -109,15 +79,19 @@ void VideoBackend::FillBackendInfo()
   g_backend_info.bSupportsCoarseDerivatives = true;
   g_backend_info.bSupportsTextureQueryLevels = true;
   g_backend_info.bSupportsLodBiasInSampler = true;
-  g_backend_info.bSupportsLogicOp =
-      !Common::is_uwp() && D3D::SupportsLogicOp(g_Config.iAdapter);
+  g_backend_info.bSupportsLogicOp = !Common::is_uwp() && D3D::device1 && D3D::SupportsLogicOp();
   g_backend_info.bSupportsSettingObjectNames = true;
   g_backend_info.bSupportsPartialMultisampleResolve = true;
   g_backend_info.bSupportsDynamicVertexLoader = false;
   g_backend_info.bSupportsHDROutput = true;
 
-  g_backend_info.Adapters = D3DCommon::GetAdapterNames();
-  g_backend_info.AAModes = D3D::GetAAModes(g_Config.iAdapter);
+  // The frontend picks the adapter and hands over its device: until then,
+  // the counts every D3D11 device has, narrowed to the device's own after.
+  g_backend_info.Adapters.clear();
+  if (D3D::device)
+    g_backend_info.AAModes = D3D::GetAAModes();
+  else
+    g_backend_info.AAModes = {1, 2, 4, 8};
 
   // Override optional features if we are actually booting.
   if (D3D::device)

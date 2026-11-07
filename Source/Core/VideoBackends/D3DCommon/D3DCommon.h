@@ -11,22 +11,10 @@
 
 #include "Common/CommonTypes.h"
 
-struct IDXGIFactory;
-
 enum class AbstractTextureFormat : u32;
 
 namespace D3DCommon
 {
-// Loading dxgi.dll
-bool LoadLibraries();
-void UnloadLibraries();
-
-// Returns a list of D3D device names.
-std::vector<std::string> GetAdapterNames();
-
-// Helper function which creates a DXGI factory.
-Microsoft::WRL::ComPtr<IDXGIFactory> CreateDXGIFactory(bool debug_device);
-
 // Helpers for texture format conversion.
 DXGI_FORMAT GetDXGIFormatForAbstractFormat(AbstractTextureFormat format, bool typeless);
 DXGI_FORMAT GetSRVFormatForAbstractFormat(AbstractTextureFormat format);

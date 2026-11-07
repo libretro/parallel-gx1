@@ -51,12 +51,12 @@ public:
   ~DXContext();
 
   // Returns a list of AA modes.
-  static std::vector<u32> GetAAModes(u32 adapter_index);
+  // The AA modes the frontend's device supports.
+  std::vector<u32> GetAAModes();
 
   // Destroys active context.
   static void Destroy();
 
-  IDXGIFactory* GetDXGIFactory() const { return m_dxgi_factory.Get(); }
   ID3D12Device* GetDevice() const { return m_device.Get(); }
   ID3D12CommandQueue* GetCommandQueue() const { return m_command_queue.Get(); }
 
@@ -172,7 +172,6 @@ private:
   void MoveToNextCommandList();
   void DestroyPendingResources(CommandListResources& cmdlist);
 
-  ComPtr<IDXGIFactory> m_dxgi_factory;
   ComPtr<ID3D12Device> m_device;
   ComPtr<ID3D12CommandQueue> m_command_queue;
 

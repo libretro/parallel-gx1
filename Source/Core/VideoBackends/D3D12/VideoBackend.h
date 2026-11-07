@@ -21,6 +21,9 @@ public:
 
   static constexpr const char* CONFIG_NAME = "D3D12";
 
+  // Again, from the frontend's device once the context has it.
+  void FillD3D12BackendInfo() { FillBackendInfo(); }
+
 private:
   void FillBackendInfo();
 };

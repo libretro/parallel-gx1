@@ -35,35 +35,9 @@ DXContext::~DXContext()
     CloseHandle(m_fence_event);
 }
 
-std::vector<u32> DXContext::GetAAModes(u32 adapter_index)
+std::vector<u32> DXContext::GetAAModes()
 {
-  // Use a temporary device if we aren't booting.
-  Common::DynamicLibrary temp_lib;
-  ComPtr<ID3D12Device> temp_device = g_dx_context ? g_dx_context->m_device : nullptr;
-  if (!temp_device)
-  {
-    ComPtr<IDXGIFactory> temp_dxgi_factory = D3DCommon::CreateDXGIFactory(false);
-    if (!temp_dxgi_factory)
-      return {};
-
-    ComPtr<IDXGIAdapter> adapter;
-    HRESULT hr = temp_dxgi_factory->EnumAdapters(adapter_index, &adapter);
-
-    if (!SUCCEEDED(hr))
-      return {};
-
-    PFN_D3D12_CREATE_DEVICE d3d12_create_device;
-    if (!temp_lib.Open("d3d12.dll") ||
-        !temp_lib.GetSymbol("D3D12CreateDevice", &d3d12_create_device))
-    {
-      return {};
-    }
-
-    hr = d3d12_create_device(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&temp_device));
-    if (!SUCCEEDED(hr))
-      return {};
-  }
-
+  ID3D12Device* const device = m_device.Get();
   const DXGI_FORMAT target_format =
       D3DCommon::GetDXGIFormatForAbstractFormat(FramebufferManager::GetEFBColorFormat(), false);
   std::vector<u32> aa_modes;
@@ -73,9 +47,8 @@ std::vector<u32> DXContext::GetAAModes(u32 adapter_index)
     multisample_quality_levels.Format = target_format;
     multisample_quality_levels.SampleCount = samples;
 
-    temp_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-                                     &multisample_quality_levels,
-                                     sizeof(multisample_quality_levels));
+    device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                                &multisample_quality_levels, sizeof(multisample_quality_levels));
 
     if (multisample_quality_levels.NumQualityLevels > 0)
       aa_modes.push_back(samples);
@@ -110,7 +83,6 @@ void DXContext::Destroy()
 
   s_d3d12_serialize_root_signature = nullptr;
   s_d3d12_library.Close();
-  D3DCommon::UnloadLibraries();
 }
 
 bool DXContext::CreateFence()
@@ -495,12 +467,6 @@ bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueu
     return false;
   }
 
-  if (!D3DCommon::LoadLibraries())
-  {
-    s_d3d12_library.Close();
-    return false;
-  }
-
   g_dx_context.reset(new DXContext());
 
   device->AddRef();
@@ -508,14 +474,6 @@ bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueu
 
   queue->AddRef();
   g_dx_context->m_command_queue.Attach(queue);
-
-  g_dx_context->m_dxgi_factory = D3DCommon::CreateDXGIFactory(false);
-  if (!g_dx_context->m_dxgi_factory)
-  {
-    ERROR_LOG_FMT(VIDEO, "Failed to create DXGI factory");
-    Destroy();
-    return false;
-  }
 
   if (!g_dx_context->CreateFence())
   {

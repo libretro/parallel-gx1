@@ -9,8 +9,6 @@
 #include <wrl/client.h>
 
 #include "Common/Assert.h"
-#include "Common/DynamicLibrary.h"
-#include "Common/HRWrap.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 
@@ -19,97 +17,6 @@
 
 namespace D3DCommon
 {
-static Common::DynamicLibrary s_dxgi_library;
-static bool s_libraries_loaded = false;
-
-static HRESULT (*create_dxgi_factory)(REFIID riid, _COM_Outptr_ void** ppFactory);
-static HRESULT (*create_dxgi_factory2)(UINT Flags, REFIID riid, void** ppFactory);
-
-bool LoadLibraries()
-{
-  if (s_libraries_loaded)
-    return true;
-
-  if (!s_dxgi_library.Open("dxgi.dll"))
-  {
-    PanicAlertFmtT("Failed to load dxgi.dll");
-    return false;
-  }
-
-  // Required symbols.
-  if (!s_dxgi_library.GetSymbol("CreateDXGIFactory", &create_dxgi_factory))
-  {
-    PanicAlertFmtT("Failed to find one or more D3D symbols");
-    s_dxgi_library.Close();
-    return false;
-  }
-
-  // Optional symbols.
-  s_dxgi_library.GetSymbol("CreateDXGIFactory2", &create_dxgi_factory2);
-  s_libraries_loaded = true;
-  return true;
-}
-
-void UnloadLibraries()
-{
-  create_dxgi_factory = nullptr;
-  create_dxgi_factory2 = nullptr;
-  s_dxgi_library.Close();
-  s_libraries_loaded = false;
-}
-
-Microsoft::WRL::ComPtr<IDXGIFactory> CreateDXGIFactory(bool debug_device)
-{
-  Microsoft::WRL::ComPtr<IDXGIFactory> factory;
-
-  // Use Win8.1 version if available.
-  if (create_dxgi_factory2 &&
-      SUCCEEDED(create_dxgi_factory2(debug_device ? DXGI_CREATE_FACTORY_DEBUG : 0,
-                                     IID_PPV_ARGS(&factory))))
-  {
-    return factory;
-  }
-
-  // Fallback to original version, without debug support.
-  HRESULT hr = create_dxgi_factory(IID_PPV_ARGS(&factory));
-  if (FAILED(hr))
-  {
-    PanicAlertFmt("CreateDXGIFactory() failed: {}", Common::HRWrap(hr));
-    return nullptr;
-  }
-
-  return factory;
-}
-
-std::vector<std::string> GetAdapterNames()
-{
-  Microsoft::WRL::ComPtr<IDXGIFactory> factory;
-  HRESULT hr = E_FAIL;
-
-  if (create_dxgi_factory2)
-    hr = create_dxgi_factory2(0, IID_PPV_ARGS(&factory));
-  else if (create_dxgi_factory)
-    hr = create_dxgi_factory(IID_PPV_ARGS(&factory));
-
-  if (FAILED(hr))
-    return {};
-
-  std::vector<std::string> adapters;
-  Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
-  while (factory->EnumAdapters(static_cast<UINT>(adapters.size()), &adapter) !=
-         DXGI_ERROR_NOT_FOUND)
-  {
-    std::string name;
-    DXGI_ADAPTER_DESC desc;
-    if (SUCCEEDED(adapter->GetDesc(&desc)))
-      name = WStringToUTF8(desc.Description);
-
-    adapters.push_back(std::move(name));
-  }
-
-  return adapters;
-}
-
 DXGI_FORMAT GetDXGIFormatForAbstractFormat(AbstractTextureFormat format, bool typeless)
 {
   switch (format)

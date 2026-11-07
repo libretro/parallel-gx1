@@ -11,7 +11,6 @@
 #include <vector>
 
 #ifdef _WIN32
-#include "Common/DynamicLibrary.h"
 #include "VideoBackends/D3D/VideoBackend.h"
 #include "VideoBackends/D3D/D3DGfx.h"
 #include "VideoBackends/D3D/D3DVertexManager.h"
@@ -85,8 +84,6 @@ static unsigned s_gpu_fields;
 static unsigned s_gpu_fields_seen;
 
 #ifdef _WIN32
-static Common::DynamicLibrary d3d11_library;
-static Common::DynamicLibrary d3d12_library;
 /* Direct3D 11 version 2: the interface, and the levels of its context
  * lock this thread holds */
 static retro_hw_render_interface_d3d11* s_d3d11_v2;
@@ -372,19 +369,6 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, const Window
   DX11::D3D::context = d3d->context;
   DX11::D3D::feature_level = d3d->featureLevel;
 
-  if (!d3d11_library.IsOpen() && !d3d11_library.Open("d3d11.dll"))
-  {
-    d3d11_library.Close();
-    ERROR_LOG_FMT(VIDEO, "Failed to load D3D11 Libraries");
-    return;
-  }
-
-  if (!D3DCommon::LoadLibraries())
-  {
-    ERROR_LOG_FMT(VIDEO, "Failed to load the dxgi library");
-    return;
-  }
-
   if (FAILED(DX11::D3D::device.As(&DX11::D3D::device1)))
   {
     WARN_LOG_FMT(VIDEO, "Missing Direct3D 11.1 support. Logical operations will not be supported.");
@@ -402,6 +386,7 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, const Window
   }
 
   d3d11->FillD3DBackendInfo();
+  g_Config.VerifyValidity();
   UpdateActiveConfig();
 
   std::unique_ptr<DX11Output> output = std::make_unique<DX11Output>(
@@ -500,19 +485,6 @@ void ContextReset(void)
       return;
     }
 
-    if (!d3d12_library.IsOpen() && !d3d12_library.Open("d3d12.dll"))
-    {
-      d3d12_library.Close();
-      ERROR_LOG_FMT(VIDEO, "Failed to load D3D12 Libraries");
-      return;
-    }
-
-    if (!D3DCommon::LoadLibraries())
-    {
-      ERROR_LOG_FMT(VIDEO, "Failed to load the dxgi library");
-      return;
-    }
-
     // Create D3D12 context with RetroArch's device and queue
     ID3D12Device* ra_device = static_cast<ID3D12Device*>(d3d12->device);
     ID3D12CommandQueue* ra_queue = static_cast<ID3D12CommandQueue*>(d3d12->queue);
@@ -522,6 +494,9 @@ void ContextReset(void)
       ERROR_LOG_FMT(VIDEO, "Failed to create D3D12 context with external device");
       return;
     }
+
+    static_cast<DX12::VideoBackend*>(g_video_backend)->FillD3D12BackendInfo();
+    g_Config.VerifyValidity();
 
     Microsoft::WRL::ComPtr<ID3D12Device1> device1;
     if (FAILED(DX12::g_dx_context->GetDevice()->QueryInterface(IID_PPV_ARGS(&device1))))
@@ -674,8 +649,6 @@ void ContextDestroy(void)
   case RETRO_HW_CONTEXT_D3D12:
 #ifdef _WIN32
     DX12::DXContext::Destroy();
-    D3DCommon::UnloadLibraries();
-    d3d12_library.Close();
 #endif
     break;
   case RETRO_HW_CONTEXT_D3D11:
@@ -693,8 +666,6 @@ void ContextDestroy(void)
     DX11::D3D::device1 = nullptr;
     DX11::D3D::context = nullptr;
     DX11::D3D::stateman.reset();
-    D3DCommon::UnloadLibraries();
-    d3d11_library.Close();
 #endif
     break;
   case RETRO_HW_CONTEXT_VULKAN:

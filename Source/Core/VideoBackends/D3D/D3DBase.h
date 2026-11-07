@@ -18,7 +18,6 @@ using Microsoft::WRL::ComPtr;
 
 namespace D3D
 {
-extern ComPtr<IDXGIFactory> dxgi_factory;
 extern ComPtr<ID3D11Device> device;
 extern ComPtr<ID3D11Device1> device1;
 extern ComPtr<ID3D11DeviceContext> context;
@@ -26,14 +25,14 @@ extern D3D_FEATURE_LEVEL feature_level;
 
 void Destroy();
 
-// Returns a list of supported AA modes for the current device.
-std::vector<u32> GetAAModes(u32 adapter_index);
+// The AA modes the frontend's device supports.
+std::vector<u32> GetAAModes();
 
 // Checks for support of the given texture format.
 bool SupportsTextureFormat(DXGI_FORMAT format);
 
-// Checks for logic op support.
-bool SupportsLogicOp(u32 adapter_index);
+// Logic op support on the frontend's device.
+bool SupportsLogicOp();
 
 }  // namespace D3D
 

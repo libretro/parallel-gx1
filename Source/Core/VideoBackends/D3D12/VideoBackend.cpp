@@ -37,11 +37,7 @@ std::string VideoBackend::GetDisplayName() const
 
 void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
 {
-  if (!D3DCommon::LoadLibraries())
-    return;
-
   FillBackendInfo();
-  D3DCommon::UnloadLibraries();
 }
 
 void VideoBackend::FillBackendInfo()
@@ -77,8 +73,13 @@ void VideoBackend::FillBackendInfo()
   g_backend_info.bSupportsLargePoints = false;
   g_backend_info.bSupportsDepthReadback = true;
   g_backend_info.bSupportsPartialDepthCopies = false;
-  g_backend_info.Adapters = D3DCommon::GetAdapterNames();
-  g_backend_info.AAModes = DXContext::GetAAModes(g_Config.iAdapter);
+  // The frontend picks the adapter and hands over its device: until then,
+  // the counts every D3D12 device has, narrowed to the device's own after.
+  g_backend_info.Adapters.clear();
+  if (g_dx_context)
+    g_backend_info.AAModes = g_dx_context->GetAAModes();
+  else
+    g_backend_info.AAModes = {1, 2, 4, 8};
   g_backend_info.bSupportsShaderBinaries = true;
   g_backend_info.bSupportsPipelineCacheData = true;
   g_backend_info.bSupportsCoarseDerivatives = true;
