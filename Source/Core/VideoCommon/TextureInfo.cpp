@@ -6,7 +6,7 @@
 #include <span>
 
 #include <fmt/format.h>
-#include <xxhash.h>
+#include <encodings/xxh64.h>
 
 #include "Common/Align.h"
 #include "Common/Assert.h"
@@ -165,8 +165,8 @@ TextureInfo::NameDetails TextureInfo::CalculateTextureName() const
 
   DEBUG_ASSERT(tlut_size <= m_palette_size.value_or(0));
 
-  const u64 tex_hash = XXH64(m_data.data(), m_texture_size, 0);
-  const u64 tlut_hash = tlut_size ? XXH64(tlut, tlut_size, 0) : 0;
+  const u64 tex_hash = xxh64(m_data.data(), m_texture_size, 0);
+  const u64 tlut_hash = tlut_size ? xxh64(tlut, tlut_size, 0) : 0;
 
   return {.base_name = fmt::format("{}{}x{}{}", format_prefix, m_raw_width, m_raw_height,
                                    m_mipmaps_enabled ? "_m" : ""),

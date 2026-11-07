@@ -9,7 +9,6 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
-#include <xxhash.h>
 
 #include "Common/CommonPaths.h"
 #include "Common/FileSearch.h"

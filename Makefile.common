@@ -142,6 +142,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/fopen_utf8.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_utf.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_xxh64.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
 	$(CORE_DIR)/Externals/libretro-common/file/file_path.c \
 	$(CORE_DIR)/Externals/libretro-common/file/file_path_io.c \
@@ -1012,14 +1013,6 @@ TINYGLTF_SOURCES_ASM :=
 TINYGLTF_SOURCES_OBJCXX :=
 TINYGLTF_SOURCES_CXX += \
 	$(CORE_DIR)/Externals/tinygltf/tinygltf/tiny_gltf.cc
-
-# XXHASH
-XXHASH_SOURCES_C :=
-XXHASH_SOURCES_CXX :=
-XXHASH_SOURCES_ASM :=
-XXHASH_SOURCES_OBJCXX :=
-XXHASH_SOURCES_C += \
-	$(CORE_DIR)/Externals/xxhash/xxHash/xxhash.c
 
 # DOLPHIN
 DOLPHIN_SOURCES_C :=
@@ -1961,7 +1954,6 @@ PUGIXML_FLAGS := -w -DPUGIXML_NO_EXCEPTIONS -I$(EXT_DIR)/pugixml/pugixml/src
 TINYGLTF_FLAGS    := -w -DTINYGLTF_NOEXCEPTION -DTINYGLTF_NO_EXTERNAL_IMAGE -DTINYGLTF_USE_CPP14
 TINYGLTF_CXXFLAGS := -std=gnu++20
 
-XXHASH_FLAGS := -w -I$(EXT_DIR)/xxhash/xxHash
 
 CPPIPC_FLAGS := -w -O2 -DUNICODE -D_UNICODE -fexceptions \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include -I$(EXT_DIR)/cpp-ipc/cpp-ipc/src \
@@ -1988,7 +1980,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 -I$(EXT_DIR)/expr/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
 	$(MGBA_INC) \
-	-I$(EXT_DIR)/libspng/libspng/spng -I$(EXT_DIR)/xxhash/xxHash \
+	-I$(EXT_DIR)/libspng/libspng/spng \
 	-I$(EXT_DIR)/tinygltf \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib -I$(EXT_DIR)/Bochs_disasm \
@@ -2046,7 +2038,7 @@ endif
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
-	MGBA SFML FMT PUGIXML XXHASH TINYGLTF FATFS
+	MGBA SFML FMT PUGIXML TINYGLTF FATFS
 ifeq ($(ARCH_X86_64),1)
    LIB_GROUPS += BDISASM
 endif
