@@ -120,6 +120,7 @@ struct fmt::formatter<EFBCopyParams>
 };
 
 class RcTcacheEntry;
+struct TexIndexNode;
 
 struct TCacheEntry
 {
@@ -157,9 +158,9 @@ struct TCacheEntry
   // used to delete textures which haven't been used for TEXTURE_KILL_THRESHOLD frames
   int frameCount = FRAMECOUNT_INVALID;
 
-  // Keep an iterator to the entry in m_textures_by_hash, so it does not need to be searched when
+  // Its node in m_textures_by_hash, if it is there, so it does not need to be searched when
   // removing the cache entry
-  std::multimap<u64, RcTcacheEntry>::iterator textures_by_hash_iter;
+  TexIndexNode* textures_by_hash_iter = nullptr;
 
   // This is used to keep track of both:
   //   * efb copies used by this partially updated texture
@@ -312,6 +313,41 @@ private:
   TCacheEntry* m_entry;
 };
 
+/* An ordered index of cache entries by address or by hash, kept as a
+ * multimap keeps one: equal keys in the order they went in, and a node
+ * staying where it is while others come and go. Its nodes come from a
+ * pool kept with it. Video thread only. */
+struct TexIndexNode
+{
+  TexIndexNode* left;
+  TexIndexNode* right;
+  TexIndexNode* parent;
+  u64 key;
+  u32 prio;
+  RcTcacheEntry value;
+};
+struct TexIndexChunk;
+struct TexIndex
+{
+  TexIndexNode* root = nullptr;
+  TexIndexNode* free_nodes = nullptr;
+  TexIndexChunk* chunks = nullptr;
+  size_t count = 0;
+  u32 seed = 0x9e3779b9u;
+};
+/* After those with an equal key; NULL out of memory. */
+TexIndexNode* TexIndexInsert(TexIndex* index, u64 key, const RcTcacheEntry& value);
+/* Returns the node after it. */
+TexIndexNode* TexIndexErase(TexIndex* index, TexIndexNode* node);
+TexIndexNode* TexIndexFirst(const TexIndex* index);
+TexIndexNode* TexIndexNext(const TexIndexNode* node);
+/* The first node with a key not less than / greater than key. */
+TexIndexNode* TexIndexLowerBound(const TexIndex* index, u64 key);
+TexIndexNode* TexIndexUpperBound(const TexIndex* index, u64 key);
+/* Drops every entry; the nodes are kept for reuse. */
+void TexIndexClear(TexIndex* index);
+void TexIndexFree(TexIndex* index);
+
 class TextureCacheBase final
 {
 public:
@@ -415,8 +451,12 @@ protected:
   size_t m_temp_size = 0;
 
 private:
-  using TexAddrCache = std::multimap<u32, RcTcacheEntry>;
-  using TexHashCache = std::multimap<u64, RcTcacheEntry>;
+  // the nodes from one to before another, as an equal_range gives them
+  struct TexIndexRange
+  {
+    TexIndexNode* first;
+    TexIndexNode* second;
+  };
 
   using TexPool = std::unordered_multimap<TextureConfig, TexPoolEntry>;
 
@@ -450,16 +490,14 @@ private:
   RcTcacheEntry AllocateCacheEntry(const TextureConfig& config);
   std::optional<TexPoolEntry> AllocateTexture(const TextureConfig& config);
   TexPool::iterator FindMatchingTextureFromPool(const TextureConfig& config);
-  TexAddrCache::iterator GetTexCacheIter(TCacheEntry* entry);
+  TexIndexNode* GetTexCacheIter(TCacheEntry* entry);
 
   // Return all possible overlapping textures. As addr+size of the textures is not
   // indexed, this may return false positives.
-  std::pair<TexAddrCache::iterator, TexAddrCache::iterator>
-  FindOverlappingTextures(u32 addr, u32 size_in_bytes);
+  TexIndexRange FindOverlappingTextures(u32 addr, u32 size_in_bytes);
 
-  // Removes and unlinks texture from texture cache and returns it to the pool
-  TexAddrCache::iterator InvalidateTexture(TexAddrCache::iterator t_iter,
-                                           bool discard_pending_efb_copy = false);
+  // Removes and unlinks texture from texture cache and returns it to the pool; the node after it
+  TexIndexNode* InvalidateTexture(TexIndexNode* node, bool discard_pending_efb_copy = false);
 
   void UninitializeEFBMemory(u8* dst, u32 stride, u32 bytes_per_row, u32 num_blocks_y);
   void UninitializeXFBMemory(u8* dst, u32 stride, u32 bytes_per_row, u32 num_blocks_y);
@@ -488,11 +526,11 @@ private:
 
   // m_textures_by_address is the authoritive version of what's actually "in" the texture cache
   // but it's possible for invalidated TCache entries to live on elsewhere
-  TexAddrCache m_textures_by_address;
+  TexIndex m_textures_by_address;
 
   // m_textures_by_hash is an alternative view of the texture cache
   // All textures in here will also be in m_textures_by_address
-  TexHashCache m_textures_by_hash;
+  TexIndex m_textures_by_hash;
 
   // m_bound_textures are actually active in the current draw
   // It's valid for textures to be in here after they've been invalidated

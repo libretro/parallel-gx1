@@ -150,6 +150,242 @@ void TCacheEntryPoolFree()
   s_entry_free = nullptr;
 }
 
+/* The texture indexes: treaps over pooled nodes. A node's priority is
+ * drawn when it goes in; rotations keep the order of the keys and of
+ * those equal, so a node another loop holds stays where it is. */
+enum
+{
+  TEX_INDEX_CHUNK = 128
+};
+struct TexIndexChunk
+{
+  TexIndexChunk* next;
+  TexIndexNode nodes[TEX_INDEX_CHUNK];
+};
+
+static void TexIndexReplace(TexIndex* index, TexIndexNode* node, TexIndexNode* with)
+{
+  TexIndexNode* const parent = node->parent;
+  with->parent = parent;
+  if (!parent)
+    index->root = with;
+  else if (parent->left == node)
+    parent->left = with;
+  else
+    parent->right = with;
+}
+
+/* node's right child takes its place */
+static void TexIndexRotateLeft(TexIndex* index, TexIndexNode* node)
+{
+  TexIndexNode* const right = node->right;
+  node->right = right->left;
+  if (right->left)
+    right->left->parent = node;
+  TexIndexReplace(index, node, right);
+  right->left = node;
+  node->parent = right;
+}
+
+/* node's left child takes its place */
+static void TexIndexRotateRight(TexIndex* index, TexIndexNode* node)
+{
+  TexIndexNode* const left = node->left;
+  node->left = left->right;
+  if (left->right)
+    left->right->parent = node;
+  TexIndexReplace(index, node, left);
+  left->right = node;
+  node->parent = left;
+}
+
+TexIndexNode* TexIndexInsert(TexIndex* index, u64 key, const RcTcacheEntry& value)
+{
+  TexIndexNode* node;
+  TexIndexNode* parent = nullptr;
+  TexIndexNode* cur = index->root;
+  u32 seed;
+
+  if (!index->free_nodes)
+  {
+    TexIndexChunk* chunk = static_cast<TexIndexChunk*>(malloc(sizeof(TexIndexChunk)));
+    size_t i;
+    if (!chunk)
+      return nullptr;
+    chunk->next = index->chunks;
+    index->chunks = chunk;
+    for (i = 0; i < TEX_INDEX_CHUNK; i++)
+    {
+      TexIndexNode* const fresh = &chunk->nodes[i];
+      new (&fresh->value) RcTcacheEntry();
+      fresh->left = index->free_nodes;
+      index->free_nodes = fresh;
+    }
+  }
+  node = index->free_nodes;
+  index->free_nodes = node->left;
+
+  /* xorshift32 */
+  seed = index->seed;
+  seed ^= seed << 13;
+  seed ^= seed >> 17;
+  seed ^= seed << 5;
+  index->seed = seed;
+
+  node->left = nullptr;
+  node->right = nullptr;
+  node->key = key;
+  node->prio = seed;
+  node->value = value;
+
+  while (cur)
+  {
+    parent = cur;
+    cur = key < cur->key ? cur->left : cur->right;
+  }
+  node->parent = parent;
+  if (!parent)
+    index->root = node;
+  else if (key < parent->key)
+    parent->left = node;
+  else
+    parent->right = node;
+
+  while (node->parent && node->prio < node->parent->prio)
+  {
+    if (node->parent->left == node)
+      TexIndexRotateRight(index, node->parent);
+    else
+      TexIndexRotateLeft(index, node->parent);
+  }
+  index->count++;
+  return node;
+}
+
+TexIndexNode* TexIndexErase(TexIndex* index, TexIndexNode* node)
+{
+  TexIndexNode* const next = TexIndexNext(node);
+
+  /* down to a leaf, the child of lower priority rising */
+  while (node->left || node->right)
+  {
+    if (!node->right || (node->left && node->left->prio < node->right->prio))
+      TexIndexRotateRight(index, node);
+    else
+      TexIndexRotateLeft(index, node);
+  }
+  if (!node->parent)
+    index->root = nullptr;
+  else if (node->parent->left == node)
+    node->parent->left = nullptr;
+  else
+    node->parent->right = nullptr;
+  index->count--;
+
+  /* the entry may go with it, after the node is out */
+  node->value.reset();
+  node->left = index->free_nodes;
+  index->free_nodes = node;
+  return next;
+}
+
+TexIndexNode* TexIndexFirst(const TexIndex* index)
+{
+  TexIndexNode* node = index->root;
+  if (node)
+    while (node->left)
+      node = node->left;
+  return node;
+}
+
+TexIndexNode* TexIndexNext(const TexIndexNode* node)
+{
+  if (node->right)
+  {
+    TexIndexNode* next = node->right;
+    while (next->left)
+      next = next->left;
+    return next;
+  }
+  while (node->parent && node->parent->right == node)
+    node = node->parent;
+  return node->parent;
+}
+
+TexIndexNode* TexIndexLowerBound(const TexIndex* index, u64 key)
+{
+  TexIndexNode* found = nullptr;
+  TexIndexNode* cur = index->root;
+  while (cur)
+  {
+    if (cur->key >= key)
+    {
+      found = cur;
+      cur = cur->left;
+    }
+    else
+      cur = cur->right;
+  }
+  return found;
+}
+
+TexIndexNode* TexIndexUpperBound(const TexIndex* index, u64 key)
+{
+  TexIndexNode* found = nullptr;
+  TexIndexNode* cur = index->root;
+  while (cur)
+  {
+    if (cur->key > key)
+    {
+      found = cur;
+      cur = cur->left;
+    }
+    else
+      cur = cur->right;
+  }
+  return found;
+}
+
+void TexIndexClear(TexIndex* index)
+{
+  TexIndexNode* node = TexIndexFirst(index);
+  /* unlinked first, then let go. A visited node's left is not looked at
+   * again by the walk, so the list goes through it. */
+  TexIndexNode* list = nullptr;
+  while (node)
+  {
+    TexIndexNode* const next = TexIndexNext(node);
+    node->left = list;
+    list = node;
+    node = next;
+  }
+  index->root = nullptr;
+  index->count = 0;
+  while (list)
+  {
+    TexIndexNode* const next = list->left;
+    list->value.reset();
+    list->left = index->free_nodes;
+    index->free_nodes = list;
+    list = next;
+  }
+}
+
+void TexIndexFree(TexIndex* index)
+{
+  TexIndexClear(index);
+  while (index->chunks)
+  {
+    TexIndexChunk* const next = index->chunks->next;
+    size_t i;
+    for (i = 0; i < TEX_INDEX_CHUNK; i++)
+      index->chunks->nodes[i].value.~RcTcacheEntry();
+    free(index->chunks);
+    index->chunks = next;
+  }
+  index->free_nodes = nullptr;
+}
+
 void TextureCacheBase::CheckTempSize(size_t required_size)
 {
   if (required_size <= m_temp_size)
@@ -186,6 +422,8 @@ void TextureCacheBase::Shutdown()
 
 TextureCacheBase::~TextureCacheBase()
 {
+  TexIndexFree(&m_textures_by_hash);
+  TexIndexFree(&m_textures_by_address);
   Common::FreeAlignedMemory(m_temp);
   m_temp = nullptr;
 }
@@ -208,8 +446,8 @@ void TextureCacheBase::Invalidate()
 
   for (auto& bind : m_bound_textures)
     bind.reset();
-  m_textures_by_hash.clear();
-  m_textures_by_address.clear();
+  TexIndexClear(&m_textures_by_hash);
+  TexIndexClear(&m_textures_by_address);
 
   m_texture_pool.clear();
 }
@@ -245,31 +483,30 @@ void TextureCacheBase::OnConfigChanged(const VideoConfig& config)
 
 void TextureCacheBase::Cleanup(int _frameCount)
 {
-  TexAddrCache::iterator iter = m_textures_by_address.begin();
-  TexAddrCache::iterator tcend = m_textures_by_address.end();
-  while (iter != tcend)
+  TexIndexNode* iter = TexIndexFirst(&m_textures_by_address);
+  while (iter)
   {
-    if (iter->second->frameCount == FRAMECOUNT_INVALID)
+    if (iter->value->frameCount == FRAMECOUNT_INVALID)
     {
-      iter->second->frameCount = _frameCount;
-      ++iter;
+      iter->value->frameCount = _frameCount;
+      iter = TexIndexNext(iter);
     }
-    else if (_frameCount > TEXTURE_KILL_THRESHOLD + iter->second->frameCount)
+    else if (_frameCount > TEXTURE_KILL_THRESHOLD + iter->value->frameCount)
     {
-      if (iter->second->IsCopy())
+      if (iter->value->IsCopy())
       {
         // Only remove EFB copies when they wouldn't be used anymore(changed hash), because EFB
         // copies living on the
         // host GPU are unrecoverable. Perform this check only every TEXTURE_KILL_THRESHOLD for
         // performance reasons
-        if ((_frameCount - iter->second->frameCount) % TEXTURE_KILL_THRESHOLD == 1 &&
-            iter->second->hash != iter->second->CalculateHash())
+        if ((_frameCount - iter->value->frameCount) % TEXTURE_KILL_THRESHOLD == 1 &&
+            iter->value->hash != iter->value->CalculateHash())
         {
           iter = InvalidateTexture(iter);
         }
         else
         {
-          ++iter;
+          iter = TexIndexNext(iter);
         }
       }
       else
@@ -279,7 +516,7 @@ void TextureCacheBase::Cleanup(int _frameCount)
     }
     else
     {
-      ++iter;
+      iter = TexIndexNext(iter);
     }
   }
 
@@ -371,7 +608,7 @@ TextureCacheBase::CreatePaletteEntryWithOffset(const RcTcacheEntry& entry, const
     ERROR_LOG_FMT(VIDEO, "Texel buffer upload of {} bytes failed", palette_size);
   }
 
-  m_textures_by_address.emplace(decoded_entry->addr, decoded_entry);
+  TexIndexInsert(&m_textures_by_address, decoded_entry->addr, decoded_entry);
 
   return {decoded_entry, texel_buffer_offset};
 }
@@ -431,7 +668,7 @@ RcTcacheEntry TextureCacheBase::CreateReinterpretEntry(const RcTcacheEntry& exis
   reinterpreted_entry->may_have_overlapping_textures =
       existing_entry->may_have_overlapping_textures;
 
-  m_textures_by_address.emplace(reinterpreted_entry->addr, reinterpreted_entry);
+  TexIndexInsert(&m_textures_by_address, reinterpreted_entry->addr, reinterpreted_entry);
 
   return reinterpreted_entry;
 }
@@ -670,20 +907,20 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
   std::vector<std::pair<u32, u32>> bound_textures_list;
   if (Config::Get(Config::GFX_SAVE_TEXTURE_CACHE_TO_STATE))
   {
-    for (const auto& it : m_textures_by_address)
+    for (TexIndexNode* it = TexIndexFirst(&m_textures_by_address); it; it = TexIndexNext(it))
     {
-      if (ShouldSaveEntry(it.second))
+      if (ShouldSaveEntry(it->value))
       {
-        const u32 id = AddCacheEntryToMap(it.second);
-        textures_by_address_list.emplace_back(it.first, id);
+        const u32 id = AddCacheEntryToMap(it->value);
+        textures_by_address_list.emplace_back(static_cast<u32>(it->key), id);
       }
     }
-    for (const auto& it : m_textures_by_hash)
+    for (TexIndexNode* it = TexIndexFirst(&m_textures_by_hash); it; it = TexIndexNext(it))
     {
-      if (ShouldSaveEntry(it.second))
+      if (ShouldSaveEntry(it->value))
       {
-        const u32 id = AddCacheEntryToMap(it.second);
-        textures_by_hash_list.emplace_back(it.first, id);
+        const u32 id = AddCacheEntryToMap(it->value);
+        textures_by_hash_list.emplace_back(it->key, id);
       }
     }
     for (u32 i = 0; i < m_bound_textures.size(); i++)
@@ -782,7 +1019,6 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
       unread.DoState(p);
       continue;
     }
-    entry->textures_by_hash_iter = m_textures_by_hash.end();
     entry->DoState(p);
     if (entry->texture && commit_state)
       id_map.emplace(i, entry);
@@ -813,7 +1049,7 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
 
     auto& entry = GetEntry(id);
     if (entry)
-      m_textures_by_address.emplace(addr, entry);
+      TexIndexInsert(&m_textures_by_address, addr, entry);
   }
 
   // Fill in hash map.
@@ -827,7 +1063,7 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
 
     auto& entry = GetEntry(id);
     if (entry)
-      entry->textures_by_hash_iter = m_textures_by_hash.emplace(hash, entry);
+      entry->textures_by_hash_iter = TexIndexInsert(&m_textures_by_hash, hash, entry);
   }
 
   // Clear bound textures
@@ -917,7 +1153,7 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
   auto iter = FindOverlappingTextures(entry_to_update->addr, entry_to_update->size_in_bytes);
   while (iter.first != iter.second)
   {
-    auto& entry = iter.first->second;
+    auto& entry = iter.first->value;
     if (entry != entry_to_update && entry->IsCopy() &&
         !entry->references.contains(entry_to_update.get()) &&
         entry->OverlapsMemoryRange(entry_to_update->addr, entry_to_update->size_in_bytes) &&
@@ -930,7 +1166,7 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
         {
           if (!CanReinterpretTextureOnGPU(entry_to_update->format.texfmt, entry->format.texfmt))
           {
-            ++iter.first;
+            iter.first = TexIndexNext(iter.first);
             continue;
           }
 
@@ -957,7 +1193,7 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
           }
           else
           {
-            ++iter.first;
+            iter.first = TexIndexNext(iter.first);
             continue;
           }
         }
@@ -1019,7 +1255,7 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
             static_cast<u32>(dst_x + copy_width) > entry_to_update->GetWidth() ||
             static_cast<u32>(dst_y + copy_height) > entry_to_update->GetHeight())
         {
-          ++iter.first;
+          iter.first = TexIndexNext(iter.first);
           continue;
         }
 
@@ -1063,7 +1299,7 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
         continue;
       }
     }
-    ++iter.first;
+    iter.first = TexIndexNext(iter.first);
   }
 
   return entry_to_update;
@@ -1464,16 +1700,17 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
   //
   // For efb copies, the entry created in CopyRenderTargetToTexture always has to be used, or else
   // it was done in vain.
-  auto iter_range = m_textures_by_address.equal_range(texture_info.GetRawAddress());
-  TexAddrCache::iterator iter = iter_range.first;
-  TexAddrCache::iterator oldest_entry = iter;
+  TexIndexNode* iter = TexIndexLowerBound(&m_textures_by_address, texture_info.GetRawAddress());
+  TexIndexNode* const iter_end =
+      TexIndexUpperBound(&m_textures_by_address, texture_info.GetRawAddress());
+  TexIndexNode* oldest_entry = iter;
   int temp_frameCount = 0x7fffffff;
-  TexAddrCache::iterator unconverted_copy = m_textures_by_address.end();
-  TexAddrCache::iterator unreinterpreted_copy = m_textures_by_address.end();
+  TexIndexNode* unconverted_copy = nullptr;
+  TexIndexNode* unreinterpreted_copy = nullptr;
 
-  while (iter != iter_range.second)
+  while (iter != iter_end)
   {
-    RcTcacheEntry& entry = iter->second;
+    RcTcacheEntry& entry = iter->value;
 
     // TODO: Some games (Rogue Squadron 3, Twin Snakes) seem to load a previously made XFB
     // copy as a regular texture. You can see this particularly well in RS3 whenever the
@@ -1505,21 +1742,22 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
           {
             // Delay the conversion until afterwards, it's possible this texture has already been
             // converted.
-            unreinterpreted_copy = iter++;
+            unreinterpreted_copy = iter;
+            iter = TexIndexNext(iter);
             continue;
           }
           else
           {
             // If the EFB copies are in a different format and are not reinterpretable, use the RAM
             // copy.
-            ++iter;
+            iter = TexIndexNext(iter);
             continue;
           }
         }
         else
         {
           // Prefer the already-converted copy.
-          unconverted_copy = m_textures_by_address.end();
+          unconverted_copy = nullptr;
         }
 
         // TODO: We should check width/height/levels for EFB copies. I'm not sure what effect
@@ -1551,7 +1789,7 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
           entry->native_width == texture_info.GetRawWidth() &&
           entry->native_height == texture_info.GetRawHeight())
       {
-        entry = DoPartialTextureUpdates(iter->second, texture_info.GetTlutAddress(),
+        entry = DoPartialTextureUpdates(iter->value, texture_info.GetTlutAddress(),
                                         texture_info.GetTlutFormat());
         if (entry)
         {
@@ -1574,15 +1812,15 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
       temp_frameCount = entry->frameCount;
       oldest_entry = iter;
     }
-    ++iter;
+    iter = TexIndexNext(iter);
   }
 
-  if (unreinterpreted_copy != m_textures_by_address.end())
+  if (unreinterpreted_copy)
   {
     auto decoded_entry =
-        CreateReinterpretEntry(unreinterpreted_copy->second, texture_info.GetTextureFormat());
-    RenderReinterpretEntry(decoded_entry, unreinterpreted_copy->second->texture.get(),
-                           unreinterpreted_copy->second->format.texfmt,
+        CreateReinterpretEntry(unreinterpreted_copy->value, texture_info.GetTextureFormat());
+    RenderReinterpretEntry(decoded_entry, unreinterpreted_copy->value->texture.get(),
+                           unreinterpreted_copy->value->format.texfmt,
                            decoded_entry->format.texfmt);
 
     // It's possible to combine reinterpreted textures + palettes.
@@ -1600,11 +1838,11 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
       return decoded_entry;
   }
 
-  if (unconverted_copy != m_textures_by_address.end())
+  if (unconverted_copy)
   {
     const auto [decoded_entry, texel_buffer_offset] =
-        CreatePaletteEntryWithOffset(unconverted_copy->second, texture_info.GetTlutAddress());
-    RenderPaletteEntry(texel_buffer_offset, decoded_entry, unconverted_copy->second->texture.get(),
+        CreatePaletteEntryWithOffset(unconverted_copy->value, texture_info.GetTlutAddress());
+    RenderPaletteEntry(texel_buffer_offset, decoded_entry, unconverted_copy->value->texture.get(),
                        texture_info.GetTlutFormat());
 
     if (decoded_entry)
@@ -1623,17 +1861,17 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
       std::max(texture_info.GetTextureSize(), palette_size) <=
           (u32)textureCacheSafetyColorSampleSize * 8)
   {
-    auto hash_range = m_textures_by_hash.equal_range(full_hash);
-    TexHashCache::iterator hash_iter = hash_range.first;
-    while (hash_iter != hash_range.second)
+    TexIndexNode* hash_iter = TexIndexLowerBound(&m_textures_by_hash, full_hash);
+    TexIndexNode* const hash_end = TexIndexUpperBound(&m_textures_by_hash, full_hash);
+    while (hash_iter != hash_end)
     {
-      RcTcacheEntry& entry = hash_iter->second;
+      RcTcacheEntry& entry = hash_iter->value;
       // All parameters, except the address, need to match here
       if (entry->format == full_format && entry->native_levels >= texture_info.GetLevelCount() &&
           entry->native_width == texture_info.GetRawWidth() &&
           entry->native_height == texture_info.GetRawHeight())
       {
-        entry = DoPartialTextureUpdates(hash_iter->second, texture_info.GetTlutAddress(),
+        entry = DoPartialTextureUpdates(hash_iter->value, texture_info.GetTlutAddress(),
                                         texture_info.GetTlutFormat());
         if (entry)
         {
@@ -1641,7 +1879,7 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
           return entry;
         }
       }
-      ++hash_iter;
+      hash_iter = TexIndexNext(hash_iter);
     }
   }
 
@@ -1896,12 +2134,14 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
     }
   }
 
-  const auto iter = m_textures_by_address.emplace(texture_info.GetRawAddress(), entry);
+  TexIndexNode* const iter =
+      TexIndexInsert(&m_textures_by_address, texture_info.GetRawAddress(), entry);
   if (safety_color_sample_size == 0 ||
       std::max(texture_info.GetTextureSize(), creation_info.palette_size) <=
           (u32)safety_color_sample_size * 8)
   {
-    entry->textures_by_hash_iter = m_textures_by_hash.emplace(creation_info.full_hash, entry);
+    entry->textures_by_hash_iter =
+        TexIndexInsert(&m_textures_by_hash, creation_info.full_hash, entry);
   }
 
   const TextureAndTLUTFormat full_format(texture_info.GetTextureFormat(),
@@ -1915,9 +2155,9 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
   entry->SetNotCopy();
 
   INCSTAT(g_stats.num_textures_uploaded);
-  SETSTAT(g_stats.num_textures_alive, static_cast<int>(m_textures_by_address.size()));
+  SETSTAT(g_stats.num_textures_alive, static_cast<int>(m_textures_by_address.count));
 
-  entry = DoPartialTextureUpdates(iter->second, texture_info.GetTlutAddress(),
+  entry = DoPartialTextureUpdates(iter->value, texture_info.GetTlutAddress(),
                                   texture_info.GetTlutFormat());
 
   // This should only be needed if the texture was updated, or used GPU decoding.
@@ -2030,8 +2270,8 @@ RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height
   entry->texture->FinishedRendering();
 
   // Insert into the texture cache so we can re-use it next frame, if needed.
-  m_textures_by_address.emplace(entry->addr, entry);
-  SETSTAT(g_stats.num_textures_alive, static_cast<int>(m_textures_by_address.size()));
+  TexIndexInsert(&m_textures_by_address, entry->addr, entry);
+  SETSTAT(g_stats.num_textures_alive, static_cast<int>(m_textures_by_address.count));
   INCSTAT(g_stats.num_textures_uploaded);
 
   if (g_ActiveConfig.bDumpXFBTarget || g_ActiveConfig.bGraphicMods)
@@ -2056,12 +2296,12 @@ RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height
 
 RcTcacheEntry TextureCacheBase::GetXFBFromCache(u32 address, u32 width, u32 height, u32 stride)
 {
-  auto iter_range = m_textures_by_address.equal_range(address);
-  TexAddrCache::iterator iter = iter_range.first;
+  TexIndexNode* iter = TexIndexLowerBound(&m_textures_by_address, address);
+  TexIndexNode* const iter_end = TexIndexUpperBound(&m_textures_by_address, address);
 
-  while (iter != iter_range.second)
+  while (iter != iter_end)
   {
-    auto& entry = iter->second;
+    auto& entry = iter->value;
 
     // The only thing which has to match exactly is the stride. We can use a partial rectangle if
     // the VI width/height differs from that of the XFB copy.
@@ -2082,7 +2322,7 @@ RcTcacheEntry TextureCacheBase::GetXFBFromCache(u32 address, u32 width, u32 heig
       }
     }
 
-    ++iter;
+    iter = TexIndexNext(iter);
   }
 
   return {};
@@ -2107,7 +2347,7 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
     // our force progressive hack means that an XFB copy should always have a matching stride. If
     // the hack is disabled, XFB2RAM should also be enabled. Should we wish to implement interlaced
     // stitching in the future, this would require a shader which grabs every second line.
-    auto& entry = iter.first->second;
+    auto& entry = iter.first->value;
     if (entry != stitched_entry && entry->IsCopy() &&
         entry->OverlapsMemoryRange(stitched_entry->addr, stitched_entry->size_in_bytes) &&
         entry->memory_stride == stitched_entry->memory_stride)
@@ -2127,7 +2367,7 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
         continue;
       }
     }
-    ++iter.first;
+    iter.first = TexIndexNext(iter.first);
   }
 
   if (candidates.empty())
@@ -2570,7 +2810,7 @@ void TextureCacheBase::CopyRenderTargetToTexture(
   auto iter = FindOverlappingTextures(dstAddr, covered_range);
   while (iter.first != iter.second)
   {
-    RcTcacheEntry& overlapping_entry = iter.first->second;
+    RcTcacheEntry& overlapping_entry = iter.first->value;
 
     if (overlapping_entry->addr == dstAddr && overlapping_entry->is_xfb_copy)
     {
@@ -2616,13 +2856,14 @@ void TextureCacheBase::CopyRenderTargetToTexture(
 
       // Do not load textures by hash, if they were at least partly overwritten by an efb copy.
       // In this case, comparing the hash is not enough to check, if two textures are identical.
-      if (overlapping_entry->textures_by_hash_iter != m_textures_by_hash.end())
+      if (overlapping_entry->textures_by_hash_iter)
       {
-        m_textures_by_hash.erase(overlapping_entry->textures_by_hash_iter);
-        overlapping_entry->textures_by_hash_iter = m_textures_by_hash.end();
+        TexIndexNode* const hash_node = overlapping_entry->textures_by_hash_iter;
+        overlapping_entry->textures_by_hash_iter = nullptr;
+        TexIndexErase(&m_textures_by_hash, hash_node);
       }
     }
-    ++iter.first;
+    iter.first = TexIndexNext(iter.first);
   }
 
   // Even if the copy is deferred, still compute the hash. This way if the copy is used as a texture
@@ -2631,7 +2872,7 @@ void TextureCacheBase::CopyRenderTargetToTexture(
   {
     const u64 hash = entry->CalculateHash();
     entry->SetHashes(hash, hash);
-    m_textures_by_address.emplace(dstAddr, std::move(entry));
+    TexIndexInsert(&m_textures_by_address, dstAddr, entry);
   }
 }
 
@@ -2688,9 +2929,9 @@ void TextureCacheBase::FlushEFBCopy(TCacheEntry* entry)
   if (entry->is_xfb_copy)
   {
     auto range = FindOverlappingTextures(entry->addr, covered_range);
-    for (auto iter = range.first; iter != range.second; ++iter)
+    for (TexIndexNode* iter = range.first; iter != range.second; iter = TexIndexNext(iter))
     {
-      auto& overlapping_entry = iter->second;
+      auto& overlapping_entry = iter->value;
       if (overlapping_entry->may_have_overlapping_textures && overlapping_entry->is_xfb_copy &&
           overlapping_entry->OverlapsMemoryRange(entry->addr, covered_range))
       {
@@ -2790,7 +3031,6 @@ RcTcacheEntry TextureCacheBase::AllocateCacheEntry(const TextureConfig& config)
       TCacheEntryNew(std::move(alloc->texture), std::move(alloc->framebuffer)));
   if (!cacheEntry)
     return {};
-  cacheEntry->textures_by_hash_iter = m_textures_by_hash.end();
   cacheEntry->id = m_last_entry_id++;
   return cacheEntry;
 }
@@ -2845,23 +3085,22 @@ TextureCacheBase::FindMatchingTextureFromPool(const TextureConfig& config)
   return matching_iter != range.second ? matching_iter : m_texture_pool.end();
 }
 
-TextureCacheBase::TexAddrCache::iterator TextureCacheBase::GetTexCacheIter(TCacheEntry* entry)
+TexIndexNode* TextureCacheBase::GetTexCacheIter(TCacheEntry* entry)
 {
-  auto iter_range = m_textures_by_address.equal_range(entry->addr);
-  TexAddrCache::iterator iter = iter_range.first;
-  while (iter != iter_range.second)
+  TexIndexNode* iter = TexIndexLowerBound(&m_textures_by_address, entry->addr);
+  TexIndexNode* const iter_end = TexIndexUpperBound(&m_textures_by_address, entry->addr);
+  while (iter != iter_end)
   {
-    if (iter->second.get() == entry)
+    if (iter->value.get() == entry)
     {
       return iter;
     }
-    ++iter;
+    iter = TexIndexNext(iter);
   }
-  return m_textures_by_address.end();
+  return nullptr;
 }
 
-std::pair<TextureCacheBase::TexAddrCache::iterator, TextureCacheBase::TexAddrCache::iterator>
-TextureCacheBase::FindOverlappingTextures(u32 addr, u32 size_in_bytes)
+TextureCacheBase::TexIndexRange TextureCacheBase::FindOverlappingTextures(u32 addr, u32 size_in_bytes)
 {
   // We index by the starting address only, so there is no way to query all textures
   // which end after the given addr. But the GC textures have a limited size, so we
@@ -2871,24 +3110,26 @@ TextureCacheBase::FindOverlappingTextures(u32 addr, u32 size_in_bytes)
   // 1024 x 1024 texel times 8 nibbles per texel
   constexpr u32 max_texture_size = 1024 * 1024 * 4;
   u32 lower_addr = addr > max_texture_size ? addr - max_texture_size : 0;
-  auto begin = m_textures_by_address.lower_bound(lower_addr);
-  auto end = m_textures_by_address.upper_bound(addr + size_in_bytes);
-
-  return std::make_pair(begin, end);
+  TexIndexRange range;
+  range.first = TexIndexLowerBound(&m_textures_by_address, lower_addr);
+  /* u32 sum, as the multimap's key was */
+  range.second = TexIndexUpperBound(&m_textures_by_address, static_cast<u32>(addr + size_in_bytes));
+  return range;
 }
 
-TextureCacheBase::TexAddrCache::iterator
-TextureCacheBase::InvalidateTexture(TexAddrCache::iterator iter, bool discard_pending_efb_copy)
+TexIndexNode* TextureCacheBase::InvalidateTexture(TexIndexNode* iter,
+                                                  bool discard_pending_efb_copy)
 {
-  if (iter == m_textures_by_address.end())
-    return m_textures_by_address.end();
+  if (!iter)
+    return nullptr;
 
-  RcTcacheEntry& entry = iter->second;
+  RcTcacheEntry& entry = iter->value;
 
-  if (entry->textures_by_hash_iter != m_textures_by_hash.end())
+  if (entry->textures_by_hash_iter)
   {
-    m_textures_by_hash.erase(entry->textures_by_hash_iter);
-    entry->textures_by_hash_iter = m_textures_by_hash.end();
+    TexIndexNode* const hash_node = entry->textures_by_hash_iter;
+    entry->textures_by_hash_iter = nullptr;
+    TexIndexErase(&m_textures_by_hash, hash_node);
   }
 
   // If this is a pending EFB copy, we don't want to flush it here.
@@ -2921,7 +3162,7 @@ TextureCacheBase::InvalidateTexture(TexAddrCache::iterator iter, bool discard_pe
   }
   entry->invalidated = true;
 
-  return m_textures_by_address.erase(iter);
+  return TexIndexErase(&m_textures_by_address, iter);
 }
 
 void TextureCacheBase::ReleaseToPool(TCacheEntry* entry)
