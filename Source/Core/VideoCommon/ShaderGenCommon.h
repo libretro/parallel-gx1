@@ -118,6 +118,20 @@ public:
   }
   /* the same, NUL terminated */
   const char* CStr() const { return shader_text_data(&m_text); }
+  /* head written in front of the text: the two as one span of head_len + Size() bytes, or
+   * nullptr if head does not fit the room kept for it */
+  const char* Prepend(const char* head, size_t head_len)
+  {
+    return shader_text_prepend(&m_text, head, head_len);
+  }
+  size_t Size() const { return shader_text_len(&m_text); }
+  /* the text's block for a new owner: the code is empty after */
+  shader_text Release()
+  {
+    shader_text text = m_text;
+    shader_text_init(&m_text, 0);
+    return text;
+  }
   shader_text* Text() { return &m_text; }
 
   /* text as it is */

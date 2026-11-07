@@ -275,14 +275,11 @@ bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view c
 {
   // We need to enable GL_ARB_compute_shader for drivers that support the extension,
   // but not GLSL 4.3. Mesa is one example.
-  std::string full_code;
-  if (g_backend_info.bSupportsComputeShaders && g_ogl_config.eSupportedGLSLVersion < Glsl430)
-  {
-    full_code = "#extension GL_ARB_compute_shader : enable\n";
-  }
-
-  full_code += code;
-  const GLuint shader_id = CompileSingleShader(GL_COMPUTE_SHADER, full_code);
+  const char* const prefix =
+      g_backend_info.bSupportsComputeShaders && g_ogl_config.eSupportedGLSLVersion < Glsl430 ?
+          "#extension GL_ARB_compute_shader : enable\n" :
+          "";
+  const GLuint shader_id = CompileSingleShader(GL_COMPUTE_SHADER, code, prefix);
   if (!shader_id)
     return false;
 
@@ -294,7 +291,7 @@ bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view c
   // original shaders aren't needed any more
   glDeleteShader(shader_id);
 
-  if (!CheckProgramLinkResult(shader.glprogid, full_code, {}, {}))
+  if (!CheckProgramLinkResult(shader.glprogid, code, {}, {}))
   {
     shader.Destroy();
     return false;
@@ -304,21 +301,17 @@ bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view c
   return true;
 }
 
-GLuint ProgramShaderCache::CompileSingleShader(GLenum type, std::string_view code)
+GLuint ProgramShaderCache::CompileSingleShader(GLenum type, std::string_view code,
+                                               const char* prefix)
 {
   const GLuint result = glCreateShader(type);
+  /* the header, any prefix and the code as they are: GL takes the pieces */
+  const char* const src[3] = {s_glsl_header.data(), prefix, code.data()};
+  const GLint src_sizes[3] = {static_cast<GLint>(s_glsl_header.size()),
+                              static_cast<GLint>(strlen(prefix)),
+                              static_cast<GLint>(code.size())};
 
-  constexpr GLsizei num_strings = 2;
-  const std::array<const char*, num_strings> src{
-      s_glsl_header.data(),
-      code.data(),
-  };
-  const std::array<GLint, num_strings> src_sizes{
-      static_cast<GLint>(s_glsl_header.size()),
-      static_cast<GLint>(code.size()),
-  };
-
-  glShaderSource(result, num_strings, src.data(), src_sizes.data());
+  glShaderSource(result, 3, src, src_sizes);
   glCompileShader(result);
 
   /* compiled on the driver's threads: an error shows when the program links */

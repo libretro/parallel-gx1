@@ -48,7 +48,7 @@ std::unique_ptr<AbstractStagingTexture> NullGfx::CreateStagingTexture(StagingTex
 }
 
 std::unique_ptr<AbstractShader>
-NullGfx::CreateShaderFromSource(ShaderStage stage, std::string_view /* source */,
+NullGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* /* source */,
                                 std::string_view /* name */)
 {
   return std::make_unique<AbstractShader>(stage);

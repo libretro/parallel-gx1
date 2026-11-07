@@ -13,8 +13,10 @@
 #include <gfx/shaders/rslc.h>
 
 #include "Common/FileUtil.h"
+#include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 
+#include "VideoCommon/ShaderGenCommon.h"
 #include "VideoCommon/VideoBackendBase.h"
 
 namespace
@@ -88,7 +90,7 @@ constexpr std::string_view COMPUTE_SHADER_HEADER = R"(
 /* A stage's bytecode, compiled by rslc from the GLSL the generators write
  * to shader model 4.0, 4.1 or 5.0 by the feature level. A stage rslc
  * refuses is logged and written to the dump directory with the reason. */
-bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::string_view source,
+bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, ShaderCode* source,
                      ShaderBinary* bytecode)
 {
   static int num_failures;
@@ -96,14 +98,22 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::st
   struct rslc_opts opts;
   struct rslc_result result;
   enum rslc_stage rstage;
-  std::string full;
+  const std::string_view head =
+      stage == ShaderStage::Compute ? COMPUTE_SHADER_HEADER : SHADER_HEADER;
+  /* the header goes in front of the text, not the text after a copy of it */
+  const char* const full = source->Prepend(head.data(), head.size());
+  const size_t full_len = head.size() + source->Size();
 
   rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
            stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
            stage == ShaderStage::Geometry ? RSLC_STAGE_GEOMETRY :
                                             RSLC_STAGE_COMPUTE;
-  full.append(stage == ShaderStage::Compute ? COMPUTE_SHADER_HEADER : SHADER_HEADER);
-  full.append(source);
+  ShaderBinaryInit(bytecode);
+  if (!full)
+  {
+    ERROR_LOG_FMT(VIDEO, "A shader's header does not fit in front of it");
+    return false;
+  }
 
   memset(&opts, 0, sizeof(opts));
   opts.dst = RSLC_DST_DXBC;
@@ -113,8 +123,7 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::st
   opts.err = err;
   opts.err_cap = sizeof(err);
   err[0] = '\0';
-  ShaderBinaryInit(bytecode);
-  if (rslc_compile(full.data(), full.size(), rstage, &opts, &result))
+  if (rslc_compile(full, full_len, rstage, &opts, &result))
   {
     /* the result block is kept whole: the code points into it */
     bytecode->block = result.blob;
@@ -125,9 +134,13 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, std::st
 
   ERROR_LOG_FMT(VIDEO, "rslc could not compile a shader: {}", err);
   {
-    std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
+    const std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
     File::CreateFullPath(path);
-    File::WriteStringToFile(path, fmt::format("{}\n/* rslc: {} */\n", full, err));
+    File::IOFile file(path, "wb");
+    file.WriteBytes(full, full_len);
+    file.WriteBytes("\n/* rslc: ", 10);
+    file.WriteBytes(err, strlen(err));
+    file.WriteBytes(" */\n", 4);
   }
   return false;
 }
@@ -145,7 +158,7 @@ Shader::~Shader()
 }
 
 bool Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
-                           std::string_view source, ShaderBinary* bytecode)
+                           ShaderCode* source, ShaderBinary* bytecode)
 {
   return CompileWithRslc(feature_level, stage, source, bytecode);
 }

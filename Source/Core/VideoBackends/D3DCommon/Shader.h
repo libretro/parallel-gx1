@@ -8,6 +8,8 @@
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/ShaderBinary.h"
 
+class ShaderCode;
+
 namespace D3DCommon
 {
 class Shader : public AbstractShader
@@ -28,7 +30,7 @@ public:
    * block then. False, with the failure logged and dumped, if rslc
    * refused it. */
   static bool CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
-                            std::string_view source, ShaderBinary* bytecode);
+                            ShaderCode* source, ShaderBinary* bytecode);
 
 protected:
   /* Takes the bytecode's block. */

@@ -459,33 +459,33 @@ void ShaderCache::CompileMissingPipelines()
 
 std::unique_ptr<AbstractShader> ShaderCache::CompileVertexShader(const VertexShaderUid& uid) const
 {
-  const ShaderCode source_code =
+  ShaderCode source_code =
       GenerateVertexShaderCode(m_api_type, m_host_config, uid.GetUidData());
-  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer());
+  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code);
 }
 
 std::unique_ptr<AbstractShader>
 ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) const
 {
-  const ShaderCode source_code =
+  ShaderCode source_code =
       UberShader::GenVertexShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code.GetBuffer(),
+  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code,
                                        fmt::to_string(*uid.GetUidData()));
 }
 
 std::unique_ptr<AbstractShader> ShaderCache::CompilePixelShader(const PixelShaderUid& uid) const
 {
-  const ShaderCode source_code =
+  ShaderCode source_code =
       GeneratePixelShaderCode(m_api_type, m_host_config, uid.GetUidData());
-  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer());
+  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code);
 }
 
 std::unique_ptr<AbstractShader>
 ShaderCache::CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const
 {
-  const ShaderCode source_code =
+  ShaderCode source_code =
       UberShader::GenPixelShader(m_api_type, m_host_config, uid.GetUidData());
-  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code.GetBuffer(),
+  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code,
                                        fmt::to_string(*uid.GetUidData()));
 }
 
@@ -583,10 +583,10 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
 
 const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid& uid)
 {
-  const ShaderCode source_code =
+  ShaderCode source_code =
       GenerateGeometryShaderCode(m_api_type, m_host_config, uid.GetUidData());
   std::unique_ptr<AbstractShader> shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code.GetBuffer(),
+      g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code,
                                     fmt::format("Geometry shader: {}", *uid.GetUidData()));
 
   auto& entry = m_gs_cache.shader_map[uid];
@@ -1404,7 +1404,7 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
 
   auto shader_code = TextureConversionShaderGen::GeneratePixelShader(m_api_type, uid.GetUidData());
   auto shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_code.GetBuffer(),
+      ShaderStage::Pixel, shader_code,
       fmt::format("EFB copy to VRAM pixel shader: {}", *uid.GetUidData()));
   if (!shader)
   {
@@ -1433,10 +1433,10 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   if (iter != m_efb_copy_to_ram_pipelines.end())
     return iter->second.get();
 
-  const ShaderCode shader_code =
+  ShaderCode shader_code =
       TextureConversionShaderTiled::GenerateEncodingShader(uid, m_api_type);
   const auto shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_code.GetBuffer(),
+      g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_code,
                                     fmt::format("EFB copy to RAM pixel shader: {}", uid));
   if (!shader)
   {
@@ -1459,31 +1459,31 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
 bool ShaderCache::CompileSharedPipelines()
 {
   m_screen_quad_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateScreenQuadVertexShader().GetBuffer(),
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateScreenQuadVertexShader(),
       "Screen quad vertex shader");
   m_texture_copy_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateTextureCopyVertexShader().GetBuffer(),
+      ShaderStage::Vertex, FramebufferShaderGen::GenerateTextureCopyVertexShader(),
       "Texture copy vertex shader");
   m_efb_copy_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, TextureConversionShaderGen::GenerateVertexShader(m_api_type).GetBuffer(), "EFB copy vertex shader");
+      ShaderStage::Vertex, TextureConversionShaderGen::GenerateVertexShader(m_api_type), "EFB copy vertex shader");
   if (!m_screen_quad_vertex_shader || !m_texture_copy_vertex_shader || !m_efb_copy_vertex_shader)
     return false;
 
   if (UseGeometryShaderForEFBCopies())
   {
     m_texcoord_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(1, 0).GetBuffer(), "Texcoord passthrough geometry shader");
+        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(1, 0), "Texcoord passthrough geometry shader");
     m_color_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(0, 1).GetBuffer(), "Color passthrough geometry shader");
+        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(0, 1), "Color passthrough geometry shader");
     if (!m_texcoord_geometry_shader || !m_color_geometry_shader)
       return false;
   }
 
   m_texture_copy_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateTextureCopyPixelShader().GetBuffer(),
+      ShaderStage::Pixel, FramebufferShaderGen::GenerateTextureCopyPixelShader(),
       "Texture copy pixel shader");
   m_color_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateColorPixelShader().GetBuffer(),
+      ShaderStage::Pixel, FramebufferShaderGen::GenerateColorPixelShader(),
       "Color pixel shader");
   if (!m_texture_copy_pixel_shader || !m_color_pixel_shader)
     return false;
@@ -1520,7 +1520,7 @@ bool ShaderCache::CompileSharedPipelines()
       TLUTFormat format = static_cast<TLUTFormat>(i);
       auto shader = g_gfx->CreateShaderFromSource(
           ShaderStage::Pixel,
-          TextureConversionShaderTiled::GeneratePaletteConversionShader(format, m_api_type).GetBuffer(), fmt::format("Palette conversion pixel shader: {}", format));
+          TextureConversionShaderTiled::GeneratePaletteConversionShader(format, m_api_type), fmt::format("Palette conversion pixel shader: {}", format));
       if (!shader)
         return false;
 
@@ -1549,13 +1549,13 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   if (!inserted)
     return iter->second.get();
 
-  const ShaderCode shader_source =
+  ShaderCode shader_source =
       FramebufferShaderGen::GenerateTextureReinterpretShader(from_format, to_format);
   if (shader_source.GetBuffer().empty())
     return nullptr;
 
   std::unique_ptr<AbstractShader> shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_source.GetBuffer(),
+      ShaderStage::Pixel, shader_source,
       fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format));
   if (!shader)
     return nullptr;
@@ -1584,7 +1584,7 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
   if (!inserted)
     return iter->second.get();
 
-  const ShaderCode shader_source =
+  ShaderCode shader_source =
       TextureConversionShaderTiled::GenerateDecodingShader(format, palette_format, APIType::OpenGL);
   if (shader_source.GetBuffer().empty())
     return nullptr;
@@ -1595,7 +1595,7 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
           fmt::format("Texture decoding compute shader: {}", format);
 
   std::unique_ptr<AbstractShader> shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source.GetBuffer(), name);
+      g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source, name);
   if (!shader)
     return nullptr;
 

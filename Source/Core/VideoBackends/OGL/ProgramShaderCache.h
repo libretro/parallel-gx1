@@ -79,7 +79,8 @@ public:
   // A program linked on the driver's threads, checked once its link is done: true when it can
   // be drawn with. With wait, waits for the link; without, false while it runs.
   static bool FinishLink(PipelineProgram* prog, bool wait);
-  static GLuint CompileSingleShader(GLenum type, std::string_view code);
+  /* prefix, where not empty, goes between the GLSL header and the code */
+  static GLuint CompileSingleShader(GLenum type, std::string_view code, const char* prefix = "");
   static bool CheckShaderCompileResult(GLuint id, GLenum type, std::string_view code);
   static bool CheckProgramLinkResult(GLuint id, std::string_view vcode, std::string_view pcode,
                                      std::string_view gcode);

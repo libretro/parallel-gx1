@@ -17,6 +17,7 @@
 #include "VideoCommon/AbstractTexture.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/RenderState.h"
+#include "VideoCommon/ShaderGenCommon.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
@@ -289,34 +290,36 @@ void SetOutput(float4 color) { ocol0 = color; }
 
 )";
 
-std::string PixelShaderSource(const char* body)
+ShaderCode PixelShaderSource(const char* body)
 {
-  std::string source = s_uniform_block;
+  ShaderCode source;
+  source.Puts(s_uniform_block);
   if (g_backend_info.bSupportsGeometryShaders)
-    source += "VARYING_LOCATION(0) in VertexData {\n  float3 v_tex0;\n};\n";
+    source.Puts("VARYING_LOCATION(0) in VertexData {\n  float3 v_tex0;\n};\n");
   else
-    source += "VARYING_LOCATION(0) in float3 v_tex0;\n";
-  source += s_pixel_header;
-  source += body;
+    source.Puts("VARYING_LOCATION(0) in float3 v_tex0;\n");
+  source.Puts(s_pixel_header);
+  source.Puts(body);
   return source;
 }
 
-std::string VertexShaderSource()
+ShaderCode VertexShaderSource()
 {
-  std::string source = s_uniform_block;
+  ShaderCode source;
+  source.Puts(s_uniform_block);
   if (g_backend_info.bSupportsGeometryShaders)
-    source += "VARYING_LOCATION(0) out VertexData {\n  float3 v_tex0;\n};\n";
+    source.Puts("VARYING_LOCATION(0) out VertexData {\n  float3 v_tex0;\n};\n");
   else
-    source += "VARYING_LOCATION(0) out float3 v_tex0;\n";
-  source += R"(void main() {
-  v_tex0 = float3(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2), 0.0f);
-  gl_Position = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);
-  v_tex0 = float3(src_rect.xy + (src_rect.zw * v_tex0.xy), float(src_layer));
-)";
+    source.Puts("VARYING_LOCATION(0) out float3 v_tex0;\n");
+  source.Puts("void main() {\n"
+              "  v_tex0 = float3(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2), 0.0f);\n"
+              "  gl_Position = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), "
+              "0.0f, 1.0f);\n"
+              "  v_tex0 = float3(src_rect.xy + (src_rect.zw * v_tex0.xy), float(src_layer));\n");
   // Vulkan's Y axis points down
   if (g_backend_info.api_type == APIType::Vulkan)
-    source += "  gl_Position.y = -gl_Position.y;\n";
-  source += "}\n";
+    source.Puts("  gl_Position.y = -gl_Position.y;\n");
+  source.Puts("}\n");
   return source;
 }
 }  // namespace

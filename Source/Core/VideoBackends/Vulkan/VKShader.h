@@ -13,6 +13,8 @@
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/ShaderBinary.h"
 
+class ShaderCode;
+
 namespace Vulkan
 {
 class VKShader final : public AbstractShader
@@ -34,7 +36,7 @@ public:
     return m_spv.code;
   }
 
-  static std::unique_ptr<VKShader> CreateFromSource(ShaderStage stage, std::string_view source,
+  static std::unique_ptr<VKShader> CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                     std::string_view name);
   static std::unique_ptr<VKShader> CreateFromBinary(ShaderStage stage, const void* data,
                                                     size_t length, std::string_view name);

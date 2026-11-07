@@ -28,7 +28,7 @@ std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, Shader
   return shader;
 }
 
-std::unique_ptr<DXShader> DXShader::CreateFromSource(ShaderStage stage, std::string_view source,
+std::unique_ptr<DXShader> DXShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                      std::string_view name)
 {
   ShaderBinary bytecode;

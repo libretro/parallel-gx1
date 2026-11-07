@@ -232,7 +232,7 @@ OGLGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* de
 }
 
 std::unique_ptr<AbstractShader>
-OGLGfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
+OGLGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                                std::string_view name)
 {
   return OGLShader::CreateFromSource(stage, source, name);

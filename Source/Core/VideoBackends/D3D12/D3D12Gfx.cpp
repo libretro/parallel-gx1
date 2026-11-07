@@ -71,7 +71,7 @@ Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth
 }
 
 std::unique_ptr<AbstractShader>
-Gfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
+Gfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                             std::string_view name)
 {
   return DXShader::CreateFromSource(stage, source, name);

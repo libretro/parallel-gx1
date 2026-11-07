@@ -65,7 +65,7 @@ bool SWGfx::BindBackbuffer(const ClearColor& clear_color)
 }
 
 std::unique_ptr<AbstractShader>
-SWGfx::CreateShaderFromSource(ShaderStage stage, std::string_view /* source */,
+SWGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* /* source */,
                               std::string_view /* name */)
 {
   return std::make_unique<AbstractShader>(stage);

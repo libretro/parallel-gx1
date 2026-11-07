@@ -713,7 +713,7 @@ bool AbstractGfx::IsTextureHeld(const AbstractTexture* texture)
 }
 
 std::unique_ptr<AbstractShader> AbstractGfx::CreateShaderFromSource(ShaderStage stage,
-                                                                    std::string_view source,
+                                                                    ShaderCode* source,
                                                                     std::string_view name)
 {
   switch (g_video_backend_kind)

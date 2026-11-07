@@ -32,7 +32,7 @@ public:
   std::unique_ptr<AbstractStagingTexture>
   CreateStagingTexture(StagingTextureType type, const TextureConfig& config);
   std::unique_ptr<AbstractShader>
-  CreateShaderFromSource(ShaderStage stage, std::string_view source,
+  CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                          std::string_view name);
   std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,

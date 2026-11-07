@@ -48,6 +48,8 @@ using ClearColor = std::array<float, 4>;
 // Abstract knows nothing about the internals of the GameCube/Wii, that is all handled elsewhere in
 // VideoCommon.
 
+class ShaderCode;
+
 class AbstractGfx
 {
 public:
@@ -112,9 +114,20 @@ public:
    * shows the pictures; kept alive by the caller until it is not. */
   bool IsTextureHeld(const AbstractTexture* texture);
 
-  // Shader modules/objects.
-  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, std::string_view source,
+  // Shader modules/objects. The source's text is the backend's to write its header in front
+  // of, or to take.
+  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                                                          std::string_view name = "");
+  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, ShaderCode& source,
+                                                         std::string_view name = "")
+  {
+    return CreateShaderFromSource(stage, &source, name);
+  }
+  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, ShaderCode&& source,
+                                                         std::string_view name = "")
+  {
+    return CreateShaderFromSource(stage, &source, name);
+  }
   std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length, std::string_view name = "");
   std::unique_ptr<NativeVertexFormat>

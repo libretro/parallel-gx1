@@ -23,7 +23,7 @@ public:
   /* Takes the bytecode's block. */
   static std::unique_ptr<DXShader> CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
                                                       std::string_view name);
-  static std::unique_ptr<DXShader> CreateFromSource(ShaderStage stage, std::string_view source,
+  static std::unique_ptr<DXShader> CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                     std::string_view name);
 
 private:

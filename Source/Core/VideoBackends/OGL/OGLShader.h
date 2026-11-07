@@ -10,24 +10,32 @@
 #include "Common/CommonTypes.h"
 #include "Common/GL/GLExtensions/GLExtensions.h"
 #include "VideoCommon/AbstractShader.h"
+#include "VideoCommon/ShaderText.h"
+
+class ShaderCode;
 
 namespace OGL
 {
 class OGLShader final : public AbstractShader
 {
 public:
-  explicit OGLShader(ShaderStage stage, GLenum gl_type, GLuint gl_id, std::string source,
+  /* Both take the source's block. */
+  explicit OGLShader(ShaderStage stage, GLenum gl_type, GLuint gl_id, shader_text source,
                      std::string name);
-  explicit OGLShader(GLuint gl_compute_program_id, std::string source, std::string name);
+  explicit OGLShader(GLuint gl_compute_program_id, shader_text source, std::string name);
   ~OGLShader();
 
   u64 GetID() const { return m_id; }
   GLenum GetGLShaderType() const { return m_type; }
   GLuint GetGLShaderID() const { return m_gl_id; }
   GLuint GetGLComputeProgramID() const { return m_gl_compute_program_id; }
-  const std::string& GetSource() const { return m_source; }
+  std::string_view GetSource() const
+  {
+    return std::string_view(shader_text_data(&m_source), shader_text_len(&m_source));
+  }
 
-  static std::unique_ptr<OGLShader> CreateFromSource(ShaderStage stage, std::string_view source,
+  /* Takes the source's text: the shader keeps it for its link's messages. */
+  static std::unique_ptr<OGLShader> CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                      std::string_view name);
 
 private:
@@ -35,7 +43,7 @@ private:
   GLenum m_type;
   GLuint m_gl_id = 0;
   GLuint m_gl_compute_program_id = 0;
-  std::string m_source;
+  shader_text m_source;
   std::string m_name;
 };
 

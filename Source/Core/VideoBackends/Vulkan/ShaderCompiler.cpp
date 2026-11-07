@@ -12,6 +12,7 @@
 #include <gfx/shaders/rslc.h>
 
 #include "Common/FileUtil.h"
+#include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/DriverDetails.h"
@@ -97,39 +98,52 @@ static const char SUBGROUP_HELPER_HEADER[] =
     "#define SUBGROUP_MIN(value) value = subgroupMin(value)\n"
     "#define SUBGROUP_MAX(value) value = subgroupMax(value)\n";
 
-/* The stage's full text: the header, then the generator's source. */
-static std::string GetShaderCode(std::string_view source, std::string_view header)
+/* The stage's header: the base one, then what the device and its driver's bugs want. */
+static size_t GetShaderHeader(char* head, size_t cap, bool compute)
 {
-  std::string full_source_code;
-  full_source_code.reserve(header.size() + sizeof(SUBGROUP_HELPER_HEADER) + source.size());
-  full_source_code.append(header);
-  if (g_vulkan_context->SupportsShaderSubgroupOperations())
-    full_source_code.append(SUBGROUP_HELPER_HEADER, sizeof(SUBGROUP_HELPER_HEADER) - 1);
-  if (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER))
+  const char* const parts[4] = {
+      compute ? COMPUTE_SHADER_HEADER : SHADER_HEADER,
+      g_vulkan_context->SupportsShaderSubgroupOperations() ? SUBGROUP_HELPER_HEADER : "",
+      DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER) ?
+          "#define gl_HelperInvocation !gl_HelperInvocation "
+          "// Work around broken AMD Metal driver\n" :
+          "",
+      DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD) ?
+          "#define BROKEN_SUBGROUP_WITH_DISCARD 1\n" :
+          ""};
+  size_t len = 0;
+  int i;
+
+  for (i = 0; i < 4; i++)
   {
-    full_source_code.append("#define gl_HelperInvocation !gl_HelperInvocation "
-                            "// Work around broken AMD Metal driver\n");
+    const size_t n = strlen(parts[i]);
+    if (len + n > cap)
+      return 0;
+    memcpy(head + len, parts[i], n);
+    len += n;
   }
-  if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD))
-    full_source_code.append("#define BROKEN_SUBGROUP_WITH_DISCARD 1\n");
-  full_source_code.append(source);
-  return full_source_code;
+  return len;
 }
 
 /* A failed stage is logged and written to the dump directory with the error. */
-static void ReportFailure(const char* stage_name, const std::string& source, const char* err)
+static void ReportFailure(const char* stage_name, const char* text, size_t len, const char* err)
 {
   static int counter;
-  std::string path = VideoBackendBase::BadShaderFilename(stage_name, counter++);
+  const std::string path = VideoBackendBase::BadShaderFilename(stage_name, counter++);
 
   ERROR_LOG_FMT(VIDEO, "rslc could not compile a {} shader: {}", stage_name, err);
   File::CreateFullPath(path);
-  File::WriteStringToFile(path, fmt::format("{}\n/* rslc: {} */\n", source, err));
+  File::IOFile file(path, "wb");
+  file.WriteBytes(text, len);
+  file.WriteBytes("\n/* rslc: ", 10);
+  file.WriteBytes(err, strlen(err));
+  file.WriteBytes(" */\n", 4);
 }
 
-bool Compile(ShaderStage stage, std::string_view source_code, ShaderBinary* spirv)
+bool Compile(ShaderStage stage, ShaderCode* source, ShaderBinary* spirv)
 {
   char err[1024];
+  char head[SHADER_TEXT_HEAD_ROOM];
   struct rslc_opts opts;
   struct rslc_result result;
   const enum rslc_stage rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
@@ -140,18 +154,25 @@ bool Compile(ShaderStage stage, std::string_view source_code, ShaderBinary* spir
                                  stage == ShaderStage::Geometry ? "gs" :
                                  stage == ShaderStage::Pixel    ? "ps" :
                                                                   "cs";
-  std::string source = GetShaderCode(
-      source_code, rstage == RSLC_STAGE_COMPUTE ? COMPUTE_SHADER_HEADER : SHADER_HEADER);
+  const size_t head_len = GetShaderHeader(head, sizeof(head), rstage == RSLC_STAGE_COMPUTE);
+  /* the header goes in front of the text, not the text after a copy of it */
+  const char* const text = head_len ? source->Prepend(head, head_len) : nullptr;
+  const size_t text_len = head_len + source->Size();
 
   ShaderBinaryInit(spirv);
+  if (!text)
+  {
+    ERROR_LOG_FMT(VIDEO, "The {} shader's header does not fit in front of it", stage_name);
+    return false;
+  }
   memset(&opts, 0, sizeof(opts));
   opts.dst = RSLC_DST_SPIRV;
   opts.err = err;
   opts.err_cap = sizeof(err);
   err[0] = '\0';
-  if (!rslc_compile(source.data(), source.size(), rstage, &opts, &result))
+  if (!rslc_compile(text, text_len, rstage, &opts, &result))
   {
-    ReportFailure(stage_name, source, err);
+    ReportFailure(stage_name, text, text_len, err);
     return false;
   }
   /* the result block is kept whole: the words point into it */

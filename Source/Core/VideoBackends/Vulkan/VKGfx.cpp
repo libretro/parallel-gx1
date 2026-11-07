@@ -62,7 +62,7 @@ std::unique_ptr<AbstractStagingTexture> VKGfx::CreateStagingTexture(StagingTextu
 }
 
 std::unique_ptr<AbstractShader>
-VKGfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
+VKGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                               std::string_view name)
 {
   return VKShader::CreateFromSource(stage, source, name);

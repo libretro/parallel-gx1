@@ -111,7 +111,7 @@ static std::unique_ptr<VKShader> CreateShaderObject(ShaderStage stage, ShaderBin
   return std::make_unique<VKShader>(spv, pipeline, name);
 }
 
-std::unique_ptr<VKShader> VKShader::CreateFromSource(ShaderStage stage, std::string_view source,
+std::unique_ptr<VKShader> VKShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                      std::string_view name)
 {
   ShaderBinary spv;
