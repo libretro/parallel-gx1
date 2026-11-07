@@ -3,11 +3,14 @@
 
 #include "VideoBackends/Software/SWGfx.h"
 
-#include "Common/GL/GLContext.h"
+#include <algorithm>
+
+#ifdef __LIBRETRO__
+#include "DolphinLibretro/Common/Globals.h"
+#endif
 
 #include "VideoBackends/Software/EfbCopy.h"
 #include "VideoBackends/Software/Rasterizer.h"
-#include "VideoBackends/Software/SWOGLWindow.h"
 #include "VideoBackends/Software/SWTexture.h"
 
 #include "VideoCommon/AbstractPipeline.h"
@@ -15,18 +18,17 @@
 #include "VideoCommon/AbstractTexture.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/Present.h"
+#include "VideoCommon/VideoCommon.h"
 
 namespace SW
 {
-SWGfx::SWGfx(std::unique_ptr<SWOGLWindow> window) : m_window(std::move(window))
-{
-}
+SWGfx::SWGfx() = default;
 
 SWGfx::~SWGfx() = default;
 
 bool SWGfx::IsHeadless() const
 {
-  return m_window->IsHeadless();
+  return false;
 }
 
 bool SWGfx::SupportsUtilityDrawing() const
@@ -98,12 +100,41 @@ std::unique_ptr<AbstractPipeline> SWGfx::CreatePipeline(const AbstractPipelineCo
   return std::make_unique<SWPipeline>();
 }
 
-// Called on the GPU thread
+// Called on the GPU thread. The frontend takes the picture in memory, in
+// its XRGB8888 order: one pass from the texture's RGBA8, into a buffer
+// that grows only when the picture does.
 void SWGfx::ShowImage(const AbstractTexture* source_texture,
                       const MathUtil::Rectangle<int>& source_rc)
 {
-  if (!IsHeadless())
-    m_window->ShowImage(source_texture, source_rc);
+  const SWTexture* texture = static_cast<const SWTexture*>(source_texture);
+  const u32 tex_width = texture->GetWidth();
+  const u32 tex_height = texture->GetHeight();
+  const u32 left = static_cast<u32>(std::clamp(source_rc.left, 0, static_cast<int>(tex_width)));
+  const u32 top = static_cast<u32>(std::clamp(source_rc.top, 0, static_cast<int>(tex_height)));
+  const u32 right =
+      static_cast<u32>(std::clamp(source_rc.right, static_cast<int>(left), static_cast<int>(tex_width)));
+  const u32 bottom =
+      static_cast<u32>(std::clamp(source_rc.bottom, static_cast<int>(top), static_cast<int>(tex_height)));
+  const u32 width = right - left;
+  const u32 height = bottom - top;
+  if (!width || !height)
+    return;
+
+  if (m_picture.size() < static_cast<size_t>(width) * height)
+    m_picture.resize(static_cast<size_t>(width) * height);
+
+  const u8* src = texture->GetData(0, 0) + (static_cast<size_t>(top) * tex_width + left) * 4;
+  u32* dst = m_picture.data();
+  for (u32 y = 0; y < height; y++)
+  {
+    const u8* s = src + static_cast<size_t>(y) * tex_width * 4;
+    for (u32 x = 0; x < width; x++, s += 4)
+      *dst++ = (static_cast<u32>(s[0]) << 16) | (static_cast<u32>(s[1]) << 8) | s[2];
+  }
+
+#ifdef __LIBRETRO__
+  Libretro::Video::video_cb(m_picture.data(), width, height, width * 4);
+#endif
 }
 
 void SWGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable,
@@ -129,9 +160,7 @@ void SWGfx::SetScissorRect(const MathUtil::Rectangle<int>& rc)
 
 SurfaceInfo SWGfx::GetSurfaceInfo() const
 {
-  GLContext* context = m_window->GetContext();
-  return {std::max(context->GetBackBufferWidth(), 1u), std::max(context->GetBackBufferHeight(), 1u),
-          1.0f, AbstractTextureFormat::RGBA8};
+  return {EFB_WIDTH, EFB_HEIGHT, 1.0f, AbstractTextureFormat::RGBA8};
 }
 
 }  // namespace SW

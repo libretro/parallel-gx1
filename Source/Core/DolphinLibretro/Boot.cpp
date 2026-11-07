@@ -800,6 +800,12 @@ bool retro_load_game(const struct retro_game_info* game)
     Libretro::generate_cht_from_ini(filename_str);
   }
 
+  /* The software and null renderers draw without a hardware context: no
+   * context_reset comes from the frontend, so they come up here, where
+   * one would follow. */
+  if (Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_NONE)
+    Libretro::Video::ContextReset();
+
   return true;
 }
 

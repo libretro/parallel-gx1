@@ -346,17 +346,6 @@ void retro_run(void)
 
     Libretro::g_emuthread_launched = true;
 
-    if(Config::Get(Config::MAIN_GFX_BACKEND) == "Software Renderer")
-    {
-      g_gfx.reset();
-      g_gfx = std::make_unique<Libretro::Video::SWGfx>();
-    }
-    else if (Config::Get(Config::MAIN_GFX_BACKEND) == "Null")
-    {
-      g_gfx.reset();
-      g_gfx = std::make_unique<Libretro::Video::NullGfx>();
-    }
-
     Libretro::g_core_refresh_rate = system.GetVideoInterface().GetTargetRefreshRate();
     Libretro::s_refresh_rate_settled = false;
 

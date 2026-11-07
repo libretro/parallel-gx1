@@ -1227,7 +1227,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoBackends/Software/SWBoundingBox.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Software/SWEfbInterface.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Software/SWGfx.cpp \
-	$(CORE_DIR)/Source/Core/VideoBackends/Software/SWOGLWindow.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Software/SWTexture.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Software/SWVertexLoader.cpp \
 	$(CORE_DIR)/Source/Core/VideoBackends/Software/Tev.cpp \

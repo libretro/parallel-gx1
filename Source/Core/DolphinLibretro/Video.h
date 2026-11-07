@@ -3,10 +3,6 @@
 #include <libretro.h>
 #include "DolphinLibretro/Common/Globals.h"
 #include "DolphinLibretro/Common/Options.h"
-#include "VideoBackends/Null/NullGfx.h"
-#include "VideoBackends/Software/SWOGLWindow.h"
-#include "VideoBackends/Software/SWGfx.h"
-#include "VideoBackends/Software/SWTexture.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 #include "Common/Logging/Log.h"
@@ -80,39 +76,6 @@ bool GpuThreadWaitField(int64_t deadline_us);
  * thread may use the video state, and lets it go again. */
 void GpuThreadPark();
 void GpuThreadUnpark();
-
-class SWGfx : public SW::SWGfx
-{
-public:
-  SWGfx()
-    : SW::SWGfx(SWOGLWindow::Create(
-            WindowSystemInfo(WindowSystemType::Libretro, nullptr, nullptr, nullptr)))
-  {
-  }
-  void ShowImage(const AbstractTexture* source_texture,
-                 const MathUtil::Rectangle<int>& source_rc) override
-  {
-    SW::SWGfx::ShowImage(source_texture, source_rc);
-    video_cb(
-      static_cast<const SW::SWTexture*>(source_texture)->GetData(0, 0),
-      source_rc.GetWidth(),
-      source_rc.GetHeight(),
-      source_texture->GetWidth() * 4
-    );
-    UpdateActiveConfig();
-  }
-};
-
-class NullGfx : public Null::NullGfx
-{
-public:
-  void ShowImage(const AbstractTexture* source_texture,
-                 const MathUtil::Rectangle<int>& source_rc) override
-  {
-    video_cb(NULL, 512, 512, 512 * 4);
-    UpdateActiveConfig();
-  }
-};
 
 #ifdef HAS_VULKAN
 namespace Vk

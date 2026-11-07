@@ -3,16 +3,16 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractGfx.h"
+#include <vector>
 
-class SWOGLWindow;
+#include "VideoCommon/AbstractGfx.h"
 
 namespace SW
 {
 class SWGfx : public AbstractGfx
 {
 public:
-  explicit SWGfx(std::unique_ptr<SWOGLWindow> window);
+  SWGfx();
   ~SWGfx() override;
 
   bool IsHeadless() const override;
@@ -55,7 +55,7 @@ public:
   SurfaceInfo GetSurfaceInfo() const override;
 
 private:
-  std::unique_ptr<SWOGLWindow> m_window;
+  std::vector<u32> m_picture;
 };
 
 }  // namespace SW

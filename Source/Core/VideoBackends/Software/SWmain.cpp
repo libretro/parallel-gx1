@@ -15,7 +15,6 @@
 #include "VideoBackends/Software/SWBoundingBox.h"
 #include "VideoBackends/Software/SWEfbInterface.h"
 #include "VideoBackends/Software/SWGfx.h"
-#include "VideoBackends/Software/SWOGLWindow.h"
 #include "VideoBackends/Software/SWVertexLoader.h"
 #include "VideoBackends/Software/TextureCache.h"
 
@@ -91,14 +90,10 @@ void VideoSoftware::InitBackendInfo(const WindowSystemInfo& wsi)
 
 bool VideoSoftware::Initialize(const WindowSystemInfo& wsi)
 {
-  std::unique_ptr<SWOGLWindow> window = SWOGLWindow::Create(wsi);
-  if (!window)
-    return false;
-
   Clipper::Init();
   Rasterizer::Init();
 
-  return InitializeShared(std::make_unique<SWGfx>(std::move(window)),
+  return InitializeShared(std::make_unique<SWGfx>(),
                           std::make_unique<SWVertexLoader>(), std::make_unique<PerfQuery>(),
                           std::make_unique<SWBoundingBox>(), std::make_unique<SWEFBInterface>(),
                           std::make_unique<TextureCache>());
