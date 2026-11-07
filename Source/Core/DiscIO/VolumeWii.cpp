@@ -77,10 +77,12 @@ VolumeWii::VolumeWii(std::unique_ptr<BlobReader> reader)
         m_game_partition = partition;
 
       auto get_ticket = [this, partition]() -> IOS::ES::TicketReader {
-        std::vector<u8> ticket_buffer(sizeof(IOS::ES::Ticket));
-        if (!m_reader->Read(partition.offset, ticket_buffer.size(), ticket_buffer.data()))
+        // read straight into the reader
+        IOS::ES::TicketReader ticket;
+        u8* const bytes = ticket.ResizeBytes(sizeof(IOS::ES::Ticket));
+        if (!bytes || !m_reader->Read(partition.offset, sizeof(IOS::ES::Ticket), bytes))
           return INVALID_TICKET;
-        return IOS::ES::TicketReader{std::move(ticket_buffer)};
+        return ticket;
       };
 
       auto get_tmd = [this, partition]() -> IOS::ES::TMDReader {
@@ -97,10 +99,11 @@ VolumeWii::VolumeWii(std::unique_ptr<BlobReader> reader)
           ERROR_LOG_FMT(DISCIO, "Invalid TMD size");
           return INVALID_TMD;
         }
-        std::vector<u8> tmd_buffer(*tmd_size);
-        if (!m_reader->Read(partition.offset + *tmd_address, *tmd_size, tmd_buffer.data()))
+        IOS::ES::TMDReader tmd;
+        u8* const bytes = tmd.ResizeBytes(*tmd_size);
+        if (!bytes || !m_reader->Read(partition.offset + *tmd_address, *tmd_size, bytes))
           return INVALID_TMD;
-        return IOS::ES::TMDReader{std::move(tmd_buffer)};
+        return tmd;
       };
 
       auto get_cert_chain = [this, partition]() -> std::vector<u8> {

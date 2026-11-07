@@ -28,11 +28,14 @@ static ES::TMDReader FindTMD(FSCore& fs, const std::string& tmd_path, Ticks tick
   if (fd.Get() < 0)
     return {};
 
-  std::vector<u8> tmd_bytes(fs.GetFileStatus(fd.Get(), ticks)->size);
-  if (!fs.Read(fd.Get(), tmd_bytes.data(), tmd_bytes.size(), ticks))
+  // read straight into the reader
+  const u32 size = fs.GetFileStatus(fd.Get(), ticks)->size;
+  ES::TMDReader tmd;
+  u8* const bytes = tmd.ResizeBytes(size);
+  if (size && (!bytes || !fs.Read(fd.Get(), bytes, size, ticks)))
     return {};
 
-  return ES::TMDReader{std::move(tmd_bytes)};
+  return tmd;
 }
 
 ES::TMDReader ESCore::FindImportTMD(u64 title_id, Ticks ticks) const
@@ -65,11 +68,14 @@ ES::TicketReader ESCore::FindSignedTicket(u64 title_id, std::optional<u8> desire
       return {};
   }
 
-  std::vector<u8> signed_ticket(ticket_file->GetStatus()->size);
-  if (!ticket_file->Read(signed_ticket.data(), signed_ticket.size()))
+  // read straight into the reader
+  const u32 size = ticket_file->GetStatus()->size;
+  ES::TicketReader ticket;
+  u8* const bytes = ticket.ResizeBytes(size);
+  if (size && (!bytes || !ticket_file->Read(bytes, size)))
     return {};
 
-  return ES::TicketReader{std::move(signed_ticket)};
+  return ticket;
 }
 
 static bool IsValidPartOfTitleID(const std::string& string)

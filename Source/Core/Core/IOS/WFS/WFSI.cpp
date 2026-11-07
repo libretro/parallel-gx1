@@ -160,10 +160,10 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
       return_error_code = IPC_EINVAL;
       break;
     }
-    std::vector<u8> tmd_bytes;
-    tmd_bytes.resize(tmd_size);
-    memory.CopyFromEmu(tmd_bytes.data(), tmd_addr, tmd_size);
-    m_tmd.SetBytes(std::move(tmd_bytes));
+    // read into the reader straight from guest memory
+    u8* const tmd_bytes = m_tmd.ResizeBytes(tmd_size);
+    if (tmd_bytes)
+      memory.CopyFromEmu(tmd_bytes, tmd_addr, tmd_size);
 
     const ES::TicketReader ticket =
         GetEmulationKernel().GetESCore().FindSignedTicket(m_tmd.GetTitleId());

@@ -256,10 +256,12 @@ IOS::ES::TMDReader FindBackupTMD(IOS::HLE::FS::FileSystem& fs, u64 title_id)
     if (tid == title_id)
     {
       // found the right TMD
-      std::vector<u8> tmd_bytes(tmd_length);
-      if (!file->Read(tmd_bytes.data(), tmd_length))
+      // read straight into the reader
+      IOS::ES::TMDReader tmd;
+      u8* const bytes = tmd.ResizeBytes(tmd_length);
+      if (tmd_length && (!bytes || !file->Read(bytes, tmd_length)))
         return {};
-      return IOS::ES::TMDReader(std::move(tmd_bytes));
+      return tmd;
     }
 
     // not the right TMD, skip this one and go to the next
@@ -655,7 +657,7 @@ OnlineSystemUpdater::DownloadTMD(const std::string& prefix_url, const TitleInfo&
   const auto tmd_begin = response->begin();
   const auto tmd_end = tmd_begin + tmd_size;
 
-  return {IOS::ES::TMDReader(std::vector<u8>(tmd_begin, tmd_end)),
+  return {IOS::ES::TMDReader(std::span<const u8>(response->data(), tmd_size)),
           std::vector<u8>(tmd_end, response->end())};
 }
 

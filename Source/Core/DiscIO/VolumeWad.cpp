@@ -45,9 +45,10 @@ VolumeWAD::VolumeWAD(std::unique_ptr<BlobReader> reader) : m_reader(std::move(re
   m_data_offset = m_tmd_offset + Common::AlignUp(m_tmd_size, 0x40);
   m_opening_bnr_offset = m_data_offset + Common::AlignUp(m_data_size, 0x40);
 
-  std::vector<u8> ticket_buffer(m_ticket_size);
-  Read(m_ticket_offset, m_ticket_size, ticket_buffer.data());
-  m_ticket.SetBytes(std::move(ticket_buffer));
+  // read straight into the reader
+  u8* const ticket_bytes = m_ticket.ResizeBytes(m_ticket_size);
+  if (ticket_bytes)
+    Read(m_ticket_offset, m_ticket_size, ticket_bytes);
 
   if (!IOS::ES::IsValidTMDSize(m_tmd_size))
   {
@@ -55,9 +56,9 @@ VolumeWAD::VolumeWAD(std::unique_ptr<BlobReader> reader) : m_reader(std::move(re
     return;
   }
 
-  std::vector<u8> tmd_buffer(m_tmd_size);
-  Read(m_tmd_offset, m_tmd_size, tmd_buffer.data());
-  m_tmd.SetBytes(std::move(tmd_buffer));
+  u8* const tmd_bytes = m_tmd.ResizeBytes(m_tmd_size);
+  if (tmd_bytes)
+    Read(m_tmd_offset, m_tmd_size, tmd_bytes);
 
   m_cert_chain.resize(m_cert_chain_size);
   Read(m_cert_chain_offset, m_cert_chain_size, m_cert_chain.data());

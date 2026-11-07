@@ -11,6 +11,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -170,10 +171,21 @@ class SignedBlobReader
 {
 public:
   SignedBlobReader() = default;
-  explicit SignedBlobReader(std::vector<u8> bytes);
+  // Copies the bytes.
+  explicit SignedBlobReader(std::span<const u8> bytes);
+  SignedBlobReader(const SignedBlobReader& other);
+  SignedBlobReader(SignedBlobReader&& other) noexcept;
+  SignedBlobReader& operator=(const SignedBlobReader& other);
+  SignedBlobReader& operator=(SignedBlobReader&& other) noexcept;
+  ~SignedBlobReader();
 
-  const std::vector<u8>& GetBytes() const;
-  void SetBytes(std::vector<u8> bytes);
+  std::span<const u8> GetBytes() const { return {m_bytes, m_size}; }
+  // Copies the bytes.
+  void SetBytes(std::span<const u8> bytes);
+  // Room for size bytes, to be filled in place - read straight from a file
+  // or a disc. What was there up to size is kept. Returns nullptr, with
+  // nothing held, when there is no memory.
+  u8* ResizeBytes(size_t size);
 
   /// Get the SHA1 hash for this signed blob (starting at the issuer).
   std::array<u8, 20> GetSha1() const;
@@ -191,7 +203,8 @@ public:
   void DoState(PointerWrap& p);
 
 protected:
-  std::vector<u8> m_bytes;
+  u8* m_bytes = nullptr;
+  size_t m_size = 0;
 };
 
 bool IsValidTMDSize(size_t size);
@@ -200,7 +213,7 @@ class TMDReader final : public SignedBlobReader
 {
 public:
   TMDReader() = default;
-  explicit TMDReader(std::vector<u8> bytes);
+  explicit TMDReader(std::span<const u8> bytes);
 
   bool IsValid() const;
 
@@ -237,7 +250,7 @@ class TicketReader final : public SignedBlobReader
 {
 public:
   TicketReader() = default;
-  explicit TicketReader(std::vector<u8> bytes);
+  explicit TicketReader(std::span<const u8> bytes);
 
   bool IsValid() const;
   bool IsV1Ticket() const;
@@ -319,7 +332,9 @@ private:
 class CertReader final : public SignedBlobReader
 {
 public:
-  explicit CertReader(std::vector<u8>&& bytes);
+  // The certificate at the start of bytes, which may go on past it; only
+  // the certificate is copied.
+  explicit CertReader(std::span<const u8> bytes);
 
   bool IsValid() const;
 
@@ -335,6 +350,6 @@ private:
   bool m_is_valid = false;
 };
 
-std::map<std::string, CertReader> ParseCertChain(const std::vector<u8>& chain);
+std::map<std::string, CertReader> ParseCertChain(std::span<const u8> chain);
 }  // namespace ES
 }  // namespace IOS

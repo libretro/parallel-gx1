@@ -86,11 +86,14 @@ IPCReply ESDevice::GetTMDStoredContentsCount(const IOCtlVRequest& request)
   if (!request.HasNumberOfValidVectors(1, 1))
     return IPCReply(ES_EINVAL);
 
-  std::vector<u8> tmd_bytes(request.in_vectors[0].size);
+  // read into the reader straight from guest memory
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
-  memory.CopyFromEmu(tmd_bytes.data(), request.in_vectors[0].address, tmd_bytes.size());
-  return GetStoredContentsCount(ES::TMDReader{std::move(tmd_bytes)}, request);
+  ES::TMDReader tmd;
+  u8* const bytes = tmd.ResizeBytes(request.in_vectors[0].size);
+  if (bytes)
+    memory.CopyFromEmu(bytes, request.in_vectors[0].address, request.in_vectors[0].size);
+  return GetStoredContentsCount(tmd, request);
 }
 
 IPCReply ESDevice::GetTMDStoredContents(const IOCtlVRequest& request)
@@ -195,7 +198,7 @@ IPCReply ESDevice::GetStoredTMD(const IOCtlVRequest& request)
   // TODO: actually use this param in when writing to the outbuffer :/
   const u32 MaxCount = memory.Read_U32(request.in_vectors[1].address);
 
-  const std::vector<u8>& raw_tmd = tmd.GetBytes();
+  const std::span<const u8> raw_tmd = tmd.GetBytes();
   if (raw_tmd.size() != request.io_vectors[0].size)
     return IPCReply(ES_EINVAL);
 

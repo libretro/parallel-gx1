@@ -125,13 +125,13 @@ public:
     No,
     Yes,
   };
-  ReturnCode ImportTicket(const std::vector<u8>& ticket_bytes, const std::vector<u8>& cert_chain,
+  ReturnCode ImportTicket(std::span<const u8> ticket_bytes, std::span<const u8> cert_chain,
                           TicketImportType type = TicketImportType::PossiblyPersonalised,
                           VerifySignature verify_signature = VerifySignature::Yes);
-  ReturnCode ImportTmd(Context& context, const std::vector<u8>& tmd_bytes, u64 caller_title_id,
+  ReturnCode ImportTmd(Context& context, std::span<const u8> tmd_bytes, u64 caller_title_id,
                        u32 caller_title_flags);
-  ReturnCode ImportTitleInit(Context& context, const std::vector<u8>& tmd_bytes,
-                             const std::vector<u8>& cert_chain,
+  ReturnCode ImportTitleInit(Context& context, std::span<const u8> tmd_bytes,
+                             std::span<const u8> cert_chain,
                              VerifySignature verify_signature = VerifySignature::Yes);
   ReturnCode ImportContentBegin(Context& context, u64 title_id, u32 content_id);
   ReturnCode ImportContentData(Context& context, u32 content_fd, const u8* data, u32 data_size);
@@ -180,9 +180,9 @@ public:
   // The caller is responsible for using IOSC_DeleteObject.
   ReturnCode VerifyContainer(VerifyContainerType type, VerifyMode mode,
                              const ES::SignedBlobReader& signed_blob,
-                             const std::vector<u8>& cert_chain, u32* issuer_handle = nullptr);
+                             std::span<const u8> cert_chain, u32* issuer_handle = nullptr);
   ReturnCode VerifyContainer(VerifyContainerType type, VerifyMode mode,
-                             const ES::CertReader& certificate, const std::vector<u8>& cert_chain,
+                             const ES::CertReader& certificate, std::span<const u8> cert_chain,
                              u32 certificate_iosc_handle);
 
 private:

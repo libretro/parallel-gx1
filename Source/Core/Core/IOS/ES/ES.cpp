@@ -1088,7 +1088,7 @@ ReturnCode ESCore::WriteNewCertToStore(const ES::CertReader& cert)
 
 ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
                                    const ES::SignedBlobReader& signed_blob,
-                                   const std::vector<u8>& cert_chain, u32* issuer_handle_out)
+                                   std::span<const u8> cert_chain, u32* issuer_handle_out)
 {
   if (!signed_blob.IsSignatureValid())
     return ES_EINVAL;
@@ -1184,7 +1184,7 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
 }
 
 ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
-                                   const ES::CertReader& cert, const std::vector<u8>& cert_chain,
+                                   const ES::CertReader& cert, std::span<const u8> cert_chain,
                                    u32 certificate_iosc_handle)
 {
   IOSC::Handle issuer_handle;

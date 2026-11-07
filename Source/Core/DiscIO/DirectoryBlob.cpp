@@ -987,11 +987,11 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
   u64 ticket_size;
   if (wrapped_partition)
   {
-    std::vector<u8> new_ticket = m_wrapped_volume->GetTicket(*wrapped_partition).GetBytes();
-    if (new_ticket.size() > WII_PARTITION_TICKET_SIZE)
-      new_ticket.resize(WII_PARTITION_TICKET_SIZE);
-    ticket_size = new_ticket.size();
-    m_nonpartition_contents.AddBytes(partition_address + WII_PARTITION_TICKET_ADDRESS, new_ticket.data(), new_ticket.size());
+    const std::span<const u8> new_ticket =
+        m_wrapped_volume->GetTicket(*wrapped_partition).GetBytes();
+    ticket_size = std::min<u64>(new_ticket.size(), WII_PARTITION_TICKET_SIZE);
+    m_nonpartition_contents.AddBytes(partition_address + WII_PARTITION_TICKET_ADDRESS,
+                                     new_ticket.data(), size_t(ticket_size));
   }
   else
   {
@@ -1003,11 +1003,10 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
   u64 tmd_size;
   if (wrapped_partition)
   {
-    std::vector<u8> new_tmd = m_wrapped_volume->GetTMD(*wrapped_partition).GetBytes();
-    if (new_tmd.size() > IOS::ES::MAX_TMD_SIZE)
-      new_tmd.resize(IOS::ES::MAX_TMD_SIZE);
-    tmd_size = new_tmd.size();
-    m_nonpartition_contents.AddBytes(partition_address + TMD_OFFSET, new_tmd.data(), new_tmd.size());
+    const std::span<const u8> new_tmd = m_wrapped_volume->GetTMD(*wrapped_partition).GetBytes();
+    tmd_size = std::min<u64>(new_tmd.size(), IOS::ES::MAX_TMD_SIZE);
+    m_nonpartition_contents.AddBytes(partition_address + TMD_OFFSET, new_tmd.data(),
+                                     size_t(tmd_size));
   }
   else
   {

@@ -35,7 +35,7 @@ static ReturnCode WriteTicket(FS::FileSystem* fs, const ES::TicketReader& ticket
   if (!file)
     return FS::ConvertResult(file.error());
 
-  const std::vector<u8>& raw_ticket = ticket.GetBytes();
+  const std::span<const u8> raw_ticket = ticket.GetBytes();
   return file->Write(raw_ticket.data(), raw_ticket.size()) ? IPC_SUCCESS : ES_EIO;
 }
 
@@ -50,8 +50,26 @@ void ESCore::TitleImportExportContext::DoState(PointerWrap& p)
   p.Do(content.buffer);
 }
 
-ReturnCode ESCore::ImportTicket(const std::vector<u8>& ticket_bytes,
-                                const std::vector<u8>& cert_chain, TicketImportType type,
+// An IPC input vector's bytes, where they lie in guest memory; an empty one
+// is empty wherever it points.
+static bool GuestBytes(const Memory::MemoryManager& memory, const IOCtlVRequest::IOVector& vector,
+                       std::span<const u8>* out)
+{
+  const u8* bytes;
+  if (!vector.size)
+  {
+    *out = {};
+    return true;
+  }
+  bytes = memory.GetPointerForRange(vector.address, vector.size);
+  if (!bytes)
+    return false;
+  *out = {bytes, vector.size};
+  return true;
+}
+
+ReturnCode ESCore::ImportTicket(std::span<const u8> ticket_bytes,
+                                std::span<const u8> cert_chain, TicketImportType type,
                                 VerifySignature verify_signature)
 {
   ES::TicketReader ticket{ticket_bytes};
@@ -101,10 +119,13 @@ IPCReply ESDevice::ImportTicket(const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::vector<u8> bytes(request.in_vectors[0].size);
-  memory.CopyFromEmu(bytes.data(), request.in_vectors[0].address, request.in_vectors[0].size);
-  std::vector<u8> cert_chain(request.in_vectors[1].size);
-  memory.CopyFromEmu(cert_chain.data(), request.in_vectors[1].address, request.in_vectors[1].size);
+  std::span<const u8> bytes;
+  std::span<const u8> cert_chain;
+  if (!GuestBytes(memory, request.in_vectors[0], &bytes) ||
+      !GuestBytes(memory, request.in_vectors[1], &cert_chain))
+  {
+    return IPCReply(ES_EINVAL);
+  }
   return IPCReply(m_core.ImportTicket(bytes, cert_chain));
 }
 
@@ -140,7 +161,7 @@ static void ResetTitleImportContext(ESCore::Context* context, IOSC& iosc)
   context->title_import_export = {};
 }
 
-ReturnCode ESCore::ImportTmd(Context& context, const std::vector<u8>& tmd_bytes,
+ReturnCode ESCore::ImportTmd(Context& context, std::span<const u8> tmd_bytes,
                              u64 caller_title_id, u32 caller_title_flags)
 {
   INFO_LOG_FMT(IOS_ES, "ImportTmd");
@@ -196,13 +217,14 @@ IPCReply ESDevice::ImportTmd(Context& context, const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::vector<u8> tmd(request.in_vectors[0].size);
-  memory.CopyFromEmu(tmd.data(), request.in_vectors[0].address, request.in_vectors[0].size);
+  std::span<const u8> tmd;
+  if (!GuestBytes(memory, request.in_vectors[0], &tmd))
+    return IPCReply(ES_EINVAL);
   return IPCReply(m_core.ImportTmd(context, tmd, m_core.m_title_context.tmd.GetTitleId(),
                                    m_core.m_title_context.tmd.GetTitleFlags()));
 }
 
-static ReturnCode InitTitleImportKey(const std::vector<u8>& ticket_bytes, IOSC& iosc,
+static ReturnCode InitTitleImportKey(std::span<const u8> ticket_bytes, IOSC& iosc,
                                      IOSC::Handle* handle)
 {
   ReturnCode ret =
@@ -220,8 +242,8 @@ static ReturnCode InitTitleImportKey(const std::vector<u8>& ticket_bytes, IOSC& 
                               &ticket_bytes[offsetof(ES::Ticket, title_key)], PID_ES);
 }
 
-ReturnCode ESCore::ImportTitleInit(Context& context, const std::vector<u8>& tmd_bytes,
-                                   const std::vector<u8>& cert_chain,
+ReturnCode ESCore::ImportTitleInit(Context& context, std::span<const u8> tmd_bytes,
+                                   std::span<const u8> cert_chain,
                                    VerifySignature verify_signature)
 {
   INFO_LOG_FMT(IOS_ES, "ImportTitleInit");
@@ -286,10 +308,13 @@ IPCReply ESDevice::ImportTitleInit(Context& context, const IOCtlVRequest& reques
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::vector<u8> tmd(request.in_vectors[0].size);
-  memory.CopyFromEmu(tmd.data(), request.in_vectors[0].address, request.in_vectors[0].size);
-  std::vector<u8> certs(request.in_vectors[1].size);
-  memory.CopyFromEmu(certs.data(), request.in_vectors[1].address, request.in_vectors[1].size);
+  std::span<const u8> tmd;
+  std::span<const u8> certs;
+  if (!GuestBytes(memory, request.in_vectors[0], &tmd) ||
+      !GuestBytes(memory, request.in_vectors[1], &certs))
+  {
+    return IPCReply(ES_EINVAL);
+  }
   return IPCReply(m_core.ImportTitleInit(context, tmd, certs));
 }
 
@@ -591,7 +616,7 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
   const u64 ticket_id = Common::swap64(ticket_view + offsetof(ES::TicketView, ticket_id));
   ticket.DeleteTicket(ticket_id);
 
-  const std::vector<u8>& new_ticket = ticket.GetBytes();
+  const std::span<const u8> new_ticket = ticket.GetBytes();
 
   if (!new_ticket.empty())
   {
@@ -712,7 +737,7 @@ ReturnCode ESCore::ExportTitleInit(Context& context, u64 title_id, u8* tmd_bytes
   if (ret != IPC_SUCCESS)
     return ret;
 
-  const std::vector<u8>& raw_tmd = context.title_import_export.tmd.GetBytes();
+  const std::span<const u8> raw_tmd = context.title_import_export.tmd.GetBytes();
   if (tmd_size != raw_tmd.size())
     return ES_EINVAL;
 

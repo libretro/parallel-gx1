@@ -437,7 +437,7 @@ IPCReply ESDevice::DIGetTMD(const IOCtlVRequest& request)
   if (!m_core.m_title_context.active)
     return IPCReply(ES_EINVAL);
 
-  const std::vector<u8>& tmd_bytes = m_core.m_title_context.tmd.GetBytes();
+  const std::span<const u8> tmd_bytes = m_core.m_title_context.tmd.GetBytes();
 
   if (static_cast<u32>(tmd_bytes.size()) > tmd_size)
     return IPCReply(ES_EINVAL);
