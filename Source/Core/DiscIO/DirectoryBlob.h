@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -14,6 +15,8 @@
 #include <variant>
 #include <vector>
 
+#include <retro_miscellaneous.h>
+
 #include "Common/CommonTypes.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Volume.h"
@@ -23,6 +26,8 @@ namespace File
 {
 struct FSTEntry;
 }  // namespace File
+
+struct RFILE;
 
 namespace DiscIO
 {
@@ -252,8 +257,9 @@ public:
       const std::function<void(std::vector<FSTBuilderNode>* fst_nodes, FSTBuilderNode* dol_node)>&
           fst_callback);
 
-  DirectoryBlobReader(DirectoryBlobReader&&) = default;
-  DirectoryBlobReader& operator=(DirectoryBlobReader&&) = default;
+  DirectoryBlobReader(DirectoryBlobReader&&) = delete;
+  DirectoryBlobReader& operator=(DirectoryBlobReader&&) = delete;
+  ~DirectoryBlobReader() override;
 
   bool Read(u64 offset, u64 length, u8* buffer) override;
   bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const override;
@@ -306,6 +312,25 @@ private:
   void SetPartitionHeader(DirectoryBlobPartition* partition, u64 partition_address);
 
   const VolumeDisc* GetWrappedVolume() const { return m_wrapped_volume.get(); }
+
+  // Reads from a host file, through a handle kept open across reads.
+  bool ReadContentFile(const std::string& path, u64 offset, u8* buffer, u64 size);
+
+  // Recently read host files, kept open (and mapped where the platform maps)
+  // so a read is a copy out of the page cache rather than an open, a map, an
+  // unmap and a close. A reader owns a slot for the length of one read; a
+  // read finding its slot taken opens the file for itself, as before.
+  static constexpr u32 NUM_FILE_SLOTS = 16;
+  struct FileSlot
+  {
+    std::atomic<u32> busy;
+    RFILE* file;
+    const u8* map;
+    u64 map_size;
+    char path[PATH_MAX_LENGTH];
+  };
+  FileSlot m_file_slots[NUM_FILE_SLOTS];
+  void InitFileSlots();
 
   // For GameCube:
   DirectoryBlobPartition m_gamecube_pseudopartition;

@@ -13,6 +13,8 @@
 #include <variant>
 #include <vector>
 
+#include <streams/file_stream.h>
+
 #include "Common/Align.h"
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -93,8 +95,8 @@ bool DiscContent::Read(u64* offset, u64* length, u8** buffer, DirectoryBlobReade
     if (std::holds_alternative<ContentFile>(m_content_source))
     {
       const auto& content = std::get<ContentFile>(m_content_source);
-      File::DirectIOFile file(content.m_filename, File::AccessMode::Read);
-      if (!file.OffsetRead(content.m_offset + offset_in_content, *buffer, bytes_to_read))
+      if (!blob->ReadContentFile(content.m_filename, content.m_offset + offset_in_content, *buffer,
+                                 bytes_to_read))
       {
         return false;
       }
@@ -386,6 +388,7 @@ DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
                                          const std::string& true_root)
     : m_encryption_cache(this)
 {
+  InitFileSlots();
   DirectoryBlobPartition game_partition(game_partition_root, {});
   m_is_wii = game_partition.IsWii();
 
@@ -436,6 +439,7 @@ DirectoryBlobReader::DirectoryBlobReader(
         fst_callback)
     : m_encryption_cache(this), m_wrapped_volume(std::move(volume))
 {
+  InitFileSlots();
   DirectoryBlobPartition game_partition(m_wrapped_volume.get(),
                                         m_wrapped_volume->GetGamePartition(), std::nullopt,
                                         sys_callback, fst_callback, this);
@@ -499,6 +503,77 @@ DirectoryBlobReader::DirectoryBlobReader(const DirectoryBlobReader& rhs)
                            CreateDisc(rhs.m_wrapped_volume->GetBlobReader().CopyReader()) :
                            nullptr)
 {
+  InitFileSlots();
+}
+
+void DirectoryBlobReader::InitFileSlots()
+{
+  u32 i;
+  for (i = 0; i < NUM_FILE_SLOTS; i++)
+  {
+    m_file_slots[i].busy.store(0, std::memory_order_relaxed);
+    m_file_slots[i].file = nullptr;
+    m_file_slots[i].map = nullptr;
+    m_file_slots[i].map_size = 0;
+    m_file_slots[i].path[0] = '\0';
+  }
+}
+
+DirectoryBlobReader::~DirectoryBlobReader()
+{
+  u32 i;
+  for (i = 0; i < NUM_FILE_SLOTS; i++)
+  {
+    if (m_file_slots[i].file)
+      filestream_close(m_file_slots[i].file);
+  }
+}
+
+bool DirectoryBlobReader::ReadContentFile(const std::string& path, u64 offset, u8* buffer, u64 size)
+{
+  const char* name = path.c_str();
+  const size_t name_len = path.size();
+  FileSlot* slot;
+  bool ok;
+  u32 hash = 2166136261u;
+  size_t i;
+
+  for (i = 0; i < name_len; i++)
+    hash = (hash ^ u8(name[i])) * 16777619u;
+  slot = &m_file_slots[hash % NUM_FILE_SLOTS];
+
+  if (name_len >= sizeof(slot->path) || slot->busy.exchange(1, std::memory_order_acquire))
+  {
+    File::DirectIOFile file(name, File::AccessMode::Read);
+    return file.OffsetRead(offset, buffer, size);
+  }
+
+  if (!slot->file || std::strcmp(slot->path, name) != 0)
+  {
+    int64_t map_size = 0;
+    if (slot->file)
+      filestream_close(slot->file);
+    slot->file = filestream_open(name, RETRO_VFS_FILE_ACCESS_READ,
+                                 RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS);
+    slot->map = slot->file ? filestream_get_mapped_ptr(slot->file, &map_size) : nullptr;
+    slot->map_size = slot->map ? u64(map_size) : 0;
+    std::memcpy(slot->path, name, name_len + 1);
+  }
+
+  if (slot->map)
+  {
+    ok = offset <= slot->map_size && size <= slot->map_size - offset;
+    if (ok)
+      std::memcpy(buffer, slot->map + offset, size_t(size));
+  }
+  else
+  {
+    ok = slot->file && filestream_seek(slot->file, s64(offset), RETRO_VFS_SEEK_POSITION_START) >= 0 &&
+         filestream_read(slot->file, buffer, s64(size)) == s64(size);
+  }
+
+  slot->busy.store(0, std::memory_order_release);
+  return ok;
 }
 
 bool DirectoryBlobReader::Read(u64 offset, u64 length, u8* buffer)
