@@ -4,17 +4,16 @@
 #pragma once
 
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <map>
 #include <memory>
 #include <optional>
-#include <set>
 #include <string>
 #include <variant>
 #include <vector>
 
+#include <retro_atomic.h>
 #include <retro_miscellaneous.h>
 
 #include "Common/CommonTypes.h"
@@ -39,53 +38,123 @@ class VolumeDisc;
 // Returns true if the path is inside a DirectoryBlob and doesn't represent the DirectoryBlob itself
 bool ShouldHideFromGameList(const std::string& volume_path);
 
-// Content chunk that is loaded from a file in the host file system.
-struct ContentFile
+// Bytes shared by the content chunks that refer to them: a host file's path
+// (NUL included) or a run of memory. Reference counted; the bytes follow the
+// header in the same allocation.
+struct ContentBlob
 {
-  // Path where the file can be found.
-  std::string m_filename;
-
-  // Offset from the start of the file where the first byte of this content chunk is.
-  u64 m_offset = 0;
+  retro_atomic_int_t refs;
+  u64 size;
 };
 
-// Content chunk that's just a direct block of memory
-typedef std::shared_ptr<std::vector<u8>> ContentMemory;
+// the bytes start here, 16-aligned whatever the atomic's width
+#define CONTENT_BLOB_HEADER ((sizeof(ContentBlob) + 15) & ~size_t(15))
 
-// Content chunk that loads data from a DirectoryBlobReader.
-// Intended for representing a partition within a disc.
-struct ContentPartition
+// The size octets after the header, uninitialized; one reference.
+ContentBlob* ContentBlobAlloc(size_t size);
+ContentBlob* ContentBlobCreate(const void* data, size_t size);
+void ContentBlobRetain(ContentBlob* blob);
+void ContentBlobRelease(ContentBlob* blob);
+inline u8* ContentBlobData(ContentBlob* blob)
 {
-  // Offset from the start of the partition for the first byte represented by this chunk.
-  u64 m_offset = 0;
+  return reinterpret_cast<u8*>(blob) + CONTENT_BLOB_HEADER;
+}
+inline const u8* ContentBlobData(const ContentBlob* blob)
+{
+  return reinterpret_cast<const u8*>(blob) + CONTENT_BLOB_HEADER;
+}
 
-  // The value passed as partition_data_offset to EncryptPartitionData().
-  u64 m_partition_data_offset = 0;
+enum ContentType : u8
+{
+  // a host file: blob is its path, offset the file offset of the first byte
+  CONTENT_FILE,
+  // blob's bytes from offset on
+  CONTENT_MEMORY,
+  // the reader's own partition, encrypted on the fly: offset into it, and
+  // the partition_data_offset passed to EncryptPartitionData()
+  CONTENT_PARTITION,
+  // the wrapped volume: offset into it, read from partition
+  CONTENT_VOLUME,
+  // fixed_byte repeated
+  CONTENT_FIXED_BYTE,
 };
 
-// Content chunk that loads data from a Volume.
-struct ContentVolume
+// Where a content chunk's bytes come from. Copies share the blob.
+struct ContentSource
 {
-  // Offset from the start of the volume for the first byte represented by this chunk.
-  u64 m_offset = 0;
+  ContentSource()
+      : type(CONTENT_FIXED_BYTE), fixed_byte(0), offset(0), partition_data_offset(0),
+        blob(nullptr)
+  {
+  }
+  ContentSource(const ContentSource& other)
+      : type(other.type), fixed_byte(other.fixed_byte), offset(other.offset),
+        partition_data_offset(other.partition_data_offset), partition(other.partition),
+        blob(other.blob)
+  {
+    if (blob)
+      ContentBlobRetain(blob);
+  }
+  ContentSource(ContentSource&& other) noexcept
+      : type(other.type), fixed_byte(other.fixed_byte), offset(other.offset),
+        partition_data_offset(other.partition_data_offset), partition(other.partition),
+        blob(other.blob)
+  {
+    other.blob = nullptr;
+  }
+  ContentSource& operator=(const ContentSource& other)
+  {
+    if (other.blob)
+      ContentBlobRetain(other.blob);
+    if (blob)
+      ContentBlobRelease(blob);
+    type = other.type;
+    fixed_byte = other.fixed_byte;
+    offset = other.offset;
+    partition_data_offset = other.partition_data_offset;
+    partition = other.partition;
+    blob = other.blob;
+    return *this;
+  }
+  ContentSource& operator=(ContentSource&& other) noexcept
+  {
+    ContentBlob* const old = blob;
+    type = other.type;
+    fixed_byte = other.fixed_byte;
+    offset = other.offset;
+    partition_data_offset = other.partition_data_offset;
+    partition = other.partition;
+    blob = other.blob;
+    other.blob = nullptr;
+    if (old)
+      ContentBlobRelease(old);
+    return *this;
+  }
+  ~ContentSource()
+  {
+    if (blob)
+      ContentBlobRelease(blob);
+  }
 
-  // The partition passed to the Volume's Read() method.
-  Partition m_partition;
+  u8 type;
+  u8 fixed_byte;
+  u64 offset;
+  u64 partition_data_offset;
+  Partition partition;
+  ContentBlob* blob;
 };
 
-// Content chunk representing a run of identical bytes.
-// Useful for padding between chunks within a file.
-struct ContentFixedByte
+ContentSource ContentFile(const char* path, u64 offset);
+inline ContentSource ContentFile(const std::string& path, u64 offset)
 {
-  u8 m_byte = 0;
-};
-
-using ContentSource = std::variant<ContentFile,       // File
-                                   ContentMemory,     // Memory/Byte Sequence
-                                   ContentPartition,  // Partition
-                                   ContentVolume,     // Volume
-                                   ContentFixedByte   // Fixed value padding
-                                   >;
+  return ContentFile(path.c_str(), offset);
+}
+// Takes over the caller's reference.
+ContentSource ContentMemory(ContentBlob* blob, u64 offset);
+ContentSource ContentBytes(const void* data, size_t size);
+ContentSource ContentPartition(u64 offset, u64 partition_data_offset);
+ContentSource ContentVolume(u64 offset, const Partition& partition);
+ContentSource ContentFixedByte(u8 byte);
 
 struct BuilderContentSource
 {
@@ -129,52 +198,46 @@ struct FSTBuilderNode
   }
 };
 
-class DiscContent
+// A content chunk placed at offset on the disc. Plain data: the container
+// it sits in holds the blob's reference.
+struct DiscContent
 {
-public:
-  DiscContent(u64 offset, u64 size, ContentSource source);
-
-  // Provided because it's convenient when searching for DiscContent in an std::set
-  explicit DiscContent(u64 offset);
-
-  u64 GetOffset() const;
-  u64 GetEndOffset() const;
-  u64 GetSize() const;
-  bool Read(u64* offset, u64* length, u8** buffer, DirectoryBlobReader* blob) const;
-
-  bool operator==(const DiscContent& other) const { return GetEndOffset() == other.GetEndOffset(); }
-  bool operator<(const DiscContent& other) const { return GetEndOffset() < other.GetEndOffset(); }
-  bool operator>(const DiscContent& other) const { return other < *this; }
-  bool operator<=(const DiscContent& other) const { return !(*this > other); }
-  bool operator>=(const DiscContent& other) const { return !(*this < other); }
-
-private:
-  // Position of this content chunk within its parent DiscContentContainer.
-  u64 m_offset;
-
-  // Number of bytes this content chunk takes up.
-  u64 m_size = 0;
-
-  // Where and how to find the data for this content chunk.
-  ContentSource m_content_source;
+  u64 offset;
+  u64 size;
+  u64 src_offset;
+  u64 partition_data_offset;
+  Partition partition;
+  ContentBlob* blob;
+  u8 type;
+  u8 fixed_byte;
 };
 
+// Content chunks sorted by end offset in one array, found by binary search.
 class DiscContentContainer
 {
 public:
-  void Add(u64 offset, std::vector<u8> vector)
-  {
-    size_t vector_size = vector.size();
-    return Add(offset, vector_size, std::make_shared<std::vector<u8>>(std::move(vector)));
-  }
-  void Add(u64 offset, u64 size, ContentSource source);
+  DiscContentContainer();
+  ~DiscContentContainer();
+  DiscContentContainer(const DiscContentContainer& other);
+  DiscContentContainer& operator=(const DiscContentContainer& other);
+  DiscContentContainer(DiscContentContainer&& other) noexcept;
+  DiscContentContainer& operator=(DiscContentContainer&& other) noexcept;
+
+  void Add(u64 offset, u64 size, const ContentSource& source);
+  void AddBytes(u64 offset, const void* data, size_t size);
   u64 CheckSizeAndAdd(u64 offset, const std::string& path);
   u64 CheckSizeAndAdd(u64 offset, u64 max_size, const std::string& path);
 
   bool Read(u64 offset, u64 length, u8* buffer, DirectoryBlobReader* blob) const;
 
 private:
-  std::set<DiscContent> m_contents;
+  void Clear();
+  bool ReadContent(const DiscContent* content, u64* offset, u64* length, u8** buffer,
+                   DirectoryBlobReader* blob) const;
+
+  DiscContent* m_items;
+  size_t m_count;
+  size_t m_capacity;
 };
 
 class DirectoryBlobPartition
@@ -247,7 +310,7 @@ private:
 
 class DirectoryBlobReader final : public BlobReader
 {
-  friend DiscContent;
+  friend DiscContentContainer;
 
 public:
   static std::unique_ptr<DirectoryBlobReader> Create(const std::string& dol_path);
@@ -314,7 +377,7 @@ private:
   const VolumeDisc* GetWrappedVolume() const { return m_wrapped_volume.get(); }
 
   // Reads from a host file, through a handle kept open across reads.
-  bool ReadContentFile(const std::string& path, u64 offset, u8* buffer, u64 size);
+  bool ReadContentFile(const char* path, size_t path_len, u64 offset, u8* buffer, u64 size);
 
   // Recently read host files, kept open (and mapped where the platform maps)
   // so a read is a copy out of the page cache rather than an open, a map, an
@@ -323,7 +386,7 @@ private:
   static constexpr u32 NUM_FILE_SLOTS = 16;
   struct FileSlot
   {
-    std::atomic<u32> busy;
+    retro_atomic_int_t busy;
     RFILE* file;
     const u8* map;
     u64 map_size;

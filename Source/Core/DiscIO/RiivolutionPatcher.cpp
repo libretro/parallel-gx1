@@ -208,9 +208,9 @@ FileDataLoaderHostFS::MakeContentSource(std::string_view external_relative_path,
 {
   auto path = MakeAbsoluteFromRelative(external_relative_path);
   if (!path)
-    return BuilderContentSource{disc_offset, external_size, ContentFixedByte{}};
+    return BuilderContentSource{disc_offset, external_size, ContentFixedByte(0)};
   return BuilderContentSource{disc_offset, external_size,
-                              ContentFile{std::move(*path), external_offset}};
+                              ContentFile(*path, external_offset)};
 }
 
 std::optional<std::string>
@@ -233,24 +233,9 @@ static void SplitAt(BuilderContentSource* before, BuilderContentSource* after, u
   // The source after the split needs its length reduced and its start point adjusted.
   after->m_offset += before->m_size;
   after->m_size = end - split_at;
-  if (std::holds_alternative<ContentFile>(after->m_source))
-  {
-    std::get<ContentFile>(after->m_source).m_offset += before->m_size;
-  }
-  else if (std::holds_alternative<ContentMemory>(after->m_source))
-  {
-    after->m_source = std::make_shared<std::vector<u8>>(
-        std::get<ContentMemory>(after->m_source)->begin() + before->m_size,
-        std::get<ContentMemory>(after->m_source)->end());
-  }
-  else if (std::holds_alternative<ContentPartition>(after->m_source))
-  {
-    std::get<ContentPartition>(after->m_source).m_offset += before->m_size;
-  }
-  else if (std::holds_alternative<ContentVolume>(after->m_source))
-  {
-    std::get<ContentVolume>(after->m_source).m_offset += before->m_size;
-  }
+  // every kind but fixed bytes moves its start; memory keeps sharing the blob
+  if (after->m_source.type != CONTENT_FIXED_BYTE)
+    after->m_source.offset += before->m_size;
 }
 
 static void ApplyPatchToFile(const Patch& patch, FSTBuilderNode* file_node,
@@ -282,7 +267,7 @@ static void ApplyPatchToFile(const Patch& patch, FSTBuilderNode* file_node,
     {
       // Insert an padding area between the old file and the patch data.
       content.emplace_back(BuilderContentSource{file_node->m_size, patch_start - file_node->m_size,
-                                                ContentFixedByte{}});
+                                                ContentFixedByte(0)});
     }
 
     insert_where = content.size();
@@ -338,7 +323,7 @@ static void ApplyPatchToFile(const Patch& patch, FSTBuilderNode* file_node,
   if (external_filesize < patch_size)
   {
     BuilderContentSource padding{patch_start + external_filesize, patch_size - external_filesize,
-                                 ContentFixedByte{}};
+                                 ContentFixedByte(0)};
     content.emplace(content.begin() + insert_where, std::move(padding));
   }
 
