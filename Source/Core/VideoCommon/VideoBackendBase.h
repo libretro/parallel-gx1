@@ -24,7 +24,6 @@ class AbstractGfx;
 class BoundingBox;
 class TextureCacheBase;
 class VertexManagerBase;
-class EFBInterfaceBase;
 
 enum class FieldType
 {
@@ -66,19 +65,11 @@ public:
   // Wrapper function which pushes the event to the GPU thread.
   void DoState(PointerWrap& p);
 
-  // For hardware backends
+  // Every backend, with its own gfx, vertex manager, perf query and bounding box
   bool InitializeShared(std::unique_ptr<AbstractGfx> gfx,
                         std::unique_ptr<VertexManagerBase> vertex_manager,
                         std::unique_ptr<PerfQueryBase> perf_query,
                         std::unique_ptr<BoundingBox> bounding_box);
-protected:
-  // For software and null backends. Allows overriding the default EFBInterface and TextureCache
-  bool InitializeShared(std::unique_ptr<AbstractGfx> gfx,
-                        std::unique_ptr<VertexManagerBase> vertex_manager,
-                        std::unique_ptr<PerfQueryBase> perf_query,
-                        std::unique_ptr<BoundingBox> bounding_box,
-                        std::unique_ptr<EFBInterfaceBase> efb_interface,
-                        std::unique_ptr<TextureCacheBase> texture_cache);
   void ShutdownShared();
 
 protected:

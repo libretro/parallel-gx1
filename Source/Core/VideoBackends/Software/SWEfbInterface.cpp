@@ -732,36 +732,17 @@ void IncPerfCounterQuadCount(PerfQueryType type)
   quad[type] = 0;
   ++perf_values[type];
 }
-}  // namespace EfbInterface
 
-namespace SW
+u32 PeekColor(u16 x, u16 y)
 {
-
-void SWEFBInterface::ReinterpretPixelData(EFBReinterpretType convtype)
-{
-}
-
-void SWEFBInterface::PokeColor(u16 x, u16 y, u32 color)
-{
-}
-
-void SWEFBInterface::PokeDepth(u16 x, u16 y, u32 depth)
-{
-}
-
-u32 SWEFBInterface::PeekColorInternal(u16 x, u16 y)
-{
-  const u32 color = EfbInterface::GetColor(x, y);
-
+  const u32 color = GetColor(x, y);
   // rgba to argb
-  u32 value = (color >> 8) | (color & 0xff) << 24;
-
-  return value;
+  return (color >> 8) | (color & 0xff) << 24;
 }
 
-u32 SWEFBInterface::PeekDepthInternal(u16 x, u16 y)
+u32 PeekDepth(u16 x, u16 y)
 {
-  return EfbInterface::GetDepth(x, y);
+  return GetDepth(x, y);
 }
 
-}  // namespace SW
+}  // namespace EfbInterface

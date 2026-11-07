@@ -378,12 +378,12 @@ void OnPixelFormatChange(FramebufferManager* frame_buffer_manager, PixelFormat p
 
     if (new_format == PixelFormat::RGBA6_Z24)
     {
-      g_efb_interface->ReinterpretPixelData(EFBReinterpretType::RGB8ToRGBA6);
+      EFBReinterpretPixelData(EFBReinterpretType::RGB8ToRGBA6);
       return;
     }
     else if (new_format == PixelFormat::RGB565_Z16)
     {
-      g_efb_interface->ReinterpretPixelData(EFBReinterpretType::RGB8ToRGB565);
+      EFBReinterpretPixelData(EFBReinterpretType::RGB8ToRGB565);
       return;
     }
   }
@@ -393,12 +393,12 @@ void OnPixelFormatChange(FramebufferManager* frame_buffer_manager, PixelFormat p
   {
     if (new_format == PixelFormat::RGB8_Z24 || new_format == PixelFormat::Z24)
     {
-      g_efb_interface->ReinterpretPixelData(EFBReinterpretType::RGBA6ToRGB8);
+      EFBReinterpretPixelData(EFBReinterpretType::RGBA6ToRGB8);
       return;
     }
     else if (new_format == PixelFormat::RGB565_Z16)
     {
-      g_efb_interface->ReinterpretPixelData(EFBReinterpretType::RGBA6ToRGB565);
+      EFBReinterpretPixelData(EFBReinterpretType::RGBA6ToRGB565);
       return;
     }
   }
@@ -408,12 +408,12 @@ void OnPixelFormatChange(FramebufferManager* frame_buffer_manager, PixelFormat p
   {
     if (new_format == PixelFormat::RGB8_Z24 || new_format == PixelFormat::Z24)
     {
-      g_efb_interface->ReinterpretPixelData(EFBReinterpretType::RGB565ToRGB8);
+      EFBReinterpretPixelData(EFBReinterpretType::RGB565ToRGB8);
       return;
     }
     else if (new_format == PixelFormat::RGBA6_Z24)
     {
-      g_efb_interface->ReinterpretPixelData(EFBReinterpretType::RGB565ToRGBA6);
+      EFBReinterpretPixelData(EFBReinterpretType::RGB565ToRGBA6);
       return;
     }
   }

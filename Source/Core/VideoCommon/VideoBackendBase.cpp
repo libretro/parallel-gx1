@@ -44,7 +44,6 @@
 #include "VideoCommon/BoundingBox.h"
 #include "VideoCommon/CPMemory.h"
 #include "VideoCommon/CommandProcessor.h"
-#include "VideoCommon/EFBInterface.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/FramebufferManager.h"
@@ -280,21 +279,6 @@ bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
                                         std::unique_ptr<PerfQueryBase> perf_query,
                                         std::unique_ptr<BoundingBox> bounding_box)
 {
-  // All hardware backends use the default EFBInterface and TextureCacheBase.
-  // Only Null and Software backends override them
-
-  return InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
-                          std::move(bounding_box), std::make_unique<HardwareEFBInterface>(),
-                          std::make_unique<TextureCacheBase>());
-}
-
-bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
-                                        std::unique_ptr<VertexManagerBase> vertex_manager,
-                                        std::unique_ptr<PerfQueryBase> perf_query,
-                                        std::unique_ptr<BoundingBox> bounding_box,
-                                        std::unique_ptr<EFBInterfaceBase> efb_interface,
-                                        std::unique_ptr<TextureCacheBase> texture_cache)
-{
   const bool is_initialized = g_context_status.IsInitialized();
   if(!is_initialized)
   {
@@ -310,9 +294,7 @@ bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
   g_perf_query = std::move(perf_query);
   g_bounding_box = std::move(bounding_box);
 
-  // Null and Software Backends supply their own derived EFBInterface and TextureCache
-  g_texture_cache = std::move(texture_cache);
-  g_efb_interface = std::move(efb_interface);
+  g_texture_cache = std::make_unique<TextureCacheBase>();
 
   g_presenter = std::make_unique<VideoCommon::Presenter>();
   g_framebuffer_manager = std::make_unique<FramebufferManager>();
@@ -381,7 +363,6 @@ void VideoBackendBase::ShutdownShared()
   g_framebuffer_manager.reset();
   g_shader_cache.reset();
   g_vertex_manager.reset();
-  g_efb_interface.reset();
   g_widescreen.reset();
   g_gfx.reset();
 

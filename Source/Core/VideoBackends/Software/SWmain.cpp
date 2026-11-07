@@ -82,8 +82,7 @@ bool VideoSoftware::Initialize(const WindowSystemInfo& wsi)
 
   return InitializeShared(std::make_unique<SWGfx>(),
                           std::make_unique<SWVertexLoader>(), std::make_unique<PerfQuery>(),
-                          std::make_unique<SWBoundingBox>(), std::make_unique<SWEFBInterface>(),
-                          std::make_unique<TextureCacheBase>());
+                          std::make_unique<SWBoundingBox>());
 }
 
 void VideoSoftware::Shutdown()

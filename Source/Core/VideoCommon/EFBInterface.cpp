@@ -4,37 +4,42 @@
 #include "VideoCommon/EFBInterface.h"
 
 #include <algorithm>
-#include <memory>
 
 #include "Common/MsgHandler.h"
 
 #include "Core/ConfigManager.h"
 #include "Core/System.h"
 
+#include "VideoBackends/Software/SWEfbInterface.h"
+
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/PixelEngine.h"
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/VideoBackendBase.h"
+#include "VideoCommon/VideoBackendKind.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
 
-std::unique_ptr<EFBInterfaceBase> g_efb_interface;
-
-EFBInterfaceBase::~EFBInterfaceBase() = default;
-
-bool EFBInterfaceBase::ShouldSkipAccess(u16 x, u16 y) const
+static bool ShouldSkipAccess(u16 x, u16 y)
 {
   return !g_ActiveConfig.bEFBAccessEnable || x >= EFB_WIDTH || y >= EFB_HEIGHT;
 }
 
-void HardwareEFBInterface::ReinterpretPixelData(EFBReinterpretType convtype)
+void EFBReinterpretPixelData(EFBReinterpretType convtype)
 {
+  if (g_video_backend_kind == VIDEO_BACKEND_NULL || g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
+    return;
   g_framebuffer_manager->ReinterpretPixelData(convtype);
 }
 
-u32 HardwareEFBInterface::PeekColorInternal(u16 x, u16 y)
+static u32 PeekColorInternal(u16 x, u16 y)
 {
+  if (g_video_backend_kind == VIDEO_BACKEND_NULL)
+    return 0;
+  if (g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
+    return EfbInterface::PeekColor(x, y);
+
   u32 color = AsyncRequests::GetInstance()->PushBlockingEvent([&] {
     INCSTAT(g_stats.this_frame.num_efb_peeks);
     return g_framebuffer_manager->PeekEFBColor(x, y);
@@ -59,7 +64,7 @@ u32 HardwareEFBInterface::PeekColorInternal(u16 x, u16 y)
   return color;
 }
 
-u32 EFBInterfaceBase::PeekColor(u16 x, u16 y)
+u32 EFBPeekColor(u16 x, u16 y)
 {
   if (ShouldSkipAccess(x, y))
     return 0;
@@ -88,8 +93,13 @@ u32 EFBInterfaceBase::PeekColor(u16 x, u16 y)
   }
 }
 
-u32 HardwareEFBInterface::PeekDepthInternal(u16 x, u16 y)
+static u32 PeekDepthInternal(u16 x, u16 y)
 {
+  if (g_video_backend_kind == VIDEO_BACKEND_NULL)
+    return 0;
+  if (g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
+    return EfbInterface::PeekDepth(x, y);
+
   float depth = AsyncRequests::GetInstance()->PushBlockingEvent([&] {
     INCSTAT(g_stats.this_frame.num_efb_peeks);
     return g_framebuffer_manager->PeekEFBDepth(x, y);
@@ -119,7 +129,7 @@ u32 HardwareEFBInterface::PeekDepthInternal(u16 x, u16 y)
   return z24depth;
 }
 
-u32 EFBInterfaceBase::PeekDepth(u16 x, u16 y)
+u32 EFBPeekDepth(u16 x, u16 y)
 {
   if (ShouldSkipAccess(x, y))
     return 0;
@@ -127,8 +137,10 @@ u32 EFBInterfaceBase::PeekDepth(u16 x, u16 y)
   return PeekDepthInternal(x, y);
 }
 
-void HardwareEFBInterface::PokeColor(u16 x, u16 y, u32 poke_data)
+void EFBPokeColor(u16 x, u16 y, u32 poke_data)
 {
+  if (g_video_backend_kind == VIDEO_BACKEND_NULL || g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
+    return;
   if (ShouldSkipAccess(x, y))
     return;
 
@@ -143,8 +155,10 @@ void HardwareEFBInterface::PokeColor(u16 x, u16 y, u32 poke_data)
   });
 }
 
-void HardwareEFBInterface::PokeDepth(u16 x, u16 y, u32 poke_data)
+void EFBPokeDepth(u16 x, u16 y, u32 poke_data)
 {
+  if (g_video_backend_kind == VIDEO_BACKEND_NULL || g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
+    return;
   if (ShouldSkipAccess(x, y))
     return;
 

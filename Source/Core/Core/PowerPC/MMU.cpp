@@ -154,12 +154,12 @@ static u32 EFB_Read(const u32 addr)
   }
   else if (addr & 0x00400000)
   {
-    var = g_efb_interface->PeekDepth(x, y);
+    var = EFBPeekDepth(x, y);
     DEBUG_LOG_FMT(MEMMAP, "EFB Z Read @ {}, {}\t= {:#010x}", x, y, var);
   }
   else
   {
-    var = g_efb_interface->PeekColor(x, y);
+    var = EFBPeekColor(x, y);
     DEBUG_LOG_FMT(MEMMAP, "EFB Color Read @ {}, {}\t= {:#010x}", x, y, var);
   }
 
@@ -179,12 +179,12 @@ static void EFB_Write(u32 data, u32 addr)
   }
   else if (addr & 0x00400000)
   {
-    g_efb_interface->PokeDepth(x, y, data);
+    EFBPokeDepth(x, y, data);
     DEBUG_LOG_FMT(MEMMAP, "EFB Z Write {:08x} @ {}, {}", data, x, y);
   }
   else
   {
-    g_efb_interface->PokeColor(x, y, data);
+    EFBPokeColor(x, y, data);
     DEBUG_LOG_FMT(MEMMAP, "EFB Color Write {:08x} @ {}, {}", data, x, y);
   }
 }
