@@ -4,10 +4,8 @@
 #pragma once
 
 #include <array>
-#include <map>
 #include <memory>
 #include <set>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -117,10 +115,10 @@ public:
   // emulated hardware outside the CPU. Use "Device_" prefix.
   std::string GetString(u32 em_address, size_t size = 0);
 
-  // If the specified guest address is within a valid memory region, returns a span starting at the
-  // host address corresponding to the specified address and ending where the memory region ends.
-  // Otherwise, returns a 0-length span starting at nullptr.
-  std::span<u8> GetSpanForAddress(u32 address) const;
+  // If the specified guest address is within a valid memory region, returns the host address
+  // corresponding to it, lent, and stores how many bytes follow it in that region. Otherwise
+  // returns nullptr and stores 0.
+  u8* GetPointerAndSize(u32 address, size_t* size) const;
 
   // If the specified range is within a single valid memory region, returns a pointer to the start
   // of the corresponding range in host memory. Otherwise, returns nullptr.
@@ -271,31 +269,44 @@ private:
   // TODO: Do we want to handle the mirrors of the GC RAM?
   std::array<PhysicalMemoryRegion, 4> m_physical_regions{};
 
-  // The key is the logical address
-  std::map<u32, LogicalMemoryView> m_dbat_mapped_entries;
-  std::map<u32, LogicalMemoryView> m_page_table_mapped_entries;
+  // Views mapped for the DBATs: a handful of runs, one per BAT range and region.
+  static constexpr u32 MAX_DBAT_VIEWS = 256;
+  LogicalMemoryView m_dbat_views[MAX_DBAT_VIEWS]{};
+  u32 m_dbat_view_count = 0;
+
+  // Per logical guest page (4 KiB), in a two-level table: a block covers PAGE_BLOCK_SIZE pages,
+  // is allocated the first time one of them is used and kept until shutdown.
+  static constexpr u32 PAGE_BLOCK_SHIFT = 10;
+  static constexpr u32 PAGE_BLOCK_SIZE = 1u << PAGE_BLOCK_SHIFT;
+  static constexpr u32 PAGE_BLOCKS = 1u << (32 - 12 - PAGE_BLOCK_SHIFT);
+  // the view mapped for a page table entry, mapped_pointer nullptr when none
+  LogicalMemoryView* m_page_table_views[PAGE_BLOCKS]{};
+  u32 m_page_table_view_counts[PAGE_BLOCKS]{};
 
   std::array<void*, PowerPC::BAT_PAGE_COUNT> m_physical_page_mappings{};
   std::array<void*, PowerPC::BAT_PAGE_COUNT> m_logical_page_mappings{};
 
-  // If the host page size is larger than the guest page size, these two maps are used
-  // to keep track of which guest pages can be combined and mapped as one host page.
+  // If the host page size is larger than the guest page size, these two tables keep the
+  // translation of each guest page, INVALID_MAPPING when none, to tell which guest pages can be
+  // combined and mapped as one host page; same blocks as above, one u32 per guest page.
   static constexpr u32 INVALID_MAPPING = 0xFFFFFFFF;
-  std::map<u32, std::vector<u32>> m_large_readable_pages;
-  std::map<u32, std::vector<u32>> m_large_writeable_pages;
+  u32* m_large_readable_pages[PAGE_BLOCKS]{};
+  u32* m_large_writeable_pages[PAGE_BLOCKS]{};
 
   Core::System& m_system;
 
   static HostPageType GetHostPageTypeForPageSize(u32 page_size);
 
   void TryAddLargePageTableMapping(u32 logical_address, u32 translated_address, bool writeable);
-  bool TryAddLargePageTableMapping(u32 logical_address, u32 translated_address,
-                                   std::map<u32, std::vector<u32>>& map);
-  bool CanCreateHostMappingForGuestPages(std::span<const u32> entries) const;
+  bool TryAddLargePageTableMapping(u32 logical_address, u32 translated_address, u32** table);
+  bool CanCreateHostMappingForGuestPages(const u32* entries) const;
   void AddHostPageTableMapping(u32 logical_address, u32 translated_address, bool writeable,
                                u32 logical_size);
   void RemoveLargePageTableMapping(u32 logical_address);
-  void RemoveLargePageTableMapping(u32 logical_address, std::map<u32, std::vector<u32>>& map);
+  void RemoveLargePageTableMapping(u32 logical_address, u32** table);
+  LogicalMemoryView* GetPageTableView(u32 logical_address, bool create);
+  void UnmapDBATViews();
+  void FreePageTables();
   void RemoveHostPageTableMapping(u32 logical_address);
 };
 }  // namespace Memory

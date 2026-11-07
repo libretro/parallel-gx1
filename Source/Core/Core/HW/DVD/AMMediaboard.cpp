@@ -330,12 +330,13 @@ static bool SafeCopyToEmu(Memory::MemoryManager& memory, u32 address, const u8* 
     return false;
   }
 
-  auto span = memory.GetSpanForAddress(address);
-  if (length > span.size())
+  size_t span_size;
+  u8* const span_data = memory.GetPointerAndSize(address, &span_size);
+  if (length > span_size)
   {
     ERROR_LOG_FMT(AMMEDIABOARD,
                   "GC-AM: Memory buffer too small: address=0x{:08x}, length={}, span={}", address,
-                  length, span.size());
+                  length, span_size);
     return false;
   }
 
@@ -354,12 +355,13 @@ static bool SafeCopyFromEmu(Memory::MemoryManager& memory, u8* destination, u32 
     return false;
   }
 
-  auto span = memory.GetSpanForAddress(address);
-  if (length > span.size())
+  size_t span_size;
+  u8* const span_data = memory.GetPointerAndSize(address, &span_size);
+  if (length > span_size)
   {
     ERROR_LOG_FMT(AMMEDIABOARD,
                   "GC-AM: Memory buffer too small: address=0x{:08x}, length={}, span={}", address,
-                  length, span.size());
+                  length, span_size);
     return false;
   }
 
@@ -1377,33 +1379,35 @@ static void AMMBCommandModifyMyIPaddr(u32 parameter_offset)
 static void FileWriteData(Memory::MemoryManager& memory, File::IOFile* file, u32 seek_pos,
                           u32 address, std::size_t length)
 {
-  auto span = memory.GetSpanForAddress(address);
-  if (length <= span.size())
+  size_t span_size;
+  u8* const span_data = memory.GetPointerAndSize(address, &span_size);
+  if (length <= span_size)
   {
     file->Seek(seek_pos, File::SeekOrigin::Begin);
-    file->WriteBytes(span.data(), length);
+    file->WriteBytes(span_data, length);
     file->Flush();
   }
   else
   {
     ERROR_LOG_FMT(AMMEDIABOARD, "GC-AM: Write overflow: address=0x{:08x}, length={}, span={}",
-                  address, length, span.size());
+                  address, length, span_size);
   }
 }
 
 static void FileReadData(Memory::MemoryManager& memory, File::IOFile* file, u32 seek_pos,
                          u32 address, std::size_t length)
 {
-  auto span = memory.GetSpanForAddress(address);
-  if (length <= span.size())
+  size_t span_size;
+  u8* const span_data = memory.GetPointerAndSize(address, &span_size);
+  if (length <= span_size)
   {
     file->Seek(seek_pos, File::SeekOrigin::Begin);
-    file->ReadBytes(span.data(), length);
+    file->ReadBytes(span_data, length);
   }
   else
   {
     ERROR_LOG_FMT(AMMEDIABOARD, "GC-AM: Read overflow: address=0x{:08x}, length={}, span={}",
-                  address, length, span.size());
+                  address, length, span_size);
   }
 }
 
@@ -1879,14 +1883,18 @@ u32 ExecuteCommand(std::array<u32, 3>& dicmd_buf, u32* diimm_buf, u32 address, u
       return 0;
     }
 
-    if (const auto span = memory.GetSpanForAddress(address); span.size() < length)
     {
-      ERROR_LOG_FMT(AMMEDIABOARD, "GC-AM: Invalid DIMM Disc read from: offset={}, length={}",
-                    offset, length);
-    }
-    else if (s_dimm_disc->Read(offset, length, span.data()))
-    {
-      return 0;
+      size_t span_size;
+      u8* const span_data = memory.GetPointerAndSize(address, &span_size);
+      if (span_size < length)
+      {
+        ERROR_LOG_FMT(AMMEDIABOARD, "GC-AM: Invalid DIMM Disc read from: offset={}, length={}",
+                      offset, length);
+      }
+      else if (s_dimm_disc->Read(offset, length, span_data))
+      {
+        return 0;
+      }
     }
 
     return 1;

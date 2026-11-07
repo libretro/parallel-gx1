@@ -128,18 +128,19 @@ void CEXIBaseboard::DMAWrite(u32 addr, u32 size)
 {
   const auto& system = Core::System::GetInstance();
   const auto& memory = system.GetMemory();
-  auto span = memory.GetSpanForAddress(addr);
+  size_t span_size;
+  u8* const span_data = memory.GetPointerAndSize(addr, &span_size);
 
-  if (span.size() < size)
+  if (span_size < size)
   {
     ERROR_LOG_FMT(SP1, "AM-BB: Backup DMA Write overflow: address=0x{:08x}, length={}, span={}",
-                  addr, size, span.size());
+                  addr, size, span_size);
     return;
   }
   NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: Backup DMA Write: {:08x} {:x}", addr, size);
 
   m_backup.Seek(m_backup_offset, File::SeekOrigin::Begin);
-  m_backup.WriteBytes(span.data(), size);
+  m_backup.WriteBytes(span_data, size);
   m_backup.Flush();
 }
 
@@ -147,18 +148,19 @@ void CEXIBaseboard::DMARead(u32 addr, u32 size)
 {
   const auto& system = Core::System::GetInstance();
   const auto& memory = system.GetMemory();
-  auto span = memory.GetSpanForAddress(addr);
+  size_t span_size;
+  u8* const span_data = memory.GetPointerAndSize(addr, &span_size);
 
-  if (span.size() < size)
+  if (span_size < size)
   {
     ERROR_LOG_FMT(SP1, "AM-BB: Backup DMA Read overflow: address=0x{:08x}, length={}, span={}",
-                  addr, size, span.size());
+                  addr, size, span_size);
     return;
   }
   NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: Backup DMA Read: {:08x} {:x}", addr, size);
 
   m_backup.Seek(m_backup_offset, File::SeekOrigin::Begin);
-  m_backup.ReadBytes(span.data(), size);
+  m_backup.ReadBytes(span_data, size);
 }
 
 void CEXIBaseboard::TransferByte(u8& byte)

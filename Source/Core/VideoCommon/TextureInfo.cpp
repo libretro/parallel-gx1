@@ -53,7 +53,9 @@ TextureInfo TextureInfo::FromStage(u32 stage)
 
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();
-  return TextureInfo(stage, memory.GetSpanForAddress(address), tlut_data, address, texture_format,
+  size_t size;
+  const u8* const data = memory.GetPointerAndSize(address, &size);
+  return TextureInfo(stage, std::span<const u8>(data, size), tlut_data, address, texture_format,
                      tlut_format, width, height, false, {}, {}, mip_count);
 }
 

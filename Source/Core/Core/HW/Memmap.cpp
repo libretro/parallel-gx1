@@ -8,14 +8,12 @@
 
 #include "Core/HW/Memmap.h"
 
-#include <algorithm>
+#include <cstdlib>
 #include <array>
 #include <bit>
 #include <cstring>
-#include <map>
 #include <memory>
 #include <set>
-#include <span>
 #include <tuple>
 
 #include "Common/ChunkFile.h"
@@ -52,7 +50,51 @@ MemoryManager::MemoryManager(Core::System& system)
 {
 }
 
-MemoryManager::~MemoryManager() = default;
+MemoryManager::~MemoryManager()
+{
+  FreePageTables();
+}
+
+void MemoryManager::FreePageTables()
+{
+  u32 i;
+  for (i = 0; i < PAGE_BLOCKS; i++)
+  {
+    std::free(m_page_table_views[i]);
+    m_page_table_views[i] = nullptr;
+    m_page_table_view_counts[i] = 0;
+    std::free(m_large_readable_pages[i]);
+    m_large_readable_pages[i] = nullptr;
+    std::free(m_large_writeable_pages[i]);
+    m_large_writeable_pages[i] = nullptr;
+  }
+}
+
+void MemoryManager::UnmapDBATViews()
+{
+  u32 i;
+  for (i = 0; i < m_dbat_view_count; i++)
+    m_arena.UnmapFromMemoryRegion(m_dbat_views[i].mapped_pointer, m_dbat_views[i].mapped_size);
+  m_dbat_view_count = 0;
+}
+
+// The view of the page at logical_address; with create, its block allocated if need be.
+LogicalMemoryView* MemoryManager::GetPageTableView(u32 logical_address, bool create)
+{
+  const u32 page = logical_address >> 12;
+  LogicalMemoryView* block = m_page_table_views[page >> PAGE_BLOCK_SHIFT];
+  if (!block)
+  {
+    if (!create)
+      return nullptr;
+    block = static_cast<LogicalMemoryView*>(
+        std::calloc(PAGE_BLOCK_SIZE, sizeof(LogicalMemoryView)));
+    if (!block)
+      return nullptr;
+    m_page_table_views[page >> PAGE_BLOCK_SHIFT] = block;
+  }
+  return &block[page & (PAGE_BLOCK_SIZE - 1)];
+}
 
 MemoryManager::HostPageType MemoryManager::GetHostPageTypeForPageSize(u32 page_size)
 {
@@ -99,7 +141,8 @@ void MemoryManager::Init()
     // upper bound is clamped to 64 MiB (maximum supported by Flipper's memory controller),
     // reflecting Apploader behaviour of clamping the simulated size to physical memory size. It is
     // never desired to emulate less than a retail console, so the lower bound is clapped to 24 MiB.
-    return std::clamp(m_system.GetSimulatedMemorySize(), MEM1_SIZE_RETAIL, MEM1_SIZE_MAX);
+    const u32 size = m_system.GetSimulatedMemorySize();
+    return size < MEM1_SIZE_RETAIL ? MEM1_SIZE_RETAIL : size > MEM1_SIZE_MAX ? MEM1_SIZE_MAX : size;
   };
   const auto get_mem2_size = [] {
     if (Config::Get(Config::MAIN_RAM_OVERRIDE_ENABLE))
@@ -256,11 +299,7 @@ bool MemoryManager::InitFastmemArena()
 
 void MemoryManager::UpdateDBATMappings(const PowerPC::BatTable& dbat_table)
 {
-  for (const auto& [logical_address, entry] : m_dbat_mapped_entries)
-  {
-    m_arena.UnmapFromMemoryRegion(entry.mapped_pointer, entry.mapped_size);
-  }
-  m_dbat_mapped_entries.clear();
+  UnmapDBATViews();
 
   RemoveAllPageTableMappings();
 
@@ -298,8 +337,11 @@ void MemoryManager::UpdateDBATMappings(const PowerPC::BatTable& dbat_table)
 
         u32 mapping_address = physical_region.physical_address;
         u32 mapping_end = mapping_address + physical_region.size;
-        u32 intersection_start = std::max(mapping_address, translated_address);
-        u32 intersection_end = std::min(mapping_end, translated_address + logical_size);
+        u32 intersection_start =
+            mapping_address > translated_address ? mapping_address : translated_address;
+        u32 intersection_end = mapping_end < translated_address + logical_size ?
+                                   mapping_end :
+                                   translated_address + logical_size;
         if (intersection_start < intersection_end)
         {
           // Found an overlapping region; map it.
@@ -319,8 +361,14 @@ void MemoryManager::UpdateDBATMappings(const PowerPC::BatTable& dbat_table)
                             intersection_start, mapped_size, logical_address);
               continue;
             }
-            m_dbat_mapped_entries.emplace(logical_address,
-                                          LogicalMemoryView{mapped_pointer, mapped_size});
+            if (m_dbat_view_count == MAX_DBAT_VIEWS)
+            {
+              // the view stays unmapped: accesses through it take the slow path
+              ERROR_LOG_FMT(MEMMAP, "Too many DBAT views; 0x{:08X} not mapped.", logical_address);
+              m_arena.UnmapFromMemoryRegion(mapped_pointer, mapped_size);
+              continue;
+            }
+            m_dbat_views[m_dbat_view_count++] = LogicalMemoryView{mapped_pointer, mapped_size};
           }
 
           u32 bat_index = mapped_logical_address / PowerPC::BAT_PAGE_SIZE;
@@ -368,19 +416,30 @@ void MemoryManager::TryAddLargePageTableMapping(u32 logical_address, u32 transla
 }
 
 bool MemoryManager::TryAddLargePageTableMapping(u32 logical_address, u32 translated_address,
-                                                std::map<u32, std::vector<u32>>& map)
+                                                u32** table)
 {
-  std::vector<u32>& entries = map[logical_address & ~(m_page_size - 1)];
+  // the host page's guest pages are consecutive in one block, as a host page is a power of two
+  // guest pages, no more than a block
+  const u32 host_page_guest_index = (logical_address & ~(m_page_size - 1)) >> 12;
+  u32* block = table[host_page_guest_index >> PAGE_BLOCK_SHIFT];
+  if (!block)
+  {
+    u32 i;
+    block = static_cast<u32*>(std::malloc(PAGE_BLOCK_SIZE * sizeof(u32)));
+    if (!block)
+      return false;
+    for (i = 0; i < PAGE_BLOCK_SIZE; i++)
+      block[i] = INVALID_MAPPING;
+    table[host_page_guest_index >> PAGE_BLOCK_SHIFT] = block;
+  }
 
-  if (entries.empty())
-    entries = std::vector<u32>(m_guest_pages_per_host_page, INVALID_MAPPING);
-
+  u32* const entries = block + (host_page_guest_index & (PAGE_BLOCK_SIZE - 1));
   entries[(logical_address & (m_page_size - 1)) / PowerPC::HW_PAGE_SIZE] = translated_address;
 
   return CanCreateHostMappingForGuestPages(entries);
 }
 
-bool MemoryManager::CanCreateHostMappingForGuestPages(std::span<const u32> entries) const
+bool MemoryManager::CanCreateHostMappingForGuestPages(const u32* entries) const
 {
   const u32 translated_address = entries[0];
   if ((translated_address & (m_page_size - 1)) != 0)
@@ -405,8 +464,11 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
 
     const u32 mapping_address = physical_region.physical_address;
     const u32 mapping_end = mapping_address + physical_region.size;
-    const u32 intersection_start = std::max(mapping_address, translated_address);
-    const u32 intersection_end = std::min(mapping_end, translated_address + logical_size);
+    const u32 intersection_start =
+        mapping_address > translated_address ? mapping_address : translated_address;
+    const u32 intersection_end = mapping_end < translated_address + logical_size ?
+                                     mapping_end :
+                                     translated_address + logical_size;
     if (intersection_start >= intersection_end)
       continue;
 
@@ -415,11 +477,13 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
     u8* const base = m_logical_base + logical_address + intersection_start - translated_address;
     const u32 mapped_size = intersection_end - intersection_start;
 
-    const auto it = m_page_table_mapped_entries.find(logical_address);
-    if (it != m_page_table_mapped_entries.end())
+    LogicalMemoryView* const view = GetPageTableView(logical_address, true);
+    if (!view)
+      continue;
+    if (view->mapped_pointer)
     {
       // Update the protection of an existing mapping.
-      if (it->second.mapped_pointer == base && it->second.mapped_size == mapped_size)
+      if (view->mapped_pointer == base && view->mapped_size == mapped_size)
       {
         if (!m_arena.ChangeMappingProtection(base, mapped_size, writeable))
         {
@@ -441,8 +505,8 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
                       intersection_start, mapped_size, logical_address);
         continue;
       }
-      m_page_table_mapped_entries.emplace(logical_address,
-                                          LogicalMemoryView{mapped_pointer, mapped_size});
+      *view = LogicalMemoryView{mapped_pointer, mapped_size};
+      m_page_table_view_counts[(logical_address >> 12) >> PAGE_BLOCK_SHIFT]++;
     }
   }
 }
@@ -472,35 +536,55 @@ void MemoryManager::RemoveLargePageTableMapping(u32 logical_address)
   RemoveHostPageTableMapping(logical_address & ~(m_page_size - 1));
 }
 
-void MemoryManager::RemoveLargePageTableMapping(u32 logical_address,
-                                                std::map<u32, std::vector<u32>>& map)
+void MemoryManager::RemoveLargePageTableMapping(u32 logical_address, u32** table)
 {
-  const auto it = map.find(logical_address & ~(m_page_size - 1));
-  if (it != map.end())
-    it->second[(logical_address & (m_page_size - 1)) / PowerPC::HW_PAGE_SIZE] = INVALID_MAPPING;
+  const u32 page = logical_address >> 12;
+  u32* const block = table[page >> PAGE_BLOCK_SHIFT];
+  if (block)
+    block[page & (PAGE_BLOCK_SIZE - 1)] = INVALID_MAPPING;
 }
 
 void MemoryManager::RemoveHostPageTableMapping(u32 logical_address)
 {
-  const auto it = m_page_table_mapped_entries.find(logical_address);
-  if (it != m_page_table_mapped_entries.end())
-  {
-    const LogicalMemoryView& entry = it->second;
-    m_arena.UnmapFromMemoryRegion(entry.mapped_pointer, entry.mapped_size);
-
-    m_page_table_mapped_entries.erase(it);
-  }
+  LogicalMemoryView* const view = GetPageTableView(logical_address, false);
+  if (!view || !view->mapped_pointer)
+    return;
+  m_arena.UnmapFromMemoryRegion(view->mapped_pointer, view->mapped_size);
+  view->mapped_pointer = nullptr;
+  view->mapped_size = 0;
+  m_page_table_view_counts[(logical_address >> 12) >> PAGE_BLOCK_SHIFT]--;
 }
 
 void MemoryManager::RemoveAllPageTableMappings()
 {
-  for (const auto& [logical_address, entry] : m_page_table_mapped_entries)
+  u32 i, j;
+  for (i = 0; i < PAGE_BLOCKS; i++)
   {
-    m_arena.UnmapFromMemoryRegion(entry.mapped_pointer, entry.mapped_size);
+    LogicalMemoryView* const block = m_page_table_views[i];
+    if (block && m_page_table_view_counts[i])
+    {
+      for (j = 0; j < PAGE_BLOCK_SIZE; j++)
+      {
+        if (!block[j].mapped_pointer)
+          continue;
+        m_arena.UnmapFromMemoryRegion(block[j].mapped_pointer, block[j].mapped_size);
+        block[j].mapped_pointer = nullptr;
+        block[j].mapped_size = 0;
+      }
+      m_page_table_view_counts[i] = 0;
+    }
+    // the blocks are kept, emptied
+    if (m_large_readable_pages[i])
+    {
+      for (j = 0; j < PAGE_BLOCK_SIZE; j++)
+        m_large_readable_pages[i][j] = INVALID_MAPPING;
+    }
+    if (m_large_writeable_pages[i])
+    {
+      for (j = 0; j < PAGE_BLOCK_SIZE; j++)
+        m_large_writeable_pages[i][j] = INVALID_MAPPING;
+    }
   }
-  m_page_table_mapped_entries.clear();
-  m_large_readable_pages.clear();
-  m_large_writeable_pages.clear();
 }
 
 void MemoryManager::DoState(PointerWrap& p)
@@ -584,22 +668,12 @@ void MemoryManager::ShutdownFastmemArena()
     m_arena.UnmapFromMemoryRegion(base, region.size);
   }
 
-  for (const auto& [logical_address, entry] : m_dbat_mapped_entries)
-  {
-    m_arena.UnmapFromMemoryRegion(entry.mapped_pointer, entry.mapped_size);
-  }
-  m_dbat_mapped_entries.clear();
-
-  for (const auto& [logical_address, entry] : m_page_table_mapped_entries)
-  {
-    m_arena.UnmapFromMemoryRegion(entry.mapped_pointer, entry.mapped_size);
-  }
-  m_page_table_mapped_entries.clear();
+  UnmapDBATViews();
+  RemoveAllPageTableMappings();
 
   m_arena.ReleaseMemoryRegion();
 
-  m_large_readable_pages.clear();
-  m_large_writeable_pages.clear();
+  FreePageTables();
 
   m_fastmem_arena = nullptr;
   m_fastmem_arena_size = 0;
@@ -623,23 +697,24 @@ void MemoryManager::Clear()
 
 u8* MemoryManager::GetPointerForRange(u32 address, size_t size) const
 {
-  std::span<u8> span = GetSpanForAddress(address);
+  size_t available;
+  u8* const pointer = GetPointerAndSize(address, &available);
 
-  if (span.data() == nullptr)
+  if (pointer == nullptr)
   {
     // The address isn't in a valid memory region.
     // A panic alert has already been raised by GetPointer, so let's not raise another one.
     return nullptr;
   }
 
-  if (span.size() < size)
+  if (available < size)
   {
     // The start address is in a valid region, but the end address is beyond the end of that region.
     PanicAlertFmt("Oversized range in GetPointerForRange. {:x} bytes at {:#010x}", size, address);
     return nullptr;
   }
 
-  return span.data();
+  return pointer;
 }
 
 void MemoryManager::CopyFromEmu(void* data, u32 address, size_t size) const
@@ -711,27 +786,31 @@ std::string MemoryManager::GetString(u32 em_address, size_t size)
   }
 }
 
-std::span<u8> MemoryManager::GetSpanForAddress(u32 address) const
+u8* MemoryManager::GetPointerAndSize(u32 address, size_t* size) const
 {
   // TODO: Should we be masking off more bits here?  Can all devices access
   // EXRAM?
   address &= 0x3FFFFFFF;
   if (address < GetRamSizeReal())
-    return std::span(m_ram + address, GetRamSizeReal() - address);
+  {
+    *size = GetRamSizeReal() - address;
+    return m_ram + address;
+  }
 
   if (m_exram)
   {
     if ((address >> 28) == 0x1 && (address & 0x0fffffff) < GetExRamSizeReal())
     {
-      return std::span(m_exram + (address & GetExRamMask()),
-                       GetExRamSizeReal() - (address & GetExRamMask()));
+      *size = GetExRamSizeReal() - (address & GetExRamMask());
+      return m_exram + (address & GetExRamMask());
     }
   }
 
   auto& ppc_state = m_system.GetPPCState();
   PanicAlertFmt("Unknown Pointer {:#010x} PC {:#010x} LR {:#010x}", address, ppc_state.pc,
                 LR(ppc_state));
-  return {};
+  *size = 0;
+  return nullptr;
 }
 
 u8 MemoryManager::Read_U8(u32 address) const

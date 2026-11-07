@@ -138,7 +138,9 @@ void SampleMip(s32 s, s32 t, s32 mip, bool linear, u8 texmap, u8* sample)
     auto& memory = system.GetMemory();
 
     const u32 imageBase = texUnit.texImage3.image_base << 5;
-    image_src = memory.GetSpanForAddress(imageBase);
+    size_t size;
+    const u8* const data = memory.GetPointerAndSize(imageBase, &size);
+    image_src = std::span<const u8>(data, size);
   }
 
   int image_width_minus_1 = ti0.width;
