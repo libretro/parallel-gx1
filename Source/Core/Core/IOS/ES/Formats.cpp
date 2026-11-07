@@ -189,14 +189,13 @@ SignatureType SignedBlobReader::GetSignatureType() const
   return static_cast<SignatureType>(Common::swap32(m_bytes));
 }
 
-template <typename T, typename It>
-static std::vector<u8> DetailGetSignatureData(It begin)
+template <typename T>
+static std::span<const u8> DetailGetSignatureData(const u8* begin)
 {
-  const auto signature_begin = begin + offsetof(T, sig);
-  return std::vector<u8>(signature_begin, signature_begin + sizeof(T::sig));
+  return {begin + offsetof(T, sig), sizeof(T::sig)};
 }
 
-std::vector<u8> SignedBlobReader::GetSignatureData() const
+std::span<const u8> SignedBlobReader::GetSignatureData() const
 {
   switch (GetSignatureType())
   {
@@ -288,26 +287,31 @@ bool TMDReader::IsValid() const
   return true;
 }
 
-std::vector<u8> TMDReader::GetRawView() const
+size_t TMDReader::GetRawViewSize() const
+{
+  return (offsetof(TMDHeader, access_rights) - offsetof(TMDHeader, tmd_version)) +
+         sizeof(TMDHeader::title_version) + sizeof(TMDHeader::num_contents) +
+         size_t(GetNumContents()) * CONTENT_VIEW_SIZE;
+}
+
+void TMDReader::GetRawView(u8* out) const
 {
   // Base fields
-  std::vector<u8> view(m_bytes + offsetof(TMDHeader, tmd_version),
-                       m_bytes + offsetof(TMDHeader, access_rights));
-
-  const auto version = m_bytes + offsetof(TMDHeader, title_version);
-  view.insert(view.end(), version, version + sizeof(TMDHeader::title_version));
-
-  const auto num_contents = m_bytes + offsetof(TMDHeader, num_contents);
-  view.insert(view.end(), num_contents, num_contents + sizeof(TMDHeader::num_contents));
+  const size_t base = offsetof(TMDHeader, access_rights) - offsetof(TMDHeader, tmd_version);
+  std::memcpy(out, m_bytes + offsetof(TMDHeader, tmd_version), base);
+  out += base;
+  std::memcpy(out, m_bytes + offsetof(TMDHeader, title_version), sizeof(TMDHeader::title_version));
+  out += sizeof(TMDHeader::title_version);
+  std::memcpy(out, m_bytes + offsetof(TMDHeader, num_contents), sizeof(TMDHeader::num_contents));
+  out += sizeof(TMDHeader::num_contents);
 
   // Content views (same as Content, but without the hash)
-  for (size_t i = 0; i < GetNumContents(); ++i)
+  const size_t num_contents = GetNumContents();
+  for (size_t i = 0; i < num_contents; ++i)
   {
-    const auto content_iterator = m_bytes + sizeof(TMDHeader) + i * sizeof(Content);
-    view.insert(view.end(), content_iterator, content_iterator + CONTENT_VIEW_SIZE);
+    std::memcpy(out, m_bytes + sizeof(TMDHeader) + i * sizeof(Content), CONTENT_VIEW_SIZE);
+    out += CONTENT_VIEW_SIZE;
   }
-
-  return view;
 }
 
 u16 TMDReader::GetBootIndex() const
@@ -469,32 +473,31 @@ u32 TicketReader::GetTicketSize() const
   return sizeof(Ticket);
 }
 
-std::vector<u8> TicketReader::GetRawTicket(u64 ticket_id_to_find) const
+std::span<const u8> TicketReader::GetRawTicket(u64 ticket_id_to_find) const
 {
+  const size_t ticket_size = GetTicketSize();
   for (size_t i = 0; i < GetNumberOfTickets(); ++i)
   {
-    const auto ticket_begin = m_bytes + GetTicketSize() * i;
+    const u8* const ticket_begin = m_bytes + ticket_size * i;
     const u64 ticket_id = Common::swap64(ticket_begin + offsetof(ES::Ticket, ticket_id));
     if (ticket_id == ticket_id_to_find)
-      return {ticket_begin, ticket_begin + GetTicketSize()};
+      return {ticket_begin, ticket_size};
   }
   return {};
 }
 
-std::vector<u8> TicketReader::GetRawTicketView(u32 ticket_num) const
+void TicketReader::GetRawTicketView(u32 ticket_num, u8* out) const
 {
   // A ticket view is composed of a version + part of a ticket starting from the ticket_id field.
-  const auto ticket_start = m_bytes + sizeof(Ticket) * ticket_num;
-  const auto view_start = ticket_start + offsetof(Ticket, ticket_id);
-
-  std::vector<u8> view(sizeof(u32));
-  view[0] = GetVersion();
+  const u8* const ticket_start = m_bytes + sizeof(Ticket) * ticket_num;
+  out[0] = GetVersion();
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
 
   // Copy the rest of the ticket view structure from the ticket.
-  view.insert(view.end(), view_start, view_start + (sizeof(TicketView) - sizeof(u32)));
-  ASSERT(view.size() == sizeof(TicketView));
-
-  return view;
+  std::memcpy(out + sizeof(u32), ticket_start + offsetof(Ticket, ticket_id),
+              sizeof(TicketView) - sizeof(u32));
 }
 
 u8 TicketReader::GetVersion() const
@@ -853,14 +856,13 @@ PublicKeyType CertReader::GetPublicKeyType() const
   return static_cast<PublicKeyType>(Common::swap32(m_bytes + offset));
 }
 
-template <typename T, typename It>
-std::vector<u8> DetailGetPublicKey(It begin, size_t extra_data = 0)
+template <typename T>
+static std::span<const u8> DetailGetPublicKey(const u8* begin, size_t extra_data = 0)
 {
-  const auto key_begin = begin + offsetof(T, public_key);
-  return {key_begin, key_begin + sizeof(T::public_key) + extra_data};
+  return {begin + offsetof(T, public_key), sizeof(T::public_key) + extra_data};
 }
 
-std::vector<u8> CertReader::GetPublicKey() const
+std::span<const u8> CertReader::GetPublicKey() const
 {
   switch (GetSignatureType())
   {

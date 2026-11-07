@@ -102,11 +102,13 @@ IPCReply ESDevice::GetTicketViews(const IOCtlVRequest& request)
   else if (ticket.IsValid())
   {
     u32 number_of_views = std::min(maxViews, static_cast<u32>(ticket.GetNumberOfTickets()));
-    for (u32 view = 0; view < number_of_views; ++view)
+    // written straight into guest memory
+    u8* const views = memory.GetPointerForRange(request.io_vectors[0].address,
+                                                number_of_views * sizeof(ES::TicketView));
+    if (views)
     {
-      const std::vector<u8> ticket_view = ticket.GetRawTicketView(view);
-      memory.CopyToEmu(request.io_vectors[0].address + view * sizeof(ES::TicketView),
-                       ticket_view.data(), ticket_view.size());
+      for (u32 view = 0; view < number_of_views; ++view)
+        ticket.GetRawTicketView(view, views + view * sizeof(ES::TicketView));
     }
   }
   else if (ShouldReturnFakeViewsForIOSes(TitleID, m_core.m_title_context))
@@ -140,7 +142,7 @@ ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* tic
   }
 
   // Handle GetTicketFromView or GetV0TicketFromView
-  const std::vector<u8> ticket_bytes = installed_ticket.GetRawTicket(ticket_id);
+  const std::span<const u8> ticket_bytes = installed_ticket.GetRawTicket(ticket_id);
   if (ticket_bytes.empty())
     return ES_NO_TICKET;
 
@@ -237,7 +239,7 @@ IPCReply ESDevice::GetTMDViewSize(const IOCtlVRequest& request)
   if (!tmd.IsValid())
     return IPCReply(FS_ENOENT);
 
-  const u32 view_size = static_cast<u32>(tmd.GetRawView().size());
+  const u32 view_size = static_cast<u32>(tmd.GetRawViewSize());
   memory.Write_U32(view_size, request.io_vectors[0].address);
 
   INFO_LOG_FMT(IOS_ES, "GetTMDViewSize: {} bytes for title {:016x}", view_size, TitleID);
@@ -263,13 +265,17 @@ IPCReply ESDevice::GetTMDViews(const IOCtlVRequest& request)
   if (!tmd.IsValid())
     return IPCReply(FS_ENOENT);
 
-  const std::vector<u8> raw_view = tmd.GetRawView();
-  if (request.io_vectors[0].size < raw_view.size())
+  const size_t view_size = tmd.GetRawViewSize();
+  if (request.io_vectors[0].size < view_size)
     return IPCReply(ES_EINVAL);
 
-  memory.CopyToEmu(request.io_vectors[0].address, raw_view.data(), raw_view.size());
+  // written straight into guest memory
+  u8* const view = memory.GetPointerForRange(request.io_vectors[0].address, view_size);
+  if (!view)
+    return IPCReply(ES_EINVAL);
+  tmd.GetRawView(view);
 
-  INFO_LOG_FMT(IOS_ES, "GetTMDView: {} bytes for title {:016x}", raw_view.size(), title_id);
+  INFO_LOG_FMT(IOS_ES, "GetTMDView: {} bytes for title {:016x}", view_size, title_id);
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -293,16 +299,18 @@ IPCReply ESDevice::DIGetTMDViewSize(const IOCtlVRequest& request)
 
   if (has_tmd)
   {
-    std::vector<u8> tmd_bytes(request.in_vectors[0].size);
-    memory.CopyFromEmu(tmd_bytes.data(), request.in_vectors[0].address, tmd_bytes.size());
-    const ES::TMDReader tmd{std::move(tmd_bytes)};
+    // read into the reader straight from guest memory
+    ES::TMDReader tmd;
+    u8* const tmd_bytes = tmd.ResizeBytes(request.in_vectors[0].size);
+    if (tmd_bytes)
+      memory.CopyFromEmu(tmd_bytes, request.in_vectors[0].address, request.in_vectors[0].size);
 
     // Yes, this returns -1017, not ES_INVALID_TMD.
     // IOS simply checks whether the TMD has all required content entries.
     if (!tmd.IsValid())
       return IPCReply(ES_EINVAL);
 
-    tmd_view_size = tmd.GetRawView().size();
+    tmd_view_size = tmd.GetRawViewSize();
   }
   else
   {
@@ -310,7 +318,7 @@ IPCReply ESDevice::DIGetTMDViewSize(const IOCtlVRequest& request)
     if (!m_core.m_title_context.active)
       return IPCReply(ES_EINVAL);
 
-    tmd_view_size = m_core.m_title_context.tmd.GetRawView().size();
+    tmd_view_size = m_core.m_title_context.tmd.GetRawViewSize();
   }
 
   memory.Write_U32(static_cast<u32>(tmd_view_size), request.io_vectors[0].address);
@@ -337,18 +345,18 @@ IPCReply ESDevice::DIGetTMDView(const IOCtlVRequest& request)
   }
 
   const bool has_tmd = request.in_vectors[0].size != 0;
-  std::vector<u8> tmd_view;
+  ES::TMDReader passed_tmd;
+  const ES::TMDReader* tmd = &passed_tmd;
 
   if (has_tmd)
   {
-    std::vector<u8> tmd_bytes(request.in_vectors[0].size);
-    memory.CopyFromEmu(tmd_bytes.data(), request.in_vectors[0].address, tmd_bytes.size());
-    const ES::TMDReader tmd{std::move(tmd_bytes)};
+    // read into the reader straight from guest memory
+    u8* const tmd_bytes = passed_tmd.ResizeBytes(request.in_vectors[0].size);
+    if (tmd_bytes)
+      memory.CopyFromEmu(tmd_bytes, request.in_vectors[0].address, request.in_vectors[0].size);
 
-    if (!tmd.IsValid())
+    if (!passed_tmd.IsValid())
       return IPCReply(ES_EINVAL);
-
-    tmd_view = tmd.GetRawView();
   }
   else
   {
@@ -356,13 +364,18 @@ IPCReply ESDevice::DIGetTMDView(const IOCtlVRequest& request)
     if (!m_core.m_title_context.active)
       return IPCReply(ES_EINVAL);
 
-    tmd_view = m_core.m_title_context.tmd.GetRawView();
+    tmd = &m_core.m_title_context.tmd;
   }
 
-  if (tmd_view.size() > request.io_vectors[0].size)
+  const size_t view_size = tmd->GetRawViewSize();
+  if (view_size > request.io_vectors[0].size)
     return IPCReply(ES_EINVAL);
 
-  memory.CopyToEmu(request.io_vectors[0].address, tmd_view.data(), tmd_view.size());
+  // written straight into guest memory
+  u8* const view = memory.GetPointerForRange(request.io_vectors[0].address, view_size);
+  if (!view)
+    return IPCReply(ES_EINVAL);
+  tmd->GetRawView(view);
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -383,7 +396,10 @@ IPCReply ESDevice::DIGetTicketView(const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  std::vector<u8> view;
+  // written straight into guest memory
+  u8* const view = memory.GetPointerForRange(request.io_vectors[0].address, sizeof(ES::TicketView));
+  if (!view)
+    return IPCReply(ES_EINVAL);
 
   // If no ticket was passed in, IOS returns the ticket view for the current title.
   // Of course, this returns -1017 if no title is active and no ticket is passed.
@@ -392,18 +408,20 @@ IPCReply ESDevice::DIGetTicketView(const IOCtlVRequest& request)
     if (!m_core.m_title_context.active)
       return IPCReply(ES_EINVAL);
 
-    view = m_core.m_title_context.ticket.GetRawTicketView(0);
+    m_core.m_title_context.ticket.GetRawTicketView(0, view);
   }
   else
   {
-    std::vector<u8> ticket_bytes(request.in_vectors[0].size);
-    memory.CopyFromEmu(ticket_bytes.data(), request.in_vectors[0].address, ticket_bytes.size());
-    const ES::TicketReader ticket{std::move(ticket_bytes)};
+    // the ticket view is made from the guest's ticket where it lies
+    const u8* const ticket_bytes =
+        memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::Ticket));
+    if (!ticket_bytes)
+      return IPCReply(ES_EINVAL);
+    const ES::TicketReader ticket{std::span<const u8>(ticket_bytes, sizeof(ES::Ticket))};
 
-    view = ticket.GetRawTicketView(0);
+    ticket.GetRawTicketView(0, view);
   }
 
-  memory.CopyToEmu(request.io_vectors[0].address, view.data(), view.size());
   return IPCReply(IPC_SUCCESS);
 }
 

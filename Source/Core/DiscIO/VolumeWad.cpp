@@ -174,7 +174,7 @@ IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const
   if (!m_ticket.IsValid() || !m_tmd.IsValid())
     return m_ticket;
 
-  const std::vector<u8> sig = m_ticket.GetSignatureData();
+  const std::span<const u8> sig = m_ticket.GetSignatureData();
   if (!std::ranges::all_of(sig, [](u8 a) { return a == 0; }))
   {
     // This does not look like a typical "invalid common key index" ticket, so let's assume

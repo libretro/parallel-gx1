@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <utility>
+#include <span>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -211,7 +212,7 @@ public:
                      u32 pid) const;
 
   ReturnCode VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle signer_handle,
-                                 const std::vector<u8>& signature, u32 pid) const;
+                                 std::span<const u8> signature, u32 pid) const;
   // Import a certificate (signed by the certificate in signer_handle) into dest_handle.
   ReturnCode ImportCertificate(const ES::CertReader& cert, Handle signer_handle, Handle dest_handle,
                                u32 pid);

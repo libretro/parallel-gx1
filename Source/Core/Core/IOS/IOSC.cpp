@@ -372,7 +372,7 @@ ReturnCode IOSC::Decrypt(Handle key_handle, u8* iv, const u8* input, size_t size
 }
 
 ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle signer_handle,
-                                     const std::vector<u8>& signature, u32 pid) const
+                                     std::span<const u8> signature, u32 pid) const
 {
   if (!HasOwnership(signer_handle, pid))
     return IOSC_EACCES;
@@ -453,11 +453,11 @@ ReturnCode IOSC::ImportCertificate(const ES::CertReader& cert, Handle signer_han
   if (!cert.IsValid())
     return IOSC_INVALID_FORMAT;
 
-  const std::vector<u8> signature = cert.GetSignatureData();
+  const std::span<const u8> signature = cert.GetSignatureData();
   if (VerifyPublicKeySign(cert.GetSha1(), signer_handle, signature, pid) != IPC_SUCCESS)
     return IOSC_FAIL_CHECKVALUE;
 
-  const std::vector<u8> public_key = cert.GetPublicKey();
+  const std::span<const u8> public_key = cert.GetPublicKey();
   const bool is_rsa = cert.GetSignatureType() != SignatureType::ECC;
   const u8* exponent = is_rsa ? (public_key.data() + public_key.size() - 4) : nullptr;
   return ImportPublicKey(dest_handle, public_key.data(), exponent, pid);

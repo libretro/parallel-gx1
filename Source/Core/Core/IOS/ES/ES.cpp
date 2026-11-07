@@ -942,7 +942,7 @@ ReturnCode ESCore::SetUpStreamKey(const u32 uid, const u8* ticket_view, const ES
   // Unlike the other "get ticket from view" function, this returns a FS error, not ES_NO_TICKET.
   if (!installed_ticket.IsValid())
     return FS_ENOENT;
-  const std::vector<u8> ticket_bytes = installed_ticket.GetRawTicket(ticket_id);
+  const std::span<const u8> ticket_bytes = installed_ticket.GetRawTicket(ticket_id);
   if (ticket_bytes.empty())
     return ES_NO_TICKET;
 
@@ -1150,7 +1150,7 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
   }
 
   // Verify the signature.
-  const std::vector<u8> signature = signed_blob.GetSignatureData();
+  const std::span<const u8> signature = signed_blob.GetSignatureData();
   ret = iosc.VerifyPublicKeySign(signed_blob.GetSha1(), issuer_handle, signature, PID_ES);
   if (ret != IPC_SUCCESS)
   {

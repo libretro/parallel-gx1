@@ -194,7 +194,8 @@ public:
   bool IsSignatureValid() const;
 
   SignatureType GetSignatureType() const;
-  std::vector<u8> GetSignatureData() const;
+  // The signature, lent from the blob.
+  std::span<const u8> GetSignatureData() const;
   size_t GetSignatureSize() const;
   // Returns the whole issuer chain.
   // Example: Root-CA00000001 if the blob was signed by CA00000001, which is signed by the Root.
@@ -217,8 +218,10 @@ public:
 
   bool IsValid() const;
 
-  // Returns parts of the TMD without any kind of parsing. Intended for use by ES.
-  std::vector<u8> GetRawView() const;
+  // Parts of the TMD without any kind of parsing, written to out, which has
+  // GetRawViewSize() bytes. Intended for use by ES.
+  size_t GetRawViewSize() const;
+  void GetRawView(u8* out) const;
 
   u16 GetBootIndex() const;
   u64 GetIOSId() const;
@@ -255,14 +258,16 @@ public:
   bool IsValid() const;
   bool IsV1Ticket() const;
 
-  std::vector<u8> GetRawTicket(u64 ticket_id) const;
+  // The ticket with this ID, lent from the blob; empty when there is none.
+  std::span<const u8> GetRawTicket(u64 ticket_id) const;
   size_t GetNumberOfTickets() const;
 
   // Returns a "raw" ticket view, without byte swapping. Intended for use from ES.
   // Theoretically, a ticket file can contain one or more tickets. In practice, most (all?)
   // official titles only have one ticket, but IOS *does* have code to handle ticket files with
   // more than just one ticket and generate ticket views for them, so we implement it too.
-  std::vector<u8> GetRawTicketView(u32 ticket_num) const;
+  // Written to out, which has sizeof(TicketView) bytes.
+  void GetRawTicketView(u32 ticket_num, u8* out) const;
 
   u8 GetVersion() const;
   u32 GetDeviceId() const;
@@ -344,7 +349,8 @@ public:
   PublicKeyType GetPublicKeyType() const;
   // Returns the public key bytes + any other data associated with it.
   // For RSA public keys, this includes 4 bytes for the exponent at the end.
-  std::vector<u8> GetPublicKey() const;
+  // Lent from the certificate.
+  std::span<const u8> GetPublicKey() const;
 
 private:
   bool m_is_valid = false;
