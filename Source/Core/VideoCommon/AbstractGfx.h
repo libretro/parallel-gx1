@@ -36,11 +36,6 @@ struct SurfaceInfo
   AbstractTextureFormat format = {};
 };
 
-namespace VideoCommon
-{
-class AsyncShaderCompiler;
-}  // namespace VideoCommon
-
 using ClearColor = std::array<float, 4>;
 
 // AbstractGfx is the root of Dolphin's Graphics API abstraction layer.
@@ -180,7 +175,8 @@ public:
   // A simple presentation fallback, only used by video software
   void ShowImage(const AbstractTexture* source_texture, const MathUtil::Rectangle<int>& source_rc);
 
-  std::unique_ptr<VideoCommon::AsyncShaderCompiler> CreateAsyncShaderCompiler();
+  // Whether the driver compiles on threads of its own (AsyncShaderCompiler::SetDeferred).
+  bool CompilesShadersOnItsOwnThreads() const;
 
   // Called when the configuration changes, and backend structures need to be updated.
   void OnConfigChanged(u32 changed_bits);
@@ -206,7 +202,6 @@ protected:
                         const MathUtil::Rectangle<int>& dst_rect,
                         const AbstractTexture* src_texture,
                         const MathUtil::Rectangle<int>& src_rect);
-  std::unique_ptr<VideoCommon::AsyncShaderCompiler> BaseCreateAsyncShaderCompiler();
   void BaseOnConfigChanged(u32 changed_bits);
 
   AbstractFramebuffer* m_current_framebuffer = nullptr;

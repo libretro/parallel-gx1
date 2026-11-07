@@ -162,11 +162,6 @@ AbstractGfx::ConvertFramebufferRectangle(const MathUtil::Rectangle<int>& rect, u
   return ret;
 }
 
-std::unique_ptr<VideoCommon::AsyncShaderCompiler> AbstractGfx::BaseCreateAsyncShaderCompiler()
-{
-  return std::make_unique<VideoCommon::AsyncShaderCompiler>();
-}
-
 void AbstractGfx::BaseOnConfigChanged(u32 changed_bits)
 {
   // If there's any shader changes, wait for the GPU to finish before destroying anything.

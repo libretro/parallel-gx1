@@ -73,7 +73,6 @@ public:
   void SelectRightBuffer();
   void SelectMainBuffer();
 
-  std::unique_ptr<VideoCommon::AsyncShaderCompiler> CreateAsyncShaderCompiler();
 
   // Only call methods from this on the GPU thread.
   GLContext* GetMainGLContext() const { return m_main_gl_context.get(); }

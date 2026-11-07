@@ -3,11 +3,7 @@
 
 #pragma once
 
-#include <array>
-#include <functional>
-#include <map>
-#include <memory>
-#include <vector>
+#include <stddef.h>
 
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
@@ -15,47 +11,48 @@
 #include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
-#include "Common/Event.h"
+
+/* A shader or pipeline to compile off the video thread. The owner embeds
+ * this first in its own item and keeps the items; the compiler only moves
+ * them between its queues. */
+struct AsyncShaderWork
+{
+  mpsc_stack_node_t link; /* first: a drained chain is cast back */
+  /* on a worker thread, or on the video thread when there are none */
+  void (*compile)(AsyncShaderWork* work);
+  /* on the video thread: takes the item back, to insert what it compiled
+   * and release it, or to queue it again */
+  void (*retrieve)(AsyncShaderWork* work);
+  /* on the video thread: takes the item back unretrieved */
+  void (*discard)(AsyncShaderWork* work);
+  u32 priority;
+  u32 seq; /* the order queued, among equal priorities */
+};
 
 namespace VideoCommon
 {
-class AsyncShaderCompiler
+class AsyncShaderCompiler final
 {
 public:
-  class WorkItem
-  {
-  public:
-    virtual ~WorkItem() = default;
-    virtual bool Compile() = 0;
-    virtual void Retrieve() = 0;
-  };
-
-  using WorkItemPtr = std::unique_ptr<WorkItem>;
-
   AsyncShaderCompiler();
-  virtual ~AsyncShaderCompiler();
+  ~AsyncShaderCompiler();
 
-  template <typename T, typename... Params>
-  static WorkItemPtr CreateWorkItem(Params&&... params)
-  {
-    return std::make_unique<T>(std::forward<Params>(params)...);
-  }
+  AsyncShaderCompiler(const AsyncShaderCompiler&) = delete;
+  AsyncShaderCompiler& operator=(const AsyncShaderCompiler&) = delete;
 
-  // Queues a new work item to the compiler threads. The lower the priority, the sooner
-  // this work item will be compiled, relative to the other work items.
-  void QueueWorkItem(WorkItemPtr item, u32 priority);
+  // Queues a work item to the compiler threads. The lower the priority, the sooner
+  // it is compiled, relative to the other work items.
+  void QueueWorkItem(AsyncShaderWork* work, u32 priority);
   void RetrieveWorkItems();
   bool HasPendingWork();
-  bool HasCompletedWork();
+  bool HasCompletedWork() const;
 
-  // Clears both pending and completed work
+  // Discards both pending and completed work.
   void ClearAllWork();
 
-  // Calls progress_callback periodically, with completed_items, and total_items.
-  // Returns false if interrupted.
-  bool WaitUntilCompletion(const std::function<void(size_t, size_t)>& progress_callback);
+  // Waits until every queued item is compiled. Returns false if interrupted.
+  bool WaitUntilCompletion();
 
-  // Needed because of calling virtual methods in shutdown procedure.
   bool StartWorkerThreads(u32 num_worker_threads);
   // Without worker threads, queued items wait and RetrieveWorkItems compiles a few of them each
   // time it is called, for a backend whose compiles only start work the driver does on threads
@@ -63,66 +60,60 @@ public:
   void SetDeferred(bool deferred) { m_deferred = deferred; }
   bool IsDeferred() const { return m_deferred && !HasWorkerThreads(); }
   bool ResizeWorkerThreads(u32 num_worker_threads);
-  bool HasWorkerThreads() const;
+  bool HasWorkerThreads() const { return m_num_workers != 0; }
   void StopWorkerThreads();
 
-protected:
-  virtual bool WorkerThreadInitMainThread(void** param);
-  virtual bool WorkerThreadInitWorkerThread(void* param);
-  virtual void WorkerThreadExit(void* param);
-
 private:
-  // Waits for a worker to finish an item; true once nothing is pending.
-  bool WaitForWorkDone();
-
-  void WorkerThreadStart();
-  void WorkerThreadEntryPoint(void* param);
-  void WorkerThreadRun();
-
   // A worker holds up to SLOTS items handed over by the video thread: one it may be
   // compiling and one to start right after, so it seldom idles until the next hand-over.
-  static constexpr size_t SLOTS = 2;
+  enum
+  {
+    SLOTS = 2
+  };
   struct Worker
   {
     AsyncShaderCompiler* owner;
-    void* param;
-    sthread_t* thread = nullptr;
-    std::array<retro_atomic_ptr_t, SLOTS> slots{};  // WorkItem*, written by the video thread
-    retro_eventcount_t wake;                        // when a slot fills or on exit
+    sthread_t* thread;
+    retro_atomic_ptr_t slots[SLOTS];  // AsyncShaderWork*, written by the video thread
+    retro_eventcount_t wake;          // when a slot fills or on exit
   };
 
-  // A finished item on its way back to the video thread.
-  struct Completed
-  {
-    mpsc_stack_node_t link;  // first: the drained chain is cast back
-    WorkItemPtr item;
-  };
+  // Waits for a worker to finish an item; true once nothing is pending.
+  bool WaitForWorkDone();
 
   static void WorkerThreadStart(void* worker);
-  void WorkerThreadEntryPoint(Worker* worker);
   void WorkerThreadRun(Worker* worker);
   // Hands the most urgent pending items to the workers' empty slots. Video thread only.
   void FeedWorkers();
   size_t ItemsInSlots() const;
 
-  retro_atomic_int_t m_exit_flag{};
-  Common::Event m_init_event;
-  retro_atomic_int_t m_worker_thread_start_result{};
+  // The pending items, a binary heap by (priority, seq). Video thread only.
+  bool PendingPush(AsyncShaderWork* work);
+  AsyncShaderWork* PendingPop();
 
-  std::vector<std::unique_ptr<Worker>> m_workers;
+  retro_atomic_int_t m_exit_flag;
 
-  // Owned by the video thread alone. A multimap keeps the items in priority order and lets
-  // the unique_ptr be moved out.
-  std::multimap<u32, WorkItemPtr> m_pending_work;
-  retro_atomic_int_t m_busy_workers{};
+  Worker* m_workers = nullptr;
+  u32 m_num_workers = 0;
+
+  AsyncShaderWork** m_pending = nullptr;
+  size_t m_num_pending = 0;
+  size_t m_pending_cap = 0;
+  u32 m_seq = 0;
+
+  retro_atomic_int_t m_busy_workers;
   // Notified each time a worker finishes an item.
   retro_eventcount_t m_work_done;
 
-  mpsc_stack_t m_completed_work{};
-  // Items finished synchronously, when there are no workers. Video thread only.
-  std::vector<WorkItemPtr> m_completed_sync;
+  mpsc_stack_t m_completed_work;
+  // Items finished synchronously, when there are no workers, in order. Video thread only.
+  AsyncShaderWork* m_completed_sync_head = nullptr;
+  AsyncShaderWork* m_completed_sync_tail = nullptr;
   // How many waiting items each RetrieveWorkItems compiles, deferred.
-  static constexpr size_t DEFERRED_ITEMS_PER_RETRIEVE = 2;
+  enum
+  {
+    DEFERRED_ITEMS_PER_RETRIEVE = 2
+  };
   bool m_deferred = false;
 };
 

@@ -11,13 +11,13 @@
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/AbstractStagingTexture.h"
 #include "VideoCommon/AbstractTexture.h"
-#include "VideoCommon/AsyncShaderCompiler.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/VideoBackendKind.h"
 
 #include "VideoBackends/Null/NullGfx.h"
 #include "VideoBackends/Software/SWGfx.h"
 #ifdef HAS_OPENGL
+#include "VideoBackends/OGL/OGLConfig.h"
 #include "VideoBackends/OGL/OGLGfx.h"
 #endif
 #ifdef HAS_VULKAN
@@ -952,17 +952,13 @@ void AbstractGfx::ShowImage(const AbstractTexture* source_texture,
   }
 }
 
-std::unique_ptr<VideoCommon::AsyncShaderCompiler> AbstractGfx::CreateAsyncShaderCompiler()
+bool AbstractGfx::CompilesShadersOnItsOwnThreads() const
 {
-  switch (g_video_backend_kind)
-  {
 #ifdef HAS_OPENGL
-  case VIDEO_BACKEND_OGL:
-    return static_cast<OGL::OGLGfx*>(this)->CreateAsyncShaderCompiler();
+  if (g_video_backend_kind == VIDEO_BACKEND_OGL)
+    return OGL::g_ogl_config.bSupportsParallelShaderCompile;
 #endif
-  default:
-    return BaseCreateAsyncShaderCompiler();
-  }
+  return false;
 }
 
 void AbstractGfx::OnConfigChanged(u32 changed_bits)

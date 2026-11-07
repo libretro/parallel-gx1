@@ -15,7 +15,6 @@
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 #include "VideoBackends/OGL/SamplerCache.h"
 
-#include "VideoCommon/AsyncShaderCompiler.h"
 #include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/VideoConfig.h"
@@ -674,16 +673,6 @@ void OGLGfx::UnbindTexture(const AbstractTexture* texture)
     glBindImageTexture(static_cast<GLuint>(i), 0, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
     m_bound_image_textures[i] = nullptr;
   }
-}
-
-std::unique_ptr<VideoCommon::AsyncShaderCompiler> OGLGfx::CreateAsyncShaderCompiler()
-{
-  std::unique_ptr<VideoCommon::AsyncShaderCompiler> compiler =
-      std::make_unique<VideoCommon::AsyncShaderCompiler>();
-  /* the driver compiles on threads of its own: programs are started a few a frame and drawn
-   * with once linked */
-  compiler->SetDeferred(g_ogl_config.bSupportsParallelShaderCompile);
-  return compiler;
 }
 
 bool OGLGfx::IsGLES() const

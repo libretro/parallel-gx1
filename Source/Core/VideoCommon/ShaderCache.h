@@ -181,6 +181,18 @@ private:
   void QueuePipelineCompile(const GXPipelineUid& uid, u32 priority);
   void QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 priority);
 
+  // The compiler's work items, kept here and reused (ShaderCache.cpp). Video thread only.
+  struct WorkItem;
+  struct WorkChunk;
+  WorkItem* AllocWork(u8 kind, u32 priority);
+  void ReleaseWork(WorkItem* item);
+  void QueueWork(WorkItem* item);
+  static void WorkCompile(AsyncShaderWork* work);
+  static void WorkRetrieve(AsyncShaderWork* work);
+  static void WorkDiscard(AsyncShaderWork* work);
+  WorkItem* m_free_work = nullptr;
+  WorkChunk* m_work_chunks = nullptr;
+
   // Populating various caches.
   template <ShaderStage stage, typename K, typename T>
   void LoadShaderCache(T& cache, APIType api_type, const char* type, bool include_gameid);
@@ -206,7 +218,7 @@ private:
   // Configuration bits.
   APIType m_api_type;
   ShaderHostConfig m_host_config = {};
-  std::unique_ptr<AsyncShaderCompiler> m_async_shader_compiler;
+  AsyncShaderCompiler m_async_shader_compiler;
 
   // Shared shaders
   std::unique_ptr<AbstractShader> m_screen_quad_vertex_shader;
