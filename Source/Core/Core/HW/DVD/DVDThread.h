@@ -156,7 +156,7 @@ private:
   void MaterializeLentReads();
   enum
   {
-    MAX_LENT_READS = 16
+    MAX_LENT_READS = 64
   };
   ReadRequest m_lent_reads[MAX_LENT_READS];  // CPU thread only
   int m_num_lent_reads = 0;
