@@ -24,14 +24,14 @@ CHSPDevice_ARAMExpansion::~CHSPDevice_ARAMExpansion()
   Common::FreeMemoryPages(m_ptr, m_size);
 }
 
-void CHSPDevice_ARAMExpansion::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
+void CHSPDevice_ARAMExpansion::Read(u32 address, u8* data)
 {
-  std::memcpy(data.data(), m_ptr + (address & m_mask), data.size());
+  std::memcpy(data, m_ptr + (address & m_mask), TRANSFER_SIZE);
 }
 
-void CHSPDevice_ARAMExpansion::Write(u32 address, std::span<const u8, TRANSFER_SIZE> data)
+void CHSPDevice_ARAMExpansion::Write(u32 address, const u8* data)
 {
-  std::memcpy(m_ptr + (address & m_mask), data.data(), data.size());
+  std::memcpy(m_ptr + (address & m_mask), data, TRANSFER_SIZE);
 }
 
 void CHSPDevice_ARAMExpansion::DoState(PointerWrap& p)

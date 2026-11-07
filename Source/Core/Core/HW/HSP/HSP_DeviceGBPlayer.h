@@ -5,7 +5,6 @@
 
 #include <array>
 #include <memory>
-#include <span>
 
 #include "Common/CommonTypes.h"
 #include "Core/HW/HSP/HSP_Device.h"
@@ -58,15 +57,16 @@ public:
 
   HSPDeviceType GetDeviceType() const override { return HSPDeviceType::GBPlayer; }
 
-  void Read(u32 address, std::span<u8, TRANSFER_SIZE> data) override;
-  void Write(u32 address, std::span<const u8, TRANSFER_SIZE> data) override;
+  void Read(u32 address, u8* data) override;
+  void Write(u32 address, const u8* data) override;
 
   void DoState(PointerWrap& p) override;
 
   void AssertIRQ(IRQ);
 
-  auto GetScanlineData() { return std::span{m_scanlines}; }
-  auto GetAudioData() { return std::span{m_audio}; }
+  // AV_REGION_SIZE entries each, lent
+  u16* GetScanlineData() { return m_scanlines.data(); }
+  u8* GetAudioData() { return m_audio.data(); }
 
 private:
   void UpdateInterrupts();

@@ -32,8 +32,6 @@ CSIDevice_GBAEmu::CSIDevice_GBAEmu(Core::System& system, SIDevices device, int d
 {
   m_core = std::make_shared<HW::GBA::Core>(system, m_device_number);
   m_core->Start(system.GetCoreTiming().GetTicks());
-  m_gbahost = Host_CreateGBAHost(m_core);
-  m_core->SetHost(m_gbahost);
   system.GetSerialInterface().ScheduleEvent(m_device_number,
                                             GetSyncInterval(system.GetSystemTimers()));
 }
@@ -42,7 +40,6 @@ CSIDevice_GBAEmu::~CSIDevice_GBAEmu()
 {
   m_system.GetSerialInterface().RemoveEvent(m_device_number);
   m_core->Stop();
-  m_gbahost.reset();
   m_core.reset();
 }
 

@@ -15,7 +15,6 @@ namespace HW::GBA
 class Core;
 }  // namespace HW::GBA
 
-class GBAHostInterface;
 
 namespace SerialInterface
 {
@@ -46,7 +45,6 @@ private:
   u16 m_keys = 0;
 
   std::shared_ptr<HW::GBA::Core> m_core;
-  std::shared_ptr<GBAHostInterface> m_gbahost;
 };
 }  // namespace SerialInterface
 #endif  // HAS_LIBMGBA

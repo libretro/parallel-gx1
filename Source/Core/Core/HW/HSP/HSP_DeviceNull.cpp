@@ -6,11 +6,11 @@
 namespace HSP
 {
 
-void CHSPDevice_Null::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
+void CHSPDevice_Null::Read(u32 address, u8* data)
 {
 }
 
-void CHSPDevice_Null::Write(u32 address, std::span<const u8, TRANSFER_SIZE> data)
+void CHSPDevice_Null::Write(u32 address, const u8* data)
 {
 }
 

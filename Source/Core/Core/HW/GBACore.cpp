@@ -331,11 +331,6 @@ CoreInfo Core::GetCoreInfo() const
   return info;
 }
 
-void Core::SetHost(std::weak_ptr<GBAHostInterface> host)
-{
-  m_host = std::move(host);
-}
-
 bool Core::LoadBIOS(const char* bios_path)
 {
   VFile* vf = OpenReadOnlyFile(bios_path);
@@ -419,9 +414,6 @@ void Core::SetVideoBuffer()
     m_video_buffer.resize(std::size_t{width} * height);
     m_core->setVideoBuffer(m_core, m_video_buffer.data(), width);
   }
-
-  if (auto host = m_host.lock())
-    host->GameChanged();
 }
 
 void Core::SetAudioBufferSize()
@@ -436,11 +428,6 @@ void Core::AddCallbacks()
   callbacks.keysRead = [](void* context) {
     auto core = static_cast<Core*>(context);
     core->m_core->setKeys(core->m_core, core->m_keys);
-  };
-  callbacks.videoFrameEnded = [](void* context) {
-    auto core = static_cast<Core*>(context);
-    if (auto host = core->m_host.lock())
-      host->FrameEnded(core->m_video_buffer);
   };
   m_core->addCoreCallbacks(m_core, &callbacks);
 }
@@ -670,8 +657,6 @@ void Core::DoState(PointerWrap& p)
   if (p.IsReadMode() && m_core->stateSize(m_core) == core_state.size())
   {
     m_core->loadState(m_core, core_state.data());
-    if (auto host = m_host.lock())
-      host->FrameEnded(m_video_buffer);
   }
 }
 

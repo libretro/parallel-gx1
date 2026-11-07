@@ -26,11 +26,6 @@ void Host_JitCacheInvalidation() {}
 void Host_JitProfileDataWiped() {}
 bool Host_TASInputHasFocus() { return false; }
 
-std::unique_ptr<GBAHostInterface> Host_CreateGBAHost(std::weak_ptr<HW::GBA::Core>)
-{
-    return nullptr;
-}
-
 void Host_Message(HostMessageID id)
 {
   DEBUG_LOG_FMT(COMMON, "message id: {}\n", (int)id);

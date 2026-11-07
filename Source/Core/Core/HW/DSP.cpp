@@ -511,8 +511,7 @@ void DSPManager::Do_ARAM_DMA()
         auto& hsp = m_system.GetHSP();
         while (m_aram_dma.Cnt.count)
         {
-          hsp.Read(m_aram_dma.ARAddr,
-                   std::span<u8, HSP::TRANSFER_SIZE>(mm_ptr, HSP::TRANSFER_SIZE));
+          hsp.Read(m_aram_dma.ARAddr, mm_ptr);
 
           m_aram_dma.MMAddr += HSP::TRANSFER_SIZE;
           m_aram_dma.ARAddr += HSP::TRANSFER_SIZE;
@@ -571,8 +570,7 @@ void DSPManager::Do_ARAM_DMA()
         auto& hsp = m_system.GetHSP();
         while (m_aram_dma.Cnt.count)
         {
-          hsp.Write(m_aram_dma.ARAddr,
-                    std::span<const u8, HSP::TRANSFER_SIZE>(mm_ptr, HSP::TRANSFER_SIZE));
+          hsp.Write(m_aram_dma.ARAddr, mm_ptr);
 
           m_aram_dma.MMAddr += HSP::TRANSFER_SIZE;
           m_aram_dma.ARAddr += HSP::TRANSFER_SIZE;

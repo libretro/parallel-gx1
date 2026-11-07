@@ -26,16 +26,16 @@ void HSPManager::Shutdown()
   m_device.reset();
 }
 
-void HSPManager::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
+void HSPManager::Read(u32 address, u8* data)
 {
   DEBUG_LOG_FMT(HSP, "HSP read from 0x{:08x}", address);
 
   m_device->Read(address, data);
 }
 
-void HSPManager::Write(u32 address, std::span<const u8, TRANSFER_SIZE> data)
+void HSPManager::Write(u32 address, const u8* data)
 {
-  DEBUG_LOG_FMT(HSP, "HSP write to 0x{:08x}: {:02x}", address, fmt::join(data, " "));
+  DEBUG_LOG_FMT(HSP, "HSP write to 0x{:08x}: {:02x}", address, fmt::join(data, data + TRANSFER_SIZE, " "));
 
   m_device->Write(address, data);
 }

@@ -255,13 +255,13 @@ bool CGBPlayer_mGBA::IsGBA() const
 
 void CGBPlayer_mGBA::PrepareScanlineData()
 {
-  const std::span video_buffer = m_gba_core.GetVideoBuffer();
-  const std::span scanline_data = m_player->GetScanlineData();
+  const u32* const video_buffer = m_gba_core.GetVideoBuffer();
+  u16* const scanline_data = m_player->GetScanlineData();
 
   constexpr u32 scanline_count = 4;
 
   const u32* color_ptr =
-      video_buffer.data() + (m_current_scanline_index * GBA_VIDEO_HORIZONTAL_PIXELS);
+      video_buffer + (m_current_scanline_index * GBA_VIDEO_HORIZONTAL_PIXELS);
 
   for (u32 i = 0; i != GBA_VIDEO_HORIZONTAL_PIXELS * scanline_count; ++i)
   {
@@ -277,14 +277,16 @@ void CGBPlayer_mGBA::PrepareScanlineData()
 
 void CGBPlayer_mGBA::PrepareAudioData()
 {
-  const std::span audio_data = m_player->GetAudioData();
+  u8* const audio_data = m_player->GetAudioData();
+  const size_t audio_size = AV_REGION_SIZE;
 
   // Read from the circular buffer.
-  const auto count = std::min(m_audio_buffer.size() - m_audio_buffer_read_pos, audio_data.size());
-  std::copy_n(m_audio_buffer.data() + m_audio_buffer_read_pos, count, audio_data.data());
-  std::copy_n(m_audio_buffer.data(), audio_data.size() - count, audio_data.data() + count);
+  const size_t left = m_audio_buffer.size() - m_audio_buffer_read_pos;
+  const size_t count = left < audio_size ? left : audio_size;
+  std::memcpy(audio_data, m_audio_buffer.data() + m_audio_buffer_read_pos, count);
+  std::memcpy(audio_data + count, m_audio_buffer.data(), audio_size - count);
 
-  m_audio_buffer_read_pos += u16(audio_data.size());
+  m_audio_buffer_read_pos += u16(audio_size);
   m_audio_buffer_read_pos %= m_audio_buffer.size();
 }
 
@@ -317,8 +319,10 @@ void CGBPlayer_mGBA::ProcessAudioBuffer()
     if (read_count == 0)
       break;
 
-    for (const auto [l, r] : std::span{buffer}.first(read_count))
+    for (size_t k = 0; k < read_count; k++)
     {
+      const s16 l = buffer[k][0];
+      const s16 r = buffer[k][1];
       const u16 l_unsigned = l + 0x8000;
       const u16 r_unsigned = r + 0x8000;
 
@@ -478,13 +482,13 @@ CHSPDevice_GBPlayer::CHSPDevice_GBPlayer(Core::System& system) : m_system{system
 #endif
 }
 
-void CHSPDevice_GBPlayer::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
+void CHSPDevice_GBPlayer::Read(u32 address, u8* data)
 {
   switch (GBPRegister(address >> 20))
   {
   case GBPRegister::Test:
   {
-    std::ranges::copy(m_test, data.data());
+    std::memcpy(data, m_test.data(), TRANSFER_SIZE);
     break;
   }
   case GBPRegister::Control:
@@ -502,7 +506,7 @@ void CHSPDevice_GBPlayer::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
       m_control &= ~(CONTROL_CART_IS_GB | CONTROL_CART_INSERTED);
     }
 
-    std::ranges::fill(data, m_control);
+    std::memset(data, m_control, TRANSFER_SIZE);
     break;
   }
   case GBPRegister::IRQ:
@@ -511,16 +515,16 @@ void CHSPDevice_GBPlayer::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
     value |= (m_irq & 0xff00) * 0x00010100u;
     value &= 0xffff7fffu;
     value = Common::swap32(value);
-    for (std::size_t i = 0; i != data.size(); i += sizeof(value))
+    for (std::size_t i = 0; i != TRANSFER_SIZE; i += sizeof(value))
     {
-      std::memcpy(data.data() + i, &value, sizeof(value));
+      std::memcpy(data + i, &value, sizeof(value));
     }
     break;
   }
   case GBPRegister::Video:
   {
     u32 scanlines_pos = (address & AV_ADDRESS_MASK) / sizeof(u32);
-    for (u32 i = 0; i != data.size(); i += sizeof(u32))
+    for (u32 i = 0; i != TRANSFER_SIZE; i += sizeof(u32))
     {
       const u16 color = m_scanlines[scanlines_pos++];
       data[i + 0] = data[i + 1] = u8(color >> 8);
@@ -531,24 +535,24 @@ void CHSPDevice_GBPlayer::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
   case GBPRegister::Audio:
   {
     u32 audio_pos = (address & AV_ADDRESS_MASK) / sizeof(u32);
-    for (u32 i = 0; i != data.size(); i += sizeof(u32))
+    for (u32 i = 0; i != TRANSFER_SIZE; i += sizeof(u32))
     {
-      std::memset(data.data() + i, m_audio[audio_pos++], sizeof(u32));
+      std::memset(data + i, m_audio[audio_pos++], sizeof(u32));
     }
     break;
   }
   case GBPRegister::SIOControl:
   {
     const u8 value = m_gbp->ReadSIOControl();
-    std::ranges::fill(data, value);
+    std::memset(data, value, TRANSFER_SIZE);
     break;
   }
   case GBPRegister::SIOData:
   {
     const u32 value = m_gbp->ReadSIOData();
-    for (std::size_t i = 0; i != data.size(); i += sizeof(value))
+    for (std::size_t i = 0; i != TRANSFER_SIZE; i += sizeof(value))
     {
-      std::memcpy(data.data() + i, &value, sizeof(value));
+      std::memcpy(data + i, &value, sizeof(value));
     }
     break;
   }
@@ -560,15 +564,14 @@ void CHSPDevice_GBPlayer::Read(u32 address, std::span<u8, TRANSFER_SIZE> data)
   }
 }
 
-void CHSPDevice_GBPlayer::Write(u32 address, std::span<const u8, TRANSFER_SIZE> data)
+void CHSPDevice_GBPlayer::Write(u32 address, const u8* data)
 {
   switch (GBPRegister(address >> 20))
   {
   case GBPRegister::Test:
   {
-    u8* dest = m_test.data();
-    for (u8 value : data)
-      *(dest++) = value ^ 0xffu;
+    for (size_t i = 0; i < TRANSFER_SIZE; i++)
+      m_test[i] = data[i] ^ 0xffu;
     break;
   }
   case GBPRegister::Control:
@@ -593,7 +596,7 @@ void CHSPDevice_GBPlayer::Write(u32 address, std::span<const u8, TRANSFER_SIZE> 
   }
   case GBPRegister::IRQ:
   {
-    const u16 value = Common::swap16(data.data() + 0x1e);
+    const u16 value = Common::swap16(data + 0x1e);
     m_irq &= u16(~value);
     UpdateInterrupts();
     break;
@@ -613,7 +616,7 @@ void CHSPDevice_GBPlayer::Write(u32 address, std::span<const u8, TRANSFER_SIZE> 
   }
   case GBPRegister::SIOData:
   {
-    const u32 value = Common::swap32(data.data() + 0x1c);
+    const u32 value = Common::swap32(data + 0x1c);
     m_gbp->WriteSIOData(value);
     break;
   }

@@ -4,7 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <span>
 
 #include "Common/CommonTypes.h"
 
@@ -31,8 +30,9 @@ public:
 
   // Note: DSPManager::RegisterMMIO ensures addresses are 32 byte aligned.
 
-  virtual void Read(u32 address, std::span<u8, TRANSFER_SIZE> data) = 0;
-  virtual void Write(u32 address, std::span<const u8, TRANSFER_SIZE> data) = 0;
+  // data is TRANSFER_SIZE bytes, lent for the call
+  virtual void Read(u32 address, u8* data) = 0;
+  virtual void Write(u32 address, const u8* data) = 0;
 
   // Savestate support
   virtual void DoState(PointerWrap& p);

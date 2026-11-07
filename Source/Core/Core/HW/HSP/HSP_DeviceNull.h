@@ -13,7 +13,7 @@ class CHSPDevice_Null final : public IHSPDevice
 public:
   HSPDeviceType GetDeviceType() const override { return HSPDeviceType::None; }
 
-  void Read(u32 address, std::span<u8, TRANSFER_SIZE> data) override;
-  void Write(u32 address, std::span<const u8, TRANSFER_SIZE> data) override;
+  void Read(u32 address, u8* data) override;
+  void Write(u32 address, const u8* data) override;
 };
 }  // namespace HSP

@@ -4,7 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -26,19 +25,6 @@
 //
 // The host can be just a command line app that opens a window, or a full blown debugger
 // interface.
-
-namespace HW::GBA
-{
-class Core;
-}  // namespace HW::GBA
-
-class GBAHostInterface
-{
-public:
-  virtual ~GBAHostInterface() = default;
-  virtual void GameChanged() = 0;
-  virtual void FrameEnded(std::span<const u32> video_buffer) = 0;
-};
 
 enum class HostMessageID
 {
@@ -64,5 +50,3 @@ void Host_JitProfileDataWiped();
 void Host_UpdateTitle(const std::string& title);
 void Host_TitleChanged();
 
-
-std::unique_ptr<GBAHostInterface> Host_CreateGBAHost(std::weak_ptr<HW::GBA::Core> core);

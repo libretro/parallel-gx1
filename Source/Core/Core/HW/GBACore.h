@@ -7,7 +7,6 @@
 
 #include <array>
 #include <memory>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,7 +26,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/WorkQueueThread.h"
 
-class GBAHostInterface;
 class PointerWrap;
 
 namespace Core
@@ -77,8 +75,6 @@ public:
   bool IsStarted() const;
   CoreInfo GetCoreInfo() const;
 
-  void SetHost(std::weak_ptr<GBAHostInterface> host);
-
   void SyncJoybus(u64 gc_ticks, u16 keys);
   void SendJoybusCommand(u64 gc_ticks, int transfer_time, u8* buffer, u16 keys);
   int GetJoybusResponse(u8* data_out);
@@ -89,7 +85,7 @@ public:
   mCore* GetCore() { return m_core; }
 
   mAudioBuffer* GetAudioBuffer() { return m_core->getAudioBuffer(m_core); }
-  std::span<const u32> GetVideoBuffer() const { return m_video_buffer; }
+  const u32* GetVideoBuffer() const { return m_video_buffer.data(); }
 
   mPlatform GetPlatform() const { return m_core->platform(m_core); }
   u32 GetAudioSampleRate() const { return m_core->audioSampleRate(m_core); }
@@ -147,8 +143,6 @@ private:
   u64 m_gc_ticks_remainder = 0;
   u16 m_keys = 0;
   bool m_link_enabled = false;
-
-  std::weak_ptr<GBAHostInterface> m_host;
 
   // Set by the GC thread before issuing a SyncEventType::RunCommand.
   int m_joybus_command_transfer_time{};

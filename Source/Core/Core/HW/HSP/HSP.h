@@ -4,7 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <span>
 
 #include "Common/CommonTypes.h"
 #include "Core/HW/HSP/HSP_Device.h"
@@ -26,8 +25,8 @@ public:
   void Init();
   void Shutdown();
 
-  void Read(u32 address, std::span<u8, TRANSFER_SIZE> data);
-  void Write(u32 address, std::span<const u8, TRANSFER_SIZE> data);
+  void Read(u32 address, u8* data);
+  void Write(u32 address, const u8* data);
 
   void DoState(PointerWrap& p);
 
