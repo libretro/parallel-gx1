@@ -322,6 +322,10 @@ GLuint ProgramShaderCache::CompileSingleShader(GLenum type, std::string_view cod
   glShaderSource(result, num_strings, src.data(), src_sizes.data());
   glCompileShader(result);
 
+  /* compiled on the driver's threads: an error shows when the program links */
+  if (g_ogl_config.bSupportsParallelShaderCompile)
+    return result;
+
   if (!CheckShaderCompileResult(result, type, code))
   {
     // Don't try to use this shader
@@ -330,6 +334,27 @@ GLuint ProgramShaderCache::CompileSingleShader(GLenum type, std::string_view cod
   }
 
   return result;
+}
+
+bool ProgramShaderCache::FinishLink(PipelineProgram* prog, bool wait)
+{
+  if (!prog->link_pending)
+    return !prog->link_failed;
+  if (!wait)
+  {
+    GLint done = GL_FALSE;
+    glGetProgramiv(prog->shader.glprogid, 0x91B1 /* GL_COMPLETION_STATUS_KHR */, &done);
+    if (done != GL_TRUE)
+      return false;
+  }
+  prog->link_pending = false;
+  if (!CheckProgramLinkResult(prog->shader.glprogid, {}, {}, {}))
+  {
+    prog->link_failed = true;
+    return false;
+  }
+  prog->shader.SetProgramVariables();
+  return true;
 }
 
 bool ProgramShaderCache::CheckShaderCompileResult(GLuint id, GLenum type, std::string_view code)
@@ -610,10 +635,14 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
     if (vao != s_last_VAO)
       glBindVertexArray(s_last_VAO);
 
-    if (!CheckProgramLinkResult(prog->shader.glprogid,
-                                vertex_shader ? vertex_shader->GetSource() : std::string_view{},
-                                geometry_shader ? geometry_shader->GetSource() : std::string_view{},
-                                pixel_shader ? pixel_shader->GetSource() : std::string_view{}))
+    /* linked on the driver's threads: checked once done, FinishLink */
+    if (g_ogl_config.bSupportsParallelShaderCompile)
+      prog->link_pending = true;
+    else if (!CheckProgramLinkResult(prog->shader.glprogid,
+                                     vertex_shader ? vertex_shader->GetSource() : std::string_view{},
+                                     geometry_shader ? geometry_shader->GetSource() :
+                                                       std::string_view{},
+                                     pixel_shader ? pixel_shader->GetSource() : std::string_view{}))
     {
       prog->shader.Destroy();
       return nullptr;
@@ -622,7 +651,8 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
 
   // Set program variables on the shader which will be returned.
   // This is only needed for drivers which don't support binding layout.
-  prog->shader.SetProgramVariables();
+  if (!prog->link_pending)
+    prog->shader.SetProgramVariables();
 
   // Publish it, unless another thread made the same program meanwhile; a dead program in the
   // slot is simply replaced.

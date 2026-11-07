@@ -50,8 +50,11 @@ AbstractPipeline::CacheData OGLPipeline::GetCacheData() const
   // copies of the same program combination, we set a flag on the program object so that it can't
   // be retrieved again. When booting, the pipeline cache is loaded in-order, so the additional
   // pipelines which use the program combination will re-use the already-created object.
-  if (!g_backend_info.bSupportsPipelineCacheData || m_program->binary_retrieved)
+  if (!g_backend_info.bSupportsPipelineCacheData || m_program->binary_retrieved ||
+      !ProgramShaderCache::FinishLink(m_program, true))
+  {
     return {};
+  }
 
   GLint program_size = 0;
   glGetProgramiv(m_program->shader.glprogid, GL_PROGRAM_BINARY_LENGTH, &program_size);

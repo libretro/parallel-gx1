@@ -163,6 +163,7 @@ private:
                       const BlendingState& blending_state, AbstractPipelineUsage usage);
   std::optional<AbstractPipelineConfig> GetGXPipelineConfig(const GXPipelineUid& uid);
   std::optional<AbstractPipelineConfig> GetGXPipelineConfig(const GXUberPipelineUid& uid);
+  void WriteGXPipelineCacheData(const GXPipelineUid& config, const AbstractPipeline* pipeline);
   const AbstractPipeline* InsertGXPipeline(const GXPipelineUid& config,
                                            std::unique_ptr<AbstractPipeline> pipeline);
   const AbstractPipeline* InsertGXUberPipeline(const GXUberPipelineUid& config,
@@ -252,6 +253,8 @@ private:
   std::vector<SerializedGXUberPipelineUid> m_pending_gx_uber_pipeline_uids;
   /* those already in the file or written to it this session */
   std::set<GXUberPipelineUid> m_recorded_uber_pipeline_uids;
+  // Pipelines whose cache data is written once their compile, on the driver's threads, is done.
+  std::vector<GXPipelineUid> m_unwritten_gx_pipelines;
 #endif
   Common::LinearDiskCache<SerializedGXPipelineUid, u8> m_gx_pipeline_disk_cache;
   Common::LinearDiskCache<SerializedGXUberPipelineUid, u8> m_gx_uber_pipeline_disk_cache;

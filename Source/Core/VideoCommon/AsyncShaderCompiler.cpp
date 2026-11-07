@@ -40,8 +40,12 @@ bool AsyncShaderCompiler::WaitForWorkDone()
 
 void AsyncShaderCompiler::QueueWorkItem(WorkItemPtr item, u32 priority)
 {
-  // If no worker threads are available, compile synchronously.
-  if (!HasWorkerThreads())
+  // If no worker threads are available, compile synchronously, or later when deferred.
+  if (IsDeferred())
+  {
+    m_pending_work.emplace(priority, std::move(item));
+  }
+  else if (!HasWorkerThreads())
   {
     item->Compile();
     m_completed_sync.push_back(std::move(item));
@@ -91,6 +95,20 @@ size_t AsyncShaderCompiler::ItemsInSlots() const
 
 void AsyncShaderCompiler::RetrieveWorkItems()
 {
+  if (IsDeferred())
+  {
+    /* the most urgent few; an item may queue others, which wait their turn */
+    for (size_t i = 0; i < DEFERRED_ITEMS_PER_RETRIEVE && !m_pending_work.empty(); i++)
+    {
+      auto iter = m_pending_work.begin();
+      WorkItemPtr item = std::move(iter->second);
+      m_pending_work.erase(iter);
+      item->Compile();
+      item->Retrieve();
+    }
+    return;
+  }
+
   // Workers that finished take their next items now, before this thread runs the retrievals.
   FeedWorkers();
 
@@ -146,6 +164,13 @@ bool AsyncShaderCompiler::WaitUntilCompletion(
 {
   if (!HasPendingWork())
     return true;
+
+  if (IsDeferred())
+  {
+    while (!m_pending_work.empty())
+      RetrieveWorkItems();
+    return true;
+  }
 
   // Grab the number of pending items. We use this to work out how many are left.
   const size_t total_items = m_completed_sync.size() + m_pending_work.size() + ItemsInSlots() +

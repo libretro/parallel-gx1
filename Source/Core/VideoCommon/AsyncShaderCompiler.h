@@ -57,6 +57,11 @@ public:
 
   // Needed because of calling virtual methods in shutdown procedure.
   bool StartWorkerThreads(u32 num_worker_threads);
+  // Without worker threads, queued items wait and RetrieveWorkItems compiles a few of them each
+  // time it is called, for a backend whose compiles only start work the driver does on threads
+  // of its own (its pipelines then tell when they are ready, AbstractPipeline::IsReady).
+  void SetDeferred(bool deferred) { m_deferred = deferred; }
+  bool IsDeferred() const { return m_deferred && !HasWorkerThreads(); }
   bool ResizeWorkerThreads(u32 num_worker_threads);
   bool HasWorkerThreads() const;
   void StopWorkerThreads();
@@ -116,6 +121,9 @@ private:
   mpsc_stack_t m_completed_work{};
   // Items finished synchronously, when there are no workers. Video thread only.
   std::vector<WorkItemPtr> m_completed_sync;
+  // How many waiting items each RetrieveWorkItems compiles, deferred.
+  static constexpr size_t DEFERRED_ITEMS_PER_RETRIEVE = 2;
+  bool m_deferred = false;
 };
 
 }  // namespace VideoCommon

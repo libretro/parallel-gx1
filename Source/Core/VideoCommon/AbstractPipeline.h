@@ -85,4 +85,10 @@ public:
   // pipeline objects, the cache is optionally used by the driver to speed up compilation.
   using CacheData = std::vector<u8>;
   virtual CacheData GetCacheData() const { return {}; }
+
+  // Whether the pipeline can be drawn with without waiting for its compile, which a driver may
+  // still be running on threads of its own. Asking does not wait.
+  virtual bool IsReady() const { return true; }
+  // Whether its compile is still running; once not, IsReady tells whether it succeeded.
+  virtual bool IsBuilding() const { return false; }
 };

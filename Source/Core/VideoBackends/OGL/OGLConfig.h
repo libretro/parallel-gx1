@@ -73,6 +73,9 @@ struct VideoConfig
   bool bSupportsAniso;
   bool bSupportsBitfield;
   bool bSupportsTextureSubImage;
+  // The driver compiles and links on threads of its own (GL_KHR/ARB_parallel_shader_compile),
+  // told done with GL_COMPLETION_STATUS.
+  bool bSupportsParallelShaderCompile;
   EsFbFetchType SupportedFramebufferFetch;
   bool bSupportsKHRShaderSubgroup;  // basic + arithmetic + ballot
   bool bSupportsExplicitLayoutInShader;

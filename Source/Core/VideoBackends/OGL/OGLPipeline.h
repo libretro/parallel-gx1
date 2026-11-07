@@ -27,6 +27,12 @@ public:
   bool HasVertexInput() const { return m_vertex_format != nullptr; }
   GLenum GetGLPrimitive() const { return m_gl_primitive; }
   CacheData GetCacheData() const override;
+  bool IsReady() const override { return ProgramShaderCache::FinishLink(m_program, false); }
+  bool IsBuilding() const override
+  {
+    ProgramShaderCache::FinishLink(m_program, false);
+    return m_program->link_pending;
+  }
   static std::unique_ptr<OGLPipeline> Create(const AbstractPipelineConfig& config,
                                              const void* cache_data, size_t cache_data_size);
 

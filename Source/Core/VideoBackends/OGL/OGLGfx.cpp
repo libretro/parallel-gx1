@@ -599,7 +599,11 @@ void OGLGfx::SetPipeline(const AbstractPipeline* pipeline)
     ApplyBlendingState(static_cast<const OGLPipeline*>(pipeline)->GetBlendingState());
     ProgramShaderCache::BindVertexFormat(
         static_cast<const OGLPipeline*>(pipeline)->GetVertexFormat());
-    static_cast<const OGLPipeline*>(pipeline)->GetProgram()->shader.Bind();
+    /* a program still linking is waited for here, the first time it is drawn with */
+    PipelineProgram* program = const_cast<PipelineProgram*>(
+        static_cast<const OGLPipeline*>(pipeline)->GetProgram());
+    ProgramShaderCache::FinishLink(program, true);
+    program->shader.Bind();
   }
   else
   {
@@ -671,7 +675,12 @@ void OGLGfx::UnbindTexture(const AbstractTexture* texture)
 
 std::unique_ptr<VideoCommon::AsyncShaderCompiler> OGLGfx::CreateAsyncShaderCompiler()
 {
-  return std::make_unique<VideoCommon::AsyncShaderCompiler>();
+  std::unique_ptr<VideoCommon::AsyncShaderCompiler> compiler =
+      std::make_unique<VideoCommon::AsyncShaderCompiler>();
+  /* the driver compiles on threads of its own: programs are started a few a frame and drawn
+   * with once linked */
+  compiler->SetDeferred(g_ogl_config.bSupportsParallelShaderCompile);
+  return compiler;
 }
 
 bool OGLGfx::IsGLES() const

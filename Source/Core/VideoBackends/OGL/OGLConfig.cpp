@@ -328,6 +328,29 @@ bool PopulateConfig(GLContext* m_main_gl_context)
   g_ogl_config.bSupportsGLBufferStorage = GLExtensions::Supports("GL_ARB_buffer_storage") ||
                                           GLExtensions::Supports("GL_EXT_buffer_storage");
   g_ogl_config.bSupportsMSAA = GLExtensions::Supports("GL_ARB_texture_multisample");
+  {
+    /* as many threads as the driver will have; not on a software
+     * rasterizer, which compiles when it first draws, where a program
+     * compiled in the background only leaves the ubershaders drawing */
+    const std::string_view renderer = g_ogl_config.gl_renderer;
+    const bool software = renderer.find("llvmpipe") != std::string_view::npos ||
+                          renderer.find("softpipe") != std::string_view::npos ||
+                          renderer.find("GDI Generic") != std::string_view::npos;
+    void (*max_threads)(GLuint) = nullptr;
+    if (!software && GLExtensions::Supports("GL_KHR_parallel_shader_compile"))
+    {
+      max_threads = reinterpret_cast<void (*)(GLuint)>(
+          m_main_gl_context->GetFuncAddress("glMaxShaderCompilerThreadsKHR"));
+    }
+    else if (!software && GLExtensions::Supports("GL_ARB_parallel_shader_compile"))
+    {
+      max_threads = reinterpret_cast<void (*)(GLuint)>(
+          m_main_gl_context->GetFuncAddress("glMaxShaderCompilerThreadsARB"));
+    }
+    g_ogl_config.bSupportsParallelShaderCompile = max_threads != nullptr;
+    if (max_threads)
+      max_threads(0xFFFFFFFFu);
+  }
   g_ogl_config.bSupportViewportFloat = GLExtensions::Supports("GL_ARB_viewport_array");
   g_ogl_config.bSupportsDebug =
       GLExtensions::Supports("GL_KHR_debug") || GLExtensions::Supports("GL_ARB_debug_output");

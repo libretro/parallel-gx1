@@ -891,12 +891,18 @@ void VertexManagerBase::UpdatePipelineObject()
 #endif
     // Can we background compile shaders? If so, get the pipeline asynchronously.
     auto res = g_shader_cache->GetPipelineForUidAsync(m_current_pipeline_config);
-    if (res)
+    if (res && (!*res || (*res)->IsReady()))
     {
       // Specialized shaders are ready, prefer these.
       m_current_pipeline_object = *res;
       return;
     }
+#ifdef __LIBRETRO__
+    /* built and still compiling on the driver's threads: asked again
+     * next draw, until it is ready */
+    if (res)
+      m_pipeline_config_changed = true;
+#endif
 
     if (g_ActiveConfig.iShaderCompilationMode == ShaderCompilationMode::AsynchronousUberShaders)
     {

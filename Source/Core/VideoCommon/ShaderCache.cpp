@@ -76,12 +76,16 @@ void ShaderCache::InitializeShaderCache()
    * known, go on building in the background while it runs. Without
    * threads to build on, the asynchronous modes draw as Synchronous does
    * (VertexManagerBase::UpdatePipelineObject), and nothing more is built
-   * before the game starts than that would. */
+   * before the game starts than that would. Where the driver compiles on
+   * threads of its own instead, a few a frame (AsyncShaderCompiler
+   * deferred), every ubershader pipeline there can be is not built: each
+   * still costs the frontend's thread the start of its compile. */
   if (g_ActiveConfig.UsingUberShaders() && CanCompileInBackground())
   {
     CompileMissingUberPipelines();
     WaitForAsyncCompiler();
-    QueueUberShaderPipelines();
+    if (m_async_shader_compiler->HasWorkerThreads())
+      QueueUberShaderPipelines();
   }
 #else
   // Queue ubershader precompiling if required.
@@ -100,7 +104,8 @@ void ShaderCache::InitializeShaderCache()
 
 bool ShaderCache::CanCompileInBackground() const
 {
-  return m_async_shader_compiler && m_async_shader_compiler->HasWorkerThreads();
+  return m_async_shader_compiler &&
+         (m_async_shader_compiler->HasWorkerThreads() || m_async_shader_compiler->IsDeferred());
 }
 
 void ShaderCache::Reload()
@@ -130,6 +135,22 @@ void ShaderCache::Reload()
 void ShaderCache::RetrieveAsyncShaders()
 {
   m_async_shader_compiler->RetrieveWorkItems();
+
+  /* the cache data of those the driver has finished */
+  size_t i = 0;
+  while (i < m_unwritten_gx_pipelines.size())
+  {
+    auto it = m_gx_pipeline_cache.find(m_unwritten_gx_pipelines[i]);
+    if (it != m_gx_pipeline_cache.end() && it->second.first && it->second.first->IsBuilding())
+    {
+      i++;
+      continue;
+    }
+    if (it != m_gx_pipeline_cache.end() && it->second.first && it->second.first->IsReady())
+      WriteGXPipelineCacheData(it->first, it->second.first.get());
+    m_unwritten_gx_pipelines[i] = m_unwritten_gx_pipelines.back();
+    m_unwritten_gx_pipelines.pop_back();
+  }
 }
 
 void ShaderCache::Shutdown()
@@ -398,6 +419,7 @@ void ShaderCache::LoadCaches()
 
 void ShaderCache::ClearCaches()
 {
+  m_unwritten_gx_pipelines.clear();
   ClearPipelineCache(m_gx_pipeline_cache, m_gx_pipeline_disk_cache);
   ClearShaderCache(m_vs_cache);
   ClearShaderCache(m_gs_cache);
@@ -761,18 +783,28 @@ const AbstractPipeline* ShaderCache::InsertGXPipeline(const GXPipelineUid& confi
 
     if (g_ActiveConfig.bShaderCache)
     {
-      auto cache_data = entry.first->GetCacheData();
-      if (!cache_data.empty())
-      {
-        SerializedGXPipelineUid disk_uid;
-        SerializePipelineUid(config, disk_uid);
-        m_gx_pipeline_disk_cache.Append(disk_uid, cache_data.data(),
-                                        static_cast<u32>(cache_data.size()));
-      }
+      /* its data is there to read once the driver is done with it */
+      if (entry.first->IsBuilding())
+        m_unwritten_gx_pipelines.push_back(config);
+      else
+        WriteGXPipelineCacheData(config, entry.first.get());
     }
   }
 
   return entry.first.get();
+}
+
+void ShaderCache::WriteGXPipelineCacheData(const GXPipelineUid& config,
+                                           const AbstractPipeline* pipeline)
+{
+  auto cache_data = pipeline->GetCacheData();
+  if (!cache_data.empty())
+  {
+    SerializedGXPipelineUid disk_uid;
+    SerializePipelineUid(config, disk_uid);
+    m_gx_pipeline_disk_cache.Append(disk_uid, cache_data.data(),
+                                    static_cast<u32>(cache_data.size()));
+  }
 }
 
 const AbstractPipeline*
@@ -952,6 +984,7 @@ void ShaderCache::LoadUberPipelineUIDCache()
    * that adding is no allocation in the middle of a game */
   m_pending_gx_uber_pipeline_uids.reserve(1024);
   m_pending_gx_pipeline_uids.reserve(1024);
+  m_unwritten_gx_pipelines.reserve(256);
 }
 
 void ShaderCache::AppendGXUberPipelineUID(const GXUberPipelineUid& config)

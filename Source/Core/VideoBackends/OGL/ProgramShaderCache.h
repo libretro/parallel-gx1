@@ -60,6 +60,9 @@ struct PipelineProgram
   SHADER shader;
   retro_atomic_int_t reference_count{1};
   bool binary_retrieved = false;
+  // Linked on the driver's threads: checked, and its variables set, once done (FinishLink).
+  bool link_pending = false;
+  bool link_failed = false;
 };
 
 class ProgramShaderCache
@@ -73,6 +76,9 @@ public:
   static void InvalidateLastProgram();
 
   static bool CompileComputeShader(SHADER& shader, std::string_view code);
+  // A program linked on the driver's threads, checked once its link is done: true when it can
+  // be drawn with. With wait, waits for the link; without, false while it runs.
+  static bool FinishLink(PipelineProgram* prog, bool wait);
   static GLuint CompileSingleShader(GLenum type, std::string_view code);
   static bool CheckShaderCompileResult(GLuint id, GLenum type, std::string_view code);
   static bool CheckProgramLinkResult(GLuint id, std::string_view vcode, std::string_view pcode,
