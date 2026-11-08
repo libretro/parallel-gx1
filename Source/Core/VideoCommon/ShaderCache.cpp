@@ -23,6 +23,7 @@
 #include "VideoCommon/PipelineUtils.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/Statistics.h"
+#include "VideoCommon/StutterStats.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
@@ -311,6 +312,7 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
   if (it && !it->pending)
     return PipelineOf(it);
 
+  STUTTER_MARK(t);
   const bool exists_in_cache = it != nullptr;
   AbstractPipeline* pipeline = nullptr;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
@@ -318,7 +320,9 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
     pipeline = g_gfx->CreatePipeline(*pipeline_config);
   if (g_ActiveConfig.bShaderCache && !exists_in_cache)
     AppendGXPipelineUID(uid);
-  return InsertGXPipeline(uid, pipeline);
+  const AbstractPipeline* const kept = InsertGXPipeline(uid, pipeline);
+  STUTTER_SINCE(STUTTER_DRAW_GX_PIPELINE, t);
+  return kept;
 }
 
 std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid)
@@ -349,17 +353,21 @@ const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineU
   if (it && !it->pending)
     return PipelineOf(it);
 
+  STUTTER_MARK(t);
   AbstractPipeline* pipeline = nullptr;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
   if (pipeline_config)
     pipeline = g_gfx->CreatePipeline(*pipeline_config);
-  return InsertGXUberPipeline(uid, pipeline);
+  const AbstractPipeline* const kept = InsertGXUberPipeline(uid, pipeline);
+  STUTTER_SINCE(STUTTER_DRAW_UBER_PIPELINE, t);
+  return kept;
 }
 
 void ShaderCache::WaitForAsyncCompiler()
 {
   bool running = true;
 
+  STUTTER_MARK(t);
   // Compiled while the frontend waits; nothing is drawn meanwhile.
   while (running &&
          (m_async_shader_compiler.HasPendingWork() || m_async_shader_compiler.HasCompletedWork()))
@@ -368,6 +376,7 @@ void ShaderCache::WaitForAsyncCompiler()
 
     m_async_shader_compiler.RetrieveWorkItems();
   }
+  STUTTER_SINCE(STUTTER_DRAW_WAIT, t);
 }
 
 template <typename SerializedUidType, typename UidType>
@@ -686,7 +695,10 @@ const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
+      {
+        STUTTER_COUNT(STUTTER_DRAW_DISK_WRITE);
         m_vs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+      }
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
@@ -719,7 +731,10 @@ const AbstractShader* ShaderCache::InsertVertexUberShader(const UberShader::Vert
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
+      {
+        STUTTER_COUNT(STUTTER_DRAW_DISK_WRITE);
         m_uber_vs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+      }
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
@@ -752,7 +767,10 @@ const AbstractShader* ShaderCache::InsertPixelShader(const PixelShaderUid& uid,
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
+      {
+        STUTTER_COUNT(STUTTER_DRAW_DISK_WRITE);
         m_ps_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+      }
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
@@ -785,7 +803,10 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
+      {
+        STUTTER_COUNT(STUTTER_DRAW_DISK_WRITE);
         m_uber_ps_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+      }
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
@@ -823,7 +844,10 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
+      {
+        STUTTER_COUNT(STUTTER_DRAW_DISK_WRITE);
         m_gs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+      }
     }
     entry->object = shader;
   }
@@ -1031,6 +1055,7 @@ void ShaderCache::WriteGXPipelineCacheData(const GXPipelineUid& config,
   {
     SerializedGXPipelineUid disk_uid;
     SerializePipelineUid(config, disk_uid);
+    STUTTER_COUNT(STUTTER_DRAW_DISK_WRITE);
     m_gx_pipeline_disk_cache.Append(disk_uid, cache_data.data(),
                                     static_cast<u32>(cache_data.size()));
   }
@@ -1063,6 +1088,7 @@ ShaderCache::InsertGXUberPipeline(const GXUberPipelineUid& config,
       {
         SerializedGXUberPipelineUid disk_uid;
         SerializePipelineUid(config, disk_uid);
+        STUTTER_COUNT(STUTTER_DRAW_DISK_WRITE);
         m_gx_uber_pipeline_disk_cache.Append(disk_uid, cache_data.data(),
                                              static_cast<u32>(cache_data.size()));
       }
@@ -1660,6 +1686,7 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
   const uid_table_value* found = uid_table_find(&m_efb_copy_to_vram_pipelines, uid.GetUidData());
   if (found)
     return PipelineOf(found);
+  STUTTER_MARK(t);
 
   auto shader_code = TextureConversionShaderGen::GeneratePixelShader(m_api_type, uid.GetUidData());
   AbstractShader* const shader = g_gfx->CreateShaderFromSource(
@@ -1682,8 +1709,10 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
-  return KeepPipeline(&m_efb_copy_to_vram_pipelines, uid.GetUidData(),
-                      PipelineOnce(config, shader));
+  const AbstractPipeline* const kept =
+      KeepPipeline(&m_efb_copy_to_vram_pipelines, uid.GetUidData(), PipelineOnce(config, shader));
+  STUTTER_SINCE(STUTTER_DRAW_EFB_COPY_TO_VRAM, t);
+  return kept;
 }
 
 const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams& uid)
@@ -1697,7 +1726,7 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   const uid_table_value* found = uid_table_find(&m_efb_copy_to_ram_pipelines, key);
   if (found)
     return PipelineOf(found);
-
+  STUTTER_MARK(t);
   ShaderCode shader_code =
       TextureConversionShaderTiled::GenerateEncodingShader(uid, m_api_type);
   AbstractShader* const shader =
@@ -1717,7 +1746,10 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetColorFramebufferState(AbstractTextureFormat::BGRA8);
   config.usage = AbstractPipelineUsage::Utility;
-  return KeepPipeline(&m_efb_copy_to_ram_pipelines, key, PipelineOnce(config, shader));
+  const AbstractPipeline* const kept =
+      KeepPipeline(&m_efb_copy_to_ram_pipelines, key, PipelineOnce(config, shader));
+  STUTTER_SINCE(STUTTER_DRAW_EFB_COPY_TO_RAM, t);
+  return kept;
 }
 
 bool ShaderCache::CompileSharedPipelines()
@@ -1815,6 +1847,7 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   /* tried once: a format pair with no shader stays without */
   if (!uid_table_get(&m_texture_reinterpret_pipelines, key))
     return nullptr;
+  STUTTER_MARK(t);
 
   ShaderCode shader_source =
       FramebufferShaderGen::GenerateTextureReinterpretShader(from_format, to_format);
@@ -1837,7 +1870,10 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
-  return KeepPipeline(&m_texture_reinterpret_pipelines, key, PipelineOnce(config, shader));
+  const AbstractPipeline* const kept =
+      KeepPipeline(&m_texture_reinterpret_pipelines, key, PipelineOnce(config, shader));
+  STUTTER_SINCE(STUTTER_DRAW_REINTERPRET, t);
+  return kept;
 }
 
 const AbstractShader*
@@ -1852,6 +1888,7 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
   /* tried once: a format with no shader stays without */
   if (!uid_table_get(&m_texture_decoding_shaders, key))
     return nullptr;
+  STUTTER_MARK(t);
 
   ShaderCode shader_source =
       TextureConversionShaderTiled::GenerateDecodingShader(format, palette_format, APIType::OpenGL);
@@ -1870,6 +1907,7 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
 
   uid_table_value* value = uid_table_get(&m_texture_decoding_shaders, key);
   value->object = shader;
+  STUTTER_SINCE(STUTTER_DRAW_DECODE, t);
   return ShaderOf(value);
 }
 }  // namespace VideoCommon

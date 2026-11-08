@@ -1,0 +1,510 @@
+/* gxgen: writes the stutter harness's synthetic corpus, FIFO logs the
+ * core's FIFO player replays (.dff).
+ *
+ *    gxgen <out.dff> [passes]
+ *
+ * Each frame draws two quads in one combination of the GX state that
+ * decides which pipeline a draw needs, copied from the EFB to the XFB:
+ * TEV stage count and colour/alpha operations, blending (factors,
+ * subtraction, logic ops), depth test and update, culling, alpha test,
+ * the vertex format (position and colour component formats) and the
+ * primitive (quads, triangles, strips, fans, lines, points). The frames
+ * walk every combination of blending, depth, vertex format and primitive,
+ * with TEV, culling and alpha test cycling alongside, once per pass; from
+ * the second pass on, every pipeline has been met before.
+ *
+ * C89, no dependencies: builds with any C compiler on Linux and Windows. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef unsigned int u32;
+typedef unsigned char u8;
+
+static u32 bp[256];
+static u32 cp[256];
+static u32 xfmem[4096];
+static u32 xfregs[88];
+
+/* the frame being built */
+static u8 *buf;
+static size_t len, cap;
+
+static void put(const void *p, size_t n)
+{
+   if (len + n > cap)
+   {
+      u8 *grown;
+      cap = (len + n) * 2;
+      grown = (u8 *)realloc(buf, cap);
+      if (!grown)
+      {
+         fprintf(stderr, "gxgen: out of memory\n");
+         exit(1);
+      }
+      buf = grown;
+   }
+   memcpy(buf + len, p, n);
+   len += n;
+}
+
+static void put8(u32 v)
+{
+   u8 b = (u8)v;
+   put(&b, 1);
+}
+
+static void be16(u32 v)
+{
+   u8 b[2];
+   b[0] = (u8)(v >> 8);
+   b[1] = (u8)v;
+   put(b, 2);
+}
+
+static void be32(u32 v)
+{
+   u8 b[4];
+   b[0] = (u8)(v >> 24);
+   b[1] = (u8)(v >> 16);
+   b[2] = (u8)(v >> 8);
+   b[3] = (u8)v;
+   put(b, 4);
+}
+
+static u32 f32(float f)
+{
+   u32 v;
+   memcpy(&v, &f, 4);
+   return v;
+}
+
+static void bpw(u32 reg, u32 v)
+{
+   put8(0x61);
+   be32((reg << 24) | (v & 0xffffff));
+}
+
+static void cpw(u32 reg, u32 v)
+{
+   put8(0x08);
+   put8(reg);
+   be32(v);
+}
+
+static void xfw(u32 reg, const u32 *vals, u32 n)
+{
+   u32 i;
+   put8(0x10);
+   be32(((n - 1) << 16) | reg);
+   for (i = 0; i < n; i++)
+      be32(vals[i]);
+}
+
+static void xf1(u32 reg, u32 v)
+{
+   xfw(reg, &v, 1);
+}
+
+/* The dimensions walked, each a list of choices. */
+
+/* TEV: stage count, and what the stages do with the rasterized colour */
+#define TEV_CHOICES 6
+/* blending: off, factor pairs, subtraction, logic ops */
+#define BLEND_CHOICES 7
+/* depth: off, tests with and without update */
+#define DEPTH_CHOICES 5
+/* culling: none, back, front */
+#define CULL_CHOICES 3
+/* alpha test: always, a compare, two compares combined */
+#define ALPHA_CHOICES 3
+/* vertex format: position float or s16, colour rgba8888, rgb565 or rgba4444 */
+#define VTX_CHOICES 4
+/* primitive */
+#define PRIM_CHOICES 6
+
+/* walked in every combination */
+static const u32 radix[4] = {BLEND_CHOICES, DEPTH_CHOICES, VTX_CHOICES, PRIM_CHOICES};
+
+static void tev(u32 choice)
+{
+   /* genmode: one colour channel, stages - 1 in bits 10..13 */
+   static const u32 stages[TEV_CHOICES] = {1, 1, 2, 3, 4, 2};
+   u32 n = stages[choice], i;
+   bpw(0x00, 0x10 | ((n - 1) << 10) | (bp[0x00] & 0xc000));
+   for (i = 0; i < n; i++)
+   {
+      u32 color, alpha;
+      if (i == 0)
+      {
+         /* the first stage: rasterized colour in d, or in a with the rest zero */
+         color = choice == 1 ? 0xafff : 0xfffa;
+         alpha = 0xffd0;
+      }
+      else if (choice == 5)
+      {
+         /* the previous colour scaled by two and back: bias, scale */
+         color = 0xfff0 | (1 << 20);
+         alpha = 0xff80;
+      }
+      else
+      {
+         /* the previous stage's colour passed on */
+         color = 0xfff0;
+         alpha = 0xff80;
+      }
+      bpw(0xc0 + i * 2, color);
+      bpw(0xc1 + i * 2, alpha);
+   }
+}
+
+static void blend(u32 choice)
+{
+   /* bp 0x41: blend enable 0, logic enable 1, colour 3, alpha 4, dst
+    * factor 5..7, src factor 8..10, subtract 11, logic mode 12..15 */
+   u32 v = 0x18;
+   switch (choice)
+   {
+      case 1: v |= 1 | (1 << 8); break;                  /* one, zero */
+      case 2: v |= 1 | (4 << 8) | (5 << 5); break;        /* src alpha, 1 - src alpha */
+      case 3: v |= 1 | (1 << 8) | (1 << 5); break;        /* one, one */
+      case 4: v |= 1 | (1 << 11) | (1 << 8) | (1 << 5); break; /* subtract */
+      case 5: v |= 2 | (3 << 12); break;                  /* logic copy */
+      case 6: v |= 2 | (6 << 12); break;                  /* logic xor */
+      default: break;
+   }
+   bpw(0x41, v);
+}
+
+static void depth(u32 choice)
+{
+   /* bp 0x40: test 0, func 1..3, update 4 */
+   static const u32 v[DEPTH_CHOICES] = {0, 1 | (7 << 1), 1 | (7 << 1) | 0x10,
+      1 | (3 << 1) | 0x10, 1 | (6 << 1)};
+   bpw(0x40, v[choice]);
+}
+
+static void cull(u32 choice)
+{
+   /* genmode bits 14..15: none, back, front */
+   static const u32 v[CULL_CHOICES] = {0, 2, 1};
+   bp[0x00] = (bp[0x00] & ~0xc000u) | (v[choice] << 14);
+}
+
+static void alpha(u32 choice)
+{
+   /* bp 0xf3: ref0 0..7, ref1 8..15, comp0 16..18, comp1 19..21, logic
+    * 22..23 (and, or, xor, xnor); 7 = always, 6 = greater or equal, 1 = less */
+   static const u32 v[ALPHA_CHOICES] = {(7 << 16) | (7 << 19),
+      (6 << 16) | (7 << 19), (6 << 16) | (1 << 19) | (1 << 22) | (0xff << 8)};
+   bpw(0xf3, v[choice]);
+}
+
+/* the vertex format: cp VAT group 0, and how big a vertex is */
+static u32 vtx_size;
+static u32 vtx_choice;
+
+static void vtx(u32 choice)
+{
+   /* position: count 0 (xyz=1), format 1..3 (3 s16, 4 float), frac 4..8;
+    * colour 0: count 13 (rgba=1), format 14..16 (0 rgb565, 3 rgba4444,
+    * 5 rgba8888); 30 byte dequant */
+   static const u32 pos_float = 1 | (4 << 1);
+   static const u32 pos_s16 = 1 | (3 << 1) | (8 << 4);
+   u32 vat = 1u << 30;
+   vtx_choice = choice;
+   switch (choice)
+   {
+      case 0: vat |= pos_float | (1 << 13) | (5 << 14); vtx_size = 12 + 4; break;
+      case 1: vat |= pos_s16 | (1 << 13) | (5 << 14); vtx_size = 6 + 4; break;
+      case 2: vat |= pos_float | (0 << 13) | (0 << 14); vtx_size = 12 + 2; break;
+      default: vat |= pos_s16 | (1 << 13) | (3 << 14); vtx_size = 6 + 2; break;
+   }
+   cpw(0x70, vat);
+}
+
+static void vertex(float x, float y, int white)
+{
+   if (vtx_choice == 0 || vtx_choice == 2)
+   {
+      be32(f32(x));
+      be32(f32(y));
+      be32(f32(0.0f));
+   }
+   else
+   {
+      be16((u32)(int)(x * 256.0f) & 0xffff);
+      be16((u32)(int)(y * 256.0f) & 0xffff);
+      be16(0);
+   }
+   switch (vtx_choice)
+   {
+      case 0:
+      case 1: be32(white ? 0xffffffffu : 0x000000ffu); break;
+      case 2: be16(white ? 0xffff : 0x0000); break;
+      default: be16(white ? 0xffff : 0x000f); break;
+   }
+}
+
+/* Two halves, one white and one black, as the primitive draws them. */
+static void prim(u32 choice, int white_left)
+{
+   static const u32 cmd[PRIM_CHOICES] = {0x80, 0x90, 0x98, 0xa0, 0xa8, 0xb8};
+   int half;
+   for (half = 0; half < 2; half++)
+   {
+      float x0 = half ? 0.0f : -1.0f, x1 = half ? 1.0f : 0.0f;
+      int white = half ? !white_left : white_left;
+      switch (choice)
+      {
+         case 0: /* quads */
+            put8(cmd[0]); be16(4);
+            vertex(x0, 1.0f, white); vertex(x1, 1.0f, white);
+            vertex(x1, -1.0f, white); vertex(x0, -1.0f, white);
+            break;
+         case 1: /* triangles */
+            put8(cmd[1]); be16(6);
+            vertex(x0, 1.0f, white); vertex(x1, 1.0f, white); vertex(x1, -1.0f, white);
+            vertex(x0, 1.0f, white); vertex(x1, -1.0f, white); vertex(x0, -1.0f, white);
+            break;
+         case 2: /* strip */
+            put8(cmd[2]); be16(4);
+            vertex(x0, 1.0f, white); vertex(x1, 1.0f, white);
+            vertex(x0, -1.0f, white); vertex(x1, -1.0f, white);
+            break;
+         case 3: /* fan */
+            put8(cmd[3]); be16(4);
+            vertex(x0, 1.0f, white); vertex(x1, 1.0f, white);
+            vertex(x1, -1.0f, white); vertex(x0, -1.0f, white);
+            break;
+         case 4: /* lines: the outline */
+            put8(cmd[4]); be16(8);
+            vertex(x0, 1.0f, white); vertex(x1, 1.0f, white);
+            vertex(x1, 1.0f, white); vertex(x1, -1.0f, white);
+            vertex(x1, -1.0f, white); vertex(x0, -1.0f, white);
+            vertex(x0, -1.0f, white); vertex(x0, 1.0f, white);
+            break;
+         default: /* points: the corners */
+            put8(cmd[5]); be16(4);
+            vertex(x0, 1.0f, white); vertex(x1, 1.0f, white);
+            vertex(x1, -1.0f, white); vertex(x0, -1.0f, white);
+            break;
+      }
+   }
+}
+
+static void frame(u32 k, u32 combos)
+{
+   static const u32 xf_viewport_n = 6, xf_proj_n = 7;
+   static const u32 copy_regs[10] = {0x49, 0x4a, 0x4b, 0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x53, 0x54};
+   static const u32 state_regs[4] = {0x20, 0x21, 0x59, 0x28};
+   u32 digit[4], c = k % combos, i;
+
+   for (i = 0; i < 4; i++)
+   {
+      digit[i] = c % radix[i];
+      c /= radix[i];
+   }
+
+   /* the state, all of it, as the player loads it again at the start */
+   cpw(0x50, cp[0x50]);
+   cpw(0x30, 0);
+   xf1(0x1008, 1);
+   xf1(0x1009, 1);
+   xf1(0x100e, 1);
+   xf1(0x1010, 1);
+   xf1(0x1018, 0);
+   xfw(0x101a, &xfregs[0x1a], xf_viewport_n);
+   xfw(0x1020, &xfregs[0x20], xf_proj_n);
+   xf1(0x103f, 0);
+   xfw(0x0000, xfmem, 12);
+   for (i = 0; i < 4; i++)
+      bpw(state_regs[i], bp[state_regs[i]]);
+   bpw(0x22, 6 | (6 << 8)); /* line width and point size, in sixths */
+   bpw(0x43, bp[0x43]);
+   bpw(0x44, bp[0x44]);
+
+   vtx(digit[2]);
+   /* cycling alongside, at strides that keep meeting new partners */
+   cull(k % CULL_CHOICES);
+   tev(k % TEV_CHOICES); /* writes genmode with the cull bits */
+   blend(digit[0]);
+   depth(digit[1]);
+   alpha((k / 7) % ALPHA_CHOICES);
+
+   prim(digit[3], (k & 1) == 0);
+
+   /* EFB to XFB */
+   for (i = 0; i < 10; i++)
+      bpw(copy_regs[i], bp[copy_regs[i]]);
+   /* the gather pipe moves 32 bytes at a time: NOPs before the copy, so
+    * the frame ends with it, as the player expects */
+   while ((len + 5) % 32)
+      put8(0);
+   bpw(0x52, (1 << 14) | (1 << 11) | 3);
+}
+
+static void le32(FILE *f, u32 v)
+{
+   u8 b[4];
+   b[0] = (u8)v;
+   b[1] = (u8)(v >> 8);
+   b[2] = (u8)(v >> 16);
+   b[3] = (u8)(v >> 24);
+   fwrite(b, 1, 4, f);
+}
+
+static void le64(FILE *f, unsigned long v)
+{
+   le32(f, (u32)v);
+   le32(f, 0);
+}
+
+static void zeros(FILE *f, unsigned long n)
+{
+   static const u8 z[4096] = {0};
+   while (n)
+   {
+      unsigned long k = n < sizeof(z) ? n : sizeof(z);
+      fwrite(z, 1, k, f);
+      n -= k;
+   }
+}
+
+int main(int argc, char **argv)
+{
+   static const float viewport[6] = {320.0f, -240.0f, 16777215.0f, 342.0f + 320.0f,
+      342.0f + 240.0f, 16777215.0f};
+   static const float proj[6] = {1.0f, 0.0f, 1.0f, 0.0f, 0.0f, -0.5f};
+   const unsigned long hdr = 128, frame_info = 8 + 4 + 4 + 4 + 8 + 4 + 32;
+   unsigned long off, bp_off, cp_off, xfm_off, xfr_off, tex_off, fl_off;
+   u32 passes = argc > 2 ? (u32)atoi(argv[2]) : 2;
+   u32 combos = 1, nframes, k, i;
+   unsigned long *data_off;
+   size_t *data_len;
+   u8 **data;
+   FILE *f;
+
+   if (argc < 2 || !passes)
+   {
+      fprintf(stderr, "usage: gxgen <out.dff> [passes]\n");
+      return 2;
+   }
+   for (i = 0; i < 4; i++)
+      combos *= radix[i];
+   nframes = combos * passes;
+
+   /* position matrix 0: identity, 3 rows of 4 */
+   for (i = 0; i < 3; i++)
+      xfmem[i * 4 + i] = f32(1.0f);
+   xfregs[0x08] = 1;
+   xfregs[0x09] = 1;
+   xfregs[0x0e] = 1;
+   xfregs[0x10] = 1;
+   for (i = 0; i < 6; i++)
+      xfregs[0x1a + i] = f32(viewport[i]);
+   for (i = 0; i < 6; i++)
+      xfregs[0x20 + i] = f32(proj[i]);
+   xfregs[0x26] = 1; /* orthographic */
+
+   cp[0x50] = (1 << 9) | (1 << 13); /* position and colour 0 direct */
+   cp[0x70] = 1 | (4 << 1) | (1 << 13) | (5 << 14) | (1u << 30);
+
+   bp[0x00] = 0x10;
+   bp[0x20] = 342 | (342 << 12);
+   bp[0x21] = (342 + 479) | ((342 + 639) << 12);
+   bp[0x59] = 171 | (171 << 10);
+   bp[0x28] = 0x3f | (0x3f << 12) | (7 << 19);
+   bp[0xc0] = 0xfffa;
+   bp[0xc1] = 0xffd0;
+   bp[0xf3] = 0x3f0000;
+   bp[0x41] = 0x18;
+   bp[0x44] = 3;
+   bp[0x4a] = 639 | (479 << 10);
+   bp[0x4b] = 0x00100000 >> 5;
+   bp[0x4d] = 640 * 2 / 32;
+   bp[0x4e] = 0x100;
+   bp[0x4f] = 0xff80;
+   bp[0x50] = 0x8080;
+   /* copy filter: coefficients 0 0 21 22 21 0 0 (sum 64); all zero would
+    * scale every copy to black */
+   bp[0x53] = 0x595000;
+   bp[0x54] = 0x000015;
+
+   data = (u8 **)calloc(nframes, sizeof(*data));
+   data_len = (size_t *)calloc(nframes, sizeof(*data_len));
+   data_off = (unsigned long *)calloc(nframes, sizeof(*data_off));
+   if (!data || !data_len || !data_off)
+      return 1;
+   for (k = 0; k < nframes; k++)
+   {
+      buf = NULL;
+      len = cap = 0;
+      frame(k, combos);
+      data[k] = buf;
+      data_len[k] = len;
+   }
+
+   off = hdr;
+   bp_off = off; off += 256 * 4;
+   cp_off = off; off += 256 * 4;
+   xfm_off = off; off += 4096 * 4;
+   xfr_off = off; off += 88 * 4;
+   tex_off = off; off += 1024 * 1024;
+   fl_off = off; off += frame_info * nframes;
+   for (k = 0; k < nframes; k++)
+   {
+      data_off[k] = off;
+      off += (unsigned long)data_len[k];
+   }
+
+   f = fopen(argv[1], "wb");
+   if (!f)
+   {
+      fprintf(stderr, "gxgen: cannot write %s\n", argv[1]);
+      return 1;
+   }
+   /* header */
+   le32(f, 0x0d01f1f0);
+   le32(f, 5);
+   le32(f, 1);
+   le64(f, bp_off); le32(f, 256);
+   le64(f, cp_off); le32(f, 256);
+   le64(f, xfm_off); le32(f, 4096);
+   le64(f, xfr_off); le32(f, 88);
+   le64(f, fl_off); le32(f, nframes); le32(f, 0);
+   le64(f, tex_off); le32(f, 1024 * 1024);
+   le32(f, 0x01800000);
+   le32(f, 0x04000000);
+   zeros(f, 8 + 24);
+   for (i = 0; i < 256; i++)
+      le32(f, bp[i]);
+   for (i = 0; i < 256; i++)
+      le32(f, cp[i]);
+   for (i = 0; i < 4096; i++)
+      le32(f, xfmem[i]);
+   for (i = 0; i < 88; i++)
+      le32(f, xfregs[i]);
+   zeros(f, 1024 * 1024);
+   for (k = 0; k < nframes; k++)
+   {
+      le64(f, data_off[k]);
+      le32(f, (u32)data_len[k]);
+      le32(f, 0x00300000);
+      le32(f, 0x003fffe0);
+      le64(f, 0);
+      le32(f, 0);
+      zeros(f, 32);
+   }
+   for (k = 0; k < nframes; k++)
+   {
+      fwrite(data[k], 1, data_len[k], f);
+      free(data[k]);
+   }
+   fclose(f);
+   free(data);
+   free(data_len);
+   free(data_off);
+   printf("%s: %u combinations, %u frames\n", argv[1], combos, nframes);
+   return 0;
+}

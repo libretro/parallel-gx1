@@ -204,6 +204,15 @@ endif
 GEN_DIR := $(CORE_DIR)/obj/gen
 OBJ_DIR := $(CORE_DIR)/obj/$(platform)-$(arch)
 
+# STATS=1: the stutter harness's core (Tools/stutter), counting shader and
+# pipeline work where it happens (VideoCommon/StutterStats.h). Its objects
+# and core sit beside the release ones, which keep building as they were.
+ifeq ($(STATS), 1)
+   OBJ_DIR := $(OBJ_DIR)-stats
+   TARGET  := $(basename $(TARGET))_stats$(suffix $(TARGET))
+   FLAGS   += -DHAVE_STUTTER_STATS
+endif
+
 include Makefile.common
 
 # ----------------------------------------------------------------------------

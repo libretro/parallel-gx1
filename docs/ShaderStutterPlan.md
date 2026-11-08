@@ -86,6 +86,22 @@ tracer) are local.
 Done when: the harness reproduces today's numbers on two runs within
 the spread, and lists every draw-path compile by kind.
 
+Landed so far: the stats build (draw-path compiles by kind, waits,
+draw-path disk writes, worker compiles, shaders and pipelines made),
+the harness on Vulkan and the software renderer, a corpus of blend,
+depth, cull, vertex format, primitive, TEV and alpha test states, and
+the Vulkan baseline. Still to come: EFB copy, texture, palette and
+texgen states in the corpus, the GL and D3D backends in the harness,
+and the allocation tracer. Counters are gated over the whole run:
+where boot ends races the GPU thread, so the boot/play split is
+reported, not gated.
+
+The first Vulkan numbers, cold: 175 ubershader pipelines and 2 EFB
+copy pipelines built on the draw path, 1 wait for the workers, 91
+cache writes from the draw path; 115 shaders and 1017 pipelines made.
+Recipes and warm remove the ubershader builds; nothing removes the EFB
+copy builds.
+
 ## Phase 1: zero draw-path compiles in the default mode
 
 1. **Ubershader coverage through dynamic state.** Take every field the

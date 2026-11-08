@@ -5,6 +5,7 @@
  * calls, and what a backend does not do itself falls to the defaults. */
 
 #include "VideoCommon/AbstractGfx.h"
+#include "VideoCommon/StutterStats.h"
 
 #include "VideoCommon/AbstractFramebuffer.h"
 #include "VideoCommon/AbstractPipeline.h"
@@ -718,29 +719,39 @@ AbstractShader* AbstractGfx::CreateShaderFromSource(ShaderStage stage,
                                                                     ShaderCode* source,
                                                                     std::string_view name)
 {
+  AbstractShader* shader = nullptr;
+  STUTTER_MARK(t);
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
-    return static_cast<Null::NullGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    shader = static_cast<Null::NullGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    break;
   case VIDEO_BACKEND_SOFTWARE:
-    return static_cast<SW::SWGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    shader = static_cast<SW::SWGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    break;
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
-    return static_cast<OGL::OGLGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    shader = static_cast<OGL::OGLGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    break;
 #endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
-    return static_cast<Vulkan::VKGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    shader = static_cast<Vulkan::VKGfx*>(this)->CreateShaderFromSource(stage, source, name);
+    break;
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
-    return static_cast<DX11::Gfx*>(this)->CreateShaderFromSource(stage, source, name);
+    shader = static_cast<DX11::Gfx*>(this)->CreateShaderFromSource(stage, source, name);
+    break;
   case VIDEO_BACKEND_D3D12:
-    return static_cast<DX12::Gfx*>(this)->CreateShaderFromSource(stage, source, name);
+    shader = static_cast<DX12::Gfx*>(this)->CreateShaderFromSource(stage, source, name);
+    break;
 #endif
   default:
-    return nullptr;
+    break;
   }
+  STUTTER_SINCE(STUTTER_SHADER_CREATE, t);
+  return shader;
 }
 
 AbstractShader* AbstractGfx::CreateShaderFromBinary(ShaderStage stage,
@@ -804,29 +815,39 @@ AbstractPipeline* AbstractGfx::CreatePipeline(const AbstractPipelineConfig& conf
                                                               const void* cache_data,
                                                               size_t cache_data_length)
 {
+  AbstractPipeline* pipeline = nullptr;
+  STUTTER_MARK(t);
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
-    return static_cast<Null::NullGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    pipeline = static_cast<Null::NullGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    break;
   case VIDEO_BACKEND_SOFTWARE:
-    return static_cast<SW::SWGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    pipeline = static_cast<SW::SWGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    break;
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
-    return static_cast<OGL::OGLGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    pipeline = static_cast<OGL::OGLGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    break;
 #endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
-    return static_cast<Vulkan::VKGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    pipeline = static_cast<Vulkan::VKGfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    break;
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
-    return static_cast<DX11::Gfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    pipeline = static_cast<DX11::Gfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    break;
   case VIDEO_BACKEND_D3D12:
-    return static_cast<DX12::Gfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    pipeline = static_cast<DX12::Gfx*>(this)->CreatePipeline(config, cache_data, cache_data_length);
+    break;
 #endif
   default:
-    return nullptr;
+    break;
   }
+  STUTTER_SINCE(STUTTER_PIPELINE_CREATE, t);
+  return pipeline;
 }
 
 void AbstractGfx::ScaleTexture(AbstractFramebuffer* dst_framebuffer,

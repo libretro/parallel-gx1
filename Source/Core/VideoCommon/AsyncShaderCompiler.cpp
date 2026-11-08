@@ -12,6 +12,8 @@
 #include "Core/Core.h"
 #include "Core/System.h"
 
+#include "VideoCommon/StutterStats.h"
+
 namespace VideoCommon
 {
 AsyncShaderCompiler::AsyncShaderCompiler()
@@ -112,7 +114,9 @@ void AsyncShaderCompiler::QueueWorkItem(AsyncShaderWork* work, u32 priority)
   // If no worker threads are available, compile synchronously, or later when deferred.
   if (!IsDeferred() && !HasWorkerThreads())
   {
+    STUTTER_MARK(t);
     work->compile(work);
+    STUTTER_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
     if (m_completed_sync_tail)
       m_completed_sync_tail->link.next = &work->link;
     else
@@ -124,7 +128,9 @@ void AsyncShaderCompiler::QueueWorkItem(AsyncShaderWork* work, u32 priority)
   if (!PendingPush(work))
   {
     /* no room to wait in: compiled here, as without workers */
+    STUTTER_MARK(t);
     work->compile(work);
+    STUTTER_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
     work->retrieve(work);
     return;
   }
@@ -179,7 +185,9 @@ void AsyncShaderCompiler::RetrieveWorkItems()
     for (i = 0; i < DEFERRED_ITEMS_PER_RETRIEVE && m_num_pending; i++)
     {
       AsyncShaderWork* work = PendingPop();
+      STUTTER_MARK(t);
       work->compile(work);
+      STUTTER_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
       work->retrieve(work);
     }
     return;
@@ -421,7 +429,9 @@ void AsyncShaderCompiler::WorkerThreadRun(Worker* worker)
       continue;
     }
 
+    STUTTER_MARK(t);
     work->compile(work);
+    STUTTER_SINCE(STUTTER_WORKER_COMPILE, t);
     mpsc_stack_push(&m_completed_work, &work->link);
     retro_atomic_fetch_sub_int(&m_busy_workers, 1);
     retro_eventcount_notify(&m_work_done);
