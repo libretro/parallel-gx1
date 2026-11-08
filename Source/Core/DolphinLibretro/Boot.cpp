@@ -505,6 +505,7 @@ bool retro_load_game(const struct retro_game_info* game)
                  Libretro::GetOption<bool>(gfx_enhancements::LOAD_CUSTOM_TEXTURES, /*def=*/false));
   Config::SetBase(Config::GFX_CACHE_HIRES_TEXTURES,
                  Libretro::GetOption<bool>(gfx_enhancements::CACHE_CUSTOM_TEXTURES, /*def=*/false));
+  // auto: decided by the renderer, once the frontend has granted one (Video::Init)
   Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING,
                  Libretro::GetOption<bool>(gfx_settings::GPU_TEXTURE_DECODING, /*def=*/false));
   Config::SetBase(Config::GFX_ENABLE_PIXEL_LIGHTING,
@@ -702,6 +703,13 @@ bool retro_load_game(const struct retro_game_info* game)
   {
     ERROR_LOG_FMT(VIDEO, "No hardware render context was granted; refusing to load");
     return false;
+  }
+  /* GPU texture decoding, auto: with Vulkan, which decodes ahead of the frame's draws */
+  if (Libretro::GetOption<std::string>(Libretro::Options::gfx_settings::GPU_TEXTURE_DECODING,
+                                       "auto") == "auto")
+  {
+    Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING,
+                    Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_VULKAN);
   }
   WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
   VideoBackendBase::PopulateBackendInfo(wsi);

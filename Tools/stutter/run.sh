@@ -108,9 +108,10 @@ states() {
 
 # each corpus frame of a --check result, with the pictures it was, sorted
 # and joined by commas: a frame may be presented again with what follows
-# partly drawn
+# partly drawn. Not the last, presented as the player starts over.
 picture_map() {
-   sed -n 's/^picture .* corpus=\([0-9]*\) .* hash=\([0-9a-f]*\)/\1 \2/p' "$1" | sort -u |
+   sed -n 's/^picture .* corpus=\([0-9]*\) .* hash=\([0-9a-f]*\)/\1 \2/p' "$1" |
+      awk -v last=$((NEW - 1)) '$1 != last' | sort -u |
       awk 'NR == 1 || $1 != k { if (NR > 1) print k, v; k = $1; v = $2; next } { v = v "," $2 }
            END { if (NR) print k, v }'
 }
@@ -160,10 +161,12 @@ for backend in $BACKENDS; do
             core=$CAND
             [ "$tag" = parent ] && core=$PARENT
             fresh "$OUT/dirs-check"
-            # with the copy filter on, as the corpus's copies set it
+            # with the copy filter on, as the corpus's copies set it, and
+            # textures decoded on the CPU, the reference for those on the GPU
             run "$core" "$backend" "$OUT/dirs-check" "$OUT/check-$tag-$backend-$mode.txt" \
                --check --opt dolphin_shader_compilation_mode=$mode \
-               --opt dolphin_disable_copy_filter=disabled
+               --opt dolphin_disable_copy_filter=disabled \
+               --opt dolphin_gpu_texture_decoding=disabled
             picture_map "$OUT/check-$tag-$backend-$mode.txt" > "$OUT/check-$tag-$backend-$mode.map"
          done
          join "$OUT/check-cand-$backend-$mode.map" "$OUT/check-parent-$backend-$mode.map" \

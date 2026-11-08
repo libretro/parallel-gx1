@@ -960,15 +960,18 @@ static struct retro_core_option_v2_definition option_defs[] = {
     Libretro::Options::gfx_settings::GPU_TEXTURE_DECODING,
     "Graphics > Settings > GPU Texture Decoding",
     "GPU Texture Decoding",
-    "Decode textures on GPU.",
+    "Decode textures on the GPU instead of the CPU: the same pictures, with less CPU time and "
+    "less data uploaded. Auto decodes on the GPU with Vulkan, which does it ahead of the frame's "
+    "drawing, and on the CPU with the other renderers, where each decode interrupts it.",
     nullptr,
     CATEGORY_GFX_SETTINGS,
     {
+      { "auto",     "Auto" },
       { "disabled", nullptr },
       { "enabled",  nullptr },
       { nullptr, nullptr }
     },
-    "disabled"
+    "auto"
   },
   {
     Libretro::Options::gfx_settings::ENABLE_PIXEL_LIGHTING,
