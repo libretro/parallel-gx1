@@ -218,11 +218,12 @@ void ShaderCache::InitializeShaderCache()
   }
 
   /* With ubershaders, every draw without its specialized pipeline yet is
-   * drawn with an ubershader one. The ones this game drew with before are
-   * built before it starts, as a draw would otherwise build its own on
-   * the spot; every other one there can be, and the specialized ones
-   * known, go on building in the background while it runs. Without
-   * threads to build on, the asynchronous modes draw as Synchronous does
+   * drawn with an ubershader one, which a draw would otherwise build on
+   * the spot: every one there can be is built before the game starts, the
+   * ones this game drew with before first. Most share what the driver
+   * compiles, which is set per draw. The specialized ones known go on
+   * building in the background while it runs. Without threads to build
+   * on, the asynchronous modes draw as Synchronous does
    * (VertexManagerBase::UpdatePipelineObject), and nothing more is built
    * before the game starts than that would. Where the driver compiles on
    * threads of its own instead, a few a frame (AsyncShaderCompiler
@@ -231,9 +232,12 @@ void ShaderCache::InitializeShaderCache()
   if (g_ActiveConfig.UsingUberShaders() && CanCompileInBackground())
   {
     CompileMissingUberPipelines();
-    WaitForAsyncCompiler();
     if (m_async_shader_compiler.HasWorkerThreads())
+    {
       QueueUberShaderPipelines();
+      CompileMissingUberPipelines();
+    }
+    WaitForAsyncCompiler();
   }
 
   // Compile all known UIDs.
@@ -269,7 +273,8 @@ void ShaderCache::Reload()
   // UIDs are still be in the map. Therefore, when these are rebuilt, the shaders will also
   // be recompiled.
   CompileMissingPipelines();
-  if (g_ActiveConfig.bWaitForShadersBeforeStarting)
+  /* the ubershader pipelines ready again before a draw needs one */
+  if (g_ActiveConfig.bWaitForShadersBeforeStarting || g_ActiveConfig.UsingUberShaders())
     WaitForAsyncCompiler();
   m_async_shader_compiler.ResizeWorkerThreads(g_ActiveConfig.GetShaderCompilerThreads());
 }

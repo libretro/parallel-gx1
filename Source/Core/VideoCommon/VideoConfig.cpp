@@ -255,8 +255,9 @@ u32 VideoConfig::GetShaderCompilerThreads() const
 
 u32 VideoConfig::GetShaderPrecompilerThreads() const
 {
-  // When using background compilation, always keep the same thread count.
-  if (!bWaitForShadersBeforeStarting)
+  /* Nothing waited for before the game starts: the same threads as while
+   * it runs. The ubershader pipelines are always waited for. */
+  if (!bWaitForShadersBeforeStarting && !UsingUberShaders())
     return GetShaderCompilerThreads();
 
   if (!g_backend_info.bSupportsBackgroundCompiling)

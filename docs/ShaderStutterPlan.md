@@ -138,10 +138,13 @@ copy builds.
 
 Landed so far: on Vulkan the logic op is set per draw, and the
 ubershader precompile covers logic ops drawn with dual-source output
-asked for. Cold, of the 175 ubershader pipelines a draw builds, 172
-reuse a VkPipeline already compiled (the `draw_driver_pipeline` counter
-holds the rest): what is left is a draw reaching a pipeline before the
-workers have, with boot not waiting for them.
+asked for. Every ubershader pipeline there can be is built before the
+game starts, so cold no draw waits for the driver to compile one
+(`draw_driver_pipeline` is 0). A draw still makes the pipeline object
+for a state it shares a compiled one with (`draw_uber_pipeline`): next,
+the state set per draw is taken out of the ubershader key. Loading
+waits for about 190 driver pipelines; making that set smaller is what
+shortens it.
 
 Done when: draw-path compiles and waits are 0 by kind, cold, on every
 backend that builds, across the whole corpus. Cold p99 and max

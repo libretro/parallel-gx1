@@ -184,8 +184,8 @@ for backend in $BACKENDS; do
             awk -v t="$tag" -v s="$state" '/^timing /{
                   for (i = 2; i <= NF; i++) { split($i, kv, "="); v[kv[1]] = v[kv[1]] " " kv[2] }
                } END {
-                  printf "   %s %s: boot_ms%s | p50%s | p99%s | max%s | over%s\n", s, t,
-                     v["boot_ms"], v["run_p50_ms"], v["run_p99_ms"], v["run_max_ms"], v["over_budget"]
+                  printf "   %s %s: load_ms%s | boot_ms%s | p50%s | p99%s | max%s | over%s\n", s, t,
+                     v["load_ms"], v["boot_ms"], v["run_p50_ms"], v["run_p99_ms"], v["run_max_ms"], v["over_budget"]
                }' "$OUT/abba-$tag-$backend-$state.txt"
          done
       done

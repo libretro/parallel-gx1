@@ -1,6 +1,6 @@
 vulkan cold draw_decode 0
 vulkan cold draw_disk_write 91
-vulkan cold draw_driver_pipeline 3
+vulkan cold draw_driver_pipeline 0
 vulkan cold draw_efb_copy_to_ram 0
 vulkan cold draw_efb_copy_to_vram 2
 vulkan cold draw_gx_pipeline 0
@@ -26,7 +26,7 @@ vulkan recipes pipeline_create 1017
 vulkan recipes shader_create 113
 vulkan state draw_decode 0
 vulkan state draw_disk_write 91
-vulkan state draw_driver_pipeline 3
+vulkan state draw_driver_pipeline 0
 vulkan state draw_efb_copy_to_ram 0
 vulkan state draw_efb_copy_to_vram 2
 vulkan state draw_gx_pipeline 0
