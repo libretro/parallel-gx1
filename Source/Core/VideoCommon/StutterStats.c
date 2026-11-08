@@ -7,14 +7,39 @@
 
 #include "VideoCommon/StutterStats.h"
 
+#if defined(_MSC_VER)
+#define STUTTER_THREAD_LOCAL __declspec(thread)
+#else
+#define STUTTER_THREAD_LOCAL __thread
+#endif
+
 static retro_atomic_size_t s_counts[STUTTER_STAT_COUNT];
 static retro_atomic_size_t s_cycles[STUTTER_STAT_COUNT];
+/* how deep this thread is in building for a draw */
+static STUTTER_THREAD_LOCAL unsigned s_draw_depth;
 
 void stutter_stat_add(enum stutter_stat stat, retro_perf_tick_t cycles)
 {
    retro_atomic_fetch_add_size(&s_counts[stat], 1);
    if (cycles)
       retro_atomic_fetch_add_size(&s_cycles[stat], (size_t)cycles);
+}
+
+void stutter_draw_enter(void)
+{
+   s_draw_depth++;
+}
+
+void stutter_draw_leave(void)
+{
+   s_draw_depth--;
+}
+
+void stutter_driver_pipeline(retro_perf_tick_t cycles)
+{
+   stutter_stat_add(STUTTER_DRIVER_PIPELINE, cycles);
+   if (s_draw_depth)
+      stutter_stat_add(STUTTER_DRAW_DRIVER_PIPELINE, cycles);
 }
 
 RETRO_API unsigned parallel_gx1_stutter_stats(unsigned long long *counts,

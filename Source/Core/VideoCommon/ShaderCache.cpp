@@ -312,7 +312,7 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
   if (it && !it->pending)
     return PipelineOf(it);
 
-  STUTTER_MARK(t);
+  STUTTER_DRAW_MARK(t);
   const bool exists_in_cache = it != nullptr;
   AbstractPipeline* pipeline = nullptr;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
@@ -321,7 +321,7 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
   if (g_ActiveConfig.bShaderCache && !exists_in_cache)
     AppendGXPipelineUID(uid);
   const AbstractPipeline* const kept = InsertGXPipeline(uid, pipeline);
-  STUTTER_SINCE(STUTTER_DRAW_GX_PIPELINE, t);
+  STUTTER_DRAW_SINCE(STUTTER_DRAW_GX_PIPELINE, t);
   return kept;
 }
 
@@ -353,13 +353,13 @@ const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineU
   if (it && !it->pending)
     return PipelineOf(it);
 
-  STUTTER_MARK(t);
+  STUTTER_DRAW_MARK(t);
   AbstractPipeline* pipeline = nullptr;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
   if (pipeline_config)
     pipeline = g_gfx->CreatePipeline(*pipeline_config);
   const AbstractPipeline* const kept = InsertGXUberPipeline(uid, pipeline);
-  STUTTER_SINCE(STUTTER_DRAW_UBER_PIPELINE, t);
+  STUTTER_DRAW_SINCE(STUTTER_DRAW_UBER_PIPELINE, t);
   return kept;
 }
 
@@ -1638,6 +1638,14 @@ void ShaderCache::QueueUberShaderPipelines()
         }
         BlendingState blend = RenderState::GetNoBlendingBlendState();
         QueueDummyPipeline(vuid, guid, cleared_puid, blend);
+        /* a logic op draws with dual-source output still asked for, as
+         * BlendingState::Generate leaves it */
+        if (cleared_puid.GetUidData()->uint_output && !cleared_puid.GetUidData()->no_dual_src)
+        {
+          blend.use_dual_src = true;
+          QueueDummyPipeline(vuid, guid, cleared_puid, blend);
+          blend.use_dual_src = false;
+        }
         if (g_backend_info.bSupportsDynamicVertexLoader)
         {
           // Not all GPUs need all the pipeline state compiled into shaders, so they tend to key

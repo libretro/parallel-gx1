@@ -114,9 +114,9 @@ void AsyncShaderCompiler::QueueWorkItem(AsyncShaderWork* work, u32 priority)
   // If no worker threads are available, compile synchronously, or later when deferred.
   if (!IsDeferred() && !HasWorkerThreads())
   {
-    STUTTER_MARK(t);
+    STUTTER_DRAW_MARK(t);
     work->compile(work);
-    STUTTER_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
+    STUTTER_DRAW_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
     if (m_completed_sync_tail)
       m_completed_sync_tail->link.next = &work->link;
     else
@@ -128,9 +128,9 @@ void AsyncShaderCompiler::QueueWorkItem(AsyncShaderWork* work, u32 priority)
   if (!PendingPush(work))
   {
     /* no room to wait in: compiled here, as without workers */
-    STUTTER_MARK(t);
+    STUTTER_DRAW_MARK(t);
     work->compile(work);
-    STUTTER_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
+    STUTTER_DRAW_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
     work->retrieve(work);
     return;
   }
@@ -185,9 +185,9 @@ void AsyncShaderCompiler::RetrieveWorkItems()
     for (i = 0; i < DEFERRED_ITEMS_PER_RETRIEVE && m_num_pending; i++)
     {
       AsyncShaderWork* work = PendingPop();
-      STUTTER_MARK(t);
+      STUTTER_DRAW_MARK(t);
       work->compile(work);
-      STUTTER_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
+      STUTTER_DRAW_SINCE(STUTTER_DRAW_QUEUED_COMPILE, t);
       work->retrieve(work);
     }
     return;

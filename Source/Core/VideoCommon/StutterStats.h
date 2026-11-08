@@ -41,11 +41,22 @@ enum stutter_stat
    /* every shader and pipeline the backend made, on any thread */
    STUTTER_SHADER_CREATE,
    STUTTER_PIPELINE_CREATE,
+   /* a pipeline the driver compiled or linked, on any thread: a pipeline
+    * made from one already compiled is not one */
+   STUTTER_DRIVER_PIPELINE,
+   /* one of those compiled or linked for a GX or ubershader draw, which
+    * waited for it */
+   STUTTER_DRAW_DRIVER_PIPELINE,
    STUTTER_STAT_COUNT
 };
 
 #ifdef HAVE_STUTTER_STATS
 void stutter_stat_add(enum stutter_stat stat, retro_perf_tick_t cycles);
+/* This thread builds for a draw from here, and no longer from here. */
+void stutter_draw_enter(void);
+void stutter_draw_leave(void);
+/* A pipeline the driver compiled or linked, by where it was. */
+void stutter_driver_pipeline(retro_perf_tick_t cycles);
 
 /* The counts and cycles so far, of the first n kinds (enum stutter_stat,
  * in its order); the number of kinds this build counts. The harness's
@@ -59,10 +70,20 @@ RETRO_API unsigned parallel_gx1_stutter_stats(unsigned long long *counts,
 #define STUTTER_SINCE(stat, t) stutter_stat_add((stat), cpu_features_get_perf_counter() - (t))
 /* one more of that kind, uncounted cycles */
 #define STUTTER_COUNT(stat) stutter_stat_add((stat), 0)
+/* the same, for building a draw waits for: what the driver compiles in
+ * between is counted as the draw's */
+#define STUTTER_DRAW_MARK(t) \
+   const retro_perf_tick_t t = (stutter_draw_enter(), cpu_features_get_perf_counter())
+#define STUTTER_DRAW_SINCE(stat, t) (stutter_draw_leave(), STUTTER_SINCE(stat, t))
+/* a pipeline the driver compiled or linked since t */
+#define STUTTER_DRIVER_SINCE(t) stutter_driver_pipeline(cpu_features_get_perf_counter() - (t))
 #else
 #define STUTTER_MARK(t) ((void)0)
 #define STUTTER_SINCE(stat, t) ((void)0)
 #define STUTTER_COUNT(stat) ((void)0)
+#define STUTTER_DRAW_MARK(t) ((void)0)
+#define STUTTER_DRAW_SINCE(stat, t) ((void)0)
+#define STUTTER_DRIVER_SINCE(t) ((void)0)
 #endif
 
 #ifdef __cplusplus

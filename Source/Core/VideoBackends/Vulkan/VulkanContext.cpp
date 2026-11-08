@@ -691,6 +691,7 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
       m_extended_dynamic_state = AddExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, false);
   }
   m_dynamic_blending = false;
+  m_dynamic_logic_op = false;
   if (m_extended_dynamic_state &&
       HasExtension(available_extension_list, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME))
   {
@@ -704,6 +705,23 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
         eds3.extendedDynamicState3ColorWriteMask)
     {
       m_dynamic_blending = AddExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, false);
+    }
+    m_dynamic_logic_op = m_dynamic_blending && m_device_info.logicOp &&
+                         eds3.extendedDynamicState3LogicOpEnable;
+  }
+  if (m_dynamic_logic_op)
+  {
+    VkPhysicalDeviceExtendedDynamicState2FeaturesEXT eds2 = {};
+    VkPhysicalDeviceFeatures2 features2 = {};
+    m_dynamic_logic_op = false;
+    if (HasExtension(available_extension_list, VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME))
+    {
+      eds2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
+      features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+      features2.pNext = &eds2;
+      vkGetPhysicalDeviceFeatures2(m_physical_device, &features2);
+      if (eds2.extendedDynamicState2LogicOp)
+        m_dynamic_logic_op = AddExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME, false);
     }
   }
 
@@ -897,8 +915,17 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
     eds3_features.extendedDynamicState3ColorBlendEnable = VK_TRUE;
     eds3_features.extendedDynamicState3ColorBlendEquation = VK_TRUE;
     eds3_features.extendedDynamicState3ColorWriteMask = VK_TRUE;
+    eds3_features.extendedDynamicState3LogicOpEnable = m_dynamic_logic_op ? VK_TRUE : VK_FALSE;
     eds3_features.pNext = const_cast<void*>(device_info.pNext);
     device_info.pNext = &eds3_features;
+  }
+  VkPhysicalDeviceExtendedDynamicState2FeaturesEXT eds2_features = {};
+  if (m_dynamic_logic_op)
+  {
+    eds2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
+    eds2_features.extendedDynamicState2LogicOp = VK_TRUE;
+    eds2_features.pNext = const_cast<void*>(device_info.pNext);
+    device_info.pNext = &eds2_features;
   }
 
   // Enable debug layer on debug builds
@@ -924,10 +951,14 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   m_dynamic_blending = m_extended_dynamic_state && m_dynamic_blending &&
                        vkCmdSetColorBlendEnableEXT && vkCmdSetColorBlendEquationEXT &&
                        vkCmdSetColorWriteMaskEXT;
+  m_dynamic_logic_op = m_dynamic_blending && m_dynamic_logic_op && vkCmdSetLogicOpEXT &&
+                       vkCmdSetLogicOpEnableEXT;
   m_fast_linking = m_fast_linking && m_extended_dynamic_state;
-  INFO_LOG_FMT(VIDEO, "Vulkan: cull mode and depth state {}, blending {}, pipelines {}",
+  INFO_LOG_FMT(VIDEO,
+               "Vulkan: cull mode and depth state {}, blending {}, logic op {}, pipelines {}",
                m_extended_dynamic_state ? "set per draw" : "in each pipeline",
                m_dynamic_blending ? "set per draw" : "in each pipeline",
+               m_dynamic_logic_op ? "set per draw" : "in each pipeline",
                m_fast_linking ? "linked from libraries" : "built whole");
 
   // Grab the graphics and present queues.

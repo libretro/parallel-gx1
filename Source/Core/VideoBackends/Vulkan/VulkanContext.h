@@ -118,6 +118,8 @@ public:
   /* blending, its equation and the colour write mask set per draw as well
    * (VK_EXT_extended_dynamic_state3), with the state above */
   bool SupportsDynamicBlending() const { return m_dynamic_blending; }
+  /* logic op enable and mode set per draw, with blending */
+  bool SupportsDynamicLogicOp() const { return m_dynamic_logic_op; }
   /* pipelines linked fast from libraries of their parts
    * (VK_EXT_graphics_pipeline_library with fast linking), with the state
    * above set per draw */
@@ -165,6 +167,7 @@ private:
   std::vector<std::string> m_device_extensions;
   bool m_extended_dynamic_state = false;
   bool m_dynamic_blending = false;
+  bool m_dynamic_logic_op = false;
   bool m_fast_linking = false;
 };
 

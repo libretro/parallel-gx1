@@ -426,6 +426,13 @@ void StateTracker::BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend, u
   vkCmdSetColorBlendEnableEXT(command_buffer, 0, attachments, enable);
   vkCmdSetColorBlendEquationEXT(command_buffer, 0, attachments, equation);
   vkCmdSetColorWriteMaskEXT(command_buffer, 0, attachments, write_mask);
+  if (blend & VK_DYNAMIC_BLEND_LOGIC_USED)
+  {
+    BlendingState state;
+    state.hex = blend & VK_DYNAMIC_BLEND_LOGIC_MASK;
+    vkCmdSetLogicOpEnableEXT(command_buffer, state.logic_op_enable ? VK_TRUE : VK_FALSE);
+    vkCmdSetLogicOpEXT(command_buffer, VKPipeline::GetVulkanLogicOp(static_cast<u32>(state.logic_mode.Value())));
+  }
   m_dynamic_blend = blend;
   m_dynamic_blend_attachments = attachments;
   m_dynamic_blend_fence = fence;

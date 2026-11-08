@@ -136,6 +136,13 @@ copy builds.
    ubershader variants these need, so a blend mode change never meets a
    missing pipeline.
 
+Landed so far: on Vulkan the logic op is set per draw, and the
+ubershader precompile covers logic ops drawn with dual-source output
+asked for. Cold, of the 175 ubershader pipelines a draw builds, 172
+reuse a VkPipeline already compiled (the `draw_driver_pipeline` counter
+holds the rest): what is left is a draw reaching a pipeline before the
+workers have, with boot not waiting for them.
+
 Done when: draw-path compiles and waits are 0 by kind, cold, on every
 backend that builds, across the whole corpus. Cold p99 and max
 `retro_run` are within the spread of warm.

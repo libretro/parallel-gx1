@@ -18,6 +18,7 @@
 #include "VideoBackends/Vulkan/VKTexture.h"
 #include "VideoBackends/Vulkan/VKVertexFormat.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
+#include "VideoCommon/StutterStats.h"
 
 namespace Vulkan
 {
@@ -521,17 +522,23 @@ void VKPipeline::GetDynamicBlendState(u32 dynamic_blend, VkBool32* enable,
   *write_mask = vk_state.colorWriteMask;
 }
 
+VkLogicOp VKPipeline::GetVulkanLogicOp(u32 logic_mode)
+{
+  static const VkLogicOp vk_logic_ops[16] = {
+      VK_LOGIC_OP_CLEAR,         VK_LOGIC_OP_AND,          VK_LOGIC_OP_AND_REVERSE,
+      VK_LOGIC_OP_COPY,          VK_LOGIC_OP_AND_INVERTED, VK_LOGIC_OP_NO_OP,
+      VK_LOGIC_OP_XOR,           VK_LOGIC_OP_OR,           VK_LOGIC_OP_NOR,
+      VK_LOGIC_OP_EQUIVALENT,    VK_LOGIC_OP_INVERT,       VK_LOGIC_OP_OR_REVERSE,
+      VK_LOGIC_OP_COPY_INVERTED, VK_LOGIC_OP_OR_INVERTED,  VK_LOGIC_OP_NAND,
+      VK_LOGIC_OP_SET};
+  return vk_logic_ops[logic_mode & 15];
+}
+
 static VkPipelineColorBlendStateCreateInfo
 GetVulkanColorBlendState(const BlendingState& state,
                          const VkPipelineColorBlendAttachmentState* attachments,
                          uint32_t num_attachments)
 {
-  static constexpr std::array<VkLogicOp, 16> vk_logic_ops = {
-      {VK_LOGIC_OP_CLEAR, VK_LOGIC_OP_AND, VK_LOGIC_OP_AND_REVERSE, VK_LOGIC_OP_COPY,
-       VK_LOGIC_OP_AND_INVERTED, VK_LOGIC_OP_NO_OP, VK_LOGIC_OP_XOR, VK_LOGIC_OP_OR,
-       VK_LOGIC_OP_NOR, VK_LOGIC_OP_EQUIVALENT, VK_LOGIC_OP_INVERT, VK_LOGIC_OP_OR_REVERSE,
-       VK_LOGIC_OP_COPY_INVERTED, VK_LOGIC_OP_OR_INVERTED, VK_LOGIC_OP_NAND, VK_LOGIC_OP_SET}};
-
   VkBool32 vk_logic_op_enable = static_cast<VkBool32>(state.logic_op_enable);
   if (vk_logic_op_enable && !g_backend_info.bSupportsLogicOp)
   {
@@ -542,7 +549,8 @@ GetVulkanColorBlendState(const BlendingState& state,
   }
 
   VkLogicOp vk_logic_op =
-      vk_logic_op_enable ? vk_logic_ops[u32(state.logic_mode.Value())] : VK_LOGIC_OP_CLEAR;
+      vk_logic_op_enable ? VKPipeline::GetVulkanLogicOp(u32(state.logic_mode.Value())) :
+                           VK_LOGIC_OP_CLEAR;
 
   VkPipelineColorBlendStateCreateInfo vk_state = {
       VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,  // VkStructureType sType
@@ -617,6 +625,14 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
       dynamic_blend = VK_DYNAMIC_BLEND_USED |
                       (config.blending_state.hex & (VK_DYNAMIC_BLEND_MASK | VK_DYNAMIC_BLEND_DUAL_SRC));
       build.blending_state.hex &= ~VK_DYNAMIC_BLEND_MASK;
+      /* the logic op mode alone picks no pipeline: one with integer output
+       * draws every mode */
+      if (g_vulkan_context->SupportsDynamicLogicOp())
+      {
+        dynamic_blend |= VK_DYNAMIC_BLEND_LOGIC_USED |
+                         (config.blending_state.hex & VK_DYNAMIC_BLEND_LOGIC_MASK);
+        build.blending_state.hex &= ~VK_DYNAMIC_BLEND_LOGIC_MASK;
+      }
     }
     key.vertex_format = build.vertex_format;
     key.vertex_shader = ShaderUid(build.vertex_shader);
@@ -747,7 +763,7 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
 
   // Viewport and scissor are set per draw, and cull mode and depth state with them where the
   // device allows it.
-  static const VkDynamicState dynamic_states[9] = {
+  static const VkDynamicState dynamic_states[11] = {
       VK_DYNAMIC_STATE_VIEWPORT,
       VK_DYNAMIC_STATE_SCISSOR,
       VK_DYNAMIC_STATE_CULL_MODE_EXT,
@@ -757,11 +773,16 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
       VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT,
       VK_DYNAMIC_STATE_COLOR_BLEND_EQUATION_EXT,
       VK_DYNAMIC_STATE_COLOR_WRITE_MASK_EXT,
+      VK_DYNAMIC_STATE_LOGIC_OP_ENABLE_EXT,
+      VK_DYNAMIC_STATE_LOGIC_OP_EXT,
   };
   const VkPipelineDynamicStateCreateInfo dynamic_state = {
       VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, nullptr,
       0,  // VkPipelineDynamicStateCreateFlags    flags
-      dynamic_blend ? 9u : dynamic_bits ? 6u : 2u,  // uint32_t dynamicStateCount
+      (dynamic_blend & VK_DYNAMIC_BLEND_LOGIC_USED) ? 11u :
+      dynamic_blend                                 ? 9u :
+      dynamic_bits                                  ? 6u :
+                                                      2u,  // uint32_t dynamicStateCount
       dynamic_states  // const VkDynamicState*                pDynamicStates
   };
 
@@ -789,6 +810,7 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
   };
 
   VkPipeline pipeline = VK_NULL_HANDLE;
+  STUTTER_MARK(t);
   /* Ubershader pipelines, built on the spot when a draw needs one, are
    * linked from libraries where the device can; a link that fails builds
    * the pipeline whole. */
@@ -808,6 +830,7 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
       return VK_NULL_HANDLE;
     }
   }
+  STUTTER_DRIVER_SINCE(t);
 
   return new VKPipeline(config, pipeline, pipeline_layout, config.usage,
                                       dynamic_bits, dynamic_blend,

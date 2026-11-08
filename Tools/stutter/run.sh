@@ -44,6 +44,7 @@ if [ -n "$PARENT" ]; then
 fi
 
 mkdir -p "$OUT"
+rm -f "$OUT"/abba-*
 case "$(uname -s)" in
    MINGW*|MSYS*) EXE=.exe; LIBS= ;;
    *) EXE=; LIBS="-ldl -lpthread" ;;
@@ -143,8 +144,10 @@ for backend in $BACKENDS; do
       # hard gates: each counter against the baseline, and against the parent
       for kind in draw_gx_pipeline draw_uber_pipeline draw_efb_copy_to_vram \
                   draw_efb_copy_to_ram draw_reinterpret draw_decode draw_queued_compile \
-                  draw_wait draw_disk_write shader_create pipeline_create; do
+                  draw_wait draw_disk_write draw_driver_pipeline shader_create pipeline_create \
+                  driver_pipeline; do
          set -- $(stat "$r" "$kind")
+         [ $# = 2 ] || { echo "FAIL $backend $state: no $kind counter"; FAILED=1; continue; }
          boot=$1; play=$2
          key="$backend $state $kind"
          base=$(sed -n "s/^$key \([0-9]*\)$/\1/p" "$BASELINE" 2>/dev/null || true)
@@ -154,15 +157,16 @@ for backend in $BACKENDS; do
          # same one is made twice; until the draw path builds none, that race
          # moves these by a few
          slack=0
-         case "$kind" in shader_create|pipeline_create) slack=$CREATE_SPREAD ;; esac
+         case "$kind" in shader_create|pipeline_create|driver_pipeline|draw_driver_pipeline) slack=$CREATE_SPREAD ;; esac
          if [ -n "$base" ] && [ "$value" -gt $((base + slack)) ]; then
             echo "FAIL $key: $value, baseline $base"
             FAILED=1
          elif [ -n "$base" ] && [ "$value" -lt "$base" ]; then
             echo "   better $key: $value, baseline $base (lower it)"
          fi
-         if [ -n "$PARENT" ]; then
-            set -- $(stat "$OUT/parent-$backend-$state.txt" "$kind")
+         # a parent from before a kind was counted has nothing to compare
+         set -- $( [ -n "$PARENT" ] && stat "$OUT/parent-$backend-$state.txt" "$kind")
+         if [ $# = 2 ]; then
             pvalue=$(($1 + $2))
             if [ "$value" -gt $((pvalue + slack)) ]; then
                echo "FAIL $key: $value, parent $pvalue"
@@ -194,7 +198,7 @@ if [ "$UPDATE_BASELINE" = 1 ]; then
       base=$(sed -n "s/^$b $s $k \([0-9]*\)$/\1/p" "$BASELINE" 2>/dev/null || true)
       # a few fewer shaders or pipelines built is the race, not a gain
       slack=0
-      case "$k" in shader_create|pipeline_create) slack=$CREATE_SPREAD ;; esac
+      case "$k" in shader_create|pipeline_create|driver_pipeline|draw_driver_pipeline) slack=$CREATE_SPREAD ;; esac
       if [ -z "$base" ] || [ $((v + slack)) -lt "$base" ]; then
          echo "$b $s $k $v"
       else

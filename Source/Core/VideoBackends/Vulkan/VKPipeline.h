@@ -27,6 +27,10 @@ namespace Vulkan
 #define VK_DYNAMIC_BLEND_MASK 0x000fff79u
 #define VK_DYNAMIC_BLEND_DUAL_SRC 0x00000080u
 #define VK_DYNAMIC_BLEND_USED (1u << 31)
+/* and, when the device can set it per draw too, the logic op: its enable
+ * and mode bits, and a bit saying they are set this way */
+#define VK_DYNAMIC_BLEND_LOGIC_MASK 0x00f00002u
+#define VK_DYNAMIC_BLEND_LOGIC_USED (1u << 30)
 
 struct VKSharedPipeline;
 
@@ -50,6 +54,8 @@ public:
   static void GetDynamicBlendState(u32 dynamic_blend, VkBool32* enable,
                                    VkColorBlendEquationEXT* equation,
                                    VkColorComponentFlags* write_mask);
+  /* the VkLogicOp of a BlendingState's logic mode */
+  static VkLogicOp GetVulkanLogicOp(u32 logic_mode);
   static VKPipeline* Create(const AbstractPipelineConfig& config);
   /* Forgets every shared pipeline; only with none alive, as the backend
    * comes up. */
