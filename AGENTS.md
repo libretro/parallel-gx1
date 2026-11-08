@@ -3,6 +3,36 @@
 Instructions for anyone, human or agent, changing this core. Read the
 section that covers the code you touch before touching it.
 
+## Zero-copy and borrowed lends
+
+Every change looks for copies to remove in the code it touches, and
+every delivery says what it found and removed. A copy that stays has a
+reason a reader can see.
+
+- **One owner, the rest borrow.** Data is owned once. Everything else
+  takes a pointer and a length for a bounded time, and the borrow ends
+  before the owner frees or reuses the memory: a borrowed slice outlives
+  every consumer, including the driver call it is passed to.
+- **Producers write where the data ends up.** A decoder writes into the
+  memory the backend lends for the upload (`AbstractTexture::LendLoad`),
+  a driver into the store it will be written to disk from
+  (`LinearDiskCache::SingleValue`), a generator into the buffer the
+  driver reads. No intermediate buffer, no `std::vector` returned by
+  value only to be copied somewhere else.
+- **No slurps.** Files are mapped, or read in place through
+  libretro-common's filestream/VFS. A file read whole into a fresh
+  allocation, to be parsed or compared, is a bug when it could be
+  mapped or streamed (`filestream_matches_buf` compares without one).
+- **Copies that must stay say why.** Some copies are what keeps the
+  emulation correct, and stay, with a comment naming the reason:
+  - guest memory the GPU reads later is snapshotted when the GPU thread
+    takes it, as the emulated CPU goes on writing it (a texture, a
+    vertex buffer, a palette);
+  - data a driver or an API hands over only for the length of a call.
+- **Measure it.** Bytes copied and allocations made are work results:
+  count them where they happen, and say what changed. They are not
+  frame-time results until timing shows it.
+
 ## Shader compilation and stutter
 
 The target is the console's own behaviour: a game never waits for a
