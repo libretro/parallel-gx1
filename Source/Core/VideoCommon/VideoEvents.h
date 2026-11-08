@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <string_view>
-#include <vector>
-
 #include "Common/CommonTypes.h"
 #include "Common/HookableEvent.h"
 
@@ -38,8 +35,6 @@ struct PresentInfo
 
   u32 frame_buffer_width;
   u32 frame_buffer_height;
-
-  std::vector<std::string_view> xfb_copy_hashes;
 };
 
 struct VideoEvents
@@ -56,16 +51,6 @@ struct VideoEvents
   // presenting.
   //       If this matters to your usecase, you should use BeforePresent instead.
   Common::HookableEvent<Core::System&> after_frame_event;
-
-  // An event called just as a frame is queued for presentation.
-  // The exact timing of this event depends on the "Immediately Present XFB" option.
-  //
-  // If enabled, this event will trigger immediately after AfterFrame
-  // If disabled, this event won't trigger until the emulated interface starts drawing out a new
-  // frame.
-  //
-  // frame_count: The number of frames
-  Common::HookableEvent<PresentInfo&> before_present_event;
 
   // An event that is triggered after a frame is presented.
   // The exact timing of this event depends on backend/driver support.
