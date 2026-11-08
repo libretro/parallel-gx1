@@ -11,7 +11,7 @@
 
 namespace OGL
 {
-std::unique_ptr<SamplerCache> g_sampler_cache;
+SamplerCache* g_sampler_cache = nullptr;
 
 SamplerCache::SamplerCache()
 {

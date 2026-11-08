@@ -22,10 +22,10 @@ class DXPipeline;
 class Gfx final : public ::AbstractGfx
 {
 public:
-  Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale);
+  Gfx(FrameOutput* output, float backbuffer_scale);
   ~Gfx();
 
-  static Gfx* GetInstance() { return static_cast<Gfx*>(g_gfx.get()); }
+  static Gfx* GetInstance() { return static_cast<Gfx*>(g_gfx); }
 
   bool IsHeadless() const;
 
@@ -153,7 +153,7 @@ private:
   float m_backbuffer_scale;
 
   // Owned objects
-  std::unique_ptr<FrameOutput> m_output;
+  FrameOutput* m_output;  // owned
 
   // Current state
   struct

@@ -40,7 +40,7 @@ static bool HasLayer(const std::vector<VkLayerProperties>& list, const char* nam
   return false;
 }
 
-std::unique_ptr<VulkanContext> g_vulkan_context;
+VulkanContext* g_vulkan_context = nullptr;
 
 template <typename Chain, typename Element>
 static void InsertIntoChain(Chain* chain, Element* element)
@@ -601,12 +601,11 @@ void VulkanContext::PopulateBackendInfoMultisampleModes(BackendInfo* backend_inf
     backend_info->AAModes.emplace_back(64);
 }
 
-std::unique_ptr<VulkanContext> VulkanContext::Create(VkInstance instance, VkPhysicalDevice gpu,
-                                                     VkSurfaceKHR surface, bool enable_debug_utils,
-                                                     bool enable_validation_layer,
-                                                     u32 vk_api_version)
+VulkanContext* VulkanContext::Create(VkInstance instance, VkPhysicalDevice gpu,
+                                     VkSurfaceKHR surface, bool enable_debug_utils,
+                                     bool enable_validation_layer, u32 vk_api_version)
 {
-  std::unique_ptr<VulkanContext> context = std::make_unique<VulkanContext>(instance, gpu);
+  VulkanContext* const context = new VulkanContext(instance, gpu);
 
   // Initialize DriverDetails so that we can check for bugs to disable features if needed.
   context->InitDriverDetails();
@@ -625,6 +624,7 @@ std::unique_ptr<VulkanContext> VulkanContext::Create(VkInstance instance, VkPhys
     if (surface != VK_NULL_HANDLE)
       vkDestroySurfaceKHR(instance, surface, nullptr);
 
+    delete context;
     return nullptr;
   }
 

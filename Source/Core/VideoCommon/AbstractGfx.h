@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include "Common/HookableEvent.h"
 #include "Common/MathUtil.h"
 
@@ -212,4 +210,7 @@ private:
   ViewportAndScissor m_viewport_and_scissor;
 };
 
-extern std::unique_ptr<AbstractGfx> g_gfx;
+/* Deletes a gfx as the backend's own class; NULL is let be. */
+void AbstractGfxDelete(AbstractGfx* gfx);
+
+extern AbstractGfx* g_gfx;

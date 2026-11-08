@@ -392,7 +392,7 @@ void retro_run(void)
 
   if (g_gfx && Config::Get(Config::MAIN_GFX_BACKEND) == "OGL")
   {
-    static_cast<OGL::OGLGfx*>(g_gfx.get())
+    static_cast<OGL::OGLGfx*>(g_gfx)
         ->SetSystemFrameBuffer((GLuint)Libretro::Video::hw_render.get_current_framebuffer());
   }
 

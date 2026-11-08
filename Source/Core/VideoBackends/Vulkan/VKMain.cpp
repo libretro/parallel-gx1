@@ -86,10 +86,13 @@ void VideoBackend::Shutdown()
 
   ShutdownShared();
 
-  g_object_cache.reset();
+  delete g_object_cache;
+  g_object_cache = nullptr;
   StateTracker::DestroyInstance();
-  g_command_buffer_mgr.reset();
-  g_vulkan_context.reset();
+  delete g_command_buffer_mgr;
+  g_command_buffer_mgr = nullptr;
+  delete g_vulkan_context;
+  g_vulkan_context = nullptr;
   UnloadVulkanLibrary();
 }
 

@@ -6,8 +6,6 @@
 #include <memory>
 #include <vector>
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
 #include "Common/MathUtil.h"
@@ -253,4 +251,7 @@ private:
   Common::EventHook m_after_present_event;
 };
 
-extern std::unique_ptr<VertexManagerBase> g_vertex_manager;
+/* Deletes a vertex manager as the backend's own class; NULL is let be. */
+void VertexManagerBaseDelete(VertexManagerBase* vertex_manager);
+
+extern VertexManagerBase* g_vertex_manager;

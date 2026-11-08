@@ -13,7 +13,7 @@
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoConfig.h"
 
-std::unique_ptr<AbstractGfx> g_gfx;
+AbstractGfx* g_gfx = nullptr;
 
 AbstractGfx::AbstractGfx()
 {

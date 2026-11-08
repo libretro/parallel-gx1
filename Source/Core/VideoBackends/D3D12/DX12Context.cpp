@@ -21,7 +21,7 @@
 
 namespace DX12
 {
-std::unique_ptr<DXContext> g_dx_context;
+DXContext* g_dx_context = nullptr;
 
 // Private D3D12 state
 static Common::DynamicLibrary s_d3d12_library;
@@ -78,8 +78,8 @@ bool DXContext::CreateGlobalResources()
 
 void DXContext::Destroy()
 {
-  if (g_dx_context)
-    g_dx_context.reset();
+  delete g_dx_context;
+  g_dx_context = nullptr;
 
   s_d3d12_serialize_root_signature = nullptr;
   s_d3d12_library.Close();
@@ -472,7 +472,7 @@ bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueu
     return false;
   }
 
-  g_dx_context.reset(new DXContext());
+  g_dx_context = new DXContext();
 
   device->AddRef();
   g_dx_context->m_device.Attach(device);

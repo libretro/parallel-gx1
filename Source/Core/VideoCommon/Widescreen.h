@@ -44,4 +44,4 @@ private:
   Common::EventHook m_config_changed;
 };
 
-extern std::unique_ptr<WidescreenManager> g_widescreen;
+extern WidescreenManager* g_widescreen;

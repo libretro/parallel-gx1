@@ -41,7 +41,7 @@
 #include "VideoCommon/XFMemory.h"
 #include "VideoCommon/XFStateManager.h"
 
-std::unique_ptr<VertexManagerBase> g_vertex_manager;
+VertexManagerBase* g_vertex_manager = nullptr;
 
 using OpcodeDecoder::Primitive;
 

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include "Common/CommonTypes.h"
 #include "VideoCommon/TextureConfig.h"
 
@@ -54,3 +52,6 @@ public:
   u32 GetHeight() const;
   AbstractTextureFormat GetFormat() const { return AbstractTextureFormat::RGBA8; }
 };
+
+/* Deletes a frame output as the backend's own class; NULL is let be. */
+void FrameOutputDelete(FrameOutput* frame_output);

@@ -200,7 +200,7 @@ private:
   void* m_before_execute_opaque = nullptr;
 };
 
-extern std::unique_ptr<DXContext> g_dx_context;
+extern DXContext* g_dx_context;
 
 // Whether the queue passed fence_value; never waits.
 bool FenceValueDone(u64 fence_value);

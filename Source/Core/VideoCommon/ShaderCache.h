@@ -280,4 +280,4 @@ private:
 
 }  // namespace VideoCommon
 
-extern std::unique_ptr<VideoCommon::ShaderCache> g_shader_cache;
+extern VideoCommon::ShaderCache* g_shader_cache;

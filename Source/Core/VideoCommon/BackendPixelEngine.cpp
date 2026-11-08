@@ -28,8 +28,10 @@
 #include "VideoBackends/D3D12/D3D12PerfQuery.h"
 #endif
 
-void std::default_delete<BoundingBox>::operator()(BoundingBox* object) const
+void BoundingBoxDelete(BoundingBox* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_SOFTWARE:
@@ -143,8 +145,10 @@ void BoundingBox::Write(u32 index, const BBoxType* values, u32 length)
   }
 }
 
-void std::default_delete<PerfQueryBase>::operator()(PerfQueryBase* object) const
+void PerfQueryBaseDelete(PerfQueryBase* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_SOFTWARE:

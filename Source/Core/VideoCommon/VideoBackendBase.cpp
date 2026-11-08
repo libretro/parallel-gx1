@@ -274,10 +274,10 @@ void VideoBackendBase::DoState(PointerWrap& p)
   system.GetFifo().GpuMaySleep();
 }
 
-bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
-                                        std::unique_ptr<VertexManagerBase> vertex_manager,
-                                        std::unique_ptr<PerfQueryBase> perf_query,
-                                        std::unique_ptr<BoundingBox> bounding_box)
+bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,
+                                        VertexManagerBase* vertex_manager,
+                                        PerfQueryBase* perf_query,
+                                        BoundingBox* bounding_box)
 {
   const bool is_initialized = g_context_status.IsInitialized();
   if(!is_initialized)
@@ -289,18 +289,19 @@ bool VideoBackendBase::InitializeShared(std::unique_ptr<AbstractGfx> gfx,
   // do not initialize again for the config window
   m_initialized = true;
 
-  g_gfx = std::move(gfx);
-  g_vertex_manager = std::move(vertex_manager);
-  g_perf_query = std::move(perf_query);
-  g_bounding_box = std::move(bounding_box);
+  /* taken: deleted by ShutdownShared */
+  g_gfx = gfx;
+  g_vertex_manager = vertex_manager;
+  g_perf_query = perf_query;
+  g_bounding_box = bounding_box;
 
-  g_texture_cache = std::make_unique<TextureCacheBase>();
+  g_texture_cache = new TextureCacheBase();
 
-  g_presenter = std::make_unique<VideoCommon::Presenter>();
-  g_framebuffer_manager = std::make_unique<FramebufferManager>();
-  g_shader_cache = std::make_unique<VideoCommon::ShaderCache>();
+  g_presenter = new VideoCommon::Presenter();
+  g_framebuffer_manager = new FramebufferManager();
+  g_shader_cache = new VideoCommon::ShaderCache();
   g_graphics_mod_manager = std::make_unique<GraphicsModManager>();
-  g_widescreen = std::make_unique<WidescreenManager>();
+  g_widescreen = new WidescreenManager();
 
   if (!g_vertex_manager->Initialize() || !g_shader_cache->Initialize() ||
       !g_perf_query->Initialize() || !g_presenter->Initialize() ||
@@ -349,23 +350,32 @@ void VideoBackendBase::ShutdownShared()
   system.GetCustomResourceManager().Shutdown();
   /* the GBAs render into the GPU's memory: given back before it goes */
   GBAScreensRevoke();
-  g_presenter.reset();
+  delete g_presenter;
+  g_presenter = nullptr;
 
   if (g_shader_cache)
     g_shader_cache->Shutdown();
   if (g_texture_cache)
     g_texture_cache->Shutdown();
 
-  g_bounding_box.reset();
-  g_perf_query.reset();
+  BoundingBoxDelete(g_bounding_box);
+  g_bounding_box = nullptr;
+  PerfQueryBaseDelete(g_perf_query);
+  g_perf_query = nullptr;
   g_graphics_mod_manager.reset();
-  g_texture_cache.reset();
+  delete g_texture_cache;
+  g_texture_cache = nullptr;
   TCacheEntryPoolFree();
-  g_framebuffer_manager.reset();
-  g_shader_cache.reset();
-  g_vertex_manager.reset();
-  g_widescreen.reset();
-  g_gfx.reset();
+  delete g_framebuffer_manager;
+  g_framebuffer_manager = nullptr;
+  delete g_shader_cache;
+  g_shader_cache = nullptr;
+  VertexManagerBaseDelete(g_vertex_manager);
+  g_vertex_manager = nullptr;
+  delete g_widescreen;
+  g_widescreen = nullptr;
+  AbstractGfxDelete(g_gfx);
+  g_gfx = nullptr;
 
   m_initialized = false;
 

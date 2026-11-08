@@ -145,7 +145,7 @@ private:
   void* m_before_submit_opaque = nullptr;
 };
 
-extern std::unique_ptr<CommandBufferManager> g_command_buffer_mgr;
+extern CommandBufferManager* g_command_buffer_mgr;
 
 // Whether the GPU did the work of fence_counter; never waits.
 bool FenceCounterDone(u64 fence_counter);

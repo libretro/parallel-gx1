@@ -29,8 +29,8 @@ static bool UsesDynamicVertexLoader(const AbstractPipeline* pipeline)
          (g_ActiveConfig.UseVSForLinePointExpand() && usage != AbstractPipelineUsage::Utility);
 }
 
-Gfx::Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
-    : m_backbuffer_scale(backbuffer_scale), m_output(std::move(output))
+Gfx::Gfx(FrameOutput* output, float backbuffer_scale)
+    : m_backbuffer_scale(backbuffer_scale), m_output(output)
 {
   g_video_backend_kind = VIDEO_BACKEND_D3D12;
   m_state.root_signature = g_dx_context->GetGXRootSignature();
@@ -42,7 +42,10 @@ Gfx::Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
   }
 }
 
-Gfx::~Gfx() = default;
+Gfx::~Gfx()
+{
+  FrameOutputDelete(m_output);
+}
 
 bool Gfx::IsHeadless() const
 {

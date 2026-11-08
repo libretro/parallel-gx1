@@ -374,7 +374,7 @@ void CheckForConfigChanges()
   // Viewport and scissor rect have to be reset since they will be scaled differently.
   if (changed_bits & CONFIG_CHANGE_BIT_TARGET_SIZE)
   {
-    BPFunctions::SetScissorAndViewport(g_framebuffer_manager.get(), bpmem.scissorTL,
+    BPFunctions::SetScissorAndViewport(g_framebuffer_manager, bpmem.scissorTL,
                                        bpmem.scissorBR, bpmem.scissorOffset, xfmem.viewport);
   }
 

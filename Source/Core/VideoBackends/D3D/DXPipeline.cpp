@@ -32,7 +32,7 @@ DXPipeline::~DXPipeline() = default;
 
 DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config)
 {
-  StateCache& state_cache = static_cast<Gfx*>(g_gfx.get())->GetStateCache();
+  StateCache& state_cache = static_cast<Gfx*>(g_gfx)->GetStateCache();
   ID3D11RasterizerState* rasterizer_state = state_cache.Get(config.rasterization_state);
   ID3D11DepthStencilState* depth_state = state_cache.Get(config.depth_state);
   ID3D11BlendState* blend_state = state_cache.Get(config.blending_state);

@@ -55,8 +55,10 @@ void NativeVertexFormatDelete(NativeVertexFormat* object)
   }
 }
 
-void std::default_delete<VertexManagerBase>::operator()(VertexManagerBase* object) const
+void VertexManagerBaseDelete(VertexManagerBase* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:

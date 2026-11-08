@@ -191,7 +191,7 @@ void D3D11Lock(void)
   used = s_d3d11_v2->lock_context(s_d3d11_v2->handle);
   /* the frontend had the context: everything bound goes back */
   if (s_d3d11_depth++ == 0 && used && g_gfx && DX11::D3D::stateman)
-    static_cast<DX11::Gfx*>(g_gfx.get())->RestoreContext();
+    static_cast<DX11::Gfx*>(g_gfx)->RestoreContext();
 #endif
 }
 
@@ -381,7 +381,7 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, const Window
     g_backend_info.bSupportsLogicOp = false;
   }
 
-  DX11::D3D::stateman = std::make_unique<DX11::D3D::StateManager>();
+  DX11::D3D::stateman = new DX11::D3D::StateManager();
 
   DX11::VideoBackend* d3d11 = static_cast<DX11::VideoBackend*>(g_video_backend);
 
@@ -395,18 +395,21 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, const Window
   g_Config.VerifyValidity();
   UpdateActiveConfig();
 
-  std::unique_ptr<DX11Output> output = std::make_unique<DX11Output>(
+  DX11Output* const output = new DX11Output(
     s_d3d11_v2, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale);
   if (!output->Create())
+  {
+    delete output;
     return;
+  }
 
-  auto gfx = std::make_unique<DX11::Gfx>(std::move(output), wsi.render_surface_scale);
-  auto vertex_manager = std::make_unique<DX11::VertexManager>();
-  auto perf_query = std::make_unique<DX11::PerfQuery>();
-  auto bounding_box = std::make_unique<DX11::D3DBoundingBox>();
+  /* made in this order, each taken by InitializeShared */
+  AbstractGfx* const gfx = new DX11::Gfx(output, wsi.render_surface_scale);
+  VertexManagerBase* const vertex_manager = new DX11::VertexManager();
+  PerfQueryBase* const perf_query = new DX11::PerfQuery();
+  BoundingBox* const bounding_box = new DX11::D3DBoundingBox();
 
-  if(d3d11->InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
-                             std::move(bounding_box)))
+  if (d3d11->InitializeShared(gfx, vertex_manager, perf_query, bounding_box))
     g_context_status.MarkInitialized();
 }
 #endif
@@ -522,22 +525,22 @@ void ContextReset(void)
     UpdateActiveConfig();
 
     s_gpu_wanted = Config::Get(Config::MAIN_CPU_THREAD);
-    std::unique_ptr<DX12Output> output = std::make_unique<DX12Output>(
+    DX12Output* const output = new DX12Output(
         d3d12, GetAdjustedBaseWidth() * efbScale, GetAdjustedBaseHeight() * efbScale,
         s_gpu_wanted);
     if (!output->Create())
     {
+      delete output;
       DX12::DXContext::Destroy();
       return;
     }
 
-    auto gfx = std::make_unique<DX12::Gfx>(std::move(output), wsi.render_surface_scale);
-    auto vertex_manager = std::make_unique<DX12::VertexManager>();
-    auto perf_query = std::make_unique<DX12::PerfQuery>();
-    auto bounding_box = std::make_unique<DX12::D3D12BoundingBox>();
+    AbstractGfx* const gfx = new DX12::Gfx(output, wsi.render_surface_scale);
+    VertexManagerBase* const vertex_manager = new DX12::VertexManager();
+    PerfQueryBase* const perf_query = new DX12::PerfQuery();
+    BoundingBox* const bounding_box = new DX12::D3D12BoundingBox();
 
-    if(!g_video_backend->InitializeShared(std::move(gfx), std::move(vertex_manager), 
-                                         std::move(perf_query), std::move(bounding_box)))
+    if (!g_video_backend->InitializeShared(gfx, vertex_manager, perf_query, bounding_box))
     {
       ERROR_LOG_FMT(VIDEO, "Failed to initialize shared components");
       DX12::DXContext::Destroy();
@@ -575,7 +578,7 @@ bool Video_InitializeBackend()
     UpdateActiveConfig();
 
     // Remaining classes are also dependent on object cache.
-    Vulkan::g_object_cache = std::make_unique<Vulkan::ObjectCache>();
+    Vulkan::g_object_cache = new Vulkan::ObjectCache();
     if (!Vulkan::g_object_cache->Initialize())
     {
       PanicAlertFmt("Failed to initialize Vulkan object cache.");
@@ -583,7 +586,7 @@ bool Video_InitializeBackend()
     }
 
     // Create command buffers. We do this separately because the other classes depend on it.
-    Vulkan::g_command_buffer_mgr = std::make_unique<Vulkan::CommandBufferManager>(g_Config.bBackendMultithreading);
+    Vulkan::g_command_buffer_mgr = new Vulkan::CommandBufferManager(g_Config.bBackendMultithreading);
     if (!Vulkan::g_command_buffer_mgr->Initialize())
     {
       PanicAlertFmt("Failed to create Vulkan command buffers");
@@ -599,19 +602,21 @@ bool Video_InitializeBackend()
     /* where the picture goes: the frontend's sync images, sized as the
      * frame the frontend was told of */
     s_gpu_wanted = Config::Get(Config::MAIN_CPU_THREAD);
-    std::unique_ptr<VKOutput> output = std::make_unique<VKOutput>(
+    VKOutput* const output = new VKOutput(
         Vk::GetHWRenderInterface(), GetAdjustedBaseWidth() * efbScale,
         GetAdjustedBaseHeight() * efbScale, s_gpu_wanted);
     if (!output->Create())
+    {
+      delete output;
       return false;
+    }
 
-    auto gfx = std::make_unique<Vulkan::VKGfx>(std::move(output), wsi.render_surface_scale);
-    auto vertex_manager = std::make_unique<Vulkan::VertexManager>();
-    auto perf_query = std::make_unique<Vulkan::PerfQuery>();
-    auto bounding_box = std::make_unique<Vulkan::VKBoundingBox>();
+    AbstractGfx* const gfx = new Vulkan::VKGfx(output, wsi.render_surface_scale);
+    VertexManagerBase* const vertex_manager = new Vulkan::VertexManager();
+    PerfQueryBase* const perf_query = new Vulkan::PerfQuery();
+    BoundingBox* const bounding_box = new Vulkan::VKBoundingBox();
 
-    return g_video_backend->InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
-                                             std::move(bounding_box));
+    return g_video_backend->InitializeShared(gfx, vertex_manager, perf_query, bounding_box);
   }
 #endif
 
@@ -641,7 +646,7 @@ void ContextDestroy(void)
   if (g_gfx &&
       Config::Get(Config::MAIN_GFX_BACKEND) == "OGL")
   {
-    static_cast<OGL::OGLGfx*>(g_gfx.get())->SetSystemFrameBuffer(0);
+    static_cast<OGL::OGLGfx*>(g_gfx)->SetSystemFrameBuffer(0);
   }
 #endif
 
@@ -671,7 +676,8 @@ void ContextDestroy(void)
     DX11::D3D::device = nullptr;
     DX11::D3D::device1 = nullptr;
     DX11::D3D::context = nullptr;
-    DX11::D3D::stateman.reset();
+    delete DX11::D3D::stateman;
+    DX11::D3D::stateman = nullptr;
 #endif
     break;
   case RETRO_HW_CONTEXT_VULKAN:

@@ -29,8 +29,8 @@
 
 namespace Vulkan
 {
-VKGfx::VKGfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
-    : m_output(std::move(output)), m_backbuffer_scale(backbuffer_scale)
+VKGfx::VKGfx(FrameOutput* output, float backbuffer_scale)
+    : m_output(output), m_backbuffer_scale(backbuffer_scale)
 {
   g_video_backend_kind = VIDEO_BACKEND_VULKAN;
   UpdateActiveConfig();
@@ -42,7 +42,10 @@ VKGfx::VKGfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale)
   ExecuteCommandBuffer(true, false);
 }
 
-VKGfx::~VKGfx() = default;
+VKGfx::~VKGfx()
+{
+  FrameOutputDelete(m_output);
+}
 
 bool VKGfx::IsHeadless() const
 {

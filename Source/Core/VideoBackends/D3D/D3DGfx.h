@@ -20,7 +20,7 @@ class DXFramebuffer;
 class Gfx final : public ::AbstractGfx
 {
 public:
-  Gfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale);
+  Gfx(FrameOutput* output, float backbuffer_scale);
   ~Gfx();
 
   StateCache& GetStateCache() { return m_state_cache; }
@@ -81,6 +81,6 @@ private:
   D3D11_VIEWPORT m_viewport = {};
   D3D11_RECT m_scissor = {};
   float m_backbuffer_scale;
-  std::unique_ptr<FrameOutput> m_output;
+  FrameOutput* m_output;  // owned
 };
 }  // namespace DX11

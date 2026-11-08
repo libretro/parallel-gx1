@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include "Common/MathUtil.h"
 
 #include "VideoCommon/TextureCacheBase.h"
@@ -201,4 +199,4 @@ private:
 
 }  // namespace VideoCommon
 
-extern std::unique_ptr<VideoCommon::Presenter> g_presenter;
+extern VideoCommon::Presenter* g_presenter;

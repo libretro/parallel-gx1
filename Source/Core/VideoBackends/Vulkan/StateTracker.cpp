@@ -16,7 +16,7 @@
 
 namespace Vulkan
 {
-static std::unique_ptr<StateTracker> s_state_tracker;
+static StateTracker* s_state_tracker = nullptr;
 
 StateTracker::StateTracker() = default;
 
@@ -24,16 +24,17 @@ StateTracker::~StateTracker() = default;
 
 StateTracker* StateTracker::GetInstance()
 {
-  return s_state_tracker.get();
+  return s_state_tracker;
 }
 
 bool StateTracker::CreateInstance()
 {
   ASSERT(!s_state_tracker);
-  s_state_tracker = std::make_unique<StateTracker>();
+  s_state_tracker = new StateTracker();
   if (!s_state_tracker->Initialize())
   {
-    s_state_tracker.reset();
+    delete s_state_tracker;
+    s_state_tracker = nullptr;
     return false;
   }
   return true;
@@ -55,7 +56,8 @@ void StateTracker::DestroyInstance()
   delete s_state_tracker->m_dummy_compute_texture;
   s_state_tracker->m_dummy_compute_texture = nullptr;
 
-  s_state_tracker.reset();
+  delete s_state_tracker;
+  s_state_tracker = nullptr;
 }
 
 bool StateTracker::Initialize()

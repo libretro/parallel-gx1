@@ -29,7 +29,7 @@
 // Maximum number of pixels poked in one batch * 6
 constexpr size_t MAX_POKE_VERTICES = 32768;
 
-std::unique_ptr<FramebufferManager> g_framebuffer_manager;
+FramebufferManager* g_framebuffer_manager = nullptr;
 
 FramebufferManager::FramebufferManager() : m_prev_efb_format(PixelFormat::INVALID_FMT)
 {

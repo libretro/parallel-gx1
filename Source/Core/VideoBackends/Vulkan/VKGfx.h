@@ -24,10 +24,10 @@ class VKTexture;
 class VKGfx final : public ::AbstractGfx
 {
 public:
-  VKGfx(std::unique_ptr<FrameOutput> output, float backbuffer_scale);
+  VKGfx(FrameOutput* output, float backbuffer_scale);
   ~VKGfx();
 
-  static VKGfx* GetInstance() { return static_cast<VKGfx*>(g_gfx.get()); }
+  static VKGfx* GetInstance() { return static_cast<VKGfx*>(g_gfx); }
 
   bool IsHeadless() const;
 
@@ -92,7 +92,7 @@ private:
 
   void BindFramebuffer(VKFramebuffer* fb);
 
-  std::unique_ptr<FrameOutput> m_output;
+  FrameOutput* m_output;  // owned
   float m_backbuffer_scale;
 
   // Keep a copy of sampler states to avoid cache lookups every draw

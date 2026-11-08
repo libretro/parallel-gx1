@@ -382,11 +382,11 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
       const auto color_ar = bpmem.clearcolorAR;
       const auto color_gb = bpmem.clearcolorGB;
       const auto z_value = bpmem.clearZValue;
-      ClearScreen(g_framebuffer_manager.get(), srcRect, color_enable, alpha_enable, z_enable,
+      ClearScreen(g_framebuffer_manager, srcRect, color_enable, alpha_enable, z_enable,
                   pixel_format, color_ar, color_gb, z_value);
 
       // Scissor rect must be restored.
-      BPFunctions::SetScissorAndViewport(g_framebuffer_manager.get(), bpmem.scissorTL,
+      BPFunctions::SetScissorAndViewport(g_framebuffer_manager, bpmem.scissorTL,
                                          bpmem.scissorBR, bpmem.scissorOffset, xfmem.viewport);
     }
 
@@ -526,7 +526,7 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     return;
 
   case BPMEM_ZCOMPARE:  // Set the Z-Compare and EFB pixel format
-    OnPixelFormatChange(g_framebuffer_manager.get(), bpmem.zcontrol.pixel_format,
+    OnPixelFormatChange(g_framebuffer_manager, bpmem.zcontrol.pixel_format,
                         bpmem.zcontrol.zformat);
     if (bp.changes & 7)
       SetBlendMode();  // dual source could be activated by changing to PIXELFMT_RGBA6_Z24
@@ -1352,10 +1352,10 @@ void BPReload()
   // let's not risk actually replaying any writes.
   // note that PixelShaderManager is already covered since it has its own DoState.
   SetGenerationMode();
-  BPFunctions::SetScissorAndViewport(g_framebuffer_manager.get(), bpmem.scissorTL, bpmem.scissorBR,
+  BPFunctions::SetScissorAndViewport(g_framebuffer_manager, bpmem.scissorTL, bpmem.scissorBR,
                                      bpmem.scissorOffset, xfmem.viewport);
   SetDepthMode();
   SetBlendMode();
-  OnPixelFormatChange(g_framebuffer_manager.get(), bpmem.zcontrol.pixel_format,
+  OnPixelFormatChange(g_framebuffer_manager, bpmem.zcontrol.pixel_format,
                       bpmem.zcontrol.zformat);
 }

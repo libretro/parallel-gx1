@@ -43,5 +43,5 @@ private:
   GLuint m_linear_sampler;
 };
 
-extern std::unique_ptr<SamplerCache> g_sampler_cache;
+extern SamplerCache* g_sampler_cache;
 }  // namespace OGL

@@ -11,7 +11,7 @@
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexManagerBase.h"
 
-std::unique_ptr<WidescreenManager> g_widescreen;
+WidescreenManager* g_widescreen = nullptr;
 
 WidescreenManager::WidescreenManager()
 {

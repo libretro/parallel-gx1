@@ -35,8 +35,10 @@
 #define OUTPUT_VULKAN_CASE(call)
 #endif
 
-void std::default_delete<FrameOutput>::operator()(FrameOutput* object) const
+void FrameOutputDelete(FrameOutput* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
 #ifdef _WIN32
@@ -477,7 +479,7 @@ void DX11Output::Present()
 
     RefreshNow(m_width, m_height);
 
-    static_cast<DX11::Gfx*>(g_gfx.get())->RestoreContext();
+    static_cast<DX11::Gfx*>(g_gfx)->RestoreContext();
   }
 }
 

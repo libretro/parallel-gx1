@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include <array>
 #include <filesystem>
 #include <fmt/format.h>
@@ -622,4 +620,4 @@ private:
   VideoCommon::TextureUtils::TextureDumper m_texture_dumper;
 };
 
-extern std::unique_ptr<TextureCacheBase> g_texture_cache;
+extern TextureCacheBase* g_texture_cache;

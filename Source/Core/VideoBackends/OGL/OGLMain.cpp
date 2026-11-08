@@ -202,16 +202,15 @@ bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
   if (!FillBackendInfo(main_gl_context.get()))
     return false;
 
-  auto gfx = std::make_unique<OGLGfx>(std::move(main_gl_context), wsi.render_surface_scale);
+  OGLGfx* const gfx = new OGLGfx(std::move(main_gl_context), wsi.render_surface_scale);
   ProgramShaderCache::Init();
-  g_sampler_cache = std::make_unique<SamplerCache>();
+  g_sampler_cache = new SamplerCache();
 
-  auto vertex_manager = std::make_unique<VertexManager>();
-  auto perf_query = std::make_unique<PerfQuery>(gfx->IsGLES());
-  auto bounding_box = std::make_unique<OGLBoundingBox>();
+  VertexManagerBase* const vertex_manager = new VertexManager();
+  PerfQueryBase* const perf_query = new PerfQuery(gfx->IsGLES());
+  BoundingBox* const bounding_box = new OGLBoundingBox();
 
-  return InitializeShared(std::move(gfx), std::move(vertex_manager), std::move(perf_query),
-                          std::move(bounding_box));
+  return InitializeShared(gfx, vertex_manager, perf_query, bounding_box);
 }
 
 void VideoBackend::Shutdown()
@@ -219,6 +218,7 @@ void VideoBackend::Shutdown()
   ShutdownShared();
 
   ProgramShaderCache::Shutdown();
-  g_sampler_cache.reset();
+  delete g_sampler_cache;
+  g_sampler_cache = nullptr;
 }
 }  // namespace OGL

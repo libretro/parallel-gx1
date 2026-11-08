@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include <memory>
 #include <optional>
 #include <string>
@@ -66,10 +64,10 @@ public:
   void DoState(PointerWrap& p);
 
   // Every backend, with its own gfx, vertex manager, perf query and bounding box
-  bool InitializeShared(std::unique_ptr<AbstractGfx> gfx,
-                        std::unique_ptr<VertexManagerBase> vertex_manager,
-                        std::unique_ptr<PerfQueryBase> perf_query,
-                        std::unique_ptr<BoundingBox> bounding_box);
+  bool InitializeShared(AbstractGfx* gfx,
+                        VertexManagerBase* vertex_manager,
+                        PerfQueryBase* perf_query,
+                        BoundingBox* bounding_box);
   void ShutdownShared();
 
 protected:

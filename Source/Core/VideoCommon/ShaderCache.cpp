@@ -29,7 +29,7 @@
 #include "VideoCommon/VideoConfig.h"
 
 
-std::unique_ptr<VideoCommon::ShaderCache> g_shader_cache;
+VideoCommon::ShaderCache* g_shader_cache = nullptr;
 
 namespace VideoCommon
 {

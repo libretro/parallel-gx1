@@ -8,8 +8,6 @@
 #include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
-#include "VideoCommon/AbstractDeleters.h"
-
 enum PerfQueryType
 {
   PQ_ZCOMP_INPUT_ZCOMPLOC = 0,
@@ -109,4 +107,7 @@ protected:
   retro_atomic_int_t m_results[PQG_NUM_MEMBERS]{};
 };
 
-extern std::unique_ptr<PerfQueryBase> g_perf_query;
+/* Deletes a query as the backend's own class; NULL is let be. */
+void PerfQueryBaseDelete(PerfQueryBase* query);
+
+extern PerfQueryBase* g_perf_query;

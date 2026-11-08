@@ -7,7 +7,7 @@
 
 #include "VideoCommon/VideoConfig.h"
 
-std::unique_ptr<PerfQueryBase> g_perf_query;
+PerfQueryBase* g_perf_query = nullptr;
 
 bool PerfQueryBase::ShouldEmulate()
 {

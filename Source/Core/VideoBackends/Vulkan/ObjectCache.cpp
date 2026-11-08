@@ -21,7 +21,7 @@
 
 namespace Vulkan
 {
-std::unique_ptr<ObjectCache> g_object_cache;
+ObjectCache* g_object_cache = nullptr;
 
 ObjectCache::ObjectCache() = default;
 

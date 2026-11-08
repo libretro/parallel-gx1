@@ -23,7 +23,7 @@
 #include "VideoCommon/VideoEvents.h"
 #include "VideoCommon/Widescreen.h"
 
-std::unique_ptr<VideoCommon::Presenter> g_presenter;
+VideoCommon::Presenter* g_presenter = nullptr;
 
 namespace VideoCommon
 {

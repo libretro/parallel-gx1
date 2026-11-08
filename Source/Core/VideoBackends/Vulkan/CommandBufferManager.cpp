@@ -493,5 +493,5 @@ void CommandBufferManager::DeferImageViewDestruction(VkImageView object)
       [object] { vkDestroyImageView(g_vulkan_context->GetDevice(), object, nullptr); });
 }
 
-std::unique_ptr<CommandBufferManager> g_command_buffer_mgr;
+CommandBufferManager* g_command_buffer_mgr = nullptr;
 }  // namespace Vulkan

@@ -21,7 +21,7 @@ public:
   PerfQuery();
   ~PerfQuery();
 
-  static PerfQuery* GetInstance() { return static_cast<PerfQuery*>(g_perf_query.get()); }
+  static PerfQuery* GetInstance() { return static_cast<PerfQuery*>(g_perf_query); }
 
   bool Initialize();
 

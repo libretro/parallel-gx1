@@ -70,7 +70,7 @@ static const int TEXTURE_POOL_KILL_THRESHOLD = 3;
 
 static int xfb_count = 0;
 
-std::unique_ptr<TextureCacheBase> g_texture_cache;
+TextureCacheBase* g_texture_cache = nullptr;
 
 TCacheEntry::TCacheEntry(AbstractTexture* tex, AbstractFramebuffer* fb)
     : texture(tex), framebuffer(fb)

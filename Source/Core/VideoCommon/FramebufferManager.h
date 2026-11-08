@@ -242,4 +242,4 @@ protected:
   Common::EventHook m_end_of_frame_event;
 };
 
-extern std::unique_ptr<FramebufferManager> g_framebuffer_manager;
+extern FramebufferManager* g_framebuffer_manager;

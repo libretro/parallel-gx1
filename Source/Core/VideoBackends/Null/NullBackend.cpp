@@ -65,8 +65,12 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
 
 bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
 {
-  return InitializeShared(std::make_unique<NullGfx>(), std::make_unique<VertexManager>(),
-                          std::make_unique<PerfQueryBase>(), std::make_unique<BoundingBox>());
+  AbstractGfx* const gfx = new NullGfx();
+  VertexManagerBase* const vertex_manager = new VertexManager();
+  PerfQueryBase* const perf_query = new PerfQueryBase();
+  BoundingBox* const bounding_box = new BoundingBox();
+
+  return InitializeShared(gfx, vertex_manager, perf_query, bounding_box);
 }
 
 void VideoBackend::Shutdown()

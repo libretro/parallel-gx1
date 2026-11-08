@@ -80,9 +80,12 @@ bool VideoSoftware::Initialize(const WindowSystemInfo& wsi)
   Clipper::Init();
   Rasterizer::Init();
 
-  return InitializeShared(std::make_unique<SWGfx>(),
-                          std::make_unique<SWVertexLoader>(), std::make_unique<PerfQuery>(),
-                          std::make_unique<SWBoundingBox>());
+  AbstractGfx* const gfx = new SWGfx();
+  VertexManagerBase* const vertex_manager = new SWVertexLoader();
+  PerfQueryBase* const perf_query = new PerfQuery();
+  BoundingBox* const bounding_box = new SWBoundingBox();
+
+  return InitializeShared(gfx, vertex_manager, perf_query, bounding_box);
 }
 
 void VideoSoftware::Shutdown()

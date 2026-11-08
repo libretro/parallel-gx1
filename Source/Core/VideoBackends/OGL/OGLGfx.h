@@ -120,7 +120,7 @@ private:
 
 inline OGLGfx* GetOGLGfx()
 {
-  return static_cast<OGLGfx*>(g_gfx.get());
+  return static_cast<OGLGfx*>(g_gfx);
 }
 
 }  // namespace OGL

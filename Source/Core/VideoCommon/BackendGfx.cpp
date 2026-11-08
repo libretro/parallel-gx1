@@ -28,8 +28,10 @@
 #include "VideoBackends/D3D12/D3D12Gfx.h"
 #endif
 
-void std::default_delete<AbstractGfx>::operator()(AbstractGfx* object) const
+void AbstractGfxDelete(AbstractGfx* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:

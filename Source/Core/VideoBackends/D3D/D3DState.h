@@ -293,7 +293,7 @@ private:
   ID3D11ComputeShader* m_compute_shader = nullptr;
 };
 
-extern std::unique_ptr<StateManager> stateman;
+extern StateManager* stateman;
 
 }  // namespace D3D
 

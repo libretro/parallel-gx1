@@ -107,6 +107,6 @@ private:
   std::string m_pipeline_cache_filename;
 };
 
-extern std::unique_ptr<ObjectCache> g_object_cache;
+extern ObjectCache* g_object_cache;
 
 }  // namespace Vulkan

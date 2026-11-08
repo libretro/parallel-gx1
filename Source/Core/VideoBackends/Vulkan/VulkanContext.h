@@ -85,9 +85,9 @@ public:
   // Creates a Vulkan device context.
   // This assumes that PopulateBackendInfo and PopulateBackendInfoAdapters has already
   // been called for the specified VideoConfig.
-  static std::unique_ptr<VulkanContext> Create(VkInstance instance, VkPhysicalDevice gpu,
-                                               VkSurfaceKHR surface, bool enable_debug_utils,
-                                               bool enable_validation_layer, u32 api_version);
+  static VulkanContext* Create(VkInstance instance, VkPhysicalDevice gpu, VkSurfaceKHR surface,
+                               bool enable_debug_utils, bool enable_validation_layer,
+                               u32 api_version);
 
   // Enable/disable debug message runtime.
   bool EnableDebugUtils();
@@ -168,6 +168,6 @@ private:
   bool m_fast_linking = false;
 };
 
-extern std::unique_ptr<VulkanContext> g_vulkan_context;
+extern VulkanContext* g_vulkan_context;
 
 }  // namespace Vulkan

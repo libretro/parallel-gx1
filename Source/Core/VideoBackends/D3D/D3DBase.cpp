@@ -28,7 +28,8 @@ D3D_FEATURE_LEVEL feature_level;
 
 void Destroy()
 {
-  stateman.reset();
+  delete stateman;
+  stateman = nullptr;
 
   if (context)
   {

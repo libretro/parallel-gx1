@@ -7,8 +7,6 @@
 #include <memory>
 
 #include "Common/CommonTypes.h"
-#include "VideoCommon/AbstractDeleters.h"
-
 class PixelShaderManager;
 class PointerWrap;
 
@@ -64,4 +62,7 @@ private:
   std::array<u16, 4> m_bounding_box_fallback = {};
 };
 
-extern std::unique_ptr<BoundingBox> g_bounding_box;
+/* Deletes a bounding box as the backend's own class; NULL is let be. */
+void BoundingBoxDelete(BoundingBox* bounding_box);
+
+extern BoundingBox* g_bounding_box;

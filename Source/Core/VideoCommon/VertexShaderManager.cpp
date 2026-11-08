@@ -457,7 +457,7 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
     }
 
     dirty = true;
-    BPFunctions::SetScissorAndViewport(g_framebuffer_manager.get(), bpmem.scissorTL,
+    BPFunctions::SetScissorAndViewport(g_framebuffer_manager, bpmem.scissorTL,
                                        bpmem.scissorBR, bpmem.scissorOffset, xfmem.viewport);
     g_stats.AddScissorRect();
   }
