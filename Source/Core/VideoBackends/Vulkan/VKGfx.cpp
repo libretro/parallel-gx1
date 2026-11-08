@@ -61,14 +61,14 @@ std::unique_ptr<AbstractStagingTexture> VKGfx::CreateStagingTexture(StagingTextu
   return VKStagingTexture::Create(type, config);
 }
 
-std::unique_ptr<AbstractShader>
+AbstractShader*
 VKGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                               std::string_view name)
 {
   return VKShader::CreateFromSource(stage, source, name);
 }
 
-std::unique_ptr<AbstractShader> VKGfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
+AbstractShader* VKGfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                               size_t length, std::string_view name)
 {
   return VKShader::CreateFromBinary(stage, data, length, name);
@@ -80,7 +80,7 @@ VKGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
   return std::make_unique<VertexFormat>(vtx_decl);
 }
 
-std::unique_ptr<AbstractPipeline> VKGfx::CreatePipeline(const AbstractPipelineConfig& config,
+AbstractPipeline* VKGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                         const void* cache_data,
                                                         size_t cache_data_length)
 {

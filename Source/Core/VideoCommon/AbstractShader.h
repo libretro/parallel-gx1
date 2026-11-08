@@ -3,11 +3,7 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include <cstddef>
-#include <memory>
-#include <string>
 
 #include "Common/CommonTypes.h"
 
@@ -34,3 +30,6 @@ public:
 protected:
   ShaderStage m_stage;
 };
+
+/* Deletes a shader as the backend's own class; NULL is let be. */
+void AbstractShaderDelete(AbstractShader* shader);

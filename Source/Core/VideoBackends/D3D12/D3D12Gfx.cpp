@@ -70,14 +70,14 @@ Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth
                                std::move(additional_color_attachments));
 }
 
-std::unique_ptr<AbstractShader>
+AbstractShader*
 Gfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                             std::string_view name)
 {
   return DXShader::CreateFromSource(stage, source, name);
 }
 
-std::unique_ptr<AbstractShader> Gfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
+AbstractShader* Gfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                             size_t length, std::string_view name)
 {
   ShaderBinary bytecode;
@@ -92,7 +92,7 @@ Gfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
   return std::make_unique<DXVertexFormat>(vtx_decl);
 }
 
-std::unique_ptr<AbstractPipeline> Gfx::CreatePipeline(const AbstractPipelineConfig& config,
+AbstractPipeline* Gfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                       const void* cache_data,
                                                       size_t cache_data_length)
 {

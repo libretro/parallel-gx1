@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -151,7 +150,7 @@ protected:
     std::unique_ptr<AbstractTexture> texture;
     std::unique_ptr<AbstractFramebuffer> framebuffer;
     std::unique_ptr<AbstractStagingTexture> readback_texture;
-    std::unique_ptr<AbstractPipeline> copy_pipeline;
+    AbstractPipeline* copy_pipeline;
     std::vector<EFBCacheTile> tiles;
     bool out_of_date;
     bool has_active_tiles;
@@ -206,14 +205,14 @@ protected:
   std::unique_ptr<AbstractFramebuffer> m_efb_convert_framebuffer;
   std::unique_ptr<AbstractFramebuffer> m_efb_color_resolve_framebuffer;
   std::unique_ptr<AbstractFramebuffer> m_efb_depth_resolve_framebuffer;
-  std::unique_ptr<AbstractPipeline> m_efb_color_resolve_pipeline;
-  std::unique_ptr<AbstractPipeline> m_efb_depth_resolve_pipeline;
+  AbstractPipeline* m_efb_color_resolve_pipeline = nullptr;
+  AbstractPipeline* m_efb_depth_resolve_pipeline = nullptr;
 
   // Pipeline for restoring the contents of the EFB from a save state
-  std::unique_ptr<AbstractPipeline> m_efb_restore_pipeline;
+  AbstractPipeline* m_efb_restore_pipeline = nullptr;
 
   // Format conversion shaders
-  std::array<std::unique_ptr<AbstractPipeline>, 6> m_format_conversion_pipelines;
+  AbstractPipeline* m_format_conversion_pipelines[6] = {};
 
   // EFB cache - for CPU EFB access (EFB peeks/pokes), not for EFB copies
 
@@ -228,12 +227,12 @@ protected:
 
   // EFB clear pipelines
   // Indexed by [color_write_enabled][alpha_write_enabled][depth_write_enabled]
-  std::array<std::array<std::array<std::unique_ptr<AbstractPipeline>, 2>, 2>, 2> m_clear_pipelines;
+  AbstractPipeline* m_clear_pipelines[2][2][2] = {};
 
   // EFB poke drawing setup
   std::unique_ptr<NativeVertexFormat> m_poke_vertex_format;
-  std::unique_ptr<AbstractPipeline> m_color_poke_pipeline;
-  std::unique_ptr<AbstractPipeline> m_depth_poke_pipeline;
+  AbstractPipeline* m_color_poke_pipeline = nullptr;
+  AbstractPipeline* m_depth_poke_pipeline = nullptr;
   // the pokes batched to draw, room for MAX_POKE_VERTICES once the game pokes
   EFBPokeVertex* m_color_poke_vertices = nullptr;
   EFBPokeVertex* m_depth_poke_vertices = nullptr;

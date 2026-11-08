@@ -18,17 +18,20 @@ DXShader::DXShader(ShaderStage stage, ShaderBinary bytecode, std::string_view na
 
 DXShader::~DXShader() = default;
 
-std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
+DXShader* DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
                                                        std::string_view name)
 {
-  std::unique_ptr<DXShader> shader(new DXShader(stage, bytecode, name));
+  DXShader* shader = new DXShader(stage, bytecode, name);
   if (stage == ShaderStage::Compute && !shader->CreateComputePipeline())
+  {
+    delete shader;
     return nullptr;
+  }
 
   return shader;
 }
 
-std::unique_ptr<DXShader> DXShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
+DXShader* DXShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                      std::string_view name)
 {
   ShaderBinary bytecode;

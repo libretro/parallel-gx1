@@ -35,7 +35,7 @@ public:
   }
 
   /* Takes the source's text: the shader keeps it for its link's messages. */
-  static std::unique_ptr<OGLShader> CreateFromSource(ShaderStage stage, ShaderCode* source,
+  static OGLShader* CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                      std::string_view name);
 
 private:

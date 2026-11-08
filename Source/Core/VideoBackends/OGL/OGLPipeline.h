@@ -33,7 +33,7 @@ public:
     ProgramShaderCache::FinishLink(m_program, false);
     return m_program->link_pending;
   }
-  static std::unique_ptr<OGLPipeline> Create(const AbstractPipelineConfig& config,
+  static OGLPipeline* Create(const AbstractPipelineConfig& config,
                                              const void* cache_data, size_t cache_data_size);
 
 private:

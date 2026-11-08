@@ -59,7 +59,7 @@ OGLShader::~OGLShader()
     glDeleteProgram(m_gl_compute_program_id);
 }
 
-std::unique_ptr<OGLShader> OGLShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
+OGLShader* OGLShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                        std::string_view name)
 {
   std::string name_str(name);
@@ -70,7 +70,7 @@ std::unique_ptr<OGLShader> OGLShader::CreateFromSource(ShaderStage stage, Shader
     if (!shader_id)
       return nullptr;
 
-    return std::make_unique<OGLShader>(stage, shader_type, shader_id, source->Release(),
+    return new OGLShader(stage, shader_type, shader_id, source->Release(),
                                        std::move(name_str));
   }
 
@@ -78,7 +78,7 @@ std::unique_ptr<OGLShader> OGLShader::CreateFromSource(ShaderStage stage, Shader
   SHADER prog;
   if (!ProgramShaderCache::CompileComputeShader(prog, source->GetBuffer()))
     return nullptr;
-  return std::make_unique<OGLShader>(prog.glprogid, source->Release(), std::move(name_str));
+  return new OGLShader(prog.glprogid, source->Release(), std::move(name_str));
 }
 
 }  // namespace OGL

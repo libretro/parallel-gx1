@@ -30,7 +30,7 @@ DXPipeline::DXPipeline(const AbstractPipelineConfig& config, ID3D11InputLayout* 
 
 DXPipeline::~DXPipeline() = default;
 
-std::unique_ptr<DXPipeline> DXPipeline::Create(const AbstractPipelineConfig& config)
+DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config)
 {
   StateCache& state_cache = static_cast<Gfx*>(g_gfx.get())->GetStateCache();
   ID3D11RasterizerState* rasterizer_state = state_cache.Get(config.rasterization_state);
@@ -57,7 +57,7 @@ std::unique_ptr<DXPipeline> DXPipeline::Create(const AbstractPipelineConfig& con
   const bool use_logic_op =
       config.blending_state.logic_op_enable && g_backend_info.bSupportsLogicOp;
 
-  return std::make_unique<DXPipeline>(config, input_layout, vertex_shader->GetD3DVertexShader(),
+  return new DXPipeline(config, input_layout, vertex_shader->GetD3DVertexShader(),
                                       geometry_shader ? geometry_shader->GetD3DGeometryShader() :
                                                         nullptr,
                                       pixel_shader->GetD3DPixelShader(), rasterizer_state,

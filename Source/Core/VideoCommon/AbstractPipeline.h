@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include <cstddef>
 #include <string>
 #include <utility>
@@ -93,3 +91,6 @@ public:
   // Whether its compile is still running; once not, IsReady tells whether it succeeded.
   bool IsBuilding() const;
 };
+
+/* Deletes a pipeline as the backend's own class; NULL is let be. */
+void AbstractPipelineDelete(AbstractPipeline* pipeline);

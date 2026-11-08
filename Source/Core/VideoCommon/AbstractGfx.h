@@ -111,23 +111,23 @@ public:
 
   // Shader modules/objects. The source's text is the backend's to write its header in front
   // of, or to take.
-  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
+  AbstractShader* CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                                                          std::string_view name = "");
-  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, ShaderCode& source,
+  AbstractShader* CreateShaderFromSource(ShaderStage stage, ShaderCode& source,
                                                          std::string_view name = "")
   {
     return CreateShaderFromSource(stage, &source, name);
   }
-  std::unique_ptr<AbstractShader> CreateShaderFromSource(ShaderStage stage, ShaderCode&& source,
+  AbstractShader* CreateShaderFromSource(ShaderStage stage, ShaderCode&& source,
                                                          std::string_view name = "")
   {
     return CreateShaderFromSource(stage, &source, name);
   }
-  std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
+  AbstractShader* CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length, std::string_view name = "");
   std::unique_ptr<NativeVertexFormat>
   CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl);
-  std::unique_ptr<AbstractPipeline> CreatePipeline(const AbstractPipelineConfig& config,
+  AbstractPipeline* CreatePipeline(const AbstractPipelineConfig& config,
                                                    const void* cache_data = nullptr,
                                                    size_t cache_data_length = 0);
 

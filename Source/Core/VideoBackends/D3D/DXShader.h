@@ -26,7 +26,7 @@ public:
   ID3D11ComputeShader* GetD3DComputeShader() const;
 
   /* Takes the bytecode's block: the shader keeps it, or it is freed. */
-  static std::unique_ptr<DXShader> CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
+  static DXShader* CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
                                                       std::string_view name);
 
 private:

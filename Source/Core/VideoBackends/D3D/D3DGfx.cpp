@@ -71,7 +71,7 @@ Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth
                                std::move(additional_color_attachments));
 }
 
-std::unique_ptr<AbstractShader>
+AbstractShader*
 Gfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                             std::string_view name)
 {
@@ -82,7 +82,7 @@ Gfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
   return DXShader::CreateFromBytecode(stage, bytecode, name);
 }
 
-std::unique_ptr<AbstractShader> Gfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
+AbstractShader* Gfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                             size_t length, std::string_view name)
 {
   ShaderBinary bytecode;
@@ -91,7 +91,7 @@ std::unique_ptr<AbstractShader> Gfx::CreateShaderFromBinary(ShaderStage stage, c
   return DXShader::CreateFromBytecode(stage, bytecode, name);
 }
 
-std::unique_ptr<AbstractPipeline> Gfx::CreatePipeline(const AbstractPipelineConfig& config,
+AbstractPipeline* Gfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                       const void* cache_data,
                                                       size_t cache_data_length)
 {

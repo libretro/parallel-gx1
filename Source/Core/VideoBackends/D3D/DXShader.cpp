@@ -46,7 +46,7 @@ ID3D11ComputeShader* DXShader::GetD3DComputeShader() const
   return static_cast<ID3D11ComputeShader*>(m_shader.Get());
 }
 
-std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
+DXShader* DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
                                                        std::string_view name)
 {
   switch (stage)
@@ -62,7 +62,7 @@ std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, Shader
       return nullptr;
     }
 
-    return std::make_unique<DXShader>(ShaderStage::Vertex, bytecode, vs.Get(), name);
+    return new DXShader(ShaderStage::Vertex, bytecode, vs.Get(), name);
   }
 
   case ShaderStage::Geometry:
@@ -76,7 +76,7 @@ std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, Shader
       return nullptr;
     }
 
-    return std::make_unique<DXShader>(ShaderStage::Geometry, bytecode, gs.Get(), name);
+    return new DXShader(ShaderStage::Geometry, bytecode, gs.Get(), name);
   }
   break;
 
@@ -91,7 +91,7 @@ std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, Shader
       return nullptr;
     }
 
-    return std::make_unique<DXShader>(ShaderStage::Pixel, bytecode, ps.Get(), name);
+    return new DXShader(ShaderStage::Pixel, bytecode, ps.Get(), name);
   }
   break;
 
@@ -106,7 +106,7 @@ std::unique_ptr<DXShader> DXShader::CreateFromBytecode(ShaderStage stage, Shader
       return nullptr;
     }
 
-    return std::make_unique<DXShader>(ShaderStage::Compute, bytecode, cs.Get(), name);
+    return new DXShader(ShaderStage::Compute, bytecode, cs.Get(), name);
   }
   break;
 

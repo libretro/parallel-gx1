@@ -325,7 +325,23 @@ ShaderCode VertexShaderSource()
 }  // namespace
 
 PostProcessing::PostProcessing() = default;
-PostProcessing::~PostProcessing() = default;
+PostProcessing::~PostProcessing()
+{
+  DestroyPipelines();
+  AbstractShaderDelete(m_correction_pixel_shader);
+  AbstractShaderDelete(m_copy_pixel_shader);
+  AbstractShaderDelete(m_vertex_shader);
+}
+
+void PostProcessing::DestroyPipelines()
+{
+  AbstractPipelineDelete(m_copy_pipeline);
+  m_copy_pipeline = nullptr;
+  AbstractPipelineDelete(m_correction_pipeline);
+  m_correction_pipeline = nullptr;
+  AbstractPipelineDelete(m_screen_pipeline);
+  m_screen_pipeline = nullptr;
+}
 
 bool PostProcessing::Initialize(AbstractTextureFormat format)
 {
@@ -336,9 +352,7 @@ bool PostProcessing::Initialize(AbstractTextureFormat format)
 
 void PostProcessing::RecompilePipeline()
 {
-  m_copy_pipeline.reset();
-  m_correction_pipeline.reset();
-  m_screen_pipeline.reset();
+  DestroyPipelines();
   CompilePipelines();
 }
 
@@ -362,8 +376,8 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
   // The bilinear sampler does the scaling; colour correction or HDR takes the correction shader.
   const bool needs_correction = IsColorCorrectionActive();
   const AbstractPipeline* pipeline =
-      needs_correction && m_correction_pipeline ? m_correction_pipeline.get() :
-                                                  m_copy_pipeline.get();
+      needs_correction && m_correction_pipeline ? m_correction_pipeline :
+                                                  m_copy_pipeline;
   if (!pipeline)
     return;
 
@@ -402,7 +416,7 @@ void PostProcessing::BlitScreen(const MathUtil::Rectangle<int>& dst,
                                           static_cast<u32>(m_uniform_staging_buffer.size()));
   g_gfx->SetViewportAndScissor(
       g_gfx->ConvertFramebufferRectangle(dst, g_gfx->GetCurrentFramebuffer()));
-  g_gfx->SetPipeline(m_screen_pipeline.get());
+  g_gfx->SetPipeline(m_screen_pipeline);
   g_gfx->Draw(0, 3);
 }
 
@@ -432,7 +446,7 @@ bool PostProcessing::CompilePipelines()
     return true;
 
   AbstractPipelineConfig config = {};
-  config.vertex_shader = m_vertex_shader.get();
+  config.vertex_shader = m_vertex_shader;
   config.rasterization_state = RenderState::GetNoCullRasterizationState(PrimitiveType::Triangles);
   config.depth_state = RenderState::GetNoDepthTestingDepthState();
   config.blending_state = RenderState::GetNoBlendingBlendState();
@@ -441,11 +455,11 @@ bool PostProcessing::CompilePipelines()
 
   if (m_correction_pixel_shader)
   {
-    config.pixel_shader = m_correction_pixel_shader.get();
+    config.pixel_shader = m_correction_pixel_shader;
     m_correction_pipeline = g_gfx->CreatePipeline(config);
   }
 
-  config.pixel_shader = m_copy_pixel_shader.get();
+  config.pixel_shader = m_copy_pixel_shader;
   m_copy_pipeline = g_gfx->CreatePipeline(config);
 
   config.blending_state.alpha_update = false;

@@ -558,7 +558,7 @@ GetVulkanColorBlendState(const BlendingState& state,
   return vk_state;
 }
 
-std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& config)
+VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
 {
   DEBUG_ASSERT(config.vertex_shader && config.pixel_shader);
 
@@ -630,7 +630,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
     shared = SharedFind(&key, hash);
     if (shared)
     {
-      return std::make_unique<VKPipeline>(config, shared->pipeline, pipeline_layout, config.usage,
+      return new VKPipeline(config, shared->pipeline, pipeline_layout, config.usage,
                                           dynamic_bits, dynamic_blend, shared);
     }
   }
@@ -809,7 +809,7 @@ std::unique_ptr<VKPipeline> VKPipeline::Create(const AbstractPipelineConfig& con
     }
   }
 
-  return std::make_unique<VKPipeline>(config, pipeline, pipeline_layout, config.usage,
+  return new VKPipeline(config, pipeline, pipeline_layout, config.usage,
                                       dynamic_bits, dynamic_blend,
                                       dynamic_bits ? SharedInsert(&key, hash, pipeline) : nullptr);
 }

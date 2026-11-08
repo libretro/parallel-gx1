@@ -18,7 +18,7 @@ public:
              D3D12_PRIMITIVE_TOPOLOGY primitive_topology, bool use_integer_rtv);
   ~DXPipeline();
 
-  static std::unique_ptr<DXPipeline> Create(const AbstractPipelineConfig& config,
+  static DXPipeline* Create(const AbstractPipelineConfig& config,
                                             const void* cache_data, size_t cache_data_size);
 
   ID3D12PipelineState* GetPipeline() const { return m_pipeline; }

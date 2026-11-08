@@ -31,15 +31,15 @@ public:
                                                  std::string_view name);
   std::unique_ptr<AbstractStagingTexture>
   CreateStagingTexture(StagingTextureType type, const TextureConfig& config);
-  std::unique_ptr<AbstractShader>
+  AbstractShader*
   CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                          std::string_view name);
-  std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
+  AbstractShader* CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,
                                                          std::string_view name);
   std::unique_ptr<NativeVertexFormat>
   CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl);
-  std::unique_ptr<AbstractPipeline> CreatePipeline(const AbstractPipelineConfig& config,
+  AbstractPipeline* CreatePipeline(const AbstractPipelineConfig& config,
                                                    const void* cache_data = nullptr,
                                                    size_t cache_data_length = 0);
   std::unique_ptr<AbstractFramebuffer>

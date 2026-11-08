@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
-#include <memory>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -39,16 +36,17 @@ private:
   bool IsColorCorrectionActive() const;
   bool CompileShaders();
   bool CompilePipelines();
+  void DestroyPipelines();
   void FillUniformBuffer(const MathUtil::Rectangle<int>& src, const AbstractTexture* src_tex,
                          int src_layer, const MathUtil::Rectangle<int>& dst,
                          const MathUtil::Rectangle<int>& wnd);
 
-  std::unique_ptr<AbstractShader> m_vertex_shader;
-  std::unique_ptr<AbstractShader> m_copy_pixel_shader;
-  std::unique_ptr<AbstractShader> m_correction_pixel_shader;
-  std::unique_ptr<AbstractPipeline> m_copy_pipeline;
-  std::unique_ptr<AbstractPipeline> m_correction_pipeline;
-  std::unique_ptr<AbstractPipeline> m_screen_pipeline;
+  AbstractShader* m_vertex_shader = nullptr;
+  AbstractShader* m_copy_pixel_shader = nullptr;
+  AbstractShader* m_correction_pixel_shader = nullptr;
+  AbstractPipeline* m_copy_pipeline = nullptr;
+  AbstractPipeline* m_correction_pipeline = nullptr;
+  AbstractPipeline* m_screen_pipeline = nullptr;
   std::vector<u8> m_uniform_staging_buffer;
 
   AbstractTextureFormat m_framebuffer_format = AbstractTextureFormat::Undefined;

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <cstring>
 #include <set>
@@ -77,23 +76,23 @@ public:
   // Shared shaders
   const AbstractShader* GetScreenQuadVertexShader() const
   {
-    return m_screen_quad_vertex_shader.get();
+    return m_screen_quad_vertex_shader;
   }
   const AbstractShader* GetTextureCopyVertexShader() const
   {
-    return m_texture_copy_vertex_shader.get();
+    return m_texture_copy_vertex_shader;
   }
-  const AbstractShader* GetEFBCopyVertexShader() const { return m_efb_copy_vertex_shader.get(); }
+  const AbstractShader* GetEFBCopyVertexShader() const { return m_efb_copy_vertex_shader; }
   const AbstractShader* GetTexcoordGeometryShader() const
   {
-    return m_texcoord_geometry_shader.get();
+    return m_texcoord_geometry_shader;
   }
   const AbstractShader* GetTextureCopyPixelShader() const
   {
-    return m_texture_copy_pixel_shader.get();
+    return m_texture_copy_pixel_shader;
   }
-  const AbstractShader* GetColorGeometryShader() const { return m_color_geometry_shader.get(); }
-  const AbstractShader* GetColorPixelShader() const { return m_color_pixel_shader.get(); }
+  const AbstractShader* GetColorGeometryShader() const { return m_color_geometry_shader; }
+  const AbstractShader* GetColorPixelShader() const { return m_color_pixel_shader; }
 
   // EFB copy to RAM/VRAM pipelines
   const AbstractPipeline*
@@ -101,10 +100,10 @@ public:
   const AbstractPipeline* GetEFBCopyToRAMPipeline(const EFBCopyParams& uid);
 
   // RGBA8 framebuffer copy pipelines
-  const AbstractPipeline* GetRGBA8CopyPipeline() const { return m_copy_rgba8_pipeline.get(); }
+  const AbstractPipeline* GetRGBA8CopyPipeline() const { return m_copy_rgba8_pipeline; }
   const AbstractPipeline* GetRGBA8StereoCopyPipeline() const
   {
-    return m_rgba8_stereo_copy_pipeline.get();
+    return m_rgba8_stereo_copy_pipeline;
   }
 
   // Palette texture conversion pipelines
@@ -131,20 +130,20 @@ private:
   bool CompileSharedPipelines();
 
   // GX shader compiler methods
-  std::unique_ptr<AbstractShader> CompileVertexShader(const VertexShaderUid& uid) const;
-  std::unique_ptr<AbstractShader>
+  AbstractShader* CompileVertexShader(const VertexShaderUid& uid) const;
+  AbstractShader*
   CompileVertexUberShader(const UberShader::VertexShaderUid& uid) const;
-  std::unique_ptr<AbstractShader> CompilePixelShader(const PixelShaderUid& uid) const;
-  std::unique_ptr<AbstractShader>
+  AbstractShader* CompilePixelShader(const PixelShaderUid& uid) const;
+  AbstractShader*
   CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const;
   const AbstractShader* InsertVertexShader(const VertexShaderUid& uid,
-                                           std::unique_ptr<AbstractShader> shader);
+                                           AbstractShader* shader);
   const AbstractShader* InsertVertexUberShader(const UberShader::VertexShaderUid& uid,
-                                               std::unique_ptr<AbstractShader> shader);
+                                               AbstractShader* shader);
   const AbstractShader* InsertPixelShader(const PixelShaderUid& uid,
-                                          std::unique_ptr<AbstractShader> shader);
+                                          AbstractShader* shader);
   const AbstractShader* InsertPixelUberShader(const UberShader::PixelShaderUid& uid,
-                                              std::unique_ptr<AbstractShader> shader);
+                                              AbstractShader* shader);
   const AbstractShader* CreateGeometryShader(const GeometryShaderUid& uid);
   bool NeedsGeometryShader(const GeometryShaderUid& uid) const;
 
@@ -161,9 +160,9 @@ private:
   std::optional<AbstractPipelineConfig> GetGXPipelineConfig(const GXUberPipelineUid& uid);
   void WriteGXPipelineCacheData(const GXPipelineUid& config, const AbstractPipeline* pipeline);
   const AbstractPipeline* InsertGXPipeline(const GXPipelineUid& config,
-                                           std::unique_ptr<AbstractPipeline> pipeline);
+                                           AbstractPipeline* pipeline);
   const AbstractPipeline* InsertGXUberPipeline(const GXUberPipelineUid& config,
-                                               std::unique_ptr<AbstractPipeline> pipeline);
+                                               AbstractPipeline* pipeline);
   void AddSerializedGXPipelineUID(const SerializedGXPipelineUid& uid);
   void AppendGXPipelineUID(const GXPipelineUid& config);
   void LoadUberPipelineUIDCache();
@@ -219,13 +218,13 @@ private:
   AsyncShaderCompiler m_async_shader_compiler;
 
   // Shared shaders
-  std::unique_ptr<AbstractShader> m_screen_quad_vertex_shader;
-  std::unique_ptr<AbstractShader> m_texture_copy_vertex_shader;
-  std::unique_ptr<AbstractShader> m_efb_copy_vertex_shader;
-  std::unique_ptr<AbstractShader> m_texcoord_geometry_shader;
-  std::unique_ptr<AbstractShader> m_color_geometry_shader;
-  std::unique_ptr<AbstractShader> m_texture_copy_pixel_shader;
-  std::unique_ptr<AbstractShader> m_color_pixel_shader;
+  AbstractShader* m_screen_quad_vertex_shader = nullptr;
+  AbstractShader* m_texture_copy_vertex_shader = nullptr;
+  AbstractShader* m_efb_copy_vertex_shader = nullptr;
+  AbstractShader* m_texcoord_geometry_shader = nullptr;
+  AbstractShader* m_color_geometry_shader = nullptr;
+  AbstractShader* m_texture_copy_pixel_shader = nullptr;
+  AbstractShader* m_color_pixel_shader = nullptr;
 
   // GX Shader Caches: each uid's AbstractShader, owned here, and whether it is compiling
   template <typename Uid>
@@ -264,12 +263,11 @@ private:
   uid_table m_efb_copy_to_ram_pipelines;  /* by EFBCopyRAMKey */
 
   // Copy pipeline for RGBA8 textures
-  std::unique_ptr<AbstractPipeline> m_copy_rgba8_pipeline;
-  std::unique_ptr<AbstractPipeline> m_rgba8_stereo_copy_pipeline;
+  AbstractPipeline* m_copy_rgba8_pipeline = nullptr;
+  AbstractPipeline* m_rgba8_stereo_copy_pipeline = nullptr;
 
   // Palette conversion pipelines
-  std::array<std::unique_ptr<AbstractPipeline>, NUM_PALETTE_CONVERSION_SHADERS>
-      m_palette_conversion_pipelines;
+  AbstractPipeline* m_palette_conversion_pipelines[NUM_PALETTE_CONVERSION_SHADERS] = {};
 
   // Texture reinterpreting pipeline
   uid_table m_texture_reinterpret_pipelines; /* by u32 from, to format */

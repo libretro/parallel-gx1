@@ -14,8 +14,6 @@
 
 class AbstractFramebuffer;
 class AbstractGfx;
-class AbstractPipeline;
-class AbstractShader;
 class AbstractStagingTexture;
 class AbstractTexture;
 class BoundingBox;
@@ -38,8 +36,6 @@ class VertexManagerBase;
 
 ABSTRACT_GPU_OBJECT_DELETER(AbstractFramebuffer)
 ABSTRACT_GPU_OBJECT_DELETER(AbstractGfx)
-ABSTRACT_GPU_OBJECT_DELETER(AbstractPipeline)
-ABSTRACT_GPU_OBJECT_DELETER(AbstractShader)
 ABSTRACT_GPU_OBJECT_DELETER(AbstractStagingTexture)
 ABSTRACT_GPU_OBJECT_DELETER(AbstractTexture)
 ABSTRACT_GPU_OBJECT_DELETER(BoundingBox)

@@ -36,9 +36,9 @@ public:
     return m_spv.code;
   }
 
-  static std::unique_ptr<VKShader> CreateFromSource(ShaderStage stage, ShaderCode* source,
+  static VKShader* CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                     std::string_view name);
-  static std::unique_ptr<VKShader> CreateFromBinary(ShaderStage stage, const void* data,
+  static VKShader* CreateFromBinary(ShaderStage stage, const void* data,
                                                     size_t length, std::string_view name);
 
 private:

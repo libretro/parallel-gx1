@@ -64,26 +64,26 @@ bool SWGfx::BindBackbuffer(const ClearColor& clear_color)
   return true;
 }
 
-std::unique_ptr<AbstractShader>
+AbstractShader*
 SWGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* /* source */,
                               std::string_view /* name */)
 {
-  return std::make_unique<AbstractShader>(stage);
+  return new AbstractShader(stage);
 }
 
-std::unique_ptr<AbstractShader> SWGfx::CreateShaderFromBinary(ShaderStage stage,
+AbstractShader* SWGfx::CreateShaderFromBinary(ShaderStage stage,
                                                               const void* /* data */,
                                                               size_t /* length */,
                                                               std::string_view /* name */)
 {
-  return std::make_unique<AbstractShader>(stage);
+  return new AbstractShader(stage);
 }
 
-std::unique_ptr<AbstractPipeline> SWGfx::CreatePipeline(const AbstractPipelineConfig& config,
+AbstractPipeline* SWGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                         const void* cache_data,
                                                         size_t cache_data_length)
 {
-  return std::make_unique<AbstractPipeline>();
+  return new AbstractPipeline();
 }
 
 // Called on the GPU thread. The frontend takes the picture in memory, in

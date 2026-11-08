@@ -161,7 +161,7 @@ static void GetD3DBlendDesc(D3D12_BLEND_DESC* desc, const BlendingState& state,
   }
 }
 
-std::unique_ptr<DXPipeline> DXPipeline::Create(const AbstractPipelineConfig& config,
+DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config,
                                                const void* cache_data, size_t cache_data_size)
 {
   DEBUG_ASSERT(config.vertex_shader && config.pixel_shader);
@@ -231,7 +231,7 @@ std::unique_ptr<DXPipeline> DXPipeline::Create(const AbstractPipelineConfig& con
 
   const bool use_integer_rtv =
       !config.blending_state.blend_enable && config.blending_state.logic_op_enable;
-  return std::make_unique<DXPipeline>(config, pso, desc.pRootSignature, config.usage,
+  return new DXPipeline(config, pso, desc.pRootSignature, config.usage,
                                       GetD3DTopology(config.rasterization_state), use_integer_rtv);
 }
 

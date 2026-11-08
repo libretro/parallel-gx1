@@ -62,7 +62,7 @@ VKShader::~VKShader()
 }
 
 /* Takes the SPIR-V's block: the shader keeps it, or it is freed. */
-static std::unique_ptr<VKShader> CreateShaderObject(ShaderStage stage, ShaderBinary spv,
+static VKShader* CreateShaderObject(ShaderStage stage, ShaderBinary spv,
                                                     std::string_view name)
 {
   VkShaderModuleCreateInfo info = {};
@@ -81,7 +81,7 @@ static std::unique_ptr<VKShader> CreateShaderObject(ShaderStage stage, ShaderBin
 
   // If it's a graphics shader, we defer pipeline creation.
   if (stage != ShaderStage::Compute)
-    return std::make_unique<VKShader>(stage, spv, mod, name);
+    return new VKShader(stage, spv, mod, name);
 
   // If it's a compute shader, we create the pipeline straight away.
   const VkComputePipelineCreateInfo pipeline_info = {
@@ -108,10 +108,10 @@ static std::unique_ptr<VKShader> CreateShaderObject(ShaderStage stage, ShaderBin
     return nullptr;
   }
 
-  return std::make_unique<VKShader>(spv, pipeline, name);
+  return new VKShader(spv, pipeline, name);
 }
 
-std::unique_ptr<VKShader> VKShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
+VKShader* VKShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                      std::string_view name)
 {
   ShaderBinary spv;
@@ -120,7 +120,7 @@ std::unique_ptr<VKShader> VKShader::CreateFromSource(ShaderStage stage, ShaderCo
   return CreateShaderObject(stage, spv, name);
 }
 
-std::unique_ptr<VKShader> VKShader::CreateFromBinary(ShaderStage stage, const void* data,
+VKShader* VKShader::CreateFromBinary(ShaderStage stage, const void* data,
                                                      size_t length, std::string_view name)
 {
   ShaderBinary spv;

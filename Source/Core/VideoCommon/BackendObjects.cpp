@@ -36,8 +36,10 @@ VideoBackendKind g_video_backend_kind = VIDEO_BACKEND_NULL;
 
 /* shaders */
 
-void std::default_delete<AbstractShader>::operator()(AbstractShader* object) const
+void AbstractShaderDelete(AbstractShader* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
 #ifdef HAS_OPENGL
@@ -86,8 +88,10 @@ const u8* AbstractShader::GetBinary(size_t* size) const
 
 /* pipelines */
 
-void std::default_delete<AbstractPipeline>::operator()(AbstractPipeline* object) const
+void AbstractPipelineDelete(AbstractPipeline* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
 #ifdef HAS_OPENGL

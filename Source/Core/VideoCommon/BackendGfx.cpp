@@ -712,7 +712,7 @@ bool AbstractGfx::IsTextureHeld(const AbstractTexture* texture)
   }
 }
 
-std::unique_ptr<AbstractShader> AbstractGfx::CreateShaderFromSource(ShaderStage stage,
+AbstractShader* AbstractGfx::CreateShaderFromSource(ShaderStage stage,
                                                                     ShaderCode* source,
                                                                     std::string_view name)
 {
@@ -741,7 +741,7 @@ std::unique_ptr<AbstractShader> AbstractGfx::CreateShaderFromSource(ShaderStage 
   }
 }
 
-std::unique_ptr<AbstractShader> AbstractGfx::CreateShaderFromBinary(ShaderStage stage,
+AbstractShader* AbstractGfx::CreateShaderFromBinary(ShaderStage stage,
                                                                     const void* data, size_t length,
                                                                     std::string_view name)
 {
@@ -798,7 +798,7 @@ AbstractGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
   }
 }
 
-std::unique_ptr<AbstractPipeline> AbstractGfx::CreatePipeline(const AbstractPipelineConfig& config,
+AbstractPipeline* AbstractGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                               const void* cache_data,
                                                               size_t cache_data_length)
 {

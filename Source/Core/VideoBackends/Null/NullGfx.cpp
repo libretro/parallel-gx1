@@ -47,26 +47,26 @@ std::unique_ptr<AbstractStagingTexture> NullGfx::CreateStagingTexture(StagingTex
   return std::make_unique<NullStagingTexture>(type, config);
 }
 
-std::unique_ptr<AbstractShader>
+AbstractShader*
 NullGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* /* source */,
                                 std::string_view /* name */)
 {
-  return std::make_unique<AbstractShader>(stage);
+  return new AbstractShader(stage);
 }
 
-std::unique_ptr<AbstractShader> NullGfx::CreateShaderFromBinary(ShaderStage stage,
+AbstractShader* NullGfx::CreateShaderFromBinary(ShaderStage stage,
                                                                 const void* /* data */,
                                                                 size_t /* length */,
                                                                 std::string_view /* name */)
 {
-  return std::make_unique<AbstractShader>(stage);
+  return new AbstractShader(stage);
 }
 
-std::unique_ptr<AbstractPipeline> NullGfx::CreatePipeline(const AbstractPipelineConfig& config,
+AbstractPipeline* NullGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                           const void* cache_data,
                                                           size_t cache_data_length)
 {
-  return std::make_unique<AbstractPipeline>();
+  return new AbstractPipeline();
 }
 
 std::unique_ptr<AbstractFramebuffer>

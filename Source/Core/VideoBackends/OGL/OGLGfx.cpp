@@ -230,14 +230,14 @@ OGLGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* de
                                 std::move(additional_color_attachments));
 }
 
-std::unique_ptr<AbstractShader>
+AbstractShader*
 OGLGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                                std::string_view name)
 {
   return OGLShader::CreateFromSource(stage, source, name);
 }
 
-std::unique_ptr<AbstractShader> OGLGfx::CreateShaderFromBinary(ShaderStage /* stage */,
+AbstractShader* OGLGfx::CreateShaderFromBinary(ShaderStage /* stage */,
                                                                const void* /* data */,
                                                                size_t /* length */,
                                                                std::string_view /* name */)
@@ -245,7 +245,7 @@ std::unique_ptr<AbstractShader> OGLGfx::CreateShaderFromBinary(ShaderStage /* st
   return nullptr;
 }
 
-std::unique_ptr<AbstractPipeline> OGLGfx::CreatePipeline(const AbstractPipelineConfig& config,
+AbstractPipeline* OGLGfx::CreatePipeline(const AbstractPipelineConfig& config,
                                                          const void* cache_data,
                                                          size_t cache_data_length)
 {

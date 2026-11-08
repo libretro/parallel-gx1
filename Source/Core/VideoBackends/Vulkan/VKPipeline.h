@@ -50,7 +50,7 @@ public:
   static void GetDynamicBlendState(u32 dynamic_blend, VkBool32* enable,
                                    VkColorBlendEquationEXT* equation,
                                    VkColorComponentFlags* write_mask);
-  static std::unique_ptr<VKPipeline> Create(const AbstractPipelineConfig& config);
+  static VKPipeline* Create(const AbstractPipelineConfig& config);
   /* Forgets every shared pipeline; only with none alive, as the backend
    * comes up. */
   static void ResetSharedPipelines();

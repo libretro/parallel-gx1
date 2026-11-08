@@ -32,7 +32,7 @@ public:
   bool HasGeometryShader() const { return m_geometry_shader != nullptr; }
   bool UseLogicOp() const { return m_use_logic_op; }
 
-  static std::unique_ptr<DXPipeline> Create(const AbstractPipelineConfig& config);
+  static DXPipeline* Create(const AbstractPipelineConfig& config);
 
 private:
   ComPtr<ID3D11InputLayout> m_input_layout;

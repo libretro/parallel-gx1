@@ -80,7 +80,7 @@ AbstractPipeline::CacheData OGLPipeline::GetCacheData() const
   return data;
 }
 
-std::unique_ptr<OGLPipeline> OGLPipeline::Create(const AbstractPipelineConfig& config,
+OGLPipeline* OGLPipeline::Create(const AbstractPipelineConfig& config,
                                                  const void* cache_data, size_t cache_data_size)
 {
   PipelineProgram* program = ProgramShaderCache::GetPipelineProgram(
@@ -93,7 +93,7 @@ std::unique_ptr<OGLPipeline> OGLPipeline::Create(const AbstractPipelineConfig& c
 
   const GLVertexFormat* vertex_format = static_cast<const GLVertexFormat*>(config.vertex_format);
   GLenum gl_primitive = MapToGLPrimitive(config.rasterization_state.primitive);
-  return std::make_unique<OGLPipeline>(config, vertex_format, config.rasterization_state,
+  return new OGLPipeline(config, vertex_format, config.rasterization_state,
                                        config.depth_state, config.blending_state, program,
                                        gl_primitive);
 }
