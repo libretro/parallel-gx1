@@ -52,6 +52,8 @@
 #include "VideoCommon/Present.h"
 
 #include <features/features_cpu.h>
+#include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 #include <rthreads/rthreads.h>
 
 #ifdef HAS_VULKAN
@@ -74,14 +76,18 @@ namespace Video
  * a few milliseconds, so a request to park or quit is seen that soon; a
  * slice that ends a field counts it. */
 static sthread_t* s_gpu_thread;
-static slock_t* s_gpu_lock;
-static scond_t* s_gpu_cond;
 static bool s_gpu_wanted;
-static bool s_gpu_quit;
-static bool s_gpu_park;
-static bool s_gpu_parked;
-static unsigned s_gpu_fields;
-static unsigned s_gpu_fields_seen;
+/* Asked of the GPU thread by the frontend's, which wakes it with to_gpu
+ * while it is parked; what it reports, a field ended or its parking,
+ * wakes the frontend's thread with from_gpu. */
+static bool s_gpu_events_ready;
+static retro_eventcount_t s_gpu_to_gpu;
+static retro_eventcount_t s_gpu_from_gpu;
+static retro_atomic_int_t s_gpu_quit;
+static retro_atomic_int_t s_gpu_park;
+static retro_atomic_int_t s_gpu_parked;
+static retro_atomic_int_t s_gpu_fields;
+static int s_gpu_fields_seen;  // the frontend's thread only
 
 #ifdef _WIN32
 /* Direct3D 11 version 2: the interface, and the levels of its context
@@ -850,33 +856,38 @@ static void GpuThreadMain(void* data)
   (void)data;
 
   Core::DeclareAsGPUThread();
-  slock_lock(s_gpu_lock);
   for (;;)
   {
-    bool ended;
-    if (s_gpu_quit)
+    if (retro_atomic_load_acquire_int(&s_gpu_quit))
       break;
-    if (s_gpu_park)
+    if (retro_atomic_load_acquire_int(&s_gpu_park))
     {
-      s_gpu_parked = true;
-      scond_broadcast(s_gpu_cond);
-      while (s_gpu_park && !s_gpu_quit)
-        scond_wait(s_gpu_cond, s_gpu_lock);
-      s_gpu_parked = false;
+      retro_atomic_store_release_int(&s_gpu_parked, 1);
+      retro_eventcount_notify(&s_gpu_from_gpu);
+      for (;;)
+      {
+        const int key = retro_eventcount_prepare_wait(&s_gpu_to_gpu);
+        if (!retro_atomic_load_acquire_int(&s_gpu_park) ||
+            retro_atomic_load_acquire_int(&s_gpu_quit))
+        {
+          retro_eventcount_cancel_wait(&s_gpu_to_gpu);
+          break;
+        }
+        retro_eventcount_commit_wait(&s_gpu_to_gpu, key);
+      }
+      retro_atomic_store_release_int(&s_gpu_parked, 0);
+      /* against GpuThreadPark: its request is seen here, or this unparking is seen there */
+      retro_atomic_thread_fence_seq_cst();
       continue;
     }
-    slock_unlock(s_gpu_lock);
-    ended = system.GetFifo().RunGpuLoop(GPU_SLICE_US);
-    slock_lock(s_gpu_lock);
-    if (ended)
+    if (system.GetFifo().RunGpuLoop(GPU_SLICE_US))
     {
-      s_gpu_fields++;
-      scond_broadcast(s_gpu_cond);
+      retro_atomic_fetch_add_int(&s_gpu_fields, 1);
+      retro_eventcount_notify(&s_gpu_from_gpu);
     }
   }
-  s_gpu_parked = true;
-  scond_broadcast(s_gpu_cond);
-  slock_unlock(s_gpu_lock);
+  retro_atomic_store_release_int(&s_gpu_parked, 1);
+  retro_eventcount_notify(&s_gpu_from_gpu);
 }
 
 bool GpuThreadWanted()
@@ -893,15 +904,21 @@ void GpuThreadEnsure()
 {
   if (s_gpu_thread || !s_gpu_wanted || !Core::System::GetInstance().IsDualCoreMode())
     return;
-  if (!s_gpu_lock)
+  if (!s_gpu_events_ready)
   {
-    s_gpu_lock = slock_new();
-    s_gpu_cond = scond_new();
+    if (!retro_eventcount_init(&s_gpu_to_gpu))
+      return;
+    if (!retro_eventcount_init(&s_gpu_from_gpu))
+    {
+      retro_eventcount_free(&s_gpu_to_gpu);
+      return;
+    }
+    s_gpu_events_ready = true;
   }
-  s_gpu_quit = false;
-  s_gpu_park = false;
-  s_gpu_parked = false;
-  s_gpu_fields_seen = s_gpu_fields;
+  retro_atomic_store_release_int(&s_gpu_quit, 0);
+  retro_atomic_store_release_int(&s_gpu_park, 0);
+  retro_atomic_store_release_int(&s_gpu_parked, 0);
+  s_gpu_fields_seen = retro_atomic_load_acquire_int(&s_gpu_fields);
   VideoCommon::g_frontend_takes_frames = true;
   s_gpu_thread = sthread_create(GpuThreadMain, nullptr);
 }
@@ -910,10 +927,8 @@ void GpuThreadStop()
 {
   if (!s_gpu_thread)
     return;
-  slock_lock(s_gpu_lock);
-  s_gpu_quit = true;
-  scond_broadcast(s_gpu_cond);
-  slock_unlock(s_gpu_lock);
+  retro_atomic_store_release_int(&s_gpu_quit, 1);
+  retro_eventcount_notify(&s_gpu_to_gpu);
   sthread_join(s_gpu_thread);
   s_gpu_thread = nullptr;
   VideoCommon::g_frontend_takes_frames = false;
@@ -921,26 +936,39 @@ void GpuThreadStop()
 
 bool GpuThreadWaitField(int64_t deadline_us)
 {
-  bool ended;
+  int fields;
 
   if (!s_gpu_thread)
     return false;
-  slock_lock(s_gpu_lock);
-  while (s_gpu_fields == s_gpu_fields_seen && !s_gpu_quit)
+  for (;;)
   {
+    int key;
+    if (retro_atomic_load_acquire_int(&s_gpu_fields) != s_gpu_fields_seen ||
+        retro_atomic_load_acquire_int(&s_gpu_quit))
+      break;
+    key = retro_eventcount_prepare_wait(&s_gpu_from_gpu);
+    if (retro_atomic_load_acquire_int(&s_gpu_fields) != s_gpu_fields_seen ||
+        retro_atomic_load_acquire_int(&s_gpu_quit))
+    {
+      retro_eventcount_cancel_wait(&s_gpu_from_gpu);
+      break;
+    }
     if (!deadline_us)
-      scond_wait(s_gpu_cond, s_gpu_lock);
+      retro_eventcount_commit_wait(&s_gpu_from_gpu, key);
     else
     {
       const int64_t left = deadline_us - (int64_t)cpu_features_get_time_usec();
       if (left <= 0)
+      {
+        retro_eventcount_cancel_wait(&s_gpu_from_gpu);
         break;
-      scond_wait_timeout(s_gpu_cond, s_gpu_lock, left);
+      }
+      retro_eventcount_commit_wait_timeout(&s_gpu_from_gpu, key, left);
     }
   }
-  ended = s_gpu_fields != s_gpu_fields_seen;
-  s_gpu_fields_seen = s_gpu_fields;
-  slock_unlock(s_gpu_lock);
+  fields = retro_atomic_load_acquire_int(&s_gpu_fields);
+  const bool ended = fields != s_gpu_fields_seen;
+  s_gpu_fields_seen = fields;
   return ended;
 }
 
@@ -948,12 +976,19 @@ void GpuThreadPark()
 {
   if (!s_gpu_thread)
     return;
-  slock_lock(s_gpu_lock);
-  s_gpu_park = true;
-  scond_broadcast(s_gpu_cond);
-  while (!s_gpu_parked)
-    scond_wait(s_gpu_cond, s_gpu_lock);
-  slock_unlock(s_gpu_lock);
+  retro_atomic_store_release_int(&s_gpu_park, 1);
+  /* against the GPU thread's unparking: it sees this request, or this sees it running */
+  retro_atomic_thread_fence_seq_cst();
+  for (;;)
+  {
+    const int key = retro_eventcount_prepare_wait(&s_gpu_from_gpu);
+    if (retro_atomic_load_acquire_int(&s_gpu_parked))
+    {
+      retro_eventcount_cancel_wait(&s_gpu_from_gpu);
+      break;
+    }
+    retro_eventcount_commit_wait(&s_gpu_from_gpu, key);
+  }
   /* a field swapped while the frontend's thread has the video state,
    * a savestate's say, is not presented */
   VideoCommon::g_frontend_takes_frames = false;
@@ -964,10 +999,8 @@ void GpuThreadUnpark()
   if (!s_gpu_thread)
     return;
   VideoCommon::g_frontend_takes_frames = true;
-  slock_lock(s_gpu_lock);
-  s_gpu_park = false;
-  scond_broadcast(s_gpu_cond);
-  slock_unlock(s_gpu_lock);
+  retro_atomic_store_release_int(&s_gpu_park, 0);
+  retro_eventcount_notify(&s_gpu_to_gpu);
 }
 
 /* The frontend's callback, behind one that counts what each retro_run
