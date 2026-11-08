@@ -1162,8 +1162,14 @@ void FramebufferManager::DoSaveState(PointerWrap& p)
   // For multisampling, we need to resolve first before we can save.
   // This won't be bit-exact when loading, which could cause interesting rendering side-effects for
   // a frame. But whatever, MSAA doesn't exactly behave that well anyway.
-  AbstractTexture* color_texture = ResolveEFBColorTexture(m_efb_color_texture->GetRect());
-  AbstractTexture* depth_texture = ResolveEFBDepthTexture(m_efb_depth_texture->GetRect(), true);
+  // Measuring takes the sizes alone, which the resolved textures share with the EFB's: nothing is
+  // drawn for it.
+  AbstractTexture* color_texture = p.IsMeasureMode() ?
+                                       m_efb_color_texture :
+                                       ResolveEFBColorTexture(m_efb_color_texture->GetRect());
+  AbstractTexture* depth_texture =
+      p.IsMeasureMode() ? m_efb_depth_texture :
+                          ResolveEFBDepthTexture(m_efb_depth_texture->GetRect(), true);
 
   // We don't want to save these as rendertarget textures, just the data itself when deserializing.
   const TextureConfig color_texture_config(
