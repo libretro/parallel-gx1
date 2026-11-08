@@ -30,11 +30,6 @@ StreamBuffer::StreamBuffer(u32 type, u32 size)
   m_free_iterator = 0;
 }
 
-StreamBuffer::~StreamBuffer()
-{
-  glDeleteBuffers(1, &m_buffer);
-}
-
 /* Shared synchronization code for ring buffers
  *
  * The next three functions are to create/delete/use the OpenGL synchronization.
@@ -124,101 +119,58 @@ void StreamBuffer::AllocMemory(u32 size)
   }
 }
 
-/* The usual way to stream data to the GPU.
+/* The ways to stream, by kind:
+ *
+ * MAP_AND_ORPHAN: the usual way to stream data to the GPU.
  * Described here: https://www.opengl.org/wiki/Buffer_Object_Streaming#Unsynchronized_buffer_mapping
- * Just do unsync appends until the buffer is full.
- * When it's full, orphan (alloc a new buffer and free the old one)
+ * Just do unsync appends until the buffer is full. When it's full, orphan (alloc a new buffer and
+ * free the old one). As reallocation is an overhead, this method isn't as fast as it is known to
+ * be.
  *
- * As reallocation is an overhead, this method isn't as fast as it is known to be.
+ * MAP_AND_SYNC: a modified streaming way without reallocation, a ring buffer allocated on
+ * initialization. With this limited resource, we have to care about the CPU-GPU distance, else
+ * this fifo may overflow. So we had traded orphan vs syncing.
+ *
+ * BUFFER_STORAGE: streaming fifo without mapping overhead, with ARB_buffer_storage (OpenGL 4.4),
+ * usually not available on OpenGL3 GPUs. It allows us to render from a mapped buffer, so we map it
+ * persistently in the initialization. Unsync mapping sounds like an easy task, but it isn't for
+ * threaded drivers: every mapping on current close-source driver _will_ end in at least a round
+ * trip time between two threads. As persistently mapped buffer can't use orphaning, we also have
+ * to sync.
+ *
+ * PINNED_MEMORY (AMD only): another streaming fifo without mapping overhead, with
+ * AMD_pinned_memory, available on all AMD GPUs. As we can't orphan without mapping, we have to
+ * sync. OpenGL 4.4 drivers should use BUFFER_STORAGE.
+ *
+ * BUFFER_SUB_DATA: fifo based on the glBufferSubData call. As everything must be copied before
+ * glBufferSubData returns, an additional memcpy in the driver will be done. So this is a huge
+ * overhead, only use it if required.
+ *
+ * BUFFER_DATA: fifo based on the glBufferData call. Some trashy drivers stall in BufferSubData.
+ * So here we use glBufferData, which realloc this buffer every time. This may avoid stalls, but it
+ * is a bigger overhead than BufferSubData.
  */
-class MapAndOrphan : public StreamBuffer
+static constexpr u32 ALIGN_PINNED_MEMORY = 4096;
+
+StreamBuffer::StreamBuffer(Kind kind, u32 type, u32 size, bool coherent, bool client_storage)
+    : StreamBuffer(type, size)
 {
-public:
-  MapAndOrphan(u32 type, u32 size) : StreamBuffer(type, size)
+  m_kind = kind;
+  m_coherent = coherent;
+  switch (kind)
   {
+  case MAP_AND_ORPHAN:
     glBindBuffer(m_buffertype, m_buffer);
     glBufferData(m_buffertype, m_size, nullptr, GL_STREAM_DRAW);
-  }
-
-  ~MapAndOrphan() override {}
-  std::pair<u8*, u32> Map(u32 size) override
-  {
-    if (m_iterator + size >= m_size)
-    {
-      glBufferData(m_buffertype, m_size, nullptr, GL_STREAM_DRAW);
-      m_iterator = 0;
-    }
-    u8* pointer = (u8*)glMapBufferRange(m_buffertype, m_iterator, size,
-                                        GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT |
-                                            GL_MAP_UNSYNCHRONIZED_BIT);
-    return std::make_pair(pointer, m_iterator);
-  }
-
-  void Unmap(u32 used_size) override
-  {
-    glFlushMappedBufferRange(m_buffertype, 0, used_size);
-    glUnmapBuffer(m_buffertype);
-    m_iterator += used_size;
-  }
-};
-
-/* A modified streaming way without reallocation
- * This one fixes the reallocation overhead of the MapAndOrphan one.
- * So it alloc a ring buffer on initialization.
- * But with this limited resource, we have to care about the CPU-GPU distance.
- * Else this fifo may overflow.
- * So we had traded orphan vs syncing.
- */
-class MapAndSync : public StreamBuffer
-{
-public:
-  MapAndSync(u32 type, u32 size) : StreamBuffer(type, size)
-  {
+    break;
+  case MAP_AND_SYNC:
     CreateFences();
     glBindBuffer(m_buffertype, m_buffer);
     glBufferData(m_buffertype, m_size, nullptr, GL_STREAM_DRAW);
-  }
-
-  ~MapAndSync() override { DeleteFences(); }
-  std::pair<u8*, u32> Map(u32 size) override
-  {
-    AllocMemory(size);
-    u8* pointer = (u8*)glMapBufferRange(m_buffertype, m_iterator, size,
-                                        GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT |
-                                            GL_MAP_UNSYNCHRONIZED_BIT);
-    return std::make_pair(pointer, m_iterator);
-  }
-
-  void Unmap(u32 used_size) override
-  {
-    glFlushMappedBufferRange(m_buffertype, 0, used_size);
-    glUnmapBuffer(m_buffertype);
-    m_iterator += used_size;
-  }
-};
-
-/* Streaming fifo without mapping overhead.
- * This one usually requires ARB_buffer_storage (OpenGL 4.4).
- * And is usually not available on OpenGL3 GPUs.
- *
- * ARB_buffer_storage allows us to render from a mapped buffer.
- * So we map it persistently in the initialization.
- *
- * Unsync mapping sounds like an easy task, but it isn't for threaded drivers.
- * So every mapping on current close-source driver _will_ end in
- * at least a round trip time between two threads.
- *
- * As persistently mapped buffer can't use orphaning, we also have to sync.
- */
-class BufferStorage : public StreamBuffer
-{
-public:
-  BufferStorage(u32 type, u32 size, bool _coherent = true, bool client_storage = false)
-      : StreamBuffer(type, size), coherent(_coherent)
-  {
+    break;
+  case BUFFER_STORAGE:
     CreateFences();
     glBindBuffer(m_buffertype, m_buffer);
-
     // PERSISTANT_BIT to make sure that the buffer can be used while mapped
     // COHERENT_BIT is set so we don't have to use a MemoryBarrier on write
     // CLIENT_STORAGE_BIT asks for client memory, cached, for what the CPU writes in place
@@ -230,44 +182,8 @@ public:
         (u8*)glMapBufferRange(m_buffertype, 0, m_size,
                               GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT |
                                   (coherent ? GL_MAP_COHERENT_BIT : GL_MAP_FLUSH_EXPLICIT_BIT));
-  }
-
-  ~BufferStorage() override
-  {
-    DeleteFences();
-    glUnmapBuffer(m_buffertype);
-    glBindBuffer(m_buffertype, 0);
-  }
-
-  std::pair<u8*, u32> Map(u32 size) override
-  {
-    AllocMemory(size);
-    return std::make_pair(m_pointer + m_iterator, m_iterator);
-  }
-
-  void Unmap(u32 used_size) override
-  {
-    if (!coherent)
-      glFlushMappedBufferRange(m_buffertype, m_iterator, used_size);
-    m_iterator += used_size;
-  }
-
-  u8* m_pointer;
-  const bool coherent;
-};
-
-/* --- AMD only ---
- * Another streaming fifo without mapping overhead.
- * As we can't orphan without mapping, we have to sync.
- *
- * This one uses AMD_pinned_memory which is available on all AMD GPUs.
- * OpenGL 4.4 drivers should use BufferStorage.
- */
-class PinnedMemory : public StreamBuffer
-{
-public:
-  PinnedMemory(u32 type, u32 size) : StreamBuffer(type, size)
-  {
+    break;
+  case PINNED_MEMORY:
     CreateFences();
     m_pointer = static_cast<u8*>(Common::AllocateAlignedMemory(
         Common::AlignUp(m_size, ALIGN_PINNED_MEMORY), ALIGN_PINNED_MEMORY));
@@ -276,94 +192,125 @@ public:
                  Common::AlignUp(m_size, ALIGN_PINNED_MEMORY), m_pointer, GL_STREAM_COPY);
     glBindBuffer(GL_EXTERNAL_VIRTUAL_MEMORY_BUFFER_AMD, 0);
     glBindBuffer(m_buffertype, m_buffer);
+    break;
+  case BUFFER_SUB_DATA:
+    glBindBuffer(m_buffertype, m_buffer);
+    glBufferData(m_buffertype, size, nullptr, GL_STATIC_DRAW);
+    m_pointer = new u8[m_size];
+    break;
+  case BUFFER_DATA:
+    glBindBuffer(m_buffertype, m_buffer);
+    m_pointer = new u8[m_size];
+    break;
   }
+}
 
-  ~PinnedMemory() override
+StreamBuffer::~StreamBuffer()
+{
+  switch (m_kind)
   {
+  case MAP_AND_ORPHAN:
+    break;
+  case MAP_AND_SYNC:
+    DeleteFences();
+    break;
+  case BUFFER_STORAGE:
+    DeleteFences();
+    glUnmapBuffer(m_buffertype);
+    glBindBuffer(m_buffertype, 0);
+    break;
+  case PINNED_MEMORY:
     DeleteFences();
     glBindBuffer(m_buffertype, 0);
     glFinish();  // ogl pipeline must be flushed, else this buffer can be in use
     Common::FreeAlignedMemory(m_pointer);
-    m_pointer = nullptr;
+    break;
+  case BUFFER_SUB_DATA:
+  case BUFFER_DATA:
+    delete[] m_pointer;
+    break;
   }
+  glDeleteBuffers(1, &m_buffer);
+}
 
-  std::pair<u8*, u32> Map(u32 size) override
+std::pair<u8*, u32> StreamBuffer::Map(u32 size)
+{
+  u8* pointer;
+  switch (m_kind)
   {
+  case MAP_AND_ORPHAN:
+    if (m_iterator + size >= m_size)
+    {
+      glBufferData(m_buffertype, m_size, nullptr, GL_STREAM_DRAW);
+      m_iterator = 0;
+    }
+    pointer = (u8*)glMapBufferRange(m_buffertype, m_iterator, size,
+                                    GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT |
+                                        GL_MAP_UNSYNCHRONIZED_BIT);
+    return std::make_pair(pointer, m_iterator);
+  case MAP_AND_SYNC:
+    AllocMemory(size);
+    pointer = (u8*)glMapBufferRange(m_buffertype, m_iterator, size,
+                                    GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT |
+                                        GL_MAP_UNSYNCHRONIZED_BIT);
+    return std::make_pair(pointer, m_iterator);
+  case BUFFER_STORAGE:
+  case PINNED_MEMORY:
     AllocMemory(size);
     return std::make_pair(m_pointer + m_iterator, m_iterator);
+  default:  // BUFFER_SUB_DATA, BUFFER_DATA
+    return std::make_pair(m_pointer, 0u);
   }
+}
 
-  void Unmap(u32 used_size) override { m_iterator += used_size; }
-  u8* m_pointer;
-  static const u32 ALIGN_PINNED_MEMORY = 4096;
-};
-
-/* Fifo based on the glBufferSubData call.
- * As everything must be copied before glBufferSubData returns,
- * an additional memcpy in the driver will be done.
- * So this is a huge overhead, only use it if required.
- */
-class BufferSubData : public StreamBuffer
+void StreamBuffer::Unmap(u32 used_size)
 {
-public:
-  BufferSubData(u32 type, u32 size) : StreamBuffer(type, size)
+  switch (m_kind)
   {
-    glBindBuffer(m_buffertype, m_buffer);
-    glBufferData(m_buffertype, size, nullptr, GL_STATIC_DRAW);
-    m_pointer = new u8[m_size];
-  }
-
-  ~BufferSubData() override { delete[] m_pointer; }
-  std::pair<u8*, u32> Map(u32 size) override { return std::make_pair(m_pointer, 0); }
-  void Unmap(u32 used_size) override { glBufferSubData(m_buffertype, 0, used_size, m_pointer); }
-  u8* m_pointer;
-};
-
-/* Fifo based on the glBufferData call.
- * Some trashy drivers stall in BufferSubData.
- * So here we use glBufferData, which realloc this buffer every time.
- * This may avoid stalls, but it is a bigger overhead than BufferSubData.
- */
-class BufferData : public StreamBuffer
-{
-public:
-  BufferData(u32 type, u32 size) : StreamBuffer(type, size)
-  {
-    glBindBuffer(m_buffertype, m_buffer);
-    m_pointer = new u8[m_size];
-  }
-
-  ~BufferData() override { delete[] m_pointer; }
-  std::pair<u8*, u32> Map(u32 size) override { return std::make_pair(m_pointer, 0); }
-  void Unmap(u32 used_size) override
-  {
+  case MAP_AND_ORPHAN:
+  case MAP_AND_SYNC:
+    glFlushMappedBufferRange(m_buffertype, 0, used_size);
+    glUnmapBuffer(m_buffertype);
+    m_iterator += used_size;
+    break;
+  case BUFFER_STORAGE:
+    if (!m_coherent)
+      glFlushMappedBufferRange(m_buffertype, m_iterator, used_size);
+    m_iterator += used_size;
+    break;
+  case PINNED_MEMORY:
+    m_iterator += used_size;
+    break;
+  case BUFFER_SUB_DATA:
+    glBufferSubData(m_buffertype, 0, used_size, m_pointer);
+    break;
+  case BUFFER_DATA:
     glBufferData(m_buffertype, used_size, m_pointer, GL_STREAM_DRAW);
+    break;
   }
+}
 
-  u8* m_pointer;
-};
-
-std::unique_ptr<StreamBuffer> StreamBuffer::CreatePersistentClient(u32 type, u32 size)
+StreamBuffer* StreamBuffer::CreatePersistentClient(u32 type, u32 size)
 {
   if (!g_ogl_config.bSupportsGLSync || !g_ogl_config.bSupportsGLBufferStorage ||
       DriverDetails::HasBug(DriverDetails::BUG_BROKEN_BUFFER_STORAGE))
   {
     return nullptr;
   }
-  return std::make_unique<BufferStorage>(type, size, true, true);
+  return new StreamBuffer(BUFFER_STORAGE, type, size, true, true);
 }
 
 // Chooses the best streaming method based on the supported extensions and known issues
-std::unique_ptr<StreamBuffer> StreamBuffer::Create(u32 type, u32 size)
+static StreamBuffer::Kind ChooseKind(u32 type)
 {
   // without basevertex support, only streaming methods whith uploads everything to zero works fine:
   if (!g_ogl_config.bSupportsGLBaseVertex)
   {
     if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_BUFFER_STREAM))
-      return std::make_unique<BufferSubData>(type, size);
+      return StreamBuffer::BUFFER_SUB_DATA;
 
     // BufferData is by far the worst way, only use it if needed
-    return std::make_unique<BufferData>(type, size);
+    return StreamBuffer::BUFFER_DATA;
   }
 
   // Prefer the syncing buffers over the orphaning one
@@ -372,7 +319,7 @@ std::unique_ptr<StreamBuffer> StreamBuffer::Create(u32 type, u32 size)
     // pinned memory is much faster than buffer storage on AMD cards
     if (g_ogl_config.bSupportsGLPinnedMemory &&
         !(DriverDetails::HasBug(DriverDetails::BUG_BROKEN_PINNED_MEMORY)))
-      return std::make_unique<PinnedMemory>(type, size);
+      return StreamBuffer::PINNED_MEMORY;
 
     // buffer storage works well in most situations
     if (g_ogl_config.bSupportsGLBufferStorage &&
@@ -380,23 +327,27 @@ std::unique_ptr<StreamBuffer> StreamBuffer::Create(u32 type, u32 size)
           type == GL_ARRAY_BUFFER) &&
         !(DriverDetails::HasBug(DriverDetails::BUG_INTEL_BROKEN_BUFFER_STORAGE) &&
           type == GL_ELEMENT_ARRAY_BUFFER))
-      return std::make_unique<BufferStorage>(type, size);
+      return StreamBuffer::BUFFER_STORAGE;
 
     // don't fall back to MapAnd* for Nvidia drivers
     if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_UNSYNC_MAPPING))
     {
       if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_BUFFER_STREAM))
-        return std::make_unique<BufferData>(type, size);
+        return StreamBuffer::BUFFER_DATA;
       else
-        return std::make_unique<BufferSubData>(type, size);
+        return StreamBuffer::BUFFER_SUB_DATA;
     }
 
     // mapping fallback
-    if (g_ogl_config.bSupportsGLSync)
-      return std::make_unique<MapAndSync>(type, size);
+    return StreamBuffer::MAP_AND_SYNC;
   }
 
   // default fallback, should work everywhere, but isn't the best way to do this job
-  return std::make_unique<MapAndOrphan>(type, size);
+  return StreamBuffer::MAP_AND_ORPHAN;
+}
+
+StreamBuffer* StreamBuffer::Create(u32 type, u32 size)
+{
+  return new StreamBuffer(ChooseKind(type), type, size, true, false);
 }
 }  // namespace OGL

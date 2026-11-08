@@ -43,9 +43,9 @@ VertexManager::~VertexManager()
 
   // VAO must be found when destroying the index buffer.
   CheckBufferBinding();
-  m_texel_buffer.reset();
-  m_index_buffer.reset();
-  m_vertex_buffer.reset();
+  delete m_texel_buffer;
+  delete m_index_buffer;
+  delete m_vertex_buffer;
 }
 
 bool VertexManager::Initialize()

@@ -53,9 +53,9 @@ protected:
   void UploadUniforms();
 
 private:
-  std::unique_ptr<StreamBuffer> m_vertex_buffer;
-  std::unique_ptr<StreamBuffer> m_index_buffer;
-  std::unique_ptr<StreamBuffer> m_texel_buffer;
+  StreamBuffer* m_vertex_buffer = nullptr;
+  StreamBuffer* m_index_buffer = nullptr;
+  StreamBuffer* m_texel_buffer = nullptr;
   std::array<GLuint, NUM_TEXEL_BUFFER_FORMATS> m_texel_buffer_views{};
 };
 }  // namespace OGL

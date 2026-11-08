@@ -406,7 +406,7 @@ enum
 {
   UPLOAD_BUFFER_SIZE = 32 * 1024 * 1024
 };
-static std::unique_ptr<StreamBuffer> s_upload_buffer;
+static StreamBuffer* s_upload_buffer;
 static bool s_upload_buffer_tried;
 static struct
 {
@@ -421,7 +421,8 @@ static struct
 
 void OGLTexture::DestroyUploadBuffer()
 {
-  s_upload_buffer.reset();
+  delete s_upload_buffer;
+  s_upload_buffer = nullptr;
   s_upload_buffer_tried = false;
 }
 

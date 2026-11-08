@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <memory>
 #include <utility>
 
 #include "Common/CommonTypes.h"
@@ -15,11 +14,24 @@ namespace OGL
 class StreamBuffer
 {
 public:
-  static std::unique_ptr<StreamBuffer> Create(u32 type, u32 size);
+  // How the buffer is streamed, chosen by Create for the driver (OGLStreamBuffer.cpp)
+  enum Kind : u8
+  {
+    MAP_AND_ORPHAN,
+    MAP_AND_SYNC,
+    BUFFER_STORAGE,
+    PINNED_MEMORY,
+    BUFFER_SUB_DATA,
+    BUFFER_DATA
+  };
+
+  static StreamBuffer* Create(u32 type, u32 size);
   // Mapped for good, in client memory: what the CPU writes in place goes straight into what the
   // GPU reads. nullptr without buffer storage.
-  static std::unique_ptr<StreamBuffer> CreatePersistentClient(u32 type, u32 size);
-  virtual ~StreamBuffer();
+  static StreamBuffer* CreatePersistentClient(u32 type, u32 size);
+  ~StreamBuffer();
+  StreamBuffer(const StreamBuffer&) = delete;
+  StreamBuffer& operator=(const StreamBuffer&) = delete;
 
   u32 GetGLBufferId() const { return m_buffer; }
   u32 GetSize() const { return m_size; }
@@ -33,8 +45,8 @@ public:
    * Mapping invalidates the current buffer content,
    * so it isn't allowed to access the old content any more.
    */
-  virtual std::pair<u8*, u32> Map(u32 size) = 0;
-  virtual void Unmap(u32 used_size) = 0;
+  std::pair<u8*, u32> Map(u32 size);
+  void Unmap(u32 used_size);
 
   std::pair<u8*, u32> Map(u32 size, u32 stride)
   {
@@ -48,8 +60,9 @@ public:
 
   const u32 m_buffer;
 
-protected:
+private:
   StreamBuffer(u32 type, u32 size);
+  StreamBuffer(Kind kind, u32 type, u32 size, bool coherent, bool client_storage);
   void CreateFences();
   void DeleteFences();
   void AllocMemory(u32 size);
@@ -61,7 +74,10 @@ protected:
   u32 m_used_iterator;
   u32 m_free_iterator;
 
-private:
+  u8* m_pointer = nullptr;  // what the CPU writes to, when not mapped each time
+  Kind m_kind = MAP_AND_ORPHAN;
+  bool m_coherent = true;
+
   static constexpr int SYNC_POINTS = 16;
   int Slot(u32 x) const { return x >> m_bit_per_slot; }
   const int m_bit_per_slot;

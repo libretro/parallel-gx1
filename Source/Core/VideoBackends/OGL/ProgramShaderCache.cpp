@@ -43,7 +43,7 @@ GLuint ProgramShaderCache::s_attributeless_VBO = 0;
 GLuint ProgramShaderCache::s_attributeless_VAO = 0;
 GLuint ProgramShaderCache::s_last_VAO = 0;
 
-static std::unique_ptr<StreamBuffer> s_buffer;
+static StreamBuffer* s_buffer;
 static int num_failures = 0;
 
 static GLuint CurrentProgram = 0;
@@ -209,7 +209,7 @@ static void AssertSlotEmpty(retro_atomic_ptr_t* slot, void* ctx)
 
 StreamBuffer* ProgramShaderCache::GetUniformBuffer()
 {
-  return s_buffer.get();
+  return s_buffer;
 }
 
 u32 ProgramShaderCache::GetUniformBufferAlignment()
@@ -470,7 +470,8 @@ void ProgramShaderCache::Init()
 
 void ProgramShaderCache::Shutdown()
 {
-  s_buffer.reset();
+  delete s_buffer;
+  s_buffer = nullptr;
 
   glBindVertexArray(0);
   glDeleteBuffers(1, &s_attributeless_VBO);
@@ -562,7 +563,7 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
       return existing;
   }
 
-  std::unique_ptr<PipelineProgram> prog = std::make_unique<PipelineProgram>();
+  PipelineProgram* const prog = new PipelineProgram();
   prog->key = key;
   prog->shader.glprogid = glCreateProgram();
 
@@ -583,6 +584,7 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
     {
       WARN_LOG_FMT(VIDEO, "Failed to create GL program from program binary.");
       prog->shader.Destroy();
+      delete prog;
       return nullptr;
     }
 
@@ -630,6 +632,7 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
                                      pixel_shader ? pixel_shader->GetSource() : std::string_view{}))
     {
       prog->shader.Destroy();
+      delete prog;
       return nullptr;
     }
   }
@@ -650,12 +653,13 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
       quiesce_exit(&s_pipeline_program_quiesce);
       // Destroy this program, and use the one which was created first.
       prog->shader.Destroy();
+      delete prog;
       return existing;
     }
-    const bool published = retro_atomic_cas_ptr(slot, existing, prog.get());
+    const bool published = retro_atomic_cas_ptr(slot, existing, prog);
     quiesce_exit(&s_pipeline_program_quiesce);
     if (published)
-      return prog.release();
+      return prog;
   }
 }
 
