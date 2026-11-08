@@ -96,6 +96,11 @@ ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
   uid_table_init(&m_gx_pipeline_cache, sizeof(GXPipelineUid));
   uid_table_init(&m_gx_uber_pipeline_cache, sizeof(GXUberPipelineUid));
   uid_table_init(&m_recorded_uber_pipeline_uids, sizeof(GXUberPipelineUid));
+  uid_table_init(&m_efb_copy_to_vram_pipelines,
+                 sizeof(*TextureConversionShaderGen::TCShaderUid().GetUidData()));
+  uid_table_init(&m_efb_copy_to_ram_pipelines, sizeof(u32) * 3);
+  uid_table_init(&m_texture_reinterpret_pipelines, sizeof(u32) * 2);
+  uid_table_init(&m_texture_decoding_shaders, sizeof(u32) * 2);
 }
 
 static AbstractShader* ShaderOf(const uid_table_value* value)
@@ -133,6 +138,17 @@ static void DropShaders(uid_table* cache)
   uid_table_clear(cache);
 }
 
+/* Keeps a pipeline, or that it failed, under key; the table holds it from then on. */
+static const AbstractPipeline* KeepPipeline(uid_table* cache, const void* key,
+                                            std::unique_ptr<AbstractPipeline> pipeline)
+{
+  uid_table_value* value = uid_table_get(cache, key);
+  if (!value)
+    return nullptr;
+  value->object = pipeline.release();
+  return PipelineOf(value);
+}
+
 ShaderCache::~ShaderCache()
 {
   // The compiler hands back what it still holds before the items go.
@@ -142,6 +158,10 @@ ShaderCache::~ShaderCache()
   uid_table_free(&m_gx_pipeline_cache);
   uid_table_free(&m_gx_uber_pipeline_cache);
   uid_table_free(&m_recorded_uber_pipeline_uids);
+  uid_table_free(&m_efb_copy_to_vram_pipelines);
+  uid_table_free(&m_efb_copy_to_ram_pipelines);
+  uid_table_free(&m_texture_reinterpret_pipelines);
+  uid_table_free(&m_texture_decoding_shaders);
   while (m_work_chunks)
   {
     WorkChunk* next = m_work_chunks->next;
@@ -536,14 +556,17 @@ void ShaderCache::ClearCaches()
   m_texture_copy_pixel_shader.reset();
   m_color_pixel_shader.reset();
 
-  m_efb_copy_to_vram_pipelines.clear();
-  m_efb_copy_to_ram_pipelines.clear();
+  DropPipelines(&m_efb_copy_to_vram_pipelines);
+  uid_table_clear(&m_efb_copy_to_vram_pipelines);
+  DropPipelines(&m_efb_copy_to_ram_pipelines);
+  uid_table_clear(&m_efb_copy_to_ram_pipelines);
   m_copy_rgba8_pipeline.reset();
   m_rgba8_stereo_copy_pipeline.reset();
   for (auto& pipeline : m_palette_conversion_pipelines)
     pipeline.reset();
-  m_texture_reinterpret_pipelines.clear();
-  m_texture_decoding_shaders.clear();
+  DropPipelines(&m_texture_reinterpret_pipelines);
+  uid_table_clear(&m_texture_reinterpret_pipelines);
+  DropShaders(&m_texture_decoding_shaders);
 
   SETSTAT(g_stats.num_pixel_shaders_created, 0);
   SETSTAT(g_stats.num_pixel_shaders_alive, 0);
@@ -1542,9 +1565,9 @@ void ShaderCache::QueueUberShaderPipelines()
 const AbstractPipeline*
 ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShaderUid& uid)
 {
-  auto iter = m_efb_copy_to_vram_pipelines.find(uid);
-  if (iter != m_efb_copy_to_vram_pipelines.end())
-    return iter->second.get();
+  const uid_table_value* found = uid_table_find(&m_efb_copy_to_vram_pipelines, uid.GetUidData());
+  if (found)
+    return PipelineOf(found);
 
   auto shader_code = TextureConversionShaderGen::GeneratePixelShader(m_api_type, uid.GetUidData());
   auto shader = g_gfx->CreateShaderFromSource(
@@ -1552,7 +1575,7 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
       fmt::format("EFB copy to VRAM pixel shader: {}", *uid.GetUidData()));
   if (!shader)
   {
-    m_efb_copy_to_vram_pipelines.emplace(uid, nullptr);
+    uid_table_get(&m_efb_copy_to_vram_pipelines, uid.GetUidData());
     return nullptr;
   }
 
@@ -1567,15 +1590,21 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
-  auto iiter = m_efb_copy_to_vram_pipelines.emplace(uid, g_gfx->CreatePipeline(config));
-  return iiter.first->second.get();
+  return KeepPipeline(&m_efb_copy_to_vram_pipelines, uid.GetUidData(),
+                      g_gfx->CreatePipeline(config));
 }
 
 const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams& uid)
 {
-  auto iter = m_efb_copy_to_ram_pipelines.find(uid);
-  if (iter != m_efb_copy_to_ram_pipelines.end())
-    return iter->second.get();
+  /* the fields alone, not the padding between them */
+  const u32 key[3] = {static_cast<u32>(uid.efb_format), static_cast<u32>(uid.copy_format),
+                      static_cast<u32>(uid.depth) | static_cast<u32>(uid.yuv) << 1 |
+                          static_cast<u32>(uid.all_copy_filter_coefs_needed) << 2 |
+                          static_cast<u32>(uid.copy_filter_can_overflow) << 3 |
+                          static_cast<u32>(uid.apply_gamma) << 4};
+  const uid_table_value* found = uid_table_find(&m_efb_copy_to_ram_pipelines, key);
+  if (found)
+    return PipelineOf(found);
 
   ShaderCode shader_code =
       TextureConversionShaderTiled::GenerateEncodingShader(uid, m_api_type);
@@ -1584,7 +1613,7 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
                                     fmt::format("EFB copy to RAM pixel shader: {}", uid));
   if (!shader)
   {
-    m_efb_copy_to_ram_pipelines.emplace(uid, nullptr);
+    uid_table_get(&m_efb_copy_to_ram_pipelines, key);
     return nullptr;
   }
 
@@ -1596,8 +1625,7 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetColorFramebufferState(AbstractTextureFormat::BGRA8);
   config.usage = AbstractPipelineUsage::Utility;
-  auto iiter = m_efb_copy_to_ram_pipelines.emplace(uid, g_gfx->CreatePipeline(config));
-  return iiter.first->second.get();
+  return KeepPipeline(&m_efb_copy_to_ram_pipelines, key, g_gfx->CreatePipeline(config));
 }
 
 bool ShaderCache::CompileSharedPipelines()
@@ -1687,11 +1715,13 @@ const AbstractPipeline* ShaderCache::GetPaletteConversionPipeline(TLUTFormat for
 const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat from_format,
                                                                    TextureFormat to_format)
 {
-  const auto key = std::make_pair(from_format, to_format);
-  const auto [iter, inserted] = m_texture_reinterpret_pipelines.emplace(key, nullptr);
-
-  if (!inserted)
-    return iter->second.get();
+  const u32 key[2] = {static_cast<u32>(from_format), static_cast<u32>(to_format)};
+  const uid_table_value* found = uid_table_find(&m_texture_reinterpret_pipelines, key);
+  if (found)
+    return PipelineOf(found);
+  /* tried once: a format pair with no shader stays without */
+  if (!uid_table_get(&m_texture_reinterpret_pipelines, key))
+    return nullptr;
 
   ShaderCode shader_source =
       FramebufferShaderGen::GenerateTextureReinterpretShader(from_format, to_format);
@@ -1714,19 +1744,21 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
-  iter->second = g_gfx->CreatePipeline(config);
-  return iter->second.get();
+  return KeepPipeline(&m_texture_reinterpret_pipelines, key, g_gfx->CreatePipeline(config));
 }
 
 const AbstractShader*
 ShaderCache::GetTextureDecodingShader(TextureFormat format,
                                       std::optional<TLUTFormat> palette_format)
 {
-  const auto key = std::make_pair(static_cast<u32>(format),
-                                  static_cast<u32>(palette_format.value_or(TLUTFormat::IA8)));
-  const auto [iter, inserted] = m_texture_decoding_shaders.emplace(key, nullptr);
-  if (!inserted)
-    return iter->second.get();
+  const u32 key[2] = {static_cast<u32>(format),
+                      static_cast<u32>(palette_format.value_or(TLUTFormat::IA8))};
+  const uid_table_value* found = uid_table_find(&m_texture_decoding_shaders, key);
+  if (found)
+    return ShaderOf(found);
+  /* tried once: a format with no shader stays without */
+  if (!uid_table_get(&m_texture_decoding_shaders, key))
+    return nullptr;
 
   ShaderCode shader_source =
       TextureConversionShaderTiled::GenerateDecodingShader(format, palette_format, APIType::OpenGL);
@@ -1743,7 +1775,8 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
   if (!shader)
     return nullptr;
 
-  iter->second = std::move(shader);
-  return iter->second.get();
+  uid_table_value* value = uid_table_get(&m_texture_decoding_shaders, key);
+  value->object = shader.release();
+  return ShaderOf(value);
 }
 }  // namespace VideoCommon

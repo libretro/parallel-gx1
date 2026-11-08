@@ -6,7 +6,6 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <map>
 #include <set>
 #include <memory>
 #include <optional>
@@ -263,9 +262,8 @@ private:
   Common::LinearDiskCache<SerializedGXUberPipelineUid, u8> m_gx_uber_pipeline_disk_cache;
 
   // EFB copy to VRAM/RAM pipelines
-  std::map<TextureConversionShaderGen::TCShaderUid, std::unique_ptr<AbstractPipeline>>
-      m_efb_copy_to_vram_pipelines;
-  std::map<EFBCopyParams, std::unique_ptr<AbstractPipeline>> m_efb_copy_to_ram_pipelines;
+  uid_table m_efb_copy_to_vram_pipelines; /* by TCShaderUid data */
+  uid_table m_efb_copy_to_ram_pipelines;  /* by EFBCopyRAMKey */
 
   // Copy pipeline for RGBA8 textures
   std::unique_ptr<AbstractPipeline> m_copy_rgba8_pipeline;
@@ -276,11 +274,10 @@ private:
       m_palette_conversion_pipelines;
 
   // Texture reinterpreting pipeline
-  std::map<std::pair<TextureFormat, TextureFormat>, std::unique_ptr<AbstractPipeline>>
-      m_texture_reinterpret_pipelines;
+  uid_table m_texture_reinterpret_pipelines; /* by u32 from, to format */
 
   // Texture decoding shaders
-  std::map<std::pair<u32, u32>, std::unique_ptr<AbstractShader>> m_texture_decoding_shaders;
+  uid_table m_texture_decoding_shaders; /* by u32 format, palette format */
 
   Common::EventHook m_frame_end_handler;
 };
