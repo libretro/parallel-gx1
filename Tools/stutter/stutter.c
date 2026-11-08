@@ -167,6 +167,22 @@ static unsigned long long hash_bytes(const unsigned char *p, size_t n)
    return h;
 }
 
+/* The corpus frame a picture is: the number gxgen draws over its top left
+ * corner, 12 squares of 16x16 EFB pixels, white for a one, bit 0 first. */
+static unsigned picture_corpus_frame(const unsigned char *px, unsigned w, unsigned h,
+      size_t pitch)
+{
+   unsigned i, k = 0;
+   for (i = 0; i < 12; i++)
+   {
+      const size_t x = ((size_t)i * 16 + 8) * w / 640, y = (size_t)8 * h / 528;
+      const unsigned char *p = px + y * pitch + x * 4;
+      if (p[0] + p[1] + p[2] > 3 * 128)
+         k |= 1u << i;
+   }
+   return k;
+}
+
 #define VKFN(name) PFN_##name p_##name = (PFN_##name)vgdpa(dev, #name)
 
 static void check_image(const struct retro_vulkan_image *img, unsigned w, unsigned h)
@@ -266,7 +282,8 @@ static void check_image(const struct retro_vulkan_image *img, unsigned w, unsign
    lock_give();
 
    p_vkMapMemory(dev, mem, 0, bi.size, 0, &px);
-   printf("picture frame=%u size=%ux%u hash=%016llx\n", frame_no, w, h,
+   printf("picture frame=%u corpus=%u size=%ux%u hash=%016llx\n", frame_no,
+         picture_corpus_frame((const unsigned char *)px, w, h, (size_t)w * 4), w, h,
          hash_bytes((const unsigned char *)px, (size_t)w * h * 4));
    p_vkUnmapMemory(dev, mem);
    p_vkDestroyCommandPool(dev, pool, NULL);
@@ -300,7 +317,8 @@ static void video_cb(const void *data, unsigned w, unsigned h, size_t pitch)
                hsh *= 1099511628211ULL;
             }
          }
-         printf("picture frame=%u size=%ux%u hash=%016llx\n", frame_no, w, h, hsh);
+         printf("picture frame=%u corpus=%u size=%ux%u hash=%016llx\n", frame_no,
+               picture_corpus_frame((const unsigned char *)data, w, h, pitch), w, h, hsh);
       }
       return;
    }

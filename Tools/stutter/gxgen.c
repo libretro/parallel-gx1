@@ -10,8 +10,14 @@
  * the vertex format (position and colour component formats) and the
  * primitive (quads, triangles, strips, fans, lines, points). The frames
  * walk every combination of blending, depth, vertex format and primitive,
- * with TEV, culling and alpha test cycling alongside, once per pass; from
- * the second pass on, every pipeline has been met before.
+ * with TEV, culling, alpha test and the copy (filter coefficients, their
+ * overflow, gamma) cycling alongside, once per pass; from the second pass
+ * on, every pipeline has been met before. Each frame also copies a square
+ * of the EFB to a texture, in a format cycling through every colour,
+ * intensity and depth copy format with the EFB with and without alpha,
+ * and draws it textured over a corner. The frame's number is drawn last,
+ * over the top left corner: a row of black and white 16x16 squares, bit 0
+ * first, which the harness reads back to tell which frame a picture is.
  *
  * C89, no dependencies: builds with any C compiler on Linux and Windows. */
 #include <stdio.h>
@@ -118,6 +124,29 @@ static void xf1(u32 reg, u32 v)
 #define CULL_CHOICES 3
 /* alpha test: always, a compare, two compares combined */
 #define ALPHA_CHOICES 3
+/* the copy: its filter coefficients (w0..w6, the rows above, the row and
+ * the rows below), and its gamma */
+#define COPY_CHOICES 5
+static const u32 copy_filter[COPY_CHOICES][7] = {
+   {0, 0, 21, 22, 21, 0, 0},     /* the row alone */
+   {10, 0, 22, 0, 22, 0, 10},    /* every row, summing to 64 */
+   {0, 0, 63, 63, 63, 0, 0},     /* the row alone, overflowing */
+   {0, 0, 21, 22, 21, 0, 0},     /* the row alone, gamma 1.7 */
+   {32, 32, 21, 22, 21, 32, 32}  /* every row, overflowing, gamma 2.2 */
+};
+static const u32 copy_gamma[COPY_CHOICES] = {0, 0, 0, 1, 2};
+/* the copy to a texture: its EFB copy format, intensity, depth, and the
+ * texture format that reads it back */
+#define TEX_COPY_CHOICES 24
+static const u32 tex_copy[TEX_COPY_CHOICES][4] = {
+   /* EFB copy format, intensity, depth, texture format */
+   {0x0, 0, 0, 0}, {0x8, 0, 0, 1}, {0x2, 0, 0, 2}, {0x3, 0, 0, 3},  /* R4 R8 RA4 RA8 */
+   {0x0, 1, 0, 0}, {0x8, 1, 0, 1}, {0x2, 1, 0, 2}, {0x3, 1, 0, 3},  /* I4 I8 IA4 IA8 */
+   {0x4, 0, 0, 4}, {0x5, 0, 0, 5}, {0x6, 0, 0, 6}, {0x7, 0, 0, 1},  /* 565 5A3 RGBA8 A8 */
+   {0x9, 0, 0, 1}, {0xa, 0, 0, 1}, {0xb, 0, 0, 3}, {0xc, 0, 0, 3},  /* G8 B8 RG8 GB8 */
+   {0x6, 0, 1, 6}, {0x8, 0, 1, 1}, {0x3, 0, 1, 3}, {0x9, 0, 1, 1},  /* Z24 Z8H Z16 Z8M */
+   {0xa, 0, 1, 1}, {0xb, 0, 1, 3}, {0xc, 0, 1, 3}, {0x0, 0, 1, 0}   /* Z8L Z16R Z16L Z4 */
+};
 /* vertex format: position float or s16, colour rgba8888, rgb565 or rgba4444 */
 #define VTX_CHOICES 4
 /* primitive */
@@ -293,6 +322,109 @@ static void prim(u32 choice, int white_left)
    }
 }
 
+/* 64x64 texels from the EFB's middle, where the halves meet, copied to a
+ * texture in one of the formats, and drawn over the top right corner with
+ * TEV taking the texture's colour and alpha alone. */
+#define TEX_SIZE 64
+#define TEX_ADDR 0x00200000u
+
+static void tex_copy_draw(u32 choice, u32 gamma, u32 pixel_format)
+{
+   const u32 *c = tex_copy[choice];
+   /* bytes per row of blocks, in 32-byte lines: 4 bits per texel (8x8
+    * blocks), 8 (8x4), 16 (4x4) or 32 (4x4, two halves) */
+   static const u32 tex_stride[7] = {8, 8, 8, 16, 16, 16, 32};
+   /* the copy's format field: the real format rotated right by one */
+   const u32 tpf = c[0] < 8 ? c[0] * 2 : (c[0] - 8) * 2 + 1;
+   static const float quad[4][4] = {
+      /* x, y, s, t */
+      {0.5f, 1.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f, 0.0f},
+      {1.0f, 0.5f, 1.0f, 1.0f}, {0.5f, 0.5f, 0.0f, 1.0f}};
+   u32 i;
+
+   bpw(0x49, (320 - TEX_SIZE / 2) | ((240 - TEX_SIZE / 2) << 10));
+   bpw(0x4a, (TEX_SIZE - 1) | ((TEX_SIZE - 1) << 10));
+   bpw(0x4b, TEX_ADDR >> 5);
+   bpw(0x4d, tex_stride[c[3]]);
+   if (c[2])
+      bpw(0x43, 3); /* the depth buffer, Z24 */
+   /* clamp both, the format, gamma, intensity with automatic conversion */
+   bpw(0x52, 3 | (tpf << 3) | (gamma << 7) | (c[1] << 15) | (1u << 16));
+   if (c[2])
+      bpw(0x43, pixel_format);
+
+   /* the texture: clamped, nearest, the copy's size, format and address */
+   bpw(0x80, 0);
+   bpw(0x84, 0);
+   bpw(0x88, (TEX_SIZE - 1) | ((TEX_SIZE - 1) << 10) | (c[3] << 20));
+   bpw(0x94, TEX_ADDR >> 5);
+   bpw(0x30, TEX_SIZE - 1);
+   bpw(0x31, TEX_SIZE - 1);
+   /* one stage: texture map 0 with texture coordinate 0, its colour and
+    * alpha alone; swap table 0 as RGBA */
+   bpw(0x00, 0x11);
+   bpw(0x28, (1 << 6) | (0x3f << 12) | (7 << 19));
+   bpw(0xc0, 0xfff8);
+   bpw(0xc1, 0xffc0);
+   bpw(0xf6, 1 << 2);
+   bpw(0xf7, 2 | (3 << 2));
+   bpw(0x40, 0);
+   bpw(0x41, 0x18);
+   bpw(0xf3, (7 << 16) | (7 << 19));
+   /* one texture coordinate, from the vertex's, through matrix 0 */
+   xf1(0x1008, 1 | (1 << 4));
+   xf1(0x103f, 1);
+   xf1(0x1040, 5 << 7);
+   /* VAT 1: position float xyz, colour rgba8888, texture coordinate float st */
+   cpw(0x60, 1);
+   cpw(0x71, 1 | (4 << 1) | (1 << 13) | (5 << 14) | (1 << 21) | (4 << 22) | (1u << 30));
+   put8(0x81);
+   be16(4);
+   for (i = 0; i < 4; i++)
+   {
+      be32(f32(quad[i][0]));
+      be32(f32(quad[i][1]));
+      be32(f32(0.0f));
+      be32(0xffffffffu);
+      be32(f32(quad[i][2]));
+      be32(f32(quad[i][3]));
+   }
+   cpw(0x60, 0);
+   xf1(0x1008, 1);
+   xf1(0x103f, 0);
+   bpw(0xf6, 0);
+   bpw(0xf7, 0);
+}
+
+/* FRAME_BITS squares from the top left, white for a one */
+#define FRAME_BITS 12
+
+static void frame_number(u32 k)
+{
+   u32 i;
+   bpw(0x00, 0x10);
+   bpw(0x28, bp[0x28]);
+   bpw(0xc0, 0xfffa);
+   bpw(0xc1, 0xffd0);
+   bpw(0x40, 0);
+   bpw(0x41, 0x18);
+   bpw(0xf3, (7 << 16) | (7 << 19));
+   /* VAT 2: position float xyz, colour rgba8888 */
+   cpw(0x72, 1 | (4 << 1) | (1 << 13) | (5 << 14) | (1u << 30));
+   put8(0x82);
+   be16(4 * FRAME_BITS);
+   for (i = 0; i < FRAME_BITS; i++)
+   {
+      const float x0 = (float)(i * 16) / 320.0f - 1.0f, x1 = (float)(i * 16 + 16) / 320.0f - 1.0f;
+      const float y0 = 1.0f, y1 = 1.0f - 16.0f / 240.0f;
+      const u32 c = (k >> i) & 1 ? 0xffffffffu : 0x000000ffu;
+      be32(f32(x0)); be32(f32(y0)); be32(f32(0.0f)); be32(c);
+      be32(f32(x1)); be32(f32(y0)); be32(f32(0.0f)); be32(c);
+      be32(f32(x1)); be32(f32(y1)); be32(f32(0.0f)); be32(c);
+      be32(f32(x0)); be32(f32(y1)); be32(f32(0.0f)); be32(c);
+   }
+}
+
 static void frame(u32 k, u32 combos)
 {
    static const u32 xf_viewport_n = 6, xf_proj_n = 7;
@@ -321,7 +453,8 @@ static void frame(u32 k, u32 combos)
    for (i = 0; i < 4; i++)
       bpw(state_regs[i], bp[state_regs[i]]);
    bpw(0x22, 6 | (6 << 8)); /* line width and point size, in sixths */
-   bpw(0x43, bp[0x43]);
+   /* the EFB without and with alpha */
+   bpw(0x43, (k / 3) & 1);
    bpw(0x44, bp[0x44]);
 
    vtx(digit[2]);
@@ -333,6 +466,16 @@ static void frame(u32 k, u32 combos)
    alpha((k / 7) % ALPHA_CHOICES);
 
    prim(digit[3], (k & 1) == 0);
+   /* the copy filter, both copies' */
+   {
+      const u32 *w = copy_filter[(k / 2) % COPY_CHOICES];
+      bp[0x53] = w[0] | (w[1] << 6) | (w[2] << 12) | (w[3] << 18);
+      bp[0x54] = w[4] | (w[5] << 6) | (w[6] << 12);
+   }
+   bpw(0x53, bp[0x53]);
+   bpw(0x54, bp[0x54]);
+   tex_copy_draw((k / 4) % TEX_COPY_CHOICES, copy_gamma[(k / 2) % COPY_CHOICES], (k / 3) & 1);
+   frame_number(k);
 
    /* EFB to XFB */
    for (i = 0; i < 10; i++)
@@ -341,7 +484,7 @@ static void frame(u32 k, u32 combos)
     * the frame ends with it, as the player expects */
    while ((len + 5) % 32)
       put8(0);
-   bpw(0x52, (1 << 14) | (1 << 11) | 3);
+   bpw(0x52, (1 << 14) | (1 << 11) | (copy_gamma[(k / 2) % COPY_CHOICES] << 7) | 3);
 }
 
 static void le32(FILE *f, u32 v)

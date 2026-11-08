@@ -106,8 +106,10 @@ public:
   const AbstractShader* GetColorPixelShader() const { return m_color_pixel_shader; }
 
   // EFB copy to RAM/VRAM pipelines
-  const AbstractPipeline*
-  GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShaderUid& uid);
+  /* The pipeline for an EFB copy to VRAM drawn in format (TextureConversionShaderGen::
+   * GetDrawnFormat), its uniforms saying the rest (GetCopyFlags): the one built for the format,
+   * or, until it is, queued to be, the one for every format. */
+  const AbstractPipeline* GetEFBCopyToVRAMPipeline(EFBCopyFormat format);
   const AbstractPipeline* GetEFBCopyToRAMPipeline(const EFBCopyParams& uid);
 
   // RGBA8 framebuffer copy pipelines
@@ -138,6 +140,8 @@ private:
   void ClosePipelineUIDCache();
   void CompileMissingPipelines();
   void QueueUberShaderPipelines();
+  /* format null: the pipeline for every format */
+  AbstractPipeline* CompileEFBCopyToVRAMPipeline(const EFBCopyFormat* format) const;
   bool CompileSharedPipelines();
 
   // GX shader compiler methods
@@ -270,7 +274,10 @@ private:
   Common::LinearDiskCache<SerializedGXUberPipelineUid, u8> m_gx_uber_pipeline_disk_cache;
 
   // EFB copy to VRAM/RAM pipelines
-  uid_table m_efb_copy_to_vram_pipelines; /* by TCShaderUid data */
+  AbstractPipeline* m_efb_copy_to_vram_pipeline = nullptr; /* every format */
+  /* by EFBCopyFormat: built, and whether one is queued or built */
+  AbstractPipeline* m_efb_copy_format_pipelines[16] = {};
+  bool m_efb_copy_format_asked[16] = {};
   uid_table m_efb_copy_to_ram_pipelines;  /* by EFBCopyRAMKey */
 
   // Copy pipeline for RGBA8 textures

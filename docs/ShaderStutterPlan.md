@@ -89,10 +89,13 @@ the spread, and lists every draw-path compile by kind.
 Landed so far: the stats build (draw-path compiles by kind, waits,
 draw-path disk writes, worker compiles, shaders and pipelines made),
 the harness on Vulkan and the software renderer, a corpus of blend,
-depth, cull, vertex format, primitive, TEV and alpha test states, and
-the Vulkan baseline. Still to come: EFB copy, texture, palette and
-texgen states in the corpus, the GL and D3D backends in the harness,
-and the allocation tracer. Counters are gated over the whole run:
+depth, cull, vertex format, primitive, TEV and alpha test states, of
+copy filters, overflow and gamma, and of an EFB copy to a texture in
+every colour, intensity and depth format drawn back textured, and the
+Vulkan baseline. Each picture carries its frame's number, so the
+picture check compares frame by frame. Still to come: texture formats
+of their own, palettes and texgens in the corpus, the GL and D3D
+backends in the harness, and the allocation tracer. Counters are gated over the whole run:
 where boot ends races the GPU thread, so the boot/play split is
 reported, not gated.
 
@@ -145,6 +148,14 @@ ubershader pipeline there can be is built before the game starts, so
 cold no draw builds one (`draw_uber_pipeline` and
 `draw_driver_pipeline` are 0). Loading waits for the driver to compile
 about 190 pipelines: making that set smaller is what shortens it.
+
+EFB copies to VRAM: one shader per format reads the rest of the copy
+(filter rows, overflow, gamma, alpha, depth, intensity) from its
+uniforms, taking the path a shader built for that copy would. One more,
+built with the shared pipelines, reads the format from them too and
+draws a format's copies the same until the format's own is built on a
+worker. No copy waits for a pipeline (`draw_efb_copy_to_vram` is 0),
+where the corpus made the parent build 152.
 
 Done when: draw-path compiles and waits are 0 by kind, cold, on every
 backend that builds, across the whole corpus. Cold p99 and max

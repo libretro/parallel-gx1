@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include <fmt/format.h>
-#include <string>
+#include <array>
 
 #include "Common/CommonTypes.h"
 
@@ -15,51 +14,28 @@ enum class APIType;
 
 namespace TextureConversionShaderGen
 {
-#pragma pack(1)
-struct UidData
+/* An EFB copy to VRAM pixel shader reads what it copies and how from its uniforms (copy_flags),
+ * each branch on them taking the path a shader built for that copy alone would. One is built for
+ * each format; the one for none takes the format from them as well, and draws every copy the
+ * same while the one for its format is not built yet. */
+enum
 {
-  u32 NumValues() const { return sizeof(UidData); }
-  EFBCopyFormat dst_format;
-
-  u32 efb_has_alpha : 1;
-  u32 is_depth_copy : 1;
-  u32 is_intensity : 1;
-  u32 scale_by_half : 1;
-  u32 all_copy_filter_coefs_needed : 1;
-  u32 copy_filter_can_overflow : 1;
-  u32 apply_gamma : 1;
+  COPY_FLAG_ALL_FILTER_COEFS = 1u << 0,
+  COPY_FLAG_EFB_HAS_ALPHA = 1u << 1,
+  COPY_FLAG_FILTER_CAN_OVERFLOW = 1u << 2,
+  COPY_FLAG_APPLY_GAMMA = 1u << 3,
+  COPY_FLAG_DEPTH = 1u << 4,
+  COPY_FLAG_INTENSITY = 1u << 5
+  /* from bit 8, how the format takes each channel (GetCopyFlags) */
 };
-#pragma pack()
-
-using TCShaderUid = ShaderUid<UidData>;
 
 ShaderCode GenerateVertexShader(APIType api_type);
-ShaderCode GeneratePixelShader(APIType api_type, const UidData* uid_data);
+ShaderCode GeneratePixelShader(APIType api_type, const EFBCopyFormat* format);
 
-TCShaderUid GetShaderUid(EFBCopyFormat dst_format, bool is_depth_copy, bool is_intensity,
-                         bool scale_by_half, float gamma_rcp,
-                         const std::array<u32, 3>& filter_coefficients);
+/* The format a copy into dst_format is drawn in: with true colour forced, a wider one. */
+EFBCopyFormat GetDrawnFormat(EFBCopyFormat dst_format);
+/* copy_flags for a copy */
+u32 GetCopyFlags(EFBCopyFormat dst_format, bool is_depth_copy, bool is_intensity, float gamma_rcp,
+                 const std::array<u32, 3>& filter_coefficients);
 
 }  // namespace TextureConversionShaderGen
-
-template <>
-struct fmt::formatter<TextureConversionShaderGen::UidData>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const TextureConversionShaderGen::UidData& uid, FormatContext& ctx) const
-  {
-    std::string dst_format;
-    if (uid.dst_format == EFBCopyFormat::XFB)
-      dst_format = "XFB";
-    else
-      dst_format = fmt::to_string(uid.dst_format);
-    return fmt::format_to(ctx.out(),
-                          "dst_format: {}, efb_has_alpha: {}, is_depth_copy: {}, is_intensity: {}, "
-                          "scale_by_half: {}, all_copy_filter_coefs_needed: {}, "
-                          "copy_filter_can_overflow: {}, apply_gamma: {}",
-                          dst_format, uid.efb_has_alpha, uid.is_depth_copy, uid.is_intensity,
-                          uid.scale_by_half, uid.all_copy_filter_coefs_needed,
-                          uid.copy_filter_can_overflow, uid.apply_gamma);
-  }
-};

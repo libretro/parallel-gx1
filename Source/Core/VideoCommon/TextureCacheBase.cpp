@@ -3410,15 +3410,8 @@ void TextureCacheBase::CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_c
   // Flush EFB pokes first, as they're expected to be included.
   g_framebuffer_manager->FlushEFBPokes();
 
-  // Get the pipeline which we will be using. If the compilation failed, this will be null.
   const AbstractPipeline* copy_pipeline = g_shader_cache->GetEFBCopyToVRAMPipeline(
-      TextureConversionShaderGen::GetShaderUid(dst_format, is_depth_copy, is_intensity,
-                                               scale_by_half, 1.0f / gamma, filter_coefficients));
-  if (!copy_pipeline)
-  {
-    WARN_LOG_FMT(VIDEO, "Skipping EFB copy to VRAM due to missing pipeline.");
-    return;
-  }
+      TextureConversionShaderGen::GetDrawnFormat(dst_format));
 
   const auto scaled_src_rect = g_framebuffer_manager->ConvertEFBRectangle(src_rect);
   const auto framebuffer_rect = g_gfx->ConvertFramebufferRectangle(
@@ -3439,7 +3432,7 @@ void TextureCacheBase::CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_c
     float clamp_top;
     float clamp_bottom;
     float pixel_height;
-    u32 padding;
+    u32 copy_flags;
   };
   Uniforms uniforms;
   const float rcp_efb_width = 1.0f / static_cast<float>(g_framebuffer_manager->GetEFBWidth());
@@ -3461,7 +3454,8 @@ void TextureCacheBase::CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_c
   const u32 bottom_coord = (clamp_bottom ? framebuffer_rect.bottom : efb_height) - 1;
   uniforms.clamp_bottom = (static_cast<float>(bottom_coord) + .5f) * rcp_efb_height;
   uniforms.pixel_height = g_ActiveConfig.bCopyEFBScaled ? rcp_efb_height : 1.0f / EFB_HEIGHT;
-  uniforms.padding = 0;
+  uniforms.copy_flags = TextureConversionShaderGen::GetCopyFlags(
+      dst_format, is_depth_copy, is_intensity, uniforms.gamma_rcp, filter_coefficients);
   g_vertex_manager->UploadUtilityUniforms(&uniforms, sizeof(uniforms));
 
   // Use the copy pipeline to render the VRAM copy.

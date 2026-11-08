@@ -9,7 +9,8 @@
 #     cold (no cache), recipes (uid caches only), warm (every cache), and
 #     state (a savestate from mid-corpus loaded into a fresh process);
 #   - with a parent core, times the candidate and the parent ABBA, and
-#     compares their pictures (separate --check runs);
+#     compares their pictures (separate --check runs, in each synchronous
+#     compilation mode);
 #   - checks the hard gates against baseline.txt and the parent: draw-path
 #     compiles, waits and disk writes, and shaders and pipelines built,
 #     each over the whole run (worker compiles are reported, not gated:
@@ -121,19 +122,34 @@ for backend in $BACKENDS; do
          cat "$OUT/abba-$order-$backend-warm.txt.$$" >> "$OUT/abba-$order-$backend-warm.txt"
          rm -f "$OUT"/abba-*.$$
       done
-      # pictures: the same set from both cores
-      for tag in cand parent; do
-         core=$CAND
-         [ "$tag" = parent ] && core=$PARENT
-         fresh "$OUT/dirs-check"
-         run "$core" "$backend" "$OUT/dirs-check" "$OUT/check-$tag-$backend.txt" --check
-         sed -n 's/^picture .* hash=\([0-9a-f]*\)/\1/p' "$OUT/check-$tag-$backend.txt" | sort -u \
-            > "$OUT/check-$tag-$backend.set"
+      # pictures: the same from both cores, frame by frame. Each picture
+      # carries its corpus frame's number (gxgen); a run presents most
+      # frames, and the frames both runs present are compared. Each
+      # synchronous mode draws a frame with the same pipeline every run,
+      # ubershaders (1) and specialized (0); the asynchronous modes draw
+      # with whichever is ready, which timing decides.
+      for mode in 1 0; do
+         for tag in cand parent; do
+            core=$CAND
+            [ "$tag" = parent ] && core=$PARENT
+            fresh "$OUT/dirs-check"
+            # with the copy filter on, as the corpus's copies set it
+            run "$core" "$backend" "$OUT/dirs-check" "$OUT/check-$tag-$backend-$mode.txt" \
+               --check --opt dolphin_shader_compilation_mode=$mode \
+               --opt dolphin_disable_copy_filter=disabled
+            sed -n 's/^picture .* corpus=\([0-9]*\) .* hash=\([0-9a-f]*\)/\1 \2/p' \
+               "$OUT/check-$tag-$backend-$mode.txt" | sort -u > "$OUT/check-$tag-$backend-$mode.map"
+         done
+         join "$OUT/check-cand-$backend-$mode.map" "$OUT/check-parent-$backend-$mode.map" \
+            > "$OUT/check-$backend-$mode.joined"
+         both=$(wc -l < "$OUT/check-$backend-$mode.joined")
+         differ=$(awk '$2 != $3' "$OUT/check-$backend-$mode.joined" | wc -l)
+         echo "   pictures, compilation mode $mode: $both frames in both runs, $differ differ"
+         if [ "$differ" != 0 ] || [ "$both" -lt $((NEW / 3)) ]; then
+            echo "FAIL $backend: the pictures differ from the parent's (compilation mode $mode)"
+            FAILED=1
+         fi
       done
-      if ! cmp -s "$OUT/check-cand-$backend.set" "$OUT/check-parent-$backend.set"; then
-         echo "FAIL $backend: the pictures differ from the parent's"
-         FAILED=1
-      fi
    fi
 
    for state in cold recipes warm state; do

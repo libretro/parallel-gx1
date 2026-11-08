@@ -45,7 +45,8 @@ enum : u8
   WORK_PIXEL_SHADER,
   WORK_PIXEL_UBER_SHADER,
   WORK_PIPELINE,
-  WORK_UBER_PIPELINE
+  WORK_UBER_PIPELINE,
+  WORK_EFB_COPY_TO_VRAM_PIPELINE /* uid: the EFBCopyFormat */
 };
 
 static constexpr size_t WorkUidSize()
@@ -97,8 +98,6 @@ ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
   uid_table_init(&m_gx_pipeline_cache, sizeof(GXPipelineUid));
   uid_table_init(&m_gx_uber_pipeline_cache, sizeof(GXUberPipelineUid));
   uid_table_init(&m_recorded_uber_pipeline_uids, sizeof(GXUberPipelineUid));
-  uid_table_init(&m_efb_copy_to_vram_pipelines,
-                 sizeof(*TextureConversionShaderGen::TCShaderUid().GetUidData()));
   uid_table_init(&m_efb_copy_to_ram_pipelines, sizeof(u32) * 3);
   uid_table_init(&m_texture_reinterpret_pipelines, sizeof(u32) * 2);
   uid_table_init(&m_texture_decoding_shaders, sizeof(u32) * 2);
@@ -173,7 +172,6 @@ ShaderCache::~ShaderCache()
   uid_table_free(&m_gx_pipeline_cache);
   uid_table_free(&m_gx_uber_pipeline_cache);
   uid_table_free(&m_recorded_uber_pipeline_uids);
-  uid_table_free(&m_efb_copy_to_vram_pipelines);
   uid_table_free(&m_efb_copy_to_ram_pipelines);
   uid_table_free(&m_texture_reinterpret_pipelines);
   uid_table_free(&m_texture_decoding_shaders);
@@ -607,8 +605,14 @@ void ShaderCache::ClearCaches()
   AbstractShaderDelete(m_color_pixel_shader);
   m_color_pixel_shader = nullptr;
 
-  DropPipelines(&m_efb_copy_to_vram_pipelines);
-  uid_table_clear(&m_efb_copy_to_vram_pipelines);
+  AbstractPipelineDelete(m_efb_copy_to_vram_pipeline);
+  m_efb_copy_to_vram_pipeline = nullptr;
+  for (size_t i = 0; i < 16; i++)
+  {
+    AbstractPipelineDelete(m_efb_copy_format_pipelines[i]);
+    m_efb_copy_format_pipelines[i] = nullptr;
+    m_efb_copy_format_asked[i] = false;
+  }
   DropPipelines(&m_efb_copy_to_ram_pipelines);
   uid_table_clear(&m_efb_copy_to_ram_pipelines);
   AbstractPipelineDelete(m_copy_rgba8_pipeline);
@@ -1482,6 +1486,9 @@ void ShaderCache::WorkCompile(AsyncShaderWork* work)
     item->result =
         cache->CompilePixelUberShader(item->Uid<UberShader::PixelShaderUid>());
     break;
+  case WORK_EFB_COPY_TO_VRAM_PIPELINE:
+    item->result = cache->CompileEFBCopyToVRAMPipeline(&item->Uid<EFBCopyFormat>());
+    break;
   default:
     if (item->has_config)
       item->result = g_gfx->CreatePipeline(item->config);
@@ -1534,6 +1541,11 @@ void ShaderCache::WorkRetrieve(AsyncShaderWork* work)
         item->Uid<GXUberPipelineUid>(),
         static_cast<AbstractPipeline*>(result));
     break;
+  case WORK_EFB_COPY_TO_VRAM_PIPELINE:
+    /* one that failed leaves the one for every format drawing */
+    cache->m_efb_copy_format_pipelines[static_cast<u32>(item->Uid<EFBCopyFormat>()) & 15] =
+        static_cast<AbstractPipeline*>(result);
+    break;
   }
   cache->ReleaseWork(item);
 }
@@ -1543,7 +1555,8 @@ void ShaderCache::WorkDiscard(AsyncShaderWork* work)
   WorkItem* item = reinterpret_cast<WorkItem*>(work);
   if (item->result)
   {
-    if (item->kind == WORK_PIPELINE || item->kind == WORK_UBER_PIPELINE)
+    if (item->kind == WORK_PIPELINE || item->kind == WORK_UBER_PIPELINE ||
+        item->kind == WORK_EFB_COPY_TO_VRAM_PIPELINE)
       AbstractPipelineDelete(static_cast<AbstractPipeline*>(item->result));
     else
       AbstractShaderDelete(static_cast<AbstractShader*>(item->result));
@@ -1750,25 +1763,14 @@ void ShaderCache::QueueUberShaderPipelines()
   }
 }
 
-const AbstractPipeline*
-ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShaderUid& uid)
+AbstractPipeline* ShaderCache::CompileEFBCopyToVRAMPipeline(const EFBCopyFormat* format) const
 {
-  const uid_table_value* found = uid_table_find(&m_efb_copy_to_vram_pipelines, uid.GetUidData());
-  if (found)
-    return PipelineOf(found);
-  STUTTER_MARK(t);
-
-  auto shader_code = TextureConversionShaderGen::GeneratePixelShader(m_api_type, uid.GetUidData());
   AbstractShader* const shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_code,
-      fmt::format("EFB copy to VRAM pixel shader: {}", *uid.GetUidData()));
-  if (!shader)
-  {
-    uid_table_get(&m_efb_copy_to_vram_pipelines, uid.GetUidData());
-    return nullptr;
-  }
-
+      ShaderStage::Pixel, TextureConversionShaderGen::GeneratePixelShader(m_api_type, format),
+      "EFB copy to VRAM pixel shader");
   AbstractPipelineConfig config = {};
+  if (!shader)
+    return nullptr;
   config.vertex_format = nullptr;
   config.vertex_shader = m_efb_copy_vertex_shader;
   config.geometry_shader =
@@ -1779,10 +1781,26 @@ ShaderCache::GetEFBCopyToVRAMPipeline(const TextureConversionShaderGen::TCShader
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
-  const AbstractPipeline* const kept =
-      KeepPipeline(&m_efb_copy_to_vram_pipelines, uid.GetUidData(), PipelineOnce(config, shader));
-  STUTTER_SINCE(STUTTER_DRAW_EFB_COPY_TO_VRAM, t);
-  return kept;
+  return PipelineOnce(config, shader);
+}
+
+const AbstractPipeline* ShaderCache::GetEFBCopyToVRAMPipeline(EFBCopyFormat format)
+{
+  const u32 i = static_cast<u32>(format) & 15;
+  if (m_efb_copy_format_pipelines[i])
+    return m_efb_copy_format_pipelines[i];
+  /* built on a worker, while the one for every format draws */
+  if (!m_efb_copy_format_asked[i] && m_async_shader_compiler.HasWorkerThreads())
+  {
+    WorkItem* const item = AllocWork(WORK_EFB_COPY_TO_VRAM_PIPELINE, COMPILE_PRIORITY_ONDEMAND_PIPELINE);
+    if (item)
+    {
+      memcpy(item->uid, &format, sizeof(format));
+      m_efb_copy_format_asked[i] = true;
+      m_async_shader_compiler.QueueWorkItem(&item->base, item->base.priority);
+    }
+  }
+  return m_efb_copy_to_vram_pipeline;
 }
 
 const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams& uid)
@@ -1866,6 +1884,10 @@ bool ShaderCache::CompileSharedPipelines()
   config.usage = AbstractPipelineUsage::Utility;
   m_copy_rgba8_pipeline = g_gfx->CreatePipeline(config);
   if (!m_copy_rgba8_pipeline)
+    return false;
+
+  m_efb_copy_to_vram_pipeline = CompileEFBCopyToVRAMPipeline(nullptr);
+  if (!m_efb_copy_to_vram_pipeline)
     return false;
 
   if (UseGeometryShaderForEFBCopies())
