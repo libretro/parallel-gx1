@@ -141,16 +141,29 @@ public:
   {
     Close();
     std::free(m_append_buffer);
+    std::free(m_borrowed);
   }
   LinearDiskCache(const LinearDiskCache&) = delete;
   LinearDiskCache& operator=(const LinearDiskCache&) = delete;
 
-  // Writes the entries appended since, in one write.
+  // Writes the entries appended since: the store's own in one write, the borrowed from where
+  // their owners keep them.
   void Sync()
   {
+    size_t i;
     if (m_append_size && m_file.IsOpen())
       m_file.WriteBytes(m_append_buffer, m_append_size);
+    for (i = 0; i < m_borrowed_count && m_file.IsOpen(); i++)
+    {
+      const Borrowed& b = m_borrowed[i];
+      m_file.WriteBytes(&b.value_size, sizeof(u32));
+      m_file.WriteBytes(&b.key, sizeof(K));
+      if (b.value_size)
+        m_file.WriteBytes(b.value, size_t(b.value_size) * sizeof(V));
+      m_file.WriteBytes(&b.entry_number, sizeof(u32));
+    }
     m_append_size = 0;
+    m_borrowed_count = 0;
     m_file.Flush();
   }
   void Close()
@@ -161,6 +174,7 @@ public:
       m_file.Close();
     }
     m_append_size = 0;
+    m_borrowed_count = 0;
   }
 
   // Room for an entry of up to max_values values at the end of the store, where its producer
@@ -169,7 +183,7 @@ public:
   {
     const size_t entry_bytes = sizeof(u32) + sizeof(K) + max_values * sizeof(V) + sizeof(u32);
 
-    if (!m_file.IsOpen())
+    if (!m_file.IsOpen() || m_borrowed_count)
       return nullptr;
     if (m_append_capacity - m_append_size < entry_bytes)
     {
@@ -198,6 +212,31 @@ public:
     std::memcpy(out + sizeof(u32), &key, sizeof(K));
     std::memcpy(out + sizeof(u32) + sizeof(K) + value_bytes, &m_num_entries, sizeof(u32));
     m_append_size += sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
+  }
+
+  // Appends a key-value pair whose value is borrowed: its owner keeps it, unchanged, until the
+  // store's next Sync or Close has written it. A store takes borrowed values or its own (the
+  // rest of these), not both, so its entries are written in the order they came.
+  void AppendBorrowed(const K& key, const V* value, u32 value_size)
+  {
+    if (!m_file.IsOpen() || m_append_size)
+      return;
+    if (m_borrowed_count == m_borrowed_capacity)
+    {
+      // doubles, so a run allocates a handful of times
+      const size_t capacity = m_borrowed_capacity ? m_borrowed_capacity * 2 : 256;
+      Borrowed* const grown =
+          static_cast<Borrowed*>(std::realloc(m_borrowed, capacity * sizeof(Borrowed)));
+      if (!grown)
+        return;
+      m_borrowed = grown;
+      m_borrowed_capacity = capacity;
+    }
+    Borrowed& b = m_borrowed[m_borrowed_count++];
+    std::memcpy(&b.key, &key, sizeof(K));
+    b.value = value;
+    b.value_size = value_size;
+    b.entry_number = ++m_num_entries;
   }
 
   // Appends a key-value pair, copied: for a value whose owner does not outlive the store's next
@@ -278,7 +317,18 @@ private:
 
   } m_header;
 
+  struct Borrowed
+  {
+    K key;
+    const V* value;
+    u32 value_size;
+    u32 entry_number;
+  };
+
   File::IOFile m_file;
+  Borrowed* m_borrowed = nullptr;
+  size_t m_borrowed_count = 0;
+  size_t m_borrowed_capacity = 0;
   u8* m_append_buffer = nullptr;
   size_t m_append_capacity = 0;
   size_t m_append_size = 0;

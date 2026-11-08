@@ -711,7 +711,7 @@ const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
-        m_vs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+        m_vs_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
@@ -744,7 +744,7 @@ const AbstractShader* ShaderCache::InsertVertexUberShader(const UberShader::Vert
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
-        m_uber_vs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+        m_uber_vs_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
@@ -777,7 +777,7 @@ const AbstractShader* ShaderCache::InsertPixelShader(const PixelShaderUid& uid,
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
-        m_ps_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+        m_ps_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
@@ -810,7 +810,7 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
-        m_uber_ps_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+        m_uber_ps_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
@@ -848,7 +848,7 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
       size_t binary_size;
       const u8* binary = shader->GetBinary(&binary_size);
       if (binary_size)
-        m_gs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
+        m_gs_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
     entry->object = shader;
   }
