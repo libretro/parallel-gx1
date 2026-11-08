@@ -1027,6 +1027,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderText.c \
+	$(CORE_DIR)/Source/Core/VideoCommon/UidTable.c \
 	$(CORE_DIR)/Source/Core/Core/HW/GBAVFile.c
 DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/ColorUtil.cpp \

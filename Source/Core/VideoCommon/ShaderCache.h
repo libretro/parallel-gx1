@@ -22,6 +22,7 @@
 #include "VideoCommon/AbstractPipeline.h"
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/AsyncShaderCompiler.h"
+#include "VideoCommon/UidTable.h"
 #include "VideoCommon/GXPipelineTypes.h"
 #include "VideoCommon/GeometryShaderGen.h"
 #include "VideoCommon/PixelShaderGen.h"
@@ -229,16 +230,13 @@ private:
   std::unique_ptr<AbstractShader> m_texture_copy_pixel_shader;
   std::unique_ptr<AbstractShader> m_color_pixel_shader;
 
-  // GX Shader Caches
+  // GX Shader Caches: each uid's AbstractShader, owned here, and whether it is compiling
   template <typename Uid>
   struct ShaderModuleCache
   {
-    struct Shader
-    {
-      std::unique_ptr<AbstractShader> shader;
-      bool pending = false;
-    };
-    std::map<Uid, Shader> shader_map;
+    ShaderModuleCache() { uid_table_init(&shader_map, sizeof(Uid)); }
+    ~ShaderModuleCache() { uid_table_free(&shader_map); }
+    uid_table shader_map;
     Common::LinearDiskCache<Uid, u8> disk_cache;
   };
   ShaderModuleCache<VertexShaderUid> m_vs_cache;
@@ -247,10 +245,9 @@ private:
   ShaderModuleCache<UberShader::VertexShaderUid> m_uber_vs_cache;
   ShaderModuleCache<UberShader::PixelShaderUid> m_uber_ps_cache;
 
-  // GX Pipeline Caches - .first - pipeline, .second - pending
-  std::map<GXPipelineUid, std::pair<std::unique_ptr<AbstractPipeline>, bool>> m_gx_pipeline_cache;
-  std::map<GXUberPipelineUid, std::pair<std::unique_ptr<AbstractPipeline>, bool>>
-      m_gx_uber_pipeline_cache;
+  // GX Pipeline Caches: each uid's AbstractPipeline, owned here, and whether it is compiling
+  uid_table m_gx_pipeline_cache;
+  uid_table m_gx_uber_pipeline_cache;
   File::IOFile m_gx_pipeline_uid_cache_file;
   std::vector<SerializedGXPipelineUid> m_pending_gx_pipeline_uids;
   /* The ubershader pipelines a game drew with, as for the specialized
@@ -259,7 +256,7 @@ private:
   File::IOFile m_gx_uber_pipeline_uid_cache_file;
   std::vector<SerializedGXUberPipelineUid> m_pending_gx_uber_pipeline_uids;
   /* those already in the file or written to it this session */
-  std::set<GXUberPipelineUid> m_recorded_uber_pipeline_uids;
+  uid_table m_recorded_uber_pipeline_uids;
   // Pipelines whose cache data is written once their compile, on the driver's threads, is done.
   std::vector<GXPipelineUid> m_unwritten_gx_pipelines;
   Common::LinearDiskCache<SerializedGXPipelineUid, u8> m_gx_pipeline_disk_cache;

@@ -93,6 +93,44 @@ struct ShaderCache::WorkChunk
 
 ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
 {
+  uid_table_init(&m_gx_pipeline_cache, sizeof(GXPipelineUid));
+  uid_table_init(&m_gx_uber_pipeline_cache, sizeof(GXUberPipelineUid));
+  uid_table_init(&m_recorded_uber_pipeline_uids, sizeof(GXUberPipelineUid));
+}
+
+static AbstractShader* ShaderOf(const uid_table_value* value)
+{
+  return static_cast<AbstractShader*>(value->object);
+}
+
+static AbstractPipeline* PipelineOf(const uid_table_value* value)
+{
+  return static_cast<AbstractPipeline*>(value->object);
+}
+
+/* Deletes every pipeline a table holds, keeping their uids as not compiling. */
+static void DropPipelines(uid_table* cache)
+{
+  size_t cursor = 0;
+  const void* key;
+  uid_table_value* value;
+  while ((value = uid_table_next(cache, &cursor, &key)))
+  {
+    std::unique_ptr<AbstractPipeline>(PipelineOf(value)).reset();
+    value->object = nullptr;
+    value->pending = 0;
+  }
+}
+
+/* Deletes every shader a table holds, and forgets their uids. */
+static void DropShaders(uid_table* cache)
+{
+  size_t cursor = 0;
+  const void* key;
+  uid_table_value* value;
+  while ((value = uid_table_next(cache, &cursor, &key)))
+    std::unique_ptr<AbstractShader>(ShaderOf(value)).reset();
+  uid_table_clear(cache);
 }
 
 ShaderCache::~ShaderCache()
@@ -101,6 +139,9 @@ ShaderCache::~ShaderCache()
   m_async_shader_compiler.StopWorkerThreads();
   m_async_shader_compiler.ClearAllWork();
   ClearCaches();
+  uid_table_free(&m_gx_pipeline_cache);
+  uid_table_free(&m_gx_uber_pipeline_cache);
+  uid_table_free(&m_recorded_uber_pipeline_uids);
   while (m_work_chunks)
   {
     WorkChunk* next = m_work_chunks->next;
@@ -203,14 +244,15 @@ void ShaderCache::RetrieveAsyncShaders()
   size_t i = 0;
   while (i < m_unwritten_gx_pipelines.size())
   {
-    auto it = m_gx_pipeline_cache.find(m_unwritten_gx_pipelines[i]);
-    if (it != m_gx_pipeline_cache.end() && it->second.first && it->second.first->IsBuilding())
+    const uid_table_value* const it =
+        uid_table_find(&m_gx_pipeline_cache, &m_unwritten_gx_pipelines[i]);
+    if (it && it->object && PipelineOf(it)->IsBuilding())
     {
       i++;
       continue;
     }
-    if (it != m_gx_pipeline_cache.end() && it->second.first && it->second.first->IsReady())
-      WriteGXPipelineCacheData(it->first, it->second.first.get());
+    if (it && it->object && PipelineOf(it)->IsReady())
+      WriteGXPipelineCacheData(m_unwritten_gx_pipelines[i], PipelineOf(it));
     m_unwritten_gx_pipelines[i] = m_unwritten_gx_pipelines.back();
     m_unwritten_gx_pipelines.pop_back();
   }
@@ -228,11 +270,11 @@ void ShaderCache::Shutdown()
 
 const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
 {
-  auto it = m_gx_pipeline_cache.find(uid);
-  if (it != m_gx_pipeline_cache.end() && !it->second.second)
-    return it->second.first.get();
+  const uid_table_value* const it = uid_table_find(&m_gx_pipeline_cache, &uid);
+  if (it && !it->pending)
+    return PipelineOf(it);
 
-  const bool exists_in_cache = it != m_gx_pipeline_cache.end();
+  const bool exists_in_cache = it != nullptr;
   std::unique_ptr<AbstractPipeline> pipeline;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
   if (pipeline_config)
@@ -244,12 +286,12 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
 
 std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid)
 {
-  auto it = m_gx_pipeline_cache.find(uid);
-  if (it != m_gx_pipeline_cache.end())
+  const uid_table_value* const it = uid_table_find(&m_gx_pipeline_cache, &uid);
+  if (it)
   {
-    // .second is the pending flag, i.e. compiling in the background.
-    if (!it->second.second)
-      return it->second.first.get();
+    // compiling in the background, or not
+    if (!it->pending)
+      return PipelineOf(it);
     else
       return {};
   }
@@ -261,13 +303,14 @@ std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const
 
 const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineUid& uid)
 {
-  auto it = m_gx_uber_pipeline_cache.find(uid);
   /* every one a draw uses is recorded, to be built before the game
    * starts next time */
-  if (m_gx_uber_pipeline_uid_cache_file.IsOpen() && !m_recorded_uber_pipeline_uids.contains(uid))
+  if (m_gx_uber_pipeline_uid_cache_file.IsOpen() &&
+      !uid_table_find(&m_recorded_uber_pipeline_uids, &uid))
     AppendGXUberPipelineUID(uid);
-  if (it != m_gx_uber_pipeline_cache.end() && !it->second.second)
-    return it->second.first.get();
+  const uid_table_value* const it = uid_table_find(&m_gx_uber_pipeline_cache, &uid);
+  if (it && !it->pending)
+    return PipelineOf(it);
 
   std::unique_ptr<AbstractPipeline> pipeline;
   std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
@@ -328,9 +371,12 @@ void ShaderCache::LoadShaderCache(T& cache, APIType api_type, const char* type, 
       auto shader = g_gfx->CreateShaderFromBinary(stage, value, value_size);
       if (shader)
       {
-        auto& entry = cache.shader_map[key];
-        entry.shader = std::move(shader);
-        entry.pending = false;
+        uid_table_value* const entry = uid_table_get(&cache.shader_map, &key);
+        if (!entry)
+          return;
+        std::unique_ptr<AbstractShader>(ShaderOf(entry)).reset();
+        entry->object = shader.release();
+        entry->pending = 0;
 
         switch (stage)
         {
@@ -363,7 +409,7 @@ void ShaderCache::ClearShaderCache(T& cache)
 {
   cache.disk_cache.Sync();
   cache.disk_cache.Close();
-  cache.shader_map.clear();
+  DropShaders(&cache.shader_map);
 }
 
 template <typename KeyType, typename DiskKeyType, typename T>
@@ -381,7 +427,7 @@ void ShaderCache::LoadPipelineCache(T& cache, Common::LinearDiskCache<DiskKeyTyp
       UnserializePipelineUid(key, real_uid);
 
       // Skip those which are already compiled.
-      if (failed || cache.contains(real_uid))
+      if (failed || uid_table_find(&cache, &real_uid))
         return;
 
       auto config = this_ptr->GetGXPipelineConfig(real_uid);
@@ -396,9 +442,11 @@ void ShaderCache::LoadPipelineCache(T& cache, Common::LinearDiskCache<DiskKeyTyp
         return;
       }
 
-      auto& entry = cache[real_uid];
-      entry.first = std::move(pipeline);
-      entry.second = false;
+      uid_table_value* const entry = uid_table_get(&cache, &real_uid);
+      if (!entry)
+        return;
+      entry->object = pipeline.release();
+      entry->pending = 0;
     }
 
   private:
@@ -433,11 +481,7 @@ void ShaderCache::ClearPipelineCache(T& cache, Y& disk_cache)
   disk_cache.Close();
 
   // Set the pending flag to false, and destroy the pipeline.
-  for (auto& it : cache)
-  {
-    it.second.first.reset();
-    it.second.second = false;
-  }
+  DropPipelines(&cache);
 }
 
 void ShaderCache::LoadCaches()
@@ -510,15 +554,22 @@ void ShaderCache::ClearCaches()
 void ShaderCache::CompileMissingPipelines()
 {
   // Queue all uids with a null pipeline for compilation.
-  for (auto& it : m_gx_pipeline_cache)
+  /* queuing one marks it compiling: no uid is added meanwhile */
+  size_t cursor = 0;
+  const void* key;
+  uid_table_value* value;
+  while ((value = uid_table_next(&m_gx_pipeline_cache, &cursor, &key)))
   {
-    if (!it.second.first)
-      QueuePipelineCompile(it.first, COMPILE_PRIORITY_SHADERCACHE_PIPELINE);
+    if (!value->object)
+      QueuePipelineCompile(*static_cast<const GXPipelineUid*>(key),
+                           COMPILE_PRIORITY_SHADERCACHE_PIPELINE);
   }
-  for (auto& it : m_gx_uber_pipeline_cache)
+  cursor = 0;
+  while ((value = uid_table_next(&m_gx_uber_pipeline_cache, &cursor, &key)))
   {
-    if (!it.second.first)
-      QueueUberPipelineCompile(it.first, COMPILE_PRIORITY_UBERSHADER_PIPELINE);
+    if (!value->object)
+      QueueUberPipelineCompile(*static_cast<const GXUberPipelineUid*>(key),
+                               COMPILE_PRIORITY_UBERSHADER_PIPELINE);
   }
 }
 
@@ -557,10 +608,12 @@ ShaderCache::CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const
 const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid,
                                                       std::unique_ptr<AbstractShader> shader)
 {
-  auto& entry = m_vs_cache.shader_map[uid];
-  entry.pending = false;
+  uid_table_value* const entry = uid_table_get(&m_vs_cache.shader_map, &uid);
+  if (!entry)
+    return nullptr;
+  entry->pending = 0;
 
-  if (shader && !entry.shader)
+  if (shader && !entry->object)
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
@@ -571,19 +624,21 @@ const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
-    entry.shader = std::move(shader);
+    entry->object = shader.release();
   }
 
-  return entry.shader.get();
+  return ShaderOf(entry);
 }
 
 const AbstractShader* ShaderCache::InsertVertexUberShader(const UberShader::VertexShaderUid& uid,
                                                           std::unique_ptr<AbstractShader> shader)
 {
-  auto& entry = m_uber_vs_cache.shader_map[uid];
-  entry.pending = false;
+  uid_table_value* const entry = uid_table_get(&m_uber_vs_cache.shader_map, &uid);
+  if (!entry)
+    return nullptr;
+  entry->pending = 0;
 
-  if (shader && !entry.shader)
+  if (shader && !entry->object)
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
@@ -594,19 +649,21 @@ const AbstractShader* ShaderCache::InsertVertexUberShader(const UberShader::Vert
     }
     INCSTAT(g_stats.num_vertex_shaders_created);
     INCSTAT(g_stats.num_vertex_shaders_alive);
-    entry.shader = std::move(shader);
+    entry->object = shader.release();
   }
 
-  return entry.shader.get();
+  return ShaderOf(entry);
 }
 
 const AbstractShader* ShaderCache::InsertPixelShader(const PixelShaderUid& uid,
                                                      std::unique_ptr<AbstractShader> shader)
 {
-  auto& entry = m_ps_cache.shader_map[uid];
-  entry.pending = false;
+  uid_table_value* const entry = uid_table_get(&m_ps_cache.shader_map, &uid);
+  if (!entry)
+    return nullptr;
+  entry->pending = 0;
 
-  if (shader && !entry.shader)
+  if (shader && !entry->object)
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
@@ -617,19 +674,21 @@ const AbstractShader* ShaderCache::InsertPixelShader(const PixelShaderUid& uid,
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
-    entry.shader = std::move(shader);
+    entry->object = shader.release();
   }
 
-  return entry.shader.get();
+  return ShaderOf(entry);
 }
 
 const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::PixelShaderUid& uid,
                                                          std::unique_ptr<AbstractShader> shader)
 {
-  auto& entry = m_uber_ps_cache.shader_map[uid];
-  entry.pending = false;
+  uid_table_value* const entry = uid_table_get(&m_uber_ps_cache.shader_map, &uid);
+  if (!entry)
+    return nullptr;
+  entry->pending = 0;
 
-  if (shader && !entry.shader)
+  if (shader && !entry->object)
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
@@ -640,10 +699,10 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
     }
     INCSTAT(g_stats.num_pixel_shaders_created);
     INCSTAT(g_stats.num_pixel_shaders_alive);
-    entry.shader = std::move(shader);
+    entry->object = shader.release();
   }
 
-  return entry.shader.get();
+  return ShaderOf(entry);
 }
 
 const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid& uid)
@@ -654,10 +713,12 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
       g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code,
                                     fmt::format("Geometry shader: {}", *uid.GetUidData()));
 
-  auto& entry = m_gs_cache.shader_map[uid];
-  entry.pending = false;
+  uid_table_value* const entry = uid_table_get(&m_gs_cache.shader_map, &uid);
+  if (!entry)
+    return nullptr;
+  entry->pending = 0;
 
-  if (shader && !entry.shader)
+  if (shader && !entry->object)
   {
     if (g_ActiveConfig.bShaderCache && g_backend_info.bSupportsShaderBinaries)
     {
@@ -666,10 +727,10 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
       if (binary_size)
         m_gs_cache.disk_cache.Append(uid, binary, static_cast<u32>(binary_size));
     }
-    entry.shader = std::move(shader);
+    entry->object = shader.release();
   }
 
-  return entry.shader.get();
+  return ShaderOf(entry);
 }
 
 bool ShaderCache::NeedsGeometryShader(const GeometryShaderUid& uid) const
@@ -706,9 +767,9 @@ ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in)
 {
   GXPipelineUid config = VideoCommon::ApplyDriverBugs(config_in);
   const AbstractShader* vs;
-  auto vs_iter = m_vs_cache.shader_map.find(config.vs_uid);
-  if (vs_iter != m_vs_cache.shader_map.end() && !vs_iter->second.pending)
-    vs = vs_iter->second.shader.get();
+  const uid_table_value* const vs_iter = uid_table_find(&m_vs_cache.shader_map, &config.vs_uid);
+  if (vs_iter && !vs_iter->pending)
+    vs = ShaderOf(vs_iter);
   else
     vs = InsertVertexShader(config.vs_uid, CompileVertexShader(config.vs_uid));
 
@@ -716,9 +777,9 @@ ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in)
   ClearUnusedPixelShaderUidBits(m_api_type, m_host_config, &ps_uid);
 
   const AbstractShader* ps;
-  auto ps_iter = m_ps_cache.shader_map.find(ps_uid);
-  if (ps_iter != m_ps_cache.shader_map.end() && !ps_iter->second.pending)
-    ps = ps_iter->second.shader.get();
+  const uid_table_value* const ps_iter = uid_table_find(&m_ps_cache.shader_map, &ps_uid);
+  if (ps_iter && !ps_iter->pending)
+    ps = ShaderOf(ps_iter);
   else
     ps = InsertPixelShader(ps_uid, CompilePixelShader(ps_uid));
 
@@ -728,9 +789,9 @@ ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in)
   const AbstractShader* gs = nullptr;
   if (NeedsGeometryShader(config.gs_uid))
   {
-    auto gs_iter = m_gs_cache.shader_map.find(config.gs_uid);
-    if (gs_iter != m_gs_cache.shader_map.end() && !gs_iter->second.pending)
-      gs = gs_iter->second.shader.get();
+    const uid_table_value* const gs_iter = uid_table_find(&m_gs_cache.shader_map, &config.gs_uid);
+    if (gs_iter && !gs_iter->pending)
+      gs = ShaderOf(gs_iter);
     else
       gs = CreateGeometryShader(config.gs_uid);
     if (!gs)
@@ -796,9 +857,9 @@ ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in)
 {
   GXUberPipelineUid config = ApplyDriverBugs(config_in);
   const AbstractShader* vs;
-  auto vs_iter = m_uber_vs_cache.shader_map.find(config.vs_uid);
-  if (vs_iter != m_uber_vs_cache.shader_map.end() && !vs_iter->second.pending)
-    vs = vs_iter->second.shader.get();
+  const uid_table_value* const vs_iter = uid_table_find(&m_uber_vs_cache.shader_map, &config.vs_uid);
+  if (vs_iter && !vs_iter->pending)
+    vs = ShaderOf(vs_iter);
   else
     vs = InsertVertexUberShader(config.vs_uid, CompileVertexUberShader(config.vs_uid));
 
@@ -806,9 +867,9 @@ ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in)
   UberShader::ClearUnusedPixelShaderUidBits(m_api_type, m_host_config, &ps_uid);
 
   const AbstractShader* ps;
-  auto ps_iter = m_uber_ps_cache.shader_map.find(ps_uid);
-  if (ps_iter != m_uber_ps_cache.shader_map.end() && !ps_iter->second.pending)
-    ps = ps_iter->second.shader.get();
+  const uid_table_value* const ps_iter = uid_table_find(&m_uber_ps_cache.shader_map, &ps_uid);
+  if (ps_iter && !ps_iter->pending)
+    ps = ShaderOf(ps_iter);
   else
     ps = InsertPixelUberShader(ps_uid, CompilePixelUberShader(ps_uid));
 
@@ -818,9 +879,9 @@ ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in)
   const AbstractShader* gs = nullptr;
   if (NeedsGeometryShader(config.gs_uid))
   {
-    auto gs_iter = m_gs_cache.shader_map.find(config.gs_uid);
-    if (gs_iter != m_gs_cache.shader_map.end() && !gs_iter->second.pending)
-      gs = gs_iter->second.shader.get();
+    const uid_table_value* const gs_iter = uid_table_find(&m_gs_cache.shader_map, &config.gs_uid);
+    if (gs_iter && !gs_iter->pending)
+      gs = ShaderOf(gs_iter);
     else
       gs = CreateGeometryShader(config.gs_uid);
     if (!gs)
@@ -835,23 +896,25 @@ ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in)
 const AbstractPipeline* ShaderCache::InsertGXPipeline(const GXPipelineUid& config,
                                                       std::unique_ptr<AbstractPipeline> pipeline)
 {
-  auto& entry = m_gx_pipeline_cache[config];
-  entry.second = false;
-  if (!entry.first && pipeline)
+  uid_table_value* const entry = uid_table_get(&m_gx_pipeline_cache, &config);
+  if (!entry)
+    return nullptr;
+  entry->pending = 0;
+  if (!entry->object && pipeline)
   {
-    entry.first = std::move(pipeline);
+    entry->object = pipeline.release();
 
     if (g_ActiveConfig.bShaderCache)
     {
       /* its data is there to read once the driver is done with it */
-      if (entry.first->IsBuilding())
+      if (PipelineOf(entry)->IsBuilding())
         m_unwritten_gx_pipelines.push_back(config);
       else
-        WriteGXPipelineCacheData(config, entry.first.get());
+        WriteGXPipelineCacheData(config, PipelineOf(entry));
     }
   }
 
-  return entry.first.get();
+  return PipelineOf(entry);
 }
 
 void ShaderCache::WriteGXPipelineCacheData(const GXPipelineUid& config,
@@ -871,15 +934,17 @@ const AbstractPipeline*
 ShaderCache::InsertGXUberPipeline(const GXUberPipelineUid& config,
                                   std::unique_ptr<AbstractPipeline> pipeline)
 {
-  auto& entry = m_gx_uber_pipeline_cache[config];
-  entry.second = false;
-  if (!entry.first && pipeline)
+  uid_table_value* const entry = uid_table_get(&m_gx_uber_pipeline_cache, &config);
+  if (!entry)
+    return nullptr;
+  entry->pending = 0;
+  if (!entry->object && pipeline)
   {
-    entry.first = std::move(pipeline);
+    entry->object = pipeline.release();
 
     if (g_ActiveConfig.bShaderCache)
     {
-      auto cache_data = entry.first->GetCacheData();
+      auto cache_data = PipelineOf(entry)->GetCacheData();
       if (!cache_data.empty())
       {
         SerializedGXUberPipelineUid disk_uid;
@@ -890,7 +955,7 @@ ShaderCache::InsertGXUberPipeline(const GXUberPipelineUid& config,
     }
   }
 
-  return entry.first.get();
+  return PipelineOf(entry);
 }
 
 void ShaderCache::LoadPipelineUIDCache()
@@ -958,12 +1023,14 @@ void ShaderCache::LoadPipelineUIDCache()
       // Write any current UIDs out to the file.
       // This way, if we load a UID cache where the data was incomplete (e.g. Dolphin crashed),
       // we don't lose the existing UIDs which were previously at the beginning.
-      for (const auto& it : m_gx_pipeline_cache)
-        AppendGXPipelineUID(it.first);
+      size_t cursor = 0;
+      const void* key;
+      while (uid_table_next(&m_gx_pipeline_cache, &cursor, &key))
+        AppendGXPipelineUID(*static_cast<const GXPipelineUid*>(key));
     }
   }
 
-  INFO_LOG_FMT(VIDEO, "Read {} pipeline UIDs from {}", m_gx_pipeline_cache.size(), filename);
+  INFO_LOG_FMT(VIDEO, "Read {} pipeline UIDs from {}", m_gx_pipeline_cache.count, filename);
 }
 
 void ShaderCache::ClosePipelineUIDCache()
@@ -983,7 +1050,7 @@ void ShaderCache::ClosePipelineUIDCache()
     WARN_LOG_FMT(VIDEO, "Writing ubershader pipeline UIDs to cache failed.");
   }
   m_pending_gx_uber_pipeline_uids.clear();
-  m_recorded_uber_pipeline_uids.clear();
+  uid_table_clear(&m_recorded_uber_pipeline_uids);
   m_gx_uber_pipeline_uid_cache_file.Close();
   m_gx_pipeline_uid_cache_file.Close();
 }
@@ -1022,9 +1089,8 @@ void ShaderCache::LoadUberPipelineUIDCache()
         UnserializePipelineUid(serialized_uid, real_uid);
         /* known, not built: built with the ubershaders before the game
          * starts */
-        if (!m_gx_uber_pipeline_cache.contains(real_uid))
-          m_gx_uber_pipeline_cache[real_uid].second = false;
-        m_recorded_uber_pipeline_uids.insert(real_uid);
+        uid_table_get(&m_gx_uber_pipeline_cache, &real_uid);
+        uid_table_get(&m_recorded_uber_pipeline_uids, &real_uid);
       }
       if (valid)
         valid = file.Seek(file_size, File::SeekOrigin::Begin);
@@ -1052,15 +1118,20 @@ void ShaderCache::AppendGXUberPipelineUID(const GXUberPipelineUid& config)
     return;
   SerializePipelineUid(config, disk_uid);
   m_pending_gx_uber_pipeline_uids.push_back(disk_uid);
-  m_recorded_uber_pipeline_uids.insert(config);
+  uid_table_get(&m_recorded_uber_pipeline_uids, &config);
 }
 
 void ShaderCache::CompileMissingUberPipelines()
 {
-  for (auto& it : m_gx_uber_pipeline_cache)
+  /* queuing one marks it compiling: no uid is added meanwhile */
+  size_t cursor = 0;
+  const void* key;
+  uid_table_value* value;
+  while ((value = uid_table_next(&m_gx_uber_pipeline_cache, &cursor, &key)))
   {
-    if (!it.second.first && !it.second.second)
-      QueueUberPipelineCompile(it.first, COMPILE_PRIORITY_UBERSHADER_PIPELINE);
+    if (!value->object && !value->pending)
+      QueueUberPipelineCompile(*static_cast<const GXUberPipelineUid*>(key),
+                               COMPILE_PRIORITY_UBERSHADER_PIPELINE);
   }
 }
 
@@ -1069,13 +1140,8 @@ void ShaderCache::AddSerializedGXPipelineUID(const SerializedGXPipelineUid& uid)
   GXPipelineUid real_uid;
   UnserializePipelineUid(uid, real_uid);
 
-  auto iter = m_gx_pipeline_cache.find(real_uid);
-  if (iter != m_gx_pipeline_cache.end())
-    return;
-
-  // Flag it as empty with a null pipeline object, for later compilation.
-  auto& entry = m_gx_pipeline_cache[real_uid];
-  entry.second = false;
+  // Flagged as empty with a null pipeline object, for later compilation, if it is new.
+  uid_table_get(&m_gx_pipeline_cache, &real_uid);
 }
 
 void ShaderCache::AppendGXPipelineUID(const GXPipelineUid& config)
@@ -1135,16 +1201,16 @@ void ShaderCache::QueueWork(WorkItem* item)
     GXPipelineUid actual_uid = ApplyDriverBugs(uid);
     bool ready = true;
 
-    auto vs_it = m_vs_cache.shader_map.find(actual_uid.vs_uid);
-    ready &= vs_it != m_vs_cache.shader_map.end() && !vs_it->second.pending;
-    if (vs_it == m_vs_cache.shader_map.end())
+    const uid_table_value* const vs_it = uid_table_find(&m_vs_cache.shader_map, &actual_uid.vs_uid);
+    ready &= vs_it && !vs_it->pending;
+    if (!vs_it)
       QueueVertexShaderCompile(actual_uid.vs_uid, priority);
 
     PixelShaderUid ps_uid = actual_uid.ps_uid;
     ClearUnusedPixelShaderUidBits(m_api_type, m_host_config, &ps_uid);
-    auto ps_it = m_ps_cache.shader_map.find(ps_uid);
-    ready &= ps_it != m_ps_cache.shader_map.end() && !ps_it->second.pending;
-    if (ps_it == m_ps_cache.shader_map.end())
+    const uid_table_value* const ps_it = uid_table_find(&m_ps_cache.shader_map, &ps_uid);
+    ready &= ps_it && !ps_it->pending;
+    if (!ps_it)
       QueuePixelShaderCompile(ps_uid, priority);
 
     // If a stage is missing, this item does nothing but come back next frame.
@@ -1166,16 +1232,16 @@ void ShaderCache::QueueWork(WorkItem* item)
     GXUberPipelineUid actual_uid = ApplyDriverBugs(uid);
     bool ready = true;
 
-    auto vs_it = m_uber_vs_cache.shader_map.find(actual_uid.vs_uid);
-    ready &= vs_it != m_uber_vs_cache.shader_map.end() && !vs_it->second.pending;
-    if (vs_it == m_uber_vs_cache.shader_map.end())
+    const uid_table_value* const vs_it = uid_table_find(&m_uber_vs_cache.shader_map, &actual_uid.vs_uid);
+    ready &= vs_it && !vs_it->pending;
+    if (!vs_it)
       QueueVertexUberShaderCompile(actual_uid.vs_uid, priority);
 
     UberShader::PixelShaderUid ps_uid = actual_uid.ps_uid;
     UberShader::ClearUnusedPixelShaderUidBits(m_api_type, m_host_config, &ps_uid);
-    auto ps_it = m_uber_ps_cache.shader_map.find(ps_uid);
-    ready &= ps_it != m_uber_ps_cache.shader_map.end() && !ps_it->second.pending;
-    if (ps_it == m_uber_ps_cache.shader_map.end())
+    const uid_table_value* const ps_it = uid_table_find(&m_uber_ps_cache.shader_map, &ps_uid);
+    ready &= ps_it && !ps_it->pending;
+    if (!ps_it)
       QueuePixelUberShaderCompile(ps_uid, priority);
 
     item->stages_ready = ready;
@@ -1291,7 +1357,11 @@ void ShaderCache::QueueVertexShaderCompile(const VertexShaderUid& uid, u32 prior
   if (!item)
     return;
   memcpy(item->uid, &uid, sizeof(uid));
-  m_vs_cache.shader_map[uid].pending = true;
+  {
+    uid_table_value* const entry = uid_table_get(&m_vs_cache.shader_map, &uid);
+    if (entry)
+      entry->pending = 1;
+  }
   QueueWork(item);
 }
 
@@ -1301,7 +1371,11 @@ void ShaderCache::QueueVertexUberShaderCompile(const UberShader::VertexShaderUid
   if (!item)
     return;
   memcpy(item->uid, &uid, sizeof(uid));
-  m_uber_vs_cache.shader_map[uid].pending = true;
+  {
+    uid_table_value* const entry = uid_table_get(&m_uber_vs_cache.shader_map, &uid);
+    if (entry)
+      entry->pending = 1;
+  }
   QueueWork(item);
 }
 
@@ -1311,7 +1385,11 @@ void ShaderCache::QueuePixelShaderCompile(const PixelShaderUid& uid, u32 priorit
   if (!item)
     return;
   memcpy(item->uid, &uid, sizeof(uid));
-  m_ps_cache.shader_map[uid].pending = true;
+  {
+    uid_table_value* const entry = uid_table_get(&m_ps_cache.shader_map, &uid);
+    if (entry)
+      entry->pending = 1;
+  }
   QueueWork(item);
 }
 
@@ -1321,7 +1399,11 @@ void ShaderCache::QueuePixelUberShaderCompile(const UberShader::PixelShaderUid& 
   if (!item)
     return;
   memcpy(item->uid, &uid, sizeof(uid));
-  m_uber_ps_cache.shader_map[uid].pending = true;
+  {
+    uid_table_value* const entry = uid_table_get(&m_uber_ps_cache.shader_map, &uid);
+    if (entry)
+      entry->pending = 1;
+  }
   QueueWork(item);
 }
 
@@ -1332,7 +1414,11 @@ void ShaderCache::QueuePipelineCompile(const GXPipelineUid& uid, u32 priority)
     return;
   memcpy(item->uid, &uid, sizeof(uid));
   QueueWork(item);
-  m_gx_pipeline_cache[uid].second = true;
+  {
+    uid_table_value* const entry = uid_table_get(&m_gx_pipeline_cache, &uid);
+    if (entry)
+      entry->pending = 1;
+  }
 }
 
 void ShaderCache::QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 priority)
@@ -1342,7 +1428,11 @@ void ShaderCache::QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 pri
     return;
   memcpy(item->uid, &uid, sizeof(uid));
   QueueWork(item);
-  m_gx_uber_pipeline_cache[uid].second = true;
+  {
+    uid_table_value* const entry = uid_table_get(&m_gx_uber_pipeline_cache, &uid);
+    if (entry)
+      entry->pending = 1;
+  }
 }
 
 void ShaderCache::QueueUberShaderPipelines()
@@ -1375,12 +1465,8 @@ void ShaderCache::QueueUberShaderPipelines()
           config.blending_state.logic_mode = LogicOp::And;
         }
 
-        auto iter = m_gx_uber_pipeline_cache.find(config);
-        if (iter != m_gx_uber_pipeline_cache.end())
-          return;
-
-        auto& entry = m_gx_uber_pipeline_cache[config];
-        entry.second = false;
+        // an empty entry, compiled afterwards, if it is new
+        uid_table_get(&m_gx_uber_pipeline_cache, &config);
       };
 
   // Populate the pipeline configs with empty entries, these will be compiled afterwards.
