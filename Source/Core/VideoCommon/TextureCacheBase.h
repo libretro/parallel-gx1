@@ -15,7 +15,6 @@
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "Common/BitSet.h"
@@ -165,7 +164,15 @@ struct TCacheEntry
   // This is used to keep track of both:
   //   * efb copies used by this partially updated texture
   //   * partially updated textures which refer to this efb copy
-  std::unordered_set<TCacheEntry*> references;
+  // A few in place, more on the heap; each one once.
+  enum
+  {
+    INLINE_REFERENCES = 4
+  };
+  TCacheEntry* inline_references[INLINE_REFERENCES];
+  TCacheEntry** references = inline_references;
+  u32 num_references = 0;
+  u32 references_cap = INLINE_REFERENCES;
 
   // Pending EFB copy
   std::unique_ptr<AbstractStagingTexture> pending_efb_copy;
@@ -206,12 +213,16 @@ struct TCacheEntry
     hash = _hash;
   }
 
+  bool HasReference(const TCacheEntry* other_entry) const;
+  void AddReference(TCacheEntry* other_entry);
+  void RemoveReference(const TCacheEntry* other_entry);
+
   // This texture entry is used by the other entry as a sub-texture
   void CreateReference(TCacheEntry* other_entry)
   {
     // References are two-way, so they can easily be destroyed later
-    this->references.emplace(other_entry);
-    other_entry->references.emplace(this);
+    this->AddReference(other_entry);
+    other_entry->AddReference(this);
   }
 
   // Acquiring a content lock will lock the current contents and prevent texture cache from
@@ -549,6 +560,10 @@ private:
   // It's valid for textures to be in here after they've been invalidated
   std::array<RcTcacheEntry, 8> m_bound_textures{};
 
+  // the overlapping copies StitchXFBCopy draws, kept for the next call
+  TCacheEntry** m_stitch_candidates = nullptr;
+  size_t m_stitch_candidates_cap = 0;
+
   TexPoolSlot* m_texture_pool = nullptr;
   size_t m_texture_pool_count = 0;
   size_t m_texture_pool_cap = 0;
@@ -586,7 +601,12 @@ private:
   // List of pending EFB copies. It is important that the order is preserved for these,
   // so that overlapping textures are written to guest RAM in the order they are issued.
   // It's valid for textures to live be in here after they've been invalidated
-  std::vector<RcTcacheEntry> m_pending_efb_copies;
+  // EFB copies waiting for their RAM writes, in order, each counted as a handle would
+  TCacheEntry** m_pending_efb_copies = nullptr;
+  size_t m_num_pending_efb_copies = 0;
+  size_t m_pending_efb_copies_cap = 0;
+  void PushPendingEFBCopy(TCacheEntry* entry);
+  void ClearPendingEFBCopies();
 
   // Staging texture used for readbacks.
   // We store this in the class so that the same staging texture can be used for multiple

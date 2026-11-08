@@ -78,7 +78,61 @@ TCacheEntry::TCacheEntry(std::unique_ptr<AbstractTexture> tex,
 {
 }
 
-TCacheEntry::~TCacheEntry() = default;
+TCacheEntry::~TCacheEntry()
+{
+  if (references != inline_references)
+    free(references);
+}
+
+bool TCacheEntry::HasReference(const TCacheEntry* other_entry) const
+{
+  u32 i;
+  for (i = 0; i < num_references; i++)
+  {
+    if (references[i] == other_entry)
+      return true;
+  }
+  return false;
+}
+
+void TCacheEntry::AddReference(TCacheEntry* other_entry)
+{
+  if (HasReference(other_entry))
+    return;
+  if (num_references == references_cap)
+  {
+    const u32 cap = references_cap * 2;
+    TCacheEntry** grown;
+    if (references == inline_references)
+    {
+      grown = static_cast<TCacheEntry**>(malloc(cap * sizeof(*grown)));
+      if (grown)
+        memcpy(grown, inline_references, sizeof(inline_references));
+    }
+    else
+    {
+      grown = static_cast<TCacheEntry**>(realloc(references, cap * sizeof(*grown)));
+    }
+    if (!grown)
+      return;
+    references = grown;
+    references_cap = cap;
+  }
+  references[num_references++] = other_entry;
+}
+
+void TCacheEntry::RemoveReference(const TCacheEntry* other_entry)
+{
+  u32 i;
+  for (i = 0; i < num_references; i++)
+  {
+    if (references[i] == other_entry)
+    {
+      references[i] = references[--num_references];
+      return;
+    }
+  }
+}
 
 /* The entry pool: chunks of entries, the free ones in a list through
  * their own storage. */
@@ -127,8 +181,8 @@ TCacheEntry* TCacheEntryNew(std::unique_ptr<AbstractTexture> tex,
 void TCacheEntryRelease(TCacheEntry* entry)
 {
   TCacheEntrySlot* const slot = reinterpret_cast<TCacheEntrySlot*>(entry);
-  for (auto& reference : entry->references)
-    reference->references.erase(entry);
+  for (u32 i = 0; i < entry->num_references; i++)
+    entry->references[i]->RemoveReference(entry);
   ASSERT_MSG(VIDEO, g_texture_cache, "Texture cache destroyed before TCacheEntry was destroyed");
   g_texture_cache->ReleaseToPool(entry);
   entry->~TCacheEntry();
@@ -412,7 +466,7 @@ TextureCacheBase::TextureCacheBase()
 void TextureCacheBase::Shutdown()
 {
   // Clear pending EFB copies first, so we don't try to flush them.
-  m_pending_efb_copies.clear();
+  ClearPendingEFBCopies();
 
   HiresTexture::Shutdown();
 
@@ -427,6 +481,9 @@ TextureCacheBase::~TextureCacheBase()
   while (m_texture_pool_count)
     DropPooledTexture(m_texture_pool_count - 1);
   free(m_texture_pool);
+  free(m_stitch_candidates);
+  ClearPendingEFBCopies();
+  free(m_pending_efb_copies);
   Common::FreeAlignedMemory(m_temp);
   m_temp = nullptr;
 }
@@ -951,8 +1008,9 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
     if (!id1)
       continue;
 
-    for (const TCacheEntry* referenced_entry : entry->references)
+    for (u32 r = 0; r < entry->num_references; r++)
     {
+      const TCacheEntry* const referenced_entry = entry->references[r];
       auto id2 = GetCacheEntryId(referenced_entry);
       if (!id2)
         continue;
@@ -1152,7 +1210,7 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
   {
     auto& entry = iter.first->value;
     if (entry != entry_to_update && entry->IsCopy() &&
-        !entry->references.contains(entry_to_update.get()) &&
+        !entry->HasReference(entry_to_update.get()) &&
         entry->OverlapsMemoryRange(entry_to_update->addr, entry_to_update->size_in_bytes) &&
         entry->memory_stride == numBlocksX * block_size)
     {
@@ -2333,7 +2391,7 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
   // that would have been overwritten in memory on real hardware get overwritten the same way here
   // too. This should work, but it may be a better idea to keep track of partial XFB copy
   // invalidations instead, which would reduce the amount of copying work here.
-  std::vector<TCacheEntry*> candidates;
+  size_t num_candidates = 0;
   bool create_upscaled_copy = false;
 
   auto iter = FindOverlappingTextures(stitched_entry->addr, stitched_entry->size_in_bytes);
@@ -2355,7 +2413,17 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
         if (entry->native_width != entry->GetWidth())
           create_upscaled_copy = true;
 
-        candidates.emplace_back(entry.get());
+        if (num_candidates == m_stitch_candidates_cap)
+        {
+          const size_t cap = m_stitch_candidates_cap ? m_stitch_candidates_cap * 2 : 32;
+          TCacheEntry** const grown = static_cast<TCacheEntry**>(
+              realloc(m_stitch_candidates, cap * sizeof(*grown)));
+          if (!grown)
+            break;
+          m_stitch_candidates = grown;
+          m_stitch_candidates_cap = cap;
+        }
+        m_stitch_candidates[num_candidates++] = entry.get();
       }
       else
       {
@@ -2367,10 +2435,21 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
     iter.first = TexIndexNext(iter.first);
   }
 
-  if (candidates.empty())
+  if (!num_candidates)
     return;
 
-  std::ranges::sort(candidates, {}, &TCacheEntry::id);
+  /* in the order they were loaded; insertion sort, as there are few */
+  for (size_t i = 1; i < num_candidates; i++)
+  {
+    TCacheEntry* const candidate = m_stitch_candidates[i];
+    size_t j = i;
+    while (j > 0 && m_stitch_candidates[j - 1]->id > candidate->id)
+    {
+      m_stitch_candidates[j] = m_stitch_candidates[j - 1];
+      j--;
+    }
+    m_stitch_candidates[j] = candidate;
+  }
 
   // We only upscale when necessary to preserve resolution. i.e. when there are upscaled partial
   // copies to be stitched together.
@@ -2381,8 +2460,9 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
                              g_framebuffer_manager->EFBToScaledY(stitched_entry->native_height));
   }
 
-  for (TCacheEntry* entry : candidates)
+  for (size_t c = 0; c < num_candidates; c++)
   {
+    TCacheEntry* const entry = m_stitch_candidates[c];
     int src_x, src_y, dst_x, dst_y;
     if (entry->addr >= stitched_entry->addr)
     {
@@ -2783,7 +2863,7 @@ void TextureCacheBase::CopyRenderTargetToTexture(
         entry->pending_efb_copy = std::move(staging_texture);
         entry->pending_efb_copy_width = bytes_per_row / sizeof(u32);
         entry->pending_efb_copy_height = num_blocks_y;
-        m_pending_efb_copies.push_back(entry);
+        PushPendingEFBCopy(entry.get());
       }
     }
   }
@@ -2811,10 +2891,8 @@ void TextureCacheBase::CopyRenderTargetToTexture(
 
     if (overlapping_entry->addr == dstAddr && overlapping_entry->is_xfb_copy)
     {
-      for (auto& reference : overlapping_entry->references)
-      {
-        reference->reference_changed = true;
-      }
+      for (u32 r = 0; r < overlapping_entry->num_references; r++)
+        overlapping_entry->references[r]->reference_changed = true;
     }
 
     if (overlapping_entry->OverlapsMemoryRange(dstAddr, covered_range))
@@ -2873,14 +2951,47 @@ void TextureCacheBase::CopyRenderTargetToTexture(
   }
 }
 
+void TextureCacheBase::PushPendingEFBCopy(TCacheEntry* entry)
+{
+  if (m_num_pending_efb_copies == m_pending_efb_copies_cap)
+  {
+    const size_t cap = m_pending_efb_copies_cap ? m_pending_efb_copies_cap * 2 : 64;
+    TCacheEntry** const grown =
+        static_cast<TCacheEntry**>(realloc(m_pending_efb_copies, cap * sizeof(*grown)));
+    if (!grown)
+    {
+      /* nowhere to wait: written now */
+      FlushEFBCopy(entry);
+      return;
+    }
+    m_pending_efb_copies = grown;
+    m_pending_efb_copies_cap = cap;
+  }
+  entry->refs++;
+  m_pending_efb_copies[m_num_pending_efb_copies++] = entry;
+}
+
+/* Lets go of the pending copies, from the last one. */
+void TextureCacheBase::ClearPendingEFBCopies()
+{
+  while (m_num_pending_efb_copies)
+  {
+    TCacheEntry* const entry = m_pending_efb_copies[--m_num_pending_efb_copies];
+    if (--entry->refs == 0)
+      TCacheEntryRelease(entry);
+  }
+}
+
 void TextureCacheBase::FlushEFBCopies()
 {
-  if (m_pending_efb_copies.empty())
+  size_t i;
+
+  if (!m_num_pending_efb_copies)
     return;
 
-  for (auto& entry : m_pending_efb_copies)
-    FlushEFBCopy(entry.get());
-  m_pending_efb_copies.clear();
+  for (i = 0; i < m_num_pending_efb_copies; i++)
+    FlushEFBCopy(m_pending_efb_copies[i]);
+  ClearPendingEFBCopies();
 }
 
 void TextureCacheBase::FlushStaleBinds()
@@ -3191,9 +3302,19 @@ TexIndexNode* TextureCacheBase::InvalidateTexture(TexIndexNode* iter,
       // Xenoblade's sunset scene, where 35 copies are done per frame, and 25 of them are
       // copied to the same address, and can be skipped.
       ReleaseEFBCopyStagingTexture(std::move(entry->pending_efb_copy));
-      auto pending_it = std::ranges::find(m_pending_efb_copies, entry);
-      if (pending_it != m_pending_efb_copies.end())
-        m_pending_efb_copies.erase(pending_it);
+      for (size_t i = 0; i < m_num_pending_efb_copies; i++)
+      {
+        TCacheEntry* const pending = m_pending_efb_copies[i];
+        if (pending != entry.get())
+          continue;
+        /* the rest keep their order: they are flushed in it */
+        memmove(&m_pending_efb_copies[i], &m_pending_efb_copies[i + 1],
+                (m_num_pending_efb_copies - i - 1) * sizeof(*m_pending_efb_copies));
+        m_num_pending_efb_copies--;
+        if (--pending->refs == 0)
+          TCacheEntryRelease(pending);
+        break;
+      }
     }
     else
     {
