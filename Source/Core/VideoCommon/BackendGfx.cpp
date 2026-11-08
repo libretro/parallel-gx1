@@ -147,6 +147,23 @@ void AbstractGfx::SetDrawState(const RasterizationState& rasterization, const De
   }
 }
 
+bool AbstractGfx::DecodeTextureAhead(const AbstractShader* shader, u32 groupsize_x,
+                                     u32 groupsize_y, u32 groups_x, u32 groups_y,
+                                     AbstractTexture* scratch, AbstractTexture* dst,
+                                     const MathUtil::Rectangle<int>& rect, u32 dst_level)
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    return static_cast<Vulkan::VKGfx*>(this)->DecodeTextureAhead(
+        shader, groupsize_x, groupsize_y, groups_x, groups_y, scratch, dst, rect, dst_level);
+#endif
+  default:
+    return false;
+  }
+}
+
 void AbstractGfx::SetScissorRect(const MathUtil::Rectangle<int>& rc)
 {
   switch (g_video_backend_kind)

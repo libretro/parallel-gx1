@@ -111,8 +111,16 @@ states() {
 # partly drawn
 picture_map() {
    sed -n 's/^picture .* corpus=\([0-9]*\) .* hash=\([0-9a-f]*\)/\1 \2/p' "$1" | sort -u |
-      awk '$1 != k { if (NR > 1) print k, v; k = $1; v = $2; next } { v = v "," $2 }
+      awk 'NR == 1 || $1 != k { if (NR > 1) print k, v; k = $1; v = $2; next } { v = v "," $2 }
            END { if (NR) print k, v }'
+}
+
+# the frames of a joined pair of picture maps that differ: whose pictures
+# have none in common (a frame one run presents twice, another may once)
+pictures_differ() {
+   awk '{ n = split($2, a, ","); split($3, b, ","); same = 0
+          for (i = 1; i <= n; i++) for (j in b) if (a[i] == b[j]) same = 1
+          if (!same) print }' "$1"
 }
 
 # boot and play counts of a counter in a result
@@ -161,7 +169,7 @@ for backend in $BACKENDS; do
          join "$OUT/check-cand-$backend-$mode.map" "$OUT/check-parent-$backend-$mode.map" \
             > "$OUT/check-$backend-$mode.joined"
          both=$(wc -l < "$OUT/check-$backend-$mode.joined")
-         differ=$(awk '$2 != $3' "$OUT/check-$backend-$mode.joined" | wc -l)
+         differ=$(pictures_differ "$OUT/check-$backend-$mode.joined" | wc -l)
          echo "   pictures, compilation mode $mode: $both frames in both runs, $differ differ"
          if [ "$differ" != 0 ] || [ "$both" -lt $((NEW / 3)) ]; then
             echo "FAIL $backend: the pictures differ from the parent's (compilation mode $mode)"
@@ -181,7 +189,7 @@ for backend in $BACKENDS; do
       join "$OUT/check-cand-$backend-gpudecode.map" "$OUT/check-cand-$backend-0.map" \
          > "$OUT/check-$backend-gpudecode.joined"
       both=$(wc -l < "$OUT/check-$backend-gpudecode.joined")
-      differ=$(awk '$2 != $3' "$OUT/check-$backend-gpudecode.joined" | wc -l)
+      differ=$(pictures_differ "$OUT/check-$backend-gpudecode.joined" | wc -l)
       echo "   pictures, GPU texture decoding: $both frames in both runs, $differ differ"
       if [ "$differ" != 0 ] || [ "$both" -lt $((NEW / 3)) ]; then
          echo "FAIL $backend: textures decoded on the GPU differ from those decoded on the CPU"

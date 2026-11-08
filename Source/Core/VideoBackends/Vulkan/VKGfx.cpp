@@ -104,6 +104,42 @@ void VKGfx::SetPipeline(const AbstractPipeline* pipeline)
   StateTracker::GetInstance()->SetPipeline(static_cast<const VKPipeline*>(pipeline));
 }
 
+/* All of it in the init command buffer, which runs before the draws: no render pass ends for
+ * it. The scratch texture is used there alone, and the destination is new or from the pool,
+ * whose textures this command buffer's draws do not use, so the layouts each tracks hold. */
+bool VKGfx::DecodeTextureAhead(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
+                               u32 groups_x, u32 groups_y, AbstractTexture* scratch,
+                               AbstractTexture* dst, const MathUtil::Rectangle<int>& rect,
+                               u32 dst_level)
+{
+  const VkCommandBuffer cb = g_command_buffer_mgr->GetCurrentInitCommandBuffer();
+  StateTracker* const state = StateTracker::GetInstance();
+  VKTexture* const src_texture = static_cast<VKTexture*>(scratch);
+  VKTexture* const dst_texture = static_cast<VKTexture*>(dst);
+  const VkImageCopy image_copy = {
+      {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+      {rect.left, rect.top, 0},
+      {VK_IMAGE_ASPECT_COLOR_BIT, dst_level, 0, 1},
+      {rect.left, rect.top, 0},
+      {static_cast<uint32_t>(rect.GetWidth()), static_cast<uint32_t>(rect.GetHeight()), 1}};
+
+  (void)groupsize_x;
+  (void)groupsize_y;
+  state->SetImageTexture(0, src_texture->GetView());
+  src_texture->TransitionToLayout(cb, VKTexture::ComputeImageLayout::WriteOnly);
+  state->SetComputeShader(static_cast<const VKShader*>(shader));
+  if (!state->BindComputeIn(cb))
+    return false;
+  vkCmdDispatch(cb, groups_x, groups_y, 1);
+  src_texture->TransitionToLayout(cb, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+  dst_texture->TransitionToLayout(cb, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  vkCmdCopyImage(cb, src_texture->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 dst_texture->GetImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
+  dst_texture->TransitionToLayout(cb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  state->SetImageTexture(0, VK_NULL_HANDLE);
+  return true;
+}
+
 void VKGfx::SetDrawState(const RasterizationState& rasterization, const DepthState& depth,
                          const BlendingState& blending)
 {

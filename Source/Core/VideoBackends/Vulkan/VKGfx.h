@@ -60,6 +60,10 @@ public:
                    bool z_enable, u32 color, u32 z);
 
   void SetPipeline(const AbstractPipeline* pipeline);
+  bool DecodeTextureAhead(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
+                          u32 groups_x, u32 groups_y, AbstractTexture* scratch,
+                          AbstractTexture* dst, const MathUtil::Rectangle<int>& rect,
+                          u32 dst_level);
   void SetDrawState(const RasterizationState& rasterization, const DepthState& depth,
                     const BlendingState& blending);
   void SetFramebuffer(AbstractFramebuffer* framebuffer);

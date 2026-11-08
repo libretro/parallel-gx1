@@ -58,6 +58,13 @@ public:
    * draw (BackendInfo::uDrawState*Bits): after SetPipeline, until the next one. */
   void SetDrawState(const RasterizationState& rasterization, const DepthState& depth,
                     const BlendingState& blending);
+  /* Decodes a texture with shader into scratch (its compute image 0), and copies rect of it into
+   * dst's level, ahead of the draws recorded so far, where the backend can: false where it
+   * cannot, and the caller records it in order. The bindings it reads are set already. */
+  bool DecodeTextureAhead(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
+                          u32 groups_x, u32 groups_y, AbstractTexture* scratch,
+                          AbstractTexture* dst, const MathUtil::Rectangle<int>& rect,
+                          u32 dst_level);
   void SetScissorRect(const MathUtil::Rectangle<int>& rc);
   void SetTexture(u32 index, const AbstractTexture* texture);
   void SetSamplerState(u32 index, const SamplerState& state);

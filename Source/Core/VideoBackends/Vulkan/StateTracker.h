@@ -76,6 +76,9 @@ public:
   // Binds all dirty compute state to the command buffer.
   // If this returns false, you should not dispatch the shader.
   bool BindCompute();
+  /* Binds the compute shader and its bindings in command_buffer, which runs before the one the
+   * rest records into: in that one, they are bound again before its next dispatch. */
+  bool BindComputeIn(VkCommandBuffer command_buffer);
 
   // Returns true if the specified rectangle is inside the current render area (used for clears).
   bool IsWithinRenderArea(s32 x, s32 y, u32 width, u32 height) const;
@@ -124,7 +127,7 @@ private:
   void UpdateDescriptorSet();
   void UpdateGXDescriptorSet();
   void UpdateUtilityDescriptorSet();
-  void UpdateComputeDescriptorSet();
+  void UpdateComputeDescriptorSet(VkCommandBuffer command_buffer);
 
   // Which bindings/state has to be updated before the next draw.
   u32 m_dirty_flags = 0;

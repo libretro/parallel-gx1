@@ -3607,16 +3607,24 @@ bool TextureCacheBase::DecodeTextureOnGPU(RcTcacheEntry& entry, u32 dst_level, c
                 aligned_height, src_offset, row_stride / bytes_per_buffer_elem,
                 palette_offset};
   g_vertex_manager->UploadUtilityUniforms(&uniforms, sizeof(uniforms));
-  g_gfx->SetComputeImageTexture(0, m_decoding_texture, false, true);
 
   auto dispatch_groups =
       TextureConversionShaderTiled::GetDispatchCount(info, aligned_width, aligned_height);
+  const auto copy_rect = entry->texture->GetConfig().GetMipRect(dst_level);
+  /* ahead of the draws where the backend can, so no render pass ends for it */
+  if (g_gfx->DecodeTextureAhead(shader, info->group_size_x, info->group_size_y,
+                                dispatch_groups.first, dispatch_groups.second, m_decoding_texture,
+                                entry->texture, copy_rect, dst_level))
+  {
+    return true;
+  }
+
+  g_gfx->SetComputeImageTexture(0, m_decoding_texture, false, true);
   g_gfx->DispatchComputeShader(shader, info->group_size_x, info->group_size_y, 1,
                                dispatch_groups.first, dispatch_groups.second, 1);
 
   // Copy from decoding texture -> final texture
   // This is because we don't want to have to create compute view for every layer
-  const auto copy_rect = entry->texture->GetConfig().GetMipRect(dst_level);
   entry->texture->CopyRectangleFromTexture(m_decoding_texture, copy_rect, 0, 0, copy_rect, 0,
                                            dst_level);
   entry->texture->FinishedRendering();

@@ -525,8 +525,20 @@ bool StateTracker::BindCompute()
                       m_compute_shader->GetComputePipeline());
   }
 
-  UpdateComputeDescriptorSet();
+  UpdateComputeDescriptorSet(command_buffer);
   m_dirty_flags &= ~DIRTY_FLAG_COMPUTE_SHADER;
+  return true;
+}
+
+bool StateTracker::BindComputeIn(VkCommandBuffer command_buffer)
+{
+  if (!m_compute_shader)
+    return false;
+  vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    m_compute_shader->GetComputePipeline());
+  m_dirty_flags |= DIRTY_FLAG_COMPUTE_BINDINGS;
+  UpdateComputeDescriptorSet(command_buffer);
+  m_dirty_flags |= DIRTY_FLAG_COMPUTE_SHADER | DIRTY_FLAG_COMPUTE_DESCRIPTOR_SET;
   return true;
 }
 
@@ -766,7 +778,7 @@ void StateTracker::UpdateUtilityDescriptorSet()
   }
 }
 
-void StateTracker::UpdateComputeDescriptorSet()
+void StateTracker::UpdateComputeDescriptorSet(VkCommandBuffer command_buffer)
 {
   // Max number of updates - UBO, Samplers, TexelBuffer, Image
   std::array<VkWriteDescriptorSet, 4> dswrites;
@@ -825,8 +837,7 @@ void StateTracker::UpdateComputeDescriptorSet()
 
   if (m_dirty_flags & DIRTY_FLAG_COMPUTE_DESCRIPTOR_SET)
   {
-    vkCmdBindDescriptorSets(g_command_buffer_mgr->GetCurrentCommandBuffer(),
-                            VK_PIPELINE_BIND_POINT_COMPUTE,
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                             g_object_cache->GetPipelineLayout(PIPELINE_LAYOUT_COMPUTE), 0, 1,
                             &m_compute_descriptor_set, 1, &m_bindings.utility_ubo_offset);
     m_dirty_flags &= ~DIRTY_FLAG_COMPUTE_DESCRIPTOR_SET;
