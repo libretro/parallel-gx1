@@ -180,6 +180,13 @@ backend that builds, across the whole corpus. Cold p99 and max
 4. **Version policy.** Any change to what a key means bumps the cache
    version. A mismatch is a recoverable miss.
 
+Landed so far: the "Shader Cache" core option, off by default; with it
+on, the shader binaries and pipeline driver data are kept in memory and
+written in one write per file as the cache closes (the uids already
+were). They are written where the cache closes, at shutdown or on a
+reload, not yet by a worker, and nothing is written on pause yet. The
+gate runs cold with the cache off, recipes and warm with it on.
+
 Done when: with the cache on or off, the counters show 0 disk
 operations on the draw path. Cold and warm runs are within the spread
 of each other.

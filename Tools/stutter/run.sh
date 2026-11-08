@@ -6,8 +6,9 @@
 # Both cores are stats builds (make STATS=1). Builds the harness and the
 # corpus, then, for each backend:
 #   - runs the corpus in four cache states, each in its own directories:
-#     cold (no cache), recipes (uid caches only), warm (every cache), and
-#     state (a savestate from mid-corpus loaded into a fresh process);
+#     cold (no cache, the default), recipes (uid caches only), warm (every
+#     cache), both with the shader cache on, and state (a savestate from
+#     mid-corpus loaded into a fresh process);
 #   - with a parent core, times the candidate and the parent ABBA, and
 #     compares their pictures (separate --check runs, in each synchronous
 #     compilation mode);
@@ -87,11 +88,16 @@ states() {
    d=$OUT/dirs-$tag-$backend
    fresh "$d"
    run "$core" "$backend" "$d" "$OUT/$tag-$backend-cold.txt" --boot 1
+   # the shader cache, off by default, filled by a run with it on
+   run "$core" "$backend" "$d" "$OUT/$tag-$backend-fill.txt" --boot 1 \
+      --opt dolphin_shader_cache=enabled
    # recipes: the uid caches kept, the shader binaries and driver blobs gone
    rm -rf "$d/system/dolphin-emu/User/Cache/Shaders"
    find "$d" -name '*.cache' -exec rm -f {} + 2>/dev/null || true
-   run "$core" "$backend" "$d" "$OUT/$tag-$backend-recipes.txt" --boot 1
+   run "$core" "$backend" "$d" "$OUT/$tag-$backend-recipes.txt" --boot 1 \
+      --opt dolphin_shader_cache=enabled
    run "$core" "$backend" "$d" "$OUT/$tag-$backend-warm.txt" --boot 1 \
+      --opt dolphin_shader_cache=enabled \
       --state-new "$COMBOS" --state-out "$OUT/$tag-$backend.state"
    # into a fresh process, with fresh caches: what loading a state costs
    ds=$OUT/dirs-$tag-$backend-state
@@ -115,10 +121,14 @@ for backend in $BACKENDS; do
       for order in cand parent parent cand; do
          core=$CAND
          [ "$order" = parent ] && core=$PARENT
+         # with the shader cache on, which the cold run fills for the warm
+         # one: what it writes, it writes as the core closes
          fresh "$OUT/dirs-abba"
-         run "$core" "$backend" "$OUT/dirs-abba" "$OUT/abba-$order-$backend-cold.txt.$$"
+         run "$core" "$backend" "$OUT/dirs-abba" "$OUT/abba-$order-$backend-cold.txt.$$" \
+            --opt dolphin_shader_cache=enabled
          cat "$OUT/abba-$order-$backend-cold.txt.$$" >> "$OUT/abba-$order-$backend-cold.txt"
-         run "$core" "$backend" "$OUT/dirs-abba" "$OUT/abba-$order-$backend-warm.txt.$$"
+         run "$core" "$backend" "$OUT/dirs-abba" "$OUT/abba-$order-$backend-warm.txt.$$" \
+            --opt dolphin_shader_cache=enabled
          cat "$OUT/abba-$order-$backend-warm.txt.$$" >> "$OUT/abba-$order-$backend-warm.txt"
          rm -f "$OUT"/abba-*.$$
       done

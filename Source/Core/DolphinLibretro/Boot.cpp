@@ -527,8 +527,8 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING,
     Libretro::GetOption<bool>(gfx_settings::WAIT_FOR_SHADERS, /*def=*/false));
 
-  if (Common::is_uwp())
-    Config::SetBase(Config::GFX_SHADER_CACHE, false);
+  Config::SetBase(Config::GFX_SHADER_CACHE,
+    Libretro::GetOption<bool>(gfx_settings::SHADER_CACHE, /*def=*/false) && !Common::is_uwp());
 
   Config::SetBase(Config::GFX_MODS_ENABLE,
     Libretro::GetOption<bool>(gfx_settings::MODS_ENABLE, /*def=*/false));

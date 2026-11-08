@@ -907,6 +907,22 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "disabled"
   },
   {
+    Libretro::Options::gfx_settings::SHADER_CACHE,
+    "Graphics > Settings > Shader Cache",
+    "Shader Cache",
+    "Keep compiled shaders and pipelines on disk, in the system directory, and load them the "
+    "next time. Not needed to play without stutter: for machines slow to compile shaders, "
+    "where it shortens starting a game.",
+    nullptr,
+    CATEGORY_GFX_SETTINGS,
+    {
+      { "disabled", nullptr },
+      { "enabled",  nullptr },
+      { nullptr, nullptr }
+    },
+    "disabled"
+  },
+  {
     Libretro::Options::gfx_settings::ANTI_ALIASING,
     "Graphics > Settings > Anti-Aliasing",
     "Anti-Aliasing",

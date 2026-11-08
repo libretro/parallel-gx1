@@ -253,6 +253,7 @@ namespace gfx_settings {
   constexpr const char EFB_SCALE[] = "dolphin_efb_scale";
   constexpr const char SHADER_COMPILATION_MODE[] = "dolphin_shader_compilation_mode";
   constexpr const char WAIT_FOR_SHADERS[] = "dolphin_wait_for_shaders";
+  constexpr const char SHADER_CACHE[] = "dolphin_shader_cache";
   constexpr const char ANTI_ALIASING[] = "dolphin_anti_aliasing";
   constexpr const char TEXTURE_CACHE_ACCURACY[] = "dolphin_texture_cache_accuracy";
   constexpr const char GPU_TEXTURE_DECODING[] = "dolphin_gpu_texture_decoding";

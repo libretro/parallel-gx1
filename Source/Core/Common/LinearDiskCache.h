@@ -39,6 +39,8 @@ public:
 };
 
 // Dead simple unsorted key-value store with append functionality.
+// Appended entries are kept in memory, and written to the file in one write when it is synced or
+// closed: whoever appends, while a game runs, never touches the disk.
 // No random read functionality, all reading is done in OpenAndRead.
 // Keys and values can contain any characters, including \0.
 //
@@ -133,41 +135,61 @@ public:
   }
 
   LinearDiskCache() = default;
-  ~LinearDiskCache() { std::free(m_append_buffer); }
+  ~LinearDiskCache()
+  {
+    Close();
+    std::free(m_append_buffer);
+  }
   LinearDiskCache(const LinearDiskCache&) = delete;
   LinearDiskCache& operator=(const LinearDiskCache&) = delete;
 
-  void Sync() { m_file.Flush(); }
+  // Writes the entries appended since, in one write.
+  void Sync()
+  {
+    if (m_append_size && m_file.IsOpen())
+      m_file.WriteBytes(m_append_buffer, m_append_size);
+    m_append_size = 0;
+    m_file.Flush();
+  }
   void Close()
   {
     if (m_file.IsOpen())
+    {
+      Sync();
       m_file.Close();
+    }
+    m_append_size = 0;
   }
 
-  // Appends a key-value pair to the store, in one write.
+  // Appends a key-value pair to the store, written with the rest at the next Sync or Close.
   void Append(const K& key, const V* value, u32 value_size)
   {
     const size_t value_bytes = size_t(value_size) * sizeof(V);
     const size_t entry_bytes = sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
     u8* out;
 
-    if (m_append_capacity < entry_bytes)
+    if (!m_file.IsOpen())
+      return;
+    if (m_append_capacity - m_append_size < entry_bytes)
     {
-      // grows to the largest entry, then stays
-      u8* const grown = static_cast<u8*>(std::realloc(m_append_buffer, entry_bytes));
+      // doubles, so a run allocates a handful of times
+      size_t capacity = m_append_capacity ? m_append_capacity * 2 : 64 * 1024;
+      while (capacity - m_append_size < entry_bytes)
+        capacity *= 2;
+      u8* const grown = static_cast<u8*>(std::realloc(m_append_buffer, capacity));
       if (!grown)
         return;
       m_append_buffer = grown;
-      m_append_capacity = entry_bytes;
+      m_append_capacity = capacity;
     }
-    out = m_append_buffer;
+    out = m_append_buffer + m_append_size;
+    m_append_size += entry_bytes;
     m_num_entries++;
     std::memcpy(out, &value_size, sizeof(u32));
     std::memcpy(out + sizeof(u32), &key, sizeof(K));
     if (value_bytes)
       std::memcpy(out + sizeof(u32) + sizeof(K), value, value_bytes);
     std::memcpy(out + sizeof(u32) + sizeof(K) + value_bytes, &m_num_entries, sizeof(u32));
-    m_file.WriteBytes(out, entry_bytes);
   }
 
 private:
@@ -239,6 +261,7 @@ private:
   File::IOFile m_file;
   u8* m_append_buffer = nullptr;
   size_t m_append_capacity = 0;
+  size_t m_append_size = 0;
   u32 m_num_entries = 0;
 };
 }  // namespace Common

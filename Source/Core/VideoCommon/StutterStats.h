@@ -34,7 +34,8 @@ enum stutter_stat
    STUTTER_DRAW_QUEUED_COMPILE,
    /* the video thread waiting for the compile workers */
    STUTTER_DRAW_WAIT,
-   /* a cache file written by the thread building for a draw */
+   /* a cache file written by the thread building for a draw: none, as
+    * the caches write what they are handed when they close */
    STUTTER_DRAW_DISK_WRITE,
    /* a queued item compiled on a worker */
    STUTTER_WORKER_COMPILE,
