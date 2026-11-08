@@ -12,10 +12,6 @@
 
 namespace Vulkan
 {
-StreamBuffer::StreamBuffer(VkBufferUsageFlags usage, u32 size, enum vk_heap_usage heap_usage)
-    : m_usage(usage), m_heap_usage(heap_usage), m_size(size)
-{
-}
 
 StreamBuffer::~StreamBuffer()
 {
@@ -23,14 +19,12 @@ StreamBuffer::~StreamBuffer()
     g_command_buffer_mgr->DeferBufferDestruction(m_buffer, m_alloc);
 }
 
-std::unique_ptr<StreamBuffer> StreamBuffer::Create(VkBufferUsageFlags usage, u32 size,
-                                                   enum vk_heap_usage heap_usage)
+bool StreamBuffer::Init(VkBufferUsageFlags usage, u32 size, enum vk_heap_usage heap_usage)
 {
-  std::unique_ptr<StreamBuffer> buffer = std::make_unique<StreamBuffer>(usage, size, heap_usage);
-  if (!buffer->AllocateBuffer())
-    return nullptr;
-
-  return buffer;
+  m_usage = usage;
+  m_heap_usage = heap_usage;
+  m_size = size;
+  return AllocateBuffer();
 }
 
 bool StreamBuffer::AllocateBuffer()
@@ -70,7 +64,7 @@ bool StreamBuffer::AllocateBuffer()
   m_host_pointer = static_cast<u8*>(alloc.mapped);
   m_current_offset = 0;
   m_current_gpu_position = 0;
-  m_tracked_fences.clear();
+  m_num_tracked = 0;
   return true;
 }
 
@@ -160,32 +154,37 @@ void StreamBuffer::UpdateCurrentFencePosition()
 
   // Has the offset changed since the last fence?
   const u64 counter = g_command_buffer_mgr->GetCurrentFenceCounter();
-  if (!m_tracked_fences.empty() && m_tracked_fences.back().first == counter)
+  if (m_num_tracked && Tracked(m_num_tracked - 1).counter == counter)
   {
     // Still haven't executed a command buffer, so just update the offset.
-    m_tracked_fences.back().second = m_current_offset;
+    Tracked(m_num_tracked - 1).offset = m_current_offset;
     return;
   }
 
   // New buffer, so update the GPU position while we're at it.
   UpdateGPUPosition();
-  m_tracked_fences.emplace_back(counter, m_current_offset);
+  if (m_num_tracked == TRACKED_FENCES)
+  {
+    // Never with fewer command buffers in flight than the ring holds; made room for all the same.
+    g_command_buffer_mgr->WaitForFenceCounter(Tracked(0).counter);
+    m_current_gpu_position = Tracked(0).offset;
+    DropTracked(1);
+  }
+  TrackedFence& fence = Tracked(m_num_tracked++);
+  fence.counter = counter;
+  fence.offset = m_current_offset;
 }
 
 void StreamBuffer::UpdateGPUPosition()
 {
-  auto start = m_tracked_fences.begin();
-  auto end = start;
-
   const u64 completed_counter = g_command_buffer_mgr->GetCompletedFenceCounter();
-  while (end != m_tracked_fences.end() && completed_counter >= end->first)
+  u32 done = 0;
+  while (done < m_num_tracked && completed_counter >= Tracked(done).counter)
   {
-    m_current_gpu_position = end->second;
-    ++end;
+    m_current_gpu_position = Tracked(done).offset;
+    done++;
   }
-
-  if (start != end)
-    m_tracked_fences.erase(start, end);
+  DropTracked(done);
 }
 
 bool StreamBuffer::WaitForClearSpace(u32 num_bytes)
@@ -193,14 +192,14 @@ bool StreamBuffer::WaitForClearSpace(u32 num_bytes)
   u32 new_offset = 0;
   u32 new_gpu_position = 0;
 
-  auto iter = m_tracked_fences.begin();
-  for (; iter != m_tracked_fences.end(); ++iter)
+  u32 i = 0;
+  for (; i < m_num_tracked; i++)
   {
     // Would this fence bring us in line with the GPU?
     // This is the "last resort" case, where a command buffer execution has been forced
     // after no additional data has been written to it, so we can assume that after the
     // fence has been signaled the entire buffer is now consumed.
-    u32 gpu_position = iter->second;
+    u32 gpu_position = Tracked(i).offset;
     if (m_current_offset == gpu_position)
     {
       new_offset = 0;
@@ -250,16 +249,14 @@ bool StreamBuffer::WaitForClearSpace(u32 num_bytes)
 
   // Did any fences satisfy this condition?
   // Has the command buffer been executed yet? If not, the caller should execute it.
-  if (iter == m_tracked_fences.end() ||
-      iter->first == g_command_buffer_mgr->GetCurrentFenceCounter())
+  if (i == m_num_tracked || Tracked(i).counter == g_command_buffer_mgr->GetCurrentFenceCounter())
   {
     return false;
   }
 
   // Wait until this fence is signaled. This will fire the callback, updating the GPU position.
-  g_command_buffer_mgr->WaitForFenceCounter(iter->first);
-  m_tracked_fences.erase(m_tracked_fences.begin(),
-                         m_current_offset == iter->second ? m_tracked_fences.end() : ++iter);
+  g_command_buffer_mgr->WaitForFenceCounter(Tracked(i).counter);
+  DropTracked(m_current_offset == Tracked(i).offset ? m_num_tracked : i + 1);
   m_current_offset = new_offset;
   m_current_gpu_position = new_gpu_position;
   return true;

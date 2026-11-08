@@ -3,16 +3,15 @@
 
 #pragma once
 
-#include <memory>
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "VideoBackends/Vulkan/VKStreamBuffer.h"
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #include "VideoCommon/VertexManagerBase.h"
 
 namespace Vulkan
 {
-class StreamBuffer;
 
 class VertexManager final : public VertexManagerBase
 {
@@ -50,10 +49,10 @@ protected:
   bool ReserveConstantStorage();
   void UploadAllConstants();
 
-  std::unique_ptr<StreamBuffer> m_vertex_stream_buffer;
-  std::unique_ptr<StreamBuffer> m_index_stream_buffer;
-  std::unique_ptr<StreamBuffer> m_uniform_stream_buffer;
-  std::unique_ptr<StreamBuffer> m_texel_stream_buffer;
+  StreamBuffer m_vertex_stream_buffer;
+  StreamBuffer m_index_stream_buffer;
+  StreamBuffer m_uniform_stream_buffer;
+  StreamBuffer m_texel_stream_buffer;
   std::array<VkBufferView, NUM_TEXEL_BUFFER_FORMATS> m_texel_buffer_views = {};
   u32 m_uniform_buffer_reserve_size = 0;
 };

@@ -6,7 +6,6 @@
 #include <array>
 #include <cstddef>
 #include <map>
-#include <memory>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -15,6 +14,7 @@
 #include "Common/LinearDiskCache.h"
 
 #include "VideoBackends/Vulkan/Constants.h"
+#include "VideoBackends/Vulkan/VKStreamBuffer.h"
 
 #include "VideoCommon/GeometryShaderGen.h"
 #include "VideoCommon/PixelShaderGen.h"
@@ -26,7 +26,6 @@ namespace Vulkan
 class CommandBufferManager;
 class VertexFormat;
 class VKTexture;
-class StreamBuffer;
 
 class ObjectCache
 {
@@ -51,7 +50,7 @@ public:
   }
 
   // Staging buffer for textures.
-  StreamBuffer* GetTextureUploadBuffer() const { return m_texture_upload_buffer.get(); }
+  StreamBuffer* GetTextureUploadBuffer() { return &m_texture_upload_buffer; }
 
   // Static samplers
   VkSampler GetPointSampler() const { return m_point_sampler; }
@@ -91,7 +90,7 @@ private:
   std::array<VkDescriptorSetLayout, NUM_DESCRIPTOR_SET_LAYOUTS> m_descriptor_set_layouts = {};
   std::array<VkPipelineLayout, NUM_PIPELINE_LAYOUTS> m_pipeline_layouts = {};
 
-  std::unique_ptr<StreamBuffer> m_texture_upload_buffer;
+  StreamBuffer m_texture_upload_buffer;
 
   VkSampler m_point_sampler = VK_NULL_HANDLE;
   VkSampler m_linear_sampler = VK_NULL_HANDLE;

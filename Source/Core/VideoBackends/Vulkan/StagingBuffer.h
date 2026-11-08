@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstddef>
-#include <memory>
 
 #include "VideoBackends/Vulkan/Constants.h"
 
@@ -15,7 +14,7 @@ class StagingBuffer
 public:
   StagingBuffer(STAGING_BUFFER_TYPE type, VkBuffer buffer, const vk_heap_alloc_t& allocation,
                 VkDeviceSize size, char* map_ptr);
-  virtual ~StagingBuffer();
+  ~StagingBuffer();
 
   STAGING_BUFFER_TYPE GetType() const { return m_type; }
   VkDeviceSize GetSize() const { return m_size; }
@@ -53,8 +52,8 @@ public:
   void Write(VkDeviceSize offset, const void* data, size_t size, bool invalidate_caches = true);
 
   // Creates the optimal format of image copy.
-  static std::unique_ptr<StagingBuffer> Create(STAGING_BUFFER_TYPE type, VkDeviceSize size,
-                                               VkBufferUsageFlags usage);
+  static StagingBuffer* Create(STAGING_BUFFER_TYPE type, VkDeviceSize size,
+                               VkBufferUsageFlags usage);
 
   // Allocates the resources needed to create a staging buffer.
   static bool AllocateBuffer(STAGING_BUFFER_TYPE type, VkDeviceSize size, VkBufferUsageFlags usage,

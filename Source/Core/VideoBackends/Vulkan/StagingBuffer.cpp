@@ -162,8 +162,8 @@ bool StagingBuffer::AllocateBuffer(STAGING_BUFFER_TYPE type, VkDeviceSize size,
   return true;
 }
 
-std::unique_ptr<StagingBuffer> StagingBuffer::Create(STAGING_BUFFER_TYPE type, VkDeviceSize size,
-                                                     VkBufferUsageFlags usage)
+StagingBuffer* StagingBuffer::Create(STAGING_BUFFER_TYPE type, VkDeviceSize size,
+                                     VkBufferUsageFlags usage)
 {
   VkBuffer buffer;
   vk_heap_alloc_t alloc;
@@ -171,7 +171,7 @@ std::unique_ptr<StagingBuffer> StagingBuffer::Create(STAGING_BUFFER_TYPE type, V
   if (!AllocateBuffer(type, size, usage, &buffer, &alloc, &map_ptr))
     return nullptr;
 
-  return std::make_unique<StagingBuffer>(type, buffer, alloc, size, map_ptr);
+  return new StagingBuffer(type, buffer, alloc, size, map_ptr);
 }
 
 }  // namespace Vulkan

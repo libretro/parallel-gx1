@@ -20,6 +20,7 @@ VKBoundingBox::~VKBoundingBox()
   {
     vk_heap_destroy_buffer(g_vulkan_context->GetHeap(), m_gpu_buffer, &m_gpu_allocation);
   }
+  delete m_readback_buffer;
 }
 
 bool VKBoundingBox::Initialize()

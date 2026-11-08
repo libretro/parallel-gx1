@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <string_view>
 
+#include "VideoBackends/Vulkan/StagingBuffer.h"
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #include "VideoCommon/AbstractFramebuffer.h"
 #include "VideoCommon/AbstractStagingTexture.h"
@@ -14,7 +14,6 @@
 
 namespace Vulkan
 {
-class StagingBuffer;
 class Texture2D;
 
 class VKTexture final : public AbstractTexture
@@ -96,7 +95,8 @@ class VKStagingTexture final : public AbstractStagingTexture
 public:
   VKStagingTexture() = delete;
   VKStagingTexture(PrivateTag, StagingTextureType type, const TextureConfig& config,
-                   std::unique_ptr<StagingBuffer> buffer, VkImage linear_image,
+                   STAGING_BUFFER_TYPE buffer_type, VkBuffer buffer, const vk_heap_alloc_t& alloc,
+                   VkDeviceSize buffer_size, char* map_ptr, VkImage linear_image,
                    const vk_heap_alloc_t& linear_image_alloc);
 
   ~VKStagingTexture();
@@ -123,7 +123,7 @@ private:
                                     const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
                                     u32 src_level, const MathUtil::Rectangle<int>& dst_rect);
 
-  std::unique_ptr<StagingBuffer> m_staging_buffer;
+  StagingBuffer m_staging_buffer;
   VkImage m_linear_image = VK_NULL_HANDLE;
   vk_heap_alloc_t m_linear_image_alloc = {};
 };

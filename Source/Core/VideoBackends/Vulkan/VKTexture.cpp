@@ -369,7 +369,7 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
   const u32 num_rows = Common::AlignUp(height, block_size) / block_size;
   const u32 source_pitch = CalculateStrideForFormat(m_config.format, row_length);
   const u32 upload_size = source_pitch * num_rows;
-  std::unique_ptr<StagingBuffer> temp_buffer;
+  StagingBuffer* temp_buffer = nullptr;
   VkBuffer upload_buffer;
   VkDeviceSize upload_buffer_offset;
 
@@ -401,6 +401,7 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
     if (!temp_buffer || !temp_buffer->Map())
     {
       PanicAlertFmt("Failed to allocate staging texture for large texture upload.");
+      delete temp_buffer;
       return;
     }
 
@@ -411,6 +412,8 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
   }
 
   CopyFromUpload(upload_buffer, upload_buffer_offset, level, layer, width, height, row_length);
+  /* its buffer goes once the GPU has copied from it */
+  delete temp_buffer;
 }
 
 /* A load lent to its writer: one at a time, as they all go through the upload stream buffer. */
@@ -801,9 +804,12 @@ void VKTexture::PrepareForRenderPass(VkCommandBuffer command_buffer) const
 }
 
 VKStagingTexture::VKStagingTexture(PrivateTag, StagingTextureType type, const TextureConfig& config,
-                                   std::unique_ptr<StagingBuffer> buffer, VkImage linear_image,
+                                   STAGING_BUFFER_TYPE buffer_type, VkBuffer buffer,
+                                   const vk_heap_alloc_t& alloc, VkDeviceSize buffer_size,
+                                   char* map_ptr, VkImage linear_image,
                                    const vk_heap_alloc_t& linear_image_alloc)
-    : AbstractStagingTexture(type, config), m_staging_buffer(std::move(buffer)),
+    : AbstractStagingTexture(type, config),
+      m_staging_buffer(buffer_type, buffer, alloc, buffer_size, map_ptr),
       m_linear_image(linear_image), m_linear_image_alloc(linear_image_alloc)
 {
 }
@@ -857,18 +863,17 @@ VKStagingTexture* VKStagingTexture::Create(StagingTextureType type, const Textur
     linear_image = CreateLinearImage(type, config, &linear_image_alloc);
   }
 
-  std::unique_ptr<StagingBuffer> staging_buffer =
-      std::make_unique<StagingBuffer>(buffer_type, buffer, alloc, buffer_size, map_ptr);
-  VKStagingTexture* const staging_tex = new VKStagingTexture(
-      PrivateTag{}, type, config, std::move(staging_buffer), linear_image, linear_image_alloc);
+  VKStagingTexture* const staging_tex =
+      new VKStagingTexture(PrivateTag{}, type, config, buffer_type, buffer, alloc, buffer_size,
+                           map_ptr, linear_image, linear_image_alloc);
 
   // Use persistent mapping.
-  if (!staging_tex->m_staging_buffer->Map())
+  if (!staging_tex->m_staging_buffer.Map())
   {
     delete staging_tex;
     return nullptr;
   }
-  staging_tex->m_map_pointer = staging_tex->m_staging_buffer->GetMapPointer();
+  staging_tex->m_map_pointer = staging_tex->m_staging_buffer.GetMapPointer();
   staging_tex->m_map_stride = stride;
   staging_tex->m_persistent_map = type == StagingTextureType::Upload;
   return staging_tex;
@@ -957,7 +962,7 @@ void VKStagingTexture::CopyFromTexture(const AbstractTexture* src,
   }
 
   vkCmdCopyImageToBuffer(g_command_buffer_mgr->GetCurrentCommandBuffer(), src_image,
-                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_staging_buffer->GetBuffer(), 1,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_staging_buffer.GetBuffer(), 1,
                          &image_copy);
 
   // Restore old source texture layout.
@@ -1030,7 +1035,7 @@ void VKStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, A
          dst_rect.top >= 0 && static_cast<u32>(dst_rect.bottom) <= dst_tex->GetHeight());
 
   // Flush caches before copying.
-  m_staging_buffer->FlushCPUCache();
+  m_staging_buffer.FlushCPUCache();
   StateTracker::GetInstance()->EndRenderPass();
 
   VkImageLayout old_layout = dst_tex->GetLayout();
@@ -1049,7 +1054,7 @@ void VKStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, A
   image_copy.imageExtent = {static_cast<u32>(dst_rect.GetWidth()),
                             static_cast<u32>(dst_rect.GetHeight()), 1u};
   vkCmdCopyBufferToImage(g_command_buffer_mgr->GetCurrentCommandBuffer(),
-                         m_staging_buffer->GetBuffer(), dst_tex->GetImage(),
+                         m_staging_buffer.GetBuffer(), dst_tex->GetImage(),
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
 
   // Restore old source texture layout.
@@ -1089,7 +1094,7 @@ void VKStagingTexture::Flush()
 
   // For readback textures, invalidate the CPU cache as there is new data there.
   if (m_type == StagingTextureType::Readback || m_type == StagingTextureType::Mutable)
-    m_staging_buffer->InvalidateCPUCache();
+    m_staging_buffer.InvalidateCPUCache();
 
   m_needs_flush = false;
 }

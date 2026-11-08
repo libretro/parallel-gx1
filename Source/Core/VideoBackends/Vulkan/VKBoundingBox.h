@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <memory>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -15,7 +14,6 @@
 
 namespace Vulkan
 {
-class StagingBuffer;
 
 class VKBoundingBox final : public BoundingBox
 {
@@ -40,7 +38,7 @@ private:
 
   static constexpr size_t BUFFER_SIZE = sizeof(BBoxType) * NUM_BBOX_VALUES;
 
-  std::unique_ptr<StagingBuffer> m_readback_buffer;
+  StagingBuffer* m_readback_buffer = nullptr;
 };
 
 }  // namespace Vulkan
