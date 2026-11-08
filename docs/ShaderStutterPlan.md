@@ -92,10 +92,13 @@ the harness on Vulkan and the software renderer, a corpus of blend,
 depth, cull, vertex format, primitive, TEV and alpha test states, of
 copy filters, overflow and gamma, and of an EFB copy to a texture in
 every colour, intensity and depth format drawn back textured, some read
-in another format of the same size and so reinterpreted, and the
+in another format of the same size and so reinterpreted, of a texture
+loaded from RAM every frame in each texture and palette format and three
+sizes, and the
 Vulkan baseline. Each picture carries its frame's number, so the
-picture check compares frame by frame. Still to come: texture formats
-of their own, palettes and texgens in the corpus, the GL and D3D
+picture check compares frame by frame, and textures decoded on the GPU
+against the same decoded on the CPU. Still to come: texgens in the
+corpus, the GL and D3D
 backends in the harness, and the allocation tracer. Counters are gated over the whole run:
 where boot ends races the GPU thread, so the boot/play split is
 reported, not gated.

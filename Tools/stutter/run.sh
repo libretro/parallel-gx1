@@ -106,6 +106,15 @@ states() {
       --state-in "$OUT/$tag-$backend.state"
 }
 
+# each corpus frame of a --check result, with the pictures it was, sorted
+# and joined by commas: a frame may be presented again with what follows
+# partly drawn
+picture_map() {
+   sed -n 's/^picture .* corpus=\([0-9]*\) .* hash=\([0-9a-f]*\)/\1 \2/p' "$1" | sort -u |
+      awk '$1 != k { if (NR > 1) print k, v; k = $1; v = $2; next } { v = v "," $2 }
+           END { if (NR) print k, v }'
+}
+
 # boot and play counts of a counter in a result
 stat() {
    sed -n "s/^stat $2 boot=\([0-9]*\) boot_mcyc=[0-9.]* play=\([0-9]*\) .*/\1 \2/p" "$1"
@@ -147,8 +156,7 @@ for backend in $BACKENDS; do
             run "$core" "$backend" "$OUT/dirs-check" "$OUT/check-$tag-$backend-$mode.txt" \
                --check --opt dolphin_shader_compilation_mode=$mode \
                --opt dolphin_disable_copy_filter=disabled
-            sed -n 's/^picture .* corpus=\([0-9]*\) .* hash=\([0-9a-f]*\)/\1 \2/p' \
-               "$OUT/check-$tag-$backend-$mode.txt" | sort -u > "$OUT/check-$tag-$backend-$mode.map"
+            picture_map "$OUT/check-$tag-$backend-$mode.txt" > "$OUT/check-$tag-$backend-$mode.map"
          done
          join "$OUT/check-cand-$backend-$mode.map" "$OUT/check-parent-$backend-$mode.map" \
             > "$OUT/check-$backend-$mode.joined"
@@ -160,6 +168,25 @@ for backend in $BACKENDS; do
             FAILED=1
          fi
       done
+   fi
+
+   # textures decoded on the GPU: the same pictures as the candidate's
+   # decoded on the CPU, with the picture checks
+   if [ -n "$PARENT" ]; then
+      fresh "$OUT/dirs-check"
+      run "$CAND" "$backend" "$OUT/dirs-check" "$OUT/check-cand-$backend-gpudecode.txt" \
+         --check --opt dolphin_shader_compilation_mode=0 \
+         --opt dolphin_disable_copy_filter=disabled --opt dolphin_gpu_texture_decoding=enabled
+      picture_map "$OUT/check-cand-$backend-gpudecode.txt" > "$OUT/check-cand-$backend-gpudecode.map"
+      join "$OUT/check-cand-$backend-gpudecode.map" "$OUT/check-cand-$backend-0.map" \
+         > "$OUT/check-$backend-gpudecode.joined"
+      both=$(wc -l < "$OUT/check-$backend-gpudecode.joined")
+      differ=$(awk '$2 != $3' "$OUT/check-$backend-gpudecode.joined" | wc -l)
+      echo "   pictures, GPU texture decoding: $both frames in both runs, $differ differ"
+      if [ "$differ" != 0 ] || [ "$both" -lt $((NEW / 3)) ]; then
+         echo "FAIL $backend: textures decoded on the GPU differ from those decoded on the CPU"
+         FAILED=1
+      fi
    fi
 
    for state in cold recipes warm state; do

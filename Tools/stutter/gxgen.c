@@ -16,7 +16,11 @@
  * of the EFB to a texture, in a format cycling through every colour,
  * intensity and depth copy format with the EFB with and without alpha,
  * and draws it textured over a corner, some read back in another format
- * of the same size, which the texture cache reinterprets. The frame's number is drawn last,
+ * of the same size, which the texture cache reinterprets. And each frame
+ * draws a texture loaded from RAM over another corner: new contents
+ * every frame, in a format and size cycling through every texture format
+ * (palettes in each palette format, CMPR) at 32, 64 and 128 texels, so
+ * each frame decodes one. The frame's number is drawn last,
  * over the top left corner: a row of black and white 16x16 squares, bit 0
  * first, which the harness reads back to tell which frame a picture is.
  *
@@ -401,6 +405,119 @@ static void tex_copy_draw(u32 choice, u32 gamma, u32 pixel_format)
    bpw(0xf7, 0);
 }
 
+/* The frame's RAM writes, made before its commands: the texture, and
+ * its palette. */
+/* in one of RAM_SLOTS places, a frame's not overwriting what the frames
+ * before it, which the GPU thread may still be reading, wrote */
+#define RAM_SLOTS 32
+#define RAM_TEX_ADDR(k) (0x00500000u + ((k) % RAM_SLOTS) * 0x10000u)
+#define RAM_TLUT_ADDR(k) (0x00800000u + ((k) % RAM_SLOTS) * 0x8000u)
+#define RAM_TEX_CHOICES 17
+static const u32 ram_tex[RAM_TEX_CHOICES][3] = {
+   /* texture format, bits per texel, palette format */
+   {0, 4, 0}, {1, 8, 0}, {2, 8, 0}, {3, 16, 0}, {4, 16, 0}, {5, 16, 0}, {6, 32, 0},
+   {8, 4, 0}, {8, 4, 1}, {8, 4, 2}, {9, 8, 0}, {9, 8, 1}, {9, 8, 2},
+   {10, 16, 0}, {10, 16, 1}, {10, 16, 2}, {14, 4, 0}};
+static const u32 ram_tex_sizes[3] = {32, 64, 128};
+
+struct ram_write
+{
+   u32 address;
+   u8 *data;
+   u32 size;
+};
+static struct ram_write *frame_writes[2];
+static u32 *frame_nwrites;
+
+static u32 rng_state;
+static u32 rng(void)
+{
+   rng_state = rng_state * 1664525u + 1013904223u;
+   return rng_state >> 8;
+}
+
+static u8 *random_bytes(u32 n, u32 seed)
+{
+   u8 *p = (u8 *)malloc(n);
+   u32 i;
+   if (!p)
+   {
+      fprintf(stderr, "gxgen: out of memory\n");
+      exit(1);
+   }
+   rng_state = seed * 2654435761u + 1;
+   for (i = 0; i < n; i++)
+      p[i] = (u8)rng();
+   return p;
+}
+
+static void ram_texture_draw(u32 k)
+{
+   const u32 *t = ram_tex[k % RAM_TEX_CHOICES];
+   const u32 size = ram_tex_sizes[(k / 5) % 3];
+   const u32 bytes = size * size * t[1] / 8;
+   /* palette entries: 16, 256 or 16384 of 2 bytes, in 32-byte lines */
+   const u32 entries = t[0] == 8 ? 16 : t[0] == 9 ? 256 : t[0] == 10 ? 16384 : 0;
+   static const float quad[4][4] = {
+      {0.5f, -0.5f, 0.0f, 0.0f}, {1.0f, -0.5f, 1.0f, 0.0f},
+      {1.0f, -1.0f, 1.0f, 1.0f}, {0.5f, -1.0f, 0.0f, 1.0f}};
+   u32 i, n = 0;
+
+   frame_writes[0][k].address = RAM_TEX_ADDR(k);
+   frame_writes[0][k].data = random_bytes(bytes, k);
+   frame_writes[0][k].size = bytes;
+   n = 1;
+   if (entries)
+   {
+      frame_writes[1][k].address = RAM_TLUT_ADDR(k);
+      frame_writes[1][k].data = random_bytes(entries * 2, k + 0x10000);
+      frame_writes[1][k].size = entries * 2;
+      n = 2;
+      /* the palette into TMEM from 0x80000, then map 0 reads it from there */
+      bpw(0x64, RAM_TLUT_ADDR(k) >> 5);
+      bpw(0x65, (0x80000 >> 9) | ((entries * 2 / 32) << 10));
+      bpw(0x98, (0x80000 >> 9) | (t[2] << 10));
+   }
+   frame_nwrites[k] = n;
+
+   bpw(0x80, 0);
+   bpw(0x84, 0);
+   bpw(0x88, (size - 1) | ((size - 1) << 10) | (t[0] << 20));
+   bpw(0x94, RAM_TEX_ADDR(k) >> 5);
+   bpw(0x30, size - 1);
+   bpw(0x31, size - 1);
+   bpw(0x00, 0x11);
+   bpw(0x28, (1 << 6) | (0x3f << 12) | (7 << 19));
+   bpw(0xc0, 0xfff8);
+   bpw(0xc1, 0xffc0);
+   bpw(0xf6, 1 << 2);
+   bpw(0xf7, 2 | (3 << 2));
+   bpw(0x40, 0);
+   bpw(0x41, 0x18);
+   bpw(0xf3, (7 << 16) | (7 << 19));
+   xf1(0x1008, 1 | (1 << 4));
+   xf1(0x103f, 1);
+   xf1(0x1040, 5 << 7);
+   cpw(0x60, 1);
+   cpw(0x71, 1 | (4 << 1) | (1 << 13) | (5 << 14) | (1 << 21) | (4 << 22) | (1u << 30));
+   put8(0x81);
+   be16(4);
+   for (i = 0; i < 4; i++)
+   {
+      be32(f32(quad[i][0]));
+      be32(f32(quad[i][1]));
+      be32(f32(0.0f));
+      be32(0xffffffffu);
+      be32(f32(quad[i][2]));
+      be32(f32(quad[i][3]));
+   }
+   cpw(0x60, 0);
+   xf1(0x1008, 1);
+   xf1(0x103f, 0);
+   bpw(0xf6, 0);
+   bpw(0xf7, 0);
+}
+
 /* FRAME_BITS squares from the top left, white for a one */
 #define FRAME_BITS 12
 
@@ -480,6 +597,7 @@ static void frame(u32 k, u32 combos)
    bpw(0x53, bp[0x53]);
    bpw(0x54, bp[0x54]);
    tex_copy_draw((k / 4) % TEX_COPY_CHOICES, copy_gamma[(k / 2) % COPY_CHOICES], (k / 3) & 1);
+   ram_texture_draw(k);
    frame_number(k);
 
    /* EFB to XFB */
@@ -528,7 +646,7 @@ int main(int argc, char **argv)
    unsigned long off, bp_off, cp_off, xfm_off, xfr_off, tex_off, fl_off;
    u32 passes = argc > 2 ? (u32)atoi(argv[2]) : 2;
    u32 combos = 1, nframes, k, i;
-   unsigned long *data_off;
+   unsigned long *data_off, *mu_off;
    size_t *data_len;
    u8 **data;
    FILE *f;
@@ -579,6 +697,12 @@ int main(int argc, char **argv)
    bp[0x53] = 0x595000;
    bp[0x54] = 0x000015;
 
+   frame_writes[0] = (struct ram_write *)calloc(nframes, sizeof(struct ram_write));
+   frame_writes[1] = (struct ram_write *)calloc(nframes, sizeof(struct ram_write));
+   frame_nwrites = (u32 *)calloc(nframes, sizeof(u32));
+   mu_off = (unsigned long *)calloc(nframes, sizeof(*mu_off));
+   if (!frame_writes[0] || !frame_writes[1] || !frame_nwrites || !mu_off)
+      return 1;
    data = (u8 **)calloc(nframes, sizeof(*data));
    data_len = (size_t *)calloc(nframes, sizeof(*data_len));
    data_off = (unsigned long *)calloc(nframes, sizeof(*data_off));
@@ -604,6 +728,12 @@ int main(int argc, char **argv)
    {
       data_off[k] = off;
       off += (unsigned long)data_len[k];
+   }
+   /* each frame's RAM writes (24 bytes each), then what they write */
+   for (k = 0; k < nframes; k++)
+   {
+      mu_off[k] = off;
+      off += 24ul * frame_nwrites[k];
    }
 
    f = fopen(argv[1], "wb");
@@ -640,8 +770,8 @@ int main(int argc, char **argv)
       le32(f, (u32)data_len[k]);
       le32(f, 0x00300000);
       le32(f, 0x003fffe0);
-      le64(f, 0);
-      le32(f, 0);
+      le64(f, mu_off[k]);
+      le32(f, frame_nwrites[k]);
       zeros(f, 32);
    }
    for (k = 0; k < nframes; k++)
@@ -649,10 +779,36 @@ int main(int argc, char **argv)
       fwrite(data[k], 1, data_len[k], f);
       free(data[k]);
    }
+   for (k = 0; k < nframes; k++)
+   {
+      for (i = 0; i < frame_nwrites[k]; i++)
+      {
+         const struct ram_write *w = &frame_writes[i][k];
+         le32(f, 0); /* before the frame's first command */
+         le32(f, w->address);
+         le64(f, off);
+         le32(f, w->size);
+         fputc(1, f); /* a texture */
+         zeros(f, 3);
+         off += w->size;
+      }
+   }
+   for (k = 0; k < nframes; k++)
+   {
+      for (i = 0; i < frame_nwrites[k]; i++)
+      {
+         fwrite(frame_writes[i][k].data, 1, frame_writes[i][k].size, f);
+         free(frame_writes[i][k].data);
+      }
+   }
    fclose(f);
    free(data);
    free(data_len);
    free(data_off);
+   free(mu_off);
+   free(frame_writes[0]);
+   free(frame_writes[1]);
+   free(frame_nwrites);
    printf("%s: %u combinations, %u frames\n", argv[1], combos, nframes);
    return 0;
 }
