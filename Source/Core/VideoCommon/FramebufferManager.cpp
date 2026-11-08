@@ -37,6 +37,8 @@ FramebufferManager::FramebufferManager() : m_prev_efb_format(PixelFormat::INVALI
 
 FramebufferManager::~FramebufferManager()
 {
+  free(m_color_poke_vertices);
+  free(m_depth_poke_vertices);
   DestroyClearPipelines();
   DestroyPokePipelines();
   DestroyConversionPipelines();
@@ -944,10 +946,10 @@ AbstractPipeline* FramebufferManager::GetClearPipeline(bool colorEnable, bool al
 void FramebufferManager::PokeEFBColor(u32 x, u32 y, u32 color)
 {
   // Flush if we exceeded the number of vertices per batch.
-  if ((m_color_poke_vertices.size() + 6) > MAX_POKE_VERTICES)
+  if ((m_num_color_poke_vertices + 6) > MAX_POKE_VERTICES)
     FlushEFBPokes();
 
-  CreatePokeVertices(&m_color_poke_vertices, x, y, 0.0f, color);
+  CreatePokeVertices(&m_color_poke_vertices, &m_num_color_poke_vertices, x, y, 0.0f, color);
 
   // See comment above for reasoning for lower-left coordinates.
   if (g_backend_info.bUsesLowerLeftOrigin)
@@ -962,10 +964,10 @@ void FramebufferManager::PokeEFBColor(u32 x, u32 y, u32 color)
 void FramebufferManager::PokeEFBDepth(u32 x, u32 y, float depth)
 {
   // Flush if we exceeded the number of vertices per batch.
-  if ((m_depth_poke_vertices.size() + 6) > MAX_POKE_VERTICES)
+  if ((m_num_depth_poke_vertices + 6) > MAX_POKE_VERTICES)
     FlushEFBPokes();
 
-  CreatePokeVertices(&m_depth_poke_vertices, x, y, depth, 0);
+  CreatePokeVertices(&m_depth_poke_vertices, &m_num_depth_poke_vertices, x, y, depth, 0);
 
   // See comment above for reasoning for lower-left coordinates.
   if (g_backend_info.bUsesLowerLeftOrigin)
@@ -977,9 +979,18 @@ void FramebufferManager::PokeEFBDepth(u32 x, u32 y, float depth)
     m_efb_depth_cache.readback_texture->WriteTexel(x, y, &depth);
 }
 
-void FramebufferManager::CreatePokeVertices(std::vector<EFBPokeVertex>* destination_list, u32 x,
-                                            u32 y, float z, u32 color)
+void FramebufferManager::CreatePokeVertices(EFBPokeVertex** list, size_t* count, u32 x, u32 y,
+                                            float z, u32 color)
 {
+  EFBPokeVertex* out;
+  /* the batch's room, taken when the game first pokes */
+  if (!*list)
+  {
+    *list = static_cast<EFBPokeVertex*>(malloc(MAX_POKE_VERTICES * sizeof(EFBPokeVertex)));
+    if (!*list)
+      return;
+  }
+  out = *list + *count;
   const float cs_pixel_width = 1.0f / EFB_WIDTH * 2.0f;
   const float cs_pixel_height = 1.0f / EFB_HEIGHT * 2.0f;
   if (g_backend_info.bSupportsLargePoints)
@@ -988,7 +999,8 @@ void FramebufferManager::CreatePokeVertices(std::vector<EFBPokeVertex>* destinat
     const float cs_x = (static_cast<float>(x) + 0.5f) * cs_pixel_width - 1.0f;
     const float cs_y = 1.0f - (static_cast<float>(y) + 0.5f) * cs_pixel_height;
     const float point_size = static_cast<float>(GetEFBScale());
-    destination_list->push_back({{cs_x, cs_y, z, point_size}, color});
+    out[0] = {{cs_x, cs_y, z, point_size}, color};
+    *count += 1;
     return;
   }
 
@@ -997,28 +1009,29 @@ void FramebufferManager::CreatePokeVertices(std::vector<EFBPokeVertex>* destinat
   const float y1 = 1.0f - static_cast<float>(y) * cs_pixel_height;
   const float x2 = x1 + cs_pixel_width;
   const float y2 = y1 - cs_pixel_height;
-  destination_list->push_back({{x1, y1, z, 1.0f}, color});
-  destination_list->push_back({{x2, y1, z, 1.0f}, color});
-  destination_list->push_back({{x1, y2, z, 1.0f}, color});
-  destination_list->push_back({{x1, y2, z, 1.0f}, color});
-  destination_list->push_back({{x2, y1, z, 1.0f}, color});
-  destination_list->push_back({{x2, y2, z, 1.0f}, color});
+  out[0] = {{x1, y1, z, 1.0f}, color};
+  out[1] = {{x2, y1, z, 1.0f}, color};
+  out[2] = {{x1, y2, z, 1.0f}, color};
+  out[3] = {{x1, y2, z, 1.0f}, color};
+  out[4] = {{x2, y1, z, 1.0f}, color};
+  out[5] = {{x2, y2, z, 1.0f}, color};
+  *count += 6;
 }
 
 void FramebufferManager::FlushEFBPokes()
 {
-  if (!m_color_poke_vertices.empty())
+  if (m_num_color_poke_vertices)
   {
-    DrawPokeVertices(m_color_poke_vertices.data(), static_cast<u32>(m_color_poke_vertices.size()),
+    DrawPokeVertices(m_color_poke_vertices, static_cast<u32>(m_num_color_poke_vertices),
                      m_color_poke_pipeline.get());
-    m_color_poke_vertices.clear();
+    m_num_color_poke_vertices = 0;
   }
 
-  if (!m_depth_poke_vertices.empty())
+  if (m_num_depth_poke_vertices)
   {
-    DrawPokeVertices(m_depth_poke_vertices.data(), static_cast<u32>(m_depth_poke_vertices.size()),
+    DrawPokeVertices(m_depth_poke_vertices, static_cast<u32>(m_num_depth_poke_vertices),
                      m_depth_poke_pipeline.get());
-    m_depth_poke_vertices.clear();
+    m_num_depth_poke_vertices = 0;
   }
 }
 

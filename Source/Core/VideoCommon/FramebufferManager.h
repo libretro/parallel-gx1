@@ -182,7 +182,7 @@ protected:
   MathUtil::Rectangle<int> GetEFBCacheTileRect(u32 tile_index) const;
   void PopulateEFBCache(bool depth, u32 tile_index, bool async = false);
 
-  void CreatePokeVertices(std::vector<EFBPokeVertex>* destination_list, u32 x, u32 y, float z,
+  void CreatePokeVertices(EFBPokeVertex** list, size_t* count, u32 x, u32 y, float z,
                           u32 color);
 
   void DrawPokeVertices(const EFBPokeVertex* vertices, u32 vertex_count,
@@ -234,8 +234,11 @@ protected:
   std::unique_ptr<NativeVertexFormat> m_poke_vertex_format;
   std::unique_ptr<AbstractPipeline> m_color_poke_pipeline;
   std::unique_ptr<AbstractPipeline> m_depth_poke_pipeline;
-  std::vector<EFBPokeVertex> m_color_poke_vertices;
-  std::vector<EFBPokeVertex> m_depth_poke_vertices;
+  // the pokes batched to draw, room for MAX_POKE_VERTICES once the game pokes
+  EFBPokeVertex* m_color_poke_vertices = nullptr;
+  EFBPokeVertex* m_depth_poke_vertices = nullptr;
+  size_t m_num_color_poke_vertices = 0;
+  size_t m_num_depth_poke_vertices = 0;
 
   Common::EventHook m_end_of_frame_event;
 };
