@@ -162,9 +162,12 @@ for backend in $BACKENDS; do
             [ "$tag" = parent ] && core=$PARENT
             fresh "$OUT/dirs-check"
             # with the copy filter on, as the corpus's copies set it, and
-            # textures decoded on the CPU, the reference for those on the GPU
+            # textures decoded on the CPU, the reference for those on the
+            # GPU; on one thread, so the player never writes a frame's RAM
+            # ahead of the GPU reading what an earlier frame wrote there
             run "$core" "$backend" "$OUT/dirs-check" "$OUT/check-$tag-$backend-$mode.txt" \
-               --check --opt dolphin_shader_compilation_mode=$mode \
+               --check --opt dolphin_main_cpu_thread=disabled \
+               --opt dolphin_shader_compilation_mode=$mode \
                --opt dolphin_disable_copy_filter=disabled \
                --opt dolphin_gpu_texture_decoding=disabled
             picture_map "$OUT/check-$tag-$backend-$mode.txt" > "$OUT/check-$tag-$backend-$mode.map"
@@ -186,7 +189,7 @@ for backend in $BACKENDS; do
    if [ -n "$PARENT" ]; then
       fresh "$OUT/dirs-check"
       run "$CAND" "$backend" "$OUT/dirs-check" "$OUT/check-cand-$backend-gpudecode.txt" \
-         --check --opt dolphin_shader_compilation_mode=0 \
+         --check --opt dolphin_main_cpu_thread=disabled --opt dolphin_shader_compilation_mode=0 \
          --opt dolphin_disable_copy_filter=disabled --opt dolphin_gpu_texture_decoding=enabled
       picture_map "$OUT/check-cand-$backend-gpudecode.txt" > "$OUT/check-cand-$backend-gpudecode.map"
       join "$OUT/check-cand-$backend-gpudecode.map" "$OUT/check-cand-$backend-0.map" \
