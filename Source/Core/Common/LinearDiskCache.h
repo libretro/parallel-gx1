@@ -104,34 +104,36 @@ public:
     return 0;
   }
 
-  // Replaces the file with a store of this one entry, atomically, unless it already holds
-  // exactly that.
-  static bool WriteSingle(const std::string& filename, const K& key, const V* value,
-                          u32 value_size)
+  // A store of one entry, built in place: the bytes it takes for value_size values, and where in
+  // them the value goes, for its producer to write it there.
+  static size_t SingleSize(u32 value_size)
+  {
+    return sizeof(Header) + sizeof(u32) + sizeof(K) + size_t(value_size) * sizeof(V) +
+           sizeof(u32);
+  }
+  static V* SingleValue(u8* store)
+  {
+    return reinterpret_cast<V*>(store + sizeof(Header) + sizeof(u32) + sizeof(K));
+  }
+
+  // Completes the store in store, its value_size values written at SingleValue, and replaces
+  // the file with it, atomically, unless it already holds exactly that.
+  static bool WriteSingle(const std::string& filename, const K& key, u8* store, u32 value_size)
   {
     LinearDiskCache cache;
     const size_t value_bytes = size_t(value_size) * sizeof(V);
+    const size_t size = SingleSize(value_size);
     const u32 entry_number = 1;
-    const size_t out_size = sizeof(Header) + sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
-    u8* const out = static_cast<u8*>(std::malloc(out_size));
-    u8* p = out;
-    bool ok;
-
-    if (!out)
-      return false;
+    u8* p = store;
 
     cache.m_header.Init();
     std::memcpy(p, &cache.m_header, sizeof(Header));
     p += sizeof(Header);
     std::memcpy(p, &value_size, sizeof(u32));
     std::memcpy(p + sizeof(u32), &key, sizeof(K));
-    if (value_bytes)
-      std::memcpy(p + sizeof(u32) + sizeof(K), value, value_bytes);
     std::memcpy(p + sizeof(u32) + sizeof(K) + value_bytes, &entry_number, sizeof(u32));
-    ok = filestream_matches_buf(filename.c_str(), out, out_size) ||
-         filestream_write_file_atomic(filename.c_str(), out, s64(out_size));
-    std::free(out);
-    return ok;
+    return filestream_matches_buf(filename.c_str(), store, size) ||
+           filestream_write_file_atomic(filename.c_str(), store, s64(size));
   }
 
   LinearDiskCache() = default;
@@ -161,15 +163,14 @@ public:
     m_append_size = 0;
   }
 
-  // Appends a key-value pair to the store, written with the rest at the next Sync or Close.
-  void Append(const K& key, const V* value, u32 value_size)
+  // Room for an entry of up to max_values values at the end of the store, where its producer
+  // writes the value; null when there is none. AppendEnd adds it, or nothing does.
+  V* AppendBegin(size_t max_values)
   {
-    const size_t value_bytes = size_t(value_size) * sizeof(V);
-    const size_t entry_bytes = sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
-    u8* out;
+    const size_t entry_bytes = sizeof(u32) + sizeof(K) + max_values * sizeof(V) + sizeof(u32);
 
     if (!m_file.IsOpen())
-      return;
+      return nullptr;
     if (m_append_capacity - m_append_size < entry_bytes)
     {
       // doubles, so a run allocates a handful of times
@@ -178,18 +179,37 @@ public:
         capacity *= 2;
       u8* const grown = static_cast<u8*>(std::realloc(m_append_buffer, capacity));
       if (!grown)
-        return;
+        return nullptr;
       m_append_buffer = grown;
       m_append_capacity = capacity;
     }
-    out = m_append_buffer + m_append_size;
-    m_append_size += entry_bytes;
+    return reinterpret_cast<V*>(m_append_buffer + m_append_size + sizeof(u32) + sizeof(K));
+  }
+
+  // Adds the entry AppendBegin made room for, with the value_size values written there, to be
+  // written with the rest at the next Sync or Close.
+  void AppendEnd(const K& key, u32 value_size)
+  {
+    u8* const out = m_append_buffer + m_append_size;
+    const size_t value_bytes = size_t(value_size) * sizeof(V);
+
     m_num_entries++;
     std::memcpy(out, &value_size, sizeof(u32));
     std::memcpy(out + sizeof(u32), &key, sizeof(K));
-    if (value_bytes)
-      std::memcpy(out + sizeof(u32) + sizeof(K), value, value_bytes);
     std::memcpy(out + sizeof(u32) + sizeof(K) + value_bytes, &m_num_entries, sizeof(u32));
+    m_append_size += sizeof(u32) + sizeof(K) + value_bytes + sizeof(u32);
+  }
+
+  // Appends a key-value pair, copied: for a value whose owner does not outlive the store's next
+  // Sync or Close.
+  void Append(const K& key, const V* value, u32 value_size)
+  {
+    V* const out = AppendBegin(value_size);
+    if (!out)
+      return;
+    if (value_size)
+      std::memcpy(out, value, size_t(value_size) * sizeof(V));
+    AppendEnd(key, value_size);
   }
 
 private:

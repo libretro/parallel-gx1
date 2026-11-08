@@ -44,7 +44,7 @@ OGLPipeline::~OGLPipeline()
   ProgramShaderCache::ReleasePipelineProgram(m_program);
 }
 
-AbstractPipeline::CacheData OGLPipeline::GetCacheData() const
+size_t OGLPipeline::WriteCacheData(CacheDataReserve reserve, void* ctx) const
 {
   // More than one pipeline can share the same shaders. To avoid bloating the cache with multiple
   // copies of the same program combination, we set a flag on the program object so that it can't
@@ -53,31 +53,32 @@ AbstractPipeline::CacheData OGLPipeline::GetCacheData() const
   if (!g_backend_info.bSupportsPipelineCacheData || m_program->binary_retrieved ||
       !ProgramShaderCache::FinishLink(m_program, true))
   {
-    return {};
+    return 0;
   }
 
   GLint program_size = 0;
   glGetProgramiv(m_program->shader.glprogid, GL_PROGRAM_BINARY_LENGTH, &program_size);
   if (program_size == 0)
-    return {};
+    return 0;
 
   // Clear any existing error.
   glGetError();
 
-  // We pack the format at the start of the buffer.
-  CacheData data(program_size + sizeof(u32));
+  // The format first, then the binary, which the driver writes into the store.
+  u8* const data = reserve(ctx, program_size + sizeof(u32));
+  if (!data)
+    return 0;
   GLsizei data_size = 0;
   GLenum program_format = 0;
   glGetProgramBinary(m_program->shader.glprogid, program_size, &data_size, &program_format,
-                     &data[sizeof(u32)]);
+                     data + sizeof(u32));
   if (glGetError() != GL_NO_ERROR || data_size == 0)
-    return {};
+    return 0;
 
   u32 program_format_u32 = static_cast<u32>(program_format);
-  std::memcpy(&data[0], &program_format_u32, sizeof(u32));
-  data.resize(data_size + sizeof(u32));
+  std::memcpy(data, &program_format_u32, sizeof(u32));
   m_program->binary_retrieved = true;
-  return data;
+  return data_size + sizeof(u32);
 }
 
 OGLPipeline* OGLPipeline::Create(const AbstractPipelineConfig& config,

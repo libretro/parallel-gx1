@@ -82,8 +82,10 @@ public:
   // "Cache data" can be used to assist a driver with creating pipelines by using previously
   // compiled shader ISA. The abstract shaders and creation struct are still required to create
   // pipeline objects, the cache is optionally used by the driver to speed up compilation.
-  using CacheData = std::vector<u8>;
-  CacheData GetCacheData() const;
+  // The backend asks reserve(ctx, size) for room for it, writes it there, and returns how many
+  // bytes it wrote: 0 when it has none, room or not.
+  using CacheDataReserve = u8* (*)(void* ctx, size_t size);
+  size_t WriteCacheData(CacheDataReserve reserve, void* ctx) const;
 
   // Whether the pipeline can be drawn with without waiting for its compile, which a driver may
   // still be running on threads of its own. Asking does not wait.

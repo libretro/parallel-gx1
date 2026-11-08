@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <type_traits>
 
 #include "Common/FileUtil.h"
@@ -667,18 +668,22 @@ void ObjectCache::SavePipelineCache()
     return;
   }
 
-  std::vector<u8> data(data_size);
+  // A single key of 1 with the whole pipeline cache, which the driver writes where the store
+  // keeps it: written only when it changed.
+  using Store = Common::LinearDiskCache<u32, u8>;
+  u8* const store = static_cast<u8*>(std::malloc(Store::SingleSize(static_cast<u32>(data_size))));
+  if (!store)
+    return;
   res = vkGetPipelineCacheData(g_vulkan_context->GetDevice(), m_pipeline_cache, &data_size,
-                               data.data());
+                               Store::SingleValue(store));
   if (res != VK_SUCCESS)
   {
     LOG_VULKAN_ERROR(res, "vkGetPipelineCacheData failed: ");
+    std::free(store);
     return;
   }
-
-  // A single key of 1 with the whole pipeline cache, written only when it changed.
-  Common::LinearDiskCache<u32, u8>::WriteSingle(m_pipeline_cache_filename, 1, data.data(),
-                                                static_cast<u32>(data.size()));
+  Store::WriteSingle(m_pipeline_cache_filename, 1, store, static_cast<u32>(data_size));
+  std::free(store);
 }
 
 void ObjectCache::ReloadPipelineCache()

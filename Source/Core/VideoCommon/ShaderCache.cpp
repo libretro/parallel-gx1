@@ -1090,16 +1090,23 @@ const AbstractPipeline* ShaderCache::InsertGXPipeline(const GXPipelineUid& confi
   return PipelineOf(entry);
 }
 
+/* Room in a pipeline disk cache for a backend to write its cache data into. */
+template <typename DiskKeyType>
+static u8* ReserveCacheData(void* ctx, size_t size)
+{
+  return static_cast<Common::LinearDiskCache<DiskKeyType, u8>*>(ctx)->AppendBegin(size);
+}
+
 void ShaderCache::WriteGXPipelineCacheData(const GXPipelineUid& config,
                                            const AbstractPipeline* pipeline)
 {
-  auto cache_data = pipeline->GetCacheData();
-  if (!cache_data.empty())
+  const size_t size = pipeline->WriteCacheData(ReserveCacheData<SerializedGXPipelineUid>,
+                                               &m_gx_pipeline_disk_cache);
+  if (size)
   {
     SerializedGXPipelineUid disk_uid;
     SerializePipelineUid(config, disk_uid);
-    m_gx_pipeline_disk_cache.Append(disk_uid, cache_data.data(),
-                                    static_cast<u32>(cache_data.size()));
+    m_gx_pipeline_disk_cache.AppendEnd(disk_uid, static_cast<u32>(size));
   }
 }
 
@@ -1125,14 +1132,17 @@ ShaderCache::InsertGXUberPipeline(const GXUberPipelineUid& config,
 
     if (g_ActiveConfig.bShaderCache)
     {
-      auto cache_data = PipelineOf(entry)->GetCacheData();
       /* a key without its vertex format has no uid to write */
-      if (!cache_data.empty() && config.vertex_format)
+      const size_t size =
+          config.vertex_format ?
+              PipelineOf(entry)->WriteCacheData(ReserveCacheData<SerializedGXUberPipelineUid>,
+                                                &m_gx_uber_pipeline_disk_cache) :
+              0;
+      if (size)
       {
         SerializedGXUberPipelineUid disk_uid;
         SerializePipelineUid(config, disk_uid);
-        m_gx_uber_pipeline_disk_cache.Append(disk_uid, cache_data.data(),
-                                             static_cast<u32>(cache_data.size()));
+        m_gx_uber_pipeline_disk_cache.AppendEnd(disk_uid, static_cast<u32>(size));
       }
     }
   }

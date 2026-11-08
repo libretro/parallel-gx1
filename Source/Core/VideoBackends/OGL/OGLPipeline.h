@@ -26,7 +26,7 @@ public:
   const PipelineProgram* GetProgram() const { return m_program; }
   bool HasVertexInput() const { return m_vertex_format != nullptr; }
   GLenum GetGLPrimitive() const { return m_gl_primitive; }
-  CacheData GetCacheData() const;
+  size_t WriteCacheData(CacheDataReserve reserve, void* ctx) const;
   bool IsReady() const { return ProgramShaderCache::FinishLink(m_program, false); }
   bool IsBuilding() const
   {

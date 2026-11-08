@@ -118,20 +118,20 @@ void AbstractPipelineDelete(AbstractPipeline* object)
   }
 }
 
-AbstractPipeline::CacheData AbstractPipeline::GetCacheData() const
+size_t AbstractPipeline::WriteCacheData(CacheDataReserve reserve, void* ctx) const
 {
   switch (g_video_backend_kind)
   {
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
-    return static_cast<const OGL::OGLPipeline*>(this)->GetCacheData();
+    return static_cast<const OGL::OGLPipeline*>(this)->WriteCacheData(reserve, ctx);
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D12:
-    return static_cast<const DX12::DXPipeline*>(this)->GetCacheData();
+    return static_cast<const DX12::DXPipeline*>(this)->WriteCacheData(reserve, ctx);
 #endif
   default:
-    return {};
+    return 0;
   }
 }
 

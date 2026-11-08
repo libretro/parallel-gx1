@@ -235,18 +235,22 @@ DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config,
                                       GetD3DTopology(config.rasterization_state), use_integer_rtv);
 }
 
-AbstractPipeline::CacheData DXPipeline::GetCacheData() const
+size_t DXPipeline::WriteCacheData(CacheDataReserve reserve, void* ctx) const
 {
   ComPtr<ID3DBlob> blob;
+  u8* out;
   HRESULT hr = m_pipeline->GetCachedBlob(&blob);
   if (FAILED(hr))
   {
     WARN_LOG_FMT(VIDEO, "ID3D12Pipeline::GetCachedBlob() failed: {}", DX12HRWrap(hr));
-    return {};
+    return 0;
   }
 
-  CacheData data(blob->GetBufferSize());
-  std::memcpy(data.data(), blob->GetBufferPointer(), blob->GetBufferSize());
-  return data;
+  // The blob is the driver's, gone with it: copied once, into the store.
+  out = reserve(ctx, blob->GetBufferSize());
+  if (!out)
+    return 0;
+  std::memcpy(out, blob->GetBufferPointer(), blob->GetBufferSize());
+  return blob->GetBufferSize();
 }
 }  // namespace DX12

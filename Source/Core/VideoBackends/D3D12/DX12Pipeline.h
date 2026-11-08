@@ -27,7 +27,7 @@ public:
   D3D12_PRIMITIVE_TOPOLOGY GetPrimitiveTopology() const { return m_primitive_topology; }
   bool UseIntegerRTV() const { return m_use_integer_rtv; }
 
-  CacheData GetCacheData() const;
+  size_t WriteCacheData(CacheDataReserve reserve, void* ctx) const;
 
 private:
   ID3D12PipelineState* m_pipeline;
