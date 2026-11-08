@@ -1903,6 +1903,7 @@ bool ShaderCache::CompileSharedPipelines()
     }
   }
 
+  CompileTextureConversionPipelines();
   return true;
 }
 
@@ -1912,30 +1913,25 @@ const AbstractPipeline* ShaderCache::GetPaletteConversionPipeline(TLUTFormat for
   return m_palette_conversion_pipelines[static_cast<size_t>(format)];
 }
 
-const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat from_format,
-                                                                   TextureFormat to_format)
+/* Builds and keeps the pipeline reinterpreting from_format as to_format, or that there is none. */
+const AbstractPipeline* ShaderCache::BuildTextureReinterpretPipeline(TextureFormat from_format,
+                                                                     TextureFormat to_format)
 {
   const u32 key[2] = {static_cast<u32>(from_format), static_cast<u32>(to_format)};
-  const uid_table_value* found = uid_table_find(&m_texture_reinterpret_pipelines, key);
-  if (found)
-    return PipelineOf(found);
-  /* tried once: a format pair with no shader stays without */
-  if (!uid_table_get(&m_texture_reinterpret_pipelines, key))
-    return nullptr;
-  STUTTER_MARK(t);
-
   ShaderCode shader_source =
       FramebufferShaderGen::GenerateTextureReinterpretShader(from_format, to_format);
-  if (shader_source.GetBuffer().empty())
-    return nullptr;
-
-  AbstractShader* const shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, shader_source,
-      fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format));
-  if (!shader)
-    return nullptr;
-
+  AbstractShader* shader = nullptr;
   AbstractPipelineConfig config;
+
+  if (!shader_source.GetBuffer().empty())
+  {
+    shader = g_gfx->CreateShaderFromSource(
+        ShaderStage::Pixel, shader_source,
+        fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format));
+  }
+  if (!shader)
+    return KeepPipeline(&m_texture_reinterpret_pipelines, key, nullptr);
+
   config.vertex_format = nullptr;
   config.vertex_shader = m_screen_quad_vertex_shader;
   config.geometry_shader = nullptr;
@@ -1945,25 +1941,32 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetRGBA8FramebufferState();
   config.usage = AbstractPipelineUsage::Utility;
-  const AbstractPipeline* const kept =
-      KeepPipeline(&m_texture_reinterpret_pipelines, key, PipelineOnce(config, shader));
+  return KeepPipeline(&m_texture_reinterpret_pipelines, key, PipelineOnce(config, shader));
+}
+
+const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat from_format,
+                                                                   TextureFormat to_format)
+{
+  const u32 key[2] = {static_cast<u32>(from_format), static_cast<u32>(to_format)};
+  const uid_table_value* found = uid_table_find(&m_texture_reinterpret_pipelines, key);
+  if (found)
+    return PipelineOf(found);
+  /* every pair there is was built with the shared pipelines: this one is not one */
+  STUTTER_MARK(t);
+  const AbstractPipeline* const kept = BuildTextureReinterpretPipeline(from_format, to_format);
   STUTTER_SINCE(STUTTER_DRAW_REINTERPRET, t);
   return kept;
 }
 
-const AbstractShader*
-ShaderCache::GetTextureDecodingShader(TextureFormat format,
-                                      std::optional<TLUTFormat> palette_format)
+/* Builds and keeps the shader decoding format, with its palette's format, or that there is none. */
+const AbstractShader* ShaderCache::BuildTextureDecodingShader(TextureFormat format,
+                                                              std::optional<TLUTFormat> palette_format)
 {
   const u32 key[2] = {static_cast<u32>(format),
                       static_cast<u32>(palette_format.value_or(TLUTFormat::IA8))};
-  const uid_table_value* found = uid_table_find(&m_texture_decoding_shaders, key);
-  if (found)
-    return ShaderOf(found);
-  /* tried once: a format with no shader stays without */
-  if (!uid_table_get(&m_texture_decoding_shaders, key))
+  uid_table_value* const value = uid_table_get(&m_texture_decoding_shaders, key);
+  if (!value)
     return nullptr;
-  STUTTER_MARK(t);
 
   ShaderCode shader_source =
       TextureConversionShaderTiled::GenerateDecodingShader(format, palette_format, APIType::OpenGL);
@@ -1975,14 +1978,65 @@ ShaderCache::GetTextureDecodingShader(TextureFormat format,
           fmt::format("Texture decoding compute shader: {}, {}", format, *palette_format) :
           fmt::format("Texture decoding compute shader: {}", format);
 
-  AbstractShader* const shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source, name);
-  if (!shader)
-    return nullptr;
-
-  uid_table_value* value = uid_table_get(&m_texture_decoding_shaders, key);
-  value->object = shader;
-  STUTTER_SINCE(STUTTER_DRAW_DECODE, t);
+  value->object = g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source, name);
   return ShaderOf(value);
+}
+
+const AbstractShader*
+ShaderCache::GetTextureDecodingShader(TextureFormat format,
+                                      std::optional<TLUTFormat> palette_format)
+{
+  const u32 key[2] = {static_cast<u32>(format),
+                      static_cast<u32>(palette_format.value_or(TLUTFormat::IA8))};
+  const uid_table_value* found = uid_table_find(&m_texture_decoding_shaders, key);
+  if (found)
+    return ShaderOf(found);
+  /* with GPU texture decoding, every one there is was built with the shared pipelines */
+  STUTTER_MARK(t);
+  const AbstractShader* const kept = BuildTextureDecodingShader(format, palette_format);
+  STUTTER_SINCE(STUTTER_DRAW_DECODE, t);
+  return kept;
+}
+
+/* Every texture reinterpretation there is (CanReinterpretTextureOnGPU), and with GPU texture
+ * decoding every decoding shader, built with the shared pipelines. */
+void ShaderCache::CompileTextureConversionPipelines()
+{
+  static const TextureFormat reinterpretable[] = {TextureFormat::I8, TextureFormat::IA4,
+                                                  TextureFormat::IA8, TextureFormat::RGB565,
+                                                  TextureFormat::RGB5A3};
+  static const TextureFormat decodable[] = {
+      TextureFormat::I4,   TextureFormat::I8,     TextureFormat::IA4,   TextureFormat::IA8,
+      TextureFormat::RGB565, TextureFormat::RGB5A3, TextureFormat::RGBA8, TextureFormat::C4,
+      TextureFormat::C8,   TextureFormat::C14X2,  TextureFormat::CMPR};
+  static const TLUTFormat palettes[] = {TLUTFormat::IA8, TLUTFormat::RGB565, TLUTFormat::RGB5A3};
+  size_t i, j;
+
+  for (i = 0; i < sizeof(reinterpretable) / sizeof(reinterpretable[0]); i++)
+  {
+    for (j = 0; j < sizeof(reinterpretable) / sizeof(reinterpretable[0]); j++)
+    {
+      /* one that fails to build is kept as failed, as it would be on a draw */
+      if (i != j && CanReinterpretTextureOnGPU(reinterpretable[i], reinterpretable[j]))
+        BuildTextureReinterpretPipeline(reinterpretable[i], reinterpretable[j]);
+    }
+  }
+
+  if (!g_ActiveConfig.UseGPUTextureDecoding())
+    return;
+  for (i = 0; i < sizeof(decodable) / sizeof(decodable[0]); i++)
+  {
+    const TextureConversionShaderTiled::DecodingShaderInfo* const info =
+        TextureConversionShaderTiled::GetDecodingShaderInfo(decodable[i]);
+    if (!info)
+      continue;
+    if (!info->palette_size)
+    {
+      BuildTextureDecodingShader(decodable[i], std::nullopt);
+      continue;
+    }
+    for (j = 0; j < sizeof(palettes) / sizeof(palettes[0]); j++)
+      BuildTextureDecodingShader(decodable[i], palettes[j]);
+  }
 }
 }  // namespace VideoCommon

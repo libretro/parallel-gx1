@@ -15,7 +15,8 @@
  * on, every pipeline has been met before. Each frame also copies a square
  * of the EFB to a texture, in a format cycling through every colour,
  * intensity and depth copy format with the EFB with and without alpha,
- * and draws it textured over a corner. The frame's number is drawn last,
+ * and draws it textured over a corner, some read back in another format
+ * of the same size, which the texture cache reinterprets. The frame's number is drawn last,
  * over the top left corner: a row of black and white 16x16 squares, bit 0
  * first, which the harness reads back to tell which frame a picture is.
  *
@@ -137,7 +138,7 @@ static const u32 copy_filter[COPY_CHOICES][7] = {
 static const u32 copy_gamma[COPY_CHOICES] = {0, 0, 0, 1, 2};
 /* the copy to a texture: its EFB copy format, intensity, depth, and the
  * texture format that reads it back */
-#define TEX_COPY_CHOICES 24
+#define TEX_COPY_CHOICES 32
 static const u32 tex_copy[TEX_COPY_CHOICES][4] = {
    /* EFB copy format, intensity, depth, texture format */
    {0x0, 0, 0, 0}, {0x8, 0, 0, 1}, {0x2, 0, 0, 2}, {0x3, 0, 0, 3},  /* R4 R8 RA4 RA8 */
@@ -145,7 +146,11 @@ static const u32 tex_copy[TEX_COPY_CHOICES][4] = {
    {0x4, 0, 0, 4}, {0x5, 0, 0, 5}, {0x6, 0, 0, 6}, {0x7, 0, 0, 1},  /* 565 5A3 RGBA8 A8 */
    {0x9, 0, 0, 1}, {0xa, 0, 0, 1}, {0xb, 0, 0, 3}, {0xc, 0, 0, 3},  /* G8 B8 RG8 GB8 */
    {0x6, 0, 1, 6}, {0x8, 0, 1, 1}, {0x3, 0, 1, 3}, {0x9, 0, 1, 1},  /* Z24 Z8H Z16 Z8M */
-   {0xa, 0, 1, 1}, {0xb, 0, 1, 3}, {0xc, 0, 1, 3}, {0x0, 0, 1, 0}   /* Z8L Z16R Z16L Z4 */
+   {0xa, 0, 1, 1}, {0xb, 0, 1, 3}, {0xc, 0, 1, 3}, {0x0, 0, 1, 0},  /* Z8L Z16R Z16L Z4 */
+   /* read back in another format of the same size: reinterpreted */
+   {0x8, 0, 0, 2}, {0x2, 0, 0, 1},                                  /* I8 as IA4, IA4 as I8 */
+   {0x3, 0, 0, 4}, {0x3, 0, 0, 5}, {0x4, 0, 0, 3}, {0x4, 0, 0, 5},  /* IA8, RGB565 as the */
+   {0x5, 0, 0, 3}, {0x5, 0, 0, 4}                                   /* others, RGB5A3 too */
 };
 /* vertex format: position float or s16, colour rgba8888, rgb565 or rgba4444 */
 #define VTX_CHOICES 4

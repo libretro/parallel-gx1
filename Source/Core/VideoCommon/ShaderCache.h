@@ -143,6 +143,11 @@ private:
   /* format null: the pipeline for every format */
   AbstractPipeline* CompileEFBCopyToVRAMPipeline(const EFBCopyFormat* format) const;
   bool CompileSharedPipelines();
+  void CompileTextureConversionPipelines();
+  const AbstractPipeline* BuildTextureReinterpretPipeline(TextureFormat from_format,
+                                                          TextureFormat to_format);
+  const AbstractShader* BuildTextureDecodingShader(TextureFormat format,
+                                                   std::optional<TLUTFormat> palette_format);
 
   // GX shader compiler methods
   AbstractShader* CompileVertexShader(const VertexShaderUid& uid) const;

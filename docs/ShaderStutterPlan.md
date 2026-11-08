@@ -91,7 +91,8 @@ draw-path disk writes, worker compiles, shaders and pipelines made),
 the harness on Vulkan and the software renderer, a corpus of blend,
 depth, cull, vertex format, primitive, TEV and alpha test states, of
 copy filters, overflow and gamma, and of an EFB copy to a texture in
-every colour, intensity and depth format drawn back textured, and the
+every colour, intensity and depth format drawn back textured, some read
+in another format of the same size and so reinterpreted, and the
 Vulkan baseline. Each picture carries its frame's number, so the
 picture check compares frame by frame. Still to come: texture formats
 of their own, palettes and texgens in the corpus, the GL and D3D
@@ -156,6 +157,12 @@ built with the shared pipelines, reads the format from them too and
 draws a format's copies the same until the format's own is built on a
 worker. No copy waits for a pipeline (`draw_efb_copy_to_vram` is 0),
 where the corpus made the parent build 152.
+
+Texture reinterpretation: the eight format pairs there are
+(`CanReinterpretTextureOnGPU`) are built with the shared pipelines, and
+with GPU texture decoding every decoding shader; the corpus reads copies
+back in each pair's other format. Still built on first use: EFB copies
+to RAM, which the default (EFB copies to texture only) does not make.
 
 Done when: draw-path compiles and waits are 0 by kind, cold, on every
 backend that builds, across the whole corpus. Cold p99 and max
