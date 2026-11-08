@@ -136,15 +136,15 @@ copy builds.
    ubershader variants these need, so a blend mode change never meets a
    missing pipeline.
 
-Landed so far: on Vulkan the logic op is set per draw, and the
-ubershader precompile covers logic ops drawn with dual-source output
-asked for. Every ubershader pipeline there can be is built before the
-game starts, so cold no draw waits for the driver to compile one
-(`draw_driver_pipeline` is 0). A draw still makes the pipeline object
-for a state it shares a compiled one with (`draw_uber_pipeline`): next,
-the state set per draw is taken out of the ubershader key. Loading
-waits for about 190 driver pipelines; making that set smaller is what
-shortens it.
+Landed so far, on Vulkan: the logic op is set per draw, and the state
+set per draw (cull mode, depth, blending, logic op) is out of the
+ubershader key, which is the uid as the driver bugs leave it, without
+the pixel shader bits it does not read
+(`BackendInfo::uDrawState*Bits`, `AbstractGfx::SetDrawState`). Every
+ubershader pipeline there can be is built before the game starts, so
+cold no draw builds one (`draw_uber_pipeline` and
+`draw_driver_pipeline` are 0). Loading waits for the driver to compile
+about 190 pipelines: making that set smaller is what shortens it.
 
 Done when: draw-path compiles and waits are 0 by kind, cold, on every
 backend that builds, across the whole corpus. Cold p99 and max

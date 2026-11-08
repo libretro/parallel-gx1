@@ -104,6 +104,14 @@ void VKGfx::SetPipeline(const AbstractPipeline* pipeline)
   StateTracker::GetInstance()->SetPipeline(static_cast<const VKPipeline*>(pipeline));
 }
 
+void VKGfx::SetDrawState(const RasterizationState& rasterization, const DepthState& depth,
+                         const BlendingState& blending)
+{
+  u32 state, blend;
+  VKPipeline::GetDrawState(rasterization, depth, blending, &state, &blend);
+  StateTracker::GetInstance()->SetDrawState(state, blend);
+}
+
 void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_enable,
                         bool alpha_enable, bool z_enable, u32 color, u32 z)
 {

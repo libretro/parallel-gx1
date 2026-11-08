@@ -54,6 +54,10 @@ public:
   bool SupportsUtilityDrawing() const;
 
   void SetPipeline(const AbstractPipeline* pipeline);
+  /* The state the draws with the pipeline just set are in, where the backend sets some of it per
+   * draw (BackendInfo::uDrawState*Bits): after SetPipeline, until the next one. */
+  void SetDrawState(const RasterizationState& rasterization, const DepthState& depth,
+                    const BlendingState& blending);
   void SetScissorRect(const MathUtil::Rectangle<int>& rc);
   void SetTexture(u32 index, const AbstractTexture* texture);
   void SetSamplerState(u32 index, const SamplerState& state);

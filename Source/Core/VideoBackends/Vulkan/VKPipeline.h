@@ -7,6 +7,8 @@
 
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #include "VideoCommon/AbstractPipeline.h"
+#include "VideoCommon/RenderState.h"
+#include "VideoCommon/VideoConfig.h"
 
 namespace Vulkan
 {
@@ -56,6 +58,12 @@ public:
                                    VkColorComponentFlags* write_mask);
   /* the VkLogicOp of a BlendingState's logic mode */
   static VkLogicOp GetVulkanLogicOp(u32 logic_mode);
+  /* What a GX or ubershader pipeline drawing in these states sets per draw, in
+   * GetDynamicState's and GetDynamicBlend's forms: 0 for what the device cannot set. */
+  static void GetDrawState(const RasterizationState& rasterization, const DepthState& depth,
+                           const BlendingState& blending, u32* state, u32* blend);
+  /* The bits of those states set per draw (BackendInfo::uDrawState*Bits). */
+  static void PopulateBackendInfoDrawState(BackendInfo* backend_info);
   static VKPipeline* Create(const AbstractPipelineConfig& config);
   /* Forgets every shared pipeline; only with none alive, as the backend
    * comes up. */

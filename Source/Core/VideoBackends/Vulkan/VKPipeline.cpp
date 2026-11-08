@@ -534,6 +534,49 @@ VkLogicOp VKPipeline::GetVulkanLogicOp(u32 logic_mode)
   return vk_logic_ops[logic_mode & 15];
 }
 
+void VKPipeline::GetDrawState(const RasterizationState& rasterization, const DepthState& depth,
+                              const BlendingState& blending, u32* state, u32* blend)
+{
+  *state = 0;
+  *blend = 0;
+  if (!g_vulkan_context->SupportsExtendedDynamicState())
+    return;
+  *state = VK_DYNAMIC_USED | s_cull_modes[u32(rasterization.cull_mode.Value())] |
+           (depth.test_enable ? VK_DYNAMIC_DEPTH_TEST : 0u) |
+           (depth.update_enable ? VK_DYNAMIC_DEPTH_WRITE : 0u) |
+           (static_cast<u32>(GetVulkanCompareOp(depth.func)) << VK_DYNAMIC_DEPTH_OP_SHIFT);
+  if (!g_vulkan_context->SupportsDynamicBlending())
+    return;
+  *blend = VK_DYNAMIC_BLEND_USED |
+           (blending.hex & (VK_DYNAMIC_BLEND_MASK | VK_DYNAMIC_BLEND_DUAL_SRC));
+  if (g_vulkan_context->SupportsDynamicLogicOp())
+    *blend |= VK_DYNAMIC_BLEND_LOGIC_USED | (blending.hex & VK_DYNAMIC_BLEND_LOGIC_MASK);
+}
+
+void VKPipeline::PopulateBackendInfoDrawState(BackendInfo* backend_info)
+{
+  RasterizationState cull;
+  DepthState depth;
+  cull.hex = 0;
+  cull.cull_mode = static_cast<CullMode>(3);
+  depth.hex = 0;
+  depth.test_enable = 1;
+  depth.update_enable = 1;
+  depth.func = static_cast<CompareMode>(7);
+  backend_info->uDrawStateRasterizationBits = 0;
+  backend_info->uDrawStateDepthBits = 0;
+  backend_info->uDrawStateBlendingBits = 0;
+  if (!g_vulkan_context->SupportsExtendedDynamicState())
+    return;
+  backend_info->uDrawStateRasterizationBits = cull.hex;
+  backend_info->uDrawStateDepthBits = depth.hex;
+  if (!g_vulkan_context->SupportsDynamicBlending())
+    return;
+  backend_info->uDrawStateBlendingBits = VK_DYNAMIC_BLEND_MASK;
+  if (g_vulkan_context->SupportsDynamicLogicOp())
+    backend_info->uDrawStateBlendingBits |= VK_DYNAMIC_BLEND_LOGIC_MASK;
+}
+
 static VkPipelineColorBlendStateCreateInfo
 GetVulkanColorBlendState(const BlendingState& state,
                          const VkPipelineColorBlendAttachmentState* attachments,
@@ -613,27 +656,13 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
       g_vulkan_context->SupportsExtendedDynamicState())
   {
     VKSharedPipeline* shared;
-    dynamic_bits = VK_DYNAMIC_USED | s_cull_modes[u32(config.rasterization_state.cull_mode.Value())] |
-                    (config.depth_state.test_enable ? VK_DYNAMIC_DEPTH_TEST : 0u) |
-                    (config.depth_state.update_enable ? VK_DYNAMIC_DEPTH_WRITE : 0u) |
-                    (static_cast<u32>(GetVulkanCompareOp(config.depth_state.func))
-                     << VK_DYNAMIC_DEPTH_OP_SHIFT);
-    build.rasterization_state.cull_mode = CullMode::None;
-    build.depth_state.hex = 0;
-    if (g_vulkan_context->SupportsDynamicBlending())
-    {
-      dynamic_blend = VK_DYNAMIC_BLEND_USED |
-                      (config.blending_state.hex & (VK_DYNAMIC_BLEND_MASK | VK_DYNAMIC_BLEND_DUAL_SRC));
-      build.blending_state.hex &= ~VK_DYNAMIC_BLEND_MASK;
-      /* the logic op mode alone picks no pipeline: one with integer output
-       * draws every mode */
-      if (g_vulkan_context->SupportsDynamicLogicOp())
-      {
-        dynamic_blend |= VK_DYNAMIC_BLEND_LOGIC_USED |
-                         (config.blending_state.hex & VK_DYNAMIC_BLEND_LOGIC_MASK);
-        build.blending_state.hex &= ~VK_DYNAMIC_BLEND_LOGIC_MASK;
-      }
-    }
+    /* the logic op mode alone picks no pipeline either, where it is set
+     * per draw: one with integer output draws every mode */
+    GetDrawState(config.rasterization_state, config.depth_state, config.blending_state,
+                 &dynamic_bits, &dynamic_blend);
+    build.rasterization_state.hex &= ~g_backend_info.uDrawStateRasterizationBits;
+    build.depth_state.hex &= ~g_backend_info.uDrawStateDepthBits;
+    build.blending_state.hex &= ~g_backend_info.uDrawStateBlendingBits;
     key.vertex_format = build.vertex_format;
     key.vertex_shader = ShaderUid(build.vertex_shader);
     key.geometry_shader = ShaderUid(build.geometry_shader);

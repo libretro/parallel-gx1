@@ -39,6 +39,15 @@ enum class TLUTFormat;
 
 namespace VideoCommon
 {
+/* The state draws with an ubershader pipeline are in, where the backend sets some of it per draw
+ * (BackendInfo::uDrawState*Bits). */
+struct GXDrawState
+{
+  RasterizationState rasterization;
+  DepthState depth;
+  BlendingState blending;
+};
+
 class ShaderCache final
 {
 public:
@@ -67,7 +76,9 @@ public:
 
   // Accesses ShaderGen shader caches
   const AbstractPipeline* GetPipelineForUid(const GXPipelineUid& uid);
-  const AbstractPipeline* GetUberPipelineForUid(const GXUberPipelineUid& uid);
+  /* draw_state, if not null, gets the state its draws are in, for AbstractGfx::SetDrawState */
+  const AbstractPipeline* GetUberPipelineForUid(const GXUberPipelineUid& uid,
+                                                GXDrawState* draw_state = nullptr);
 
   // Accesses ShaderGen shader caches asynchronously.
   // The optional will be empty if this pipeline is now background compiling.

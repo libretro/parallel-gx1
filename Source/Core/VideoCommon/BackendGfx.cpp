@@ -132,6 +132,21 @@ void AbstractGfx::SetPipeline(const AbstractPipeline* pipeline)
   }
 }
 
+void AbstractGfx::SetDrawState(const RasterizationState& rasterization, const DepthState& depth,
+                               const BlendingState& blending)
+{
+  switch (g_video_backend_kind)
+  {
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    static_cast<Vulkan::VKGfx*>(this)->SetDrawState(rasterization, depth, blending);
+    return;
+#endif
+  default:
+    return;
+  }
+}
+
 void AbstractGfx::SetScissorRect(const MathUtil::Rectangle<int>& rc)
 {
   switch (g_video_backend_kind)

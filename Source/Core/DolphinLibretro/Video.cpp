@@ -62,6 +62,7 @@
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 #include "VideoBackends/Vulkan/StateTracker.h"
 #include "VideoBackends/Vulkan/VKGfx.h"
+#include "VideoBackends/Vulkan/VKPipeline.h"
 #include "VideoBackends/Vulkan/VKVertexManager.h"
 #include "VideoBackends/Vulkan/VKPerfQuery.h"
 #include "VideoBackends/Vulkan/VKBoundingBox.h"
@@ -575,6 +576,7 @@ bool Video_InitializeBackend()
                                               Vulkan::g_vulkan_context->GetDeviceInfo());
     Vulkan::VulkanContext::PopulateBackendInfoMultisampleModes(
         &g_backend_info, Vulkan::g_vulkan_context->GetPhysicalDevice(), Vulkan::g_vulkan_context->GetDeviceInfo());
+    Vulkan::VKPipeline::PopulateBackendInfoDrawState(&g_backend_info);
     UpdateActiveConfig();
 
     // Remaining classes are also dependent on object cache.

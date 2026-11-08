@@ -36,6 +36,9 @@ public:
   void SetIndexBuffer(VkBuffer buffer, VkDeviceSize offset, VkIndexType type);
   void SetFramebuffer(VKFramebuffer* framebuffer);
   void SetPipeline(const VKPipeline* pipeline);
+  /* The state the draws with the pipeline set are in, in VKPipeline::GetDrawState's form, in place
+   * of what the pipeline was built with: until the next SetPipeline. */
+  void SetDrawState(u32 state, u32 blend);
   void SetComputeShader(const VKShader* shader);
   void SetGXUniformBuffer(u32 index, VkBuffer buffer, u32 offset, u32 size);
   void SetUtilityUniformBuffer(VkBuffer buffer, u32 offset, u32 size);
@@ -140,6 +143,10 @@ private:
   u32 m_dynamic_state = 0;
   u32 m_dynamic_blend = 0;
   u32 m_dynamic_blend_attachments = 0;
+  // SetDrawState's, while m_draw_state_set
+  u32 m_draw_state = 0;
+  u32 m_draw_blend = 0;
+  bool m_draw_state_set = false;
 
   // pipeline state
   const VKPipeline* m_pipeline = nullptr;

@@ -139,6 +139,7 @@ void StateTracker::SetFramebuffer(VKFramebuffer* framebuffer)
 
 void StateTracker::SetPipeline(const VKPipeline* pipeline)
 {
+  m_draw_state_set = false;
   if (m_pipeline == pipeline)
     return;
 
@@ -150,6 +151,13 @@ void StateTracker::SetPipeline(const VKPipeline* pipeline)
   m_dirty_flags |= DIRTY_FLAG_PIPELINE;
   if (new_usage)
     m_dirty_flags |= DIRTY_FLAG_DESCRIPTOR_SETS;
+}
+
+void StateTracker::SetDrawState(u32 state, u32 blend)
+{
+  m_draw_state = state;
+  m_draw_blend = blend;
+  m_draw_state_set = true;
 }
 
 void StateTracker::SetComputeShader(const VKShader* shader)
@@ -479,10 +487,14 @@ bool StateTracker::Bind()
   }
 
   if (m_pipeline->GetDynamicState())
-    BindDynamicState(command_buffer, m_pipeline->GetDynamicState());
+  {
+    BindDynamicState(command_buffer,
+                     m_draw_state_set ? m_draw_state : m_pipeline->GetDynamicState());
+  }
   if (m_pipeline->GetDynamicBlend())
   {
-    BindDynamicBlend(command_buffer, m_pipeline->GetDynamicBlend(),
+    BindDynamicBlend(command_buffer,
+                     m_draw_state_set ? m_draw_blend : m_pipeline->GetDynamicBlend(),
                      m_pipeline->GetColorAttachmentCount());
   }
 

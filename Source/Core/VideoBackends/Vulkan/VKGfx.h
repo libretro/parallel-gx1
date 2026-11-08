@@ -60,6 +60,8 @@ public:
                    bool z_enable, u32 color, u32 z);
 
   void SetPipeline(const AbstractPipeline* pipeline);
+  void SetDrawState(const RasterizationState& rasterization, const DepthState& depth,
+                    const BlendingState& blending);
   void SetFramebuffer(AbstractFramebuffer* framebuffer);
   void SetAndDiscardFramebuffer(AbstractFramebuffer* framebuffer);
   void SetAndClearFramebuffer(AbstractFramebuffer* framebuffer, const ClearColor& color_value = {},

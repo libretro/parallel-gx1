@@ -157,6 +157,11 @@ struct BackendInfo
   bool bSupportsGLLayerInFS = true;
   bool bSupportsHDROutput = false;
   bool bSupportsUnrestrictedDepthRange = false;
+  // The bits of an ubershader pipeline's RasterizationState, DepthState and BlendingState the
+  // backend sets per draw (AbstractGfx::SetDrawState): pipelines that differ only in them are one.
+  u32 uDrawStateRasterizationBits = 0;
+  u32 uDrawStateDepthBits = 0;
+  u32 uDrawStateBlendingBits = 0;
 };
 
 extern BackendInfo g_backend_info;

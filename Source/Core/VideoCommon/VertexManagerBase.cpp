@@ -823,6 +823,7 @@ void VertexManagerBase::UpdatePipelineObject()
     return;
 
   m_current_pipeline_object = nullptr;
+  m_current_draw_state_set = false;
   m_pipeline_config_changed = false;
 
   switch (g_ActiveConfig.iShaderCompilationMode)
@@ -838,7 +839,8 @@ void VertexManagerBase::UpdatePipelineObject()
   {
     // Exclusive ubershader mode, always use ubershaders.
     m_current_pipeline_object =
-        g_shader_cache->GetUberPipelineForUid(m_current_uber_pipeline_config);
+        g_shader_cache->GetUberPipelineForUid(m_current_uber_pipeline_config, &m_current_draw_state);
+    m_current_draw_state_set = true;
   }
   break;
 
@@ -868,8 +870,9 @@ void VertexManagerBase::UpdatePipelineObject()
     if (g_ActiveConfig.iShaderCompilationMode == ShaderCompilationMode::AsynchronousUberShaders)
     {
       // Specialized shaders not ready, use the ubershaders.
-      m_current_pipeline_object =
-          g_shader_cache->GetUberPipelineForUid(m_current_uber_pipeline_config);
+      m_current_pipeline_object = g_shader_cache->GetUberPipelineForUid(
+          m_current_uber_pipeline_config, &m_current_draw_state);
+      m_current_draw_state_set = true;
     }
     else
     {
@@ -1013,6 +1016,13 @@ void VertexManagerBase::RenderDrawCall(
   UploadUniforms();
 
   g_gfx->SetPipeline(current_pipeline);
+  if (m_current_draw_state_set &&
+      (g_backend_info.uDrawStateRasterizationBits | g_backend_info.uDrawStateDepthBits |
+       g_backend_info.uDrawStateBlendingBits))
+  {
+    g_gfx->SetDrawState(m_current_draw_state.rasterization, m_current_draw_state.depth,
+                        m_current_draw_state.blending);
+  }
 
   u32 base_vertex, base_index;
   CommitBuffer(m_index_generator.GetNumVerts(),
