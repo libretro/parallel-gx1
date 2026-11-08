@@ -82,8 +82,7 @@ enum class TriState : int
 enum class VertexLoaderType : int
 {
   Native,
-  Software,
-  Compare
+  Software
 };
 
 // Bitmask containing information about which configuration has changed for the backend.

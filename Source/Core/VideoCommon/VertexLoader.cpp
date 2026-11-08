@@ -65,7 +65,7 @@ static void SkipVertex(VertexLoader* loader)
 }
 
 VertexLoader::VertexLoader(const TVtxDesc& vtx_desc, const VAT& vtx_attr)
-    : VertexLoaderBase(vtx_desc, vtx_attr)
+    : VertexLoaderBase(vtx_desc, vtx_attr, false)
 {
   CompileVertexTranslator();
 

@@ -20,7 +20,7 @@ class VertexLoader : public VertexLoaderBase
 public:
   VertexLoader(const TVtxDesc& vtx_desc, const VAT& vtx_attr);
 
-  int RunVertices(const u8* src, u8* dst, int count) override;
+  int RunVertices(const u8* src, u8* dst, int count);
   // They are used for the communication with the loader functions
   float m_posScale;
   float m_tcScale[8];

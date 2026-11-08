@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -57,10 +56,9 @@ class VertexLoaderBase
 public:
   static u32 GetVertexSize(const TVtxDesc& vtx_desc, const VAT& vtx_attr);
   static u32 GetVertexComponents(const TVtxDesc& vtx_desc, const VAT& vtx_attr);
-  static std::unique_ptr<VertexLoaderBase> CreateVertexLoader(const TVtxDesc& vtx_desc,
-                                                              const VAT& vtx_attr);
-  virtual ~VertexLoaderBase() {}
-  virtual int RunVertices(const u8* src, u8* dst, int count) = 0;
+  static VertexLoaderBase* CreateVertexLoader(const TVtxDesc& vtx_desc, const VAT& vtx_attr);
+  // Decodes count vertices from src to dst with the loader's own code; how many it kept.
+  int RunVertices(const u8* src, u8* dst, int count);
 
   // per loader public state
   PortableVertexDeclaration m_native_vtx_decl{};
@@ -71,10 +69,14 @@ public:
   NativeVertexFormat* m_native_vertex_format = nullptr;
   int m_numLoadedVertices = 0;
 
+  // the generated loader of the host's CPU, or the C one (VertexLoader)
+  const bool m_jit;
+
 protected:
-  VertexLoaderBase(const TVtxDesc& vtx_desc, const VAT& vtx_attr)
+  VertexLoaderBase(const TVtxDesc& vtx_desc, const VAT& vtx_attr, bool jit)
       : m_vertex_size{GetVertexSize(vtx_desc, vtx_attr)},
-        m_native_components{GetVertexComponents(vtx_desc, vtx_attr)}, m_VtxAttr{vtx_attr},
+        m_native_components{GetVertexComponents(vtx_desc, vtx_attr)}, m_jit{jit},
+        m_VtxAttr{vtx_attr},
         m_VtxDesc{vtx_desc}
   {
   }
@@ -83,3 +85,6 @@ protected:
   const VAT m_VtxAttr;
   const TVtxDesc m_VtxDesc;
 };
+
+/* Deletes a loader as its own class; NULL is let be. */
+void VertexLoaderDelete(VertexLoaderBase* loader);

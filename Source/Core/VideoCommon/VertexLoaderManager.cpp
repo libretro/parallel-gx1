@@ -57,7 +57,7 @@ struct LoaderEntry
 {
   LoaderEntry* next;  // fixed once published
   VertexLoaderUID uid;
-  std::unique_ptr<VertexLoaderBase> loader;
+  VertexLoaderBase* loader;  // owned
 };
 constexpr size_t LOADER_BUCKETS = 1024;
 }  // namespace
@@ -69,7 +69,7 @@ static VertexLoaderBase* FindLoader(LoaderEntry* entry, const LoaderEntry* stop,
   for (; entry != stop; entry = entry->next)
   {
     if (entry->uid == uid)
-      return entry->loader.get();
+      return entry->loader;
   }
   return nullptr;
 }
@@ -90,13 +90,14 @@ static VertexLoaderBase* GetOrAddLoader(const VertexLoaderUID& uid, const TVtxDe
     auto* newer = static_cast<LoaderEntry*>(retro_atomic_load_acquire_ptr(bucket));
     if (VertexLoaderBase* found = FindLoader(newer, entry->next, uid))
     {
+      VertexLoaderDelete(entry->loader);
       delete entry;
       return found;
     }
     entry->next = newer;
   }
   INCSTAT(g_stats.num_vertex_loaders);
-  return entry->loader.get();
+  return entry->loader;
 }
 
 Common::EnumMap<u8*, CPArray::TexCoord7> cached_arraybases;
@@ -124,6 +125,7 @@ void Clear()
     while (entry)
     {
       LoaderEntry* next = entry->next;
+      VertexLoaderDelete(entry->loader);
       delete entry;
       entry = next;
     }
