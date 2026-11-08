@@ -22,8 +22,7 @@ class DXTexture final : public AbstractTexture
 public:
   ~DXTexture();
 
-  static std::unique_ptr<DXTexture> Create(const TextureConfig& config, std::string_view name);
-  static std::unique_ptr<DXTexture> CreateAdopted(ID3D12Resource* resource);
+  static DXTexture* Create(const TextureConfig& config, std::string_view name);
 
   void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
             u32 layer);
@@ -89,7 +88,7 @@ public:
   void ClearDepth(float depth_value, const D3D12_RECT* rectangle) const;
   void TransitionRenderTargets() const;
 
-  static std::unique_ptr<DXFramebuffer>
+  static DXFramebuffer*
   Create(DXTexture* color_attachment, DXTexture* depth_attachment,
          std::vector<AbstractTexture*> additional_color_attachments);
 
@@ -126,7 +125,7 @@ public:
   void Unmap();
   void Flush();
 
-  static std::unique_ptr<DXStagingTexture> Create(StagingTextureType type,
+  static DXStagingTexture* Create(StagingTextureType type,
                                                   const TextureConfig& config);
 
 private:

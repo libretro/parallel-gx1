@@ -58,8 +58,8 @@ struct GBAScreen
 /* The GPU thread's side of a screen. */
 struct GBAScreenView
 {
-  std::unique_ptr<AbstractTexture> texture;
-  std::unique_ptr<AbstractStagingTexture> staging[SCREEN_BUFFERS];
+  AbstractTexture* texture;
+  AbstractStagingTexture* staging[SCREEN_BUFFERS];
   /* without upload memory that stays mapped: the three buffers */
   u32* memory;
   /* the buffer the texture was last filled from, given back to the GBA
@@ -214,8 +214,12 @@ static void ViewFree(GBAScreenView* view)
   int i;
 
   for (i = 0; i < SCREEN_BUFFERS; i++)
-    view->staging[i].reset();
-  view->texture.reset();
+  {
+    AbstractStagingTextureDelete(view->staging[i]);
+    view->staging[i] = nullptr;
+  }
+  AbstractTextureDelete(view->texture);
+  view->texture = nullptr;
   std::free(view->memory);
   view->memory = nullptr;
   view->shown_size = 0;
@@ -261,7 +265,10 @@ static bool ScreenLend(unsigned gba)
     const size_t plane = (size_t)GBA_SCREEN_MAX_WIDTH * GBA_SCREEN_MAX_HEIGHT;
 
     for (i = 0; i < SCREEN_BUFFERS; i++)
-      view->staging[i].reset();
+    {
+      AbstractStagingTextureDelete(view->staging[i]);
+      view->staging[i] = nullptr;
+    }
     view->memory = static_cast<u32*>(std::calloc(plane * SCREEN_BUFFERS, sizeof(u32)));
     if (!view->memory)
     {
@@ -286,7 +293,7 @@ static bool ScreenLend(unsigned gba)
 /* Whether the GPU is done with the buffer the texture was filled from. */
 static bool ViewCopyDone(GBAScreenView* view)
 {
-  return !view->staging[view->copying] || StagingTransferDone(view->staging[view->copying].get());
+  return !view->staging[view->copying] || StagingTransferDone(view->staging[view->copying]);
 }
 
 static void ViewUpload(GBAScreenView* view, int index, u32 width, u32 height)
@@ -294,7 +301,7 @@ static void ViewUpload(GBAScreenView* view, int index, u32 width, u32 height)
   if (view->staging[index])
   {
     const MathUtil::Rectangle<int> rect(0, 0, (int)width, (int)height);
-    view->staging[index]->CopyToTexture(rect, view->texture.get(), rect, 0, 0);
+    view->staging[index]->CopyToTexture(rect, view->texture, rect, 0, 0);
   }
   else
   {
@@ -364,7 +371,7 @@ void GBAScreensDraw(VideoCommon::PostProcessing* post_processor, int width, int 
     if (!s_views[i].shown_size)
       continue;
     sizes[count] = s_views[i].shown_size;
-    textures[count] = s_views[i].texture.get();
+    textures[count] = s_views[i].texture;
     total_width += sizes[count] >> 16;
     count++;
   }

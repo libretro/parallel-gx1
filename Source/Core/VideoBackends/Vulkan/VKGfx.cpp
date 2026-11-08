@@ -49,13 +49,13 @@ bool VKGfx::IsHeadless() const
   return m_output == nullptr;
 }
 
-std::unique_ptr<AbstractTexture> VKGfx::CreateTexture(const TextureConfig& config,
+AbstractTexture* VKGfx::CreateTexture(const TextureConfig& config,
                                                       std::string_view name)
 {
   return VKTexture::Create(config, name);
 }
 
-std::unique_ptr<AbstractStagingTexture> VKGfx::CreateStagingTexture(StagingTextureType type,
+AbstractStagingTexture* VKGfx::CreateStagingTexture(StagingTextureType type,
                                                                     const TextureConfig& config)
 {
   return VKStagingTexture::Create(type, config);
@@ -74,10 +74,10 @@ AbstractShader* VKGfx::CreateShaderFromBinary(ShaderStage stage, const void* dat
   return VKShader::CreateFromBinary(stage, data, length, name);
 }
 
-std::unique_ptr<NativeVertexFormat>
+NativeVertexFormat*
 VKGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
-  return std::make_unique<VertexFormat>(vtx_decl);
+  return new VertexFormat(vtx_decl);
 }
 
 AbstractPipeline* VKGfx::CreatePipeline(const AbstractPipelineConfig& config,
@@ -87,7 +87,7 @@ AbstractPipeline* VKGfx::CreatePipeline(const AbstractPipelineConfig& config,
   return VKPipeline::Create(config);
 }
 
-std::unique_ptr<AbstractFramebuffer>
+AbstractFramebuffer*
 VKGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                          std::vector<AbstractTexture*> additional_color_attachments)
 {

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -62,3 +60,6 @@ public:
 protected:
   const TextureConfig m_config;
 };
+
+/* Deletes a texture as the backend's own class; NULL is let be. */
+void AbstractTextureDelete(AbstractTexture* texture);

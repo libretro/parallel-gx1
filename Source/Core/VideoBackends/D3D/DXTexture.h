@@ -238,8 +238,7 @@ class DXTexture final : public AbstractTexture
 public:
   ~DXTexture();
 
-  static std::unique_ptr<DXTexture> Create(const TextureConfig& config, std::string_view name);
-  static std::unique_ptr<DXTexture> CreateAdopted(ComPtr<ID3D11Texture2D> texture);
+  static DXTexture* Create(const TextureConfig& config, std::string_view name);
 
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
@@ -283,7 +282,7 @@ public:
   void Unmap();
   void Flush();
 
-  static std::unique_ptr<DXStagingTexture> Create(StagingTextureType type,
+  static DXStagingTexture* Create(StagingTextureType type,
                                                   const TextureConfig& config);
 
 private:
@@ -312,7 +311,7 @@ public:
   void Unbind();
   void Clear(const ClearColor& color_value, float depth_value);
 
-  static std::unique_ptr<DXFramebuffer>
+  static DXFramebuffer*
   Create(DXTexture* color_attachment, DXTexture* depth_attachment,
          std::vector<AbstractTexture*> additional_color_attachments);
 

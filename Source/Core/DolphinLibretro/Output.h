@@ -117,6 +117,7 @@ class DX11Output final : public FrameOutput
 {
 public:
   DX11Output(retro_hw_render_interface_d3d11* v2, u32 width, u32 height);
+  ~DX11Output();
   bool Create();
 
   AbstractFramebuffer* Acquire();
@@ -126,8 +127,8 @@ public:
   u32 GetHeight() const { return m_height; }
 
 private:
-  std::unique_ptr<DX11::DXTexture> m_textures[OUTPUT_MAX_SLOTS];
-  std::unique_ptr<DX11::DXFramebuffer> m_framebuffers[OUTPUT_MAX_SLOTS];
+  DX11::DXTexture* m_textures[OUTPUT_MAX_SLOTS] = {};
+  DX11::DXFramebuffer* m_framebuffers[OUTPUT_MAX_SLOTS] = {};
   retro_hw_render_interface_d3d11* m_v2;   /* NULL on version 1 */
   u32 m_width;
   u32 m_height;
@@ -165,8 +166,8 @@ private:
   bool m_threaded;
   OutputQueue m_queue;
 
-  std::unique_ptr<DX12::DXTexture> m_textures[OUTPUT_MAX_SLOTS];
-  std::unique_ptr<DX12::DXFramebuffer> m_framebuffers[OUTPUT_MAX_SLOTS];
+  DX12::DXTexture* m_textures[OUTPUT_MAX_SLOTS] = {};
+  DX12::DXFramebuffer* m_framebuffers[OUTPUT_MAX_SLOTS] = {};
   /* A texture handed on where it is: version 2 reads it until another
    * picture is handed on, so it is kept in the state the frontend reads
    * it in meanwhile. */
@@ -212,8 +213,8 @@ private:
   retro_vulkan_image m_direct_images[QUEUE_DIRECT];
 
   retro_vulkan_image m_images[OUTPUT_MAX_SLOTS];
-  std::unique_ptr<Vulkan::VKTexture> m_textures[OUTPUT_MAX_SLOTS];
-  std::unique_ptr<Vulkan::VKFramebuffer> m_framebuffers[OUTPUT_MAX_SLOTS];
+  Vulkan::VKTexture* m_textures[OUTPUT_MAX_SLOTS] = {};
+  Vulkan::VKFramebuffer* m_framebuffers[OUTPUT_MAX_SLOTS] = {};
   /* A texture handed on where it is, through its 2D view: the frontend
    * reads it until another picture is handed on, so it is kept in
    * shader-read layout meanwhile. */

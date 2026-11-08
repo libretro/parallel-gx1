@@ -22,9 +22,9 @@ public:
 
   bool IsHeadless() const;
 
-  std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config,
+  AbstractTexture* CreateTexture(const TextureConfig& config,
                                                  std::string_view name);
-  std::unique_ptr<AbstractStagingTexture>
+  AbstractStagingTexture*
   CreateStagingTexture(StagingTextureType type, const TextureConfig& config);
   AbstractShader*
   CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
@@ -32,12 +32,12 @@ public:
   AbstractShader* CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,
                                                          std::string_view name);
-  std::unique_ptr<NativeVertexFormat>
+  NativeVertexFormat*
   CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl);
   AbstractPipeline* CreatePipeline(const AbstractPipelineConfig& config,
                                                    const void* cache_data = nullptr,
                                                    size_t cache_data_length = 0);
-  std::unique_ptr<AbstractFramebuffer>
+  AbstractFramebuffer*
   CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                     std::vector<AbstractTexture*> additional_color_attachments);
 
@@ -105,7 +105,7 @@ private:
   void ApplyBlendingState(const BlendingState state);
 
   std::unique_ptr<GLContext> m_main_gl_context;
-  std::unique_ptr<OGLFramebuffer> m_system_framebuffer;
+  OGLFramebuffer* m_system_framebuffer = nullptr;
   std::array<const OGLTexture*, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> m_bound_textures{};
   std::array<const AbstractTexture*, VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS>
       m_bound_image_textures{};

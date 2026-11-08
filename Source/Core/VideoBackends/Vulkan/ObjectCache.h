@@ -98,9 +98,6 @@ private:
 
   std::map<SamplerState, VkSampler> m_sampler_cache;
 
-  // Dummy image for samplers that are unbound
-  std::unique_ptr<VKTexture> m_dummy_texture;
-
   // Render pass cache
   using RenderPassCacheKey = std::tuple<VkFormat, VkFormat, u32, VkAttachmentLoadOp, std::size_t>;
   std::map<RenderPassCacheKey, VkRenderPass> m_render_pass_cache;

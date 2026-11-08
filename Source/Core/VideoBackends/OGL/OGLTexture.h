@@ -88,7 +88,7 @@ public:
   void Unmap();
   void Flush();
 
-  static std::unique_ptr<OGLStagingTexture> Create(StagingTextureType type,
+  static OGLStagingTexture* Create(StagingTextureType type,
                                                    const TextureConfig& config);
 
 private:
@@ -110,7 +110,7 @@ public:
                  u32 height, u32 layers, u32 samples, GLuint fbo);
   ~OGLFramebuffer();
 
-  static std::unique_ptr<OGLFramebuffer>
+  static OGLFramebuffer*
   Create(OGLTexture* color_attachment, OGLTexture* depth_attachment,
          std::vector<AbstractTexture*> additional_color_attachments);
 

@@ -124,8 +124,9 @@ struct TexIndexNode;
 struct TCacheEntry
 {
   // common members
-  std::unique_ptr<AbstractTexture> texture;
-  std::unique_ptr<AbstractFramebuffer> framebuffer;
+  /* owned: deleted with the entry unless handed back to the pool */
+  AbstractTexture* texture = nullptr;
+  AbstractFramebuffer* framebuffer = nullptr;
   u32 addr = 0;
   u32 size_in_bytes = 0;
   u64 base_hash = 0;
@@ -175,7 +176,7 @@ struct TCacheEntry
   u32 references_cap = INLINE_REFERENCES;
 
   // Pending EFB copy
-  std::unique_ptr<AbstractStagingTexture> pending_efb_copy;
+  AbstractStagingTexture* pending_efb_copy = nullptr;  // owned
   u32 pending_efb_copy_width = 0;
   u32 pending_efb_copy_height = 0;
 
@@ -184,8 +185,7 @@ struct TCacheEntry
   VideoCommon::CustomAsset::TimeType last_load_time;
   std::shared_ptr<HiresTexture> hires_texture;
 
-  explicit TCacheEntry(std::unique_ptr<AbstractTexture> tex,
-                       std::unique_ptr<AbstractFramebuffer> fb);
+  TCacheEntry(AbstractTexture* tex, AbstractFramebuffer* fb);
 
   ~TCacheEntry();
 
@@ -259,8 +259,8 @@ struct TCacheEntry
 /* Cache entries come from a pool kept for the core's life and are handed
  * back to it when the last handle goes: none is allocated once the pool
  * has grown to what a game keeps. Video thread only. */
-TCacheEntry* TCacheEntryNew(std::unique_ptr<AbstractTexture> tex,
-                            std::unique_ptr<AbstractFramebuffer> fb);
+/* Takes tex and fb, deleting them when out of memory. */
+TCacheEntry* TCacheEntryNew(AbstractTexture* tex, AbstractFramebuffer* fb);
 void TCacheEntryRelease(TCacheEntry* entry);
 /* Frees the pool's memory when no entry is alive. */
 void TCacheEntryPoolFree();
@@ -362,14 +362,13 @@ void TexIndexFree(TexIndex* index);
 class TextureCacheBase final
 {
 public:
-  // Minimal version of TCacheEntry just for TexPool
+  // A texture and its framebuffer, if it has one, handed from the pool or newly made; a null
+  // texture for none.
   struct TexPoolEntry
   {
-    std::unique_ptr<AbstractTexture> texture;
-    std::unique_ptr<AbstractFramebuffer> framebuffer;
-    int frameCount = FRAMECOUNT_INVALID;
-
-    TexPoolEntry(std::unique_ptr<AbstractTexture> tex, std::unique_ptr<AbstractFramebuffer> fb);
+    AbstractTexture* texture;
+    AbstractFramebuffer* framebuffer;
+    int frameCount;
   };
 
   struct TextureCreationInfo
@@ -419,7 +418,7 @@ public:
 
   // Texture Serialization
   void SerializeTexture(AbstractTexture* tex, const TextureConfig& config, PointerWrap& p);
-  std::optional<TexPoolEntry> DeserializeTexture(PointerWrap& p);
+  TexPoolEntry DeserializeTexture(PointerWrap& p);
 
   // Save States
   void DoState(PointerWrap& p);
@@ -507,11 +506,11 @@ private:
   void CheckTempSize(size_t required_size);
 
   RcTcacheEntry AllocateCacheEntry(const TextureConfig& config);
-  std::optional<TexPoolEntry> AllocateTexture(const TextureConfig& config);
+  TexPoolEntry AllocateTexture(const TextureConfig& config);
   // The slot of a pooled texture to reuse for config, or m_texture_pool_count.
   size_t FindMatchingTextureFromPool(const TextureConfig& config) const;
-  void PoolTexture(std::unique_ptr<AbstractTexture> texture,
-                   std::unique_ptr<AbstractFramebuffer> framebuffer);
+  // Takes the texture and framebuffer.
+  void PoolTexture(AbstractTexture* texture, AbstractFramebuffer* framebuffer);
   // Deletes the slot's texture; the last slot takes its place.
   void DropPooledTexture(size_t slot);
   TexIndexNode* GetTexCacheIter(TCacheEntry* entry);
@@ -534,14 +533,14 @@ private:
 
   // Flushes a pending EFB copy to RAM from the host to the guest RAM.
   void WriteEFBCopyToRAM(u8* dst_ptr, u32 width, u32 height, u32 stride,
-                         std::unique_ptr<AbstractStagingTexture> staging_texture);
+                         AbstractStagingTexture* staging_texture);
   void FlushEFBCopy(TCacheEntry* entry);
 
   // Returns a staging texture of the maximum EFB copy size.
-  std::unique_ptr<AbstractStagingTexture> GetEFBCopyStagingTexture();
+  AbstractStagingTexture* GetEFBCopyStagingTexture();
 
   // Returns an EFB copy staging texture to the pool, so it can be re-used.
-  void ReleaseEFBCopyStagingTexture(std::unique_ptr<AbstractStagingTexture> tex);
+  void ReleaseEFBCopyStagingTexture(AbstractStagingTexture* tex);
 
   bool CheckReadbackTexture(u32 width, u32 height, AbstractTextureFormat format);
   void DoSaveState(PointerWrap& p);
@@ -589,14 +588,16 @@ private:
   BackupConfig m_backup_config = {};
 
   // Encoding texture used for EFB copies to RAM.
-  std::unique_ptr<AbstractTexture> m_efb_encoding_texture;
-  std::unique_ptr<AbstractFramebuffer> m_efb_encoding_framebuffer;
+  AbstractTexture* m_efb_encoding_texture = nullptr;
+  AbstractFramebuffer* m_efb_encoding_framebuffer = nullptr;
 
   // Decoding texture used for GPU texture decoding.
-  std::unique_ptr<AbstractTexture> m_decoding_texture;
+  AbstractTexture* m_decoding_texture = nullptr;
 
   // Pool of readback textures used for deferred EFB copies.
-  std::vector<std::unique_ptr<AbstractStagingTexture>> m_efb_copy_staging_texture_pool;
+  AbstractStagingTexture** m_efb_copy_staging_texture_pool = nullptr;
+  size_t m_num_efb_copy_staging_textures = 0;
+  size_t m_efb_copy_staging_texture_pool_cap = 0;
 
   // List of pending EFB copies. It is important that the order is preserved for these,
   // so that overlapping textures are written to guest RAM in the order they are issued.
@@ -611,7 +612,7 @@ private:
   // Staging texture used for readbacks.
   // We store this in the class so that the same staging texture can be used for multiple
   // readbacks, saving the overhead of allocating a new buffer every time.
-  std::unique_ptr<AbstractStagingTexture> m_readback_texture;
+  AbstractStagingTexture* m_readback_texture = nullptr;
 
   void OnFrameEnd();
 

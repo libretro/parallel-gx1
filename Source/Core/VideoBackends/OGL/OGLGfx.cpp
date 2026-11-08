@@ -127,11 +127,11 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
   // Create the window framebuffer.
   if (!m_main_gl_context->IsHeadless())
   {
-    m_system_framebuffer = std::make_unique<OGLFramebuffer>(
+    m_system_framebuffer = new OGLFramebuffer(
         nullptr, nullptr, std::vector<AbstractTexture*>{}, AbstractTextureFormat::RGBA8,
         AbstractTextureFormat::Undefined, std::max(m_main_gl_context->GetBackBufferWidth(), 1u),
         std::max(m_main_gl_context->GetBackBufferHeight(), 1u), 1, 1, 0);
-    m_current_framebuffer = m_system_framebuffer.get();
+    m_current_framebuffer = m_system_framebuffer;
   }
 
   if (!m_main_gl_context->IsGLES())
@@ -202,6 +202,7 @@ OGLGfx::~OGLGfx()
   OGLTexture::DestroyUploadBuffer();
   glDeleteFramebuffers(1, &m_shared_draw_framebuffer);
   glDeleteFramebuffers(1, &m_shared_read_framebuffer);
+  delete m_system_framebuffer;
 }
 
 bool OGLGfx::IsHeadless() const
@@ -209,19 +210,19 @@ bool OGLGfx::IsHeadless() const
   return m_main_gl_context->IsHeadless();
 }
 
-std::unique_ptr<AbstractTexture> OGLGfx::CreateTexture(const TextureConfig& config,
+AbstractTexture* OGLGfx::CreateTexture(const TextureConfig& config,
                                                        std::string_view name)
 {
-  return std::make_unique<OGLTexture>(config, name);
+  return new OGLTexture(config, name);
 }
 
-std::unique_ptr<AbstractStagingTexture> OGLGfx::CreateStagingTexture(StagingTextureType type,
+AbstractStagingTexture* OGLGfx::CreateStagingTexture(StagingTextureType type,
                                                                      const TextureConfig& config)
 {
   return OGLStagingTexture::Create(type, config);
 }
 
-std::unique_ptr<AbstractFramebuffer>
+AbstractFramebuffer*
 OGLGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                           std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -411,7 +412,7 @@ void OGLGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEn
 
 bool OGLGfx::BindBackbuffer(const ClearColor& clear_color)
 {
-  SetAndClearFramebuffer(m_system_framebuffer.get(), clear_color);
+  SetAndClearFramebuffer(m_system_framebuffer, clear_color);
   return true;
 }
 

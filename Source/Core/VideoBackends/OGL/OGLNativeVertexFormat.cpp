@@ -17,10 +17,10 @@
 
 namespace OGL
 {
-std::unique_ptr<NativeVertexFormat>
+NativeVertexFormat*
 OGLGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
-  return std::make_unique<GLVertexFormat>(vtx_decl);
+  return new GLVertexFormat(vtx_decl);
 }
 
 static inline GLuint VarToGL(ComponentFormat t)

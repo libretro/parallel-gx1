@@ -166,7 +166,7 @@ SWFramebuffer::SWFramebuffer(AbstractTexture* color_attachment, AbstractTexture*
 {
 }
 
-std::unique_ptr<SWFramebuffer>
+SWFramebuffer*
 SWFramebuffer::Create(SWTexture* color_attachment, SWTexture* depth_attachment,
                       std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -183,9 +183,9 @@ SWFramebuffer::Create(SWTexture* color_attachment, SWTexture* depth_attachment,
   const u32 layers = either_attachment->GetLayers();
   const u32 samples = either_attachment->GetSamples();
 
-  return std::make_unique<SWFramebuffer>(color_attachment, depth_attachment,
-                                         std::move(additional_color_attachments), color_format,
-                                         depth_format, width, height, layers, samples);
+  return new SWFramebuffer(color_attachment, depth_attachment,
+                           std::move(additional_color_attachments), color_format, depth_format,
+                           width, height, layers, samples);
 }
 
 }  // namespace SW

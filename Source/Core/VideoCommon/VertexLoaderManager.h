@@ -4,9 +4,7 @@
 #pragma once
 
 #include <array>
-#include <memory>
 #include <string>
-#include <unordered_map>
 
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"
@@ -22,8 +20,6 @@ enum class Primitive : u8;
 
 namespace VertexLoaderManager
 {
-using NativeVertexFormatMap =
-    std::unordered_map<PortableVertexDeclaration, std::unique_ptr<NativeVertexFormat>>;
 
 void Init();
 void Clear();

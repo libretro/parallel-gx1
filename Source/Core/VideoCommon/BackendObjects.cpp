@@ -163,8 +163,10 @@ bool AbstractPipeline::IsBuilding() const
 
 /* framebuffers */
 
-void std::default_delete<AbstractFramebuffer>::operator()(AbstractFramebuffer* object) const
+void AbstractFramebufferDelete(AbstractFramebuffer* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
@@ -199,8 +201,10 @@ void std::default_delete<AbstractFramebuffer>::operator()(AbstractFramebuffer* o
 
 /* textures */
 
-void std::default_delete<AbstractTexture>::operator()(AbstractTexture* object) const
+void AbstractTextureDelete(AbstractTexture* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
@@ -420,8 +424,10 @@ void AbstractTexture::FinishedRendering()
 
 /* staging textures */
 
-void std::default_delete<AbstractStagingTexture>::operator()(AbstractStagingTexture* object) const
+void AbstractStagingTextureDelete(AbstractStagingTexture* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:

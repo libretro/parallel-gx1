@@ -33,7 +33,6 @@ ObjectCache::~ObjectCache()
   DestroyPipelineLayouts();
   DestroyDescriptorSetLayouts();
   DestroyRenderPassCache();
-  m_dummy_texture.reset();
 }
 
 bool ObjectCache::Initialize()

@@ -38,19 +38,19 @@ bool SWGfx::SupportsUtilityDrawing() const
   return false;
 }
 
-std::unique_ptr<AbstractTexture> SWGfx::CreateTexture(const TextureConfig& config,
+AbstractTexture* SWGfx::CreateTexture(const TextureConfig& config,
                                                       std::string_view /* name */)
 {
-  return std::make_unique<SWTexture>(config);
+  return new SWTexture(config);
 }
 
-std::unique_ptr<AbstractStagingTexture> SWGfx::CreateStagingTexture(StagingTextureType type,
+AbstractStagingTexture* SWGfx::CreateStagingTexture(StagingTextureType type,
                                                                     const TextureConfig& config)
 {
-  return std::make_unique<SWStagingTexture>(type, config);
+  return new SWStagingTexture(type, config);
 }
 
-std::unique_ptr<AbstractFramebuffer>
+AbstractFramebuffer*
 SWGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                          std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -127,10 +127,10 @@ void SWGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEna
   EfbCopy::ClearEfb();
 }
 
-std::unique_ptr<NativeVertexFormat>
+NativeVertexFormat*
 SWGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
-  return std::make_unique<NativeVertexFormat>(vtx_decl);
+  return new NativeVertexFormat(vtx_decl);
 }
 
 void SWGfx::SetScissorRect(const MathUtil::Rectangle<int>& rc)

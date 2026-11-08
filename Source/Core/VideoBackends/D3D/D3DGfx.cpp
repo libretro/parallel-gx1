@@ -50,19 +50,19 @@ bool Gfx::IsHeadless() const
   return !m_output;
 }
 
-std::unique_ptr<AbstractTexture> Gfx::CreateTexture(const TextureConfig& config,
+AbstractTexture* Gfx::CreateTexture(const TextureConfig& config,
                                                     std::string_view name)
 {
   return DXTexture::Create(config, name);
 }
 
-std::unique_ptr<AbstractStagingTexture> Gfx::CreateStagingTexture(StagingTextureType type,
+AbstractStagingTexture* Gfx::CreateStagingTexture(StagingTextureType type,
                                                                   const TextureConfig& config)
 {
   return DXStagingTexture::Create(type, config);
 }
 
-std::unique_ptr<AbstractFramebuffer>
+AbstractFramebuffer*
 Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                        std::vector<AbstractTexture*> additional_color_attachments)
 {

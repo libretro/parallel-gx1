@@ -68,7 +68,7 @@ public:
                          u32 width, u32 height, u32 layers, u32 samples);
   ~SWFramebuffer() = default;
 
-  static std::unique_ptr<SWFramebuffer>
+  static SWFramebuffer*
   Create(SWTexture* color_attachment, SWTexture* depth_attachment,
          std::vector<AbstractTexture*> additional_color_attachments);
 };

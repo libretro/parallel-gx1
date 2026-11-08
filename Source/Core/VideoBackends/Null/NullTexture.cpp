@@ -76,7 +76,7 @@ NullFramebuffer::NullFramebuffer(AbstractTexture* color_attachment,
 {
 }
 
-std::unique_ptr<NullFramebuffer>
+NullFramebuffer*
 NullFramebuffer::Create(NullTexture* color_attachment, NullTexture* depth_attachment,
                         std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -93,9 +93,9 @@ NullFramebuffer::Create(NullTexture* color_attachment, NullTexture* depth_attach
   const u32 layers = either_attachment->GetLayers();
   const u32 samples = either_attachment->GetSamples();
 
-  return std::make_unique<NullFramebuffer>(color_attachment, depth_attachment,
-                                           std::move(additional_color_attachments), color_format,
-                                           depth_format, width, height, layers, samples);
+  return new NullFramebuffer(color_attachment, depth_attachment,
+                             std::move(additional_color_attachments), color_format, depth_format,
+                             width, height, layers, samples);
 }
 
 }  // namespace Null

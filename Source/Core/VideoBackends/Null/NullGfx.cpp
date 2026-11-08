@@ -35,16 +35,16 @@ bool NullGfx::SupportsUtilityDrawing() const
   return false;
 }
 
-std::unique_ptr<AbstractTexture> NullGfx::CreateTexture(const TextureConfig& config,
+AbstractTexture* NullGfx::CreateTexture(const TextureConfig& config,
                                                         std::string_view /* name */)
 {
-  return std::make_unique<NullTexture>(config);
+  return new NullTexture(config);
 }
 
-std::unique_ptr<AbstractStagingTexture> NullGfx::CreateStagingTexture(StagingTextureType type,
+AbstractStagingTexture* NullGfx::CreateStagingTexture(StagingTextureType type,
                                                                       const TextureConfig& config)
 {
-  return std::make_unique<NullStagingTexture>(type, config);
+  return new NullStagingTexture(type, config);
 }
 
 AbstractShader*
@@ -69,7 +69,7 @@ AbstractPipeline* NullGfx::CreatePipeline(const AbstractPipelineConfig& config,
   return new AbstractPipeline();
 }
 
-std::unique_ptr<AbstractFramebuffer>
+AbstractFramebuffer*
 NullGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                            std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -78,10 +78,10 @@ NullGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* d
                                  std::move(additional_color_attachments));
 }
 
-std::unique_ptr<NativeVertexFormat>
+NativeVertexFormat*
 NullGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
-  return std::make_unique<NativeVertexFormat>(vtx_decl);
+  return new NativeVertexFormat(vtx_decl);
 }
 
 }  // namespace Null

@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -27,6 +26,7 @@
 #include "VideoCommon/DataReader.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/Statistics.h"
+#include "VideoCommon/UidTable.h"
 #include "VideoCommon/VertexLoaderBase.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VertexShaderManager.h"
@@ -43,7 +43,8 @@ alignas(sizeof(std::array<float, 4>)) std::array<float, 4> normal_cache;
 alignas(sizeof(std::array<float, 4>)) std::array<float, 4> tangent_cache;
 alignas(sizeof(std::array<float, 4>)) std::array<float, 4> binormal_cache;
 
-static NativeVertexFormatMap s_native_vertex_map;
+/* each PortableVertexDeclaration's NativeVertexFormat, owned here */
+static uid_table s_native_vertex_map;
 static NativeVertexFormat* s_current_vtx_fmt;
 u32 g_current_components;
 
@@ -127,7 +128,12 @@ void Clear()
       entry = next;
     }
   }
-  s_native_vertex_map.clear();
+  size_t cursor = 0;
+  const void* key;
+  uid_table_value* value;
+  while ((value = uid_table_next(&s_native_vertex_map, &cursor, &key)))
+    NativeVertexFormatDelete(static_cast<NativeVertexFormat*>(value->object));
+  uid_table_free(&s_native_vertex_map);
 }
 
 void UpdateVertexArrayPointers()
@@ -196,15 +202,19 @@ void MarkAllDirty()
 
 NativeVertexFormat* GetOrCreateMatchingFormat(const PortableVertexDeclaration& decl)
 {
-  auto iter = s_native_vertex_map.find(decl);
-  if (iter == s_native_vertex_map.end())
+  uid_table_value* value;
+  if (!s_native_vertex_map.key_size)
+    uid_table_init(&s_native_vertex_map, sizeof(PortableVertexDeclaration));
+  value = uid_table_get(&s_native_vertex_map, &decl);
+  if (!value)
+    return nullptr;
+  /* made once: one that failed stays without */
+  if (!value->object && !value->pending)
   {
-    std::unique_ptr<NativeVertexFormat> fmt = g_gfx->CreateNativeVertexFormat(decl);
-    auto ipair = s_native_vertex_map.emplace(decl, std::move(fmt));
-    iter = ipair.first;
+    value->object = g_gfx->CreateNativeVertexFormat(decl);
+    value->pending = 1;
   }
-
-  return iter->second.get();
+  return static_cast<NativeVertexFormat*>(value->object);
 }
 
 NativeVertexFormat* GetUberVertexFormat(const PortableVertexDeclaration& decl)

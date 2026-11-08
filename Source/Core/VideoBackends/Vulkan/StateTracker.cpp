@@ -50,8 +50,10 @@ void StateTracker::DestroyInstance()
     it.imageView = VK_NULL_HANDLE;
   for (auto& it : s_state_tracker->m_bindings.image_textures)
     it.imageView = VK_NULL_HANDLE;
-  s_state_tracker->m_dummy_texture.reset();
-  s_state_tracker->m_dummy_compute_texture.reset();
+  delete s_state_tracker->m_dummy_texture;
+  s_state_tracker->m_dummy_texture = nullptr;
+  delete s_state_tracker->m_dummy_compute_texture;
+  s_state_tracker->m_dummy_compute_texture = nullptr;
 
   s_state_tracker.reset();
 }

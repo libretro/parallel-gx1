@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -104,3 +102,6 @@ protected:
 
   bool m_needs_flush = false;
 };
+
+/* Deletes a staging texture as the backend's own class; NULL is let be. */
+void AbstractStagingTextureDelete(AbstractStagingTexture* staging_texture);

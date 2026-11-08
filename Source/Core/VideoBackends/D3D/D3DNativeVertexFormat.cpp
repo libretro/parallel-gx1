@@ -16,10 +16,10 @@
 namespace DX11
 {
 
-std::unique_ptr<NativeVertexFormat>
+NativeVertexFormat*
 Gfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
-  return std::make_unique<D3DVertexFormat>(vtx_decl);
+  return new D3DVertexFormat(vtx_decl);
 }
 
 static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)

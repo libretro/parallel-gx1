@@ -64,11 +64,11 @@ public:
   void SetViewport(float x, float y, float width, float height, float near_depth, float far_depth);
   void BeginUtilityDrawing();
   void EndUtilityDrawing();
-  std::unique_ptr<AbstractTexture> CreateTexture(const TextureConfig& config,
+  AbstractTexture* CreateTexture(const TextureConfig& config,
                                                  std::string_view name = "");
-  std::unique_ptr<AbstractStagingTexture> CreateStagingTexture(StagingTextureType type,
+  AbstractStagingTexture* CreateStagingTexture(StagingTextureType type,
                                                                const TextureConfig& config);
-  std::unique_ptr<AbstractFramebuffer>
+  AbstractFramebuffer*
   CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                     std::vector<AbstractTexture*> additional_color_attachments = {});
 
@@ -125,7 +125,7 @@ public:
   }
   AbstractShader* CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length, std::string_view name = "");
-  std::unique_ptr<NativeVertexFormat>
+  NativeVertexFormat*
   CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl);
   AbstractPipeline* CreatePipeline(const AbstractPipelineConfig& config,
                                                    const void* cache_data = nullptr,

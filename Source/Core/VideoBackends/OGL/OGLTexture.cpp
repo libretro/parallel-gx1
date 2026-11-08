@@ -516,8 +516,7 @@ OGLStagingTexture::~OGLStagingTexture()
     glDeleteBuffers(1, &m_buffer_name);
 }
 
-std::unique_ptr<OGLStagingTexture> OGLStagingTexture::Create(StagingTextureType type,
-                                                             const TextureConfig& config)
+OGLStagingTexture* OGLStagingTexture::Create(StagingTextureType type, const TextureConfig& config)
 {
   size_t stride = config.GetStride();
   size_t buffer_size = stride * config.height;
@@ -563,8 +562,8 @@ std::unique_ptr<OGLStagingTexture> OGLStagingTexture::Create(StagingTextureType 
   }
   glBindBuffer(target, 0);
 
-  std::unique_ptr<OGLStagingTexture> staging_tex(
-      new OGLStagingTexture(type, config, target, buffer, buffer_size, buffer_ptr, stride));
+  OGLStagingTexture* const staging_tex =
+      new OGLStagingTexture(type, config, target, buffer, buffer_size, buffer_ptr, stride);
   staging_tex->m_persistent_map = buffer_ptr && type == StagingTextureType::Upload;
   return staging_tex;
 }
@@ -764,7 +763,7 @@ OGLFramebuffer::~OGLFramebuffer()
   glDeleteFramebuffers(1, &m_fbo);
 }
 
-std::unique_ptr<OGLFramebuffer>
+OGLFramebuffer*
 OGLFramebuffer::Create(OGLTexture* color_attachment, OGLTexture* depth_attachment,
                        std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -838,9 +837,9 @@ OGLFramebuffer::Create(OGLTexture* color_attachment, OGLTexture* depth_attachmen
   DEBUG_ASSERT(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
   GetOGLGfx()->RestoreFramebufferBinding();
 
-  return std::make_unique<OGLFramebuffer>(color_attachment, depth_attachment,
-                                          std::move(additional_color_attachments), color_format,
-                                          depth_format, width, height, layers, samples, fbo);
+  return new OGLFramebuffer(color_attachment, depth_attachment,
+                            std::move(additional_color_attachments), color_format, depth_format,
+                            width, height, layers, samples, fbo);
 }
 
 void OGLFramebuffer::UpdateDimensions(u32 width, u32 height)

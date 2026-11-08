@@ -70,7 +70,7 @@ DXTexture::~DXTexture()
     g_dx_context->DeferResourceDestruction(m_resource.Get());
 }
 
-std::unique_ptr<DXTexture> DXTexture::Create(const TextureConfig& config, std::string_view name)
+DXTexture* DXTexture::Create(const TextureConfig& config, std::string_view name)
 {
   constexpr D3D12_HEAP_PROPERTIES heap_properties = {D3D12_HEAP_TYPE_DEFAULT};
   D3D12_RESOURCE_STATES resource_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -120,40 +120,12 @@ std::unique_ptr<DXTexture> DXTexture::Create(const TextureConfig& config, std::s
   if (FAILED(hr))
     return nullptr;
 
-  auto tex =
-      std::unique_ptr<DXTexture>(new DXTexture(config, resource.Get(), resource_state, name));
+  DXTexture* const tex = new DXTexture(config, resource.Get(), resource_state, name);
   if (!tex->CreateSRVDescriptor() || (config.IsComputeImage() && !tex->CreateUAVDescriptor()))
-    return nullptr;
-
-  return tex;
-}
-
-std::unique_ptr<DXTexture> DXTexture::CreateAdopted(ID3D12Resource* resource)
-{
-  const D3D12_RESOURCE_DESC desc = resource->GetDesc();
-  const AbstractTextureFormat format = D3DCommon::GetAbstractFormatForDXGIFormat(desc.Format);
-  if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
-      format == AbstractTextureFormat::Undefined)
   {
-    PanicAlertFmt("Unknown format for adopted texture");
+    delete tex;
     return nullptr;
   }
-
-  TextureConfig config(static_cast<u32>(desc.Width), desc.Height, desc.MipLevels,
-                       desc.DepthOrArraySize, desc.SampleDesc.Count, format, 0,
-                       AbstractTextureType::Texture_2DArray);
-  if (desc.Flags &
-      (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
-  {
-    config.flags |= AbstractTextureFlag_RenderTarget;
-  }
-  if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-    config.flags |= AbstractTextureFlag_ComputeImage;
-
-  auto tex =
-      std::unique_ptr<DXTexture>(new DXTexture(config, resource, D3D12_RESOURCE_STATE_COMMON, ""));
-  if (!tex->CreateSRVDescriptor())
-    return nullptr;
 
   return tex;
 }
@@ -587,7 +559,7 @@ void DXFramebuffer::TransitionRenderTargets() const
   }
 }
 
-std::unique_ptr<DXFramebuffer>
+DXFramebuffer*
 DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment,
                       std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -604,12 +576,13 @@ DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment,
   const u32 layers = either_attachment->GetLayers();
   const u32 samples = either_attachment->GetSamples();
 
-  std::unique_ptr<DXFramebuffer> fb(
+  DXFramebuffer* const fb =
       new DXFramebuffer(color_attachment, depth_attachment, std::move(additional_color_attachments),
-                        color_format, depth_format, width, height, layers, samples));
+                        color_format, depth_format, width, height, layers, samples);
   if (!fb->CreateRTVDescriptors() || (color_attachment && !fb->CreateIRTVDescriptor()) ||
       (depth_attachment && !fb->CreateDSVDescriptor()))
   {
+    delete fb;
     return nullptr;
   }
 
@@ -849,8 +822,7 @@ void DXStagingTexture::Flush()
     g_dx_context->WaitForFence(m_transfer_fence);
 }
 
-std::unique_ptr<DXStagingTexture> DXStagingTexture::Create(StagingTextureType type,
-                                                           const TextureConfig& config)
+DXStagingTexture* DXStagingTexture::Create(StagingTextureType type, const TextureConfig& config)
 {
   ASSERT(config.levels == 1 && config.layers == 1 && config.samples == 1);
 
@@ -885,8 +857,7 @@ std::unique_ptr<DXStagingTexture> DXStagingTexture::Create(StagingTextureType ty
   if (FAILED(hr))
     return nullptr;
 
-  return std::unique_ptr<DXStagingTexture>(
-      new DXStagingTexture(type, config, resource.Get(), stride, size));
+  return new DXStagingTexture(type, config, resource.Get(), stride, size);
 }
 
 }  // namespace DX12

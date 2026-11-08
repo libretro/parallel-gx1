@@ -33,7 +33,7 @@ DXTexture::~DXTexture()
     D3D::stateman->ApplyTextures();
 }
 
-std::unique_ptr<DXTexture> DXTexture::Create(const TextureConfig& config, std::string_view name)
+DXTexture* DXTexture::Create(const TextureConfig& config, std::string_view name)
 {
   // Use typeless to create the texture when it's a render target, so we can alias it with an
   // integer format (for EFB).
@@ -58,33 +58,12 @@ std::unique_ptr<DXTexture> DXTexture::Create(const TextureConfig& config, std::s
     return nullptr;
   }
 
-  std::unique_ptr<DXTexture> tex(new DXTexture(config, std::move(d3d_texture), name));
+  DXTexture* const tex = new DXTexture(config, std::move(d3d_texture), name);
   if (!tex->CreateSRV() || (config.IsComputeImage() && !tex->CreateUAV()))
+  {
+    delete tex;
     return nullptr;
-
-  return tex;
-}
-
-std::unique_ptr<DXTexture> DXTexture::CreateAdopted(ComPtr<ID3D11Texture2D> texture)
-{
-  D3D11_TEXTURE2D_DESC desc;
-  texture->GetDesc(&desc);
-
-  // Convert to our texture config format.
-  TextureConfig config(desc.Width, desc.Height, desc.MipLevels, desc.ArraySize,
-                       desc.SampleDesc.Count,
-                       D3DCommon::GetAbstractFormatForDXGIFormat(desc.Format), 0,
-                       AbstractTextureType::Texture_2DArray);
-  if (desc.BindFlags & D3D11_BIND_RENDER_TARGET)
-    config.flags |= AbstractTextureFlag_RenderTarget;
-  if (desc.BindFlags & D3D11_BIND_UNORDERED_ACCESS)
-    config.flags |= AbstractTextureFlag_ComputeImage;
-
-  std::unique_ptr<DXTexture> tex(new DXTexture(config, std::move(texture), ""));
-  if (desc.BindFlags & D3D11_BIND_SHADER_RESOURCE && !tex->CreateSRV())
-    return nullptr;
-  if (desc.BindFlags & D3D11_BIND_UNORDERED_ACCESS && !tex->CreateUAV())
-    return nullptr;
+  }
 
   return tex;
 }
@@ -209,8 +188,7 @@ DXStagingTexture::~DXStagingTexture()
     DXStagingTexture::Unmap();
 }
 
-std::unique_ptr<DXStagingTexture> DXStagingTexture::Create(StagingTextureType type,
-                                                           const TextureConfig& config)
+DXStagingTexture* DXStagingTexture::Create(StagingTextureType type, const TextureConfig& config)
 {
   D3D11_USAGE usage;
   UINT cpu_flags;
@@ -241,7 +219,7 @@ std::unique_ptr<DXStagingTexture> DXStagingTexture::Create(StagingTextureType ty
   if (FAILED(hr))
     return nullptr;
 
-  return std::unique_ptr<DXStagingTexture>(new DXStagingTexture(type, config, std::move(texture)));
+  return new DXStagingTexture(type, config, std::move(texture));
 }
 
 void DXStagingTexture::CopyFromTexture(const AbstractTexture* src,
@@ -421,7 +399,7 @@ void DXFramebuffer::Clear(const ClearColor& color_value, float depth_value)
   }
 }
 
-std::unique_ptr<DXFramebuffer>
+DXFramebuffer*
 DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment,
                       std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -502,7 +480,7 @@ DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment,
       return nullptr;
   }
 
-  return std::make_unique<DXFramebuffer>(
+  return new DXFramebuffer(
       color_attachment, depth_attachment, std::move(additional_color_attachments), color_format,
       depth_format, width, height, layers, samples, std::move(rtv), std::move(integer_rtv),
       std::move(dsv), std::move(additional_rtvs));

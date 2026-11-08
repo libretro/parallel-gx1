@@ -167,8 +167,8 @@ private:
   VkRect2D m_scissor = {{0, 0}, {1, 1}};
 
   // uniform buffers
-  std::unique_ptr<VKTexture> m_dummy_texture;
-  std::unique_ptr<VKTexture> m_dummy_compute_texture;
+  VKTexture* m_dummy_texture = nullptr;
+  VKTexture* m_dummy_compute_texture = nullptr;
 
   VKFramebuffer* m_framebuffer = nullptr;
   VkRenderPass m_current_render_pass = VK_NULL_HANDLE;

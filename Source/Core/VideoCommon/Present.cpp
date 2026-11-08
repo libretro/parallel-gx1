@@ -799,7 +799,7 @@ void Presenter::Present()
     if (m_xfb_entry)
     {
       const MathUtil::Rectangle<int> rect = AdjustForCustomCrop(m_xfb_rect);
-      g_gfx->ShowImage(m_xfb_entry->texture.get(), rect);
+      g_gfx->ShowImage(m_xfb_entry->texture, rect);
 
       // Update the window size based on the frame that was just rendered.
       // Due to depending on guest state, we need to call this every frame.
@@ -835,7 +835,7 @@ void Presenter::Present()
     MathUtil::Rectangle<int> render_source_rc = AdjustForCustomCrop(m_xfb_rect);
     AdjustRectanglesToFitBounds(&render_target_rc, &render_source_rc, m_backbuffer_width,
                                 m_backbuffer_height);
-    RenderXFBToScreen(render_target_rc, m_xfb_entry->texture.get(), render_source_rc);
+    RenderXFBToScreen(render_target_rc, m_xfb_entry->texture, render_source_rc);
     if (gba_screens)
       GBAScreensDraw(m_post_processor.get(), m_backbuffer_width, m_backbuffer_height);
   }
@@ -860,7 +860,7 @@ void Presenter::Present()
 
 bool Presenter::PresentXFBInPlace()
 {
-  const AbstractTexture* texture = m_xfb_entry->texture.get();
+  const AbstractTexture* texture = m_xfb_entry->texture;
   const TextureConfig& config = texture->GetConfig();
   MathUtil::Rectangle<int> target_rc = GetTargetRectangle();
   MathUtil::Rectangle<int> source_rc = AdjustForCustomCrop(m_xfb_rect);
@@ -918,7 +918,7 @@ int Presenter::PruneHeldEntries()
 
   for (i = 0; i < HELD_ENTRIES; i++)
   {
-    if (m_held_entries[i] && !g_gfx->IsTextureHeld(m_held_entries[i]->texture.get()))
+    if (m_held_entries[i] && !g_gfx->IsTextureHeld(m_held_entries[i]->texture))
       m_held_entries[i].reset();
     if (!m_held_entries[i])
       free_place = i;

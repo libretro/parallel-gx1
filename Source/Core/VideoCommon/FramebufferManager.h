@@ -58,9 +58,9 @@ public:
   static TextureConfig GetEFBDepthTextureConfig(u32 width, u32 height);
 
   // Accessors.
-  AbstractTexture* GetEFBColorTexture() const { return m_efb_color_texture.get(); }
-  AbstractTexture* GetEFBDepthTexture() const { return m_efb_depth_texture.get(); }
-  AbstractFramebuffer* GetEFBFramebuffer() const { return m_efb_framebuffer.get(); }
+  AbstractTexture* GetEFBColorTexture() const { return m_efb_color_texture; }
+  AbstractTexture* GetEFBDepthTexture() const { return m_efb_depth_texture; }
+  AbstractFramebuffer* GetEFBFramebuffer() const { return m_efb_framebuffer; }
   u32 GetEFBWidth() const { return m_efb_color_texture->GetWidth(); }
   u32 GetEFBHeight() const { return m_efb_color_texture->GetHeight(); }
   u32 GetEFBLayers() const { return m_efb_color_texture->GetLayers(); }
@@ -147,9 +147,9 @@ protected:
   // Tiles are ordered left-to-right, then top-to-bottom
   struct EFBCacheData
   {
-    std::unique_ptr<AbstractTexture> texture;
-    std::unique_ptr<AbstractFramebuffer> framebuffer;
-    std::unique_ptr<AbstractStagingTexture> readback_texture;
+    AbstractTexture* texture;
+    AbstractFramebuffer* framebuffer;
+    AbstractStagingTexture* readback_texture;
     AbstractPipeline* copy_pipeline;
     std::vector<EFBCacheTile> tiles;
     bool out_of_date;
@@ -195,16 +195,16 @@ protected:
   float m_efb_scale = 1.0f;
   PixelFormat m_prev_efb_format;
 
-  std::unique_ptr<AbstractTexture> m_efb_color_texture;
-  std::unique_ptr<AbstractTexture> m_efb_convert_color_texture;
-  std::unique_ptr<AbstractTexture> m_efb_depth_texture;
-  std::unique_ptr<AbstractTexture> m_efb_resolve_color_texture;
-  std::unique_ptr<AbstractTexture> m_efb_depth_resolve_texture;
+  AbstractTexture* m_efb_color_texture = nullptr;
+  AbstractTexture* m_efb_convert_color_texture = nullptr;
+  AbstractTexture* m_efb_depth_texture = nullptr;
+  AbstractTexture* m_efb_resolve_color_texture = nullptr;
+  AbstractTexture* m_efb_depth_resolve_texture = nullptr;
 
-  std::unique_ptr<AbstractFramebuffer> m_efb_framebuffer;
-  std::unique_ptr<AbstractFramebuffer> m_efb_convert_framebuffer;
-  std::unique_ptr<AbstractFramebuffer> m_efb_color_resolve_framebuffer;
-  std::unique_ptr<AbstractFramebuffer> m_efb_depth_resolve_framebuffer;
+  AbstractFramebuffer* m_efb_framebuffer = nullptr;
+  AbstractFramebuffer* m_efb_convert_framebuffer = nullptr;
+  AbstractFramebuffer* m_efb_color_resolve_framebuffer = nullptr;
+  AbstractFramebuffer* m_efb_depth_resolve_framebuffer = nullptr;
   AbstractPipeline* m_efb_color_resolve_pipeline = nullptr;
   AbstractPipeline* m_efb_depth_resolve_pipeline = nullptr;
 
@@ -230,7 +230,7 @@ protected:
   AbstractPipeline* m_clear_pipelines[2][2][2] = {};
 
   // EFB poke drawing setup
-  std::unique_ptr<NativeVertexFormat> m_poke_vertex_format;
+  NativeVertexFormat* m_poke_vertex_format = nullptr;
   AbstractPipeline* m_color_poke_pipeline = nullptr;
   AbstractPipeline* m_depth_poke_pipeline = nullptr;
   // the pokes batched to draw, room for MAX_POKE_VERTICES once the game pokes

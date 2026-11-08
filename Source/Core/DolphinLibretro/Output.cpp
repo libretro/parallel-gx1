@@ -397,6 +397,15 @@ DX11Output::DX11Output(retro_hw_render_interface_d3d11* v2, u32 width, u32 heigh
 {
 }
 
+DX11Output::~DX11Output()
+{
+  for (u32 i = 0; i < OUTPUT_MAX_SLOTS; i++)
+  {
+    delete m_framebuffers[i];
+    delete m_textures[i];
+  }
+}
+
 bool DX11Output::Create()
 {
   const unsigned mask = m_v2 ? m_v2->get_sync_index_mask(m_v2->handle) : 1u;
@@ -413,7 +422,7 @@ bool DX11Output::Create()
       ERROR_LOG_FMT(VIDEO, "Failed to create output texture {}", i);
       return false;
     }
-    m_framebuffers[i] = DX11::DXFramebuffer::Create(m_textures[i].get(), nullptr, {});
+    m_framebuffers[i] = DX11::DXFramebuffer::Create(m_textures[i], nullptr, {});
     if (!m_framebuffers[i])
     {
       ERROR_LOG_FMT(VIDEO, "Failed to create output framebuffer {}", i);
@@ -430,12 +439,12 @@ AbstractFramebuffer* DX11Output::Acquire()
    * version 2: it is done with this index's texture once the wait
    * returns, which needs the context lock released */
   if (!m_v2)
-    return m_framebuffers[0].get();
+    return m_framebuffers[0];
   m_current = m_v2->get_sync_index(m_v2->handle);
   depth = D3D11Suspend();
   m_v2->wait_sync_index(m_v2->handle);
   D3D11Resume(depth);
-  return m_framebuffers[m_current].get();
+  return m_framebuffers[m_current];
 }
 
 void DX11Output::Present()
@@ -506,6 +515,11 @@ DX12Output::~DX12Output()
     s_active = nullptr;
   if (m_threaded && DX12::g_dx_context)
     DX12::g_dx_context->SetBeforeExecute(nullptr, nullptr);
+  for (u32 i = 0; i < OUTPUT_MAX_SLOTS; i++)
+  {
+    delete m_framebuffers[i];
+    delete m_textures[i];
+  }
 }
 
 bool DX12Output::Create()
@@ -527,7 +541,7 @@ bool DX12Output::Create()
       ERROR_LOG_FMT(VIDEO, "Failed to create output texture {}", i);
       return false;
     }
-    m_framebuffers[i] = DX12::DXFramebuffer::Create(m_textures[i].get(), nullptr, {});
+    m_framebuffers[i] = DX12::DXFramebuffer::Create(m_textures[i], nullptr, {});
     if (!m_framebuffers[i])
     {
       ERROR_LOG_FMT(VIDEO, "Failed to create output framebuffer {}", i);
@@ -545,7 +559,7 @@ AbstractFramebuffer* DX12Output::Acquire()
   {
     /* a target the frontend does not read */
     m_current = QueueAcquireTarget(&m_queue);
-    return m_framebuffers[m_current].get();
+    return m_framebuffers[m_current];
   }
   if (m_v2)
   {
@@ -554,7 +568,7 @@ AbstractFramebuffer* DX12Output::Acquire()
     m_current = m_iface->get_sync_index(m_iface->handle);
     m_iface->wait_sync_index(m_iface->handle);
   }
-  return m_framebuffers[m_current].get();
+  return m_framebuffers[m_current];
 }
 
 void DX12Output::Present()
@@ -562,10 +576,10 @@ void DX12Output::Present()
   m_direct = nullptr;
   if (m_threaded)
   {
-    Publish(PUB_TARGET, m_current, m_textures[m_current].get(), m_width, m_height);
+    Publish(PUB_TARGET, m_current, m_textures[m_current], m_width, m_height);
     return;
   }
-  Hand(m_textures[m_current].get(), m_width, m_height);
+  Hand(m_textures[m_current], m_width, m_height);
 }
 
 bool DX12Output::PresentTexture(const AbstractTexture* texture, u32 width, u32 height)
@@ -699,6 +713,11 @@ VKOutput::~VKOutput()
   if (m_threaded && Vulkan::g_command_buffer_mgr)
     Vulkan::g_command_buffer_mgr->SetBeforeSubmit(nullptr, nullptr);
   DropDirect();
+  for (u32 i = 0; i < OUTPUT_MAX_SLOTS; i++)
+  {
+    delete m_framebuffers[i];
+    delete m_textures[i];
+  }
 }
 
 void VKOutput::DropDirect()
@@ -726,7 +745,7 @@ bool VKOutput::Create()
       ERROR_LOG_FMT(VIDEO, "Failed to create output image {}", i);
       return false;
     }
-    m_framebuffers[i] = Vulkan::VKFramebuffer::Create(m_textures[i].get(), nullptr, {});
+    m_framebuffers[i] = Vulkan::VKFramebuffer::Create(m_textures[i], nullptr, {});
     if (!m_framebuffers[i])
     {
       ERROR_LOG_FMT(VIDEO, "Failed to create output framebuffer {}", i);
@@ -813,7 +832,7 @@ AbstractFramebuffer* VKOutput::Acquire()
     m_iface->wait_sync_index(m_iface->handle);
     m_current = m_iface->get_sync_index(m_iface->handle);
   }
-  texture = m_textures[m_current].get();
+  texture = m_textures[m_current];
   if (!texture)
     return nullptr;
 
@@ -821,12 +840,12 @@ AbstractFramebuffer* VKOutput::Acquire()
   texture->OverrideImageLayout(VK_IMAGE_LAYOUT_UNDEFINED);
   texture->TransitionToLayout(Vulkan::g_command_buffer_mgr->GetCurrentCommandBuffer(),
                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-  return m_framebuffers[m_current].get();
+  return m_framebuffers[m_current];
 }
 
 void VKOutput::Present()
 {
-  Vulkan::VKTexture* texture = m_textures[m_current].get();
+  Vulkan::VKTexture* texture = m_textures[m_current];
 
   if (!texture)
   {

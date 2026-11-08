@@ -25,8 +25,10 @@
 #include "VideoBackends/D3D12/DX12VertexFormat.h"
 #endif
 
-void std::default_delete<NativeVertexFormat>::operator()(NativeVertexFormat* object) const
+void NativeVertexFormatDelete(NativeVertexFormat* object)
 {
+  if (!object)
+    return;
   switch (g_video_backend_kind)
   {
 #ifdef HAS_OPENGL

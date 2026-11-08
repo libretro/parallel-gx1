@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "VideoCommon/AbstractDeleters.h"
-
 #include <memory>
 #include <vector>
 
@@ -54,3 +52,6 @@ protected:
   u32 m_layers;
   u32 m_samples;
 };
+
+/* Deletes a framebuffer as the backend's own class; NULL is let be. */
+void AbstractFramebufferDelete(AbstractFramebuffer* framebuffer);

@@ -325,7 +325,7 @@ void AbstractGfx::EndUtilityDrawing()
   }
 }
 
-std::unique_ptr<AbstractTexture> AbstractGfx::CreateTexture(const TextureConfig& config,
+AbstractTexture* AbstractGfx::CreateTexture(const TextureConfig& config,
                                                             std::string_view name)
 {
   switch (g_video_backend_kind)
@@ -353,7 +353,7 @@ std::unique_ptr<AbstractTexture> AbstractGfx::CreateTexture(const TextureConfig&
   }
 }
 
-std::unique_ptr<AbstractStagingTexture>
+AbstractStagingTexture*
 AbstractGfx::CreateStagingTexture(StagingTextureType type, const TextureConfig& config)
 {
   switch (g_video_backend_kind)
@@ -381,7 +381,7 @@ AbstractGfx::CreateStagingTexture(StagingTextureType type, const TextureConfig& 
   }
 }
 
-std::unique_ptr<AbstractFramebuffer>
+AbstractFramebuffer*
 AbstractGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
                                std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -770,7 +770,7 @@ AbstractShader* AbstractGfx::CreateShaderFromBinary(ShaderStage stage,
   }
 }
 
-std::unique_ptr<NativeVertexFormat>
+NativeVertexFormat*
 AbstractGfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 {
   switch (g_video_backend_kind)

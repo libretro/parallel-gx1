@@ -7,7 +7,6 @@
 #include <functional>  // for hash
 
 #include "Common/CommonTypes.h"
-#include "VideoCommon/AbstractDeleters.h"
 #include "VideoCommon/CPMemory.h"
 
 // m_components
@@ -143,3 +142,6 @@ public:
 protected:
   PortableVertexDeclaration m_decl;
 };
+
+/* Deletes a vertex format as the backend's own class; NULL is let be. */
+void NativeVertexFormatDelete(NativeVertexFormat* format);

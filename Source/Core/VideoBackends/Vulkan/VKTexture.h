@@ -61,11 +61,7 @@ public:
   VkFormat GetVkFormat() const { return GetVkFormatForHostTextureFormat(m_config.format); }
   bool IsAdopted() const { return m_alloc.memory != VK_NULL_HANDLE; }
 
-  static std::unique_ptr<VKTexture> Create(const TextureConfig& tex_config, std::string_view name);
-  static std::unique_ptr<VKTexture>
-  CreateAdopted(const TextureConfig& tex_config, VkImage image,
-                VkImageViewType view_type = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
-                VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
+  static VKTexture* Create(const TextureConfig& tex_config, std::string_view name);
 
   // Used when the render pass is changing the image layout, or to force it to
   // VK_IMAGE_LAYOUT_UNDEFINED, if the existing contents of the image is
@@ -116,8 +112,7 @@ public:
   void Unmap();
   void Flush();
 
-  static std::unique_ptr<VKStagingTexture> Create(StagingTextureType type,
-                                                  const TextureConfig& config);
+  static VKStagingTexture* Create(StagingTextureType type, const TextureConfig& config);
 
   // Returns VK_NULL_HANDLE when linear images are not to be had.
   static VkImage CreateLinearImage(StagingTextureType type, const TextureConfig& config,
@@ -160,7 +155,7 @@ public:
     return m_additional_color_attachments.size();
   }
 
-  static std::unique_ptr<VKFramebuffer>
+  static VKFramebuffer*
   Create(VKTexture* color_attachments, VKTexture* depth_attachment,
          std::vector<AbstractTexture*> additional_color_attachments);
 

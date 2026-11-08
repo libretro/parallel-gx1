@@ -57,7 +57,7 @@ VKTexture::~VKTexture()
   }
 }
 
-std::unique_ptr<VKTexture> VKTexture::Create(const TextureConfig& tex_config, std::string_view name)
+VKTexture* VKTexture::Create(const TextureConfig& tex_config, std::string_view name)
 {
   // Determine image usage, we need to flag as an attachment if it can be used as a rendertarget.
   VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -98,8 +98,8 @@ std::unique_ptr<VKTexture> VKTexture::Create(const TextureConfig& tex_config, st
     return nullptr;
   }
 
-  std::unique_ptr<VKTexture> texture = std::make_unique<VKTexture>(
-      tex_config, alloc, image, name, VK_IMAGE_LAYOUT_UNDEFINED, ComputeImageLayout::Undefined);
+  VKTexture* const texture = new VKTexture(tex_config, alloc, image, name,
+                                          VK_IMAGE_LAYOUT_UNDEFINED, ComputeImageLayout::Undefined);
 
   VkImageViewType image_view_type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
   if (tex_config.type == AbstractTextureType::Texture_CubeMap)
@@ -117,27 +117,17 @@ std::unique_ptr<VKTexture> VKTexture::Create(const TextureConfig& tex_config, st
   else
   {
     PanicAlertFmt("Unhandled texture type.");
+    delete texture;
     return nullptr;
   }
-  if (!texture->CreateView(image_view_type, &texture->m_view))
-    return nullptr;
-  if (tex_config.type == AbstractTextureType::Texture_2DArray && tex_config.layers == 1 &&
-      tex_config.IsRenderTarget() &&
-      !texture->CreateView(VK_IMAGE_VIEW_TYPE_2D, &texture->m_view_2d))
+  if (!texture->CreateView(image_view_type, &texture->m_view) ||
+      (tex_config.type == AbstractTextureType::Texture_2DArray && tex_config.layers == 1 &&
+       tex_config.IsRenderTarget() &&
+       !texture->CreateView(VK_IMAGE_VIEW_TYPE_2D, &texture->m_view_2d)))
   {
+    delete texture;
     return nullptr;
   }
-
-  return texture;
-}
-
-std::unique_ptr<VKTexture> VKTexture::CreateAdopted(const TextureConfig& tex_config, VkImage image,
-                                                    VkImageViewType view_type, VkImageLayout layout)
-{
-  std::unique_ptr<VKTexture> texture = std::make_unique<VKTexture>(
-      tex_config, vk_heap_alloc_t{}, image, "", layout, ComputeImageLayout::Undefined);
-  if (!texture->CreateView(view_type, &texture->m_view))
-    return nullptr;
 
   return texture;
 }
@@ -826,8 +816,7 @@ VKStagingTexture::~VKStagingTexture()
   }
 }
 
-std::unique_ptr<VKStagingTexture> VKStagingTexture::Create(StagingTextureType type,
-                                                           const TextureConfig& config)
+VKStagingTexture* VKStagingTexture::Create(StagingTextureType type, const TextureConfig& config)
 {
   size_t stride = config.GetStride();
   size_t buffer_size = stride * static_cast<size_t>(config.height);
@@ -870,12 +859,15 @@ std::unique_ptr<VKStagingTexture> VKStagingTexture::Create(StagingTextureType ty
 
   std::unique_ptr<StagingBuffer> staging_buffer =
       std::make_unique<StagingBuffer>(buffer_type, buffer, alloc, buffer_size, map_ptr);
-  std::unique_ptr<VKStagingTexture> staging_tex = std::make_unique<VKStagingTexture>(
+  VKStagingTexture* const staging_tex = new VKStagingTexture(
       PrivateTag{}, type, config, std::move(staging_buffer), linear_image, linear_image_alloc);
 
   // Use persistent mapping.
   if (!staging_tex->m_staging_buffer->Map())
+  {
+    delete staging_tex;
     return nullptr;
+  }
   staging_tex->m_map_pointer = staging_tex->m_staging_buffer->GetMapPointer();
   staging_tex->m_map_stride = stride;
   staging_tex->m_persistent_map = type == StagingTextureType::Upload;
@@ -1122,7 +1114,7 @@ VKFramebuffer::~VKFramebuffer()
   g_command_buffer_mgr->DeferFramebufferDestruction(m_fb);
 }
 
-std::unique_ptr<VKFramebuffer>
+VKFramebuffer*
 VKFramebuffer::Create(VKTexture* color_attachment, VKTexture* depth_attachment,
                       std::vector<AbstractTexture*> additional_color_attachments)
 {
@@ -1185,7 +1177,7 @@ VKFramebuffer::Create(VKTexture* color_attachment, VKTexture* depth_attachment,
     return nullptr;
   }
 
-  return std::make_unique<VKFramebuffer>(
+  return new VKFramebuffer(
       color_attachment, depth_attachment, std::move(additional_color_attachments), width, height,
       layers, samples, fb, load_render_pass, discard_render_pass, clear_render_pass);
 }
