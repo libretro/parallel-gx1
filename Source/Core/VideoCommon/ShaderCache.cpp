@@ -101,6 +101,9 @@ ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
   uid_table_init(&m_efb_copy_to_ram_pipelines, sizeof(u32) * 3);
   uid_table_init(&m_texture_reinterpret_pipelines, sizeof(u32) * 2);
   uid_table_init(&m_texture_decoding_shaders, sizeof(u32) * 2);
+  uid_array_init(&m_pending_gx_pipeline_uids, sizeof(SerializedGXPipelineUid));
+  uid_array_init(&m_pending_gx_uber_pipeline_uids, sizeof(SerializedGXUberPipelineUid));
+  uid_array_init(&m_unwritten_gx_pipelines, sizeof(GXPipelineUid));
 }
 
 static AbstractShader* ShaderOf(const uid_table_value* value)
@@ -162,6 +165,9 @@ ShaderCache::~ShaderCache()
   uid_table_free(&m_efb_copy_to_ram_pipelines);
   uid_table_free(&m_texture_reinterpret_pipelines);
   uid_table_free(&m_texture_decoding_shaders);
+  uid_array_free(&m_pending_gx_pipeline_uids);
+  uid_array_free(&m_pending_gx_uber_pipeline_uids);
+  uid_array_free(&m_unwritten_gx_pipelines);
   while (m_work_chunks)
   {
     WorkChunk* next = m_work_chunks->next;
@@ -262,19 +268,19 @@ void ShaderCache::RetrieveAsyncShaders()
 
   /* the cache data of those the driver has finished */
   size_t i = 0;
-  while (i < m_unwritten_gx_pipelines.size())
+  while (i < m_unwritten_gx_pipelines.count)
   {
-    const uid_table_value* const it =
-        uid_table_find(&m_gx_pipeline_cache, &m_unwritten_gx_pipelines[i]);
+    const GXPipelineUid* const uid =
+        static_cast<const GXPipelineUid*>(uid_array_at(&m_unwritten_gx_pipelines, i));
+    const uid_table_value* const it = uid_table_find(&m_gx_pipeline_cache, uid);
     if (it && it->object && PipelineOf(it)->IsBuilding())
     {
       i++;
       continue;
     }
     if (it && it->object && PipelineOf(it)->IsReady())
-      WriteGXPipelineCacheData(m_unwritten_gx_pipelines[i], PipelineOf(it));
-    m_unwritten_gx_pipelines[i] = m_unwritten_gx_pipelines.back();
-    m_unwritten_gx_pipelines.pop_back();
+      WriteGXPipelineCacheData(*uid, PipelineOf(it));
+    uid_array_swap_remove(&m_unwritten_gx_pipelines, i);
   }
 }
 
@@ -538,7 +544,7 @@ void ShaderCache::LoadCaches()
 
 void ShaderCache::ClearCaches()
 {
-  m_unwritten_gx_pipelines.clear();
+  uid_array_clear(&m_unwritten_gx_pipelines);
   ClearPipelineCache(m_gx_pipeline_cache, m_gx_pipeline_disk_cache);
   ClearShaderCache(m_vs_cache);
   ClearShaderCache(m_gs_cache);
@@ -931,7 +937,7 @@ const AbstractPipeline* ShaderCache::InsertGXPipeline(const GXPipelineUid& confi
     {
       /* its data is there to read once the driver is done with it */
       if (PipelineOf(entry)->IsBuilding())
-        m_unwritten_gx_pipelines.push_back(config);
+        uid_array_push(&m_unwritten_gx_pipelines, &config);
       else
         WriteGXPipelineCacheData(config, PipelineOf(entry));
     }
@@ -1059,20 +1065,22 @@ void ShaderCache::LoadPipelineUIDCache()
 void ShaderCache::ClosePipelineUIDCache()
 {
   // This is left as a method in case we need to append extra data to the file in the future.
-  if (m_gx_pipeline_uid_cache_file.IsOpen() && !m_pending_gx_pipeline_uids.empty() &&
-      !m_gx_pipeline_uid_cache_file.WriteArray(m_pending_gx_pipeline_uids.data(),
-                                                m_pending_gx_pipeline_uids.size()))
+  if (m_gx_pipeline_uid_cache_file.IsOpen() && m_pending_gx_pipeline_uids.count &&
+      !m_gx_pipeline_uid_cache_file.WriteArray(
+          static_cast<const SerializedGXPipelineUid*>(uid_array_at(&m_pending_gx_pipeline_uids, 0)),
+          m_pending_gx_pipeline_uids.count))
   {
     WARN_LOG_FMT(VIDEO, "Writing pipeline UIDs to cache failed.");
   }
-  m_pending_gx_pipeline_uids.clear();
-  if (m_gx_uber_pipeline_uid_cache_file.IsOpen() && !m_pending_gx_uber_pipeline_uids.empty() &&
-      !m_gx_uber_pipeline_uid_cache_file.WriteArray(m_pending_gx_uber_pipeline_uids.data(),
-                                                     m_pending_gx_uber_pipeline_uids.size()))
+  uid_array_clear(&m_pending_gx_pipeline_uids);
+  if (m_gx_uber_pipeline_uid_cache_file.IsOpen() && m_pending_gx_uber_pipeline_uids.count &&
+      !m_gx_uber_pipeline_uid_cache_file.WriteArray(
+          static_cast<const SerializedGXUberPipelineUid*>(uid_array_at(&m_pending_gx_uber_pipeline_uids, 0)),
+          m_pending_gx_uber_pipeline_uids.count))
   {
     WARN_LOG_FMT(VIDEO, "Writing ubershader pipeline UIDs to cache failed.");
   }
-  m_pending_gx_uber_pipeline_uids.clear();
+  uid_array_clear(&m_pending_gx_uber_pipeline_uids);
   uid_table_clear(&m_recorded_uber_pipeline_uids);
   m_gx_uber_pipeline_uid_cache_file.Close();
   m_gx_pipeline_uid_cache_file.Close();
@@ -1128,9 +1136,9 @@ void ShaderCache::LoadUberPipelineUIDCache()
   }
   /* what a session adds is written when the cache closes: room enough
    * that adding is no allocation in the middle of a game */
-  m_pending_gx_uber_pipeline_uids.reserve(1024);
-  m_pending_gx_pipeline_uids.reserve(1024);
-  m_unwritten_gx_pipelines.reserve(256);
+  uid_array_reserve(&m_pending_gx_uber_pipeline_uids, 1024);
+  uid_array_reserve(&m_pending_gx_pipeline_uids, 1024);
+  uid_array_reserve(&m_unwritten_gx_pipelines, 256);
 }
 
 void ShaderCache::AppendGXUberPipelineUID(const GXUberPipelineUid& config)
@@ -1140,7 +1148,7 @@ void ShaderCache::AppendGXUberPipelineUID(const GXUberPipelineUid& config)
   if (!m_gx_uber_pipeline_uid_cache_file.IsOpen())
     return;
   SerializePipelineUid(config, disk_uid);
-  m_pending_gx_uber_pipeline_uids.push_back(disk_uid);
+  uid_array_push(&m_pending_gx_uber_pipeline_uids, &disk_uid);
   uid_table_get(&m_recorded_uber_pipeline_uids, &config);
 }
 
@@ -1175,7 +1183,7 @@ void ShaderCache::AppendGXPipelineUID(const GXPipelineUid& config)
   SerializedGXPipelineUid disk_uid;
   SerializePipelineUid(config, disk_uid);
   // Keep filesystem writes off the draw path. Save on reload or shutdown.
-  m_pending_gx_pipeline_uids.push_back(disk_uid);
+  uid_array_push(&m_pending_gx_pipeline_uids, &disk_uid);
 }
 
 ShaderCache::WorkItem* ShaderCache::AllocWork(u8 kind, u32 priority)

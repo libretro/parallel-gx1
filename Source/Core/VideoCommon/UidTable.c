@@ -140,3 +140,48 @@ void uid_table_clear(struct uid_table *t)
       memset(t->slots, 0, t->cap * t->slot_size);
    t->count = 0;
 }
+
+void uid_array_init(struct uid_array *a, size_t elem_size)
+{
+   a->data      = NULL;
+   a->count     = 0;
+   a->cap       = 0;
+   a->elem_size = elem_size;
+}
+
+void uid_array_free(struct uid_array *a)
+{
+   free(a->data);
+   a->data  = NULL;
+   a->count = 0;
+   a->cap   = 0;
+}
+
+int uid_array_reserve(struct uid_array *a, size_t cap)
+{
+   unsigned char *data;
+   if (cap <= a->cap)
+      return 1;
+   data = (unsigned char*)realloc(a->data, cap * a->elem_size);
+   if (!data)
+      return 0;
+   a->data = data;
+   a->cap  = cap;
+   return 1;
+}
+
+int uid_array_push(struct uid_array *a, const void *elem)
+{
+   if (a->count == a->cap && !uid_array_reserve(a, a->cap ? a->cap * 2 : 16))
+      return 0;
+   memcpy(a->data + a->count * a->elem_size, elem, a->elem_size);
+   a->count++;
+   return 1;
+}
+
+void uid_array_swap_remove(struct uid_array *a, size_t i)
+{
+   a->count--;
+   if (i != a->count)
+      memcpy(a->data + i * a->elem_size, a->data + a->count * a->elem_size, a->elem_size);
+}

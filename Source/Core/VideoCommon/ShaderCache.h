@@ -9,10 +9,8 @@
 #include <set>
 #include <memory>
 #include <optional>
-#include <string>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
@@ -248,16 +246,16 @@ private:
   uid_table m_gx_pipeline_cache;
   uid_table m_gx_uber_pipeline_cache;
   File::IOFile m_gx_pipeline_uid_cache_file;
-  std::vector<SerializedGXPipelineUid> m_pending_gx_pipeline_uids;
+  uid_array m_pending_gx_pipeline_uids; /* SerializedGXPipelineUid */
   /* The ubershader pipelines a game drew with, as for the specialized
    * ones: compiled while the game boots next time, so a hybrid draw
    * finds its ubershader ready instead of building it on the spot. */
   File::IOFile m_gx_uber_pipeline_uid_cache_file;
-  std::vector<SerializedGXUberPipelineUid> m_pending_gx_uber_pipeline_uids;
+  uid_array m_pending_gx_uber_pipeline_uids; /* SerializedGXUberPipelineUid */
   /* those already in the file or written to it this session */
   uid_table m_recorded_uber_pipeline_uids;
   // Pipelines whose cache data is written once their compile, on the driver's threads, is done.
-  std::vector<GXPipelineUid> m_unwritten_gx_pipelines;
+  uid_array m_unwritten_gx_pipelines; /* GXPipelineUid */
   Common::LinearDiskCache<SerializedGXPipelineUid, u8> m_gx_pipeline_disk_cache;
   Common::LinearDiskCache<SerializedGXUberPipelineUid, u8> m_gx_uber_pipeline_disk_cache;
 

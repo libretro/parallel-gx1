@@ -52,6 +52,27 @@ struct uid_table_value *uid_table_next(const struct uid_table *t, size_t *cursor
 /* Forgets every uid; the owner has deleted their objects. */
 void uid_table_clear(struct uid_table *t);
 
+/* A growable array of fixed-size uids, kept in the order added. */
+struct uid_array
+{
+   unsigned char *data;
+   size_t         count;
+   size_t         cap;
+   size_t         elem_size;
+};
+
+void uid_array_init(struct uid_array *a, size_t elem_size);
+void uid_array_free(struct uid_array *a);
+/* Room for cap uids, so adding up to that many allocates nothing; 0 out of memory. */
+int uid_array_reserve(struct uid_array *a, size_t cap);
+/* Copies elem to the end; 0 out of memory. */
+int uid_array_push(struct uid_array *a, const void *elem);
+/* Moves the last uid into slot i, which goes. */
+void uid_array_swap_remove(struct uid_array *a, size_t i);
+
+#define uid_array_at(a, i) ((void*)((a)->data + (i) * (a)->elem_size))
+#define uid_array_clear(a) ((a)->count = 0)
+
 #ifdef __cplusplus
 }
 #endif
