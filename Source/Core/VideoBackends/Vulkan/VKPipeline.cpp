@@ -572,7 +572,8 @@ void VKPipeline::PopulateBackendInfoDrawState(BackendInfo* backend_info)
   backend_info->uDrawStateDepthBits = depth.hex;
   if (!g_vulkan_context->SupportsDynamicBlending())
     return;
-  backend_info->uDrawStateBlendingBits = VK_DYNAMIC_BLEND_MASK;
+  /* use_dual_src only picks the factors, which are set per draw too: the pipeline is the same */
+  backend_info->uDrawStateBlendingBits = VK_DYNAMIC_BLEND_MASK | VK_DYNAMIC_BLEND_DUAL_SRC;
   if (g_vulkan_context->SupportsDynamicLogicOp())
     backend_info->uDrawStateBlendingBits |= VK_DYNAMIC_BLEND_LOGIC_MASK;
 }
