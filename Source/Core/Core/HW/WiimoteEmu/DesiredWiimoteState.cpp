@@ -209,7 +209,8 @@ bool DeserializeDesiredState(DesiredWiimoteState* state, const SerializedWiimote
     for (auto& camera_point : state->camera_points)
     {
       const IRExtended irext = Common::BitCastPtr<IRExtended>(&d[pos]);
-      camera_point = CameraPoint(irext.GetPosition(), irext.size);
+      camera_point.position = irext.GetPosition();
+      camera_point.size = irext.size;
       pos += sizeof(irext);
     }
   }

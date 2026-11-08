@@ -244,13 +244,13 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
       }
 
       // Change the UID and GID from 0 to the intended values.
-      const ResultCode set_metadata_result =
+      const ResultCode child_metadata_result =
           SetMetadata(0, child_path, child_metadata.uid, child_metadata.gid,
                       child_metadata.attribute, child_metadata.modes);
-      if (set_metadata_result != ResultCode::Success)
+      if (child_metadata_result != ResultCode::Success)
       {
         ERROR_LOG_FMT(IOS_FS, "DoStateRead failed to call SetMetadata for {}: {}", child_path,
-                      set_metadata_result);
+                      child_metadata_result);
         p_.SetVerifyMode();
         return;
       }

@@ -22,7 +22,6 @@
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/FileUtil.h"
 #include "Common/HttpRequest.h"
 #include "Common/IOFile.h"
@@ -614,38 +613,6 @@ bool GameFile::CheckIfTwoDiscGame(const std::string& game_id) const
 
   std::string_view game_id_prefix(game_id.data(), GAME_ID_PREFIX_SIZE);
   return std::ranges::binary_search(two_disc_game_id_prefixes, game_id_prefix);
-}
-
-static Common::SHA1::Digest GetHash(u32 value)
-{
-  auto data = Common::BitCastToArray<u8>(value);
-  return Common::SHA1::CalculateDigest(data);
-}
-
-static Common::SHA1::Digest GetHash(std::string_view str)
-{
-  return Common::SHA1::CalculateDigest(str);
-}
-
-static std::optional<Common::SHA1::Digest> GetFileHash(const std::string& path)
-{
-  std::string buffer;
-  if (!File::ReadFileToString(path, buffer))
-    return std::nullopt;
-  return GetHash(buffer);
-}
-
-static std::optional<Common::SHA1::Digest> MixHash(const std::optional<Common::SHA1::Digest>& lhs,
-                                                   const std::optional<Common::SHA1::Digest>& rhs)
-{
-  if (!lhs && !rhs)
-    return std::nullopt;
-  if (!lhs || !rhs)
-    return !rhs ? lhs : rhs;
-  Common::SHA1::Digest result;
-  for (size_t i = 0; i < result.size(); ++i)
-    result[i] = (*lhs)[i] ^ (*rhs)[(i + 1) % result.size()];
-  return result;
 }
 
 std::string GameFile::GetWiiFSPath() const

@@ -613,7 +613,7 @@ static inline void expr_copy(struct expr *dst, struct expr *src) {
     size_t len = strlen(src->param.str.s);
     dst->param.str.s = (char *)calloc(1, len + 1);
     if (dst->param.str.s != NULL) {
-      strncpy(dst->param.str.s, src->param.str.s, len);
+      memcpy(dst->param.str.s, src->param.str.s, len);
     }
   } else {
     vec_foreach(&src->param.op.args, arg, i) {

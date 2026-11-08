@@ -1115,7 +1115,7 @@ ReturnCode ESCore::WriteNewCertToStore(const ES::CertReader& cert)
   }
 
   // Otherwise, write the new cert at the end of the store.
-  size_t cert_size;
+  size_t cert_size = 0;
   const auto store_file =
       m_ios.GetFS()->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH,
                                        {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read});

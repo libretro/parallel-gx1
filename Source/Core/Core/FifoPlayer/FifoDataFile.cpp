@@ -179,7 +179,9 @@ bool FifoDataFile::Save(const std::string& filename)
   }
   else
   {
-    std::strncpy(header.gameid, gameid.c_str(), DEFAULT_GAME_ID.size());
+    /* zero-padded, unterminated when it fills the field */
+    std::memset(header.gameid, 0, DEFAULT_GAME_ID.size());
+    std::memcpy(header.gameid, gameid.c_str(), std::min(gameid.size(), DEFAULT_GAME_ID.size()));
   }
 
   file.Seek(0, File::SeekOrigin::Begin);

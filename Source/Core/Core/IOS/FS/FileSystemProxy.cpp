@@ -205,7 +205,9 @@ FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path,
     return {this, ConvertResult(backend_fd.error()), ticks};
 
   auto& handle = m_fd_map[fd] = {gid, uid, backend_fd->Release()};
-  std::strncpy(handle.name.data(), path.c_str(), handle.name.size());
+  /* zero-padded, unterminated when it fills the field */
+  handle.name.fill(0);
+  std::memcpy(handle.name.data(), path.c_str(), std::min(path.size(), handle.name.size()));
   return {this, static_cast<s64>(fd), ticks};
 }
 

@@ -274,7 +274,7 @@ static GuestSocket GetAvailableGuestSocket()
     s_next_valid_fd = (s_next_valid_fd + 1) % std::size(s_sockets);
     if (i < FIRST_VALID_FD)
       continue;
-    if (s_sockets[i] == SOCKET_ERROR)
+    if (s_sockets[i] == INVALID_SOCKET)
       return GuestSocket(i);
   }
 
@@ -331,7 +331,7 @@ static bool SafeCopyToEmu(Memory::MemoryManager& memory, u32 address, const u8* 
   }
 
   size_t span_size;
-  u8* const span_data = memory.GetPointerAndSize(address, &span_size);
+  memory.GetPointerAndSize(address, &span_size);
   if (length > span_size)
   {
     ERROR_LOG_FMT(AMMEDIABOARD,
@@ -356,7 +356,7 @@ static bool SafeCopyFromEmu(Memory::MemoryManager& memory, u8* destination, u32 
   }
 
   size_t span_size;
-  u8* const span_data = memory.GetPointerAndSize(address, &span_size);
+  memory.GetPointerAndSize(address, &span_size);
   if (length > span_size)
   {
     ERROR_LOG_FMT(AMMEDIABOARD,
@@ -2374,7 +2374,7 @@ static void CloseAllSockets()
 {
   for (u32 i = FIRST_VALID_FD; i < std::size(s_sockets); ++i)
   {
-    if (s_sockets[i] != SOCKET_ERROR)
+    if (s_sockets[i] != INVALID_SOCKET)
     {
       closesocket(s_sockets[i]);
       s_sockets[i] = SOCKET_ERROR;
@@ -2438,7 +2438,7 @@ void DoState(PointerWrap& p)
   {
     for (u32 i = FIRST_VALID_FD; i < std::size(s_sockets); ++i)
     {
-      if (s_sockets[i] != SOCKET_ERROR)
+      if (s_sockets[i] != INVALID_SOCKET)
         created_sockets.SetFd(GuestSocket(i));
     }
   }

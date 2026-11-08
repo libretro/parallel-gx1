@@ -64,10 +64,14 @@ static BluetoothAuthenticateDevice_t pBluetoothAuthenticateDevice = nullptr;
 static BluetoothFindFirstRadio_t pBluetoothFindFirstRadio = nullptr;
 static BluetoothSetServiceState_t pBluetoothSetServiceState = nullptr;
 #else
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4995)
+#endif
 DYN_FUNC_DECLARE(BluetoothAuthenticateDevice);
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif
 DYN_FUNC_DECLARE(BluetoothFindFirstRadio);
 DYN_FUNC_DECLARE(BluetoothSetServiceState);
 #endif
@@ -223,7 +227,9 @@ void init_lib()
 }
 }  // Anonymous namespace
 
+#ifdef _MSC_VER
 #pragma comment(lib, "Bthprops.lib")
+#endif
 
 #if defined(__MINGW64_VERSION_MAJOR) && __MINGW64_VERSION_MAJOR < 13
 static const PROPERTYKEY PKEY_Devices_Aep_AepId = {
@@ -263,8 +269,10 @@ enum class AuthenticationMethod : bool
 
 // BluetoothAuthenticateDevice is marked as deprecated.
 // BluetoothAuthenticateDeviceEx requires a bunch of rigmarole.. maybe some other day.
+#ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4995)
+#endif
 static bool AuthenticateWiimote(HANDLE radio_handle, const BLUETOOTH_RADIO_INFO& radio_info,
                                 BLUETOOTH_DEVICE_INFO_STRUCT* btdi,
                                 AuthenticationMethod auth_method)
@@ -304,7 +312,9 @@ static bool AuthenticateWiimote(HANDLE radio_handle, const BLUETOOTH_RADIO_INFO&
 
   return true;
 }
+#ifdef _MSC_VER
 #pragma warning(pop)
+#endif
 
 static std::optional<USBUtils::DeviceInfo> GetDeviceInfo(const WCHAR* hid_iface)
 {

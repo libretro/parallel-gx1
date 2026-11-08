@@ -404,7 +404,8 @@ public:
       file_hdr.type = static_cast<u8>(save_file.type);
       if (save_file.path.length() > file_hdr.name.size())
         return false;
-      std::strncpy(file_hdr.name.data(), save_file.path.data(), file_hdr.name.size());
+      /* zero-padded, unterminated when it fills the field */
+      std::memcpy(file_hdr.name.data(), save_file.path.data(), save_file.path.length());
 
       std::optional<std::vector<u8>> data;
       if (file_hdr.type == 1)
