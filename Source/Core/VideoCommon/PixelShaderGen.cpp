@@ -410,6 +410,7 @@ void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
             "\tbool  logic_op_enable;\n"
             "\tuint  logic_op_mode;\n"
             "\tuint  time_ms;\n"
+            "\tuint  xfmem_numTexGen;\n"
             "};\n"
             "\n");
   out.Puts("#define bpmem_combiners(i) (bpmem_pack1[(i)].xy)\n"

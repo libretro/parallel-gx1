@@ -83,6 +83,12 @@ void PixelShaderManager::Dirty()
 
 void PixelShaderManager::SetConstants()
 {
+  /* XF's, not tracked as it is written: compared as the draws go */
+  if (constants.xfmem_numTexGen != xfmem.numTexGen.numTexGens)
+  {
+    constants.xfmem_numTexGen = xfmem.numTexGen.numTexGens;
+    dirty = true;
+  }
   if (m_fog_range_adjusted_changed)
   {
     // set by two components, so keep changed flag here

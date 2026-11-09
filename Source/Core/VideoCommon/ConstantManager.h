@@ -60,6 +60,9 @@ struct alignas(16) PixelShaderConstants
   LogicOp logic_op_mode;
   // For custom shaders...
   u32 time_ms;
+  // XF's texgen count, for ubershaders sized for more texgens than the draw has; in what was the
+  // block's padding, so the block and savestates keep their size
+  u32 xfmem_numTexGen;
 };
 
 struct alignas(16) VertexShaderConstants

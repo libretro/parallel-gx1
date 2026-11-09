@@ -241,6 +241,15 @@ ubershader pipelines for them are the triangles', 27 where there were
 81. Over the corpus, pipelines made fall from 236 to 182, and loading
 from about 1.65 s to 1.23 s on lavapipe.
 
+In the default mode, where ubershaders draw only until the specialized
+pipeline is built, the ubershader pipelines are keyed sized for every
+texgen, and the pixel shader reads the draw's count from its uniforms:
+3 pipelines are built before the game starts where there were 27. Over
+the corpus, shaders made fall from 134 to 102, their words from 737739
+to 274571, pipelines from 182 to 158, and loading from about 1.03 s to
+0.22 s on lavapipe. Synchronous (UberShaders) keeps them sized for the
+draw's texgens: there ubershaders draw every frame.
+
 Done when: never. Each commit holds or improves every number.
 
 ## Phase 4: zero-copy through the shader path

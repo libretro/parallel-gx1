@@ -172,7 +172,10 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
 
     if (api_type == APIType::D3D)
     {
-      out.Puts("  switch (index) {\n");
+      out.Puts("  if (index >= xfmem_numTexGen) {\n"
+                "    return fixpoint_uv0;\n"
+                "  }\n"
+                "  switch (index) {\n");
       for (u32 i = 0; i < numTexgen; i++)
       {
         out.Printf("  case %uu:\n"
@@ -184,7 +187,8 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     }
     else
     {
-      out.Printf("  if (index >= %uu) {\n", numTexgen);
+      /* the draw's texgens, which the shader may be sized for more of */
+      out.Puts("  if (index >= xfmem_numTexGen) {\n");
       out.Puts("    return fixpoint_uv0;\n"
                 "  }\n");
       if (numTexgen > 4)
@@ -234,7 +238,10 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
 
     if (api_type == APIType::D3D)
     {
-      out.Puts("  switch (texmap) {\n");
+      out.Puts("  if (texmap >= xfmem_numTexGen) {\n"
+                "    return 0u;\n"
+                "  }\n"
+                "  switch (texmap) {\n");
       for (u32 i = 0; i < numTexgen; i++)
       {
         out.Printf("  case %uu:\n"
@@ -246,7 +253,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     }
     else
     {
-      out.Printf("  if (texmap >= %uu) {\n", numTexgen);
+      out.Puts("  if (texmap >= xfmem_numTexGen) {\n");
       out.Puts("    return 0u;\n"
                 "  }\n");
       if (numTexgen > 4)
@@ -646,9 +653,11 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
             "\n", int(TwoTevStageOrders().enable_tex_odd.StartBit() -
                 TwoTevStageOrders().enable_tex_even.StartBit()));
 
-  // Disable texturing when there are no texgens (for now)
+  // Disable texturing when there are no texgens (for now): those the draw has, where the shader
+  // is sized for more
   if (numTexgen != 0)
   {
+    out.Puts("    if (xfmem_numTexGen != 0u) {\n");
     for (u32 i = 0; i < numTexgen; i++)
     {
       out.Printf("    int2 fixpoint_uv%u = int2(", i);
@@ -777,6 +786,7 @@ ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
     out.Puts("    } else {\n"
               "      // Texture is disabled\n"
               "      s.TexColor = int4(255, 255, 255, 255);\n"
+              "    }\n"
               "    }\n"
               "\n");
   }

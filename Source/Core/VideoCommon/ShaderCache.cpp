@@ -1012,6 +1012,14 @@ static void UberPipelineKey(APIType api_type, const ShaderHostConfig& host_confi
     return;
   ApplyUberDriverBugs(key);
   UberShader::ClearUnusedPixelShaderUidBits(api_type, host_config, &key->ps_uid);
+  /* Where ubershaders draw only until the specialized pipeline is built, one sized for every
+   * texgen (8) draws them all: the pixel shader reads the draw's count from its uniforms. */
+  if (g_ActiveConfig.iShaderCompilationMode == ShaderCompilationMode::AsynchronousUberShaders)
+  {
+    key->vs_uid.GetUidData()->num_texgens = 8;
+    key->ps_uid.GetUidData()->num_texgens = 8;
+    key->gs_uid.GetUidData()->numTexGens = 8;
+  }
   if (draw_state)
   {
     draw_state->rasterization = key->rasterization_state;
