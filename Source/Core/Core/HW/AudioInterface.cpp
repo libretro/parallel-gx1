@@ -215,7 +215,7 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 {
   mmio->Register(
       base | AI_CONTROL_REGISTER, MMIO::DirectRead<u32>(&m_control.hex),
-      MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+      MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
         const AICR tmp_ai_ctrl(val);
 
         auto& core_timing = system.GetCoreTiming();
@@ -281,14 +281,14 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
       }));
 
   mmio->Register(base | AI_VOLUME_REGISTER, MMIO::DirectRead<u32>(&m_volume.hex),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& ai = system.GetAudioInterface();
                    ai.m_volume.hex = val;
                    field_audio_mix_set_volume(FIELD_AUDIO_STREAM, ai.m_volume.left,
                                           ai.m_volume.right);
                  }));
 
-  mmio->Register(base | AI_SAMPLE_COUNTER, MMIO::ComplexRead<u32>([](Core::System& system, u32) {
+  mmio->Register(base | AI_SAMPLE_COUNTER, MMIO::ComplexRead<u32>([](Core::System& system, uintptr_t, u32) -> u32 {
                    auto& ai = system.GetAudioInterface();
                    const u64 cycles_streamed =
                        ai.IsPlaying() ? (system.GetCoreTiming().GetTicks() - ai.m_last_cpu_time) :
@@ -296,7 +296,7 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    return ai.m_sample_counter +
                           static_cast<u32>(cycles_streamed / ai.m_cpu_cycles_per_sample);
                  }),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& core_timing = system.GetCoreTiming();
                    auto& ai = system.GetAudioInterface();
                    ai.m_sample_counter = val;
@@ -306,7 +306,7 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  }));
 
   mmio->Register(base | AI_INTERRUPT_TIMING, MMIO::DirectRead<u32>(&m_interrupt_timing),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& core_timing = system.GetCoreTiming();
                    auto& ai = system.GetAudioInterface();
                    DEBUG_LOG_FMT(AUDIO_INTERFACE, "AI_INTERRUPT_TIMING={:08x} at PC: {:08x}", val,

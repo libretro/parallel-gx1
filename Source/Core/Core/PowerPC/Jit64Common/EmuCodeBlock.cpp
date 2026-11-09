@@ -227,9 +227,9 @@ public:
   {
     LoadAddrMaskToReg(8 * sizeof(T), addr, mask);
   }
-  void VisitComplex(const std::function<T(Core::System&, u32)>* lambda) override
+  void VisitComplex(MMIO::ReadFn<T> fn, uintptr_t ctx) override
   {
-    CallLambda(8 * sizeof(T), lambda);
+    CallComplex(8 * sizeof(T), fn, ctx);
   }
 
 private:
@@ -276,10 +276,10 @@ private:
     }
   }
 
-  void CallLambda(int sbits, const std::function<T(Core::System&, u32)>* lambda)
+  void CallComplex(int sbits, MMIO::ReadFn<T> fn, uintptr_t ctx)
   {
     m_code->ABI_PushRegistersAndAdjustStack(m_registers_in_use, 0);
-    m_code->ABI_CallLambdaPC(lambda, m_system, m_address);
+    m_code->ABI_CallFunctionPPC(fn, m_system, reinterpret_cast<const void*>(ctx), m_address);
     m_code->ABI_PopRegistersAndAdjustStack(m_registers_in_use, 0);
     MoveOpArgToReg(sbits, R(ABI_RETURN));
   }

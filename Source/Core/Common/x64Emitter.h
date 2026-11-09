@@ -7,7 +7,6 @@
 
 #include <cstddef>
 #include <cstring>
-#include <functional>
 #include <tuple>
 #include <type_traits>
 
@@ -1194,24 +1193,6 @@ public:
                                          size_t needed_frame_size = 0);
   void ABI_PopRegistersAndAdjustStack(BitSet32 mask, size_t rsp_alignment,
                                       size_t needed_frame_size = 0);
-
-  // Utility to generate a call to a std::function object.
-  //
-  // Unfortunately, calling operator() directly is undefined behavior in C++
-  // (this method might be a thunk in the case of multi-inheritance) so we
-  // have to go through a trampoline function.
-  template <typename T, typename... Args>
-  static T CallLambdaTrampoline(const std::function<T(Args...)>* f, Args... args)
-  {
-    return (*f)(args...);
-  }
-
-  template <typename T, typename... Args>
-  void ABI_CallLambdaPC(const std::function<T(Args...)>* f, void* p1, u32 p2)
-  {
-    auto trampoline = &XEmitter::CallLambdaTrampoline<T, Args...>;
-    ABI_CallFunctionPPC(trampoline, reinterpret_cast<const void*>(f), p1, p2);
-  }
 };  // class XEmitter
 
 class X64CodeBlock : public Common::CodeBlock<XEmitter>

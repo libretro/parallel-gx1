@@ -33,6 +33,10 @@ public:
   IEXIDevice* GetDevice(u8 chip_select);
 
   void RegisterMMIO(MMIO::Mapping* mmio, u32 base);
+  // the MMIO registers' accesses
+  u32 ReadStatus();
+  void WriteStatus(Core::System& system, u32 val);
+  void WriteControl(u32 val);
 
   void SendTransferComplete();
 

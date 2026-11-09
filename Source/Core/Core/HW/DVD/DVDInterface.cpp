@@ -543,7 +543,7 @@ bool DVDInterface::UpdateRunningGameMetadata(std::optional<u64> title_id)
 void DVDInterface::RegisterMMIO(MMIO::Mapping* mmio, u32 base, bool is_wii)
 {
   mmio->Register(base | DI_STATUS_REGISTER, MMIO::DirectRead<u32>(&m_DISR.Hex),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& di = system.GetDVDInterface();
                    const UDISR tmp_status_reg(val);
 
@@ -570,7 +570,7 @@ void DVDInterface::RegisterMMIO(MMIO::Mapping* mmio, u32 base, bool is_wii)
                  }));
 
   mmio->Register(base | DI_COVER_REGISTER, MMIO::DirectRead<u32>(&m_DICVR.Hex),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& di = system.GetDVDInterface();
                    const UDICVR tmp_cover_reg(val);
 
@@ -608,7 +608,7 @@ void DVDInterface::RegisterMMIO(MMIO::Mapping* mmio, u32 base, bool is_wii)
   mmio->Register(base | DI_DMA_LENGTH_REGISTER, MMIO::DirectRead<u32>(&m_DILENGTH),
                  MMIO::DirectWrite<u32>(&m_DILENGTH, ~0x1F));
   mmio->Register(base | DI_DMA_CONTROL_REGISTER, MMIO::DirectRead<u32>(&m_DICR.Hex),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& di = system.GetDVDInterface();
                    di.m_DICR.Hex = val & 7;
                    if (di.m_DICR.TSTART)

@@ -28,9 +28,9 @@ public:
     // Do nothing
   }
   void VisitDirect(T* addr, u32 mask) override { WriteRegToAddr(8 * sizeof(T), addr, mask); }
-  void VisitComplex(const std::function<void(Core::System&, u32, T)>* lambda) override
+  void VisitComplex(MMIO::WriteFn<T> fn, uintptr_t ctx) override
   {
-    CallLambda(8 * sizeof(T), lambda);
+    CallComplex(8 * sizeof(T), fn, ctx);
   }
 
 private:
@@ -72,14 +72,14 @@ private:
     }
   }
 
-  void CallLambda(int sbits, const std::function<void(Core::System&, u32, T)>* lambda)
+  void CallComplex(int sbits, MMIO::WriteFn<T> fn, uintptr_t ctx)
   {
     ARM64FloatEmitter float_emit(m_emit);
 
     m_emit->ABI_PushRegisters(m_gprs_in_use);
     float_emit.ABI_PushRegisters(m_fprs_in_use, ARM64Reg::X1);
 
-    m_emit->ABI_CallLambdaFunction(lambda, m_system, m_address, m_src_reg);
+    m_emit->ABI_CallFunction(fn, m_system, ctx, m_address, m_src_reg);
 
     float_emit.ABI_PopRegisters(m_fprs_in_use, ARM64Reg::X1);
     m_emit->ABI_PopRegisters(m_gprs_in_use);
@@ -109,9 +109,9 @@ public:
   {
     LoadAddrMaskToReg(8 * sizeof(T), addr, mask);
   }
-  void VisitComplex(const std::function<T(Core::System&, u32)>* lambda) override
+  void VisitComplex(MMIO::ReadFn<T> fn, uintptr_t ctx) override
   {
-    CallLambda(8 * sizeof(T), lambda);
+    CallComplex(8 * sizeof(T), fn, ctx);
   }
 
 private:
@@ -168,14 +168,14 @@ private:
     }
   }
 
-  void CallLambda(int sbits, const std::function<T(Core::System&, u32)>* lambda)
+  void CallComplex(int sbits, MMIO::ReadFn<T> fn, uintptr_t ctx)
   {
     ARM64FloatEmitter float_emit(m_emit);
 
     m_emit->ABI_PushRegisters(m_gprs_in_use);
     float_emit.ABI_PushRegisters(m_fprs_in_use, ARM64Reg::X1);
 
-    m_emit->ABI_CallLambdaFunction(lambda, m_system, m_address);
+    m_emit->ABI_CallFunction(fn, m_system, ctx, m_address);
 
     if (m_sign_extend)
       m_emit->SBFM(m_dst_reg, ARM64Reg::W0, 0, sbits - 1);

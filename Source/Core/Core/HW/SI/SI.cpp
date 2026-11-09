@@ -301,59 +301,64 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   {
     const u32 address = base | static_cast<u32>(io_buffer_base + i);
 
-    mmio->Register(address, MMIO::ComplexRead<u32>([i](Core::System& system, u32) {
+    mmio->Register(address, MMIO::ComplexRead<u32>([](Core::System& system, uintptr_t ctx, u32) -> u32 {
+                     const size_t offset = static_cast<size_t>(ctx);
                      const auto& si = system.GetSerialInterface();
                      u32 val;
-                     std::memcpy(&val, &si.m_si_buffer[i], sizeof(val));
+                     std::memcpy(&val, &si.m_si_buffer[offset], sizeof(val));
                      return Common::swap32(val);
-                   }),
-                   MMIO::ComplexWrite<u32>([i](Core::System& system, u32, u32 val) {
+                   }, i),
+                   MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t ctx, u32, u32 val) {
+                     const size_t offset = static_cast<size_t>(ctx);
                      auto& si = system.GetSerialInterface();
                      val = Common::swap32(val);
-                     std::memcpy(&si.m_si_buffer[i], &val, sizeof(val));
-                   }));
+                     std::memcpy(&si.m_si_buffer[offset], &val, sizeof(val));
+                   }, i));
   }
   for (size_t i = 0; i < m_si_buffer.size(); i += sizeof(u16))
   {
     const u32 address = base | static_cast<u32>(io_buffer_base + i);
 
-    mmio->Register(address, MMIO::ComplexRead<u16>([i](Core::System& system, u32) {
+    mmio->Register(address, MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t ctx, u32) -> u16 {
+                     const size_t offset = static_cast<size_t>(ctx);
                      const auto& si = system.GetSerialInterface();
                      u16 val;
-                     std::memcpy(&val, &si.m_si_buffer[i], sizeof(val));
+                     std::memcpy(&val, &si.m_si_buffer[offset], sizeof(val));
                      return Common::swap16(val);
-                   }),
-                   MMIO::ComplexWrite<u16>([i](Core::System& system, u32, u16 val) {
+                   }, i),
+                   MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t ctx, u32, u16 val) {
+                     const size_t offset = static_cast<size_t>(ctx);
                      auto& si = system.GetSerialInterface();
                      val = Common::swap16(val);
-                     std::memcpy(&si.m_si_buffer[i], &val, sizeof(val));
-                   }));
+                     std::memcpy(&si.m_si_buffer[offset], &val, sizeof(val));
+                   }, i));
   }
 
   // In and out for the 4 SI channels.
   for (u32 i = 0; i < u32(MAX_SI_CHANNELS); ++i)
   {
-    // We need to clear the RDST bit for the SI channel when reading.
-    const u32 clear_rdst = ~GetRDSTBit(i);
-
     mmio->Register(base | (SI_CHANNEL_0_OUT + 0xC * i),
                    MMIO::DirectRead<u32>(&m_channel[i].out.hex),
                    MMIO::DirectWrite<u32>(&m_channel[i].out.hex));
     mmio->Register(base | (SI_CHANNEL_0_IN_HI + 0xC * i),
-                   MMIO::ComplexRead<u32>([i, clear_rdst](Core::System& system, u32) {
+                   MMIO::ComplexRead<u32>([](Core::System& system, uintptr_t ctx, u32) -> u32 {
+                     const u32 channel = static_cast<u32>(ctx);
                      auto& si = system.GetSerialInterface();
-                     si.m_status_reg.hex &= clear_rdst;
+                     // We need to clear the RDST bit for the SI channel when reading.
+                     si.m_status_reg.hex &= ~GetRDSTBit(channel);
                      si.UpdateInterrupts();
-                     return si.m_channel[i].in_hi.hex;
-                   }),
+                     return si.m_channel[channel].in_hi.hex;
+                   }, i),
                    MMIO::DirectWrite<u32>(&m_channel[i].in_hi.hex));
     mmio->Register(base | (SI_CHANNEL_0_IN_LO + 0xC * i),
-                   MMIO::ComplexRead<u32>([i, clear_rdst](Core::System& system, u32) {
+                   MMIO::ComplexRead<u32>([](Core::System& system, uintptr_t ctx, u32) -> u32 {
+                     const u32 channel = static_cast<u32>(ctx);
                      auto& si = system.GetSerialInterface();
-                     si.m_status_reg.hex &= clear_rdst;
+                     // We need to clear the RDST bit for the SI channel when reading.
+                     si.m_status_reg.hex &= ~GetRDSTBit(channel);
                      si.UpdateInterrupts();
-                     return si.m_channel[i].in_lo.hex;
-                   }),
+                     return si.m_channel[channel].in_lo.hex;
+                   }, i),
                    MMIO::DirectWrite<u32>(&m_channel[i].in_lo.hex));
   }
 
@@ -361,7 +366,7 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::DirectWrite<u32>(&m_poll.hex));
 
   mmio->Register(base | SI_COM_CSR, MMIO::DirectRead<u32>(&m_com_csr.hex),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& si = system.GetSerialInterface();
                    const USIComCSR tmp_com_csr(val);
 
@@ -390,7 +395,7 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  }));
 
   mmio->Register(base | SI_STATUS_REG, MMIO::DirectRead<u32>(&m_status_reg.hex),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& si = system.GetSerialInterface();
                    const USIStatusReg tmp_status(val);
 

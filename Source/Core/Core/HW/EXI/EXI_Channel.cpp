@@ -43,115 +43,140 @@ CEXIChannel::~CEXIChannel()
   RemoveDevices();
 }
 
+u32 CEXIChannel::ReadStatus()
+{
+  // check if external device is present
+  // pretty sure it is memcard only, not entirely sure
+  if (m_channel_id == 2)
+  {
+    m_status.EXT = 0;
+  }
+  else
+  {
+    m_status.EXT = GetDevice(1)->IsPresent() ? 1 : 0;
+  }
+
+  return m_status.Hex;
+}
+
+void CEXIChannel::WriteStatus(Core::System& system, u32 val)
+{
+  UEXI_STATUS new_status(val);
+
+  m_status.EXIINTMASK = new_status.EXIINTMASK;
+  if (new_status.EXIINT)
+    m_status.EXIINT = 0;
+
+  m_status.TCINTMASK = new_status.TCINTMASK;
+  if (new_status.TCINT)
+    m_status.TCINT = 0;
+
+  m_status.CLK = new_status.CLK;
+
+  if (m_channel_id == 0 || m_channel_id == 1)
+  {
+    m_status.EXTINTMASK = new_status.EXTINTMASK;
+
+    if (new_status.EXTINT)
+      m_status.EXTINT = 0;
+  }
+
+  if (m_channel_id == 0)
+    m_status.ROMDIS = new_status.ROMDIS;
+
+  IEXIDevice* device = GetDevice(m_status.CHIP_SELECT ^ new_status.CHIP_SELECT);
+  m_status.CHIP_SELECT = new_status.CHIP_SELECT;
+  if (device != nullptr)
+    device->SetCS(m_status.CHIP_SELECT);
+
+  system.GetExpansionInterface().UpdateInterrupts();
+}
+
+void CEXIChannel::WriteControl(u32 val)
+{
+  m_control.Hex = val;
+
+  if (m_control.TSTART)
+  {
+    IEXIDevice* device = GetDevice(m_status.CHIP_SELECT);
+    if (device == nullptr)
+      return;
+
+    if (m_control.DMA == 0)
+    {
+      // immediate data
+      switch (m_control.RW)
+      {
+      case EXI_READ:
+        m_imm_data = device->ImmRead(m_control.TLEN + 1);
+        break;
+      case EXI_WRITE:
+        device->ImmWrite(m_imm_data, m_control.TLEN + 1);
+        break;
+      case EXI_READWRITE:
+        device->ImmReadWrite(m_imm_data, m_control.TLEN + 1);
+        break;
+      default:
+        DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0,
+                         "EXI Imm: Unknown transfer type {}", m_control.RW);
+      }
+    }
+    else
+    {
+      // DMA
+      switch (m_control.RW)
+      {
+      case EXI_READ:
+        device->DMARead(m_dma_memory_address, m_dma_length);
+        break;
+      case EXI_WRITE:
+        device->DMAWrite(m_dma_memory_address, m_dma_length);
+        break;
+      default:
+        DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0,
+                         "EXI DMA: Unknown transfer type {}", m_control.RW);
+      }
+    }
+
+    m_control.TSTART = 0;
+
+    // Check if device needs specific timing, otherwise just complete transfer
+    // immediately
+    if (!device->UseDelayedTransferCompletion())
+      SendTransferComplete();
+  }
+}
+
+/* The MMIO's functions, the channel their context */
+static u32 ReadStatusMMIO(Core::System&, uintptr_t ctx, u32)
+{
+  return reinterpret_cast<CEXIChannel*>(ctx)->ReadStatus();
+}
+
+static void WriteStatusMMIO(Core::System& system, uintptr_t ctx, u32, u32 val)
+{
+  reinterpret_cast<CEXIChannel*>(ctx)->WriteStatus(system, val);
+}
+
+static void WriteControlMMIO(Core::System&, uintptr_t ctx, u32, u32 val)
+{
+  reinterpret_cast<CEXIChannel*>(ctx)->WriteControl(val);
+}
+
 void CEXIChannel::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 {
   // Warning: the base is not aligned on a page boundary here. We can't use |
   // to select a register address, instead we need to use +.
 
-  mmio->Register(base + EXI_STATUS, MMIO::ComplexRead<u32>([this](Core::System&, u32) {
-                   // check if external device is present
-                   // pretty sure it is memcard only, not entirely sure
-                   if (m_channel_id == 2)
-                   {
-                     m_status.EXT = 0;
-                   }
-                   else
-                   {
-                     m_status.EXT = GetDevice(1)->IsPresent() ? 1 : 0;
-                   }
-
-                   return m_status.Hex;
-                 }),
-                 MMIO::ComplexWrite<u32>([this](Core::System& system, u32, u32 val) {
-                   UEXI_STATUS new_status(val);
-
-                   m_status.EXIINTMASK = new_status.EXIINTMASK;
-                   if (new_status.EXIINT)
-                     m_status.EXIINT = 0;
-
-                   m_status.TCINTMASK = new_status.TCINTMASK;
-                   if (new_status.TCINT)
-                     m_status.TCINT = 0;
-
-                   m_status.CLK = new_status.CLK;
-
-                   if (m_channel_id == 0 || m_channel_id == 1)
-                   {
-                     m_status.EXTINTMASK = new_status.EXTINTMASK;
-
-                     if (new_status.EXTINT)
-                       m_status.EXTINT = 0;
-                   }
-
-                   if (m_channel_id == 0)
-                     m_status.ROMDIS = new_status.ROMDIS;
-
-                   IEXIDevice* device = GetDevice(m_status.CHIP_SELECT ^ new_status.CHIP_SELECT);
-                   m_status.CHIP_SELECT = new_status.CHIP_SELECT;
-                   if (device != nullptr)
-                     device->SetCS(m_status.CHIP_SELECT);
-
-                   system.GetExpansionInterface().UpdateInterrupts();
-                 }));
+  mmio->Register(base + EXI_STATUS, MMIO::ComplexRead<u32>(ReadStatusMMIO, reinterpret_cast<uintptr_t>(this)),
+                 MMIO::ComplexWrite<u32>(WriteStatusMMIO, reinterpret_cast<uintptr_t>(this)));
 
   mmio->Register(base + EXI_DMA_ADDRESS, MMIO::DirectRead<u32>(&m_dma_memory_address),
                  MMIO::DirectWrite<u32>(&m_dma_memory_address));
   mmio->Register(base + EXI_DMA_LENGTH, MMIO::DirectRead<u32>(&m_dma_length),
                  MMIO::DirectWrite<u32>(&m_dma_length));
   mmio->Register(base + EXI_DMA_CONTROL, MMIO::DirectRead<u32>(&m_control.Hex),
-                 MMIO::ComplexWrite<u32>([this](Core::System&, u32, u32 val) {
-                   m_control.Hex = val;
-
-                   if (m_control.TSTART)
-                   {
-                     IEXIDevice* device = GetDevice(m_status.CHIP_SELECT);
-                     if (device == nullptr)
-                       return;
-
-                     if (m_control.DMA == 0)
-                     {
-                       // immediate data
-                       switch (m_control.RW)
-                       {
-                       case EXI_READ:
-                         m_imm_data = device->ImmRead(m_control.TLEN + 1);
-                         break;
-                       case EXI_WRITE:
-                         device->ImmWrite(m_imm_data, m_control.TLEN + 1);
-                         break;
-                       case EXI_READWRITE:
-                         device->ImmReadWrite(m_imm_data, m_control.TLEN + 1);
-                         break;
-                       default:
-                         DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0,
-                                          "EXI Imm: Unknown transfer type {}", m_control.RW);
-                       }
-                     }
-                     else
-                     {
-                       // DMA
-                       switch (m_control.RW)
-                       {
-                       case EXI_READ:
-                         device->DMARead(m_dma_memory_address, m_dma_length);
-                         break;
-                       case EXI_WRITE:
-                         device->DMAWrite(m_dma_memory_address, m_dma_length);
-                         break;
-                       default:
-                         DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0,
-                                          "EXI DMA: Unknown transfer type {}", m_control.RW);
-                       }
-                     }
-
-                     m_control.TSTART = 0;
-
-                     // Check if device needs specific timing, otherwise just complete transfer
-                     // immediately
-                     if (!device->UseDelayedTransferCompletion())
-                       SendTransferComplete();
-                   }
-                 }));
+                 MMIO::ComplexWrite<u32>(WriteControlMMIO, reinterpret_cast<uintptr_t>(this)));
 
   mmio->Register(base + EXI_IMM_DATA, MMIO::DirectRead<u32>(&m_imm_data),
                  MMIO::DirectWrite<u32>(&m_imm_data));

@@ -116,19 +116,19 @@ public:
   // Example usages can be found in just about any HW/ module in Dolphin's
   // codebase.
   template <typename Unit>
-  void RegisterRead(u32 addr, ReadHandlingMethod<Unit>* read)
+  void RegisterRead(u32 addr, ReadHandlingMethod<Unit> read)
   {
-    GetHandlerForRead<Unit>(addr).ResetMethod(read);
+    GetHandlerForRead<Unit>(addr).m = read;
   }
 
   template <typename Unit>
-  void RegisterWrite(u32 addr, WriteHandlingMethod<Unit>* write)
+  void RegisterWrite(u32 addr, WriteHandlingMethod<Unit> write)
   {
-    GetHandlerForWrite<Unit>(addr).ResetMethod(write);
+    GetHandlerForWrite<Unit>(addr).m = write;
   }
 
   template <typename Unit>
-  void Register(u32 addr, ReadHandlingMethod<Unit>* read, WriteHandlingMethod<Unit>* write)
+  void Register(u32 addr, ReadHandlingMethod<Unit> read, WriteHandlingMethod<Unit> write)
   {
     RegisterRead(addr, read);
     RegisterWrite(addr, write);

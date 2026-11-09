@@ -188,7 +188,7 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    MMIO::InvalidWrite<u16>());
   }
 
-  mmio->Register(base | STATUS_REGISTER, MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
+  mmio->Register(base | STATUS_REGISTER, MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
                    auto& cp = system_.GetCommandProcessor();
                    system_.GetFifo().SyncGPUForRegisterAccess();
                    cp.SetCpStatusRegister();
@@ -197,7 +197,7 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::InvalidWrite<u16>());
 
   mmio->Register(base | CTRL_REGISTER, MMIO::DirectRead<u16>(&m_cp_ctrl_reg.Hex),
-                 MMIO::ComplexWrite<u16>([](Core::System& system_, u32, u16 val) {
+                 MMIO::ComplexWrite<u16>([](Core::System& system_, uintptr_t, u32, u16 val) {
                    auto& cp = system_.GetCommandProcessor();
                    UCPCtrlReg tmp(val & 0x3F);
                    cp.m_cp_ctrl_reg.Hex = tmp.Hex;
@@ -206,7 +206,7 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  }));
 
   mmio->Register(base | CLEAR_REGISTER, MMIO::Constant<u16>(0),
-                 MMIO::ComplexWrite<u16>([](Core::System& system_, u32, u16 val) {
+                 MMIO::ComplexWrite<u16>([](Core::System& system_, uintptr_t, u32, u16 val) {
                    auto& cp = system_.GetCommandProcessor();
                    UCPClearReg tmp(val);
                    cp.m_cp_clear_reg.Hex = tmp.Hex;
@@ -225,10 +225,10 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   // Some MMIOs have different handlers for single core vs. dual core mode.
   const bool is_on_thread = IsOnThread(m_system);
-  MMIO::ReadHandlingMethod<u16>* fifo_rw_distance_lo_r;
+  MMIO::ReadHandlingMethod<u16> fifo_rw_distance_lo_r;
   if (is_on_thread)
   {
-    fifo_rw_distance_lo_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
+    fifo_rw_distance_lo_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       if (LoadReg(&fifo_.CPWritePointer) >= LoadReg(&fifo_.SafeCPReadPointer))
       {
@@ -246,14 +246,14 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     fifo_rw_distance_lo_r =
         MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&m_fifo.CPReadWriteDistance));
   }
-  mmio->Register(base | FIFO_RW_DISTANCE_LO, fifo_rw_distance_lo_r,
+  mmio->Register(base | FIFO_RW_DISTANCE_LO, std::move(fifo_rw_distance_lo_r),
                  MMIO::DirectWrite<u16>(MMIO::Utils::LowPart(&m_fifo.CPReadWriteDistance),
                                         WMASK_LO_ALIGN_32BIT));
 
-  MMIO::ReadHandlingMethod<u16>* fifo_rw_distance_hi_r;
+  MMIO::ReadHandlingMethod<u16> fifo_rw_distance_hi_r;
   if (is_on_thread)
   {
-    fifo_rw_distance_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
+    fifo_rw_distance_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
       if (LoadReg(&fifo_.CPWritePointer) >= LoadReg(&fifo_.SafeCPReadPointer))
@@ -270,19 +270,20 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   }
   else
   {
-    fifo_rw_distance_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
+    fifo_rw_distance_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
       return LoadReg(&fifo_.CPReadWriteDistance) >> 16;
     });
   }
-  mmio->Register(base | FIFO_RW_DISTANCE_HI, fifo_rw_distance_hi_r,
-                 MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](Core::System& system_, u32, u16 val) {
+  mmio->Register(base | FIFO_RW_DISTANCE_HI, std::move(fifo_rw_distance_hi_r),
+                 MMIO::ComplexWrite<u16>([](Core::System& system_, uintptr_t ctx, u32, u16 val) {
+                   const u16 mask_hi = static_cast<u16>(ctx);
                    auto& fifo_ = system_.GetCommandProcessor().GetFifo();
                    system_.GetFifo().SyncGPUForRegisterAccess();
-                   WriteHigh(&fifo_.CPReadWriteDistance, val & WMASK_HI_RESTRICT);
+                   WriteHigh(&fifo_.CPReadWriteDistance, val & mask_hi);
                    system_.GetFifo().RunGpu();
-                 }));
+                 }, WMASK_HI_RESTRICT));
 
   mmio->Register(
       base | FIFO_READ_POINTER_LO,
@@ -290,38 +291,41 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                      MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&m_fifo.CPReadPointer)),
       MMIO::DirectWrite<u16>(MMIO::Utils::LowPart(&m_fifo.CPReadPointer), WMASK_LO_ALIGN_32BIT));
 
-  MMIO::ReadHandlingMethod<u16>* fifo_read_hi_r;
-  MMIO::WriteHandlingMethod<u16>* fifo_read_hi_w;
+  MMIO::ReadHandlingMethod<u16> fifo_read_hi_r;
+  MMIO::WriteHandlingMethod<u16> fifo_read_hi_w;
   if (is_on_thread)
   {
-    fifo_read_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
+    fifo_read_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
       return LoadReg(&fifo_.SafeCPReadPointer) >> 16;
     });
     fifo_read_hi_w =
-        MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](Core::System& system_, u32, u16 val) {
+        MMIO::ComplexWrite<u16>([](Core::System& system_, uintptr_t ctx, u32, u16 val) {
+          const u16 mask_hi = static_cast<u16>(ctx);
           auto& fifo_ = system_.GetCommandProcessor().GetFifo();
           system_.GetFifo().SyncGPUForRegisterAccess();
-          WriteHigh(&fifo_.CPReadPointer, val & WMASK_HI_RESTRICT);
+          WriteHigh(&fifo_.CPReadPointer, val & mask_hi);
           StoreReg(&fifo_.SafeCPReadPointer, LoadReg(&fifo_.CPReadPointer));
-        });
+        }, WMASK_HI_RESTRICT);
   }
   else
   {
-    fifo_read_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, u32) {
+    fifo_read_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
       return LoadReg(&fifo_.CPReadPointer) >> 16;
     });
     fifo_read_hi_w =
-        MMIO::ComplexWrite<u16>([WMASK_HI_RESTRICT](Core::System& system_, u32, u16 val) {
+        MMIO::ComplexWrite<u16>([](Core::System& system_, uintptr_t ctx, u32, u16 val) {
+          const u16 mask_hi = static_cast<u16>(ctx);
           auto& fifo_ = system_.GetCommandProcessor().GetFifo();
           system_.GetFifo().SyncGPUForRegisterAccess();
-          WriteHigh(&fifo_.CPReadPointer, val & WMASK_HI_RESTRICT);
-        });
+          WriteHigh(&fifo_.CPReadPointer, val & mask_hi);
+        }, WMASK_HI_RESTRICT);
   }
-  mmio->Register(base | FIFO_READ_POINTER_HI, fifo_read_hi_r, fifo_read_hi_w);
+  mmio->Register(base | FIFO_READ_POINTER_HI, std::move(fifo_read_hi_r),
+                 std::move(fifo_read_hi_w));
 }
 
 void CommandProcessorManager::GatherPipeBursted()

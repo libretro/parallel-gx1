@@ -6,7 +6,6 @@
 #include <array>
 #include <bit>
 #include <cstring>
-#include <functional>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -1188,23 +1187,6 @@ public:
     QuickCallFunction(ARM64Reg::X8, func);
   }
 
-  // Utility to generate a call to a std::function object.
-  //
-  // Unfortunately, calling operator() directly is undefined behavior in C++
-  // (this method might be a thunk in the case of multi-inheritance) so we
-  // have to go through a trampoline function.
-  template <typename T, typename... Args>
-  static T CallLambdaTrampoline(const std::function<T(Args...)>* f, Args... args)
-  {
-    return (*f)(args...);
-  }
-
-  template <typename FuncRet, typename... FuncArgs, typename... Args>
-  void ABI_CallLambdaFunction(const std::function<FuncRet(FuncArgs...)>* f, Args... args)
-  {
-    auto trampoline = &ARM64XEmitter::CallLambdaTrampoline<FuncRet, FuncArgs...>;
-    ABI_CallFunction(trampoline, f, args...);
-  }
 };
 
 class ARM64FloatEmitter

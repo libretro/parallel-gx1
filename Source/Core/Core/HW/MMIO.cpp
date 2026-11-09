@@ -3,9 +3,6 @@
 
 #include "Core/HW/MMIO.h"
 
-#include <cstdlib>
-#include <functional>
-#include <utility>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -14,180 +11,93 @@
 
 namespace MMIO
 {
-// Base classes for the two handling method hierarchies. Note that a single
-// class can inherit from both.
-//
-// At the moment the only common element between all the handling method is
-// that they should be able to accept a visitor of the appropriate type.
-template <typename T>
-class ReadHandlingMethod
-{
-public:
-  virtual ~ReadHandlingMethod() = default;
-  virtual void AcceptReadVisitor(ReadHandlingMethodVisitor<T>& v) const = 0;
-};
-template <typename T>
-class WriteHandlingMethod
-{
-public:
-  virtual ~WriteHandlingMethod() = default;
-  virtual void AcceptWriteVisitor(WriteHandlingMethodVisitor<T>& v) const = 0;
-};
-
-// Constant: handling method holds a single integer and passes it to the
-// visitor. This is a read only handling method: storing to a constant does not
+// Constant: the value read. A read only handling method: storing to a constant does not
 // mean anything.
 template <typename T>
-class ConstantHandlingMethod : public ReadHandlingMethod<T>
+ReadHandlingMethod<T> Constant(T value)
 {
-public:
-  explicit ConstantHandlingMethod(T value) : value_(value) {}
-  ~ConstantHandlingMethod() override = default;
-  void AcceptReadVisitor(ReadHandlingMethodVisitor<T>& v) const override
-  {
-    v.VisitConstant(value_);
-  }
-
-private:
-  T value_;
-};
-template <typename T>
-ReadHandlingMethod<T>* Constant(T value)
-{
-  return new ConstantHandlingMethod<T>(value);
+  ReadHandlingMethod<T> m = {};
+  m.kind = MMIO_HANDLER_CONSTANT;
+  m.value = value;
+  return m;
 }
 
-// Nop: extremely simple write handling method that does nothing at all, only
-// respond to visitors and dispatch to the correct method. This is write only
-// since reads should always at least return a value.
+// Nop: a write that does nothing at all. Write only, since reads should always at least
+// return a value.
 template <typename T>
-class NopHandlingMethod : public WriteHandlingMethod<T>
+WriteHandlingMethod<T> Nop()
 {
-public:
-  NopHandlingMethod() {}
-  ~NopHandlingMethod() override = default;
-  void AcceptWriteVisitor(WriteHandlingMethodVisitor<T>& v) const override { v.VisitNop(); }
-};
-template <typename T>
-WriteHandlingMethod<T>* Nop()
-{
-  return new NopHandlingMethod<T>();
+  WriteHandlingMethod<T> m = {};
+  m.kind = MMIO_HANDLER_NOP;
+  return m;
 }
 
-// Direct: handling method holds a pointer to the value where to read/write the
-// data from, as well as a mask that is used to restrict reading/writing only
-// to a given set of bits.
+// Direct: a pointer to the value where to read/write the data from, as well as a mask that is
+// used to restrict reading/writing only to a given set of bits.
 template <typename T>
-class DirectHandlingMethod : public ReadHandlingMethod<T>, public WriteHandlingMethod<T>
+ReadHandlingMethod<T> DirectRead(const T* addr, u32 mask)
 {
-public:
-  DirectHandlingMethod(T* addr, u32 mask) : addr_(addr), mask_(mask) {}
-  ~DirectHandlingMethod() override = default;
-  void AcceptReadVisitor(ReadHandlingMethodVisitor<T>& v) const override
-  {
-    v.VisitDirect(addr_, mask_);
-  }
-
-  void AcceptWriteVisitor(WriteHandlingMethodVisitor<T>& v) const override
-  {
-    v.VisitDirect(addr_, mask_);
-  }
-
-private:
-  T* addr_;
-  u32 mask_;
-};
-template <typename T>
-ReadHandlingMethod<T>* DirectRead(const T* addr, u32 mask)
-{
-  return new DirectHandlingMethod<T>(const_cast<T*>(addr), mask);
+  ReadHandlingMethod<T> m = {};
+  m.kind = MMIO_HANDLER_DIRECT;
+  m.ptr = addr;
+  m.mask = mask;
+  return m;
 }
 template <typename T>
-WriteHandlingMethod<T>* DirectWrite(T* addr, u32 mask)
+WriteHandlingMethod<T> DirectWrite(T* addr, u32 mask)
 {
-  return new DirectHandlingMethod<T>(addr, mask);
+  WriteHandlingMethod<T> m = {};
+  m.kind = MMIO_HANDLER_DIRECT;
+  m.ptr = addr;
+  m.mask = mask;
+  return m;
 }
 
-// Complex: holds a lambda that is called when a read or a write is executed.
-// This gives complete control to the user as to what is going to happen during
-// that read or write, but reduces the optimization potential.
+// Complex: a function called when a read or a write is executed, with its context. This gives
+// complete control to the user as to what is going to happen during that read or write, but
+// reduces the optimization potential.
 template <typename T>
-class ComplexHandlingMethod : public ReadHandlingMethod<T>, public WriteHandlingMethod<T>
+ReadHandlingMethod<T> ComplexRead(ReadFn<T> fn, uintptr_t ctx)
 {
-public:
-  explicit ComplexHandlingMethod(std::function<T(Core::System&, u32)> read_lambda)
-      : read_lambda_(std::move(read_lambda)), write_lambda_(InvalidWriteLambda())
-  {
-  }
-
-  explicit ComplexHandlingMethod(std::function<void(Core::System&, u32, T)> write_lambda)
-      : read_lambda_(InvalidReadLambda()), write_lambda_(std::move(write_lambda))
-  {
-  }
-
-  ~ComplexHandlingMethod() override = default;
-  void AcceptReadVisitor(ReadHandlingMethodVisitor<T>& v) const override
-  {
-    v.VisitComplex(&read_lambda_);
-  }
-
-  void AcceptWriteVisitor(WriteHandlingMethodVisitor<T>& v) const override
-  {
-    v.VisitComplex(&write_lambda_);
-  }
-
-private:
-  std::function<T(Core::System&, u32)> InvalidReadLambda() const
-  {
-    return [](Core::System&, u32) {
-      DEBUG_ASSERT_MSG(MEMMAP, 0,
-                       "Called the read lambda on a write "
-                       "complex handler.");
-      return 0;
-    };
-  }
-
-  std::function<void(Core::System&, u32, T)> InvalidWriteLambda() const
-  {
-    return [](Core::System&, u32, T) {
-      DEBUG_ASSERT_MSG(MEMMAP, 0,
-                       "Called the write lambda on a read "
-                       "complex handler.");
-    };
-  }
-
-  std::function<T(Core::System&, u32)> read_lambda_;
-  std::function<void(Core::System&, u32, T)> write_lambda_;
-};
-template <typename T>
-ReadHandlingMethod<T>* ComplexRead(std::function<T(Core::System&, u32)> lambda)
-{
-  return new ComplexHandlingMethod<T>(std::move(lambda));
+  ReadHandlingMethod<T> m = {};
+  m.kind = MMIO_HANDLER_COMPLEX;
+  m.fn = fn;
+  m.ctx = ctx;
+  return m;
 }
 template <typename T>
-WriteHandlingMethod<T>* ComplexWrite(std::function<void(Core::System&, u32, T)> lambda)
+WriteHandlingMethod<T> ComplexWrite(WriteFn<T> fn, uintptr_t ctx)
 {
-  return new ComplexHandlingMethod<T>(std::move(lambda));
+  WriteHandlingMethod<T> m = {};
+  m.kind = MMIO_HANDLER_COMPLEX;
+  m.fn = fn;
+  m.ctx = ctx;
+  return m;
 }
 
-// Invalid: specialization of the complex handling type with lambdas that
-// display error messages.
+// Invalid: complex methods that display error messages.
 template <typename T>
-ReadHandlingMethod<T>* InvalidRead()
+static T ReadInvalid(Core::System&, uintptr_t, u32 addr)
 {
-  return ComplexRead<T>([](Core::System&, u32 addr) {
-    ERROR_LOG_FMT(MEMMAP, "Trying to read {} bits from an invalid MMIO (addr={:08x})",
-                  8 * sizeof(T), addr);
-    return 0;
-  });
+  ERROR_LOG_FMT(MEMMAP, "Trying to read {} bits from an invalid MMIO (addr={:08x})",
+                8 * sizeof(T), addr);
+  return 0;
 }
 template <typename T>
-WriteHandlingMethod<T>* InvalidWrite()
+static void WriteInvalid(Core::System&, uintptr_t, u32 addr, T val)
 {
-  return ComplexWrite<T>([](Core::System&, u32 addr, T val) {
-    ERROR_LOG_FMT(MEMMAP, "Trying to write {} bits to an invalid MMIO (addr={:08x}, val={:08x})",
-                  8 * sizeof(T), addr, val);
-  });
+  ERROR_LOG_FMT(MEMMAP, "Trying to write {} bits to an invalid MMIO (addr={:08x}, val={:08x})",
+                8 * sizeof(T), addr, val);
+}
+template <typename T>
+ReadHandlingMethod<T> InvalidRead()
+{
+  return ComplexRead<T>(ReadInvalid<T>);
+}
+template <typename T>
+WriteHandlingMethod<T> InvalidWrite()
+{
+  return ComplexWrite<T>(WriteInvalid<T>);
 }
 
 // Converters to larger and smaller size. Probably the most complex of these
@@ -223,156 +133,106 @@ struct LargerAccessSize<u16>
   typedef u32 value;
 };
 
+// To smaller: the context is the high part's handler, the low part's the next one; the parts are
+// at the access's address, aligned as the access is (high at the register, low after it).
 template <typename T>
-ReadHandlingMethod<T>* ReadToSmaller(Mapping* mmio, u32 high_part_addr, u32 low_part_addr)
+static T ReadSmaller(Core::System& system, uintptr_t ctx, u32 addr)
 {
   typedef typename SmallerAccessSize<T>::value ST;
-
-  ReadHandler<ST>* high_part = &mmio->GetHandlerForRead<ST>(high_part_addr);
-  ReadHandler<ST>* low_part = &mmio->GetHandlerForRead<ST>(low_part_addr);
-
-  // TODO(delroth): optimize
-  return ComplexRead<T>([=](Core::System& system, u32 addr) {
-    return ((T)high_part->Read(system, high_part_addr) << (8 * sizeof(ST))) |
-           low_part->Read(system, low_part_addr);
-  });
+  ReadHandler<ST>* const high_part = reinterpret_cast<ReadHandler<ST>*>(ctx);
+  const u32 high_part_addr = addr & ~u32(sizeof(T) - 1);
+  return (T(high_part[0].Read(system, high_part_addr)) << (8 * sizeof(ST))) |
+         high_part[1].Read(system, high_part_addr + u32(sizeof(ST)));
 }
 
 template <typename T>
-WriteHandlingMethod<T>* WriteToSmaller(Mapping* mmio, u32 high_part_addr, u32 low_part_addr)
+static void WriteSmaller(Core::System& system, uintptr_t ctx, u32 addr, T val)
 {
   typedef typename SmallerAccessSize<T>::value ST;
-
-  WriteHandler<ST>* high_part = &mmio->GetHandlerForWrite<ST>(high_part_addr);
-  WriteHandler<ST>* low_part = &mmio->GetHandlerForWrite<ST>(low_part_addr);
-
-  // TODO(delroth): optimize
-  return ComplexWrite<T>([=](Core::System& system, u32 addr, T val) {
-    high_part->Write(system, high_part_addr, val >> (8 * sizeof(ST)));
-    low_part->Write(system, low_part_addr, (ST)val);
-  });
+  WriteHandler<ST>* const high_part = reinterpret_cast<WriteHandler<ST>*>(ctx);
+  const u32 high_part_addr = addr & ~u32(sizeof(T) - 1);
+  high_part[0].Write(system, high_part_addr, ST(val >> (8 * sizeof(ST))));
+  high_part[1].Write(system, high_part_addr + u32(sizeof(ST)), ST(val));
 }
 
 template <typename T>
-ReadHandlingMethod<T>* ReadToLarger(Mapping* mmio, u32 larger_addr, u32 shift)
+ReadHandlingMethod<T> ReadToSmaller(Mapping* mmio, u32 high_part_addr, u32 low_part_addr)
+{
+  typedef typename SmallerAccessSize<T>::value ST;
+  ReadHandler<ST>* const high_part = &mmio->GetHandlerForRead<ST>(high_part_addr);
+  ASSERT(&mmio->GetHandlerForRead<ST>(low_part_addr) == high_part + 1);
+  return ComplexRead<T>(ReadSmaller<T>, reinterpret_cast<uintptr_t>(high_part));
+}
+
+template <typename T>
+WriteHandlingMethod<T> WriteToSmaller(Mapping* mmio, u32 high_part_addr, u32 low_part_addr)
+{
+  typedef typename SmallerAccessSize<T>::value ST;
+  WriteHandler<ST>* const high_part = &mmio->GetHandlerForWrite<ST>(high_part_addr);
+  ASSERT(&mmio->GetHandlerForWrite<ST>(low_part_addr) == high_part + 1);
+  return ComplexWrite<T>(WriteSmaller<T>, reinterpret_cast<uintptr_t>(high_part));
+}
+
+// To larger: the context is the larger handler with the shift / 8 in its low bits (a handler
+// is aligned to more than 4).
+template <typename T>
+static T ReadLarger(Core::System& system, uintptr_t ctx, u32 addr)
 {
   typedef typename LargerAccessSize<T>::value LT;
-
-  ReadHandler<LT>* large = &mmio->GetHandlerForRead<LT>(larger_addr);
-
-  // TODO(delroth): optimize
-  return ComplexRead<T>([large, shift](Core::System& system, u32 addr) {
-    return large->Read(system, addr & ~(sizeof(LT) - 1)) >> shift;
-  });
+  ReadHandler<LT>* const large = reinterpret_cast<ReadHandler<LT>*>(ctx & ~uintptr_t(3));
+  const u32 shift = u32(ctx & 3) * 8;
+  return T(large->Read(system, addr & ~u32(sizeof(LT) - 1)) >> shift);
 }
 
-// Implementation of the ReadHandler and WriteHandler class. There is a lot of
-// redundant code between these two classes but trying to abstract it away
-// brings more trouble than it fixes.
+template <typename T>
+ReadHandlingMethod<T> ReadToLarger(Mapping* mmio, u32 larger_addr, u32 shift)
+{
+  typedef typename LargerAccessSize<T>::value LT;
+  ReadHandler<LT>* const large = &mmio->GetHandlerForRead<LT>(larger_addr);
+  static_assert(alignof(ReadHandler<LT>) >= 4);
+  ASSERT(shift % 8 == 0 && shift < 32);
+  return ComplexRead<T>(ReadLarger<T>, reinterpret_cast<uintptr_t>(large) | (shift / 8));
+}
+
+// Implementation of the ReadHandler and WriteHandler class.
 template <typename T>
 void ReadHandler<T>::Visit(ReadHandlingMethodVisitor<T>& visitor)
 {
-  if (!m_Method)
-    InitializeInvalid();
-
-  m_Method->AcceptReadVisitor(visitor);
-}
-
-template <typename T>
-void ReadHandler<T>::ResetMethod(ReadHandlingMethod<T>* method)
-{
-  struct KindVisitor : public ReadHandlingMethodVisitor<T>
+  switch (m.kind)
   {
-    ReadHandler<T>* h;
-    void VisitConstant(T value) override
-    {
-      h->m_kind = MMIO_HANDLER_CONSTANT;
-      h->m_value = value;
-    }
-    void VisitDirect(const T* addr, u32 mask) override
-    {
-      h->m_kind = MMIO_HANDLER_DIRECT;
-      h->m_ptr = addr;
-      h->m_mask = mask;
-    }
-    void VisitComplex(const std::function<T(Core::System&, u32)>* lambda) override
-    {
-      h->m_kind = MMIO_HANDLER_COMPLEX;
-      h->m_func = lambda;
-    }
-  };
-  KindVisitor v;
-
-  delete m_Method;
-  m_Method = method;
-  m_kind = MMIO_HANDLER_INVALID;
-  if (!method)
+  case MMIO_HANDLER_CONSTANT:
+    visitor.VisitConstant(m.value);
     return;
-  v.h = this;
-  method->AcceptReadVisitor(v);
-}
-
-template <typename T>
-void ReadHandler<T>::Free()
-{
-  ResetMethod(nullptr);
-}
-
-template <typename T>
-void ReadHandler<T>::InitializeInvalid()
-{
-  ResetMethod(InvalidRead<T>());
+  case MMIO_HANDLER_DIRECT:
+    visitor.VisitDirect(m.ptr, m.mask);
+    return;
+  case MMIO_HANDLER_COMPLEX:
+    break;
+  default:
+    m = InvalidRead<T>();
+    break;
+  }
+  visitor.VisitComplex(m.fn, m.ctx);
 }
 
 template <typename T>
 void WriteHandler<T>::Visit(WriteHandlingMethodVisitor<T>& visitor)
 {
-  if (!m_Method)
-    InitializeInvalid();
-
-  m_Method->AcceptWriteVisitor(visitor);
-}
-
-template <typename T>
-void WriteHandler<T>::ResetMethod(WriteHandlingMethod<T>* method)
-{
-  struct KindVisitor : public WriteHandlingMethodVisitor<T>
+  switch (m.kind)
   {
-    WriteHandler<T>* h;
-    void VisitNop() override { h->m_kind = MMIO_HANDLER_NOP; }
-    void VisitDirect(T* ptr, u32 mask) override
-    {
-      h->m_kind = MMIO_HANDLER_DIRECT;
-      h->m_ptr = ptr;
-      h->m_mask = mask;
-    }
-    void VisitComplex(const std::function<void(Core::System&, u32, T)>* lambda) override
-    {
-      h->m_kind = MMIO_HANDLER_COMPLEX;
-      h->m_func = lambda;
-    }
-  };
-  KindVisitor v;
-
-  delete m_Method;
-  m_Method = method;
-  m_kind = MMIO_HANDLER_INVALID;
-  if (!method)
+  case MMIO_HANDLER_NOP:
+    visitor.VisitNop();
     return;
-  v.h = this;
-  method->AcceptWriteVisitor(v);
-}
-
-template <typename T>
-void WriteHandler<T>::Free()
-{
-  ResetMethod(nullptr);
-}
-
-template <typename T>
-void WriteHandler<T>::InitializeInvalid()
-{
-  ResetMethod(InvalidWrite<T>());
+  case MMIO_HANDLER_DIRECT:
+    visitor.VisitDirect(m.ptr, m.mask);
+    return;
+  case MMIO_HANDLER_COMPLEX:
+    break;
+  default:
+    m = InvalidWrite<T>();
+    break;
+  }
+  visitor.VisitComplex(m.fn, m.ctx);
 }
 
 /* The handler arrays, the system's zeroed pages: every handler invalid until a method is
@@ -393,17 +253,11 @@ Mapping::Mapping()
 {
 }
 
-/* Only the handlers given a method have one to delete. */
 template <typename H>
 static void FreeHandlers(H* handlers, u32 count)
 {
-  u32 i;
-  if (!handlers)
-    return;
-  for (i = 0; i < count; i++)
-    if (handlers[i].m_Method)
-      handlers[i].Free();
-  Common::FreeMemoryPages(handlers, count * sizeof(H));
+  if (handlers)
+    Common::FreeMemoryPages(handlers, count * sizeof(H));
 }
 
 Mapping::~Mapping()

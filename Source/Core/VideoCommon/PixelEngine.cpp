@@ -119,19 +119,21 @@ void PixelEngineManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   };
   for (auto& pq_reg : pq_regs)
   {
-    mmio->Register(base | pq_reg.addr, MMIO::ComplexRead<u16>([pq_reg](Core::System&, u32) {
-                     return g_video_backend->Video_GetQueryResult(pq_reg.pqtype) & 0xFFFF;
-                   }),
+    mmio->Register(base | pq_reg.addr, MMIO::ComplexRead<u16>([](Core::System&, uintptr_t ctx, u32) -> u16 {
+                     const PerfQueryType pqtype = static_cast<PerfQueryType>(ctx);
+                     return g_video_backend->Video_GetQueryResult(pqtype) & 0xFFFF;
+                   }, pq_reg.pqtype),
                    MMIO::InvalidWrite<u16>());
-    mmio->Register(base | (pq_reg.addr + 2), MMIO::ComplexRead<u16>([pq_reg](Core::System&, u32) {
-                     return g_video_backend->Video_GetQueryResult(pq_reg.pqtype) >> 16;
-                   }),
+    mmio->Register(base | (pq_reg.addr + 2), MMIO::ComplexRead<u16>([](Core::System&, uintptr_t ctx, u32) -> u16 {
+                     const PerfQueryType pqtype = static_cast<PerfQueryType>(ctx);
+                     return g_video_backend->Video_GetQueryResult(pqtype) >> 16;
+                   }, pq_reg.pqtype),
                    MMIO::InvalidWrite<u16>());
   }
 
   // Control register
   mmio->Register(base | PE_CTRL_REGISTER, MMIO::DirectRead<u16>(&m_control.hex),
-                 MMIO::ComplexWrite<u16>([](Core::System& system, u32, u16 val) {
+                 MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
                    auto& pe = system.GetPixelEngine();
 
                    UPECtrlReg tmpCtrl{.hex = val};
@@ -158,10 +160,10 @@ void PixelEngineManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   for (int i = 0; i < 4; ++i)
   {
     mmio->Register(base | (PE_BBOX_LEFT + 2 * i),
-                   MMIO::ComplexRead<u16>([i](Core::System& system, u32) {
+                   MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t ctx, u32) -> u16 {
                      g_bounding_box->Disable(system.GetPixelShaderManager());
-                     return g_video_backend->Video_GetBoundingBox(i);
-                   }),
+                     return g_video_backend->Video_GetBoundingBox(static_cast<int>(ctx));
+                   }, static_cast<uintptr_t>(i)),
                    MMIO::InvalidWrite<u16>());
   }
 }

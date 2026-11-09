@@ -75,42 +75,42 @@ void ProcessorInterfaceManager::Init()
 void ProcessorInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 {
   mmio->Register(base | PI_INTERRUPT_CAUSE, MMIO::DirectRead<u32>(&m_interrupt_cause),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& processor_interface = system.GetProcessorInterface();
                    processor_interface.m_interrupt_cause &= ~val;
                    processor_interface.UpdateException();
                  }));
 
   mmio->Register(base | PI_INTERRUPT_MASK, MMIO::DirectRead<u32>(&m_interrupt_mask),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& processor_interface = system.GetProcessorInterface();
                    processor_interface.m_interrupt_mask = val;
                    processor_interface.UpdateException();
                  }));
 
   mmio->Register(base | PI_FIFO_BASE, MMIO::DirectRead<u32>(&m_fifo_cpu_base),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    u32 mask = CommandProcessor::GetPhysicalAddressMask(system.IsWii()) & 0xFFFFFFE0;
                    auto& processor_interface = system.GetProcessorInterface();
                    processor_interface.m_fifo_cpu_base = val & mask;
                  }));
 
   mmio->Register(base | PI_FIFO_END, MMIO::DirectRead<u32>(&m_fifo_cpu_end),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    u32 mask = CommandProcessor::GetPhysicalAddressMask(system.IsWii()) & 0xFFFFFFE0;
                    auto& processor_interface = system.GetProcessorInterface();
                    processor_interface.m_fifo_cpu_end = val & mask;
                  }));
 
   mmio->Register(base | PI_FIFO_WPTR, MMIO::DirectRead<u32>(&m_fifo_cpu_write_pointer),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    u32 mask = CommandProcessor::GetPhysicalAddressMask(system.IsWii()) & 0xFFFFFFE0;
                    auto& processor_interface = system.GetProcessorInterface();
                    processor_interface.m_fifo_cpu_write_pointer = val & mask;
                  }));
 
   mmio->Register(base | PI_FIFO_RESET, MMIO::InvalidRead<u32>(),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    // Used by GXAbortFrame
                    INFO_LOG_FMT(PROCESSORINTERFACE, "Wrote PI_FIFO_RESET: {:08x}", val);
                    if ((val & 1) != 0)
@@ -142,13 +142,13 @@ void ProcessorInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   mmio->Register(base | PI_ERROR_ADDRESS, MMIO::DirectRead<u32>(&m_error_address),
                  MMIO::InvalidWrite<u32>());
 
-  mmio->Register(base | PI_RESET_CODE, MMIO::ComplexRead<u32>([](Core::System& system, u32) {
+  mmio->Register(base | PI_RESET_CODE, MMIO::ComplexRead<u32>([](Core::System& system, uintptr_t, u32) -> u32 {
                    auto& processor_interface = system.GetProcessorInterface();
                    DEBUG_LOG_FMT(PROCESSORINTERFACE, "Read PI_RESET_CODE: {:08x}",
                                  processor_interface.m_reset_code);
                    return processor_interface.m_reset_code;
                  }),
-                 MMIO::ComplexWrite<u32>([](Core::System& system, u32, u32 val) {
+                 MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& processor_interface = system.GetProcessorInterface();
                    processor_interface.m_reset_code = val;
                    INFO_LOG_FMT(PROCESSORINTERFACE, "Wrote PI_RESET_CODE: {:08x}",
