@@ -1178,7 +1178,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/TextureDataResource.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderCache.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderGenCommon.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Statistics.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/TextureCacheBase.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/TextureConfig.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/TextureConversionShader.cpp \

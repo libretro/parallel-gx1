@@ -59,25 +59,8 @@ private:
   {
     struct ProjectionCounts
     {
-      size_t normal_flush_count;
-      size_t anamorphic_flush_count;
-      size_t other_flush_count;
-
       size_t normal_vertex_count;
       size_t anamorphic_vertex_count;
-      size_t other_vertex_count;
-
-      size_t GetTotalFlushCount() const
-      {
-        return normal_flush_count + anamorphic_flush_count + other_flush_count;
-      }
-
-      size_t GetTotalVertexCount() const
-      {
-        return normal_vertex_count + anamorphic_vertex_count + other_vertex_count;
-      }
-
-      MathUtil::RunningMean<float> average_ratio;
     };
 
     ProjectionCounts perspective;

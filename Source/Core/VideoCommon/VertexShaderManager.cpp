@@ -18,7 +18,6 @@
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionData.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
@@ -101,8 +100,6 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
 
     m_projection_matrix[14] = -1.0f;
     m_projection_matrix[15] = 0.0f;
-
-    g_stats.gproj = m_projection_matrix;
   }
   break;
 
@@ -128,9 +125,6 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
 
     m_projection_matrix[14] = 0.0f;
     m_projection_matrix[15] = 1.0f;
-
-    g_stats.g2proj = m_projection_matrix;
-    g_stats.proj = rawProjection;
   }
   break;
 

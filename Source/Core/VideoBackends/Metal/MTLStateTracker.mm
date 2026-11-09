@@ -20,7 +20,6 @@
 
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -830,8 +829,6 @@ void Metal::StateTracker::PrepareRender()
       SetVertexBufferNow(1, map.gpu_buffer, map.gpu_offset);
       if (pipe->UsesFragmentBuffer(1))
         SetFragmentBufferNow(1, map.gpu_buffer, map.gpu_offset);
-      ADDSTAT(g_stats.this_frame.bytes_uniform_streamed,
-              Align(sizeof(VertexShaderConstants), AlignMask::Uniform));
     }
     if (!m_flags.has_gx_gs_uniform && pipe->UsesVertexBuffer(2))
     {
@@ -841,7 +838,6 @@ void Metal::StateTracker::PrepareRender()
       [m_current_render_encoder setVertexBytes:&geometry_shader_manager.constants
                                         length:sizeof(GeometryShaderConstants)
                                        atIndex:2];
-      ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, sizeof(GeometryShaderConstants));
     }
     if (!m_flags.has_gx_ps_uniform)
     {
@@ -851,8 +847,6 @@ void Metal::StateTracker::PrepareRender()
       auto& pixel_shader_manager = system.GetPixelShaderManager();
       memcpy(map.cpu_buffer, &pixel_shader_manager.constants, sizeof(PixelShaderConstants));
       SetFragmentBufferNow(0, map.gpu_buffer, map.gpu_offset);
-      ADDSTAT(g_stats.this_frame.bytes_uniform_streamed,
-              Align(sizeof(PixelShaderConstants), AlignMask::Uniform));
     }
   }
   else

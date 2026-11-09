@@ -15,7 +15,6 @@
 #include "VideoCommon/BPFunctions.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/PerfQueryBase.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/XFMemory.h"
 
@@ -150,8 +149,6 @@ void SetTevKonstColors()
 
 static void Draw(s32 x, s32 y, s32 xi, s32 yi)
 {
-  INCSTAT(g_stats.this_frame.rasterized_pixels);
-
   s32 z = (s32)std::clamp<float>(ZSlope.GetValue(x, y), 0.0f, 16777215.0f);
 
   if (bpmem.GetEmulatedZ() == EmulatedZ::Early)
@@ -508,8 +505,6 @@ static void DrawTriangleFrontFace(const OutputVertexData* v0, const OutputVertex
 void DrawTriangleFrontFace(const OutputVertexData* v0, const OutputVertexData* v1,
                            const OutputVertexData* v2)
 {
-  INCSTAT(g_stats.this_frame.num_triangles_drawn);
-
   for (u32 i = 0; i < num_scissors; i++)
     DrawTriangleFrontFace(v0, v1, v2, scissors[i]);
 }

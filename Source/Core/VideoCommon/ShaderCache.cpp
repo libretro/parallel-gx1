@@ -21,7 +21,6 @@
 #include "VideoCommon/FramebufferShaderGen.h"
 #include "VideoCommon/PipelineUtils.h"
 #include "VideoCommon/Present.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/StutterStats.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexManagerBase.h"
@@ -452,12 +451,8 @@ void ShaderCache::LoadShaderCache(T& cache, APIType api_type, const char* type, 
         switch (stage)
         {
         case ShaderStage::Vertex:
-          INCSTAT(g_stats.num_vertex_shaders_created);
-          INCSTAT(g_stats.num_vertex_shaders_alive);
           break;
         case ShaderStage::Pixel:
-          INCSTAT(g_stats.num_pixel_shaders_created);
-          INCSTAT(g_stats.num_pixel_shaders_alive);
           break;
         default:
           break;
@@ -642,11 +637,6 @@ void ShaderCache::ClearCaches()
   DropPipelines(&m_texture_reinterpret_pipelines);
   uid_table_clear(&m_texture_reinterpret_pipelines);
   DropShaders(&m_texture_decoding_shaders);
-
-  SETSTAT(g_stats.num_pixel_shaders_created, 0);
-  SETSTAT(g_stats.num_pixel_shaders_alive, 0);
-  SETSTAT(g_stats.num_vertex_shaders_created, 0);
-  SETSTAT(g_stats.num_vertex_shaders_alive, 0);
 }
 
 void ShaderCache::CompileMissingPipelines()
@@ -734,8 +724,6 @@ const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid
       if (binary_size)
         m_vs_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
-    INCSTAT(g_stats.num_vertex_shaders_created);
-    INCSTAT(g_stats.num_vertex_shaders_alive);
     entry->object = shader;
   }
 
@@ -767,8 +755,6 @@ const AbstractShader* ShaderCache::InsertVertexUberShader(const UberShader::Vert
       if (binary_size)
         m_uber_vs_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
-    INCSTAT(g_stats.num_vertex_shaders_created);
-    INCSTAT(g_stats.num_vertex_shaders_alive);
     entry->object = shader;
   }
 
@@ -800,8 +786,6 @@ const AbstractShader* ShaderCache::InsertPixelShader(const PixelShaderUid& uid,
       if (binary_size)
         m_ps_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
-    INCSTAT(g_stats.num_pixel_shaders_created);
-    INCSTAT(g_stats.num_pixel_shaders_alive);
     entry->object = shader;
   }
 
@@ -833,8 +817,6 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
       if (binary_size)
         m_uber_ps_cache.disk_cache.AppendBorrowed(uid, binary, static_cast<u32>(binary_size));
     }
-    INCSTAT(g_stats.num_pixel_shaders_created);
-    INCSTAT(g_stats.num_pixel_shaders_alive);
     entry->object = shader;
   }
 

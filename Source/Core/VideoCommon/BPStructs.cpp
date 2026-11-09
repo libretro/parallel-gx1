@@ -29,7 +29,6 @@
 #include "VideoCommon/PixelEngine.h"
 #include "VideoCommon/PixelShaderManager.h"
 #include "VideoCommon/Present.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/TMEM.h"
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/TextureDecoder.h"
@@ -180,7 +179,6 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     {
     case 0x02:
     {
-      INCSTAT(g_stats.this_frame.num_draw_done);
       g_texture_cache->FlushEFBCopies();
       g_texture_cache->FlushStaleBinds();
       g_framebuffer_manager->InvalidatePeekCache(false);
@@ -199,7 +197,6 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     return;
   case BPMEM_PE_TOKEN_ID:  // Pixel Engine Token ID
   {
-    INCSTAT(g_stats.this_frame.num_token);
     g_texture_cache->FlushEFBCopies();
     g_texture_cache->FlushStaleBinds();
     g_framebuffer_manager->InvalidatePeekCache(false);
@@ -215,7 +212,6 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
   }
   case BPMEM_PE_TOKEN_INT_ID:  // Pixel Engine Interrupt Token ID
   {
-    INCSTAT(g_stats.this_frame.num_token_int);
     g_texture_cache->FlushEFBCopies();
     g_texture_cache->FlushStaleBinds();
     g_framebuffer_manager->InvalidatePeekCache(false);

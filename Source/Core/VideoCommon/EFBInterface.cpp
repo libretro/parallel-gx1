@@ -15,7 +15,6 @@
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/PixelEngine.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoBackendKind.h"
 #include "VideoCommon/VideoCommon.h"
@@ -41,7 +40,6 @@ static u32 PeekColorInternal(u16 x, u16 y)
     return EfbInterface::PeekColor(x, y);
 
   u32 color = AsyncRequests::GetInstance()->PushBlockingEvent([&] {
-    INCSTAT(g_stats.this_frame.num_efb_peeks);
     return g_framebuffer_manager->PeekEFBColor(x, y);
   });
 
@@ -101,7 +99,6 @@ static u32 PeekDepthInternal(u16 x, u16 y)
     return EfbInterface::PeekDepth(x, y);
 
   float depth = AsyncRequests::GetInstance()->PushBlockingEvent([&] {
-    INCSTAT(g_stats.this_frame.num_efb_peeks);
     return g_framebuffer_manager->PeekEFBDepth(x, y);
   });
 
@@ -150,7 +147,6 @@ void EFBPokeColor(u16 x, u16 y, u32 poke_data)
       ((poke_data & 0xFF00FF00) | ((poke_data >> 16) & 0xFF) | ((poke_data << 16) & 0xFF0000));
 
   AsyncRequests::GetInstance()->PushEvent([x, y, color] {
-    INCSTAT(g_stats.this_frame.num_efb_pokes);
     g_framebuffer_manager->PokeEFBColor(x, y, color);
   });
 }
@@ -168,7 +164,6 @@ void EFBPokeDepth(u16 x, u16 y, u32 poke_data)
     depth = 1.0f - depth;
 
   AsyncRequests::GetInstance()->PushEvent([x, y, depth] {
-    INCSTAT(g_stats.this_frame.num_efb_pokes);
     g_framebuffer_manager->PokeEFBDepth(x, y, depth);
   });
 }

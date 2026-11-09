@@ -17,7 +17,6 @@
 #include "VideoBackends/Software/TextureSampler.h"
 
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/XFMemory.h"
 
@@ -389,7 +388,6 @@ void Tev::Draw()
   ASSERT(Position[0] >= 0 && Position[0] < s32(EFB_WIDTH));
   ASSERT(Position[1] >= 0 && Position[1] < s32(EFB_HEIGHT));
 
-  INCSTAT(g_stats.this_frame.tev_pixels_in);
 
   auto& system = Core::System::GetInstance();
   auto& pixel_shader_manager = system.GetPixelShaderManager();
@@ -676,7 +674,6 @@ void Tev::Draw()
   BBoxManager::Update(static_cast<u16>(Position[0] & ~1), static_cast<u16>(Position[0] | 1),
                       static_cast<u16>(Position[1] & ~1), static_cast<u16>(Position[1] | 1));
 
-  INCSTAT(g_stats.this_frame.tev_pixels_out);
   EfbInterface::IncPerfCounterQuadCount(PQ_BLEND_INPUT);
 
   EfbInterface::BlendTev(Position[0], Position[1], output);

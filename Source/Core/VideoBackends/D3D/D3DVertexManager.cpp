@@ -22,7 +22,6 @@
 #include "VideoCommon/IndexGenerator.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
@@ -51,8 +50,6 @@ static void UpdateConstantBuffer(ID3D11Buffer* const buffer, const void* data, u
   D3D::context->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
   memcpy(map.pData, data, data_size);
   D3D::context->Unmap(buffer, 0);
-
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, data_size);
 }
 
 static ComPtr<ID3D11ShaderResourceView>
@@ -183,7 +180,6 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
 
   *out_offset = m_texel_buffer_offset / elem_size;
   std::memcpy(static_cast<u8*>(sr.pData) + m_texel_buffer_offset, data, data_size);
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, data_size);
   m_texel_buffer_offset += data_size;
 
   D3D::context->Unmap(m_texel_buffer.Get(), 0);
@@ -211,7 +207,6 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
   std::memcpy(static_cast<u8*>(sr.pData) + m_texel_buffer_offset, data, data_size);
   std::memcpy(static_cast<u8*>(sr.pData) + m_texel_buffer_offset + palette_byte_offset,
               palette_data, palette_size);
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, palette_byte_offset + palette_size);
   *out_offset = m_texel_buffer_offset / elem_size;
   *out_palette_offset = (m_texel_buffer_offset + palette_byte_offset) / palette_elem_size;
   m_texel_buffer_offset += palette_byte_offset + palette_size;
@@ -291,8 +286,6 @@ void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_in
   m_vertex_cursor += vertex_data_size;
   m_index_cursor += index_data_size;
 
-  ADDSTAT(g_stats.this_frame.bytes_vertex_streamed, vertex_data_size);
-  ADDSTAT(g_stats.this_frame.bytes_index_streamed, index_data_size);
 
   D3D::stateman->SetVertexBuffer(m_vertex_buffer.Get(), vertex_stride, 0);
   D3D::stateman->SetIndexBuffer(m_index_buffer.Get());

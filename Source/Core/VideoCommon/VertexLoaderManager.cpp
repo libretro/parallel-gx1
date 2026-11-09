@@ -25,7 +25,6 @@
 #include "VideoCommon/CPMemory.h"
 #include "VideoCommon/DataReader.h"
 #include "VideoCommon/NativeVertexFormat.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/UidTable.h"
 #include "VideoCommon/VertexLoaderBase.h"
 #include "VideoCommon/VertexManagerBase.h"
@@ -89,7 +88,6 @@ static VertexLoaderBase* GetOrAddLoader(const VertexLoaderUID& uid, const TVtxDe
     }
     loader->m_next_loader = newer;
   }
-  INCSTAT(g_stats.num_vertex_loaders);
   return loader;
 }
 
@@ -107,7 +105,6 @@ void Init()
   MarkAllDirty();
   g_main_vertex_loaders.fill(nullptr);
   g_preprocess_vertex_loaders.fill(nullptr);
-  SETSTAT(g_stats.num_vertex_loaders, 0);
   VertexLoaderPoolsCreate();
 }
 
@@ -300,7 +297,6 @@ VertexLoaderBase* GetOrCreateLoader(int vtx_attr_group)
   attr_dirty[vtx_attr_group] = false;
   return loader;
 }
-
 }  // namespace detail
 
 static void CheckCPConfiguration(int vtx_attr_group)
@@ -495,11 +491,7 @@ int RunVertices(int vtx_attr_group, OpcodeDecoder::Primitive primitive, int coun
 
       g_vertex_manager->AddIndices(primitive, num_loaded);
       g_vertex_manager->FlushData(num_loaded, stride);
-
-      ADDSTAT(g_stats.this_frame.num_prims, num_loaded);
     } while (count);
-
-    INCSTAT(g_stats.this_frame.num_primitive_joins);
   }
   return size;
 }
@@ -513,5 +505,4 @@ NativeVertexFormat* GetCurrentVertexFormat()
 {
   return s_current_vtx_fmt;
 }
-
 }  // namespace VertexLoaderManager

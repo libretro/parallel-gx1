@@ -53,7 +53,6 @@
 #include "VideoCommon/Present.h"
 #include "VideoCommon/Resources/CustomResourceManager.h"
 #include "VideoCommon/ShaderCache.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/TMEM.h"
 #include "VideoCommon/TextureConversionShader.h"
 #include "VideoCommon/TextureConverterShaderGen.h"
@@ -2235,8 +2234,6 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
   entry->memory_stride = entry->BytesPerRow();
   entry->SetNotCopy();
 
-  INCSTAT(g_stats.num_textures_uploaded);
-  SETSTAT(g_stats.num_textures_alive, static_cast<int>(m_textures_by_address.count));
 
   entry = DoPartialTextureUpdates(iter->value, texture_info.GetTlutAddress(),
                                   texture_info.GetTlutFormat());
@@ -2352,8 +2349,6 @@ RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height
 
   // Insert into the texture cache so we can re-use it next frame, if needed.
   TexIndexInsert(&m_textures_by_address, entry->addr, entry);
-  SETSTAT(g_stats.num_textures_alive, static_cast<int>(m_textures_by_address.count));
-  INCSTAT(g_stats.num_textures_uploaded);
 
   if (g_ActiveConfig.bDumpXFBTarget || g_ActiveConfig.bGraphicMods)
   {
@@ -3215,7 +3210,6 @@ TextureCacheBase::TexPoolEntry TextureCacheBase::AllocateTexture(const TextureCo
     }
   }
 
-  INCSTAT(g_stats.num_textures_created);
   return entry;
 }
 

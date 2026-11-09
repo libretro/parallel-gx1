@@ -9,7 +9,6 @@
 
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexShaderManager.h"
 
 Metal::VertexManager::VertexManager()
@@ -79,9 +78,6 @@ void Metal::VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32
       StateTracker::UploadBuffer::Vertex, vsize, StateTracker::AlignMask::None);
   StateTracker::Map imap = g_state_tracker->CommitPreallocation(
       StateTracker::UploadBuffer::Index, isize, StateTracker::AlignMask::None);
-
-  ADDSTAT(g_stats.this_frame.bytes_vertex_streamed, vsize);
-  ADDSTAT(g_stats.this_frame.bytes_index_streamed, isize);
 
   DEBUG_ASSERT(vmap.gpu_offset + m_vertex_offset == m_base_vertex * vertex_stride);
   g_state_tracker->SetVerticesAndIndices(vmap.gpu_buffer, imap.gpu_buffer);

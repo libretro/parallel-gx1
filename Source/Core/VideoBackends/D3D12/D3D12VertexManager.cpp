@@ -17,7 +17,6 @@
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/IndexGenerator.h"
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoConfig.h"
@@ -126,8 +125,6 @@ void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_in
   m_vertex_stream_buffer.CommitMemory(vertex_data_size);
   m_index_stream_buffer.CommitMemory(index_data_size);
 
-  ADDSTAT(g_stats.this_frame.bytes_vertex_streamed, static_cast<int>(vertex_data_size));
-  ADDSTAT(g_stats.this_frame.bytes_index_streamed, static_cast<int>(index_data_size));
 
   Gfx::GetInstance()->SetVertexBuffer(m_vertex_stream_buffer.GetGPUPointer(),
                                       m_vertex_srv.cpu_handle, vertex_stride,
@@ -155,7 +152,6 @@ void VertexManager::UpdateVertexShaderConstants()
   std::memcpy(m_uniform_stream_buffer.GetCurrentHostPointer(), &vertex_shader_manager.constants,
               sizeof(VertexShaderConstants));
   m_uniform_stream_buffer.CommitMemory(sizeof(VertexShaderConstants));
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, sizeof(VertexShaderConstants));
   vertex_shader_manager.dirty = false;
 }
 
@@ -171,7 +167,6 @@ void VertexManager::UpdateGeometryShaderConstants()
   std::memcpy(m_uniform_stream_buffer.GetCurrentHostPointer(), &geometry_shader_manager.constants,
               sizeof(GeometryShaderConstants));
   m_uniform_stream_buffer.CommitMemory(sizeof(GeometryShaderConstants));
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, sizeof(GeometryShaderConstants));
   geometry_shader_manager.dirty = false;
 }
 
@@ -189,7 +184,6 @@ void VertexManager::UpdatePixelShaderConstants()
     std::memcpy(m_uniform_stream_buffer.GetCurrentHostPointer(), &pixel_shader_manager.constants,
                 sizeof(PixelShaderConstants));
     m_uniform_stream_buffer.CommitMemory(sizeof(PixelShaderConstants));
-    ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, sizeof(PixelShaderConstants));
     pixel_shader_manager.dirty = false;
   }
 }
@@ -259,7 +253,6 @@ void VertexManager::UploadAllConstants()
               &geometry_shader_manager.constants, sizeof(GeometryShaderConstants));
   // Finally, flush buffer memory after copying
   m_uniform_stream_buffer.CommitMemory(allocation_size);
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, allocation_size);
 
   // Clear dirty flags
   vertex_shader_manager.dirty = false;
@@ -282,7 +275,6 @@ void VertexManager::UploadUtilityUniforms(const void* data, u32 data_size)
   Gfx::GetInstance()->SetConstantBuffer(2, m_uniform_stream_buffer.GetCurrentGPUPointer());
   std::memcpy(m_uniform_stream_buffer.GetCurrentHostPointer(), data, data_size);
   m_uniform_stream_buffer.CommitMemory(data_size);
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, data_size);
 }
 
 bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBufferFormat format,
@@ -307,7 +299,6 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
   std::memcpy(m_texel_stream_buffer.GetCurrentHostPointer(), data, data_size);
   *out_offset = static_cast<u32>(m_texel_stream_buffer.GetCurrentOffset()) / elem_size;
   m_texel_stream_buffer.CommitMemory(data_size);
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, data_size);
   Gfx::GetInstance()->SetTextureDescriptor(0, m_texel_buffer_views[format].cpu_handle);
   return true;
 }
@@ -344,10 +335,8 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
       palette_elem_size;
 
   m_texel_stream_buffer.CommitMemory(palette_byte_offset + palette_size);
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, palette_byte_offset + palette_size);
   Gfx::GetInstance()->SetTextureDescriptor(0, m_texel_buffer_views[format].cpu_handle);
   Gfx::GetInstance()->SetTextureDescriptor(1, m_texel_buffer_views[palette_format].cpu_handle);
   return true;
 }
-
 }  // namespace DX12

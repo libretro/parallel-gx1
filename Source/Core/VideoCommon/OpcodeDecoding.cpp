@@ -23,7 +23,6 @@
 #include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/DataReader.h"
 #include "VideoCommon/Fifo.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexLoaderBase.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/XFMemory.h"
@@ -31,7 +30,6 @@
 
 namespace OpcodeDecoder
 {
-
 template <bool is_preprocess>
 class RunCallback final : public Callback
 {
@@ -43,8 +41,6 @@ public:
     if constexpr (!is_preprocess)
     {
       LoadXFReg(address, count, data);
-
-      INCSTAT(g_stats.this_frame.num_xf_loads);
     }
   }
   OPCODE_CALLBACK(void OnCP(u8 command, u32 value))
@@ -81,8 +77,6 @@ public:
       {
         VertexLoaderManager::g_bases_dirty = true;
       }
-
-      INCSTAT(g_stats.this_frame.num_cp_loads);
     }
     else if constexpr (is_preprocess)
     {
@@ -109,7 +103,6 @@ public:
     else
     {
       LoadBPReg(command, value, m_cycles);
-      INCSTAT(g_stats.this_frame.num_bp_loads);
     }
   }
   OPCODE_CALLBACK(void OnIndexedLoad(CPArray array, u32 index, u16 address, u8 size))
@@ -182,14 +175,7 @@ public:
         // Avoid the crash if memory.GetPointerForRange failed ..
         if (start_address != nullptr)
         {
-          // temporarily swap dl and non-dl (small "hack" for the stats)
-          g_stats.SwapDL();
-
           Run(start_address, size, *this);
-          INCSTAT(g_stats.this_frame.num_dlists_called);
-
-          // un-swap
-          g_stats.SwapDL();
         }
       }
 
@@ -261,5 +247,4 @@ u8* RunFifo(DataReader src, u32* cycles)
 
 template u8* RunFifo<true>(DataReader src, u32* cycles);
 template u8* RunFifo<false>(DataReader src, u32* cycles);
-
 }  // namespace OpcodeDecoder

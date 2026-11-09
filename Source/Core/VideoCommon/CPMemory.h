@@ -768,4 +768,3 @@ extern CPState g_preprocess_cp_state;
 
 void CopyPreprocessCPStateFromMain();
 
-std::pair<std::string, std::string> GetCPRegInfo(u8 cmd, u32 value);

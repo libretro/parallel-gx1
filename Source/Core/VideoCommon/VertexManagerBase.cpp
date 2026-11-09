@@ -32,7 +32,6 @@
 #include "VideoCommon/PerfQueryBase.h"
 #include "VideoCommon/PixelShaderGen.h"
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexShaderManager.h"
@@ -83,27 +82,6 @@ static float CalculateProjectionViewportRatio(const Projection::Raw& projection,
   const float viewport_ar = viewport.wd / viewport.ht;
 
   return std::abs(projection_ar / viewport_ar);
-}
-
-static bool IsAnamorphicProjection(const Projection::Raw& projection, const Viewport& viewport,
-                                   const VideoConfig& config)
-{
-  // If ratio between our projection and viewport aspect ratios is similar to 16:9 / 4:3
-  // we have an anamorphic projection. This value can be overridden by a GameINI.
-  // Game cheats that change the aspect ratio to natively unsupported ones
-  // won't be automatically recognized here.
-
-  return std::abs(CalculateProjectionViewportRatio(projection, viewport) -
-                  config.widescreen_heuristic_widescreen_ratio) <
-         config.widescreen_heuristic_aspect_ratio_slop;
-}
-
-static bool IsNormalProjection(const Projection::Raw& projection, const Viewport& viewport,
-                               const VideoConfig& config)
-{
-  return std::abs(CalculateProjectionViewportRatio(projection, viewport) -
-                  config.widescreen_heuristic_standard_ratio) <
-         config.widescreen_heuristic_aspect_ratio_slop;
 }
 
 VertexManagerBase::VertexManagerBase()
@@ -484,29 +462,18 @@ void VertexManagerBase::Flush()
         is_perspective ? m_flush_statistics.perspective : m_flush_statistics.orthographic;
 
     const auto& projection = xfmem.projection.rawProjection;
-    // TODO: Potentially the viewport size could be used as weight for the flush count average.
-    // This way a small minimap would have less effect than a fullscreen projection.
     const auto& viewport = xfmem.viewport;
 
-    // FYI: This average is based on flushes.
-    // It doesn't look at vertex counts like the heuristic does.
-    counts.average_ratio.Push(CalculateProjectionViewportRatio(projection, viewport));
-
-    if (IsAnamorphicProjection(projection, viewport, g_ActiveConfig))
-    {
-      ++counts.anamorphic_flush_count;
-      counts.anamorphic_vertex_count += index_generator_index_len(&m_index_generator);
-    }
-    else if (IsNormalProjection(projection, viewport, g_ActiveConfig))
-    {
-      ++counts.normal_flush_count;
-      counts.normal_vertex_count += index_generator_index_len(&m_index_generator);
-    }
-    else
-    {
-      ++counts.other_flush_count;
-      counts.other_vertex_count += index_generator_index_len(&m_index_generator);
-    }
+    // A projection whose aspect ratio is the viewport's times about 16:9 / 4:3 is anamorphic,
+    // about 1 normal (a GameINI can override both). Cheats that change the aspect ratio to
+    // natively unsupported ones won't be recognized here.
+    const float ratio = CalculateProjectionViewportRatio(projection, viewport);
+    const float slop = g_ActiveConfig.widescreen_heuristic_aspect_ratio_slop;
+    const u32 num_indices = index_generator_index_len(&m_index_generator);
+    if (std::abs(ratio - g_ActiveConfig.widescreen_heuristic_widescreen_ratio) < slop)
+      counts.anamorphic_vertex_count += num_indices;
+    else if (std::abs(ratio - g_ActiveConfig.widescreen_heuristic_standard_ratio) < slop)
+      counts.normal_vertex_count += num_indices;
   }
 
   auto& pixel_shader_manager = system.GetPixelShaderManager();
@@ -1075,7 +1042,6 @@ void VertexManagerBase::RenderDrawCall(
   DrawCurrentBatch(base_index, index_generator_index_len(&m_index_generator), base_vertex);
 
   // Track the total emulated state draws
-  INCSTAT(g_stats.this_frame.num_draw_calls);
 
   if (PerfQueryBase::ShouldEmulate())
     g_perf_query->DisableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);

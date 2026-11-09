@@ -30,7 +30,6 @@
 
 #include "VideoCommon/GeometryShaderManager.h"
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
@@ -163,7 +162,6 @@ void SHADER::Bind() const
 {
   if (CurrentProgram != glprogid)
   {
-    INCSTAT(g_stats.this_frame.num_shader_changes);
     glUseProgram(glprogid);
     CurrentProgram = glprogid;
   }
@@ -251,8 +249,6 @@ void ProgramShaderCache::UploadConstants()
     pixel_shader_manager.dirty = false;
     vertex_shader_manager.dirty = false;
     geometry_shader_manager.dirty = false;
-
-    ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, s_ubo_buffer_size);
   }
 }
 
@@ -267,8 +263,6 @@ void ProgramShaderCache::UploadConstants(const void* data, u32 data_size)
   // bind the same sub-buffer to all stages
   for (u32 index = 1; index <= 4; index++)
     glBindBufferRange(GL_UNIFORM_BUFFER, index, s_buffer->m_buffer, buffer.second, data_size);
-
-  ADDSTAT(g_stats.this_frame.bytes_uniform_streamed, data_size);
 }
 
 bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view code)
@@ -927,5 +921,4 @@ u64 ProgramShaderCache::GenerateShaderID()
 {
   return static_cast<u64>(retro_atomic_fetch_add_64(&s_shader_counter, 1));
 }
-
 }  // namespace OGL
