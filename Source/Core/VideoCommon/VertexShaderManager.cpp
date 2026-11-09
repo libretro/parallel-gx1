@@ -230,7 +230,7 @@ bool VertexShaderManager::UseVertexDepthRange()
 
 // Syncs the shader constant buffers with xfmem
 // TODO: A cleaner way to control the matrices without making a mess in the parameters field
-void VertexShaderManager::SetConstants(std::span<const std::string> textures,
+void VertexShaderManager::SetConstants(const std::string* const* textures, u32 num_textures,
                                        XFStateManager& xf_state_manager)
 {
   if (constants.missing_color_hex != g_ActiveConfig.iMissingColorValue)
@@ -245,7 +245,7 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
     dirty = true;
   }
 
-  const auto per_vertex_transform_matrix_changes =
+  const int* const per_vertex_transform_matrix_changes =
       xf_state_manager.GetPerVertexTransformMatrixChanges();
   if (per_vertex_transform_matrix_changes[0] >= 0)
   {
@@ -257,7 +257,7 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
     xf_state_manager.ResetPerVertexTransformMatrixChanges();
   }
 
-  const auto per_vertex_normal_matrices_changed =
+  const int* const per_vertex_normal_matrices_changed =
       xf_state_manager.GetPerVertexNormalMatrixChanges();
   if (per_vertex_normal_matrices_changed[0] >= 0)
   {
@@ -271,7 +271,7 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
     xf_state_manager.ResetPerVertexNormalMatrixChanges();
   }
 
-  const auto post_transform_matrices_changed = xf_state_manager.GetPostTransformMatrixChanges();
+  const int* const post_transform_matrices_changed = xf_state_manager.GetPostTransformMatrixChanges();
   if (post_transform_matrices_changed[0] >= 0)
   {
     int startn = post_transform_matrices_changed[0] / 4;
@@ -282,7 +282,7 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
     xf_state_manager.ResetPostTransformMatrixChanges();
   }
 
-  const auto light_changes = xf_state_manager.GetLightsChanged();
+  const int* const light_changes = xf_state_manager.GetLightsChanged();
   if (light_changes[0] >= 0)
   {
     // TODO: Outdated comment
@@ -461,38 +461,39 @@ void VertexShaderManager::SetConstants(std::span<const std::string> textures,
                                        bpmem.scissorBR, bpmem.scissorOffset, xfmem.viewport);
   }
 
-  std::vector<GraphicsModAction*> projection_actions;
+  // the mod manager's action lists, lent: the projection's, then each texture's
+  const std::vector<GraphicsModAction*>* projection_actions[1 + 8];
+  u32 num_projection_actions = 0;
+  bool have_projection_actions = false;
   if (g_ActiveConfig.bGraphicMods)
   {
-    for (const auto& action : g_graphics_mod_manager->GetProjectionActions(xfmem.projection.type))
+    projection_actions[num_projection_actions++] =
+        &g_graphics_mod_manager->GetProjectionActions(xfmem.projection.type);
+    for (u32 i = 0; i < num_textures && i < 8; i++)
     {
-      projection_actions.push_back(action);
+      projection_actions[num_projection_actions++] =
+          &g_graphics_mod_manager->GetProjectionTextureActions(xfmem.projection.type,
+                                                               *textures[i]);
     }
-
-    for (const auto& texture : textures)
-    {
-      for (const auto& action :
-           g_graphics_mod_manager->GetProjectionTextureActions(xfmem.projection.type, texture))
-      {
-        projection_actions.push_back(action);
-      }
-    }
+    for (u32 i = 0; i < num_projection_actions; i++)
+      have_projection_actions = have_projection_actions || !projection_actions[i]->empty();
   }
 
   if (xf_state_manager.DidProjectionChange() ||
-      !projection_actions.empty() || m_projection_graphics_mod_change
+      have_projection_actions || m_projection_graphics_mod_change
       || LibretroVRCameraChanged()
   )
   {
     xf_state_manager.ResetProjection();
-    m_projection_graphics_mod_change = !projection_actions.empty();
+    m_projection_graphics_mod_change = have_projection_actions;
 
     auto corrected_matrix = LoadProjectionMatrix();
 
     GraphicsModActionData::Projection projection{&corrected_matrix};
-    for (const auto& action : projection_actions)
+    for (u32 i = 0; i < num_projection_actions; i++)
     {
-      action->OnProjection(&projection);
+      for (GraphicsModAction* action : *projection_actions[i])
+        action->OnProjection(&projection);
     }
 
     memcpy(constants.projection.data(), corrected_matrix.data.data(), 4 * sizeof(float4));

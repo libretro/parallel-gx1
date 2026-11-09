@@ -526,7 +526,9 @@ void VertexManagerBase::Flush()
   const auto used_textures = UsedTextures();
   bool vr_textured = false;
   bool vr_samples_copy = false;
-  std::vector<std::string> texture_names;
+  // the names the bound cache entries hold, lent: they stay bound until BindTextures
+  const std::string* texture_names[8];
+  u32 num_texture_names = 0;
   Common::SmallVector<u32, 8> texture_units;
   std::array<SamplerState, 8> samplers;
   if (!m_cull_all)
@@ -555,11 +557,11 @@ void VertexManagerBase::Flush()
           vr_textured = true;
           vr_samples_copy |= cache_entry->IsCopy();
           bool named = false;
-          for (const auto& name : texture_names)
-            named = named || name == cache_entry->texture_info_name;
+          for (u32 n = 0; n < num_texture_names; n++)
+            named = named || *texture_names[n] == cache_entry->texture_info_name;
           if (!named)
           {
-            texture_names.push_back(cache_entry->texture_info_name);
+            texture_names[num_texture_names++] = &cache_entry->texture_info_name;
             texture_units.push_back(i);
           }
 
@@ -572,7 +574,7 @@ void VertexManagerBase::Flush()
   }
   g_libretro_vr_camera.draw_textured = vr_textured;
   g_libretro_vr_camera.draw_samples_copy = vr_samples_copy;
-  vertex_shader_manager.SetConstants(texture_names, xf_state_manager);
+  vertex_shader_manager.SetConstants(texture_names, num_texture_names, xf_state_manager);
   if (!bpmem.genMode.zfreeze)
   {
     // Must be done after VertexShaderManager::SetConstants()
@@ -587,10 +589,10 @@ void VertexManagerBase::Flush()
   if (!m_cull_all)
   {
     bool skip = false;
-    for (size_t i = 0; i < texture_names.size(); i++)
+    for (u32 i = 0; i < num_texture_names; i++)
     {
       GraphicsModActionData::DrawStarted draw_started{texture_units, &skip};
-      for (const auto& action : g_graphics_mod_manager->GetDrawStartedActions(texture_names[i]))
+      for (const auto& action : g_graphics_mod_manager->GetDrawStartedActions(*texture_names[i]))
         action->OnDrawStarted(&draw_started);
     }
 

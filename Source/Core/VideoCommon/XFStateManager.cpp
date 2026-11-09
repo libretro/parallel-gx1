@@ -30,13 +30,13 @@ void XFStateManager::Init()
 
 void XFStateManager::DoState(PointerWrap& p)
 {
-  p.DoArray(m_minmax_transform_matrices_changed);
-  p.DoArray(m_minmax_normal_matrices_changed);
-  p.DoArray(m_minmax_post_transform_matrices_changed);
-  p.DoArray(m_minmax_lights_changed);
+  p.DoArray(m_minmax_transform_matrices_changed, 2);
+  p.DoArray(m_minmax_normal_matrices_changed, 2);
+  p.DoArray(m_minmax_post_transform_matrices_changed, 2);
+  p.DoArray(m_minmax_lights_changed, 2);
 
   p.Do(m_materials_changed);
-  p.DoArray(m_tex_matrices_changed);
+  p.DoArray(m_tex_matrices_changed, 2);
   p.Do(m_pos_normal_matrix_changed);
   p.Do(m_projection_changed);
   p.Do(m_viewport_changed);
@@ -250,7 +250,7 @@ void XFStateManager::ResetLightingConfigChange()
 
 void XFStateManager::ResetLightsChanged()
 {
-  m_minmax_lights_changed.fill(-1);
+  m_minmax_lights_changed[0] = m_minmax_lights_changed[1] = -1;
 }
 
 void XFStateManager::SetMaterialColorChanged(int index)
@@ -265,15 +265,15 @@ void XFStateManager::ResetMaterialChanges()
 
 void XFStateManager::ResetPerVertexTransformMatrixChanges()
 {
-  m_minmax_transform_matrices_changed.fill(-1);
+  m_minmax_transform_matrices_changed[0] = m_minmax_transform_matrices_changed[1] = -1;
 }
 
 void XFStateManager::ResetPerVertexNormalMatrixChanges()
 {
-  m_minmax_normal_matrices_changed.fill(-1);
+  m_minmax_normal_matrices_changed[0] = m_minmax_normal_matrices_changed[1] = -1;
 }
 
 void XFStateManager::ResetPostTransformMatrixChanges()
 {
-  m_minmax_post_transform_matrices_changed.fill(-1);
+  m_minmax_post_transform_matrices_changed[0] = m_minmax_post_transform_matrices_changed[1] = -1;
 }

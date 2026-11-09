@@ -6,6 +6,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -47,7 +48,13 @@ private:
   std::list<std::unique_ptr<GraphicsModAction>> m_actions;
   std::unordered_map<ProjectionType, std::vector<GraphicsModAction*>>
       m_projection_target_to_actions;
-  std::unordered_map<std::string, std::vector<GraphicsModAction*>>
+  // looked up per draw by a key built on the stack
+  struct KeyHash
+  {
+    using is_transparent = void;
+    size_t operator()(std::string_view key) const { return std::hash<std::string_view>{}(key); }
+  };
+  std::unordered_map<std::string, std::vector<GraphicsModAction*>, KeyHash, std::equal_to<>>
       m_projection_texture_target_to_actions;
   std::unordered_map<std::string, std::vector<GraphicsModAction*>> m_draw_started_target_to_actions;
   std::unordered_map<std::string, std::vector<GraphicsModAction*>> m_load_texture_target_to_actions;

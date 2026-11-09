@@ -120,7 +120,18 @@ const std::vector<GraphicsModAction*>&
 GraphicsModManager::GetProjectionTextureActions(ProjectionType projection_type,
                                                 const std::string& texture_name) const
 {
-  const auto lookup = fmt::format("{}_{}", texture_name, static_cast<int>(projection_type));
+  if (m_projection_texture_target_to_actions.empty())
+    return m_default;
+  char key[256];
+  const auto made = fmt::format_to_n(key, sizeof(key), "{}_{}", texture_name,
+                                     static_cast<int>(projection_type));
+  // texture names fit; a longer one is made on the heap
+  const std::string long_key = made.size > sizeof(key) ?
+                                   fmt::format("{}_{}", texture_name,
+                                               static_cast<int>(projection_type)) :
+                                   std::string();
+  const std::string_view lookup =
+      made.size > sizeof(key) ? std::string_view(long_key) : std::string_view(key, made.size);
   if (const auto it = m_projection_texture_target_to_actions.find(lookup);
       it != m_projection_texture_target_to_actions.end())
   {

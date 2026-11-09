@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <span>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -56,7 +55,8 @@ public:
 
   // constant management
   void SetProjectionMatrix(XFStateManager& xf_state_manager);
-  void SetConstants(std::span<const std::string> textures, XFStateManager& xf_state_manager);
+  void SetConstants(const std::string* const* textures, u32 num_textures,
+                    XFStateManager& xf_state_manager);
 
   // data: 3 floats representing the X, Y and Z vertex model coordinates and the posmatrix index.
   // out:  4 floats which will be initialized with the corresponding clip space coordinates

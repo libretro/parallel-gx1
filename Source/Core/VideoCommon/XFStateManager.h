@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 
 #include "Common/BitSet.h"
 
@@ -46,26 +45,26 @@ public:
   bool DidLightingConfigChange() const { return m_lighting_config_changed; }
   void ResetLightingConfigChange();
 
-  const std::array<int, 2>& GetLightsChanged() const { return m_minmax_lights_changed; }
+  const int* GetLightsChanged() const { return m_minmax_lights_changed; }
   void ResetLightsChanged();
 
   void SetMaterialColorChanged(int index);
   const BitSet32& GetMaterialChanges() const { return m_materials_changed; }
   void ResetMaterialChanges();
 
-  const std::array<int, 2>& GetPerVertexTransformMatrixChanges() const
+  const int* GetPerVertexTransformMatrixChanges() const
   {
     return m_minmax_transform_matrices_changed;
   }
   void ResetPerVertexTransformMatrixChanges();
 
-  const std::array<int, 2>& GetPerVertexNormalMatrixChanges() const
+  const int* GetPerVertexNormalMatrixChanges() const
   {
     return m_minmax_normal_matrices_changed;
   }
   void ResetPerVertexNormalMatrixChanges();
 
-  const std::array<int, 2>& GetPostTransformMatrixChanges() const
+  const int* GetPostTransformMatrixChanges() const
   {
     return m_minmax_post_transform_matrices_changed;
   }
@@ -73,15 +72,15 @@ public:
 
 private:
   // track changes
-  std::array<bool, 2> m_tex_matrices_changed{};
+  bool m_tex_matrices_changed[2] = {};
   bool m_pos_normal_matrix_changed = false;
   bool m_projection_changed = false;
   bool m_viewport_changed = false;
   bool m_tex_mtx_info_changed = false;
   bool m_lighting_config_changed = false;
   BitSet32 m_materials_changed;
-  std::array<int, 2> m_minmax_transform_matrices_changed{};
-  std::array<int, 2> m_minmax_normal_matrices_changed{};
-  std::array<int, 2> m_minmax_post_transform_matrices_changed{};
-  std::array<int, 2> m_minmax_lights_changed{};
+  int m_minmax_transform_matrices_changed[2] = {};
+  int m_minmax_normal_matrices_changed[2] = {};
+  int m_minmax_post_transform_matrices_changed[2] = {};
+  int m_minmax_lights_changed[2] = {};
 };
