@@ -3,11 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <functional>
-#include <memory>
-#include <vector>
-
 #include <retro_atomic.h>
 
 #include <Common/WorkQueueThread.h>
@@ -98,23 +93,52 @@ private:
 
   const u32 DESCRIPTOR_SETS_PER_POOL = 1024;
 
+  /* An object destroyed once the GPU is done with the command buffer it was last used in. */
+  struct DeferredDestruction
+  {
+    enum Kind
+    {
+      BUFFER_VIEW,
+      BUFFER,
+      FRAMEBUFFER,
+      IMAGE,
+      IMAGE_VIEW
+    } kind;
+    union
+    {
+      VkBufferView buffer_view;
+      VkBuffer buffer;
+      VkFramebuffer framebuffer;
+      VkImage image;
+      VkImageView image_view;
+    };
+    vk_heap_alloc_t alloc; /* BUFFER and IMAGE */
+  };
+  static void Destroy(DeferredDestruction* d);
+  void Defer(const DeferredDestruction& d);
+
   struct CmdBufferResources
   {
     // [0] - Init (upload) command buffer, [1] - draw command buffer
     VkCommandPool command_pool = VK_NULL_HANDLE;
-    std::array<VkCommandBuffer, 2> command_buffers = {};
+    VkCommandBuffer command_buffers[2] = {};
     VkFence fence = VK_NULL_HANDLE;
     u64 fence_counter = 0;
     bool init_command_buffer_used = false;
     retro_atomic_int_t waiting_for_submit{};
     u32 frame_index = 0;
 
-    std::vector<std::function<void()>> cleanup_resources;
+    /* kept after each clear: grows to what a command buffer frees, then no more */
+    DeferredDestruction* cleanup = nullptr;
+    u32 num_cleanup = 0;
+    u32 cleanup_capacity = 0;
   };
 
   struct FrameResources
   {
-    std::vector<VkDescriptorPool> descriptor_pools;
+    VkDescriptorPool* descriptor_pools = nullptr;
+    u32 num_descriptor_pools = 0;
+    u32 descriptor_pools_capacity = 0;
     u32 current_descriptor_pool_index = 0;
   };
 
@@ -128,8 +152,8 @@ private:
   u64 m_next_fence_counter = 1;
   u64 m_completed_fence_counter = 0;
 
-  std::array<FrameResources, NUM_FRAMES_IN_FLIGHT> m_frame_resources;
-  std::array<CmdBufferResources, NUM_COMMAND_BUFFERS> m_command_buffers;
+  FrameResources m_frame_resources[NUM_FRAMES_IN_FLIGHT];
+  CmdBufferResources m_command_buffers[NUM_COMMAND_BUFFERS];
   u32 m_current_frame = 0;
   u32 m_current_cmd_buffer = 0;
 

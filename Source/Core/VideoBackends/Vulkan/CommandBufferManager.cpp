@@ -3,8 +3,8 @@
 
 #include "VideoBackends/Vulkan/CommandBufferManager.h"
 
-#include <array>
 #include <cstdint>
+#include <cstdlib>
 
 #include "Common/Assert.h"
 #include "Common/MsgHandler.h"
@@ -64,9 +64,9 @@ bool CommandBufferManager::CreateCommandBuffers()
 
     VkCommandBufferAllocateInfo buffer_info = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr, resources.command_pool,
-        VK_COMMAND_BUFFER_LEVEL_PRIMARY, static_cast<uint32_t>(resources.command_buffers.size())};
+        VK_COMMAND_BUFFER_LEVEL_PRIMARY, 2};
 
-    res = vkAllocateCommandBuffers(device, &buffer_info, resources.command_buffers.data());
+    res = vkAllocateCommandBuffers(device, &buffer_info, resources.command_buffers);
     if (res != VK_SUCCESS)
     {
       LOG_VULKAN_ERROR(res, "vkAllocateCommandBuffers failed: ");
@@ -85,7 +85,7 @@ bool CommandBufferManager::CreateCommandBuffers()
   }
 
   // Activate the first command buffer. BeginCommandBuffer moves forward, so start with the last
-  m_current_cmd_buffer = static_cast<u32>(m_command_buffers.size()) - 1;
+  m_current_cmd_buffer = NUM_COMMAND_BUFFERS - 1;
   BeginCommandBuffer();
   return true;
 }
@@ -104,8 +104,11 @@ void CommandBufferManager::DestroyCommandBuffers()
       vkDestroyCommandPool(device, resources.command_pool, nullptr);
 
     // Destroy any pending objects.
-    for (auto& it : resources.cleanup_resources)
-      it();
+    for (u32 i = 0; i < resources.num_cleanup; i++)
+      Destroy(&resources.cleanup[i]);
+    free(resources.cleanup);
+    resources.cleanup = nullptr;
+    resources.num_cleanup = resources.cleanup_capacity = 0;
 
     if (resources.fence != VK_NULL_HANDLE)
       vkDestroyFence(device, resources.fence, nullptr);
@@ -113,11 +116,28 @@ void CommandBufferManager::DestroyCommandBuffers()
 
   for (FrameResources& resources : m_frame_resources)
   {
-    for (VkDescriptorPool descriptor_pool : resources.descriptor_pools)
-    {
-      vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
-    }
+    for (u32 i = 0; i < resources.num_descriptor_pools; i++)
+      vkDestroyDescriptorPool(device, resources.descriptor_pools[i], nullptr);
+    free(resources.descriptor_pools);
+    resources.descriptor_pools = nullptr;
+    resources.num_descriptor_pools = resources.descriptor_pools_capacity = 0;
   }
+}
+
+/* Room for one more of size bytes in a list grown by doubling: false where none was left. */
+static bool Reserve(void** data, u32 count, u32* capacity, size_t size)
+{
+  void* grown;
+  u32 n;
+  if (count < *capacity)
+    return true;
+  n = *capacity ? *capacity * 2 : 16;
+  grown = realloc(*data, static_cast<size_t>(n) * size);
+  if (!grown)
+    return false;
+  *data = grown;
+  *capacity = n;
+  return true;
 }
 
 VkDescriptorPool CommandBufferManager::CreateDescriptorPool(u32 max_descriptor_sets)
@@ -131,7 +151,7 @@ VkDescriptorPool CommandBufferManager::CreateDescriptorPool(u32 max_descriptor_s
    * UNIFORM_TEXEL_BUFFER: 3
    * STORAGE_IMAGE: 1
    */
-  const std::array<VkDescriptorPoolSize, 5> pool_sizes{{
+  const VkDescriptorPoolSize pool_sizes[5] = {
       {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, max_descriptor_sets * 3},
       {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
        max_descriptor_sets *
@@ -140,11 +160,11 @@ VkDescriptorPool CommandBufferManager::CreateDescriptorPool(u32 max_descriptor_s
       {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, max_descriptor_sets * 2},
       {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, max_descriptor_sets * 3},
       {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, max_descriptor_sets * 1},
-  }};
+  };
 
   const VkDescriptorPoolCreateInfo pool_create_info = {
       VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr,           0, max_descriptor_sets,
-      static_cast<u32>(pool_sizes.size()),           pool_sizes.data(),
+      5,                                             pool_sizes,
   };
 
   VkDevice device = g_vulkan_context->GetDevice();
@@ -163,7 +183,7 @@ VkDescriptorSet CommandBufferManager::AllocateDescriptorSet(VkDescriptorSetLayou
   VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
   FrameResources& resources = GetCurrentFrameResources();
 
-  if (!resources.descriptor_pools.empty()) [[likely]]
+  if (resources.num_descriptor_pools) [[likely]]
   {
     VkDescriptorSetAllocateInfo allocate_info = {
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, nullptr,
@@ -172,7 +192,7 @@ VkDescriptorSet CommandBufferManager::AllocateDescriptorSet(VkDescriptorSetLayou
     VkResult res =
         vkAllocateDescriptorSets(g_vulkan_context->GetDevice(), &allocate_info, &descriptor_set);
     if (res != VK_SUCCESS &&
-        resources.descriptor_pools.size() > resources.current_descriptor_pool_index + 1)
+        resources.num_descriptor_pools > resources.current_descriptor_pool_index + 1)
     {
       // Mark the next descriptor set as active and try again.
       resources.current_descriptor_pool_index++;
@@ -187,9 +207,15 @@ VkDescriptorSet CommandBufferManager::AllocateDescriptorSet(VkDescriptorSetLayou
     if (descriptor_pool == VK_NULL_HANDLE) [[unlikely]]
       return VK_NULL_HANDLE;
 
-    resources.descriptor_pools.push_back(descriptor_pool);
-    resources.current_descriptor_pool_index =
-        static_cast<u32>(resources.descriptor_pools.size()) - 1;
+    if (!Reserve(reinterpret_cast<void**>(&resources.descriptor_pools),
+                 resources.num_descriptor_pools, &resources.descriptor_pools_capacity,
+                 sizeof(VkDescriptorPool))) [[unlikely]]
+    {
+      vkDestroyDescriptorPool(g_vulkan_context->GetDevice(), descriptor_pool, nullptr);
+      return VK_NULL_HANDLE;
+    }
+    resources.descriptor_pools[resources.num_descriptor_pools++] = descriptor_pool;
+    resources.current_descriptor_pool_index = resources.num_descriptor_pools - 1;
     descriptor_set = AllocateDescriptorSet(set_layout);
   }
 
@@ -293,9 +319,9 @@ void CommandBufferManager::WaitForCommandBufferCompletion(u32 index)
 
     if (cleanup_resources.fence_counter > m_completed_fence_counter)
     {
-      for (auto& it : cleanup_resources.cleanup_resources)
-        it();
-      cleanup_resources.cleanup_resources.clear();
+      for (u32 i = 0; i < cleanup_resources.num_cleanup; i++)
+        Destroy(&cleanup_resources.cleanup[i]);
+      cleanup_resources.num_cleanup = 0;
     }
 
     cleanup_index = (cleanup_index + 1) % NUM_COMMAND_BUFFERS;
@@ -359,7 +385,7 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
     // Reset the descriptor pools
     FrameResources& frame_resources = GetCurrentFrameResources();
 
-    if (frame_resources.descriptor_pools.size() == 1) [[likely]]
+    if (frame_resources.num_descriptor_pools == 1) [[likely]]
     {
       VkResult res = vkResetDescriptorPool(g_vulkan_context->GetDevice(),
                                            frame_resources.descriptor_pools[0], 0);
@@ -368,14 +394,20 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
     }
     else [[unlikely]]
     {
-      for (VkDescriptorPool descriptor_pool : frame_resources.descriptor_pools)
-      {
-        vkDestroyDescriptorPool(g_vulkan_context->GetDevice(), descriptor_pool, nullptr);
-      }
-      frame_resources.descriptor_pools.clear();
+      /* one pool for them all, where the list already has room */
+      for (u32 i = 0; i < frame_resources.num_descriptor_pools; i++)
+        vkDestroyDescriptorPool(g_vulkan_context->GetDevice(),
+                                frame_resources.descriptor_pools[i], nullptr);
+      frame_resources.num_descriptor_pools = 0;
       VkDescriptorPool descriptor_pool = CreateDescriptorPool(m_descriptor_set_count);
-      if (descriptor_pool != VK_NULL_HANDLE) [[likely]]
-        frame_resources.descriptor_pools.push_back(descriptor_pool);
+      if (descriptor_pool != VK_NULL_HANDLE &&
+          Reserve(reinterpret_cast<void**>(&frame_resources.descriptor_pools), 0,
+                  &frame_resources.descriptor_pools_capacity, sizeof(VkDescriptorPool)))
+        [[likely]]
+        frame_resources.descriptor_pools[frame_resources.num_descriptor_pools++] =
+            descriptor_pool;
+      else if (descriptor_pool != VK_NULL_HANDLE)
+        vkDestroyDescriptorPool(g_vulkan_context->GetDevice(), descriptor_pool, nullptr);
     }
 
     frame_resources.current_descriptor_pool_index = 0;
@@ -395,8 +427,8 @@ void CommandBufferManager::SubmitCommandBuffer(u32 command_buffer_index)
                               0,
                               nullptr,
                               nullptr,
-                              static_cast<u32>(resources.command_buffers.size()),
-                              resources.command_buffers.data(),
+                              2,
+                              resources.command_buffers,
                               0,
                               nullptr};
 
@@ -454,43 +486,85 @@ void CommandBufferManager::BeginCommandBuffer()
   m_current_cmd_buffer = next_buffer_index;
 }
 
+void CommandBufferManager::Destroy(DeferredDestruction* d)
+{
+  const VkDevice device = g_vulkan_context->GetDevice();
+  switch (d->kind)
+  {
+  case DeferredDestruction::BUFFER_VIEW:
+    vkDestroyBufferView(device, d->buffer_view, nullptr);
+    break;
+  case DeferredDestruction::BUFFER:
+    vk_heap_destroy_buffer(g_vulkan_context->GetHeap(), d->buffer, &d->alloc);
+    break;
+  case DeferredDestruction::FRAMEBUFFER:
+    vkDestroyFramebuffer(device, d->framebuffer, nullptr);
+    break;
+  case DeferredDestruction::IMAGE:
+    vk_heap_destroy_image(g_vulkan_context->GetHeap(), d->image, &d->alloc);
+    break;
+  case DeferredDestruction::IMAGE_VIEW:
+    vkDestroyImageView(device, d->image_view, nullptr);
+    break;
+  }
+}
+
+/* Where the list cannot grow, the object is destroyed once the GPU is idle. */
+void CommandBufferManager::Defer(const DeferredDestruction& d)
+{
+  CmdBufferResources& resources = GetCurrentCmdBufferResources();
+  if (!Reserve(reinterpret_cast<void**>(&resources.cleanup), resources.num_cleanup,
+               &resources.cleanup_capacity, sizeof(DeferredDestruction))) [[unlikely]]
+  {
+    DeferredDestruction now = d;
+    WaitForWorkerThreadIdle();
+    vkDeviceWaitIdle(g_vulkan_context->GetDevice());
+    Destroy(&now);
+    return;
+  }
+  resources.cleanup[resources.num_cleanup++] = d;
+}
+
 void CommandBufferManager::DeferBufferViewDestruction(VkBufferView object)
 {
-  CmdBufferResources& cmd_buffer_resources = GetCurrentCmdBufferResources();
-  cmd_buffer_resources.cleanup_resources.push_back(
-      [object] { vkDestroyBufferView(g_vulkan_context->GetDevice(), object, nullptr); });
+  DeferredDestruction d = {};
+  d.kind = DeferredDestruction::BUFFER_VIEW;
+  d.buffer_view = object;
+  Defer(d);
 }
 
 void CommandBufferManager::DeferBufferDestruction(VkBuffer buffer, const vk_heap_alloc_t& alloc)
 {
-  CmdBufferResources& cmd_buffer_resources = GetCurrentCmdBufferResources();
-  vk_heap_alloc_t owned = alloc;
-  cmd_buffer_resources.cleanup_resources.push_back([buffer, owned]() mutable {
-    vk_heap_destroy_buffer(g_vulkan_context->GetHeap(), buffer, &owned);
-  });
+  DeferredDestruction d = {};
+  d.kind = DeferredDestruction::BUFFER;
+  d.buffer = buffer;
+  d.alloc = alloc;
+  Defer(d);
 }
 
 void CommandBufferManager::DeferFramebufferDestruction(VkFramebuffer object)
 {
-  CmdBufferResources& cmd_buffer_resources = GetCurrentCmdBufferResources();
-  cmd_buffer_resources.cleanup_resources.push_back(
-      [object] { vkDestroyFramebuffer(g_vulkan_context->GetDevice(), object, nullptr); });
+  DeferredDestruction d = {};
+  d.kind = DeferredDestruction::FRAMEBUFFER;
+  d.framebuffer = object;
+  Defer(d);
 }
 
 void CommandBufferManager::DeferImageDestruction(VkImage image, const vk_heap_alloc_t& alloc)
 {
-  CmdBufferResources& cmd_buffer_resources = GetCurrentCmdBufferResources();
-  vk_heap_alloc_t owned = alloc;
-  cmd_buffer_resources.cleanup_resources.push_back([image, owned]() mutable {
-    vk_heap_destroy_image(g_vulkan_context->GetHeap(), image, &owned);
-  });
+  DeferredDestruction d = {};
+  d.kind = DeferredDestruction::IMAGE;
+  d.image = image;
+  d.alloc = alloc;
+  Defer(d);
 }
 
 void CommandBufferManager::DeferImageViewDestruction(VkImageView object)
 {
-  CmdBufferResources& cmd_buffer_resources = GetCurrentCmdBufferResources();
-  cmd_buffer_resources.cleanup_resources.push_back(
-      [object] { vkDestroyImageView(g_vulkan_context->GetDevice(), object, nullptr); });
+  DeferredDestruction d = {};
+  d.kind = DeferredDestruction::IMAGE_VIEW;
+  d.image_view = object;
+  Defer(d);
 }
 
 CommandBufferManager* g_command_buffer_mgr = nullptr;
