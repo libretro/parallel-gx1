@@ -57,6 +57,37 @@ work over through atomics and eventcounts, and nothing waits on a clock.
   eventcounts. A mutex added to fix a race is the wrong fix: give the
   state one owner.
 
+## No allocations mid-game
+
+After boot, nothing the core does in play touches the heap, on any
+thread: not `retro_run`, not the CPU or GPU thread, not the compile
+workers. The gate's allocation pass holds this at 0 on the main thread
+and 0 on the workers (`Tools/stutter/baseline.txt`), and a single new
+allocation fails it.
+
+- **Make it at boot.** Storage play needs is made before the first
+  frame: sized for the worst case where the bound is known, or grown
+  during boot. A thread that starts at boot makes what it will use
+  then (`shader_arena_prepare`), not on its first piece of work.
+- **Keep what is freed.** Objects made and destroyed in play come from
+  a pool (`Common/ObjectPool.h`); shader text and blobs from the
+  thread's stash (`VideoCommon/ShaderArena.c`); a list that is cleared
+  keeps its storage.
+- **Fixed bounds where the hardware gives one.** A per-frame list with a
+  natural bound is a fixed array; past it, the frame stops recording
+  rather than allocating (the CPU-access and command-buffer-kick
+  lists).
+- **Large tables are untouched pages.** Memory that is mostly zero and
+  written sparsely comes from `Common::AllocateMemoryPages`, which the
+  system zeroes lazily, not `calloc` or a value-initialized vector.
+- **No hidden allocators.** `std::string`, `fmt::format`, iostream
+  parsing, `std::function` captures and growing containers allocate.
+  None of them run per frame, per draw or per field; a setting read in
+  play is read where config changes, not with `Config::Get` per call.
+- **Find it with the tracer.** `Tools/stutter/allocs.c` names each site
+  after boot; deepen its stack to find the owner. A site that is
+  "one-time" is still a stall at the moment it happens, so it goes too.
+
 ## Zero-copy and borrowed lends
 
 Every change looks for copies to remove in the code it touches, and
