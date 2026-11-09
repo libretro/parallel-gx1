@@ -109,8 +109,6 @@ public:
   void RemovePageTableMappings(const std::set<u32>& mappings);
   void RemoveAllPageTableMappings();
 
-  void Clear();
-
   // Routines to access physically addressed memory, designed for use by
   // emulated hardware outside the CPU. Use "Device_" prefix.
   std::string GetString(u32 em_address, size_t size = 0);

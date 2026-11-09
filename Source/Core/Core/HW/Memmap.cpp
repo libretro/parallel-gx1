@@ -216,8 +216,8 @@ void MemoryManager::Init()
 
   m_physical_page_mappings_base = reinterpret_cast<u8*>(m_physical_page_mappings.data());
   m_logical_page_mappings_base = reinterpret_cast<u8*>(m_logical_page_mappings.data());
-
-  Clear();
+  /* every view is of a segment the system just made, which it fills with zeroes: the memory is
+   * not written here, so no page is touched before the game touches it */
 
   INFO_LOG_FMT(MEMMAP, "Memory system initialized. RAM at {}", fmt::ptr(m_ram));
   m_is_initialized = true;
@@ -681,18 +681,6 @@ void MemoryManager::ShutdownFastmemArena()
   m_logical_base = nullptr;
 
   m_is_fastmem_arena_initialized = false;
-}
-
-void MemoryManager::Clear()
-{
-  if (m_ram)
-    memset(m_ram, 0, GetRamSize());
-  if (m_l1_cache)
-    memset(m_l1_cache, 0, GetL1CacheSize());
-  if (m_fake_vmem)
-    memset(m_fake_vmem, 0, GetFakeVMemSize());
-  if (m_exram)
-    memset(m_exram, 0, GetExRamSize());
 }
 
 u8* MemoryManager::GetPointerForRange(u32 address, size_t size) const
