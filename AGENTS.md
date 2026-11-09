@@ -38,6 +38,15 @@ work over through atomics and eventcounts, and nothing waits on a clock.
   a thread works, or when it stops: no time slices, no deadlines, no
   frame budgets. Background work that used to run every so many
   milliseconds counts frames (`Common/FrameClock.h`) instead.
+- **One field per `retro_run`, through the frame gate.** The CPU thread
+  parks at the end of each field until `retro_run` grants the next
+  (`Core::RunField`), so between two runs it runs nothing; a field still
+  running is never granted twice. A request that stops the CPU thread
+  (pause, savestate, shutdown, a CPU-thread job) kicks it out of the gate
+  (`FrameGateKick`), where it stops as a break at the field's end would,
+  and owes the gate a wait before it runs on. Fields before the CPU
+  thread reaches its run loop are boot work and are not gated. No
+  per-frame pause and resume of the CPU thread.
 - **No timed waits.** A thread waits for work, a field or a request on
   an eventcount, with no timeout. The one bound is the wedge guard: the
   frontend's thread waits at most `FIELD_WEDGE_US` (one second) with

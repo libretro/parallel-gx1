@@ -15,6 +15,7 @@
 #include <fmt/format.h>
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
+#include <rthreads/retro_eventcount.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -395,8 +396,35 @@ void EmuThreadEntry(void* data)
 }
 }  // namespace
 
+/* The frame gate (dual core): the CPU thread runs one field per retro_run.
+ * At a field's end it counts the field ended, lets the GPU loop finish it,
+ * and parks until the frontend's thread grants the next; between two
+ * retro_runs it runs nothing. The field the thread boots into counts as
+ * granted. A request that stops the CPU thread (a pause, a savestate,
+ * shutdown) kicks it out of the gate, where it stops just as a break at
+ * the field's end would; resumed, it waits at the gate again before it
+ * runs on, so it never runs a field the frontend did not ask for. */
+static retro_atomic_int_t s_fields_granted; /* the frontend's thread */
+static retro_atomic_int_t s_fields_ended;   /* the CPU thread */
+static retro_eventcount_t s_frame_gate;
+static bool s_frame_gate_ready;
+static bool s_frame_gate_owed; /* the CPU thread: it left the gate ungranted */
+
+static bool FieldGranted()
+{
+  return retro_atomic_load_acquire_int(&s_fields_granted) -
+             retro_atomic_load_acquire_int(&s_fields_ended) >
+         0;
+}
+
 bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
+  if (!s_frame_gate_ready)
+    s_frame_gate_ready = retro_eventcount_init(&s_frame_gate);
+  retro_atomic_store_release_int(&s_fields_granted, 1);
+  retro_atomic_store_release_int(&s_fields_ended, 0);
+  s_frame_gate_owed = false;
+
   EmuThreadArgs* const args = new EmuThreadArgs{&system, std::move(boot)};
   s_emu_thread = sthread_create(EmuThreadEntry, args);
   if (s_emu_thread)
@@ -759,7 +787,57 @@ void Callback_NewField(Core::System& system)
   SealFieldAudio(system);
 
   if (system.IsDualCoreMode())
+  {
     system.GetFifo().StopGpuLoop();
+    /* fields before the CPU thread reaches its run loop are boot work
+     * (the FIFO player clearing the EFB), not the frontend's frames */
+    if (system.GetCPU().HasCPURunStateBeenReached())
+    {
+      retro_atomic_fetch_add_int(&s_fields_ended, 1);
+      FrameGateWait(system);
+    }
+  }
+}
+
+/* The CPU thread, at a field's end or resumed with a field owed: parks
+ * until the next field is granted or the thread is asked to stop. */
+void FrameGateWait(Core::System& system)
+{
+  auto& cpu = system.GetCPU();
+  if (!s_frame_gate_ready)
+    return;
+  for (;;)
+  {
+    int key;
+    if (FieldGranted())
+    {
+      s_frame_gate_owed = false;
+      return;
+    }
+    if (cpu.GetState() != CPU::State::Running)
+    {
+      s_frame_gate_owed = true;
+      return;
+    }
+    key = retro_eventcount_prepare_wait(&s_frame_gate);
+    if (FieldGranted() || cpu.GetState() != CPU::State::Running)
+    {
+      retro_eventcount_cancel_wait(&s_frame_gate);
+      continue;
+    }
+    retro_eventcount_commit_wait(&s_frame_gate, key);
+  }
+}
+
+bool FrameGateOwed()
+{
+  return s_frame_gate_owed;
+}
+
+void FrameGateKick()
+{
+  if (s_frame_gate_ready)
+    retro_eventcount_notify(&s_frame_gate);
 }
 
 void UpdateTitle(Core::System& system)
@@ -880,31 +958,22 @@ void HostDispatchJobs(Core::System& system)
   }
 }
 
-bool IsFrameStepping()
+bool IsFieldInFlight()
 {
-  return s_frame_step;
+  return FieldGranted();
 }
 
-// NOTE: Host Thread
-void DoFrameStep(Core::System& system)
+// The frontend's thread, retro_run: the next field, unless one is still running (a wedge left
+// it to this run); a CPU thread something paused is let go again.
+void RunField(Core::System& system)
 {
-  if (AchievementManager::GetInstance().IsHardcoreModeActive())
+  if (!FieldGranted())
   {
-    Core::DisplayMessage("Frame stepping is disabled in RetroAchievements hardcore mode");
-    return;
+    retro_atomic_fetch_add_int(&s_fields_granted, 1);
+    FrameGateKick();
   }
-
   if (GetState(system) == State::Paused)
-  {
-    // if already paused, frame advance for 1 frame
-    s_frame_step = true;
     SetState(system, State::Running, false);
-  }
-  else if (!s_frame_step)
-  {
-    // if not paused yet, pause immediately instead
-    SetState(system, State::Paused);
-  }
 }
 
 void UpdateInputGate(bool require_focus, bool require_full_focus)

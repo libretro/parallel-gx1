@@ -162,6 +162,13 @@ void CPUManager::Run()
     switch (LoadState())
     {
     case State::Running:
+      // Stopped at the frame gate before its field was granted: back to the gate first.
+      if (Core::FrameGateOwed())
+      {
+        Core::FrameGateWait(m_system);
+        if (Core::FrameGateOwed())
+          break;
+      }
       if (!TryEnterActive(State::Running))
         break;
 
@@ -223,6 +230,7 @@ void CPUManager::Stop()
   // We don't need the stepping claim because State::PowerDown is a priority state which
   // will stick permanently.
   retro_atomic_exchange_int(&m_state, static_cast<int>(State::PowerDown));
+  Core::FrameGateKick();
   WakeCPU();
   WaitForIdle();
 
@@ -272,6 +280,7 @@ void CPUManager::SetStepping(bool stepping)
   if (stepping)
   {
     SetStateChecked(State::Stepping);
+    Core::FrameGateKick();
 
     if (!Core::IsCPUThread())
       WaitForIdle();
@@ -312,6 +321,7 @@ bool CPUManager::PauseAndLock()
 
   const bool was_unpaused = LoadState() == State::Running;
   SetStateChecked(State::Stepping);
+  Core::FrameGateKick();
 
   WaitForIdle();
 

@@ -179,9 +179,16 @@ void QueueHostJob(std::function<void(Core::System&)> job, bool run_during_stop =
 // WMUserJobDispatch will be sent when something is added to the queue.
 void HostDispatchJobs(Core::System& system);
 
-void DoFrameStep(Core::System& system);
-/* Whether a frame step has the CPU thread running to the end of a field. */
-bool IsFrameStepping();
+/* The frame gate (dual core; Core.cpp): retro_run lets the CPU thread
+ * run the next field; whether one is granted and not yet ended. */
+void RunField(Core::System& system);
+bool IsFieldInFlight();
+/* The CPU thread: parks at the gate until a field is granted or it is
+ * asked to stop; whether it left the gate ungranted and owes a wait. */
+void FrameGateWait(Core::System& system);
+bool FrameGateOwed();
+/* Any thread that asks the CPU thread to stop: wakes it from the gate. */
+void FrameGateKick();
 
 void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 

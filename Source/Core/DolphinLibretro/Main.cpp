@@ -133,7 +133,7 @@ void FinishFieldInFlight()
   {
     /* the GPU thread finishes the field; parked then, until
      * ResumeAfterField, so this thread has the video state */
-    while (Core::IsFrameStepping() && Core::GetState(system) == Core::State::Running)
+    while (Core::IsFieldInFlight() && Core::GetState(system) == Core::State::Running)
       Libretro::Video::GpuThreadWaitField(Libretro::Video::FIELD_WEDGE_US);
     Libretro::Video::GpuThreadPark();
     return;
@@ -141,7 +141,7 @@ void FinishFieldInFlight()
   /* stepping is what the end of a field leaves; a field's end already
    * asked for stops the loop at once, so it is run until the CPU thread
    * has really stopped */
-  while (Core::IsFrameStepping() && Core::GetState(system) == Core::State::Running)
+  while (Core::IsFieldInFlight() && Core::GetState(system) == Core::State::Running)
     system.GetFifo().RunGpuLoop(0);
 }
 
@@ -594,14 +594,14 @@ void retro_run(void)
     {
       /* the GPU thread runs the field, and EndFrame hands it over */
       Libretro::Video::GpuThreadEnsure();
-      Core::DoFrameStep(system);
+      Core::RunField(system);
       Libretro::Video::GpuThreadWaitField(Libretro::Video::FIELD_WEDGE_US);
     }
     else
     {
       Libretro::Video::D3D11Lock();
       VideoCommon::g_frontend_takes_frames = true;
-      Core::DoFrameStep(system);
+      Core::RunField(system);
       while (system.GetFifo().RunGpuLoop(Libretro::Video::FIELD_WEDGE_US) ==
              Fifo::FifoManager::GPU_LOOP_INTERRUPTED)
       {
