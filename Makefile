@@ -213,6 +213,15 @@ ifeq ($(STATS), 1)
    FLAGS   += -DHAVE_STUTTER_STATS
 endif
 
+# PERF_TEST=1: the frontend's performance counters around retro_run's
+# field and frame hand-over (DolphinLibretro/Main.cpp); its objects and
+# core sit beside the release ones.
+ifeq ($(PERF_TEST), 1)
+   OBJ_DIR := $(OBJ_DIR)-perf
+   TARGET  := $(basename $(TARGET))_perf$(suffix $(TARGET))
+   FLAGS   += -DPERF_TEST
+endif
+
 include Makefile.common
 
 # ----------------------------------------------------------------------------

@@ -154,8 +154,15 @@ void FifoManager::EmulatorState(bool running)
   m_emu_running_state.Set(running);
   if (running)
     m_gpu_mainloop.Wakeup();
-  else
-    m_gpu_mainloop.AllowSleep();
+}
+
+/* Any thread: the loop returns soon, its field not ended, so its thread
+ * can look at what it was asked; kept until a run takes it, when no run
+ * is going. */
+void FifoManager::InterruptGpuLoop()
+{
+  retro_atomic_store_release_int(&m_gpu_loop_interrupt, 1);
+  m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
 }
 
 void FifoManager::SyncGPU(SyncGPUReason reason, bool may_move_read_ptr)
@@ -298,23 +305,18 @@ void FifoManager::ResetVideoBuffer()
 
 // Description: Main FIFO update loop
 // Purpose: Keep the Core HW updated about the CPU-GPU distance
-bool FifoManager::RunGpuLoop(s64 budget_us)
+int FifoManager::RunGpuLoop(s64 wedge_us)
 {
-  /* Past the deadline the loop stops even though the field has not ended,
-   * the CPU thread being held up by something, a disc read say: the
-   * frontend's frame is not held up with it. */
-  const s64 deadline_us = budget_us ? (s64)cpu_features_get_time_usec() + budget_us : 0;
-  bool out_of_time = false;
-  u32 chunks = 0;
+  bool interrupted = false;
 
-  m_gpu_mainloop.SetSleepDeadline(deadline_us);
+  m_gpu_mainloop.SetIdleTimeout(wedge_us);
   m_gpu_mainloop.Run(
       [&] {
         if (retro_atomic_load_acquire_int(&m_stop_gpu_loop_requested))
           m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
-        else if (deadline_us && (s64)cpu_features_get_time_usec() >= deadline_us)
+        else if (retro_atomic_exchange_int(&m_gpu_loop_interrupt, 0))
         {
-          out_of_time = true;
+          interrupted = true;
           m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
         }
 
@@ -351,13 +353,6 @@ bool FifoManager::RunGpuLoop(s64 budget_us)
             if (m_config_sync_gpu &&
                 retro_atomic_load_seq_cst_int(&m_sync_ticks) < m_config_sync_gpu_min_distance)
               break;
-            /* the clock read every 64 chunks of 32 bytes */
-            if (deadline_us && !(++chunks & 63) && (s64)cpu_features_get_time_usec() >= deadline_us)
-            {
-              out_of_time = true;
-              m_gpu_mainloop.Stop(Common::BlockingLoop::StopMode::NonBlock);
-              break;
-            }
 
             u32 cyclesExecuted = 0;
             u32 readPtr = LoadReg(&fifo.CPReadPointer);
@@ -408,10 +403,6 @@ bool FifoManager::RunGpuLoop(s64 budget_us)
             AsyncRequests::GetInstance()->PullEvents();
           }
 
-          /* the rest of the fifo is the next run's */
-          if (out_of_time)
-            return;
-
           // fast skip remaining GPU time if fifo is empty
           if (retro_atomic_load_seq_cst_int(&m_sync_ticks) > 0)
           {
@@ -426,12 +417,16 @@ bool FifoManager::RunGpuLoop(s64 budget_us)
           g_framebuffer_manager->RefreshPeekCache();
         }
       });
-  m_gpu_mainloop.SetSleepDeadline(0);
-  /* a field's end that came while the loop was out of time is kept for
-   * the next run, which then finishes that field's work and stops */
-  if (!out_of_time)
-    retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 0);
-  return !out_of_time;
+  const bool wedged = m_gpu_mainloop.IdleTimedOut();
+  m_gpu_mainloop.SetIdleTimeout(0);
+  /* a field's end that came while the loop was interrupted or idle too
+   * long is kept for the next run, which then finishes that field */
+  if (interrupted)
+    return GPU_LOOP_INTERRUPTED;
+  if (wedged)
+    return GPU_LOOP_WEDGED;
+  retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 0);
+  return GPU_LOOP_FIELD;
 }
 
 void FifoManager::FlushGpu()
@@ -440,11 +435,6 @@ void FifoManager::FlushGpu()
     return;
 
   m_gpu_mainloop.Wait();
-}
-
-void FifoManager::GpuMaySleep()
-{
-  m_gpu_mainloop.AllowSleep();
 }
 
 bool AtBreakpoint(Core::System& system)

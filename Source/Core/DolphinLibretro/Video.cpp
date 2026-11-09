@@ -73,9 +73,9 @@ namespace Libretro
 extern std::vector<std::string> g_normalized_game_paths;
 namespace Video
 {
-/* The GPU thread (see GpuThreadMain). Its loop runs the GPU in slices of
- * a few milliseconds, so a request to park or quit is seen that soon; a
- * slice that ends a field counts it. */
+/* The GPU thread (see GpuThreadMain). Its loop runs the GPU until the CPU
+ * thread ends a field, which it counts, or a request to park or quit
+ * interrupts it; idle, it parks with no timeout. */
 static sthread_t* s_gpu_thread;
 static bool s_gpu_wanted;
 /* Asked of the GPU thread by the frontend's, which wakes it with to_gpu
@@ -842,11 +842,6 @@ bool CreateDevice2(retro_vulkan_context* context, VkInstance instance, VkPhysica
 #endif
 
 
-enum
-{
-  GPU_SLICE_US = 5000
-};
-
 static void GpuThreadMain(void* data)
 {
   Core::System& system = Core::System::GetInstance();
@@ -877,7 +872,7 @@ static void GpuThreadMain(void* data)
       retro_atomic_thread_fence_seq_cst();
       continue;
     }
-    if (system.GetFifo().RunGpuLoop(GPU_SLICE_US))
+    if (system.GetFifo().RunGpuLoop(0) == Fifo::FifoManager::GPU_LOOP_FIELD)
     {
       retro_atomic_fetch_add_int(&s_gpu_fields, 1);
       retro_eventcount_notify(&s_gpu_from_gpu);
@@ -926,12 +921,13 @@ void GpuThreadStop()
     return;
   retro_atomic_store_release_int(&s_gpu_quit, 1);
   retro_eventcount_notify(&s_gpu_to_gpu);
+  Core::System::GetInstance().GetFifo().InterruptGpuLoop();
   sthread_join(s_gpu_thread);
   s_gpu_thread = nullptr;
   VideoCommon::g_frontend_takes_frames = false;
 }
 
-bool GpuThreadWaitField(int64_t deadline_us)
+bool GpuThreadWaitField(int64_t wedge_us)
 {
   int fields;
 
@@ -950,18 +946,10 @@ bool GpuThreadWaitField(int64_t deadline_us)
       retro_eventcount_cancel_wait(&s_gpu_from_gpu);
       break;
     }
-    if (!deadline_us)
+    if (!wedge_us)
       retro_eventcount_commit_wait(&s_gpu_from_gpu, key);
-    else
-    {
-      const int64_t left = deadline_us - (int64_t)cpu_features_get_time_usec();
-      if (left <= 0)
-      {
-        retro_eventcount_cancel_wait(&s_gpu_from_gpu);
-        break;
-      }
-      retro_eventcount_commit_wait_timeout(&s_gpu_from_gpu, key, left);
-    }
+    else if (!retro_eventcount_commit_wait_timeout(&s_gpu_from_gpu, key, wedge_us))
+      break; /* wedged: the frontend gets a repeat, the field a later run */
   }
   fields = retro_atomic_load_acquire_int(&s_gpu_fields);
   const bool ended = fields != s_gpu_fields_seen;
@@ -976,6 +964,7 @@ void GpuThreadPark()
   retro_atomic_store_release_int(&s_gpu_park, 1);
   /* against the GPU thread's unparking: it sees this request, or this sees it running */
   retro_atomic_thread_fence_seq_cst();
+  Core::System::GetInstance().GetFifo().InterruptGpuLoop();
   for (;;)
   {
     const int key = retro_eventcount_prepare_wait(&s_gpu_from_gpu);

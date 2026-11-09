@@ -6,7 +6,6 @@
 
 #include <cstdint>
 
-#include <features/features_cpu.h>
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
 #include <rthreads/rthreads.h>
@@ -83,10 +82,6 @@ public:
       }
       retro_eventcount_commit_wait(&m_done, key);
     }
-
-    // As we wanted to wait for the other thread, there is likely no work remaining.
-    // So there is no need for a busy loop any more.
-    m_may_sleep.Set();
   }
 
   // Half start the worker.
@@ -116,7 +111,6 @@ public:
     // so the payload will only be executed once without any Wakeup call
     retro_atomic_exchange_int(&m_running_state, STATE_LAST_EXECUTION);
     m_shutdown.Clear();
-    m_may_sleep.Set();
     retro_atomic_store_release_int(&m_prepare_state, PREPARE_RUNNING);
     retro_eventcount_notify(&m_done);
   }
@@ -160,30 +154,19 @@ public:
         [[fallthrough]];
 
       case STATE_DONE:
-        // We're done now. So time to check if we want to sleep or if we want to stay in a busy
-        // loop.
-        if (m_may_sleep.TestAndClear())
-        {
-          // Try to set the sleeping state.
-          if (retro_atomic_fetch_sub_int(&m_running_state, 1) != STATE_DONE)
-            break;
-        }
-        else
-        {
-          // Busy loop.
+        // Done: park until new work. Never a busy loop, never a wall-clock deadline.
+        if (retro_atomic_fetch_sub_int(&m_running_state, 1) != STATE_DONE)
           break;
-        }
         [[fallthrough]];
 
       case STATE_SLEEPING:
-        // Just relax, no longer than the sleep bound lets
-        if (!m_sleep_deadline_us)
+        if (!m_idle_timeout_us)
           m_new_work_event.Wait();
-        else
+        else if (!m_new_work_event.WaitFor(m_idle_timeout_us))
         {
-          const int64_t left = m_sleep_deadline_us - (int64_t)cpu_features_get_time_usec();
-          if (left > 0)
-            m_new_work_event.WaitFor(left);
+          // Idle that long: the caller's wedge guard, not a pace.
+          m_idle_timed_out = true;
+          m_shutdown.Set();
         }
         break;
       }
@@ -235,16 +218,16 @@ public:
     return IsStopped() || retro_atomic_load_seq_cst_int(&m_running_state) <= STATE_DONE;
   }
 
-  // This function should be triggered by regularly by time. So we will fall back from
-  // the busy loop to the sleeping way.
-  void AllowSleep() { m_may_sleep.Set(); }
-
-  /* A time, in cpu_features_get_time_usec() microseconds of the wall
-   * clock (not the frame clock, which only moves between runs), past
-   * which Run() does not sleep waiting for work, so that its payload gets
-   * to see the time is up; 0 for none. Set by the thread that calls
-   * Run(), around it. */
-  void SetSleepDeadline(int64_t deadline_us) { m_sleep_deadline_us = deadline_us; }
+  /* The longest Run() parks with no work before it gives up, a wedge guard
+   * for a caller that must not wait forever (0: as long as it takes);
+   * IdleTimedOut() says whether the last Run() ended that way. Set and read
+   * by the thread that calls Run(), around it. */
+  void SetIdleTimeout(int64_t timeout_us)
+  {
+    m_idle_timeout_us = timeout_us;
+    m_idle_timed_out = false;
+  }
+  bool IdleTimedOut() const { return m_idle_timed_out; }
 
 private:
   bool IsStopped() const
@@ -276,11 +259,8 @@ private:
   Event m_new_work_event;
   retro_eventcount_t m_done;
 
-  // If this is set, we fall back from the busy loop to an event based synchronization.
-  // This variable is set to true after a timeout or if Wait() is called.
-  Flag m_may_sleep;
-
-  int64_t m_sleep_deadline_us = 0;
+  int64_t m_idle_timeout_us = 0;
+  bool m_idle_timed_out = false;
 };
 
 }  // namespace Common

@@ -139,6 +139,8 @@ void CPUManager::Run()
   auto& power_pc = m_system.GetPowerPC();
 
   retro_atomic_store_release_int(&m_cpu_run_state_reached, 1);
+  // A thread running the GPU until this one got here (the frontend's, at boot) looks again.
+  m_system.GetFifo().InterruptGpuLoop();
   while (LoadState() != State::PowerDown)
   {
     // Wait out a PauseAndLock: the host thread is standing in for this one.

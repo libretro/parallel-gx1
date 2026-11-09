@@ -271,9 +271,6 @@ void VideoBackendBase::DoState(PointerWrap& p)
 
   AsyncRequests::GetInstance()->PushBlockingEvent([&] { VideoCommon_DoState(p); });
 
-  // Let the GPU thread sleep after loading the state, so we're not spinning if paused after loading
-  // a state. The next GP burst will wake it up again.
-  system.GetFifo().GpuMaySleep();
 }
 
 bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,

@@ -103,16 +103,11 @@ void SystemTimersManager::IPC_HLE_UpdateCallback(Core::System& system, u64 userd
   }
 }
 
+/* The GPU loop parks whenever it is idle, so nothing has to let it any
+ * more: kept, doing nothing and never scheduled again, for the savestates
+ * that have it queued. */
 void SystemTimersManager::GPUSleepCallback(Core::System& system, u64 userdata, s64 cycles_late)
 {
-  auto& core_timing = system.GetCoreTiming();
-  system.GetFifo().GpuMaySleep();
-
-  // We want to call GpuMaySleep at about 1000hz so
-  // that the thread can sleep while not doing anything.
-  auto& system_timers = system.GetSystemTimers();
-  core_timing.ScheduleEvent(system_timers.GetTicksPerSecond() / 1000 - cycles_late,
-                            system_timers.m_event_type_gpu_sleeper);
 }
 
 void SystemTimersManager::VICallback(Core::System& system, u64 userdata, s64 cycles_late)
@@ -267,7 +262,6 @@ void SystemTimersManager::Init()
   m_event_type_gpu_sleeper = core_timing.RegisterEvent("GPUSleeper", GPUSleepCallback);
   m_event_type_patch_engine = core_timing.RegisterEvent("PatchEngine", PatchEngineCallback);
 
-  core_timing.ScheduleEvent(0, m_event_type_gpu_sleeper);
   core_timing.ScheduleEvent(vi.GetTicksPerHalfLine(), m_event_type_vi);
   core_timing.ScheduleEvent(0, m_event_type_dsp);
 

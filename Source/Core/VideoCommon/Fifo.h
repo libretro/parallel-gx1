@@ -70,12 +70,19 @@ public:
 
   void FlushGpu();
   void RunGpu();
-  void GpuMaySleep();
-  /* Runs the GPU until the CPU thread ends the field or, when budget_us
-   * is not 0, until that many microseconds have gone by: the field's
-   * remaining work is left for the next call then. True when the field
-   * ended. */
-  bool RunGpuLoop(s64 budget_us);
+  /* Runs the GPU until the CPU thread ends the field (GPU_LOOP_FIELD),
+   * InterruptGpuLoop is called (GPU_LOOP_INTERRUPTED), or, with wedge_us
+   * not 0, nothing at all comes for that long (GPU_LOOP_WEDGED): a guard
+   * for a wedged CPU thread, never a pace. The field's remaining work is
+   * the next call's then. */
+  enum
+  {
+    GPU_LOOP_FIELD,
+    GPU_LOOP_INTERRUPTED,
+    GPU_LOOP_WEDGED
+  };
+  int RunGpuLoop(s64 wedge_us);
+  void InterruptGpuLoop();
   void ExitGpuLoop();
   void EmulatorState(bool running);
   void ResetVideoBuffer();
@@ -94,6 +101,8 @@ private:
   Common::BlockingLoop m_gpu_mainloop;
   // Set by StopGpuLoop(), so that a stop requested before RunGpuLoop() got going still ends it.
   retro_atomic_int_t m_stop_gpu_loop_requested{};
+  // Set by InterruptGpuLoop(), taken by the run that sees it.
+  retro_atomic_int_t m_gpu_loop_interrupt{};
 
   Common::Flag m_emu_running_state;
 

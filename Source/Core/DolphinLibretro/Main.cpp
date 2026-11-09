@@ -58,17 +58,27 @@
 #ifdef PERF_TEST
 static struct retro_perf_callback perf_cb;
 
+/* make PERF_TEST=1: counters the frontend shows (RetroArch: Settings >
+ * Logging > Performance Counters, then the quick menu): retro_run whole,
+ * the field (dolphin_main_func: starting it and waiting for the emulation
+ * threads to finish it) and handing the frame over (dolphin_end_frame). */
 #define RETRO_PERFORMANCE_INIT(name)                                                               \
-  retro_perf_tick_t current_ticks;                                                                 \
   static struct retro_perf_counter name = {#name};                                                 \
-  if (!name.registered)                                                                            \
-    perf_cb.perf_register(&(name));                                                                \
-  current_ticks = name.total
+  if (!name.registered && perf_cb.perf_register)                                                   \
+    perf_cb.perf_register(&(name))
 
-#define RETRO_PERFORMANCE_START(name) perf_cb.perf_start(&(name))
+#define RETRO_PERFORMANCE_START(name)                                                              \
+  do                                                                                               \
+  {                                                                                                \
+    if (perf_cb.perf_start)                                                                        \
+      perf_cb.perf_start(&(name));                                                                 \
+  } while (0)
 #define RETRO_PERFORMANCE_STOP(name)                                                               \
-  perf_cb.perf_stop(&(name));                                                                      \
-  current_ticks = name.total - current_ticks;
+  do                                                                                               \
+  {                                                                                                \
+    if (perf_cb.perf_stop)                                                                         \
+      perf_cb.perf_stop(&(name));                                                                  \
+  } while (0)
 #else
 #define RETRO_PERFORMANCE_INIT(name)
 #define RETRO_PERFORMANCE_START(name)
@@ -124,7 +134,7 @@ void FinishFieldInFlight()
     /* the GPU thread finishes the field; parked then, until
      * ResumeAfterField, so this thread has the video state */
     while (Core::IsFrameStepping() && Core::GetState(system) == Core::State::Running)
-      Libretro::Video::GpuThreadWaitField((int64_t)cpu_features_get_time_usec() + 10000);
+      Libretro::Video::GpuThreadWaitField(Libretro::Video::FIELD_WEDGE_US);
     Libretro::Video::GpuThreadPark();
     return;
   }
@@ -147,7 +157,7 @@ void retro_set_environment(retro_environment_t cb)
 {
   Libretro::environ_cb = cb;
 #ifdef PERF_TEST
-  environ_cb(RETRO_ENVIRONMENT_GET_PERF_INTERFACE, &perf_cb);
+  cb(RETRO_ENVIRONMENT_GET_PERF_INTERFACE, &perf_cb);
 #endif
 static const struct retro_subsystem_memory_info gbp_gba_memory[] = {
   {"srm", RETRO_MEMORY_SAVE_RAM},
@@ -195,7 +205,8 @@ void retro_deinit(void)
   Libretro::g_emuthread_launched = false;
   parallel_for_deinit();
 #ifdef PERF_TEST
-  perf_cb.perf_log();
+  if (perf_cb.perf_log)
+    perf_cb.perf_log();
 #endif
 }
 
@@ -342,8 +353,9 @@ void retro_run(void)
        * the GPU: what the CPU thread does first may wait on it, as the
        * FIFO player clearing the EFB does */
       Libretro::Video::D3D11Lock();
+      /* the CPU thread interrupts the loop as it gets there */
       while (!system.GetCPU().HasCPURunStateBeenReached())
-        system.GetFifo().RunGpuLoop(5000);
+        system.GetFifo().RunGpuLoop(Libretro::Video::FIELD_WEDGE_US);
       Libretro::Video::D3D11Unlock();
     }
     else
@@ -574,27 +586,26 @@ void retro_run(void)
 
   if (system.IsDualCoreMode())
   {
-    /* two of the frontend's frames, and never more than 40 ms: a field
-     * held up on the CPU thread, by a disc read or anything else, leaves
-     * this run to report a repeat and the rest of the field to the next */
-    s64 budget_us = (s64)(2000000.0 / frame_hz);
-    if (budget_us > 40000)
-      budget_us = 40000;
-
+    /* The field is waited for as long as it takes: the frontend owns the
+     * pace, and nothing here decides it by the clock. Only a wedged
+     * thread, nothing for FIELD_WEDGE_US, leaves this run a repeat and
+     * the field to a later one. */
     if (Libretro::Video::GpuThreadWanted())
     {
-      /* the GPU thread runs the field; this thread waits for it no
-       * longer than the budget, and EndFrame hands over what is done */
+      /* the GPU thread runs the field, and EndFrame hands it over */
       Libretro::Video::GpuThreadEnsure();
       Core::DoFrameStep(system);
-      Libretro::Video::GpuThreadWaitField((int64_t)cpu_features_get_time_usec() + budget_us);
+      Libretro::Video::GpuThreadWaitField(Libretro::Video::FIELD_WEDGE_US);
     }
     else
     {
       Libretro::Video::D3D11Lock();
       VideoCommon::g_frontend_takes_frames = true;
       Core::DoFrameStep(system);
-      system.GetFifo().RunGpuLoop(budget_us);
+      while (system.GetFifo().RunGpuLoop(Libretro::Video::FIELD_WEDGE_US) ==
+             Fifo::FifoManager::GPU_LOOP_INTERRUPTED)
+      {
+      }
       VideoCommon::g_frontend_takes_frames = false;
       Libretro::Video::D3D11Unlock();
     }
@@ -610,7 +621,10 @@ void retro_run(void)
 
   RETRO_PERFORMANCE_STOP(dolphin_main_func);
 
+  RETRO_PERFORMANCE_INIT(dolphin_end_frame);
+  RETRO_PERFORMANCE_START(dolphin_end_frame);
   Libretro::Video::EndFrame();
+  RETRO_PERFORMANCE_STOP(dolphin_end_frame);
 
   if (Libretro::Input::g_has_microphone_support)
     poll_microphone();

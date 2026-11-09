@@ -68,10 +68,17 @@ bool GpuThreadWanted();
 bool GpuThreadRunning();
 void GpuThreadEnsure();
 void GpuThreadStop();
-/* Waits, until deadline_us of cpu_features_get_time_usec() or with 0 for
- * as long as it takes, for a field to end on the GPU thread since the
- * last call; true if one did. */
-bool GpuThreadWaitField(int64_t deadline_us);
+/* The longest the frontend's thread waits for a field: only a wedged CPU
+ * or GPU thread reaches it, never a disc read, a compile or a slow field,
+ * and what reaches it degrades to repeated frames, not a frozen frontend. */
+enum
+{
+  FIELD_WEDGE_US = 1000000
+};
+/* Waits for a field to end on the GPU thread since the last call, with 0
+ * for as long as it takes, else until nothing has come for wedge_us; true
+ * if one did. */
+bool GpuThreadWaitField(int64_t wedge_us);
 /* Stops the GPU thread between two runs of its loop, so the frontend's
  * thread may use the video state, and lets it go again. */
 void GpuThreadPark();

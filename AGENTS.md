@@ -28,6 +28,35 @@ touches closer, and never adds C++ that was not there.
 - **A file with no C++ left becomes a `.c` file.** Its header keeps
   `extern "C"` guards while C++ still includes it.
 
+## Threads, waits and pacing
+
+The model is parallel-ps2's: the frontend owns the pace, threads hand
+work over through atomics and eventcounts, and nothing waits on a clock.
+
+- **The frontend owns pacing.** One field per `retro_run`, run on the
+  input polled in it. No wall clock decides emulated progress, how long
+  a thread works, or when it stops: no time slices, no deadlines, no
+  frame budgets. Background work that used to run every so many
+  milliseconds counts frames (`Common/FrameClock.h`) instead.
+- **No timed waits.** A thread waits for work, a field or a request on
+  an eventcount, with no timeout. The one bound is the wedge guard: the
+  frontend's thread waits at most `FIELD_WEDGE_US` (one second) with
+  nothing at all arriving, so a wedged CPU or GPU thread degrades to
+  repeated frames and not to a frozen frontend. A disc read, a compile
+  or a slow field never reaches it, and it is never a pace.
+- **Stop by request, not by polling.** A thread is parked, interrupted
+  or quit by setting a flag and notifying it (`InterruptGpuLoop`,
+  `GpuThreadPark`), never by a loop that comes up for air every few
+  milliseconds to look.
+- **Park, never spin.** An idle thread parks on its eventcount with the
+  two-check protocol: check, prepare the wait, check again, then commit
+  or cancel. Busy-spinning a thread, or an emulated-time event whose job
+  is to let a thread sleep, is a defect. Finite polling before parking
+  is a latency policy, and needs numbers that show it pays.
+- **No locks.** Work is handed over through atomics, SPSC rings and
+  eventcounts. A mutex added to fix a race is the wrong fix: give the
+  state one owner.
+
 ## Zero-copy and borrowed lends
 
 Every change looks for copies to remove in the code it touches, and
