@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -103,7 +102,8 @@ static Slope TexSlopes[8][3];
 static Tev tev;
 static RasterBlock rasterBlock;
 
-static std::vector<BPFunctions::ScissorRect> scissors;
+static BPFunctions::ScissorRect scissors[9 * 9];
+static u32 num_scissors;
 
 void Init()
 {
@@ -116,7 +116,9 @@ void ScissorChanged()
 {
   auto scissor_result = BPFunctions::ComputeScissorRects(bpmem.scissorTL, bpmem.scissorBR,
                                                          bpmem.scissorOffset, xfmem.viewport);
-  scissors = std::move(scissor_result.rectangles);
+  num_scissors = scissor_result.num_rectangles;
+  for (u32 i = 0; i < num_scissors; i++)
+    scissors[i] = scissor_result.rectangles[i];
 }
 
 // Returns approximation of log2(f) in s28.4
@@ -508,7 +510,7 @@ void DrawTriangleFrontFace(const OutputVertexData* v0, const OutputVertexData* v
 {
   INCSTAT(g_stats.this_frame.num_triangles_drawn);
 
-  for (const auto& scissor : scissors)
-    DrawTriangleFrontFace(v0, v1, v2, scissor);
+  for (u32 i = 0; i < num_scissors; i++)
+    DrawTriangleFrontFace(v0, v1, v2, scissors[i]);
 }
 }  // namespace Rasterizer

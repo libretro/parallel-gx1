@@ -4,9 +4,6 @@
 #pragma once
 
 #include <array>
-#include <vector>
-
-#include "VideoCommon/BPFunctions.h"
 
 struct Statistics
 {
@@ -28,16 +25,6 @@ struct Statistics
   // For widescreen heuristic.
   float avg_persp_proj_viewport_ratio = 0;
   float avg_ortho_proj_viewport_ratio = 0;
-
-  std::vector<BPFunctions::ScissorResult> scissors{};
-  size_t current_scissor = 0;  // 0 => all, otherwise index + 1
-  int scissor_scale = 10;
-  int scissor_expected_count = 0;
-  bool allow_duplicate_scissors = false;
-  bool show_scissors = true;
-  bool show_raw_scissors = true;
-  bool show_viewports = false;
-  bool show_text = true;
 
   struct ThisFrame
   {
@@ -83,7 +70,6 @@ struct Statistics
   ThisFrame this_frame;
   void ResetFrame();
   void SwapDL();
-  void AddScissorRect();
 
   static void Init();
   static void Shutdown();

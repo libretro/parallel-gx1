@@ -8,7 +8,6 @@
 #pragma once
 
 #include <utility>
-#include <vector>
 
 #include "Common/MathUtil.h"
 #include "VideoCommon/BPMemory.h"
@@ -32,6 +31,7 @@ struct ScissorRange
 
 struct ScissorRect
 {
+  constexpr ScissorRect() : x_off(0), y_off(0) {}
   constexpr ScissorRect(ScissorRange x_range, ScissorRange y_range)
       :  // Rectangle ctor takes x0, y0, x1, y1.
         rect(x_range.start, y_range.start, x_range.end, y_range.end), x_off(x_range.offset),
@@ -72,8 +72,9 @@ struct ScissorResult
       : scissor_tl{.hex = other.scissor_tl.hex}, scissor_br{.hex = other.scissor_br.hex},
         scissor_off{.hex = other.scissor_off.hex}, viewport_left{other.viewport_left},
         viewport_right{other.viewport_right}, viewport_top{other.viewport_top},
-        viewport_bottom{other.viewport_bottom}, rectangles{other.rectangles}
+        viewport_bottom{other.viewport_bottom}
   {
+    CopyRectangles(other);
   }
   ScissorResult& operator=(const ScissorResult& other)
   {
@@ -86,15 +87,16 @@ struct ScissorResult
     viewport_right = other.viewport_right;
     viewport_top = other.viewport_top;
     viewport_bottom = other.viewport_bottom;
-    rectangles = other.rectangles;
+    CopyRectangles(other);
     return *this;
   }
   ScissorResult(ScissorResult&& other)
       : scissor_tl{.hex = other.scissor_tl.hex}, scissor_br{.hex = other.scissor_br.hex},
         scissor_off{.hex = other.scissor_off.hex}, viewport_left{other.viewport_left},
         viewport_right{other.viewport_right}, viewport_top{other.viewport_top},
-        viewport_bottom{other.viewport_bottom}, rectangles{std::move(other.rectangles)}
+        viewport_bottom{other.viewport_bottom}
   {
+    CopyRectangles(other);
   }
   ScissorResult& operator=(ScissorResult&& other)
   {
@@ -107,7 +109,7 @@ struct ScissorResult
     viewport_right = other.viewport_right;
     viewport_top = other.viewport_top;
     viewport_bottom = other.viewport_bottom;
-    rectangles = std::move(other.rectangles);
+    CopyRectangles(other);
     return *this;
   }
 
@@ -120,7 +122,10 @@ struct ScissorResult
   float viewport_top;
   float viewport_bottom;
 
-  std::vector<ScissorRect> rectangles;
+  /* every x range by every y range (ComputeScissorRanges: 9 each at most), in place: computed
+   * where the scissor or viewport changes */
+  ScissorRect rectangles[9 * 9];
+  u32 num_rectangles = 0;
 
   ScissorRect Best() const;
 
@@ -148,6 +153,13 @@ private:
                 ScissorOffset scissor_offset, std::pair<float, float> viewport_x,
                 std::pair<float, float> viewport_y);
 
+  void CopyRectangles(const ScissorResult& other)
+  {
+    u32 i;
+    num_rectangles = other.num_rectangles;
+    for (i = 0; i < num_rectangles; i++)
+      rectangles[i] = other.rectangles[i];
+  }
   int GetViewportArea(const ScissorRect& rect) const;
   bool IsWorse(const ScissorRect& lhs, const ScissorRect& rhs) const;
 };
