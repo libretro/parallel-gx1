@@ -164,8 +164,14 @@ where the corpus made the parent build 152.
 Texture reinterpretation: the eight format pairs there are
 (`CanReinterpretTextureOnGPU`) are built with the shared pipelines, and
 with GPU texture decoding every decoding shader; the corpus reads copies
-back in each pair's other format. Still built on first use: EFB copies
-to RAM, which the default (EFB copies to texture only) does not make.
+back in each pair's other format.
+
+EFB copies to RAM: one encoder per copy format reads the rest of the
+copy (the EFB's format, depth, YUV, filter rows, overflow, gamma) from
+its uniforms, and where copies to RAM may be made, every one is built on
+the workers before the game starts. The gate checks pictures with copies
+to RAM too, where the parent's encoders kept the draw path building 201,
+and fails a copy that waits for its encoder.
 
 Done when: draw-path compiles and waits are 0 by kind, cold, on every
 backend that builds, across the whole corpus. Cold p99 and max

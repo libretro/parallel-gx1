@@ -112,7 +112,8 @@ public:
    * GetDrawnFormat), its uniforms saying the rest (GetCopyFlags): the one built for the format,
    * or, until it is, queued to be, the one for every format. */
   const AbstractPipeline* GetEFBCopyToVRAMPipeline(EFBCopyFormat format);
-  const AbstractPipeline* GetEFBCopyToRAMPipeline(const EFBCopyParams& uid);
+  /* null where its encoder failed to build */
+  const AbstractPipeline* GetEFBCopyToRAMPipeline(EFBCopyFormat format);
 
   // RGBA8 framebuffer copy pipelines
   const AbstractPipeline* GetRGBA8CopyPipeline() const { return m_copy_rgba8_pipeline; }
@@ -144,6 +145,8 @@ private:
   void QueueUberShaderPipelines();
   /* format null: the pipeline for every format */
   AbstractPipeline* CompileEFBCopyToVRAMPipeline(const EFBCopyFormat* format) const;
+  AbstractPipeline* CompileEFBCopyToRAMPipeline(EFBCopyFormat format) const;
+  bool QueueEFBCopyToRAMPipelines();
   bool CompileSharedPipelines();
   void CompileTextureConversionPipelines();
   const AbstractPipeline* BuildTextureReinterpretPipeline(TextureFormat from_format,
@@ -285,7 +288,7 @@ private:
   /* by EFBCopyFormat: built, and whether one is queued or built */
   AbstractPipeline* m_efb_copy_format_pipelines[16] = {};
   bool m_efb_copy_format_asked[16] = {};
-  uid_table m_efb_copy_to_ram_pipelines;  /* by EFBCopyRAMKey */
+  AbstractPipeline* m_efb_copy_to_ram_pipelines[16] = {}; /* by EFBCopyFormat */
 
   // Copy pipeline for RGBA8 textures
   AbstractPipeline* m_copy_rgba8_pipeline = nullptr;

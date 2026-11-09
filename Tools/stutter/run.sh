@@ -11,7 +11,8 @@
 #     mid-corpus loaded into a fresh process);
 #   - with a parent core, times the candidate and the parent ABBA, and
 #     compares their pictures (separate --check runs, in each synchronous
-#     compilation mode);
+#     compilation mode, and with EFB copies to RAM, where no copy may wait
+#     for its encoder);
 #   - checks the hard gates against baseline.txt and the parent: draw-path
 #     compiles, waits and disk writes, shaders and pipelines built, and
 #     the words rslc emitted, each over the whole run (worker compiles are
@@ -208,6 +209,34 @@ for backend in $BACKENDS; do
       echo "   pictures, GPU texture decoding: $both frames in both runs, $differ differ"
       if [ "$differ" != 0 ] || [ "$both" -lt $((NEW / 3)) ]; then
          echo "FAIL $backend: textures decoded on the GPU differ from those decoded on the CPU"
+         FAILED=1
+      fi
+
+      # EFB copies to RAM too, encoded on the GPU and read back as the textures drawn: the
+      # parent's pictures, and none of the encoders built where a copy waits for it
+      for tag in cand parent; do
+         core=$CAND
+         [ "$tag" = parent ] && core=$PARENT
+         fresh "$OUT/dirs-check"
+         run "$core" "$backend" "$OUT/dirs-check" "$OUT/check-$tag-$backend-ram.txt" \
+            --check --opt dolphin_main_cpu_thread=disabled --opt dolphin_shader_compilation_mode=0 \
+            --opt dolphin_disable_copy_filter=disabled --opt dolphin_gpu_texture_decoding=disabled \
+            --opt dolphin_efb_to_texture=disabled
+         picture_map "$OUT/check-$tag-$backend-ram.txt" > "$OUT/check-$tag-$backend-ram.map"
+      done
+      join "$OUT/check-cand-$backend-ram.map" "$OUT/check-parent-$backend-ram.map" \
+         > "$OUT/check-$backend-ram.joined"
+      both=$(wc -l < "$OUT/check-$backend-ram.joined")
+      differ=$(pictures_differ "$OUT/check-$backend-ram.joined" | wc -l)
+      set -- $(stat "$OUT/check-cand-$backend-ram.txt" draw_efb_copy_to_ram)
+      echo "   pictures, EFB copies to RAM: $both frames in both runs, $differ differ;" \
+         "draw_efb_copy_to_ram=$(($1 + $2))"
+      if [ "$differ" != 0 ] || [ "$both" -lt $((NEW / 3)) ]; then
+         echo "FAIL $backend: the pictures with EFB copies to RAM differ from the parent's"
+         FAILED=1
+      fi
+      if [ $(($1 + $2)) != 0 ]; then
+         echo "FAIL $backend: EFB copies to RAM built their encoders on the draw path"
          FAILED=1
       fi
    fi
