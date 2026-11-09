@@ -3,17 +3,12 @@
 
 #include "Core/CoreTiming.h"
 
-#include <algorithm>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
-#include <fmt/format.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
-#include "Common/ScopeGuard.h"
 
 #include "Core/CPUThreadConfigCallback.h"
 #include "Core/Config/MainSettings.h"
@@ -35,9 +30,114 @@ static void EmptyTimedCallback(Core::System& system, u64 userdata, s64 cyclesLat
 {
 }
 
+/* the queued events the timing starts with room for: the hardware's, a few each */
+#define CORE_TIMING_FIRST_EVENTS 64
+
 CoreTimingManager::CoreTimingManager(Core::System& system) : m_system(system)
 {
   mpsc_stack_init(&m_ts_queue);
+}
+
+/* Earlier: sooner, or as soon and queued first. */
+static bool EventBefore(const Event& a, const Event& b)
+{
+  return a.time < b.time || (a.time == b.time && a.fifo_order < b.fifo_order);
+}
+
+bool CoreTimingManager::ReserveEvents(u32 count)
+{
+  u32 capacity;
+  Event* grown;
+  if (count <= m_event_capacity)
+    return true;
+  capacity = m_event_capacity ? m_event_capacity : CORE_TIMING_FIRST_EVENTS;
+  while (capacity < count)
+    capacity *= 2;
+  grown = static_cast<Event*>(realloc(m_event_queue, capacity * sizeof(Event)));
+  if (!grown)
+    return false;
+  m_event_queue = grown;
+  m_event_capacity = capacity;
+  return true;
+}
+
+/* Up from the end to where it is no earlier than its parent. */
+void CoreTimingManager::PushEvent(const Event& ev)
+{
+  u32 i;
+  if (!ReserveEvents(m_num_events + 1))
+  {
+    ERROR_LOG_FMT(POWERPC, "Lost a \"{}\" event: out of memory", ev.type->name);
+    return;
+  }
+  i = m_num_events++;
+  while (i > 0)
+  {
+    const u32 parent = (i - 1) / 2;
+    if (!EventBefore(ev, m_event_queue[parent]))
+      break;
+    m_event_queue[i] = m_event_queue[parent];
+    i = parent;
+  }
+  m_event_queue[i] = ev;
+}
+
+/* The earliest out: the last goes down from the top. */
+void CoreTimingManager::PopEvent()
+{
+  Event last;
+  u32 i = 0;
+  if (--m_num_events == 0)
+    return;
+  last = m_event_queue[m_num_events];
+  for (;;)
+  {
+    u32 child = 2 * i + 1;
+    if (child >= m_num_events)
+      break;
+    if (child + 1 < m_num_events && EventBefore(m_event_queue[child + 1], m_event_queue[child]))
+      child++;
+    if (!EventBefore(m_event_queue[child], last))
+      break;
+    m_event_queue[i] = m_event_queue[child];
+    i = child;
+  }
+  m_event_queue[i] = last;
+}
+
+/* The heap order, from any: each parent down from the last. */
+void CoreTimingManager::MakeHeap()
+{
+  u32 start = m_num_events / 2;
+  while (start-- > 0)
+  {
+    const Event ev = m_event_queue[start];
+    u32 i = start;
+    for (;;)
+    {
+      u32 child = 2 * i + 1;
+      if (child >= m_num_events)
+        break;
+      if (child + 1 < m_num_events && EventBefore(m_event_queue[child + 1], m_event_queue[child]))
+        child++;
+      if (!EventBefore(m_event_queue[child], ev))
+        break;
+      m_event_queue[i] = m_event_queue[child];
+      i = child;
+    }
+    m_event_queue[i] = ev;
+  }
+}
+
+EventType* CoreTimingManager::FindEventType(const char* name)
+{
+  u32 i;
+  for (i = 0; i < m_num_event_types; i++)
+  {
+    if (strcmp(m_event_types[i].name, name) == 0)
+      return &m_event_types[i];
+  }
+  return nullptr;
 }
 
 // Changing the CPU speed in Dolphin isn't actually done by changing the physical clock rate,
@@ -57,25 +157,30 @@ int CoreTimingManager::CyclesToDowncount(int cycles) const
   return static_cast<int>(cycles * m_last_oc_factor);
 }
 
-EventType* CoreTimingManager::RegisterEvent(const std::string& name, TimedCallback callback)
+EventType* CoreTimingManager::RegisterEvent(const char* name, TimedCallback callback)
 {
-  // check for existing type with same name.
+  EventType* event_type;
   // we want event type names to remain unique so that we can use them for serialization.
-  ASSERT_MSG(POWERPC, !m_event_types.contains(name),
+  ASSERT_MSG(POWERPC, !FindEventType(name),
              "CoreTiming Event \"{}\" is already registered. Events should only be registered "
              "during Init to avoid breaking save states.",
              name);
-
-  auto info = m_event_types.emplace(name, EventType{std::move(callback), nullptr});
-  EventType* event_type = &info.first->second;
-  event_type->name = &info.first->first;
+  ASSERT_MSG(POWERPC, strlen(name) < CORE_TIMING_NAME_SIZE, "CoreTiming Event \"{}\": name too long",
+             name);
+  ASSERT_MSG(POWERPC, m_num_event_types < MAX_EVENT_TYPES, "Too many CoreTiming Events");
+  if (m_num_event_types == MAX_EVENT_TYPES)
+    return m_ev_lost;
+  event_type = &m_event_types[m_num_event_types++];
+  event_type->callback = callback;
+  strncpy(event_type->name, name, CORE_TIMING_NAME_SIZE - 1);
+  event_type->name[CORE_TIMING_NAME_SIZE - 1] = '\0';
   return event_type;
 }
 
 void CoreTimingManager::UnregisterAllEvents()
 {
-  ASSERT_MSG(POWERPC, m_event_queue.empty(), "Cannot unregister events with events pending");
-  m_event_types.clear();
+  ASSERT_MSG(POWERPC, m_num_events == 0, "Cannot unregister events with events pending");
+  m_num_event_types = 0;
 }
 
 void CoreTimingManager::Init()
@@ -92,6 +197,10 @@ void CoreTimingManager::Init()
   m_is_global_timer_sane = true;
 
   m_event_fifo_id = 0;
+  m_num_events = 0;
+  ReserveEvents(CORE_TIMING_FIRST_EVENTS);
+  if (!m_ts_pool)
+    m_ts_pool = object_pool_create(sizeof(ThreadSafeEvent), 64);
   m_ev_lost = RegisterEvent("_lost_event", &EmptyTimedCallback);
 
   m_registered_config_callback_id =
@@ -108,9 +217,11 @@ CoreTimingManager::~CoreTimingManager()
   while (node)
   {
     mpsc_stack_node_t* const next = node->next;
-    delete reinterpret_cast<ThreadSafeEvent*>(node);
+    object_pool_free(node);
     node = next;
   }
+  object_pool_destroy(m_ts_pool);
+  free(m_event_queue);
 }
 
 void CoreTimingManager::Shutdown()
@@ -147,45 +258,57 @@ void CoreTimingManager::DoState(PointerWrap& p)
   p.DoMarker("CoreTimingData");
 
   MoveEvents();
-  p.DoEachElement(m_event_queue, [this](PointerWrap& pw, Event& ev) {
-    pw.Do(ev.time);
-    pw.Do(ev.fifo_order);
-
+  // a count, then each event: its time, order, userdata and its type's name (a count and the
+  // characters), as the events are not registered the same way every time
+  u32 count = m_num_events;
+  p.Do(count);
+  if (p.IsReadMode() && !ReserveEvents(count))
+  {
+    p.SetMeasureMode();
+    return;
+  }
+  m_num_events = count;
+  for (u32 i = 0; i < count; i++)
+  {
+    Event& ev = m_event_queue[i];
+    char name[CORE_TIMING_NAME_SIZE];
+    u32 name_len = p.IsReadMode() ? 0 : static_cast<u32>(strlen(ev.type->name));
+    p.Do(ev.time);
+    p.Do(ev.fifo_order);
     // this is why we can't have (nice things) pointers as userdata
-    pw.Do(ev.userdata);
-
-    // we can't savestate ev.type directly because events might not get registered in the same
-    // order (or at all) every time.
-    // so, we savestate the event's type's name, and derive ev.type from that when loading.
-    std::string name;
-    if (!pw.IsReadMode())
-      name = *ev.type->name;
-
-    pw.Do(name);
-    if (pw.IsReadMode())
+    p.Do(ev.userdata);
+    p.Do(name_len);
+    if (!p.IsReadMode())
     {
-      auto itr = m_event_types.find(name);
-      if (itr != m_event_types.end())
-      {
-        ev.type = &itr->second;
-      }
-      else
-      {
-        WARN_LOG_FMT(POWERPC,
-                     "Lost event from savestate because its type, \"{}\", has not been registered.",
-                     name);
-        ev.type = m_ev_lost;
-      }
+      p.DoArray(ev.type->name, name_len);
+      continue;
     }
-  });
+    if (name_len >= CORE_TIMING_NAME_SIZE)
+    {
+      // no registered name is as long: skip it
+      static_cast<void>(p.DoExternal(name_len));
+      ev.type = m_ev_lost;
+      WARN_LOG_FMT(POWERPC, "Lost event from savestate: its type's name is too long");
+      continue;
+    }
+    p.DoArray(name, name_len);
+    name[name_len] = '\0';
+    ev.type = FindEventType(name);
+    if (!ev.type)
+    {
+      WARN_LOG_FMT(POWERPC,
+                   "Lost event from savestate because its type, \"{}\", has not been registered.",
+                   name);
+      ev.type = m_ev_lost;
+    }
+  }
   p.DoMarker("CoreTimingEvents");
 
   if (p.IsReadMode())
   {
-    // When loading from a save state, we must assume the Event order is random and meaningless.
-    // The exact layout of the heap in memory is implementation defined, therefore it is platform
-    // and library version specific.
-    std::ranges::make_heap(m_event_queue, std::ranges::greater{});
+    // When loading from a save state, we must assume the Event order is random and meaningless:
+    // the layout of the heap is the saver's.
+    MakeHeap();
   }
 }
 
@@ -202,14 +325,9 @@ u64 CoreTimingManager::GetTicks() const
   return ticks;
 }
 
-u64 CoreTimingManager::GetIdleTicks() const
-{
-  return static_cast<u64>(m_idled_cycles);
-}
-
 void CoreTimingManager::ClearPendingEvents()
 {
-  m_event_queue.clear();
+  m_num_events = 0;
 }
 
 void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_type, u64 userdata,
@@ -226,7 +344,7 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
   {
     from_cpu_thread = from == FromThread::CPU;
     ASSERT_MSG(POWERPC, from_cpu_thread == Core::IsCPUThread(),
-               "A \"{}\" event was scheduled from the wrong thread ({})", *event_type->name,
+               "A \"{}\" event was scheduled from the wrong thread ({})", event_type->name,
                from_cpu_thread ? "CPU" : "non-CPU");
   }
 
@@ -238,8 +356,8 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
     if (!m_is_global_timer_sane)
       ForceExceptionCheck(cycles_into_future);
 
-    m_event_queue.emplace_back(Event{timeout, m_event_fifo_id++, userdata, event_type});
-    std::ranges::push_heap(m_event_queue, std::ranges::greater{});
+    const Event ev = {timeout, m_event_fifo_id++, userdata, event_type};
+    PushEvent(ev);
   }
   else
   {
@@ -248,24 +366,39 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
       ERROR_LOG_FMT(POWERPC,
                     "Someone scheduled an off-thread \"{}\" event while netplay or "
                     "movie play/record was active.  This is likely to cause a desync.",
-                    *event_type->name);
+                    event_type->name);
     }
 
     ThreadSafeEvent* const node =
-        new ThreadSafeEvent{{nullptr}, Event{cycles_into_future, 0, userdata, event_type}};
+        static_cast<ThreadSafeEvent*>(object_pool_alloc(m_ts_pool, sizeof(ThreadSafeEvent)));
+    if (!node)
+    {
+      ERROR_LOG_FMT(POWERPC, "Lost a \"{}\" event: out of memory", event_type->name);
+      return;
+    }
+    node->link.next = nullptr;
+    node->event.time = cycles_into_future;
+    node->event.fifo_order = 0;
+    node->event.userdata = userdata;
+    node->event.type = event_type;
     mpsc_stack_push(&m_ts_queue, &node->link);
   }
 }
 
 void CoreTimingManager::RemoveEvent(EventType* event_type)
 {
-  const size_t erased =
-      std::erase_if(m_event_queue, [&](const Event& e) { return e.type == event_type; });
+  u32 i, kept = 0;
+  for (i = 0; i < m_num_events; i++)
+  {
+    if (m_event_queue[i].type != event_type)
+      m_event_queue[kept++] = m_event_queue[i];
+  }
 
   // Removing random items breaks the invariant so we have to re-establish it.
-  if (erased != 0)
+  if (kept != m_num_events)
   {
-    std::ranges::make_heap(m_event_queue, std::ranges::greater{});
+    m_num_events = kept;
+    MakeHeap();
   }
 }
 
@@ -277,7 +410,8 @@ void CoreTimingManager::RemoveAllEvents(EventType* event_type)
 
 void CoreTimingManager::ForceExceptionCheck(s64 cycles)
 {
-  cycles = std::max<s64>(0, cycles);
+  if (cycles < 0)
+    cycles = 0;
   auto& ppc_state = m_system.GetPPCState();
   if (DowncountToCycles(ppc_state.downcount) > cycles)
   {
@@ -298,14 +432,13 @@ void CoreTimingManager::MoveEvents()
   while (node)
   {
     ThreadSafeEvent* const ts_event = reinterpret_cast<ThreadSafeEvent*>(node);
+    Event ev = ts_event->event;
     node = node->next;
-    auto& ev = m_event_queue.emplace_back(ts_event->event);
-    delete ts_event;
+    object_pool_free(ts_event);
 
     ev.fifo_order = m_event_fifo_id++;
     ev.time += m_globals.global_timer;
-
-    std::ranges::push_heap(m_event_queue, std::ranges::greater{});
+    PushEvent(ev);
   }
 }
 
@@ -326,21 +459,20 @@ void CoreTimingManager::Advance()
 
   m_is_global_timer_sane = true;
 
-  while (!m_event_queue.empty() && m_event_queue.front().time <= m_globals.global_timer)
+  while (m_num_events && m_event_queue[0].time <= m_globals.global_timer)
   {
-    Event evt = m_event_queue.front();
-    std::ranges::pop_heap(m_event_queue, std::ranges::greater{});
-    m_event_queue.pop_back();
+    const Event evt = m_event_queue[0];
+    PopEvent();
     evt.type->callback(m_system, evt.userdata, m_globals.global_timer - evt.time);
   }
 
   m_is_global_timer_sane = false;
 
   // Still events left (scheduled in the future)
-  if (!m_event_queue.empty())
+  if (m_num_events)
   {
-    m_globals.slice_length = static_cast<int>(
-        std::min<s64>(m_event_queue.front().time - m_globals.global_timer, MAX_SLICE_LENGTH));
+    const s64 until = m_event_queue[0].time - m_globals.global_timer;
+    m_globals.slice_length = static_cast<int>(until < MAX_SLICE_LENGTH ? until : MAX_SLICE_LENGTH);
   }
 
   ppc_state.downcount = CyclesToDowncount(m_globals.slice_length);
@@ -362,24 +494,15 @@ bool CoreTimingManager::UseSyncOnSkipIdle() const
   return m_config_sync_on_skip_idle;
 }
 
-void CoreTimingManager::LogPendingEvents() const
-{
-  auto clone = m_event_queue;
-  std::ranges::sort(clone);
-  for (const Event& ev : clone)
-  {
-    INFO_LOG_FMT(POWERPC, "PENDING: Now: {} Pending: {} Type: {}", m_globals.global_timer, ev.time,
-                 *ev.type->name);
-  }
-}
-
 // Should only be called from the CPU thread after the PPC clock has changed
 void CoreTimingManager::AdjustEventQueueTimes(u32 new_ppc_clock, u32 old_ppc_clock)
 {
   const s64 ticks = m_globals.global_timer;
 
-  for (Event& ev : m_event_queue)
+  u32 i;
+  for (i = 0; i < m_num_events; i++)
   {
+    Event& ev = m_event_queue[i];
     const s64 ev_ticks = (ev.time - ticks) * new_ppc_clock / old_ppc_clock;
     ev.time = ticks + ev_ticks;
   }
@@ -399,20 +522,6 @@ void CoreTimingManager::Idle()
   PowerPC::UpdatePerformanceMonitor(ppc_state.downcount, 0, 0, ppc_state);
   m_idled_cycles += DowncountToCycles(ppc_state.downcount);
   ppc_state.downcount = 0;
-}
-
-std::string CoreTimingManager::GetScheduledEventsSummary() const
-{
-  std::string text = "Scheduled events\n";
-  text.reserve(1000);
-
-  auto clone = m_event_queue;
-  std::ranges::sort(clone);
-  for (const Event& ev : clone)
-  {
-    text += fmt::format("{} : {} {:016x}\n", *ev.type->name, ev.time, ev.userdata);
-  }
-  return text;
 }
 
 u32 CoreTimingManager::GetFakeDecStartValue() const

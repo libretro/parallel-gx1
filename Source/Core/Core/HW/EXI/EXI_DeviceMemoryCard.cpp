@@ -89,9 +89,9 @@ void CEXIMemoryCard::Init(CoreTiming::CoreTimingManager& core_timing)
   for (Slot slot : MEMCARD_SLOTS)
   {
     s_et_cmd_done[slot] = core_timing.RegisterEvent(
-        fmt::format("memcardDone{}", s_card_short_names[slot]), CmdDoneCallback);
+        fmt::format("memcardDone{}", s_card_short_names[slot]).c_str(), CmdDoneCallback);
     s_et_transfer_complete[slot] = core_timing.RegisterEvent(
-        fmt::format("memcardTransferComplete{}", s_card_short_names[slot]),
+        fmt::format("memcardTransferComplete{}", s_card_short_names[slot]).c_str(),
         TransferCompleteCallback);
   }
 }

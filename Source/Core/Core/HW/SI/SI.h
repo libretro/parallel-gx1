@@ -85,6 +85,9 @@ private:
   void RunSIBuffer(u64 user_data, s64 cycles_late);
   static void GlobalRunSIBuffer(Core::System& system, u64 user_data, s64 cycles_late);
   static void ChangeDeviceCallback(Core::System& system, u64 user_data, s64 cycles_late);
+  // a channel's device's event
+  template <u32 channel>
+  static void ChannelEvent(Core::System& system, u64 user_data, s64 cycles_late);
 
   // SI Channel Output
   union USIChannelOut

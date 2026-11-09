@@ -16,15 +16,8 @@
 // inside callback:
 //   ScheduleEvent(periodInCycles - cyclesLate, callback, "whatever")
 
-#include <string>
-#include <tuple>
-#include <unordered_map>
-#include <vector>
-
 #include "Common/CommonTypes.h"
-#include "Common/Functional.h"
-#include "Common/HookableEvent.h"
-#include "Common/Timer.h"
+#include "Common/ObjectPool.h"
 #include "Core/CPUThreadConfigCallback.h"
 
 #include <queues/mpsc_stack.h>
@@ -48,31 +41,26 @@ struct Globals
   float last_OC_factor_inverted = 0.0f;
 };
 
-using TimedCallback =
-    Common::MoveOnlyFunction<void(Core::System& system, u64 userdata, s64 cyclesLate)>;
+/* An event's function: what it needs beyond userdata (which a state saves) it finds through
+ * the system. */
+typedef void (*TimedCallback)(Core::System& system, u64 userdata, s64 cyclesLate);
+
+/* The name a state saves an event of the type under: unique, and at most this long. */
+#define CORE_TIMING_NAME_SIZE 48
 
 struct EventType
 {
   TimedCallback callback;
-  const std::string* name;
+  char name[CORE_TIMING_NAME_SIZE];
 };
 
+/* Sorted by time, then by the order added to the queue. */
 struct Event
 {
   s64 time;
   u64 fifo_order;
   u64 userdata;
   EventType* type;
-
-  // Sort by time, unless the times are the same, in which case sort by the order added to the queue
-  constexpr auto operator<=>(const Event& other) const
-  {
-    return std::tie(time, fifo_order) <=> std::tie(other.time, other.fifo_order);
-  }
-  constexpr bool operator==(const Event& other) const
-  {
-    return std::tie(time, fifo_order) == std::tie(other.time, other.fifo_order);
-  }
 };
 
 enum class FromThread
@@ -102,15 +90,14 @@ public:
   // This should only be called from the CPU thread, if you are calling it any other thread, you are
   // doing something evil
   u64 GetTicks() const;
-  u64 GetIdleTicks() const;
 
   void RefreshConfig();
 
   void DoState(PointerWrap& p);
 
-  // Returns the event_type identifier. if name is not unique, an existing event_type will be
-  // discarded.
-  EventType* RegisterEvent(const std::string& name, TimedCallback callback);
+  // Returns the event_type identifier; the name is unique (asserted), and only registered
+  // during Init.
+  EventType* RegisterEvent(const char* name, TimedCallback callback);
   void UnregisterAllEvents();
 
   // userdata MAY NOT CONTAIN POINTERS. userdata might get written and reloaded from savestates.
@@ -139,10 +126,6 @@ public:
   // Clear all pending events. This should ONLY be done on exit or state load.
   void ClearPendingEvents();
 
-  void LogPendingEvents() const;
-
-  std::string GetScheduledEventsSummary() const;
-
   void AdjustEventQueueTimes(u32 new_ppc_clock, u32 old_ppc_clock);
 
   u32 GetFakeDecStartValue() const;
@@ -168,17 +151,22 @@ private:
 
   Core::System& m_system;
 
-  // unordered_map stores each element separately as a linked list node so pointers to elements
-  // remain stable regardless of rehashes/resizing.
-  std::unordered_map<std::string, EventType> m_event_types;
+  // The registered types, in place: others keep pointers to them.
+  static constexpr u32 MAX_EVENT_TYPES = 128;
+  EventType m_event_types[MAX_EVENT_TYPES];
+  u32 m_num_event_types = 0;
+  EventType* FindEventType(const char* name);
 
   // STATE_TO_SAVE
-  // The queue is a min-heap using std::ranges::make_heap/push_heap/pop_heap.
-  // We don't use std::priority_queue because we need to be able to serialize, unserialize and
-  // erase arbitrary events (RemoveEvent()) regardless of the queue order. These aren't accommodated
-  // by the standard adaptor class.
-  std::vector<Event> m_event_queue;
+  // The queue: a binary min-heap, its room made at Init and doubled where it runs out.
+  Event* m_event_queue = nullptr;
+  u32 m_num_events = 0;
+  u32 m_event_capacity = 0;
   u64 m_event_fifo_id = 0;
+  bool ReserveEvents(u32 count);
+  void PushEvent(const Event& ev);
+  void PopEvent();
+  void MakeHeap();
 
   // Event objects created from other threads, pushed lock-free by any of them and taken all at
   // once by the CPU thread. The time value of each Event here is a cycles_into_future value.
@@ -188,6 +176,8 @@ private:
     Event event;
   };
   mpsc_stack_t m_ts_queue;
+  // their nodes, lock-free from any thread
+  object_pool_t* m_ts_pool = nullptr;
 
   float m_last_oc_factor = 0.0f;
 

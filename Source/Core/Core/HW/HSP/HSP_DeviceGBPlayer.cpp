@@ -97,6 +97,7 @@ public:
   CGBPlayer_mGBA(CGBPlayer_mGBA&&) = delete;
   CGBPlayer_mGBA& operator=(const CGBPlayer_mGBA&) = delete;
   CGBPlayer_mGBA& operator=(CGBPlayer_mGBA&&) = delete;
+  ~CGBPlayer_mGBA() override;
 
   void Reset() override;
   void Stop() override;
@@ -128,6 +129,7 @@ private:
   CoreTiming::EventType* m_update_event = nullptr;
 
   void HandleUpdateEvent(s64 cycles_late);
+  static void UpdateEvent(Core::System& system, u64 userdata, s64 cycles_late);
 
   void UpdateAudio();
   void UpdateVideoAndScheduleNextUpdate(s64 cycles_late);
@@ -162,15 +164,28 @@ private:
   u8 m_bits_per_sample = 9;
 };
 
+/* The player whose updates the event runs: there is one GB Player. */
+static CGBPlayer_mGBA* s_player;
+
+void CGBPlayer_mGBA::UpdateEvent(Core::System&, u64, s64 cycles_late)
+{
+  if (s_player)
+    s_player->HandleUpdateEvent(cycles_late);
+}
+
+CGBPlayer_mGBA::~CGBPlayer_mGBA()
+{
+  if (s_player == this)
+    s_player = nullptr;
+}
+
 CGBPlayer_mGBA::CGBPlayer_mGBA(Core::System& system, CHSPDevice_GBPlayer* gbplayer)
     : IGBPlayer(system, gbplayer), m_gba_core{m_system, Config::GBPLAYER_GBA_INDEX}
 {
   auto& core_timing = m_system.GetCoreTiming();
 
-  m_update_event =
-      core_timing.RegisterEvent("GBPmGBAUpdate", [this](Core::System&, u64, s64 cycles_late) {
-        HandleUpdateEvent(cycles_late);
-      });
+  s_player = this;
+  m_update_event = core_timing.RegisterEvent("GBPmGBAUpdate", UpdateEvent);
 
   m_av_stream.player = this;
 
