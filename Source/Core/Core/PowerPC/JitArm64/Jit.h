@@ -18,7 +18,6 @@
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/PPCAnalyst.h"
 
-class HostDisassembler;
 
 class JitArm64 : public JitBase, public Arm64Gen::ARM64CodeBlock, public CommonAsmRoutinesBase
 {
@@ -305,7 +304,6 @@ protected:
 
   void IntializeSpeculativeConstants();
 
-  void LogGeneratedCode() const;
 
   // AsmRoutines
   void GenerateAsm();
@@ -421,5 +419,4 @@ protected:
   Common::RangeSizeSet<u8*> m_free_ranges_far_0;
   Common::RangeSizeSet<u8*> m_free_ranges_far_1;
 
-  std::unique_ptr<HostDisassembler> m_disassembler;
 };

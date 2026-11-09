@@ -285,9 +285,6 @@ void CachedInterpreter::Jit(u32 em_address, bool clear_cache_and_retry_on_failur
 
       m_block_cache.FinalizeBlock(*b, jo.enableBlocklink, code_block, m_code_buffer);
 
-#ifdef JIT_LOG_GENERATED_CODE
-      LogGeneratedCode();
-#endif
 
       return;
     }
@@ -393,21 +390,3 @@ void CachedInterpreter::ClearCache()
   RefreshConfig();
 }
 
-void CachedInterpreter::LogGeneratedCode() const
-{
-  std::ostringstream stream;
-
-  stream << "\nPPC Code Buffer:\n";
-  for (const PPCAnalyst::CodeOp& op :
-       std::span{m_code_buffer.data(), code_block.m_num_instructions})
-  {
-    fmt::print(stream, "0x{:08x}\t\t{}\n", op.address,
-               Common::GekkoDisassembler::Disassemble(op.inst.hex, op.address));
-  }
-
-  stream << "\nHost Code:\n";
-  Disassemble(*js.curBlock, stream);
-
-  // TODO C++20: std::ostringstream::view()
-  DEBUG_LOG_FMT(DYNA_REC, "{}", std::move(stream).str());
-}

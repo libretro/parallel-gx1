@@ -114,23 +114,6 @@ endif
 # ----------------------------------------------------------------------------
 # Sources
 # ----------------------------------------------------------------------------
-# BDISASM
-BDISASM_SOURCES_C :=
-BDISASM_SOURCES_CXX :=
-BDISASM_SOURCES_ASM :=
-BDISASM_SOURCES_OBJCXX :=
-ifeq ($(ARCH_X86_64),1)
-   BDISASM_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/Bochs_disasm/dis_decode.cc \
-	$(CORE_DIR)/Externals/Bochs_disasm/dis_groups.cc \
-	$(CORE_DIR)/Externals/Bochs_disasm/resolve.cc \
-	$(CORE_DIR)/Externals/Bochs_disasm/syntax.cc
-endif
-ifeq ($(OS_WIN),1)
-   BDISASM_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/Bochs_disasm/stdafx.cc
-endif
-
 # LIBRETRO_COMMON
 LIBRETRO_COMMON_SOURCES_C :=
 LIBRETRO_COMMON_SOURCES_CXX :=
@@ -1054,7 +1037,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/FileUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/FloatUtils.cpp \
 	$(CORE_DIR)/Source/Core/Common/GekkoDisassembler.cpp \
-	$(CORE_DIR)/Source/Core/Common/HostDisassembler.cpp \
 	$(CORE_DIR)/Source/Core/Common/HttpRequest.cpp \
 	$(CORE_DIR)/Source/Core/Common/Image.cpp \
 	$(CORE_DIR)/Source/Core/Common/IniFile.cpp \
@@ -1071,7 +1053,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Random.cpp \
 	$(CORE_DIR)/Source/Core/Common/SDCardUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/SettingsHandler.cpp \
-	$(CORE_DIR)/Source/Core/Common/SFMLHelper.cpp \
 	$(CORE_DIR)/Source/Core/Common/SocketContext.cpp \
 	$(CORE_DIR)/Source/Core/Common/StringUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/SymbolDB.cpp \
@@ -1777,7 +1758,6 @@ CPPIPC_SOURCES_CXX += \
 # <LIB>_CXXFLAGS to its C and C++ objects only. Third-party code builds
 # with warnings off.
 
-BDISASM_FLAGS := -w -I$(EXT_DIR)/Bochs_disasm
 
 FATFS_FLAGS := -w -I$(EXT_DIR)/FatFs
 
@@ -1951,7 +1931,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/libspng/libspng/spng \
 	-I$(EXT_DIR)/tinygltf \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
-	-I$(EXT_DIR)/lz4/lz4/lib -I$(EXT_DIR)/Bochs_disasm \
+	-I$(EXT_DIR)/lz4/lz4/lib \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include \
 	-isystem $(EXT_DIR)/libusb/libusb/libusb -isystem $(EXT_DIR)/watcher/watcher/include \
 	-Wall -Wtype-limits -Wsign-compare -Wignored-qualifiers -Wuninitialized -Wshadow \
@@ -2006,9 +1986,6 @@ endif
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
 	MGBA SFML FMT PUGIXML TINYGLTF FATFS
-ifeq ($(ARCH_X86_64),1)
-   LIB_GROUPS += BDISASM
-endif
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB
 endif

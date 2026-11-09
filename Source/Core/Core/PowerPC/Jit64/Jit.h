@@ -33,7 +33,6 @@
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/JitCommon/JitCache.h"
 
-class HostDisassembler;
 namespace PPCAnalyst
 {
 struct CodeBlock;
@@ -270,7 +269,6 @@ private:
   void FreeRanges();
   void ResetFreeMemoryRanges();
 
-  void LogGeneratedCode() const;
 
   static void ImHere(Jit64& jit);
 
@@ -290,5 +288,4 @@ private:
   const bool m_im_here_debug = false;
   const bool m_im_here_log = false;
   std::map<u32, int> m_been_here;
-  std::unique_ptr<HostDisassembler> m_disassembler;
 };
