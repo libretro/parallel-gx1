@@ -484,20 +484,6 @@ static struct retro_core_option_v2_definition option_defs[] = {
     },
     "disabled"
   },
-  {
-    Libretro::Options::main_interface::ENABLE_DEBUGGING,
-    "Interface > Enable debugging",
-    "Enable debugging",
-    "Enable the debugger.",
-    nullptr,
-    CATEGORY_INTERFACE,
-    {
-      { "disabled", nullptr },
-      { "enabled",  nullptr },
-      { nullptr, nullptr }
-    },
-    "disabled"
-  },
 
   // ========== Main.DSP ==========
   {

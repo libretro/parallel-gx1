@@ -39,7 +39,7 @@
 #include "Core/AchievementManager.h"
 #include "Core/CheatCodes.h"
 #include "Core/Config/MainSettings.h"
-#include "Core/Debugger/PPCDebugInterface.h"
+#include "Core/PatchEngine.h"
 #include "Core/PowerPC/MMU.h"
 
 #include <retro_atomic.h>

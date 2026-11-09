@@ -11,9 +11,7 @@
 
 #include <retro_atomic.h>
 
-#include "Common/Event.h"
 #include "Core/DSP/DSPAnalyzer.h"
-#include "Core/DSP/DSPBreakpoints.h"
 #include "Core/DSP/DSPCaptureLogger.h"
 
 class PointerWrap;
@@ -482,7 +480,6 @@ enum class State
 {
   Stopped,
   Running,
-  Stepping,
 };
 
 class DSPCore
@@ -505,24 +502,13 @@ public:
   void Shutdown();
 
   // Delegates to JIT or interpreter as appropriate.
-  // Handle state changes and stepping.
   int RunCycles(int cycles);
-
-  // Steps the DSP by a single instruction.
-  void Step();
 
   // Resets DSP state as if the reset exception vector has been taken.
   void Reset();
 
   // Clears the DSP instruction RAM.
   void ClearIRAM();
-
-  // Dictates whether or not the DSP is currently stopped, running or stepping
-  // through instructions.
-  void SetState(State new_state);
-
-  // Retrieves the current execution state of the DSP.
-  State GetState() const;
 
   // Indicates that a particular exception has occurred
   // and sets a flag in the pending exception register.
@@ -573,10 +559,6 @@ public:
   // Writes or loads state for savestates.
   void DoState(PointerWrap& p);
 
-  // Accessors for the DSP breakpoint facilities.
-  DSPBreakpoints& BreakPoints() { return m_dsp_breakpoints; }
-  const DSPBreakpoints& BreakPoints() const { return m_dsp_breakpoints; }
-
   SDSP& DSPState() { return m_dsp; }
   const SDSP& DSPState() const { return m_dsp; }
 
@@ -585,11 +567,9 @@ public:
 
 private:
   SDSP m_dsp;
-  DSPBreakpoints m_dsp_breakpoints;
   State m_core_state = State::Stopped;
   std::unique_ptr<Interpreter::Interpreter> m_dsp_interpreter;
   std::unique_ptr<JIT::DSPEmitter> m_dsp_jit;
   std::unique_ptr<DSPCaptureLogger> m_dsp_cap;
-  Common::Event m_step_event;
 };
 }  // namespace DSP

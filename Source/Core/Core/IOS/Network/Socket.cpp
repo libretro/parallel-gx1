@@ -24,6 +24,7 @@
 #include "Core/Core.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
+#include "Core/NetworkCaptureLogger.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 #include "Core/WC24PatchEngine.h"
@@ -507,7 +508,7 @@ void WiiSocket::Update(bool read, bool write, bool except)
 
             if (ret >= 0)
             {
-              system.GetPowerPC().GetDebugInterface().NetworkLogger()->LogSSLWrite(
+              Core::NetworkLogger()->LogSSLWrite(
                   memory.GetPointerForRange(BufferOut2, ret), ret, ssl->hostfd);
               // Return bytes written or SSL_ERR_ZERO if none
               WriteReturnValue(memory, (ret == 0) ? SSL_ERR_ZERO : ret, BufferIn);
@@ -541,7 +542,7 @@ void WiiSocket::Update(bool read, bool write, bool except)
 
             if (ret >= 0)
             {
-              system.GetPowerPC().GetDebugInterface().NetworkLogger()->LogSSLRead(
+              Core::NetworkLogger()->LogSSLRead(
                   memory.GetPointerForRange(BufferIn2, ret), ret, ssl->hostfd);
               // Return bytes read or SSL_ERR_ZERO if none
               WriteReturnValue(memory, (ret == 0) ? SSL_ERR_ZERO : ret, BufferIn);
@@ -623,7 +624,7 @@ void WiiSocket::Update(bool read, bool write, bool except)
           const int ret = sendto(fd, data, BufferInSize, flags, to, tolen);
           ReturnValue = m_socket_manager.GetNetErrorCode(ret, "SO_SENDTO", true);
           if (ret > 0)
-            system.GetPowerPC().GetDebugInterface().NetworkLogger()->LogWrite(data, ret, fd, to);
+            Core::NetworkLogger()->LogWrite(data, ret, fd, to);
 
           INFO_LOG_FMT(IOS_NET,
                        "{} = {} Socket: {:08x}, BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
@@ -683,7 +684,7 @@ void WiiSocket::Update(bool read, bool write, bool except)
           ReturnValue = m_socket_manager.GetNetErrorCode(
               ret, BufferOutSize2 ? "SO_RECVFROM" : "SO_RECV", true);
           if (ret > 0)
-            system.GetPowerPC().GetDebugInterface().NetworkLogger()->LogRead(data, ret, fd, from);
+            Core::NetworkLogger()->LogRead(data, ret, fd, from);
 
           INFO_LOG_FMT(IOS_NET,
                        "{}({}, {}) Socket: {:08X}, Flags: {:08X}, "
@@ -893,7 +894,7 @@ s32 WiiSockMan::AddSocket(s32 fd, bool is_rw)
     WiiSocket& sock = WiiSockets.emplace(wii_fd, *this).first->second;
     sock.SetFd(fd);
     sock.SetWiiFd(wii_fd);
-    m_ios.GetSystem().GetPowerPC().GetDebugInterface().NetworkLogger()->OnNewSocket(fd);
+    Core::NetworkLogger()->OnNewSocket(fd);
 
     Common::SetPlatformSocketOptions(fd);
 

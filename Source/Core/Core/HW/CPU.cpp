@@ -4,7 +4,6 @@
 #include "Core/HW/CPU.h"
 
 
-#include "Common/Event.h"
 #include "Common/Thread.h"
 #include "Common/Timer.h"
 #include "Core/CPUThreadConfigCallback.h"
@@ -19,8 +18,6 @@
 
 namespace CPU
 {
-// Stands in for the Event of a step request that has none; never dereferenced.
-static Common::Event* const STEP_NO_EVENT = reinterpret_cast<Common::Event*>(alignof(void*));
 
 CPUManager::CPUManager(Core::System& system) : m_system(system)
 {
@@ -29,7 +26,6 @@ CPUManager::CPUManager(Core::System& system) : m_system(system)
   retro_atomic_int_init(&m_cpu_thread_active, 0);
   retro_atomic_int_init(&m_paused_and_locked, 0);
   retro_atomic_int_init(&m_system_request_stepping, 0);
-  retro_atomic_ptr_init(&m_step_request, nullptr);
   mpsc_stack_init(&m_pending_jobs);
   retro_eventcount_init(&m_stepping_released);
   retro_eventcount_init(&m_cpu_wake);
@@ -66,13 +62,6 @@ void CPUManager::Shutdown()
   Stop();
   retro_atomic_store_release_int(&m_cpu_run_state_reached, 0);
   m_system.GetPowerPC().Shutdown();
-}
-
-void CPUManager::FlushStepSyncEvent()
-{
-  auto* event = static_cast<Common::Event*>(retro_atomic_exchange_ptr(&m_step_request, nullptr));
-  if (event && event != STEP_NO_EVENT)
-    event->Set();
 }
 
 void CPUManager::ExecutePendingJobs()
@@ -174,29 +163,6 @@ void CPUManager::Run()
       if (!TryEnterActive(State::Running))
         break;
 
-      // Adjust PC when debugging
-      // SingleStep so that the "continue", "step over" and "step out" debugger functions
-      // work when the PC is at a breakpoint at the beginning of the block
-      // Don't use PowerPCManager::CheckBreakPoints, otherwise you get double logging
-      // If watchpoints are enabled, any instruction could be a breakpoint.
-      if (power_pc.GetBreakPoints().IsAddressBreakPoint(power_pc.GetPPCState().pc) ||
-          power_pc.GetMemChecks().HasAny())
-      {
-        // Only from Running, so a pause or stop that came in meanwhile is not undone.
-        int expected = static_cast<int>(State::Running);
-        const bool swapped =
-            retro_atomic_cas_int(&m_state, expected, static_cast<int>(State::Stepping));
-        PowerPC::CoreMode old_mode = power_pc.GetMode();
-        power_pc.SetMode(PowerPC::CoreMode::Interpreter);
-        power_pc.SingleStep();
-        power_pc.SetMode(old_mode);
-        if (swapped)
-        {
-          expected = static_cast<int>(State::Stepping);
-          retro_atomic_cas_int(&m_state, expected, static_cast<int>(State::Running));
-        }
-      }
-
       // Enter a fast runloop
       power_pc.RunLoop();
 
@@ -204,49 +170,27 @@ void CPUManager::Run()
       break;
 
     case State::Stepping:
-      // Wait for step command.
+      // Paused: wait for the state to change.
       for (;;)
       {
         ExecutePendingJobs();
         CPUThreadConfigCallback::CheckForConfigChanges();
-        if (retro_atomic_load_acquire_ptr(&m_step_request) || !IsStepping())
+        if (!IsStepping())
           break;
         const int key = retro_eventcount_prepare_wait(&m_cpu_wake);
-        if (retro_atomic_load_acquire_ptr(&m_step_request) || !IsStepping())
+        if (!IsStepping())
         {
           retro_eventcount_cancel_wait(&m_cpu_wake);
           break;
         }
         retro_eventcount_commit_wait(&m_cpu_wake, key);
       }
-      if (!IsStepping())
-      {
-        // Signal event if the mode changes.
-        FlushStepSyncEvent();
-        continue;
-      }
-      if (retro_atomic_load_seq_cst_int(&m_paused_and_locked))
-        continue;
-
-      // Do step
-      if (!TryEnterActive(State::Stepping))
-        continue;
-
-      power_pc.SingleStep();
-
-      LeaveActive();
-
-      // Update disasm dialog
-      FlushStepSyncEvent();
-      Host_UpdateDisasmDialog();
       break;
 
     case State::PowerDown:
       break;
     }
   }
-
-  Host_UpdateDisasmDialog();
 }
 
 void CPUManager::RunSingleFrame()
@@ -281,7 +225,6 @@ void CPUManager::Stop()
   WaitForIdle();
 
   RunAdjacentSystems(false);
-  FlushStepSyncEvent();
 }
 
 bool CPUManager::IsStepping() const
@@ -305,24 +248,6 @@ void CPUManager::Reset()
 {
 }
 
-void CPUManager::StepOpcode(Common::Event* event)
-{
-  // If we're not stepping then this is pointless
-  if (!IsStepping())
-  {
-    if (event)
-      event->Set();
-    return;
-  }
-
-  // Potential race where the previous step has not been serviced yet.
-  auto* previous = static_cast<Common::Event*>(
-      retro_atomic_exchange_ptr(&m_step_request, event ? event : STEP_NO_EVENT));
-  if (previous && previous != STEP_NO_EVENT && previous != event)
-    previous->Set();
-  WakeCPU();
-}
-
 // PowerDown sticks: a state change after it is refused.
 bool CPUManager::SetStateChecked(State s)
 {
@@ -335,8 +260,6 @@ bool CPUManager::SetStateChecked(State s)
       break;
     cur = retro_atomic_load_seq_cst_int(&m_state);
   }
-  if (s == State::Stepping)
-    m_system.GetPowerPC().GetBreakPoints().ClearTemporary();
   return true;
 }
 
@@ -377,12 +300,6 @@ void CPUManager::Break()
   // finish resulting in the CPU loop never terminating.
   SetStateChecked(State::Stepping);
   RunAdjacentSystems(false);
-}
-
-void CPUManager::Continue()
-{
-  SetStepping(false);
-  Core::NotifyStateChanged(Core::State::Running);
 }
 
 bool CPUManager::PauseAndLock()

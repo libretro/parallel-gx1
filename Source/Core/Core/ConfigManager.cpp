@@ -332,8 +332,7 @@ void SConfig::OnTitleDirectlyBooted(const Core::CPUThreadGuard& guard)
 
   auto& ppc_symbol_db = system.GetPPCSymbolDB();
 
-  if (ppc_symbol_db.LoadMapOnBoot(guard))
-    Host_PPCSymbolsChanged();
+  ppc_symbol_db.LoadMapOnBoot(guard);
   HLE::Reload(system);
 
   PatchEngine::Reload(system);

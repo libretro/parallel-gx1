@@ -32,8 +32,6 @@ void JitArm64::GenerateAsm()
 {
   const Common::ScopedJITPageWriteAndNoExecute enable_jit_page_writes(GetRegionPtr());
 
-  const bool enable_debugging = Config::IsDebuggingEnabled();
-
   // This value is all of the callee saved registers that we are required to save.
   // According to the AACPS64 we need to save R19 ~ R30 and Q8 ~ Q15.
   const u32 ALL_CALLEE_SAVED = 0x7FF80000;
@@ -84,15 +82,6 @@ void JitArm64::GenerateAsm()
   dispatcher_no_timing_check = GetCodePtr();
 
   auto& cpu = m_system.GetCPU();
-
-  FixupBranch debug_exit;
-  if (enable_debugging)
-  {
-    LDR(IndexType::Unsigned, ARM64Reg::W8, ARM64Reg::X8,
-        MOVPage2R(ARM64Reg::X8, cpu.GetStatePtr()));
-    static_assert(std::to_underlying(CPU::State::Running) == 0);
-    debug_exit = CBNZ(ARM64Reg::W8);
-  }
 
   dispatcher_no_check = GetCodePtr();
 
@@ -214,14 +203,6 @@ void JitArm64::GenerateAsm()
 
   // We can safely assume that downcount >= 1
   B(dispatcher_no_check);
-
-  if (enable_debugging)
-  {
-    SetJumpTarget(debug_exit);
-    static_assert(PPCSTATE_OFF(pc) <= 252);
-    static_assert(PPCSTATE_OFF(pc) + 4 == PPCSTATE_OFF(npc));
-    STP(IndexType::Signed, DISPATCHER_PC, DISPATCHER_PC, PPC_REG, PPCSTATE_OFF(pc));
-  }
 
   dispatcher_exit = GetCodePtr();
   SetJumpTarget(exit);

@@ -20,6 +20,44 @@
 
 namespace Core
 {
+static std::shared_ptr<NetworkCaptureLogger> s_network_logger;
+
+std::shared_ptr<NetworkCaptureLogger> NetworkLogger()
+{
+  const bool has_ssl = Config::Get(Config::MAIN_NETWORK_SSL_DUMP_READ) ||
+                       Config::Get(Config::MAIN_NETWORK_SSL_DUMP_WRITE);
+  const bool is_pcap = Config::Get(Config::MAIN_NETWORK_DUMP_AS_PCAP);
+  const auto current_capture_type = [&] {
+    if (is_pcap)
+      return NetworkCaptureType::PCAP;
+    if (has_ssl)
+      return NetworkCaptureType::Raw;
+    return NetworkCaptureType::None;
+  }();
+
+  if (s_network_logger && s_network_logger->GetCaptureType() == current_capture_type)
+    return s_network_logger;
+
+  switch (current_capture_type)
+  {
+  case NetworkCaptureType::PCAP:
+    s_network_logger = std::make_shared<PCAPSSLCaptureLogger>();
+    break;
+  case NetworkCaptureType::Raw:
+    s_network_logger = std::make_shared<BinarySSLCaptureLogger>();
+    break;
+  case NetworkCaptureType::None:
+    s_network_logger = std::make_shared<DummyNetworkCaptureLogger>();
+    break;
+  }
+  return s_network_logger;
+}
+
+void ResetNetworkLogger()
+{
+  s_network_logger.reset();
+}
+
 NetworkCaptureLogger::NetworkCaptureLogger() = default;
 NetworkCaptureLogger::~NetworkCaptureLogger() = default;
 

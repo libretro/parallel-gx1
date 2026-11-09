@@ -143,10 +143,6 @@ void WiimoteDevice::SetBasebandState(BasebandState new_state)
 
   m_baseband_state = new_state;
 
-  // Update wiimote connection checkboxes in UI.
-  if (IsConnected() != was_connected)
-    Host_UpdateDisasmDialog();
-
   if (!IsSourceValid())
     return;
 

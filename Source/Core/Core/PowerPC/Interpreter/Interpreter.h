@@ -11,7 +11,6 @@
 
 namespace Core
 {
-class BranchWatch;
 class System;
 }  // namespace Core
 namespace PowerPC
@@ -25,7 +24,7 @@ class Interpreter : public CPUCoreBase
 {
 public:
   Interpreter(Core::System& system, PowerPC::PowerPCState& ppc_state, PowerPC::MMU& mmu,
-              Core::BranchWatch& branch_watch, PPCSymbolDB& ppc_symbol_db);
+              PPCSymbolDB& ppc_symbol_db);
   Interpreter(const Interpreter&) = delete;
   Interpreter(Interpreter&&) = delete;
   Interpreter& operator=(const Interpreter&) = delete;
@@ -319,7 +318,6 @@ private:
   Core::System& m_system;
   PowerPC::PowerPCState& m_ppc_state;
   PowerPC::MMU& m_mmu;
-  Core::BranchWatch& m_branch_watch;
   PPCSymbolDB& m_ppc_symbol_db;
 
   UGeckoInstruction m_prev_inst{};

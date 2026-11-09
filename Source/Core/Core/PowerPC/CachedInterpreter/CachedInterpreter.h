@@ -45,12 +45,7 @@ public:
   void Jit(u32 address, bool clear_cache_and_retry_on_failure);
   bool DoJit(u32 address, JitBlock* b, u32 nextPC);
 
-  std::vector<MemoryStats> GetMemoryStats() const override;
-
   static std::size_t Disassemble(const JitBlock& block, std::ostream& stream);
-
-  std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const override;
-  std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const override;
 
   JitBaseBlockCache* GetBlockCache() override { return &m_block_cache; }
   const char* GetName() const override { return "Cached Interpreter"; }
@@ -71,8 +66,6 @@ private:
 
   void LogGeneratedCode() const;
 
-  struct StartProfiledBlockOperands;
-  template <bool profiled>
   struct EndBlockOperands;
   struct InterpretOperands;
   struct InterpretAndCheckExceptionsOperands;
@@ -81,13 +74,8 @@ private:
   struct CheckHaltOperands;
   struct CheckIdleOperands;
 
-  static s32 StartProfiledBlock(PowerPC::PowerPCState& ppc_state,
-                                const StartProfiledBlockOperands& operands);
-  static s32 StartProfiledBlock(std::ostream& stream, const StartProfiledBlockOperands& operands);
-  template <bool profiled>
-  static s32 EndBlock(PowerPC::PowerPCState& ppc_state, const EndBlockOperands<profiled>& operands);
-  template <bool profiled>
-  static s32 EndBlock(std::ostream& stream, const EndBlockOperands<profiled>& operands);
+  static s32 EndBlock(PowerPC::PowerPCState& ppc_state, const EndBlockOperands& operands);
+  static s32 EndBlock(std::ostream& stream, const EndBlockOperands& operands);
   template <bool write_pc>
   static s32 Interpret(PowerPC::PowerPCState& ppc_state, const InterpretOperands& operands);
   template <bool write_pc>
@@ -105,8 +93,6 @@ private:
   static s32 WriteBrokenBlockNPC(std::ostream& stream, const WriteBrokenBlockNPCOperands& operands);
   static s32 CheckFPU(PowerPC::PowerPCState& ppc_state, const CheckHaltOperands& operands);
   static s32 CheckFPU(std::ostream& stream, const CheckHaltOperands& operands);
-  static s32 CheckBreakpoint(PowerPC::PowerPCState& ppc_state, const CheckHaltOperands& operands);
-  static s32 CheckBreakpoint(std::ostream& stream, const CheckHaltOperands& operands);
   static s32 CheckIdle(PowerPC::PowerPCState& ppc_state, const CheckIdleOperands& operands);
   static s32 CheckIdle(std::ostream& stream, const CheckIdleOperands& operands);
 
@@ -114,24 +100,12 @@ private:
   CachedInterpreterBlockCache m_block_cache;
 };
 
-struct CachedInterpreter::StartProfiledBlockOperands
-{
-  JitBlock::ProfileData* profile_data;
-};
-
-template <>
-struct CachedInterpreter::EndBlockOperands<false>
+struct CachedInterpreter::EndBlockOperands
 {
   u32 downcount;
   u32 num_load_stores;
   u32 num_fp_inst;
   u32 : 32;
-};
-
-template <>
-struct CachedInterpreter::EndBlockOperands<true> : CachedInterpreter::EndBlockOperands<false>
-{
-  JitBlock::ProfileData* profile_data;
 };
 
 struct CachedInterpreter::InterpretOperands

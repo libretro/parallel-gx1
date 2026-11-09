@@ -45,8 +45,6 @@ void Jit64AsmRoutineManager::Regenerate()
 
 void Jit64AsmRoutineManager::Generate()
 {
-  const bool enable_debugging = Config::IsDebuggingEnabled();
-
   enter_code = AlignCode16();
   // We need to own the beginning of RSP, so we do an extra stack adjustment
   // for the shadow region before calls in this function.  This call will
@@ -75,7 +73,7 @@ void Jit64AsmRoutineManager::Generate()
   MOV(64, R(RMEM), PPCSTATE(mem_ptr));
 
   // skip the sync and compare first time
-  FixupBranch skipToRealDispatch = J(enable_debugging ? Jump::Near : Jump::Short);
+  FixupBranch skipToRealDispatch = J(Jump::Short);
 
   dispatcher_mispredicted_blr = GetCodePtr();
   AND(32, PPCSTATE(pc), Imm32(0xFFFFFFFC));
@@ -93,14 +91,6 @@ void Jit64AsmRoutineManager::Generate()
   dispatcher_no_timing_check = GetCodePtr();
 
   auto& system = m_jit.m_system;
-
-  FixupBranch dbg_exit;
-  if (enable_debugging)
-  {
-    MOV(64, R(RSCRATCH), ImmPtr(system.GetCPU().GetStatePtr()));
-    CMP(32, MatR(RSCRATCH), Imm32(std::to_underlying(CPU::State::Running)));
-    dbg_exit = J_CC(CC_NE, Jump::Near);
-  }
 
   SetJumpTarget(skipToRealDispatch);
 
@@ -234,9 +224,6 @@ void Jit64AsmRoutineManager::Generate()
 
   // Landing pad for drec space
   dispatcher_exit = GetCodePtr();
-  if (enable_debugging)
-    SetJumpTarget(dbg_exit);
-
   // Reset the stack pointer, since the BLR optimization may have pushed things onto the stack
   // without popping them.
   ResetStack(*this);

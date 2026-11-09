@@ -598,45 +598,10 @@ std::optional<ReadResult<u32>> MMU::HostTryReadInstruction(const Core::CPUThread
   return std::nullopt;
 }
 
-void MMU::Memcheck(u32 address, u64 var, bool write, size_t size)
-{
-  if (!m_power_pc.GetMemChecks().HasAny())
-    return;
-
-  TMemCheck* mc = m_power_pc.GetMemChecks().GetMemCheck(address, size);
-  if (mc == nullptr)
-    return;
-
-  if (m_system.GetCPU().IsStepping())
-  {
-    // Disable when stepping so that resume works.
-    return;
-  }
-
-  mc->num_hits++;
-
-  const bool pause = mc->Action(m_system, var, address, write, size, m_ppc_state.pc);
-  if (!pause)
-    return;
-
-  m_system.GetCPU().Break();
-
-  // Fake a DSI so that all the code that tests for it in order to skip
-  // the rest of the instruction will apply.  (This means that
-  // watchpoints will stop the emulator before the offending load/store,
-  // not after like GDB does, but that's better anyway.  Just need to
-  // make sure resuming after that works.)
-  // It doesn't matter if ReadFromHardware triggers its own DSI because
-  // we'll take it after resuming.
-  m_ppc_state.Exceptions |= EXCEPTION_DSI | EXCEPTION_FAKE_MEMCHECK_HIT;
-}
-
 template <std::unsigned_integral T>
 T MMU::Read(const u32 address)
 {
-  T var = ReadFromHardware<XCheckTLBFlag::Read, T>(address);
-  Memcheck(address, var, false, sizeof(T));
-  return var;
+  return ReadFromHardware<XCheckTLBFlag::Read, T>(address);
 }
 template u8 MMU::Read<u8>(const u32 address);
 template u16 MMU::Read<u16>(const u32 address);
@@ -691,7 +656,6 @@ template std::optional<ReadResult<u64>> MMU::HostTryRead<u64>(const Core::CPUThr
 template <std::unsigned_integral T>
 void MMU::Write(const Common::MakeAtLeastU32<T> var, const u32 address)
 {
-  Memcheck(address, var, true, sizeof(T));
   WriteToHardware<XCheckTLBFlag::Write>(address, var, sizeof(T));
 }
 template void MMU::Write<u8>(const u32 var, const u32 address);
@@ -700,7 +664,6 @@ template void MMU::Write<u32>(const u32 var, const u32 address);
 template <>
 void MMU::Write<u64>(const u64 var, const u32 address)
 {
-  Memcheck(address, var, true, 8);
   WriteToHardware<XCheckTLBFlag::Write>(address, static_cast<u32>(var >> 32), 4);
   WriteToHardware<XCheckTLBFlag::Write>(address + sizeof(u32), static_cast<u32>(var), 4);
 }
@@ -856,9 +819,6 @@ std::optional<ReadResult<std::string>> MMU::HostTryReadString(const Core::CPUThr
 
 bool MMU::IsOptimizableRAMAddress(const u32 address, const u32 access_size) const
 {
-  if (m_power_pc.GetMemChecks().HasAny())
-    return false;
-
   if (!m_ppc_state.msr.DR)
     return false;
 
@@ -1147,9 +1107,6 @@ void MMU::TouchDCacheLine(u32 address, bool store)
 
 u32 MMU::IsOptimizableMMIOAccess(u32 address, u32 access_size) const
 {
-  if (m_power_pc.GetMemChecks().HasAny())
-    return 0;
-
   if (!m_ppc_state.msr.DR)
     return 0;
 
@@ -1173,9 +1130,6 @@ u32 MMU::IsOptimizableMMIOAccess(u32 address, u32 access_size) const
 
 bool MMU::IsOptimizableGatherPipeWrite(u32 address) const
 {
-  if (m_power_pc.GetMemChecks().HasAny())
-    return false;
-
   if (!m_ppc_state.msr.DR)
     return false;
 
@@ -1594,13 +1548,6 @@ void MMU::PageTableUpdated(std::span<const u8> page_table)
         // Block address translation takes priority over page address translation.
         host_mapping = false;
       }
-      else if (m_power_pc.GetMemChecks().OverlapsMemcheck(logical_address->Hex,
-                                                          PowerPC::HW_PAGE_SIZE))
-      {
-        // Fast accesses don't support memchecks, so force slow accesses by removing fastmem
-        // mappings for all overlapping virtual pages.
-        host_mapping = false;
-      }
 
       const u32 priority = (page_table_offset % 64 / 8) | (pte1.H << 3);
       const PageMapping page_mapping(pte2.RPN, host_mapping, priority);
@@ -1965,11 +1912,6 @@ void MMU::UpdateBATs(BatTable& bat_table, u32 base_spr)
           }
         }
 
-        // Fast accesses don't support memchecks, so force slow accesses by removing fastmem
-        // mappings for all overlapping virtual pages.
-        if (m_power_pc.GetMemChecks().OverlapsMemcheck(virtual_address, BAT_PAGE_SIZE))
-          valid_bit &= ~BAT_PHYSICAL_BIT;
-
         // (BEPI | j) == (BEPI & ~BL) | (j & BL).
         bat_table[virtual_address >> BAT_INDEX_SHIFT] = physical_address | valid_bit;
       }
@@ -1985,12 +1927,7 @@ void MMU::UpdateFakeMMUBat(BatTable& bat_table, u32 start_addr)
     // [0x7E000000,0x80000000).
     u32 e_address = i + (start_addr >> BAT_INDEX_SHIFT);
     u32 p_address = 0x7E000000 | (i << BAT_INDEX_SHIFT & m_memory.GetFakeVMemMask());
-    u32 flags = BAT_MAPPED_BIT | BAT_PHYSICAL_BIT;
-
-    if (m_power_pc.GetMemChecks().OverlapsMemcheck(e_address << BAT_INDEX_SHIFT, BAT_PAGE_SIZE))
-      flags &= ~BAT_PHYSICAL_BIT;
-
-    bat_table[e_address] = p_address | flags;
+    bat_table[e_address] = p_address | BAT_MAPPED_BIT | BAT_PHYSICAL_BIT;
   }
 }
 
@@ -2013,7 +1950,7 @@ void MMU::DBATUpdated()
 
   // Calling UpdateDBATMappings removes all fastmem page table mappings, so we have to recreate
   // them. We need to go through them anyway because there may have been a change in which DBATs
-  // or memchecks are shadowing which page table mappings.
+  // are shadowing which page table mappings.
   if (!m_page_table.empty())
     ReloadPageTable();
 #endif

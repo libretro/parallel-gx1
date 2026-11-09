@@ -21,7 +21,6 @@
 #include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
-#include "Core/Debugger/DebugInterface.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PPCAnalyst.h"
 #include "Core/PowerPC/PowerPC.h"
@@ -672,50 +671,5 @@ bool PPCSymbolDB::SaveSymbolMap(const std::string& filename) const
     file.WriteString(line);
   }
 
-  return true;
-}
-
-// Save code map
-//
-// Notes:
-//  - Dolphin doesn't load back code maps
-//  - It's a custom code map format
-bool PPCSymbolDB::SaveCodeMap(const Core::CPUThreadGuard& guard, const std::string& filename) const
-{
-  constexpr int SYMBOL_NAME_LIMIT = 30;
-  File::IOFile f(filename, "w");
-  if (!f)
-    return false;
-
-  // Write ".text" at the top
-  f.WriteString(".text\n");
-
-  const auto& ppc_debug_interface = guard.GetSystem().GetPowerPC().GetDebugInterface();
-
-  u32 next_address = 0;
-  for (const auto& function : m_functions)
-  {
-    const Common::Symbol& symbol = function.second;
-
-    // Skip functions which are inside bigger functions
-    if (symbol.address + symbol.size <= next_address)
-    {
-      // At least write the symbol name and address
-      f.WriteString(fmt::format("// {0:08x} beginning of {1}\n", symbol.address, symbol.name));
-      continue;
-    }
-
-    // Write the symbol full name
-    f.WriteString(fmt::format("\n{0}:\n", symbol.name));
-    next_address = symbol.address + symbol.size;
-
-    // Write the code
-    for (u32 address = symbol.address; address < next_address; address += 4)
-    {
-      const std::string disasm = ppc_debug_interface.Disassemble(&guard, address);
-      f.WriteString(fmt::format("{0:08x} {1:<{2}.{3}} {4}\n", address, symbol.name,
-                                SYMBOL_NAME_LIMIT, SYMBOL_NAME_LIMIT, disasm));
-    }
-  }
   return true;
 }

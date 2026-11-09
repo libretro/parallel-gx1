@@ -60,6 +60,7 @@
 #include "Core/Host.h"
 #include "Core/IOS/IOS.h"
 #include "Core/MemTools.h"
+#include "Core/NetworkCaptureLogger.h"
 #include "Core/PatchEngine.h"
 #include "Core/PowerPC/JitInterface.h"
 #include "Core/PowerPC/PowerPC.h"
@@ -266,7 +267,6 @@ static void CPUSetInitialExecutionState(Core::System& system)
   // The CPU starts in stepping state, and will wait until a new state is set before executing.
   const bool paused = SConfig::GetInstance().bBootToPause;
   SetState(system, paused ? State::Paused : State::Running, true, true);
-  Host_UpdateDisasmDialog();
 }
 
 // Create the CPU thread, which is a CPU + Video thread in Single Core mode.
@@ -477,9 +477,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 
     PatchEngine::Shutdown();
     HLE::Clear();
-
-    CPUThreadGuard guard(system);
-    system.GetPowerPC().GetDebugInterface().Clear(guard);
+    ResetNetworkLogger();
   }};
 
   // In single-core mode: This holds a video backend shutdown function.

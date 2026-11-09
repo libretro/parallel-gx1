@@ -27,7 +27,6 @@
 
 namespace Core
 {
-class BranchWatch;
 class System;
 }  // namespace Core
 namespace PowerPC
@@ -151,8 +150,6 @@ protected:
   bool bJITSystemRegistersOff = false;
   bool bJITBranchOff = false;
   bool bJITRegisterCacheOff = false;
-  bool m_enable_profiling = false;
-  bool m_enable_debugging = false;
   bool m_enable_branch_following = false;
   bool m_enable_float_exceptions = false;
   bool m_enable_div_by_zero_exceptions = false;
@@ -168,7 +165,7 @@ protected:
   bool m_cleanup_after_stackfault = false;
   u8* m_stack_guard = nullptr;
 
-  static const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 25> JIT_SETTINGS;
+  static const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 23> JIT_SETTINGS;
 
   bool DoesConfigNeedRefresh() const;
   void RefreshConfig();
@@ -200,25 +197,10 @@ public:
   JitBase& operator=(JitBase&&) = delete;
   ~JitBase() override;
 
-  bool IsProfilingEnabled() const { return m_enable_profiling && m_enable_debugging; }
-  bool IsDebuggingEnabled() const { return m_enable_debugging; }
-  bool IsBranchWatchEnabled() const
-  {
-    auto& branch_watch = m_system.GetPowerPC().GetBranchWatch();
-    return branch_watch.GetRecordingActive();
-  }
-
   static const u8* Dispatch(JitBase& jit);
   virtual JitBaseBlockCache* GetBlockCache() = 0;
 
   virtual void Jit(u32 em_address) = 0;
-
-  // Memory region name, free size, and fragmentation ratio
-  using MemoryStats = std::pair<std::string_view, std::pair<std::size_t, double>>;
-  virtual std::vector<MemoryStats> GetMemoryStats() const = 0;
-
-  virtual std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const = 0;
-  virtual std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const = 0;
 
   virtual const CommonAsmRoutinesBase* GetAsmRoutines() = 0;
 
@@ -236,7 +218,6 @@ public:
   Core::System& m_system;
   PowerPC::PowerPCState& m_ppc_state;
   PowerPC::MMU& m_mmu;
-  Core::BranchWatch& m_branch_watch;
   PPCSymbolDB& m_ppc_symbol_db;
 };
 

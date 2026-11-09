@@ -1043,8 +1043,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Crypto/HMAC.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/SHA1.cpp \
 	$(CORE_DIR)/Source/Core/Common/CWDemangler.cpp \
-	$(CORE_DIR)/Source/Core/Common/Debug/MemoryPatches.cpp \
-	$(CORE_DIR)/Source/Core/Common/Debug/Watches.cpp \
 	$(CORE_DIR)/Source/Core/Common/DirectIOFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/DynamicLibrary.cpp \
 	$(CORE_DIR)/Source/Core/Common/FatFsUtil.cpp \
@@ -1309,12 +1307,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/Core.cpp \
 	$(CORE_DIR)/Source/Core/Core/CoreTiming.cpp \
 	$(CORE_DIR)/Source/Core/Core/CPUThreadConfigCallback.cpp \
-	$(CORE_DIR)/Source/Core/Core/Debugger/BranchWatch.cpp \
 	$(CORE_DIR)/Source/Core/Core/Debugger/Debugger_SymbolMap.cpp \
-	$(CORE_DIR)/Source/Core/Core/Debugger/Dump.cpp \
-	$(CORE_DIR)/Source/Core/Core/Debugger/OSThread.cpp \
-	$(CORE_DIR)/Source/Core/Core/Debugger/PPCDebugInterface.cpp \
-	$(CORE_DIR)/Source/Core/Core/Debugger/RSO.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAccelerator.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAnalyzer.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAssembler.cpp \
@@ -1527,13 +1520,11 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/MemTools.cpp \
 	$(CORE_DIR)/Source/Core/Core/NetworkCaptureLogger.cpp \
 	$(CORE_DIR)/Source/Core/Core/PatchEngine.cpp \
-	$(CORE_DIR)/Source/Core/Core/PowerPC/BreakPoints.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter_Disassembler.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreterBlockCache.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreterEmitter.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/ConditionRegister.cpp \
-	$(CORE_DIR)/Source/Core/Core/PowerPC/Expression.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/Interpreter/Interpreter_Branch.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/Interpreter/Interpreter_FloatingPoint.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/Interpreter/Interpreter_Integer.cpp \
@@ -1954,7 +1945,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/fmt/fmt/include \
 	-I$(EXT_DIR)/mbedtls/include -I$(EXT_DIR)/minizip-ng/minizip-ng \
 	$(ZLIB_INC) $(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
-	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 -I$(EXT_DIR)/expr/include \
+	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
 	$(MGBA_INC) \
 	-I$(EXT_DIR)/libspng/libspng/spng \

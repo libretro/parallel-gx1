@@ -112,23 +112,12 @@ void CachedInterpreter::SingleStep()
   ExecuteOneBlock();
 }
 
-s32 CachedInterpreter::StartProfiledBlock(PowerPC::PowerPCState& ppc_state,
-                                          const StartProfiledBlockOperands& operands)
-{
-  JitBlock::ProfileData::BeginProfiling(operands.profile_data);
-  return sizeof(AnyCallback) + sizeof(operands);
-}
-
-template <bool profiled>
-s32 CachedInterpreter::EndBlock(PowerPC::PowerPCState& ppc_state,
-                                const EndBlockOperands<profiled>& operands)
+s32 CachedInterpreter::EndBlock(PowerPC::PowerPCState& ppc_state, const EndBlockOperands& operands)
 {
   ppc_state.pc = ppc_state.npc;
   ppc_state.downcount -= operands.downcount;
   PowerPC::UpdatePerformanceMonitor(operands.downcount, operands.num_load_stores,
                                     operands.num_fp_inst, ppc_state);
-  if constexpr (profiled)
-    JitBlock::ProfileData::EndProfiling(operands.profile_data, operands.downcount);
   return 0;
 }
 
@@ -197,20 +186,6 @@ s32 CachedInterpreter::CheckFPU(PowerPC::PowerPCState& ppc_state, const CheckHal
   return sizeof(AnyCallback) + sizeof(operands);
 }
 
-s32 CachedInterpreter::CheckBreakpoint(PowerPC::PowerPCState& ppc_state,
-                                       const CheckHaltOperands& operands)
-{
-  const auto& [power_pc, current_pc, downcount] = operands;
-  ppc_state.pc = current_pc;
-  if (power_pc.CheckAndHandleBreakPoints())
-  {
-    // Accessing PowerPCState through power_pc instead of ppc_state produces better assembly.
-    power_pc.GetPPCState().downcount -= downcount;
-    return 0;
-  }
-  return sizeof(AnyCallback) + sizeof(operands);
-}
-
 s32 CachedInterpreter::CheckIdle(PowerPC::PowerPCState& ppc_state,
                                  const CheckIdleOperands& operands)
 {
@@ -240,15 +215,7 @@ bool CachedInterpreter::HandleFunctionHooking(u32 address)
 
 void CachedInterpreter::WriteEndBlock()
 {
-  if (IsProfilingEnabled())
-  {
-    Write(EndBlock<true>, {{js.downcountAmount, js.numLoadStoreInst, js.numFloatingPointInst},
-                           js.curBlock->profile_data.get()});
-  }
-  else
-  {
-    Write(EndBlock<false>, {js.downcountAmount, js.numLoadStoreInst, js.numFloatingPointInst});
-  }
+  Write(EndBlock, {js.downcountAmount, js.numLoadStoreInst, js.numFloatingPointInst});
 }
 
 bool CachedInterpreter::SetEmitterStateToFreeCodeRegion()
@@ -351,11 +318,7 @@ bool CachedInterpreter::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 
   auto& interpreter = m_system.GetInterpreter();
   auto& power_pc = m_system.GetPowerPC();
-  auto& cpu = m_system.GetCPU();
-  auto& breakpoints = power_pc.GetBreakPoints();
 
-  if (IsProfilingEnabled())
-    Write(StartProfiledBlock, {js.curBlock->profile_data.get()});
 
   for (u32 i = 0; i < code_block.m_num_instructions; i++)
   {
@@ -375,11 +338,6 @@ bool CachedInterpreter::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 
     if (!op.skip)
     {
-      if (IsDebuggingEnabled() && !cpu.IsStepping() &&
-          breakpoints.IsAddressBreakPoint(js.compilerPC))
-      {
-        Write(CheckBreakpoint, {power_pc, js.compilerPC, js.downcountAmount});
-      }
       if (!js.firstFPInstructionFound && (op.opinfo->flags & FL_USE_FPU) != 0)
       {
         Write(CheckFPU, {power_pc, js.compilerPC, js.downcountAmount});
@@ -426,23 +384,6 @@ bool CachedInterpreter::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
   return true;
 }
 
-std::vector<JitBase::MemoryStats> CachedInterpreter::GetMemoryStats() const
-{
-  return {{"free", m_free_ranges.get_stats()}};
-}
-
-std::size_t CachedInterpreter::DisassembleNearCode(const JitBlock& block,
-                                                   std::ostream& stream) const
-{
-  return Disassemble(block, stream);
-}
-
-std::size_t CachedInterpreter::DisassembleFarCode(const JitBlock& block, std::ostream& stream) const
-{
-  stream << "N/A\n";
-  return 0;
-}
-
 void CachedInterpreter::ClearCache()
 {
   m_block_cache.Clear();
@@ -450,7 +391,6 @@ void CachedInterpreter::ClearCache()
   ClearCodeSpace();
   ResetFreeMemoryRanges();
   RefreshConfig();
-  Host_JitCacheInvalidation();
 }
 
 void CachedInterpreter::LogGeneratedCode() const

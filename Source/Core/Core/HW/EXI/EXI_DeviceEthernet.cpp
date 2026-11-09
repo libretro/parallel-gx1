@@ -18,6 +18,7 @@
 #include "Core/CoreTiming.h"
 #include "Core/HW/EXI/EXI.h"
 #include "Core/HW/Memmap.h"
+#include "Core/NetworkCaptureLogger.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 
@@ -454,7 +455,7 @@ void CEXIETHERNET::SendFromDirectFIFO()
   const u8* frame = tx_fifo.get();
   const u16 size = std::min<u16>(BBA_TXFIFO_SIZE, Common::BitCastPtr<u16>(&mBbaMem[BBA_TXFIFOCNT]));
   if (m_network_interface->SendFrame(frame, size))
-    m_system.GetPowerPC().GetDebugInterface().NetworkLogger()->LogBBA(frame, size);
+    Core::NetworkLogger()->LogBBA(frame, size);
 }
 
 void CEXIETHERNET::SendFromPacketBuffer()
@@ -567,7 +568,7 @@ bool CEXIETHERNET::RecvHandlePacket()
   INFO_LOG_FMT(SP1, "{:x} {:x} {:x} {:x}", page_ptr(BBA_BP), page_ptr(BBA_RRP), page_ptr(BBA_RWP),
                page_ptr(BBA_RHBP));
 #endif
-  m_system.GetPowerPC().GetDebugInterface().NetworkLogger()->LogBBA(mRecvBuffer.get(),
+  Core::NetworkLogger()->LogBBA(mRecvBuffer.get(),
                                                                     mRecvBufferLength);
   write_ptr = &mBbaMem[page_ptr(BBA_RWP) << 8];
 

@@ -65,11 +65,6 @@ public:
   void Jit(u32 em_address, bool clear_cache_and_retry_on_failure);
   bool DoJit(u32 em_address, JitBlock* b, u32 nextPC);
 
-  std::vector<MemoryStats> GetMemoryStats() const override;
-
-  std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const override;
-  std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const override;
-
   // Finds a free memory region and sets the near and far code emitters to point at that region.
   // Returns false if no free memory region can be found for either of the two.
   bool SetEmitterStateToFreeCodeRegion();
@@ -79,7 +74,6 @@ public:
 
   void IntializeSpeculativeConstants();
 
-  void FlushRegistersBeforeSlowAccess();
 
   JitCommon::ConstantPropagation& GetConstantPropagation() { return m_constant_propagation; }
 
@@ -107,9 +101,6 @@ public:
   void WriteExternalExceptionExit();
   void WriteRfiExitDestInRSCRATCH();
   void WriteIdleExit(u32 destination);
-  template <bool condition>
-  void WriteBranchWatch(u32 origin, u32 destination, UGeckoInstruction inst, BitSet32 caller_save);
-  void WriteBranchWatchDestInRSCRATCH(u32 origin, UGeckoInstruction inst, BitSet32 caller_save);
 
   bool Cleanup();
 

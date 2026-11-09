@@ -313,7 +313,6 @@ void Jit64::ClearCache()
   RefreshConfig();
   asm_routines.Regenerate();
   ResetFreeMemoryRanges();
-  Host_JitCacheInvalidation();
 }
 
 void Jit64::FreeRanges()
@@ -475,15 +474,6 @@ bool Jit64::Cleanup()
     ABI_PushRegistersAndAdjustStack({}, 0);
     ABI_CallFunctionCCCP(PowerPC::UpdatePerformanceMonitor, js.downcountAmount, js.numLoadStoreInst,
                          js.numFloatingPointInst, &m_ppc_state);
-    ABI_PopRegistersAndAdjustStack({}, 0);
-    did_something = true;
-  }
-
-  if (IsProfilingEnabled())
-  {
-    ABI_PushRegistersAndAdjustStack({}, 0);
-    ABI_CallFunctionPC(&JitBlock::ProfileData::EndProfiling, js.curBlock->profile_data.get(),
-                       js.downcountAmount);
     ABI_PopRegistersAndAdjustStack({}, 0);
     did_something = true;
   }
@@ -800,30 +790,6 @@ void Jit64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
 
   std::size_t block_size = m_code_buffer.size();
 
-  if (IsDebuggingEnabled())
-  {
-    // We can link blocks as long as we are not single stepping
-    EnableBlockLink();
-    EnableOptimization();
-
-    if (!IsProfilingEnabled())
-    {
-      if (m_system.GetCPU().IsStepping())
-      {
-        block_size = 1;
-
-        // Do not link this block to other blocks While single stepping
-        jo.enableBlocklink = false;
-        analyzer.ClearOption(PPCAnalyst::PPCAnalyzer::OPTION_CONDITIONAL_CONTINUE);
-        analyzer.ClearOption(PPCAnalyst::PPCAnalyzer::OPTION_BRANCH_MERGE);
-        analyzer.ClearOption(PPCAnalyst::PPCAnalyzer::OPTION_CROR_MERGE);
-        analyzer.ClearOption(PPCAnalyst::PPCAnalyzer::OPTION_CARRY_MERGE);
-        analyzer.ClearOption(PPCAnalyst::PPCAnalyzer::OPTION_BRANCH_FOLLOW);
-      }
-      Trace();
-    }
-  }
-
   // Analyze the block, collect all instructions it is made of (including inlining,
   // if that is enabled), reorder instructions for optimal performance, and join joinable
   // instructions.
@@ -933,10 +899,6 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
     ABI_CallFunctionP(ImHere, this);
     ABI_PopRegistersAndAdjustStack({}, 0);
   }
-
-  // Conditionally add profiling code.
-  if (IsProfilingEnabled())
-    ABI_CallFunctionP(&JitBlock::ProfileData::BeginProfiling, b->profile_data.get());
 
 #if defined(_DEBUG) || defined(DEBUGFAST) || defined(NAN_CHECK)
   // should help logged stack-traces become more accurate
@@ -1067,42 +1029,8 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
     if (HandleFunctionHooking(op.address))
       break;
 
-    if (op.skip)
+    if (!op.skip)
     {
-      if (IsBranchWatchEnabled())
-      {
-        // The only thing that currently sets op.skip is the BLR following optimization.
-        // If any non-branch instruction starts setting that too, this will need to be changed.
-        ASSERT(op.inst.hex == 0x4e800020);
-        WriteBranchWatch<true>(op.address, op.branchTo, op.inst, CallerSavedRegistersInUse());
-      }
-    }
-    else
-    {
-      auto& cpu = m_system.GetCPU();
-      auto& power_pc = m_system.GetPowerPC();
-      if (IsDebuggingEnabled() && power_pc.GetBreakPoints().IsAddressBreakPoint(op.address) &&
-          !cpu.IsStepping())
-      {
-        gpr.Flush();
-        fpr.Flush();
-
-        MOV(32, PPCSTATE(pc), Imm32(op.address));
-        ABI_PushRegistersAndAdjustStack({}, 0);
-        ABI_CallFunctionP(PowerPC::CheckAndHandleBreakPointsFromJIT, &power_pc);
-        ABI_PopRegistersAndAdjustStack({}, 0);
-        MOV(64, R(RSCRATCH), ImmPtr(cpu.GetStatePtr()));
-        CMP(32, MatR(RSCRATCH), Imm32(std::to_underlying(CPU::State::Running)));
-        FixupBranch noBreakpoint = J_CC(CC_E);
-
-        Cleanup();
-        MOV(32, PPCSTATE(npc), Imm32(op.address));
-        SUB(32, PPCSTATE(downcount), Imm32(js.downcountAmount));
-        JMP(asm_routines.dispatcher_exit);
-
-        SetJumpTarget(noBreakpoint);
-      }
-
       if ((opinfo->flags & FL_USE_FPU) && !js.firstFPInstructionFound)
       {
         // This instruction uses FPU - needs to add FP exception bailout
@@ -1284,21 +1212,6 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
   return true;
 }
 
-std::vector<JitBase::MemoryStats> Jit64::GetMemoryStats() const
-{
-  return {{"near", m_free_ranges_near.get_stats()}, {"far", m_free_ranges_far.get_stats()}};
-}
-
-std::size_t Jit64::DisassembleNearCode(const JitBlock& block, std::ostream& stream) const
-{
-  return m_disassembler->Disassemble(block.normalEntry, block.near_end, stream);
-}
-
-std::size_t Jit64::DisassembleFarCode(const JitBlock& block, std::ostream& stream) const
-{
-  return m_disassembler->Disassemble(block.far_begin, block.far_end, stream);
-}
-
 BitSet8 Jit64::ComputeStaticGQRs(const PPCAnalyst::CodeBlock& cb) const
 {
   return cb.m_gqr_used & ~cb.m_gqr_modified;
@@ -1357,25 +1270,6 @@ void Jit64::IntializeSpeculativeConstants()
       CMP(32, PPCSTATE_GPR(i), Imm32(compileTimeValue));
       J_CC(CC_NZ, target);
       gpr.SetImmediate32(i, compileTimeValue, false);
-    }
-  }
-}
-
-void Jit64::FlushRegistersBeforeSlowAccess()
-{
-  // Register values can be used by memory watchpoint conditions.
-  MemChecks& mem_checks = m_system.GetPowerPC().GetMemChecks();
-  if (mem_checks.HasAny())
-  {
-    BitSet32 gprs = mem_checks.GetGPRsUsedInConditions();
-    BitSet32 fprs = mem_checks.GetFPRsUsedInConditions();
-    if (gprs || fprs)
-    {
-      RCForkGuard gpr_guard = gpr.Fork();
-      RCForkGuard fpr_guard = fpr.Fork();
-
-      gpr.Flush(gprs);
-      fpr.Flush(fprs);
     }
   }
 }

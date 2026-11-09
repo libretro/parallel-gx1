@@ -194,7 +194,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, 
     // In the case of JitAsm routines, the state we want to store here isn't known
     // when compiling the routine, so the caller has to store it themselves.
     if (!emitting_routine)
-      FlushPPCStateBeforeSlowAccess(ARM64Reg::W30, temp_fpr);
+      FlushPPCStateBeforeSlowAccess(ARM64Reg::W30);
 
     if (flags & BackPatchInfo::FLAG_STORE)
     {
@@ -311,20 +311,12 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, 
   }
 }
 
-void JitArm64::FlushPPCStateBeforeSlowAccess(ARM64Reg temp_gpr, ARM64Reg temp_fpr)
+void JitArm64::FlushPPCStateBeforeSlowAccess(ARM64Reg temp_gpr)
 {
-  // PC is used by memory watchpoints (if enabled), profiling where to insert gather pipe
+  // PC is used for profiling where to insert gather pipe
   // interrupt checks, and printing accurate PC locations in debug logs.
   MOVI2R(temp_gpr, js.compilerPC);
   STR(IndexType::Unsigned, temp_gpr, PPC_REG, PPCSTATE_OFF(pc));
-
-  // Register values can be used by memory watchpoint conditions.
-  MemChecks& mem_checks = m_system.GetPowerPC().GetMemChecks();
-  if (mem_checks.HasAny())
-  {
-    gpr.FlushRegisters(mem_checks.GetGPRsUsedInConditions(), FlushMode::MaintainState, temp_gpr);
-    fpr.FlushRegisters(mem_checks.GetFPRsUsedInConditions(), FlushMode::MaintainState, temp_fpr);
-  }
 }
 
 bool JitArm64::HandleFastmemFault(SContext* ctx)

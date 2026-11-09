@@ -15,6 +15,8 @@
 #include "Common/GL/GLExtensions/GLExtensions.h"
 #include "Common/MsgHandler.h"
 
+#include "Core/Core.h"
+
 #include "VideoBackends/OGL/OGLTexture.h"
 
 #include "VideoCommon/DriverDetails.h"

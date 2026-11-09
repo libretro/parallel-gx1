@@ -18,18 +18,10 @@ s32 CachedInterpreterEmitter::PoisonCallback(std::ostream& stream, const void* o
   return sizeof(AnyCallback);
 }
 
-s32 CachedInterpreter::StartProfiledBlock(std::ostream& stream,
-                                          const StartProfiledBlockOperands& operands)
+s32 CachedInterpreter::EndBlock(std::ostream& stream, const EndBlockOperands& operands)
 {
-  stream << "StartProfiledBlock()\n";
-  return sizeof(AnyCallback) + sizeof(operands);
-}
-
-template <bool profiled>
-s32 CachedInterpreter::EndBlock(std::ostream& stream, const EndBlockOperands<profiled>& operands)
-{
-  fmt::println(stream, "EndBlock<profiled={}>(downcount={}, num_load_stores={}, num_fp_inst={})",
-               profiled, operands.downcount, operands.num_load_stores, operands.num_fp_inst);
+  fmt::println(stream, "EndBlock(downcount={}, num_load_stores={}, num_fp_inst={})",
+               operands.downcount, operands.num_load_stores, operands.num_fp_inst);
   return sizeof(AnyCallback) + sizeof(operands);
 }
 
@@ -75,13 +67,6 @@ s32 CachedInterpreter::CheckFPU(std::ostream& stream, const CheckHaltOperands& o
   return sizeof(AnyCallback) + sizeof(operands);
 }
 
-s32 CachedInterpreter::CheckBreakpoint(std::ostream& stream, const CheckHaltOperands& operands)
-{
-  const auto& [power_pc, current_pc, downcount] = operands;
-  fmt::println(stream, "CheckBreakpoint(current_pc=0x{:08x}, downcount={})", current_pc, downcount);
-  return sizeof(AnyCallback) + sizeof(operands);
-}
-
 s32 CachedInterpreter::CheckIdle(std::ostream& stream, const CheckIdleOperands& operands)
 {
   const auto& [core_timing, idle_pc] = operands;
@@ -100,9 +85,7 @@ std::size_t CachedInterpreter::Disassemble(const JitBlock& block, std::ostream& 
   // Function addresses aren't known at compile-time, so this array is sorted at run-time.
   static auto sorted_lookup = std::to_array<LookupKV>({
       LOOKUP_KV(CachedInterpreter::PoisonCallback),
-      LOOKUP_KV(CachedInterpreter::StartProfiledBlock),
-      LOOKUP_KV(CachedInterpreter::EndBlock<false>),
-      LOOKUP_KV(CachedInterpreter::EndBlock<true>),
+      LOOKUP_KV(CachedInterpreter::EndBlock),
       LOOKUP_KV(CachedInterpreter::Interpret<false>),
       LOOKUP_KV(CachedInterpreter::Interpret<true>),
       LOOKUP_KV(CachedInterpreter::InterpretAndCheckExceptions<false>),
@@ -110,7 +93,6 @@ std::size_t CachedInterpreter::Disassemble(const JitBlock& block, std::ostream& 
       LOOKUP_KV(CachedInterpreter::HLEFunction),
       LOOKUP_KV(CachedInterpreter::WriteBrokenBlockNPC),
       LOOKUP_KV(CachedInterpreter::CheckFPU),
-      LOOKUP_KV(CachedInterpreter::CheckBreakpoint),
       LOOKUP_KV(CachedInterpreter::CheckIdle),
   });
 

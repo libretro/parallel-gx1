@@ -27,10 +27,8 @@ public:
 
   // If these simply return the same number of cycles as was passed into them,
   // chances are that the DSP is halted.
-  // The difference between them is that the debug one obeys breakpoints.
   int RunCyclesThread(int cycles);
   int RunCycles(int cycles);
-  int RunCyclesDebug(int cycles);
 
   void WriteControlRegister(u16 val);
   u16 ReadControlRegister();

@@ -11,7 +11,6 @@
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
-#include "Common/Event.h"
 #include "Common/Hash.h"
 #include "Common/MemoryUtil.h"
 #include "Common/MsgHandler.h"
@@ -452,7 +451,6 @@ void DSPCore::Shutdown()
 }
 
 // Delegate to JIT or interpreter as appropriate.
-// Handle state changes and stepping.
 int DSPCore::RunCycles(int cycles)
 {
   if (m_dsp_jit)
@@ -462,36 +460,10 @@ int DSPCore::RunCycles(int cycles)
 
   while (cycles > 0)
   {
-    switch (m_core_state)
-    {
-    case State::Running:
-// Seems to slow things down
-#if defined(_DEBUG) || defined(DEBUGFAST)
-      cycles = m_dsp_interpreter->RunCyclesDebug(cycles);
-#else
+    if (m_core_state == State::Running)
       cycles = m_dsp_interpreter->RunCycles(cycles);
-#endif
-      break;
-
-    case State::Stepping:
-      m_step_event.Wait();
-      if (m_core_state != State::Stepping)
-        continue;
-
-      m_dsp_interpreter->Step();
-      cycles--;
-      break;
-    case State::Stopped:
-      break;
-    }
   }
   return cycles;
-}
-
-void DSPCore::Step()
-{
-  if (m_core_state == State::Stepping)
-    m_step_event.Set();
 }
 
 void DSPCore::Reset()
@@ -506,20 +478,6 @@ void DSPCore::ClearIRAM()
     return;
 
   m_dsp_jit->ClearIRAM();
-}
-
-void DSPCore::SetState(State new_state)
-{
-  m_core_state = new_state;
-
-  // kick the event, in case we are waiting
-  if (new_state == State::Running)
-    m_step_event.Set();
-}
-
-State DSPCore::GetState() const
-{
-  return m_core_state;
 }
 
 void DSPCore::SetException(ExceptionType exception)

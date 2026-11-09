@@ -7,13 +7,8 @@
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
 
-#include "Common/Event.h"
 #include "Common/Functional.h"
 
-namespace Common
-{
-class Event;
-}
 namespace Core
 {
 class System;
@@ -62,9 +57,6 @@ public:
   // Reset [NOT IMPLEMENTED]
   void Reset();
 
-  // StepOpcode (Steps one Opcode)
-  void StepOpcode(Common::Event* event = nullptr);
-
   // Enable or Disable Stepping.
   void SetStepping(bool stepping);
 
@@ -73,9 +65,6 @@ public:
   //   which enables it to avoid deadlocks but also makes it less safe so it
   //   should not be used by the Host.
   void Break();
-
-  // This should only be called from the CPU thread
-  void Continue();
 
   // Shorthand for GetState() == State::Stepping.
   // WARNING: State::PowerDown will return false, not just State::Running.
@@ -117,7 +106,6 @@ private:
     Common::MoveOnlyFunction<void()> function;
   };
 
-  void FlushStepSyncEvent();
   void ExecutePendingJobs();
   void RunAdjacentSystems(bool running);
   bool SetStateChecked(State s);
@@ -147,14 +135,11 @@ private:
   retro_atomic_int_t m_cpu_thread_active;
   retro_atomic_int_t m_paused_and_locked;
   retro_atomic_int_t m_system_request_stepping;
-  // Wakes the CPU thread: state changed, a pause ended, a step was asked for.
+  // Wakes the CPU thread: state changed, or a pause ended.
   retro_eventcount_t m_cpu_wake;
   // Wakes threads waiting for the CPU thread to go idle.
   retro_eventcount_t m_cpu_idle;
 
-  // A step request: null for none, STEP_NO_EVENT for one nobody waits on, or the Event to set
-  // once the step is done. Exchanged whole, so a request and its event never come apart.
-  retro_atomic_ptr_t m_step_request;
 
   mpsc_stack_t m_pending_jobs;
 

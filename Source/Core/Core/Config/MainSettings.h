@@ -228,7 +228,6 @@ extern const Info<bool> MAIN_SHOW_ACTIVE_TITLE;
 extern const Info<bool> MAIN_USE_BUILT_IN_TITLE_DATABASE;
 extern const Info<std::string> MAIN_THEME_NAME;
 extern const Info<bool> MAIN_PAUSE_ON_FOCUS_LOST;
-extern const Info<bool> MAIN_ENABLE_DEBUGGING;
 
 // Main.GameList
 
@@ -304,7 +303,6 @@ extern const Info<bool> MAIN_DEBUG_JIT_PAIRED_OFF;
 extern const Info<bool> MAIN_DEBUG_JIT_SYSTEM_REGISTERS_OFF;
 extern const Info<bool> MAIN_DEBUG_JIT_BRANCH_OFF;
 extern const Info<bool> MAIN_DEBUG_JIT_REGISTER_CACHE_OFF;
-extern const Info<bool> MAIN_DEBUG_JIT_ENABLE_PROFILING;
 
 // Main.BluetoothPassthrough
 
@@ -372,5 +370,4 @@ std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::
                              std::optional<DiscIO::Region> region);
 bool IsDefaultGCIFolderPathConfigured(ExpansionInterface::Slot slot);
 bool AreCheatsEnabled();
-bool IsDebuggingEnabled();
 }  // namespace Config

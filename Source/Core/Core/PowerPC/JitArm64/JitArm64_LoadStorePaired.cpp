@@ -102,7 +102,7 @@ void JitArm64::psq_lXX(UGeckoInstruction inst)
   {
     LDR(IndexType::Unsigned, scale_reg, PPC_REG, PPCSTATE_OFF_SPR(SPR_GQR0 + i));
 
-    FlushPPCStateBeforeSlowAccess(ARM64Reg::W30, ARM64Reg::Q1);
+    FlushPPCStateBeforeSlowAccess(ARM64Reg::W30);
 
     UBFM(type_reg, scale_reg, 16, 18);   // Type
     UBFM(scale_reg, scale_reg, 24, 29);  // Scale
@@ -258,7 +258,7 @@ void JitArm64::psq_stXX(UGeckoInstruction inst)
   {
     LDR(IndexType::Unsigned, scale_reg, PPC_REG, PPCSTATE_OFF_SPR(SPR_GQR0 + i));
 
-    FlushPPCStateBeforeSlowAccess(ARM64Reg::W30, ARM64Reg::Q1);
+    FlushPPCStateBeforeSlowAccess(ARM64Reg::W30);
 
     UBFM(type_reg, scale_reg, 0, 2);    // Type
     UBFM(scale_reg, scale_reg, 8, 13);  // Scale

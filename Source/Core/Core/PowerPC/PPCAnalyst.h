@@ -180,7 +180,6 @@ public:
   void SetOption(AnalystOption option) { m_options |= option; }
   void ClearOption(AnalystOption option) { m_options &= ~(option); }
   bool HasOption(AnalystOption option) const { return !!(m_options & option); }
-  void SetDebuggingEnabled(bool enabled) { m_is_debugging_enabled = enabled; }
   void SetBranchFollowingEnabled(bool enabled) { m_enable_branch_following = enabled; }
   void SetFloatExceptionsEnabled(bool enabled) { m_enable_float_exceptions = enabled; }
   void SetDivByZeroExceptionsEnabled(bool enabled) { m_enable_div_by_zero_exceptions = enabled; }
@@ -204,7 +203,6 @@ private:
   // Options
   u32 m_options = 0;
 
-  bool m_is_debugging_enabled = false;
   bool m_enable_branch_following = false;
   bool m_enable_float_exceptions = false;
   bool m_enable_div_by_zero_exceptions = false;

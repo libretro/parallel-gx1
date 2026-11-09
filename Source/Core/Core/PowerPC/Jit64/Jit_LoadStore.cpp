@@ -16,7 +16,6 @@
 
 #include "Core/ConfigManager.h"
 #include "Core/CoreTiming.h"
-#include "Core/Debugger/BranchWatch.h"
 #include "Core/HW/CPU.h"
 #include "Core/HW/Memmap.h"
 #include "Core/PowerPC/Jit64/RegCache/JitRegCache.h"
@@ -110,8 +109,6 @@ void Jit64::lXXx(UGeckoInstruction inst)
   default:
     PanicAlertFmt("Invalid instruction");
   }
-
-  FlushRegistersBeforeSlowAccess();
 
   // PowerPC has no 8-bit sign extended load, but x86 does, so merge extsb with the load if we find
   // it.
@@ -303,27 +300,6 @@ void Jit64::dcbx(UGeckoInstruction inst)
 
     // Load the loop_counter register with the amount of invalidations to execute.
     LEA(32, loop_counter, MDisp(RSCRATCH2, 1));
-
-    if (IsBranchWatchEnabled())
-    {
-      const BitSet32 bw_caller_save = (CallerSavedRegistersInUse() | BitSet32{RSCRATCH2}) &
-                                      ~BitSet32{int(reg_cycle_count), int(reg_downcount)};
-
-      // Assert RSCRATCH2 won't be clobbered before it is moved from.
-      static_assert(RSCRATCH2 != ABI_PARAM1);
-
-      ABI_PushRegistersAndAdjustStack(bw_caller_save, 0);
-      MOV(64, R(ABI_PARAM1), ImmPtr(&m_branch_watch));
-      // RSCRATCH2 holds the amount of faked branch watch hits. Move RSCRATCH2 first, because
-      // ABI_PARAM2 clobbers RSCRATCH2 on Windows and ABI_PARAM3 clobbers RSCRATCH2 on Linux!
-      MOV(32, R(ABI_PARAM4), R(RSCRATCH2));
-      const PPCAnalyst::CodeOp& op = js.op[2];
-      MOV(64, R(ABI_PARAM2), Imm64(Core::FakeBranchWatchCollectionKey{op.address, op.branchTo}));
-      MOV(32, R(ABI_PARAM3), Imm32(op.inst.hex));
-      ABI_CallFunction(m_ppc_state.msr.IR ? &Core::BranchWatch::HitVirtualTrue_fk_n :
-                                            &Core::BranchWatch::HitPhysicalTrue_fk_n);
-      ABI_PopRegistersAndAdjustStack(bw_caller_save, 0);
-    }
   }
 
   X64Reg effective_address = RSCRATCH;
@@ -428,8 +404,6 @@ void Jit64::dcbz(UGeckoInstruction inst)
   int a = inst.RA;
   int b = inst.RB;
 
-  FlushRegistersBeforeSlowAccess();
-
   {
     RCOpArg Ra = a ? gpr.Use(a, RCMode::Read) : RCOpArg::Imm32(0);
     RCOpArg Rb = gpr.Use(b, RCMode::Read);
@@ -525,8 +499,6 @@ void Jit64::stX(UGeckoInstruction inst)
     return;
   }
 
-  FlushRegistersBeforeSlowAccess();
-
   // If we already know the address of the write
   if (!a || gpr.IsImm(a))
   {
@@ -612,8 +584,6 @@ void Jit64::stXx(UGeckoInstruction inst)
     break;
   }
 
-  FlushRegistersBeforeSlowAccess();
-
   const bool does_clobber = WriteClobbersRegValue(accessSize, /* swap */ !byte_reverse);
 
   RCOpArg Ra = update ? gpr.Bind(a, RCMode::ReadWrite) : gpr.Use(a, RCMode::Read);
@@ -648,8 +618,6 @@ void Jit64::lmw(UGeckoInstruction inst)
 
   int a = inst.RA, d = inst.RD;
 
-  FlushRegistersBeforeSlowAccess();
-
   // TODO: This doesn't handle rollback on DSI correctly
   {
     RCOpArg Ra = a ? gpr.Use(a, RCMode::Read) : RCOpArg::Imm32(0);
@@ -672,8 +640,6 @@ void Jit64::stmw(UGeckoInstruction inst)
   JITDISABLE(bJITLoadStoreOff);
 
   int a = inst.RA, d = inst.RD;
-
-  FlushRegistersBeforeSlowAccess();
 
   // TODO: This doesn't handle rollback on DSI correctly
   for (int i = d; i < 32; i++)

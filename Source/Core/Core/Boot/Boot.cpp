@@ -539,16 +539,10 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       const std::string filename = PathToFileName(executable.path);
 
       auto& ppc_symbol_db = system.GetPPCSymbolDB();
-      bool symbols_changed = ppc_symbol_db.Clear();
+      ppc_symbol_db.Clear();
 
       if (executable.reader->LoadSymbols(guard, ppc_symbol_db, filename))
-      {
-        symbols_changed = true;
         HLE::PatchFunctions(system);
-      }
-
-      if (symbols_changed)
-        Host_PPCSymbolsChanged();
 
       return true;
     }

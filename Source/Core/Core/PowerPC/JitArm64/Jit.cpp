@@ -198,7 +198,6 @@ void JitArm64::GenerateAsmAndResetFreeMemoryRanges()
   ResetFreeMemoryRanges(routines_near_end - routines_near_start,
                         routines_far_end - routines_far_start);
 
-  Host_JitCacheInvalidation();
 }
 
 void JitArm64::FreeRanges()
@@ -510,11 +509,6 @@ void JitArm64::WriteExit(u32 destination, bool LK, u32 exit_address_after_return
                          ARM64Reg exit_address_after_return_reg)
 {
   Cleanup();
-  if (IsProfilingEnabled())
-  {
-    ABI_CallFunction(&JitBlock::ProfileData::EndProfiling, js.curBlock->profile_data.get(),
-                     js.downcountAmount);
-  }
   DoDownCount();
 
   LK &= m_enable_blr_optimization;
@@ -615,11 +609,6 @@ void JitArm64::WriteExit(Arm64Gen::ARM64Reg dest, bool LK, u32 exit_address_afte
     MOV(DISPATCHER_PC, dest);
 
   Cleanup();
-  if (IsProfilingEnabled())
-  {
-    ABI_CallFunction(&JitBlock::ProfileData::EndProfiling, js.curBlock->profile_data.get(),
-                     js.downcountAmount);
-  }
   DoDownCount();
 
   LK &= m_enable_blr_optimization;
@@ -784,11 +773,6 @@ void JitArm64::WriteBLRExit(Arm64Gen::ARM64Reg dest)
     MOV(DISPATCHER_PC, dest);
 
   Cleanup();
-  if (IsProfilingEnabled())
-  {
-    ABI_CallFunction(&JitBlock::ProfileData::EndProfiling, js.curBlock->profile_data.get(),
-                     js.downcountAmount);
-  }
 
   // Check if {PPC_PC, feature_flags} matches the current state, then RET to ARM_PC.
   LDP(IndexType::Post, ARM64Reg::X2, ARM64Reg::X1, ARM64Reg::SP, 16);
@@ -852,11 +836,6 @@ void JitArm64::WriteExceptionExit(ARM64Reg dest, bool only_external, bool always
   if (!always_exception)
     SetJumpTarget(no_exceptions);
 
-  if (IsProfilingEnabled())
-  {
-    ABI_CallFunction(&JitBlock::ProfileData::EndProfiling, js.curBlock->profile_data.get(),
-                     js.downcountAmount);
-  }
   DoDownCount();
 
   B(dispatcher);
@@ -988,28 +967,6 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
 
   std::size_t block_size = m_code_buffer.size();
 
-  auto& cpu = m_system.GetCPU();
-
-  if (IsDebuggingEnabled())
-  {
-    // We can link blocks as long as we are not single stepping
-    SetBlockLinkingEnabled(true);
-    SetOptimizationEnabled(true);
-
-    if (!IsProfilingEnabled())
-    {
-      if (cpu.IsStepping())
-      {
-        block_size = 1;
-
-        // Do not link this block to other blocks while single stepping
-        SetBlockLinkingEnabled(false);
-        SetOptimizationEnabled(false);
-      }
-      Trace();
-    }
-  }
-
   // Analyze the block, collect all instructions it is made of (including inlining,
   // if that is enabled), reorder instructions for optimal performance, and join joinable
   // instructions.
@@ -1081,24 +1038,6 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
   exit(-1);
 }
 
-std::vector<JitBase::MemoryStats> JitArm64::GetMemoryStats() const
-{
-  return {{"near_0", m_free_ranges_near_0.get_stats()},
-          {"near_1", m_free_ranges_near_1.get_stats()},
-          {"far_0", m_free_ranges_far_0.get_stats()},
-          {"far_1", m_free_ranges_far_1.get_stats()}};
-}
-
-std::size_t JitArm64::DisassembleNearCode(const JitBlock& block, std::ostream& stream) const
-{
-  return m_disassembler->Disassemble(block.normalEntry, block.near_end, stream);
-}
-
-std::size_t JitArm64::DisassembleFarCode(const JitBlock& block, std::ostream& stream) const
-{
-  return m_disassembler->Disassemble(block.far_begin, block.far_end, stream);
-}
-
 std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
 {
   // Find some large free memory blocks and set code emitters to point at them. If we can't find
@@ -1149,8 +1088,6 @@ std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
 
 bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 {
-  auto& cpu = m_system.GetCPU();
-
   js.isLastInstruction = false;
   js.firstFPInstructionFound = false;
   js.assumeNoPairedQuantize = false;
@@ -1165,10 +1102,6 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
   js.numFloatingPointInst = 0;
 
   b->normalEntry = GetWritableCodePtr();
-
-  // Conditionally add profiling code.
-  if (IsProfilingEnabled())
-    ABI_CallFunction(&JitBlock::ProfileData::BeginProfiling, b->profile_data.get());
 
   if (code_block.m_gqr_used.Count() == 1 && !js.pairedQuantizeAddresses.contains(js.blockStart))
   {
@@ -1286,50 +1219,8 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
     if (HandleFunctionHooking(op.address))
       break;
 
-    if (op.skip)
+    if (!op.skip)
     {
-      if (IsBranchWatchEnabled())
-      {
-        // The only thing that currently sets op.skip is the BLR following optimization.
-        // If any non-branch instruction starts setting that too, this will need to be changed.
-        ASSERT(op.inst.hex == 0x4e800020);
-        WriteBranchWatch<true>(op.address, op.branchTo, op.inst, gpr.GetCallerSavedUsed(),
-                               fpr.GetCallerSavedUsed());
-      }
-    }
-    else
-    {
-      if (IsDebuggingEnabled() && !cpu.IsStepping() &&
-          m_system.GetPowerPC().GetBreakPoints().IsAddressBreakPoint(op.address))
-      {
-        FlushCarry();
-        gpr.Flush(FlushMode::Full, ARM64Reg::INVALID_REG);
-        fpr.Flush(FlushMode::Full, ARM64Reg::INVALID_REG);
-
-        static_assert(PPCSTATE_OFF(pc) <= 252);
-        static_assert(PPCSTATE_OFF(pc) + 4 == PPCSTATE_OFF(npc));
-
-        MOVI2R(DISPATCHER_PC, op.address);
-        STP(IndexType::Signed, DISPATCHER_PC, DISPATCHER_PC, PPC_REG, PPCSTATE_OFF(pc));
-        ABI_CallFunction(&PowerPC::CheckAndHandleBreakPointsFromJIT, &m_system.GetPowerPC());
-
-        LDR(IndexType::Unsigned, ARM64Reg::W0, ARM64Reg::X0,
-            MOVPage2R(ARM64Reg::X0, cpu.GetStatePtr()));
-        static_assert(std::to_underlying(CPU::State::Running) == 0);
-        FixupBranch no_breakpoint = CBZ(ARM64Reg::W0);
-
-        Cleanup();
-        if (IsProfilingEnabled())
-        {
-          ABI_CallFunction(&JitBlock::ProfileData::EndProfiling, b->profile_data.get(),
-                           js.downcountAmount);
-        }
-        DoDownCount();
-        B(dispatcher_exit);
-
-        SetJumpTarget(no_breakpoint);
-      }
-
       if ((opinfo->flags & FL_USE_FPU) && !js.firstFPInstructionFound)
       {
         FixupBranch b1;

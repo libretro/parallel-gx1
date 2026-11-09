@@ -7,7 +7,6 @@
 #include "Common/CommonTypes.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
-#include "Core/Debugger/BranchWatch.h"
 #include "Core/HLE/HLE.h"
 #include "Core/PowerPC/Interpreter/ExceptionUtils.h"
 #include "Core/PowerPC/PowerPC.h"
@@ -25,9 +24,6 @@ void Interpreter::bx(Interpreter& interpreter, UGeckoInstruction inst)
     destination_addr += ppc_state.pc;
   ppc_state.npc = destination_addr;
 
-  if (auto& branch_watch = interpreter.m_branch_watch; branch_watch.GetRecordingActive())
-    branch_watch.HitTrue(ppc_state.pc, destination_addr, inst, ppc_state.msr.IR);
-
   interpreter.m_end_block = true;
 }
 
@@ -35,7 +31,6 @@ void Interpreter::bx(Interpreter& interpreter, UGeckoInstruction inst)
 void Interpreter::bcx(Interpreter& interpreter, UGeckoInstruction inst)
 {
   auto& ppc_state = interpreter.m_ppc_state;
-  auto& branch_watch = interpreter.m_branch_watch;
 
   if ((inst.BO & BO_DONT_DECREMENT_FLAG) == 0)
     CTR(ppc_state)--;
@@ -56,13 +51,6 @@ void Interpreter::bcx(Interpreter& interpreter, UGeckoInstruction inst)
     if (!inst.AA)
       destination_addr += ppc_state.pc;
     ppc_state.npc = destination_addr;
-
-    if (branch_watch.GetRecordingActive())
-      branch_watch.HitTrue(ppc_state.pc, destination_addr, inst, ppc_state.msr.IR);
-  }
-  else if (branch_watch.GetRecordingActive())
-  {
-    branch_watch.HitFalse(ppc_state.pc, ppc_state.pc + 4, inst, ppc_state.msr.IR);
   }
 
   interpreter.m_end_block = true;
@@ -71,7 +59,6 @@ void Interpreter::bcx(Interpreter& interpreter, UGeckoInstruction inst)
 void Interpreter::bcctrx(Interpreter& interpreter, UGeckoInstruction inst)
 {
   auto& ppc_state = interpreter.m_ppc_state;
-  auto& branch_watch = interpreter.m_branch_watch;
 
   DEBUG_ASSERT_MSG(POWERPC, (inst.BO_2 & BO_DONT_DECREMENT_FLAG) != 0,
                    "bcctrx with decrement and test CTR option is invalid!");
@@ -85,13 +72,6 @@ void Interpreter::bcctrx(Interpreter& interpreter, UGeckoInstruction inst)
     ppc_state.npc = destination_addr;
     if (inst.LK_3)
       LR(ppc_state) = ppc_state.pc + 4;
-
-    if (branch_watch.GetRecordingActive())
-      branch_watch.HitTrue(ppc_state.pc, destination_addr, inst, ppc_state.msr.IR);
-  }
-  else if (branch_watch.GetRecordingActive())
-  {
-    branch_watch.HitFalse(ppc_state.pc, ppc_state.pc + 4, inst, ppc_state.msr.IR);
   }
 
   interpreter.m_end_block = true;
@@ -100,7 +80,6 @@ void Interpreter::bcctrx(Interpreter& interpreter, UGeckoInstruction inst)
 void Interpreter::bclrx(Interpreter& interpreter, UGeckoInstruction inst)
 {
   auto& ppc_state = interpreter.m_ppc_state;
-  auto& branch_watch = interpreter.m_branch_watch;
 
   if ((inst.BO_2 & BO_DONT_DECREMENT_FLAG) == 0)
     CTR(ppc_state)--;
@@ -115,13 +94,6 @@ void Interpreter::bclrx(Interpreter& interpreter, UGeckoInstruction inst)
     ppc_state.npc = destination_addr;
     if (inst.LK_3)
       LR(ppc_state) = ppc_state.pc + 4;
-
-    if (branch_watch.GetRecordingActive())
-      branch_watch.HitTrue(ppc_state.pc, destination_addr, inst, ppc_state.msr.IR);
-  }
-  else if (branch_watch.GetRecordingActive())
-  {
-    branch_watch.HitFalse(ppc_state.pc, ppc_state.pc + 4, inst, ppc_state.msr.IR);
   }
 
   interpreter.m_end_block = true;

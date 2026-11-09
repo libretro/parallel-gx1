@@ -446,10 +446,6 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::MAIN_FAST_DISC_SPEED,
                   Libretro::GetOption<bool>(core::FAST_DISC_SPEED, /*def=*/false));
 
-  // Main.Interface
-  Config::SetBase(Config::MAIN_ENABLE_DEBUGGING,
-                     Libretro::GetOption<bool>(main_interface::ENABLE_DEBUGGING, /*def=*/false));
-
   // Main.General
 
   // Main.DSP
@@ -693,7 +689,6 @@ bool retro_load_game(const struct retro_game_info* game)
 #endif
   NOTICE_LOG_FMT(BOOT, "CPU Core: {}", Libretro::Options::CPUCoreToString(Config::Get(Config::MAIN_CPU_CORE)));
   NOTICE_LOG_FMT(BOOT, "Fastmem enabled = {}", (Config::Get(Config::MAIN_FASTMEM)) ? "Yes" : "No");
-  NOTICE_LOG_FMT(BOOT, "JIT debug enabled = {}", Config::IsDebuggingEnabled() ? "Yes" : "No");
 
   Libretro::Video::Init();
   // The hardware renderer was asked for and no hardware context was granted (e.g. no GLES 3): fail the load so the

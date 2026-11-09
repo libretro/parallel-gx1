@@ -50,11 +50,6 @@ public:
   void Jit(u32 em_address) override;
   void Jit(u32 em_address, bool clear_cache_and_retry_on_failure);
 
-  std::vector<MemoryStats> GetMemoryStats() const override;
-
-  std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const override;
-  std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const override;
-
   const char* GetName() const override { return "JITARM64"; }
 
   // OPCODES
@@ -279,7 +274,7 @@ protected:
                             BitSet32 fprs_to_push = BitSet32(0), bool emitting_routine = false);
 
   // temp_gpr must be a valid register, but temp_fpr can be INVALID_REG.
-  void FlushPPCStateBeforeSlowAccess(Arm64Gen::ARM64Reg temp_gpr, Arm64Gen::ARM64Reg temp_fpr);
+  void FlushPPCStateBeforeSlowAccess(Arm64Gen::ARM64Reg temp_gpr);
 
   // Loadstore routines
   void SafeLoadToReg(u32 dest, s32 addr, s32 offsetReg, u32 flags, s32 offset, bool update);
@@ -328,14 +323,6 @@ protected:
   void EmitUpdateMembase();
   void MSRUpdated(u32 msr);
   void MSRUpdated(Arm64Gen::ARM64Reg msr);
-
-  // Branch Watch
-  template <bool condition>
-  void WriteBranchWatch(u32 origin, u32 destination, UGeckoInstruction inst,
-                        BitSet32 gpr_caller_save, BitSet32 fpr_caller_save);
-  void WriteBranchWatchDestInRegister(u32 origin, Arm64Gen::ARM64Reg destination,
-                                      UGeckoInstruction inst, BitSet32 gpr_caller_save,
-                                      BitSet32 fpr_caller_save);
 
   // Exits
   void

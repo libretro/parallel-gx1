@@ -8,6 +8,7 @@
 
 #include "Common/CallGate.h"
 #include "Common/CommonTypes.h"
+#include "Common/Event.h"
 #include "Common/Flag.h"
 #include "Core/DSP/DSPCore.h"
 #include "Core/DSPEmulator.h"

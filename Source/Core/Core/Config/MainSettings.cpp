@@ -399,7 +399,6 @@ const Info<bool> MAIN_USE_BUILT_IN_TITLE_DATABASE{
 const Info<std::string> MAIN_THEME_NAME{{System::Main, "Interface", "ThemeName"},
                                         DEFAULT_THEME_DIR};
 const Info<bool> MAIN_PAUSE_ON_FOCUS_LOST{{System::Main, "Interface", "PauseOnFocusLost"}, false};
-const Info<bool> MAIN_ENABLE_DEBUGGING{{System::Main, "Interface", "DebugModeEnabled"}, false};
 
 // Main.GameList
 
@@ -492,8 +491,6 @@ const Info<bool> MAIN_DEBUG_JIT_SYSTEM_REGISTERS_OFF{
 const Info<bool> MAIN_DEBUG_JIT_BRANCH_OFF{{System::Main, "Debug", "JitBranchOff"}, false};
 const Info<bool> MAIN_DEBUG_JIT_REGISTER_CACHE_OFF{{System::Main, "Debug", "JitRegisterCacheOff"},
                                                    false};
-const Info<bool> MAIN_DEBUG_JIT_ENABLE_PROFILING{{System::Main, "Debug", "JitEnableProfiling"},
-                                                 false};
 
 // Main.BluetoothPassthrough
 
@@ -818,12 +815,6 @@ bool IsDefaultGCIFolderPathConfigured(ExpansionInterface::Slot slot)
 bool AreCheatsEnabled()
 {
   return Config::Get(::Config::MAIN_ENABLE_CHEATS);
-}
-
-bool IsDebuggingEnabled()
-{
-  return Config::Get(::Config::MAIN_ENABLE_DEBUGGING) &&
-         !AchievementManager::GetInstance().IsHardcoreModeActive();
 }
 
 }  // namespace Config

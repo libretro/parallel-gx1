@@ -18,7 +18,7 @@
 #include <fmt/format.h>
 
 #include "Common/Assert.h"
-#include "Common/Debug/MemoryPatches.h"
+#include "Common/Align.h"
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
 
@@ -28,12 +28,49 @@
 #include "Core/Config/SessionSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
-#include "Core/Debugger/PPCDebugInterface.h"
 #include "Core/GeckoCode.h"
 #include "Core/GeckoCodeConfig.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
+
+void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, std::span<u8> value, const u32 address,
+                      bool store_existing_value)
+{
+  if (value.empty())
+    return;
+
+  const std::size_t size = value.size();
+  if (!PowerPC::MMU::HostIsRAMAddress(guard, address))
+    return;
+
+  auto& power_pc = guard.GetSystem().GetPowerPC();
+
+  bool should_invalidate_cache = false;
+  for (u32 offset = 0; offset < size; ++offset)
+  {
+    u8 old_value = PowerPC::MMU::HostRead<u8>(guard, address + offset);
+    if (old_value != value[offset])
+    {
+      PowerPC::MMU::HostWrite<u8>(guard, value[offset], address + offset);
+      should_invalidate_cache = true;
+      if (store_existing_value)
+        value[offset] = old_value;
+    }
+
+    if (((address + offset) % 4) == 3)
+    {
+      if (should_invalidate_cache)
+        power_pc.ScheduleInvalidateCacheThreadSafe(Common::AlignDown(address + offset, 4));
+      should_invalidate_cache = false;
+    }
+  }
+  if (should_invalidate_cache)
+  {
+    power_pc.ScheduleInvalidateCacheThreadSafe(
+        Common::AlignDown(address + static_cast<u32>(size) - 1, 4));
+  }
+}
 
 namespace PatchEngine
 {
@@ -44,7 +81,6 @@ constexpr std::array<const char*, 3> s_patch_type_strings{{
 }};
 
 static std::vector<Patch> s_on_frame;
-static std::vector<std::size_t> s_on_frame_memory;
 
 const char* PatchTypeAsString(PatchType type)
 {
@@ -247,15 +283,6 @@ static void ApplyPatches(const Core::CPUThreadGuard& guard, const std::vector<Pa
   }
 }
 
-static void ApplyMemoryPatches(const Core::CPUThreadGuard& guard,
-                               std::span<const std::size_t> memory_patch_indices)
-{
-  for (std::size_t index : memory_patch_indices)
-  {
-    guard.GetSystem().GetPowerPC().GetDebugInterface().ApplyExistingPatch(guard, index);
-  }
-}
-
 // Requires MSR.DR, MSR.IR
 // There's no perfect way to do this, it's just a heuristic.
 // We require at least 2 stack frames, if the stack is shallower than that then it won't work.
@@ -282,16 +309,6 @@ static bool IsStackValid(const Core::CPUThreadGuard& guard)
   const u32 address = PowerPC::MMU::HostRead<u32>(guard, next_SP + 4);
   return PowerPC::MMU::HostIsInstructionRAMAddress(guard, address) &&
          0 != PowerPC::MMU::HostRead_Instruction(guard, address);
-}
-
-void AddMemoryPatch(std::size_t index)
-{
-  s_on_frame_memory.push_back(index);
-}
-
-void RemoveMemoryPatch(std::size_t index)
-{
-  std::erase(s_on_frame_memory, index);
 }
 
 static void ApplyStartupPatches(Core::System& system)
@@ -333,7 +350,6 @@ bool ApplyFramePatches(Core::System& system)
   }
 
   ApplyPatches(guard, s_on_frame);
-  ApplyMemoryPatches(guard, s_on_frame_memory);
 
   // Run the Gecko code handler
   Gecko::RunCodeHandler(guard);

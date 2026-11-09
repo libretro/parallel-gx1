@@ -199,7 +199,6 @@ namespace main_interface {
   constexpr const char LOG_DSPHLE[] = "dolphin_log_dsphle_enabled";
   constexpr const char LOG_DSPLLE[] = "dolphin_log_dsplle_enabled";
   constexpr const char LOG_DSP_MAIL[] = "dolphin_log_dsp_mail_enabled";
-  constexpr const char ENABLE_DEBUGGING[] = "dolphin_debug_mode_enabled";
 }  // namespace main_interface
 
 // ======================================================

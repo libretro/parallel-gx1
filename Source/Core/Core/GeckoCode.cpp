@@ -212,7 +212,6 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   {
     ppc_state.iCache.Invalidate(memory, jit_interface, INSTALLER_BASE_ADDRESS + j);
   }
-  Host_JitCacheInvalidation();
   return Installation::Installed;
 }
 

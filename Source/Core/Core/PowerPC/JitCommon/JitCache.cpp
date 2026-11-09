@@ -8,16 +8,13 @@
 #include <cstring>
 #include <functional>
 #include <map>
-#include <ranges>
 #include <set>
-#include <span>
 #include <utility>
 
 #include "Common/CommonTypes.h"
 #include "Common/JitRegister.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
-#include "Core/Host.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
@@ -32,18 +29,6 @@ using namespace Gen;
 bool JitBlock::OverlapsPhysicalRange(u32 address, u32 length) const
 {
   return physical_addresses.overlaps(address, address + length);
-}
-
-void JitBlock::ProfileData::BeginProfiling(ProfileData* data)
-{
-  data->run_count += 1;
-  data->time_start = Clock::now();
-}
-
-void JitBlock::ProfileData::EndProfiling(ProfileData* data, u32 downcount_amount)
-{
-  data->cycles_spent += downcount_amount;
-  data->time_spent += Clock::now() - data->time_start;
 }
 
 JitBaseBlockCache::JitBaseBlockCache(JitBase& jit) : m_jit{jit}
@@ -112,27 +97,10 @@ JitBlock** JitBaseBlockCache::GetFastBlockMapFallback()
   return m_fast_block_map_fallback.data();
 }
 
-void JitBaseBlockCache::RunOnBlocks(const Core::CPUThreadGuard&,
-                                    const std::function<void(const JitBlock&)>& f) const
-{
-  for (const auto& e : block_map)
-    f(e.second);
-}
-
-void JitBaseBlockCache::WipeBlockProfilingData(const Core::CPUThreadGuard&)
-{
-  for (const auto& kv : block_map)
-  {
-    if (JitBlock::ProfileData* const profile_data = kv.second.profile_data.get())
-      *profile_data = {};
-  }
-  Host_JitProfileDataWiped();
-}
-
 JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
 {
   const u32 physical_address = m_jit.m_mmu.JitCache_TranslateAddress(em_address).address;
-  JitBlock& b = block_map.emplace(physical_address, m_jit.IsProfilingEnabled())->second;
+  JitBlock& b = block_map.emplace(physical_address, JitBlock{})->second;
   b.effectiveAddress = em_address;
   b.physicalAddress = physical_address;
   b.feature_flags = m_jit.m_ppc_state.feature_flags;
@@ -160,16 +128,6 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
   block.physical_addresses = code_block.m_physical_addresses;
 
   block.originalSize = code_block.m_num_instructions;
-  if (m_jit.IsDebuggingEnabled())
-  {
-    // TODO C++23: Can do this all in one statement with `std::vector::assign_range`.
-    const std::ranges::transform_view original_buffer_transform_view{
-        std::span{code_buffer.data(), block.originalSize},
-        [](const PPCAnalyst::CodeOp& op) { return std::make_pair(op.address, op.inst); }};
-    block.original_buffer.assign(original_buffer_transform_view.begin(),
-                                 original_buffer_transform_view.end());
-  }
-
   for (auto [range_start, range_end] : block.physical_addresses)
   {
     for (u32 i = range_start & ~31; i < range_end; i += 32)

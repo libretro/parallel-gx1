@@ -13,7 +13,6 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
-#include "Core/Debugger/BranchWatch.h"
 #include "Core/HW/DSP.h"
 #include "Core/HW/MMIO.h"
 #include "Core/HW/Memmap.h"
@@ -770,22 +769,6 @@ void JitArm64::dcbx(UGeckoInstruction inst)
     // Load the loop_counter register with the amount of invalidations to execute.
     ADD(loop_counter, WA, 1);
 
-    if (IsBranchWatchEnabled())
-    {
-      const BitSet32 gpr_caller_save =
-          gpr.GetCallerSavedUsed() &
-          ~BitSet32{DecodeReg(WB), DecodeReg(reg_cycle_count), DecodeReg(reg_downcount)};
-      ABI_PushRegisters(gpr_caller_save);
-      const BitSet32 fpr_caller_save = fpr.GetCallerSavedUsed();
-      m_float_emit.ABI_PushRegisters(fpr_caller_save, ARM64Reg::X8);
-      const PPCAnalyst::CodeOp& op = js.op[2];
-      ABI_CallFunction(m_ppc_state.msr.IR ? &Core::BranchWatch::HitVirtualTrue_fk_n :
-                                            &Core::BranchWatch::HitPhysicalTrue_fk_n,
-                       &m_branch_watch, Core::FakeBranchWatchCollectionKey{op.address, op.branchTo},
-                       op.inst.hex, WA);
-      m_float_emit.ABI_PopRegisters(fpr_caller_save, ARM64Reg::X8);
-      ABI_PopRegisters(gpr_caller_save);
-    }
   }
 
   constexpr ARM64Reg effective_addr = WB;

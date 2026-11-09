@@ -62,9 +62,8 @@ void Interpreter::UpdatePC()
 }
 
 Interpreter::Interpreter(Core::System& system, PowerPC::PowerPCState& ppc_state, PowerPC::MMU& mmu,
-                         Core::BranchWatch& branch_watch, PPCSymbolDB& ppc_symbol_db)
-    : m_system(system), m_ppc_state(ppc_state), m_mmu(mmu), m_branch_watch(branch_watch),
-      m_ppc_symbol_db(ppc_symbol_db)
+                         PPCSymbolDB& ppc_symbol_db)
+    : m_system(system), m_ppc_state(ppc_state), m_mmu(mmu), m_ppc_symbol_db(ppc_symbol_db)
 {
 }
 
@@ -214,20 +213,11 @@ void Interpreter::SingleStep()
   }
 }
 
-// #define SHOW_HISTORY
-#ifdef SHOW_HISTORY
-static std::vector<u32> s_pc_vec;
-static std::vector<u32> s_pc_block_vec;
-constexpr u32 s_show_blocks = 30;
-constexpr u32 s_show_steps = 300;
-#endif
-
 // FastRun - inspired by GCemu (to imitate the JIT so that they can be compared).
 void Interpreter::Run()
 {
   auto& core_timing = m_system.GetCoreTiming();
   auto& cpu = m_system.GetCPU();
-  auto& power_pc = m_system.GetPowerPC();
   while (cpu.GetState() == CPU::State::Running)
   {
     // CoreTiming Advance() ends the previous slice and declares the start of the next
@@ -235,50 +225,13 @@ void Interpreter::Run()
     // advance into slice 0 to get a correct slice length before executing any cycles.
     core_timing.Advance();
 
-    // we have to check exceptions at branches apparently (or maybe just rfi?)
-    if (Config::IsDebuggingEnabled())
+    while (m_ppc_state.downcount > 0)
     {
-#ifdef SHOW_HISTORY
-      s_pc_block_vec.push_back(m_ppc_state.pc);
-      if (s_pc_block_vec.size() > s_show_blocks)
-        s_pc_block_vec.erase(s_pc_block_vec.begin());
-#endif
-
-      // Debugging friendly version of inner loop. Tries to do the timing as similarly to the
-      // JIT as possible. Does not take into account that some instructions take multiple cycles.
-      while (m_ppc_state.downcount > 0)
-      {
-        m_end_block = false;
-        int cycles = 0;
-        while (!m_end_block)
-        {
-#ifdef SHOW_HISTORY
-          s_pc_vec.push_back(m_ppc_state.pc);
-          if (s_pc_vec.size() > s_show_steps)
-            s_pc_vec.erase(s_pc_vec.begin());
-#endif
-
-          if (power_pc.CheckAndHandleBreakPoints())
-            return;
-          cycles += SingleStepInner();
-        }
-        m_ppc_state.downcount -= cycles;
-      }
-    }
-    else
-    {
-      // "fast" version of inner loop. well, it's not so fast.
-      while (m_ppc_state.downcount > 0)
-      {
-        m_end_block = false;
-
-        int cycles = 0;
-        while (!m_end_block)
-        {
-          cycles += SingleStepInner();
-        }
-        m_ppc_state.downcount -= cycles;
-      }
+      int cycles = 0;
+      m_end_block = false;
+      while (!m_end_block)
+        cycles += SingleStepInner();
+      m_ppc_state.downcount -= cycles;
     }
   }
 }

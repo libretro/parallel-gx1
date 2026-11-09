@@ -3,12 +3,15 @@
 
 #pragma once
 
+#include <concepts>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "Common/Swap.h"
 
 namespace Common
 {
@@ -16,7 +19,22 @@ class IniFile;
 }
 namespace Core
 {
+class CPUThreadGuard;
 class System;
+}  // namespace Core
+
+// Writes value to address in RAM, invalidating the instruction cache where it changed. With
+// store_existing_value, value is given back what was there.
+void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, std::span<u8> value, const u32 address,
+                      bool store_existing_value = true);
+
+template <std::unsigned_integral T>
+void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, T value, const u32 address)
+{
+  Common::BigEndianValue<T> big_endian{value};
+  auto data =
+      std::span<u8, sizeof(T)>{reinterpret_cast<u8*>(std::addressof(big_endian)), sizeof(T)};
+  ApplyMemoryPatch(guard, data, address);
 }
 
 namespace PatchEngine
@@ -56,9 +74,6 @@ void LoadPatchSection(const std::string& section, std::vector<Patch>* patches,
                       const Common::IniFile& globalIni, const Common::IniFile& localIni);
 void SavePatchSection(Common::IniFile* local_ini, std::span<const Patch> patches);
 void LoadPatches();
-
-void AddMemoryPatch(std::size_t index);
-void RemoveMemoryPatch(std::size_t index);
 
 bool ApplyFramePatches(Core::System& system);
 void Shutdown();

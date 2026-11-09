@@ -141,13 +141,11 @@ public:
   bool IsMIOS() const { return m_is_mios; }
   bool IsTriforce() const { return m_is_triforce; }
   bool IsWii() const { return m_is_wii; }
-  bool IsBranchWatchIgnoreApploader() { return m_branch_watch_ignore_apploader; }
   u32 GetSimulatedMemorySize() const { return m_simulated_memory_size; }
 
   void SetIsMIOS(bool is_mios) { m_is_mios = is_mios; }
   void SetIsTriforce(bool is_triforce) { m_is_triforce = is_triforce; }
   void SetIsWii(bool is_wii) { m_is_wii = is_wii; }
-  void SetIsBranchWatchIgnoreApploader(bool enable) { m_branch_watch_ignore_apploader = enable; }
 
   IOS::HLE::EmulationKernel* GetIOS() const;
   void SetIOS(std::unique_ptr<IOS::HLE::EmulationKernel> ios);
@@ -204,7 +202,6 @@ private:
   bool m_is_mios = false;
   bool m_is_triforce = false;
   bool m_is_wii = false;
-  bool m_branch_watch_ignore_apploader = false;
   u32 m_simulated_memory_size{0};
 };
 }  // namespace Core

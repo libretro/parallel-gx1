@@ -131,4 +131,9 @@ private:
   std::map<s32, u32> m_read_sequence_number;
   std::map<s32, u32> m_write_sequence_number;
 };
+
+// The logger the network settings ask for, made again when they change.
+std::shared_ptr<NetworkCaptureLogger> NetworkLogger();
+// Drops the logger, closing what it writes to.
+void ResetNetworkLogger();
 }  // namespace Core

@@ -229,13 +229,6 @@ bool PPCAnalyzer::CanSwapAdjacentOps(const CodeOp& a, const CodeOp& b) const
   u64 a_flags = a_info->flags;
   u64 b_flags = b_info->flags;
 
-  // can't reorder around breakpoints
-  if (m_is_debugging_enabled)
-  {
-    auto& breakpoints = Core::System::GetInstance().GetPowerPC().GetBreakPoints();
-    if (breakpoints.IsAddressBreakPoint(a.address) || breakpoints.IsAddressBreakPoint(b.address))
-      return false;
-  }
   // Any instruction which can raise an interrupt is *not* a possible swap candidate:
   // see [1] for an example of a crash caused by this error.
   //
@@ -1008,8 +1001,7 @@ u32 PPCAnalyzer::Analyze(u32 address, CodeBlock* block, CodeBuffer* buffer,
 
     const auto ppc_mode = power_pc.GetMode();
     const bool hle = !!HLE::TryReplaceFunction(ppc_symbol_db, op.address, ppc_mode);
-    const bool breakpoint = power_pc.GetBreakPoints().IsAddressBreakPoint(op.address);
-    const bool may_exit_block = hle || breakpoint || op.canEndBlock || op.canCauseException;
+    const bool may_exit_block = hle || op.canEndBlock || op.canCauseException;
 
     const bool opWantsFPRF = op.wantsFPRF;
     const bool opWantsCA = op.wantsCA;
@@ -1042,7 +1034,7 @@ u32 PPCAnalyzer::Analyze(u32 address, CodeBlock* block, CodeBuffer* buffer,
     if (strncmp(op.opinfo->opname, "stfd", 4))
       fprInXmm |= op.fregsIn;
 
-    if (hle || breakpoint)
+    if (hle)
     {
       gprWillBeRead = BitSet32{};
       gprWillBeWritten = BitSet32{};

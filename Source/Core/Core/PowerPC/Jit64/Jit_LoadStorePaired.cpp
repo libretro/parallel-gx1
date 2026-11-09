@@ -34,8 +34,6 @@ void Jit64::psq_stXX(UGeckoInstruction inst)
   int w = indexed ? inst.Wx : inst.W;
   FALLBACK_IF(!a);
 
-  FlushRegistersBeforeSlowAccess();
-
   RCX64Reg scratch_guard = gpr.Scratch(RSCRATCH_EXTRA);
   RCOpArg Ra = update ? gpr.Bind(a, RCMode::ReadWrite) : gpr.Use(a, RCMode::Read);
   RCOpArg Rb = indexed ? gpr.Use(b, RCMode::Read) : RCOpArg::Imm32((u32)offset);
@@ -124,8 +122,6 @@ void Jit64::psq_lXX(UGeckoInstruction inst)
   int i = indexed ? inst.Ix : inst.I;
   int w = indexed ? inst.Wx : inst.W;
   FALLBACK_IF(!a);
-
-  FlushRegistersBeforeSlowAccess();
 
   RCX64Reg scratch_guard = gpr.Scratch(RSCRATCH_EXTRA);
   RCX64Reg Ra = gpr.Bind(a, update ? RCMode::ReadWrite : RCMode::Read);

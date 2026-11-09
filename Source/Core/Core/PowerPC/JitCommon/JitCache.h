@@ -5,10 +5,8 @@
 
 #include <array>
 #include <bitset>
-#include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <functional>
 #include <map>
 #include <memory>
 #include <type_traits>
@@ -64,25 +62,6 @@ static_assert(std::is_standard_layout_v<JitBlockData>, "JitBlockData must have a
 // address.
 struct JitBlock : public JitBlockData
 {
-  // Software profiling data for JIT block.
-  struct ProfileData
-  {
-    static void BeginProfiling(ProfileData* data);
-    static void EndProfiling(ProfileData* data, u32 downcount_amount);
-
-    std::size_t run_count = 0;
-    u64 cycles_spent = 0;
-    Clock::duration time_spent = {};
-
-  private:
-    Clock::time_point time_start;
-  };
-
-  explicit JitBlock(bool profiling_enabled)
-      : profile_data(profiling_enabled ? std::make_unique<ProfileData>() : nullptr)
-  {
-  }
-
   bool OverlapsPhysicalRange(u32 address, u32 length) const;
 
   // Information about exits to a known address from this block.
@@ -102,11 +81,6 @@ struct JitBlock : public JitBlockData
   // This set stores all physical addresses of all occupied instructions.
   Common::RangeSet<u32> physical_addresses;
 
-  // This is only available when debugging is enabled. It is a trimmed-down copy of the
-  // PPCAnalyst::CodeBuffer used to recompile this block, including repeat instructions.
-  std::vector<std::pair<u32, UGeckoInstruction>> original_buffer;
-
-  std::unique_ptr<ProfileData> profile_data;
 };
 
 typedef void (*CompiledCode)();
@@ -183,10 +157,6 @@ public:
   // Code Cache
   u8** GetEntryPoints();
   JitBlock** GetFastBlockMapFallback();
-  void RunOnBlocks(const Core::CPUThreadGuard& guard,
-                   const std::function<void(const JitBlock&)>& f) const;
-  void WipeBlockProfilingData(const Core::CPUThreadGuard& guard);
-  std::size_t GetBlockCount() const { return block_map.size(); }
 
   JitBlock* AllocateBlock(u32 em_address);
   void FinalizeBlock(JitBlock& block, bool block_link, const PPCAnalyst::CodeBlock& code_block,

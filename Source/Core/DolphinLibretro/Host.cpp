@@ -20,10 +20,6 @@ std::vector<std::string> Host_GetPreferredLocales()
   return {};
 }
 
-void Host_PPCSymbolsChanged() {}
-void Host_PPCBreakpointsChanged() {}
-void Host_JitCacheInvalidation() {}
-void Host_JitProfileDataWiped() {}
 bool Host_TASInputHasFocus() { return false; }
 
 void Host_Message(HostMessageID id)
@@ -36,10 +32,6 @@ void Host_UpdateTitle(const std::string& title)
 #if 0
   DEBUG_LOG_FMT(COMMON, "title : {}\n", title.c_str());
 #endif
-}
-
-void Host_UpdateDisasmDialog()
-{
 }
 
 void Host_RequestRenderWindowSize(int width, int height)
@@ -55,11 +47,6 @@ bool Host_RendererHasFocus()
 bool Host_RendererHasFullFocus()
 {
   return true;
-}
-
-bool Host_RendererIsFullscreen()
-{
-  return false;
 }
 
 void Host_TitleChanged()

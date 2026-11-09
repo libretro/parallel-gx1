@@ -333,7 +333,6 @@ private:
   void GenerateDSIException(u32 effective_address, bool write);
   void GenerateISIException(u32 effective_address);
 
-  void Memcheck(u32 address, u64 var, bool write, size_t size);
 
   void ClearPageTable();
   void ReloadPageTable();

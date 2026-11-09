@@ -13,9 +13,6 @@
 #include "Common/CommonTypes.h"
 
 #include "Core/CPUThreadConfigCallback.h"
-#include "Core/Debugger/BranchWatch.h"
-#include "Core/Debugger/PPCDebugInterface.h"
-#include "Core/PowerPC/BreakPoints.h"
 #include "Core/PowerPC/ConditionRegister.h"
 #include "Core/PowerPC/Gekko.h"
 #include "Core/PowerPC/PPCCache.h"
@@ -23,6 +20,11 @@
 
 class CPUCoreBase;
 class PointerWrap;
+namespace Core
+{
+class CPUThreadGuard;
+class System;
+}  // namespace Core
 namespace CoreTiming
 {
 struct EventType;
@@ -283,10 +285,6 @@ public:
   void SingleStep();
   void CheckExceptions();
   void CheckExternalExceptions();
-  // Evaluate the breakpoints in order to log. Returns whether it would break.
-  bool CheckBreakPoints();
-  // Evaluate the breakpoints in order to log and/or break. Returns whether it breaks.
-  bool CheckAndHandleBreakPoints();
   void RunLoop();
 
   u64 ReadFullTimeBaseValue() const;
@@ -296,16 +294,8 @@ public:
 
   PowerPCState& GetPPCState() { return m_ppc_state; }
   const PowerPCState& GetPPCState() const { return m_ppc_state; }
-  BreakPoints& GetBreakPoints() { return m_breakpoints; }
-  const BreakPoints& GetBreakPoints() const { return m_breakpoints; }
-  MemChecks& GetMemChecks() { return m_memchecks; }
-  const MemChecks& GetMemChecks() const { return m_memchecks; }
-  PPCDebugInterface& GetDebugInterface() { return m_debug_interface; }
-  const PPCDebugInterface& GetDebugInterface() const { return m_debug_interface; }
   PPCSymbolDB& GetSymbolDB() { return m_symbol_db; }
   const PPCSymbolDB& GetSymbolDB() const { return m_symbol_db; }
-  Core::BranchWatch& GetBranchWatch() { return m_branch_watch; }
-  const Core::BranchWatch& GetBranchWatch() const { return m_branch_watch; }
 
 private:
   void InitializeCPUCore(CPUCore cpu_core);
@@ -319,11 +309,7 @@ private:
   bool m_cpu_core_base_is_injected = false;
   CoreMode m_mode = CoreMode::Interpreter;
 
-  BreakPoints m_breakpoints;
-  MemChecks m_memchecks;
   PPCSymbolDB m_symbol_db;
-  PPCDebugInterface m_debug_interface;
-  Core::BranchWatch m_branch_watch;
 
   CPUThreadConfigCallback::ConfigChangedCallbackID m_registered_config_callback_id;
 
@@ -337,7 +323,6 @@ void UpdatePerformanceMonitor(u32 cycles, u32 num_load_stores, u32 num_fp_inst,
 
 void CheckExceptionsFromJIT(PowerPCManager& power_pc);
 void CheckExternalExceptionsFromJIT(PowerPCManager& power_pc);
-void CheckAndHandleBreakPointsFromJIT(PowerPCManager& power_pc);
 
 // Easy register access macros.
 #define HID0(ppc_state) ((UReg_HID0&)(ppc_state).spr[SPR_HID0])

@@ -73,7 +73,6 @@ void Patch(Core::System& system, u32 addr, std::string_view func_name)
     {
       s_hooked_addresses[addr] = i;
       ppc_state.iCache.Invalidate(memory, jit_interface, addr);
-      Host_JitCacheInvalidation();
       return;
     }
   }
@@ -145,7 +144,6 @@ void PatchFunctions(Core::System& system)
     }
   }
 
-  Host_JitCacheInvalidation();
 }
 
 void Clear()
@@ -232,8 +230,7 @@ TryReplaceFunctionResult TryReplaceFunction(PPCSymbolDB& ppc_symbol_db, u32 addr
 
 bool IsEnabled(HookFlag flag, PowerPC::CoreMode mode)
 {
-  return flag != HLE::HookFlag::Debug || Config::IsDebuggingEnabled() ||
-         mode == PowerPC::CoreMode::Interpreter;
+  return flag != HLE::HookFlag::Debug || mode == PowerPC::CoreMode::Interpreter;
 }
 
 u32 UnPatch(Core::System& system, std::string_view patch_name)
@@ -265,7 +262,6 @@ u32 UnPatch(Core::System& system, std::string_view patch_name)
         ++i;
       }
     }
-    Host_JitCacheInvalidation();
     return addr;
   }
 
@@ -278,7 +274,6 @@ u32 UnPatch(Core::System& system, std::string_view patch_name)
       s_hooked_addresses.erase(addr);
       ppc_state.iCache.Invalidate(memory, jit_interface, addr);
     }
-    Host_JitCacheInvalidation();
     return symbol->address;
   }
 
@@ -302,7 +297,6 @@ u32 UnpatchRange(Core::System& system, u32 start_addr, u32 end_addr)
     i = s_hooked_addresses.erase(i);
     count += 1;
   }
-  Host_JitCacheInvalidation();
 
   return count;
 }

@@ -21,6 +21,7 @@
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/Network/Socket.h"
+#include "Core/NetworkCaptureLogger.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 
@@ -66,7 +67,7 @@ int SSLSendWithoutSNI(void* ctx, const unsigned char* buf, size_t len)
   // Log raw SSL packets if we don't dump unencrypted SSL writes
   if (!Config::Get(Config::MAIN_NETWORK_SSL_DUMP_WRITE) && ret > 0)
   {
-    Core::System::GetInstance().GetPowerPC().GetDebugInterface().NetworkLogger()->LogWrite(
+    Core::NetworkLogger()->LogWrite(
         buf, ret, *fd, nullptr);
   }
 
@@ -82,7 +83,7 @@ int SSLRecv(void* ctx, unsigned char* buf, size_t len)
   // Log raw SSL packets if we don't dump unencrypted SSL reads
   if (!Config::Get(Config::MAIN_NETWORK_SSL_DUMP_READ) && ret > 0)
   {
-    Core::System::GetInstance().GetPowerPC().GetDebugInterface().NetworkLogger()->LogRead(
+    Core::NetworkLogger()->LogRead(
         buf, ret, *fd, nullptr);
   }
 
