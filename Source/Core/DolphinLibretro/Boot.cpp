@@ -711,6 +711,10 @@ bool retro_load_game(const struct retro_game_info* game)
     Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING,
                     Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_VULKAN);
   }
+  /* Lines and points expanded to triangles in the vertex shader with Vulkan: their pipelines have
+   * no geometry shader stage, and the ubershader ones are the triangles' (a third as many). */
+  Config::SetBase(Config::GFX_PREFER_VS_FOR_LINE_POINT_EXPANSION,
+                  Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_VULKAN);
   WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
   VideoBackendBase::PopulateBackendInfo(wsi);
   NOTICE_LOG_FMT(VIDEO, "Using GFX backend: {}", Config::Get(Config::MAIN_GFX_BACKEND));

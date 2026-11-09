@@ -151,7 +151,7 @@ the pixel shader bits it does not read
 ubershader pipeline there can be is built before the game starts, so
 cold no draw builds one (`draw_uber_pipeline` and
 `draw_driver_pipeline` are 0). Loading waits for the driver to compile
-about 190 pipelines: making that set smaller is what shortens it.
+them: making that set smaller is what shortens it.
 
 EFB copies to VRAM: one shader per format reads the rest of the copy
 (filter rows, overflow, gamma, alpha, depth, intensity) from its
@@ -234,6 +234,12 @@ corpus cold: text 6 Mcyc for 93 shaders, rslc 150 Mcyc and 767291 words
 for 150, the driver 13 to 17 Gcyc for 236 pipelines. Driver time is
 where making a shader goes: fewer and smaller pipelines are what cut
 it.
+
+With Vulkan, lines and points are expanded to triangles in the vertex
+shader: their pipelines have no geometry shader stage, and the
+ubershader pipelines for them are the triangles', 27 where there were
+81. Over the corpus, pipelines made fall from 236 to 182, and loading
+from about 1.65 s to 1.23 s on lavapipe.
 
 Done when: never. Each commit holds or improves every number.
 
