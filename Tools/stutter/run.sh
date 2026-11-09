@@ -29,7 +29,7 @@
 # corpus), OUT (./stutter-out), CC (cc), BASELINE (Tools/stutter/baseline.txt),
 # UPDATE_BASELINE=1 writes the candidate's numbers where they are lower,
 # CREATE_SPREAD (2) is the run-to-run spread allowed in shaders and
-# pipelines built.
+# pipelines built, ALLOC_SPREAD (8) in the compile workers' allocations.
 
 set -e
 
@@ -42,6 +42,7 @@ BACKENDS=${BACKENDS:-vulkan}
 CC=${CC:-cc}
 BASELINE=${BASELINE:-$HERE/baseline.txt}
 CREATE_SPREAD=${CREATE_SPREAD:-2}
+ALLOC_SPREAD=${ALLOC_SPREAD:-8}
 
 if [ -z "$CAND" ]; then
    echo "usage: $0 <candidate stats core> [parent stats core]" >&2
@@ -300,26 +301,31 @@ for backend in $BACKENDS; do
       run "$core" "$backend" "$OUT/dirs-allocs" "$OUT/allocs-$tag-$backend.txt" --boot 1 \
          --allocs --opt dolphin_main_cpu_thread=disabled
    done
-   value=$(sed -n 's/^allocs play=\([0-9]*\) .*/\1/p' "$OUT/allocs-cand-$backend.txt")
-   if [ -n "$value" ]; then
+   # the thread that runs the core draws the same frames every run: its count is exact; the
+   # compile workers' race the end of boot, by a few
+   echo "   allocations after boot: $(sed -n 's/^allocs //p' "$OUT/allocs-cand-$backend.txt")"
+   sed -n 's/^alloc_site /      /p' "$OUT/allocs-cand-$backend.txt" | head -5
+   for kind in main other; do
+      value=$(sed -n "s/^allocs .* $kind=\([0-9]*\) .*/\1/p" "$OUT/allocs-cand-$backend.txt")
+      [ -n "$value" ] || continue
+      slack=0
       key="$backend play allocs"
+      [ "$kind" = other ] && { slack=$ALLOC_SPREAD; key="$backend play allocs_workers"; }
       base=$(sed -n "s/^$key \([0-9]*\)$/\1/p" "$BASELINE" 2>/dev/null || true)
-      echo "   allocations after boot: $value"
-      sed -n 's/^alloc_site /      /p' "$OUT/allocs-cand-$backend.txt" | head -5
-      if [ -n "$base" ] && [ "$value" -gt "$base" ]; then
+      if [ -n "$base" ] && [ "$value" -gt $((base + slack)) ]; then
          echo "FAIL $key: $value, baseline $base"
          FAILED=1
-      elif [ -n "$base" ] && [ "$value" -lt "$base" ]; then
+      elif [ -n "$base" ] && [ $((value + slack)) -lt "$base" ]; then
          echo "   better $key: $value, baseline $base (lower it)"
       fi
-      pvalue=$( [ -n "$PARENT" ] && sed -n 's/^allocs play=\([0-9]*\) .*/\1/p' \
+      pvalue=$( [ -n "$PARENT" ] && sed -n "s/^allocs .* $kind=\([0-9]*\) .*/\1/p" \
          "$OUT/allocs-parent-$backend.txt")
-      if [ -n "$pvalue" ] && [ "$value" -gt "$pvalue" ]; then
+      if [ -n "$pvalue" ] && [ "$value" -gt $((pvalue + slack)) ]; then
          echo "FAIL $key: $value, parent $pvalue"
          FAILED=1
       fi
       echo "$key $value" >> "$OUT/measured.txt.$$"
-   fi
+   done
    if [ -n "$PARENT" ]; then
       for state in cold warm; do
          for tag in parent cand; do

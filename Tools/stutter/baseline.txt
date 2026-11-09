@@ -12,7 +12,8 @@ vulkan cold driver_pipeline 158
 vulkan cold pipeline_create 158
 vulkan cold shader_create 102
 vulkan cold shader_words 274571
-vulkan play allocs 1356
+vulkan play allocs 1079
+vulkan play allocs_workers 277
 vulkan recipes draw_decode 0
 vulkan recipes draw_disk_write 0
 vulkan recipes draw_driver_pipeline 0

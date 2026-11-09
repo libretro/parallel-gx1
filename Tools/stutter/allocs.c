@@ -39,7 +39,9 @@ struct site
 
 static unsigned long core_lo, core_hi, core_base;
 static volatile int counting;
-static unsigned long count, bytes, sites_lost;
+static unsigned long count, count_main, bytes, sites_lost;
+/* the thread that runs the core: what it allocates does not race the compile workers */
+static pthread_t main_thread;
 static struct site sites[SITES];
 static pthread_key_t inside; /* set while a site is taken: backtrace may allocate */
 
@@ -53,6 +55,8 @@ static void record(void *ret, size_t size)
    int n;
 
    __sync_fetch_and_add(&count, 1UL);
+   if (pthread_equal(pthread_self(), main_thread))
+      __sync_fetch_and_add(&count_main, 1UL);
    __sync_fetch_and_add(&bytes, (unsigned long)size);
    if (pthread_getspecific(inside))
       return;
@@ -182,7 +186,12 @@ int allocs_init(void (*function_in_core)(void))
    return f.found;
 }
 
-void allocs_count(int on) { counting = on; }
+void allocs_count(int on)
+{
+   if (on)
+      main_thread = pthread_self();
+   counting = on;
+}
 
 static int by_count(const void *x, const void *y)
 {
@@ -194,7 +203,8 @@ void allocs_report(unsigned top)
 {
    unsigned i, n = 0;
    counting = 0;
-   printf("allocs play=%lu bytes=%lu sites_lost=%lu\n", count, bytes, sites_lost);
+   printf("allocs play=%lu main=%lu other=%lu bytes=%lu sites_lost=%lu\n", count, count_main,
+         count - count_main, bytes, sites_lost);
    for (i = 0; i < SITES; i++)
       if (sites[i].a)
          sites[n++] = sites[i];

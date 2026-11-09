@@ -7,7 +7,8 @@
 int allocs_init(void (*function_in_core)(void));
 /* Counts the core's allocations from now (1), or stops (0). */
 void allocs_count(int on);
-/* "allocs play=N bytes=B sites_lost=L", then the top sites by count:
+/* "allocs play=N main=M other=O bytes=B sites_lost=L" (M on the thread that started counting, O
+ * on the others), then the top sites by count:
  * "alloc_site count=N at=0xOFFSET from=0xOFFSET", offsets in the core. */
 void allocs_report(unsigned top);
 
