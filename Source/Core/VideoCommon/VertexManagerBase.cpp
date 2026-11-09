@@ -831,7 +831,9 @@ void VertexManagerBase::UpdatePipelineObject()
   case ShaderCompilationMode::Synchronous:
   {
     // Ubershaders disabled? Block and compile the specialized shader.
-    m_current_pipeline_object = g_shader_cache->GetPipelineForUid(m_current_pipeline_config);
+    m_current_pipeline_object =
+        g_shader_cache->GetPipelineForUid(m_current_pipeline_config, &m_current_draw_state);
+    m_current_draw_state_set = true;
   }
   break;
 
@@ -851,15 +853,19 @@ void VertexManagerBase::UpdatePipelineObject()
      * would build it on the spot, then an ubershader one besides */
     if (!g_shader_cache->CanCompileInBackground())
     {
-      m_current_pipeline_object = g_shader_cache->GetPipelineForUid(m_current_pipeline_config);
+      m_current_pipeline_object =
+          g_shader_cache->GetPipelineForUid(m_current_pipeline_config, &m_current_draw_state);
+      m_current_draw_state_set = true;
       return;
     }
     // Can we background compile shaders? If so, get the pipeline asynchronously.
-    auto res = g_shader_cache->GetPipelineForUidAsync(m_current_pipeline_config);
+    auto res =
+        g_shader_cache->GetPipelineForUidAsync(m_current_pipeline_config, &m_current_draw_state);
     if (res && (!*res || (*res)->IsReady()))
     {
       // Specialized shaders are ready, prefer these.
       m_current_pipeline_object = *res;
+      m_current_draw_state_set = true;
       return;
     }
     /* built and still compiling on the driver's threads: asked again

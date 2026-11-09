@@ -219,6 +219,14 @@ of each other.
 4. **Driver work.** Track worker pipeline creation cycles. Smaller,
    simpler modules and GPL links are where driver time goes down.
 
+Landed so far, on Vulkan: whether blending reads the second output is
+set per draw with the blend factors, and specialized pipelines are kept,
+like the ubershader ones, under the uid as the driver bugs leave it,
+without the state set per draw and the pixel shader bits the shader does
+not read; the uid cache still records the uids the draws asked for. Over
+the corpus, pipelines made fall from 701 to 236, one per driver
+pipeline, and driver pipelines from 317 to 236.
+
 Done when: never. Each commit holds or improves every number.
 
 ## Phase 4: zero-copy through the shader path

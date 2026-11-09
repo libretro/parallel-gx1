@@ -39,7 +39,7 @@ enum class TLUTFormat;
 
 namespace VideoCommon
 {
-/* The state draws with an ubershader pipeline are in, where the backend sets some of it per draw
+/* The state draws with a GX pipeline are in, where the backend sets some of it per draw
  * (BackendInfo::uDrawState*Bits). */
 struct GXDrawState
 {
@@ -75,14 +75,16 @@ public:
   void RetrieveAsyncShaders();
 
   // Accesses ShaderGen shader caches
-  const AbstractPipeline* GetPipelineForUid(const GXPipelineUid& uid);
+  const AbstractPipeline* GetPipelineForUid(const GXPipelineUid& uid,
+                                            GXDrawState* draw_state = nullptr);
   /* draw_state, if not null, gets the state its draws are in, for AbstractGfx::SetDrawState */
   const AbstractPipeline* GetUberPipelineForUid(const GXUberPipelineUid& uid,
                                                 GXDrawState* draw_state = nullptr);
 
   // Accesses ShaderGen shader caches asynchronously.
   // The optional will be empty if this pipeline is now background compiling.
-  std::optional<const AbstractPipeline*> GetPipelineForUidAsync(const GXPipelineUid& uid);
+  std::optional<const AbstractPipeline*> GetPipelineForUidAsync(const GXPipelineUid& uid,
+                                                                GXDrawState* draw_state = nullptr);
 
   // Shared shaders
   const AbstractShader* GetScreenQuadVertexShader() const

@@ -312,29 +312,38 @@ void ShaderCache::Shutdown()
 static void UberPipelineKey(APIType api_type, const ShaderHostConfig& host_config,
                             const GXUberPipelineUid& uid, GXUberPipelineUid* key,
                             GXDrawState* draw_state);
+static void GXPipelineKey(APIType api_type, const ShaderHostConfig& host_config,
+                          const GXPipelineUid& uid, GXPipelineUid* key, GXDrawState* draw_state);
+static void GXPipelineBuildUid(const GXPipelineUid& key, GXPipelineUid* uid);
 
-const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid)
+const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid,
+                                                       GXDrawState* draw_state)
 {
-  const uid_table_value* const it = uid_table_find(&m_gx_pipeline_cache, &uid);
+  GXPipelineUid key;
+  GXPipelineKey(m_api_type, m_host_config, uid, &key, draw_state);
+  const uid_table_value* const it = uid_table_find(&m_gx_pipeline_cache, &key);
   if (it && !it->pending)
     return PipelineOf(it);
 
   STUTTER_DRAW_MARK(t);
   const bool exists_in_cache = it != nullptr;
   AbstractPipeline* pipeline = nullptr;
-  std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(uid);
+  std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(key);
   if (pipeline_config)
     pipeline = g_gfx->CreatePipeline(*pipeline_config);
   if (g_ActiveConfig.bShaderCache && !exists_in_cache)
     AppendGXPipelineUID(uid);
-  const AbstractPipeline* const kept = InsertGXPipeline(uid, pipeline);
+  const AbstractPipeline* const kept = InsertGXPipeline(key, pipeline);
   STUTTER_DRAW_SINCE(STUTTER_DRAW_GX_PIPELINE, t);
   return kept;
 }
 
-std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid)
+std::optional<const AbstractPipeline*>
+ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid, GXDrawState* draw_state)
 {
-  const uid_table_value* const it = uid_table_find(&m_gx_pipeline_cache, &uid);
+  GXPipelineUid key;
+  GXPipelineKey(m_api_type, m_host_config, uid, &key, draw_state);
+  const uid_table_value* const it = uid_table_find(&m_gx_pipeline_cache, &key);
   if (it)
   {
     // compiling in the background, or not
@@ -345,7 +354,7 @@ std::optional<const AbstractPipeline*> ShaderCache::GetPipelineForUidAsync(const
   }
 
   AppendGXPipelineUID(uid);
-  QueuePipelineCompile(uid, COMPILE_PRIORITY_ONDEMAND_PIPELINE);
+  QueuePipelineCompile(key, COMPILE_PRIORITY_ONDEMAND_PIPELINE);
   return {};
 }
 
@@ -888,7 +897,8 @@ AbstractPipelineConfig ShaderCache::GetGXPipelineConfig(
 std::optional<AbstractPipelineConfig>
 ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in)
 {
-  GXPipelineUid config = VideoCommon::ApplyDriverBugs(config_in);
+  GXPipelineUid config;
+  GXPipelineBuildUid(config_in, &config);
   const AbstractShader* vs;
   const uid_table_value* const vs_iter = uid_table_find(&m_vs_cache.shader_map, &config.vs_uid);
   if (vs_iter && !vs_iter->pending)
@@ -974,9 +984,9 @@ static void ApplyUberDriverBugs(GXUberPipelineUid* out)
   }
 }
 
-/* Whether the backend sets some of an ubershader pipeline's state per draw: its pipelines are
- * then kept under the uid as the driver bugs leave it, without that state. */
-static bool UberDrawStateSet()
+/* Whether the backend sets some of a GX pipeline's state per draw: its pipelines are then kept
+ * under the uid as the driver bugs leave it, without that state. */
+static bool DrawStateSet()
 {
   return (g_backend_info.uDrawStateRasterizationBits | g_backend_info.uDrawStateDepthBits |
           g_backend_info.uDrawStateBlendingBits) != 0;
@@ -992,7 +1002,7 @@ static void UberPipelineKey(APIType api_type, const ShaderHostConfig& host_confi
   // GXUberPipelineUid is not trivially copyable, as RasterizationState and BlendingState aren't:
   // copied byte for byte, padding and all, as the key compares.
   memcpy(static_cast<void*>(key), static_cast<const void*>(&uid), sizeof(*key));
-  if (!UberDrawStateSet())
+  if (!DrawStateSet())
     return;
   ApplyUberDriverBugs(key);
   UberShader::ClearUnusedPixelShaderUidBits(api_type, host_config, &key->ps_uid);
@@ -1012,8 +1022,41 @@ static void UberPipelineKey(APIType api_type, const ShaderHostConfig& host_confi
 static void UberPipelineBuildUid(const GXUberPipelineUid& key, GXUberPipelineUid* uid)
 {
   memcpy(static_cast<void*>(uid), static_cast<const void*>(&key), sizeof(*uid));
-  if (!UberDrawStateSet())
+  if (!DrawStateSet())
     ApplyUberDriverBugs(uid);
+}
+
+/* The key a specialized pipeline for uid is kept under, as UberPipelineKey: where the backend
+ * sets some of its state per draw, the uid as the driver bugs leave it, without that state and
+ * the pixel shader bits the shader does not read, and the state the draws are in. */
+static void GXPipelineKey(APIType api_type, const ShaderHostConfig& host_config,
+                          const GXPipelineUid& uid, GXPipelineUid* key, GXDrawState* draw_state)
+{
+  if (!DrawStateSet())
+  {
+    memcpy(static_cast<void*>(key), static_cast<const void*>(&uid), sizeof(*key));
+    return;
+  }
+  *key = VideoCommon::ApplyDriverBugs(uid);
+  ClearUnusedPixelShaderUidBits(api_type, host_config, &key->ps_uid);
+  if (draw_state)
+  {
+    draw_state->rasterization = key->rasterization_state;
+    draw_state->depth = key->depth_state;
+    draw_state->blending = key->blending_state;
+  }
+  key->rasterization_state.hex &= ~g_backend_info.uDrawStateRasterizationBits;
+  key->depth_state.hex &= ~g_backend_info.uDrawStateDepthBits;
+  key->blending_state.hex &= ~g_backend_info.uDrawStateBlendingBits;
+}
+
+/* The uid a specialized pipeline kept under key is built from. */
+static void GXPipelineBuildUid(const GXPipelineUid& key, GXPipelineUid* uid)
+{
+  if (DrawStateSet())
+    memcpy(static_cast<void*>(uid), static_cast<const void*>(&key), sizeof(*uid));
+  else
+    *uid = VideoCommon::ApplyDriverBugs(key);
 }
 
 std::optional<AbstractPipelineConfig>
@@ -1215,9 +1258,10 @@ void ShaderCache::LoadPipelineUIDCache()
       // Write any current UIDs out to the file.
       // This way, if we load a UID cache where the data was incomplete (e.g. Dolphin crashed),
       // we don't lose the existing UIDs which were previously at the beginning.
+      /* keys without the state set per draw are no uids to write */
       size_t cursor = 0;
       const void* key;
-      while (uid_table_next(&m_gx_pipeline_cache, &cursor, &key))
+      while (!DrawStateSet() && uid_table_next(&m_gx_pipeline_cache, &cursor, &key))
         AppendGXPipelineUID(*static_cast<const GXPipelineUid*>(key));
     }
   }
@@ -1336,10 +1380,12 @@ void ShaderCache::CompileMissingUberPipelines()
 void ShaderCache::AddSerializedGXPipelineUID(const SerializedGXPipelineUid& uid)
 {
   GXPipelineUid real_uid;
+  GXPipelineUid key;
   UnserializePipelineUid(uid, real_uid);
+  GXPipelineKey(m_api_type, m_host_config, real_uid, &key, nullptr);
 
   // Flagged as empty with a null pipeline object, for later compilation, if it is new.
-  uid_table_get(&m_gx_pipeline_cache, &real_uid);
+  uid_table_get(&m_gx_pipeline_cache, &key);
 }
 
 void ShaderCache::AppendGXPipelineUID(const GXPipelineUid& config)
@@ -1396,7 +1442,8 @@ void ShaderCache::QueueWork(WorkItem* item)
   if (item->kind == WORK_PIPELINE)
   {
     const GXPipelineUid& uid = item->Uid<GXPipelineUid>();
-    GXPipelineUid actual_uid = ApplyDriverBugs(uid);
+    GXPipelineUid actual_uid;
+    GXPipelineBuildUid(uid, &actual_uid);
     bool ready = true;
 
     const uid_table_value* const vs_it = uid_table_find(&m_vs_cache.shader_map, &actual_uid.vs_uid);

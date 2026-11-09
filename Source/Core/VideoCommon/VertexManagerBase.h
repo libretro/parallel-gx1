@@ -214,8 +214,8 @@ protected:
   VideoCommon::GXPipelineUid m_current_pipeline_config;
   VideoCommon::GXUberPipelineUid m_current_uber_pipeline_config;
   const AbstractPipeline* m_current_pipeline_object = nullptr;
-  // the state of the draws with it, set per draw, when it is an ubershader one the backend sets
-  // some of its state for (BackendInfo::uDrawState*Bits)
+  // the state of the draws with it, set per draw where the backend sets some of a GX pipeline's
+  // state (BackendInfo::uDrawState*Bits)
   VideoCommon::GXDrawState m_current_draw_state = {};
   bool m_current_draw_state_set = false;
   PrimitiveType m_current_primitive_type = PrimitiveType::Points;
