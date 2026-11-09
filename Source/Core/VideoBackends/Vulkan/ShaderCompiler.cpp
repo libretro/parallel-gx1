@@ -188,6 +188,7 @@ bool Compile(ShaderStage stage, ShaderCode* source, ShaderBinary* spirv)
   STUTTER_EMIT_SINCE(t, result.spirv_len);
   /* the result block is kept whole: the words point into it */
   spirv->block = result.blob;
+  spirv->release = shader_arena_blob_release;
   spirv->code = reinterpret_cast<const u8*>(result.spirv);
   spirv->size = result.spirv_len * sizeof(uint32_t);
   return true;

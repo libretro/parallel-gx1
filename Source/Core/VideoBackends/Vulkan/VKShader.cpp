@@ -66,7 +66,8 @@ VKShader::~VKShader()
   ShaderBinaryFree(&m_spv);
 }
 
-/* Takes the SPIR-V's block: the shader keeps it, or it is freed. */
+/* Takes the SPIR-V's block: the shader keeps it for the disk cache, or it is
+ * given back now, for this thread's next compile. */
 static VKShader* CreateShaderObject(ShaderStage stage, ShaderBinary spv,
                                                     std::string_view name)
 {
@@ -83,6 +84,9 @@ static VKShader* CreateShaderObject(ShaderStage stage, ShaderBinary spv,
     ShaderBinaryFree(&spv);
     return nullptr;
   }
+
+  if (!g_ActiveConfig.bShaderCache)
+    ShaderBinaryFree(&spv);
 
   // If it's a graphics shader, we defer pipeline creation.
   if (stage != ShaderStage::Compute)

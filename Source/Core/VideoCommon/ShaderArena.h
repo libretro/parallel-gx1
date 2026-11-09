@@ -10,15 +10,17 @@
  * once the block has grown to the largest shader seen. Only the result
  * blob rslc returns is allocated, as the shader owns it.
  *
- *  - shader_arena_use fills opts->arena and opts->arena_len, making the
+ *  - shader_arena_use fills opts->arena and opts->arena_len, and the
+ *    allocator of the result blob (shader_arena_blob_alloc), making the
  *    block the first time; without one, rslc allocates as it would.
  *  - shader_arena_grow, after a compile that failed, doubles the block
  *    where the failure was the arena's, and says whether to compile
  *    again.
- *  - shader_arena_text_take and shader_arena_text_give keep one freed
- *    shader text block per thread (ShaderText.c), the largest given, for
- *    the next text that thread starts: a generator allocates nothing once
- *    its thread has made one as large.
+ *  - shader_arena_text_take and shader_arena_text_give keep a few freed
+ *    shader text blocks per thread (ShaderText.c), the largest given, for
+ *    the next texts that thread starts, as many as it has alive at once
+ *    (a pipeline's vertex and pixel shaders): a generator allocates
+ *    nothing once its thread has made as many, as large.
  *  - shader_arenas_free frees every thread's blocks, once no thread
  *    compiles any more (the backend shutting down); a thread's next
  *    compile makes new ones.
@@ -39,6 +41,12 @@ int shader_arena_grow(const char *err);
 char *shader_arena_text_take(size_t size, size_t *got);
 /* a text block of size bytes kept for this thread: 0 where the caller frees it */
 int shader_arena_text_give(char *block, size_t size);
+/* rslc's allocator for its result blobs (shader_arena_use sets it), keeping freed
+ * blobs per thread as shader text is kept; a blob is released with
+ * shader_arena_blob_release, never free(). */
+void *shader_arena_blob_alloc(void *ud, size_t len);
+void shader_arena_blob_free(void *ud, void *ptr);
+void shader_arena_blob_release(void *ptr);
 void shader_arenas_free(void);
 
 #ifdef __cplusplus

@@ -10,14 +10,15 @@
 
 /* A shader's code for the GPU (SPIR-V or DXBC): the block it lives in,
  * owned by the shader, and the code within it. rslc's result block is
- * kept whole, the code pointing into it; code read back from the disk
- * cache gets a block of its own. Freed with free(), as rslc's default
- * allocator allocates. */
+ * kept whole, the code pointing into it, and given back with release
+ * (shader_arena_blob_release); code read back from the disk cache gets a
+ * block of its own, freed with free() (release NULL). */
 struct ShaderBinary
 {
   void* block;
   const u8* code;
   size_t size;
+  void (*release)(void* block);
 };
 
 static inline void ShaderBinaryInit(ShaderBinary* binary)
@@ -25,11 +26,15 @@ static inline void ShaderBinaryInit(ShaderBinary* binary)
   binary->block = NULL;
   binary->code = NULL;
   binary->size = 0;
+  binary->release = NULL;
 }
 
 static inline void ShaderBinaryFree(ShaderBinary* binary)
 {
-  free(binary->block);
+  if (binary->release)
+    binary->release(binary->block);
+  else
+    free(binary->block);
   ShaderBinaryInit(binary);
 }
 

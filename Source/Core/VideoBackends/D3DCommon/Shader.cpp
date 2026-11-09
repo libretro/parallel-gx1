@@ -140,6 +140,7 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, ShaderC
     STUTTER_EMIT_SINCE(t, result.spirv_len);
     /* the result block is kept whole: the code points into it */
     bytecode->block = result.blob;
+    bytecode->release = shader_arena_blob_release;
     bytecode->code = reinterpret_cast<const u8*>(result.spirv);
     bytecode->size = result.spirv_len * sizeof(uint32_t);
     return true;
