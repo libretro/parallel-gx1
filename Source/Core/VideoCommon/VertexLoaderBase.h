@@ -66,6 +66,9 @@ public:
   const u32 m_native_components;
 
   // used by VertexLoaderManager
+  /* the next loader of its bucket (VertexLoaderManager), fixed once published, and its uid */
+  VertexLoaderBase* m_next_loader = nullptr;
+  VertexLoaderUID m_uid;
   NativeVertexFormat* m_native_vertex_format = nullptr;
   int m_numLoadedVertices = 0;
 
@@ -85,6 +88,11 @@ protected:
   const VAT m_VtxAttr;
   const TVtxDesc m_VtxDesc;
 };
+
+/* The loaders' pools: made where the manager starts, freed where it clears (or with the
+ * last loader). */
+void VertexLoaderPoolsCreate();
+void VertexLoaderPoolsDestroy();
 
 /* Deletes a loader as its own class; NULL is let be. */
 void VertexLoaderDelete(VertexLoaderBase* loader);

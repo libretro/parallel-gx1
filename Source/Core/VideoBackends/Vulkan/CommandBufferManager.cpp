@@ -43,6 +43,21 @@ bool CommandBufferManager::Initialize()
   return true;
 }
 
+static bool Reserve(void** data, u32 count, u32* capacity, size_t size)
+{
+  void* grown;
+  u32 n;
+  if (count < *capacity)
+    return true;
+  n = *capacity ? *capacity * 2 : 16;
+  grown = realloc(*data, static_cast<size_t>(n) * size);
+  if (!grown)
+    return false;
+  *data = grown;
+  *capacity = n;
+  return true;
+}
+
 bool CommandBufferManager::CreateCommandBuffers()
 {
   VkDevice device = g_vulkan_context->GetDevice();
@@ -82,6 +97,20 @@ bool CommandBufferManager::CreateCommandBuffers()
       LOG_VULKAN_ERROR(res, "vkCreateFence failed: ");
       return false;
     }
+  }
+
+  /* the lists' first room, now: a frame's first descriptor pool and cleanups allocate nothing */
+  for (FrameResources& frame : m_frame_resources)
+  {
+    if (!Reserve(reinterpret_cast<void**>(&frame.descriptor_pools), 0,
+                 &frame.descriptor_pools_capacity, sizeof(VkDescriptorPool)))
+      return false;
+  }
+  for (CmdBufferResources& resources : m_command_buffers)
+  {
+    if (!Reserve(reinterpret_cast<void**>(&resources.cleanup), 0, &resources.cleanup_capacity,
+                 sizeof(DeferredDestruction)))
+      return false;
   }
 
   // Activate the first command buffer. BeginCommandBuffer moves forward, so start with the last
@@ -125,21 +154,6 @@ void CommandBufferManager::DestroyCommandBuffers()
 }
 
 /* Room for one more of size bytes in a list grown by doubling: false where none was left. */
-static bool Reserve(void** data, u32 count, u32* capacity, size_t size)
-{
-  void* grown;
-  u32 n;
-  if (count < *capacity)
-    return true;
-  n = *capacity ? *capacity * 2 : 16;
-  grown = realloc(*data, static_cast<size_t>(n) * size);
-  if (!grown)
-    return false;
-  *data = grown;
-  *capacity = n;
-  return true;
-}
-
 VkDescriptorPool CommandBufferManager::CreateDescriptorPool(u32 max_descriptor_sets)
 {
   /*

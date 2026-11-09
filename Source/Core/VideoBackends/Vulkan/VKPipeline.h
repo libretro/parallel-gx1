@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 
+#include "Common/ObjectPool.h"
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #include "VideoCommon/AbstractPipeline.h"
 #include "VideoCommon/RenderState.h"
@@ -43,6 +45,9 @@ public:
                       VkPipelineLayout pipeline_layout, AbstractPipelineUsage usage,
                       u32 dynamic_state, u32 dynamic_blend, VKSharedPipeline* shared);
   ~VKPipeline();
+
+  /* from the class's pool: made at backend start, destroyed once every one is */
+  OBJECT_POOL_MEMBERS
 
   VkPipeline GetVkPipeline() const { return m_pipeline; }
   VkPipelineLayout GetVkPipelineLayout() const { return m_pipeline_layout; }

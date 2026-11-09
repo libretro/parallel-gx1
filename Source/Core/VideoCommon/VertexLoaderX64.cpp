@@ -41,6 +41,8 @@ static OpArg MPIC(const void* ptr)
   return MDisp(base_reg, PtrOffset(ptr, memory_base_ptr));
 }
 
+OBJECT_POOL_DEFINE(VertexLoaderX64, 64)
+
 VertexLoaderX64::VertexLoaderX64(const TVtxDesc& vtx_desc, const VAT& vtx_att)
     : VertexLoaderBase(vtx_desc, vtx_att, true)
 {

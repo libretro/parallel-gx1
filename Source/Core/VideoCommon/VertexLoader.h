@@ -9,6 +9,7 @@
 #include <string>
 
 #include "Common/CommonTypes.h"
+#include "Common/ObjectPool.h"
 #include "Common/SmallVector.h"
 #include "VideoCommon/VertexLoaderBase.h"
 
@@ -19,6 +20,9 @@ class VertexLoader : public VertexLoaderBase
 {
 public:
   VertexLoader(const TVtxDesc& vtx_desc, const VAT& vtx_attr);
+  /* from the class's pool (VertexLoaderPoolsCreate) */
+  OBJECT_POOL_MEMBERS
+
 
   int RunVertices(const u8* src, u8* dst, int count);
   // They are used for the communication with the loader functions

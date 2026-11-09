@@ -51,25 +51,17 @@ u32 g_current_components;
 // Every loader made so far, shared by the main and the preprocessing thread. Entries are only
 // ever added while both run, so each bucket is a list pushed at its head with a CAS and read
 // without a lock; Clear frees it all once neither thread is decoding.
-namespace
-{
-struct LoaderEntry
-{
-  LoaderEntry* next;  // fixed once published
-  VertexLoaderUID uid;
-  VertexLoaderBase* loader;  // owned
-};
+// A loader is its own list node (m_next_loader).
 constexpr size_t LOADER_BUCKETS = 1024;
-}  // namespace
 static retro_atomic_ptr_t s_vertex_loaders[LOADER_BUCKETS];
 
-static VertexLoaderBase* FindLoader(LoaderEntry* entry, const LoaderEntry* stop,
+static VertexLoaderBase* FindLoader(VertexLoaderBase* loader, const VertexLoaderBase* stop,
                                     const VertexLoaderUID& uid)
 {
-  for (; entry != stop; entry = entry->next)
+  for (; loader != stop; loader = loader->m_next_loader)
   {
-    if (entry->uid == uid)
-      return entry->loader;
+    if (loader->m_uid == uid)
+      return loader;
   }
   return nullptr;
 }
@@ -79,25 +71,26 @@ static VertexLoaderBase* GetOrAddLoader(const VertexLoaderUID& uid, const TVtxDe
                                         const VAT& attr)
 {
   retro_atomic_ptr_t* bucket = &s_vertex_loaders[uid.GetHash() % LOADER_BUCKETS];
-  auto* head = static_cast<LoaderEntry*>(retro_atomic_load_acquire_ptr(bucket));
+  auto* head = static_cast<VertexLoaderBase*>(retro_atomic_load_acquire_ptr(bucket));
   if (VertexLoaderBase* found = FindLoader(head, nullptr, uid))
     return found;
 
-  auto* entry = new LoaderEntry{head, uid, VertexLoaderBase::CreateVertexLoader(desc, attr)};
-  while (!retro_atomic_cas_ptr(bucket, entry->next, entry))
+  VertexLoaderBase* const loader = VertexLoaderBase::CreateVertexLoader(desc, attr);
+  loader->m_uid = uid;
+  loader->m_next_loader = head;
+  while (!retro_atomic_cas_ptr(bucket, loader->m_next_loader, loader))
   {
     // Someone else pushed meanwhile: it may be the same loader, made on the other thread.
-    auto* newer = static_cast<LoaderEntry*>(retro_atomic_load_acquire_ptr(bucket));
-    if (VertexLoaderBase* found = FindLoader(newer, entry->next, uid))
+    auto* newer = static_cast<VertexLoaderBase*>(retro_atomic_load_acquire_ptr(bucket));
+    if (VertexLoaderBase* found = FindLoader(newer, loader->m_next_loader, uid))
     {
-      VertexLoaderDelete(entry->loader);
-      delete entry;
+      VertexLoaderDelete(loader);
       return found;
     }
-    entry->next = newer;
+    loader->m_next_loader = newer;
   }
   INCSTAT(g_stats.num_vertex_loaders);
-  return entry->loader;
+  return loader;
 }
 
 Common::EnumMap<u8*, CPArray::TexCoord7> cached_arraybases;
@@ -115,21 +108,22 @@ void Init()
   g_main_vertex_loaders.fill(nullptr);
   g_preprocess_vertex_loaders.fill(nullptr);
   SETSTAT(g_stats.num_vertex_loaders, 0);
+  VertexLoaderPoolsCreate();
 }
 
 void Clear()
 {
   for (auto& bucket : s_vertex_loaders)
   {
-    auto* entry = static_cast<LoaderEntry*>(retro_atomic_exchange_ptr(&bucket, nullptr));
-    while (entry)
+    auto* loader = static_cast<VertexLoaderBase*>(retro_atomic_exchange_ptr(&bucket, nullptr));
+    while (loader)
     {
-      LoaderEntry* next = entry->next;
-      VertexLoaderDelete(entry->loader);
-      delete entry;
-      entry = next;
+      VertexLoaderBase* next = loader->m_next_loader;
+      VertexLoaderDelete(loader);
+      loader = next;
     }
   }
+  VertexLoaderPoolsDestroy();
   size_t cursor = 0;
   const void* key;
   uid_table_value* value;

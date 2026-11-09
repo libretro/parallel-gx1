@@ -64,6 +64,8 @@ static void SkipVertex(VertexLoader* loader)
   }
 }
 
+OBJECT_POOL_DEFINE(VertexLoader, 64)
+
 VertexLoader::VertexLoader(const TVtxDesc& vtx_desc, const VAT& vtx_attr)
     : VertexLoaderBase(vtx_desc, vtx_attr, false)
 {

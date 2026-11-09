@@ -49,6 +49,8 @@ alignas(16) static const float scale_factors[] = {
     1.0 / (1ULL << 28), 1.0 / (1ULL << 29), 1.0 / (1ULL << 30), 1.0 / (1ULL << 31),
 };
 
+OBJECT_POOL_DEFINE(VertexLoaderARM64, 64)
+
 VertexLoaderARM64::VertexLoaderARM64(const TVtxDesc& vtx_desc, const VAT& vtx_att)
     : VertexLoaderBase(vtx_desc, vtx_att, true), m_float_emit(this)
 {

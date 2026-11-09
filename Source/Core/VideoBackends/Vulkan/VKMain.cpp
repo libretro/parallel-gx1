@@ -12,6 +12,9 @@
 #include "VideoBackends/Vulkan/VKBoundingBox.h"
 #include "VideoBackends/Vulkan/VKGfx.h"
 #include "VideoBackends/Vulkan/VKPerfQuery.h"
+#include "VideoBackends/Vulkan/VKPipeline.h"
+#include "VideoBackends/Vulkan/VKShader.h"
+#include "VideoBackends/Vulkan/VKTexture.h"
 #include "VideoBackends/Vulkan/VKVertexManager.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 
@@ -83,6 +86,11 @@ void VideoBackend::Shutdown()
 
   delete g_object_cache;
   g_object_cache = nullptr;
+  /* freed now, or with the last object still out (the frontend's output textures) */
+  VKPipeline::DestroyPool();
+  VKShader::DestroyPool();
+  VKTexture::DestroyPool();
+  VKFramebuffer::DestroyPool();
   StateTracker::DestroyInstance();
   delete g_command_buffer_mgr;
   g_command_buffer_mgr = nullptr;

@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "Common/CommonTypes.h"
+#include "Common/ObjectPool.h"
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/ShaderBinary.h"
@@ -23,6 +24,9 @@ public:
   VKShader(ShaderStage stage, ShaderBinary spv, VkShaderModule mod, std::string_view name);
   VKShader(ShaderBinary spv, VkPipeline compute_pipeline, std::string_view name);
   ~VKShader();
+
+  /* from the class's pool: made at backend start, destroyed once every one is */
+  OBJECT_POOL_MEMBERS
 
   VkShaderModule GetShaderModule() const { return m_module; }
   VkPipeline GetComputePipeline() const { return m_compute_pipeline; }

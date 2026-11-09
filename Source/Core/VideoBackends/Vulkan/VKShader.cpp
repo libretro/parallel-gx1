@@ -7,6 +7,7 @@
 
 #include <retro_atomic.h>
 
+#include "Common/ObjectPool.h"
 #include "Common/Align.h"
 
 #include "VideoBackends/Vulkan/ObjectCache.h"
@@ -56,6 +57,9 @@ VKShader::VKShader(ShaderBinary spv, VkPipeline compute_pipeline, std::string_vi
 {
   SetObjectName(VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(m_compute_pipeline), name);
 }
+
+/* what a game makes in its first minutes, in one chunk */
+OBJECT_POOL_DEFINE(VKShader, 256)
 
 VKShader::~VKShader()
 {

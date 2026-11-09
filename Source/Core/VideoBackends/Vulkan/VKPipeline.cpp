@@ -9,6 +9,7 @@
 
 #include <retro_atomic.h>
 
+#include "Common/ObjectPool.h"
 #include "Common/Assert.h"
 #include "Common/EnumMap.h"
 #include "Common/MsgHandler.h"
@@ -324,6 +325,9 @@ VKPipeline::VKPipeline(const AbstractPipelineConfig& config, VkPipeline pipeline
       m_dynamic_blend(dynamic_blend)
 {
 }
+
+/* what a game makes in its first minutes, in one chunk */
+OBJECT_POOL_DEFINE(VKPipeline, 256)
 
 VKPipeline::~VKPipeline()
 {

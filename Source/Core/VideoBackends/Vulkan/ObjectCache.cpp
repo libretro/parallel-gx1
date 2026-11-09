@@ -4,6 +4,7 @@
 #include "VideoBackends/Vulkan/ObjectCache.h"
 
 #include "VideoBackends/Vulkan/VKPipeline.h"
+#include "VideoBackends/Vulkan/VKShader.h"
 
 #include <algorithm>
 #include <array>
@@ -40,6 +41,10 @@ ObjectCache::~ObjectCache()
 bool ObjectCache::Initialize()
 {
   VKPipeline::ResetSharedPipelines();
+  VKPipeline::CreatePool();
+  VKShader::CreatePool();
+  VKTexture::CreatePool();
+  VKFramebuffer::CreatePool();
 
   if (!CreateDescriptorSetLayouts())
     return false;

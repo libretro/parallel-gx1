@@ -105,6 +105,27 @@ int VertexLoaderBase::RunVertices(const u8* src, u8* dst, int count)
   return static_cast<VertexLoader*>(this)->RunVertices(src, dst, count);
 }
 
+void VertexLoaderPoolsCreate()
+{
+#if defined(_M_X86_64)
+  VertexLoaderX64::CreatePool();
+#elif defined(_M_ARM_64)
+  VertexLoaderARM64::CreatePool();
+#endif
+  if (g_ActiveConfig.vertex_loader_type == VertexLoaderType::Software)
+    VertexLoader::CreatePool();
+}
+
+void VertexLoaderPoolsDestroy()
+{
+#if defined(_M_X86_64)
+  VertexLoaderX64::DestroyPool();
+#elif defined(_M_ARM_64)
+  VertexLoaderARM64::DestroyPool();
+#endif
+  VertexLoader::DestroyPool();
+}
+
 void VertexLoaderDelete(VertexLoaderBase* loader)
 {
   if (!loader)

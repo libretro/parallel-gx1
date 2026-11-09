@@ -43,6 +43,10 @@ VKTexture::VKTexture(const TextureConfig& tex_config, const vk_heap_alloc_t& all
   }
 }
 
+/* the textures and framebuffers a game makes in its first minutes, in one chunk */
+OBJECT_POOL_DEFINE(VKTexture, 256)
+OBJECT_POOL_DEFINE(VKFramebuffer, 64)
+
 VKTexture::~VKTexture()
 {
   StateTracker::GetInstance()->UnbindTexture(m_view);

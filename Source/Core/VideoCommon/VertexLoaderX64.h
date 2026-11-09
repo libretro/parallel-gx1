@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Common/CommonTypes.h"
+#include "Common/ObjectPool.h"
 #include "Common/x64Emitter.h"
 #include "VideoCommon/VertexLoaderBase.h"
 
@@ -16,6 +17,9 @@ class VertexLoaderX64 : public VertexLoaderBase, public Gen::X64CodeBlock
 {
 public:
   VertexLoaderX64(const TVtxDesc& vtx_desc, const VAT& vtx_att);
+  /* from the class's pool (VertexLoaderPoolsCreate) */
+  OBJECT_POOL_MEMBERS
+
   int RunVertices(const u8* src, u8* dst, int count);
 
 private:

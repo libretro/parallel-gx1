@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include "Common/ObjectPool.h"
 #include "VideoBackends/Vulkan/StagingBuffer.h"
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #include "VideoCommon/AbstractFramebuffer.h"
@@ -33,6 +34,9 @@ public:
             std::string_view name, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED,
             ComputeImageLayout compute_layout = ComputeImageLayout::Undefined);
   ~VKTexture();
+
+  /* from the class's pool: made at backend start, destroyed once every one is */
+  OBJECT_POOL_MEMBERS
 
   static VkFormat GetLinearFormat(VkFormat format);
   static VkFormat GetVkFormatForHostTextureFormat(AbstractTextureFormat format);
@@ -135,6 +139,9 @@ public:
                 u32 layers, u32 samples, VkFramebuffer fb, VkRenderPass load_render_pass,
                 VkRenderPass discard_render_pass, VkRenderPass clear_render_pass);
   ~VKFramebuffer();
+
+  /* from the class's pool: made at backend start, destroyed once every one is */
+  OBJECT_POOL_MEMBERS
 
   VkFramebuffer GetFB() const { return m_fb; }
   VkRect2D GetRect() const { return VkRect2D{{0, 0}, {m_width, m_height}}; }
