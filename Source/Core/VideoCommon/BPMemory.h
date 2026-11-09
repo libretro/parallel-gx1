@@ -2534,5 +2534,3 @@ extern BPMemory bpmem;
 
 void LoadBPReg(u8 reg, u32 value, int cycles_into_future);
 void LoadBPRegPreprocess(u8 reg, u32 value, int cycles_into_future);
-
-std::pair<std::string, std::string> GetBPRegInfo(u8 cmd, u32 cmddata);
