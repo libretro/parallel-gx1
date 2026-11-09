@@ -4,7 +4,6 @@
 - [Coding style introduction](#introduction)
 - [C++ coding style and formatting](#cpp-coding-style-and-formatting)
 - [C++ code-specific guidelines](#cpp-code-specific-guidelines)
-- [Android](#android)
 - [Help](#help)
 
 # <a name="legal"></a>Legal and policies
@@ -295,15 +294,6 @@ Summary:
   };
   ```
 
-# <a name="android"></a>Android
-
-If you are using Kotlin, just use the built-in official Kotlin code style.
-
-To install the Java code style in Android Studio, select the gear icon in the Code Style settings as shown, select `Import Scheme...` and select `dolphin/Source/Android/code-style-java.xml`. The Code Style menu should look like this when complete. ![Code Style Window][code-style]
-
-You can now select any section of code and press `Ctrl + Alt + L` to automatically format it.
-
 # <a name="help"></a>Help
 If you have any questions about Dolphin's development or would like some help, Dolphin developers use `#dolphin-emu @ irc.libera.chat` to communicate. If you are new to IRC, [Libera.Chat has resources to get started chatting with IRC.](https://libera.chat/)
 
-[code-style]: https://i.imgur.com/3b3UBhb.png
