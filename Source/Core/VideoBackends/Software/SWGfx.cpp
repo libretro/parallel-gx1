@@ -51,12 +51,10 @@ AbstractStagingTexture* SWGfx::CreateStagingTexture(StagingTextureType type,
 }
 
 AbstractFramebuffer*
-SWGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                         std::vector<AbstractTexture*> additional_color_attachments)
+SWGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment)
 {
   return SWFramebuffer::Create(static_cast<SWTexture*>(color_attachment),
-                               static_cast<SWTexture*>(depth_attachment),
-                               std::move(additional_color_attachments));
+                               static_cast<SWTexture*>(depth_attachment));
 }
 
 bool SWGfx::BindBackbuffer(const ClearColor& clear_color)

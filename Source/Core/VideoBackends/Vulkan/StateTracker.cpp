@@ -409,31 +409,21 @@ void StateTracker::BindDynamicState(VkCommandBuffer command_buffer, u32 state)
   m_dynamic_fence = fence;
 }
 
-/* The same blending for every colour attachment, set when it, or the
- * attachments, differ from what this command buffer has set already. */
-void StateTracker::BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend, u32 attachments)
+/* The colour attachment's blending, set when it differs from what this
+ * command buffer has set already. */
+void StateTracker::BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend)
 {
-  VkBool32 enable[8];
-  VkColorBlendEquationEXT equation[8];
-  VkColorComponentFlags write_mask[8];
+  VkBool32 enable;
+  VkColorBlendEquationEXT equation;
+  VkColorComponentFlags write_mask;
   const u64 fence = g_command_buffer_mgr->GetCurrentFenceCounter();
-  u32 i;
 
-  if (fence == m_dynamic_blend_fence && blend == m_dynamic_blend &&
-      attachments == m_dynamic_blend_attachments)
-  {
+  if (fence == m_dynamic_blend_fence && blend == m_dynamic_blend)
     return;
-  }
-  VKPipeline::GetDynamicBlendState(blend, &enable[0], &equation[0], &write_mask[0]);
-  for (i = 1; i < attachments; i++)
-  {
-    enable[i] = enable[0];
-    equation[i] = equation[0];
-    write_mask[i] = write_mask[0];
-  }
-  vkCmdSetColorBlendEnableEXT(command_buffer, 0, attachments, enable);
-  vkCmdSetColorBlendEquationEXT(command_buffer, 0, attachments, equation);
-  vkCmdSetColorWriteMaskEXT(command_buffer, 0, attachments, write_mask);
+  VKPipeline::GetDynamicBlendState(blend, &enable, &equation, &write_mask);
+  vkCmdSetColorBlendEnableEXT(command_buffer, 0, 1, &enable);
+  vkCmdSetColorBlendEquationEXT(command_buffer, 0, 1, &equation);
+  vkCmdSetColorWriteMaskEXT(command_buffer, 0, 1, &write_mask);
   if (blend & VK_DYNAMIC_BLEND_LOGIC_USED)
   {
     BlendingState state;
@@ -442,7 +432,6 @@ void StateTracker::BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend, u
     vkCmdSetLogicOpEXT(command_buffer, VKPipeline::GetVulkanLogicOp(static_cast<u32>(state.logic_mode.Value())));
   }
   m_dynamic_blend = blend;
-  m_dynamic_blend_attachments = attachments;
   m_dynamic_blend_fence = fence;
 }
 
@@ -494,8 +483,7 @@ bool StateTracker::Bind()
   if (m_pipeline->GetDynamicBlend())
   {
     BindDynamicBlend(command_buffer,
-                     m_draw_state_set ? m_draw_blend : m_pipeline->GetDynamicBlend(),
-                     m_pipeline->GetColorAttachmentCount());
+                     m_draw_state_set ? m_draw_blend : m_pipeline->GetDynamicBlend());
   }
 
   if (m_dirty_flags & DIRTY_FLAG_VIEWPORT)

@@ -70,12 +70,10 @@ AbstractPipeline* NullGfx::CreatePipeline(const AbstractPipelineConfig& config,
 }
 
 AbstractFramebuffer*
-NullGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                           std::vector<AbstractTexture*> additional_color_attachments)
+NullGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment)
 {
   return NullFramebuffer::Create(static_cast<NullTexture*>(color_attachment),
-                                 static_cast<NullTexture*>(depth_attachment),
-                                 std::move(additional_color_attachments));
+                                 static_cast<NullTexture*>(depth_attachment));
 }
 
 NativeVertexFormat*

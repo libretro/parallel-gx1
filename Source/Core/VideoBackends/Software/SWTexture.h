@@ -63,14 +63,12 @@ class SWFramebuffer final : public AbstractFramebuffer
 {
 public:
   explicit SWFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                         std::vector<AbstractTexture*> additional_color_attachments,
                          AbstractTextureFormat color_format, AbstractTextureFormat depth_format,
                          u32 width, u32 height, u32 layers, u32 samples);
   ~SWFramebuffer() = default;
 
   static SWFramebuffer*
-  Create(SWTexture* color_attachment, SWTexture* depth_attachment,
-         std::vector<AbstractTexture*> additional_color_attachments);
+  Create(SWTexture* color_attachment, SWTexture* depth_attachment);
 };
 
 }  // namespace SW

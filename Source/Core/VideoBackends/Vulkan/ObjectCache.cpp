@@ -12,6 +12,7 @@
 
 #include "Common/FileUtil.h"
 #include "Common/LinearDiskCache.h"
+#include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 
 #include "VideoBackends/Vulkan/VKStreamBuffer.h"
@@ -78,17 +79,55 @@ void ObjectCache::Shutdown()
 
 void ObjectCache::ClearSamplerCache()
 {
-  for (const auto& it : m_sampler_cache)
+  u32 i;
+  for (i = 0; i < m_sampler_capacity; i++)
   {
-    if (it.second != VK_NULL_HANDLE)
-      vkDestroySampler(g_vulkan_context->GetDevice(), it.second, nullptr);
+    if (m_samplers[i].used && m_samplers[i].sampler != VK_NULL_HANDLE)
+      vkDestroySampler(g_vulkan_context->GetDevice(), m_samplers[i].sampler, nullptr);
+    m_samplers[i].used = 0;
   }
-  m_sampler_cache.clear();
+  m_num_samplers = 0;
+}
+
+static u32 SamplerHash(u64 key)
+{
+  key ^= key >> 33;
+  key *= 0xff51afd7ed558ccdULL;
+  key ^= key >> 33;
+  return static_cast<u32>(key);
+}
+
+/* Doubles the table (or makes the first), placing what it held again. */
+bool ObjectCache::GrowSamplers()
+{
+  const u32 capacity = m_sampler_capacity ? m_sampler_capacity * 2 : 256;
+  SamplerSlot* const samplers =
+      static_cast<SamplerSlot*>(calloc(capacity, sizeof(SamplerSlot)));
+  u32 i;
+  if (!samplers)
+    return false;
+  for (i = 0; i < m_sampler_capacity; i++)
+  {
+    u32 j;
+    if (!m_samplers[i].used)
+      continue;
+    j = SamplerHash(m_samplers[i].key) & (capacity - 1);
+    while (samplers[j].used)
+      j = (j + 1) & (capacity - 1);
+    samplers[j] = m_samplers[i];
+  }
+  free(m_samplers);
+  m_samplers = samplers;
+  m_sampler_capacity = capacity;
+  return true;
 }
 
 void ObjectCache::DestroySamplers()
 {
   ClearSamplerCache();
+  free(m_samplers);
+  m_samplers = nullptr;
+  m_sampler_capacity = 0;
 
   if (m_point_sampler != VK_NULL_HANDLE)
   {
@@ -362,9 +401,18 @@ bool ObjectCache::CreateStaticSamplers()
 
 VkSampler ObjectCache::GetSampler(const SamplerState& info)
 {
-  auto iter = m_sampler_cache.find(info);
-  if (iter != m_sampler_cache.end())
-    return iter->second;
+  const u64 key = info.Hex();
+  u32 slot = 0;
+  if (m_sampler_capacity)
+  {
+    slot = SamplerHash(key) & (m_sampler_capacity - 1);
+    while (m_samplers[slot].used)
+    {
+      if (m_samplers[slot].key == key)
+        return m_samplers[slot].sampler;
+      slot = (slot + 1) & (m_sampler_capacity - 1);
+    }
+  }
 
   static constexpr std::array<VkFilter, 4> filters = {{VK_FILTER_NEAREST, VK_FILTER_LINEAR}};
   static constexpr std::array<VkSamplerMipmapMode, 2> mipmap_modes = {
@@ -409,77 +457,83 @@ VkSampler ObjectCache::GetSampler(const SamplerState& info)
     LOG_VULKAN_ERROR(res, "vkCreateSampler failed: ");
 
   // Store it even if it failed
-  m_sampler_cache.emplace(info, sampler);
+  if ((m_num_samplers + 1) * 2 > m_sampler_capacity)
+  {
+    if (!GrowSamplers())
+      return sampler; /* not kept: made again the next time */
+    slot = SamplerHash(key) & (m_sampler_capacity - 1);
+    while (m_samplers[slot].used)
+      slot = (slot + 1) & (m_sampler_capacity - 1);
+  }
+  m_samplers[slot].key = key;
+  m_samplers[slot].sampler = sampler;
+  m_samplers[slot].used = 1;
+  m_num_samplers++;
   return sampler;
 }
 
 VkRenderPass ObjectCache::GetRenderPass(VkFormat color_format, VkFormat depth_format,
-                                        u32 multisamples, VkAttachmentLoadOp load_op,
-                                        u8 additional_attachment_count)
+                                        u32 multisamples, VkAttachmentLoadOp load_op)
 {
-  auto key =
-      std::tie(color_format, depth_format, multisamples, load_op, additional_attachment_count);
-  auto it = m_render_pass_cache.find(key);
-  if (it != m_render_pass_cache.end())
-    return it->second;
+  u32 i;
+  for (i = 0; i < m_num_render_passes; i++)
+  {
+    const RenderPassSlot* const slot = &m_render_passes[i];
+    if (slot->color_format == color_format && slot->depth_format == depth_format &&
+        slot->multisamples == multisamples && slot->load_op == load_op)
+    {
+      return slot->pass;
+    }
+  }
+  if (m_num_render_passes == MAX_RENDER_PASSES)
+  {
+    ERROR_LOG_FMT(VIDEO, "Too many Vulkan render passes");
+    return VK_NULL_HANDLE;
+  }
 
+  /* the colour attachment, then depth: as the framebuffer lists their views */
+  VkAttachmentDescription attachments[2];
+  VkAttachmentReference color_reference;
   VkAttachmentReference depth_reference;
-  VkAttachmentReference* depth_reference_ptr = nullptr;
-  std::vector<VkAttachmentDescription> attachments;
-  std::vector<VkAttachmentReference> color_attachment_references;
-  if (color_format != VK_FORMAT_UNDEFINED)
+  u32 num_attachments = 0;
+  const bool has_color = color_format != VK_FORMAT_UNDEFINED;
+  const bool has_depth = depth_format != VK_FORMAT_UNDEFINED;
+  if (has_color)
   {
-    VkAttachmentReference color_reference;
-    color_reference.attachment = static_cast<uint32_t>(attachments.size());
+    color_reference.attachment = num_attachments;
     color_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment_references.push_back(std::move(color_reference));
-    attachments.push_back({0, color_format, static_cast<VkSampleCountFlagBits>(multisamples),
-                           load_op, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                           VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+    attachments[num_attachments++] = {
+        0, color_format, static_cast<VkSampleCountFlagBits>(multisamples), load_op,
+        VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
   }
-  if (depth_format != VK_FORMAT_UNDEFINED)
+  if (has_depth)
   {
-    depth_reference.attachment = static_cast<uint32_t>(attachments.size());
+    depth_reference.attachment = num_attachments;
     depth_reference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depth_reference_ptr = &depth_reference;
-    attachments.push_back({0, depth_format, static_cast<VkSampleCountFlagBits>(multisamples),
-                           load_op, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                           VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL});
+    attachments[num_attachments++] = {
+        0, depth_format, static_cast<VkSampleCountFlagBits>(multisamples), load_op,
+        VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
   }
 
-  for (u8 i = 0; i < additional_attachment_count; i++)
-  {
-    VkAttachmentReference color_reference;
-    color_reference.attachment = static_cast<uint32_t>(attachments.size());
-    color_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment_references.push_back(std::move(color_reference));
-    attachments.push_back({0, color_format, static_cast<VkSampleCountFlagBits>(multisamples),
-                           load_op, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                           VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
-  }
-
-  VkSubpassDescription subpass = {
-      0,
-      VK_PIPELINE_BIND_POINT_GRAPHICS,
-      0,
-      nullptr,
-      static_cast<uint32_t>(color_attachment_references.size()),
-      color_attachment_references.empty() ? nullptr : color_attachment_references.data(),
-      nullptr,
-      depth_reference_ptr,
-      0,
-      nullptr};
+  VkSubpassDescription subpass = {0,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  0,
+                                  nullptr,
+                                  has_color ? 1u : 0u,
+                                  has_color ? &color_reference : nullptr,
+                                  nullptr,
+                                  has_depth ? &depth_reference : nullptr,
+                                  0,
+                                  nullptr};
   VkRenderPassCreateInfo pass_info = {VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
                                       nullptr,
                                       0,
-                                      static_cast<uint32_t>(attachments.size()),
-                                      attachments.data(),
+                                      num_attachments,
+                                      attachments,
                                       1,
                                       &subpass,
                                       0,
@@ -493,15 +547,21 @@ VkRenderPass ObjectCache::GetRenderPass(VkFormat color_format, VkFormat depth_fo
     return VK_NULL_HANDLE;
   }
 
-  m_render_pass_cache.emplace(key, pass);
+  RenderPassSlot* const slot = &m_render_passes[m_num_render_passes++];
+  slot->color_format = color_format;
+  slot->depth_format = depth_format;
+  slot->multisamples = multisamples;
+  slot->load_op = load_op;
+  slot->pass = pass;
   return pass;
 }
 
 void ObjectCache::DestroyRenderPassCache()
 {
-  for (auto& it : m_render_pass_cache)
-    vkDestroyRenderPass(g_vulkan_context->GetDevice(), it.second, nullptr);
-  m_render_pass_cache.clear();
+  u32 i;
+  for (i = 0; i < m_num_render_passes; i++)
+    vkDestroyRenderPass(g_vulkan_context->GetDevice(), m_render_passes[i].pass, nullptr);
+  m_num_render_passes = 0;
 }
 
 bool ObjectCache::CreatePipelineCache()

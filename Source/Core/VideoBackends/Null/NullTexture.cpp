@@ -66,21 +66,19 @@ void NullStagingTexture::Flush()
 
 NullFramebuffer::NullFramebuffer(AbstractTexture* color_attachment,
                                  AbstractTexture* depth_attachment,
-                                 std::vector<AbstractTexture*> additional_color_attachments,
                                  AbstractTextureFormat color_format,
                                  AbstractTextureFormat depth_format, u32 width, u32 height,
                                  u32 layers, u32 samples)
     : AbstractFramebuffer(color_attachment, depth_attachment,
-                          std::move(additional_color_attachments), color_format, depth_format,
+                          color_format, depth_format,
                           width, height, layers, samples)
 {
 }
 
 NullFramebuffer*
-NullFramebuffer::Create(NullTexture* color_attachment, NullTexture* depth_attachment,
-                        std::vector<AbstractTexture*> additional_color_attachments)
+NullFramebuffer::Create(NullTexture* color_attachment, NullTexture* depth_attachment)
 {
-  if (!ValidateConfig(color_attachment, depth_attachment, additional_color_attachments))
+  if (!ValidateConfig(color_attachment, depth_attachment))
     return nullptr;
 
   const AbstractTextureFormat color_format =
@@ -94,7 +92,7 @@ NullFramebuffer::Create(NullTexture* color_attachment, NullTexture* depth_attach
   const u32 samples = either_attachment->GetSamples();
 
   return new NullFramebuffer(color_attachment, depth_attachment,
-                             std::move(additional_color_attachments), color_format, depth_format,
+                             color_format, depth_format,
                              width, height, layers, samples);
 }
 

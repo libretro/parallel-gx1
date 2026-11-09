@@ -43,8 +43,7 @@ public:
                                                    const void* cache_data = nullptr,
                                                    size_t cache_data_length = 0);
   AbstractFramebuffer*
-  CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                    std::vector<AbstractTexture*> additional_color_attachments);
+  CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment);
 
   void SetPipeline(const AbstractPipeline* pipeline);
   void SetFramebuffer(AbstractFramebuffer* framebuffer);

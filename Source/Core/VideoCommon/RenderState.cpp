@@ -456,7 +456,6 @@ FramebufferState GetColorFramebufferState(AbstractTextureFormat format)
   state.depth_texture_format = AbstractTextureFormat::Undefined;
   state.per_sample_shading = false;
   state.samples = 1;
-  state.additional_color_attachment_count = 0;
   return state;
 }
 

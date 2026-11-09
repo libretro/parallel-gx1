@@ -5,9 +5,7 @@
 
 #include <array>
 #include <cstddef>
-#include <map>
 #include <string>
-#include <tuple>
 #include <unordered_map>
 
 #include "Common/CommonTypes.h"
@@ -59,7 +57,7 @@ public:
 
   // Render pass cache.
   VkRenderPass GetRenderPass(VkFormat color_format, VkFormat depth_format, u32 multisamples,
-                             VkAttachmentLoadOp load_op, u8 additional_attachment_count = 0);
+                             VkAttachmentLoadOp load_op);
 
   // Pipeline cache. Used when creating pipelines for drivers to store compiled programs.
   VkPipelineCache GetPipelineCache() const { return m_pipeline_cache; }
@@ -95,11 +93,32 @@ private:
   VkSampler m_point_sampler = VK_NULL_HANDLE;
   VkSampler m_linear_sampler = VK_NULL_HANDLE;
 
-  std::map<SamplerState, VkSampler> m_sampler_cache;
+  /* Samplers by SamplerState::Hex, open-addressed; grown (doubled) when
+   * half full, so a lookup never allocates. A failed sampler is kept too,
+   * as VK_NULL_HANDLE, so it is not tried again. */
+  struct SamplerSlot
+  {
+    u64 key;
+    VkSampler sampler;
+    u32 used;
+  };
+  SamplerSlot* m_samplers = nullptr;
+  u32 m_sampler_capacity = 0; /* a power of two */
+  u32 m_num_samplers = 0;
+  bool GrowSamplers();
 
-  // Render pass cache
-  using RenderPassCacheKey = std::tuple<VkFormat, VkFormat, u32, VkAttachmentLoadOp, std::size_t>;
-  std::map<RenderPassCacheKey, VkRenderPass> m_render_pass_cache;
+  /* Render passes: a handful (formats and load ops), searched in turn. */
+  struct RenderPassSlot
+  {
+    VkFormat color_format;
+    VkFormat depth_format;
+    u32 multisamples;
+    VkAttachmentLoadOp load_op;
+    VkRenderPass pass;
+  };
+  static constexpr u32 MAX_RENDER_PASSES = 64;
+  RenderPassSlot m_render_passes[MAX_RENDER_PASSES];
+  u32 m_num_render_passes = 0;
 
   // pipeline cache
   VkPipelineCache m_pipeline_cache = VK_NULL_HANDLE;

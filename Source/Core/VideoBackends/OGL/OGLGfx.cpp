@@ -128,7 +128,7 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
   if (!m_main_gl_context->IsHeadless())
   {
     m_system_framebuffer = new OGLFramebuffer(
-        nullptr, nullptr, std::vector<AbstractTexture*>{}, AbstractTextureFormat::RGBA8,
+        nullptr, nullptr, AbstractTextureFormat::RGBA8,
         AbstractTextureFormat::Undefined, std::max(m_main_gl_context->GetBackBufferWidth(), 1u),
         std::max(m_main_gl_context->GetBackBufferHeight(), 1u), 1, 1, 0);
     m_current_framebuffer = m_system_framebuffer;
@@ -223,12 +223,10 @@ AbstractStagingTexture* OGLGfx::CreateStagingTexture(StagingTextureType type,
 }
 
 AbstractFramebuffer*
-OGLGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                          std::vector<AbstractTexture*> additional_color_attachments)
+OGLGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment)
 {
   return OGLFramebuffer::Create(static_cast<OGLTexture*>(color_attachment),
-                                static_cast<OGLTexture*>(depth_attachment),
-                                std::move(additional_color_attachments));
+                                static_cast<OGLTexture*>(depth_attachment));
 }
 
 AbstractShader*

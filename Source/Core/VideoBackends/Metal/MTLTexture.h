@@ -60,14 +60,11 @@ private:
 class Framebuffer final : public AbstractFramebuffer
 {
 public:
-  Framebuffer(AbstractTexture* color, AbstractTexture* depth,
-              std::vector<AbstractTexture*> additonal_color_textures,  //
-              u32 width, u32 height, u32 layers, u32 samples);
+  Framebuffer(AbstractTexture* color, AbstractTexture* depth, u32 width, u32 height, u32 layers,
+              u32 samples);
   ~Framebuffer();
 
   MTLRenderPassDescriptor* PassDesc() const { return m_pass_descriptor; }
-
-  size_t NumAdditionalColorTextures() const { return m_additional_color_textures.size(); }
 
   void SetLoadAction(MTLLoadAction action)
   {
@@ -82,7 +79,6 @@ public:
 
 private:
   MRCOwned<MTLRenderPassDescriptor*> m_pass_descriptor;
-  std::vector<AbstractTexture*> m_additional_color_textures;
   MTLLoadAction m_current_load_action = MTLLoadActionLoad;
   void ActualSetLoadAction(MTLLoadAction action);
 };

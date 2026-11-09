@@ -131,8 +131,7 @@ private:
 class VKFramebuffer final : public AbstractFramebuffer
 {
 public:
-  VKFramebuffer(VKTexture* color_attachment, VKTexture* depth_attachment,
-                std::vector<AbstractTexture*> additional_color_attachments, u32 width, u32 height,
+  VKFramebuffer(VKTexture* color_attachment, VKTexture* depth_attachment, u32 width, u32 height,
                 u32 layers, u32 samples, VkFramebuffer fb, VkRenderPass load_render_pass,
                 VkRenderPass discard_render_pass, VkRenderPass clear_render_pass);
   ~VKFramebuffer();
@@ -150,14 +149,8 @@ public:
 
   void SetAndClear(const VkRect2D& rect, const VkClearValue& color_value,
                    const VkClearValue& depth_value);
-  std::size_t GetNumberOfAdditonalAttachments() const
-  {
-    return m_additional_color_attachments.size();
-  }
-
   static VKFramebuffer*
-  Create(VKTexture* color_attachments, VKTexture* depth_attachment,
-         std::vector<AbstractTexture*> additional_color_attachments);
+  Create(VKTexture* color_attachments, VKTexture* depth_attachment);
 
 protected:
   VkFramebuffer m_fb;

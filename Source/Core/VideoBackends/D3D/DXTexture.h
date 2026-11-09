@@ -296,28 +296,24 @@ class DXFramebuffer final : public AbstractFramebuffer
 {
 public:
   DXFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                std::vector<AbstractTexture*> additional_color_attachments,
                 AbstractTextureFormat color_format, AbstractTextureFormat depth_format, u32 width,
                 u32 height, u32 layers, u32 samples, ComPtr<ID3D11RenderTargetView> rtv,
-                ComPtr<ID3D11RenderTargetView> integer_rtv, ComPtr<ID3D11DepthStencilView> dsv,
-                std::vector<ComPtr<ID3D11RenderTargetView>> additional_rtvs);
+                ComPtr<ID3D11RenderTargetView> integer_rtv, ComPtr<ID3D11DepthStencilView> dsv);
   ~DXFramebuffer();
 
-  ID3D11RenderTargetView* const* GetRTVArray() const { return m_render_targets_raw.data(); }
+  ID3D11RenderTargetView* const* GetRTVArray() const { return m_rtv.GetAddressOf(); }
   ID3D11RenderTargetView* const* GetIntegerRTVArray() const { return m_integer_rtv.GetAddressOf(); }
-  UINT GetNumRTVs() const { return static_cast<UINT>(m_render_targets_raw.size()); }
+  UINT GetNumRTVs() const { return 1; }
   ID3D11DepthStencilView* GetDSV() const { return m_dsv.Get(); }
 
   void Unbind();
   void Clear(const ClearColor& color_value, float depth_value);
 
   static DXFramebuffer*
-  Create(DXTexture* color_attachment, DXTexture* depth_attachment,
-         std::vector<AbstractTexture*> additional_color_attachments);
+  Create(DXTexture* color_attachment, DXTexture* depth_attachment);
 
 protected:
-  std::vector<ComPtr<ID3D11RenderTargetView>> m_render_targets;
-  std::vector<ID3D11RenderTargetView*> m_render_targets_raw;
+  ComPtr<ID3D11RenderTargetView> m_rtv;
   ComPtr<ID3D11RenderTargetView> m_integer_rtv;
   ComPtr<ID3D11DepthStencilView> m_dsv;
 };

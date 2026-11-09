@@ -52,7 +52,6 @@ public:
   /* 0, or the VK_DYNAMIC_BLEND_* state to set before drawing with it, for each of its colour
    * attachments */
   u32 GetDynamicBlend() const { return m_dynamic_blend; }
-  u32 GetColorAttachmentCount() const { return m_color_attachments; }
   static void GetDynamicBlendState(u32 dynamic_blend, VkBool32* enable,
                                    VkColorBlendEquationEXT* equation,
                                    VkColorComponentFlags* write_mask);
@@ -79,7 +78,6 @@ private:
   AbstractPipelineUsage m_usage;
   u32 m_dynamic_state;
   u32 m_dynamic_blend;
-  u32 m_color_attachments;
 };
 
 }  // namespace Vulkan

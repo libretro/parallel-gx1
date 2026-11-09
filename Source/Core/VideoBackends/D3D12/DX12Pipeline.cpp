@@ -188,8 +188,7 @@ DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config,
   if (config.pixel_shader)
     desc.PS = static_cast<const DXShader*>(config.pixel_shader)->GetD3DByteCode();
 
-  GetD3DBlendDesc(&desc.BlendState, config.blending_state,
-                  config.framebuffer_state.additional_color_attachment_count + 1);
+  GetD3DBlendDesc(&desc.BlendState, config.blending_state, 1);
   desc.SampleMask = 0xFFFFFFFF;
   GetD3DRasterizerDesc(&desc.RasterizerState, config.rasterization_state, config.framebuffer_state);
   GetD3DDepthDesc(&desc.DepthStencilState, config.depth_state);
@@ -201,16 +200,9 @@ DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config,
   desc.PrimitiveTopologyType = GetD3DTopologyType(config.rasterization_state);
   if (config.framebuffer_state.color_texture_format != AbstractTextureFormat::Undefined)
   {
-    desc.NumRenderTargets =
-        static_cast<u8>(config.framebuffer_state.additional_color_attachment_count) + 1;
+    desc.NumRenderTargets = 1;
     desc.RTVFormats[0] = D3DCommon::GetRTVFormatForAbstractFormat(
         config.framebuffer_state.color_texture_format, config.blending_state.logic_op_enable);
-    for (u8 i = 0; i < static_cast<u8>(config.framebuffer_state.additional_color_attachment_count);
-         i++)
-    {
-      // For now set all formats to be the same
-      desc.RTVFormats[i + 1] = desc.RTVFormats[0];
-    }
   }
   if (config.framebuffer_state.depth_texture_format != AbstractTextureFormat::Undefined)
     desc.DSVFormat =

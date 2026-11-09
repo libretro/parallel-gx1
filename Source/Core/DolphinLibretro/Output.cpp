@@ -424,7 +424,7 @@ bool DX11Output::Create()
       ERROR_LOG_FMT(VIDEO, "Failed to create output texture {}", i);
       return false;
     }
-    m_framebuffers[i] = DX11::DXFramebuffer::Create(m_textures[i], nullptr, {});
+    m_framebuffers[i] = DX11::DXFramebuffer::Create(m_textures[i], nullptr);
     if (!m_framebuffers[i])
     {
       ERROR_LOG_FMT(VIDEO, "Failed to create output framebuffer {}", i);
@@ -543,7 +543,7 @@ bool DX12Output::Create()
       ERROR_LOG_FMT(VIDEO, "Failed to create output texture {}", i);
       return false;
     }
-    m_framebuffers[i] = DX12::DXFramebuffer::Create(m_textures[i], nullptr, {});
+    m_framebuffers[i] = DX12::DXFramebuffer::Create(m_textures[i], nullptr);
     if (!m_framebuffers[i])
     {
       ERROR_LOG_FMT(VIDEO, "Failed to create output framebuffer {}", i);
@@ -747,7 +747,7 @@ bool VKOutput::Create()
       ERROR_LOG_FMT(VIDEO, "Failed to create output image {}", i);
       return false;
     }
-    m_framebuffers[i] = Vulkan::VKFramebuffer::Create(m_textures[i], nullptr, {});
+    m_framebuffers[i] = Vulkan::VKFramebuffer::Create(m_textures[i], nullptr);
     if (!m_framebuffers[i])
     {
       ERROR_LOG_FMT(VIDEO, "Failed to create output framebuffer {}", i);

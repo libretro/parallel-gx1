@@ -28,8 +28,7 @@ public:
   std::unique_ptr<AbstractStagingTexture>
   CreateStagingTexture(StagingTextureType type, const TextureConfig& config) override;
   std::unique_ptr<AbstractFramebuffer>
-  CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                    std::vector<AbstractTexture*> additional_color_attachments) override;
+  CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment) override;
 
   std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,

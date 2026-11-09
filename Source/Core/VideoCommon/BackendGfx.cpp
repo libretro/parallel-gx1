@@ -417,34 +417,33 @@ AbstractGfx::CreateStagingTexture(StagingTextureType type, const TextureConfig& 
 }
 
 AbstractFramebuffer*
-AbstractGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                               std::vector<AbstractTexture*> additional_color_attachments)
+AbstractGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment)
 {
   switch (g_video_backend_kind)
   {
   case VIDEO_BACKEND_NULL:
     return static_cast<Null::NullGfx*>(this)->CreateFramebuffer(
-        color_attachment, depth_attachment, std::move(additional_color_attachments));
+        color_attachment, depth_attachment);
   case VIDEO_BACKEND_SOFTWARE:
     return static_cast<SW::SWGfx*>(this)->CreateFramebuffer(
-        color_attachment, depth_attachment, std::move(additional_color_attachments));
+        color_attachment, depth_attachment);
 #ifdef HAS_OPENGL
   case VIDEO_BACKEND_OGL:
     return static_cast<OGL::OGLGfx*>(this)->CreateFramebuffer(
-        color_attachment, depth_attachment, std::move(additional_color_attachments));
+        color_attachment, depth_attachment);
 #endif
 #ifdef HAS_VULKAN
   case VIDEO_BACKEND_VULKAN:
     return static_cast<Vulkan::VKGfx*>(this)->CreateFramebuffer(
-        color_attachment, depth_attachment, std::move(additional_color_attachments));
+        color_attachment, depth_attachment);
 #endif
 #ifdef _WIN32
   case VIDEO_BACKEND_D3D11:
     return static_cast<DX11::Gfx*>(this)->CreateFramebuffer(
-        color_attachment, depth_attachment, std::move(additional_color_attachments));
+        color_attachment, depth_attachment);
   case VIDEO_BACKEND_D3D12:
     return static_cast<DX12::Gfx*>(this)->CreateFramebuffer(
-        color_attachment, depth_attachment, std::move(additional_color_attachments));
+        color_attachment, depth_attachment);
 #endif
   default:
     return nullptr;

@@ -85,7 +85,7 @@ public:
 
 private:
   void BindDynamicState(VkCommandBuffer command_buffer, u32 state);
-  void BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend, u32 attachments);
+  void BindDynamicBlend(VkCommandBuffer command_buffer, u32 blend);
   // Number of descriptor sets for game draws.
   enum
   {
@@ -145,7 +145,6 @@ private:
   u64 m_dynamic_blend_fence = 0;
   u32 m_dynamic_state = 0;
   u32 m_dynamic_blend = 0;
-  u32 m_dynamic_blend_attachments = 0;
   // SetDrawState's, while m_draw_state_set
   u32 m_draw_state = 0;
   u32 m_draw_blend = 0;

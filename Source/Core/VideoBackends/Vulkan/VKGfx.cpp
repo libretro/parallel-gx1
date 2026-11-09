@@ -91,12 +91,10 @@ AbstractPipeline* VKGfx::CreatePipeline(const AbstractPipelineConfig& config,
 }
 
 AbstractFramebuffer*
-VKGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                         std::vector<AbstractTexture*> additional_color_attachments)
+VKGfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment)
 {
   return VKFramebuffer::Create(static_cast<VKTexture*>(color_attachment),
-                               static_cast<VKTexture*>(depth_attachment),
-                               std::move(additional_color_attachments));
+                               static_cast<VKTexture*>(depth_attachment));
 }
 
 void VKGfx::SetPipeline(const AbstractPipeline* pipeline)
@@ -199,10 +197,9 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
   // We can't use this when preserving alpha but clearing color.
   if (use_clear_attachments)
   {
-    /* color and depth, then the additional color attachments (FramebufferState: 7 at most) */
-    VkClearAttachment clear_attachments[2 + 7];
+    /* colour, then depth */
+    VkClearAttachment clear_attachments[2];
     u32 num_clear_attachments = 0;
-    bool has_color = false;
     if (color_enable && alpha_enable)
     {
       VkClearAttachment clear_attachment;
@@ -212,7 +209,6 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
       clear_attachments[num_clear_attachments++] = clear_attachment;
       color_enable = false;
       alpha_enable = false;
-      has_color = true;
     }
     if (z_enable)
     {
@@ -222,19 +218,6 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
       clear_attachment.clearValue = clear_depth_value;
       clear_attachments[num_clear_attachments++] = clear_attachment;
       z_enable = false;
-    }
-    if (has_color)
-    {
-      for (std::size_t i = 0; i < vk_frame_buffer->GetNumberOfAdditonalAttachments() &&
-                              num_clear_attachments < 2 + 7;
-           i++)
-      {
-        VkClearAttachment clear_attachment;
-        clear_attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        clear_attachment.colorAttachment = 0;
-        clear_attachment.clearValue = clear_color_value;
-        clear_attachments[num_clear_attachments++] = clear_attachment;
-      }
     }
     if (num_clear_attachments)
     {

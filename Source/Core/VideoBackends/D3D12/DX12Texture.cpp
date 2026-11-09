@@ -459,11 +459,10 @@ void DXTexture::DestroyResource()
 }
 
 DXFramebuffer::DXFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                             std::vector<AbstractTexture*> additional_color_attachments,
                              AbstractTextureFormat color_format, AbstractTextureFormat depth_format,
                              u32 width, u32 height, u32 layers, u32 samples)
     : AbstractFramebuffer(color_attachment, depth_attachment,
-                          std::move(additional_color_attachments), color_format, depth_format,
+                          color_format, depth_format,
                           width, height, layers, samples)
 {
 }
@@ -480,11 +479,11 @@ DXFramebuffer::~DXFramebuffer()
       g_dx_context->DeferDescriptorDestruction(g_dx_context->GetRTVHeapManager(),
                                                m_int_rtv_descriptor.index);
     }
-  }
-  for (auto render_target : m_render_targets)
-  {
-    g_dx_context->DeferDescriptorDestruction(g_dx_context->GetRTVHeapManager(),
-                                             render_target.index);
+    if (m_rtv_descriptor)
+    {
+      g_dx_context->DeferDescriptorDestruction(g_dx_context->GetRTVHeapManager(),
+                                               m_rtv_descriptor.index);
+    }
   }
 }
 
@@ -513,11 +512,6 @@ void DXFramebuffer::Unbind()
     g_dx_context->GetCommandList()->DiscardResource(
         static_cast<DXTexture*>(GetColorAttachment())->GetResource(), &dr);
   }
-  for (auto additional_color_attachment : m_additional_color_attachments)
-  {
-    g_dx_context->GetCommandList()->DiscardResource(
-        static_cast<DXTexture*>(additional_color_attachment)->GetResource(), &dr);
-  }
   if (HasDepthBuffer())
   {
     g_dx_context->GetCommandList()->DiscardResource(
@@ -528,10 +522,10 @@ void DXFramebuffer::Unbind()
 void DXFramebuffer::ClearRenderTargets(const ClearColor& color_value,
                                        const D3D12_RECT* rectangle) const
 {
-  for (auto render_target : m_render_targets_raw)
+  if (m_rtv_descriptor)
   {
-    g_dx_context->GetCommandList()->ClearRenderTargetView(render_target, color_value.data(),
-                                                          rectangle ? 1 : 0, rectangle);
+    g_dx_context->GetCommandList()->ClearRenderTargetView(
+        m_rtv_descriptor.cpu_handle, color_value.data(), rectangle ? 1 : 0, rectangle);
   }
 }
 
@@ -552,18 +546,12 @@ void DXFramebuffer::TransitionRenderTargets() const
     static_cast<DXTexture*>(GetColorAttachment())
         ->TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
   }
-  for (auto additional_color_attachment : m_additional_color_attachments)
-  {
-    static_cast<DXTexture*>(additional_color_attachment)
-        ->TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
-  }
 }
 
 DXFramebuffer*
-DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment,
-                      std::vector<AbstractTexture*> additional_color_attachments)
+DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment)
 {
-  if (!ValidateConfig(color_attachment, depth_attachment, additional_color_attachments))
+  if (!ValidateConfig(color_attachment, depth_attachment))
     return nullptr;
 
   const AbstractTextureFormat color_format =
@@ -577,9 +565,8 @@ DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment,
   const u32 samples = either_attachment->GetSamples();
 
   DXFramebuffer* const fb =
-      new DXFramebuffer(color_attachment, depth_attachment, std::move(additional_color_attachments),
-                        color_format, depth_format, width, height, layers, samples);
-  if (!fb->CreateRTVDescriptors() || (color_attachment && !fb->CreateIRTVDescriptor()) ||
+      new DXFramebuffer(color_attachment, depth_attachment, color_format, depth_format, width, height, layers, samples);
+  if ((color_attachment && (!fb->CreateRTVDescriptor() || !fb->CreateIRTVDescriptor())) ||
       (depth_attachment && !fb->CreateDSVDescriptor()))
   {
     delete fb;
@@ -589,48 +576,25 @@ DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment,
   return fb;
 }
 
-bool DXFramebuffer::CreateRTVDescriptors()
+bool DXFramebuffer::CreateRTVDescriptor()
 {
-  if (m_color_attachment)
-  {
-    if (!CreateRTVDescriptor(m_layers, m_color_attachment))
-    {
-      return false;
-    }
-  }
-
-  for (auto* attachment : m_additional_color_attachments)
-  {
-    if (!CreateRTVDescriptor(1, attachment))
-    {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-bool DXFramebuffer::CreateRTVDescriptor(u32 layers, AbstractTexture* attachment)
-{
-  DescriptorHandle rtv;
-  if (!g_dx_context->GetRTVHeapManager().Allocate(&rtv))
+  if (!g_dx_context->GetRTVHeapManager().Allocate(&m_rtv_descriptor))
   {
     PanicAlertFmt("Failed to allocate RTV descriptor");
     return false;
   }
-  m_render_targets.push_back(std::move(rtv));
-  m_render_targets_raw.push_back(m_render_targets.back().cpu_handle);
 
   const bool multisampled = m_samples > 1;
   D3D12_RENDER_TARGET_VIEW_DESC rtv_desc = {
       D3DCommon::GetRTVFormatForAbstractFormat(m_color_format, false),
       multisampled ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY};
   if (multisampled)
-    rtv_desc.Texture2DMSArray.ArraySize = layers;
+    rtv_desc.Texture2DMSArray.ArraySize = m_layers;
   else
-    rtv_desc.Texture2DArray.ArraySize = layers;
+    rtv_desc.Texture2DArray.ArraySize = m_layers;
   g_dx_context->GetDevice()->CreateRenderTargetView(
-      static_cast<DXTexture*>(attachment)->GetResource(), &rtv_desc, m_render_targets_raw.back());
+      static_cast<DXTexture*>(m_color_attachment)->GetResource(), &rtv_desc,
+      m_rtv_descriptor.cpu_handle);
 
   return true;
 }

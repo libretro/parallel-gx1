@@ -304,8 +304,6 @@ public:
       framebuffer.color_texture_format = cfg.framebuffer_state.color_texture_format.Value();
       framebuffer.depth_texture_format = cfg.framebuffer_state.depth_texture_format.Value();
       framebuffer.samples = cfg.framebuffer_state.samples.Value();
-      framebuffer.additional_color_attachment_count =
-          cfg.framebuffer_state.additional_color_attachment_count.Value();
       blend.color_update = cfg.blending_state.color_update.Value();
       blend.alpha_update = cfg.blending_state.alpha_update.Value();
       if (cfg.blending_state.blend_enable)
@@ -419,11 +417,6 @@ public:
       }
       [desc setRasterSampleCount:fs.samples];
       [color0 setPixelFormat:Util::FromAbstract(fs.color_texture_format)];
-      if (u32 cnt = fs.additional_color_attachment_count)
-      {
-        for (u32 i = 0; i < cnt; i++)
-          [[desc colorAttachments] setObject:color0 atIndexedSubscript:i + 1];
-      }
       [desc setDepthAttachmentPixelFormat:Util::FromAbstract(fs.depth_texture_format)];
       if (Util::HasStencil(fs.depth_texture_format))
         [desc setStencilAttachmentPixelFormat:Util::FromAbstract(fs.depth_texture_format)];
@@ -449,8 +442,6 @@ public:
           fmt::println(file, "Color Format: {}", static_cast<u32>(fs.color_texture_format.Value()));
           fmt::println(file, "Depth Format: {}", static_cast<u32>(fs.depth_texture_format.Value()));
           fmt::println(file, "Sample Count: {}", fs.samples);
-          if (u32 cnt = fs.additional_color_attachment_count)
-            fmt::println(file, "Additional Color Attachments: {}", cnt);
           if (bs.color_update && bs.alpha_update)
             fmt::println(file, "Write Color, Alpha");
           else if (bs.color_update)

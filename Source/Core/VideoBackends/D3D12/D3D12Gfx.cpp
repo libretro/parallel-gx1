@@ -65,12 +65,10 @@ AbstractStagingTexture* Gfx::CreateStagingTexture(StagingTextureType type,
 }
 
 AbstractFramebuffer*
-Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                       std::vector<AbstractTexture*> additional_color_attachments)
+Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment)
 {
   return DXFramebuffer::Create(static_cast<DXTexture*>(color_attachment),
-                               static_cast<DXTexture*>(depth_attachment),
-                               std::move(additional_color_attachments));
+                               static_cast<DXTexture*>(depth_attachment));
 }
 
 AbstractShader*

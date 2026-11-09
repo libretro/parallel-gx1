@@ -36,8 +36,7 @@ public:
   AbstractStagingTexture*
   CreateStagingTexture(StagingTextureType type, const TextureConfig& config);
   AbstractFramebuffer*
-  CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                    std::vector<AbstractTexture*> additional_color_attachments);
+  CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment);
 
   AbstractShader*
   CreateShaderFromSource(ShaderStage stage, ShaderCode* source,

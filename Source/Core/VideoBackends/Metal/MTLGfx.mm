@@ -108,13 +108,11 @@ Metal::Gfx::CreateStagingTexture(StagingTextureType type, const TextureConfig& c
 }
 
 std::unique_ptr<AbstractFramebuffer>
-Metal::Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment,
-                              std::vector<AbstractTexture*> additional_color_attachments)
+Metal::Gfx::CreateFramebuffer(AbstractTexture* color_attachment, AbstractTexture* depth_attachment)
 {
   AbstractTexture* const either_attachment = color_attachment ? color_attachment : depth_attachment;
   return std::make_unique<Framebuffer>(
-      color_attachment, depth_attachment, std::move(additional_color_attachments),
-      either_attachment->GetWidth(), either_attachment->GetHeight(), either_attachment->GetLayers(),
+      color_attachment, depth_attachment, either_attachment->GetWidth(), either_attachment->GetHeight(), either_attachment->GetLayers(),
       either_attachment->GetSamples());
 }
 
@@ -510,7 +508,7 @@ void Metal::Gfx::SetupSurface()
                     AbstractTextureType::Texture_2DArray);
   m_bb_texture = std::make_unique<Texture>(nullptr, cfg);
   m_backbuffer = std::make_unique<Framebuffer>(
-      m_bb_texture.get(), nullptr, std::vector<AbstractTexture*>{}, info.width, info.height, 1, 1);
+      m_bb_texture.get(), nullptr, info.width, info.height, 1, 1);
 
   if (g_presenter)
     g_presenter->SetBackbuffer(info);

@@ -321,9 +321,7 @@ VKPipeline::VKPipeline(const AbstractPipelineConfig& config, VkPipeline pipeline
                        u32 dynamic_state, u32 dynamic_blend, VKSharedPipeline* shared)
     : AbstractPipeline(config), m_pipeline(pipeline), m_pipeline_layout(pipeline_layout),
       m_shared(shared), m_usage(usage), m_dynamic_state(dynamic_state),
-      m_dynamic_blend(dynamic_blend),
-      m_color_attachments(1u + static_cast<u32>(
-                                   config.framebuffer_state.additional_color_attachment_count))
+      m_dynamic_blend(dynamic_blend)
 {
 }
 
@@ -618,8 +616,7 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
   VkRenderPass render_pass = g_object_cache->GetRenderPass(
       VKTexture::GetVkFormatForHostTextureFormat(config.framebuffer_state.color_texture_format),
       VKTexture::GetVkFormatForHostTextureFormat(config.framebuffer_state.depth_texture_format),
-      config.framebuffer_state.samples, VK_ATTACHMENT_LOAD_OP_LOAD,
-      config.framebuffer_state.additional_color_attachment_count);
+      config.framebuffer_state.samples, VK_ATTACHMENT_LOAD_OP_LOAD);
 
   if (render_pass == VK_NULL_HANDLE)
   {
@@ -762,14 +759,8 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
   VkPipelineColorBlendAttachmentState blend_attachment_state =
       GetVulkanAttachmentBlendState(build.blending_state, config.usage);
 
-  // Right now all our attachments have the same state
-  VkPipelineColorBlendAttachmentState blend_attachment_states[8];
-  const u32 num_attachments =
-      1 + static_cast<u32>(config.framebuffer_state.additional_color_attachment_count);
-  for (u32 i = 0; i < num_attachments; i++)
-    blend_attachment_states[i] = blend_attachment_state;
   VkPipelineColorBlendStateCreateInfo blend_state =
-      GetVulkanColorBlendState(build.blending_state, blend_attachment_states, num_attachments);
+      GetVulkanColorBlendState(build.blending_state, &blend_attachment_state, 1);
 
   static const VkDepthClampRangeEXT clamp_range = {0.0f, MAX_EFB_DEPTH};
   static const VkPipelineViewportDepthClampControlCreateInfoEXT depth_clamp_state = {

@@ -7,27 +7,20 @@
 
 AbstractFramebuffer::AbstractFramebuffer(AbstractTexture* color_attachment,
                                          AbstractTexture* depth_attachment,
-                                         std::vector<AbstractTexture*> additional_color_attachments,
                                          AbstractTextureFormat color_format,
                                          AbstractTextureFormat depth_format, u32 width, u32 height,
                                          u32 layers, u32 samples)
     : m_color_attachment(color_attachment), m_depth_attachment(depth_attachment),
-      m_additional_color_attachments(std::move(additional_color_attachments)),
       m_color_format(color_format), m_depth_format(depth_format), m_width(width), m_height(height),
       m_layers(layers), m_samples(samples)
 {
 }
 
-bool AbstractFramebuffer::ValidateConfig(
-    const AbstractTexture* color_attachment, const AbstractTexture* depth_attachment,
-    const std::vector<AbstractTexture*>& additional_color_attachments)
+bool AbstractFramebuffer::ValidateConfig(const AbstractTexture* color_attachment,
+                                         const AbstractTexture* depth_attachment)
 {
   // Must have at least a color or depth attachment.
   if (!color_attachment && !depth_attachment)
-    return false;
-
-  // Must have a color attachment if additional color attachments are defined
-  if (!color_attachment && !additional_color_attachments.empty())
     return false;
 
   // Currently we only expose a single mip level for render target textures.
@@ -42,14 +35,6 @@ bool AbstractFramebuffer::ValidateConfig(
     return false;
   }
 
-  for (auto* attachment : additional_color_attachments)
-  {
-    if (!CheckAttachment(attachment))
-    {
-      return false;
-    }
-  }
-
   // If both color and depth are present, their attributes must match.
   if (color_attachment && depth_attachment)
   {
@@ -57,16 +42,6 @@ bool AbstractFramebuffer::ValidateConfig(
         color_attachment->GetConfig().height != depth_attachment->GetConfig().height ||
         color_attachment->GetConfig().layers != depth_attachment->GetConfig().layers ||
         color_attachment->GetConfig().samples != depth_attachment->GetConfig().samples)
-    {
-      return false;
-    }
-  }
-
-  for (auto* attachment : additional_color_attachments)
-  {
-    if (color_attachment->GetConfig().width != attachment->GetConfig().width ||
-        color_attachment->GetConfig().height != attachment->GetConfig().height ||
-        color_attachment->GetConfig().samples != attachment->GetConfig().samples)
     {
       return false;
     }
