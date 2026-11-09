@@ -3,6 +3,8 @@
 
 #include "VideoCommon/ShaderText.h"
 
+#include "VideoCommon/ShaderArena.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +24,13 @@ void shader_text_init(struct shader_text *t, size_t cap)
    t->failed = 0;
    if (cap)
    {
-      t->block = (char*)malloc(SHADER_TEXT_HEAD_ROOM + cap);
+      /* the block this thread's last text freed, where it is as large */
+      size_t got = 0;
+      t->block = shader_arena_text_take(SHADER_TEXT_HEAD_ROOM + cap, &got);
+      if (t->block)
+         cap = got - SHADER_TEXT_HEAD_ROOM;
+      else
+         t->block = (char*)malloc(SHADER_TEXT_HEAD_ROOM + cap);
       if (t->block)
       {
          t->cap = cap;
@@ -33,7 +41,8 @@ void shader_text_init(struct shader_text *t, size_t cap)
 
 void shader_text_free(struct shader_text *t)
 {
-   free(t->block);
+   if (!t->block || !shader_arena_text_give(t->block, SHADER_TEXT_HEAD_ROOM + t->cap))
+      free(t->block);
    t->block  = NULL;
    t->len    = 0;
    t->cap    = 0;

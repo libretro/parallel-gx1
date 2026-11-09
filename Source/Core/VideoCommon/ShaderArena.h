@@ -15,9 +15,13 @@
  *  - shader_arena_grow, after a compile that failed, doubles the block
  *    where the failure was the arena's, and says whether to compile
  *    again.
- *  - shader_arenas_free frees every thread's block, once no thread
+ *  - shader_arena_text_take and shader_arena_text_give keep one freed
+ *    shader text block per thread (ShaderText.c), the largest given, for
+ *    the next text that thread starts: a generator allocates nothing once
+ *    its thread has made one as large.
+ *  - shader_arenas_free frees every thread's blocks, once no thread
  *    compiles any more (the backend shutting down); a thread's next
- *    compile makes a new one.
+ *    compile makes new ones.
  */
 
 #ifndef VIDEOCOMMON_SHADER_ARENA_H
@@ -31,6 +35,10 @@ extern "C" {
 
 void shader_arena_use(struct rslc_opts *opts);
 int shader_arena_grow(const char *err);
+/* this thread's kept text block, of at least size bytes, in *got its size: NULL for none */
+char *shader_arena_text_take(size_t size, size_t *got);
+/* a text block of size bytes kept for this thread: 0 where the caller frees it */
+int shader_arena_text_give(char *block, size_t size);
 void shader_arenas_free(void);
 
 #ifdef __cplusplus

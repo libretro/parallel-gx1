@@ -24,6 +24,8 @@ struct shader_arena
 {
    void *block;
    size_t len;
+   char *text; /* a freed shader text block, kept for the next */
+   size_t text_len;
 };
 
 /* every thread's block, to free them all; a slot is taken once per thread and generation */
@@ -81,6 +83,30 @@ int shader_arena_grow(const char *err)
    return 1;
 }
 
+char *shader_arena_text_take(size_t size, size_t *got)
+{
+   struct shader_arena *a = mine();
+   char *text;
+   if (!a || !a->text || a->text_len < size)
+      return NULL;
+   text = a->text;
+   *got = a->text_len;
+   a->text = NULL;
+   a->text_len = 0;
+   return text;
+}
+
+int shader_arena_text_give(char *block, size_t size)
+{
+   struct shader_arena *a = mine();
+   if (!a || (a->text && a->text_len >= size))
+      return 0;
+   free(a->text);
+   a->text = block;
+   a->text_len = size;
+   return 1;
+}
+
 void shader_arenas_free(void)
 {
    int i;
@@ -88,8 +114,11 @@ void shader_arenas_free(void)
    for (i = 0; i < n && i < SHADER_ARENA_THREADS; i++)
    {
       free(s_arenas[i].block);
+      free(s_arenas[i].text);
       s_arenas[i].block = NULL;
       s_arenas[i].len = 0;
+      s_arenas[i].text = NULL;
+      s_arenas[i].text_len = 0;
    }
    retro_atomic_store_release_int(&s_num_arenas, 0);
    retro_atomic_fetch_add_int(&s_generation, 1);
