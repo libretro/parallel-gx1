@@ -329,8 +329,25 @@ static void ApplyStartupPatches(Core::System& system)
   ApplyPatches(guard, s_on_frame);
 }
 
+/* Whether a field has anything to apply: an enabled OnFrame patch, a Gecko
+ * code or an Action Replay code. Usually none. */
+static bool HasFramePatches()
+{
+  for (const Patch& patch : s_on_frame)
+  {
+    if (patch.enabled)
+      return true;
+  }
+  return Gecko::CountEnabledCodes() != 0 || ActionReplay::CountEnabledCodes() != 0;
+}
+
 bool ApplyFramePatches(Core::System& system)
 {
+  // Nothing to apply: done, with no walk of the guest's stack, and no retry every 1000 cycles
+  // when it is not in a state to walk (an exception vector, the FIFO player).
+  if (!HasFramePatches())
+    return true;
+
   const auto& ppc_state = system.GetPPCState();
 
   ASSERT(Core::IsCPUThread());
