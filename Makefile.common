@@ -1549,7 +1549,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/JitCommon/JitBase.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/JitCommon/JitCache.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/JitInterface.cpp \
-	$(CORE_DIR)/Source/Core/Core/PowerPC/GDBStub.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/MMU.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/PowerPC.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/PPCAnalyst.cpp \

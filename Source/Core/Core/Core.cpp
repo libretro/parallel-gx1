@@ -61,7 +61,6 @@
 #include "Core/IOS/IOS.h"
 #include "Core/MemTools.h"
 #include "Core/PatchEngine.h"
-#include "Core/PowerPC/GDBStub.h"
 #include "Core/PowerPC/JitInterface.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/State.h"
@@ -262,10 +261,10 @@ void UndeclareAsGPUThread()
 }
 
 // For the CPU Thread only.
-static void CPUSetInitialExecutionState(Core::System& system, bool force_paused = false)
+static void CPUSetInitialExecutionState(Core::System& system)
 {
   // The CPU starts in stepping state, and will wait until a new state is set before executing.
-  const bool paused = SConfig::GetInstance().bBootToPause || force_paused;
+  const bool paused = SConfig::GetInstance().bBootToPause;
   SetState(system, paused ? State::Paused : State::Running, true, true);
   Host_UpdateDisasmDialog();
 }
@@ -295,29 +294,7 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
 
   StartingToRunning();
 
-  {
-#ifndef _WIN32
-    std::string gdb_socket = Config::Get(Config::MAIN_GDB_SOCKET);
-    if (!gdb_socket.empty() && !AchievementManager::GetInstance().IsHardcoreModeActive())
-    {
-      GDBStub::InitLocal(gdb_socket.data());
-      CPUSetInitialExecutionState(system, true);
-    }
-    else
-#endif
-    {
-      int gdb_port = Config::Get(Config::MAIN_GDB_PORT);
-      if (gdb_port > 0 && !AchievementManager::GetInstance().IsHardcoreModeActive())
-      {
-        GDBStub::Init(gdb_port);
-        CPUSetInitialExecutionState(system, true);
-      }
-      else
-      {
-        CPUSetInitialExecutionState(system);
-      }
-    }
-  }
+  CPUSetInitialExecutionState(system);
 
   // dont enter the blocking loop if in single core mode
   if (!system.IsDualCoreMode())
@@ -327,14 +304,6 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
 
   if (exception_handler)
     EMM::UninstallExceptionHandler();
-
-  if (GDBStub::IsActive())
-  {
-    INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "Stopping GDB ..."));
-    GDBStub::Deinit();
-    INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "GDB stopped."));
-    INFO_LOG_FMT(GDB_STUB, "Killed by CPU shutdown");
-  }
 }
 
 /* In single core, the FIFO player's CPU core stays injected after the
@@ -969,14 +938,6 @@ void SingleCorePostRunShutdown()
 {
   if (EMM::IsExceptionHandlerSupported())
     EMM::UninstallExceptionHandler();
-
-  if (GDBStub::IsActive())
-  {
-    INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "Stopping GDB ..."));
-    GDBStub::Deinit();
-    INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "GDB stopped."));
-    INFO_LOG_FMT(GDB_STUB, "Killed by CPU shutdown");
-  }
 }
 
 }  // namespace Core

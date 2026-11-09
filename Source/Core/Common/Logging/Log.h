@@ -33,7 +33,6 @@ enum class LogType : int
   EXPANSIONINTERFACE,
   FILEMON,
   FRAMEDUMP,
-  GDB_STUB,
   GPFIFO,
   HOST_GPU,
   HSP,

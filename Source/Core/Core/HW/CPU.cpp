@@ -12,7 +12,6 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/Host.h"
-#include "Core/PowerPC/GDBStub.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 #include "VideoCommon/Fifo.h"
@@ -169,7 +168,6 @@ void CPUManager::Run()
     ExecutePendingJobs();
     CPUThreadConfigCallback::CheckForConfigChanges();
 
-    Common::Event gdb_step_sync_event;
     switch (LoadState())
     {
     case State::Running:
@@ -211,21 +209,6 @@ void CPUManager::Run()
       {
         ExecutePendingJobs();
         CPUThreadConfigCallback::CheckForConfigChanges();
-        if (GDBStub::IsActive() && GDBStub::HasControl())
-        {
-          if (!GDBStub::JustConnected())
-            GDBStub::SendSignal(GDBStub::Signal::Sigtrap);
-          GDBStub::ProcessCommands(true);
-          // If we are still going to step, emulate the fact we just sent a step command
-          if (GDBStub::HasControl())
-          {
-            // Make sure the previous step by gdb was serviced
-            auto* previous = static_cast<Common::Event*>(
-                retro_atomic_exchange_ptr(&m_step_request, &gdb_step_sync_event));
-            if (previous && previous != STEP_NO_EVENT && previous != &gdb_step_sync_event)
-              previous->Set();
-          }
-        }
         if (retro_atomic_load_acquire_ptr(&m_step_request) || !IsStepping())
           break;
         const int key = retro_eventcount_prepare_wait(&m_cpu_wake);
