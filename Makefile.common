@@ -1027,6 +1027,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/ObjectPool.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
+	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderArena.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderText.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/StutterStats.c \
@@ -1161,7 +1162,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionFactory.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/HiresTextures.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/LightingShaderGen.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/OpcodeDecoding.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/PerfQueryBase.cpp \

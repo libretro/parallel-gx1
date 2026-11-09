@@ -4,7 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
@@ -205,9 +204,10 @@ protected:
   u8* m_base_buffer_pointer = nullptr;
   u8* m_end_buffer_pointer = nullptr;
 
-  // Alternative buffers in CPU memory for primitives we are going to discard.
-  std::vector<u8> m_cpu_vertex_buffer;
-  std::vector<u16> m_cpu_index_buffer;
+  // Alternative buffers in CPU memory for primitives we are going to discard: pages the system
+  // hands over zeroed, so only what culled batches write is ever touched.
+  u8* m_cpu_vertex_buffer = nullptr;
+  u16* m_cpu_index_buffer = nullptr;
 
   Slope m_zslope = {};
 
@@ -225,7 +225,7 @@ protected:
   bool m_blending_state_changed = true;
   bool m_cull_all = false;
 
-  IndexGenerator m_index_generator;
+  index_generator m_index_generator{};
   CPUCull m_cpu_cull;
 
 private:
@@ -245,8 +245,15 @@ private:
   u32 m_draw_counter = 0;
   u32 m_last_efb_copy_draw_counter = 0;
   bool m_unflushed_efb_copy = false;
-  std::vector<u32> m_cpu_accesses_this_frame;
-  std::vector<u32> m_scheduled_command_buffer_kicks;
+  // draws a CPU EFB access followed this frame, then the draws that kick a command buffer next
+  // frame: both rising, so a cursor finds the next kick; past the end a frame stops recording.
+  static constexpr u32 MAX_CPU_ACCESSES = 4096;
+  static constexpr u32 MAX_COMMAND_BUFFER_KICKS = 4096;
+  u32 m_cpu_accesses_this_frame[MAX_CPU_ACCESSES];
+  u32 m_num_cpu_accesses = 0;
+  u32 m_scheduled_command_buffer_kicks[MAX_COMMAND_BUFFER_KICKS];
+  u32 m_num_command_buffer_kicks = 0;
+  u32 m_next_command_buffer_kick = 0;
   bool m_allow_background_execution = true;
 
   u64 m_ticks_elapsed = 0;

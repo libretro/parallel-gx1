@@ -275,8 +275,7 @@ void VertexManager::ResetBuffer(u32 vertex_stride)
   m_base_buffer_pointer = static_cast<u8*>(vertex_map.pData) + vertex_cursor;
   m_cur_buffer_pointer = m_base_buffer_pointer;
   m_end_buffer_pointer = m_base_buffer_pointer + MAXVBUFFERSIZE;
-  m_index_generator.Start(
-      reinterpret_cast<u16*>(static_cast<u8*>(index_map.pData) + index_cursor));
+  index_generator_start(&m_index_generator, reinterpret_cast<u16*>(static_cast<u8*>(index_map.pData) + index_cursor));
 }
 
 void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,

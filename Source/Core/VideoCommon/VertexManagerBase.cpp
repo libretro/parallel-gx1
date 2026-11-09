@@ -12,6 +12,7 @@
 #include "Common/EnumMap.h"
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
+#include "Common/MemoryUtil.h"
 #include "Common/SmallVector.h"
 
 #include "Core/HW/SystemTimers.h"
@@ -106,11 +107,19 @@ static bool IsNormalProjection(const Projection::Raw& projection, const Viewport
 }
 
 VertexManagerBase::VertexManagerBase()
-    : m_cpu_vertex_buffer(MAXVBUFFERSIZE), m_cpu_index_buffer(MAXIBUFFERSIZE)
+    : m_cpu_vertex_buffer(static_cast<u8*>(Common::AllocateMemoryPages(MAXVBUFFERSIZE))),
+      m_cpu_index_buffer(
+          static_cast<u16*>(Common::AllocateMemoryPages(MAXIBUFFERSIZE * sizeof(u16))))
 {
 }
 
-VertexManagerBase::~VertexManagerBase() = default;
+VertexManagerBase::~VertexManagerBase()
+{
+  if (m_cpu_vertex_buffer)
+    Common::FreeMemoryPages(m_cpu_vertex_buffer, MAXVBUFFERSIZE);
+  if (m_cpu_index_buffer)
+    Common::FreeMemoryPages(m_cpu_index_buffer, MAXIBUFFERSIZE * sizeof(u16));
+}
 
 bool VertexManagerBase::BaseInitialize()
 {
@@ -120,7 +129,7 @@ bool VertexManagerBase::BaseInitialize()
       video_events.after_frame_event.Register([this](Core::System&) { OnEndFrame(); });
   m_after_present_event = video_events.after_present_event.Register(
       [this](const PresentInfo& pi) { m_ticks_elapsed = pi.emulated_timestamp; });
-  m_index_generator.Init();
+  index_generator_init(&m_index_generator, g_backend_info.bSupportsPrimitiveRestart, g_Config.UseVSForLinePointExpand());
   m_cpu_cull.Init();
   return true;
 }
@@ -132,7 +141,7 @@ u32 VertexManagerBase::GetRemainingSize() const
 
 void VertexManagerBase::AddIndices(OpcodeDecoder::Primitive primitive, u32 num_vertices)
 {
-  m_index_generator.AddIndices(primitive, num_vertices);
+  index_generator_add(&m_index_generator, static_cast<unsigned>(primitive), num_vertices);
 }
 
 bool VertexManagerBase::AreAllVerticesCulled(VertexLoaderBase* loader,
@@ -165,7 +174,7 @@ DataReader VertexManagerBase::BasePrepareForAdditionalData(OpcodeDecoder::Primit
   }
 
   u32 remaining_indices = GetRemainingIndices(primitive);
-  u32 remaining_index_generator_indices = m_index_generator.GetRemainingIndices(primitive);
+  u32 remaining_index_generator_indices = index_generator_remaining(&m_index_generator, static_cast<unsigned>(primitive));
 
   // Check for size in buffer, if the buffer gets full, call Flush()
   if (!m_is_flushed && (count > remaining_index_generator_indices || count > remaining_indices ||
@@ -182,16 +191,16 @@ DataReader VertexManagerBase::BasePrepareForAdditionalData(OpcodeDecoder::Primit
     if (cullall)
     {
       // This buffer isn't getting sent to the GPU. Just allocate it on the cpu.
-      m_cur_buffer_pointer = m_base_buffer_pointer = m_cpu_vertex_buffer.data();
-      m_end_buffer_pointer = m_base_buffer_pointer + m_cpu_vertex_buffer.size();
-      m_index_generator.Start(m_cpu_index_buffer.data());
+      m_cur_buffer_pointer = m_base_buffer_pointer = m_cpu_vertex_buffer;
+      m_end_buffer_pointer = m_base_buffer_pointer + MAXVBUFFERSIZE;
+      index_generator_start(&m_index_generator, m_cpu_index_buffer);
     }
     else
     {
       ResetBuffer(stride);
     }
 
-    remaining_index_generator_indices = m_index_generator.GetRemainingIndices(primitive);
+    remaining_index_generator_indices = index_generator_remaining(&m_index_generator, static_cast<unsigned>(primitive));
     remaining_indices = GetRemainingIndices(primitive);
     m_is_flushed = false;
   }
@@ -233,7 +242,7 @@ void VertexManagerBase::FlushData(u32 count, u32 stride)
 
 u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) const
 {
-  const u32 index_len = MAXIBUFFERSIZE - m_index_generator.GetIndexLen();
+  const u32 index_len = MAXIBUFFERSIZE - index_generator_index_len(&m_index_generator);
 
   if (primitive >= Primitive::GX_DRAW_LINES)
   {
@@ -328,10 +337,10 @@ auto VertexManagerBase::ResetFlushAspectRatioCount() -> FlushStatistics
 
 void VertexManagerBase::BaseResetBuffer(u32 vertex_stride)
 {
-  m_base_buffer_pointer = m_cpu_vertex_buffer.data();
-  m_cur_buffer_pointer = m_cpu_vertex_buffer.data();
-  m_end_buffer_pointer = m_base_buffer_pointer + m_cpu_vertex_buffer.size();
-  m_index_generator.Start(m_cpu_index_buffer.data());
+  m_base_buffer_pointer = m_cpu_vertex_buffer;
+  m_cur_buffer_pointer = m_cpu_vertex_buffer;
+  m_end_buffer_pointer = m_base_buffer_pointer + MAXVBUFFERSIZE;
+  index_generator_start(&m_index_generator, m_cpu_index_buffer);
 }
 
 void VertexManagerBase::BaseDrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex)
@@ -373,7 +382,7 @@ void VertexManagerBase::UploadUtilityVertices(const void* vertices, u32 vertex_s
     m_cur_buffer_pointer += copy_size;
   }
   if (indices)
-    m_index_generator.AddExternalIndices(indices, num_indices, num_vertices);
+    index_generator_add_external(&m_index_generator, indices, num_indices, num_vertices);
 
   CommitBuffer(num_vertices, vertex_stride, num_indices, out_base_vertex, out_base_index);
 }
@@ -486,17 +495,17 @@ void VertexManagerBase::Flush()
     if (IsAnamorphicProjection(projection, viewport, g_ActiveConfig))
     {
       ++counts.anamorphic_flush_count;
-      counts.anamorphic_vertex_count += m_index_generator.GetIndexLen();
+      counts.anamorphic_vertex_count += index_generator_index_len(&m_index_generator);
     }
     else if (IsNormalProjection(projection, viewport, g_ActiveConfig))
     {
       ++counts.normal_flush_count;
-      counts.normal_vertex_count += m_index_generator.GetIndexLen();
+      counts.normal_vertex_count += index_generator_index_len(&m_index_generator);
     }
     else
     {
       ++counts.other_flush_count;
-      counts.other_vertex_count += m_index_generator.GetIndexLen();
+      counts.other_vertex_count += index_generator_index_len(&m_index_generator);
     }
   }
 
@@ -587,7 +596,7 @@ void VertexManagerBase::Flush()
 
     // Now the vertices can be flushed to the GPU. Everything following the CommitBuffer() call
     // must be careful to not upload any utility vertices, as the binding will be lost otherwise.
-    const u32 num_indices = m_index_generator.GetIndexLen();
+    const u32 num_indices = index_generator_index_len(&m_index_generator);
     if (num_indices == 0)
       return;
 
@@ -894,7 +903,7 @@ void VertexManagerBase::UpdatePipelineObject()
 void VertexManagerBase::OnConfigChange()
 {
   // Reload index generator function tables in case VS expand config changed
-  m_index_generator.Init();
+  index_generator_init(&m_index_generator, g_backend_info.bSupportsPrimitiveRestart, g_Config.UseVSForLinePointExpand());
 }
 
 void VertexManagerBase::OnDraw()
@@ -912,13 +921,20 @@ void VertexManagerBase::OnDraw()
   }
 
   // If we didn't have any CPU access last frame, do nothing.
-  if (m_scheduled_command_buffer_kicks.empty() || !m_allow_background_execution)
+  if (m_next_command_buffer_kick == m_num_command_buffer_kicks || !m_allow_background_execution)
     return;
 
-  // Check if this draw is scheduled to kick a command buffer.
-  // The draw counters will always be sorted so a binary search is possible here.
-  if (std::ranges::binary_search(m_scheduled_command_buffer_kicks, m_draw_counter))
+  // Check if this draw is scheduled to kick a command buffer: the kicks rise, as the draw
+  // counter does, so only the next one can match.
+  while (m_next_command_buffer_kick < m_num_command_buffer_kicks &&
+         m_scheduled_command_buffer_kicks[m_next_command_buffer_kick] < m_draw_counter)
   {
+    m_next_command_buffer_kick++;
+  }
+  if (m_next_command_buffer_kick < m_num_command_buffer_kicks &&
+      m_scheduled_command_buffer_kicks[m_next_command_buffer_kick] == m_draw_counter)
+  {
+    m_next_command_buffer_kick++;
     // Kick a command buffer on the background thread.
     g_gfx->Flush();
     m_unflushed_efb_copy = false;
@@ -929,11 +945,13 @@ void VertexManagerBase::OnDraw()
 void VertexManagerBase::OnCPUEFBAccess()
 {
   // Check this isn't another access without any draws in between.
-  if (!m_cpu_accesses_this_frame.empty() && m_cpu_accesses_this_frame.back() == m_draw_counter)
+  if (m_num_cpu_accesses != 0 &&
+      m_cpu_accesses_this_frame[m_num_cpu_accesses - 1] == m_draw_counter)
     return;
 
   // Store the current draw counter for scheduling in OnEndFrame.
-  m_cpu_accesses_this_frame.emplace_back(m_draw_counter);
+  if (m_num_cpu_accesses < MAX_CPU_ACCESSES)
+    m_cpu_accesses_this_frame[m_num_cpu_accesses++] = m_draw_counter;
 }
 
 void VertexManagerBase::OnEFBCopyToRAM()
@@ -962,11 +980,12 @@ void VertexManagerBase::OnEndFrame()
 {
   m_draw_counter = 0;
   m_last_efb_copy_draw_counter = 0;
-  m_scheduled_command_buffer_kicks.clear();
+  m_num_command_buffer_kicks = 0;
+  m_next_command_buffer_kick = 0;
 
   // If we have no CPU access at all, leave everything in the one command buffer for maximum
   // parallelism between CPU/GPU, at the cost of slightly higher latency.
-  if (m_cpu_accesses_this_frame.empty())
+  if (m_num_cpu_accesses == 0)
     return;
 
   // In order to reduce CPU readback latency, we want to kick a command buffer roughly halfway
@@ -976,8 +995,9 @@ void VertexManagerBase::OnEndFrame()
   {
     u32 last_draw_counter = 0;
     u32 interval = static_cast<u32>(g_ActiveConfig.iCommandBufferExecuteInterval);
-    for (u32 draw_counter : m_cpu_accesses_this_frame)
+    for (u32 i = 0; i < m_num_cpu_accesses; i++)
     {
+      const u32 draw_counter = m_cpu_accesses_this_frame[i];
       // We don't want to waste executing command buffers for only a few draws, so set a minimum.
       // Leave last_draw_counter as-is, so we get the correct number of draws between submissions.
       u32 draw_count = draw_counter - last_draw_counter;
@@ -987,14 +1007,17 @@ void VertexManagerBase::OnEndFrame()
       if (draw_count <= interval)
       {
         u32 mid_point = draw_count / 2;
-        m_scheduled_command_buffer_kicks.emplace_back(last_draw_counter + mid_point);
+        if (m_num_command_buffer_kicks < MAX_COMMAND_BUFFER_KICKS)
+          m_scheduled_command_buffer_kicks[m_num_command_buffer_kicks++] =
+              last_draw_counter + mid_point;
       }
       else
       {
         u32 counter = interval;
-        while (counter < draw_count)
+        while (counter < draw_count && m_num_command_buffer_kicks < MAX_COMMAND_BUFFER_KICKS)
         {
-          m_scheduled_command_buffer_kicks.emplace_back(last_draw_counter + counter);
+          m_scheduled_command_buffer_kicks[m_num_command_buffer_kicks++] =
+              last_draw_counter + counter;
           counter += interval;
         }
       }
@@ -1003,7 +1026,7 @@ void VertexManagerBase::OnEndFrame()
     }
   }
 
-  m_cpu_accesses_this_frame.clear();
+  m_num_cpu_accesses = 0;
 
   // We invalidate the pipeline object at the start of the frame.
   // This is for the rare case where only a single pipeline configuration is used,
@@ -1031,9 +1054,9 @@ void VertexManagerBase::RenderDrawCall(
   }
 
   u32 base_vertex, base_index;
-  CommitBuffer(m_index_generator.GetNumVerts(),
+  CommitBuffer(index_generator_num_verts(&m_index_generator),
                VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride(),
-               m_index_generator.GetIndexLen(), &base_vertex, &base_index);
+               index_generator_index_len(&m_index_generator), &base_vertex, &base_index);
 
   if (g_backend_info.api_type != APIType::D3D && g_ActiveConfig.UseVSForLinePointExpand() &&
       (primitive_type == PrimitiveType::Points || primitive_type == PrimitiveType::Lines))
@@ -1047,7 +1070,7 @@ void VertexManagerBase::RenderDrawCall(
   if (PerfQueryBase::ShouldEmulate())
     g_perf_query->EnableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
 
-  DrawCurrentBatch(base_index, m_index_generator.GetIndexLen(), base_vertex);
+  DrawCurrentBatch(base_index, index_generator_index_len(&m_index_generator), base_vertex);
 
   // Track the total emulated state draws
   INCSTAT(g_stats.this_frame.num_draw_calls);
