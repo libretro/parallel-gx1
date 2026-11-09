@@ -199,7 +199,9 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
   // We can't use this when preserving alpha but clearing color.
   if (use_clear_attachments)
   {
-    std::vector<VkClearAttachment> clear_attachments;
+    /* color and depth, then the additional color attachments (FramebufferState: 7 at most) */
+    VkClearAttachment clear_attachments[2 + 7];
+    u32 num_clear_attachments = 0;
     bool has_color = false;
     if (color_enable && alpha_enable)
     {
@@ -207,7 +209,7 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
       clear_attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       clear_attachment.colorAttachment = 0;
       clear_attachment.clearValue = clear_color_value;
-      clear_attachments.push_back(std::move(clear_attachment));
+      clear_attachments[num_clear_attachments++] = clear_attachment;
       color_enable = false;
       alpha_enable = false;
       has_color = true;
@@ -218,21 +220,23 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
       clear_attachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
       clear_attachment.colorAttachment = 0;
       clear_attachment.clearValue = clear_depth_value;
-      clear_attachments.push_back(std::move(clear_attachment));
+      clear_attachments[num_clear_attachments++] = clear_attachment;
       z_enable = false;
     }
     if (has_color)
     {
-      for (std::size_t i = 0; i < vk_frame_buffer->GetNumberOfAdditonalAttachments(); i++)
+      for (std::size_t i = 0; i < vk_frame_buffer->GetNumberOfAdditonalAttachments() &&
+                              num_clear_attachments < 2 + 7;
+           i++)
       {
         VkClearAttachment clear_attachment;
         clear_attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         clear_attachment.colorAttachment = 0;
         clear_attachment.clearValue = clear_color_value;
-        clear_attachments.push_back(std::move(clear_attachment));
+        clear_attachments[num_clear_attachments++] = clear_attachment;
       }
     }
-    if (!clear_attachments.empty())
+    if (num_clear_attachments)
     {
       VkClearRect vk_rect = {target_vk_rc, 0, g_framebuffer_manager->GetEFBLayers()};
       if (!StateTracker::GetInstance()->IsWithinRenderArea(
@@ -244,8 +248,7 @@ void VKGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_en
       StateTracker::GetInstance()->BeginRenderPass();
 
       vkCmdClearAttachments(g_command_buffer_mgr->GetCurrentCommandBuffer(),
-                            static_cast<uint32_t>(clear_attachments.size()),
-                            clear_attachments.data(), 1, &vk_rect);
+                            num_clear_attachments, clear_attachments, 1, &vk_rect);
     }
   }
 

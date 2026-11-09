@@ -1240,20 +1240,16 @@ void VKFramebuffer::PrepareForRenderPass()
 void VKFramebuffer::SetAndClear(const VkRect2D& rect, const VkClearValue& color_value,
                                 const VkClearValue& depth_value)
 {
-  std::vector<VkClearValue> clear_values;
+  /* color and depth, then the additional color attachments (FramebufferState: 7 at most) */
+  VkClearValue clear_values[2 + 7];
+  u32 num_clear_values = 0;
   if (GetColorFormat() != AbstractTextureFormat::Undefined)
-  {
-    clear_values.push_back(color_value);
-  }
+    clear_values[num_clear_values++] = color_value;
   if (GetDepthFormat() != AbstractTextureFormat::Undefined)
-  {
-    clear_values.push_back(depth_value);
-  }
-  for (std::size_t i = 0; i < m_additional_color_attachments.size(); i++)
-  {
-    clear_values.push_back(color_value);
-  }
-  StateTracker::GetInstance()->BeginClearRenderPass(rect, clear_values.data(),
-                                                    static_cast<u32>(clear_values.size()));
+    clear_values[num_clear_values++] = depth_value;
+  for (std::size_t i = 0; i < m_additional_color_attachments.size() && num_clear_values < 2 + 7;
+       i++)
+    clear_values[num_clear_values++] = color_value;
+  StateTracker::GetInstance()->BeginClearRenderPass(rect, clear_values, num_clear_values);
 }
 }  // namespace Vulkan
