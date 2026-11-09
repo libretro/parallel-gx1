@@ -3,6 +3,8 @@
 
 #include "VideoCommon/VideoBackendBase.h"
 
+#include "VideoCommon/ShaderArena.h"
+
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -370,6 +372,8 @@ void VideoBackendBase::ShutdownShared()
   g_framebuffer_manager = nullptr;
   delete g_shader_cache;
   g_shader_cache = nullptr;
+  /* nothing compiles now: every thread's rslc block goes */
+  shader_arenas_free();
   VertexManagerBaseDelete(g_vertex_manager);
   g_vertex_manager = nullptr;
   delete g_widescreen;

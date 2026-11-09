@@ -1026,6 +1026,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/FrameClock.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
+	$(CORE_DIR)/Source/Core/VideoCommon/ShaderArena.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderText.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/StutterStats.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/UidTable.c \

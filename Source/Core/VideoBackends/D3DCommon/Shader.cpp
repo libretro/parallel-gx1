@@ -17,6 +17,7 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoCommon/ShaderGenCommon.h"
+#include "VideoCommon/ShaderArena.h"
 #include "VideoCommon/StutterStats.h"
 #include "VideoCommon/VideoBackendBase.h"
 
@@ -99,6 +100,7 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, ShaderC
   struct rslc_opts opts;
   struct rslc_result result;
   enum rslc_stage rstage;
+  bool compiled;
   const std::string_view head =
       stage == ShaderStage::Compute ? COMPUTE_SHADER_HEADER : SHADER_HEADER;
   /* the header goes in front of the text, not the text after a copy of it */
@@ -123,9 +125,17 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, ShaderC
                                                            50;
   opts.err = err;
   opts.err_cap = sizeof(err);
-  err[0] = '\0';
   STUTTER_MARK(t);
-  if (rslc_compile(full, full_len, rstage, &opts, &result))
+  /* in this thread's block, grown and compiled again where it was too small */
+  for (;;)
+  {
+    err[0] = '\0';
+    shader_arena_use(&opts);
+    compiled = rslc_compile(full, full_len, rstage, &opts, &result);
+    if (compiled || !shader_arena_grow(err))
+      break;
+  }
+  if (compiled)
   {
     STUTTER_EMIT_SINCE(t, result.spirv_len);
     /* the result block is kept whole: the code points into it */

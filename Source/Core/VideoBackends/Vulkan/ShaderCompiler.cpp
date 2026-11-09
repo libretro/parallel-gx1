@@ -16,6 +16,7 @@
 #include "Common/Logging/Log.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/DriverDetails.h"
+#include "VideoCommon/ShaderArena.h"
 #include "VideoCommon/StutterStats.h"
 #include "VideoCommon/VideoBackendBase.h"
 
@@ -170,12 +171,19 @@ bool Compile(ShaderStage stage, ShaderCode* source, ShaderBinary* spirv)
   opts.dst = RSLC_DST_SPIRV;
   opts.err = err;
   opts.err_cap = sizeof(err);
-  err[0] = '\0';
   STUTTER_MARK(t);
-  if (!rslc_compile(text, text_len, rstage, &opts, &result))
+  /* in this thread's block, grown and compiled again where it was too small */
+  for (;;)
   {
-    ReportFailure(stage_name, text, text_len, err);
-    return false;
+    err[0] = '\0';
+    shader_arena_use(&opts);
+    if (rslc_compile(text, text_len, rstage, &opts, &result))
+      break;
+    if (!shader_arena_grow(err))
+    {
+      ReportFailure(stage_name, text, text_len, err);
+      return false;
+    }
   }
   STUTTER_EMIT_SINCE(t, result.spirv_len);
   /* the result block is kept whole: the words point into it */
