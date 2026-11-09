@@ -473,6 +473,7 @@ private:
     TextureConfig config;
     AbstractTexture* texture;
     AbstractFramebuffer* framebuffer;
+    size_t bytes; /* what the texture holds, roughly: what the pool's budget counts */
     int frameCount;
   };
 
@@ -564,6 +565,7 @@ private:
   TexPoolSlot* m_texture_pool = nullptr;
   size_t m_texture_pool_count = 0;
   size_t m_texture_pool_cap = 0;
+  size_t m_texture_pool_bytes = 0;
   u64 m_last_entry_id = 0;
 
   // Backup configuration values

@@ -67,6 +67,9 @@ static const u64 TEXHASH_INVALID = 0;
 // Sonic the Fighters (inside Sonic Gems Collection) loops a 64 frames animation
 static const int TEXTURE_KILL_THRESHOLD = 64;
 static const int TEXTURE_POOL_KILL_THRESHOLD = 3;
+/* textures unused past the threshold stay pooled while the pool holds less than this, the oldest
+ * dropped first: a config that comes back reuses one, where it would make a new one */
+static const size_t TEXTURE_POOL_BUDGET = 64u * 1024u * 1024u;
 
 static int xfb_count = 0;
 
@@ -594,17 +597,25 @@ void TextureCacheBase::Cleanup(int _frameCount)
     }
   }
 
-  size_t slot = 0;
-  while (slot < m_texture_pool_count)
+  size_t slot;
+  for (slot = 0; slot < m_texture_pool_count; slot++)
+    if (m_texture_pool[slot].frameCount == FRAMECOUNT_INVALID)
+      m_texture_pool[slot].frameCount = _frameCount;
+  /* over the budget, the oldest past the threshold go until it holds */
+  while (m_texture_pool_bytes > TEXTURE_POOL_BUDGET)
   {
-    TexPoolSlot* const pooled = &m_texture_pool[slot];
-    if (pooled->frameCount == FRAMECOUNT_INVALID)
-      pooled->frameCount = _frameCount;
-    /* the last one moves into the slot: looked at next */
-    if (_frameCount > TEXTURE_POOL_KILL_THRESHOLD + pooled->frameCount)
-      DropPooledTexture(slot);
-    else
-      slot++;
+    size_t oldest = m_texture_pool_count;
+    for (slot = 0; slot < m_texture_pool_count; slot++)
+    {
+      const TexPoolSlot* const pooled = &m_texture_pool[slot];
+      if (_frameCount > TEXTURE_POOL_KILL_THRESHOLD + pooled->frameCount &&
+          (oldest == m_texture_pool_count ||
+           pooled->frameCount < m_texture_pool[oldest].frameCount))
+        oldest = slot;
+    }
+    if (oldest == m_texture_pool_count)
+      break;
+    DropPooledTexture(oldest);
   }
 }
 
@@ -3178,6 +3189,7 @@ TextureCacheBase::TexPoolEntry TextureCacheBase::AllocateTexture(const TextureCo
     entry.texture = pooled->texture;
     entry.framebuffer = pooled->framebuffer;
     entry.frameCount = pooled->frameCount;
+    m_texture_pool_bytes -= pooled->bytes;
     m_texture_pool[slot] = m_texture_pool[--m_texture_pool_count];
     return entry;
   }
@@ -3205,6 +3217,22 @@ TextureCacheBase::TexPoolEntry TextureCacheBase::AllocateTexture(const TextureCo
 
   INCSTAT(g_stats.num_textures_created);
   return entry;
+}
+
+/* the bytes a texture of config holds, every level, layer and sample */
+static size_t PoolBytes(const TextureConfig& c)
+{
+  const u32 block = AbstractTexture::GetBlockSizeForFormat(c.format);
+  const size_t texel = AbstractTexture::GetTexelSizeForFormat(c.format);
+  size_t bytes = 0;
+  u32 level;
+  for (level = 0; level < c.levels; level++)
+  {
+    const u32 w = c.width >> level ? c.width >> level : 1;
+    const u32 h = c.height >> level ? c.height >> level : 1;
+    bytes += static_cast<size_t>((w + block - 1) / block) * ((h + block - 1) / block) * texel;
+  }
+  return bytes * c.layers * (c.samples ? c.samples : 1);
 }
 
 /* the config packed as its hash packs it */
@@ -3236,6 +3264,8 @@ void TextureCacheBase::PoolTexture(AbstractTexture* texture, AbstractFramebuffer
   pooled = &m_texture_pool[m_texture_pool_count++];
   pooled->config = texture->GetConfig();
   pooled->id = PoolId(pooled->config);
+  pooled->bytes = PoolBytes(pooled->config);
+  m_texture_pool_bytes += pooled->bytes;
   pooled->frameCount = FRAMECOUNT_INVALID;
   pooled->framebuffer = framebuffer;
   pooled->texture = texture;
@@ -3244,6 +3274,7 @@ void TextureCacheBase::PoolTexture(AbstractTexture* texture, AbstractFramebuffer
 void TextureCacheBase::DropPooledTexture(size_t slot)
 {
   TexPoolSlot* const pooled = &m_texture_pool[slot];
+  m_texture_pool_bytes -= pooled->bytes;
   /* the framebuffer before the texture it draws into */
   AbstractFramebufferDelete(pooled->framebuffer);
   AbstractTextureDelete(pooled->texture);
