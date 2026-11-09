@@ -6,6 +6,7 @@
 #include <array>
 #include <bitset>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <map>
@@ -125,18 +126,40 @@ public:
     // The number of elements in the allocated array. Each u32 contains 32 bits.
     VALID_BLOCK_ALLOC_ELEMENTS = VALID_BLOCK_MASK_SIZE / 32
   };
-  // Directly accessed by Jit64.
-  std::unique_ptr<u32[]> m_valid_block;
+  // Directly accessed by Jit64. 16 MiB from calloc, which the system hands over zeroed and
+  // untouched: only the pages a block sets are ever written.
+  u32* m_valid_block;
+  // the words Set has written since the last ClearAll: [m_lo, m_hi)
+  u32 m_lo;
+  u32 m_hi;
 
   ValidBlockBitSet()
+      : m_valid_block(static_cast<u32*>(calloc(VALID_BLOCK_ALLOC_ELEMENTS, sizeof(u32)))),
+        m_lo(VALID_BLOCK_ALLOC_ELEMENTS), m_hi(0)
   {
-    m_valid_block.reset(new u32[VALID_BLOCK_ALLOC_ELEMENTS]);
-    ClearAll();
   }
+  ~ValidBlockBitSet() { free(m_valid_block); }
+  ValidBlockBitSet(const ValidBlockBitSet&) = delete;
+  ValidBlockBitSet& operator=(const ValidBlockBitSet&) = delete;
 
-  void Set(u32 bit) { m_valid_block[bit / 32] |= 1u << (bit % 32); }
+  void Set(u32 bit)
+  {
+    const u32 word = bit / 32;
+    m_valid_block[word] |= 1u << (bit % 32);
+    if (word < m_lo)
+      m_lo = word;
+    if (word >= m_hi)
+      m_hi = word + 1;
+  }
   void Clear(u32 bit) { m_valid_block[bit / 32] &= ~(1u << (bit % 32)); }
-  void ClearAll() { memset(m_valid_block.get(), 0, sizeof(u32) * VALID_BLOCK_ALLOC_ELEMENTS); }
+  /* only the words set since the last: the rest are zero already */
+  void ClearAll()
+  {
+    if (m_lo < m_hi)
+      memset(m_valid_block + m_lo, 0, sizeof(u32) * (m_hi - m_lo));
+    m_lo = VALID_BLOCK_ALLOC_ELEMENTS;
+    m_hi = 0;
+  }
   bool Test(u32 bit) const { return (m_valid_block[bit / 32] & (1u << (bit % 32))) != 0; }
 };
 
