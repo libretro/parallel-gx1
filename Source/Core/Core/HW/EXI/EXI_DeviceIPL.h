@@ -18,6 +18,8 @@ class CEXIIPL : public IEXIDevice
 public:
   explicit CEXIIPL(Core::System& system);
   ~CEXIIPL() override;
+  CEXIIPL(const CEXIIPL&) = delete;
+  CEXIIPL& operator=(const CEXIIPL&) = delete;
 
   void SetCS(int cs) override;
   bool IsPresent() const override;
@@ -33,7 +35,7 @@ public:
   static bool HasIPLDump();
 
 private:
-  std::unique_ptr<u8[]> m_rom;
+  u8* m_rom = nullptr;
 
   // TODO these ranges are highly suspect
   enum

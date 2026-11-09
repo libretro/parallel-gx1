@@ -47,9 +47,17 @@ struct Cache
 
   // Note: This is only for performance purposes; this same data could be computed at runtime
   // from the tags and valid fields (and that's how it's done on the actual cache)
-  std::vector<u8> lookup_table{};
-  std::vector<u8> lookup_table_ex{};
-  std::vector<u8> lookup_table_vmem{};
+  // Each 32-byte block's way + 1, 0 where it is not cached: the tables, in one block of pages,
+  // start as the system's zeroed pages, touched only where a block is cached.
+  u8* lookup_table = nullptr;
+  u8* lookup_table_ex = nullptr;
+  u8* lookup_table_vmem = nullptr;
+  size_t m_lookup_size = 0;
+
+  Cache() = default;
+  ~Cache();
+  Cache(const Cache&) = delete;
+  Cache& operator=(const Cache&) = delete;
 
   void Store(Memory::MemoryManager& memory, u32 addr);
   void Invalidate(Memory::MemoryManager& memory, u32 addr);
@@ -65,6 +73,7 @@ struct Cache
 
   void Init(Memory::MemoryManager& memory);
   void Reset();
+  void ClearLookups(Memory::MemoryManager& memory);
 
   void DoState(Memory::MemoryManager& memory, PointerWrap& p);
 };

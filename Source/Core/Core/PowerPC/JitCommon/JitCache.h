@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "Common/MemoryUtil.h"
 #include "Common/RangeSet.h"
 #include "Core/HW/Memmap.h"
 #include "Core/PowerPC/Gekko.h"
@@ -100,19 +101,24 @@ public:
     // The number of elements in the allocated array. Each u32 contains 32 bits.
     VALID_BLOCK_ALLOC_ELEMENTS = VALID_BLOCK_MASK_SIZE / 32
   };
-  // Directly accessed by Jit64. 16 MiB from calloc, which the system hands over zeroed and
-  // untouched: only the pages a block sets are ever written.
+  // Directly accessed by Jit64. 16 MiB of pages the system hands over zeroed and untouched
+  // (calloc zeroes them itself where its heap has room): only the pages a block sets are written.
   u32* m_valid_block;
   // the words Set has written since the last ClearAll: [m_lo, m_hi)
   u32 m_lo;
   u32 m_hi;
 
   ValidBlockBitSet()
-      : m_valid_block(static_cast<u32*>(calloc(VALID_BLOCK_ALLOC_ELEMENTS, sizeof(u32)))),
+      : m_valid_block(static_cast<u32*>(
+            Common::AllocateMemoryPages(VALID_BLOCK_ALLOC_ELEMENTS * sizeof(u32)))),
         m_lo(VALID_BLOCK_ALLOC_ELEMENTS), m_hi(0)
   {
   }
-  ~ValidBlockBitSet() { free(m_valid_block); }
+  ~ValidBlockBitSet()
+  {
+    if (m_valid_block)
+      Common::FreeMemoryPages(m_valid_block, VALID_BLOCK_ALLOC_ELEMENTS * sizeof(u32));
+  }
   ValidBlockBitSet(const ValidBlockBitSet&) = delete;
   ValidBlockBitSet& operator=(const ValidBlockBitSet&) = delete;
 

@@ -9,6 +9,7 @@
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
+#include "Common/MemoryUtil.h"
 #include "Core/HW/MMIOHandlers.h"
 
 namespace MMIO
@@ -374,19 +375,21 @@ void WriteHandler<T>::InitializeInvalid()
   ResetMethod(InvalidWrite<T>());
 }
 
-/* The handler arrays, zeroed: every handler invalid until a method is registered. */
+/* The handler arrays, the system's zeroed pages: every handler invalid until a method is
+ * registered, and only the pages of registered ones touched. */
+template <typename H>
+static H* NewHandlers(u32 count)
+{
+  return static_cast<H*>(Common::AllocateMemoryPages(count * sizeof(H)));
+}
+
 Mapping::Mapping()
-    : m_read_handlers8(static_cast<ReadHandler<u8>*>(calloc(NUM_MMIOS, sizeof(ReadHandler<u8>)))),
-      m_read_handlers16(
-          static_cast<ReadHandler<u16>*>(calloc(NUM_MMIOS / 2, sizeof(ReadHandler<u16>)))),
-      m_read_handlers32(
-          static_cast<ReadHandler<u32>*>(calloc(NUM_MMIOS / 4, sizeof(ReadHandler<u32>)))),
-      m_write_handlers8(
-          static_cast<WriteHandler<u8>*>(calloc(NUM_MMIOS, sizeof(WriteHandler<u8>)))),
-      m_write_handlers16(
-          static_cast<WriteHandler<u16>*>(calloc(NUM_MMIOS / 2, sizeof(WriteHandler<u16>)))),
-      m_write_handlers32(
-          static_cast<WriteHandler<u32>*>(calloc(NUM_MMIOS / 4, sizeof(WriteHandler<u32>))))
+    : m_read_handlers8(NewHandlers<ReadHandler<u8>>(NUM_MMIOS)),
+      m_read_handlers16(NewHandlers<ReadHandler<u16>>(NUM_MMIOS / 2)),
+      m_read_handlers32(NewHandlers<ReadHandler<u32>>(NUM_MMIOS / 4)),
+      m_write_handlers8(NewHandlers<WriteHandler<u8>>(NUM_MMIOS)),
+      m_write_handlers16(NewHandlers<WriteHandler<u16>>(NUM_MMIOS / 2)),
+      m_write_handlers32(NewHandlers<WriteHandler<u32>>(NUM_MMIOS / 4))
 {
 }
 
@@ -400,7 +403,7 @@ static void FreeHandlers(H* handlers, u32 count)
   for (i = 0; i < count; i++)
     if (handlers[i].m_Method)
       handlers[i].Free();
-  free(handlers);
+  Common::FreeMemoryPages(handlers, count * sizeof(H));
 }
 
 Mapping::~Mapping()

@@ -14,6 +14,7 @@
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
+#include "Common/MemoryUtil.h"
 #include "Common/StringUtil.h"
 #include "Common/Swap.h"
 #include "Common/Timer.h"
@@ -98,8 +99,8 @@ void CEXIIPL::Descrambler(u8* data, u32 size)
 
 CEXIIPL::CEXIIPL(Core::System& system) : IEXIDevice(system)
 {
-  // Fill the ROM
-  m_rom = std::make_unique<u8[]>(ROM_SIZE);
+  // Fill the ROM: the system's zeroed pages, touched only where the dump or the fonts go
+  m_rom = static_cast<u8*>(Common::AllocateMemoryPages(ROM_SIZE));
 
   // Load whole ROM dump
   // Note: The Wii doesn't have a copy of the IPL, only fonts.
@@ -109,8 +110,8 @@ CEXIIPL::CEXIIPL(Core::System& system) : IEXIDevice(system)
     // Descramble the encrypted section (contains BS1 and BS2)
     Descrambler(&m_rom[0x100], 0x1afe00);
 
-    const std::string_view name{reinterpret_cast<char*>(m_rom.get()),
-                                strnlen(reinterpret_cast<char*>(m_rom.get()), 0x100)};
+    const std::string_view name{reinterpret_cast<char*>(m_rom),
+                                strnlen(reinterpret_cast<char*>(m_rom), 0x100)};
     INFO_LOG_FMT(BOOT, "Loaded bootrom: {}", name);
   }
   else
@@ -140,7 +141,11 @@ CEXIIPL::CEXIIPL(Core::System& system) : IEXIDevice(system)
   FixSRAMChecksums(&sram);
 }
 
-CEXIIPL::~CEXIIPL() = default;
+CEXIIPL::~CEXIIPL()
+{
+  if (m_rom)
+    Common::FreeMemoryPages(m_rom, ROM_SIZE);
+}
 
 void CEXIIPL::DoState(PointerWrap& p)
 {
