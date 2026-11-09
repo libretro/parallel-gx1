@@ -51,29 +51,10 @@ std::optional<std::string> Metal::VideoBackend::GetWarningMessage() const
   return std::nullopt;
 }
 
-static bool WindowSystemTypeSupportsMetal(WindowSystemType type)
-{
-  switch (type)
-  {
-  case WindowSystemType::MacOS:
-  case WindowSystemType::Headless:
-    return true;
-  default:
-    return false;
-  }
-}
-
-bool Metal::VideoBackend::Initialize(const WindowSystemInfo& wsi)
+bool Metal::VideoBackend::Initialize(float backbuffer_scale)
 {
   @autoreleasepool
   {
-    const bool surface_ok = wsi.type == WindowSystemType::Headless || wsi.render_surface;
-    if (!WindowSystemTypeSupportsMetal(wsi.type) || !surface_ok)
-    {
-      PanicAlertFmt("Bad WindowSystemInfo for Metal renderer.");
-      return false;
-    }
-
     auto devs = Util::GetAdapterList();
     if (devs.empty())
     {
@@ -117,10 +98,8 @@ bool Metal::VideoBackend::Initialize(const WindowSystemInfo& wsi)
 
     UpdateActiveConfig();
 
-    MRCOwned<CAMetalLayer*> layer = MRCRetain(static_cast<CAMetalLayer*>(wsi.render_surface));
-    [layer setDevice:adapter];
-    if (Util::ToAbstract([layer pixelFormat]) == AbstractTextureFormat::Undefined)
-      [layer setPixelFormat:MTLPixelFormatBGRA8Unorm];
+    /* no layer: the frontend presents */
+    MRCOwned<CAMetalLayer*> layer;
 
     ObjectCache::Initialize(std::move(adapter));
     g_state_tracker = std::make_unique<StateTracker>();
@@ -139,7 +118,7 @@ void Metal::VideoBackend::Shutdown()
   ObjectCache::Shutdown();
 }
 
-void Metal::VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
+void Metal::VideoBackend::InitBackendInfo()
 {
   @autoreleasepool
   {
@@ -155,32 +134,4 @@ void Metal::VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
       Util::PopulateBackendInfoFeatures(g_Config, &g_backend_info, adapters[index]);
     }
   }
-}
-
-void Metal::VideoBackend::PrepareWindow(WindowSystemInfo& wsi)
-{
-#if TARGET_OS_OSX
-  if (wsi.type != WindowSystemType::MacOS)
-    return;
-  NSView* view = static_cast<NSView*>(wsi.render_surface);
-  CAMetalLayer* layer = [CAMetalLayer layer];
-
-  Util::PopulateBackendInfo(&g_backend_info);
-
-  if (g_backend_info.bSupportsHDROutput && g_Config.bHDR)
-  {
-    [layer setWantsExtendedDynamicRangeContent:YES];
-    [layer setPixelFormat:MTLPixelFormatRGBA16Float];
-
-    const CFStringRef name = kCGColorSpaceExtendedLinearSRGB;
-    CGColorSpaceRef colorspace = CGColorSpaceCreateWithName(name);
-    [layer setColorspace:colorspace];
-    CGColorSpaceRelease(colorspace);
-  }
-
-  [view setWantsLayer:YES];
-  [view setLayer:layer];
-
-  wsi.render_surface = layer;
-#endif
 }

@@ -20,7 +20,6 @@
 #include "Common/HookableEvent.h"
 
 struct BootParameters;
-struct WindowSystemInfo;
 
 namespace Core
 {
@@ -119,7 +118,7 @@ private:
 
 // These three are normally called from the Host thread. However, they can be called from any thread
 // that isn't launched by the emulator core.
-bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi);
+bool Init(Core::System& system, std::unique_ptr<BootParameters> boot);
 void Stop(Core::System& system);
 void Shutdown(Core::System& system);
 
@@ -188,12 +187,11 @@ void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 
 void UpdateTitle(Core::System& system);
 
-void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot, WindowSystemInfo wsi);
+void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot);
 void SingleCorePostRunShutdown();
 extern std::unique_ptr<BootParameters> g_boot_params;
 // Starts EmuThread on its own thread (dual core); s_emu_thread is its handle.
-bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
-                    const WindowSystemInfo& wsi);
+bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot);
 extern sthread_t* s_emu_thread;
 extern bool s_frame_step;
 

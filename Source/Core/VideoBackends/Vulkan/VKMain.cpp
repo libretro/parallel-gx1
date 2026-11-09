@@ -18,21 +18,16 @@
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/VideoConfig.h"
 
-#if defined(VK_USE_PLATFORM_METAL_EXT)
-#include <objc/message.h>
-#endif
-
 namespace Vulkan
 {
-void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
+void VideoBackend::InitBackendInfo()
 {
   VulkanContext::PopulateBackendInfo(&g_backend_info);
 
   if (LoadVulkanLibrary())
   {
     u32 vk_api_version = 0;
-    VkInstance temp_instance = VulkanContext::CreateVulkanInstance(WindowSystemType::Headless,
-                                                                   false, false, &vk_api_version);
+    VkInstance temp_instance = VulkanContext::CreateVulkanInstance(false, false, &vk_api_version);
     if (temp_instance)
     {
       if (LoadVulkanInstanceFunctions(temp_instance))
@@ -71,7 +66,7 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
 
 /* The frontend owns the instance, the device and the window:
  * Libretro::Video brings the backend up on the device it negotiated. */
-bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
+bool VideoBackend::Initialize(float backbuffer_scale)
 {
   return false;
 }
@@ -94,53 +89,5 @@ void VideoBackend::Shutdown()
   delete g_vulkan_context;
   g_vulkan_context = nullptr;
   UnloadVulkanLibrary();
-}
-
-void VideoBackend::PrepareWindow(WindowSystemInfo& wsi)
-{
-#if defined(VK_USE_PLATFORM_METAL_EXT)
-  // We only need to manually create the CAMetalLayer on macOS.
-  if (wsi.type != WindowSystemType::MacOS)
-    return;
-
-  // This is kinda messy, but it avoids having to write Objective C++ just to create a metal layer.
-  id view = reinterpret_cast<id>(wsi.render_surface);
-  Class clsCAMetalLayer = objc_getClass("CAMetalLayer");
-  if (!clsCAMetalLayer)
-  {
-    ERROR_LOG_FMT(VIDEO, "Failed to get CAMetalLayer class.");
-    return;
-  }
-
-  // [CAMetalLayer layer]
-  id layer = reinterpret_cast<id (*)(Class, SEL)>(objc_msgSend)(objc_getClass("CAMetalLayer"),
-                                                                sel_getUid("layer"));
-  if (!layer)
-  {
-    ERROR_LOG_FMT(VIDEO, "Failed to create Metal layer.");
-    return;
-  }
-
-  // [view setWantsLayer:YES]
-  reinterpret_cast<void (*)(id, SEL, BOOL)>(objc_msgSend)(view, sel_getUid("setWantsLayer:"), YES);
-
-  // [view setLayer:layer]
-  reinterpret_cast<void (*)(id, SEL, id)>(objc_msgSend)(view, sel_getUid("setLayer:"), layer);
-
-  // NSScreen* screen = [NSScreen mainScreen]
-  id screen = reinterpret_cast<id (*)(Class, SEL)>(objc_msgSend)(objc_getClass("NSScreen"),
-                                                                 sel_getUid("mainScreen"));
-
-  // CGFloat factor = [screen backingScaleFactor]
-  double factor =
-      reinterpret_cast<double (*)(id, SEL)>(objc_msgSend)(screen, sel_getUid("backingScaleFactor"));
-
-  // layer.contentsScale = factor
-  reinterpret_cast<void (*)(id, SEL, double)>(objc_msgSend)(layer, sel_getUid("setContentsScale:"),
-                                                            factor);
-
-  // Store the layer pointer, that way MoltenVK doesn't call [NSView layer] outside the main thread.
-  wsi.render_surface = layer;
-#endif
 }
 }  // namespace Vulkan

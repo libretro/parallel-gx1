@@ -27,12 +27,10 @@ static thread_local ciface::InputChannel tls_input_channel = ciface::InputChanne
 
 static thread_local bool tls_is_updating_devices = false;
 
-void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
+void ControllerInterface::Initialize()
 {
   if (IsInit())
     return;
-
-  m_wsi = wsi;
 
   retro_atomic_store_release_int(&m_populating_devices_counter, 1);
 
@@ -60,46 +58,13 @@ void ControllerInterface::Initialize(const WindowSystemInfo& wsi)
     InvokeDevicesChangedCallbacks();
 }
 
-void ControllerInterface::ChangeWindow(void* hwnd, WindowChangeReason reason)
-{
-  if (!IsInit())
-    return;
-
-  if (m_wsi.render_window == hwnd)
-    return;
-
-  // This shouldn't use render_surface so no need to update it.
-  m_wsi.render_window = hwnd;
-
-  // No need to re-add devices if this is an application exit request
-  if (reason == WindowChangeReason::Exit)
-    ClearDevices();
-  else
-    RefreshDevices(RefreshReason::WindowChangeOnly);
-}
-
-void ControllerInterface::RefreshDevices(RefreshReason reason)
+void ControllerInterface::RefreshDevices()
 {
   if (!IsInit())
     return;
 
   // Backends with a hotplug thread may add or remove devices meanwhile; every change is
   // one swap of the whole list, so each lands complete, before or after this refresh's.
-  // If only the window changed, avoid removing and re-adding all devices.
-  // Instead only refresh devices that require the window handle.
-  if (reason == RefreshReason::WindowChangeOnly)
-  {
-    retro_atomic_fetch_add_int(&m_populating_devices_counter, 1);
-
-    for (auto& backend : m_input_backends)
-      backend->HandleWindowChange();
-
-    if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1)
-      InvokeDevicesChangedCallbacks();
-
-    return;
-  }
-
   retro_atomic_fetch_add_int(&m_populating_devices_counter, 1);
 
   // Make sure shared_ptr<Device> objects are released before repopulating.
@@ -315,11 +280,6 @@ void ControllerInterface::SetCurrentInputChannel(ciface::InputChannel input_chan
 ciface::InputChannel ControllerInterface::GetCurrentInputChannel()
 {
   return tls_input_channel;
-}
-
-WindowSystemInfo ControllerInterface::GetWindowSystemInfo() const
-{
-  return m_wsi;
 }
 
 void ControllerInterface::SetAspectRatioAdjustment(float value)

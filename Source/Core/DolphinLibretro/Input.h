@@ -1,7 +1,6 @@
 #pragma once
 
 #include <libretro.h>
-#include "Common/WindowSystemInfo.h"
 
 // only 4 support sensors, but the array may be upto 8 if connected GC controllers
 #define NUM_CONTROLLERS_FOR_SENSORS 8
@@ -47,7 +46,7 @@ extern double g_point[NUM_CONTROLLERS_FOR_SENSORS][4];
 
 static retro_sensor_interface sensor_interface = {0};
 
-void Init(const WindowSystemInfo& wsi);
+void Init();
 void InitStage2();
 void InitSensors();
 // VR: player 1's Wiimote takes its motion and pointing from the right VR controller.

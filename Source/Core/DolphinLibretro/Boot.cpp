@@ -715,8 +715,7 @@ bool retro_load_game(const struct retro_game_info* game)
    * no geometry shader stage, and the ubershader ones are the triangles' (a third as many). */
   Config::SetBase(Config::GFX_PREFER_VS_FOR_LINE_POINT_EXPANSION,
                   Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_VULKAN);
-  WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
-  VideoBackendBase::PopulateBackendInfo(wsi);
+  VideoBackendBase::PopulateBackendInfo();
   NOTICE_LOG_FMT(VIDEO, "Using GFX backend: {}", Config::Get(Config::MAIN_GFX_BACKEND));
 
   std::vector<std::string> normalized_game_paths;
@@ -752,7 +751,7 @@ bool retro_load_game(const struct retro_game_info* game)
   for (auto& normalized_game_path : normalized_game_paths)
     Libretro::disk_paths.push_back(normalized_game_path);
 
-  Libretro::Input::Init(wsi);
+  Libretro::Input::Init();
 
   // for Wii
   if (Libretro::Input::g_has_microphone_support)
@@ -797,7 +796,7 @@ bool retro_load_game(const struct retro_game_info* game)
   if (boot_params)
     Libretro::SetRegionFreeFallback(*boot_params);
 
-  if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot_params), wsi))
+  if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot_params)))
   {
     ERROR_LOG_FMT(BOOT, "Could not boot {}", game->path);
     return false;

@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "Common/CommonTypes.h"
-#include "Common/WindowSystemInfo.h"
 
 class GLContext
 {
@@ -44,11 +43,11 @@ public:
 
   // Creates an instance of GLContext specific to the platform we are running on.
   // If successful, the context is made current on the calling thread.
-  static std::unique_ptr<GLContext> Create(const WindowSystemInfo& wsi, bool stereo = false,
-                                           bool core = true, bool prefer_gles = false);
+  static std::unique_ptr<GLContext> Create(bool stereo = false, bool core = true,
+                                           bool prefer_gles = false);
 
 protected:
-  virtual bool Initialize(const WindowSystemInfo& wsi, bool stereo, bool core);
+  virtual bool Initialize(bool stereo, bool core);
 
   Mode m_opengl_mode = Mode::Detect;
 

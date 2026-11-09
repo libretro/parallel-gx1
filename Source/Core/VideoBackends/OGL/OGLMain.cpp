@@ -73,10 +73,10 @@ std::string VideoBackend::GetDisplayName() const
     return _trans("OpenGL");
 }
 
-void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
+void VideoBackend::InitBackendInfo()
 {
   std::unique_ptr<GLContext> temp_gl_context =
-      GLContext::Create(wsi, g_Config.stereo_mode == StereoMode::QuadBuffer, true,
+      GLContext::Create(g_Config.stereo_mode == StereoMode::QuadBuffer, true,
                         Config::Get(Config::GFX_PREFER_GLES));
 
   if (!temp_gl_context)
@@ -191,10 +191,10 @@ bool VideoBackend::FillBackendInfo(GLContext* context)
   return true;
 }
 
-bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
+bool VideoBackend::Initialize(float backbuffer_scale)
 {
   std::unique_ptr<GLContext> main_gl_context =
-      GLContext::Create(wsi, g_Config.stereo_mode == StereoMode::QuadBuffer, true,
+      GLContext::Create(g_Config.stereo_mode == StereoMode::QuadBuffer, true,
                         Config::Get(Config::GFX_PREFER_GLES));
   if (!main_gl_context)
     return false;
@@ -202,7 +202,7 @@ bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
   if (!FillBackendInfo(main_gl_context.get()))
     return false;
 
-  OGLGfx* const gfx = new OGLGfx(std::move(main_gl_context), wsi.render_surface_scale);
+  OGLGfx* const gfx = new OGLGfx(std::move(main_gl_context), backbuffer_scale);
   ProgramShaderCache::Init();
   g_sampler_cache = new SamplerCache();
 

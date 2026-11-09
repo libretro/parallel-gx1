@@ -245,12 +245,12 @@ u32 VulkanContext::GetInstanceAPIVersion()
   return getAPIVersion();
 }
 
-VkInstance VulkanContext::CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils,
+VkInstance VulkanContext::CreateVulkanInstance(bool enable_debug_utils,
                                                bool enable_validation_layer,
                                                u32* out_vk_api_version)
 {
   std::vector<const char*> enabled_extensions;
-  if (!SelectInstanceExtensions(&enabled_extensions, wstype, enable_debug_utils,
+  if (!SelectInstanceExtensions(&enabled_extensions, enable_debug_utils,
                                 enable_validation_layer))
     return VK_NULL_HANDLE;
 
@@ -294,7 +294,7 @@ VkInstance VulkanContext::CreateVulkanInstance(WindowSystemType wstype, bool ena
 }
 
 bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension_list,
-                                             WindowSystemType wstype, bool enable_debug_utils,
+                                             bool enable_debug_utils,
                                              bool validation_layer_enabled)
 {
   u32 extension_count = 0;
@@ -364,44 +364,8 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
     return false;
   };
 
-  // Common extensions
-  if (wstype != WindowSystemType::Headless && !AddExtension(VK_KHR_SURFACE_EXTENSION_NAME, true))
-  {
-    return false;
-  }
-
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-  if (wstype == WindowSystemType::Windows &&
-      !AddExtension(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, true))
-  {
-    return false;
-  }
-#endif
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-  if (wstype == WindowSystemType::X11 && !AddExtension(VK_KHR_XLIB_SURFACE_EXTENSION_NAME, true))
-  {
-    return false;
-  }
-#endif
-#if defined(VK_USE_PLATFORM_ANDROID_KHR)
-  if (wstype == WindowSystemType::Android &&
-      !AddExtension(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, true))
-  {
-    return false;
-  }
-#endif
-#if defined(VK_USE_PLATFORM_METAL_EXT)
-  if (wstype == WindowSystemType::MacOS && !AddExtension(VK_EXT_METAL_SURFACE_EXTENSION_NAME, true))
-  {
-    return false;
-  }
-#endif
-
+  /* no surface: the frontend presents */
   AddExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, false);
-  if (wstype != WindowSystemType::Headless)
-  {
-    AddExtension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, false);
-  }
 
   // VK_EXT_debug_utils
   if (AddExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, false))

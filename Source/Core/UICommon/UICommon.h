@@ -12,7 +12,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/HookableEvent.h"
 
-struct WindowSystemInfo;
 
 namespace UICommon
 {

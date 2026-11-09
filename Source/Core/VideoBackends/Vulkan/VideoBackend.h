@@ -11,13 +11,12 @@ namespace Vulkan
 class VideoBackend : public VideoBackendBase
 {
 public:
-  bool Initialize(const WindowSystemInfo& wsi) override;
+  bool Initialize(float backbuffer_scale) override;
   void Shutdown() override;
 
   std::string GetConfigName() const override { return CONFIG_NAME; }
   std::string GetDisplayName() const override { return _trans("Vulkan"); }
-  void InitBackendInfo(const WindowSystemInfo& wsi) override;
-  void PrepareWindow(WindowSystemInfo& wsi) override;
+  void InitBackendInfo() override;
 
   static constexpr const char* CONFIG_NAME = "Vulkan";
 };

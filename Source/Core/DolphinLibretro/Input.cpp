@@ -598,7 +598,7 @@ static void RemoveDevicesForPort(unsigned port)
 }
 #endif
 
-void Init(const WindowSystemInfo& wsi)
+void Init()
 {
   if (!environ_cb(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble))
   {
@@ -629,7 +629,7 @@ void Init(const WindowSystemInfo& wsi)
     WARN_LOG_FMT(BOOT, "Microphone interface NOT available");
   }
 
-  g_controller_interface.Initialize(wsi);
+  g_controller_interface.Initialize();
   g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_KEYBOARD, 0));
 
   GCAdapter::Init();

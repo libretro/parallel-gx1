@@ -125,9 +125,6 @@ static std::deque<std::unique_ptr<HostJob>> s_host_jobs_ready;
 static thread_local bool tls_is_cpu_thread = false;
 static thread_local bool tls_is_gpu_thread = false;
 
-void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
-               WindowSystemInfo wsi);
-
 // Display messages and return values
 
 // Formatted stop message
@@ -176,7 +173,7 @@ bool WantsDeterminism()
 
 // This is called from the GUI thread. See the booting call schedule in
 // BootManager.cpp
-bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
+bool Init(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
   if (s_emu_thread)
   {
@@ -393,8 +390,7 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
 
 // Returns a RAII object for video backend initialization and deinitialization.
 // Returns nullptr on failure.
-[[nodiscard]] static auto GetInitializedVideoGuard(Core::System& system,
-                                                   const WindowSystemInfo& wsi)
+[[nodiscard]] static auto GetInitializedVideoGuard(Core::System& system)
 {
   using GuardType = Common::ScopeGuard<Common::MoveOnlyFunction<void()>>;
 
@@ -421,20 +417,18 @@ struct EmuThreadArgs
 {
   Core::System* system;
   std::unique_ptr<BootParameters> boot;
-  WindowSystemInfo wsi;
 };
 
 void EmuThreadEntry(void* data)
 {
   std::unique_ptr<EmuThreadArgs> args(static_cast<EmuThreadArgs*>(data));
-  EmuThread(*args->system, std::move(args->boot), args->wsi);
+  EmuThread(*args->system, std::move(args->boot));
 }
 }  // namespace
 
-bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
-                    const WindowSystemInfo& wsi)
+bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
-  EmuThreadArgs* const args = new EmuThreadArgs{&system, std::move(boot), wsi};
+  EmuThreadArgs* const args = new EmuThreadArgs{&system, std::move(boot)};
   s_emu_thread = sthread_create(EmuThreadEntry, args);
   if (s_emu_thread)
     return true;
@@ -445,8 +439,7 @@ bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
 // Initialize and create emulation thread
 // Call browser: Init():s_emu_thread().
 // See the BootManager.cpp file description for a complete call schedule.
-void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
-               WindowSystemInfo wsi)
+void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
   NotifyStateChanged(State::Starting);
   Common::ScopeGuard flag_guard{[] {
@@ -467,10 +460,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
   // If settings have changed since the previous run, notify callbacks.
   CPUThreadConfigCallback::CheckForConfigChanges();
 
-  // Switch the window used for inputs to the render window. This way, the cursor position
-  // is relative to the render window, instead of the main window.
   ASSERT(g_controller_interface.IsInit());
-  g_controller_interface.ChangeWindow(wsi.render_window);
 
   Pad::LoadConfig();
   Pad::LoadGBAConfig();
@@ -525,7 +515,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
 
   // In single-core mode: This holds a video backend shutdown function.
   // In dual-core mode: This holds a GPU thread stopping function (which does the backend shutdown).
-  const auto video_guard = GetInitializedVideoGuard(system, wsi);
+  const auto video_guard = GetInitializedVideoGuard(system);
   if (!video_guard)
   {
     PanicAlertFmt("Failed to initialize video backend!");

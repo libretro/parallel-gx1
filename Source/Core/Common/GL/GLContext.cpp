@@ -12,7 +12,7 @@ const std::array<std::pair<int, int>, 9> GLContext::s_desktop_opengl_versions = 
 
 GLContext::~GLContext() = default;
 
-bool GLContext::Initialize(const WindowSystemInfo& wsi, bool stereo, bool core)
+bool GLContext::Initialize(bool stereo, bool core)
 {
   return false;
 }
@@ -53,20 +53,15 @@ void* GLContext::GetFuncAddress(const std::string& name)
   return nullptr;
 }
 
-std::unique_ptr<GLContext> GLContext::Create(const WindowSystemInfo& wsi, bool stereo, bool core,
-                                             bool prefer_gles)
+std::unique_ptr<GLContext> GLContext::Create(bool stereo, bool core, bool prefer_gles)
 {
-  std::unique_ptr<GLContext> context;
-  if (wsi.type == WindowSystemType::Libretro)
-    context = std::make_unique<GLContextLR>();
-  if (!context)
-    return nullptr;
+  std::unique_ptr<GLContext> context = std::make_unique<GLContextLR>();
 
   // Option to prefer GLES on desktop platforms, useful for testing.
   if (prefer_gles)
     context->m_opengl_mode = Mode::OpenGLES;
 
-  if (!context->Initialize(wsi, stereo, core))
+  if (!context->Initialize(stereo, core))
     return nullptr;
 
   return context;

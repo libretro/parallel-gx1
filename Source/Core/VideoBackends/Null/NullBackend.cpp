@@ -20,7 +20,7 @@
 
 namespace Null
 {
-void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
+void VideoBackend::InitBackendInfo()
 {
   g_backend_info.api_type = APIType::Nothing;
   g_backend_info.MaxTextureSize = 16384;
@@ -63,7 +63,7 @@ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
   g_backend_info.AAModes = {1};
 }
 
-bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
+bool VideoBackend::Initialize(float backbuffer_scale)
 {
   AbstractGfx* const gfx = new NullGfx();
   VertexManagerBase* const vertex_manager = new VertexManager();

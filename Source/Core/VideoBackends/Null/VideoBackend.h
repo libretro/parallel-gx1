@@ -10,12 +10,12 @@ namespace Null
 class VideoBackend final : public VideoBackendBase
 {
 public:
-  bool Initialize(const WindowSystemInfo& wsi) override;
+  bool Initialize(float backbuffer_scale) override;
   void Shutdown() override;
 
   std::string GetConfigName() const override { return CONFIG_NAME; }
   std::string GetDisplayName() const override;
-  void InitBackendInfo(const WindowSystemInfo& wsi) override;
+  void InitBackendInfo() override;
 
   static constexpr const char* CONFIG_NAME = "Null";
 };

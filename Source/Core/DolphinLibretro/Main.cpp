@@ -324,7 +324,6 @@ void retro_run(void)
   if (Core::GetState(system) == Core::State::Starting &&
       !Libretro::g_emuthread_launched)
   {
-    WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
     /* The video backend did not come up (the log says why): booting would
      * draw through it at once, so stop here instead. */
     if (!g_vertex_manager)
@@ -337,7 +336,7 @@ void retro_run(void)
     }
     if (system.IsDualCoreMode())
     {
-      Core::StartEmuThread(system, std::move(Core::g_boot_params), wsi);
+      Core::StartEmuThread(system, std::move(Core::g_boot_params));
 
       /* until the CPU thread has reached its run loop, this thread runs
        * the GPU: what the CPU thread does first may wait on it, as the
@@ -348,7 +347,7 @@ void retro_run(void)
       Libretro::Video::D3D11Unlock();
     }
     else
-      Core::EmuThread(system, std::move(Core::g_boot_params), wsi);
+      Core::EmuThread(system, std::move(Core::g_boot_params));
 
     Libretro::g_emuthread_launched = true;
 

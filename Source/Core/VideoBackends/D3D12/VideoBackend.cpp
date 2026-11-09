@@ -35,7 +35,7 @@ std::string VideoBackend::GetDisplayName() const
   return "Direct3D 12";
 }
 
-void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
+void VideoBackend::InitBackendInfo()
 {
   FillBackendInfo();
 }
@@ -105,7 +105,7 @@ void VideoBackend::FillBackendInfo()
 
 /* The frontend owns the device and the window: Libretro::Video brings
  * the backend up on the device and queue it is handed. */
-bool VideoBackend::Initialize(const WindowSystemInfo& wsi)
+bool VideoBackend::Initialize(float backbuffer_scale)
 {
   return false;
 }

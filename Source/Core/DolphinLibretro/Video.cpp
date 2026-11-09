@@ -369,8 +369,7 @@ bool SetHWRender(retro_hw_context_type type, const int version_major, const int 
 #ifdef _WIN32
 /* The Direct3D 11 backend on the frontend's device, with the context
  * lock held. */
-static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, const WindowSystemInfo& wsi,
-                              int efbScale)
+static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, int efbScale)
 {
   DX11::D3D::device = d3d->device;
   DX11::D3D::context = d3d->context;
@@ -405,7 +404,7 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, const Window
   }
 
   /* made in this order, each taken by InitializeShared */
-  AbstractGfx* const gfx = new DX11::Gfx(output, wsi.render_surface_scale);
+  AbstractGfx* const gfx = new DX11::Gfx(output, static_cast<float>(efbScale));
   VertexManagerBase* const vertex_manager = new DX11::VertexManager();
   PerfQueryBase* const perf_query = new DX11::PerfQuery();
   BoundingBox* const bounding_box = new DX11::D3DBoundingBox();
@@ -444,11 +443,8 @@ void ContextReset(void)
 #ifdef _WIN32
   if (hw_render.context_type == RETRO_HW_CONTEXT_D3D11)
   {
-    WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
     int efbScale = Libretro::Options::GetCached<int>(
       Libretro::Options::gfx_settings::EFB_SCALE, 1);
-    wsi.render_surface_scale = efbScale;
-    g_video_backend->PrepareWindow(wsi);
 
     retro_hw_render_interface_d3d11* d3d;
     if (!Libretro::environ_cb(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE, (void**)&d3d) || !d3d)
@@ -467,17 +463,15 @@ void ContextReset(void)
     s_d3d11_v2 = d3d->interface_version >= RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2 ? d3d : nullptr;
     s_d3d11_depth = 0;
     D3D11Lock();
-    ContextResetD3D11(d3d, wsi, efbScale);
+    ContextResetD3D11(d3d, efbScale);
     D3D11Unlock();
     return;
   }
 
   if (hw_render.context_type == RETRO_HW_CONTEXT_D3D12)
   {
-    WindowSystemInfo wsi(WindowSystemType::Libretro, nullptr, nullptr, nullptr);
     int efbScale = Libretro::Options::GetCached<int>(
       Libretro::Options::gfx_settings::EFB_SCALE, 1);
-    wsi.render_surface_scale = efbScale;
 
     retro_hw_render_interface_d3d12* d3d12;
     if (!Libretro::environ_cb(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE, (void**)&d3d12) || !d3d12)
@@ -536,7 +530,7 @@ void ContextReset(void)
       return;
     }
 
-    AbstractGfx* const gfx = new DX12::Gfx(output, wsi.render_surface_scale);
+    AbstractGfx* const gfx = new DX12::Gfx(output, static_cast<float>(efbScale));
     VertexManagerBase* const vertex_manager = new DX12::VertexManager();
     PerfQueryBase* const perf_query = new DX12::PerfQuery();
     BoundingBox* const bounding_box = new DX12::D3D12BoundingBox();
@@ -559,13 +553,8 @@ void ContextReset(void)
 
 bool Video_InitializeBackend()
 {
-  WindowSystemInfo wsi = {};
-  wsi.type = WindowSystemType::Libretro;
-  int efbScale = Libretro::Options::GetCached<int>(
-    Libretro::Options::gfx_settings::EFB_SCALE, 1);
-  wsi.render_surface_scale = efbScale;
-
-  g_video_backend->PrepareWindow(wsi);
+  const float efbScale = static_cast<float>(Libretro::Options::GetCached<int>(
+    Libretro::Options::gfx_settings::EFB_SCALE, 1));
 
 #ifdef HAS_VULKAN
   if (hw_render.context_type == RETRO_HW_CONTEXT_VULKAN)
@@ -613,7 +602,7 @@ bool Video_InitializeBackend()
       return false;
     }
 
-    AbstractGfx* const gfx = new Vulkan::VKGfx(output, wsi.render_surface_scale);
+    AbstractGfx* const gfx = new Vulkan::VKGfx(output, efbScale);
     VertexManagerBase* const vertex_manager = new Vulkan::VertexManager();
     PerfQueryBase* const perf_query = new Vulkan::PerfQuery();
     BoundingBox* const bounding_box = new Vulkan::VKBoundingBox();
@@ -628,7 +617,7 @@ bool Video_InitializeBackend()
   }
 
   // this calls InitializeGLExtensions, FillBackendInfo and InitializeShared internally
-  return g_video_backend->Initialize(wsi);
+  return g_video_backend->Initialize(efbScale);
 }
 
 void ContextDestroy(void)

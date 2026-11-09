@@ -46,8 +46,7 @@
 namespace BootManager
 {
 // Boot the ISO or file
-bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
-              const WindowSystemInfo& wsi)
+bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
   if (!boot)
     return false;
@@ -207,11 +206,10 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
         std::make_unique<BootParameters>(
             BootParameters::IPL{StartUp.m_region,
                                 std::move(std::get<BootParameters::Disc>(boot->parameters))},
-            std::move(boot->boot_session_data)),
-        wsi);
+            std::move(boot->boot_session_data)));
   }
 
-  return Core::Init(system, std::move(boot), wsi);
+  return Core::Init(system, std::move(boot));
 }
 
 void RestoreConfig()

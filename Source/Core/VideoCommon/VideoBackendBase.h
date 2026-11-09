@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/WindowSystemInfo.h"
 #include "VideoCommon/PerfQueryBase.h"
 
 namespace MMIO
@@ -33,17 +32,13 @@ class VideoBackendBase
 {
 public:
   virtual ~VideoBackendBase() {}
-  virtual bool Initialize(const WindowSystemInfo& wsi) = 0;
+  virtual bool Initialize(float backbuffer_scale) = 0;
   virtual void Shutdown() = 0;
 
   virtual std::string GetConfigName() const = 0;
   virtual std::string GetDisplayName() const { return GetConfigName(); }
-  virtual void InitBackendInfo(const WindowSystemInfo& wsi) = 0;
+  virtual void InitBackendInfo() = 0;
   virtual std::optional<std::string> GetWarningMessage() const { return {}; }
-
-  // Prepares a native window for rendering. This is called on the main thread, or the
-  // thread which owns the window.
-  virtual void PrepareWindow(WindowSystemInfo& wsi) {}
 
   static std::string BadShaderFilename(const char* shader_stage, int counter);
 
@@ -58,7 +53,7 @@ public:
   static void ActivateBackend(const std::string& name);
 
   // Fills the backend_info fields with the capabilities of the selected backend/device.
-  static void PopulateBackendInfo(const WindowSystemInfo& wsi);
+  static void PopulateBackendInfo();
 
   // Wrapper function which pushes the event to the GPU thread.
   void DoState(PointerWrap& p);

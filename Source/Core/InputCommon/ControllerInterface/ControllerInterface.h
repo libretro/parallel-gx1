@@ -8,7 +8,6 @@
 
 #include "Common/HookableEvent.h"
 #include "Common/Matrix.h"
-#include "Common/WindowSystemInfo.h"
 
 #include "InputCommon/ControllerInterface/CoreDevice.h"
 #include "InputCommon/ControllerInterface/InputBackend.h"
@@ -46,28 +45,10 @@ enum class InputChannel
 class ControllerInterface : public ciface::Core::DeviceContainer
 {
 public:
-  enum class WindowChangeReason
-  {
-    // Application is shutting down
-    Exit,
-    Other
-  };
-
-  enum class RefreshReason
-  {
-    // Only the window changed.
-    WindowChangeOnly,
-    // User requested, or any other internal reason (e.g. init).
-    // The window might have changed anyway.
-    Other
-  };
-
   ControllerInterface() {}
-  void Initialize(const WindowSystemInfo& wsi);
-  // Only call from one thread at a time.
-  void ChangeWindow(void* hwnd, WindowChangeReason reason = WindowChangeReason::Other);
+  void Initialize();
   // Can be called by any thread at any time (when initialized).
-  void RefreshDevices(RefreshReason reason = RefreshReason::Other);
+  void RefreshDevices();
   void Shutdown();
   bool AddDevice(std::shared_ptr<ciface::Core::Device> device);
   // Removes all the devices the function returns true to.
@@ -100,8 +81,6 @@ public:
   static void SetCurrentInputChannel(ciface::InputChannel);
   static ciface::InputChannel GetCurrentInputChannel();
 
-  WindowSystemInfo GetWindowSystemInfo() const;
-
 private:
   void ClearDevices();
 
@@ -112,7 +91,6 @@ private:
   retro_atomic_int_t m_is_init{};
   // Populations in progress on any thread; the last to finish runs the callbacks.
   retro_atomic_int_t m_populating_devices_counter{};
-  WindowSystemInfo m_wsi;
   retro_atomic_int_t m_aspect_ratio_adjustment{0x3f800000}; /* the bits of a float, 1.0f */
   retro_atomic_int_t m_requested_mouse_centering{};
 

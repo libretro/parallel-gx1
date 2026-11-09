@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/WindowSystemInfo.h"
 #include "VideoBackends/Vulkan/Constants.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -66,7 +65,7 @@ public:
   static u32 GetInstanceAPIVersion();
 
   // Helper method to create a Vulkan instance.
-  static VkInstance CreateVulkanInstance(WindowSystemType wstype, bool enable_debug_utils,
+  static VkInstance CreateVulkanInstance(bool enable_debug_utils,
                                          bool enable_validation_layer, u32* out_vk_api_version);
 
   // Returns a list of Vulkan-compatible GPUs.
@@ -140,7 +139,7 @@ public:
 
 private:
   static bool SelectInstanceExtensions(std::vector<const char*>* extension_list,
-                                       WindowSystemType wstype, bool enable_debug_utils,
+                                       bool enable_debug_utils,
                                        bool validation_layer_enabled);
   bool SelectDeviceExtensions(bool enable_surface);
   void WarnMissingDeviceFeatures();

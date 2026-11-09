@@ -237,7 +237,7 @@ void VideoBackendBase::ActivateBackend(const std::string& name)
   g_video_backend = iter->get();
 }
 
-void VideoBackendBase::PopulateBackendInfo(const WindowSystemInfo& wsi)
+void VideoBackendBase::PopulateBackendInfo()
 {
   // If the core has been initialized, the backend info will have been populated already. Doing it
   // again would be unnecessary and could cause the UI thread to race with the GPU thread.
@@ -250,7 +250,7 @@ void VideoBackendBase::PopulateBackendInfo(const WindowSystemInfo& wsi)
   g_backend_info = {};
   ActivateBackend(Config::Get(Config::MAIN_GFX_BACKEND));
   g_backend_info.DisplayName = g_video_backend->GetDisplayName();
-  g_video_backend->InitBackendInfo(wsi);
+  g_video_backend->InitBackendInfo();
   if (g_backend_info.api_type == APIType::Nothing)
     return;
   // We validate the config after initializing the backend info, as system-specific settings
