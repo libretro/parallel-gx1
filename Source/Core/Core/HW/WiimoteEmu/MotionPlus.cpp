@@ -145,9 +145,9 @@ void MotionPlus::Reset()
 void MotionPlus::CalibrationData::UpdateChecksum()
 {
   // Checksum is crc32 of all data other than the checksum itself.
-  u32 crc_result = Common::StartCRC32();
-  crc_result = Common::UpdateCRC32(crc_result, reinterpret_cast<const u8*>(this), 0xe);
-  crc_result = Common::UpdateCRC32(crc_result, reinterpret_cast<const u8*>(this) + 0x10, 0xe);
+  u32 crc_result = common_crc32_start();
+  crc_result = common_crc32_update(crc_result, reinterpret_cast<const u8*>(this), 0xe);
+  crc_result = common_crc32_update(crc_result, reinterpret_cast<const u8*>(this) + 0x10, 0xe);
 
   crc32_lsb = u16(crc_result);
   crc32_msb = u16(crc_result >> 16);

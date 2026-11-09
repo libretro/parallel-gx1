@@ -1,24 +1,33 @@
-// Copyright 2008 Dolphin Emulator Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright 2008 Dolphin Emulator Project
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#pragma once
+#ifndef COMMON_HASH_H
+#define COMMON_HASH_H
 
-#include <cstddef>
-#include <string_view>
+#include <stddef.h>
+#include <stdint.h>
 
-#include "Common/CommonTypes.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace Common
-{
-u32 HashAdler32(const u8* data, size_t len);
-// JUNK. DO NOT USE FOR NEW THINGS
-u32 HashEctor(const u8* data, size_t len);
+uint32_t common_hash_adler32(const uint8_t *data, size_t len);
+/* JUNK. DO NOT USE FOR NEW THINGS */
+uint32_t common_hash_ector(const uint8_t *data, size_t len);
 
-// Specialized hash function used for the texture cache
-u64 GetHash64(const u8* src, u32 len, u32 samples);
+/* The texture cache's hash: CRC32 where the CPU has it, else MurmurHash3; of
+ * every 8 bytes, or of about samples of them spread over len (0: all). */
+uint64_t common_hash64(const uint8_t *src, uint32_t len, uint32_t samples);
 
-u32 StartCRC32();
-u32 UpdateCRC32(u32 crc, const u8* data, size_t len);
-u32 ComputeCRC32(const u8* data, size_t len);
-u32 ComputeCRC32(std::string_view data);
-}  // namespace Common
+uint32_t common_crc32_start(void);
+uint32_t common_crc32_update(uint32_t crc, const uint8_t *data, size_t len);
+uint32_t common_crc32_compute(const uint8_t *data, size_t len);
+
+/* CPUDetect's answer, for the hash */
+int common_cpu_has_crc32(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

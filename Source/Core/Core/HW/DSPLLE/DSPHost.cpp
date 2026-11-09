@@ -80,7 +80,7 @@ void CodeLoaded(DSPCore& dsp, u32 addr, size_t size)
 void CodeLoaded(DSPCore& dsp, const u8* ptr, size_t size)
 {
   auto& state = dsp.DSPState();
-  const u32 iram_crc = Common::HashEctor(ptr, size);
+  const u32 iram_crc = common_hash_ector(ptr, size);
   state.SetIRAMCRC(iram_crc);
 
   if (Config::Get(Config::MAIN_DUMP_UCODE))

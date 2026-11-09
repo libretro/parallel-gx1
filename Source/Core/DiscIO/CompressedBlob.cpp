@@ -166,7 +166,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   }
 
   // First, check hash.
-  const u32 block_hash = Common::HashAdler32(m_zlib_buffer.data(), read_size);
+  const u32 block_hash = common_hash_adler32(m_zlib_buffer.data(), read_size);
   if (block_hash != m_hashes[block_num])
   {
     ERROR_LOG_FMT(DISCIO,

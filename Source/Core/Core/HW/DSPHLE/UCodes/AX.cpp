@@ -72,7 +72,7 @@ bool AXUCode::LoadResamplingCoefficients(bool require_same_checksum, u32 desired
     std::array<u8, raw_coeffs_size> raw_coeffs;
     fp.ReadBytes(raw_coeffs.data(), raw_coeffs_size);
 
-    u32 checksum = Common::HashAdler32(raw_coeffs.data(), raw_coeffs_size);
+    u32 checksum = common_hash_adler32(raw_coeffs.data(), raw_coeffs_size);
     if (require_same_checksum && checksum != desired_checksum)
       continue;
 

@@ -234,7 +234,7 @@ struct Message
   void Finish()
   {
     m_message.header.crc32 =
-        Common::ComputeCRC32(reinterpret_cast<const u8*>(&m_message), sizeof(m_message));
+        common_crc32_compute(reinterpret_cast<const u8*>(&m_message), sizeof(m_message));
   }
 
   template <class ToMsgType>
@@ -244,7 +244,7 @@ struct Message
     // zero out the crc32 in the packet once we got it since that's what's needed for calculation
     m_message.header.crc32 = 0;
     const u32 crc32_calculated =
-        Common::ComputeCRC32(reinterpret_cast<const u8*>(&m_message), sizeof(ToMsgType));
+        common_crc32_compute(reinterpret_cast<const u8*>(&m_message), sizeof(ToMsgType));
     if (crc32_in_header != crc32_calculated)
     {
       NOTICE_LOG_FMT(

@@ -7,7 +7,7 @@
 
 u32 FBInfo::CalculateHash() const
 {
-  return Common::HashAdler32(reinterpret_cast<const u8*>(this), sizeof(FBInfo));
+  return common_hash_adler32(reinterpret_cast<const u8*>(this), sizeof(FBInfo));
 }
 
 bool FBInfo::operator==(const FBInfo& other) const

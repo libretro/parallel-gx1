@@ -1025,6 +1025,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/CallGate.c \
 	$(CORE_DIR)/Source/Core/Common/FrameClock.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
+	$(CORE_DIR)/Source/Core/Common/Hash.c \
 	$(CORE_DIR)/Source/Core/Common/ObjectPool.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.c \
@@ -1053,7 +1054,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/FileUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/FloatUtils.cpp \
 	$(CORE_DIR)/Source/Core/Common/GekkoDisassembler.cpp \
-	$(CORE_DIR)/Source/Core/Common/Hash.cpp \
 	$(CORE_DIR)/Source/Core/Common/HostDisassembler.cpp \
 	$(CORE_DIR)/Source/Core/Common/HttpRequest.cpp \
 	$(CORE_DIR)/Source/Core/Common/Image.cpp \

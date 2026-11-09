@@ -96,7 +96,7 @@ void UCodeInterface::PrepareBootUCode(u32 mail)
     auto& memory = m_dsphle->GetSystem().GetMemory();
     const u8* pointer =
         memory.GetPointerForRange(m_next_ucode.iram_mram_addr, m_next_ucode.iram_size);
-    const u32 ector_crc = Common::HashEctor(pointer, m_next_ucode.iram_size);
+    const u32 ector_crc = common_hash_ector(pointer, m_next_ucode.iram_size);
 
     if (Config::Get(Config::MAIN_DUMP_UCODE))
       DumpDSPCode(pointer, m_next_ucode.iram_size, ector_crc);

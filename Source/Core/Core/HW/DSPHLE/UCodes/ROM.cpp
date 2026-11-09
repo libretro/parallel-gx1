@@ -97,7 +97,7 @@ void ROMUCode::BootUCode()
   auto& memory = m_dsphle->GetSystem().GetMemory();
   const u8* pointer =
       memory.GetPointerForRange(m_current_ucode.m_ram_address, m_current_ucode.m_length);
-  const u32 ector_crc = Common::HashEctor(pointer, m_current_ucode.m_length);
+  const u32 ector_crc = common_hash_ector(pointer, m_current_ucode.m_length);
 
   if (Config::Get(Config::MAIN_DUMP_UCODE))
     DumpDSPCode(pointer, m_current_ucode.m_length, ector_crc);

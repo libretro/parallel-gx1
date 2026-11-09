@@ -1738,14 +1738,14 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
 
   // TODO: This doesn't hash GB tiles for preloaded RGBA8 textures (instead, it's hashing more data
   // from the low tmem bank than it should)
-  base_hash = Common::GetHash64(texture_info.GetData(), texture_info.GetTextureSize(),
+  base_hash = common_hash64(texture_info.GetData(), texture_info.GetTextureSize(),
                                 textureCacheSafetyColorSampleSize);
   u32 palette_size = 0;
   if (texture_info.GetPaletteSize())
   {
     palette_size = *texture_info.GetPaletteSize();
     full_hash =
-        base_hash ^ Common::GetHash64(texture_info.GetTlutAddress(), *texture_info.GetPaletteSize(),
+        base_hash ^ common_hash64(texture_info.GetTlutAddress(), *texture_info.GetPaletteSize(),
                                       textureCacheSafetyColorSampleSize);
   }
   else
@@ -3736,7 +3736,7 @@ u64 TCacheEntry::CalculateHash() const
   u8* ptr = memory.GetPointerForRange(addr, size_in_bytes);
   if (memory_stride == bytes_per_row)
   {
-    return Common::GetHash64(ptr, size_in_bytes, hash_sample_size);
+    return common_hash64(ptr, size_in_bytes, hash_sample_size);
   }
   else
   {
@@ -3755,7 +3755,7 @@ u64 TCacheEntry::CalculateHash() const
     {
       // Multiply by a prime number to mix the hash up a bit. This prevents identical blocks from
       // canceling each other out
-      temp_hash = (temp_hash * 397) ^ Common::GetHash64(ptr, bytes_per_row, samples_per_row);
+      temp_hash = (temp_hash * 397) ^ common_hash64(ptr, bytes_per_row, samples_per_row);
       ptr += memory_stride;
     }
     return temp_hash;

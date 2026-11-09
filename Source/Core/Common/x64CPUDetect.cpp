@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "Common/CPUDetect.h"
+#include "Common/Hash.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -102,6 +103,11 @@ static inline CPUIDResult cpuid(int function_id, int subfunction_id = 0)
 }
 
 CPUInfo cpu_info;
+
+extern "C" int common_cpu_has_crc32(void)
+{
+  return cpu_info.bCRC32;
+}
 
 CPUInfo::CPUInfo()
 {

@@ -339,7 +339,7 @@ bool CBoot::Load_BS2(Core::System& system, const std::string& boot_rom_filename)
       return false;
   }
 
-  const u32 ipl_hash = Common::ComputeCRC32(data.data(), data.size());
+  const u32 ipl_hash = common_crc32_compute(data.data(), data.size());
   bool known_ipl = false;
   bool pal_ipl = false;
   switch (ipl_hash)
