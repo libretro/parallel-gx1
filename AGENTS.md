@@ -3,6 +3,31 @@
 Instructions for anyone, human or agent, changing this core. Read the
 section that covers the code you touch before touching it.
 
+## MSVC C89, gradually
+
+The core is rewritten into C89 that MSVC compiles, a piece at a time, as
+code is touched. No big-bang rewrite: each change leaves the code it
+touches closer, and never adds C++ that was not there.
+
+- **New files are C89.** `.c` files, test harnesses and tools included:
+  declarations at the top of a block, `/* */` comments, no designated
+  initializers, compound literals, VLAs or `//`.
+- **Code touched in C++ files is written C89-shaped.** A struct and
+  functions in place of a class, a switch on a kind in place of a
+  virtual call, an explicit init and free in place of a constructor and
+  destructor, no exceptions and no RTTI. Its codegen is checked to be
+  faster than the C++ form, or at worst neutral.
+- **No STL in the code a change touches.** `std::vector`,
+  `std::function`, `std::array`, `std::string` and the rest go as the
+  code around them is touched: fixed arrays where a bound is known, a
+  pointer, count and capacity grown by doubling and kept where it is
+  not, a function pointer and context in place of a callable, and a
+  tagged record in place of a captured lambda. A list that is cleared
+  keeps its storage, so play stops allocating once it has grown.
+- **Frames stay small.** A function's stack frame is 4 KiB at most.
+- **A file with no C++ left becomes a `.c` file.** Its header keeps
+  `extern "C"` guards while C++ still includes it.
+
 ## Zero-copy and borrowed lends
 
 Every change looks for copies to remove in the code it touches, and
