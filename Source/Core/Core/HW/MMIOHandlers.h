@@ -116,60 +116,99 @@ public:
 // code. Unfortunately, because we want to make Read() and Write() fast and
 // inlinable, we need to provide some of the implementation of these two
 // classes here and can't just use a forward declaration.
+//
+// A handler is plain data, zero when no method was registered for its address (an invalid
+// one, made on first use): the mapping's arrays come zeroed from calloc and nothing is
+// constructed for the many addresses nothing registers. A read or write switches on the kind,
+// where it called a std::function; the method object stays for the JIT's visitors.
+enum
+{
+  MMIO_HANDLER_INVALID = 0,
+  MMIO_HANDLER_CONSTANT,
+  MMIO_HANDLER_DIRECT,
+  MMIO_HANDLER_NOP,
+  MMIO_HANDLER_COMPLEX
+};
+
 template <typename T>
 class ReadHandler
 {
 public:
-  ReadHandler();
-
-  // Takes ownership of "method".
-  ReadHandler(ReadHandlingMethod<T>* method);
-
-  ~ReadHandler();
-
   // Entry point for read handling method visitors.
   void Visit(ReadHandlingMethodVisitor<T>& visitor);
 
-  T Read(Core::System& system, u32 addr);
+  T Read(Core::System& system, u32 addr)
+  {
+    switch (m_kind)
+    {
+    case MMIO_HANDLER_CONSTANT:
+      return m_value;
+    case MMIO_HANDLER_DIRECT:
+      return static_cast<T>(*m_ptr & m_mask);
+    case MMIO_HANDLER_COMPLEX:
+      return (*m_func)(system, addr);
+    default:
+      InitializeInvalid();
+      return (*m_func)(system, addr);
+    }
+  }
 
-  // Internal method called when changing the internal method object. Its
-  // main role is to make sure the read function is updated at the same time.
+  // Takes ownership of "method", deleting the one before.
   void ResetMethod(ReadHandlingMethod<T>* method);
+  // Deletes the method: the handler is zero again.
+  void Free();
+
+  // filled from the method by ResetMethod
+  ReadHandlingMethod<T>* m_Method;
+  const T* m_ptr;
+  const std::function<T(Core::System&, u32)>* m_func; /* the method's */
+  u32 m_mask;
+  T m_value;
+  u8 m_kind;
 
 private:
-  // Initialize this handler to an invalid handler. Done lazily to avoid
-  // useless initialization of thousands of unused handler objects.
   void InitializeInvalid();
-  std::unique_ptr<ReadHandlingMethod<T>> m_Method;
-  std::function<T(Core::System&, u32)> m_ReadFunc;
 };
 template <typename T>
 class WriteHandler
 {
 public:
-  WriteHandler();
-
-  // Takes ownership of "method".
-  WriteHandler(WriteHandlingMethod<T>* method);
-
-  ~WriteHandler();
-
   // Entry point for write handling method visitors.
   void Visit(WriteHandlingMethodVisitor<T>& visitor);
 
-  void Write(Core::System& system, u32 addr, T val);
+  void Write(Core::System& system, u32 addr, T val)
+  {
+    switch (m_kind)
+    {
+    case MMIO_HANDLER_NOP:
+      return;
+    case MMIO_HANDLER_DIRECT:
+      *m_ptr = static_cast<T>(val & m_mask);
+      return;
+    case MMIO_HANDLER_COMPLEX:
+      (*m_func)(system, addr, val);
+      return;
+    default:
+      InitializeInvalid();
+      (*m_func)(system, addr, val);
+      return;
+    }
+  }
 
-  // Internal method called when changing the internal method object. Its
-  // main role is to make sure the write function is updated at the same
-  // time.
+  // Takes ownership of "method", deleting the one before.
   void ResetMethod(WriteHandlingMethod<T>* method);
+  // Deletes the method: the handler is zero again.
+  void Free();
+
+  // filled from the method by ResetMethod
+  WriteHandlingMethod<T>* m_Method;
+  T* m_ptr;
+  const std::function<void(Core::System&, u32, T)>* m_func; /* the method's */
+  u32 m_mask;
+  u8 m_kind;
 
 private:
-  // Initialize this handler to an invalid handler. Done lazily to avoid
-  // useless initialization of thousands of unused handler objects.
   void InitializeInvalid();
-  std::unique_ptr<WriteHandlingMethod<T>> m_Method;
-  std::function<void(Core::System&, u32, T)> m_WriteFunc;
 };
 
 // Boilerplate boilerplate boilerplate.

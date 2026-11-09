@@ -3,6 +3,7 @@
 
 #include "Core/HW/MMIO.h"
 
+#include <cstdlib>
 #include <functional>
 #include <utility>
 
@@ -268,22 +269,6 @@ ReadHandlingMethod<T>* ReadToLarger(Mapping* mmio, u32 larger_addr, u32 shift)
 // redundant code between these two classes but trying to abstract it away
 // brings more trouble than it fixes.
 template <typename T>
-ReadHandler<T>::ReadHandler()
-{
-}
-
-template <typename T>
-ReadHandler<T>::ReadHandler(ReadHandlingMethod<T>* method) : m_Method(nullptr)
-{
-  ResetMethod(method);
-}
-
-template <typename T>
-ReadHandler<T>::~ReadHandler()
-{
-}
-
-template <typename T>
 void ReadHandler<T>::Visit(ReadHandlingMethodVisitor<T>& visitor)
 {
   if (!m_Method)
@@ -293,69 +278,49 @@ void ReadHandler<T>::Visit(ReadHandlingMethodVisitor<T>& visitor)
 }
 
 template <typename T>
-T ReadHandler<T>::Read(Core::System& system, u32 addr)
+void ReadHandler<T>::ResetMethod(ReadHandlingMethod<T>* method)
 {
-  // Check if the handler has already been initialized. For real
-  // handlers, this will always be the case, so this branch should be
-  // easily predictable.
-  if (!m_Method)
-    InitializeInvalid();
+  struct KindVisitor : public ReadHandlingMethodVisitor<T>
+  {
+    ReadHandler<T>* h;
+    void VisitConstant(T value) override
+    {
+      h->m_kind = MMIO_HANDLER_CONSTANT;
+      h->m_value = value;
+    }
+    void VisitDirect(const T* addr, u32 mask) override
+    {
+      h->m_kind = MMIO_HANDLER_DIRECT;
+      h->m_ptr = addr;
+      h->m_mask = mask;
+    }
+    void VisitComplex(const std::function<T(Core::System&, u32)>* lambda) override
+    {
+      h->m_kind = MMIO_HANDLER_COMPLEX;
+      h->m_func = lambda;
+    }
+  };
+  KindVisitor v;
 
-  return m_ReadFunc(system, addr);
+  delete m_Method;
+  m_Method = method;
+  m_kind = MMIO_HANDLER_INVALID;
+  if (!method)
+    return;
+  v.h = this;
+  method->AcceptReadVisitor(v);
 }
 
 template <typename T>
-void ReadHandler<T>::ResetMethod(ReadHandlingMethod<T>* method)
+void ReadHandler<T>::Free()
 {
-  m_Method.reset(method);
-
-  struct FuncCreatorVisitor : public ReadHandlingMethodVisitor<T>
-  {
-    virtual ~FuncCreatorVisitor() = default;
-
-    std::function<T(Core::System&, u32)> ret;
-
-    void VisitConstant(T value) override
-    {
-      ret = [value](Core::System&, u32) { return value; };
-    }
-
-    void VisitDirect(const T* addr, u32 mask) override
-    {
-      ret = [addr, mask](Core::System&, u32) { return *addr & mask; };
-    }
-
-    void VisitComplex(const std::function<T(Core::System&, u32)>* lambda) override
-    {
-      ret = *lambda;
-    }
-  };
-
-  FuncCreatorVisitor v;
-  Visit(v);
-  m_ReadFunc = v.ret;
+  ResetMethod(nullptr);
 }
 
 template <typename T>
 void ReadHandler<T>::InitializeInvalid()
 {
   ResetMethod(InvalidRead<T>());
-}
-
-template <typename T>
-WriteHandler<T>::WriteHandler()
-{
-}
-
-template <typename T>
-WriteHandler<T>::WriteHandler(WriteHandlingMethod<T>* method) : m_Method(nullptr)
-{
-  ResetMethod(method);
-}
-
-template <typename T>
-WriteHandler<T>::~WriteHandler()
-{
 }
 
 template <typename T>
@@ -368,53 +333,84 @@ void WriteHandler<T>::Visit(WriteHandlingMethodVisitor<T>& visitor)
 }
 
 template <typename T>
-void WriteHandler<T>::Write(Core::System& system, u32 addr, T val)
+void WriteHandler<T>::ResetMethod(WriteHandlingMethod<T>* method)
 {
-  // Check if the handler has already been initialized. For real
-  // handlers, this will always be the case, so this branch should be
-  // easily predictable.
-  if (!m_Method)
-    InitializeInvalid();
+  struct KindVisitor : public WriteHandlingMethodVisitor<T>
+  {
+    WriteHandler<T>* h;
+    void VisitNop() override { h->m_kind = MMIO_HANDLER_NOP; }
+    void VisitDirect(T* ptr, u32 mask) override
+    {
+      h->m_kind = MMIO_HANDLER_DIRECT;
+      h->m_ptr = ptr;
+      h->m_mask = mask;
+    }
+    void VisitComplex(const std::function<void(Core::System&, u32, T)>* lambda) override
+    {
+      h->m_kind = MMIO_HANDLER_COMPLEX;
+      h->m_func = lambda;
+    }
+  };
+  KindVisitor v;
 
-  m_WriteFunc(system, addr, val);
+  delete m_Method;
+  m_Method = method;
+  m_kind = MMIO_HANDLER_INVALID;
+  if (!method)
+    return;
+  v.h = this;
+  method->AcceptWriteVisitor(v);
 }
 
 template <typename T>
-void WriteHandler<T>::ResetMethod(WriteHandlingMethod<T>* method)
+void WriteHandler<T>::Free()
 {
-  m_Method.reset(method);
-
-  struct FuncCreatorVisitor : public WriteHandlingMethodVisitor<T>
-  {
-    virtual ~FuncCreatorVisitor() = default;
-
-    std::function<void(Core::System&, u32, T)> ret;
-
-    void VisitNop() override
-    {
-      ret = [](Core::System&, u32, T) {};
-    }
-
-    void VisitDirect(T* ptr, u32 mask) override
-    {
-      ret = [ptr, mask](Core::System&, u32, T val) { *ptr = val & mask; };
-    }
-
-    void VisitComplex(const std::function<void(Core::System&, u32, T)>* lambda) override
-    {
-      ret = *lambda;
-    }
-  };
-
-  FuncCreatorVisitor v;
-  Visit(v);
-  m_WriteFunc = v.ret;
+  ResetMethod(nullptr);
 }
 
 template <typename T>
 void WriteHandler<T>::InitializeInvalid()
 {
   ResetMethod(InvalidWrite<T>());
+}
+
+/* The handler arrays, zeroed: every handler invalid until a method is registered. */
+Mapping::Mapping()
+    : m_read_handlers8(static_cast<ReadHandler<u8>*>(calloc(NUM_MMIOS, sizeof(ReadHandler<u8>)))),
+      m_read_handlers16(
+          static_cast<ReadHandler<u16>*>(calloc(NUM_MMIOS / 2, sizeof(ReadHandler<u16>)))),
+      m_read_handlers32(
+          static_cast<ReadHandler<u32>*>(calloc(NUM_MMIOS / 4, sizeof(ReadHandler<u32>)))),
+      m_write_handlers8(
+          static_cast<WriteHandler<u8>*>(calloc(NUM_MMIOS, sizeof(WriteHandler<u8>)))),
+      m_write_handlers16(
+          static_cast<WriteHandler<u16>*>(calloc(NUM_MMIOS / 2, sizeof(WriteHandler<u16>)))),
+      m_write_handlers32(
+          static_cast<WriteHandler<u32>*>(calloc(NUM_MMIOS / 4, sizeof(WriteHandler<u32>))))
+{
+}
+
+/* Only the handlers given a method have one to delete. */
+template <typename H>
+static void FreeHandlers(H* handlers, u32 count)
+{
+  u32 i;
+  if (!handlers)
+    return;
+  for (i = 0; i < count; i++)
+    if (handlers[i].m_Method)
+      handlers[i].Free();
+  free(handlers);
+}
+
+Mapping::~Mapping()
+{
+  FreeHandlers(m_read_handlers8, NUM_MMIOS);
+  FreeHandlers(m_read_handlers16, NUM_MMIOS / 2);
+  FreeHandlers(m_read_handlers32, NUM_MMIOS / 4);
+  FreeHandlers(m_write_handlers8, NUM_MMIOS);
+  FreeHandlers(m_write_handlers16, NUM_MMIOS / 2);
+  FreeHandlers(m_write_handlers32, NUM_MMIOS / 4);
 }
 
 // Define all the public specializations that are exported in MMIOHandlers.h.

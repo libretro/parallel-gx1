@@ -106,6 +106,11 @@ inline u16* HighPart(retro_atomic_int_t* ptr)
 class Mapping
 {
 public:
+  Mapping();
+  ~Mapping();
+  Mapping(const Mapping&) = delete;
+  Mapping& operator=(const Mapping&) = delete;
+
   // MMIO registration interface. Use this to register new MMIO handlers.
   //
   // Example usages can be found in just about any HW/ module in Dolphin's
@@ -170,23 +175,17 @@ private:
   // defined earlier, which maps an MMIO address to a unique ID by using the
   // MMIO block ID.
   //
-  // Each array contains NUM_MMIOS / sizeof (AccessType) because larger
+  // Each array holds NUM_MMIOS / sizeof (AccessType) handlers because larger
   // access types mean less possible addresses (assuming aligned only
-  // accesses).
-  template <typename Unit>
-  struct HandlerArray
-  {
-    using Read = std::array<ReadHandler<Unit>, NUM_MMIOS / sizeof(Unit)>;
-    using Write = std::array<WriteHandler<Unit>, NUM_MMIOS / sizeof(Unit)>;
-  };
+  // accesses). They come from calloc, zeroed: a handler nothing registered
+  // costs nothing until it is used.
+  ReadHandler<u8>* m_read_handlers8;
+  ReadHandler<u16>* m_read_handlers16;
+  ReadHandler<u32>* m_read_handlers32;
 
-  HandlerArray<u8>::Read m_read_handlers8;
-  HandlerArray<u16>::Read m_read_handlers16;
-  HandlerArray<u32>::Read m_read_handlers32;
-
-  HandlerArray<u8>::Write m_write_handlers8;
-  HandlerArray<u16>::Write m_write_handlers16;
-  HandlerArray<u32>::Write m_write_handlers32;
+  WriteHandler<u8>* m_write_handlers8;
+  WriteHandler<u16>* m_write_handlers16;
+  WriteHandler<u32>* m_write_handlers32;
 
   // Getter functions for the handler arrays.
   template <typename Unit>
@@ -195,11 +194,12 @@ private:
     static_assert(std::is_same<Unit, u8>() || std::is_same<Unit, u16>() ||
                       std::is_same<Unit, u32>(),
                   "Invalid unit used");
-
-    auto handlers = std::tie(m_read_handlers8, m_read_handlers16, m_read_handlers32);
-
-    using ArrayType = typename HandlerArray<Unit>::Read;
-    return std::get<ArrayType&>(handlers)[index];
+    if constexpr (std::is_same<Unit, u8>())
+      return m_read_handlers8[index];
+    else if constexpr (std::is_same<Unit, u16>())
+      return m_read_handlers16[index];
+    else
+      return m_read_handlers32[index];
   }
 
   template <typename Unit>
@@ -208,11 +208,12 @@ private:
     static_assert(std::is_same<Unit, u8>() || std::is_same<Unit, u16>() ||
                       std::is_same<Unit, u32>(),
                   "Invalid unit used");
-
-    auto handlers = std::tie(m_write_handlers8, m_write_handlers16, m_write_handlers32);
-
-    using ArrayType = typename HandlerArray<Unit>::Write;
-    return std::get<ArrayType&>(handlers)[index];
+    if constexpr (std::is_same<Unit, u8>())
+      return m_write_handlers8[index];
+    else if constexpr (std::is_same<Unit, u16>())
+      return m_write_handlers16[index];
+    else
+      return m_write_handlers32[index];
   }
 };
 
