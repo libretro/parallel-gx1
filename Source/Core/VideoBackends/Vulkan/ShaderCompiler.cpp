@@ -16,6 +16,7 @@
 #include "Common/Logging/Log.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/DriverDetails.h"
+#include "VideoCommon/StutterStats.h"
 #include "VideoCommon/VideoBackendBase.h"
 
 namespace Vulkan::ShaderCompiler
@@ -170,11 +171,13 @@ bool Compile(ShaderStage stage, ShaderCode* source, ShaderBinary* spirv)
   opts.err = err;
   opts.err_cap = sizeof(err);
   err[0] = '\0';
+  STUTTER_MARK(t);
   if (!rslc_compile(text, text_len, rstage, &opts, &result))
   {
     ReportFailure(stage_name, text, text_len, err);
     return false;
   }
+  STUTTER_EMIT_SINCE(t, result.spirv_len);
   /* the result block is kept whole: the words point into it */
   spirv->block = result.blob;
   spirv->code = reinterpret_cast<const u8*>(result.spirv);

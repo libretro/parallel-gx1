@@ -667,32 +667,40 @@ void ShaderCache::CompileMissingPipelines()
 
 AbstractShader* ShaderCache::CompileVertexShader(const VertexShaderUid& uid) const
 {
+  STUTTER_MARK(t);
   ShaderCode source_code =
       GenerateVertexShaderCode(m_api_type, m_host_config, uid.GetUidData());
+  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
   return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code);
 }
 
 AbstractShader*
 ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) const
 {
+  STUTTER_MARK(t);
   ShaderCode source_code =
       UberShader::GenVertexShader(m_api_type, m_host_config, uid.GetUidData());
+  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
   return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code,
                                        fmt::to_string(*uid.GetUidData()));
 }
 
 AbstractShader* ShaderCache::CompilePixelShader(const PixelShaderUid& uid) const
 {
+  STUTTER_MARK(t);
   ShaderCode source_code =
       GeneratePixelShaderCode(m_api_type, m_host_config, uid.GetUidData());
+  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
   return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code);
 }
 
 AbstractShader*
 ShaderCache::CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const
 {
+  STUTTER_MARK(t);
   ShaderCode source_code =
       UberShader::GenPixelShader(m_api_type, m_host_config, uid.GetUidData());
+  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
   return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code,
                                        fmt::to_string(*uid.GetUidData()));
 }
@@ -831,8 +839,10 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
 
 const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid& uid)
 {
+  STUTTER_MARK(t);
   ShaderCode source_code =
       GenerateGeometryShaderCode(m_api_type, m_host_config, uid.GetUidData());
+  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
   AbstractShader* shader =
       g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code,
                                     fmt::format("Geometry shader: {}", *uid.GetUidData()));

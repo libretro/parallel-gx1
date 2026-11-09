@@ -227,6 +227,14 @@ not read; the uid cache still records the uids the draws asked for. Over
 the corpus, pipelines made fall from 701 to 236, one per driver
 pipeline, and driver pipelines from 317 to 236.
 
+The stats build counts the cycles generating GX shader text and in
+rslc, and the words rslc emits; the gate holds the words and reports the
+cycles beside the workers' and the driver's. On lavapipe, over the
+corpus cold: text 6 Mcyc for 93 shaders, rslc 150 Mcyc and 767291 words
+for 150, the driver 13 to 17 Gcyc for 236 pipelines. Driver time is
+where making a shader goes: fewer and smaller pipelines are what cut
+it.
+
 Done when: never. Each commit holds or improves every number.
 
 ## Phase 4: zero-copy through the shader path

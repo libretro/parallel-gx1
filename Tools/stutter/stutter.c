@@ -467,7 +467,7 @@ static const char *const stat_names[] = {
    "draw_gx_pipeline", "draw_uber_pipeline", "draw_efb_copy_to_vram", "draw_efb_copy_to_ram",
    "draw_reinterpret", "draw_decode", "draw_queued_compile", "draw_wait", "draw_disk_write",
    "worker_compile", "shader_create", "pipeline_create", "driver_pipeline",
-   "draw_driver_pipeline"
+   "draw_driver_pipeline", "shader_generate", "shader_emit", "shader_words"
 };
 #define NUM_STAT_NAMES (sizeof(stat_names) / sizeof(stat_names[0]))
 

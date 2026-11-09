@@ -13,9 +13,12 @@
 #     compares their pictures (separate --check runs, in each synchronous
 #     compilation mode);
 #   - checks the hard gates against baseline.txt and the parent: draw-path
-#     compiles, waits and disk writes, and shaders and pipelines built,
-#     each over the whole run (worker compiles are reported, not gated:
-#     how many a worker finishes before the end depends on timing).
+#     compiles, waits and disk writes, shaders and pipelines built, and
+#     the words rslc emitted, each over the whole run (worker compiles are
+#     reported, not gated: how many a worker finishes before the end
+#     depends on timing);
+#   - reports what making them cost: the cycles generating shader text,
+#     in rslc, on the workers and in the driver.
 # Exits nonzero when a gate fails.
 #
 # Environment: BACKENDS (vulkan; software too, slow), FRAMES (runs at most), NEW (two passes of the
@@ -129,6 +132,12 @@ stat() {
    sed -n "s/^stat $2 boot=\([0-9]*\) boot_mcyc=[0-9.]* play=\([0-9]*\) .*/\1 \2/p" "$1"
 }
 
+# a counter's count and its millions of cycles, boot and play together
+cost() {
+   awk -v k="$2" '$1 == "stat" && $2 == k { split($3, b, "="); split($4, bc, "=")
+      split($5, p, "="); split($6, pc, "="); printf "%s=%d/%.1fMcyc", k, b[2] + p[2], bc[2] + pc[2] }' "$1"
+}
+
 FAILED=0
 for backend in $BACKENDS; do
    echo "== $backend"
@@ -212,7 +221,7 @@ for backend in $BACKENDS; do
       for kind in draw_gx_pipeline draw_uber_pipeline draw_efb_copy_to_vram \
                   draw_efb_copy_to_ram draw_reinterpret draw_decode draw_queued_compile \
                   draw_wait draw_disk_write draw_driver_pipeline shader_create pipeline_create \
-                  driver_pipeline; do
+                  driver_pipeline shader_words; do
          set -- $(stat "$r" "$kind")
          [ $# = 2 ] || { echo "FAIL $backend $state: no $kind counter"; FAILED=1; continue; }
          boot=$1; play=$2
@@ -244,6 +253,9 @@ for backend in $BACKENDS; do
          [ "$value" != 0 ] && summary="$summary $kind=$value"
       done
       echo "   $state:$summary"
+      # what the shaders and pipelines cost to make, reported: the cycles vary run to run
+      echo "   $state cost: $(cost "$r" shader_generate) $(cost "$r" shader_emit)" \
+         "$(cost "$r" worker_compile) $(cost "$r" driver_pipeline)"
    done
    if [ -n "$PARENT" ]; then
       for state in cold warm; do

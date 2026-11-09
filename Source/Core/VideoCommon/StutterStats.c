@@ -42,6 +42,12 @@ void stutter_driver_pipeline(retro_perf_tick_t cycles)
       stutter_stat_add(STUTTER_DRAW_DRIVER_PIPELINE, cycles);
 }
 
+void stutter_shader_emit(retro_perf_tick_t cycles, unsigned long words)
+{
+   stutter_stat_add(STUTTER_SHADER_EMIT, cycles);
+   retro_atomic_fetch_add_size(&s_counts[STUTTER_SHADER_WORDS], (size_t)words);
+}
+
 RETRO_API unsigned parallel_gx1_stutter_stats(unsigned long long *counts,
       unsigned long long *cycles, unsigned n)
 {

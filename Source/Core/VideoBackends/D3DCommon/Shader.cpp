@@ -17,6 +17,7 @@
 #include "Common/Logging/Log.h"
 
 #include "VideoCommon/ShaderGenCommon.h"
+#include "VideoCommon/StutterStats.h"
 #include "VideoCommon/VideoBackendBase.h"
 
 namespace
@@ -123,8 +124,10 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, ShaderC
   opts.err = err;
   opts.err_cap = sizeof(err);
   err[0] = '\0';
+  STUTTER_MARK(t);
   if (rslc_compile(full, full_len, rstage, &opts, &result))
   {
+    STUTTER_EMIT_SINCE(t, result.spirv_len);
     /* the result block is kept whole: the code points into it */
     bytecode->block = result.blob;
     bytecode->code = reinterpret_cast<const u8*>(result.spirv);

@@ -48,6 +48,12 @@ enum stutter_stat
    /* one of those compiled or linked for a GX or ubershader draw, which
     * waited for it */
    STUTTER_DRAW_DRIVER_PIPELINE,
+   /* a GX shader's text generated, on any thread */
+   STUTTER_SHADER_GENERATE,
+   /* a shader's text compiled by rslc into the backend's code, and the
+    * words of it: that kind's count is the words, its cycles none */
+   STUTTER_SHADER_EMIT,
+   STUTTER_SHADER_WORDS,
    STUTTER_STAT_COUNT
 };
 
@@ -58,6 +64,8 @@ void stutter_draw_enter(void);
 void stutter_draw_leave(void);
 /* A pipeline the driver compiled or linked, by where it was. */
 void stutter_driver_pipeline(retro_perf_tick_t cycles);
+/* A shader rslc compiled, and the words it emitted. */
+void stutter_shader_emit(retro_perf_tick_t cycles, unsigned long words);
 
 /* The counts and cycles so far, of the first n kinds (enum stutter_stat,
  * in its order); the number of kinds this build counts. The harness's
@@ -78,6 +86,9 @@ RETRO_API unsigned parallel_gx1_stutter_stats(unsigned long long *counts,
 #define STUTTER_DRAW_SINCE(stat, t) (stutter_draw_leave(), STUTTER_SINCE(stat, t))
 /* a pipeline the driver compiled or linked since t */
 #define STUTTER_DRIVER_SINCE(t) stutter_driver_pipeline(cpu_features_get_perf_counter() - (t))
+/* a shader rslc compiled since t, of that many words */
+#define STUTTER_EMIT_SINCE(t, words) \
+   stutter_shader_emit(cpu_features_get_perf_counter() - (t), (unsigned long)(words))
 #else
 #define STUTTER_MARK(t) ((void)0)
 #define STUTTER_SINCE(stat, t) ((void)0)
@@ -85,6 +96,7 @@ RETRO_API unsigned parallel_gx1_stutter_stats(unsigned long long *counts,
 #define STUTTER_DRAW_MARK(t) ((void)0)
 #define STUTTER_DRAW_SINCE(stat, t) ((void)0)
 #define STUTTER_DRIVER_SINCE(t) ((void)0)
+#define STUTTER_EMIT_SINCE(t, words) ((void)0)
 #endif
 
 #ifdef __cplusplus
