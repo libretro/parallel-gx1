@@ -18,6 +18,9 @@
 #     the words rslc emitted, each over the whole run (worker compiles are
 #     reported, not gated: how many a worker finishes before the end
 #     depends on timing);
+#   - counts the heap allocations the core makes after boot (allocs.c, glibc
+#     only), on one thread, and gates them against baseline.txt and the
+#     parent, listing the sites they came from;
 #   - reports what making them cost: the cycles generating shader text,
 #     in rslc, on the workers and in the driver.
 # Exits nonzero when a gate fails.
@@ -58,7 +61,7 @@ esac
 INC="-isystem $ROOT/Externals/libretro-common/include -isystem $ROOT/Externals/Vulkan-Headers/include"
 $CC -std=c89 -pedantic -Wall -Wextra -Wno-long-long -O2 -o "$OUT/gxgen$EXE" "$HERE/gxgen.c"
 $CC -std=c89 -pedantic -Wall -Wextra -Wno-long-long -O2 $INC -o "$OUT/stutter$EXE" \
-   "$HERE/stutter.c" $LIBS
+   "$HERE/stutter.c" "$HERE/allocs.c" $LIBS
 "$OUT/gxgen$EXE" "$OUT/corpus.dff" 2 > "$OUT/corpus.txt"
 COMBOS=$(sed -n 's/.*: \([0-9]*\) combinations.*/\1/p' "$OUT/corpus.txt")
 # the corpus's pictures, two passes; runs, at most, to get there
@@ -286,6 +289,37 @@ for backend in $BACKENDS; do
       echo "   $state cost: $(cost "$r" shader_generate) $(cost "$r" shader_emit)" \
          "$(cost "$r" worker_compile) $(cost "$r" driver_pipeline)"
    done
+
+   # heap allocations the core makes after boot (allocs.c), on one thread so that every run
+   # draws the same frames: against the baseline and the parent, with the sites they came from
+   for tag in cand parent; do
+      core=$CAND
+      [ "$tag" = parent ] && core=$PARENT
+      [ -n "$core" ] || continue
+      fresh "$OUT/dirs-allocs"
+      run "$core" "$backend" "$OUT/dirs-allocs" "$OUT/allocs-$tag-$backend.txt" --boot 1 \
+         --allocs --opt dolphin_main_cpu_thread=disabled
+   done
+   value=$(sed -n 's/^allocs play=\([0-9]*\) .*/\1/p' "$OUT/allocs-cand-$backend.txt")
+   if [ -n "$value" ]; then
+      key="$backend play allocs"
+      base=$(sed -n "s/^$key \([0-9]*\)$/\1/p" "$BASELINE" 2>/dev/null || true)
+      echo "   allocations after boot: $value"
+      sed -n 's/^alloc_site /      /p' "$OUT/allocs-cand-$backend.txt" | head -5
+      if [ -n "$base" ] && [ "$value" -gt "$base" ]; then
+         echo "FAIL $key: $value, baseline $base"
+         FAILED=1
+      elif [ -n "$base" ] && [ "$value" -lt "$base" ]; then
+         echo "   better $key: $value, baseline $base (lower it)"
+      fi
+      pvalue=$( [ -n "$PARENT" ] && sed -n 's/^allocs play=\([0-9]*\) .*/\1/p' \
+         "$OUT/allocs-parent-$backend.txt")
+      if [ -n "$pvalue" ] && [ "$value" -gt "$pvalue" ]; then
+         echo "FAIL $key: $value, parent $pvalue"
+         FAILED=1
+      fi
+      echo "$key $value" >> "$OUT/measured.txt.$$"
+   fi
    if [ -n "$PARENT" ]; then
       for state in cold warm; do
          for tag in parent cand; do

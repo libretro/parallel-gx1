@@ -97,9 +97,11 @@ loaded from RAM every frame in each texture and palette format and three
 sizes, and the
 Vulkan baseline. Each picture carries its frame's number, so the
 picture check compares frame by frame, and textures decoded on the GPU
-against the same decoded on the CPU. Still to come: texgens in the
-corpus, the GL and D3D
-backends in the harness, and the allocation tracer. Counters are gated over the whole run:
+against the same decoded on the CPU. The allocation tracer
+counts the heap allocations the core makes after boot, on one thread so
+that the count is exact, and lists their sites; the gate holds the count.
+Still to come: texgens in the corpus, and the GL and D3D backends in the
+harness. Counters are gated over the whole run:
 where boot ends races the GPU thread, so the boot/play split is
 reported, not gated.
 

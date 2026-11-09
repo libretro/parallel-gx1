@@ -12,6 +12,8 @@
  *    --system DIR, --save DIR    the frontend's directories (.)
  *    --opt key=value             a core option, any number of them
  *    --check                     hash each new picture (no timing then)
+ *    --allocs                    count the core's heap allocations after boot
+ *                                (allocs.c), and report where they were made
  *    --state-out FILE            save a state after run --state-frame
  *    --state-in FILE             load this state after run --state-frame
  *    --state-frame N             where (the last boot run)
@@ -24,7 +26,7 @@
  * value, for run.sh.
  *
  * C89. Linux: cc -O2 -I<core>/Externals/libretro-common/include
- *   -I<core>/Externals/Vulkan-Headers/include stutter.c -ldl -lpthread
+ *   -I<core>/Externals/Vulkan-Headers/include stutter.c allocs.c -ldl -lpthread
  * Windows (MSYS2 MINGW64): the same, without -ldl -lpthread. The Vulkan
  * loader is opened at run time. */
 #ifndef _WIN32
@@ -48,6 +50,8 @@
 #include <vulkan/vulkan.h>
 #include <libretro.h>
 #include <libretro_vulkan.h>
+
+#include "allocs.h"
 
 #define SYNC_COUNT 3
 #define MAX_OPTS 64
@@ -527,7 +531,7 @@ int main(int argc, char **argv)
    unsigned long long c_boot[MAX_STATS], y_boot[MAX_STATS], c_end[MAX_STATS], y_end[MAX_STATS];
    const char *state_in = NULL, *state_out = NULL;
    unsigned state_frame = 0, state_new = 0, until_new = 0;
-   int state_done = 0;
+   int state_done = 0, allocs = 0;
 
    if (argc < 3)
    {
@@ -541,6 +545,11 @@ int main(int argc, char **argv)
       if (!strcmp(a, "--check"))
       {
          check = 1;
+         continue;
+      }
+      if (!strcmp(a, "--allocs"))
+      {
+         allocs = 1;
          continue;
       }
       if (!v)
@@ -621,6 +630,11 @@ int main(int argc, char **argv)
    SYM(p_unload_game, void (*)(void), "retro_unload_game");
    SYM(p_deinit, void (*)(void), "retro_deinit");
    p_stats = (stats_fn)lib_sym(core, "parallel_gx1_stutter_stats");
+   if (allocs && !allocs_init(p_run))
+   {
+      fprintf(stderr, "--allocs: cannot count the core's allocations here\n");
+      allocs = 0;
+   }
    if (!p_stats)
       fprintf(stderr, "no counters: not the stats core (make STATS=1)\n");
 
@@ -670,6 +684,8 @@ int main(int argc, char **argv)
          t_boot += run_ms[frame_no];
       if (frame_no + 1 == boot && p_stats)
          n_stats = p_stats(c_boot, y_boot, MAX_STATS);
+      if (frame_no + 1 == boot && allocs)
+         allocs_count(1);
       if (!state_done && (state_new ? frames_new >= state_new : frame_no + 1 == state_frame))
       {
          state_done = 1;
@@ -697,6 +713,8 @@ int main(int argc, char **argv)
          }
       }
    }
+   if (allocs)
+      allocs_count(0);
    if (p_stats)
       p_stats(c_end, y_end, MAX_STATS);
    frames = frame_no;
@@ -728,6 +746,8 @@ int main(int argc, char **argv)
       printf("stat %s boot=%llu boot_mcyc=%.3f play=%llu play_mcyc=%.3f\n", stat_names[i],
             c_boot[i], (double)y_boot[i] / 1e6, c_end[i] - c_boot[i],
             (double)(y_end[i] - y_boot[i]) / 1e6);
+   if (allocs)
+      allocs_report(16);
 
    if (hw.context_destroy)
       hw.context_destroy();
