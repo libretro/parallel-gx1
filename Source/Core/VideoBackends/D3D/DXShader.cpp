@@ -11,13 +11,12 @@ namespace DX11
 {
 DXShader::DXShader(ShaderStage stage, ShaderBinary bytecode, ID3D11DeviceChild* shader,
                    std::string_view name)
-    : D3DCommon::Shader(stage, bytecode), m_shader(shader), m_name(name)
+    : D3DCommon::Shader(stage, bytecode), m_shader(shader)
 {
-  if (!m_name.empty())
-  {
-    m_shader->SetPrivateData(WKPDID_D3DDebugObjectName, static_cast<UINT>(m_name.size()),
-                             m_name.data());
-  }
+  /* D3D copies the name, from the borrowed view and its size */
+  if (!name.empty())
+    m_shader->SetPrivateData(WKPDID_D3DDebugObjectName, static_cast<UINT>(name.size()),
+                             name.data());
 }
 
 DXShader::~DXShader() = default;

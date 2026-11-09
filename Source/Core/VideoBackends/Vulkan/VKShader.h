@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <memory>
-#include <string>
 #include <string_view>
 
 #include "Common/CommonTypes.h"
@@ -45,7 +44,6 @@ private:
   ShaderBinary m_spv;
   VkShaderModule m_module;
   VkPipeline m_compute_pipeline;
-  std::string m_name;
   u32 m_uid;
 };
 

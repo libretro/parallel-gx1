@@ -21,8 +21,8 @@ class OGLShader final : public AbstractShader
 public:
   /* Both take the source's block. */
   explicit OGLShader(ShaderStage stage, GLenum gl_type, GLuint gl_id, shader_text source,
-                     std::string name);
-  explicit OGLShader(GLuint gl_compute_program_id, shader_text source, std::string name);
+                     std::string_view name);
+  explicit OGLShader(GLuint gl_compute_program_id, shader_text source, std::string_view name);
   ~OGLShader();
 
   u64 GetID() const { return m_id; }
@@ -44,7 +44,6 @@ private:
   GLuint m_gl_id = 0;
   GLuint m_gl_compute_program_id = 0;
   shader_text m_source;
-  std::string m_name;
 };
 
 }  // namespace OGL

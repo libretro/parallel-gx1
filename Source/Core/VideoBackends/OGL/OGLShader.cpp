@@ -28,26 +28,23 @@ static GLenum GetGLShaderTypeForStage(ShaderStage stage)
   }
 }
 
+/* the label is copied by GL, from the borrowed name and its length */
 OGLShader::OGLShader(ShaderStage stage, GLenum gl_type, GLuint gl_id, shader_text source,
-                     std::string name)
+                     std::string_view name)
     : AbstractShader(stage), m_id(ProgramShaderCache::GenerateShaderID()), m_type(gl_type),
-      m_gl_id(gl_id), m_source(source), m_name(std::move(name))
+      m_gl_id(gl_id), m_source(source)
 {
-  if (!m_name.empty() && g_backend_info.bSupportsSettingObjectNames)
-  {
-    glObjectLabel(GL_SHADER, m_gl_id, (GLsizei)m_name.size(), m_name.c_str());
-  }
+  if (!name.empty() && g_backend_info.bSupportsSettingObjectNames)
+    glObjectLabel(GL_SHADER, m_gl_id, (GLsizei)name.size(), name.data());
 }
 
-OGLShader::OGLShader(GLuint gl_compute_program_id, shader_text source, std::string name)
+OGLShader::OGLShader(GLuint gl_compute_program_id, shader_text source, std::string_view name)
     : AbstractShader(ShaderStage::Compute), m_id(ProgramShaderCache::GenerateShaderID()),
       m_type(GL_COMPUTE_SHADER), m_gl_compute_program_id(gl_compute_program_id),
-      m_source(source), m_name(std::move(name))
+      m_source(source)
 {
-  if (!m_name.empty() && g_backend_info.bSupportsSettingObjectNames)
-  {
-    glObjectLabel(GL_PROGRAM, m_gl_compute_program_id, (GLsizei)m_name.size(), m_name.c_str());
-  }
+  if (!name.empty() && g_backend_info.bSupportsSettingObjectNames)
+    glObjectLabel(GL_PROGRAM, m_gl_compute_program_id, (GLsizei)name.size(), name.data());
 }
 
 OGLShader::~OGLShader()
@@ -62,7 +59,6 @@ OGLShader::~OGLShader()
 OGLShader* OGLShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                        std::string_view name)
 {
-  std::string name_str(name);
   if (stage != ShaderStage::Compute)
   {
     GLenum shader_type = GetGLShaderTypeForStage(stage);
@@ -70,15 +66,14 @@ OGLShader* OGLShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
     if (!shader_id)
       return nullptr;
 
-    return new OGLShader(stage, shader_type, shader_id, source->Release(),
-                                       std::move(name_str));
+    return new OGLShader(stage, shader_type, shader_id, source->Release(), name);
   }
 
   // Compute shaders.
   SHADER prog;
   if (!ProgramShaderCache::CompileComputeShader(prog, source->GetBuffer()))
     return nullptr;
-  return new OGLShader(prog.glprogid, source->Release(), std::move(name_str));
+  return new OGLShader(prog.glprogid, source->Release(), name);
 }
 
 }  // namespace OGL

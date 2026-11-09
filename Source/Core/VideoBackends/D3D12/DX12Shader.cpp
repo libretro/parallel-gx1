@@ -11,8 +11,8 @@
 
 namespace DX12
 {
-DXShader::DXShader(ShaderStage stage, ShaderBinary bytecode, std::string_view name)
-    : D3DCommon::Shader(stage, bytecode), m_name(UTF8ToWString(name))
+DXShader::DXShader(ShaderStage stage, ShaderBinary bytecode)
+    : D3DCommon::Shader(stage, bytecode)
 {
 }
 
@@ -21,8 +21,8 @@ DXShader::~DXShader() = default;
 DXShader* DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
                                                        std::string_view name)
 {
-  DXShader* shader = new DXShader(stage, bytecode, name);
-  if (stage == ShaderStage::Compute && !shader->CreateComputePipeline())
+  DXShader* shader = new DXShader(stage, bytecode);
+  if (stage == ShaderStage::Compute && !shader->CreateComputePipeline(name))
   {
     delete shader;
     return nullptr;
@@ -46,7 +46,7 @@ D3D12_SHADER_BYTECODE DXShader::GetD3DByteCode() const
   return D3D12_SHADER_BYTECODE{m_bytecode.code, m_bytecode.size};
 }
 
-bool DXShader::CreateComputePipeline()
+bool DXShader::CreateComputePipeline(std::string_view name)
 {
   D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
   desc.pRootSignature = g_dx_context->GetComputeRootSignature();
@@ -57,8 +57,9 @@ bool DXShader::CreateComputePipeline()
       &desc, IID_PPV_ARGS(&m_compute_pipeline));
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating compute pipeline failed: {}", DX12HRWrap(hr));
 
-  if (m_compute_pipeline && !m_name.empty())
-    m_compute_pipeline->SetName(m_name.c_str());
+  /* only the compute pipeline is named: the name is widened for it alone */
+  if (m_compute_pipeline && !name.empty())
+    m_compute_pipeline->SetName(UTF8ToWString(name).c_str());
 
   return SUCCEEDED(hr);
 }

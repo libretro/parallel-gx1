@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Vulkan/VKShader.h"
 
+#include <cstring>
+
 #include <retro_atomic.h>
 
 #include "Common/Align.h"
@@ -22,34 +24,37 @@ static u32 NextUid()
   return (u32)retro_atomic_fetch_add_int(&s_next_uid, 1) + 1u;
 }
 
+/* The object's name for debugging tools, from the borrowed name: the
+ * driver copies it, so it is terminated in a buffer of the stack's. */
+static void SetObjectName(VkObjectType type, uint64_t handle, std::string_view name)
+{
+  char buf[128];
+  VkDebugUtilsObjectNameInfoEXT name_info = {};
+  const size_t len = name.size() < sizeof(buf) - 1 ? name.size() : sizeof(buf) - 1;
+
+  if (!len || !g_backend_info.bSupportsSettingObjectNames)
+    return;
+  memcpy(buf, name.data(), len);
+  buf[len] = '\0';
+  name_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+  name_info.objectType = type;
+  name_info.objectHandle = handle;
+  name_info.pObjectName = buf;
+  vkSetDebugUtilsObjectNameEXT(g_vulkan_context->GetDevice(), &name_info);
+}
+
 VKShader::VKShader(ShaderStage stage, ShaderBinary spv, VkShaderModule mod, std::string_view name)
     : AbstractShader(stage), m_spv(spv), m_module(mod),
-      m_compute_pipeline(VK_NULL_HANDLE), m_name(name), m_uid(NextUid())
+      m_compute_pipeline(VK_NULL_HANDLE), m_uid(NextUid())
 {
-  if (!m_name.empty() && g_backend_info.bSupportsSettingObjectNames)
-  {
-    VkDebugUtilsObjectNameInfoEXT name_info = {};
-    name_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-    name_info.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
-    name_info.objectHandle = reinterpret_cast<uint64_t>(m_module);
-    name_info.pObjectName = m_name.data();
-    vkSetDebugUtilsObjectNameEXT(g_vulkan_context->GetDevice(), &name_info);
-  }
+  SetObjectName(VK_OBJECT_TYPE_SHADER_MODULE, reinterpret_cast<uint64_t>(m_module), name);
 }
 
 VKShader::VKShader(ShaderBinary spv, VkPipeline compute_pipeline, std::string_view name)
     : AbstractShader(ShaderStage::Compute), m_spv(spv), m_module(VK_NULL_HANDLE),
-      m_compute_pipeline(compute_pipeline), m_name(name), m_uid(NextUid())
+      m_compute_pipeline(compute_pipeline), m_uid(NextUid())
 {
-  if (!m_name.empty() && g_backend_info.bSupportsSettingObjectNames)
-  {
-    VkDebugUtilsObjectNameInfoEXT name_info = {};
-    name_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-    name_info.objectType = VK_OBJECT_TYPE_PIPELINE;
-    name_info.objectHandle = reinterpret_cast<uint64_t>(m_compute_pipeline);
-    name_info.pObjectName = m_name.data();
-    vkSetDebugUtilsObjectNameEXT(g_vulkan_context->GetDevice(), &name_info);
-  }
+  SetObjectName(VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(m_compute_pipeline), name);
 }
 
 VKShader::~VKShader()

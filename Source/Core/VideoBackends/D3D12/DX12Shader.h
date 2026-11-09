@@ -27,13 +27,11 @@ public:
                                                     std::string_view name);
 
 private:
-  DXShader(ShaderStage stage, ShaderBinary bytecode, std::string_view name);
+  DXShader(ShaderStage stage, ShaderBinary bytecode);
 
-  bool CreateComputePipeline();
+  bool CreateComputePipeline(std::string_view name);
 
   ComPtr<ID3D12PipelineState> m_compute_pipeline;
-
-  std::wstring m_name;
 };
 
 }  // namespace DX12

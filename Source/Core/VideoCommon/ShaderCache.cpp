@@ -8,7 +8,6 @@
 #include <type_traits>
 #include <utility>
 
-#include <fmt/format.h>
 
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
@@ -681,8 +680,7 @@ ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) con
   ShaderCode source_code =
       UberShader::GenVertexShader(m_api_type, m_host_config, uid.GetUidData());
   STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
-  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code,
-                                       fmt::to_string(*uid.GetUidData()));
+  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code, "Vertex ubershader");
 }
 
 AbstractShader* ShaderCache::CompilePixelShader(const PixelShaderUid& uid) const
@@ -701,8 +699,7 @@ ShaderCache::CompilePixelUberShader(const UberShader::PixelShaderUid& uid) const
   ShaderCode source_code =
       UberShader::GenPixelShader(m_api_type, m_host_config, uid.GetUidData());
   STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
-  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code,
-                                       fmt::to_string(*uid.GetUidData()));
+  return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code, "Pixel ubershader");
 }
 
 const AbstractShader* ShaderCache::InsertVertexShader(const VertexShaderUid& uid,
@@ -844,8 +841,7 @@ const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid&
       GenerateGeometryShaderCode(m_api_type, m_host_config, uid.GetUidData());
   STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
   AbstractShader* shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code,
-                                    fmt::format("Geometry shader: {}", *uid.GetUidData()));
+      g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code, "Geometry shader");
 
   uid_table_value* const entry = uid_table_get(&m_gs_cache.shader_map, &uid);
   if (!entry)
@@ -1869,7 +1865,7 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(const EFBCopyParams
       TextureConversionShaderTiled::GenerateEncodingShader(uid, m_api_type);
   AbstractShader* const shader =
       g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_code,
-                                    fmt::format("EFB copy to RAM pixel shader: {}", uid));
+                                    "EFB copy to RAM pixel shader");
   if (!shader)
   {
     uid_table_get(&m_efb_copy_to_ram_pipelines, key);
@@ -1959,7 +1955,7 @@ bool ShaderCache::CompileSharedPipelines()
       AbstractShader* const shader = g_gfx->CreateShaderFromSource(
           ShaderStage::Pixel,
           TextureConversionShaderTiled::GeneratePaletteConversionShader(format, m_api_type),
-          fmt::format("Palette conversion pixel shader: {}", format));
+          "Palette conversion pixel shader");
       if (!shader)
         return false;
 
@@ -1992,9 +1988,8 @@ const AbstractPipeline* ShaderCache::BuildTextureReinterpretPipeline(TextureForm
 
   if (!shader_source.GetBuffer().empty())
   {
-    shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Pixel, shader_source,
-        fmt::format("Texture reinterpret pixel shader: {} to {}", from_format, to_format));
+    shader = g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_source,
+                                           "Texture reinterpret pixel shader");
   }
   if (!shader)
     return KeepPipeline(&m_texture_reinterpret_pipelines, key, nullptr);
@@ -2040,12 +2035,8 @@ const AbstractShader* ShaderCache::BuildTextureDecodingShader(TextureFormat form
   if (shader_source.GetBuffer().empty())
     return nullptr;
 
-  const std::string name =
-      palette_format.has_value() ?
-          fmt::format("Texture decoding compute shader: {}, {}", format, *palette_format) :
-          fmt::format("Texture decoding compute shader: {}", format);
-
-  value->object = g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source, name);
+  value->object = g_gfx->CreateShaderFromSource(ShaderStage::Compute, shader_source,
+                                                "Texture decoding compute shader");
   return ShaderOf(value);
 }
 
