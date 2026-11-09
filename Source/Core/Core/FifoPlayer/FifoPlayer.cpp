@@ -88,10 +88,10 @@ void FifoPlaybackAnalyzer::AnalyzeFrames(FifoDataFile* file,
     u32 part_start = 0;
     CPState cpmem;
 
-    while (offset < frame.fifoData.size())
+    while (offset < frame.fifoDataSize)
     {
       const u32 cmd_size = OpcodeDecoder::RunCommand(&frame.fifoData[offset],
-                                                     u32(frame.fifoData.size()) - offset, analyzer);
+                                                     frame.fifoDataSize - offset, analyzer);
 
       if (analyzer.m_start_of_primitives)
       {
@@ -122,8 +122,8 @@ void FifoPlaybackAnalyzer::AnalyzeFrames(FifoDataFile* file,
     }
 
     // The frame should end with an EFB copy, so part_start should have been updated to the end.
-    ASSERT(part_start == frame.fifoData.size());
-    ASSERT(offset == frame.fifoData.size());
+    ASSERT(part_start == frame.fifoDataSize);
+    ASSERT(offset == frame.fifoDataSize);
   }
 }
 
@@ -403,7 +403,7 @@ void FifoPlayer::WriteFrame(const FifoFrameInfo& frame, const AnalyzedFrameInfo&
   m_CyclesPerFrame = static_cast<u64>(m_system.GetSystemTimers().GetTicksPerSecond()) *
                      vi.GetTargetRefreshRateDenominator() / vi.GetTargetRefreshRateNumerator();
   m_ElapsedCycles = 0;
-  m_FrameFifoSize = static_cast<u32>(frame.fifoData.size());
+  m_FrameFifoSize = frame.fifoDataSize;
 
   u32 memory_update = 0;
   u32 object_num = 0;
@@ -411,7 +411,7 @@ void FifoPlayer::WriteFrame(const FifoFrameInfo& frame, const AnalyzedFrameInfo&
   // Skip all memory updates if early memory updates are enabled, as we already wrote them
   if (m_EarlyMemoryUpdates)
   {
-    memory_update = (u32)(frame.memoryUpdates.size());
+    memory_update = frame.numMemoryUpdates;
   }
 
   for (const FramePart& part : info.parts)
@@ -441,12 +441,12 @@ void FifoPlayer::WriteFrame(const FifoFrameInfo& frame, const AnalyzedFrameInfo&
 void FifoPlayer::WriteFramePart(const FramePart& part, u32* next_mem_update,
                                 const FifoFrameInfo& frame)
 {
-  const u8* const data = frame.fifoData.data();
+  const u8* const data = frame.fifoData;
 
   u32 data_start = part.m_start;
   const u32 data_end = part.m_end;
 
-  while (*next_mem_update < frame.memoryUpdates.size() && data_start < data_end)
+  while (*next_mem_update < frame.numMemoryUpdates && data_start < data_end)
   {
     const MemoryUpdate& memUpdate = frame.memoryUpdates[*next_mem_update];
 
@@ -480,10 +480,8 @@ void FifoPlayer::WriteAllMemoryUpdates()
   for (u32 frameNum = 0; frameNum < m_File->GetFrameCount(); ++frameNum)
   {
     const FifoFrameInfo& frame = m_File->GetFrame(frameNum);
-    for (auto& update : frame.memoryUpdates)
-    {
-      WriteMemory(update);
-    }
+    for (u32 i = 0; i < frame.numMemoryUpdates; ++i)
+      WriteMemory(frame.memoryUpdates[i]);
   }
 }
 
@@ -497,7 +495,7 @@ void FifoPlayer::WriteMemory(const MemoryUpdate& memUpdate)
   else
     mem = &memory.GetRAM()[memUpdate.address & memory.GetRamMask()];
 
-  std::ranges::copy(memUpdate.data, mem);
+  std::memcpy(mem, memUpdate.data, memUpdate.dataSize);
 }
 
 void FifoPlayer::WriteFifo(const u8* data, u32 start, u32 end)
@@ -704,7 +702,11 @@ void FifoPlayer::LoadTextureMemory()
 {
   static_assert(static_cast<size_t>(TMEM_SIZE) == static_cast<size_t>(FifoDataFile::TEX_MEM_SIZE),
                 "TMEM_SIZE matches the size of texture memory in FifoDataFile");
-  std::memcpy(s_tex_mem.data(), m_File->GetTexMem(), FifoDataFile::TEX_MEM_SIZE);
+  /* what the file has of it, the rest zero */
+  if (m_File->GetTexMemSize())
+    std::memcpy(s_tex_mem.data(), m_File->GetTexMem(), m_File->GetTexMemSize());
+  std::memset(s_tex_mem.data() + m_File->GetTexMemSize(), 0,
+              FifoDataFile::TEX_MEM_SIZE - m_File->GetTexMemSize());
 }
 
 void FifoPlayer::WriteCP(u32 address, u16 value)
