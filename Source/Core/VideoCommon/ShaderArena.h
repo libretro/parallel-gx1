@@ -21,6 +21,8 @@
  *    the next texts that thread starts, as many as it has alive at once
  *    (a pipeline's vertex and pixel shaders): a generator allocates
  *    nothing once its thread has made as many, as large.
+ *  - shader_arena_prepare makes a thread's block and text blocks before
+ *    its first compile, where it starts at boot.
  *  - shader_arenas_free frees every thread's blocks, once no thread
  *    compiles any more (the backend shutting down); a thread's next
  *    compile makes new ones.
@@ -48,6 +50,9 @@ void *shader_arena_blob_alloc(void *ud, size_t len);
 void shader_arena_blob_free(void *ud, void *ptr);
 void shader_arena_blob_release(void *ptr);
 void shader_arenas_free(void);
+/* this thread's block made now, and texts text blocks of text_size bytes kept for it: a
+ * thread about to compile (a worker starting) allocates nothing on its first compiles */
+void shader_arena_prepare(size_t text_size, int texts);
 
 #ifdef __cplusplus
 }

@@ -104,7 +104,7 @@ private:
 class ShaderCode : public ShaderGeneratorInterface
 {
 public:
-  ShaderCode() { shader_text_init(&m_text, 16384); }
+  ShaderCode() { shader_text_init(&m_text, SHADER_TEXT_FIRST_CAP); }
   ~ShaderCode() { shader_text_free(&m_text); }
   ShaderCode(ShaderCode&& other) noexcept : m_text(other.m_text) { shader_text_init(&other.m_text, 0); }
   ShaderCode(const ShaderCode&) = delete;

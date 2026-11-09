@@ -12,6 +12,8 @@
 #include "Core/Core.h"
 #include "Core/System.h"
 
+#include "VideoCommon/ShaderArena.h"
+#include "VideoCommon/ShaderText.h"
 #include "VideoCommon/StutterStats.h"
 
 namespace VideoCommon
@@ -386,6 +388,8 @@ void AsyncShaderCompiler::WorkerThreadStart(void* worker)
   /* what is compiled in the background waits; the frame being emulated
    * does not, on a machine with fewer cores than busy threads */
   Common::LowerCurrentThreadPriority();
+  // its compile memory, now at boot: a pipeline's stages are alive at once
+  shader_arena_prepare(SHADER_TEXT_HEAD_ROOM + SHADER_TEXT_FIRST_CAP, 3);
   w->owner->WorkerThreadRun(w);
 }
 

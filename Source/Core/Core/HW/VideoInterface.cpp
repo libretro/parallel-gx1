@@ -184,6 +184,10 @@ void VideoInterfaceManager::Init()
 
 void VideoInterfaceManager::RefreshConfig()
 {
+  m_config_early_xfb_output = Config::Get(Config::GFX_HACK_EARLY_XFB_OUTPUT);
+  m_config_force_progressive = Config::Get(Config::GFX_HACK_FORCE_PROGRESSIVE);
+  m_config_background_input = Config::Get(Config::MAIN_INPUT_BACKGROUND_INPUT);
+  m_config_lock_cursor = Config::Get(Config::MAIN_LOCK_CURSOR);
   m_config_vi_oc_factor =
       Config::Get(Config::MAIN_VI_OVERCLOCK_ENABLE) ? Config::Get(Config::MAIN_VI_OVERCLOCK) : 1.0f;
   if (AchievementManager::GetInstance().IsHardcoreModeActive() && m_config_vi_oc_factor < 1.0f)
@@ -828,7 +832,7 @@ void VideoInterfaceManager::OutputField(FieldType field, u64 ticks)
   fbStride *= 2;
 
   if (potentially_interlaced_xfb && interlaced_video_mode &&
-      Config::Get(Config::GFX_HACK_FORCE_PROGRESSIVE))
+      m_config_force_progressive)
   {
     // Strictly speaking, in interlaced mode, we're only supposed to read
     // half of the lines of the XFB, and use that to display a field; the
@@ -871,7 +875,7 @@ void VideoInterfaceManager::BeginField(FieldType field, u64 ticks)
 {
   // Outputting the frame at the beginning of scanout reduces latency. This assumes the game isn't
   // going to change the VI registers while a frame is scanning out.
-  if (Config::Get(Config::GFX_HACK_EARLY_XFB_OUTPUT))
+  if (m_config_early_xfb_output)
     OutputField(field, ticks);
 }
 
@@ -881,7 +885,7 @@ void VideoInterfaceManager::EndField(FieldType field, u64 ticks)
   // until the end so the last register values are used. This still isn't accurate, but it does
   // produce more acceptable results in some problematic cases.
   // Currently, this is only known to be necessary to eliminate flickering in WWE Crush Hour.
-  if (!Config::Get(Config::GFX_HACK_EARLY_XFB_OUTPUT))
+  if (!m_config_early_xfb_output)
     OutputField(field, ticks);
 
   m_system.GetVideoEvents().vi_end_field_event.Trigger();
@@ -928,8 +932,7 @@ void VideoInterfaceManager::Update(u64 ticks)
   // If an SI poll is scheduled to happen on this half-line, do it!
   if (m_half_line_count == m_half_line_of_next_si_poll)
   {
-    Core::UpdateInputGate(!Config::Get(Config::MAIN_INPUT_BACKGROUND_INPUT),
-                          Config::Get(Config::MAIN_LOCK_CURSOR));
+    Core::UpdateInputGate(!m_config_background_input, m_config_lock_cursor);
     auto& si = m_system.GetSerialInterface();
     si.UpdateDevices();
     m_half_line_of_next_si_poll += 2 * si.GetPollXLines();

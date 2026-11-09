@@ -455,6 +455,11 @@ private:
   u32 m_odd_field_last_hl = 0;    // index last halfline of the odd field
 
   float m_config_vi_oc_factor = 1.0f;
+  // read per field and per SI poll: kept here so those never look config up
+  bool m_config_early_xfb_output = false;
+  bool m_config_force_progressive = false;
+  bool m_config_background_input = false;
+  bool m_config_lock_cursor = false;
 
   Config::ConfigChangedCallbackID m_config_changed_callback_id;
   Core::System& m_system;

@@ -145,6 +145,25 @@ static void stash_free(struct shader_stash *st)
    }
 }
 
+void shader_arena_prepare(size_t text_size, int texts)
+{
+   struct shader_arena *a = mine();
+   int i;
+   if (!a)
+      return;
+   if (!a->block)
+   {
+      a->block = malloc(SHADER_ARENA_FIRST);
+      a->len = a->block ? SHADER_ARENA_FIRST : 0;
+   }
+   for (i = 0; i < texts && i < SHADER_ARENA_KEPT; i++)
+   {
+      char *block = (char *)malloc(text_size);
+      if (block && !stash_give(&a->text, block, text_size))
+         free(block);
+   }
+}
+
 char *shader_arena_text_take(size_t size, size_t *got)
 {
    struct shader_arena *a = mine();

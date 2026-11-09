@@ -34,6 +34,8 @@ extern "C" {
 
 /* What a backend puts in front of the text fits in this. */
 #define SHADER_TEXT_HEAD_ROOM 4096
+/* the text a generator starts with room for */
+#define SHADER_TEXT_FIRST_CAP 16384
 
 struct shader_text
 {
