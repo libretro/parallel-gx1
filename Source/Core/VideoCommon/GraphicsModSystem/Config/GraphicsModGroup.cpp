@@ -5,6 +5,7 @@
 
 #include <map>
 #include <string>
+#include <utility>
 
 #include "Common/CommonPaths.h"
 #include "Common/FileSearch.h"
@@ -84,7 +85,12 @@ void GraphicsModGroupConfig::Load()
     try_add_mod(graphics_mod_directory, GraphicsModConfig::Source::System);
   }
 
-  std::ranges::sort(m_graphics_mods, {}, &GraphicsModConfig::m_weight);
+  // by weight; mods of equal weight stay in the order they were found
+  for (size_t i = 1; i < m_graphics_mods.size(); i++)
+  {
+    for (size_t j = i; j > 0 && m_graphics_mods[j - 1].m_weight > m_graphics_mods[j].m_weight; j--)
+      std::swap(m_graphics_mods[j - 1], m_graphics_mods[j]);
+  }
   for (auto& mod : m_graphics_mods)
   {
     m_path_to_graphics_mod[mod.GetAbsolutePath()] = &mod;

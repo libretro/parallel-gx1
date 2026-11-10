@@ -30,7 +30,7 @@ bool Metal::BoundingBox::Initialize()
   return true;
 }
 
-std::vector<BBoxType> Metal::BoundingBox::Read(u32 index, u32 length)
+void Metal::BoundingBox::Read(u32 index, u32 length, BBoxType* values)
 {
   @autoreleasepool
   {
@@ -38,24 +38,24 @@ std::vector<BBoxType> Metal::BoundingBox::Read(u32 index, u32 length)
     g_state_tracker->FlushEncoders();
     g_state_tracker->NotifyOfCPUGPUSync();
     g_state_tracker->WaitForFlushedEncoders();
-    return std::vector<BBoxType>(m_cpu_buffer_ptr + index, m_cpu_buffer_ptr + index + length);
+    memcpy(values, m_cpu_buffer_ptr + index, length * sizeof(BBoxType));
   }
 }
 
-void Metal::BoundingBox::Write(u32 index, std::span<const BBoxType> values)
+void Metal::BoundingBox::Write(u32 index, const BBoxType* values, u32 length)
 {
-  const u32 size = values.size() * sizeof(BBoxType);
+  const u32 size = length * sizeof(BBoxType);
   if (!g_state_tracker->HasUnflushedData() && !g_state_tracker->GPUBusy())
   {
     // We can just write directly to the buffer!
-    memcpy(m_cpu_buffer_ptr + index, values.data(), size);
+    memcpy(m_cpu_buffer_ptr + index, values, size);
   }
   else
   {
     @autoreleasepool
     {
       StateTracker::Map map = g_state_tracker->AllocateForTextureUpload(size);
-      memcpy(map.cpu_buffer, values.data(), size);
+      memcpy(map.cpu_buffer, values, size);
       g_state_tracker->EndRenderPass();
       id<MTLBlitCommandEncoder> upload = [g_state_tracker->GetRenderCmdBuf() blitCommandEncoder];
       [upload setLabel:@"BBox Upload"];

@@ -4,12 +4,11 @@
 #pragma once
 
 #include <array>
-#include <span>
 #include <tuple>
 
 #include "Common/CommonTypes.h"
 #include "Common/EnumFormatter.h"
-#include "Common/SpanUtils.h"
+#include "VideoCommon/TexBytes.h"
 
 enum
 {
@@ -175,9 +174,10 @@ static inline bool CanReinterpretTextureOnGPU(TextureFormat from_format, Texture
   }
 }
 
-inline std::span<u8> TexDecoder_GetTmemSpan(size_t offset = 0)
+inline TexBytes TexDecoder_GetTmem(size_t offset)
 {
-  return Common::SafeSubspan(std::span<u8>(s_tex_mem), offset);
+  TexBytes tmem = {s_tex_mem.data(), TMEM_SIZE};
+  return TexBytesSkip(tmem, offset);
 }
 
 int TexDecoder_GetTexelSizeInNibbles(TextureFormat format);
@@ -193,10 +193,10 @@ void TexDecoder_Decode(u8* dst, const u8* src, int width, int height, TextureFor
                        const u8* tlut, TLUTFormat tlutfmt);
 void TexDecoder_DecodeRGBA8FromTmem(u8* dst, const u8* src_ar, const u8* src_gb, int width,
                                     int height);
-void TexDecoder_DecodeTexel(u8* dst, std::span<const u8> src, int s, int t, int imageWidth,
-                            TextureFormat texformat, std::span<const u8> tlut, TLUTFormat tlutfmt);
-void TexDecoder_DecodeTexelRGBA8FromTmem(u8* dst, std::span<const u8> src_ar,
-                                         std::span<const u8> src_gb, int s, int t, int imageWidth);
+void TexDecoder_DecodeTexel(u8* dst, TexBytes src, int s, int t, int imageWidth,
+                            TextureFormat texformat, TexBytes tlut, TLUTFormat tlutfmt);
+void TexDecoder_DecodeTexelRGBA8FromTmem(u8* dst, TexBytes src_ar, TexBytes src_gb, int s, int t,
+                                         int imageWidth);
 void TexDecoder_DecodeTexelRGBA8FromTmem(u8* dst, const u8* src_ar, const u8* src_gb, int s, int t,
                                          int imageWidth);
 void TexDecoder_DecodeXFB(u8* dst, const u8* src, u32 width, u32 height, u32 stride);

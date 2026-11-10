@@ -4,11 +4,11 @@
 #pragma once
 
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 
 #include "Common/CommonTypes.h"
+#include "VideoCommon/TexBytes.h"
 
 enum class TextureFormat;
 enum class TLUTFormat;
@@ -17,9 +17,9 @@ class TextureInfo final
 {
 public:
   static TextureInfo FromStage(u32 stage);
-  TextureInfo(u32 stage, std::span<const u8> data, std::span<const u8> tlut_data, u32 address,
+  TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 address,
               TextureFormat texture_format, TLUTFormat tlut_format, u32 width, u32 height,
-              bool from_tmem, std::span<const u8> tmem_odd, std::span<const u8> tmem_even,
+              bool from_tmem, TexBytes tmem_odd, TexBytes tmem_even,
               std::optional<u32> mip_count);
 
   struct NameDetails
@@ -35,13 +35,13 @@ public:
 
   bool IsDataValid() const { return m_data_valid; }
 
-  const u8* GetData() const { return m_data.data(); }
-  const u8* GetTlutAddress() const { return m_tlut_data.data(); }
+  const u8* GetData() const { return m_data.data; }
+  const u8* GetTlutAddress() const { return m_tlut_data.data; }
 
   u32 GetRawAddress() const { return m_address; }
 
   bool IsFromTmem() const { return m_from_tmem; }
-  const u8* GetTmemOddAddress() const { return m_tmem_odd.data(); }
+  const u8* GetTmemOddAddress() const { return m_tmem_odd.data; }
 
   TextureFormat GetTextureFormat() const { return m_texture_format; }
   TLUTFormat GetTlutFormat() const { return m_tlut_format; }
@@ -64,7 +64,7 @@ public:
   {
   public:
     MipLevel() = default;
-    MipLevel(u32 level, const TextureInfo& parent, std::span<const u8>* data);
+    MipLevel(u32 level, const TextureInfo& parent, TexBytes* data);
 
     bool IsDataValid() const { return m_data_valid; }
 
@@ -129,9 +129,9 @@ public:
     const TextureInfo* m_parent = nullptr;
     u32 m_level_index = 0;
     bool m_from_tmem = false;
-    std::span<const u8> m_data;
-    std::span<const u8> m_tmem_even;
-    std::span<const u8> m_tmem_odd;
+    TexBytes m_data = {};
+    TexBytes m_tmem_even = {};
+    TexBytes m_tmem_odd = {};
   };
 
   class MipLevels final
@@ -155,16 +155,16 @@ public:
   static constexpr std::string_view format_prefix{"tex1_"};
 
 private:
-  std::span<const u8> m_data;
-  std::span<const u8> m_tlut_data;
+  TexBytes m_data;
+  TexBytes m_tlut_data;
 
   u32 m_address;
 
   bool m_data_valid;
 
   bool m_from_tmem;
-  std::span<const u8> m_tmem_even;
-  std::span<const u8> m_tmem_odd;
+  TexBytes m_tmem_even;
+  TexBytes m_tmem_odd;
 
   TextureFormat m_texture_format;
   TLUTFormat m_tlut_format;

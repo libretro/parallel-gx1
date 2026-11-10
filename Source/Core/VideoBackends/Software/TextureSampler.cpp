@@ -4,11 +4,9 @@
 #include "VideoBackends/Software/TextureSampler.h"
 
 #include <algorithm>
-#include <span>
 
 #include "Common/CommonTypes.h"
 #include "Common/MsgHandler.h"
-#include "Common/SpanUtils.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
@@ -124,13 +122,13 @@ void SampleMip(s32 s, s32 t, s32 mip, bool linear, u8 texmap, u8* sample)
   const TextureFormat texfmt = ti0.format;
   const TLUTFormat tlutfmt = texTlut.tlut_format;
 
-  std::span<const u8> image_src;
-  std::span<const u8> image_src_odd;
+  TexBytes image_src = {};
+  TexBytes image_src_odd = {};
   if (texUnit.texImage1.cache_manually_managed)
   {
-    image_src = TexDecoder_GetTmemSpan(texUnit.texImage1.tmem_even * TMEM_LINE_SIZE);
+    image_src = TexDecoder_GetTmem(texUnit.texImage1.tmem_even * TMEM_LINE_SIZE);
     if (texfmt == TextureFormat::RGBA8)
-      image_src_odd = TexDecoder_GetTmemSpan(texUnit.texImage2.tmem_odd * TMEM_LINE_SIZE);
+      image_src_odd = TexDecoder_GetTmem(texUnit.texImage2.tmem_odd * TMEM_LINE_SIZE);
   }
   else
   {
@@ -138,16 +136,14 @@ void SampleMip(s32 s, s32 t, s32 mip, bool linear, u8 texmap, u8* sample)
     auto& memory = system.GetMemory();
 
     const u32 imageBase = texUnit.texImage3.image_base << 5;
-    size_t size;
-    const u8* const data = memory.GetPointerAndSize(imageBase, &size);
-    image_src = std::span<const u8>(data, size);
+    image_src.data = memory.GetPointerAndSize(imageBase, &image_src.size);
   }
 
   int image_width_minus_1 = ti0.width;
   int image_height_minus_1 = ti0.height;
 
   const int tlutAddress = texTlut.tmem_offset << 9;
-  const std::span<const u8> tlut = TexDecoder_GetTmemSpan(tlutAddress);
+  const TexBytes tlut = TexDecoder_GetTmem(tlutAddress);
 
   // reduce sample location and texture size to mip level
   // move texture pointer to mip location
@@ -171,7 +167,7 @@ void SampleMip(s32 s, s32 t, s32 mip, bool linear, u8 texmap, u8* sample)
       mipHeight = std::max(mipHeight, fmtHeight);
       const u32 size = (mipWidth * mipHeight * fmtDepth) >> 1;
 
-      image_src = Common::SafeSubspan(image_src, size);
+      image_src = TexBytesSkip(image_src, size);
       mipWidth >>= 1;
       mipHeight >>= 1;
       mip--;

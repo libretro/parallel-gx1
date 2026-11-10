@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <span>
+#include <cstddef>
 #include <string>
 
 #include "Common/Buffer.h"
@@ -34,5 +34,5 @@ bool LoadDDSTexture(CustomTextureData* texture, const std::string& filename);
 bool LoadDDSTexture(CustomTextureData::ArraySlice::Level* level, const std::string& filename,
                     u32 mip_level);
 bool LoadPNGTexture(CustomTextureData::ArraySlice::Level* level, const std::string& filename);
-bool LoadPNGTexture(CustomTextureData::ArraySlice::Level* level, std::span<const u8> buffer);
+bool LoadPNGTexture(CustomTextureData::ArraySlice::Level* level, const u8* buffer, size_t size);
 }  // namespace VideoCommon
