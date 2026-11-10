@@ -16,8 +16,6 @@ Dolphin includes or links code of the following third-party software projects:
    [BSD 1-Clause](http://elm-chan.org/fsw/ff/doc/appnote.html#license)
 - [GCEmu](http://sourceforge.net/projects/gcemu-project/):
    GPLv2+
-- [gettext](https://www.gnu.org/software/gettext/):
-   [GPLv3+](http://git.savannah.gnu.org/cgit/gettext.git/tree/COPYING)
 - [googletest](https://github.com/google/googletest):
    [BSD 3-Clause](https://github.com/google/googletest/blob/master/LICENSE)
 - [libao](https://www.xiph.org/ao/):
