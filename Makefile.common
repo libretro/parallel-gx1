@@ -126,10 +126,14 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/fopen_utf8.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_crc32.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_deflate.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_rzstd.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_utf.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_xxh64.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
 	$(CORE_DIR)/Externals/libretro-common/file/file_path.c \
+	$(CORE_DIR)/Externals/libretro-common/file/archive_file.c \
+	$(CORE_DIR)/Externals/libretro-common/file/archive_file_zlib.c \
+	$(CORE_DIR)/Externals/libretro-common/file/archive_file_zstd.c \
 	$(CORE_DIR)/Externals/libretro-common/file/file_path_io.c \
 	$(CORE_DIR)/Externals/libretro-common/file/retro_dirent.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_dxbc.c \
@@ -139,6 +143,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/formats/json/rjson.c \
 	$(CORE_DIR)/Externals/libretro-common/formats/png/rpng.c \
 	$(CORE_DIR)/Externals/libretro-common/formats/png/rpng_encode.c \
+	$(CORE_DIR)/Externals/libretro-common/lists/string_list.c \
 	$(CORE_DIR)/Externals/libretro-common/memmap/memmap.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_waitable_spsc.c \
@@ -903,34 +908,6 @@ ifeq ($(OS_WIN),1)
    MGBA_SOURCES_C += \
 	$(CORE_DIR)/Externals/mGBA/mgba/src/platform/windows/memory.c \
 	$(CORE_DIR)/Externals/mGBA/mgba/src/platform/windows/vfs-w32.c
-endif
-
-# MINIZIP
-MINIZIP_SOURCES_C :=
-MINIZIP_SOURCES_CXX :=
-MINIZIP_SOURCES_ASM :=
-MINIZIP_SOURCES_OBJCXX :=
-MINIZIP_SOURCES_C += \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_crypt.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_os.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_buf.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_mem.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_split.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_zip.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_zip_rw.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_zlib.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_lzma.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_zstd.c
-ifneq ($(OS_WIN),1)
-   MINIZIP_SOURCES_C += \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_os_posix.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_os_posix.c
-endif
-ifeq ($(OS_WIN),1)
-   MINIZIP_SOURCES_C += \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_os_win32.c \
-	$(CORE_DIR)/Externals/minizip-ng/minizip-ng/mz_strm_os_win32.c
 endif
 
 # ZSTD
@@ -1869,20 +1846,6 @@ ifeq ($(OS_APPLE),1)
    MGBA_FLAGS += -D_DARWIN_C_SOURCE -DHAVE_FUTIMES -DHAVE_XLOCALE -DHAVE_SNPRINTF_L -DHAVE_STRTOF_L
 endif
 
-MINIZIP_FLAGS := -w -DHAVE_INTTYPES_H -DHAVE_LZMA -DHAVE_STDINT_H -DHAVE_ZLIB -DHAVE_ZSTD \
-	-DLZMA_API_STATIC -DMZ_ZIP_NO_CRYPTO -DMZ_ZIP_NO_ENCRYPTION -DZLIB_COMPAT \
-	-D_LARGEFILE64_SOURCE -D__USE_LARGEFILE64 \
-	$(ZLIB_INC) $(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) -I$(EXT_DIR)/minizip-ng/minizip-ng
-MINIZIP_CFLAGS := -std=gnu99
-ifneq ($(OS_ANDROID),1)
-   MINIZIP_FLAGS += -DZSTD_MULTITHREAD
-endif
-ifeq ($(OS_WIN),1)
-   MINIZIP_FLAGS += -D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE
-else
-   MINIZIP_FLAGS += -DHAVE_ICONV -D_BSD_SOURCE -D_POSIX_C_SOURCE=200809L
-endif
-
 ZSTD_FLAGS := -w -DXXH_NAMESPACE=ZSTD_ -DZSTD_LEGACY_SUPPORT=5 $(ZSTD_INC)
 ifeq ($(OS_ANDROID),1)
    ZSTD_FLAGS += -DLIBC_NO_FSEEKO
@@ -1916,7 +1879,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/libretro-common/include \
 	-I$(EXT_DIR)/Vulkan-Headers/include \
 	-I$(EXT_DIR)/fmt/fmt/include \
-	-I$(EXT_DIR)/mbedtls/include -I$(EXT_DIR)/minizip-ng/minizip-ng \
+	-I$(EXT_DIR)/mbedtls/include \
 	$(ZLIB_INC) $(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
@@ -1975,8 +1938,16 @@ else ifeq ($(ARCH_ARM64),1)
    FILE_FLAGS_$(abspath $(SRC_DIR)/Common/Crypto/SHA1.cpp) := -march=armv8-a+crypto
 endif
 
+# libretro-common's archive code: zip (stored, deflate, deflate64, Zstandard) and Zstandard
+# archives, through its own decoders. Only these files: elsewhere HAVE_COMPRESSION asks for
+# streams this core does not build.
+LRC_ARCHIVE_FLAGS := -DHAVE_COMPRESSION -DHAVE_RZSTD
+FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file.c) := $(LRC_ARCHIVE_FLAGS)
+FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zlib.c) := $(LRC_ARCHIVE_FLAGS)
+FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zstd.c) := $(LRC_ARCHIVE_FLAGS)
+
 # Libraries in link order; the optional ones only where they are built.
-LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO \
+LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS ZSTD ZLIB LZMA BZIP2 LZ4 LZO \
 	MGBA SFML FMT PUGIXML TINYGLTF FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB

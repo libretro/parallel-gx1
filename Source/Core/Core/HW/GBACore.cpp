@@ -11,11 +11,8 @@
 #include <mgba/internal/gb/gb.h>
 #include <mgba/internal/gba/gba.h>
 
-#include <mz.h>
-#include <mz_strm.h>
-#include <mz_zip.h>
-#include <mz_zip_rw.h>
-
+#include <file/archive_file.h>
+#include <lists/string_list.h>
 
 #include "AudioCommon/FieldAudio.h"
 #include "Core/HW/GBAVFile.h"
@@ -25,7 +22,6 @@
 #include "Common/Crypto/SHA1.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
-#include "Common/MinizipUtil.h"
 #include "Common/ScopeGuard.h"
 
 #include "Core/Config/MainSettings.h"
@@ -81,39 +77,43 @@ static VFile* OpenROM_Archive(const char* path)
   return vf;
 }
 
+/* The first member of a zip that is a ROM mGBA takes, each decoded straight into the memory file
+ * the core will map */
 static VFile* OpenROM_Zip(const char* path)
 {
-  VFile* vf{};
-  void* zip_reader = mz_zip_reader_create();
-  if (!zip_reader)
-    return {};
+  VFile* vf = nullptr;
+  struct string_list* entries = file_archive_get_file_list(path, nullptr);
+  char member[4096];
+  size_t i;
 
-  Common::ScopeGuard file_guard{[&] { mz_zip_reader_delete(&zip_reader); }};
-
-  if (mz_zip_reader_open_file(zip_reader, path) != MZ_OK)
-    return nullptr;
-
-  do
+  for (i = 0; entries && i < entries->size && !vf; i++)
   {
-    mz_zip_file* info;
-    if (mz_zip_reader_entry_get_info(zip_reader, &info) != MZ_OK || !info->uncompressed_size)
-      continue;
+    file_archive_entry_source_t* src;
+    int64_t usize = 0, got = 0, n;
+    u8* dst;
 
-    // inflated straight into the memory file the core will map
-    vf = VFileMemChunk(nullptr, static_cast<size_t>(info->uncompressed_size));
-    if (!vf)
+    if (snprintf(member, sizeof(member), "%s#%s", path, entries->elems[i].data) >=
+        static_cast<int>(sizeof(member)))
       continue;
-    void* dst = vf->map(vf, static_cast<size_t>(info->uncompressed_size), MAP_WRITE);
-    if (dst && Common::ReadFileFromZip(zip_reader, static_cast<u8*>(dst), info->uncompressed_size) &&
-        mCoreIsCompatible(vf) != mPLATFORM_NONE)
+    if (!(src = file_archive_entry_source_open(member, &usize)))
+      continue;
+    if (usize > 0 && (vf = VFileMemChunk(nullptr, static_cast<size_t>(usize))) &&
+        (dst = static_cast<u8*>(vf->map(vf, static_cast<size_t>(usize), MAP_WRITE))))
     {
-      vf->seek(vf, 0, SEEK_SET);
-      break;
+      while (got < usize && (n = file_archive_entry_source_read(src, dst + got, usize - got)) > 0)
+        got += n;
     }
-
-    vf->close(vf);
-    vf = nullptr;
-  } while (mz_zip_reader_goto_next_entry(zip_reader) != MZ_END_OF_LIST);
+    file_archive_entry_source_close(src);
+    if (vf && (got != usize || mCoreIsCompatible(vf) == mPLATFORM_NONE))
+    {
+      vf->close(vf);
+      vf = nullptr;
+    }
+  }
+  if (vf)
+    vf->seek(vf, 0, SEEK_SET);
+  if (entries)
+    string_list_free(entries);
   return vf;
 }
 
