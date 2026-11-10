@@ -13,7 +13,6 @@
 
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
-#include "Common/EnumMap.h"
 #include "Common/StringUtil.h"
 #include "Common/TypeUtils.h"
 
@@ -146,20 +145,12 @@ protected:
   shader_text m_text;
 };
 
-// An enum as shader text writes it: 0x<value>u and its name in a comment, from
-// ShaderEnumValue and ShaderEnumName.
+// An enum's value as a shader compares it.
 template <typename T>
 unsigned ShaderEnumValue(T e)
 {
   return static_cast<unsigned>(static_cast<std::make_unsigned_t<std::underlying_type_t<T>>>(
       static_cast<std::underlying_type_t<T>>(e)));
-}
-template <typename T>
-const char* ShaderEnumName(T e)
-{
-  static constexpr fmt::formatter<T> formatter{};
-  const char* const name = formatter.Name(e);
-  return name ? name : "Invalid";
 }
 
 // Host config contains the settings which can influence generated shaders.
@@ -205,12 +196,6 @@ union ShaderHostConfig
 std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool include_gameid,
                                        bool include_host_config, bool include_api = true);
 
-void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
-                                const ShaderHostConfig& host_config);
-
-void GenerateVSOutputMembers(ShaderCode& object, u32 texgens, const ShaderHostConfig& host_config,
-                             const char* qualifier);
-
 /* ---- the same pieces, built by calls ---- */
 
 /* An expression made afresh each time: var, var[index_var] or var[index]. */
@@ -222,7 +207,7 @@ struct sb_place
 };
 uint32_t sb_place_ref(const struct shader_build* sb, const struct sb_place* p);
 
-/* VS_OUTPUT's members as GenerateVSOutputMembers lays them out, each with quals (RSLC_B_*);
+/* VS_OUTPUT's members as they are laid out, each with quals (RSLC_B_*);
  * the index of each in it, -1 where absent. */
 struct vs_output_layout
 {
@@ -236,7 +221,15 @@ struct vs_output_layout
 void BuildVSOutputLayout(const struct shader_build* sb, u32 texgens,
                          const ShaderHostConfig& host_config, unsigned quals,
                          struct vs_output_layout* layout);
-/* The member quals GetInterpolationQualifier gives: centroid or sample under MSAA. */
+/* The member quals the stage's varyings take: centroid or sample under MSAA. */
+// We use the flag "centroid" to fix some MSAA rendering bugs. With MSAA, the
+// pixel shader will be executed for each pixel which has at least one passed sample.
+// So there may be rendered pixels where the center of the pixel isn't in the primitive.
+// As the pixel shader usually renders at the center of the pixel, this position may be
+// outside the primitive. This will lead to sampling outside the texture, sign changes, ...
+// As a workaround, we interpolate at the centroid of the coveraged pixel, which
+// is always inside the primitive.
+// Without MSAA, this flag is defined to have no effect.
 unsigned BuildInterpolationQuals(bool msaa, bool ssaa);
 /* a.member = b.member for each member of VS_OUTPUT */
 void BuildAssignVSOutputMembers(const struct shader_build* sb, const struct vs_output_layout* layout,
@@ -312,36 +305,8 @@ struct vs_expansion
 void BuildVSLineExpansion(const struct shader_build* sb, const struct vs_expansion* x);
 void BuildVSPointExpansion(const struct shader_build* sb, const struct vs_expansion* x);
 
-// We use the flag "centroid" to fix some MSAA rendering bugs. With MSAA, the
-// pixel shader will be executed for each pixel which has at least one passed sample.
-// So there may be rendered pixels where the center of the pixel isn't in the primitive.
-// As the pixel shader usually renders at the center of the pixel, this position may be
-// outside the primitive. This will lead to sampling outside the texture, sign changes, ...
-// As a workaround, we interpolate at the centroid of the coveraged pixel, which
-// is always inside the primitive.
-// Without MSAA, this flag is defined to have no effect.
-const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interface_block = false,
-                                      bool in = false);
-
-// bitfieldExtract generator for BitField types: the text in a buffer of its own, for the
-// statement it is written in.
-struct ShaderBitfieldExtract
-{
-  char text[128];
-};
-template <auto ptr_to_bitfield_member>
-ShaderBitfieldExtract BitfieldExtract(const char* source)
-{
-  using BitFieldT = Common::MemberType<ptr_to_bitfield_member>;
-  ShaderBitfieldExtract extract;
-  snprintf(extract.text, sizeof(extract.text), "bitfieldExtract(%s(%s), %u, %u)",
-           BitFieldT::IsSigned() ? "int" : "uint", source,
-           static_cast<u32>(BitFieldT::StartBit()), static_cast<u32>(BitFieldT::NumBits()));
-  return extract;
-}
-
-/* WriteBitfieldExtractHeader's functions, where the backend lacks bitfieldExtract: nullptr
- * where it has it. */
+/* bitfieldExtract's own uint and int forms, where the backend lacks it: nullptr where it
+ * has it. */
 struct sb_bitfield
 {
   struct rslc_func* u;
@@ -352,7 +317,7 @@ void BuildBitfieldExtractHeader(const struct shader_build* sb, const ShaderHostC
 /* bitfieldExtract(int(src) or uint(src), start, bits) */
 uint32_t sb_bitfield_extract(const struct shader_build* sb, const struct sb_bitfield* bf,
                              bool is_signed, uint32_t src, u32 start, u32 bits);
-/* BitfieldExtract, built by calls */
+/* bitfieldExtract of a BitField member */
 template <auto ptr_to_bitfield_member>
 uint32_t BuildBitfieldExtract(const struct shader_build* sb, const struct sb_bitfield* bf,
                               uint32_t src)
@@ -361,28 +326,6 @@ uint32_t BuildBitfieldExtract(const struct shader_build* sb, const struct sb_bit
   return sb_bitfield_extract(sb, bf, BitFieldT::IsSigned(), src,
                              static_cast<u32>(BitFieldT::StartBit()),
                              static_cast<u32>(BitFieldT::NumBits()));
-}
-
-// A tree of ifs on variable, values[i] written where it is i: indexes low <= i < high.
-void WriteSwitchTree(ShaderCode& out, const char* variable, const char* const* values,
-                     const char* const* names, u32 indent, u32 low, u32 high);
-
-template <auto last_member>
-void WriteSwitch(ShaderCode& out, const char* variable,
-                 const Common::EnumMap<const char*, last_member>& values, u32 indent)
-{
-  using enum_type = decltype(last_member);
-  const u32 count = static_cast<u32>(last_member) + 1;
-  const char* value_texts[static_cast<u32>(last_member) + 1];
-  const char* names[static_cast<u32>(last_member) + 1];
-  u32 i;
-
-  for (i = 0; i < count; i++)
-  {
-    value_texts[i] = values[static_cast<enum_type>(i)];
-    names[i] = ShaderEnumName(static_cast<enum_type>(i));
-  }
-  WriteSwitchTree(out, variable, value_texts, names, indent, 0, count);
 }
 
 // Constant variable names

@@ -175,431 +175,6 @@ void ClearUnusedPixelShaderUidBits(APIType api_type, const ShaderHostConfig& hos
   uid_data->bounding_box &= host_config.bounding_box && host_config.backend_bbox;
 }
 
-void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
-                                  const ShaderHostConfig& host_config, bool bounding_box)
-{
-  // dot product for integer vectors
-  out.Puts("int idot(int3 x, int3 y)\n"
-            "{\n"
-            "\tint3 tmp = x * y;\n"
-            "\treturn tmp.x + tmp.y + tmp.z;\n"
-            "}\n");
-
-  out.Puts("int idot(int4 x, int4 y)\n"
-            "{\n"
-            "\tint4 tmp = x * y;\n"
-            "\treturn tmp.x + tmp.y + tmp.z + tmp.w;\n"
-            "}\n"
-            "\n");
-
-  // rounding + casting to integer at once in a single function
-  out.Puts("int  iround(float  x) { return int (round(x)); }\n"
-            "int2 iround(float2 x) { return int2(round(x)); }\n"
-            "int3 iround(float3 x) { return int3(round(x)); }\n"
-            "int4 iround(float4 x) { return int4(round(x)); }\n"
-            "\n");
-
-  out.Puts("SAMPLER_BINDING(0) uniform sampler2DArray samp[8];\n");
-  out.Puts("\n");
-
-  out.Puts("UBO_BINDING(std140, 1) uniform PSBlock {\n");
-
-  out.Puts("\tint4 "
-            I_COLORS
-            "[4];\n"
-            "\tint4 "
-            I_KCOLORS
-            "[4];\n"
-            "\tint4 "
-            I_ALPHA
-            ";\n"
-            "\tint4 "
-            I_TEXDIMS
-            "[8];\n"
-            "\tint4 "
-            I_ZBIAS
-            "[2];\n"
-            "\tint4 "
-            I_INDTEXSCALE
-            "[2];\n"
-            "\tint4 "
-            I_INDTEXMTX
-            "[6];\n"
-            "\tint4 "
-            I_FOGCOLOR
-            ";\n"
-            "\tint4 "
-            I_FOGI
-            ";\n"
-            "\tfloat4 "
-            I_FOGF
-            ";\n"
-            "\tfloat4 "
-            I_FOGRANGE
-            "[3];\n"
-            "\tfloat4 "
-            I_ZSLOPE
-            ";\n"
-            "\tfloat2 "
-            I_EFBSCALE
-            ";\n"
-            "\tuint  bpmem_genmode;\n"
-            "\tuint  bpmem_alphaTest;\n"
-            "\tuint  bpmem_fogParam3;\n"
-            "\tuint  bpmem_fogRangeBase;\n"
-            "\tuint  bpmem_dstalpha;\n"
-            "\tuint  bpmem_ztex_op;\n"
-            "\tbool  bpmem_late_ztest;\n"
-            "\tbool  bpmem_rgba6_format;\n"
-            "\tbool  bpmem_dither;\n"
-            "\tbool  bpmem_bounding_box;\n"
-            "\tuint4 bpmem_pack1[16];\n"
-            "\tuint4 bpmem_pack2[8];\n"
-            "\tint4  konstLookup[32];\n"
-            "\tbool  blend_enable;\n"
-            "\tuint  blend_src_factor;\n"
-            "\tuint  blend_src_factor_alpha;\n"
-            "\tuint  blend_dst_factor;\n"
-            "\tuint  blend_dst_factor_alpha;\n"
-            "\tbool  blend_subtract;\n"
-            "\tbool  blend_subtract_alpha;\n"
-            "\tbool  logic_op_enable;\n"
-            "\tuint  logic_op_mode;\n"
-            "\tuint  time_ms;\n"
-            "\tuint  xfmem_numTexGen;\n"
-            "};\n"
-            "\n");
-  out.Puts("#define bpmem_combiners(i) (bpmem_pack1[(i)].xy)\n"
-            "#define bpmem_tevind(i) (bpmem_pack1[(i)].z)\n"
-            "#define bpmem_iref(i) (bpmem_pack1[(i)].w)\n"
-            "#define bpmem_tevorder(i) (bpmem_pack2[(i)].x)\n"
-            "#define bpmem_tevksel(i) (bpmem_pack2[(i)].y)\n"
-            "#define samp_texmode0(i) (bpmem_pack2[(i)].z)\n"
-            "#define samp_texmode1(i) (bpmem_pack2[(i)].w)\n"
-            "\n");
-
-  if (host_config.per_pixel_lighting)
-  {
-    out.Puts(s_lighting_struct);
-
-    out.Puts("UBO_BINDING(std140, 2) uniform VSBlock {\n");
-
-    out.Puts(s_shader_uniforms);
-    out.Puts("};\n");
-  }
-
-  if (bounding_box)
-  {
-    out.Puts("SSBO_BINDING(0) coherent buffer BBox {\n"
-              "  int bbox_data[4];\n"
-              "};");
-
-    out.Printf("\n"
-              "#define bbox_left bbox_data[0]\n"
-              "#define bbox_right bbox_data[1]\n"
-              "#define bbox_top bbox_data[2]\n"
-              "#define bbox_bottom bbox_data[3]\n"
-              "\n"
-              "void UpdateBoundingBoxBuffer(int2 min_pos, int2 max_pos) {\n"
-              "  if (bbox_left > min_pos.x)\n"
-              "    atomicMin(bbox_left, min_pos.x);\n"
-              "  if (bbox_right < max_pos.x)\n"
-              "    atomicMax(bbox_right, max_pos.x);\n"
-              "  if (bbox_top > min_pos.y)\n"
-              "    atomicMin(bbox_top, min_pos.y);\n"
-              "  if (bbox_bottom < max_pos.y)\n"
-              "    atomicMax(bbox_bottom, max_pos.y);\n"
-              "}\n"
-              "\n"
-              "void UpdateBoundingBox(float2 rawpos) {\n"
-              "  // We only want to include coordinates for pixels aligned with the native resolution pixel centers.\n"
-              "  // This makes bounding box sizes more accurate (though not perfect) at higher resolutions,\n"
-              "  // avoiding EFB copy buffer overflow in affected games.\n"
-              "  //\n"
-              "  // For a more detailed explanation, see https://dolp.in/pr9801\n"
-              "  int2 int_efb_scale = iround(1.0 / %s.xy);\n"
-              "  if (int(rawpos.x) %% int_efb_scale.x != int_efb_scale.x >> 1 ||\n"
-              "      int(rawpos.y) %% int_efb_scale.y != int_efb_scale.y >> 1)  // right shift for fast divide by two\n"
-              "  {\n"
-              "    return;\n"
-              "  }\n"
-              "\n"
-              "  // The rightmost shaded pixel is not included in the right bounding box register,\n"
-              "  // such that width = right - left + 1. This has been verified on hardware.\n"
-              "  int2 pos = int2(rawpos * %s.xy);\n"
-              "\n"
-              "#ifdef API_OPENGL\n"
-              "  // We need to invert the Y coordinate due to OpenGL's lower-left origin\n"
-              "  pos.y = %u - pos.y - 1;\n"
-              "#endif\n"
-              "\n"
-              "  // The GC/Wii GPU rasterizes in 2x2 pixel groups, so bounding box values will be rounded to the\n"
-              "  // extents of these groups, rather than the exact pixel.\n"
-              "  int2 pos_tl = pos & ~1;  // round down to even\n"
-              "  int2 pos_br = pos | 1;   // round up to odd\n"
-              "\n"
-              "#if defined(SUPPORTS_SUBGROUP_REDUCTION) && !defined(BROKEN_SUBGROUP_WITH_DISCARD)\n"
-              "  if (!IS_HELPER_INVOCATION)\n"
-              "  {\n"
-              "    SUBGROUP_MIN(pos_tl);\n"
-              "    SUBGROUP_MAX(pos_br);\n"
-              "    if (IS_FIRST_ACTIVE_INVOCATION)\n"
-              "      UpdateBoundingBoxBuffer(pos_tl, pos_br);\n"
-              "  }\n"
-              "#else\n"
-              "  UpdateBoundingBoxBuffer(pos_tl, pos_br);\n"
-              "#endif\n"
-              "}\n"
-              "\n", I_EFBSCALE, I_EFBSCALE, EFB_HEIGHT);
-  }
-
-  if (host_config.manual_texture_sampling)
-  {
-    out.Puts("\n"
-              "int4 readTexture(in sampler2DArray tex, uint u, uint v, int layer, int lod) {\n"
-              "  return iround(texelFetch(tex, int3(u, v, layer), lod) * 255.0);\n"
-              "}\n"
-              "\n"
-              "int4 readTextureLinear(in sampler2DArray tex, uint2 uv1, uint2 uv2, int layer, int lod, int2 frac_uv) {");
-
-    out.Puts("\n"
-              "  int4 result =\n"
-              "    readTexture(tex, uv1.x, uv1.y, layer, lod) * (128 - frac_uv.x) * (128 - frac_uv.y) +\n"
-              "    readTexture(tex, uv2.x, uv1.y, layer, lod) * (      frac_uv.x) * (128 - frac_uv.y) +\n"
-              "    readTexture(tex, uv1.x, uv2.y, layer, lod) * (128 - frac_uv.x) * (      frac_uv.y) +\n"
-              "    readTexture(tex, uv2.x, uv2.y, layer, lod) * (      frac_uv.x) * (      frac_uv.y);\n"
-              "  return result >> 14;\n"
-              "}\n");
-
-    if (host_config.manual_texture_sampling_custom_texture_sizes)
-    {
-      // This is slower, and doesn't result in the same odd behavior that happens on console when
-      // wrapping with non-power-of-2 sizes, but it's fine for custom textures to have non-console
-      // behavior.
-      out.Printf("\n"
-                "// Both GLSL and HLSL produce undefined values when the modulo operator (%%) is used with a negative\n"
-                "// dividend and a positive divisor.  We want a positive value such that SafeModulo(-1, 3) is 2.\n"
-                "int SafeModulo(int dividend, int divisor) {\n"
-                "  if (dividend >= 0) {\n"
-                "    return dividend %% divisor;\n"
-                "  } else {\n"
-                "    // This works because ~x is the same as -x - 1.\n"
-                "    // `~x %% 5` over -5 to -1 gives 4, 3, 2, 1, 0.  `4 - (~x %% 5)` gives 0, 1, 2, 3, 4.\n"
-                "    return (divisor - 1) - (~dividend %% divisor);\n"
-                "  }\n"
-                "}\n"
-                "\n"
-                "uint WrapCoord(int coord, uint wrap, int size) {\n"
-                "  switch (wrap) {\n"
-                "    case 0x%xu /* %s */:\n"
-                "    default: // confirmed that clamp is used for invalid (3) via hardware test\n"
-                "      return uint(clamp(coord, 0, size - 1));\n"
-                "    case 0x%xu /* %s */:\n"
-                "      return uint(SafeModulo(coord, size));  // coord %% size\n"
-                "    case 0x%xu /* %s */:\n"
-                "      if (SafeModulo(coord, 2 * size) >= size) {  // coord %% (2 * size)\n"
-                "        coord = ~coord;\n"
-                "      }\n"
-                "      return uint(SafeModulo(coord, size));  // coord %% size\n"
-                "  }\n"
-                "}\n", ShaderEnumValue(WrapMode::Clamp), ShaderEnumName(WrapMode::Clamp), ShaderEnumValue(WrapMode::Repeat), ShaderEnumName(WrapMode::Repeat), ShaderEnumValue(WrapMode::Mirror), ShaderEnumName(WrapMode::Mirror));
-    }
-    else
-    {
-      out.Printf("\n"
-                "uint WrapCoord(int coord, uint wrap, int size) {\n"
-                "  switch (wrap) {\n"
-                "    case 0x%xu /* %s */:\n"
-                "    default: // confirmed that clamp is used for invalid (3) via hardware test\n"
-                "      return uint(clamp(coord, 0, size - 1));\n"
-                "    case 0x%xu /* %s */:\n"
-                "      return uint(coord & (size - 1));\n"
-                "    case 0x%xu /* %s */:\n"
-                "      if ((coord & size) != 0) {\n"
-                "        coord = ~coord;\n"
-                "      }\n"
-                "      return uint(coord & (size - 1));\n"
-                "  }\n"
-                "}\n", ShaderEnumValue(WrapMode::Clamp), ShaderEnumName(WrapMode::Clamp), ShaderEnumValue(WrapMode::Repeat), ShaderEnumName(WrapMode::Repeat), ShaderEnumValue(WrapMode::Mirror), ShaderEnumName(WrapMode::Mirror));
-    }
-  }
-
-  out.Puts("\n"
-            "int4 sampleTexture(uint texmap, in sampler2DArray tex, int2 uv, int layer) {\n");
-
-  if (!host_config.manual_texture_sampling)
-  {
-    out.Puts("  float size_s = float("
-              I_TEXDIMS
-              "[texmap].x * 128);\n"
-              "  float size_t = float("
-              I_TEXDIMS
-              "[texmap].y * 128);\n"
-              "  float3 coords = float3(float(uv.x) / size_s, float(uv.y) / size_t, layer);\n");
-    if (!host_config.backend_sampler_lod_bias)
-    {
-      out.Printf("  uint texmode0 = samp_texmode0(texmap);\n"
-                "  float lod_bias = float(%s) / 256.0f;\n"
-                "  return iround(255.0 * texture(tex, coords, lod_bias));\n", BitfieldExtract<&SamplerState::TM0::lod_bias>("texmode0").text);
-    }
-    else
-    {
-      out.Puts("  return iround(255.0 * texture(tex, coords));\n");
-    }
-
-    out.Puts("}\n");
-  }
-  else
-  {
-    out.Printf("\n"
-              "  uint texmode0 = samp_texmode0(texmap);\n"
-              "  uint texmode1 = samp_texmode1(texmap);\n"
-              "\n"
-              "  uint wrap_s = %s;\n"
-              "  uint wrap_t = %s;\n"
-              "  bool mag_linear = %s != 0u;\n"
-              "  bool mipmap_linear = %s != 0u;\n"
-              "  bool min_linear = %s != 0u;\n"
-              "  bool diag_lod = %s != 0u;\n"
-              "  int lod_bias = %s;\n"
-              "  // uint max_aniso = TODO;\n"
-              "  bool lod_clamp = %s != 0u;\n"
-              "  int min_lod = int(%s);\n"
-              "  int max_lod = int(%s);\n", BitfieldExtract<&SamplerState::TM0::wrap_u>("texmode0").text, BitfieldExtract<&SamplerState::TM0::wrap_v>("texmode0").text, BitfieldExtract<&SamplerState::TM0::mag_filter>("texmode0").text, BitfieldExtract<&SamplerState::TM0::mipmap_filter>("texmode0").text, BitfieldExtract<&SamplerState::TM0::min_filter>("texmode0").text, BitfieldExtract<&SamplerState::TM0::diag_lod>("texmode0").text, BitfieldExtract<&SamplerState::TM0::lod_bias>("texmode0").text, BitfieldExtract<&SamplerState::TM0::lod_clamp>("texmode0").text, BitfieldExtract<&SamplerState::TM1::min_lod>("texmode1").text, BitfieldExtract<&SamplerState::TM1::max_lod>("texmode1").text);
-
-    if (host_config.manual_texture_sampling_custom_texture_sizes)
-    {
-      out.Puts("\n"
-                "  int native_size_s = "
-                I_TEXDIMS
-                "[texmap].x;\n"
-                "  int native_size_t = "
-                I_TEXDIMS
-                "[texmap].y;\n");
-
-      out.Puts("\n"
-                "  int3 size = textureSize(tex, 0);\n"
-                "  int size_s = size.x;\n"
-                "  int size_t = size.y;\n"
-                "  int num_layers = size.z;\n");
-      if (g_backend_info.bSupportsTextureQueryLevels)
-      {
-        out.Puts("  int number_of_levels = textureQueryLevels(tex);\n");
-      }
-      else
-      {
-        out.Puts("  int number_of_levels = 256;  // textureQueryLevels is not supported\n");
-        ERROR_LOG_FMT(VIDEO, "textureQueryLevels is not supported!  Odd graphical results may "
-                             "occur if custom textures are in use!");
-      }
-
-      out.Puts("\n"
-                "  // Prevent out-of-bounds LOD values when using custom textures\n"
-                "  max_lod = min(max_lod, (number_of_levels - 1) << 4);\n"
-                "  // Rescale uv to account for the new texture size\n"
-                "  uv.x = (uv.x * size_s) / native_size_s;\n"
-                "  uv.y = (uv.y * size_t) / native_size_t;\n"
-                "  // Clamp layer as well (texture() automatically clamps, but texelFetch() doesn't)\n"
-                "  layer = clamp(layer, 0, num_layers - 1);\n");
-    }
-    else
-    {
-      out.Puts("\n"
-                "  int size_s = "
-                I_TEXDIMS
-                "[texmap].x;\n"
-                "  int size_t = "
-                I_TEXDIMS
-                "[texmap].y;\n");
-    }
-
-    if (g_backend_info.bSupportsCoarseDerivatives)
-    {
-      // The software renderer uses the equivalent of coarse derivatives, so use them here for
-      // consistency.  This hasn't been hardware tested.
-      // Note that bSupportsCoarseDerivatives being false only means dFdxCoarse and dFdxFine don't
-      // exist.  The GPU may still implement dFdx using coarse derivatives; we just don't have the
-      // ability to specifically require it.
-      out.Puts("\n"
-                "  float2 uv_delta_x = abs(dFdxCoarse(float2(uv)));\n"
-                "  float2 uv_delta_y = abs(dFdyCoarse(float2(uv)));\n");
-    }
-    else
-    {
-      out.Puts("\n"
-                "  float2 uv_delta_x = abs(dFdx(float2(uv)));\n"
-                "  float2 uv_delta_y = abs(dFdy(float2(uv)));\n");
-    }
-
-    // TODO: LOD bias is normally S2.5 (Dolphin uses S7.8 for arbitrary mipmap detection and higher
-    // IRs), but (at least per the software renderer) actual LOD is S28.4.  How does this work?
-    // Also, note that we can make some assumptions due to use of a SamplerState version of the BP
-    // configuration, which tidies things compared to whatever nonsense games can put in.
-    out.Puts("\n"
-              "  float2 uv_delta = diag_lod ? uv_delta_x + uv_delta_y : max(uv_delta_x, uv_delta_y);\n"
-              "  float max_delta = max(uv_delta.x / 128.0, uv_delta.y / 128.0);\n"
-              "  // log2(x) is undefined if x <= 0, but in practice it seems log2(0) is -infinity, which becomes INT_MIN.\n"
-              "  // If lod_bias is negative, adding it to INT_MIN causes an underflow, resulting in a large positive value.\n"
-              "  // Hardware testing indicates that min_lod should be used when the derivative is 0.\n"
-              "  int lod = max_delta == 0.0 ? min_lod : int(floor(log2(max_delta) * 16.0)) + (lod_bias >> 4);\n"
-              "\n"
-              "  bool is_linear = (lod > 0) ? min_linear : mag_linear;\n"
-              "  lod = clamp(lod, min_lod, max_lod);\n"
-              "  int base_lod = lod >> 4;\n"
-              "  int frac_lod = lod & 15;\n"
-              "  if (!mipmap_linear && frac_lod >= 8) {\n"
-              "    // Round to nearest LOD in point mode\n"
-              "    base_lod++;\n"
-              "  }\n"
-              "\n"
-              "  if (is_linear) {\n"
-              "    uint2 texuv1 = uint2(\n"
-              "        WrapCoord(((uv.x >> base_lod) - 64) >> 7, wrap_s, size_s >> base_lod),\n"
-              "        WrapCoord(((uv.y >> base_lod) - 64) >> 7, wrap_t, size_t >> base_lod));\n"
-              "    uint2 texuv2 = uint2(\n"
-              "        WrapCoord(((uv.x >> base_lod) + 64) >> 7, wrap_s, size_s >> base_lod),\n"
-              "        WrapCoord(((uv.y >> base_lod) + 64) >> 7, wrap_t, size_t >> base_lod));\n"
-              "    int2 frac_uv = int2(((uv.x >> base_lod) - 64) & 0x7f, ((uv.y >> base_lod) - 64) & 0x7f);\n"
-              "\n"
-              "    int4 result = readTextureLinear(tex, texuv1, texuv2, layer, base_lod, frac_uv);\n"
-              "\n"
-              "    if (frac_lod != 0 && mipmap_linear) {\n"
-              "      texuv1 = uint2(\n"
-              "          WrapCoord(((uv.x >> (base_lod + 1)) - 64) >> 7, wrap_s, size_s >> (base_lod + 1)),\n"
-              "          WrapCoord(((uv.y >> (base_lod + 1)) - 64) >> 7, wrap_t, size_t >> (base_lod + 1)));\n"
-              "      texuv2 = uint2(\n"
-              "          WrapCoord(((uv.x >> (base_lod + 1)) + 64) >> 7, wrap_s, size_s >> (base_lod + 1)),\n"
-              "          WrapCoord(((uv.y >> (base_lod + 1)) + 64) >> 7, wrap_t, size_t >> (base_lod + 1)));\n"
-              "      frac_uv = int2(((uv.x >> (base_lod + 1)) - 64) & 0x7f, ((uv.y >> (base_lod + 1)) - 64) & 0x7f);\n"
-              "\n"
-              "      result *= 16 - frac_lod;\n"
-              "      result += readTextureLinear(tex, texuv1, texuv2, layer, base_lod + 1, frac_uv) * frac_lod;\n"
-              "      result >>= 4;\n"
-              "    }\n"
-              "\n"
-              "    return result;\n"
-              "  } else {\n"
-              "    uint2 texuv = uint2(\n"
-              "        WrapCoord(uv.x >> (7 + base_lod), wrap_s, size_s >> base_lod),\n"
-              "        WrapCoord(uv.y >> (7 + base_lod), wrap_t, size_t >> base_lod));\n"
-              "\n"
-              "    int4 result = readTexture(tex, texuv.x, texuv.y, layer, base_lod);\n"
-              "\n"
-              "    if (frac_lod != 0 && mipmap_linear) {\n"
-              "      texuv = uint2(\n"
-              "          WrapCoord(uv.x >> (7 + base_lod + 1), wrap_s, size_s >> (base_lod + 1)),\n"
-              "          WrapCoord(uv.y >> (7 + base_lod + 1), wrap_t, size_t >> (base_lod + 1)));\n"
-              "\n"
-              "      result *= 16 - frac_lod;\n"
-              "      result += readTexture(tex, texuv.x, texuv.y, layer, base_lod + 1) * frac_lod;\n"
-              "      result >>= 4;\n"
-              "    }\n"
-              "    return result;\n"
-              "  }\n"
-              "}\n");
-  }
-}
-
 /* ---- built by calls ---- */
 
 namespace
@@ -2246,20 +1821,6 @@ uint32_t pb_alpha_func(const struct ps_build* p, CompareMode mode, const char* r
 namespace
 {
 /* the stage's inputs: a member of the unnamed block, or a varying */
-struct ps_inputs
-{
-  const struct shader_build* sb;
-  struct rslc_var* block;
-  struct rslc_var* var[20];
-};
-
-uint32_t pi_ref(const struct ps_inputs* in, int idx)
-{
-  if (in->block)
-    return sb_mem(in->sb, sb_ref(in->sb, in->block), static_cast<uint32_t>(idx));
-  return sb_ref(in->sb, in->var[idx]);
-}
-
 /* intN(v...) as the text writes float literals: float4(0.0, 0.0, 0.0, 0.0) */
 uint32_t pb_fvec(const struct shader_build* sb, unsigned n, double v)
 {
@@ -2501,17 +2062,79 @@ uint32_t pb_blend_factor(const struct ps_build* p, u32 factor, bool dst, bool al
 }
 }  // namespace
 
+uint32_t pi_ref(const struct ps_inputs* in, int idx)
+{
+  if (in->block)
+    return sb_mem(in->sb, sb_ref(in->sb, in->block), static_cast<uint32_t>(idx));
+  return sb_ref(in->sb, in->var[idx]);
+}
+
+void BuildPixelShaderInputs(const struct shader_build* sb, const ShaderHostConfig& host_config,
+                            u32 numtexgens, struct ps_inputs* in, struct vs_output_layout* plain,
+                            struct rslc_var** layer_in)
+{
+  static const char* const tex_names[8] = {"tex0", "tex1", "tex2", "tex3",
+                                           "tex4", "tex5", "tex6", "tex7"};
+  struct rslc_b_quals q;
+  u32 i;
+
+  memset(in, 0, sizeof(*in));
+  in->sb = sb;
+  *layer_in = nullptr;
+  BuildVSOutputLayout(sb, numtexgens, host_config, 0, plain);
+  if (host_config.backend_geometry_shaders)
+  {
+    struct vs_output_layout in_l;
+    BuildVSOutputLayout(sb, numtexgens, host_config,
+                        BuildInterpolationQuals(host_config.msaa, host_config.ssaa), &in_l);
+    rslc_b_quals_init(&q);
+    q.storage = RSLC_B_ST_IN;
+    q.location = sb_varying_location(sb, 0);
+    in->block = rslc_b_io_block(sb->b, &q, "VertexData", nullptr, in_l.types, in_l.names,
+                                nullptr, in_l.quals, in_l.n, -1);
+    if (host_config.stereo && !host_config.backend_gl_layer_in_fs)
+    {
+      rslc_b_quals_init(&q);
+      q.storage = RSLC_B_ST_IN;
+      q.interp = RSLC_B_INTERP_FLAT;
+      *layer_in = rslc_b_declare(sb->b, &q, "layer", sb->i[1], 0);
+    }
+    return;
+  }
+  // Let's set up attributes
+  {
+    u32 counter = 0;
+    rslc_b_quals_init(&q);
+    q.storage = RSLC_B_ST_IN;
+    q.quals = BuildInterpolationQuals(host_config.msaa, host_config.ssaa);
+#define PS_VARYING(idx, name, type)                                                                \
+  do                                                                                               \
+  {                                                                                                \
+    q.location = sb_varying_location(sb, counter++);                                              \
+    in->var[idx] = rslc_b_declare(sb->b, &q, name, type, 0);                                      \
+  } while (0)
+    PS_VARYING(plain->colors_0, "colors_0", sb->f[4]);
+    PS_VARYING(plain->colors_1, "colors_1", sb->f[4]);
+    for (i = 0; i < numtexgens; ++i)
+      PS_VARYING(plain->tex0 + static_cast<int>(i), tex_names[i], sb->f[3]);
+    if (!host_config.fast_depth_calc)
+      PS_VARYING(plain->clipPos, "clipPos", sb->f[4]);
+    if (host_config.per_pixel_lighting)
+    {
+      PS_VARYING(plain->Normal, "Normal", sb->f[3]);
+      PS_VARYING(plain->WorldPos, "WorldPos", sb->f[3]);
+    }
+#undef PS_VARYING
+  }
+}
+
 bool BuildPixelShader(struct shader_build* sb, const void* arg)
 {
   const PixelShaderBuildArgs* a = static_cast<const PixelShaderBuildArgs*>(arg);
   const ShaderHostConfig& host_config = *a->host_config;
   const pixel_shader_uid_data* uid_data = a->uid_data;
   const bool per_pixel_lighting = host_config.per_pixel_lighting;
-  const bool msaa = host_config.msaa;
-  const bool ssaa = host_config.ssaa;
   const bool stereo = host_config.stereo;
-  static const char* const tex_names[8] = {"tex0", "tex1", "tex2", "tex3",
-                                           "tex4", "tex5", "tex6", "tex7"};
   struct ps_build p;
   struct ps_inputs in;
   struct vs_output_layout plain;
@@ -2525,12 +2148,10 @@ bool BuildPixelShader(struct shader_build* sb, const void* arg)
   u32 i;
 
   memset(&p, 0, sizeof(p));
-  memset(&in, 0, sizeof(in));
   p.sb = sb;
   p.uid_data = uid_data;
   p.host_config = &host_config;
   p.api_type = a->api_type;
-  in.sb = sb;
 
   // Stuff that is shared between ubershaders and pixelgen.
   BuildBitfieldExtractHeader(sb, host_config, &p.bitfield);
@@ -2614,51 +2235,7 @@ bool BuildPixelShader(struct shader_build* sb, const void* arg)
                               0);
   }
 
-  BuildVSOutputLayout(sb, uid_data->genMode_numtexgens, host_config, 0, &plain);
-  if (host_config.backend_geometry_shaders)
-  {
-    struct vs_output_layout in_l;
-    BuildVSOutputLayout(sb, uid_data->genMode_numtexgens, host_config,
-                        BuildInterpolationQuals(msaa, ssaa), &in_l);
-    rslc_b_quals_init(&q);
-    q.storage = RSLC_B_ST_IN;
-    q.location = sb_varying_location(sb, 0);
-    in.block = rslc_b_io_block(sb->b, &q, "VertexData", nullptr, in_l.types, in_l.names,
-                               nullptr, in_l.quals, in_l.n, -1);
-    if (stereo && !host_config.backend_gl_layer_in_fs)
-    {
-      rslc_b_quals_init(&q);
-      q.storage = RSLC_B_ST_IN;
-      q.interp = RSLC_B_INTERP_FLAT;
-      layer_in = rslc_b_declare(sb->b, &q, "layer", sb->i[1], 0);
-    }
-  }
-  else
-  {
-    // Let's set up attributes
-    u32 counter = 0;
-    rslc_b_quals_init(&q);
-    q.storage = RSLC_B_ST_IN;
-    q.quals = BuildInterpolationQuals(msaa, ssaa);
-#define PS_VARYING(idx, name, type)                                                                \
-  do                                                                                               \
-  {                                                                                                \
-    q.location = sb_varying_location(sb, counter++);                                              \
-    in.var[idx] = rslc_b_declare(sb->b, &q, name, type, 0);                                       \
-  } while (0)
-    PS_VARYING(plain.colors_0, "colors_0", sb->f[4]);
-    PS_VARYING(plain.colors_1, "colors_1", sb->f[4]);
-    for (i = 0; i < uid_data->genMode_numtexgens; ++i)
-      PS_VARYING(plain.tex0 + static_cast<int>(i), tex_names[i], sb->f[3]);
-    if (!host_config.fast_depth_calc)
-      PS_VARYING(plain.clipPos, "clipPos", sb->f[4]);
-    if (per_pixel_lighting)
-    {
-      PS_VARYING(plain.Normal, "Normal", sb->f[3]);
-      PS_VARYING(plain.WorldPos, "WorldPos", sb->f[3]);
-    }
-#undef PS_VARYING
-  }
+  BuildPixelShaderInputs(sb, host_config, uid_data->genMode_numtexgens, &in, &plain, &layer_in);
 
   if (per_pixel_lighting)
     BuildLightingShaderHeader(sb, uid_data->lighting, p.c.vs[SU_MATERIALS], p.c.vs[SU_LIGHTS],

@@ -27,8 +27,15 @@ using PixelShaderUid = ShaderUid<pixel_ubershader_uid_data>;
 
 PixelShaderUid GetPixelShaderUid();
 
-ShaderCode GenPixelShader(APIType api_type, const ShaderHostConfig& host_config,
-                          const pixel_ubershader_uid_data* uid_data);
+/* What BuildPixelShader builds the stage for. */
+struct PixelShaderBuildArgs
+{
+  const ShaderHostConfig* host_config;
+  const pixel_ubershader_uid_data* uid_data;
+  APIType api_type;
+};
+/* The stage built by calls: for AbstractGfx::CreateShaderFromBuild. */
+bool BuildPixelShader(struct shader_build* sb, const void* arg);
 
 /* Every pixel ubershader UID, into uids: returns how many. */
 enum

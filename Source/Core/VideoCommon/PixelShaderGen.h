@@ -158,8 +158,6 @@ struct pixel_shader_uid_data
 
 using PixelShaderUid = ShaderUid<pixel_shader_uid_data>;
 
-void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
-                                  const ShaderHostConfig& host_config, bool bounding_box);
 void ClearUnusedPixelShaderUidBits(APIType api_type, const ShaderHostConfig& host_config,
                                    PixelShaderUid* uid);
 
@@ -208,7 +206,7 @@ enum ps_uniform
   PSU_COUNT
 };
 
-/* What WritePixelShaderCommonHeader declares, built by calls: its functions (iround by the
+/* What the pixel stages share: its functions (iround by the
  * width it takes, nullptr where not declared), samp[8], the PSBlock's members and, with
  * per-pixel lighting, the VSBlock's. */
 struct ps_common
@@ -226,6 +224,20 @@ struct ps_common
   struct rslc_func* wrap_coord;
   struct rslc_func* sample_texture;
 };
+/* The stage's inputs as both pixel generators declare them: the geometry shader's VertexData
+ * block, or a varying each. pi_ref reads the one plain gives the index of. */
+struct ps_inputs
+{
+  const struct shader_build* sb;
+  struct rslc_var* block;
+  struct rslc_var* var[20];
+};
+uint32_t pi_ref(const struct ps_inputs* in, int idx);
+/* layer_in: the layer as its own flat input, where the geometry shader passes it so; nullptr
+ * otherwise */
+void BuildPixelShaderInputs(const struct shader_build* sb, const ShaderHostConfig& host_config,
+                            u32 numtexgens, struct ps_inputs* in, struct vs_output_layout* plain,
+                            struct rslc_var** layer_in);
 /* What BuildPixelShader builds the stage for. */
 struct PixelShaderBuildArgs
 {

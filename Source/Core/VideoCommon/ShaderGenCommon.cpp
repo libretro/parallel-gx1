@@ -45,31 +45,6 @@ void ShaderCode::Printf(const char* format, ...)
   }
 }
 
-void WriteSwitchTree(ShaderCode& out, const char* variable, const char* const* values,
-                     const char* const* names, u32 indent, u32 low, u32 high)
-{
-  u32 mid;
-
-  // Each generated statement is for low <= x < high
-  if (high == low + 1)
-  {
-    // Down to 1 case (low <= x < low + 1 means x == low)
-    // Note that this indentation behaves poorly for multi-line code
-    out.Indent(indent);
-    out.Printf("%s  // %s (%u)\n", values[low], names[low], low);
-    return;
-  }
-  mid = low + ((high - low) / 2);
-  out.Indent(indent);
-  out.Printf("if (%s < %uu) {\n", variable, mid);
-  WriteSwitchTree(out, variable, values, names, indent + 2, low, mid);
-  out.Indent(indent);
-  out.Puts("} else {\n");
-  WriteSwitchTree(out, variable, values, names, indent + 2, mid, high);
-  out.Indent(indent);
-  out.Puts("}\n");
-}
-
 ShaderHostConfig ShaderHostConfig::GetCurrent()
 {
   ShaderHostConfig bits = {};
@@ -161,67 +136,6 @@ std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool 
 
   filename += ".cache";
   return filename;
-}
-
-void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
-                                const ShaderHostConfig& host_config)
-{
-  // ==============================================
-  //  BitfieldExtract for APIs which don't have it
-  // ==============================================
-  if (!host_config.backend_bitfield)
-  {
-    out.Puts("uint bitfieldExtract(uint val, int off, int size) {\n"
-              "  // This built-in function is only supported in OpenGL 4.0+ and ES 3.1+\n"
-              "  // Microsoft's HLSL compiler automatically optimises this to a bitfield extract instruction.\n"
-              "  uint mask = uint((1 << size) - 1);\n"
-              "  return uint(val >> off) & mask;\n"
-              "}\n"
-              "\n");
-    out.Puts("int bitfieldExtract(int val, int off, int size) {\n"
-              "  // This built-in function is only supported in OpenGL 4.0+ and ES 3.1+\n"
-              "  // Microsoft's HLSL compiler automatically optimises this to a bitfield extract instruction.\n"
-              "  return ((val << (32 - size - off)) >> (32 - size));\n"
-              "}\n"
-              "\n");
-  }
-}
-
-static void DefineOutputMember(ShaderCode& object, const char* qualifier,
-                               const char* type, const char* name, int var_index)
-{
-  object.Printf("\t%s %s %s", qualifier, type, name);
-
-  if (var_index != -1)
-    object.Printf("%d", var_index);
-
-  object.Puts(";\n");
-}
-
-void GenerateVSOutputMembers(ShaderCode& object, u32 texgens, const ShaderHostConfig& host_config,
-                             const char* qualifier)
-{
-  DefineOutputMember(object, qualifier, "float4", "pos", -1);
-  DefineOutputMember(object, qualifier, "float4", "colors_", 0);
-  DefineOutputMember(object, qualifier, "float4", "colors_", 1);
-
-  if (host_config.backend_geometry_shaders)
-  {
-    DefineOutputMember(object, qualifier, "float", "clipDist", 0);
-    DefineOutputMember(object, qualifier, "float", "clipDist", 1);
-  }
-
-  for (unsigned int i = 0; i < texgens; ++i)
-    DefineOutputMember(object, qualifier, "float3", "tex", i);
-
-  if (!host_config.fast_depth_calc)
-    DefineOutputMember(object, qualifier, "float4", "clipPos", -1);
-
-  if (host_config.per_pixel_lighting)
-  {
-    DefineOutputMember(object, qualifier, "float3", "Normal", -1);
-    DefineOutputMember(object, qualifier, "float3", "WorldPos", -1);
-  }
 }
 
 uint32_t sb_place_ref(const struct shader_build* sb, const struct sb_place* p)
@@ -698,28 +612,5 @@ void BuildVSPointExpansion(const struct shader_build* sb, const struct vs_expans
                           sb_bin(sb, RSLC_B_NE, sb_idx(sb, sb_ref(sb, x->texoffset), sb_i(sb, 3)),
                                  sb_i(sb, 0)),
                           then_s, 0));
-  }
-}
-
-const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interface_block, bool in)
-{
-  if (!msaa)
-    return "";
-
-  // Without GL_ARB_shading_language_420pack support, the interpolation qualifier must be
-  // "centroid in" and not "centroid", even within an interface block.
-  if (in_glsl_interface_block && !g_backend_info.bSupportsBindingLayout)
-  {
-    if (!ssaa)
-      return in ? "centroid in" : "centroid out";
-    else
-      return in ? "sample in" : "sample out";
-  }
-  else
-  {
-    if (!ssaa)
-      return "centroid";
-    else
-      return "sample";
   }
 }
