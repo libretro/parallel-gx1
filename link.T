@@ -1,4 +1,4 @@
 {
-   global: retro_*; parallel_gx1_stutter_stats;
+   global: retro_*;
    local: *;
 };

@@ -232,6 +232,7 @@ ifeq ($(STATS), 1)
    OBJ_DIR := $(OBJ_DIR)-stats
    TARGET  := $(basename $(TARGET))_stats$(suffix $(TARGET))
    FLAGS   += -DHAVE_STUTTER_STATS
+   SHARED  := $(subst link.T,link_stats.T,$(SHARED))
 endif
 
 # PERF_TEST=1: the frontend's performance counters around retro_run's
