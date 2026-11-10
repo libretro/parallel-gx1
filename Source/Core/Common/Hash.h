@@ -16,8 +16,12 @@ uint32_t common_hash_adler32(const uint8_t *data, size_t len);
 uint32_t common_hash_ector(const uint8_t *data, size_t len);
 
 /* The texture cache's hash: CRC32 where the CPU has it, else MurmurHash3; of
- * every 8 bytes, or of about samples of them spread over len (0: all). */
+ * every 8 bytes, or of about samples of them spread over len (0: all). On
+ * x86-64 with VPCLMULQDQ a whole buffer of 512 bytes or more is the CRC-32
+ * of libretro-common's encoding_crc32 instead. */
 uint64_t common_hash64(const uint8_t *src, uint32_t len, uint32_t samples);
+/* What common_hash64 was before that, for the hashes older states hold */
+uint64_t common_hash64_v1(const uint8_t *src, uint32_t len, uint32_t samples);
 
 uint32_t common_crc32_start(void);
 uint32_t common_crc32_update(uint32_t crc, const uint8_t *data, size_t len);
@@ -25,6 +29,10 @@ uint32_t common_crc32_compute(const uint8_t *data, size_t len);
 
 /* CPUDetect's answer, for the hash */
 int common_cpu_has_crc32(void);
+#if defined(_M_X86_64)
+/* whether CRC-32 folds 512 bits at a time */
+int common_cpu_has_crc_fold(void);
+#endif
 
 #ifdef __cplusplus
 }

@@ -104,9 +104,17 @@ static inline CPUIDResult cpuid(int function_id, int subfunction_id = 0)
 
 CPUInfo cpu_info;
 
+/* VPCLMULQDQ on ZMM, with the OS saving the AVX-512 state */
+static bool s_crc_fold;
+
 extern "C" int common_cpu_has_crc32(void)
 {
   return cpu_info.bCRC32;
+}
+
+extern "C" int common_cpu_has_crc_fold(void)
+{
+  return s_crc_fold;
 }
 
 CPUInfo::CPUInfo()
@@ -149,6 +157,7 @@ void CPUInfo::Detect()
   // Detect family and other misc stuff.
   bool is_amd_family_17 = false;
   bool has_sse = false;
+  bool zmm_saved = false;
   if (func_id_max >= 1)
   {
     info = cpuid(1);
@@ -197,7 +206,10 @@ void CPUInfo::Detect()
     if (((info.ecx >> 28) & 1) && ((info.ecx >> 27) & 1))
     {
       // Check that XSAVE can be used for SSE and AVX
-      if ((xgetbv(XCR_XFEATURE_ENABLED_MASK) & 0b110) == 0b110)
+      const u64 xcr0 = xgetbv(XCR_XFEATURE_ENABLED_MASK);
+      /* SSE, AVX, opmask and both halves of the ZMM registers */
+      zmm_saved = (xcr0 & 0xe6) == 0xe6;
+      if ((xcr0 & 0b110) == 0b110)
       {
         bAVX = true;
         if ((info.ecx >> 12) & 1)
@@ -214,6 +226,9 @@ void CPUInfo::Detect()
         bBMI2 = true;
       if ((info.ebx >> 29) & 1)
         bSHA1 = bSHA2 = true;
+      /* AVX512F, BW and VL, and VPCLMULQDQ */
+      s_crc_fold = zmm_saved && ((info.ebx >> 16) & 1) && ((info.ebx >> 30) & 1) &&
+                   ((info.ebx >> 31) & 1) && ((info.ecx >> 10) & 1);
     }
   }
 

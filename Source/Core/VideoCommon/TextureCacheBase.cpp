@@ -576,7 +576,7 @@ void TextureCacheBase::Cleanup(int _frameCount)
         // host GPU are unrecoverable. Perform this check only every TEXTURE_KILL_THRESHOLD for
         // performance reasons
         if ((_frameCount - iter->value->frameCount) % TEXTURE_KILL_THRESHOLD == 1 &&
-            iter->value->hash != iter->value->CalculateHash())
+            !iter->value->MemoryUnchanged(false))
         {
           iter = InvalidateTexture(iter);
         }
@@ -1100,6 +1100,7 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
       continue;
     }
     entry->DoState(p);
+    entry->hash_from_state = entry->IsCopy();
     if (entry->texture && commit_state)
       id_map.emplace(i, entry);
   }
@@ -1239,7 +1240,7 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
         entry->OverlapsMemoryRange(entry_to_update->addr, entry_to_update->size_in_bytes) &&
         entry->memory_stride == numBlocksX * block_size)
     {
-      if (entry->hash == entry->CalculateHash())
+      if (entry->MemoryUnchanged(false))
       {
         // If the texture formats are not compatible or convertible, skip it.
         if (!IsCompatibleTextureFormat(entry_to_update->format.texfmt, entry->format.texfmt))
@@ -1676,7 +1677,7 @@ TCacheEntry* TextureCacheBase::LoadImpl(u32 stage, bool force_reload)
 
     // Otherwise, hash the backing memory and check it's unchanged.
     // FIXME: this doesn't correctly handle textures from tmem.
-    if (!entry->invalidated && entry->base_hash == entry->CalculateHash())
+    if (!entry->invalidated && entry->MemoryUnchanged(true))
     {
       return entry;
     }
@@ -2384,7 +2385,7 @@ RcTcacheEntry TextureCacheBase::GetXFBFromCache(u32 address, u32 width, u32 heig
     if (entry->is_xfb_copy && entry->memory_stride == stride && entry->native_width >= width &&
         entry->native_height >= height && !entry->may_have_overlapping_textures)
     {
-      if (entry->hash == entry->CalculateHash() && !entry->reference_changed)
+      if (entry->MemoryUnchanged(false) && !entry->reference_changed)
       {
         return entry;
       }
@@ -2428,7 +2429,7 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
         entry->OverlapsMemoryRange(stitched_entry->addr, stitched_entry->size_in_bytes) &&
         entry->memory_stride == stitched_entry->memory_stride)
     {
-      if (entry->hash == entry->CalculateHash())
+      if (entry->MemoryUnchanged(false))
       {
         // Can't check the height here because of Y scaling.
         if (entry->native_width != entry->GetWidth())
@@ -3760,23 +3761,23 @@ int TCacheEntry::HashSampleSize() const
   return g_ActiveConfig.iSafeTextureCache_ColorSamples;
 }
 
-u64 TCacheEntry::CalculateHash() const
+static u64 HashEntryMemory(const TCacheEntry& entry, u64 (*hash64)(const u8*, u32, u32))
 {
-  const u32 bytes_per_row = BytesPerRow();
-  const u32 hash_sample_size = HashSampleSize();
+  const u32 bytes_per_row = entry.BytesPerRow();
+  const u32 hash_sample_size = entry.HashSampleSize();
 
   // FIXME: textures from tmem won't get the correct hash.
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();
-  u8* ptr = memory.GetPointerForRange(addr, size_in_bytes);
-  if (memory_stride == bytes_per_row)
+  u8* ptr = memory.GetPointerForRange(entry.addr, entry.size_in_bytes);
+  if (entry.memory_stride == bytes_per_row)
   {
-    return common_hash64(ptr, size_in_bytes, hash_sample_size);
+    return hash64(ptr, entry.size_in_bytes, hash_sample_size);
   }
   else
   {
-    const u32 num_blocks_y = NumBlocksY();
-    u64 temp_hash = size_in_bytes;
+    const u32 num_blocks_y = entry.NumBlocksY();
+    u64 temp_hash = entry.size_in_bytes;
 
     u32 samples_per_row = 0;
     if (hash_sample_size != 0)
@@ -3790,10 +3791,39 @@ u64 TCacheEntry::CalculateHash() const
     {
       // Multiply by a prime number to mix the hash up a bit. This prevents identical blocks from
       // canceling each other out
-      temp_hash = (temp_hash * 397) ^ common_hash64(ptr, bytes_per_row, samples_per_row);
-      ptr += memory_stride;
+      temp_hash = (temp_hash * 397) ^ hash64(ptr, bytes_per_row, samples_per_row);
+      ptr += entry.memory_stride;
     }
     return temp_hash;
   }
+}
+
+u64 TCacheEntry::CalculateHash() const
+{
+  return HashEntryMemory(*this, common_hash64);
+}
+
+/* A state saved before whole buffers were hashed with encoding_crc32 holds
+ * the old hash of a copy, whose picture is only on the host and would be
+ * lost to a mismatch: the first check after loading also takes the old
+ * hash of the memory, and keeps the new one from then on. */
+bool TCacheEntry::MemoryUnchanged(bool base)
+{
+  const u64 want = base ? base_hash : hash;
+  const u64 now = CalculateHash();
+  if (now == want)
+    return true;
+  if (!hash_from_state)
+    return false;
+  hash_from_state = false;
+  if (HashEntryMemory(*this, common_hash64_v1) != want)
+    return false;
+  if (base_hash == hash)
+    base_hash = hash = now;
+  else if (base)
+    base_hash = now;
+  else
+    hash = now;
+  return true;
 }
 

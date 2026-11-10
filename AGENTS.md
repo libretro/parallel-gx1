@@ -135,6 +135,17 @@ reason a reader can see.
   count them where they happen, and say what changed. They are not
   frame-time results until timing shows it.
 
+## Savestates and libretro-common
+
+- **A state an older build saved loads the same.** A value a state
+  keeps that a change now computes differently (a texture cache hash,
+  say) is taken in its old form too, on its first use after loading,
+  and replaced with the new one; the old function stays for that.
+  Check it with a state the parent saved, loaded by the candidate.
+- **libretro-common comes from upstream as it is.** A file it lacks is
+  copied in unchanged from libretro/libretro-common; its files are not
+  edited here.
+
 ## Shader compilation and stutter
 
 The target is the console's own behaviour: a game never waits for a

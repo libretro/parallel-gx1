@@ -148,6 +148,9 @@ struct TCacheEntry
 
   bool reference_changed = false;  // used by xfb to determine when a reference xfb changed
 
+  /* a copy a state brought back, whose hashes may be common_hash64_v1's */
+  bool hash_from_state = false;
+
   // Texture dimensions from the GameCube's point of view
   u32 native_width = 0;
   u32 native_height = 0;
@@ -209,6 +212,7 @@ struct TCacheEntry
   {
     base_hash = _base_hash;
     hash = _hash;
+    hash_from_state = false;
   }
 
   bool HasReference(const TCacheEntry* other_entry) const;
@@ -244,6 +248,8 @@ struct TCacheEntry
   u32 BytesPerRow() const;
 
   u64 CalculateHash() const;
+  /* Whether the memory still hashes to base_hash (base) or hash. */
+  bool MemoryUnchanged(bool base);
 
   int HashSampleSize() const;
   u32 GetWidth() const { return texture->GetConfig().width; }

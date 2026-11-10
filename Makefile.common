@@ -124,6 +124,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strcasestr.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/fopen_utf8.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_crc32.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_utf.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_xxh64.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \

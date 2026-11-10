@@ -5,6 +5,8 @@
 
 #include <zlib.h>
 
+#include <encodings/crc32.h>
+
 #include "Common/Hash.h"
 
 #if defined(_M_X86_64)
@@ -284,8 +286,16 @@ static uint64_t crc_hash(const uint8_t *src, uint32_t len, uint32_t samples)
 
 /* 1 for CRC32, -1 for MurmurHash3, 0 until the first hash asks CPUDetect */
 static int s_hash_crc;
+/* 1 where whole buffers are folded with VPCLMULQDQ, -1 where not */
+static int s_hash_fold;
 
-uint64_t common_hash64(const uint8_t *src, uint32_t len, uint32_t samples)
+/* From this size a whole buffer folded 512 bits at a time hashes at two to
+ * three times the rate of the four CRC32C chains; below it the chains are
+ * quicker. Folding 128 bits at a time is no quicker than they are, so
+ * without VPCLMULQDQ the chains stay. */
+#define HASH_FOLD_MIN 512
+
+uint64_t common_hash64_v1(const uint8_t *src, uint32_t len, uint32_t samples)
 {
    if (s_hash_crc == 0)
       s_hash_crc = common_cpu_has_crc32() ? 1 : -1;
@@ -294,6 +304,17 @@ uint64_t common_hash64(const uint8_t *src, uint32_t len, uint32_t samples)
       return crc_hash(src, len, samples);
 #endif
    return murmur_hash3(src, len, samples);
+}
+
+uint64_t common_hash64(const uint8_t *src, uint32_t len, uint32_t samples)
+{
+#if defined(_M_X86_64)
+   if (s_hash_fold == 0)
+      s_hash_fold = common_cpu_has_crc_fold() ? 1 : -1;
+   if (s_hash_fold > 0 && len >= HASH_FOLD_MIN && hash_step(len / 8, samples) == 1)
+      return ((uint64_t)len << 32) | encoding_crc32(0, src, len);
+#endif
+   return common_hash64_v1(src, len, samples);
 }
 
 uint32_t common_crc32_start(void)
