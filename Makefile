@@ -77,6 +77,27 @@ else
    $(error Unsupported target architecture '$(arch)': the core builds for x86_64 and arm64)
 endif
 
+# The externals are git submodules; a clone made without --recursive has them
+# empty and fails deep inside the build on a missing header.
+SUBMODULE_FILES := \
+   Externals/mGBA/mgba/include/mgba-util/vfs.h \
+   Externals/libusb/libusb/libusb/libusb.h \
+   Externals/curl/curl/include/curl/curl.h \
+   Externals/fmt/fmt/include/fmt/format.h \
+   Externals/lz4/lz4/lib/lz4.h \
+   Externals/hidapi/hidapi-src/hidapi/hidapi.h \
+   Externals/Vulkan-Headers/include/vulkan/vulkan.h \
+   Externals/watcher/watcher/include/wtr/watcher.hpp \
+   Externals/SFML/SFML/include/SFML/Network.hpp \
+   Externals/cpp-ipc/cpp-ipc/include/libipc/ipc.h \
+   Externals/wil/include/wil/common.h
+ifneq (,$(filter-out clean,$(or $(MAKECMDGOALS),all)))
+   SUBMODULES_MISSING := $(filter-out $(wildcard $(SUBMODULE_FILES)),$(SUBMODULE_FILES))
+   ifneq (,$(SUBMODULES_MISSING))
+      $(error Submodules are not checked out (missing $(firstword $(SUBMODULES_MISSING))). Run: git submodule update --init --recursive)
+   endif
+endif
+
 HAVE_LIBUSB        := 0
 HAVE_HIDAPI        := 0
 HAVE_CPPIPC        := 0
