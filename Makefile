@@ -179,7 +179,7 @@ else ifneq (,$(filter android-arm64 android-x86_64,$(platform)))
    CC  = $(ANDROID_NDK_LLVM)/bin/clang --target=$(ANDROID_TRIPLE)
    CXX = $(ANDROID_NDK_LLVM)/bin/clang++ --target=$(ANDROID_TRIPLE)
    AR  = $(ANDROID_NDK_LLVM)/bin/llvm-ar
-   FLAGS   += -DANDROID -I$(CORE_DIR)/Source/Android -funwind-tables
+   FLAGS   += -DANDROID -funwind-tables
    LDFLAGS += -static-libstdc++
    HAVE_BUNDLED_ICONV := 1
    LIBS += -landroid -llog -latomic -lm -ldl

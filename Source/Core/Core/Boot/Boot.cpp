@@ -172,15 +172,6 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
   if (paths.size() == 1)
     paths.clear();
 
-#ifdef ANDROID
-  if (extension.empty() && IsPathAndroidContent(path))
-  {
-    const std::string display_name = GetAndroidContentDisplayName(path);
-    SplitPath(display_name, nullptr, nullptr, &extension);
-    Common::ToLower(&extension);
-  }
-#endif
-
   static const std::unordered_set<std::string> disc_image_extensions = {
       {".gcm", ".bin", ".iso", ".tgc", ".wbfs", ".ciso", ".gcz", ".wia", ".rvz", ".nfs", ".dol",
        ".elf"}};

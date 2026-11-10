@@ -54,10 +54,6 @@
 #include <unistd.h>
 #endif
 
-#ifdef __ANDROID__
-#include "jni/AndroidCommon/AndroidCommon.h"
-#endif
-
 #ifdef __linux__
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
@@ -408,16 +404,8 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
     }
   }
 #elif defined(__ANDROID__)
-  const u32 addr = GetNetworkIpAddress();
-  const u32 prefix_length = GetNetworkPrefixLength();
-  const u32 netmask = (1 << prefix_length) - 1;
-  const u32 gateway = GetNetworkGateway();
-  // this isn't fully correct, but this will make calls to get the routing table at least return the
-  // gateway
-  if (routing_table.empty())
-    routing_table = {{0, 0, 0, gateway}};
-  if (addr || netmask || gateway)
-    return DefaultInterface{addr, netmask, gateway, routing_table};
+  // getifaddrs() needs API 24: the fallback interface stands in
+  (void)routing_table;
 #else
   // Assume that the address that is used to access the Internet corresponds
   // to the default interface.

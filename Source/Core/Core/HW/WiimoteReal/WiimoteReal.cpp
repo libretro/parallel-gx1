@@ -27,7 +27,6 @@
 #include "Core/HW/Wiimote.h"
 #include "Core/HW/WiimoteCommon/DataReport.h"
 #include "Core/HW/WiimoteCommon/WiimoteHid.h"
-#include "Core/HW/WiimoteReal/IOAndroid.h"
 #include "Core/HW/WiimoteReal/IOLinux.h"
 #include "Core/HW/WiimoteReal/IOWin.h"
 #include "Core/HW/WiimoteReal/IOhidapi.h"
@@ -883,7 +882,6 @@ void WiimoteScanner::ThreadFunc()
   // EXC_BAD_ACCES crash.
   std::vector<std::unique_ptr<WiimoteScannerBackend>> backends;
   backends.emplace_back(std::make_unique<WiimoteScannerLinux>());
-  backends.emplace_back(std::make_unique<WiimoteScannerAndroid>());
   backends.emplace_back(std::make_unique<WiimoteScannerWindows>());
   backends.emplace_back(std::make_unique<WiimoteScannerHidapi>());
 

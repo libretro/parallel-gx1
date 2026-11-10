@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <memory>
 #ifdef __ANDROID__
-#include "Core/HW/WiimoteReal/IOAndroid.h"
 #include "InputCommon/GCAdapter.h"
 #include "InputCommon/GCPadStatus.h"
 // TODO: removed
@@ -119,55 +118,6 @@ void ResetDeviceType(int chan)
 {
 }
 }  // namespace GCAdapter
-
-namespace WiimoteReal
-{
-WiimoteScannerBackend::FindResults WiimoteScannerAndroid::FindAttachedWiimotes()
-{
-  return {};
-}
-
-WiimoteAndroid::WiimoteAndroid(int index) : Wiimote(), m_mayflash_index(index)
-{
-}
-
-WiimoteAndroid::~WiimoteAndroid()
-{
-}
-
-bool WiimoteAndroid::ConnectInternal()
-{
-  return false;
-}
-
-void WiimoteAndroid::DisconnectInternal()
-{
-}
-
-bool WiimoteAndroid::IsConnected() const
-{
-  return false;
-}
-
-int WiimoteAndroid::IORead(u8* buf)
-{
-  return 0;
-}
-
-int WiimoteAndroid::IOWrite(u8 const* buf, size_t len)
-{
-  return len;
-}
-
-void InitAdapterClass()
-{
-}
-
-std::string WiimoteAndroid::GetId() const
-{
-  return "";
-}
-}  // namespace WiimoteReal
 
 // TODO: refactor or remove?
 /*namespace ButtonManager

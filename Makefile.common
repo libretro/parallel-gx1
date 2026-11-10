@@ -1566,8 +1566,6 @@ ifeq ($(ARCH_ARM64),1)
 endif
 ifeq ($(OS_ANDROID),1)
    DOLPHIN_SOURCES_CXX += \
-	$(CORE_DIR)/Source/Android/jni/AndroidCommon/AndroidCommon.cpp \
-	$(CORE_DIR)/Source/Android/jni/AndroidCommon/IDCache.cpp \
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerDroid.cpp \
 	$(CORE_DIR)/Source/Core/Common/MemArenaAndroid.cpp
 endif
