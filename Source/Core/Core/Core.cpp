@@ -788,14 +788,18 @@ void Callback_NewField(Core::System& system)
 
   if (system.IsDualCoreMode())
   {
-    system.GetFifo().StopGpuLoop();
     /* fields before the CPU thread reaches its run loop are boot work
      * (the FIFO player clearing the EFB), not the frontend's frames */
-    if (system.GetCPU().HasCPURunStateBeenReached())
-    {
+    const bool gated = system.GetCPU().HasCPURunStateBeenReached();
+    /* Counted ended before the GPU loop is let go: the frontend's thread
+     * learns of the field from the GPU loop, and the next retro_run must
+     * find it ended, or it grants nothing and waits for a field the CPU
+     * thread, parked at the gate, never runs. */
+    if (gated)
       retro_atomic_fetch_add_int(&s_fields_ended, 1);
+    system.GetFifo().StopGpuLoop();
+    if (gated)
       FrameGateWait(system);
-    }
   }
 }
 
