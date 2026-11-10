@@ -4,7 +4,7 @@
 #pragma once
 
 #include <optional>
-#include <span>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -20,7 +20,7 @@ struct GameIDAndRegion
   u32 region;
 };
 
-std::optional<GameIDAndRegion> DecryptARCode(std::span<const std::string> encrypted_lines,
+std::optional<GameIDAndRegion> DecryptARCode(const std::string* encrypted_lines, size_t count,
                                              std::vector<AREntry>* result);
 
 }  // namespace ActionReplay

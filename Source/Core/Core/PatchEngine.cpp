@@ -11,7 +11,6 @@
 #include <array>
 #include <iterator>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -24,7 +23,6 @@
 
 #include "Core/ActionReplay.h"
 #include "Core/CheatCodes.h"
-#include "Core/Config/SessionSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/GeckoCode.h"
@@ -33,13 +31,12 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 
-void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, std::span<u8> value, const u32 address,
+void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, u8* value, size_t size, const u32 address,
                       bool store_existing_value)
 {
-  if (value.empty())
+  if (!size)
     return;
 
-  const std::size_t size = value.size();
   if (!PowerPC::MMU::HostIsRAMAddress(guard, address))
     return;
 
@@ -81,11 +78,6 @@ constexpr std::array<const char*, 3> s_patch_type_strings{{
 
 static std::vector<Patch> s_on_frame;
 
-const char* PatchTypeAsString(PatchType type)
-{
-  return s_patch_type_strings.at(static_cast<int>(type));
-}
-
 std::optional<PatchEntry> DeserializeLine(std::string line)
 {
   std::string::size_type loc = line.find('=');
@@ -116,20 +108,6 @@ std::optional<PatchEntry> DeserializeLine(std::string line)
   entry.type = static_cast<PatchType>(std::distance(s_patch_type_strings.begin(), iter));
 
   return entry;
-}
-
-std::string SerializeLine(const PatchEntry& entry)
-{
-  if (entry.conditional)
-  {
-    return fmt::format("0x{:08X}:{}:0x{:08X}:0x{:08X}", entry.address,
-                       PatchEngine::PatchTypeAsString(entry.type), entry.value, entry.comparand);
-  }
-  else
-  {
-    return fmt::format("0x{:08X}:{}:0x{:08X}", entry.address,
-                       PatchEngine::PatchTypeAsString(entry.type), entry.value);
-  }
 }
 
 void LoadPatchSection(const std::string& section, std::vector<Patch>* patches,
@@ -181,31 +159,6 @@ void LoadPatchSection(const std::string& section, std::vector<Patch>* patches,
   }
 }
 
-void SavePatchSection(Common::IniFile* local_ini, std::span<const Patch> patches)
-{
-  std::vector<std::string> lines;
-  std::vector<std::string> lines_enabled;
-  std::vector<std::string> lines_disabled;
-
-  for (const auto& patch : patches)
-  {
-    if (patch.enabled != patch.default_enabled)
-      (patch.enabled ? lines_enabled : lines_disabled).emplace_back('$' + patch.name);
-
-    if (!patch.user_defined)
-      continue;
-
-    lines.emplace_back('$' + patch.name);
-
-    for (const PatchEntry& entry : patch.entries)
-      lines.emplace_back(SerializeLine(entry));
-  }
-
-  local_ini->SetLines("OnFrame_Enabled", lines_enabled);
-  local_ini->SetLines("OnFrame_Disabled", lines_disabled);
-  local_ini->SetLines("OnFrame", lines);
-}
-
 void LoadPatches()
 {
   const auto& sconfig = SConfig::GetInstance();
@@ -216,19 +169,9 @@ void LoadPatches()
   LoadPatchSection("OnFrame", &s_on_frame, globalIni, localIni);
 
 
-  // Check if I'm syncing Codes
-  if (Config::Get(Config::SESSION_CODE_SYNC_OVERRIDE))
-  {
-    Gecko::SetSyncedCodesAsActive();
-    ActionReplay::SetSyncedCodesAsActive();
-  }
-  else
-  {
-    Gecko::SetActiveCodes(Gecko::LoadCodes(globalIni, localIni), sconfig.GetGameID(),
-                          sconfig.GetRevision());
-    ActionReplay::LoadAndApplyCodes(globalIni, localIni, sconfig.GetGameID(),
-                                    sconfig.GetRevision());
-  }
+  const std::vector<Gecko::GeckoCode> gecko_codes = Gecko::LoadCodes(globalIni, localIni);
+  Gecko::SetActiveCodes(gecko_codes.data(), gecko_codes.size());
+  ActionReplay::LoadAndApplyCodes(globalIni, localIni);
 
   const size_t enabled_patch_count =
       std::ranges::count_if(s_on_frame, [](const Patch& patch) { return patch.enabled; });
@@ -377,7 +320,7 @@ bool ApplyFramePatches(Core::System& system)
 void Shutdown()
 {
   s_on_frame.clear();
-  ActionReplay::ApplyCodes({}, "", 0);
+  ActionReplay::ApplyCodes(nullptr, 0);
   Gecko::Shutdown();
 }
 

@@ -854,19 +854,16 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
     return;
   }
 
-  const std::string& game_id = SConfig::GetInstance().GetGameID();
-  const u16 game_revision = SConfig::GetInstance().GetRevision();
-
   // Look up by code as index is unreliable
   enable_cheat_by_code(enabled, code);
 
   Libretro::FinishFieldInFlight();
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     // Apply Action Replay
-    ActionReplay::ApplyCodes(Libretro::g_ar_codes, game_id, game_revision);
+    ActionReplay::ApplyCodes(Libretro::g_ar_codes.data(), Libretro::g_ar_codes.size());
 
     // Apply Gecko
-    Gecko::SetActiveCodes(Libretro::g_gecko_codes, game_id, game_revision);
+    Gecko::SetActiveCodes(Libretro::g_gecko_codes.data(), Libretro::g_gecko_codes.size());
   }, true);
   Libretro::ResumeAfterField();
 }

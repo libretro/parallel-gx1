@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include <concepts>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -23,18 +21,16 @@ class CPUThreadGuard;
 class System;
 }  // namespace Core
 
-// Writes value to address in RAM, invalidating the instruction cache where it changed. With
-// store_existing_value, value is given back what was there.
-void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, std::span<u8> value, const u32 address,
+// Writes size octets of value to address in RAM, invalidating the instruction cache where it
+// changed. With store_existing_value, value is given back what was there.
+void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, u8* value, size_t size, const u32 address,
                       bool store_existing_value = true);
 
-template <std::unsigned_integral T>
+template <typename T>
 void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, T value, const u32 address)
 {
   Common::BigEndianValue<T> big_endian{value};
-  auto data =
-      std::span<u8, sizeof(T)>{reinterpret_cast<u8*>(std::addressof(big_endian)), sizeof(T)};
-  ApplyMemoryPatch(guard, data, address);
+  ApplyMemoryPatch(guard, reinterpret_cast<u8*>(&big_endian), sizeof(T), address);
 }
 
 namespace PatchEngine
@@ -66,13 +62,10 @@ struct Patch
   bool user_defined = false;  // False if this code is shipped with Dolphin.
 };
 
-const char* PatchTypeAsString(PatchType type);
 
 std::optional<PatchEntry> DeserializeLine(std::string line);
-std::string SerializeLine(const PatchEntry& entry);
 void LoadPatchSection(const std::string& section, std::vector<Patch>* patches,
                       const Common::IniFile& globalIni, const Common::IniFile& localIni);
-void SavePatchSection(Common::IniFile* local_ini, std::span<const Patch> patches);
 void LoadPatches();
 
 bool ApplyFramePatches(Core::System& system);

@@ -223,12 +223,13 @@ static void SetCode(u32* dst, u32 addr, u32 val)
 }
 
 // This looks like a nibble-wise CRC-16/KERMIT.
-static constexpr u16 GetCRC16(std::span<const u32> codes)
+static constexpr u16 GetCRC16(const u32* codes, size_t count)
 {
   u16 ret = 0;
 
-  for (u32 code : codes)
+  for (size_t c = 0; c < count; c++)
   {
+    const u32 code = codes[c];
     for (u32 i = 0; i != 4; ++i)
     {
       const u8 tmp = ((code >> (i << 3)) ^ ret);
@@ -239,9 +240,9 @@ static constexpr u16 GetCRC16(std::span<const u32> codes)
   return ret;
 }
 
-static constexpr u8 VerifyCode(std::span<const u32> codes)
+static constexpr u8 VerifyCode(const u32* codes, size_t count)
 {
-  const u16 tmp = GetCRC16(codes);
+  const u16 tmp = GetCRC16(codes, count);
   return (((tmp >> 12) ^ (tmp >> 8) ^ (tmp >> 4) ^ tmp) & 0x0F);
 }
 
@@ -345,19 +346,19 @@ static bool GetBitString(u32* ctrl, u32* out, u8 len)
   return true;
 }
 
-static std::optional<GameIDAndRegion> BatchDecrypt(std::span<u32> codes)
+static std::optional<GameIDAndRegion> BatchDecrypt(u32* codes, size_t count)
 {
-  const auto size = static_cast<u32>(codes.size());
+  const auto size = static_cast<u32>(count);
 
   assert((size & 1) == 0);
   assert(size != 0);
 
   for (u32 i = 0; i < size; i += 2)
-    DecryptCode(genseeds, codes.data() + i);
+    DecryptCode(genseeds, codes + i);
 
   const u32 tmp = codes[0];
   codes[0] &= 0x0FFFFFFF;
-  if ((tmp >> 28) != VerifyCode(codes))
+  if ((tmp >> 28) != VerifyCode(codes, count))
     return std::nullopt;
 
   std::array<u32, 4> tmparray = {
@@ -403,14 +404,15 @@ static u32 GetVal(char chr)
 
 // Returns a vector of converted lines or an index where conversion failed.
 static std::expected<std::vector<u32>, std::size_t>
-ConvertAlphaToBinary(const std::span<const std::string>& alpha)
+ConvertAlphaToBinary(const std::string* alpha, size_t count)
 {
   std::vector<u32> result;
-  result.reserve(alpha.size() * 2);
+  result.reserve(count * 2);
 
   std::size_t current_index = 0;
-  for (const auto& line : alpha)
+  for (size_t l = 0; l < count; l++)
   {
+    const std::string& line = alpha[l];
     assert(line.size() == 13);
 
     u32 value_a = GetVal(line[6]) >> 3;
@@ -433,13 +435,13 @@ ConvertAlphaToBinary(const std::span<const std::string>& alpha)
   return std::move(result);
 }
 
-std::optional<GameIDAndRegion> DecryptARCode(std::span<const std::string> encrypted_lines,
+std::optional<GameIDAndRegion> DecryptARCode(const std::string* encrypted_lines, size_t count,
                                              std::vector<AREntry>* result)
 {
-  if (encrypted_lines.empty())
+  if (!count)
     return std::nullopt;
 
-  auto conversion_result = ConvertAlphaToBinary(encrypted_lines);
+  auto conversion_result = ConvertAlphaToBinary(encrypted_lines, count);
   if (!conversion_result.has_value())
   {
     PanicAlertFmtT(
@@ -449,7 +451,7 @@ std::optional<GameIDAndRegion> DecryptARCode(std::span<const std::string> encryp
   }
 
   auto& codes = *conversion_result;
-  const auto decrypted_result = BatchDecrypt(codes);
+  const auto decrypted_result = BatchDecrypt(codes.data(), codes.size());
   if (!decrypted_result.has_value())
   {
     ERROR_LOG_FMT(ACTIONREPLAY,

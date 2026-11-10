@@ -84,9 +84,6 @@ enum
 // Codes list and internal log: emulation thread only. Cheats are changed through
 // RunOnCPUThread, the patch engine runs on it, and nothing else touches them.
 static std::vector<ARCode> s_active_codes;
-static std::vector<ARCode> s_synced_codes;
-static std::vector<std::string> s_internal_log;
-static retro_atomic_int_t s_use_internal_log;
 // pointer to the code currently being run, (used by log messages that include the code name)
 static const ARCode* s_current_code = nullptr;
 static bool s_disable_logging = false;
@@ -112,60 +109,18 @@ struct ARAddr
 
 // ----------------------
 // AR Remote Functions
-void ApplyCodes(std::span<const ARCode> codes, const std::string& game_id, u16 revision)
+void ApplyCodes(const ARCode* codes, size_t count)
 {
   if (!Config::AreCheatsEnabled())
     return;
   s_disable_logging = false;
   s_active_codes.clear();
-
-  const auto should_be_activated = [](const ARCode& code) {
-    return code.enabled;
-  };
-  std::copy_if(codes.begin(), codes.end(), std::back_inserter(s_active_codes), should_be_activated);
-  s_active_codes.shrink_to_fit();
-}
-
-void SetSyncedCodesAsActive()
-{
-  s_active_codes.clear();
-  s_active_codes.reserve(s_synced_codes.size());
-  s_active_codes = s_synced_codes;
-}
-
-void UpdateSyncedCodes(std::span<const ARCode> codes)
-{
-  s_synced_codes.clear();
-  s_synced_codes.reserve(codes.size());
-  std::copy_if(codes.begin(), codes.end(), std::back_inserter(s_synced_codes),
-               [](const ARCode& code) { return code.enabled; });
-  s_synced_codes.shrink_to_fit();
-}
-
-std::vector<ARCode> ApplyAndReturnCodes(std::span<const ARCode> codes)
-{
-  if (Config::AreCheatsEnabled())
+  for (size_t i = 0; i < count; i++)
   {
-    s_disable_logging = false;
-    s_active_codes.clear();
-    std::copy_if(codes.begin(), codes.end(), std::back_inserter(s_active_codes),
-                 [](const ARCode& code) { return code.enabled; });
+    if (codes[i].enabled)
+      s_active_codes.push_back(codes[i]);
   }
   s_active_codes.shrink_to_fit();
-
-  return s_active_codes;
-}
-
-void AddCode(ARCode code)
-{
-  if (!Config::AreCheatsEnabled())
-    return;
-
-  if (code.enabled)
-  {
-    s_disable_logging = false;
-    s_active_codes.emplace_back(std::move(code));
-  }
 }
 
 size_t CountEnabledCodes()
@@ -175,10 +130,10 @@ size_t CountEnabledCodes()
   return s_active_codes.size();
 }
 
-void LoadAndApplyCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini,
-                       const std::string& game_id, u16 revision)
+void LoadAndApplyCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini)
 {
-  ApplyCodes(LoadCodes(global_ini, local_ini), game_id, revision);
+  const std::vector<ARCode> codes = LoadCodes(global_ini, local_ini);
+  ApplyCodes(codes.data(), codes.size());
 }
 
 // Parses the Action Replay section of a game ini file.
@@ -211,7 +166,7 @@ std::vector<ARCode> LoadCodes(const Common::IniFile& global_ini, const Common::I
         }
         if (!encrypted_lines.empty())
         {
-          DecryptARCode(encrypted_lines, &current_code.ops);
+          DecryptARCode(encrypted_lines.data(), encrypted_lines.size(), &current_code.ops);
           codes.push_back(current_code);
           current_code.ops.clear();
           encrypted_lines.clear();
@@ -240,7 +195,7 @@ std::vector<ARCode> LoadCodes(const Common::IniFile& global_ini, const Common::I
     }
     if (!encrypted_lines.empty())
     {
-      DecryptARCode(encrypted_lines, &current_code.ops);
+      DecryptARCode(encrypted_lines.data(), encrypted_lines.size(), &current_code.ops);
       codes.push_back(current_code);
     }
 
@@ -254,32 +209,6 @@ std::vector<ARCode> LoadCodes(const Common::IniFile& global_ini, const Common::I
   }
 
   return codes;
-}
-
-void SaveCodes(Common::IniFile* local_ini, std::span<const ARCode> codes)
-{
-  std::vector<std::string> lines;
-  std::vector<std::string> enabled_lines;
-  std::vector<std::string> disabled_lines;
-
-  for (const ActionReplay::ARCode& code : codes)
-  {
-    if (code.enabled != code.default_enabled)
-      (code.enabled ? enabled_lines : disabled_lines).emplace_back('$' + code.name);
-
-    if (code.user_defined)
-    {
-      lines.emplace_back('$' + code.name);
-      for (const ActionReplay::AREntry& op : code.ops)
-      {
-        lines.emplace_back(SerializeLine(op));
-      }
-    }
-  }
-
-  local_ini->SetLines("ActionReplay_Enabled", enabled_lines);
-  local_ini->SetLines("ActionReplay_Disabled", disabled_lines);
-  local_ini->SetLines("ActionReplay", lines);
 }
 
 std::variant<std::monostate, AREntry, EncryptedLine> DeserializeLine(const std::string& line)
@@ -310,57 +239,21 @@ std::variant<std::monostate, AREntry, EncryptedLine> DeserializeLine(const std::
   return std::monostate{};
 }
 
-std::string SerializeLine(const AREntry& op)
-{
-  return fmt::format("{:08X} {:08X}", op.cmd_addr, op.value);
-}
-
 static void VLogInfo(std::string_view format, fmt::format_args args)
 {
   if (s_disable_logging)
     return;
 
-  const bool use_internal_log = retro_atomic_load_relaxed_int(&s_use_internal_log) != 0;
   if constexpr (Common::Log::MAX_EFFECTIVE_LOGLEVEL < Common::Log::LogLevel::LINFO)
-  {
-    if (!use_internal_log)
-      return;
-  }
+    return;
 
-  std::string text = fmt::vformat(format, args);
-  INFO_LOG_FMT(ACTIONREPLAY, "{}", text);
-
-  if (use_internal_log)
-  {
-    text += '\n';
-    s_internal_log.emplace_back(std::move(text));
-  }
+  INFO_LOG_FMT(ACTIONREPLAY, "{}", fmt::vformat(format, args));
 }
 
 template <typename... Args>
 static void LogInfo(std::string_view format, const Args&... args)
 {
   VLogInfo(format, fmt::make_format_args(args...));
-}
-
-void EnableSelfLogging(bool enable)
-{
-  retro_atomic_store_relaxed_int(&s_use_internal_log, enable ? 1 : 0);
-}
-
-std::vector<std::string> GetSelfLog()
-{
-  return s_internal_log;
-}
-
-void ClearSelfLog()
-{
-  s_internal_log.clear();
-}
-
-bool IsSelfLogging()
-{
-  return retro_atomic_load_relaxed_int(&s_use_internal_log) != 0;
 }
 
 // ----------------------

@@ -1001,8 +1001,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/Boot/DolReader.cpp \
 	$(CORE_DIR)/Source/Core/Core/Boot/ElfReader.cpp \
 	$(CORE_DIR)/Source/Core/Core/BootManager.cpp \
-	$(CORE_DIR)/Source/Core/Core/CheatGeneration.cpp \
-	$(CORE_DIR)/Source/Core/Core/CheatSearch.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/DefaultLocale.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/GraphicsSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/MainSettings.cpp \

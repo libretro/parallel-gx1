@@ -46,7 +46,6 @@ enum class Installation
 static Installation s_code_handler_installed = Installation::Uninstalled;
 // the currently active codes
 static std::vector<GeckoCode> s_active_codes;
-static std::vector<GeckoCode> s_synced_codes;
 
 size_t CountEnabledCodes()
 {
@@ -55,56 +54,20 @@ size_t CountEnabledCodes()
   return s_active_codes.size();
 }
 
-void SetActiveCodes(std::span<const GeckoCode> gcodes, const std::string& game_id, u16 revision)
+void SetActiveCodes(const GeckoCode* gcodes, size_t count)
 {
-
   s_active_codes.clear();
   if (Config::AreCheatsEnabled())
   {
-    s_active_codes.reserve(gcodes.size());
-
-    const auto should_be_activated = [](const GeckoCode& code) {
-      return code.enabled;
-    };
-    std::copy_if(gcodes.begin(), gcodes.end(), std::back_inserter(s_active_codes),
-                 should_be_activated);
+    for (size_t i = 0; i < count; i++)
+    {
+      if (gcodes[i].enabled)
+        s_active_codes.push_back(gcodes[i]);
+    }
   }
   s_active_codes.shrink_to_fit();
 
   s_code_handler_installed = Installation::Uninstalled;
-}
-
-void SetSyncedCodesAsActive()
-{
-  s_active_codes.clear();
-  s_active_codes.reserve(s_synced_codes.size());
-  s_active_codes = s_synced_codes;
-}
-
-void UpdateSyncedCodes(std::span<const GeckoCode> gcodes)
-{
-  s_synced_codes.clear();
-  s_synced_codes.reserve(gcodes.size());
-  std::copy_if(gcodes.begin(), gcodes.end(), std::back_inserter(s_synced_codes),
-               [](const GeckoCode& code) { return code.enabled; });
-  s_synced_codes.shrink_to_fit();
-}
-
-std::vector<GeckoCode> SetAndReturnActiveCodes(std::span<const GeckoCode> gcodes)
-{
-
-  s_active_codes.clear();
-  if (Config::AreCheatsEnabled())
-  {
-    s_active_codes.reserve(gcodes.size());
-    std::copy_if(gcodes.begin(), gcodes.end(), std::back_inserter(s_active_codes),
-                 [](const GeckoCode& code) { return code.enabled; });
-  }
-  s_active_codes.shrink_to_fit();
-
-  s_code_handler_installed = Installation::Uninstalled;
-
-  return s_active_codes;
 }
 
 // Emulation thread only, like everything touching the active codes.
