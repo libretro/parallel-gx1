@@ -1822,10 +1822,11 @@ void ARM64XEmitter::ParallelMoves(RegisterMove* begin, RegisterMove* end,
       (*source_gpr_usages)[DecodeReg(dst)] = (*source_gpr_usages)[DecodeReg(src)];
       (*source_gpr_usages)[DecodeReg(src)] = 0;
 
-      std::for_each(begin, end, [src, dst](RegisterMove& move) {
-        if (move.src == src)
-          move.src = dst;
-      });
+      for (RegisterMove* move = begin; move != end; ++move)
+      {
+        if (move->src == src)
+          move->src = dst;
+      }
     }
   }
 }

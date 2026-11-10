@@ -93,15 +93,17 @@ SectorReader::Cache* SectorReader::GetEmptyCacheLine()
 {
   Cache* oldest = &m_cache[0];
   // Find the Least Recently Used cache line to replace.
-  std::for_each(m_cache.begin() + 1, m_cache.end(), [&](Cache& line) {
+  for (size_t i = 1; i < m_cache.size(); i++)
+  {
+    Cache& line = m_cache[i];
     if (line.IsLessRecentlyUsedThan(*oldest))
     {
       oldest->ShiftLRU();
       oldest = &line;
-      return;
+      continue;
     }
     line.ShiftLRU();
-  });
+  }
   oldest->Reset();
   return oldest;
 }
