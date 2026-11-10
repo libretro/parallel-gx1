@@ -48,9 +48,6 @@
 	path = Externals/zstd/zstd
 	url = https://github.com/facebook/zstd.git
 	shallow = true
-[submodule "Externals/pugixml/pugixml"]
-	path = Externals/pugixml/pugixml
-	url = https://github.com/zeux/pugixml.git
 	shallow = true
 [submodule "Externals/cpp-ipc/cpp-ipc"]
 	path = Externals/cpp-ipc/cpp-ipc

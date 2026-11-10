@@ -872,14 +872,6 @@ ifeq ($(ARCH_X86_64),1)
    endif
 endif
 
-# PUGIXML
-PUGIXML_SOURCES_C :=
-PUGIXML_SOURCES_CXX :=
-PUGIXML_SOURCES_ASM :=
-PUGIXML_SOURCES_OBJCXX :=
-PUGIXML_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/pugixml/pugixml/src/pugixml.cpp
-
 # DOLPHIN
 DOLPHIN_SOURCES_C :=
 DOLPHIN_SOURCES_CXX :=
@@ -1733,7 +1725,6 @@ ifneq ($(ARCH_X86_64)$(OS_WIN),1)
    ZSTD_FLAGS += -DZSTD_DISABLE_ASM
 endif
 
-PUGIXML_FLAGS := -w -DPUGIXML_NO_EXCEPTIONS -I$(EXT_DIR)/pugixml/pugixml/src
 
 
 
@@ -1745,7 +1736,7 @@ CPPIPC_CXXFLAGS := -std=gnu++17
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA \
-	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC \
+	-DLZMA_API_STATIC -DSFML_STATIC \
 	-DCURL_STATICLIB \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
 	-I$(GEN_DIR)/Source/Core \
@@ -1756,7 +1747,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/mbedtls/include \
 	$(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 \
-	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
+	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib \
@@ -1806,7 +1797,7 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zstd.c) := $(L
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS ZSTD LZMA BZIP2 LZ4 LZO \
-	MGBA SFML FMT PUGIXML FATFS
+	MGBA SFML FMT FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB
 endif
