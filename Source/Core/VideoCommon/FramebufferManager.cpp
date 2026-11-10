@@ -422,9 +422,9 @@ bool FramebufferManager::CompileConversionPipelines()
   for (u32 i = 0; i < NUM_EFB_REINTERPRET_TYPES; i++)
   {
     EFBReinterpretType convtype = static_cast<EFBReinterpretType>(i);
-    AbstractShader* const pixel_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Pixel,
-        FramebufferShaderGen::GenerateFormatConversionShader(convtype, GetEFBSamples()),
+    const FramebufferShaderGen::FormatConversionArgs args = {convtype, GetEFBSamples()};
+    AbstractShader* const pixel_shader = g_gfx->CreateShaderFromBuild(
+        ShaderStage::Pixel, FramebufferShaderGen::BuildFormatConversionShader, &args,
         fmt::format("Framebuffer conversion pixel shader {}", convtype));
     if (!pixel_shader)
       return false;
@@ -689,8 +689,8 @@ bool FramebufferManager::CompileReadbackPipelines()
   }
 
   // EFB restore pipeline
-  AbstractShader* const restore_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateEFBRestorePixelShader(),
+  AbstractShader* const restore_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Pixel, FramebufferShaderGen::BuildEFBRestorePixelShader, nullptr,
       "EFB restore pixel shader");
   if (!restore_shader)
     return false;

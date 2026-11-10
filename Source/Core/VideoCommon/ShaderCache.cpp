@@ -2021,16 +2021,12 @@ const AbstractPipeline* ShaderCache::BuildTextureReinterpretPipeline(TextureForm
                                                                      TextureFormat to_format)
 {
   const u32 key[2] = {static_cast<u32>(from_format), static_cast<u32>(to_format)};
-  ShaderCode shader_source =
-      FramebufferShaderGen::GenerateTextureReinterpretShader(from_format, to_format);
-  AbstractShader* shader = nullptr;
+  const TextureFormat formats[2] = {from_format, to_format};
+  AbstractShader* const shader =
+      g_gfx->CreateShaderFromBuild(ShaderStage::Pixel, FramebufferShaderGen::BuildTextureReinterpretShader,
+                                   formats, "Texture reinterpret pixel shader");
   AbstractPipelineConfig config;
 
-  if (!shader_source.GetBuffer().empty())
-  {
-    shader = g_gfx->CreateShaderFromSource(ShaderStage::Pixel, shader_source,
-                                           "Texture reinterpret pixel shader");
-  }
   if (!shader)
     return KeepPipeline(&m_texture_reinterpret_pipelines, key, nullptr);
 

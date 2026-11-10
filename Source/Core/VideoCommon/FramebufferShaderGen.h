@@ -4,7 +4,6 @@
 #pragma once
 
 #include "Common/CommonTypes.h"
-#include "VideoCommon/ShaderGenCommon.h"
 
 enum class EFBReinterpretType;
 enum class TextureFormat;
@@ -25,9 +24,15 @@ bool BuildResolveDepthPixelShader(struct shader_build* sb, const void* arg);
 bool BuildClearVertexShader(struct shader_build* sb, const void* arg);
 bool BuildEFBPokeVertexShader(struct shader_build* sb, const void* arg);
 bool BuildColorPixelShader(struct shader_build* sb, const void* arg);
+struct FormatConversionArgs
+{
+  EFBReinterpretType convtype;
+  u32 samples;
+};
+bool BuildFormatConversionShader(struct shader_build* sb, const void* arg);
+/* arg: TextureFormat[2], from and to; false for a pair there is no shader for */
+bool BuildTextureReinterpretShader(struct shader_build* sb, const void* arg);
+bool BuildEFBRestorePixelShader(struct shader_build* sb, const void* arg);
 
-ShaderCode GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samples);
-ShaderCode GenerateTextureReinterpretShader(TextureFormat from_format, TextureFormat to_format);
-ShaderCode GenerateEFBRestorePixelShader();
 
 }  // namespace FramebufferShaderGen

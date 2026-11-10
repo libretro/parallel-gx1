@@ -22,342 +22,7 @@ APIType GetAPIType()
 {
   return g_backend_info.api_type;
 }
-
-void EmitSamplerDeclarations(ShaderCode& code, u32 start = 0, u32 end = 1,
-                             bool multisampled = false)
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-  {
-    const char* array_type = multisampled ? "sampler2DMSArray" : "sampler2DArray";
-
-    for (u32 i = start; i < end; i++)
-    {
-      code.Printf("SAMPLER_BINDING(%u) uniform %s samp%u;\n", i, array_type, i);
-    }
-  }
-  break;
-  default:
-    break;
-  }
-}
-
-void EmitSampleTexture(ShaderCode& code, u32 n, const char* coords)
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-    code.Printf("texture(samp%u, %s)", n, coords);
-    break;
-
-  default:
-    break;
-  }
-}
-
-// Emits a texel fetch/load instruction. Assumes that "coords" is a 4-element vector, with z
-// containing the layer, and w containing the mipmap level.
-void EmitTextureLoad(ShaderCode& code, u32 n, const char* coords)
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-    code.Printf("texelFetch(samp%u, (%s).xyz, (%s).w)", n, coords, coords);
-    break;
-
-  default:
-    break;
-  }
-}
-
-void EmitPixelMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_color_inputs,
-                              const char* output_type = "float4",
-                              const char* extra_vars = "", bool emit_frag_coord = false)
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-  {
-    if (g_backend_info.bSupportsGeometryShaders)
-    {
-      code.Puts("VARYING_LOCATION(0) in VertexData {\n");
-      for (u32 i = 0; i < num_tex_inputs; i++)
-        code.Printf("  float3 v_tex%u;\n", i);
-      for (u32 i = 0; i < num_color_inputs; i++)
-        code.Printf("  float4 v_col%u;\n", i);
-      code.Puts("};\n");
-    }
-    else
-    {
-      for (u32 i = 0; i < num_tex_inputs; i++)
-        code.Printf("VARYING_LOCATION(%u) in float3 v_tex%u;\n", i, i);
-      for (u32 i = 0; i < num_color_inputs; i++)
-        code.Printf("VARYING_LOCATION(%u) in float4 v_col%u;\n", num_tex_inputs + i, i);
-    }
-
-    code.Printf("FRAGMENT_OUTPUT_LOCATION(0) out %s ocol0;\n", output_type);
-    code.Printf("%s\n", extra_vars);
-    if (emit_frag_coord)
-      code.Puts("#define frag_coord gl_FragCoord\n");
-    code.Puts("void main()\n");
-  }
-  break;
-
-  default:
-    break;
-  }
-}
 }  // Anonymous namespace
-
-ShaderCode GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samples)
-{
-  ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, samples > 1);
-  EmitPixelMainDeclaration(code, 1, 0, "float4",
-
-                           "");
-  code.Puts("{\n"
-            "  int layer = int(v_tex0.z);\n");
-  code.Puts("  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
-
-  if (samples == 1)
-  {
-    // No MSAA at all.
-    code.Puts("  float4 val = texelFetch(samp0, coords, 0);\n");
-  }
-  else if (g_ActiveConfig.bSSAA)
-  {
-    // Sample shading, shader runs once per sample
-    code.Puts("  float4 val = texelFetch(samp0, coords, gl_SampleID);");
-  }
-  else
-  {
-    // MSAA without sample shading, average out all samples.
-    code.Puts("  float4 val = float4(0.0f, 0.0f, 0.0f, 0.0f);\n");
-    code.Printf("  for (int i = 0; i < %u; i++)\n", samples);
-    code.Puts("    val += texelFetch(samp0, coords, i);\n");
-    code.Printf("  val /= float(%u);\n", samples);
-  }
-
-  switch (convtype)
-  {
-  case EFBReinterpretType::RGB8ToRGBA6:
-    code.Puts("  int4 src8 = int4(round(val * 255.f));\n"
-              "  int4 dst6;\n"
-              "  dst6.r = src8.r >> 2;\n"
-              "  dst6.g = ((src8.r & 0x3) << 4) | (src8.g >> 4);\n"
-              "  dst6.b = ((src8.g & 0xF) << 2) | (src8.b >> 6);\n"
-              "  dst6.a = src8.b & 0x3F;\n"
-              "  ocol0 = float4(dst6) / 63.f;\n");
-    break;
-
-  case EFBReinterpretType::RGB8ToRGB565:
-    code.Puts("  ocol0 = val;\n");
-    break;
-
-  case EFBReinterpretType::RGBA6ToRGB8:
-    code.Puts("  int4 src6 = int4(round(val * 63.f));\n"
-              "  int4 dst8;\n"
-              "  dst8.r = (src6.r << 2) | (src6.g >> 4);\n"
-              "  dst8.g = ((src6.g & 0xF) << 4) | (src6.b >> 2);\n"
-              "  dst8.b = ((src6.b & 0x3) << 6) | src6.a;\n"
-              "  dst8.a = 255;\n"
-              "  ocol0 = float4(dst8) / 255.f;\n");
-    break;
-
-  case EFBReinterpretType::RGBA6ToRGB565:
-    code.Puts("  ocol0 = val;\n");
-    break;
-
-  case EFBReinterpretType::RGB565ToRGB8:
-    code.Puts("  ocol0 = val;\n");
-    break;
-
-  case EFBReinterpretType::RGB565ToRGBA6:
-    //
-    code.Puts("  ocol0 = val;\n");
-    break;
-  }
-
-  code.Puts("}\n");
-  return code;
-}
-
-ShaderCode GenerateTextureReinterpretShader(TextureFormat from_format, TextureFormat to_format)
-{
-  ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, false);
-  EmitPixelMainDeclaration(code, 1, 0, "float4", "", true);
-  code.Puts("{\n"
-            "  int layer = int(v_tex0.z);\n"
-            "  int4 coords = int4(int2(frag_coord.xy), layer, 0);\n");
-
-  // Convert to a 32-bit value encompassing all channels, filling the most significant bits with
-  // zeroes.
-  code.Puts("  uint raw_value;\n");
-  switch (from_format)
-  {
-  case TextureFormat::I8:
-  case TextureFormat::C8:
-  {
-    code.Puts("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Puts(";\n"
-              "  raw_value = uint(temp_value.r * 255.0);\n");
-  }
-  break;
-
-  case TextureFormat::IA8:
-  {
-    code.Puts("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Puts(";\n"
-              "  raw_value = uint(temp_value.r * 255.0) | (uint(temp_value.a * 255.0) << 8);\n");
-  }
-  break;
-
-  case TextureFormat::I4:
-  {
-    code.Puts("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Puts(";\n"
-              "  raw_value = uint(temp_value.r * 15.0);\n");
-  }
-  break;
-
-  case TextureFormat::IA4:
-  {
-    code.Puts("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Puts(";\n"
-              "  raw_value = uint(temp_value.r * 15.0) | (uint(temp_value.a * 15.0) << 4);\n");
-  }
-  break;
-
-  case TextureFormat::RGB565:
-  {
-    code.Puts("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Puts(";\n"
-              "  raw_value = uint(temp_value.b * 31.0) | (uint(temp_value.g * 63.0) << 5) |\n"
-              "              (uint(temp_value.r * 31.0) << 11);\n");
-  }
-  break;
-
-  case TextureFormat::RGB5A3:
-  {
-    code.Puts("  float4 temp_value = ");
-    EmitTextureLoad(code, 0, "coords");
-    code.Puts(";\n");
-
-    // 0.8784 = 224 / 255 which is the maximum alpha value that can be represented in 3 bits
-    code.Puts("  if (temp_value.a > 0.878f) {\n"
-              "    raw_value = (uint(temp_value.b * 31.0)) | (uint(temp_value.g * 31.0) << 5) |\n"
-              "                (uint(temp_value.r * 31.0) << 10) | 0x8000u;\n"
-              "  } else {\n"
-              "     raw_value = (uint(temp_value.b * 15.0)) | (uint(temp_value.g * 15.0) << 4) |\n"
-              "                 (uint(temp_value.r * 15.0) << 8) | (uint(temp_value.a * 7.0) << 12);\n"
-              "  }\n");
-  }
-  break;
-
-  default:
-    WARN_LOG_FMT(VIDEO, "From format {} is not supported", from_format);
-  {
-    ShaderCode unsupported;
-    unsupported.Puts("{}\n");
-    return unsupported;
-  }
-  }
-
-  // Now convert it to its new representation.
-  switch (to_format)
-  {
-  case TextureFormat::I8:
-  case TextureFormat::C8:
-  {
-    code.Puts("  float orgba = float(raw_value & 0xFFu) / 255.0;\n"
-              "  ocol0 = float4(orgba, orgba, orgba, orgba);\n");
-  }
-  break;
-
-  case TextureFormat::IA8:
-  {
-    code.Puts("  float orgb = float(raw_value & 0xFFu) / 255.0;\n"
-              "  ocol0 = float4(orgb, orgb, orgb, float((raw_value >> 8) & 0xFFu) / 255.0);\n");
-  }
-  break;
-
-  case TextureFormat::IA4:
-  {
-    code.Puts("  float orgb = float(raw_value & 0xFu) / 15.0;\n"
-              "  ocol0 = float4(orgb, orgb, orgb, float((raw_value >> 4) & 0xFu) / 15.0);\n");
-  }
-  break;
-
-  case TextureFormat::RGB565:
-  {
-    code.Puts("  ocol0 = float4(float((raw_value >> 10) & 0x1Fu) / 31.0,\n"
-              "                 float((raw_value >> 5) & 0x1Fu) / 31.0,\n"
-              "                 float(raw_value & 0x1Fu) / 31.0, 1.0);\n");
-  }
-  break;
-
-  case TextureFormat::RGB5A3:
-  {
-    code.Puts("  if ((raw_value & 0x8000u) != 0u) {\n"
-              "    ocol0 = float4(float((raw_value >> 10) & 0x1Fu) / 31.0,\n"
-              "                   float((raw_value >> 5) & 0x1Fu) / 31.0,\n"
-              "                   float(raw_value & 0x1Fu) / 31.0, 1.0);\n"
-              "  } else {\n"
-              "    ocol0 = float4(float((raw_value >> 8) & 0x0Fu) / 15.0,\n"
-              "                   float((raw_value >> 4) & 0x0Fu) / 15.0,\n"
-              "                   float(raw_value & 0x0Fu) / 15.0,\n"
-              "                   float((raw_value >> 12) & 0x07u) / 7.0);\n"
-              "  }\n");
-  }
-  break;
-  default:
-    WARN_LOG_FMT(VIDEO, "To format {} is not supported", to_format);
-  {
-    ShaderCode unsupported;
-    unsupported.Puts("{}\n");
-    return unsupported;
-  }
-  }
-
-  code.Puts("}\n");
-  return code;
-}
-
-ShaderCode GenerateEFBRestorePixelShader()
-{
-  ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 2, false);
-  EmitPixelMainDeclaration(code, 1, 0, "float4", "");
-  code.Puts("{\n"
-            "  ocol0 = ");
-  EmitSampleTexture(code, 0, "v_tex0");
-  code.Puts(";\n");
-  code.Puts("  gl_FragDepth = ");
-  EmitSampleTexture(code, 1, "v_tex0");
-  code.Puts(".r;\n"
-            "}\n");
-  return code;
-}
 
 /* ---- stages built by calls ---- */
 
@@ -421,7 +86,7 @@ struct fb_vertex
   struct fb_vary out;
 };
 
-/* what EmitVertexMainDeclaration declared, without texture inputs */
+/* a utility vertex stage's attributes, no texture ones, and its varyings */
 void fb_vertex_decl(struct shader_build* sb, u32 num_color_inputs, bool position_input,
                     u32 num_tex_outputs, u32 num_color_outputs, struct fb_vertex* vx)
 {
@@ -453,12 +118,13 @@ void fb_ps_block(struct shader_build* sb, const struct rslc_type* const* types,
   rslc_b_block_q(sb->b, &q, "PSBlock", NULL, types, names, n, members);
 }
 
-struct rslc_var* fb_sampler(struct shader_build* sb, bool multisampled)
+struct rslc_var* fb_sampler_n(struct shader_build* sb, u32 n, bool multisampled)
 {
+  static const char* const names[2] = {"samp0", "samp1"};
   struct rslc_b_quals q;
   rslc_b_quals_init(&q);
-  sb_sampler(sb, &q, 0);
-  return rslc_b_declare(sb->b, &q, "samp0",
+  sb_sampler(sb, &q, n);
+  return rslc_b_declare(sb->b, &q, names[n],
                         rslc_b_sampler_type(sb->b,
                                             multisampled ? RSLC_B_SAMPLER_2D_MS_ARRAY :
                                                            RSLC_B_SAMPLER_2D_ARRAY,
@@ -466,7 +132,12 @@ struct rslc_var* fb_sampler(struct shader_build* sb, bool multisampled)
                         0);
 }
 
-/* what EmitPixelMainDeclaration declared */
+struct rslc_var* fb_sampler(struct shader_build* sb, bool multisampled)
+{
+  return fb_sampler_n(sb, 0, multisampled);
+}
+
+/* a utility pixel stage's varyings and its output ocol0 */
 struct rslc_var* fb_pixel_decl(struct shader_build* sb, u32 num_tex_inputs, u32 num_color_inputs,
                                const struct rslc_type* output_type, struct fb_vary* in)
 {
@@ -760,6 +431,320 @@ bool BuildEFBPokeVertexShader(struct shader_build* sb, const void* /* arg */)
     sb_set(sb, sb_bi(sb, "gl_PointSize"), sb_swz(sb, sb_ref(sb, vx.rawpos), "w"));
   if (GetAPIType() == APIType::Vulkan)
     fb_flip_y(sb);
+  return rslc_b_func_end(sb->b);
+}
+
+namespace
+{
+/* round(val * scale) as int4 */
+uint32_t fb_scaled_int4(const struct shader_build* sb, struct rslc_var* val, double scale)
+{
+  return sb_con(sb, sb->i[4], 1,
+                sb_call(sb, "round", 1, sb_bin(sb, RSLC_B_MUL, sb_ref(sb, val), sb_f(sb, scale))));
+}
+
+/* dst.c = e; */
+void fb_set_c(const struct shader_build* sb, struct rslc_var* v, const char* c, uint32_t e)
+{
+  sb_set(sb, sb_swz(sb, sb_ref(sb, v), c), e);
+}
+
+uint32_t fb_c(const struct shader_build* sb, struct rslc_var* v, const char* c)
+{
+  return sb_swz(sb, sb_ref(sb, v), c);
+}
+
+uint32_t fb_and(const struct shader_build* sb, uint32_t e, int32_t m)
+{
+  return sb_bin(sb, RSLC_B_BAND, e, sb_i(sb, m));
+}
+
+uint32_t fb_shl(const struct shader_build* sb, uint32_t e, int32_t n)
+{
+  return sb_bin(sb, RSLC_B_SHL, e, sb_i(sb, n));
+}
+
+uint32_t fb_shr(const struct shader_build* sb, uint32_t e, int32_t n)
+{
+  return sb_bin(sb, RSLC_B_SHR, e, sb_i(sb, n));
+}
+
+uint32_t fb_or(const struct shader_build* sb, uint32_t a, uint32_t b)
+{
+  return sb_bin(sb, RSLC_B_BOR, a, b);
+}
+}  // Anonymous namespace
+
+bool BuildFormatConversionShader(struct shader_build* sb, const void* arg)
+{
+  const struct FormatConversionArgs* a = static_cast<const struct FormatConversionArgs*>(arg);
+  struct fb_vary in;
+  struct rslc_var* samp = fb_sampler(sb, a->samples > 1);
+  struct rslc_var* ocol0 = fb_pixel_decl(sb, 1, 0, sb->f[4], &in);
+  struct rslc_var *coords, *val, *src, *dst;
+  fb_main(sb);
+  coords = fb_resolve_coords(sb, &in);
+
+  if (a->samples == 1)
+  {
+    // No MSAA at all.
+    val = rslc_b_local(sb->b, "val", sb->f[4],
+                       sb_call(sb, "texelFetch", 3, sb_ref(sb, samp), sb_ref(sb, coords),
+                               sb_i(sb, 0)),
+                       false);
+  }
+  else if (g_ActiveConfig.bSSAA)
+  {
+    // Sample shading, shader runs once per sample
+    val = rslc_b_local(sb->b, "val", sb->f[4],
+                       sb_call(sb, "texelFetch", 3, sb_ref(sb, samp), sb_ref(sb, coords),
+                               sb_bi(sb, "gl_SampleID")),
+                       false);
+  }
+  else
+  {
+    // MSAA without sample shading, average out all samples.
+    struct rslc_var* i;
+    uint32_t init, body;
+    val = rslc_b_local(sb->b, "val", sb->f[4],
+                       sb_con(sb, sb->f[4], 4, sb_f(sb, 0.0), sb_f(sb, 0.0), sb_f(sb, 0.0),
+                              sb_f(sb, 0.0)),
+                       false);
+    init = rslc_b_decl_stmt(sb->b, "i", sb->i[1], sb_i(sb, 0), &i);
+    body = rslc_b_expr(sb->b, rslc_b_assign(sb->b, RSLC_B_ADD, sb_ref(sb, val),
+                                            sb_call(sb, "texelFetch", 3, sb_ref(sb, samp),
+                                                    sb_ref(sb, coords), sb_ref(sb, i))));
+    rslc_b_stmt(sb->b, rslc_b_for(sb->b, init,
+                                  sb_bin(sb, RSLC_B_LT, sb_ref(sb, i),
+                                         sb_i(sb, static_cast<int32_t>(a->samples))),
+                                  sb_un(sb, RSLC_B_POSTINC, sb_ref(sb, i)), body));
+    sb_op_set(sb, RSLC_B_DIV, sb_ref(sb, val),
+              sb_con(sb, sb->f[1], 1, sb_i(sb, static_cast<int32_t>(a->samples))));
+  }
+
+  switch (a->convtype)
+  {
+  case EFBReinterpretType::RGB8ToRGBA6:
+    src = rslc_b_local(sb->b, "src8", sb->i[4], fb_scaled_int4(sb, val, 255.0), false);
+    dst = rslc_b_local(sb->b, "dst6", sb->i[4], 0, false);
+    fb_set_c(sb, dst, "r", fb_shr(sb, fb_c(sb, src, "r"), 2));
+    fb_set_c(sb, dst, "g",
+             fb_or(sb, fb_shl(sb, fb_and(sb, fb_c(sb, src, "r"), 0x3), 4),
+                   fb_shr(sb, fb_c(sb, src, "g"), 4)));
+    fb_set_c(sb, dst, "b",
+             fb_or(sb, fb_shl(sb, fb_and(sb, fb_c(sb, src, "g"), 0xF), 2),
+                   fb_shr(sb, fb_c(sb, src, "b"), 6)));
+    fb_set_c(sb, dst, "a", fb_and(sb, fb_c(sb, src, "b"), 0x3F));
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_bin(sb, RSLC_B_DIV, sb_con(sb, sb->f[4], 1, sb_ref(sb, dst)), sb_f(sb, 63.0)));
+    break;
+
+  case EFBReinterpretType::RGBA6ToRGB8:
+    src = rslc_b_local(sb->b, "src6", sb->i[4], fb_scaled_int4(sb, val, 63.0), false);
+    dst = rslc_b_local(sb->b, "dst8", sb->i[4], 0, false);
+    fb_set_c(sb, dst, "r",
+             fb_or(sb, fb_shl(sb, fb_c(sb, src, "r"), 2), fb_shr(sb, fb_c(sb, src, "g"), 4)));
+    fb_set_c(sb, dst, "g",
+             fb_or(sb, fb_shl(sb, fb_and(sb, fb_c(sb, src, "g"), 0xF), 4),
+                   fb_shr(sb, fb_c(sb, src, "b"), 2)));
+    fb_set_c(sb, dst, "b",
+             fb_or(sb, fb_shl(sb, fb_and(sb, fb_c(sb, src, "b"), 0x3), 6), fb_c(sb, src, "a")));
+    fb_set_c(sb, dst, "a", sb_i(sb, 255));
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_bin(sb, RSLC_B_DIV, sb_con(sb, sb->f[4], 1, sb_ref(sb, dst)), sb_f(sb, 255.0)));
+    break;
+
+  default:
+    sb_set(sb, sb_ref(sb, ocol0), sb_ref(sb, val));
+    break;
+  }
+  return rslc_b_func_end(sb->b);
+}
+
+namespace
+{
+/* uint(t.c * scale) */
+uint32_t fb_uq(const struct shader_build* sb, struct rslc_var* t, const char* c, double scale)
+{
+  return sb_con(sb, sb->u[1], 1, sb_bin(sb, RSLC_B_MUL, fb_c(sb, t, c), sb_f(sb, scale)));
+}
+
+/* float((raw >> shift) & mask) / div; no shift for 0 */
+uint32_t fb_field(const struct shader_build* sb, struct rslc_var* raw, int32_t shift, uint32_t mask,
+                  double div)
+{
+  uint32_t e = sb_ref(sb, raw);
+  if (shift)
+    e = fb_shr(sb, e, shift);
+  return sb_bin(sb, RSLC_B_DIV,
+                sb_con(sb, sb->f[1], 1, sb_bin(sb, RSLC_B_BAND, e, sb_u(sb, mask))), sb_f(sb, div));
+}
+}  // Anonymous namespace
+
+bool BuildTextureReinterpretShader(struct shader_build* sb, const void* arg)
+{
+  const TextureFormat* const formats = static_cast<const TextureFormat*>(arg);
+  const TextureFormat from_format = formats[0];
+  const TextureFormat to_format = formats[1];
+  struct fb_vary in;
+  struct rslc_var* samp = fb_sampler(sb, false);
+  struct rslc_var* ocol0 = fb_pixel_decl(sb, 1, 0, sb->f[4], &in);
+  struct rslc_var *layer, *coords, *raw, *t, *o;
+  uint32_t then_s, else_s;
+
+  switch (from_format)
+  {
+  case TextureFormat::I8:
+  case TextureFormat::C8:
+  case TextureFormat::IA8:
+  case TextureFormat::I4:
+  case TextureFormat::IA4:
+  case TextureFormat::RGB565:
+  case TextureFormat::RGB5A3:
+    break;
+  default:
+    WARN_LOG_FMT(VIDEO, "From format {} is not supported", from_format);
+    return false;
+  }
+  switch (to_format)
+  {
+  case TextureFormat::I8:
+  case TextureFormat::C8:
+  case TextureFormat::IA8:
+  case TextureFormat::IA4:
+  case TextureFormat::RGB565:
+  case TextureFormat::RGB5A3:
+    break;
+  default:
+    WARN_LOG_FMT(VIDEO, "To format {} is not supported", to_format);
+    return false;
+  }
+
+  fb_main(sb);
+  layer = rslc_b_local(sb->b, "layer", sb->i[1],
+                       sb_con(sb, sb->i[1], 1, sb_swz(sb, fb_vary_ref(sb, &in, 0), "z")), false);
+  coords = rslc_b_local(
+      sb->b, "coords", sb->i[4],
+      sb_con(sb, sb->i[4], 3, sb_con(sb, sb->i[2], 1, sb_swz(sb, sb_bi(sb, "gl_FragCoord"), "xy")),
+             sb_ref(sb, layer), sb_i(sb, 0)),
+      false);
+
+  // Convert to a 32-bit value encompassing all channels, filling the most significant bits with
+  // zeroes.
+  raw = rslc_b_local(sb->b, "raw_value", sb->u[1], 0, false);
+  t = rslc_b_local(sb->b, "temp_value", sb->f[4],
+                   sb_call(sb, "texelFetch", 3, sb_ref(sb, samp),
+                           sb_swz(sb, sb_ref(sb, coords), "xyz"), sb_swz(sb, sb_ref(sb, coords), "w")),
+                   false);
+  switch (from_format)
+  {
+  case TextureFormat::I8:
+  case TextureFormat::C8:
+    sb_set(sb, sb_ref(sb, raw), fb_uq(sb, t, "r", 255.0));
+    break;
+  case TextureFormat::IA8:
+    sb_set(sb, sb_ref(sb, raw),
+           fb_or(sb, fb_uq(sb, t, "r", 255.0), fb_shl(sb, fb_uq(sb, t, "a", 255.0), 8)));
+    break;
+  case TextureFormat::I4:
+    sb_set(sb, sb_ref(sb, raw), fb_uq(sb, t, "r", 15.0));
+    break;
+  case TextureFormat::IA4:
+    sb_set(sb, sb_ref(sb, raw),
+           fb_or(sb, fb_uq(sb, t, "r", 15.0), fb_shl(sb, fb_uq(sb, t, "a", 15.0), 4)));
+    break;
+  case TextureFormat::RGB565:
+    sb_set(sb, sb_ref(sb, raw),
+           fb_or(sb,
+                 fb_or(sb, fb_uq(sb, t, "b", 31.0), fb_shl(sb, fb_uq(sb, t, "g", 63.0), 5)),
+                 fb_shl(sb, fb_uq(sb, t, "r", 31.0), 11)));
+    break;
+  default:  // RGB5A3
+    // 0.8784 = 224 / 255 which is the maximum alpha value that can be represented in 3 bits
+    rslc_b_begin_block(sb->b);
+    sb_set(sb, sb_ref(sb, raw),
+           fb_or(sb,
+                 fb_or(sb,
+                       fb_or(sb, fb_uq(sb, t, "b", 31.0), fb_shl(sb, fb_uq(sb, t, "g", 31.0), 5)),
+                       fb_shl(sb, fb_uq(sb, t, "r", 31.0), 10)),
+                 sb_u(sb, 0x8000u)));
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_begin_block(sb->b);
+    sb_set(sb, sb_ref(sb, raw),
+           fb_or(sb,
+                 fb_or(sb,
+                       fb_or(sb, fb_uq(sb, t, "b", 15.0), fb_shl(sb, fb_uq(sb, t, "g", 15.0), 4)),
+                       fb_shl(sb, fb_uq(sb, t, "r", 15.0), 8)),
+                 fb_shl(sb, fb_uq(sb, t, "a", 7.0), 12)));
+    else_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b, rslc_b_if(sb->b,
+                                 sb_bin(sb, RSLC_B_GT, fb_c(sb, t, "a"), sb_f(sb, 0.878)),
+                                 then_s, else_s));
+    break;
+  }
+
+  // Now convert it to its new representation.
+  switch (to_format)
+  {
+  case TextureFormat::I8:
+  case TextureFormat::C8:
+    o = rslc_b_local(sb->b, "orgba", sb->f[1], fb_field(sb, raw, 0, 0xFFu, 255.0), false);
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_con(sb, sb->f[4], 4, sb_ref(sb, o), sb_ref(sb, o), sb_ref(sb, o), sb_ref(sb, o)));
+    break;
+  case TextureFormat::IA8:
+    o = rslc_b_local(sb->b, "orgb", sb->f[1], fb_field(sb, raw, 0, 0xFFu, 255.0), false);
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_con(sb, sb->f[4], 4, sb_ref(sb, o), sb_ref(sb, o), sb_ref(sb, o),
+                  fb_field(sb, raw, 8, 0xFFu, 255.0)));
+    break;
+  case TextureFormat::IA4:
+    o = rslc_b_local(sb->b, "orgb", sb->f[1], fb_field(sb, raw, 0, 0xFu, 15.0), false);
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_con(sb, sb->f[4], 4, sb_ref(sb, o), sb_ref(sb, o), sb_ref(sb, o),
+                  fb_field(sb, raw, 4, 0xFu, 15.0)));
+    break;
+  case TextureFormat::RGB565:
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_con(sb, sb->f[4], 4, fb_field(sb, raw, 10, 0x1Fu, 31.0),
+                  fb_field(sb, raw, 5, 0x1Fu, 31.0), fb_field(sb, raw, 0, 0x1Fu, 31.0),
+                  sb_f(sb, 1.0)));
+    break;
+  default:  // RGB5A3
+    rslc_b_begin_block(sb->b);
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_con(sb, sb->f[4], 4, fb_field(sb, raw, 10, 0x1Fu, 31.0),
+                  fb_field(sb, raw, 5, 0x1Fu, 31.0), fb_field(sb, raw, 0, 0x1Fu, 31.0),
+                  sb_f(sb, 1.0)));
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_begin_block(sb->b);
+    sb_set(sb, sb_ref(sb, ocol0),
+           sb_con(sb, sb->f[4], 4, fb_field(sb, raw, 8, 0x0Fu, 15.0),
+                  fb_field(sb, raw, 4, 0x0Fu, 15.0), fb_field(sb, raw, 0, 0x0Fu, 15.0),
+                  fb_field(sb, raw, 12, 0x07u, 7.0)));
+    else_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b,
+                rslc_b_if(sb->b,
+                          sb_bin(sb, RSLC_B_NE,
+                                 sb_bin(sb, RSLC_B_BAND, sb_ref(sb, raw), sb_u(sb, 0x8000u)),
+                                 sb_u(sb, 0u)),
+                          then_s, else_s));
+    break;
+  }
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildEFBRestorePixelShader(struct shader_build* sb, const void* /* arg */)
+{
+  struct fb_vary in;
+  struct rslc_var* samp0 = fb_sampler_n(sb, 0, false);
+  struct rslc_var* samp1 = fb_sampler_n(sb, 1, false);
+  struct rslc_var* ocol0 = fb_pixel_decl(sb, 1, 0, sb->f[4], &in);
+  fb_main(sb);
+  sb_set(sb, sb_ref(sb, ocol0),
+         sb_call(sb, "texture", 2, sb_ref(sb, samp0), fb_vary_ref(sb, &in, 0)));
+  sb_set(sb, sb_bi(sb, "gl_FragDepth"),
+         sb_swz(sb, sb_call(sb, "texture", 2, sb_ref(sb, samp1), fb_vary_ref(sb, &in, 0)), "r"));
   return rslc_b_func_end(sb->b);
 }
 
