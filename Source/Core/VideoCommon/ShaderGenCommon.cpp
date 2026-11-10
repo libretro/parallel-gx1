@@ -522,6 +522,252 @@ struct rslc_var* BuildLineOffset(const struct shader_build* sb, struct rslc_var*
   return offset;
 }
 
+struct rslc_func* BuildIsNanHeader(const struct shader_build* sb, APIType api_type)
+{
+  static const char* const names[1] = {"f"};
+  static const unsigned dirs[1] = {RSLC_B_IN};
+  const struct rslc_type* types[1];
+  struct rslc_func* f;
+  if (api_type != APIType::D3D)
+    return nullptr;
+  // Workaround for the HLSL compiler deciding that isnan can never be true and
+  // optimising away the call, even though the value can actually be NaN
+  // Just look for the bit pattern that indicates NaN instead
+  types[0] = sb->f[1];
+  f = rslc_b_func(sb->b, "dolphin_isnan", sb->bl, 1, types, dirs, names);
+  rslc_b_func_begin(sb->b, f);
+  rslc_b_stmt(sb->b,
+              rslc_b_return(sb->b, sb_bin(sb, RSLC_B_GT,
+                                          sb_bin(sb, RSLC_B_BAND,
+                                                 sb_call(sb, "floatBitsToInt", 1,
+                                                         sb_ref(sb, rslc_b_param(f, 0))),
+                                                 sb_i(sb, 0x7FFFFFFF)),
+                                          sb_i(sb, 0x7F800000))));
+  rslc_b_func_end(sb->b);
+  return f;
+}
+
+uint32_t sb_isnan(const struct shader_build* sb, const struct rslc_func* isnan_fn, uint32_t e)
+{
+  if (isnan_fn)
+    return rslc_b_call(sb->b, isnan_fn, &e, 1);
+  return sb_call(sb, "isnan", 1, e);
+}
+
+u32 BuildShaderUniforms(const struct shader_build* sb, const struct rslc_type* light,
+                        const struct rslc_type** types, const char** names, u32 n)
+{
+  static const char* const su_names[SU_COUNT] = {"components",
+                                                 "xfmem_dualTexInfo",
+                                                 "xfmem_numColorChans",
+                                                 "missing_color_hex",
+                                                 "missing_color_value",
+                                                 I_POSNORMALMATRIX,
+                                                 I_PROJECTION,
+                                                 I_MATERIALS,
+                                                 I_LIGHTS,
+                                                 I_TEXMATRICES,
+                                                 I_TRANSFORMMATRICES,
+                                                 I_NORMALMATRICES,
+                                                 I_POSTTRANSFORMMATRICES,
+                                                 I_PIXELCENTERCORRECTION,
+                                                 I_VIEWPORT_SIZE,
+                                                 "xfmem_pack1",
+                                                 I_CACHED_NORMAL,
+                                                 I_CACHED_TANGENT,
+                                                 I_CACHED_BINORMAL,
+                                                 "vertex_stride",
+                                                 "vertex_offset_rawnormal",
+                                                 "vertex_offset_rawtangent",
+                                                 "vertex_offset_rawbinormal",
+                                                 "vertex_offset_rawpos",
+                                                 "vertex_offset_posmtx",
+                                                 "vertex_offset_rawcolor0",
+                                                 "vertex_offset_rawcolor1",
+                                                 "vertex_offset_rawtex"};
+  u32 k;
+  for (k = 0; k < SU_COUNT; k++)
+    names[n + k] = su_names[k];
+  types[n + SU_COMPONENTS] = sb->u[1];
+  types[n + SU_DUALTEXINFO] = sb->u[1];
+  types[n + SU_NUMCOLORCHANS] = sb->u[1];
+  types[n + SU_MISSING_COLOR_HEX] = sb->u[1];
+  types[n + SU_MISSING_COLOR_VALUE] = sb->f[4];
+  types[n + SU_POSNORMALMATRIX] = rslc_b_array(sb->b, sb->f[4], 6);
+  types[n + SU_PROJECTION] = rslc_b_array(sb->b, sb->f[4], 4);
+  types[n + SU_MATERIALS] = rslc_b_array(sb->b, sb->i[4], 4);
+  types[n + SU_LIGHTS] = rslc_b_array(sb->b, light, 8);
+  types[n + SU_TEXMATRICES] = rslc_b_array(sb->b, sb->f[4], 24);
+  types[n + SU_TRANSFORMMATRICES] = rslc_b_array(sb->b, sb->f[4], 64);
+  types[n + SU_NORMALMATRICES] = rslc_b_array(sb->b, sb->f[4], 32);
+  types[n + SU_POSTTRANSFORMMATRICES] = rslc_b_array(sb->b, sb->f[4], 64);
+  types[n + SU_PIXELCENTERCORRECTION] = sb->f[4];
+  types[n + SU_VIEWPORT_SIZE] = sb->f[2];
+  types[n + SU_PACK1] = rslc_b_array(sb->b, sb->u[4], 8);
+  types[n + SU_CACHED_NORMAL] = sb->f[4];
+  types[n + SU_CACHED_TANGENT] = sb->f[4];
+  types[n + SU_CACHED_BINORMAL] = sb->f[4];
+  for (k = SU_VERTEX_STRIDE; k < SU_OFFSET_RAWTEX; k++)
+    types[n + k] = sb->u[1];
+  types[n + SU_OFFSET_RAWTEX] = rslc_b_array(sb->b, sb->u[4], 2);
+  return n + SU_COUNT;
+}
+
+namespace
+{
+/* o.member */
+uint32_t vsx_o(const struct shader_build* sb, const struct vs_expansion* x, int member)
+{
+  return sb_mem(sb, sb_ref(sb, x->o), static_cast<uint32_t>(member));
+}
+
+uint32_t vsx_o_pos(const struct shader_build* sb, const void* ctx)
+{
+  const struct vs_expansion* x = static_cast<const struct vs_expansion*>(ctx);
+  return vsx_o(sb, x, x->layout->pos);
+}
+
+uint32_t vsx_other_pos(const struct shader_build* sb, const void* ctx)
+{
+  return sb_ref(sb, static_cast<const struct vs_expansion*>(ctx)->other_pos);
+}
+
+/* o.pos.xy += offset * o.pos.w; */
+void vsx_offset_pos(const struct shader_build* sb, const struct vs_expansion* x,
+                    struct rslc_var* offset)
+{
+  sb_op_set(sb, RSLC_B_ADD, sb_swz(sb, vsx_o(sb, x, x->layout->pos), "xy"),
+            sb_bin(sb, RSLC_B_MUL, sb_ref(sb, offset),
+                   sb_swz(sb, vsx_o(sb, x, x->layout->pos), "w")));
+}
+
+/* (((ctexoffset[k] >> i) & 0x1) != 0) */
+uint32_t vsx_tex_bit(const struct shader_build* sb, const struct vs_expansion* x, int k, u32 i)
+{
+  return sb_bin(sb, RSLC_B_NE,
+                sb_bin(sb, RSLC_B_BAND,
+                       sb_bin(sb, RSLC_B_SHR, sb_idx(sb, sb_ref(sb, x->texoffset), sb_i(sb, k)),
+                              sb_i(sb, static_cast<int32_t>(i))),
+                       sb_i(sb, 0x1)),
+                sb_i(sb, 0));
+}
+
+/* is ? a : b, of float literals */
+uint32_t vsx_pick(const struct shader_build* sb, struct rslc_var* is, double a, double b)
+{
+  return rslc_b_select(sb->b, sb_ref(sb, is),
+                       a < 0 ? sb_un(sb, RSLC_B_NEG, sb_f(sb, -a)) : sb_f(sb, a),
+                       b < 0 ? sb_un(sb, RSLC_B_NEG, sb_f(sb, -b)) : sb_f(sb, b));
+}
+}  // namespace
+
+void BuildVSLineExpansion(const struct shader_build* sb, const struct vs_expansion* x)
+{
+  const u32 texgens = x->layout->texgens;
+  struct rslc_var *expand_sign, *offset;
+  uint32_t d[4];
+  int k;
+  for (k = 0; k < 4; k++)
+    d[k] = sb_call(sb, "dot", 2, sb_idx(sb, sb_ref(sb, x->projection), sb_i(sb, k)),
+                   sb_ref(sb, x->other_pos));
+  sb_set(sb, sb_ref(sb, x->other_pos), sb_con(sb, sb->f[4], 4, d[0], d[1], d[2], d[3]));
+  expand_sign =
+      rslc_b_local(sb->b, "expand_sign", sb->f[1], vsx_pick(sb, x->is_right, 1.0, -1.0), false);
+  offset = BuildLineOffset(sb, x->clinept, vsx_o_pos, x, vsx_other_pos, x, expand_sign);
+  vsx_offset_pos(sb, x, offset);
+  if (texgens > 0)
+  {
+    struct rslc_var* tex_offset;
+    uint32_t then_s;
+    u32 i;
+    rslc_b_begin_block(sb->b);
+    tex_offset = rslc_b_local(
+        sb->b, "texOffset", sb->f[1],
+        sb_bin(sb, RSLC_B_DIV, sb_f(sb, 1.0),
+               sb_con(sb, sb->f[1], 1, sb_idx(sb, sb_ref(sb, x->texoffset), sb_i(sb, 2)))),
+        false);
+    for (i = 0; i < texgens; i++)
+    {
+      rslc_b_stmt(sb->b,
+                  rslc_b_if(sb->b, vsx_tex_bit(sb, x, 0, i),
+                            rslc_b_expr(sb->b, rslc_b_assign(
+                                                   sb->b, RSLC_B_ADD,
+                                                   sb_swz(sb,
+                                                          vsx_o(sb, x,
+                                                                x->layout->tex0 +
+                                                                    static_cast<int>(i)),
+                                                          "x"),
+                                                   sb_ref(sb, tex_offset))),
+                            0));
+    }
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b,
+                rslc_b_if(sb->b,
+                          sb_bin(sb, RSLC_B_AND,
+                                 sb_bin(sb, RSLC_B_NE,
+                                        sb_idx(sb, sb_ref(sb, x->texoffset), sb_i(sb, 2)),
+                                        sb_i(sb, 0)),
+                                 sb_ref(sb, x->is_right)),
+                          then_s, 0));
+  }
+}
+
+void BuildVSPointExpansion(const struct shader_build* sb, const struct vs_expansion* x)
+{
+  const u32 texgens = x->layout->texgens;
+  struct rslc_var *expand_sign, *offset;
+  expand_sign = rslc_b_local(sb->b, "expand_sign", sb->f[2],
+                             sb_con(sb, sb->f[2], 2, vsx_pick(sb, x->is_right, 1.0, -1.0),
+                                    vsx_pick(sb, x->is_bottom, -1.0, 1.0)),
+                             false);
+  offset = rslc_b_local(sb->b, "offset", sb->f[2],
+                        sb_bin(sb, RSLC_B_DIV,
+                               sb_bin(sb, RSLC_B_MUL, sb_ref(sb, expand_sign),
+                                      sb_swz(sb, sb_ref(sb, x->clinept), "ww")),
+                               sb_swz(sb, sb_ref(sb, x->clinept), "xy")),
+                        false);
+  vsx_offset_pos(sb, x, offset);
+  if (texgens > 0)
+  {
+    struct rslc_var *magnitude, *tex_offset;
+    uint32_t then_s;
+    u32 i;
+    rslc_b_begin_block(sb->b);
+    magnitude = rslc_b_local(
+        sb->b, "texOffsetMagnitude", sb->f[1],
+        sb_bin(sb, RSLC_B_DIV, sb_f(sb, 1.0),
+               sb_con(sb, sb->f[1], 1, sb_idx(sb, sb_ref(sb, x->texoffset), sb_i(sb, 3)))),
+        false);
+    tex_offset = rslc_b_local(
+        sb->b, "texOffset", sb->f[2],
+        sb_con(sb, sb->f[2], 2,
+               rslc_b_select(sb->b, sb_ref(sb, x->is_right), sb_ref(sb, magnitude), sb_f(sb, 0.0)),
+               rslc_b_select(sb->b, sb_ref(sb, x->is_bottom), sb_ref(sb, magnitude),
+                             sb_f(sb, 0.0))),
+        false);
+    for (i = 0; i < texgens; i++)
+    {
+      rslc_b_stmt(sb->b,
+                  rslc_b_if(sb->b, vsx_tex_bit(sb, x, 1, i),
+                            rslc_b_expr(sb->b, rslc_b_assign(
+                                                   sb->b, RSLC_B_ADD,
+                                                   sb_swz(sb,
+                                                          vsx_o(sb, x,
+                                                                x->layout->tex0 +
+                                                                    static_cast<int>(i)),
+                                                          "xy"),
+                                                   sb_ref(sb, tex_offset))),
+                            0));
+    }
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b,
+                rslc_b_if(sb->b,
+                          sb_bin(sb, RSLC_B_NE, sb_idx(sb, sb_ref(sb, x->texoffset), sb_i(sb, 3)),
+                                 sb_i(sb, 0)),
+                          then_s, 0));
+  }
+}
+
 const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interface_block, bool in)
 {
   if (!msaa)

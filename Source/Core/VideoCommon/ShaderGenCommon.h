@@ -264,6 +264,63 @@ typedef uint32_t (*sb_expr_fn)(const struct shader_build* sb, const void* ctx);
 struct rslc_var* BuildLineOffset(const struct shader_build* sb, struct rslc_var* clinept,
                                  sb_expr_fn pos_a, const void* a_ctx, sb_expr_fn pos_b,
                                  const void* b_ctx, struct rslc_var* sign);
+/* dolphin_isnan: the function Direct3D needs (nullptr elsewhere), and a call of it */
+struct rslc_func* BuildIsNanHeader(const struct shader_build* sb, APIType api_type);
+uint32_t sb_isnan(const struct shader_build* sb, const struct rslc_func* isnan_fn, uint32_t e);
+
+/* s_shader_uniforms' members, in order */
+enum shader_uniform
+{
+  SU_COMPONENTS,
+  SU_DUALTEXINFO,
+  SU_NUMCOLORCHANS,
+  SU_MISSING_COLOR_HEX,
+  SU_MISSING_COLOR_VALUE,
+  SU_POSNORMALMATRIX,
+  SU_PROJECTION,
+  SU_MATERIALS,
+  SU_LIGHTS,
+  SU_TEXMATRICES,
+  SU_TRANSFORMMATRICES,
+  SU_NORMALMATRICES,
+  SU_POSTTRANSFORMMATRICES,
+  SU_PIXELCENTERCORRECTION,
+  SU_VIEWPORT_SIZE,
+  SU_PACK1,
+  SU_CACHED_NORMAL,
+  SU_CACHED_TANGENT,
+  SU_CACHED_BINORMAL,
+  SU_VERTEX_STRIDE,
+  SU_OFFSET_RAWNORMAL,
+  SU_OFFSET_RAWTANGENT,
+  SU_OFFSET_RAWBINORMAL,
+  SU_OFFSET_RAWPOS,
+  SU_OFFSET_POSMTX,
+  SU_OFFSET_RAWCOLOR0,
+  SU_OFFSET_RAWCOLOR1,
+  SU_OFFSET_RAWTEX,
+  SU_COUNT
+};
+/* s_shader_uniforms' types and names at types + n and names + n, light the struct Light:
+ * returns n + SU_COUNT */
+u32 BuildShaderUniforms(const struct shader_build* sb, const struct rslc_type* light,
+                        const struct rslc_type** types, const char** names, u32 n);
+
+/* What GenerateVSLineExpansion and GenerateVSPointExpansion read and write: o a VS_OUTPUT
+ * laid out as layout, the GSBlock's members by name. */
+struct vs_expansion
+{
+  struct rslc_var* o;
+  const struct vs_output_layout* layout;
+  struct rslc_var* is_right;
+  struct rslc_var* is_bottom;
+  struct rslc_var* other_pos;
+  struct rslc_var* projection;
+  struct rslc_var* clinept;
+  struct rslc_var* texoffset;
+};
+void BuildVSLineExpansion(const struct shader_build* sb, const struct vs_expansion* x);
+void BuildVSPointExpansion(const struct shader_build* sb, const struct vs_expansion* x);
 
 // We use the flag "centroid" to fix some MSAA rendering bugs. With MSAA, the
 // pixel shader will be executed for each pixel which has at least one passed sample.

@@ -663,11 +663,9 @@ void ShaderCache::CompileMissingPipelines()
 
 AbstractShader* ShaderCache::CompileVertexShader(const VertexShaderUid& uid) const
 {
-  STUTTER_MARK(t);
-  ShaderCode source_code =
-      GenerateVertexShaderCode(m_api_type, m_host_config, uid.GetUidData());
-  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
-  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code);
+  const VertexShaderBuildArgs args = {&m_host_config, uid.GetUidData(), m_api_type};
+  return g_gfx->CreateShaderFromBuild(ShaderStage::Vertex, BuildVertexShader, &args,
+                                      "Vertex shader");
 }
 
 AbstractShader*

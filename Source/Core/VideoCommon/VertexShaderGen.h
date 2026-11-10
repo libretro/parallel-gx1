@@ -106,7 +106,13 @@ static_assert(sizeof(vertex_shader_uid_data) == 28, "vertex_shader_uid_data shou
 using VertexShaderUid = ShaderUid<vertex_shader_uid_data>;
 
 VertexShaderUid GetVertexShaderUid();
-ShaderCode GenerateVertexShaderCode(APIType api_type, const ShaderHostConfig& host_config,
-                                    const vertex_shader_uid_data* uid_data);
-void WriteVertexBody(APIType api_type, const ShaderHostConfig& host_config,
-                     const vertex_shader_uid_data* uid_data, ShaderCode& out);
+
+/* What BuildVertexShader builds the stage for. */
+struct VertexShaderBuildArgs
+{
+  const ShaderHostConfig* host_config;
+  const vertex_shader_uid_data* uid_data;
+  APIType api_type;
+};
+/* The stage built by calls: for AbstractGfx::CreateShaderFromBuild. */
+bool BuildVertexShader(struct shader_build* sb, const void* arg);

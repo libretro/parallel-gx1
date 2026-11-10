@@ -7,21 +7,9 @@
 #include "Common/CommonTypes.h"
 
 class ShaderCode;
-
-#define LIGHT_COL "{}[{}].color.{}"
-#define LIGHT_COL_PARAMS(index, swizzle) (I_LIGHTS), (index), (swizzle)
-
-#define LIGHT_COSATT "{}[{}].cosatt"
-#define LIGHT_COSATT_PARAMS(index) (I_LIGHTS), (index)
-
-#define LIGHT_DISTATT "{}[{}].distatt"
-#define LIGHT_DISTATT_PARAMS(index) (I_LIGHTS), (index)
-
-#define LIGHT_POS "{}[{}].pos"
-#define LIGHT_POS_PARAMS(index) (I_LIGHTS), (index)
-
-#define LIGHT_DIR "{}[{}].dir"
-#define LIGHT_DIR_PARAMS(index) (I_LIGHTS), (index)
+struct shader_build;
+struct rslc_var;
+struct rslc_func;
 
 /**
  * Common uid data used for shader generators that use lighting calculations.
@@ -45,4 +33,9 @@ constexpr char s_lighting_struct[] = "struct Light {\n"
                                      "};\n";
 
 void GenerateLightingShaderHeader(ShaderCode& object, const LightingUidData& uid_data);
+/* GenerateLightingShaderHeader's dolphin_calculate_lighting_chn0 and _chn1, into chn; materials
+ * and lights the uniforms' members */
+void BuildLightingShaderHeader(const struct shader_build* sb, const LightingUidData& uid_data,
+                               struct rslc_var* materials, struct rslc_var* lights,
+                               struct rslc_func** chn);
 void GetLightingShaderUid(LightingUidData& uid_data);
