@@ -115,12 +115,12 @@ enum
   VOUT_NORMAL,
   VOUT_TEXTURE_COORD_0
 };
-/* the raw normal, binormal and tangent, by the names the expanding input gives them */
+/* the raw normal, tangent and binormal, as VB_HAS_NORMAL << k orders them */
 enum
 {
   RAW_NORMAL,
-  RAW_BINORMAL,
-  RAW_TANGENT
+  RAW_TANGENT,
+  RAW_BINORMAL
 };
 
 struct vs_build
@@ -347,12 +347,23 @@ bool vb_texcoord_transforms(struct vs_build* v)
       if ((uid_data->components & (VB_HAS_TEXMTXIDX0 << i)) != 0)
       {
         struct rslc_var* tmp;
-        /* the expanding input's raw texture coordinates are main's alone */
-        if (!v->rawtex[i])
-          return false;
-        tmp = rslc_b_local(sb->b, "tmp", sb->i[1],
-                           sb_con(sb, sb->i[1], 1, sb_swz(sb, sb_ref(sb, v->rawtex[i]), "z")),
-                           false);
+        uint32_t index;
+        if (v->expand)
+        {
+          /* the matrix index is the coordinate's third element, read where main's is */
+          uint32_t zero = sb_i(sb, 0);
+          struct rslc_var* in;
+          if (texinfo.texcoord_elem_count != 3)
+            return false;
+          in = rslc_b_local(sb->b, "i", v->input_data,
+                            rslc_b_call(sb->b, v->expand_data, &zero, 1), false);
+          index = vb_mem(v, in, v->in_tex[i] + 2);
+        }
+        else
+        {
+          index = sb_swz(sb, sb_ref(sb, v->rawtex[i]), "z");
+        }
+        tmp = rslc_b_local(sb->b, "tmp", sb->i[1], sb_con(sb, sb->i[1], 1, index), false);
         sb_set(sb, sb_ref(sb, result),
                vb_texcoord_rows(v, coord, SU_TRANSFORMMATRICES, tmp, 0, stq));
       }
@@ -598,10 +609,9 @@ bool BuildVertexShader(struct shader_build* sb, const void* arg)
 
   if (!v.expand)
   {
-    static const char* const attr_raw[3] = {"rawnormal", "rawtangent", "rawbinormal"};
+    static const char* const raw_names[3] = {"rawnormal", "rawtangent", "rawbinormal"};
     static const char* const rawtex_names[8] = {"rawtex0", "rawtex1", "rawtex2", "rawtex3",
                                                 "rawtex4", "rawtex5", "rawtex6", "rawtex7"};
-    static const int raw_of_attr[3] = {RAW_NORMAL, RAW_TANGENT, RAW_BINORMAL};
     rslc_b_quals_init(&q);
     q.storage = RSLC_B_ST_IN;
     q.location = sb_attribute_location(sb, ShaderEnumValue(ShaderAttrib::Position));
@@ -616,7 +626,7 @@ bool BuildVertexShader(struct shader_build* sb, const void* arg)
       if ((components & (VB_HAS_NORMAL << k)) != 0)
       {
         q.location = sb_attribute_location(sb, ShaderEnumValue(ShaderAttrib::Normal + k));
-        v.raw[raw_of_attr[k]] = rslc_b_declare(sb->b, &q, attr_raw[k], sb->f[3], 0);
+        v.raw[k] = rslc_b_declare(sb->b, &q, raw_names[k], sb->f[3], 0);
       }
     }
     for (k = 0; k < 2; k++)
@@ -645,7 +655,7 @@ bool BuildVertexShader(struct shader_build* sb, const void* arg)
     static const unsigned dirs[1] = {RSLC_B_IN};
     static const char* const member_names[] = {
         "posmtx",   "pos0",     "pos1",     "pos2",     "normal0",   "normal1",   "normal2",
-        "binormal0", "binormal1", "binormal2", "tangent0", "tangent1", "tangent2", "color0",
+        "tangent0", "tangent1", "tangent2", "binormal0", "binormal1", "binormal2", "color0",
         "color1",   "tex0",     "tex1",     "tex2",     "tex3",      "tex4",      "tex5",
         "tex6",     "tex7"};
     static const char* const tex_member_names[8][3] = {
@@ -833,7 +843,7 @@ bool BuildVertexShader(struct shader_build* sb, const void* arg)
 
   if (v.expand)
   {
-    static const char* const extract_names[3] = {"rawnormal", "rawbinormal", "rawtangent"};
+    static const char* const extract_names[3] = {"rawnormal", "rawtangent", "rawbinormal"};
     static const char* const color_names[2] = {"rawcolor0", "rawcolor1"};
     static const char* const rawtex_names[8] = {"rawtex0", "rawtex1", "rawtex2", "rawtex3",
                                                 "rawtex4", "rawtex5", "rawtex6", "rawtex7"};
@@ -928,19 +938,9 @@ bool BuildVertexShader(struct shader_build* sb, const void* arg)
     static const int cached[3] = {SU_CACHED_NORMAL, SU_CACHED_BINORMAL, SU_CACHED_TANGENT};
     for (k = 0; k < 3; k++)
     {
-      uint32_t e;
-      if ((components & bits[k]) != 0)
-      {
-        /* the expanding input names its members by another order */
-        if (!v.raw[raws[k]])
-          return false;
-        e = sb_ref(sb, v.raw[raws[k]]);
-      }
-      else
-      {
-        e = sb_swz(sb, vb_u(&v, cached[k]), "xyz");
-      }
-      sb_set(sb, VIN(VIN_NORMAL + static_cast<int>(k)), e);
+      sb_set(sb, VIN(VIN_NORMAL + static_cast<int>(k)),
+             (components & bits[k]) != 0 ? sb_ref(sb, v.raw[raws[k]]) :
+                                           sb_swz(sb, vb_u(&v, cached[k]), "xyz"));
     }
   }
 
@@ -959,8 +959,8 @@ bool BuildVertexShader(struct shader_build* sb, const void* arg)
       raw = v.rawpos;
       break;
     case SourceRow::Normal:
-      if ((components & VB_HAS_NORMAL) != 0 && !(raw = v.raw[RAW_NORMAL]))
-        return false;
+      if ((components & VB_HAS_NORMAL) != 0)
+        raw = v.raw[RAW_NORMAL];
       break;
     case SourceRow::Colors:
       ASSERT(!texinfo.is_regular_texgen);
@@ -968,20 +968,18 @@ bool BuildVertexShader(struct shader_build* sb, const void* arg)
              texinfo.other.texgentype == TexGenType::Color1);
       break;
     case SourceRow::BinormalT:
-      if ((components & VB_HAS_TANGENT) != 0 && !(raw = v.raw[RAW_TANGENT]))
-        return false;
+      if ((components & VB_HAS_TANGENT) != 0)
+        raw = v.raw[RAW_TANGENT];
       break;
     case SourceRow::BinormalB:
-      if ((components & VB_HAS_BINORMAL) != 0 && !(raw = v.raw[RAW_BINORMAL]))
-        return false;
+      if ((components & VB_HAS_BINORMAL) != 0)
+        raw = v.raw[RAW_BINORMAL];
       break;
     default:
     {
       const u32 texnum = static_cast<u32>(texinfo.sourcerow) - static_cast<u32>(SourceRow::Tex0);
       if (uid_data->texGenInfo[texnum].texcoord_elem_count != 0)
       {
-        if (!v.rawtex[texnum])
-          return false;
         sb_set(sb, sb_ref(sb, coord),
                sb_con(sb, sb->f[4], 4, sb_swz(sb, sb_ref(sb, v.rawtex[texnum]), "x"),
                       sb_swz(sb, sb_ref(sb, v.rawtex[texnum]), "y"), sb_f(sb, 1.0),
