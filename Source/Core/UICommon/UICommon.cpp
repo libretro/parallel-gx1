@@ -61,7 +61,6 @@ static void CreateLoadPath(std::string path)
   if (!path.empty())
     File::SetUserPath(D_LOAD_IDX, std::move(path));
   File::CreateFullPath(File::GetUserPath(D_HIRESTEXTURES_IDX));
-  File::CreateFullPath(File::GetUserPath(D_RIIVOLUTION_IDX));
   File::CreateFullPath(File::GetUserPath(D_GRAPHICSMOD_IDX));
   File::CreateFullPath(File::GetUserPath(D_DYNAMICINPUT_IDX));
 }

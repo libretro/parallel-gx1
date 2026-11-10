@@ -16,7 +16,6 @@
 #include "Core/IOS/IOSC.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Enums.h"
-#include "DiscIO/RiivolutionParser.h"
 #include "DiscIO/VolumeDisc.h"
 #include "DiscIO/VolumeWad.h"
 
@@ -126,7 +125,6 @@ struct BootParameters
   BootParameters(Parameters&& parameters_, BootSessionData boot_session_data_ = BootSessionData());
 
   Parameters parameters;
-  std::vector<DiscIO::Riivolution::Patch> riivolution_patches;
   BootSessionData boot_session_data;
 };
 
@@ -150,17 +148,13 @@ private:
   static void SetupHID(PowerPC::PowerPCState& ppc_state, bool is_wii);
   static void SetupBAT(Core::System& system, bool is_wii);
   static bool RunApploader(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                           const DiscIO::VolumeDisc& volume,
-                           const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches);
+                           const DiscIO::VolumeDisc& volume);
   static bool EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& guard,
-                             const DiscIO::VolumeDisc& volume,
-                             const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches);
+                             const DiscIO::VolumeDisc& volume);
   static bool EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& guard,
-                              const DiscIO::VolumeDisc& volume,
-                              const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches);
+                              const DiscIO::VolumeDisc& volume);
   static bool EmulatedBS2(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                          const DiscIO::VolumeDisc& volume,
-                          const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches);
+                          const DiscIO::VolumeDisc& volume);
   static bool Load_BS2(Core::System& system, const std::string& boot_rom_filename);
 
   static void SetupGCMemory(Core::System& system, const Core::CPUThreadGuard& guard);
@@ -221,6 +215,4 @@ void UpdateStateFlags(const std::function<void(StateFlags*)>& update_function);
 /// but we cannot rely on this because we don't require any system titles to be installed.
 void CreateSystemMenuTitleDirs();
 
-void AddRiivolutionPatches(BootParameters* boot_params,
-                           std::vector<DiscIO::Riivolution::Patch> riivolution_patches);
 std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::string& folder_path);

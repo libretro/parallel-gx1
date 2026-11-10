@@ -69,7 +69,6 @@
 #include "Core/System.h"
 #include "Core/WiiRoot.h"
 
-#include "DiscIO/RiivolutionPatcher.h"
 
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
@@ -539,11 +538,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   const auto cpu_thread_func =
       std::holds_alternative<BootParameters::DFF>(boot->parameters) ? FifoPlayerThread : CpuThread;
 
-  std::optional<DiscIO::Riivolution::SavegameRedirect> savegame_redirect = std::nullopt;
-  if (system.IsWii())
-    savegame_redirect = DiscIO::Riivolution::ExtractSavegameRedirect(boot->riivolution_patches.data(),
-                                                                boot->riivolution_patches.size());
-
   {
     ASSERT(IsCPUThread());
     CPUThreadGuard guard(system);
@@ -563,7 +557,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
     }
   };
   if (system.IsWii())
-    Core::InitializeWiiFileSystemContents(savegame_redirect, boot_session_data);
+    Core::InitializeWiiFileSystemContents(boot_session_data);
   else
     wiifs_guard.Dismiss();
 

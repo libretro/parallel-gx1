@@ -392,9 +392,8 @@ void DVDInterface::SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
 
     const DiscIO::BlobReader& blob = disc->GetBlobReader();
 
-    // DirectoryBlobs (including Riivolution-patched discs) may end up larger than a real physical
-    // Wii disc, which triggers Error #001. In those cases we manually make the check succeed to
-    // avoid problems.
+    // DirectoryBlobs may end up larger than a real physical Wii disc, which triggers Error #001.
+    // In those cases we manually make the check succeed to avoid problems.
     const bool should_fake_error_001 =
         m_system.IsWii() && blob.GetBlobType() == DiscIO::BlobType::DIRECTORY;
     Config::SetCurrent(Config::SESSION_SHOULD_FAKE_ERROR_001, should_fake_error_001);

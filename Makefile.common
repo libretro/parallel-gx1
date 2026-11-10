@@ -964,8 +964,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DiscIO/Filesystem.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/LaggedFibonacciGenerator.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/NFSBlob.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/RiivolutionParser.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/RiivolutionPatcher.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/ScrubbedBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/SplitFileBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/TGCBlob.cpp \

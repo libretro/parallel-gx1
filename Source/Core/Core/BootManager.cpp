@@ -99,10 +99,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot)
   if (system.IsWii() && DiscIO::IsNTSC(StartUp.m_region) && Config::Get(Config::SYSCONF_PAL60))
     Config::SetCurrent(Config::SYSCONF_PAL60, false);
 
-  // Disable loading time emulation for Riivolution-patched games until we have proper emulation.
-  if (!boot->riivolution_patches.empty())
-    Config::SetCurrent(Config::MAIN_FAST_DISC_SPEED, true);
-
   if (system.IsTriforce())
   {
     // Attach Triforce Baseboard hardware if not overridden in any layer.

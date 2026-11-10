@@ -253,9 +253,7 @@ static bool CopySysmenuFilesToFS(FS::FileSystem* fs, const std::string& host_sou
   return true;
 }
 
-void InitializeWiiFileSystemContents(
-    std::optional<DiscIO::Riivolution::SavegameRedirect> save_redirect,
-    const BootSessionData& boot_session_data)
+void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data)
 {
   const auto fs = Core::System::GetInstance().GetIOS()->GetFS();
 
@@ -266,39 +264,11 @@ void InitializeWiiFileSystemContents(
   if (!CopySysmenuFilesToFS(fs.get(), File::GetSysDirectory() + WII_USER_DIR, ""))
     WARN_LOG_FMT(CORE, "Failed to copy initial System Menu files to the NAND");
 
-  const bool is_temp_nand = WiiRootIsTemporary();
-  if (is_temp_nand)
+  if (WiiRootIsTemporary())
   {
     // Generate a SYSCONF with default settings for the temporary Wii NAND.
     SysConf sysconf{fs};
     sysconf.Save();
-  }
-
-  if (save_redirect)
-  {
-    const u64 title_id = SConfig::GetInstance().GetTitleID();
-    std::string source_path = Common::GetTitleDataPath(title_id);
-
-    if (is_temp_nand)
-    {
-      // remember the actual path for copying back on shutdown and redirect to a temp folder instead
-      s_temp_nand_redirects.emplace_back(
-          TempRedirectPath{save_redirect->m_target_path, s_temp_redirect_root});
-      save_redirect->m_target_path = s_temp_redirect_root;
-    }
-
-    if (!File::IsDirectory(save_redirect->m_target_path))
-    {
-      File::CreateDirs(save_redirect->m_target_path);
-      if (save_redirect->m_clone)
-      {
-        File::Copy(Common::GetTitleDataPath(title_id, Common::FromWhichRoot::Session),
-                   save_redirect->m_target_path);
-      }
-    }
-    s_nand_redirects.emplace_back(IOS::HLE::FS::NandRedirect{
-        std::move(source_path), std::move(save_redirect->m_target_path)});
-    fs->SetNandRedirects(s_nand_redirects);
   }
 }
 

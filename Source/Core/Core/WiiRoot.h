@@ -3,10 +3,7 @@
 
 #pragma once
 
-#include <optional>
 #include <vector>
-
-#include "DiscIO/RiivolutionPatcher.h"
 
 class BootSessionData;
 
@@ -33,9 +30,7 @@ void BackupWiiSettings();
 void RestoreWiiSettings(RestoreReason reason);
 
 // Initialize or clean up the filesystem contents.
-void InitializeWiiFileSystemContents(
-    std::optional<DiscIO::Riivolution::SavegameRedirect> save_redirect,
-    const BootSessionData& boot_session_data);
+void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data);
 void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data);
 
 const std::vector<IOS::HLE::FS::NandRedirect>& GetActiveNandRedirects();

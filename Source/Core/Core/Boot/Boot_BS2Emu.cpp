@@ -36,7 +36,6 @@
 #include "Core/System.h"
 
 #include "DiscIO/Enums.h"
-#include "DiscIO/RiivolutionPatcher.h"
 #include "DiscIO/VolumeDisc.h"
 
 #include "VideoCommon/VertexManagerBase.h"
@@ -138,8 +137,7 @@ void CBoot::SetupBAT(Core::System& system, bool is_wii)
 }
 
 bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                         const DiscIO::VolumeDisc& volume,
-                         const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches)
+                         const DiscIO::VolumeDisc& volume)
 {
   const DiscIO::Partition partition = volume.GetGamePartition();
 
@@ -203,10 +201,6 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
     INFO_LOG_FMT(BOOT, "DVDRead: offset: {:08x}   memOffset: {:08x}   length: {}", dvd_offset,
                  ram_address, length);
     DVDRead(system, volume, dvd_offset, ram_address, length, partition);
-
-    DiscIO::Riivolution::ApplyApploaderMemoryPatches(guard, riivolution_patches.data(),
-                                                     riivolution_patches.size(), ram_address,
-                                                     length);
 
     ppc_state.gpr[3] = 0x81300004;
     ppc_state.gpr[4] = 0x81300008;
@@ -279,8 +273,7 @@ void CBoot::SetupGCMemory(Core::System& system, const Core::CPUThreadGuard& guar
 // copy the apploader to 0x81200000
 // execute the apploader, function by function, using the above utility.
 bool CBoot::EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& guard,
-                           const DiscIO::VolumeDisc& volume,
-                           const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches)
+                           const DiscIO::VolumeDisc& volume)
 {
   INFO_LOG_FMT(BOOT, "Faking GC BS2...");
 
@@ -333,7 +326,7 @@ bool CBoot::EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& gua
   // Global pointer to Small Data Area Base (Luigi's Mansion's apploader uses it)
   ppc_state.gpr[13] = ntsc ? 0x81465320 : 0x814b4fc0;
 
-  return RunApploader(system, guard, /*is_wii*/ false, volume, riivolution_patches);
+  return RunApploader(system, guard, /*is_wii*/ false, volume);
 }
 
 static DiscIO::Region CodeRegion(char c)
@@ -532,8 +525,7 @@ static void WriteEmptyPlayRecord()
 // copy the apploader to 0x81200000
 // execute the apploader
 bool CBoot::EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& guard,
-                            const DiscIO::VolumeDisc& volume,
-                            const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches)
+                            const DiscIO::VolumeDisc& volume)
 {
   INFO_LOG_FMT(BOOT, "Faking Wii BS2...");
   if (volume.GetVolumeType() != DiscIO::Platform::WiiDisc)
@@ -603,7 +595,7 @@ bool CBoot::EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& gu
 
   ppc_state.gpr[1] = 0x816ffff0;  // StackPointer
 
-  if (!RunApploader(system, guard, /*is_wii*/ true, volume, riivolution_patches))
+  if (!RunApploader(system, guard, /*is_wii*/ true, volume))
     return false;
 
   // The Apploader probably just overwrote values needed for RAM Override.  Run this again!
@@ -619,9 +611,7 @@ bool CBoot::EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& gu
 // Returns true if apploader has run successfully. If is_wii is true, the disc
 // that volume refers to must currently be inserted into the emulated disc drive.
 bool CBoot::EmulatedBS2(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                        const DiscIO::VolumeDisc& volume,
-                        const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches)
+                        const DiscIO::VolumeDisc& volume)
 {
-  return is_wii ? EmulatedBS2_Wii(system, guard, volume, riivolution_patches) :
-                  EmulatedBS2_GC(system, guard, volume, riivolution_patches);
+  return is_wii ? EmulatedBS2_Wii(system, guard, volume) : EmulatedBS2_GC(system, guard, volume);
 }

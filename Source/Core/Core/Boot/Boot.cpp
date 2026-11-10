@@ -54,8 +54,6 @@
 #include "Core/System.h"
 
 #include "DiscIO/Enums.h"
-#include "DiscIO/RiivolutionParser.h"
-#include "DiscIO/RiivolutionPatcher.h"
 #include "DiscIO/VolumeDisc.h"
 #include "DiscIO/VolumeWad.h"
 
@@ -437,10 +435,8 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
   struct BootTitle
   {
-    BootTitle(Core::System& system_, const Core::CPUThreadGuard& guard_,
-              const std::vector<DiscIO::Riivolution::Patch>& patches)
-        : system(system_), guard(guard_), config(SConfig::GetInstance()),
-          riivolution_patches(patches)
+    BootTitle(Core::System& system_, const Core::CPUThreadGuard& guard_)
+        : system(system_), guard(guard_), config(SConfig::GetInstance())
     {
     }
     bool operator()(BootParameters::Disc& disc) const
@@ -453,7 +449,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       if (!volume)
         return false;
 
-      if (!EmulatedBS2(system, guard, system.IsWii(), *volume, riivolution_patches))
+      if (!EmulatedBS2(system, guard, system.IsWii(), *volume))
         return false;
 
       SConfig::OnTitleDirectlyBooted(guard);
@@ -587,16 +583,9 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
     Core::System& system;
     const Core::CPUThreadGuard& guard;
     const SConfig& config;
-    const std::vector<DiscIO::Riivolution::Patch>& riivolution_patches;
   };
 
-  if (!std::visit(BootTitle(system, guard, boot->riivolution_patches), boot->parameters))
-    return false;
-
-  DiscIO::Riivolution::ApplyGeneralMemoryPatches(guard, boot->riivolution_patches.data(),
-                                                 boot->riivolution_patches.size());
-
-  return true;
+  return std::visit(BootTitle(system, guard), boot->parameters);
 }
 
 BootExecutableReader::BootExecutableReader(const std::string& file_name)
@@ -685,29 +674,4 @@ void CreateSystemMenuTitleDirs()
 {
   const auto& es = Core::System::GetInstance().GetIOS()->GetESCore();
   es.CreateTitleDirectories(Titles::SYSTEM_MENU, IOS::SYSMENU_GID);
-}
-
-void AddRiivolutionPatches(BootParameters* boot_params,
-                           std::vector<DiscIO::Riivolution::Patch> riivolution_patches)
-{
-  if (riivolution_patches.empty())
-    return;
-  if (!std::holds_alternative<BootParameters::Disc>(boot_params->parameters))
-    return;
-
-  auto& disc = std::get<BootParameters::Disc>(boot_params->parameters);
-  disc.volume = DiscIO::CreateDisc(DiscIO::DirectoryBlobReader::Create(
-      std::move(disc.volume),
-      [&](std::vector<DiscIO::FSTBuilderNode>* fst) {
-        DiscIO::Riivolution::ApplyPatchesToFiles(
-            riivolution_patches.data(), riivolution_patches.size(),
-            DiscIO::Riivolution::PatchIndex::DolphinSysFiles, fst, nullptr);
-      },
-      [&](std::vector<DiscIO::FSTBuilderNode>* fst, DiscIO::FSTBuilderNode* dol_node) {
-        DiscIO::Riivolution::ApplyPatchesToFiles(riivolution_patches.data(),
-                                                 riivolution_patches.size(),
-                                                 DiscIO::Riivolution::PatchIndex::FileSystem, fst,
-                                                 dol_node);
-      }));
-  boot_params->riivolution_patches = std::move(riivolution_patches);
 }
