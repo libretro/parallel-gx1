@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstddef>
-#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -73,8 +72,6 @@ enum ContentType : u8
   // the reader's own partition, encrypted on the fly: offset into it, and
   // the partition_data_offset passed to EncryptPartitionData()
   CONTENT_PARTITION,
-  // the wrapped volume: offset into it, read from partition
-  CONTENT_VOLUME,
   // fixed_byte repeated
   CONTENT_FIXED_BYTE,
 };
@@ -89,16 +86,14 @@ struct ContentSource
   }
   ContentSource(const ContentSource& other)
       : type(other.type), fixed_byte(other.fixed_byte), offset(other.offset),
-        partition_data_offset(other.partition_data_offset), partition(other.partition),
-        blob(other.blob)
+        partition_data_offset(other.partition_data_offset), blob(other.blob)
   {
     if (blob)
       ContentBlobRetain(blob);
   }
   ContentSource(ContentSource&& other) noexcept
       : type(other.type), fixed_byte(other.fixed_byte), offset(other.offset),
-        partition_data_offset(other.partition_data_offset), partition(other.partition),
-        blob(other.blob)
+        partition_data_offset(other.partition_data_offset), blob(other.blob)
   {
     other.blob = nullptr;
   }
@@ -112,7 +107,6 @@ struct ContentSource
     fixed_byte = other.fixed_byte;
     offset = other.offset;
     partition_data_offset = other.partition_data_offset;
-    partition = other.partition;
     blob = other.blob;
     return *this;
   }
@@ -123,7 +117,6 @@ struct ContentSource
     fixed_byte = other.fixed_byte;
     offset = other.offset;
     partition_data_offset = other.partition_data_offset;
-    partition = other.partition;
     blob = other.blob;
     other.blob = nullptr;
     if (old)
@@ -140,7 +133,6 @@ struct ContentSource
   u8 fixed_byte;
   u64 offset;
   u64 partition_data_offset;
-  Partition partition;
   ContentBlob* blob;
 };
 
@@ -153,7 +145,6 @@ inline ContentSource ContentFile(const std::string& path, u64 offset)
 ContentSource ContentMemory(ContentBlob* blob, u64 offset);
 ContentSource ContentBytes(const void* data, size_t size);
 ContentSource ContentPartition(u64 offset, u64 partition_data_offset);
-ContentSource ContentVolume(u64 offset, const Partition& partition);
 ContentSource ContentFixedByte(u8 byte);
 
 struct BuilderContentSource
@@ -168,7 +159,6 @@ struct FSTBuilderNode
   std::string m_filename;
   u64 m_size = 0;
   std::variant<std::vector<BuilderContentSource>, std::vector<FSTBuilderNode>> m_content;
-  void* m_user_data = nullptr;
 
   bool IsFile() const
   {
@@ -206,7 +196,6 @@ struct DiscContent
   u64 size;
   u64 src_offset;
   u64 partition_data_offset;
-  Partition partition;
   ContentBlob* blob;
   u8 type;
   u8 fixed_byte;
@@ -245,12 +234,6 @@ class DirectoryBlobPartition
 public:
   DirectoryBlobPartition() = default;
   DirectoryBlobPartition(std::string root_directory, std::optional<bool> is_wii);
-  DirectoryBlobPartition(
-      VolumeDisc* volume, const Partition& partition, std::optional<bool> is_wii,
-      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes)>& sys_callback,
-      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes, FSTBuilderNode* dol_node)>&
-          fst_callback,
-      DirectoryBlobReader* blob);
 
   DirectoryBlobPartition(const DirectoryBlobPartition&) = default;
   DirectoryBlobPartition& operator=(const DirectoryBlobPartition&) = default;
@@ -262,7 +245,6 @@ public:
   void SetDataSize(u64 size) { m_data_size = size; }
   const std::string& GetRootDirectory() const { return m_root_directory; }
   const DiscContentContainer& GetContents() const { return m_contents; }
-  const std::optional<Partition>& GetWrappedPartition() const { return m_wrapped_partition; }
 
   const std::array<u8, VolumeWii::AES_KEY_SIZE>& GetKey() const { return m_key; }
   void SetKey(std::array<u8, VolumeWii::AES_KEY_SIZE> key) { m_key = key; }
@@ -270,8 +252,6 @@ public:
 private:
   void SetDiscType(std::optional<bool> is_wii, const u8* disc_header);
   void SetBI2FromFile(const std::string& bi2_path);
-  // takes over the reference; bi2_size is the size before padding
-  void SetBI2(ContentBlob* bi2, u64 bi2_size);
 
   // Returns DOL address
   u64 SetApploaderFromFile(const std::string& path);
@@ -279,7 +259,6 @@ private:
   u64 SetApploader(ContentBlob* apploader, const std::string& log_path);
   // Returns FST address
   u64 SetDOLFromFile(const std::string& path, u64 dol_address, u8* disc_header);
-  u64 SetDOL(FSTBuilderNode dol_node, u64 dol_address, u8* disc_header);
 
   void BuildFSTFromFolder(const std::string& fst_root_path, u64 fst_address,
                           u8* disc_header);
@@ -306,8 +285,6 @@ private:
   u32 m_address_shift = 0;
 
   u64 m_data_size = 0;
-
-  std::optional<Partition> m_wrapped_partition = std::nullopt;
 };
 
 class DirectoryBlobReader final : public BlobReader
@@ -316,11 +293,6 @@ class DirectoryBlobReader final : public BlobReader
 
 public:
   static std::unique_ptr<DirectoryBlobReader> Create(const std::string& dol_path);
-  static std::unique_ptr<DirectoryBlobReader> Create(
-      std::unique_ptr<VolumeDisc> volume,
-      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes)>& sys_callback,
-      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes, FSTBuilderNode* dol_node)>&
-          fst_callback);
 
   DirectoryBlobReader(DirectoryBlobReader&&) = delete;
   DirectoryBlobReader& operator=(DirectoryBlobReader&&) = delete;
@@ -357,11 +329,6 @@ private:
 
   explicit DirectoryBlobReader(const std::string& game_partition_root,
                                const std::string& true_root);
-  explicit DirectoryBlobReader(
-      std::unique_ptr<VolumeDisc> volume,
-      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes)>& sys_callback,
-      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes, FSTBuilderNode* dol_node)>&
-          fst_callback);
   explicit DirectoryBlobReader(const DirectoryBlobReader& rhs);
 
   const DirectoryBlobPartition* GetPartition(u64 offset, u64 size, u64 partition_data_offset) const;
@@ -377,8 +344,6 @@ private:
   void SetWiiRegionData(const u8* wii_region_data, size_t size, const std::string& log_path);
   void SetPartitions(std::vector<PartitionWithType>&& partitions);
   void SetPartitionHeader(DirectoryBlobPartition* partition, u64 partition_address);
-
-  const VolumeDisc* GetWrappedVolume() const { return m_wrapped_volume.get(); }
 
   // Reads from a host file, through a handle kept open across reads.
   bool ReadContentFile(const char* path, size_t path_len, u64 offset, u8* buffer, u64 size);
@@ -411,8 +376,6 @@ private:
   bool m_encrypted;
 
   u64 m_data_size;
-
-  std::unique_ptr<VolumeDisc> m_wrapped_volume;
 };
 
 }  // namespace DiscIO
