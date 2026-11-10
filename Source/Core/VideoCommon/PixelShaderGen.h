@@ -166,4 +166,80 @@ void WriteFragmentBody(APIType api_type, const ShaderHostConfig& host_config,
                        const pixel_shader_uid_data* uid_data, ShaderCode& out);
 void ClearUnusedPixelShaderUidBits(APIType api_type, const ShaderHostConfig& host_config,
                                    PixelShaderUid* uid);
+
+/* ---- built by calls ---- */
+
+/* PSBlock's members, in order */
+enum ps_uniform
+{
+  PSU_COLORS,
+  PSU_KCOLORS,
+  PSU_ALPHA,
+  PSU_TEXDIMS,
+  PSU_ZBIAS,
+  PSU_INDTEXSCALE,
+  PSU_INDTEXMTX,
+  PSU_FOGCOLOR,
+  PSU_FOGI,
+  PSU_FOGF,
+  PSU_FOGRANGE,
+  PSU_ZSLOPE,
+  PSU_EFBSCALE,
+  PSU_GENMODE,
+  PSU_ALPHATEST,
+  PSU_FOGPARAM3,
+  PSU_FOGRANGEBASE,
+  PSU_DSTALPHA,
+  PSU_ZTEX_OP,
+  PSU_LATE_ZTEST,
+  PSU_RGBA6_FORMAT,
+  PSU_DITHER,
+  PSU_BOUNDING_BOX,
+  PSU_PACK1,
+  PSU_PACK2,
+  PSU_KONSTLOOKUP,
+  PSU_BLEND_ENABLE,
+  PSU_BLEND_SRC_FACTOR,
+  PSU_BLEND_SRC_FACTOR_ALPHA,
+  PSU_BLEND_DST_FACTOR,
+  PSU_BLEND_DST_FACTOR_ALPHA,
+  PSU_BLEND_SUBTRACT,
+  PSU_BLEND_SUBTRACT_ALPHA,
+  PSU_LOGIC_OP_ENABLE,
+  PSU_LOGIC_OP_MODE,
+  PSU_TIME_MS,
+  PSU_NUMTEXGEN,
+  PSU_COUNT
+};
+
+/* What WritePixelShaderCommonHeader declares, built by calls: its functions (iround by the
+ * width it takes, nullptr where not declared), samp[8], the PSBlock's members and, with
+ * per-pixel lighting, the VSBlock's. */
+struct ps_common
+{
+  struct rslc_func* idot3;
+  struct rslc_func* idot4;
+  struct rslc_func* iround[5];
+  struct rslc_var* samp;
+  struct rslc_var* ps[PSU_COUNT];
+  struct rslc_var* vs[SU_COUNT];
+  struct rslc_func* update_bounding_box;
+  struct rslc_func* read_texture;
+  struct rslc_func* read_texture_linear;
+  struct rslc_func* safe_modulo;
+  struct rslc_func* wrap_coord;
+  struct rslc_func* sample_texture;
+};
+/* What BuildPixelShader builds the stage for. */
+struct PixelShaderBuildArgs
+{
+  const ShaderHostConfig* host_config;
+  const pixel_shader_uid_data* uid_data;
+  APIType api_type;
+};
+/* The stage built by calls: for AbstractGfx::CreateShaderFromBuild. */
+bool BuildPixelShader(struct shader_build* sb, const void* arg);
+void BuildPixelShaderCommonHeader(const struct shader_build* sb,
+                                  const ShaderHostConfig& host_config, bool bounding_box,
+                                  const struct sb_bitfield* bitfield, struct ps_common* c);
 PixelShaderUid GetPixelShaderUid();

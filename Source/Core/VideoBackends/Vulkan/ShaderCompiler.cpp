@@ -202,13 +202,22 @@ bool CompileBuild(ShaderStage stage, shader_build_fn fn, const void* arg, Shader
                                  stage == ShaderStage::Geometry ? RSLC_STAGE_GEOMETRY :
                                  stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
                                                                   RSLC_STAGE_COMPUTE;
+  /* what the text's header says of the device and its driver's bugs */
+  const unsigned flags =
+      (g_vulkan_context->SupportsShaderSubgroupOperations() ? SHADER_BUILD_SUBGROUP : 0u) |
+      (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER) ?
+           SHADER_BUILD_INVERTED_HELPER :
+           0u) |
+      (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD) ?
+           SHADER_BUILD_SUBGROUP_BROKEN_DISCARD :
+           0u);
   ShaderBinaryInit(spirv);
   memset(&opts, 0, sizeof(opts));
   opts.dst = RSLC_DST_SPIRV;
   opts.err = err;
   opts.err_cap = sizeof(err);
   STUTTER_MARK(t);
-  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, 0, &opts, &result))
+  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, flags, &opts, &result))
   {
     ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
     return false;

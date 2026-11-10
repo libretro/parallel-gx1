@@ -12,6 +12,7 @@
 #include "VideoBackends/Metal/MTLVertexFormat.h"
 #include "VideoBackends/Metal/MTLVertexManager.h"
 
+#include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/ShaderArena.h"
 #include "VideoCommon/Present.h"
@@ -144,13 +145,22 @@ std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromBuild(ShaderStage st
   const enum rslc_stage rstage = stage == ShaderStage::Vertex ? RSLC_STAGE_VERTEX :
                                  stage == ShaderStage::Pixel  ? RSLC_STAGE_FRAGMENT :
                                                                 RSLC_STAGE_COMPUTE;
+  /* what the text's header says of the device and its driver's bugs */
+  const unsigned flags =
+      (g_features.subgroup_ops ? SHADER_BUILD_SUBGROUP : 0u) |
+      (DriverDetails::HasBug(DriverDetails::BUG_INVERTED_IS_HELPER) ?
+           SHADER_BUILD_INVERTED_HELPER :
+           0u) |
+      (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_SUBGROUP_OPS_WITH_DISCARD) ?
+           SHADER_BUILD_SUBGROUP_BROKEN_DISCARD :
+           0u);
   memset(&opts, 0, sizeof(opts));
   opts.dst = RSLC_DST_MSL;
-  opts.version = 20;
+  opts.version = 23; /* MSL 2.3, as the text compiles: framebuffer fetch and simd reductions */
   opts.err = err;
   opts.err_cap = sizeof(err);
   /* Metal binds as Vulkan's sets lay out */
-  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, 0, &opts, &result))
+  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, flags, &opts, &result))
   {
     PanicAlertFmt("Failed to build shader {}: {}", name, err);
     return nullptr;

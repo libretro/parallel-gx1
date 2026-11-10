@@ -22,9 +22,13 @@ enum shader_build_api
    SHADER_BUILD_OPENGL
 };
 
-/* What the OpenGL context's GLSL takes in layouts. */
-#define SHADER_BUILD_GL_BINDINGS  1u   /* binding = on blocks, samplers, images */
-#define SHADER_BUILD_GL_LOCATIONS 2u   /* location = on attributes and outputs */
+/* What the backend's shaders can do: the OpenGL context's GLSL in layouts,
+ * and the subgroup reduction the bounding box uses where there is one. */
+#define SHADER_BUILD_GL_BINDINGS            1u   /* binding = on blocks, samplers, images */
+#define SHADER_BUILD_GL_LOCATIONS           2u   /* location = on attributes and outputs */
+#define SHADER_BUILD_SUBGROUP               4u   /* subgroupMin, subgroupMax, subgroupElect */
+#define SHADER_BUILD_INVERTED_HELPER        8u   /* gl_HelperInvocation reads inverted */
+#define SHADER_BUILD_SUBGROUP_BROKEN_DISCARD 16u /* subgroup operations break after discard */
 
 /* A stage being built: the builder, the layout it binds its resources
  * by, and the scalar and vector types by base and width (index 1-4). */
@@ -37,7 +41,7 @@ struct shader_build
    const struct rslc_type *bl;
    const struct rslc_type *v;
    unsigned                api;     /* enum shader_build_api */
-   unsigned                gl;      /* SHADER_BUILD_GL_*, for SHADER_BUILD_OPENGL */
+   unsigned                flags;   /* SHADER_BUILD_* */
    bool                    compute;
 };
 
@@ -47,13 +51,13 @@ struct shader_build
 typedef bool (*shader_build_fn)(struct shader_build *sb, const void *arg);
 
 void shader_build_init(struct shader_build *sb, struct rslc_builder *b, unsigned api,
-      unsigned gl, bool compute);
+      unsigned flags, bool compute);
 
 /* fn's stage compiled for opts (dst, version, err) in this thread's
  * shader arena: built again from the start where the arena had to grow.
  * The result is released with shader_arena_blob_release(result->blob). */
 bool shader_build_compile(shader_build_fn fn, const void *arg, enum rslc_stage stage,
-      unsigned api, unsigned gl, struct rslc_opts *opts, struct rslc_result *result);
+      unsigned api, unsigned flags, struct rslc_opts *opts, struct rslc_result *result);
 
 /* Resource layouts: what the shader headers' UBO_BINDING, SAMPLER_BINDING,
  * TEXEL_BUFFER_BINDING, SSBO_BINDING and IMAGE_BINDING said. */

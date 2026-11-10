@@ -160,6 +160,9 @@ reason a reader can see.
 - **A stage moved to the builder compiles to the same words.** Before its
   text generator is deleted, the built stage and the old text are compiled
   side by side for Vulkan and D3D and must match word for word.
+- **What the device can do goes in the builder's flags**
+  (`SHADER_BUILD_SUBGROUP` and the driver-bug flags), set by the backend
+  as its text header used to define them.
 
 ## Shader compilation and stutter
 

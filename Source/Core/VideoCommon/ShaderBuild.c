@@ -10,13 +10,13 @@
 #define SB_MAX_ARGS 8
 
 void shader_build_init(struct shader_build *sb, struct rslc_builder *b, unsigned api,
-      unsigned gl, bool compute)
+      unsigned flags, bool compute)
 {
    unsigned k;
    memset(sb, 0, sizeof(*sb));
    sb->b       = b;
    sb->api     = api;
-   sb->gl      = gl;
+   sb->flags   = flags;
    sb->compute = compute;
    for (k = 1; k <= 4; k++)
    {
@@ -29,7 +29,7 @@ void shader_build_init(struct shader_build *sb, struct rslc_builder *b, unsigned
 }
 
 bool shader_build_compile(shader_build_fn fn, const void *arg, enum rslc_stage stage,
-      unsigned api, unsigned gl, struct rslc_opts *opts, struct rslc_result *result)
+      unsigned api, unsigned flags, struct rslc_opts *opts, struct rslc_result *result)
 {
    for (;;)
    {
@@ -41,7 +41,7 @@ bool shader_build_compile(shader_build_fn fn, const void *arg, enum rslc_stage s
       b = rslc_b_begin(opts, stage);
       if (!b)
          return false;
-      shader_build_init(&sb, b, api, gl, stage == RSLC_STAGE_COMPUTE);
+      shader_build_init(&sb, b, api, flags, stage == RSLC_STAGE_COMPUTE);
       built = fn(&sb, arg);
       if (rslc_b_end(b, result))
       {
@@ -56,7 +56,7 @@ bool shader_build_compile(shader_build_fn fn, const void *arg, enum rslc_stage s
 }
 
 /* OpenGL without the layouts its GLSL lacks binds by name after linking. */
-#define SB_GL_NO(sb, flag) ((sb)->api == SHADER_BUILD_OPENGL && !((sb)->gl & (flag)))
+#define SB_GL_NO(sb, flag) ((sb)->api == SHADER_BUILD_OPENGL && !((sb)->flags & (flag)))
 
 uint32_t sb_attribute_location(const struct shader_build *sb, unsigned x)
 {
