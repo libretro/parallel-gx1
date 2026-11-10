@@ -1158,7 +1158,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/Config/MainSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/SessionSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/SYSCONFSettings.cpp \
-	$(CORE_DIR)/Source/Core/Core/Config/UISettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/Config/WiimoteSettings.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/BaseConfigLoader.cpp \
 	$(CORE_DIR)/Source/Core/Core/ConfigLoaders/GameConfigLoader.cpp \
@@ -1421,7 +1420,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/EXI_DeviceMic.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/GBACore.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/SI/SI_DeviceGBAEmu.cpp \
-	$(CORE_DIR)/Source/Core/UICommon/GameFile.cpp \
 	$(CORE_DIR)/Source/Core/UICommon/UICommon.cpp
 ifneq (,$(filter 1,$(OS_UNIX) $(OS_APPLE)))
    DOLPHIN_SOURCES_CXX += \
