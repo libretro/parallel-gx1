@@ -3,12 +3,14 @@
 
 #include "VideoCommon/TextureConversionShader.h"
 
+#include <cstring>
 #include <map>
 #include <string_view>
 
 #include "Common/CommonTypes.h"
 #include "Common/MathUtil.h"
 #include "Common/MsgHandler.h"
+#include "VideoCommon/ShaderBuild.h"
 #include "VideoCommon/ShaderGenCommon.h"
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/VertexManagerBase.h"
@@ -50,130 +52,8 @@ u16 GetEncodedSampleCount(EFBCopyFormat format)
   }
 }
 
-static void WriteHeader(ShaderCode& code, APIType api_type)
-{
-  // left, top, of source rectangle within source texture
-  // width of the destination rectangle, scale_factor (1 or 2)
-  code.Puts("UBO_BINDING(std140, 1) uniform PSBlock {\n"
-            "  int4 position;\n"
-            "  float y_scale;\n"
-            "  float gamma_rcp;\n"
-            "  float2 clamp_tb;\n"
-            "  uint3 filter_coefficients;\n"
-            "  uint copy_flags;\n"
-            "};\n");
-  if (g_backend_info.bSupportsGeometryShaders)
-  {
-    code.Puts("VARYING_LOCATION(0) in VertexData {\n"
-              "  float3 v_tex0;\n"
-              "};\n");
-  }
-  else
-  {
-    code.Puts("VARYING_LOCATION(0) in float3 v_tex0;\n");
-  }
-  code.Puts("SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n"
-            "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n");
-
-  // Alpha channel in the copy is set to 1 the EFB format does not have an alpha channel.
-  code.Puts("float4 RGBA8ToRGB8(float4 src)\n"
-            "{\n"
-            "  return float4(src.xyz, 1.0);\n"
-            "}\n"
-            "float4 RGBA8ToRGBA6(float4 src)\n"
-            "{\n"
-            "  int4 val = int4(roundEven(src * 255.0));\n"
-            "  val = (val & 0xfc) | (val >> 6);\n"
-            "  return float4(val) / 255.0;\n"
-            "}\n"
-            "float4 RGBA8ToRGB565(float4 src)\n"
-            "{\n"
-            "  int4 val = int4(roundEven(src * 255.0));\n"
-            "  val.r = (val.r & 0xf8) | (val.r >> 5);\n"
-            "  val.g = (val.g & 0xfc) | (val.g >> 6);\n"
-            "  val.b = (val.b & 0xf8) | (val.b >> 5);\n"
-            "  val.a = 255;\n"
-            "  return float4(val) / 255.0;\n"
-            "}\n");
-}
-
-/* The rest of the copy, read from copy_flags (GetEncodingFlags): the EFB's format in bits 0-2,
- * then depth, YUV, the filter's three rows, its overflow and gamma, each a bit. */
-static void WriteSampleFunction(ShaderCode& code, APIType api_type)
-{
-  code.Puts("uint4 SampleEFB0(float2 uv, float2 pixel_size, float x_offset, float y_offset) {\n"
-            "  float4 tex_sample = texture(samp0, float3(uv.x + x_offset * pixel_size.x, ");
-
-  // Reverse the direction for OpenGL, since positive numbers are distance from the bottom row.
-  // TODO: This isn't done on TextureConverterShaderGen - maybe it handles that via pixel_size?
-  if (api_type == APIType::OpenGL)
-    code.Puts("clamp(uv.y - y_offset * pixel_size.y, clamp_tb.x, clamp_tb.y)");
-  else
-    code.Puts("clamp(uv.y + y_offset * pixel_size.y, clamp_tb.x, clamp_tb.y)");
-
-  code.Puts(", 0.0));\n");
-
-  // TODO: Is this really needed?  Doesn't the EFB only store appropriate values?  Or is this for
-  // EFB2Ram having consistent output with force 32-bit color?
-  code.Printf("  uint efb_format = copy_flags & 7u;\n"
-              "  if (efb_format == %uu)\n"
-              "    tex_sample = RGBA8ToRGB8(tex_sample);\n"
-              "  else if (efb_format == %uu)\n"
-              "    tex_sample = RGBA8ToRGBA6(tex_sample);\n"
-              "  else if (efb_format == %uu)\n"
-              "    tex_sample = RGBA8ToRGB565(tex_sample);\n",
-              static_cast<u32>(PixelFormat::RGB8_Z24), static_cast<u32>(PixelFormat::RGBA6_Z24),
-              static_cast<u32>(PixelFormat::RGB565_Z16));
-
-  code.Puts("  if ((copy_flags & 8u) != 0u) {\n");
-  if (!g_backend_info.bSupportsReversedDepthRange)
-    code.Puts("    tex_sample.x = 1.0 - tex_sample.x;\n");
-  code.Puts("    uint depth = uint(tex_sample.x * 16777216.0);\n"
-            "    return uint4((depth >> 16) & 255u, (depth >> 8) & 255u, depth & 255u, 255u);\n"
-            "  }\n"
-            "  return uint4(tex_sample * 255.0);\n"
-            "}\n");
-
-  // The copy filter applies to both color and depth copies. This has been verified on hardware.
-  // The filter is only applied to the RGB channels, the alpha channel is left intact.
-  code.Puts("float4 SampleEFB(float2 uv, float2 pixel_size, int x_offset)\n"
-            "{\n"
-            "  uint4 current_row = SampleEFB0(uv, pixel_size, float(x_offset), 0.0f);\n"
-            "  uint3 combined_rows = current_row.rgb * filter_coefficients[1];\n"
-            "  if ((copy_flags & 32u) != 0u) {\n"
-            "    uint4 prev_row = SampleEFB0(uv, pixel_size, float(x_offset), -1.0f);\n"
-            "    uint4 next_row = SampleEFB0(uv, pixel_size, float(x_offset), 1.0f);\n"
-            "    combined_rows += prev_row.rgb * filter_coefficients[0] +\n"
-            "                     next_row.rgb * filter_coefficients[2];\n"
-            "  }\n"
-            "  // Shift right by 6 to divide by 64, as filter coefficients\n"
-            "  // that sum to 64 result in no change in brightness\n"
-            "  uint4 texcol_raw = uint4(combined_rows.rgb >> 6, current_row.a);\n"
-            "  if ((copy_flags & 64u) != 0u)\n"
-            "    texcol_raw &= 0x1ffu;\n");
-  // Note that overflow occurs when the sum of values is >= 128, but this max situation can be hit
-  // on >= 64, so we always include it.
-  code.Puts("  texcol_raw = min(texcol_raw, uint4(255, 255, 255, 255));\n"
-            "  if ((copy_flags & 128u) != 0u) {\n"
-            "    texcol_raw = uint4(round(pow(float4(texcol_raw) / 255.0,\n"
-            "                       float4(gamma_rcp, gamma_rcp, gamma_rcp, 1.0)) * 255.0));\n"
-            "  }\n"
-            "  if ((copy_flags & 16u) != 0u) {\n"
-            "    // Intensity/YUV format conversion constants determined by hardware testing\n"
-            "    const float4 y_const = float4( 66, 129,  25,  16);\n"
-            "    const float4 u_const = float4(-38, -74, 112, 128);\n"
-            "    const float4 v_const = float4(112, -94, -18, 128);\n"
-            "    // Intensity/YUV format conversion\n"
-            "    texcol_raw.rgb = uint3(dot(y_const, float4(texcol_raw.rgb, 256)),\n"
-            "                           dot(u_const, float4(texcol_raw.rgb, 256)),\n"
-            "                           dot(v_const, float4(texcol_raw.rgb, 256)));\n"
-            "    // Divide by 256 and round .5 and higher up\n"
-            "    texcol_raw.rgb = (texcol_raw.rgb >> 8) + ((texcol_raw.rgb >> 7) & 1u);\n"
-            "  }\n"
-            "  return float4(texcol_raw) / 255.0;\n"
-            "}\n");
-}
-
+/* The rest of the copy, packed into copy_flags: the EFB's format in bits 0-2, then depth, YUV,
+ * the filter's three rows, its overflow and gamma, each a bit. */
 u32 GetEncodingFlags(const EFBCopyParams& params)
 {
   return (static_cast<u32>(params.efb_format) & 7u) | (params.depth ? 8u : 0u) |
@@ -181,313 +61,742 @@ u32 GetEncodingFlags(const EFBCopyParams& params)
          (params.copy_filter_can_overflow ? 64u : 0u) | (params.apply_gamma ? 128u : 0u);
 }
 
-// Block dimensions   : widthStride, heightStride
-// Texture dimensions : width, height, x offset, y offset
-static void WriteSwizzler(ShaderCode& code, EFBCopyFormat format, APIType api_type)
-{
-  code.Puts("void main()\n"
-            "{\n"
-            "  int2 sampleUv;\n"
-            "  int2 uv1 = int2(gl_FragCoord.xy);\n");
+/* ---- the encoder, built by calls ---- */
 
+namespace
+{
+/* PSBlock's members */
+enum
+{
+  EC_POSITION,
+  EC_Y_SCALE,
+  EC_GAMMA_RCP,
+  EC_CLAMP_TB,
+  EC_FILTER_COEFFICIENTS,
+  EC_COPY_FLAGS,
+  EC_COUNT
+};
+
+struct ec_build
+{
+  const struct shader_build* sb;
+  APIType api_type;
+  struct rslc_var* ps[EC_COUNT];
+  struct rslc_var* samp0;
+  struct rslc_var* ocol0;
+  struct rslc_var* uv0;
+  struct rslc_var* pixel_size;
+  struct rslc_func* to_rgb8;
+  struct rslc_func* to_rgba6;
+  struct rslc_func* to_rgb565;
+  struct rslc_func* sample_efb0;
+  struct rslc_func* sample_efb;
+};
+
+uint32_t ec_r(const struct shader_build* sb, const struct rslc_var* v)
+{
+  return sb_ref(sb, v);
+}
+
+uint32_t ec_swz(const struct shader_build* sb, const struct rslc_var* v, const char* c)
+{
+  return sb_swz(sb, sb_ref(sb, v), c);
+}
+
+/* a literal as the text writes it: negative ones as a negated literal */
+uint32_t ec_int(const struct shader_build* sb, int v)
+{
+  return v < 0 ? sb_un(sb, RSLC_B_NEG, sb_i(sb, -v)) : sb_i(sb, v);
+}
+
+uint32_t ec_float(const struct shader_build* sb, double v)
+{
+  return v < 0 ? sb_un(sb, RSLC_B_NEG, sb_f(sb, -v)) : sb_f(sb, v);
+}
+
+/* (copy_flags & bit) != 0u */
+uint32_t ec_flag(const struct ec_build* e, u32 bit)
+{
+  const struct shader_build* sb = e->sb;
+  return sb_bin(sb, RSLC_B_NE,
+                sb_bin(sb, RSLC_B_BAND, ec_r(sb, e->ps[EC_COPY_FLAGS]), sb_u(sb, bit)),
+                sb_u(sb, 0));
+}
+
+uint32_t ec_set_stmt(const struct shader_build* sb, uint32_t l, uint32_t r)
+{
+  return rslc_b_expr(sb->b, rslc_b_assign(sb->b, RSLC_B_SET, l, r));
+}
+
+uint32_t ec_call1(const struct shader_build* sb, const struct rslc_func* f, uint32_t x)
+{
+  return rslc_b_call(sb->b, f, &x, 1);
+}
+
+uint32_t ec_call4(const struct shader_build* sb, const struct rslc_func* f, uint32_t a0,
+                  uint32_t a1, uint32_t a2, uint32_t a3)
+{
+  uint32_t a[4];
+  a[0] = a0;
+  a[1] = a1;
+  a[2] = a2;
+  a[3] = a3;
+  return rslc_b_call(sb->b, f, a, 4);
+}
+
+struct rslc_func* ec_func(const struct shader_build* sb, const char* name,
+                          const struct rslc_type* ret, unsigned n,
+                          const struct rslc_type* const* types, const char* const* names)
+{
+  static const unsigned dirs[4] = {RSLC_B_IN, RSLC_B_IN, RSLC_B_IN, RSLC_B_IN};
+  struct rslc_func* f = rslc_b_func(sb->b, name, ret, n, types, dirs, names);
+  if (f)
+    rslc_b_func_begin(sb->b, f);
+  return f;
+}
+
+/* float4(a, b, c, d) of int literals */
+uint32_t ec_f4i(const struct shader_build* sb, int a, int b, int c, int d)
+{
+  return sb_con(sb, sb->f[4], 4, ec_int(sb, a), ec_int(sb, b), ec_int(sb, c), ec_int(sb, d));
+}
+
+/* Alpha channel in the copy is set to 1 the EFB format does not have an alpha channel. */
+void ec_format_functions(struct ec_build* e)
+{
+  static const char* const names[1] = {"src"};
+  const struct shader_build* sb = e->sb;
+  const struct rslc_type* types[1];
+  struct rslc_var *src, *val;
+  int k;
+
+  types[0] = sb->f[4];
+  e->to_rgb8 = ec_func(sb, "RGBA8ToRGB8", sb->f[4], 1, types, names);
+  src = rslc_b_param(e->to_rgb8, 0);
+  rslc_b_stmt(sb->b, rslc_b_return(sb->b, sb_con(sb, sb->f[4], 2, ec_swz(sb, src, "xyz"),
+                                                   sb_f(sb, 1.0))));
+  rslc_b_func_end(sb->b);
+
+  for (k = 0; k < 2; k++)
+  {
+    struct rslc_func* f =
+        ec_func(sb, k ? "RGBA8ToRGB565" : "RGBA8ToRGBA6", sb->f[4], 1, types, names);
+    src = rslc_b_param(f, 0);
+    val = rslc_b_local(
+        sb->b, "val", sb->i[4],
+        sb_con(sb, sb->i[4], 1,
+               sb_call(sb, "roundEven", 1,
+                       sb_bin(sb, RSLC_B_MUL, ec_r(sb, src), sb_f(sb, 255.0)))),
+        false);
+    if (!k)
+    {
+      sb_set(sb, ec_r(sb, val),
+             sb_bin(sb, RSLC_B_BOR, sb_bin(sb, RSLC_B_BAND, ec_r(sb, val), sb_i(sb, 0xfc)),
+                    sb_bin(sb, RSLC_B_SHR, ec_r(sb, val), sb_i(sb, 6))));
+    }
+    else
+    {
+      static const char* const comps[3] = {"r", "g", "b"};
+      static const int masks[3] = {0xf8, 0xfc, 0xf8};
+      static const int shifts[3] = {5, 6, 5};
+      int c;
+      for (c = 0; c < 3; c++)
+        sb_set(sb, ec_swz(sb, val, comps[c]),
+               sb_bin(sb, RSLC_B_BOR,
+                      sb_bin(sb, RSLC_B_BAND, ec_swz(sb, val, comps[c]), sb_i(sb, masks[c])),
+                      sb_bin(sb, RSLC_B_SHR, ec_swz(sb, val, comps[c]), sb_i(sb, shifts[c]))));
+      sb_set(sb, ec_swz(sb, val, "a"), sb_i(sb, 255));
+    }
+    rslc_b_stmt(sb->b,
+                rslc_b_return(sb->b, sb_bin(sb, RSLC_B_DIV, sb_con(sb, sb->f[4], 1, ec_r(sb, val)),
+                                            sb_f(sb, 255.0))));
+    rslc_b_func_end(sb->b);
+    if (k)
+      e->to_rgb565 = f;
+    else
+      e->to_rgba6 = f;
+  }
+}
+
+/* SampleEFB0 and SampleEFB: the rest of the copy, read from copy_flags (GetEncodingFlags): the
+ * EFB's format in bits 0-2, then depth, YUV, the filter's three rows, its overflow and gamma,
+ * each a bit. */
+void ec_sample_functions(struct ec_build* e)
+{
+  static const char* const names0[4] = {"uv", "pixel_size", "x_offset", "y_offset"};
+  static const char* const names[3] = {"uv", "pixel_size", "x_offset"};
+  const struct shader_build* sb = e->sb;
+  const struct rslc_type* types[4];
+  struct rslc_func* f;
+  struct rslc_var *uv, *ps, *xo, *yo, *tex_sample, *efb_format, *depth;
+  uint32_t y, then_s, a[4];
+
+  types[0] = types[1] = sb->f[2];
+  types[2] = types[3] = sb->f[1];
+  f = ec_func(sb, "SampleEFB0", sb->u[4], 4, types, names0);
+  uv = rslc_b_param(f, 0);
+  ps = rslc_b_param(f, 1);
+  xo = rslc_b_param(f, 2);
+  yo = rslc_b_param(f, 3);
+  // Reverse the direction for OpenGL, since positive numbers are distance from the bottom row.
+  y = sb_bin(sb, e->api_type == APIType::OpenGL ? RSLC_B_SUB : RSLC_B_ADD, ec_swz(sb, uv, "y"),
+             sb_bin(sb, RSLC_B_MUL, ec_r(sb, yo), ec_swz(sb, ps, "y")));
+  a[0] = ec_r(sb, e->samp0);
+  a[1] = sb_con(sb, sb->f[3], 3,
+                sb_bin(sb, RSLC_B_ADD, ec_swz(sb, uv, "x"),
+                       sb_bin(sb, RSLC_B_MUL, ec_r(sb, xo), ec_swz(sb, ps, "x"))),
+                sb_call(sb, "clamp", 3, y, ec_swz(sb, e->ps[EC_CLAMP_TB], "x"),
+                        ec_swz(sb, e->ps[EC_CLAMP_TB], "y")),
+                sb_f(sb, 0.0));
+  tex_sample = rslc_b_local(sb->b, "tex_sample", sb->f[4],
+                            rslc_b_builtin(sb->b, "texture", a, 2), false);
+  efb_format = rslc_b_local(sb->b, "efb_format", sb->u[1],
+                            sb_bin(sb, RSLC_B_BAND, ec_r(sb, e->ps[EC_COPY_FLAGS]), sb_u(sb, 7)),
+                            false);
+#define EC_FMT(fmt, fn)                                                                           \
+  sb_bin(sb, RSLC_B_EQ, ec_r(sb, efb_format), sb_u(sb, static_cast<u32>(PixelFormat::fmt))),     \
+      ec_set_stmt(sb, ec_r(sb, tex_sample), ec_call1(sb, e->fn, ec_r(sb, tex_sample)))
+  {
+    uint32_t c565 = rslc_b_if(sb->b, EC_FMT(RGB565_Z16, to_rgb565), 0);
+    uint32_t c6 = rslc_b_if(sb->b, EC_FMT(RGBA6_Z24, to_rgba6), c565);
+    rslc_b_stmt(sb->b, rslc_b_if(sb->b, EC_FMT(RGB8_Z24, to_rgb8), c6));
+  }
+#undef EC_FMT
+  rslc_b_begin_block(sb->b);
+  if (!g_backend_info.bSupportsReversedDepthRange)
+    sb_set(sb, ec_swz(sb, tex_sample, "x"),
+           sb_bin(sb, RSLC_B_SUB, sb_f(sb, 1.0), ec_swz(sb, tex_sample, "x")));
+  depth = rslc_b_local(
+      sb->b, "depth", sb->u[1],
+      sb_con(sb, sb->u[1], 1,
+             sb_bin(sb, RSLC_B_MUL, ec_swz(sb, tex_sample, "x"), sb_f(sb, 16777216.0))),
+      false);
+  rslc_b_stmt(
+      sb->b,
+      rslc_b_return(
+          sb->b,
+          sb_con(sb, sb->u[4], 4,
+                 sb_bin(sb, RSLC_B_BAND, sb_bin(sb, RSLC_B_SHR, ec_r(sb, depth), sb_i(sb, 16)),
+                        sb_u(sb, 255)),
+                 sb_bin(sb, RSLC_B_BAND, sb_bin(sb, RSLC_B_SHR, ec_r(sb, depth), sb_i(sb, 8)),
+                        sb_u(sb, 255)),
+                 sb_bin(sb, RSLC_B_BAND, ec_r(sb, depth), sb_u(sb, 255)), sb_u(sb, 255))));
+  then_s = rslc_b_end_block(sb->b);
+  rslc_b_stmt(sb->b, rslc_b_if(sb->b, ec_flag(e, 8), then_s, 0));
+  rslc_b_stmt(sb->b,
+              rslc_b_return(sb->b,
+                            sb_con(sb, sb->u[4], 1,
+                                   sb_bin(sb, RSLC_B_MUL, ec_r(sb, tex_sample), sb_f(sb, 255.0)))));
+  rslc_b_func_end(sb->b);
+  e->sample_efb0 = f;
+
+  // The copy filter applies to both color and depth copies. This has been verified on hardware.
+  // The filter is only applied to the RGB channels, the alpha channel is left intact.
+  types[2] = sb->i[1];
+  f = ec_func(sb, "SampleEFB", sb->f[4], 3, types, names);
+  {
+    struct rslc_var *current_row, *combined, *prev_row, *next_row, *raw;
+    uint32_t fc;
+#define ROW(yoff)                                                                                 \
+  ec_call4(sb, e->sample_efb0, ec_r(sb, rslc_b_param(f, 0)), ec_r(sb, rslc_b_param(f, 1)),     \
+             sb_con(sb, sb->f[1], 1, ec_r(sb, rslc_b_param(f, 2))), ec_float(sb, yoff))
+#define FC(i) sb_idx(sb, ec_r(sb, e->ps[EC_FILTER_COEFFICIENTS]), sb_i(sb, i))
+    current_row = rslc_b_local(sb->b, "current_row", sb->u[4], ROW(0.0), false);
+    combined = rslc_b_local(sb->b, "combined_rows", sb->u[3],
+                            sb_bin(sb, RSLC_B_MUL, ec_swz(sb, current_row, "rgb"), FC(1)), false);
+    rslc_b_begin_block(sb->b);
+    prev_row = rslc_b_local(sb->b, "prev_row", sb->u[4], ROW(-1.0), false);
+    next_row = rslc_b_local(sb->b, "next_row", sb->u[4], ROW(1.0), false);
+    sb_op_set(sb, RSLC_B_ADD, ec_r(sb, combined),
+              sb_bin(sb, RSLC_B_ADD, sb_bin(sb, RSLC_B_MUL, ec_swz(sb, prev_row, "rgb"), FC(0)),
+                     sb_bin(sb, RSLC_B_MUL, ec_swz(sb, next_row, "rgb"), FC(2))));
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b, rslc_b_if(sb->b, ec_flag(e, 32), then_s, 0));
+#undef ROW
+#undef FC
+    // Shift right by 6 to divide by 64, as filter coefficients
+    // that sum to 64 result in no change in brightness
+    raw = rslc_b_local(sb->b, "texcol_raw", sb->u[4],
+                       sb_con(sb, sb->u[4], 2,
+                              sb_bin(sb, RSLC_B_SHR, ec_swz(sb, combined, "rgb"), sb_i(sb, 6)),
+                              ec_swz(sb, current_row, "a")),
+                       false);
+    rslc_b_stmt(sb->b,
+                rslc_b_if(sb->b, ec_flag(e, 64),
+                          rslc_b_expr(sb->b, rslc_b_assign(sb->b, RSLC_B_BAND, ec_r(sb, raw),
+                                                           sb_u(sb, 0x1ff))),
+                          0));
+    // Note that overflow occurs when the sum of values is >= 128, but this max situation can be
+    // hit on >= 64, so we always include it.
+    sb_set(sb, ec_r(sb, raw),
+           sb_call(sb, "min", 2, ec_r(sb, raw),
+                   sb_con(sb, sb->u[4], 4, sb_i(sb, 255), sb_i(sb, 255), sb_i(sb, 255),
+                          sb_i(sb, 255))));
+    rslc_b_begin_block(sb->b);
+    fc = sb_con(sb, sb->f[4], 4, ec_r(sb, e->ps[EC_GAMMA_RCP]), ec_r(sb, e->ps[EC_GAMMA_RCP]),
+                ec_r(sb, e->ps[EC_GAMMA_RCP]), sb_f(sb, 1.0));
+    sb_set(sb, ec_r(sb, raw),
+           sb_con(sb, sb->u[4], 1,
+                  sb_call(sb, "round", 1,
+                          sb_bin(sb, RSLC_B_MUL,
+                                 sb_call(sb, "pow", 2,
+                                         sb_bin(sb, RSLC_B_DIV,
+                                                sb_con(sb, sb->f[4], 1, ec_r(sb, raw)),
+                                                sb_f(sb, 255.0)),
+                                         fc),
+                                 sb_f(sb, 255.0)))));
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b, rslc_b_if(sb->b, ec_flag(e, 128), then_s, 0));
+    rslc_b_begin_block(sb->b);
+    {
+      struct rslc_var* k[3];
+      uint32_t d[3];
+      int c;
+      // Intensity/YUV format conversion constants determined by hardware testing
+      k[0] = rslc_b_local(sb->b, "y_const", sb->f[4], ec_f4i(sb, 66, 129, 25, 16), true);
+      k[1] = rslc_b_local(sb->b, "u_const", sb->f[4], ec_f4i(sb, -38, -74, 112, 128), true);
+      k[2] = rslc_b_local(sb->b, "v_const", sb->f[4], ec_f4i(sb, 112, -94, -18, 128), true);
+      // Intensity/YUV format conversion
+      for (c = 0; c < 3; c++)
+        d[c] = sb_call(sb, "dot", 2, ec_r(sb, k[c]),
+                       sb_con(sb, sb->f[4], 2, ec_swz(sb, raw, "rgb"), sb_i(sb, 256)));
+      sb_set(sb, ec_swz(sb, raw, "rgb"), sb_con(sb, sb->u[3], 3, d[0], d[1], d[2]));
+      // Divide by 256 and round .5 and higher up
+      sb_set(sb, ec_swz(sb, raw, "rgb"),
+             sb_bin(sb, RSLC_B_ADD, sb_bin(sb, RSLC_B_SHR, ec_swz(sb, raw, "rgb"), sb_i(sb, 8)),
+                    sb_bin(sb, RSLC_B_BAND,
+                           sb_bin(sb, RSLC_B_SHR, ec_swz(sb, raw, "rgb"), sb_i(sb, 7)),
+                           sb_u(sb, 1))));
+    }
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b, rslc_b_if(sb->b, ec_flag(e, 16), then_s, 0));
+    rslc_b_stmt(sb->b,
+                rslc_b_return(sb->b, sb_bin(sb, RSLC_B_DIV, sb_con(sb, sb->f[4], 1, ec_r(sb, raw)),
+                                            sb_f(sb, 255.0))));
+  }
+  rslc_b_func_end(sb->b);
+  e->sample_efb = f;
+}
+
+/* SampleEFB(uv0, pixel_size, x_offset).comp */
+uint32_t ec_sample(const struct ec_build* e, int x_offset, const char* comp)
+{
+  const struct shader_build* sb = e->sb;
+  uint32_t a[3];
+  a[0] = ec_r(sb, e->uv0);
+  a[1] = ec_r(sb, e->pixel_size);
+  a[2] = sb_i(sb, x_offset);
+  return sb_swz(sb, rslc_b_call(sb->b, e->sample_efb, a, 3), comp);
+}
+
+/* floor(src * 255.0 / exp2(8.0 - depth.0)) */
+uint32_t ec_bit_depth(const struct shader_build* sb, int depth, uint32_t src)
+{
+  return sb_call(sb, "floor", 1,
+                 sb_bin(sb, RSLC_B_DIV, sb_bin(sb, RSLC_B_MUL, src, sb_f(sb, 255.0)),
+                        sb_call(sb, "exp2", 1,
+                                sb_bin(sb, RSLC_B_SUB, sb_f(sb, 8.0), sb_f(sb, depth)))));
+}
+
+uint32_t ec_o(const struct ec_build* e, const char* c)
+{
+  return ec_swz(e->sb, e->ocol0, c);
+}
+
+/* ocol0 = ocol0 / 255.0; */
+void ec_normalize(const struct ec_build* e)
+{
+  const struct shader_build* sb = e->sb;
+  sb_set(sb, ec_r(sb, e->ocol0), sb_bin(sb, RSLC_B_DIV, ec_r(sb, e->ocol0), sb_f(sb, 255.0)));
+}
+
+void ec_rgb565(const struct ec_build* e)
+{
+  const struct shader_build* sb = e->sb;
+  struct rslc_var *s0, *s1, *rs, *gs, *bs, *g_int, *g_upper, *g_lower;
+  s0 = rslc_b_local(sb->b, "texSample0", sb->f[3], 0, false);
+  s1 = rslc_b_local(sb->b, "texSample1", sb->f[3], 0, false);
+  sb_set(sb, ec_r(sb, s0), ec_sample(e, 0, "rgb"));
+  sb_set(sb, ec_r(sb, s1), ec_sample(e, 1, "rgb"));
+  rs = rslc_b_local(sb->b, "texRs", sb->f[2],
+                    sb_con(sb, sb->f[2], 2, ec_swz(sb, s0, "r"), ec_swz(sb, s1, "r")), false);
+  gs = rslc_b_local(sb->b, "texGs", sb->f[2],
+                    sb_con(sb, sb->f[2], 2, ec_swz(sb, s0, "g"), ec_swz(sb, s1, "g")), false);
+  bs = rslc_b_local(sb->b, "texBs", sb->f[2],
+                    sb_con(sb, sb->f[2], 2, ec_swz(sb, s0, "b"), ec_swz(sb, s1, "b")), false);
+  g_int = rslc_b_local(sb->b, "gInt", sb->f[2], ec_bit_depth(sb, 6, ec_r(sb, gs)), false);
+  g_upper = rslc_b_local(sb->b, "gUpper", sb->f[2],
+                         sb_call(sb, "floor", 1,
+                                 sb_bin(sb, RSLC_B_DIV, ec_r(sb, g_int), sb_f(sb, 8.0))),
+                         false);
+  g_lower = rslc_b_local(
+      sb->b, "gLower", sb->f[2],
+      sb_bin(sb, RSLC_B_SUB, ec_r(sb, g_int),
+             sb_bin(sb, RSLC_B_MUL, ec_r(sb, g_upper), sb_f(sb, 8.0))),
+      false);
+  sb_set(sb, ec_o(e, "br"), ec_bit_depth(sb, 5, ec_r(sb, rs)));
+  sb_set(sb, ec_o(e, "br"),
+         sb_bin(sb, RSLC_B_ADD, sb_bin(sb, RSLC_B_MUL, ec_o(e, "br"), sb_f(sb, 8.0)),
+                ec_r(sb, g_upper)));
+  sb_set(sb, ec_o(e, "ga"), ec_bit_depth(sb, 5, ec_r(sb, bs)));
+  sb_set(sb, ec_o(e, "ga"),
+         sb_bin(sb, RSLC_B_ADD, ec_o(e, "ga"),
+                sb_bin(sb, RSLC_B_MUL, ec_r(sb, g_lower), sb_f(sb, 32.0))));
+  ec_normalize(e);
+}
+
+/* one RGB5A3 texel into ocol0's c_hi and c_lo */
+void ec_rgb5a3_texel(const struct ec_build* e, struct rslc_var* tex, struct rslc_var* color0,
+                     struct rslc_var* g_upper, struct rslc_var* g_lower, const char* c_hi,
+                     const char* c_lo)
+{
+  const struct shader_build* sb = e->sb;
+  uint32_t then_s, else_s;
+  // 0.8784 = 224 / 255 which is the maximum alpha value that can be represented in 3 bits
+  rslc_b_begin_block(sb->b);
+  sb_set(sb, ec_r(sb, color0), ec_bit_depth(sb, 5, ec_swz(sb, tex, "g")));
+  sb_set(sb, ec_r(sb, g_upper),
+         sb_call(sb, "floor", 1, sb_bin(sb, RSLC_B_DIV, ec_r(sb, color0), sb_f(sb, 8.0))));
+  sb_set(sb, ec_r(sb, g_lower),
+         sb_bin(sb, RSLC_B_SUB, ec_r(sb, color0),
+                sb_bin(sb, RSLC_B_MUL, ec_r(sb, g_upper), sb_f(sb, 8.0))));
+  sb_set(sb, ec_o(e, c_hi), ec_bit_depth(sb, 5, ec_swz(sb, tex, "r")));
+  sb_set(sb, ec_o(e, c_hi),
+         sb_bin(sb, RSLC_B_ADD,
+                sb_bin(sb, RSLC_B_ADD, sb_bin(sb, RSLC_B_MUL, ec_o(e, c_hi), sb_f(sb, 4.0)),
+                       ec_r(sb, g_upper)),
+                sb_f(sb, 128.0)));
+  sb_set(sb, ec_o(e, c_lo), ec_bit_depth(sb, 5, ec_swz(sb, tex, "b")));
+  sb_set(sb, ec_o(e, c_lo),
+         sb_bin(sb, RSLC_B_ADD, ec_o(e, c_lo),
+                sb_bin(sb, RSLC_B_MUL, ec_r(sb, g_lower), sb_f(sb, 32.0))));
+  then_s = rslc_b_end_block(sb->b);
+  rslc_b_begin_block(sb->b);
+  sb_set(sb, ec_o(e, c_hi), ec_bit_depth(sb, 4, ec_swz(sb, tex, "r")));
+  sb_set(sb, ec_o(e, c_lo), ec_bit_depth(sb, 4, ec_swz(sb, tex, "b")));
+  sb_set(sb, ec_r(sb, color0), ec_bit_depth(sb, 3, ec_swz(sb, tex, "a")));
+  sb_set(sb, ec_o(e, c_hi),
+         sb_bin(sb, RSLC_B_ADD, ec_o(e, c_hi),
+                sb_bin(sb, RSLC_B_MUL, ec_r(sb, color0), sb_f(sb, 16.0))));
+  sb_set(sb, ec_r(sb, color0), ec_bit_depth(sb, 4, ec_swz(sb, tex, "g")));
+  sb_set(sb, ec_o(e, c_lo),
+         sb_bin(sb, RSLC_B_ADD, ec_o(e, c_lo),
+                sb_bin(sb, RSLC_B_MUL, ec_r(sb, color0), sb_f(sb, 16.0))));
+  else_s = rslc_b_end_block(sb->b);
+  rslc_b_stmt(sb->b,
+              rslc_b_if(sb->b, sb_bin(sb, RSLC_B_GT, ec_swz(sb, tex, "a"), sb_f(sb, 0.878)),
+                        then_s, else_s));
+}
+
+void ec_rgb5a3(const struct ec_build* e)
+{
+  const struct shader_build* sb = e->sb;
+  struct rslc_var *tex, *color0, *g_upper, *g_lower;
+  tex = rslc_b_local(sb->b, "texSample", sb->f[4], 0, false);
+  color0 = rslc_b_local(sb->b, "color0", sb->f[1], 0, false);
+  g_upper = rslc_b_local(sb->b, "gUpper", sb->f[1], 0, false);
+  g_lower = rslc_b_local(sb->b, "gLower", sb->f[1], 0, false);
+  sb_set(sb, ec_r(sb, tex), ec_sample(e, 0, "rgba"));
+  ec_rgb5a3_texel(e, tex, color0, g_upper, g_lower, "b", "g");
+  sb_set(sb, ec_r(sb, tex), ec_sample(e, 1, "rgba"));
+  ec_rgb5a3_texel(e, tex, color0, g_upper, g_lower, "r", "a");
+  ec_normalize(e);
+}
+
+void ec_rgba8(const struct ec_build* e, struct rslc_var* first)
+{
+  const struct shader_build* sb = e->sb;
+  struct rslc_var *tex, *color0, *color1;
+  tex = rslc_b_local(sb->b, "texSample", sb->f[4], 0, false);
+  color0 = rslc_b_local(sb->b, "color0", sb->f[4], 0, false);
+  color1 = rslc_b_local(sb->b, "color1", sb->f[4], 0, false);
+  sb_set(sb, ec_r(sb, tex), ec_sample(e, 0, "rgba"));
+  sb_set(sb, ec_swz(sb, color0, "b"), ec_swz(sb, tex, "a"));
+  sb_set(sb, ec_swz(sb, color0, "g"), ec_swz(sb, tex, "r"));
+  sb_set(sb, ec_swz(sb, color1, "b"), ec_swz(sb, tex, "g"));
+  sb_set(sb, ec_swz(sb, color1, "g"), ec_swz(sb, tex, "b"));
+  sb_set(sb, ec_r(sb, tex), ec_sample(e, 1, "rgba"));
+  sb_set(sb, ec_swz(sb, color0, "r"), ec_swz(sb, tex, "a"));
+  sb_set(sb, ec_swz(sb, color0, "a"), ec_swz(sb, tex, "r"));
+  sb_set(sb, ec_swz(sb, color1, "r"), ec_swz(sb, tex, "g"));
+  sb_set(sb, ec_swz(sb, color1, "a"), ec_swz(sb, tex, "b"));
+  sb_set(sb, ec_r(sb, e->ocol0),
+         rslc_b_select(sb->b, ec_r(sb, first), ec_r(sb, color0), ec_r(sb, color1)));
+}
+
+/* color0, color1 to 4 bits; ocol0 = (color0 * 16.0 + color1) / 255.0; */
+void ec_pack4(const struct ec_build* e, struct rslc_var* color0, struct rslc_var* color1)
+{
+  const struct shader_build* sb = e->sb;
+  sb_set(sb, ec_r(sb, color0), ec_bit_depth(sb, 4, ec_r(sb, color0)));
+  sb_set(sb, ec_r(sb, color1), ec_bit_depth(sb, 4, ec_r(sb, color1)));
+  sb_set(sb, ec_r(sb, e->ocol0),
+         sb_bin(sb, RSLC_B_DIV,
+                sb_bin(sb, RSLC_B_ADD, sb_bin(sb, RSLC_B_MUL, ec_r(sb, color0), sb_f(sb, 16.0)),
+                       ec_r(sb, color1)),
+                sb_f(sb, 255.0)));
+}
+
+void ec_c4(const struct ec_build* e, const char* comp)
+{
+  static const char* const dst[4] = {"b", "g", "r", "a"};
+  const struct shader_build* sb = e->sb;
+  struct rslc_var *color0, *color1;
+  int k;
+  color0 = rslc_b_local(sb->b, "color0", sb->f[4], 0, false);
+  color1 = rslc_b_local(sb->b, "color1", sb->f[4], 0, false);
+  for (k = 0; k < 8; k++)
+    sb_set(sb, ec_swz(sb, (k & 1) ? color1 : color0, dst[k >> 1]), ec_sample(e, k, comp));
+  ec_pack4(e, color0, color1);
+}
+
+void ec_c8(const struct ec_build* e, const char* comp)
+{
+  static const char* const dst[4] = {"b", "g", "r", "a"};
+  int k;
+  for (k = 0; k < 4; k++)
+    sb_set(e->sb, ec_o(e, dst[k]), ec_sample(e, k, comp));
+}
+
+void ec_cc4(const struct ec_build* e, const char* comp)
+{
+  static const char* const dst[4] = {"b", "g", "r", "a"};
+  const struct shader_build* sb = e->sb;
+  struct rslc_var *tex, *color0, *color1;
+  int k;
+  tex = rslc_b_local(sb->b, "texSample", sb->f[2], 0, false);
+  color0 = rslc_b_local(sb->b, "color0", sb->f[4], 0, false);
+  color1 = rslc_b_local(sb->b, "color1", sb->f[4], 0, false);
+  for (k = 0; k < 4; k++)
+  {
+    sb_set(sb, ec_r(sb, tex), ec_sample(e, k, comp));
+    sb_set(sb, ec_swz(sb, color0, dst[k]), ec_swz(sb, tex, "x"));
+    sb_set(sb, ec_swz(sb, color1, dst[k]), ec_swz(sb, tex, "y"));
+  }
+  ec_pack4(e, color0, color1);
+}
+
+void ec_cc8(const struct ec_build* e, const char* comp)
+{
+  sb_set(e->sb, ec_o(e, "bg"), ec_sample(e, 0, comp));
+  sb_set(e->sb, ec_o(e, "ra"), ec_sample(e, 1, comp));
+}
+
+void ec_xfb(const struct ec_build* e)
+{
+  static const char* const dst[4] = {"b", "g", "r", "a"};
+  const struct shader_build* sb = e->sb;
+  struct rslc_var *color0, *color1, *k[3], *average;
+  int c;
+  color0 = rslc_b_local(sb->b, "color0", sb->f[4], ec_f4i(sb, 0, 0, 0, 1), false);
+  color1 = rslc_b_local(sb->b, "color1", sb->f[4], ec_f4i(sb, 0, 0, 0, 1), false);
+  sb_set(sb, ec_swz(sb, color0, "rgb"), ec_sample(e, 0, "rgb"));
+  sb_set(sb, ec_swz(sb, color1, "rgb"), ec_sample(e, 1, "rgb"));
+  // Convert to YUV. Intensity/YUV format conversion constants determined by hardware testing
+  k[0] = rslc_b_local(sb->b, "y_const", sb->f[4], ec_f4i(sb, 66, 129, 25, 16), true);
+  k[1] = rslc_b_local(sb->b, "u_const", sb->f[4], ec_f4i(sb, -38, -74, 112, 128), true);
+  k[2] = rslc_b_local(sb->b, "v_const", sb->f[4], ec_f4i(sb, 112, -94, -18, 128), true);
+  average = rslc_b_local(
+      sb->b, "average", sb->f[4],
+      sb_bin(sb, RSLC_B_MUL, sb_bin(sb, RSLC_B_ADD, ec_r(sb, color0), ec_r(sb, color1)),
+             sb_f(sb, 0.5)),
+      false);
+  // TODO: check rounding
+  for (c = 0; c < 4; c++)
+  {
+    /* b: color0 y, g: average u, r: color1 y, a: average v */
+    struct rslc_var* v = c == 0 ? color0 : c == 2 ? color1 : average;
+    struct rslc_var* kc = c == 1 ? k[1] : c == 3 ? k[2] : k[0];
+    sb_set(sb, ec_o(e, dst[c]),
+           sb_bin(sb, RSLC_B_DIV,
+                  sb_call(sb, "round", 1, sb_call(sb, "dot", 2, ec_r(sb, v), ec_r(sb, kc))),
+                  sb_f(sb, 256.0)));
+  }
+}
+}  // namespace
+
+bool BuildEncodingShader(struct shader_build* sb, const void* arg)
+{
+  static const char* const names[EC_COUNT] = {"position",           "y_scale",   "gamma_rcp",
+                                              "clamp_tb",           "filter_coefficients",
+                                              "copy_flags"};
+  const EncodingShaderBuildArgs* a = static_cast<const EncodingShaderBuildArgs*>(arg);
+  const EFBCopyFormat format = a->format;
+  const struct rslc_type* types[EC_COUNT];
+  struct ec_build eb;
+  struct ec_build* e = &eb;
+  struct rslc_b_quals q;
+  struct rslc_var *sample_uv, *uv1, *x_block, *y_block, *first = nullptr, *offset_in_block;
+  struct rslc_var *y_off, *x_off;
+  struct rslc_func* fmain;
   const int blkW = TexDecoder_GetEFBCopyBlockWidthInTexels(format);
   const int blkH = TexDecoder_GetEFBCopyBlockHeightInTexels(format);
   int samples = GetEncodedSampleCount(format);
 
-  code.Printf("  int x_block_position = (uv1.x >> %d) << %d;\n", MathUtil::IntLog2(blkH * blkW / samples), MathUtil::IntLog2(blkW));
-  code.Printf("  int y_block_position = uv1.y << %d;\n", MathUtil::IntLog2(blkH));
+  memset(e, 0, sizeof(*e));
+  e->sb = sb;
+  e->api_type = a->api_type;
+
+  // left, top, of source rectangle within source texture
+  // width of the destination rectangle, scale_factor (1 or 2)
+  types[EC_POSITION] = sb->i[4];
+  types[EC_Y_SCALE] = types[EC_GAMMA_RCP] = sb->f[1];
+  types[EC_CLAMP_TB] = sb->f[2];
+  types[EC_FILTER_COEFFICIENTS] = sb->u[3];
+  types[EC_COPY_FLAGS] = sb->u[1];
+  rslc_b_quals_init(&q);
+  sb_ubo(sb, &q, 1);
+  rslc_b_block_q(sb->b, &q, "PSBlock", nullptr, types, names, EC_COUNT, e->ps);
+  {
+    static const char* const vnames[1] = {"v_tex0"};
+    const struct rslc_type* vtypes[1];
+    vtypes[0] = sb->f[3];
+    rslc_b_quals_init(&q);
+    q.storage = RSLC_B_ST_IN;
+    q.location = sb_varying_location(sb, 0);
+    if (g_backend_info.bSupportsGeometryShaders)
+      rslc_b_io_block(sb->b, &q, "VertexData", nullptr, vtypes, vnames, nullptr, nullptr, 1, -1);
+    else
+      rslc_b_declare(sb->b, &q, "v_tex0", sb->f[3], 0);
+  }
+  rslc_b_quals_init(&q);
+  sb_sampler(sb, &q, 0);
+  e->samp0 = rslc_b_declare(
+      sb->b, &q, "samp0",
+      rslc_b_sampler_type(sb->b, RSLC_B_SAMPLER_2D_ARRAY, RSLC_BASE_FLOAT), 0);
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_OUT;
+  q.location = sb_output_location(sb, 0);
+  e->ocol0 = rslc_b_declare(sb->b, &q, "ocol0", sb->f[4], 0);
+
+  ec_format_functions(e);
+  ec_sample_functions(e);
+
+  // Block dimensions   : widthStride, heightStride
+  // Texture dimensions : width, height, x offset, y offset
+  fmain = rslc_b_func(sb->b, "main", sb->v, 0, nullptr, nullptr, nullptr);
+  rslc_b_func_begin(sb->b, fmain);
+  sample_uv = rslc_b_local(sb->b, "sampleUv", sb->i[2], 0, false);
+  uv1 = rslc_b_local(sb->b, "uv1", sb->i[2],
+                     sb_con(sb, sb->i[2], 1, sb_swz(sb, sb_bi(sb, "gl_FragCoord"), "xy")), false);
+  x_block = rslc_b_local(
+      sb->b, "x_block_position", sb->i[1],
+      sb_bin(sb, RSLC_B_SHL,
+             sb_bin(sb, RSLC_B_SHR, ec_swz(sb, uv1, "x"),
+                    sb_i(sb, MathUtil::IntLog2(blkH * blkW / samples))),
+             sb_i(sb, MathUtil::IntLog2(blkW))),
+      false);
+  y_block = rslc_b_local(sb->b, "y_block_position", sb->i[1],
+                         sb_bin(sb, RSLC_B_SHL, ec_swz(sb, uv1, "y"),
+                                sb_i(sb, MathUtil::IntLog2(blkH))),
+                         false);
   if (samples == 1)
   {
     // With samples == 1, we write out pairs of blocks; one A8R8, one G8B8.
-    code.Printf("  bool first = (uv1.x & %d) == 0;\n", blkH * blkW / 2);
+    first = rslc_b_local(
+        sb->b, "first", sb->bl,
+        sb_bin(sb, RSLC_B_EQ,
+               sb_bin(sb, RSLC_B_BAND, ec_swz(sb, uv1, "x"), sb_i(sb, blkH * blkW / 2)),
+               sb_i(sb, 0)),
+        false);
     samples = 2;
   }
-  code.Printf("  int offset_in_block = uv1.x & %d;\n", (blkH * blkW / samples) - 1);
-  code.Printf("  int y_offset_in_block = offset_in_block >> %d;\n", MathUtil::IntLog2(blkW / samples));
-  code.Printf("  int x_offset_in_block = (offset_in_block & %d) << %d;\n", (blkW / samples) - 1, MathUtil::IntLog2(samples));
-
-  code.Puts("  sampleUv.x = x_block_position + x_offset_in_block;\n"
-            "  sampleUv.y = y_block_position + y_offset_in_block;\n");
+  offset_in_block = rslc_b_local(
+      sb->b, "offset_in_block", sb->i[1],
+      sb_bin(sb, RSLC_B_BAND, ec_swz(sb, uv1, "x"), sb_i(sb, (blkH * blkW / samples) - 1)), false);
+  y_off = rslc_b_local(sb->b, "y_offset_in_block", sb->i[1],
+                       sb_bin(sb, RSLC_B_SHR, ec_r(sb, offset_in_block),
+                              sb_i(sb, MathUtil::IntLog2(blkW / samples))),
+                       false);
+  x_off = rslc_b_local(
+      sb->b, "x_offset_in_block", sb->i[1],
+      sb_bin(sb, RSLC_B_SHL,
+             sb_bin(sb, RSLC_B_BAND, ec_r(sb, offset_in_block), sb_i(sb, (blkW / samples) - 1)),
+             sb_i(sb, MathUtil::IntLog2(samples))),
+      false);
+  sb_set(sb, ec_swz(sb, sample_uv, "x"),
+         sb_bin(sb, RSLC_B_ADD, ec_r(sb, x_block), ec_r(sb, x_off)));
+  sb_set(sb, ec_swz(sb, sample_uv, "y"),
+         sb_bin(sb, RSLC_B_ADD, ec_r(sb, y_block), ec_r(sb, y_off)));
 
   // sampleUv is the sample position in (int)gx_coords
-  code.Puts("  float2 uv0 = float2(sampleUv);\n");
+  e->uv0 = rslc_b_local(sb->b, "uv0", sb->f[2], sb_con(sb, sb->f[2], 1, ec_r(sb, sample_uv)),
+                        false);
   // Move to center of pixel
-  code.Puts("  uv0 += float2(0.5, 0.5);\n");
-  // Scale by two if needed (also move to pixel borders
-  // so that linear filtering will average adjacent
-  // pixel)
-  code.Puts("  uv0 *= float(position.w);\n");
-
+  sb_op_set(sb, RSLC_B_ADD, ec_r(sb, e->uv0),
+            sb_con(sb, sb->f[2], 2, sb_f(sb, 0.5), sb_f(sb, 0.5)));
+  // Scale by two if needed (also move to pixel borders so that linear filtering will average
+  // adjacent pixel)
+  sb_op_set(sb, RSLC_B_MUL, ec_r(sb, e->uv0),
+            sb_con(sb, sb->f[1], 1, ec_swz(sb, e->ps[EC_POSITION], "w")));
   // Move to copied rect
-  code.Puts("  uv0 += float2(position.xy);\n");
+  sb_op_set(sb, RSLC_B_ADD, ec_r(sb, e->uv0),
+            sb_con(sb, sb->f[2], 1, ec_swz(sb, e->ps[EC_POSITION], "xy")));
   // Normalize to [0:1]
-  code.Printf("  uv0 /= float2(%u, %u);\n", EFB_WIDTH, EFB_HEIGHT);
+  sb_op_set(sb, RSLC_B_DIV, ec_r(sb, e->uv0),
+            sb_con(sb, sb->f[2], 2, sb_i(sb, EFB_WIDTH), sb_i(sb, EFB_HEIGHT)));
   // Apply the y scaling
-  code.Puts("  uv0 /= float2(1, y_scale);\n");
+  sb_op_set(sb, RSLC_B_DIV, ec_r(sb, e->uv0),
+            sb_con(sb, sb->f[2], 2, sb_i(sb, 1), ec_r(sb, e->ps[EC_Y_SCALE])));
   // OGL has to flip up and down
-  if (api_type == APIType::OpenGL)
-  {
-    code.Puts("  uv0.y = 1.0-uv0.y;\n");
-  }
-
-  code.Printf("  float2 pixel_size = float2(position.w, position.w) / float2(%u, %u);\n", EFB_WIDTH, EFB_HEIGHT);
-}
-
-static void WriteSampleColor(ShaderCode& code, const char* color_comp, const char* dest,
-                             int x_offset, APIType api_type)
-{
-  code.Printf("  %s = SampleEFB(uv0, pixel_size, %d).%s;\n", dest, x_offset, color_comp);
-}
-
-static void WriteToBitDepth(ShaderCode& code, u8 depth, const char* src, const char* dest)
-{
-  code.Printf("  %s = floor(%s * 255.0 / exp2(8.0 - %d.0));\n", dest, src, depth);
-}
-
-static void WriteRGB565Encoder(ShaderCode& code, APIType api_type)
-{
-  code.Puts("  float3 texSample0;\n"
-            "  float3 texSample1;\n");
-
-  WriteSampleColor(code, "rgb", "texSample0", 0, api_type);
-  WriteSampleColor(code, "rgb", "texSample1", 1, api_type);
-  code.Puts("  float2 texRs = float2(texSample0.r, texSample1.r);\n"
-            "  float2 texGs = float2(texSample0.g, texSample1.g);\n"
-            "  float2 texBs = float2(texSample0.b, texSample1.b);\n");
-
-  WriteToBitDepth(code, 6, "texGs", "float2 gInt");
-  code.Puts("  float2 gUpper = floor(gInt / 8.0);\n"
-            "  float2 gLower = gInt - gUpper * 8.0;\n");
-
-  WriteToBitDepth(code, 5, "texRs", "ocol0.br");
-  code.Puts("  ocol0.br = ocol0.br * 8.0 + gUpper;\n");
-  WriteToBitDepth(code, 5, "texBs", "ocol0.ga");
-  code.Puts("  ocol0.ga = ocol0.ga + gLower * 32.0;\n");
-
-  code.Puts("  ocol0 = ocol0 / 255.0;\n");
-}
-
-static void WriteRGB5A3Encoder(ShaderCode& code, APIType api_type)
-{
-  code.Puts("  float4 texSample;\n"
-            "  float color0;\n"
-            "  float gUpper;\n"
-            "  float gLower;\n");
-
-  WriteSampleColor(code, "rgba", "texSample", 0, api_type);
-
-  // 0.8784 = 224 / 255 which is the maximum alpha value that can be represented in 3 bits
-  code.Puts("if(texSample.a > 0.878f) {\n");
-
-  WriteToBitDepth(code, 5, "texSample.g", "color0");
-  code.Puts("  gUpper = floor(color0 / 8.0);\n"
-            "  gLower = color0 - gUpper * 8.0;\n");
-
-  WriteToBitDepth(code, 5, "texSample.r", "ocol0.b");
-  code.Puts("  ocol0.b = ocol0.b * 4.0 + gUpper + 128.0;\n");
-  WriteToBitDepth(code, 5, "texSample.b", "ocol0.g");
-  code.Puts("  ocol0.g = ocol0.g + gLower * 32.0;\n");
-
-  code.Puts("} else {\n");
-
-  WriteToBitDepth(code, 4, "texSample.r", "ocol0.b");
-  WriteToBitDepth(code, 4, "texSample.b", "ocol0.g");
-
-  WriteToBitDepth(code, 3, "texSample.a", "color0");
-  code.Puts("ocol0.b = ocol0.b + color0 * 16.0;\n");
-  WriteToBitDepth(code, 4, "texSample.g", "color0");
-  code.Puts("ocol0.g = ocol0.g + color0 * 16.0;\n");
-
-  code.Puts("}\n");
-
-  WriteSampleColor(code, "rgba", "texSample", 1, api_type);
-
-  code.Puts("if(texSample.a > 0.878f) {\n");
-
-  WriteToBitDepth(code, 5, "texSample.g", "color0");
-  code.Puts("  gUpper = floor(color0 / 8.0);\n"
-            "  gLower = color0 - gUpper * 8.0;\n");
-
-  WriteToBitDepth(code, 5, "texSample.r", "ocol0.r");
-  code.Puts("  ocol0.r = ocol0.r * 4.0 + gUpper + 128.0;\n");
-  WriteToBitDepth(code, 5, "texSample.b", "ocol0.a");
-  code.Puts("  ocol0.a = ocol0.a + gLower * 32.0;\n");
-
-  code.Puts("} else {\n");
-
-  WriteToBitDepth(code, 4, "texSample.r", "ocol0.r");
-  WriteToBitDepth(code, 4, "texSample.b", "ocol0.a");
-
-  WriteToBitDepth(code, 3, "texSample.a", "color0");
-  code.Puts("ocol0.r = ocol0.r + color0 * 16.0;\n");
-  WriteToBitDepth(code, 4, "texSample.g", "color0");
-  code.Puts("ocol0.a = ocol0.a + color0 * 16.0;\n");
-
-  code.Puts("}\n");
-
-  code.Puts("  ocol0 = ocol0 / 255.0;\n");
-}
-
-static void WriteRGBA8Encoder(ShaderCode& code, APIType api_type)
-{
-  code.Puts("  float4 texSample;\n"
-            "  float4 color0;\n"
-            "  float4 color1;\n");
-
-  WriteSampleColor(code, "rgba", "texSample", 0, api_type);
-  code.Puts("  color0.b = texSample.a;\n"
-            "  color0.g = texSample.r;\n"
-            "  color1.b = texSample.g;\n"
-            "  color1.g = texSample.b;\n");
-
-  WriteSampleColor(code, "rgba", "texSample", 1, api_type);
-  code.Puts("  color0.r = texSample.a;\n"
-            "  color0.a = texSample.r;\n"
-            "  color1.r = texSample.g;\n"
-            "  color1.a = texSample.b;\n");
-
-  code.Puts("  ocol0 = first ? color0 : color1;\n");
-}
-
-static void WriteC4Encoder(ShaderCode& code, const char* comp, APIType api_type)
-{
-  code.Puts("  float4 color0;\n"
-            "  float4 color1;\n");
-
-  WriteSampleColor(code, comp, "color0.b", 0, api_type);
-  WriteSampleColor(code, comp, "color1.b", 1, api_type);
-  WriteSampleColor(code, comp, "color0.g", 2, api_type);
-  WriteSampleColor(code, comp, "color1.g", 3, api_type);
-  WriteSampleColor(code, comp, "color0.r", 4, api_type);
-  WriteSampleColor(code, comp, "color1.r", 5, api_type);
-  WriteSampleColor(code, comp, "color0.a", 6, api_type);
-  WriteSampleColor(code, comp, "color1.a", 7, api_type);
-
-  WriteToBitDepth(code, 4, "color0", "color0");
-  WriteToBitDepth(code, 4, "color1", "color1");
-
-  code.Puts("  ocol0 = (color0 * 16.0 + color1) / 255.0;\n");
-}
-
-static void WriteC8Encoder(ShaderCode& code, const char* comp, APIType api_type)
-{
-  WriteSampleColor(code, comp, "ocol0.b", 0, api_type);
-  WriteSampleColor(code, comp, "ocol0.g", 1, api_type);
-  WriteSampleColor(code, comp, "ocol0.r", 2, api_type);
-  WriteSampleColor(code, comp, "ocol0.a", 3, api_type);
-}
-
-static void WriteCC4Encoder(ShaderCode& code, const char* comp, APIType api_type)
-{
-  code.Puts("  float2 texSample;\n"
-            "  float4 color0;\n"
-            "  float4 color1;\n");
-
-  WriteSampleColor(code, comp, "texSample", 0, api_type);
-  code.Puts("  color0.b = texSample.x;\n"
-            "  color1.b = texSample.y;\n");
-
-  WriteSampleColor(code, comp, "texSample", 1, api_type);
-  code.Puts("  color0.g = texSample.x;\n"
-            "  color1.g = texSample.y;\n");
-
-  WriteSampleColor(code, comp, "texSample", 2, api_type);
-  code.Puts("  color0.r = texSample.x;\n"
-            "  color1.r = texSample.y;\n");
-
-  WriteSampleColor(code, comp, "texSample", 3, api_type);
-  code.Puts("  color0.a = texSample.x;\n"
-            "  color1.a = texSample.y;\n");
-
-  WriteToBitDepth(code, 4, "color0", "color0");
-  WriteToBitDepth(code, 4, "color1", "color1");
-
-  code.Puts("  ocol0 = (color0 * 16.0 + color1) / 255.0;\n");
-}
-
-static void WriteCC8Encoder(ShaderCode& code, const char* comp, APIType api_type)
-{
-  WriteSampleColor(code, comp, "ocol0.bg", 0, api_type);
-  WriteSampleColor(code, comp, "ocol0.ra", 1, api_type);
-}
-
-static void WriteXFBEncoder(ShaderCode& code, APIType api_type)
-{
-  code.Puts("float4 color0 = float4(0, 0, 0, 1), color1 = float4(0, 0, 0, 1);\n");
-  WriteSampleColor(code, "rgb", "color0.rgb", 0, api_type);
-  WriteSampleColor(code, "rgb", "color1.rgb", 1, api_type);
-
-  // Convert to YUV.
-  code.Puts("  // Intensity/YUV format conversion constants determined by hardware testing\n"
-            "  const float4 y_const = float4( 66, 129,  25,  16);\n"
-            "  const float4 u_const = float4(-38, -74, 112, 128);\n"
-            "  const float4 v_const = float4(112, -94, -18, 128);\n"
-            "  float4 average = (color0 + color1) * 0.5;\n"
-            "  // TODO: check rounding\n"
-            "  ocol0.b = round(dot(color0,  y_const)) / 256.0;\n"
-            "  ocol0.g = round(dot(average, u_const)) / 256.0;\n"
-            "  ocol0.r = round(dot(color1,  y_const)) / 256.0;\n"
-            "  ocol0.a = round(dot(average, v_const)) / 256.0;\n");
-}
-
-ShaderCode GenerateEncodingShader(EFBCopyFormat format, APIType api_type)
-{
-  ShaderCode code;
-
-  WriteHeader(code, api_type);
-  WriteSampleFunction(code, api_type);
-  WriteSwizzler(code, format, api_type);
+  if (a->api_type == APIType::OpenGL)
+    sb_set(sb, ec_swz(sb, e->uv0, "y"),
+           sb_bin(sb, RSLC_B_SUB, sb_f(sb, 1.0), ec_swz(sb, e->uv0, "y")));
+  e->pixel_size = rslc_b_local(
+      sb->b, "pixel_size", sb->f[2],
+      sb_bin(sb, RSLC_B_DIV,
+             sb_con(sb, sb->f[2], 2, ec_swz(sb, e->ps[EC_POSITION], "w"),
+                    ec_swz(sb, e->ps[EC_POSITION], "w")),
+             sb_con(sb, sb->f[2], 2, sb_i(sb, EFB_WIDTH), sb_i(sb, EFB_HEIGHT))),
+      false);
 
   switch (format)
   {
   case EFBCopyFormat::R4:
-    WriteC4Encoder(code, "r", api_type);
+    ec_c4(e, "r");
     break;
   case EFBCopyFormat::RA4:
-    WriteCC4Encoder(code, "ar", api_type);
+    ec_cc4(e, "ar");
     break;
   case EFBCopyFormat::RA8:
-    WriteCC8Encoder(code, "ar", api_type);
+    ec_cc8(e, "ar");
     break;
   case EFBCopyFormat::RGB565:
-    WriteRGB565Encoder(code, api_type);
+    ec_rgb565(e);
     break;
   case EFBCopyFormat::RGB5A3:
-    WriteRGB5A3Encoder(code, api_type);
+    ec_rgb5a3(e);
     break;
   case EFBCopyFormat::RGBA8:
-    WriteRGBA8Encoder(code, api_type);
+    ec_rgba8(e, first);
     break;
   case EFBCopyFormat::A8:
-    WriteC8Encoder(code, "a", api_type);
+    ec_c8(e, "a");
     break;
   case EFBCopyFormat::R8_0x1:
   case EFBCopyFormat::R8:
-    WriteC8Encoder(code, "r", api_type);
+    ec_c8(e, "r");
     break;
   case EFBCopyFormat::G8:
-    WriteC8Encoder(code, "g", api_type);
+    ec_c8(e, "g");
     break;
   case EFBCopyFormat::B8:
-    WriteC8Encoder(code, "b", api_type);
+    ec_c8(e, "b");
     break;
   case EFBCopyFormat::RG8:
-    WriteCC8Encoder(code, "gr", api_type);
+    ec_cc8(e, "gr");
     break;
   case EFBCopyFormat::GB8:
-    WriteCC8Encoder(code, "bg", api_type);
+    ec_cc8(e, "bg");
     break;
   case EFBCopyFormat::XFB:
-    WriteXFBEncoder(code, api_type);
+    ec_xfb(e);
     break;
   default:
-    PanicAlertFmt("Invalid EFB Copy Format {}! (GenerateEncodingShader)", format);
+    PanicAlertFmt("Invalid EFB Copy Format {}! (BuildEncodingShader)", format);
     break;
   }
-
-  code.Puts("}\n");
-
-  return code;
+  return rslc_b_func_end(sb->b);
 }
 
 // NOTE: In these uniforms, a row refers to a row of blocks, not texels.

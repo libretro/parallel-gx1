@@ -1852,8 +1852,9 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToVRAMPipeline(EFBCopyFormat form
 
 AbstractPipeline* ShaderCache::CompileEFBCopyToRAMPipeline(EFBCopyFormat format) const
 {
-  AbstractShader* const shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, TextureConversionShaderTiled::GenerateEncodingShader(format, m_api_type),
+  const TextureConversionShaderTiled::EncodingShaderBuildArgs args = {format, m_api_type};
+  AbstractShader* const shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Pixel, TextureConversionShaderTiled::BuildEncodingShader, &args,
       "EFB copy to RAM pixel shader");
   AbstractPipelineConfig config = {};
   if (!shader)

@@ -20,10 +20,16 @@ namespace TextureConversionShaderTiled
 {
 u16 GetEncodedSampleCount(EFBCopyFormat format);
 
-/* The encoder of an EFB copy to RAM in format: the rest of the copy is read from the copy_flags
- * uniform, as GetEncodingFlags packs it. */
-ShaderCode GenerateEncodingShader(EFBCopyFormat format, APIType api_type);
 u32 GetEncodingFlags(const EFBCopyParams& params);
+/* What BuildEncodingShader builds the encoder of an EFB copy to RAM for: the rest of the copy is
+ * read from the copy_flags uniform, as GetEncodingFlags packs it. */
+struct EncodingShaderBuildArgs
+{
+  EFBCopyFormat format;
+  APIType api_type;
+};
+/* The stage built by calls: for AbstractGfx::CreateShaderFromBuild. */
+bool BuildEncodingShader(struct shader_build* sb, const void* arg);
 
 // Information required to compile and dispatch a texture decoding shader.
 struct DecodingShaderInfo
