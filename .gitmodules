@@ -34,9 +34,6 @@
 	path = Externals/hidapi/hidapi-src
 	url = https://github.com/libusb/hidapi.git
 	shallow = true
-[submodule "Externals/tinygltf/tinygltf"]
-	path = Externals/tinygltf/tinygltf
-	url = https://github.com/syoyo/tinygltf.git
 	shallow = true
 [submodule "Externals/Vulkan-Headers"]
 	path = Externals/Vulkan-Headers

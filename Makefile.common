@@ -968,14 +968,6 @@ PUGIXML_SOURCES_OBJCXX :=
 PUGIXML_SOURCES_CXX += \
 	$(CORE_DIR)/Externals/pugixml/pugixml/src/pugixml.cpp
 
-# TINYGLTF
-TINYGLTF_SOURCES_C :=
-TINYGLTF_SOURCES_CXX :=
-TINYGLTF_SOURCES_ASM :=
-TINYGLTF_SOURCES_OBJCXX :=
-TINYGLTF_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/tinygltf/tinygltf/tiny_gltf.cc
-
 # DOLPHIN
 DOLPHIN_SOURCES_C :=
 DOLPHIN_SOURCES_CXX :=
@@ -1858,8 +1850,6 @@ endif
 
 PUGIXML_FLAGS := -w -DPUGIXML_NO_EXCEPTIONS -I$(EXT_DIR)/pugixml/pugixml/src
 
-TINYGLTF_FLAGS    := -w -DTINYGLTF_NOEXCEPTION -DTINYGLTF_NO_EXTERNAL_IMAGE -DTINYGLTF_USE_CPP14
-TINYGLTF_CXXFLAGS := -std=gnu++20
 
 
 CPPIPC_FLAGS := -w -O2 -DUNICODE -D_UNICODE -fexceptions \
@@ -1872,7 +1862,6 @@ DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
 	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC \
 	-DCURL_STATICLIB \
-	-DTINYGLTF_NOEXCEPTION -DTINYGLTF_NO_EXTERNAL_IMAGE -DTINYGLTF_USE_CPP14 \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
 	-I$(GEN_DIR)/Source/Core \
 	-I$(SRC_DIR)/DolphinLibretro/Common -I$(SRC_DIR)/DolphinLibretro/VideoContexts \
@@ -1884,7 +1873,6 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
 	$(MGBA_INC) \
-	-I$(EXT_DIR)/tinygltf \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include \
@@ -1948,7 +1936,7 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zstd.c) := $(L
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS ZSTD ZLIB LZMA BZIP2 LZ4 LZO \
-	MGBA SFML FMT PUGIXML TINYGLTF FATFS
+	MGBA SFML FMT PUGIXML FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB
 endif
