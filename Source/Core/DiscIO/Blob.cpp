@@ -240,9 +240,8 @@ std::unique_ptr<BlobReader> CreateBlobReader(const std::string& filename)
   case WBFS_MAGIC:
     return WbfsFileReader::Create(std::move(file), filename);
   case WIA_MAGIC:
-    return WIAFileReader::Create(std::move(file), filename);
   case RVZ_MAGIC:
-    return RVZFileReader::Create(std::move(file), filename);
+    return WIARVZFileReader::Create(std::move(file), filename);
   case NFS_MAGIC:
     return NFSFileReader::Create(std::move(file), filename);
   default:

@@ -25,8 +25,6 @@
 
 namespace DiscIO
 {
-enum class WIARVZCompressionType : u32;
-
 enum class BlobType
 {
   PLAIN,

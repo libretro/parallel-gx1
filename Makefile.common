@@ -77,8 +77,6 @@ MGBA_VERSION_STATUS := $(shell \
 # ----------------------------------------------------------------------------
 # Include sets shared by several libraries
 # ----------------------------------------------------------------------------
-ZSTD_INC  := -I$(EXT_DIR)/zstd/zstd/lib
-LZMA_INC  := -I$(EXT_DIR)/liblzma/api
 MGBA_INC  := -I$(EXT_DIR)/mGBA/mgba/include -I$(EXT_DIR)/mGBA/makefile
 ICONV_INC :=
 ifeq ($(HAVE_BUNDLED_ICONV),1)
@@ -102,8 +100,10 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strcasestr.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/fopen_utf8.c \
+	$(CORE_DIR)/Externals/libretro-common/crypto/crypto.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_crc32.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_deflate.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_rbzip2.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_rzstd.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_utf.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_xxh64.c \
@@ -118,9 +118,13 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_emit.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_front.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_ir.c \
+	$(CORE_DIR)/Externals/libretro-common/formats/7z/r7z_lzma2.c \
+	$(CORE_DIR)/Externals/libretro-common/formats/7z/r7z_lzma_stream.c \
 	$(CORE_DIR)/Externals/libretro-common/formats/json/rjson.c \
 	$(CORE_DIR)/Externals/libretro-common/formats/png/rpng.c \
 	$(CORE_DIR)/Externals/libretro-common/formats/png/rpng_encode.c \
+	$(CORE_DIR)/Externals/libretro-common/formats/rvz/rvz.c \
+	$(CORE_DIR)/Externals/libretro-common/hash/lrc_hash.c \
 	$(CORE_DIR)/Externals/libretro-common/lists/string_list.c \
 	$(CORE_DIR)/Externals/libretro-common/memmap/memmap.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
@@ -181,20 +185,6 @@ ifeq ($(OS_WIN),1)
    SFML_SOURCES_CXX += \
 	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/Win32/SocketImpl.cpp
 endif
-
-# BZIP2
-BZIP2_SOURCES_C :=
-BZIP2_SOURCES_CXX :=
-BZIP2_SOURCES_ASM :=
-BZIP2_SOURCES_OBJCXX :=
-BZIP2_SOURCES_C += \
-	$(CORE_DIR)/Externals/bzip2/bzip2/blocksort.c \
-	$(CORE_DIR)/Externals/bzip2/bzip2/huffman.c \
-	$(CORE_DIR)/Externals/bzip2/bzip2/crctable.c \
-	$(CORE_DIR)/Externals/bzip2/bzip2/randtable.c \
-	$(CORE_DIR)/Externals/bzip2/bzip2/compress.c \
-	$(CORE_DIR)/Externals/bzip2/bzip2/decompress.c \
-	$(CORE_DIR)/Externals/bzip2/bzip2/bzlib.c
 
 # CURL
 CURL_SOURCES_C :=
@@ -566,85 +556,6 @@ ifneq ($(OS_WIN),1)
 	$(CORE_DIR)/Externals/libiconv/lib/iconv.c
 endif
 
-# LZMA
-LZMA_SOURCES_C :=
-LZMA_SOURCES_CXX :=
-LZMA_SOURCES_ASM :=
-LZMA_SOURCES_OBJCXX :=
-LZMA_SOURCES_C += \
-	$(CORE_DIR)/Externals/liblzma/check/check.c \
-	$(CORE_DIR)/Externals/liblzma/check/crc32_fast.c \
-	$(CORE_DIR)/Externals/liblzma/check/crc32_table.c \
-	$(CORE_DIR)/Externals/liblzma/check/crc64_fast.c \
-	$(CORE_DIR)/Externals/liblzma/check/crc64_table.c \
-	$(CORE_DIR)/Externals/liblzma/check/sha256.c \
-	$(CORE_DIR)/Externals/liblzma/common/alone_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/alone_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/auto_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/block_buffer_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/block_buffer_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/block_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/block_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/block_header_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/block_header_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/block_util.c \
-	$(CORE_DIR)/Externals/liblzma/common/common.c \
-	$(CORE_DIR)/Externals/liblzma/common/easy_buffer_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/easy_decoder_memusage.c \
-	$(CORE_DIR)/Externals/liblzma/common/easy_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/easy_encoder_memusage.c \
-	$(CORE_DIR)/Externals/liblzma/common/easy_preset.c \
-	$(CORE_DIR)/Externals/liblzma/common/filter_buffer_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/filter_buffer_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/filter_common.c \
-	$(CORE_DIR)/Externals/liblzma/common/filter_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/filter_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/filter_flags_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/filter_flags_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/hardware_cputhreads.c \
-	$(CORE_DIR)/Externals/liblzma/common/hardware_physmem.c \
-	$(CORE_DIR)/Externals/liblzma/common/index.c \
-	$(CORE_DIR)/Externals/liblzma/common/index_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/index_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/index_hash.c \
-	$(CORE_DIR)/Externals/liblzma/common/outqueue.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_buffer_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_buffer_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_encoder_mt.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_flags_common.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_flags_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/stream_flags_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/vli_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/vli_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/common/vli_size.c \
-	$(CORE_DIR)/Externals/liblzma/delta/delta_common.c \
-	$(CORE_DIR)/Externals/liblzma/delta/delta_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/delta/delta_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/lz/lz_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/lz/lz_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/lz/lz_encoder_mf.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/fastpos_table.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/lzma2_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/lzma2_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/lzma_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/lzma_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/lzma_encoder_optimum_fast.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/lzma_encoder_optimum_normal.c \
-	$(CORE_DIR)/Externals/liblzma/lzma/lzma_encoder_presets.c \
-	$(CORE_DIR)/Externals/liblzma/rangecoder/price_table.c \
-	$(CORE_DIR)/Externals/liblzma/simple/simple_coder.c \
-	$(CORE_DIR)/Externals/liblzma/simple/simple_decoder.c \
-	$(CORE_DIR)/Externals/liblzma/simple/simple_encoder.c \
-	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_cpucores.c \
-	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_exit.c \
-	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_mbstr_fw.c \
-	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_mbstr_width.c \
-	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_open_stdxxx.c \
-	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_physmem.c \
-	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_progname.c
-
 # LZ4
 LZ4_SOURCES_C :=
 LZ4_SOURCES_CXX :=
@@ -822,56 +733,6 @@ ifeq ($(OS_WIN),1)
 	$(CORE_DIR)/Externals/mGBA/mgba/src/platform/windows/vfs-w32.c
 endif
 
-# ZSTD
-ZSTD_SOURCES_C :=
-ZSTD_SOURCES_CXX :=
-ZSTD_SOURCES_ASM :=
-ZSTD_SOURCES_OBJCXX :=
-ZSTD_SOURCES_C += \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/debug.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/entropy_common.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/error_private.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/fse_decompress.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/pool.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/threading.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/xxhash.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/common/zstd_common.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/fse_compress.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/hist.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/huf_compress.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_compress.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_compress_literals.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_compress_sequences.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_compress_superblock.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_double_fast.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_fast.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_lazy.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_ldm.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_opt.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstd_preSplit.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/compress/zstdmt_compress.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/decompress/huf_decompress.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/decompress/zstd_ddict.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/decompress/zstd_decompress.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/decompress/zstd_decompress_block.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/dictBuilder/cover.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/dictBuilder/divsufsort.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/dictBuilder/fastcover.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/dictBuilder/zdict.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/legacy/zstd_v01.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/legacy/zstd_v02.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/legacy/zstd_v03.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/legacy/zstd_v04.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/legacy/zstd_v05.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/legacy/zstd_v06.c \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/legacy/zstd_v07.c
-ifeq ($(ARCH_X86_64),1)
-   ifneq ($(OS_WIN),1)
-      ZSTD_SOURCES_ASM += \
-	$(CORE_DIR)/Externals/zstd/zstd/lib/decompress/huf_decompress_amd64.S
-   endif
-endif
-
 # DOLPHIN
 DOLPHIN_SOURCES_C :=
 DOLPHIN_SOURCES_CXX :=
@@ -967,7 +828,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DiscIO/VolumeWii.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/WbfsBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/WIABlob.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/WIACompression.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/WiiEncryptionCache.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/WiiSaveBanner.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AbstractFramebuffer.cpp \
@@ -1635,7 +1495,6 @@ LZO_FLAGS := -w -I$(EXT_DIR)/LZO
 SFML_FLAGS    := -w -DSFML_STATIC -I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/SFML/SFML/src
 SFML_CXXFLAGS := -std=gnu++20
 
-BZIP2_FLAGS := -w -DHAVE_UNISTD_H -D_LARGEFILE64_SOURCE=1 -I$(EXT_DIR)/bzip2/bzip2
 
 CURL_FLAGS := -w -DBUILDING_LIBCURL -DCURL_HIDDEN_SYMBOLS -DHAVE_CONFIG_H \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/curl/makefile
@@ -1677,15 +1536,6 @@ ICONV_FLAGS := -w \
 	-I$(EXT_DIR)/libiconv/include -I$(EXT_DIR)/libiconv/makefile/lib \
 	-I$(EXT_DIR)/libiconv/libcharset/include -I$(EXT_DIR)/libiconv/makefile/libcharset
 
-LZMA_FLAGS := -w -DHAVE_CONFIG_H -DHAVE_UNISTD_H -DLZMA_API_STATIC -D_LARGEFILE64_SOURCE=1 \
-	$(LZMA_INC) -I$(EXT_DIR)/liblzma -I$(EXT_DIR)/liblzma/check \
-	-I$(EXT_DIR)/liblzma/common -I$(EXT_DIR)/liblzma/delta -I$(EXT_DIR)/liblzma/lz \
-	-I$(EXT_DIR)/liblzma/lzma -I$(EXT_DIR)/liblzma/rangecoder \
-	-I$(EXT_DIR)/liblzma/simple -I$(EXT_DIR)/liblzma/tuklib
-ifneq ($(OS_WIN),1)
-   LZMA_FLAGS += -DHAVE_WCWIDTH=1
-endif
-
 LZ4_FLAGS := -w -DXXH_NAMESPACE=LZ4_ -I$(EXT_DIR)/lz4/lz4/lib
 
 MGBA_FLAGS := -w -DBUILD_STATIC -DDISABLE_THREADING -DENABLE_DIRECTORIES -DENABLE_VFS \
@@ -1711,15 +1561,6 @@ ifeq ($(OS_APPLE),1)
    MGBA_FLAGS += -D_DARWIN_C_SOURCE -DHAVE_FUTIMES -DHAVE_XLOCALE -DHAVE_SNPRINTF_L -DHAVE_STRTOF_L
 endif
 
-ZSTD_FLAGS := -w -DXXH_NAMESPACE=ZSTD_ -DZSTD_LEGACY_SUPPORT=5 $(ZSTD_INC)
-ifeq ($(OS_ANDROID),1)
-   ZSTD_FLAGS += -DLIBC_NO_FSEEKO
-else
-   ZSTD_FLAGS += -DZSTD_MULTITHREAD
-endif
-ifneq ($(ARCH_X86_64)$(OS_WIN),1)
-   ZSTD_FLAGS += -DZSTD_DISABLE_ASM
-endif
 
 
 
@@ -1732,7 +1573,7 @@ CPPIPC_CXXFLAGS := -std=gnu++17
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA \
-	-DLZMA_API_STATIC -DSFML_STATIC \
+	-DSFML_STATIC \
 	-DCURL_STATICLIB \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
 	-I$(GEN_DIR)/Source/Core \
@@ -1741,8 +1582,8 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/Vulkan-Headers/include \
 	-I$(EXT_DIR)/fmt/fmt/include \
 	-I$(EXT_DIR)/mbedtls/include \
-	$(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
-	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 \
+	$(ICONV_INC) \
+	-I$(EXT_DIR)/SFML/SFML/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
@@ -1752,9 +1593,6 @@ DOLPHIN_FLAGS := \
 	-Wall -Wtype-limits -Wsign-compare -Wignored-qualifiers -Wuninitialized -Wshadow \
 	-Winit-self -Wmissing-declarations -Wimplicit-fallthrough -Werror=format -Wno-trigraphs
 DOLPHIN_CXXFLAGS := -std=c++23
-ifneq ($(OS_ANDROID),1)
-   DOLPHIN_FLAGS += -DZSTD_MULTITHREAD
-endif
 ifeq ($(HAVE_CPPIPC),1)
    DOLPHIN_FLAGS += -DHAVE_CPPIPC
 endif
@@ -1791,8 +1629,11 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file.c) := $(LRC_AR
 FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zlib.c) := $(LRC_ARCHIVE_FLAGS)
 FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zstd.c) := $(LRC_ARCHIVE_FLAGS)
 
+# WIA and RVZ images, Zstandard groups included.
+FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/formats/rvz/rvz.c) := -DHAVE_RZSTD
+
 # Libraries in link order; the optional ones only where they are built.
-LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS ZSTD LZMA BZIP2 LZ4 LZO \
+LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS LZ4 LZO \
 	MGBA SFML FMT FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB

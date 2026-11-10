@@ -41,9 +41,6 @@
 	path = Externals/SFML/SFML
 	url = https://github.com/SFML/SFML.git
 	shallow = true
-[submodule "Externals/zstd/zstd"]
-	path = Externals/zstd/zstd
-	url = https://github.com/facebook/zstd.git
 	shallow = true
 	shallow = true
 [submodule "Externals/cpp-ipc/cpp-ipc"]
@@ -54,9 +51,6 @@
 	path = Externals/cpp-optparse/cpp-optparse
 	url = https://github.com/weisslj/cpp-optparse.git
 	shallow = true
-[submodule "Externals/bzip2/bzip2"]
-	path = Externals/bzip2/bzip2
-	url = https://gitlab.com/bzip2/bzip2.git
 	shallow = true
 [submodule "Externals/wil"]
 	path = Externals/wil
