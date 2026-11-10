@@ -431,6 +431,7 @@ private:
   bool HalfLineHasWork(u32 half_line) const;
   void CatchUp(u64 now, bool with_work);
   u64 NextWorkTicks() const;
+  u32 StepsToWork() const;
   u32 HalfLineAt(u64 ticks) const;
 
   // Registers listed in order:

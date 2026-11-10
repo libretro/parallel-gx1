@@ -1036,46 +1036,114 @@ bool VideoInterfaceManager::HalfLineHasWork(u32 half_line) const
   return false;
 }
 
+/* A half-line with work, as a distance from count, if nearer than *best. */
+static void NearerWork(u32 half_line, u32 count, u32 total, u32* best)
+{
+  if (half_line < total)
+  {
+    const u32 distance = half_line >= count ? half_line - count : half_line + total - count;
+    if (distance < *best)
+      *best = distance;
+  }
+}
+
+/* Half-lines from the count to the next with work (0: the count's own),
+ * as HalfLineHasWork would find them one by one: the nearest of the few
+ * that can have any. */
+u32 VideoInterfaceManager::StepsToWork() const
+{
+  const u32 total = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
+  const u32 count = m_half_line_count;
+  u32 best = total;
+  if (count >= total)
+  {
+    /* past the frame's end the count only grows, as Update has it: one by one */
+    u32 half_line = count;
+    u32 ahead = 0;
+    while (ahead < 2 * total + 2 && !HalfLineHasWork(half_line))
+    {
+      half_line = half_line + 1 == total ? 0 : half_line + 1;
+      ahead++;
+    }
+    return ahead;
+  }
+  NearerWork(0, count, total, &best);
+  NearerWork(GetHalfLinesPerOddField(), count, total, &best);
+  NearerWork(m_odd_field_first_hl, count, total, &best);
+  NearerWork(m_even_field_first_hl, count, total, &best);
+  NearerWork(m_odd_field_last_hl, count, total, &best);
+  NearerWork(m_even_field_last_hl, count, total, &best);
+  NearerWork(m_half_line_of_next_si_poll, count, total, &best);
+  for (const UVIInterruptRegister& reg : m_interrupt_register)
+  {
+    /* raised as the count moves to 2 * (VCT - 1) + target: from the half-line before */
+    const u32 target_halfline = (reg.HCT > m_h_timing_0.HLW) ? 1 : 0;
+    if (reg.VCT >= 1)
+    {
+      const u32 next = 2 * (reg.VCT - 1) + target_halfline;
+      if (next < total)
+        NearerWork(next == 0 ? total - 1 : next - 1, count, total, &best);
+    }
+  }
+  return best;
+}
+
+/* The count after steps half-lines with no work, as Update counts them:
+ * it wraps only on reaching the frame's end exactly. */
+static u32 CountAfter(u32 count, u32 steps, u32 total)
+{
+  return count + steps == total ? 0 : count + steps;
+}
+
 /* Every half-line due by now; with_work false stops at one with work,
- * which its event runs. One with none is counted as Update counts it. */
+ * which its event runs. A run of ones with none is counted at once, as
+ * Update would count them one by one: the count, and the start of the
+ * last full line among them. */
 void VideoInterfaceManager::CatchUp(u64 now, bool with_work)
 {
   if (!m_half_line_clock_known)
     return;
   while (m_next_half_line_ticks <= now)
   {
-    const u64 ticks = m_next_half_line_ticks;
-    if (HalfLineHasWork(m_half_line_count))
+    const u32 ticks_per_half_line = GetTicksPerHalfLine();
+    const u32 steps = StepsToWork();
+    if (steps == 0)
     {
+      const u64 ticks = m_next_half_line_ticks;
       if (!with_work)
         return;
       Update(ticks);
+      m_next_half_line_ticks = ticks + GetTicksPerHalfLine();
+      continue;
     }
-    else
     {
-      ++m_half_line_count;
-      if (m_half_line_count == GetHalfLinesPerEvenField() + GetHalfLinesPerOddField())
-        m_half_line_count = 0;
-      if (!(m_half_line_count & 1))
-        m_ticks_last_line_start = ticks;
+      const u32 total = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
+      const u64 due = ticks_per_half_line ?
+                          (now - m_next_half_line_ticks) / ticks_per_half_line + 1 :
+                          steps;
+      const u32 k = due < steps ? static_cast<u32>(due) : steps;
+      const u32 after = CountAfter(m_half_line_count, k, total);
+      /* the last of the k whose count is even starts a line: the k-th, or the one before */
+      u32 even_step = 0;
+      if (!(after & 1))
+        even_step = k;
+      else if (k >= 2)
+        even_step = k - 1;
+      if (even_step)
+      {
+        m_ticks_last_line_start =
+            m_next_half_line_ticks + static_cast<u64>(even_step - 1) * ticks_per_half_line;
+      }
+      m_half_line_count = after;
+      m_next_half_line_ticks += static_cast<u64>(k) * ticks_per_half_line;
     }
-    m_next_half_line_ticks = ticks + GetTicksPerHalfLine();
   }
 }
 
 /* When the next half-line with work is due, counting as Update would. */
 u64 VideoInterfaceManager::NextWorkTicks() const
 {
-  const u32 total = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
-  u32 half_line = m_half_line_count;
-  u32 ahead = 0;
-  /* a whole frame holds a field boundary; the bound is for a count past it */
-  while (ahead < 2 * total + 2 && !HalfLineHasWork(half_line))
-  {
-    half_line = half_line + 1 == total ? 0 : half_line + 1;
-    ahead++;
-  }
-  return m_next_half_line_ticks + (u64)ahead * GetTicksPerHalfLine();
+  return m_next_half_line_ticks + static_cast<u64>(StepsToWork()) * GetTicksPerHalfLine();
 }
 
 void VideoInterfaceManager::OnEvent(u64 event_ticks)
@@ -1102,17 +1170,14 @@ void VideoInterfaceManager::Sync()
 u32 VideoInterfaceManager::HalfLineAt(u64 ticks) const
 {
   const u32 total = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
-  u32 half_line = m_half_line_count;
-  u64 due = m_next_half_line_ticks;
-  u32 steps = 0;
-  if (!m_half_line_clock_known)
-    return half_line;
-  while (due <= ticks && steps++ < 2 * total + 2 && !HalfLineHasWork(half_line))
-  {
-    half_line = half_line + 1 == total ? 0 : half_line + 1;
-    due += GetTicksPerHalfLine();
-  }
-  return half_line;
+  const u32 ticks_per_half_line = GetTicksPerHalfLine();
+  u32 steps;
+  u64 due;
+  if (!m_half_line_clock_known || m_next_half_line_ticks > ticks || !ticks_per_half_line)
+    return m_half_line_count;
+  steps = StepsToWork();
+  due = (ticks - m_next_half_line_ticks) / ticks_per_half_line + 1;
+  return CountAfter(m_half_line_count, due < steps ? static_cast<u32>(due) : steps, total);
 }
 
 void VideoInterfaceManager::Reschedule()
