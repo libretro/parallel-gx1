@@ -6,10 +6,7 @@
 #include <optional>
 #include <string>
 
-#include <picojson.h>
-
 #include "Common/IniFile.h"
-#include "Common/JsonUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"
@@ -20,46 +17,8 @@ namespace InputCommon::DynamicInputTextures
 {
 Configuration::Configuration(const std::string& json_path)
 {
-  picojson::value root;
-  std::string error;
-  if (!JsonFromFile(json_path, &root, &error))
-  {
-    ERROR_LOG_FMT(VIDEO, "Failed to load dynamic input json file '{}' due to parse error: {}",
-                  json_path, error);
-    m_valid = false;
-    return;
-  }
-
   SplitPath(json_path, &m_base_path, nullptr, nullptr);
-
-  const picojson::value& specification_json = root.get("specification");
-  u8 specification = 1;
-  if (specification_json.is<double>())
-  {
-    const double spec_from_json = specification_json.get<double>();
-    if (spec_from_json < static_cast<double>(std::numeric_limits<u8>::min()) ||
-        spec_from_json > static_cast<double>(std::numeric_limits<u8>::max()))
-    {
-      ERROR_LOG_FMT(
-          VIDEO,
-          "Failed to load dynamic input json file '{}', specification '{}' is not within bounds",
-          json_path, spec_from_json);
-      m_valid = false;
-      return;
-    }
-    specification = static_cast<u8>(spec_from_json);
-  }
-
-  if (specification != 1)
-  {
-    ERROR_LOG_FMT(VIDEO,
-                  "Failed to load dynamic input json file '{}', specification '{}' is invalid",
-                  json_path, specification);
-    m_valid = false;
-    return;
-  }
-
-  m_valid = ProcessSpecificationV1(root, m_dynamic_input_textures, m_base_path, json_path);
+  m_valid = LoadSpecification(json_path, m_dynamic_input_textures, m_base_path);
 }
 
 Configuration::~Configuration() = default;

@@ -145,6 +145,9 @@ reason a reader can see.
 - **libretro-common comes from upstream as it is.** A file it lacks is
   copied in unchanged from libretro/libretro-common; its files are not
   edited here.
+- **JSON is read with libretro-common's rjson.** Files are pulled through
+  `rjson_open_user` from a VFS `filestream`, parsed as they stream, with
+  no document tree and no wrapper library between rjson and its caller.
 
 ## Shader generators build by calls
 

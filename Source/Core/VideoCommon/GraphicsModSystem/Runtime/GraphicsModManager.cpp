@@ -254,9 +254,9 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
 
   const auto create_action =
       [filesystem_library = std::move(filesystem_library)](
-          const std::string_view& action_name, const picojson::value& json_data,
+          const std::string_view& action_name, const Common::Vec3& xyz,
           GraphicsModConfig mod_config) -> std::unique_ptr<GraphicsModAction> {
-    auto action = GraphicsModActionFactory::Create(action_name, json_data, filesystem_library);
+    auto action = GraphicsModActionFactory::Create(action_name, xyz, filesystem_library);
     if (action == nullptr)
     {
       return nullptr;
@@ -318,7 +318,7 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
       };
 
       const auto add_action = [&](GraphicsModConfig mod_config) -> bool {
-        auto action = create_action(feature.m_action, feature.m_action_data, std::move(mod_config));
+        auto action = create_action(feature.m_action, feature.m_action_xyz, std::move(mod_config));
         if (action == nullptr)
         {
           WARN_LOG_FMT(VIDEO, "Failed to create action '{}' for group '{}'.", feature.m_action,

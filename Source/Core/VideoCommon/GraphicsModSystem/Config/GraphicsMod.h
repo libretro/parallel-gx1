@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-#include <picojson.h>
-
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsModAsset.h"
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsModFeature.h"
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsTargetGroup.h"
@@ -34,13 +32,10 @@ struct GraphicsModConfig
   std::vector<GraphicsModAssetConfig> m_assets;
 
   static std::optional<GraphicsModConfig> Create(const std::string& file, Source source);
-  static std::optional<GraphicsModConfig> Create(const picojson::object* obj);
 
   std::string GetAbsolutePath() const;
-
-  void SerializeToConfig(picojson::object& json_obj) const;
-  bool DeserializeFromConfig(const picojson::value& value);
-
-  void SerializeToProfile(picojson::object* value) const;
-  void DeserializeFromProfile(const picojson::object& value);
 };
+
+/* The mods a game's profile lists, with its enabled and weight applied; nullopt where
+ * the profile cannot be read. */
+std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::string& file);

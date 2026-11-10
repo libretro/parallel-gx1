@@ -7,8 +7,6 @@
 #include <string>
 #include <variant>
 
-#include <picojson.h>
-
 #include "Common/CommonTypes.h"
 #include "VideoCommon/TextureDecoder.h"
 #include "VideoCommon/XFMemory.h"
@@ -55,8 +53,19 @@ using GraphicsTargetConfig =
     std::variant<DrawStartedTextureTarget, LoadTextureTarget, CreateTextureTarget, EFBTarget,
                  XFBTarget, ProjectionTarget>;
 
-void SerializeTargetToConfig(picojson::object& json_obj, const GraphicsTargetConfig& target);
-std::optional<GraphicsTargetConfig> DeserializeTargetFromConfig(const picojson::object& obj);
+/* A target field as a mod's file gives it: absent, a string, or a value of another kind. */
+struct GraphicsTargetField
+{
+  enum class Kind
+  {
+    Absent,
+    String,
+    Other
+  };
+  Kind kind = Kind::Absent;
+  std::string text;
+};
 
-void SerializeTargetToProfile(picojson::object* obj, const GraphicsTargetConfig& target);
-void DeserializeTargetFromProfile(const picojson::object& obj, GraphicsTargetConfig* target);
+std::optional<GraphicsTargetConfig> MakeTarget(const GraphicsTargetField& type,
+                                               const GraphicsTargetField& texture_filename,
+                                               const GraphicsTargetField& value);

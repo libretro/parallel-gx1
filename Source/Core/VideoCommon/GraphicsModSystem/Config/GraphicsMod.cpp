@@ -3,31 +3,518 @@
 
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsMod.h"
 
+#include <cstring>
+#include <string_view>
+
 #include <fmt/format.h>
 
+#include <formats/rjson.h>
+#include <streams/file_stream.h>
+
 #include "Common/FileUtil.h"
-#include "Common/JsonUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 
 #include "VideoCommon/GraphicsModSystem/Constants.h"
 
+namespace
+{
+int ReadFile(void* buf, int len, void* user)
+{
+  return static_cast<int>(filestream_read(static_cast<RFILE*>(user), buf, len));
+}
+
+/* A json file read as it is parsed. */
+struct Document
+{
+  explicit Document(const std::string& path)
+      : file(filestream_open(path.c_str(), RETRO_VFS_FILE_ACCESS_READ,
+                             RETRO_VFS_FILE_ACCESS_HINT_NONE)),
+        json(file ? rjson_open_user(ReadFile, file, 4096) : nullptr)
+  {
+  }
+  ~Document()
+  {
+    if (json)
+      rjson_free(json);
+    if (file)
+      filestream_close(file);
+  }
+  Document(const Document&) = delete;
+  Document& operator=(const Document&) = delete;
+
+  RFILE* file;
+  rjson_t* json;
+};
+
+void LogParseError(rjson_t* json, std::string_view what, const std::string& path)
+{
+  ERROR_LOG_FMT(VIDEO, "Failed to load {} json file '{}' due to parse error: {} at line {}:{}",
+                what, path, rjson_get_error(json), rjson_get_source_line(json),
+                rjson_get_source_column(json));
+}
+
+/* Past the value whose first token was t; false where the document is broken. */
+bool Skip(rjson_t* json, enum rjson_type t)
+{
+  unsigned depth = 0;
+  for (;;)
+  {
+    if (t == RJSON_OBJECT || t == RJSON_ARRAY)
+      depth++;
+    else if (t == RJSON_OBJECT_END || t == RJSON_ARRAY_END)
+      depth--;
+    else if (t == RJSON_ERROR || t == RJSON_DONE)
+      return false;
+    if (!depth)
+      return true;
+    t = rjson_next(json);
+  }
+}
+
+std::string_view Text(rjson_t* json)
+{
+  size_t len;
+  const char* s = rjson_get_string(json, &len);
+  return std::string_view(s, len);
+}
+
+/* The current member name's index in names, or -1. */
+int Key(rjson_t* json, const char* const* names, int n)
+{
+  const std::string_view key = Text(json);
+  for (int k = 0; k < n; k++)
+  {
+    if (key == names[k])
+      return k;
+  }
+  return -1;
+}
+
+bool ReadField(rjson_t* json, enum rjson_type t, GraphicsTargetField* field)
+{
+  if (t == RJSON_STRING)
+  {
+    field->kind = GraphicsTargetField::Kind::String;
+    field->text = Text(json);
+    return true;
+  }
+  field->kind = GraphicsTargetField::Kind::Other;
+  field->text.clear();
+  return Skip(json, t);
+}
+
+/* A string member into out, or false with what it was logged. */
+bool ReadString(rjson_t* json, enum rjson_type t, std::string* out, std::string_view what)
+{
+  if (t == RJSON_STRING)
+  {
+    *out = Text(json);
+    return true;
+  }
+  ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified {} is not a string",
+                what);
+  Skip(json, t);
+  return false;
+}
+
+/* The elements of an array after its '[', each through read. */
+template <typename F>
+bool ReadArray(rjson_t* json, F read)
+{
+  enum rjson_type t;
+  while ((t = rjson_next(json)) != RJSON_ARRAY_END)
+  {
+    if (!read(t))
+      return false;
+  }
+  return true;
+}
+
+/* { "title": ..., "author": ..., "description": ... } after its '{' */
+bool ReadMeta(rjson_t* json, GraphicsModConfig* mod)
+{
+  static const char* const names[] = {"title", "author", "description"};
+  std::string* const fields[] = {&mod->m_title, &mod->m_author, &mod->m_description};
+  enum rjson_type t;
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 3);
+    t = rjson_next(json);
+    if (k >= 0 && t == RJSON_STRING)
+      *fields[k] = Text(json);
+    else if (!Skip(json, t))
+      return false;
+  }
+  return t == RJSON_OBJECT_END;
+}
+
+/* { "type": ..., "texture_filename": ..., "value": ... } after its '{' */
+bool ReadTarget(rjson_t* json, std::vector<GraphicsTargetConfig>* targets)
+{
+  static const char* const names[] = {"type", "texture_filename", "value"};
+  GraphicsTargetField fields[3];
+  enum rjson_type t;
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 3);
+    t = rjson_next(json);
+    if (!(k >= 0 ? ReadField(json, t, &fields[k]) : Skip(json, t)))
+      return false;
+  }
+  if (t != RJSON_OBJECT_END)
+    return false;
+  auto target = MakeTarget(fields[0], fields[1], fields[2]);
+  if (!target)
+    return false;
+  targets->push_back(std::move(*target));
+  return true;
+}
+
+/* { "name": ..., "targets": [...] } after its '{' */
+bool ReadGroup(rjson_t* json, GraphicsTargetGroupConfig* group)
+{
+  static const char* const names[] = {"name", "targets"};
+  enum rjson_type t;
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 2);
+    t = rjson_next(json);
+    if (k == 0)
+    {
+      if (!ReadString(json, t, &group->m_name, "group's name"))
+        return false;
+    }
+    else if (k == 1)
+    {
+      if (t != RJSON_ARRAY)
+      {
+        ERROR_LOG_FMT(
+            VIDEO,
+            "Failed to load mod configuration file, specified group's targets is not an array");
+        return false;
+      }
+      group->m_targets.clear();
+      if (!ReadArray(json, [&](enum rjson_type e) {
+            if (e != RJSON_OBJECT)
+            {
+              ERROR_LOG_FMT(VIDEO, "Failed to load shader configuration file, specified target "
+                                   "is not a json object");
+              return false;
+            }
+            return ReadTarget(json, &group->m_targets);
+          }))
+      {
+        return false;
+      }
+    }
+    else if (!Skip(json, t))
+    {
+      return false;
+    }
+  }
+  return t == RJSON_OBJECT_END;
+}
+
+/* { "X": ..., "Y": ..., "Z": ... } after its '{'; members that are not numbers are 0 */
+bool ReadActionData(rjson_t* json, Common::Vec3* xyz)
+{
+  static const char* const names[] = {"X", "Y", "Z"};
+  enum rjson_type t;
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 3);
+    t = rjson_next(json);
+    if (k >= 0)
+      xyz->data[k] = t == RJSON_NUMBER ? static_cast<float>(rjson_get_double(json)) : 0.0f;
+    if (!Skip(json, t))
+      return false;
+  }
+  return t == RJSON_OBJECT_END;
+}
+
+/* { "group": ..., "action": ..., "action_data": ... } after its '{' */
+bool ReadFeature(rjson_t* json, GraphicsModFeatureConfig* feature)
+{
+  static const char* const names[] = {"group", "action", "action_data"};
+  enum rjson_type t;
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 3);
+    t = rjson_next(json);
+    if (k == 0)
+    {
+      if (!ReadString(json, t, &feature->m_group, "feature's group"))
+        return false;
+    }
+    else if (k == 1)
+    {
+      if (!ReadString(json, t, &feature->m_action, "feature's action"))
+        return false;
+    }
+    else if (k == 2)
+    {
+      feature->m_action_xyz = Common::Vec3();
+      if (!(t == RJSON_OBJECT ? ReadActionData(json, &feature->m_action_xyz) : Skip(json, t)))
+        return false;
+    }
+    else if (!Skip(json, t))
+    {
+      return false;
+    }
+  }
+  return t == RJSON_OBJECT_END;
+}
+
+/* { "name": ..., "data": { key: path, ... } } after its '{' */
+bool ReadAsset(rjson_t* json, GraphicsModAssetConfig* asset)
+{
+  static const char* const names[] = {"name", "data"};
+  enum rjson_type name_type = RJSON_DONE;
+  enum rjson_type data_type = RJSON_DONE;
+  std::string bad_key;
+  enum rjson_type t;
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 2);
+    t = rjson_next(json);
+    if (k == 0)
+    {
+      name_type = t;
+      if (t == RJSON_STRING)
+        asset->m_asset_id = Text(json);
+    }
+    else if (k == 1)
+    {
+      data_type = t;
+      asset->m_map.clear();
+      bad_key.clear();
+      if (t == RJSON_OBJECT)
+      {
+        while ((t = rjson_next(json)) == RJSON_STRING)
+        {
+          std::string key(Text(json));
+          t = rjson_next(json);
+          if (t == RJSON_STRING)
+            asset->m_map[key] = Text(json);
+          else if (bad_key.empty())
+            bad_key = std::move(key);
+          if (!Skip(json, t))
+            return false;
+        }
+        if (t != RJSON_OBJECT_END)
+          return false;
+        continue;
+      }
+    }
+    if (!Skip(json, t))
+      return false;
+  }
+  if (t != RJSON_OBJECT_END)
+    return false;
+
+  if (name_type == RJSON_DONE)
+  {
+    ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified asset has no name");
+    return false;
+  }
+  if (name_type != RJSON_STRING)
+  {
+    ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified asset has a name "
+                         "that is not a string");
+    return false;
+  }
+  if (data_type == RJSON_DONE)
+  {
+    ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified asset '{}' has no data",
+                  asset->m_asset_id);
+    return false;
+  }
+  if (data_type != RJSON_OBJECT)
+  {
+    ERROR_LOG_FMT(VIDEO,
+                  "Failed to load mod configuration file, specified asset '{}' has data "
+                  "that is not an object",
+                  asset->m_asset_id);
+    return false;
+  }
+  if (!bad_key.empty())
+  {
+    ERROR_LOG_FMT(VIDEO,
+                  "Failed to load mod configuration file, specified asset '{}' has data "
+                  "with a value for key '{}' that is not a string",
+                  asset->m_asset_id, bad_key);
+    return false;
+  }
+  return true;
+}
+
+/* An array member of objects, each through read into a new element of out. */
+template <typename T, typename F>
+bool ReadObjects(rjson_t* json, enum rjson_type t, std::vector<T>* out, std::string_view what,
+                 F read)
+{
+  if (t != RJSON_ARRAY)
+    return Skip(json, t);
+  out->clear();
+  return ReadArray(json, [&](enum rjson_type e) {
+    if (e != RJSON_OBJECT)
+    {
+      ERROR_LOG_FMT(VIDEO,
+                    "Failed to load mod configuration file, specified {} is not a json object",
+                    what);
+      return false;
+    }
+    T item;
+    if (!read(json, &item))
+      return false;
+    out->push_back(std::move(item));
+    return true;
+  });
+}
+
+/* A mod's metadata.json */
+bool ReadConfig(rjson_t* json, GraphicsModConfig* mod)
+{
+  static const char* const names[] = {"meta", "groups", "features", "assets"};
+  enum rjson_type t = rjson_next(json);
+  if (t != RJSON_OBJECT)
+    return Skip(json, t);
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 4);
+    bool ok;
+    t = rjson_next(json);
+    switch (k)
+    {
+    case 0:
+      ok = t == RJSON_OBJECT ? ReadMeta(json, mod) : Skip(json, t);
+      break;
+    case 1:
+      ok = ReadObjects(json, t, &mod->m_groups, "group", ReadGroup);
+      break;
+    case 2:
+      ok = ReadObjects(json, t, &mod->m_features, "feature", ReadFeature);
+      break;
+    case 3:
+      ok = ReadObjects(json, t, &mod->m_assets, "asset", ReadAsset);
+      break;
+    default:
+      ok = Skip(json, t);
+      break;
+    }
+    if (!ok)
+      return false;
+  }
+  return t == RJSON_OBJECT_END;
+}
+
+/* An array's element count after its '[' */
+bool Count(rjson_t* json, long* n)
+{
+  *n = 0;
+  return ReadArray(json, [&](enum rjson_type e) {
+    ++*n;
+    return Skip(json, e);
+  });
+}
+
+/* A profile's mod entry after its '{': the mod it names, into mods where it loads. */
+bool ReadProfileMod(rjson_t* json, std::vector<GraphicsModConfig>* mods)
+{
+  static const char* const names[] = {"source", "path", "groups", "features", "enabled",
+                                      "weight"};
+  GraphicsTargetField source, path;
+  long groups = -1, features = -1;
+  std::optional<bool> enabled;
+  std::optional<double> weight;
+  enum rjson_type t;
+  while ((t = rjson_next(json)) == RJSON_STRING)
+  {
+    const int k = Key(json, names, 6);
+    bool ok = true;
+    t = rjson_next(json);
+    switch (k)
+    {
+    case 0:
+      ok = ReadField(json, t, &source);
+      break;
+    case 1:
+      ok = ReadField(json, t, &path);
+      break;
+    case 2:
+    case 3:
+    {
+      long* const n = k == 2 ? &groups : &features;
+      *n = -1;
+      ok = t == RJSON_ARRAY ? Count(json, n) : Skip(json, t);
+      break;
+    }
+    case 4:
+      enabled.reset();
+      if (t == RJSON_TRUE || t == RJSON_FALSE)
+        enabled = t == RJSON_TRUE;
+      ok = Skip(json, t);
+      break;
+    case 5:
+      weight.reset();
+      if (t == RJSON_NUMBER)
+        weight = rjson_get_double(json);
+      ok = Skip(json, t);
+      break;
+    default:
+      ok = Skip(json, t);
+      break;
+    }
+    if (!ok)
+      return false;
+  }
+  if (t != RJSON_OBJECT_END)
+    return false;
+
+  if (source.kind == GraphicsTargetField::Kind::Absent ||
+      path.kind != GraphicsTargetField::Kind::String)
+  {
+    return true;
+  }
+  auto mod = source.kind == GraphicsTargetField::Kind::String && source.text == "system" ?
+                 GraphicsModConfig::Create(fmt::format("{}{}{}", File::GetSysDirectory(),
+                                                       DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR, path.text),
+                                           GraphicsModConfig::Source::System) :
+                 GraphicsModConfig::Create(File::GetUserPath(D_GRAPHICSMOD_IDX) + path.text,
+                                           GraphicsModConfig::Source::User);
+  if (!mod)
+    return true;
+  if ((groups < 0 || static_cast<size_t>(groups) == mod->m_groups.size()) &&
+      (features < 0 || static_cast<size_t>(features) == mod->m_features.size()))
+  {
+    if (enabled)
+      mod->m_enabled = *enabled;
+    if (weight)
+      mod->m_weight = static_cast<u16>(*weight);
+  }
+  mods->push_back(std::move(*mod));
+  return true;
+}
+}  // namespace
+
 std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& file_path,
                                                            Source source)
 {
-  picojson::value root;
-  std::string error;
-  if (!JsonFromFile(file_path, &root, &error))
-  {
-    ERROR_LOG_FMT(VIDEO, "Failed to load graphics mod json file '{}' due to parse error: {}",
-                  file_path, error);
-    return std::nullopt;
-  }
-
   GraphicsModConfig result;
-  if (!result.DeserializeFromConfig(root))
   {
-    return std::nullopt;
+    Document doc(file_path);
+    if (!doc.json)
+    {
+      ERROR_LOG_FMT(VIDEO, "Failed to load graphics mod json file '{}'", file_path);
+      return std::nullopt;
+    }
+    if (!ReadConfig(doc.json, &result))
+    {
+      if (*rjson_get_error(doc.json))
+        LogParseError(doc.json, "graphics mod", file_path);
+      return std::nullopt;
+    }
   }
   result.m_source = source;
   if (source == Source::User)
@@ -60,37 +547,6 @@ std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& fi
   return result;
 }
 
-std::optional<GraphicsModConfig> GraphicsModConfig::Create(const picojson::object* obj)
-{
-  if (!obj)
-    return std::nullopt;
-
-  const auto source_it = obj->find("source");
-  if (source_it == obj->end())
-  {
-    return std::nullopt;
-  }
-  const std::string source_str = source_it->second.to_str();
-
-  const auto path_it = obj->find("path");
-  if (path_it == obj->end())
-  {
-    return std::nullopt;
-  }
-  const std::string relative_path = path_it->second.to_str();
-
-  if (source_str == "system")
-  {
-    return Create(fmt::format("{}{}{}", File::GetSysDirectory(), DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR,
-                              relative_path),
-                  Source::System);
-  }
-  else
-  {
-    return Create(File::GetUserPath(D_GRAPHICSMOD_IDX) + relative_path, Source::User);
-  }
-}
-
 std::string GraphicsModConfig::GetAbsolutePath() const
 {
   if (m_source == Source::System)
@@ -104,228 +560,52 @@ std::string GraphicsModConfig::GetAbsolutePath() const
   }
 }
 
-void GraphicsModConfig::SerializeToConfig(picojson::object& json_obj) const
+std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::string& file_path)
 {
-  picojson::object serialized_metadata;
-  serialized_metadata.emplace("title", m_title);
-  serialized_metadata.emplace("author", m_author);
-  serialized_metadata.emplace("description", m_description);
-  json_obj.emplace("meta", std::move(serialized_metadata));
-
-  picojson::array serialized_groups;
-  for (const auto& group : m_groups)
+  Document doc(file_path);
+  if (!doc.json)
   {
-    picojson::object serialized_group;
-    group.SerializeToConfig(serialized_group);
-    serialized_groups.emplace_back(std::move(serialized_group));
+    ERROR_LOG_FMT(VIDEO, "Failed to load graphics mod group json file '{}'", file_path);
+    return std::nullopt;
   }
-  json_obj.emplace("groups", std::move(serialized_groups));
-
-  picojson::array serialized_features;
-  for (const auto& feature : m_features)
+  enum rjson_type t = rjson_next(doc.json);
+  if (t != RJSON_OBJECT)
   {
-    picojson::object serialized_feature;
-    feature.SerializeToConfig(serialized_feature);
-    serialized_features.emplace_back(std::move(serialized_feature));
+    if (t == RJSON_ERROR)
+      LogParseError(doc.json, "graphics mod group", file_path);
+    else
+      ERROR_LOG_FMT(
+          VIDEO,
+          "Failed to load graphics mod group json file '{}' due to root not being an object!",
+          file_path);
+    return std::nullopt;
   }
-  json_obj.emplace("features", std::move(serialized_features));
 
-  picojson::array serialized_assets;
-  for (const auto& asset : m_assets)
+  static const char* const names[] = {"mods"};
+  std::vector<GraphicsModConfig> mods;
+  while ((t = rjson_next(doc.json)) == RJSON_STRING)
   {
-    picojson::object serialized_asset;
-    asset.SerializeToConfig(serialized_asset);
-    serialized_assets.emplace_back(std::move(serialized_asset));
-  }
-  json_obj.emplace("assets", std::move(serialized_assets));
-}
-
-bool GraphicsModConfig::DeserializeFromConfig(const picojson::value& value)
-{
-  const auto& meta = value.get("meta");
-  if (meta.is<picojson::object>())
-  {
-    const auto& title = meta.get("title");
-    if (title.is<std::string>())
+    const int k = Key(doc.json, names, 1);
+    bool ok;
+    t = rjson_next(doc.json);
+    if (k == 0 && t == RJSON_ARRAY)
     {
-      m_title = title.to_str();
+      mods.clear();
+      ok = ReadArray(doc.json, [&](enum rjson_type e) {
+        return e == RJSON_OBJECT ? ReadProfileMod(doc.json, &mods) : Skip(doc.json, e);
+      });
     }
-
-    const auto& author = meta.get("author");
-    if (author.is<std::string>())
+    else
     {
-      m_author = author.to_str();
+      ok = Skip(doc.json, t);
     }
-
-    const auto& description = meta.get("description");
-    if (description.is<std::string>())
-    {
-      m_description = description.to_str();
-    }
+    if (!ok)
+      break;
   }
-
-  const auto& groups = value.get("groups");
-  if (groups.is<picojson::array>())
+  if (t != RJSON_OBJECT_END)
   {
-    for (const auto& group_val : groups.get<picojson::array>())
-    {
-      if (!group_val.is<picojson::object>())
-      {
-        ERROR_LOG_FMT(
-            VIDEO, "Failed to load mod configuration file, specified group is not a json object");
-        return false;
-      }
-      GraphicsTargetGroupConfig group;
-      if (!group.DeserializeFromConfig(group_val.get<picojson::object>()))
-      {
-        return false;
-      }
-
-      m_groups.push_back(std::move(group));
-    }
+    LogParseError(doc.json, "graphics mod group", file_path);
+    return std::nullopt;
   }
-
-  const auto& features = value.get("features");
-  if (features.is<picojson::array>())
-  {
-    for (const auto& feature_val : features.get<picojson::array>())
-    {
-      if (!feature_val.is<picojson::object>())
-      {
-        ERROR_LOG_FMT(
-            VIDEO, "Failed to load mod configuration file, specified feature is not a json object");
-        return false;
-      }
-      GraphicsModFeatureConfig feature;
-      if (!feature.DeserializeFromConfig(feature_val.get<picojson::object>()))
-      {
-        return false;
-      }
-
-      m_features.push_back(std::move(feature));
-    }
-  }
-
-  const auto& assets = value.get("assets");
-  if (assets.is<picojson::array>())
-  {
-    for (const auto& asset_val : assets.get<picojson::array>())
-    {
-      if (!asset_val.is<picojson::object>())
-      {
-        ERROR_LOG_FMT(
-            VIDEO, "Failed to load mod configuration file, specified asset is not a json object");
-        return false;
-      }
-      GraphicsModAssetConfig asset;
-      if (!asset.DeserializeFromConfig(asset_val.get<picojson::object>()))
-      {
-        return false;
-      }
-
-      m_assets.push_back(std::move(asset));
-    }
-  }
-
-  return true;
-}
-
-void GraphicsModConfig::SerializeToProfile(picojson::object* obj) const
-{
-  if (!obj)
-    return;
-
-  auto& json_obj = *obj;
-  switch (m_source)
-  {
-  case Source::User:
-    json_obj.emplace("source", "user");
-    break;
-  case Source::System:
-    json_obj.emplace("source", "system");
-    break;
-  }
-
-  json_obj.emplace("path", m_relative_path);
-
-  picojson::array serialized_groups;
-  for (const auto& group : m_groups)
-  {
-    picojson::object serialized_group;
-    group.SerializeToProfile(&serialized_group);
-    serialized_groups.emplace_back(std::move(serialized_group));
-  }
-  json_obj.emplace("groups", std::move(serialized_groups));
-
-  picojson::array serialized_features;
-  for (const auto& feature : m_features)
-  {
-    picojson::object serialized_feature;
-    feature.SerializeToProfile(&serialized_feature);
-    serialized_features.emplace_back(std::move(serialized_feature));
-  }
-  json_obj.emplace("features", std::move(serialized_features));
-
-  json_obj.emplace("enabled", m_enabled);
-
-  json_obj.emplace("weight", static_cast<double>(m_weight));
-}
-
-void GraphicsModConfig::DeserializeFromProfile(const picojson::object& obj)
-{
-  if (const auto it = obj.find("groups"); it != obj.end())
-  {
-    if (it->second.is<picojson::array>())
-    {
-      const auto& serialized_groups = it->second.get<picojson::array>();
-      if (serialized_groups.size() != m_groups.size())
-        return;
-
-      for (std::size_t i = 0; i < serialized_groups.size(); i++)
-      {
-        const auto& serialized_group_val = serialized_groups[i];
-        if (serialized_group_val.is<picojson::object>())
-        {
-          const auto& serialized_group = serialized_group_val.get<picojson::object>();
-          m_groups[i].DeserializeFromProfile(serialized_group);
-        }
-      }
-    }
-  }
-
-  if (const auto it = obj.find("features"); it != obj.end())
-  {
-    if (it->second.is<picojson::array>())
-    {
-      const auto& serialized_features = it->second.get<picojson::array>();
-      if (serialized_features.size() != m_features.size())
-        return;
-
-      for (std::size_t i = 0; i < serialized_features.size(); i++)
-      {
-        const auto& serialized_feature_val = serialized_features[i];
-        if (serialized_feature_val.is<picojson::object>())
-        {
-          const auto& serialized_feature = serialized_feature_val.get<picojson::object>();
-          m_features[i].DeserializeFromProfile(serialized_feature);
-        }
-      }
-    }
-  }
-
-  if (const auto it = obj.find("enabled"); it != obj.end())
-  {
-    if (it->second.is<bool>())
-    {
-      m_enabled = it->second.get<bool>();
-    }
-  }
-
-  if (const auto it = obj.find("weight"); it != obj.end())
-  {
-    if (it->second.is<double>())
-    {
-      m_weight = static_cast<u16>(it->second.get<double>());
-    }
-  }
+  return mods;
 }

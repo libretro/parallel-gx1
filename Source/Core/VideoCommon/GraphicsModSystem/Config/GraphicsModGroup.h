@@ -25,7 +25,6 @@ public:
   GraphicsModGroupConfig& operator=(GraphicsModGroupConfig&&) noexcept;
 
   void Load();
-  void Save() const;
 
   void SetChangeCount(u32 change_count);
   u32 GetChangeCount() const;

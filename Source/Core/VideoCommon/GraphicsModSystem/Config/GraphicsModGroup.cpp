@@ -6,12 +6,9 @@
 #include <map>
 #include <string>
 
-#include <picojson.h>
-
 #include "Common/CommonPaths.h"
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
-#include "Common/JsonUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 
@@ -41,44 +38,13 @@ void GraphicsModGroupConfig::Load()
   std::set<std::string> known_paths;
   if (File::Exists(file_path))
   {
-    picojson::value root;
-    std::string error;
-    if (!JsonFromFile(file_path, &root, &error))
-    {
-      ERROR_LOG_FMT(VIDEO,
-                    "Failed to load graphics mod group json file '{}' due to parse error: {}",
-                    file_path, error);
+    auto mods = LoadGraphicsModProfile(file_path);
+    if (!mods)
       return;
-    }
-    if (!root.is<picojson::object>())
+    for (auto& mod : *mods)
     {
-      ERROR_LOG_FMT(
-          VIDEO,
-          "Failed to load graphics mod group json file '{}' due to root not being an object!",
-          file_path);
-      return;
-    }
-
-    const auto& mods = root.get("mods");
-    if (mods.is<picojson::array>())
-    {
-      for (const auto& mod_json : mods.get<picojson::array>())
-      {
-        if (mod_json.is<picojson::object>())
-        {
-          const auto& mod_json_obj = mod_json.get<picojson::object>();
-          auto graphics_mod = GraphicsModConfig::Create(&mod_json_obj);
-          if (!graphics_mod)
-          {
-            continue;
-          }
-          graphics_mod->DeserializeFromProfile(mod_json_obj);
-
-          auto mod_full_path = graphics_mod->GetAbsolutePath();
-          known_paths.insert(std::move(mod_full_path));
-          m_graphics_mods.push_back(std::move(*graphics_mod));
-        }
-      }
+      known_paths.insert(mod.GetAbsolutePath());
+      m_graphics_mods.push_back(std::move(mod));
     }
   }
 
@@ -125,24 +91,6 @@ void GraphicsModGroupConfig::Load()
   }
 
   m_change_count++;
-}
-
-void GraphicsModGroupConfig::Save() const
-{
-  const std::string file_path = GetPath();
-  picojson::object serialized_root;
-  picojson::array serialized_mods;
-  for (const auto& mod : m_graphics_mods)
-  {
-    picojson::object serialized_mod;
-    mod.SerializeToProfile(&serialized_mod);
-    serialized_mods.emplace_back(std::move(serialized_mod));
-  }
-  serialized_root.emplace("mods", std::move(serialized_mods));
-
-  const auto output = picojson::value{serialized_root}.serialize(true);
-  if (!File::WriteStringToFile(file_path, output))
-    ERROR_LOG_FMT(VIDEO, "Failed to write graphics mod group json file '{}'", file_path);
 }
 
 void GraphicsModGroupConfig::SetChangeCount(u32 change_count)

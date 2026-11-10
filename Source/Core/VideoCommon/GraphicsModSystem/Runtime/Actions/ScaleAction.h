@@ -6,15 +6,12 @@
 #include <memory>
 #include <string_view>
 
-#include <picojson.h>
-
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModAction.h"
 
 class ScaleAction final : public GraphicsModAction
 {
 public:
   static constexpr std::string_view factory_name = "scale";
-  static std::unique_ptr<ScaleAction> Create(const picojson::value& json_data);
   explicit ScaleAction(Common::Vec3 scale);
   void BeforeEFB(GraphicsModActionData::PreEFB*) override;
   void OnProjection(GraphicsModActionData::Projection*) override;

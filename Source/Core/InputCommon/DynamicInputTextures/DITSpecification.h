@@ -6,12 +6,12 @@
 #include <string>
 #include <vector>
 
-#include <picojson.h>
-
 #include "InputCommon/DynamicInputTextures/DITData.h"
 
 namespace InputCommon::DynamicInputTextures
 {
-bool ProcessSpecificationV1(picojson::value& root, std::vector<Data>& input_textures,
-                            const std::string& base_path, const std::string& json_file);
+/* Reads json_file, a specification 1 dynamic input texture file, into input_textures; the
+ * images it names are under base_path. False, with the reason logged, where it is not one. */
+bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_textures,
+                       const std::string& base_path);
 }

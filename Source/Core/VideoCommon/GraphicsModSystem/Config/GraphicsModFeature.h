@@ -5,17 +5,12 @@
 
 #include <string>
 
-#include <picojson.h>
+#include "Common/Matrix.h"
 
 struct GraphicsModFeatureConfig
 {
   std::string m_group;
   std::string m_action;
-  picojson::value m_action_data;
-
-  void SerializeToConfig(picojson::object& json_obj) const;
-  bool DeserializeFromConfig(const picojson::object& value);
-
-  void SerializeToProfile(picojson::object* value) const;
-  void DeserializeFromProfile(const picojson::object& value);
+  /* X, Y and Z of action_data, as move and scale take them */
+  Common::Vec3 m_action_xyz;
 };

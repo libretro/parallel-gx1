@@ -11,24 +11,24 @@
 namespace
 {
 template <typename T, std::enable_if_t<std::is_base_of_v<FBTarget, T>, int> = 0>
-std::optional<T> DeserializeFBTargetFromConfig(const picojson::object& obj, std::string_view prefix)
+std::optional<T> MakeFBTarget(const GraphicsTargetField& texture_filename_field,
+                              std::string_view prefix)
 {
   T fb;
-  const auto texture_filename_iter = obj.find("texture_filename");
-  if (texture_filename_iter == obj.end())
+  if (texture_filename_field.kind == GraphicsTargetField::Kind::Absent)
   {
     ERROR_LOG_FMT(VIDEO,
                   "Failed to load mod configuration file, option 'texture_filename' not found");
     return std::nullopt;
   }
-  if (!texture_filename_iter->second.is<std::string>())
+  if (texture_filename_field.kind != GraphicsTargetField::Kind::String)
   {
     ERROR_LOG_FMT(
         VIDEO,
         "Failed to load mod configuration file, option 'texture_filename' is not a string type");
     return std::nullopt;
   }
-  const auto texture_filename = texture_filename_iter->second.get<std::string>();
+  const std::string& texture_filename = texture_filename_field.text;
   const auto texture_filename_without_prefix = texture_filename.substr(prefix.size() + 1);
   const auto split_str_values = SplitString(texture_filename_without_prefix, '_');
   if (split_str_values.size() == 1)
@@ -108,23 +108,22 @@ std::optional<T> DeserializeFBTargetFromConfig(const picojson::object& obj, std:
 
   return fb;
 }
-std::optional<std::string> ExtractTextureFilenameForConfig(const picojson::object& obj)
+std::optional<std::string> ExtractTextureFilename(const GraphicsTargetField& texture_filename)
 {
-  const auto texture_filename_iter = obj.find("texture_filename");
-  if (texture_filename_iter == obj.end())
+  if (texture_filename.kind == GraphicsTargetField::Kind::Absent)
   {
     ERROR_LOG_FMT(VIDEO,
                   "Failed to load mod configuration file, option 'texture_filename' not found");
     return std::nullopt;
   }
-  if (!texture_filename_iter->second.is<std::string>())
+  if (texture_filename.kind != GraphicsTargetField::Kind::String)
   {
     ERROR_LOG_FMT(
         VIDEO,
         "Failed to load mod configuration file, option 'texture_filename' is not a string type");
     return std::nullopt;
   }
-  std::string texture_info = texture_filename_iter->second.get<std::string>();
+  std::string texture_info = texture_filename.text;
 
   const auto handle_fb_texture =
       [&texture_info](std::string_view type) -> std::optional<std::string> {
@@ -153,69 +152,25 @@ std::optional<std::string> ExtractTextureFilenameForConfig(const picojson::objec
 }
 }  // namespace
 
-void SerializeTargetToConfig(picojson::object& json_obj, const GraphicsTargetConfig& target)
+std::optional<GraphicsTargetConfig> MakeTarget(const GraphicsTargetField& type_field,
+                                               const GraphicsTargetField& texture_filename,
+                                               const GraphicsTargetField& value)
 {
-  std::visit(overloaded{
-                 [&](const DrawStartedTextureTarget& the_target) {
-                   json_obj.emplace("type", "draw_started");
-                   json_obj.emplace("texture_filename", the_target.m_texture_info_string);
-                 },
-                 [&](const LoadTextureTarget& the_target) {
-                   json_obj.emplace("type", "load_texture");
-                   json_obj.emplace("texture_filename", the_target.m_texture_info_string);
-                 },
-                 [&](const CreateTextureTarget& the_target) {
-                   json_obj.emplace("type", "create_texture");
-                   json_obj.emplace("texture_filename", the_target.m_texture_info_string);
-                 },
-                 [&](const EFBTarget& the_target) {
-                   json_obj.emplace("type", "efb");
-                   json_obj.emplace("texture_filename",
-                                    fmt::format("{}_{}x{}_{}", EFB_DUMP_PREFIX, the_target.m_width,
-                                                the_target.m_height,
-                                                static_cast<int>(the_target.m_texture_format)));
-                 },
-                 [&](const XFBTarget& the_target) {
-                   json_obj.emplace("type", "xfb");
-                   json_obj.emplace("texture_filename",
-                                    fmt::format("{}_{}x{}_{}", XFB_DUMP_PREFIX, the_target.m_width,
-                                                the_target.m_height,
-                                                static_cast<int>(the_target.m_texture_format)));
-                 },
-                 [&](const ProjectionTarget& the_target) {
-                   const char* type_name = "3d";
-                   if (the_target.m_projection_type == ProjectionType::Orthographic)
-                     type_name = "2d";
-
-                   json_obj.emplace("type", type_name);
-
-                   if (the_target.m_texture_info_string)
-                   {
-                     json_obj.emplace("texture_filename", *the_target.m_texture_info_string);
-                   }
-                 },
-             },
-             target);
-}
-
-std::optional<GraphicsTargetConfig> DeserializeTargetFromConfig(const picojson::object& obj)
-{
-  const auto type_iter = obj.find("type");
-  if (type_iter == obj.end())
+  if (type_field.kind == GraphicsTargetField::Kind::Absent)
   {
     ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, option 'type' not found");
     return std::nullopt;
   }
-  if (!type_iter->second.is<std::string>())
+  if (type_field.kind != GraphicsTargetField::Kind::String)
   {
     ERROR_LOG_FMT(VIDEO,
                   "Failed to load mod configuration file, option 'type' is not a string type");
     return std::nullopt;
   }
-  const std::string& type = type_iter->second.get<std::string>();
+  const std::string& type = type_field.text;
   if (type == "draw_started")
   {
-    std::optional<std::string> texture_info = ExtractTextureFilenameForConfig(obj);
+    std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
     if (!texture_info.has_value())
       return std::nullopt;
 
@@ -225,7 +180,7 @@ std::optional<GraphicsTargetConfig> DeserializeTargetFromConfig(const picojson::
   }
   else if (type == "load_texture")
   {
-    std::optional<std::string> texture_info = ExtractTextureFilenameForConfig(obj);
+    std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
     if (!texture_info.has_value())
       return std::nullopt;
 
@@ -235,7 +190,7 @@ std::optional<GraphicsTargetConfig> DeserializeTargetFromConfig(const picojson::
   }
   else if (type == "create_texture")
   {
-    std::optional<std::string> texture_info = ExtractTextureFilenameForConfig(obj);
+    std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
     if (!texture_info.has_value())
       return std::nullopt;
 
@@ -245,36 +200,34 @@ std::optional<GraphicsTargetConfig> DeserializeTargetFromConfig(const picojson::
   }
   else if (type == "efb")
   {
-    return DeserializeFBTargetFromConfig<EFBTarget>(obj, EFB_DUMP_PREFIX);
+    return MakeFBTarget<EFBTarget>(texture_filename, EFB_DUMP_PREFIX);
   }
   else if (type == "xfb")
   {
-    return DeserializeFBTargetFromConfig<XFBTarget>(obj, EFB_DUMP_PREFIX);
+    return MakeFBTarget<XFBTarget>(texture_filename, EFB_DUMP_PREFIX);
   }
   else if (type == "projection")
   {
     ProjectionTarget target;
-    const auto texture_iter = obj.find("texture_filename");
-    if (texture_iter != obj.end())
+    if (texture_filename.kind != GraphicsTargetField::Kind::Absent)
     {
-      std::optional<std::string> texture_info = ExtractTextureFilenameForConfig(obj);
+      std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
       if (!texture_info.has_value())
         return std::nullopt;
       target.m_texture_info_string = texture_info;
     }
-    const auto value_iter = obj.find("value");
-    if (value_iter == obj.end())
+    if (value.kind == GraphicsTargetField::Kind::Absent)
     {
       ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, option 'value' not found");
       return std::nullopt;
     }
-    if (!value_iter->second.is<std::string>())
+    if (value.kind != GraphicsTargetField::Kind::String)
     {
       ERROR_LOG_FMT(VIDEO,
                     "Failed to load mod configuration file, option 'value' is not a string type");
       return std::nullopt;
     }
-    const auto& value_str = value_iter->second.get<std::string>();
+    const std::string& value_str = value.text;
     if (value_str == "2d")
     {
       target.m_projection_type = ProjectionType::Orthographic;
@@ -297,14 +250,4 @@ std::optional<GraphicsTargetConfig> DeserializeTargetFromConfig(const picojson::
                   "Failed to load mod configuration file, option 'type' is not a valid value");
   }
   return std::nullopt;
-}
-
-void SerializeTargetToProfile(picojson::object*, const GraphicsTargetConfig&)
-{
-  // Added for consistency, no functionality as of now
-}
-
-void DeserializeTargetFromProfile(const picojson::object&, GraphicsTargetConfig*)
-{
-  // Added for consistency, no functionality as of now
 }

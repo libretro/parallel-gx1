@@ -135,6 +135,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_emit.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_front.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_ir.c \
+	$(CORE_DIR)/Externals/libretro-common/formats/json/rjson.c \
 	$(CORE_DIR)/Externals/libretro-common/memmap/memmap.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_waitable_spsc.c \
@@ -1044,7 +1045,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/IniFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/IOFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/JitRegister.cpp \
-	$(CORE_DIR)/Source/Core/Common/JsonUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/Logging/LogManager.cpp \
 	$(CORE_DIR)/Source/Core/Common/Matrix.cpp \
 	$(CORE_DIR)/Source/Core/Common/MemoryUtil.cpp \
@@ -1131,11 +1131,8 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/GeometryShaderGen.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GeometryShaderManager.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsMod.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsModAsset.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsModFeature.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsModGroup.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsTarget.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Config/GraphicsTargetGroup.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/MoveAction.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/PrintAction.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/GraphicsModSystem/Runtime/Actions/ScaleAction.cpp \
@@ -1917,7 +1914,7 @@ DOLPHIN_FLAGS := \
 	-DCURL_STATICLIB \
 	-DTINYGLTF_NOEXCEPTION -DTINYGLTF_NO_EXTERNAL_IMAGE -DTINYGLTF_USE_CPP14 \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
-	-I$(EXT_DIR)/picojson -I$(GEN_DIR)/Source/Core \
+	-I$(GEN_DIR)/Source/Core \
 	-I$(SRC_DIR)/DolphinLibretro/Common -I$(SRC_DIR)/DolphinLibretro/VideoContexts \
 	-I$(EXT_DIR)/libretro-common/include \
 	-I$(EXT_DIR)/Vulkan-Headers/include \

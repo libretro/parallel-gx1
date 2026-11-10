@@ -7,12 +7,14 @@
 
 #include <fmt/ranges.h>
 
-#include <picojson.h>
+#include <cstring>
+
+#include <formats/rjson.h>
+#include <streams/file_stream.h>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
 #include "Common/FileUtil.h"
-#include "Common/JsonUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/Swap.h"
 
@@ -70,6 +72,29 @@ struct CardIdentifier
 };
 #pragma pack(pop)
 
+int DeckRead(void* buf, int len, void* user)
+{
+  return static_cast<int>(filestream_read(static_cast<RFILE*>(user), buf, len));
+}
+
+/* Past the value whose first token was t; false where the document is broken. */
+bool DeckSkip(rjson_t* json, enum rjson_type t)
+{
+  unsigned depth = 0;
+  for (;;)
+  {
+    if (t == RJSON_OBJECT || t == RJSON_ARRAY)
+      depth++;
+    else if (t == RJSON_OBJECT_END || t == RJSON_ARRAY_END)
+      depth--;
+    else if (t == RJSON_ERROR || t == RJSON_DONE)
+      return false;
+    if (!depth)
+      return true;
+    t = rjson_next(json);
+  }
+}
+
 std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
 {
   // Example json format:
@@ -95,57 +120,89 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
       fmt::format("{}tricard_{}_deck.json", File::GetUserPath(D_TRIUSER_IDX),
                   SConfig::GetInstance().GetGameID());
 
-  std::string file_contents;
-  File::ReadFileToString(filename, file_contents);
-
-  picojson::value json_root;
-  const auto err = picojson::parse(json_root, file_contents);
-
-  if (!err.empty())
+  RFILE* const file = filestream_open(filename.c_str(), RETRO_VFS_FILE_ACCESS_READ,
+                                      RETRO_VFS_FILE_ACCESS_HINT_NONE);
+  if (!file)
   {
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: {}", err);
+    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: cannot read {}", filename);
     return std::nullopt;
   }
-
-  if (!json_root.is<picojson::object>())
-  {
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid JSON root object.");
-    return std::nullopt;
-  }
-
-  const auto cards_obj = json_root.get("cards");
-  if (!cards_obj.is<picojson::array>())
-  {
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"cards\" array.");
-    return std::nullopt;
-  }
-
+  rjson_t* const json = rjson_open_user(DeckRead, file, 4096);
   std::optional<std::vector<CardIdentifier>> result;
-  result.emplace();
+  bool ok = json && rjson_next(json) == RJSON_OBJECT;
+  bool cards = false;
 
-  for (const auto& item : cards_obj.get<picojson::array>())
+  if (json && !ok)
+    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid JSON root object.");
+  while (ok)
   {
-    if (!item.is<picojson::object>())
-      continue;
-
-    const auto& item_obj = item.get<picojson::object>();
-
-    const auto card_index = ReadNumericFromJson<u16>(item_obj, "index");
-    if (!card_index)
+    size_t len;
+    const char* key;
+    enum rjson_type t = rjson_next(json);
+    if (t == RJSON_OBJECT_END)
+      break;
+    key = rjson_get_string(json, &len);
+    t = rjson_next(json);
+    if (len != 5 || memcmp(key, "cards", 5) != 0)
     {
-      ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"index\" field.");
+      ok = DeckSkip(json, t);
       continue;
     }
-
-    CardIdentifier card_id{};
-    card_id.card_index = *card_index;
-    card_id.table_index = ReadNumericFromJson<u8>(item_obj, "table").value_or(0);
-
-    const auto quantity = ReadNumericFromJson<u8>(item_obj, "quantity").value_or(1);
-    result->resize(result->size() + quantity, card_id);
+    if (t != RJSON_ARRAY)
+      break;
+    cards = true;
+    result.emplace();
+    while (ok && (t = rjson_next(json)) != RJSON_ARRAY_END)
+    {
+      std::optional<u16> card_index;
+      CardIdentifier card_id{};
+      u8 quantity = 1;
+      if (t != RJSON_OBJECT)
+      {
+        ok = DeckSkip(json, t);
+        continue;
+      }
+      while (ok && (t = rjson_next(json)) == RJSON_STRING)
+      {
+        key = rjson_get_string(json, &len);
+        const std::string_view name(key, len);
+        t = rjson_next(json);
+        if (t != RJSON_NUMBER)
+          ok = DeckSkip(json, t);
+        else if (name == "index")
+          card_index = static_cast<u16>(rjson_get_double(json));
+        else if (name == "table")
+          card_id.table_index = static_cast<u8>(rjson_get_double(json));
+        else if (name == "quantity")
+          quantity = static_cast<u8>(rjson_get_double(json));
+      }
+      ok = ok && t == RJSON_OBJECT_END;
+      if (!ok)
+        break;
+      if (!card_index)
+      {
+        ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"index\" field.");
+        continue;
+      }
+      card_id.card_index = *card_index;
+      result->resize(result->size() + quantity, card_id);
+    }
+    ok = ok && t == RJSON_ARRAY_END;
   }
 
-  return result;
+  if (json && rjson_get_error(json)[0])
+  {
+    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: {}", rjson_get_error(json));
+    result.reset();
+  }
+  else if (json && ok && !cards)
+  {
+    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"cards\" array.");
+  }
+  if (json)
+    rjson_free(json);
+  filestream_close(file);
+  return ok ? result : std::nullopt;
 }
 
 }  // namespace
