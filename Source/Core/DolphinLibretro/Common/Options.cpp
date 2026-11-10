@@ -1,6 +1,9 @@
 
 #include <libretro.h>
 #include <cstdlib>
+#include <stdint.h>
+
+#include <retro_atomic.h>
 #include "DolphinLibretro/Common/Options.h"
 
 namespace Libretro
@@ -2096,7 +2099,39 @@ static int CompareKeys(const void* a, const void* b)
 }
 
 /* The index of the option named key, or -1. */
+/* The keys are one object each (inline constexpr in Options.h), the
+ * pointers callers pass and option_defs hold alike: a key's index is found
+ * by its address, in a slot the binary search fills. A slot is checked
+ * against option_defs before it is trusted, so a racing writer can only
+ * cost a search. */
+enum
+{
+  KEY_SLOTS = 256
+};
+static retro_atomic_int_t s_key_slots[KEY_SLOTS]; /* index + 1, 0 for none */
+
+static unsigned KeySlot(const char* key)
+{
+  const uintptr_t a = (uintptr_t)key;
+  return (unsigned)((a ^ (a >> 7) ^ (a >> 15)) & (KEY_SLOTS - 1));
+}
+
+static int Search(const char* key);
+
 static int Find(const char* key)
+{
+  const unsigned slot = KeySlot(key);
+  const int known = retro_atomic_load_acquire_int(&s_key_slots[slot]) - 1;
+  int i;
+  if (known >= 0 && known < (int)OPTION_COUNT && option_defs[known].key == key)
+    return known;
+  i = Search(key);
+  if (i >= 0)
+    retro_atomic_store_release_int(&s_key_slots[slot], i + 1);
+  return i;
+}
+
+static int Search(const char* key)
 {
   unsigned lo = 0;
   unsigned hi = OPTION_COUNT;

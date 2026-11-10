@@ -160,78 +160,78 @@ inline std::string CPUCoreToString(PowerPC::CPUCore core)
 // Core
 // ======================================================
 namespace core {
-  constexpr const char CPU_CORE[] = "dolphin_cpu_core";
-  constexpr const char CPU_CLOCK_RATE[] = "dolphin_cpu_clock_rate";
-  constexpr const char MAIN_CPU_THREAD[] = "dolphin_main_cpu_thread";
-  constexpr const char MAIN_SYNC_GPU[] = "dolphin_sync_gpu";
-  constexpr const char MAIN_LOAD_GAME_INTO_MEMORY[] = "dolphin_main_load_game_into_memory";
-  constexpr const char FASTMEM[] = "dolphin_fastmem";
-  constexpr const char FASTMEM_ARENA[] = "dolphin_fastmem_arena";
-  constexpr const char MAIN_ACCURATE_CPU_CACHE[] = "dolphin_main_accurate_cpu_cache";
-  constexpr const char CHEATS_ENABLED[] = "dolphin_cheats_enabled";
-  constexpr const char SKIP_GC_BIOS[] = "dolphin_skip_gc_bios";
-  constexpr const char DISC_BASED_GAMES_BOOT_TO_WII_MENU[] = "dolphin_disc_based_games_boot_to_wii_menu";
-  constexpr const char LANGUAGE[] = "dolphin_language";
-  constexpr const char FAST_DISC_SPEED[] = "dolphin_fast_disc_speed";
-  constexpr const char MAIN_MMU[] = "dolphin_main_mmu";
+  inline constexpr char CPU_CORE[] = "dolphin_cpu_core";
+  inline constexpr char CPU_CLOCK_RATE[] = "dolphin_cpu_clock_rate";
+  inline constexpr char MAIN_CPU_THREAD[] = "dolphin_main_cpu_thread";
+  inline constexpr char MAIN_SYNC_GPU[] = "dolphin_sync_gpu";
+  inline constexpr char MAIN_LOAD_GAME_INTO_MEMORY[] = "dolphin_main_load_game_into_memory";
+  inline constexpr char FASTMEM[] = "dolphin_fastmem";
+  inline constexpr char FASTMEM_ARENA[] = "dolphin_fastmem_arena";
+  inline constexpr char MAIN_ACCURATE_CPU_CACHE[] = "dolphin_main_accurate_cpu_cache";
+  inline constexpr char CHEATS_ENABLED[] = "dolphin_cheats_enabled";
+  inline constexpr char SKIP_GC_BIOS[] = "dolphin_skip_gc_bios";
+  inline constexpr char DISC_BASED_GAMES_BOOT_TO_WII_MENU[] = "dolphin_disc_based_games_boot_to_wii_menu";
+  inline constexpr char LANGUAGE[] = "dolphin_language";
+  inline constexpr char FAST_DISC_SPEED[] = "dolphin_fast_disc_speed";
+  inline constexpr char MAIN_MMU[] = "dolphin_main_mmu";
 }  // namespace core
 
 // ======================================================
 // Audio / DSP
 // ======================================================
   namespace audio {
-  constexpr const char DSP_HLE[] = "dolphin_dsp_hle";
-  constexpr const char DSP_JIT[] = "dolphin_dsp_jit";
+  inline constexpr char DSP_HLE[] = "dolphin_dsp_hle";
+  inline constexpr char DSP_JIT[] = "dolphin_dsp_jit";
 }  // namespace audio
 
 // ======================================================
 // Interface
 // ======================================================
 namespace main_interface {
-  constexpr const char LOG_LEVEL[] = "dolphin_log_level";
-  constexpr const char LOG_BOOT[] = "dolphin_log_boot_enabled";
-  constexpr const char LOG_CORE[] = "dolphin_log_core_enabled";
-  constexpr const char LOG_VIDEO[] = "dolphin_log_video_enabled";
-  constexpr const char LOG_COMMON[] = "dolphin_log_common_enabled";
-  constexpr const char LOG_HOST_GPU[] = "dolphin_log_host_gpu_enabled";
-  constexpr const char LOG_MEMMAP[] = "dolphin_log_memmap_enabled";
-  constexpr const char LOG_DSPINTERFACE[] = "dolphin_log_dspinterface_enabled";
-  constexpr const char LOG_DSPHLE[] = "dolphin_log_dsphle_enabled";
-  constexpr const char LOG_DSPLLE[] = "dolphin_log_dsplle_enabled";
-  constexpr const char LOG_DSP_MAIL[] = "dolphin_log_dsp_mail_enabled";
+  inline constexpr char LOG_LEVEL[] = "dolphin_log_level";
+  inline constexpr char LOG_BOOT[] = "dolphin_log_boot_enabled";
+  inline constexpr char LOG_CORE[] = "dolphin_log_core_enabled";
+  inline constexpr char LOG_VIDEO[] = "dolphin_log_video_enabled";
+  inline constexpr char LOG_COMMON[] = "dolphin_log_common_enabled";
+  inline constexpr char LOG_HOST_GPU[] = "dolphin_log_host_gpu_enabled";
+  inline constexpr char LOG_MEMMAP[] = "dolphin_log_memmap_enabled";
+  inline constexpr char LOG_DSPINTERFACE[] = "dolphin_log_dspinterface_enabled";
+  inline constexpr char LOG_DSPHLE[] = "dolphin_log_dsphle_enabled";
+  inline constexpr char LOG_DSPLLE[] = "dolphin_log_dsplle_enabled";
+  inline constexpr char LOG_DSP_MAIL[] = "dolphin_log_dsp_mail_enabled";
 }  // namespace main_interface
 
 // ======================================================
 // Bluetooth
 // ======================================================
 namespace main_bluetooth {
-  constexpr const char BLUETOOTH_PASSTHROUGH[] = "dolphin_bluetooth_passthrough";
+  inline constexpr char BLUETOOTH_PASSTHROUGH[] = "dolphin_bluetooth_passthrough";
 }  // namespace bluetooth
 
 // ======================================================
 // System Configuration (SYSCONF) - GC
 // ======================================================
 namespace sysconf_gc {
-  constexpr const char SP1_DEVICE[] = "dolphin_gc_sp1";
-  constexpr const char ENABLE_GAMECUBE_MIC[] = "dolphin_enable_gamecube_mic";
-  constexpr const char HOTKEY_ACTIVATE_MICROPHONE[] = "dolphin_hotkey_activate_microphone";
-  constexpr const char GBA_SCREENS[] = "dolphin_gba_screens";
+  inline constexpr char SP1_DEVICE[] = "dolphin_gc_sp1";
+  inline constexpr char ENABLE_GAMECUBE_MIC[] = "dolphin_enable_gamecube_mic";
+  inline constexpr char HOTKEY_ACTIVATE_MICROPHONE[] = "dolphin_hotkey_activate_microphone";
+  inline constexpr char GBA_SCREENS[] = "dolphin_gba_screens";
 }
 
 // ======================================================
 // System Configuration (SYSCONF) - Wii
 // ======================================================
 namespace sysconf {
-  constexpr const char WIDESCREEN[] = "dolphin_widescreen";
-  constexpr const char PROGRESSIVE_SCAN[] = "dolphin_progressive_scan";
-  constexpr const char PAL60[] = "dolphin_pal60";
-  constexpr const char SENSOR_BAR_POSITION[] = "dolphin_sensor_bar_position";
-  constexpr const char ENABLE_RUMBLE[] = "dolphin_enable_rumble";
-  constexpr const char WIIMOTE_CONTINUOUS_SCANNING[] = "dolphin_wiimote_continuous_scanning";
-  constexpr const char ALT_GC_PORTS_ON_WII[] = "dolphin_alt_gc_ports_on_wii";
-  constexpr const char WII_SPEAK_ENABLE[] = "dolphin_wiispeak_enable";
-  constexpr const char WII_SPEAK_MUTED[] = "dolphin_wiispeak_muted";
-  constexpr const char WII_LOGI_MICROPHONE_ENABLE[] = "dolphin_wii_logi_microphone_enable";
+  inline constexpr char WIDESCREEN[] = "dolphin_widescreen";
+  inline constexpr char PROGRESSIVE_SCAN[] = "dolphin_progressive_scan";
+  inline constexpr char PAL60[] = "dolphin_pal60";
+  inline constexpr char SENSOR_BAR_POSITION[] = "dolphin_sensor_bar_position";
+  inline constexpr char ENABLE_RUMBLE[] = "dolphin_enable_rumble";
+  inline constexpr char WIIMOTE_CONTINUOUS_SCANNING[] = "dolphin_wiimote_continuous_scanning";
+  inline constexpr char ALT_GC_PORTS_ON_WII[] = "dolphin_alt_gc_ports_on_wii";
+  inline constexpr char WII_SPEAK_ENABLE[] = "dolphin_wiispeak_enable";
+  inline constexpr char WII_SPEAK_MUTED[] = "dolphin_wiispeak_muted";
+  inline constexpr char WII_LOGI_MICROPHONE_ENABLE[] = "dolphin_wii_logi_microphone_enable";
 }  // namespace sysconf
 
 // ======================================================
@@ -245,59 +245,59 @@ namespace gfx_hardware {
 // Graphics > Settings
 // ======================================================
 namespace gfx_settings {
-  constexpr const char RENDERER[] = "dolphin_renderer";
-  constexpr const char WIDESCREEN_HACK[] = "dolphin_widescreen_hack";
-  constexpr const char ASPECT_RATIO[] = "dolphin_aspect_ratio";
-  constexpr const char CROP_OVERSCAN[] = "dolphin_crop_overscan";
-  constexpr const char EFB_SCALE[] = "dolphin_efb_scale";
-  constexpr const char SHADER_COMPILATION_MODE[] = "dolphin_shader_compilation_mode";
-  constexpr const char WAIT_FOR_SHADERS[] = "dolphin_wait_for_shaders";
-  constexpr const char SHADER_CACHE[] = "dolphin_shader_cache";
-  constexpr const char ANTI_ALIASING[] = "dolphin_anti_aliasing";
-  constexpr const char TEXTURE_CACHE_ACCURACY[] = "dolphin_texture_cache_accuracy";
-  constexpr const char GPU_TEXTURE_DECODING[] = "dolphin_gpu_texture_decoding";
-  constexpr const char ENABLE_PIXEL_LIGHTING[] = "dolphin_pixel_lighting";
-  constexpr const char FAST_DEPTH_CALCULATION[] = "dolphin_fast_depth_calculation";
-  constexpr const char MODS_ENABLE[] = "dolphin_mods_enabled";
-  constexpr const char VR_MODE[] = "dolphin_vr_mode";
+  inline constexpr char RENDERER[] = "dolphin_renderer";
+  inline constexpr char WIDESCREEN_HACK[] = "dolphin_widescreen_hack";
+  inline constexpr char ASPECT_RATIO[] = "dolphin_aspect_ratio";
+  inline constexpr char CROP_OVERSCAN[] = "dolphin_crop_overscan";
+  inline constexpr char EFB_SCALE[] = "dolphin_efb_scale";
+  inline constexpr char SHADER_COMPILATION_MODE[] = "dolphin_shader_compilation_mode";
+  inline constexpr char WAIT_FOR_SHADERS[] = "dolphin_wait_for_shaders";
+  inline constexpr char SHADER_CACHE[] = "dolphin_shader_cache";
+  inline constexpr char ANTI_ALIASING[] = "dolphin_anti_aliasing";
+  inline constexpr char TEXTURE_CACHE_ACCURACY[] = "dolphin_texture_cache_accuracy";
+  inline constexpr char GPU_TEXTURE_DECODING[] = "dolphin_gpu_texture_decoding";
+  inline constexpr char ENABLE_PIXEL_LIGHTING[] = "dolphin_pixel_lighting";
+  inline constexpr char FAST_DEPTH_CALCULATION[] = "dolphin_fast_depth_calculation";
+  inline constexpr char MODS_ENABLE[] = "dolphin_mods_enabled";
+  inline constexpr char VR_MODE[] = "dolphin_vr_mode";
 }  // namespace gfx_settings
 
 // ======================================================
 // Graphics > Enhancements
 // ======================================================
 namespace gfx_enhancements {
-  constexpr const char MAX_ANISOTROPY[] = "dolphin_max_anisotropy";
-  constexpr const char FORCE_TEXTURE_FILTERING_MODE[] = "dolphin_force_texture_filtering_mode";
-  constexpr const char LOAD_CUSTOM_TEXTURES[] = "dolphin_load_custom_textures";
-  constexpr const char CACHE_CUSTOM_TEXTURES[] = "dolphin_cache_custom_textures";
-  constexpr const char FORCE_TRUE_COLOR[] = "dolphin_force_true_color";
-  constexpr const char GFX_ENHANCE_DISABLE_COPY_FILTER[] = "dolphin_disable_copy_filter";
-  constexpr const char GFX_ENHANCE_HDR_OUTPUT[] = "dolphin_enhance_hdr_output";
-  constexpr const char GFX_ARBITRARY_MIPMAP_DETECTION[] = "dolphin_mipmap_detection";
+  inline constexpr char MAX_ANISOTROPY[] = "dolphin_max_anisotropy";
+  inline constexpr char FORCE_TEXTURE_FILTERING_MODE[] = "dolphin_force_texture_filtering_mode";
+  inline constexpr char LOAD_CUSTOM_TEXTURES[] = "dolphin_load_custom_textures";
+  inline constexpr char CACHE_CUSTOM_TEXTURES[] = "dolphin_cache_custom_textures";
+  inline constexpr char FORCE_TRUE_COLOR[] = "dolphin_force_true_color";
+  inline constexpr char GFX_ENHANCE_DISABLE_COPY_FILTER[] = "dolphin_disable_copy_filter";
+  inline constexpr char GFX_ENHANCE_HDR_OUTPUT[] = "dolphin_enhance_hdr_output";
+  inline constexpr char GFX_ARBITRARY_MIPMAP_DETECTION[] = "dolphin_mipmap_detection";
 }  // namespace gfx_enhancements
 
 // ======================================================
 // Graphics > Hacks
 // ======================================================
 namespace gfx_hacks {
-  constexpr const char EFB_ACCESS_ENABLE[] = "dolphin_efb_access_enable";
-  constexpr const char EFB_ACCESS_DEFER_INVALIDATION[] = "dolphin_efb_access_defer_invalidation";
-  constexpr const char EFB_ACCESS_TILE_SIZE[] = "dolphin_efb_access_tile_size";
-  constexpr const char BBOX_ENABLED[] = "dolphin_bbox_enabled";
-  constexpr const char FORCE_PROGRESSIVE[] = "dolphin_force_progressive";
-  constexpr const char EFB_TO_TEXTURE[] = "dolphin_efb_to_texture";
-  constexpr const char XFB_TO_TEXTURE_ENABLE[] = "dolphin_xfb_to_texture_enable";
-  constexpr const char EFB_TO_VRAM[] = "dolphin_efb_to_vram";
-  constexpr const char DEFER_EFB_COPIES[] = "dolphin_defer_efb_copies";
-  constexpr const char IMMEDIATE_XFB[] = "dolphin_immediate_xfb";
-  constexpr const char SKIP_DUPE_FRAMES[] = "dolphin_skip_dupe_frames";
-  constexpr const char EARLY_XFB_OUTPUT[] = "dolphin_early_xfb_output";
-  constexpr const char EFB_SCALED_COPY[] = "dolphin_efb_scaled_copy";
-  constexpr const char EFB_EMULATE_FORMAT_CHANGES[] = "dolphin_efb_emulate_format_changes";
-  constexpr const char VERTEX_ROUNDING[] = "dolphin_vertex_rounding";
-  constexpr const char FAST_TEXTURE_SAMPLING[] = "dolphin_fast_texture_sampling";
+  inline constexpr char EFB_ACCESS_ENABLE[] = "dolphin_efb_access_enable";
+  inline constexpr char EFB_ACCESS_DEFER_INVALIDATION[] = "dolphin_efb_access_defer_invalidation";
+  inline constexpr char EFB_ACCESS_TILE_SIZE[] = "dolphin_efb_access_tile_size";
+  inline constexpr char BBOX_ENABLED[] = "dolphin_bbox_enabled";
+  inline constexpr char FORCE_PROGRESSIVE[] = "dolphin_force_progressive";
+  inline constexpr char EFB_TO_TEXTURE[] = "dolphin_efb_to_texture";
+  inline constexpr char XFB_TO_TEXTURE_ENABLE[] = "dolphin_xfb_to_texture_enable";
+  inline constexpr char EFB_TO_VRAM[] = "dolphin_efb_to_vram";
+  inline constexpr char DEFER_EFB_COPIES[] = "dolphin_defer_efb_copies";
+  inline constexpr char IMMEDIATE_XFB[] = "dolphin_immediate_xfb";
+  inline constexpr char SKIP_DUPE_FRAMES[] = "dolphin_skip_dupe_frames";
+  inline constexpr char EARLY_XFB_OUTPUT[] = "dolphin_early_xfb_output";
+  inline constexpr char EFB_SCALED_COPY[] = "dolphin_efb_scaled_copy";
+  inline constexpr char EFB_EMULATE_FORMAT_CHANGES[] = "dolphin_efb_emulate_format_changes";
+  inline constexpr char VERTEX_ROUNDING[] = "dolphin_vertex_rounding";
+  inline constexpr char FAST_TEXTURE_SAMPLING[] = "dolphin_fast_texture_sampling";
 #ifdef __APPLE__
-  constexpr const char NO_MIPMAPPING[] = "dolphin_no_mipmapping";
+  inline constexpr char NO_MIPMAPPING[] = "dolphin_no_mipmapping";
 #endif
 }  // namespace gfx_hacks
 
@@ -305,7 +305,7 @@ namespace gfx_hacks {
 // Graphics > Game Specific
 // ======================================================
 namespace gfx_gamespecific {
-  constexpr const char GFX_PERF_QUERIES_ENABLE[] = "dolphin_per_queries_enable";
+  inline constexpr char GFX_PERF_QUERIES_ENABLE[] = "dolphin_per_queries_enable";
 }  // namespace gfx_gamespecific
 
 // ======================================================
@@ -313,40 +313,40 @@ namespace gfx_gamespecific {
 // ======================================================
 namespace wiimote {
   // Controllers
-  constexpr const char* DEFAULT_DEVICE = "dolphin_wiimote_default_device";
+  inline constexpr char DEFAULT_DEVICE[] = "dolphin_wiimote_default_device";
 
   // General and options
-  constexpr const char HOTKEY_SIDEWAYS_TOGGLE[] = "dolphin_hotkey_sideways_toggle";
-  constexpr const char HOTKEY_UPRIGHT_TOGGLE[] = "dolphin_hotkey_upright_toggle";
+  inline constexpr char HOTKEY_SIDEWAYS_TOGGLE[] = "dolphin_hotkey_sideways_toggle";
+  inline constexpr char HOTKEY_UPRIGHT_TOGGLE[] = "dolphin_hotkey_upright_toggle";
 
   // Motion simulation
-  constexpr const char IR_MODE[] = "dolphin_ir_mode";
-  constexpr const char IR_OFFSET[] = "dolphin_ir_offset";
-  constexpr const char IR_YAW[] = "dolphin_ir_yaw";
-  constexpr const char IR_PITCH[] = "dolphin_ir_pitch";
-  constexpr const char IR_DEADZONE[] = "dolphin_ir_deadzone";
-  constexpr const char IR_MODIFIER[] = "dolphin_ir_modifier";
-  constexpr const char SWING_MODIFIER[] = "dolphin_swing_modifier";
-  constexpr const char SWING_ANGLE[] = "dolphin_swing_angle";
-  constexpr const char IR_PASSTHROUGH[] = "dolphin_ir_passthrough";
+  inline constexpr char IR_MODE[] = "dolphin_ir_mode";
+  inline constexpr char IR_OFFSET[] = "dolphin_ir_offset";
+  inline constexpr char IR_YAW[] = "dolphin_ir_yaw";
+  inline constexpr char IR_PITCH[] = "dolphin_ir_pitch";
+  inline constexpr char IR_DEADZONE[] = "dolphin_ir_deadzone";
+  inline constexpr char IR_MODIFIER[] = "dolphin_ir_modifier";
+  inline constexpr char SWING_MODIFIER[] = "dolphin_swing_modifier";
+  inline constexpr char SWING_ANGLE[] = "dolphin_swing_angle";
+  inline constexpr char IR_PASSTHROUGH[] = "dolphin_ir_passthrough";
 }  // namespace wiimote
 
 // ======================================================
 // RetroArch unique settings
 // ======================================================
 namespace retroarch_core {
-  constexpr const char CHEATS_IMPORT[] = "dolphin_cheats_import";
+  inline constexpr char CHEATS_IMPORT[] = "dolphin_cheats_import";
   // preserve settings
-  constexpr const char SAVE_LOAD_SETTINGS[] = "dolphin_save_load_settings";
+  inline constexpr char SAVE_LOAD_SETTINGS[] = "dolphin_save_load_settings";
 
 #if defined(HAS_OPENGL) && defined(__WEBOS__)
-  constexpr const char SUPPORTS_BINDING_LAYOUT[] = "dolphin_supports_binding_layout";
-  constexpr const char SUPPORTS_COPY_SUB_IMAGE[] = "dolphin_supports_copy_sub_image";
-  constexpr const char SUPPORTS_GL_BASE_VERTEX[] = "dolphin_supports_gl_base_vertex";
+  inline constexpr char SUPPORTS_BINDING_LAYOUT[] = "dolphin_supports_binding_layout";
+  inline constexpr char SUPPORTS_COPY_SUB_IMAGE[] = "dolphin_supports_copy_sub_image";
+  inline constexpr char SUPPORTS_GL_BASE_VERTEX[] = "dolphin_supports_gl_base_vertex";
 #endif
 
-  constexpr const char ENABLE_DEFAULT_MOUSE_BINDINGS[] = "dolphin_default_mouse_bindings_enabled";
-  constexpr const char ENABLE_LOG_POPUPS[] = "dolphin_log_popups_enabled";
+  inline constexpr char ENABLE_DEFAULT_MOUSE_BINDINGS[] = "dolphin_default_mouse_bindings_enabled";
+  inline constexpr char ENABLE_LOG_POPUPS[] = "dolphin_log_popups_enabled";
 }  // namespace retroarch_core
 
 // ======================================================
@@ -355,12 +355,12 @@ namespace retroarch_core {
 #ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
 namespace wiimote_dsu {
 
-  constexpr const char DSU_ENABLED[] = "dolphin_dsu_enabled";
-  constexpr const char DSU_IP_1[] = "dolphin_dsu_ip_octet1";
-  constexpr const char DSU_IP_2[] = "dolphin_dsu_ip_octet2";
-  constexpr const char DSU_IP_3[] = "dolphin_dsu_ip_octet3";
-  constexpr const char DSU_IP_4[] = "dolphin_dsu_ip_octet4";
-  constexpr const char DSU_PORT[] = "dolphin_dsu_port";
+  inline constexpr char DSU_ENABLED[] = "dolphin_dsu_enabled";
+  inline constexpr char DSU_IP_1[] = "dolphin_dsu_ip_octet1";
+  inline constexpr char DSU_IP_2[] = "dolphin_dsu_ip_octet2";
+  inline constexpr char DSU_IP_3[] = "dolphin_dsu_ip_octet3";
+  inline constexpr char DSU_IP_4[] = "dolphin_dsu_ip_octet4";
+  inline constexpr char DSU_PORT[] = "dolphin_dsu_port";
 }
 #endif // namespace wiimote_dsu
 
