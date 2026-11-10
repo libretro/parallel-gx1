@@ -158,12 +158,8 @@ struct pixel_shader_uid_data
 
 using PixelShaderUid = ShaderUid<pixel_shader_uid_data>;
 
-ShaderCode GeneratePixelShaderCode(APIType api_type, const ShaderHostConfig& host_config,
-                                   const pixel_shader_uid_data* uid_data);
 void WritePixelShaderCommonHeader(ShaderCode& out, APIType api_type,
                                   const ShaderHostConfig& host_config, bool bounding_box);
-void WriteFragmentBody(APIType api_type, const ShaderHostConfig& host_config,
-                       const pixel_shader_uid_data* uid_data, ShaderCode& out);
 void ClearUnusedPixelShaderUidBits(APIType api_type, const ShaderHostConfig& host_config,
                                    PixelShaderUid* uid);
 

@@ -678,16 +678,6 @@ ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) con
 
 AbstractShader* ShaderCache::CompilePixelShader(const PixelShaderUid& uid) const
 {
-  /* OpenGL prints the stage as text for its driver: framebuffer fetch, conservative depth and
-   * subgroups printed by rslc are still to come */
-  if (m_api_type == APIType::OpenGL)
-  {
-    STUTTER_MARK(t);
-    ShaderCode source_code =
-        GeneratePixelShaderCode(m_api_type, m_host_config, uid.GetUidData());
-    STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
-    return g_gfx->CreateShaderFromSource(ShaderStage::Pixel, source_code);
-  }
   const PixelShaderBuildArgs args = {&m_host_config, uid.GetUidData(), m_api_type};
   return g_gfx->CreateShaderFromBuild(ShaderStage::Pixel, BuildPixelShader, &args,
                                       "Pixel shader");

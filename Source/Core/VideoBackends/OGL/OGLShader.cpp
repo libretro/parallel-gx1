@@ -87,7 +87,7 @@ OGLShader* OGLShader::CreateFromBuild(ShaderStage stage, shader_build_fn fn, con
   struct rslc_result result;
   ShaderCode code;
   bool es;
-  unsigned gl = 0;
+  unsigned flags = 0;
   const enum rslc_stage rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
                                  stage == ShaderStage::Geometry ? RSLC_STAGE_GEOMETRY :
                                  stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
@@ -97,11 +97,21 @@ OGLShader* OGLShader::CreateFromBuild(ShaderStage stage, shader_build_fn fn, con
   opts.dst = es ? RSLC_DST_GLSL_ES : RSLC_DST_GLSL;
   opts.err = err;
   opts.err_cap = sizeof(err);
+  /* what the text's header said of the context */
+  opts.fb_fetch = g_ogl_config.SupportedFramebufferFetch == EsFbFetchType::FbFetchExt ?
+                      RSLC_FB_FETCH_EXT :
+                  g_ogl_config.SupportedFramebufferFetch == EsFbFetchType::FbFetchArm ?
+                      RSLC_FB_FETCH_ARM :
+                      RSLC_FB_FETCH_NONE;
+  opts.early_z_depth_unchanged =
+      !g_ogl_config.bSupportsImageLoadStore && g_ogl_config.bSupportsConservativeDepth;
   if (g_backend_info.bSupportsBindingLayout)
-    gl |= SHADER_BUILD_GL_BINDINGS;
+    flags |= SHADER_BUILD_GL_BINDINGS;
   if (g_ogl_config.bSupportsExplicitLayoutInShader)
-    gl |= SHADER_BUILD_GL_LOCATIONS;
-  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_OPENGL, gl, &opts, &result))
+    flags |= SHADER_BUILD_GL_LOCATIONS;
+  if (g_ogl_config.bSupportsKHRShaderSubgroup)
+    flags |= SHADER_BUILD_SUBGROUP;
+  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_OPENGL, flags, &opts, &result))
   {
     ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
     return nullptr;
