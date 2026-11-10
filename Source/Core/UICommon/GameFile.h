@@ -98,7 +98,6 @@ public:
   DiscIO::DataSizeType GetVolumeSizeType() const { return m_volume_size_type; }
   bool IsDatelDisc() const { return m_is_datel_disc; }
   bool IsNKit() const { return m_is_nkit; }
-  bool IsModDescriptor() const;
   const GameBanner& GetBannerImage() const;
   const GameCover& GetCoverImage() const;
   void DoState(PointerWrap& p);
@@ -124,7 +123,6 @@ private:
   bool IsElfOrDol() const;
   bool ReadXMLMetadata(const std::string& path);
   bool ReadPNGBanner(const std::string& path);
-  bool TryLoadGameModDescriptorBanner();
   bool CheckIfTwoDiscGame(const std::string& game_id) const;
 
   // IMPORTANT: Nearly all data members must be save/restored in DoState.

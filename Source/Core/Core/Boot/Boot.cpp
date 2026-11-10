@@ -54,7 +54,6 @@
 #include "Core/System.h"
 
 #include "DiscIO/Enums.h"
-#include "DiscIO/GameModDescriptor.h"
 #include "DiscIO/RiivolutionParser.h"
 #include "DiscIO/RiivolutionPatcher.h"
 #include "DiscIO/VolumeDisc.h"
@@ -224,30 +223,6 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
       return std::make_unique<BootParameters>(std::move(*wad), std::move(boot_session_data_));
   }
 
-  if (extension == ".json")
-  {
-    auto descriptor = DiscIO::ParseGameModDescriptorFile(path);
-    if (descriptor)
-    {
-      auto boot_params = GenerateFromFile(descriptor->base_file, std::move(boot_session_data_));
-      if (!boot_params)
-      {
-        PanicAlertFmtT("Could not recognize file {0}", descriptor->base_file);
-        return nullptr;
-      }
-
-      if (descriptor->riivolution && std::holds_alternative<Disc>(boot_params->parameters))
-      {
-        const auto& volume = *std::get<Disc>(boot_params->parameters).volume;
-        AddRiivolutionPatches(boot_params.get(),
-                              DiscIO::Riivolution::GenerateRiivolutionPatchesFromGameModDescriptor(
-                                  *descriptor->riivolution, volume.GetGameID(),
-                                  volume.GetRevision(), volume.GetDiscNumber()));
-      }
-
-      return boot_params;
-    }
-  }
 
   PanicAlertFmtT("Could not recognize file {0}", path);
   return {};

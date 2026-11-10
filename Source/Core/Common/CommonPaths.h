@@ -77,7 +77,6 @@
 #define MEMORYWATCHER_DIR "MemoryWatcher"
 #define WFSROOT_DIR "WFS"
 #define BACKUP_DIR "Backup"
-#define RESOURCEPACK_DIR "ResourcePacks"
 #define DYNAMICINPUT_DIR "DynamicInputTextures"
 #define GRAPHICSMOD_DIR "GraphicMods"
 #define FIRMWARE_DIR "Firmware"

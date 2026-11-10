@@ -38,7 +38,6 @@ enum class BlobType
   TGC,
   WIA,
   RVZ,
-  MOD_DESCRIPTOR,
   NFS,
   SPLIT_PLAIN,
 };

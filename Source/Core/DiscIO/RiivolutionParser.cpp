@@ -15,7 +15,6 @@
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/StringUtil.h"
-#include "DiscIO/GameModDescriptor.h"
 #include "DiscIO/RiivolutionPatcher.h"
 
 namespace DiscIO::Riivolution
@@ -357,48 +356,6 @@ std::vector<Patch> Disc::GeneratePatches(const std::string& game_id) const
   return active_patches;
 }
 
-std::vector<Patch> GenerateRiivolutionPatchesFromGameModDescriptor(
-    const GameModDescriptorRiivolution& descriptor, const std::string& game_id,
-    std::optional<u16> revision, std::optional<u8> disc_number)
-{
-  std::vector<Patch> result;
-  for (const auto& patch_info : descriptor.patches)
-  {
-    auto parsed = ParseFile(patch_info.xml);
-    if (!parsed || !parsed->IsValidForGame(game_id, revision, disc_number))
-      continue;
-
-    for (auto& section : parsed->m_sections)
-    {
-      for (auto& option : section.m_options)
-      {
-        const auto* info = [&]() -> const GameModDescriptorRiivolutionPatchOption* {
-          for (const auto& o : patch_info.options)
-          {
-            if (o.section_name == section.m_name)
-            {
-              if (!o.option_id.empty() && o.option_id == option.m_id)
-                return &o;
-              if (!o.option_name.empty() && o.option_name == option.m_name)
-                return &o;
-            }
-          }
-          return nullptr;
-        }();
-        if (info && info->choice <= option.m_choices.size())
-          option.m_selected_choice = info->choice;
-      }
-    }
-
-    for (auto& p : parsed->GeneratePatches(game_id))
-    {
-      p.m_file_data_loader =
-          std::make_shared<FileDataLoaderHostFS>(patch_info.root, parsed->m_xml_path, p.m_root);
-      result.emplace_back(std::move(p));
-    }
-  }
-  return result;
-}
 
 std::vector<Patch> GenerateRiivolutionPatchesFromConfig(const std::string& root_directory,
                                                         const std::string& game_id,

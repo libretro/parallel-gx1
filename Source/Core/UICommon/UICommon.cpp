@@ -66,12 +66,6 @@ static void CreateLoadPath(std::string path)
   File::CreateFullPath(File::GetUserPath(D_DYNAMICINPUT_IDX));
 }
 
-static void CreateResourcePackPath(std::string path)
-{
-  if (!path.empty())
-    File::SetUserPath(D_RESOURCEPACK_IDX, std::move(path));
-}
-
 static void CreateWFSPath(const std::string& path)
 {
   if (!path.empty())
@@ -83,7 +77,6 @@ static void InitCustomPaths()
   File::SetUserPath(D_WIIROOT_IDX, Config::Get(Config::MAIN_FS_PATH));
   CreateLoadPath(Config::Get(Config::MAIN_LOAD_PATH));
   CreateDumpPath(Config::Get(Config::MAIN_DUMP_PATH));
-  CreateResourcePackPath(Config::Get(Config::MAIN_RESOURCEPACK_PATH));
   CreateWFSPath(Config::Get(Config::MAIN_WFS_PATH));
   File::SetUserPath(F_WIISDCARDIMAGE_IDX, Config::Get(Config::MAIN_WII_SD_CARD_IMAGE_PATH));
   File::SetUserPath(D_WIISDCARDSYNCFOLDER_IDX,
@@ -208,7 +201,6 @@ void SetLocale(std::string locale_name)
 
 void CreateDirectories()
 {
-  File::CreateFullPath(File::GetUserPath(D_RESOURCEPACK_IDX));
   File::CreateFullPath(File::GetUserPath(D_USER_IDX));
   File::CreateFullPath(File::GetUserPath(D_CACHE_IDX));
   File::CreateFullPath(File::GetUserPath(D_COVERCACHE_IDX));
