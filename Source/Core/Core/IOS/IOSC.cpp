@@ -11,8 +11,8 @@
 #include <vector>
 
 #include <fmt/format.h>
-#include <mbedtls/md.h>
-#include <mbedtls/rsa.h>
+
+#include <crypto/pk.h>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
@@ -21,7 +21,6 @@
 #include "Common/Crypto/ec.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
-#include "Common/ScopeGuard.h"
 #include "Common/Swap.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/ES/Formats.h"
@@ -370,6 +369,33 @@ ReturnCode IOSC::Decrypt(Handle key_handle, u8* iv, const u8* input, size_t size
   return DecryptEncrypt(Common::AES::Mode::Decrypt, key_handle, iv, input, size, output, pid);
 }
 
+// The working storage for one public-key operation, emulation thread only.
+static struct
+{
+  bn_word n[BN_MAX_WORDS];
+  bn_word sig[BN_MAX_WORDS];
+  bn_word r2[BN_MAX_WORDS];
+  bn_word out[BN_MAX_WORDS];
+  bn_word work[3 * BN_MAX_WORDS + BN_MONT_TMP_WORDS(BN_MAX_WORDS)];
+} s_rsa;
+
+// out = sig^e mod n, all big endian and n_size long; n_size is 0x100 or 0x200.
+static bool RSAPublic(const u8* n, size_t n_size, const u8* e, const u8* sig, u8* out)
+{
+  const unsigned k = static_cast<unsigned>(n_size / BN_WORD_BYTES);
+  bn_word exponent[1];
+  bn_from_be(s_rsa.n, k, n, n_size);
+  bn_from_be(s_rsa.sig, k, sig, n_size);
+  bn_from_be(exponent, 1, e, 4);
+  if (!(s_rsa.n[0] & 1) || bn_cmp(s_rsa.sig, s_rsa.n, k) >= 0)
+    return false;
+  const bn_word n0 = bn_mont_n0(s_rsa.n);
+  bn_mont_r2(s_rsa.r2, s_rsa.n, k);
+  bn_mod_exp(s_rsa.out, s_rsa.sig, exponent, 1, s_rsa.n, s_rsa.r2, n0, k, s_rsa.work);
+  bn_to_be(out, n_size, s_rsa.out, k);
+  return true;
+}
+
 ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle signer_handle,
                                      const u8* signature, size_t signature_size, u32 pid) const
 {
@@ -393,24 +419,15 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
     ASSERT(entry->data.size() == expected_key_size);
     ASSERT(signature_size == expected_key_size);
 
-    mbedtls_rsa_context rsa;
-    mbedtls_rsa_init(&rsa, MBEDTLS_RSA_PKCS_V15, 0);
-    Common::ScopeGuard context_guard{[&rsa] { mbedtls_rsa_free(&rsa); }};
-
-    mbedtls_mpi_read_binary(&rsa.N, entry->data.data(), entry->data.size());
-    mbedtls_mpi_read_binary(&rsa.E, reinterpret_cast<const u8*>(&entry->misc_data), 4);
-    rsa.len = entry->data.size();
-
-    int ret = mbedtls_rsa_pkcs1_verify(&rsa, nullptr, nullptr, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA1,
-                                       0, sha1.data(), signature);
+    const u8* const exponent = reinterpret_cast<const u8*>(&entry->misc_data);
+    int ret = rsa_pkcs1_verify(entry->data.data(), entry->data.size(), exponent, 4,
+                               RSA_HASH_SHA1, sha1.data(), sha1.size(), signature, signature_size);
     if (ret != 0 && m_console_type == ConsoleType::RVT)
     {
       // Some dev signatures do not have proper PKCS#1 padding. Just powmod and check it ends with
       // digest.
-      // at most a 4096-bit key: the result fits on the stack
       u8 result[0x200];
-      if (signature_size <= sizeof(result) &&
-          mbedtls_rsa_public(&rsa, signature, result) == 0 &&
+      if (RSAPublic(entry->data.data(), entry->data.size(), exponent, signature, result) &&
           memcmp(&result[signature_size - sha1.size()], sha1.data(), sha1.size()) == 0)
       {
         ret = 0;

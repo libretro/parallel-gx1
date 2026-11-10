@@ -7,7 +7,7 @@
 #include <cstring>
 #include <memory>
 
-#include <mbedtls/aes.h>
+#include <crypto/crypto.h>
 
 #include "Common/Assert.h"
 #include "Common/CPUDetect.h"
@@ -37,25 +37,20 @@ template <Mode AesMode>
 class ContextGeneric final : public Context
 {
 public:
-  ContextGeneric(const u8* key)
-  {
-    mbedtls_aes_init(&ctx);
-    if constexpr (AesMode == Mode::Encrypt)
-      ASSERT(!mbedtls_aes_setkey_enc(&ctx, key, 128));
-    else
-      ASSERT(!mbedtls_aes_setkey_dec(&ctx, key, 128));
-  }
+  ContextGeneric(const u8* key) { ASSERT(!aes_init(&ctx, key, BLOCK_SIZE)); }
 
   bool Crypt(const u8* iv, u8* iv_out, const u8* buf_in, u8* buf_out, size_t len) const override
   {
     std::array<u8, BLOCK_SIZE> iv_tmp{};
+    if (len % BLOCK_SIZE)
+      return false;
     if (iv)
       std::memcpy(&iv_tmp[0], iv, BLOCK_SIZE);
 
-    constexpr int mode = (AesMode == Mode::Encrypt) ? MBEDTLS_AES_ENCRYPT : MBEDTLS_AES_DECRYPT;
-    if (mbedtls_aes_crypt_cbc(const_cast<mbedtls_aes_context*>(&ctx), mode, len, &iv_tmp[0], buf_in,
-                              buf_out))
-      return false;
+    if constexpr (AesMode == Mode::Encrypt)
+      aes_cbc_encrypt(&ctx, &iv_tmp[0], buf_in, buf_out, len);
+    else
+      aes_cbc_decrypt(&ctx, &iv_tmp[0], buf_in, buf_out, len);
 
     if (iv_out)
       std::memcpy(iv_out, &iv_tmp[0], BLOCK_SIZE);
@@ -63,7 +58,7 @@ public:
   }
 
 private:
-  mbedtls_aes_context ctx{};
+  struct aes_ctx ctx{};
 };
 
 #if defined(_M_X86_64)
@@ -422,15 +417,21 @@ std::unique_ptr<Context> CreateContextDecrypt(const u8* key)
 // OFB encryption and decryption are the exact same. We don't encrypt though.
 void CryptOFB(const u8* key, const u8* iv, u8* iv_out, const u8* buf_in, u8* buf_out, size_t size)
 {
-  mbedtls_aes_context aes_ctx;
+  struct aes_ctx aes_ctx;
   size_t iv_offset = 0;
 
   std::array<u8, 16> iv_tmp{};
   if (iv)
     std::memcpy(&iv_tmp[0], iv, 16);
 
-  ASSERT(!mbedtls_aes_setkey_enc(&aes_ctx, key, 128));
-  mbedtls_aes_crypt_ofb(&aes_ctx, size, &iv_offset, &iv_tmp[0], buf_in, buf_out);
+  ASSERT(!aes_init(&aes_ctx, key, 16));
+  for (size_t i = 0; i < size; i++)
+  {
+    if (!iv_offset)
+      aes_encrypt_block(&aes_ctx, &iv_tmp[0], &iv_tmp[0]);
+    buf_out[i] = buf_in[i] ^ iv_tmp[iv_offset];
+    iv_offset = (iv_offset + 1) & 15;
+  }
 
   if (iv_out)
     std::memcpy(iv_out, &iv_tmp[0], 16);

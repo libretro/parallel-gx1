@@ -8,7 +8,7 @@
 #include <memory>
 
 #include <fmt/ranges.h>
-#include <mbedtls/sha1.h>
+#include <lrc_hash.h>
 
 #include "Common/Assert.h"
 #include "Common/CPUDetect.h"
@@ -34,29 +34,21 @@
 
 namespace Common::SHA1
 {
-class ContextMbed final : public Context
+class ContextGeneric final : public Context
 {
 public:
-  ContextMbed()
-  {
-    mbedtls_sha1_init(&ctx);
-    ASSERT(!mbedtls_sha1_starts_ret(&ctx));
-  }
-  ~ContextMbed() override { mbedtls_sha1_free(&ctx); }
-  void Update(const u8* msg, size_t len) override
-  {
-    ASSERT(!mbedtls_sha1_update_ret(&ctx, msg, len));
-  }
+  ContextGeneric() { sha1_stream_init(&ctx); }
+  void Update(const u8* msg, size_t len) override { sha1_stream_update(&ctx, msg, len); }
   Digest Finish() override
   {
     Digest digest;
-    ASSERT(!mbedtls_sha1_finish_ret(&ctx, digest.data()));
+    ASSERT(sha1_stream_final(&ctx, digest.data()));
     return digest;
   }
   bool HwAccelerated() const override { return false; }
 
 private:
-  mbedtls_sha1_context ctx{};
+  struct sha1_state ctx{};
 };
 
 class BlockContext : public Context
@@ -379,7 +371,7 @@ std::unique_ptr<Context> CreateContext()
     return std::make_unique<ContextNeon>();
 #endif
   }
-  return std::make_unique<ContextMbed>();
+  return std::make_unique<ContextGeneric>();
 }
 
 Digest CalculateDigest(const u8* msg, size_t len)

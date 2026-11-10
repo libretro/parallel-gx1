@@ -91,6 +91,8 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/fopen_utf8.c \
 	$(CORE_DIR)/Externals/libretro-common/crypto/crypto.c \
+	$(CORE_DIR)/Externals/libretro-common/crypto/kdf.c \
+	$(CORE_DIR)/Externals/libretro-common/crypto/pk.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_crc32.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_deflate.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_rbzip2.c \
@@ -131,6 +133,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/string/rstrtod.c \
 	$(CORE_DIR)/Externals/libretro-common/string/stdstring.c \
 	$(CORE_DIR)/Externals/libretro-common/time/rtime.c \
+	$(CORE_DIR)/Externals/libretro-common/utils/md5.c \
 	$(CORE_DIR)/Externals/libretro-common/vfs/vfs_hybrid.c \
 	$(CORE_DIR)/Externals/libretro-common/vfs/vfs_implementation.c
 

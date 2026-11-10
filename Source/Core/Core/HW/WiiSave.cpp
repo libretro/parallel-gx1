@@ -12,7 +12,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
-#include <mbedtls/md5.h>
+#include <lrc_hash.h>
 #include <memory>
 #include <optional>
 #include <string>
@@ -48,6 +48,15 @@ constexpr std::array<u8, 0x10> s_sd_initial_iv{{0x21, 0x67, 0x12, 0xE6, 0xAA, 0x
                                                 0x95, 0xC5, 0xA2, 0x23, 0x24, 0xDC, 0x6A, 0x98}};
 constexpr Md5 s_md5_blanker{{0x0E, 0x65, 0x37, 0x81, 0x99, 0xBE, 0x45, 0x17, 0xAB, 0x06, 0xEC, 0x22,
                              0x45, 0x1A, 0x57, 0x93}};
+
+static void HeaderMD5(const Header& header, u8* out)
+{
+  MD5_CTX ctx;
+  MD5_Init(&ctx);
+  MD5_Update(&ctx, &header, sizeof(Header));
+  MD5_Final(out, &ctx);
+}
+
 constexpr u32 s_ng_id = 0x0403AC68;
 
 void StorageDeleter::operator()(Storage* p) const
@@ -125,7 +134,7 @@ public:
     header.banner[7] &= ~1;
 
     Md5 md5_calc;
-    mbedtls_md5_ret(reinterpret_cast<const u8*>(&header), sizeof(Header), md5_calc.data());
+    HeaderMD5(header, md5_calc.data());
     header.md5 = md5_calc;
     return header;
   }
@@ -303,7 +312,7 @@ public:
     Md5 md5_file = header.md5;
     header.md5 = s_md5_blanker;
     Md5 md5_calc;
-    mbedtls_md5_ret(reinterpret_cast<const u8*>(&header), sizeof(Header), md5_calc.data());
+    HeaderMD5(header, md5_calc.data());
     if (md5_file != md5_calc)
     {
       ERROR_LOG_FMT(CONSOLE, "MD5 mismatch\n {:016x}{:016x} != {:016x}{:016x}",
