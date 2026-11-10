@@ -1823,8 +1823,8 @@ void ShaderCache::QueueUberShaderPipelines()
 
 AbstractPipeline* ShaderCache::CompileEFBCopyToVRAMPipeline(const EFBCopyFormat* format) const
 {
-  AbstractShader* const shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, TextureConversionShaderGen::GeneratePixelShader(m_api_type, format),
+  AbstractShader* const shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Pixel, TextureConversionShaderGen::BuildPixelShader, format,
       "EFB copy to VRAM pixel shader");
   AbstractPipelineConfig config = {};
   if (!shader)
@@ -1932,8 +1932,9 @@ bool ShaderCache::CompileSharedPipelines()
   m_texture_copy_vertex_shader = g_gfx->CreateShaderFromBuild(
       ShaderStage::Vertex, FramebufferShaderGen::BuildTextureCopyVertexShader, nullptr,
       "Texture copy vertex shader");
-  m_efb_copy_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, TextureConversionShaderGen::GenerateVertexShader(m_api_type), "EFB copy vertex shader");
+  m_efb_copy_vertex_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Vertex, TextureConversionShaderGen::BuildVertexShader, nullptr,
+      "EFB copy vertex shader");
   if (!m_screen_quad_vertex_shader || !m_texture_copy_vertex_shader || !m_efb_copy_vertex_shader)
     return false;
 

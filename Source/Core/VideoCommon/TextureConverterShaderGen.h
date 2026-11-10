@@ -7,10 +7,9 @@
 
 #include "Common/CommonTypes.h"
 
-#include "VideoCommon/ShaderGenCommon.h"
 #include "VideoCommon/TextureDecoder.h"
 
-enum class APIType;
+struct shader_build;
 
 namespace TextureConversionShaderGen
 {
@@ -29,8 +28,11 @@ enum
   /* from bit 8, how the format takes each channel (GetCopyFlags) */
 };
 
-ShaderCode GenerateVertexShader(APIType api_type);
-ShaderCode GeneratePixelShader(APIType api_type, const EFBCopyFormat* format);
+/* Stages built by calls: for AbstractGfx::CreateShaderFromBuild. The pixel shader's arg is the
+ * const EFBCopyFormat* it is built for, or nullptr for the one that reads it from copy_flags. */
+bool BuildVertexShader(struct shader_build* sb, const void* arg);
+bool BuildPixelShader(struct shader_build* sb, const void* arg);
+
 
 /* The format a copy into dst_format is drawn in: with true colour forced, a wider one. */
 EFBCopyFormat GetDrawnFormat(EFBCopyFormat dst_format);
