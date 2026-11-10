@@ -75,12 +75,17 @@ public:
   static void InvalidateVertexFormatIfBound(GLuint vao);
   static void InvalidateLastProgram();
 
-  static bool CompileComputeShader(SHADER& shader, std::string_view code);
+  /* with_header false: code is a whole stage, its #version its own */
+  static bool CompileComputeShader(SHADER& shader, std::string_view code,
+                                   bool with_header = true);
+  /* The context's GLSL as a version number; es for GLSL ES. */
+  static unsigned GLSLVersionNumber(bool* es);
   // A program linked on the driver's threads, checked once its link is done: true when it can
   // be drawn with. With wait, waits for the link; without, false while it runs.
   static bool FinishLink(PipelineProgram* prog, bool wait);
   /* prefix, where not empty, goes between the GLSL header and the code */
-  static GLuint CompileSingleShader(GLenum type, std::string_view code, const char* prefix = "");
+  static GLuint CompileSingleShader(GLenum type, std::string_view code, const char* prefix = "",
+                                    bool with_header = true);
   static bool CheckShaderCompileResult(GLuint id, GLenum type, std::string_view code);
   static bool CheckProgramLinkResult(GLuint id, std::string_view vcode, std::string_view pcode,
                                      std::string_view gcode);

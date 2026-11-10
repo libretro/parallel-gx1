@@ -1921,13 +1921,16 @@ const AbstractPipeline* ShaderCache::GetEFBCopyToRAMPipeline(EFBCopyFormat forma
   return *slot;
 }
 
+
 bool ShaderCache::CompileSharedPipelines()
 {
-  m_screen_quad_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateScreenQuadVertexShader(),
+  static const u32 texcoord_varyings[2] = {1, 0};
+  static const u32 color_varyings[2] = {0, 1};
+  m_screen_quad_vertex_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Vertex, FramebufferShaderGen::BuildScreenQuadVertexShader, nullptr,
       "Screen quad vertex shader");
-  m_texture_copy_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateTextureCopyVertexShader(),
+  m_texture_copy_vertex_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Vertex, FramebufferShaderGen::BuildTextureCopyVertexShader, nullptr,
       "Texture copy vertex shader");
   m_efb_copy_vertex_shader = g_gfx->CreateShaderFromSource(
       ShaderStage::Vertex, TextureConversionShaderGen::GenerateVertexShader(m_api_type), "EFB copy vertex shader");
@@ -1936,19 +1939,21 @@ bool ShaderCache::CompileSharedPipelines()
 
   if (UseGeometryShaderForEFBCopies())
   {
-    m_texcoord_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(1, 0), "Texcoord passthrough geometry shader");
-    m_color_geometry_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Geometry, FramebufferShaderGen::GeneratePassthroughGeometryShader(0, 1), "Color passthrough geometry shader");
+    m_texcoord_geometry_shader = g_gfx->CreateShaderFromBuild(
+        ShaderStage::Geometry, FramebufferShaderGen::BuildPassthroughGeometryShader,
+        texcoord_varyings, "Texcoord passthrough geometry shader");
+    m_color_geometry_shader = g_gfx->CreateShaderFromBuild(
+        ShaderStage::Geometry, FramebufferShaderGen::BuildPassthroughGeometryShader,
+        color_varyings, "Color passthrough geometry shader");
     if (!m_texcoord_geometry_shader || !m_color_geometry_shader)
       return false;
   }
 
-  m_texture_copy_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateTextureCopyPixelShader(),
+  m_texture_copy_pixel_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Pixel, FramebufferShaderGen::BuildTextureCopyPixelShader, nullptr,
       "Texture copy pixel shader");
-  m_color_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, FramebufferShaderGen::GenerateColorPixelShader(),
+  m_color_pixel_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Pixel, FramebufferShaderGen::BuildColorPixelShader, nullptr,
       "Color pixel shader");
   if (!m_texture_copy_pixel_shader || !m_color_pixel_shader)
     return false;

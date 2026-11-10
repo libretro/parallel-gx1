@@ -177,4 +177,37 @@ bool Shader::CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
   return CompileWithRslc(feature_level, stage, source, bytecode);
 }
 
+bool Shader::CompileBuild(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
+                          shader_build_fn fn, const void* arg, ShaderBinary* bytecode)
+{
+  char err[1024];
+  struct rslc_opts opts;
+  struct rslc_result result;
+  const enum rslc_stage rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
+                                 stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
+                                 stage == ShaderStage::Geometry ? RSLC_STAGE_GEOMETRY :
+                                                                  RSLC_STAGE_COMPUTE;
+  ShaderBinaryInit(bytecode);
+  memset(&opts, 0, sizeof(opts));
+  opts.dst = RSLC_DST_DXBC;
+  opts.version = feature_level == D3D_FEATURE_LEVEL_10_0 ? 40 :
+                 feature_level == D3D_FEATURE_LEVEL_10_1 ? 41 :
+                                                           50;
+  opts.err = err;
+  opts.err_cap = sizeof(err);
+  STUTTER_MARK(t);
+  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_D3D, 0, &opts, &result))
+  {
+    ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
+    return false;
+  }
+  STUTTER_EMIT_SINCE(t, result.spirv_len);
+  /* the result block is kept whole: the code points into it */
+  bytecode->block = result.blob;
+  bytecode->release = shader_arena_blob_release;
+  bytecode->code = reinterpret_cast<const u8*>(result.spirv);
+  bytecode->size = result.spirv_len * sizeof(uint32_t);
+  return true;
+}
+
 }  // namespace D3DCommon

@@ -1014,6 +1014,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderArena.c \
+	$(CORE_DIR)/Source/Core/VideoCommon/ShaderBuild.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderText.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/StutterStats.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/UidTable.c \
@@ -1763,7 +1764,8 @@ CPPIPC_SOURCES_CXX += \
 FATFS_FLAGS := -w -I$(EXT_DIR)/FatFs
 
 # RSLC_EXTENDED: rslc takes the stages and types the core's shaders use.
-LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -DHAVE_THREAD_STORAGE -DRSLC_EXTENDED \
+# RSLC_BUILD: the generators build their stages by calls.
+LIBRETRO_COMMON_FLAGS := -DHAVE_THREADS -DHAVE_THREAD_STORAGE -DRSLC_EXTENDED -DRSLC_BUILD \
 	-I$(EXT_DIR)/libretro-common/include
 ifneq ($(OS_WIN),1)
    LIBRETRO_COMMON_FLAGS += -DHAVE_MMAP

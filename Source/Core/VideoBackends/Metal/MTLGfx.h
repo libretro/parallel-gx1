@@ -33,6 +33,8 @@ public:
   std::unique_ptr<AbstractShader>
   CreateShaderFromSource(ShaderStage stage, std::string_view source,
                          std::string_view name) override;
+  std::unique_ptr<AbstractShader> CreateShaderFromBuild(ShaderStage stage, shader_build_fn fn,
+                                                        const void* arg, std::string_view name);
   std::unique_ptr<AbstractShader> CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,
                                                          std::string_view name) override;

@@ -13,6 +13,7 @@
 #include "VideoBackends/Metal/MTLVertexManager.h"
 
 #include "VideoCommon/FramebufferManager.h"
+#include "VideoCommon/ShaderArena.h"
 #include "VideoCommon/Present.h"
 #include "VideoCommon/VideoBackendBase.h"
 
@@ -130,6 +131,33 @@ Metal::Gfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
   }
 
   return CreateShaderFromMSL(stage, std::move(*msl), source, name);
+}
+
+std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromBuild(ShaderStage stage,
+                                                                  shader_build_fn fn,
+                                                                  const void* arg,
+                                                                  std::string_view name)
+{
+  char err[1024];
+  struct rslc_opts opts;
+  struct rslc_result result;
+  const enum rslc_stage rstage = stage == ShaderStage::Vertex ? RSLC_STAGE_VERTEX :
+                                 stage == ShaderStage::Pixel  ? RSLC_STAGE_FRAGMENT :
+                                                                RSLC_STAGE_COMPUTE;
+  memset(&opts, 0, sizeof(opts));
+  opts.dst = RSLC_DST_MSL;
+  opts.version = 20;
+  opts.err = err;
+  opts.err_cap = sizeof(err);
+  /* Metal binds as Vulkan's sets lay out */
+  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, 0, &opts, &result))
+  {
+    PanicAlertFmt("Failed to build shader {}: {}", name, err);
+    return nullptr;
+  }
+  std::string msl(result.text, result.text_len);
+  shader_arena_blob_release(result.blob);
+  return CreateShaderFromMSL(stage, std::move(msl), {}, name);
 }
 
 std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromBinary(ShaderStage stage,

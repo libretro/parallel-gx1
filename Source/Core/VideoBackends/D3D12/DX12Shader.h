@@ -25,6 +25,8 @@ public:
                                                       std::string_view name);
   static DXShader* CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                     std::string_view name);
+  static DXShader* CreateFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                   std::string_view name);
 
 private:
   DXShader(ShaderStage stage, ShaderBinary bytecode);

@@ -71,6 +71,12 @@ VKGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
   return VKShader::CreateFromSource(stage, source, name);
 }
 
+AbstractShader* VKGfx::CreateShaderFromBuild(ShaderStage stage, shader_build_fn fn,
+                                             const void* arg, std::string_view name)
+{
+  return VKShader::CreateFromBuild(stage, fn, arg, name);
+}
+
 AbstractShader* VKGfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                               size_t length, std::string_view name)
 {

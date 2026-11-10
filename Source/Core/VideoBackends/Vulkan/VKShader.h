@@ -12,6 +12,7 @@
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/ShaderBinary.h"
+#include "VideoCommon/ShaderBuild.h"
 
 class ShaderCode;
 
@@ -41,6 +42,8 @@ public:
 
   static VKShader* CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                     std::string_view name);
+  static VKShader* CreateFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                   std::string_view name);
   static VKShader* CreateFromBinary(ShaderStage stage, const void* data,
                                                     size_t length, std::string_view name);
 

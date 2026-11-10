@@ -785,6 +785,44 @@ AbstractShader* AbstractGfx::CreateShaderFromSource(ShaderStage stage,
   return shader;
 }
 
+AbstractShader* AbstractGfx::CreateShaderFromBuild(ShaderStage stage, shader_build_fn fn,
+                                                   const void* arg, std::string_view name)
+{
+  AbstractShader* shader = nullptr;
+  STUTTER_MARK(t);
+  switch (g_video_backend_kind)
+  {
+  case VIDEO_BACKEND_NULL:
+    shader = static_cast<Null::NullGfx*>(this)->CreateShaderFromBuild(stage, fn, arg, name);
+    break;
+  case VIDEO_BACKEND_SOFTWARE:
+    shader = static_cast<SW::SWGfx*>(this)->CreateShaderFromBuild(stage, fn, arg, name);
+    break;
+#ifdef HAS_OPENGL
+  case VIDEO_BACKEND_OGL:
+    shader = static_cast<OGL::OGLGfx*>(this)->CreateShaderFromBuild(stage, fn, arg, name);
+    break;
+#endif
+#ifdef HAS_VULKAN
+  case VIDEO_BACKEND_VULKAN:
+    shader = static_cast<Vulkan::VKGfx*>(this)->CreateShaderFromBuild(stage, fn, arg, name);
+    break;
+#endif
+#ifdef _WIN32
+  case VIDEO_BACKEND_D3D11:
+    shader = static_cast<DX11::Gfx*>(this)->CreateShaderFromBuild(stage, fn, arg, name);
+    break;
+  case VIDEO_BACKEND_D3D12:
+    shader = static_cast<DX12::Gfx*>(this)->CreateShaderFromBuild(stage, fn, arg, name);
+    break;
+#endif
+  default:
+    break;
+  }
+  STUTTER_SINCE(STUTTER_SHADER_CREATE, t);
+  return shader;
+}
+
 AbstractShader* AbstractGfx::CreateShaderFromBinary(ShaderStage stage,
                                                                     const void* data, size_t length,
                                                                     std::string_view name)

@@ -236,6 +236,12 @@ OGLGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
   return OGLShader::CreateFromSource(stage, source, name);
 }
 
+AbstractShader* OGLGfx::CreateShaderFromBuild(ShaderStage stage, shader_build_fn fn,
+                                              const void* arg, std::string_view name)
+{
+  return OGLShader::CreateFromBuild(stage, fn, arg, name);
+}
+
 AbstractShader* OGLGfx::CreateShaderFromBinary(ShaderStage /* stage */,
                                                                const void* /* data */,
                                                                size_t /* length */,

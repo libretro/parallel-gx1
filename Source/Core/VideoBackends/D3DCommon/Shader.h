@@ -7,6 +7,7 @@
 #include "VideoBackends/D3DCommon/D3DCommon.h"
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/ShaderBinary.h"
+#include "VideoCommon/ShaderBuild.h"
 
 class ShaderCode;
 
@@ -31,6 +32,9 @@ public:
    * refused it. */
   static bool CompileShader(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
                             ShaderCode* source, ShaderBinary* bytecode);
+  /* The same for a stage fn builds by calls. */
+  static bool CompileBuild(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
+                           shader_build_fn fn, const void* arg, ShaderBinary* bytecode);
 
 protected:
   /* Takes the bytecode's block. */

@@ -54,6 +54,12 @@ NullGfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* /* source */,
   return new AbstractShader(stage);
 }
 
+AbstractShader* NullGfx::CreateShaderFromBuild(ShaderStage stage, shader_build_fn /* fn */,
+                                              const void* /* arg */, std::string_view /* name */)
+{
+  return new AbstractShader(stage);
+}
+
 AbstractShader* NullGfx::CreateShaderFromBinary(ShaderStage stage,
                                                                 const void* /* data */,
                                                                 size_t /* length */,

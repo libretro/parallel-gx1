@@ -78,6 +78,12 @@ Gfx::CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
   return DXShader::CreateFromSource(stage, source, name);
 }
 
+AbstractShader* Gfx::CreateShaderFromBuild(ShaderStage stage, shader_build_fn fn,
+                                           const void* arg, std::string_view name)
+{
+  return DXShader::CreateFromBuild(stage, fn, arg, name);
+}
+
 AbstractShader* Gfx::CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                             size_t length, std::string_view name)
 {

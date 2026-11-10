@@ -3,8 +3,11 @@
 
 #include "VideoBackends/OGL/OGLShader.h"
 
+#include "Common/Logging/Log.h"
+#include "VideoBackends/OGL/OGLConfig.h"
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 
+#include "VideoCommon/ShaderArena.h"
 #include "VideoCommon/ShaderGenCommon.h"
 
 #include "VideoCommon/VideoConfig.h"
@@ -74,6 +77,52 @@ OGLShader* OGLShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
   if (!ProgramShaderCache::CompileComputeShader(prog, source->GetBuffer()))
     return nullptr;
   return new OGLShader(prog.glprogid, source->Release(), name);
+}
+
+OGLShader* OGLShader::CreateFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                      std::string_view name)
+{
+  char err[1024];
+  struct rslc_opts opts;
+  struct rslc_result result;
+  ShaderCode code;
+  bool es;
+  unsigned gl = 0;
+  const enum rslc_stage rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
+                                 stage == ShaderStage::Geometry ? RSLC_STAGE_GEOMETRY :
+                                 stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
+                                                                  RSLC_STAGE_COMPUTE;
+  memset(&opts, 0, sizeof(opts));
+  opts.version = ProgramShaderCache::GLSLVersionNumber(&es);
+  opts.dst = es ? RSLC_DST_GLSL_ES : RSLC_DST_GLSL;
+  opts.err = err;
+  opts.err_cap = sizeof(err);
+  if (g_backend_info.bSupportsBindingLayout)
+    gl |= SHADER_BUILD_GL_BINDINGS;
+  if (g_ogl_config.bSupportsExplicitLayoutInShader)
+    gl |= SHADER_BUILD_GL_LOCATIONS;
+  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_OPENGL, gl, &opts, &result))
+  {
+    ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
+    return nullptr;
+  }
+  code.Putn(result.text, result.text_len);
+  shader_arena_blob_release(result.blob);
+
+  if (stage != ShaderStage::Compute)
+  {
+    GLenum shader_type = GetGLShaderTypeForStage(stage);
+    GLuint shader_id =
+        ProgramShaderCache::CompileSingleShader(shader_type, code.GetBuffer(), "", false);
+    if (!shader_id)
+      return nullptr;
+    return new OGLShader(stage, shader_type, shader_id, code.Release(), name);
+  }
+
+  SHADER prog;
+  if (!ProgramShaderCache::CompileComputeShader(prog, code.GetBuffer(), false))
+    return nullptr;
+  return new OGLShader(prog.glprogid, code.Release(), name);
 }
 
 }  // namespace OGL

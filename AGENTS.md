@@ -146,6 +146,18 @@ reason a reader can see.
   copied in unchanged from libretro/libretro-common; its files are not
   edited here.
 
+## Shader generators build by calls
+
+- **A generator builds its stage through rslc's builder**
+  (`VideoCommon/ShaderBuild.h`, `AbstractGfx::CreateShaderFromBuild`), not
+  by writing GLSL for a backend to parse. The backend asks rslc for its own
+  destination: SPIR-V for Vulkan, DXBC for D3D11, DXIL for D3D12, GLSL for
+  OpenGL, MSL for Metal. Resource layouts come from the `sb_*` helpers,
+  not from header macros.
+- **A stage moved to the builder compiles to the same words.** Before its
+  text generator is deleted, the built stage and the old text are compiled
+  side by side for Vulkan and D3D and must match word for word.
+
 ## Shader compilation and stutter
 
 The target is the console's own behaviour: a game never waits for a

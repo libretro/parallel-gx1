@@ -133,6 +133,15 @@ VKShader* VKShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
   return CreateShaderObject(stage, spv, name);
 }
 
+VKShader* VKShader::CreateFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                     std::string_view name)
+{
+  ShaderBinary spv;
+  if (!ShaderCompiler::CompileBuild(stage, fn, arg, &spv))
+    return nullptr;
+  return CreateShaderObject(stage, spv, name);
+}
+
 VKShader* VKShader::CreateFromBinary(ShaderStage stage, const void* data,
                                                      size_t length, std::string_view name)
 {

@@ -41,6 +41,16 @@ DXShader* DXShader::CreateFromSource(ShaderStage stage, ShaderCode* source,
   return CreateFromBytecode(stage, bytecode, name);
 }
 
+DXShader* DXShader::CreateFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                    std::string_view name)
+{
+  ShaderBinary bytecode;
+  if (!CompileBuild(g_dx_context->GetFeatureLevel(), stage, fn, arg, &bytecode))
+    return nullptr;
+
+  return CreateFromBytecode(stage, bytecode, name);
+}
+
 D3D12_SHADER_BYTECODE DXShader::GetD3DByteCode() const
 {
   return D3D12_SHADER_BYTECODE{m_bytecode.code, m_bytecode.size};

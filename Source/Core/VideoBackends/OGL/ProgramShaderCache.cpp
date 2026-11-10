@@ -82,11 +82,10 @@ static std::string GetGLSLVersionString()
   }
 }
 
+/* Blocks and samplers by name too where the layouts give them: a stage
+ * rslc prints from a build names them and leaves the binding out. */
 void SHADER::SetProgramVariables()
 {
-  if (g_backend_info.bSupportsBindingLayout)
-    return;
-
   // To set uniform blocks/uniforms, the program must be active. We restore the
   // current binding at the end of this method to maintain the invariant.
   glUseProgram(glprogid);
@@ -120,12 +119,9 @@ void SHADER::SetProgramVariables()
   glUseProgram(CurrentProgram);
 }
 
+/* Attributes and outputs by name, as the layouts say where the shader has them. */
 void SHADER::SetProgramBindings(bool is_compute)
 {
-  if (g_ogl_config.bSupportsExplicitLayoutInShader)
-  {
-    return;
-  }
   if (!is_compute)
   {
     if (g_backend_info.bSupportsDualSourceBlend)
@@ -265,7 +261,16 @@ void ProgramShaderCache::UploadConstants(const void* data, u32 data_size)
     glBindBufferRange(GL_UNIFORM_BUFFER, index, s_buffer->m_buffer, buffer.second, data_size);
 }
 
-bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view code)
+unsigned ProgramShaderCache::GLSLVersionNumber(bool* es)
+{
+  static const unsigned numbers[] = {130, 140, 150, 330, 400, 430, 450, 300, 310, 320};
+  const GlslVersion v = g_ogl_config.eSupportedGLSLVersion;
+  *es = v >= GlslEs300;
+  return numbers[v - Glsl130];
+}
+
+bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view code,
+                                              bool with_header)
 {
   // We need to enable GL_ARB_compute_shader for drivers that support the extension,
   // but not GLSL 4.3. Mesa is one example.
@@ -273,7 +278,8 @@ bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view c
       g_backend_info.bSupportsComputeShaders && g_ogl_config.eSupportedGLSLVersion < Glsl430 ?
           "#extension GL_ARB_compute_shader : enable\n" :
           "";
-  const GLuint shader_id = CompileSingleShader(GL_COMPUTE_SHADER, code, prefix);
+  const GLuint shader_id =
+      CompileSingleShader(GL_COMPUTE_SHADER, code, with_header ? prefix : "", with_header);
   if (!shader_id)
     return false;
 
@@ -296,7 +302,7 @@ bool ProgramShaderCache::CompileComputeShader(SHADER& shader, std::string_view c
 }
 
 GLuint ProgramShaderCache::CompileSingleShader(GLenum type, std::string_view code,
-                                               const char* prefix)
+                                               const char* prefix, bool with_header)
 {
   const GLuint result = glCreateShader(type);
   /* the header, any prefix and the code as they are: GL takes the pieces */
@@ -305,7 +311,10 @@ GLuint ProgramShaderCache::CompileSingleShader(GLenum type, std::string_view cod
                               static_cast<GLint>(strlen(prefix)),
                               static_cast<GLint>(code.size())};
 
-  glShaderSource(result, 3, src, src_sizes);
+  if (with_header)
+    glShaderSource(result, 3, src, src_sizes);
+  else
+    glShaderSource(result, 1, src + 2, src_sizes + 2);
   glCompileShader(result);
 
   /* compiled on the driver's threads: an error shows when the program links */

@@ -3,6 +3,7 @@
 
 #include "VideoCommon/FramebufferShaderGen.h"
 
+#include "VideoCommon/ShaderBuild.h"
 
 #include "Common/Logging/Log.h"
 
@@ -20,11 +21,6 @@ namespace
 APIType GetAPIType()
 {
   return g_backend_info.api_type;
-}
-
-void EmitUniformBufferDeclaration(ShaderCode& code)
-{
-  code.Puts("UBO_BINDING(std140, 1) uniform PSBlock\n");
 }
 
 void EmitSamplerDeclarations(ShaderCode& code, u32 start = 0, u32 end = 1,
@@ -84,56 +80,6 @@ void EmitTextureLoad(ShaderCode& code, u32 n, const char* coords)
   }
 }
 
-void EmitVertexMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_color_inputs,
-                               bool position_input, u32 num_tex_outputs, u32 num_color_outputs,
-                               const char* extra_inputs = "")
-{
-  switch (GetAPIType())
-  {
-  case APIType::D3D:
-  case APIType::Metal:
-  case APIType::OpenGL:
-  case APIType::Vulkan:
-  {
-    for (u32 i = 0; i < num_tex_inputs; i++)
-    {
-      const auto attribute = ShaderAttrib::TexCoord0 + i;
-      code.Printf("ATTRIBUTE_LOCATION(0x%xu /* %s */) in float3 rawtex%u;\n", ShaderEnumValue(attribute), ShaderEnumName(attribute), i);
-    }
-    for (u32 i = 0; i < num_color_inputs; i++)
-    {
-      const auto attribute = ShaderAttrib::Color0 + i;
-      code.Printf("ATTRIBUTE_LOCATION(0x%xu /* %s */) in float4 rawcolor%u;\n", ShaderEnumValue(attribute), ShaderEnumName(attribute), i);
-    }
-    if (position_input)
-      code.Printf("ATTRIBUTE_LOCATION(0x%xu /* %s */) in float4 rawpos;\n", ShaderEnumValue(ShaderAttrib::Position), ShaderEnumName(ShaderAttrib::Position));
-
-    if (g_backend_info.bSupportsGeometryShaders)
-    {
-      code.Puts("VARYING_LOCATION(0) out VertexData {\n");
-      for (u32 i = 0; i < num_tex_outputs; i++)
-        code.Printf("  float3 v_tex%u;\n", i);
-      for (u32 i = 0; i < num_color_outputs; i++)
-        code.Printf("  float4 v_col%u;\n", i);
-      code.Puts("};\n");
-    }
-    else
-    {
-      for (u32 i = 0; i < num_tex_outputs; i++)
-        code.Printf("VARYING_LOCATION(%u) out float3 v_tex%u;\n", i, i);
-      for (u32 i = 0; i < num_color_outputs; i++)
-        code.Printf("VARYING_LOCATION(%u) out float4 v_col%u;\n", num_tex_inputs + i, i);
-    }
-    code.Puts("#define opos gl_Position\n");
-    code.Printf("%s\n", extra_inputs);
-    code.Puts("void main()\n");
-  }
-  break;
-  default:
-    break;
-  }
-}
-
 void EmitPixelMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_color_inputs,
                               const char* output_type = "float4",
                               const char* extra_vars = "", bool emit_frag_coord = false)
@@ -175,208 +121,6 @@ void EmitPixelMainDeclaration(ShaderCode& code, u32 num_tex_inputs, u32 num_colo
   }
 }
 }  // Anonymous namespace
-
-ShaderCode GenerateScreenQuadVertexShader()
-{
-  ShaderCode code;
-  EmitVertexMainDeclaration(code, 0, 0, false, 1, 0,
-
-                            "#define id gl_VertexID\n");
-  code.Puts("{\n"
-            "  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n"
-            "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n");
-
-  // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.
-  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL)
-    code.Puts("  opos.y = -opos.y;\n");
-
-  code.Puts("}\n");
-
-  return code;
-}
-
-ShaderCode GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors)
-{
-  ShaderCode code;
-  if (GetAPIType() == APIType::D3D || GetAPIType() == APIType::OpenGL ||
-      GetAPIType() == APIType::Vulkan)
-  {
-    code.Puts("layout(triangles) in;\n"
-              "layout(triangle_strip, max_vertices = 6) out;\n");
-
-    if (num_tex > 0 || num_colors > 0)
-    {
-      code.Puts("VARYING_LOCATION(0) in VertexData {\n");
-      for (u32 i = 0; i < num_tex; i++)
-        code.Printf("  float3 v_tex%u;\n", i);
-      for (u32 i = 0; i < num_colors; i++)
-        code.Printf("  float4 v_col%u;\n", i);
-      code.Puts("} v_in[];\n");
-
-      code.Puts("VARYING_LOCATION(0) out VertexData {\n");
-      for (u32 i = 0; i < num_tex; i++)
-        code.Printf("  float3 v_tex%u;\n", i);
-      for (u32 i = 0; i < num_colors; i++)
-        code.Printf("  float4 v_col%u;\n", i);
-      code.Puts("} v_out;\n");
-    }
-    code.Puts("\n"
-              "void main()\n"
-              "{\n"
-              "  for (int j = 0; j < 2; j++)\n"
-              "  {\n"
-              "    gl_Layer = j;\n");
-
-    // We have to explicitly unroll this loop otherwise the GL compiler gets cranky.
-    for (u32 v = 0; v < 3; v++)
-    {
-      // Outputs are undefined after EmitVertex()
-      if (v > 0)
-        code.Puts("    gl_Layer = j;\n");
-      code.Printf("    gl_Position = gl_in[%u].gl_Position;\n", v);
-      for (u32 i = 0; i < num_tex; i++)
-      {
-        code.Printf("    v_out.v_tex%u = float3(v_in[%u].v_tex%u.xy, float(j));\n", i, v, i);
-      }
-      for (u32 i = 0; i < num_colors; i++)
-        code.Printf("    v_out.v_col%u = v_in[%u].v_col%u;\n", i, v, i);
-      code.Puts("    EmitVertex();\n"
-                "\n");
-    }
-    code.Puts("    EndPrimitive();\n"
-              "  }\n"
-              "}\n");
-  }
-
-  return code;
-}
-
-ShaderCode GenerateTextureCopyVertexShader()
-{
-  ShaderCode code;
-  EmitUniformBufferDeclaration(code);
-  code.Puts("{  float2 src_offset;\n"
-            "  float2 src_size;\n"
-            "};\n"
-            "\n");
-
-  EmitVertexMainDeclaration(code, 0, 0, false, 1, 0,
-
-                            "#define id gl_VertexID");
-  code.Puts("{\n"
-            "  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n"
-            "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n"
-            "  v_tex0 = float3(src_offset + (src_size * v_tex0.xy), 0.0f);\n");
-
-  // NDC space is flipped in Vulkan. We also flip in GL so that (0,0) is in the lower-left.
-  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL)
-    code.Puts("  opos.y = -opos.y;\n");
-
-  code.Puts("}\n");
-
-  return code;
-}
-
-ShaderCode GenerateTextureCopyPixelShader()
-{
-  ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, false);
-  EmitPixelMainDeclaration(code, 1, 0);
-  code.Puts("{\n"
-            "  ocol0 = ");
-  EmitSampleTexture(code, 0, "v_tex0");
-  code.Puts(";\n"
-            "}\n");
-  return code;
-}
-
-ShaderCode GenerateColorPixelShader()
-{
-  ShaderCode code;
-  EmitPixelMainDeclaration(code, 0, 1);
-  code.Puts("{\n"
-            "  ocol0 = v_col0;\n"
-            "}\n");
-  return code;
-}
-
-ShaderCode GenerateResolveColorPixelShader(u32 samples)
-{
-  ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, true);
-  EmitPixelMainDeclaration(code, 1, 0);
-  code.Puts("{\n"
-            "  int layer = int(v_tex0.z);\n"
-            "  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n"
-            "  ocol0 = float4(0.0f);\n");
-  code.Printf("  for (int i = 0; i < %u; i++)\n", samples);
-  code.Puts("    ocol0 += texelFetch(samp0, coords, i);\n");
-  code.Printf("  ocol0 /= %u.0f;\n", samples);
-  code.Puts("}\n");
-  return code;
-}
-
-ShaderCode GenerateResolveDepthPixelShader(u32 samples)
-{
-  ShaderCode code;
-  EmitSamplerDeclarations(code, 0, 1, true);
-  EmitPixelMainDeclaration(code, 1, 0, "float", "");
-  code.Puts("{\n"
-            "  int layer = int(v_tex0.z);\n");
-  code.Puts("  int3 coords = int3(int2(gl_FragCoord.xy), layer);\n");
-
-  // Take the minimum of all depth samples.
-  code.Puts("  ocol0 = texelFetch(samp0, coords, 0).r;\n");
-  code.Printf("  for (int i = 1; i < %u; i++)\n", samples);
-  code.Puts("    ocol0 = min(ocol0, texelFetch(samp0, coords, i).r);\n");
-
-  code.Puts("}\n");
-  return code;
-}
-
-ShaderCode GenerateClearVertexShader()
-{
-  ShaderCode code;
-  EmitUniformBufferDeclaration(code);
-  code.Puts("{\n"
-            "  float4 clear_color;\n"
-            "  float clear_depth;\n"
-            "};\n");
-
-  EmitVertexMainDeclaration(code, 0, 0, false, 0, 1,
-
-                            "#define id gl_VertexID\n");
-  code.Puts("{\n"
-            "  float2 coord = float2(float((id << 1) & 2), float(id & 2));\n"
-            "  opos = float4(coord * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), clear_depth, 1.0f);\n"
-            "  v_col0 = clear_color;\n");
-
-  // NDC space is flipped in Vulkan
-  if (GetAPIType() == APIType::Vulkan)
-    code.Puts("  opos.y = -opos.y;\n");
-
-  code.Puts("}\n");
-
-  return code;
-}
-
-ShaderCode GenerateEFBPokeVertexShader()
-{
-  ShaderCode code;
-  EmitVertexMainDeclaration(code, 0, 1, true, 0, 1);
-  code.Puts("{\n"
-            "  v_col0 = rawcolor0;\n"
-            "  opos = float4(rawpos.xyz, 1.0f);\n");
-  if (g_backend_info.bSupportsLargePoints)
-    code.Puts("  gl_PointSize = rawpos.w;\n");
-
-  // NDC space is flipped in Vulkan.
-  if (GetAPIType() == APIType::Vulkan)
-    code.Puts("  opos.y = -opos.y;\n");
-
-  code.Puts("}\n");
-  return code;
-}
 
 ShaderCode GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samples)
 {
@@ -615,4 +359,409 @@ ShaderCode GenerateEFBRestorePixelShader()
   return code;
 }
 
+/* ---- stages built by calls ---- */
+
+namespace
+{
+/* VertexData in or out: one unnamed block where the backend has
+ * geometry shaders, a variable a member otherwise. */
+struct fb_vary
+{
+  struct rslc_var* block;
+  struct rslc_var* var[2];
+};
+
+uint32_t fb_vary_ref(const struct shader_build* sb, const struct fb_vary* v, u32 i)
+{
+  return v->block ? sb_mem(sb, sb_ref(sb, v->block), i) : sb_ref(sb, v->var[i]);
+}
+
+/* num_tex float3 v_texN, then num_colors float4 v_colN; a color is at
+ * color_base + N where they are loose */
+void fb_varyings(struct shader_build* sb, unsigned storage, u32 num_tex, u32 num_colors,
+                 u32 color_base, struct fb_vary* v)
+{
+  static const char* const tex_names[2] = {"v_tex0", "v_tex1"};
+  static const char* const col_names[2] = {"v_col0", "v_col1"};
+  const struct rslc_type* types[4];
+  const char* names[4];
+  struct rslc_b_quals q;
+  u32 n = 0, i;
+
+  for (i = 0; i < num_tex; i++)
+  {
+    types[n] = sb->f[3];
+    names[n++] = tex_names[i];
+  }
+  for (i = 0; i < num_colors; i++)
+  {
+    types[n] = sb->f[4];
+    names[n++] = col_names[i];
+  }
+  v->block = NULL;
+  rslc_b_quals_init(&q);
+  q.storage = storage;
+  if (g_backend_info.bSupportsGeometryShaders)
+  {
+    q.location = sb_varying_location(sb, 0);
+    v->block = rslc_b_io_block(sb->b, &q, "VertexData", NULL, types, names, NULL, NULL, n, -1);
+    return;
+  }
+  for (i = 0; i < n; i++)
+  {
+    q.location = sb_varying_location(sb, i < num_tex ? i : color_base + (i - num_tex));
+    v->var[i] = rslc_b_declare(sb->b, &q, names[i], types[i], 0);
+  }
+}
+
+struct fb_vertex
+{
+  struct rslc_var* rawcolor0;
+  struct rslc_var* rawpos;
+  struct fb_vary out;
+};
+
+/* what EmitVertexMainDeclaration declared, without texture inputs */
+void fb_vertex_decl(struct shader_build* sb, u32 num_color_inputs, bool position_input,
+                    u32 num_tex_outputs, u32 num_color_outputs, struct fb_vertex* vx)
+{
+  struct rslc_b_quals q;
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_IN;
+  vx->rawcolor0 = NULL;
+  vx->rawpos = NULL;
+  if (num_color_inputs)
+  {
+    q.location = sb_attribute_location(sb, ShaderEnumValue(ShaderAttrib::Color0));
+    vx->rawcolor0 = rslc_b_declare(sb->b, &q, "rawcolor0", sb->f[4], 0);
+  }
+  if (position_input)
+  {
+    q.location = sb_attribute_location(sb, ShaderEnumValue(ShaderAttrib::Position));
+    vx->rawpos = rslc_b_declare(sb->b, &q, "rawpos", sb->f[4], 0);
+  }
+  fb_varyings(sb, RSLC_B_ST_OUT, num_tex_outputs, num_color_outputs, 0, &vx->out);
+}
+
+/* PSBlock of float members, unnamed */
+void fb_ps_block(struct shader_build* sb, const struct rslc_type* const* types,
+                 const char* const* names, u32 n, struct rslc_var** members)
+{
+  struct rslc_b_quals q;
+  rslc_b_quals_init(&q);
+  sb_ubo(sb, &q, 1);
+  rslc_b_block_q(sb->b, &q, "PSBlock", NULL, types, names, n, members);
+}
+
+struct rslc_var* fb_sampler(struct shader_build* sb, bool multisampled)
+{
+  struct rslc_b_quals q;
+  rslc_b_quals_init(&q);
+  sb_sampler(sb, &q, 0);
+  return rslc_b_declare(sb->b, &q, "samp0",
+                        rslc_b_sampler_type(sb->b,
+                                            multisampled ? RSLC_B_SAMPLER_2D_MS_ARRAY :
+                                                           RSLC_B_SAMPLER_2D_ARRAY,
+                                            RSLC_BASE_FLOAT),
+                        0);
+}
+
+/* what EmitPixelMainDeclaration declared */
+struct rslc_var* fb_pixel_decl(struct shader_build* sb, u32 num_tex_inputs, u32 num_color_inputs,
+                               const struct rslc_type* output_type, struct fb_vary* in)
+{
+  struct rslc_b_quals q;
+  fb_varyings(sb, RSLC_B_ST_IN, num_tex_inputs, num_color_inputs, num_tex_inputs, in);
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_OUT;
+  q.location = sb_output_location(sb, 0);
+  return rslc_b_declare(sb->b, &q, "ocol0", output_type, 0);
+}
+
+struct rslc_func* fb_main(struct shader_build* sb)
+{
+  struct rslc_func* f = rslc_b_func(sb->b, "main", sb->v, 0, NULL, NULL, NULL);
+  rslc_b_func_begin(sb->b, f);
+  return f;
+}
+
+/* float((id << 1) & 2), float(id & 2) */
+void fb_quad_xy(const struct shader_build* sb, uint32_t* x, uint32_t* y)
+{
+  *x = sb_con(sb, sb->f[1], 1,
+              sb_bin(sb, RSLC_B_BAND,
+                     sb_bin(sb, RSLC_B_SHL, sb_bi(sb, "gl_VertexIndex"), sb_i(sb, 1)),
+                     sb_i(sb, 2)));
+  *y = sb_con(sb, sb->f[1], 1, sb_bin(sb, RSLC_B_BAND, sb_bi(sb, "gl_VertexIndex"), sb_i(sb, 2)));
+}
+
+/* xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f) */
+uint32_t fb_quad_ndc(const struct shader_build* sb, uint32_t xy)
+{
+  return sb_bin(sb, RSLC_B_ADD,
+                sb_bin(sb, RSLC_B_MUL, xy,
+                       sb_con(sb, sb->f[2], 2, sb_f(sb, 2.0),
+                              sb_un(sb, RSLC_B_NEG, sb_f(sb, 2.0)))),
+                sb_con(sb, sb->f[2], 2, sb_un(sb, RSLC_B_NEG, sb_f(sb, 1.0)), sb_f(sb, 1.0)));
+}
+
+/* opos.y = -opos.y; NDC space is flipped in Vulkan */
+void fb_flip_y(const struct shader_build* sb)
+{
+  sb_set(sb, sb_swz(sb, sb_bi(sb, "gl_Position"), "y"),
+         sb_un(sb, RSLC_B_NEG, sb_swz(sb, sb_bi(sb, "gl_Position"), "y")));
+}
+
+/* v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);
+ * opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f); */
+void fb_quad_tex(const struct shader_build* sb, const struct fb_vary* out)
+{
+  uint32_t x, y;
+  fb_quad_xy(sb, &x, &y);
+  sb_set(sb, fb_vary_ref(sb, out, 0), sb_con(sb, sb->f[3], 3, x, y, sb_f(sb, 0.0)));
+  sb_set(sb, sb_bi(sb, "gl_Position"),
+         sb_con(sb, sb->f[4], 3, fb_quad_ndc(sb, sb_swz(sb, fb_vary_ref(sb, out, 0), "xy")),
+                sb_f(sb, 0.0), sb_f(sb, 1.0)));
+}
+}  // Anonymous namespace
+
+bool BuildScreenQuadVertexShader(struct shader_build* sb, const void* /* arg */)
+{
+  struct fb_vertex vx;
+  fb_vertex_decl(sb, 0, false, 1, 0, &vx);
+  fb_main(sb);
+  fb_quad_tex(sb, &vx.out);
+  /* We also flip in GL so that (0,0) is in the lower-left. */
+  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL)
+    fb_flip_y(sb);
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildPassthroughGeometryShader(struct shader_build* sb, const void* arg)
+{
+  static const char* const tex_names[2] = {"v_tex0", "v_tex1"};
+  static const char* const col_names[2] = {"v_col0", "v_col1"};
+  const u32* const counts = static_cast<const u32*>(arg);
+  const u32 num_tex = counts[0];
+  const u32 num_colors = counts[1];
+  const struct rslc_type* types[4];
+  const char* names[4];
+  struct rslc_var *v_in = NULL, *v_out = NULL, *j;
+  struct rslc_b_quals q;
+  uint32_t init, body;
+  u32 n = 0, i, v;
+
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_IN;
+  q.prim = RSLC_B_PRIM_TRIANGLES;
+  rslc_b_layout(sb->b, &q);
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_OUT;
+  q.prim = RSLC_B_PRIM_TRIANGLE_STRIP;
+  q.max_vertices = 6;
+  rslc_b_layout(sb->b, &q);
+  for (i = 0; i < num_tex; i++)
+  {
+    types[n] = sb->f[3];
+    names[n++] = tex_names[i];
+  }
+  for (i = 0; i < num_colors; i++)
+  {
+    types[n] = sb->f[4];
+    names[n++] = col_names[i];
+  }
+  if (n)
+  {
+    rslc_b_quals_init(&q);
+    q.storage = RSLC_B_ST_IN;
+    q.location = sb_varying_location(sb, 0);
+    v_in = rslc_b_io_block(sb->b, &q, "VertexData", "v_in", types, names, NULL, NULL, n, 0);
+    q.storage = RSLC_B_ST_OUT;
+    v_out = rslc_b_io_block(sb->b, &q, "VertexData", "v_out", types, names, NULL, NULL, n, -1);
+  }
+
+  fb_main(sb);
+  init = rslc_b_decl_stmt(sb->b, "j", sb->i[1], sb_i(sb, 0), &j);
+  rslc_b_begin_block(sb->b);
+  sb_set(sb, sb_bi(sb, "gl_Layer"), sb_ref(sb, j));
+  // We have to explicitly unroll this loop otherwise the GL compiler gets cranky.
+  for (v = 0; v < 3; v++)
+  {
+    // Outputs are undefined after EmitVertex()
+    if (v > 0)
+      sb_set(sb, sb_bi(sb, "gl_Layer"), sb_ref(sb, j));
+    sb_set(sb, sb_bi(sb, "gl_Position"),
+           sb_mem(sb, sb_idx(sb, sb_bi(sb, "gl_in"), sb_i(sb, static_cast<int32_t>(v))), 0));
+    for (i = 0; i < n; i++)
+    {
+      const uint32_t src =
+          sb_mem(sb, sb_idx(sb, sb_ref(sb, v_in), sb_i(sb, static_cast<int32_t>(v))), i);
+      if (i < num_tex)
+        sb_set(sb, sb_mem(sb, sb_ref(sb, v_out), i),
+               sb_con(sb, sb->f[3], 2, sb_swz(sb, src, "xy"),
+                      sb_con(sb, sb->f[1], 1, sb_ref(sb, j))));
+      else
+        sb_set(sb, sb_mem(sb, sb_ref(sb, v_out), i), src);
+    }
+    sb_do(sb, sb_call(sb, "EmitVertex", 0));
+  }
+  sb_do(sb, sb_call(sb, "EndPrimitive", 0));
+  body = rslc_b_end_block(sb->b);
+  rslc_b_stmt(sb->b, rslc_b_for(sb->b, init, sb_bin(sb, RSLC_B_LT, sb_ref(sb, j), sb_i(sb, 2)),
+                                sb_un(sb, RSLC_B_POSTINC, sb_ref(sb, j)), body));
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildTextureCopyVertexShader(struct shader_build* sb, const void* /* arg */)
+{
+  static const char* const names[2] = {"src_offset", "src_size"};
+  const struct rslc_type* types[2];
+  struct rslc_var* m[2];
+  struct fb_vertex vx;
+  types[0] = sb->f[2];
+  types[1] = sb->f[2];
+  fb_ps_block(sb, types, names, 2, m);
+  fb_vertex_decl(sb, 0, false, 1, 0, &vx);
+  fb_main(sb);
+  fb_quad_tex(sb, &vx.out);
+  sb_set(sb, fb_vary_ref(sb, &vx.out, 0),
+         sb_con(sb, sb->f[3], 2,
+                sb_bin(sb, RSLC_B_ADD, sb_ref(sb, m[0]),
+                       sb_bin(sb, RSLC_B_MUL, sb_ref(sb, m[1]),
+                              sb_swz(sb, fb_vary_ref(sb, &vx.out, 0), "xy"))),
+                sb_f(sb, 0.0)));
+  if (GetAPIType() == APIType::Vulkan || GetAPIType() == APIType::OpenGL)
+    fb_flip_y(sb);
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildTextureCopyPixelShader(struct shader_build* sb, const void* /* arg */)
+{
+  struct fb_vary in;
+  struct rslc_var* samp = fb_sampler(sb, false);
+  struct rslc_var* ocol0 = fb_pixel_decl(sb, 1, 0, sb->f[4], &in);
+  fb_main(sb);
+  sb_set(sb, sb_ref(sb, ocol0),
+         sb_call(sb, "texture", 2, sb_ref(sb, samp), fb_vary_ref(sb, &in, 0)));
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildColorPixelShader(struct shader_build* sb, const void* /* arg */)
+{
+  struct fb_vary in;
+  struct rslc_var* ocol0 = fb_pixel_decl(sb, 0, 1, sb->f[4], &in);
+  fb_main(sb);
+  sb_set(sb, sb_ref(sb, ocol0), fb_vary_ref(sb, &in, 0));
+  return rslc_b_func_end(sb->b);
+}
+
+namespace
+{
+/* int layer = int(v_tex0.z); int3 coords = int3(int2(gl_FragCoord.xy), layer); */
+struct rslc_var* fb_resolve_coords(struct shader_build* sb, const struct fb_vary* in)
+{
+  struct rslc_var* layer =
+      rslc_b_local(sb->b, "layer", sb->i[1],
+                   sb_con(sb, sb->i[1], 1, sb_swz(sb, fb_vary_ref(sb, in, 0), "z")), false);
+  return rslc_b_local(
+      sb->b, "coords", sb->i[3],
+      sb_con(sb, sb->i[3], 2, sb_con(sb, sb->i[2], 1, sb_swz(sb, sb_bi(sb, "gl_FragCoord"), "xy")),
+             sb_ref(sb, layer)),
+      false);
+}
+}  // Anonymous namespace
+
+bool BuildResolveColorPixelShader(struct shader_build* sb, const void* arg)
+{
+  const u32 samples = *static_cast<const u32*>(arg);
+  struct fb_vary in;
+  struct rslc_var* samp = fb_sampler(sb, true);
+  struct rslc_var* ocol0 = fb_pixel_decl(sb, 1, 0, sb->f[4], &in);
+  struct rslc_var *coords, *i;
+  uint32_t init, body;
+  fb_main(sb);
+  coords = fb_resolve_coords(sb, &in);
+  sb_set(sb, sb_ref(sb, ocol0), sb_con(sb, sb->f[4], 1, sb_f(sb, 0.0)));
+  init = rslc_b_decl_stmt(sb->b, "i", sb->i[1], sb_i(sb, 0), &i);
+  body = rslc_b_expr(sb->b, rslc_b_assign(sb->b, RSLC_B_ADD, sb_ref(sb, ocol0),
+                                          sb_call(sb, "texelFetch", 3, sb_ref(sb, samp),
+                                                  sb_ref(sb, coords), sb_ref(sb, i))));
+  rslc_b_stmt(sb->b, rslc_b_for(sb->b, init,
+                                sb_bin(sb, RSLC_B_LT, sb_ref(sb, i),
+                                       sb_i(sb, static_cast<int32_t>(samples))),
+                                sb_un(sb, RSLC_B_POSTINC, sb_ref(sb, i)), body));
+  sb_op_set(sb, RSLC_B_DIV, sb_ref(sb, ocol0), sb_f(sb, static_cast<double>(samples)));
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildResolveDepthPixelShader(struct shader_build* sb, const void* arg)
+{
+  const u32 samples = *static_cast<const u32*>(arg);
+  struct fb_vary in;
+  struct rslc_var* samp = fb_sampler(sb, true);
+  struct rslc_var* ocol0 = fb_pixel_decl(sb, 1, 0, sb->f[1], &in);
+  struct rslc_var *coords, *i;
+  uint32_t init, body;
+  fb_main(sb);
+  coords = fb_resolve_coords(sb, &in);
+  // Take the minimum of all depth samples.
+  sb_set(sb, sb_ref(sb, ocol0),
+         sb_swz(sb,
+                sb_call(sb, "texelFetch", 3, sb_ref(sb, samp), sb_ref(sb, coords), sb_i(sb, 0)),
+                "r"));
+  init = rslc_b_decl_stmt(sb->b, "i", sb->i[1], sb_i(sb, 1), &i);
+  body = rslc_b_expr(
+      sb->b, rslc_b_assign(sb->b, RSLC_B_SET, sb_ref(sb, ocol0),
+                           sb_call(sb, "min", 2, sb_ref(sb, ocol0),
+                                   sb_swz(sb,
+                                          sb_call(sb, "texelFetch", 3, sb_ref(sb, samp),
+                                                  sb_ref(sb, coords), sb_ref(sb, i)),
+                                          "r"))));
+  rslc_b_stmt(sb->b, rslc_b_for(sb->b, init,
+                                sb_bin(sb, RSLC_B_LT, sb_ref(sb, i),
+                                       sb_i(sb, static_cast<int32_t>(samples))),
+                                sb_un(sb, RSLC_B_POSTINC, sb_ref(sb, i)), body));
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildClearVertexShader(struct shader_build* sb, const void* /* arg */)
+{
+  static const char* const names[2] = {"clear_color", "clear_depth"};
+  const struct rslc_type* types[2];
+  struct rslc_var* m[2];
+  struct rslc_var* coord;
+  struct fb_vertex vx;
+  uint32_t x, y;
+  types[0] = sb->f[4];
+  types[1] = sb->f[1];
+  fb_ps_block(sb, types, names, 2, m);
+  fb_vertex_decl(sb, 0, false, 0, 1, &vx);
+  fb_main(sb);
+  fb_quad_xy(sb, &x, &y);
+  coord = rslc_b_local(sb->b, "coord", sb->f[2], sb_con(sb, sb->f[2], 2, x, y), false);
+  sb_set(sb, sb_bi(sb, "gl_Position"),
+         sb_con(sb, sb->f[4], 3, fb_quad_ndc(sb, sb_ref(sb, coord)), sb_ref(sb, m[1]),
+                sb_f(sb, 1.0)));
+  sb_set(sb, fb_vary_ref(sb, &vx.out, 0), sb_ref(sb, m[0]));
+  if (GetAPIType() == APIType::Vulkan)
+    fb_flip_y(sb);
+  return rslc_b_func_end(sb->b);
+}
+
+bool BuildEFBPokeVertexShader(struct shader_build* sb, const void* /* arg */)
+{
+  struct fb_vertex vx;
+  fb_vertex_decl(sb, 1, true, 0, 1, &vx);
+  fb_main(sb);
+  sb_set(sb, fb_vary_ref(sb, &vx.out, 0), sb_ref(sb, vx.rawcolor0));
+  sb_set(sb, sb_bi(sb, "gl_Position"),
+         sb_con(sb, sb->f[4], 2, sb_swz(sb, sb_ref(sb, vx.rawpos), "xyz"), sb_f(sb, 1.0)));
+  if (g_backend_info.bSupportsLargePoints)
+    sb_set(sb, sb_bi(sb, "gl_PointSize"), sb_swz(sb, sb_ref(sb, vx.rawpos), "w"));
+  if (GetAPIType() == APIType::Vulkan)
+    fb_flip_y(sb);
+  return rslc_b_func_end(sb->b);
+}
+
 }  // namespace FramebufferShaderGen
+

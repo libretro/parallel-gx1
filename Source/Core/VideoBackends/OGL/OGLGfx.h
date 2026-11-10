@@ -29,6 +29,8 @@ public:
   AbstractShader*
   CreateShaderFromSource(ShaderStage stage, ShaderCode* source,
                          std::string_view name);
+  AbstractShader* CreateShaderFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                        std::string_view name);
   AbstractShader* CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length,
                                                          std::string_view name);

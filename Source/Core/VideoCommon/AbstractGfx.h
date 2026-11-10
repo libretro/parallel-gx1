@@ -7,6 +7,7 @@
 #include "Common/MathUtil.h"
 
 #include "VideoCommon/RenderState.h"
+#include "VideoCommon/ShaderBuild.h"
 
 #include <array>
 #include <memory>
@@ -131,6 +132,9 @@ public:
   {
     return CreateShaderFromSource(stage, &source, name);
   }
+  /* A stage fn builds by calls, compiled for the backend; arg is fn's. */
+  AbstractShader* CreateShaderFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                        std::string_view name = "");
   AbstractShader* CreateShaderFromBinary(ShaderStage stage, const void* data,
                                                          size_t length, std::string_view name = "");
   NativeVertexFormat*

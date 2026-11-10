@@ -10,6 +10,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/GL/GLExtensions/GLExtensions.h"
 #include "VideoCommon/AbstractShader.h"
+#include "VideoCommon/ShaderBuild.h"
 #include "VideoCommon/ShaderText.h"
 
 class ShaderCode;
@@ -37,6 +38,9 @@ public:
   /* Takes the source's text: the shader keeps it for its link's messages. */
   static OGLShader* CreateFromSource(ShaderStage stage, ShaderCode* source,
                                                      std::string_view name);
+  /* A stage fn builds by calls, printed as the context's GLSL. */
+  static OGLShader* CreateFromBuild(ShaderStage stage, shader_build_fn fn, const void* arg,
+                                    std::string_view name);
 
 private:
   u64 m_id;

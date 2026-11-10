@@ -193,4 +193,32 @@ bool Compile(ShaderStage stage, ShaderCode* source, ShaderBinary* spirv)
   spirv->size = result.spirv_len * sizeof(uint32_t);
   return true;
 }
+bool CompileBuild(ShaderStage stage, shader_build_fn fn, const void* arg, ShaderBinary* spirv)
+{
+  char err[1024];
+  struct rslc_opts opts;
+  struct rslc_result result;
+  const enum rslc_stage rstage = stage == ShaderStage::Vertex   ? RSLC_STAGE_VERTEX :
+                                 stage == ShaderStage::Geometry ? RSLC_STAGE_GEOMETRY :
+                                 stage == ShaderStage::Pixel    ? RSLC_STAGE_FRAGMENT :
+                                                                  RSLC_STAGE_COMPUTE;
+  ShaderBinaryInit(spirv);
+  memset(&opts, 0, sizeof(opts));
+  opts.dst = RSLC_DST_SPIRV;
+  opts.err = err;
+  opts.err_cap = sizeof(err);
+  STUTTER_MARK(t);
+  if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, 0, &opts, &result))
+  {
+    ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
+    return false;
+  }
+  STUTTER_EMIT_SINCE(t, result.spirv_len);
+  /* the result block is kept whole: the words point into it */
+  spirv->block = result.blob;
+  spirv->release = shader_arena_blob_release;
+  spirv->code = reinterpret_cast<const u8*>(result.spirv);
+  spirv->size = result.spirv_len * sizeof(uint32_t);
+  return true;
+}
 }  // namespace Vulkan::ShaderCompiler

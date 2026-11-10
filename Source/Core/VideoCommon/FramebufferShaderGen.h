@@ -9,17 +9,23 @@
 enum class EFBReinterpretType;
 enum class TextureFormat;
 
+struct shader_build;
+
 namespace FramebufferShaderGen
 {
-ShaderCode GenerateScreenQuadVertexShader();
-ShaderCode GeneratePassthroughGeometryShader(u32 num_tex, u32 num_colors);
-ShaderCode GenerateTextureCopyVertexShader();
-ShaderCode GenerateTextureCopyPixelShader();
-ShaderCode GenerateResolveColorPixelShader(u32 samples);
-ShaderCode GenerateResolveDepthPixelShader(u32 samples);
-ShaderCode GenerateClearVertexShader();
-ShaderCode GenerateEFBPokeVertexShader();
-ShaderCode GenerateColorPixelShader();
+/* Stages built by calls: for AbstractGfx::CreateShaderFromBuild. */
+bool BuildScreenQuadVertexShader(struct shader_build* sb, const void* arg);
+/* arg: u32[2], the texture and color varyings */
+bool BuildPassthroughGeometryShader(struct shader_build* sb, const void* arg);
+bool BuildTextureCopyVertexShader(struct shader_build* sb, const void* arg);
+bool BuildTextureCopyPixelShader(struct shader_build* sb, const void* arg);
+/* arg: u32, the samples */
+bool BuildResolveColorPixelShader(struct shader_build* sb, const void* arg);
+bool BuildResolveDepthPixelShader(struct shader_build* sb, const void* arg);
+bool BuildClearVertexShader(struct shader_build* sb, const void* arg);
+bool BuildEFBPokeVertexShader(struct shader_build* sb, const void* arg);
+bool BuildColorPixelShader(struct shader_build* sb, const void* arg);
+
 ShaderCode GenerateFormatConversionShader(EFBReinterpretType convtype, u32 samples);
 ShaderCode GenerateTextureReinterpretShader(TextureFormat from_format, TextureFormat to_format);
 ShaderCode GenerateEFBRestorePixelShader();

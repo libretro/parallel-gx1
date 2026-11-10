@@ -658,8 +658,10 @@ bool FramebufferManager::CompileReadbackPipelines()
 
   if (IsEFBMultisampled())
   {
-    AbstractShader* const depth_resolve_shader = g_gfx->CreateShaderFromSource(
-        ShaderStage::Pixel, FramebufferShaderGen::GenerateResolveDepthPixelShader(GetEFBSamples()), "Depth resolve pixel shader");
+    const u32 samples = GetEFBSamples();
+    AbstractShader* const depth_resolve_shader = g_gfx->CreateShaderFromBuild(
+        ShaderStage::Pixel, FramebufferShaderGen::BuildResolveDepthPixelShader, &samples,
+        "Depth resolve pixel shader");
     if (!depth_resolve_shader)
       return false;
 
@@ -672,9 +674,8 @@ bool FramebufferManager::CompileReadbackPipelines()
     if (!g_backend_info.bSupportsPartialMultisampleResolve)
     {
       config.framebuffer_state.color_texture_format = GetEFBColorFormat();
-      AbstractShader* const color_resolve_shader = g_gfx->CreateShaderFromSource(
-          ShaderStage::Pixel,
-          FramebufferShaderGen::GenerateResolveColorPixelShader(GetEFBSamples()),
+      AbstractShader* const color_resolve_shader = g_gfx->CreateShaderFromBuild(
+          ShaderStage::Pixel, FramebufferShaderGen::BuildResolveColorPixelShader, &samples,
           "Color resolve pixel shader");
       if (!color_resolve_shader)
         return false;
@@ -912,8 +913,8 @@ void FramebufferManager::ClearEFB(const MathUtil::Rectangle<int>& rc, bool color
 
 bool FramebufferManager::CompileClearPipelines()
 {
-  AbstractShader* const vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateClearVertexShader(),
+  AbstractShader* const vertex_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Vertex, FramebufferShaderGen::BuildClearVertexShader, nullptr,
       "Clear vertex shader");
   if (!vertex_shader)
     return false;
@@ -1103,8 +1104,8 @@ bool FramebufferManager::CompilePokePipelines()
   if (!m_poke_vertex_format)
     return false;
 
-  AbstractShader* const poke_vertex_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Vertex, FramebufferShaderGen::GenerateEFBPokeVertexShader(),
+  AbstractShader* const poke_vertex_shader = g_gfx->CreateShaderFromBuild(
+      ShaderStage::Vertex, FramebufferShaderGen::BuildEFBPokeVertexShader, nullptr,
       "EFB poke vertex shader");
   if (!poke_vertex_shader)
     return false;
