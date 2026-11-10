@@ -14,7 +14,6 @@
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/Host.h"
@@ -64,8 +63,8 @@ void SetActiveCodes(std::span<const GeckoCode> gcodes, const std::string& game_i
   {
     s_active_codes.reserve(gcodes.size());
 
-    const auto should_be_activated = [&game_id, &revision](const GeckoCode& code) {
-      return AchievementManager::GetInstance().ShouldGeckoCodeBeActivated(code, game_id, revision);
+    const auto should_be_activated = [](const GeckoCode& code) {
+      return code.enabled;
     };
     std::copy_if(gcodes.begin(), gcodes.end(), std::back_inserter(s_active_codes),
                  should_be_activated);

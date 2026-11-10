@@ -36,7 +36,6 @@
 #include "Common/MsgHandler.h"
 
 #include "Core/ARDecrypt.h"
-#include "Core/AchievementManager.h"
 #include "Core/CheatCodes.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/PatchEngine.h"
@@ -120,8 +119,8 @@ void ApplyCodes(std::span<const ARCode> codes, const std::string& game_id, u16 r
   s_disable_logging = false;
   s_active_codes.clear();
 
-  const auto should_be_activated = [&game_id, &revision](const ARCode& code) {
-    return AchievementManager::GetInstance().ShouldARCodeBeActivated(code, game_id, revision);
+  const auto should_be_activated = [](const ARCode& code) {
+    return code.enabled;
   };
   std::copy_if(codes.begin(), codes.end(), std::back_inserter(s_active_codes), should_be_activated);
   s_active_codes.shrink_to_fit();

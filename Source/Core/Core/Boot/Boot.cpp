@@ -27,7 +27,6 @@
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/Boot/DolReader.h"
 #include "Core/Boot/ElfReader.h"
 #include "Core/CommonTitles.h"
@@ -435,7 +434,6 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       NOTICE_LOG_FMT(BOOT, "Booting from disc: {}", disc.path);
       const DiscIO::VolumeDisc* volume =
           SetDisc(system.GetDVDInterface(), std::move(disc.volume), disc.auto_disc_change_paths);
-      AchievementManager::GetInstance().LoadGame(volume);
 
       if (!volume)
         return false;
@@ -492,7 +490,6 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
         return false;
       }
 
-      AchievementManager::GetInstance().LoadGame(nullptr);
 
       SConfig::OnTitleDirectlyBooted(guard);
 
@@ -515,7 +512,6 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       if (!Boot_WiiWAD(system, wad))
         return false;
 
-      AchievementManager::GetInstance().LoadGame(&wad);
 
       SConfig::OnTitleDirectlyBooted(guard);
       return true;
@@ -527,7 +523,6 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       if (!BootNANDTitle(system, nand_title.id))
         return false;
 
-      AchievementManager::GetInstance().LoadGame(nullptr);
 
       SConfig::OnTitleDirectlyBooted(guard);
       return true;
@@ -548,16 +543,13 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       if (!Load_BS2(system, ipl.path))
         return false;
 
-      const DiscIO::VolumeDisc* volume = nullptr;
       if (ipl.disc)
       {
         NOTICE_LOG_FMT(BOOT, "Inserting disc: {}", ipl.disc->path);
 
-        volume = SetDisc(system.GetDVDInterface(), DiscIO::CreateDiscForCore(ipl.disc->path),
-                         ipl.disc->auto_disc_change_paths);
+        SetDisc(system.GetDVDInterface(), DiscIO::CreateDiscForCore(ipl.disc->path),
+                ipl.disc->auto_disc_change_paths);
       }
-
-      AchievementManager::GetInstance().LoadGame(volume);
 
       SConfig::OnTitleDirectlyBooted(guard);
       return true;
@@ -566,7 +558,6 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
     bool operator()(const BootParameters::DFF& dff) const
     {
       NOTICE_LOG_FMT(BOOT, "Booting DFF: {}", dff.dff_path);
-      AchievementManager::GetInstance().LoadGame(nullptr);
       return system.GetFifoPlayer().Open(dff.dff_path);
     }
 

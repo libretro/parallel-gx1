@@ -14,7 +14,6 @@
 #include "Common/Logging/Log.h"
 
 
-#include "Core/AchievementManager.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/SYSCONFSettings.h"
@@ -194,12 +193,6 @@ void VideoInterfaceManager::RefreshConfig()
   m_config_lock_cursor = Config::Get(Config::MAIN_LOCK_CURSOR);
   m_config_vi_oc_factor =
       Config::Get(Config::MAIN_VI_OVERCLOCK_ENABLE) ? Config::Get(Config::MAIN_VI_OVERCLOCK) : 1.0f;
-  if (AchievementManager::GetInstance().IsHardcoreModeActive() && m_config_vi_oc_factor < 1.0f)
-  {
-    Config::SetCurrent(Config::MAIN_VI_OVERCLOCK, 1.0f);
-    m_config_vi_oc_factor = 1.0f;
-    Core::DisplayMessage("Minimum VBI frequency is 100% in Hardcore Mode");
-  }
   UpdateRefreshRate();
 }
 

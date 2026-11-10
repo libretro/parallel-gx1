@@ -32,7 +32,6 @@
 #include "Common/Version.h"
 #include "Common/WorkQueueThread.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
@@ -255,12 +254,6 @@ static bool CheckIfStateLoadIsAllowed(Core::System& system)
 {
   if (!Core::IsRunningOrStarting(system))
     return false;
-
-  if (AchievementManager::GetInstance().IsHardcoreModeActive())
-  {
-    Core::DisplayMessage("Loading savestates is disabled in RetroAchievements hardcore mode");
-    return false;
-  }
 
   return true;
 }

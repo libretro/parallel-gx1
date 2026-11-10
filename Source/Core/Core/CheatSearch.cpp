@@ -17,7 +17,6 @@
 #include "Common/Assert.h"
 #include "Common/StringUtil.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
 #include "Core/PowerPC/MMU.h"
@@ -116,8 +115,6 @@ auto Cheats::NewSearch(const Core::CPUThreadGuard& guard,
                        const std::function<bool(const T& value)>& validator)
     -> std::expected<std::vector<SearchResult<T>>, SearchErrorCode>
 {
-  if (AchievementManager::GetInstance().IsHardcoreModeActive())
-    return std::unexpected{Cheats::SearchErrorCode::DisabledInHardcoreMode};
   auto& system = guard.GetSystem();
   std::vector<Cheats::SearchResult<T>> results;
   const Core::State core_state = Core::GetState(system);
@@ -169,8 +166,6 @@ auto Cheats::NextSearch(
     const std::function<bool(const T& new_value, const T& old_value)>& validator)
     -> std::expected<std::vector<SearchResult<T>>, SearchErrorCode>
 {
-  if (AchievementManager::GetInstance().IsHardcoreModeActive())
-    return std::unexpected{Cheats::SearchErrorCode::DisabledInHardcoreMode};
   auto& system = guard.GetSystem();
   std::vector<Cheats::SearchResult<T>> results;
   const Core::State core_state = Core::GetState(system);
@@ -343,8 +338,6 @@ MakeCompareFunctionForLastValue(Cheats::CompareType op)
 template <typename T>
 Cheats::SearchErrorCode Cheats::CheatSearchSession<T>::RunSearch(const Core::CPUThreadGuard& guard)
 {
-  if (AchievementManager::GetInstance().IsHardcoreModeActive())
-    return Cheats::SearchErrorCode::DisabledInHardcoreMode;
   std::expected<std::vector<SearchResult<T>>, SearchErrorCode> result =
       std::unexpected{Cheats::SearchErrorCode::InvalidParameters};
   if (m_filter_type == FilterType::CompareAgainstSpecificValue)

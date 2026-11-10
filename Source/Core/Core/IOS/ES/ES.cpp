@@ -16,7 +16,6 @@
 #include "Common/NandPaths.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
-#include "Core/AchievementManager.h"
 #include "Core/CommonTitles.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -507,7 +506,6 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   if (!Core::IsRunning(system))
     return BootstrapPPC();
 
-  AchievementManager::GetInstance().LoadGame(nullptr);
 
   core_timing.RemoveEvent(s_bootstrap_ppc_for_launch_event);
   core_timing.ScheduleEvent(ticks, s_bootstrap_ppc_for_launch_event);

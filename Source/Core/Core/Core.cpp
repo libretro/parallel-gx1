@@ -38,7 +38,6 @@
 #include "Common/TimeUtil.h"
 #include "Common/Version.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
 #include "Core/CPUThreadConfigCallback.h"
@@ -227,7 +226,6 @@ void Stop(Core::System& system)  // - Hammertime!
 
   NotifyStateChanged(State::Stopping);
 
-  AchievementManager::GetInstance().CloseGame();
 
   // Dump left over jobs
   HostDispatchJobs(system);
@@ -775,7 +773,6 @@ void Callback_NewField(Core::System& system)
     NotifyStateChanged(Core::GetState(system));
   }
 
-  AchievementManager::GetInstance().DoFrame();
 
   // Sealed before the GPU loop is let go, so the retro_run this field ends finds it.
   SealFieldAudio(system);

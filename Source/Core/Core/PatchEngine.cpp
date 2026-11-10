@@ -22,7 +22,6 @@
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/ActionReplay.h"
 #include "Core/CheatCodes.h"
 #include "Core/Config/SessionSettings.h"

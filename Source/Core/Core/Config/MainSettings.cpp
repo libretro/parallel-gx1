@@ -17,7 +17,6 @@
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Common/Version.h"
-#include "Core/AchievementManager.h"
 #include "Core/Config/DefaultLocale.h"
 #include "Core/Core.h"
 #include "Core/HW/EXI/EXI.h"

@@ -27,7 +27,6 @@
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/Boot/Boot.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
@@ -148,7 +147,6 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot)
     }
   }
 
-  AchievementManager::GetInstance().CloseGame();
 
   // For Libretro we check for the IPL file here, the disc region is known by now
   // so we can easily get the correct path to check.

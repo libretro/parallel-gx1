@@ -23,7 +23,6 @@
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 
-#include "Core/AchievementManager.h"
 #include "Core/Boot/Boot.h"
 #include "Core/Config/DefaultLocale.h"
 #include "Core/Config/MainSettings.h"
@@ -292,7 +291,6 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
   if (!was_changed || game_id == "00000000")
     return;
 
-  AchievementManager::GetInstance().CloseGame();
 
   NOTICE_LOG_FMT(CORE, "Active title: {}", title_description);
   Host_TitleChanged();
