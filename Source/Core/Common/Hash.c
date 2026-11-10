@@ -3,9 +3,8 @@
 
 #include <string.h>
 
-#include <zlib.h>
-
 #include <encodings/crc32.h>
+#include <encodings/deflate.h>
 
 #include "Common/Hash.h"
 
@@ -31,8 +30,7 @@
 
 uint32_t common_hash_adler32(const uint8_t *data, size_t len)
 {
-   /* zlib-ng's */
-   return (uint32_t)adler32_z(1, data, len);
+   return encoding_adler32(1, data, len);
 }
 
 /* Stupid hash - but can't go back now :) Reasonably fast. */
@@ -319,12 +317,12 @@ uint64_t common_hash64(const uint8_t *src, uint32_t len, uint32_t samples)
 
 uint32_t common_crc32_start(void)
 {
-   return (uint32_t)crc32_z(0L, NULL, 0);
+   return 0;
 }
 
 uint32_t common_crc32_update(uint32_t crc, const uint8_t *data, size_t len)
 {
-   return (uint32_t)crc32_z(crc, data, len);
+   return encoding_crc32(crc, data, len);
 }
 
 uint32_t common_crc32_compute(const uint8_t *data, size_t len)

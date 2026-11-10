@@ -76,6 +76,7 @@ private:
   File::DirectIOFile m_file = {};
   u64 m_file_size = 0;
   std::vector<u8> m_zlib_buffer = {};
+  void* m_inflate = nullptr;  // libretro-common's rinflate, made once
   std::string m_file_name = {};
   bool m_valid = false;
 };

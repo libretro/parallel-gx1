@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include <zlib.h>
+#include <encodings/deflate.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -89,6 +89,8 @@ bool CompressedBlobReader::Initialize()
   // I still add some safety margin.
   const u32 zlib_buffer_size = m_header.block_size + 64;
   m_zlib_buffer.resize(zlib_buffer_size);
+  if (!(m_inflate = rinflate_new(15)))
+    return false;
 
   SetSectorSize(m_header.block_size);
 
@@ -110,7 +112,10 @@ std::unique_ptr<CompressedBlobReader> CompressedBlobReader::Create(File::DirectI
   return nullptr;
 }
 
-CompressedBlobReader::~CompressedBlobReader() = default;
+CompressedBlobReader::~CompressedBlobReader()
+{
+  rinflate_free(m_inflate);
+}
 
 std::unique_ptr<BlobReader> CompressedBlobReader::CopyReader() const
 {
@@ -181,25 +186,25 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   }
   else
   {
-    z_stream z = {};
-    z.next_in = m_zlib_buffer.data();
-    z.avail_in = read_size;
-    if (z.avail_in > m_header.block_size)
+    size_t read, wrote, uncomp_size = 0;
+    int status;
+    if (read_size > m_header.block_size)
     {
       ERROR_LOG_FMT(DISCIO, "Compressed block size is larger than uncompressed block size");
     }
-    z.next_out = out_ptr;
-    z.avail_out = m_header.block_size;
-    inflateInit(&z);
-    int status = inflate(&z, Z_FULL_FLUSH);
-    u32 uncomp_size = m_header.block_size - z.avail_out;
-    if (status != Z_STREAM_END)
+    rinflate_reset(m_inflate, 15);
+    rinflate_set_in(m_inflate, m_zlib_buffer.data(), read_size);
+    rinflate_set_out(m_inflate, out_ptr, m_header.block_size);
+    do
     {
-      // this seem to fire wrongly from time to time
-      // to be sure, don't use compressed isos :P
+      read = wrote = 0;
+      status = rinflate_process(m_inflate, &read, &wrote);
+      uncomp_size += wrote;
+    } while (status == RDEFLATE_PROCESS_NEXT && (read || wrote));
+    if (status != RDEFLATE_PROCESS_END)
+    {
       ERROR_LOG_FMT(DISCIO, "Failure reading block {} - out of data and not at end.", block_num);
     }
-    inflateEnd(&z);
     if (uncomp_size != m_header.block_size)
     {
       ERROR_LOG_FMT(DISCIO, "Wrong block size");

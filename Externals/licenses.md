@@ -66,7 +66,5 @@ Dolphin includes or links code of the following third-party software projects:
    [BSD 2-Clause](https://github.com/Cyan4973/xxHash/blob/master/LICENSE)
 - [YACardEmu](https://github.com/GXTX/YACardEmu)
    [GPLv2+](https://github.com/GXTX/YACardEmu/blob/master/license.txt)
-- [zlib-ng](https://github.com/zlib-ng/zlib-ng):
-   [zlib license](https://github.com/zlib-ng/zlib-ng/blob/develop/LICENSE.md)
 - [Zstandard](https://facebook.github.io/zstd/):
    [BSD 3-Clause](https://github.com/facebook/zstd/blob/dev/LICENSE) or [GPLv2](https://github.com/facebook/zstd/blob/dev/COPYING)

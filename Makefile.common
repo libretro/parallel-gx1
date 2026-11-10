@@ -21,32 +21,11 @@ SRC_DIR := $(CORE_DIR)/Source/Core
 # per-platform configure results (curl_config.h, the libusb, libiconv and
 # libcharset config.h, mGBA's flags.h) are checked in under
 # Externals/<library>/makefile instead.
-ZLIBNG_DIR      := $(EXT_DIR)/zlib-ng/zlib-ng
-ZLIBNG_GEN_DIR  := $(GEN_DIR)/Externals/zlib-ng/zlib-ng
 SCMREV_H        := $(GEN_DIR)/Source/Core/Common/scmrev.h
 MGBA_VERSION_C  := $(GEN_DIR)/Externals/mGBA/mgba/version.c
 
 GEN_HEADERS := \
-	$(SCMREV_H) \
-	$(ZLIBNG_GEN_DIR)/zlib.h \
-	$(ZLIBNG_GEN_DIR)/zconf.h \
-	$(ZLIBNG_GEN_DIR)/zlib_name_mangling.h
-
-$(ZLIBNG_GEN_DIR)/zlib.h: $(ZLIBNG_DIR)/zlib.h.in
-	@mkdir -p $(@D)
-	sed 's/@ZLIB_SYMBOL_PREFIX@//g' $< > $@
-
-$(ZLIBNG_GEN_DIR)/gzread.c: $(ZLIBNG_DIR)/gzread.c.in
-	@mkdir -p $(@D)
-	sed 's/@ZLIB_SYMBOL_PREFIX@//g' $< > $@
-
-$(ZLIBNG_GEN_DIR)/zconf.h: $(ZLIBNG_DIR)/zconf.h.in
-	@mkdir -p $(@D)
-	sed 's|^#ifdef HAVE_UNISTD_H .*$$|#if 1    /* was set to #if 1 by configure/cmake/etc */|' $< > $@
-
-$(ZLIBNG_GEN_DIR)/zlib_name_mangling.h: $(ZLIBNG_DIR)/zlib_name_mangling.h.empty
-	@mkdir -p $(@D)
-	cp $< $@
+	$(SCMREV_H)
 
 # scmrev.h and mGBA's version.c carry the revision the tree is at, so they
 # are rewritten at parse time, but only touched when their content changes.
@@ -98,7 +77,6 @@ MGBA_VERSION_STATUS := $(shell \
 # ----------------------------------------------------------------------------
 # Include sets shared by several libraries
 # ----------------------------------------------------------------------------
-ZLIB_INC  := -I$(ZLIBNG_GEN_DIR) -I$(ZLIBNG_DIR)
 ZSTD_INC  := -I$(EXT_DIR)/zstd/zstd/lib
 LZMA_INC  := -I$(EXT_DIR)/liblzma/api
 MGBA_INC  := -I$(EXT_DIR)/mGBA/mgba/include -I$(EXT_DIR)/mGBA/makefile
@@ -666,72 +644,6 @@ LZMA_SOURCES_C += \
 	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_open_stdxxx.c \
 	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_physmem.c \
 	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_progname.c
-
-# ZLIB
-ZLIB_SOURCES_C :=
-ZLIB_SOURCES_CXX :=
-ZLIB_SOURCES_ASM :=
-ZLIB_SOURCES_OBJCXX :=
-ZLIB_SOURCES_C += \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/adler32.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/adler32_fold.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/chunkset.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/compare256.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/compress.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/cpu_features.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/crc32_braid.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/crc32_braid_comb.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/crc32_fold.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate_fast.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate_huff.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate_medium.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate_quick.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate_rle.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate_slow.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/deflate_stored.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/functable.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/infback.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/inffast.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/inflate.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/inftrees.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/insert_string.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/insert_string_roll.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/slide_hash.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/trees.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/uncompr.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/zutil.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/gzlib.c \
-	$(GEN_DIR)/Externals/zlib-ng/zlib-ng/gzread.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/gzwrite.c
-ifeq ($(ARCH_X86_64),1)
-   ZLIB_SOURCES_C += \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/x86_features.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/slide_hash_avx2.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/chunkset_avx.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/compare256_avx2.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/adler32_avx2.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/adler32_avx512.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/adler32_avx512_vnni.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/chunkset_sse41.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/adler32_sse42.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/insert_string_sse42.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/chunkset_sse2.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/compare256_sse2.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/slide_hash_sse2.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/adler32_ssse3.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/x86/crc32_fold_pclmulqdq.c
-endif
-ifeq ($(ARCH_ARM64),1)
-   ZLIB_SOURCES_C += \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/arm/arm_features.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/arm/crc32_acle.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/arm/insert_string_acle.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/arm/adler32_neon.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/arm/chunkset_neon.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/arm/compare256_neon.c \
-	$(CORE_DIR)/Externals/zlib-ng/zlib-ng/arch/arm/slide_hash_neon.c
-endif
 
 # LZ4
 LZ4_SOURCES_C :=
@@ -1790,36 +1702,13 @@ ifneq ($(OS_WIN),1)
    LZMA_FLAGS += -DHAVE_WCWIDTH=1
 endif
 
-ZLIB_FLAGS  := -w -O2 -DHAVE_BUILTIN_CTZ -DHAVE_BUILTIN_CTZLL -DWITH_GZFILEOP -DZLIB_COMPAT \
-	-D_LARGEFILE64_SOURCE=1 -D__USE_LARGEFILE64 $(ZLIB_INC)
-ZLIB_CFLAGS := -std=c11
-ifneq ($(OS_WIN),1)
-   ZLIB_FLAGS += -DHAVE_POSIX_MEMALIGN -DHAVE_VISIBILITY_HIDDEN -DHAVE_VISIBILITY_INTERNAL
-endif
-ifneq (,$(filter 1,$(OS_UNIX) $(OS_ANDROID)))
-   ZLIB_FLAGS += -DHAVE_SYS_AUXV_H
-endif
-ifeq ($(ARCH_X86_64),1)
-   ZLIB_FLAGS += -DX86_FEATURES -DX86_MASK_INTRIN -DX86_SSE2 -DX86_SSE2_CHUNKSET \
-	-DX86_SSE2_SLIDEHASH -DX86_SSSE3 -DX86_SSSE3_ADLER32 -DX86_SSE41 \
-	-DX86_SSE42_ADLER32 -DX86_SSE42_CRC_HASH -DX86_SSE42_CRC_INTRIN \
-	-DX86_PCLMULQDQ_CRC -DX86_AVX2 -DX86_AVX2_ADLER32 -DX86_AVX_CHUNKSET \
-	-DX86_AVX512 -DX86_AVX512_ADLER32 -DX86_AVX512VNNI -DX86_AVX512VNNI_ADLER32
-else ifeq ($(ARCH_ARM64),1)
-   ZLIB_FLAGS += -DARM_FEATURES -DARM_ACLE_CRC_HASH -DARM_NEON -DARM_NEON_ADLER32 \
-	-DARM_NEON_CHUNKSET -DARM_NEON_HASLD4 -DARM_NEON_SLIDEHASH
-   ifeq ($(OS_UNIX),1)
-      ZLIB_FLAGS += -DARM_AUXV_HAS_CRC32
-   endif
-endif
-
 LZ4_FLAGS := -w -DXXH_NAMESPACE=LZ4_ -I$(EXT_DIR)/lz4/lz4/lib
 
 MGBA_FLAGS := -w -DBUILD_STATIC -DDISABLE_THREADING -DENABLE_DIRECTORIES -DENABLE_VFS \
-	-DENABLE_VFS_FD -DHAVE_CRC32 -DHAVE_SETLOCALE -DHAVE_STRDUP -DHAVE_VASPRINTF \
+	-DENABLE_VFS_FD -DHAVE_SETLOCALE -DHAVE_STRDUP -DHAVE_VASPRINTF \
 	-DM_CORE_GB -DM_CORE_GBA -DUSE_LZMA -D_7ZIP_PPMD_SUPPPORT \
 	$(MGBA_INC) -I$(EXT_DIR)/mGBA/mgba/src -I$(EXT_DIR)/mGBA/mgba/src/third-party/lzma \
-	$(ZLIB_INC) -fwrapv
+	-fwrapv
 MGBA_CFLAGS := -std=c11
 ifneq ($(OS_WIN),1)
    MGBA_FLAGS += -DHAVE_FREELOCALE -DHAVE_FUTIMENS -DHAVE_LOCALE -DHAVE_LOCALTIME_R \
@@ -1859,7 +1748,7 @@ CPPIPC_CXXFLAGS := -std=gnu++17
 
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
-	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
+	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA \
 	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC \
 	-DCURL_STATICLIB \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
@@ -1869,7 +1758,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/Vulkan-Headers/include \
 	-I$(EXT_DIR)/fmt/fmt/include \
 	-I$(EXT_DIR)/mbedtls/include \
-	$(ZLIB_INC) $(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
+	$(LZMA_INC) $(ZSTD_INC) $(ICONV_INC) \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
 	$(MGBA_INC) \
@@ -1906,22 +1795,7 @@ ifeq ($(OS_WIN),1)
    FILE_FLAGS_$(abspath $(SRC_DIR)/Common/FilesystemWatcher.cpp) := -fexceptions
 endif
 ifeq ($(ARCH_X86_64),1)
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/slide_hash_avx2.c) := -mavx2
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/chunkset_avx.c) := -mavx2
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/compare256_avx2.c) := -mavx2
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/adler32_avx2.c) := -mavx2
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/adler32_avx512.c) := -mavx512f -mavx512dq -mavx512bw -mavx512vl -mtune=cascadelake
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/adler32_avx512_vnni.c) := -mavx512f -mavx512dq -mavx512bw -mavx512vl -mavx512vnni -mtune=cascadelake
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/chunkset_sse41.c) := -msse4.1
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/adler32_sse42.c) := -msse4.2
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/insert_string_sse42.c) := -msse4.2
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/adler32_ssse3.c) := -mssse3
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/x86/crc32_fold_pclmulqdq.c) := -mssse3 -msse4.2 -mpclmul
 else ifeq ($(ARCH_ARM64),1)
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/arm/adler32_neon.c) := -march=armv8-a+simd
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/arm/chunkset_neon.c) := -march=armv8-a+simd
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/arm/compare256_neon.c) := -march=armv8-a+simd
-   FILE_FLAGS_$(abspath $(ZLIBNG_DIR)/arch/arm/slide_hash_neon.c) := -march=armv8-a+simd
    FILE_FLAGS_$(abspath $(SRC_DIR)/Common/Crypto/AES.cpp) := -march=armv8-a+crypto
    FILE_FLAGS_$(abspath $(SRC_DIR)/Common/Crypto/SHA1.cpp) := -march=armv8-a+crypto
 endif
@@ -1935,7 +1809,7 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zlib.c) := $(L
 FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zstd.c) := $(LRC_ARCHIVE_FLAGS)
 
 # Libraries in link order; the optional ones only where they are built.
-LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS ZSTD ZLIB LZMA BZIP2 LZ4 LZO \
+LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS ZSTD LZMA BZIP2 LZ4 LZO \
 	MGBA SFML FMT PUGIXML FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB
