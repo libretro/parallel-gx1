@@ -22,17 +22,17 @@ DSPDisassembler::DSPDisassembler(const AssemblerSettings& settings) : settings_(
 {
 }
 
-bool DSPDisassembler::Disassemble(std::span<const u16> code, std::string& text)
+bool DSPDisassembler::Disassemble(const u16* code, size_t size, std::string& text)
 {
-  if (code.size() > std::numeric_limits<u16>::max())
+  if (size > std::numeric_limits<u16>::max())
   {
     text.append("; code too large for 16-bit addressing\n");
     return false;
   }
 
-  for (u16 pc = 0; pc < code.size();)
+  for (u16 pc = 0; pc < size;)
   {
-    bool failed = !DisassembleOpcode(code, &pc, text);
+    bool failed = !DisassembleOpcode(code, size, &pc, text);
     text.append("\n");
     if (failed)
       return false;
@@ -137,11 +137,6 @@ std::string DSPDisassembler::DisassembleParameters(const DSPOPCTemplate& opc, u1
   }
 
   return buf;
-}
-
-bool DSPDisassembler::DisassembleOpcode(std::span<const u16> code, u16* pc, std::string& dest)
-{
-  return DisassembleOpcode(code.data(), code.size(), pc, dest);
 }
 
 bool DSPDisassembler::DisassembleOpcode(const u16* binbuf, size_t binbuf_size, u16* pc,

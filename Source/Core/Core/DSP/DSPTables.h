@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <string_view>
 
 #include "Core/DSP/DSPCommon.h"
 #include "Core/DSP/DSPCore.h"
@@ -95,16 +94,12 @@ extern const std::array<pdlabel_t, 96> pdlabels;
 
 std::string pdname(u16 val);
 std::string pdregname(int val);
-std::string pdregnamelong(int val);
 
 void InitInstructionTable();
 
-// Used by the assembler and disassembler for info retrieval.
+// Used by the disassembler for info retrieval.
 const DSPOPCTemplate* FindOpInfoByOpcode(UDSPInstruction opcode);
-const DSPOPCTemplate* FindOpInfoByName(std::string_view name);
-
 const DSPOPCTemplate* FindExtOpInfoByOpcode(UDSPInstruction opcode);
-const DSPOPCTemplate* FindExtOpInfoByName(std::string_view name);
 
 // Used by the interpreter and JIT for instruction emulation
 const DSPOPCTemplate* GetOpTemplate(UDSPInstruction inst);

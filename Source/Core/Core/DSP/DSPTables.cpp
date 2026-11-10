@@ -510,23 +510,12 @@ std::string pdregname(int val)
   return regnames[val].name;
 }
 
-std::string pdregnamelong(int val)
-{
-  return regnames[val].description;
-}
-
 namespace
 {
 constexpr size_t OPTABLE_SIZE = 0xffff + 1;
 constexpr size_t EXT_OPTABLE_SIZE = 0xff + 1;
 std::array<const DSPOPCTemplate*, OPTABLE_SIZE> s_op_table;
 std::array<const DSPOPCTemplate*, EXT_OPTABLE_SIZE> s_ext_op_table;
-
-template <size_t N>
-auto FindByName(std::string_view name, const std::array<DSPOPCTemplate, N>& data)
-{
-  return std::ranges::find(data, name, &DSPOPCTemplate::name);
-}
 }  // Anonymous namespace
 
 const DSPOPCTemplate* FindOpInfoByOpcode(UDSPInstruction opcode)
@@ -538,27 +527,9 @@ const DSPOPCTemplate* FindOpInfoByOpcode(UDSPInstruction opcode)
   return &*iter;
 }
 
-const DSPOPCTemplate* FindOpInfoByName(std::string_view name)
-{
-  const auto iter = FindByName(name, s_opcodes);
-  if (iter == s_opcodes.cend())
-    return nullptr;
-
-  return &*iter;
-}
-
 const DSPOPCTemplate* FindExtOpInfoByOpcode(UDSPInstruction opcode)
 {
   const auto iter = FindByOpcode(opcode, s_opcodes_ext);
-  if (iter == s_opcodes_ext.cend())
-    return nullptr;
-
-  return &*iter;
-}
-
-const DSPOPCTemplate* FindExtOpInfoByName(std::string_view name)
-{
-  const auto iter = FindByName(name, s_opcodes_ext);
   if (iter == s_opcodes_ext.cend())
     return nullptr;
 

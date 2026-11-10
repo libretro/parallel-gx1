@@ -1159,7 +1159,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/Debugger/Debugger_SymbolMap.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAccelerator.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPAnalyzer.cpp \
-	$(CORE_DIR)/Source/Core/Core/DSP/DSPAssembler.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPCaptureLogger.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPCodeUtil.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/DSPCore.cpp \
@@ -1177,7 +1176,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/DSP/Interpreter/DSPIntMultiplier.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/Interpreter/DSPIntTables.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/Jit/DSPEmitterBase.cpp \
-	$(CORE_DIR)/Source/Core/Core/DSP/LabelMap.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSPEmulator.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoDataFile.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoPlayer.cpp \
