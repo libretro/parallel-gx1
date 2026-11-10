@@ -114,7 +114,7 @@ Result<FileHandle> HostFileSystem::OpenFile(Uid, Gid, const std::string& path, M
   if (!handle)
     return std::unexpected{ResultCode::NoFreeHandle};
 
-  const std::string host_path = BuildFilename(path).host_path;
+  const std::string host_path = BuildFilename(path);
   if (File::IsDirectory(host_path))
   {
     *handle = Handle{};

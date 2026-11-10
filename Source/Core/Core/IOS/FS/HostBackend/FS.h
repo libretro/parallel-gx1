@@ -19,7 +19,7 @@ namespace IOS::HLE::FS
 class HostFileSystem final : public FileSystem
 {
 public:
-  HostFileSystem(std::string root_path, std::vector<NandRedirect> nand_redirects = {});
+  explicit HostFileSystem(std::string root_path);
   ~HostFileSystem() override;
 
   void DoState(PointerWrap& p) override;
@@ -54,7 +54,6 @@ public:
   Result<DirectoryStats> GetDirectoryStats(const std::string& path) override;
   Result<ExtendedDirectoryStats> GetExtendedDirectoryStats(const std::string& path) override;
 
-  void SetNandRedirects(std::vector<NandRedirect> nand_redirects) override;
 
 private:
   struct FstEntry
@@ -98,12 +97,7 @@ private:
   Handle* GetHandleFromFd(Fd fd);
   Fd ConvertHandleToFd(const Handle* handle) const;
 
-  struct HostFilename
-  {
-    std::string host_path;
-    bool is_redirect;
-  };
-  HostFilename BuildFilename(const std::string& wii_path) const;
+  std::string BuildFilename(const std::string& wii_path) const;
   int OpenHostFile(const std::string& host_path);
   void ReleaseHostFile(int index);
 
@@ -133,9 +127,6 @@ private:
   std::string m_root_path;
   HostFile m_host_files[NUM_HANDLES];
   Handle m_handles[NUM_HANDLES];
-
-  FstEntry m_redirect_fst{};
-  std::vector<NandRedirect> m_nand_redirects;
 };
 
 }  // namespace IOS::HLE::FS

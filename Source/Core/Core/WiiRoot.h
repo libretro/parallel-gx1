@@ -3,14 +3,7 @@
 
 #pragma once
 
-#include <vector>
-
 class BootSessionData;
-
-namespace IOS::HLE::FS
-{
-struct NandRedirect;
-}
 
 namespace Core
 {
@@ -33,5 +26,4 @@ void RestoreWiiSettings(RestoreReason reason);
 void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data);
 void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data);
 
-const std::vector<IOS::HLE::FS::NandRedirect>& GetActiveNandRedirects();
 }  // namespace Core

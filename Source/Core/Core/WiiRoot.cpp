@@ -32,23 +32,7 @@ namespace Core
 namespace FS = IOS::HLE::FS;
 
 static std::string s_temp_wii_root;
-static std::string s_temp_redirect_root;
 static bool s_wii_root_initialized = false;
-static std::vector<IOS::HLE::FS::NandRedirect> s_nand_redirects;
-
-// When Temp NAND + Redirects are both active, we need to keep track of where each redirect path
-// should be copied back to after a successful session finish.
-struct TempRedirectPath
-{
-  std::string real_path;
-  std::string temp_path;
-};
-static std::vector<TempRedirectPath> s_temp_nand_redirects;
-
-const std::vector<IOS::HLE::FS::NandRedirect>& GetActiveNandRedirects()
-{
-  return s_nand_redirects;
-}
 
 static bool CopyBackupFile(const std::string& path_from, const std::string& path_to)
 {
@@ -138,13 +122,10 @@ void InitializeWiiRoot(bool use_temporary)
   if (use_temporary)
   {
     s_temp_wii_root = File::GetUserPath(D_USER_IDX) + "WiiSession" DIR_SEP;
-    s_temp_redirect_root = File::GetUserPath(D_USER_IDX) + "RedirectSession" DIR_SEP;
     WARN_LOG_FMT(IOS_FS, "Using temporary directory {} for minimal Wii FS", s_temp_wii_root);
-    WARN_LOG_FMT(IOS_FS, "Using temporary directory {} for redirected saves", s_temp_redirect_root);
 
     // If directory exists, make a backup
     MoveToBackupIfExists(s_temp_wii_root);
-    MoveToBackupIfExists(s_temp_redirect_root);
 
     File::SetUserPath(D_SESSION_WIIROOT_IDX, s_temp_wii_root);
   }
@@ -153,7 +134,6 @@ void InitializeWiiRoot(bool use_temporary)
     File::SetUserPath(D_SESSION_WIIROOT_IDX, File::GetUserPath(D_WIIROOT_IDX));
   }
 
-  s_nand_redirects.clear();
   s_wii_root_initialized = true;
 }
 
@@ -163,12 +143,8 @@ void ShutdownWiiRoot()
   {
     File::DeleteDirRecursively(s_temp_wii_root);
     s_temp_wii_root.clear();
-    File::DeleteDirRecursively(s_temp_redirect_root);
-    s_temp_redirect_root.clear();
-    s_temp_nand_redirects.clear();
   }
 
-  s_nand_redirects.clear();
   s_wii_root_initialized = false;
 }
 
@@ -284,18 +260,7 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
 
   INFO_LOG_FMT(CORE, "Wii FS Cleanup: Copying from temporary FS to configured_fs.");
 
-  // copy back the temp nand redirected files to where they should normally be redirected to
-  for (const auto& redirect : s_temp_nand_redirects)
-  {
-    File::CreateFullPath(redirect.real_path);
-    File::MoveWithOverwrite(redirect.temp_path, redirect.real_path);
-  }
-
   IOS::HLE::EmulationKernel* ios = Core::System::GetInstance().GetIOS();
-
-  // clear the redirects in the session FS, otherwise the back-copy might grab redirected files
-  s_nand_redirects.clear();
-  ios->GetFS()->SetNandRedirects({});
 
   const auto configured_fs = FS::MakeFileSystem(FS::Location::Configured);
 
