@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstring>
-#include <span>
 #include <string>
 
 #include <mbedtls/aes.h>
@@ -41,7 +40,7 @@ void SkylanderFigure::PopulateKeys()
   for (u8 sector = 0; sector < 0x10; sector++)
   {
     u16 key_offset = (sector * 64) + (3 * 16);
-    u64 key = CalculateKeyA(sector, std::span<u8, 4>(m_data.begin(), 4));
+    u64 key = CalculateKeyA(sector, m_data.data());
 
     for (u32 j = 0; j < 6; j++)
     {
@@ -80,7 +79,7 @@ void SkylanderFigure::GenerateIncompleteHashIn(u8* dest) const
 
   memcpy(dest, hash_in.data(), 0x56);
 }
-void SkylanderFigure::Encrypt(std::span<const u8, FIGURE_SIZE> input)
+void SkylanderFigure::Encrypt(const u8* input)
 {
   std::array<u8, 0x56> hash_in = {};
 
@@ -93,7 +92,7 @@ void SkylanderFigure::Encrypt(std::span<const u8, FIGURE_SIZE> input)
   // Run for every block
   for (u8 i = 0; i < 64; ++i)
   {
-    memcpy(current_block.data(), input.data() + (i * BLOCK_SIZE), BLOCK_SIZE);
+    memcpy(current_block.data(), input + (i * BLOCK_SIZE), BLOCK_SIZE);
 
     // Skip sector trailer and the first 8 blocks
     if (((i + 1) % 4 == 0) || i < 8)
@@ -352,7 +351,7 @@ void SkylanderFigure::SetData(FigureData* figure_data)
   }
 
   // Encrypt again
-  Encrypt(decrypted);
+  Encrypt(decrypted.data());
 
   Save();
 }

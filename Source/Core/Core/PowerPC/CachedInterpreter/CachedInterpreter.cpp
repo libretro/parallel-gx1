@@ -3,7 +3,6 @@
 
 #include "Core/PowerPC/CachedInterpreter/CachedInterpreter.h"
 
-#include <span>
 #include <sstream>
 #include <utility>
 

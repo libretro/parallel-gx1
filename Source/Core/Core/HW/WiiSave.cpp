@@ -158,13 +158,14 @@ public:
 
   bool WriteBkHeader(const BkHeader& bk_header) override { return true; }
 
-  bool WriteFiles(std::span<const SaveFile> files) override
+  bool WriteFiles(const SaveFile* files, size_t count) override
   {
     if (!m_uid || !m_gid)
       return false;
 
-    for (const SaveFile& file : files)
+    for (size_t i = 0; i < count; i++)
     {
+      const SaveFile& file = files[i];
       const FS::Modes modes = GetFsMode(file.mode);
       const std::string path = m_data_dir + '/' + file.path;
       if (file.type == SaveFile::Type::File)
@@ -390,13 +391,14 @@ public:
     return m_file.Seek(sizeof(Header), File::SeekOrigin::Begin) && m_file.WriteArray(&bk_header, 1);
   }
 
-  bool WriteFiles(std::span<const SaveFile> files) override
+  bool WriteFiles(const SaveFile* files, size_t count) override
   {
     if (!m_file.Seek(sizeof(Header) + sizeof(BkHeader), File::SeekOrigin::Begin))
       return false;
 
-    for (const SaveFile& save_file : files)
+    for (size_t i = 0; i < count; i++)
     {
+      const SaveFile& save_file = files[i];
       FileHDR file_hdr{};
       file_hdr.magic = FILE_HDR_MAGIC;
       file_hdr.permissions = save_file.mode;
@@ -533,7 +535,7 @@ CopyResult Copy(Storage* source, Storage* dest)
     return CopyResult::Error;
   }
 
-  if (!dest->WriteFiles(*files))
+  if (!dest->WriteFiles(files->data(), files->size()))
   {
     ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to write files");
     return CopyResult::Error;

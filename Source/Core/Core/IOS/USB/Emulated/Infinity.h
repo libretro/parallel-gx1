@@ -5,7 +5,6 @@
 
 #include <array>
 #include <queue>
-#include <span>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -102,7 +101,6 @@ public:
   std::string LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE>& buf,
                          File::IOFile in_file, FigureUIPosition position);
   bool CreateFigure(const std::string& file_path, u32 character);
-  static std::span<const std::pair<const char*, const u32>> GetFigureList();
   std::string FindFigure(u32 character) const;
 
 protected:

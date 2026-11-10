@@ -220,9 +220,9 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
   // can return ERROR_MORE_DATA on XP even after the first call
   while (result == NO_ERROR || result == ERROR_MORE_DATA)
   {
-    const std::span<MIB_IPFORWARDROW> table(forward_table->table, forward_table->dwNumEntries);
-    for (const auto& entry : table)
+    for (DWORD i = 0; i < forward_table->dwNumEntries; i++)
     {
+      const MIB_IPFORWARDROW& entry = forward_table->table[i];
       routing_table.emplace_back(entry.dwForwardIfIndex,
                                  std::bit_cast<in_addr>(entry.dwForwardDest),
                                  std::bit_cast<in_addr>(entry.dwForwardMask),

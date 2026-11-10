@@ -5,7 +5,6 @@
 
 #include <cstdio>
 #include <optional>
-#include <span>
 #include <sstream>
 #include <utility>
 

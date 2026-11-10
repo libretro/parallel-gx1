@@ -5,7 +5,6 @@
 
 #include <array>
 #include <bit>
-#include <span>
 #include <vector>
 
 #include "Common/BitUtils.h"
@@ -725,11 +724,6 @@ bool InfinityBase::CreateFigure(const std::string& file_path, u32 figure_num)
   inf_file.WriteBytes(file_data.data(), file_data.size());
 
   return true;
-}
-
-std::span<const std::pair<const char*, const u32>> InfinityBase::GetFigureList()
-{
-  return list_infinity_figures;
 }
 
 std::string InfinityBase::FindFigure(u32 number) const

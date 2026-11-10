@@ -186,7 +186,7 @@ static DRESULT vff_ioctl(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, BYTE cmd, voi
 
 namespace IOS::HLE::NWC24
 {
-static ErrorCode WriteFile(const std::string& filename, std::span<const u8> tmp_buffer)
+static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, size_t size)
 {
   FIL dst{};
   const auto open_error_code = f_open(&dst, filename.c_str(), FA_CREATE_ALWAYS | FA_WRITE);
@@ -196,7 +196,6 @@ static ErrorCode WriteFile(const std::string& filename, std::span<const u8> tmp_
     return WC24_ERR_FILE_OPEN;
   }
 
-  size_t size = tmp_buffer.size();
   size_t offset = 0;
   while (size > 0)
   {
@@ -205,7 +204,7 @@ static ErrorCode WriteFile(const std::string& filename, std::span<const u8> tmp_
 
     u32 written_size;
     const auto write_error_code =
-        f_write(&dst, tmp_buffer.data() + offset, chunk_size, &written_size);
+        f_write(&dst, tmp_buffer + offset, chunk_size, &written_size);
     if (write_error_code != FR_OK)
     {
       ERROR_LOG_FMT(IOS_WC24, "Failed to write file {} to VFF: {}", filename,
@@ -298,7 +297,7 @@ public:
 }  // namespace
 
 ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
-                     const std::shared_ptr<FS::FileSystem>& fs, std::span<const u8> data)
+                     const std::shared_ptr<FS::FileSystem>& fs, const u8* data, size_t size)
 {
   VffFatFsCallbacks callbacks;
   ErrorCode return_value;
@@ -336,7 +335,7 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
       return;
     }
 
-    const auto write_error_code = WriteFile(filename, data);
+    const auto write_error_code = WriteFile(filename, data, size);
     if (write_error_code != WC24_OK)
     {
       return_value = write_error_code;

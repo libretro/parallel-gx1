@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cmath>
 #include <ranges>
-#include <span>
 
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
@@ -118,17 +117,13 @@ long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
   if (!m_sampler.IsSampleOn() || m_sampler.IsMuted())
     return nframes;
 
-  std::span<const SampleType> buffer(input_buffer, nframes);
   const auto gain = ComputeGain(GetVolumeModifier());
-  const auto apply_gain = [gain](SampleType sample) {
-    return MathUtil::SaturatingCast<SampleType>(sample * gain);
-  };
-
   const bool are_samples_byte_swapped = AreSamplesByteSwapped();
   std::vector<SampleType> converted;
-  converted.reserve(buffer.size());
-  for (const SampleType le_sample : std::ranges::transform_view(buffer, apply_gain))
+  converted.reserve(nframes);
+  for (long i = 0; i < nframes; i++)
   {
+    const SampleType le_sample = MathUtil::SaturatingCast<SampleType>(input_buffer[i] * gain);
     UpdateLoudness(le_sample);
     converted.push_back(are_samples_byte_swapped ? Common::swap16(le_sample) : le_sample);
   }

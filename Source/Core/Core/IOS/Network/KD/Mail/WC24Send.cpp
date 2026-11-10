@@ -223,9 +223,9 @@ ErrorCode WC24SendList::AddRegistrationMessages(const WC24FriendList& friend_lis
 
     const std::string formatted_message =
         fmt::format(MAIL_REGISTRATION_STRING, sender, code, fmt::gmtime(t));
-    const std::span message{reinterpret_cast<const u8*>(formatted_message.data()),
-                            formatted_message.size()};
-    const ErrorCode reply = WriteToVFF(SEND_BOX_PATH, GetMailPath(entry_index), m_fs, message);
+    const ErrorCode reply = WriteToVFF(SEND_BOX_PATH, GetMailPath(entry_index), m_fs,
+                                       reinterpret_cast<const u8*>(formatted_message.data()),
+                                       formatted_message.size());
 
     if (reply != WC24_OK)
     {
@@ -236,11 +236,12 @@ ErrorCode WC24SendList::AddRegistrationMessages(const WC24FriendList& friend_lis
     NOTICE_LOG_FMT(IOS_WC24, "Issued registration message for Wii Friend: {}", code);
 
     // Update the header and some fields in the body
-    m_data.entries[entry_index].msg_size = Common::swap32(static_cast<u32>(message.size()));
+    m_data.entries[entry_index].msg_size =
+        Common::swap32(static_cast<u32>(formatted_message.size()));
     m_data.header.number_of_mail = Common::swap32(GetNumberOfMail() + 1);
     m_data.header.next_entry_id = Common::swap32(msg_id + 1);
-    m_data.header.total_size_of_messages =
-        Common::swap32(m_data.header.total_size_of_messages) + static_cast<u32>(message.size());
+    m_data.header.total_size_of_messages = Common::swap32(m_data.header.total_size_of_messages) +
+                                           static_cast<u32>(formatted_message.size());
 
     const std::optional<u32> next_entry_index = GetNextFreeEntryIndex();
     if (!next_entry_index)

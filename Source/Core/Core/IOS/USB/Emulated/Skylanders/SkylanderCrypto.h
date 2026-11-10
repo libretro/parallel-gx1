@@ -4,15 +4,16 @@
 #pragma once
 
 #include <array>
-#include <span>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 
 namespace IOS::HLE::USB::SkylanderCrypto
 {
-u16 ComputeCRC16(std::span<const u8> data);
-u64 ComputeCRC48(std::span<const u8> data);
-u64 CalculateKeyA(u8 sector, std::span<const u8, 0x4> nuid);
+u16 ComputeCRC16(const u8* data, size_t size);
+u64 ComputeCRC48(const u8* data, size_t size);
+// nuid: the figure's first 4 octets
+u64 CalculateKeyA(u8 sector, const u8* nuid);
 void ComputeChecksumType0(const u8* data_start, u8* output);
 void ComputeChecksumType1(const u8* data_start, u8* output);
 void ComputeChecksumType2(const u8* data_start, u8* output);

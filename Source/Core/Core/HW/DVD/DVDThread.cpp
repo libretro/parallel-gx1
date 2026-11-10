@@ -7,7 +7,6 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <span>
 #include <utility>
 #include <vector>
 
@@ -329,8 +328,7 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
     if (request.copy_to_ram)
       m_system.GetMemory().CopyToEmu(request.output_address, data, request.length);
     m_system.GetDVDInterface().FinishExecutingCommand(
-        request.reply_type, DVD::DIInterruptType::TCINT, cycles_late,
-        std::span<const u8>(data, request.length));
+        request.reply_type, DVD::DIInterruptType::TCINT, cycles_late, data, request.length);
     return;
   }
 
@@ -389,8 +387,7 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
   }
 
   // Notify the emulated software that the command has been executed
-  dvd_interface.FinishExecutingCommand(request.reply_type, interrupt, cycles_late,
-                                       std::span<const u8>(data, size));
+  dvd_interface.FinishExecutingCommand(request.reply_type, interrupt, cycles_late, data, size);
 
   if (node)
     mpsc_stack_push(&m_free_results, &node->link);

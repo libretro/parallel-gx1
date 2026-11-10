@@ -6,7 +6,7 @@
 #include <array>
 #include <memory>
 #include <optional>
-#include <span>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -171,17 +171,17 @@ public:
 
   // Used by DVDThread
   void FinishExecutingCommand(ReplyType reply_type, DIInterruptType interrupt_type, s64 cycles_late,
-                              std::span<const u8> data = {});
+                              const u8* data, size_t size);
 
   // Used by IOS HLE
   void SetInterruptEnabled(DIInterruptType interrupt, bool enabled);
   void ClearInterrupt(DIInterruptType interrupt);
 
 private:
-  void DTKStreamingCallback(DIInterruptType interrupt_type, std::span<const u8> audio_data,
-                            s64 cycles_late);
-  size_t ProcessDTKSamples(s16* target_samples, size_t target_block_count,
-                           const std::span<const u8> audio_data);
+  void DTKStreamingCallback(DIInterruptType interrupt_type, const u8* audio_data,
+                            size_t audio_size, s64 cycles_late);
+  size_t ProcessDTKSamples(s16* target_samples, size_t target_block_count, const u8* audio_data,
+                           size_t audio_size);
   u32 AdvanceDTK(u32 maximum_blocks, u32* blocks_to_process);
 
   void SetLidOpen();

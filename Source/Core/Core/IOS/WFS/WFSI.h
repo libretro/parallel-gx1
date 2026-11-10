@@ -5,7 +5,7 @@
 
 #include <functional>
 #include <memory>
-#include <span>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -23,9 +23,10 @@ public:
   ARCUnpacker() { Reset(); }
   void Reset();
 
-  void AddBytes(std::span<const u8> bytes);
+  void AddBytes(const u8* bytes, size_t size);
 
-  using WriteCallback = std::function<void(const std::string&, std::span<const u8>)>;
+  // a file's name and its octets, which stay valid until the callback returns
+  using WriteCallback = std::function<void(const std::string&, const u8*, size_t)>;
   void Extract(const WriteCallback& callback);
 
 private:

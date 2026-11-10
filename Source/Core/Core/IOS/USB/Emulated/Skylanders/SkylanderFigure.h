@@ -5,7 +5,6 @@
 
 #include <array>
 #include <optional>
-#include <span>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -77,7 +76,8 @@ private:
   void PopulateSectorTrailers();
   void PopulateKeys();
   void GenerateIncompleteHashIn(u8* dest) const;
-  void Encrypt(std::span<const u8, FIGURE_SIZE>);
+  // input: FIGURE_SIZE octets
+  void Encrypt(const u8* input);
 
   File::IOFile m_sky_file;
   std::array<u8, FIGURE_SIZE> m_data;

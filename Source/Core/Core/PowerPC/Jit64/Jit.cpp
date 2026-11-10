@@ -4,7 +4,6 @@
 #include "Core/PowerPC/Jit64/Jit.h"
 
 #include <map>
-#include <span>
 #include <sstream>
 #include <string>
 #include <utility>

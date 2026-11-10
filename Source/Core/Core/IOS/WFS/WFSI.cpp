@@ -43,9 +43,9 @@ void ARCUnpacker::Reset()
   m_whole_file.clear();
 }
 
-void ARCUnpacker::AddBytes(std::span<const u8> bytes)
+void ARCUnpacker::AddBytes(const u8* bytes, size_t size)
 {
-  m_whole_file.insert(m_whole_file.end(), bytes.begin(), bytes.end());
+  m_whole_file.insert(m_whole_file.end(), bytes, bytes + size);
 }
 
 void ARCUnpacker::Extract(const WriteCallback& callback)
@@ -87,9 +87,7 @@ void ARCUnpacker::Extract(const WriteCallback& callback)
     }
     else
     {
-      std::vector<u8> contents(m_whole_file.data() + data_offset,
-                               m_whole_file.data() + data_offset + size);
-      callback(fullname, contents);
+      callback(fullname, m_whole_file.data() + data_offset, size);
     }
   }
 }
@@ -232,7 +230,7 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
     m_aes_ctx->Crypt(m_aes_iv, m_aes_iv, memory.GetPointerForRange(input_ptr, input_size),
                      decrypted.data(), input_size);
 
-    m_arc_unpacker.AddBytes(decrypted);
+    m_arc_unpacker.AddBytes(decrypted.data(), decrypted.size());
     break;
   }
 
@@ -244,8 +242,8 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
                                  "IOCTL_WFSI_IMPORT_CONTENT_END";
     INFO_LOG_FMT(IOS_WFS, "{}", ioctl_name);
 
-    const auto callback = [this](const std::string& filename, std::span<const u8> bytes) {
-      INFO_LOG_FMT(IOS_WFS, "Extract: {} ({} bytes)", filename, bytes.size());
+    const auto callback = [this](const std::string& filename, const u8* bytes, size_t size) {
+      INFO_LOG_FMT(IOS_WFS, "Extract: {} ({} bytes)", filename, size);
 
       const std::string path = WFS::NativePath(m_base_extract_path + '/' + filename);
       File::CreateFullPath(path);
@@ -255,7 +253,7 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
         ERROR_LOG_FMT(IOS_WFS, "Could not extract {} to {}", filename, path);
         return;
       }
-      f.WriteBytes(bytes.data(), bytes.size());
+      f.WriteBytes(bytes, size);
     };
     m_arc_unpacker.Extract(callback);
 

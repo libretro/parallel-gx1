@@ -4,7 +4,6 @@
 #include "Core/IOS/USB/Emulated/Skylanders/SkylanderCrypto.h"
 
 #include <array>
-#include <span>
 
 #include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
@@ -12,13 +11,13 @@
 
 namespace IOS::HLE::USB::SkylanderCrypto
 {
-u16 ComputeCRC16(std::span<const u8> data)
+u16 ComputeCRC16(const u8* data, size_t size)
 {
   const u16 polynomial = 0x1021;
 
   u16 crc = 0xFFFF;
 
-  for (size_t i = 0; i < data.size(); ++i)
+  for (size_t i = 0; i < size; ++i)
   {
     crc ^= data[i] << 8;
 
@@ -38,13 +37,13 @@ u16 ComputeCRC16(std::span<const u8> data)
   return crc;
 }
 // CRC-64 algorithm that is limited to 48 bits every iteration
-u64 ComputeCRC48(std::span<const u8> data)
+u64 ComputeCRC48(const u8* data, size_t size)
 {
   const u64 polynomial = 0x42f0e1eba9ea3693;
   const u64 initial_register_value = 2ULL * 2ULL * 3ULL * 1103ULL * 12868356821ULL;
 
   u64 crc = initial_register_value;
-  for (size_t i = 0; i < data.size(); ++i)
+  for (size_t i = 0; i < size; ++i)
   {
     crc ^= (static_cast<u64>(data[i]) << 40);
     for (size_t j = 0; j < 8; ++j)
@@ -61,7 +60,7 @@ u64 ComputeCRC48(std::span<const u8> data)
   }
   return crc & 0x0000FFFFFFFFFFFF;
 }
-u64 CalculateKeyA(u8 sector, std::span<const u8, 0x4> nuid)
+u64 CalculateKeyA(u8 sector, const u8* nuid)
 {
   if (sector == 0)
   {
@@ -70,7 +69,7 @@ u64 CalculateKeyA(u8 sector, std::span<const u8, 0x4> nuid)
 
   std::array<u8, 5> data = {nuid[0], nuid[1], nuid[2], nuid[3], sector};
 
-  u64 big_endian_crc = ComputeCRC48(data);
+  u64 big_endian_crc = ComputeCRC48(data.data(), data.size());
   u64 little_endian_crc = Common::swap64(big_endian_crc) >> 16;
 
   return little_endian_crc;
@@ -79,7 +78,7 @@ void ComputeChecksumType0(const u8* data_start, u8* output)
 {
   std::array<u8, 0x1E> input = {};
   memcpy(input.data(), data_start, 0x1E);
-  u16 crc = ComputeCRC16(input);
+  u16 crc = ComputeCRC16(input.data(), input.size());
   memcpy(output, &crc, 2);
 }
 void ComputeChecksumType1(const u8* data_start, u8* output)
@@ -88,7 +87,7 @@ void ComputeChecksumType1(const u8* data_start, u8* output)
   memcpy(input.data(), data_start, 0x10);
   input[0xE] = 0x05;
   input[0xF] = 0x00;
-  u16 crc = ComputeCRC16(input);
+  u16 crc = ComputeCRC16(input.data(), input.size());
   memcpy(output, &crc, 2);
 }
 void ComputeChecksumType2(const u8* data_start, u8* output)
@@ -96,7 +95,7 @@ void ComputeChecksumType2(const u8* data_start, u8* output)
   std::array<u8, 0x30> input = {};
   memcpy(input.data(), data_start, 0x20);
   memcpy(input.data() + 0x20, data_start + 0x30, 0x10);
-  u16 crc = ComputeCRC16(input);
+  u16 crc = ComputeCRC16(input.data(), input.size());
   memcpy(output, &crc, 2);
 }
 void ComputeChecksumType3(const u8* data_start, u8* output)
@@ -104,7 +103,7 @@ void ComputeChecksumType3(const u8* data_start, u8* output)
   std::array<u8, 0x110> input = {};
   memcpy(input.data(), data_start, 0x20);
   memcpy(input.data() + 0x20, data_start + 0x30, 0x10);
-  u16 crc = ComputeCRC16(input);
+  u16 crc = ComputeCRC16(input.data(), input.size());
   memcpy(output, &crc, 2);
 }
 
@@ -117,7 +116,7 @@ void ComputeChecksumType6(const u8* data_start, u8* output)
   input[0x0] = 0x06;
   input[0x1] = 0x01;
 
-  u16 crc = ComputeCRC16(input);
+  u16 crc = ComputeCRC16(input.data(), input.size());
   memcpy(output, &crc, 2);
 }
 std::array<u8, 11> ComputeToyCode(u64 code)

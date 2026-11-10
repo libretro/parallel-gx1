@@ -129,10 +129,10 @@ void DVDInterface::DoState(PointerWrap& p)
 }
 
 size_t DVDInterface::ProcessDTKSamples(s16* target_samples, size_t target_block_count,
-                                       std::span<const u8> audio_data)
+                                       const u8* audio_data, size_t audio_size)
 {
   const size_t block_count_to_process =
-      std::min(target_block_count, audio_data.size() / StreamADPCM::ONE_BLOCK_SIZE);
+      std::min(target_block_count, audio_size / StreamADPCM::ONE_BLOCK_SIZE);
   size_t samples_processed = 0;
   size_t bytes_processed = 0;
   for (size_t i = 0; i < block_count_to_process; ++i)
@@ -187,8 +187,8 @@ u32 DVDInterface::AdvanceDTK(u32 maximum_blocks, u32* blocks_to_process)
   return bytes_to_process;
 }
 
-void DVDInterface::DTKStreamingCallback(DIInterruptType interrupt_type,
-                                        std::span<const u8> audio_data, s64 cycles_late)
+void DVDInterface::DTKStreamingCallback(DIInterruptType interrupt_type, const u8* audio_data,
+                                        size_t audio_size, s64 cycles_late)
 {
   auto& ai = m_system.GetAudioInterface();
 
@@ -213,7 +213,7 @@ void DVDInterface::DTKStreamingCallback(DIInterruptType interrupt_type,
     std::array<s16, MAX_POSSIBLE_SAMPLES * 2> temp_pcm{};
     ASSERT(m_pending_blocks <= MAX_POSSIBLE_BLOCKS);
     const u32 pending_blocks = std::min(m_pending_blocks, MAX_POSSIBLE_BLOCKS);
-    ProcessDTKSamples(temp_pcm.data(), pending_blocks, audio_data);
+    ProcessDTKSamples(temp_pcm.data(), pending_blocks, audio_data, audio_size);
 
     field_audio_mix_be_rl(FIELD_AUDIO_STREAM, temp_pcm.data(),
                           pending_blocks * StreamADPCM::SAMPLES_PER_BLOCK);
@@ -1276,7 +1276,8 @@ void DVDInterface::FinishExecutingCommandCallback(Core::System& system, u64 user
 {
   ReplyType reply_type = static_cast<ReplyType>(userdata >> 32);
   DIInterruptType interrupt_type = static_cast<DIInterruptType>(userdata & 0xFFFFFFFF);
-  system.GetDVDInterface().FinishExecutingCommand(reply_type, interrupt_type, cycles_late);
+  system.GetDVDInterface().FinishExecutingCommand(reply_type, interrupt_type, cycles_late, nullptr,
+                                                 0);
 }
 
 void DVDInterface::SetDriveState(DriveState state)
@@ -1290,14 +1291,14 @@ void DVDInterface::SetDriveError(DriveError error)
 }
 
 void DVDInterface::FinishExecutingCommand(ReplyType reply_type, DIInterruptType interrupt_type,
-                                          s64 cycles_late, std::span<const u8> data)
+                                          s64 cycles_late, const u8* data, size_t size)
 {
   // The data parameter contains the requested data iff this was called from DVDThread, and is
   // empty otherwise. DVDThread is the only source of ReplyType::NoReply and ReplyType::DTK.
 
   u32 transfer_size = 0;
   if (reply_type == ReplyType::NoReply)
-    transfer_size = static_cast<u32>(data.size());
+    transfer_size = static_cast<u32>(size);
   else if (reply_type == ReplyType::Interrupt || reply_type == ReplyType::IOS)
     transfer_size = m_DILENGTH;
 
@@ -1332,7 +1333,7 @@ void DVDInterface::FinishExecutingCommand(ReplyType reply_type, DIInterruptType 
 
   case ReplyType::DTK:
   {
-    DTKStreamingCallback(interrupt_type, data, cycles_late);
+    DTKStreamingCallback(interrupt_type, data, size, cycles_late);
     break;
   }
   }
