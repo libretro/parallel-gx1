@@ -8,7 +8,6 @@
 #include <map>
 #include <optional>
 #include <set>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -336,7 +335,7 @@ private:
 
   void ClearPageTable();
   void ReloadPageTable();
-  void PageTableUpdated(std::span<const u8> page_table);
+  void PageTableUpdated(const u8* page_table, size_t page_table_size);
 
   void UpdateBATs(BatTable& bat_table, u32 base_spr);
   void UpdateFakeMMUBat(BatTable& bat_table, u32 start_addr);

@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstddef>
-#include <span>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -247,7 +246,6 @@ static_assert(offsetof(PowerPC::PowerPCState, above_fits_in_first_0x100) <= 0x10
 #endif
 #endif
 
-std::span<const CPUCore> AvailableCPUCores();
 CPUCore DefaultCPUCore();
 
 class PowerPCManager

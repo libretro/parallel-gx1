@@ -93,7 +93,7 @@ void MMU::DoState(PointerWrap& p, bool sr_changed)
     {
       // Incremental update of page table mappings.
       p.Do(m_temp_page_table);
-      PageTableUpdated(m_temp_page_table);
+      PageTableUpdated(m_temp_page_table.data(), m_temp_page_table.size());
     }
   }
   else
@@ -1351,7 +1351,7 @@ void MMU::ReloadPageTable()
   std::swap(m_page_table, m_temp_page_table);
 
   if (m_system.GetJitInterface().WantsPageTableMappings())
-    PageTableUpdated(m_temp_page_table);
+    PageTableUpdated(m_temp_page_table.data(), m_temp_page_table.size());
   else
     m_memory.RemoveAllPageTableMappings();
 }
@@ -1381,10 +1381,10 @@ void MMU::PageTableUpdated()
     return;
   }
 
-  PageTableUpdated(std::span(page_table_view, page_table_size));
+  PageTableUpdated(page_table_view, page_table_size);
 }
 
-void MMU::PageTableUpdated(std::span<const u8> page_table)
+void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
 {
   // PowerPC's priority order for PTEs that have the same logical adress is as follows:
   //
@@ -1392,10 +1392,10 @@ void MMU::PageTableUpdated(std::span<const u8> page_table)
   // * If two PTEs have equal H values, they must be in the same PTEG due to how the hash
   //   incorporates the logical address and H. The PTE located first in the PTEG takes priority.
 
-  if (page_table.size() % PAGE_TABLE_MIN_SIZE != 0)
+  if (page_table_size % PAGE_TABLE_MIN_SIZE != 0)
   {
     // Should only happen if a maliciously crafted savestate was loaded
-    PanicAlertFmt("Impossible page table size {}", page_table.size());
+    PanicAlertFmt("Impossible page table size {}", page_table_size);
     ClearPageTable();
     return;
   }
@@ -1404,16 +1404,16 @@ void MMU::PageTableUpdated(std::span<const u8> page_table)
   m_added_readonly_mappings.clear();
   m_added_readwrite_mappings.clear();
 
-  if (m_page_table.size() != page_table.size())
+  if (m_page_table.size() != page_table_size)
   {
     m_memory.RemoveAllPageTableMappings();
     m_page_mappings.clear();
     m_page_table.resize(0);
-    m_page_table.resize(page_table.size(), 0);
+    m_page_table.resize(page_table_size, 0);
   }
 
   u8* old_page_table = m_page_table.data();
-  const u8* new_page_table = page_table.data();
+  const u8* new_page_table = page_table;
 
   constexpr auto compare_64_bytes = [](const u8* a, const u8* b) -> bool {
 #ifdef _M_X86_64
@@ -1586,7 +1586,7 @@ void MMU::PageTableUpdated(std::span<const u8> page_table)
   bool run_pass_2 = false;
 
   // Pass 1: Remove old mappings and add new primary (H=0) mappings.
-  for (u32 i = 0; i < page_table.size(); i += PAGE_TABLE_MIN_SIZE)
+  for (u32 i = 0; i < page_table_size; i += PAGE_TABLE_MIN_SIZE)
   {
     if ((i & m_ppc_state.pagetable_mask) != i || (i & m_ppc_state.pagetable_base) != 0)
       continue;
@@ -1662,7 +1662,7 @@ void MMU::PageTableUpdated(std::span<const u8> page_table)
   // the time, there are no secondary mappings, letting us skip the second pass.
   if (run_pass_2) [[unlikely]]
   {
-    for (u32 i = 0; i < page_table.size(); i += PAGE_TABLE_MIN_SIZE)
+    for (u32 i = 0; i < page_table_size; i += PAGE_TABLE_MIN_SIZE)
     {
       if ((i & m_ppc_state.pagetable_mask) != i || (i & m_ppc_state.pagetable_base) != 0)
         continue;

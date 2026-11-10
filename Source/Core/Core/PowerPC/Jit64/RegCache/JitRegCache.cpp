@@ -482,11 +482,12 @@ void RegCache::StoreFromRegister(preg_t i, FlushMode mode,
 
 X64Reg RegCache::GetFreeXReg()
 {
-  const auto order = GetAllocationOrder();
-  for (const X64Reg xr : order)
+  size_t count;
+  const X64Reg* const order = GetAllocationOrder(&count);
+  for (size_t i = 0; i < count; i++)
   {
-    if (m_xregs[xr].IsFree())
-      return xr;
+    if (m_xregs[order[i]].IsFree())
+      return order[i];
   }
 
   // Okay, not found; run the register allocator heuristic and
@@ -494,8 +495,9 @@ X64Reg RegCache::GetFreeXReg()
   float min_score = std::numeric_limits<float>::max();
   X64Reg best_xreg = INVALID_REG;
   size_t best_preg = 0;
-  for (const X64Reg xreg : order)
+  for (size_t i = 0; i < count; i++)
   {
+    const X64Reg xreg = order[i];
     const preg_t preg = m_xregs[xreg].Contents();
     if (m_xregs[xreg].IsLocked() || m_regs[preg].IsLocked())
       continue;
@@ -522,10 +524,12 @@ X64Reg RegCache::GetFreeXReg()
 
 int RegCache::NumFreeRegisters() const
 {
+  size_t order_count;
+  const X64Reg* const order = GetAllocationOrder(&order_count);
   int count = 0;
-  for (const X64Reg reg : GetAllocationOrder())
+  for (size_t i = 0; i < order_count; i++)
   {
-    if (m_xregs[reg].IsFree())
+    if (m_xregs[order[i]].IsFree())
       count++;
   }
   return count;

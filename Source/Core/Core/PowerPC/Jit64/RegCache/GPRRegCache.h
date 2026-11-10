@@ -25,7 +25,7 @@ protected:
                      IgnoreDiscardedRegisters ignore_discarded_registers) override;
   void LoadRegister(preg_t preg, Gen::X64Reg new_loc) override;
   void DiscardImm(preg_t preg) override;
-  std::span<const Gen::X64Reg> GetAllocationOrder() const override;
+  const Gen::X64Reg* GetAllocationOrder(size_t* count) const override;
   BitSet32 GetRegUtilization() const override;
   BitSet32 CountRegsIn(preg_t preg, u32 lookahead) const override;
 };

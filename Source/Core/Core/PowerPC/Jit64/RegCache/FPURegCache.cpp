@@ -68,10 +68,11 @@ void FPURegCache::DiscardImm(preg_t preg)
   // FPURegCache doesn't support immediates, so no need to do anything
 }
 
-std::span<const X64Reg> FPURegCache::GetAllocationOrder() const
+const X64Reg* FPURegCache::GetAllocationOrder(size_t* count) const
 {
   static constexpr X64Reg allocation_order[] = {XMM6,  XMM7,  XMM8,  XMM9, XMM10, XMM11, XMM12,
                                                 XMM13, XMM14, XMM15, XMM2, XMM3,  XMM4,  XMM5};
+  *count = sizeof(allocation_order) / sizeof(allocation_order[0]);
   return allocation_order;
 }
 

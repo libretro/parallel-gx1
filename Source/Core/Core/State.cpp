@@ -265,10 +265,10 @@ static bool CheckIfStateLoadIsAllowed(Core::System& system)
   return true;
 }
 
-static bool LoadFromBuffer(Core::System& system, std::span<u8> buffer)
+static bool LoadFromBuffer(Core::System& system, u8* buffer, size_t size)
 {
-  u8* ptr = buffer.data();
-  PointerWrap p(&ptr, buffer.size(), PointerWrap::Mode::Read);
+  u8* ptr = buffer;
+  PointerWrap p(&ptr, size, PointerWrap::Mode::Read);
   DoState(system, p);
   return p.IsReadMode();
 }
@@ -371,19 +371,19 @@ static std::vector<SlotWithTimestamp> GetUsedSlotsWithTimestamp()
   return result;
 }
 
-static void CompressBufferToFile(std::span<const u8> raw_buffer, File::IOFile& f)
+static void CompressBufferToFile(const u8* raw_buffer, size_t raw_size, File::IOFile& f)
 {
   u64 total_bytes_compressed = 0;
 
   while (true)
   {
-    const u64 bytes_left_to_compress = raw_buffer.size() - total_bytes_compressed;
+    const u64 bytes_left_to_compress = raw_size - total_bytes_compressed;
 
     const int bytes_to_compress =
         static_cast<int>(std::min(static_cast<u64>(LZ4_MAX_INPUT_SIZE), bytes_left_to_compress));
     Common::UniqueBuffer<char> compressed_buffer(LZ4_compressBound(bytes_to_compress));
     const int compressed_len = LZ4_compress_default(
-        reinterpret_cast<const char*>(raw_buffer.data()) + total_bytes_compressed,
+        reinterpret_cast<const char*>(raw_buffer) + total_bytes_compressed,
         compressed_buffer.get(), bytes_to_compress, static_cast<int>(compressed_buffer.size()));
 
     if (compressed_len == 0)
@@ -397,7 +397,7 @@ static void CompressBufferToFile(std::span<const u8> raw_buffer, File::IOFile& f
     f.WriteBytes(compressed_buffer.get(), compressed_len);
 
     total_bytes_compressed += bytes_to_compress;
-    if (total_bytes_compressed == raw_buffer.size())
+    if (total_bytes_compressed == raw_size)
       break;
   }
 }
@@ -463,7 +463,7 @@ static void CompressAndDumpState(Core::System& system, const CompressAndDumpStat
   WriteHeadersToFile(buffer.size(), f);
 
   if (s_use_compression)
-    CompressBufferToFile(buffer, f);
+    CompressBufferToFile(buffer.data(), buffer.size(), f);
   else
     f.WriteBytes(buffer.data(), buffer.size());
 
@@ -872,7 +872,7 @@ static void LoadAsFromCore(Core::System& system, std::string filename)
     if (!buffer.empty())
     {
       was_file_read = true;
-      loaded_successfully = LoadFromBuffer(system, buffer);
+      loaded_successfully = LoadFromBuffer(system, buffer.data(), buffer.size());
     }
   }
 
@@ -992,7 +992,7 @@ void UndoLoadState(Core::System& system)
       return;
     }
 
-    LoadFromBuffer(system, s_undo_load_buffer);
+    LoadFromBuffer(system, s_undo_load_buffer.data(), s_undo_load_buffer.size());
   });
 }
 

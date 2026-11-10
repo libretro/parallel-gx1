@@ -90,7 +90,7 @@ OpArg GPRRegCache::GetDefaultLocation(preg_t preg) const
   return PPCSTATE_GPR(preg);
 }
 
-std::span<const X64Reg> GPRRegCache::GetAllocationOrder() const
+const X64Reg* GPRRegCache::GetAllocationOrder(size_t* count) const
 {
   static constexpr X64Reg allocation_order[] = {
 #ifdef _WIN32
@@ -101,6 +101,7 @@ std::span<const X64Reg> GPRRegCache::GetAllocationOrder() const
       R8,  R9,  R10, R11, RCX
 #endif
   };
+  *count = sizeof(allocation_order) / sizeof(allocation_order[0]);
   return allocation_order;
 }
 
