@@ -18,6 +18,7 @@
 #include "Common/TypeUtils.h"
 
 #include "VideoCommon/AbstractShader.h"
+#include "VideoCommon/ShaderBuild.h"
 #include "VideoCommon/ShaderText.h"
 #include "VideoCommon/VideoCommon.h"
 
@@ -220,6 +221,49 @@ void GenerateLineOffset(ShaderCode& object, const char* indent0, const char* ind
 void GenerateVSLineExpansion(ShaderCode& object, const char* indent, u32 texgens);
 
 void GenerateVSPointExpansion(ShaderCode& object, const char* indent, u32 texgens);
+
+/* ---- the same pieces, built by calls ---- */
+
+/* An expression made afresh each time: var, var[index_var] or var[index]. */
+struct sb_place
+{
+  struct rslc_var* var;
+  struct rslc_var* index_var;
+  int index;  // -1 for none
+};
+uint32_t sb_place_ref(const struct shader_build* sb, const struct sb_place* p);
+
+/* VS_OUTPUT's members as GenerateVSOutputMembers lays them out, each with quals (RSLC_B_*);
+ * the index of each in it, -1 where absent. */
+struct vs_output_layout
+{
+  const struct rslc_type* types[20];
+  const char* names[20];
+  unsigned quals[20];
+  u32 n;
+  u32 texgens;
+  int pos, colors_0, colors_1, clipDist0, clipDist1, tex0, clipPos, Normal, WorldPos;
+};
+void BuildVSOutputLayout(const struct shader_build* sb, u32 texgens,
+                         const ShaderHostConfig& host_config, unsigned quals,
+                         struct vs_output_layout* layout);
+/* The member quals GetInterpolationQualifier gives: centroid or sample under MSAA. */
+unsigned BuildInterpolationQuals(bool msaa, bool ssaa);
+/* a.member = b.member, in AssignVSOutputMembers' order */
+void BuildAssignVSOutputMembers(const struct shader_build* sb, const struct vs_output_layout* layout,
+                                const struct sb_place* a, const struct sb_place* b,
+                                const ShaderHostConfig& host_config);
+/* struct Light, as s_lighting_struct declares it */
+const struct rslc_type* BuildLightStruct(const struct shader_build* sb);
+/* s_geometry_shader_uniforms' types and names, at types + n and names + n: returns n + 4 */
+u32 BuildGeometryShaderUniforms(const struct shader_build* sb, const struct rslc_type** types,
+                                const char** names, u32 n);
+/* GenerateLineOffset: float2 offset, declared and set; pos_a and pos_b are float4 positions
+ * made afresh by the calls, sign a float (nullptr for none) */
+typedef uint32_t (*sb_expr_fn)(const struct shader_build* sb, const void* ctx);
+struct rslc_var* BuildLineOffset(const struct shader_build* sb, struct rslc_var* clinept,
+                                 sb_expr_fn pos_a, const void* a_ctx, sb_expr_fn pos_b,
+                                 const void* b_ctx, struct rslc_var* sign);
 
 // We use the flag "centroid" to fix some MSAA rendering bugs. With MSAA, the
 // pixel shader will be executed for each pixel which has at least one passed sample.

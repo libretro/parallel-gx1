@@ -359,6 +359,169 @@ void GenerateVSPointExpansion(ShaderCode& object, const char* indent, u32 texgen
   }
 }
 
+uint32_t sb_place_ref(const struct shader_build* sb, const struct sb_place* p)
+{
+  uint32_t e = sb_ref(sb, p->var);
+  if (p->index_var)
+    return sb_idx(sb, e, sb_ref(sb, p->index_var));
+  if (p->index >= 0)
+    return sb_idx(sb, e, sb_i(sb, p->index));
+  return e;
+}
+
+void BuildVSOutputLayout(const struct shader_build* sb, u32 texgens,
+                         const ShaderHostConfig& host_config, unsigned quals,
+                         struct vs_output_layout* l)
+{
+  static const char* const tex_names[8] = {"tex0", "tex1", "tex2", "tex3",
+                                           "tex4", "tex5", "tex6", "tex7"};
+  u32 n = 0, i;
+#define VS_OUT_MEMBER(idx, type, name)                                                            \
+  do                                                                                               \
+  {                                                                                                \
+    l->idx = static_cast<int>(n);                                                                 \
+    l->types[n] = (type);                                                                          \
+    l->names[n] = (name);                                                                          \
+    l->quals[n++] = quals;                                                                         \
+  } while (0)
+  l->clipDist0 = l->clipDist1 = l->clipPos = l->Normal = l->WorldPos = -1;
+  l->texgens = texgens;
+  VS_OUT_MEMBER(pos, sb->f[4], "pos");
+  VS_OUT_MEMBER(colors_0, sb->f[4], "colors_0");
+  VS_OUT_MEMBER(colors_1, sb->f[4], "colors_1");
+  if (host_config.backend_geometry_shaders)
+  {
+    VS_OUT_MEMBER(clipDist0, sb->f[1], "clipDist0");
+    VS_OUT_MEMBER(clipDist1, sb->f[1], "clipDist1");
+  }
+  l->tex0 = static_cast<int>(n);
+  for (i = 0; i < texgens; i++)
+  {
+    l->types[n] = sb->f[3];
+    l->names[n] = tex_names[i];
+    l->quals[n++] = quals;
+  }
+  if (!host_config.fast_depth_calc)
+    VS_OUT_MEMBER(clipPos, sb->f[4], "clipPos");
+  if (host_config.per_pixel_lighting)
+  {
+    VS_OUT_MEMBER(Normal, sb->f[3], "Normal");
+    VS_OUT_MEMBER(WorldPos, sb->f[3], "WorldPos");
+  }
+#undef VS_OUT_MEMBER
+  l->n = n;
+}
+
+unsigned BuildInterpolationQuals(bool msaa, bool ssaa)
+{
+  if (!msaa)
+    return 0;
+  return ssaa ? RSLC_B_SAMPLE : RSLC_B_CENTROID;
+}
+
+void BuildAssignVSOutputMembers(const struct shader_build* sb, const struct vs_output_layout* l,
+                                const struct sb_place* a, const struct sb_place* b,
+                                const ShaderHostConfig& host_config)
+{
+  u32 i;
+#define VS_OUT_ASSIGN(idx)                                                                        \
+  sb_set(sb, sb_mem(sb, sb_place_ref(sb, a), static_cast<uint32_t>(idx)),                         \
+         sb_mem(sb, sb_place_ref(sb, b), static_cast<uint32_t>(idx)))
+  VS_OUT_ASSIGN(l->pos);
+  VS_OUT_ASSIGN(l->colors_0);
+  VS_OUT_ASSIGN(l->colors_1);
+  for (i = 0; i < l->texgens; i++)
+    VS_OUT_ASSIGN(l->tex0 + static_cast<int>(i));
+  if (!host_config.fast_depth_calc)
+    VS_OUT_ASSIGN(l->clipPos);
+  if (host_config.per_pixel_lighting)
+  {
+    VS_OUT_ASSIGN(l->Normal);
+    VS_OUT_ASSIGN(l->WorldPos);
+  }
+  if (host_config.backend_geometry_shaders)
+  {
+    VS_OUT_ASSIGN(l->clipDist0);
+    VS_OUT_ASSIGN(l->clipDist1);
+  }
+#undef VS_OUT_ASSIGN
+}
+
+const struct rslc_type* BuildLightStruct(const struct shader_build* sb)
+{
+  static const char* const names[5] = {"color", "cosatt", "distatt", "pos", "dir"};
+  const struct rslc_type* types[5];
+  types[0] = sb->i[4];
+  types[1] = sb->f[4];
+  types[2] = sb->f[4];
+  types[3] = sb->f[4];
+  types[4] = sb->f[4];
+  return rslc_b_struct(sb->b, "Light", types, names, 5);
+}
+
+u32 BuildGeometryShaderUniforms(const struct shader_build* sb, const struct rslc_type** types,
+                                const char** names, u32 n)
+{
+  types[n] = sb->f[4];
+  names[n++] = I_STEREOPARAMS;
+  types[n] = sb->f[4];
+  names[n++] = I_LINEPTPARAMS;
+  types[n] = sb->i[4];
+  names[n++] = I_TEXOFFSET;
+  types[n] = sb->u[1];
+  names[n++] = "vs_expand";
+  return n;
+}
+
+struct rslc_var* BuildLineOffset(const struct shader_build* sb, struct rslc_var* clinept,
+                                 sb_expr_fn pos_a, const void* a_ctx, sb_expr_fn pos_b,
+                                 const void* b_ctx, struct rslc_var* sign)
+{
+  // GameCube/Wii's line drawing algorithm is a little quirky. It does not
+  // use the correct line caps. Instead, the line caps are vertical or
+  // horizontal depending the slope of the line.
+  struct rslc_var* offset = rslc_b_local(sb->b, "offset", sb->f[2], 0, false);
+  struct rslc_var* to;
+  uint32_t then_s, else_s, e;
+#define LP(c) sb_swz(sb, sb_ref(sb, clinept), c)
+  to = rslc_b_local(
+      sb->b, "to", sb->f[2],
+      sb_call(sb, "abs", 1,
+              sb_bin(sb, RSLC_B_SUB,
+                     sb_bin(sb, RSLC_B_DIV, sb_swz(sb, pos_a(sb, a_ctx), "xy"),
+                            sb_swz(sb, pos_a(sb, a_ctx), "w")),
+                     sb_bin(sb, RSLC_B_DIV, sb_swz(sb, pos_b(sb, b_ctx), "xy"),
+                            sb_swz(sb, pos_b(sb, b_ctx), "w")))),
+      false);
+  // FIXME: What does real hardware do when line is at a 45-degree angle?
+  // FIXME: Lines aren't drawn at the correct width. See Twilight Princess map.
+  rslc_b_begin_block(sb->b);
+  // Line is more tall. Extend geometry left and right.
+  // Lerp LineWidth/2 from [0..VpWidth] to [-1..1]
+  e = sign ? sb_bin(sb, RSLC_B_MUL, sb_ref(sb, sign), LP("z")) : LP("z");
+  e = sb_bin(sb, RSLC_B_DIV, e, LP("x"));
+  sb_set(sb, sb_ref(sb, offset), sb_con(sb, sb->f[2], 2, e, sb_i(sb, 0)));
+  then_s = rslc_b_end_block(sb->b);
+  rslc_b_begin_block(sb->b);
+  // Line is more wide. Extend geometry up and down.
+  // Lerp LineWidth/2 from [0..VpHeight] to [1..-1]
+  e = sb_un(sb, RSLC_B_NEG, LP("z"));
+  if (sign)
+    e = sb_bin(sb, RSLC_B_MUL, sb_ref(sb, sign), e);
+  e = sb_bin(sb, RSLC_B_DIV, e, LP("y"));
+  sb_set(sb, sb_ref(sb, offset), sb_con(sb, sb->f[2], 2, sb_i(sb, 0), e));
+  else_s = rslc_b_end_block(sb->b);
+  rslc_b_stmt(sb->b, rslc_b_if(sb->b,
+                               sb_bin(sb, RSLC_B_GT,
+                                      sb_bin(sb, RSLC_B_MUL, LP("y"),
+                                             sb_swz(sb, sb_ref(sb, to), "y")),
+                                      sb_bin(sb, RSLC_B_MUL, LP("x"),
+                                             sb_swz(sb, sb_ref(sb, to), "x"))),
+                               then_s, else_s));
+#undef LP
+  return offset;
+}
+
 const char* GetInterpolationQualifier(bool msaa, bool ssaa, bool in_glsl_interface_block, bool in)
 {
   if (!msaa)

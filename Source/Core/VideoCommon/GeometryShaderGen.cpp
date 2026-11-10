@@ -3,6 +3,9 @@
 
 #include "VideoCommon/GeometryShaderGen.h"
 
+#include <cstring>
+#include <utility>
+
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"
 #include "VideoCommon/DriverDetails.h"
@@ -10,13 +13,6 @@
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/XFMemory.h"
-
-constexpr Common::EnumMap<const char*, PrimitiveType::TriangleStrip> primitives_ogl{
-    "points",
-    "lines",
-    "triangles",
-    "triangles",
-};
 
 constexpr Common::EnumMap<u32, PrimitiveType::TriangleStrip> vertex_in_map{1u, 2u, 3u, 3u};
 constexpr Common::EnumMap<u32, PrimitiveType::TriangleStrip> vertex_out_map{4u, 4u, 4u, 3u};
@@ -39,97 +35,206 @@ GeometryShaderUid GetGeometryShaderUid(PrimitiveType primitive_type)
   return out;
 }
 
-static void EmitVertex(ShaderCode& out, const ShaderHostConfig& host_config,
-                       const geometry_shader_uid_data* uid_data, const char* vertex,
-                       APIType api_type, bool wireframe, bool stereo, bool first_vertex = false);
-static void EndPrimitive(ShaderCode& out, const ShaderHostConfig& host_config,
-                         const geometry_shader_uid_data* uid_data, APIType api_type, bool wireframe,
-                         bool stereo);
+/* ---- the stage built by calls ---- */
 
-ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& host_config,
-                                      const geometry_shader_uid_data* uid_data)
+namespace
 {
-  ShaderCode out;
-  // Non-uid template parameters will write to the dummy data (=> gets optimized out)
+struct gs_build
+{
+  const struct shader_build* sb;
+  const GeometryShaderBuildArgs* a;
+  const struct vs_output_layout* layout;
+  struct rslc_var *ps, *layer, *eye, *i, *first, *gsblock[4];
+  bool wireframe, stereo;
+};
 
+uint32_t gs_member(const struct gs_build* g, struct rslc_var* v, int idx)
+{
+  return sb_mem(g->sb, sb_ref(g->sb, v), static_cast<uint32_t>(idx));
+}
+
+void gs_emit_vertex(struct gs_build* g, struct rslc_var* v, bool first_vertex)
+{
+  const struct shader_build* sb = g->sb;
+  const ShaderHostConfig& host = *g->a->host_config;
+  struct sb_place ps_place = {g->ps, nullptr, -1};
+  struct sb_place v_place = {v, nullptr, -1};
+  uint32_t pos;
+
+  if (g->wireframe && first_vertex)
+    rslc_b_stmt(sb->b,
+                rslc_b_if(sb->b, sb_bin(sb, RSLC_B_EQ, sb_ref(sb, g->i), sb_i(sb, 0)),
+                          rslc_b_expr(sb->b, rslc_b_assign(sb->b, RSLC_B_SET, sb_ref(sb, g->first),
+                                                           sb_ref(sb, v))),
+                          0));
+
+  // Vulkan NDC space has Y pointing down (right-handed NDC space).
+  pos = g->layout->pos;
+  if (g->a->api_type == APIType::Vulkan)
+    sb_set(sb, sb_bi(sb, "gl_Position"),
+           sb_con(sb, sb->f[4], 4, sb_swz(sb, gs_member(g, v, pos), "x"),
+                  sb_un(sb, RSLC_B_NEG, sb_swz(sb, gs_member(g, v, pos), "y")),
+                  sb_swz(sb, gs_member(g, v, pos), "z"), sb_swz(sb, gs_member(g, v, pos), "w")));
+  else
+    sb_set(sb, sb_bi(sb, "gl_Position"), gs_member(g, v, pos));
+
+  if (host.backend_depth_clamp)
+  {
+    sb_set(sb, sb_idx(sb, sb_bi(sb, "gl_ClipDistance"), sb_i(sb, 0)),
+           gs_member(g, v, g->layout->clipDist0));
+    sb_set(sb, sb_idx(sb, sb_bi(sb, "gl_ClipDistance"), sb_i(sb, 1)),
+           gs_member(g, v, g->layout->clipDist1));
+  }
+  BuildAssignVSOutputMembers(sb, g->layout, &ps_place, &v_place, host);
+
+  if (g->stereo)
+  {
+    // Select the output layer
+    sb_set(sb, sb_bi(sb, "gl_Layer"), sb_ref(sb, g->eye));
+    if (!host.backend_gl_layer_in_fs)
+      sb_set(sb, sb_ref(sb, g->layer), sb_ref(sb, g->eye));
+  }
+  sb_do(sb, sb_call(sb, "EmitVertex", 0));
+}
+
+/* v.pos */
+uint32_t gs_pos_of(const struct shader_build* sb, const void* ctx)
+{
+  const std::pair<struct rslc_var*, int>* p = static_cast<const std::pair<struct rslc_var*, int>*>(ctx);
+  return sb_mem(sb, sb_ref(sb, p->first), static_cast<uint32_t>(p->second));
+}
+
+/* (((ctexoffset[k] >> i) & 0x1) != 0) */
+uint32_t gs_tex_bit(const struct gs_build* g, int k, u32 i)
+{
+  const struct shader_build* sb = g->sb;
+  return sb_bin(sb, RSLC_B_NE,
+                sb_bin(sb, RSLC_B_BAND,
+                       sb_bin(sb, RSLC_B_SHR, sb_idx(sb, sb_ref(sb, g->gsblock[2]), sb_i(sb, k)),
+                              sb_i(sb, static_cast<int32_t>(i))),
+                       sb_i(sb, 0x1)),
+                sb_i(sb, 0));
+}
+
+/* v.texN.c op= e */
+void gs_tex_add(const struct gs_build* g, struct rslc_var* v, u32 n, const char* c, uint32_t e)
+{
+  const struct shader_build* sb = g->sb;
+  sb_op_set(sb, RSLC_B_ADD,
+            sb_swz(sb, gs_member(g, v, g->layout->tex0 + static_cast<int>(n)), c), e);
+}
+}  // Anonymous namespace
+
+bool BuildGeometryShader(struct shader_build* sb, const void* arg)
+{
+  const GeometryShaderBuildArgs* a = static_cast<const GeometryShaderBuildArgs*>(arg);
+  const ShaderHostConfig& host_config = *a->host_config;
+  const geometry_shader_uid_data* uid_data = a->uid_data;
   const bool wireframe = host_config.wireframe;
-  const bool msaa = host_config.msaa;
-  const bool ssaa = host_config.ssaa;
   const bool stereo = host_config.stereo;
   const auto primitive_type = static_cast<PrimitiveType>(uid_data->primitive_type);
   const u32 vertex_in = vertex_in_map[primitive_type];
   u32 vertex_out = vertex_out_map[primitive_type];
+  static const unsigned prims[4] = {RSLC_B_PRIM_POINTS, RSLC_B_PRIM_LINES,
+                                    RSLC_B_PRIM_TRIANGLES, RSLC_B_PRIM_TRIANGLES};
+  struct vs_output_layout plain, in_l, out_l;
+  struct gs_build g;
+  struct rslc_b_quals q;
+  const struct rslc_type* gs_types[4];
+  const char* gs_names[4];
+  const struct rslc_type* vs_output;
+  struct rslc_var *vs, *f, *offset = nullptr, *center = nullptr;
+  struct rslc_func* fmain;
+  uint32_t eye_init = 0, i_init = 0;
 
   if (wireframe)
     vertex_out++;
 
-  // Insert layout parameters
-  if (host_config.backend_gs_instancing)
-  {
-    out.Printf("layout(%s, invocations = %d) in;\n", primitives_ogl[primitive_type], stereo ? 2 : 1);
-    out.Printf("layout(%s_strip, max_vertices = %u) out;\n", wireframe ? "line" : "triangle", vertex_out);
-  }
-  else
-  {
-    out.Printf("layout(%s) in;\n", primitives_ogl[primitive_type]);
-    out.Printf("layout(%s_strip, max_vertices = %u) out;\n", wireframe ? "line" : "triangle", stereo ? vertex_out * 2 : vertex_out);
-  }
+  memset(&g, 0, sizeof(g));
+  g.sb = sb;
+  g.a = a;
+  g.wireframe = wireframe;
+  g.stereo = stereo;
 
-  out.Puts(s_lighting_struct);
+  // Insert layout parameters
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_IN;
+  q.prim = prims[static_cast<u32>(primitive_type)];
+  if (host_config.backend_gs_instancing)
+    q.invocations = stereo ? 2 : 1;
+  rslc_b_layout(sb->b, &q);
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_OUT;
+  q.prim = wireframe ? RSLC_B_PRIM_LINE_STRIP : RSLC_B_PRIM_TRIANGLE_STRIP;
+  q.max_vertices =
+      host_config.backend_gs_instancing ? vertex_out : (stereo ? vertex_out * 2 : vertex_out);
+  rslc_b_layout(sb->b, &q);
+
+  BuildLightStruct(sb);
 
   /* uniforms; Direct3D binds the stage's block at b0 */
-  out.Printf("UBO_BINDING(std140, %d) uniform GSBlock {\n", api_type == APIType::D3D ? 1 : 4);
+  rslc_b_quals_init(&q);
+  sb_ubo(sb, &q, a->api_type == APIType::D3D ? 1 : 4);
+  BuildGeometryShaderUniforms(sb, gs_types, gs_names, 0);
+  rslc_b_block_q(sb->b, &q, "GSBlock", nullptr, gs_types, gs_names, 4, g.gsblock);
 
-  out.Puts(s_geometry_shader_uniforms);
-  out.Puts("};\n");
+  BuildVSOutputLayout(sb, uid_data->numTexGens, host_config, 0, &plain);
+  vs_output = rslc_b_struct(sb->b, "VS_OUTPUT", plain.types, plain.names, plain.n);
+  g.layout = &plain;
 
-  out.Puts("struct VS_OUTPUT {\n");
-  GenerateVSOutputMembers(out, uid_data->numTexGens, host_config, "");
-  out.Puts("};\n");
-
-  if (host_config.backend_gs_instancing)
-    out.Puts("#define InstanceID gl_InvocationID\n");
-
-  out.Puts("VARYING_LOCATION(0) in VertexData {\n");
-  GenerateVSOutputMembers(out, uid_data->numTexGens, host_config,
-                          GetInterpolationQualifier(msaa, ssaa, true, true));
-  out.Printf("} vs[%u];\n", vertex_in);
-
-  out.Puts("VARYING_LOCATION(0) out VertexData {\n");
-  GenerateVSOutputMembers(out, uid_data->numTexGens, host_config,
-                          GetInterpolationQualifier(msaa, ssaa, true, false));
-
-  out.Puts("} ps;\n");
+  BuildVSOutputLayout(sb, uid_data->numTexGens, host_config,
+                      BuildInterpolationQuals(host_config.msaa, host_config.ssaa), &in_l);
+  rslc_b_quals_init(&q);
+  q.storage = RSLC_B_ST_IN;
+  q.location = sb_varying_location(sb, 0);
+  vs = rslc_b_io_block(sb->b, &q, "VertexData", "vs", in_l.types, in_l.names, nullptr, in_l.quals,
+                       in_l.n, static_cast<int32_t>(vertex_in));
+  BuildVSOutputLayout(sb, uid_data->numTexGens, host_config,
+                      BuildInterpolationQuals(host_config.msaa, host_config.ssaa), &out_l);
+  q.storage = RSLC_B_ST_OUT;
+  g.ps = rslc_b_io_block(sb->b, &q, "VertexData", "ps", out_l.types, out_l.names, nullptr,
+                         out_l.quals, out_l.n, -1);
   if (stereo && !host_config.backend_gl_layer_in_fs)
-    out.Puts("flat out int layer;");
+  {
+    rslc_b_quals_init(&q);
+    q.storage = RSLC_B_ST_OUT;
+    q.interp = RSLC_B_INTERP_FLAT;
+    g.layer = rslc_b_declare(sb->b, &q, "layer", sb->i[1], 0);
+  }
 
-  out.Puts("void main()\n"
-            "{\n");
+  fmain = rslc_b_func(sb->b, "main", sb->v, 0, nullptr, nullptr, nullptr);
+  rslc_b_func_begin(sb->b, fmain);
 
   if (primitive_type == PrimitiveType::Lines)
   {
-    out.Puts("\tVS_OUTPUT start, end;\n");
-    AssignVSOutputMembers(out, "start", "vs[0]", uid_data->numTexGens, host_config);
-    AssignVSOutputMembers(out, "end", "vs[1]", uid_data->numTexGens, host_config);
-
-    GenerateLineOffset(out, "\t", "\t\t", "end.pos", "start.pos", "");
+    struct rslc_var* start = rslc_b_local(sb->b, "start", vs_output, 0, false);
+    struct rslc_var* end = rslc_b_local(sb->b, "end", vs_output, 0, false);
+    struct sb_place s_place = {start, nullptr, -1}, e_place = {end, nullptr, -1};
+    struct sb_place v0 = {vs, nullptr, 0}, v1 = {vs, nullptr, 1};
+    std::pair<struct rslc_var*, int> pa(end, plain.pos), pb(start, plain.pos);
+    BuildAssignVSOutputMembers(sb, &plain, &s_place, &v0, host_config);
+    BuildAssignVSOutputMembers(sb, &plain, &e_place, &v1, host_config);
+    offset = BuildLineOffset(sb, g.gsblock[1], gs_pos_of, &pa, gs_pos_of, &pb, nullptr);
   }
   else if (primitive_type == PrimitiveType::Points)
   {
-    out.Puts("\tVS_OUTPUT center;\n");
-    AssignVSOutputMembers(out, "center", "vs[0]", uid_data->numTexGens, host_config);
-
+    struct sb_place c_place, v0 = {vs, nullptr, 0};
+    center = rslc_b_local(sb->b, "center", vs_output, 0, false);
+    c_place.var = center;
+    c_place.index_var = nullptr;
+    c_place.index = -1;
+    BuildAssignVSOutputMembers(sb, &plain, &c_place, &v0, host_config);
     // Offset from center to upper right vertex
     // Lerp PointSize/2 from [0,0..VpWidth,VpHeight] to [-1,1..1,-1]
-    out.Puts("\tfloat2 offset = float2("
-              I_LINEPTPARAMS
-              ".w / "
-              I_LINEPTPARAMS
-              ".x, -"
-              I_LINEPTPARAMS
-              ".w / "
-              I_LINEPTPARAMS
-              ".y) * center.pos.w;\n");
+#define LP(c) sb_swz(sb, sb_ref(sb, g.gsblock[1]), c)
+    offset = rslc_b_local(
+        sb->b, "offset", sb->f[2],
+        sb_bin(sb, RSLC_B_MUL,
+               sb_con(sb, sb->f[2], 2, sb_bin(sb, RSLC_B_DIV, LP("w"), LP("x")),
+                      sb_bin(sb, RSLC_B_DIV, sb_un(sb, RSLC_B_NEG, LP("w")), LP("y"))),
+               sb_swz(sb, gs_member(&g, center, plain.pos), "w")),
+        false);
+#undef LP
   }
 
   if (stereo)
@@ -137,30 +242,45 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
     // If the GPU supports invocation we don't need a for loop and can simply use the
     // invocation identifier to determine which layer we're rendering.
     if (host_config.backend_gs_instancing)
-      out.Puts("\tint eye = InstanceID;\n");
+    {
+      g.eye = rslc_b_local(sb->b, "eye", sb->i[1], sb_bi(sb, "gl_InvocationID"), false);
+    }
     else
-      out.Puts("\tfor (int eye = 0; eye < 2; ++eye) {\n");
+    {
+      eye_init = rslc_b_decl_stmt(sb->b, "eye", sb->i[1], sb_i(sb, 0), &g.eye);
+      rslc_b_begin_block(sb->b);
+    }
   }
 
   if (wireframe)
-    out.Puts("\tVS_OUTPUT first;\n");
+    g.first = rslc_b_local(sb->b, "first", vs_output, 0, false);
 
   // Avoid D3D warning about forced unrolling of single-iteration loop
   if (vertex_in > 1)
-    out.Printf("\tfor (int i = 0; i < %u; ++i) {\n", vertex_in);
+  {
+    i_init = rslc_b_decl_stmt(sb->b, "i", sb->i[1], sb_i(sb, 0), &g.i);
+    rslc_b_begin_block(sb->b);
+  }
   else
-    out.Puts("\tint i = 0;\n");
+  {
+    g.i = rslc_b_local(sb->b, "i", sb->i[1], sb_i(sb, 0), false);
+  }
 
-  out.Puts("\tVS_OUTPUT f;\n");
-  AssignVSOutputMembers(out, "f", "vs[i]", uid_data->numTexGens, host_config);
+  f = rslc_b_local(sb->b, "f", vs_output, 0, false);
+  {
+    struct sb_place f_place = {f, nullptr, -1}, vi = {vs, g.i, -1};
+    BuildAssignVSOutputMembers(sb, &plain, &f_place, &vi, host_config);
+  }
 
   if (host_config.backend_depth_clamp &&
       DriverDetails::HasBug(DriverDetails::BUG_BROKEN_CLIP_DISTANCE))
   {
     // On certain GPUs we have to consume the clip distance from the vertex shader
     // or else the other vertex shader outputs will get corrupted.
-    out.Puts("\tf.clipDist0 = gl_in[i].gl_ClipDistance[0];\n"
-              "\tf.clipDist1 = gl_in[i].gl_ClipDistance[1];\n");
+    sb_set(sb, gs_member(&g, f, plain.clipDist0),
+           sb_idx(sb, sb_mem(sb, sb_idx(sb, sb_bi(sb, "gl_in"), sb_ref(sb, g.i)), 2), sb_i(sb, 0)));
+    sb_set(sb, gs_member(&g, f, plain.clipDist1),
+           sb_idx(sb, sb_mem(sb, sb_idx(sb, sb_bi(sb, "gl_in"), sb_ref(sb, g.i)), 2), sb_i(sb, 1)));
   }
 
   if (stereo)
@@ -172,139 +292,136 @@ ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& 
     // the depth value. This results in objects at a distance smaller than the convergence
     // distance to seemingly appear in front of the screen.
     // This formula is based on page 13 of the "Nvidia 3D Vision Automatic, Best Practices Guide"
-    out.Puts("\tfloat hoffset = (eye == 0) ? "
-              I_STEREOPARAMS
-              ".x : "
-              I_STEREOPARAMS
-              ".y;\n");
-    out.Puts("\tf.pos.x += hoffset * (f.pos.w - "
-              I_STEREOPARAMS
-              ".z);\n");
+#define SP(c) sb_swz(sb, sb_ref(sb, g.gsblock[0]), c)
+    struct rslc_var* hoffset = rslc_b_local(
+        sb->b, "hoffset", sb->f[1],
+        rslc_b_select(sb->b, sb_bin(sb, RSLC_B_EQ, sb_ref(sb, g.eye), sb_i(sb, 0)), SP("x"),
+                      SP("y")),
+        false);
+    sb_op_set(sb, RSLC_B_ADD, sb_swz(sb, gs_member(&g, f, plain.pos), "x"),
+              sb_bin(sb, RSLC_B_MUL, sb_ref(sb, hoffset),
+                     sb_bin(sb, RSLC_B_SUB, sb_swz(sb, gs_member(&g, f, plain.pos), "w"),
+                            SP("z"))));
+#undef SP
   }
 
+#define TO(k) sb_idx(sb, sb_ref(sb, g.gsblock[2]), sb_i(sb, k))
   if (primitive_type == PrimitiveType::Lines)
   {
-    out.Puts("\tVS_OUTPUT l = f;\n"
-              "\tVS_OUTPUT r = f;\n");
-
-    out.Puts("\tl.pos.xy -= offset * l.pos.w;\n"
-              "\tr.pos.xy += offset * r.pos.w;\n");
-
-    out.Puts("\tif ("
-              I_TEXOFFSET
-              "[2] != 0) {\n");
-    out.Puts("\tfloat texOffset = 1.0 / float("
-              I_TEXOFFSET
-              "[2]);\n");
-
-    for (u32 i = 0; i < uid_data->numTexGens; ++i)
+    struct rslc_var* l = rslc_b_local(sb->b, "l", vs_output, sb_ref(sb, f), false);
+    struct rslc_var* r = rslc_b_local(sb->b, "r", vs_output, sb_ref(sb, f), false);
+    uint32_t then_s;
+    u32 i;
+    sb_op_set(sb, RSLC_B_SUB, sb_swz(sb, gs_member(&g, l, plain.pos), "xy"),
+              sb_bin(sb, RSLC_B_MUL, sb_ref(sb, offset),
+                     sb_swz(sb, gs_member(&g, l, plain.pos), "w")));
+    sb_op_set(sb, RSLC_B_ADD, sb_swz(sb, gs_member(&g, r, plain.pos), "xy"),
+              sb_bin(sb, RSLC_B_MUL, sb_ref(sb, offset),
+                     sb_swz(sb, gs_member(&g, r, plain.pos), "w")));
+    rslc_b_begin_block(sb->b);
     {
-      out.Printf("\tif ((("
-                I_TEXOFFSET
-                "[0] >> %u) & 0x1) != 0)\n", i);
-      out.Printf("\t\tr.tex%u.x += texOffset;\n", i);
+      struct rslc_var* tex_offset = rslc_b_local(
+          sb->b, "texOffset", sb->f[1],
+          sb_bin(sb, RSLC_B_DIV, sb_f(sb, 1.0), sb_con(sb, sb->f[1], 1, TO(2))), false);
+      for (i = 0; i < uid_data->numTexGens; ++i)
+      {
+        rslc_b_stmt(
+            sb->b,
+            rslc_b_if(sb->b, gs_tex_bit(&g, 0, i),
+                      rslc_b_expr(sb->b,
+                                  rslc_b_assign(sb->b, RSLC_B_ADD,
+                                                sb_swz(sb,
+                                                       gs_member(&g, r,
+                                                                 plain.tex0 + static_cast<int>(i)),
+                                                       "x"),
+                                                sb_ref(sb, tex_offset))),
+                      0));
+      }
     }
-    out.Puts("\t}\n");
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b,
+                rslc_b_if(sb->b, sb_bin(sb, RSLC_B_NE, TO(2), sb_i(sb, 0)), then_s, 0));
 
-    EmitVertex(out, host_config, uid_data, "l", api_type, wireframe, stereo, true);
-    EmitVertex(out, host_config, uid_data, "r", api_type, wireframe, stereo);
+    gs_emit_vertex(&g, l, true);
+    gs_emit_vertex(&g, r, false);
   }
   else if (primitive_type == PrimitiveType::Points)
   {
-    out.Puts("\tVS_OUTPUT ll = f;\n"
-              "\tVS_OUTPUT lr = f;\n"
-              "\tVS_OUTPUT ul = f;\n"
-              "\tVS_OUTPUT ur = f;\n");
-
-    out.Puts("\tll.pos.xy += float2(-1,-1) * offset;\n"
-              "\tlr.pos.xy += float2(1,-1) * offset;\n"
-              "\tul.pos.xy += float2(-1,1) * offset;\n"
-              "\tur.pos.xy += offset;\n");
-
-    out.Puts("\tif ("
-              I_TEXOFFSET
-              "[3] != 0) {\n");
-    out.Puts("\tfloat2 texOffset = float2(1.0 / float("
-              I_TEXOFFSET
-              "[3]), 1.0 / float("
-              I_TEXOFFSET
-              "[3]));\n");
-
-    for (u32 i = 0; i < uid_data->numTexGens; ++i)
+    struct rslc_var* ll = rslc_b_local(sb->b, "ll", vs_output, sb_ref(sb, f), false);
+    struct rslc_var* lr = rslc_b_local(sb->b, "lr", vs_output, sb_ref(sb, f), false);
+    struct rslc_var* ul = rslc_b_local(sb->b, "ul", vs_output, sb_ref(sb, f), false);
+    struct rslc_var* ur = rslc_b_local(sb->b, "ur", vs_output, sb_ref(sb, f), false);
+    uint32_t then_s;
+    u32 i;
+#define NI(v) ((v) < 0 ? sb_un(sb, RSLC_B_NEG, sb_i(sb, -(v))) : sb_i(sb, (v)))
+#define CORNER(var, x, y)                                                                          \
+  sb_op_set(sb, RSLC_B_ADD, sb_swz(sb, gs_member(&g, var, plain.pos), "xy"),                      \
+            sb_bin(sb, RSLC_B_MUL, sb_con(sb, sb->f[2], 2, NI(x), NI(y)), sb_ref(sb, offset)))
+    CORNER(ll, -1, -1);
+    CORNER(lr, 1, -1);
+    CORNER(ul, -1, 1);
+    sb_op_set(sb, RSLC_B_ADD, sb_swz(sb, gs_member(&g, ur, plain.pos), "xy"), sb_ref(sb, offset));
+    rslc_b_begin_block(sb->b);
     {
-      out.Printf("\tif ((("
-                I_TEXOFFSET
-                "[1] >> %u) & 0x1) != 0) {\n", i);
-      out.Printf("\t\tul.tex%u.xy += float2(0,1) * texOffset;\n", i);
-      out.Printf("\t\tur.tex%u.xy += texOffset;\n", i);
-      out.Printf("\t\tlr.tex%u.xy += float2(1,0) * texOffset;\n", i);
-      out.Puts("\t}\n");
+      struct rslc_var* tex_offset = rslc_b_local(
+          sb->b, "texOffset", sb->f[2],
+          sb_con(sb, sb->f[2], 2,
+                 sb_bin(sb, RSLC_B_DIV, sb_f(sb, 1.0), sb_con(sb, sb->f[1], 1, TO(3))),
+                 sb_bin(sb, RSLC_B_DIV, sb_f(sb, 1.0), sb_con(sb, sb->f[1], 1, TO(3)))),
+          false);
+      for (i = 0; i < uid_data->numTexGens; ++i)
+      {
+        uint32_t body;
+        rslc_b_begin_block(sb->b);
+        gs_tex_add(&g, ul, i, "xy",
+                   sb_bin(sb, RSLC_B_MUL, sb_con(sb, sb->f[2], 2, sb_i(sb, 0), sb_i(sb, 1)),
+                          sb_ref(sb, tex_offset)));
+        gs_tex_add(&g, ur, i, "xy", sb_ref(sb, tex_offset));
+        gs_tex_add(&g, lr, i, "xy",
+                   sb_bin(sb, RSLC_B_MUL, sb_con(sb, sb->f[2], 2, sb_i(sb, 1), sb_i(sb, 0)),
+                          sb_ref(sb, tex_offset)));
+        body = rslc_b_end_block(sb->b);
+        rslc_b_stmt(sb->b, rslc_b_if(sb->b, gs_tex_bit(&g, 1, i), body, 0));
+      }
     }
-    out.Puts("\t}\n");
-
-    EmitVertex(out, host_config, uid_data, "ll", api_type, wireframe, stereo, true);
-    EmitVertex(out, host_config, uid_data, "lr", api_type, wireframe, stereo);
-    EmitVertex(out, host_config, uid_data, "ul", api_type, wireframe, stereo);
-    EmitVertex(out, host_config, uid_data, "ur", api_type, wireframe, stereo);
+    then_s = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b,
+                rslc_b_if(sb->b, sb_bin(sb, RSLC_B_NE, TO(3), sb_i(sb, 0)), then_s, 0));
+#undef CORNER
+#undef NI
+    gs_emit_vertex(&g, ll, true);
+    gs_emit_vertex(&g, lr, false);
+    gs_emit_vertex(&g, ul, false);
+    gs_emit_vertex(&g, ur, false);
   }
   else
   {
-    EmitVertex(out, host_config, uid_data, "f", api_type, wireframe, stereo, true);
+    gs_emit_vertex(&g, f, true);
   }
+#undef TO
 
   // Only close loop if previous code was in one (See D3D warning above)
   if (vertex_in > 1)
-    out.Puts("\t}\n");
+  {
+    uint32_t body = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b, rslc_b_for(sb->b, i_init,
+                                  sb_bin(sb, RSLC_B_LT, sb_ref(sb, g.i),
+                                         sb_i(sb, static_cast<int32_t>(vertex_in))),
+                                  sb_un(sb, RSLC_B_PREINC, sb_ref(sb, g.i)), body));
+  }
 
-  EndPrimitive(out, host_config, uid_data, api_type, wireframe, stereo);
+  if (wireframe)
+    gs_emit_vertex(&g, g.first, false);
+  sb_do(sb, sb_call(sb, "EndPrimitive", 0));
 
   if (stereo && !host_config.backend_gs_instancing)
-    out.Puts("\t}\n");
-
-  out.Puts("}\n");
-
-  return out;
-}
-
-static void EmitVertex(ShaderCode& out, const ShaderHostConfig& host_config,
-                       const geometry_shader_uid_data* uid_data, const char* vertex,
-                       APIType api_type, bool wireframe, bool stereo, bool first_vertex)
-{
-  if (wireframe && first_vertex)
-    out.Printf("\tif (i == 0) first = %s;\n", vertex);
-
-  // Vulkan NDC space has Y pointing down (right-handed NDC space).
-  if (api_type == APIType::Vulkan)
-    out.Printf("\tgl_Position = float4(%s.pos.x, -%s.pos.y, %s.pos.z, %s.pos.w);\n", vertex, vertex, vertex, vertex);
-  else
-    out.Printf("\tgl_Position = %s.pos;\n", vertex);
-
-  if (host_config.backend_depth_clamp)
   {
-    out.Printf("\tgl_ClipDistance[0] = %s.clipDist0;\n", vertex);
-    out.Printf("\tgl_ClipDistance[1] = %s.clipDist1;\n", vertex);
+    uint32_t body = rslc_b_end_block(sb->b);
+    rslc_b_stmt(sb->b, rslc_b_for(sb->b, eye_init,
+                                  sb_bin(sb, RSLC_B_LT, sb_ref(sb, g.eye), sb_i(sb, 2)),
+                                  sb_un(sb, RSLC_B_PREINC, sb_ref(sb, g.eye)), body));
   }
-  AssignVSOutputMembers(out, "ps", vertex, uid_data->numTexGens, host_config);
-
-  if (stereo)
-  {
-    // Select the output layer
-    out.Puts("\tgl_Layer = eye;\n");
-    if (!host_config.backend_gl_layer_in_fs)
-      out.Puts("\tlayer = eye;\n");
-  }
-
-  out.Puts("\tEmitVertex();\n");
-}
-
-static void EndPrimitive(ShaderCode& out, const ShaderHostConfig& host_config,
-                         const geometry_shader_uid_data* uid_data, APIType api_type, bool wireframe,
-                         bool stereo)
-{
-  if (wireframe)
-    EmitVertex(out, host_config, uid_data, "first", api_type, wireframe, stereo);
-
-  out.Puts("\tEndPrimitive();\n");
+  return rslc_b_func_end(sb->b);
 }
 
 u32 EnumerateGeometryShaderUids(GeometryShaderUid* uids)
@@ -329,3 +446,4 @@ u32 EnumerateGeometryShaderUids(GeometryShaderUid* uids)
   }
   return count;
 }
+

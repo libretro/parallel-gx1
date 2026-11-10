@@ -25,8 +25,15 @@ struct geometry_shader_uid_data
 
 using GeometryShaderUid = ShaderUid<geometry_shader_uid_data>;
 
-ShaderCode GenerateGeometryShaderCode(APIType api_type, const ShaderHostConfig& host_config,
-                                      const geometry_shader_uid_data* uid_data);
+/* What BuildGeometryShader builds the stage for. */
+struct GeometryShaderBuildArgs
+{
+  const ShaderHostConfig* host_config;
+  const geometry_shader_uid_data* uid_data;
+  APIType api_type;
+};
+/* The stage built by calls: for AbstractGfx::CreateShaderFromBuild. */
+bool BuildGeometryShader(struct shader_build* sb, const void* arg);
 GeometryShaderUid GetGeometryShaderUid(PrimitiveType primitive_type);
 /* Every geometry shader UID, into uids: returns how many. */
 enum

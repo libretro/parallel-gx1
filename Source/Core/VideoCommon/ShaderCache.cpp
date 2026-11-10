@@ -825,12 +825,9 @@ const AbstractShader* ShaderCache::InsertPixelUberShader(const UberShader::Pixel
 
 const AbstractShader* ShaderCache::CreateGeometryShader(const GeometryShaderUid& uid)
 {
-  STUTTER_MARK(t);
-  ShaderCode source_code =
-      GenerateGeometryShaderCode(m_api_type, m_host_config, uid.GetUidData());
-  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
-  AbstractShader* shader =
-      g_gfx->CreateShaderFromSource(ShaderStage::Geometry, source_code, "Geometry shader");
+  const GeometryShaderBuildArgs args = {&m_host_config, uid.GetUidData(), m_api_type};
+  AbstractShader* shader = g_gfx->CreateShaderFromBuild(ShaderStage::Geometry, BuildGeometryShader,
+                                                        &args, "Geometry shader");
 
   uid_table_value* const entry = uid_table_get(&m_gs_cache.shader_map, &uid);
   if (!entry)
