@@ -7,7 +7,6 @@
 #   OS_APPLE, with OS_MACOS or OS_IOS        Apple (OS_IOS covers iOS and tvOS)
 #   HAVE_LIBUSB HAVE_HIDAPI HAVE_CPPIPC      optional components
 #   HAVE_VULKAN HAVE_D3D
-#   HAVE_BUNDLED_ICONV                       Externals/libiconv instead of libc
 #
 # Units only the standalone frontends use are left out.
 
@@ -17,10 +16,9 @@ SRC_DIR := $(CORE_DIR)/Source/Core
 # ----------------------------------------------------------------------------
 # Generated files
 # ----------------------------------------------------------------------------
-# Plain substitutions of the upstream templates. The
-# per-platform configure results (curl_config.h, the libusb, libiconv and
-# libcharset config.h, mGBA's flags.h) are checked in under
-# Externals/<library>/makefile instead.
+# Plain substitutions of the upstream templates. The per-platform configure
+# results (curl_config.h, the libusb config.h, mGBA's flags.h) are checked in
+# under Externals/<library>/makefile instead.
 SCMREV_H        := $(GEN_DIR)/Source/Core/Common/scmrev.h
 MGBA_VERSION_C  := $(GEN_DIR)/Externals/mGBA/mgba/version.c
 
@@ -78,14 +76,6 @@ MGBA_VERSION_STATUS := $(shell \
 # Include sets shared by several libraries
 # ----------------------------------------------------------------------------
 MGBA_INC  := -I$(EXT_DIR)/mGBA/mgba/include -I$(EXT_DIR)/mGBA/makefile
-ICONV_INC :=
-ifeq ($(HAVE_BUNDLED_ICONV),1)
-   ICONV_INC := \
-	-I$(EXT_DIR)/libiconv/include \
-	-I$(EXT_DIR)/libiconv/makefile/lib \
-	-I$(EXT_DIR)/libiconv/libcharset/include \
-	-I$(EXT_DIR)/libiconv/makefile/libcharset
-endif
 
 # ----------------------------------------------------------------------------
 # Sources
@@ -105,6 +95,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_deflate.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_rbzip2.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_rzstd.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_shiftjis.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_utf.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_xxh64.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
@@ -534,26 +525,6 @@ endif
 ifeq ($(OS_MACOS),1)
    LIBUSB_SOURCES_C += \
 	$(CORE_DIR)/Externals/libusb/libusb/libusb/os/darwin_usb.c
-endif
-
-# LIBCHARSET
-LIBCHARSET_SOURCES_C :=
-LIBCHARSET_SOURCES_CXX :=
-LIBCHARSET_SOURCES_ASM :=
-LIBCHARSET_SOURCES_OBJCXX :=
-ifneq ($(OS_WIN),1)
-   LIBCHARSET_SOURCES_C += \
-	$(CORE_DIR)/Externals/libiconv/libcharset/lib/localcharset.c
-endif
-
-# ICONV
-ICONV_SOURCES_C :=
-ICONV_SOURCES_CXX :=
-ICONV_SOURCES_ASM :=
-ICONV_SOURCES_OBJCXX :=
-ifneq ($(OS_WIN),1)
-   ICONV_SOURCES_C += \
-	$(CORE_DIR)/Externals/libiconv/lib/iconv.c
 endif
 
 # LZ4
@@ -1519,20 +1490,6 @@ endif
 
 LIBUSB_FLAGS := -w -I$(EXT_DIR)/libusb/makefile -I$(EXT_DIR)/libusb/libusb/libusb
 
-LIBCHARSET_FLAGS := -w -D_ALL_SOURCE -D_DARWIN_C_SOURCE -D_GNU_SOURCE \
-	-D_HPUX_ALT_XOPEN_SOCKET_API -D_MINIX -D_NETBSD_SOURCE -D_OPENBSD_SOURCE \
-	-D_POSIX_1_SOURCE -D_POSIX_PTHREAD_SEMANTICS -D_POSIX_SOURCE -D_TANDEM_SOURCE \
-	-D_XOPEN_SOURCE -D__EXTENSIONS__ -D__STDC_WANT_IEC_60559_ATTRIBS_EXT__ \
-	-D__STDC_WANT_IEC_60559_BFP_EXT__ -D__STDC_WANT_IEC_60559_DFP_EXT__ \
-	-D__STDC_WANT_IEC_60559_EXT__ -D__STDC_WANT_IEC_60559_FUNCS_EXT__ \
-	-D__STDC_WANT_IEC_60559_TYPES_EXT__ -D__STDC_WANT_LIB_EXT2__ \
-	-D__STDC_WANT_MATH_SPEC_FUNCS__ \
-	-I$(EXT_DIR)/libiconv/libcharset/include -I$(EXT_DIR)/libiconv/makefile/libcharset
-
-ICONV_FLAGS := -w \
-	-I$(EXT_DIR)/libiconv/include -I$(EXT_DIR)/libiconv/makefile/lib \
-	-I$(EXT_DIR)/libiconv/libcharset/include -I$(EXT_DIR)/libiconv/makefile/libcharset
-
 LZ4_FLAGS := -w -DXXH_NAMESPACE=LZ4_ -I$(EXT_DIR)/lz4/lz4/lib
 
 MGBA_FLAGS := -w -DBUILD_STATIC -DDISABLE_THREADING -DENABLE_DIRECTORIES -DENABLE_VFS \
@@ -1579,7 +1536,6 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/Vulkan-Headers/include \
 	-I$(EXT_DIR)/fmt/fmt/include \
 	-I$(EXT_DIR)/mbedtls/include \
-	$(ICONV_INC) \
 	-I$(EXT_DIR)/SFML/SFML/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
@@ -1637,9 +1593,6 @@ ifeq ($(HAVE_LIBUSB),1)
 endif
 ifeq ($(HAVE_HIDAPI),1)
    LIB_GROUPS += HIDAPI
-endif
-ifeq ($(HAVE_BUNDLED_ICONV),1)
-   LIB_GROUPS += ICONV LIBCHARSET
 endif
 ifeq ($(HAVE_CPPIPC),1)
    LIB_GROUPS += CPPIPC

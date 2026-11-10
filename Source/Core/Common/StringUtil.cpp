@@ -23,16 +23,12 @@
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 
+#include <encodings/shiftjis.h>
+
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
-constexpr u32 CODEPAGE_SHIFT_JIS = 932;
-constexpr u32 CODEPAGE_WINDOWS_1252 = 1252;
-
-#include "Common/Swap.h"
 #else
-#include <cerrno>
-#include <iconv.h>
 #include <locale.h>
 #endif
 
@@ -564,7 +560,7 @@ private:
   }
 };
 
-template <std::integral CharType>
+template <std::integral CharType, bool BigEndian = false>
 requires(sizeof(CharType) == 2)
 class UTF16Decoder
 {
@@ -580,7 +576,7 @@ public:
   {
     assert(RemainingCodeUnits() > 0);
 
-    const u16 first_code_unit = *m_ptr;
+    const u16 first_code_unit = Load(m_ptr);
     ++m_ptr;
 
     // Single code unit.
@@ -595,7 +591,7 @@ public:
     if (RemainingCodeUnits() == 0)
       return UNICODE_REPLACEMENT_CHARACTER;
 
-    const u16 second_code_unit = *m_ptr;
+    const u16 second_code_unit = Load(m_ptr);
 
     // High surrogate not followed by low surrogate.
     if ((second_code_unit & u16(~SURROGATE_VALUE_MASK)) != UNICODE_LOW_SURROGATE)
@@ -609,8 +605,38 @@ public:
   }
 
 private:
+  static constexpr u16 Load(const CharType* p)
+  {
+    const u16 unit = static_cast<u16>(*p);
+    return BigEndian ? static_cast<u16>((unit >> 8) | (unit << 8)) : unit;
+  }
+
   const CharType* m_ptr;
   const CharType* const m_end_ptr;
+};
+
+// wchar_t outside Windows: UTF-32 in host order.
+class UTF32Decoder
+{
+public:
+  constexpr UTF32Decoder(const wchar_t* chars, size_t count)
+      : m_ptr{chars}, m_end_ptr{chars + count}
+  {
+  }
+
+  auto RemainingCodeUnits() const { return m_end_ptr - m_ptr; }
+
+  constexpr char32_t operator()()
+  {
+    const u32 code_point = static_cast<u32>(*m_ptr++);
+    if (code_point > UNICODE_LAST_CODE_POINT || IsSurrogateCodePoint(code_point))
+      return UNICODE_REPLACEMENT_CHARACTER;
+    return code_point;
+  }
+
+private:
+  const wchar_t* m_ptr;
+  const wchar_t* const m_end_ptr;
 };
 
 class UTF16Encoder
@@ -720,120 +746,41 @@ std::string WStringToUTF8(std::wstring_view input)
   return UTF16ToCP(CP_UTF8, input);
 }
 
-std::string SHIFTJISToUTF8(std::string_view input)
-{
-  return WStringToUTF8(CPToUTF16(CODEPAGE_SHIFT_JIS, input));
-}
-
-std::string UTF8ToSHIFTJIS(std::string_view input)
-{
-  return UTF16ToCP(CODEPAGE_SHIFT_JIS, UTF8ToWString(input));
-}
-
-std::string CP1252ToUTF8(std::string_view input)
-{
-  return WStringToUTF8(CPToUTF16(CODEPAGE_WINDOWS_1252, input));
-}
-
-std::string UTF16BEToUTF8(const char16_t* str, size_t max_size)
-{
-  size_t length = 0;
-  while (length < max_size && str[length])
-    length++;
-  std::wstring result(length, '\0');
-  for (size_t i = 0; i < length; i++)
-    result[i] = static_cast<wchar_t>(Common::swap16(static_cast<u16>(str[i])));
-  return WStringToUTF8(result);
-}
-
 #else
-
-template <typename T>
-static std::string CodeTo(const char* tocode, const char* fromcode, std::basic_string_view<T> input)
-{
-  std::string result;
-
-  auto* const conv_desc = iconv_open(tocode, fromcode);
-  if ((iconv_t)-1 == conv_desc)
-  {
-    ERROR_LOG_FMT(COMMON, "Iconv initialization failure [{}]: {}", fromcode,
-                  Common::LastStrerrorString());
-  }
-  else
-  {
-    size_t const in_bytes = sizeof(T) * input.size();
-    size_t const out_buffer_size = 4 * in_bytes;
-
-    std::string out_buffer;
-    out_buffer.resize(out_buffer_size);
-
-    auto* src_buffer = input.data();
-    size_t src_bytes = in_bytes;
-    auto* dst_buffer = out_buffer.data();
-    size_t dst_bytes = out_buffer.size();
-
-    while (src_bytes != 0)
-    {
-      size_t const iconv_result =
-          iconv(conv_desc, const_cast<char**>(reinterpret_cast<const char**>(&src_buffer)),
-                &src_bytes, &dst_buffer, &dst_bytes);
-      if ((size_t)-1 == iconv_result)
-      {
-        if (EILSEQ == errno || EINVAL == errno)
-        {
-          // Try to skip the bad character
-          if (src_bytes != 0)
-          {
-            --src_bytes;
-            ++src_buffer;
-          }
-        }
-        else
-        {
-          ERROR_LOG_FMT(COMMON, "iconv failure [{}]: {}", fromcode, Common::LastStrerrorString());
-          break;
-        }
-      }
-    }
-
-    out_buffer.resize(out_buffer_size - dst_bytes);
-    out_buffer.swap(result);
-
-    iconv_close(conv_desc);
-  }
-
-  return result;
-}
-
-template <typename T>
-static std::string CodeToUTF8(const char* fromcode, std::basic_string_view<T> input)
-{
-  return CodeTo("UTF-8", fromcode, input);
-}
-
-std::string CP1252ToUTF8(std::string_view input)
-{
-  // return CodeToUTF8("CP1252//TRANSLIT", input);
-  // return CodeToUTF8("CP1252//IGNORE", input);
-  return CodeToUTF8("CP1252", input);
-}
-
-std::string SHIFTJISToUTF8(std::string_view input)
-{
-  // return CodeToUTF8("CP932", input);
-  return CodeToUTF8("SJIS", input);
-}
-
-std::string UTF8ToSHIFTJIS(std::string_view input)
-{
-  return CodeTo("SJIS", "UTF-8", input);
-}
 
 std::string WStringToUTF8(std::wstring_view input)
 {
-  // Note: Without LE iconv expects a BOM.
-  // The "WCHAR_T" code would be appropriate, but it's apparently not in every iconv implementation.
-  return CodeToUTF8((sizeof(wchar_t) == 2) ? "UTF-16LE" : "UTF-32LE", input);
+  static_assert(sizeof(wchar_t) == 4);
+  return ReEncodeString<UTF32Decoder, UTF8Encoder, char>(input);
+}
+
+#endif
+
+// Converts with a libretro-common conversion whose output is at most
+// out_factor octets per input octet.
+static std::string Convert(size_t (*convert)(char*, size_t, const char*, size_t),
+                           std::string_view input, size_t out_factor)
+{
+  std::string result;
+  result.resize_and_overwrite(input.size() * out_factor, [&](char* buf, std::size_t size) {
+    return convert(buf, size + 1, input.data(), input.size());
+  });
+  return result;
+}
+
+std::string CP1252ToUTF8(std::string_view input)
+{
+  return Convert(cp1252_to_utf8, input, 3);
+}
+
+std::string SHIFTJISToUTF8(std::string_view input)
+{
+  return Convert(sjis_to_utf8, input, 3);
+}
+
+std::string UTF8ToSHIFTJIS(std::string_view input)
+{
+  return Convert(utf8_to_sjis, input, 1);
 }
 
 std::string UTF16BEToUTF8(const char16_t* str, size_t max_size)
@@ -841,10 +788,9 @@ std::string UTF16BEToUTF8(const char16_t* str, size_t max_size)
   size_t length = 0;
   while (length < max_size && str[length])
     length++;
-  return CodeToUTF8("UTF-16BE", std::u16string_view(str, length));
+  return ReEncodeString<UTF16Decoder<char16_t, true>, UTF8Encoder, char>(
+      std::u16string_view(str, length));
 }
-
-#endif
 
 std::string UTF16ToUTF8(std::u16string_view input)
 {
