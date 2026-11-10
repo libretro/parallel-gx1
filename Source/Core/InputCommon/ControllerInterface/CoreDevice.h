@@ -7,7 +7,6 @@
 #include <limits>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -228,17 +227,6 @@ public:
 class DeviceContainer
 {
 public:
-  struct InputDetection
-  {
-    std::shared_ptr<Device> device;
-    Device::Input* input = nullptr;
-    Clock::time_point press_time;
-    std::optional<Clock::time_point> release_time;
-    ControlState smoothness = 0;
-
-    bool IsAnalogPress() const { return smoothness > 1.00001; }
-  };
-
   Device::Input* FindInput(std::string_view name, const Device* def_dev) const;
   Device::Output* FindOutput(std::string_view name, const Device* def_dev) const;
 
@@ -314,38 +302,6 @@ private:
   static void FreeDeviceList(quiesce_node_t* node);
 
   mutable retro_atomic_ptr_t m_device_list{};
-};
-
-// Wait for inputs on supplied devices.
-// Inputs are only considered if they are first seen in a neutral state.
-// This is useful for wacky flight sticks that have certain buttons that are always held down
-// and also properly handles detection when using "FullAnalogSurface" inputs.
-// Multiple detections are returned until the various timeouts have been reached.
-class InputDetector
-{
-public:
-  using Detection = DeviceContainer::InputDetection;
-  using Results = std::vector<Detection>;
-
-  InputDetector();
-  ~InputDetector();
-
-  void Start(const DeviceContainer& container, std::span<const std::string> device_strings);
-  void Update(std::chrono::milliseconds initial_wait, std::chrono::milliseconds confirmation_wait,
-              std::chrono::milliseconds maximum_wait);
-  bool IsComplete() const;
-
-  const Results& GetResults() const;
-
-  // move-return'd to prevent copying.
-  Results TakeResults();
-
-private:
-  struct Impl;
-
-  Clock::time_point m_start_time;
-  Results m_detections;
-  std::unique_ptr<Impl> m_state;
 };
 
 }  // namespace Core
