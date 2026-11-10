@@ -20,8 +20,15 @@ using VertexShaderUid = ShaderUid<vertex_ubershader_uid_data>;
 
 VertexShaderUid GetVertexShaderUid();
 
-ShaderCode GenVertexShader(APIType api_type, const ShaderHostConfig& host_config,
-                           const vertex_ubershader_uid_data* uid_data);
+/* What BuildVertexShader builds the stage for. */
+struct VertexShaderBuildArgs
+{
+  const ShaderHostConfig* host_config;
+  const vertex_ubershader_uid_data* uid_data;
+  APIType api_type;
+};
+/* The stage built by calls: for AbstractGfx::CreateShaderFromBuild. */
+bool BuildVertexShader(struct shader_build* sb, const void* arg);
 /* Every vertex ubershader UID, into uids: returns how many. */
 enum
 {

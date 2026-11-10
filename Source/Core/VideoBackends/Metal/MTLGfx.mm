@@ -155,7 +155,7 @@ std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromBuild(ShaderStage st
     PanicAlertFmt("Failed to build shader {}: {}", name, err);
     return nullptr;
   }
-  std::string msl(result.text, result.text_len);
+  std::string msl = Util::FinishMSL(std::string_view(result.text, result.text_len));
   shader_arena_blob_release(result.blob);
   return CreateShaderFromMSL(stage, std::move(msl), {}, name);
 }

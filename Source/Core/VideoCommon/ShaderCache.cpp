@@ -671,11 +671,9 @@ AbstractShader* ShaderCache::CompileVertexShader(const VertexShaderUid& uid) con
 AbstractShader*
 ShaderCache::CompileVertexUberShader(const UberShader::VertexShaderUid& uid) const
 {
-  STUTTER_MARK(t);
-  ShaderCode source_code =
-      UberShader::GenVertexShader(m_api_type, m_host_config, uid.GetUidData());
-  STUTTER_SINCE(STUTTER_SHADER_GENERATE, t);
-  return g_gfx->CreateShaderFromSource(ShaderStage::Vertex, source_code, "Vertex ubershader");
+  const UberShader::VertexShaderBuildArgs args = {&m_host_config, uid.GetUidData(), m_api_type};
+  return g_gfx->CreateShaderFromBuild(ShaderStage::Vertex, UberShader::BuildVertexShader, &args,
+                                      "Vertex ubershader");
 }
 
 AbstractShader* ShaderCache::CompilePixelShader(const PixelShaderUid& uid) const

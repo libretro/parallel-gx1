@@ -205,22 +205,11 @@ union ShaderHostConfig
 std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool include_gameid,
                                        bool include_host_config, bool include_api = true);
 
-void WriteIsNanHeader(ShaderCode& out, APIType api_type);
 void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
                                 const ShaderHostConfig& host_config);
 
 void GenerateVSOutputMembers(ShaderCode& object, u32 texgens, const ShaderHostConfig& host_config,
                              const char* qualifier);
-
-void AssignVSOutputMembers(ShaderCode& object, const char* a, const char* b, u32 texgens,
-                           const ShaderHostConfig& host_config);
-
-void GenerateLineOffset(ShaderCode& object, const char* indent0, const char* indent1,
-                        const char* pos_a, const char* pos_b, const char* sign);
-
-void GenerateVSLineExpansion(ShaderCode& object, const char* indent, u32 texgens);
-
-void GenerateVSPointExpansion(ShaderCode& object, const char* indent, u32 texgens);
 
 /* ---- the same pieces, built by calls ---- */
 
@@ -249,17 +238,18 @@ void BuildVSOutputLayout(const struct shader_build* sb, u32 texgens,
                          struct vs_output_layout* layout);
 /* The member quals GetInterpolationQualifier gives: centroid or sample under MSAA. */
 unsigned BuildInterpolationQuals(bool msaa, bool ssaa);
-/* a.member = b.member, in AssignVSOutputMembers' order */
+/* a.member = b.member for each member of VS_OUTPUT */
 void BuildAssignVSOutputMembers(const struct shader_build* sb, const struct vs_output_layout* layout,
                                 const struct sb_place* a, const struct sb_place* b,
                                 const ShaderHostConfig& host_config);
 /* struct Light, as s_lighting_struct declares it */
 const struct rslc_type* BuildLightStruct(const struct shader_build* sb);
-/* s_geometry_shader_uniforms' types and names, at types + n and names + n: returns n + 4 */
+/* The GSBlock's members (cstereo, clinept, ctexoffset, vs_expand): their types and names at
+ * types + n and names + n; returns n + 4 */
 u32 BuildGeometryShaderUniforms(const struct shader_build* sb, const struct rslc_type** types,
                                 const char** names, u32 n);
-/* GenerateLineOffset: float2 offset, declared and set; pos_a and pos_b are float4 positions
- * made afresh by the calls, sign a float (nullptr for none) */
+/* A line's float2 offset, declared and set; pos_a and pos_b are float4 positions made afresh
+ * by the calls, sign a float (nullptr for none) */
 typedef uint32_t (*sb_expr_fn)(const struct shader_build* sb, const void* ctx);
 struct rslc_var* BuildLineOffset(const struct shader_build* sb, struct rslc_var* clinept,
                                  sb_expr_fn pos_a, const void* a_ctx, sb_expr_fn pos_b,
@@ -306,8 +296,8 @@ enum shader_uniform
 u32 BuildShaderUniforms(const struct shader_build* sb, const struct rslc_type* light,
                         const struct rslc_type** types, const char** names, u32 n);
 
-/* What GenerateVSLineExpansion and GenerateVSPointExpansion read and write: o a VS_OUTPUT
- * laid out as layout, the GSBlock's members by name. */
+/* What the vertex stage's line and point expansion read and write: o a VS_OUTPUT laid out as
+ * layout, the GSBlock's members by name. */
 struct vs_expansion
 {
   struct rslc_var* o;
@@ -348,6 +338,29 @@ ShaderBitfieldExtract BitfieldExtract(const char* source)
            BitFieldT::IsSigned() ? "int" : "uint", source,
            static_cast<u32>(BitFieldT::StartBit()), static_cast<u32>(BitFieldT::NumBits()));
   return extract;
+}
+
+/* WriteBitfieldExtractHeader's functions, where the backend lacks bitfieldExtract: nullptr
+ * where it has it. */
+struct sb_bitfield
+{
+  struct rslc_func* u;
+  struct rslc_func* i;
+};
+void BuildBitfieldExtractHeader(const struct shader_build* sb, const ShaderHostConfig& host_config,
+                                struct sb_bitfield* bf);
+/* bitfieldExtract(int(src) or uint(src), start, bits) */
+uint32_t sb_bitfield_extract(const struct shader_build* sb, const struct sb_bitfield* bf,
+                             bool is_signed, uint32_t src, u32 start, u32 bits);
+/* BitfieldExtract, built by calls */
+template <auto ptr_to_bitfield_member>
+uint32_t BuildBitfieldExtract(const struct shader_build* sb, const struct sb_bitfield* bf,
+                              uint32_t src)
+{
+  using BitFieldT = Common::MemberType<ptr_to_bitfield_member>;
+  return sb_bitfield_extract(sb, bf, BitFieldT::IsSigned(), src,
+                             static_cast<u32>(BitFieldT::StartBit()),
+                             static_cast<u32>(BitFieldT::NumBits()));
 }
 
 // A tree of ifs on variable, values[i] written where it is i: indexes low <= i < high.
@@ -438,8 +451,4 @@ static const char s_shader_uniforms[] = "\tuint    components;\n"
                                         "\t#define xfmem_color(i) (xfmem_pack1[(i)].z)\n"
                                         "\t#define xfmem_alpha(i) (xfmem_pack1[(i)].w)\n";
 
-static const char s_geometry_shader_uniforms[] = "\tfloat4 " I_STEREOPARAMS ";\n"
-                                                 "\tfloat4 " I_LINEPTPARAMS ";\n"
-                                                 "\tint4 " I_TEXOFFSET ";\n"
-                                                 "\tuint vs_expand;\n";
 

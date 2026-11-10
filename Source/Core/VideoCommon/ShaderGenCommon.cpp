@@ -163,25 +163,6 @@ std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool 
   return filename;
 }
 
-void WriteIsNanHeader(ShaderCode& out, APIType api_type)
-{
-  if (api_type == APIType::D3D)
-  {
-    out.Puts("bool dolphin_isnan(float f) {\n"
-              "  // Workaround for the HLSL compiler deciding that isnan can never be true and\n"
-              "  // optimising away the call, even though the value can actually be NaN\n"
-              "  // Just look for the bit pattern that indicates NaN instead\n"
-              "  return (floatBitsToInt(f) & 0x7FFFFFFF) > 0x7F800000;\n"
-              "}\n"
-              "\n");
-    // If isfinite is needed, (floatBitsToInt(f) & 0x7F800000) != 0x7F800000 can be used
-  }
-  else
-  {
-    out.Puts("#define dolphin_isnan(f) isnan(f)\n");
-  }
-}
-
 void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
                                 const ShaderHostConfig& host_config)
 {
@@ -240,122 +221,6 @@ void GenerateVSOutputMembers(ShaderCode& object, u32 texgens, const ShaderHostCo
   {
     DefineOutputMember(object, qualifier, "float3", "Normal", -1);
     DefineOutputMember(object, qualifier, "float3", "WorldPos", -1);
-  }
-}
-
-void AssignVSOutputMembers(ShaderCode& object, const char* a, const char* b, u32 texgens,
-                           const ShaderHostConfig& host_config)
-{
-  object.Printf("\t%s.pos = %s.pos;\n", a, b);
-  object.Printf("\t%s.colors_0 = %s.colors_0;\n", a, b);
-  object.Printf("\t%s.colors_1 = %s.colors_1;\n", a, b);
-
-  for (unsigned int i = 0; i < texgens; ++i)
-    object.Printf("\t%s.tex%u = %s.tex%u;\n", a, i, b, i);
-
-  if (!host_config.fast_depth_calc)
-    object.Printf("\t%s.clipPos = %s.clipPos;\n", a, b);
-
-  if (host_config.per_pixel_lighting)
-  {
-    object.Printf("\t%s.Normal = %s.Normal;\n", a, b);
-    object.Printf("\t%s.WorldPos = %s.WorldPos;\n", a, b);
-  }
-
-  if (host_config.backend_geometry_shaders)
-  {
-    object.Printf("\t%s.clipDist0 = %s.clipDist0;\n", a, b);
-    object.Printf("\t%s.clipDist1 = %s.clipDist1;\n", a, b);
-  }
-}
-
-void GenerateLineOffset(ShaderCode& object, const char* indent0, const char* indent1,
-                        const char* pos_a, const char* pos_b, const char* sign)
-{
-  // GameCube/Wii's line drawing algorithm is a little quirky. It does not
-  // use the correct line caps. Instead, the line caps are vertical or
-  // horizontal depending the slope of the line.
-  object.Printf("%sfloat2 offset;\n", indent0);
-  object.Printf("%sfloat2 to = abs(%s.xy / %s.w - %s.xy / %s.w);\n", indent0, pos_a, pos_a, pos_b,
-                pos_b);
-  // FIXME: What does real hardware do when line is at a 45-degree angle?
-  // FIXME: Lines aren't drawn at the correct width. See Twilight Princess map.
-  object.Printf("%sif (" I_LINEPTPARAMS ".y * to.y > " I_LINEPTPARAMS ".x * to.x) {\n", indent0);
-  // Line is more tall. Extend geometry left and right.
-  // Lerp LineWidth/2 from [0..VpWidth] to [-1..1]
-  object.Printf("%soffset = float2(%s" I_LINEPTPARAMS ".z / " I_LINEPTPARAMS ".x, 0);\n", indent1,
-                sign);
-  object.Printf("%s} else {\n", indent0);
-  // Line is more wide. Extend geometry up and down.
-  // Lerp LineWidth/2 from [0..VpHeight] to [1..-1]
-  object.Printf("%soffset = float2(0, %s-" I_LINEPTPARAMS ".z / " I_LINEPTPARAMS ".y);\n", indent1,
-                sign);
-  object.Printf("%s}\n", indent0);
-}
-
-void GenerateVSLineExpansion(ShaderCode& object, const char* indent, u32 texgens)
-{
-  char indent1[64];
-  snprintf(indent1, sizeof(indent1), "%s  ", indent);
-  object.Printf("%sother_pos = float4(dot("
-            I_PROJECTION
-            "[0], other_pos), dot("
-            I_PROJECTION
-            "[1], other_pos), dot("
-            I_PROJECTION
-            "[2], other_pos), dot("
-            I_PROJECTION
-            "[3], other_pos));\n"
-            "\n"
-            "%sfloat expand_sign = is_right ? 1.0f : -1.0f;\n", indent, indent);
-  GenerateLineOffset(object, indent, indent1, "o.pos", "other_pos", "expand_sign * ");
-  object.Printf("\n"
-            "%so.pos.xy += offset * o.pos.w;\n", indent);
-  if (texgens > 0)
-  {
-    object.Printf("%sif (("
-              I_TEXOFFSET
-              "[2] != 0) && is_right) {\n", indent);
-    object.Printf("%s  float texOffset = 1.0 / float("
-              I_TEXOFFSET
-              "[2]);\n", indent);
-    for (u32 i = 0; i < texgens; i++)
-    {
-      object.Printf("%s  if ((("
-                I_TEXOFFSET
-                "[0] >> %u) & 0x1) != 0)\n", indent, i);
-      object.Printf("%s    o.tex%u.x += texOffset;\n", indent, i);
-    }
-    object.Printf("%s}\n", indent);
-  }
-}
-
-void GenerateVSPointExpansion(ShaderCode& object, const char* indent, u32 texgens)
-{
-  object.Printf("%sfloat2 expand_sign = float2(is_right ? 1.0f : -1.0f, is_bottom ? -1.0f : 1.0f);\n"
-            "%sfloat2 offset = expand_sign * "
-            I_LINEPTPARAMS
-            ".ww / "
-            I_LINEPTPARAMS
-            ".xy;\n"
-            "%so.pos.xy += offset * o.pos.w;\n", indent, indent, indent);
-  if (texgens > 0)
-  {
-    object.Printf("%sif ("
-              I_TEXOFFSET
-              "[3] != 0) {\n"
-              "%s  float texOffsetMagnitude = 1.0f / float("
-              I_TEXOFFSET
-              "[3]);\n"
-              "%s  float2 texOffset = float2(is_right ? texOffsetMagnitude : 0.0f, is_bottom ? texOffsetMagnitude : 0.0f);", indent, indent, indent);
-    for (u32 i = 0; i < texgens; i++)
-    {
-      object.Printf("%s  if ((("
-                I_TEXOFFSET
-                "[1] >> %u) & 0x1) != 0)\n", indent, i);
-      object.Printf("%s    o.tex%u.xy += texOffset;\n", indent, i);
-    }
-    object.Printf("%s}\n", indent);
   }
 }
 
@@ -520,6 +385,74 @@ struct rslc_var* BuildLineOffset(const struct shader_build* sb, struct rslc_var*
                                then_s, else_s));
 #undef LP
   return offset;
+}
+
+void BuildBitfieldExtractHeader(const struct shader_build* sb, const ShaderHostConfig& host_config,
+                                struct sb_bitfield* bf)
+{
+  static const char* const names[3] = {"val", "off", "size"};
+  static const unsigned dirs[3] = {RSLC_B_IN, RSLC_B_IN, RSLC_B_IN};
+  const struct rslc_type* types[3];
+  struct rslc_var *mask, *val, *off, *size;
+  bf->u = bf->i = nullptr;
+  // ==============================================
+  //  BitfieldExtract for APIs which don't have it
+  // ==============================================
+  if (host_config.backend_bitfield)
+    return;
+  // This built-in function is only supported in OpenGL 4.0+ and ES 3.1+
+  // Microsoft's HLSL compiler automatically optimises this to a bitfield extract instruction.
+  types[0] = sb->u[1];
+  types[1] = types[2] = sb->i[1];
+  bf->u = rslc_b_func(sb->b, "bitfieldExtract", sb->u[1], 3, types, dirs, names);
+  rslc_b_func_begin(sb->b, bf->u);
+  val = rslc_b_param(bf->u, 0);
+  off = rslc_b_param(bf->u, 1);
+  size = rslc_b_param(bf->u, 2);
+  mask = rslc_b_local(
+      sb->b, "mask", sb->u[1],
+      sb_con(sb, sb->u[1], 1,
+             sb_bin(sb, RSLC_B_SUB, sb_bin(sb, RSLC_B_SHL, sb_i(sb, 1), sb_ref(sb, size)),
+                    sb_i(sb, 1))),
+      false);
+  rslc_b_stmt(sb->b,
+              rslc_b_return(sb->b, sb_bin(sb, RSLC_B_BAND,
+                                          sb_con(sb, sb->u[1], 1,
+                                                 sb_bin(sb, RSLC_B_SHR, sb_ref(sb, val),
+                                                        sb_ref(sb, off))),
+                                          sb_ref(sb, mask))));
+  rslc_b_func_end(sb->b);
+
+  types[0] = sb->i[1];
+  bf->i = rslc_b_func(sb->b, "bitfieldExtract", sb->i[1], 3, types, dirs, names);
+  rslc_b_func_begin(sb->b, bf->i);
+  val = rslc_b_param(bf->i, 0);
+  off = rslc_b_param(bf->i, 1);
+  size = rslc_b_param(bf->i, 2);
+  rslc_b_stmt(
+      sb->b,
+      rslc_b_return(
+          sb->b,
+          sb_bin(sb, RSLC_B_SHR,
+                 sb_bin(sb, RSLC_B_SHL, sb_ref(sb, val),
+                        sb_bin(sb, RSLC_B_SUB,
+                               sb_bin(sb, RSLC_B_SUB, sb_i(sb, 32), sb_ref(sb, size)),
+                               sb_ref(sb, off))),
+                 sb_bin(sb, RSLC_B_SUB, sb_i(sb, 32), sb_ref(sb, size)))));
+  rslc_b_func_end(sb->b);
+}
+
+uint32_t sb_bitfield_extract(const struct shader_build* sb, const struct sb_bitfield* bf,
+                             bool is_signed, uint32_t src, u32 start, u32 bits)
+{
+  uint32_t a[3];
+  const struct rslc_func* f = is_signed ? bf->i : bf->u;
+  a[0] = sb_con(sb, is_signed ? sb->i[1] : sb->u[1], 1, src);
+  a[1] = sb_i(sb, static_cast<int32_t>(start));
+  a[2] = sb_i(sb, static_cast<int32_t>(bits));
+  if (f)
+    return rslc_b_call(sb->b, f, a, 3);
+  return rslc_b_builtin(sb->b, "bitfieldExtract", a, 3);
 }
 
 struct rslc_func* BuildIsNanHeader(const struct shader_build* sb, APIType api_type)

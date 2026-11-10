@@ -556,7 +556,11 @@ Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
   }
   compiled = result.text;
   rslc_result_free(&result, &opts);
+  return FinishMSL(compiled);
+}
 
+std::string Metal::Util::FinishMSL(std::string_view compiled)
+{
   std::string output(MSL_HEADER);
   std::string_view remaining = compiled;
   while (!remaining.empty())
