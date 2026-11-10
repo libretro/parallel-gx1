@@ -2963,10 +2963,13 @@ void TextureCacheBase::CopyRenderTargetToTexture(
   }
 
   // Even if the copy is deferred, still compute the hash. This way if the copy is used as a texture
-  // in a subsequent draw before it is flushed, it will have the same hash.
+  // in a subsequent draw before it is flushed, it will have the same hash. Memory filled with the
+  // uninitialized pattern, exactly the bytes the hash reads, has its shape's hash.
   if (entry)
   {
-    const u64 hash = entry->CalculateHash();
+    const bool filled = !copy_to_ram && entry->BytesPerRow() == bytes_per_row &&
+                        entry->NumBlocksY() == num_blocks_y && entry->memory_stride == dstStride;
+    const u64 hash = filled ? FilledPatternHash(*entry, is_xfb_copy) : entry->CalculateHash();
     entry->SetHashes(hash, hash);
     TexIndexInsert(&m_textures_by_address, dstAddr, entry);
   }
@@ -3116,6 +3119,38 @@ void TextureCacheBase::UninitializeEFBMemory(u8* dst, u32 stride, u32 bytes_per_
   {
     std::memset(ptr, 0, bytes_per_row);
     ptr += stride;
+  }
+}
+
+u64 TextureCacheBase::FilledPatternHash(const TCacheEntry& entry, bool xfb)
+{
+  const u32 bytes_per_row = entry.BytesPerRow();
+  const u32 rows = entry.NumBlocksY();
+  const u32 samples = static_cast<u32>(entry.HashSampleSize());
+  u32 i;
+  for (i = 0; i < m_num_pattern_hashes; i++)
+  {
+    const PatternHash& known = m_pattern_hashes[i];
+    if (known.bytes_per_row == bytes_per_row && known.stride == entry.memory_stride &&
+        known.rows == rows && known.size == entry.size_in_bytes && known.samples == samples &&
+        known.xfb == xfb)
+    {
+      return known.hash;
+    }
+  }
+  {
+    PatternHash& made = m_pattern_hashes[m_next_pattern_hash];
+    made.bytes_per_row = bytes_per_row;
+    made.stride = entry.memory_stride;
+    made.rows = rows;
+    made.size = entry.size_in_bytes;
+    made.samples = samples;
+    made.xfb = xfb;
+    made.hash = entry.CalculateHash();
+    m_next_pattern_hash = (m_next_pattern_hash + 1) % NUM_PATTERN_HASHES;
+    if (m_num_pattern_hashes < NUM_PATTERN_HASHES)
+      m_num_pattern_hashes++;
+    return made.hash;
   }
 }
 

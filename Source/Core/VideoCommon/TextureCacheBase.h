@@ -524,6 +524,25 @@ private:
   void UninitializeEFBMemory(u8* dst, u32 stride, u32 bytes_per_row, u32 num_blocks_y);
   void UninitializeXFBMemory(u8* dst, u32 stride, u32 bytes_per_row, u32 num_blocks_y);
 
+  /* The hash of a copy's memory just filled with the uninitialized pattern
+   * (UninitializeXFBMemory / UninitializeEFBMemory): the same bytes for the
+   * same shape every time, so hashed once per shape. */
+  u64 FilledPatternHash(const TCacheEntry& entry, bool xfb);
+  struct PatternHash
+  {
+    u32 bytes_per_row;
+    u32 stride;
+    u32 rows;
+    u32 size;
+    u32 samples;
+    bool xfb;
+    u64 hash;
+  };
+  static constexpr u32 NUM_PATTERN_HASHES = 4;
+  PatternHash m_pattern_hashes[NUM_PATTERN_HASHES] = {};
+  u32 m_num_pattern_hashes = 0;
+  u32 m_next_pattern_hash = 0;
+
   // Precomputing the coefficients for the previous, current, and next lines for the copy filter.
   static std::array<u32, 3>
   GetRAMCopyFilterCoefficients(const CopyFilterCoefficients::Values& coefficients);
