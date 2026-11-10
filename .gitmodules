@@ -10,10 +10,6 @@
 	path = Externals/zlib-ng/zlib-ng
 	url = https://github.com/zlib-ng/zlib-ng.git
 	shallow = true
-[submodule "Externals/libspng/libspng"]
-	path = Externals/libspng/libspng
-	url = https://github.com/randy408/libspng.git
-	shallow = true
 [submodule "Externals/gtest"]
 	path = Externals/gtest
 	url = https://github.com/google/googletest.git

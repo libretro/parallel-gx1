@@ -3,124 +3,70 @@
 
 #include "Common/Image.h"
 
-#include <memory>
+#include <cstdlib>
 #include <string>
 
-#include <spng.h>
+#include <formats/image.h>
+#include <formats/rpng.h>
+#include <libretro.h>
+#include <streams/interface_stream.h>
 
-#include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
-#include "Common/Timer.h"
 
 namespace Common
 {
-static void spng_free(spng_ctx* ctx)
-{
-  if (ctx)
-    spng_ctx_free(ctx);
-}
-
-static auto make_spng_ctx(int flags)
-{
-  return std::unique_ptr<spng_ctx, decltype(&spng_free)>(spng_ctx_new(flags), spng_free);
-}
-
 bool LoadPNG(const u8* input, size_t input_size, Common::UniqueBuffer<u8>* data_out,
              u32* width_out, u32* height_out)
 {
-  auto ctx = make_spng_ctx(0);
-  if (!ctx)
+  struct rpng_info info;
+  rpng_t* rpng = rpng_alloc();
+  void* out = nullptr;
+  unsigned width = 0, height = 0;
+  int ret = IMAGE_PROCESS_ERROR;
+
+  if (!rpng)
     return false;
-
-  if (spng_set_png_buffer(ctx.get(), input, input_size))
-    return false;
-
-  spng_ihdr ihdr{};
-  if (spng_get_ihdr(ctx.get(), &ihdr))
-    return false;
-
-  const int format = SPNG_FMT_RGBA8;
-  size_t decoded_len = 0;
-  if (spng_decoded_image_size(ctx.get(), format, &decoded_len))
-    return false;
-
-  data_out->reset(decoded_len);
-  if (spng_decode_image(ctx.get(), data_out->data(), decoded_len, format, SPNG_DECODE_TRNS))
-    return false;
-
-  *width_out = ihdr.width;
-  *height_out = ihdr.height;
-  return true;
-}
-
-static int WritePNGStream(spng_ctx*, void* user, void* data, size_t length)
-{
-  return static_cast<File::IOFile*>(user)->WriteBytes(data, length) ? 0 : SPNG_IO_ERROR;
-}
-
-bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u32 width,
-             u32 height, u32 stride, int level)
-{
-  Common::Timer timer;
-  timer.Start();
-
-  spng_color_type color_type;
-  switch (format)
+  /* rpng only reads the buffer it is lent */
+  if (rpng_set_buf_ptr(rpng, const_cast<u8*>(input), input_size) && rpng_start(rpng))
   {
-  case ImageByteFormat::RGB:
-    color_type = SPNG_COLOR_TYPE_TRUECOLOR;
-    break;
-  case ImageByteFormat::RGBA:
-    color_type = SPNG_COLOR_TYPE_TRUECOLOR_ALPHA;
-    break;
-  default:
-    ASSERT_MSG(FRAMEDUMP, false, "Invalid format {}", static_cast<int>(format));
-    return false;
-  }
-
-  auto ctx = make_spng_ctx(SPNG_CTX_ENCODER);
-  if (!ctx)
-    return false;
-
-  auto outfile = File::IOFile(path, "wb");
-  if (!outfile || spng_set_png_stream(ctx.get(), WritePNGStream, &outfile))
-    return false;
-
-  if (spng_set_option(ctx.get(), SPNG_IMG_COMPRESSION_LEVEL, level))
-    return false;
-
-  spng_ihdr ihdr{};
-  ihdr.width = width;
-  ihdr.height = height;
-  ihdr.color_type = color_type;
-  ihdr.bit_depth = 8;
-  if (spng_set_ihdr(ctx.get(), &ihdr))
-    return false;
-
-  if (spng_encode_image(ctx.get(), nullptr, 0, SPNG_FMT_PNG,
-                        SPNG_ENCODE_PROGRESSIVE | SPNG_ENCODE_FINALIZE))
-  {
-    return false;
-  }
-  for (u32 row = 0; row < height; row++)
-  {
-    const int err = spng_encode_row(ctx.get(), &input[row * stride], stride);
-    if (err == SPNG_EOI)
-      break;
-    if (err)
+    while (rpng_iterate_image(rpng))
     {
-      ERROR_LOG_FMT(FRAMEDUMP, "Failed to save {} by {} image to {} at level {}: error {}", width,
-                    height, path, level, err);
-      return false;
+    }
+    if (rpng_is_valid(rpng) && rpng_get_info(rpng, &info))
+    {
+      /* decoded straight into the caller's buffer: R, G, B, A bytes */
+      data_out->reset(static_cast<size_t>(info.width) * info.height * 4);
+      if (rpng_set_output(rpng, reinterpret_cast<uint32_t*>(data_out->data()), info.width))
+      {
+        do
+          ret = rpng_process_image(rpng, &out, input_size, &width, &height, true);
+        while (ret == IMAGE_PROCESS_NEXT);
+      }
     }
   }
-
-  size_t image_len = 0;
-  spng_decoded_image_size(ctx.get(), SPNG_FMT_PNG, &image_len);
-  INFO_LOG_FMT(FRAMEDUMP, "{} byte {} by {} image saved to {} at level {} in {} ms", image_len,
-               width, height, path, level, timer.ElapsedMs());
+  rpng_free(rpng);
+  if (ret != IMAGE_PROCESS_END)
+    return false;
+  *width_out = width;
+  *height_out = height;
   return true;
+}
+
+bool SavePNG(const std::string& path, const u8* input, u32 width, u32 height, u32 stride)
+{
+  intfstream_t* stream = intfstream_open_file(path.c_str(), RETRO_VFS_FILE_ACCESS_WRITE,
+                                              RETRO_VFS_FILE_ACCESS_HINT_NONE);
+  bool ok;
+
+  if (!stream)
+    return false;
+  ok = rpng_save_image_stream_fmt(input, stream, width, height, static_cast<signed>(stride),
+                                  RPNG_PIXFMT_RGBA32, nullptr);
+  intfstream_close(stream);
+  free(stream);
+  if (!ok)
+    ERROR_LOG_FMT(FRAMEDUMP, "Failed to save {} by {} image to {}", width, height, path);
+  return ok;
 }
 }  // namespace Common

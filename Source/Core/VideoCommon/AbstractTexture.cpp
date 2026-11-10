@@ -17,7 +17,7 @@ AbstractTexture::AbstractTexture(const TextureConfig& c) : m_config(c)
 {
 }
 
-bool AbstractTexture::Save(const std::string& filename, unsigned int level, int compression) const
+bool AbstractTexture::Save(const std::string& filename, unsigned int level) const
 {
   // We can't dump compressed textures currently (it would mean drawing them to a RGBA8
   // framebuffer, and saving that). TextureCache does not call Save for custom textures
@@ -52,8 +52,8 @@ bool AbstractTexture::Save(const std::string& filename, unsigned int level, int 
 
   return Common::SavePNG(filename,
                          reinterpret_cast<const u8*>(readback_texture->GetMappedPointer()),
-                         Common::ImageByteFormat::RGBA, level_width, level_height,
-                         static_cast<int>(readback_texture->GetMappedStride()), compression);
+                         level_width, level_height,
+                         static_cast<u32>(readback_texture->GetMappedStride()));
 }
 
 bool AbstractTexture::IsCompressedFormat(AbstractTextureFormat format)

@@ -10,15 +10,10 @@
 
 namespace Common
 {
+/* A PNG decoded to R, G, B, A bytes */
 bool LoadPNG(const u8* input, size_t input_size, Common::UniqueBuffer<u8>* data_out,
              u32* width_out, u32* height_out);
 
-enum class ImageByteFormat
-{
-  RGB,
-  RGBA,
-};
-
-bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u32 width,
-             u32 height, u32 stride, int level = 6);
+/* R, G, B, A rows stride bytes apart, written to path as a PNG */
+bool SavePNG(const std::string& path, const u8* input, u32 width, u32 height, u32 stride);
 }  // namespace Common

@@ -125,6 +125,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/compat/compat_strl.c \
 	$(CORE_DIR)/Externals/libretro-common/compat/fopen_utf8.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_crc32.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_deflate.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_utf.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_xxh64.c \
 	$(CORE_DIR)/Externals/libretro-common/features/features_cpu.c \
@@ -136,12 +137,19 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_front.c \
 	$(CORE_DIR)/Externals/libretro-common/gfx/shaders/rslc_ir.c \
 	$(CORE_DIR)/Externals/libretro-common/formats/json/rjson.c \
+	$(CORE_DIR)/Externals/libretro-common/formats/png/rpng.c \
+	$(CORE_DIR)/Externals/libretro-common/formats/png/rpng_encode.c \
 	$(CORE_DIR)/Externals/libretro-common/memmap/memmap.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_waitable_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/rthreads/retro_eventcount.c \
 	$(CORE_DIR)/Externals/libretro-common/rthreads/rthreads.c \
 	$(CORE_DIR)/Externals/libretro-common/streams/file_stream.c \
+	$(CORE_DIR)/Externals/libretro-common/streams/interface_stream.c \
+	$(CORE_DIR)/Externals/libretro-common/streams/memory_stream.c \
+	$(CORE_DIR)/Externals/libretro-common/streams/trans_stream.c \
+	$(CORE_DIR)/Externals/libretro-common/streams/trans_stream_deflate.c \
+	$(CORE_DIR)/Externals/libretro-common/streams/trans_stream_pipe.c \
 	$(CORE_DIR)/Externals/libretro-common/string/rstrtod.c \
 	$(CORE_DIR)/Externals/libretro-common/string/stdstring.c \
 	$(CORE_DIR)/Externals/libretro-common/time/rtime.c \
@@ -653,14 +661,6 @@ LZMA_SOURCES_C += \
 	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_open_stdxxx.c \
 	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_physmem.c \
 	$(CORE_DIR)/Externals/liblzma/tuklib/tuklib_progname.c
-
-# SPNG
-SPNG_SOURCES_C :=
-SPNG_SOURCES_CXX :=
-SPNG_SOURCES_ASM :=
-SPNG_SOURCES_OBJCXX :=
-SPNG_SOURCES_C += \
-	$(CORE_DIR)/Externals/libspng/libspng/spng/spng.c
 
 # ZLIB
 ZLIB_SOURCES_C :=
@@ -1821,9 +1821,6 @@ ifneq ($(OS_WIN),1)
    LZMA_FLAGS += -DHAVE_WCWIDTH=1
 endif
 
-SPNG_FLAGS  := -DSPNG_DISABLE_OPT=1 -DSPNG_STATIC -I$(EXT_DIR)/libspng/libspng/spng $(ZLIB_INC)
-SPNG_CFLAGS := -std=gnu99
-
 ZLIB_FLAGS  := -w -O2 -DHAVE_BUILTIN_CTZ -DHAVE_BUILTIN_CTZLL -DWITH_GZFILEOP -DZLIB_COMPAT \
 	-D_LARGEFILE64_SOURCE=1 -D__USE_LARGEFILE64 $(ZLIB_INC)
 ZLIB_CFLAGS := -std=c11
@@ -1910,7 +1907,7 @@ CPPIPC_CXXFLAGS := -std=gnu++17
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA -DHAVE_CRC32 \
-	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC -DSPNG_STATIC \
+	-DLZMA_API_STATIC -DPUGIXML_NO_EXCEPTIONS -DSFML_STATIC \
 	-DCURL_STATICLIB \
 	-DTINYGLTF_NOEXCEPTION -DTINYGLTF_NO_EXTERNAL_IMAGE -DTINYGLTF_USE_CPP14 \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
@@ -1924,7 +1921,6 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/bzip2/bzip2 \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi -I$(EXT_DIR)/pugixml/pugixml/src \
 	$(MGBA_INC) \
-	-I$(EXT_DIR)/libspng/libspng/spng \
 	-I$(EXT_DIR)/tinygltf \
 	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib \
@@ -1980,7 +1976,7 @@ else ifeq ($(ARCH_ARM64),1)
 endif
 
 # Libraries in link order; the optional ones only where they are built.
-LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO SPNG \
+LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS MINIZIP ZSTD ZLIB LZMA BZIP2 LZ4 LZO \
 	MGBA SFML FMT PUGIXML TINYGLTF FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB

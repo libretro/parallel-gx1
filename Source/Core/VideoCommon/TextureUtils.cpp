@@ -8,8 +8,8 @@
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
+#include "Common/StringUtil.h"
 
-#include "Core/Config/GraphicsSettings.h"
 #include "Core/ConfigManager.h"
 
 #include "VideoCommon/AbstractTexture.h"
@@ -44,7 +44,7 @@ void DumpTexture(const ::AbstractTexture& texture, std::string basename, u32 lev
   if (File::Exists(filename))
     return;
 
-  texture.Save(filename, level, Config::Get(Config::GFX_TEXTURE_PNG_COMPRESSION_LEVEL));
+  texture.Save(filename, level);
 }
 
 void TextureDumper::DumpTexture(const ::AbstractTexture& texture, std::string basename, u32 level,
@@ -74,7 +74,6 @@ void TextureDumper::DumpTexture(const ::AbstractTexture& texture, std::string ba
   if (file_existed)
     return;
 
-  texture.Save(fmt::format("{}/{}.png", dump_dir, name), level,
-               Config::Get(Config::GFX_TEXTURE_PNG_COMPRESSION_LEVEL));
+  texture.Save(fmt::format("{}/{}.png", dump_dir, name), level);
 }
 }  // namespace VideoCommon::TextureUtils
