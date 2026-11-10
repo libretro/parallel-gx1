@@ -53,6 +53,14 @@ work over through atomics and eventcounts, and nothing waits on a clock.
   nothing at all arriving, so a wedged CPU or GPU thread degrades to
   repeated frames and not to a frozen frontend. A disc read, a compile
   or a slow field never reaches it, and it is never a pace.
+- **Events where there is work.** An emulated-time event fires where
+  something happens, not on every tick, line or half-line to count it:
+  the VI event runs only on half-lines with work (a field's edges, the
+  SI poll, an interrupt's line) and counts the ones between when it
+  fires. Whatever reads or changes that state between events (a register
+  read or write, a savestate) catches it up first, so it sees what an
+  event per half-line would have left; a savestate leaves the event as
+  the old layout had it, so states load in either build.
 - **Stop by request, not by polling.** A thread is parked, interrupted
   or quit by setting a flag and notifying it (`InterruptGpuLoop`,
   `GpuThreadPark`), never by a loop that comes up for air every few

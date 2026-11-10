@@ -113,10 +113,8 @@ void SystemTimersManager::GPUSleepCallback(Core::System& system, u64 userdata, s
 void SystemTimersManager::VICallback(Core::System& system, u64 userdata, s64 cycles_late)
 {
   auto& core_timing = system.GetCoreTiming();
-  auto& vi = system.GetVideoInterface();
-  vi.Update(core_timing.GetTicks() - cycles_late);
-  core_timing.ScheduleEvent(vi.GetTicksPerHalfLine() - cycles_late,
-                            system.GetSystemTimers().m_event_type_vi);
+  // VideoInterface runs the half-lines up to the event's time and schedules the next with work.
+  system.GetVideoInterface().OnEvent(core_timing.GetTicks() - cycles_late);
 }
 
 void SystemTimersManager::DecrementerCallback(Core::System& system, u64 userdata, s64 cycles_late)

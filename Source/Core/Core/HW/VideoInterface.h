@@ -375,6 +375,20 @@ public:
   // Update and draw framebuffer
   void Update(u64 ticks);
 
+  /* The VI event fires only on a half-line where something happens: a
+   * field's first or last line, a field boundary, an SI poll, an
+   * interrupt's line. OnEvent runs every half-line up to the event's
+   * time, the ones between with no work, and schedules the next one with
+   * work. Sync brings the half-line count up to now for whatever reads or
+   * changes it, short of a half-line with work, which stays its event's;
+   * Reschedule moves the event after a write that changes where the next
+   * one with work is. PrepareForState leaves the event on the very next
+   * half-line, as one per half-line had it, before a savestate is taken. */
+  void OnEvent(u64 event_ticks);
+  void Sync();
+  void Reschedule();
+  void PrepareForState();
+
   // UpdateInterrupts: check if we have to generate a new VI Interrupt
   void UpdateInterrupts();
 
@@ -414,6 +428,11 @@ private:
   void RefreshConfig();
   void UpdateRefreshRate();
 
+  bool HalfLineHasWork(u32 half_line) const;
+  void CatchUp(u64 now, bool with_work);
+  u64 NextWorkTicks() const;
+  u32 HalfLineAt(u64 ticks) const;
+
   // Registers listed in order:
   UVIVerticalTimingRegister m_vertical_timing_register;
   UVIDisplayControlRegister m_display_control_register;
@@ -447,6 +466,11 @@ private:
   u64 m_ticks_last_line_start = 0;  // number of ticks when the current full scanline started
   u32 m_half_line_count = 0;        // number of halflines that have occurred for this full frame
   u32 m_half_line_of_next_si_poll = 0;  // halfline when next SI poll results should be available
+
+  // When m_half_line_count's update is due; known from the first event after boot or a load,
+  // which the savestate leaves on the very next half-line. Not saved.
+  bool m_half_line_clock_known = false;
+  u64 m_next_half_line_ticks = 0;
 
   // below indexes are 0-based
   u32 m_even_field_first_hl = 0;  // index first halfline of the even field

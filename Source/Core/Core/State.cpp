@@ -39,6 +39,7 @@
 #include "Core/GeckoCode.h"
 #include "Core/HW/HW.h"
 #include "Core/HW/Memmap.h"
+#include "Core/HW/VideoInterface.h"
 #include "Core/HW/Wiimote.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
@@ -224,6 +225,11 @@ void DoState(Core::System& system, PointerWrap& p)
   // things to RAM
   g_video_backend->DoState(p);
   p.DoMarker("video_backend");
+
+  // The VI event goes back on the very next half-line before the event queue is saved, as one
+  // event per half-line had it: a state is the same whichever build saved it.
+  if (!p.IsReadMode())
+    system.GetVideoInterface().PrepareForState();
 
   // CoreTiming needs to be restored before restoring Hardware because
   // the controller code might need to schedule an event if the controller has changed.

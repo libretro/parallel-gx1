@@ -87,6 +87,9 @@ void VideoInterfaceManager::DoState(PointerWrap& p)
   p.Do(m_odd_field_first_hl);
   p.Do(m_even_field_last_hl);
   p.Do(m_odd_field_last_hl);
+  // A loaded state has the VI event on its very next half-line (PrepareForState).
+  if (p.IsReadMode())
+    m_half_line_clock_known = false;
 }
 
 // Executed after Init, before game boot
@@ -170,6 +173,7 @@ void VideoInterfaceManager::Preset(bool _bNTSC)
   m_ticks_last_line_start = 0;
   m_half_line_count = 0;
   m_half_line_of_next_si_poll = NUM_HALF_LINES_FOR_SI_POLL;  // first sampling starts at vsync
+  m_half_line_clock_known = false;
 
   UpdateParameters();
 }
@@ -207,7 +211,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     u16* ptr;
   };
 
-  std::array<MappedVar, 46> directly_mapped_vars{{
+  std::array<MappedVar, 42> directly_mapped_vars{{
       {VI_VERTICAL_TIMING, &m_vertical_timing_register.Hex},
       {VI_HORIZONTAL_TIMING_0_HI, &m_h_timing_0.Hi},
       {VI_HORIZONTAL_TIMING_0_LO, &m_h_timing_0.Lo},
@@ -225,10 +229,6 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
       {VI_FB_RIGHT_TOP_LO, &m_xfb_3d_info_top.Lo},
       {VI_FB_LEFT_BOTTOM_LO, &m_xfb_info_bottom.Lo},
       {VI_FB_RIGHT_BOTTOM_LO, &m_xfb_3d_info_bottom.Lo},
-      {VI_PRERETRACE_LO, &m_interrupt_register[0].Lo},
-      {VI_POSTRETRACE_LO, &m_interrupt_register[1].Lo},
-      {VI_DISPLAY_INTERRUPT_2_LO, &m_interrupt_register[2].Lo},
-      {VI_DISPLAY_INTERRUPT_3_LO, &m_interrupt_register[3].Lo},
       {VI_DISPLAY_LATCH_0_HI, &m_latch_register[0].Hi},
       {VI_DISPLAY_LATCH_0_LO, &m_latch_register[0].Lo},
       {VI_DISPLAY_LATCH_1_HI, &m_latch_register[1].Hi},
@@ -280,9 +280,34 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     mmio->Register(base | mapped_var.addr, MMIO::DirectRead<u16>(mapped_var.ptr),
                    MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t ctx, u32, u16 val) {
                      u16* const ptr = reinterpret_cast<u16*>(ctx);
+                     auto& vi = system.GetVideoInterface();
+                     vi.Sync();
                      *ptr = val;
-                     system.GetVideoInterface().UpdateParameters();
+                     vi.UpdateParameters();
+                     vi.Reschedule();
                    }, reinterpret_cast<uintptr_t>(mapped_var.ptr)));
+  }
+
+  // An interrupt's horizontal count picks the half-line it is raised on.
+  {
+    const MappedVar interrupt_lo[4] = {
+        {VI_PRERETRACE_LO, &m_interrupt_register[0].Lo},
+        {VI_POSTRETRACE_LO, &m_interrupt_register[1].Lo},
+        {VI_DISPLAY_INTERRUPT_2_LO, &m_interrupt_register[2].Lo},
+        {VI_DISPLAY_INTERRUPT_3_LO, &m_interrupt_register[3].Lo},
+    };
+    for (const MappedVar& mapped_var : interrupt_lo)
+    {
+      mmio->Register(base | mapped_var.addr, MMIO::DirectRead<u16>(mapped_var.ptr),
+                     MMIO::ComplexWrite<u16>(
+                         [](Core::System& system, uintptr_t ctx, u32, u16 val) {
+                           auto& vi = system.GetVideoInterface();
+                           vi.Sync();
+                           *reinterpret_cast<u16*>(ctx) = val;
+                           vi.Reschedule();
+                         },
+                         reinterpret_cast<uintptr_t>(mapped_var.ptr)));
+    }
   }
 
   // XFB related MMIOs that require special handling on writes.
@@ -319,6 +344,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   mmio->Register(
       base | VI_VERTICAL_BEAM_POSITION, MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t, u32) -> u16 {
         auto& vi = system.GetVideoInterface();
+        vi.Sync();
         return 1 + (vi.m_half_line_count) / 2;
       }),
       MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
@@ -329,6 +355,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   mmio->Register(
       base | VI_HORIZONTAL_BEAM_POSITION, MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t, u32) -> u16 {
         auto& vi = system.GetVideoInterface();
+        vi.Sync();
         u16 value = static_cast<u16>(
             1 + vi.m_h_timing_0.HLW *
                     (system.GetCoreTiming().GetTicks() - vi.m_ticks_last_line_start) /
@@ -347,28 +374,36 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   mmio->Register(base | VI_PRERETRACE_HI, MMIO::DirectRead<u16>(&m_interrupt_register[0].Hi),
                  MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
                    auto& vi = system.GetVideoInterface();
+                   vi.Sync();
                    vi.m_interrupt_register[0].Hi = val;
                    vi.UpdateInterrupts();
+                   vi.Reschedule();
                  }));
   mmio->Register(base | VI_POSTRETRACE_HI, MMIO::DirectRead<u16>(&m_interrupt_register[1].Hi),
                  MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
                    auto& vi = system.GetVideoInterface();
+                   vi.Sync();
                    vi.m_interrupt_register[1].Hi = val;
                    vi.UpdateInterrupts();
+                   vi.Reschedule();
                  }));
   mmio->Register(base | VI_DISPLAY_INTERRUPT_2_HI,
                  MMIO::DirectRead<u16>(&m_interrupt_register[2].Hi),
                  MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
                    auto& vi = system.GetVideoInterface();
+                   vi.Sync();
                    vi.m_interrupt_register[2].Hi = val;
                    vi.UpdateInterrupts();
+                   vi.Reschedule();
                  }));
   mmio->Register(base | VI_DISPLAY_INTERRUPT_3_HI,
                  MMIO::DirectRead<u16>(&m_interrupt_register[3].Hi),
                  MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
                    auto& vi = system.GetVideoInterface();
+                   vi.Sync();
                    vi.m_interrupt_register[3].Hi = val;
                    vi.UpdateInterrupts();
+                   vi.Reschedule();
                  }));
 
   // Unknown anti-aliasing related MMIO register: puts a warning on log and
@@ -398,6 +433,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   mmio->Register(base | VI_CONTROL_REGISTER, MMIO::DirectRead<u16>(&m_display_control_register.Hex),
                  MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
                    auto& vi = system.GetVideoInterface();
+                   vi.Sync();
 
                    UVIDisplayControlRegister tmpConfig(val);
                    vi.m_display_control_register.ENB = tmpConfig.ENB;
@@ -416,6 +452,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    }
 
                    vi.UpdateParameters();
+                   vi.Reschedule();
                  }));
 
   // Map 8 bit reads (not writes) to 16 bit reads.
@@ -976,10 +1013,142 @@ void VideoInterfaceManager::Update(u64 ticks)
   UpdateInterrupts();
 }
 
+/* What Update does on a half-line besides counting it: a field's first
+ * or last line, a field boundary, the SI poll, or an interrupt raised on
+ * the half-line the count moves to. */
+bool VideoInterfaceManager::HalfLineHasWork(u32 half_line) const
+{
+  const u32 total = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
+  const u32 next = half_line + 1 == total ? 0 : half_line + 1;
+  if (half_line == 0 || half_line == GetHalfLinesPerOddField() ||
+      half_line == m_odd_field_first_hl || half_line == m_even_field_first_hl ||
+      half_line == m_odd_field_last_hl || half_line == m_even_field_last_hl ||
+      half_line == m_half_line_of_next_si_poll)
+  {
+    return true;
+  }
+  for (const UVIInterruptRegister& reg : m_interrupt_register)
+  {
+    const u32 target_halfline = (reg.HCT > m_h_timing_0.HLW) ? 1 : 0;
+    if (1 + next / 2 == reg.VCT && (next & 1) == target_halfline)
+      return true;
+  }
+  return false;
+}
+
+/* Every half-line due by now; with_work false stops at one with work,
+ * which its event runs. One with none is counted as Update counts it. */
+void VideoInterfaceManager::CatchUp(u64 now, bool with_work)
+{
+  if (!m_half_line_clock_known)
+    return;
+  while (m_next_half_line_ticks <= now)
+  {
+    const u64 ticks = m_next_half_line_ticks;
+    if (HalfLineHasWork(m_half_line_count))
+    {
+      if (!with_work)
+        return;
+      Update(ticks);
+    }
+    else
+    {
+      ++m_half_line_count;
+      if (m_half_line_count == GetHalfLinesPerEvenField() + GetHalfLinesPerOddField())
+        m_half_line_count = 0;
+      if (!(m_half_line_count & 1))
+        m_ticks_last_line_start = ticks;
+    }
+    m_next_half_line_ticks = ticks + GetTicksPerHalfLine();
+  }
+}
+
+/* When the next half-line with work is due, counting as Update would. */
+u64 VideoInterfaceManager::NextWorkTicks() const
+{
+  const u32 total = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
+  u32 half_line = m_half_line_count;
+  u32 ahead = 0;
+  /* a whole frame holds a field boundary; the bound is for a count past it */
+  while (ahead < 2 * total + 2 && !HalfLineHasWork(half_line))
+  {
+    half_line = half_line + 1 == total ? 0 : half_line + 1;
+    ahead++;
+  }
+  return m_next_half_line_ticks + (u64)ahead * GetTicksPerHalfLine();
+}
+
+void VideoInterfaceManager::OnEvent(u64 event_ticks)
+{
+  auto& core_timing = m_system.GetCoreTiming();
+  if (!m_half_line_clock_known)
+  {
+    /* the first event after boot or a load is on the very next half-line */
+    m_next_half_line_ticks = event_ticks;
+    m_half_line_clock_known = true;
+  }
+  CatchUp(event_ticks, true);
+  core_timing.ScheduleEvent(static_cast<s64>(NextWorkTicks() - core_timing.GetTicks()),
+                            m_system.GetSystemTimers().GetVIEventType());
+}
+
+void VideoInterfaceManager::Sync()
+{
+  CatchUp(m_system.GetCoreTiming().GetProcessedTicks(), false);
+}
+
+/* The half-line count as it would be at ticks, counting without changing
+ * anything: for a thread that reads it but does not own it. */
+u32 VideoInterfaceManager::HalfLineAt(u64 ticks) const
+{
+  const u32 total = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
+  u32 half_line = m_half_line_count;
+  u64 due = m_next_half_line_ticks;
+  u32 steps = 0;
+  if (!m_half_line_clock_known)
+    return half_line;
+  while (due <= ticks && steps++ < 2 * total + 2 && !HalfLineHasWork(half_line))
+  {
+    half_line = half_line + 1 == total ? 0 : half_line + 1;
+    due += GetTicksPerHalfLine();
+  }
+  return half_line;
+}
+
+void VideoInterfaceManager::Reschedule()
+{
+  auto& core_timing = m_system.GetCoreTiming();
+  CoreTiming::EventType* const event = m_system.GetSystemTimers().GetVIEventType();
+  if (!m_half_line_clock_known || !event)
+    return;
+  const s64 until = static_cast<s64>(NextWorkTicks() - core_timing.GetTicks());
+  core_timing.RemoveEvent(event);
+  core_timing.ScheduleEvent(until > 0 ? until : 0, event);
+}
+
+void VideoInterfaceManager::PrepareForState()
+{
+  auto& core_timing = m_system.GetCoreTiming();
+  CoreTiming::EventType* const event = m_system.GetSystemTimers().GetVIEventType();
+  if (!m_half_line_clock_known || !event)
+    return;
+  Sync();
+  const s64 until = static_cast<s64>(m_next_half_line_ticks - core_timing.GetTicks());
+  core_timing.RemoveEvent(event);
+  core_timing.ScheduleEvent(until > 0 ? until : 0, event);
+  /* the event is the very next half-line's again: the next one picks the clock up from it */
+  m_half_line_clock_known = false;
+}
+
 // Create a fake VI mode for a fifolog
 void VideoInterfaceManager::FakeVIUpdate(u32 xfb_address, u32 fb_width, u32 fb_stride,
                                          u32 fb_height)
 {
+  /* Called where the GPU runs: the CPU thread in single core, which owns the
+   * count, and the GPU thread in dual core, which only reads it. */
+  const bool cpu_thread = Core::IsCPUThread();
+  if (cpu_thread)
+    Sync();
   bool interlaced = fb_height > 480 / 2;
   if (interlaced)
   {
@@ -1002,8 +1171,11 @@ void VideoInterfaceManager::FakeVIUpdate(u32 xfb_address, u32 fb_width, u32 fb_s
 
   u32 total_halflines = GetHalfLinesPerEvenField() + GetHalfLinesPerOddField();
 
-  if ((m_half_line_count - m_even_field_first_hl) % total_halflines <
-      (m_half_line_count - m_odd_field_first_hl) % total_halflines)
+  const u32 half_line =
+      cpu_thread ? m_half_line_count :
+                   HalfLineAt(m_system.GetCoreTiming().GetProcessedTicks());
+  if ((half_line - m_even_field_first_hl) % total_halflines <
+      (half_line - m_odd_field_first_hl) % total_halflines)
   {
     // Even/Bottom field is next.
     m_xfb_info_bottom.FBB = interlaced ? (xfb_address + fb_width * 2) >> 5 : xfb_address >> 5;
@@ -1013,6 +1185,9 @@ void VideoInterfaceManager::FakeVIUpdate(u32 xfb_address, u32 fb_width, u32 fb_s
     // Odd/Top field is next
     m_xfb_info_top.FBB = (xfb_address >> 5);
   }
+
+  if (cpu_thread)
+    Reschedule();
 }
 
 }  // namespace VideoInterface

@@ -325,6 +325,11 @@ u64 CoreTimingManager::GetTicks() const
   return ticks;
 }
 
+u64 CoreTimingManager::GetProcessedTicks() const
+{
+  return m_is_global_timer_sane ? m_dispatch_time : static_cast<u64>(m_globals.global_timer);
+}
+
 void CoreTimingManager::ClearPendingEvents()
 {
   m_num_events = 0;
@@ -463,6 +468,7 @@ void CoreTimingManager::Advance()
   {
     const Event evt = m_event_queue[0];
     PopEvent();
+    m_dispatch_time = static_cast<u64>(evt.time);
     evt.type->callback(m_system, evt.userdata, m_globals.global_timer - evt.time);
   }
 

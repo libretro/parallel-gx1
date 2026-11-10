@@ -88,6 +88,9 @@ public:
   // - 1.0: the emulator is running at 100% speed.
   // - 2.0: the emulator is running at 200% speed (or 100% speed but sleeping half of the time).
 
+  // The VI event, which VideoInterface moves to the next half-line with work.
+  CoreTiming::EventType* GetVIEventType() const { return m_event_type_vi; }
+
 private:
   static void DSPCallback(Core::System& system, u64 userdata, s64 cycles_late);
   static void AudioDMACallback(Core::System& system, u64 userdata, s64 cycles_late);

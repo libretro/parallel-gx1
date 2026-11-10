@@ -90,6 +90,10 @@ public:
   // This should only be called from the CPU thread, if you are calling it any other thread, you are
   // doing something evil
   u64 GetTicks() const;
+  /* The time up to which events have run: the event being run, inside a
+   * callback, else the last Advance. Lazily counted state (VideoInterface's
+   * half-lines) catches up to here, as an event per step would have. */
+  u64 GetProcessedTicks() const;
 
   void RefreshConfig();
 
@@ -187,6 +191,8 @@ private:
 
   // Are we in a function that has been called from Advance()
   bool m_is_global_timer_sane = false;
+  // the event being run, while Advance runs them
+  u64 m_dispatch_time = 0;
 
   EventType* m_ev_lost = nullptr;
 
