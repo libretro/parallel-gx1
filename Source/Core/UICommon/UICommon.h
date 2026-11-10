@@ -12,7 +12,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/HookableEvent.h"
 
-
 namespace UICommon
 {
 void Init();
@@ -23,12 +22,6 @@ void Shutdown();
 void FlushUnsavedData();
 
 void ShutdownControllers();
-
-void InhibitScreenSaver(bool inhibit);
-
-// Calls std::locale::global, selecting a fallback locale if the
-// requested locale isn't available
-void SetLocale(std::string locale_name);
 
 void CreateDirectories();
 void SetUserDirectory(std::string custom_path);

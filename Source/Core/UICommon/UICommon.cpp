@@ -141,63 +141,6 @@ void ShutdownControllers()
   g_controller_interface.Shutdown();
 }
 
-void SetLocale(std::string locale_name)
-{
-  auto set_locale = [](const std::string& locale) {
-#ifdef __linux__
-    std::string adjusted_locale = locale;
-    if (!locale.empty())
-      adjusted_locale += ".UTF-8";
-#else
-    const std::string& adjusted_locale = locale;
-#endif
-
-    // setlocale sets the C locale, and global sets the C and C++ locales, so the call to setlocale
-    // would be redundant if it wasn't for not having any other good way to check whether
-    // the locale name is valid. (Constructing a std::locale object for an unsupported
-    // locale name throws std::runtime_error, and exception handling is disabled in Dolphin.)
-    if (!std::setlocale(LC_ALL, adjusted_locale.c_str()))
-      return false;
-    std::locale::global(std::locale(adjusted_locale));
-    return true;
-  };
-
-#ifdef _WIN32
-  constexpr char PREFERRED_SEPARATOR = '-';
-  constexpr char OTHER_SEPARATOR = '_';
-#else
-  constexpr char PREFERRED_SEPARATOR = '_';
-  constexpr char OTHER_SEPARATOR = '-';
-#endif
-
-  // Users who use a system language other than English are unlikely to prefer American date and
-  // time formats, so let's explicitly request "en_GB" if Dolphin's language is set to "en".
-  // (The settings window only allows setting "en", not anything like "en_US" or "en_GB".)
-  // Users who prefer the American formats are likely to have their system language set to en_US,
-  // and are thus likely to leave Dolphin's language as the default value "" (<System Language>).
-  if (locale_name == "en")
-    locale_name = "en_GB";
-
-  std::ranges::replace(locale_name, OTHER_SEPARATOR, PREFERRED_SEPARATOR);
-
-  // Use the specified locale if supported.
-  if (set_locale(locale_name))
-    return;
-
-  // Remove subcodes until we get a supported locale. If that doesn't give us a supported locale,
-  // "" is passed to set_locale in order to get the system default locale.
-  while (!locale_name.empty())
-  {
-    const size_t separator_index = locale_name.rfind(PREFERRED_SEPARATOR);
-    locale_name.erase(separator_index == std::string::npos ? 0 : separator_index);
-    if (set_locale(locale_name))
-      return;
-  }
-
-  // If none of the locales tried above are supported, we just keep using whatever locale is set
-  // (which is the classic locale by default).
-}
-
 void CreateDirectories()
 {
   File::CreateFullPath(File::GetUserPath(D_USER_IDX));
@@ -251,18 +194,6 @@ bool TriggerSTMPowerEvent()
   ios->GetSystem().GetProcessorInterface().PowerButton_Tap();
 
   return true;
-}
-
-void InhibitScreenSaver(bool inhibit)
-{
-  // Inhibit the screensaver. Depending on the operating system this may also
-  // disable low-power states and/or screen dimming.
-
-#ifdef _WIN32
-  // Prevents Windows from sleeping, turning off the display, or idling
-  SetThreadExecutionState(ES_CONTINUOUS |
-                          (inhibit ? (ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED) : 0));
-#endif
 }
 
 std::string FormatSize(u64 bytes, int decimals)
