@@ -93,6 +93,8 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/crypto/crypto.c \
 	$(CORE_DIR)/Externals/libretro-common/crypto/kdf.c \
 	$(CORE_DIR)/Externals/libretro-common/crypto/pk.c \
+	$(CORE_DIR)/Externals/libretro-common/crypto/x509.c \
+	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_base64.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_crc32.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_deflate.c \
 	$(CORE_DIR)/Externals/libretro-common/encodings/encoding_rbzip2.c \
@@ -120,6 +122,9 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/hash/lrc_hash.c \
 	$(CORE_DIR)/Externals/libretro-common/lists/string_list.c \
 	$(CORE_DIR)/Externals/libretro-common/memmap/memmap.c \
+	$(CORE_DIR)/Externals/libretro-common/net/net_compat.c \
+	$(CORE_DIR)/Externals/libretro-common/net/net_socket.c \
+	$(CORE_DIR)/Externals/libretro-common/net/net_socket_ssl_retro.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_waitable_spsc.c \
 	$(CORE_DIR)/Externals/libretro-common/rthreads/retro_eventcount.c \

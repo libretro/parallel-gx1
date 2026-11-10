@@ -321,8 +321,6 @@ const Info<bool> MAIN_NETWORK_SSL_DUMP_WRITE{{System::Main, "Network", "SSLDumpW
 const Info<bool> MAIN_NETWORK_SSL_VERIFY_CERTIFICATES{
     {System::Main, "Network", "SSLVerifyCertificates"}, true};
 const Info<bool> MAIN_NETWORK_SSL_DUMP_ROOT_CA{{System::Main, "Network", "SSLDumpRootCA"}, false};
-const Info<bool> MAIN_NETWORK_SSL_DUMP_PEER_CERT{{System::Main, "Network", "SSLDumpPeerCert"},
-                                                 false};
 const Info<bool> MAIN_NETWORK_DUMP_BBA{{System::Main, "Network", "DumpBBA"}, false};
 const Info<bool> MAIN_NETWORK_DUMP_AS_PCAP{{System::Main, "Network", "DumpAsPCAP"}, false};
 // Default value based on:

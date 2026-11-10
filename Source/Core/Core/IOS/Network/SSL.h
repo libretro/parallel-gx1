@@ -3,19 +3,9 @@
 
 #pragma once
 
-// These imports need to be in this order for mbed to be included correctly.
-// clang-format off
-
-#include <mbedtls/ctr_drbg.h>
-#include <mbedtls/entropy.h>
-#include <mbedtls/net_sockets.h>
-#include <mbedtls/pk.h>
-#include <mbedtls/platform.h>
-#include <mbedtls/ssl.h>
-#include <mbedtls/x509_crt.h>
 #include <string>
 
-// clang-format on
+#include <crypto/pk.h>
 
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Device.h"
@@ -63,20 +53,33 @@ enum SSL_IOCTL
   IOCTLV_NET_SSL_DEBUGGETTIME = 0x15,
 };
 
+// Root CAs a connection trusts, and the store their DER lives in.
+constexpr u32 WII_SSL_MAX_ROOTCAS = 4;
+constexpr u32 WII_SSL_ROOTCA_STORE = 8192;
+constexpr u32 WII_SSL_CERT_STORE = 4096;
+
+// One emulated connection. Its certificates and key are DER in fixed
+// storage, which the TLS connection borrows from its first handshake step
+// to its shutdown.
 struct WII_SSL
 {
-  mbedtls_ssl_context ctx{};
-  mbedtls_ssl_config config{};
-  mbedtls_ssl_session session{};
-  mbedtls_entropy_context entropy{};
-  mbedtls_ctr_drbg_context ctr_drbg{};
-  mbedtls_x509_crt cacert{};
-  mbedtls_x509_crt clicert{};
-  mbedtls_pk_context pk{};
-  int sockfd = -1;
-  int hostfd = -1;
-  std::string hostname;
-  bool active = false;
+  void* tls;  // ssl_socket state, made at the first handshake step
+  u8 rootca[WII_SSL_ROOTCA_STORE];
+  const u8* rootca_ptrs[WII_SSL_MAX_ROOTCAS];
+  size_t rootca_lens[WII_SSL_MAX_ROOTCAS];
+  u32 rootca_count;
+  u32 rootca_used;
+  u8 clicert[WII_SSL_CERT_STORE];
+  const u8* clicert_ptr;
+  size_t clicert_len;
+  u8 clikey[WII_SSL_CERT_STORE];
+  struct rsa_private_key key;
+  bool have_client_cert;
+  bool verify;
+  int sockfd;
+  int hostfd;
+  char hostname[256];
+  bool active;
 };
 
 class NetSSLDevice : public EmulationDevice
@@ -101,4 +104,11 @@ constexpr bool IsSSLIDValid(int id)
 {
   return (id >= 0 && id < NET_SSL_MAXINSTANCES && NetSSLDevice::_SSL[id].active);
 }
+
+// One step of the connection's handshake: SSL_OK when done, SSL_ERR_RAGAIN or
+// SSL_ERR_WAGAIN while it runs, or a failure.
+s32 WiiSSLHandshakeStep(WII_SSL* ssl);
+// Bytes written or read, SSL_ERR_ZERO, SSL_ERR_RAGAIN or a failure.
+s32 WiiSSLWrite(WII_SSL* ssl, const u8* data, u32 size);
+s32 WiiSSLRead(WII_SSL* ssl, u8* data, u32 size);
 }  // namespace IOS::HLE
