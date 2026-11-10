@@ -7,11 +7,6 @@
 	url = https://github.com/libusb/libusb.git
 	shallow = true
 	shallow = true
-[submodule "Externals/gtest"]
-	path = Externals/gtest
-	url = https://github.com/google/googletest.git
-	shallow = true
-	shallow = true
 [submodule "Externals/curl/curl"]
 	path = Externals/curl/curl
 	url = https://github.com/curl/curl.git
