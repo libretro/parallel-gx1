@@ -52,32 +52,15 @@ struct RegionSetting
 
 class BootExecutableReader;
 
-enum class DeleteSavestateAfterBoot : u8
-{
-  No,
-  Yes
-};
-
 class BootSessionData
 {
 public:
   BootSessionData();
-  BootSessionData(std::optional<std::string> savestate_path,
-                  DeleteSavestateAfterBoot delete_savestate);
   BootSessionData(const BootSessionData& other) = delete;
   BootSessionData(BootSessionData&& other);
   BootSessionData& operator=(const BootSessionData& other) = delete;
   BootSessionData& operator=(BootSessionData&& other);
   ~BootSessionData();
-
-  const std::optional<std::string>& GetSavestatePath() const;
-  DeleteSavestateAfterBoot GetDeleteSavestate() const;
-  void SetSavestateData(std::optional<std::string> savestate_path,
-                        DeleteSavestateAfterBoot delete_savestate);
-
-private:
-  std::optional<std::string> m_savestate_path;
-  DeleteSavestateAfterBoot m_delete_savestate = DeleteSavestateAfterBoot::No;
 };
 
 struct BootParameters

@@ -268,8 +268,7 @@ static void CPUSetInitialExecutionState(Core::System& system)
 }
 
 // Create the CPU thread, which is a CPU + Video thread in Single Core mode.
-static void CpuThread(Core::System& system, const std::optional<std::string> savestate_path,
-                      bool delete_savestate)
+static void CpuThread(Core::System& system)
 {
   if (system.IsDualCoreMode())
     Common::SetCurrentThreadName("CPU thread");
@@ -282,13 +281,6 @@ static void CpuThread(Core::System& system, const std::optional<std::string> sav
   const bool exception_handler = EMM::IsExceptionHandlerSupported();
   if (exception_handler)
     EMM::InstallExceptionHandler();
-
-  if (savestate_path)
-  {
-    ::State::LoadAs(system, *savestate_path);
-    if (delete_savestate)
-      File::Delete(*savestate_path);
-  }
 
   StartingToRunning();
 
@@ -318,8 +310,7 @@ static void DetachFifoCPUCore()
   system.GetFifoPlayer().Close();
 }
 
-static void FifoPlayerThread(Core::System& system, const std::optional<std::string> savestate_path,
-                             bool delete_savestate)
+static void FifoPlayerThread(Core::System& system)
 {
   if (system.IsDualCoreMode())
     Common::SetCurrentThreadName("FIFO player thread");
@@ -461,9 +452,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   Keyboard::LoadConfig();
 
   BootSessionData boot_session_data = std::move(boot->boot_session_data);
-  const std::optional<std::string> savestate_path = boot_session_data.GetSavestatePath();
-  const bool delete_savestate =
-      boot_session_data.GetDeleteSavestate() == DeleteSavestateAfterBoot::Yes;
 
   bool sync_sd_folder = system.IsWii() && Config::Get(Config::MAIN_WII_SD_CARD) &&
                         Config::Get(Config::MAIN_WII_SD_CARD_ENABLE_FOLDER_SYNC);
@@ -597,7 +585,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   }
 
   // Become the CPU thread.
-  cpu_thread_func(system, savestate_path, delete_savestate);
+  cpu_thread_func(system);
 }
 
 // Set or get the running state

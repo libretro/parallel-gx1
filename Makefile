@@ -83,7 +83,6 @@ SUBMODULE_FILES := \
    Externals/mGBA/mgba/include/mgba-util/vfs.h \
    Externals/libusb/libusb/libusb/libusb.h \
    Externals/fmt/fmt/include/fmt/format.h \
-   Externals/lz4/lz4/lib/lz4.h \
    Externals/hidapi/hidapi-src/hidapi/hidapi.h \
    Externals/Vulkan-Headers/include/vulkan/vulkan.h \
    Externals/watcher/watcher/include/wtr/watcher.hpp \

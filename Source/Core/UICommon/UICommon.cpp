@@ -162,7 +162,6 @@ void CreateDirectories()
   File::CreateFullPath(File::GetUserPath(D_LOGS_IDX));
   File::CreateFullPath(File::GetUserPath(D_MAPS_IDX));
   File::CreateFullPath(File::GetUserPath(D_RETROACHIEVEMENTSCACHE_IDX));
-  File::CreateFullPath(File::GetUserPath(D_STATESAVES_IDX));
   File::CreateFullPath(File::GetUserPath(D_ASM_ROOT_IDX));
   File::CreateFullPath(File::GetUserPath(D_WFSROOT_IDX));
 #ifndef ANDROID

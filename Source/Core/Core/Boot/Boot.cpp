@@ -104,34 +104,11 @@ BootSessionData::BootSessionData()
 {
 }
 
-BootSessionData::BootSessionData(std::optional<std::string> savestate_path,
-                                 DeleteSavestateAfterBoot delete_savestate)
-    : m_savestate_path(std::move(savestate_path)), m_delete_savestate(delete_savestate)
-{
-}
-
 BootSessionData::BootSessionData(BootSessionData&& other) = default;
 
 BootSessionData& BootSessionData::operator=(BootSessionData&& other) = default;
 
 BootSessionData::~BootSessionData() = default;
-
-const std::optional<std::string>& BootSessionData::GetSavestatePath() const
-{
-  return m_savestate_path;
-}
-
-DeleteSavestateAfterBoot BootSessionData::GetDeleteSavestate() const
-{
-  return m_delete_savestate;
-}
-
-void BootSessionData::SetSavestateData(std::optional<std::string> savestate_path,
-                                       DeleteSavestateAfterBoot delete_savestate)
-{
-  m_savestate_path = std::move(savestate_path);
-  m_delete_savestate = delete_savestate;
-}
 
 BootParameters::BootParameters(Parameters&& parameters_, BootSessionData boot_session_data_)
     : parameters(std::move(parameters_)), boot_session_data(std::move(boot_session_data_))

@@ -152,14 +152,6 @@ FATFS_SOURCES_C += \
 	$(CORE_DIR)/Externals/FatFs/ff.c \
 	$(CORE_DIR)/Externals/FatFs/ffunicode.c
 
-# LZO
-LZO_SOURCES_C :=
-LZO_SOURCES_CXX :=
-LZO_SOURCES_ASM :=
-LZO_SOURCES_OBJCXX :=
-LZO_SOURCES_C += \
-	$(CORE_DIR)/Externals/LZO/minilzo.c
-
 # SFML
 SFML_SOURCES_C :=
 SFML_SOURCES_CXX :=
@@ -247,17 +239,6 @@ ifeq ($(OS_MACOS),1)
    LIBUSB_SOURCES_C += \
 	$(CORE_DIR)/Externals/libusb/libusb/libusb/os/darwin_usb.c
 endif
-
-# LZ4
-LZ4_SOURCES_C :=
-LZ4_SOURCES_CXX :=
-LZ4_SOURCES_ASM :=
-LZ4_SOURCES_OBJCXX :=
-LZ4_SOURCES_C += \
-	$(CORE_DIR)/Externals/lz4/lz4/lib/lz4.c \
-	$(CORE_DIR)/Externals/lz4/lz4/lib/lz4hc.c \
-	$(CORE_DIR)/Externals/lz4/lz4/lib/lz4frame.c \
-	$(CORE_DIR)/Externals/lz4/lz4/lib/xxhash.c
 
 # MGBA
 MGBA_SOURCES_C :=
@@ -1180,7 +1161,6 @@ ifneq ($(OS_WIN),1)
 endif
 
 
-LZO_FLAGS := -w -I$(EXT_DIR)/LZO
 
 SFML_FLAGS    := -w -DSFML_STATIC -I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/SFML/SFML/src
 SFML_CXXFLAGS := -std=gnu++20
@@ -1198,8 +1178,6 @@ ifeq ($(OS_WIN),1)
 endif
 
 LIBUSB_FLAGS := -w -I$(EXT_DIR)/libusb/makefile -I$(EXT_DIR)/libusb/libusb/libusb
-
-LZ4_FLAGS := -w -DXXH_NAMESPACE=LZ4_ -I$(EXT_DIR)/lz4/lz4/lib
 
 MGBA_FLAGS := -w -DBUILD_STATIC -DDISABLE_THREADING -DENABLE_DIRECTORIES -DENABLE_VFS \
 	-DENABLE_VFS_FD -DHAVE_SETLOCALE -DHAVE_STRDUP -DHAVE_VASPRINTF \
@@ -1246,8 +1224,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/SFML/SFML/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
-	-I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
-	-I$(EXT_DIR)/lz4/lz4/lib \
+	-I$(EXT_DIR)/FatFs \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include \
 	-isystem $(EXT_DIR)/libusb/libusb/libusb -isystem $(EXT_DIR)/watcher/watcher/include \
 	-Wall -Wtype-limits -Wsign-compare -Wignored-qualifiers -Wuninitialized -Wshadow \
@@ -1293,7 +1270,7 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zstd.c) := $(L
 FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/formats/rvz/rvz.c) := -DHAVE_RZSTD
 
 # Libraries in link order; the optional ones only where they are built.
-LIB_GROUPS := DOLPHIN LIBRETRO_COMMON LZ4 LZO \
+LIB_GROUPS := DOLPHIN LIBRETRO_COMMON \
 	MGBA SFML FMT FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB
