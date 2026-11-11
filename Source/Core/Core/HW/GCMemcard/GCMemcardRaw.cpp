@@ -12,7 +12,7 @@
 #include <string>
 #include <utility>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/FrameClock.h"
 #include "Common/ChunkFile.h"
@@ -48,7 +48,7 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
     m_nintendo_card_id = m_memory_card_size / SIZE_TO_Mb;
     m_memcard_data = std::make_unique_for_overwrite<u8[]>(m_memory_card_size);
 
-    INFO_LOG_FMT(EXPANSIONINTERFACE, "Reading memory card {}", m_filename);
+    INFO_LOG(EXPANSIONINTERFACE, "Reading memory card %s", m_filename.c_str());
     size_t got = 0;
     file.ReadArray(&m_memcard_data[0], m_memory_card_size, &got);
     if (got < m_memory_card_size)
@@ -76,7 +76,7 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
     // Fills in the remaining blocks
     memset(&m_memcard_data[MC_HDR_SIZE], 0xFF, m_memory_card_size - MC_HDR_SIZE);
 
-    INFO_LOG_FMT(EXPANSIONINTERFACE, "No memory card found. A new one was created instead.");
+    INFO_LOG(EXPANSIONINTERFACE, "No memory card found. A new one was created instead.");
   }
 
   // Class members (including inherited ones) have now been initialized, so
@@ -189,7 +189,10 @@ void MemoryCard::FlushThread()
     return;
   }
 
-  Common::SetCurrentThreadName(fmt::format("Memcard {} flushing thread", m_card_slot).c_str());
+  char thread_name[32];
+  snprintf(thread_name, sizeof(thread_name), "Memcard %s flushing thread",
+           ExpansionInterface::SlotName(m_card_slot));
+  Common::SetCurrentThreadName(thread_name);
 
   // About fifteen seconds of frontend frames.
   constexpr u64 FLUSH_INTERVAL_FRAMES = 15 * 60;
@@ -229,12 +232,12 @@ void MemoryCard::FlushThread()
     // Note - file may have changed above, after ctor
     if (!file)
     {
-      PanicAlertFmtT(
-          "Could not write memory card file {0}.\n\n"
+      PanicAlert(
+          "Could not write memory card file %s.\n\n"
           "Are you running Dolphin from a CD/DVD, or is the save file maybe write protected?\n\n"
           "Are you receiving this after moving the emulator directory?\nIf so, then you may "
           "need to re-specify your memory card location in the options.",
-          m_filename);
+          m_filename.c_str());
 
       // Exit the flushing thread - further flushes will be ignored unless
       // the thread is recreated.
@@ -248,8 +251,8 @@ void MemoryCard::FlushThread()
     if (do_exit)
       return;
 
-    Core::DisplayMessage(fmt::format("Wrote to Memory Card {}",
-                                     m_card_slot == ExpansionInterface::Slot::A ? 'A' : 'B'),
+    Core::DisplayMessage(m_card_slot == ExpansionInterface::Slot::A ? "Wrote to Memory Card A" :
+                                                                      "Wrote to Memory Card B",
                          4000);
   }
 }
@@ -263,7 +266,7 @@ s32 MemoryCard::Read(u32 src_address, s32 length, u8* dest_address)
 {
   if (!IsAddressInBounds(src_address, length))
   {
-    PanicAlertFmtT("MemoryCard: Read called with invalid source address ({0:#x})", src_address);
+    PanicAlert("MemoryCard: Read called with invalid source address (%#x)", src_address);
     return -1;
   }
 
@@ -275,8 +278,7 @@ s32 MemoryCard::Write(u32 dest_address, s32 length, const u8* src_address)
 {
   if (!IsAddressInBounds(dest_address, length))
   {
-    PanicAlertFmtT("MemoryCard: Write called with invalid destination address ({0:#x})",
-                   dest_address);
+    PanicAlert("MemoryCard: Write called with invalid destination address (%#x)", dest_address);
     return -1;
   }
 
@@ -290,7 +292,7 @@ void MemoryCard::ClearBlock(u32 address)
 {
   if (address & (Memcard::BLOCK_SIZE - 1) || !IsAddressInBounds(address, Memcard::BLOCK_SIZE))
   {
-    PanicAlertFmtT("MemoryCard: ClearBlock called on invalid address ({0:#x})", address);
+    PanicAlert("MemoryCard: ClearBlock called on invalid address (%#x)", address);
     return;
   }
   memset(&m_memcard_data[address], 0xFF, Memcard::BLOCK_SIZE);

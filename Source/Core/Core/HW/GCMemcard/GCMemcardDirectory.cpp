@@ -5,8 +5,9 @@
 #include "Core/HW/EXI/EXI.h"
 
 #include <algorithm>
-#include <cstdlib>
+#include <cinttypes>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -14,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/FrameClock.h"
 #include "Common/Assert.h"
@@ -60,9 +61,13 @@ static std::string GenerateDefaultGCIFilename(const Memcard::DEntry& entry,
                                   entry.m_gamecode.size());
   const std::string_view filename(reinterpret_cast<const char*>(entry.m_filename.data()),
                                   entry.m_filename.size());
-  return Common::EscapeFileName(fmt::format("{}-{}-{}.gci", strip_null(string_decoder(makercode)),
-                                            strip_null(string_decoder(gamecode)),
-                                            strip_null(string_decoder(filename))));
+  std::string name(strip_null(string_decoder(makercode)));
+  name += '-';
+  name += strip_null(string_decoder(gamecode));
+  name += '-';
+  name += strip_null(string_decoder(filename));
+  name += ".gci";
+  return Common::EscapeFileName(name);
 }
 
 bool GCMemcardDirectory::LoadGCI(Memcard::GCIFile gci)
@@ -72,10 +77,10 @@ bool GCMemcardDirectory::LoadGCI(Memcard::GCIFile gci)
   {
     if (HasSameIdentity(gci.m_gci_header, already_loaded_gci.m_gci_header))
     {
-      ERROR_LOG_FMT(EXPANSIONINTERFACE,
-                    "{}\nwas not loaded because it has the same internal filename as previously "
-                    "loaded save\n{}",
-                    gci.m_filename, already_loaded_gci.m_filename);
+      ERROR_LOG(EXPANSIONINTERFACE,
+                "%s\nwas not loaded because it has the same internal filename as previously "
+                "loaded save\n%s",
+                gci.m_filename.c_str(), already_loaded_gci.m_filename.c_str());
       return false;
     }
   }
@@ -86,16 +91,15 @@ bool GCMemcardDirectory::LoadGCI(Memcard::GCIFile gci)
   const u16 num_blocks = gci.m_gci_header.m_block_count;
   if (num_blocks > 2043)
   {
-    ERROR_LOG_FMT(
-        EXPANSIONINTERFACE,
-        "{}\nwas not loaded because it is an invalid GCI.\nNumber of blocks claimed to be {}",
-        gci.m_filename, num_blocks);
+    ERROR_LOG(EXPANSIONINTERFACE,
+              "%s\nwas not loaded because it is an invalid GCI.\nNumber of blocks claimed to be %u",
+              gci.m_filename.c_str(), (unsigned)num_blocks);
     return false;
   }
 
   if (!gci.LoadSaveBlocks())
   {
-    ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to load data of {}", gci.m_filename);
+    ERROR_LOG(EXPANSIONINTERFACE, "Failed to load data of %s", gci.m_filename.c_str());
     return false;
   }
 
@@ -103,10 +107,10 @@ bool GCMemcardDirectory::LoadGCI(Memcard::GCIFile gci)
   const u16 first_block = m_bat1.AssignBlocksContiguous(num_blocks);
   if (first_block == 0xFFFF)
   {
-    ERROR_LOG_FMT(
+    ERROR_LOG(
         EXPANSIONINTERFACE,
-        "{}\nwas not loaded because there are not enough free blocks on the virtual memory card",
-        gci.m_filename);
+        "%s\nwas not loaded because there are not enough free blocks on the virtual memory card",
+        gci.m_filename.c_str());
     return false;
   }
   gci.m_gci_header.m_first_block = first_block;
@@ -151,7 +155,7 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
     gci.m_dirty = false;
     if (!gci.LoadHeader())
     {
-      ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to load header of {}", filename);
+      ERROR_LOG(EXPANSIONINTERFACE, "Failed to load header of %s", filename.c_str());
       continue;
     }
 
@@ -216,7 +220,10 @@ void GCMemcardDirectory::FlushThread()
     return;
   }
 
-  Common::SetCurrentThreadName(fmt::format("Memcard {} flushing thread", m_card_slot).c_str());
+  char thread_name[32];
+  snprintf(thread_name, sizeof(thread_name), "Memcard %s flushing thread",
+           ExpansionInterface::SlotName(m_card_slot));
+  Common::SetCurrentThreadName(thread_name);
 
   // About a second of frontend frames.
   constexpr u64 FLUSH_QUIET_FRAMES = 60;
@@ -313,7 +320,7 @@ s32 GCMemcardDirectory::Read(u32 src_address, s32 length, u8* dest_address)
 s32 GCMemcardDirectory::Write(u32 dest_address, s32 length, const u8* src_address)
 {
   if (length != 0x80)
-    INFO_LOG_FMT(EXPANSIONINTERFACE, "Writing to {:#x}. Length: {:#x}", dest_address, length);
+    INFO_LOG(EXPANSIONINTERFACE, "Writing to %#x. Length: %#x", dest_address, (unsigned)length);
   const s32 block = dest_address / Memcard::BLOCK_SIZE;
   const u32 offset = dest_address % Memcard::BLOCK_SIZE;
   s32 extra = 0;  // used for write calls that are across multiple blocks
@@ -361,7 +368,7 @@ s32 GCMemcardDirectory::Write(u32 dest_address, s32 length, const u8* src_addres
       m_last_block = SaveAreaRW(block, true);
       if (m_last_block == -1)
       {
-        PanicAlertFmtT("Report: GCIFolder Writing to unallocated block {0:#x}", block);
+        PanicAlert("Report: GCIFolder Writing to unallocated block %#x", (unsigned)block);
         exit(0);
       }
     }
@@ -384,12 +391,12 @@ void GCMemcardDirectory::ClearBlock(u32 address)
 {
   if (address % Memcard::BLOCK_SIZE)
   {
-    PanicAlertFmtT("GCMemcardDirectory: ClearBlock called with invalid block address");
+    PanicAlert("GCMemcardDirectory: ClearBlock called with invalid block address");
     return;
   }
 
   const u32 block = address / Memcard::BLOCK_SIZE;
-  INFO_LOG_FMT(EXPANSIONINTERFACE, "Clearing block {}", block);
+  INFO_LOG(EXPANSIONINTERFACE, "Clearing block %u", block);
   switch (block)
   {
   case 0:
@@ -433,8 +440,8 @@ inline void GCMemcardDirectory::SyncSaves()
   {
     if (current->m_dir_entries[i].m_gamecode != Memcard::DEntry::UNINITIALIZED_GAMECODE)
     {
-      INFO_LOG_FMT(EXPANSIONINTERFACE, "Syncing save {:#x}",
-                   Common::swap32(current->m_dir_entries[i].m_gamecode.data()));
+      INFO_LOG(EXPANSIONINTERFACE, "Syncing save %#x",
+               Common::swap32(current->m_dir_entries[i].m_gamecode.data()));
       bool added = false;
       while (i >= m_saves.size())
       {
@@ -454,16 +461,15 @@ inline void GCMemcardDirectory::SyncSaves()
 
         if ((gamecode != 0xFFFFFFFF) && (gamecode != new_gamecode))
         {
-          PanicAlertFmtT(
-              "Game overwrote with another games save. Data corruption ahead {0:#x}, {1:#x}",
-              Common::swap32(m_saves[i].m_gci_header.m_gamecode.data()),
-              Common::swap32(current->m_dir_entries[i].m_gamecode.data()));
+          PanicAlert("Game overwrote with another games save. Data corruption ahead %#x, %#x",
+                     Common::swap32(m_saves[i].m_gci_header.m_gamecode.data()),
+                     Common::swap32(current->m_dir_entries[i].m_gamecode.data()));
         }
         memcpy((u8*)&(m_saves[i].m_gci_header), (u8*)&(current->m_dir_entries[i]),
                Memcard::DENTRY_SIZE);
         if (old_start != new_start)
         {
-          INFO_LOG_FMT(EXPANSIONINTERFACE, "Save moved from {:#x} to {:#x}", old_start, new_start);
+          INFO_LOG(EXPANSIONINTERFACE, "Save moved from %#x to %#x", old_start, new_start);
           m_saves[i].m_used_blocks.clear();
           m_saves[i].m_save_data.clear();
         }
@@ -475,8 +481,8 @@ inline void GCMemcardDirectory::SyncSaves()
     }
     else if ((i < m_saves.size()) && (*(u32*)&(m_saves[i].m_gci_header) != 0xFFFFFFFF))
     {
-      INFO_LOG_FMT(EXPANSIONINTERFACE, "Clearing and/or deleting save {:#x}",
-                   Common::swap32(m_saves[i].m_gci_header.m_gamecode.data()));
+      INFO_LOG(EXPANSIONINTERFACE, "Clearing and/or deleting save %#x",
+               Common::swap32(m_saves[i].m_gci_header.m_gamecode.data()));
       m_saves[i].m_gci_header.m_gamecode = Memcard::DEntry::UNINITIALIZED_GAMECODE;
       m_saves[i].m_save_data.clear();
       m_saves[i].m_used_blocks.clear();
@@ -515,8 +521,8 @@ inline s32 GCMemcardDirectory::SaveAreaRW(u32 block, bool writing)
 
         if (static_cast<size_t>(idx) >= m_saves[i].m_save_data.size())
         {
-          PanicAlertFmt("Block index ({0}) is larger than the number of available blocks ({1})",
-                        idx, m_saves[i].m_save_data.size());
+          PanicAlert("Block index (%d) is larger than the number of available blocks (%" PRIu64 ")",
+                     idx, (u64)m_saves[i].m_save_data.size());
           return -1;
         }
         m_last_block = block;
@@ -564,7 +570,7 @@ bool GCMemcardDirectory::SetUsedBlocks(int save_index)
     block = current_bat->GetNextBlock(block);
     if (block == 0)
     {
-      PanicAlertFmtT("BAT incorrect. Dolphin will now exit");
+      PanicAlert("BAT incorrect. Dolphin will now exit");
       exit(0);
     }
   }
@@ -573,10 +579,9 @@ bool GCMemcardDirectory::SetUsedBlocks(int save_index)
   const u16 blocks_from_bat = static_cast<u16>(m_saves[save_index].m_used_blocks.size());
   if (blocks_from_bat != num_blocks)
   {
-    PanicAlertFmtT(
-        "Warning: Number of blocks indicated by the BAT ({0}) does not match that of the "
-        "loaded file header ({1})",
-        blocks_from_bat, num_blocks);
+    PanicAlert("Warning: Number of blocks indicated by the BAT (%u) does not match that of the "
+               "loaded file header (%u)",
+               (unsigned)blocks_from_bat, (unsigned)num_blocks);
     return false;
   }
 
@@ -627,8 +632,8 @@ void GCMemcardDirectory::QueueDirtySaves()
           // The save's header has been changed but the actual save blocks haven't been read/written
           // to
           // skip flushing this file until actual save data is modified
-          ERROR_LOG_FMT(EXPANSIONINTERFACE,
-                        "GCI header modified without corresponding save data changes");
+          ERROR_LOG(EXPANSIONINTERFACE,
+                    "GCI header modified without corresponding save data changes");
           continue;
         }
         if (save.m_filename.empty())
@@ -645,8 +650,8 @@ void GCMemcardDirectory::QueueDirtySaves()
           }
           if (File::Exists(default_save_name))
           {
-            PanicAlertFmtT("Failed to find new filename.\n{0}\n will be overwritten",
-                           default_save_name);
+            PanicAlert("Failed to find new filename.\n%s\n will be overwritten",
+                       default_save_name.c_str());
           }
           save.m_filename = default_save_name;
         }
@@ -670,7 +675,7 @@ void GCMemcardDirectory::QueueDirtySaves()
     const u32 gamecode = Common::swap32(save.m_gci_header.m_gamecode.data());
     if (gamecode != m_game_id && gamecode != 0xFFFFFFFF && !save.m_save_data.empty())
     {
-      INFO_LOG_FMT(EXPANSIONINTERFACE, "Flushing savedata to disk for {}", save.m_filename);
+      INFO_LOG(EXPANSIONINTERFACE, "Flushing savedata to disk for %s", save.m_filename.c_str());
       save.m_save_data.clear();
     }
   }
@@ -708,7 +713,7 @@ void GCMemcardDirectory::WriteQueuedJobs()
     RFILE* gci = filestream_open_atomic(job->filename);
     if (!gci)
     {
-      ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to open file at {} for writing", job->filename);
+      ERROR_LOG(EXPANSIONINTERFACE, "Failed to open file at %s for writing", job->filename);
       continue;
     }
     const s64 blocks_size = s64(job->num_blocks) * Memcard::BLOCK_SIZE;
@@ -716,7 +721,7 @@ void GCMemcardDirectory::WriteQueuedJobs()
         filestream_write(gci, &job->header, Memcard::DENTRY_SIZE) == Memcard::DENTRY_SIZE &&
         (!blocks_size || filestream_write(gci, job->tail, blocks_size) == blocks_size);
     if (filestream_commit_atomic(gci, job->filename, ok) != 0)
-      ERROR_LOG_FMT(EXPANSIONINTERFACE, "Failed to save data to {}", job->filename);
+      ERROR_LOG(EXPANSIONINTERFACE, "Failed to save data to %s", job->filename);
   }
 
   for (node = jobs; node;)
