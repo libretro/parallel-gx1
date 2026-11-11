@@ -52,7 +52,7 @@ u8 SlotToEXIChannel(Slot slot)
   case Slot::SP2:
     return 2;
   default:
-    PanicAlertFmt("Unhandled slot {}", slot);
+    PanicAlert("Unhandled slot %u", static_cast<unsigned>(slot));
     return 0;
   }
 }
@@ -70,7 +70,7 @@ u8 SlotToEXIDevice(Slot slot)
   case Slot::SP2:
     return 0;
   default:
-    PanicAlertFmt("Unhandled slot {}", slot);
+    PanicAlert("Unhandled slot %u", static_cast<unsigned>(slot));
     return 0;
   }
 }

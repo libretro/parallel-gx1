@@ -3,6 +3,7 @@
 
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
+#include <cinttypes>
 #include <cstring>
 
 #include "Common/Logging/Log.h"
@@ -62,8 +63,8 @@ void CEXIETHERNET::TAPServerNetworkInterface::HandleReceivedFrame(std::string&& 
 {
   if (data.size() > BBA_RECV_SIZE)
   {
-    ERROR_LOG_FMT(SP1, "Received BBA frame of size {}, which is larger than maximum size {}",
-                  data.size(), BBA_RECV_SIZE);
+    ERROR_LOG(SP1, "Received BBA frame of size %" PRIu64 ", which is larger than maximum size %d",
+              (u64)data.size(), BBA_RECV_SIZE);
     return;
   }
 

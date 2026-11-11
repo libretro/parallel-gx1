@@ -74,7 +74,7 @@ void CEXIAD16::TransferByte(u8& byte)
         break;
       case 4:
         m_ad16_register.U8[3] = byte;
-        INFO_LOG_FMT(EXPANSIONINTERFACE, "AD16 received: 0x{:08X}", m_ad16_register.U32);
+        INFO_LOG(EXPANSIONINTERFACE, "AD16 received: 0x%08X", m_ad16_register.U32);
         break;
       }
     }

@@ -49,22 +49,22 @@ CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type) : IEXIDevic
   {
   case BBADeviceType::TAP:
     m_network_interface = std::make_unique<TAPNetworkInterface>(this);
-    INFO_LOG_FMT(SP1, "Created TAP physical network interface.");
+    INFO_LOG(SP1, "Created TAP physical network interface.");
     break;
   case BBADeviceType::TAPSERVER:
     m_network_interface = std::make_unique<TAPServerNetworkInterface>(
         this, Config::Get(Config::MAIN_BBA_TAPSERVER_DESTINATION));
-    INFO_LOG_FMT(SP1, "Created tapserver physical network interface.");
+    INFO_LOG(SP1, "Created tapserver physical network interface.");
     break;
   case BBADeviceType::BuiltIn:
     m_network_interface = std::make_unique<BuiltInBBAInterface>(
         this, Config::Get(Config::MAIN_BBA_BUILTIN_DNS), Config::Get(Config::MAIN_BBA_BUILTIN_IP));
-    INFO_LOG_FMT(SP1, "Created Built in network interface.");
+    INFO_LOG(SP1, "Created Built in network interface.");
     break;
   case BBADeviceType::IPC:
     mac_addr = Common::GenerateMacAddress(Common::MACConsumer::BBA);  // Always randomize
     m_network_interface = std::make_unique<IPCBBAInterface>(this);
-    INFO_LOG_FMT(SP1, "Created IPC-based network interface.");
+    INFO_LOG(SP1, "Created IPC-based network interface.");
     break;
   case BBADeviceType::XLINK:
     // TODO start BBA with network link down, bring it up after "connected" response from XLink
@@ -74,10 +74,9 @@ CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type) : IEXIDevic
     // Don't actually stop the BBA from initializing though
     if (!mac_addr_setting.starts_with("00:09:bf") && !mac_addr_setting.starts_with("00:17:ab"))
     {
-      PanicAlertFmtT(
-          "BBA MAC address {0} invalid for XLink Kai. A valid Nintendo GameCube MAC address "
-          "must be used. Generate a new MAC address starting with 00:09:bf or 00:17:ab.",
-          mac_addr_setting);
+      PanicAlert("BBA MAC address %s invalid for XLink Kai. A valid Nintendo GameCube MAC address "
+                 "must be used. Generate a new MAC address starting with 00:09:bf or 00:17:ab.",
+                 mac_addr_setting.c_str());
     }
 
     // m_client_mdentifier should be unique per connected emulator from the XLink kai client's
@@ -86,8 +85,8 @@ CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type) : IEXIDevic
         std::make_unique<XLinkNetworkInterface>(this, Config::Get(Config::MAIN_BBA_XLINK_IP), 34523,
                                                 "dolphin" + Config::Get(Config::MAIN_BBA_MAC),
                                                 Config::Get(Config::MAIN_BBA_XLINK_CHAT_OSD));
-    INFO_LOG_FMT(SP1, "Created XLink Kai BBA network interface connection to {}:34523",
-                 Config::Get(Config::MAIN_BBA_XLINK_IP));
+    INFO_LOG(SP1, "Created XLink Kai BBA network interface connection to %s:34523",
+             Config::Get(Config::MAIN_BBA_XLINK_IP).c_str());
     break;
   }
 
@@ -142,13 +141,14 @@ void CEXIETHERNET::ImmWrite(u32 data, u32 size)
       transfer.address = (data >> 8) & 0xffff;
     transfer.direction = IsWriteCommand(data) ? transfer.WRITE : transfer.READ;
 
-    DEBUG_LOG_FMT(SP1, "{} {} {} {:x}", IsMXCommand(data) ? "mx " : "exi",
-                  IsWriteCommand(data) ? "write" : "read ", GetRegisterName(), transfer.address);
+    DEBUG_LOG(SP1, "%s %s %s %x", IsMXCommand(data) ? "mx " : "exi",
+              IsWriteCommand(data) ? "write" : "read ", GetRegisterName(),
+              (unsigned)transfer.address);
 
     if (transfer.address == BBA_IOB && transfer.region == transfer.MX)
     {
-      ERROR_LOG_FMT(SP1,
-                    "Usage of BBA_IOB indicates that the rx packet descriptor has been corrupted.");
+      ERROR_LOG(SP1,
+                "Usage of BBA_IOB indicates that the rx packet descriptor has been corrupted.");
     }
 
     // transfer has been setup
@@ -157,7 +157,7 @@ void CEXIETHERNET::ImmWrite(u32 data, u32 size)
 
   // Reach here if we're actually writing data to the EXI or MX region.
 
-  DEBUG_LOG_FMT(SP1, "{} write {:x}", transfer.region == transfer.MX ? "mx " : "exi", data);
+  DEBUG_LOG(SP1, "%s write %x", transfer.region == transfer.MX ? "mx " : "exi", data);
 
   if (transfer.region == transfer.EXI)
   {
@@ -222,7 +222,7 @@ u32 CEXIETHERNET::ImmRead(u32 size)
       ret |= mBbaMem[transfer.address++] << (i * 8);
   }
 
-  DEBUG_LOG_FMT(SP1, "imm r{}: {:x}", size, ret);
+  DEBUG_LOG(SP1, "imm r%u: %x", size, ret);
 
   ret <<= (4 - size) * 8;
 
@@ -231,7 +231,7 @@ u32 CEXIETHERNET::ImmRead(u32 size)
 
 void CEXIETHERNET::DMAWrite(u32 addr, u32 size)
 {
-  DEBUG_LOG_FMT(SP1, "DMA write: {:08x} {:x}", addr, size);
+  DEBUG_LOG(SP1, "DMA write: %08x %x", addr, size);
 
   if (transfer.region == transfer.MX && transfer.direction == transfer.WRITE &&
       transfer.address == BBA_WRTXFIFOD)
@@ -241,15 +241,15 @@ void CEXIETHERNET::DMAWrite(u32 addr, u32 size)
   }
   else
   {
-    ERROR_LOG_FMT(SP1, "DMA write in {} {} mode - not implemented",
-                  transfer.region == transfer.EXI ? "exi" : "mx",
-                  transfer.direction == transfer.READ ? "read" : "write");
+    ERROR_LOG(SP1, "DMA write in %s %s mode - not implemented",
+              transfer.region == transfer.EXI ? "exi" : "mx",
+              transfer.direction == transfer.READ ? "read" : "write");
   }
 }
 
 void CEXIETHERNET::DMARead(u32 addr, u32 size)
 {
-  DEBUG_LOG_FMT(SP1, "DMA read: {:08x} {:x}", addr, size);
+  DEBUG_LOG(SP1, "DMA read: %08x %x", addr, size);
   auto& memory = m_system.GetMemory();
   memory.CopyToEmu(addr, &mBbaMem[transfer.address], size);
   transfer.address += size;
@@ -365,13 +365,13 @@ void CEXIETHERNET::MXCommandHandler(u32 data, u32 size)
   case BBA_NCRA:
     if ((data & NCRA_RESET) != 0)
     {
-      INFO_LOG_FMT(SP1, "Software reset");
+      INFO_LOG(SP1, "Software reset");
       // MXSoftReset();
       m_network_interface->Activate();
     }
     if (((mBbaMem[BBA_NCRA] & NCRA_SR) ^ (data & NCRA_SR)) != 0)
     {
-      DEBUG_LOG_FMT(SP1, "{} rx", (data & NCRA_SR) ? "start" : "stop");
+      DEBUG_LOG(SP1, "%s rx", (data & NCRA_SR) ? "start" : "stop");
 
       if ((data & NCRA_SR) != 0)
         m_network_interface->RecvStart();
@@ -386,12 +386,12 @@ void CEXIETHERNET::MXCommandHandler(u32 data, u32 size)
 
       if ((data & NCRA_ST0) != 0)
       {
-        INFO_LOG_FMT(SP1, "start tx - local DMA");
+        INFO_LOG(SP1, "start tx - local DMA");
         SendFromPacketBuffer();
       }
       else if ((data & NCRA_ST1) != 0)
       {
-        DEBUG_LOG_FMT(SP1, "start tx - direct FIFO");
+        DEBUG_LOG(SP1, "start tx - direct FIFO");
         SendFromDirectFIFO();
         // Kind of a hack: send completes instantly, so we don't
         // actually write the "send in status" bit to the register
@@ -460,7 +460,7 @@ void CEXIETHERNET::SendFromDirectFIFO()
 
 void CEXIETHERNET::SendFromPacketBuffer()
 {
-  ERROR_LOG_FMT(SP1, "tx packet buffer not implemented.");
+  ERROR_LOG(SP1, "tx packet buffer not implemented.");
 }
 
 void CEXIETHERNET::SendComplete()
@@ -562,11 +562,12 @@ bool CEXIETHERNET::RecvHandlePacket()
     goto wait_for_next;
 
 #ifdef BBA_TRACK_PAGE_PTRS
-  INFO_LOG_FMT(SP1, "RecvHandlePacket {:x}\n{}", mRecvBufferLength,
-               ArrayToString(mRecvBuffer.get(), mRecvBufferLength, 16));
+  INFO_LOG(SP1, "RecvHandlePacket %x\n%s", static_cast<unsigned>(mRecvBufferLength),
+           ArrayToString(mRecvBuffer.get(), mRecvBufferLength, 16).c_str());
 
-  INFO_LOG_FMT(SP1, "{:x} {:x} {:x} {:x}", page_ptr(BBA_BP), page_ptr(BBA_RRP), page_ptr(BBA_RWP),
-               page_ptr(BBA_RHBP));
+  INFO_LOG(SP1, "%x %x %x %x", static_cast<unsigned>(page_ptr(BBA_BP)),
+           static_cast<unsigned>(page_ptr(BBA_RRP)), static_cast<unsigned>(page_ptr(BBA_RWP)),
+           static_cast<unsigned>(page_ptr(BBA_RHBP)));
 #endif
   Core::NetworkLogger()->LogBBA(mRecvBuffer.get(),
                                                                     mRecvBufferLength);
@@ -574,7 +575,7 @@ bool CEXIETHERNET::RecvHandlePacket()
 
   descriptor = (Descriptor*)write_ptr;
   current_rwp = page_ptr(BBA_RWP);
-  DEBUG_LOG_FMT(SP1, "Frame recv: {:x}", mRecvBufferLength);
+  DEBUG_LOG(SP1, "Frame recv: %x", mRecvBufferLength);
   for (u32 i = 0; i < mRecvBufferLength; i++)
   {
     write_ptr[off] = mRecvBuffer[i];
@@ -613,8 +614,9 @@ bool CEXIETHERNET::RecvHandlePacket()
     current_rwp = current_rwp == page_ptr(BBA_RHBP) ? page_ptr(BBA_BP) : current_rwp + 1;
 
 #ifdef BBA_TRACK_PAGE_PTRS
-  INFO_LOG_FMT(SP1, "{:x} {:x} {:x} {:x}", page_ptr(BBA_BP), page_ptr(BBA_RRP), page_ptr(BBA_RWP),
-               page_ptr(BBA_RHBP));
+  INFO_LOG(SP1, "%x %x %x %x", static_cast<unsigned>(page_ptr(BBA_BP)),
+           static_cast<unsigned>(page_ptr(BBA_RRP)), static_cast<unsigned>(page_ptr(BBA_RWP)),
+           static_cast<unsigned>(page_ptr(BBA_RHBP)));
 #endif
 
   // Is the current frame multicast?
@@ -629,7 +631,7 @@ bool CEXIETHERNET::RecvHandlePacket()
     }
     else
     {
-      ERROR_LOG_FMT(SP1, "RBF while AUTORCVR == 0!");
+      ERROR_LOG(SP1, "RBF while AUTORCVR == 0!");
     }
   }
 
@@ -650,7 +652,7 @@ bool CEXIETHERNET::RecvHandlePacket()
   else
   {
     // This occurs if software is still processing the last raised recv interrupt
-    WARN_LOG_FMT(SP1, "NOT raising recv interrupt");
+    WARN_LOG(SP1, "NOT raising recv interrupt");
   }
 
 wait_for_next:

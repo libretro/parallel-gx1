@@ -112,7 +112,7 @@ CEXIIPL::CEXIIPL(Core::System& system) : IEXIDevice(system)
 
     const std::string_view name{reinterpret_cast<char*>(m_rom),
                                 strnlen(reinterpret_cast<char*>(m_rom), 0x100)};
-    INFO_LOG_FMT(BOOT, "Loaded bootrom: {}", name);
+    INFO_LOG(BOOT, "Loaded bootrom: %.*s", static_cast<int>(name.size()), name.data());
   }
   else
   {
@@ -236,12 +236,12 @@ void CEXIIPL::LoadFontFile(const std::string& filename, u32 offset)
   // bytes long respectively, so, determine the size of the font being loaded based on the offset
   const u64 fontsize = (offset == 0x1aff00) ? 0x4a24d : 0x2575;
 
-  INFO_LOG_FMT(BOOT, "Found IPL dump, loading {} font from {}",
-               (offset == 0x1aff00) ? "Shift JIS" : "Windows-1252", ipl_rom_path);
+  INFO_LOG(BOOT, "Found IPL dump, loading %s font from %s",
+           (offset == 0x1aff00) ? "Shift JIS" : "Windows-1252", ipl_rom_path.c_str());
 
   if (!stream.Seek(offset, File::SeekOrigin::Begin) || !stream.ReadBytes(&m_rom[offset], fontsize))
   {
-    WARN_LOG_FMT(BOOT, "Failed to read font from IPL dump.");
+    WARN_LOG(BOOT, "Failed to read font from IPL dump.");
     return;
   }
 
@@ -285,9 +285,8 @@ void CEXIIPL::TransferByte(u8& data)
       // This is technically not very accurate :(
       UpdateRTC();
 
-      DEBUG_LOG_FMT(EXPANSIONINTERFACE, "IPL-DEV cmd {} {:08x} {:02x}",
-                    m_command.is_write() ? "write" : "read", m_command.address(),
-                    m_command.low_bits());
+      DEBUG_LOG(EXPANSIONINTERFACE, "IPL-DEV cmd %s %08x %02x",
+                m_command.is_write() ? "write" : "read", m_command.address(), m_command.low_bits());
     }
   }
   else
@@ -295,8 +294,8 @@ void CEXIIPL::TransferByte(u8& data)
     // Actually read or write a byte
     const u32 address = m_command.address();
 
-    DEBUG_LOG_FMT(EXPANSIONINTERFACE, "IPL-DEV data {} {:08x} {:02x}",
-                  m_command.is_write() ? "write" : "read", address, data);
+    DEBUG_LOG(EXPANSIONINTERFACE, "IPL-DEV data %s %08x %02x",
+              m_command.is_write() ? "write" : "read", address, (unsigned)data);
 
     auto UartFifoAccess = [&] {
       if (m_command.is_write())
@@ -306,7 +305,7 @@ void CEXIIPL::TransferByte(u8& data)
 
         if (data == '\r')
         {
-          NOTICE_LOG_FMT(OSREPORT, "{}", SHIFTJISToUTF8(m_buffer));
+          NOTICE_LOG(OSREPORT, "%s", SHIFTJISToUTF8(m_buffer).c_str());
           m_buffer.clear();
         }
       }
@@ -333,13 +332,13 @@ void CEXIIPL::TransferByte(u8& data)
         {
           if (dev_addr >= 0x001FCF00)
           {
-            PanicAlertFmtT("Error: Trying to access Windows-1252 fonts but they are not loaded. "
-                           "Games may not show fonts correctly, or crash.");
+            PanicAlert("Error: Trying to access Windows-1252 fonts but they are not loaded. "
+                       "Games may not show fonts correctly, or crash.");
           }
           else
           {
-            PanicAlertFmtT("Error: Trying to access Shift JIS fonts but they are not loaded. "
-                           "Games may not show fonts correctly, or crash.");
+            PanicAlert("Error: Trying to access Shift JIS fonts but they are not loaded. "
+                       "Games may not show fonts correctly, or crash.");
           }
           // Don't be a nag
           m_fonts_loaded = true;
@@ -369,7 +368,7 @@ void CEXIIPL::TransferByte(u8& data)
         // Seen being written to after reading 4 bytes from barnacle
         break;
       case 0x4c:
-        DEBUG_LOG_FMT(OSREPORT, "UART Barnacle {:x}", data);
+        DEBUG_LOG(OSREPORT, "UART Barnacle %x", (unsigned)data);
         break;
       }
     }
@@ -396,7 +395,7 @@ void CEXIIPL::TransferByte(u8& data)
     }
     else
     {
-      NOTICE_LOG_FMT(EXPANSIONINTERFACE, "IPL-DEV Accessing unknown device");
+      NOTICE_LOG(EXPANSIONINTERFACE, "IPL-DEV Accessing unknown device");
     }
   }
 }

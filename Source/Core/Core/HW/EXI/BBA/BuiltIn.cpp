@@ -134,7 +134,7 @@ void CEXIETHERNET::BuiltInBBAInterface::WriteToQueue(std::vector<u8> data)
   if (next_write_index != m_queue_read)
     m_queue_write = next_write_index;
   else
-    WARN_LOG_FMT(SP1, "BBA queue overrun, data might be lost");
+    WARN_LOG(SP1, "BBA queue overrun, data might be lost");
 }
 
 bool CEXIETHERNET::BuiltInBBAInterface::WillQueueOverrun() const
@@ -185,7 +185,7 @@ void CEXIETHERNET::BuiltInBBAInterface::PollData(std::size_t* datasize)
     }
     else
     {
-      WARN_LOG_FMT(SP1, "BBA queue might overrun, can't poll more data");
+      WARN_LOG(SP1, "BBA queue might overrun, can't poll more data");
       return;
     }
   }
@@ -482,9 +482,9 @@ void CEXIETHERNET::BuiltInBBAInterface::InitUDPPort(u16 port)
   ref->udp_socket.SetBlocking(false);
   if (ref->udp_socket.Bind(port, m_current_ip) != BbaSocketStatus::Done)
   {
-    ERROR_LOG_FMT(SP1, "Couldn't open UDP socket");
-    PanicAlertFmtT(
-        "Couldn't open port {0}. This might stop the game's LAN mode from working properly.", port);
+    ERROR_LOG(SP1, "Couldn't open UDP socket");
+    PanicAlert("Couldn't open port %u. This might stop the game's LAN mode from working properly.",
+               (unsigned)port);
     return;
   }
 }
@@ -514,12 +514,12 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUDPFrame(const Common::UDPPacket& 
     if (ref->udp_socket.Bind(ntohs(udp_header.source_port), m_current_ip) !=
         BbaSocketStatus::Done)
     {
-      PanicAlertFmtT(
-          "Port {0} is already in use. This might stop the game's LAN mode from working properly.",
-          htons(udp_header.source_port));
+      PanicAlert(
+          "Port %u is already in use. This might stop the game's LAN mode from working properly.",
+          (unsigned)htons(udp_header.source_port));
       if (ref->udp_socket.Bind(0, m_current_ip) != BbaSocketStatus::Done)
       {
-        ERROR_LOG_FMT(SP1, "Couldn't open UDP socket");
+        ERROR_LOG(SP1, "Couldn't open UDP socket");
         return;
       }
       if (ntohs(udp_header.destination_port) == Common::SSDP_PORT && ntohs(udp_header.length) > 150)
@@ -557,14 +557,14 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUPnPClient()
   if (ref->tcp_socket.GetPeerName(&ref->from) != BbaSocketStatus::Done ||
       ref->tcp_socket.GetSockName(&ref->to) != BbaSocketStatus::Done)
   {
-    ERROR_LOG_FMT(SP1, "Failed to accept new UPnP client: {}", Common::StrNetworkError());
+    ERROR_LOG(SP1, "Failed to accept new UPnP client: %s", Common::StrNetworkError());
     return;
   }
 
   if (m_current_ip == ref->from.sin_addr.s_addr)
   {
     ref->tcp_socket.Disconnect();
-    WARN_LOG_FMT(SP1, "Ignoring UPnP request to itself");
+    WARN_LOG(SP1, "Ignoring UPnP request to itself");
     return;
   }
 
@@ -650,12 +650,12 @@ bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
   const std::optional<u16> ethertype = Common::PacketView(frame, size).GetEtherType();
   if (!ethertype.has_value())
   {
-    ERROR_LOG_FMT(SP1, "Unable to send frame with invalid ethernet header");
+    ERROR_LOG(SP1, "Unable to send frame with invalid ethernet header");
     return false;
   }
   if (*ethertype != Common::IPV4_ETHERTYPE && *ethertype != Common::ARP_ETHERTYPE)
   {
-    ERROR_LOG_FMT(SP1, "Unsupported EtherType {:#06x}", *ethertype);
+    ERROR_LOG(SP1, "Unsupported EtherType %#06x", (unsigned)(*ethertype));
     return false;
   }
   Post(Request::Kind::Frame, std::vector<u8>(frame, frame + size));
@@ -670,7 +670,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
   const std::optional<u16> ethertype = view.GetEtherType();
   if (!ethertype.has_value())
   {
-    ERROR_LOG_FMT(SP1, "Unable to send frame with invalid ethernet header");
+    ERROR_LOG(SP1, "Unable to send frame with invalid ethernet header");
     return;
   }
 
@@ -681,7 +681,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
     const std::optional<u8> ip_proto = view.GetIPProto();
     if (!ip_proto.has_value())
     {
-      ERROR_LOG_FMT(SP1, "Unable to send frame with invalid IP header");
+      ERROR_LOG(SP1, "Unable to send frame with invalid IP header");
       return;
     }
 
@@ -692,7 +692,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
       const auto udp_packet = view.GetUDPPacket();
       if (!udp_packet.has_value())
       {
-        ERROR_LOG_FMT(SP1, "Unable to send frame with invalid UDP header");
+        ERROR_LOG(SP1, "Unable to send frame with invalid UDP header");
         return;
       }
 
@@ -712,7 +712,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
       const auto tcp_packet = view.GetTCPPacket();
       if (!tcp_packet.has_value())
       {
-        ERROR_LOG_FMT(SP1, "Unable to send frame with invalid TCP header");
+        ERROR_LOG(SP1, "Unable to send frame with invalid TCP header");
         return;
       }
 
@@ -728,7 +728,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
     }
 
     default:
-      ERROR_LOG_FMT(SP1, "Unsupported IP protocol {}", *ip_proto);
+      ERROR_LOG(SP1, "Unsupported IP protocol %u", (unsigned)(*ip_proto));
       break;
     }
     break;
@@ -739,7 +739,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
     const auto arp_packet = view.GetARPPacket();
     if (!arp_packet.has_value())
     {
-      ERROR_LOG_FMT(SP1, "Unable to send frame with invalid ARP header");
+      ERROR_LOG(SP1, "Unable to send frame with invalid ARP header");
       return;
     }
 
@@ -748,7 +748,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
   }
 
   default:
-    ERROR_LOG_FMT(SP1, "Unsupported EtherType {:#06x}", *ethertype);
+    ERROR_LOG(SP1, "Unsupported EtherType %#06x", (unsigned)(*ethertype));
     return;
   }
 
@@ -791,8 +791,8 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
       datasize = self->m_queue_data[self->m_queue_read].size();
       if (datasize > BBA_RECV_SIZE)
       {
-        ERROR_LOG_FMT(SP1, "Frame size is exceiding BBA capacity, frame stack might be corrupted"
-                           "Killing Dolphin...");
+        ERROR_LOG(SP1, "Frame size is exceiding BBA capacity, frame stack might be corrupted"
+                       "Killing Dolphin...");
         std::exit(0);
       }
       std::memcpy(self->m_eth_ref->mRecvBuffer.get(), self->m_queue_data[self->m_queue_read].data(),
@@ -935,7 +935,7 @@ BbaSocketStatus BbaTcpSocket::GetPeerName(sockaddr_in* addr) const
   socklen_t size = sizeof(*addr);
   if (getpeername(m_fd, reinterpret_cast<sockaddr*>(addr), &size) == -1)
   {
-    ERROR_LOG_FMT(SP1, "getpeername failed: {}", Common::StrNetworkError());
+    ERROR_LOG(SP1, "getpeername failed: %s", Common::StrNetworkError());
     return BbaSocketStatus::Error;
   }
   return BbaSocketStatus::Done;
@@ -946,7 +946,7 @@ BbaSocketStatus BbaTcpSocket::GetSockName(sockaddr_in* addr) const
   socklen_t size = sizeof(*addr);
   if (getsockname(m_fd, reinterpret_cast<sockaddr*>(addr), &size) == -1)
   {
-    ERROR_LOG_FMT(SP1, "getsockname failed: {}", Common::StrNetworkError());
+    ERROR_LOG(SP1, "getsockname failed: %s", Common::StrNetworkError());
     return BbaSocketStatus::Error;
   }
   return BbaSocketStatus::Done;
@@ -973,8 +973,7 @@ BbaTcpSocket::ConnectingState BbaTcpSocket::Connected(StackRef* ref)
 
     if (select(nfds, &read_fds, &write_fds, &except_fds, &t) < 0)
     {
-      ERROR_LOG_FMT(SP1, "Failed to get BBA socket connection state: {}",
-                    Common::StrNetworkError());
+      ERROR_LOG(SP1, "Failed to get BBA socket connection state: %s", Common::StrNetworkError());
       break;
     }
 
@@ -985,15 +984,14 @@ BbaTcpSocket::ConnectingState BbaTcpSocket::Connected(StackRef* ref)
     socklen_t len = sizeof(error);
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&error), &len) != 0)
     {
-      ERROR_LOG_FMT(SP1, "Failed to get BBA socket error state: {}", Common::StrNetworkError());
+      ERROR_LOG(SP1, "Failed to get BBA socket error state: %s", Common::StrNetworkError());
       m_connecting_state = ConnectingState::Error;
       break;
     }
 
     if (error != 0)
     {
-      ERROR_LOG_FMT(SP1, "BBA connect failed (err={}): {}", error,
-                    Common::DecodeNetworkError(error));
+      ERROR_LOG(SP1, "BBA connect failed (err=%d): %s", error, Common::DecodeNetworkError(error));
       m_connecting_state = ConnectingState::Error;
       break;
     }
@@ -1003,14 +1001,14 @@ BbaTcpSocket::ConnectingState BbaTcpSocket::Connected(StackRef* ref)
     socklen_t peer_len = sizeof(peer);
     if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &peer_len) != 0)
     {
-      ERROR_LOG_FMT(SP1, "BBA connect failed to get peername: {}", Common::StrNetworkError());
+      ERROR_LOG(SP1, "BBA connect failed to get peername: %s", Common::StrNetworkError());
       m_connecting_state = ConnectingState::Error;
       break;
     }
 
     // Create the resulting SYN ACK packet
     m_connecting_state = ConnectingState::Connected;
-    INFO_LOG_FMT(SP1, "BBA connect succeeded");
+    INFO_LOG(SP1, "BBA connect succeeded");
 
     Common::TCPPacket result(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
                              ref->ack_num, BBA_TCP_FLAG_SIN | BBA_TCP_FLAG_ACK);
@@ -1103,19 +1101,19 @@ BbaSocketStatus BbaUdpSocket::Bind(u16 port, u32 net_ip)
   if (setsockopt(m_fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&on),
                  sizeof(on)) != 0)
   {
-    ERROR_LOG_FMT(SP1, "setsockopt failed to reuse SSDP address: {}", Common::StrNetworkError());
+    ERROR_LOG(SP1, "setsockopt failed to reuse SSDP address: %s", Common::StrNetworkError());
   }
 #ifdef SO_REUSEPORT
   if (setsockopt(m_fd, SOL_SOCKET, SO_REUSEPORT, reinterpret_cast<const char*>(&on),
                  sizeof(on)) != 0)
   {
-    ERROR_LOG_FMT(SP1, "setsockopt failed to reuse SSDP port: {}", Common::StrNetworkError());
+    ERROR_LOG(SP1, "setsockopt failed to reuse SSDP port: %s", Common::StrNetworkError());
   }
 #endif
   if (const char loop = 1;
       setsockopt(m_fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) != 0)
   {
-    ERROR_LOG_FMT(SP1, "setsockopt failed to set SSDP loopback: {}", Common::StrNetworkError());
+    ERROR_LOG(SP1, "setsockopt failed to set SSDP loopback: %s", Common::StrNetworkError());
   }
 
   sockaddr_in addr;
@@ -1125,11 +1123,11 @@ BbaSocketStatus BbaUdpSocket::Bind(u16 port, u32 net_ip)
   Common::ScopeGuard error_guard([this] { Unbind(); });
   if (::bind(m_fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0)
   {
-    WARN_LOG_FMT(SP1, "bind with SSDP port and INADDR_ANY failed: {}", Common::StrNetworkError());
+    WARN_LOG(SP1, "bind with SSDP port and INADDR_ANY failed: %s", Common::StrNetworkError());
     addr.sin_addr.s_addr = net_ip;
     if (::bind(m_fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) != 0)
     {
-      ERROR_LOG_FMT(SP1, "bind with SSDP port failed: {}", Common::StrNetworkError());
+      ERROR_LOG(SP1, "bind with SSDP port failed: %s", Common::StrNetworkError());
       return BbaSocketStatus::Error;
     }
   }
@@ -1137,14 +1135,14 @@ BbaSocketStatus BbaUdpSocket::Bind(u16 port, u32 net_ip)
   {
     addr.sin_addr.s_addr = net_ip;  // Set this here for IP_MULTICAST_IF
   }
-  INFO_LOG_FMT(SP1, "SSDP bind successful");
+  INFO_LOG(SP1, "SSDP bind successful");
 
   // Bind to the right interface
   if (setsockopt(m_fd, IPPROTO_IP, IP_MULTICAST_IF,
                  reinterpret_cast<const char*>(&addr.sin_addr), sizeof(addr.sin_addr)) != 0)
   {
-    ERROR_LOG_FMT(SP1, "setsockopt failed to bind to the network interface: {}",
-                  Common::StrNetworkError());
+    ERROR_LOG(SP1, "setsockopt failed to bind to the network interface: %s",
+              Common::StrNetworkError());
     return BbaSocketStatus::Error;
   }
 
@@ -1156,13 +1154,13 @@ BbaSocketStatus BbaUdpSocket::Bind(u16 port, u32 net_ip)
   if (setsockopt(m_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
                  reinterpret_cast<const char*>(&mreq), sizeof(mreq)) != 0)
   {
-    ERROR_LOG_FMT(SP1, "setsockopt failed to subscribe to SSDP multicast group: {}",
-                  Common::StrNetworkError());
+    ERROR_LOG(SP1, "setsockopt failed to subscribe to SSDP multicast group: %s",
+              Common::StrNetworkError());
     return BbaSocketStatus::Error;
   }
 
   error_guard.Dismiss();
-  INFO_LOG_FMT(SP1, "SSDP multicast membership successful");
+  INFO_LOG(SP1, "SSDP multicast membership successful");
   return BbaSocketStatus::Done;
 }
 

@@ -38,7 +38,7 @@ CEXIModem::CEXIModem(Core::System& system, ModemDeviceType type) : IEXIDevice(sy
   case ModemDeviceType::TAPSERVER:
     m_network_interface = std::make_unique<TAPServerNetworkInterface>(
         this, Config::Get(Config::MAIN_MODEM_TAPSERVER_DESTINATION));
-    INFO_LOG_FMT(SP1, "Created tapserver physical network interface.");
+    INFO_LOG(SP1, "Created tapserver physical network interface.");
     break;
   }
 
@@ -83,8 +83,8 @@ void CEXIModem::ImmWrite(u32 data, u32 size)
   }
   else if (!IsWriteTransfer(m_transfer_descriptor))
   {
-    ERROR_LOG_FMT(SP1, "Received EXI IMM write {:x} ({} bytes) after read command {:x}", data, size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "Received EXI IMM write %x (%u bytes) after read command %x", data, size,
+              m_transfer_descriptor);
     m_transfer_descriptor = INVALID_TRANSFER_DESCRIPTOR;
   }
   else if (IsModemTransfer(m_transfer_descriptor))
@@ -115,19 +115,19 @@ void CEXIModem::DMAWrite(u32 addr, u32 size)
 {
   if (m_transfer_descriptor == INVALID_TRANSFER_DESCRIPTOR)
   {
-    ERROR_LOG_FMT(SP1, "Received EXI DMA write {:x} ({} bytes) after read command {:x}", addr, size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "Received EXI DMA write %x (%u bytes) after read command %x", addr, size,
+              m_transfer_descriptor);
   }
   else if (!IsWriteTransfer(m_transfer_descriptor))
   {
-    ERROR_LOG_FMT(SP1, "Received EXI DMA write {:x} ({} bytes) after read command {:x}", addr, size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "Received EXI DMA write %x (%u bytes) after read command %x", addr, size,
+              m_transfer_descriptor);
     m_transfer_descriptor = INVALID_TRANSFER_DESCRIPTOR;
   }
   else if (!IsModemTransfer(m_transfer_descriptor))
   {
-    ERROR_LOG_FMT(SP1, "Received EXI DMA write {:x} ({} bytes) to registers {:x}", addr, size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "Received EXI DMA write %x (%u bytes) to registers %x", addr, size,
+              m_transfer_descriptor);
     m_transfer_descriptor = INVALID_TRANSFER_DESCRIPTOR;
   }
   else
@@ -141,13 +141,13 @@ u32 CEXIModem::ImmRead(u32 size)
 {
   if (m_transfer_descriptor == INVALID_TRANSFER_DESCRIPTOR)
   {
-    ERROR_LOG_FMT(SP1, "Received EXI IMM read ({} bytes) with no pending transfer", size);
+    ERROR_LOG(SP1, "Received EXI IMM read (%u bytes) with no pending transfer", size);
     return 0;
   }
   else if (IsWriteTransfer(m_transfer_descriptor))
   {
-    ERROR_LOG_FMT(SP1, "Received EXI IMM read ({} bytes) after write command {:x}", size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "Received EXI IMM read (%u bytes) after write command %x", size,
+              m_transfer_descriptor);
     m_transfer_descriptor = INVALID_TRANSFER_DESCRIPTOR;
     return 0;
   }
@@ -184,19 +184,18 @@ void CEXIModem::DMARead(u32 addr, u32 size)
 {
   if (m_transfer_descriptor == INVALID_TRANSFER_DESCRIPTOR)
   {
-    ERROR_LOG_FMT(SP1, "Received EXI DMA read {:x} ({} bytes) with no pending transfer", addr,
-                  size);
+    ERROR_LOG(SP1, "Received EXI DMA read %x (%u bytes) with no pending transfer", addr, size);
   }
   else if (IsWriteTransfer(m_transfer_descriptor))
   {
-    ERROR_LOG_FMT(SP1, "Received EXI DMA read {:x} ({} bytes) after write command {:x}", addr, size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "Received EXI DMA read %x (%u bytes) after write command %x", addr, size,
+              m_transfer_descriptor);
     m_transfer_descriptor = INVALID_TRANSFER_DESCRIPTOR;
   }
   else if (!IsModemTransfer(m_transfer_descriptor))
   {
-    ERROR_LOG_FMT(SP1, "Received EXI DMA read {:x} ({} bytes) to registers {:x}", addr, size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "Received EXI DMA read %x (%u bytes) to registers %x", addr, size,
+              m_transfer_descriptor);
     m_transfer_descriptor = INVALID_TRANSFER_DESCRIPTOR;
   }
   else
@@ -211,8 +210,8 @@ void CEXIModem::HandleReadModemTransfer(void* data, u32 size)
   const u16 bytes_requested = GetModemTransferSize(m_transfer_descriptor);
   if (size > bytes_requested)
   {
-    ERROR_LOG_FMT(SP1, "More bytes requested ({}) than originally requested for transfer {:x}",
-                  size, m_transfer_descriptor);
+    ERROR_LOG(SP1, "More bytes requested (%u) than originally requested for transfer %x", size,
+              m_transfer_descriptor);
     size = bytes_requested;
   }
   const u16 bytes_requested_after_read = bytes_requested - size;
@@ -234,7 +233,7 @@ void CEXIModem::HandleReadModemTransfer(void* data, u32 size)
   }
   else
   {
-    ERROR_LOG_FMT(SP1, "Invalid modem read transfer type {:x}", m_transfer_descriptor);
+    ERROR_LOG(SP1, "Invalid modem read transfer type %x", m_transfer_descriptor);
   }
 
   m_transfer_descriptor =
@@ -248,8 +247,8 @@ void CEXIModem::HandleWriteModemTransfer(const void* data, u32 size)
   const u16 bytes_expected = GetModemTransferSize(m_transfer_descriptor);
   if (size > bytes_expected)
   {
-    ERROR_LOG_FMT(SP1, "More bytes received ({}) than expected for transfer {:x}", size,
-                  m_transfer_descriptor);
+    ERROR_LOG(SP1, "More bytes received (%u) than expected for transfer %x", size,
+              m_transfer_descriptor);
     return;
   }
   const u16 bytes_expected_after_write = bytes_expected - size;
@@ -272,7 +271,7 @@ void CEXIModem::HandleWriteModemTransfer(const void* data, u32 size)
   }
   else
   {
-    ERROR_LOG_FMT(SP1, "Invalid modem write transfer type {:x}", m_transfer_descriptor);
+    ERROR_LOG(SP1, "Invalid modem write transfer type %x", m_transfer_descriptor);
   }
 
   m_transfer_descriptor =
@@ -344,7 +343,7 @@ void CEXIModem::AddToReceiveBuffer(std::string&& data)
 {
   // Network thread: hand the bytes over and have the CPU thread look at the interrupt.
   if (retro_spsc_write(&m_receive_buffer, data.data(), data.size()) != data.size())
-    ERROR_LOG_FMT(SP1, "Modem receive ring full; dropped part of a frame");
+    ERROR_LOG(SP1, "Modem receive ring full; dropped part of a frame");
   m_system.GetExpansionInterface().ScheduleUpdateInterrupts(CoreTiming::FromThread::NON_CPU, 0);
 }
 
@@ -363,7 +362,7 @@ void CEXIModem::RunAllPendingATCommands()
     std::string command = m_at_command_data.substr(0, newline_pos);
     m_at_command_data = m_at_command_data.substr(newline_pos + 1);
 
-    INFO_LOG_FMT(SP1, "Received AT command: {}", command);
+    INFO_LOG(SP1, "Received AT command: %s", command.c_str());
 
     if (command.substr(0, 3) == "ATZ" || command == "ATH0")
     {

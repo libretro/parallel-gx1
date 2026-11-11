@@ -8,12 +8,13 @@
 #include <queue>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
-#include "Common/FrameClock.h"
 #include "Common/CommonTypes.h"
+#include "Common/FrameClock.h"
 #include "Common/Logging/Log.h"
 #include "Common/NetSocket.h"
+#include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Core/Core.h"
 
@@ -76,7 +77,9 @@ void GeckoSockServer::GeckoConnectionWaiter(void*)
   if (!server_running.IsSet())
     return;
 
-  Core::DisplayMessage(fmt::format("USBGecko: Listening on TCP port {}", server_port), 5000);
+  Core::DisplayMessage(
+      StringFromFormat("USBGecko: Listening on TCP port %u", static_cast<unsigned>(server_port)),
+      5000);
 
   while (server_running.IsSet())
   {
@@ -238,7 +241,7 @@ void CEXIGecko::ImmReadWrite(u32& _uData, u32 _uSize)
   }
 
   default:
-    ERROR_LOG_FMT(EXPANSIONINTERFACE, "Unknown USBGecko command {:x}", _uData);
+    ERROR_LOG(EXPANSIONINTERFACE, "Unknown USBGecko command %x", _uData);
     break;
   }
 }

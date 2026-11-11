@@ -9,6 +9,7 @@
 
 #include "Core/Core.h"
 
+#include <cinttypes>
 #include <cstring>
 #include <optional>
 
@@ -34,7 +35,7 @@ bool CEXIETHERNET::XLinkNetworkInterface::Activate()
   m_fd = net_udp_open(0);
   if (m_fd < 0)
   {
-    ERROR_LOG_FMT(SP1, "Couldn't open XLink Kai UDP socket, unable to initialize BBA");
+    ERROR_LOG(SP1, "Couldn't open XLink Kai UDP socket, unable to initialize BBA");
     return false;
   }
 
@@ -50,14 +51,14 @@ bool CEXIETHERNET::XLinkNetworkInterface::Activate()
   const auto size = u32(cmd.length());
   memmove(buffer, cmd.c_str(), size);
 
-  DEBUG_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", size, ArrayToString(buffer, size, 0x10));
+  DEBUG_LOG(SP1, "SendCommandPayload %x\n%s", size, ArrayToString(buffer, size, 0x10).c_str());
 
   if (net_udp_sendto(m_fd, buffer, size, m_recipient_ip, m_dest_port) < 0)
   {
-    ERROR_LOG_FMT(SP1, "Activate(): failed to send connect message to XLink Kai client");
+    ERROR_LOG(SP1, "Activate(): failed to send connect message to XLink Kai client");
   }
 
-  INFO_LOG_FMT(SP1, "BBA initialized.");
+  INFO_LOG(SP1, "BBA initialized.");
 
   m_read_thread_shutdown.Clear();
   return RecvInit();
@@ -77,14 +78,14 @@ void CEXIETHERNET::XLinkNetworkInterface::Deactivate()
   u8 buffer[255] = {};
   memmove(buffer, cmd.c_str(), size);
 
-  DEBUG_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", size, ArrayToString(buffer, size, 0x10));
+  DEBUG_LOG(SP1, "SendCommandPayload %x\n%s", size, ArrayToString(buffer, size, 0x10).c_str());
 
   if (net_udp_sendto(m_fd, buffer, size, m_recipient_ip, m_dest_port) < 0)
   {
-    ERROR_LOG_FMT(SP1, "Deactivate(): failed to send disconnect message to XLink Kai client");
+    ERROR_LOG(SP1, "Deactivate(): failed to send disconnect message to XLink Kai client");
   }
 
-  NOTICE_LOG_FMT(SP1, "XLink Kai BBA deactivated");
+  NOTICE_LOG(SP1, "XLink Kai BBA deactivated");
 
   m_bba_link_up = false;
 
@@ -130,13 +131,9 @@ bool CEXIETHERNET::XLinkNetworkInterface::SendFrame(const u8* frame, u32 size)
   memmove(m_out_frame + 4, frame, size);
   size += 4;
 
-  // Only uncomment for debugging, the performance hit is too big otherwise
-  // INFO_LOG_FMT(SP1, "SendFrame {}\n{}", size, ArrayToString(m_out_frame, size, 0x10)));
-
   if (net_udp_sendto(m_fd, m_out_frame, size, m_recipient_ip, m_dest_port) < 0)
   {
-    ERROR_LOG_FMT(SP1, "SendFrame(): expected to write {} bytes, but failed, errno {}", size,
-                  errno);
+    ERROR_LOG(SP1, "SendFrame(): expected to write %u bytes, but failed, errno %d", size, errno);
     return false;
   }
   else
@@ -161,7 +158,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
     if (self->m_read_thread_shutdown.IsSet())
       break;
     if (received < 0 && self->m_bba_link_up)
-      ERROR_LOG_FMT(SP1, "Failed to read from BBA, err={}", received);
+      ERROR_LOG(SP1, "Failed to read from BBA, err=%d", received);
 
     // Make sure *anything* was received before going any further
     if (received < 1)
@@ -185,13 +182,10 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
         // Check the frame size again after the header is removed
         if (bytes_read < 1)
         {
-          ERROR_LOG_FMT(SP1, "Failed to read from BBA, err={}", bytes_read - 4);
+          ERROR_LOG(SP1, "Failed to read from BBA, err=%" PRIu64, (u64)(bytes_read - 4));
         }
         else if (self->m_read_enabled.IsSet())
         {
-          // Only uncomment for debugging, the performance hit is too big otherwise
-          // DEBUG_LOG_FMT(SP1, "Read data: {}", ArrayToString(self->m_eth_ref->mRecvBuffer.get(),
-          // u32(bytes_read - 4), 0x10));
           self->m_eth_ref->mRecvBufferLength = u32(bytes_read - 4);
           self->m_eth_ref->RecvHandlePacket();
         }
@@ -201,12 +195,12 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
     else
     {
       const std::string control_msg(self->m_in_frame, self->m_in_frame + bytes_read);
-      INFO_LOG_FMT(SP1, "Received XLink Kai control data: {}", control_msg);
+      INFO_LOG(SP1, "Received XLink Kai control data: %s", control_msg.c_str());
 
       // connected;identifier;
       if (control_msg.starts_with("connected"))
       {
-        NOTICE_LOG_FMT(SP1, "XLink Kai BBA connected");
+        NOTICE_LOG(SP1, "XLink Kai BBA connected");
         Core::DisplayMessage("XLink Kai BBA connected", 4500);
 
         self->m_bba_link_up = true;
@@ -221,21 +215,21 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
           u8 buffer[255] = {};
           memmove(buffer, cmd.data(), size);
 
-          DEBUG_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", size,
-                        ArrayToString(buffer, size, 0x10));
+          DEBUG_LOG(SP1, "SendCommandPayload %x\n%s", size,
+                    ArrayToString(buffer, size, 0x10).c_str());
 
           if (net_udp_sendto(self->m_fd, buffer, size, self->m_recipient_ip,
                              self->m_dest_port) < 0)
           {
-            ERROR_LOG_FMT(
-                SP1, "ReadThreadHandler(): failed to send setting message to XLink Kai client");
+            ERROR_LOG(SP1,
+                      "ReadThreadHandler(): failed to send setting message to XLink Kai client");
           }
         }
       }
       // disconnected;optional_identifier;optional_message;
       else if (control_msg.starts_with("disconnected"))
       {
-        NOTICE_LOG_FMT(SP1, "XLink Kai BBA disconnected");
+        NOTICE_LOG(SP1, "XLink Kai BBA disconnected");
         // Show OSD message for 15 seconds to make sure the user sees it
         Core::DisplayMessage("XLink Kai BBA disconnected", 15000);
 
@@ -254,16 +248,13 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
       // keepalive;
       else if (control_msg.starts_with("keepalive"))
       {
-        DEBUG_LOG_FMT(SP1, "XLink Kai BBA keepalive");
-
-        // Only uncomment for debugging, just clogs the log otherwise
-        // INFO_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", 2, ArrayToString(m_in_frame, 2, 0x10));
+        DEBUG_LOG(SP1, "XLink Kai BBA keepalive");
 
         // Reply (using the message that came in!)
         if (net_udp_sendto(self->m_fd, self->m_in_frame, 10, self->m_recipient_ip,
                            self->m_dest_port) < 0)
         {
-          ERROR_LOG_FMT(SP1, "ReadThreadHandler(): failed to reply to XLink Kai client keepalive");
+          ERROR_LOG(SP1, "ReadThreadHandler(): failed to reply to XLink Kai client keepalive");
         }
       }
       // message;message_text;
@@ -271,7 +262,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
       {
         std::string msg = control_msg.substr(8, control_msg.length() - 1);
 
-        NOTICE_LOG_FMT(SP1, "XLink Kai message: {}", msg);
+        NOTICE_LOG(SP1, "XLink Kai message: %s", msg.c_str());
         // Show OSD message for 15 seconds to make sure the user sees it
         Core::DisplayMessage(std::move(msg), 15000);
       }
@@ -280,7 +271,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
       {
         std::string msg = control_msg.substr(5, control_msg.length() - 1);
 
-        NOTICE_LOG_FMT(SP1, "XLink Kai chat: {}", msg);
+        NOTICE_LOG(SP1, "XLink Kai chat: %s", msg.c_str());
         Core::DisplayMessage(std::move(msg), 5000);
       }
       // directmessage;message_text;
@@ -288,7 +279,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
       {
         std::string msg = control_msg.substr(14, control_msg.length() - 1);
 
-        NOTICE_LOG_FMT(SP1, "XLink Kai direct message: {}", msg);
+        NOTICE_LOG(SP1, "XLink Kai direct message: %s", msg.c_str());
         Core::DisplayMessage(std::move(msg), 5000);
       }
       // else junk/unsupported control message

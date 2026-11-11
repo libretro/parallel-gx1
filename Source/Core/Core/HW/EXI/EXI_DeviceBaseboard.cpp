@@ -3,10 +3,11 @@
 
 #include "Core/HW/EXI/EXI_DeviceBaseboard.h"
 
+#include <cinttypes>
 #include <numeric>
 #include <string>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/BitUtils.h"
 #include "Common/Buffer.h"
@@ -14,6 +15,7 @@
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
+#include "Common/StringUtil.h"
 
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -47,8 +49,8 @@ void GenerateInterrupt(int flag)
 
 CEXIBaseboard::CEXIBaseboard(Core::System& system) : IEXIDevice(system)
 {
-  std::string backup_filename(fmt::format("{}tribackup_{}.bin", File::GetUserPath(D_TRIUSER_IDX),
-                                          SConfig::GetInstance().GetGameID()));
+  std::string backup_filename =
+      File::GetUserPath(D_TRIUSER_IDX) + "tribackup_" + SConfig::GetInstance().GetGameID() + ".bin";
 
   m_backup = File::IOFile(backup_filename, "rb+");
   if (!m_backup.IsOpen())
@@ -59,12 +61,13 @@ CEXIBaseboard::CEXIBaseboard(Core::System& system) : IEXIDevice(system)
   // Some games share the same ID Client/Server
   if (!m_backup.IsGood())
   {
-    PanicAlertFmt("Failed to open {}\nFile might be in use.", backup_filename.c_str());
+    PanicAlert("Failed to open %s\nFile might be in use.", backup_filename.c_str());
 
     std::srand(static_cast<u32>(std::time(nullptr)));
 
-    backup_filename = fmt::format("{}tribackup_tmp_{}{}.bin", File::GetUserPath(D_TRIUSER_IDX),
-                                  rand(), SConfig::GetInstance().GetGameID());
+    backup_filename =
+        StringFromFormat("%stribackup_tmp_%d%s.bin", File::GetUserPath(D_TRIUSER_IDX).c_str(),
+                         rand(), SConfig::GetInstance().GetGameID().c_str());
 
     m_backup = File::IOFile(backup_filename, "wb+");
   }
@@ -101,7 +104,7 @@ CEXIBaseboard::~CEXIBaseboard()
 
 void CEXIBaseboard::SetCS(int cs)
 {
-  DEBUG_LOG_FMT(SP1, "AM-BB: ChipSelect={}", cs);
+  DEBUG_LOG(SP1, "AM-BB: ChipSelect=%d", cs);
   if (cs)
     m_position = 0;
 }
@@ -115,7 +118,7 @@ bool CEXIBaseboard::IsInterruptSet()
 {
   if (s_interrupt_set)
   {
-    DEBUG_LOG_FMT(SP1, "AM-BB: IRQ");
+    DEBUG_LOG(SP1, "AM-BB: IRQ");
     if (++s_irq_timer > 12)
       s_interrupt_set = false;
     return true;
@@ -133,11 +136,11 @@ void CEXIBaseboard::DMAWrite(u32 addr, u32 size)
 
   if (span_size < size)
   {
-    ERROR_LOG_FMT(SP1, "AM-BB: Backup DMA Write overflow: address=0x{:08x}, length={}, span={}",
-                  addr, size, span_size);
+    ERROR_LOG(SP1, "AM-BB: Backup DMA Write overflow: address=0x%08x, length=%u, span=%" PRIu64,
+              addr, size, (u64)span_size);
     return;
   }
-  NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: Backup DMA Write: {:08x} {:x}", addr, size);
+  NOTICE_LOG(SP1, "AM-BB: COMMAND: Backup DMA Write: %08x %x", addr, size);
 
   m_backup.Seek(m_backup_offset, File::SeekOrigin::Begin);
   m_backup.WriteBytes(span_data, size);
@@ -153,11 +156,11 @@ void CEXIBaseboard::DMARead(u32 addr, u32 size)
 
   if (span_size < size)
   {
-    ERROR_LOG_FMT(SP1, "AM-BB: Backup DMA Read overflow: address=0x{:08x}, length={}, span={}",
-                  addr, size, span_size);
+    ERROR_LOG(SP1, "AM-BB: Backup DMA Read overflow: address=0x%08x, length=%u, span=%" PRIu64,
+              addr, size, (u64)span_size);
     return;
   }
-  NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: Backup DMA Read: {:08x} {:x}", addr, size);
+  NOTICE_LOG(SP1, "AM-BB: COMMAND: Backup DMA Read: %08x %x", addr, size);
 
   m_backup.Seek(m_backup_offset, File::SeekOrigin::Begin);
   m_backup.ReadBytes(span_data, size);
@@ -165,7 +168,7 @@ void CEXIBaseboard::DMARead(u32 addr, u32 size)
 
 void CEXIBaseboard::TransferByte(u8& byte)
 {
-  DEBUG_LOG_FMT(SP1, "AM-BB: > {:02x}", byte);
+  DEBUG_LOG(SP1, "AM-BB: > %02x", (unsigned)byte);
   if (m_position < 4)
   {
     m_command[m_position] = byte;
@@ -191,7 +194,7 @@ void CEXIBaseboard::TransferByte(u8& byte)
     }
 
     if (m_command[3] != (checksum & 0xFF))
-      DEBUG_LOG_FMT(SP1, "AM-BB: cs: {:02x}, w: {:02x}", m_command[3], checksum & 0xFF);
+      DEBUG_LOG(SP1, "AM-BB: cs: %02x, w: %02x", (unsigned)m_command[3], checksum & 0xFF);
   }
   else if (m_position == 4)
   {
@@ -199,49 +202,53 @@ void CEXIBaseboard::TransferByte(u8& byte)
     {
     case BackupOffsetSet:
       m_backup_offset = (m_command[1] << 8) | m_command[2];
-      DEBUG_LOG_FMT(SP1, "AM-BB: COMMAND: BackupOffsetSet:{:04x}", m_backup_offset);
+      DEBUG_LOG(SP1, "AM-BB: COMMAND: BackupOffsetSet:%04x", (unsigned)m_backup_offset);
       m_backup.Seek(m_backup_offset, File::SeekOrigin::Begin);
       byte = 0x01;
       break;
     case BackupWrite:
-      DEBUG_LOG_FMT(SP1, "AM-BB: COMMAND: BackupWrite:{:04x}-{:02x}", m_backup_offset,
-                    m_command[1]);
+      DEBUG_LOG(SP1, "AM-BB: COMMAND: BackupWrite:%04x-%02x", (unsigned)m_backup_offset,
+                (unsigned)m_command[1]);
       m_backup.WriteBytes(&m_command[1], 1);
       m_backup.Flush();
       byte = 0x01;
       break;
     case BackupRead:
-      DEBUG_LOG_FMT(SP1, "AM-BB: COMMAND: BackupRead :{:04x}", m_backup_offset);
+      DEBUG_LOG(SP1, "AM-BB: COMMAND: BackupRead :%04x", (unsigned)m_backup_offset);
       byte = 0x01;
       break;
     case DMAOffsetLengthSet:
       m_backup_dma_offset = (m_command[1] << 8) | m_command[2];
       m_backup_dma_length = m_command[3];
-      NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: DMAOffsetLengthSet :{:04x} {:02x}", m_backup_dma_offset,
-                     m_backup_dma_length);
+      NOTICE_LOG(SP1, "AM-BB: COMMAND: DMAOffsetLengthSet :%04x %02x", m_backup_dma_offset,
+                 m_backup_dma_length);
       byte = 0x01;
       break;
     case ReadISR:
-      NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: ReadISR  :{:02x} {:02x}:{:02x} {:02x}", m_command[1],
-                     m_command[2], 4, s_irq_status);
+      NOTICE_LOG(SP1, "AM-BB: COMMAND: ReadISR  :%02x %02x:%02x %02x", (unsigned)m_command[1],
+                 (unsigned)m_command[2], (unsigned)4, s_irq_status);
       byte = 0x04;
       break;
     case WriteISR:
-      NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: WriteISR :{:02x} {:02x}", m_command[1], m_command[2]);
+      NOTICE_LOG(SP1, "AM-BB: COMMAND: WriteISR :%02x %02x", (unsigned)m_command[1],
+                 (unsigned)m_command[2]);
       s_irq_status &= ~(m_command[2]);
       byte = 0x04;
       break;
     // 2 byte out
     case ReadIMR:
-      NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: ReadIMR  :{:02x} {:02x}", m_command[1], m_command[2]);
+      NOTICE_LOG(SP1, "AM-BB: COMMAND: ReadIMR  :%02x %02x", (unsigned)m_command[1],
+                 (unsigned)m_command[2]);
       byte = 0x04;
       break;
     case WriteIMR:
-      NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: WriteIMR :{:02x} {:02x}", m_command[1], m_command[2]);
+      NOTICE_LOG(SP1, "AM-BB: COMMAND: WriteIMR :%02x %02x", (unsigned)m_command[1],
+                 (unsigned)m_command[2]);
       byte = 0x04;
       break;
     case WriteLANCNT:
-      NOTICE_LOG_FMT(SP1, "AM-BB: COMMAND: WriteLANCNT :{:02x} {:02x}", m_command[1], m_command[2]);
+      NOTICE_LOG(SP1, "AM-BB: COMMAND: WriteLANCNT :%02x %02x", (unsigned)m_command[1],
+                 (unsigned)m_command[2]);
       if ((m_command[1] == 0) && (m_command[2] == 0))
       {
         s_interrupt_set = true;
@@ -256,8 +263,8 @@ void CEXIBaseboard::TransferByte(u8& byte)
       break;
     default:
       byte = 4;
-      ERROR_LOG_FMT(SP1, "AM-BB: COMMAND: {:02x} {:02x} {:02x}", m_command[0], m_command[1],
-                    m_command[2]);
+      ERROR_LOG(SP1, "AM-BB: COMMAND: %02x %02x %02x", (unsigned)m_command[0],
+                (unsigned)m_command[1], (unsigned)m_command[2]);
       break;
     }
   }
@@ -292,7 +299,7 @@ void CEXIBaseboard::TransferByte(u8& byte)
         byte = 0x81;
       break;
     default:
-      ERROR_LOG_FMT(SP1, "Unknown AM-BB command: {:02x}", m_command[0]);
+      ERROR_LOG(SP1, "Unknown AM-BB command: %02x", (unsigned)m_command[0]);
       break;
     }
   }
@@ -301,7 +308,7 @@ void CEXIBaseboard::TransferByte(u8& byte)
     byte = 0xFF;
   }
 
-  DEBUG_LOG_FMT(SP1, "AM-BB < {:02x}", byte);
+  DEBUG_LOG(SP1, "AM-BB < %02x", (unsigned)byte);
   m_position++;
 }
 

@@ -102,6 +102,12 @@ private:
 
   Core::System& m_system;
 };
+// The slot's name, as messages print it.
+constexpr const char* SlotName(Slot slot)
+{
+  constexpr const char* names[] = {"Slot A", "Slot B", "Serial Port 1", "Serial Port 2"};
+  return static_cast<unsigned>(slot) < 4 ? names[static_cast<unsigned>(slot)] : "Invalid";
+}
 }  // namespace ExpansionInterface
 
 template <>

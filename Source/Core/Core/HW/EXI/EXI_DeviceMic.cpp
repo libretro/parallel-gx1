@@ -51,7 +51,7 @@ void CEXIMic::StreamStart()
 
   if (!mic)
   {
-    WARN_LOG_FMT(EXPANSIONINTERFACE, "CEXIMic: failed to open GC mic at {}Hz", sample_rate);
+    WARN_LOG(EXPANSIONINTERFACE, "CEXIMic: failed to open GC mic at %dHz", sample_rate);
     return;
   }
 
@@ -214,7 +214,7 @@ void CEXIMic::TransferByte(u8& byte)
   break;
 
   default:
-    ERROR_LOG_FMT(EXPANSIONINTERFACE, "EXI MIC: unknown command byte {:02x}", command);
+    ERROR_LOG(EXPANSIONINTERFACE, "EXI MIC: unknown command byte %02x", (unsigned)command);
     break;
   }
 

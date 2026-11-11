@@ -10,7 +10,7 @@
 #include <string>
 #include <utility>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
@@ -88,11 +88,14 @@ void CEXIMemoryCard::Init(CoreTiming::CoreTimingManager& core_timing)
 
   for (Slot slot : MEMCARD_SLOTS)
   {
-    s_et_cmd_done[slot] = core_timing.RegisterEvent(
-        fmt::format("memcardDone{}", s_card_short_names[slot]).c_str(), CmdDoneCallback);
-    s_et_transfer_complete[slot] = core_timing.RegisterEvent(
-        fmt::format("memcardTransferComplete{}", s_card_short_names[slot]).c_str(),
-        TransferCompleteCallback);
+    char done_name[16];
+    char transfer_name[32];
+    snprintf(done_name, sizeof(done_name), "memcardDone%c", s_card_short_names[slot]);
+    snprintf(transfer_name, sizeof(transfer_name), "memcardTransferComplete%c",
+             s_card_short_names[slot]);
+    s_et_cmd_done[slot] = core_timing.RegisterEvent(done_name, CmdDoneCallback);
+    s_et_transfer_complete[slot] =
+        core_timing.RegisterEvent(transfer_name, TransferCompleteCallback);
   }
 }
 
@@ -183,7 +186,7 @@ void CEXIMemoryCard::SetupGciFolder(const Memcard::HeaderData& header_data)
   {
     if (File::Rename(dir_path, dir_path + ".original"))
     {
-      PanicAlertFmtT("{0} was not a directory, moved to *.original", dir_path);
+      PanicAlert("%s was not a directory, moved to *.original", dir_path.c_str());
       if (migrate)
         MigrateFromMemcardFile(dir_path + DIR_SEP, m_card_slot, SConfig::GetInstance().m_region);
       else
@@ -192,9 +195,9 @@ void CEXIMemoryCard::SetupGciFolder(const Memcard::HeaderData& header_data)
     else  // we tried but the user wants to crash
     {
       // TODO more user friendly abort
-      PanicAlertFmtT("{0} is not a directory, failed to move to *.original.\n Verify your "
-                     "write permissions or move the file outside of Dolphin",
-                     dir_path);
+      PanicAlert("%s is not a directory, failed to move to *.original.\n Verify your "
+                 "write permissions or move the file outside of Dolphin",
+                 dir_path.c_str());
       std::exit(0);
     }
   }
@@ -319,7 +322,7 @@ bool CEXIMemoryCard::IsInterruptSet()
 
 void CEXIMemoryCard::TransferByte(u8& byte)
 {
-  DEBUG_LOG_FMT(EXPANSIONINTERFACE, "EXI MEMCARD: > {:02x}", byte);
+  DEBUG_LOG(EXPANSIONINTERFACE, "EXI MEMCARD: > %02x", (unsigned)byte);
   if (m_position == 0)
   {
     m_command = static_cast<Command>(byte);  // first byte is command
@@ -342,12 +345,12 @@ void CEXIMemoryCard::TransferByte(u8& byte)
     case Command::PageProgram:
     case Command::ExtraByteProgram:
     case Command::ChipErase:
-      DEBUG_LOG_FMT(EXPANSIONINTERFACE, "EXI MEMCARD: command {:02x} at position 0. seems normal.",
-                    static_cast<u8>(m_command));
+      DEBUG_LOG(EXPANSIONINTERFACE, "EXI MEMCARD: command %02x at position 0. seems normal.",
+                (unsigned)(static_cast<u8>(m_command)));
       break;
     default:
-      WARN_LOG_FMT(EXPANSIONINTERFACE, "EXI MEMCARD: command {:02x} at position 0",
-                   static_cast<u8>(m_command));
+      WARN_LOG(EXPANSIONINTERFACE, "EXI MEMCARD: command %02x at position 0",
+               (unsigned)(static_cast<u8>(m_command)));
       break;
     }
     if (m_command == Command::ClearStatus)
@@ -468,12 +471,12 @@ void CEXIMemoryCard::TransferByte(u8& byte)
       break;
 
     default:
-      WARN_LOG_FMT(EXPANSIONINTERFACE, "EXI MEMCARD: unknown command byte {:02x}", byte);
+      WARN_LOG(EXPANSIONINTERFACE, "EXI MEMCARD: unknown command byte %02x", (unsigned)byte);
       byte = 0xFF;
     }
   }
   m_position++;
-  DEBUG_LOG_FMT(EXPANSIONINTERFACE, "EXI MEMCARD: < {:02x}", byte);
+  DEBUG_LOG(EXPANSIONINTERFACE, "EXI MEMCARD: < %02x", (unsigned)byte);
 }
 
 void CEXIMemoryCard::DoState(PointerWrap& p)
@@ -506,7 +509,7 @@ void CEXIMemoryCard::DMARead(u32 addr, u32 size)
 
   if ((m_address + size) % Memcard::BLOCK_SIZE == 0)
   {
-    INFO_LOG_FMT(EXPANSIONINTERFACE, "reading from block: {:x}", m_address / Memcard::BLOCK_SIZE);
+    INFO_LOG(EXPANSIONINTERFACE, "reading from block: %x", m_address / Memcard::BLOCK_SIZE);
   }
 
   // Schedule transfer complete later based on read speed
@@ -524,7 +527,7 @@ void CEXIMemoryCard::DMAWrite(u32 addr, u32 size)
 
   if (((m_address + size) % Memcard::BLOCK_SIZE) == 0)
   {
-    INFO_LOG_FMT(EXPANSIONINTERFACE, "writing to block: {:x}", m_address / Memcard::BLOCK_SIZE);
+    INFO_LOG(EXPANSIONINTERFACE, "writing to block: %x", m_address / Memcard::BLOCK_SIZE);
   }
 
   // Schedule transfer complete later based on write speed

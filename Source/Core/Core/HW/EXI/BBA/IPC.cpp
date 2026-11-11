@@ -57,13 +57,13 @@ bool CEXIETHERNET::IPCBBAInterface::Activate()
   }
   if (!m_port)
   {
-    ERROR_LOG_FMT(SP1, "BBA IPC: every port from {} to {} is taken", IPC_BBA_FIRST_PORT,
-                  IPC_BBA_FIRST_PORT + IPC_BBA_PORTS - 1);
+    ERROR_LOG(SP1, "BBA IPC: every port from %u to %d is taken", (unsigned)IPC_BBA_FIRST_PORT,
+              IPC_BBA_FIRST_PORT + IPC_BBA_PORTS - 1);
     socket_close(m_fd);
     m_fd = -1;
     return false;
   }
-  INFO_LOG_FMT(SP1, "BBA IPC: on port {}", m_port);
+  INFO_LOG(SP1, "BBA IPC: on port %u", (unsigned)m_port);
 
   retro_atomic_store_release_int(&m_read_enabled, 0);
   retro_atomic_store_release_int(&m_read_thread_shutdown, 0);
