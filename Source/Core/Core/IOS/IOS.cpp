@@ -4,8 +4,9 @@
 #include "Core/IOS/IOS.h"
 
 #include <algorithm>
-#include <cstdlib>
 #include <array>
+#include <cinttypes>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <string>
@@ -109,7 +110,7 @@ static bool SetupMemory(Memory::MemoryManager& memory, u64 ios_title_id, MemoryS
 
   if (target_imv == GetMemoryValues().end())
   {
-    ERROR_LOG_FMT(IOS, "Unknown IOS version: {:016x}", ios_title_id);
+    ERROR_LOG(IOS, "Unknown IOS version: %016" PRIx64, (u64)ios_title_id);
     return false;
   }
 
@@ -309,10 +310,10 @@ Kernel::Kernel(u64 title_id) : m_title_id(title_id)
 EmulationKernel::EmulationKernel(Core::System& system, u64 title_id)
     : Kernel(title_id), m_system(system)
 {
-  INFO_LOG_FMT(IOS, "Starting IOS {:016x}", title_id);
+  INFO_LOG(IOS, "Starting IOS %016" PRIx64, (u64)title_id);
 
   if (!SetupMemory(m_system.GetMemory(), title_id, MemorySetupType::IOSReload))
-    WARN_LOG_FMT(IOS, "No information about this IOS -- cannot set up memory values");
+    WARN_LOG(IOS, "No information about this IOS -- cannot set up memory values");
 
   if (title_id == Titles::MIOS)
   {
@@ -449,12 +450,12 @@ bool EmulationKernel::BootstrapPPC(const std::string& boot_content_path)
   ResetAndPausePPC(m_system);
 
   if (dol.IsAncast())
-    INFO_LOG_FMT(IOS, "BootstrapPPC: Loading ancast image");
+    INFO_LOG(IOS, "BootstrapPPC: Loading ancast image");
 
   if (!dol.LoadIntoMemory(m_system))
     return false;
 
-  INFO_LOG_FMT(IOS, "BootstrapPPC: {}", boot_content_path);
+  INFO_LOG(IOS, "BootstrapPPC: %s", boot_content_path.c_str());
   m_system.GetCoreTiming().ScheduleEvent(ticks, s_event_finish_ppc_bootstrap, dol.IsAncast());
   return true;
 }
@@ -553,7 +554,7 @@ void EmulationKernel::InitIPC()
   if (Core::IsUninitialized(m_system))
     return;
 
-  INFO_LOG_FMT(IOS, "IPC initialised.");
+  INFO_LOG(IOS, "IPC initialised.");
   m_system.GetWiiIPC().GenerateAck(0);
 }
 
@@ -680,11 +681,11 @@ std::shared_ptr<Device> EmulationKernel::GetDeviceByFileDescriptor(const u32 fd)
 std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
 {
   const s32 new_fd = GetFreeDeviceID();
-  INFO_LOG_FMT(IOS, "Opening {} (mode {}, fd {})", request.path, std::to_underlying(request.flags),
-               new_fd);
+  INFO_LOG(IOS, "Opening %s (mode %d, fd %d)", request.path.c_str(),
+           std::to_underlying(request.flags), new_fd);
   if (new_fd < 0 || new_fd >= IPC_MAX_FDS)
   {
-    ERROR_LOG_FMT(IOS, "Couldn't get a free fd, too many open files");
+    ERROR_LOG(IOS, "Couldn't get a free fd, too many open files");
     return IPCReply{IPC_EMAX, 5000_tbticks};
   }
   request.fd = new_fd;
@@ -710,9 +711,9 @@ std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
                                                  "/dev/usb123", "/dev/usb2"};
     static_assert(std::ranges::is_sorted(cios_devices));
     if (std::ranges::binary_search(cios_devices, request.path))
-      WARN_LOG_FMT(IOS, "Possible anti-piracy check for cIOS device {}", request.path);
+      WARN_LOG(IOS, "Possible anti-piracy check for cIOS device %s", request.path.c_str());
     else
-      ERROR_LOG_FMT(IOS, "Unknown device: {}", request.path);
+      ERROR_LOG(IOS, "Unknown device: %s", request.path.c_str());
     return IPCReply{IPC_ENOENT, 3700_tbticks};
   }
 
@@ -846,7 +847,7 @@ void EmulationKernel::UpdateIPC()
   if (!m_reply_queue.empty())
   {
     wii_ipc.GenerateReply(m_reply_queue.front());
-    DEBUG_LOG_FMT(IOS, "<<-- Reply to IPC Request @ {:#010x}", m_reply_queue.front());
+    DEBUG_LOG(IOS, "<<-- Reply to IPC Request @ %#010x", m_reply_queue.front());
     m_reply_queue.pop_front();
     return;
   }
@@ -963,7 +964,7 @@ static void FinishPPCBootstrap(Core::System& system, u64 userdata, s64 cycles_la
   Core::CPUThreadGuard guard(system);
   SConfig::OnTitleDirectlyBooted(guard);
 
-  INFO_LOG_FMT(IOS, "Bootstrapping done.");
+  INFO_LOG(IOS, "Bootstrapping done.");
 }
 
 void Init(Core::System& system)

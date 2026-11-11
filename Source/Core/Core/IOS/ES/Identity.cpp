@@ -23,7 +23,7 @@ namespace IOS::HLE
 ReturnCode ESCore::GetDeviceId(u32* device_id) const
 {
   *device_id = m_ios.GetIOSC().GetDeviceId();
-  INFO_LOG_FMT(IOS_ES, "GetDeviceId: {:08X}", *device_id);
+  INFO_LOG(IOS_ES, "GetDeviceId: %08X", *device_id);
   return IPC_SUCCESS;
 }
 
@@ -92,7 +92,7 @@ IPCReply ESDevice::CheckKoreaRegion(const IOCtlVRequest& request)
   // IOS70 has this to let system menu 4.2 check if the console is region changed. it returns
   // -1017
   // if the IOS didn't find the Korean keys and 0 if it does. 0 leads to a error 003
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_CHECKKOREAREGION: Title checked for Korean keys.");
+  INFO_LOG(IOS_ES, "IOCTL_ES_CHECKKOREAREGION: Title checked for Korean keys.");
   return IPCReply(ES_EINVAL);
 }
 
@@ -101,7 +101,7 @@ IPCReply ESDevice::GetDeviceCertificate(const IOCtlVRequest& request)
   if (!request.HasNumberOfValidVectors(0, 1) || request.io_vectors[0].size != 0x180)
     return IPCReply(ES_EINVAL);
 
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETDEVICECERT");
+  INFO_LOG(IOS_ES, "IOCTL_ES_GETDEVICECERT");
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
@@ -115,7 +115,7 @@ IPCReply ESDevice::Sign(const IOCtlVRequest& request)
   if (!request.HasNumberOfValidVectors(1, 2))
     return IPCReply(ES_EINVAL);
 
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_SIGN");
+  INFO_LOG(IOS_ES, "IOCTL_ES_SIGN");
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
   u8* ap_cert_out = memory.GetPointerForRange(request.io_vectors[1].address, sizeof(CertECC));
@@ -167,8 +167,8 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
                         certs_bytes, certs_size, ng_cert);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "VerifySign: VerifyContainer(ng) failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "VerifySign: VerifyContainer(ng) failed with error %d",
+              std::to_underlying(ret));
     return ret;
   }
 
@@ -177,8 +177,8 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
   ret = iosc.VerifyPublicKeySign(ap.GetSha1(), ng_cert, ap_signature, ap_signature_size, PID_ES);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(ap) failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(ap) failed with error %d",
+              std::to_underlying(ret));
     return ret;
   }
 
@@ -192,8 +192,8 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
   ret = iosc.ImportPublicKey(ap_cert, ap.GetPublicKey(&ap_key_size), nullptr, PID_ES);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "VerifySign: IOSC_ImportPublicKey(ap) failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "VerifySign: IOSC_ImportPublicKey(ap) failed with error %d",
+              std::to_underlying(ret));
     return ret;
   }
 
@@ -202,12 +202,12 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
                                  sizeof(Common::ec::Signature), PID_ES);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(data) failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(data) failed with error %d",
+              std::to_underlying(ret));
     return ret;
   }
 
-  INFO_LOG_FMT(IOS_ES, "VerifySign: all checks passed");
+  INFO_LOG(IOS_ES, "VerifySign: all checks passed");
   return IPC_SUCCESS;
 }
 

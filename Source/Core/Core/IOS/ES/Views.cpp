@@ -3,6 +3,7 @@
 
 #include "Core/IOS/ES/ES.h"
 
+#include <cinttypes>
 #include <cstddef>
 #include <cstdio>
 #include <vector>
@@ -52,12 +53,12 @@ IPCReply ESDevice::GetTicketViewCount(const IOCtlVRequest& request)
   if (!IsEmulated(TitleID))
   {
     view_count = 0;
-    ERROR_LOG_FMT(IOS_ES, "GetViewCount: Dolphin doesn't emulate IOS title {:016x}", TitleID);
+    ERROR_LOG(IOS_ES, "GetViewCount: Dolphin doesn't emulate IOS title %016" PRIx64, (u64)TitleID);
   }
   else if (ShouldReturnFakeViewsForIOSes(TitleID, m_core.m_title_context))
   {
     view_count = 1;
-    WARN_LOG_FMT(IOS_ES, "GetViewCount: Faking IOS title {:016x} being present", TitleID);
+    WARN_LOG(IOS_ES, "GetViewCount: Faking IOS title %016" PRIx64 " being present", (u64)TitleID);
   }
 
   // Only the disc is booted, so the Wii Menu has no ticket. A game returning to it (HOME menu → Wii Menu,
@@ -65,13 +66,15 @@ IPCReply ESDevice::GetTicketViewCount(const IOCtlVRequest& request)
   // game instead, as a real Wii returns to its menu.
   if (TitleID == Titles::SYSTEM_MENU && view_count == 0)
   {
-    NOTICE_LOG_FMT(IOS_ES, "GetViewCount: the Wii Menu is not installed; asking the frontend to close the game");
+    NOTICE_LOG(
+        IOS_ES,
+        "GetViewCount: the Wii Menu is not installed; asking the frontend to close the game");
     if (Libretro::environ_cb)
       Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, nullptr);
   }
 
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETVIEWCNT for titleID: {:016x} (View Count = {})", TitleID,
-               view_count);
+  INFO_LOG(IOS_ES, "IOCTL_ES_GETVIEWCNT for titleID: %016" PRIx64 " (View Count = %u)",
+           (u64)TitleID, view_count);
 
   memory.Write_U32(view_count, request.io_vectors[0].address);
   return IPCReply(IPC_SUCCESS);
@@ -92,7 +95,7 @@ IPCReply ESDevice::GetTicketViews(const IOCtlVRequest& request)
 
   if (!IsEmulated(TitleID))
   {
-    ERROR_LOG_FMT(IOS_ES, "GetViews: Dolphin doesn't emulate IOS title {:016x}", TitleID);
+    ERROR_LOG(IOS_ES, "GetViews: Dolphin doesn't emulate IOS title %016" PRIx64, (u64)TitleID);
   }
   else if (ticket.IsValid())
   {
@@ -110,10 +113,11 @@ IPCReply ESDevice::GetTicketViews(const IOCtlVRequest& request)
   else if (ShouldReturnFakeViewsForIOSes(TitleID, m_core.m_title_context))
   {
     memory.Memset(request.io_vectors[0].address, 0, sizeof(ES::TicketView));
-    WARN_LOG_FMT(IOS_ES, "GetViews: Faking IOS title {:016x} being present", TitleID);
+    WARN_LOG(IOS_ES, "GetViews: Faking IOS title %016" PRIx64 " being present", (u64)TitleID);
   }
 
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETVIEWS for titleID: {:016x} (MaxViews = {})", TitleID, maxViews);
+  INFO_LOG(IOS_ES, "IOCTL_ES_GETVIEWS for titleID: %016" PRIx64 " (MaxViews = %u)", (u64)TitleID,
+           maxViews);
 
   return IPCReply(IPC_SUCCESS);
 }
@@ -239,7 +243,7 @@ IPCReply ESDevice::GetTMDViewSize(const IOCtlVRequest& request)
   const u32 view_size = static_cast<u32>(tmd.GetRawViewSize());
   memory.Write_U32(view_size, request.io_vectors[0].address);
 
-  INFO_LOG_FMT(IOS_ES, "GetTMDViewSize: {} bytes for title {:016x}", view_size, TitleID);
+  INFO_LOG(IOS_ES, "GetTMDViewSize: %u bytes for title %016" PRIx64, view_size, (u64)TitleID);
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -272,7 +276,8 @@ IPCReply ESDevice::GetTMDViews(const IOCtlVRequest& request)
     return IPCReply(ES_EINVAL);
   tmd.GetRawView(view);
 
-  INFO_LOG_FMT(IOS_ES, "GetTMDView: {} bytes for title {:016x}", view_size, title_id);
+  INFO_LOG(IOS_ES, "GetTMDView: %" PRIu64 " bytes for title %016" PRIx64, (u64)view_size,
+           (u64)title_id);
   return IPCReply(IPC_SUCCESS);
 }
 

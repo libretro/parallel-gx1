@@ -3,6 +3,7 @@
 
 #include "Core/IOS/ES/ES.h"
 
+#include <cinttypes>
 #include <vector>
 
 #include "Common/Logging/Log.h"
@@ -38,9 +39,10 @@ s32 ESCore::OpenContent(const ES::TMDReader& tmd, u16 content_index, u32 uid, Ti
     entry.m_content = content;
     entry.m_title_id = title_id;
     entry.m_uid = uid;
-    INFO_LOG_FMT(IOS_ES,
-                 "OpenContent: title ID {:016x}, UID {:#x}, content {:08x} (index {}) -> CFD {}",
-                 title_id, uid, content.id, content_index, i);
+    INFO_LOG(IOS_ES,
+             "OpenContent: title ID %016" PRIx64
+             ", UID %#x, content %08x (index %u) -> CFD %" PRIu64,
+             (u64)title_id, uid, content.id, (unsigned)content_index, (u64)i);
     return static_cast<s32>(i);
   }
 
@@ -120,8 +122,7 @@ IPCReply ESDevice::ReadContent(u32 uid, const IOCtlVRequest& request)
     const u32 size = request.io_vectors[0].size;
     const u32 addr = request.io_vectors[0].address;
 
-    INFO_LOG_FMT(IOS_ES, "ReadContent(uid={:#x}, cfd={}, size={}, addr={:08x})", uid, cfd, size,
-                 addr);
+    INFO_LOG(IOS_ES, "ReadContent(uid=%#x, cfd=%u, size=%u, addr=%08x)", uid, cfd, size, addr);
     return m_core.ReadContent(cfd, memory.GetPointerForRange(addr, size), size, uid, ticks);
   });
 }
@@ -139,7 +140,7 @@ s32 ESCore::CloseContent(u32 cfd, u32 uid, Ticks ticks)
 
   m_ios.GetFSCore().Close(entry.m_fd, ticks);
   entry = {};
-  INFO_LOG_FMT(IOS_ES, "CloseContent: CFD {}", cfd);
+  INFO_LOG(IOS_ES, "CloseContent: CFD %u", cfd);
   return IPC_SUCCESS;
 }
 

@@ -4,11 +4,11 @@
 #include "Core/IOS/WFS/WFSSRV.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <cstdio>
 
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
@@ -45,18 +45,18 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
   {
   case IOCTL_WFS_INIT:
     // TODO(wfs): Implement.
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_INIT");
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_INIT");
     break;
 
   case IOCTL_WFS_UNKNOWN_8:
     // TODO(wfs): Figure out what this actually does.
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_UNKNOWN_8");
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_UNKNOWN_8");
     memory.Write_U8(7, request.buffer_out);
     memory.CopyToEmu(request.buffer_out + 1, "msc01\x00\x00\x00", 8);
     break;
 
   case IOCTL_WFS_SHUTDOWN:
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_SHUTDOWN");
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_SHUTDOWN");
 
     // Close all hanging attach/detach ioctls with an appropriate error code.
     for (auto address : m_hanging)
@@ -70,14 +70,14 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     break;
 
   case IOCTL_WFS_DEVICE_INFO:
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_DEVICE_INFO");
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_DEVICE_INFO");
     memory.Write_U64(16ull << 30, request.buffer_out);  // 16GB storage.
     memory.Write_U8(4, request.buffer_out + 8);
     break;
 
   case IOCTL_WFS_GET_DEVICE_NAME:
   {
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_DEVICE_NAME");
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_GET_DEVICE_NAME");
     memory.Write_U8(static_cast<u8>(m_device_name.size()), request.buffer_out);
     memory.CopyToEmu(request.buffer_out + 1, m_device_name.data(), m_device_name.size());
     break;
@@ -85,14 +85,14 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
 
   case IOCTL_WFS_ATTACH_DETACH_2:
     // TODO(wfs): Implement.
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_ATTACH_DETACH_2({})", request.request);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_ATTACH_DETACH_2(%u)", request.request);
     memory.Write_U32(1, request.buffer_out);
     memory.Write_U32(0, request.buffer_out + 4);  // device id?
     memory.Write_U32(0, request.buffer_out + 8);
     break;
 
   case IOCTL_WFS_ATTACH_DETACH:
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_ATTACH_DETACH({})", request.request);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_ATTACH_DETACH(%u)", request.request);
 
     // Leave hanging, but we need to acknowledge the request at shutdown time.
     m_hanging.push_back(request.address);
@@ -100,7 +100,7 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
 
   case IOCTL_WFS_FLUSH:
     // Nothing to do.
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_FLUSH: doing nothing");
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_FLUSH: doing nothing");
     break;
 
   case IOCTL_WFS_MKDIR:
@@ -111,17 +111,17 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
 
     if (File::Exists(native_path))
     {
-      INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_MKDIR({}): already exists", path);
+      INFO_LOG(IOS_WFS, "IOCTL_WFS_MKDIR(%s): already exists", path.c_str());
       return_error_code = WFS_EEXIST;
     }
     else if (!File::CreateDir(native_path))
     {
-      INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_MKDIR({}): no such file or directory", path);
+      INFO_LOG(IOS_WFS, "IOCTL_WFS_MKDIR(%s): no such file or directory", path.c_str());
       return_error_code = WFS_ENOENT;
     }
     else
     {
-      INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_MKDIR({}): directory created", path);
+      INFO_LOG(IOS_WFS, "IOCTL_WFS_MKDIR(%s): directory created", path.c_str());
     }
     break;
   }
@@ -129,34 +129,34 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
   // TODO(wfs): Globbing is not really implemented, we just fake the one case
   // (listing /vol/*) which is required to get the installer to work.
   case IOCTL_WFS_GLOB_START:
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GLOB_START({})", request.request);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_GLOB_START(%u)", request.request);
     memory.Memset(request.buffer_out, 0, request.buffer_out_size);
     memory.CopyToEmu(request.buffer_out + 0x14, m_device_name.data(), m_device_name.size());
     break;
 
   case IOCTL_WFS_GLOB_NEXT:
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GLOB_NEXT({})", request.request);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_GLOB_NEXT(%u)", request.request);
     return_error_code = WFS_ENOENT;
     break;
 
   case IOCTL_WFS_GLOB_END:
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GLOB_END({})", request.request);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_GLOB_END(%u)", request.request);
     memory.Memset(request.buffer_out, 0, request.buffer_out_size);
     break;
 
   case IOCTL_WFS_SET_HOMEDIR:
     m_home_directory = memory.GetString(request.buffer_in + 2, memory.Read_U16(request.buffer_in));
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_SET_HOMEDIR: {}", m_home_directory);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_SET_HOMEDIR: %s", m_home_directory.c_str());
     break;
 
   case IOCTL_WFS_CHDIR:
     m_current_directory =
         memory.GetString(request.buffer_in + 2, memory.Read_U16(request.buffer_in));
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_CHDIR: {}", m_current_directory);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_CHDIR: %s", m_current_directory.c_str());
     break;
 
   case IOCTL_WFS_GET_HOMEDIR:
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_HOMEDIR: {}", m_home_directory);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_GET_HOMEDIR: %s", m_home_directory.c_str());
     memory.Write_U16(static_cast<u16>(m_home_directory.size()), request.buffer_out);
     memory.CopyToEmu(request.buffer_out + 2, m_home_directory.data(), m_home_directory.size());
     break;
@@ -170,18 +170,18 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     memory.Memset(0, request.buffer_out, request.buffer_out_size);
     if (!File::Exists(native_path))
     {
-      INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_ATTRIBUTES({}): no such file or directory", path);
+      INFO_LOG(IOS_WFS, "IOCTL_WFS_GET_ATTRIBUTES(%s): no such file or directory", path.c_str());
       return_error_code = WFS_ENOENT;
     }
     else if (File::IsDirectory(native_path))
     {
-      INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_ATTRIBUTES({}): directory", path);
+      INFO_LOG(IOS_WFS, "IOCTL_WFS_GET_ATTRIBUTES(%s): directory", path.c_str());
       memory.Write_U32(0x80000000, request.buffer_out + 4);
     }
     else
     {
       const auto size = static_cast<u32>(File::GetSize(native_path));
-      INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_ATTRIBUTES({}): file with size {}", path, size);
+      INFO_LOG(IOS_WFS, "IOCTL_WFS_GET_ATTRIBUTES(%s): file with size %u", path.c_str(), size);
       memory.Write_U32(size, request.buffer_out);
     }
     break;
@@ -218,13 +218,13 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
 
     if (!fd_obj->Open())
     {
-      ERROR_LOG_FMT(IOS_WFS, "{}({}, {}): error opening file", ioctl_name, path, mode);
+      ERROR_LOG(IOS_WFS, "%s(%s, %u): error opening file", ioctl_name, path.c_str(), mode);
       ReleaseFileDescriptor(fd);
       return_error_code = WFS_ENOENT;
       break;
     }
 
-    INFO_LOG_FMT(IOS_WFS, "{}({}, {}) -> {}", ioctl_name, path, mode, fd);
+    INFO_LOG(IOS_WFS, "%s(%s, %u) -> %u", ioctl_name, path.c_str(), mode, (unsigned)fd);
     if (request.request == IOCTL_WFS_OPEN)
     {
       memory.Write_U16(fd, request.buffer_out + 0x14);
@@ -242,17 +242,18 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     FileDescriptor* fd_obj = FindFileDescriptor(fd);
     if (fd_obj == nullptr)
     {
-      ERROR_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_SIZE: invalid file descriptor {}", fd);
+      ERROR_LOG(IOS_WFS, "IOCTL_WFS_GET_SIZE: invalid file descriptor %u", (unsigned)fd);
       return_error_code = WFS_EBADFD;
       break;
     }
 
     const u64 size = fd_obj->file.GetSize();
     const u32 truncated_size = static_cast<u32>(size);
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_SIZE({}) -> {}", fd, truncated_size);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_GET_SIZE(%u) -> %u", (unsigned)fd, truncated_size);
     if (size != truncated_size)
     {
-      ERROR_LOG_FMT(IOS_WFS, "IOCTL_WFS_GET_SIZE: file {} too large ({})", fd, size);
+      ERROR_LOG(IOS_WFS, "IOCTL_WFS_GET_SIZE: file %u too large (%" PRIu64 ")", (unsigned)fd,
+                (u64)size);
     }
     memory.Write_U32(truncated_size, request.buffer_out);
     break;
@@ -261,7 +262,7 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
   case IOCTL_WFS_CLOSE:
   {
     const u16 fd = memory.Read_U16(request.buffer_in + 0x4);
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_CLOSE({})", fd);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_CLOSE(%u)", (unsigned)fd);
     ReleaseFileDescriptor(fd);
     break;
   }
@@ -271,7 +272,7 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     // TODO(wfs): Figure out the exact semantics difference from the other
     // close.
     const u16 fd = memory.Read_U16(request.buffer_in + 0x4);
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_CLOSE_2({})", fd);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_CLOSE_2(%u)", (unsigned)fd);
     ReleaseFileDescriptor(fd);
     break;
   }
@@ -289,7 +290,7 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     FileDescriptor* fd_obj = FindFileDescriptor(fd);
     if (fd_obj == nullptr)
     {
-      ERROR_LOG_FMT(IOS_WFS, "IOCTL_WFS_READ: invalid file descriptor {}", fd);
+      ERROR_LOG(IOS_WFS, "IOCTL_WFS_READ: invalid file descriptor %u", (unsigned)fd);
       return_error_code = WFS_EBADFD;
       break;
     }
@@ -311,8 +312,8 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
       fd_obj->position += read_bytes;
     }
 
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_READ: read {} bytes from FD {} ({})", read_bytes, fd,
-                 fd_obj->path);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_READ: read %" PRIu64 " bytes from FD %u (%s)", (u64)read_bytes,
+             (unsigned)fd, fd_obj->path.c_str());
     return_error_code = static_cast<int>(read_bytes);
     break;
   }
@@ -330,7 +331,7 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     FileDescriptor* fd_obj = FindFileDescriptor(fd);
     if (fd_obj == nullptr)
     {
-      ERROR_LOG_FMT(IOS_WFS, "IOCTL_WFS_WRITE: invalid file descriptor {}", fd);
+      ERROR_LOG(IOS_WFS, "IOCTL_WFS_WRITE: invalid file descriptor %u", (unsigned)fd);
       return_error_code = WFS_EBADFD;
       break;
     }
@@ -351,8 +352,8 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
       fd_obj->position += size;
     }
 
-    INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_WRITE: written {} bytes from FD {} ({})", size, fd,
-                 fd_obj->path);
+    INFO_LOG(IOS_WFS, "IOCTL_WFS_WRITE: written %u bytes from FD %u (%s)", size, (unsigned)fd,
+             fd_obj->path.c_str());
     break;
   }
 
@@ -373,7 +374,7 @@ s32 WFSSRVDevice::Rename(std::string source, std::string dest) const
   source = NormalizePath(source);
   dest = NormalizePath(dest);
 
-  INFO_LOG_FMT(IOS_WFS, "IOCTL_WFS_RENAME: {} to {}", source, dest);
+  INFO_LOG(IOS_WFS, "IOCTL_WFS_RENAME: %s to %s", source.c_str(), dest.c_str());
 
   const bool opened =
       std::ranges::any_of(m_fds, [&](const auto& fd) { return fd.in_use && fd.path == source; });
@@ -426,7 +427,13 @@ std::string WFSSRVDevice::NormalizePath(const std::string& path) const
       normalized_components.push_back(component);
     }
   }
-  return fmt::format("/{}", fmt::join(normalized_components, "/"));
+  std::string normalized;
+  for (const std::string& component : normalized_components)
+  {
+    normalized += '/';
+    normalized += component;
+  }
+  return normalized.empty() ? std::string("/") : normalized;
 }
 
 WFSSRVDevice::FileDescriptor* WFSSRVDevice::FindFileDescriptor(u16 fd)
@@ -485,7 +492,7 @@ bool WFSSRVDevice::FileDescriptor::Open()
   }
   else
   {
-    ERROR_LOG_FMT(IOS_WFS, "WFSOpen: invalid mode {}", mode);
+    ERROR_LOG(IOS_WFS, "WFSOpen: invalid mode %d", mode);
     return false;
   }
 

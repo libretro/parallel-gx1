@@ -4,6 +4,7 @@
 #include "Core/IOS/Device.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <map>
 #include <utility>
 
@@ -105,8 +106,9 @@ bool IOCtlVRequest::HasNumberOfValidVectors(const size_t in_count, const size_t 
 void IOCtlRequest::Log(std::string_view device_name, Common::Log::LogType type,
                        Common::Log::LogLevel verbosity) const
 {
-  GENERIC_LOG_FMT(type, verbosity, "{} (fd {}) - IOCtl {:#x} (in_size={:#x}, out_size={:#x})",
-                  device_name, fd, request, buffer_in_size, buffer_out_size);
+  GENERIC_LOG(type, verbosity, "%.*s (fd %u) - IOCtl %#x (in_size=%#x, out_size=%#x)",
+              static_cast<int>(device_name.size()), device_name.data(), fd, request, buffer_in_size,
+              buffer_out_size);
 }
 
 void IOCtlRequest::Dump(Core::System& system, const std::string& description,
@@ -115,10 +117,12 @@ void IOCtlRequest::Dump(Core::System& system, const std::string& description,
   auto& memory = system.GetMemory();
 
   Log("===== " + description, type, level);
-  GENERIC_LOG_FMT(type, level, "In buffer\n{}",
-                  HexDump(memory.GetPointerForRange(buffer_in, buffer_in_size), buffer_in_size));
-  GENERIC_LOG_FMT(type, level, "Out buffer\n{}",
-                  HexDump(memory.GetPointerForRange(buffer_out, buffer_out_size), buffer_out_size));
+  GENERIC_LOG(
+      type, level, "In buffer\n%s",
+      HexDump(memory.GetPointerForRange(buffer_in, buffer_in_size), buffer_in_size).c_str());
+  GENERIC_LOG(
+      type, level, "Out buffer\n%s",
+      HexDump(memory.GetPointerForRange(buffer_out, buffer_out_size), buffer_out_size).c_str());
 }
 
 void IOCtlRequest::DumpUnknown(Core::System& system, const std::string& description,
@@ -132,19 +136,21 @@ void IOCtlVRequest::Dump(Core::System& system, std::string_view description,
 {
   auto& memory = system.GetMemory();
 
-  GENERIC_LOG_FMT(type, level, "===== {} (fd {}) - IOCtlV {:#x} ({} in, {} io)", description, fd,
-                  request, in_vectors.size(), io_vectors.size());
+  GENERIC_LOG(type, level, "===== %.*s (fd %u) - IOCtlV %#x (%" PRIu64 " in, %" PRIu64 " io)",
+              static_cast<int>(description.size()), description.data(), fd, request,
+              (u64)in_vectors.size(), (u64)io_vectors.size());
 
   size_t i = 0;
   for (const auto& vector : in_vectors)
   {
-    GENERIC_LOG_FMT(type, level, "in[{}] (size={:#x}):\n{}", i++, vector.size,
-                    HexDump(memory.GetPointerForRange(vector.address, vector.size), vector.size));
+    GENERIC_LOG(
+        type, level, "in[%" PRIu64 "] (size=%#x):\n%s", (u64)(i++), vector.size,
+        HexDump(memory.GetPointerForRange(vector.address, vector.size), vector.size).c_str());
   }
 
   i = 0;
   for (const auto& vector : io_vectors)
-    GENERIC_LOG_FMT(type, level, "io[{}] (size={:#x})", i++, vector.size);
+    GENERIC_LOG(type, level, "io[%" PRIu64 "] (size=%#x)", (u64)(i++), vector.size);
 }
 
 void IOCtlVRequest::DumpUnknown(Core::System& system, const std::string& description,
@@ -187,7 +193,8 @@ std::optional<IPCReply> Device::Unsupported(const Request& request)
       {IPC_CMD_IOCTLV, "IOCtlV"},
   }};
 
-  WARN_LOG_FMT(IOS, "{} does not support {}()", m_name, names.at(request.command));
+  WARN_LOG(IOS, "%s does not support %.*s()", m_name.c_str(),
+           static_cast<int>(names.at(request.command).size()), names.at(request.command).data());
   return IPCReply{IPC_EINVAL};
 }
 }  // namespace IOS::HLE

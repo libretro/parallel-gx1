@@ -4,6 +4,7 @@
 #include "Core/IOS/ES/Formats.h"
 
 #include <array>
+#include <cinttypes>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -14,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
@@ -375,7 +376,7 @@ std::string TMDReader::GetGameID() const
   if (i == sizeof(game_id))
     return std::string(game_id, sizeof(game_id));
 
-  return fmt::format("{:016x}", GetTitleId());
+  return StringFromFormat("%016" PRIx64, (u64)GetTitleId());
 }
 
 std::string TMDReader::GetGameTDBID() const
@@ -390,7 +391,7 @@ std::string TMDReader::GetGameTDBID() const
   if (i == 4)
     return std::string(reinterpret_cast<const char*>(begin), 4);
 
-  return fmt::format("{:016x}", GetTitleId());
+  return StringFromFormat("%016" PRIx64, (u64)GetTitleId());
 }
 
 u16 TMDReader::GetNumContents() const
@@ -545,8 +546,8 @@ std::array<u8, 16> TicketReader::GetTitleKey(const HLE::IOSC& iosc) const
   u8 index = m_bytes[offsetof(Ticket, common_key_index)];
   if (index >= HLE::IOSC::COMMON_KEY_HANDLES.size())
   {
-    PanicAlertFmt("Bad common key index for title {:016x}: {} -- using common key 0", GetTitleId(),
-                  index);
+    PanicAlert("Bad common key index for title %016" PRIx64 ": %u -- using common key 0",
+               (u64)GetTitleId(), (unsigned)index);
     index = 0;
   }
   auto common_key_handle = HLE::IOSC::COMMON_KEY_HANDLES[index];
@@ -675,7 +676,8 @@ SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const
     return {};
 
   const std::string_view id_string(reinterpret_cast<const char*>(it->id.data()), it->id.size());
-  return fmt::format("/shared1/{}.app", id_string);
+  return StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()),
+                          id_string.data());
 }
 
 std::vector<std::array<u8, 20>> SharedContentMap::GetHashes() const
@@ -698,14 +700,17 @@ std::string SharedContentMap::AddSharedContent(const std::array<u8, 20>& sha1)
                 "'m_last_id' must be represented by 8 characters when formatted in hexadecimal.");
   static_assert(std::tuple_size_v<decltype(entry.id)> == sizeof(m_last_id) * 2,
                 "'entry.id' must be a std::array capable of storing every nibble of 'm_last_id'.");
-  fmt::format_to(entry.id.data(), "{:08x}", m_last_id);
+  char id[9];
+  snprintf(id, sizeof(id), "%08x", m_last_id);
+  std::memcpy(entry.id.data(), id, entry.id.size());
   entry.sha1 = sha1;
 
   WriteEntries();
   m_last_id++;
 
   const std::string_view id_string(reinterpret_cast<const char*>(entry.id.data()), entry.id.size());
-  return fmt::format("/shared1/{}.app", id_string);
+  return StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()),
+                          id_string.data());
 }
 
 bool SharedContentMap::DeleteSharedContent(const std::array<u8, 20>& sha1)
@@ -788,7 +793,7 @@ u32 UIDSys::GetOrInsertUIDForTitle(const u64 title_id)
   const u32 current_uid = GetUIDFromTitle(title_id);
   if (current_uid)
   {
-    INFO_LOG_FMT(IOS_ES, "Title {:016x} already exists in uid.sys", title_id);
+    INFO_LOG(IOS_ES, "Title %016" PRIx64 " already exists in uid.sys", (u64)title_id);
     return current_uid;
   }
 
@@ -805,7 +810,7 @@ u32 UIDSys::GetOrInsertUIDForTitle(const u64 title_id)
   if (!file || !file->Seek(0, HLE::FS::SeekMode::End) || !file->Write(&swapped_title_id, 1) ||
       !file->Write(&swapped_uid, 1))
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to write to /sys/uid.sys");
+    ERROR_LOG(IOS_ES, "Failed to write to /sys/uid.sys");
     return 0;
   }
 

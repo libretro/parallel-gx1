@@ -4,11 +4,12 @@
 #include "Core/IOS/ES/ES.h"
 
 #include <array>
+#include <cinttypes>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonTypes.h"
 #include "Common/Crypto/SHA1.h"
@@ -94,7 +95,7 @@ static std::vector<u64> GetTitlesInTitleOrImport(FS::FileSystem* fs, const std::
   const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, titles_dir);
   if (!entries)
   {
-    ERROR_LOG_FMT(IOS_ES, "{} is not a directory", titles_dir);
+    ERROR_LOG(IOS_ES, "%s is not a directory", titles_dir.c_str());
     return {};
   }
 
@@ -107,7 +108,7 @@ static std::vector<u64> GetTitlesInTitleOrImport(FS::FileSystem* fs, const std::
     if (!IsValidPartOfTitleID(title_type))
       continue;
 
-    const std::string title_dir = fmt::format("{}/{}", titles_dir, title_type);
+    const std::string title_dir = StringFromFormat("%s/%s", titles_dir.c_str(), title_type.c_str());
     const auto title_entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, title_dir);
     if (!title_entries)
       continue;
@@ -116,8 +117,9 @@ static std::vector<u64> GetTitlesInTitleOrImport(FS::FileSystem* fs, const std::
     {
       if (!IsValidPartOfTitleID(title_identifier))
         continue;
-      if (!fs->ReadDirectory(PID_KERNEL, PID_KERNEL,
-                             fmt::format("{}/{}", title_dir, title_identifier)))
+      if (!fs->ReadDirectory(
+              PID_KERNEL, PID_KERNEL,
+              StringFromFormat("%s/%s", title_dir.c_str(), title_identifier.c_str())))
       {
         continue;
       }
@@ -147,7 +149,7 @@ std::vector<u64> ESCore::GetTitlesWithTickets() const
   const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, "/ticket");
   if (!entries)
   {
-    ERROR_LOG_FMT(IOS_ES, "/ticket is not a directory");
+    ERROR_LOG(IOS_ES, "/ticket is not a directory");
     return {};
   }
 
@@ -167,8 +169,9 @@ std::vector<u64> ESCore::GetTitlesWithTickets() const
     for (const std::string& file_name : *sub_entries)
     {
       const std::string name_without_ext = file_name.substr(0, 8);
-      if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL,
-                            fmt::format("/ticket/{}/{}", title_type, file_name)) ||
+      if (fs->ReadDirectory(
+              PID_KERNEL, PID_KERNEL,
+              StringFromFormat("/ticket/%s/%s", title_type.c_str(), file_name.c_str())) ||
           !IsValidPartOfTitleID(name_without_ext) ||
           (name_without_ext + ".tik" != file_name && name_without_ext + ".tv1" != file_name))
       {
@@ -291,7 +294,8 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
       fs->SetMetadata(PID_KERNEL, content_dir, PID_KERNEL, PID_KERNEL, 0, content_dir_modes);
   if (result1 != FS::ResultCode::Success || result2 != FS::ResultCode::Success)
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to create or set metadata on content dir for {:016x}", title_id);
+    ERROR_LOG(IOS_ES, "Failed to create or set metadata on content dir for %016" PRIx64,
+              (u64)title_id);
     return false;
   }
 
@@ -301,7 +305,7 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
                              fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir, 0,
                                                  data_dir_modes) != FS::ResultCode::Success))
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to create data dir for {:016x}", title_id);
+    ERROR_LOG(IOS_ES, "Failed to create data dir for %016" PRIx64, (u64)title_id);
     return false;
   }
 
@@ -309,7 +313,7 @@ bool ESCore::CreateTitleDirectories(u64 title_id, u16 group_id) const
   const u32 uid = uid_sys.GetOrInsertUIDForTitle(title_id);
   if (fs->SetMetadata(0, data_dir, uid, group_id, 0, data_dir_modes) != FS::ResultCode::Success)
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to set metadata on data dir for {:016x}", title_id);
+    ERROR_LOG(IOS_ES, "Failed to set metadata on data dir for %016" PRIx64, (u64)title_id);
     return false;
   }
 
@@ -327,7 +331,8 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
       fs->CreateFullPath(PID_KERNEL, PID_KERNEL, import_content_dir + '/', 0, content_dir_modes);
   if (result != FS::ResultCode::Success)
   {
-    ERROR_LOG_FMT(IOS_ES, "InitImport: Failed to create content dir for {:016x}", tmd.GetTitleId());
+    ERROR_LOG(IOS_ES, "InitImport: Failed to create content dir for %016" PRIx64,
+              (u64)tmd.GetTitleId());
     return false;
   }
 
@@ -341,7 +346,8 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
   const auto rename_result = fs->Rename(PID_KERNEL, PID_KERNEL, content_dir, import_content_dir);
   if (rename_result != FS::ResultCode::Success)
   {
-    ERROR_LOG_FMT(IOS_ES, "InitImport: Failed to move content dir for {:016x}", tmd.GetTitleId());
+    ERROR_LOG(IOS_ES, "InitImport: Failed to move content dir for %016" PRIx64,
+              (u64)tmd.GetTitleId());
     return false;
   }
   DeleteDirectoriesIfEmpty(m_ios.GetFS().get(), import_content_dir);
@@ -357,13 +363,14 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
   // Remove everything not listed in the TMD.
   std::unordered_set<std::string> expected_entries = {"title.tmd"};
   for (const auto& content_info : tmd.GetContents())
-    expected_entries.insert(fmt::format("{:08x}.app", content_info.id));
+    expected_entries.insert(StringFromFormat("%08x.app", content_info.id));
   const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, import_content_dir);
   if (!entries)
     return false;
   for (const std::string& name : *entries)
   {
-    const std::string absolute_path = fmt::format("{}/{}", import_content_dir, name);
+    const std::string absolute_path =
+        StringFromFormat("%s/%s", import_content_dir.c_str(), name.c_str());
     // There should not be any directory in there. Remove it.
     if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, absolute_path))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path);
@@ -375,7 +382,7 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
   if (fs->Rename(PID_KERNEL, PID_KERNEL, import_content_dir, content_dir) !=
       FS::ResultCode::Success)
   {
-    ERROR_LOG_FMT(IOS_ES, "FinishImport: Failed to rename import directory to {}", content_dir);
+    ERROR_LOG(IOS_ES, "FinishImport: Failed to rename import directory to %s", content_dir.c_str());
     return false;
   }
   return true;
@@ -393,8 +400,8 @@ bool ESCore::WriteImportTMD(const ES::TMDReader& tmd)
       return false;
   }
 
-  const std::string dest =
-      fmt::format("{}/content/title.tmd", Common::GetImportTitlePath(tmd.GetTitleId()));
+  const std::string dest = StringFromFormat("%s/content/title.tmd",
+                                            Common::GetImportTitlePath(tmd.GetTitleId()).c_str());
   return fs->Rename(PID_KERNEL, PID_KERNEL, tmd_path, dest) == FS::ResultCode::Success;
 }
 
@@ -430,7 +437,7 @@ std::string ESCore::GetContentPath(const u64 title_id, const ES::Content& conten
     ticks.Add(content_map.GetTicks());
     return content_map.GetFilenameFromSHA1(content.sha1).value_or("");
   }
-  return fmt::format("{}/{:08x}.app", Common::GetTitleContentPath(title_id), content.id);
+  return StringFromFormat("%s/%08x.app", Common::GetTitleContentPath(title_id).c_str(), content.id);
 }
 
 s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size, Ticks ticks)
@@ -442,35 +449,36 @@ s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size,
                               {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None}, ticks);
   if (result != FS::ResultCode::Success)
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to create temporary file {}: {}", tmp_path,
-                  static_cast<int>(result));
+    ERROR_LOG(IOS_ES, "Failed to create temporary file %s: %d", tmp_path.c_str(),
+              static_cast<int>(result));
     return FS::ConvertResult(result);
   }
 
   auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmp_path, FS::Mode::ReadWrite, {}, ticks);
   if (fd.Get() < 0)
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to open temporary file {}: {}", tmp_path, fd.Get());
+    ERROR_LOG(IOS_ES, "Failed to open temporary file %s: %" PRId64, tmp_path.c_str(),
+              (s64)fd.Get());
     return fd.Get();
   }
 
   if (fs.Write(fd.Get(), data, size, {}, ticks) != s32(size))
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to write to temporary file {}", tmp_path);
+    ERROR_LOG(IOS_ES, "Failed to write to temporary file %s", tmp_path.c_str());
     return ES_EIO;
   }
 
   if (const auto ret = fs.Close(fd.Release(), ticks); ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to close temporary file {}", tmp_path);
+    ERROR_LOG(IOS_ES, "Failed to close temporary file %s", tmp_path.c_str());
     return ret;
   }
 
   result = fs.RenameFile(PID_KERNEL, PID_KERNEL, tmp_path, path, ticks);
   if (result != FS::ResultCode::Success)
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to move launch file to final destination ({}): {}", path,
-                  static_cast<int>(result));
+    ERROR_LOG(IOS_ES, "Failed to move launch file to final destination (%s): %d", path.c_str(),
+              static_cast<int>(result));
     return FS::ConvertResult(result);
   }
 

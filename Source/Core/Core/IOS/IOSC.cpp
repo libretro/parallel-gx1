@@ -4,13 +4,14 @@
 #include "Core/IOS/IOSC.h"
 
 #include <array>
+#include <cinttypes>
 #include <cstddef>
 #include <cstring>
 #include <map>
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include <crypto/pk.h>
 
@@ -21,6 +22,7 @@
 #include "Common/Crypto/ec.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
+#include "Common/StringUtil.h"
 #include "Common/Swap.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/ES/Formats.h"
@@ -436,7 +438,7 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
 
     if (ret != 0)
     {
-      WARN_LOG_FMT(IOS, "VerifyPublicKeySign: RSA verification failed (error {})", ret);
+      WARN_LOG(IOS, "VerifyPublicKeySign: RSA verification failed (error %d)", ret);
       return IOSC_FAIL_CHECKVALUE;
     }
 
@@ -543,8 +545,8 @@ static CertECC MakeBlankEccCert(const std::string& issuer, const std::string& na
 
 CertECC IOSC::GetDeviceCertificate() const
 {
-  const std::string name = fmt::format("NG{:08x}", GetDeviceId());
-  auto cert = MakeBlankEccCert(fmt::format("Root-CA{:08x}-MS{:08x}", m_ca_id, m_ms_id), name,
+  const std::string name = StringFromFormat("NG%08x", GetDeviceId());
+  auto cert = MakeBlankEccCert(StringFromFormat("Root-CA%08x-MS%08x", m_ca_id, m_ms_id), name,
                                m_key_entries[HANDLE_CONSOLE_KEY].data.data(), m_console_key_id);
   cert.signature.sig = m_console_signature;
   return cert;
@@ -560,8 +562,8 @@ void IOSC::Sign(u8* sig_out, u8* ap_cert_out, u64 title_id, const u8* data, u32 
   // ap_priv[0] &= 1;
 
   const std::string signer =
-      fmt::format("Root-CA{:08x}-MS{:08x}-NG{:08x}", m_ca_id, m_ms_id, GetDeviceId());
-  const std::string name = fmt::format("AP{:016x}", title_id);
+      StringFromFormat("Root-CA%08x-MS%08x-NG%08x", m_ca_id, m_ms_id, GetDeviceId());
+  const std::string name = StringFromFormat("AP%016" PRIx64, (u64)title_id);
   CertECC cert = MakeBlankEccCert(signer, name, ap_priv.data(), 0);
   // Sign the AP cert.
   const size_t skip = offsetof(CertECC, signature.issuer);
@@ -652,14 +654,14 @@ void IOSC::LoadEntries()
   File::IOFile file{File::GetUserPath(D_WIIROOT_IDX) + "keys.bin", "rb"};
   if (!file)
   {
-    WARN_LOG_FMT(IOS, "keys.bin could not be found. Default values will be used.");
+    WARN_LOG(IOS, "keys.bin could not be found. Default values will be used.");
     return;
   }
 
   BootMiiKeyDump dump;
   if (!file.ReadBytes(&dump, sizeof(dump)))
   {
-    ERROR_LOG_FMT(IOS, "Failed to read from keys.bin.");
+    ERROR_LOG(IOS, "Failed to read from keys.bin.");
     return;
   }
 

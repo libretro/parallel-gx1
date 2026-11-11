@@ -26,7 +26,7 @@ std::optional<IPCReply> STMImmediateDevice::IOCtl(const IOCtlRequest& request)
   {
   case IOCTL_STM_IDLE:
   case IOCTL_STM_SHUTDOWN:
-    NOTICE_LOG_FMT(IOS_STM, "IOCTL_STM_IDLE or IOCTL_STM_SHUTDOWN received, shutting down");
+    NOTICE_LOG(IOS_STM, "IOCTL_STM_IDLE or IOCTL_STM_SHUTDOWN received, shutting down");
     Core::QueueHostJob(&Core::Stop, false);
     break;
 
@@ -42,20 +42,20 @@ std::optional<IPCReply> STMImmediateDevice::IOCtl(const IOCtlRequest& request)
     break;
 
   case IOCTL_STM_HOTRESET:
-    INFO_LOG_FMT(IOS_STM, "{} - IOCtl:", GetDeviceName());
-    INFO_LOG_FMT(IOS_STM, "    IOCTL_STM_HOTRESET");
+    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName().c_str());
+    INFO_LOG(IOS_STM, "    IOCTL_STM_HOTRESET");
     break;
 
   case IOCTL_STM_VIDIMMING:  // (Input: 20 bytes, Output: 20 bytes)
-    INFO_LOG_FMT(IOS_STM, "{} - IOCtl:", GetDeviceName());
-    INFO_LOG_FMT(IOS_STM, "    IOCTL_STM_VIDIMMING");
+    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName().c_str());
+    INFO_LOG(IOS_STM, "    IOCTL_STM_VIDIMMING");
     // memory.Write_U32(1, buffer_out);
     // return_value = 1;
     break;
 
   case IOCTL_STM_LEDMODE:  // (Input: 20 bytes, Output: 20 bytes)
-    INFO_LOG_FMT(IOS_STM, "{} - IOCtl:", GetDeviceName());
-    INFO_LOG_FMT(IOS_STM, "    IOCTL_STM_LEDMODE");
+    INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName().c_str());
+    INFO_LOG(IOS_STM, "    IOCTL_STM_LEDMODE");
     break;
 
   case IOCTL_STM_HOTRESET_FOR_PD:
@@ -66,7 +66,7 @@ std::optional<IPCReply> STMImmediateDevice::IOCtl(const IOCtlRequest& request)
   case IOCTL_STM_LEDFLASH:
   case IOCTL_STM_READVER:
   case IOCTL_STM_WRITEDMCU:
-    ERROR_LOG_FMT(IOS_STM, "{} - Unimplemented IOCtl: {}", GetDeviceName(), request.request);
+    ERROR_LOG(IOS_STM, "%s - Unimplemented IOCtl: %u", GetDeviceName().c_str(), request.request);
     break;
 
   default:

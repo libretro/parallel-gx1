@@ -3,12 +3,11 @@
 
 #include "Core/IOS/ES/ES.h"
 
+#include <cinttypes>
 #include <cstdio>
 #include <memory>
 #include <utility>
 #include <vector>
-
-#include <fmt/format.h>
 
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
@@ -94,8 +93,8 @@ ESCore::ESCore(Kernel& ios) : m_ios(ios)
                                                        directory.attribute, directory.modes);
     if (result != FS::ResultCode::Success && result != FS::ResultCode::AlreadyExists)
     {
-      ERROR_LOG_FMT(IOS_ES, "Failed to create {}: error {}", directory.path,
-                    std::to_underlying(FS::ConvertResult(result)));
+      ERROR_LOG(IOS_ES, "Failed to create %s: error %d", directory.path,
+                std::to_underlying(FS::ConvertResult(result)));
     }
 
     // Now update the UID/GID and other attributes.
@@ -168,7 +167,8 @@ void ESDevice::FinishInit()
 
   if (pending_launch_title_id.has_value())
   {
-    NOTICE_LOG_FMT(IOS, "Re-launching title {:016x} after IOS reload.", *pending_launch_title_id);
+    NOTICE_LOG(IOS, "Re-launching title %016" PRIx64 " after IOS reload.",
+               (u64)(*pending_launch_title_id));
     LaunchTitle(*pending_launch_title_id, HangPPC::No);
   }
 }
@@ -192,7 +192,7 @@ void TitleContext::Update(const ES::TMDReader& tmd_, const ES::TicketReader& tic
 {
   if (!tmd_.IsValid() || !ticket_.IsValid())
   {
-    ERROR_LOG_FMT(IOS_ES, "TMD or ticket is not valid -- refusing to update title context");
+    ERROR_LOG(IOS_ES, "TMD or ticket is not valid -- refusing to update title context");
     return;
   }
 
@@ -218,13 +218,13 @@ IPCReply ESDevice::GetTitleDirectory(const IOCtlVRequest& request)
   auto& memory = system.GetMemory();
 
   const u64 title_id = memory.Read_U64(request.in_vectors[0].address);
-  const auto path = fmt::format("/title/{:08x}/{:08x}/data", static_cast<u32>(title_id >> 32),
-                                static_cast<u32>(title_id));
+  const auto path = StringFromFormat("/title/%08x/%08x/data", static_cast<u32>(title_id >> 32),
+                                     static_cast<u32>(title_id));
 
   const auto path_dst = request.io_vectors[0].address;
   memory.CopyToEmu(path_dst, path.data(), path.size());
 
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETTITLEDIR: {}", path);
+  INFO_LOG(IOS_ES, "IOCTL_ES_GETTITLEDIR: %s", path.c_str());
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -250,8 +250,8 @@ IPCReply ESDevice::GetTitleId(const IOCtlVRequest& request)
   auto& memory = system.GetMemory();
 
   memory.Write_U64(title_id, request.io_vectors[0].address);
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETTITLEID: {:08x}/{:08x}", static_cast<u32>(title_id >> 32),
-               static_cast<u32>(title_id));
+  INFO_LOG(IOS_ES, "IOCTL_ES_GETTITLEID: %08x/%08x", static_cast<u32>(title_id >> 32),
+           static_cast<u32>(title_id));
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -261,7 +261,7 @@ static bool UpdateUIDAndGID(EmulationKernel& kernel, ES::UIDSys* uid_sys, const 
   const u32 uid = uid_sys->GetOrInsertUIDForTitle(title_id);
   if (uid == 0)
   {
-    ERROR_LOG_FMT(IOS_ES, "Failed to get UID for title {:016x}", title_id);
+    ERROR_LOG(IOS_ES, "Failed to get UID for title %016" PRIx64, (u64)title_id);
     return false;
   }
   kernel.SetUidForPPC(uid);
@@ -309,7 +309,7 @@ IPCReply ESDevice::SetUID(u32 uid, const IOCtlVRequest& request)
   const s32 ret = CheckIsAllowedToSetUID(kernel, &uid_sys, uid, m_core.m_title_context.tmd);
   if (ret < 0)
   {
-    ERROR_LOG_FMT(IOS_ES, "SetUID: Permission check failed with error {}", ret);
+    ERROR_LOG(IOS_ES, "SetUID: Permission check failed with error %d", ret);
     return IPCReply(ret);
   }
 
@@ -324,7 +324,7 @@ IPCReply ESDevice::SetUID(u32 uid, const IOCtlVRequest& request)
 
   if (!UpdateUIDAndGID(kernel, &uid_sys, tmd))
   {
-    ERROR_LOG_FMT(IOS_ES, "SetUID: Failed to get UID for title {:016x}", title_id);
+    ERROR_LOG(IOS_ES, "SetUID: Failed to get UID for title %016" PRIx64, (u64)title_id);
     return IPCReply(ES_SHORT_READ, delay_ticks);
   }
 
@@ -334,18 +334,17 @@ IPCReply ESDevice::SetUID(u32 uid, const IOCtlVRequest& request)
 bool ESDevice::LaunchTitle(u64 title_id, HangPPC hang_ppc)
 {
   m_core.m_title_context.Clear();
-  INFO_LOG_FMT(IOS_ES, "ES_Launch: Title context changed: (none)");
+  INFO_LOG(IOS_ES, "ES_Launch: Title context changed: (none)");
 
-  NOTICE_LOG_FMT(IOS_ES, "Launching title {:016x}...", title_id);
+  NOTICE_LOG(IOS_ES, "Launching title %016" PRIx64 "...", (u64)title_id);
 
   if ((title_id == Titles::SHOP || title_id == Titles::KOREAN_SHOP) &&
       GetEmulationKernel().GetIOSC().IsUsingDefaultId())
   {
-    ERROR_LOG_FMT(IOS_ES, "Refusing to launch the shop channel with default device credentials");
-    CriticalAlertFmtT(
-        "You cannot use the Wii Shop Channel without using your own device credentials."
-        "\nPlease refer to the NAND usage guide for setup instructions: "
-        "https://dolphin-emu.org/docs/guides/nand-usage-guide/");
+    ERROR_LOG(IOS_ES, "Refusing to launch the shop channel with default device credentials");
+    CriticalAlert("You cannot use the Wii Shop Channel without using your own device credentials."
+                  "\nPlease refer to the NAND usage guide for setup instructions: "
+                  "https://dolphin-emu.org/docs/guides/nand-usage-guide/");
 
     // Send the user back to the system menu instead of returning an error, which would
     // likely make the system menu crash. Doing this is okay as anyone who has the shop
@@ -371,7 +370,7 @@ bool ESDevice::LaunchIOS(u64 ios_title_id, HangPPC hang_ppc)
   // (indirectly via boot2), we can just launch MIOS when BC is launched.
   if (ios_title_id == Titles::BC)
   {
-    NOTICE_LOG_FMT(IOS, "BC: Launching MIOS...");
+    NOTICE_LOG(IOS, "BC: Launching MIOS...");
     return LaunchIOS(Titles::MIOS, hang_ppc);
   }
 
@@ -387,9 +386,9 @@ bool ESDevice::LaunchIOS(u64 ios_title_id, HangPPC hang_ppc)
         !GetEmulationKernel().BootIOS(ios_title_id, hang_ppc,
                                       m_core.GetContentPath(ios_title_id, content)))
     {
-      PanicAlertFmtT("Could not launch IOS {0:016x} because it is missing from the NAND.\n"
-                     "The emulated software will likely hang now.",
-                     ios_title_id);
+      PanicAlert("Could not launch IOS %016" PRIx64 " because it is missing from the NAND.\n"
+                 "The emulated software will likely hang now.",
+                 (u64)ios_title_id);
       return false;
     }
     return true;
@@ -429,14 +428,14 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   {
     if (title_id == Titles::SYSTEM_MENU)
     {
-      PanicAlertFmtT("Could not launch the Wii Menu because it is missing from the NAND.\n"
-                     "The emulated software will likely hang now.");
+      PanicAlert("Could not launch the Wii Menu because it is missing from the NAND.\n"
+                 "The emulated software will likely hang now.");
     }
     else
     {
-      PanicAlertFmtT("Could not launch title {0:016x} because it is missing from the NAND.\n"
-                     "The emulated software will likely hang now.",
-                     title_id);
+      PanicAlert("Could not launch title %016" PRIx64 " because it is missing from the NAND.\n"
+                 "The emulated software will likely hang now.",
+                 (u64)title_id);
     }
     // Only the disc is booted, so leaving it (HOME menu → Wii Menu) would hang on a black screen. Ask the
     // frontend to close the game instead, as a real Wii returns to its menu.
@@ -463,7 +462,7 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   {
     if (WriteLaunchFile(tmd, &ticks) != IPC_SUCCESS)
     {
-      PanicAlertFmt("LaunchPPCTitle: Failed to write launch file");
+      PanicAlert("LaunchPPCTitle: Failed to write launch file");
       return false;
     }
 
@@ -486,7 +485,7 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   }
 
   m_core.m_title_context.Update(tmd, ticket, DiscIO::Platform::WiiWAD);
-  INFO_LOG_FMT(IOS_ES, "LaunchPPCTitle: Title context changed: {:016x}", tmd.GetTitleId());
+  INFO_LOG(IOS_ES, "LaunchPPCTitle: Title context changed: %016" PRIx64, (u64)tmd.GetTitleId());
 
   // Note: the UID/GID is also updated for IOS titles, but since we have no guarantee IOS titles
   // are installed, we can only do this for PPC titles.
@@ -494,7 +493,7 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   if (!UpdateUIDAndGID(kernel, &uid_sys, m_core.m_title_context.tmd))
   {
     m_core.m_title_context.Clear();
-    INFO_LOG_FMT(IOS_ES, "LaunchPPCTitle: Title context changed: (none)");
+    INFO_LOG(IOS_ES, "LaunchPPCTitle: Title context changed: (none)");
     return false;
   }
 
@@ -594,14 +593,14 @@ std::optional<IPCReply> ESDevice::Close(u32 fd)
   context->active = false;
   context->ipc_fd = -1;
 
-  INFO_LOG_FMT(IOS_ES, "ES: Close");
+  INFO_LOG(IOS_ES, "ES: Close");
   m_is_active = false;
   return IPCReply(IPC_SUCCESS);
 }
 
 std::optional<IPCReply> ESDevice::IOCtlV(const IOCtlVRequest& request)
 {
-  DEBUG_LOG_FMT(IOS_ES, "{} ({:#x})", GetDeviceName(), request.request);
+  DEBUG_LOG(IOS_ES, "%s (%#x)", GetDeviceName().c_str(), request.request);
   auto context = FindActiveContext(request.fd);
   if (context == m_contexts.end())
     return IPCReply(ES_EINVAL);
@@ -751,8 +750,8 @@ std::optional<IPCReply> ESDevice::IOCtlV(const IOCtlVRequest& request)
 
   case IOCTL_ES_UNKNOWN_41:
   case IOCTL_ES_UNKNOWN_42:
-    PanicAlertFmt("IOS-ES: Unimplemented ioctlv {:#x} ({} in vectors, {} io vectors)",
-                  request.request, request.in_vectors.size(), request.io_vectors.size());
+    PanicAlert("IOS-ES: Unimplemented ioctlv %#x (%" PRIu64 " in vectors, %" PRIu64 " io vectors)",
+               request.request, (u64)request.in_vectors.size(), (u64)request.io_vectors.size());
     request.DumpUnknown(GetSystem(), GetDeviceName(), Common::Log::LogType::IOS_ES,
                         Common::Log::LogLevel::LERROR);
     return IPCReply(IPC_EINVAL);
@@ -772,7 +771,7 @@ IPCReply ESDevice::GetConsumption(const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
   memory.Write_U32(0, request.io_vectors[1].address);
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_GETCONSUMPTION");
+  INFO_LOG(IOS_ES, "IOCTL_ES_GETCONSUMPTION");
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -791,8 +790,8 @@ std::optional<IPCReply> ESDevice::Launch(const IOCtlVRequest& request)
   const u64 titleid = memory.Read_U64(request.in_vectors[1].address + 16);
   const u16 access = memory.Read_U16(request.in_vectors[1].address + 24);
 
-  INFO_LOG_FMT(IOS_ES, "IOCTL_ES_LAUNCH {:016x} {:08x} {:016x} {:08x} {:016x} {:04x}", title_id,
-               view, ticketid, devicetype, titleid, access);
+  INFO_LOG(IOS_ES, "IOCTL_ES_LAUNCH %016" PRIx64 " %08x %016" PRIx64 " %08x %016" PRIx64 " %04x",
+           (u64)title_id, view, (u64)ticketid, devicetype, (u64)titleid, (unsigned)access);
 
   // Prevent loading installed IOSes that are not emulated.
   if (!IsEmulated(title_id))
@@ -862,7 +861,7 @@ static ReturnCode WriteTmdForDiVerify(FS::FileSystem* fs, const ES::TMDReader& t
 ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& ticket)
 {
   m_core.m_title_context.Clear();
-  INFO_LOG_FMT(IOS_ES, "ES_DIVerify: Title context changed: (none)");
+  INFO_LOG(IOS_ES, "ES_DIVerify: Title context changed: (none)");
 
   if (!tmd.IsValid() || !ticket.IsValid())
     return ES_EINVAL;
@@ -871,7 +870,7 @@ ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& 
     return ES_EINVAL;
 
   m_core.m_title_context.Update(tmd, ticket, DiscIO::Platform::WiiDisc);
-  INFO_LOG_FMT(IOS_ES, "ES_DIVerify: Title context changed: {:016x}", tmd.GetTitleId());
+  INFO_LOG(IOS_ES, "ES_DIVerify: Title context changed: %016" PRIx64, (u64)tmd.GetTitleId());
 
   // XXX: We are supposed to verify the TMD and ticket here, but cannot because
   // this may cause issues with custom/patched games.
@@ -882,7 +881,7 @@ ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& 
   {
     if (const ReturnCode ret = WriteTmdForDiVerify(fs.get(), tmd))
     {
-      ERROR_LOG_FMT(IOS_ES, "DiVerify failed to write disc TMD to NAND.");
+      ERROR_LOG(IOS_ES, "DiVerify failed to write disc TMD to NAND.");
       return ret;
     }
   }
@@ -1169,8 +1168,8 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
   ret = iosc.ImportCertificate(ca_cert, IOSC::HANDLE_ROOT_KEY, ca_handle, PID_ES);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "VerifyContainer: IOSC_ImportCertificate(ca) failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "VerifyContainer: IOSC_ImportCertificate(ca) failed with error %d",
+              std::to_underlying(ret));
     return ret;
   }
 
@@ -1185,8 +1184,8 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
   ret = iosc.ImportCertificate(issuer_cert, ca_handle, issuer_handle, PID_ES);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "VerifyContainer: IOSC_ImportCertificate(issuer) failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "VerifyContainer: IOSC_ImportCertificate(issuer) failed with error %d",
+              std::to_underlying(ret));
     return ret;
   }
 
@@ -1197,8 +1196,8 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
                                  PID_ES);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "VerifyContainer: IOSC_VerifyPublicKeySign failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "VerifyContainer: IOSC_VerifyPublicKeySign failed with error %d",
+              std::to_underlying(ret));
     return ret;
   }
 
@@ -1207,14 +1206,14 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
     ret = WriteNewCertToStore(issuer_cert);
     if (ret != IPC_SUCCESS)
     {
-      ERROR_LOG_FMT(IOS_ES, "VerifyContainer: Writing the issuer cert failed with return code {}",
-                    std::to_underlying(ret));
+      ERROR_LOG(IOS_ES, "VerifyContainer: Writing the issuer cert failed with return code %d",
+                std::to_underlying(ret));
     }
 
     ret = WriteNewCertToStore(ca_cert);
     if (ret != IPC_SUCCESS)
-      ERROR_LOG_FMT(IOS_ES, "VerifyContainer: Writing the CA cert failed with return code {}",
-                    std::to_underlying(ret));
+      ERROR_LOG(IOS_ES, "VerifyContainer: Writing the CA cert failed with return code %d",
+                std::to_underlying(ret));
   }
 
   if (ret == IPC_SUCCESS && issuer_handle_out)

@@ -62,7 +62,7 @@ bool Load(Core::System& system)
   memory.Write_U32(0x09142001, 0x3180);
 
   ReinitHardware(system);
-  NOTICE_LOG_FMT(IOS, "Reinitialised hardware.");
+  NOTICE_LOG(IOS, "Reinitialised hardware.");
 
   auto& power_pc = system.GetPowerPC();
   auto& ppc_symbol_db = power_pc.GetSymbolDB();
@@ -84,7 +84,7 @@ bool Load(Core::System& system)
   ppc_state.pc = 0x3400;
   power_pc.MSRUpdated();
 
-  NOTICE_LOG_FMT(IOS, "Loaded MIOS and bootstrapped PPC.");
+  NOTICE_LOG(IOS, "Loaded MIOS and bootstrapped PPC.");
 
   // IOS writes 0 to 0x30f8 before bootstrapping the PPC. Once started, the IPL eventually writes
   // 0xdeadbeef there, then waits for it to be cleared by IOS before continuing.
@@ -93,7 +93,7 @@ bool Load(Core::System& system)
   power_pc.SetMode(core_mode);
 
   memory.Write_U32(0x00000000, ADDRESS_INIT_SEMAPHORE);
-  NOTICE_LOG_FMT(IOS, "IPL ready.");
+  NOTICE_LOG(IOS, "IPL ready.");
   system.SetIsMIOS(true);
   system.GetDVDInterface().UpdateRunningGameMetadata();
   SConfig::OnTitleDirectlyBooted(guard);

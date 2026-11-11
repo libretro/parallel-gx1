@@ -3,16 +3,18 @@
 
 #include "Core/IOS/ES/ES.h"
 
+#include <cinttypes>
 #include <cstddef>
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Align.h"
 #include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
+#include "Common/StringUtil.h"
 #include "Core/CommonTitles.h"
 #include "Core/HW/Memmap.h"
 #include "Core/IOS/ES/Formats.h"
@@ -78,15 +80,14 @@ ReturnCode ESCore::ImportTicket(const u8* ticket_bytes, size_t ticket_size, cons
   {
     if (device_id != ticket_device_id)
     {
-      WARN_LOG_FMT(IOS_ES, "Device ID mismatch: ticket {:08x}, device {:08x}", ticket_device_id,
-                   device_id);
+      WARN_LOG(IOS_ES, "Device ID mismatch: ticket %08x, device %08x", ticket_device_id, device_id);
       return ES_DEVICE_ID_MISMATCH;
     }
     const ReturnCode ret = ticket.Unpersonalise(m_ios.GetIOSC());
     if (ret < 0)
     {
-      ERROR_LOG_FMT(IOS_ES, "ImportTicket: Failed to unpersonalise ticket for {:016x} ({})",
-                    ticket.GetTitleId(), std::to_underlying(ret));
+      ERROR_LOG(IOS_ES, "ImportTicket: Failed to unpersonalise ticket for %016" PRIx64 " (%d)",
+                (u64)ticket.GetTitleId(), std::to_underlying(ret));
       return ret;
     }
   }
@@ -104,7 +105,7 @@ ReturnCode ESCore::ImportTicket(const u8* ticket_bytes, size_t ticket_size, cons
   if (write_ret != IPC_SUCCESS)
     return write_ret;
 
-  INFO_LOG_FMT(IOS_ES, "ImportTicket: Imported ticket for title {:016x}", ticket.GetTitleId());
+  INFO_LOG(IOS_ES, "ImportTicket: Imported ticket for title %016" PRIx64, (u64)ticket.GetTitleId());
   return IPC_SUCCESS;
 }
 
@@ -162,7 +163,7 @@ static void ResetTitleImportContext(ESCore::Context* context, IOSC& iosc)
 ReturnCode ESCore::ImportTmd(Context& context, const u8* tmd_bytes, size_t tmd_size,
                              u64 caller_title_id, u32 caller_title_flags)
 {
-  INFO_LOG_FMT(IOS_ES, "ImportTmd");
+  INFO_LOG(IOS_ES, "ImportTmd");
 
   // Ioctlv 0x2b writes the TMD to /tmp/title.tmd (for imports) and doesn't seem to write it
   // to either /import or /title. So here we simply have to set the import TMD.
@@ -182,14 +183,13 @@ ReturnCode ESCore::ImportTmd(Context& context, const u8* tmd_bytes, size_t tmd_s
   std::free(cert_store);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportTmd: VerifyContainer failed with error {}",
-                  std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "ImportTmd: VerifyContainer failed with error %d", std::to_underlying(ret));
     return ret;
   }
 
   if (!InitImport(context.title_import_export.tmd))
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportTmd: Failed to initialise title import");
+    ERROR_LOG(IOS_ES, "ImportTmd: Failed to initialise title import");
     return ES_EIO;
   }
 
@@ -197,11 +197,11 @@ ReturnCode ESCore::ImportTmd(Context& context, const u8* tmd_bytes, size_t tmd_s
                       &context.title_import_export.key_handle);
   if (ret != IPC_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportTmd: InitBackupKey failed with error {}", std::to_underlying(ret));
+    ERROR_LOG(IOS_ES, "ImportTmd: InitBackupKey failed with error %d", std::to_underlying(ret));
     return ret;
   }
 
-  INFO_LOG_FMT(IOS_ES, "ImportTmd: All checks passed, marking context as valid");
+  INFO_LOG(IOS_ES, "ImportTmd: All checks passed, marking context as valid");
   context.title_import_export.valid = true;
   return IPC_SUCCESS;
 }
@@ -246,12 +246,12 @@ ReturnCode ESCore::ImportTitleInit(Context& context, const u8* tmd_bytes, size_t
                                    const u8* cert_chain, size_t cert_chain_size,
                                    VerifySignature verify_signature)
 {
-  INFO_LOG_FMT(IOS_ES, "ImportTitleInit");
+  INFO_LOG(IOS_ES, "ImportTitleInit");
   ResetTitleImportContext(&context, m_ios.GetIOSC());
   context.title_import_export.tmd.SetBytes(tmd_bytes, tmd_size);
   if (!context.title_import_export.tmd.IsValid())
   {
-    ERROR_LOG_FMT(IOS_ES, "Invalid TMD while adding title (size = {})", tmd_size);
+    ERROR_LOG(IOS_ES, "Invalid TMD while adding title (size = %" PRIu64 ")", (u64)tmd_size);
     return ES_EINVAL;
   }
 
@@ -326,23 +326,25 @@ ReturnCode ESCore::ImportContentBegin(Context& context, u64 title_id, u32 conten
 {
   if (context.title_import_export.content.valid)
   {
-    ERROR_LOG_FMT(IOS_ES, "Trying to add content when we haven't finished adding "
-                          "another content. Unsupported.");
+    ERROR_LOG(IOS_ES, "Trying to add content when we haven't finished adding "
+                      "another content. Unsupported.");
     return ES_EINVAL;
   }
   context.title_import_export.content = {};
   context.title_import_export.content.id = content_id;
 
-  INFO_LOG_FMT(IOS_ES, "ImportContentBegin: title {:016x}, content ID {:08x}", title_id,
-               context.title_import_export.content.id);
+  INFO_LOG(IOS_ES, "ImportContentBegin: title %016" PRIx64 ", content ID %08x", (u64)title_id,
+           context.title_import_export.content.id);
 
   if (!context.title_import_export.valid)
     return ES_EINVAL;
 
   if (title_id != context.title_import_export.tmd.GetTitleId())
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportContentBegin: title id {:016x} != TMD title id {:016x}, ignoring",
-                  title_id, context.title_import_export.tmd.GetTitleId());
+    ERROR_LOG(IOS_ES,
+              "ImportContentBegin: title id %016" PRIx64 " != TMD title id %016" PRIx64
+              ", ignoring",
+              (u64)title_id, (u64)context.title_import_export.tmd.GetTitleId());
     return ES_EINVAL;
   }
 
@@ -381,7 +383,7 @@ IPCReply ESDevice::ImportContentBegin(Context& context, const IOCtlVRequest& req
 ReturnCode ESCore::ImportContentData(Context& context, u32 content_fd, const u8* data,
                                      u32 data_size)
 {
-  INFO_LOG_FMT(IOS_ES, "ImportContentData: content fd {:08x}, size {}", content_fd, data_size);
+  INFO_LOG(IOS_ES, "ImportContentData: content fd %08x, size %u", content_fd, data_size);
   context.title_import_export.content.buffer.insert(
       context.title_import_export.content.buffer.end(), data, data + data_size);
   return IPC_SUCCESS;
@@ -408,12 +410,13 @@ static bool CheckIfContentHashMatches(const u8* content, const ES::Content& info
 
 static std::string GetImportContentPath(u64 title_id, u32 content_id)
 {
-  return fmt::format("{}/content/{:08x}.app", Common::GetImportTitlePath(title_id), content_id);
+  return StringFromFormat("%s/content/%08x.app", Common::GetImportTitlePath(title_id).c_str(),
+                          content_id);
 }
 
 ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
 {
-  INFO_LOG_FMT(IOS_ES, "ImportContentEnd: content fd {:08x}", content_fd);
+  INFO_LOG(IOS_ES, "ImportContentEnd: content fd %08x", content_fd);
 
   if (!context.title_import_export.valid || !context.title_import_export.content.valid)
     return ES_EINVAL;
@@ -431,8 +434,7 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
                                                   &content_info);
   if (!CheckIfContentHashMatches(decrypted_data, content_info))
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportContentEnd: Hash for content {:08x} doesn't match",
-                  content_info.id);
+    ERROR_LOG(IOS_ES, "ImportContentEnd: Hash for content %08x doesn't match", content_info.id);
     return ES_HASH_MISMATCH;
   }
 
@@ -457,7 +459,7 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
     const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, content_modes);
     if (!file || !file->Write(decrypted_data, content_info.size))
     {
-      ERROR_LOG_FMT(IOS_ES, "ImportContentEnd: Failed to write to {}", temp_path);
+      ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to write to %s", temp_path.c_str());
       return ES_EIO;
     }
   }
@@ -466,7 +468,7 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
   if (rename_result != FS::ResultCode::Success)
   {
     fs->Delete(PID_KERNEL, PID_KERNEL, temp_path);
-    ERROR_LOG_FMT(IOS_ES, "ImportContentEnd: Failed to move content to {}", content_path);
+    ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to move content to %s", content_path.c_str());
     return FS::ConvertResult(rename_result);
   }
 
@@ -516,8 +518,7 @@ ReturnCode ESCore::ImportTitleDone(Context& context)
 {
   if (!context.title_import_export.valid || context.title_import_export.content.valid)
   {
-    ERROR_LOG_FMT(IOS_ES,
-                  "ImportTitleDone: No title import, or a content import is still in progress");
+    ERROR_LOG(IOS_ES, "ImportTitleDone: No title import, or a content import is still in progress");
     return ES_EINVAL;
   }
 
@@ -526,23 +527,23 @@ ReturnCode ESCore::ImportTitleDone(Context& context)
   if (title_id - 0x100000001LL <= 0x100 &&
       !HasAllRequiredContents(m_ios, context.title_import_export.tmd))
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportTitleDone: Some required contents are missing");
+    ERROR_LOG(IOS_ES, "ImportTitleDone: Some required contents are missing");
     return ES_EINVAL;
   }
 
   if (!WriteImportTMD(context.title_import_export.tmd))
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportTitleDone: Failed to write import TMD");
+    ERROR_LOG(IOS_ES, "ImportTitleDone: Failed to write import TMD");
     return ES_EIO;
   }
 
   if (!FinishImport(context.title_import_export.tmd))
   {
-    ERROR_LOG_FMT(IOS_ES, "ImportTitleDone: Failed to finalise title import");
+    ERROR_LOG(IOS_ES, "ImportTitleDone: Failed to finalise title import");
     return ES_EIO;
   }
 
-  INFO_LOG_FMT(IOS_ES, "ImportTitleDone: title {:016x}", title_id);
+  INFO_LOG(IOS_ES, "ImportTitleDone: title %016" PRIx64, (u64)title_id);
   ResetTitleImportContext(&context, m_ios.GetIOSC());
   return IPC_SUCCESS;
 }
@@ -568,7 +569,7 @@ ReturnCode ESCore::ImportTitleCancel(Context& context)
   {
     const u64 title_id = context.title_import_export.tmd.GetTitleId();
     FinishStaleImport(title_id);
-    INFO_LOG_FMT(IOS_ES, "ImportTitleCancel: title {:016x}", title_id);
+    INFO_LOG(IOS_ES, "ImportTitleCancel: title %016" PRIx64, (u64)title_id);
   }
 
   ResetTitleImportContext(&context, m_ios.GetIOSC());
@@ -648,7 +649,7 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
 
   // Delete the ticket directory if it is now empty.
   const std::string ticket_parent_dir =
-      fmt::format("/ticket/{:08x}", static_cast<u32>(title_id >> 32));
+      StringFromFormat("/ticket/%08x", static_cast<u32>(title_id >> 32));
   const auto ticket_parent_dir_entries =
       fs->ReadDirectory(PID_KERNEL, PID_KERNEL, ticket_parent_dir);
   if (ticket_parent_dir_entries && ticket_parent_dir_entries->empty())
@@ -714,7 +715,7 @@ ReturnCode ESCore::DeleteContent(u64 title_id, u32 content_id) const
     return ES_EINVAL;
 
   const std::string path =
-      fmt::format("{}/{:08x}.app", Common::GetTitleContentPath(title_id), content_id);
+      StringFromFormat("%s/%08x.app", Common::GetTitleContentPath(title_id).c_str(), content_id);
   return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, path));
 }
 
@@ -785,7 +786,7 @@ ReturnCode ESCore::ExportContentBegin(Context& context, u64 title_id, u32 conten
   if (!context.title_import_export.valid ||
       context.title_import_export.tmd.GetTitleId() != title_id)
   {
-    ERROR_LOG_FMT(IOS_ES, "Tried to use ExportContentBegin with an invalid title export context.");
+    ERROR_LOG(IOS_ES, "Tried to use ExportContentBegin with an invalid title export context.");
     return ES_EINVAL;
   }
 
