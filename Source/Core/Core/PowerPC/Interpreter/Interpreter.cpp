@@ -221,7 +221,7 @@ void Interpreter::unknown_instruction(Interpreter& interpreter, UGeckoInstructio
                ppc_state.gpr[i + 3]);
   }
   ASSERT_MSG(POWERPC, 0,
-             "\nIntCPU: Unknown instruction {:08x} at PC = {:08x}  last_PC = {:08x}  LR = {:08x}\n",
+             "\nIntCPU: Unknown instruction %08x at PC = %08x  last_PC = %08x  LR = %08x\n",
              inst.hex, ppc_state.pc, last_pc, LR(ppc_state));
   if (system.IsPauseOnPanicMode())
     system.GetCPU().Break();

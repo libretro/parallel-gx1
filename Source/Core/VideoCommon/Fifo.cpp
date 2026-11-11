@@ -367,7 +367,7 @@ int FifoManager::RunGpuLoop(s64 wedge_us)
             const s32 distance =
                 static_cast<s32>(LoadReg(&fifo.CPReadWriteDistance)) - GPFifo::GATHER_PIPE_SIZE;
             ASSERT_MSG(COMMANDPROCESSOR, distance >= 0,
-                       "Negative fifo.CPReadWriteDistance = {} in FIFO Loop !\nThat can produce "
+                       "Negative fifo.CPReadWriteDistance = %d in FIFO Loop !\nThat can produce "
                        "instability in the game. Please report it.",
                        distance);
 

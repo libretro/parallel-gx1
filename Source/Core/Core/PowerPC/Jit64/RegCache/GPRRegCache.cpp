@@ -3,6 +3,8 @@
 
 #include "Core/PowerPC/Jit64/RegCache/GPRRegCache.h"
 
+#include <cinttypes>
+
 #include "Common/x64Reg.h"
 #include "Core/PowerPC/Jit64/Jit.h"
 #include "Core/PowerPC/Jit64Common/Jit64PowerPCState.h"
@@ -42,7 +44,7 @@ OpArg GPRRegCache::R(preg_t preg) const
   }
   else
   {
-    ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(), "GPR {} missing!", preg);
+    ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(), "GPR %" PRIu64 " missing!", (u64)preg);
     return m_regs[preg].GetDefaultLocation();
   }
 }
@@ -61,7 +63,7 @@ void GPRRegCache::StoreRegister(preg_t preg, const OpArg& new_loc,
   else
   {
     ASSERT_MSG(DYNA_REC, ignore_discarded_registers != IgnoreDiscardedRegisters::No,
-               "GPR {} not in host register or constant propagation", preg);
+               "GPR %" PRIu64 " not in host register or constant propagation", (u64)preg);
   }
 }
 
@@ -74,8 +76,8 @@ void GPRRegCache::LoadRegister(preg_t preg, X64Reg new_loc)
   }
   else
   {
-    ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(), "GPR {} not in default location",
-               preg);
+    ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(),
+               "GPR %" PRIu64 " not in default location", (u64)preg);
     m_emitter->MOV(32, ::Gen::R(new_loc), m_regs[preg].GetDefaultLocation());
   }
 }

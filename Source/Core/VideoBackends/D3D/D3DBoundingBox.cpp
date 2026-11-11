@@ -37,7 +37,8 @@ bool D3DBoundingBox::Initialize()
   data.SysMemSlicePitch = 0;
   HRESULT hr;
   hr = D3D::device->CreateBuffer(&desc, &data, &m_buffer);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create BoundingBox Buffer: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create BoundingBox Buffer: %s",
+             DX11::HRText(hr).text);
   if (FAILED(hr))
     return false;
   D3DCommon::SetDebugObjectName(m_buffer.Get(), "BoundingBox Buffer");
@@ -48,8 +49,8 @@ bool D3DBoundingBox::Initialize()
   desc.BindFlags = 0;
   desc.MiscFlags = 0;
   hr = D3D::device->CreateBuffer(&desc, nullptr, &m_staging_buffer);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create BoundingBox Staging Buffer: {}",
-             DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create BoundingBox Staging Buffer: %s",
+             DX11::HRText(hr).text);
   if (FAILED(hr))
     return false;
   D3DCommon::SetDebugObjectName(m_staging_buffer.Get(), "BoundingBox Staging Buffer");
@@ -62,7 +63,7 @@ bool D3DBoundingBox::Initialize()
   UAVdesc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
   UAVdesc.Buffer.NumElements = NUM_BBOX_VALUES;
   hr = D3D::device->CreateUnorderedAccessView(m_buffer.Get(), &UAVdesc, &m_uav);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create BoundingBox UAV: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create BoundingBox UAV: %s", DX11::HRText(hr).text);
   if (FAILED(hr))
     return false;
   D3DCommon::SetDebugObjectName(m_uav.Get(), "BoundingBox UAV");

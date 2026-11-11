@@ -74,25 +74,25 @@ bool Delete(const char* filename, IfAbsentBehavior behavior)
 {
   const int flags = path_stat(filename);
 
-  DEBUG_LOG_FMT(COMMON, "{}: file {}", __func__, filename);
+  DEBUG_LOG(COMMON, "%s: file %s", __func__, filename);
 
   // Return true because we care about the file not being there, not the actual delete.
   if (!(flags & RETRO_VFS_STAT_IS_VALID))
   {
     if (behavior == IfAbsentBehavior::ConsoleWarning)
-      WARN_LOG_FMT(COMMON, "{}: {} does not exist", __func__, filename);
+      WARN_LOG(COMMON, "%s: %s does not exist", __func__, filename);
     return true;
   }
 
   if (flags & RETRO_VFS_STAT_IS_DIRECTORY)
   {
-    WARN_LOG_FMT(COMMON, "{} failed: {} is a directory", __func__, filename);
+    WARN_LOG(COMMON, "%s failed: %s is a directory", __func__, filename);
     return false;
   }
 
   if (filestream_delete(filename) != 0)
   {
-    WARN_LOG_FMT(COMMON, "{}: failed on {}", __func__, filename);
+    WARN_LOG(COMMON, "%s: failed on %s", __func__, filename);
     return false;
   }
   return true;
@@ -100,10 +100,10 @@ bool Delete(const char* filename, IfAbsentBehavior behavior)
 
 bool CreateDir(const char* path)
 {
-  DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, path);
+  DEBUG_LOG(COMMON, "%s: directory %s", __func__, path);
   if (path_mkdir(path))
     return true;
-  ERROR_LOG_FMT(COMMON, "{}: failed on {}", __func__, path);
+  ERROR_LOG(COMMON, "%s: failed on %s", __func__, path);
   return false;
 }
 
@@ -122,7 +122,7 @@ bool CreateFullPath(std::string_view fullPath)
   char buf[PATH_MAX_LENGTH];
   size_t slash = fullPath.size();
 
-  DEBUG_LOG_FMT(COMMON, "{}: path {}", __func__, fullPath);
+  DEBUG_LOG(COMMON, "%s: path %.*s", __func__, static_cast<int>(fullPath.size()), fullPath.data());
   // the directory part: up to the last separator
   while (slash && fullPath[slash - 1] != '/'
 #ifdef _WIN32
@@ -146,25 +146,25 @@ bool DeleteDir(const char* filename, IfAbsentBehavior behavior)
 {
   const int flags = path_stat(filename);
 
-  DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, filename);
+  DEBUG_LOG(COMMON, "%s: directory %s", __func__, filename);
 
   // Return true because we care about the directory not being there, not the actual delete.
   if (!(flags & RETRO_VFS_STAT_IS_VALID))
   {
     if (behavior == IfAbsentBehavior::ConsoleWarning)
-      WARN_LOG_FMT(COMMON, "{}: {} does not exist", __func__, filename);
+      WARN_LOG(COMMON, "%s: %s does not exist", __func__, filename);
     return true;
   }
 
   if (!(flags & RETRO_VFS_STAT_IS_DIRECTORY))
   {
-    ERROR_LOG_FMT(COMMON, "{}: Not a directory {}", __func__, filename);
+    ERROR_LOG(COMMON, "%s: Not a directory %s", __func__, filename);
     return false;
   }
 
   if (!path_rmdir(filename))
   {
-    WARN_LOG_FMT(COMMON, "{}: failed on {}", __func__, filename);
+    WARN_LOG(COMMON, "%s: failed on %s", __func__, filename);
     return false;
   }
   return true;
@@ -173,7 +173,7 @@ bool DeleteDir(const char* filename, IfAbsentBehavior behavior)
 // Replaces destFilename if it exists.
 bool Rename(const char* srcFilename, const char* destFilename)
 {
-  DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, srcFilename, destFilename);
+  DEBUG_LOG(COMMON, "%s: %s --> %s", __func__, srcFilename, destFilename);
   if (filestream_rename(srcFilename, destFilename) == 0)
     return true;
   // a frontend VFS may refuse to replace
@@ -182,7 +182,7 @@ bool Rename(const char* srcFilename, const char* destFilename)
   {
     return true;
   }
-  ERROR_LOG_FMT(COMMON, "{} failed: {} --> {}", __func__, srcFilename, destFilename);
+  ERROR_LOG(COMMON, "%s failed: %s --> %s", __func__, srcFilename, destFilename);
   return false;
 }
 
@@ -191,19 +191,21 @@ bool CopyRegularFile(std::string_view source_path, std::string_view destination_
   const std::string src(source_path);
   const std::string dst(destination_path);
 
-  DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, source_path, destination_path);
+  DEBUG_LOG(COMMON, "%s: %.*s --> %.*s", __func__, static_cast<int>(source_path.size()),
+            source_path.data(), static_cast<int>(destination_path.size()), destination_path.data());
   if (filestream_copy(src.c_str(), dst.c_str()) == 0)
     return true;
-  ERROR_LOG_FMT(COMMON, "{}: failed {} --> {}", __func__, source_path, destination_path);
+  ERROR_LOG(COMMON, "%s: failed %.*s --> %.*s", __func__, static_cast<int>(source_path.size()),
+            source_path.data(), static_cast<int>(destination_path.size()), destination_path.data());
   return false;
 }
 
 bool CreateEmptyFile(const std::string& filename)
 {
-  DEBUG_LOG_FMT(COMMON, "CreateEmptyFile: {}", filename);
+  DEBUG_LOG(COMMON, "CreateEmptyFile: %s", filename.c_str());
   if (!File::IOFile(filename, "wb"))
   {
-    ERROR_LOG_FMT(COMMON, "CreateEmptyFile: failed {}", filename);
+    ERROR_LOG(COMMON, "CreateEmptyFile: failed %s", filename.c_str());
     return false;
   }
   return true;
@@ -258,7 +260,7 @@ FSTEntry ScanDirectoryTree(const std::string& directory, bool recursive)
 {
   FSTEntry parent_entry;
 
-  DEBUG_LOG_FMT(COMMON, "{}: directory {}", __func__, directory);
+  DEBUG_LOG(COMMON, "%s: directory %s", __func__, directory.c_str());
   parent_entry.physicalName = directory;
   while (parent_entry.physicalName.size() > 1 && parent_entry.physicalName.back() == DIR_SEP_CHR)
     parent_entry.physicalName.pop_back();
@@ -283,12 +285,12 @@ static bool DeleteTree(const FSTEntry& dir)
 
 bool DeleteDirRecursively(const std::string& directory)
 {
-  DEBUG_LOG_FMT(COMMON, "{}: {}", __func__, directory);
+  DEBUG_LOG(COMMON, "%s: %s", __func__, directory.c_str());
   if (!IsDirectory(directory))
     return true;
   if (DeleteTree(ScanDirectoryTree(directory, true)))
     return true;
-  ERROR_LOG_FMT(COMMON, "{}: {} failed", __func__, directory);
+  ERROR_LOG(COMMON, "%s: %s failed", __func__, directory.c_str());
   return false;
 }
 
@@ -311,8 +313,9 @@ bool Copy(std::string_view source_path, std::string_view dest_path, bool overwri
   const std::string src(source_path);
   const std::string dst(dest_path);
 
-  DEBUG_LOG_FMT(COMMON, "{}: {} --> {} ({})", __func__, source_path, dest_path,
-                overwrite_existing ? "overwrite" : "preserve");
+  DEBUG_LOG(COMMON, "%s: %.*s --> %.*s (%s)", __func__, static_cast<int>(source_path.size()),
+            source_path.data(), static_cast<int>(dest_path.size()), dest_path.data(),
+            overwrite_existing ? "overwrite" : "preserve");
   if (src == dst)
     return true;
   if (IsDirectory(src))
@@ -340,9 +343,11 @@ static bool MoveTree(const std::string& src, const std::string& dst)
 
 bool MoveWithOverwrite(std::string_view source_path, std::string_view dest_path)
 {
-  DEBUG_LOG_FMT(COMMON, "{}: {} --> {}", __func__, source_path, dest_path);
+  DEBUG_LOG(COMMON, "%s: %.*s --> %.*s", __func__, static_cast<int>(source_path.size()),
+            source_path.data(), static_cast<int>(dest_path.size()), dest_path.data());
   if (!MoveTree(std::string(source_path), std::string(dest_path)))
-    ERROR_LOG_FMT(COMMON, "{}: failed {} --> {}", __func__, source_path, dest_path);
+    ERROR_LOG(COMMON, "%s: failed %.*s --> %.*s", __func__, static_cast<int>(source_path.size()),
+              source_path.data(), static_cast<int>(dest_path.size()), dest_path.data());
   return true;
 }
 
@@ -365,7 +370,7 @@ const std::string& GetSysDirectory()
 #ifndef ANDROID
 void SetSysDirectory(const std::string& path)
 {
-  INFO_LOG_FMT(COMMON, "Setting Sys directory to {}", path);
+  INFO_LOG(COMMON, "Setting Sys directory to %s", path.c_str());
   s_libretro_sys_directory = path;
 }
 #endif
@@ -374,8 +379,8 @@ void SetSysDirectory(const std::string& path)
 void SetSysDirectory(const std::string& path)
 {
   INFO_LOG_FMT(COMMON, "Setting Sys directory to {}", path);
-  ASSERT_MSG(COMMON, s_android_sys_directory.empty(), "Sys directory already set to {}",
-             s_android_sys_directory);
+  ASSERT_MSG(COMMON, s_android_sys_directory.empty(), "Sys directory already set to %s",
+             s_android_sys_directory.c_str());
   s_android_sys_directory = path;
 }
 #endif

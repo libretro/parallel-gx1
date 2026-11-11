@@ -44,7 +44,7 @@ void D3D12BoundingBox::Read(u32 index, u32 length, BBoxType* values)
   static constexpr D3D12_RANGE read_range = {0, BUFFER_SIZE};
   void* mapped_pointer;
   HRESULT hr = m_readback_buffer->Map(0, &read_range, &mapped_pointer);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Map bounding box CPU buffer failed: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Map bounding box CPU buffer failed: %s", DX12::HRText(hr).text);
   if (FAILED(hr))
     return;
 
@@ -103,7 +103,8 @@ bool D3D12BoundingBox::CreateBuffers()
   HRESULT hr = g_dx_context->GetDevice()->CreateCommittedResource(
       &gpu_heap_properties, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_COMMON,
       nullptr, IID_PPV_ARGS(&m_gpu_buffer));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating bounding box GPU buffer failed: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating bounding box GPU buffer failed: %s",
+             DX12::HRText(hr).text);
   if (FAILED(hr) || !g_dx_context->GetDescriptorHeapManager().Allocate(&m_gpu_descriptor))
     return false;
 
@@ -116,7 +117,8 @@ bool D3D12BoundingBox::CreateBuffers()
   hr = g_dx_context->GetDevice()->CreateCommittedResource(
       &cpu_heap_properties, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST,
       nullptr, IID_PPV_ARGS(&m_readback_buffer));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating bounding box CPU buffer failed: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating bounding box CPU buffer failed: %s",
+             DX12::HRText(hr).text);
   if (FAILED(hr))
     return false;
 

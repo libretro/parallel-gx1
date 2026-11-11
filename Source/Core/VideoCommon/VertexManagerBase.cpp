@@ -188,15 +188,15 @@ DataReader VertexManagerBase::BasePrepareForAdditionalData(OpcodeDecoder::Primit
   // ton of lines in one draw command, in which case we will either need to add support for
   // splitting a single draw command into multiple draws or using bigger indices.
   ASSERT_MSG(VIDEO, count <= remaining_index_generator_indices,
-             "VertexManager: Too few remaining index values ({} > {}). "
+             "VertexManager: Too few remaining index values (%u > %u). "
              "32-bit indices or primitive breaking needed.",
              count, remaining_index_generator_indices);
   ASSERT_MSG(VIDEO, count <= remaining_indices,
-             "VertexManager: Buffer not large enough for all indices! ({} > {}) "
+             "VertexManager: Buffer not large enough for all indices! (%u > %u) "
              "Increase MAXIBUFFERSIZE or we need primitive breaking after all.",
              count, remaining_indices);
   ASSERT_MSG(VIDEO, needed_vertex_bytes <= GetRemainingSize(),
-             "VertexManager: Buffer not large enough for all vertices! ({} > {}) "
+             "VertexManager: Buffer not large enough for all vertices! (%u > %u) "
              "Increase MAXVBUFFERSIZE or we need primitive breaking after all.",
              needed_vertex_bytes, GetRemainingSize());
 

@@ -54,7 +54,7 @@ DXShader* DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
   {
     ComPtr<ID3D11VertexShader> vs;
     HRESULT hr = D3D::device->CreateVertexShader(bytecode.code, bytecode.size, nullptr, &vs);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create vertex shader: {}", DX11HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create vertex shader: %s", DX11::HRText(hr).text);
     if (FAILED(hr))
     {
       ShaderBinaryFree(&bytecode);
@@ -68,7 +68,7 @@ DXShader* DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
   {
     ComPtr<ID3D11GeometryShader> gs;
     HRESULT hr = D3D::device->CreateGeometryShader(bytecode.code, bytecode.size, nullptr, &gs);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create geometry shader: {}", DX11HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create geometry shader: %s", DX11::HRText(hr).text);
     if (FAILED(hr))
     {
       ShaderBinaryFree(&bytecode);
@@ -83,7 +83,7 @@ DXShader* DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
   {
     ComPtr<ID3D11PixelShader> ps;
     HRESULT hr = D3D::device->CreatePixelShader(bytecode.code, bytecode.size, nullptr, &ps);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create pixel shader: {}", DX11HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create pixel shader: %s", DX11::HRText(hr).text);
     if (FAILED(hr))
     {
       ShaderBinaryFree(&bytecode);
@@ -98,7 +98,7 @@ DXShader* DXShader::CreateFromBytecode(ShaderStage stage, ShaderBinary bytecode,
   {
     ComPtr<ID3D11ComputeShader> cs;
     HRESULT hr = D3D::device->CreateComputeShader(bytecode.code, bytecode.size, nullptr, &cs);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create compute shader: {}", DX11HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create compute shader: %s", DX11::HRText(hr).text);
     if (FAILED(hr))
     {
       ShaderBinaryFree(&bytecode);

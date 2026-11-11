@@ -3,6 +3,7 @@
 
 #include "Common/x64Emitter.h"
 
+#include <cinttypes>
 #include <cstring>
 
 #include "Common/CPUDetect.h"
@@ -287,9 +288,9 @@ void OpArg::WriteRest(XEmitter* emit, int extraBytes, X64Reg _operandReg,
     // TODO : add some checks
     u64 ripAddr = (u64)emit->GetCodePtr() + 4 + extraBytes;
     s64 distance = (s64)offset - (s64)ripAddr;
-    ASSERT_MSG(DYNA_REC,
-               (distance < 0x80000000LL && distance >= -0x80000000LL) || !warn_64bit_offset,
-               "WriteRest: op out of range ({:#x} uses {:#x})", ripAddr, offset);
+    ASSERT_MSG(
+        DYNA_REC, (distance < 0x80000000LL && distance >= -0x80000000LL) || !warn_64bit_offset,
+        "WriteRest: op out of range (%#" PRIx64 " uses %#" PRIx64 ")", (u64)ripAddr, (u64)offset);
     s32 offs = (s32)distance;
     emit->Write32((u32)offs);
     return;
@@ -420,7 +421,7 @@ void XEmitter::JMP(const u8* addr, bool force_near_padding)
   {
     distance = (s64)(fn - ((u64)code + NEAR_JMP_LEN));
     ASSERT_MSG(DYNA_REC, distance >= -0x80000000LL && distance < 0x80000000LL,
-               "Jump target too far away ({}), needs indirect register", distance);
+               "Jump target too far away (%" PRId64 "), needs indirect register", (s64)distance);
     Write8(0xE9);
     Write32((u32)(s32)distance);
   }
@@ -472,7 +473,8 @@ void XEmitter::CALL(const void* fnptr)
 {
   u64 distance = u64(fnptr) - (u64(code) + 5);
   ASSERT_MSG(DYNA_REC, distance < 0x0000000080000000ULL || distance >= 0xFFFFFFFF80000000ULL,
-             "CALL out of range ({} calls {})", fmt::ptr(code), fmt::ptr(fnptr));
+             "CALL out of range (%p calls %p)", static_cast<const void*>(code),
+             static_cast<const void*>(fnptr));
   Write8(0xE8);
   Write32(u32(distance));
 }
@@ -557,7 +559,7 @@ void XEmitter::J_CC(CCFlags conditionCode, const u8* addr)
   {
     distance = (s64)(fn - ((u64)code + 6));
     ASSERT_MSG(DYNA_REC, distance >= -0x80000000LL && distance < 0x80000000LL,
-               "Jump target too far away ({}), needs indirect register", distance);
+               "Jump target too far away (%" PRId64 "), needs indirect register", (s64)distance);
     Write8(0x0F);
     Write8(0x80 + conditionCode);
     Write32((u32)(s32)distance);
@@ -578,14 +580,15 @@ void XEmitter::SetJumpTarget(const FixupBranch& branch)
   {
     s64 distance = (s64)(code - branch.ptr);
     ASSERT_MSG(DYNA_REC, distance >= -0x80 && distance < 0x80,
-               "Jump::Short target too far away ({}), needs Jump::Near", distance);
+               "Jump::Short target too far away (%" PRId64 "), needs Jump::Near", (s64)distance);
     branch.ptr[-1] = (u8)(s8)distance;
   }
   else if (branch.type == FixupBranch::Type::Branch32Bit)
   {
     s64 distance = (s64)(code - branch.ptr);
     ASSERT_MSG(DYNA_REC, distance >= -0x80000000LL && distance < 0x80000000LL,
-               "Jump::Near target too far away ({}), needs indirect register", distance);
+               "Jump::Near target too far away (%" PRId64 "), needs indirect register",
+               (s64)distance);
 
     s32 valid_distance = static_cast<s32>(distance);
     std::memcpy(&branch.ptr[-4], &valid_distance, sizeof(s32));
@@ -1013,14 +1016,14 @@ void XEmitter::TZCNT(int bits, X64Reg dest, const OpArg& src)
 {
   CheckFlags();
   if (!cpu_info.bBMI1)
-    PanicAlertFmt("Trying to use BMI1 on a system that doesn't support it. Bad programmer.");
+    PanicAlert("Trying to use BMI1 on a system that doesn't support it. Bad programmer.");
   WriteBitSearchType(bits, dest, src, 0xBC, true);
 }
 void XEmitter::LZCNT(int bits, X64Reg dest, const OpArg& src)
 {
   CheckFlags();
   if (!cpu_info.bLZCNT)
-    PanicAlertFmt("Trying to use LZCNT on a system that doesn't support it. Bad programmer.");
+    PanicAlert("Trying to use LZCNT on a system that doesn't support it. Bad programmer.");
   WriteBitSearchType(bits, dest, src, 0xBD, true);
 }
 
@@ -1520,7 +1523,8 @@ void OpArg::WriteNormalOp(XEmitter* emit, bool toRM, NormalOp op, const OpArg& o
     }
     else
     {
-      ASSERT_MSG(DYNA_REC, 0, "WriteNormalOp - Unhandled case {} {}", operand.scale, bits);
+      ASSERT_MSG(DYNA_REC, 0, "WriteNormalOp - Unhandled case %u %d", (unsigned)operand.scale,
+                 bits);
     }
 
     // pass extension in REG of ModRM
@@ -1632,7 +1636,7 @@ void XEmitter::MOV(int bits, const OpArg& a1, const OpArg& a2)
     return;
   }
   if (a1.IsSimpleReg() && a2.IsSimpleReg() && a1.GetSimpleReg() == a2.GetSimpleReg())
-    ERROR_LOG_FMT(DYNA_REC, "Redundant MOV @ {} - bug in JIT?", fmt::ptr(code));
+    ERROR_LOG(DYNA_REC, "Redundant MOV @ %p - bug in JIT?", static_cast<const void*>(code));
   WriteNormalOp(bits, NormalOp::MOV, a1, a2);
 }
 void XEmitter::TEST(int bits, const OpArg& a1, const OpArg& a2)
@@ -1865,7 +1869,7 @@ void XEmitter::WriteVEXOp4(u8 opPrefix, u16 op, X64Reg regOp1, X64Reg regOp2, co
 static void CheckAVXSupport()
 {
   if (!cpu_info.bAVX)
-    PanicAlertFmt("Trying to use AVX on a system that doesn't support it. Bad programmer.");
+    PanicAlert("Trying to use AVX on a system that doesn't support it. Bad programmer.");
 }
 
 void XEmitter::WriteAVXOp(u8 opPrefix, u16 op, X64Reg regOp1, X64Reg regOp2, const OpArg& arg,
@@ -1886,8 +1890,7 @@ void XEmitter::WriteFMA3Op(u8 op, X64Reg regOp1, X64Reg regOp2, const OpArg& arg
 {
   if (!cpu_info.bFMA)
   {
-    PanicAlertFmt(
-        "Trying to use FMA3 on a system that doesn't support it. Computer is v. f'n madd.");
+    PanicAlert("Trying to use FMA3 on a system that doesn't support it. Computer is v. f'n madd.");
   }
   WriteVEXOp(0x66, 0x3800 | op, regOp1, regOp2, arg, W);
 }
@@ -1897,8 +1900,7 @@ void XEmitter::WriteFMA4Op(u8 op, X64Reg dest, X64Reg regOp1, X64Reg regOp2, con
 {
   if (!cpu_info.bFMA4)
   {
-    PanicAlertFmt(
-        "Trying to use FMA4 on a system that doesn't support it. Computer is v. f'n madd.");
+    PanicAlert("Trying to use FMA4 on a system that doesn't support it. Computer is v. f'n madd.");
   }
   WriteVEXOp4(0x66, 0x3A00 | op, dest, regOp1, arg, regOp2, W);
 }
@@ -1907,9 +1909,9 @@ void XEmitter::WriteBMIOp(int size, u8 opPrefix, u16 op, X64Reg regOp1, X64Reg r
                           const OpArg& arg, int extrabytes)
 {
   if (arg.IsImm())
-    PanicAlertFmt("BMI1/2 instructions don't support immediate operands.");
+    PanicAlert("BMI1/2 instructions don't support immediate operands.");
   if (size != 32 && size != 64)
-    PanicAlertFmt("BMI1/2 instructions only support 32-bit and 64-bit modes!");
+    PanicAlert("BMI1/2 instructions only support 32-bit and 64-bit modes!");
   const int W = size == 64;
   WriteVEXOp(opPrefix, op, regOp1, regOp2, arg, W, extrabytes);
 }
@@ -1919,7 +1921,7 @@ void XEmitter::WriteBMI1Op(int size, u8 opPrefix, u16 op, X64Reg regOp1, X64Reg 
 {
   CheckFlags();
   if (!cpu_info.bBMI1)
-    PanicAlertFmt("Trying to use BMI1 on a system that doesn't support it. Bad programmer.");
+    PanicAlert("Trying to use BMI1 on a system that doesn't support it. Bad programmer.");
   WriteBMIOp(size, opPrefix, op, regOp1, regOp2, arg, extrabytes);
 }
 
@@ -1927,7 +1929,7 @@ void XEmitter::WriteBMI2Op(int size, u8 opPrefix, u16 op, X64Reg regOp1, X64Reg 
                            const OpArg& arg, int extrabytes)
 {
   if (!cpu_info.bBMI2)
-    PanicAlertFmt("Trying to use BMI2 on a system that doesn't support it. Bad programmer.");
+    PanicAlert("Trying to use BMI2 on a system that doesn't support it. Bad programmer.");
   WriteBMIOp(size, opPrefix, op, regOp1, regOp2, arg, extrabytes);
 }
 
@@ -2576,7 +2578,7 @@ void XEmitter::PSLLDQ(X64Reg reg, u8 shift)
 void XEmitter::PSRAW(X64Reg reg, u8 shift)
 {
   if (reg > 7)
-    PanicAlertFmt("The PSRAW-emitter does not support regs above 7");
+    PanicAlert("The PSRAW-emitter does not support regs above 7");
   Write8(0x66);
   Write8(0x0f);
   Write8(0x71);
@@ -2588,7 +2590,7 @@ void XEmitter::PSRAW(X64Reg reg, u8 shift)
 void XEmitter::PSRAD(X64Reg reg, u8 shift)
 {
   if (reg > 7)
-    PanicAlertFmt("The PSRAD-emitter does not support regs above 7");
+    PanicAlert("The PSRAD-emitter does not support regs above 7");
   Write8(0x66);
   Write8(0x0f);
   Write8(0x72);
@@ -2599,14 +2601,14 @@ void XEmitter::PSRAD(X64Reg reg, u8 shift)
 void XEmitter::WriteSSSE3Op(u8 opPrefix, u16 op, X64Reg regOp, const OpArg& arg, int extrabytes)
 {
   if (!cpu_info.bSSSE3)
-    PanicAlertFmt("Trying to use SSSE3 on a system that doesn't support it. Bad programmer.");
+    PanicAlert("Trying to use SSSE3 on a system that doesn't support it. Bad programmer.");
   WriteSSEOp(opPrefix, op, regOp, arg, extrabytes);
 }
 
 void XEmitter::WriteSSE41Op(u8 opPrefix, u16 op, X64Reg regOp, const OpArg& arg, int extrabytes)
 {
   if (!cpu_info.bSSE4_1)
-    PanicAlertFmt("Trying to use SSE4.1 on a system that doesn't support it. Bad programmer.");
+    PanicAlert("Trying to use SSE4.1 on a system that doesn't support it. Bad programmer.");
   WriteSSEOp(opPrefix, op, regOp, arg, extrabytes);
 }
 

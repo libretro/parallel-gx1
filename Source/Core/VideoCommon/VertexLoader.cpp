@@ -184,11 +184,13 @@ void VertexLoader::CompileVertexTranslator()
     if (tc != VertexComponentFormat::NotPresent)
     {
       ASSERT_MSG(VIDEO, VertexComponentFormat::Direct <= tc && tc <= VertexComponentFormat::Index16,
-                 "Invalid texture coordinates!\n(tc = {})", tc);
+                 "Invalid texture coordinates!\n(tc = %u)", static_cast<unsigned>(tc));
       ASSERT_MSG(VIDEO, ComponentFormat::UByte <= format && format <= ComponentFormat::Float,
-                 "Invalid texture coordinates format!\n(format = {})", format);
+                 "Invalid texture coordinates format!\n(format = %u)",
+                 static_cast<unsigned>(format));
       ASSERT_MSG(VIDEO, elements == TexComponentCount::S || elements == TexComponentCount::ST,
-                 "Invalid number of texture coordinates elements!\n(elements = {})", elements);
+                 "Invalid number of texture coordinates elements!\n(elements = %u)",
+                 static_cast<unsigned>(elements));
 
       WriteCall(VertexLoader_TextCoord::GetFunction(tc, format, elements));
     }

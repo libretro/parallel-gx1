@@ -215,7 +215,7 @@ DXStagingTexture* DXStagingTexture::Create(StagingTextureType type, const Textur
 
   ComPtr<ID3D11Texture2D> texture;
   HRESULT hr = D3D::device->CreateTexture2D(&desc, nullptr, &texture);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create staging texture: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create staging texture: %s", DX11::HRText(hr).text);
   if (FAILED(hr))
     return nullptr;
 
@@ -306,7 +306,7 @@ bool DXStagingTexture::Map()
 
   D3D11_MAPPED_SUBRESOURCE sr;
   HRESULT hr = D3D::context->Map(m_tex.Get(), 0, map_type, 0, &sr);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to map readback texture: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to map readback texture: %s", DX11::HRText(hr).text);
   if (FAILED(hr))
     return false;
 
@@ -405,8 +405,8 @@ DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment)
         color_attachment->GetLayers());
     HRESULT hr =
         D3D::device->CreateRenderTargetView(color_attachment->GetD3DTexture(), &desc, &rtv);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create render target view for framebuffer: {}",
-               DX11HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create render target view for framebuffer: %s",
+               DX11::HRText(hr).text);
     if (FAILED(hr))
       return nullptr;
 
@@ -419,7 +419,8 @@ DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment)
       hr = D3D::device->CreateRenderTargetView(color_attachment->GetD3DTexture(), &desc,
                                                &integer_rtv);
       ASSERT_MSG(VIDEO, SUCCEEDED(hr),
-                 "Failed to create integer render target view for framebuffer: {}", DX11HRWrap(hr));
+                 "Failed to create integer render target view for framebuffer: %s",
+                 DX11::HRText(hr).text);
     }
   }
 
@@ -433,8 +434,8 @@ DXFramebuffer::Create(DXTexture* color_attachment, DXTexture* depth_attachment)
         depth_attachment->GetLayers(), 0);
     HRESULT hr =
         D3D::device->CreateDepthStencilView(depth_attachment->GetD3DTexture(), &desc, &dsv);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create depth stencil view for framebuffer: {}",
-               DX11HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create depth stencil view for framebuffer: %s",
+               DX11::HRText(hr).text);
     if (FAILED(hr))
       return nullptr;
   }

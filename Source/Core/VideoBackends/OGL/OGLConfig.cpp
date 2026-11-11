@@ -7,8 +7,7 @@
 #include <ranges>
 #include <string>
 #include <string_view>
-
-#include <fmt/ranges.h>
+#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/GL/GLContext.h"
@@ -28,6 +27,26 @@
 
 namespace OGL
 {
+namespace
+{
+struct AAModesText
+{
+  char text[128];
+  explicit AAModesText(const std::vector<int>& modes)
+  {
+    size_t len = 0;
+    text[0] = '\0';
+    for (size_t i = 0; i < modes.size() && len < sizeof(text); i++)
+    {
+      const int n = snprintf(text + len, sizeof(text) - len, i ? ", %d" : "%d", modes[i]);
+      if (n < 0)
+        break;
+      len += static_cast<size_t>(n);
+    }
+  }
+};
+}  // namespace
+
 void InitDriverInfo()
 {
   const std::string_view svendor(g_ogl_config.gl_vendor);
@@ -604,7 +623,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
                               GL_NUM_SAMPLE_COUNTS, 1, &num_color_sample_counts);
 
         ASSERT_MSG(VIDEO, num_color_sample_counts >= 0,
-                   "negative GL_NUM_SAMPLE_COUNTS for colors does not make sense: {}",
+                   "negative GL_NUM_SAMPLE_COUNTS for colors does not make sense: %d",
                    num_color_sample_counts);
         color_aa_modes.reserve(num_color_sample_counts + 1);
         if (num_color_sample_counts > 0)
@@ -616,8 +635,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
                                 num_color_sample_counts,
                                 reinterpret_cast<GLint*>(color_aa_modes.data()));
           ASSERT_MSG(VIDEO, std::ranges::is_sorted(color_aa_modes | std::views::reverse),
-                     "GPU driver didn't return sorted color AA modes: [{}]",
-                     fmt::join(color_aa_modes, ", "));
+                     "GPU driver didn't return sorted color AA modes: [%s]",
+                     AAModesText(color_aa_modes).text);
         }
 
         if (color_aa_modes.empty() || color_aa_modes.back() != 1)
@@ -633,7 +652,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
                               GL_NUM_SAMPLE_COUNTS, 1, &num_depth_sample_counts);
 
         ASSERT_MSG(VIDEO, num_depth_sample_counts >= 0,
-                   "negative GL_NUM_SAMPLE_COUNTS for depth does not make sense: {}",
+                   "negative GL_NUM_SAMPLE_COUNTS for depth does not make sense: %d",
                    num_depth_sample_counts);
         depth_aa_modes.reserve(num_depth_sample_counts + 1);
         if (num_depth_sample_counts > 0)
@@ -645,8 +664,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
                                 num_depth_sample_counts,
                                 reinterpret_cast<GLint*>(depth_aa_modes.data()));
           ASSERT_MSG(VIDEO, std::ranges::is_sorted(depth_aa_modes | std::views::reverse),
-                     "GPU driver didn't return sorted depth AA modes: [{}]",
-                     fmt::join(depth_aa_modes, ", "));
+                     "GPU driver didn't return sorted depth AA modes: [%s]",
+                     AAModesText(depth_aa_modes).text);
         }
 
         if (depth_aa_modes.empty() || depth_aa_modes.back() != 1)

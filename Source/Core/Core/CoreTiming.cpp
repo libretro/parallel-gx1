@@ -162,11 +162,11 @@ EventType* CoreTimingManager::RegisterEvent(const char* name, TimedCallback call
   EventType* event_type;
   // we want event type names to remain unique so that we can use them for serialization.
   ASSERT_MSG(POWERPC, !FindEventType(name),
-             "CoreTiming Event \"{}\" is already registered. Events should only be registered "
+             "CoreTiming Event \"%s\" is already registered. Events should only be registered "
              "during Init to avoid breaking save states.",
              name);
-  ASSERT_MSG(POWERPC, strlen(name) < CORE_TIMING_NAME_SIZE, "CoreTiming Event \"{}\": name too long",
-             name);
+  ASSERT_MSG(POWERPC, strlen(name) < CORE_TIMING_NAME_SIZE,
+             "CoreTiming Event \"%s\": name too long", name);
   ASSERT_MSG(POWERPC, m_num_event_types < MAX_EVENT_TYPES, "Too many CoreTiming Events");
   if (m_num_event_types == MAX_EVENT_TYPES)
     return m_ev_lost;
@@ -349,7 +349,7 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
   {
     from_cpu_thread = from == FromThread::CPU;
     ASSERT_MSG(POWERPC, from_cpu_thread == Core::IsCPUThread(),
-               "A \"{}\" event was scheduled from the wrong thread ({})", event_type->name,
+               "A \"%s\" event was scheduled from the wrong thread (%s)", event_type->name,
                from_cpu_thread ? "CPU" : "non-CPU");
   }
 

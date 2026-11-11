@@ -58,14 +58,15 @@ bool StreamBuffer::AllocateBuffer(u32 size, bool cpu_cached)
         &upload_heap, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr, IID_PPV_ARGS(&m_buffer));
   }
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to allocate buffer of size {}: {}", size,
-             DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to allocate buffer of size %u: %s", size,
+             DX12::HRText(hr).text);
   if (FAILED(hr))
     return false;
 
   static const D3D12_RANGE read_range = {};
   hr = m_buffer->Map(0, &read_range, reinterpret_cast<void**>(&m_host_pointer));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to map buffer of size {}: {}", size, DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to map buffer of size %u: %s", size,
+             DX12::HRText(hr).text);
   if (FAILED(hr))
     return false;
 

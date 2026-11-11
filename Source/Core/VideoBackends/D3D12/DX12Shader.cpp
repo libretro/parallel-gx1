@@ -65,7 +65,7 @@ bool DXShader::CreateComputePipeline(std::string_view name)
 
   HRESULT hr = g_dx_context->GetDevice()->CreateComputePipelineState(
       &desc, IID_PPV_ARGS(&m_compute_pipeline));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating compute pipeline failed: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating compute pipeline failed: %s", DX12::HRText(hr).text);
 
   /* only the compute pipeline is named: the name is widened for it alone */
   if (m_compute_pipeline && !name.empty())

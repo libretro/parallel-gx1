@@ -449,7 +449,7 @@ ID3D11SamplerState* StateCache::Get(SamplerState state)
 
   ComPtr<ID3D11SamplerState> res;
   HRESULT hr = D3D::device->CreateSamplerState(&sampdc, &res);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D sampler state failed: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D sampler state failed: %s", DX11::HRText(hr).text);
   return Publish(slot, std::move(res));
 }
 
@@ -525,7 +525,7 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
 
   ComPtr<ID3D11BlendState> res;
   HRESULT hr = D3D::device->CreateBlendState(&desc, &res);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D blend state failed: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D blend state failed: %s", DX11::HRText(hr).text);
   return Publish(slot, std::move(res));
 }
 
@@ -545,7 +545,8 @@ ID3D11RasterizerState* StateCache::Get(RasterizationState state)
 
   ComPtr<ID3D11RasterizerState> res;
   HRESULT hr = D3D::device->CreateRasterizerState(&desc, &res);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D rasterizer state failed: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D rasterizer state failed: %s",
+             DX11::HRText(hr).text);
   return Publish(slot, std::move(res));
 }
 
@@ -586,7 +587,8 @@ ID3D11DepthStencilState* StateCache::Get(DepthState state)
 
   ComPtr<ID3D11DepthStencilState> res;
   HRESULT hr = D3D::device->CreateDepthStencilState(&depthdc, &res);
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D depth stencil state failed: {}", DX11HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Creating D3D depth stencil state failed: %s",
+             DX11::HRText(hr).text);
   return Publish(slot, std::move(res));
 }
 

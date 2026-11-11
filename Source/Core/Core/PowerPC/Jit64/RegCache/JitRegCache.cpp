@@ -4,6 +4,7 @@
 #include "Core/PowerPC/Jit64/RegCache/JitRegCache.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -321,10 +322,11 @@ void RegCache::Discard(BitSet32 pregs)
 
   for (preg_t i : pregs)
   {
-    ASSERT_MSG(DYNA_REC, !m_regs[i].IsLocked(), "Someone forgot to unlock PPC reg {} (X64 reg {}).",
-               i, std::to_underlying(RX(i)));
-    ASSERT_MSG(DYNA_REC, !m_regs[i].IsRevertable(), "Register transaction is in progress for {}!",
-               i);
+    ASSERT_MSG(DYNA_REC, !m_regs[i].IsLocked(),
+               "Someone forgot to unlock PPC reg %" PRIu64 " (X64 reg %u).", (u64)i,
+               std::to_underlying(RX(i)));
+    ASSERT_MSG(DYNA_REC, !m_regs[i].IsRevertable(),
+               "Register transaction is in progress for %" PRIu64 "!", (u64)i);
 
     DiscardRegister(i);
   }
@@ -339,9 +341,10 @@ void RegCache::Flush(BitSet32 pregs, FlushMode mode,
   for (preg_t i : pregs)
   {
     ASSERT_MSG(DYNA_REC, mode != FlushMode::Full || !m_regs[i].IsLocked(),
-               "Someone forgot to unlock PPC reg {} (X64 reg {}).", i, std::to_underlying(RX(i)));
-    ASSERT_MSG(DYNA_REC, !m_regs[i].IsRevertable(), "Register transaction is in progress for {}!",
-               i);
+               "Someone forgot to unlock PPC reg %" PRIu64 " (X64 reg %u).", (u64)i,
+               std::to_underlying(RX(i)));
+    ASSERT_MSG(DYNA_REC, !m_regs[i].IsRevertable(),
+               "Register transaction is in progress for %" PRIu64 "!", (u64)i);
 
     StoreFromRegister(i, mode, ignore_discarded_registers);
   }
@@ -407,7 +410,7 @@ BitSet32 RegCache::RegistersInUse() const
 
 void RegCache::FlushX(X64Reg reg)
 {
-  ASSERT_MSG(DYNA_REC, reg < m_xregs.size(), "Flushing non-existent reg {}",
+  ASSERT_MSG(DYNA_REC, reg < m_xregs.size(), "Flushing non-existent reg %u",
              std::to_underlying(reg));
   ASSERT(!m_xregs[reg].IsLocked());
   if (!m_xregs[reg].IsFree())
@@ -446,7 +449,7 @@ void RegCache::BindToRegister(preg_t i, bool doLoad, bool makeDirty)
                                     [xr](const auto& r) {
                                       return r.IsInHostRegister() && r.GetHostRegister() == xr;
                                     }),
-               "Xreg {} already bound", std::to_underlying(xr));
+               "Xreg %u already bound", std::to_underlying(xr));
 
     m_regs[i].SetInHostRegister(xr, makeDirty);
   }
@@ -462,14 +465,16 @@ void RegCache::BindToRegister(preg_t i, bool doLoad, bool makeDirty)
     DiscardImm(i);
 
   ASSERT_MSG(DYNA_REC, !m_xregs[RX(i)].IsLocked(),
-             "WTF, this reg ({} -> {}) should have been flushed", i, std::to_underlying(RX(i)));
+             "WTF, this reg (%" PRIu64 " -> %u) should have been flushed", (u64)i,
+             std::to_underlying(RX(i)));
 }
 
 void RegCache::StoreFromRegister(preg_t i, FlushMode mode,
                                  IgnoreDiscardedRegisters ignore_discarded_registers)
 {
   // When a transaction is in progress, allowing the store would overwrite the old value.
-  ASSERT_MSG(DYNA_REC, !m_regs[i].IsRevertable(), "Register transaction on {} is in progress!", i);
+  ASSERT_MSG(DYNA_REC, !m_regs[i].IsRevertable(),
+             "Register transaction on %" PRIu64 " is in progress!", (u64)i);
 
   if (!m_regs[i].IsInDefaultLocation())
     StoreRegister(i, GetDefaultLocation(i), ignore_discarded_registers);
@@ -569,7 +574,8 @@ float RegCache::ScoreRegister(X64Reg xreg) const
 
 X64Reg RegCache::RX(preg_t preg) const
 {
-  ASSERT_MSG(DYNA_REC, m_regs[preg].IsInHostRegister(), "Not in host register - {}", preg);
+  ASSERT_MSG(DYNA_REC, m_regs[preg].IsInHostRegister(), "Not in host register - %" PRIu64,
+             (u64)preg);
   return m_regs[preg].GetHostRegister();
 }
 

@@ -117,8 +117,7 @@ void CEXIChannel::WriteControl(u32 val)
         device->ImmReadWrite(m_imm_data, m_control.TLEN + 1);
         break;
       default:
-        DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0,
-                         "EXI Imm: Unknown transfer type {}", m_control.RW);
+        DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0, "EXI Imm: Unknown transfer type %u", m_control.RW);
       }
     }
     else
@@ -133,8 +132,7 @@ void CEXIChannel::WriteControl(u32 val)
         device->DMAWrite(m_dma_memory_address, m_dma_length);
         break;
       default:
-        DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0,
-                         "EXI DMA: Unknown transfer type {}", m_control.RW);
+        DEBUG_ASSERT_MSG(EXPANSIONINTERFACE, 0, "EXI DMA: Unknown transfer type %u", m_control.RW);
       }
     }
 

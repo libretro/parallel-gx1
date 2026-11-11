@@ -91,7 +91,7 @@ bool DXContext::CreateFence()
 {
   HRESULT hr =
       m_device->CreateFence(m_completed_fence_value, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create fence: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create fence: %s", DX12::HRText(hr).text);
   if (FAILED(hr))
     return false;
 
@@ -196,7 +196,7 @@ static bool BuildRootSignature(ID3D12Device* device, ID3D12RootSignature** sig_p
 
   hr = device->CreateRootSignature(0, root_signature_blob->GetBufferPointer(),
                                    root_signature_blob->GetBufferSize(), IID_PPV_ARGS(sig_ptr));
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create root signature: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create root signature: %s", DX12::HRText(hr).text);
   return true;
 }
 
@@ -318,13 +318,14 @@ bool DXContext::CreateCommandLists()
     CommandListResources& res = m_command_lists[i];
     HRESULT hr = m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
                                                   IID_PPV_ARGS(&res.command_allocator));
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create command allocator: {}", DX12HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create command allocator: %s",
+               DX12::HRText(hr).text);
     if (FAILED(hr))
       return false;
 
     hr = m_device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, res.command_allocator.Get(),
                                      nullptr, IID_PPV_ARGS(&res.command_list));
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create command list: {}", DX12HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create command list: %s", DX12::HRText(hr).text);
     if (FAILED(hr))
     {
       return false;
@@ -332,7 +333,7 @@ bool DXContext::CreateCommandLists()
 
     // Close the command list, since the first thing we do is reset them.
     hr = res.command_list->Close();
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Closing new command list failed: {}", DX12HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Closing new command list failed: %s", DX12::HRText(hr).text);
     if (FAILED(hr))
       return false;
 
@@ -377,7 +378,7 @@ void DXContext::ExecuteCommandList(bool wait_for_completion)
 
   // Close and queue command list.
   HRESULT hr = res.command_list->Close();
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to close command list: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to close command list: %s", DX12::HRText(hr).text);
   const std::array<ID3D12CommandList*, 1> execute_lists{res.command_list.Get()};
   m_command_queue->ExecuteCommandLists(static_cast<UINT>(execute_lists.size()),
                                        execute_lists.data());
@@ -385,7 +386,7 @@ void DXContext::ExecuteCommandList(bool wait_for_completion)
   // Update fence when GPU has completed.
   hr = m_command_queue->Signal(m_fence.Get(), m_current_fence_value);
 
-  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to signal fence: {}", DX12HRWrap(hr));
+  ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to signal fence: %s", DX12::HRText(hr).text);
 
   MoveToNextCommandList();
   if (wait_for_completion)
@@ -443,7 +444,8 @@ void DXContext::WaitForFence(u64 fence)
   {
     // Fall back to event.
     HRESULT hr = m_fence->SetEventOnCompletion(fence, m_fence_event);
-    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to set fence event on completion: {}", DX12HRWrap(hr));
+    ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to set fence event on completion: %s",
+               DX12::HRText(hr).text);
     WaitForSingleObject(m_fence_event, INFINITE);
     m_completed_fence_value = m_fence->GetCompletedValue();
   }

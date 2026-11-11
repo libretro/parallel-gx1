@@ -3,6 +3,8 @@
 
 #include "Core/PowerPC/Jit64/RegCache/FPURegCache.h"
 
+#include <cinttypes>
+
 #include "Common/x64Reg.h"
 #include "Core/PowerPC/Jit64/Jit.h"
 #include "Core/PowerPC/Jit64Common/Jit64PowerPCState.h"
@@ -38,7 +40,7 @@ OpArg FPURegCache::R(preg_t preg) const
   }
   else
   {
-    ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(), "FPR {} missing!", preg);
+    ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(), "FPR %" PRIu64 " missing!", (u64)preg);
     return m_regs[preg].GetDefaultLocation();
   }
 }
@@ -53,13 +55,14 @@ void FPURegCache::StoreRegister(preg_t preg, const OpArg& new_loc,
   else
   {
     ASSERT_MSG(DYNA_REC, ignore_discarded_registers != IgnoreDiscardedRegisters::No,
-               "FPR {} not in host register", preg);
+               "FPR %" PRIu64 " not in host register", (u64)preg);
   }
 }
 
 void FPURegCache::LoadRegister(preg_t preg, X64Reg new_loc)
 {
-  ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(), "FPR {} not in default location", preg);
+  ASSERT_MSG(DYNA_REC, m_regs[preg].IsInDefaultLocation(), "FPR %u not in default location",
+             static_cast<unsigned>(preg));
   m_emitter->MOVAPD(new_loc, m_regs[preg].GetDefaultLocation());
 }
 

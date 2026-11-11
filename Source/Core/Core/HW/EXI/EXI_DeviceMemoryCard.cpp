@@ -109,8 +109,8 @@ CEXIMemoryCard::CEXIMemoryCard(Core::System& system, const Slot slot, bool gci_f
                                const Memcard::HeaderData& header_data)
     : IEXIDevice(system), m_card_slot(slot)
 {
-  ASSERT_MSG(EXPANSIONINTERFACE, IsMemcardSlot(slot), "Trying to create invalid memory card in {}.",
-             slot);
+  ASSERT_MSG(EXPANSIONINTERFACE, IsMemcardSlot(slot), "Trying to create invalid memory card in %u.",
+             static_cast<unsigned>(slot));
 
   // NOTE: When loading a save state, DMA completion callbacks (s_et_transfer_complete) and such
   //   may have been restored, we need to anticipate those arriving.

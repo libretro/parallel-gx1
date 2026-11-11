@@ -615,7 +615,7 @@ const GekkoOPInfo* GetOpInfo(UGeckoInstruction inst, u32 pc)
     case 63:
       return &s_tables.all_instructions[s_tables.table63[inst.SUBOP10]];
     default:
-      ASSERT_MSG(POWERPC, 0, "GetOpInfo - invalid subtable op {:08x} @ {:08x}", inst.hex, pc);
+      ASSERT_MSG(POWERPC, 0, "GetOpInfo - invalid subtable op %08x @ %08x", inst.hex, pc);
       return &s_tables.all_instructions[s_tables.unknown_op_info];
     }
   }
@@ -623,7 +623,7 @@ const GekkoOPInfo* GetOpInfo(UGeckoInstruction inst, u32 pc)
   {
     if (info->type == OpType::Invalid)
     {
-      ASSERT_MSG(POWERPC, 0, "GetOpInfo - invalid op {:08x} @ {:08x}", inst.hex, pc);
+      ASSERT_MSG(POWERPC, 0, "GetOpInfo - invalid op %08x @ %08x", inst.hex, pc);
       return &s_tables.all_instructions[s_tables.unknown_op_info];
     }
     return info;

@@ -767,7 +767,7 @@ std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request
     ret = device->IOCtlV(IOCtlVRequest{GetSystem(), request.address});
     break;
   default:
-    ASSERT_MSG(IOS, false, "Unexpected command: {:#x}", std::to_underlying(request.command));
+    ASSERT_MSG(IOS, false, "Unexpected command: %#x", std::to_underlying(request.command));
     ret = IPCReply{IPC_EINVAL, 978_tbticks};
     break;
   }
