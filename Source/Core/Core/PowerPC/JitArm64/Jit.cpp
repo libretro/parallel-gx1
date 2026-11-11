@@ -921,32 +921,6 @@ void JitArm64::SingleStep()
   UnprotectStack();
 }
 
-void JitArm64::Trace()
-{
-  std::string regs;
-  std::string fregs;
-
-#ifdef JIT_LOG_GPR
-  for (size_t i = 0; i < std::size(m_ppc_state.gpr); i++)
-  {
-    regs += fmt::format("r{:02d}: {:08x} ", i, m_ppc_state.gpr[i]);
-  }
-#endif
-
-#ifdef JIT_LOG_FPR
-  for (size_t i = 0; i < std::size(m_ppc_state.ps); i++)
-  {
-    fregs += fmt::format("f{:02d}: {:016x} ", i, m_ppc_state.ps[i].PS0AsU64());
-  }
-#endif
-
-  DEBUG_LOG_FMT(DYNA_REC,
-                "JitArm64 PC: {:08x} SRR0: {:08x} SRR1: {:08x} FPSCR: {:08x} "
-                "MSR: {:08x} LR: {:08x} {} {}",
-                m_ppc_state.pc, SRR0(m_ppc_state), SRR1(m_ppc_state), m_ppc_state.fpscr.Hex,
-                m_ppc_state.msr.Hex, m_ppc_state.spr[8], regs, fregs);
-}
-
 void JitArm64::Jit(u32 em_address)
 {
   Jit(em_address, true);

@@ -78,30 +78,6 @@ void Interpreter::Shutdown()
 {
 }
 
-void Interpreter::Trace(const UGeckoInstruction& inst)
-{
-  std::string regs;
-  for (size_t i = 0; i < std::size(m_ppc_state.gpr); i++)
-  {
-    regs += fmt::format("r{:02d}: {:08x} ", i, m_ppc_state.gpr[i]);
-  }
-
-  std::string fregs;
-  for (size_t i = 0; i < std::size(m_ppc_state.ps); i++)
-  {
-    const auto& ps = m_ppc_state.ps[i];
-    fregs += fmt::format("f{:02d}: {:08x} {:08x} ", i, ps.PS0AsU64(), ps.PS1AsU64());
-  }
-
-  const std::string ppc_inst = Common::GekkoDisassembler::Disassemble(inst.hex, m_ppc_state.pc);
-  DEBUG_LOG_FMT(POWERPC,
-                "INTER PC: {:08x} SRR0: {:08x} SRR1: {:08x} CRval: {:016x} "
-                "FPSCR: {:08x} MSR: {:08x} LR: {:08x} {} {:08x} {}",
-                m_ppc_state.pc, SRR0(m_ppc_state), SRR1(m_ppc_state), m_ppc_state.cr.fields[0],
-                m_ppc_state.fpscr.Hex, m_ppc_state.msr.Hex, m_ppc_state.spr[SPR_LR], regs, inst.hex,
-                ppc_inst);
-}
-
 bool Interpreter::HandleFunctionHooking(u32 address)
 {
   const auto result =
@@ -129,22 +105,6 @@ int Interpreter::SingleStepInner()
   m_prev_inst.hex = m_mmu.Read_Opcode(m_ppc_state.pc);
 
   const GekkoOPInfo* opinfo = PPCTables::GetOpInfo(m_prev_inst, m_ppc_state.pc);
-
-  // Uncomment to trace the interpreter
-  // if ((m_ppc_state.pc & 0x00FFFFFF) >= 0x000AB54C &&
-  //     (m_ppc_state.pc & 0x00FFFFFF) <= 0x000AB624)
-  // {
-  //   m_start_trace = true;
-  // }
-  // else
-  // {
-  //   m_start_trace = false;
-  // }
-
-  if (m_start_trace)
-  {
-    Trace(m_prev_inst);
-  }
 
   if (m_prev_inst.hex != 0)
   {

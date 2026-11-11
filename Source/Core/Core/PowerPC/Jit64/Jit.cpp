@@ -426,29 +426,6 @@ void Jit64::DoNothing(UGeckoInstruction _inst)
   // Yup, just don't do anything.
 }
 
-void Jit64::ImHere(Jit64& jit)
-{
-  auto& ppc_state = jit.m_ppc_state;
-  static File::IOFile f;
-  if (jit.m_im_here_log)
-  {
-    if (!f)
-      f.Open("log64.txt", "w");
-
-    f.WriteString(fmt::format("{0:08x}\n", ppc_state.pc));
-  }
-  auto& been_here = jit.m_been_here;
-  auto it = been_here.find(ppc_state.pc);
-  if (it != been_here.end())
-  {
-    it->second++;
-    if (it->second & 1023)
-      return;
-  }
-  INFO_LOG_FMT(DYNA_REC, "I'm here - PC = {:08x} , LR = {:08x}", ppc_state.pc, LR(ppc_state));
-  been_here[ppc_state.pc] = 1;
-}
-
 bool Jit64::Cleanup()
 {
   bool did_something = false;
@@ -740,32 +717,6 @@ void Jit64::SingleStep()
   UnprotectStack();
 }
 
-void Jit64::Trace()
-{
-  std::string regs;
-  std::string fregs;
-
-#ifdef JIT_LOG_GPR
-  for (size_t i = 0; i < std::size(m_ppc_state.gpr); i++)
-  {
-    regs += fmt::format("r{:02d}: {:08x} ", i, m_ppc_state.gpr[i]);
-  }
-#endif
-
-#ifdef JIT_LOG_FPR
-  for (size_t i = 0; i < std::size(m_ppc_state.ps); i++)
-  {
-    fregs += fmt::format("f{:02d}: {:016x} ", i, m_ppc_state.ps[i].PS0AsU64());
-  }
-#endif
-
-  DEBUG_LOG_FMT(DYNA_REC,
-                "JIT64 PC: {:08x} SRR0: {:08x} SRR1: {:08x} FPSCR: {:08x} "
-                "MSR: {:08x} LR: {:08x} {} {}",
-                m_ppc_state.pc, SRR0(m_ppc_state), SRR1(m_ppc_state), m_ppc_state.fpscr.Hex,
-                m_ppc_state.msr.Hex, m_ppc_state.spr[8], regs, fregs);
-}
-
 void Jit64::Jit(u32 em_address)
 {
   Jit(em_address, true);
@@ -885,14 +836,6 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 
   // TODO: Test if this or AlignCode16 make a difference from GetCodePtr
   b->normalEntry = AlignCode4();
-
-  // Used to get a trace of the last few blocks before a crash, sometimes VERY useful
-  if (m_im_here_debug)
-  {
-    ABI_PushRegistersAndAdjustStack({}, 0);
-    ABI_CallFunctionP(ImHere, this);
-    ABI_PopRegistersAndAdjustStack({}, 0);
-  }
 
 #if defined(_DEBUG) || defined(DEBUGFAST) || defined(NAN_CHECK)
   // should help logged stack-traces become more accurate

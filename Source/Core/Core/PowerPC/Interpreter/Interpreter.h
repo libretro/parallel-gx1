@@ -313,8 +313,6 @@ private:
   void UpdatePC();
   bool IsInvalidPairedSingleExecution(UGeckoInstruction inst);
 
-  void Trace(const UGeckoInstruction& inst);
-
   Core::System& m_system;
   PowerPC::PowerPCState& m_ppc_state;
   PowerPC::MMU& m_mmu;
@@ -323,5 +321,4 @@ private:
   UGeckoInstruction m_prev_inst{};
   u32 m_last_pc = 0;
   bool m_end_block = false;
-  bool m_start_trace = false;
 };

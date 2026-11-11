@@ -77,7 +77,6 @@ public:
   JitCommon::ConstantPropagation& GetConstantPropagation() { return m_constant_propagation; }
 
   JitBlockCache* GetBlockCache() override { return &blocks; }
-  void Trace();
 
   void ClearCache() override;
 
@@ -269,9 +268,6 @@ private:
   void FreeRanges();
   void ResetFreeMemoryRanges();
 
-
-  static void ImHere(Jit64& jit);
-
   JitBlockCache blocks{*this};
   TrampolineCache trampolines{*this};
 
@@ -284,8 +280,4 @@ private:
 
   Common::RangeSizeSet<u8*> m_free_ranges_near;
   Common::RangeSizeSet<u8*> m_free_ranges_far;
-
-  const bool m_im_here_debug = false;
-  const bool m_im_here_log = false;
-  std::map<u32, int> m_been_here;
 };

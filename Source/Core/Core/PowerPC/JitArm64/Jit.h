@@ -287,8 +287,6 @@ protected:
 
   bool DoJit(u32 em_address, JitBlock* b, u32 nextPC);
 
-  void Trace();
-
   // Finds a free memory region and sets the near and far code emitters to point at that region.
   // On success, returns the index of the memory region (either 0 or 1).
   // If either near code or far code is full, returns std::nullopt.
