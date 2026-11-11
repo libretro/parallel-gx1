@@ -8,6 +8,7 @@
 
 #include "Core/IOS/USB/Bluetooth/RealtekFirmwareLoader.h"
 
+#include <cinttypes>
 
 #include "Common/BitUtils.h"
 #include "Common/FileUtil.h"
@@ -218,7 +219,7 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
 {
   if (fw_size < sizeof(rtl_epatch_header))
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized firmware file");
+    ERROR_LOG(IOS_WIIMOTE, "Undersized firmware file");
     return {};
   }
 
@@ -229,11 +230,11 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
     if (std::memcmp(epatch_info.signature.data(), RTL_EPATCH_SIGNATURE_V2.data(),
                     epatch_info.signature.size()) == 0)
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "EPATCH v2 not implemented. Please report device to developers.");
+      ERROR_LOG(IOS_WIIMOTE, "EPATCH v2 not implemented. Please report device to developers.");
     }
     else
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "Bad EPATCH signature");
+      ERROR_LOG(IOS_WIIMOTE, "Bad EPATCH signature");
     }
     return {};
   }
@@ -241,14 +242,15 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
   const auto fw_version = epatch_info.fw_version;
   const auto num_patches = epatch_info.num_patches;
 
-  INFO_LOG_FMT(IOS_WIIMOTE, "fw_version={} num_patches={}", epatch_info.fw_version, num_patches);
+  INFO_LOG(IOS_WIIMOTE, "fw_version=%u num_patches=%u", epatch_info.fw_version,
+           (unsigned)num_patches);
 
   static constexpr u8 EXTENSION_SIGNATURE[] = {0x51, 0x04, 0xfd, 0x77};
   const char* const extension = fw_data + fw_size - sizeof(EXTENSION_SIGNATURE);
   if (fw_size < sizeof(rtl_epatch_header) + sizeof(EXTENSION_SIGNATURE) ||
       std::memcmp(extension, EXTENSION_SIGNATURE, sizeof(EXTENSION_SIGNATURE)) != 0)
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Bad extension section signature");
+    ERROR_LOG(IOS_WIIMOTE, "Bad extension section signature");
     return {};
   }
 
@@ -266,7 +268,7 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
 
     if (length == 0)
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "Found instruction with length 0");
+      ERROR_LOG(IOS_WIIMOTE, "Found instruction with length 0");
       return {};
     }
 
@@ -305,7 +307,7 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
   }
   if (!it || it->lmp_subver != local_ver.lmp_subversion)
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Unexpected project_id: {}", project_id);
+    ERROR_LOG(IOS_WIIMOTE, "Unexpected project_id: %d", project_id);
     return {};
   }
 
@@ -314,7 +316,7 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
   if (fw_size <
       sizeof(rtl_epatch_header) + num_patches * (sizeof(u16) + sizeof(u16) + sizeof(u32)))
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized firmware file");
+    ERROR_LOG(IOS_WIIMOTE, "Undersized firmware file");
     return {};
   }
   const char* chip_id_base = fw_data + sizeof(rtl_epatch_header);
@@ -328,11 +330,11 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
       const u16 patch_length = Common::BitCastPtr<u16>(patch_length_base + (i * sizeof(u16)));
       const u32 patch_offset = Common::BitCastPtr<u32>(patch_offset_base + (i * sizeof(u32)));
 
-      INFO_LOG_FMT(IOS_WIIMOTE, "Patch length:{} offset:{}", patch_length, patch_offset);
+      INFO_LOG(IOS_WIIMOTE, "Patch length:%u offset:%u", (unsigned)patch_length, patch_offset);
 
       if (patch_offset + patch_length > fw_size)
       {
-        ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized firmware file");
+        ERROR_LOG(IOS_WIIMOTE, "Undersized firmware file");
         return {};
       }
 
@@ -351,7 +353,7 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
     }
   }
 
-  ERROR_LOG_FMT(IOS_WIIMOTE, "Patch not found");
+  ERROR_LOG(IOS_WIIMOTE, "Patch not found");
   return {};
 }
 
@@ -365,7 +367,7 @@ static bool WriteFirmwareBlock(LibUSBBluetoothAdapter& adapter, const void* bloc
 
   if (result.status != 0x00)
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Bad load firmware status: 0x{:02x}", result.status);
+    ERROR_LOG(IOS_WIIMOTE, "Bad load firmware status: 0x%02x", (unsigned)result.status);
     return false;
   }
 
@@ -376,11 +378,11 @@ static bool LoadFirmware(LibUSBBluetoothAdapter& adapter, const char* data, std:
 {
   if (!size)
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Firmware data is empty");
+    ERROR_LOG(IOS_WIIMOTE, "Firmware data is empty");
     return false;
   }
 
-  INFO_LOG_FMT(IOS_WIIMOTE, "Loading firmware, total size: {}", size);
+  INFO_LOG(IOS_WIIMOTE, "Loading firmware, total size: %" PRIu64, (u64)size);
 
   HCICommandPayload<0xfc20, rtl_download_cmd> payload{};
 
@@ -411,7 +413,7 @@ static bool LoadFirmware(LibUSBBluetoothAdapter& adapter, const char* data, std:
   if (!WriteFirmwareBlock(adapter, &payload, sizeof(payload) - bytes_short_of_full_block))
     return false;
 
-  NOTICE_LOG_FMT(IOS_WIIMOTE, "Loading firmware complete");
+  NOTICE_LOG(IOS_WIIMOTE, "Loading firmware complete");
   return true;
 }
 
@@ -486,7 +488,7 @@ static void DownloadFirmwareFilesFromInternet(const std::string& fw_filename,
     const auto response = request.Get(fw_url);
     if (!response)
     {
-      PanicAlertFmtT("HTTP GET {0}\n\nError: {1}", fw_url, request.GetLastResponseCode());
+      PanicAlert("HTTP GET %s\n\nError: %d", fw_url.c_str(), request.GetLastResponseCode());
       return;
     }
 
@@ -505,13 +507,13 @@ static void DownloadFirmwareFilesFromInternet(const std::string& fw_filename,
       {
         // Some devices don't have this _config.bin.
         // But the very popular 8761B does, so I suppose it makes sense to show this error.
-        PanicAlertFmtT("File {0} was not found on the server.\n\nThis might be normal.\n\n"
-                       "Not all devices expect this file.",
-                       config_filename);
+        PanicAlert("File %s was not found on the server.\n\nThis might be normal.\n\n"
+                   "Not all devices expect this file.",
+                   config_filename.c_str());
       }
       else
       {
-        PanicAlertFmtT("HTTP GET {0}\n\nError: {1}", config_url, request.GetLastResponseCode());
+        PanicAlert("HTTP GET %s\n\nError: %d", config_url.c_str(), request.GetLastResponseCode());
       }
       return;
     }
@@ -524,11 +526,11 @@ static void DownloadFirmwareFilesFromInternet(const std::string& fw_filename,
 
 static void ShowFirmwareReadError(std::string_view fw_path)
 {
-  PanicAlertFmtT("Bluetooth passthrough failed to read firmware file from:\n"
-                 "{0}\n\n"
-                 "Refer to https://wiki.dolphin-emu.org/index.php?title=Bluetooth_Passthrough "
-                 "for instructions.",
-                 fw_path);
+  PanicAlert("Bluetooth passthrough failed to read firmware file from:\n"
+             "%.*s\n\n"
+             "Refer to https://wiki.dolphin-emu.org/index.php?title=Bluetooth_Passthrough "
+             "for instructions.",
+             static_cast<int>(fw_path.size()), fw_path.data());
 }
 
 bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
@@ -543,7 +545,7 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
   }
   if (local_ver.status != 0x00)
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Bad local version status: 0x{:02x}", local_ver.status);
+    ERROR_LOG(IOS_WIIMOTE, "Bad local version status: 0x%02x", (unsigned)local_ver.status);
     return false;
   }
 
@@ -551,7 +553,7 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
   // If firmware has already been loaded then the subversion changes and we won't find a match.
   if (firmware_name.empty())
   {
-    INFO_LOG_FMT(IOS_WIIMOTE, "Assuming no firmware load is needed");
+    INFO_LOG(IOS_WIIMOTE, "Assuming no firmware load is needed");
     return true;
   }
 
@@ -565,14 +567,13 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
   const auto fw_path = firmware_load_path + fw_filename;
   const auto config_path = firmware_load_path + config_filename;
 
-  NOTICE_LOG_FMT(IOS_WIIMOTE, "Loading firmware: {}", base_filename);
+  NOTICE_LOG(IOS_WIIMOTE, "Loading firmware: %s", base_filename.c_str());
 
   if (!File::Exists(fw_path))
   {
-    const bool should_download =
-        AskYesNoFmtT("Bluetooth passthrough requires missing firmware: {0}\n\n"
-                     "Automatically download from gitlab.com now?",
-                     base_filename);
+    const bool should_download = AskYesNo("Bluetooth passthrough requires missing firmware: %s\n\n"
+                                          "Automatically download from gitlab.com now?",
+                                          base_filename.c_str());
 
     if (should_download)
       DownloadFirmwareFilesFromInternet(fw_filename, config_filename);
@@ -591,7 +592,7 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
     // File should *not* have the epatch signature.
     if (fw_data.starts_with(RTL_EPATCH_SIGNATURE))
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "Unexpected EPATCH signature");
+      ERROR_LOG(IOS_WIIMOTE, "Unexpected EPATCH signature");
       return false;
     }
 
@@ -608,12 +609,12 @@ bool InitializeRealtekBluetoothDevice(LibUSBBluetoothAdapter& adapter)
   }
   if (read_rom_ver.status != 0x00)
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Bad ROM version status: 0x{:02x}", read_rom_ver.status);
+    ERROR_LOG(IOS_WIIMOTE, "Bad ROM version status: 0x%02x", (unsigned)read_rom_ver.status);
     return false;
   }
 
   const u8 rom_version = read_rom_ver.version;
-  INFO_LOG_FMT(IOS_WIIMOTE, "ROM version: 0x{:02x}", rom_version);
+  INFO_LOG(IOS_WIIMOTE, "ROM version: 0x%02x", (unsigned)rom_version);
 
   // Apparently only certain devices require the config binary. We load it whenever present.
   std::string config_data;

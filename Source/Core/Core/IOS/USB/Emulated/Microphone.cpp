@@ -59,7 +59,7 @@ void Microphone::StreamStart(u32 sampling_rate)
   m_retro_mic = Libretro::Input::g_microphone_interface.open_mic(&params);
   if (!m_retro_mic)
   {
-    WARN_LOG_FMT(IOS_USB, "Microphone: failed to open mic at {}Hz", sampling_rate);
+    WARN_LOG(IOS_USB, "Microphone: failed to open mic at %uHz", sampling_rate);
     return;
   }
 
@@ -77,7 +77,7 @@ void Microphone::StreamStart(u32 sampling_rate)
       break;
   }
 
-  INFO_LOG_FMT(IOS_USB, "Microphone: opened mic at {}Hz", sampling_rate);
+  INFO_LOG(IOS_USB, "Microphone: opened mic at %uHz", sampling_rate);
 }
 
 void Microphone::StreamStop()
@@ -293,13 +293,14 @@ void Microphone::Loudness::LogStats()
   const auto crest_factor = GetCrestFactor();
   const auto crest_factor_db = GetDecibel(crest_factor);
 
-  INFO_LOG_FMT(IOS_USB,
-               "Microphone loudness stats (sample count: {}/{}):\n"
-               " - min={} max={} amplitude={} ({} dB)\n"
-               " - rms={} ({} dB) \n"
-               " - abs_mean={} ({} dB)\n"
-               " - crest_factor={} ({} dB)",
-               samples_count, SAMPLES_NEEDED, peak_min, peak_max, amplitude, amplitude_db, rms,
-               rms_db, abs_mean, abs_mean_db, crest_factor, crest_factor_db);
+  INFO_LOG(IOS_USB,
+           "Microphone loudness stats (sample count: %u/%u):\n"
+           " - min=%d max=%d amplitude=%g (%g dB)\n"
+           " - rms=%g (%g dB) \n"
+           " - abs_mean=%g (%g dB)\n"
+           " - crest_factor=%g (%g dB)",
+           (unsigned)samples_count, (unsigned)SAMPLES_NEEDED, (int)peak_min, (int)peak_max,
+           (double)amplitude, (double)amplitude_db, (double)rms, (double)rms_db, (double)abs_mean,
+           (double)abs_mean_db, (double)crest_factor, (double)crest_factor_db);
 }
 }  // namespace IOS::HLE::USB

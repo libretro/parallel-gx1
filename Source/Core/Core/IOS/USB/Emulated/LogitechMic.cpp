@@ -148,7 +148,8 @@ bool LogitechMic::Attach()
   if (m_device_attached)
     return true;
 
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Opening device", m_vid, m_pid, m_index);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Opening device", (unsigned)m_vid, (unsigned)m_pid,
+            (unsigned)m_index);
   if (!m_microphone)
   {
     m_microphone = std::make_unique<MicrophoneLogitech>(m_sampler, m_index);
@@ -171,16 +172,16 @@ bool LogitechMic::AttachAndChangeInterface(const u8 iface)
 
 int LogitechMic::CancelTransfer(const u8 endpoint)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] Cancelling transfers (endpoint {:#x})", m_vid,
-                m_pid, m_index, m_active_interface, endpoint);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] Cancelling transfers (endpoint %#x)", (unsigned)m_vid,
+            (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface, (unsigned)endpoint);
 
   return IPC_SUCCESS;
 }
 
 int LogitechMic::ChangeInterface(const u8 iface)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] Changing interface to {}", m_vid, m_pid, m_index,
-                m_active_interface, iface);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] Changing interface to %u", (unsigned)m_vid, (unsigned)m_pid,
+            (unsigned)m_index, (unsigned)m_active_interface, (unsigned)iface);
   m_active_interface = iface;
   return 0;
 }
@@ -222,11 +223,11 @@ int LogitechMic::GetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   const u8 cn = static_cast<u8>(cmd->value - 1);
   const u32 aid = USBGETAID(cs, request, cmd->index);
   int ret = IPC_STALL;
-  DEBUG_LOG_FMT(IOS_USB,
-                "GetAudioControl: bCs={:02x} bCn={:02x} bRequestType={:02x} bRequest={:02x} "
-                "bIndex={:02x} aid={:08x}",
-                std::to_underlying(cs), cn, cmd->request_type, std::to_underlying(request),
-                cmd->index, aid);
+  DEBUG_LOG(IOS_USB,
+            "GetAudioControl: bCs=%02x bCn=%02x bRequestType=%02x bRequest=%02x "
+            "bIndex=%02x aid=%08x",
+            (unsigned)std::to_underlying(cs), (unsigned)cn, (unsigned)cmd->request_type,
+            (unsigned)std::to_underlying(request), (unsigned)cmd->index, aid);
   switch (aid)
   {
   case USBGETAID(FeatureUnitControlSelector::Mute, RequestCode::GetCur, 0x0200):
@@ -241,7 +242,7 @@ int LogitechMic::GetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
     {
       const uint16_t vol =
           (retro_atomic_load_acquire_int(&m_sampler.volume) * 0x8800 + 127) / 255 + 0x8000;
-      DEBUG_LOG_FMT(IOS_USB, "GetAudioControl: Get volume {:04x}", vol);
+      DEBUG_LOG(IOS_USB, "GetAudioControl: Get volume %04x", (unsigned)vol);
       memory.Write_U16(vol, cmd->data_address);
       ret = 2;
     }
@@ -276,11 +277,11 @@ int LogitechMic::GetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   }
   default:
   {
-    WARN_LOG_FMT(IOS_USB,
-                 "GetAudioControl: Unknown request: bCs={:02x} bCn={:02x} bRequestType={:02x} "
-                 "bRequest={:02x} bIndex={:02x} aid={:08x}",
-                 std::to_underlying(cs), cn, cmd->request_type, std::to_underlying(request),
-                 cmd->index, aid);
+    WARN_LOG(IOS_USB,
+             "GetAudioControl: Unknown request: bCs=%02x bCn=%02x bRequestType=%02x "
+             "bRequest=%02x bIndex=%02x aid=%08x",
+             (unsigned)std::to_underlying(cs), (unsigned)cn, (unsigned)cmd->request_type,
+             (unsigned)std::to_underlying(request), (unsigned)cmd->index, aid);
     break;
   }
   }
@@ -296,17 +297,18 @@ int LogitechMic::SetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   const u8 cn = static_cast<u8>(cmd->value - 1);
   const u32 aid = USBGETAID(cs, request, cmd->index);
   int ret = IPC_STALL;
-  DEBUG_LOG_FMT(IOS_USB,
-                "SetAudioControl: bCs={:02x} bCn={:02x} bRequestType={:02x} bRequest={:02x} "
-                "bIndex={:02x} aid={:08x}",
-                std::to_underlying(cs), cn, cmd->request_type, std::to_underlying(request),
-                cmd->index, aid);
+  DEBUG_LOG(IOS_USB,
+            "SetAudioControl: bCs=%02x bCn=%02x bRequestType=%02x bRequest=%02x "
+            "bIndex=%02x aid=%08x",
+            (unsigned)std::to_underlying(cs), (unsigned)cn, (unsigned)cmd->request_type,
+            (unsigned)std::to_underlying(request), (unsigned)cmd->index, aid);
   switch (aid)
   {
   case USBGETAID(FeatureUnitControlSelector::Mute, RequestCode::SetCur, 0x0200):
   {
     retro_atomic_store_release_int(&m_sampler.mute, memory.Read_U8(cmd->data_address) & 0x01);
-    DEBUG_LOG_FMT(IOS_USB, "SetAudioControl: Setting mute to {}", m_sampler.IsMuted());
+    DEBUG_LOG(IOS_USB, "SetAudioControl: Setting mute to %s",
+              m_sampler.IsMuted() ? "true" : "false");
     ret = 0;
     break;
   }
@@ -324,8 +326,8 @@ int LogitechMic::SetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
 
       retro_atomic_store_release_int(&m_sampler.volume, static_cast<u8>(vol));
 
-      DEBUG_LOG_FMT(IOS_USB, "SetAudioControl: Setting volume to [{:02x}] [original={:04x}]",
-                    retro_atomic_load_acquire_int(&m_sampler.volume), original_vol);
+      DEBUG_LOG(IOS_USB, "SetAudioControl: Setting volume to [%02x] [original=%04x]",
+                (unsigned)retro_atomic_load_acquire_int(&m_sampler.volume), (unsigned)original_vol);
 
       ret = 0;
     }
@@ -338,11 +340,11 @@ int LogitechMic::SetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   }
   default:
   {
-    WARN_LOG_FMT(IOS_USB,
-                 "SetAudioControl: Unknown request: bCs={:02x} bCn={:02x} bRequestType={:02x} "
-                 "bRequest={:02x} bIndex={:02x} aid={:08x}",
-                 std::to_underlying(cs), cn, cmd->request_type, std::to_underlying(request),
-                 cmd->index, aid);
+    WARN_LOG(IOS_USB,
+             "SetAudioControl: Unknown request: bCs=%02x bCn=%02x bRequestType=%02x "
+             "bRequest=%02x bIndex=%02x aid=%08x",
+             (unsigned)std::to_underlying(cs), (unsigned)cn, (unsigned)cmd->request_type,
+             (unsigned)std::to_underlying(request), (unsigned)cmd->index, aid);
     break;
   }
   }
@@ -358,11 +360,11 @@ int LogitechMic::EndpointAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   const u8 cn = static_cast<u8>(cmd->value - 1);
   const u32 aid = USBGETAID(cs, request, cmd->index);
   int ret = IPC_STALL;
-  DEBUG_LOG_FMT(IOS_USB,
-                "EndpointAudioControl: bCs={:02x} bCn={:02x} bRequestType={:02x} bRequest={:02x} "
-                "bIndex={:02x} aid:{:08x}",
-                std::to_underlying(cs), cn, cmd->request_type, std::to_underlying(request),
-                cmd->index, aid);
+  DEBUG_LOG(IOS_USB,
+            "EndpointAudioControl: bCs=%02x bCn=%02x bRequestType=%02x bRequest=%02x "
+            "bIndex=%02x aid:%08x",
+            (unsigned)std::to_underlying(cs), (unsigned)cn, (unsigned)cmd->request_type,
+            (unsigned)std::to_underlying(request), (unsigned)cmd->index, aid);
   switch (aid)
   {
   case USBGETAID(EndpointControlSelector::SamplingFreq, RequestCode::SetCur, ENDPOINT_AUDIO_IN):
@@ -377,15 +379,15 @@ int LogitechMic::EndpointAudioControl(std::unique_ptr<CtrlMessage>& cmd)
         retro_atomic_store_release_int(&m_sampler.sample_rate, static_cast<int>(sr));
         if (m_microphone != nullptr)
         {
-          DEBUG_LOG_FMT(IOS_USB, "EndpointAudioControl: Setting sampling rate to {:d}", sr);
+          DEBUG_LOG(IOS_USB, "EndpointAudioControl: Setting sampling rate to %d", sr);
           m_microphone->SetSamplingRate(sr);
         }
       }
     }
     else if (cn < 1)
     {
-      WARN_LOG_FMT(IOS_USB, "EndpointAudioControl: Unsupported SAMPLER_FREQ_CONTROL set [cn={:d}]",
-                   cn);
+      WARN_LOG(IOS_USB, "EndpointAudioControl: Unsupported SAMPLER_FREQ_CONTROL set [cn=%d]",
+               (unsigned)cn);
     }
     ret = 0;
     break;
@@ -401,11 +403,11 @@ int LogitechMic::EndpointAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   }
   default:
   {
-    WARN_LOG_FMT(IOS_USB,
-                 "SetAudioControl: Unknown request: bCs={:02x} bCn={:02x} bRequestType={:02x} "
-                 "bRequest={:02x} bIndex={:02x} aid={:08x}",
-                 std::to_underlying(cs), cn, cmd->request_type, std::to_underlying(request),
-                 cmd->index, aid);
+    WARN_LOG(IOS_USB,
+             "SetAudioControl: Unknown request: bCs=%02x bCn=%02x bRequestType=%02x "
+             "bRequest=%02x bIndex=%02x aid=%08x",
+             (unsigned)std::to_underlying(cs), (unsigned)cn, (unsigned)cmd->request_type,
+             (unsigned)std::to_underlying(request), (unsigned)cmd->index, aid);
     break;
   }
   }
@@ -548,34 +550,38 @@ static constexpr u16 LogitechUSBHDR(u8 dir, u8 type, u8 recipient, RequestCode r
 int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
 {
   // Reference: https://www.usb.org/sites/default/files/audio10.pdf
-  DEBUG_LOG_FMT(IOS_USB,
-                "[{:04x}:{:04x} {}:{}] Control: bRequestType={:02x} bRequest={:02x} wValue={:04x}"
-                " wIndex={:04x} wLength={:04x}",
-                m_vid, m_pid, m_index, m_active_interface, cmd->request_type, cmd->request,
-                cmd->value, cmd->index, cmd->length);
+  DEBUG_LOG(IOS_USB,
+            "[%04x:%04x %u:%u] Control: bRequestType=%02x bRequest=%02x wValue=%04x"
+            " wIndex=%04x wLength=%04x",
+            (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+            (unsigned)cmd->request_type, (unsigned)cmd->request, (unsigned)cmd->value,
+            (unsigned)cmd->index, (unsigned)cmd->length);
   switch (cmd->request_type << 8 | cmd->request)
   {
   case USBHDR(DIR_DEVICE2HOST, TYPE_STANDARD, REC_DEVICE, REQUEST_GET_DESCRIPTOR):
   {
     // It seems every game always pokes this at first twice; one with a length of 9 which gets the
     // config, and then another with the length provided by the config.
-    DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] REQUEST_GET_DESCRIPTOR index={:04x} value={:04x}",
-                  m_vid, m_pid, m_index, m_active_interface, cmd->index, cmd->value);
+    DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] REQUEST_GET_DESCRIPTOR index=%04x value=%04x",
+              (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+              (unsigned)cmd->index, (unsigned)cmd->value);
     cmd->FillBuffer(FULL_DESCRIPTOR.data(), std::min<size_t>(cmd->length, FULL_DESCRIPTOR.size()));
     cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_SUCCESS);
     break;
   }
   case USBHDR(DIR_HOST2DEVICE, TYPE_STANDARD, REC_INTERFACE, REQUEST_SET_INTERFACE):
   {
-    DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] REQUEST_SET_INTERFACE index={:04x} value={:04x}",
-                  m_vid, m_pid, m_index, m_active_interface, cmd->index, cmd->value);
+    DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] REQUEST_SET_INTERFACE index=%04x value=%04x",
+              (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+              (unsigned)cmd->index, (unsigned)cmd->value);
     if (static_cast<u8>(cmd->index) != m_active_interface)
     {
       const int ret = ChangeInterface(static_cast<u8>(cmd->index));
       if (ret < 0)
       {
-        ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] Failed to change interface to {}", m_vid,
-                      m_pid, m_index, m_active_interface, cmd->index);
+        ERROR_LOG(IOS_USB, "[%04x:%04x %u:%u] Failed to change interface to %u", (unsigned)m_vid,
+                  (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+                  (unsigned)cmd->index);
         return ret;
       }
     }
@@ -589,14 +595,15 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   case LogitechUSBHDR(DIR_DEVICE2HOST, TYPE_CLASS, REC_INTERFACE, RequestCode::GetMax):
   case LogitechUSBHDR(DIR_DEVICE2HOST, TYPE_CLASS, REC_INTERFACE, RequestCode::GetRes):
   {
-    DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] Get Control index={:04x} value={:04x}", m_vid,
-                  m_pid, m_index, m_active_interface, cmd->index, cmd->value);
+    DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] Get Control index=%04x value=%04x", (unsigned)m_vid,
+              (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+              (unsigned)cmd->index, (unsigned)cmd->value);
     const int ret = GetAudioControl(cmd);
     if (ret < 0)
     {
-      ERROR_LOG_FMT(IOS_USB,
-                    "[{:04x}:{:04x} {}:{}] Get Control Failed index={:04x} value={:04x} ret={}",
-                    m_vid, m_pid, m_index, m_active_interface, cmd->index, cmd->value, ret);
+      ERROR_LOG(IOS_USB, "[%04x:%04x %u:%u] Get Control Failed index=%04x value=%04x ret=%d",
+                (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+                (unsigned)cmd->index, (unsigned)cmd->value, ret);
       cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_STALL);
     }
     else
@@ -610,14 +617,15 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   case LogitechUSBHDR(DIR_DEVICE2HOST, TYPE_CLASS, REC_INTERFACE, RequestCode::SetMax):
   case LogitechUSBHDR(DIR_DEVICE2HOST, TYPE_CLASS, REC_INTERFACE, RequestCode::SetRes):
   {
-    DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] Set Control index={:04x} value={:04x}", m_vid,
-                  m_pid, m_index, m_active_interface, cmd->index, cmd->value);
+    DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] Set Control index=%04x value=%04x", (unsigned)m_vid,
+              (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+              (unsigned)cmd->index, (unsigned)cmd->value);
     const int ret = SetAudioControl(cmd);
     if (ret < 0)
     {
-      ERROR_LOG_FMT(IOS_USB,
-                    "[{:04x}:{:04x} {}:{}] Set Control Failed index={:04x} value={:04x} ret={}",
-                    m_vid, m_pid, m_index, m_active_interface, cmd->index, cmd->value, ret);
+      ERROR_LOG(IOS_USB, "[%04x:%04x %u:%u] Set Control Failed index=%04x value=%04x ret=%d",
+                (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+                (unsigned)cmd->index, (unsigned)cmd->value, ret);
       cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_STALL);
     }
     else
@@ -635,15 +643,15 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   case LogitechUSBHDR(DIR_HOST2DEVICE, TYPE_CLASS, REC_ENDPOINT, RequestCode::SetMax):
   case LogitechUSBHDR(DIR_HOST2DEVICE, TYPE_CLASS, REC_ENDPOINT, RequestCode::SetRes):
   {
-    DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}:{}] REC_ENDPOINT index={:04x} value={:04x}", m_vid,
-                  m_pid, m_index, m_active_interface, cmd->index, cmd->value);
+    DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] REC_ENDPOINT index=%04x value=%04x", (unsigned)m_vid,
+              (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+              (unsigned)cmd->index, (unsigned)cmd->value);
     const int ret = EndpointAudioControl(cmd);
     if (ret < 0)
     {
-      ERROR_LOG_FMT(
-          IOS_USB,
-          "[{:04x}:{:04x} {}:{}] Enndpoint Control Failed index={:04x} value={:04x} ret={}", m_vid,
-          m_pid, m_index, m_active_interface, cmd->index, cmd->value, ret);
+      ERROR_LOG(IOS_USB, "[%04x:%04x %u:%u] Enndpoint Control Failed index=%04x value=%04x ret=%d",
+                (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+                (unsigned)cmd->index, (unsigned)cmd->value, ret);
       cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_STALL);
     }
     else
@@ -657,16 +665,16 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   case LogitechUSBHDR(DIR_HOST2DEVICE, TYPE_CLASS, REC_INTERFACE, RequestCode::SetMax):
   case LogitechUSBHDR(DIR_HOST2DEVICE, TYPE_CLASS, REC_INTERFACE, RequestCode::SetRes):
   {
-    DEBUG_LOG_FMT(IOS_USB,
-                  "[{:04x}:{:04x} {}:{}] Set Control HOST2DEVICE index={:04x} value={:04x}", m_vid,
-                  m_pid, m_index, m_active_interface, cmd->index, cmd->value);
+    DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] Set Control HOST2DEVICE index=%04x value=%04x",
+              (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+              (unsigned)cmd->index, (unsigned)cmd->value);
     const int ret = SetAudioControl(cmd);
     if (ret < 0)
     {
-      ERROR_LOG_FMT(
-          IOS_USB,
-          "[{:04x}:{:04x} {}:{}] Set Control HOST2DEVICE Failed index={:04x} value={:04x} ret={}",
-          m_vid, m_pid, m_index, m_active_interface, cmd->index, cmd->value, ret);
+      ERROR_LOG(IOS_USB,
+                "[%04x:%04x %u:%u] Set Control HOST2DEVICE Failed index=%04x value=%04x ret=%d",
+                (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
+                (unsigned)cmd->index, (unsigned)cmd->value, ret);
       cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_STALL);
     }
     else
@@ -676,7 +684,7 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
     break;
   }
   default:
-    NOTICE_LOG_FMT(IOS_USB, "Unknown command");
+    NOTICE_LOG(IOS_USB, "Unknown command");
     cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_STALL);
   }
 
@@ -703,7 +711,7 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
   u8* packets = memory.GetPointerForRange(cmd->data_address, cmd->length);
   if (packets == nullptr)
   {
-    ERROR_LOG_FMT(IOS_USB, "Logitech USB Microphone command invalid");
+    ERROR_LOG(IOS_USB, "Logitech USB Microphone command invalid");
     return IPC_EINVAL;
   }
 
@@ -716,17 +724,17 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
       size = m_microphone->ReadIntoBuffer(packets, cmd->length);
     if (const u16 remainder = cmd->SetPacketsReturnValueFromSize(size); remainder != 0)
     {
-      WARN_LOG_FMT(IOS_USB, "Microphone data truncated, {} byte(s) lost in isochronous message",
-                   remainder);
+      WARN_LOG(IOS_USB, "Microphone data truncated, %u byte(s) lost in isochronous message",
+               (unsigned)remainder);
     }
     break;
   }
   default:
   {
-    WARN_LOG_FMT(IOS_USB,
-                 "Logitech Mic isochronous transfer, unsupported endpoint: length={:04x} "
-                 "endpoint={:02x} num_packets={:02x}",
-                 cmd->length, cmd->endpoint, cmd->num_packets);
+    WARN_LOG(IOS_USB,
+             "Logitech Mic isochronous transfer, unsupported endpoint: length=%04x "
+             "endpoint=%02x num_packets=%02x",
+             cmd->length, (unsigned)cmd->endpoint, (unsigned)cmd->num_packets);
   }
   }
 

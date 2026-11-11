@@ -650,7 +650,7 @@ bool SkylanderUSB::Attach()
   {
     return true;
   }
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Opening device", m_vid, m_pid);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x] Opening device", (unsigned)m_vid, (unsigned)m_pid);
   m_device_attached = true;
   return true;
 }
@@ -668,16 +668,16 @@ bool SkylanderUSB::AttachAndChangeInterface(const u8 iface)
 
 int SkylanderUSB::CancelTransfer(const u8 endpoint)
 {
-  INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Cancelling transfers (endpoint {:#x})", m_vid, m_pid,
-               m_active_interface, endpoint);
+  INFO_LOG(IOS_USB, "[%04x:%04x %u] Cancelling transfers (endpoint %#x)", (unsigned)m_vid,
+           (unsigned)m_pid, (unsigned)m_active_interface, (unsigned)endpoint);
 
   return IPC_SUCCESS;
 }
 
 int SkylanderUSB::ChangeInterface(const u8 iface)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Changing interface to {}", m_vid, m_pid,
-                m_active_interface, iface);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Changing interface to %u", (unsigned)m_vid, (unsigned)m_pid,
+            (unsigned)m_active_interface, (unsigned)iface);
   m_active_interface = iface;
   return 0;
 }
@@ -700,11 +700,12 @@ int SkylanderUSB::SetAltSetting(u8 alt_setting)
 // https://pastebin.com/EqtTRzeF
 int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB,
-                "[{:04x}:{:04x} {}] Control: bRequestType={:02x} bRequest={} wValue={:04x}"
-                " wIndex={:04x} wLength={:04x}",
-                m_vid, m_pid, m_active_interface, cmd->request_type, cmd->request, cmd->value,
-                cmd->index, cmd->length);
+  DEBUG_LOG(IOS_USB,
+            "[%04x:%04x %u] Control: bRequestType=%02x bRequest=%u wValue=%04x"
+            " wIndex=%04x wLength=%04x",
+            (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface,
+            (unsigned)cmd->request_type, (unsigned)cmd->request, (unsigned)cmd->value,
+            (unsigned)cmd->index, (unsigned)cmd->length);
 
   // If not HID Host to Device type, return invalid
   if (cmd->request_type != 0x21)
@@ -729,7 +730,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
       expected_count = 8;
       break;
     default:
-      ERROR_LOG_FMT(IOS_USB, "Unhandled Request {}", cmd->request);
+      ERROR_LOG(IOS_USB, "Unhandled Request %u", (unsigned)cmd->request);
       break;
     }
   }
@@ -741,7 +742,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
     u8* buf = memory.GetPointerForRange(cmd->data_address, cmd->length);
     if (cmd->length == 0 || buf == nullptr)
     {
-      ERROR_LOG_FMT(IOS_USB, "Skylander command invalid");
+      ERROR_LOG(IOS_USB, "Skylander command invalid");
       return IPC_EINVAL;
     }
     // Data to be queued to be sent back via the Interrupt Transfer (if needed)
@@ -995,7 +996,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
       break;
     }
     default:
-      ERROR_LOG_FMT(IOS_USB, "Unhandled Skylander Portal Query: {}", buf[0]);
+      ERROR_LOG(IOS_USB, "Unhandled Skylander Portal Query: %u", (unsigned)buf[0]);
       break;
     }
   }
@@ -1009,8 +1010,8 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
 
 int SkylanderUSB::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Bulk: length={} endpoint={}", m_vid, m_pid,
-                m_active_interface, cmd->length, cmd->endpoint);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Bulk: length=%u endpoint=%u", (unsigned)m_vid, (unsigned)m_pid,
+            (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
   return 0;
 }
 
@@ -1020,15 +1021,15 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
 // Message.
 int SkylanderUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Interrupt: length={} endpoint={}", m_vid, m_pid,
-                m_active_interface, cmd->length, cmd->endpoint);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Interrupt: length=%u endpoint=%u", (unsigned)m_vid,
+            (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
 
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
   u8* buf = memory.GetPointerForRange(cmd->data_address, cmd->length);
   if (cmd->length == 0 || buf == nullptr)
   {
-    ERROR_LOG_FMT(IOS_USB, "Skylander command invalid");
+    ERROR_LOG(IOS_USB, "Skylander command invalid");
     return IPC_EINVAL;
   }
   std::array<u8, 64> interrupt_response = {};
@@ -1072,8 +1073,9 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
 
 int SkylanderUSB::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Isochronous: length={} endpoint={} num_packets={}",
-                m_vid, m_pid, m_active_interface, cmd->length, cmd->endpoint, cmd->num_packets);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Isochronous: length=%u endpoint=%u num_packets=%u",
+            (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface, cmd->length,
+            (unsigned)cmd->endpoint, (unsigned)cmd->num_packets);
   return 0;
 }
 
@@ -1266,7 +1268,7 @@ bool SkylanderPortal::RemoveSkylander(u8 sky_num)
   if (!IsSkylanderNumberValid(sky_num))
     return false;
 
-  DEBUG_LOG_FMT(IOS_USB, "Cleared Skylander from slot {}", sky_num);
+  DEBUG_LOG(IOS_USB, "Cleared Skylander from slot %u", (unsigned)sky_num);
   auto& skylander = skylanders[sky_num];
 
   if (skylander.figure->FileIsOpen())
@@ -1306,7 +1308,7 @@ u8 SkylanderPortal::LoadSkylander(std::unique_ptr<SkylanderFigure> figure)
     {
       if (skylanders[i].last_id == sky_serial)
       {
-        DEBUG_LOG_FMT(IOS_USB, "Last Id: {}", skylanders[i].last_id);
+        DEBUG_LOG(IOS_USB, "Last Id: %u", skylanders[i].last_id);
 
         found_slot = i;
         break;
@@ -1314,7 +1316,7 @@ u8 SkylanderPortal::LoadSkylander(std::unique_ptr<SkylanderFigure> figure)
 
       if (i < found_slot)
       {
-        DEBUG_LOG_FMT(IOS_USB, "Last Id: {}", skylanders[i].last_id);
+        DEBUG_LOG(IOS_USB, "Last Id: %u", skylanders[i].last_id);
         found_slot = i;
       }
     }

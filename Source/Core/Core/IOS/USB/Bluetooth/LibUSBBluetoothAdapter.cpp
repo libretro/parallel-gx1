@@ -113,9 +113,11 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
         LibusbUtils::MakeConfigDescriptor(device);
     if (make_config_descriptor_ret != LIBUSB_SUCCESS || !config_descriptor)
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "Failed to get config descriptor for device {:04x}:{:04x}: {}",
-                    device_descriptor.idVendor, device_descriptor.idProduct,
-                    LibusbUtils::ErrorWrap(make_config_descriptor_ret));
+      ERROR_LOG(IOS_WIIMOTE, "Failed to get config descriptor for device %04x:%04x: %s (%d: %s)",
+                (unsigned)device_descriptor.idVendor, (unsigned)device_descriptor.idProduct,
+                LibusbUtils::ErrorWrap(make_config_descriptor_ret).GetStrError(),
+                LibusbUtils::ErrorWrap(make_config_descriptor_ret).m_error,
+                LibusbUtils::ErrorWrap(make_config_descriptor_ret).GetName());
       return true;
     }
 
@@ -133,9 +135,10 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
           LibusbUtils::GetStringDescriptor(m_handle, device_descriptor.iProduct).value_or("?");
       const auto serial_number =
           LibusbUtils::GetStringDescriptor(m_handle, device_descriptor.iSerialNumber).value_or("?");
-      NOTICE_LOG_FMT(IOS_WIIMOTE, "Using device {:04x}:{:04x} (rev {:x}) for Bluetooth: {} {} {}",
-                     device_descriptor.idVendor, device_descriptor.idProduct,
-                     device_descriptor.bcdDevice, manufacturer, product, serial_number);
+      NOTICE_LOG(IOS_WIIMOTE, "Using device %04x:%04x (rev %x) for Bluetooth: %s %s %s",
+                 (unsigned)device_descriptor.idVendor, (unsigned)device_descriptor.idProduct,
+                 (unsigned)device_descriptor.bcdDevice, manufacturer.c_str(), product.c_str(),
+                 serial_number.c_str());
 
       m_device_vid = device_descriptor.idVendor;
       m_device_pid = device_descriptor.idProduct;
@@ -153,17 +156,15 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
   {
     if (m_last_open_error.empty())
     {
-      CriticalAlertFmtT(
-          "Could not find any usable Bluetooth USB adapter for Bluetooth Passthrough.\n\n"
-          "The emulated console will now stop.");
+      CriticalAlert("Could not find any usable Bluetooth USB adapter for Bluetooth Passthrough.\n\n"
+                    "The emulated console will now stop.");
     }
     else
     {
-      CriticalAlertFmtT(
-          "Could not find any usable Bluetooth USB adapter for Bluetooth Passthrough.\n"
-          "The following error occurred when Dolphin tried to use an adapter:\n{0}\n\n"
-          "The emulated console will now stop.",
-          m_last_open_error);
+      CriticalAlert("Could not find any usable Bluetooth USB adapter for Bluetooth Passthrough.\n"
+                    "The following error occurred when Dolphin tried to use an adapter:\n%s\n\n"
+                    "The emulated console will now stop.",
+                    m_last_open_error.c_str());
     }
     Core::QueueHostJob(&Core::Stop);
     return;
@@ -173,12 +174,12 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 
   if (IsRealtekVID(m_device_vid) || IsKnownRealtekBluetoothDevice(m_device_vid, m_device_pid))
   {
-    INFO_LOG_FMT(IOS_WIIMOTE, "Initializing Realtek Bluetooth device: {:04x}:{:04x}", m_device_vid,
-                 m_device_pid);
+    INFO_LOG(IOS_WIIMOTE, "Initializing Realtek Bluetooth device: %04x:%04x",
+             (unsigned)m_device_vid, (unsigned)m_device_pid);
     if (!InitializeRealtekBluetoothDevice(*this))
     {
-      PanicAlertFmtT("Failed to initialize Realtek Bluetooth device.\n\n"
-                     "Bluetooth passthrough will probably not work.");
+      PanicAlert("Failed to initialize Realtek Bluetooth device.\n\n"
+                 "Bluetooth passthrough will probably not work.");
     }
   }
 }
@@ -220,7 +221,9 @@ void LibUSBBluetoothAdapter::Close()
 
   const int ret = libusb_release_interface(m_handle, 0);
   if (ret != LIBUSB_SUCCESS)
-    WARN_LOG_FMT(IOS_WIIMOTE, "libusb_release_interface failed: {}", LibusbUtils::ErrorWrap(ret));
+    WARN_LOG(IOS_WIIMOTE, "libusb_release_interface failed: %s (%d: %s)",
+             LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+             LibusbUtils::ErrorWrap(ret).GetName());
 
   libusb_close(std::exchange(m_handle, nullptr));
 }
@@ -235,8 +238,8 @@ void LibUSBBluetoothAdapter::Update()
   while (!m_unacknowledged_commands.empty() &&
          now - m_unacknowledged_commands.front().submit_ticks > timeout_ticks)
   {
-    WARN_LOG_FMT(IOS_WIIMOTE, "HCI command 0x{:04x} timed out.",
-                 m_unacknowledged_commands.front().opcode);
+    WARN_LOG(IOS_WIIMOTE, "HCI command 0x%04x timed out.",
+             (unsigned)m_unacknowledged_commands.front().opcode);
     m_unacknowledged_commands.pop_front();
   }
 
@@ -247,7 +250,7 @@ void LibUSBBluetoothAdapter::Update()
   // Push queued commands when the controller is ready for them.
   if (!m_pending_hci_transfers.empty() && IsControllerReadyForCommand())
   {
-    DEBUG_LOG_FMT(IOS_WIIMOTE, "Submitting queued HCI command.");
+    DEBUG_LOG(IOS_WIIMOTE, "Submitting queued HCI command.");
 
     PushHCICommand(m_pending_hci_transfers.front());
     m_pending_hci_transfers.pop();
@@ -330,7 +333,7 @@ void LibUSBBluetoothAdapter::AcknowledgeCommand(const u8* buffer, std::size_t si
 {
   if (size < sizeof(hci_event_hdr_t) + sizeof(EventType)) [[unlikely]]
   {
-    WARN_LOG_FMT(IOS_WIIMOTE, "Undersized HCI event");
+    WARN_LOG(IOS_WIIMOTE, "Undersized HCI event");
     return;
   }
 
@@ -345,12 +348,12 @@ void LibUSBBluetoothAdapter::AcknowledgeCommand(const u8* buffer, std::size_t si
   }
   if (index < m_unacknowledged_commands.size())
   {
-    DEBUG_LOG_FMT(IOS_WIIMOTE, "HCI command acknowledged: 0x{:04x}", ev.opcode);
+    DEBUG_LOG(IOS_WIIMOTE, "HCI command acknowledged: 0x%04x", (unsigned)ev.opcode);
     m_unacknowledged_commands.erase(m_unacknowledged_commands.begin() + index);
   }
   else if (ev.opcode != 0x0000)
   {
-    WARN_LOG_FMT(IOS_WIIMOTE, "Unexpected opcode acknowledgement: 0x{:04x}", ev.opcode);
+    WARN_LOG(IOS_WIIMOTE, "Unexpected opcode acknowledgement: 0x%04x", (unsigned)ev.opcode);
   }
 
   m_num_hci_command_packets = ev.num_cmd_pkts;
@@ -435,7 +438,9 @@ void LibUSBBluetoothAdapter::SubmitTransfer(libusb_transfer* transfer)
   if (ret == LIBUSB_SUCCESS)
     return;
 
-  ERROR_LOG_FMT(IOS_WIIMOTE, "libusb_submit_transfer: {}", LibusbUtils::ErrorWrap(ret));
+  ERROR_LOG(IOS_WIIMOTE, "libusb_submit_transfer: %s (%d: %s)",
+            LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+            LibusbUtils::ErrorWrap(ret).GetName());
 
   // Failed transers will not invoke callbacks so we must mark the buffer to be free'd here.
   QueueFree(transfer);
@@ -476,7 +481,7 @@ void LibUSBBluetoothAdapter::SendControlTransfer(u8 type, u8 request, u8 value, 
   }
   else
   {
-    DEBUG_LOG_FMT(IOS_WIIMOTE, "Queueing HCI command while controller is busy.");
+    DEBUG_LOG(IOS_WIIMOTE, "Queueing HCI command while controller is busy.");
     m_pending_hci_transfers.emplace(transfer);
   }
 }
@@ -512,7 +517,7 @@ bool LibUSBBluetoothAdapter::SendBlockingCommand(const void* data, std::size_t s
     {
       if (retro_atomic_load_acquire_int(&m_input_failed))
       {
-        ERROR_LOG_FMT(IOS_WIIMOTE, "Bluetooth adapter stopped answering HCI commands.");
+        ERROR_LOG(IOS_WIIMOTE, "Bluetooth adapter stopped answering HCI commands.");
         return false;
       }
       continue;
@@ -523,7 +528,7 @@ bool LibUSBBluetoothAdapter::SendBlockingCommand(const void* data, std::size_t s
 
     if (event.size() < sizeof(hci_event_hdr_t) + sizeof(hci_command_compl_ep))
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized hci_command_compl_ep");
+      ERROR_LOG(IOS_WIIMOTE, "Undersized hci_command_compl_ep");
       continue;
     }
 
@@ -534,7 +539,7 @@ bool LibUSBBluetoothAdapter::SendBlockingCommand(const void* data, std::size_t s
 
     if (event.size() < sizeof(hci_event_hdr_t) + sizeof(hci_command_compl_ep) + response_size)
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE, "Undersized command result");
+      ERROR_LOG(IOS_WIIMOTE, "Undersized command result");
       break;
     }
 
@@ -633,8 +638,8 @@ void LibUSBBluetoothAdapter::HandleInputTransfer(libusb_transfer* tr)
     else if (!std::exchange(m_showed_long_queue_drop, true))
     {
       // This will happen when pausing the emulator.
-      WARN_LOG_FMT(IOS_WIIMOTE, "{} queue is too long. Packets will be dropped.",
-                   (is_hci_event ? "HCI" : "ACL"));
+      WARN_LOG(IOS_WIIMOTE, "%s queue is too long. Packets will be dropped.",
+               (is_hci_event ? "HCI" : "ACL"));
     }
   }
 
@@ -655,8 +660,9 @@ void LibUSBBluetoothAdapter::HandleInputTransfer(libusb_transfer* tr)
       return;
     }
 
-    ERROR_LOG_FMT(IOS_WIIMOTE, "HandleInputTransfer libusb_submit_transfer: {}",
-                  LibusbUtils::ErrorWrap(ret));
+    ERROR_LOG(IOS_WIIMOTE, "HandleInputTransfer libusb_submit_transfer: %s (%d: %s)",
+              LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+              LibusbUtils::ErrorWrap(ret).GetName());
   }
 
   // No longer listening: nothing more will arrive for a blocking command to wait on.
@@ -669,8 +675,10 @@ void LibUSBBluetoothAdapter::HandleTransferError(libusb_transfer* transfer)
   if (transfer->status != LIBUSB_TRANSFER_COMPLETED &&
       transfer->status != LIBUSB_TRANSFER_CANCELLED)
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "libusb transfer failed: {}",
-                  LibusbUtils::ErrorWrap(transfer->status));
+    ERROR_LOG(IOS_WIIMOTE, "libusb transfer failed: %s (%d: %s)",
+              LibusbUtils::ErrorWrap(transfer->status).GetStrError(),
+              LibusbUtils::ErrorWrap(transfer->status).m_error,
+              LibusbUtils::ErrorWrap(transfer->status).GetName());
     if (!std::exchange(m_showed_failed_transfer, true))
     {
       Core::DisplayMessage("Failed to send a command to the Bluetooth adapter.", 10000);

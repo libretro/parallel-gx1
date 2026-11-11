@@ -40,8 +40,10 @@ LibusbDevice::LibusbDevice(libusb_device* device, const libusb_device_descriptor
     auto [ret, config_descriptor] = LibusbUtils::MakeConfigDescriptor(m_device, i);
     if (ret != LIBUSB_SUCCESS || !config_descriptor)
     {
-      WARN_LOG_FMT(IOS_USB, "Failed to make config descriptor {} for {:04x}:{:04x}: {}", i, m_vid,
-                   m_pid, LibusbUtils::ErrorWrap(ret));
+      WARN_LOG(IOS_USB, "Failed to make config descriptor %u for %04x:%04x: %s (%d: %s)",
+               (unsigned)i, (unsigned)m_vid, (unsigned)m_pid,
+               LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+               LibusbUtils::ErrorWrap(ret).GetName());
     }
     m_config_descriptors.emplace_back(std::move(config_descriptor));
   }
@@ -79,7 +81,8 @@ std::vector<ConfigDescriptor> LibusbDevice::GetConfigurations() const
   {
     if (!config_descriptor)
     {
-      ERROR_LOG_FMT(IOS_USB, "Ignoring invalid config descriptor for {:04x}:{:04x}", m_vid, m_pid);
+      ERROR_LOG(IOS_USB, "Ignoring invalid config descriptor for %04x:%04x", (unsigned)m_vid,
+                (unsigned)m_pid);
       continue;
     }
     ConfigDescriptor descriptor;
@@ -94,7 +97,8 @@ std::vector<InterfaceDescriptor> LibusbDevice::GetInterfaces(const u8 config) co
   std::vector<InterfaceDescriptor> descriptors;
   if (config >= m_config_descriptors.size() || !m_config_descriptors[config])
   {
-    ERROR_LOG_FMT(IOS_USB, "Invalid config descriptor {} for {:04x}:{:04x}", config, m_vid, m_pid);
+    ERROR_LOG(IOS_USB, "Invalid config descriptor %u for %04x:%04x", (unsigned)config,
+              (unsigned)m_vid, (unsigned)m_pid);
     return descriptors;
   }
   for (u8 i = 0; i < m_config_descriptors[config]->bNumInterfaces; ++i)
@@ -116,7 +120,8 @@ LibusbDevice::GetEndpoints(const u8 config, const u8 interface_number, const u8 
   std::vector<EndpointDescriptor> descriptors;
   if (config >= m_config_descriptors.size() || !m_config_descriptors[config])
   {
-    ERROR_LOG_FMT(IOS_USB, "Invalid config descriptor {} for {:04x}:{:04x}", config, m_vid, m_pid);
+    ERROR_LOG(IOS_USB, "Invalid config descriptor %u for %04x:%04x", (unsigned)config,
+              (unsigned)m_vid, (unsigned)m_pid);
     return descriptors;
   }
   ASSERT(interface_number < m_config_descriptors[config]->bNumInterfaces);
@@ -144,12 +149,13 @@ bool LibusbDevice::Attach()
 
   if (!m_handle)
   {
-    NOTICE_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Opening device", m_vid, m_pid);
+    NOTICE_LOG(IOS_USB, "[%04x:%04x] Opening device", (unsigned)m_vid, (unsigned)m_pid);
     const int ret = libusb_open(m_device, &m_handle);
     if (ret != LIBUSB_SUCCESS)
     {
-      ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Failed to open: {}", m_vid, m_pid,
-                    LibusbUtils::ErrorWrap(ret));
+      ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to open: %s (%d: %s)", (unsigned)m_vid,
+                (unsigned)m_pid, LibusbUtils::ErrorWrap(ret).GetStrError(),
+                LibusbUtils::ErrorWrap(ret).m_error, LibusbUtils::ErrorWrap(ret).GetName());
       m_handle = nullptr;
       return false;
     }
@@ -173,8 +179,8 @@ bool LibusbDevice::AttachAndChangeInterface(const u8 iface)
 
 int LibusbDevice::CancelTransfer(const u8 endpoint)
 {
-  INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Cancelling transfers (endpoint {:#x})", m_vid, m_pid,
-               m_active_interface, endpoint);
+  INFO_LOG(IOS_USB, "[%04x:%04x %u] Cancelling transfers (endpoint %#x)", (unsigned)m_vid,
+           (unsigned)m_pid, (unsigned)m_active_interface, (unsigned)endpoint);
   if (!m_transfer_endpoints[endpoint].IsUsed())
     return IPC_ENOENT;
   m_transfer_endpoints[endpoint].CancelTransfers();
@@ -183,8 +189,8 @@ int LibusbDevice::CancelTransfer(const u8 endpoint)
 
 int LibusbDevice::ChangeInterface(const u8 iface)
 {
-  INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Changing interface to {}", m_vid, m_pid,
-               m_active_interface, iface);
+  INFO_LOG(IOS_USB, "[%04x:%04x %u] Changing interface to %u", (unsigned)m_vid, (unsigned)m_pid,
+           (unsigned)m_active_interface, (unsigned)iface);
   m_active_interface = iface;
   return LIBUSB_SUCCESS;
 }
@@ -194,8 +200,8 @@ int LibusbDevice::SetAltSetting(const u8 alt_setting)
   if (!m_device_attached)
     return LIBUSB_ERROR_NOT_FOUND;
 
-  INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Setting alt setting {}", m_vid, m_pid,
-               m_active_interface, alt_setting);
+  INFO_LOG(IOS_USB, "[%04x:%04x %u] Setting alt setting %u", (unsigned)m_vid, (unsigned)m_pid,
+           (unsigned)m_active_interface, (unsigned)alt_setting);
   return libusb_set_interface_alt_setting(m_handle, m_active_interface, alt_setting);
 }
 
@@ -297,26 +303,30 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   if (!m_device_attached)
     return LIBUSB_ERROR_NOT_FOUND;
 
-  DEBUG_LOG_FMT(IOS_USB,
-                "[{:04x}:{:04x} {}] Control: bRequestType={:02x} bRequest={:02x} wValue={:04x}"
-                " wIndex={:04x} wLength={:04x}",
-                m_vid, m_pid, m_active_interface, cmd->request_type, cmd->request, cmd->value,
-                cmd->index, cmd->length);
+  DEBUG_LOG(IOS_USB,
+            "[%04x:%04x %u] Control: bRequestType=%02x bRequest=%02x wValue=%04x"
+            " wIndex=%04x wLength=%04x",
+            (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface,
+            (unsigned)cmd->request_type, (unsigned)cmd->request, (unsigned)cmd->value,
+            (unsigned)cmd->index, (unsigned)cmd->length);
 
   switch ((cmd->request_type << 8) | cmd->request)
   {
   // The following requests have to go through libusb and cannot be directly sent to the device.
   case USBHDR(DIR_HOST2DEVICE, TYPE_STANDARD, REC_INTERFACE, REQUEST_SET_INTERFACE):
   {
-    INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] REQUEST_SET_INTERFACE index={:04x} value={:04x}",
-                 m_vid, m_pid, m_active_interface, cmd->index, cmd->value);
+    INFO_LOG(IOS_USB, "[%04x:%04x %u] REQUEST_SET_INTERFACE index=%04x value=%04x", (unsigned)m_vid,
+             (unsigned)m_pid, (unsigned)m_active_interface, (unsigned)cmd->index,
+             (unsigned)cmd->value);
     if (static_cast<u8>(cmd->index) != m_active_interface)
     {
       const int ret = ChangeInterface(static_cast<u8>(cmd->index));
       if (ret < LIBUSB_SUCCESS)
       {
-        ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Failed to change interface to {}: {}", m_vid,
-                      m_pid, m_active_interface, cmd->index, LibusbUtils::ErrorWrap(ret));
+        ERROR_LOG(IOS_USB, "[%04x:%04x %u] Failed to change interface to %u: %s (%d: %s)",
+                  (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface,
+                  (unsigned)cmd->index, LibusbUtils::ErrorWrap(ret).GetStrError(),
+                  LibusbUtils::ErrorWrap(ret).m_error, LibusbUtils::ErrorWrap(ret).GetName());
         return ret;
       }
     }
@@ -327,8 +337,9 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   }
   case USBHDR(DIR_HOST2DEVICE, TYPE_STANDARD, REC_DEVICE, REQUEST_SET_CONFIGURATION):
   {
-    INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] REQUEST_SET_CONFIGURATION index={:04x} value={:04x}",
-                 m_vid, m_pid, m_active_interface, cmd->index, cmd->value);
+    INFO_LOG(IOS_USB, "[%04x:%04x %u] REQUEST_SET_CONFIGURATION index=%04x value=%04x",
+             (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface, (unsigned)cmd->index,
+             (unsigned)cmd->value);
     ReleaseAllInterfacesForCurrentConfig();
     const int ret = libusb_set_configuration(m_handle, cmd->value);
     if (ret == LIBUSB_SUCCESS)
@@ -372,8 +383,8 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
   if (!m_device_attached)
     return LIBUSB_ERROR_NOT_FOUND;
 
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Bulk: length={:04x} endpoint={:02x}", m_vid, m_pid,
-                m_active_interface, cmd->length, cmd->endpoint);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Bulk: length=%04x endpoint=%02x", (unsigned)m_vid,
+            (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
 
   libusb_transfer* transfer = libusb_alloc_transfer(0);
   libusb_fill_bulk_transfer(transfer, m_handle, cmd->endpoint,
@@ -389,8 +400,8 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
   if (!m_device_attached)
     return LIBUSB_ERROR_NOT_FOUND;
 
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Interrupt: length={:04x} endpoint={:02x}", m_vid,
-                m_pid, m_active_interface, cmd->length, cmd->endpoint);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Interrupt: length=%04x endpoint=%02x", (unsigned)m_vid,
+            (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
 
   libusb_transfer* transfer = libusb_alloc_transfer(0);
   libusb_fill_interrupt_transfer(transfer, m_handle, cmd->endpoint,
@@ -406,9 +417,9 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
   if (!m_device_attached)
     return LIBUSB_ERROR_NOT_FOUND;
 
-  DEBUG_LOG_FMT(IOS_USB,
-                "[{:04x}:{:04x} {}] Isochronous: length={:04x} endpoint={:02x} num_packets={:02x}",
-                m_vid, m_pid, m_active_interface, cmd->length, cmd->endpoint, cmd->num_packets);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Isochronous: length=%04x endpoint=%02x num_packets=%02x",
+            (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface, cmd->length,
+            (unsigned)cmd->endpoint, (unsigned)cmd->num_packets);
 
   libusb_transfer* transfer = libusb_alloc_transfer(cmd->num_packets);
   transfer->buffer = cmd->MakeBuffer(cmd->length).release();
@@ -479,7 +490,7 @@ void LibusbDevice::TransferEndpoint::AddTransfer(std::unique_ptr<TransferCommand
   }
   // More than MAX_IN_FLIGHT outstanding on one endpoint: the reply goes out when it completes,
   // it just cannot be cancelled.
-  ERROR_LOG_FMT(IOS_USB, "Too many transfers in flight on one endpoint");
+  ERROR_LOG(IOS_USB, "Too many transfers in flight on one endpoint");
   delete in_flight;
 }
 
@@ -508,7 +519,7 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(
   call_gate_drain(&m_cancel_gate);
   if (!in_flight)
   {
-    ERROR_LOG_FMT(IOS_USB, "No such transfer");
+    ERROR_LOG(IOS_USB, "No such transfer");
     return;
   }
 
@@ -526,10 +537,10 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(
   case LIBUSB_TRANSFER_TIMED_OUT:
   case LIBUSB_TRANSFER_OVERFLOW:
   case LIBUSB_TRANSFER_STALL:
-    ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] {} transfer (endpoint {:#04x}) failed: {}",
-                  device->m_vid, device->m_pid, device->m_active_interface,
-                  s_transfer_types.at(transfer->type), transfer->endpoint,
-                  libusb_error_name(transfer->status));
+    ERROR_LOG(IOS_USB, "[%04x:%04x %u] %s transfer (endpoint %#04x) failed: %s",
+              (unsigned)device->m_vid, (unsigned)device->m_pid,
+              (unsigned)device->m_active_interface, s_transfer_types.at(transfer->type),
+              (unsigned)transfer->endpoint, libusb_error_name(transfer->status));
     return_value = transfer->status == LIBUSB_TRANSFER_STALL ? -7004 : -5;
     break;
   case LIBUSB_TRANSFER_NO_DEVICE:
@@ -582,8 +593,9 @@ int LibusbDevice::ClaimAllInterfaces(u8 config_num) const
     if (ret2 < LIBUSB_SUCCESS && ret2 != LIBUSB_ERROR_NOT_FOUND &&
         ret2 != LIBUSB_ERROR_NOT_SUPPORTED)
     {
-      ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Failed to detach kernel driver: {}", m_vid, m_pid,
-                    LibusbUtils::ErrorWrap(ret2));
+      ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to detach kernel driver: %s (%d: %s)", (unsigned)m_vid,
+                (unsigned)m_pid, LibusbUtils::ErrorWrap(ret2).GetStrError(),
+                LibusbUtils::ErrorWrap(ret2).m_error, LibusbUtils::ErrorWrap(ret2).GetName());
       return ret2;
     }
 #endif
@@ -591,8 +603,8 @@ int LibusbDevice::ClaimAllInterfaces(u8 config_num) const
   });
   if (ret < LIBUSB_SUCCESS)
   {
-    ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Failed to claim all interfaces (configuration {})",
-                  m_vid, m_pid, config_num);
+    ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to claim all interfaces (configuration %u)",
+              (unsigned)m_vid, (unsigned)m_pid, (unsigned)config_num);
   }
   return ret;
 }
@@ -604,8 +616,8 @@ int LibusbDevice::ReleaseAllInterfaces(u8 config_num) const
   });
   if (ret < LIBUSB_SUCCESS && ret != LIBUSB_ERROR_NO_DEVICE && ret != LIBUSB_ERROR_NOT_FOUND)
   {
-    ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Failed to release all interfaces (configuration {})",
-                  m_vid, m_pid, config_num);
+    ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to release all interfaces (configuration %u)",
+              (unsigned)m_vid, (unsigned)m_pid, (unsigned)config_num);
   }
   return ret;
 }

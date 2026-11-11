@@ -182,8 +182,9 @@ IPCReply USBV5ResourceManager::SuspendResume(USBV5Device& device, const IOCtlReq
 
   // Note: this is unimplemented because there's no easy way to do this in a
   // platform-independant way (libusb does not support power management).
-  INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Received {} command", host_device->GetVid(),
-               host_device->GetPid(), device.interface_number, resumed == 0 ? "suspend" : "resume");
+  INFO_LOG(IOS_USB, "[%04x:%04x %u] Received %s command", (unsigned)host_device->GetVid(),
+           (unsigned)host_device->GetPid(), (unsigned)device.interface_number,
+           resumed == 0 ? "suspend" : "resume");
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -302,6 +303,6 @@ void USBV5ResourceManager::TriggerDeviceChangeReply()
   GetEmulationKernel().EnqueueIPCReply(*m_devicechange_hook_request, num_devices, 0,
                                        CoreTiming::FromThread::ANY);
   m_devicechange_hook_request.reset();
-  INFO_LOG_FMT(IOS_USB, "{} USBv5 device(s), including interfaces", num_devices);
+  INFO_LOG(IOS_USB, "%u USBv5 device(s), including interfaces", (unsigned)num_devices);
 }
 }  // namespace IOS::HLE

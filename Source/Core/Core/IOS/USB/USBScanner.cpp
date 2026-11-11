@@ -223,7 +223,9 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
         return true;
       });
       if (ret != LIBUSB_SUCCESS)
-        WARN_LOG_FMT(IOS_USB, "GetDeviceList failed: {}", LibusbUtils::ErrorWrap(ret));
+        WARN_LOG(IOS_USB, "GetDeviceList failed: %s (%d: %s)",
+                 LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+                 LibusbUtils::ErrorWrap(ret).GetName());
     }
   }
 #endif

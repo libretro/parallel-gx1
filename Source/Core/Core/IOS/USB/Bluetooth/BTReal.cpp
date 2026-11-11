@@ -11,7 +11,7 @@
 #include <string>
 #include <utility>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
@@ -83,7 +83,7 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
     {
       if (opcode == HCI_CMD_DELETE_STORED_LINK_KEY)
       {
-        INFO_LOG_FMT(IOS_WIIMOTE, "HCI_CMD_DELETE_STORED_LINK_KEY");
+        INFO_LOG(IOS_WIIMOTE, "HCI_CMD_DELETE_STORED_LINK_KEY");
 
         // Delete link key(s) from our own link key storage when the game tells the adapter to
         hci_delete_stored_link_key_cp delete_cmd;
@@ -97,7 +97,7 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
       else if (opcode == HCI_CMD_SNIFF_MODE)
       {
         // FYI: This is what causes Wii Remotes to operate at 200hz instead of 100hz.
-        DEBUG_LOG_FMT(IOS_WIIMOTE, "HCI_CMD_SNIFF_MODE");
+        DEBUG_LOG(IOS_WIIMOTE, "HCI_CMD_SNIFF_MODE");
       }
 
       // Lent from guest memory; the adapter copies it into the transfer.
@@ -149,11 +149,12 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
       return std::nullopt;
     }
 
-    ERROR_LOG_FMT(IOS_WIIMOTE, "IOCTLV_USBV0_INTRMSG: Unknown endpoint: 0x{:02x}", cmd->endpoint);
+    ERROR_LOG(IOS_WIIMOTE, "IOCTLV_USBV0_INTRMSG: Unknown endpoint: 0x%02x",
+              (unsigned)cmd->endpoint);
     break;
   }
   default:
-    ERROR_LOG_FMT(IOS_WIIMOTE, "IOCtlV: Unknown request: 0x{:08x}", request.request);
+    ERROR_LOG(IOS_WIIMOTE, "IOCtlV: Unknown request: 0x%08x", request.request);
     break;
   }
 
@@ -209,7 +210,7 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
   const auto event = buffer[0];
   if (event == HCI_EVENT_LINK_KEY_NOTIFICATION)
   {
-    INFO_LOG_FMT(IOS_WIIMOTE, "HCI_EVENT_LINK_KEY_NOTIFICATION");
+    INFO_LOG(IOS_WIIMOTE, "HCI_EVENT_LINK_KEY_NOTIFICATION");
 
     hci_link_key_notification_ep notification;
     std::memcpy(&notification, buffer.data() + sizeof(hci_event_hdr_t), sizeof(notification));
@@ -235,7 +236,7 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
 
       if (reply.status != 0x00)
       {
-        ERROR_LOG_FMT(IOS_WIIMOTE, "HCI_CMD_READ_BUFFER_SIZE status: 0x{:02x}.", reply.status);
+        ERROR_LOG(IOS_WIIMOTE, "HCI_CMD_READ_BUFFER_SIZE status: 0x%02x.", (unsigned)reply.status);
 
         reply.status = 0x00;
         reply.num_acl_pkts = ACL_PKT_NUM;
@@ -252,8 +253,8 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
       else if (reply.num_acl_pkts < ACL_PKT_NUM)
       {
         // The controller buffers fewer ACL packets than the original BT module.
-        WARN_LOG_FMT(IOS_WIIMOTE, "HCI_CMD_READ_BUFFER_SIZE num_acl_pkts({}) < ACL_PKT_NUM({})",
-                     reply.num_acl_pkts, ACL_PKT_NUM);
+        WARN_LOG(IOS_WIIMOTE, "HCI_CMD_READ_BUFFER_SIZE num_acl_pkts(%u) < ACL_PKT_NUM(%d)",
+                 (unsigned)reply.num_acl_pkts, ACL_PKT_NUM);
       }
 
       // Force the other the parameters to match that of the original BT module.
@@ -272,7 +273,7 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
     // We configure HCI_SERVICE_TYPE_GUARANTEED for each new connection.
     // This solves dropped input issues at least for the mentioned Sena adapter.
 
-    INFO_LOG_FMT(IOS_WIIMOTE, "Sending HCI_CMD_QOS_SETUP");
+    INFO_LOG(IOS_WIIMOTE, "Sending HCI_CMD_QOS_SETUP");
 
     HCICommandPayload<HCI_CMD_QOS_SETUP, hci_qos_setup_cp> payload;
 
@@ -291,9 +292,10 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
   {
     const auto service_type = buffer[6];
     if (service_type != HCI_SERVICE_TYPE_GUARANTEED)
-      WARN_LOG_FMT(IOS_WIIMOTE, "Got HCI_EVENT_QOS_SETUP_COMPL service_type: {}", service_type);
+      WARN_LOG(IOS_WIIMOTE, "Got HCI_EVENT_QOS_SETUP_COMPL service_type: %u",
+               (unsigned)service_type);
     else
-      INFO_LOG_FMT(IOS_WIIMOTE, "Got HCI_EVENT_QOS_SETUP_COMPL HCI_SERVICE_TYPE_GUARANTEED");
+      INFO_LOG(IOS_WIIMOTE, "Got HCI_EVENT_QOS_SETUP_COMPL HCI_SERVICE_TYPE_GUARANTEED");
   }
 
   return buffer;
@@ -381,14 +383,14 @@ void BluetoothRealDevice::TriggerSyncButtonHeldEvent()
 
 void BluetoothRealDevice::SendHCIResetCommand()
 {
-  INFO_LOG_FMT(IOS_WIIMOTE, "SendHCIResetCommand");
+  INFO_LOG(IOS_WIIMOTE, "SendHCIResetCommand");
   const hci_cmd_hdr_t reset{.opcode = HCI_CMD_RESET, .length = 0};
   m_lib_usb_bt_adapter->SendControlTransfer(&reset, sizeof(reset));
 }
 
 void BluetoothRealDevice::SendHCIDeleteLinkKeyCommand()
 {
-  INFO_LOG_FMT(IOS_WIIMOTE, "SendHCIDeleteLinkKeyCommand");
+  INFO_LOG(IOS_WIIMOTE, "SendHCIDeleteLinkKeyCommand");
 
   HCICommandPayload<HCI_CMD_DELETE_STORED_LINK_KEY, hci_delete_stored_link_key_cp> payload;
   payload.command.bdaddr = {};
@@ -407,7 +409,7 @@ bool BluetoothRealDevice::SendHCIStoreLinkKeyCommand()
   const auto num_link_keys =
       u8(m_link_key_count < MAX_LINK_KEYS ? m_link_key_count : MAX_LINK_KEYS);
 
-  INFO_LOG_FMT(IOS_WIIMOTE, "SendHCIStoreLinkKeyCommand num_link_keys: {}", num_link_keys);
+  INFO_LOG(IOS_WIIMOTE, "SendHCIStoreLinkKeyCommand num_link_keys: %u", (unsigned)num_link_keys);
 
   struct Payload
   {
@@ -437,7 +439,7 @@ bool BluetoothRealDevice::SendHCIStoreLinkKeyCommand()
 
 void BluetoothRealDevice::FakeVendorCommandReply(u16 opcode, USB::V0IntrMessage& ctrl)
 {
-  DEBUG_LOG_FMT(IOS_WIIMOTE, "FakeVendorCommandReply");
+  DEBUG_LOG(IOS_WIIMOTE, "FakeVendorCommandReply");
 
   struct Payload
   {
@@ -481,7 +483,7 @@ void BluetoothRealDevice::SetLinkKey(const bdaddr_t& bdaddr, const linkkey_t& li
   }
   if (m_link_key_count == MAX_STORED_LINK_KEYS)
   {
-    WARN_LOG_FMT(IOS_WIIMOTE, "Too many link keys; dropping one.");
+    WARN_LOG(IOS_WIIMOTE, "Too many link keys; dropping one.");
     return;
   }
   for (std::size_t i = m_link_key_count; i > index; i--)
@@ -507,7 +509,7 @@ void BluetoothRealDevice::EraseLinkKey(const bdaddr_t& bdaddr)
 // This causes the emulated software to perform a BT inquiry and connect to found Wiimotes.
 void BluetoothRealDevice::FakeSyncButtonPressedEvent(USB::V0IntrMessage& ctrl)
 {
-  NOTICE_LOG_FMT(IOS_WIIMOTE, "Faking 'sync button pressed' (0x08) event packet");
+  NOTICE_LOG(IOS_WIIMOTE, "Faking 'sync button pressed' (0x08) event packet");
   constexpr u8 payload[1] = {0x08};
   FakeSyncButtonEvent(ctrl, payload, sizeof(payload));
   SetSyncButtonState(SyncButtonState::Ignored);
@@ -516,7 +518,7 @@ void BluetoothRealDevice::FakeSyncButtonPressedEvent(USB::V0IntrMessage& ctrl)
 // When the red sync button is held for 10 seconds, a HCI event with payload 09 is sent.
 void BluetoothRealDevice::FakeSyncButtonHeldEvent(USB::V0IntrMessage& ctrl)
 {
-  NOTICE_LOG_FMT(IOS_WIIMOTE, "Faking 'sync button held' (0x09) event packet");
+  NOTICE_LOG(IOS_WIIMOTE, "Faking 'sync button held' (0x09) event packet");
   constexpr u8 payload[1] = {0x09};
   FakeSyncButtonEvent(ctrl, payload, sizeof(payload));
   SetSyncButtonState(SyncButtonState::Ignored);
@@ -537,9 +539,8 @@ void BluetoothRealDevice::LoadLinkKeys()
     std::optional<bdaddr_t> address = Common::StringToMacAddress(address_string);
     if (!address)
     {
-      ERROR_LOG_FMT(IOS_WIIMOTE,
-                    "Malformed MAC address ({}). Skipping loading of current link key.",
-                    address_string);
+      ERROR_LOG(IOS_WIIMOTE, "Malformed MAC address (%.*s). Skipping loading of current link key.",
+                static_cast<int>(address_string.size()), address_string.data());
       continue;
     }
 
@@ -572,7 +573,7 @@ void BluetoothRealDevice::SaveLinkKeys()
     config_string += Common::MacAddressToString(address);
     config_string += '=';
     for (u8 c : linkkey)
-      config_string += fmt::format("{:02x}", c);
+      config_string += StringFromFormat("%02x", (unsigned)c);
 
     config_string += ',';
   }

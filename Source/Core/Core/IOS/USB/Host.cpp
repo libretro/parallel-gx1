@@ -117,8 +117,8 @@ void USBHost::OnDevicesChangedInternal(const USBScanner::DeviceMap& new_devices)
     const auto& [id, device] = *it;
     if (!new_devices.contains(id))
     {
-      INFO_LOG_FMT(IOS_USB, "{} - Removed device: {:04x}:{:04x}", GetDeviceName(), device->GetVid(),
-                   device->GetPid());
+      INFO_LOG(IOS_USB, "%s - Removed device: %04x:%04x", GetDeviceName().c_str(),
+               (unsigned)device->GetVid(), (unsigned)device->GetPid());
 
       changes = true;
       auto device_copy = device;
@@ -135,8 +135,8 @@ void USBHost::OnDevicesChangedInternal(const USBScanner::DeviceMap& new_devices)
   {
     if (!m_devices.contains(id) && ShouldAddDevice(*device))
     {
-      INFO_LOG_FMT(IOS_USB, "{} - New device: {:04x}:{:04x}", GetDeviceName(), device->GetVid(),
-                   device->GetPid());
+      INFO_LOG(IOS_USB, "%s - New device: %04x:%04x", GetDeviceName().c_str(),
+               (unsigned)device->GetVid(), (unsigned)device->GetPid());
 
       changes = true;
       m_devices.emplace(id, device);
@@ -159,8 +159,9 @@ std::optional<IPCReply> USBHost::HandleTransfer(const std::shared_ptr<USB::Devic
   if (ret == IPC_SUCCESS)
     return std::nullopt;
 
-  ERROR_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Failed to submit transfer (request {}): {}",
-                device->GetVid(), device->GetPid(), request, device->GetErrorName(ret));
+  ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to submit transfer (request %u): %s",
+            (unsigned)device->GetVid(), (unsigned)device->GetPid(), request,
+            device->GetErrorName(ret).c_str());
   return IPCReply(ret <= 0 ? ret : IPC_EINVAL);
 }
 

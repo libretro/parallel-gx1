@@ -47,7 +47,7 @@ std::optional<IPCReply> OH0::IOCtl(const IOCtlRequest& request)
 
 std::optional<IPCReply> OH0::IOCtlV(const IOCtlVRequest& request)
 {
-  INFO_LOG_FMT(IOS_USB, "/dev/usb/oh0 - IOCtlV {}", request.request);
+  INFO_LOG(IOS_USB, "/dev/usb/oh0 - IOCtlV %u", request.request);
   switch (request.request)
   {
   case USB::IOCTLV_USBV0_GETDEVLIST:
@@ -149,7 +149,7 @@ IPCReply OH0::GetRhPortStatus(const IOCtlVRequest& request) const
   if (!request.HasNumberOfValidVectors(1, 1))
     return IPCReply(IPC_EINVAL);
 
-  ERROR_LOG_FMT(IOS_USB, "Unimplemented IOCtlV: IOCTLV_USBV0_GETRHPORTSTATUS");
+  ERROR_LOG(IOS_USB, "Unimplemented IOCtlV: IOCTLV_USBV0_GETRHPORTSTATUS");
   request.Dump(GetSystem(), GetDeviceName(), Common::Log::LogType::IOS_USB,
                Common::Log::LogLevel::LERROR);
   return IPCReply(IPC_SUCCESS);
@@ -160,7 +160,7 @@ IPCReply OH0::SetRhPortStatus(const IOCtlVRequest& request)
   if (!request.HasNumberOfValidVectors(2, 0))
     return IPCReply(IPC_EINVAL);
 
-  ERROR_LOG_FMT(IOS_USB, "Unimplemented IOCtlV: IOCTLV_USBV0_SETRHPORTSTATUS");
+  ERROR_LOG(IOS_USB, "Unimplemented IOCtlV: IOCTLV_USBV0_SETRHPORTSTATUS");
   request.Dump(GetSystem(), GetDeviceName(), Common::Log::LogType::IOS_USB,
                Common::Log::LogLevel::LERROR);
   return IPCReply(IPC_SUCCESS);
@@ -216,7 +216,7 @@ std::optional<IPCReply> OH0::RegisterClassChangeHook(const IOCtlVRequest& reques
 {
   if (!request.HasNumberOfValidVectors(1, 0))
     return IPCReply(IPC_EINVAL);
-  WARN_LOG_FMT(IOS_USB, "Unimplemented IOCtlV: USB::IOCTLV_USBV0_DEVICECLASSCHANGE (no reply)");
+  WARN_LOG(IOS_USB, "Unimplemented IOCtlV: USB::IOCTLV_USBV0_DEVICECLASSCHANGE (no reply)");
   request.Dump(GetSystem(), GetDeviceName(), Common::Log::LogType::IOS_USB,
                Common::Log::LogLevel::LWARNING);
   return std::nullopt;

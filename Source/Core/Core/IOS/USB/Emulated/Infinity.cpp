@@ -175,7 +175,7 @@ bool InfinityUSB::Attach()
   {
     return true;
   }
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x}] Opening device", m_vid, m_pid);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x] Opening device", (unsigned)m_vid, (unsigned)m_pid);
   m_device_attached = true;
   return true;
 }
@@ -193,16 +193,16 @@ bool InfinityUSB::AttachAndChangeInterface(const u8 iface)
 
 int InfinityUSB::CancelTransfer(const u8 endpoint)
 {
-  INFO_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Cancelling transfers (endpoint {:#x})", m_vid, m_pid,
-               m_active_interface, endpoint);
+  INFO_LOG(IOS_USB, "[%04x:%04x %u] Cancelling transfers (endpoint %#x)", (unsigned)m_vid,
+           (unsigned)m_pid, (unsigned)m_active_interface, (unsigned)endpoint);
 
   return IPC_SUCCESS;
 }
 
 int InfinityUSB::ChangeInterface(const u8 iface)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Changing interface to {}", m_vid, m_pid,
-                m_active_interface, iface);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Changing interface to %u", (unsigned)m_vid, (unsigned)m_pid,
+            (unsigned)m_active_interface, (unsigned)iface);
   m_active_interface = iface;
   return 0;
 }
@@ -219,23 +219,24 @@ int InfinityUSB::SetAltSetting(u8 alt_setting)
 
 int InfinityUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB,
-                "[{:04x}:{:04x} {}] Control: bRequestType={:02x} bRequest={:02x} wValue={:04x}"
-                " wIndex={:04x} wLength={:04x}",
-                m_vid, m_pid, m_active_interface, cmd->request_type, cmd->request, cmd->value,
-                cmd->index, cmd->length);
+  DEBUG_LOG(IOS_USB,
+            "[%04x:%04x %u] Control: bRequestType=%02x bRequest=%02x wValue=%04x"
+            " wIndex=%04x wLength=%04x",
+            (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface,
+            (unsigned)cmd->request_type, (unsigned)cmd->request, (unsigned)cmd->value,
+            (unsigned)cmd->index, (unsigned)cmd->length);
   return 0;
 }
 int InfinityUSB::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Bulk: length={:04x} endpoint={:02x}", m_vid, m_pid,
-                m_active_interface, cmd->length, cmd->endpoint);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Bulk: length=%04x endpoint=%02x", (unsigned)m_vid,
+            (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
   return 0;
 }
 int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB, "[{:04x}:{:04x} {}] Interrupt: length={:04x} endpoint={:02x}", m_vid,
-                m_pid, m_active_interface, cmd->length, cmd->endpoint);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Interrupt: length=%04x endpoint=%02x", (unsigned)m_vid,
+            (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
 
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
@@ -243,7 +244,7 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
   u8* buf = memory.GetPointerForRange(cmd->data_address, cmd->length);
   if (cmd->length != 32 || buf == nullptr)
   {
-    ERROR_LOG_FMT(IOS_USB, "Infinity Base command invalid");
+    ERROR_LOG(IOS_USB, "Infinity Base command invalid");
     return IPC_EINVAL;
   }
 
@@ -380,7 +381,7 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
       break;
     }
     default:
-      ERROR_LOG_FMT(IOS_USB, "Unhandled Infinity Base Command: {}", command);
+      ERROR_LOG(IOS_USB, "Unhandled Infinity Base Command: %u", (unsigned)command);
       break;
     }
 
@@ -402,9 +403,9 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
 
 int InfinityUSB::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
 {
-  DEBUG_LOG_FMT(IOS_USB,
-                "[{:04x}:{:04x} {}] Isochronous: length={:04x} endpoint={:02x} num_packets={:02x}",
-                m_vid, m_pid, m_active_interface, cmd->length, cmd->endpoint, cmd->num_packets);
+  DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Isochronous: length=%04x endpoint=%02x num_packets=%02x",
+            (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface, cmd->length,
+            (unsigned)cmd->endpoint, (unsigned)cmd->num_packets);
   return 0;
 }
 
@@ -605,7 +606,7 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
 
   u32 number = u32(infinity_decrypted_block[1]) << 16 | u32(infinity_decrypted_block[2]) << 8 |
                u32(infinity_decrypted_block[3]);
-  DEBUG_LOG_FMT(IOS_USB, "Toy Number: {}", number);
+  DEBUG_LOG(IOS_USB, "Toy Number: %u", number);
 
   InfinityFigure& figure = m_figures[static_cast<u8>(position)];
 
@@ -622,7 +623,7 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
   FigureBasePosition derived_position = DeriveFigurePosition(position);
   if (derived_position == FigureBasePosition::Unknown)
   {
-    ERROR_LOG_FMT(IOS_USB, "Invalid Position for Infinity Figure");
+    ERROR_LOG(IOS_USB, "Invalid Position for Infinity Figure");
     return "Unknown Figure";
   }
 
@@ -649,7 +650,7 @@ void InfinityBase::RemoveFigure(FigureUIPosition position)
     FigureBasePosition derived_position = DeriveFigurePosition(position);
     if (derived_position == FigureBasePosition::Unknown)
     {
-      ERROR_LOG_FMT(IOS_USB, "Invalid Position for Infinity Figure");
+      ERROR_LOG(IOS_USB, "Invalid Position for Infinity Figure");
       return;
     }
 
@@ -719,7 +720,7 @@ bool InfinityBase::CreateFigure(const std::string& file_path, u32 figure_num)
   memcpy(&file_data[16 * 0x0C], encrypted_blank.data(), encrypted_blank.size());
   memcpy(&file_data[16 * 0x0D], encrypted_blank.data(), encrypted_blank.size());
 
-  DEBUG_LOG_FMT(IOS_USB, "File Data: \n{}", HexDump(file_data.data(), file_data.size()));
+  DEBUG_LOG(IOS_USB, "File Data: \n%s", HexDump(file_data.data(), file_data.size()).c_str());
 
   inf_file.WriteBytes(file_data.data(), file_data.size());
 
@@ -820,7 +821,7 @@ std::array<u8, 16> InfinityBase::GenerateBlankFigureData(u32 figure_num)
   {
     figure_data[15 - i] = u8((checksum >> i * 8) & 0xFF);
   }
-  DEBUG_LOG_FMT(IOS_USB, "Block 1: \n{}", HexDump(figure_data.data(), 16));
+  DEBUG_LOG(IOS_USB, "Block 1: \n%s", HexDump(figure_data.data(), 16).c_str());
   return figure_data;
 }
 

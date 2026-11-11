@@ -118,7 +118,8 @@ void SkylanderFigure::Encrypt(const u8* input)
 
   memcpy(m_data.data(), encrypted.data(), FIGURE_SIZE);
 
-  DEBUG_LOG_FMT(IOS_USB, "Encrypted skylander data: \n{}", HexDump(encrypted.data(), FIGURE_SIZE));
+  DEBUG_LOG(IOS_USB, "Encrypted skylander data: \n%s",
+            HexDump(encrypted.data(), FIGURE_SIZE).c_str());
 }
 SkylanderFigure::SkylanderFigure(File::IOFile file)
 {
@@ -405,7 +406,8 @@ void SkylanderFigure::DecryptFigure(std::array<u8, FIGURE_SIZE>* dest) const
 
   memcpy(dest->data(), decrypted.data(), FIGURE_SIZE);
 
-  DEBUG_LOG_FMT(IOS_USB, "Decrypted skylander data: \n{}", HexDump(decrypted.data(), FIGURE_SIZE));
+  DEBUG_LOG(IOS_USB, "Decrypted skylander data: \n%s",
+            HexDump(decrypted.data(), FIGURE_SIZE).c_str());
 }
 void SkylanderFigure::Close()
 {

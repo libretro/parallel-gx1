@@ -24,14 +24,17 @@ public:
     const int ret = libusb_init(&m_context);
     if (ret != LIBUSB_SUCCESS)
     {
-      ERROR_LOG_FMT(IOS_USB, "Failed to init libusb: {}", ErrorWrap(ret));
+      ERROR_LOG(IOS_USB, "Failed to init libusb: %s (%d: %s)",
+                LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+                LibusbUtils::ErrorWrap(ret).GetName());
       return;
     }
 
 #ifdef _WIN32
     const int usbdk_ret = libusb_set_option(m_context, LIBUSB_OPTION_USE_USBDK);
     if (usbdk_ret != LIBUSB_SUCCESS && usbdk_ret != LIBUSB_ERROR_NOT_FOUND)
-      WARN_LOG_FMT(IOS_USB, "Failed to set LIBUSB_OPTION_USE_USBDK: {}", ErrorWrap(usbdk_ret));
+      WARN_LOG(IOS_USB, "Failed to set LIBUSB_OPTION_USE_USBDK: %s (%d: %s)",
+               ErrorWrap(usbdk_ret).GetStrError(), usbdk_ret, ErrorWrap(usbdk_ret).GetName());
 #endif
     m_event_thread_running.Set();
     m_event_thread = sthread_create(Common::ThreadEntry<&Impl::EventThread>, this);
@@ -88,7 +91,9 @@ private:
     {
       const int ret = libusb_handle_events_timeout_completed(m_context, &tv, nullptr);
       if (ret != LIBUSB_SUCCESS)
-        WARN_LOG_FMT(IOS_USB, "libusb_handle_events_timeout_completed failed: {}", ErrorWrap(ret));
+        WARN_LOG(IOS_USB, "libusb_handle_events_timeout_completed failed: %s (%d: %s)",
+                 LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+                 LibusbUtils::ErrorWrap(ret).GetName());
     }
   }
 
@@ -183,8 +188,8 @@ std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle,
 
   if (lang_id_result != 4 || buffer.length < 4 || buffer.descriptor_type != LIBUSB_DT_STRING)
   {
-    ERROR_LOG_FMT(IOS_USB, "libusb_get_string_descriptor(desc_index={}, lang_id=0) result:{}",
-                  static_cast<int>(desc_index), lang_id_result);
+    ERROR_LOG(IOS_USB, "libusb_get_string_descriptor(desc_index=%d, lang_id=0) result:%d",
+              static_cast<int>(desc_index), lang_id_result);
     return std::nullopt;
   }
 
@@ -195,16 +200,16 @@ std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle,
 
   if (str_result < 2 || buffer.length > str_result || buffer.descriptor_type != LIBUSB_DT_STRING)
   {
-    ERROR_LOG_FMT(IOS_USB, "libusb_get_string_descriptor(desc_index={}, lang_id={}) result:{}",
-                  static_cast<int>(desc_index), lang_id, str_result);
+    ERROR_LOG(IOS_USB, "libusb_get_string_descriptor(desc_index=%d, lang_id=%u) result:%d",
+              static_cast<int>(desc_index), (unsigned)lang_id, str_result);
     return std::nullopt;
   }
 
   // The UTF-16 data size should be even and equal to the return value.
   if ((buffer.length & 1u) != 0 || buffer.length != str_result)
   {
-    WARN_LOG_FMT(IOS_USB, "GetStringDescriptor: buffer.length:{} result:{}", buffer.length,
-                 str_result);
+    WARN_LOG(IOS_USB, "GetStringDescriptor: buffer.length:%u result:%d", (unsigned)buffer.length,
+             str_result);
   }
 
   const std::size_t str_length = std::max(0, buffer.length - 2) / 2;
