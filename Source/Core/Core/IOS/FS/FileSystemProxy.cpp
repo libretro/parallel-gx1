@@ -4,14 +4,15 @@
 #include "Core/IOS/FS/FileSystemProxy.h"
 
 #include <algorithm>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <expected>
 #include <string_view>
 #include <utility>
 
-#include <fmt/format.h>
-
 #include "Common/ChunkFile.h"
+#include "Common/Logging/LogManager.h"
 #include "Common/Swap.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/SystemTimers.h"
@@ -112,22 +113,34 @@ void FSDevice::DoState(PointerWrap& p)
   p.Do(m_core.m_fd_map);
 }
 
-template <typename... Args>
-static void LogResult(ResultCode code, fmt::format_string<Args...> format, Args&&... args)
+static ResultCode CodeOf(ResultCode code)
 {
-  const std::string command = fmt::format(format, std::forward<Args>(args)...);
-  const auto type =
-      code == ResultCode::Success ? Common::Log::LogLevel::LINFO : Common::Log::LogLevel::LERROR;
-
-  GENERIC_LOG_FMT(Common::Log::LogType::IOS_FS, type, "Command: {}: Result {}", command,
-                  std::to_underlying(ConvertResult(code)));
+  return code;
 }
 
-template <typename T, typename... Args>
-static void LogResult(const Result<T>& result, fmt::format_string<Args...> format, Args&&... args)
+template <typename T> static ResultCode CodeOf(const Result<T>& result)
 {
-  const auto result_code = result.has_value() ? ResultCode::Success : result.error();
-  LogResult(result_code, format, std::forward<Args>(args)...);
+  return result.has_value() ? ResultCode::Success : result.error();
+}
+
+// Logs an FS command and its result; the command is formatted, on the stack, only when the
+// message is logged.
+static void LogResult(ResultCode code, const char* format, ...) DOLPHIN_PRINTF_ATTR(2, 3);
+static void LogResult(ResultCode code, const char* format, ...)
+{
+  const auto level =
+      code == ResultCode::Success ? Common::Log::LogLevel::LINFO : Common::Log::LogLevel::LERROR;
+  const auto* const log = Common::Log::LogManager::GetInstance();
+  if (!log || !log->IsEnabled(Common::Log::LogType::IOS_FS, level))
+    return;
+
+  char command[192];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(command, sizeof(command), format, args);
+  va_end(args);
+  GENERIC_LOG(Common::Log::LogType::IOS_FS, level, "Command: %s: Result %d", command,
+              std::to_underlying(ConvertResult(code)));
 }
 
 enum class FileLookupMode
@@ -200,7 +213,7 @@ FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path,
   ticks.Add(EstimateFileLookupTicks(path, FileLookupMode::Normal));
 
   auto backend_fd = m_ios.GetFS()->OpenFile(uid, gid, path, mode);
-  LogResult(backend_fd, "OpenFile({})", path);
+  LogResult(CodeOf(backend_fd), "OpenFile(%s)", path.c_str());
   if (!backend_fd)
     return {this, ConvertResult(backend_fd.error()), ticks};
 
@@ -233,7 +246,7 @@ s32 FSCore::Close(u64 fd, Ticks ticks)
       ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
 
     const ResultCode result = m_ios.GetFS()->Close(handle.fs_fd);
-    LogResult(result, "Close({})", handle.name.data());
+    LogResult(CodeOf(result), "Close(%s)", handle.name.data());
     m_fd_map.erase(fd);
     if (result != ResultCode::Success)
       return ConvertResult(result);
@@ -346,7 +359,7 @@ s32 FSCore::Read(u64 fd, u8* data, u32 size, std::optional<u32> ipc_buffer_addr,
 
   const Result<u32> result = m_ios.GetFS()->ReadBytesFromFile(handle.fs_fd, data, size);
   if (ipc_buffer_addr)
-    LogResult(result, "Read({}, 0x{:08x}, {})", handle.name.data(), *ipc_buffer_addr, size);
+    LogResult(CodeOf(result), "Read(%s, 0x%08x, %u)", handle.name.data(), *ipc_buffer_addr, size);
 
   if (!result)
     return ConvertResult(result.error());
@@ -377,7 +390,7 @@ s32 FSCore::Write(u64 fd, const u8* data, u32 size, std::optional<u32> ipc_buffe
 
   const Result<u32> result = m_ios.GetFS()->WriteBytesToFile(handle.fs_fd, data, size);
   if (ipc_buffer_addr)
-    LogResult(result, "Write({}, 0x{:08x}, {})", handle.name.data(), *ipc_buffer_addr, size);
+    LogResult(CodeOf(result), "Write(%s, 0x%08x, %u)", handle.name.data(), *ipc_buffer_addr, size);
 
   if (!result)
     return ConvertResult(result.error());
@@ -401,7 +414,8 @@ s32 FSCore::Seek(u64 fd, u32 offset, FS::SeekMode mode, Ticks ticks)
     return ConvertResult(ResultCode::Invalid);
 
   const Result<u32> result = m_ios.GetFS()->SeekFile(handle.fs_fd, offset, mode);
-  LogResult(result, "Seek({}, 0x{:08x}, {})", handle.name.data(), offset, static_cast<int>(mode));
+  LogResult(CodeOf(result), "Seek(%s, 0x%08x, %d)", handle.name.data(), offset,
+            static_cast<int>(mode));
   if (!result)
     return ConvertResult(result.error());
   return *result;
@@ -513,7 +527,7 @@ IPCReply FSDevice::GetStats(const Handle& handle, const IOCtlRequest& request)
     return GetFSReply(ConvertResult(ResultCode::Invalid));
 
   const Result<NandStats> stats = m_ios.GetFS()->GetNandStats();
-  LogResult(stats, "GetNandStats");
+  LogResult(CodeOf(stats), "GetNandStats");
   if (!stats)
     return IPCReply(ConvertResult(stats.error()));
 
@@ -540,7 +554,7 @@ IPCReply FSDevice::CreateDirectory(const Handle& handle, const IOCtlRequest& req
 
   const ResultCode result = m_ios.GetFS()->CreateDirectory(handle.uid, handle.gid, params->path,
                                                            params->attribute, params->modes);
-  LogResult(result, "CreateDirectory({})", params->path);
+  LogResult(CodeOf(result), "CreateDirectory(%s)", params->path);
   return GetReplyForSuperblockOperation(m_ios.GetVersion(), result);
 }
 
@@ -579,7 +593,7 @@ IPCReply FSDevice::ReadDirectory(const Handle& handle, const IOCtlVRequest& requ
   const std::string directory = memory.GetString(request.in_vectors[0].address, 64);
   const Result<std::vector<std::string>> list =
       m_ios.GetFS()->ReadDirectory(handle.uid, handle.gid, directory);
-  LogResult(list, "ReadDirectory({})", directory);
+  LogResult(CodeOf(list), "ReadDirectory(%s)", directory.c_str());
   if (!list)
     return GetFSReply(ConvertResult(list.error()));
 
@@ -609,7 +623,7 @@ IPCReply FSDevice::SetAttribute(const Handle& handle, const IOCtlRequest& reques
 
   const ResultCode result = m_ios.GetFS()->SetMetadata(
       handle.uid, params->path, params->uid, params->gid, params->attribute, params->modes);
-  LogResult(result, "SetMetadata({})", params->path);
+  LogResult(CodeOf(result), "SetMetadata(%s)", params->path);
   return GetReplyForSuperblockOperation(m_ios.GetVersion(), result);
 }
 
@@ -624,7 +638,7 @@ IPCReply FSDevice::GetAttribute(const Handle& handle, const IOCtlRequest& reques
   const std::string path = memory.GetString(request.buffer_in, 64);
   const auto ticks = EstimateFileLookupTicks(path, FileLookupMode::Split);
   const Result<Metadata> metadata = m_ios.GetFS()->GetMetadata(handle.uid, handle.gid, path);
-  LogResult(metadata, "GetMetadata({})", path);
+  LogResult(CodeOf(metadata), "GetMetadata(%s)", path.c_str());
   if (!metadata)
     return GetFSReply(ConvertResult(metadata.error()), ticks);
 
@@ -646,7 +660,7 @@ FS::ResultCode FSCore::DeleteFile(FS::Uid uid, FS::Gid gid, const std::string& p
 
   const ResultCode result = m_ios.GetFS()->Delete(uid, gid, path);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(result, "Delete({})", path);
+  LogResult(CodeOf(result), "Delete(%s)", path.c_str());
   return result;
 }
 
@@ -671,7 +685,7 @@ FS::ResultCode FSCore::RenameFile(FS::Uid uid, FS::Gid gid, const std::string& o
 
   const ResultCode result = m_ios.GetFS()->Rename(uid, gid, old_path, new_path);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(result, "Rename({}, {})", old_path, new_path);
+  LogResult(CodeOf(result), "Rename(%s, %s)", old_path.c_str(), new_path.c_str());
   return result;
 }
 
@@ -697,7 +711,7 @@ FS::ResultCode FSCore::CreateFile(FS::Uid uid, FS::Gid gid, const std::string& p
 
   const ResultCode result = m_ios.GetFS()->CreateFile(uid, gid, path, attribute, modes);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(result, "CreateFile({})", path);
+  LogResult(CodeOf(result), "CreateFile(%s)", path.c_str());
   return result;
 }
 
@@ -719,8 +733,8 @@ IPCReply FSDevice::SetFileVersionControl(const Handle& handle, const IOCtlReques
     return GetFSReply(ConvertResult(params.error()));
 
   // FS_SetFileVersionControl(ctx->uid, params->path, params->attribute)
-  ERROR_LOG_FMT(IOS_FS, "SetFileVersionControl({}, {:#x}): Stubbed", params->path,
-                params->attribute);
+  ERROR_LOG(IOS_FS, "SetFileVersionControl(%s, %#x): Stubbed", params->path,
+            (unsigned)params->attribute);
   return GetFSReply(IPC_SUCCESS);
 }
 
@@ -753,7 +767,7 @@ FS::Result<FS::FileStatus> FSCore::GetFileStatus(u64 fd, Ticks ticks)
     return std::unexpected{ResultCode::Invalid};
 
   auto status = m_ios.GetFS()->GetFileStatus(handle.fs_fd);
-  LogResult(status, "GetFileStatus({})", handle.name.data());
+  LogResult(CodeOf(status), "GetFileStatus(%s)", handle.name.data());
   return status;
 }
 
@@ -770,7 +784,7 @@ IPCReply FSDevice::GetUsage(const Handle& handle, const IOCtlVRequest& request)
 
   const std::string directory = memory.GetString(request.in_vectors[0].address, 64);
   const Result<DirectoryStats> stats = m_ios.GetFS()->GetDirectoryStats(directory);
-  LogResult(stats, "GetDirectoryStats({})", directory);
+  LogResult(CodeOf(stats), "GetDirectoryStats(%s)", directory.c_str());
   if (!stats)
     return GetFSReply(ConvertResult(stats.error()));
 
@@ -781,7 +795,7 @@ IPCReply FSDevice::GetUsage(const Handle& handle, const IOCtlVRequest& request)
 
 IPCReply FSDevice::Shutdown(const Handle& handle, const IOCtlRequest& request)
 {
-  INFO_LOG_FMT(IOS_FS, "Shutdown");
+  INFO_LOG(IOS_FS, "Shutdown");
   return GetFSReply(IPC_SUCCESS);
 }
 }  // namespace IOS::HLE

@@ -58,15 +58,15 @@ int HostFileSystem::OpenHostFile(const std::string& host_path)
   while (!host_file.file.Open(host_path, "r+b"))
   {
     const bool try_again =
-        PanicYesNoFmt("File \"{}\" could not be opened!\n"
-                      "This may happen with improper permissions or use by another process.\n"
-                      "Press \"Yes\" to make another attempt.",
-                      host_path);
+        PanicYesNo("File \"%s\" could not be opened!\n"
+                   "This may happen with improper permissions or use by another process.\n"
+                   "Press \"Yes\" to make another attempt.",
+                   host_path.c_str());
 
     if (!try_again)
     {
       // We've failed to open the file:
-      ERROR_LOG_FMT(IOS_FS, "OpenHostFile {}", host_path);
+      ERROR_LOG(IOS_FS, "OpenHostFile %s", host_path.c_str());
       return -1;
     }
   }

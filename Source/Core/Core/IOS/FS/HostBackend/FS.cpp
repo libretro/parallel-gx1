@@ -11,7 +11,7 @@
 #include <type_traits>
 #include <utility>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Align.h"
 #include "Common/Assert.h"
@@ -145,7 +145,7 @@ HostFileSystem::~HostFileSystem()
 
 std::string HostFileSystem::GetFstFilePath() const
 {
-  return fmt::format("{}/fst.bin", m_root_path);
+  return StringFromFormat("%s/fst.bin", m_root_path.c_str());
 }
 
 void HostFileSystem::ResetFst()
@@ -188,7 +188,7 @@ void HostFileSystem::LoadFst()
   const auto root_entry = parse_entry(parse_entry, 0);
   if (!root_entry.has_value())
   {
-    ERROR_LOG_FMT(IOS_FS, "Failed to parse FST: at least one of the entries was invalid");
+    ERROR_LOG(IOS_FS, "Failed to parse FST: at least one of the entries was invalid");
     return;
   }
   m_root_entry = *root_entry;
@@ -214,12 +214,12 @@ void HostFileSystem::SaveFst()
     File::IOFile file{temp_path, "wb"};
     if (!file.WriteArray(to_write.data(), to_write.size()))
     {
-      PanicAlertFmt("IOS_FS: Failed to write new FST");
+      PanicAlert("IOS_FS: Failed to write new FST");
       return;
     }
   }
   if (!File::Rename(temp_path, dest_path))
-    PanicAlertFmt("IOS_FS: Failed to rename temporary FST file");
+    PanicAlert("IOS_FS: Failed to rename temporary FST file");
 }
 
 HostFileSystem::FstEntry* HostFileSystem::GetFstEntryForPath(const std::string& path)
@@ -257,7 +257,7 @@ HostFileSystem::FstEntry* HostFileSystem::GetFstEntryForPath(const std::string& 
       // Fall back to dummy data to avoid breaking existing filesystems.
       // This code path is also reached when creating a new file or directory;
       // proper metadata is filled in later.
-      INFO_LOG_FMT(IOS_FS, "Creating a default entry for {}", complete_path);
+      INFO_LOG(IOS_FS, "Creating a default entry for %s", complete_path.c_str());
       entry = &entry->children.emplace_back();
       entry->name = component;
       entry->data.modes = {Mode::ReadWrite, Mode::ReadWrite, Mode::ReadWrite};
@@ -267,7 +267,7 @@ HostFileSystem::FstEntry* HostFileSystem::GetFstEntryForPath(const std::string& 
   entry->data.is_file = host_file_info.IsFile();
   if (entry->data.is_file && !entry->children.empty())
   {
-    WARN_LOG_FMT(IOS_FS, "{} is a file but also has children; clearing children", path);
+    WARN_LOG(IOS_FS, "%s is a file but also has children; clearing children", path.c_str());
     entry->children.clear();
   }
 
@@ -408,7 +408,7 @@ ResultCode HostFileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::st
   const bool ok = is_file ? File::CreateEmptyFile(host_path) : File::CreateDir(host_path);
   if (!ok)
   {
-    ERROR_LOG_FMT(IOS_FS, "Failed to create file or directory: {}", host_path);
+    ERROR_LOG(IOS_FS, "Failed to create file or directory: %s", host_path.c_str());
     return ResultCode::UnknownError;
   }
 
@@ -548,7 +548,7 @@ ResultCode HostFileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
 
   if (!File::Rename(host_old_path, host_new_path))
   {
-    ERROR_LOG_FMT(IOS_FS, "Rename {} to {} - failed", host_old_path, host_new_path);
+    ERROR_LOG(IOS_FS, "Rename %s to %s - failed", host_old_path.c_str(), host_new_path.c_str());
     return ResultCode::NotFound;
   }
 
