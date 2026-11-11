@@ -85,8 +85,7 @@ SUBMODULE_FILES := \
    Externals/fmt/fmt/include/fmt/format.h \
    Externals/hidapi/hidapi-src/hidapi/hidapi.h \
    Externals/Vulkan-Headers/include/vulkan/vulkan.h \
-   Externals/watcher/watcher/include/wtr/watcher.hpp \
-   Externals/wil/include/wil/common.h
+   Externals/watcher/watcher/include/wtr/watcher.hpp
 ifneq (,$(filter-out clean,$(or $(MAKECMDGOALS),all)))
    SUBMODULES_MISSING := $(filter-out $(wildcard $(SUBMODULE_FILES)),$(SUBMODULE_FILES))
    ifneq (,$(SUBMODULES_MISSING))

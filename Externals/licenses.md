@@ -42,8 +42,6 @@ Dolphin includes or links code of the following third-party software projects:
    [zlib license](http://hg.libsdl.org/SDL/file/tip/COPYING.txt)
 - [TAP-Windows](https://openvpn.net/):
    header only
-- [Windows Implementation Libraries](https://github.com/microsoft/wil):
-   [MIT](https://github.com/microsoft/wil/blob/master/LICENSE)
 - [xxHash](https://github.com/Cyan4973/xxHash):
    [BSD 2-Clause](https://github.com/Cyan4973/xxHash/blob/master/LICENSE)
 - [YACardEmu](https://github.com/GXTX/YACardEmu)

@@ -24,7 +24,3 @@
 	path = Externals/watcher/watcher
 	url = https://github.com/e-dant/watcher.git
 	shallow = true
-[submodule "Externals/wil"]
-	path = Externals/wil
-	url = https://github.com/microsoft/wil.git
-	shallow = true
