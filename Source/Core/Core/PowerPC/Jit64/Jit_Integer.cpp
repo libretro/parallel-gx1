@@ -410,7 +410,7 @@ void Jit64::DoMergedBranch()
   }
   else
   {
-    PanicAlertFmt("WTF invalid branch");
+    PanicAlert("WTF invalid branch");
   }
 }
 
@@ -542,7 +542,7 @@ void Jit64::cmpXX(UGeckoInstruction inst)
     break;
 
   default:
-    PanicAlertFmt("cmpXX");
+    PanicAlert("cmpXX");
   }
 
   if (gpr.IsImm(a) && imm_comparand.has_value())
@@ -815,7 +815,7 @@ void Jit64::boolX(UGeckoInstruction inst)
     }
     else
     {
-      PanicAlertFmt("WTF!");
+      PanicAlert("WTF!");
     }
   }
   else if (s == b)
@@ -863,7 +863,7 @@ void Jit64::boolX(UGeckoInstruction inst)
     }
     else
     {
-      PanicAlertFmt("WTF!");
+      PanicAlert("WTF!");
     }
   }
   else if ((a == s) || (a == b))
@@ -937,7 +937,7 @@ void Jit64::boolX(UGeckoInstruction inst)
     }
     else
     {
-      PanicAlertFmt("WTF");
+      PanicAlert("WTF");
     }
   }
   else
@@ -1003,7 +1003,7 @@ void Jit64::boolX(UGeckoInstruction inst)
     }
     else
     {
-      PanicAlertFmt("WTF!");
+      PanicAlert("WTF!");
     }
   }
   if (inst.Rc)

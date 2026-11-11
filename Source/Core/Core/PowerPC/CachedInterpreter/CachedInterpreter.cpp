@@ -220,7 +220,7 @@ bool CachedInterpreter::SetEmitterStateToFreeCodeRegion()
   const auto free = m_free_ranges.by_size_begin();
   if (free == m_free_ranges.by_size_end())
   {
-    WARN_LOG_FMT(DYNA_REC, "Failed to find free memory region in code region.");
+    WARN_LOG(DYNA_REC, "Failed to find free memory region in code region.");
     return false;
   }
   SetCodePtr(free.from(), free.to());
@@ -261,7 +261,7 @@ void CachedInterpreter::Jit(u32 em_address, bool clear_cache_and_retry_on_failur
     m_ppc_state.npc = nextPC;
     m_ppc_state.Exceptions |= EXCEPTION_ISI;
     m_system.GetPowerPC().CheckExceptions();
-    WARN_LOG_FMT(POWERPC, "ISI exception at {:#010x}", nextPC);
+    WARN_LOG(POWERPC, "ISI exception at %#010x", nextPC);
     return;
   }
 
@@ -289,14 +289,14 @@ void CachedInterpreter::Jit(u32 em_address, bool clear_cache_and_retry_on_failur
 
   if (clear_cache_and_retry_on_failure)
   {
-    WARN_LOG_FMT(DYNA_REC, "flushing code caches, please report if this happens a lot");
+    WARN_LOG(DYNA_REC, "flushing code caches, please report if this happens a lot");
     ClearCache();
     Jit(em_address, false);
     return;
   }
 
-  PanicAlertFmtT("JIT failed to find code space after a cache clear. This should never happen. "
-                 "Please report this incident on the bug tracker. Dolphin will now exit.");
+  PanicAlert("JIT failed to find code space after a cache clear. This should never happen. "
+             "Please report this incident on the bug tracker. Dolphin will now exit.");
   std::exit(-1);
 }
 
@@ -372,7 +372,7 @@ bool CachedInterpreter::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 
   if (HasWriteFailed())
   {
-    WARN_LOG_FMT(DYNA_REC, "JIT ran out of space in code region during code generation.");
+    WARN_LOG(DYNA_REC, "JIT ran out of space in code region during code generation.");
     return false;
   }
   return true;

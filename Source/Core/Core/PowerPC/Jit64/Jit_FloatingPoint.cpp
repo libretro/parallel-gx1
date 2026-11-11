@@ -859,7 +859,7 @@ void Jit64::fsign(UGeckoInstruction inst)
            packed);
     break;
   default:
-    PanicAlertFmt("fsign bleh");
+    PanicAlert("fsign bleh");
     break;
   }
 }

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cinttypes>
 #include <utility>
 
 #include "Common/Align.h"
@@ -176,7 +177,7 @@ void JitBase::ProtectStack()
   ULONG reserveSize = SAFE_STACK_SIZE;
   if (!SetThreadStackGuarantee(&reserveSize))
   {
-    PanicAlertFmt("Failed to set thread stack guarantee");
+    PanicAlert("Failed to set thread stack guarantee");
     m_enable_blr_optimization = false;
     return;
   }
@@ -187,7 +188,7 @@ void JitBase::ProtectStack()
   const uintptr_t stack_middle_addr = reinterpret_cast<uintptr_t>(&stack_addr);
   if (stack_middle_addr < stack_base_addr || stack_middle_addr >= stack_base_addr + stack_size)
   {
-    PanicAlertFmt("Failed to get correct stack base");
+    PanicAlert("Failed to get correct stack base");
     m_enable_blr_optimization = false;
     return;
   }
@@ -195,7 +196,7 @@ void JitBase::ProtectStack()
   const long page_size = sysconf(_SC_PAGESIZE);
   if (page_size <= 0)
   {
-    PanicAlertFmt("Failed to get page size");
+    PanicAlert("Failed to get page size");
     m_enable_blr_optimization = false;
     return;
   }
@@ -204,9 +205,10 @@ void JitBase::ProtectStack()
   if (stack_guard_addr >= stack_middle_addr ||
       stack_middle_addr - stack_guard_addr < GUARD_SIZE + MIN_UNSAFE_STACK_SIZE)
   {
-    PanicAlertFmt("Stack is too small for BLR optimization (size {:x}, base {:x}, current stack "
-                  "pointer {:x}, alignment {:x})",
-                  stack_size, stack_base_addr, stack_middle_addr, page_size);
+    PanicAlert("Stack is too small for BLR optimization (size %" PRIx64 ", base %" PRIx64
+               ", current stack "
+               "pointer %" PRIx64 ", alignment %" PRIx64 ")",
+               (u64)stack_size, (u64)stack_base_addr, (u64)stack_middle_addr, (u64)(u64)page_size);
     m_enable_blr_optimization = false;
     return;
   }
@@ -241,7 +243,7 @@ bool JitBase::HandleStackFault()
   if (!m_enable_blr_optimization || !Core::IsCPUThread())
     return false;
 
-  WARN_LOG_FMT(POWERPC, "BLR cache disabled due to excessive BL in the emulated program.");
+  WARN_LOG(POWERPC, "BLR cache disabled due to excessive BL in the emulated program.");
 
   UnprotectStack();
   m_enable_blr_optimization = false;

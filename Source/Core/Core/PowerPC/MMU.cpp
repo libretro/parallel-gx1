@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cinttypes>
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -149,17 +150,17 @@ static u32 EFB_Read(const u32 addr)
 
   if (addr & 0x00800000)
   {
-    ERROR_LOG_FMT(MEMMAP, "Unimplemented Z+Color EFB read @ {:#010x}", addr);
+    ERROR_LOG(MEMMAP, "Unimplemented Z+Color EFB read @ %#010x", addr);
   }
   else if (addr & 0x00400000)
   {
     var = EFBPeekDepth(x, y);
-    DEBUG_LOG_FMT(MEMMAP, "EFB Z Read @ {}, {}\t= {:#010x}", x, y, var);
+    DEBUG_LOG(MEMMAP, "EFB Z Read @ %u, %u\t= %#010x", x, y, var);
   }
   else
   {
     var = EFBPeekColor(x, y);
-    DEBUG_LOG_FMT(MEMMAP, "EFB Color Read @ {}, {}\t= {:#010x}", x, y, var);
+    DEBUG_LOG(MEMMAP, "EFB Color Read @ %u, %u\t= %#010x", x, y, var);
   }
 
   return var;
@@ -174,17 +175,17 @@ static void EFB_Write(u32 data, u32 addr)
   {
     // It's possible to do a z-tested write to EFB by writing a 64bit value to this address range.
     // Not much is known, but let's at least get some logging.
-    ERROR_LOG_FMT(MEMMAP, "Unimplemented Z+Color EFB write. {:08x} @ {:#010x}", data, addr);
+    ERROR_LOG(MEMMAP, "Unimplemented Z+Color EFB write. %08x @ %#010x", data, addr);
   }
   else if (addr & 0x00400000)
   {
     EFBPokeDepth(x, y, data);
-    DEBUG_LOG_FMT(MEMMAP, "EFB Z Write {:08x} @ {}, {}", data, x, y);
+    DEBUG_LOG(MEMMAP, "EFB Z Write %08x @ %u, %u", data, x, y);
   }
   else
   {
     EFBPokeColor(x, y, data);
-    DEBUG_LOG_FMT(MEMMAP, "EFB Color Write {:08x} @ {}, {}", data, x, y);
+    DEBUG_LOG(MEMMAP, "EFB Color Write %08x @ %u, %u", data, x, y);
   }
 }
 
@@ -308,7 +309,7 @@ T MMU::ReadFromHardware(u32 em_address)
   // Don't show a panic alert for the specific access Game Boy Interface does.
   if (em_address != 0x10000000 || (m_ppc_state.pc >> 28) != 0)
   {
-    PanicAlertFmt("Unable to resolve read address {:x} PC {:x}", em_address, m_ppc_state.pc);
+    PanicAlert("Unable to resolve read address %x PC %x", em_address, m_ppc_state.pc);
     if (m_system.IsPauseOnPanicMode())
     {
       m_system.GetCPU().Break();
@@ -504,7 +505,7 @@ void MMU::WriteToHardware(u32 em_address, const u32 data, const u32 size)
   // TODO: This interrupt is supposed to have associated cause and address registers.
   m_system.GetProcessorInterface().SetInterrupt(ProcessorInterface::INT_CAUSE_PI);
 
-  PanicAlertFmt("Unable to resolve write address {:x} PC {:x}", em_address, m_ppc_state.pc);
+  PanicAlert("Unable to resolve write address %x PC %x", em_address, m_ppc_state.pc);
   if (m_system.IsPauseOnPanicMode())
   {
     m_system.GetCPU().Break();
@@ -1165,15 +1166,15 @@ void MMU::GenerateDSIException(u32 effective_address, bool write)
   {
     if (write)
     {
-      PanicAlertFmtT(
-          "Invalid write to {0:#010x}, PC = {1:#010x}.\n\nThe game probably would have crashed on "
+      PanicAlert(
+          "Invalid write to %#010x, PC = %#010x.\n\nThe game probably would have crashed on "
           "real hardware. Enable MMU in advanced settings to accurately emulate game crashes.",
           effective_address, m_ppc_state.pc);
     }
     else
     {
-      PanicAlertFmtT(
-          "Invalid read from {0:#010x}, PC = {1:#010x}.\n\nThe game probably would have crashed on "
+      PanicAlert(
+          "Invalid read from %#010x, PC = %#010x.\n\nThe game probably would have crashed on "
           "real hardware. Enable MMU in advanced settings to accurately emulate game crashes.",
           effective_address, m_ppc_state.pc);
     }
@@ -1204,7 +1205,7 @@ void MMU::GenerateISIException(u32 effective_address)
   m_ppc_state.npc = effective_address;
 
   m_ppc_state.Exceptions |= EXCEPTION_ISI;
-  WARN_LOG_FMT(POWERPC, "ISI exception at {:#010x}", m_ppc_state.pc);
+  WARN_LOG(POWERPC, "ISI exception at %#010x", m_ppc_state.pc);
 }
 
 void MMU::SDRUpdated()
@@ -1213,7 +1214,7 @@ void MMU::SDRUpdated()
   const u32 htabmask = sdr.htabmask;
 
   if (!Common::IsValidLowMask(htabmask))
-    WARN_LOG_FMT(POWERPC, "Invalid HTABMASK: 0b{:032b}", htabmask);
+    WARN_LOG(POWERPC, "Invalid HTABMASK: %#010x", htabmask);
 
   // While 6xx_pem.pdf §7.6.1.1 mentions that the number of trailing zeros in HTABORG
   // must be equal to the number of trailing ones in the mask (i.e. HTABORG must be
@@ -1221,7 +1222,7 @@ void MMU::SDRUpdated()
   // the base address anyway. Ignoring SDR changes would lead to incorrect emulation.
   const u32 htaborg = sdr.htaborg;
   if ((htaborg & htabmask) != 0)
-    WARN_LOG_FMT(POWERPC, "Invalid HTABORG: htaborg=0x{:08x} htabmask=0x{:08x}", htaborg, htabmask);
+    WARN_LOG(POWERPC, "Invalid HTABORG: htaborg=0x%08x htabmask=0x%08x", htaborg, htabmask);
 
   m_ppc_state.pagetable_base = htaborg << 16;
   m_ppc_state.pagetable_mask = (htabmask << 16) | 0xffc0;
@@ -1375,8 +1376,8 @@ void MMU::PageTableUpdated()
   u8* page_table_view = m_system.GetMemory().GetPointerForRange(page_table_base, page_table_size);
   if (!page_table_view)
   {
-    WARN_LOG_FMT(POWERPC, "Failed to read page table at {:#010x}-{:#010x}", page_table_base,
-                 page_table_end);
+    WARN_LOG(POWERPC, "Failed to read page table at %#010x-%#010x", page_table_base,
+             page_table_end);
     ClearPageTable();
     return;
   }
@@ -1395,7 +1396,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
   if (page_table_size % PAGE_TABLE_MIN_SIZE != 0)
   {
     // Should only happen if a maliciously crafted savestate was loaded
-    PanicAlertFmt("Impossible page table size {}", page_table_size);
+    PanicAlert("Impossible page table size %" PRIu64, (u64)page_table_size);
     ClearPageTable();
     return;
   }
@@ -1851,14 +1852,14 @@ void MMU::UpdateBATs(BatTable& bat_table, u32 base_spr)
       // With a valid BAT, the simplest way to match is
       // (input & ~BL_mask) == BEPI. For now, assume it's
       // implemented this way for invalid BATs as well.
-      WARN_LOG_FMT(POWERPC, "Bad BAT setup: BEPI overlaps BL");
+      WARN_LOG(POWERPC, "Bad BAT setup: BEPI overlaps BL");
     }
     if ((batl.BRPN & batu.BL) != 0)
     {
       // With a valid BAT, the simplest way to translate is
       // (input & BL_mask) | BRPN_address. For now, assume it's
       // implemented this way for invalid BATs as well.
-      WARN_LOG_FMT(POWERPC, "Bad BAT setup: BPRN overlaps BL");
+      WARN_LOG(POWERPC, "Bad BAT setup: BPRN overlaps BL");
     }
     if (!Common::IsValidLowMask((u32)batu.BL))
     {
@@ -1866,7 +1867,7 @@ void MMU::UpdateBATs(BatTable& bat_table, u32 base_spr)
       // (input & ~BL_mask) for matching and (input & BL_mask) for
       // translation. For now, assume it's implemented this way for
       // invalid BATs as well.
-      WARN_LOG_FMT(POWERPC, "Bad BAT setup: invalid mask in BL");
+      WARN_LOG(POWERPC, "Bad BAT setup: invalid mask in BL");
     }
     for (u32 j = 0; j <= batu.BL; ++j)
     {

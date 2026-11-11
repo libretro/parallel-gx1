@@ -3,13 +3,13 @@
 
 #include "Core/PowerPC/Jit64/Jit.h"
 
+#include <cinttypes>
 #include <map>
 #include <sstream>
 #include <string>
 #include <utility>
 
-#include <fmt/format.h>
-#include <fmt/ostream.h>
+#include <cstdio>
 
 // for the PROFILER stuff
 #ifdef _WIN32
@@ -148,10 +148,11 @@ bool Jit64::HandleFault(uintptr_t access_address, SContext* ctx)
 
     if (access_address < memory_base || access_address >= memory_base + 0x1'0000'0000)
     {
-      WARN_LOG_FMT(DYNA_REC,
-                   "Jit64 address calculation overflowed! Please report if this happens a lot. "
-                   "PC {:#018x}, access address {:#018x}, memory base {:#018x}, MSR.DR {}",
-                   ctx->CTX_PC, access_address, memory_base, ppc_state.msr.DR);
+      WARN_LOG(DYNA_REC,
+               "Jit64 address calculation overflowed! Please report if this happens a lot. "
+               "PC %#018" PRIx64 ", access address %#018" PRIx64 ", memory base %#018" PRIx64
+               ", MSR.DR %u",
+               (u64)ctx->CTX_PC, (u64)access_address, (u64)memory_base, ppc_state.msr.DR.Value());
     }
 
     return BackPatch(ctx);
@@ -170,7 +171,8 @@ bool Jit64::BackPatch(SContext* ctx)
   auto it = m_back_patch_info.find(codePtr);
   if (it == m_back_patch_info.end())
   {
-    PanicAlertFmt("BackPatch: no register use entry for address {}", fmt::ptr(codePtr));
+    PanicAlert("BackPatch: no register use entry for address %p",
+               static_cast<const void*>(codePtr));
     return false;
   }
 
@@ -730,7 +732,7 @@ void Jit64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
   {
     if (!SConfig::GetInstance().bJITNoBlockCache)
     {
-      WARN_LOG_FMT(DYNA_REC, "flushing trampoline code cache, please report if this happens a lot");
+      WARN_LOG(DYNA_REC, "flushing trampoline code cache, please report if this happens a lot");
     }
     ClearCache();
   }
@@ -750,7 +752,7 @@ void Jit64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     m_ppc_state.Exceptions |= EXCEPTION_ISI;
     m_system.GetPowerPC().CheckExceptions();
     m_system.GetJitInterface().UpdateMembase();
-    WARN_LOG_FMT(POWERPC, "ISI exception at {:#010x}", nextPC);
+    WARN_LOG(POWERPC, "ISI exception at %#010x", nextPC);
     return;
   }
 
@@ -789,14 +791,14 @@ void Jit64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
   {
     // Code generation failed due to not enough free space in either the near or far code regions.
     // Clear the entire JIT cache and retry.
-    WARN_LOG_FMT(DYNA_REC, "flushing code caches, please report if this happens a lot");
+    WARN_LOG(DYNA_REC, "flushing code caches, please report if this happens a lot");
     ClearCache();
     Jit(em_address, false);
     return;
   }
 
-  PanicAlertFmtT("JIT failed to find code space after a cache clear. This should never happen. "
-                 "Please report this incident on the bug tracker. Dolphin will now exit.");
+  PanicAlert("JIT failed to find code space after a cache clear. This should never happen. "
+             "Please report this incident on the bug tracker. Dolphin will now exit.");
   std::exit(-1);
 }
 
@@ -807,7 +809,7 @@ bool Jit64::SetEmitterStateToFreeCodeRegion()
   const auto free_near = m_free_ranges_near.by_size_begin();
   if (free_near == m_free_ranges_near.by_size_end())
   {
-    WARN_LOG_FMT(DYNA_REC, "Failed to find free memory region in near code region.");
+    WARN_LOG(DYNA_REC, "Failed to find free memory region in near code region.");
     return false;
   }
   SetCodePtr(free_near.from(), free_near.to());
@@ -815,7 +817,7 @@ bool Jit64::SetEmitterStateToFreeCodeRegion()
   const auto free_far = m_free_ranges_far.by_size_begin();
   if (free_far == m_free_ranges_far.by_size_end())
   {
-    WARN_LOG_FMT(DYNA_REC, "Failed to find free memory region in far code region.");
+    WARN_LOG(DYNA_REC, "Failed to find free memory region in far code region.");
     return false;
   }
   m_far_code.SetCodePtr(free_far.from(), free_far.to());
@@ -1116,7 +1118,7 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
     if (!gpr.SanityCheck() || !fpr.SanityCheck())
     {
       const std::string ppc_inst = Common::GekkoDisassembler::Disassemble(op.inst.hex, em_address);
-      NOTICE_LOG_FMT(DYNA_REC, "Unflushed register: {}", ppc_inst);
+      NOTICE_LOG(DYNA_REC, "Unflushed register: %s", ppc_inst.c_str());
     }
 #endif
     i += js.skipInstructions;
@@ -1139,9 +1141,9 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
   if (HasWriteFailed() || m_far_code.HasWriteFailed())
   {
     if (HasWriteFailed())
-      WARN_LOG_FMT(DYNA_REC, "JIT ran out of space in near code region during code generation.");
+      WARN_LOG(DYNA_REC, "JIT ran out of space in near code region during code generation.");
     if (m_far_code.HasWriteFailed())
-      WARN_LOG_FMT(DYNA_REC, "JIT ran out of space in far code region during code generation.");
+      WARN_LOG(DYNA_REC, "JIT ran out of space in far code region during code generation.");
 
     return false;
   }

@@ -282,8 +282,8 @@ void Interpreter::lmw(Interpreter& interpreter, UGeckoInstruction inst)
 
     if ((ppc_state.Exceptions & EXCEPTION_DSI) != 0)
     {
-      PanicAlertFmt("DSI exception in lmw");
-      NOTICE_LOG_FMT(POWERPC, "DSI exception in lmw");
+      PanicAlert("DSI exception in lmw");
+      NOTICE_LOG(POWERPC, "DSI exception in lmw");
       return;
     }
     else
@@ -310,8 +310,8 @@ void Interpreter::stmw(Interpreter& interpreter, UGeckoInstruction inst)
     interpreter.m_mmu.Write<u32>(ppc_state.gpr[i], address);
     if ((ppc_state.Exceptions & EXCEPTION_DSI) != 0)
     {
-      PanicAlertFmt("DSI exception in stmw");
-      NOTICE_LOG_FMT(POWERPC, "DSI exception in stmw");
+      PanicAlert("DSI exception in stmw");
+      NOTICE_LOG(POWERPC, "DSI exception in stmw");
       return;
     }
   }
@@ -744,7 +744,7 @@ void Interpreter::lswx(Interpreter& interpreter, UGeckoInstruction inst)
     // Not64 (Homebrew N64 Emulator for Wii) triggers the following case.
     if ((ppc_state.Exceptions & EXCEPTION_DSI) != 0)
     {
-      NOTICE_LOG_FMT(POWERPC, "DSI exception in lswx");
+      NOTICE_LOG(POWERPC, "DSI exception in lswx");
       return;
     }
     ppc_state.gpr[reg] |= temp_value;
@@ -943,7 +943,7 @@ void Interpreter::lswi(Interpreter& interpreter, UGeckoInstruction inst)
     const u32 temp_value = interpreter.m_mmu.Read<u8>(EA) << (24 - i);
     if ((ppc_state.Exceptions & EXCEPTION_DSI) != 0)
     {
-      PanicAlertFmt("DSI exception in lsw.");
+      PanicAlert("DSI exception in lsw.");
       return;
     }
 

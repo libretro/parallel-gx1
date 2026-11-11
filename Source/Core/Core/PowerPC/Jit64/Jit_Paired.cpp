@@ -62,7 +62,7 @@ void Jit64::ps_sum(UGeckoInstruction inst)
       MOVLPD(tmp, Rc);
     break;
   default:
-    PanicAlertFmt("ps_sum WTF!!!");
+    PanicAlert("ps_sum WTF!!!");
   }
   // We're intentionally not calling HandleNaNs here.
   // For addition and subtraction specifically, x86's NaN behavior matches PPC's.
@@ -96,7 +96,7 @@ void Jit64::ps_muls(UGeckoInstruction inst)
     avx_op(&XEmitter::VSHUFPD, &XEmitter::SHUFPD, Rc_duplicated, Rc, Rc, 3);
     break;
   default:
-    PanicAlertFmt("ps_muls WTF!!!");
+    PanicAlert("ps_muls WTF!!!");
   }
 
   if (round_input)

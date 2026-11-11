@@ -324,7 +324,7 @@ void Interpreter::mtspr(Interpreter& interpreter, UGeckoInstruction inst)
   {
   case SPR_TL:
   case SPR_TU:
-    PanicAlertFmt("Illegal Write to TL/TU");
+    PanicAlert("Illegal Write to TL/TU");
     break;
 
   case SPR_TL_W:
@@ -348,16 +348,16 @@ void Interpreter::mtspr(Interpreter& interpreter, UGeckoInstruction inst)
     old_hid0.Hex = old_value;
     if (HID0(ppc_state).ICE != old_hid0.ICE)
     {
-      INFO_LOG_FMT(POWERPC, "Instruction Cache Enable (HID0.ICE) = {}", HID0(ppc_state).ICE);
+      INFO_LOG(POWERPC, "Instruction Cache Enable (HID0.ICE) = %u", HID0(ppc_state).ICE.Value());
     }
     if (HID0(ppc_state).ILOCK != old_hid0.ILOCK)
     {
-      INFO_LOG_FMT(POWERPC, "Instruction Cache Lock (HID0.ILOCK) = {}", HID0(ppc_state).ILOCK);
+      INFO_LOG(POWERPC, "Instruction Cache Lock (HID0.ILOCK) = %u", HID0(ppc_state).ILOCK.Value());
     }
     if (HID0(ppc_state).ICFI)
     {
       HID0(ppc_state).ICFI = 0;
-      INFO_LOG_FMT(POWERPC, "Flush Instruction Cache! ICE={}", HID0(ppc_state).ICE);
+      INFO_LOG(POWERPC, "Flush Instruction Cache! ICE=%u", HID0(ppc_state).ICE.Value());
       // this is rather slow
       // most games do it only once during initialization
       auto& jit_interface = interpreter.m_system.GetJitInterface();
@@ -384,7 +384,7 @@ void Interpreter::mtspr(Interpreter& interpreter, UGeckoInstruction inst)
   case SPR_HID4:
     if (old_value != ppc_state.spr[index])
     {
-      INFO_LOG_FMT(POWERPC, "HID4 updated {:x} {:x}", old_value, ppc_state.spr[index]);
+      INFO_LOG(POWERPC, "HID4 updated %x %x", old_value, ppc_state.spr[index]);
       interpreter.m_mmu.IBATUpdated();
       interpreter.m_mmu.DBATUpdated();
     }
@@ -434,7 +434,7 @@ void Interpreter::mtspr(Interpreter& interpreter, UGeckoInstruction inst)
     // Top bit from 0 to 1
     if ((old_value >> 31) == 0 && (ppc_state.gpr[inst.RD] >> 31) != 0)
     {
-      INFO_LOG_FMT(POWERPC, "Software triggered Decrementer exception");
+      INFO_LOG(POWERPC, "Software triggered Decrementer exception");
       ppc_state.Exceptions |= EXCEPTION_DECREMENTER;
     }
     interpreter.m_system.GetSystemTimers().DecrementerSet();
@@ -467,7 +467,7 @@ void Interpreter::mtspr(Interpreter& interpreter, UGeckoInstruction inst)
   case SPR_DBAT7U:
     if (old_value != ppc_state.spr[index])
     {
-      INFO_LOG_FMT(POWERPC, "DBAT updated {} {:x} {:x}", index, old_value, ppc_state.spr[index]);
+      INFO_LOG(POWERPC, "DBAT updated %u %x %x", index, old_value, ppc_state.spr[index]);
       interpreter.m_mmu.DBATUpdated();
     }
     break;
@@ -490,7 +490,7 @@ void Interpreter::mtspr(Interpreter& interpreter, UGeckoInstruction inst)
   case SPR_IBAT7U:
     if (old_value != ppc_state.spr[index])
     {
-      INFO_LOG_FMT(POWERPC, "IBAT updated {} {:x} {:x}", index, old_value, ppc_state.spr[index]);
+      INFO_LOG(POWERPC, "IBAT updated %u %x %x", index, old_value, ppc_state.spr[index]);
       interpreter.m_mmu.IBATUpdated();
     }
     break;

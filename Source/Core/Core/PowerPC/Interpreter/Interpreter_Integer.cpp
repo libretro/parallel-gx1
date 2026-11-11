@@ -153,7 +153,7 @@ void Interpreter::twi(Interpreter& interpreter, UGeckoInstruction inst)
   const s32 b = inst.SIMM_16;
   const u32 TO = inst.TO;
 
-  DEBUG_LOG_FMT(POWERPC, "twi rA {:x} SIMM {:x} TO {:x}", a, b, TO);
+  DEBUG_LOG(POWERPC, "twi rA %x SIMM %x TO %x", (unsigned)a, (unsigned)b, TO);
 
   if ((a < b && (TO & 0x10) != 0) || (a > b && (TO & 0x08) != 0) || (a == b && (TO & 0x04) != 0) ||
       (u32(a) < u32(b) && (TO & 0x02) != 0) || (u32(a) > u32(b) && (TO & 0x01) != 0))
@@ -384,7 +384,7 @@ void Interpreter::tw(Interpreter& interpreter, UGeckoInstruction inst)
   const s32 b = s32(ppc_state.gpr[inst.RB]);
   const u32 TO = inst.TO;
 
-  DEBUG_LOG_FMT(POWERPC, "tw rA {:x} rB {:x} TO {:x}", a, b, TO);
+  DEBUG_LOG(POWERPC, "tw rA %x rB %x TO %x", (unsigned)a, (unsigned)b, TO);
 
   if ((a < b && (TO & 0x10) != 0) || (a > b && (TO & 0x08) != 0) || (a == b && (TO & 0x04) != 0) ||
       ((u32(a) < u32(b)) && (TO & 0x02) != 0) || ((u32(a) > u32(b)) && (TO & 0x01) != 0))

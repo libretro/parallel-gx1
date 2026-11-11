@@ -267,7 +267,7 @@ void JitArm64::boolX(UGeckoInstruction inst)
     }
     else
     {
-      PanicAlertFmt("WTF!");
+      PanicAlert("WTF!");
     }
   }
   else if ((gpr.IsImm(s) && (gpr.GetImm(s) == 0 || gpr.GetImm(s) == 0xFFFFFFFF ||
@@ -422,7 +422,7 @@ void JitArm64::boolX(UGeckoInstruction inst)
     }
     else
     {
-      PanicAlertFmt("WTF!");
+      PanicAlert("WTF!");
     }
   }
   else
@@ -464,7 +464,7 @@ void JitArm64::boolX(UGeckoInstruction inst)
     }
     else
     {
-      PanicAlertFmt("WTF!");
+      PanicAlert("WTF!");
     }
     if (inst.Rc)
       ComputeRC0(gpr.R(a));

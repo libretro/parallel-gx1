@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -78,7 +78,11 @@ bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::S
                      u32 max_size)
 {
   if (func.name.empty())
-    func.Rename(fmt::format("zz_{:08x}_", startAddr));
+  {
+    char name[16];
+    snprintf(name, sizeof(name), "zz_%08x_", startAddr);
+    func.Rename(name);
+  }
   if (func.analyzed)
     return true;  // No error, just already did it.
 
@@ -400,7 +404,7 @@ void FindFunctions(const Core::CPUThreadGuard& guard, u32 startAddr, u32 endAddr
   func_db->ForEachSymbolWithMutation([&](Common::Symbol& f) {
     if (f.address == 4)
     {
-      WARN_LOG_FMT(SYMBOLS, "Weird function");
+      WARN_LOG(SYMBOLS, "Weird function");
     }
     else
     {
@@ -451,12 +455,12 @@ void FindFunctions(const Core::CPUThreadGuard& guard, u32 startAddr, u32 endAddr
   else
     unniceSize /= numUnNice;
 
-  INFO_LOG_FMT(SYMBOLS,
-               "Functions analyzed. {} leafs, {} nice, {} unnice."
-               "{} timer, {} rfi. {} are branchless leafs.",
-               numLeafs, numNice, numUnNice, numTimer, numRFI, numStraightLeaf);
-  INFO_LOG_FMT(SYMBOLS, "Average size: {} (leaf), {} (nice), {}(unnice)", leafSize, niceSize,
-               unniceSize);
+  INFO_LOG(SYMBOLS,
+           "Functions analyzed. %d leafs, %d nice, %d unnice."
+           "%d timer, %d rfi. %d are branchless leafs.",
+           numLeafs, numNice, numUnNice, numTimer, numRFI, numStraightLeaf);
+  INFO_LOG(SYMBOLS, "Average size: %d (leaf), %d (nice), %d(unnice)", leafSize, niceSize,
+           unniceSize);
 }
 
 static bool isCarryOp(const CodeOp& a)

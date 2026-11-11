@@ -111,7 +111,7 @@ void PowerPCManager::DoState(PointerWrap& p)
 
     if (!m_ppc_state.m_enable_dcache)
     {
-      INFO_LOG_FMT(POWERPC, "Flushing data cache");
+      INFO_LOG(POWERPC, "Flushing data cache");
       m_ppc_state.dCache.FlushAll(memory);
     }
 
@@ -212,8 +212,8 @@ void PowerPCManager::InitializeCPUCore(CPUCore cpu_core)
     m_cpu_core_base = m_system.GetJitInterface().InitJitCore(cpu_core);
     if (!m_cpu_core_base)  // Handle Situations where JIT core isn't available
     {
-      WARN_LOG_FMT(POWERPC, "CPU core {} not available. Falling back to default.",
-                   static_cast<int>(cpu_core));
+      WARN_LOG(POWERPC, "CPU core %d not available. Falling back to default.",
+               static_cast<int>(cpu_core));
       m_cpu_core_base = m_system.GetJitInterface().InitJitCore(DefaultCPUCore());
     }
     break;
@@ -241,7 +241,7 @@ void PowerPCManager::RefreshConfig()
 
   if (old_enable_dcache && !m_ppc_state.m_enable_dcache)
   {
-    INFO_LOG_FMT(POWERPC, "Flushing data cache");
+    INFO_LOG(POWERPC, "Flushing data cache");
     m_ppc_state.dCache.FlushAll(m_system.GetMemory());
   }
 }
@@ -484,7 +484,7 @@ void PowerPCManager::CheckExceptions()
     m_ppc_state.msr.Hex &= ~0x04EF36;
     m_ppc_state.pc = m_ppc_state.npc = 0x00000400;
 
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_ISI");
+    DEBUG_LOG(POWERPC, "EXCEPTION_ISI");
     m_ppc_state.Exceptions &= ~EXCEPTION_ISI;
   }
   else if (exceptions & EXCEPTION_PROGRAM)
@@ -496,7 +496,7 @@ void PowerPCManager::CheckExceptions()
     m_ppc_state.msr.Hex &= ~0x04EF36;
     m_ppc_state.pc = m_ppc_state.npc = 0x00000700;
 
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_PROGRAM");
+    DEBUG_LOG(POWERPC, "EXCEPTION_PROGRAM");
     m_ppc_state.Exceptions &= ~EXCEPTION_PROGRAM;
   }
   else if (exceptions & EXCEPTION_SYSCALL)
@@ -507,7 +507,7 @@ void PowerPCManager::CheckExceptions()
     m_ppc_state.msr.Hex &= ~0x04EF36;
     m_ppc_state.pc = m_ppc_state.npc = 0x00000C00;
 
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_SYSCALL (PC={:08x})", m_ppc_state.pc);
+    DEBUG_LOG(POWERPC, "EXCEPTION_SYSCALL (PC=%08x)", m_ppc_state.pc);
     m_ppc_state.Exceptions &= ~EXCEPTION_SYSCALL;
   }
   else if (exceptions & EXCEPTION_FPU_UNAVAILABLE)
@@ -519,7 +519,7 @@ void PowerPCManager::CheckExceptions()
     m_ppc_state.msr.Hex &= ~0x04EF36;
     m_ppc_state.pc = m_ppc_state.npc = 0x00000800;
 
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_FPU_UNAVAILABLE");
+    DEBUG_LOG(POWERPC, "EXCEPTION_FPU_UNAVAILABLE");
     m_ppc_state.Exceptions &= ~EXCEPTION_FPU_UNAVAILABLE;
   }
   else if (exceptions & EXCEPTION_FAKE_MEMCHECK_HIT)
@@ -535,7 +535,7 @@ void PowerPCManager::CheckExceptions()
     m_ppc_state.pc = m_ppc_state.npc = 0x00000300;
     // DSISR and DAR regs are changed in GenerateDSIException()
 
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_DSI");
+    DEBUG_LOG(POWERPC, "EXCEPTION_DSI");
     m_ppc_state.Exceptions &= ~EXCEPTION_DSI;
   }
   else if (exceptions & EXCEPTION_ALIGNMENT)
@@ -548,7 +548,7 @@ void PowerPCManager::CheckExceptions()
 
     // TODO crazy amount of DSISR options to check out
 
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_ALIGNMENT");
+    DEBUG_LOG(POWERPC, "EXCEPTION_ALIGNMENT");
     m_ppc_state.Exceptions &= ~EXCEPTION_ALIGNMENT;
   }
   else
@@ -576,7 +576,7 @@ void PowerPCManager::CheckExternalExceptions()
   {
     // Pokemon gets this "too early", it hasn't a handler yet
 
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_EXTERNAL_INT");
+    DEBUG_LOG(POWERPC, "EXCEPTION_EXTERNAL_INT");
     DEBUG_ASSERT_MSG(POWERPC, m_ppc_state.msr.RI, "EXTERNAL_INT unrecoverable???");
 
     exception_vector = 0x00000500;
@@ -584,14 +584,14 @@ void PowerPCManager::CheckExternalExceptions()
   }
   else if (exceptions & EXCEPTION_PERFORMANCE_MONITOR)
   {
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_PERFORMANCE_MONITOR");
+    DEBUG_LOG(POWERPC, "EXCEPTION_PERFORMANCE_MONITOR");
 
     exception_vector = 0x00000F00;
     m_ppc_state.Exceptions &= ~EXCEPTION_PERFORMANCE_MONITOR;
   }
   else if (exceptions & EXCEPTION_DECREMENTER)
   {
-    DEBUG_LOG_FMT(POWERPC, "EXCEPTION_DECREMENTER");
+    DEBUG_LOG(POWERPC, "EXCEPTION_DECREMENTER");
 
     exception_vector = 0x00000900;
     m_ppc_state.Exceptions &= ~EXCEPTION_DECREMENTER;
@@ -599,8 +599,7 @@ void PowerPCManager::CheckExternalExceptions()
   else
   {
     DEBUG_ASSERT_MSG(POWERPC, 0, "Unknown EXT interrupt: Exceptions == {:08x}", exceptions);
-    ERROR_LOG_FMT(POWERPC, "Unknown EXTERNAL INTERRUPT exception: Exceptions == {:08x}",
-                  exceptions);
+    ERROR_LOG(POWERPC, "Unknown EXTERNAL INTERRUPT exception: Exceptions == %08x", exceptions);
     return;
   }
 

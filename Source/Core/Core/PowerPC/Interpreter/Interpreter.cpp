@@ -4,9 +4,10 @@
 #include "Core/PowerPC/Interpreter/Interpreter.h"
 
 #include <array>
+#include <cinttypes>
 #include <string>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -205,20 +206,19 @@ void Interpreter::unknown_instruction(Interpreter& interpreter, UGeckoInstructio
   const u32 last_pc = interpreter.m_last_pc;
   const u32 opcode = PowerPC::MMU::HostRead<u32>(guard, last_pc);
   const std::string disasm = Common::GekkoDisassembler::Disassemble(opcode, last_pc);
-  NOTICE_LOG_FMT(POWERPC, "Last PC = {:08x} : {}", last_pc, disasm);
+  NOTICE_LOG(POWERPC, "Last PC = %08x : %s", last_pc, disasm.c_str());
   Dolphin_Debugger::PrintCallstack(guard, Common::Log::LogType::POWERPC,
                                    Common::Log::LogLevel::LNOTICE);
 
   const auto& ppc_state = interpreter.m_ppc_state;
-  NOTICE_LOG_FMT(
-      POWERPC,
-      "\nIntCPU: Unknown instruction {:08x} at PC = {:08x}  last_PC = {:08x}  LR = {:08x}\n",
-      inst.hex, ppc_state.pc, last_pc, LR(ppc_state));
+  NOTICE_LOG(POWERPC,
+             "\nIntCPU: Unknown instruction %08x at PC = %08x  last_PC = %08x  LR = %08x\n",
+             inst.hex, ppc_state.pc, last_pc, LR(ppc_state));
   for (int i = 0; i < 32; i += 4)
   {
-    NOTICE_LOG_FMT(POWERPC, "r{}: {:#010x} r{}: {:#010x} r{}: {:#010x} r{}: {:#010x}", i,
-                   ppc_state.gpr[i], i + 1, ppc_state.gpr[i + 1], i + 2, ppc_state.gpr[i + 2],
-                   i + 3, ppc_state.gpr[i + 3]);
+    NOTICE_LOG(POWERPC, "r%d: %#010x r%d: %#010x r%d: %#010x r%d: %#010x", i, ppc_state.gpr[i],
+               i + 1, ppc_state.gpr[i + 1], i + 2, ppc_state.gpr[i + 2], i + 3,
+               ppc_state.gpr[i + 3]);
   }
   ASSERT_MSG(POWERPC, 0,
              "\nIntCPU: Unknown instruction {:08x} at PC = {:08x}  last_PC = {:08x}  LR = {:08x}\n",

@@ -3,13 +3,11 @@
 
 #include "Core/PowerPC/JitArm64/Jit.h"
 
+#include <cinttypes>
 #include <cstdio>
 #include <optional>
 #include <sstream>
 #include <utility>
-
-#include <fmt/format.h>
-#include <fmt/ostream.h>
 
 #include "Common/Arm64Emitter.h"
 #include "Common/CommonTypes.h"
@@ -116,7 +114,7 @@ bool JitArm64::HandleFault(uintptr_t access_address, SContext* ctx)
   // We can't handle any fault from other threads.
   if (!Core::IsCPUThread())
   {
-    ERROR_LOG_FMT(DYNA_REC, "Exception handler - Not on CPU thread");
+    ERROR_LOG(DYNA_REC, "Exception handler - Not on CPU thread");
     DoBacktrace(access_address, ctx);
     return false;
   }
@@ -140,13 +138,15 @@ bool JitArm64::HandleFault(uintptr_t access_address, SContext* ctx)
 
       if (access_address < memory_base || access_address >= memory_base + 0x1'0000'0000)
       {
-        ERROR_LOG_FMT(DYNA_REC,
-                      "JitArm64 address calculation overflowed. This should never happen! "
-                      "PC {:#018x}, access address {:#018x}, memory base {:#018x}, MSR.DR {}, "
-                      "mem_ptr {}, pbase {}, lbase {}",
-                      ctx->CTX_PC, access_address, memory_base, m_ppc_state.msr.DR,
-                      fmt::ptr(m_ppc_state.mem_ptr), fmt::ptr(memory.GetPhysicalBase()),
-                      fmt::ptr(memory.GetLogicalBase()));
+        ERROR_LOG(DYNA_REC,
+                  "JitArm64 address calculation overflowed. This should never happen! "
+                  "PC %#018" PRIx64 ", access address %#018" PRIx64 ", memory base %#018" PRIx64
+                  ", MSR.DR %u, mem_ptr %p, pbase %p, lbase %p",
+                  static_cast<u64>(ctx->CTX_PC), static_cast<u64>(access_address),
+                  static_cast<u64>(memory_base), static_cast<unsigned>(m_ppc_state.msr.DR.Value()),
+                  static_cast<const void*>(m_ppc_state.mem_ptr),
+                  static_cast<const void*>(memory.GetPhysicalBase()),
+                  static_cast<const void*>(memory.GetLogicalBase()));
       }
       else
       {
@@ -157,7 +157,7 @@ bool JitArm64::HandleFault(uintptr_t access_address, SContext* ctx)
 
   if (!success)
   {
-    ERROR_LOG_FMT(DYNA_REC, "Exception handler - Unhandled fault");
+    ERROR_LOG(DYNA_REC, "Exception handler - Unhandled fault");
     DoBacktrace(access_address, ctx);
   }
   return success;
@@ -331,7 +331,7 @@ void JitArm64::DoNothing(UGeckoInstruction inst)
 
 void JitArm64::Break(UGeckoInstruction inst)
 {
-  WARN_LOG_FMT(DYNA_REC, "Breaking! {:08x} - Fix me ;)", inst.hex);
+  WARN_LOG(DYNA_REC, "Breaking! %08x - Fix me ;)", inst.hex);
   std::exit(0);
 }
 
@@ -893,10 +893,21 @@ bool JitArm64::HandleFunctionHooking(u32 address)
 
 void JitArm64::DumpCode(const u8* start, const u8* end)
 {
-  std::string output;
-  for (const u8* code = start; code < end; code += sizeof(u32))
-    output += fmt::format("{:08x}", Common::swap32(code));
-  WARN_LOG_FMT(DYNA_REC, "Code dump from {} to {}:\n{}", fmt::ptr(start), fmt::ptr(end), output);
+  WARN_LOG(DYNA_REC, "Code dump from %p to %p:", static_cast<const void*>(start),
+           static_cast<const void*>(end));
+  // a line of up to 16 words at a time, on the stack
+  for (const u8* line = start; line < end; line += 16 * sizeof(u32))
+  {
+    char text[16 * 8 + 1];
+    size_t len = 0;
+    for (const u8* code = line; code < end && code < line + 16 * sizeof(u32); code += sizeof(u32))
+    {
+      snprintf(text + len, sizeof(text) - len, "%08x", Common::swap32(code));
+      len += 8;
+    }
+    text[len] = '\0';
+    WARN_LOG(DYNA_REC, "%s", text);
+  }
 }
 
 void JitArm64::Run()
@@ -950,7 +961,7 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     m_ppc_state.Exceptions |= EXCEPTION_ISI;
     m_system.GetPowerPC().CheckExceptions();
     m_system.GetJitInterface().UpdateMembase();
-    WARN_LOG_FMT(POWERPC, "ISI exception at {:#010x}", nextPC);
+    WARN_LOG(POWERPC, "ISI exception at %#010x", nextPC);
     return;
   }
 
@@ -995,14 +1006,14 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
   {
     // Code generation failed due to not enough free space in either the near or far code regions.
     // Clear the entire JIT cache and retry.
-    WARN_LOG_FMT(DYNA_REC, "flushing code caches, please report if this happens a lot");
+    WARN_LOG(DYNA_REC, "flushing code caches, please report if this happens a lot");
     ClearCache();
     Jit(em_address, false);
     return;
   }
 
-  PanicAlertFmtT("JIT failed to find code space after a cache clear. This should never happen. "
-                 "Please report this incident on the bug tracker. Dolphin will now exit.");
+  PanicAlert("JIT failed to find code space after a cache clear. This should never happen. "
+             "Please report this incident on the bug tracker. Dolphin will now exit.");
   exit(-1);
 }
 
@@ -1034,9 +1045,9 @@ std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
   if (free_0_smallest_size == 0 && free_1_smallest_size == 0)
   {
     if (free_near_0_size == 0 && free_near_1_size == 0)
-      WARN_LOG_FMT(DYNA_REC, "Failed to find free memory region in near code regions.");
+      WARN_LOG(DYNA_REC, "Failed to find free memory region in near code regions.");
     else if (free_far_0_size == 0 && free_far_1_size == 0)
-      WARN_LOG_FMT(DYNA_REC, "Failed to find free memory region in far code regions.");
+      WARN_LOG(DYNA_REC, "Failed to find free memory region in far code regions.");
     return std::nullopt;
   }
 
@@ -1301,9 +1312,9 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
   if (HasWriteFailed() || m_far_code.HasWriteFailed())
   {
     if (HasWriteFailed())
-      WARN_LOG_FMT(DYNA_REC, "JIT ran out of space in near code region during code generation.");
+      WARN_LOG(DYNA_REC, "JIT ran out of space in near code region during code generation.");
     if (m_far_code.HasWriteFailed())
-      WARN_LOG_FMT(DYNA_REC, "JIT ran out of space in far code region during code generation.");
+      WARN_LOG(DYNA_REC, "JIT ran out of space in far code region during code generation.");
 
     return false;
   }
