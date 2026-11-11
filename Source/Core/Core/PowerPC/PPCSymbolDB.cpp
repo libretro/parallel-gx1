@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
-#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -16,7 +15,6 @@
 
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
-#include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"
@@ -73,7 +71,7 @@ void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAdd
   {
     // already got it, let's just update name, checksum & size to be sure.
     symbol.Rename(name);
-    symbol.hash = HashSignatureDB::ComputeCodeChecksum(guard, startAddr, startAddr + size - 4);
+    symbol.hash = SignatureDB::ComputeCodeChecksum(guard, startAddr, startAddr + size - 4);
     symbol.size = size;
   }
   else
@@ -357,8 +355,8 @@ bool PPCSymbolDB::LoadMapOnBoot(const Core::CPUThreadGuard& guard)
 // https://forums.oculus.com/viewtopic.php?f=42&t=11241&start=580
 // https://m2k2.taigaforum.com/post/metroid_prime_hacking_help_25.html#metroid_prime_hacking_help_25
 
-// This one can load both leftover map files on game discs (like Zelda), and mapfiles
-// produced by SaveSymbolMap below.
+// This one can load both leftover map files on game discs (like Zelda) and
+// CodeWarrior-style map files.
 // bad=true means carefully load map files that might not be from exactly the right version
 bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filename, bool bad)
 {
@@ -614,62 +612,5 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
   std::swap(m_map_name, filename);
 
   NOTICE_LOG_FMT(SYMBOLS, "{} symbols loaded, {} symbols ignored.", good_count, bad_count);
-  return true;
-}
-
-// Save symbol map similar to CodeWarrior's map file
-bool PPCSymbolDB::SaveSymbolMap(const std::string& filename) const
-{
-  File::IOFile file(filename, "w");
-  if (!file)
-    return false;
-
-  // Write .text section
-  auto function_symbols = m_functions | std::views::filter([](const auto& f) {
-                            return f.second.type == Common::Symbol::Type::Function;
-                          }) |
-                          std::views::transform([](const auto& f) { return f.second; });
-  file.WriteString(".text section layout\n");
-  for (const auto& symbol : function_symbols)
-  {
-    // Write symbol address, size, virtual address, alignment, name
-    std::string line = fmt::format("{:08x} {:06x} {:08x} {} {}", symbol.address, symbol.size,
-                                   symbol.address, 0, symbol.name);
-    // Also write the object name if it exists
-    if (!symbol.object_name.empty())
-      line += fmt::format(" \t{0}", symbol.object_name);
-    line += "\n";
-    file.WriteString(line);
-  }
-
-  // Write .data section
-  auto data_symbols = m_functions | std::views::filter([](const auto& f) {
-                        return f.second.type == Common::Symbol::Type::Data;
-                      }) |
-                      std::views::transform([](const auto& f) { return f.second; });
-  file.WriteString("\n.data section layout\n");
-  for (const auto& symbol : data_symbols)
-  {
-    // Write symbol address, size, virtual address, alignment, name
-    std::string line = fmt::format("{:08x} {:06x} {:08x} {} {}", symbol.address, symbol.size,
-                                   symbol.address, 0, symbol.name);
-    // Also write the object name if it exists
-    if (!symbol.object_name.empty())
-      line += fmt::format(" \t{0}", symbol.object_name);
-    line += "\n";
-    file.WriteString(line);
-  }
-
-  // Write .note section
-  auto note_symbols = m_notes | std::views::transform([](const auto& f) { return f.second; });
-  file.WriteString("\n.note section layout\n");
-  for (const auto& symbol : note_symbols)
-  {
-    // Write symbol address, size, virtual address, alignment, name
-    const std::string line = fmt::format("{:08x} {:06x} {:08x} {} {}\n", symbol.address,
-                                         symbol.size, symbol.address, 0, symbol.name);
-    file.WriteString(line);
-  }
-
   return true;
 }

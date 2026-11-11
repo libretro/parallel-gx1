@@ -105,7 +105,7 @@ bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::S
       func.address = startAddr;
       func.analyzed = true;
       func.size -= 4;
-      func.hash = HashSignatureDB::ComputeCodeChecksum(guard, startAddr, addr - 4);
+      func.hash = SignatureDB::ComputeCodeChecksum(guard, startAddr, addr - 4);
       if (numInternalBranches == 0)
         func.flags |= Common::FFLAG_STRAIGHT;
       return true;
@@ -127,7 +127,7 @@ bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::S
         // Let's calc the checksum and get outta here
         func.address = startAddr;
         func.analyzed = true;
-        func.hash = HashSignatureDB::ComputeCodeChecksum(guard, startAddr, addr);
+        func.hash = SignatureDB::ComputeCodeChecksum(guard, startAddr, addr);
         if (numInternalBranches == 0)
           func.flags |= Common::FFLAG_STRAIGHT;
         return true;
