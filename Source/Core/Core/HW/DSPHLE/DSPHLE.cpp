@@ -64,7 +64,7 @@ void DSPHLE::SendMailToDSP(u32 mail)
 {
   if (m_ucode != nullptr)
   {
-    DEBUG_LOG_FMT(DSP_MAIL, "CPU writes {:#010x}", mail);
+    DEBUG_LOG(DSP_MAIL, "CPU writes %#010x", mail);
     m_ucode->HandleMail(mail);
   }
 }
@@ -172,7 +172,7 @@ void DSPHLE::DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value)
   }
   else
   {
-    PanicAlertFmt("CPU can't write {:08x} to DSP mailbox", value);
+    PanicAlert("CPU can't write %08x to DSP mailbox", (unsigned)value);
   }
 }
 
@@ -187,7 +187,7 @@ void DSPHLE::DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value)
   }
   else
   {
-    PanicAlertFmt("CPU can't write {:08x} to DSP mailbox", value);
+    PanicAlert("CPU can't write %08x to DSP mailbox", (unsigned)value);
   }
 }
 
@@ -198,8 +198,8 @@ u16 DSPHLE::DSP_WriteControlRegister(u16 value)
 
   if (m_dsp_control.DSPHalt != temp.DSPHalt)
   {
-    INFO_LOG_FMT(DSPHLE, "DSP_CONTROL halt bit changed: {:04x} -> {:04x}", m_dsp_control.Hex,
-                 value);
+    INFO_LOG(DSPHLE, "DSP_CONTROL halt bit changed: %04x -> %04x", (unsigned)m_dsp_control.Hex,
+             (unsigned)value);
     m_mail_handler.SetHalted(temp.DSPHalt);
   }
 

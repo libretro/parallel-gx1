@@ -66,10 +66,10 @@ void ProcessGBACrypto(Memory::MemoryManager& memory, u32 address)
   memory.Write_U32(t3, dest_addr + 4);
 
   // Done!
-  DEBUG_LOG_FMT(DSPHLE,
-                "\n{:08x} -> challenge: {:08x}, len: {:08x}, dest_addr: {:08x}, "
-                "palette: {:08x}, speed: {:08x} key: {:08x}, auth_code: {:08x}",
-                address, challenge, length, dest_addr, logo_palette, logo_speed_32, key, t3);
+  DEBUG_LOG(DSPHLE,
+            "\n%08x -> challenge: %08x, len: %08x, dest_addr: %08x, "
+            "palette: %08x, speed: %08x key: %08x, auth_code: %08x",
+            address, challenge, length, dest_addr, logo_palette, logo_speed_32, key, t3);
 }
 
 GBAUCode::GBAUCode(DSPHLE* dsphle, u32 crc) : UCodeInterface(dsphle, crc)
@@ -107,12 +107,12 @@ void GBAUCode::HandleMail(u32 mail)
   {
     if (mail == REQUEST_MAIL)
     {
-      INFO_LOG_FMT(DSPHLE, "GBAUCode - Received request mail");
+      INFO_LOG(DSPHLE, "GBAUCode - Received request mail");
       m_mail_state = MailState::WaitingForAddress;
     }
     else
     {
-      WARN_LOG_FMT(DSPHLE, "GBAUCode - Expected request mail but got {:08x}", mail);
+      WARN_LOG(DSPHLE, "GBAUCode - Expected request mail but got %08x", mail);
     }
     break;
   }
@@ -139,7 +139,7 @@ void GBAUCode::HandleMail(u32 mail)
       m_dsphle->SetUCode(UCODE_ROM);
       break;
     default:
-      WARN_LOG_FMT(DSPHLE, "GBAUCode - unknown 0xcdd1 command: {:08x}", mail);
+      WARN_LOG(DSPHLE, "GBAUCode - unknown 0xcdd1 command: %08x", mail);
       break;
     }
   }

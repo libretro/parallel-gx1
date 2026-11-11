@@ -94,7 +94,7 @@ void ASndUCode::HandleMail(u32 mail)
   else if (m_next_mail_is_voice_addr)
   {
     m_voice_addr = mail;
-    INFO_LOG_FMT(DSPHLE, "ASndUCode - Voice data is at {:08x}", mail);
+    INFO_LOG(DSPHLE, "ASndUCode - Voice data is at %08x", mail);
     m_next_mail_is_voice_addr = false;
     // No mail is sent in response
   }
@@ -109,7 +109,7 @@ void ASndUCode::HandleMail(u32 mail)
       m_dsphle->SetUCode(UCODE_ROM);
       break;
     default:
-      WARN_LOG_FMT(DSPHLE, "ASndUCode - unknown 0xcdd1 command: {:08x}", mail);
+      WARN_LOG(DSPHLE, "ASndUCode - unknown 0xcdd1 command: %08x", mail);
       break;
     }
     // No mail is sent in response to any of these
@@ -120,7 +120,7 @@ void ASndUCode::HandleMail(u32 mail)
     switch (mail & 0xffff)
     {
     case MAIL_INPUT_SAMPLES:
-      DEBUG_LOG_FMT(DSPHLE, "ASndUCode - MAIL_INPUT_SAMPLES: {:08x}", mail);
+      DEBUG_LOG(DSPHLE, "ASndUCode - MAIL_INPUT_SAMPLES: %08x", mail);
       // input_samples
       DMAInVoiceData();
       // loop_get1
@@ -130,7 +130,7 @@ void ASndUCode::HandleMail(u32 mail)
       break;
     case MAIL_INPUT_SAMPLES_2:
     {
-      WARN_LOG_FMT(DSPHLE, "ASndUCode - MAIL_INPUT_SAMPLES_2: {:08x} - not normally used", mail);
+      WARN_LOG(DSPHLE, "ASndUCode - MAIL_INPUT_SAMPLES_2: %08x - not normally used", mail);
       // input_samples2
       DMAInVoiceData();  // first do_dma call
       // second do_dma call
@@ -142,12 +142,12 @@ void ASndUCode::HandleMail(u32 mail)
       break;
     }
     case MAIL_SET_VOICE_DATA_BUFFER:
-      DEBUG_LOG_FMT(DSPHLE, "ASndUCode - MAIL_SET_VOICE_DATA_BUFFER: {:08x}", mail);
+      DEBUG_LOG(DSPHLE, "ASndUCode - MAIL_SET_VOICE_DATA_BUFFER: %08x", mail);
       m_next_mail_is_voice_addr = true;
       // No mail is sent in response
       break;
     case MAIL_INPUT_NEXT_SAMPLES:
-      DEBUG_LOG_FMT(DSPHLE, "ASndUCode - MAIL_INPUT_NEXT_SAMPLES: {:08x}", mail);
+      DEBUG_LOG(DSPHLE, "ASndUCode - MAIL_INPUT_NEXT_SAMPLES: %08x", mail);
       // input_next_samples
       DMAInVoiceData();
       // called via fallthrough
@@ -156,7 +156,7 @@ void ASndUCode::HandleMail(u32 mail)
       break;
     case MAIN_SEND_SAMPLES:
     {
-      DEBUG_LOG_FMT(DSPHLE, "ASndUCode - MAIN_SEND_SAMPLES: {:08x}", mail);
+      DEBUG_LOG(DSPHLE, "ASndUCode - MAIN_SEND_SAMPLES: %08x", mail);
       auto& memory = m_dsphle->GetSystem().GetMemory();
       memory.CopyToEmuSwapped(m_current_voice.out_buf, m_output_buffer.data(),
                               sizeof(m_output_buffer));
@@ -164,12 +164,12 @@ void ASndUCode::HandleMail(u32 mail)
       break;
     }
     case MAIL_ROM_DUMP_WORD:
-      WARN_LOG_FMT(DSPHLE, "ASndUCode - MAIL_ROM_DUMP_WORD: {:08x} - not normally used", mail);
+      WARN_LOG(DSPHLE, "ASndUCode - MAIL_ROM_DUMP_WORD: %08x - not normally used", mail);
       // Reads instruction at 0x8000 | (mail >> 16), and sends it back in DMBL. DMBH is 0.
       m_mail_handler.PushMail(0x0000'0000, false);  // DIRQ is not set
       break;
     case MAIL_TEST:
-      WARN_LOG_FMT(DSPHLE, "ASndUCode - MAIL_TEST: {:08x} - not normally used", mail);
+      WARN_LOG(DSPHLE, "ASndUCode - MAIL_TEST: %08x - not normally used", mail);
       // Runs `lri $ac0.m, #0x0` and `andf $ac0.m, #0x1`
       // and then sends $sr in DMBH and $ac0.m in DMBL
       // The exact value of $sr will vary, but this isn't used by anything in practice.
@@ -178,19 +178,18 @@ void ASndUCode::HandleMail(u32 mail)
     case MAIL_TERMINATE:
       if (m_crc != HASH_2008)
       {
-        INFO_LOG_FMT(DSPHLE, "ASndUCode - MAIL_TERMINATE: {:08x}", mail);
+        INFO_LOG(DSPHLE, "ASndUCode - MAIL_TERMINATE: %08x", mail);
         // This doesn't actually change the state of the system.
         m_mail_handler.PushMail(DSP_DONE, true);
       }
       else
       {
-        WARN_LOG_FMT(DSPHLE, "ASndUCode - MAIL_TERMINATE is not supported in this version: {:08x}",
-                     mail);
+        WARN_LOG(DSPHLE, "ASndUCode - MAIL_TERMINATE is not supported in this version: %08x", mail);
         m_mail_handler.PushMail(DSP_SYNC, true);
       }
       break;
     default:
-      WARN_LOG_FMT(DSPHLE, "ASndUCode - unknown command: {:08x}", mail);
+      WARN_LOG(DSPHLE, "ASndUCode - unknown command: %08x", mail);
       m_mail_handler.PushMail(DSP_SYNC, true);
       break;
     }
@@ -204,7 +203,7 @@ void ASndUCode::DMAInVoiceData()
   m_current_voice.delay_samples = memory.Read_U32(m_voice_addr + 4);
   u32 new_flags = memory.Read_U32(m_voice_addr + 8);
   if (m_current_voice.flags != new_flags)
-    DEBUG_LOG_FMT(DSPHLE, "ASndUCode - flags: {:08x}", new_flags);
+    DEBUG_LOG(DSPHLE, "ASndUCode - flags: %08x", new_flags);
   m_current_voice.flags = new_flags;
   m_current_voice.start_addr = memory.Read_U32(m_voice_addr + 12);
   m_current_voice.end_addr = memory.Read_U32(m_voice_addr + 16);

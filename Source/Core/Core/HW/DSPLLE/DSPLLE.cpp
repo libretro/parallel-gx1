@@ -3,6 +3,7 @@
 
 #include "Core/HW/DSPLLE/DSPLLE.h"
 
+#include <cinttypes>
 #include <cstring>
 #include <string>
 
@@ -93,8 +94,8 @@ static bool LoadDSPRom(u16* rom, const std::string& filename, u32 size_in_bytes)
 
   if (file.GetSize() != size_in_bytes)
   {
-    ERROR_LOG_FMT(DSPLLE, "{} has a wrong size ({}, expected {})", filename, file.GetSize(),
-                  size_in_bytes);
+    ERROR_LOG(DSPLLE, "%s has a wrong size (%" PRIu64 ", expected %u)", filename.c_str(),
+              (u64)file.GetSize(), size_in_bytes);
     return false;
   }
 
@@ -232,14 +233,14 @@ void DSPLLE::DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value)
     if ((m_dsp_core.PeekMailbox(Mailbox::CPU) & 0x80000000) != 0)
     {
       // the DSP didn't read the previous value
-      WARN_LOG_FMT(DSPLLE, "Mailbox isn't empty ... strange");
+      WARN_LOG(DSPLLE, "Mailbox isn't empty ... strange");
     }
 
     m_dsp_core.WriteMailboxHigh(Mailbox::CPU, value);
   }
   else
   {
-    ERROR_LOG_FMT(DSPLLE, "CPU can't write to DSP mailbox");
+    ERROR_LOG(DSPLLE, "CPU can't write to DSP mailbox");
   }
 }
 
@@ -251,7 +252,7 @@ void DSPLLE::DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value)
   }
   else
   {
-    ERROR_LOG_FMT(DSPLLE, "CPU can't write to DSP mailbox");
+    ERROR_LOG(DSPLLE, "CPU can't write to DSP mailbox");
   }
 }
 

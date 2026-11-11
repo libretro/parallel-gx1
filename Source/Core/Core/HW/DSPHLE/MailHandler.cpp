@@ -32,7 +32,7 @@ void CMailHandler::PushMail(u32 mail, bool interrupt, int cycles_into_future)
     }
   }
   m_pending_mails.emplace_back(mail, false);
-  DEBUG_LOG_FMT(DSP_MAIL, "DSP writes {:#010x}", mail);
+  DEBUG_LOG(DSP_MAIL, "DSP writes %#010x", mail);
 }
 
 u16 CMailHandler::ReadDSPMailboxHigh()

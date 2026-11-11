@@ -32,7 +32,7 @@ AXUCode::AXUCode(DSPHLE* dsphle, u32 crc, bool dummy) : UCodeInterface(dsphle, c
 
 AXUCode::AXUCode(DSPHLE* dsphle, u32 crc) : AXUCode(dsphle, crc, false)
 {
-  INFO_LOG_FMT(DSPHLE, "Instantiating AXUCode: crc={:08x}", crc);
+  INFO_LOG(DSPHLE, "Instantiating AXUCode: crc=%08x", crc);
 
   m_accelerator = std::make_unique<HLEAccelerator>(dsphle->GetSystem().GetDSP());
 }
@@ -63,7 +63,7 @@ bool AXUCode::LoadResamplingCoefficients(bool require_same_checksum, u32 desired
 
   for (const std::string& filename : filenames)
   {
-    INFO_LOG_FMT(DSPHLE, "Checking for polyphase resampling coeffs at {}", filename);
+    INFO_LOG(DSPHLE, "Checking for polyphase resampling coeffs at %s", filename.c_str());
 
     if (File::GetSize(filename) != raw_coeffs_size)
       continue;
@@ -80,7 +80,7 @@ bool AXUCode::LoadResamplingCoefficients(bool require_same_checksum, u32 desired
     for (auto& coef : m_coeffs)
       coef = Common::swap16(coef);
 
-    INFO_LOG_FMT(DSPHLE, "Using polyphase resampling coeffs from {}", filename);
+    INFO_LOG(DSPHLE, "Using polyphase resampling coeffs from %s", filename.c_str());
     m_coeffs_checksum = checksum;
     return true;
   }
@@ -276,7 +276,7 @@ void AXUCode::HandleCommandList()
     }
 
     default:
-      ERROR_LOG_FMT(DSPHLE, "Unknown command in AX command list: {:04x}", cmd);
+      ERROR_LOG(DSPHLE, "Unknown command in AX command list: %04x", (unsigned)cmd);
       end = true;
       break;
     }
@@ -721,8 +721,7 @@ void AXUCode::HandleMail(u32 mail)
     }
     else
     {
-      ERROR_LOG_FMT(DSPHLE, "Unknown mail sent to AX::HandleMail; expected command list: {:08x}",
-                    mail);
+      ERROR_LOG(DSPHLE, "Unknown mail sent to AX::HandleMail; expected command list: %08x", mail);
     }
     break;
 
@@ -737,7 +736,7 @@ void AXUCode::HandleMail(u32 mail)
   case MailState::WaitingForNextTask:
     if ((mail & TASK_MAIL_MASK) != TASK_MAIL_TO_DSP)
     {
-      WARN_LOG_FMT(DSPHLE, "Rendering task without prefix CDD1: {:08x}", mail);
+      WARN_LOG(DSPHLE, "Rendering task without prefix CDD1: %08x", mail);
       mail = TASK_MAIL_TO_DSP | (mail & ~TASK_MAIL_MASK);
       // The actual uCode does not check for the CDD1 prefix.
     }
@@ -769,7 +768,7 @@ void AXUCode::HandleMail(u32 mail)
       break;
 
     default:
-      WARN_LOG_FMT(DSPHLE, "Unknown task mail: {:08x}", mail);
+      WARN_LOG(DSPHLE, "Unknown task mail: %08x", mail);
       break;
     }
     break;
@@ -780,7 +779,7 @@ void AXUCode::CopyCmdList(u32 addr, u16 size)
 {
   if (size >= std::size(m_cmdlist))
   {
-    ERROR_LOG_FMT(DSPHLE, "Command list at {:08x} is too large: size={}", addr, size);
+    ERROR_LOG(DSPHLE, "Command list at %08x is too large: size=%u", addr, (unsigned)size);
     return;
   }
 

@@ -88,7 +88,7 @@ void CodeLoaded(DSPCore& dsp, const u8* ptr, size_t size)
     DSP::DumpDSPCode(ptr, size, iram_crc);
   }
 
-  NOTICE_LOG_FMT(DSPLLE, "g_dsp.iram_crc: {:08x}", iram_crc);
+  NOTICE_LOG(DSPLLE, "g_dsp.iram_crc: %08x", iram_crc);
 
   Symbols::Clear();
   Symbols::AutoDisassembly(state, 0x0, 0x1000);

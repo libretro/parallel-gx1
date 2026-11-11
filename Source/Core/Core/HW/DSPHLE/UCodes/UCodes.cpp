@@ -101,22 +101,23 @@ void UCodeInterface::PrepareBootUCode(u32 mail)
     if (Config::Get(Config::MAIN_DUMP_UCODE))
       DumpDSPCode(pointer, m_next_ucode.iram_size, ector_crc);
 
-    DEBUG_LOG_FMT(DSPHLE, "PrepareBootUCode {:#010x}", ector_crc);
-    DEBUG_LOG_FMT(DSPHLE, "DRAM -> MRAM: src {:04x} dst {:08x} size {:04x}",
-                  m_next_ucode.mram_dram_addr, m_next_ucode.mram_dest_addr, m_next_ucode.mram_size);
-    DEBUG_LOG_FMT(DSPHLE, "MRAM -> IRAM: src {:08x} dst {:04x} size {:04x} startpc {:04x}",
-                  m_next_ucode.iram_mram_addr, m_next_ucode.iram_dest, m_next_ucode.iram_size,
-                  m_next_ucode.iram_startpc);
-    DEBUG_LOG_FMT(DSPHLE, "MRAM -> DRAM: src {:08x} dst {:04x} size {:04x}",
-                  m_next_ucode.dram_mram_addr, m_next_ucode.dram_dest, m_next_ucode.dram_size);
+    DEBUG_LOG(DSPHLE, "PrepareBootUCode %#010x", ector_crc);
+    DEBUG_LOG(DSPHLE, "DRAM -> MRAM: src %04x dst %08x size %04x",
+              (unsigned)m_next_ucode.mram_dram_addr, m_next_ucode.mram_dest_addr,
+              (unsigned)m_next_ucode.mram_size);
+    DEBUG_LOG(DSPHLE, "MRAM -> IRAM: src %08x dst %04x size %04x startpc %04x",
+              m_next_ucode.iram_mram_addr, (unsigned)m_next_ucode.iram_dest,
+              (unsigned)m_next_ucode.iram_size, (unsigned)m_next_ucode.iram_startpc);
+    DEBUG_LOG(DSPHLE, "MRAM -> DRAM: src %08x dst %04x size %04x", m_next_ucode.dram_mram_addr,
+              (unsigned)m_next_ucode.dram_dest, (unsigned)m_next_ucode.dram_size);
 
     if (m_next_ucode.mram_size)
     {
-      WARN_LOG_FMT(DSPHLE, "Trying to boot new ucode with DRAM download - not implemented");
+      WARN_LOG(DSPHLE, "Trying to boot new ucode with DRAM download - not implemented");
     }
     if (m_next_ucode.dram_size)
     {
-      WARN_LOG_FMT(DSPHLE, "Trying to boot new ucode with DRAM upload - not implemented");
+      WARN_LOG(DSPHLE, "Trying to boot new ucode with DRAM upload - not implemented");
     }
 
     m_dsphle->SwapUCode(ector_crc);
@@ -136,19 +137,19 @@ std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii)
   switch (crc)
   {
   case UCODE_ROM:
-    INFO_LOG_FMT(DSPHLE, "Switching to ROM ucode");
+    INFO_LOG(DSPHLE, "Switching to ROM ucode");
     return std::make_unique<ROMUCode>(dsphle, crc);
 
   case UCODE_INIT_AUDIO_SYSTEM:
-    INFO_LOG_FMT(DSPHLE, "Switching to INIT ucode");
+    INFO_LOG(DSPHLE, "Switching to INIT ucode");
     return std::make_unique<INITUCode>(dsphle, crc);
 
   case 0x65d6cc6f:  // CARD
-    INFO_LOG_FMT(DSPHLE, "Switching to CARD ucode");
+    INFO_LOG(DSPHLE, "Switching to CARD ucode");
     return std::make_unique<CARDUCode>(dsphle, crc);
 
   case 0xdd7e72d5:
-    INFO_LOG_FMT(DSPHLE, "Switching to GBA ucode");
+    INFO_LOG(DSPHLE, "Switching to GBA ucode");
     return std::make_unique<GBAUCode>(dsphle, crc);
 
   case 0x3ad3b7ac:  // Naruto 3, Paper Mario - The Thousand Year Door
@@ -163,7 +164,7 @@ std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii)
                     // Zelda:OOT, Tony Hawk, Viewtiful Joe
   case 0xe2136399:  // Billy Hatcher, Dragon Ball Z, Mario Party 5, TMNT, 1080° Avalanche
   case 0x3389a79e:  // MP1/MP2 Wii (Metroid Prime Trilogy)
-    INFO_LOG_FMT(DSPHLE, "CRC {:08x}: AX ucode chosen", crc);
+    INFO_LOG(DSPHLE, "CRC %08x: AX ucode chosen", crc);
     return std::make_unique<AXUCode>(dsphle, crc);
 
   case 0x86840740:  // Zelda WW - US
@@ -190,7 +191,7 @@ std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii)
   case 0x4cc52064:  // Bleach: Versus Crusade
   case 0xd9c4bf34:  // Wii System Menu 1.0
   case 0x7699af32:  // Wii Startup Menu
-    INFO_LOG_FMT(DSPHLE, "CRC {:08x}: Wii - AXWii chosen", crc);
+    INFO_LOG(DSPHLE, "CRC %08x: Wii - AXWii chosen", crc);
     return std::make_unique<AXWiiUCode>(dsphle, crc);
 
   case ASndUCode::HASH_2008:
@@ -202,7 +203,7 @@ std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii)
   case ASndUCode::HASH_DESERT_BUS_2012:
   case ASndUCode::HASH_2024:
   case ASndUCode::HASH_2024_PAD:
-    INFO_LOG_FMT(DSPHLE, "CRC {:08x}: ASnd chosen (Homebrew)", crc);
+    INFO_LOG(DSPHLE, "CRC %08x: ASnd chosen (Homebrew)", crc);
     return std::make_unique<ASndUCode>(dsphle, crc);
 
   case AESndUCode::HASH_2010:
@@ -212,26 +213,24 @@ std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii)
   case AESndUCode::HASH_2020_PAD:
   case AESndUCode::HASH_2022_PAD:
   case AESndUCode::HASH_2023:
-    INFO_LOG_FMT(DSPHLE, "CRC {:08x}: AESnd chosen (Homebrew)", crc);
+    INFO_LOG(DSPHLE, "CRC %08x: AESnd chosen (Homebrew)", crc);
     return std::make_unique<AESndUCode>(dsphle, crc);
 
   default:
     if (wii)
     {
-      PanicAlertFmtT(
-          "This title might be incompatible with DSP HLE emulation. Try using LLE if this "
-          "is homebrew.\n\n"
-          "Unknown ucode (CRC = {0:08x}) - forcing AXWii.",
-          crc);
+      PanicAlert("This title might be incompatible with DSP HLE emulation. Try using LLE if this "
+                 "is homebrew.\n\n"
+                 "Unknown ucode (CRC = %08x) - forcing AXWii.",
+                 crc);
       return std::make_unique<AXWiiUCode>(dsphle, crc);
     }
     else
     {
-      PanicAlertFmtT(
-          "This title might be incompatible with DSP HLE emulation. Try using LLE if this "
-          "is homebrew.\n\n"
-          "DSPHLE: Unknown ucode (CRC = {0:08x}) - forcing AX.",
-          crc);
+      PanicAlert("This title might be incompatible with DSP HLE emulation. Try using LLE if this "
+                 "is homebrew.\n\n"
+                 "DSPHLE: Unknown ucode (CRC = %08x) - forcing AX.",
+                 crc);
       return std::make_unique<AXUCode>(dsphle, crc);
     }
 

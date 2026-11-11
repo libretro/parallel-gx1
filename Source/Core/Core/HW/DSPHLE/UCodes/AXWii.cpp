@@ -23,7 +23,7 @@ namespace DSP::HLE
 AXWiiUCode::AXWiiUCode(DSPHLE* dsphle, u32 crc)
     : AXUCode(dsphle, crc, false), m_last_main_volume(0x8000)
 {
-  INFO_LOG_FMT(DSPHLE, "Instantiating AXWiiUCode: crc={:08x}", crc);
+  INFO_LOG(DSPHLE, "Instantiating AXWiiUCode: crc=%08x", crc);
 
   for (u16& volume : m_last_aux_volumes)
     volume = 0x8000;

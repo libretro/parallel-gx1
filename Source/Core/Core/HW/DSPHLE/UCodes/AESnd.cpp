@@ -110,7 +110,7 @@ void AESndUCode::HandleMail(u32 mail)
   {
     // get_pb_address
     m_parameter_block_addr = mail;
-    INFO_LOG_FMT(DSPHLE, "AESndUCode - Parameter block is at {:08x}", mail);
+    INFO_LOG(DSPHLE, "AESndUCode - Parameter block is at %08x", mail);
     m_next_mail_is_parameter_block_addr = false;
     // No mail is sent in response
   }
@@ -125,7 +125,7 @@ void AESndUCode::HandleMail(u32 mail)
       m_dsphle->SetUCode(UCODE_ROM);
       break;
     default:
-      WARN_LOG_FMT(DSPHLE, "AESndUCode - unknown 0xcdd1 command: {:08x}", mail);
+      WARN_LOG(DSPHLE, "AESndUCode - unknown 0xcdd1 command: %08x", mail);
       break;
     }
     // No mail is sent in response to any of these.
@@ -137,26 +137,26 @@ void AESndUCode::HandleMail(u32 mail)
     switch (mail)
     {
     case MAIL_PROCESS_FIRST_VOICE:
-      DEBUG_LOG_FMT(DSPHLE, "AESndUCode - MAIL_PROCESS_FIRST_VOICE");
+      DEBUG_LOG(DSPHLE, "AESndUCode - MAIL_PROCESS_FIRST_VOICE");
       DMAInParameterBlock();  // dma_pb_block
       m_output_buffer.fill(0);
       DoMixing();  // fall through to dsp_mixer
       // Mail is handled by DoMixing()
       break;
     case MAIL_PROCESS_NEXT_VOICE:
-      DEBUG_LOG_FMT(DSPHLE, "AESndUCode - MAIL_PROCESS_NEXT_VOICE");
+      DEBUG_LOG(DSPHLE, "AESndUCode - MAIL_PROCESS_NEXT_VOICE");
       DMAInParameterBlock();  // dma_pb_block
       DoMixing();             // jump to dsp_mixer
       // Mail is handled by DoMixing()
       break;
     case MAIL_GET_PB_ADDRESS:
-      DEBUG_LOG_FMT(DSPHLE, "AESndUCode - MAIL_GET_PB_ADDRESS");
+      DEBUG_LOG(DSPHLE, "AESndUCode - MAIL_GET_PB_ADDRESS");
       m_next_mail_is_parameter_block_addr = true;
       // No mail is sent in response
       break;
     case MAIL_SEND_SAMPLES:
     {
-      DEBUG_LOG_FMT(DSPHLE, "AESndUCode - MAIL_SEND_SAMPLES");
+      DEBUG_LOG(DSPHLE, "AESndUCode - MAIL_SEND_SAMPLES");
       // send_samples
       auto& memory = m_dsphle->GetSystem().GetMemory();
       memory.CopyToEmuSwapped(m_parameter_block.out_buf, m_output_buffer.data(),
@@ -165,7 +165,7 @@ void AESndUCode::HandleMail(u32 mail)
       break;
     }
     case MAIL_TERMINATE:
-      INFO_LOG_FMT(DSPHLE, "AESndUCode - MAIL_TERMINATE: {:08x}", mail);
+      INFO_LOG(DSPHLE, "AESndUCode - MAIL_TERMINATE: %08x", mail);
       if (m_crc != HASH_2022_PAD && m_crc != HASH_2023)
       {
         // The relevant code looks like this:
@@ -183,14 +183,14 @@ void AESndUCode::HandleMail(u32 mail)
         // AESND_Reset never returns, resulting in a hang. We always send the mail to avoid this
         // hang. (It's possible to exit without calling AESND_Reset, so most homebrew probably
         // isn't affected by this bug in the first place.)
-        WARN_LOG_FMT(DSPHLE, "AESndUCode - MAIL_TERMINATE is broken in this version of the "
-                             "uCode; this will hang on real hardware or with DSP LLE");
+        WARN_LOG(DSPHLE, "AESndUCode - MAIL_TERMINATE is broken in this version of the "
+                         "uCode; this will hang on real hardware or with DSP LLE");
       }
       // This doesn't actually change the state of the DSP code.
       m_mail_handler.PushMail(DSP_DONE, true);
       break;
     default:
-      WARN_LOG_FMT(DSPHLE, "AESndUCode - unknown command: {:08x}", mail);
+      WARN_LOG(DSPHLE, "AESndUCode - unknown command: %08x", mail);
       // No mail is sent in this case
       break;
     }
@@ -300,9 +300,9 @@ void AESndUCode::DoMixing()
         if (!m_has_shown_unsupported_sample_format_warning)
         {
           m_has_shown_unsupported_sample_format_warning = true;
-          PanicAlertFmt("EDuke32 Wii aesndlib uCode does not correctly handle this sample format: "
-                        "{} (flags: {:08x})",
-                        voice_format, m_parameter_block.flags);
+          PanicAlert("EDuke32 Wii aesndlib uCode does not correctly handle this sample format: "
+                     "%u (flags: %08x)",
+                     voice_format, m_parameter_block.flags);
         }
       }
     }
