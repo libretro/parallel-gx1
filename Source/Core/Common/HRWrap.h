@@ -18,6 +18,14 @@ namespace Common
 {
 std::string GetHResultMessage(HRESULT hr);
 
+/* An HRESULT as text, "message (0x........)", returned whole: pass
+ * HRText(hr).text to a printf-style log or alert. */
+struct HResultText
+{
+  char text[384];
+};
+HResultText HRText(HRESULT hr);
+
 // Wrapper for HRESULT to be used with fmt.  Note that we can't create a fmt::formatter directly
 // for HRESULT as HRESULT is simply a typedef on long and not a distinct type.
 struct HRWrap
