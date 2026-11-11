@@ -50,7 +50,7 @@ DXGI_FORMAT GetDXGIFormatForAbstractFormat(AbstractTextureFormat format, bool ty
   case AbstractTextureFormat::D32F_S8:
     return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
   default:
-    PanicAlertFmt("Unhandled texture format.");
+    PanicAlert("Unhandled texture format.");
     return DXGI_FORMAT_R8G8B8A8_UNORM;
   }
 }
@@ -87,7 +87,7 @@ DXGI_FORMAT GetSRVFormatForAbstractFormat(AbstractTextureFormat format)
   case AbstractTextureFormat::D32F_S8:
     return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
   default:
-    PanicAlertFmt("Unhandled SRV format");
+    PanicAlert("Unhandled SRV format");
     return DXGI_FORMAT_UNKNOWN;
   }
 }
@@ -109,7 +109,7 @@ DXGI_FORMAT GetRTVFormatForAbstractFormat(AbstractTextureFormat format, bool int
   case AbstractTextureFormat::R32F:
     return DXGI_FORMAT_R32_FLOAT;
   default:
-    PanicAlertFmt("Unhandled RTV format");
+    PanicAlert("Unhandled RTV format");
     return DXGI_FORMAT_UNKNOWN;
   }
 }
@@ -126,7 +126,7 @@ DXGI_FORMAT GetDSVFormatForAbstractFormat(AbstractTextureFormat format)
   case AbstractTextureFormat::D32F_S8:
     return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
   default:
-    PanicAlertFmt("Unhandled DSV format");
+    PanicAlert("Unhandled DSV format");
     return DXGI_FORMAT_UNKNOWN;
   }
 }

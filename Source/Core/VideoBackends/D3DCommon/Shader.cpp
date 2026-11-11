@@ -114,7 +114,7 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, ShaderC
   ShaderBinaryInit(bytecode);
   if (!full)
   {
-    ERROR_LOG_FMT(VIDEO, "A shader's header does not fit in front of it");
+    ERROR_LOG(VIDEO, "A shader's header does not fit in front of it");
     return false;
   }
 
@@ -146,7 +146,7 @@ bool CompileWithRslc(D3D_FEATURE_LEVEL feature_level, ShaderStage stage, ShaderC
     return true;
   }
 
-  ERROR_LOG_FMT(VIDEO, "rslc could not compile a shader: {}", err);
+  ERROR_LOG(VIDEO, "rslc could not compile a shader: %s", err);
   {
     const std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
     File::CreateFullPath(path);
@@ -198,7 +198,7 @@ bool Shader::CompileBuild(D3D_FEATURE_LEVEL feature_level, ShaderStage stage,
   STUTTER_MARK(t);
   if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_D3D, 0, &opts, &result))
   {
-    ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
+    ERROR_LOG(VIDEO, "rslc could not build a shader: %s", err);
     return false;
   }
   STUTTER_EMIT_SINCE(t, result.spirv_len);

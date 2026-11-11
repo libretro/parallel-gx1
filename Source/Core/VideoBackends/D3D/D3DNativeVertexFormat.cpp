@@ -117,7 +117,8 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
       integer ? d3d_integer_format_lookup[size - 1][t] : d3d_float_format_lookup[size - 1][t];
   if (retval == DXGI_FORMAT_UNKNOWN)
   {
-    PanicAlertFmt("VarToD3D: Invalid type/size combo {}, {}, {}", t, size, integer);
+    PanicAlert("VarToD3D: Invalid type/size combo %u, %d, %s", static_cast<unsigned>(t), size,
+               integer ? "true" : "false");
   }
   return retval;
 }

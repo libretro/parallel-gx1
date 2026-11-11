@@ -486,7 +486,7 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
     {
       return Publish(slot, std::move(res));
     }
-    WARN_LOG_FMT(VIDEO, "Creating D3D blend state failed with an error: {}", DX11HRWrap(hr));
+    WARN_LOG(VIDEO, "Creating D3D blend state failed with an error: %s", DX11::HRText(hr).text);
   }
 
   D3D11_BLEND_DESC desc = {};

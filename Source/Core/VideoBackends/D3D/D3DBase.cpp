@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cinttypes>
+#include <cstdio>
+#include <cstring>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -42,10 +45,9 @@ void Destroy()
 
   auto remaining_references = device.Reset();
   if (remaining_references)
-    ERROR_LOG_FMT(VIDEO, "Unreleased references: {}.", remaining_references);
+    ERROR_LOG(VIDEO, "Unreleased references: %lu.", static_cast<unsigned long>(remaining_references));
   else
-    NOTICE_LOG_FMT(VIDEO, "Successfully released all device references!");
-
+    NOTICE_LOG(VIDEO, "Successfully released all device references!");
 }
 
 std::vector<u32> GetAAModes()
@@ -97,5 +99,17 @@ bool SupportsLogicOp()
 }
 
 }  // namespace D3D
+
+Common::HResultText HRText(HRESULT hr)
+{
+  Common::HResultText out = Common::HRText(hr);
+  if (hr == DXGI_ERROR_DEVICE_REMOVED && D3D::device != nullptr)
+  {
+    const size_t len = strlen(out.text);
+    snprintf(out.text + len, sizeof(out.text) - len, "\nDevice removal reason: %s",
+             Common::HRText(D3D::device->GetDeviceRemovedReason()).text);
+  }
+  return out;
+}
 
 }  // namespace DX11
