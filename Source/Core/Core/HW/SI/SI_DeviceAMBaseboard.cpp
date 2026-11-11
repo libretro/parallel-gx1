@@ -3,10 +3,11 @@
 
 #include "Core/HW/SI/SI_DeviceAMBaseboard.h"
 
+#include <cinttypes>
 #include <cstring>
 #include <string>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
@@ -80,7 +81,7 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
 {
   // Magnetic Card Reader
   m_mag_card_settings.card_path = File::GetUserPath(D_TRIUSER_IDX);
-  m_mag_card_settings.card_name = fmt::format("tricard_{}.bin", SConfig::GetInstance().GetGameID());
+  m_mag_card_settings.card_name = "tricard_" + SConfig::GetInstance().GetGameID() + ".bin";
 
   m_io_ports.AddIOAdapter(std::make_unique<Triforce::Common_IOAdapter>(m_system));
 
@@ -200,8 +201,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
     constexpr int command_header_size = 2;
     if (command_header_size + command_length > request_length)
     {
-      ERROR_LOG_FMT(SERIALINTERFACE_AMBB, "Bad command_length: {} for request_length: {}",
-                    command_length, request_length);
+      ERROR_LOG(SERIALINTERFACE_AMBB, "Bad command_length: %d for request_length: %d",
+                command_length, request_length);
       return -1;
     }
 
@@ -220,17 +221,20 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
     // i.e. *data++ at most lead to data.end()
     auto validate_data_in_out = [&](u32 n_in, u32 n_out, std::string_view command) -> bool {
       if (data_in + n_in > data_in_end)
-        ERROR_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: data_in overflow in {}", command);
+        ERROR_LOG(SERIALINTERFACE_AMBB, "GC-AM: data_in overflow in %.*s",
+                  static_cast<int>(command.size()), command.data());
       else if (u64{data_offset} + n_out > usable_out_size)
-        ERROR_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: data_out overflow in {}", command);
+        ERROR_LOG(SERIALINTERFACE_AMBB, "GC-AM: data_out overflow in %.*s",
+                  static_cast<int>(command.size()), command.data());
       else
         return true;
-      ERROR_LOG_FMT(SERIALINTERFACE_AMBB,
-                    "Overflow details:\n"
-                    " - data_in(begin={}, current={}, end={}, n_in={})\n"
-                    " - data_out(offset={}, size={}, n_out={})",
-                    fmt::ptr(buffer + 2), fmt::ptr(data_in), fmt::ptr(data_in_end), n_in,
-                    data_offset, data_out.size(), n_out);
+      ERROR_LOG(SERIALINTERFACE_AMBB,
+                "Overflow details:\n"
+                " - data_in(begin=%p, current=%p, end=%p, n_in=%u)\n"
+                " - data_out(offset=%u, size=%" PRIu64 ", n_out=%u)",
+                static_cast<const void*>(buffer + 2), static_cast<const void*>(data_in),
+                static_cast<const void*>(data_in_end), n_in, data_offset, (u64)data_out.size(),
+                n_out);
       data_in = data_in_end;
       return false;
     };
@@ -249,8 +253,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
           break;
 
         const u8 status = *data_in++;
-        DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x10, {:02x} (READ STATUS&SWITCHES)",
-                      status);
+        DEBUG_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x10, %02x (READ STATUS&SWITCHES)",
+                  (unsigned)status);
 
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = out_length;
@@ -265,8 +269,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(1, 18, "SerialNumber"))
           break;
 
-        NOTICE_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x11, {:02x} (READ SERIAL NR)",
-                       *data_in);
+        NOTICE_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x11, %02x (READ SERIAL NR)",
+                   (unsigned)(*data_in));
         data_in++;
 
         data_out[data_offset++] = gcam_command;
@@ -280,8 +284,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(2, 2, "Unknown_12"))
           break;
 
-        NOTICE_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x12, {:02x} {:02x}", data_in[0],
-                       data_in[1]);
+        NOTICE_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x12, %02x %02x", (unsigned)data_in[0],
+                   (unsigned)data_in[1]);
 
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = 0x00;
@@ -292,8 +296,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(2, 2, "Unknown_14"))
           break;
 
-        NOTICE_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x14, {:02x} {:02x}", data_in[0],
-                       data_in[1]);
+        NOTICE_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x14, %02x %02x", (unsigned)data_in[0],
+                   (unsigned)data_in[1]);
 
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = 0x00;
@@ -304,8 +308,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(1, 4, "FirmVersion"))
           break;
 
-        NOTICE_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x15, {:02x} (READ FIRM VERSION)",
-                       *data_in);
+        NOTICE_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x15, %02x (READ FIRM VERSION)",
+                   (unsigned)(*data_in));
         data_in++;
 
         data_out[data_offset++] = gcam_command;
@@ -318,8 +322,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(1, 4, "FPGAVersion"))
           break;
 
-        NOTICE_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x16, {:02x} (READ FPGA VERSION)",
-                       *data_in);
+        NOTICE_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x16, %02x (READ FPGA VERSION)",
+                   (unsigned)(*data_in));
         data_in++;
 
         data_out[data_offset++] = gcam_command;
@@ -335,9 +339,9 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
 
         // Used by SegaBoot for region checks (dev mode skips this check)
         // In some games this also controls the displayed language
-        NOTICE_LOG_FMT(SERIALINTERFACE_AMBB,
-                       "GC-AM: Command 0x1F, {:02x} {:02x} {:02x} {:02x} {:02x} (REGION)",
-                       data_in[0], data_in[1], data_in[2], data_in[3], data_in[4]);
+        NOTICE_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x1F, %02x %02x %02x %02x %02x (REGION)",
+                   (unsigned)data_in[0], (unsigned)data_in[1], (unsigned)data_in[2],
+                   (unsigned)data_in[3], (unsigned)data_in[4]);
 
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = 0x14;
@@ -355,8 +359,9 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(4, 0, "Unknown_21"))
           break;
 
-        DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x21, {:02x}, {:02x}, {:02x}, {:02x}",
-                      data_in[0], data_in[1], data_in[2], data_in[3]);
+        DEBUG_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x21, %02x, %02x, %02x, %02x",
+                  (unsigned)data_in[0], (unsigned)data_in[1], (unsigned)data_in[2],
+                  (unsigned)data_in[3]);
         data_in += 4;
       }
       break;
@@ -367,10 +372,10 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(7, 0, "Unknown_22"))
           break;
 
-        DEBUG_LOG_FMT(SERIALINTERFACE_AMBB,
-                      "GC-AM: Command 0x22, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}",
-                      data_in[0], data_in[1], data_in[2], data_in[3], data_in[4], data_in[5],
-                      data_in[6]);
+        DEBUG_LOG(
+            SERIALINTERFACE_AMBB, "GC-AM: Command 0x22, %02x, %02x, %02x, %02x, %02x, %02x, %02x",
+            (unsigned)data_in[0], (unsigned)data_in[1], (unsigned)data_in[2], (unsigned)data_in[3],
+            (unsigned)data_in[4], (unsigned)data_in[5], (unsigned)data_in[6]);
 
         const u32 in_size = data_in[0] + 1;
         if (!validate_data_in_out(in_size, 0, "Unknown_22"))
@@ -382,8 +387,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(2, 2, "Unknown_23"))
           break;
 
-        DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x23, {:02x} {:02x}", data_in[0],
-                      data_in[1]);
+        DEBUG_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x23, %02x %02x", (unsigned)data_in[0],
+                  (unsigned)data_in[1]);
 
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = 0x00;
@@ -394,8 +399,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(2, 2, "Unknown_24"))
           break;
 
-        DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x24, {:02x} {:02x}", data_in[0],
-                      data_in[1]);
+        DEBUG_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x24, %02x %02x", (unsigned)data_in[0],
+                  (unsigned)data_in[1]);
 
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = 0x00;
@@ -474,8 +479,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         if (!validate_data_in_out(3, 0, "Unknown_60"))
           break;
 
-        NOTICE_LOG_FMT(SERIALINTERFACE_AMBB, "GC-AM: Command 0x60, {:02x} {:02x} {:02x}",
-                       data_in[0], data_in[1], data_in[2]);
+        NOTICE_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command 0x60, %02x %02x %02x",
+                   (unsigned)data_in[0], (unsigned)data_in[1], (unsigned)data_in[2]);
 
         const u32 in_size = data_in[0] + 1;
         if (!validate_data_in_out(in_size, 0, "Unknown_60"))
@@ -484,11 +489,13 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
       }
       break;
       default:
-        if (!validate_data_in_out(5, 0, fmt::format("Unknown_{}", gcam_command)))
+        char unknown_name[24];
+        snprintf(unknown_name, sizeof(unknown_name), "Unknown_%u", gcam_command);
+        if (!validate_data_in_out(5, 0, unknown_name))
           break;
-        ERROR_LOG_FMT(SERIALINTERFACE_AMBB,
-                      "GC-AM: Command {:02x} (unknown) {:02x} {:02x} {:02x} {:02x} {:02x}",
-                      gcam_command, data_in[0], data_in[1], data_in[2], data_in[3], data_in[4]);
+        ERROR_LOG(SERIALINTERFACE_AMBB, "GC-AM: Command %02x (unknown) %02x %02x %02x %02x %02x",
+                  gcam_command, (unsigned)data_in[0], (unsigned)data_in[1], (unsigned)data_in[2],
+                  (unsigned)data_in[3], (unsigned)data_in[4]);
         break;
       }
     }
@@ -538,8 +545,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
     const u8 checksum = u8(~sum);
     data_out.back() = checksum;
 
-    DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "Command response: {}",
-                  HexDump(data_out.data(), data_out.size()));
+    DEBUG_LOG(SERIALINTERFACE_AMBB, "Command response: %s",
+              HexDump(data_out.data(), data_out.size()).c_str());
 
     // Switch to next buffer and return it.
     if (++m_current_response_buffer_index == m_response_buffers.size())
@@ -556,8 +563,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
   }
   default:
   {
-    ERROR_LOG_FMT(SERIALINTERFACE, "Unknown SI command (0x{:08x})", (u32)bb_command);
-    PanicAlertFmt("SI: Unknown command");
+    ERROR_LOG(SERIALINTERFACE, "Unknown SI command (0x%08x)", (u32)bb_command);
+    PanicAlert("SI: Unknown command");
     break;
   }
   }
@@ -573,7 +580,7 @@ DataResponse CSIDevice_AMBaseboard::GetData(u32&, u32&)
 
 void CSIDevice_AMBaseboard::SendCommand(u32 command, u8 poll)
 {
-  WARN_LOG_FMT(SERIALINTERFACE_AMBB, "Unhandled SendCommand(0x{:08x}, 0x{:02x})", command, poll);
+  WARN_LOG(SERIALINTERFACE_AMBB, "Unhandled SendCommand(0x%08x, 0x%02x)", command, (unsigned)poll);
 }
 
 void CSIDevice_AMBaseboard::DoState(PointerWrap& p)

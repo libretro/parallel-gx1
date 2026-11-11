@@ -44,7 +44,7 @@ void C1231BR::Command_D0_ControlShutter()
 
   m_is_shutter_open = Action(m_current_packet[0]) == Action::Open;
 
-  INFO_LOG_FMT(SERIALINTERFACE_CARD, "Shutter: {}", m_is_shutter_open ? "Open" : "Close");
+  INFO_LOG(SERIALINTERFACE_CARD, "Shutter: %s", m_is_shutter_open ? "Open" : "Close");
 
   FinishCommand();
 }

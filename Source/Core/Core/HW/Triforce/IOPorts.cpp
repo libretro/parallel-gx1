@@ -3,10 +3,10 @@
 
 #include "Core/HW/Triforce/IOPorts.h"
 
-
+#include <cinttypes>
 #include <cstring>
 
-#include <fmt/ranges.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/BitUtils.h"
@@ -75,7 +75,8 @@ void IOPorts::SetGenericOutputs(const u8* bytes, std::size_t size)
 {
   if (size > m_generic_outputs.size())
   {
-    WARN_LOG_FMT(SERIALINTERFACE_JVSIO, "SetGenericOutputs: Unexpected byte count: {}", size);
+    WARN_LOG(SERIALINTERFACE_JVSIO, "SetGenericOutputs: Unexpected byte count: %" PRIu64,
+             (u64)size);
   }
 
   const std::size_t bytes_to_copy =
@@ -95,9 +96,23 @@ void IOPorts::SetGenericOutputs(const u8* bytes, std::size_t size)
     m_generic_outputs[i] = bytes[i];
   }
 
-  DEBUG_LOG_FMT(SERIALINTERFACE_JVSIO, "SetGenericOutputs: set:{:02x} clr:{:02x} ({:02x})",
-                fmt::join(bits_set, " "), fmt::join(bits_cleared, " "),
-                fmt::join(m_generic_outputs, " "));
+#if defined(_DEBUG) || defined(DEBUGFAST)
+  {
+    // each byte as "xx", a space between
+    char set[GENERIC_OUTPUT_BYTE_COUNT * 3];
+    char cleared[GENERIC_OUTPUT_BYTE_COUNT * 3];
+    char outputs[GENERIC_OUTPUT_BYTE_COUNT * 3];
+    for (std::size_t i = 0; i != GENERIC_OUTPUT_BYTE_COUNT; ++i)
+    {
+      const char* const format = i ? " %02x" : "%02x";
+      snprintf(set + i * 3, sizeof(set) - i * 3, format, bits_set[i]);
+      snprintf(cleared + i * 3, sizeof(cleared) - i * 3, format, bits_cleared[i]);
+      snprintf(outputs + i * 3, sizeof(outputs) - i * 3, format, m_generic_outputs[i]);
+    }
+    DEBUG_LOG(SERIALINTERFACE_JVSIO, "SetGenericOutputs: set:%s clr:%s (%s)", set, cleared,
+              outputs);
+  }
+#endif
 
   for (auto& adapter : m_io_adapters)
   {
@@ -283,14 +298,14 @@ void VirtuaStriker4Common_IOAdapter::HandleGenericOutputsChanged(const u8* bits_
 
   if (bits_changed_0 & SLOT_A_LOCK_BIT)
   {
-    INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "JVS-IO: Slot 1: {}",
-                 (bits_set[0] & SLOT_A_LOCK_BIT) ? "Locked" : "Unlocked");
+    INFO_LOG(SERIALINTERFACE_JVSIO, "JVS-IO: Slot 1: %s",
+             (bits_set[0] & SLOT_A_LOCK_BIT) ? "Locked" : "Unlocked");
   }
 
   if (bits_changed_0 & SLOT_B_LOCK_BIT)
   {
-    INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "JVS-IO: Slot 2: {}",
-                 (bits_set[0] & SLOT_B_LOCK_BIT) ? "Locked" : "Unlocked");
+    INFO_LOG(SERIALINTERFACE_JVSIO, "JVS-IO: Slot 2: %s",
+             (bits_set[0] & SLOT_B_LOCK_BIT) ? "Locked" : "Unlocked");
   }
 }
 

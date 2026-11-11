@@ -7,6 +7,7 @@
 
 #include "Core/HW/MagCard/MagneticCardReader.h"
 
+#include <cinttypes>
 #include <cstring>
 
 #include "Common/DirectIOFile.h"
@@ -100,7 +101,7 @@ MagneticCardReader::~MagneticCardReader()
     // Games do seem to write the entire save data in a single command.
     // But the printed messages are another story.
     // I suppose there's potential for data loss here.
-    WARN_LOG_FMT(SERIALINTERFACE_CARD, "Shutdown before ejecting card!");
+    WARN_LOG(SERIALINTERFACE_CARD, "Shutdown before ejecting card!");
   }
 }
 
@@ -140,7 +141,7 @@ void MagneticCardReader::Command_33_ReadData()
   {
   case 1:
     if (mode == Mode::CardCapture)
-      INFO_LOG_FMT(SERIALINTERFACE_CARD, "Command_33_ReadData: CardCapture");
+      INFO_LOG(SERIALINTERFACE_CARD, "Command_33_ReadData: CardCapture");
     break;
   case 2:
   {
@@ -157,7 +158,7 @@ void MagneticCardReader::Command_33_ReadData()
       // How does hardware behave when the card is already elsewhere in the machine ?
       if (m_status.r != R::READ_WRITE_HEAD)
       {
-        NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Capturing Card.");
+        NOTICE_LOG(SERIALINTERFACE_CARD, "Capturing Card.");
 
         MoveCard(R::READ_WRITE_HEAD);
         ReadCardFile();
@@ -167,8 +168,8 @@ void MagneticCardReader::Command_33_ReadData()
       break;
     }
 
-    DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "Command_33_ReadData: mode {:02x} track {:02x}", u8(mode),
-                  u8(track));
+    DEBUG_LOG(SERIALINTERFACE_CARD, "Command_33_ReadData: mode %02x track %02x", (unsigned)u8(mode),
+              (unsigned)u8(track));
 
     const auto track_indices = GetTrackIndicesForTrackType(track);
 
@@ -184,7 +185,8 @@ void MagneticCardReader::Command_33_ReadData()
       if (!track_data.has_value())
       {
         SetPError(P::READ_ERR);
-        WARN_LOG_FMT(SERIALINTERFACE_CARD, "Command_33_ReadData: Empty track {:02x}", track_index);
+        WARN_LOG(SERIALINTERFACE_CARD, "Command_33_ReadData: Empty track %02" PRIx64,
+                 (u64)track_index);
         // TODO: Are we supposed to return partial data ?
         return;
       }
@@ -267,13 +269,13 @@ void MagneticCardReader::Command_53_WriteData()
   if (mode != Mode::Standard || !IsCardLoaded() || track_indices.size() == 0 ||
       payload_size != proper_payload_size)
   {
-    WARN_LOG_FMT(SERIALINTERFACE_CARD, "Command_53_WriteData: Failed.");
+    WARN_LOG(SERIALINTERFACE_CARD, "Command_53_WriteData: Failed.");
     SetPError(P::ILLEGAL_ERR);
     return;
   }
 
-  INFO_LOG_FMT(SERIALINTERFACE_CARD, "Command_53_WriteData: Writing {} track(s) to memory.",
-               track_indices.size());
+  INFO_LOG(SERIALINTERFACE_CARD, "Command_53_WriteData: Writing %" PRIu64 " track(s) to memory.",
+           (u64)track_indices.size());
 
   for (auto track_index : track_indices)
   {
@@ -405,7 +407,7 @@ void MagneticCardReader::Command_A0_Clean()
     // TODO: How is this command supposed to behave if a card is already in the machine ?
     if (!IsCardLoaded())
     {
-      NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Inserting cleaning card.");
+      NOTICE_LOG(SERIALINTERFACE_CARD, "Inserting cleaning card.");
       Core::DisplayMessage("Inserting cleaning card", 4000);
       MoveCard(R::THERMAL_HEAD);
     }
@@ -513,7 +515,8 @@ void MagneticCardReader::ClearCardInMemory()
 
 void MagneticCardReader::ReadCardFile()
 {
-  NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Reading card data from: {}", m_card_settings->card_name);
+  NOTICE_LOG(SERIALINTERFACE_CARD, "Reading card data from: %s",
+             m_card_settings->card_name.c_str());
 
   ClearCardInMemory();
 
@@ -527,7 +530,8 @@ void MagneticCardReader::ReadCardFile()
 
   if (file_size == 0 || excess_byte_count != 0 || complete_track_count > NUM_TRACKS)
   {
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "ReadCardFile: Incorrect card file size: {}", file_size);
+    ERROR_LOG(SERIALINTERFACE_CARD, "ReadCardFile: Incorrect card file size: %" PRIu64,
+              (u64)file_size);
   }
 
   const u32 tracks_to_read =
@@ -539,13 +543,13 @@ void MagneticCardReader::ReadCardFile()
 
     if (!file.Read(track_data->data(), track_data->size()))
     {
-      ERROR_LOG_FMT(SERIALINTERFACE_CARD, "File read failed.");
+      ERROR_LOG(SERIALINTERFACE_CARD, "File read failed.");
       track_data.reset();
       break;
     }
 
-    DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "ReadCardFile: track:{} data:{}", track_num,
-                  HexDump(track_data->data(), track_data->size()));
+    DEBUG_LOG(SERIALINTERFACE_CARD, "ReadCardFile: track:%u data:%s", track_num,
+              HexDump(track_data->data(), track_data->size()).c_str());
   }
 }
 
@@ -555,7 +559,7 @@ void MagneticCardReader::WriteCardFile()
   // Games expect to dispense their own blank cards, not have such cards inserted.
   // We only write files when the game itself writes, so this won't happen.
 
-  NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Writing card data to: {}", m_card_settings->card_name);
+  NOTICE_LOG(SERIALINTERFACE_CARD, "Writing card data to: %s", m_card_settings->card_name.c_str());
 
   const auto full_path = m_card_settings->card_path + m_card_settings->card_name;
 
@@ -567,33 +571,34 @@ void MagneticCardReader::WriteCardFile()
 
     if (!track_data.has_value())
     {
-      DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "WriteCardFile: Skipping empty track:{}", track_num);
+      DEBUG_LOG(SERIALINTERFACE_CARD, "WriteCardFile: Skipping empty track:%" PRIu64,
+                (u64)track_num);
       continue;
     }
 
-    DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "WriteCardFile: track:{} data:{}", track_num,
-                  HexDump(track_data->data(), track_data->size()));
+    DEBUG_LOG(SERIALINTERFACE_CARD, "WriteCardFile: track:%" PRIu64 " data:%s", (u64)track_num,
+              HexDump(track_data->data(), track_data->size()).c_str());
 
     // FYI: Our simple file format assumes contiguously filled tracks.
     // I don't think games ever just skip the 2nd track,
     //  but we better write out every used tracks at the correct offset in case they do.
     if (!file.OffsetWrite(track_num * TRACK_SIZE, track_data->data(), track_data->size()))
     {
-      ERROR_LOG_FMT(SERIALINTERFACE_CARD, "File write failed.");
+      ERROR_LOG(SERIALINTERFACE_CARD, "File write failed.");
     }
   }
 }
 
 void MagneticCardReader::SetPError(P error_code)
 {
-  WARN_LOG_FMT(SERIALINTERFACE_CARD, "SetPError: {:02x}", u8(error_code));
+  WARN_LOG(SERIALINTERFACE_CARD, "SetPError: %02x", (unsigned)u8(error_code));
   m_status.p = error_code;
   FinishCommand();
 }
 
 void MagneticCardReader::SetSError(S error_code)
 {
-  WARN_LOG_FMT(SERIALINTERFACE_CARD, "SetSError: {:02x}", u8(error_code));
+  WARN_LOG(SERIALINTERFACE_CARD, "SetSError: %02x", (unsigned)u8(error_code));
   m_status.s = error_code;
   FinishCommand();
 }
@@ -615,7 +620,7 @@ void MagneticCardReader::Update()
       // This triggers sending of the latest command buffer.
       // We also step the state machine here.
 
-      DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "Process: ENQ");
+      DEBUG_LOG(SERIALINTERFACE_CARD, "Process: ENQ");
 
       // TODO: Get time from Core rather than assuming.
       const auto elapsed_time = std::chrono::milliseconds{50};
@@ -631,7 +636,7 @@ void MagneticCardReader::Update()
 
     if (first_byte != START_OF_TEXT)
     {
-      ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Process: Unexpected {:02x}", first_byte);
+      ERROR_LOG(SERIALINTERFACE_CARD, "Process: Unexpected %02x", (unsigned)first_byte);
       ConsumeRxBytes(1);
       continue;
     }
@@ -649,12 +654,12 @@ void MagneticCardReader::Update()
 
     if (ReceivePacket(read + 2, packet_size))
     {
-      DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "Writing ACK");
+      DEBUG_LOG(SERIALINTERFACE_CARD, "Writing ACK");
       WriteTxByte(ACK);
     }
     else
     {
-      WARN_LOG_FMT(SERIALINTERFACE_CARD, "Writing NACK");
+      WARN_LOG(SERIALINTERFACE_CARD, "Writing NACK");
       WriteTxByte(NACK);
     }
 
@@ -664,17 +669,17 @@ void MagneticCardReader::Update()
 
 bool MagneticCardReader::ReceivePacket(const u8* packet, std::size_t size)
 {
-  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: {}", HexDump(packet, size));
+  DEBUG_LOG(SERIALINTERFACE_CARD, "ReceivePacket: %s", HexDump(packet, size).c_str());
 
   if (size < 6)
   {
-    WARN_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: Bad packet size!");
+    WARN_LOG(SERIALINTERFACE_CARD, "ReceivePacket: Bad packet size!");
     return false;
   }
 
   if (packet[size - 2] != END_OF_TEXT)
   {
-    WARN_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: Missing END_OF_TEXT!");
+    WARN_LOG(SERIALINTERFACE_CARD, "ReceivePacket: Missing END_OF_TEXT!");
     return false;
   }
 
@@ -685,7 +690,7 @@ bool MagneticCardReader::ReceivePacket(const u8* packet, std::size_t size)
     checksum ^= packet[i];
   if (checksum != 0)
   {
-    WARN_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: Bad checksum!");
+    WARN_LOG(SERIALINTERFACE_CARD, "ReceivePacket: Bad checksum!");
     return false;
   }
 
@@ -695,15 +700,15 @@ bool MagneticCardReader::ReceivePacket(const u8* packet, std::size_t size)
   {
     if (new_command == 0x40)  // Cancel.
     {
-      INFO_LOG_FMT(SERIALINTERFACE_CARD, "ReceivePacket: Cancelling command: {:02x}",
-                   m_current_command);
+      INFO_LOG(SERIALINTERFACE_CARD, "ReceivePacket: Cancelling command: %02x",
+               (unsigned)m_current_command);
     }
     else
     {
       // What does the real hardware do here ?
-      WARN_LOG_FMT(SERIALINTERFACE_CARD,
-                   "ReceivePacket: Running command: {:02x} interrupted by command: {:02x}",
-                   m_current_command, new_command);
+      WARN_LOG(SERIALINTERFACE_CARD,
+               "ReceivePacket: Running command: %02x interrupted by command: %02x",
+               (unsigned)m_current_command, (unsigned)new_command);
     }
   }
 
@@ -757,7 +762,7 @@ void MagneticCardReader::StepStatePerson(DT elapsed_time)
         m_time_since_person_moved_card > std::chrono::milliseconds{500} && *card_exists)
     {
       // Place the card in the entry slot after a delay.
-      NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Inserting card.");
+      NOTICE_LOG(SERIALINTERFACE_CARD, "Inserting card.");
       m_status.r = R::ENTRY_SLOT;
       m_time_since_person_moved_card = {};
     }
@@ -772,7 +777,7 @@ void MagneticCardReader::StepStatePerson(DT elapsed_time)
       !*card_exists)
   {
     // Take the card from the machine when ejected or if the file is deleted.
-    NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Removing card.");
+    NOTICE_LOG(SERIALINTERFACE_CARD, "Removing card.");
     m_status.r = R::NO_CARD;
     m_time_since_person_moved_card = {};
   }
@@ -785,7 +790,7 @@ void MagneticCardReader::StepStateMachine(DT elapsed_time)
   if (!IsRunningCommand())
     return;
 
-  DEBUG_LOG_FMT(SERIALINTERFACE_CARD, "StepStateMachine command: {:02x}", GetCurrentCommand());
+  DEBUG_LOG(SERIALINTERFACE_CARD, "StepStateMachine command: %02x", (unsigned)GetCurrentCommand());
 
   switch (GetCurrentCommand())
   {
@@ -847,8 +852,8 @@ void MagneticCardReader::StepStateMachine(DT elapsed_time)
     Command_F0_GetVersion();
     break;
   default:
-    WARN_LOG_FMT(SERIALINTERFACE_CARD, "HandlePacket: Unhandled command {:02x}",
-                 GetCurrentCommand());
+    WARN_LOG(SERIALINTERFACE_CARD, "HandlePacket: Unhandled command %02x",
+             (unsigned)GetCurrentCommand());
     SetSError(S::ILLEGAL_COMMAND);
     break;
   }
@@ -919,8 +924,7 @@ void MagneticCardReader::MoveCard(R new_position)
       "NO_CARD", "READ_WRITE_HEAD", "THERMAL_HEAD", "DISPENSER_THERMAL", "ENTRY_SLOT",
   };
 
-  INFO_LOG_FMT(SERIALINTERFACE_CARD, "MoveCard: {}",
-               position_descriptions[std::size_t(new_position)]);
+  INFO_LOG(SERIALINTERFACE_CARD, "MoveCard: %s", position_descriptions[std::size_t(new_position)]);
 
   m_status.r = new_position;
   m_time_since_machine_moved_card = {};
@@ -930,7 +934,7 @@ void MagneticCardReader::EjectCard()
 {
   if (IsCardLoaded())
   {
-    NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Ejecting card.");
+    NOTICE_LOG(SERIALINTERFACE_CARD, "Ejecting card.");
 
     ClearCardInMemory();
     MoveCard(R::ENTRY_SLOT);
@@ -956,7 +960,7 @@ void MagneticCardReader::DispenseCard()
     return;
   }
 
-  NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Dispensing a new card.");
+  NOTICE_LOG(SERIALINTERFACE_CARD, "Dispensing a new card.");
   Core::DisplayMessage("Created Magnetic Card", 4000);
 
   // TODO: This behavior doesn't seem to match protocol dumps.

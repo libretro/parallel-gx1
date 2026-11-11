@@ -123,7 +123,7 @@ void CSIDevice_GCSteeringWheel::SendCommand(u32 command, u8 poll)
         Pad::Rumble(pad_num, 0);
         break;
       default:
-        WARN_LOG_FMT(SERIALINTERFACE, "Unknown CMD_FORCE type {}", int(type));
+        WARN_LOG(SERIALINTERFACE, "Unknown CMD_FORCE type %d", int(type));
         break;
       }
     }
@@ -131,7 +131,7 @@ void CSIDevice_GCSteeringWheel::SendCommand(u32 command, u8 poll)
     if (poll == 0)
     {
       m_mode = wheel_command.parameter2;
-      INFO_LOG_FMT(SERIALINTERFACE, "PAD {} set to mode {}", m_device_number, m_mode);
+      INFO_LOG(SERIALINTERFACE, "PAD %d set to mode %u", m_device_number, (unsigned)m_mode);
     }
   }
   else

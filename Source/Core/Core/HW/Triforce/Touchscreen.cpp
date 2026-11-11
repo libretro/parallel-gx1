@@ -3,7 +3,7 @@
 
 #include "Core/HW/Triforce/Touchscreen.h"
 
-
+#include <cinttypes>
 #include <cstddef>
 
 #include "Common/BitUtils.h"
@@ -38,8 +38,8 @@ void Touchscreen::Update()
   if (const std::size_t input_size = GetRxByteCount())
   {
     // The Key of Avalon doesn't write to the device, it only reads.
-    WARN_LOG_FMT(SERIALINTERFACE_AMBB, "Unexpected write of {} bytes to touchscreen.",
-                 input_size);
+    WARN_LOG(SERIALINTERFACE_AMBB, "Unexpected write of %" PRIu64 " bytes to touchscreen.",
+             (u64)input_size);
     ConsumeRxBytes(input_size);
   }
 

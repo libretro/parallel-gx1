@@ -57,7 +57,7 @@ int CSIDevice_GCController::RunBuffer(u8* buffer, int request_length)
 
   case EBufferCommands::CMD_DIRECT:
   {
-    INFO_LOG_FMT(SERIALINTERFACE, "PAD - Direct (Request length: {})", request_length);
+    INFO_LOG(SERIALINTERFACE, "PAD - Direct (Request length: %d)", request_length);
     u32 high, low;
     GetData(high, low);
     for (int i = 0; i < 4; i++)
@@ -70,7 +70,7 @@ int CSIDevice_GCController::RunBuffer(u8* buffer, int request_length)
 
   case EBufferCommands::CMD_ORIGIN:
   {
-    INFO_LOG_FMT(SERIALINTERFACE, "PAD - Get Origin");
+    INFO_LOG(SERIALINTERFACE, "PAD - Get Origin");
 
     const u8* calibration = reinterpret_cast<u8*>(&m_origin);
     for (int i = 0; i < (int)sizeof(SOrigin); i++)
@@ -83,7 +83,7 @@ int CSIDevice_GCController::RunBuffer(u8* buffer, int request_length)
   // Recalibrate (FiRES: i am not 100 percent sure about this)
   case EBufferCommands::CMD_RECALIBRATE:
   {
-    INFO_LOG_FMT(SERIALINTERFACE, "PAD - Recalibrate");
+    INFO_LOG(SERIALINTERFACE, "PAD - Recalibrate");
 
     const u8* calibration = reinterpret_cast<u8*>(&m_origin);
     for (int i = 0; i < (int)sizeof(SOrigin); i++)
@@ -104,8 +104,9 @@ int CSIDevice_GCController::RunBuffer(u8* buffer, int request_length)
   // DEFAULT
   default:
   {
-    ERROR_LOG_FMT(SERIALINTERFACE, "Unknown SI command     ({:#x})", static_cast<u8>(command));
-    PanicAlertFmt("SI: Unknown command ({:#x})", static_cast<u8>(command));
+    ERROR_LOG(SERIALINTERFACE, "Unknown SI command     (%#x)",
+              (unsigned)(static_cast<u8>(command)));
+    PanicAlert("SI: Unknown command (%#x)", (unsigned)(static_cast<u8>(command)));
   }
   break;
   }
@@ -228,12 +229,12 @@ CSIDevice_GCController::HandleButtonCombos(const GCPadStatus& pad_status)
     {
       if (m_last_button_combo == COMBO_RESET)
       {
-        INFO_LOG_FMT(SERIALINTERFACE, "PAD - COMBO_RESET");
+        INFO_LOG(SERIALINTERFACE, "PAD - COMBO_RESET");
         m_system.GetProcessorInterface().ResetButton_Tap();
       }
       else if (m_last_button_combo == COMBO_ORIGIN)
       {
-        INFO_LOG_FMT(SERIALINTERFACE, "PAD - COMBO_ORIGIN");
+        INFO_LOG(SERIALINTERFACE, "PAD - COMBO_ORIGIN");
         SetOrigin(pad_status);
       }
 
@@ -278,14 +279,14 @@ void CSIDevice_GCController::SendCommand(u32 command, u8 poll)
     if (poll == 0)
     {
       m_mode = controller_command.parameter2;
-      INFO_LOG_FMT(SERIALINTERFACE, "PAD {} set to mode {}", m_device_number, m_mode);
+      INFO_LOG(SERIALINTERFACE, "PAD %d set to mode %u", m_device_number, (unsigned)m_mode);
     }
   }
   else if (controller_command.command != 0x00)
   {
     // Costis sent 0x00 in some demos :)
-    ERROR_LOG_FMT(SERIALINTERFACE, "Unknown direct command     ({:#x})", command);
-    PanicAlertFmt("SI: Unknown direct command");
+    ERROR_LOG(SERIALINTERFACE, "Unknown direct command     (%#x)", command);
+    PanicAlert("SI: Unknown direct command");
   }
 }
 

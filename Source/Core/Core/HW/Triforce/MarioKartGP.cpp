@@ -3,7 +3,7 @@
 
 #include "Core/HW/Triforce/MarioKartGP.h"
 
-#include <fmt/ranges.h>
+#include <cstdio>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
@@ -72,8 +72,8 @@ void MarioKartGPCommon_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set
   {
     if (bits_changed_0 & led_value)
     {
-      INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "JVS-IO: {}: {}", led_name,
-                   (bits_set[0] & led_value) ? "ON" : "OFF");
+      INFO_LOG(SERIALINTERFACE_JVSIO, "JVS-IO: %s: %s", led_name,
+               (bits_set[0] & led_value) ? "ON" : "OFF");
     }
   }
 }
@@ -95,13 +95,13 @@ void MarioKartGPSteeringWheel::Update()
 
 void MarioKartGPSteeringWheel::ProcessRequest(const u8* request)
 {
-  DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Request: {}",
-                Common::BytesToHexString(request, REQUEST_SIZE));
+  DEBUG_LOG(SERIALINTERFACE_AMBB, "SteeringWheel: Request: %s",
+            Common::BytesToHexString(request, REQUEST_SIZE).c_str());
 
   const u32 cmd = Common::swap32(request);
   if (cmd != 0xffffff01)
   {
-    WARN_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Unknown command: {:08x}", cmd);
+    WARN_LOG(SERIALINTERFACE_AMBB, "SteeringWheel: Unknown command: %08x", cmd);
     return;
   }
 
@@ -109,8 +109,8 @@ void MarioKartGPSteeringWheel::ProcessRequest(const u8* request)
   const u16 friction_force = Common::swap16(request + 6);
   const u16 roll = Common::swap16(request + 8);
 
-  DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: FFB: {:04x} {:04x} {:04x}", centering_force,
-                friction_force, roll);
+  DEBUG_LOG(SERIALINTERFACE_AMBB, "SteeringWheel: FFB: %04x %04x %04x", (unsigned)centering_force,
+            (unsigned)friction_force, (unsigned)roll);
 
   switch (m_init_state)
   {
@@ -142,7 +142,7 @@ void MarioKartGPSteeringWheel::ProcessRequest(const u8* request)
 
 void MarioKartGPSteeringWheel::Reset()
 {
-  INFO_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Reset");
+  INFO_LOG(SERIALINTERFACE_AMBB, "SteeringWheel: Reset");
   m_init_state = 0;
 }
 

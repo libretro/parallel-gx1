@@ -272,8 +272,8 @@ int CSIDevice_GBA::RunBuffer(u8* buffer, int request_length)
     if (m_sock_server.Connect())
     {
 #ifdef _DEBUG
-      NOTICE_LOG_FMT(SERIALINTERFACE, "{} cmd {:02x} [> {:02x}{:02x}{:02x}{:02x}]", m_device_number,
-                     buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]);
+      NOTICE_LOG(SERIALINTERFACE, "%d cmd %02x [> %02x%02x%02x%02x]", m_device_number, buffer[0],
+                 buffer[1], buffer[2], buffer[3], buffer[4]);
 #endif
       m_sock_server.Flush();  // Clear out any replies we might have timed out waiting for
       m_sock_server.Send(buffer);
@@ -325,17 +325,17 @@ int CSIDevice_GBA::RunBuffer(u8* buffer, int request_length)
         (m_last_cmd == EBufferCommands::CMD_STATUS || m_last_cmd == EBufferCommands::CMD_RESET) ?
             Common::Log::LogLevel::LERROR :
             Common::Log::LogLevel::LWARNING;
-    GENERIC_LOG_FMT(Common::Log::LogType::SERIALINTERFACE, log_level,
-                    "{}                              [< {:02x}{:02x}{:02x}{:02x}{:02x}] ({})",
-                    m_device_number, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4],
-                    num_data_received);
+    GENERIC_LOG(Common::Log::LogType::SERIALINTERFACE, log_level,
+                "%d                              [< %02x%02x%02x%02x%02x] (%d)", m_device_number,
+                buffer[0], buffer[1], buffer[2], buffer[3], buffer[4],
+                static_cast<int>(num_data_received));
 #endif
     return num_data_received;
   }
   }
 
   // This should never happen, but appease MSVC which thinks it might.
-  ERROR_LOG_FMT(SERIALINTERFACE, "Unknown state {}\n", static_cast<int>(m_next_action));
+  ERROR_LOG(SERIALINTERFACE, "Unknown state %d\n", static_cast<int>(m_next_action));
   return 0;
 }
 

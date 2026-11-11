@@ -3,9 +3,10 @@
 
 #include "Core/HW/Triforce/DeckReader.h"
 
+#include <cinttypes>
 #include <string_view>
 
-#include <fmt/ranges.h>
+#include <cstdio>
 
 #include <cstring>
 
@@ -36,7 +37,7 @@ constexpr u32 FIRMWARE_UPDATE_TIMEOUT = 240;
 
 auto GetFirmwareDumpFilename()
 {
-  return fmt::format("{}card_deck_reader_firmware.bin", File::GetUserPath(D_TRIUSER_IDX));
+  return File::GetUserPath(D_TRIUSER_IDX) + "card_deck_reader_firmware.bin";
 }
 
 enum class CDReaderCommand : u8
@@ -116,15 +117,14 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
   //   ]
   // }
 
-  const std::string filename =
-      fmt::format("{}tricard_{}_deck.json", File::GetUserPath(D_TRIUSER_IDX),
-                  SConfig::GetInstance().GetGameID());
+  const std::string filename = File::GetUserPath(D_TRIUSER_IDX) + "tricard_" +
+                               SConfig::GetInstance().GetGameID() + "_deck.json";
 
   RFILE* const file = filestream_open(filename.c_str(), RETRO_VFS_FILE_ACCESS_READ,
                                       RETRO_VFS_FILE_ACCESS_HINT_NONE);
   if (!file)
   {
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: cannot read {}", filename);
+    ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: cannot read %s", filename.c_str());
     return std::nullopt;
   }
   rjson_t* const json = rjson_open_user(DeckRead, file, 4096);
@@ -133,7 +133,7 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
   bool cards = false;
 
   if (json && !ok)
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid JSON root object.");
+    ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid JSON root object.");
   while (ok)
   {
     size_t len;
@@ -181,7 +181,7 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
         break;
       if (!card_index)
       {
-        ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"index\" field.");
+        ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"index\" field.");
         continue;
       }
       card_id.card_index = *card_index;
@@ -192,12 +192,12 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
 
   if (json && rjson_get_error(json)[0])
   {
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: {}", rjson_get_error(json));
+    ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: %s", rjson_get_error(json));
     result.reset();
   }
   else if (json && ok && !cards)
   {
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"cards\" array.");
+    ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"cards\" array.");
   }
   if (json)
     rjson_free(json);
@@ -281,7 +281,7 @@ void DeckReader::HandleCommand()
   {
   case CDReaderCommand::SelfTest:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "SelfTest");
+    INFO_LOG(SERIALINTERFACE_CARD, "SelfTest");
 
     // Avalon appears to not inspect this value.
     WriteTxByte(0x00);
@@ -290,7 +290,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::SensLock:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "SensLock");
+    INFO_LOG(SERIALINTERFACE_CARD, "SensLock");
 
     // Avalon will ask the user to close the shutter if open.
     constexpr bool is_closed = true;
@@ -301,7 +301,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::ProgramVersion:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "ProgramVersion");
+    INFO_LOG(SERIALINTERFACE_CARD, "ProgramVersion");
 
     WriteTxBytes(reinterpret_cast<const u8*>(CDR_PROGRAM_VERSION.data()),
                  CDR_PROGRAM_VERSION.size());
@@ -314,7 +314,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::BootVersion:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "BootVersion");
+    INFO_LOG(SERIALINTERFACE_CARD, "BootVersion");
 
     WriteTxBytes(reinterpret_cast<const u8*>(CDR_BOOT_VERSION.data()), CDR_BOOT_VERSION.size());
 
@@ -326,7 +326,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::ProgramChecksum:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "ProgramChecksum");
+    INFO_LOG(SERIALINTERFACE_CARD, "ProgramChecksum");
 
     // Avalon seems to not care about the actual value.
     WriteTxU32BE(0x89abcdef);
@@ -335,7 +335,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::BootChecksum:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "BootChecksum");
+    INFO_LOG(SERIALINTERFACE_CARD, "BootChecksum");
 
     // Avalon seems to not care about the actual value.
     WriteTxU32BE(0x01234567);
@@ -344,7 +344,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::CameraCheck:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "CameraCheck");
+    INFO_LOG(SERIALINTERFACE_CARD, "CameraCheck");
 
     // FYI: If `header[1] != 0x68` the game inspects some bits and 9 bytes. Some error state ?
 
@@ -355,7 +355,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::ShutterGet:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "ShutterGet");
+    INFO_LOG(SERIALINTERFACE_CARD, "ShutterGet");
 
     WriteTxU32BE(SHUTTER_TIME);
 
@@ -363,7 +363,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::ShutterAuto:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "ShutterAuto");
+    INFO_LOG(SERIALINTERFACE_CARD, "ShutterAuto");
 
     WriteTxU32BE(SHUTTER_TIME);
 
@@ -372,22 +372,22 @@ void DeckReader::HandleCommand()
   case CDReaderCommand::Shutter:
   case CDReaderCommand::ShutterAlt:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "Shutter");
+    INFO_LOG(SERIALINTERFACE_CARD, "Shutter");
     break;
   }
   case CDReaderCommand::ShutterLoad:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "ShutterLoad");
+    INFO_LOG(SERIALINTERFACE_CARD, "ShutterLoad");
     break;
   }
   case CDReaderCommand::ShutterSave:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "ShutterSave");
+    INFO_LOG(SERIALINTERFACE_CARD, "ShutterSave");
     break;
   }
   case CDReaderCommand::SensCard:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "SensCard");
+    INFO_LOG(SERIALINTERFACE_CARD, "SensCard");
 
     // TODO: What is the meaning of this value ?
     // Avalon tests for 0x01.
@@ -397,7 +397,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::ReadCard:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "ReadCard");
+    INFO_LOG(SERIALINTERFACE_CARD, "ReadCard");
 
     constexpr bool is_deck_empty = false;
 
@@ -432,7 +432,7 @@ void DeckReader::HandleCommand()
   }
   case CDReaderCommand::FirmwareUpdate:
   {
-    INFO_LOG_FMT(SERIALINTERFACE_CARD, "FirmwareUpdate");
+    INFO_LOG(SERIALINTERFACE_CARD, "FirmwareUpdate");
 
     m_firmware_update_timeout = FIRMWARE_UPDATE_TIMEOUT;
 
@@ -442,11 +442,11 @@ void DeckReader::HandleCommand()
     const auto filename = GetFirmwareDumpFilename();
     if (m_firmware_dump_file.Open(filename, File::AccessMode::Write))
     {
-      NOTICE_LOG_FMT(SERIALINTERFACE_CARD, "Writing firmware to: {}", filename);
+      NOTICE_LOG(SERIALINTERFACE_CARD, "Writing firmware to: %s", filename.c_str());
     }
     else
     {
-      ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Failed to open: {}", filename);
+      ERROR_LOG(SERIALINTERFACE_CARD, "Failed to open: %s", filename.c_str());
     }
 
     break;
@@ -456,7 +456,7 @@ void DeckReader::HandleCommand()
     // TODO: I think maybe we're supposed to produce a header of {0xaa, 0x55} ?
 
     // Responses seem to be variable in length and unspecified so we can't do much.
-    ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Unknown command: {:02x}", cd_reader_command);
+    ERROR_LOG(SERIALINTERFACE_CARD, "Unknown command: %02x", (unsigned)cd_reader_command);
     break;
   }
   }
@@ -483,7 +483,7 @@ void DeckReader::HandleFirmwareUpdate()
       static const u8 fw_update_done[3] = {0xaa, u8(CDReaderCommand::FirmwareUpdate), 0x00};
       WriteTxBytes(fw_update_done, sizeof(fw_update_done));
 
-      INFO_LOG_FMT(SERIALINTERFACE_CARD, "Fake FirmwareUpdate done.");
+      INFO_LOG(SERIALINTERFACE_CARD, "Fake FirmwareUpdate done.");
 
       m_firmware_dump_file.Close();
     }
@@ -494,7 +494,8 @@ void DeckReader::HandleFirmwareUpdate()
     {
       if (!m_firmware_dump_file.Write(input, input_size))
       {
-        ERROR_LOG_FMT(SERIALINTERFACE_CARD, "Failed to write {} bytes to firmware.", input_size);
+        ERROR_LOG(SERIALINTERFACE_CARD, "Failed to write %" PRIu64 " bytes to firmware.",
+                  (u64)input_size);
       }
     }
 

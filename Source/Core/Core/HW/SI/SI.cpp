@@ -4,6 +4,7 @@
 #include "Core/HW/SI/SI.h"
 
 #include <array>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 
@@ -155,23 +156,23 @@ void SerialInterfaceManager::RunSIBuffer(u64 user_data, s64 cycles_late)
     auto* const device = m_channel[m_com_csr.CHANNEL].device.get();
     const s32 actual_response_length = device->RunBuffer(m_si_buffer.data(), request_length);
 
-    DEBUG_LOG_FMT(SERIALINTERFACE,
-                  "RunSIBuffer  chan: {}  request_length: {}  expected_response_length: {}  "
-                  "actual_response_length: {}",
-                  m_com_csr.CHANNEL, request_length, expected_response_length,
-                  actual_response_length);
+    DEBUG_LOG(SERIALINTERFACE,
+              "RunSIBuffer  chan: %u  request_length: %d  expected_response_length: %d  "
+              "actual_response_length: %d",
+              m_com_csr.CHANNEL.Value(), request_length, expected_response_length,
+              actual_response_length);
     if (actual_response_length > 0 && expected_response_length != actual_response_length)
     {
 #if defined(_DEBUG)
-      WARN_LOG_FMT(
+      WARN_LOG(
           SERIALINTERFACE,
-          "RunSIBuffer: expected_response_length({}) != actual_response_length({}): request: {}",
-          expected_response_length, actual_response_length,
-          Common::BytesToHexString(request_copy.data(), request_copy.size()));
+          "RunSIBuffer: expected_response_length(%d) != actual_response_length(%d): request: %s",
+          static_cast<int>(expected_response_length), static_cast<int>(actual_response_length),
+          Common::BytesToHexString(request_copy.data(), request_copy.size()).c_str());
 #else
-      WARN_LOG_FMT(SERIALINTERFACE,
-                   "RunSIBuffer: expected_response_length({}) != actual_response_length({})",
-                   expected_response_length, actual_response_length);
+      WARN_LOG(SERIALINTERFACE,
+               "RunSIBuffer: expected_response_length(%d) != actual_response_length(%d)",
+               expected_response_length, actual_response_length);
 #endif
     }
 

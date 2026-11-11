@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -53,25 +53,21 @@ SIDevices ISIDevice::GetDeviceType() const
 int ISIDevice::RunBuffer(u8* buffer, int request_length)
 {
 #ifdef _DEBUG
-  DEBUG_LOG_FMT(SERIALINTERFACE, "Send Data Device({}) - Length({})   ", m_device_number,
-                request_length);
+  DEBUG_LOG(SERIALINTERFACE, "Send Data Device(%d) - Length(%d)   ", m_device_number,
+            static_cast<int>(request_length));
 
-  std::string temp;
+  // eight bytes a line, as "0x.. "
+  char line[8 * 5 + 1];
   int num = 0;
-
   while (num < request_length)
   {
-    temp += fmt::format("0x{:02x} ", buffer[num]);
+    snprintf(line + (num % 8) * 5, sizeof(line) - (num % 8) * 5, "0x%02x ", buffer[num]);
     num++;
-
     if ((num % 8) == 0)
-    {
-      DEBUG_LOG_FMT(SERIALINTERFACE, "{}", temp);
-      temp.clear();
-    }
+      DEBUG_LOG(SERIALINTERFACE, "%s", line);
   }
-
-  DEBUG_LOG_FMT(SERIALINTERFACE, "{}", temp);
+  if (num % 8)
+    DEBUG_LOG(SERIALINTERFACE, "%s", line);
 #endif
   return 0;
 }
@@ -185,7 +181,7 @@ std::unique_ptr<ISIDevice> SIDevice_Create(Core::System& system, const SIDevices
 #ifdef HAS_LIBMGBA
     return std::make_unique<CSIDevice_GBAEmu>(system, device, port_number);
 #else
-    PanicAlertFmtT("Error: This build does not support emulated GBA controllers");
+    PanicAlert("Error: This build does not support emulated GBA controllers");
     return std::make_unique<CSIDevice_Null>(system, device, port_number);
 #endif
 

@@ -3,8 +3,7 @@
 
 #include "Core/HW/Triforce/FZeroAX.h"
 
-
-#include <fmt/ranges.h>
+#include <cstdio>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
@@ -98,8 +97,8 @@ void FZeroAXCommon_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, co
   {
     if (bits_changed_0 & led_value)
     {
-      INFO_LOG_FMT(SERIALINTERFACE_JVSIO, "JVS-IO: {}: {}", led_name,
-                   (bits_set[0] & led_value) ? "ON" : "OFF");
+      INFO_LOG(SERIALINTERFACE_JVSIO, "JVS-IO: %s: %s", led_name,
+               (bits_set[0] & led_value) ? "ON" : "OFF");
     }
   }
 }
@@ -200,7 +199,7 @@ void FZeroAXSteeringWheel::Update()
       checksum ^= request[i];
     if (checksum != 0)
     {
-      WARN_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Bad checksum!");
+      WARN_LOG(SERIALINTERFACE_AMBB, "SteeringWheel: Bad checksum!");
       ++rx_position;
       continue;
     }
@@ -214,8 +213,8 @@ void FZeroAXSteeringWheel::Update()
 
 void FZeroAXSteeringWheel::ProcessRequest(const u8* request)
 {
-  DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: Request: {}",
-                Common::BytesToHexString(request, REQUEST_SIZE));
+  DEBUG_LOG(SERIALINTERFACE_AMBB, "SteeringWheel: Request: %s",
+            Common::BytesToHexString(request, REQUEST_SIZE).c_str());
 
   // The first byte is XOR'd with 0x80.
   const u8 cmd = request[0] ^ 0x80u;
@@ -236,7 +235,7 @@ void FZeroAXSteeringWheel::ProcessRequest(const u8* request)
     // This produces a value in the range around [-56, +56].
     m_servo_position = s8(0x80 - (u8(request[1] << 7u) | request[2]));
 
-    DEBUG_LOG_FMT(SERIALINTERFACE_AMBB, "SteeringWheel: servo_position: {}", m_servo_position);
+    DEBUG_LOG(SERIALINTERFACE_AMBB, "SteeringWheel: servo_position: %d", (int)m_servo_position);
     break;
   }
 
