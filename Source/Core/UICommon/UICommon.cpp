@@ -6,10 +6,9 @@
 #include <algorithm>
 #include <clocale>
 #include <cmath>
+#include <cstdio>
 #include <locale>
 #include <memory>
-
-#include <fmt/format.h>
 
 #include "Common/Common.h"
 #include "Common/CommonPaths.h"
@@ -132,7 +131,7 @@ void Shutdown()
 
 void FlushUnsavedData()
 {
-  INFO_LOG_FMT(CORE, "Flushing unsaved data...");
+  INFO_LOG(CORE, "Flushing unsaved data...");
   s_flush_unsaved_data_event_hook.Trigger();
 }
 
@@ -209,7 +208,8 @@ std::string FormatSize(u64 bytes, int decimals)
 
   // Don't need exact values, only 5 most significant digits
   const double unit_size = std::pow(2, unit * 10);
-  return fmt::format("{:.{}Lf} {}", bytes / unit_size, decimals,
-                     Common::GetStringT(unit_symbols[unit]));
+  char text[48];
+  snprintf(text, sizeof(text), "%.*f %s", decimals, bytes / unit_size, unit_symbols[unit]);
+  return text;
 }
 }  // namespace UICommon
