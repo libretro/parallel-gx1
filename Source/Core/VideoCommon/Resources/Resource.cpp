@@ -51,8 +51,8 @@ void Resource::ProcessCurrentTask()
     // Early out, we're already at our end state
     return;
   default:
-    ERROR_LOG_FMT(VIDEO, "Unknown task '{}' for resource '{}'", static_cast<int>(m_current_task),
-                  m_resource_context.primary_asset_id);
+    ERROR_LOG(VIDEO, "Unknown task '%d' for resource '%s'", static_cast<int>(m_current_task),
+              m_resource_context.primary_asset_id.c_str());
     return;
   };
 

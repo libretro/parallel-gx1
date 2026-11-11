@@ -3,7 +3,9 @@
 
 #include "VideoCommon/TextureInfo.h"
 
-#include <fmt/format.h>
+#include <cinttypes>
+#include <cstdio>
+
 #include <encodings/xxh64.h>
 
 #include "Common/Align.h"
@@ -81,12 +83,12 @@ TextureInfo::TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 addre
 
   if (data.size < m_texture_size)
   {
-    ERROR_LOG_FMT(VIDEO, "Trying to use an invalid texture address {:#010x}", GetRawAddress());
+    ERROR_LOG(VIDEO, "Trying to use an invalid texture address %#010x", GetRawAddress());
     m_data_valid = false;
   }
   else if (m_palette_size && tlut_data.size < *m_palette_size)
   {
-    ERROR_LOG_FMT(VIDEO, "Trying to use an invalid TLUT address {:#010x}", GetRawAddress());
+    ERROR_LOG(VIDEO, "Trying to use an invalid TLUT address %#010x", GetRawAddress());
     m_data_valid = false;
   }
   else
@@ -110,7 +112,7 @@ TextureInfo::TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 addre
 
 std::string TextureInfo::NameDetails::GetFullName() const
 {
-  return fmt::format("{}_{}{}_{}", base_name, texture_name, tlut_name, format_name);
+  return base_name + "_" + texture_name + tlut_name + "_" + format_name;
 }
 
 TextureInfo::NameDetails TextureInfo::CalculateTextureName() const
@@ -168,11 +170,22 @@ TextureInfo::NameDetails TextureInfo::CalculateTextureName() const
   const u64 tex_hash = xxh64(m_data.data, m_texture_size, 0);
   const u64 tlut_hash = tlut_size ? xxh64(tlut, tlut_size, 0) : 0;
 
-  return {.base_name = fmt::format("{}{}x{}{}", format_prefix, m_raw_width, m_raw_height,
-                                   m_mipmaps_enabled ? "_m" : ""),
-          .texture_name = fmt::format("{:016x}", tex_hash),
-          .tlut_name = tlut_size ? fmt::format("_{:016x}", tlut_hash) : "",
-          .format_name = fmt::to_string(static_cast<int>(m_texture_format))};
+  char base_name[64];
+  char texture_name[24];
+  char tlut_name[24];
+  char format_name[16];
+  snprintf(base_name, sizeof(base_name), "%.*s%ux%u%s", static_cast<int>(format_prefix.size()),
+           format_prefix.data(), m_raw_width, m_raw_height, m_mipmaps_enabled ? "_m" : "");
+  snprintf(texture_name, sizeof(texture_name), "%016" PRIx64, tex_hash);
+  if (tlut_size)
+    snprintf(tlut_name, sizeof(tlut_name), "_%016" PRIx64, tlut_hash);
+  else
+    tlut_name[0] = '\0';
+  snprintf(format_name, sizeof(format_name), "%d", static_cast<int>(m_texture_format));
+  return {.base_name = base_name,
+          .texture_name = texture_name,
+          .tlut_name = tlut_name,
+          .format_name = format_name};
 }
 
 TextureInfo::MipLevels TextureInfo::GetMipMapLevels() const

@@ -155,7 +155,7 @@ constexpr u32 GetElementSize(ComponentFormat format)
   case ComponentFormat::InvalidFloat7:
     return 4;
   default:
-    PanicAlertFmt("Unknown format {}", format);
+    PanicAlert("Unknown format %u", static_cast<unsigned>(format));
     return 0;
   }
 }
@@ -495,7 +495,7 @@ struct VAT
     case 1:
       return g0.Color1Elements;
     default:
-      PanicAlertFmt("Invalid color index {}", idx);
+      PanicAlert("Invalid color index %u", static_cast<unsigned>(idx));
       return ColorComponentCount::RGB;
     }
   }
@@ -508,7 +508,7 @@ struct VAT
     case 1:
       return g0.Color1Comp;
     default:
-      PanicAlertFmt("Invalid color index {}", idx);
+      PanicAlert("Invalid color index %u", static_cast<unsigned>(idx));
       return ColorFormat::RGB565;
     }
   }
@@ -533,7 +533,7 @@ struct VAT
     case 7:
       return g2.Tex7CoordElements;
     default:
-      PanicAlertFmt("Invalid tex coord index {}", idx);
+      PanicAlert("Invalid tex coord index %u", static_cast<unsigned>(idx));
       return TexComponentCount::S;
     }
   }
@@ -558,7 +558,7 @@ struct VAT
     case 7:
       return g2.Tex7CoordFormat;
     default:
-      PanicAlertFmt("Invalid tex coord index {}", idx);
+      PanicAlert("Invalid tex coord index %u", static_cast<unsigned>(idx));
       return ComponentFormat::UByte;
     }
   }
@@ -583,7 +583,7 @@ struct VAT
     case 7:
       return g2.Tex7Frac;
     default:
-      PanicAlertFmt("Invalid tex coord index {}", idx);
+      PanicAlert("Invalid tex coord index %u", static_cast<unsigned>(idx));
       return 0;
     }
   }
@@ -616,7 +616,7 @@ struct VAT
       g2.Tex7CoordElements = value;
       return;
     default:
-      PanicAlertFmt("Invalid tex coord index {}", idx);
+      PanicAlert("Invalid tex coord index %u", static_cast<unsigned>(idx));
     }
   }
   void SetTexFormat(size_t idx, ComponentFormat value)
@@ -648,7 +648,7 @@ struct VAT
       g2.Tex7CoordFormat = value;
       return;
     default:
-      PanicAlertFmt("Invalid tex coord index {}", idx);
+      PanicAlert("Invalid tex coord index %u", static_cast<unsigned>(idx));
     }
   }
   void SetTexFrac(size_t idx, u8 value)
@@ -680,7 +680,7 @@ struct VAT
       g2.Tex7Frac = value;
       return;
     default:
-      PanicAlertFmt("Invalid tex coord index {}", idx);
+      PanicAlert("Invalid tex coord index %u", static_cast<unsigned>(idx));
     }
   }
 };

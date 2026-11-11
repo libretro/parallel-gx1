@@ -603,7 +603,7 @@ bool BuildTextureReinterpretShader(struct shader_build* sb, const void* arg)
   case TextureFormat::RGB5A3:
     break;
   default:
-    WARN_LOG_FMT(VIDEO, "From format {} is not supported", from_format);
+    WARN_LOG(VIDEO, "From format %u is not supported", static_cast<unsigned>(from_format));
     return false;
   }
   switch (to_format)
@@ -616,7 +616,7 @@ bool BuildTextureReinterpretShader(struct shader_build* sb, const void* arg)
   case TextureFormat::RGB5A3:
     break;
   default:
-    WARN_LOG_FMT(VIDEO, "To format {} is not supported", to_format);
+    WARN_LOG(VIDEO, "To format %u is not supported", static_cast<unsigned>(to_format));
     return false;
   }
 

@@ -433,7 +433,7 @@ bool PostProcessing::CompileShaders()
 
   if (!m_vertex_shader || !m_copy_pixel_shader)
   {
-    PanicAlertFmt("Failed to compile the presentation shaders");
+    PanicAlert("Failed to compile the presentation shaders");
     return false;
   }
   return true;

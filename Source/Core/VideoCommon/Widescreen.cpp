@@ -24,8 +24,7 @@ WidescreenManager::WidescreenManager()
       g_ActiveConfig.suggested_aspect_mode == AspectMode::ForceWide;
   if (!is_valid_suggested_aspect_mode)
   {
-    WARN_LOG_FMT(VIDEO,
-                 "Invalid suggested aspect ratio mode: only Auto, 4:3 and 16:9 are supported");
+    WARN_LOG(VIDEO, "Invalid suggested aspect ratio mode: only Auto, 4:3 and 16:9 are supported");
   }
 
   auto& system = Core::System::GetInstance();

@@ -51,7 +51,7 @@ int TexDecoder_GetTexelSizeInNibbles(TextureFormat format)
   case TextureFormat::XFB:
     return 4;
   default:
-    PanicAlertFmt("Invalid Texture Format {}! (GetTexelSizeInNibbles)", format);
+    PanicAlert("Invalid Texture Format %u! (GetTexelSizeInNibbles)", static_cast<unsigned>(format));
     return 1;
   }
 }
@@ -90,7 +90,7 @@ int TexDecoder_GetBlockWidthInTexels(TextureFormat format)
   case TextureFormat::XFB:
     return 16;
   default:
-    PanicAlertFmt("Invalid Texture Format {}! (GetBlockWidthInTexels)", format);
+    PanicAlert("Invalid Texture Format %u! (GetBlockWidthInTexels)", static_cast<unsigned>(format));
     return 8;
   }
 }
@@ -124,7 +124,8 @@ int TexDecoder_GetBlockHeightInTexels(TextureFormat format)
   case TextureFormat::XFB:
     return 1;
   default:
-    PanicAlertFmt("Invalid Texture Format {}! (GetBlockHeightInTexels)", format);
+    PanicAlert("Invalid Texture Format %u! (GetBlockHeightInTexels)",
+               static_cast<unsigned>(format));
     return 4;
   }
 }
@@ -158,7 +159,8 @@ int TexDecoder_GetEFBCopyBlockWidthInTexels(EFBCopyFormat format)
   case EFBCopyFormat::XFB:
     return 16;
   default:
-    PanicAlertFmt("Invalid EFB Copy Format {}! (GetEFBCopyBlockWidthInTexels)", format);
+    PanicAlert("Invalid EFB Copy Format %u! (GetEFBCopyBlockWidthInTexels)",
+               static_cast<unsigned>(format));
     return 8;
   }
 }
@@ -192,7 +194,8 @@ int TexDecoder_GetEFBCopyBlockHeightInTexels(EFBCopyFormat format)
   case EFBCopyFormat::XFB:
     return 1;
   default:
-    PanicAlertFmt("Invalid EFB Copy Format {}! (GetEFBCopyBlockHeightInTexels)", format);
+    PanicAlert("Invalid EFB Copy Format %u! (GetEFBCopyBlockHeightInTexels)",
+               static_cast<unsigned>(format));
     return 4;
   }
 }
@@ -243,7 +246,7 @@ TextureFormat TexDecoder_GetEFBCopyBaseFormat(EFBCopyFormat format)
   case EFBCopyFormat::XFB:
     return TextureFormat::XFB;
   default:
-    PanicAlertFmt("Invalid EFB Copy Format {}! (GetEFBCopyBaseFormat)", format);
+    PanicAlert("Invalid EFB Copy Format %u! (GetEFBCopyBaseFormat)", static_cast<unsigned>(format));
     return static_cast<TextureFormat>(format);
   }
 }
@@ -268,9 +271,9 @@ static void TexDecoder_DrawOverlay(u8* dst, int width, int height, TextureFormat
     yoff = 0;
   }
 
-  const auto fmt_str = fmt::to_string(texformat);
-  for (char ch : fmt_str)
+  for (const char* fmt_str = TextureFormatName(texformat); *fmt_str; fmt_str++)
   {
+    const char ch = *fmt_str;
     int xcnt = 0;
     int nchar = sfont_map[static_cast<u8>(ch)];
 

@@ -31,15 +31,7 @@ constexpr u32 MAX_XFB_WIDTH = 720u;
 // that are next to each other in memory (TODO: handle that situation).
 constexpr u32 MAX_XFB_HEIGHT = 576u;
 
-#define PRIM_LOG(t, ...) DEBUG_LOG_FMT(VIDEO, t __VA_OPT__(, ) __VA_ARGS__)
-
-// warning: mapping buffer should be disabled to use this
-// #define LOG_VTX() DEBUG_LOG_FMT(VIDEO, "vtx: {} {} {}, ",
-//                                 ((float*)g_vertex_manager_write_ptr)[-3],
-//                                 ((float*)g_vertex_manager_write_ptr)[-2],
-//                                 ((float*)g_vertex_manager_write_ptr)[-1]);
-
-#define LOG_VTX()
+#define PRIM_LOG(...) DEBUG_LOG(VIDEO, __VA_ARGS__)
 
 enum class APIType
 {

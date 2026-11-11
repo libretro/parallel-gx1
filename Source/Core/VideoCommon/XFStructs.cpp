@@ -170,7 +170,7 @@ static void XFRegWritten(Core::System& system, XFStateManager& xf_state_manager,
     case 0x104d:
     case 0x104e:
     case 0x104f:
-      DEBUG_LOG_FMT(VIDEO, "Possible Normal Mtx XF reg?: {:x}={:x}", address, value);
+      DEBUG_LOG(VIDEO, "Possible Normal Mtx XF reg?: %x=%x", address, value);
       break;
 
     case 0x1013:
@@ -180,7 +180,7 @@ static void XFRegWritten(Core::System& system, XFStateManager& xf_state_manager,
     case 0x1017:
 
     default:
-      WARN_LOG_FMT(VIDEO, "Unknown XF Reg: {:x}={:x}", address, value);
+      WARN_LOG(VIDEO, "Unknown XF Reg: %x=%x", address, value);
       break;
     }
   }
@@ -190,8 +190,8 @@ void LoadXFReg(u16 base_address, u8 transfer_size, const u8* data)
 {
   if (base_address > XFMEM_REGISTERS_END)
   {
-    WARN_LOG_FMT(VIDEO, "XF load base address past end of address space: {:x} {} bytes",
-                 base_address, transfer_size);
+    WARN_LOG(VIDEO, "XF load base address past end of address space: %x %u bytes",
+             (unsigned)base_address, (unsigned)transfer_size);
     return;
   }
 
@@ -200,8 +200,8 @@ void LoadXFReg(u16 base_address, u8 transfer_size, const u8* data)
   // do not allow writes past registers
   if (end_address > XFMEM_REGISTERS_END)
   {
-    WARN_LOG_FMT(VIDEO, "XF load ends past end of address space: {:x} {} bytes", base_address,
-                 transfer_size);
+    WARN_LOG(VIDEO, "XF load ends past end of address space: %x %u bytes", (unsigned)base_address,
+             (unsigned)transfer_size);
     end_address = XFMEM_REGISTERS_END;
   }
 

@@ -7,7 +7,7 @@
 #include <cstring>
 #include <string>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"
@@ -95,10 +95,11 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
   {
   case BPMEM_GENMODE:  // Set the Generation Mode
     PRIM_LOG(
-        "genmode: texgen={}, col={}, multisampling={}, tev={}, cull_mode={}, ind={}, zfeeze={}",
-        bpmem.genMode.numtexgens, bpmem.genMode.numcolchans, bpmem.genMode.multisampling,
-        bpmem.genMode.numtevstages + 1, bpmem.genMode.cull_mode, bpmem.genMode.numindstages,
-        bpmem.genMode.zfreeze);
+        "genmode: texgen=%u, col=%u, multisampling=%s, tev=%u, cull_mode=%u, ind=%u, zfeeze=%s",
+        bpmem.genMode.numtexgens.Value(), bpmem.genMode.numcolchans.Value(),
+        bpmem.genMode.multisampling.Value() ? "true" : "false", bpmem.genMode.numtevstages + 1,
+        static_cast<unsigned>(bpmem.genMode.cull_mode.Value()), bpmem.genMode.numindstages.Value(),
+        bpmem.genMode.zfreeze.Value() ? "true" : "false");
 
     if (bp.changes)
       pixel_shader_manager.SetGenModeChanged();
@@ -140,19 +141,24 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     geometry_shader_manager.SetLinePtWidthChanged();
     return;
   case BPMEM_ZMODE:  // Depth Control
-    PRIM_LOG("zmode: test={}, func={}, upd={}", bpmem.zmode.test_enable, bpmem.zmode.func,
-             bpmem.zmode.update_enable);
+    PRIM_LOG("zmode: test=%s, func=%u, upd=%s", bpmem.zmode.test_enable.Value() ? "true" : "false",
+             static_cast<unsigned>(bpmem.zmode.func.Value()),
+             bpmem.zmode.update_enable.Value() ? "true" : "false");
     SetDepthMode();
     pixel_shader_manager.SetZModeControl();
     return;
   case BPMEM_BLENDMODE:  // Blending Control
     if (bp.changes & 0xFFFF)
     {
-      PRIM_LOG("blendmode: en={}, open={}, colupd={}, alphaupd={}, dst={}, src={}, sub={}, mode={}",
-               bpmem.blendmode.blend_enable, bpmem.blendmode.logic_op_enable,
-               bpmem.blendmode.color_update, bpmem.blendmode.alpha_update,
-               bpmem.blendmode.dst_factor, bpmem.blendmode.src_factor, bpmem.blendmode.subtract,
-               bpmem.blendmode.logic_mode);
+      PRIM_LOG("blendmode: en=%s, open=%s, colupd=%s, alphaupd=%s, dst=%u, src=%u, sub=%s, mode=%u",
+               bpmem.blendmode.blend_enable.Value() ? "true" : "false",
+               bpmem.blendmode.logic_op_enable.Value() ? "true" : "false",
+               bpmem.blendmode.color_update.Value() ? "true" : "false",
+               bpmem.blendmode.alpha_update.Value() ? "true" : "false",
+               static_cast<unsigned>(bpmem.blendmode.dst_factor.Value()),
+               static_cast<unsigned>(bpmem.blendmode.src_factor.Value()),
+               bpmem.blendmode.subtract.Value() ? "true" : "false",
+               static_cast<unsigned>(bpmem.blendmode.logic_mode.Value()));
 
       SetBlendMode();
 
@@ -160,7 +166,8 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     }
     return;
   case BPMEM_CONSTANTALPHA:  // Set Destination Alpha
-    PRIM_LOG("constalpha: alp={}, en={}", bpmem.dstalpha.alpha, bpmem.dstalpha.enable);
+    PRIM_LOG("constalpha: alp=%u, en=%s", bpmem.dstalpha.alpha.Value(),
+             bpmem.dstalpha.enable.Value() ? "true" : "false");
     if (bp.changes)
     {
       pixel_shader_manager.SetAlpha();
@@ -186,12 +193,13 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
       auto& system = Core::System::GetInstance();
       if (!system.GetFifo().UseDeterministicGPUThread())
         system.GetPixelEngine().SetFinish(cycles_into_future);  // may generate interrupt
-      DEBUG_LOG_FMT(VIDEO, "GXSetDrawDone SetPEFinish (value: {:#04X})", bp.newvalue & 0xFFFF);
+      DEBUG_LOG(VIDEO, "GXSetDrawDone SetPEFinish (value: %#04X)",
+                (unsigned)(bp.newvalue & 0xFFFF));
       return;
     }
 
     default:
-      WARN_LOG_FMT(VIDEO, "GXSetDrawDone ??? (value {:#04X})", bp.newvalue & 0xFFFF);
+      WARN_LOG(VIDEO, "GXSetDrawDone ??? (value %#04X)", (unsigned)(bp.newvalue & 0xFFFF));
       return;
     }
     return;
@@ -207,7 +215,7 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
       system.GetPixelEngine().SetToken(static_cast<u16>(bp.newvalue & 0xFFFF), false,
                                        cycles_into_future);
     }
-    DEBUG_LOG_FMT(VIDEO, "SetPEToken {:#06X}", bp.newvalue & 0xFFFF);
+    DEBUG_LOG(VIDEO, "SetPEToken %#06X", (unsigned)(bp.newvalue & 0xFFFF));
     return;
   }
   case BPMEM_PE_TOKEN_INT_ID:  // Pixel Engine Interrupt Token ID
@@ -222,7 +230,7 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
       system.GetPixelEngine().SetToken(static_cast<u16>(bp.newvalue & 0xFFFF), true,
                                        cycles_into_future);
     }
-    DEBUG_LOG_FMT(VIDEO, "SetPEToken + INT {:#06X}", bp.newvalue & 0xFFFF);
+    DEBUG_LOG(VIDEO, "SetPEToken + INT %#06X", (unsigned)(bp.newvalue & 0xFFFF));
     return;
   }
 
@@ -266,8 +274,8 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
 
     if (u32(srcRect.right) > EFB_WIDTH || u32(srcRect.bottom) > EFB_HEIGHT)
     {
-      WARN_LOG_FMT(VIDEO, "Oversized EFB copy: {}x{} (offset {},{} stride {})", srcRect.GetWidth(),
-                   srcRect.GetHeight(), srcRect.left, srcRect.top, destStride);
+      WARN_LOG(VIDEO, "Oversized EFB copy: %dx%d (offset %d,%d stride %u)", srcRect.GetWidth(),
+               srcRect.GetHeight(), srcRect.left, srcRect.top, destStride);
 
       if (u32(srcRect.left) >= EFB_WIDTH || u32(srcRect.top) >= EFB_HEIGHT)
       {
@@ -323,11 +331,11 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
 
         u32 height = static_cast<u32>(num_xfb_lines);
 
-        DEBUG_LOG_FMT(VIDEO,
-                      "RenderToXFB: destAddr: {:08x} | srcRect [{} {} {} {}] | fbWidth: {} | "
-                      "fbStride: {} | fbHeight: {} | yScale: {}",
-                      destAddr, srcRect.left, srcRect.top, srcRect.right, srcRect.bottom,
-                      bpmem.copyTexSrcWH.x + 1, destStride, height, yScale);
+        DEBUG_LOG(VIDEO,
+                  "RenderToXFB: destAddr: %08x | srcRect [%d %d %d %d] | fbWidth: %u | "
+                  "fbStride: %u | fbHeight: %u | yScale: %g",
+                  destAddr, srcRect.left, srcRect.top, srcRect.right, srcRect.bottom,
+                  bpmem.copyTexSrcWH.x + 1, destStride, height, (double)yScale);
 
         bool is_depth_copy = bpmem.zcontrol.pixel_format == PixelFormat::Z24;
         g_texture_cache->CopyRenderTargetToTexture(
@@ -437,9 +445,11 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
       pixel_shader_manager.SetFogColorChanged();
     return;
   case BPMEM_ALPHACOMPARE:  // Compare Alpha Values
-    PRIM_LOG("alphacmp: ref0={}, ref1={}, comp0={}, comp1={}, logic={}", bpmem.alpha_test.ref0,
-             bpmem.alpha_test.ref1, bpmem.alpha_test.comp0, bpmem.alpha_test.comp1,
-             bpmem.alpha_test.logic);
+    PRIM_LOG("alphacmp: ref0=%u, ref1=%u, comp0=%u, comp1=%u, logic=%u",
+             bpmem.alpha_test.ref0.Value(), bpmem.alpha_test.ref1.Value(),
+             static_cast<unsigned>(bpmem.alpha_test.comp0.Value()),
+             static_cast<unsigned>(bpmem.alpha_test.comp1.Value()),
+             static_cast<unsigned>(bpmem.alpha_test.logic.Value()));
     if (bp.changes & 0xFFFF)
       pixel_shader_manager.SetAlpha();
     if (bp.changes)
@@ -449,7 +459,7 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     }
     return;
   case BPMEM_BIAS:  // BIAS
-    PRIM_LOG("ztex bias={:#x}", bpmem.ztex1.bias);
+    PRIM_LOG("ztex bias=%#x", bpmem.ztex1.bias.Value());
     if (bp.changes)
       pixel_shader_manager.SetZTextureBias();
     return;
@@ -459,7 +469,8 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
       pixel_shader_manager.SetZTextureTypeChanged();
     if (bp.changes & 12)
       pixel_shader_manager.SetZTextureOpChanged();
-    PRIM_LOG("ztex op={}, type={}", bpmem.ztex2.op, bpmem.ztex2.type);
+    PRIM_LOG("ztex op=%u, type=%u", static_cast<unsigned>(bpmem.ztex2.op.Value()),
+             static_cast<unsigned>(bpmem.ztex2.type.Value()));
   }
     return;
   // ----------------------------------
@@ -779,8 +790,8 @@ static void BPWritten(PixelShaderManager& pixel_shader_manager, XFStateManager& 
     break;
   }
 
-  WARN_LOG_FMT(VIDEO, "Unknown BP opcode: address = {:#010x} value = {:#010x}", bp.address,
-               bp.newvalue);
+  WARN_LOG(VIDEO, "Unknown BP opcode: address = %#010x value = %#010x", (unsigned)bp.address,
+           (unsigned)bp.newvalue);
 }
 
 // Call browser: OpcodeDecoding.cpp RunCallback::OnBP()

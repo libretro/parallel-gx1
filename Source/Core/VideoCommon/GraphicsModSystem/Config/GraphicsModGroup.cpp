@@ -138,5 +138,5 @@ const std::string& GraphicsModGroupConfig::GetGameID() const
 std::string GraphicsModGroupConfig::GetPath() const
 {
   const std::string game_mod_root = File::GetUserPath(D_CONFIG_IDX) + GRAPHICSMOD_CONFIG_DIR;
-  return fmt::format("{}/{}.json", game_mod_root, m_game_id);
+  return game_mod_root + "/" + m_game_id + ".json";
 }

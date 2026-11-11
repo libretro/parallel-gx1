@@ -3,6 +3,7 @@
 
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
 
+#include <cstdio>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -123,15 +124,16 @@ GraphicsModManager::GetProjectionTextureActions(ProjectionType projection_type,
   if (m_projection_texture_target_to_actions.empty())
     return m_default;
   char key[256];
-  const auto made = fmt::format_to_n(key, sizeof(key), "{}_{}", texture_name,
-                                     static_cast<int>(projection_type));
+  const int made =
+      snprintf(key, sizeof(key), "%s_%d", texture_name.c_str(), static_cast<int>(projection_type));
+  const size_t made_size = made < 0 ? 0 : static_cast<size_t>(made);
   // texture names fit; a longer one is made on the heap
-  const std::string long_key = made.size > sizeof(key) ?
-                                   fmt::format("{}_{}", texture_name,
-                                               static_cast<int>(projection_type)) :
-                                   std::string();
+  const std::string long_key =
+      made_size >= sizeof(key) ?
+          StringFromFormat("%s_%d", texture_name.c_str(), static_cast<int>(projection_type)) :
+          std::string();
   const std::string_view lookup =
-      made.size > sizeof(key) ? std::string_view(long_key) : std::string_view(key, made.size);
+      made_size >= sizeof(key) ? std::string_view(long_key) : std::string_view(key, made_size);
   if (const auto it = m_projection_texture_target_to_actions.find(lookup);
       it != m_projection_texture_target_to_actions.end())
   {
@@ -212,13 +214,13 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
     {
       if (const bool inserted = m_groups.insert(group.m_name).second; !inserted)
       {
-        WARN_LOG_FMT(
+        WARN_LOG(
             VIDEO,
-            "Specified graphics mod group '{}' for mod '{}' is already specified by another mod.",
-            group.m_name, mod.m_title);
+            "Specified graphics mod group '%s' for mod '%s' is already specified by another mod.",
+            group.m_name.c_str(), mod.m_title.c_str());
       }
 
-      const auto internal_group = fmt::format("{}.{}", mod.m_title, group.m_name);
+      const std::string internal_group = mod.m_title + "." + group.m_name;
       for (const GraphicsTargetConfig& target : group.m_targets)
       {
         group_to_targets[group.m_name].push_back(target);
@@ -235,10 +237,10 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
       {
         if (v.is_absolute())
         {
-          WARN_LOG_FMT(VIDEO,
-                       "Specified graphics mod asset '{}' for mod '{}' has an absolute path, you "
-                       "shouldn't release this to users.",
-                       asset.m_asset_id, mod.m_title);
+          WARN_LOG(VIDEO,
+                   "Specified graphics mod asset '%s' for mod '%s' has an absolute path, you "
+                   "shouldn't release this to users.",
+                   asset.m_asset_id.c_str(), mod.m_title.c_str());
         }
         else
         {
@@ -266,7 +268,7 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
   {
     for (const GraphicsModFeatureConfig& feature : mod.m_features)
     {
-      const auto internal_group = fmt::format("{}.{}", mod.m_title, feature.m_group);
+      const std::string internal_group = mod.m_title + "." + feature.m_group;
 
       const auto add_target = [&](const GraphicsTargetConfig& target) {
         std::visit(
@@ -300,8 +302,9 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
                 [&](const ProjectionTarget& the_target) {
                   if (the_target.m_texture_info_string)
                   {
-                    const auto lookup = fmt::format("{}_{}", *the_target.m_texture_info_string,
-                                                    static_cast<int>(the_target.m_projection_type));
+                    const std::string lookup =
+                        StringFromFormat("%s_%d", the_target.m_texture_info_string->c_str(),
+                                         static_cast<int>(the_target.m_projection_type));
                     m_projection_texture_target_to_actions[lookup].push_back(
                         m_actions.back().get());
                   }
@@ -319,8 +322,8 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
         auto action = create_action(feature.m_action, feature.m_action_xyz, std::move(mod_config));
         if (action == nullptr)
         {
-          WARN_LOG_FMT(VIDEO, "Failed to create action '{}' for group '{}'.", feature.m_action,
-                       feature.m_group);
+          WARN_LOG(VIDEO, "Failed to create action '%s' for group '%s'.", feature.m_action.c_str(),
+                   feature.m_group.c_str());
           return false;
         }
         m_actions.push_back(std::move(action));
@@ -352,8 +355,8 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
       }
       else
       {
-        WARN_LOG_FMT(VIDEO, "Specified graphics mod group '{}' was not found for mod '{}'",
-                     feature.m_group, mod.m_title);
+        WARN_LOG(VIDEO, "Specified graphics mod group '%s' was not found for mod '%s'",
+                 feature.m_group.c_str(), mod.m_title.c_str());
       }
     }
   }

@@ -7,7 +7,7 @@
 
 void PrintAction::OnDrawStarted(GraphicsModActionData::DrawStarted*)
 {
-  INFO_LOG_FMT(VIDEO, "OnDrawStarted Called");
+  INFO_LOG(VIDEO, "OnDrawStarted Called");
 }
 
 void PrintAction::BeforeEFB(GraphicsModActionData::PreEFB* efb)
@@ -21,18 +21,18 @@ void PrintAction::BeforeEFB(GraphicsModActionData::PreEFB* efb)
   if (!efb->scaled_height) [[unlikely]]
     return;
 
-  INFO_LOG_FMT(VIDEO, "OnEFB Called. Original [{}, {}], Scaled [{}, {}]", efb->texture_width,
-               efb->texture_height, *efb->scaled_width, *efb->scaled_height);
+  INFO_LOG(VIDEO, "OnEFB Called. Original [%u, %u], Scaled [%u, %u]", efb->texture_width,
+           efb->texture_height, *efb->scaled_width, *efb->scaled_height);
 }
 
 void PrintAction::OnProjection(GraphicsModActionData::Projection*)
 {
-  INFO_LOG_FMT(VIDEO, "OnProjection Called");
+  INFO_LOG(VIDEO, "OnProjection Called");
 }
 
 void PrintAction::OnProjectionAndTexture(GraphicsModActionData::Projection*)
 {
-  INFO_LOG_FMT(VIDEO, "OnProjectionAndTexture Called");
+  INFO_LOG(VIDEO, "OnProjectionAndTexture Called");
 }
 
 void PrintAction::OnTextureLoad(GraphicsModActionData::TextureLoad* texture_load)
@@ -40,5 +40,6 @@ void PrintAction::OnTextureLoad(GraphicsModActionData::TextureLoad* texture_load
   if (!texture_load) [[unlikely]]
     return;
 
-  INFO_LOG_FMT(VIDEO, "OnTextureLoad Called.  Texture: {}", texture_load->texture_name);
+  INFO_LOG(VIDEO, "OnTextureLoad Called.  Texture: %.*s",
+           static_cast<int>(texture_load->texture_name.size()), texture_load->texture_name.data());
 }

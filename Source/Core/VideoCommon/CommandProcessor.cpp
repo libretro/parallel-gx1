@@ -3,7 +3,7 @@
 
 #include "VideoCommon/CommandProcessor.h"
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
@@ -397,13 +397,13 @@ void CommandProcessorManager::UpdateInterrupts(u64 userdata)
   if (userdata)
   {
     m_interrupt_set.Set();
-    DEBUG_LOG_FMT(COMMANDPROCESSOR, "Interrupt set");
+    DEBUG_LOG(COMMANDPROCESSOR, "Interrupt set");
     m_system.GetProcessorInterface().SetInterrupt(INT_CAUSE_CP, true);
   }
   else
   {
     m_interrupt_set.Clear();
-    DEBUG_LOG_FMT(COMMANDPROCESSOR, "Interrupt cleared");
+    DEBUG_LOG(COMMANDPROCESSOR, "Interrupt cleared");
     m_system.GetProcessorInterface().SetInterrupt(INT_CAUSE_CP, false);
   }
   m_system.GetCoreTiming().ForceExceptionCheck(0);
@@ -435,7 +435,7 @@ void CommandProcessorManager::SetCPStatusFromGPU()
     {
       if (!breakpoint)
       {
-        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Hit breakpoint at {}", LoadReg(&m_fifo.CPReadPointer));
+        DEBUG_LOG(COMMANDPROCESSOR, "Hit breakpoint at %u", LoadReg(&m_fifo.CPReadPointer));
         StoreReg(&m_fifo.bFF_Breakpoint, 1);
       }
     }
@@ -443,7 +443,7 @@ void CommandProcessorManager::SetCPStatusFromGPU()
     {
       if (breakpoint)
       {
-        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Cleared breakpoint at {}", LoadReg(&m_fifo.CPReadPointer));
+        DEBUG_LOG(COMMANDPROCESSOR, "Cleared breakpoint at %u", LoadReg(&m_fifo.CPReadPointer));
         StoreReg(&m_fifo.bFF_Breakpoint, 0);
       }
     }
@@ -452,7 +452,7 @@ void CommandProcessorManager::SetCPStatusFromGPU()
   {
     if (breakpoint)
     {
-      DEBUG_LOG_FMT(COMMANDPROCESSOR, "Cleared breakpoint at {}", LoadReg(&m_fifo.CPReadPointer));
+      DEBUG_LOG(COMMANDPROCESSOR, "Cleared breakpoint at %u", LoadReg(&m_fifo.CPReadPointer));
       StoreReg(&m_fifo.bFF_Breakpoint, 0);
     }
   }
@@ -506,7 +506,7 @@ void CommandProcessorManager::SetCPStatusFromCPU()
       if (!interrupt || bpInt || undfInt || ovfInt)
       {
         m_interrupt_set.Set(interrupt);
-        DEBUG_LOG_FMT(COMMANDPROCESSOR, "Interrupt set");
+        DEBUG_LOG(COMMANDPROCESSOR, "Interrupt set");
         m_system.GetProcessorInterface().SetInterrupt(INT_CAUSE_CP, interrupt);
       }
     }
@@ -528,13 +528,13 @@ void CommandProcessorManager::SetCpStatusRegister()
   m_cp_status_reg.UnderflowLoWatermark = LoadReg(&m_fifo.bFF_LoWatermark);
   m_cp_status_reg.OverflowHiWatermark = LoadReg(&m_fifo.bFF_HiWatermark);
 
-  DEBUG_LOG_FMT(COMMANDPROCESSOR, "\t Read from STATUS_REGISTER : {:04x}", m_cp_status_reg.Hex);
-  DEBUG_LOG_FMT(COMMANDPROCESSOR,
-                "(r) status: iBP {} | fReadIdle {} | fCmdIdle {} | iOvF {} | iUndF {}",
-                m_cp_status_reg.Breakpoint ? "ON" : "OFF", m_cp_status_reg.ReadIdle ? "ON" : "OFF",
-                m_cp_status_reg.CommandIdle ? "ON" : "OFF",
-                m_cp_status_reg.OverflowHiWatermark ? "ON" : "OFF",
-                m_cp_status_reg.UnderflowLoWatermark ? "ON" : "OFF");
+  DEBUG_LOG(COMMANDPROCESSOR, "\t Read from STATUS_REGISTER : %04x", (unsigned)m_cp_status_reg.Hex);
+  DEBUG_LOG(COMMANDPROCESSOR,
+            "(r) status: iBP %s | fReadIdle %s | fCmdIdle %s | iOvF %s | iUndF %s",
+            m_cp_status_reg.Breakpoint ? "ON" : "OFF", m_cp_status_reg.ReadIdle ? "ON" : "OFF",
+            m_cp_status_reg.CommandIdle ? "ON" : "OFF",
+            m_cp_status_reg.OverflowHiWatermark ? "ON" : "OFF",
+            m_cp_status_reg.UnderflowLoWatermark ? "ON" : "OFF");
 }
 
 void CommandProcessorManager::SetCpControlRegister()
@@ -551,13 +551,12 @@ void CommandProcessorManager::SetCpControlRegister()
   StoreReg(&m_fifo.bFF_LoWatermarkInt, m_cp_ctrl_reg.FifoUnderflowIntEnable);
   StoreReg(&m_fifo.bFF_GPLinkEnable, m_cp_ctrl_reg.GPLinkEnable);
 
-  DEBUG_LOG_FMT(COMMANDPROCESSOR, "\t GPREAD {} | BP {} | Int {} | OvF {} | UndF {} | LINK {}",
-                LoadReg(&m_fifo.bFF_GPReadEnable) ? "ON" : "OFF",
-                LoadReg(&m_fifo.bFF_BPEnable) ? "ON" : "OFF",
-                LoadReg(&m_fifo.bFF_BPInt) ? "ON" : "OFF",
-                m_cp_ctrl_reg.FifoOverflowIntEnable ? "ON" : "OFF",
-                m_cp_ctrl_reg.FifoUnderflowIntEnable ? "ON" : "OFF",
-                m_cp_ctrl_reg.GPLinkEnable ? "ON" : "OFF");
+  DEBUG_LOG(COMMANDPROCESSOR, "\t GPREAD %s | BP %s | Int %s | OvF %s | UndF %s | LINK %s",
+            LoadReg(&m_fifo.bFF_GPReadEnable) ? "ON" : "OFF",
+            LoadReg(&m_fifo.bFF_BPEnable) ? "ON" : "OFF", LoadReg(&m_fifo.bFF_BPInt) ? "ON" : "OFF",
+            m_cp_ctrl_reg.FifoOverflowIntEnable ? "ON" : "OFF",
+            m_cp_ctrl_reg.FifoUnderflowIntEnable ? "ON" : "OFF",
+            m_cp_ctrl_reg.GPLinkEnable ? "ON" : "OFF");
 }
 
 // NOTE: We intentionally don't emulate this function at the moment.
@@ -605,25 +604,29 @@ void CommandProcessorManager::HandleUnknownOpcode(u8 cmd_byte, const u8* buffer,
   // unknown opcode is inside of a display list.  Also note that the changes in GPFifo.h are not
   // accurate and may introduce timing issues.
   const auto& ppc_state = m_system.GetPPCState();
-  GENERIC_LOG_FMT(
+  GENERIC_LOG(
       Common::Log::LogType::VIDEO, log_level,
-      "FIFO: Unknown Opcode {:#04x} @ {}, preprocessing = {}, CPBase: {:#010x}, CPEnd: "
-      "{:#010x}, CPHiWatermark: {:#010x}, CPLoWatermark: {:#010x}, CPReadWriteDistance: "
-      "{:#010x}, CPWritePointer: {:#010x}, CPReadPointer: {:#010x}, CPBreakpoint: "
-      "{:#010x}, bFF_GPReadEnable: {}, bFF_BPEnable: {}, bFF_BPInt: {}, bFF_Breakpoint: "
-      "{}, bFF_GPLinkEnable: {}, bFF_HiWatermarkInt: {}, bFF_LoWatermarkInt: {}, "
-      "approximate PC: {:08x}, approximate LR: {:08x}",
-      cmd_byte, fmt::ptr(buffer), preprocess ? "yes" : "no", LoadReg(&m_fifo.CPBase),
-      LoadReg(&m_fifo.CPEnd), m_fifo.CPHiWatermark, m_fifo.CPLoWatermark,
-      LoadReg(&m_fifo.CPReadWriteDistance), LoadReg(&m_fifo.CPWritePointer),
-      LoadReg(&m_fifo.CPReadPointer), LoadReg(&m_fifo.CPBreakpoint),
+      "FIFO: Unknown Opcode %#04x @ %p, preprocessing = %s, CPBase: %#010x, CPEnd: "
+      "%#010x, CPHiWatermark: %#010x, CPLoWatermark: %#010x, CPReadWriteDistance: "
+      "%#010x, CPWritePointer: %#010x, CPReadPointer: %#010x, CPBreakpoint: "
+      "%#010x, bFF_GPReadEnable: %s, bFF_BPEnable: %s, bFF_BPInt: %s, bFF_Breakpoint: "
+      "%s, bFF_GPLinkEnable: %s, bFF_HiWatermarkInt: %s, bFF_LoWatermarkInt: %s, "
+      "approximate PC: %08x, approximate LR: %08x",
+      static_cast<unsigned>(cmd_byte), static_cast<const void*>(buffer), preprocess ? "yes" : "no",
+      static_cast<unsigned>(LoadReg(&m_fifo.CPBase)), static_cast<unsigned>(LoadReg(&m_fifo.CPEnd)),
+      static_cast<unsigned>(m_fifo.CPHiWatermark), static_cast<unsigned>(m_fifo.CPLoWatermark),
+      static_cast<unsigned>(LoadReg(&m_fifo.CPReadWriteDistance)),
+      static_cast<unsigned>(LoadReg(&m_fifo.CPWritePointer)),
+      static_cast<unsigned>(LoadReg(&m_fifo.CPReadPointer)),
+      static_cast<unsigned>(LoadReg(&m_fifo.CPBreakpoint)),
       LoadReg(&m_fifo.bFF_GPReadEnable) ? "true" : "false",
       LoadReg(&m_fifo.bFF_BPEnable) ? "true" : "false",
       LoadReg(&m_fifo.bFF_BPInt) ? "true" : "false",
       LoadReg(&m_fifo.bFF_Breakpoint) ? "true" : "false",
       LoadReg(&m_fifo.bFF_GPLinkEnable) ? "true" : "false",
       LoadReg(&m_fifo.bFF_HiWatermarkInt) ? "true" : "false",
-      LoadReg(&m_fifo.bFF_LoWatermarkInt) ? "true" : "false", ppc_state.pc, LR(ppc_state));
+      LoadReg(&m_fifo.bFF_LoWatermarkInt) ? "true" : "false", static_cast<unsigned>(ppc_state.pc),
+      static_cast<unsigned>(LR(ppc_state)));
 
   if (!m_is_fifo_error_seen && !suppress_panic_alert)
   {
@@ -666,13 +669,14 @@ void CommandProcessorManager::HandleUnknownOpcode(u8 cmd_byte, const u8* buffer,
           "a game bug.");
     }
 
-    PanicAlertFmtT("GFX FIFO: Unknown Opcode ({0:#04x} @ {1}, preprocess={2}).\n"
-                   "\n"
-                   "{3}\n"
-                   "\n"
-                   "Further errors will be sent to the Video Backend log and "
-                   "Dolphin will now likely crash or hang.",
-                   cmd_byte, fmt::ptr(buffer), preprocess, Common::GetStringT(advice));
+    PanicAlert("GFX FIFO: Unknown Opcode (%#04x @ %p, preprocess=%s).\n"
+               "\n"
+               "%s\n"
+               "\n"
+               "Further errors will be sent to the Video Backend log and "
+               "Dolphin will now likely crash or hang.",
+               (unsigned)cmd_byte, static_cast<const void*>(buffer), preprocess ? "true" : "false",
+               Common::GetStringT(advice).c_str());
   }
 }
 

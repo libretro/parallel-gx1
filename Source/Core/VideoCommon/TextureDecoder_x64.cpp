@@ -1491,7 +1491,8 @@ void _TexDecoder_DecodeImpl(u32* dst, const u8* src, int width, int height, Text
     break;
 
   default:
-    PanicAlertFmt("Invalid Texture Format {}! (_TexDecoder_DecodeImpl)", texformat);
+    PanicAlert("Invalid Texture Format %u! (_TexDecoder_DecodeImpl)",
+               static_cast<unsigned>(texformat));
     break;
   }
 }

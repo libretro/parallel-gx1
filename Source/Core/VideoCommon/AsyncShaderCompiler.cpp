@@ -321,7 +321,7 @@ bool AsyncShaderCompiler::StartWorkerThreads(u32 num_worker_threads)
     if (!worker->thread)
     {
       retro_eventcount_free(&worker->wake);
-      WARN_LOG_FMT(VIDEO, "Failed to start shader compiler worker thread.");
+      WARN_LOG(VIDEO, "Failed to start shader compiler worker thread.");
       break;
     }
     m_num_workers++;

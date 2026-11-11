@@ -13,11 +13,6 @@
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexLoaderUtils.h"
 
-// warning: mapping buffer should be disabled to use this
-#define LOG_NORM()  // PRIM_LOG("norm: {} {} {}, ", ((float*)g_vertex_manager_write_ptr)[-3],
-                    // ((float*)g_vertex_manager_write_ptr)[-2],
-                    // ((float*)g_vertex_manager_write_ptr)[-1]);
-
 namespace
 {
 template <typename T>
@@ -58,8 +53,6 @@ void ReadIndirect(VertexLoader* loader, const T* data)
     }
     DataWrite(value);
   }
-
-  LOG_NORM();
 }
 
 template <typename T, u32 N>

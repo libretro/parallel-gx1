@@ -3,12 +3,13 @@
 
 #include "VideoCommon/FramebufferManager.h"
 
-#include <fmt/format.h>
+#include <cstdio>
 #include <memory>
 
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
+#include "Common/StringUtil.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/System.h"
 #include "VideoCommon/AbstractFramebuffer.h"
@@ -51,38 +52,38 @@ bool FramebufferManager::Initialize(int efb_scale)
 {
   if (!CreateEFBFramebuffer(efb_scale))
   {
-    PanicAlertFmt("Failed to create EFB framebuffer");
+    PanicAlert("Failed to create EFB framebuffer");
     return false;
   }
 
   m_efb_cache_tile_size = static_cast<u32>(std::max(g_ActiveConfig.iEFBAccessTileSize, 0));
   if (!CreateReadbackFramebuffer())
   {
-    PanicAlertFmt("Failed to create EFB readback framebuffer");
+    PanicAlert("Failed to create EFB readback framebuffer");
     return false;
   }
 
   if (!CompileReadbackPipelines())
   {
-    PanicAlertFmt("Failed to compile EFB readback pipelines");
+    PanicAlert("Failed to compile EFB readback pipelines");
     return false;
   }
 
   if (!CompileConversionPipelines())
   {
-    PanicAlertFmt("Failed to compile EFB conversion pipelines");
+    PanicAlert("Failed to compile EFB conversion pipelines");
     return false;
   }
 
   if (!CompileClearPipelines())
   {
-    PanicAlertFmt("Failed to compile EFB clear pipelines");
+    PanicAlert("Failed to compile EFB clear pipelines");
     return false;
   }
 
   if (!CompilePokePipelines())
   {
-    PanicAlertFmt("Failed to compile EFB poke pipelines");
+    PanicAlert("Failed to compile EFB poke pipelines");
     return false;
   }
 
@@ -100,7 +101,7 @@ void FramebufferManager::RecreateEFBFramebuffer(int efb_scale)
   DestroyReadbackFramebuffer();
   DestroyEFBFramebuffer();
   if (!CreateEFBFramebuffer(efb_scale) || !CreateReadbackFramebuffer())
-    PanicAlertFmt("Failed to recreate EFB framebuffer");
+    PanicAlert("Failed to recreate EFB framebuffer");
 }
 
 void FramebufferManager::RecompileShaders()
@@ -112,7 +113,7 @@ void FramebufferManager::RecompileShaders()
   if (!CompileReadbackPipelines() || !CompileConversionPipelines() || !CompileClearPipelines() ||
       !CompilePokePipelines())
   {
-    PanicAlertFmt("Failed to recompile EFB pipelines");
+    PanicAlert("Failed to recompile EFB pipelines");
   }
 }
 
@@ -425,7 +426,8 @@ bool FramebufferManager::CompileConversionPipelines()
     const FramebufferShaderGen::FormatConversionArgs args = {convtype, GetEFBSamples()};
     AbstractShader* const pixel_shader = g_gfx->CreateShaderFromBuild(
         ShaderStage::Pixel, FramebufferShaderGen::BuildFormatConversionShader, &args,
-        fmt::format("Framebuffer conversion pixel shader {}", convtype));
+        StringFromFormat("Framebuffer conversion pixel shader %u",
+                         static_cast<unsigned>(convtype)));
     if (!pixel_shader)
       return false;
 
@@ -546,7 +548,7 @@ void FramebufferManager::SetEFBCacheTileSize(u32 size)
   m_efb_cache_tile_size = size;
   DestroyReadbackFramebuffer();
   if (!CreateReadbackFramebuffer())
-    PanicAlertFmt("Failed to create EFB readback framebuffers");
+    PanicAlert("Failed to create EFB readback framebuffers");
 }
 
 void FramebufferManager::RefreshPeekCache()
@@ -1205,7 +1207,7 @@ void FramebufferManager::DoLoadState(PointerWrap& p)
   if (!color_tex.texture || !depth_tex.texture ||
       color_tex.texture->GetLayers() != m_efb_color_texture->GetLayers())
   {
-    WARN_LOG_FMT(VIDEO, "Failed to deserialize EFB contents. Clearing instead.");
+    WARN_LOG(VIDEO, "Failed to deserialize EFB contents. Clearing instead.");
     g_gfx->SetAndClearFramebuffer(m_efb_framebuffer, {{0.0f, 0.0f, 0.0f, 0.0f}},
                                   g_backend_info.bSupportsReversedDepthRange ? 1.0f : 0.0f);
     FreeDeserialized(color_tex);

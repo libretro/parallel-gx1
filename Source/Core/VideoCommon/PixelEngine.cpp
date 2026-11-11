@@ -149,7 +149,7 @@ void PixelEngineManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    pe.m_control.pe_token = false;   // this flag is write only
                    pe.m_control.pe_finish = false;  // this flag is write only
 
-                   DEBUG_LOG_FMT(PIXELENGINE, "(w16) CTRL_REGISTER: {:#06x}", val);
+                   DEBUG_LOG(PIXELENGINE, "(w16) CTRL_REGISTER: %#06x", (unsigned)val);
                    pe.UpdateInterrupts();
                  }));
 
@@ -236,7 +236,8 @@ void PixelEngineManager::RaiseEvent(int set, int keep, int cycles_into_future)
 // THIS IS EXECUTED FROM VIDEO THREAD
 void PixelEngineManager::SetToken(const u16 token, const bool interrupt, int cycles_into_future)
 {
-  DEBUG_LOG_FMT(PIXELENGINE, "VIDEO Backend raises INT_CAUSE_PE_TOKEN (btw, token: {:04x})", token);
+  DEBUG_LOG(PIXELENGINE, "VIDEO Backend raises INT_CAUSE_PE_TOKEN (btw, token: %04x)",
+            (unsigned)token);
 
   RaiseEvent(token | (interrupt ? PENDING_TOKEN_INT : 0), ~0xFFFF, cycles_into_future);
 }
@@ -245,7 +246,7 @@ void PixelEngineManager::SetToken(const u16 token, const bool interrupt, int cyc
 // THIS IS EXECUTED FROM VIDEO THREAD (BPStructs.cpp) when a new frame has been drawn
 void PixelEngineManager::SetFinish(int cycles_into_future)
 {
-  DEBUG_LOG_FMT(PIXELENGINE, "VIDEO Set Finish");
+  DEBUG_LOG(PIXELENGINE, "VIDEO Set Finish");
 
   RaiseEvent(PENDING_FINISH_INT, ~0, cycles_into_future);
 }

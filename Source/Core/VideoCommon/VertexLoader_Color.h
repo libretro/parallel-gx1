@@ -17,7 +17,7 @@ public:
   {
     if (format > ColorFormat::RGBA8888)
     {
-      PanicAlertFmt("Invalid color format {}", format);
+      PanicAlert("Invalid color format %u", static_cast<unsigned>(format));
       return 0;
     }
     return s_table_size[type][format];

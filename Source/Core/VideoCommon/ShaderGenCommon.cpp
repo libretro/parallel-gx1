@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/FileUtil.h"
 #include "Core/ConfigManager.h"
@@ -124,7 +124,9 @@ std::string GetDiskShaderCacheFileName(APIType api_type, const char* type, bool 
   {
     // We're using 21 bits, so 6 hex characters.
     ShaderHostConfig host_config = ShaderHostConfig::GetCurrent();
-    filename += fmt::format("-{:06X}", host_config.bits);
+    char suffix[16];
+    snprintf(suffix, sizeof(suffix), "-%06X", static_cast<unsigned>(host_config.bits));
+    filename += suffix;
 
 #if defined(__WEBOS__)
     // The webOS core option toggles binding layout, which changes the

@@ -3,6 +3,7 @@
 
 #include "VideoCommon/Fifo.h"
 
+#include <cinttypes>
 #include <features/features_cpu.h>
 
 #include <cstring>
@@ -106,7 +107,7 @@ void FifoManager::Init()
 void FifoManager::Shutdown()
 {
   if (m_gpu_mainloop.IsRunning())
-    PanicAlertFmt("FIFO shutting down while active");
+    PanicAlert("FIFO shutting down while active");
 
   Common::FreeMemoryPages(m_video_buffer, FIFO_SIZE + 4);
   m_video_buffer = nullptr;
@@ -176,8 +177,8 @@ void FifoManager::SyncGPU(SyncGPUReason reason, bool may_move_read_ptr)
     // Opportunistically reset FIFOs so we don't wrap around.
     if (may_move_read_ptr && m_fifo_aux_write_ptr != m_fifo_aux_read_ptr)
     {
-      PanicAlertFmt("Aux FIFO not synced ({}, {})", fmt::ptr(m_fifo_aux_write_ptr),
-                    fmt::ptr(m_fifo_aux_read_ptr));
+      PanicAlert("Aux FIFO not synced (%p, %p)", static_cast<const void*>(m_fifo_aux_write_ptr),
+                 static_cast<const void*>(m_fifo_aux_read_ptr));
     }
 
     memmove(m_fifo_aux_data, m_fifo_aux_read_ptr, m_fifo_aux_write_ptr - m_fifo_aux_read_ptr);
@@ -218,7 +219,7 @@ void FifoManager::PushFifoAuxBuffer(const void* ptr, size_t size)
     {
       // That will sync us up to the last 32 bytes, so this short region
       // of FIFO would have to point to a 2MB display list or something.
-      PanicAlertFmt("Absurdly large aux buffer");
+      PanicAlert("Absurdly large aux buffer");
       return;
     }
   }
@@ -242,8 +243,8 @@ void FifoManager::ReadDataFromFifo(u32 read_ptr)
     const size_t existing_len = write_ptr - m_video_buffer_read_ptr;
     if (GPFifo::GATHER_PIPE_SIZE > static_cast<size_t>(FIFO_SIZE - existing_len))
     {
-      PanicAlertFmt("FIFO out of bounds (existing {} + new {} > {})", existing_len,
-                    GPFifo::GATHER_PIPE_SIZE, FIFO_SIZE);
+      PanicAlert("FIFO out of bounds (existing %" PRIu64 " + new %u > %u)", (u64)existing_len,
+                 GPFifo::GATHER_PIPE_SIZE, FIFO_SIZE);
       return;
     }
     memmove(m_video_buffer, m_video_buffer_read_ptr, existing_len);
@@ -273,15 +274,15 @@ void FifoManager::ReadDataFromFifoOnCPU(u32 read_ptr)
 
     if (m_video_buffer_pp_read_ptr != m_video_buffer_read_ptr)
     {
-      PanicAlertFmt("Desynced read pointers");
+      PanicAlert("Desynced read pointers");
       return;
     }
     write_ptr = GetWritePtr();
     const size_t existing_len = write_ptr - m_video_buffer_pp_read_ptr;
     if (GPFifo::GATHER_PIPE_SIZE > static_cast<size_t>(FIFO_SIZE - existing_len))
     {
-      PanicAlertFmt("FIFO out of bounds (existing {} + new {} > {})", existing_len,
-                    GPFifo::GATHER_PIPE_SIZE, FIFO_SIZE);
+      PanicAlert("FIFO out of bounds (existing %" PRIu64 " + new %u > %u)", (u64)existing_len,
+                 GPFifo::GATHER_PIPE_SIZE, FIFO_SIZE);
       return;
     }
   }

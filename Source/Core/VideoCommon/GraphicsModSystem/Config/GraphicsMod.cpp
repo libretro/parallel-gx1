@@ -3,10 +3,11 @@
 
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsMod.h"
 
+#include <cinttypes>
 #include <cstring>
 #include <string_view>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include <formats/rjson.h>
 #include <streams/file_stream.h>
@@ -49,9 +50,11 @@ struct Document
 
 void LogParseError(rjson_t* json, std::string_view what, const std::string& path)
 {
-  ERROR_LOG_FMT(VIDEO, "Failed to load {} json file '{}' due to parse error: {} at line {}:{}",
-                what, path, rjson_get_error(json), rjson_get_source_line(json),
-                rjson_get_source_column(json));
+  ERROR_LOG(VIDEO,
+            "Failed to load %.*s json file '%s' due to parse error: %s at line %" PRIu64
+            ":%" PRIu64,
+            static_cast<int>(what.size()), what.data(), path.c_str(), rjson_get_error(json),
+            (u64)rjson_get_source_line(json), (u64)rjson_get_source_column(json));
 }
 
 /* Past the value whose first token was t; false where the document is broken. */
@@ -112,8 +115,8 @@ bool ReadString(rjson_t* json, enum rjson_type t, std::string* out, std::string_
     *out = Text(json);
     return true;
   }
-  ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified {} is not a string",
-                what);
+  ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified %.*s is not a string",
+            static_cast<int>(what.size()), what.data());
   Skip(json, t);
   return false;
 }
@@ -189,7 +192,7 @@ bool ReadGroup(rjson_t* json, GraphicsTargetGroupConfig* group)
     {
       if (t != RJSON_ARRAY)
       {
-        ERROR_LOG_FMT(
+        ERROR_LOG(
             VIDEO,
             "Failed to load mod configuration file, specified group's targets is not an array");
         return false;
@@ -198,8 +201,8 @@ bool ReadGroup(rjson_t* json, GraphicsTargetGroupConfig* group)
       if (!ReadArray(json, [&](enum rjson_type e) {
             if (e != RJSON_OBJECT)
             {
-              ERROR_LOG_FMT(VIDEO, "Failed to load shader configuration file, specified target "
-                                   "is not a json object");
+              ERROR_LOG(VIDEO, "Failed to load shader configuration file, specified target "
+                               "is not a json object");
               return false;
             }
             return ReadTarget(json, &group->m_targets);
@@ -315,35 +318,35 @@ bool ReadAsset(rjson_t* json, GraphicsModAssetConfig* asset)
 
   if (name_type == RJSON_DONE)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified asset has no name");
+    ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified asset has no name");
     return false;
   }
   if (name_type != RJSON_STRING)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified asset has a name "
-                         "that is not a string");
+    ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified asset has a name "
+                     "that is not a string");
     return false;
   }
   if (data_type == RJSON_DONE)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load mod configuration file, specified asset '{}' has no data",
-                  asset->m_asset_id);
+    ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified asset '%s' has no data",
+              asset->m_asset_id.c_str());
     return false;
   }
   if (data_type != RJSON_OBJECT)
   {
-    ERROR_LOG_FMT(VIDEO,
-                  "Failed to load mod configuration file, specified asset '{}' has data "
-                  "that is not an object",
-                  asset->m_asset_id);
+    ERROR_LOG(VIDEO,
+              "Failed to load mod configuration file, specified asset '%s' has data "
+              "that is not an object",
+              asset->m_asset_id.c_str());
     return false;
   }
   if (!bad_key.empty())
   {
-    ERROR_LOG_FMT(VIDEO,
-                  "Failed to load mod configuration file, specified asset '{}' has data "
-                  "with a value for key '{}' that is not a string",
-                  asset->m_asset_id, bad_key);
+    ERROR_LOG(VIDEO,
+              "Failed to load mod configuration file, specified asset '%s' has data "
+              "with a value for key '%s' that is not a string",
+              asset->m_asset_id.c_str(), bad_key.c_str());
     return false;
   }
   return true;
@@ -360,9 +363,8 @@ bool ReadObjects(rjson_t* json, enum rjson_type t, std::vector<T>* out, std::str
   return ReadArray(json, [&](enum rjson_type e) {
     if (e != RJSON_OBJECT)
     {
-      ERROR_LOG_FMT(VIDEO,
-                    "Failed to load mod configuration file, specified {} is not a json object",
-                    what);
+      ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified %.*s is not a json object",
+                static_cast<int>(what.size()), what.data());
       return false;
     }
     T item;
@@ -478,8 +480,8 @@ bool ReadProfileMod(rjson_t* json, std::vector<GraphicsModConfig>* mods)
     return true;
   }
   auto mod = source.kind == GraphicsTargetField::Kind::String && source.text == "system" ?
-                 GraphicsModConfig::Create(fmt::format("{}{}{}", File::GetSysDirectory(),
-                                                       DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR, path.text),
+                 GraphicsModConfig::Create(File::GetSysDirectory() +
+                                               DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR + path.text,
                                            GraphicsModConfig::Source::System) :
                  GraphicsModConfig::Create(File::GetUserPath(D_GRAPHICSMOD_IDX) + path.text,
                                            GraphicsModConfig::Source::User);
@@ -506,7 +508,7 @@ std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& fi
     Document doc(file_path);
     if (!doc.json)
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to load graphics mod json file '{}'", file_path);
+      ERROR_LOG(VIDEO, "Failed to load graphics mod json file '%s'", file_path.c_str());
       return std::nullopt;
     }
     if (!ReadConfig(doc.json, &result))
@@ -522,10 +524,10 @@ std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& fi
     const std::string base_path = File::GetUserPath(D_GRAPHICSMOD_IDX);
     if (base_path.size() > file_path.size())
     {
-      ERROR_LOG_FMT(
+      ERROR_LOG(
           VIDEO,
-          "Failed to load graphics mod json file '{}' due to it not matching the base path: {}",
-          file_path, base_path);
+          "Failed to load graphics mod json file '%s' due to it not matching the base path: %s",
+          file_path.c_str(), base_path.c_str());
       return std::nullopt;
     }
     result.m_relative_path = file_path.substr(base_path.size());
@@ -535,10 +537,10 @@ std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& fi
     const std::string base_path = File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR;
     if (base_path.size() > file_path.size())
     {
-      ERROR_LOG_FMT(
+      ERROR_LOG(
           VIDEO,
-          "Failed to load graphics mod json file '{}' due to it not matching the base path: {}",
-          file_path, base_path);
+          "Failed to load graphics mod json file '%s' due to it not matching the base path: %s",
+          file_path.c_str(), base_path.c_str());
       return std::nullopt;
     }
     result.m_relative_path = file_path.substr(base_path.size());
@@ -551,8 +553,8 @@ std::string GraphicsModConfig::GetAbsolutePath() const
 {
   if (m_source == Source::System)
   {
-    return WithUnifiedPathSeparators(fmt::format("{}{}{}", File::GetSysDirectory(),
-                                                 DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR, m_relative_path));
+    return WithUnifiedPathSeparators(File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR +
+                                     m_relative_path);
   }
   else
   {
@@ -565,7 +567,7 @@ std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::
   Document doc(file_path);
   if (!doc.json)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load graphics mod group json file '{}'", file_path);
+    ERROR_LOG(VIDEO, "Failed to load graphics mod group json file '%s'", file_path.c_str());
     return std::nullopt;
   }
   enum rjson_type t = rjson_next(doc.json);
@@ -574,10 +576,9 @@ std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::
     if (t == RJSON_ERROR)
       LogParseError(doc.json, "graphics mod group", file_path);
     else
-      ERROR_LOG_FMT(
-          VIDEO,
-          "Failed to load graphics mod group json file '{}' due to root not being an object!",
-          file_path);
+      ERROR_LOG(VIDEO,
+                "Failed to load graphics mod group json file '%s' due to root not being an object!",
+                file_path.c_str());
     return std::nullopt;
   }
 

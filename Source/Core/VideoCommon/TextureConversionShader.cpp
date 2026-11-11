@@ -47,7 +47,8 @@ u16 GetEncodedSampleCount(EFBCopyFormat format)
   case EFBCopyFormat::XFB:
     return 2;
   default:
-    PanicAlertFmt("Invalid EFB Copy Format {}! (GetEncodedSampleCount)", format);
+    PanicAlert("Invalid EFB Copy Format %u! (GetEncodedSampleCount)",
+               static_cast<unsigned>(format));
     return 1;
   }
 }
@@ -793,7 +794,7 @@ bool BuildEncodingShader(struct shader_build* sb, const void* arg)
     ec_xfb(e);
     break;
   default:
-    PanicAlertFmt("Invalid EFB Copy Format {}! (BuildEncodingShader)", format);
+    PanicAlert("Invalid EFB Copy Format %u! (BuildEncodingShader)", static_cast<unsigned>(format));
     break;
   }
   return rslc_b_func_end(sb->b);
@@ -1469,7 +1470,7 @@ float4 DecodePixel(int val)
     break;
 
   default:
-    PanicAlertFmt("Unknown format");
+    PanicAlert("Unknown format");
     break;
   }
 

@@ -3,7 +3,8 @@
 
 #include "VideoCommon/TextureUtils.h"
 
-#include <fmt/format.h>
+#include <cinttypes>
+#include <cstdio>
 
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
@@ -22,7 +23,11 @@ std::string BuildDumpTextureFilename(std::string basename, u32 level, bool is_ar
     basename += "_arb";
 
   if (level > 0)
-    basename += fmt::format("_mip{}", level);
+  {
+    char mip[24];
+    snprintf(mip, sizeof(mip), "_mip%u", level);
+    basename += mip;
+  }
 
   return basename;
 }
@@ -39,7 +44,7 @@ void DumpTexture(const ::AbstractTexture& texture, std::string basename, u32 lev
     File::CreateDir(dump_dir);
 
   const std::string name = BuildDumpTextureFilename(std::move(basename), level, is_arbitrary);
-  const std::string filename = fmt::format("{}/{}.png", dump_dir, name);
+  const std::string filename = dump_dir + "/" + name + ".png";
 
   if (File::Exists(filename))
     return;
@@ -65,8 +70,8 @@ void TextureDumper::DumpTexture(const ::AbstractTexture& texture, std::string ba
       m_dumped_textures.insert(name);
     }
 
-    NOTICE_LOG_FMT(VIDEO, "Found {} dumped textures that will not be re-dumped.",
-                   m_dumped_textures.size());
+    NOTICE_LOG(VIDEO, "Found %" PRIu64 " dumped textures that will not be re-dumped.",
+               (u64)m_dumped_textures.size());
   }
 
   const std::string name = BuildDumpTextureFilename(std::move(basename), level, is_arbitrary);
@@ -74,6 +79,6 @@ void TextureDumper::DumpTexture(const ::AbstractTexture& texture, std::string ba
   if (file_existed)
     return;
 
-  texture.Save(fmt::format("{}/{}.png", dump_dir, name), level);
+  texture.Save(dump_dir + "/" + name + ".png", level);
 }
 }  // namespace VideoCommon::TextureUtils

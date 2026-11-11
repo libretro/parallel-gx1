@@ -23,7 +23,7 @@ void CustomAssetCache::Initialize()
   m_max_ram_available = sys_mem - keep_unused_mem;
 
   if (m_max_ram_available == 0)
-    ERROR_LOG_FMT(VIDEO, "Not enough system memory for custom resources.");
+    ERROR_LOG(VIDEO, "Not enough system memory for custom resources.");
 
   m_asset_loader.Initialize();
 }
@@ -127,7 +127,7 @@ void CustomAssetCache::RemoveAssetsUntilBelowMemoryLimit()
 
   if (m_ram_used > threshold_ram)
   {
-    INFO_LOG_FMT(VIDEO, "Memory usage over threshold: {}", UICommon::FormatSize(m_ram_used));
+    INFO_LOG(VIDEO, "Memory usage over threshold: %s", UICommon::FormatSize(m_ram_used).c_str());
   }
 
   // Clear out least recently used resources until
@@ -150,8 +150,8 @@ void CustomAssetCache::RemoveAssetsUntilBelowMemoryLimit()
     asset_data.load_status = AssetData::LoadStatus::Unloaded;
     asset_data.load_request_time = {};
 
-    INFO_LOG_FMT(VIDEO, "Unloading asset: {} ({})", asset_data.asset->GetAssetId(),
-                 UICommon::FormatSize(bytes_unloaded));
+    INFO_LOG(VIDEO, "Unloading asset: %s (%s)", asset_data.asset->GetAssetId().c_str(),
+             UICommon::FormatSize(bytes_unloaded).c_str());
   }
 }
 

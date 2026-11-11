@@ -3,6 +3,7 @@
 
 #include "VideoCommon/ShaderCache.h"
 
+#include <cinttypes>
 #include <stdlib.h>
 #include <string.h>
 #include <type_traits>
@@ -259,7 +260,7 @@ void ShaderCache::Reload()
   ClearCaches();
 
   if (!CompileSharedPipelines())
-    PanicAlertFmt("Failed to compile shared pipelines after reload.");
+    PanicAlert("Failed to compile shared pipelines after reload.");
 
   if (g_ActiveConfig.bShaderCache)
     LoadCaches();
@@ -467,7 +468,7 @@ void ShaderCache::LoadShaderCache(T& cache, APIType api_type, const char* type, 
   std::string filename = GetDiskShaderCacheFileName(api_type, type, include_gameid, true);
   CacheReader reader(cache);
   u32 count = cache.disk_cache.OpenAndRead(filename, reader);
-  INFO_LOG_FMT(VIDEO, "Loaded {} cached shaders from {}", count, filename);
+  INFO_LOG(VIDEO, "Loaded %u cached shaders from %s", count, filename.c_str());
 }
 
 template <typename T>
@@ -527,7 +528,7 @@ void ShaderCache::LoadPipelineCache(T& cache, Common::LinearDiskCache<DiskKeyTyp
   std::string filename = GetDiskShaderCacheFileName(api_type, type, include_gameid, true);
   CacheReader reader(this, cache);
   const u32 count = disk_cache.OpenAndRead(filename, reader);
-  INFO_LOG_FMT(VIDEO, "Loaded {} cached pipelines from {}", count, filename);
+  INFO_LOG(VIDEO, "Loaded %u cached pipelines from %s", count, filename.c_str());
 
   // If any of the pipelines in the cache failed to create, it's likely because of a change of
   // driver version, or system configuration. In this case, when the UID cache picks up the pipeline
@@ -535,8 +536,8 @@ void ShaderCache::LoadPipelineCache(T& cache, Common::LinearDiskCache<DiskKeyTyp
   // the old cache data around, so discard and recreate the disk cache.
   if (reader.AnyFailed())
   {
-    WARN_LOG_FMT(VIDEO, "Failed to load one or more pipelines from cache '{}'. Discarding.",
-                 filename);
+    WARN_LOG(VIDEO, "Failed to load one or more pipelines from cache '%s'. Discarding.",
+             filename.c_str());
     disk_cache.Close();
     File::Delete(filename);
     disk_cache.OpenAndRead(filename, reader);
@@ -934,8 +935,8 @@ static void ApplyUberDriverBugs(GXUberPipelineUid* out)
     if (!s_warned_logic_op && !out->blending_state.LogicOpApproximationIsExact())
     {
       s_warned_logic_op = true;
-      WARN_LOG_FMT(VIDEO,
-                   "Approximating logic op with blending, this will produce incorrect rendering.");
+      WARN_LOG(VIDEO,
+               "Approximating logic op with blending, this will produce incorrect rendering.");
     }
     out->blending_state.ApproximateLogicOpWithBlending();
   }
@@ -1258,7 +1259,8 @@ void ShaderCache::LoadPipelineUIDCache()
     }
   }
 
-  INFO_LOG_FMT(VIDEO, "Read {} pipeline UIDs from {}", m_gx_pipeline_cache.count, filename);
+  INFO_LOG(VIDEO, "Read %" PRIu64 " pipeline UIDs from %s", (u64)m_gx_pipeline_cache.count,
+           filename.c_str());
 }
 
 void ShaderCache::ClosePipelineUIDCache()
@@ -1269,7 +1271,7 @@ void ShaderCache::ClosePipelineUIDCache()
           static_cast<const SerializedGXPipelineUid*>(uid_array_at(&m_pending_gx_pipeline_uids, 0)),
           m_pending_gx_pipeline_uids.count))
   {
-    WARN_LOG_FMT(VIDEO, "Writing pipeline UIDs to cache failed.");
+    WARN_LOG(VIDEO, "Writing pipeline UIDs to cache failed.");
   }
   uid_array_clear(&m_pending_gx_pipeline_uids);
   if (m_gx_uber_pipeline_uid_cache_file.IsOpen() && m_pending_gx_uber_pipeline_uids.count &&
@@ -1277,7 +1279,7 @@ void ShaderCache::ClosePipelineUIDCache()
           static_cast<const SerializedGXUberPipelineUid*>(uid_array_at(&m_pending_gx_uber_pipeline_uids, 0)),
           m_pending_gx_uber_pipeline_uids.count))
   {
-    WARN_LOG_FMT(VIDEO, "Writing ubershader pipeline UIDs to cache failed.");
+    WARN_LOG(VIDEO, "Writing ubershader pipeline UIDs to cache failed.");
   }
   uid_array_clear(&m_pending_gx_uber_pipeline_uids);
   uid_table_clear(&m_recorded_uber_pipeline_uids);

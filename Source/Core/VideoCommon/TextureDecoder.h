@@ -47,6 +47,16 @@ struct fmt::formatter<TextureFormat> : EnumFormatter<TextureFormat::CMPR>
   constexpr formatter() : EnumFormatter(names) {}
 };
 
+// The format's name, as the texture format overlay draws it.
+static inline const char* TextureFormatName(TextureFormat format)
+{
+  static const char* const names[] = {"I4",     "I8",    "IA4",   "IA8",   "RGB565",
+                                      "RGB5A3", "RGBA8", nullptr, "C4",    "C8",
+                                      "C14X2",  nullptr, nullptr, nullptr, "CMPR"};
+  const unsigned index = static_cast<unsigned>(format);
+  return index < sizeof(names) / sizeof(names[0]) && names[index] ? names[index] : "Invalid";
+}
+
 static inline bool IsColorIndexed(TextureFormat format)
 {
   return format == TextureFormat::C4 || format == TextureFormat::C8 ||

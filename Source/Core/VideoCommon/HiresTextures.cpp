@@ -3,7 +3,7 @@
 
 #include "VideoCommon/HiresTextures.h"
 
-#include <fmt/format.h>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -46,9 +46,9 @@ std::pair<std::string, bool> GetNameArbPair(const TextureInfo& texture_info)
   }
 
   // Single wildcard ignoring the tlut hash
-  const std::string texture_name_single_wildcard_tlut =
-      fmt::format("{}_{}_$_{}", texture_name_details.base_name, texture_name_details.texture_name,
-                  texture_name_details.format_name);
+  const std::string texture_name_single_wildcard_tlut = texture_name_details.base_name + "_" +
+                                                        texture_name_details.texture_name + "_$_" +
+                                                        texture_name_details.format_name;
   if (auto iter = s_hires_texture_id_to_arbmipmap.find(texture_name_single_wildcard_tlut);
       iter != s_hires_texture_id_to_arbmipmap.end())
   {
@@ -56,9 +56,9 @@ std::pair<std::string, bool> GetNameArbPair(const TextureInfo& texture_info)
   }
 
   // Single wildcard ignoring the texture hash
-  const std::string texture_name_single_wildcard_tex =
-      fmt::format("{}_${}_{}", texture_name_details.base_name, texture_name_details.tlut_name,
-                  texture_name_details.format_name);
+  const std::string texture_name_single_wildcard_tex = texture_name_details.base_name + "_$" +
+                                                       texture_name_details.tlut_name + "_" +
+                                                       texture_name_details.format_name;
   if (auto iter = s_hires_texture_id_to_arbmipmap.find(texture_name_single_wildcard_tex);
       iter != s_hires_texture_id_to_arbmipmap.end())
   {
@@ -133,25 +133,33 @@ void HiresTexture::Update()
 
     if (failed_insert)
     {
-      ERROR_LOG_FMT(VIDEO, "One or more textures at path '{}' were already inserted",
-                    texture_directory);
+      ERROR_LOG(VIDEO, "One or more textures at path '%s' were already inserted",
+                texture_directory.c_str());
     }
   }
 
   const std::vector<std::string> game_ids_for_textures =
       SConfig::GetInstance().GetGameIDsForTextures();
-  const std::string game_id_display = fmt::format("{}", fmt::join(game_ids_for_textures, "' or '"));
+  std::string game_id_display;
+  for (const std::string& game_id : game_ids_for_textures)
+  {
+    if (!game_id_display.empty())
+      game_id_display += "' or '";
+    game_id_display += game_id;
+  }
 
   std::string message;
   if (g_ActiveConfig.bCacheHiresTextures)
   {
-    message = fmt::format("Preloading '{}' custom textures for '{}'", s_hires_texture_cache.size(),
-                          game_id_display);
+    message = StringFromFormat("Preloading '%u' custom textures for '%s'",
+                               static_cast<unsigned>(s_hires_texture_cache.size()),
+                               game_id_display.c_str());
   }
   else
   {
-    message = fmt::format("Found '{}' custom textures for '{}'",
-                          s_hires_texture_id_to_arbmipmap.size(), game_id_display);
+    message = StringFromFormat("Found '%u' custom textures for '%s'",
+                               static_cast<unsigned>(s_hires_texture_id_to_arbmipmap.size()),
+                               game_id_display.c_str());
   }
   Core::DisplayMessage(message, 10000);
 }

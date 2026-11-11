@@ -129,11 +129,12 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
   break;
 
   default:
-    ERROR_LOG_FMT(VIDEO, "Unknown projection type: {}", xfmem.projection.type);
+    ERROR_LOG(VIDEO, "Unknown projection type: %u", static_cast<unsigned>(xfmem.projection.type));
   }
 
-  PRIM_LOG("Projection: {} {} {} {} {} {}", rawProjection[0], rawProjection[1], rawProjection[2],
-           rawProjection[3], rawProjection[4], rawProjection[5]);
+  PRIM_LOG("Projection: %g %g %g %g %g %g", (double)rawProjection[0], (double)rawProjection[1],
+           (double)rawProjection[2], (double)rawProjection[3], (double)rawProjection[4],
+           (double)rawProjection[5]);
 
   const bool use_vr_camera = UseLibretroVRCamera();
   const bool use_vr_screen = UseLibretroVRScreen();

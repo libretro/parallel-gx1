@@ -131,7 +131,7 @@ u32 AbstractTexture::CalculateStrideForFormat(AbstractTextureFormat format, u32 
   case AbstractTextureFormat::RGBA16F:
     return static_cast<size_t>(row_length) * 8;
   default:
-    PanicAlertFmt("Unhandled texture format.");
+    PanicAlert("Unhandled texture format.");
     return 0;
   }
 }
@@ -160,7 +160,7 @@ u32 AbstractTexture::GetTexelSizeForFormat(AbstractTextureFormat format)
   case AbstractTextureFormat::RGBA16F:
     return 8;
   default:
-    PanicAlertFmt("Unhandled texture format.");
+    PanicAlert("Unhandled texture format.");
     return 0;
   }
 }

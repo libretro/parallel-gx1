@@ -3,7 +3,7 @@
 
 #include "VideoCommon/Assets/CustomAssetLoader.h"
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Logging/Log.h"
 #include "Common/Thread.h"
@@ -86,7 +86,9 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
 #if defined(SKIP_ASSETLOADER_THREAD)
   return;
 #endif
-  Common::SetCurrentThreadName(fmt::format("Asset Loader {}", thread_index).c_str());
+  char thread_name[32];
+  snprintf(thread_name, sizeof(thread_name), "Asset Loader %d", static_cast<int>(thread_index));
+  Common::SetCurrentThreadName(thread_name);
 
   while (!m_exit_flag.IsSet())
   {
@@ -131,8 +133,8 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
     const std::size_t bytes_loaded = item->Load();
     retro_atomic_fetch_add_64(&m_change_in_memory, static_cast<s64>(bytes_loaded));
 
-    INFO_LOG_FMT(VIDEO, "CustomAssetLoader thread {} loaded: {} ({})", thread_index,
-                 item->GetAssetId(), UICommon::FormatSize(bytes_loaded));
+    INFO_LOG(VIDEO, "CustomAssetLoader thread %u loaded: %s (%s)", thread_index,
+             item->GetAssetId().c_str(), UICommon::FormatSize(bytes_loaded).c_str());
 
     auto* loaded = new Loaded{{}, {item->GetHandle(), bytes_loaded > 0}};
     mpsc_stack_push(&m_loaded, &loaded->link);

@@ -11,12 +11,13 @@
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
+#include "Common/StringUtil.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
@@ -84,8 +85,8 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
 std::string VideoBackendBase::BadShaderFilename(const char* shader_stage, int counter)
 {
-  return fmt::format("{}bad_{}_{}_{}.txt", File::GetUserPath(D_DUMP_IDX), shader_stage,
-                     g_video_backend->GetConfigName(), counter);
+  return StringFromFormat("%sbad_%s_%s_%d.txt", File::GetUserPath(D_DUMP_IDX).c_str(), shader_stage,
+                          g_video_backend->GetConfigName().c_str(), counter);
 }
 
 // Run from the CPU thread (from VideoInterface.cpp)
@@ -144,9 +145,8 @@ u16 VideoBackendBase::Video_GetBoundingBox(int index)
     static bool warn_once = true;
     if (warn_once)
     {
-      ERROR_LOG_FMT(VIDEO,
-                    "BBox shall be used but it is disabled. Please use a gameini to enable it "
-                    "for this game.");
+      ERROR_LOG(VIDEO, "BBox shall be used but it is disabled. Please use a gameini to enable it "
+                       "for this game.");
     }
     warn_once = false;
   }
@@ -155,10 +155,9 @@ u16 VideoBackendBase::Video_GetBoundingBox(int index)
     static bool warn_once = true;
     if (warn_once)
     {
-      PanicAlertFmtT(
-          "This game requires bounding box emulation to run properly but your graphics "
-          "card or its drivers do not support it. As a result you will experience bugs or "
-          "freezes while running this game.");
+      PanicAlert("This game requires bounding box emulation to run properly but your graphics "
+                 "card or its drivers do not support it. As a result you will experience bugs or "
+                 "freezes while running this game.");
     }
     warn_once = false;
   }
@@ -309,7 +308,7 @@ bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,
       (g_backend_info.bSupportsBBox && !g_bounding_box->Initialize()) ||
       !g_graphics_mod_manager->Initialize())
   {
-    PanicAlertFmtT("Failed to initialize renderer classes");
+    PanicAlert("Failed to initialize renderer classes");
     Shutdown();
     return false;
   }
@@ -334,7 +333,7 @@ bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,
 
   if (g_Config.bDumpTextures)
   {
-    Core::DisplayMessage(fmt::format("Texture Dumping is enabled. This will reduce performance."));
+    Core::DisplayMessage("Texture Dumping is enabled. This will reduce performance.");
   }
 
   g_shader_cache->InitializeShaderCache();

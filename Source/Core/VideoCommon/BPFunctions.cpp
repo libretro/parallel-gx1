@@ -365,7 +365,8 @@ void OnPixelFormatChange(FramebufferManager* frame_buffer_manager, PixelFormat p
   const auto new_format = pixel_format;
   frame_buffer_manager->StorePixelFormat(new_format);
 
-  DEBUG_LOG_FMT(VIDEO, "pixelfmt: pixel={}, zc={}", new_format, z_format);
+  DEBUG_LOG(VIDEO, "pixelfmt: pixel=%u, zc=%u", static_cast<unsigned>(new_format),
+            static_cast<unsigned>(z_format));
 
   // no need to reinterpret pixel data in these cases
   if (new_format == old_format || old_format == PixelFormat::INVALID_FMT)
@@ -428,7 +429,8 @@ void OnPixelFormatChange(FramebufferManager* frame_buffer_manager, PixelFormat p
     break;
   }
 
-  ERROR_LOG_FMT(VIDEO, "Unhandled EFB format change: {} to {}", old_format, new_format);
+  ERROR_LOG(VIDEO, "Unhandled EFB format change: %u to %u", static_cast<unsigned>(old_format),
+            static_cast<unsigned>(new_format));
 }
 
 void SetInterlacingMode(const BPCmd& bp)
@@ -440,19 +442,21 @@ void SetInterlacingMode(const BPCmd& bp)
   {
     // SDK always sets bpmem.lineptwidth.lineaspect via BPMEM_LINEPTWIDTH
     // just before this cmd
-    DEBUG_LOG_FMT(VIDEO, "BPMEM_FIELDMODE texLOD:{} lineaspect:{}", bpmem.fieldmode.texLOD,
-                  bpmem.lineptwidth.adjust_for_aspect_ratio);
+    DEBUG_LOG(VIDEO, "BPMEM_FIELDMODE texLOD:%u lineaspect:%u",
+              static_cast<unsigned>(bpmem.fieldmode.texLOD.Value()),
+              static_cast<unsigned>(bpmem.lineptwidth.adjust_for_aspect_ratio.Value()));
   }
   break;
   case BPMEM_FIELDMASK:
   {
     // Determines if fields will be written to EFB (always computed)
-    DEBUG_LOG_FMT(VIDEO, "BPMEM_FIELDMASK even:{} odd:{}", bpmem.fieldmask.even,
-                  bpmem.fieldmask.odd);
+    DEBUG_LOG(VIDEO, "BPMEM_FIELDMASK even:%u odd:%u",
+              static_cast<unsigned>(bpmem.fieldmask.even.Value()),
+              static_cast<unsigned>(bpmem.fieldmask.odd.Value()));
   }
   break;
   default:
-    ERROR_LOG_FMT(VIDEO, "SetInterlacingMode default");
+    ERROR_LOG(VIDEO, "SetInterlacingMode default");
     break;
   }
 }

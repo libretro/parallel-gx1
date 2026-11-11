@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#include <fmt/std.h>
+#include <cstdio>
 
 #include "Common/CommonPaths.h"
 #include "Common/FileUtil.h"
@@ -62,8 +62,8 @@ CustomAssetLibrary::LoadInfo DirectFilesystemAssetLibrary::LoadTexture(const Ass
   const auto asset_map = GetAssetMapForID(asset_id);
   if (asset_map.empty())
   {
-    ERROR_LOG_FMT(VIDEO, "Asset '{}' error - raw texture expected to have one or two files mapped!",
-                  asset_id);
+    ERROR_LOG(VIDEO, "Asset '%s' error - raw texture expected to have one or two files mapped!",
+              asset_id.c_str());
     return {};
   }
 
@@ -71,7 +71,7 @@ CustomAssetLibrary::LoadInfo DirectFilesystemAssetLibrary::LoadTexture(const Ass
 
   if (texture_path == asset_map.end())
   {
-    ERROR_LOG_FMT(VIDEO, "Asset '{}' expected to have a texture entry mapped!", asset_id);
+    ERROR_LOG(VIDEO, "Asset '%s' expected to have a texture entry mapped!", asset_id.c_str());
     return {};
   }
 

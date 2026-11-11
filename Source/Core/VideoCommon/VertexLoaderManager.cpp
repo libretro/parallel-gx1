@@ -4,6 +4,7 @@
 #include "VideoCommon/VertexLoaderManager.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <iterator>
 #include <memory>
 #include <string>
@@ -335,16 +336,20 @@ static void CheckCPConfiguration(int vtx_attr_group)
   if (num_cp_colors != xfmem.invtxspec.numcolors || num_cp_normals != num_xf_normals ||
       num_cp_tex_coords != xfmem.invtxspec.numtextures) [[unlikely]]
   {
-    PanicAlertFmt("Mismatched configuration between CP and XF stages - {}/{} colors, {}/{} "
-                  "normals, {}/{} texture coordinates. Please report on the issue tracker.\n\n"
-                  "VCD: {:08x} {:08x}\nVAT {}: {:08x} {:08x} {:08x}\nXF vertex spec: {:08x}",
-                  num_cp_colors, xfmem.invtxspec.numcolors, num_cp_normals,
-                  num_xf_normals.has_value() ? fmt::to_string(num_xf_normals.value()) : "invalid",
-                  num_cp_tex_coords, xfmem.invtxspec.numtextures, g_main_cp_state.vtx_desc.low.Hex,
-                  g_main_cp_state.vtx_desc.high.Hex, vtx_attr_group,
-                  g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
-                  g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
-                  g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex, xfmem.invtxspec.hex);
+    char xf_normals[16];
+    if (num_xf_normals.has_value())
+      snprintf(xf_normals, sizeof(xf_normals), "%u", num_xf_normals.value());
+    else
+      snprintf(xf_normals, sizeof(xf_normals), "invalid");
+    PanicAlert("Mismatched configuration between CP and XF stages - %u/%u colors, %u/%s "
+               "normals, %u/%u texture coordinates. Please report on the issue tracker.\n\n"
+               "VCD: %08x %08x\nVAT %d: %08x %08x %08x\nXF vertex spec: %08x",
+               num_cp_colors, xfmem.invtxspec.numcolors.Value(), num_cp_normals, xf_normals,
+               num_cp_tex_coords, xfmem.invtxspec.numtextures.Value(),
+               g_main_cp_state.vtx_desc.low.Hex, g_main_cp_state.vtx_desc.high.Hex, vtx_attr_group,
+               g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
+               g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
+               g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex, xfmem.invtxspec.hex);
 
     // Don't bail out, though; we can still render something successfully
     // (real hardware seems to hang in this case, though)
@@ -353,50 +358,51 @@ static void CheckCPConfiguration(int vtx_attr_group)
   if (g_main_cp_state.matrix_index_a.Hex != xfmem.MatrixIndexA.Hex ||
       g_main_cp_state.matrix_index_b.Hex != xfmem.MatrixIndexB.Hex) [[unlikely]]
   {
-    WARN_LOG_FMT(VIDEO,
-                 "Mismatched matrix index configuration between CP and XF stages - "
-                 "index A: {:08x}/{:08x}, index B {:08x}/{:08x}.",
-                 g_main_cp_state.matrix_index_a.Hex, xfmem.MatrixIndexA.Hex,
-                 g_main_cp_state.matrix_index_b.Hex, xfmem.MatrixIndexB.Hex);
+    WARN_LOG(VIDEO,
+             "Mismatched matrix index configuration between CP and XF stages - "
+             "index A: %08x/%08x, index B %08x/%08x.",
+             g_main_cp_state.matrix_index_a.Hex, xfmem.MatrixIndexA.Hex,
+             g_main_cp_state.matrix_index_b.Hex, xfmem.MatrixIndexB.Hex);
   }
 
   if (g_main_cp_state.vtx_attr[vtx_attr_group].g0.PosFormat >= ComponentFormat::InvalidFloat5)
   {
-    WARN_LOG_FMT(VIDEO, "Invalid position format {} for VAT {} - {:08x} {:08x} {:08x}",
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g0.PosFormat, vtx_attr_group,
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
+    WARN_LOG(VIDEO, "Invalid position format %u for VAT %d - %08x %08x %08x",
+             static_cast<unsigned>(g_main_cp_state.vtx_attr[vtx_attr_group].g0.PosFormat.Value()),
+             vtx_attr_group, g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
+             g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
+             g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
   }
   if (g_main_cp_state.vtx_attr[vtx_attr_group].g0.NormalFormat >= ComponentFormat::InvalidFloat5)
   {
-    WARN_LOG_FMT(VIDEO, "Invalid normal format {} for VAT {} - {:08x} {:08x} {:08x}",
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g0.NormalFormat, vtx_attr_group,
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
-                 g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
+    WARN_LOG(
+        VIDEO, "Invalid normal format %u for VAT %d - %08x %08x %08x",
+        static_cast<unsigned>(g_main_cp_state.vtx_attr[vtx_attr_group].g0.NormalFormat.Value()),
+        vtx_attr_group, g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
+        g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
+        g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
   }
   for (size_t i = 0; i < 8; i++)
   {
     if (g_main_cp_state.vtx_attr[vtx_attr_group].GetTexFormat(i) >= ComponentFormat::InvalidFloat5)
     {
-      WARN_LOG_FMT(VIDEO,
-                   "Invalid texture coordinate {} format {} for VAT {} - {:08x} {:08x} {:08x}", i,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].GetTexFormat(i), vtx_attr_group,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
+      WARN_LOG(
+          VIDEO, "Invalid texture coordinate %" PRIu64 " format %u for VAT %d - %08x %08x %08x",
+          (u64)i, static_cast<unsigned>(g_main_cp_state.vtx_attr[vtx_attr_group].GetTexFormat(i)),
+          vtx_attr_group, g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
+          g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
+          g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
     }
   }
   for (size_t i = 0; i < 2; i++)
   {
     if (g_main_cp_state.vtx_attr[vtx_attr_group].GetColorFormat(i) > ColorFormat::RGBA8888)
     {
-      WARN_LOG_FMT(VIDEO, "Invalid color {} format {} for VAT {} - {:08x} {:08x} {:08x}", i,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].GetColorFormat(i), vtx_attr_group,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
-                   g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
+      WARN_LOG(VIDEO, "Invalid color %" PRIu64 " format %u for VAT %d - %08x %08x %08x", (u64)i,
+               static_cast<unsigned>(g_main_cp_state.vtx_attr[vtx_attr_group].GetColorFormat(i)),
+               vtx_attr_group, g_main_cp_state.vtx_attr[vtx_attr_group].g0.Hex,
+               g_main_cp_state.vtx_attr[vtx_attr_group].g1.Hex,
+               g_main_cp_state.vtx_attr[vtx_attr_group].g2.Hex);
     }
   }
 }

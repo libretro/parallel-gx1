@@ -201,7 +201,7 @@ TPipelineFunction VertexLoader_Color::GetFunction(VertexComponentFormat type, Co
 {
   if (format > ColorFormat::RGBA8888)
   {
-    PanicAlertFmt("Invalid color format {}", format);
+    PanicAlert("Invalid color format %u", static_cast<unsigned>(format));
     return nullptr;
   }
   return s_table_read_color[type][format];

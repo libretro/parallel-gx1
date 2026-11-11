@@ -42,8 +42,6 @@ void Pos_ReadDirect(VertexLoader* loader)
       VertexLoaderManager::position_cache[loader->m_remaining][i] = value;
     DataWrite(value);
   }
-
-  LOG_VTX();
 }
 
 template <typename I, typename T, int N>
@@ -66,8 +64,6 @@ void Pos_ReadIndex(VertexLoader* loader)
       VertexLoaderManager::position_cache[loader->m_remaining][i] = value;
     DataWrite(value);
   }
-
-  LOG_VTX();
 }
 
 using ComponentCountRow = Common::EnumMap<TPipelineFunction, CoordComponentCount::XYZ>;

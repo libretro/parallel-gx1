@@ -466,10 +466,10 @@ static bool ReadMipLevel(VideoCommon::CustomTextureData::ArraySlice::Level* leve
   if (mip_level == 0 && info.block_size > 1 &&
       ((width % info.block_size) != 0 || (height % info.block_size) != 0))
   {
-    ERROR_LOG_FMT(VIDEO,
-                  "Invalid dimensions for DDS texture {}. For compressed textures of this format, "
-                  "the width/height of the first mip level must be a multiple of {}.",
-                  filename, info.block_size);
+    ERROR_LOG(VIDEO,
+              "Invalid dimensions for DDS texture %s. For compressed textures of this format, "
+              "the width/height of the first mip level must be a multiple of %u.",
+              filename.c_str(), info.block_size);
     return false;
   }
 

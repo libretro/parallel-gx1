@@ -550,8 +550,8 @@ void pc_sample_manual(const struct shader_build* sb, const ShaderHostConfig& hos
     else
     {
       levels = rslc_b_local(sb->b, "number_of_levels", sb->i[1], sb_i(sb, 256), false);
-      ERROR_LOG_FMT(VIDEO, "textureQueryLevels is not supported!  Odd graphical results may "
-                           "occur if custom textures are in use!");
+      ERROR_LOG(VIDEO, "textureQueryLevels is not supported!  Odd graphical results may "
+                       "occur if custom textures are in use!");
     }
     // Prevent out-of-bounds LOD values when using custom textures
     sb_set(sb, sb_ref(sb, max_lod),
@@ -1954,7 +1954,7 @@ void pb_fog(const struct ps_build* p, struct rslc_var* rawpos, struct rslc_var* 
     break;
   default:
     if (uid_data->fog_fsel != FogType::Linear)
-      WARN_LOG_FMT(VIDEO, "Unknown Fog Type! {}", uid_data->fog_fsel);
+      WARN_LOG(VIDEO, "Unknown Fog Type! %u", static_cast<unsigned>(uid_data->fog_fsel));
     break;
   }
 #undef NEG8

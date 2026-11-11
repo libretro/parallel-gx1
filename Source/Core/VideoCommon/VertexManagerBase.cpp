@@ -402,32 +402,39 @@ void VertexManagerBase::Flush()
   if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens ||
       xfmem.numChan.numColorChans != bpmem.genMode.numcolchans)
   {
-    ERROR_LOG_FMT(
-        VIDEO,
-        "Mismatched configuration between XF and BP stages - {}/{} texgens, {}/{} colors. "
-        "Skipping draw. Please report on the issue tracker.",
-        xfmem.numTexGen.numTexGens, bpmem.genMode.numtexgens.Value(), xfmem.numChan.numColorChans,
-        bpmem.genMode.numcolchans.Value());
+    ERROR_LOG(VIDEO,
+              "Mismatched configuration between XF and BP stages - %u/%u texgens, %u/%u colors. "
+              "Skipping draw. Please report on the issue tracker.",
+              xfmem.numTexGen.numTexGens.Value(), bpmem.genMode.numtexgens.Value(),
+              xfmem.numChan.numColorChans.Value(), bpmem.genMode.numcolchans.Value());
 
     return;
   }
 
 #if defined(_DEBUG) || defined(DEBUGFAST)
-  PRIM_LOG("frame{}:\n texgen={}, numchan={}, dualtex={}, ztex={}, cole={}, alpe={}, ze={}",
-           g_ActiveConfig.iSaveTargetId, xfmem.numTexGen.numTexGens, xfmem.numChan.numColorChans,
-           xfmem.dualTexTrans.enabled, bpmem.ztex2.op.Value(), bpmem.blendmode.color_update.Value(),
-           bpmem.blendmode.alpha_update.Value(), bpmem.zmode.update_enable.Value());
+  PRIM_LOG("frame%d:\n texgen=%u, numchan=%u, dualtex=%u, ztex=%u, cole=%u, alpe=%u, ze=%u",
+           g_ActiveConfig.iSaveTargetId, static_cast<unsigned>(xfmem.numTexGen.numTexGens.Value()),
+           static_cast<unsigned>(xfmem.numChan.numColorChans.Value()),
+           static_cast<unsigned>(xfmem.dualTexTrans.enabled.Value()),
+           static_cast<unsigned>(bpmem.ztex2.op.Value()),
+           static_cast<unsigned>(bpmem.blendmode.color_update.Value()),
+           static_cast<unsigned>(bpmem.blendmode.alpha_update.Value()),
+           static_cast<unsigned>(bpmem.zmode.update_enable.Value()));
 
   for (u32 i = 0; i < xfmem.numChan.numColorChans; ++i)
   {
     LitChannel* ch = &xfmem.color[i];
-    PRIM_LOG("colchan{}: matsrc={}, light={:#x}, ambsrc={}, diffunc={}, attfunc={}", i,
-             ch->matsource.Value(), ch->GetFullLightMask(), ch->ambsource.Value(),
-             ch->diffusefunc.Value(), ch->attnfunc.Value());
+    PRIM_LOG("colchan%u: matsrc=%u, light=%#x, ambsrc=%u, diffunc=%u, attfunc=%u", i,
+             static_cast<unsigned>(ch->matsource.Value()), ch->GetFullLightMask(),
+             static_cast<unsigned>(ch->ambsource.Value()),
+             static_cast<unsigned>(ch->diffusefunc.Value()),
+             static_cast<unsigned>(ch->attnfunc.Value()));
     ch = &xfmem.alpha[i];
-    PRIM_LOG("alpchan{}: matsrc={}, light={:#x}, ambsrc={}, diffunc={}, attfunc={}", i,
-             ch->matsource.Value(), ch->GetFullLightMask(), ch->ambsource.Value(),
-             ch->diffusefunc.Value(), ch->attnfunc.Value());
+    PRIM_LOG("alpchan%u: matsrc=%u, light=%#x, ambsrc=%u, diffunc=%u, attfunc=%u", i,
+             static_cast<unsigned>(ch->matsource.Value()), ch->GetFullLightMask(),
+             static_cast<unsigned>(ch->ambsource.Value()),
+             static_cast<unsigned>(ch->diffusefunc.Value()),
+             static_cast<unsigned>(ch->attnfunc.Value()));
   }
 
   for (u32 i = 0; i < xfmem.numTexGen.numTexGens; ++i)
@@ -438,17 +445,23 @@ void VertexManagerBase::Flush()
     if (tinfo.texgentype != TexGenType::Regular)
       tinfo.projection = TexSize::ST;
 
-    PRIM_LOG("txgen{}: proj={}, input={}, gentype={}, srcrow={}, embsrc={}, emblght={}, "
-             "postmtx={}, postnorm={}",
-             i, tinfo.projection.Value(), tinfo.inputform.Value(), tinfo.texgentype.Value(),
-             tinfo.sourcerow.Value(), tinfo.embosssourceshift.Value(),
-             tinfo.embosslightshift.Value(), xfmem.postMtxInfo[i].index.Value(),
-             xfmem.postMtxInfo[i].normalize.Value());
+    PRIM_LOG("txgen%u: proj=%u, input=%u, gentype=%u, srcrow=%u, embsrc=%u, emblght=%u, "
+             "postmtx=%u, postnorm=%u",
+             i, static_cast<unsigned>(tinfo.projection.Value()),
+             static_cast<unsigned>(tinfo.inputform.Value()),
+             static_cast<unsigned>(tinfo.texgentype.Value()),
+             static_cast<unsigned>(tinfo.sourcerow.Value()),
+             static_cast<unsigned>(tinfo.embosssourceshift.Value()),
+             static_cast<unsigned>(tinfo.embosslightshift.Value()),
+             static_cast<unsigned>(xfmem.postMtxInfo[i].index.Value()),
+             static_cast<unsigned>(xfmem.postMtxInfo[i].normalize.Value()));
   }
 
-  PRIM_LOG("pixel: tev={}, ind={}, texgen={}, dstalpha={}, alphatest={:#x}",
-           bpmem.genMode.numtevstages.Value() + 1, bpmem.genMode.numindstages.Value(),
-           bpmem.genMode.numtexgens.Value(), bpmem.dstalpha.enable.Value(),
+  PRIM_LOG("pixel: tev=%u, ind=%u, texgen=%u, dstalpha=%u, alphatest=%#x",
+           static_cast<unsigned>(bpmem.genMode.numtevstages.Value()) + 1,
+           static_cast<unsigned>(bpmem.genMode.numindstages.Value()),
+           static_cast<unsigned>(bpmem.genMode.numtexgens.Value()),
+           static_cast<unsigned>(bpmem.dstalpha.enable.Value()),
            (bpmem.alpha_test.hex >> 16) & 0xff);
 #endif
 
@@ -594,9 +607,9 @@ void VertexManagerBase::Flush()
 
   if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens)
   {
-    ERROR_LOG_FMT(VIDEO,
-                  "xf.numtexgens ({}) does not match bp.numtexgens ({}). Error in command stream.",
-                  xfmem.numTexGen.numTexGens, bpmem.genMode.numtexgens.Value());
+    ERROR_LOG(VIDEO,
+              "xf.numtexgens (%u) does not match bp.numtexgens (%u). Error in command stream.",
+              xfmem.numTexGen.numTexGens.Value(), bpmem.genMode.numtexgens.Value());
   }
 }
 

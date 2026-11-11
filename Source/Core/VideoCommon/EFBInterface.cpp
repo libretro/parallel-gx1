@@ -85,7 +85,7 @@ u32 EFBPeekColor(u16 x, u16 y)
   {
     if (alpha_read_mode != PixelEngine::AlphaReadMode::Read00)
     {
-      PanicAlertFmt("Invalid PE alpha read mode: {}", static_cast<u16>(alpha_read_mode));
+      PanicAlert("Invalid PE alpha read mode: %u", (unsigned)(static_cast<u16>(alpha_read_mode)));
     }
     return color & 0x00FFFFFF;
   }

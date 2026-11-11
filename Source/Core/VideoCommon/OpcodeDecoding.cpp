@@ -137,7 +137,7 @@ public:
 
     if (m_in_display_list)
     {
-      WARN_LOG_FMT(VIDEO, "recursive display list detected");
+      WARN_LOG(VIDEO, "recursive display list detected");
     }
     else
     {
@@ -192,13 +192,13 @@ public:
     {
       // 'Zelda Four Swords' calls it and checks the metrics registers after that
       m_cycles += 6;
-      DEBUG_LOG_FMT(VIDEO, "GX 0x44");
+      DEBUG_LOG(VIDEO, "GX 0x44");
     }
     else if (static_cast<Opcode>(opcode) == Opcode::GX_CMD_INVL_VC)
     {
       // Invalidate Vertex Cache
       m_cycles += 6;
-      DEBUG_LOG_FMT(VIDEO, "Invalidate (vertex cache?)");
+      DEBUG_LOG(VIDEO, "Invalidate (vertex cache?)");
     }
     else
     {

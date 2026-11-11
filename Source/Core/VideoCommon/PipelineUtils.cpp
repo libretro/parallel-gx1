@@ -40,8 +40,8 @@ GXPipelineUid ApplyDriverBugs(const GXPipelineUid& in)
       !g_backend_info.bSupportsFramebufferFetch)
   {
     if (!blend.LogicOpApproximationIsExact())
-      WARN_LOG_FMT(VIDEO,
-                   "Approximating logic op with blending, this will produce incorrect rendering.");
+      WARN_LOG(VIDEO,
+               "Approximating logic op with blending, this will produce incorrect rendering.");
     if (blend.LogicOpApproximationWantsShaderHelp())
     {
       ps->emulate_logic_op_with_blend = true;
