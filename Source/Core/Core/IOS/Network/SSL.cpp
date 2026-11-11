@@ -31,8 +31,7 @@ extern "C" void ssl_socket_log_verify_fail(int mode_required, const char* domain
 {
   (void)mode_required;
   std::snprintf(s_verify_info, sizeof(s_verify_info), "%s", verify_info ? verify_info : "");
-  ERROR_LOG_FMT(IOS_SSL, "Certificate for {} refused: {}", domain ? domain : "",
-                s_verify_info);
+  ERROR_LOG(IOS_SSL, "Certificate for %s refused: %s", domain ? domain : "", s_verify_info);
 }
 
 extern "C" void ssl_socket_log_verify_disabled(const char* domain)
@@ -199,8 +198,8 @@ s32 WiiSSLHandshakeStep(WII_SSL* ssl)
     return (want_write && !want_read) ? SSL_ERR_WAGAIN : SSL_ERR_RAGAIN;
   if (s_verify_info[0])
     return VerifyError();
-  ERROR_LOG_FMT(IOS_SSL, "Handshake with {} failed ({})", ssl->hostname,
-                ssl_socket_last_error(ssl->tls));
+  ERROR_LOG(IOS_SSL, "Handshake with %s failed (%d)", ssl->hostname,
+            ssl_socket_last_error(ssl->tls));
   return SSL_ERR_FAILED;
 }
 
@@ -297,13 +296,13 @@ static bool LoadCertFile(File::FileLoan* cert, const char* name, const u8* corre
 
   if (!File::LoanFile(cert, path))
   {
-    ERROR_LOG_FMT(IOS_SSL, "Failed to read {}", path);
+    ERROR_LOG(IOS_SSL, "Failed to read %s", path);
     if (!silent)
     {
-      PanicAlertFmtT("IOS: Could not read a file required for SSL services ({0}). Please refer to "
-                     "https://dolphin-emu.org/docs/guides/wii-network-guide/ for "
-                     "instructions on setting up Wii networking.",
-                     path);
+      PanicAlert("IOS: Could not read a file required for SSL services (%s). Please refer to "
+                 "https://dolphin-emu.org/docs/guides/wii-network-guide/ for "
+                 "instructions on setting up Wii networking.",
+                 path);
     }
     return false;
   }
@@ -313,13 +312,13 @@ static bool LoadCertFile(File::FileLoan* cert, const char* name, const u8* corre
   sha256_stream_final(&sha, hash);
   if (std::memcmp(hash, correct_hash, sizeof(hash)) != 0)
   {
-    ERROR_LOG_FMT(IOS_SSL, "Wrong hash for {}", path);
+    ERROR_LOG(IOS_SSL, "Wrong hash for %s", path);
     if (!silent)
     {
-      PanicAlertFmtT("IOS: A file required for SSL services ({0}) is invalid. Please refer to "
-                     "https://dolphin-emu.org/docs/guides/wii-network-guide/ for "
-                     "instructions on setting up Wii networking.",
-                     path);
+      PanicAlert("IOS: A file required for SSL services (%s) is invalid. Please refer to "
+                 "https://dolphin-emu.org/docs/guides/wii-network-guide/ for "
+                 "instructions on setting up Wii networking.",
+                 path);
     }
     File::EndLoan(cert);
     return false;
@@ -398,14 +397,14 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
       WriteReturnValue(memory, SSL_ERR_FAILED, BufferIn);
     }
 
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_NEW ({}, {}) "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 verifyOption, hostname, BufferIn, BufferInSize, BufferIn2, BufferInSize2,
-                 BufferIn3, BufferInSize3, BufferOut, BufferOutSize, BufferOut2, BufferOutSize2,
-                 BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_NEW (%d, %s) "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             verifyOption, hostname.c_str(), BufferIn, BufferInSize, BufferIn2, BufferInSize2,
+             BufferIn3, BufferInSize3, BufferOut, BufferOutSize, BufferOut2, BufferOutSize2,
+             BufferOut3, BufferOutSize3);
     break;
   }
   case IOCTLV_NET_SSL_SHUTDOWN:
@@ -420,24 +419,24 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     {
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
     }
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_SHUTDOWN "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_SHUTDOWN "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
     break;
   }
   case IOCTLV_NET_SSL_SETROOTCA:
   {
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_SETROOTCA "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_SETROOTCA "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
 
     int sslID = memory.Read_U32(BufferOut) - 1;
     if (IsSSLIDValid(sslID))
@@ -456,7 +455,7 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
       }
 
       WriteReturnValue(memory, ok ? SSL_OK : SSL_ERR_FAILED, BufferIn);
-      INFO_LOG_FMT(IOS_SSL, "IOCTLV_NET_SSL_SETROOTCA = {}", ok);
+      INFO_LOG(IOS_SSL, "IOCTLV_NET_SSL_SETROOTCA = %s", ok ? "true" : "false");
     }
     else
     {
@@ -466,13 +465,13 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
   }
   case IOCTLV_NET_SSL_SETBUILTINCLIENTCERT:
   {
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
 
     int sslID = memory.Read_U32(BufferOut) - 1;
     if (IsSSLIDValid(sslID))
@@ -508,24 +507,25 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
       ssl->clicert_len = ssl->have_client_cert ? cert_len : 0;
       WriteReturnValue(memory, ssl->have_client_cert ? SSL_OK : SSL_ERR_FAILED, BufferIn);
 
-      INFO_LOG_FMT(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT = {}", ssl->have_client_cert);
+      INFO_LOG(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT = %s",
+               ssl->have_client_cert ? "true" : "false");
     }
     else
     {
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
-      INFO_LOG_FMT(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT invalid sslID = {}", sslID);
+      INFO_LOG(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT invalid sslID = %d", sslID);
     }
     break;
   }
   case IOCTLV_NET_SSL_REMOVECLIENTCERT:
   {
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_REMOVECLIENTCERT "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_REMOVECLIENTCERT "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
 
     int sslID = memory.Read_U32(BufferOut) - 1;
     if (IsSSLIDValid(sslID))
@@ -539,7 +539,7 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     else
     {
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
-      INFO_LOG_FMT(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT invalid sslID = {}", sslID);
+      INFO_LOG(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINCLIENTCERT invalid sslID = %d", sslID);
     }
     break;
   }
@@ -557,19 +557,19 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
         ok = AddRootCA(ssl, root_ca.data, size_t(root_ca.size));
       File::EndLoan(&root_ca);
       WriteReturnValue(memory, ok ? SSL_OK : SSL_ERR_FAILED, BufferIn);
-      INFO_LOG_FMT(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINROOTCA = {}", ok);
+      INFO_LOG(IOS_SSL, "IOCTLV_NET_SSL_SETBUILTINROOTCA = %s", ok ? "true" : "false");
     }
     else
     {
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
     }
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_SETBUILTINROOTCA "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_SETBUILTINROOTCA "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
     break;
   }
   case IOCTLV_NET_SSL_CONNECT:
@@ -580,20 +580,20 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
       WII_SSL* ssl = &_SSL[sslID];
       ssl->sockfd = memory.Read_U32(BufferOut2);
       ssl->hostfd = GetEmulationKernel().GetSocketManager()->GetHostSocket(ssl->sockfd);
-      INFO_LOG_FMT(IOS_SSL, "IOCTLV_NET_SSL_CONNECT socket = {}", ssl->sockfd);
+      INFO_LOG(IOS_SSL, "IOCTLV_NET_SSL_CONNECT socket = %d", ssl->sockfd);
       WriteReturnValue(memory, SSL_OK, BufferIn);
     }
     else
     {
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
     }
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_CONNECT "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_CONNECT "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
     break;
   }
   case IOCTLV_NET_SSL_DOHANDSHAKE:
@@ -624,14 +624,14 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     {
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
     }
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_WRITE "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
-    INFO_LOG_FMT(IOS_SSL, "{}", memory.GetString(BufferOut2));
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_WRITE "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL, "%s", memory.GetString(BufferOut2).c_str());
     break;
   }
   case IOCTLV_NET_SSL_READ:
@@ -649,13 +649,13 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
     }
 
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_READ({})"
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 ret, BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_READ(%d)"
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             ret, BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
+             BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
     break;
   }
   case IOCTLV_NET_SSL_SETROOTCADEFAULT:
@@ -669,24 +669,24 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     {
       WriteReturnValue(memory, SSL_ERR_ID, BufferIn);
     }
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_SETROOTCADEFAULT "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_SETROOTCADEFAULT "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
     break;
   }
   case IOCTLV_NET_SSL_SETCLIENTCERTDEFAULT:
   {
-    INFO_LOG_FMT(IOS_SSL,
-                 "IOCTLV_NET_SSL_SETCLIENTCERTDEFAULT "
-                 "BufferIn: ({:08x}, {}), BufferIn2: ({:08x}, {}), "
-                 "BufferIn3: ({:08x}, {}), BufferOut: ({:08x}, {}), "
-                 "BufferOut2: ({:08x}, {}), BufferOut3: ({:08x}, {})",
-                 BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3,
-                 BufferOut, BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
+    INFO_LOG(IOS_SSL,
+             "IOCTLV_NET_SSL_SETCLIENTCERTDEFAULT "
+             "BufferIn: (%08x, %u), BufferIn2: (%08x, %u), "
+             "BufferIn3: (%08x, %u), BufferOut: (%08x, %u), "
+             "BufferOut2: (%08x, %u), BufferOut3: (%08x, %u)",
+             BufferIn, BufferInSize, BufferIn2, BufferInSize2, BufferIn3, BufferInSize3, BufferOut,
+             BufferOutSize, BufferOut2, BufferOutSize2, BufferOut3, BufferOutSize3);
 
     int sslID = memory.Read_U32(BufferOut) - 1;
     if (IsSSLIDValid(sslID))

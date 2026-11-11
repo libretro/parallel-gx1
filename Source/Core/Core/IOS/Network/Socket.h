@@ -279,8 +279,9 @@ public:
     auto socket_entry = WiiSockets.find(sock);
     if (socket_entry == WiiSockets.end())
     {
-      ERROR_LOG_FMT(IOS_NET, "DoSock: Error, fd not found ({:08x}, {:08X}, {:08X})", sock,
-                    request.address, std::to_underlying(type));
+      ERROR_LOG(IOS_NET, "DoSock: Error, fd not found (%08x, %08X, %08X)",
+                static_cast<unsigned>(sock), static_cast<unsigned>(request.address),
+                static_cast<unsigned>(std::to_underlying(type)));
       EnqueueIPCReply(request, -SO_EBADF);
     }
     else

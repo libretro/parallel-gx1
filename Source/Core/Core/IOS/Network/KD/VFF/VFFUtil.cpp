@@ -4,6 +4,7 @@
 #include "Core/IOS/Network/KD/VFF/VFFUtil.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -27,7 +28,7 @@ static DRESULT read_vff_header(IOS::HLE::FS::FileHandle* vff, FATFS* fs)
   IOS::HLE::NWC24::VFFHeader header;
   if (!vff->Read(&header, 1))
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to read VFF header.");
+    ERROR_LOG(IOS_WC24, "Failed to read VFF header.");
     return RES_ERROR;
   }
 
@@ -67,7 +68,7 @@ static DRESULT read_vff_header(IOS::HLE::FS::FileHandle* vff, FATFS* fs)
   }
   else
   {
-    ERROR_LOG_FMT(IOS_WC24, "VFF not FAT12 or 16! Cluster size: {}", cluster_size);
+    ERROR_LOG(IOS_WC24, "VFF not FAT12 or 16! Cluster size: %u", (unsigned)cluster_size);
     return RES_ERROR;
   }
 
@@ -121,21 +122,22 @@ static DRESULT vff_read(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, BYTE* buff, LB
   // We cannot read or write data to the 0th sector in a VFF.
   if (sector == 0)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Attempted to read the 0th sector in the VFF: Invalid VFF?");
+    ERROR_LOG(IOS_WC24, "Attempted to read the 0th sector in the VFF: Invalid VFF?");
     return RES_ERROR;
   }
 
   const u64 offset = static_cast<u64>(sector) * IOS::HLE::NWC24::SECTOR_SIZE - 480;
   if (!vff->Seek(offset, IOS::HLE::FS::SeekMode::Set))
   {
-    ERROR_LOG_FMT(IOS_WC24, "VFF seek failed (offset={})", offset);
+    ERROR_LOG(IOS_WC24, "VFF seek failed (offset=%" PRIu64 ")", (u64)offset);
     return RES_ERROR;
   }
 
   const size_t size = static_cast<size_t>(count) * IOS::HLE::NWC24::SECTOR_SIZE;
   if (!vff->Read(buff, size))
   {
-    ERROR_LOG_FMT(IOS_WC24, "VFF read failed (offset={}, size={})", offset, size);
+    ERROR_LOG(IOS_WC24, "VFF read failed (offset=%" PRIu64 ", size=%" PRIu64 ")", (u64)offset,
+              (u64)size);
     return RES_ERROR;
   }
 
@@ -147,14 +149,14 @@ static DRESULT vff_write(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, const BYTE* b
 {
   if (sector == 0)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Attempted to write to the 0th sector in the VFF: Invalid VFF?");
+    ERROR_LOG(IOS_WC24, "Attempted to write to the 0th sector in the VFF: Invalid VFF?");
     return RES_ERROR;
   }
 
   const u64 offset = static_cast<u64>(sector) * IOS::HLE::NWC24::SECTOR_SIZE - 480;
   if (!vff->Seek(offset, IOS::HLE::FS::SeekMode::Set))
   {
-    ERROR_LOG_FMT(IOS_WC24, "VFF seek failed (offset={})", offset);
+    ERROR_LOG(IOS_WC24, "VFF seek failed (offset=%" PRIu64 ")", (u64)offset);
     return RES_ERROR;
   }
 
@@ -162,7 +164,8 @@ static DRESULT vff_write(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, const BYTE* b
   const auto res = vff->Write(buff, size);
   if (!res)
   {
-    ERROR_LOG_FMT(IOS_WC24, "VFF write failed (offset={}, size={})", offset, size);
+    ERROR_LOG(IOS_WC24, "VFF write failed (offset=%" PRIu64 ", size=%" PRIu64 ")", (u64)offset,
+              (u64)size);
     return RES_ERROR;
   }
 
@@ -179,7 +182,7 @@ static DRESULT vff_ioctl(IOS::HLE::FS::FileHandle* vff, BYTE pdrv, BYTE cmd, voi
     *static_cast<LBA_t*>(buff) = vff->GetStatus()->size / IOS::HLE::NWC24::SECTOR_SIZE;
     return RES_OK;
   default:
-    WARN_LOG_FMT(IOS_WC24, "Unexpected FAT ioctl {}", cmd);
+    WARN_LOG(IOS_WC24, "Unexpected FAT ioctl %u", (unsigned)cmd);
     return RES_OK;
   }
 }
@@ -192,7 +195,7 @@ static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, si
   const auto open_error_code = f_open(&dst, filename.c_str(), FA_CREATE_ALWAYS | FA_WRITE);
   if (open_error_code != FR_OK)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to open file {} in VFF", filename);
+    ERROR_LOG(IOS_WC24, "Failed to open file %s in VFF", filename.c_str());
     return WC24_ERR_FILE_OPEN;
   }
 
@@ -207,15 +210,15 @@ static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, si
         f_write(&dst, tmp_buffer + offset, chunk_size, &written_size);
     if (write_error_code != FR_OK)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to write file {} to VFF: {}", filename,
-                    std::to_underlying(write_error_code));
+      ERROR_LOG(IOS_WC24, "Failed to write file %s to VFF: %u", filename.c_str(),
+                std::to_underlying(write_error_code));
       return WC24_ERR_FILE_WRITE;
     }
 
     if (written_size != chunk_size)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to write bytes of file {} to VFF ({} != {})", filename,
-                    written_size, chunk_size);
+      ERROR_LOG(IOS_WC24, "Failed to write bytes of file %s to VFF (%u != %u)", filename.c_str(),
+                written_size, chunk_size);
       return WC24_ERR_FILE_WRITE;
     }
 
@@ -226,7 +229,7 @@ static ErrorCode WriteFile(const std::string& filename, const u8* tmp_buffer, si
   const auto close_error_code = f_close(&dst);
   if (close_error_code != FR_OK)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to close file {} in VFF", filename);
+    ERROR_LOG(IOS_WC24, "Failed to close file %s in VFF", filename.c_str());
     return WC24_ERR_FILE_CLOSE;
   }
 
@@ -239,7 +242,7 @@ static ErrorCode ReadFile(const std::string& filename, std::vector<u8>& out)
   const auto open_error_code = f_open(&src, filename.c_str(), FA_READ);
   if (open_error_code != FR_OK)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to open file {} in VFF", filename);
+    ERROR_LOG(IOS_WC24, "Failed to open file %s in VFF", filename.c_str());
     return WC24_ERR_FILE_OPEN;
   }
 
@@ -250,15 +253,15 @@ static ErrorCode ReadFile(const std::string& filename, std::vector<u8>& out)
   const auto read_error_code = f_read(&src, out.data(), size, &read_size);
   if (read_error_code != FR_OK)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to read file {} in VFF: {}", filename,
-                  static_cast<u32>(read_error_code));
+    ERROR_LOG(IOS_WC24, "Failed to read file %s in VFF: %u", filename.c_str(),
+              static_cast<u32>(read_error_code));
     return WC24_ERR_FILE_READ;
   }
 
   if (read_size != size)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to read bytes of file {} to VFF ({} != {})", filename,
-                  read_size, size);
+    ERROR_LOG(IOS_WC24, "Failed to read bytes of file %s to VFF (%u != %u)", filename.c_str(),
+              read_size, size);
     return WC24_ERR_FILE_READ;
   }
 
@@ -268,7 +271,7 @@ static ErrorCode ReadFile(const std::string& filename, std::vector<u8>& out)
   const auto close_error_code = f_close(&src);
   if (close_error_code != FR_OK)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to close file {} in VFF", filename);
+    ERROR_LOG(IOS_WC24, "Failed to close file %s in VFF", filename.c_str());
     return WC24_ERR_FILE_CLOSE;
   }
 
@@ -305,7 +308,7 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
     auto temp = fs->OpenFile(PID_KD, PID_KD, path, FS::Mode::ReadWrite);
     if (!temp)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to open VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", path.c_str());
       return_value = WC24_ERR_FILE_OPEN;
       return;
     }
@@ -319,7 +322,7 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
     if (fatfs_mount_error_code != FR_OK)
     {
       // The VFF is most likely broken.
-      ERROR_LOG_FMT(IOS_WC24, "Failed to mount VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", path.c_str());
       return_value = WC24_ERR_FILE_READ;
       return;
     }
@@ -330,7 +333,7 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
     if (vff_mount_error_code != FR_OK)
     {
       // The VFF is most likely broken.
-      ERROR_LOG_FMT(IOS_WC24, "Failed to mount VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", path.c_str());
       return_value = WC24_ERR_FILE_READ;
       return;
     }
@@ -360,7 +363,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename,
     auto temp = fs->OpenFile(PID_KD, PID_KD, path, FS::Mode::ReadWrite);
     if (!temp)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to open VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", path.c_str());
       return_value = WC24_ERR_NOT_FOUND;
       return;
     }
@@ -372,7 +375,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename,
     if (fatfs_mount_error_code != FR_OK)
     {
       // The VFF is most likely broken.
-      ERROR_LOG_FMT(IOS_WC24, "Failed to mount VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", path.c_str());
       return_value = WC24_ERR_BROKEN;
       return;
     }
@@ -383,7 +386,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename,
     if (vff_mount_error_code != FR_OK)
     {
       // The VFF is most likely broken.
-      ERROR_LOG_FMT(IOS_WC24, "Failed to mount VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", path.c_str());
       return_value = WC24_ERR_BROKEN;
       return;
     }
@@ -411,7 +414,7 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
     auto temp = fs->OpenFile(PID_KD, PID_KD, path, FS::Mode::ReadWrite);
     if (!temp)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to open VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", path.c_str());
       return_value = WC24_ERR_NOT_FOUND;
       return;
     }
@@ -423,7 +426,7 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
     if (fatfs_mount_error_code != FR_OK)
     {
       // The VFF is most likely broken.
-      ERROR_LOG_FMT(IOS_WC24, "Failed to mount VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", path.c_str());
       return_value = WC24_ERR_BROKEN;
       return;
     }
@@ -434,7 +437,7 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
     if (vff_mount_error_code != FR_OK)
     {
       // The VFF is most likely broken.
-      ERROR_LOG_FMT(IOS_WC24, "Failed to mount VFF at: {}", path);
+      ERROR_LOG(IOS_WC24, "Failed to mount VFF at: %s", path.c_str());
       return_value = WC24_ERR_BROKEN;
       return;
     }
@@ -442,8 +445,8 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
     const FRESULT unlink_code = f_unlink(filename.c_str());
     if (unlink_code != FR_OK)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to delete file {} in VFF at: {} Code: {}", filename, path,
-                    static_cast<u32>(unlink_code));
+      ERROR_LOG(IOS_WC24, "Failed to delete file %s in VFF at: %s Code: %u", filename.c_str(),
+                path.c_str(), static_cast<u32>(unlink_code));
       return_value = WC24_ERR_BROKEN;
       return;
     }

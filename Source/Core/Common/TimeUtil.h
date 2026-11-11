@@ -10,4 +10,7 @@ namespace Common
 {
 // Threadsafe and error-checking variant of std::localtime()
 std::optional<std::tm> LocalTime(std::time_t time);
+
+// Threadsafe std::gmtime(): fills @out, false when @time cannot be converted.
+bool GmTime(std::time_t time, std::tm* out);
 }  // Namespace Common

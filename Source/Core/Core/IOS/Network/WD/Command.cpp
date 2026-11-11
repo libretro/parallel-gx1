@@ -117,7 +117,7 @@ void NetWDCommandDevice::ProcessRecvRequests()
         result = 0;
       }
 
-      INFO_LOG_FMT(IOS_NET, "Processed request {:08x} (result {:08x})", request, result);
+      INFO_LOG(IOS_NET, "Processed request %08x (result %08x)", request, (unsigned)result);
       GetEmulationKernel().EnqueueIPCReply(Request{system, request}, result);
       queue.pop_front();
     }
@@ -135,7 +135,8 @@ void NetWDCommandDevice::HandleStateChange()
   if (status == target_status)
     return;
 
-  INFO_LOG_FMT(IOS_NET, "{}: Handling status change ({} -> {})", __func__, status, target_status);
+  INFO_LOG(IOS_NET, "%s: Handling status change (%u -> %u)", __func__,
+           static_cast<unsigned>(status), static_cast<unsigned>(target_status));
 
   switch (status)
   {
@@ -166,8 +167,9 @@ void NetWDCommandDevice::HandleStateChange()
     break;
   }
 
-  INFO_LOG_FMT(IOS_NET, "{}: done (status: {} -> {}, target was {})", __func__, status, m_status,
-               target_status);
+  INFO_LOG(IOS_NET, "%s: done (status: %u -> %u, target was %u)", __func__,
+           static_cast<unsigned>(status), static_cast<unsigned>(m_status),
+           static_cast<unsigned>(target_status));
 }
 
 void NetWDCommandDevice::DoState(PointerWrap& p)
@@ -191,12 +193,13 @@ std::optional<IPCReply> NetWDCommandDevice::Open(const OpenRequest& request)
     const auto flags = u32(request.flags);
     const auto mode = WD::Mode(flags & 0xFFFF);
     const auto buffer_flags = flags & 0x7FFF0000;
-    INFO_LOG_FMT(IOS_NET, "Opening with mode={} buffer_flags={:08x}", mode, buffer_flags);
+    INFO_LOG(IOS_NET, "Opening with mode=%u buffer_flags=%08x", static_cast<unsigned>(mode),
+             buffer_flags);
 
     // We don't support anything other than mode 1 and mode 3 at the moment.
     if (mode != WD::Mode::DSCommunications && mode != WD::Mode::AOSSAccessPointScan)
     {
-      ERROR_LOG_FMT(IOS_NET, "Unsupported WD operating mode: {}", mode);
+      ERROR_LOG(IOS_NET, "Unsupported WD operating mode: %u", static_cast<unsigned>(mode));
       return IPCReply(s32(ResultCode::UnavailableCommand));
     }
 
@@ -208,7 +211,7 @@ std::optional<IPCReply> NetWDCommandDevice::Open(const OpenRequest& request)
     }
   }
 
-  INFO_LOG_FMT(IOS_NET, "Opened");
+  INFO_LOG(IOS_NET, "Opened");
   return Device::Open(request);
 }
 
@@ -216,11 +219,11 @@ std::optional<IPCReply> NetWDCommandDevice::Close(u32 fd)
 {
   if (m_ipc_owner_fd < 0 || fd != u32(m_ipc_owner_fd))
   {
-    ERROR_LOG_FMT(IOS_NET, "Invalid close attempt.");
+    ERROR_LOG(IOS_NET, "Invalid close attempt.");
     return IPCReply(u32(ResultCode::InvalidFd));
   }
 
-  INFO_LOG_FMT(IOS_NET, "Closing and resetting status to Idle");
+  INFO_LOG(IOS_NET, "Closing and resetting status to Idle");
   m_target_status = m_status = Status::Idle;
 
   m_ipc_owner_fd = -1;
@@ -237,7 +240,8 @@ IPCReply NetWDCommandDevice::SetLinkState(const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
   const u32 state = memory.Read_U32(vector->address);
-  INFO_LOG_FMT(IOS_NET, "WD_SetLinkState called (state={}, mode={})", state, m_mode);
+  INFO_LOG(IOS_NET, "WD_SetLinkState called (state=%u, mode=%u)", state,
+           static_cast<unsigned>(m_mode));
 
   if (state == 0)
   {
@@ -245,7 +249,8 @@ IPCReply NetWDCommandDevice::SetLinkState(const IOCtlVRequest& request)
       return IPCReply(u32(ResultCode::UnavailableCommand));
 
     m_target_status = Status::Idle;
-    INFO_LOG_FMT(IOS_NET, "WD_SetLinkState: setting target status to {}", m_target_status);
+    INFO_LOG(IOS_NET, "WD_SetLinkState: setting target status to %u",
+             static_cast<unsigned>(m_target_status));
   }
   else
   {
@@ -259,7 +264,8 @@ IPCReply NetWDCommandDevice::SetLinkState(const IOCtlVRequest& request)
     if (m_status != target_status && m_info.enabled_channels == 0)
       return IPCReply(u32(ResultCode::UnavailableCommand));
 
-    INFO_LOG_FMT(IOS_NET, "WD_SetLinkState: setting target status to {}", target_status);
+    INFO_LOG(IOS_NET, "WD_SetLinkState: setting target status to %u",
+             static_cast<unsigned>(target_status));
     m_target_status = target_status;
   }
 
@@ -268,7 +274,8 @@ IPCReply NetWDCommandDevice::SetLinkState(const IOCtlVRequest& request)
 
 IPCReply NetWDCommandDevice::GetLinkState(const IOCtlVRequest& request) const
 {
-  INFO_LOG_FMT(IOS_NET, "WD_GetLinkState called (status={}, mode={})", m_status, m_mode);
+  INFO_LOG(IOS_NET, "WD_GetLinkState called (status=%u, mode=%u)", static_cast<unsigned>(m_status),
+           static_cast<unsigned>(m_mode));
   if (!WD::IsValidMode(m_mode))
     return IPCReply(u32(ResultCode::UnavailableCommand));
 
@@ -288,20 +295,21 @@ IPCReply NetWDCommandDevice::Disassociate(const IOCtlVRequest& request)
   Common::MACAddress mac;
   memory.CopyFromEmu(mac.data(), vector->address, mac.size());
 
-  INFO_LOG_FMT(IOS_NET, "WD_Disassociate: MAC {}", Common::MacAddressToString(mac));
+  INFO_LOG(IOS_NET, "WD_Disassociate: MAC %s", Common::MacAddressToString(mac).c_str());
 
   if (m_mode != WD::Mode::DSCommunications && m_mode != WD::Mode::Unknown5 &&
       m_mode != WD::Mode::Unknown6)
   {
-    ERROR_LOG_FMT(IOS_NET, "WD_Disassociate: cannot disassociate in mode {}", m_mode);
+    ERROR_LOG(IOS_NET, "WD_Disassociate: cannot disassociate in mode %u",
+              static_cast<unsigned>(m_mode));
     return IPCReply(u32(ResultCode::UnavailableCommand));
   }
 
   const auto target_status = GetTargetStatusForMode(m_mode);
   if (m_status != target_status)
   {
-    ERROR_LOG_FMT(IOS_NET, "WD_Disassociate: cannot disassociate in status {} (target {})",
-                  m_status, target_status);
+    ERROR_LOG(IOS_NET, "WD_Disassociate: cannot disassociate in status %u (target %u)",
+              static_cast<unsigned>(m_status), static_cast<unsigned>(target_status));
     return IPCReply(u32(ResultCode::UnavailableCommand));
   }
 

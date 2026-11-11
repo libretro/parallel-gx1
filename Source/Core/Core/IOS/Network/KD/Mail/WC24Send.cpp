@@ -4,6 +4,7 @@
 #include "Core/IOS/Network/KD/Mail/WC24Send.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <cstring>
 #include <ctime>
 #include <memory>
@@ -11,12 +12,14 @@
 #include <string>
 #include <vector>
 
-#include <fmt/chrono.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
+#include "Common/StringUtil.h"
 #include "Common/Swap.h"
+#include "Common/TimeUtil.h"
 
 #include "Core/IOS/FS/FileSystem.h"
 #include "Core/IOS/Network/KD/VFF/VFFUtil.h"
@@ -31,15 +34,15 @@ WC24SendList::WC24SendList(std::shared_ptr<FS::FileSystem> fs) : m_fs{std::move(
 {
   if (!ReadSendList())
   {
-    ERROR_LOG_FMT(IOS_WC24, "There is an error in the Send List for WC24 mail. Mail will be "
-                            "unavailable for this IOS session.");
+    ERROR_LOG(IOS_WC24, "There is an error in the Send List for WC24 mail. Mail will be "
+                        "unavailable for this IOS session.");
     m_is_disabled = true;
 
     // If the Send list is corrupted, delete it.
     const FS::ResultCode result = m_fs->Delete(PID_KD, PID_KD, SEND_LIST_PATH);
     if (result != FS::ResultCode::Success && result != FS::ResultCode::NotFound)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to delete the Send list.");
+      ERROR_LOG(IOS_WC24, "Failed to delete the Send list.");
     }
   }
 }
@@ -49,13 +52,13 @@ bool WC24SendList::ReadSendList()
   const auto file = m_fs->OpenFile(PID_KD, PID_KD, SEND_LIST_PATH, FS::Mode::Read);
   if (!file || !file->Read(&m_data, 1))
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to read the Send list");
+    ERROR_LOG(IOS_WC24, "Failed to read the Send list");
     return false;
   }
 
   if (file->GetStatus()->size != SEND_LIST_SIZE)
   {
-    ERROR_LOG_FMT(IOS_WC24, "The WC24 Send list file is not the correct size.");
+    ERROR_LOG(IOS_WC24, "The WC24 Send list file is not the correct size.");
     return false;
   }
 
@@ -78,7 +81,7 @@ bool WC24SendList::ReadSendList()
 
   const s32 file_error = CheckSendList();
   if (!file_error)
-    ERROR_LOG_FMT(IOS_WC24, "There is an error in the Send List for WC24 mail");
+    ERROR_LOG(IOS_WC24, "There is an error in the Send List for WC24 mail");
 
   return true;
 }
@@ -96,7 +99,7 @@ void WC24SendList::WriteSendList() const
   const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, SEND_LIST_PATH, public_modes);
 
   if (!file || !file->Write(&m_data, 1))
-    ERROR_LOG_FMT(IOS_WC24, "Failed to open or write WC24 Send list file");
+    ERROR_LOG(IOS_WC24, "Failed to open or write WC24 Send list file");
 }
 
 bool WC24SendList::CheckSendList() const
@@ -104,14 +107,14 @@ bool WC24SendList::CheckSendList() const
   // 'WcTf' magic
   if (Common::swap32(m_data.header.magic) != MAIL_LIST_MAGIC)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Send List magic mismatch ({} != {})",
-                  Common::swap32(m_data.header.magic), MAIL_LIST_MAGIC);
+    ERROR_LOG(IOS_WC24, "Send List magic mismatch (%u != %u)", Common::swap32(m_data.header.magic),
+              MAIL_LIST_MAGIC);
     return false;
   }
 
   if (Common::swap32(m_data.header.version) != 4)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Send List version mismatch");
+    ERROR_LOG(IOS_WC24, "Send List version mismatch");
     return false;
   }
 
@@ -156,7 +159,7 @@ ErrorCode WC24SendList::DeleteMessage(u32 index)
 
 std::string WC24SendList::GetMailPath(u32 index) const
 {
-  return fmt::format("mb/s{:07d}.msg", GetEntryId(index));
+  return StringFromFormat("mb/s%07d.msg", GetEntryId(index));
 }
 
 u32 WC24SendList::GetNextEntryId() const
@@ -220,20 +223,24 @@ ErrorCode WC24SendList::AddRegistrationMessages(const WC24FriendList& friend_lis
     m_data.entries[entry_index].id = Common::swap32(msg_id);
 
     const std::time_t t = std::time(nullptr);
+    std::tm gm_time{};
+    char date[64] = "";
+    if (Common::GmTime(t, &gm_time))
+      std::strftime(date, sizeof(date), "%a, %d %b %Y %X", &gm_time);
 
     const std::string formatted_message =
-        fmt::format(MAIL_REGISTRATION_STRING, sender, code, fmt::gmtime(t));
+        StringFromFormat(MAIL_REGISTRATION_STRING, sender, code, date, sender, code);
     const ErrorCode reply = WriteToVFF(SEND_BOX_PATH, GetMailPath(entry_index), m_fs,
                                        reinterpret_cast<const u8*>(formatted_message.data()),
                                        formatted_message.size());
 
     if (reply != WC24_OK)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Error writing registration message to VFF");
+      ERROR_LOG(IOS_WC24, "Error writing registration message to VFF");
       return reply;
     }
 
-    NOTICE_LOG_FMT(IOS_WC24, "Issued registration message for Wii Friend: {}", code);
+    NOTICE_LOG(IOS_WC24, "Issued registration message for Wii Friend: %" PRIu64, (u64)code);
 
     // Update the header and some fields in the body
     m_data.entries[entry_index].msg_size =

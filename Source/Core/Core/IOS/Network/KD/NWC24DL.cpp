@@ -8,6 +8,7 @@
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
+#include "Common/StringUtil.h"
 #include "Common/Swap.h"
 #include "Core/IOS/FS/FileSystem.h"
 #include "Core/IOS/Uids.h"
@@ -20,9 +21,9 @@ NWC24Dl::NWC24Dl(std::shared_ptr<FS::FileSystem> fs) : m_fs{std::move(fs)}
 {
   if (!ReadDlList())
   {
-    ERROR_LOG_FMT(IOS_WC24,
-                  "There is an error in the DL list for WC24. WiiConnect24 downloading will be "
-                  "unavailable for this current IOS session.");
+    ERROR_LOG(IOS_WC24,
+              "There is an error in the DL list for WC24. WiiConnect24 downloading will be "
+              "unavailable for this current IOS session.");
     m_is_disabled = true;
 
     // If the DL list is corrupted, delete it.
@@ -34,7 +35,7 @@ NWC24Dl::NWC24Dl(std::shared_ptr<FS::FileSystem> fs) : m_fs{std::move(fs)}
     // the first load may have deleted the file.
     if (result != FS::ResultCode::Success && result != FS::ResultCode::NotFound)
     {
-      ERROR_LOG_FMT(IOS_WC24, "Failed to delete the DL list.");
+      ERROR_LOG(IOS_WC24, "Failed to delete the DL list.");
     }
   }
 }
@@ -44,7 +45,7 @@ bool NWC24Dl::ReadDlList()
   const auto file = m_fs->OpenFile(PID_KD, PID_KD, DL_LIST_PATH, FS::Mode::Read);
   if (!file || !file->Read(&m_data, 1))
   {
-    ERROR_LOG_FMT(IOS_WC24, "Failed to read the DL list");
+    ERROR_LOG(IOS_WC24, "Failed to read the DL list");
     return false;
   }
 
@@ -56,13 +57,13 @@ bool NWC24Dl::CheckNwc24DlList() const
   // 'WcDl' magic
   if (Magic() != DL_LIST_MAGIC)
   {
-    ERROR_LOG_FMT(IOS_WC24, "DL list magic mismatch");
+    ERROR_LOG(IOS_WC24, "DL list magic mismatch");
     return false;
   }
 
   if (Version() != 1)
   {
-    ERROR_LOG_FMT(IOS_WC24, "DL list version mismatch");
+    ERROR_LOG(IOS_WC24, "DL list version mismatch");
     return false;
   }
 
@@ -82,7 +83,7 @@ void NWC24Dl::WriteDlList() const
   const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, DL_LIST_PATH, public_modes);
 
   if (!file || !file->Write(&m_data, 1))
-    ERROR_LOG_FMT(IOS_WC24, "Failed to open or write WC24 DL list file");
+    ERROR_LOG(IOS_WC24, "Failed to open or write WC24 DL list file");
 }
 
 bool NWC24Dl::DoesEntryExist(u16 entry_index) const
@@ -100,7 +101,7 @@ std::string NWC24Dl::GetDownloadURL(u16 entry_index, std::optional<u8> subtask_i
   if (subtask_id &&
       Common::ExtractBit(Common::swap32(m_data.entries[entry_index].subtask_bitmask), 1))
   {
-    url.append(fmt::format(".{:02d}", *subtask_id));
+    url.append(StringFromFormat(".%02d", (unsigned)(*subtask_id)));
   }
 
   return url;
@@ -115,7 +116,7 @@ std::string NWC24Dl::GetVFFContentName(u16 entry_index, std::optional<u8> subtas
   if (subtask_id &&
       Common::ExtractBit(Common::swap32(m_data.entries[entry_index].subtask_bitmask), 0))
   {
-    content.append(fmt::format(".{:02d}", *subtask_id));
+    content.append(StringFromFormat(".%02d", (unsigned)(*subtask_id)));
   }
 
   return content;
@@ -127,7 +128,7 @@ std::string NWC24Dl::GetVFFPath(u16 entry_index) const
   const u32 lower_title_id = Common::swap32(m_data.entries[entry_index].low_title_id);
   const u32 high_title_id = Common::swap32(m_data.entries[entry_index].high_title_id);
 
-  return fmt::format("/title/{0:08x}/{1:08x}/data/wc24dl.vff", lower_title_id, high_title_id);
+  return StringFromFormat("/title/%08x/%08x/data/wc24dl.vff", lower_title_id, high_title_id);
 }
 
 std::optional<WC24PubkMod> NWC24Dl::GetWC24PubkMod(u16 entry_index) const
@@ -138,7 +139,7 @@ std::optional<WC24PubkMod> NWC24Dl::GetWC24PubkMod(u16 entry_index) const
   const u32 high_title_id = Common::swap32(m_data.entries[entry_index].high_title_id);
 
   const std::string path =
-      fmt::format("/title/{0:08x}/{1:08x}/data/wc24pubk.mod", lower_title_id, high_title_id);
+      StringFromFormat("/title/%08x/%08x/data/wc24pubk.mod", lower_title_id, high_title_id);
 
   const auto file = m_fs->OpenFile(PID_KD, PID_KD, path, IOS::HLE::FS::Mode::Read);
   if (!file)

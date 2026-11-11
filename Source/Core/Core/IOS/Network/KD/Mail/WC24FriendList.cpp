@@ -30,7 +30,7 @@ void WC24FriendList::ReadFriendList()
 
   const bool success = CheckFriendList();
   if (!success)
-    ERROR_LOG_FMT(IOS_WC24, "There is an error in the Receive List for WC24 mail");
+    ERROR_LOG(IOS_WC24, "There is an error in the Receive List for WC24 mail");
 }
 
 void WC24FriendList::WriteFriendList() const
@@ -40,7 +40,7 @@ void WC24FriendList::WriteFriendList() const
   const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, FRIEND_LIST_PATH, public_modes);
 
   if (!file || !file->Write(&m_data, 1))
-    ERROR_LOG_FMT(IOS_WC24, "Failed to open or write WC24 Receive list file");
+    ERROR_LOG(IOS_WC24, "Failed to open or write WC24 Receive list file");
 }
 
 bool WC24FriendList::CheckFriendList() const
@@ -48,8 +48,8 @@ bool WC24FriendList::CheckFriendList() const
   // 'WcFl' magic
   if (Common::swap32(m_data.header.magic) != FRIEND_LIST_MAGIC)
   {
-    ERROR_LOG_FMT(IOS_WC24, "Receive List magic mismatch ({} != {})",
-                  Common::swap32(m_data.header.magic), FRIEND_LIST_MAGIC);
+    ERROR_LOG(IOS_WC24, "Receive List magic mismatch (%u != %u)",
+              Common::swap32(m_data.header.magic), FRIEND_LIST_MAGIC);
     return false;
   }
 
