@@ -502,7 +502,7 @@ static void EncodeRGBA6(u8* dst, const u8* src, EFBCopyFormat format, bool yuv)
     break;
 
   default:
-    PanicAlertFmt("Unknown texture copy format: {}\n", format);
+    PanicAlert("Unknown texture copy format: %u\n", static_cast<unsigned>(format));
     break;
   }
 }
@@ -741,7 +741,7 @@ static void EncodeRGBA6halfscale(u8* dst, const u8* src, EFBCopyFormat format, b
     break;
 
   default:
-    PanicAlertFmt("Unknown texture copy format: {}\n", format);
+    PanicAlert("Unknown texture copy format: %u\n", static_cast<unsigned>(format));
     break;
   }
 }
@@ -961,7 +961,7 @@ static void EncodeRGB8(u8* dst, const u8* src, EFBCopyFormat format, bool yuv)
     break;
 
   default:
-    PanicAlertFmt("Unknown texture copy format: {}\n", format);
+    PanicAlert("Unknown texture copy format: %u\n", static_cast<unsigned>(format));
     break;
   }
 }
@@ -1196,7 +1196,7 @@ static void EncodeRGB8halfscale(u8* dst, const u8* src, EFBCopyFormat format, bo
     break;
 
   default:
-    PanicAlertFmt("Unknown texture copy format: {}\n", format);
+    PanicAlert("Unknown texture copy format: %u\n", static_cast<unsigned>(format));
     break;
   }
 }
@@ -1304,7 +1304,7 @@ static void EncodeZ24(u8* dst, const u8* src, EFBCopyFormat format)
     break;
 
   default:
-    PanicAlertFmt("Unknown texture copy format: {}\n", format);
+    PanicAlert("Unknown texture copy format: %u\n", static_cast<unsigned>(format));
     break;
   }
 }
@@ -1418,7 +1418,7 @@ static void EncodeZ24halfscale(u8* dst, const u8* src, EFBCopyFormat format)
     break;
 
   default:
-    PanicAlertFmt("Unknown texture copy format: {}\n", format);
+    PanicAlert("Unknown texture copy format: %u\n", static_cast<unsigned>(format));
     break;
   }
 }

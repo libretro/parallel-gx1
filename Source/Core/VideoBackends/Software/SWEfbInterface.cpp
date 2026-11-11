@@ -56,7 +56,8 @@ static void SetPixelAlphaOnly(u32 offset, u8 a)
   }
   break;
   default:
-    ERROR_LOG_FMT(VIDEO, "Unsupported pixel format: {}", bpmem.zcontrol.pixel_format);
+    ERROR_LOG(VIDEO, "Unsupported pixel format: %u",
+              static_cast<unsigned>(bpmem.zcontrol.pixel_format.Value()));
     break;
   }
 }
@@ -97,7 +98,8 @@ static void SetPixelColorOnly(u32 offset, u8* rgb)
   }
   break;
   default:
-    ERROR_LOG_FMT(VIDEO, "Unsupported pixel format: {}", bpmem.zcontrol.pixel_format);
+    ERROR_LOG(VIDEO, "Unsupported pixel format: %u",
+              static_cast<unsigned>(bpmem.zcontrol.pixel_format.Value()));
     break;
   }
 }
@@ -139,7 +141,8 @@ static void SetPixelAlphaColor(u32 offset, u8* color)
   }
   break;
   default:
-    ERROR_LOG_FMT(VIDEO, "Unsupported pixel format: {}", bpmem.zcontrol.pixel_format);
+    ERROR_LOG(VIDEO, "Unsupported pixel format: %u",
+              static_cast<unsigned>(bpmem.zcontrol.pixel_format.Value()));
     break;
   }
 }
@@ -166,7 +169,8 @@ static u32 GetPixelColor(u32 offset)
     return 0xff | ((src & 0x00ffffff) << 8);
 
   default:
-    ERROR_LOG_FMT(VIDEO, "Unsupported pixel format: {}", bpmem.zcontrol.pixel_format);
+    ERROR_LOG(VIDEO, "Unsupported pixel format: %u",
+              static_cast<unsigned>(bpmem.zcontrol.pixel_format.Value()));
     return 0;
   }
 }
@@ -195,7 +199,8 @@ static void SetPixelDepth(u32 offset, u32 depth)
   }
   break;
   default:
-    ERROR_LOG_FMT(VIDEO, "Unsupported pixel format: {}", bpmem.zcontrol.pixel_format);
+    ERROR_LOG(VIDEO, "Unsupported pixel format: %u",
+              static_cast<unsigned>(bpmem.zcontrol.pixel_format.Value()));
     break;
   }
 }
@@ -220,7 +225,8 @@ static u32 GetPixelDepth(u32 offset)
   }
   break;
   default:
-    ERROR_LOG_FMT(VIDEO, "Unsupported pixel format: {}", bpmem.zcontrol.pixel_format);
+    ERROR_LOG(VIDEO, "Unsupported pixel format: %u",
+              static_cast<unsigned>(bpmem.zcontrol.pixel_format.Value()));
     break;
   }
 
@@ -579,7 +585,7 @@ void EncodeXFB(u8* xfb_in_ram, u32 memory_stride, const MathUtil::Rectangle<int>
 {
   if (!xfb_in_ram)
   {
-    WARN_LOG_FMT(VIDEO, "Tried to copy to invalid XFB address");
+    WARN_LOG(VIDEO, "Tried to copy to invalid XFB address");
     return;
   }
 
@@ -594,7 +600,7 @@ void EncodeXFB(u8* xfb_in_ram, u32 memory_stride, const MathUtil::Rectangle<int>
   // copy always has an even width, which might not be true.
   if (left & 1 || right & 1)
   {
-    WARN_LOG_FMT(VIDEO, "Trying to copy XFB to from unaligned EFB source");
+    WARN_LOG(VIDEO, "Trying to copy XFB to from unaligned EFB source");
     // this will show up as wrongly encoded
   }
 
@@ -698,7 +704,7 @@ bool ZCompare(u16 x, u16 y, u32 z)
     break;
   default:
     pass = false;
-    ERROR_LOG_FMT(VIDEO, "Bad Z compare mode {}", bpmem.zmode.func);
+    ERROR_LOG(VIDEO, "Bad Z compare mode %u", static_cast<unsigned>(bpmem.zmode.func.Value()));
     break;
   }
 

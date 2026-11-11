@@ -44,7 +44,7 @@ static inline void WrapCoord(int* coordp, WrapMode wrap_mode, int image_size)
   }
   default:
     // Hardware testing indicates that wrap_mode set to 3 behaves the same as clamp.
-    PanicAlertFmt("Invalid wrap mode: {}", wrap_mode);
+    PanicAlert("Invalid wrap mode: %u", static_cast<unsigned>(wrap_mode));
     coord = std::clamp(coord, 0, image_size - 1);
     break;
   }

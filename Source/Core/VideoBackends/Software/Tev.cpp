@@ -68,7 +68,7 @@ void Tev::SetRasColor(RasColorChan colorChan, u32 swaptable)
   default:
   {
     if (colorChan != RasColorChan::Zero)
-      PanicAlertFmt("Invalid ras color channel: {}", colorChan);
+      PanicAlert("Invalid ras color channel: %u", static_cast<unsigned>(colorChan));
 
     RasColor = TevColor::All(0);
   }
@@ -125,7 +125,7 @@ void Tev::DrawColorCompare(const TevStageCombiner::ColorCombiner& cc, const Inpu
       break;
 
     default:
-      PanicAlertFmt("Invalid compare mode {}", cc.compare_mode);
+      PanicAlert("Invalid compare mode %u", static_cast<unsigned>(cc.compare_mode.Value()));
       continue;
     }
 
@@ -179,7 +179,7 @@ void Tev::DrawAlphaCompare(const TevStageCombiner::AlphaCombiner& ac, const Inpu
     break;
 
   default:
-    PanicAlertFmt("Invalid compare mode {}", ac.compare_mode);
+    PanicAlert("Invalid compare mode %u", static_cast<unsigned>(ac.compare_mode.Value()));
     return;
   }
 
@@ -210,7 +210,7 @@ static bool AlphaCompare(int alpha, int ref, CompareMode comp)
   case CompareMode::NEqual:
     return alpha != ref;
   default:
-    PanicAlertFmt("Invalid compare mode {}", comp);
+    PanicAlert("Invalid compare mode %u", static_cast<unsigned>(comp));
     return true;
   }
 }
@@ -231,7 +231,7 @@ static bool TevAlphaTest(int alpha)
   case AlphaTestOp::Xnor:
     return !(comp0 ^ comp1);
   default:
-    PanicAlertFmt("Invalid AlphaTestOp {}", bpmem.alpha_test.logic);
+    PanicAlert("Invalid AlphaTestOp %u", static_cast<unsigned>(bpmem.alpha_test.logic.Value()));
     return true;
   }
 }
@@ -255,7 +255,7 @@ static inline s32 WrapIndirectCoord(s32 coord, IndTexWrap wrapMode)
   case IndTexWrap::ITW_0:
     return 0;
   default:
-    PanicAlertFmt("Invalid indirect wrap mode {}", wrapMode);
+    PanicAlert("Invalid indirect wrap mode %u", static_cast<unsigned>(wrapMode));
     return 0;
   }
 }
@@ -283,7 +283,7 @@ void Tev::Indirect(unsigned int stageNum, s32 s, s32 t)
     AlphaBump = indmap[TextureSampler::GRN_SMP];
     break;
   default:
-    PanicAlertFmt("Invalid alpha bump {}", indirect.bs);
+    PanicAlert("Invalid alpha bump %u", static_cast<unsigned>(indirect.bs.Value()));
     return;
   }
 
@@ -322,7 +322,7 @@ void Tev::Indirect(unsigned int stageNum, s32 s, s32 t)
     AlphaBump = AlphaBump << 3;
     break;
   default:
-    PanicAlertFmt("Invalid indirect format {}", indirect.fmt);
+    PanicAlert("Invalid indirect format %u", static_cast<unsigned>(indirect.fmt.Value()));
     return;
   }
 
@@ -358,7 +358,8 @@ void Tev::Indirect(unsigned int stageNum, s32 s, s32 t)
       indtevtrans[1] = t * indcoord[1] / 256;
       break;
     default:
-      PanicAlertFmt("Invalid indirect matrix ID {}", indirect.matrix_id);
+      PanicAlert("Invalid indirect matrix ID %u",
+                 static_cast<unsigned>(indirect.matrix_id.Value()));
       return;
     }
 
@@ -561,7 +562,7 @@ void Tev::Draw()
       ztex += RawTexColor[RED_C] << 16 | RawTexColor[GRN_C] << 8 | RawTexColor[BLU_C];
       break;
     default:
-      PanicAlertFmt("Invalid ztex format {}", bpmem.ztex2.type);
+      PanicAlert("Invalid ztex format %u", static_cast<unsigned>(bpmem.ztex2.type.Value()));
     }
 
     if (bpmem.ztex2.op == ZTexOp::Add)

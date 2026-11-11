@@ -255,7 +255,7 @@ static float CalculateLightAttn(const LightPointer* light, Vec3* _ldir, const Ve
     break;
   }
   default:
-    PanicAlertFmt("Invalid attnfunc: {}", chan.attnfunc);
+    PanicAlert("Invalid attnfunc: %u", static_cast<unsigned>(chan.attnfunc.Value()));
   }
 
   return attn;
@@ -283,7 +283,7 @@ static void LightColor(const Vec3& pos, const Vec3& normal, u8 lightNum, const L
     AddScaledIntegerColor(light->color, attn * difAttn, lightCol);
     break;
   default:
-    PanicAlertFmt("Invalid diffusefunc: {}", chan.attnfunc);
+    PanicAlert("Invalid diffusefunc: %u", static_cast<unsigned>(chan.attnfunc.Value()));
   }
 }
 
@@ -309,7 +309,7 @@ static void LightAlpha(const Vec3& pos, const Vec3& normal, u8 lightNum, const L
     lightCol += light->color[0] * attn * difAttn;
     break;
   default:
-    PanicAlertFmt("Invalid diffusefunc: {}", chan.attnfunc);
+    PanicAlert("Invalid diffusefunc: %u", static_cast<unsigned>(chan.attnfunc.Value()));
   }
 }
 
@@ -437,7 +437,7 @@ void TransformTexCoord(const InputVertexData* src, OutputVertexData* dst)
       dst->texCoords[coordNum].z = 1.0f;
       break;
     default:
-      ERROR_LOG_FMT(VIDEO, "Bad tex gen type {}", texinfo.texgentype);
+      ERROR_LOG(VIDEO, "Bad tex gen type %u", static_cast<unsigned>(texinfo.texgentype.Value()));
       break;
     }
   }
