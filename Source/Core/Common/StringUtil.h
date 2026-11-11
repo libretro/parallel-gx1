@@ -23,17 +23,15 @@
 
 std::string StringFromFormatV(const char* format, va_list args);
 
-std::string StringFromFormat(const char* format, ...)
-#if !defined _WIN32
-    // On compilers that support function attributes, this gives StringFromFormat
-    // the same errors and warnings that printf would give.
-    __attribute__((__format__(printf, 1, 2)))
-#endif
-    ;
+std::string StringFromFormat(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
 
 // Cheap!
 bool CharArrayFromFormatV(char* out, int outsize, const char* format, va_list args);
 
+/* In the C locale, whatever the frontend set: for text that is stored. */
+template <size_t Count>
+inline void CharArrayFromFormat(char (&out)[Count], const char* format, ...)
+    DOLPHIN_PRINTF_ATTR(2, 3);
 template <size_t Count>
 inline void CharArrayFromFormat(char (&out)[Count], const char* format, ...)
 {

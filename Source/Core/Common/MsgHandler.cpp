@@ -3,6 +3,8 @@
 
 #include "Common/MsgHandler.h"
 
+#include <cstdarg>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -108,9 +110,9 @@ static bool ShowMessageAlert(std::string_view text, bool yes_no, Common::Log::Lo
 {
   const char* caption = GetCaption(style);
   const Log::LogLevel level = GetMessageAlertLogLevel(style);
-  // Directly call GenericLogFmt rather than using the normal log macros so that we can use the
-  // caller's line file and line number
-  Common::Log::GenericLogFmt<2>(level, log_type, file, line, FMT_STRING("{}: {}"), caption, text);
+  // logged at the caller's file and line
+  Common::Log::GenericLog(level, log_type, file, line, "%s: %.*s", caption,
+                          static_cast<int>(text.size()), text.data());
 
   // Panic alerts.
   if (style == MsgType::Warning && s_abort_on_panic_alert)
@@ -135,6 +137,17 @@ bool MsgAlertFmtImpl(bool yes_no, MsgType style, Common::Log::LogType log_type, 
 {
   const auto message = fmt::vformat(format, args);
 
+  return ShowMessageAlert(message, yes_no, log_type, style, file, line);
+}
+
+bool MsgAlert(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file, int line,
+              const char* format, ...)
+{
+  char message[1024];
+  va_list ap;
+  va_start(ap, format);
+  vsnprintf(message, sizeof(message), format, ap);
+  va_end(ap);
   return ShowMessageAlert(message, yes_no, log_type, style, file, line);
 }
 }  // namespace Common

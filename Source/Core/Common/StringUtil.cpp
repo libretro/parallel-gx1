@@ -135,30 +135,24 @@ std::string StringFromFormat(const char* format, ...)
 
 std::string StringFromFormatV(const char* format, va_list args)
 {
-  char* buf = nullptr;
-#ifdef _WIN32
-  int required = _vscprintf(format, args);
-  buf = new char[required + 1];
-  CharArrayFromFormatV(buf, required + 1, format, args);
-
-  std::string temp = buf;
-  delete[] buf;
-#else
-#if !defined(ANDROID) && !defined(__HAIKU__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+  std::string temp;
+  va_list copy;
+  int length;
+#if !defined(_WIN32) && !defined(ANDROID) && !defined(__HAIKU__) && !defined(__OpenBSD__) &&       \
+    !defined(__NetBSD__)
   locale_t previousLocale = uselocale(GetCLocale());
 #endif
-  if (vasprintf(&buf, format, args) < 0)
+  va_copy(copy, args);
+  length = vsnprintf(nullptr, 0, format, copy);
+  va_end(copy);
+  if (length > 0)
   {
-    ERROR_LOG_FMT(COMMON, "Unable to allocate memory for string");
-    buf = nullptr;
+    temp.resize(static_cast<size_t>(length));
+    vsnprintf(temp.data(), static_cast<size_t>(length) + 1, format, args);
   }
-
-#if !defined(ANDROID) && !defined(__HAIKU__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+#if !defined(_WIN32) && !defined(ANDROID) && !defined(__HAIKU__) && !defined(__OpenBSD__) &&       \
+    !defined(__NetBSD__)
   uselocale(previousLocale);
-#endif
-
-  std::string temp = buf;
-  free(buf);
 #endif
   return temp;
 }

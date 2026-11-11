@@ -4,7 +4,9 @@
 #pragma once
 
 #include <cstddef>
+
 #include <fmt/format.h>
+#include "Common/CommonTypes.h"
 #include "Common/FormatUtil.h"
 
 namespace Common::Log
@@ -97,15 +99,8 @@ void GenericLogFmtImpl(LogLevel level, LogType type, const char* file, int line,
 
 /* A message in printf's terms, formatted into a buffer on the stack (a
  * longer one is cut), only when its type and level are enabled. */
-#if defined(__MINGW32__)
-#define LOG_PRINTF_ATTR __attribute__((format(__MINGW_PRINTF_FORMAT, 5, 6)))
-#elif defined(__GNUC__)
-#define LOG_PRINTF_ATTR __attribute__((format(printf, 5, 6)))
-#else
-#define LOG_PRINTF_ATTR
-#endif
-void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format,
-                ...) LOG_PRINTF_ATTR;
+void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format, ...)
+    DOLPHIN_PRINTF_ATTR(5, 6);
 
 template <std::size_t NumFields, typename S, typename... Args>
 void GenericLogFmt(LogLevel level, LogType type, const char* file, int line, const S& format,

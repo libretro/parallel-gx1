@@ -52,3 +52,13 @@ using DT = Clock::duration;
 using DT_us = std::chrono::duration<double, std::micro>;
 using DT_ms = std::chrono::duration<double, std::milli>;
 using DT_s = std::chrono::duration<double, std::ratio<1>>;
+
+/* Has the compiler check a printf format (argument @f) against the
+ * arguments from @a on. MinGW names the printf its headers picked. */
+#if defined(__MINGW32__)
+#define DOLPHIN_PRINTF_ATTR(f, a) __attribute__((format(__MINGW_PRINTF_FORMAT, f, a)))
+#elif defined(__GNUC__)
+#define DOLPHIN_PRINTF_ATTR(f, a) __attribute__((format(printf, f, a)))
+#else
+#define DOLPHIN_PRINTF_ATTR(f, a)
+#endif

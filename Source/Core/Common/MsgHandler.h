@@ -30,6 +30,11 @@ void RegisterMsgAlertHandler(MsgAlertHandler handler);
 bool MsgAlertFmtImpl(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file,
                      int line, fmt::string_view format, const fmt::format_args& args);
 
+/* An alert in printf's terms, formatted into a buffer on the stack (a
+ * longer one is cut). */
+bool MsgAlert(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file, int line,
+              const char* format, ...) DOLPHIN_PRINTF_ATTR(6, 7);
+
 template <std::size_t NumFields, typename S, typename... Args>
 bool MsgAlertFmt(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file,
                  int line, const S& format, const Args&... args)
@@ -88,6 +93,16 @@ std::string FmtFormatT(const char* string, Args&&... args)
 }  // namespace Common
 
 // Fmt-capable variants of the macros
+
+#define GenericAlert(yes_no, style, log_type, ...)                                                 \
+  Common::MsgAlert(yes_no, style, Common::Log::LogType::log_type, __FILE__, __LINE__, __VA_ARGS__)
+#define SuccessAlert(...) GenericAlert(false, Common::MsgType::Information, MASTER_LOG, __VA_ARGS__)
+#define PanicAlert(...) GenericAlert(false, Common::MsgType::Warning, MASTER_LOG, __VA_ARGS__)
+#define PanicYesNo(...) GenericAlert(true, Common::MsgType::Warning, MASTER_LOG, __VA_ARGS__)
+#define AskYesNo(...) GenericAlert(true, Common::MsgType::Question, MASTER_LOG, __VA_ARGS__)
+#define CriticalAlert(...) GenericAlert(false, Common::MsgType::Critical, MASTER_LOG, __VA_ARGS__)
+#define PanicYesNoAssert(log_type, ...)                                                            \
+  GenericAlert(true, Common::MsgType::Warning, log_type, __VA_ARGS__)
 
 #define GenericAlertFmt(yes_no, style, log_type, format, ...)                                      \
   Common::MsgAlertFmt<Common::CountFmtReplacementFields(format)>(                                  \
