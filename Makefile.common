@@ -5,7 +5,7 @@
 #   ARCH_X86_64 / ARCH_ARM64                 target architecture
 #   OS_WIN / OS_ANDROID / OS_UNIX            OS family (OS_UNIX: Linux, webOS)
 #   OS_APPLE, with OS_MACOS or OS_IOS        Apple (OS_IOS covers iOS and tvOS)
-#   HAVE_LIBUSB HAVE_HIDAPI HAVE_CPPIPC      optional components
+#   HAVE_LIBUSB HAVE_HIDAPI                  optional components
 #   HAVE_VULKAN HAVE_D3D
 #
 # Units only the standalone frontends use are left out.
@@ -744,6 +744,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/BBA/TAPServerBBA.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/BBA/XLINK_KAI_BBA.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/BBA/BuiltIn.cpp \
+	$(CORE_DIR)/Source/Core/Core/HW/EXI/BBA/IPC.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/Modem/TAPServerModem.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/EXI_Channel.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/EXI_Device.cpp \
@@ -1027,10 +1028,6 @@ ifneq (,$(filter 1,$(OS_UNIX) $(OS_ANDROID)))
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/EXI/BBA/TAP_Unix.cpp
 endif
-ifeq ($(HAVE_CPPIPC),1)
-   DOLPHIN_SOURCES_CXX += \
-	$(CORE_DIR)/Source/Core/Core/HW/EXI/BBA/IPC.cpp
-endif
 ifeq ($(OS_WIN),1)
    DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Logging/ConsoleListenerWin.cpp \
@@ -1116,32 +1113,6 @@ ifeq ($(OS_ANDROID),1)
    DOLPHIN_SOURCES_CXX := $(filter-out $(SRC_DIR)/InputCommon/GCAdapter.cpp,$(DOLPHIN_SOURCES_CXX))
 endif
 
-# CPPIPC
-CPPIPC_SOURCES_C :=
-CPPIPC_SOURCES_CXX :=
-CPPIPC_SOURCES_ASM :=
-CPPIPC_SOURCES_OBJCXX :=
-CPPIPC_SOURCES_C += \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/platform/platform.c
-CPPIPC_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/buffer.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/ipc.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/shm.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/sync/condition.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/sync/mutex.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/sync/semaphore.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/sync/waiter.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/platform/platform.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/imp/codecvt.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/imp/fmt.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/imp/nameof.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/imp/system.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/bytes_allocator.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/central_cache_allocator.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/monotonic_buffer_resource.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/new.cpp \
-	$(CORE_DIR)/Externals/cpp-ipc/cpp-ipc/src/libipc/mem/new_delete_resource.cpp
-
 # ----------------------------------------------------------------------------
 # Per-library flags
 # ----------------------------------------------------------------------------
@@ -1206,10 +1177,6 @@ endif
 
 
 
-CPPIPC_FLAGS := -w -O2 -DUNICODE -D_UNICODE -fexceptions \
-	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include -I$(EXT_DIR)/cpp-ipc/cpp-ipc/src \
-	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/src/libipc/platform/linux
-CPPIPC_CXXFLAGS := -std=gnu++17
 
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
@@ -1225,14 +1192,10 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
 	-I$(EXT_DIR)/FatFs \
-	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include \
 	-isystem $(EXT_DIR)/libusb/libusb/libusb -isystem $(EXT_DIR)/watcher/watcher/include \
 	-Wall -Wtype-limits -Wsign-compare -Wignored-qualifiers -Wuninitialized -Wshadow \
 	-Winit-self -Wmissing-declarations -Wimplicit-fallthrough -Werror=format -Wno-trigraphs
 DOLPHIN_CXXFLAGS := -std=c++23
-ifeq ($(HAVE_CPPIPC),1)
-   DOLPHIN_FLAGS += -DHAVE_CPPIPC
-endif
 ifeq ($(HAVE_HIDAPI),1)
    DOLPHIN_FLAGS += -DHAVE_HIDAPI=1
 endif
@@ -1277,7 +1240,4 @@ ifeq ($(HAVE_LIBUSB),1)
 endif
 ifeq ($(HAVE_HIDAPI),1)
    LIB_GROUPS += HIDAPI
-endif
-ifeq ($(HAVE_CPPIPC),1)
-   LIB_GROUPS += CPPIPC
 endif

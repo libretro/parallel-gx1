@@ -533,9 +533,7 @@ static struct retro_core_option_v2_definition option_defs[] = {
         { "10",  "Ethernet XLink" },    // EXIDeviceType::EthernetXLink
         { "11",  "Ethernet TapServer" },// EXIDeviceType::EthernetTapServer
         { "12",  "Ethernet Built-In" }, // EXIDeviceType::EthernetBuiltIn
-#ifdef HAVE_CPPIPC
         { "14",  "Ethernet IPC" },      // EXIDeviceType::EthernetIPC
-#endif
         { "13",  "Modem TapServer" },   // EXIDeviceType::ModemTapServer
         { "6",   "Baseboard" },         // EXIDeviceType::Baseboard
         { nullptr, nullptr }

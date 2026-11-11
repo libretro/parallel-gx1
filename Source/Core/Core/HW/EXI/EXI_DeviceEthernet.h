@@ -12,12 +12,8 @@
 #endif
 
 #include <SFML/Network.hpp>
-#ifdef HAVE_CPPIPC
-#include <libipc/ipc.h>
-
 #include <retro_atomic.h>
 #include <rthreads/rthreads.h>
-#endif
 
 #include <queues/mpsc_stack.h>
 #include "Common/Flag.h"
@@ -502,8 +498,6 @@ private:
   public:
     explicit IPCBBAInterface(CEXIETHERNET* const eth_ref) : NetworkInterface(eth_ref) {}
 
-#ifdef HAVE_CPPIPC
-
     bool Activate() override;
     void Deactivate() override;
     bool IsActivated() override;
@@ -515,23 +509,14 @@ private:
   private:
     void ReadThreadHandler();
 
-    bool m_active{};
-    ipc::channel m_channel;
+    // A UDP socket on the loopback, on one port of a small range; every
+    // frame goes to the other ports of the range, so the instances on one
+    // machine share a segment.
+    int m_fd = -1;
+    u16 m_port = 0;
     sthread_t* m_read_thread = nullptr;
-    Common::Flag m_read_enabled;
-    Common::Flag m_read_thread_shutdown;
-
-#else
-
-    bool Activate() override { return false; }
-    void Deactivate() override {}
-    bool IsActivated() override { return false; }
-    bool SendFrame(const u8* const frame, const u32 size) override { return false; }
-    bool RecvInit() override { return false; }
-    void RecvStart() override {}
-    void RecvStop() override {}
-
-#endif
+    retro_atomic_int_t m_read_enabled{};
+    retro_atomic_int_t m_read_thread_shutdown{};
   };
 
   std::unique_ptr<NetworkInterface> m_network_interface;

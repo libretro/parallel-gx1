@@ -6,8 +6,6 @@ Dolphin includes or links code of the following third-party software projects:
    [LGPLv2.1+](https://git.kernel.org/cgit/bluetooth/bluez.git/tree/COPYING.LIB)
 - [Bochs](http://bochs.sourceforge.net/):
    [LGPLv2.1+](http://bochs.sourceforge.net/cgi-bin/lxr/source/COPYING)
-- [cpp-ipc](https://github.com/mutouyun/cpp-ipc):
-   [MIT](https://github.com/mutouyun/cpp-ipc/blob/master/LICENSE)
 - [cwdemangle](https://github.com/encounter/cwdemangle)
    [CC0-1.0](https://github.com/encounter/cwdemangle/blob/main/LICENSE)
 - [expr](https://github.com/zserge/expr):

@@ -87,7 +87,6 @@ SUBMODULE_FILES := \
    Externals/Vulkan-Headers/include/vulkan/vulkan.h \
    Externals/watcher/watcher/include/wtr/watcher.hpp \
    Externals/SFML/SFML/include/SFML/Network.hpp \
-   Externals/cpp-ipc/cpp-ipc/include/libipc/ipc.h \
    Externals/wil/include/wil/common.h
 ifneq (,$(filter-out clean,$(or $(MAKECMDGOALS),all)))
    SUBMODULES_MISSING := $(filter-out $(wildcard $(SUBMODULE_FILES)),$(SUBMODULE_FILES))
@@ -98,7 +97,6 @@ endif
 
 HAVE_LIBUSB        := 0
 HAVE_HIDAPI        := 0
-HAVE_CPPIPC        := 0
 HAVE_D3D           := 0
 
 FLAGS    :=
@@ -123,7 +121,6 @@ ifneq (,$(filter unix webos,$(platform)))
       HAVE_LIBUSB := 1
       HAVE_HIDAPI := 1
    endif
-   HAVE_CPPIPC := 1
    ifeq ($(LINK_STATIC_LIBCPLUSPLUS),1)
       LDFLAGS += -static-libgcc -static-libstdc++
    endif
@@ -208,7 +205,6 @@ else
 	-DWINDOWS_FOUNDATION_UNIVERSALAPICONTRACT_VERSION=0x50000
    HAVE_LIBUSB      := 1
    HAVE_HIDAPI      := 1
-   HAVE_CPPIPC      := 1
    HAVE_D3D         := 1
    LDFLAGS += -static-libgcc -static-libstdc++ -static
    LIBS += -lsetupapi -lcfgmgr32 -lshlwapi -liphlpapi -lwinmm -lws2_32 -lbcrypt \
