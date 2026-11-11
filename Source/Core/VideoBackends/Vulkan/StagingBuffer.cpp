@@ -154,8 +154,8 @@ bool StagingBuffer::AllocateBuffer(STAGING_BUFFER_TYPE type, VkDeviceSize size,
       !(vk_heap_flags(g_vulkan_context->GetHeap(), out_alloc) &
         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))
   {
-    WARN_LOG_FMT(VIDEO, "Vulkan: Failed to find a coherent memory type for uploads, this will "
-                        "affect performance.");
+    WARN_LOG(VIDEO, "Vulkan: Failed to find a coherent memory type for uploads, this will "
+                    "affect performance.");
   }
 
   *out_map_ptr = static_cast<char*>(out_alloc->mapped);

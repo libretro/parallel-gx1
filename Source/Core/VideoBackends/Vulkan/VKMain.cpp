@@ -56,14 +56,14 @@ void VideoBackend::InitBackendInfo()
     }
     else
     {
-      PanicAlertFmt("Failed to create Vulkan instance.");
+      PanicAlert("Failed to create Vulkan instance.");
     }
 
     UnloadVulkanLibrary();
   }
   else
   {
-    PanicAlertFmt("Failed to load Vulkan library.");
+    PanicAlert("Failed to load Vulkan library.");
   }
 }
 

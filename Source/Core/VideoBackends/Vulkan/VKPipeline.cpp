@@ -412,7 +412,7 @@ static VkCompareOp GetVulkanCompareOp(CompareMode func)
   case CompareMode::Always:
     return VK_COMPARE_OP_ALWAYS;
   default:
-    PanicAlertFmt("Invalid compare mode {}", func);
+    PanicAlert("Invalid compare mode %u", static_cast<unsigned>(func));
     return VK_COMPARE_OP_ALWAYS;
   }
 }
@@ -624,7 +624,7 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
 
   if (render_pass == VK_NULL_HANDLE)
   {
-    PanicAlertFmt("Failed to get render pass");
+    PanicAlert("Failed to get render pass");
     return nullptr;
   }
 
@@ -642,7 +642,7 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
     pipeline_layout = g_object_cache->GetPipelineLayout(PIPELINE_LAYOUT_UTILITY);
     break;
   default:
-    PanicAlertFmt("Unknown pipeline layout.");
+    PanicAlert("Unknown pipeline layout.");
     return nullptr;
   }
 

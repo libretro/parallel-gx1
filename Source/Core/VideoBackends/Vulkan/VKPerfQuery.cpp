@@ -30,7 +30,7 @@ bool PerfQuery::Initialize()
 {
   if (!CreateQueryPool())
   {
-    PanicAlertFmt("Failed to create query pool");
+    PanicAlert("Failed to create query pool");
     return false;
   }
 

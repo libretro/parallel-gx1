@@ -230,12 +230,12 @@ static u32 getAPIVersion()
       used_version = VK_API_VERSION_1_2;
     else if (supported_version >= VK_API_VERSION_1_1)
       used_version = VK_API_VERSION_1_1;
-    WARN_LOG_FMT(HOST_GPU, "Using Vulkan 1.{}, supported: {}.{}", VK_VERSION_MINOR(used_version),
-                 VK_VERSION_MAJOR(supported_version), VK_VERSION_MINOR(supported_version));
+    WARN_LOG(HOST_GPU, "Using Vulkan 1.%u, supported: %u.%u", VK_VERSION_MINOR(used_version),
+             VK_VERSION_MAJOR(supported_version), VK_VERSION_MINOR(supported_version));
   }
   else
   {
-    WARN_LOG_FMT(HOST_GPU, "Using Vulkan 1.0");
+    WARN_LOG(HOST_GPU, "Using Vulkan 1.0");
   }
   return used_version;
 }
@@ -307,7 +307,7 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
 
   if (extension_count == 0)
   {
-    ERROR_LOG_FMT(VIDEO, "Vulkan: No extensions supported by instance.");
+    ERROR_LOG(VIDEO, "Vulkan: No extensions supported by instance.");
     return false;
   }
 
@@ -338,12 +338,12 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
   }
 
   for (const auto& extension_properties : available_extension_list)
-    INFO_LOG_FMT(VIDEO, "Available extension: {}", extension_properties.extensionName);
+    INFO_LOG(VIDEO, "Available extension: %s", extension_properties.extensionName);
 
   for (const auto& extension_properties : validation_layer_extension_list)
   {
-    INFO_LOG_FMT(VIDEO, "Available extension in validation layer: {}",
-                 extension_properties.extensionName);
+    INFO_LOG(VIDEO, "Available extension in validation layer: %s",
+             extension_properties.extensionName);
   }
 
   auto AddExtension = [&](const char* name, bool required) {
@@ -353,13 +353,13 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
 
     if (extension_supported)
     {
-      INFO_LOG_FMT(VIDEO, "Enabling extension: {}", name);
+      INFO_LOG(VIDEO, "Enabling extension: %s", name);
       extension_list->push_back(name);
       return true;
     }
 
     if (required)
-      ERROR_LOG_FMT(VIDEO, "Vulkan: Missing required extension {}.", name);
+      ERROR_LOG(VIDEO, "Vulkan: Missing required extension %s.", name);
 
     return false;
   };
@@ -374,7 +374,7 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
   }
   else if (enable_debug_utils)
   {
-    WARN_LOG_FMT(VIDEO, "Vulkan: Debug utils requested, but extension is not available.");
+    WARN_LOG(VIDEO, "Vulkan: Debug utils requested, but extension is not available.");
   }
 
   return true;
@@ -510,10 +510,9 @@ void VulkanContext::PopulateBackendInfoFeatures(BackendInfo* backend_info, VkPhy
 
   if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_DISCARD_WITH_EARLY_Z))
   {
-    PanicAlertFmtT(
-        "You are attempting to use the Vulkan backend on an unsupported operating system. "
-        "To prevent visual glitches and artifacts, please use the Metal backend or update "
-        "to macOS Sonoma 14 or newer.");
+    PanicAlert("You are attempting to use the Vulkan backend on an unsupported operating system. "
+               "To prevent visual glitches and artifacts, please use the Metal backend or update "
+               "to macOS Sonoma 14 or newer.");
   }
 }
 
@@ -608,7 +607,7 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
 
   if (extension_count == 0)
   {
-    ERROR_LOG_FMT(VIDEO, "Vulkan: No extensions supported by device.");
+    ERROR_LOG(VIDEO, "Vulkan: No extensions supported by device.");
     return false;
   }
 
@@ -618,18 +617,18 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   ASSERT(res == VK_SUCCESS);
 
   for (const auto& extension_properties : available_extension_list)
-    INFO_LOG_FMT(VIDEO, "Available extension: {}", extension_properties.extensionName);
+    INFO_LOG(VIDEO, "Available extension: %s", extension_properties.extensionName);
 
   auto AddExtension = [&](const char* name, bool required) {
     if (HasExtension(available_extension_list, name))
     {
-      INFO_LOG_FMT(VIDEO, "Enabling extension: {}", name);
+      INFO_LOG(VIDEO, "Enabling extension: %s", name);
       m_device_extensions.push_back(name);
       return true;
     }
 
     if (required)
-      ERROR_LOG_FMT(VIDEO, "Vulkan: Missing required extension {}.", name);
+      ERROR_LOG(VIDEO, "Vulkan: Missing required extension %s.", name);
 
     return false;
   };
@@ -730,11 +729,10 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
 void VulkanContext::WarnMissingDeviceFeatures()
 {
   if (!m_device_info.largePoints)
-    WARN_LOG_FMT(VIDEO, "Vulkan: Missing large points feature. CPU EFB writes will be slower.");
+    WARN_LOG(VIDEO, "Vulkan: Missing large points feature. CPU EFB writes will be slower.");
   if (!m_device_info.occlusionQueryPrecise)
   {
-    WARN_LOG_FMT(VIDEO,
-                 "Vulkan: Missing precise occlusion queries. Perf queries will be inaccurate.");
+    WARN_LOG(VIDEO, "Vulkan: Missing precise occlusion queries. Perf queries will be inaccurate.");
   }
 }
 
@@ -744,14 +742,14 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   vkGetPhysicalDeviceQueueFamilyProperties(m_physical_device, &queue_family_count, nullptr);
   if (queue_family_count == 0)
   {
-    ERROR_LOG_FMT(VIDEO, "No queue families found on specified vulkan physical device.");
+    ERROR_LOG(VIDEO, "No queue families found on specified vulkan physical device.");
     return false;
   }
 
   std::vector<VkQueueFamilyProperties> queue_family_properties(queue_family_count);
   vkGetPhysicalDeviceQueueFamilyProperties(m_physical_device, &queue_family_count,
                                            queue_family_properties.data());
-  INFO_LOG_FMT(VIDEO, "{} vulkan queue families", queue_family_count);
+  INFO_LOG(VIDEO, "%u vulkan queue families", queue_family_count);
 
   // Find graphics and present queues.
   m_graphics_queue_family_index = queue_family_count;
@@ -794,12 +792,12 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   }
   if (m_graphics_queue_family_index == queue_family_count)
   {
-    ERROR_LOG_FMT(VIDEO, "Vulkan: Failed to find an acceptable graphics queue.");
+    ERROR_LOG(VIDEO, "Vulkan: Failed to find an acceptable graphics queue.");
     return false;
   }
   if (surface && m_present_queue_family_index == queue_family_count)
   {
-    ERROR_LOG_FMT(VIDEO, "Vulkan: Failed to find an acceptable present queue.");
+    ERROR_LOG(VIDEO, "Vulkan: Failed to find an acceptable present queue.");
     return false;
   }
 
@@ -918,12 +916,11 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   m_dynamic_logic_op = m_dynamic_blending && m_dynamic_logic_op && vkCmdSetLogicOpEXT &&
                        vkCmdSetLogicOpEnableEXT;
   m_fast_linking = m_fast_linking && m_extended_dynamic_state;
-  INFO_LOG_FMT(VIDEO,
-               "Vulkan: cull mode and depth state {}, blending {}, logic op {}, pipelines {}",
-               m_extended_dynamic_state ? "set per draw" : "in each pipeline",
-               m_dynamic_blending ? "set per draw" : "in each pipeline",
-               m_dynamic_logic_op ? "set per draw" : "in each pipeline",
-               m_fast_linking ? "linked from libraries" : "built whole");
+  INFO_LOG(VIDEO, "Vulkan: cull mode and depth state %s, blending %s, logic op %s, pipelines %s",
+           m_extended_dynamic_state ? "set per draw" : "in each pipeline",
+           m_dynamic_blending ? "set per draw" : "in each pipeline",
+           m_dynamic_logic_op ? "set per draw" : "in each pipeline",
+           m_fast_linking ? "linked from libraries" : "built whole");
 
   // Grab the graphics and present queues.
   vkGetDeviceQueue(m_device, m_graphics_queue_family_index, 0, &m_graphics_queue);
@@ -992,7 +989,7 @@ bool VulkanContext::CreateAllocator(u32 vk_api_version)
   if (!vk_heap_init(&m_heap, m_device, &props, device_props.limits.nonCoherentAtomSize, &fns, 0,
                     0))
   {
-    ERROR_LOG_FMT(VIDEO, "Vulkan: device memory entry points are missing");
+    ERROR_LOG(VIDEO, "Vulkan: device memory entry points are missing");
     return false;
   }
   m_heap_ready = true;
@@ -1004,15 +1001,15 @@ DebugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                    VkDebugUtilsMessageTypeFlagsEXT messageTypes,
                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 {
-  const std::string log_message = fmt::format("Vulkan debug message: {}", pCallbackData->pMessage);
+  const char* const message = pCallbackData->pMessage;
   if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-    ERROR_LOG_FMT(HOST_GPU, "{}", log_message);
+    ERROR_LOG(HOST_GPU, "Vulkan debug message: %s", message);
   else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-    WARN_LOG_FMT(HOST_GPU, "{}", log_message);
+    WARN_LOG(HOST_GPU, "Vulkan debug message: %s", message);
   else if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-    INFO_LOG_FMT(HOST_GPU, "{}", log_message);
+    INFO_LOG(HOST_GPU, "Vulkan debug message: %s", message);
   else
-    DEBUG_LOG_FMT(HOST_GPU, "{}", log_message);
+    DEBUG_LOG(HOST_GPU, "Vulkan debug message: %s", message);
 
   return VK_FALSE;
 }
@@ -1188,8 +1185,8 @@ void VulkanContext::InitDriverDetails()
   }
   else
   {
-    WARN_LOG_FMT(VIDEO, "Unknown Vulkan driver vendor, please report it to us.");
-    WARN_LOG_FMT(VIDEO, "Vendor ID: {:#X}, Device Name: {}", vendor_id, device_name);
+    WARN_LOG(VIDEO, "Unknown Vulkan driver vendor, please report it to us.");
+    WARN_LOG(VIDEO, "Vendor ID: %#X, Device Name: %s", vendor_id, device_name.c_str());
     vendor = DriverDetails::VENDOR_UNKNOWN;
     driver = DriverDetails::DRIVER_UNKNOWN;
   }

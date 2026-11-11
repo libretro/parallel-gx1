@@ -133,7 +133,7 @@ static void ReportFailure(const char* stage_name, const char* text, size_t len, 
   static int counter;
   const std::string path = VideoBackendBase::BadShaderFilename(stage_name, counter++);
 
-  ERROR_LOG_FMT(VIDEO, "rslc could not compile a {} shader: {}", stage_name, err);
+  ERROR_LOG(VIDEO, "rslc could not compile a %s shader: %s", stage_name, err);
   File::CreateFullPath(path);
   File::IOFile file(path, "wb");
   file.WriteBytes(text, len);
@@ -164,7 +164,7 @@ bool Compile(ShaderStage stage, ShaderCode* source, ShaderBinary* spirv)
   ShaderBinaryInit(spirv);
   if (!text)
   {
-    ERROR_LOG_FMT(VIDEO, "The {} shader's header does not fit in front of it", stage_name);
+    ERROR_LOG(VIDEO, "The %s shader's header does not fit in front of it", stage_name);
     return false;
   }
   memset(&opts, 0, sizeof(opts));
@@ -219,7 +219,7 @@ bool CompileBuild(ShaderStage stage, shader_build_fn fn, const void* arg, Shader
   STUTTER_MARK(t);
   if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, flags, &opts, &result))
   {
-    ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
+    ERROR_LOG(VIDEO, "rslc could not build a shader: %s", err);
     return false;
   }
   STUTTER_EMIT_SINCE(t, result.spirv_len);

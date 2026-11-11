@@ -385,7 +385,7 @@ void VKGfx::SetTexture(u32 index, const AbstractTexture* texture)
     {
       if (StateTracker::GetInstance()->InRenderPass())
       {
-        WARN_LOG_FMT(VIDEO, "Transitioning image in render pass in VKGfx::SetTexture()");
+        WARN_LOG(VIDEO, "Transitioning image in render pass in VKGfx::SetTexture()");
         StateTracker::GetInstance()->EndRenderPass();
       }
 
@@ -411,7 +411,7 @@ void VKGfx::SetSamplerState(u32 index, const SamplerState& state)
   VkSampler sampler = g_object_cache->GetSampler(state);
   if (sampler == VK_NULL_HANDLE)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to create sampler");
+    ERROR_LOG(VIDEO, "Failed to create sampler");
     sampler = g_object_cache->GetPointSampler();
   }
 

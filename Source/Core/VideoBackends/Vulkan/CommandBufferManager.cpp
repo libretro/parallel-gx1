@@ -357,8 +357,8 @@ void CommandBufferManager::SubmitCommandBuffer(bool submit_on_worker_thread,
     if (res != VK_SUCCESS)
     {
       LOG_VULKAN_ERROR(res, "vkEndCommandBuffer failed: ");
-      PanicAlertFmt("Failed to end command buffer: {} ({})", VkResultToString(res),
-                    static_cast<int>(res));
+      PanicAlert("Failed to end command buffer: %s (%d)", VkResultToString(res),
+                 static_cast<int>(res));
     }
   }
 
@@ -458,8 +458,8 @@ void CommandBufferManager::SubmitCommandBuffer(u32 command_buffer_index)
   if (res != VK_SUCCESS)
   {
     LOG_VULKAN_ERROR(res, "vkQueueSubmit failed: ");
-    PanicAlertFmt("Failed to submit command buffer: {} ({})", VkResultToString(res),
-                  static_cast<int>(res));
+    PanicAlert("Failed to submit command buffer: %s (%d)", VkResultToString(res),
+               static_cast<int>(res));
   }
 }
 

@@ -120,7 +120,7 @@ VKTexture* VKTexture::Create(const TextureConfig& tex_config, std::string_view n
   }
   else
   {
-    PanicAlertFmt("Unhandled texture type.");
+    PanicAlert("Unhandled texture type.");
     delete texture;
     return nullptr;
   }
@@ -230,7 +230,7 @@ VkFormat VKTexture::GetVkFormatForHostTextureFormat(AbstractTextureFormat format
     return VK_FORMAT_UNDEFINED;
 
   default:
-    PanicAlertFmt("Unhandled texture format.");
+    PanicAlert("Unhandled texture format.");
     return VK_FORMAT_R8G8B8A8_UNORM;
   }
 }
@@ -384,13 +384,12 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
     if (!stream_buffer->ReserveMemory(upload_size, upload_alignment))
     {
       // Execute the command buffer first.
-      WARN_LOG_FMT(VIDEO,
-                   "Executing command list while waiting for space in texture upload buffer");
+      WARN_LOG(VIDEO, "Executing command list while waiting for space in texture upload buffer");
       VKGfx::GetInstance()->ExecuteCommandBuffer(false);
 
       // Try allocating again. This may cause a fence wait.
       if (!stream_buffer->ReserveMemory(upload_size, upload_alignment))
-        PanicAlertFmt("Failed to allocate space in texture upload buffer");
+        PanicAlert("Failed to allocate space in texture upload buffer");
     }
     upload_buffer = stream_buffer->GetBuffer();
     upload_buffer_offset = stream_buffer->GetCurrentOffset();
@@ -404,7 +403,7 @@ void VKTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
                                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     if (!temp_buffer || !temp_buffer->Map())
     {
-      PanicAlertFmt("Failed to allocate staging texture for large texture upload.");
+      PanicAlert("Failed to allocate staging texture for large texture upload.");
       delete temp_buffer;
       return;
     }
@@ -444,8 +443,7 @@ u8* VKTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t
                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
   if (!stream_buffer->ReserveMemory(static_cast<u32>(size), upload_alignment))
   {
-    WARN_LOG_FMT(VIDEO,
-                 "Executing command list while waiting for space in texture upload buffer");
+    WARN_LOG(VIDEO, "Executing command list while waiting for space in texture upload buffer");
     VKGfx::GetInstance()->ExecuteCommandBuffer(false);
     if (!stream_buffer->ReserveMemory(static_cast<u32>(size), upload_alignment))
       return nullptr;

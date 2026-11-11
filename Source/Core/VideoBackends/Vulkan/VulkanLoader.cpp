@@ -50,7 +50,7 @@ bool LoadVulkanLibrary()
 #define VULKAN_MODULE_ENTRY_POINT(name, required)                                                  \
   if (!s_vulkan_module.GetSymbol(#name, &name) && required)                                        \
   {                                                                                                \
-    ERROR_LOG_FMT(VIDEO, "Vulkan: Failed to load required module function {}", #name);             \
+    ERROR_LOG(VIDEO, "Vulkan: Failed to load required module function %s", #name);                 \
     ResetVulkanLibraryFunctionPointers();                                                          \
     s_vulkan_module.Close();                                                                       \
     return false;                                                                                  \
@@ -75,7 +75,7 @@ bool LoadVulkanInstanceFunctions(VkInstance instance)
     *func_ptr = vkGetInstanceProcAddr(instance, name);
     if (!(*func_ptr) && is_required)
     {
-      ERROR_LOG_FMT(HOST_GPU, "Vulkan: Failed to load required instance function {}", name);
+      ERROR_LOG(HOST_GPU, "Vulkan: Failed to load required instance function %s", name);
       required_functions_missing = true;
     }
   };
@@ -95,7 +95,7 @@ bool LoadVulkanDeviceFunctions(VkDevice device)
     *func_ptr = vkGetDeviceProcAddr(device, name);
     if (!(*func_ptr) && is_required)
     {
-      ERROR_LOG_FMT(HOST_GPU, "Vulkan: Failed to load required device function {}", name);
+      ERROR_LOG(HOST_GPU, "Vulkan: Failed to load required device function %s", name);
       required_functions_missing = true;
     }
   };
@@ -192,8 +192,8 @@ const char* VkResultToString(VkResult res)
 void LogVulkanResult(Common::Log::LogLevel level, const char* func_name, const int line,
                      VkResult res, const char* msg)
 {
-  GENERIC_LOG_FMT(Common::Log::LogType::VIDEO, level, "({}:{}) {} ({}: {})", func_name, line, msg,
-                  static_cast<int>(res), VkResultToString(res));
+  GENERIC_LOG(Common::Log::LogType::VIDEO, level, "(%s:%d) %s (%d: %s)", func_name, line, msg,
+              static_cast<int>(res), VkResultToString(res));
 }
 
 }  // namespace Vulkan
