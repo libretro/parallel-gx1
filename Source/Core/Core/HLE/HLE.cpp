@@ -140,7 +140,7 @@ void PatchFunctions(Core::System& system)
         s_hooked_addresses[addr] = i;
         ppc_state.iCache.Invalidate(memory, jit_interface, addr);
       }
-      INFO_LOG_FMT(OSHLE, "Patching {} {:08x}", os_patches[i].name, symbol->address);
+      INFO_LOG(OSHLE, "Patching %s %08x", os_patches[i].name, symbol->address);
     }
   }
 
@@ -167,7 +167,7 @@ void Execute(const Core::CPUThreadGuard& guard, u32 current_pc, u32 hook_index)
   }
   else
   {
-    PanicAlertFmt("HLE system tried to call an undefined HLE function {}.", hook_index);
+    PanicAlert("HLE system tried to call an undefined HLE function %u.", hook_index);
   }
 }
 
@@ -291,8 +291,8 @@ u32 UnpatchRange(Core::System& system, u32 start_addr, u32 end_addr)
   auto i = s_hooked_addresses.lower_bound(start_addr);
   while (i != s_hooked_addresses.end() && i->first < end_addr)
   {
-    INFO_LOG_FMT(OSHLE, "Unpatch HLE hooks [{:08x};{:08x}): {} at {:08x}", start_addr, end_addr,
-                 os_patches[i->second].name, i->first);
+    INFO_LOG(OSHLE, "Unpatch HLE hooks [%08x;%08x): %s at %08x", start_addr, end_addr,
+             os_patches[i->second].name, i->first);
     ppc_state.iCache.Invalidate(memory, jit_interface, i->first);
     i = s_hooked_addresses.erase(i);
     count += 1;
