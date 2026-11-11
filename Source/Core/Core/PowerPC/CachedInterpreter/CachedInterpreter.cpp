@@ -6,8 +6,6 @@
 #include <sstream>
 #include <utility>
 
-#include <fmt/ostream.h>
-
 #include "Common/CommonTypes.h"
 #include "Common/GekkoDisassembler.h"
 #include "Common/Logging/Log.h"

@@ -873,7 +873,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/MemTools.cpp \
 	$(CORE_DIR)/Source/Core/Core/NetworkCaptureLogger.cpp \
 	$(CORE_DIR)/Source/Core/Core/PatchEngine.cpp \
-	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter_Disassembler.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreterBlockCache.cpp \
 	$(CORE_DIR)/Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreterEmitter.cpp \
