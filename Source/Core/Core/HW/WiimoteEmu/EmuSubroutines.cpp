@@ -27,7 +27,8 @@ void Wiimote::HandleReportMode(const OutputReportMode& dr)
   if (!DataReportBuilder::IsValidMode(dr.mode))
   {
     // A real wiimote ignores the entire message if the mode is invalid.
-    WARN_LOG_FMT(WIIMOTE, "Game requested invalid report mode: {:#04x}", static_cast<u8>(dr.mode));
+    WARN_LOG(WIIMOTE, "Game requested invalid report mode: %#04x",
+             (unsigned)(static_cast<u8>(dr.mode)));
     return;
   }
 
@@ -48,8 +49,8 @@ void Wiimote::InvokeHandler(H&& handler, const WiimoteCommon::OutputReportGeneri
 {
   if (size < sizeof(T))
   {
-    ERROR_LOG_FMT(WIIMOTE, "InvokeHandler: report: {:#04x} invalid size: {}",
-                  static_cast<u8>(rpt.rpt_id), size);
+    ERROR_LOG(WIIMOTE, "InvokeHandler: report: %#04x invalid size: %u",
+              (unsigned)(static_cast<u8>(rpt.rpt_id)), size);
     return;
   }
 
@@ -70,7 +71,7 @@ void Wiimote::InterruptDataOutput(const u8* data, u32 size)
 {
   if (size == 0)
   {
-    ERROR_LOG_FMT(WIIMOTE, "OutputData: zero sized data");
+    ERROR_LOG(WIIMOTE, "OutputData: zero sized data");
     return;
   }
 
@@ -79,7 +80,7 @@ void Wiimote::InterruptDataOutput(const u8* data, u32 size)
 
   if (rpt_size == 0)
   {
-    ERROR_LOG_FMT(WIIMOTE, "OutputData: zero sized report");
+    ERROR_LOG(WIIMOTE, "OutputData: zero sized report");
     return;
   }
 
@@ -123,7 +124,7 @@ void Wiimote::InterruptDataOutput(const u8* data, u32 size)
     InvokeHandler<OutputReportEnableFeature>(&Wiimote::HandleIRLogicEnable2, rpt, rpt_size);
     break;
   default:
-    PanicAlertFmt("HidOutputReport: Unknown report ID {:#04x}", static_cast<u8>(rpt.rpt_id));
+    PanicAlert("HidOutputReport: Unknown report ID %#04x", (unsigned)(static_cast<u8>(rpt.rpt_id)));
     break;
   }
 }
@@ -154,8 +155,8 @@ void Wiimote::HandleExtensionSwap(ExtensionNumber desired_extension_number,
 
   if (m_is_motion_plus_attached && !desired_motion_plus)
   {
-    INFO_LOG_FMT(WIIMOTE, "Detaching Motion Plus (Wiimote {} in slot {})", m_index,
-                 m_bt_device_index);
+    INFO_LOG(WIIMOTE, "Detaching Motion Plus (Wiimote %u in slot %u)", (unsigned)m_index,
+             (unsigned)m_bt_device_index);
 
     // M+ is attached and it's not wanted, so remove it.
     m_extension_port.AttachExtension(GetNoneExtension());
@@ -181,8 +182,8 @@ void Wiimote::HandleExtensionSwap(ExtensionNumber desired_extension_number,
     }
     else
     {
-      INFO_LOG_FMT(WIIMOTE, "Attaching Motion Plus (Wiimote {} in slot {})", m_index,
-                   m_bt_device_index);
+      INFO_LOG(WIIMOTE, "Attaching Motion Plus (Wiimote %u in slot %u)", (unsigned)m_index,
+               (unsigned)m_bt_device_index);
 
       // No extension attached so attach M+.
       m_is_motion_plus_attached = true;
@@ -198,8 +199,8 @@ void Wiimote::HandleExtensionSwap(ExtensionNumber desired_extension_number,
     // A different extension is wanted (either by user or by the M+ logic above)
     if (GetActiveExtensionNumber() != ExtensionNumber::NONE)
     {
-      INFO_LOG_FMT(WIIMOTE, "Detaching Extension (Wiimote {} in slot {})", m_index,
-                   m_bt_device_index);
+      INFO_LOG(WIIMOTE, "Detaching Extension (Wiimote %u in slot %u)", (unsigned)m_index,
+               (unsigned)m_bt_device_index);
 
       // First we must detach the current extension.
       // The next call will change to the new extension if needed.
@@ -207,8 +208,9 @@ void Wiimote::HandleExtensionSwap(ExtensionNumber desired_extension_number,
     }
     else
     {
-      INFO_LOG_FMT(WIIMOTE, "Switching to Extension {} (Wiimote {} in slot {})",
-                   std::to_underlying(desired_extension_number), m_index, m_bt_device_index);
+      INFO_LOG(WIIMOTE, "Switching to Extension %u (Wiimote %u in slot %u)",
+               (unsigned)std::to_underlying(desired_extension_number), (unsigned)m_index,
+               (unsigned)m_bt_device_index);
 
       m_active_extension = desired_extension_number;
     }
@@ -256,17 +258,17 @@ void Wiimote::HandleWriteData(const OutputReportWriteData& wd)
   {
     // FYI: Writes during an active read will occasionally produce a "busy" (0x4) ack.
     // We won't simulate that as it often does work. Poorly programmed games may rely on it.
-    WARN_LOG_FMT(WIIMOTE, "WriteData: write during active read request.");
+    WARN_LOG(WIIMOTE, "WriteData: write during active read request.");
   }
 
   const u16 address = Common::swap16(wd.address);
 
-  DEBUG_LOG_FMT(WIIMOTE, "Wiimote::WriteData: {:#04x} @ {:#04x} @ {:#04x} ({})", wd.space,
-                wd.slave_address, address, wd.size);
+  DEBUG_LOG(WIIMOTE, "Wiimote::WriteData: %#04x @ %#04x @ %#04x (%u)", (unsigned)wd.space,
+            (unsigned)wd.slave_address, (unsigned)address, (unsigned)wd.size);
 
   if (0 == wd.size || wd.size > 16)
   {
-    WARN_LOG_FMT(WIIMOTE, "WriteData: invalid size: {}", wd.size);
+    WARN_LOG(WIIMOTE, "WriteData: invalid size: %u", (unsigned)wd.size);
     // A real wiimote silently ignores such a request:
     return;
   }
@@ -279,7 +281,7 @@ void Wiimote::HandleWriteData(const OutputReportWriteData& wd)
   {
     if (address + wd.size > EEPROM_FREE_SIZE)
     {
-      WARN_LOG_FMT(WIIMOTE, "WriteData: address + size out of bounds!");
+      WARN_LOG(WIIMOTE, "WriteData: address + size out of bounds!");
       error_code = ErrorCode::InvalidAddress;
     }
     else
@@ -296,7 +298,7 @@ void Wiimote::HandleWriteData(const OutputReportWriteData& wd)
     // Attempting to access the EEPROM directly over i2c results in error 8.
     if (EEPROM_I2C_ADDR == m_read_request.slave_address)
     {
-      WARN_LOG_FMT(WIIMOTE, "Attempt to write EEPROM directly.");
+      WARN_LOG(WIIMOTE, "Attempt to write EEPROM directly.");
       error_code = ErrorCode::InvalidAddress;
       break;
     }
@@ -312,7 +314,7 @@ void Wiimote::HandleWriteData(const OutputReportWriteData& wd)
   break;
 
   default:
-    WARN_LOG_FMT(WIIMOTE, "WriteData: invalid address space: {:#x}", wd.space);
+    WARN_LOG(WIIMOTE, "WriteData: invalid address space: %#x", (unsigned)wd.space);
     // A real wiimote gives error 6:
     error_code = ErrorCode::InvalidSpace;
     break;
@@ -384,7 +386,7 @@ void Wiimote::HandleSpeakerData(const WiimoteCommon::OutputReportSpeakerData& rp
   {
     if (rpt.length > std::size(rpt.data))
     {
-      ERROR_LOG_FMT(WIIMOTE, "Bad speaker data length: {}", rpt.length);
+      ERROR_LOG(WIIMOTE, "Bad speaker data length: %u", (unsigned)rpt.length);
     }
     else
     {
@@ -404,7 +406,7 @@ void Wiimote::HandleReadData(const OutputReportReadData& rd)
   if (m_read_request.size)
   {
     // There is already an active read being processed.
-    WARN_LOG_FMT(WIIMOTE, "ReadData: attempting read during active request.");
+    WARN_LOG(WIIMOTE, "ReadData: attempting read during active request.");
 
     // A real wm+ sends a busy ack in this situation.
     SendAck(OutputReportID::ReadData, ErrorCode::Busy);
@@ -418,9 +420,10 @@ void Wiimote::HandleReadData(const OutputReportReadData& rd)
   // A zero size request is just ignored, like on the real wiimote.
   m_read_request.size = Common::swap16(rd.size);
 
-  DEBUG_LOG_FMT(WIIMOTE, "Wiimote::ReadData: {} @ {:#04x} @ {:#04x} ({})",
-                static_cast<u8>(m_read_request.space), m_read_request.slave_address,
-                m_read_request.address, m_read_request.size);
+  DEBUG_LOG(WIIMOTE, "Wiimote::ReadData: %u @ %#04x @ %#04x (%u)",
+            (unsigned)(static_cast<u8>(m_read_request.space)),
+            (unsigned)m_read_request.slave_address, (unsigned)m_read_request.address,
+            (unsigned)m_read_request.size);
 
   // Send up to one read-data-reply.
   // If more data needs to be sent it will happen on the next "Update()"
@@ -482,7 +485,7 @@ bool Wiimote::ProcessReadDataRequest()
     // Attempting to access the EEPROM directly over i2c results in error 8.
     if (EEPROM_I2C_ADDR == m_read_request.slave_address)
     {
-      WARN_LOG_FMT(WIIMOTE, "Attempt to read EEPROM directly.");
+      WARN_LOG(WIIMOTE, "Attempt to read EEPROM directly.");
       error_code = ErrorCode::InvalidAddress;
       break;
     }
@@ -493,8 +496,9 @@ bool Wiimote::ProcessReadDataRequest()
 
     if (bytes_read != bytes_to_read)
     {
-      DEBUG_LOG_FMT(WIIMOTE, "Responding with read error 7 @ {:#x} @ {:#x} ({})",
-                    m_read_request.slave_address, m_read_request.address, m_read_request.size);
+      DEBUG_LOG(WIIMOTE, "Responding with read error 7 @ %#x @ %#x (%u)",
+                (unsigned)m_read_request.slave_address, (unsigned)m_read_request.address,
+                (unsigned)m_read_request.size);
       error_code = ErrorCode::Nack;
       break;
     }
@@ -504,7 +508,7 @@ bool Wiimote::ProcessReadDataRequest()
   break;
 
   default:
-    WARN_LOG_FMT(WIIMOTE, "ReadData: invalid address space: {:#x}", int(m_read_request.space));
+    WARN_LOG(WIIMOTE, "ReadData: invalid address space: %#x", (unsigned)int(m_read_request.space));
     // A real wiimote gives error 6:
     error_code = ErrorCode::InvalidSpace;
     break;

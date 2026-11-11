@@ -21,10 +21,10 @@ static bool IsDeviceUsable(const std::string& device_path)
   hid_device* handle = hid_open_path(device_path.c_str());
   if (handle == nullptr)
   {
-    ERROR_LOG_FMT(WIIMOTE,
-                  "Could not connect to Wii Remote at \"{}\". "
-                  "Do you have permission to access the device?",
-                  device_path);
+    ERROR_LOG(WIIMOTE,
+              "Could not connect to Wii Remote at \"%s\". "
+              "Do you have permission to access the device?",
+              device_path.c_str());
     return false;
   }
   // Some third-party adapters (DolphinBar) always expose all four Wii Remotes as HIDs
@@ -34,7 +34,7 @@ static bool IsDeviceUsable(const std::string& device_path)
   const int result = hid_write(handle, report, sizeof(report));
   // The DolphinBar uses EPIPE to signal the absence of a Wii Remote connected to this HID.
   if (result == -1 && errno != EPIPE)
-    ERROR_LOG_FMT(WIIMOTE, "Couldn't write to Wii Remote at \"{}\".", device_path);
+    ERROR_LOG(WIIMOTE, "Couldn't write to Wii Remote at \"%s\".", device_path.c_str());
 
   hid_close(handle);
   return result != -1;
@@ -58,7 +58,7 @@ WiimoteScannerHidapi::WiimoteScannerHidapi()
 WiimoteScannerHidapi::~WiimoteScannerHidapi()
 {
   if (hid_exit() == -1)
-    ERROR_LOG_FMT(WIIMOTE, "Failed to clean up hidapi.");
+    ERROR_LOG(WIIMOTE, "Failed to clean up hidapi.");
 }
 
 auto WiimoteScannerHidapi::FindAttachedWiimotes() -> FindResults
@@ -81,10 +81,11 @@ auto WiimoteScannerHidapi::FindAttachedWiimotes() -> FindResults
     else
       results.wii_remotes.emplace_back(std::move(wiimote));
 
-    NOTICE_LOG_FMT(WIIMOTE, "Found {} at {}: {} {} ({:04x}:{:04x})",
-                   is_balance_board ? "balance board" : "Wiimote", device->path,
-                   WStringToUTF8(device->manufacturer_string),
-                   WStringToUTF8(device->product_string), device->vendor_id, device->product_id);
+    NOTICE_LOG(WIIMOTE, "Found %s at %s: %s %s (%04x:%04x)",
+               is_balance_board ? "balance board" : "Wiimote", device->path,
+               WStringToUTF8(device->manufacturer_string).c_str(),
+               WStringToUTF8(device->product_string).c_str(), (unsigned)device->vendor_id,
+               (unsigned)device->product_id);
   }
   hid_free_enumeration(list);
 
@@ -108,10 +109,10 @@ bool WiimoteHidapi::ConnectInternal()
   m_handle = hid_open_path(m_device_path.c_str());
   if (m_handle == nullptr)
   {
-    ERROR_LOG_FMT(WIIMOTE,
-                  "Could not connect to Wii Remote at \"{}\". "
-                  "Do you have permission to access the device?",
-                  m_device_path);
+    ERROR_LOG(WIIMOTE,
+              "Could not connect to Wii Remote at \"%s\". "
+              "Do you have permission to access the device?",
+              m_device_path.c_str());
   }
   return m_handle != nullptr;
 }
@@ -135,7 +136,7 @@ int WiimoteHidapi::IORead(u8* buf)
   // mess.
   if (result == -1)
   {
-    ERROR_LOG_FMT(WIIMOTE, "Failed to read from {}.", m_device_path);
+    ERROR_LOG(WIIMOTE, "Failed to read from %s.", m_device_path.c_str());
     return 0;  // error
   }
   if (result == 0)
@@ -153,7 +154,7 @@ int WiimoteHidapi::IOWrite(const u8* buf, size_t len)
   int result = hid_write(m_handle, buf + 1, len - 1);
   if (result == -1)
   {
-    ERROR_LOG_FMT(WIIMOTE, "Failed to write to {}.", m_device_path);
+    ERROR_LOG(WIIMOTE, "Failed to write to %s.", m_device_path.c_str());
     return 0;
   }
   return (result == 0) ? 1 : result;

@@ -8,7 +8,7 @@
 #include <optional>
 #include <string_view>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/Common.h"
@@ -18,6 +18,7 @@
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
+#include "Common/StringUtil.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
@@ -85,7 +86,7 @@ void Wiimote::Reset()
   if (!want_determinism && m_eeprom_dirty)
   {
     // Write out existing EEPROM
-    INFO_LOG_FMT(WIIMOTE, "Wrote EEPROM for {}", GetName());
+    INFO_LOG(WIIMOTE, "Wrote EEPROM for %s", GetName().c_str());
     File::IOFile(eeprom_file, "wb").WriteBytes(m_eeprom.data.data(), EEPROM_FREE_SIZE);
 
     m_eeprom_dirty = false;
@@ -316,7 +317,7 @@ std::string Wiimote::GetName() const
 {
   if (m_index == WIIMOTE_BALANCE_BOARD)
     return "BalanceBoard";
-  return fmt::format("Wiimote{}", 1 + m_index);
+  return StringFromFormat("Wiimote%u", 1u + m_index);
 }
 
 InputConfig* Wiimote::GetConfig() const
@@ -431,7 +432,7 @@ bool Wiimote::ProcessExtensionPortEvent()
   // FYI: This happens even during a read request which continues after the status report is sent.
   m_reporting_mode = InputReportID::ReportDisabled;
 
-  DEBUG_LOG_FMT(WIIMOTE, "Sending status report due to extension status change.");
+  DEBUG_LOG(WIIMOTE, "Sending status report due to extension status change.");
 
   HandleRequestStatus(OutputReportRequestStatus{});
 
@@ -777,9 +778,13 @@ void Wiimote::LoadDefaults(const ControllerInterface& ciface)
   m_imu_gyroscope->SetControlExpression(5, "`Gyro Yaw Right`");
   for (int i = 0; i < 4; ++i)
   {
-    m_ir_passthrough->SetControlExpression(i * 3 + 0, fmt::format("`IR Object {} X`", i + 1));
-    m_ir_passthrough->SetControlExpression(i * 3 + 1, fmt::format("`IR Object {} Y`", i + 1));
-    m_ir_passthrough->SetControlExpression(i * 3 + 2, fmt::format("`IR Object {} Size`", i + 1));
+    char expression[24];
+    snprintf(expression, sizeof(expression), "`IR Object %d X`", i + 1);
+    m_ir_passthrough->SetControlExpression(i * 3 + 0, expression);
+    snprintf(expression, sizeof(expression), "`IR Object %d Y`", i + 1);
+    m_ir_passthrough->SetControlExpression(i * 3 + 1, expression);
+    snprintf(expression, sizeof(expression), "`IR Object %d Size`", i + 1);
+    m_ir_passthrough->SetControlExpression(i * 3 + 2, expression);
   }
 #endif
 

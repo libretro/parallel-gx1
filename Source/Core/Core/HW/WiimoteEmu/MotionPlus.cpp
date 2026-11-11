@@ -221,7 +221,8 @@ int MotionPlus::BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in)
       return m_i2c_bus.BusWrite(slave_addr, addr, count, data_in);
     }
 
-    DEBUG_LOG_FMT(WIIMOTE, "Inactive M+ write {:#x} : {}", addr, ArrayToString(data_in, count));
+    DEBUG_LOG(WIIMOTE, "Inactive M+ write %#x : %s", (unsigned)addr,
+              ArrayToString(data_in, count).c_str());
 
     auto const result = RawWrite(&m_reg_data, addr, count, data_in);
 
@@ -242,7 +243,8 @@ int MotionPlus::BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in)
       return 0;
     }
 
-    DEBUG_LOG_FMT(WIIMOTE, "Active M+ write {:#x} : {}", addr, ArrayToString(data_in, count));
+    DEBUG_LOG(WIIMOTE, "Active M+ write %#x : %s", (unsigned)addr,
+              ArrayToString(data_in, count).c_str());
 
     auto const result = RawWrite(&m_reg_data, addr, count, data_in);
 
@@ -260,7 +262,7 @@ int MotionPlus::BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in)
     case offsetof(Register, challenge_type):
       if (ChallengeState::ParameterXReady == m_reg_data.challenge_state)
       {
-        DEBUG_LOG_FMT(WIIMOTE, "M+ challenge: {:#x}", m_reg_data.challenge_type);
+        DEBUG_LOG(WIIMOTE, "M+ challenge: %#x", (unsigned)m_reg_data.challenge_type);
 
         // After games read parameter x they write here to request y0 or y1.
         if (0 == m_reg_data.challenge_type)
@@ -288,7 +290,7 @@ int MotionPlus::BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in)
 
     case offsetof(Register, calibration_trigger):
       // Games seem to invoke this to start and stop calibration. Exact consequences unknown.
-      DEBUG_LOG_FMT(WIIMOTE, "M+ calibration trigger: {:#x}", m_reg_data.calibration_trigger);
+      DEBUG_LOG(WIIMOTE, "M+ calibration trigger: %#x", (unsigned)m_reg_data.calibration_trigger);
       break;
 
     case PASSTHROUGH_MODE_OFFSET:
@@ -330,7 +332,7 @@ void MotionPlus::OnPassthroughModeWrite()
 
 void MotionPlus::Activate()
 {
-  DEBUG_LOG_FMT(WIIMOTE, "M+ has been activated.");
+  DEBUG_LOG(WIIMOTE, "M+ has been activated.");
 
   m_reg_data.ext_identifier[2] = ACTIVE_DEVICE_ADDR << 1;
 
@@ -347,7 +349,7 @@ void MotionPlus::Activate()
 
 void MotionPlus::Deactivate()
 {
-  DEBUG_LOG_FMT(WIIMOTE, "M+ has been deactivated.");
+  DEBUG_LOG(WIIMOTE, "M+ has been deactivated.");
 
   m_reg_data.ext_identifier[2] = INACTIVE_DEVICE_ADDR << 1;
 
@@ -413,7 +415,7 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
   {
     if (is_ext_connected)
     {
-      DEBUG_LOG_FMT(WIIMOTE, "M+ initializing new extension.");
+      DEBUG_LOG(WIIMOTE, "M+ initializing new extension.");
 
       // The M+ automatically initializes an extension when attached.
 
@@ -461,7 +463,7 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
   {
     std::memcpy(m_reg_data.challenge_data.data(), s_challenge_x, sizeof(s_challenge_x));
 
-    DEBUG_LOG_FMT(WIIMOTE, "M+ parameter x ready.");
+    DEBUG_LOG(WIIMOTE, "M+ parameter x ready.");
     m_reg_data.challenge_state = ChallengeState::ParameterXReady;
     break;
   }
@@ -471,7 +473,7 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
                 0 == m_reg_data.challenge_type ? s_challenge_y0 : s_challenge_y1,
                 sizeof(s_challenge_y0));
 
-    DEBUG_LOG_FMT(WIIMOTE, "M+ parameter y ready.");
+    DEBUG_LOG(WIIMOTE, "M+ parameter y ready.");
     m_reg_data.challenge_state = ChallengeState::ParameterYReady;
     break;
 
@@ -564,8 +566,7 @@ void MotionPlus::PrepareInput(const MotionPlus::DataFormat::Data& gyroscope_data
       break;
     default:
       // This really shouldn't happen as the M+ deactivates on an invalid mode write.
-      ERROR_LOG_FMT(WIIMOTE, "M+ unknown passthrough-mode {}",
-                    static_cast<int>(GetPassthroughMode()));
+      ERROR_LOG(WIIMOTE, "M+ unknown passthrough-mode %d", static_cast<int>(GetPassthroughMode()));
       mplus_data.is_mp_data = true;
       break;
     }

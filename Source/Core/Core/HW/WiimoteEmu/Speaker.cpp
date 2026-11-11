@@ -82,7 +82,7 @@ void SpeakerLogic::SpeakerData(const u8* data, int length, float speaker_pan)
   }
   else
   {
-    ERROR_LOG_FMT(IOS_WIIMOTE, "Unknown speaker format {:x}", reg_data.format);
+    ERROR_LOG(IOS_WIIMOTE, "Unknown speaker format %x", (unsigned)reg_data.format);
     return;
   }
   if (reg_data.volume > volume_divisor)

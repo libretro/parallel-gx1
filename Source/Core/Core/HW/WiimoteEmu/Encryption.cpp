@@ -500,7 +500,7 @@ EncryptionKey KeyGen::GenerateFromExtensionKeyData(const ExtKeyData& ext_key) co
 
   // Retail games never hit this path but some homebrew fills encryption key with 0x00.
   // Real extensions seem to then use entirely different "sboxes" for table generation.
-  WARN_LOG_FMT(WIIMOTE, "Extension key gen did not match any idx. Generating fallback tables.");
+  WARN_LOG(WIIMOTE, "Extension key gen did not match any idx. Generating fallback tables.");
   return GenerateFallbackTables(rand, key);
 }
 
