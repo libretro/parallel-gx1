@@ -26,7 +26,6 @@
 #include "Core/HW/Wiimote.h"
 #include "Core/HW/WiimoteCommon/DataReport.h"
 #include "Core/HW/WiimoteCommon/WiimoteHid.h"
-#include "Core/HW/WiimoteReal/IOLinux.h"
 #include "Core/HW/WiimoteReal/IOWin.h"
 #include "Core/HW/WiimoteReal/IOhidapi.h"
 #include "Core/System.h"
@@ -882,9 +881,12 @@ void WiimoteScanner::ThreadFunc()
   // are called on different threads (and so reference different CFRunLoops) which can cause an
   // EXC_BAD_ACCES crash.
   std::vector<std::unique_ptr<WiimoteScannerBackend>> backends;
-  backends.emplace_back(std::make_unique<WiimoteScannerLinux>());
+#ifdef _WIN32
   backends.emplace_back(std::make_unique<WiimoteScannerWindows>());
+#endif
+#ifdef HAVE_HIDAPI
   backends.emplace_back(std::make_unique<WiimoteScannerHidapi>());
+#endif
 
   std::vector<WiimoteScannerBackend*> published;
   for (const auto& backend : backends)

@@ -82,10 +82,4 @@ private:
 };
 }  // namespace WiimoteReal
 
-#else
-#include "Core/HW/WiimoteReal/IODummy.h"
-namespace WiimoteReal
-{
-using WiimoteScannerWindows = WiimoteScannerDummy;
-}
 #endif
