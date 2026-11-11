@@ -36,7 +36,7 @@ u64 GetTickCountStd()
 std::vector<u8> BuildFINFrame(StackRef* ref)
 {
   const Common::TCPPacket result(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
-                                 ref->ack_num, TCP_FLAG_FIN | TCP_FLAG_ACK | TCP_FLAG_RST);
+                                 ref->ack_num, BBA_TCP_FLAG_FIN | BBA_TCP_FLAG_ACK | BBA_TCP_FLAG_RST);
 
   for (auto& tcp_buf : ref->tcp_buffers)
     tcp_buf.used = false;
@@ -46,7 +46,7 @@ std::vector<u8> BuildFINFrame(StackRef* ref)
 std::vector<u8> BuildAckFrame(StackRef* ref)
 {
   const Common::TCPPacket result(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
-                                 ref->ack_num, TCP_FLAG_ACK);
+                                 ref->ack_num, BBA_TCP_FLAG_ACK);
   return result.Build();
 }
 
@@ -284,7 +284,7 @@ CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref)
     {
       // Create the resulting RST ACK packet
       const Common::TCPPacket result(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
-                                     ref->ack_num, TCP_FLAG_RST | TCP_FLAG_ACK);
+                                     ref->ack_num, BBA_TCP_FLAG_RST | BBA_TCP_FLAG_ACK);
       WriteToQueue(result.Build());
       ref->ip = 0;
       ref->tcp_socket.disconnect();
@@ -317,7 +317,7 @@ CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref)
     if (datasize > 0)
     {
       Common::TCPPacket packet(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
-                               ref->ack_num, TCP_FLAG_ACK | TCP_FLAG_PSH);
+                               ref->ack_num, BBA_TCP_FLAG_ACK | BBA_TCP_FLAG_PSH);
       packet.data = std::vector<u8>(buffer.begin(), buffer.begin() + datasize);
 
       // build buffer
@@ -351,7 +351,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
   StackRef* ref = m_network_ref.GetTCPSlot(tcp_header.source_port, tcp_header.destination_port,
                                            std::bit_cast<u32>(ip_header.destination_addr));
   const u16 flags = ntohs(tcp_header.properties) & 0xfff;
-  if (flags & (TCP_FLAG_FIN | TCP_FLAG_RST))
+  if (flags & (BBA_TCP_FLAG_FIN | BBA_TCP_FLAG_RST))
   {
     if (ref == nullptr)
       return;  // not found
@@ -363,7 +363,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
       (void)ref->tcp_socket.send(data.data(), data.size());
     ref->tcp_socket.disconnect();
   }
-  else if (flags == (TCP_FLAG_SIN | TCP_FLAG_ACK))
+  else if (flags == (BBA_TCP_FLAG_SIN | BBA_TCP_FLAG_ACK))
   {
     if (ref == nullptr)
       return;  // not found
@@ -373,7 +373,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
     ref->ready = true;
     WriteToQueue(BuildAckFrame(ref));
   }
-  else if (flags & TCP_FLAG_SIN)
+  else if (flags & BBA_TCP_FLAG_SIN)
   {
     // new connection
     if (ref != nullptr)
@@ -431,7 +431,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
     ref->window_size = ntohs(tcp_header.window_size);
 
     // clear any ack data
-    if (ntohs(tcp_header.properties) & TCP_FLAG_ACK)
+    if (ntohs(tcp_header.properties) & BBA_TCP_FLAG_ACK)
     {
       const u32 ack_num = ntohl(tcp_header.acknowledgement_number);
       for (auto& tcp_buf : ref->tcp_buffers)
@@ -582,7 +582,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUPnPClient()
   ref->ready = false;
 
   Common::TCPPacket result(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
-                           ref->ack_num, TCP_FLAG_SIN);
+                           ref->ack_num, BBA_TCP_FLAG_SIN);
   // Based on Nintendont packet capture of Mario Kart: Double Dash!!
   result.tcp_options = {
       0x02, 0x04, 0x05, 0xb4,  // Maximum segment size: 1460 bytes
@@ -945,7 +945,7 @@ BbaTcpSocket::ConnectingState BbaTcpSocket::Connected(StackRef* ref)
     INFO_LOG_FMT(SP1, "BBA connect succeeded");
 
     Common::TCPPacket result(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
-                             ref->ack_num, TCP_FLAG_SIN | TCP_FLAG_ACK);
+                             ref->ack_num, BBA_TCP_FLAG_SIN | BBA_TCP_FLAG_ACK);
 
     result.tcp_options = {
         0x02, 0x04, 0x05, 0xb4,  // Maximum segment size: 1460 bytes

@@ -14,11 +14,11 @@ using socklen_t = int;
 #include "Common/CommonTypes.h"
 #include "Common/Network.h"
 
-constexpr u16 TCP_FLAG_SIN = 0x2;
-constexpr u16 TCP_FLAG_ACK = 0x10;
-constexpr u16 TCP_FLAG_PSH = 0x8;
-constexpr u16 TCP_FLAG_FIN = 0x1;
-constexpr u16 TCP_FLAG_RST = 0x4;
+constexpr u16 BBA_TCP_FLAG_SIN = 0x2;
+constexpr u16 BBA_TCP_FLAG_ACK = 0x10;
+constexpr u16 BBA_TCP_FLAG_PSH = 0x8;
+constexpr u16 BBA_TCP_FLAG_FIN = 0x1;
+constexpr u16 BBA_TCP_FLAG_RST = 0x4;
 
 constexpr u8 MAX_TCP_BUFFER = 4;
 constexpr u16 MAX_UDP_LENGTH = 1500;
