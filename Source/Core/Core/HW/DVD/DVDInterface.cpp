@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cinttypes>
 #include <memory>
 #include <optional>
 #include <string>
@@ -159,11 +160,11 @@ u32 DVDInterface::AdvanceDTK(u32 maximum_blocks, u32* blocks_to_process)
   {
     if (m_audio_position >= m_current_start + m_current_length)
     {
-      DEBUG_LOG_FMT(DVDINTERFACE,
-                    "AdvanceDTK: NextStart={:08x}, NextLength={:08x}, "
-                    "CurrentStart={:08x}, CurrentLength={:08x}, AudioPos={:08x}",
-                    m_next_start, m_next_length, m_current_start, m_current_length,
-                    m_audio_position);
+      DEBUG_LOG(DVDINTERFACE,
+                "AdvanceDTK: NextStart=%08" PRIx64 ", NextLength=%08x, "
+                "CurrentStart=%08" PRIx64 ", CurrentLength=%08x, AudioPos=%08" PRIx64,
+                (u64)m_next_start, m_next_length, (u64)m_current_start, m_current_length,
+                (u64)m_audio_position);
 
       m_audio_position = m_next_start;
       m_current_start = m_next_start;
@@ -387,7 +388,8 @@ void DVDInterface::SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
   {
     m_disc_end_offset = GetDiscEndOffset(*disc);
     if (disc->GetDataSizeType() != DiscIO::DataSizeType::Accurate)
-      WARN_LOG_FMT(DVDINTERFACE, "Unknown disc size, guessing {0} bytes", m_disc_end_offset);
+      WARN_LOG(DVDINTERFACE, "Unknown disc size, guessing %" PRIu64 " bytes",
+               (u64)m_disc_end_offset);
 
     const DiscIO::BlobReader& blob = disc->GetBlobReader();
 
@@ -451,7 +453,7 @@ void DVDInterface::InsertDiscCallback(Core::System& system, u64 userdata, s64 cy
   }
   else
   {
-    PanicAlertFmtT("The disc that was about to be inserted couldn't be found.");
+    PanicAlert("The disc that was about to be inserted couldn't be found.");
   }
 
   di.m_disc_path_to_insert.clear();
@@ -485,7 +487,7 @@ void DVDInterface::ChangeDisc(const Core::CPUThreadGuard& guard, const std::stri
 {
   if (!m_disc_path_to_insert.empty())
   {
-    PanicAlertFmtT("A disc is already about to be inserted.");
+    PanicAlert("A disc is already about to be inserted.");
     return;
   }
 
@@ -699,19 +701,19 @@ bool DVDInterface::CheckReadPreconditions()
 {
   if (!IsDiscInside())  // Implies CoverOpened or NoMediumPresent
   {
-    ERROR_LOG_FMT(DVDINTERFACE, "No disc inside.");
+    ERROR_LOG(DVDINTERFACE, "No disc inside.");
     SetDriveError(DriveError::MediumNotPresent);
     return false;
   }
   if (m_drive_state == DriveState::DiscChangeDetected)
   {
-    ERROR_LOG_FMT(DVDINTERFACE, "Disc changed (motor stopped).");
+    ERROR_LOG(DVDINTERFACE, "Disc changed (motor stopped).");
     SetDriveError(DriveError::MediumChanged);
     return false;
   }
   if (m_drive_state == DriveState::MotorStopped)
   {
-    ERROR_LOG_FMT(DVDINTERFACE, "Motor stopped.");
+    ERROR_LOG(DVDINTERFACE, "Motor stopped.");
     SetDriveError(DriveError::MotorStopped);
     return false;
   }
@@ -721,7 +723,7 @@ bool DVDInterface::CheckReadPreconditions()
   {
     if (m_drive_state == DriveState::DiscIdNotRead)
     {
-      ERROR_LOG_FMT(DVDINTERFACE, "Disc id not read.");
+      ERROR_LOG(DVDINTERFACE, "Disc id not read.");
       SetDriveError(DriveError::NoDiscID);
       return false;
     }
@@ -748,8 +750,8 @@ bool DVDInterface::ExecuteReadCommand(u64 dvd_offset, u32 output_address, u32 dv
 
   if (dvd_length > output_length)
   {
-    WARN_LOG_FMT(DVDINTERFACE, "Detected an attempt to read more data from the DVD "
-                               "than what fits inside the out buffer. Clamping.");
+    WARN_LOG(DVDINTERFACE, "Detected an attempt to read more data from the DVD "
+                           "than what fits inside the out buffer. Clamping.");
     dvd_length = output_length;
   }
 
@@ -807,19 +809,19 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     memory.Write_U32(0x20060526, m_DIMAR + 4);  // Release date
     memory.Write_U32(0x41000000, m_DIMAR + 8);  // Version
 
-    INFO_LOG_FMT(DVDINTERFACE, "DVDLowInquiry (Buffer {:#010x}, {:#x})", m_DIMAR, m_DILENGTH);
+    INFO_LOG(DVDINTERFACE, "DVDLowInquiry (Buffer %#010x, %#x)", m_DIMAR, m_DILENGTH);
     break;
   }
   // GC-only patched drive firmware command, used by libogc
   case DICommand::Unknown55:
-    INFO_LOG_FMT(DVDINTERFACE, "SetExtension");
+    INFO_LOG(DVDINTERFACE, "SetExtension");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
 
   // Wii-exclusive
   case DICommand::ReportKey:
-    INFO_LOG_FMT(DVDINTERFACE, "DVDLowReportKey");
+    INFO_LOG(DVDINTERFACE, "DVDLowReportKey");
     // Does not work on retail discs/drives
     // Retail games send this command to see if they are running on real retail hw
     SetDriveError(DriveError::InvalidCommand);
@@ -835,10 +837,10 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     {
       const u64 dvd_offset = static_cast<u64>(m_DICMDBUF[1]) << 2;
 
-      INFO_LOG_FMT(
-          DVDINTERFACE,
-          "Read: DVDOffset={:08x}, DMABuffer = {:08x}, SrcLength = {:08x}, DMALength = {:08x}",
-          dvd_offset, m_DIMAR, m_DICMDBUF[2], m_DILENGTH);
+      INFO_LOG(DVDINTERFACE,
+               "Read: DVDOffset=%08" PRIx64
+               ", DMABuffer = %08x, SrcLength = %08x, DMALength = %08x",
+               (u64)dvd_offset, m_DIMAR, m_DICMDBUF[2], m_DILENGTH);
 
       if (m_drive_state == DriveState::ReadyNoReadsMade)
         SetDriveState(DriveState::Ready);
@@ -850,7 +852,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     break;
 
     case 0x40:  // Read DiscID
-      INFO_LOG_FMT(DVDINTERFACE, "Read DiscID: buffer {:08x}", m_DIMAR);
+      INFO_LOG(DVDINTERFACE, "Read DiscID: buffer %08x", m_DIMAR);
       if (m_drive_state == DriveState::DiscIdNotRead)
       {
         SetDriveState(DriveState::ReadyNoReadsMade);
@@ -868,7 +870,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
       break;
 
     default:
-      ERROR_LOG_FMT(DVDINTERFACE, "Unknown read subcommand: {:08x}", m_DICMDBUF[0]);
+      ERROR_LOG(DVDINTERFACE, "Unknown read subcommand: %08x", m_DICMDBUF[0]);
       break;
     }
     break;
@@ -876,8 +878,8 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   // Used by both GC and Wii
   case DICommand::Seek:
     // Currently unimplemented
-    INFO_LOG_FMT(DVDINTERFACE, "Seek: offset={:09x} (ignoring)",
-                 static_cast<u64>(m_DICMDBUF[1]) << 2);
+    INFO_LOG(DVDINTERFACE, "Seek: offset=%09" PRIx64 " (ignoring)",
+             (u64)(static_cast<u64>(m_DICMDBUF[1]) << 2));
     break;
 
   // Wii-exclusive
@@ -885,16 +887,16 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     switch ((m_DICMDBUF[0] >> 16) & 0xFF)
     {
     case 0:
-      ERROR_LOG_FMT(DVDINTERFACE, "DVDLowReadDvdPhysical");
+      ERROR_LOG(DVDINTERFACE, "DVDLowReadDvdPhysical");
       break;
     case 1:
-      ERROR_LOG_FMT(DVDINTERFACE, "DVDLowReadDvdCopyright");
+      ERROR_LOG(DVDINTERFACE, "DVDLowReadDvdCopyright");
       break;
     case 2:
-      ERROR_LOG_FMT(DVDINTERFACE, "DVDLowReadDvdDiscKey");
+      ERROR_LOG(DVDINTERFACE, "DVDLowReadDvdDiscKey");
       break;
     default:
-      ERROR_LOG_FMT(DVDINTERFACE, "Unknown 0xAD subcommand in {:08x}", m_DICMDBUF[0]);
+      ERROR_LOG(DVDINTERFACE, "Unknown 0xAD subcommand in %08x", m_DICMDBUF[0]);
       break;
     }
     SetDriveError(DriveError::InvalidCommand);
@@ -902,32 +904,32 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     break;
   // Wii-exclusive
   case DICommand::ReadDVD:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowReadDvd");
+    ERROR_LOG(DVDINTERFACE, "DVDLowReadDvd");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
   // Wii-exclusive
   case DICommand::ReadDVDConfig:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowReadDvdConfig");
+    ERROR_LOG(DVDINTERFACE, "DVDLowReadDvdConfig");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
   // Wii-exclusive
   case DICommand::StopLaser:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowStopLaser");
+    ERROR_LOG(DVDINTERFACE, "DVDLowStopLaser");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
   // Wii-exclusive
   case DICommand::Offset:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowOffset");
+    ERROR_LOG(DVDINTERFACE, "DVDLowOffset");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
   // Wii-exclusive
   case DICommand::ReadBCA:
   {
-    WARN_LOG_FMT(DVDINTERFACE, "DVDLowReadDiskBca - supplying dummy data to appease NSMBW");
+    WARN_LOG(DVDINTERFACE, "DVDLowReadDiskBca - supplying dummy data to appease NSMBW");
     // NSMBW checks that the first 0x33 bytes of the BCA are 0, then it expects a 1.
     // Most (all?) other games have 0x34 0's at the start of the BCA, but don't actually
     // read it.  NSMBW doesn't care about the other 12 bytes (which contain manufacturing data?)
@@ -941,25 +943,25 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   }
   // Wii-exclusive
   case DICommand::RequestDiscStatus:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowRequestDiscStatus");
+    ERROR_LOG(DVDINTERFACE, "DVDLowRequestDiscStatus");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
   // Wii-exclusive
   case DICommand::RequestRetryNumber:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowRequestRetryNumber");
+    ERROR_LOG(DVDINTERFACE, "DVDLowRequestRetryNumber");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
   // Wii-exclusive
   case DICommand::SetMaximumRotation:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowSetMaximumRotation");
+    ERROR_LOG(DVDINTERFACE, "DVDLowSetMaximumRotation");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
   // Wii-exclusive
   case DICommand::SerMeasControl:
-    ERROR_LOG_FMT(DVDINTERFACE, "DVDLowSerMeasControl");
+    ERROR_LOG(DVDINTERFACE, "DVDLowSerMeasControl");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
@@ -974,7 +976,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
       drive_state = static_cast<u32>(m_drive_state) - 1;
 
     const u32 result = (drive_state << 24) | static_cast<u32>(m_error_code);
-    INFO_LOG_FMT(DVDINTERFACE, "Requesting error... ({:#010x})", result);
+    INFO_LOG(DVDINTERFACE, "Requesting error... (%#010x)", result);
     m_DIIMMBUF = result;
     SetDriveError(DriveError::None);
     break;
@@ -988,16 +990,15 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   {
     if (!CheckReadPreconditions())
     {
-      ERROR_LOG_FMT(DVDINTERFACE, "Cannot play audio (command {:08x})", m_DICMDBUF[0]);
+      ERROR_LOG(DVDINTERFACE, "Cannot play audio (command %08x)", m_DICMDBUF[0]);
       interrupt_type = DIInterruptType::DEINT;
       break;
     }
     if (!m_enable_dtk)
     {
-      ERROR_LOG_FMT(
-          DVDINTERFACE,
-          "Attempted to change playing audio while audio is disabled!  ({:08x} {:08x} {:08x})",
-          m_DICMDBUF[0], m_DICMDBUF[1], m_DICMDBUF[2]);
+      ERROR_LOG(DVDINTERFACE,
+                "Attempted to change playing audio while audio is disabled!  (%08x %08x %08x)",
+                m_DICMDBUF[0], m_DICMDBUF[1], m_DICMDBUF[2]);
       SetDriveError(DriveError::NoAudioBuf);
       interrupt_type = DIInterruptType::DEINT;
       break;
@@ -1012,8 +1013,8 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     {
       const u64 offset = static_cast<u64>(m_DICMDBUF[1]) << 2;
       const u32 length = m_DICMDBUF[2];
-      INFO_LOG_FMT(DVDINTERFACE, "(Audio) Start stream: offset: {:08x} length: {:08x}", offset,
-                   length);
+      INFO_LOG(DVDINTERFACE, "(Audio) Start stream: offset: %08" PRIx64 " length: %08x",
+               (u64)offset, length);
 
       if ((offset == 0) && (length == 0))
       {
@@ -1035,13 +1036,13 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
       break;
     }
     case 0x01:
-      INFO_LOG_FMT(DVDINTERFACE, "(Audio) Stop stream");
+      INFO_LOG(DVDINTERFACE, "(Audio) Stop stream");
       m_stop_at_track_end = false;
       m_stream = false;
       break;
     default:
-      ERROR_LOG_FMT(DVDINTERFACE, "Invalid audio command!  ({:08x} {:08x} {:08x})", m_DICMDBUF[0],
-                    m_DICMDBUF[1], m_DICMDBUF[2]);
+      ERROR_LOG(DVDINTERFACE, "Invalid audio command!  (%08x %08x %08x)", m_DICMDBUF[0],
+                m_DICMDBUF[1], m_DICMDBUF[2]);
       SetDriveError(DriveError::InvalidAudioCommand);
       interrupt_type = DIInterruptType::DEINT;
       break;
@@ -1054,14 +1055,14 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   {
     if (!CheckReadPreconditions())
     {
-      ERROR_LOG_FMT(DVDINTERFACE, "Attempted to request audio status in an invalid state!");
+      ERROR_LOG(DVDINTERFACE, "Attempted to request audio status in an invalid state!");
       interrupt_type = DIInterruptType::DEINT;
       break;
     }
 
     if (!m_enable_dtk)
     {
-      ERROR_LOG_FMT(DVDINTERFACE, "Attempted to request audio status while audio is disabled!");
+      ERROR_LOG(DVDINTERFACE, "Attempted to request audio status while audio is disabled!");
       SetDriveError(DriveError::NoAudioBuf);
       interrupt_type = DIInterruptType::DEINT;
       break;
@@ -1070,33 +1071,32 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     switch (m_DICMDBUF[0] >> 16 & 0xFF)
     {
     case 0x00:  // Returns streaming status
-      INFO_LOG_FMT(DVDINTERFACE,
-                   "(Audio): Stream Status: Request Audio status "
-                   "AudioPos:{:08x}/{:08x} "
-                   "CurrentStart:{:08x} CurrentLength:{:08x}",
-                   m_audio_position, m_current_start + m_current_length, m_current_start,
-                   m_current_length);
+      INFO_LOG(DVDINTERFACE,
+               "(Audio): Stream Status: Request Audio status "
+               "AudioPos:%08" PRIx64 "/%08" PRIx64 " "
+               "CurrentStart:%08" PRIx64 " CurrentLength:%08x",
+               (u64)m_audio_position, (u64)(m_current_start + m_current_length),
+               (u64)m_current_start, m_current_length);
       m_DIIMMBUF = (m_stream ? 1 : 0);
       break;
     case 0x01:  // Returns the current offset
-      INFO_LOG_FMT(DVDINTERFACE, "(Audio): Stream Status: Request Audio status AudioPos:{:08x}",
-                   m_audio_position);
+      INFO_LOG(DVDINTERFACE, "(Audio): Stream Status: Request Audio status AudioPos:%08" PRIx64,
+               (u64)m_audio_position);
       m_DIIMMBUF = static_cast<u32>((m_audio_position & 0xffffffffffff8000ull) >> 2);
       break;
     case 0x02:  // Returns the start offset
-      INFO_LOG_FMT(DVDINTERFACE, "(Audio): Stream Status: Request Audio status CurrentStart:{:08x}",
-                   m_current_start);
+      INFO_LOG(DVDINTERFACE, "(Audio): Stream Status: Request Audio status CurrentStart:%08" PRIx64,
+               (u64)m_current_start);
       m_DIIMMBUF = static_cast<u32>(m_current_start >> 2);
       break;
     case 0x03:  // Returns the total length
-      INFO_LOG_FMT(DVDINTERFACE,
-                   "(Audio): Stream Status: Request Audio status CurrentLength:{:08x}",
-                   m_current_length);
+      INFO_LOG(DVDINTERFACE, "(Audio): Stream Status: Request Audio status CurrentLength:%08x",
+               m_current_length);
       m_DIIMMBUF = m_current_length;
       break;
     default:
-      ERROR_LOG_FMT(DVDINTERFACE, "Invalid audio status command!  ({:08x} {:08x} {:08x})",
-                    m_DICMDBUF[0], m_DICMDBUF[1], m_DICMDBUF[2]);
+      ERROR_LOG(DVDINTERFACE, "Invalid audio status command!  (%08x %08x %08x)", m_DICMDBUF[0],
+                m_DICMDBUF[1], m_DICMDBUF[2]);
       SetDriveError(DriveError::InvalidAudioCommand);
       interrupt_type = DIInterruptType::DEINT;
       break;
@@ -1109,7 +1109,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   {
     const bool eject = (m_DICMDBUF[0] & (1 << 17));
     const bool kill = (m_DICMDBUF[0] & (1 << 20));
-    INFO_LOG_FMT(DVDINTERFACE, "DVDLowStopMotor{}{}", eject ? " eject" : "", kill ? " kill!" : "");
+    INFO_LOG(DVDINTERFACE, "DVDLowStopMotor%s%s", eject ? " eject" : "", kill ? " kill!" : "");
 
     if (m_drive_state == DriveState::Ready || m_drive_state == DriveState::ReadyNoReadsMade ||
         m_drive_state == DriveState::DiscIdNotRead)
@@ -1144,15 +1144,14 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
     // reads. Too early, and you get NoDiscID.  Too late, and you get InvalidPeriod.
     if (!CheckReadPreconditions())
     {
-      ERROR_LOG_FMT(DVDINTERFACE, "Attempted to change DTK configuration in an invalid state!");
+      ERROR_LOG(DVDINTERFACE, "Attempted to change DTK configuration in an invalid state!");
       interrupt_type = DIInterruptType::DEINT;
       break;
     }
 
     if (m_drive_state == DriveState::Ready)
     {
-      ERROR_LOG_FMT(DVDINTERFACE,
-                    "Attempted to change DTK configuration after a read has been made!");
+      ERROR_LOG(DVDINTERFACE, "Attempted to change DTK configuration after a read has been made!");
       SetDriveError(DriveError::InvalidPeriod);
       interrupt_type = DIInterruptType::DEINT;
       break;
@@ -1165,7 +1164,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
 
   // GC-only patched drive firmware command, used by libogc
   case DICommand::UnknownEE:
-    INFO_LOG_FMT(DVDINTERFACE, "SetStatus");
+    INFO_LOG(DVDINTERFACE, "SetStatus");
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
@@ -1175,7 +1174,7 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   // This will appear as unknown commands, unless the check is re-instated to catch such data.
   // Can only be used through direct access and only after unlocked.
   case DICommand::Debug:
-    ERROR_LOG_FMT(DVDINTERFACE, "Unsupported DVD Drive debug command {:#010x}", m_DICMDBUF[0]);
+    ERROR_LOG(DVDINTERFACE, "Unsupported DVD Drive debug command %#010x", m_DICMDBUF[0]);
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
@@ -1187,24 +1186,24 @@ void DVDInterface::ExecuteCommand(ReplyType reply_type)
   {
     if (m_DICMDBUF[0] == 0xFF014D41 && m_DICMDBUF[1] == 0x54534849 && m_DICMDBUF[2] == 0x54410200)
     {
-      INFO_LOG_FMT(DVDINTERFACE, "Unlock test 1 passed");
+      INFO_LOG(DVDINTERFACE, "Unlock test 1 passed");
     }
     else if (m_DICMDBUF[0] == 0xFF004456 && m_DICMDBUF[1] == 0x442D4741 &&
              m_DICMDBUF[2] == 0x4D450300)
     {
-      INFO_LOG_FMT(DVDINTERFACE, "Unlock test 2 passed");
+      INFO_LOG(DVDINTERFACE, "Unlock test 2 passed");
     }
     else
     {
-      INFO_LOG_FMT(DVDINTERFACE, "Unlock test failed");
+      INFO_LOG(DVDINTERFACE, "Unlock test failed");
     }
   }
   break;
 
   default:
-    ERROR_LOG_FMT(DVDINTERFACE, "Unknown command {:#010x} (Buffer {:#010x}, {:#x})", m_DICMDBUF[0],
-                  m_DIMAR, m_DILENGTH);
-    PanicAlertFmtT("Unknown DVD command {0:08x} - fatal error", m_DICMDBUF[0]);
+    ERROR_LOG(DVDINTERFACE, "Unknown command %#010x (Buffer %#010x, %#x)", m_DICMDBUF[0], m_DIMAR,
+              m_DILENGTH);
+    PanicAlert("Unknown DVD command %08x - fatal error", m_DICMDBUF[0]);
     SetDriveError(DriveError::InvalidCommand);
     interrupt_type = DIInterruptType::DEINT;
     break;
@@ -1242,7 +1241,7 @@ void DVDInterface::PerformDecryptingRead(u32 position, u32 length, u32 output_ad
 
 void DVDInterface::ForceOutOfBoundsRead(ReplyType reply_type)
 {
-  INFO_LOG_FMT(DVDINTERFACE, "Forcing an out-of-bounds disc read.");
+  INFO_LOG(DVDINTERFACE, "Forcing an out-of-bounds disc read.");
 
   if (m_drive_state == DriveState::ReadyNoReadsMade)
     SetDriveState(DriveState::Ready);
@@ -1261,9 +1260,9 @@ void DVDInterface::AudioBufferConfig(bool enable_dtk, u8 dtk_buffer_length)
   m_enable_dtk = enable_dtk;
   m_dtk_buffer_length = dtk_buffer_length;
   if (m_enable_dtk)
-    INFO_LOG_FMT(DVDINTERFACE, "DTK enabled: buffer size {}", m_dtk_buffer_length);
+    INFO_LOG(DVDINTERFACE, "DTK enabled: buffer size %u", (unsigned)m_dtk_buffer_length);
   else
-    INFO_LOG_FMT(DVDINTERFACE, "DTK disabled");
+    INFO_LOG(DVDINTERFACE, "DTK disabled");
 }
 
 static u64 PackFinishExecutingCommandUserdata(ReplyType reply_type, DIInterruptType interrupt_type)
@@ -1398,8 +1397,8 @@ void DVDInterface::ScheduleReads(u64 offset, u32 length, const DiscIO::Partition
                          m_read_buffer_end_offset - STREAMING_BUFFER_SIZE :
                          0;
 
-      DEBUG_LOG_FMT(DVDINTERFACE, "Buffer: now={:#x} start time={:#x} end time={:#x}", current_time,
-                    m_read_buffer_start_time, m_read_buffer_end_time);
+      DEBUG_LOG(DVDINTERFACE, "Buffer: now=%#" PRIx64 " start time=%#" PRIx64 " end time=%#" PRIx64,
+                (u64)current_time, (u64)m_read_buffer_start_time, (u64)m_read_buffer_end_time);
 
       if (current_time >= m_read_buffer_end_time)
       {
@@ -1427,11 +1426,11 @@ void DVDInterface::ScheduleReads(u64 offset, u32 length, const DiscIO::Partition
     }
   }
 
-  DEBUG_LOG_FMT(DVDINTERFACE, "Buffer: start={:#x} end={:#x} avail={:#x}", buffer_start, buffer_end,
-                buffer_end - buffer_start);
+  DEBUG_LOG(DVDINTERFACE, "Buffer: start=%#" PRIx64 " end=%#" PRIx64 " avail=%#" PRIx64,
+            (u64)buffer_start, (u64)buffer_end, (u64)(buffer_end - buffer_start));
 
-  DEBUG_LOG_FMT(DVDINTERFACE, "Schedule reads: offset={:#x} length={:#x} address={:#x}", offset,
-                length, output_address);
+  DEBUG_LOG(DVDINTERFACE, "Schedule reads: offset=%#" PRIx64 " length=%#x address=%#x", (u64)offset,
+            length, output_address);
 
   s64 ticks_until_completion =
       READ_COMMAND_LATENCY_US * (m_system.GetSystemTimers().GetTicksPerSecond() / 1000000);
@@ -1483,8 +1482,8 @@ void DVDInterface::ScheduleReads(u64 offset, u32 length, const DiscIO::Partition
         ticks_until_completion += ticks_per_second * DVDMath::CalculateRotationalLatency(
                                                          dvd_offset, time_after_seek, wii_disc);
 
-        DEBUG_LOG_FMT(DVDINTERFACE, "Seek+read {:#x} bytes @ {:#x} ticks={}", chunk_length, offset,
-                      ticks_until_completion);
+        DEBUG_LOG(DVDINTERFACE, "Seek+read %#x bytes @ %#" PRIx64 " ticks=%" PRId64, chunk_length,
+                  (u64)offset, (s64)ticks_until_completion);
       }
       else
       {
@@ -1558,11 +1557,12 @@ void DVDInterface::ScheduleReads(u64 offset, u32 length, const DiscIO::Partition
                              m_read_buffer_end_offset - m_read_buffer_start_offset, wii_disc));
   }
 
-  DEBUG_LOG_FMT(DVDINTERFACE,
-                "Schedule reads: ECC blocks unbuffered={}, buffered={}, "
-                "ticks={}, time={} us",
-                unbuffered_blocks, buffered_blocks, ticks_until_completion,
-                ticks_until_completion * 1000000 / m_system.GetSystemTimers().GetTicksPerSecond());
+  DEBUG_LOG(
+      DVDINTERFACE,
+      "Schedule reads: ECC blocks unbuffered=%u, buffered=%u, "
+      "ticks=%" PRId64 ", time=%" PRId64 " us",
+      unbuffered_blocks, buffered_blocks, (s64)ticks_until_completion,
+      (s64)(ticks_until_completion * 1000000 / m_system.GetSystemTimers().GetTicksPerSecond()));
 }
 
 }  // namespace DVD

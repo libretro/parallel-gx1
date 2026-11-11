@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_set>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -78,11 +78,11 @@ void FileLogger::Log(const DiscIO::Volume& volume, const DiscIO::Partition& part
 
   const std::string size_string = Common::ThousandSeparate(file_info->GetSize() / 1000, 7);
   const std::string path = file_info->GetPath();
-  const std::string log_string = fmt::format("{} kB {}", size_string, path);
+  const std::string log_string = size_string + " kB " + path;
   if (IsSoundFile(path))
-    INFO_LOG_FMT(FILEMON, "{}", log_string);
+    INFO_LOG(FILEMON, "%s", log_string.c_str());
   else
-    WARN_LOG_FMT(FILEMON, "{}", log_string);
+    WARN_LOG(FILEMON, "%s", log_string.c_str());
 
   // Update the last accessed file
   m_previous_partition = partition;

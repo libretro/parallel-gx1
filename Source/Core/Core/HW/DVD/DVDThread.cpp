@@ -3,6 +3,7 @@
 
 #include "Core/HW/DVD/DVDThread.h"
 
+#include <cinttypes>
 #include <cstdlib>
 #include <map>
 #include <memory>
@@ -149,7 +150,7 @@ void DVDThread::DoState(PointerWrap& p)
   if (had_disc != HasDisc())
   {
     if (had_disc)
-      PanicAlertFmtT("An inserted disc was expected but not found.");
+      PanicAlert("An inserted disc was expected but not found.");
     else
       m_disc.reset();
   }
@@ -361,16 +362,16 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
   const u8* const data = node ? node->data : result.second.data();
   const size_t size = node ? node->size : result.second.size();
 
-  DEBUG_LOG_FMT(DVDINTERFACE, "Disc has been read. Emulated time including delay: {} us.",
-                (m_system.GetCoreTiming().GetTicks() - request.time_started_ticks) /
-                    (m_system.GetSystemTimers().GetTicksPerSecond() / 1000000));
+  DEBUG_LOG(DVDINTERFACE, "Disc has been read. Emulated time including delay: %" PRIu64 " us.",
+            (u64)((m_system.GetCoreTiming().GetTicks() - request.time_started_ticks) /
+                  (m_system.GetSystemTimers().GetTicksPerSecond() / 1000000)));
 
   auto& dvd_interface = m_system.GetDVDInterface();
   DVD::DIInterruptType interrupt;
   if (size != request.length)
   {
-    PanicAlertFmtT("The disc could not be read (at {0:#x} - {1:#x}).", request.dvd_offset,
-                   request.dvd_offset + request.length);
+    PanicAlert("The disc could not be read (at %#" PRIx64 " - %#" PRIx64 ").",
+               (u64)request.dvd_offset, (u64)(request.dvd_offset + request.length));
 
     dvd_interface.SetDriveError(DVD::DriveError::ReadError);
     interrupt = DVD::DIInterruptType::DEINT;
