@@ -803,9 +803,9 @@ void DirectoryBlobReader::SetWiiRegionData(const u8* wii_region_data, size_t siz
               size < WII_REGION_DATA_SIZE ? size_t(size) : size_t(WII_REGION_DATA_SIZE));
 
   if (size < 0x4)
-    ERROR_LOG_FMT(DISCIO, "Couldn't read region from {}", log_path);
+    ERROR_LOG(DISCIO, "Couldn't read region from %s", log_path.c_str());
   else if (size < 0x20)
-    ERROR_LOG_FMT(DISCIO, "Couldn't read age ratings from {}", log_path);
+    ERROR_LOG(DISCIO, "Couldn't read age ratings from %s", log_path.c_str());
 
   m_nonpartition_contents.Add(WII_REGION_DATA_ADDRESS, WII_REGION_DATA_SIZE,
                               ContentMemory(blob, 0));
@@ -961,7 +961,8 @@ DirectoryBlobPartition::DirectoryBlobPartition(std::string root_directory,
     return;
   u8* const disc_header = ContentBlobData(header_blob);
   if (ReadFileToBuffer(m_root_directory + "sys/boot.bin", disc_header, DISCHEADER_SIZE) < 0x20)
-    ERROR_LOG_FMT(DISCIO, "{} doesn't exist or is too small", m_root_directory + "sys/boot.bin");
+    ERROR_LOG(DISCIO, "%s doesn't exist or is too small",
+              (m_root_directory + "sys/boot.bin").c_str());
 
   SetDiscType(is_wii, disc_header);
   SetBI2FromFile(m_root_directory + "sys/bi2.bin");
@@ -985,8 +986,8 @@ void DirectoryBlobPartition::SetDiscType(std::optional<bool> is_wii, const u8* d
     const bool is_gc = Common::swap32(&disc_header[0x1c]) == GAMECUBE_DISC_MAGIC;
     if (m_is_wii == is_gc)
     {
-      ERROR_LOG_FMT(DISCIO, "Couldn't detect disc type based on disc header; assuming {}",
-                    m_is_wii ? "Wii" : "GameCube");
+      ERROR_LOG(DISCIO, "Couldn't detect disc type based on disc header; assuming %s",
+                m_is_wii ? "Wii" : "GameCube");
     }
   }
 
@@ -1005,7 +1006,7 @@ void DirectoryBlobPartition::SetBI2FromFile(const std::string& bi2_path)
 
   bytes_read = ReadFileToBuffer(bi2_path, ContentBlobData(blob), BI2_SIZE);
   if (!m_is_wii && bytes_read < 0x1C)
-    ERROR_LOG_FMT(DISCIO, "Couldn't read region from {}", bi2_path);
+    ERROR_LOG(DISCIO, "Couldn't read region from %s", bi2_path.c_str());
 
   m_contents.Add(BI2_ADDRESS, BI2_SIZE, ContentMemory(blob, 0));
 }
@@ -1027,14 +1028,14 @@ u64 DirectoryBlobPartition::SetApploader(ContentBlob* apploader, const std::stri
 
   if (size < 0x20)
   {
-    ERROR_LOG_FMT(DISCIO, "{} couldn't be accessed or is too small", log_path);
+    ERROR_LOG(DISCIO, "%s couldn't be accessed or is too small", log_path.c_str());
   }
   else
   {
     const u8* const data = ContentBlobData(apploader);
     const u64 apploader_size = 0x20 + Common::swap32(data + 0x14) + Common::swap32(data + 0x18);
     if (apploader_size != size)
-      ERROR_LOG_FMT(DISCIO, "{} is the wrong size... Is it really an apploader?", log_path);
+      ERROR_LOG(DISCIO, "%s is the wrong size... Is it really an apploader?", log_path.c_str());
     else
       success = true;
   }

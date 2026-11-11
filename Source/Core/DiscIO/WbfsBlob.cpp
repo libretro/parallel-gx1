@@ -172,7 +172,7 @@ File::DirectIOFile& WbfsFileReader::SeekToCluster(u64 offset, u64* available)
     }
   }
 
-  ERROR_LOG_FMT(DISCIO, "Read beyond end of disc");
+  ERROR_LOG(DISCIO, "Read beyond end of disc");
   if (available)
     *available = 0;
   m_files[0].file.Seek(0, File::SeekOrigin::Begin);

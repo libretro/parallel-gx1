@@ -4,6 +4,7 @@
 #include "DiscIO/CachedBlob.h"
 
 #include <chrono>
+#include <cinttypes>
 
 #include <retro_atomic.h>
 #include <rthreads/rthreads.h>
@@ -49,9 +50,10 @@ public:
       return true;
 
     case CacheState::Scrubbed:
-      WARN_LOG_FMT(DISCIO,
-                   "CachedBlobReader: Read({}, {}) hits a scrubbed cluster which is not cached.",
-                   offset, size);
+      WARN_LOG(DISCIO,
+               "CachedBlobReader: Read(%" PRIu64 ", %" PRIu64
+               ") hits a scrubbed cluster which is not cached.",
+               offset, size);
       return false;
 
     default:
@@ -96,7 +98,7 @@ private:
     m_memory_region_data = static_cast<u8*>(m_memory_region.Create(total_size));
     if (m_memory_region_data == nullptr)
     {
-      ERROR_LOG_FMT(DISCIO, "CachedBlobReader: Failed to create memory region.");
+      ERROR_LOG(DISCIO, "CachedBlobReader: Failed to create memory region.");
       return;
     }
 
@@ -122,7 +124,7 @@ private:
       }
       else
       {
-        WARN_LOG_FMT(DISCIO, "CachedBlobReader: Failed to scrub. The entire file will be cached.");
+        WARN_LOG(DISCIO, "CachedBlobReader: Failed to scrub. The entire file will be cached.");
       }
     }
 
@@ -134,7 +136,7 @@ private:
     {
       if (retro_atomic_load_relaxed_int(&m_stop_thread))
       {
-        INFO_LOG_FMT(DISCIO, "CachedBlobReader: Stopped");
+        INFO_LOG(DISCIO, "CachedBlobReader: Stopped");
         break;
       }
 
@@ -145,9 +147,8 @@ private:
 
         static constexpr auto mib_scale = double(1 << 20);
 
-        NOTICE_LOG_FMT(
-            DISCIO, "CachedBlobReader: Completed. Cached {:.2f} of {:.2f} MiB in {:.2f} seconds.",
-            committed_count / mib_scale, total_size / mib_scale, total_time);
+        NOTICE_LOG(DISCIO, "CachedBlobReader: Completed. Cached %.2f of %.2f MiB in %.2f seconds.",
+                   committed_count / mib_scale, total_size / mib_scale, total_time);
         break;
       }
 
@@ -157,7 +158,8 @@ private:
 
         if (!reader->Read(read_offset, read_size, m_memory_region_data + read_offset))
         {
-          ERROR_LOG_FMT(DISCIO, "CachedBlobReader: Read({}, {}) failed.", read_offset, read_size);
+          ERROR_LOG(DISCIO, "CachedBlobReader: Read(%" PRIu64 ", %" PRIu64 ") failed.", read_offset,
+                    read_size);
           break;
         }
 
@@ -169,8 +171,8 @@ private:
 
       if (const auto now = Clock::now(); now >= next_log_time)
       {
-        INFO_LOG_FMT(DISCIO, "CachedBlobReader: Progress: {}%",
-                     committed_count * 100 / total_bytes_to_commit);
+        INFO_LOG(DISCIO, "CachedBlobReader: Progress: %" PRIu64 "%%",
+                 committed_count * 100 / total_bytes_to_commit);
         next_log_time = now + PERIODIC_LOG_TIME;
       }
     }
@@ -198,13 +200,13 @@ public:
         m_reader{std::move(reader)}
 
   {
-    INFO_LOG_FMT(DISCIO, "CachedBlobReader: Created");
+    INFO_LOG(DISCIO, "CachedBlobReader: Created");
   }
 
   CachedBlobReader(std::shared_ptr<CacheFiller> cache_filler, std::unique_ptr<BlobReader> reader)
       : m_cache_filler{std::move(cache_filler)}, m_reader{std::move(reader)}
   {
-    INFO_LOG_FMT(DISCIO, "CachedBlobReader: Copied");
+    INFO_LOG(DISCIO, "CachedBlobReader: Copied");
   }
 
   std::unique_ptr<BlobReader> CopyReader() const override

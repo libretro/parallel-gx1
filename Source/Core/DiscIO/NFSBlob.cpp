@@ -4,6 +4,8 @@
 #include "DiscIO/NFSBlob.h"
 
 #include <array>
+#include <cinttypes>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -11,7 +13,6 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
 
 #include "Common/Align.h"
 #include "Common/BitUtils.h"
@@ -33,7 +34,7 @@ bool NFSFileReader::ReadKey(const std::string& path, const std::string& director
 
   if (parent_name + parent_extension != "content")
   {
-    ERROR_LOG_FMT(DISCIO, "hif_000000.nfs is not in a directory named 'content': {}", path);
+    ERROR_LOG(DISCIO, "hif_000000.nfs is not in a directory named 'content': %s", path.c_str());
     return false;
   }
 
@@ -41,7 +42,7 @@ bool NFSFileReader::ReadKey(const std::string& path, const std::string& director
   File::DirectIOFile key_file(key_path, File::AccessMode::Read);
   if (!key_file.Read(key_out->data(), key_out->size()))
   {
-    ERROR_LOG_FMT(DISCIO, "Failed to read from {}", key_path);
+    ERROR_LOG(DISCIO, "Failed to read from %s", key_path.c_str());
     return false;
   }
 
@@ -81,11 +82,13 @@ std::vector<File::DirectIOFile> NFSFileReader::OpenFiles(const std::string& dire
 
   for (u64 i = 1; i < file_count; ++i)
   {
-    const std::string child_path = fmt::format("{}hif_{:06}.nfs", directory, i);
+    char child_name[32];
+    snprintf(child_name, sizeof(child_name), "hif_%06" PRIu64 ".nfs", i);
+    const std::string child_path = directory + child_name;
     File::DirectIOFile child(child_path, File::AccessMode::Read);
     if (!child.IsOpen())
     {
-      ERROR_LOG_FMT(DISCIO, "Failed to open {}", child_path);
+      ERROR_LOG(DISCIO, "Failed to open %s", child_path.c_str());
       return {};
     }
 
@@ -95,10 +98,10 @@ std::vector<File::DirectIOFile> NFSFileReader::OpenFiles(const std::string& dire
 
   if (*raw_size_out < expected_raw_size)
   {
-    ERROR_LOG_FMT(
-        DISCIO,
-        "Expected sum of NFS file sizes for {} to be at least {} bytes, but it was {} bytes",
-        directory, expected_raw_size, *raw_size_out);
+    ERROR_LOG(DISCIO,
+              "Expected sum of NFS file sizes for %s to be at least %" PRIu64
+              " bytes, but it was %" PRIu64 " bytes",
+              directory.c_str(), expected_raw_size, *raw_size_out);
     return {};
   }
 

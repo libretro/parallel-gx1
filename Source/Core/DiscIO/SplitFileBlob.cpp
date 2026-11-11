@@ -3,11 +3,12 @@
 
 #include "DiscIO/SplitFileBlob.h"
 
+#include <cstdio>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
-#include <fmt/format.h>
 
 namespace DiscIO
 {
@@ -32,7 +33,9 @@ std::unique_ptr<SplitPlainFileReader> SplitPlainFileReader::Create(std::string_v
   u64 offset = 0;
   while (true)
   {
-    File::DirectIOFile f(fmt::format("{}.part{}.iso", base_path, index), File::AccessMode::Read);
+    char part_name[40];
+    snprintf(part_name, sizeof(part_name), ".part%zu.iso", index);
+    File::DirectIOFile f(std::string(base_path) + part_name, File::AccessMode::Read);
     if (!f.IsOpen())
       break;
     const u64 size = f.GetSize();

@@ -70,7 +70,7 @@ std::unique_ptr<WIARVZFileReader> WIARVZFileReader::Create(File::DirectIOFile fi
   std::unique_ptr<WIARVZFileReader> blob(new WIARVZFileReader(std::move(file), path, rvz));
   if (!(blob->m_reader = rvz_new()) || !blob->Open())
   {
-    ERROR_LOG_FMT(DISCIO, "Not a WIA or RVZ image this reads: {}", path);
+    ERROR_LOG(DISCIO, "Not a WIA or RVZ image this reads: %s", path.c_str());
     return nullptr;
   }
   blob->m_compression = rvz_compression(blob->m_reader, &blob->m_level);

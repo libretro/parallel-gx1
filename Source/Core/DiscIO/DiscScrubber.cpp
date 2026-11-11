@@ -3,6 +3,7 @@
 
 #include "DiscIO/DiscScrubber.h"
 
+#include <cinttypes>
 #include <cstddef>
 #include <optional>
 #include <vector>
@@ -51,7 +52,7 @@ void DiscScrubber::MarkAsUsed(u64 offset, u64 size)
   u64 current_offset = Common::AlignDown(offset, CLUSTER_SIZE);
   const u64 end_offset = offset + size;
 
-  DEBUG_LOG_FMT(DISCIO, "Marking {:#018x} - {:#018x} as used", offset, end_offset);
+  DEBUG_LOG(DISCIO, "Marking %#018" PRIx64 " - %#018" PRIx64 " as used", offset, end_offset);
 
   while (current_offset < end_offset && current_offset < m_file_size)
   {
@@ -164,8 +165,8 @@ bool DiscScrubber::ParsePartitionData(const Volume& disc, const Partition& parti
   const FileSystem* filesystem = disc.GetFileSystem(partition);
   if (!filesystem)
   {
-    ERROR_LOG_FMT(DISCIO, "Failed to read file system for the partition at {:#x}",
-                  partition.offset);
+    ERROR_LOG(DISCIO, "Failed to read file system for the partition at %#" PRIx64,
+              partition.offset);
     return false;
   }
 
@@ -220,7 +221,7 @@ void DiscScrubber::ParseFileSystemData(u64 partition_data_offset, const FileInfo
 {
   for (const FileInfo& file_info : directory)
   {
-    DEBUG_LOG_FMT(DISCIO, "Scrubbing {}", file_info.GetPath());
+    DEBUG_LOG(DISCIO, "Scrubbing %s", file_info.GetPath().c_str());
     if (file_info.IsDirectory())
       ParseFileSystemData(partition_data_offset, file_info);
     else

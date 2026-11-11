@@ -188,7 +188,7 @@ bool FileInfoGCWii::IsValid(u64 fst_size, const FileInfoGCWii& parent_directory)
 {
   if (GetNameOffset() >= fst_size)
   {
-    ERROR_LOG_FMT(DISCIO, "Impossibly large name offset in file system");
+    ERROR_LOG(DISCIO, "Impossibly large name offset in file system");
     return false;
   }
 
@@ -196,7 +196,7 @@ bool FileInfoGCWii::IsValid(u64 fst_size, const FileInfoGCWii& parent_directory)
   {
     if (Get(EntryProperty::FILE_OFFSET) != parent_directory.m_index)
     {
-      ERROR_LOG_FMT(DISCIO, "Incorrect parent offset in file system");
+      ERROR_LOG(DISCIO, "Incorrect parent offset in file system");
       return false;
     }
 
@@ -204,13 +204,13 @@ bool FileInfoGCWii::IsValid(u64 fst_size, const FileInfoGCWii& parent_directory)
 
     if (size <= m_index)
     {
-      ERROR_LOG_FMT(DISCIO, "Impossibly small directory size in file system");
+      ERROR_LOG(DISCIO, "Impossibly small directory size in file system");
       return false;
     }
 
     if (size > parent_directory.Get(EntryProperty::FILE_SIZE))
     {
-      ERROR_LOG_FMT(DISCIO, "Impossibly large directory size in file system");
+      ERROR_LOG(DISCIO, "Impossibly large directory size in file system");
       return false;
     }
 
@@ -242,7 +242,7 @@ FileSystemGCWii::FileSystemGCWii(const VolumeDisc* volume, const Partition& part
     return;
   if (*fst_size < FST_ENTRY_SIZE)
   {
-    ERROR_LOG_FMT(DISCIO, "File system is too small");
+    ERROR_LOG(DISCIO, "File system is too small");
     return;
   }
 
@@ -254,7 +254,7 @@ FileSystemGCWii::FileSystemGCWii(const VolumeDisc* volume, const Partition& part
     // Without this check, Dolphin can crash by trying to allocate too much
     // memory when loading a disc image with an incorrect FST size.
 
-    ERROR_LOG_FMT(DISCIO, "File system is abnormally large! Aborting loading");
+    ERROR_LOG(DISCIO, "File system is abnormally large! Aborting loading");
     return;
   }
 
@@ -262,7 +262,7 @@ FileSystemGCWii::FileSystemGCWii(const VolumeDisc* volume, const Partition& part
   m_file_system_table.resize(*fst_size);
   if (!volume->Read(*fst_offset, *fst_size, m_file_system_table.data(), partition))
   {
-    ERROR_LOG_FMT(DISCIO, "Couldn't read file system table");
+    ERROR_LOG(DISCIO, "Couldn't read file system table");
     return;
   }
 
@@ -270,20 +270,20 @@ FileSystemGCWii::FileSystemGCWii(const VolumeDisc* volume, const Partition& part
   m_root = FileInfoGCWii(m_file_system_table.data(), offset_shift);
   if (!m_root.IsDirectory())
   {
-    ERROR_LOG_FMT(DISCIO, "File system root is not a directory");
+    ERROR_LOG(DISCIO, "File system root is not a directory");
     return;
   }
 
   if (FST_ENTRY_SIZE * m_root.GetSize() > *fst_size)
   {
-    ERROR_LOG_FMT(DISCIO, "File system has too many entries for its size");
+    ERROR_LOG(DISCIO, "File system has too many entries for its size");
     return;
   }
 
   // If the FST's final byte isn't 0, FileInfoGCWii::GetName() can read past the end
   if (m_file_system_table[*fst_size - 1] != 0)
   {
-    ERROR_LOG_FMT(DISCIO, "File system does not end with a null byte");
+    ERROR_LOG(DISCIO, "File system does not end with a null byte");
     return;
   }
 

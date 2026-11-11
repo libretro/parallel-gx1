@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/MathUtil.h"
@@ -46,7 +45,7 @@ std::string NameForPartitionType(u32 partition_type, bool include_prefix)
       return include_prefix ? "P-" + type_as_game_id : type_as_game_id;
     }
 
-    return fmt::format("{}{}", include_prefix ? "P" : "", partition_type);
+    return (include_prefix ? "P" : "") + std::to_string(partition_type);
   }
 }
 

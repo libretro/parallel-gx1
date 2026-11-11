@@ -42,7 +42,7 @@ VolumeWii::VolumeWii(std::unique_ptr<BlobReader> reader)
   m_has_encryption = m_reader->ReadSwapped<u8>(0x61) == u8(0);
 
   if (m_has_encryption && !m_has_hashes)
-    ERROR_LOG_FMT(DISCIO, "Wii disc has encryption but no hashes! This probably won't work well");
+    ERROR_LOG(DISCIO, "Wii disc has encryption but no hashes! This probably won't work well");
 
   for (u32 partition_group = 0; partition_group < 4; ++partition_group)
   {
@@ -94,7 +94,7 @@ VolumeWii::VolumeWii(std::unique_ptr<BlobReader> reader)
         {
           // This check is normally done by ES in ES_DiVerify, but that would happen too late
           // (after allocating the buffer), so we do the check here.
-          ERROR_LOG_FMT(DISCIO, "Invalid TMD size");
+          ERROR_LOG(DISCIO, "Invalid TMD size");
           return INVALID_TMD;
         }
         IOS::ES::TMDReader tmd;

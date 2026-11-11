@@ -366,7 +366,7 @@ Country CountryCodeToCountry(u8 country_code, Platform platform, Region region,
 
   default:
     if (country_code > 'A')  // Silently ignore IOS wads
-      WARN_LOG_FMT(DISCIO, "Unknown Country Code! {}", static_cast<char>(country_code));
+      WARN_LOG(DISCIO, "Unknown Country Code! %c", static_cast<char>(country_code));
     return Country::Unknown;
   }
 }
@@ -408,7 +408,7 @@ std::string GetSysMenuVersionString(u16 title_version, bool is_vwii)
     region_letter = 'K';
     break;
   default:
-    WARN_LOG_FMT(DISCIO, "Unknown region for Wii Menu version {}", title_version);
+    WARN_LOG(DISCIO, "Unknown region for Wii Menu version %u", (unsigned)title_version);
     break;
   }
 

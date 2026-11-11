@@ -3,6 +3,7 @@
 
 #include "DiscIO/CompressedBlob.h"
 
+#include <cinttypes>
 #include <cstring>
 #include <expected>
 #include <memory>
@@ -57,19 +58,19 @@ bool CompressedBlobReader::Initialize()
   // Basic sanity check for size before we start allocating
   if (header_size > m_file_size)
   {
-    ERROR_LOG_FMT(DISCIO, "Headers' size is larger than file size");
+    ERROR_LOG(DISCIO, "Headers' size is larger than file size");
     return false;
   }
 
   if ((header_size + m_header.compressed_data_size) > m_file_size)
   {
-    ERROR_LOG_FMT(DISCIO, "Data size is larger than file size.");
+    ERROR_LOG(DISCIO, "Data size is larger than file size.");
     return false;
   }
 
   if (m_header.num_blocks == 0)
   {
-    ERROR_LOG_FMT(DISCIO, "GCZ file has zero blocks");
+    ERROR_LOG(DISCIO, "GCZ file has zero blocks");
     return false;
   }
 
@@ -131,7 +132,7 @@ u64 CompressedBlobReader::GetBlockCompressedSize(u64 block_num) const
   else if (block_num == m_header.num_blocks - 1)
     return m_header.compressed_data_size - start;
   else
-    ERROR_LOG_FMT(DISCIO, "{} - illegal block number {}", __func__, block_num);
+    ERROR_LOG(DISCIO, "%s - illegal block number %" PRIu64, __func__, block_num);
   return 0;
 }
 
@@ -148,7 +149,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   {
     if (read_size != m_header.block_size)
     {
-      ERROR_LOG_FMT(DISCIO, "Uncompressed block with wrong size");
+      ERROR_LOG(DISCIO, "Uncompressed block with wrong size");
       return false;
     }
     uncompressed = true;
@@ -158,15 +159,15 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   {
     if (read_size > m_zlib_buffer.size())
     {
-      ERROR_LOG_FMT(DISCIO, "Compressed block is too large");
+      ERROR_LOG(DISCIO, "Compressed block is too large");
       return false;
     }
   }
 
   if (!m_file.OffsetRead(offset, m_zlib_buffer.data(), read_size))
   {
-    ERROR_LOG_FMT(DISCIO, "The disc image \"{}\" is truncated, some of the data is missing.",
-                  m_file_name);
+    ERROR_LOG(DISCIO, "The disc image \"%s\" is truncated, some of the data is missing.",
+              m_file_name.c_str());
     return false;
   }
 
@@ -174,10 +175,10 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   const u32 block_hash = common_hash_adler32(m_zlib_buffer.data(), read_size);
   if (block_hash != m_hashes[block_num])
   {
-    ERROR_LOG_FMT(DISCIO,
-                  "The disc image \"{}\" is corrupt.\n"
-                  "Hash of block {} is {:08x} instead of {:08x}.",
-                  m_file_name, block_num, block_hash, m_hashes[block_num]);
+    ERROR_LOG(DISCIO,
+              "The disc image \"%s\" is corrupt.\n"
+              "Hash of block %" PRIu64 " is %08x instead of %08x.",
+              m_file_name.c_str(), block_num, block_hash, m_hashes[block_num]);
   }
 
   if (uncompressed)
@@ -190,7 +191,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
     int status;
     if (read_size > m_header.block_size)
     {
-      ERROR_LOG_FMT(DISCIO, "Compressed block size is larger than uncompressed block size");
+      ERROR_LOG(DISCIO, "Compressed block size is larger than uncompressed block size");
     }
     rinflate_reset(m_inflate, 15);
     rinflate_set_in(m_inflate, m_zlib_buffer.data(), read_size);
@@ -203,11 +204,12 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
     } while (status == RDEFLATE_PROCESS_NEXT && (read || wrote));
     if (status != RDEFLATE_PROCESS_END)
     {
-      ERROR_LOG_FMT(DISCIO, "Failure reading block {} - out of data and not at end.", block_num);
+      ERROR_LOG(DISCIO, "Failure reading block %" PRIu64 " - out of data and not at end.",
+                block_num);
     }
     if (uncomp_size != m_header.block_size)
     {
-      ERROR_LOG_FMT(DISCIO, "Wrong block size");
+      ERROR_LOG(DISCIO, "Wrong block size");
       return false;
     }
   }
@@ -249,7 +251,7 @@ bool CompressedBlobReader::ValidateBlockPointers() const
   size_t invalid_pointers = m_header.num_blocks - valid_pointers;
 
   if (invalid_pointers > 0)
-    ERROR_LOG_FMT(DISCIO, "GCZ file has {} invalid block pointers", invalid_pointers);
+    ERROR_LOG(DISCIO, "GCZ file has %" PRIu64 " invalid block pointers", invalid_pointers);
 
   return invalid_pointers == 0;
 }
