@@ -247,10 +247,10 @@ struct Message
         common_crc32_compute(reinterpret_cast<const u8*>(&m_message), sizeof(ToMsgType));
     if (crc32_in_header != crc32_calculated)
     {
-      NOTICE_LOG_FMT(
-          CONTROLLERINTERFACE,
-          "DualShockUDPClient Received message with bad CRC in header: got {:08x}, expected {:08x}",
-          crc32_in_header, crc32_calculated);
+      NOTICE_LOG(CONTROLLERINTERFACE,
+                 "DualShockUDPClient Received message with bad CRC in header: got %08x, expected "
+                 "%08x",
+                 crc32_in_header, crc32_calculated);
       return std::nullopt;
     }
     if (m_message.header.protocol_version > CEMUHOOK_PROTOCOL_VERSION)

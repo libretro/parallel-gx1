@@ -31,7 +31,7 @@ bool InputConfig::LoadConfig()
 {
   Common::IniFile inifile;
   bool useProfile[MAX_BBMOTES] = {false, false, false, false, false};
-  static constexpr std::array<std::string_view, MAX_BBMOTES> num = {"1", "2", "3", "4", "BB"};
+  static const char* const num[MAX_BBMOTES] = {"1", "2", "3", "4", "BB"};
   std::string profile[MAX_BBMOTES];
 
   if (SConfig::GetInstance().GetGameID() != "00000000")
@@ -43,7 +43,7 @@ bool InputConfig::LoadConfig()
 
     for (int i = 0; i < 4; i++)
     {
-      const auto profile_name = fmt::format("{}Profile{}", GetProfileKey(), num[i]);
+      const std::string profile_name = GetProfileKey() + "Profile" + num[i];
 
       if (control_section->Exists(profile_name))
       {
@@ -55,7 +55,7 @@ bool InputConfig::LoadConfig()
           if (profiles.empty())
           {
             // TODO: PanicAlert shouldn't be used for this.
-            PanicAlertFmtT("No profiles found for game setting '{0}'", profile_setting);
+            PanicAlert("No profiles found for game setting '%s'", profile_setting.c_str());
             continue;
           }
 
@@ -152,12 +152,12 @@ bool InputConfig::ControllersNeedToBeCreated() const
 
 std::string InputConfig::GetUserProfileDirectoryPath() const
 {
-  return fmt::format("{}Profiles/{}/", File::GetUserPath(D_CONFIG_IDX), GetProfileDirectoryName());
+  return File::GetUserPath(D_CONFIG_IDX) + "Profiles/" + GetProfileDirectoryName() + "/";
 }
 
 std::string InputConfig::GetSysProfileDirectoryPath() const
 {
-  return fmt::format("{}Profiles/{}/", File::GetSysDirectory(), GetProfileDirectoryName());
+  return File::GetSysDirectory() + "Profiles/" + GetProfileDirectoryName() + "/";
 }
 
 int InputConfig::GetControllerCount() const

@@ -3,11 +3,13 @@
 
 #include "InputCommon/ControllerInterface/Wiimote/WiimoteController.h"
 
+#include <cinttypes>
 #include <cstring>
 
 #include "Common/BitUtils.h"
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
+#include "Common/StringUtil.h"
 #include "Core/Config/SYSCONFSettings.h"
 #include "Core/HW/WiimoteEmu/ExtensionPort.h"
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
@@ -118,7 +120,7 @@ void AddDevice(std::unique_ptr<WiimoteReal::Wiimote> wiimote)
 
   if (!wiimote->Connect(CIFACE_WIIMOTE_INDEX))
   {
-    WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to connect.");
+    WARN_LOG(WIIMOTE, "WiiRemote: Failed to connect.");
     return;
   }
 
@@ -211,12 +213,15 @@ Device::Device(std::unique_ptr<WiimoteReal::Wiimote> wiimote) : m_wiimote(std::m
   // Raw IR Objects.
   for (std::size_t i = 0; i < 4; ++i)
   {
-    AddInput(new UndetectableAnalogInput<float>(&m_ir_state.raw_ir_object_position[i].x,
-                                                fmt::format("IR Object {} X", i + 1), 1));
-    AddInput(new UndetectableAnalogInput<float>(&m_ir_state.raw_ir_object_position[i].y,
-                                                fmt::format("IR Object {} Y", i + 1), 1));
-    AddInput(new UndetectableAnalogInput<float>(&m_ir_state.raw_ir_object_size[i],
-                                                fmt::format("IR Object {} Size", i + 1), 1));
+    AddInput(new UndetectableAnalogInput<float>(
+        &m_ir_state.raw_ir_object_position[i].x,
+        StringFromFormat("IR Object %u X", static_cast<unsigned>(i + 1)), 1));
+    AddInput(new UndetectableAnalogInput<float>(
+        &m_ir_state.raw_ir_object_position[i].y,
+        StringFromFormat("IR Object %u Y", static_cast<unsigned>(i + 1)), 1));
+    AddInput(new UndetectableAnalogInput<float>(
+        &m_ir_state.raw_ir_object_size[i],
+        StringFromFormat("IR Object %u Size", static_cast<unsigned>(i + 1)), 1));
   }
 
   // Raw gyroscope.
@@ -324,7 +329,7 @@ Device::~Device()
 
   m_wiimote->EmuStop();
 
-  INFO_LOG_FMT(WIIMOTE, "WiiRemote: Returning remote to pool.");
+  INFO_LOG(WIIMOTE, "WiiRemote: Returning remote to pool.");
   WiimoteReal::AddWiimoteToPool(std::move(m_wiimote));
 }
 
@@ -356,7 +361,7 @@ void Device::RunTasks()
 
     AddReportHandler(std::function<void(const InputReportStatus& status)>(
         [this](const InputReportStatus& status) {
-          DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Received requested status.");
+          DEBUG_LOG(WIIMOTE, "WiiRemote: Received requested status.");
           ProcessStatusReport(status);
         }));
 
@@ -373,11 +378,11 @@ void Device::RunTasks()
     QueueReport(rpt, [this, desired_leds](ErrorCode result) {
       if (result != ErrorCode::Success)
       {
-        WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to set LEDs.");
+        WARN_LOG(WIIMOTE, "WiiRemote: Failed to set LEDs.");
         return;
       }
 
-      DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Set LEDs.");
+      DEBUG_LOG(WIIMOTE, "WiiRemote: Set LEDs.");
 
       m_leds = desired_leds;
     });
@@ -395,13 +400,13 @@ void Device::RunTasks()
     QueueReport(mode, [this](ErrorCode error) {
       if (error != ErrorCode::Success)
       {
-        WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to set reporting mode.");
+        WARN_LOG(WIIMOTE, "WiiRemote: Failed to set reporting mode.");
         return;
       }
 
       m_reporting_mode = desired_reporting_mode;
 
-      DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Set reporting mode.");
+      DEBUG_LOG(WIIMOTE, "WiiRemote: Set reporting mode.");
     });
 
     return;
@@ -416,11 +421,11 @@ void Device::RunTasks()
              [this](ReadResponse response) {
                if (!response)
                {
-                 WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to read accelerometer calibration.");
+                 WARN_LOG(WIIMOTE, "WiiRemote: Failed to read accelerometer calibration.");
                  return;
                }
 
-               DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Read accelerometer calibration.");
+               DEBUG_LOG(WIIMOTE, "WiiRemote: Read accelerometer calibration.");
 
                auto& calibration_data = *response;
 
@@ -432,7 +437,7 @@ void Device::RunTasks()
 
                // We could potentially try the second block at 0x26 if the checksum is bad.
                if (accel_calibration.checksum != calibration_data.back())
-                 WARN_LOG_FMT(WIIMOTE, "WiiRemote: Bad accelerometer calibration checksum.");
+                 WARN_LOG(WIIMOTE, "WiiRemote: Bad accelerometer calibration checksum.");
              });
 
     return;
@@ -487,7 +492,7 @@ void Device::RunTasks()
     // Note that this signal also DE-activates a M+.
     WriteData(AddressSpace::I2CBus, WiimoteEmu::ExtensionPort::REPORT_I2C_SLAVE, INIT_ADDR,
               {INIT_VALUE}, [this](ErrorCode result) {
-                DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Initialized extension: {}.", int(result));
+                DEBUG_LOG(WIIMOTE, "WiiRemote: Initialized extension: %d.", int(result));
                 m_extension_id = std::nullopt;
               });
 
@@ -515,14 +520,14 @@ void Device::RunTasks()
              [this](const ReadResponse& response) {
                if (!response)
                {
-                 DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: M+ poll failed.");
+                 DEBUG_LOG(WIIMOTE, "WiiRemote: M+ poll failed.");
                  HandleMotionPlusNonResponse();
                  return;
                }
 
                WriteData(AddressSpace::I2CBus, WiimoteEmu::MotionPlus::INACTIVE_DEVICE_ADDR,
                          INIT_ADDR, {INIT_VALUE}, [this](ErrorCode result) {
-                           DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: M+ initialization: {}.", int(result));
+                           DEBUG_LOG(WIIMOTE, "WiiRemote: M+ initialization: %d.", int(result));
                            if (result != ErrorCode::Success)
                            {
                              HandleMotionPlusNonResponse();
@@ -589,7 +594,7 @@ void Device::RunTasks()
                if (!response)
                  return;
 
-               DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Read M+ calibration.");
+               DEBUG_LOG(WIIMOTE, "WiiRemote: Read M+ calibration.");
 
                WiimoteEmu::MotionPlus::CalibrationData calibration =
                    Common::BitCastPtr<WiimoteEmu::MotionPlus::CalibrationData>(response->data());
@@ -603,7 +608,7 @@ void Device::RunTasks()
                if (read_checksum != std::pair(calibration.crc32_lsb, calibration.crc32_msb))
                {
                  // We could potentially try another read or call the M+ unusable.
-                 WARN_LOG_FMT(WIIMOTE, "WiiRemote: Bad M+ calibration checksum.");
+                 WARN_LOG(WIIMOTE, "WiiRemote: Bad M+ calibration checksum.");
                }
              });
 
@@ -627,7 +632,7 @@ void Device::RunTasks()
           if (!response)
             return;
 
-          DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Read extension calibration.");
+          DEBUG_LOG(WIIMOTE, "WiiRemote: Read extension calibration.");
 
           auto& calibration_data = *response;
 
@@ -642,7 +647,7 @@ void Device::RunTasks()
                                          calibration_data[CALIBRATION_SIZE - 1]))
           {
             // We could potentially try another block or call the extension unusable.
-            WARN_LOG_FMT(WIIMOTE, "WiiRemote: Bad extension calibration checksum.");
+            WARN_LOG(WIIMOTE, "WiiRemote: Bad extension calibration checksum.");
             checksum = Checksum::Bad;
           }
 
@@ -730,14 +735,14 @@ void Device::ProcessExtensionID(u8 id_0, u8 id_4, u8 id_5)
 {
   if (id_4 == 0x00 && id_5 == 0x00)
   {
-    INFO_LOG_FMT(WIIMOTE, "WiiRemote: Nunchuk is attached.");
+    INFO_LOG(WIIMOTE, "WiiRemote: Nunchuk is attached.");
     m_extension_id = ExtensionID::Nunchuk;
 
     m_mplus_desired_mode = MotionPlusState::PassthroughMode::Nunchuk;
   }
   else if (id_4 == 0x01 && id_5 == 0x01)
   {
-    INFO_LOG_FMT(WIIMOTE, "WiiRemote: Classic Controller is attached.");
+    INFO_LOG(WIIMOTE, "WiiRemote: Classic Controller is attached.");
     m_extension_id = ExtensionID::Classic;
 
     m_mplus_desired_mode = MotionPlusState::PassthroughMode::Classic;
@@ -745,7 +750,8 @@ void Device::ProcessExtensionID(u8 id_0, u8 id_4, u8 id_5)
   else
   {
     // This is a normal occurrence before extension initialization.
-    DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Unknown extension: {} {} {}.", id_0, id_4, id_5);
+    DEBUG_LOG(WIIMOTE, "WiiRemote: Unknown extension: %u %u %u.", (unsigned)id_0, (unsigned)id_4,
+              (unsigned)id_5);
     m_extension_id = ExtensionID::Unsupported;
   }
 }
@@ -753,7 +759,7 @@ void Device::ProcessExtensionID(u8 id_0, u8 id_4, u8 id_5)
 void Device::MotionPlusState::SetCalibrationData(
     const WiimoteEmu::MotionPlus::CalibrationData& data)
 {
-  DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Set M+ calibration.");
+  DEBUG_LOG(WIIMOTE, "WiiRemote: Set M+ calibration.");
 
   calibration.emplace();
 
@@ -774,7 +780,7 @@ Device::NunchukState::Calibration::Calibration() : accel{}, stick{}
 void Device::NunchukState::SetCalibrationData(const WiimoteEmu::Nunchuk::CalibrationData& data,
                                               Checksum checksum)
 {
-  DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Set Nunchuk calibration.");
+  DEBUG_LOG(WIIMOTE, "WiiRemote: Set Nunchuk calibration.");
 
   calibration.emplace();
 
@@ -790,8 +796,7 @@ void Device::NunchukState::SetCalibrationData(const WiimoteEmu::Nunchuk::Calibra
   }
   else
   {
-    WARN_LOG_FMT(WIIMOTE,
-                 "WiiRemote: Nunchuk stick calibration is not sane. Using fallback values.");
+    WARN_LOG(WIIMOTE, "WiiRemote: Nunchuk stick calibration is not sane. Using fallback values.");
   }
 
   // No known reports of bad accelerometer calibration but we'll handle it just in case.
@@ -802,8 +807,7 @@ void Device::NunchukState::SetCalibrationData(const WiimoteEmu::Nunchuk::Calibra
   }
   else
   {
-    WARN_LOG_FMT(WIIMOTE,
-                 "WiiRemote: Nunchuk accel calibration is not sane. Using fallback values.");
+    WARN_LOG(WIIMOTE, "WiiRemote: Nunchuk accel calibration is not sane. Using fallback values.");
   }
 }
 
@@ -823,7 +827,7 @@ Device::ClassicState::Calibration::Calibration()
 void Device::ClassicState::SetCalibrationData(const WiimoteEmu::Classic::CalibrationData& data,
                                               Checksum checksum)
 {
-  DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Set Classic Controller calibration.");
+  DEBUG_LOG(WIIMOTE, "WiiRemote: Set Classic Controller calibration.");
 
   calibration.emplace();
 
@@ -837,8 +841,7 @@ void Device::ClassicState::SetCalibrationData(const WiimoteEmu::Classic::Calibra
   }
   else
   {
-    WARN_LOG_FMT(WIIMOTE,
-                 "WiiRemote: CC left stick calibration is not sane. Using fallback values.");
+    WARN_LOG(WIIMOTE, "WiiRemote: CC left stick calibration is not sane. Using fallback values.");
   }
 
   const auto right_stick_calibration = data.GetRightStick();
@@ -848,8 +851,7 @@ void Device::ClassicState::SetCalibrationData(const WiimoteEmu::Classic::Calibra
   }
   else
   {
-    WARN_LOG_FMT(WIIMOTE,
-                 "WiiRemote: CC right stick calibration is not sane. Using fallback values.");
+    WARN_LOG(WIIMOTE, "WiiRemote: CC right stick calibration is not sane. Using fallback values.");
   }
   calibration->left_trigger = data.GetLeftTrigger();
   calibration->right_trigger = data.GetRightTrigger();
@@ -874,7 +876,7 @@ void Device::ReadActiveExtensionID()
 
                m_mplus_state.current_mode = passthrough_mode;
 
-               INFO_LOG_FMT(WIIMOTE, "WiiRemote: M+ is active in mode: {}.", int(passthrough_mode));
+               INFO_LOG(WIIMOTE, "WiiRemote: M+ is active in mode: %d.", int(passthrough_mode));
              }
              else
              {
@@ -923,7 +925,7 @@ void Device::SetIRSensitivity(u32 level)
   static constexpr u16 BLOCK1_ADDR = 0x00;
   static constexpr u16 BLOCK2_ADDR = 0x1a;
 
-  DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Setting IR sensitivity: {}.", level + 1);
+  DEBUG_LOG(WIIMOTE, "WiiRemote: Setting IR sensitivity: %u.", level + 1);
 
   const auto& sensitivity_config = sensitivity_configs[level];
 
@@ -931,7 +933,7 @@ void Device::SetIRSensitivity(u32 level)
             sensitivity_config.block1, [&sensitivity_config, level, this](ErrorCode block_result) {
               if (block_result != ErrorCode::Success)
               {
-                WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to write IR block 1.");
+                WARN_LOG(WIIMOTE, "WiiRemote: Failed to write IR block 1.");
                 return;
               }
 
@@ -939,11 +941,11 @@ void Device::SetIRSensitivity(u32 level)
                         sensitivity_config.block2, [&, level, this](ErrorCode block2_result) {
                           if (block2_result != ErrorCode::Success)
                           {
-                            WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to write IR block 2.");
+                            WARN_LOG(WIIMOTE, "WiiRemote: Failed to write IR block 2.");
                             return;
                           }
 
-                          DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: IR sensitivity set.");
+                          DEBUG_LOG(WIIMOTE, "WiiRemote: IR sensitivity set.");
 
                           m_ir_state.current_sensitivity = level;
                         });
@@ -960,7 +962,7 @@ void Device::ConfigureIRCamera()
     QueueReport(ir_logic2, [this](ErrorCode result) {
       if (result != ErrorCode::Success)
       {
-        WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to enable IR.");
+        WARN_LOG(WIIMOTE, "WiiRemote: Failed to enable IR.");
         return;
       }
 
@@ -970,11 +972,11 @@ void Device::ConfigureIRCamera()
       QueueReport(ir_logic, [this](ErrorCode ir_result) {
         if (ir_result != ErrorCode::Success)
         {
-          WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to enable IR.");
+          WARN_LOG(WIIMOTE, "WiiRemote: Failed to enable IR.");
           return;
         }
 
-        DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: IR enabled.");
+        DEBUG_LOG(WIIMOTE, "WiiRemote: IR enabled.");
 
         m_ir_state.enabled = true;
       });
@@ -1000,7 +1002,7 @@ void Device::ConfigureIRCamera()
               {WiimoteEmu::CameraLogic::IR_MODE_BASIC}, [this](ErrorCode mode_result) {
                 if (mode_result != ErrorCode::Success)
                 {
-                  WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to set IR mode.");
+                  WARN_LOG(WIIMOTE, "WiiRemote: Failed to set IR mode.");
                   return;
                 }
 
@@ -1012,11 +1014,11 @@ void Device::ConfigureIRCamera()
                           {ENABLE_VALUE}, [this](ErrorCode result) {
                             if (result != ErrorCode::Success)
                             {
-                              WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to enable object tracking.");
+                              WARN_LOG(WIIMOTE, "WiiRemote: Failed to enable object tracking.");
                               return;
                             }
 
-                            DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: IR mode set.");
+                            DEBUG_LOG(WIIMOTE, "WiiRemote: IR mode set.");
 
                             m_ir_state.mode_set = true;
                           });
@@ -1032,7 +1034,7 @@ void Device::ConfigureSpeaker()
   QueueReport(mute, [this](ErrorCode mute_result) {
     if (mute_result != ErrorCode::Success)
     {
-      WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to mute speaker.");
+      WARN_LOG(WIIMOTE, "WiiRemote: Failed to mute speaker.");
       return;
     }
 
@@ -1042,11 +1044,11 @@ void Device::ConfigureSpeaker()
     QueueReport(spkr, [this](ErrorCode enable_result) {
       if (enable_result != ErrorCode::Success)
       {
-        WARN_LOG_FMT(WIIMOTE, "WiiRemote: Failed to disable speaker.");
+        WARN_LOG(WIIMOTE, "WiiRemote: Failed to disable speaker.");
         return;
       }
 
-      DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Speaker muted and disabled.");
+      DEBUG_LOG(WIIMOTE, "WiiRemote: Speaker muted and disabled.");
 
       m_speaker_configured = true;
     });
@@ -1065,7 +1067,7 @@ void Device::TriggerMotionPlusModeChange()
 
   WriteData(AddressSpace::I2CBus, device_addr, WiimoteEmu::MotionPlus::PASSTHROUGH_MODE_OFFSET,
             {passthrough_mode}, [this](ErrorCode activation_result) {
-              DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: M+ activation: {}.", int(activation_result));
+              DEBUG_LOG(WIIMOTE, "WiiRemote: M+ activation: %d.", int(activation_result));
 
               WaitForMotionPlus();
 
@@ -1086,7 +1088,7 @@ void Device::TriggerMotionPlusCalibration()
   // It seems we're better off just manually determining "zero".
   WriteData(AddressSpace::I2CBus, WiimoteEmu::MotionPlus::ACTIVE_DEVICE_ADDR,
             CALIBRATION_TRIGGER_ADDR, {CALIBRATION_TRIGGER_VALUE}, [](ErrorCode result) {
-              DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: M+ calibration trigger done: {}.", int(result));
+              DEBUG_LOG(WIIMOTE, "WiiRemote: M+ calibration trigger done: %d.", int(result));
             });
 }
 
@@ -1110,7 +1112,7 @@ void Device::ProcessInputReport(WiimoteReal::Report& report)
 {
   if (report.size() < WiimoteReal::REPORT_HID_HEADER_SIZE)
   {
-    WARN_LOG_FMT(WIIMOTE, "WiiRemote: Bad report size.");
+    WARN_LOG(WIIMOTE, "WiiRemote: Bad report size.");
     return;
   }
 
@@ -1125,7 +1127,7 @@ void Device::ProcessInputReport(WiimoteReal::Report& report)
         if (report.size() - WiimoteReal::REPORT_HID_HEADER_SIZE <
             sizeof(TypedInputData<InputReportStatus>))
         {
-          WARN_LOG_FMT(WIIMOTE, "WiiRemote: Bad report size.");
+          WARN_LOG(WIIMOTE, "WiiRemote: Bad report size.");
         }
         else
         {
@@ -1134,8 +1136,8 @@ void Device::ProcessInputReport(WiimoteReal::Report& report)
       }
       else if (report_id < InputReportID::ReportCore)
       {
-        WARN_LOG_FMT(WIIMOTE, "WiiRemote: Unhandled input report: {}.",
-                     ArrayToString(report.data(), u32(report.size())));
+        WARN_LOG(WIIMOTE, "WiiRemote: Unhandled input report: %s.",
+                 ArrayToString(report.data(), u32(report.size())).c_str());
       }
 
       break;
@@ -1143,7 +1145,7 @@ void Device::ProcessInputReport(WiimoteReal::Report& report)
 
     if (it->IsExpired())
     {
-      WARN_LOG_FMT(WIIMOTE, "WiiRemote: Removing expired handler.");
+      WARN_LOG(WIIMOTE, "WiiRemote: Removing expired handler.");
       it = m_report_handlers.erase(it);
       continue;
     }
@@ -1175,7 +1177,7 @@ void Device::ProcessInputReport(WiimoteReal::Report& report)
 
   if (manipulator->GetDataSize() + WiimoteReal::REPORT_HID_HEADER_SIZE > report.size())
   {
-    WARN_LOG_FMT(WIIMOTE, "WiiRemote: Bad report size.");
+    WARN_LOG(WIIMOTE, "WiiRemote: Bad report size.");
     return;
   }
 
@@ -1371,7 +1373,8 @@ void Device::ProcessMotionPlusExtensionData(const u8* ext_data, u32 ext_size)
   {
     m_mplus_state.passthrough_port = is_ext_connected;
 
-    DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: M+ passthrough port event: {}.", is_ext_connected);
+    DEBUG_LOG(WIIMOTE, "WiiRemote: M+ passthrough port event: %s.",
+              is_ext_connected ? "true" : "false");
 
     // With no passthrough extension we'll be happy with the current mode.
     if (!is_ext_connected)
@@ -1388,7 +1391,7 @@ void Device::ProcessMotionPlusExtensionData(const u8* ext_data, u32 ext_size)
 
   if (!IsMotionPlusInDesiredMode())
   {
-    DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Ignoring unwanted passthrough data.");
+    DEBUG_LOG(WIIMOTE, "WiiRemote: Ignoring unwanted passthrough data.");
     return;
   }
 
@@ -1485,7 +1488,7 @@ bool Device::IsWaitingForMotionPlus() const
 
 void Device::WaitForMotionPlus()
 {
-  DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Wait for M+.");
+  DEBUG_LOG(WIIMOTE, "WiiRemote: Wait for M+.");
   m_mplus_wait_time = Clock::now() + std::chrono::seconds{2};
 }
 
@@ -1537,7 +1540,7 @@ void Device::AddReadDataReplyHandler(AddressSpace space, u8 slave, u16 address, 
 {
   // Data read may return a busy ack.
   auto ack_handler = MakeAckHandler(OutputReportID::ReadData, [callback](ErrorCode result) {
-    DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Read ack error: {}.", int(result));
+    DEBUG_LOG(WIIMOTE, "WiiRemote: Read ack error: %d.", int(result));
     callback(ReadResponse{});
   });
 
@@ -1550,7 +1553,7 @@ void Device::AddReadDataReplyHandler(AddressSpace space, u8 slave, u16 address, 
 
     if (reply.error != u8(ErrorCode::Success))
     {
-      DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Read reply error: {}.", int(reply.error));
+      DEBUG_LOG(WIIMOTE, "WiiRemote: Read reply error: %d.", int(reply.error));
       callback(ReadResponse{});
 
       return ReportHandler::HandlerResult::Handled;
@@ -1639,8 +1642,8 @@ void Device::ReportHandler::AddHandler(std::function<R(const T&)> handler)
     if (report.size() < sizeof(T) + WiimoteReal::REPORT_HID_HEADER_SIZE + 1)
     {
       // Off-brand "NEW 2in1" Wii Remote likes to shorten read data replies.
-      WARN_LOG_FMT(WIIMOTE, "WiiRemote: Bad report size ({}) for report {:#x}. Zero-filling.",
-                   report.size(), int(T::REPORT_ID));
+      WARN_LOG(WIIMOTE, "WiiRemote: Bad report size (%" PRIu64 ") for report %#x. Zero-filling.",
+               report.size(), (unsigned)int(T::REPORT_ID));
 
       data = {};
       std::memcpy(&data, report.data() + WiimoteReal::REPORT_HID_HEADER_SIZE + 1,
@@ -1713,7 +1716,7 @@ void Device::ProcessStatusReport(const InputReportStatus& status)
   // Handle extension port state change.
   if (is_ext_connected != m_extension_port)
   {
-    DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Extension port event: {}.", is_ext_connected);
+    DEBUG_LOG(WIIMOTE, "WiiRemote: Extension port event: %s.", is_ext_connected ? "true" : "false");
 
     m_extension_port = is_ext_connected;
 

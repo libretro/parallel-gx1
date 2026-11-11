@@ -3,8 +3,6 @@
 
 #include "InputCommon/ControllerEmu/Setting/NumericSetting.h"
 
-#include <fmt/format.h>
-
 namespace ControllerEmu
 {
 NumericSettingBase::NumericSettingBase(const NumericSettingDetails& details) : m_details(details)
@@ -46,7 +44,9 @@ void NumericSetting<T>::SetExpressionFromValue()
 {
   // Always include -/+ sign to prevent CoalesceExpression binding.
   // e.g. 1 is a valid input name for keyboard devices, +1 is not.
-  m_value.m_input.SetExpression(fmt::format("{:+g}", ControlState(GetValue())));
+  char text[32];
+  CharArrayFromFormat(text, "%+g", static_cast<double>(ControlState(GetValue())));
+  m_value.m_input.SetExpression(text);
 }
 
 template <typename T>

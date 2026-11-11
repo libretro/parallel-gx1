@@ -7,8 +7,6 @@
 #include <limits>
 #include <string_view>
 
-#include <fmt/format.h>
-
 #include <formats/rjson.h>
 #include <streams/file_stream.h>
 
@@ -108,10 +106,10 @@ bool ReadHostControls(Reader* r, HostDevices* out)
     t = rjson_next(r->json);
     if (t != RJSON_OBJECT)
     {
-      ERROR_LOG_FMT(VIDEO,
-                    "Failed to load dynamic input json file '{}' because 'host_controls' "
-                    "map key '{}' is incorrect type ",
-                    *r->json_file, host_device);
+      ERROR_LOG(VIDEO,
+                "Failed to load dynamic input json file '%s' because 'host_controls' "
+                "map key '%s' is incorrect type ",
+                (*r->json_file).c_str(), host_device.c_str());
       return false;
     }
     auto& host_control_to_imagename = (*out)[host_device];
@@ -153,19 +151,19 @@ bool ReadRegion(Reader* r, const std::string& controller, const std::string& con
   }
   if (n != 4)
   {
-    ERROR_LOG_FMT(VIDEO,
-                  "Failed to load dynamic input json file '{}' because emulated controller '{}' "
-                  "key '{}' has a region that does not have 4 offsets (left, top, right, "
-                  "bottom).",
-                  *r->json_file, controller, control);
+    ERROR_LOG(VIDEO,
+              "Failed to load dynamic input json file '%s' because emulated controller '%s' "
+              "key '%s' has a region that does not have 4 offsets (left, top, right, "
+              "bottom).",
+              (*r->json_file).c_str(), controller.c_str(), control.c_str());
     return false;
   }
   if (!numbers)
   {
-    ERROR_LOG_FMT(VIDEO,
-                  "Failed to load dynamic input json file '{}' because emulated controller '{}' "
-                  "key '{}' has a region that has the incorrect offset type.",
-                  *r->json_file, controller, control);
+    ERROR_LOG(VIDEO,
+              "Failed to load dynamic input json file '%s' because emulated controller '%s' "
+              "key '%s' has a region that has the incorrect offset type.",
+              (*r->json_file).c_str(), controller.c_str(), control.c_str());
     return false;
   }
   rect->left = v[0];
@@ -184,10 +182,10 @@ bool ReadEmulatedControls(Reader* r, Data* data)
     const std::string controller(Text(r->json));
     if (rjson_next(r->json) != RJSON_OBJECT)
     {
-      ERROR_LOG_FMT(VIDEO,
-                    "Failed to load dynamic input json file '{}' because 'emulated_controls' "
-                    "map key '{}' is incorrect type.  Expected map  ",
-                    *r->json_file, controller);
+      ERROR_LOG(VIDEO,
+                "Failed to load dynamic input json file '%s' because 'emulated_controls' "
+                "map key '%s' is incorrect type.  Expected map  ",
+                (*r->json_file).c_str(), controller.c_str());
       return false;
     }
     auto& key_to_regions = data->m_emulated_controllers[controller];
@@ -197,10 +195,10 @@ bool ReadEmulatedControls(Reader* r, Data* data)
       std::vector<Rect> region_rects;
       if (rjson_next(r->json) != RJSON_ARRAY)
       {
-        ERROR_LOG_FMT(VIDEO,
-                      "Failed to load dynamic input json file '{}' because emulated controller "
-                      "'{}' key '{}' has incorrect value type.  Expected array ",
-                      *r->json_file, controller, control);
+        ERROR_LOG(VIDEO,
+                  "Failed to load dynamic input json file '%s' because emulated controller "
+                  "'%s' key '%s' has incorrect value type.  Expected array ",
+                  (*r->json_file).c_str(), controller.c_str(), control.c_str());
         return false;
       }
       while ((t = rjson_next(r->json)) != RJSON_ARRAY_END)
@@ -208,10 +206,10 @@ bool ReadEmulatedControls(Reader* r, Data* data)
         Rect rect;
         if (t != RJSON_ARRAY)
         {
-          ERROR_LOG_FMT(VIDEO,
-                        "Failed to load dynamic input json file '{}' because emulated controller "
-                        "'{}' key '{}' has a region with the incorrect type.  Expected array ",
-                        *r->json_file, controller, control);
+          ERROR_LOG(VIDEO,
+                    "Failed to load dynamic input json file '%s' because emulated controller "
+                    "'%s' key '%s' has a region with the incorrect type.  Expected array ",
+                    (*r->json_file).c_str(), controller.c_str(), control.c_str());
           return false;
         }
         if (!ReadRegion(r, controller, control, &rect))
@@ -279,8 +277,7 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
                                       RETRO_VFS_FILE_ACCESS_HINT_NONE);
   std::vector<std::pair<std::string, PendingTexture>> textures;
   HostDevices default_host_controls;
-  std::string generated_folder_name =
-      fmt::format("{}_Generated", SConfig::GetInstance().GetGameID());
+  std::string generated_folder_name = SConfig::GetInstance().GetGameID() + "_Generated";
   double specification = 1;
   bool preserve_aspect_ratio = true;
   bool has_output_textures = false;
@@ -289,7 +286,8 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
 
   if (!file)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load dynamic input json file '{}': cannot read it", json_file);
+    ERROR_LOG(VIDEO, "Failed to load dynamic input json file '%s': cannot read it",
+              json_file.c_str());
     return false;
   }
   r.json = rjson_open_user(ReadFile, file, 4096);
@@ -343,8 +341,8 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
   }
   if (r.json && rjson_get_error(r.json)[0])
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load dynamic input json file '{}' due to parse error: {}",
-                  json_file, rjson_get_error(r.json));
+    ERROR_LOG(VIDEO, "Failed to load dynamic input json file '%s' due to parse error: %s",
+              json_file.c_str(), rjson_get_error(r.json));
     ok = false;
   }
   if (r.json)
@@ -356,26 +354,24 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
   if (specification < static_cast<double>(std::numeric_limits<u8>::min()) ||
       specification > static_cast<double>(std::numeric_limits<u8>::max()))
   {
-    ERROR_LOG_FMT(
+    ERROR_LOG(
         VIDEO,
-        "Failed to load dynamic input json file '{}', specification '{}' is not within bounds",
-        json_file, specification);
+        "Failed to load dynamic input json file '%s', specification '%g' is not within bounds",
+        json_file.c_str(), specification);
     return false;
   }
   if (static_cast<u8>(specification) != 1)
   {
-    ERROR_LOG_FMT(VIDEO,
-                  "Failed to load dynamic input json file '{}', specification '{}' is invalid",
-                  json_file, static_cast<u8>(specification));
+    ERROR_LOG(VIDEO, "Failed to load dynamic input json file '%s', specification '%u' is invalid",
+              json_file.c_str(), (unsigned)(static_cast<u8>(specification)));
     return false;
   }
   if (!has_output_textures)
   {
-    ERROR_LOG_FMT(
-        VIDEO,
-        "Failed to load dynamic input json file '{}' because 'output_textures' is missing or "
-        "was not of type object",
-        json_file);
+    ERROR_LOG(VIDEO,
+              "Failed to load dynamic input json file '%s' because 'output_textures' is missing or "
+              "was not of type object",
+              json_file.c_str());
     return false;
   }
 
@@ -388,11 +384,11 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
     texture_data.m_hires_texture_name = name;
     if (!texture.has_image || !texture.has_emulated_controls)
     {
-      ERROR_LOG_FMT(VIDEO,
-                    "Failed to load dynamic input json file '{}' because required fields "
-                    "'image', or 'emulated_controls' are either "
-                    "missing or the incorrect type",
-                    json_file);
+      ERROR_LOG(VIDEO,
+                "Failed to load dynamic input json file '%s' because required fields "
+                "'image', or 'emulated_controls' are either "
+                "missing or the incorrect type",
+                json_file.c_str());
       return false;
     }
     texture_data.m_preserve_aspect_ratio = preserve_aspect_ratio;
@@ -401,10 +397,10 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
     const std::string image_full_path = base_path + texture_data.m_image_name;
     if (!File::Exists(image_full_path))
     {
-      ERROR_LOG_FMT(VIDEO,
-                    "Failed to load dynamic input json file '{}' because the image '{}' "
-                    "could not be loaded",
-                    json_file, image_full_path);
+      ERROR_LOG(VIDEO,
+                "Failed to load dynamic input json file '%s' because the image '%s' "
+                "could not be loaded",
+                json_file.c_str(), image_full_path.c_str());
       return false;
     }
 
@@ -414,10 +410,10 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
         texture.has_host_controls ? std::move(texture.host_controls) : default_host_controls;
     if (texture_data.m_host_devices.empty())
     {
-      ERROR_LOG_FMT(VIDEO,
-                    "Failed to load dynamic input json file '{}' because field "
-                    "'host_controls' is missing ",
-                    json_file);
+      ERROR_LOG(VIDEO,
+                "Failed to load dynamic input json file '%s' because field "
+                "'host_controls' is missing ",
+                json_file.c_str());
       return false;
     }
     input_textures.emplace_back(std::move(texture_data));

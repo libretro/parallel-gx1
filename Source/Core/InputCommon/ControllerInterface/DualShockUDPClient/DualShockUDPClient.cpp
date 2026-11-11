@@ -6,9 +6,8 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <tuple>
-
-#include <fmt/format.h>
 
 #include "Common/Config/Config.h"
 #include "Common/Flag.h"
@@ -237,9 +236,9 @@ static bool IsSameController(const Proto::MessageType::PortInfo& a,
 void InputBackend::HotplugThreadFunc()
 {
   Common::SetCurrentThreadName("DualShockUDPClient Hotplug Thread");
-  INFO_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient hotplug thread started");
+  INFO_LOG(CONTROLLERINTERFACE, "DualShockUDPClient hotplug thread started");
   Common::ScopeGuard thread_stop_guard{
-      [] { INFO_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient hotplug thread stopped"); }};
+      [] { INFO_LOG(CONTROLLERINTERFACE, "DualShockUDPClient hotplug thread stopped"); }};
 
   std::vector<bool> timed_out_servers(m_servers.size(), false);
 
@@ -268,13 +267,13 @@ void InputBackend::HotplugThreadFunc()
           if (net_udp_sendto(server.m_socket, &list_ports, sizeof list_ports, server_ip,
                              server.m_port) < 0)
           {
-            ERROR_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient HotplugThreadFunc send failed");
+            ERROR_LOG(CONTROLLERINTERFACE, "DualShockUDPClient HotplugThreadFunc send failed");
           }
         }
         else
         {
-          ERROR_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient failed to resolve {}",
-                        server.m_address);
+          ERROR_LOG(CONTROLLERINTERFACE, "DualShockUDPClient failed to resolve %s",
+                    server.m_address.c_str());
         }
         timed_out_servers[i] = true;
       }
@@ -403,7 +402,7 @@ void InputBackend::StopHotplugThread()
 // Also just start
 void InputBackend::Restart()
 {
-  INFO_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient Restart");
+  INFO_LOG(CONTROLLERINTERFACE, "DualShockUDPClient Restart");
 
   StopHotplugThread();
 
@@ -434,8 +433,12 @@ void InputBackend::ConfigChanged()
   std::string new_servers_setting;
   for (const auto& server : m_servers)
   {
-    new_servers_setting +=
-        fmt::format("{}:{}:{};", server.m_description, server.m_address, server.m_port);
+    new_servers_setting += server.m_description;
+    new_servers_setting += ':';
+    new_servers_setting += server.m_address;
+    char port[16];
+    snprintf(port, sizeof(port), ":%u;", static_cast<unsigned>(server.m_port));
+    new_servers_setting += port;
   }
 
   if (servers_enabled != m_servers_enabled || servers_setting != new_servers_setting)
@@ -478,10 +481,10 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
   if (!server_address_setting.empty() && server_port_setting != 0)
   {
     const auto& servers_setting = Config::Get(ciface::DualShockUDPClient::Settings::SERVERS);
+    char port[16];
+    snprintf(port, sizeof(port), ":%d;", server_port_setting);
     Config::SetBaseOrCurrent(ciface::DualShockUDPClient::Settings::SERVERS,
-                             servers_setting + fmt::format("{}:{}:{};", "DS4",
-                                                           server_address_setting,
-                                                           server_port_setting));
+                             servers_setting + "DS4:" + server_address_setting + port);
     Config::SetBase(Settings::SERVER_ADDRESS, "");
     Config::SetBase(Settings::SERVER_PORT, 0);
   }
@@ -498,7 +501,7 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
 // from the main thread
 void InputBackend::PopulateDevices()
 {
-  INFO_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient PopulateDevices");
+  INFO_LOG(CONTROLLERINTERFACE, "DualShockUDPClient PopulateDevices");
 
   // m_servers has already been updated so we can't use it to know which devices we removed,
   // also it's good to remove all of them before adding new ones so that their id will be set
@@ -645,7 +648,7 @@ Core::DeviceRemoval Device::UpdateInput()
     if (!net_resolve_ipv4(m_server_address.c_str(), &server_ip) ||
         net_udp_sendto(m_socket, &data_req, sizeof(data_req), server_ip, m_server_port) < 0)
     {
-      ERROR_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient UpdateInput send failed");
+      ERROR_LOG(CONTROLLERINTERFACE, "DualShockUDPClient UpdateInput send failed");
     }
   }
 

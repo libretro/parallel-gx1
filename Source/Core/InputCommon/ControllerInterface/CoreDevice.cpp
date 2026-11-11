@@ -11,9 +11,8 @@
 #include <tuple>
 #include <utility>
 
-#include <fmt/format.h>
-
 #include "Common/MathUtil.h"
+#include "Common/StringUtil.h"
 
 namespace ciface
 {
@@ -92,7 +91,7 @@ void Device::AddOutput(Device::Output* const o)
 
 std::string Device::GetQualifiedName() const
 {
-  return fmt::format("{}/{}/{}", GetSource(), GetId(), GetName());
+  return StringFromFormat("%s/%d/%s", GetSource().c_str(), GetId(), GetName().c_str());
 }
 
 auto Device::GetParentMostInput(Input* child) const -> Input*
@@ -203,9 +202,9 @@ std::string DeviceQualifier::ToString() const
     return {};
 
   if (cid > -1)
-    return fmt::format("{}/{}/{}", source, cid, name);
+    return StringFromFormat("%s/%d/%s", source.c_str(), cid, name.c_str());
   else
-    return fmt::format("{}//{}", source, name);
+    return StringFromFormat("%s//%s", source.c_str(), name.c_str());
 }
 
 //

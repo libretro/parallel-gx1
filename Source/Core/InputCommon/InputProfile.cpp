@@ -4,9 +4,8 @@
 #include "InputCommon/InputProfile.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <iterator>
-
-#include <fmt/format.h>
 
 #include "Common/FileSearch.h"
 #include "Common/FileUtil.h"
@@ -133,7 +132,7 @@ void ProfileCycler::CycleProfile(CycleDirection cycle_direction, InputConfig* de
   }
   else
   {
-    Core::DisplayMessage(fmt::format("No controller found for index: {}", controller_index),
+    Core::DisplayMessage(StringFromFormat("No controller found for index: %d", controller_index),
                          display_message_ms);
   }
 }
@@ -172,7 +171,7 @@ void ProfileCycler::CycleProfileForGame(CycleDirection cycle_direction,
   }
   else
   {
-    Core::DisplayMessage(fmt::format("No controller found for index: {}", controller_index),
+    Core::DisplayMessage(StringFromFormat("No controller found for index: %d", controller_index),
                          display_message_ms);
   }
 }
@@ -183,7 +182,9 @@ std::string ProfileCycler::GetWiimoteInputProfilesForGame(int controller_index)
   const auto* const control_section = game_ini.GetOrCreateSection("Controls");
 
   std::string result;
-  control_section->Get(fmt::format("WiimoteProfile{}", controller_index + 1), &result);
+  char key[32];
+  snprintf(key, sizeof(key), "WiimoteProfile%d", controller_index + 1);
+  control_section->Get(key, &result);
   return result;
 }
 

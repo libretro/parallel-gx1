@@ -7,9 +7,6 @@
 #include <cmath>
 #include <ranges>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
-
 #include "Common/MathUtil.h"
 #include "Common/Matrix.h"
 #include "Common/StringUtil.h"
@@ -334,16 +331,23 @@ void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const std::s
 
   const CalibrationData calibration = GetCalibrationData();
   const ReshapeData center = GetCenter();
-  const std::ranges::transform_view scaled_calibration(
-      calibration, [](ControlState val) { return val * CALIBRATION_CONFIG_SCALE; });
-  section->Set(group + CALIBRATION_CONFIG_NAME,
-               fmt::format("{:.2f}", fmt::join(scaled_calibration, " ")), "");
+  // each sample as "%.2f", a space between
+  std::string calibration_data;
+  calibration_data.reserve(calibration.size() * 8);
+  for (const ControlState val : calibration)
+  {
+    char text[32];
+    CharArrayFromFormat(text, "%s%.2f", calibration_data.empty() ? "" : " ",
+                        static_cast<double>(val * CALIBRATION_CONFIG_SCALE));
+    calibration_data += text;
+  }
+  section->Set(group + CALIBRATION_CONFIG_NAME, calibration_data, "");
 
   // Save center value.
-  static constexpr char center_format[] = "{:.2f} {:.2f}";
-  const auto center_data = fmt::format(center_format, center.x * CENTER_CONFIG_SCALE,
-                                       center.y * CENTER_CONFIG_SCALE);
-  section->Set(group + CENTER_CONFIG_NAME, center_data, fmt::format(center_format, 0.0, 0.0));
+  char center_data[64];
+  CharArrayFromFormat(center_data, "%.2f %.2f", static_cast<double>(center.x * CENTER_CONFIG_SCALE),
+                      static_cast<double>(center.y * CENTER_CONFIG_SCALE));
+  section->Set(group + CENTER_CONFIG_NAME, std::string(center_data), "0.00 0.00");
 }
 
 ReshapableInput::ReshapeData ReshapableInput::Reshape(ControlState x, ControlState y,

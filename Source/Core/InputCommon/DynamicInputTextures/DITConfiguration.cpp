@@ -43,8 +43,8 @@ void Configuration::GenerateTexture(const Common::IniFile& file,
   const auto original_image = LoadImage(m_base_path + texture_data.m_image_name);
   if (!original_image)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load image '{}' needed for dynamic input texture generation",
-                  texture_data.m_image_name);
+    ERROR_LOG(VIDEO, "Failed to load image '%s' needed for dynamic input texture generation",
+              texture_data.m_image_name.c_str());
     return;
   }
   auto image_to_write = original_image;
@@ -110,9 +110,8 @@ void Configuration::GenerateTexture(const Common::IniFile& file,
         const auto host_key_image = LoadImage(full_image_path);
         if (!host_key_image)
         {
-          ERROR_LOG_FMT(VIDEO,
-                        "Failed to load image '{}' needed for dynamic input texture generation",
-                        full_image_path);
+          ERROR_LOG(VIDEO, "Failed to load image '%s' needed for dynamic input texture generation",
+                    full_image_path.c_str());
           continue;
         }
 

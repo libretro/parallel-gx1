@@ -138,7 +138,7 @@ InputBackend::InputBackend(ControllerInterface* controller_interface)
 
 void InputBackend::PopulateDevices()
 {
-  INFO_LOG_FMT(CONTROLLERINTERFACE, "SteamDeck PopulateDevices");
+  INFO_LOG(CONTROLLERINTERFACE, "SteamDeck PopulateDevices");
 
   auto possible_devices = hid_enumerate(0x28de, 0x1205);
   bool was_found = false;
@@ -147,8 +147,8 @@ void InputBackend::PopulateDevices()
 
   while (this_device)
   {
-    INFO_LOG_FMT(CONTROLLERINTERFACE, "Found {} (interface {})", this_device->path,
-                 this_device->interface_number);
+    INFO_LOG(CONTROLLERINTERFACE, "Found %s (interface %d)", this_device->path,
+             this_device->interface_number);
 
     if (this_device->interface_number == 2)
     {
@@ -164,23 +164,23 @@ void InputBackend::PopulateDevices()
 
   if (was_found)
   {
-    INFO_LOG_FMT(CONTROLLERINTERFACE, "Found Steam Deck controls at {}", found_path);
+    INFO_LOG(CONTROLLERINTERFACE, "Found Steam Deck controls at %s", found_path.c_str());
   }
   else
   {
-    INFO_LOG_FMT(CONTROLLERINTERFACE, "No Steam Deck interface found");
+    INFO_LOG(CONTROLLERINTERFACE, "No Steam Deck interface found");
     return;
   }
 
   auto deck_dev = hid_open_path(found_path.c_str());
   if (!deck_dev)
   {
-    ERROR_LOG_FMT(CONTROLLERINTERFACE, "Steam Deck controls could not be opened");
+    ERROR_LOG(CONTROLLERINTERFACE, "Steam Deck controls could not be opened");
     return;
   }
   if (hid_set_nonblocking(deck_dev, 1) != 0)
   {
-    ERROR_LOG_FMT(CONTROLLERINTERFACE, "Steam Deck controls could not be set nonblocking");
+    ERROR_LOG(CONTROLLERINTERFACE, "Steam Deck controls could not be set nonblocking");
     return;
   }
 
@@ -310,7 +310,7 @@ Core::DeviceRemoval Device::UpdateInput()
   if (rpt.major_ver != 0x01 || rpt.minor_ver != 0x00 || rpt.report_type != 0x09 ||
       rpt.report_sz != sizeof(rpt))
   {
-    ERROR_LOG_FMT(CONTROLLERINTERFACE, "Steam Deck bad report");
+    ERROR_LOG(CONTROLLERINTERFACE, "Steam Deck bad report");
     return Core::DeviceRemoval::Keep;
   }
 
