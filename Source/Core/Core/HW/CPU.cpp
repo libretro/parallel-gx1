@@ -165,7 +165,7 @@ void CPUManager::Run()
       // Stopped at the frame gate before its field was granted: back to the gate first.
       if (Core::FrameGateOwed())
       {
-        Core::FrameGateWait(m_system);
+        Core::FrameGateWait(m_system, true);
         if (Core::FrameGateOwed())
           break;
       }
@@ -365,6 +365,13 @@ void CPUManager::AddCPUThreadJob(Common::MoveOnlyFunction<void()> function)
 {
   Job* job = new Job{{}, std::move(function)};
   mpsc_stack_push(&m_pending_jobs, &job->link);
+  // a thread parked at the frame gate runs it
+  Core::FrameGateKick();
+}
+
+bool CPUManager::HasPendingJobs()
+{
+  return !mpsc_stack_empty(&m_pending_jobs);
 }
 
 }  // namespace CPU

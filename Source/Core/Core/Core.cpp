@@ -783,8 +783,11 @@ void Callback_NewField(Core::System& system)
 }
 
 /* The CPU thread, at a field's end or resumed with a field owed: parks
- * until the next field is granted or the thread is asked to stop. */
-void FrameGateWait(Core::System& system)
+ * until the next field is granted or the thread is asked to stop. Resumed,
+ * outside the run loop, it also leaves for a job queued for it: a pause
+ * that comes and goes before the parked thread wakes leaves a running
+ * state behind and a job only this thread can run. */
+void FrameGateWait(Core::System& system, bool leave_for_jobs)
 {
   auto& cpu = system.GetCPU();
   if (!s_frame_gate_ready)
@@ -797,13 +800,14 @@ void FrameGateWait(Core::System& system)
       s_frame_gate_owed = false;
       return;
     }
-    if (cpu.GetState() != CPU::State::Running)
+    if (cpu.GetState() != CPU::State::Running || (leave_for_jobs && cpu.HasPendingJobs()))
     {
       s_frame_gate_owed = true;
       return;
     }
     key = retro_eventcount_prepare_wait(&s_frame_gate);
-    if (FieldGranted() || cpu.GetState() != CPU::State::Running)
+    if (FieldGranted() || cpu.GetState() != CPU::State::Running ||
+        (leave_for_jobs && cpu.HasPendingJobs()))
     {
       retro_eventcount_cancel_wait(&s_frame_gate);
       continue;

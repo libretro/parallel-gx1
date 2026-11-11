@@ -94,6 +94,7 @@ public:
   // Adds a job to be executed during on the CPU thread. This should be combined with
   // PauseAndLock(), as while the CPU is in the run loop, it won't execute the function.
   void AddCPUThreadJob(Common::MoveOnlyFunction<void()> function);
+  bool HasPendingJobs();
 
   bool HasCPURunStateBeenReached() const
   {

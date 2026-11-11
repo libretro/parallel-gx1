@@ -185,7 +185,7 @@ void RunField(Core::System& system);
 bool IsFieldInFlight();
 /* The CPU thread: parks at the gate until a field is granted or it is
  * asked to stop; whether it left the gate ungranted and owes a wait. */
-void FrameGateWait(Core::System& system);
+void FrameGateWait(Core::System& system, bool leave_for_jobs = false);
 bool FrameGateOwed();
 /* Any thread that asks the CPU thread to stop: wakes it from the gate. */
 void FrameGateKick();
