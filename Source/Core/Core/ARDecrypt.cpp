@@ -444,9 +444,8 @@ std::optional<GameIDAndRegion> DecryptARCode(const std::string* encrypted_lines,
   auto conversion_result = ConvertAlphaToBinary(encrypted_lines, count);
   if (!conversion_result.has_value())
   {
-    PanicAlertFmtT(
-        "Action Replay Code Decryption Error:\nParity Check Failed\n\nCulprit Code:\n{0}",
-        encrypted_lines[conversion_result.error()]);
+    PanicAlert("Action Replay Code Decryption Error:\nParity Check Failed\n\nCulprit Code:\n%s",
+               encrypted_lines[conversion_result.error()].c_str());
     return std::nullopt;
   }
 
@@ -454,28 +453,28 @@ std::optional<GameIDAndRegion> DecryptARCode(const std::string* encrypted_lines,
   const auto decrypted_result = BatchDecrypt(codes.data(), codes.size());
   if (!decrypted_result.has_value())
   {
-    ERROR_LOG_FMT(ACTIONREPLAY,
-                  "Decryption Error: CRC Check Failed. "
-                  "First Code in Block (should be verification code): {}",
-                  encrypted_lines[0]);
+    ERROR_LOG(ACTIONREPLAY,
+              "Decryption Error: CRC Check Failed. "
+              "First Code in Block (should be verification code): %s",
+              encrypted_lines[0].c_str());
 
     for (size_t i = 0; i < codes.size(); i += 2)
     {
       result->emplace_back(codes[i], codes[i + 1]);
-      WARN_LOG_FMT(ACTIONREPLAY, "Decrypted AR Code without verification code: {:08X} {:08X}",
-                   codes[i], codes[i + 1]);
+      WARN_LOG(ACTIONREPLAY, "Decrypted AR Code without verification code: %08X %08X", codes[i],
+               codes[i + 1]);
     }
   }
   else
   {
-    INFO_LOG_FMT(ACTIONREPLAY, "Decrypted AR Code: GameID:{:08X} Region:{}",
-                 decrypted_result->game_id, decrypted_result->region);
+    INFO_LOG(ACTIONREPLAY, "Decrypted AR Code: GameID:%08X Region:%u", decrypted_result->game_id,
+             decrypted_result->region);
 
     // Skip passing the verification code back
     for (size_t i = 2; i < codes.size(); i += 2)
     {
       result->emplace_back(codes[i], codes[i + 1]);
-      DEBUG_LOG_FMT(ACTIONREPLAY, "Decrypted AR Code: {:08X} {:08X}", codes[i], codes[i + 1]);
+      DEBUG_LOG(ACTIONREPLAY, "Decrypted AR Code: %08X %08X", codes[i], codes[i + 1]);
     }
   }
 

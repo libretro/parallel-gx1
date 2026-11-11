@@ -4,6 +4,7 @@
 #include "Core/GeckoCode.h"
 
 #include <algorithm>
+#include <cinttypes>
 #include <iterator>
 #include <tuple>
 #include <vector>
@@ -77,15 +78,14 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   File::IOFile handler(File::GetSysDirectory() + GECKO_CODE_HANDLER, "rb");
   if (!handler)
   {
-    ERROR_LOG_FMT(ACTIONREPLAY,
-                  "Could not enable cheats because " GECKO_CODE_HANDLER " was missing.");
+    ERROR_LOG(ACTIONREPLAY, "Could not enable cheats because " GECKO_CODE_HANDLER " was missing.");
     return Installation::Failed;
   }
 
   const u64 handler_size = handler.GetSize();
   if (handler_size > INSTALLER_END_ADDRESS - INSTALLER_BASE_ADDRESS - CODE_SIZE)
   {
-    ERROR_LOG_FMT(ACTIONREPLAY, GECKO_CODE_HANDLER " is too big. The file may be corrupt.");
+    ERROR_LOG(ACTIONREPLAY, GECKO_CODE_HANDLER " is too big. The file may be corrupt.");
     return Installation::Failed;
   }
 
@@ -111,7 +111,7 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
     if (PowerPC::MMU::HostRead<u32>(guard, INSTALLER_BASE_ADDRESS + h) ==
         (0x3f000000u | ((mmio_addr ^ 1) << 8)))
     {
-      NOTICE_LOG_FMT(ACTIONREPLAY, "Patching MMIO access at {:08x}", INSTALLER_BASE_ADDRESS + h);
+      NOTICE_LOG(ACTIONREPLAY, "Patching MMIO access at %08x", INSTALLER_BASE_ADDRESS + h);
       PowerPC::MMU::HostWrite<u32>(guard, 0x3f000000u | mmio_addr << 8, INSTALLER_BASE_ADDRESS + h);
     }
   }
@@ -139,11 +139,11 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
     // If the code is not going to fit in the space we have left then we have to skip it
     if (next_address + active_code.codes.size() * CODE_SIZE > end_address)
     {
-      NOTICE_LOG_FMT(ACTIONREPLAY,
-                     "Too many GeckoCodes! Ran out of storage space in Game RAM. Could "
-                     "not write: \"{}\". Need {} bytes, only {} remain.",
-                     active_code.name, active_code.codes.size() * CODE_SIZE,
-                     end_address - next_address);
+      NOTICE_LOG(ACTIONREPLAY,
+                 "Too many GeckoCodes! Ran out of storage space in Game RAM. Could "
+                 "not write: \"%s\". Need %" PRIu64 " bytes, only %u remain.",
+                 active_code.name.c_str(), (u64)(active_code.codes.size() * CODE_SIZE),
+                 end_address - next_address);
       continue;
     }
 
@@ -155,8 +155,8 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
     }
   }
 
-  WARN_LOG_FMT(ACTIONREPLAY, "GeckoCodes: Using {} of {} bytes", next_address - start_address,
-               end_address - start_address);
+  WARN_LOG(ACTIONREPLAY, "GeckoCodes: Using %u of %u bytes", next_address - start_address,
+           end_address - start_address);
 
   // Stop code. Tells the handler that this is the end of the list.
   PowerPC::MMU::HostWrite<u32>(guard, 0xF0000000, next_address);
@@ -243,10 +243,10 @@ void RunCodeHandler(const Core::CPUThreadGuard& guard)
     PowerPC::MMU::HostWrite<u64>(guard, ppc_state.ps[i].PS1AsU64(),
                                  SP + 24 + (2 * i + 1) * sizeof(u64));
   }
-  DEBUG_LOG_FMT(ACTIONREPLAY,
-                "GeckoCodes: Initiating phantom branch-and-link. "
-                "PC = {:#010x}, SP = {:#010x}, SFP = {:#010x}",
-                ppc_state.pc, SP, SFP);
+  DEBUG_LOG(ACTIONREPLAY,
+            "GeckoCodes: Initiating phantom branch-and-link. "
+            "PC = %#010x, SP = %#010x, SFP = %#010x",
+            ppc_state.pc, SP, SFP);
   LR(ppc_state) = HLE_TRAMPOLINE_ADDRESS;
   ppc_state.pc = ppc_state.npc = ENTRY_POINT;
 }

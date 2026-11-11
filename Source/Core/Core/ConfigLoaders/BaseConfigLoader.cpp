@@ -204,8 +204,8 @@ public:
       auto ini = inis.find(location.system);
       if (ini == inis.end())
       {
-        ERROR_LOG_FMT(COMMON, "Config can't map system '{}' to an INI file!",
-                      Config::GetSystemName(location.system));
+        ERROR_LOG(COMMON, "Config can't map system '%s' to an INI file!",
+                  Config::GetSystemName(location.system).c_str());
         continue;
       }
 

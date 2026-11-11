@@ -8,7 +8,7 @@
 
 #include <algorithm>
 #include <array>
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/IniFile.h"
 #include "Common/StringUtil.h"
@@ -146,9 +146,12 @@ std::optional<std::string> GetNetworkPatchByPayload(std::string_view source)
       {
         if (patch.is_kd != WC24PatchEngine::IsKD{true} && domain == patch.source && patch.enabled)
         {
-          return fmt::format("{}Host: {}{}", source.substr(0, pos), patch.replacement,
-                             end_of_line == std::string_view::npos ? "" :
-                                                                     source.substr(end_of_line));
+          return StringFromFormat(
+              "%.*sHost: %s%.*s", static_cast<int>(source.substr(0, pos).size()),
+              source.substr(0, pos).data(), patch.replacement.c_str(),
+              static_cast<int>(
+                  (end_of_line == std::string_view::npos ? "" : source.substr(end_of_line)).size()),
+              (end_of_line == std::string_view::npos ? "" : source.substr(end_of_line)).data());
         }
       }
 

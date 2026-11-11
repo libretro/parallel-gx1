@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonPaths.h"
 #include "Common/Config/Config.h"
@@ -21,6 +21,7 @@
 #include "Common/IniFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
+#include "Common/StringUtil.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/SYSCONFSettings.h"
@@ -42,18 +43,21 @@ std::vector<std::string> GetGameIniFilenames(std::string_view id, std::optional<
   if (id.length() == 6)
   {
     // INIs that match the system code (unique for each Virtual Console system)
-    filenames.push_back(fmt::format("{}.ini", id.substr(0, 1)));
+    filenames.push_back(StringFromFormat("%.*s.ini", static_cast<int>(id.substr(0, 1).size()),
+                                         id.substr(0, 1).data()));
 
     // INIs that match all regions
-    filenames.push_back(fmt::format("{}.ini", id.substr(0, 3)));
+    filenames.push_back(StringFromFormat("%.*s.ini", static_cast<int>(id.substr(0, 3).size()),
+                                         id.substr(0, 3).data()));
   }
 
   // Regular INIs
-  filenames.push_back(fmt::format("{}.ini", id));
+  filenames.push_back(StringFromFormat("%.*s.ini", static_cast<int>(id.size()), id.data()));
 
   // INIs with specific revisions
   if (revision)
-    filenames.push_back(fmt::format("{}r{}.ini", id, *revision));
+    filenames.push_back(StringFromFormat("%.*sr%u.ini", static_cast<int>(id.size()), id.data(),
+                                         (unsigned)(*revision)));
 
   return filenames;
 }
@@ -151,7 +155,7 @@ static Location MapINIToRealLocation(const std::string& section, const std::stri
   if (!fail && system)
     return {*system, config_section, key};
 
-  WARN_LOG_FMT(CORE, "Unknown game INI option in section {}: {}", section, key);
+  WARN_LOG(CORE, "Unknown game INI option in section %s: %s", section.c_str(), key.c_str());
   return {Config::System::Main, "", ""};
 }
 
@@ -240,7 +244,7 @@ private:
           if (!File::Exists(ini_path))
           {
             // TODO: PanicAlert shouldn't be used for this.
-            PanicAlertFmtT("Selected controller profile does not exist");
+            PanicAlert("Selected controller profile does not exist");
             continue;
           }
 
@@ -311,7 +315,8 @@ void INIGameConfigLayerLoader::Save(Config::Layer* layer)
 
   // Try to save to the revision specific INI first, if it exists.
   const std::string gameini_with_rev =
-      fmt::format("{}{}r{}.ini", File::GetUserPath(D_GAMESETTINGS_IDX), m_id, m_revision);
+      StringFromFormat("%s%sr%u.ini", File::GetUserPath(D_GAMESETTINGS_IDX).c_str(), m_id.c_str(),
+                       (unsigned)m_revision);
   if (File::Exists(gameini_with_rev))
   {
     ini.Save(gameini_with_rev);
@@ -320,7 +325,8 @@ void INIGameConfigLayerLoader::Save(Config::Layer* layer)
 
   // Otherwise, save to the game INI. We don't try any INI broader than that because it will
   // likely cause issues with cheat codes and game patches.
-  const std::string gameini = fmt::format("{}{}.ini", File::GetUserPath(D_GAMESETTINGS_IDX), m_id);
+  const std::string gameini =
+      StringFromFormat("%s%s.ini", File::GetUserPath(D_GAMESETTINGS_IDX).c_str(), m_id.c_str());
   ini.Save(gameini);
 }
 

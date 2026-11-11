@@ -324,7 +324,7 @@ bool DiscContentContainer::ReadContent(const DiscContent* content, u64* offset, 
     std::memset(*buffer, content->fixed_byte, size_t(bytes_to_read));
     break;
   default:
-    PanicAlertFmt("DirectoryBlob: Invalid content source in DiscContent.");
+    PanicAlert("DirectoryBlob: Invalid content source in DiscContent.");
     return false;
   }
 

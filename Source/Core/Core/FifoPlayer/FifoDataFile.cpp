@@ -116,13 +116,13 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
     return nullptr;
 
   auto panic_failed_to_read = [] {
-    CriticalAlertFmtT("Failed to read DFF file.");
+    CriticalAlert("Failed to read DFF file.");
     return nullptr;
   };
 
   if (file.GetSize() == 0)
   {
-    CriticalAlertFmtT("DFF file size is 0; corrupt/incomplete file?");
+    CriticalAlert("DFF file size is 0; corrupt/incomplete file?");
     return nullptr;
   }
 
@@ -132,15 +132,15 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
 
   if (header.fileId != FILE_ID)
   {
-    CriticalAlertFmtT("DFF file magic number is incorrect: got {0:08x}, expected {1:08x}",
-                      header.fileId, FILE_ID);
+    CriticalAlert("DFF file magic number is incorrect: got %08x, expected %08x", header.fileId,
+                  FILE_ID);
     return nullptr;
   }
 
   if (header.min_loader_version > VERSION_NUMBER)
   {
-    CriticalAlertFmtT(
-        "The DFF's minimum loader version ({0}) exceeds the version of this FIFO Player ({1})",
+    CriticalAlert(
+        "The DFF's minimum loader version (%u) exceeds the version of this FIFO Player (%u)",
         header.min_loader_version, VERSION_NUMBER);
     return nullptr;
   }
@@ -191,13 +191,12 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
   auto& memory = system.GetMemory();
   if (header.mem1_size != memory.GetRamSizeReal() || header.mem2_size != memory.GetExRamSizeReal())
   {
-    CriticalAlertFmtT("Emulated memory size mismatch!\n"
-                      "Current: MEM1 {0:08X} ({1} MiB), MEM2 {2:08X} ({3} MiB)\n"
-                      "DFF: MEM1 {4:08X} ({5} MiB), MEM2 {6:08X} ({7} MiB)",
-                      memory.GetRamSizeReal(), memory.GetRamSizeReal() / 0x100000,
-                      memory.GetExRamSizeReal(), memory.GetExRamSizeReal() / 0x100000,
-                      header.mem1_size, header.mem1_size / 0x100000, header.mem2_size,
-                      header.mem2_size / 0x100000);
+    CriticalAlert("Emulated memory size mismatch!\n"
+                  "Current: MEM1 %08X (%u MiB), MEM2 %08X (%u MiB)\n"
+                  "DFF: MEM1 %08X (%u MiB), MEM2 %08X (%u MiB)",
+                  memory.GetRamSizeReal(), memory.GetRamSizeReal() / 0x100000,
+                  memory.GetExRamSizeReal(), memory.GetExRamSizeReal() / 0x100000, header.mem1_size,
+                  header.mem1_size / 0x100000, header.mem2_size, header.mem2_size / 0x100000);
     return nullptr;
   }
 

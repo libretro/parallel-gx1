@@ -13,7 +13,7 @@
 #include <string_view>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
 #endif
@@ -27,8 +27,6 @@
 // initguid.h must be included before usbiodef.h
 #include <usbiodef.h>
 
-#include <fmt/xchar.h>
-
 #include "Common/StringUtil.h"
 #include "Common/WindowsDevice.h"
 #endif
@@ -37,6 +35,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 #include "Common/ScopeGuard.h"
+#include "Common/StringUtil.h"
 #include "Core/LibusbUtils.h"
 
 // Device names for known Wii peripherals.
@@ -98,7 +97,7 @@ std::optional<DeviceInfo> DeviceInfo::FromString(const std::string& str)
 
 std::string DeviceInfo::ToString() const
 {
-  return fmt::format("{:04x}:{:04x}", vid, pid);
+  return StringFromFormat("%04x:%04x", (unsigned)vid, (unsigned)pid);
 }
 
 std::string DeviceInfo::ToDisplayString() const
@@ -111,7 +110,7 @@ std::string DeviceInfo::ToDisplayString() const
 
 std::string DeviceInfo::ToDisplayString(const std::string& name) const
 {
-  return fmt::format("{} ({:04x}:{:04x})", name, vid, pid);
+  return StringFromFormat("%s (%04x:%04x)", name.c_str(), (unsigned)vid, (unsigned)pid);
 }
 
 static std::optional<std::string> GetDeviceNameUsingKnownDevices(u16 vid, u16 pid)
@@ -127,7 +126,10 @@ static std::optional<std::string> GetDeviceNameUsingCfgMgr32(u16 vid, u16 pid)
 {
   auto class_guid = GUID_DEVINTERFACE_USB_DEVICE;
   const ULONG flags = CM_GET_DEVICE_INTERFACE_LIST_PRESENT;
-  const std::wstring filter = fmt::format(L"VID_{:04X}&PID_{:04X}", vid, pid);
+  wchar_t filter_text[24];
+  swprintf(filter_text, sizeof(filter_text) / sizeof(filter_text[0]), L"VID_%04X&PID_%04X", vid,
+           pid);
+  const std::wstring filter = filter_text;
 
   for (auto* iface : Common::GetDeviceInterfaceList(&class_guid, nullptr, flags))
   {
@@ -141,7 +143,7 @@ static std::optional<std::string> GetDeviceNameUsingCfgMgr32(u16 vid, u16 pid)
     DEVINST dev_inst{};
     if (CM_Locate_DevNode(&dev_inst, dev_inst_id->data(), CM_LOCATE_DEVNODE_NORMAL) != CR_SUCCESS)
     {
-      ERROR_LOG_FMT(COMMON, "CM_Locate_DevNode");
+      ERROR_LOG(COMMON, "CM_Locate_DevNode");
       return std::nullopt;
     }
 
@@ -172,8 +174,10 @@ static std::optional<std::string> GetDeviceNameUsingHWDB(u16 vid, u16 pid)
 
   Common::ScopeGuard hwdb_guard{[&] { udev_hwdb_unref(hwdb); }};
 
-  const std::string modalias = fmt::format("usb:v{:04X}p{:04X}*", vid, pid);
-  udev_list_entry* entries = udev_hwdb_get_properties_list_entry(hwdb, modalias.c_str(), 0);
+  char modalias[24];
+  snprintf(modalias, sizeof(modalias), "usb:v%04Xp%04X*", static_cast<unsigned>(vid),
+           static_cast<unsigned>(pid));
+  udev_list_entry* entries = udev_hwdb_get_properties_list_entry(hwdb, modalias, 0);
   if (!entries)
     return std::nullopt;
 
@@ -281,7 +285,9 @@ ListDevices(const std::function<bool(const libusb_device_descriptor&)>& filter)
   });
 
   if (ret != LIBUSB_SUCCESS)
-    WARN_LOG_FMT(CORE, "Failed to get device list: {}", LibusbUtils::ErrorWrap(ret));
+    WARN_LOG(CORE, "Failed to get device list: %s (%d: %s)",
+             LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+             LibusbUtils::ErrorWrap(ret).GetName());
 
   return device_list;
 }

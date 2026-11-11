@@ -3,11 +3,12 @@
 
 #include "Core/WiiRoot.h"
 
+#include <cinttypes>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -102,12 +103,12 @@ static void MoveToBackupIfExists(const std::string& path)
   if (File::Exists(path))
   {
     const std::string backup_path = path.substr(0, path.size() - 1) + ".backup";
-    WARN_LOG_FMT(IOS_FS, "Temporary directory at {} exists, moving to backup...", path);
+    WARN_LOG(IOS_FS, "Temporary directory at %s exists, moving to backup...", path.c_str());
 
     // If backup exists, delete it as we don't want a mess
     if (File::Exists(backup_path))
     {
-      WARN_LOG_FMT(IOS_FS, "Temporary backup directory at {} exists, deleting...", backup_path);
+      WARN_LOG(IOS_FS, "Temporary backup directory at %s exists, deleting...", backup_path.c_str());
       File::DeleteDirRecursively(backup_path);
     }
 
@@ -122,7 +123,7 @@ void InitializeWiiRoot(bool use_temporary)
   if (use_temporary)
   {
     s_temp_wii_root = File::GetUserPath(D_USER_IDX) + "WiiSession" DIR_SEP;
-    WARN_LOG_FMT(IOS_FS, "Using temporary directory {} for minimal Wii FS", s_temp_wii_root);
+    WARN_LOG(IOS_FS, "Using temporary directory %s for minimal Wii FS", s_temp_wii_root.c_str());
 
     // If directory exists, make a backup
     MoveToBackupIfExists(s_temp_wii_root);
@@ -238,7 +239,7 @@ void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data)
   // Because we do not require the system menu to be run, WiiConnect24 files must be copied
   // to the NAND manually.
   if (!CopySysmenuFilesToFS(fs.get(), File::GetSysDirectory() + WII_USER_DIR, ""))
-    WARN_LOG_FMT(CORE, "Failed to copy initial System Menu files to the NAND");
+    WARN_LOG(CORE, "Failed to copy initial System Menu files to the NAND");
 
   if (WiiRootIsTemporary())
   {
@@ -253,12 +254,12 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
   // In TAS mode, copy back always.
   const bool cleanup_required = WiiRootIsTemporary();
 
-  INFO_LOG_FMT(CORE, "Wii FS Cleanup: cleanup_required = {}", cleanup_required);
+  INFO_LOG(CORE, "Wii FS Cleanup: cleanup_required = %s", cleanup_required ? "true" : "false");
 
   if (!cleanup_required)
     return;
 
-  INFO_LOG_FMT(CORE, "Wii FS Cleanup: Copying from temporary FS to configured_fs.");
+  INFO_LOG(CORE, "Wii FS Cleanup: Copying from temporary FS to configured_fs.");
 
   IOS::HLE::EmulationKernel* ios = Core::System::GetInstance().GetIOS();
 
@@ -268,12 +269,12 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
   if (!CopyNandFile(ios->GetFS().get(), Common::GetMiiDatabasePath(), configured_fs.get(),
                     Common::GetMiiDatabasePath()))
   {
-    WARN_LOG_FMT(CORE, "Failed to copy Mii database to the NAND");
+    WARN_LOG(CORE, "Failed to copy Mii database to the NAND");
   }
 
   for (const u64 title_id : ios->GetESCore().GetInstalledTitles())
   {
-    INFO_LOG_FMT(CORE, "Wii FS Cleanup: Copying {0:016x}.", title_id);
+    INFO_LOG(CORE, "Wii FS Cleanup: Copying %016" PRIx64 ".", (u64)title_id);
 
     const auto session_save = WiiSave::MakeNandStorage(ios->GetFS().get(), title_id);
 
@@ -284,8 +285,8 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
 
     const auto user_save = WiiSave::MakeNandStorage(configured_fs.get(), title_id);
 
-    const std::string backup_path =
-        fmt::format("{}/{:016x}.bin", File::GetUserPath(D_BACKUP_IDX), title_id);
+    const std::string backup_path = StringFromFormat(
+        "%s/%016" PRIx64 ".bin", File::GetUserPath(D_BACKUP_IDX).c_str(), (u64)title_id);
     const auto backup_save = WiiSave::MakeDataBinStorage(&ios->GetIOSC(), backup_path, "w+b");
 
     // Backup the existing save just in case it's still needed.

@@ -67,7 +67,7 @@ void CoreTimingManager::PushEvent(const Event& ev)
   u32 i;
   if (!ReserveEvents(m_num_events + 1))
   {
-    ERROR_LOG_FMT(POWERPC, "Lost a \"{}\" event: out of memory", ev.type->name);
+    ERROR_LOG(POWERPC, "Lost a \"%s\" event: out of memory", ev.type->name);
     return;
   }
   i = m_num_events++;
@@ -288,7 +288,7 @@ void CoreTimingManager::DoState(PointerWrap& p)
       // no registered name is as long: skip it
       static_cast<void>(p.DoExternal(name_len));
       ev.type = m_ev_lost;
-      WARN_LOG_FMT(POWERPC, "Lost event from savestate: its type's name is too long");
+      WARN_LOG(POWERPC, "Lost event from savestate: its type's name is too long");
       continue;
     }
     p.DoArray(name, name_len);
@@ -296,9 +296,9 @@ void CoreTimingManager::DoState(PointerWrap& p)
     ev.type = FindEventType(name);
     if (!ev.type)
     {
-      WARN_LOG_FMT(POWERPC,
-                   "Lost event from savestate because its type, \"{}\", has not been registered.",
-                   name);
+      WARN_LOG(POWERPC,
+               "Lost event from savestate because its type, \"%s\", has not been registered.",
+               name);
       ev.type = m_ev_lost;
     }
   }
@@ -368,17 +368,17 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
   {
     if (Core::WantsDeterminism())
     {
-      ERROR_LOG_FMT(POWERPC,
-                    "Someone scheduled an off-thread \"{}\" event while netplay or "
-                    "movie play/record was active.  This is likely to cause a desync.",
-                    event_type->name);
+      ERROR_LOG(POWERPC,
+                "Someone scheduled an off-thread \"%s\" event while netplay or "
+                "movie play/record was active.  This is likely to cause a desync.",
+                event_type->name);
     }
 
     ThreadSafeEvent* const node =
         static_cast<ThreadSafeEvent*>(object_pool_alloc(m_ts_pool, sizeof(ThreadSafeEvent)));
     if (!node)
     {
-      ERROR_LOG_FMT(POWERPC, "Lost a \"{}\" event: out of memory", event_type->name);
+      ERROR_LOG(POWERPC, "Lost a \"%s\" event: out of memory", event_type->name);
       return;
     }
     node->link.next = nullptr;

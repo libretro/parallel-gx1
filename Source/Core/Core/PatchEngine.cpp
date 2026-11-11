@@ -9,12 +9,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cinttypes>
 #include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/Align.h"
@@ -177,12 +178,14 @@ void LoadPatches()
       std::ranges::count_if(s_on_frame, [](const Patch& patch) { return patch.enabled; });
   if (enabled_patch_count > 0)
   {
-    Core::DisplayMessage(fmt::format("{} game patch(es) enabled", enabled_patch_count));
+    Core::DisplayMessage(
+        StringFromFormat("%" PRIu64 " game patch(es) enabled", (u64)enabled_patch_count));
   }
 
   const size_t enabled_cheat_count = ActionReplay::CountEnabledCodes() + Gecko::CountEnabledCodes();
   if (enabled_cheat_count > 0)
-    Core::DisplayMessage(fmt::format("{} cheat(s) enabled", enabled_cheat_count));
+    Core::DisplayMessage(
+        StringFromFormat("%" PRIu64 " cheat(s) enabled", (u64)enabled_cheat_count));
 }
 
 static void ApplyPatches(const Core::CPUThreadGuard& guard, const std::vector<Patch>& patches)
@@ -261,10 +264,10 @@ static void ApplyStartupPatches(Core::System& system)
   const auto& ppc_state = system.GetPPCState();
   if (!ppc_state.msr.DR || !ppc_state.msr.IR)
   {
-    DEBUG_LOG_FMT(ACTIONREPLAY,
-                  "Need to retry later. CPU configuration is currently incorrect. PC = {:#010x}, "
-                  "MSR = {:#010x}",
-                  ppc_state.pc, ppc_state.msr.Hex);
+    DEBUG_LOG(ACTIONREPLAY,
+              "Need to retry later. CPU configuration is currently incorrect. PC = %#010x, "
+              "MSR = %#010x",
+              ppc_state.pc, ppc_state.msr.Hex);
     return;
   }
 
@@ -301,10 +304,10 @@ bool ApplyFramePatches(Core::System& system)
   // where we can try again after the CPU hopefully returns back to the normal instruction flow.
   if (!ppc_state.msr.DR || !ppc_state.msr.IR || !IsStackValid(guard))
   {
-    DEBUG_LOG_FMT(ACTIONREPLAY,
-                  "Need to retry later. CPU configuration is currently incorrect. PC = {:#010x}, "
-                  "MSR = {:#010x}",
-                  ppc_state.pc, ppc_state.msr.Hex);
+    DEBUG_LOG(ACTIONREPLAY,
+              "Need to retry later. CPU configuration is currently incorrect. PC = %#010x, "
+              "MSR = %#010x",
+              ppc_state.pc, ppc_state.msr.Hex);
     return false;
   }
 

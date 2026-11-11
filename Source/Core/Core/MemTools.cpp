@@ -127,7 +127,7 @@ static void CheckKR(const char* name, kern_return_t kr)
 {
   if (kr)
   {
-    PanicAlertFmt("{} failed: kr={:x}", name, kr);
+    PanicAlert("%s failed: kr=%x", name, static_cast<unsigned>(kr));
   }
 }
 
@@ -182,13 +182,14 @@ static void ExceptionThread(void* data)
 
     if (msg_in.Head.msgh_id != 2406)
     {
-      PanicAlertFmt("unknown message received");
+      PanicAlert("unknown message received");
       return;
     }
 
     if (msg_in.flavor != THREAD_STATE64)
     {
-      PanicAlertFmt("unknown flavor {} (expected {})", msg_in.flavor, THREAD_STATE64);
+      PanicAlert("unknown flavor %d (expected %d)", msg_in.flavor,
+                 static_cast<int>(THREAD_STATE64));
       return;
     }
 
@@ -319,7 +320,7 @@ void InstallExceptionHandler()
   signal_stack.ss_size = SIGSTKSZ;
   signal_stack.ss_flags = 0;
   if (sigaltstack(&signal_stack, nullptr) != 0)
-    PanicAlertFmt("sigaltstack failed: {}", Common::LastStrerrorString());
+    PanicAlert("sigaltstack failed: %s", Common::LastStrerrorString().c_str());
   struct sigaction sa{};
   sa.sa_sigaction = &sigsegv_handler;
   sa.sa_flags = SA_SIGINFO;

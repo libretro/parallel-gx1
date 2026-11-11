@@ -20,7 +20,7 @@
 #include "Core/HW/EXI/EXI_Device.h"
 #include "Core/Config/SYSCONFSettings.h"
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -186,7 +186,7 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot)
     // if they have the IPL for the current game region.
     if (skip_ipl)
     {
-      WARN_LOG_FMT(BOOT, "Skipping IPL: {}.", ipl_path.empty() ? "region unknown" : "file not found");
+      WARN_LOG(BOOT, "Skipping IPL: %s.", ipl_path.empty() ? "region unknown" : "file not found");
       Config::SetCurrent(Config::MAIN_SKIP_IPL, true);
     }
   }

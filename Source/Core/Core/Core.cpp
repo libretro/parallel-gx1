@@ -11,8 +11,7 @@
 #include <utility>
 #include <variant>
 
-#include <fmt/chrono.h>
-#include <fmt/format.h>
+#include <cstdio>
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
@@ -129,14 +128,15 @@ static thread_local bool tls_is_gpu_thread = false;
 // Formatted stop message
 std::string StopMessage(bool main_thread, std::string_view message)
 {
-  return fmt::format("Stop [{} {}]\t{}", main_thread ? "Main Thread" : "Video Thread",
-                     Common::CurrentThreadId(), message);
+  return StringFromFormat("Stop [%s %d]\t%.*s", main_thread ? "Main Thread" : "Video Thread",
+                          Common::CurrentThreadId(), static_cast<int>(message.size()),
+                          message.data());
 }
 
 void DisplayMessage(std::string message, int)
 {
   // Nothing is drawn over the game: the message goes to the log.
-  NOTICE_LOG_FMT(CORE, "{}", message);
+  NOTICE_LOG(CORE, "%s", message.c_str());
 }
 
 bool IsRunning(Core::System& system)
@@ -178,7 +178,7 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot)
   {
     if (!IsUninitialized(system))
     {
-      PanicAlertFmtT("Emu Thread already running");
+      PanicAlert("Emu Thread already running");
       return false;
     }
 
@@ -189,8 +189,8 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot)
   // Drain any left over jobs
   HostDispatchJobs(system);
 
-  INFO_LOG_FMT(BOOT, "Starting core = {} mode", system.IsWii() ? "Wii" : "GameCube");
-  INFO_LOG_FMT(BOOT, "CPU Thread separate = {}", system.IsDualCoreMode() ? "Yes" : "No");
+  INFO_LOG(BOOT, "Starting core = %s mode", system.IsWii() ? "Wii" : "GameCube");
+  INFO_LOG(BOOT, "CPU Thread separate = %s", system.IsDualCoreMode() ? "Yes" : "No");
 
   // Manually reactivate the video backend in case a GameINI overrides the video backend setting.
 
@@ -232,10 +232,10 @@ void Stop(Core::System& system)  // - Hammertime!
 
   system.GetFifo().EmulatorState(false);
 
-  INFO_LOG_FMT(CONSOLE, "Stop [Main Thread]\t\t---- Shutting down ----");
+  INFO_LOG(CONSOLE, "Stop [Main Thread]\t\t---- Shutting down ----");
 
   // Stop the CPU
-  INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "Stop CPU"));
+  INFO_LOG(CONSOLE, "%s", StopMessage(true, "Stop CPU").c_str());
   system.GetCPU().Stop();
 }
 
@@ -340,7 +340,7 @@ static void FifoPlayerThread(Core::System& system)
   }
   else
   {
-    PanicAlertFmt("FIFO file doesn't contain any frame, cannot playback.");
+    PanicAlert("FIFO file doesn't contain any frame, cannot playback.");
     system.GetFifoPlayer().Close();
     return;
   }
@@ -358,9 +358,9 @@ static void FifoPlayerThread(Core::System& system)
     // that loop is told to stop.
     AsyncRequests::GetInstance()->SetPassthrough(false);
     return std::make_unique<GuardType>([&system] {
-      INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "Wait for Video Loop to exit ..."));
+      INFO_LOG(CONSOLE, "%s", StopMessage(true, "Wait for Video Loop to exit ...").c_str());
       system.GetFifo().ExitGpuLoop();
-      INFO_LOG_FMT(CONSOLE, "{}", StopMessage(true, "GPU thread stopped."));
+      INFO_LOG(CONSOLE, "%s", StopMessage(true, "GPU thread stopped.").c_str());
     });
   }
 
@@ -432,7 +432,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 
     NotifyStateChanged(State::Uninitialized);
 
-    INFO_LOG_FMT(CONSOLE, "Stop\t\t---- Shutdown complete ----");
+    INFO_LOG(CONSOLE, "Stop\t\t---- Shutdown complete ----");
   }};
 
   Common::SetCurrentThreadName("Emuthread - Starting");
@@ -466,11 +466,10 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
       const bool sync_ok = Common::SyncSDImageToSDFolder([] { return false; });
       if (!sync_ok)
       {
-        PanicAlertFmtT(
-            "Failed to sync SD card with folder. All changes made this session will be "
-            "discarded on next boot if you do not manually re-issue a resync in Config > "
-            "Wii > SD Card Settings > {0}!",
-            Common::GetStringT(Common::SD_UNPACK_TEXT));
+        PanicAlert("Failed to sync SD card with folder. All changes made this session will be "
+                   "discarded on next boot if you do not manually re-issue a resync in Config > "
+                   "Wii > SD Card Settings > %s!",
+                   Common::GetStringT(Common::SD_UNPACK_TEXT).c_str());
       }
     }
   }};
@@ -480,9 +479,9 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   HW::Init(system, nullptr);
 
   Common::ScopeGuard hw_guard{[&system] {
-    INFO_LOG_FMT(CONSOLE, "{}", StopMessage(false, "Shutting down HW"));
+    INFO_LOG(CONSOLE, "%s", StopMessage(false, "Shutting down HW").c_str());
     HW::Shutdown(system);
-    INFO_LOG_FMT(CONSOLE, "{}", StopMessage(false, "HW shutdown"));
+    INFO_LOG(CONSOLE, "%s", StopMessage(false, "HW shutdown").c_str());
 
     // The config must be restored only after the whole HW has shut down,
     // not when it is still running.
@@ -498,7 +497,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   const auto video_guard = GetInitializedVideoGuard(system);
   if (!video_guard)
   {
-    PanicAlertFmt("Failed to initialize video backend!");
+    PanicAlert("Failed to initialize video backend!");
     return;
   }
 
@@ -510,7 +509,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   if (!system.GetDSP().GetDSPEmulator()->Initialize(system.IsWii(),
                                                     Config::Get(Config::MAIN_DSP_THREAD)))
   {
-    PanicAlertFmt("Failed to initialize DSP emulation!");
+    PanicAlert("Failed to initialize DSP emulation!");
     return;
   }
 
@@ -617,7 +616,7 @@ void SetState(Core::System& system, State state, bool report_state_change,
       break;
     }
     default:
-      PanicAlertFmt("Invalid state");
+      PanicAlert("Invalid state");
       break;
     }
   }
@@ -830,11 +829,12 @@ void FrameGateKick()
 void UpdateTitle(Core::System& system)
 {
   // Settings are shown the same for both extended and summary info
-  const std::string SSettings = fmt::format(
-      "{} {} | {} | {}", system.GetPowerPC().GetCPUName(), system.IsDualCoreMode() ? "DC" : "SC",
-      g_video_backend->GetDisplayName(), Config::Get(Config::MAIN_DSP_HLE) ? "HLE" : "LLE");
+  const std::string SSettings = StringFromFormat(
+      "%s %s | %s | %s", system.GetPowerPC().GetCPUName(), system.IsDualCoreMode() ? "DC" : "SC",
+      g_video_backend->GetDisplayName().c_str(), Config::Get(Config::MAIN_DSP_HLE) ? "HLE" : "LLE");
 
-  std::string message = fmt::format("{} | {}", Common::GetScmRevStr(), SSettings);
+  std::string message =
+      StringFromFormat("%s | %s", Common::GetScmRevStr().c_str(), SSettings.c_str());
   if (Config::Get(Config::MAIN_SHOW_ACTIVE_TITLE))
   {
     const std::string& title = SConfig::GetInstance().GetTitleDescription();
@@ -885,7 +885,7 @@ void UpdateWantDeterminism(Core::System& system, bool initial)
   const bool new_want_determinism = false;
   if (new_want_determinism != s_wants_determinism || initial)
   {
-    NOTICE_LOG_FMT(COMMON, "Want determinism <- {}", new_want_determinism ? "true" : "false");
+    NOTICE_LOG(COMMON, "Want determinism <- %s", new_want_determinism ? "true" : "false");
 
     s_wants_determinism = new_want_determinism;
     const auto ios = system.GetIOS();

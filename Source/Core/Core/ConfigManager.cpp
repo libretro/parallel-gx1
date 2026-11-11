@@ -4,7 +4,7 @@
 #include "Core/ConfigManager.h"
 
 #include <algorithm>
-#include <fmt/format.h>
+#include <cstdio>
 #include <memory>
 #include <optional>
 #include <string>
@@ -82,13 +82,13 @@ SConfig::~SConfig()
 
 void SConfig::SaveSettings()
 {
-  NOTICE_LOG_FMT(BOOT, "Saving settings to {}", File::GetUserPath(F_DOLPHINCONFIG_IDX));
+  NOTICE_LOG(BOOT, "Saving settings to %s", File::GetUserPath(F_DOLPHINCONFIG_IDX).c_str());
   Config::Save();
 }
 
 void SConfig::LoadSettings()
 {
-  INFO_LOG_FMT(BOOT, "Loading Settings from {}", File::GetUserPath(F_DOLPHINCONFIG_IDX));
+  INFO_LOG(BOOT, "Loading Settings from %s", File::GetUserPath(F_DOLPHINCONFIG_IDX).c_str());
   Config::Load();
 }
 
@@ -165,7 +165,8 @@ const std::vector<std::string> SConfig::GetGameIDsForTextures() const
   if (metadata.game_id_elf_dol.empty())
     return {metadata.game_id};
 
-  return {fmt::format("{}-{}", metadata.game_id_elf_dol, metadata.game_id), metadata.game_id};
+  return {StringFromFormat("%s-%s", metadata.game_id_elf_dol.c_str(), metadata.game_id.c_str()),
+          metadata.game_id};
 }
 
 const std::string SConfig::GetTitleName() const
@@ -255,7 +256,7 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
   else if (title_id != 0)
   {
     m_debugger_game_id =
-        fmt::format("{:08X}_{:08X}", static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
+        StringFromFormat("%08X_%08X", static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
   }
   else
   {
@@ -291,8 +292,7 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
   if (!was_changed || game_id == "00000000")
     return;
 
-
-  NOTICE_LOG_FMT(CORE, "Active title: {}", title_description);
+  NOTICE_LOG(CORE, "Active title: %s", title_description.c_str());
   Host_TitleChanged();
 
   auto& system = Core::System::GetInstance();
@@ -420,12 +420,12 @@ struct SetGameMetadata
   {
     if (!wad.GetTMD().IsValid())
     {
-      PanicAlertFmtT("This WAD is not valid.");
+      PanicAlert("This WAD is not valid.");
       return false;
     }
     if (!IOS::ES::IsChannel(wad.GetTMD().GetTitleId()))
     {
-      PanicAlertFmtT("This WAD is not bootable.");
+      PanicAlert("This WAD is not bootable.");
       return false;
     }
 
@@ -443,7 +443,7 @@ struct SetGameMetadata
     const IOS::ES::TMDReader tmd = ios.GetESCore().FindInstalledTMD(nand_title.id);
     if (!tmd.IsValid() || !IOS::ES::IsChannel(nand_title.id))
     {
-      PanicAlertFmtT("This title cannot be booted.");
+      PanicAlert("This title cannot be booted.");
       return false;
     }
 

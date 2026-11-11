@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/Align.h"
 #include "Common/Assert.h"
@@ -68,7 +68,7 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
 {
   if (!wad.GetTicket().IsValid() || !wad.GetTMD().IsValid())
   {
-    PanicAlertFmtT("WAD installation failed: The selected file is not a valid WAD.");
+    PanicAlert("WAD installation failed: The selected file is not a valid WAD.");
     return false;
   }
 
@@ -95,8 +95,8 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
   {
     if (ret != IOS::HLE::IOSC_FAIL_CHECKVALUE)
     {
-      PanicAlertFmtT("WAD installation failed: Could not initialise title import (error {0}).",
-                     std::to_underlying(ret));
+      PanicAlert("WAD installation failed: Could not initialise title import (error %d).",
+                 std::to_underlying(ret));
     }
     return false;
   }
@@ -111,7 +111,7 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
         es.ImportContentData(context, 0, data.data(), static_cast<u32>(data.size())) < 0 ||
         es.ImportContentEnd(context, 0) < 0)
     {
-      PanicAlertFmtT("WAD installation failed: Could not import content {0:08x}.", content.id);
+      PanicAlert("WAD installation failed: Could not import content %08x.", content.id);
       contents_imported = false;
       break;
     }
@@ -120,7 +120,7 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
   if ((contents_imported && es.ImportTitleDone(context) < 0) ||
       (!contents_imported && es.ImportTitleCancel(context) < 0))
   {
-    PanicAlertFmtT("WAD installation failed: Could not finalise title import.");
+    PanicAlert("WAD installation failed: Could not finalise title import.");
     return false;
   }
 
@@ -129,7 +129,7 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
   // they are not present. So ensure they exist and create them if they don't.
   if (!CreateShopLogs(fs.get()))
   {
-    PanicAlertFmtT("WAD installation failed: Could not create Wii Shop log files.");
+    PanicAlert("WAD installation failed: Could not create Wii Shop log files.");
     return false;
   }
 
@@ -164,10 +164,11 @@ bool InstallWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad, InstallType
   const bool has_another_version =
       installed_tmd.IsValid() && installed_tmd.GetTitleVersion() != wad.GetTMD().GetTitleVersion();
   if (has_another_version &&
-      !AskYesNoFmtT("A different version of this title is already installed on the NAND.\n\n"
-                    "Installed version: {0}\nWAD version: {1}\n\n"
-                    "Installing this WAD will replace it irreversibly. Continue?",
-                    installed_tmd.GetTitleVersion(), wad.GetTMD().GetTitleVersion()))
+      !AskYesNo("A different version of this title is already installed on the NAND.\n\n"
+                "Installed version: %u\nWAD version: %u\n\n"
+                "Installing this WAD will replace it irreversibly. Continue?",
+                (unsigned)installed_tmd.GetTitleVersion(),
+                (unsigned)wad.GetTMD().GetTitleVersion()))
   {
     return false;
   }

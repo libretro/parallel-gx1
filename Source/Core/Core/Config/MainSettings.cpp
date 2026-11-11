@@ -5,8 +5,7 @@
 
 #include <sstream>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <cstdio>
 
 #include "Common/Assert.h"
 #include "Common/CommonPaths.h"
@@ -240,7 +239,7 @@ GPUDeterminismMode GetGPUDeterminismMode()
   if (mode == "fake-completion")
     return GPUDeterminismMode::FakeCompletion;
 
-  NOTICE_LOG_FMT(CORE, "Unknown GPU determinism mode {}", mode);
+  NOTICE_LOG(CORE, "Unknown GPU determinism mode %s", mode.c_str());
   return GPUDeterminismMode::Auto;
 }
 
@@ -559,7 +558,14 @@ static std::string GetDefaultTriforceIPRedirections()
       "192.168.150.0/24=127.0.0.1 ALL.Net",
   };
 
-  return fmt::format("{}", fmt::join(entries, ","));
+  std::string joined;
+  for (const std::string_view entry : entries)
+  {
+    if (!joined.empty())
+      joined += ',';
+    joined += entry;
+  }
+  return joined;
 #endif
 }
 
@@ -629,9 +635,10 @@ std::string GetMemcardPath(ExpansionInterface::Slot slot, std::optional<DiscIO::
 std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::Slot slot,
                            std::optional<DiscIO::Region> region, u16 size_mb)
 {
-  const std::string blocks_string = size_mb < Memcard::MBIT_SIZE_MEMORY_CARD_2043 ?
-                                        fmt::format(".{}", Memcard::MbitToFreeBlocks(size_mb)) :
-                                        "";
+  const std::string blocks_string =
+      size_mb < Memcard::MBIT_SIZE_MEMORY_CARD_2043 ?
+          StringFromFormat(".%u", Memcard::MbitToFreeBlocks(size_mb)) :
+          "";
 
   if (configured_filename.empty())
   {
@@ -639,8 +646,9 @@ std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::
     const bool is_slot_a = slot == ExpansionInterface::Slot::A;
     const std::string region_string = Config::GetDirectoryForRegion(
         Config::ToGameCubeRegion(region ? *region : Config::Get(Config::MAIN_FALLBACK_REGION)));
-    return fmt::format("{}{}.{}{}.raw", File::GetUserPath(D_GCUSER_IDX),
-                       is_slot_a ? GC_MEMCARDA : GC_MEMCARDB, region_string, blocks_string);
+    return StringFromFormat("%s%s.%s%s.raw", File::GetUserPath(D_GCUSER_IDX).c_str(),
+                            is_slot_a ? GC_MEMCARDA : GC_MEMCARDB, region_string.c_str(),
+                            blocks_string.c_str());
   }
 
   // Custom path is expected to be stored in the form of
@@ -683,9 +691,9 @@ std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::
 
   const DiscIO::Region used_region =
       region ? *region : (path_region ? *path_region : Config::Get(Config::MAIN_FALLBACK_REGION));
-  return fmt::format("{}{}.{}{}{}", dir, name,
-                     Config::GetDirectoryForRegion(Config::ToGameCubeRegion(used_region)),
-                     blocks_string, ext);
+  return StringFromFormat("%s%s.%s%s%s", dir.c_str(), name.c_str(),
+                          Config::GetDirectoryForRegion(Config::ToGameCubeRegion(used_region)),
+                          blocks_string.c_str(), ext.c_str());
 }
 
 bool IsDefaultMemcardPathConfigured(ExpansionInterface::Slot slot)
@@ -706,8 +714,8 @@ std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::
     const auto region_dir = Config::GetDirectoryForRegion(
         Config::ToGameCubeRegion(region ? *region : Config::Get(Config::MAIN_FALLBACK_REGION)));
     const bool is_slot_a = slot == ExpansionInterface::Slot::A;
-    return fmt::format("{}{}/Card {}", File::GetUserPath(D_GCUSER_IDX), region_dir,
-                       is_slot_a ? 'A' : 'B');
+    return StringFromFormat("%s%s/Card %c", File::GetUserPath(D_GCUSER_IDX).c_str(), region_dir,
+                            is_slot_a ? 'A' : 'B');
   }
 
   // Custom path is expected to be stored in the form of
@@ -749,9 +757,9 @@ std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::
 
   const DiscIO::Region used_region =
       region ? *region : (path_region ? *path_region : Config::Get(Config::MAIN_FALLBACK_REGION));
-  return fmt::format("{}/{}", base_path,
-                     Config::GetDirectoryForRegion(Config::ToGameCubeRegion(used_region),
-                                                   Config::RegionDirectoryStyle::Modern));
+  return StringFromFormat("%.*s/%s", static_cast<int>(base_path.size()), base_path.data(),
+                          Config::GetDirectoryForRegion(Config::ToGameCubeRegion(used_region),
+                                                        Config::RegionDirectoryStyle::Modern));
 }
 
 bool IsDefaultGCIFolderPathConfigured(ExpansionInterface::Slot slot)
