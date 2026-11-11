@@ -86,7 +86,7 @@ bool ElfReader::Initialize()
 {
   if (m_size < sizeof(Elf32_Ehdr))
   {
-    ERROR_LOG_FMT(BOOT, "ELF file is too small.");
+    ERROR_LOG(BOOT, "ELF file is too small.");
     return false;
   }
 
@@ -101,7 +101,7 @@ bool ElfReader::Initialize()
       header->e_ident[EI_MAG2] != ELFMAG2 || header->e_ident[EI_MAG3] != ELFMAG3 ||
       header->e_ident[EI_CLASS] != ELFCLASS32 || header->e_ident[EI_DATA] != ELFDATA2MSB)
   {
-    ERROR_LOG_FMT(BOOT, "Invalid ELF header.");
+    ERROR_LOG(BOOT, "Invalid ELF header.");
     return false;
   }
 
@@ -117,7 +117,7 @@ bool ElfReader::Initialize()
       !is_range_valid(header->e_shoff, sizeof(Elf32_Shdr) * header->e_shnum) ||
       (header->e_shstrndx != SHN_UNDEF && header->e_shstrndx >= header->e_shnum))
   {
-    ERROR_LOG_FMT(BOOT, "Invalid ELF header table.");
+    ERROR_LOG(BOOT, "Invalid ELF header table.");
     return false;
   }
 
@@ -130,7 +130,7 @@ bool ElfReader::Initialize()
     if (!is_range_valid(segments[i].p_offset, segments[i].p_filesz) ||
         segments[i].p_filesz > segments[i].p_memsz)
     {
-      ERROR_LOG_FMT(BOOT, "Invalid ELF program header {}.", i);
+      ERROR_LOG(BOOT, "Invalid ELF program header %d.", i);
       return false;
     }
   }
@@ -141,7 +141,7 @@ bool ElfReader::Initialize()
     if (sections[i].sh_type != SHT_NOBITS &&
         !is_range_valid(sections[i].sh_offset, sections[i].sh_size))
     {
-      ERROR_LOG_FMT(BOOT, "Invalid ELF section header {}.", i);
+      ERROR_LOG(BOOT, "Invalid ELF section header %d.", i);
       return false;
     }
   }
@@ -178,15 +178,15 @@ bool ElfReader::LoadIntoMemory(Core::System& system, bool only_in_mem1) const
   if (!m_is_valid)
     return false;
 
-  INFO_LOG_FMT(BOOT, "String section: {}", header->e_shstrndx);
+  INFO_LOG(BOOT, "String section: %u", (unsigned)header->e_shstrndx);
 
   if (bRelocate)
   {
-    PanicAlertFmt("Error: Dolphin doesn't know how to load a relocatable elf.");
+    PanicAlert("Error: Dolphin doesn't know how to load a relocatable elf.");
     return false;
   }
 
-  INFO_LOG_FMT(BOOT, "{} segments:", header->e_phnum);
+  INFO_LOG(BOOT, "%u segments:", (unsigned)header->e_phnum);
 
   auto& memory = system.GetMemory();
 
@@ -195,8 +195,8 @@ bool ElfReader::LoadIntoMemory(Core::System& system, bool only_in_mem1) const
   {
     Elf32_Phdr* p = segments + i;
 
-    INFO_LOG_FMT(BOOT, "Type: {} Vaddr: {:08x} Paddr: {:08x} Filesz: {} Memsz: {}", p->p_type,
-                 p->p_vaddr, p->p_paddr, p->p_filesz, p->p_memsz);
+    INFO_LOG(BOOT, "Type: %u Vaddr: %08x Paddr: %08x Filesz: %u Memsz: %u", p->p_type, p->p_vaddr,
+             p->p_paddr, p->p_filesz, p->p_memsz);
 
     if (p->p_type == PT_LOAD)
     {
@@ -218,11 +218,11 @@ bool ElfReader::LoadIntoMemory(Core::System& system, bool only_in_mem1) const
       if (srcSize < dstSize)
         memory.Memset(writeAddr + srcSize, 0, dstSize - srcSize);  // zero out bss
 
-      INFO_LOG_FMT(BOOT, "Loadable Segment Copied to {:08x}, size {:08x}", writeAddr, p->p_memsz);
+      INFO_LOG(BOOT, "Loadable Segment Copied to %08x, size %08x", writeAddr, p->p_memsz);
     }
   }
 
-  INFO_LOG_FMT(BOOT, "Done loading.");
+  INFO_LOG(BOOT, "Done loading.");
   return true;
 }
 
@@ -251,7 +251,7 @@ bool ElfReader::LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_
     const u32 string_section_index = sections[sec].sh_link;
     if (string_section_index >= header->e_shnum)
     {
-      ERROR_LOG_FMT(BOOT, "Invalid ELF symbol string table.");
+      ERROR_LOG(BOOT, "Invalid ELF symbol string table.");
       return false;
     }
 
@@ -259,7 +259,7 @@ bool ElfReader::LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_
     const char* stringBase = (const char*)GetSectionDataPtr(string_section_index);
     if (!stringBase)
     {
-      ERROR_LOG_FMT(BOOT, "ELF symbol string table has no data.");
+      ERROR_LOG(BOOT, "ELF symbol string table has no data.");
       return false;
     }
 
@@ -267,7 +267,7 @@ bool ElfReader::LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_
     Elf32_Sym* symtab = (Elf32_Sym*)(GetSectionDataPtr(sec));
     if (!symtab)
     {
-      ERROR_LOG_FMT(BOOT, "ELF symbol table has no data.");
+      ERROR_LOG(BOOT, "ELF symbol table has no data.");
       return false;
     }
 
@@ -286,7 +286,7 @@ bool ElfReader::LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_
       if (name_offset >= string_section.sh_size ||
           !std::memchr(stringBase + name_offset, '\0', string_section.sh_size - name_offset))
       {
-        ERROR_LOG_FMT(BOOT, "Invalid ELF symbol name {}.", sym);
+        ERROR_LOG(BOOT, "Invalid ELF symbol name %d.", sym);
         return false;
       }
       const char* name = stringBase + name_offset;

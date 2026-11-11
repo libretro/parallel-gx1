@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "Common/CommonTypes.h"
+
+#include <cinttypes>
 #include "Common/MsgHandler.h"
 
 #include "Core/Boot/Boot.h"
@@ -25,7 +27,7 @@ bool CBoot::BootNANDTitle(Core::System& system, const u64 title_id)
   if (ticket.IsValid())
     console_type = ticket.GetConsoleType();
   else
-    ERROR_LOG_FMT(BOOT, "No ticket was found for {:016x}", title_id);
+    ERROR_LOG(BOOT, "No ticket was found for %016" PRIx64, title_id);
   SetupWiiMemory(system, console_type);
   return es->LaunchTitle(title_id);
 }
@@ -34,7 +36,7 @@ bool CBoot::Boot_WiiWAD(Core::System& system, const DiscIO::VolumeWAD& wad)
 {
   if (!WiiUtils::InstallWAD(*system.GetIOS(), wad, WiiUtils::InstallType::Temporary))
   {
-    PanicAlertFmtT("Cannot boot this WAD because it could not be installed to the NAND.");
+    PanicAlert("Cannot boot this WAD because it could not be installed to the NAND.");
     return false;
   }
   return BootNANDTitle(system, wad.GetTMD().GetTitleId());

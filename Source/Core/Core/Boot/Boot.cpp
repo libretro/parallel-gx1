@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -14,8 +15,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
-#include <fmt/ranges.h>
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -64,8 +63,10 @@ static void PushLine(void* ud, const char* text, size_t length)
 std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::string& folder_path)
 {
   std::vector<std::string> result;
-  std::vector<std::string> nonexistent;
   std::vector<std::string> lines;
+  /* the paths not found, a line each, cut when they run past it */
+  char missing[1024];
+  size_t missing_len = 0;
 
   File::ForEachLine(m3u_path, PushLine, &lines);
 
@@ -76,26 +77,35 @@ std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::str
 
     if (line.starts_with(utf8_bom))
     {
-      WARN_LOG_FMT(BOOT, "UTF-8 BOM in file: {}", m3u_path);
+      WARN_LOG(BOOT, "UTF-8 BOM in file: %s", m3u_path.c_str());
       line.erase(0, utf8_bom.length());
     }
 
     if (!line.empty() && line.front() != '#')  // Comments start with #
     {
-      const std::string path_to_add = File::JoinPath(folder_path, line);
-      (File::Exists(path_to_add) ? result : nonexistent).push_back(path_to_add);
+      std::string path_to_add = File::JoinPath(folder_path, line);
+      if (File::Exists(path_to_add))
+      {
+        result.push_back(std::move(path_to_add));
+      }
+      else if (missing_len < sizeof(missing))
+      {
+        const int n = snprintf(missing + missing_len, sizeof(missing) - missing_len, "%s%s",
+                               missing_len ? "\n" : "", path_to_add.c_str());
+        missing_len = n < 0 ? sizeof(missing) : missing_len + static_cast<size_t>(n);
+      }
     }
   }
 
-  if (!nonexistent.empty())
+  if (missing_len)
   {
-    PanicAlertFmtT("Files specified in the M3U file \"{0}\" were not found:\n{1}", m3u_path,
-                   fmt::join(nonexistent, "\n"));
+    PanicAlert("Files specified in the M3U file \"%s\" were not found:\n%s", m3u_path.c_str(),
+               missing);
     return {};
   }
 
   if (result.empty())
-    PanicAlertFmtT("No paths found in the M3U file \"{0}\"", m3u_path);
+    PanicAlert("No paths found in the M3U file \"%s\"", m3u_path.c_str());
 
   return result;
 }
@@ -134,7 +144,7 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
   // that gave an incorrect file name
   if (!File::Exists(paths.front()))
   {
-    PanicAlertFmtT("The specified file \"{0}\" does not exist", paths.front());
+    PanicAlert("The specified file \"%s\" does not exist", paths.front().c_str());
     return {};
   }
 
@@ -174,7 +184,7 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
                                               std::move(boot_session_data_));
     }
 
-    PanicAlertFmtT("\"{0}\" is an invalid GCM/ISO file, or is not a GC/Wii ISO.", path);
+    PanicAlert("\"%s\" is an invalid GCM/ISO file, or is not a GC/Wii ISO.", path.c_str());
     return {};
   }
 
@@ -188,8 +198,7 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
       return std::make_unique<BootParameters>(std::move(*wad), std::move(boot_session_data_));
   }
 
-
-  PanicAlertFmtT("Could not recognize file {0}", path);
+  PanicAlert("Could not recognize file %s", path.c_str());
   return {};
 }
 
@@ -300,15 +309,15 @@ bool CBoot::Load_BS2(Core::System& system, const std::string& boot_rom_filename)
     known_ipl = true;
     break;
   default:
-    PanicAlertFmtT("The IPL file is not a known good dump. (CRC32: {0:x})", ipl_hash);
+    PanicAlert("The IPL file is not a known good dump. (CRC32: %x)", ipl_hash);
     break;
   }
 
   const DiscIO::Region boot_region = SConfig::GetInstance().m_region;
   if (known_ipl && pal_ipl != (boot_region == DiscIO::Region::PAL))
   {
-    PanicAlertFmtT("{0} IPL found in {1} directory. The disc might not be recognized",
-                   pal_ipl ? "PAL" : "NTSC", Config::GetDirectoryForRegion(boot_region));
+    PanicAlert("%s IPL found in %s directory. The disc might not be recognized",
+               pal_ipl ? "PAL" : "NTSC", Config::GetDirectoryForRegion(boot_region));
   }
 
   // Run the descrambler over the encrypted section containing BS1/BS2
@@ -408,7 +417,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
     }
     bool operator()(BootParameters::Disc& disc) const
     {
-      NOTICE_LOG_FMT(BOOT, "Booting from disc: {}", disc.path);
+      NOTICE_LOG(BOOT, "Booting from disc: %s", disc.path.c_str());
       const DiscIO::VolumeDisc* volume =
           SetDisc(system.GetDVDInterface(), std::move(disc.volume), disc.auto_disc_change_paths);
 
@@ -424,7 +433,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
     bool operator()(const BootParameters::Executable& executable) const
     {
-      NOTICE_LOG_FMT(BOOT, "Booting from executable: {}", executable.path);
+      NOTICE_LOG(BOOT, "Booting from executable: %s", executable.path.c_str());
 
       if (!executable.reader->IsValid())
         return false;
@@ -463,7 +472,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
       if (!executable.reader->LoadIntoMemory(system))
       {
-        PanicAlertFmtT("Failed to load the executable to memory.");
+        PanicAlert("Failed to load the executable to memory.");
         return false;
       }
 
@@ -507,13 +516,13 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
     bool operator()(const BootParameters::IPL& ipl) const
     {
-      NOTICE_LOG_FMT(BOOT, "Booting GC IPL: {}", ipl.path);
+      NOTICE_LOG(BOOT, "Booting GC IPL: %s", ipl.path.c_str());
       if (!File::Exists(ipl.path))
       {
         if (ipl.disc)
-          PanicAlertFmtT("Cannot start the game, because the GC IPL could not be found.");
+          PanicAlert("Cannot start the game, because the GC IPL could not be found.");
         else
-          PanicAlertFmtT("Cannot find the GC IPL.");
+          PanicAlert("Cannot find the GC IPL.");
         return false;
       }
 
@@ -522,7 +531,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
       if (ipl.disc)
       {
-        NOTICE_LOG_FMT(BOOT, "Inserting disc: {}", ipl.disc->path);
+        NOTICE_LOG(BOOT, "Inserting disc: %s", ipl.disc->path.c_str());
 
         SetDisc(system.GetDVDInterface(), DiscIO::CreateDiscForCore(ipl.disc->path),
                 ipl.disc->auto_disc_change_paths);
@@ -534,7 +543,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
     bool operator()(const BootParameters::DFF& dff) const
     {
-      NOTICE_LOG_FMT(BOOT, "Booting DFF: {}", dff.dff_path);
+      NOTICE_LOG(BOOT, "Booting DFF: %s", dff.dff_path.c_str());
       return system.GetFifoPlayer().Open(dff.dff_path);
     }
 

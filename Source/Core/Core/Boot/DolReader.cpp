@@ -55,10 +55,10 @@ bool DolReader::Initialize()
     const u64 section_size = Common::AlignUp(static_cast<u64>(m_dolheader.m_text_size[i]), 32);
     if (section_size != m_dolheader.m_text_size[i])
     {
-      WARN_LOG_FMT(BOOT,
-                   "DolReader: Text section {} size is not aligned to 32 bytes and can cause "
-                   "issues when loaded",
-                   i);
+      WARN_LOG(BOOT,
+               "DolReader: Text section %d size is not aligned to 32 bytes and can cause "
+               "issues when loaded",
+               i);
     }
 
     if (m_size < m_dolheader.m_text_offset[i] + section_size)
@@ -91,10 +91,10 @@ bool DolReader::Initialize()
     const u32 section_offset = m_dolheader.m_data_offset[i];
     if (section_size != m_dolheader.m_data_size[i])
     {
-      WARN_LOG_FMT(BOOT,
-                   "DolReader: Data section {} size is not aligned to 32 bytes and can cause "
-                   "issues when loaded",
-                   i);
+      WARN_LOG(BOOT,
+               "DolReader: Data section %d size is not aligned to 32 bytes and can cause "
+               "issues when loaded",
+               i);
     }
 
     if (m_size < section_offset + section_size)
@@ -153,24 +153,24 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
   // Verify header block size
   if (Common::swap32(header.header_block.header_block_size) != sizeof(AncastHeaderBlock))
   {
-    ERROR_LOG_FMT(BOOT, "Ancast: Invalid header block size: 0x{:x}",
-                  Common::swap32(header.header_block.header_block_size));
+    ERROR_LOG(BOOT, "Ancast: Invalid header block size: 0x%x",
+              Common::swap32(header.header_block.header_block_size));
     return false;
   }
 
   // Make sure this is a PPC ancast image
   if (Common::swap32(header.signature_block.signature_type) != 0x01)
   {
-    ERROR_LOG_FMT(BOOT, "Ancast: Invalid signature type: 0x{:x}",
-                  Common::swap32(header.signature_block.signature_type));
+    ERROR_LOG(BOOT, "Ancast: Invalid signature type: 0x%x",
+              Common::swap32(header.signature_block.signature_type));
     return false;
   }
 
   // Make sure this is a Wii-Mode ancast image
   if (Common::swap32(header.info_block.image_type) != ANCAST_IMAGE_TYPE_ESPRESSO_WII)
   {
-    ERROR_LOG_FMT(BOOT, "Ancast: Invalid image type: 0x{:x}",
-                  Common::swap32(header.info_block.image_type));
+    ERROR_LOG(BOOT, "Ancast: Invalid image type: 0x%x",
+              Common::swap32(header.info_block.image_type));
     return false;
   }
 
@@ -178,7 +178,7 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
   const u32 body_size = Common::swap32(header.info_block.body_size);
   if (body_size + sizeof(EspressoAncastHeader) > section.m_header_section_size)
   {
-    ERROR_LOG_FMT(BOOT, "Ancast: Invalid body size: 0x{:x}", body_size);
+    ERROR_LOG(BOOT, "Ancast: Invalid body size: 0x%x", body_size);
     return false;
   }
 
@@ -187,7 +187,7 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
       section.m_data + sizeof(EspressoAncastHeader), body_size);
   if (digest != header.info_block.body_hash)
   {
-    ERROR_LOG_FMT(BOOT, "Ancast: Body hash mismatch");
+    ERROR_LOG(BOOT, "Ancast: Body hash mismatch");
     return false;
   }
 
@@ -199,8 +199,8 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
   }
   else if (Common::swap32(header.info_block.console_type) != ANCAST_CONSOLE_TYPE_RETAIL)
   {
-    ERROR_LOG_FMT(BOOT, "Ancast: Invalid console type: 0x{:x}",
-                  Common::swap32(header.info_block.console_type));
+    ERROR_LOG(BOOT, "Ancast: Invalid console type: 0x%x",
+              Common::swap32(header.info_block.console_type));
     return false;
   }
 

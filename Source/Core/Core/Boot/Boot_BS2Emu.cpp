@@ -149,7 +149,7 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
   const std::optional<u32> trailer = volume.ReadSwapped<u32>(offset + 0x18, partition);
   if (!entry || !size || !trailer || *entry == UINT32_MAX || *size + *trailer == UINT32_MAX)
   {
-    INFO_LOG_FMT(BOOT, "Invalid apploader. Your disc image is probably corrupted.");
+    INFO_LOG(BOOT, "Invalid apploader. Your disc image is probably corrupted.");
     return false;
   }
   DVDRead(system, volume, offset + 0x20, 0x01200000, *size + *trailer, partition);
@@ -160,7 +160,7 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
   auto& mmu = system.GetMMU();
 
   // Call iAppLoaderEntry.
-  DEBUG_LOG_FMT(BOOT, "Call iAppLoaderEntry");
+  DEBUG_LOG(BOOT, "Call iAppLoaderEntry");
   const u32 iAppLoaderFuncAddr = is_wii ? 0x80004000 : 0x80003100;
   ppc_state.gpr[3] = iAppLoaderFuncAddr + 0;
   ppc_state.gpr[4] = iAppLoaderFuncAddr + 4;
@@ -171,7 +171,7 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
   const u32 iAppLoaderClose = mmu.Read<u32>(iAppLoaderFuncAddr + 8);
 
   // iAppLoaderInit
-  DEBUG_LOG_FMT(BOOT, "Call iAppLoaderInit");
+  DEBUG_LOG(BOOT, "Call iAppLoaderInit");
   PowerPC::MMU::HostWrite<u32>(guard, 0x4E800020, 0x81300000);  // Write BLR
   HLE::Patch(system, 0x81300000, "AppLoaderReport");            // HLE OSReport for Apploader
   ppc_state.gpr[3] = 0x81300000;
@@ -180,7 +180,7 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
   // iAppLoaderMain - Here we load the apploader, the DOL (the exe) and the FST (filesystem).
   // To give you an idea about where the stuff is located on the disc take a look at yagcd
   // ch 13.
-  DEBUG_LOG_FMT(BOOT, "Call iAppLoaderMain");
+  DEBUG_LOG(BOOT, "Call iAppLoaderMain");
 
   ppc_state.gpr[3] = 0x81300004;
   ppc_state.gpr[4] = 0x81300008;
@@ -198,8 +198,8 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
     const u32 length = mmu.Read<u32>(0x81300008);
     const u32 dvd_offset = mmu.Read<u32>(0x8130000c) << (is_wii ? 2 : 0);
 
-    INFO_LOG_FMT(BOOT, "DVDRead: offset: {:08x}   memOffset: {:08x}   length: {}", dvd_offset,
-                 ram_address, length);
+    INFO_LOG(BOOT, "DVDRead: offset: %08x   memOffset: %08x   length: %u", dvd_offset, ram_address,
+             length);
     DVDRead(system, volume, dvd_offset, ram_address, length, partition);
 
     ppc_state.gpr[3] = 0x81300004;
@@ -210,7 +210,7 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
   }
 
   // iAppLoaderClose
-  DEBUG_LOG_FMT(BOOT, "call iAppLoaderClose");
+  DEBUG_LOG(BOOT, "call iAppLoaderClose");
   RunFunction(system, iAppLoaderClose);
   HLE::UnPatch(system, "AppLoaderReport");
 
@@ -275,7 +275,7 @@ void CBoot::SetupGCMemory(Core::System& system, const Core::CPUThreadGuard& guar
 bool CBoot::EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& guard,
                            const DiscIO::VolumeDisc& volume)
 {
-  INFO_LOG_FMT(BOOT, "Faking GC BS2...");
+  INFO_LOG(BOOT, "Faking GC BS2...");
 
   auto& ppc_state = system.GetPPCState();
 
@@ -414,11 +414,11 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
       serno = "123456789";
     else
       serno = Common::SettingsWriter::GenerateSerialNumber();
-    INFO_LOG_FMT(BOOT, "No previous serial number found, generated one instead: {}", serno);
+    INFO_LOG(BOOT, "No previous serial number found, generated one instead: %s", serno.c_str());
   }
   else
   {
-    INFO_LOG_FMT(BOOT, "Using serial number: {}", serno);
+    INFO_LOG(BOOT, "Using serial number: %s", serno.c_str());
   }
 
   Common::SettingsWriter settings_writer;
@@ -437,7 +437,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   if (!settings_file ||
       !settings_file->Write(settings_writer.GetBytes().data(), settings_writer.GetBytes().size()))
   {
-    PanicAlertFmtT("SetupWiiMemory: Can't create setting.txt file");
+    PanicAlert("SetupWiiMemory: Can't create setting.txt file");
     return false;
   }
 
@@ -446,7 +446,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   // Write the 256 byte setting.txt to memory.
   memory.CopyToEmu(0x3800, settings_writer.GetBytes().data(), settings_writer.GetBytes().size());
 
-  INFO_LOG_FMT(BOOT, "Setup Wii Memory...");
+  INFO_LOG(BOOT, "Setup Wii Memory...");
 
   /*
   Set hardcoded global variables to Wii memory. These are partly collected from
@@ -527,7 +527,7 @@ static void WriteEmptyPlayRecord()
 bool CBoot::EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& guard,
                             const DiscIO::VolumeDisc& volume)
 {
-  INFO_LOG_FMT(BOOT, "Faking Wii BS2...");
+  INFO_LOG(BOOT, "Faking Wii BS2...");
   if (volume.GetVolumeType() != DiscIO::Platform::WiiDisc)
     return false;
 
