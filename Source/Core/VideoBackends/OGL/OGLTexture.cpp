@@ -49,7 +49,7 @@ GLenum OGLTexture::GetGLInternalFormatForTextureFormat(AbstractTextureFormat for
   case AbstractTextureFormat::D32F_S8:
     return GL_DEPTH32F_STENCIL8;
   default:
-    PanicAlertFmt("Unhandled texture format.");
+    PanicAlert("Unhandled texture format.");
     return storage ? GL_RGBA8 : GL_RGBA;
   }
 }
@@ -281,17 +281,17 @@ void OGLTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8
                       size_t buffer_size, u32 layer)
 {
   if (level >= m_config.levels)
-    PanicAlertFmt("Texture only has {} levels, can't update level {}", m_config.levels, level);
+    PanicAlert("Texture only has %u levels, can't update level %u", m_config.levels, level);
 
   if (layer >= m_config.layers)
-    PanicAlertFmt("Texture only has {} layer, can't update layer {}", m_config.layers, layer);
+    PanicAlert("Texture only has %u layer, can't update layer %u", m_config.layers, layer);
 
   const auto expected_width = std::max(1U, m_config.width >> level);
   const auto expected_height = std::max(1U, m_config.height >> level);
   if (width != expected_width || height != expected_height)
   {
-    PanicAlertFmt("Size of level {} must be {}x{}, but {}x{} requested", level, expected_width,
-                  expected_height, width, height);
+    PanicAlert("Size of level %u must be %ux%u, but %ux%u requested", level, expected_width,
+               expected_height, width, height);
   }
 
   const GLenum target = GetGLTarget();
@@ -346,7 +346,7 @@ void OGLTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8
     }
     else
     {
-      PanicAlertFmt("Failed to handle compressed texture load - unhandled type");
+      PanicAlert("Failed to handle compressed texture load - unhandled type");
     }
   }
   else
@@ -392,7 +392,7 @@ void OGLTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8
     }
     else
     {
-      PanicAlertFmt("Failed to handle texture load - unhandled type");
+      PanicAlert("Failed to handle texture load - unhandled type");
     }
   }
 

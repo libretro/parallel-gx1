@@ -113,7 +113,7 @@ OGLShader* OGLShader::CreateFromBuild(ShaderStage stage, shader_build_fn fn, con
     flags |= SHADER_BUILD_SUBGROUP;
   if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_OPENGL, flags, &opts, &result))
   {
-    ERROR_LOG_FMT(VIDEO, "rslc could not build a shader: {}", err);
+    ERROR_LOG(VIDEO, "rslc could not build a shader: %s", err);
     return nullptr;
   }
   code.Putn(result.text, result.text_len);

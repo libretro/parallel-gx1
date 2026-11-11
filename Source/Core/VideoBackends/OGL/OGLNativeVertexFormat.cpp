@@ -53,7 +53,7 @@ GLVertexFormat::GLVertexFormat(const PortableVertexDeclaration& vtx_decl)
 
   // We will not allow vertex components causing uneven strides.
   if (vertex_stride & 3)
-    PanicAlertFmt("Uneven vertex stride: {}", vertex_stride);
+    PanicAlert("Uneven vertex stride: %u", vertex_stride);
 
   VertexManager* const vm = static_cast<VertexManager*>(g_vertex_manager);
 

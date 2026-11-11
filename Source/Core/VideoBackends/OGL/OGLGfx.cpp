@@ -89,19 +89,19 @@ static void APIENTRY ErrorCallback(GLenum source, GLenum type, GLuint id, GLenum
   switch (severity)
   {
   case GL_DEBUG_SEVERITY_HIGH_ARB:
-    ERROR_LOG_FMT(HOST_GPU, "id: {:x}, source: {}, type: {} - {}", id, s_source, s_type, message);
+    ERROR_LOG(HOST_GPU, "id: %x, source: %s, type: %s - %s", id, s_source, s_type, message);
     break;
   case GL_DEBUG_SEVERITY_MEDIUM_ARB:
-    WARN_LOG_FMT(HOST_GPU, "id: {:x}, source: {}, type: {} - {}", id, s_source, s_type, message);
+    WARN_LOG(HOST_GPU, "id: %x, source: %s, type: %s - %s", id, s_source, s_type, message);
     break;
   case GL_DEBUG_SEVERITY_LOW_ARB:
-    DEBUG_LOG_FMT(HOST_GPU, "id: {:x}, source: {}, type: {} - {}", id, s_source, s_type, message);
+    DEBUG_LOG(HOST_GPU, "id: %x, source: %s, type: %s - %s", id, s_source, s_type, message);
     break;
   case GL_DEBUG_SEVERITY_NOTIFICATION:
-    DEBUG_LOG_FMT(HOST_GPU, "id: {:x}, source: {}, type: {} - {}", id, s_source, s_type, message);
+    DEBUG_LOG(HOST_GPU, "id: %x, source: %s, type: %s - %s", id, s_source, s_type, message);
     break;
   default:
-    ERROR_LOG_FMT(HOST_GPU, "id: {:x}, source: {}, type: {} - {}", id, s_source, s_type, message);
+    ERROR_LOG(HOST_GPU, "id: %x, source: %s, type: %s - %s", id, s_source, s_type, message);
     break;
   }
 }

@@ -14,6 +14,7 @@
 #include "Common/GL/GLContext.h"
 #include "Common/GL/GLExtensions/GLExtensions.h"
 #include "Common/MsgHandler.h"
+#include "Common/StringUtil.h"
 
 #include "Core/Core.h"
 
@@ -201,7 +202,7 @@ void InitDriverInfo()
     version = 100 * major + minor;
     if (change >= change_scale)
     {
-      ERROR_LOG_FMT(VIDEO, "Version changeID overflow - change:{} scale:{}", change, change_scale);
+      ERROR_LOG(VIDEO, "Version changeID overflow - change:%d scale:%g", change, change_scale);
     }
     else
     {
@@ -232,8 +233,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
     {
       // We want the ogl3 framebuffer instead of the ogl2 one for better blitting support.
       // It's also compatible with the gles3 one.
-      PanicAlertFmtT("GPU: ERROR: Need GL_ARB_framebuffer_object for multiple render targets.\n"
-                     "GPU: Does your video card support OpenGL 3.0?");
+      PanicAlert("GPU: ERROR: Need GL_ARB_framebuffer_object for multiple render targets.\n"
+                 "GPU: Does your video card support OpenGL 3.0?");
       bSuccess = false;
     }
 
@@ -241,8 +242,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
     {
       // This extension is used to replace lots of pointer setting function.
       // Also gles3 requires to use it.
-      PanicAlertFmtT("GPU: OGL ERROR: Need GL_ARB_vertex_array_object.\n"
-                     "GPU: Does your video card support OpenGL 3.0?");
+      PanicAlert("GPU: OGL ERROR: Need GL_ARB_vertex_array_object.\n"
+                 "GPU: Does your video card support OpenGL 3.0?");
       bSuccess = false;
     }
 
@@ -250,8 +251,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
     {
       // ogl3 buffer mapping for better streaming support.
       // The ogl2 one also isn't in gles3.
-      PanicAlertFmtT("GPU: OGL ERROR: Need GL_ARB_map_buffer_range.\n"
-                     "GPU: Does your video card support OpenGL 3.0?");
+      PanicAlert("GPU: OGL ERROR: Need GL_ARB_map_buffer_range.\n"
+                 "GPU: Does your video card support OpenGL 3.0?");
       bSuccess = false;
     }
 
@@ -259,13 +260,13 @@ bool PopulateConfig(GLContext* m_main_gl_context)
     {
       // ubo allow us to keep the current constants on shader switches
       // we also can stream them much nicer and pack into it whatever we want to
-      PanicAlertFmtT("GPU: OGL ERROR: Need GL_ARB_uniform_buffer_object.\n"
-                     "GPU: Does your video card support OpenGL 3.1?");
+      PanicAlert("GPU: OGL ERROR: Need GL_ARB_uniform_buffer_object.\n"
+                 "GPU: Does your video card support OpenGL 3.1?");
       bSuccess = false;
     }
     else if (DriverDetails::HasBug(DriverDetails::BUG_BROKEN_UBO))
     {
-      PanicAlertFmtT(
+      PanicAlert(
           "Buggy GPU driver detected.\n"
           "Please either install the closed-source GPU driver or update your Mesa 3D version.");
       bSuccess = false;
@@ -275,8 +276,8 @@ bool PopulateConfig(GLContext* m_main_gl_context)
     {
       // Our sampler cache uses this extension. It could easily be workaround and it's by far the
       // highest requirement, but it seems that no driver lacks support for it.
-      PanicAlertFmtT("GPU: OGL ERROR: Need GL_ARB_sampler_objects.\n"
-                     "GPU: Does your video card support OpenGL 3.3?");
+      PanicAlert("GPU: OGL ERROR: Need GL_ARB_sampler_objects.\n"
+                 "GPU: Does your video card support OpenGL 3.3?");
       bSuccess = false;
     }
   }
@@ -496,10 +497,10 @@ bool PopulateConfig(GLContext* m_main_gl_context)
 
     if (GLExtensions::Version() < 300)
     {
-      PanicAlertFmtT("GPU: OGL ERROR: Need at least GLSL 1.30\n"
-                     "GPU: Does your video card support OpenGL 3.0?\n"
-                     "GPU: Your driver supports GLSL {0}",
-                     reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)));
+      PanicAlert("GPU: OGL ERROR: Need at least GLSL 1.30\n"
+                 "GPU: Does your video card support OpenGL 3.0?\n"
+                 "GPU: Your driver supports GLSL %s",
+                 reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)));
       bSuccess = false;
     }
     else if (GLExtensions::Version() == 300)
@@ -742,11 +743,10 @@ bool PopulateConfig(GLContext* m_main_gl_context)
     // MSAA on default framebuffer isn't working because of glBlitFramebuffer.
     // It also isn't useful as we don't render anything to the default framebuffer.
     // We also try to get a non-msaa fb, so this only happens when forced by the driver.
-    PanicAlertFmtT(
-        "The graphics driver is forcibly enabling anti-aliasing for Dolphin. You need to "
-        "turn this off in the graphics driver's settings in order for Dolphin to work.\n\n"
-        "(MSAA with {0} samples found on default framebuffer)",
-        samples);
+    PanicAlert("The graphics driver is forcibly enabling anti-aliasing for Dolphin. You need to "
+               "turn this off in the graphics driver's settings in order for Dolphin to work.\n\n"
+               "(MSAA with %d samples found on default framebuffer)",
+               samples);
     bSuccess = false;
   }
 
@@ -756,41 +756,42 @@ bool PopulateConfig(GLContext* m_main_gl_context)
   g_Config.VerifyValidity();
   UpdateActiveConfig();
 
-  Core::DisplayMessage(fmt::format("Video Info: {}, {}, {}", g_ogl_config.gl_vendor,
-                              g_ogl_config.gl_renderer, g_ogl_config.gl_version),
-                  5000);
+  Core::DisplayMessage(StringFromFormat("Video Info: %s, %s, %s", g_ogl_config.gl_vendor,
+                                        g_ogl_config.gl_renderer, g_ogl_config.gl_version),
+                       5000);
 
   if (!g_ogl_config.bSupportsGLBufferStorage && !g_ogl_config.bSupportsGLPinnedMemory)
   {
-    Core::DisplayMessage(fmt::format("Your OpenGL driver does not support {}_buffer_storage.",
-                                m_main_gl_context->IsGLES() ? "EXT" : "ARB"),
-                    60000);
+    Core::DisplayMessage(m_main_gl_context->IsGLES() ?
+                             "Your OpenGL driver does not support EXT_buffer_storage." :
+                             "Your OpenGL driver does not support ARB_buffer_storage.",
+                         60000);
     Core::DisplayMessage("This device's performance may be poor.", 60000);
   }
 
-  INFO_LOG_FMT(VIDEO, "Video Info: {}, {}, {}", g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
-               g_ogl_config.gl_version);
+  INFO_LOG(VIDEO, "Video Info: %s, %s, %s", g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
+           g_ogl_config.gl_version);
 
-  const std::string missing_extensions = fmt::format(
-      "{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
-      g_backend_info.bSupportsDualSourceBlend ? "" : "DualSourceBlend ",
-      g_backend_info.bSupportsPrimitiveRestart ? "" : "PrimitiveRestart ",
-      g_backend_info.bSupportsEarlyZ ? "" : "EarlyZ ",
-      g_ogl_config.bSupportsGLPinnedMemory ? "" : "PinnedMemory ",
-      supports_glsl_cache ? "" : "ShaderCache ",
-      g_ogl_config.bSupportsGLBaseVertex ? "" : "BaseVertex ",
-      g_ogl_config.bSupportsGLBufferStorage ? "" : "BufferStorage ",
-      g_ogl_config.bSupportsGLSync ? "" : "Sync ", g_ogl_config.bSupportsMSAA ? "" : "MSAA ",
-      g_backend_info.bSupportsSSAA ? "" : "SSAA ",
-      g_backend_info.bSupportsGSInstancing ? "" : "GSInstancing ",
-      g_backend_info.bSupportsClipControl ? "" : "ClipControl ",
-      g_ogl_config.bSupportsCopySubImage ? "" : "CopyImageSubData ",
-      g_backend_info.bSupportsDepthClamp ? "" : "DepthClamp ");
+  char missing_extensions[256];
+  snprintf(missing_extensions, sizeof(missing_extensions), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+           g_backend_info.bSupportsDualSourceBlend ? "" : "DualSourceBlend ",
+           g_backend_info.bSupportsPrimitiveRestart ? "" : "PrimitiveRestart ",
+           g_backend_info.bSupportsEarlyZ ? "" : "EarlyZ ",
+           g_ogl_config.bSupportsGLPinnedMemory ? "" : "PinnedMemory ",
+           supports_glsl_cache ? "" : "ShaderCache ",
+           g_ogl_config.bSupportsGLBaseVertex ? "" : "BaseVertex ",
+           g_ogl_config.bSupportsGLBufferStorage ? "" : "BufferStorage ",
+           g_ogl_config.bSupportsGLSync ? "" : "Sync ", g_ogl_config.bSupportsMSAA ? "" : "MSAA ",
+           g_backend_info.bSupportsSSAA ? "" : "SSAA ",
+           g_backend_info.bSupportsGSInstancing ? "" : "GSInstancing ",
+           g_backend_info.bSupportsClipControl ? "" : "ClipControl ",
+           g_ogl_config.bSupportsCopySubImage ? "" : "CopyImageSubData ",
+           g_backend_info.bSupportsDepthClamp ? "" : "DepthClamp ");
 
-  if (missing_extensions.empty())
-    INFO_LOG_FMT(VIDEO, "All used OGL Extensions are available.");
+  if (!missing_extensions[0])
+    INFO_LOG(VIDEO, "All used OGL Extensions are available.");
   else
-    WARN_LOG_FMT(VIDEO, "Missing OGL Extensions: {}", missing_extensions);
+    WARN_LOG(VIDEO, "Missing OGL Extensions: %s", missing_extensions);
 
   return true;
 }

@@ -4,10 +4,9 @@
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 
 #include <array>
+#include <cstdio>
 #include <memory>
 #include <string>
-
-#include <fmt/format.h>
 
 #include "Common/Align.h"
 #include "Common/Assert.h"
@@ -17,6 +16,7 @@
 #include "Common/GL/GLUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
+#include "Common/StringUtil.h"
 #include "Common/Version.h"
 
 #include "Core/ConfigManager.h"
@@ -108,9 +108,14 @@ void SHADER::SetProgramVariables()
   for (int a = 0; a < 8; ++a)
   {
     // Still need to get sampler locations since we aren't binding them statically in the shaders
-    int loc = glGetUniformLocation(glprogid, fmt::format("samp[{}]", a).c_str());
+    char name[16];
+    snprintf(name, sizeof(name), "samp[%d]", a);
+    int loc = glGetUniformLocation(glprogid, name);
     if (loc < 0)
-      loc = glGetUniformLocation(glprogid, fmt::format("samp{}", a).c_str());
+    {
+      snprintf(name, sizeof(name), "samp%d", a);
+      loc = glGetUniformLocation(glprogid, name);
+    }
     if (loc >= 0)
       glUniform1i(loc, a);
   }
@@ -149,8 +154,9 @@ void SHADER::SetProgramBindings(bool is_compute)
   {
     // Per documentation: OpenGL copies the name string when glBindAttribLocation is called, so an
     // application may free its copy of the name string immediately after the function returns.
-    glBindAttribLocation(glprogid, static_cast<GLuint>(ShaderAttrib::TexCoord0 + i),
-                         fmt::format("rawtex{}", i).c_str());
+    char name[16];
+    snprintf(name, sizeof(name), "rawtex%d", i);
+    glBindAttribLocation(glprogid, static_cast<GLuint>(ShaderAttrib::TexCoord0 + i), name);
   }
 }
 
@@ -383,23 +389,27 @@ bool ProgramShaderCache::CheckShaderCompileResult(GLuint id, GLenum type, std::s
 
     if (compileStatus != GL_TRUE)
     {
-      ERROR_LOG_FMT(VIDEO, "{} failed compilation:\n{}", prefix, info_log);
+      ERROR_LOG(VIDEO, "%s failed compilation:\n%s", prefix, info_log.c_str());
 
       std::string filename = VideoBackendBase::BadShaderFilename(prefix, num_failures++);
-      File::WriteStringToFile(filename,
-                              fmt::format("{}{}{}\nDolphin Version: {}\nVideo Backend: {}",
-                                          s_glsl_header, code, info_log, Common::GetScmRevStr(),
-                                          g_video_backend->GetDisplayName()));
+      std::string dump = s_glsl_header;
+      dump += code;
+      dump += info_log;
+      dump += "\nDolphin Version: ";
+      dump += Common::GetScmRevStr();
+      dump += "\nVideo Backend: ";
+      dump += g_video_backend->GetDisplayName();
+      File::WriteStringToFile(filename, dump);
 
-      PanicAlertFmt("Failed to compile {} shader: {}\n"
-                    "Debug info ({}, {}, {}):\n{}",
-                    prefix, filename, g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
-                    g_ogl_config.gl_version, info_log);
+      PanicAlert("Failed to compile %s shader: %s\n"
+                 "Debug info (%s, %s, %s):\n%s",
+                 prefix, filename.c_str(), g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
+                 g_ogl_config.gl_version, info_log.c_str());
 
       return false;
     }
 
-    WARN_LOG_FMT(VIDEO, "{} compiled with warnings:\n{}", prefix, info_log);
+    WARN_LOG(VIDEO, "%s compiled with warnings:\n%s", prefix, info_log.c_str());
   }
 
   return true;
@@ -419,28 +429,34 @@ bool ProgramShaderCache::CheckProgramLinkResult(GLuint id, std::string_view vcod
     glGetProgramInfoLog(id, length, &length, &info_log[0]);
     if (linkStatus != GL_TRUE)
     {
-      ERROR_LOG_FMT(VIDEO, "Program failed linking:\n{}", info_log);
+      ERROR_LOG(VIDEO, "Program failed linking:\n%s", info_log.c_str());
       std::string filename = VideoBackendBase::BadShaderFilename("p", num_failures++);
       std::string dump;
-      if (!vcode.empty())
-        dump += fmt::format("{}{}\n", s_glsl_header, vcode);
-      if (!gcode.empty())
-        dump += fmt::format("{}{}\n", s_glsl_header, gcode);
-      if (!pcode.empty())
-        dump += fmt::format("{}{}\n", s_glsl_header, pcode);
-      dump += fmt::format("{}\nDolphin Version: {}\nVideo Backend: {}", info_log,
-                          Common::GetScmRevStr(), g_video_backend->GetDisplayName());
+      const std::string_view stages[] = {vcode, gcode, pcode};
+      for (const std::string_view stage : stages)
+      {
+        if (stage.empty())
+          continue;
+        dump += s_glsl_header;
+        dump += stage;
+        dump += '\n';
+      }
+      dump += info_log;
+      dump += "\nDolphin Version: ";
+      dump += Common::GetScmRevStr();
+      dump += "\nVideo Backend: ";
+      dump += g_video_backend->GetDisplayName();
       File::WriteStringToFile(filename, dump);
 
-      PanicAlertFmt("Failed to link shaders: {}\n"
-                    "Debug info ({}, {}, {}):\n{}",
-                    filename, g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
-                    g_ogl_config.gl_version, info_log);
+      PanicAlert("Failed to link shaders: %s\n"
+                 "Debug info (%s, %s, %s):\n%s",
+                 filename.c_str(), g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
+                 g_ogl_config.gl_version, info_log.c_str());
 
       return false;
     }
 
-    WARN_LOG_FMT(VIDEO, "Program linked with warnings:\n{}", info_log);
+    WARN_LOG(VIDEO, "Program linked with warnings:\n%s", info_log.c_str());
   }
 
   return true;
@@ -585,7 +601,7 @@ PipelineProgram* ProgramShaderCache::GetPipelineProgram(const GLVertexFormat* ve
     glGetProgramiv(prog->shader.glprogid, GL_LINK_STATUS, &link_status);
     if (link_status != GL_TRUE)
     {
-      WARN_LOG_FMT(VIDEO, "Failed to create GL program from program binary.");
+      WARN_LOG(VIDEO, "Failed to create GL program from program binary.");
       prog->shader.Destroy();
       delete prog;
       return nullptr;
@@ -828,36 +844,36 @@ void ProgramShaderCache::CreateHeader()
 )";
   }
 
-  s_glsl_header = fmt::format(
-      "{}\n"
-      "{}\n"  // ubo
-      "{}\n"  // early-z
-      "{}\n"  // 420pack
-      "{}\n"  // msaa
-      "{}\n"  // Input/output/sampler binding
-      "{}\n"  // Varying location
-      "{}\n"  // storage buffer
-      "{}\n"  // shader5
-      "{}\n"  // SSAA
-      "{}\n"  // Geometry point size
-      "{}\n"  // AEP
-      "{}\n"  // texture buffer
-      "{}\n"  // ES texture buffer
-      "{}\n"  // ES dual source blend
-      "{}\n"  // shader image load store
-      "{}\n"  // shader framebuffer fetch
-      "{}\n"  // shader thread shuffle
-      "{}\n"  // derivative control
-      "{}\n"  // query levels
-      "{}\n"  // OES multisample texture storage
+  s_glsl_header = StringFromFormat(
+      "%s\n"
+      "%s\n"  // ubo
+      "%s\n"  // early-z
+      "%s\n"  // 420pack
+      "%s\n"  // msaa
+      "%s\n"  // Input/output/sampler binding
+      "%s\n"  // Varying location
+      "%s\n"  // storage buffer
+      "%s\n"  // shader5
+      "%s\n"  // SSAA
+      "%s\n"  // Geometry point size
+      "%s\n"  // AEP
+      "%s\n"  // texture buffer
+      "%s\n"  // ES texture buffer
+      "%s\n"  // ES dual source blend
+      "%s\n"  // shader image load store
+      "%s\n"  // shader framebuffer fetch
+      "%s\n"  // shader thread shuffle
+      "%s\n"  // derivative control
+      "%s\n"  // query levels
+      "%s\n"  // OES multisample texture storage
 
       // Precision defines for GLSL ES
-      "{}\n"
-      "{}\n"
-      "{}\n"
-      "{}\n"
-      "{}\n"
-      "{}\n"
+      "%s\n"
+      "%s\n"
+      "%s\n"
+      "%s\n"
+      "%s\n"
+      "%s\n"
 
       // Silly differences
       "#define API_OPENGL 1\n"
@@ -874,8 +890,8 @@ void ProgramShaderCache::CreateHeader()
       "#define lerp mix\n"
 
       ,
-      GetGLSLVersionString(), v < Glsl140 ? "#extension GL_ARB_uniform_buffer_object : enable" : "",
-      earlyz_string,
+      GetGLSLVersionString().c_str(),
+      v < Glsl140 ? "#extension GL_ARB_uniform_buffer_object : enable" : "", earlyz_string.c_str(),
       (g_backend_info.bSupportsBindingLayout && v < GlslEs310) ?
           "#extension GL_ARB_shading_language_420pack : enable" :
           "",
@@ -891,12 +907,12 @@ void ProgramShaderCache::CreateHeader()
           "",
       v < Glsl400 && g_backend_info.bSupportsSSAA ? "#extension GL_ARB_sample_shading : enable" :
                                                     "",
-      SupportedESPointSize,
+      SupportedESPointSize.c_str(),
       g_ogl_config.bSupportsAEP ? "#extension GL_ANDROID_extension_pack_es31a : enable" : "",
       v < Glsl140 && g_backend_info.bSupportsPaletteConversion ?
           "#extension GL_ARB_texture_buffer_object : enable" :
           "",
-      SupportedESTextureBuffer,
+      SupportedESTextureBuffer.c_str(),
       is_glsles && g_backend_info.bSupportsDualSourceBlend ?
           "#extension GL_EXT_blend_func_extended : enable" :
           ""
@@ -906,7 +922,7 @@ void ProgramShaderCache::CreateHeader()
               ((!is_glsles && v < Glsl430) || (is_glsles && v < GlslEs310)) ?
           "#extension GL_ARB_shader_image_load_store : enable" :
           "",
-      framebuffer_fetch_string, shader_shuffle_string,
+      framebuffer_fetch_string.c_str(), shader_shuffle_string.c_str(),
       g_backend_info.bSupportsCoarseDerivatives ? "#extension GL_ARB_derivative_control : enable" :
                                                   "",
       g_backend_info.bSupportsTextureQueryLevels ?
