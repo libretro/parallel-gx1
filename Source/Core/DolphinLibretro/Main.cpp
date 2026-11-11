@@ -1,10 +1,11 @@
 
-#include <features/features_cpu.h>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <features/features_cpu.h>
 #include <libretro.h>
 #include <string>
-
 #include <vector>
 
 #include "Common/ChunkFile.h"
@@ -343,7 +344,7 @@ void retro_run(void)
      * draw through it at once, so stop here instead. */
     if (!g_vertex_manager)
     {
-      ERROR_LOG_FMT(BOOT, "The video backend failed to initialize; not booting.");
+      ERROR_LOG(BOOT, "The video backend failed to initialize; not booting.");
       Libretro::Log::DoLogFrontEnd(RETRO_LOG_ERROR,
                                    "The video driver failed to initialize; see the log.", 5000);
       Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
@@ -401,7 +402,7 @@ void retro_run(void)
 
   if(!Libretro::g_emuthread_launched)
   {
-    DEBUG_LOG_FMT(BOOT, "retro_run() - waiting for g_emuthread_launched");
+    DEBUG_LOG(BOOT, "retro_run() - waiting for g_emuthread_launched");
     return;
   }
 
@@ -459,8 +460,7 @@ void retro_run(void)
   {
     const double old_rate = Libretro::g_core_refresh_rate;
 
-    NOTICE_LOG_FMT(VIDEO, "Target refresh rate changed: {:.4f} Hz -> {:.4f} Hz",
-                   old_rate, new_rate);
+    NOTICE_LOG(VIDEO, "Target refresh rate changed: %.4f Hz -> %.4f Hz", old_rate, new_rate);
 
     Libretro::g_core_refresh_rate = new_rate;
 
@@ -770,55 +770,58 @@ void* retro_get_memory_data(unsigned id)
   return NULL;
 }
 
+/* Whether @c, written as RetroArch's cheat file has it (each op "%08X %08X",
+ * joined by '+'), is @code; nothing is built to compare. */
+static bool ar_code_matches(const ActionReplay::ARCode& c, const char* code)
+{
+  bool first = true;
+  for (const auto& op : c.ops)
+  {
+    char text[24];
+    const int n =
+        snprintf(text, sizeof(text), "%s%08X %08X", first ? "" : "+", op.cmd_addr, op.value);
+    if (n <= 0 || strncmp(code, text, static_cast<size_t>(n)) != 0)
+      return false;
+    code += n;
+    first = false;
+  }
+  return *code == '\0';
+}
+
+/* The same for a Gecko code: its lines as written, joined by '+'. */
+static bool gecko_code_matches(const Gecko::GeckoCode& c, const char* code)
+{
+  bool first = true;
+  for (const auto& line : c.codes)
+  {
+    const size_t len = line.original_line.size();
+    if (!first && *code++ != '+')
+      return false;
+    if (strncmp(code, line.original_line.c_str(), len) != 0)
+      return false;
+    code += len;
+    first = false;
+  }
+  return *code == '\0';
+}
+
 static void enable_cheat_by_code(bool enabled, const char* code)
 {
-  std::string incoming(code);
-  bool found = false;
-
-  // Match Action Replay codes
   for (auto& c : Libretro::g_ar_codes)
   {
-    std::string serialized;
-    serialized.reserve(64);
-
-    for (const auto& op : c.ops)
-    {
-      if (!serialized.empty())
-          serialized += "+";
-
-      serialized += fmt::format("{:08X} {:08X}", op.cmd_addr, op.value);
-    }
-
-    if (serialized == incoming)
+    if (ar_code_matches(c, code))
     {
       c.enabled = enabled;
-      found = true;
-      break;
+      return;
     }
   }
 
-  // Match Gecko codes only if not already matched
-  if (!found)
+  for (auto& c : Libretro::g_gecko_codes)
   {
-    for (auto& c : Libretro::g_gecko_codes)
+    if (gecko_code_matches(c, code))
     {
-      std::string serialized;
-      serialized.reserve(64);
-
-      for (const auto& line : c.codes)
-      {
-        if (!serialized.empty())
-            serialized += "+";
-
-        serialized += line.original_line;
-      }
-
-      if (serialized == incoming)
-      {
-        c.enabled = enabled;
-        found = true;
-        break;
-      }
+      c.enabled = enabled;
+      return;
     }
   }
 }

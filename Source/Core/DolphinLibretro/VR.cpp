@@ -255,8 +255,8 @@ void Update(float eye_aspect_ratio)
   if (frontend_flat != s_frontend_flat)
   {
     s_frontend_flat = frontend_flat;
-    INFO_LOG_FMT(VIDEO, "VR: frontend {} both eyes, stereoscopy {}",
-                 frontend_flat ? "stopped showing" : "shows", frontend_flat ? "off" : "on");
+    INFO_LOG(VIDEO, "VR: frontend %s both eyes, stereoscopy %s",
+             frontend_flat ? "stopped showing" : "shows", frontend_flat ? "off" : "on");
     Config::SetCurrent(Config::GFX_STEREO_MODE,
                        frontend_flat ? StereoMode::Off : StereoMode::SideBySide);
   }

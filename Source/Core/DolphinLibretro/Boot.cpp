@@ -4,14 +4,16 @@
 #include <functional>
 #include <iterator>
 
+#include <streams/file_stream.h>
+#include <vfs/vfs_hybrid.h>
 #include "Common/CommonPaths.h"
-#include "Common/Thread.h"
-#include "Core/CommonTitles.h"
 #include "Common/FileUtil.h"
 #include "Common/StringUtil.h"
+#include "Common/Thread.h"
 #include "Common/Version.h"
 #include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
+#include "Core/CommonTitles.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/SYSCONFSettings.h"
@@ -26,24 +28,22 @@
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 #include "DolphinLibretro/Audio.h"
-#include "DolphinLibretro/Input.h"
-#include "DolphinLibretro/Log.h"
-#include <vfs/vfs_hybrid.h>
 #include "DolphinLibretro/Common/Globals.h"
 #include "DolphinLibretro/Common/Options.h"
-#include "DolphinLibretro/Video.h"
+#include "DolphinLibretro/Input.h"
+#include "DolphinLibretro/Log.h"
 #include "DolphinLibretro/VR.h"
+#include "DolphinLibretro/Video.h"
 #include "DolphinLibretro/VideoContexts/ContextStatus.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPClient.h"
 #include "UICommon/UICommon.h"
 #include "VideoCommon/AsyncRequests.h"
-#include "VideoCommon/VideoBackendBase.h"
-#include "VideoCommon/VideoConfig.h"
-#include "VideoCommon/Resources/CustomResourceManager.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/GBAScreens.h"
-
+#include "VideoCommon/Resources/CustomResourceManager.h"
+#include "VideoCommon/VideoBackendBase.h"
+#include "VideoCommon/VideoConfig.h"
 
 namespace Libretro
 {
@@ -102,59 +102,68 @@ void generate_cht_from_ini(std::string fileName)
 
   if (File::Exists(cheatFile))
   {
-    INFO_LOG_FMT(BOOT, "Cheats: pre-existing cht file found: {}", cheatFile);
+    INFO_LOG(BOOT, "Cheats: pre-existing cht file found: %s", cheatFile.c_str());
     return;
   }
 
   size_t total = Libretro::g_ar_codes.size() + Libretro::g_gecko_codes.size();
   if (total == 0)
   {
-    INFO_LOG_FMT(BOOT, "Cheats: not generating cht file as no ActionReply or Gecko codes found");
+    INFO_LOG(BOOT, "Cheats: not generating cht file as no ActionReply or Gecko codes found");
     return;
   }
 
   if (!File::CreateFullPath(cheatFile))
     return;
 
-  // built whole, written in one go
-  std::string out = fmt::format("cheats = {}\n\n", total);
-  size_t cheat_index = 0;
+  RFILE* const out = filestream_open(cheatFile.c_str(), RETRO_VFS_FILE_ACCESS_WRITE,
+                                     RETRO_VFS_FILE_ACCESS_HINT_NONE);
+  unsigned cheat_index = 0;
+  bool written = out != nullptr;
 
-  for (const auto& c : Libretro::g_ar_codes)
+  if (written)
   {
-    std::string code;
-    for (const auto& op : c.ops)
+    filestream_printf(out, "cheats = %u\n\n", static_cast<unsigned>(total));
+
+    for (const auto& c : Libretro::g_ar_codes)
     {
-      if (!code.empty())
-        code += "+";
-      fmt::format_to(std::back_inserter(code), "{:08X} {:08X}", op.cmd_addr, op.value);
+      bool first = true;
+      filestream_printf(out, "cheat%u_desc = \"%s\"\ncheat%u_code = \"", cheat_index,
+                        c.name.c_str(), cheat_index);
+      for (const auto& op : c.ops)
+      {
+        filestream_printf(out, "%s%08X %08X", first ? "" : "+", op.cmd_addr, op.value);
+        first = false;
+      }
+      filestream_printf(out, "\"\ncheat%u_enable = %s\n\n", cheat_index++,
+                        c.enabled ? "true" : "false");
     }
-    fmt::format_to(std::back_inserter(out),
-                   "cheat{0}_desc = \"{1}\"\ncheat{0}_code = \"{2}\"\ncheat{0}_enable = {3}\n\n",
-                   cheat_index++, c.name, code, c.enabled ? "true" : "false");
+
+    for (const auto& c : Libretro::g_gecko_codes)
+    {
+      bool first = true;
+      filestream_printf(out, "cheat%u_desc = \"%s\"\ncheat%u_code = \"", cheat_index,
+                        c.name.c_str(), cheat_index);
+      for (const auto& line : c.codes)
+      {
+        filestream_printf(out, "%s%s", first ? "" : "+", line.original_line.c_str());
+        first = false;
+      }
+      filestream_printf(out, "\"\ncheat%u_enable = %s\n\n", cheat_index++,
+                        c.enabled ? "true" : "false");
+    }
+
+    written = !filestream_error(out);
+    written = filestream_close(out) == 0 && written;
   }
 
-  for (const auto& c : Libretro::g_gecko_codes)
+  if (!written)
   {
-    std::string code;
-    for (const auto& line : c.codes)
-    {
-      if (!code.empty())
-        code += "+";
-      code += line.original_line;
-    }
-    fmt::format_to(std::back_inserter(out),
-                   "cheat{0}_desc = \"{1}\"\ncheat{0}_code = \"{2}\"\ncheat{0}_enable = {3}\n\n",
-                   cheat_index++, c.name, code, c.enabled ? "true" : "false");
-  }
-
-  if (!File::WriteStringToFile(cheatFile, out))
-  {
-    ERROR_LOG_FMT(BOOT, "Cheats: unable to create a new cht file at: {}", cheatFile);
+    ERROR_LOG(BOOT, "Cheats: unable to create a new cht file at: %s", cheatFile.c_str());
     return;
   }
 
-  INFO_LOG_FMT(BOOT, "Cheats: cht file created successfully at: {}", cheatFile);
+  INFO_LOG(BOOT, "Cheats: cht file created successfully at: %s", cheatFile.c_str());
 }
 
 // A region-free title runs in the fallback region, which follows the system locale and is PAL
@@ -180,8 +189,8 @@ static void SetRegionFreeFallback(const BootParameters& boot_params)
   if (region == DiscIO::Region::Unknown)
     return;
 
-  NOTICE_LOG_FMT(BOOT, "Region-free title {}: running it as {}", game_id,
-                 DiscIO::GetName(region, false));
+  NOTICE_LOG(BOOT, "Region-free title %s: running it as %s", game_id.c_str(),
+             DiscIO::GetName(region, false).c_str());
   Config::SetCurrent(Config::MAIN_FALLBACK_REGION, region);
 }
 
@@ -280,7 +289,7 @@ bool retro_load_game(const struct retro_game_info* game)
       rebuild_save_dir = rebuild_save_dir + DIR_SEP + library_name;
 
     save_dir = rebuild_save_dir.c_str();
-    INFO_LOG_FMT(BOOT, "GBPlayer: GC save dir reconstructed to: '{}'", save_dir);
+    INFO_LOG(BOOT, "GBPlayer: GC save dir reconstructed to: '%s'", save_dir);
   }
   else
   {
@@ -346,9 +355,10 @@ bool retro_load_game(const struct retro_game_info* game)
   if (Libretro::GBPlayer_active)
   {
     Config::SetBase(Config::MAIN_GBA_ROM_PATHS[Config::GBPLAYER_GBA_INDEX], Libretro::GBPlayer_rom_path);
-    INFO_LOG_FMT(BOOT, "GBPlayer: GBA ROM path applied from subsystem: '{}'", Libretro::GBPlayer_rom_path);
+    INFO_LOG(BOOT, "GBPlayer: GBA ROM path applied from subsystem: '%s'",
+             Libretro::GBPlayer_rom_path.c_str());
     Config::SetBase(Config::MAIN_GBA_SAVES_PATH, std::string(gba_save_dir));
-    INFO_LOG_FMT(BOOT, "GBPlayer: ROM save set to: '{}'", gba_save_dir);
+    INFO_LOG(BOOT, "GBPlayer: ROM save set to: '%s'", gba_save_dir);
     // In order to prevent confusion for the settings of the save location between RA and the
     // emulator we just turn this off
     Config::SetBase(Config::MAIN_GBA_SAVES_IN_ROM_PATH, false);
@@ -364,7 +374,7 @@ bool retro_load_game(const struct retro_game_info* game)
     bool yes_no, Common::MsgType style) -> bool
   {
     // Log the message instead of showing a popup
-    WARN_LOG_FMT(COMMON, "Suppressed popup: {} - {}", caption, text);
+    WARN_LOG(COMMON, "Suppressed popup: %s - %s", caption, text);
 
     if (Libretro::GetOption<bool>(retroarch_core::ENABLE_LOG_POPUPS,
                             /*def=*/false))
@@ -372,9 +382,9 @@ bool retro_load_game(const struct retro_game_info* game)
     return true; // Always "continue"
   });
 
-  NOTICE_LOG_FMT(BOOT, "SCM Git revision: {}", Common::GetScmRevGitStr());
-  NOTICE_LOG_FMT(BOOT, "User Directory set to '{}'", user_dir);
-  NOTICE_LOG_FMT(BOOT, "System Directory set to '{}'", sys_dir);
+  NOTICE_LOG(BOOT, "SCM Git revision: %s", Common::GetScmRevGitStr().c_str());
+  NOTICE_LOG(BOOT, "User Directory set to '%s'", user_dir.c_str());
+  NOTICE_LOG(BOOT, "System Directory set to '%s'", sys_dir.c_str());
 
   const std::string codehandler = std::string(sys_dir) + DIR_SEP GECKO_CODE_HANDLER;
 
@@ -382,23 +392,18 @@ bool retro_load_game(const struct retro_game_info* game)
   {
 #if defined(ANDROID) || defined(IPHONEOS)
     // for reduced area to display the message..
-    const std::string missing_core_files_msg =
-      fmt::format(
-        "IMPORTANT - Open Online Updater ->\n"
-        "Core System Files Downloader -> Dolphin.zip.");
+    static const char missing_core_files_msg[] = "IMPORTANT - Open Online Updater ->\n"
+                                                 "Core System Files Downloader -> Dolphin.zip.";
 #else
-    const std::string missing_core_files_msg =
-      fmt::format(
-        "Core file {} missing! Open Online Updater ->\n"
+    static const char missing_core_files_msg[] =
+        "Core file " GECKO_CODE_HANDLER " missing! Open Online Updater ->\n"
         "Core System Files Downloader -> Install Dolphin.zip. "
-        "Restart core to take effect.",
-        GECKO_CODE_HANDLER);
+        "Restart core to take effect.";
 #endif
 
-    Libretro::Log::LogFrontEnd(
-      Common::Log::LogLevel::LERROR, missing_core_files_msg.c_str(), 10000);
+    Libretro::Log::LogFrontEnd(Common::Log::LogLevel::LERROR, missing_core_files_msg, 10000);
 
-    ERROR_LOG_FMT(BOOT, "{}", missing_core_files_msg);
+    ERROR_LOG(BOOT, "%s", missing_core_files_msg);
   }
 
   // Main.Core
@@ -663,10 +668,10 @@ bool retro_load_game(const struct retro_game_info* game)
       const int o4 = Libretro::GetOption<int>(Libretro::Options::wiimote_dsu::DSU_IP_4, 1);
       const int port = Libretro::GetOption<int>(Libretro::Options::wiimote_dsu::DSU_PORT, 26760);
 
-      const std::string address = fmt::format("{}.{}.{}.{}", o1, o2, o3, o4);
-      const std::string servers_entry = fmt::format("DS4:{}:{};", address, port);
+      char servers_entry[48];
+      snprintf(servers_entry, sizeof(servers_entry), "DS4:%d.%d.%d.%d:%d;", o1, o2, o3, o4, port);
 
-      Config::SetBase(ciface::DualShockUDPClient::Settings::SERVERS, servers_entry);
+      Config::SetBase(ciface::DualShockUDPClient::Settings::SERVERS, std::string(servers_entry));
     }
   }
 #endif
@@ -701,8 +706,9 @@ bool retro_load_game(const struct retro_game_info* game)
     Core::DisplayMessage("CPU: Just in time compiler disabled as unavailable on your system");
   }
 #endif
-  NOTICE_LOG_FMT(BOOT, "CPU Core: {}", Libretro::Options::CPUCoreToString(Config::Get(Config::MAIN_CPU_CORE)));
-  NOTICE_LOG_FMT(BOOT, "Fastmem enabled = {}", (Config::Get(Config::MAIN_FASTMEM)) ? "Yes" : "No");
+  NOTICE_LOG(BOOT, "CPU Core: %s",
+             Libretro::Options::CPUCoreToString(Config::Get(Config::MAIN_CPU_CORE)).c_str());
+  NOTICE_LOG(BOOT, "Fastmem enabled = %s", (Config::Get(Config::MAIN_FASTMEM)) ? "Yes" : "No");
 
   Libretro::Video::Init();
   // The hardware renderer was asked for and no hardware context was granted (e.g. no GLES 3): fail the load so the
@@ -710,7 +716,7 @@ bool retro_load_game(const struct retro_game_info* game)
   if (Libretro::Options::GetCached<std::string>(Libretro::Options::gfx_settings::RENDERER) == "Hardware" &&
       Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_NONE)
   {
-    ERROR_LOG_FMT(VIDEO, "No hardware render context was granted; refusing to load");
+    ERROR_LOG(VIDEO, "No hardware render context was granted; refusing to load");
     UndoFailedLoad(false);
     return false;
   }
@@ -726,7 +732,7 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::GFX_PREFER_VS_FOR_LINE_POINT_EXPANSION,
                   Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_VULKAN);
   VideoBackendBase::PopulateBackendInfo();
-  NOTICE_LOG_FMT(VIDEO, "Using GFX backend: {}", Config::Get(Config::MAIN_GFX_BACKEND));
+  NOTICE_LOG(VIDEO, "Using GFX backend: %s", Config::Get(Config::MAIN_GFX_BACKEND).c_str());
 
   std::vector<std::string> normalized_game_paths;
   normalized_game_paths.push_back(game->path);
@@ -753,7 +759,7 @@ bool retro_load_game(const struct retro_game_info* game)
     normalized_game_paths = ReadM3UFile(normalized_game_paths.front(), folder_path_str);
     if (normalized_game_paths.empty())
     {
-      ERROR_LOG_FMT(BOOT, "Could not boot {}. M3U contains no paths", game->path);
+      ERROR_LOG(BOOT, "Could not boot %s. M3U contains no paths", game->path);
       UndoFailedLoad(false);
       return false;
     }
@@ -789,13 +795,17 @@ bool retro_load_game(const struct retro_game_info* game)
       if (volume && (volume->GetVolumeType() == DiscIO::Platform::WiiDisc || volume->GetVolumeType() == DiscIO::Platform::GameCubeDisc))
         is_disc_title = true;
       else
-        WARN_LOG_FMT(BOOT, "'Disc Based Games Boot to Wii System Menu' enabled but content is not a disc based game, ignoring Wii Menu");
+        WARN_LOG(BOOT, "'Disc Based Games Boot to Wii System Menu' enabled but content is not a "
+                       "disc based game, ignoring Wii Menu");
     }
 
     const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);
     const bool wii_menu_installed = File::Exists(wii_menu_tmd_file_name);
     if (is_disc_title && !wii_menu_installed)
-      WARN_LOG_FMT(BOOT,"'Disc Based Games Boot to Wii System Menu' enabled but Wii Menu not found at save location: {}, booting directly instead", wii_menu_tmd_file_name);
+      WARN_LOG(BOOT,
+               "'Disc Based Games Boot to Wii System Menu' enabled but Wii Menu not found at save "
+               "location: %s, booting directly instead",
+               wii_menu_tmd_file_name.c_str());
 
     if (is_disc_title && wii_menu_installed)
     {
@@ -809,7 +819,7 @@ bool retro_load_game(const struct retro_game_info* game)
 
   if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot_params)))
   {
-    ERROR_LOG_FMT(BOOT, "Could not boot {}", game->path);
+    ERROR_LOG(BOOT, "Could not boot %s", game->path);
     UndoFailedLoad(true);
     return false;
   }
@@ -837,12 +847,12 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info* i
 {
   if (game_type != Libretro::g_gbplayer_subsystem_id)
   {
-    ERROR_LOG_FMT(BOOT, "retro_load_game_special: unknown game_type {}", game_type);
+    ERROR_LOG(BOOT, "retro_load_game_special: unknown game_type %u", game_type);
     return false;
   }
   if (num_info < 1 || !info)
   {
-    ERROR_LOG_FMT(BOOT, "retro_load_game_special: no content info");
+    ERROR_LOG(BOOT, "retro_load_game_special: no content info");
     return false;
   }
 
@@ -852,20 +862,20 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info* i
 
   if (!gc_slot)
   {
-    ERROR_LOG_FMT(BOOT, "GBPlayer: no GC disc path provided in slot 0");
+    ERROR_LOG(BOOT, "GBPlayer: no GC disc path provided in slot 0");
     return false;
   }
 
-  INFO_LOG_FMT(BOOT, "GBPlayer: GC disc  = '{}'", gc_slot->path);
+  INFO_LOG(BOOT, "GBPlayer: GC disc  = '%s'", gc_slot->path);
   if (gba_slot)
   {
     Libretro::GBPlayer_rom_path = gba_slot->path;
-    INFO_LOG_FMT(BOOT, "GBPlayer: ROM = '{}'", gba_slot->path);
+    INFO_LOG(BOOT, "GBPlayer: ROM = '%s'", gba_slot->path);
   }
   else
   {
     Libretro::GBPlayer_rom_path.clear();
-    INFO_LOG_FMT(BOOT, "GBPlayer: no ROM");
+    INFO_LOG(BOOT, "GBPlayer: no ROM");
   }
 
   Libretro::GBPlayer_active = true;

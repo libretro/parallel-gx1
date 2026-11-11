@@ -159,7 +159,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDe
       }
       else
       {
-        WARN_LOG_FMT(VIDEO, "Dropping unsupported device extension: {}", name);
+        WARN_LOG(VIDEO, "Dropping unsupported device extension: %s", name);
       }
     }
   }

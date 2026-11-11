@@ -602,12 +602,12 @@ void Init()
 {
   if (!environ_cb(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble))
   {
-    WARN_LOG_FMT(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE.");
+    WARN_LOG(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE.");
   }
 
   if (!environ_cb(RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE, &sensor_interface))
   {
-    WARN_LOG_FMT(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE.");
+    WARN_LOG(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE.");
   }
 
   retro_microphone_interface mic_iface{RETRO_MICROPHONE_INTERFACE_VERSION};
@@ -626,7 +626,7 @@ void Init()
   }
   else
   {
-    WARN_LOG_FMT(BOOT, "Microphone interface NOT available");
+    WARN_LOG(BOOT, "Microphone interface NOT available");
   }
 
   g_controller_interface.Initialize();
@@ -686,7 +686,7 @@ void InitStage2()
       };
 
       if (!environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports))
-        WARN_LOG_FMT(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_SET_CONTROLLER_INFO.");
+        WARN_LOG(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_SET_CONTROLLER_INFO.");
     }
     else // Both Wii devices and GC controllers listed in ports 1-4, ports 5-8 are unused
     {
@@ -714,7 +714,7 @@ void InitStage2()
       };
 
       if (!environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports))
-        WARN_LOG_FMT(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_SET_CONTROLLER_INFO.");
+        WARN_LOG(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_SET_CONTROLLER_INFO.");
     }
   }
   else
@@ -732,7 +732,7 @@ void InitStage2()
     };
 
     if (!environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports))
-      WARN_LOG_FMT(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_SET_CONTROLLER_INFO.");
+      WARN_LOG(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_SET_CONTROLLER_INFO.");
   }
 }
 
@@ -763,15 +763,16 @@ void InitSensors()
         sensor_enabled[i][SENSOR_GYRO] = true;
         // At rest until the controller is seen: gravity reads as up.
         g_accel_pos[i][2] = 9.80665;
-        INFO_LOG_FMT(BOOT, "Sensor interface: Port: {} driven by the right VR controller", i);
+        INFO_LOG(BOOT, "Sensor interface: Port: %d driven by the right VR controller", i);
       }
       else if (sensor_interface.set_sensor_state)
       {
         sensor_enabled[i][SENSOR_ACCELEROMETER] = sensor_interface.set_sensor_state(i, RETRO_SENSOR_ACCELEROMETER_ENABLE, 60);
         sensor_enabled[i][SENSOR_GYRO] = sensor_interface.set_sensor_state(i, RETRO_SENSOR_GYROSCOPE_ENABLE, 60);
 
-        INFO_LOG_FMT(BOOT, "Sensor interface: Port: {} ACCELEROMETER: {} GYROSCOPE: {}", i,
-          sensor_enabled[i][SENSOR_ACCELEROMETER], sensor_enabled[i][SENSOR_GYRO]);
+        INFO_LOG(BOOT, "Sensor interface: Port: %d ACCELEROMETER: %s GYROSCOPE: %s", i,
+                 sensor_enabled[i][SENSOR_ACCELEROMETER] ? "true" : "false",
+                 sensor_enabled[i][SENSOR_GYRO] ? "true" : "false");
       }
 
       if (sensor_enabled[i][SENSOR_ACCELEROMETER] || sensor_enabled[i][SENSOR_GYRO])
@@ -1471,7 +1472,7 @@ void UpdateInputDescriptors()
 
   if(!Libretro::environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, &all_descs[0]))
   {
-    WARN_LOG_FMT(COMMON, "RetroArch does not support RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS.");
+    WARN_LOG(COMMON, "RetroArch does not support RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS.");
   }
 }
 
@@ -1513,8 +1514,9 @@ static WiimoteEmu::Wiimote* load_saved_controller_config(unsigned port, unsigned
   const std::string devJoypad = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_JOYPAD);
 
   const std::string profile_directory = ::Wiimote::GetConfig()->GetUserProfileDirectoryPath();
-  const std::string profile_key =
-      fmt::format("{}Profile{}", ::Wiimote::GetConfig()->GetProfileKey(), port + 1);
+  char profile_key[64];
+  snprintf(profile_key, sizeof(profile_key), "%sProfile%u",
+           ::Wiimote::GetConfig()->GetProfileKey().c_str(), static_cast<unsigned>(port + 1));
 
   // Step 1: game ini [Controls] WiimoteProfile{n} -> Profiles/Wiimote/<name>.ini [Profile]
   // LoadGameIni() already resolves the priority chain: S.ini, SOE.ini, SOUE01.ini, SOUE01r{n}.ini
@@ -1710,7 +1712,7 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
 
   if (Wiimote::GetConfig()->ControllersNeedToBeCreated())
   {
-    WARN_LOG_FMT(COMMON, "No controllers have been created yet");
+    WARN_LOG(COMMON, "No controllers have been created yet");
     return;
   }
 

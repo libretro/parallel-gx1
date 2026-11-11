@@ -23,14 +23,11 @@ bool Host_TASInputHasFocus() { return false; }
 
 void Host_Message(HostMessageID id)
 {
-  DEBUG_LOG_FMT(COMMON, "message id: {}\n", (int)id);
+  DEBUG_LOG(COMMON, "message id: %d\n", (int)id);
 }
 
 void Host_UpdateTitle(const std::string& title)
 {
-#if 0
-  DEBUG_LOG_FMT(COMMON, "title : {}\n", title.c_str());
-#endif
 }
 
 void Host_RequestRenderWindowSize(int width, int height)

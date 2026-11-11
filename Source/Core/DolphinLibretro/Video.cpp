@@ -126,7 +126,7 @@ int GetAdjustedBaseHeight()
 
 void Init()
 {
-  DEBUG_LOG_FMT(VIDEO, "Video - Init");
+  DEBUG_LOG(VIDEO, "Video - Init");
 
   std::string renderer = Libretro::Options::GetCached<std::string>(
     Libretro::Options::gfx_settings::RENDERER);
@@ -225,7 +225,7 @@ void D3D11Resume(unsigned depth)
 
 bool SetHWRender(retro_hw_context_type type, const int version_major, const int version_minor)
 {
-  DEBUG_LOG_FMT(VIDEO, "Video - SetHWRender!");
+  DEBUG_LOG(VIDEO, "Video - SetHWRender!");
 
   hw_render.context_type = type;
   hw_render.context_reset = ContextReset;
@@ -245,7 +245,7 @@ bool SetHWRender(retro_hw_context_type type, const int version_major, const int 
       Config::SetBase(Config::MAIN_GFX_BACKEND, "OGL");
       success = true;
     } else {
-      WARN_LOG_FMT(VIDEO, "Video - SetHWRender - failed to set hw renderer for OpenGL Core");
+      WARN_LOG(VIDEO, "Video - SetHWRender - failed to set hw renderer for OpenGL Core");
     }
     break;
   case RETRO_HW_CONTEXT_OPENGLES_VERSION:
@@ -268,15 +268,16 @@ bool SetHWRender(retro_hw_context_type type, const int version_major, const int 
     {
       // Shared context is required with "gl" video driver
       if (!environ_cb(RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT, nullptr)) {
-        WARN_LOG_FMT(VIDEO, "Video - SetHWRender - unable to set shared context for {}", api_name);
+        WARN_LOG(VIDEO, "Video - SetHWRender - unable to set shared context for %s",
+                 api_name.c_str());
       }
-      INFO_LOG_FMT(VIDEO, "Video - SetHWRender - using {}", api_name);
+      INFO_LOG(VIDEO, "Video - SetHWRender - using %s", api_name.c_str());
       Config::SetBase(Config::MAIN_GFX_BACKEND, "OGL");
       success = true;
     }
     else
     {
-      WARN_LOG_FMT(VIDEO, "Video - SetHWRender - failed to set hw renderer for {}", api_name);
+      WARN_LOG(VIDEO, "Video - SetHWRender - failed to set hw renderer for %s", api_name.c_str());
     }
     break;
   }
@@ -377,7 +378,7 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, int efbScale
 
   if (FAILED(DX11::D3D::device.As(&DX11::D3D::device1)))
   {
-    WARN_LOG_FMT(VIDEO, "Missing Direct3D 11.1 support. Logical operations will not be supported.");
+    WARN_LOG(VIDEO, "Missing Direct3D 11.1 support. Logical operations will not be supported.");
     g_backend_info.bSupportsLogicOp = false;
   }
 
@@ -387,7 +388,7 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, int efbScale
 
   if (!d3d11)
   {
-    WARN_LOG_FMT(VIDEO, "D3D11 backend is null");
+    WARN_LOG(VIDEO, "D3D11 backend is null");
     return;
   }
 
@@ -416,7 +417,7 @@ static void ContextResetD3D11(retro_hw_render_interface_d3d11* d3d, int efbScale
 
 void ContextReset(void)
 {
-  DEBUG_LOG_FMT(VIDEO, "Video - ContextReset!");
+  DEBUG_LOG(VIDEO, "Video - ContextReset!");
 
   g_context_status.MarkReset();
 
@@ -427,12 +428,12 @@ void ContextReset(void)
     if (!Libretro::environ_cb(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE, (void**)&vulkan) ||
         !vulkan)
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to get HW rendering interface!");
+      ERROR_LOG(VIDEO, "Failed to get HW rendering interface!");
       return;
     }
     if (vulkan->interface_version != RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION)
     {
-      ERROR_LOG_FMT(VIDEO, "HW render interface mismatch, expected {}, got {}",
+      ERROR_LOG(VIDEO, "HW render interface mismatch, expected %d, got %u",
                 RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION, vulkan->interface_version);
       return;
     }
@@ -449,15 +450,15 @@ void ContextReset(void)
     retro_hw_render_interface_d3d11* d3d;
     if (!Libretro::environ_cb(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE, (void**)&d3d) || !d3d)
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to get HW rendering interface!");
+      ERROR_LOG(VIDEO, "Failed to get HW rendering interface!");
       return;
     }
     if (d3d->interface_version != RETRO_HW_RENDER_INTERFACE_D3D11_VERSION &&
         d3d->interface_version != RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2)
     {
-      ERROR_LOG_FMT(VIDEO, "HW render interface mismatch, expected {} or {}, got {}!",
-                RETRO_HW_RENDER_INTERFACE_D3D11_VERSION,
-                RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2, d3d->interface_version);
+      ERROR_LOG(VIDEO, "HW render interface mismatch, expected %d or %d, got %u!",
+                RETRO_HW_RENDER_INTERFACE_D3D11_VERSION, RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2,
+                d3d->interface_version);
       return;
     }
     s_d3d11_v2 = d3d->interface_version >= RETRO_HW_RENDER_INTERFACE_D3D11_VERSION_2 ? d3d : nullptr;
@@ -476,16 +477,16 @@ void ContextReset(void)
     retro_hw_render_interface_d3d12* d3d12;
     if (!Libretro::environ_cb(RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE, (void**)&d3d12) || !d3d12)
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to get HW rendering interface!");
+      ERROR_LOG(VIDEO, "Failed to get HW rendering interface!");
       return;
     }
 
     if (d3d12->interface_version != RETRO_HW_RENDER_INTERFACE_D3D12_VERSION &&
         d3d12->interface_version != RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2)
     {
-      ERROR_LOG_FMT(VIDEO, "HW render interface mismatch, expected {} or {}, got {}!",
-                RETRO_HW_RENDER_INTERFACE_D3D12_VERSION,
-                RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2, d3d12->interface_version);
+      ERROR_LOG(VIDEO, "HW render interface mismatch, expected %d or %d, got %u!",
+                RETRO_HW_RENDER_INTERFACE_D3D12_VERSION, RETRO_HW_RENDER_INTERFACE_D3D12_VERSION_2,
+                d3d12->interface_version);
       return;
     }
 
@@ -495,7 +496,7 @@ void ContextReset(void)
 
     if (!DX12::DXContext::CreateWithExternalDevice(ra_device, ra_queue))
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to create D3D12 context with external device");
+      ERROR_LOG(VIDEO, "Failed to create D3D12 context with external device");
       return;
     }
 
@@ -505,14 +506,13 @@ void ContextReset(void)
     Microsoft::WRL::ComPtr<ID3D12Device1> device1;
     if (FAILED(DX12::g_dx_context->GetDevice()->QueryInterface(IID_PPV_ARGS(&device1))))
     {
-      WARN_LOG_FMT(VIDEO,
-        "Missing Direct3D 12.1+ support. Logical operations will not be supported.");
+      WARN_LOG(VIDEO, "Missing Direct3D 12.1+ support. Logical operations will not be supported.");
       g_backend_info.bSupportsLogicOp = false;
     }
 
     if (!DX12::g_dx_context->CreateGlobalResources())
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to create D3D12 global resources");
+      ERROR_LOG(VIDEO, "Failed to create D3D12 global resources");
       DX12::DXContext::Destroy();
       return;
     }
@@ -537,7 +537,7 @@ void ContextReset(void)
 
     if (!g_video_backend->InitializeShared(gfx, vertex_manager, perf_query, bounding_box))
     {
-      ERROR_LOG_FMT(VIDEO, "Failed to initialize shared components");
+      ERROR_LOG(VIDEO, "Failed to initialize shared components");
       DX12::DXContext::Destroy();
       return;
     }
@@ -572,7 +572,7 @@ bool Video_InitializeBackend()
     Vulkan::g_object_cache = new Vulkan::ObjectCache();
     if (!Vulkan::g_object_cache->Initialize())
     {
-      PanicAlertFmt("Failed to initialize Vulkan object cache.");
+      PanicAlert("Failed to initialize Vulkan object cache.");
       return false;
     }
 
@@ -580,13 +580,13 @@ bool Video_InitializeBackend()
     Vulkan::g_command_buffer_mgr = new Vulkan::CommandBufferManager(g_Config.bBackendMultithreading);
     if (!Vulkan::g_command_buffer_mgr->Initialize())
     {
-      PanicAlertFmt("Failed to create Vulkan command buffers");
+      PanicAlert("Failed to create Vulkan command buffers");
       return false;
     }
 
     if (!Vulkan::StateTracker::CreateInstance())
     {
-      PanicAlertFmt("Failed to create state tracker");
+      PanicAlert("Failed to create state tracker");
       return false;
     }
 
@@ -612,7 +612,7 @@ bool Video_InitializeBackend()
 #endif
 
   if(!g_video_backend) {
-    WARN_LOG_FMT(VIDEO, "Video - g_video_backend - No supported renderer found");
+    WARN_LOG(VIDEO, "Video - g_video_backend - No supported renderer found");
     return false;
   }
 
@@ -622,7 +622,7 @@ bool Video_InitializeBackend()
 
 void ContextDestroy(void)
 {
-  DEBUG_LOG_FMT(VIDEO, "Video - ContextDestroy!");
+  DEBUG_LOG(VIDEO, "Video - ContextDestroy!");
 
   /* the backend goes away with the context: its thread first */
   GpuThreadStop();
@@ -768,7 +768,7 @@ static bool CreateDeviceInternal(
 
   if (!Vulkan::LoadVulkanInstanceFunctions(instance))
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to load Vulkan instance functions.");
+    ERROR_LOG(VIDEO, "Failed to load Vulkan instance functions.");
     Vulkan::UnloadVulkanLibrary();
     return false;
   }
@@ -776,7 +776,7 @@ static bool CreateDeviceInternal(
   Vulkan::VulkanContext::GPUList gpu_list = Vulkan::VulkanContext::EnumerateGPUs(instance);
   if (gpu_list.empty())
   {
-    ERROR_LOG_FMT(VIDEO, "No Vulkan physical devices available.");
+    ERROR_LOG(VIDEO, "No Vulkan physical devices available.");
     Vulkan::UnloadVulkanLibrary();
     return false;
   }
@@ -790,7 +790,7 @@ static bool CreateDeviceInternal(
       Vulkan::VulkanContext::Create(instance, gpu, surface, false, false, s_instance_api_version);
   if (!Vulkan::g_vulkan_context)
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to create Vulkan device");
+    ERROR_LOG(VIDEO, "Failed to create Vulkan device");
     Vulkan::UnloadVulkanLibrary();
     return false;
   }
@@ -831,7 +831,7 @@ bool CreateDevice2(retro_vulkan_context* context, VkInstance instance, VkPhysica
 {
   if (!create_device_wrapper)
   {
-    ERROR_LOG_FMT(VIDEO, "Vulkan negotiation v2 requires a device creation wrapper.");
+    ERROR_LOG(VIDEO, "Vulkan negotiation v2 requires a device creation wrapper.");
     return false;
   }
 
