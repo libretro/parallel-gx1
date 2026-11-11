@@ -38,11 +38,6 @@ void CustomResourceManager::Reset(bool is_shutdown)
     m_worker_thread.Reset("resource-worker");
 }
 
-void CustomResourceManager::MarkAssetDirty(const CustomAssetLibrary::AssetID& asset_id)
-{
-  m_asset_cache.MarkAssetDirty(asset_id);
-}
-
 void CustomResourceManager::XFBTriggered()
 {
   m_asset_cache.Update();

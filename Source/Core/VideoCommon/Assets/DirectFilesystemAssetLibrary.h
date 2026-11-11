@@ -10,7 +10,7 @@
 #include "VideoCommon/Assets/CustomTextureData.h"
 #include "VideoCommon/Assets/TextureAsset.h"
 #include "VideoCommon/Assets/Types.h"
-#include "VideoCommon/Assets/WatchableFilesystemAssetLibrary.h"
+#include "VideoCommon/Assets/CustomAssetLibrary.h"
 
 #include "Common/AtomicMap.h"
 
@@ -18,7 +18,7 @@ namespace VideoCommon
 {
 // This class implements 'CustomAssetLibrary' and loads any assets
 // directly from the filesystem
-class DirectFilesystemAssetLibrary final : public WatchableFilesystemAssetLibrary
+class DirectFilesystemAssetLibrary final : public CustomAssetLibrary
 {
 public:
   DirectFilesystemAssetLibrary();
@@ -34,14 +34,11 @@ public:
   void SetAssetIDMapData(const AssetID& asset_id, Assets::AssetMap asset_path_map);
 
 private:
-  void PathModified(std::string_view path) override;
-
   // Gets the asset map given an asset id
   Assets::AssetMap GetAssetMapForID(const AssetID& asset_id) const;
 
-  // Written while mods and texture packs load, read by the loader threads and the file
-  // watcher: lock-free maps keyed by the string's bytes, each value swapped whole.
+  // Written while mods and texture packs load, read by the loader threads: a lock-free map
+  // keyed by the string's bytes, each value swapped whole.
   atomic_value_map_t* m_asset_id_to_asset_map_path;  // AssetMapValue
-  atomic_value_map_t* m_path_to_asset_id;            // AssetIDValue
 };
 }  // namespace VideoCommon

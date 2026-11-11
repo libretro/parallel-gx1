@@ -21,9 +21,6 @@ public:
   void Shutdown();
   void Reset(bool is_shutdown = false);
 
-  // Request that an asset be reloaded
-  void MarkAssetDirty(const CustomAssetLibrary::AssetID& asset_id);
-
   void XFBTriggered();
 
   TextureDataResource*

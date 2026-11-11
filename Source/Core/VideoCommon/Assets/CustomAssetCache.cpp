@@ -43,19 +43,7 @@ void CustomAssetCache::Reset()
   m_pending_assets = {};
   m_asset_handle_to_data.clear();
   m_asset_id_to_handle.clear();
-  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_dirty_assets); node;)
-  {
-    auto* dirty = reinterpret_cast<DirtyAsset*>(node);
-    node = node->next;
-    delete dirty;
-  }
   m_ram_used = 0;
-}
-
-void CustomAssetCache::MarkAssetDirty(const CustomAssetLibrary::AssetID& asset_id)
-{
-  auto* dirty = new DirtyAsset{{}, asset_id};
-  mpsc_stack_push(&m_dirty_assets, &dirty->link);
 }
 
 void CustomAssetCache::MarkAssetPending(CustomAsset* asset)
@@ -70,7 +58,6 @@ void CustomAssetCache::MarkAssetActive(CustomAsset* asset)
 
 void CustomAssetCache::Update()
 {
-  ProcessDirtyAssets();
   ProcessLoadedAssets();
 
   if (m_ram_used > m_max_ram_available)
@@ -86,37 +73,6 @@ void CustomAssetCache::Update()
 
   const u64 allowed_memory = m_max_ram_available - m_ram_used;
   m_asset_loader.ScheduleAssetsToLoad(m_pending_assets.Elements(), allowed_memory);
-}
-
-void CustomAssetCache::ProcessDirtyAssets()
-{
-  std::set<CustomAssetLibrary::AssetID> dirty_assets;
-  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_dirty_assets); node;)
-  {
-    auto* dirty = reinterpret_cast<DirtyAsset*>(node);
-    node = node->next;
-    dirty_assets.insert(std::move(dirty->id));
-    delete dirty;
-  }
-
-  const auto now = CustomAsset::ClockType::now();
-  for (const auto& asset_id : dirty_assets)
-  {
-    if (const auto it = m_asset_id_to_handle.find(asset_id); it != m_asset_id_to_handle.end())
-    {
-      const auto asset_handle = it->second;
-      AssetData& asset_data = m_asset_handle_to_data[asset_handle];
-      asset_data.load_status = AssetData::LoadStatus::PendingReload;
-      asset_data.load_request_time = now;
-
-      // Asset was reloaded, clear any errors we might have
-      asset_data.has_load_error = false;
-
-      m_pending_assets.InsertAsset(it->second, asset_data.asset.get());
-
-      DEBUG_LOG_FMT(VIDEO, "Dirty asset pending reload: {}", asset_data.asset->GetAssetId());
-    }
-  }
 }
 
 void CustomAssetCache::ProcessLoadedAssets()

@@ -419,7 +419,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/DynamicLibrary.cpp \
 	$(CORE_DIR)/Source/Core/Common/FatFsUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/FileSearch.cpp \
-	$(CORE_DIR)/Source/Core/Common/FilesystemWatcher.cpp \
 	$(CORE_DIR)/Source/Core/Common/FileUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/FloatUtils.cpp \
 	$(CORE_DIR)/Source/Core/Common/GekkoDisassembler.cpp \
@@ -1163,7 +1162,7 @@ DOLPHIN_FLAGS := \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
 	-I$(EXT_DIR)/FatFs \
-	-isystem $(EXT_DIR)/libusb/libusb/libusb -isystem $(EXT_DIR)/watcher/watcher/include \
+	-isystem $(EXT_DIR)/libusb/libusb/libusb \
 	-Wall -Wtype-limits -Wsign-compare -Wignored-qualifiers -Wuninitialized -Wshadow \
 	-Winit-self -Wmissing-declarations -Wimplicit-fallthrough -Werror=format -Wno-trigraphs
 DOLPHIN_CXXFLAGS := -std=c++23
@@ -1181,10 +1180,6 @@ ifeq ($(OS_ANDROID),1)
 endif
 
 # Per-file additions.
-ifeq ($(OS_WIN),1)
-   # watcher's Windows backend throws.
-   FILE_FLAGS_$(abspath $(SRC_DIR)/Common/FilesystemWatcher.cpp) := -fexceptions
-endif
 ifeq ($(ARCH_X86_64),1)
 else ifeq ($(ARCH_ARM64),1)
    FILE_FLAGS_$(abspath $(SRC_DIR)/Common/Crypto/AES.cpp) := -march=armv8-a+crypto

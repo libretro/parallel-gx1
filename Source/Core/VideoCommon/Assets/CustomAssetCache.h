@@ -6,7 +6,6 @@
 #include <list>
 #include <map>
 #include <memory>
-#include <set>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -15,7 +14,6 @@
 #include "VideoCommon/Assets/CustomAsset.h"
 #include "VideoCommon/Assets/CustomAssetLibrary.h"
 #include "VideoCommon/Assets/CustomAssetLoader.h"
-#include <queues/mpsc_stack.h>
 
 namespace VideoCommon
 {
@@ -83,9 +81,6 @@ public:
 
   void Reset();
 
-  // Request that an asset be reloaded
-  void MarkAssetDirty(const CustomAssetLibrary::AssetID& asset_id);
-
   // Notify the system that we are interested in this asset and
   // are waiting for it to be loaded
   void MarkAssetPending(CustomAsset* asset);
@@ -97,7 +92,6 @@ public:
   void Update();
 
 private:
-  void ProcessDirtyAssets();
   void ProcessLoadedAssets();
   void RemoveAssetsUntilBelowMemoryLimit();
 
@@ -190,14 +184,6 @@ private:
 
   // A calculated amount of memory to avoid exceeding.
   u64 m_max_ram_available = 0;
-
-  // Asset IDs the file watcher saw change, taken by ProcessDirtyAssets.
-  struct DirtyAsset
-  {
-    mpsc_stack_node_t link;  // first: the drained chain is cast back
-    CustomAssetLibrary::AssetID id;
-  };
-  mpsc_stack_t m_dirty_assets{};
 
   CustomAssetLoader m_asset_loader;
 };

@@ -204,8 +204,6 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
   const auto& mods = config.GetMods();
 
   auto filesystem_library = std::make_shared<VideoCommon::DirectFilesystemAssetLibrary>();
-  filesystem_library->Watch(File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR);
-  filesystem_library->Watch(File::GetUserPath(D_GRAPHICSMOD_IDX));
 
   std::map<std::string, std::vector<GraphicsTargetConfig>> group_to_targets;
   for (const auto& mod : mods)
