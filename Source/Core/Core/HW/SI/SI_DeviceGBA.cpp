@@ -14,6 +14,7 @@
 #include "Common/CommonTypes.h"
 #include "Common/Flag.h"
 #include "Common/Logging/Log.h"
+#include "Common/NetSocket.h"
 #include "Common/Thread.h"
 #include "Core/CoreTiming.h"
 #include "Core/HW/SI/SI_Device.h"
@@ -30,32 +31,31 @@ sthread_t* s_connection_thread = nullptr;
 struct WaitingSock
 {
   mpsc_stack_node_t link;  // first: the drained chain is cast back
-  std::unique_ptr<sf::TcpSocket> socket;
+  int socket;
 };
 mpsc_stack_t s_waiting_socks;
 mpsc_stack_t s_waiting_clocks;
-std::queue<std::unique_ptr<sf::TcpSocket>> s_taken_socks;
-std::queue<std::unique_ptr<sf::TcpSocket>> s_taken_clocks;
+std::queue<int> s_taken_socks;
+std::queue<int> s_taken_clocks;
 
-void PushSock(mpsc_stack_t* stack, std::unique_ptr<sf::TcpSocket> socket)
+void PushSock(mpsc_stack_t* stack, int socket)
 {
-  auto* waiting = new WaitingSock{{}, std::move(socket)};
+  auto* waiting = new WaitingSock{{}, socket};
   mpsc_stack_push(stack, &waiting->link);
 }
 
-std::unique_ptr<sf::TcpSocket> TakeSock(mpsc_stack_t* stack,
-                                        std::queue<std::unique_ptr<sf::TcpSocket>>& taken)
+int TakeSock(mpsc_stack_t* stack, std::queue<int>& taken)
 {
   for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(stack)); node;)
   {
     auto* waiting = reinterpret_cast<WaitingSock*>(node);
     node = node->next;
-    taken.push(std::move(waiting->socket));
+    taken.push(waiting->socket);
     delete waiting;
   }
   if (taken.empty())
-    return nullptr;
-  std::unique_ptr<sf::TcpSocket> socket = std::move(taken.front());
+    return -1;
+  const int socket = taken.front();
   taken.pop();
   return socket;
 }
@@ -73,39 +73,33 @@ static void GBAConnectionWaiter(void*)
 
   Common::SetCurrentThreadName("GBA Connection Waiter");
 
-  sf::TcpListener server;
-  sf::TcpListener clock_server;
-
   // "dolphin gba"
-  if (server.listen(0xd6ba) != sf::Socket::Status::Done)
+  const int server = net_tcp_listen(0xd6ba);
+  if (server < 0)
     return;
 
   // "clock"
-  if (clock_server.listen(0xc10c) != sf::Socket::Status::Done)
+  const int clock_server = net_tcp_listen(0xc10c);
+  if (clock_server < 0)
+  {
+    net_close(server);
     return;
+  }
 
-  server.setBlocking(false);
-  clock_server.setBlocking(false);
-
-  auto new_client = std::make_unique<sf::TcpSocket>();
   while (s_server_running.IsSet())
   {
-    if (server.accept(*new_client) == sf::Socket::Status::Done)
-    {
-      PushSock(&s_waiting_socks, std::move(new_client));
-
-      new_client = std::make_unique<sf::TcpSocket>();
-    }
-    if (clock_server.accept(*new_client) == sf::Socket::Status::Done)
-    {
-      PushSock(&s_waiting_clocks, std::move(new_client));
-
-      new_client = std::make_unique<sf::TcpSocket>();
-    }
+    const int new_client = net_tcp_accept(server);
+    if (new_client >= 0)
+      PushSock(&s_waiting_socks, new_client);
+    const int new_clock = net_tcp_accept(clock_server);
+    if (new_clock >= 0)
+      PushSock(&s_waiting_clocks, new_clock);
 
     // Look for a connection once a frame.
     frame_clock_wait_until(frame_clock_now() + 1, s_server_running.Raw());
   }
+  net_close(server);
+  net_close(clock_server);
 }
 
 void GBAConnectionWaiter_Shutdown()
@@ -115,12 +109,12 @@ void GBAConnectionWaiter_Shutdown()
   Common::JoinThread(s_connection_thread);
 }
 
-static std::unique_ptr<sf::TcpSocket> GetNextSock()
+static int GetNextSock()
 {
   return TakeSock(&s_waiting_socks, s_taken_socks);
 }
 
-static std::unique_ptr<sf::TcpSocket> GetNextClock()
+static int GetNextClock()
 {
   return TakeSock(&s_waiting_clocks, s_taken_clocks);
 }
@@ -140,16 +134,16 @@ GBASockServer::~GBASockServer()
 
 void GBASockServer::Disconnect()
 {
-  if (m_client)
+  if (m_client >= 0)
   {
     s_num_connected--;
-    m_client->disconnect();
-    m_client = nullptr;
+    net_close(m_client);
+    m_client = -1;
   }
-  if (m_clock_sync)
+  if (m_clock_sync >= 0)
   {
-    m_clock_sync->disconnect();
-    m_clock_sync = nullptr;
+    net_close(m_clock_sync);
+    m_clock_sync = -1;
   }
   m_last_time_slice = 0;
   m_booted = false;
@@ -157,8 +151,8 @@ void GBASockServer::Disconnect()
 
 void GBASockServer::ClockSync(Core::System& system)
 {
-  if (!m_clock_sync)
-    if (!(m_clock_sync = GetNextClock()))
+  if (m_clock_sync < 0)
+    if ((m_clock_sync = GetNextClock()) < 0)
       return;
 
   const auto& core_timing = system.GetCoreTiming();
@@ -184,11 +178,10 @@ void GBASockServer::ClockSync(Core::System& system)
   bytes[2] = (time_slice >> 8) & 0xff;
   bytes[3] = time_slice & 0xff;
 
-  const sf::Socket::Status status = m_clock_sync->send(bytes, 4);
-  if (status == sf::Socket::Status::Disconnected)
+  if (net_tcp_send(m_clock_sync, bytes, 4) < 0)
   {
-    m_clock_sync->disconnect();
-    m_clock_sync = nullptr;
+    net_close(m_clock_sync);
+    m_clock_sync = -1;
   }
 }
 
@@ -197,15 +190,15 @@ bool GBASockServer::Connect()
   if (!IsConnected())
   {
     m_client = GetNextSock();
-    if (m_client)
-      m_client->setBlocking(false);
+    if (m_client >= 0)
+      net_set_blocking(m_client, false);
   }
   return IsConnected();
 }
 
 bool GBASockServer::IsConnected()
 {
-  return static_cast<bool>(m_client);
+  return m_client >= 0;
 }
 
 void GBASockServer::Send(const u8* si_buffer)
@@ -219,38 +212,29 @@ void GBASockServer::Send(const u8* si_buffer)
 
   const auto cmd = static_cast<EBufferCommands>(send_data[0]);
 
-  sf::Socket::Status status;
-  if (cmd == EBufferCommands::CMD_WRITE_GBA)
-    status = m_client->send(send_data.data(), send_data.size());
-  else
-    status = m_client->send(send_data.data(), 1);
-
-  if (status == sf::Socket::Status::Disconnected)
+  const size_t size = cmd == EBufferCommands::CMD_WRITE_GBA ? send_data.size() : 1;
+  if (net_tcp_send(m_client, send_data.data(), size) < 0)
     Disconnect();
 }
 
 int GBASockServer::Receive(u8* si_buffer, u8 bytes)
 {
-  if (!m_client)
+  if (m_client < 0)
     return 0;
 
   if (m_booted)
-  {
-    sf::SocketSelector selector;
-    selector.add(*m_client);
-    (void)selector.wait(sf::milliseconds(1000));
-  }
+    (void)net_wait_readable(m_client, 1000);
 
-  size_t num_received = 0;
   std::array<u8, RECV_MAX_SIZE> recv_data;
-  const sf::Socket::Status recv_stat = m_client->receive(recv_data.data(), bytes, num_received);
-  if (recv_stat == sf::Socket::Status::Disconnected)
+  const int received = net_tcp_recv(m_client, recv_data.data(), bytes);
+  if (received < 0)
   {
     Disconnect();
     return 0;
   }
+  const size_t num_received = static_cast<size_t>(received);
 
-  if (recv_stat == sf::Socket::Status::NotReady || num_received == 0)
+  if (num_received == 0)
   {
     m_booted = false;
     return 0;
@@ -264,16 +248,12 @@ int GBASockServer::Receive(u8* si_buffer, u8 bytes)
 
 void GBASockServer::Flush()
 {
-  if (!m_client)
+  if (m_client < 0)
     return;
 
-  size_t num_received = 1;
   u8 byte;
-  while (num_received)
+  while (net_tcp_recv(m_client, &byte, 1) > 0)
   {
-    const sf::Socket::Status recv_stat = m_client->receive(&byte, 1, num_received);
-    if (recv_stat != sf::Socket::Status::Done)
-      break;
   }
 }
 

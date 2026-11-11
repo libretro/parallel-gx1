@@ -8,21 +8,19 @@
 #include <chrono>
 #include <tuple>
 
-#include <SFML/Network/SocketSelector.hpp>
-#include <SFML/Network/UdpSocket.hpp>
 #include <fmt/format.h>
 
 #include "Common/Config/Config.h"
 #include "Common/Flag.h"
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
+#include "Common/NetSocket.h"
 #include "Common/Random.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPProto.h"
-#include "SFML/Network/IpAddress.hpp"
 
 namespace ciface::DualShockUDPClient
 {
@@ -128,6 +126,7 @@ public:
   Core::DeviceRemoval UpdateInput() override;
 
   Device(std::string name, int index, std::string server_address, u16 server_port, u32 client_uid);
+  ~Device() override { net_close(m_socket); }
 
   std::string GetName() const final override;
   std::string GetSource() const final override;
@@ -140,7 +139,7 @@ private:
 
   const std::string m_name;
   const int m_index;
-  sf::UdpSocket m_socket;
+  int m_socket = -1;  // opened on the first request, nonblocking
   SteadyClock::time_point m_next_reregister = SteadyClock::time_point::min();
   Proto::MessageType::PadDataResponse m_pad_data{};
   Proto::Touch m_prev_touch{};
@@ -170,7 +169,8 @@ constexpr u32 SERVER_ASKED_PADS = 4;
 struct Server
 {
   Server(std::string description, std::string address, u16 port)
-      : m_description{std::move(description)}, m_address{std::move(address)}, m_port{port}
+      : m_description{std::move(description)}, m_address{std::move(address)}, m_port{port},
+        m_socket{net_udp_open(0)}
   {
   }
   Server(const Server&) = delete;
@@ -180,18 +180,20 @@ struct Server
     m_address = std::move(other.m_address);
     m_port = other.m_port;
     m_port_info = other.m_port_info;
+    m_socket = other.m_socket;
+    other.m_socket = -1;
   }
 
   Server& operator=(const Server&) = delete;
   Server& operator=(Server&&) = delete;
 
-  ~Server() = default;
+  ~Server() { net_close(m_socket); }
 
   std::string m_description;
   std::string m_address;
   u16 m_port = 0;
   std::array<Proto::MessageType::PortInfo, Proto::PORT_COUNT> m_port_info{};
-  sf::UdpSocket m_socket;
+  int m_socket = -1;
   SteadyClock::time_point m_disconnect_time = SteadyClock::now();
 };
 
@@ -260,10 +262,11 @@ void InputBackend::HotplugThreadFunc()
         list_ports.pad_request_count = SERVER_ASKED_PADS;
         list_ports.pad_ids = {0, 1, 2, 3};
         msg.Finish();
-        if (std::optional<sf::IpAddress> server_ip = sf::IpAddress::resolve(server.m_address))
+        u32 server_ip;
+        if (net_resolve_ipv4(server.m_address.c_str(), &server_ip))
         {
-          if (server.m_socket.send(&list_ports, sizeof list_ports, *server_ip, server.m_port) !=
-              sf::Socket::Status::Done)
+          if (net_udp_sendto(server.m_socket, &list_ports, sizeof list_ports, server_ip,
+                             server.m_port) < 0)
           {
             ERROR_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient HotplugThreadFunc send failed");
           }
@@ -277,10 +280,17 @@ void InputBackend::HotplugThreadFunc()
       }
     }
 
-    sf::SocketSelector selector;
-    for (auto& server : m_servers)
+    // The servers whose socket opened, by index.
+    int fds[32];
+    bool ready[32];
+    size_t server_of[32];
+    unsigned count = 0;
+    for (size_t i = 0; i < m_servers.size() && count < 32; i++)
     {
-      selector.add(server.m_socket);
+      if (m_servers[i].m_socket < 0)
+        continue;
+      fds[count] = m_servers[i].m_socket;
+      server_of[count++] = i;
     }
 
     auto timeout = duration_cast<milliseconds>(m_next_listports_time - SteadyClock::now());
@@ -296,23 +306,20 @@ void InputBackend::HotplugThreadFunc()
       const auto current_timeout = std::max(std::min(timeout, THREAD_MAX_WAIT_INTERVAL), 1ms);
       timeout -= current_timeout;
       // This will return at the first answer
-      if (selector.wait(sf::milliseconds(current_timeout.count())))
+      if (net_wait_readable_any(fds, count, static_cast<int>(current_timeout.count()), ready))
       {
         // Now check all the servers because we don't know which one(s) sent a reply
-        for (size_t i = 0; i < m_servers.size(); ++i)
+        for (unsigned j = 0; j < count; ++j)
         {
+          const size_t i = server_of[j];
           auto& server = m_servers[i];
-          if (!selector.isReady(server.m_socket))
+          if (!ready[j])
           {
             continue;
           }
 
           Proto::Message<Proto::MessageType::FromServer> msg;
-          std::size_t received_bytes;
-          std::optional<sf::IpAddress> sender;
-          u16 port;
-          if (server.m_socket.receive(&msg, sizeof(msg), received_bytes, sender, port) !=
-              sf::Socket::Status::Done)
+          if (net_udp_recvfrom(server.m_socket, &msg, sizeof(msg), nullptr, nullptr) < 0)
           {
             continue;
           }
@@ -387,7 +394,9 @@ void InputBackend::StopHotplugThread()
 
   for (auto& server : m_servers)
   {
-    server.m_socket.unbind();  // interrupt blocking socket
+    // a fresh socket drops the replies the stopped thread left
+    net_close(server.m_socket);
+    server.m_socket = net_udp_open(0);
   }
 }
 
@@ -526,8 +535,6 @@ Device::Device(std::string name, int index, std::string server_address, u16 serv
     : m_name{std::move(name)}, m_index{index}, m_server_address{std::move(server_address)},
       m_server_port{server_port}, m_client_uid(client_uid)
 {
-  m_socket.setBlocking(false);
-
   AddInput(new AnalogInput<u8>("Pad W", m_pad_data.button_dpad_left_analog, 255));
   AddInput(new AnalogInput<u8>("Pad S", m_pad_data.button_dpad_down_analog, 255));
   AddInput(new AnalogInput<u8>("Pad E", m_pad_data.button_dpad_right_analog, 255));
@@ -632,8 +639,11 @@ Core::DeviceRemoval Device::UpdateInput()
     data_req.register_flags = Proto::RegisterFlags::PadID;
     data_req.pad_id_to_register = m_index;
     msg.Finish();
-    if (m_socket.send(&data_req, sizeof(data_req), sf::IpAddress::resolve(m_server_address).value(),
-                      m_server_port) != sf::Socket::Status::Done)
+    u32 server_ip = 0;
+    if (m_socket < 0 && (m_socket = net_udp_open(0)) >= 0)
+      net_set_blocking(m_socket, false);
+    if (!net_resolve_ipv4(m_server_address.c_str(), &server_ip) ||
+        net_udp_sendto(m_socket, &data_req, sizeof(data_req), server_ip, m_server_port) < 0)
     {
       ERROR_LOG_FMT(CONTROLLERINTERFACE, "DualShockUDPClient UpdateInput send failed");
     }
@@ -641,11 +651,7 @@ Core::DeviceRemoval Device::UpdateInput()
 
   // Receive and handle controller data
   Proto::Message<Proto::MessageType::FromServer> msg;
-  std::size_t received_bytes;
-  std::optional<sf::IpAddress> sender;
-  u16 port;
-  while (m_socket.receive(&msg, sizeof msg, received_bytes, sender, port) ==
-         sf::Socket::Status::Done)
+  while (m_socket >= 0 && net_udp_recvfrom(m_socket, &msg, sizeof msg, nullptr, nullptr) >= 0)
   {
     if (auto pad_data = msg.CheckAndCastTo<Proto::MessageType::PadDataResponse>())
     {

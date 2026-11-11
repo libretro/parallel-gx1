@@ -3,12 +3,10 @@
 
 #pragma once
 
-#include <SFML/Network.hpp>
 #include <deque>
-#include <memory>
-#include <queue>
 
 #include <queues/mpsc_stack.h>
+#include <retro_atomic.h>
 #include <retro_spsc.h>
 #include <rthreads/rthreads.h>
 
@@ -26,7 +24,10 @@ public:
   bool GetAvailableSock();
 
   // Client for this server object
-  std::unique_ptr<sf::TcpSocket> client;
+  // The connection, which the CPU thread replaces; the client thread closes it and sets
+  // client_gone when the peer goes.
+  int client = -1;
+  retro_atomic_int_t client_gone{};
   void ClientThread();
   sthread_t* clientThread = nullptr;
 
@@ -48,11 +49,11 @@ private:
   struct WaitingSock
   {
     mpsc_stack_node_t link;  // first: the drained chain is cast back
-    std::unique_ptr<sf::TcpSocket> socket;
+    int socket;
   };
   static mpsc_stack_t waiting_socks;
   // The CPU thread's own queue of them, oldest first.
-  static std::deque<std::unique_ptr<sf::TcpSocket>> taken_socks;
+  static std::deque<int> taken_socks;
 };
 
 class CEXIGecko : public IEXIDevice, private GeckoSockServer

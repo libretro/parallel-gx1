@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "Common/Logging/Log.h"
+#include "Common/NetSocket.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
-#include "SFML/Network/IpAddress.hpp"
 #include "Core/Core.h"
 
 #include <cstring>
@@ -24,13 +24,22 @@ bool CEXIETHERNET::XLinkNetworkInterface::Activate()
   if (IsActivated())
     return true;
 
-  if (m_sf_socket.bind(sf::Socket::AnyPort) != sf::Socket::Status::Done)
+  // A reader that ended on the client's disconnect has nothing left to do.
+  if (m_read_thread)
+  {
+    Common::JoinThread(m_read_thread);
+    m_read_thread = nullptr;
+  }
+
+  m_fd = net_udp_open(0);
+  if (m_fd < 0)
   {
     ERROR_LOG_FMT(SP1, "Couldn't open XLink Kai UDP socket, unable to initialize BBA");
     return false;
   }
 
-  m_sf_recipient_ip = sf::IpAddress::resolve(m_dest_ip.c_str()).value_or(sf::IpAddress::Any);
+  if (!net_resolve_ipv4(m_dest_ip.c_str(), &m_recipient_ip))
+    m_recipient_ip = 0;
 
   // Send connect command with unique local name
   // connect;locally_unique_name;emulator_name;optional_padding
@@ -43,13 +52,14 @@ bool CEXIETHERNET::XLinkNetworkInterface::Activate()
 
   DEBUG_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", size, ArrayToString(buffer, size, 0x10));
 
-  if (m_sf_socket.send(buffer, size, m_sf_recipient_ip, m_dest_port) != sf::Socket::Status::Done)
+  if (net_udp_sendto(m_fd, buffer, size, m_recipient_ip, m_dest_port) < 0)
   {
     ERROR_LOG_FMT(SP1, "Activate(): failed to send connect message to XLink Kai client");
   }
 
   INFO_LOG_FMT(SP1, "BBA initialized.");
 
+  m_read_thread_shutdown.Clear();
   return RecvInit();
 }
 
@@ -69,7 +79,7 @@ void CEXIETHERNET::XLinkNetworkInterface::Deactivate()
 
   DEBUG_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", size, ArrayToString(buffer, size, 0x10));
 
-  if (m_sf_socket.send(buffer, size, m_sf_recipient_ip, m_dest_port) != sf::Socket::Status::Done)
+  if (net_udp_sendto(m_fd, buffer, size, m_recipient_ip, m_dest_port) < 0)
   {
     ERROR_LOG_FMT(SP1, "Deactivate(): failed to send disconnect message to XLink Kai client");
   }
@@ -78,27 +88,25 @@ void CEXIETHERNET::XLinkNetworkInterface::Deactivate()
 
   m_bba_link_up = false;
 
-  // Disable socket blocking
-  m_sf_socket.setBlocking(false);
-
   // Set flags for clean shutdown of the read thread
   m_read_enabled.Clear();
   m_read_thread_shutdown.Set();
 
-  // Detach the thread and let it die on its own (leaks ~9kb of memory)
+  // An empty datagram to ourselves ends the reader's receive.
   if (m_read_thread)
   {
-    sthread_detach(m_read_thread);
+    net_udp_sendto(m_fd, "", 0, net_loopback_ipv4(), net_local_port(m_fd));
+    Common::JoinThread(m_read_thread);
     m_read_thread = nullptr;
   }
 
-  // Close the socket
-  m_sf_socket.unbind();
+  net_close(m_fd);
+  m_fd = -1;
 }
 
 bool CEXIETHERNET::XLinkNetworkInterface::IsActivated()
 {
-  return m_sf_socket.getLocalPort() > 0;
+  return m_fd >= 0;
 }
 
 bool CEXIETHERNET::XLinkNetworkInterface::SendFrame(const u8* frame, u32 size)
@@ -125,8 +133,7 @@ bool CEXIETHERNET::XLinkNetworkInterface::SendFrame(const u8* frame, u32 size)
   // Only uncomment for debugging, the performance hit is too big otherwise
   // INFO_LOG_FMT(SP1, "SendFrame {}\n{}", size, ArrayToString(m_out_frame, size, 0x10)));
 
-  if (m_sf_socket.send(m_out_frame, size, m_sf_recipient_ip, m_dest_port) !=
-      sf::Socket::Status::Done)
+  if (net_udp_sendto(m_fd, m_out_frame, size, m_recipient_ip, m_dest_port) < 0)
   {
     ERROR_LOG_FMT(SP1, "SendFrame(): expected to write {} bytes, but failed, errno {}", size,
                   errno);
@@ -142,9 +149,6 @@ bool CEXIETHERNET::XLinkNetworkInterface::SendFrame(const u8* frame, u32 size)
 void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
 {
   XLinkNetworkInterface* const self = static_cast<XLinkNetworkInterface*>(data);
-  std::optional<sf::IpAddress> sender;
-  u16 port;
-
   while (!self->m_read_thread_shutdown.IsSet())
   {
     if (!self->IsActivated())
@@ -152,17 +156,17 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
 
     // XLink supports jumboframes but GameCube BBA does not. We need to support jumbo frames
     // *here* because XLink *could* send one
-    std::size_t bytes_read = 0;
-    if (self->m_sf_socket.receive(self->m_in_frame, std::size(self->m_in_frame), bytes_read, sender,
-                                  port) != sf::Socket::Status::Done &&
-        self->m_bba_link_up)
-    {
-      ERROR_LOG_FMT(SP1, "Failed to read from BBA, err={}", bytes_read);
-    }
+    const int received =
+        net_udp_recvfrom(self->m_fd, self->m_in_frame, std::size(self->m_in_frame), nullptr, nullptr);
+    if (self->m_read_thread_shutdown.IsSet())
+      break;
+    if (received < 0 && self->m_bba_link_up)
+      ERROR_LOG_FMT(SP1, "Failed to read from BBA, err={}", received);
 
     // Make sure *anything* was received before going any further
-    if (bytes_read < 1)
+    if (received < 1)
       continue;
+    const std::size_t bytes_read = static_cast<std::size_t>(received);
 
     // Did we get an ethernet frame? Copy the first 4 bytes to check the header
     char temp_check[4];
@@ -220,8 +224,8 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
           DEBUG_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", size,
                         ArrayToString(buffer, size, 0x10));
 
-          if (self->m_sf_socket.send(buffer, size, self->m_sf_recipient_ip, self->m_dest_port) !=
-              sf::Socket::Status::Done)
+          if (net_udp_sendto(self->m_fd, buffer, size, self->m_recipient_ip,
+                             self->m_dest_port) < 0)
           {
             ERROR_LOG_FMT(
                 SP1, "ReadThreadHandler(): failed to send setting message to XLink Kai client");
@@ -238,15 +242,13 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
         // TODO (TODO in EXI_DeviceEthernet.cpp) bring the BBA link down here
         self->m_bba_link_up = false;
 
-        // Disable socket blocking
-        self->m_sf_socket.setBlocking(false);
-
         // Shut down the read thread
         self->m_read_enabled.Clear();
         self->m_read_thread_shutdown.Set();
 
-        // Close the socket
-        self->m_sf_socket.unbind();
+        // Close the socket; the next Activate joins this thread
+        net_close(self->m_fd);
+        self->m_fd = -1;
         break;
       }
       // keepalive;
@@ -258,8 +260,8 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
         // INFO_LOG_FMT(SP1, "SendCommandPayload {:x}\n{}", 2, ArrayToString(m_in_frame, 2, 0x10));
 
         // Reply (using the message that came in!)
-        if (self->m_sf_socket.send(self->m_in_frame, 10, self->m_sf_recipient_ip,
-                                   self->m_dest_port) != sf::Socket::Status::Done)
+        if (net_udp_sendto(self->m_fd, self->m_in_frame, 10, self->m_recipient_ip,
+                           self->m_dest_port) < 0)
         {
           ERROR_LOG_FMT(SP1, "ReadThreadHandler(): failed to reply to XLink Kai client keepalive");
         }

@@ -152,32 +152,6 @@ FATFS_SOURCES_C += \
 	$(CORE_DIR)/Externals/FatFs/ff.c \
 	$(CORE_DIR)/Externals/FatFs/ffunicode.c
 
-# SFML
-SFML_SOURCES_C :=
-SFML_SOURCES_CXX :=
-SFML_SOURCES_ASM :=
-SFML_SOURCES_OBJCXX :=
-SFML_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/Http.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/IpAddress.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/Packet.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/Socket.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/SocketSelector.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/TcpListener.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/TcpSocket.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/UdpSocket.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/System/Err.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/System/String.cpp \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/System/Utils.cpp
-ifneq ($(OS_WIN),1)
-   SFML_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/Unix/SocketImpl.cpp
-endif
-ifeq ($(OS_WIN),1)
-   SFML_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/Win32/SocketImpl.cpp
-endif
-
 # FMT
 FMT_SOURCES_C :=
 FMT_SOURCES_CXX :=
@@ -419,6 +393,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/Hash.c \
 	$(CORE_DIR)/Source/Core/Common/HttpService.c \
+	$(CORE_DIR)/Source/Core/Common/NetSocket.c \
 	$(CORE_DIR)/Source/Core/Common/ObjectPool.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.c \
@@ -1133,8 +1108,6 @@ endif
 
 
 
-SFML_FLAGS    := -w -DSFML_STATIC -I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/SFML/SFML/src
-SFML_CXXFLAGS := -std=gnu++20
 
 
 FMT_FLAGS := -w -I$(EXT_DIR)/fmt/fmt/include
@@ -1181,14 +1154,12 @@ endif
 # Dolphin itself: every Source/ unit shares one set.
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA \
-	-DSFML_STATIC \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
 	-I$(GEN_DIR)/Source/Core \
 	-I$(SRC_DIR)/DolphinLibretro/Common -I$(SRC_DIR)/DolphinLibretro/VideoContexts \
 	-I$(EXT_DIR)/libretro-common/include \
 	-I$(EXT_DIR)/Vulkan-Headers/include \
 	-I$(EXT_DIR)/fmt/fmt/include \
-	-I$(EXT_DIR)/SFML/SFML/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
 	-I$(EXT_DIR)/FatFs \
@@ -1234,7 +1205,7 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/formats/rvz/rvz.c) := -DHAVE_RZS
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON \
-	MGBA SFML FMT FATFS
+	MGBA FMT FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB
 endif

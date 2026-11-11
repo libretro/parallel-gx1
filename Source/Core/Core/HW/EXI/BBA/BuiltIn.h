@@ -10,7 +10,6 @@ using socklen_t = int;
 #include <netinet/in.h>
 #endif
 
-#include <SFML/Network.hpp>
 #include "Common/CommonTypes.h"
 #include "Common/Network.h"
 
@@ -39,14 +38,32 @@ struct StackRef;
 // If the socket isn't bound, the system will pick the interface to use automatically.
 // This might result in the source IP address changing when talking to the same peer
 // and multiple interfaces/IP addresses can reach the socket's peer.
-class BbaTcpSocket : public sf::TcpSocket
+// What a socket call came to.
+enum class BbaSocketStatus
+{
+  Done,
+  NotReady,
+  Disconnected,
+  Error
+};
+
+class BbaTcpSocket
 {
 public:
   BbaTcpSocket();
+  ~BbaTcpSocket();
+  BbaTcpSocket(const BbaTcpSocket&) = delete;
+  BbaTcpSocket& operator=(const BbaTcpSocket&) = delete;
 
-  sf::Socket::Status Connect(const sf::IpAddress& dest, u16 port, u32 net_ip);
-  sf::Socket::Status GetPeerName(sockaddr_in* addr) const;
-  sf::Socket::Status GetSockName(sockaddr_in* addr) const;
+  // Addresses in network order, ports in host order.
+  BbaSocketStatus Connect(u32 dest, u16 port, u32 net_ip);
+  BbaSocketStatus Accept(int listener);
+  BbaSocketStatus GetPeerName(sockaddr_in* addr) const;
+  BbaSocketStatus GetSockName(sockaddr_in* addr) const;
+  BbaSocketStatus Send(const void* data, size_t size);
+  BbaSocketStatus Receive(void* data, size_t size, size_t* received);
+  void SetBlocking(bool block);
+  void Disconnect();
 
   enum class ConnectingState
   {
@@ -59,15 +76,29 @@ public:
   ConnectingState Connected(StackRef* ref);
 
 private:
+  int m_fd = -1;
+  bool m_blocking = true;
   ConnectingState m_connecting_state = ConnectingState::None;
 };
 
-class BbaUdpSocket : public sf::UdpSocket
+class BbaUdpSocket
 {
 public:
   BbaUdpSocket();
+  ~BbaUdpSocket();
+  BbaUdpSocket(const BbaUdpSocket&) = delete;
+  BbaUdpSocket& operator=(const BbaUdpSocket&) = delete;
 
-  sf::Socket::Status Bind(u16 port, u32 net_ip);
+  // Port 0 is any port.
+  BbaSocketStatus Bind(u16 port, u32 net_ip);
+  BbaSocketStatus Send(const void* data, size_t size, u32 dest, u16 port);
+  BbaSocketStatus Receive(void* data, size_t size, size_t* received, u32* sender, u16* port);
+  void SetBlocking(bool block);
+  void Unbind();
+
+private:
+  int m_fd = -1;
+  bool m_blocking = true;
 };
 
 struct StackRef

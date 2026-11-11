@@ -5,13 +5,11 @@
 
 #include <map>
 #include <vector>
-#include "SFML/Network/IpAddress.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
-#include <SFML/Network.hpp>
 #include <retro_atomic.h>
 #include <rthreads/rthreads.h>
 
@@ -410,8 +408,8 @@ private:
     bool m_bba_failure_notified = false;
 #if defined(WIN32) || defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) ||          \
     defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__)
-    sf::UdpSocket m_sf_socket;
-    sf::IpAddress m_sf_recipient_ip = sf::IpAddress::Any;
+    int m_fd = -1;
+    u32 m_recipient_ip = 0;  // network order
     char m_in_frame[9004]{};
     char m_out_frame[9004]{};
     sthread_t* m_read_thread = nullptr;
@@ -470,7 +468,7 @@ private:
     u32 m_router_ip = 0;
     Common::MACAddress m_router_mac{};
     std::map<u32, Common::MACAddress> m_arp_table;
-    sf::TcpListener m_upnp_httpd;
+    int m_upnp_httpd = -1;
 #if defined(WIN32) || defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) ||          \
     defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__)
     NetworkRef m_network_ref;

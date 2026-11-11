@@ -86,7 +86,6 @@ SUBMODULE_FILES := \
    Externals/hidapi/hidapi-src/hidapi/hidapi.h \
    Externals/Vulkan-Headers/include/vulkan/vulkan.h \
    Externals/watcher/watcher/include/wtr/watcher.hpp \
-   Externals/SFML/SFML/include/SFML/Network.hpp \
    Externals/wil/include/wil/common.h
 ifneq (,$(filter-out clean,$(or $(MAKECMDGOALS),all)))
    SUBMODULES_MISSING := $(filter-out $(wildcard $(SUBMODULE_FILES)),$(SUBMODULE_FILES))

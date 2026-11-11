@@ -19,10 +19,10 @@
 
 #include "Common/Logging/Log.h"
 #include "Common/Network.h"
+#include "Common/NetSocket.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Core/HW/EXI/BBA/TAPServerConnection.h"
-#include "SFML/Network/IpAddress.hpp"
 
 namespace ExpansionInterface
 {
@@ -66,14 +66,13 @@ static int ConnectToDestination(const std::string& destination)
     }
 
     sockaddr_in* sin = reinterpret_cast<sockaddr_in*>(&ss);
-    const std::optional<sf::IpAddress> dest_ip =
-        sf::IpAddress::resolve(destination.substr(0, colon_offset));
-    if (!dest_ip)
+    uint32_t dest_ip;
+    if (!net_resolve_ipv4(destination.substr(0, colon_offset).c_str(), &dest_ip))
     {
       ERROR_LOG_FMT(SP1, "Destination IP address is not valid\n");
       return -1;
     }
-    sin->sin_addr.s_addr = htonl(dest_ip->toInteger());
+    sin->sin_addr.s_addr = dest_ip;
     sin->sin_family = AF_INET;
     const std::string port_str = destination.substr(colon_offset + 1);
     const int dest_port = std::atoi(port_str.c_str());

@@ -24,12 +24,6 @@
 	path = Externals/watcher/watcher
 	url = https://github.com/e-dant/watcher.git
 	shallow = true
-[submodule "Externals/SFML/SFML"]
-	path = Externals/SFML/SFML
-	url = https://github.com/SFML/SFML.git
-	shallow = true
-	shallow = true
-	shallow = true
 [submodule "Externals/wil"]
 	path = Externals/wil
 	url = https://github.com/microsoft/wil.git

@@ -13,6 +13,7 @@
 #include "Common/FrameClock.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
+#include "Common/NetSocket.h"
 #include "Common/Thread.h"
 #include "Core/Core.h"
 
@@ -23,7 +24,7 @@ int GeckoSockServer::client_count;
 sthread_t* GeckoSockServer::connectionThread = nullptr;
 Common::Flag GeckoSockServer::server_running;
 mpsc_stack_t GeckoSockServer::waiting_socks;
-std::deque<std::unique_ptr<sf::TcpSocket>> GeckoSockServer::taken_socks;
+std::deque<int> GeckoSockServer::taken_socks;
 
 // Bytes held each way; the Gecko moves one at a time, so this is ample.
 constexpr size_t GECKO_FIFO_SIZE = 64 * 1024;
@@ -62,11 +63,12 @@ void GeckoSockServer::GeckoConnectionWaiter(void*)
 {
   Common::SetCurrentThreadName("Gecko Connection Waiter");
 
-  sf::TcpListener server;
+  int server = -1;
   server_port = 0xd6ec;  // "dolphin gecko"
   for (int bind_tries = 0; bind_tries <= 10 && !server_running.IsSet(); bind_tries++)
   {
-    server_running.Set(server.listen(server_port) == sf::Socket::Status::Done);
+    server = net_tcp_listen(server_port);
+    server_running.Set(server >= 0);
     if (!server_running.IsSet())
       server_port++;
   }
@@ -76,22 +78,19 @@ void GeckoSockServer::GeckoConnectionWaiter(void*)
 
   Core::DisplayMessage(fmt::format("USBGecko: Listening on TCP port {}", server_port), 5000);
 
-  server.setBlocking(false);
-
-  auto new_client = std::make_unique<sf::TcpSocket>();
   while (server_running.IsSet())
   {
-    if (server.accept(*new_client) == sf::Socket::Status::Done)
+    const int new_client = net_tcp_accept(server);
+    if (new_client >= 0)
     {
-      auto* waiting = new WaitingSock{{}, std::move(new_client)};
+      auto* waiting = new WaitingSock{{}, new_client};
       mpsc_stack_push(&waiting_socks, &waiting->link);
-
-      new_client = std::make_unique<sf::TcpSocket>();
     }
 
     // Look for a connection once a frame.
     frame_clock_wait_until(frame_clock_now() + 1, server_running.Raw());
   }
+  net_close(server);
 }
 
 bool GeckoSockServer::GetAvailableSock()
@@ -103,13 +102,13 @@ bool GeckoSockServer::GetAvailableSock()
   {
     auto* waiting = reinterpret_cast<WaitingSock*>(node);
     node = node->next;
-    taken_socks.push_back(std::move(waiting->socket));
+    taken_socks.push_back(waiting->socket);
     delete waiting;
   }
 
   if (!taken_socks.empty())
   {
-    client = std::move(taken_socks.front());
+    const int next = taken_socks.front();
     if (clientThread)
     {
       client_running.Clear();
@@ -119,6 +118,8 @@ bool GeckoSockServer::GetAvailableSock()
       retro_spsc_clear(&recv_fifo);
       retro_spsc_clear(&send_fifo);
     }
+    client = next;
+    retro_atomic_store_release_int(&client_gone, 0);
     clientThread = sthread_create(Common::ThreadEntry<&GeckoSockServer::ClientThread>, this);
     client_count++;
     taken_socks.pop_front();
@@ -134,7 +135,7 @@ void GeckoSockServer::ClientThread()
 
   Common::SetCurrentThreadName("Gecko Client");
 
-  client->setBlocking(false);
+  net_set_blocking(client, false);
 
   while (client_running.IsSet())
   {
@@ -143,12 +144,11 @@ void GeckoSockServer::ClientThread()
     {
       // what's an ideal buffer size?
       std::array<char, 128> buffer;
-      std::size_t got = 0;
-
-      if (client->receive(buffer.data(), buffer.size(), got) == sf::Socket::Status::Disconnected)
+      const int got = net_tcp_recv(client, buffer.data(), buffer.size());
+      if (got < 0)
         client_running.Clear();
 
-      if (got != 0)
+      if (got > 0)
       {
         did_nothing = false;
 
@@ -163,7 +163,7 @@ void GeckoSockServer::ClientThread()
         std::vector<char> packet(pending);
         retro_spsc_read(&send_fifo, packet.data(), pending);
 
-        if (client->send(&packet[0], packet.size()) == sf::Socket::Status::Disconnected)
+        if (net_tcp_send(client, &packet[0], packet.size()) < 0)
           client_running.Clear();
       }
     }
@@ -173,7 +173,8 @@ void GeckoSockServer::ClientThread()
       frame_clock_wait_until(frame_clock_now() + 1, client_running.Raw());
   }
 
-  client->disconnect();
+  net_close(client);
+  retro_atomic_store_release_int(&client_gone, 1);
 }
 
 CEXIGecko::CEXIGecko(Core::System& system) : IEXIDevice(system)
@@ -185,7 +186,7 @@ void CEXIGecko::ImmReadWrite(u32& _uData, u32 _uSize)
   // We don't really care about _uSize
   (void)_uSize;
 
-  if (!client || client->getLocalPort() == 0)
+  if (client < 0 || retro_atomic_load_acquire_int(&client_gone))
     GetAvailableSock();
 
   switch (_uData >> 28)

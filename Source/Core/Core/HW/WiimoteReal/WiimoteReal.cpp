@@ -10,8 +10,6 @@
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
 
-#include <SFML/Network/UdpSocket.hpp>
-
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
@@ -19,6 +17,7 @@
 #include "Common/Swap.h"
 #include "Common/Thread.h"
 #include "Common/FrameClock.h"
+#include "Common/NetSocket.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/WiimoteSettings.h"
@@ -405,9 +404,10 @@ bool Wiimote::Read()
   const bool keep = retro_atomic_load_acquire_int(&m_is_linked) != 0 && result > 0;
   if (keep && m_balance_board_dump_port > 0 && m_index == WIIMOTE_BALANCE_BOARD)
   {
-    static sf::UdpSocket Socket;
-    (void)Socket.send(record->data, MAX_PAYLOAD, sf::IpAddress::LocalHost,
-                      m_balance_board_dump_port);
+    // The read thread's own socket.
+    static const int s_socket = net_udp_open(0);
+    (void)net_udp_sendto(s_socket, record->data, MAX_PAYLOAD, net_loopback_ipv4(),
+                         m_balance_board_dump_port);
   }
 
   if (reserved)
@@ -438,9 +438,10 @@ bool Wiimote::Write(const WriteRecord& record)
 {
   if (m_balance_board_dump_port > 0 && m_index == WIIMOTE_BALANCE_BOARD)
   {
-    static sf::UdpSocket Socket;
-    (void)Socket.send(record.data, record.size, sf::IpAddress::LocalHost,
-                      m_balance_board_dump_port);
+    // The write thread's own socket.
+    static const int s_socket = net_udp_open(0);
+    (void)net_udp_sendto(s_socket, record.data, record.size, net_loopback_ipv4(),
+                         m_balance_board_dump_port);
   }
 
   int ret = IOWrite(record.data, record.size);

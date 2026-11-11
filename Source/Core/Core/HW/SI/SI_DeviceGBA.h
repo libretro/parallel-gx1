@@ -6,8 +6,6 @@
 #include <array>
 #include <memory>
 
-#include <SFML/Network.hpp>
-
 #include "Common/CommonTypes.h"
 #include "Core/HW/SI/SI_Device.h"
 
@@ -33,8 +31,8 @@ public:
 private:
   void Disconnect();
 
-  std::unique_ptr<sf::TcpSocket> m_client;
-  std::unique_ptr<sf::TcpSocket> m_clock_sync;
+  int m_client = -1;
+  int m_clock_sync = -1;
 
   u64 m_last_time_slice = 0;
   bool m_booted = false;
