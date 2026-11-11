@@ -134,7 +134,7 @@ bool DXTexture::CreateSRVDescriptor()
 {
   if (!g_dx_context->GetDescriptorHeapManager().Allocate(&m_srv_descriptor))
   {
-    PanicAlertFmt("Failed to allocate SRV descriptor");
+    PanicAlert("Failed to allocate SRV descriptor");
     return false;
   }
 
@@ -159,7 +159,7 @@ bool DXTexture::CreateSRVDescriptor()
   }
   else
   {
-    PanicAlertFmt("Failed to allocate SRV - unhandled type");
+    PanicAlert("Failed to allocate SRV - unhandled type");
     return false;
   }
   D3D12_SHADER_RESOURCE_VIEW_DESC desc = {D3DCommon::GetSRVFormatForAbstractFormat(m_config.format),
@@ -192,7 +192,7 @@ bool DXTexture::CreateUAVDescriptor()
 {
   if (!g_dx_context->GetDescriptorHeapManager().Allocate(&m_uav_descriptor))
   {
-    PanicAlertFmt("Failed to allocate UAV descriptor");
+    PanicAlert("Failed to allocate UAV descriptor");
     return false;
   }
 
@@ -236,13 +236,13 @@ void DXTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
     staging_buffer = CreateTextureUploadBuffer(upload_size);
     if (!staging_buffer)
     {
-      PanicAlertFmt("Failed to allocate temporary texture upload buffer");
+      PanicAlert("Failed to allocate temporary texture upload buffer");
       return;
     }
     HRESULT hr = staging_buffer->Map(0, &read_range, &upload_buffer_ptr);
     if (FAILED(hr))
     {
-      PanicAlertFmt("Failed to map temporary texture upload buffer: {}", DX12HRWrap(hr));
+      PanicAlert("Failed to map temporary texture upload buffer: %s", DX12::HRText(hr).text);
       return;
     }
 
@@ -256,13 +256,12 @@ void DXTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
     if (!g_dx_context->GetTextureUploadBuffer().ReserveMemory(
             upload_size, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT))
     {
-      WARN_LOG_FMT(VIDEO,
-                   "Executing command list while waiting for space in texture upload buffer");
+      WARN_LOG(VIDEO, "Executing command list while waiting for space in texture upload buffer");
       Gfx::GetInstance()->ExecuteCommandList(false);
       if (!g_dx_context->GetTextureUploadBuffer().ReserveMemory(
               upload_size, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT))
       {
-        PanicAlertFmt("Failed to allocate texture upload buffer");
+        PanicAlert("Failed to allocate texture upload buffer");
         return;
       }
     }
@@ -329,8 +328,7 @@ u8* DXTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t
   TransitionToState(D3D12_RESOURCE_STATE_COPY_DEST);
   if (!stream_buffer.ReserveMemory(static_cast<u32>(size), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT))
   {
-    WARN_LOG_FMT(VIDEO,
-                 "Executing command list while waiting for space in texture upload buffer");
+    WARN_LOG(VIDEO, "Executing command list while waiting for space in texture upload buffer");
     Gfx::GetInstance()->ExecuteCommandList(false);
     if (!stream_buffer.ReserveMemory(static_cast<u32>(size),
                                      D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT))
@@ -580,7 +578,7 @@ bool DXFramebuffer::CreateRTVDescriptor()
 {
   if (!g_dx_context->GetRTVHeapManager().Allocate(&m_rtv_descriptor))
   {
-    PanicAlertFmt("Failed to allocate RTV descriptor");
+    PanicAlert("Failed to allocate RTV descriptor");
     return false;
   }
 
@@ -631,7 +629,7 @@ bool DXFramebuffer::CreateDSVDescriptor()
 {
   if (!g_dx_context->GetDSVHeapManager().Allocate(&m_dsv_descriptor))
   {
-    PanicAlertFmt("Failed to allocate RTV descriptor");
+    PanicAlert("Failed to allocate RTV descriptor");
     return false;
   }
 

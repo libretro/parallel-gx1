@@ -177,7 +177,7 @@ DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config,
     desc.pRootSignature = g_dx_context->GetUtilityRootSignature();
     break;
   default:
-    PanicAlertFmt("Unknown pipeline layout.");
+    PanicAlert("Unknown pipeline layout.");
     return nullptr;
   }
 
@@ -216,8 +216,8 @@ DXPipeline* DXPipeline::Create(const AbstractPipelineConfig& config,
   HRESULT hr = g_dx_context->GetDevice()->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&pso));
   if (FAILED(hr))
   {
-    WARN_LOG_FMT(VIDEO, "CreateGraphicsPipelineState() {}failed: {}",
-                 cache_data ? "with cache data " : "", DX12HRWrap(hr));
+    WARN_LOG(VIDEO, "CreateGraphicsPipelineState() %sfailed: %s",
+             cache_data ? "with cache data " : "", DX12::HRText(hr).text);
     return nullptr;
   }
 
@@ -234,7 +234,7 @@ size_t DXPipeline::WriteCacheData(CacheDataReserve reserve, void* ctx) const
   HRESULT hr = m_pipeline->GetCachedBlob(&blob);
   if (FAILED(hr))
   {
-    WARN_LOG_FMT(VIDEO, "ID3D12Pipeline::GetCachedBlob() failed: {}", DX12HRWrap(hr));
+    WARN_LOG(VIDEO, "ID3D12Pipeline::GetCachedBlob() failed: %s", DX12::HRText(hr).text);
     return 0;
   }
 

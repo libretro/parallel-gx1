@@ -61,11 +61,11 @@ void D3D12BoundingBox::Write(u32 index, const BBoxType* values, u32 length)
   const u32 copy_size = static_cast<u32>(length * sizeof(BBoxType));
   if (!m_upload_buffer.ReserveMemory(copy_size, sizeof(BBoxType)))
   {
-    WARN_LOG_FMT(VIDEO, "Executing command list while waiting for space in bbox stream buffer");
+    WARN_LOG(VIDEO, "Executing command list while waiting for space in bbox stream buffer");
     Gfx::GetInstance()->ExecuteCommandList(false);
     if (!m_upload_buffer.ReserveMemory(copy_size, sizeof(BBoxType)))
     {
-      PanicAlertFmt("Failed to allocate bbox stream buffer space");
+      PanicAlert("Failed to allocate bbox stream buffer space");
       return;
     }
   }

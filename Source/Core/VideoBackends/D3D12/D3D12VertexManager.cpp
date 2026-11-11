@@ -37,7 +37,7 @@ bool VertexManager::Initialize()
       !m_uniform_stream_buffer.AllocateBuffer(UNIFORM_STREAM_BUFFER_SIZE) ||
       !m_texel_stream_buffer.AllocateBuffer(TEXEL_STREAM_BUFFER_SIZE))
   {
-    PanicAlertFmt("Failed to allocate streaming buffers");
+    PanicAlert("Failed to allocate streaming buffers");
     return false;
   }
 
@@ -53,7 +53,7 @@ bool VertexManager::Initialize()
     DescriptorHandle& dh = m_texel_buffer_views[it.first];
     if (!g_dx_context->GetDescriptorHeapManager().Allocate(&dh))
     {
-      PanicAlertFmt("Failed to allocate descriptor for texel buffer");
+      PanicAlert("Failed to allocate descriptor for texel buffer");
       return false;
     }
 
@@ -67,7 +67,7 @@ bool VertexManager::Initialize()
 
   if (!g_dx_context->GetDescriptorHeapManager().Allocate(&m_vertex_srv))
   {
-    PanicAlertFmt("Failed to allocate descriptor for vertex srv");
+    PanicAlert("Failed to allocate descriptor for vertex srv");
     return false;
   }
 
@@ -90,7 +90,7 @@ void VertexManager::ResetBuffer(u32 vertex_stride)
   if (!has_vbuffer_allocation || !has_ibuffer_allocation)
   {
     // Flush any pending commands first, so that we can wait on the fences
-    WARN_LOG_FMT(VIDEO, "Executing command list while waiting for space in vertex/index buffer");
+    WARN_LOG(VIDEO, "Executing command list while waiting for space in vertex/index buffer");
     Gfx::GetInstance()->ExecuteCommandList(false);
 
     // Attempt to allocate again, this may cause a fence wait
@@ -102,7 +102,7 @@ void VertexManager::ResetBuffer(u32 vertex_stride)
 
     // If we still failed, that means the allocation was too large and will never succeed, so panic
     if (!has_vbuffer_allocation || !has_ibuffer_allocation)
-      PanicAlertFmt("Failed to allocate space in streaming buffers for pending draw");
+      PanicAlert("Failed to allocate space in streaming buffers for pending draw");
   }
 
   // Update pointers
@@ -200,7 +200,7 @@ bool VertexManager::ReserveConstantStorage()
   }
 
   // The only places that call constant updates are safe to have state restored.
-  WARN_LOG_FMT(VIDEO, "Executing command list while waiting for space in uniform buffer");
+  WARN_LOG(VIDEO, "Executing command list while waiting for space in uniform buffer");
   Gfx::GetInstance()->ExecuteCommandList(false);
 
   // Since we are on a new command buffer, all constants have been invalidated, and we need
@@ -229,7 +229,7 @@ void VertexManager::UploadAllConstants()
   if (!m_uniform_stream_buffer.ReserveMemory(allocation_size,
                                              D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT))
   {
-    PanicAlertFmt("Failed to allocate space for constants in streaming buffer");
+    PanicAlert("Failed to allocate space for constants in streaming buffer");
     return;
   }
 
@@ -266,7 +266,7 @@ void VertexManager::UploadUtilityUniforms(const void* data, u32 data_size)
   if (!m_uniform_stream_buffer.ReserveMemory(data_size,
                                              D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT))
   {
-    WARN_LOG_FMT(VIDEO, "Executing command buffer while waiting for ext space in uniform buffer");
+    WARN_LOG(VIDEO, "Executing command buffer while waiting for ext space in uniform buffer");
     Gfx::GetInstance()->ExecuteCommandList(false);
   }
 
@@ -287,11 +287,11 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
   if (!m_texel_stream_buffer.ReserveMemory(data_size, elem_size))
   {
     // Try submitting cmdbuffer.
-    WARN_LOG_FMT(VIDEO, "Submitting command buffer while waiting for space in texel buffer");
+    WARN_LOG(VIDEO, "Submitting command buffer while waiting for space in texel buffer");
     Gfx::GetInstance()->ExecuteCommandList(false);
     if (!m_texel_stream_buffer.ReserveMemory(data_size, elem_size))
     {
-      PanicAlertFmt("Failed to allocate {} bytes from texel buffer", data_size);
+      PanicAlert("Failed to allocate %u bytes from texel buffer", data_size);
       return false;
     }
   }
@@ -316,11 +316,11 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
   if (!m_texel_stream_buffer.ReserveMemory(reserve_size, elem_size))
   {
     // Try submitting cmdbuffer.
-    WARN_LOG_FMT(VIDEO, "Submitting command buffer while waiting for space in texel buffer");
+    WARN_LOG(VIDEO, "Submitting command buffer while waiting for space in texel buffer");
     Gfx::GetInstance()->ExecuteCommandList(false);
     if (!m_texel_stream_buffer.ReserveMemory(reserve_size, elem_size))
     {
-      PanicAlertFmt("Failed to allocate {} bytes from texel buffer", reserve_size);
+      PanicAlert("Failed to allocate %u bytes from texel buffer", reserve_size);
       return false;
     }
   }

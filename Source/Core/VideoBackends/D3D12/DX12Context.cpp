@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdio>
+#include <cstring>
 #include <dxgi1_6.h>
 #include <queue>
 #include <vector>
@@ -126,7 +128,7 @@ bool DXContext::CreateDescriptorHeaps()
 
   if (!m_descriptor_heap_manager.Allocate(&m_null_srv_descriptor))
   {
-    PanicAlertFmt("Failed to allocate null descriptor");
+    PanicAlert("Failed to allocate null descriptor");
     return false;
   }
 
@@ -186,9 +188,9 @@ static bool BuildRootSignature(ID3D12Device* device, ID3D12RootSignature** sig_p
                                                 &root_signature_blob, &root_signature_error_blob);
   if (FAILED(hr))
   {
-    PanicAlertFmt("Failed to serialize root signature: {}\n{}",
-                  static_cast<const char*>(root_signature_error_blob->GetBufferPointer()),
-                  DX12HRWrap(hr));
+    PanicAlert("Failed to serialize root signature: %s\n%s",
+               static_cast<const char*>(root_signature_error_blob->GetBufferPointer()),
+               DX12::HRText(hr).text);
     return false;
   }
 
@@ -299,7 +301,7 @@ bool DXContext::CreateTextureUploadBuffer()
 {
   if (!m_texture_upload_buffer.AllocateBuffer(TEXTURE_UPLOAD_BUFFER_SIZE, true))
   {
-    PanicAlertFmt("Failed to create texture upload buffer");
+    PanicAlert("Failed to create texture upload buffer");
     return false;
   }
 
@@ -411,7 +413,7 @@ void DXContext::RecreateGXRootSignature()
 {
   m_gx_root_signature.Reset();
   if (!CreateGXRootSignature())
-    PanicAlertFmt("Failed to re-create GX root signature.");
+    PanicAlert("Failed to re-create GX root signature.");
 }
 
 void DXContext::DestroyPendingResources(CommandListResources& cmdlist)
@@ -467,7 +469,7 @@ bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueu
   if (!s_d3d12_library.Open("d3d12.dll") ||
       !s_d3d12_library.GetSymbol("D3D12SerializeRootSignature", &s_d3d12_serialize_root_signature))
   {
-    ERROR_LOG_FMT(VIDEO, "d3d12.dll could not be loaded.");
+    ERROR_LOG(VIDEO, "d3d12.dll could not be loaded.");
     s_d3d12_library.Close();
     return false;
   }
@@ -482,18 +484,32 @@ bool DXContext::CreateWithExternalDevice(ID3D12Device* device, ID3D12CommandQueu
 
   if (!g_dx_context->CreateFence())
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to create fence");
+    ERROR_LOG(VIDEO, "Failed to create fence");
     Destroy();
     return false;
   }
 
   if (!g_dx_context->CreateCommandLists())
   {
-    ERROR_LOG_FMT(VIDEO, "Failed to create command lists");
+    ERROR_LOG(VIDEO, "Failed to create command lists");
     Destroy();
     return false;
   }
 
   return true;
 }
+
+Common::HResultText HRText(HRESULT hr)
+{
+  Common::HResultText out = Common::HRText(hr);
+  if (hr == DXGI_ERROR_DEVICE_REMOVED && g_dx_context != nullptr &&
+      g_dx_context->GetDevice() != nullptr)
+  {
+    const size_t len = strlen(out.text);
+    snprintf(out.text + len, sizeof(out.text) - len, "\nDevice removal reason: %s",
+             Common::HRText(g_dx_context->GetDevice()->GetDeviceRemovedReason()).text);
+  }
+  return out;
+}
+
 }  // namespace DX12

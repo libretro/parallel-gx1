@@ -214,6 +214,9 @@ struct DX12HRWrap
   const HRESULT m_hr;
 };
 
+// Common::HRText, with the device's removal reason after a device removed error.
+Common::HResultText HRText(HRESULT hr);
+
 }  // namespace DX12
 
 template <>

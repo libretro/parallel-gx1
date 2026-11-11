@@ -640,8 +640,8 @@ void Gfx::UpdateDescriptorTables()
       (m_dirty_bits & DirtyState_VS_SRV) && !UpdateVSSRVDescriptorTable();
   if (texture_update_failed || sampler_update_failed || uav_update_failed || srv_update_failed)
   {
-    WARN_LOG_FMT(VIDEO, "Executing command list while waiting for temporary {}",
-                 texture_update_failed ? "descriptors" : "samplers");
+    WARN_LOG(VIDEO, "Executing command list while waiting for temporary %s",
+             texture_update_failed ? "descriptors" : "samplers");
     ExecuteCommandList(false);
     SetRootSignatures();
     SetDescriptorHeaps();
