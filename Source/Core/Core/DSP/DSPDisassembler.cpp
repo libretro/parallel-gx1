@@ -4,11 +4,11 @@
 
 #include "Core/DSP/DSPDisassembler.h"
 
+#include <cstdarg>
+#include <cstdio>
 #include <limits>
 #include <string>
 #include <utility>
-
-#include <fmt/format.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -18,6 +18,18 @@
 
 namespace DSP
 {
+// Appends @format's text to @dest; a disassembly piece is short, so it is made on the stack.
+static void Append(std::string& dest, const char* format, ...) DOLPHIN_PRINTF_ATTR(2, 3);
+static void Append(std::string& dest, const char* format, ...)
+{
+  char text[64];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(text, sizeof(text), format, args);
+  va_end(args);
+  dest += text;
+}
+
 DSPDisassembler::DSPDisassembler(const AssemblerSettings& settings) : settings_(settings)
 {
 }
@@ -74,16 +86,16 @@ std::string DSPDisassembler::DisassembleParameters(const DSPOPCTemplate& opc, u1
     {
     case P_REG:
       if (settings_.decode_registers)
-        buf += fmt::format("${}", pdregname(val));
+        Append(buf, "$%s", pdregname(val).c_str());
       else
-        buf += fmt::format("${}", val);
+        Append(buf, "$%u", static_cast<unsigned>(val));
       break;
 
     case P_PRG:
       if (settings_.decode_registers)
-        buf += fmt::format("@${}", pdregname(val));
+        Append(buf, "@$%s", pdregname(val).c_str());
       else
-        buf += fmt::format("@${}", val);
+        Append(buf, "@$%u", static_cast<unsigned>(val));
       break;
 
     case P_VAL:
@@ -95,7 +107,7 @@ std::string DSPDisassembler::DisassembleParameters(const DSPOPCTemplate& opc, u1
       }
       else
       {
-        buf += fmt::format("0x{:04x}", val);
+        Append(buf, "0x%04x", static_cast<unsigned>(val));
       }
       break;
 
@@ -107,16 +119,16 @@ std::string DSPDisassembler::DisassembleParameters(const DSPOPCTemplate& opc, u1
         {
           // Left and right shifts function essentially as a single shift by a 7-bit signed value,
           // but are split into two instructions for clarity.
-          buf += fmt::format("#{}", (val & 0x20) != 0 ? (int(val) - 64) : int(val));
+          Append(buf, "#%d", (val & 0x20) != 0 ? (int(val) - 64) : int(val));
         }
         else
         {
-          buf += fmt::format("#0x{:02x}", val);
+          Append(buf, "#0x%02x", static_cast<unsigned>(val));
         }
       }
       else
       {
-        buf += fmt::format("#0x{:04x}", val);
+        Append(buf, "#0x%04x", static_cast<unsigned>(val));
       }
       break;
 
@@ -125,13 +137,13 @@ std::string DSPDisassembler::DisassembleParameters(const DSPOPCTemplate& opc, u1
         val = (u16)(s16)(s8)val;
 
       if (settings_.decode_names)
-        buf += fmt::format("@{}", pdname(val));
+        Append(buf, "@%s", pdname(val).c_str());
       else
-        buf += fmt::format("@0x{:04x}", val);
+        Append(buf, "@0x%04x", static_cast<unsigned>(val));
       break;
 
     default:
-      ERROR_LOG_FMT(DSPLLE, "Unknown parameter type: {:x}", std::to_underlying(opc.params[j].type));
+      ERROR_LOG(DSPLLE, "Unknown parameter type: %x", std::to_underlying(opc.params[j].type));
       break;
     }
   }
@@ -181,7 +193,7 @@ bool DSPDisassembler::DisassembleOpcode(const u16* binbuf, size_t binbuf_size, u
   // printing
 
   if (settings_.show_pc)
-    dest += fmt::format("{:04x} ", wrapped_pc);
+    Append(dest, "%04x ", static_cast<unsigned>(wrapped_pc));
 
   u16 op2;
 
@@ -191,33 +203,43 @@ bool DSPDisassembler::DisassembleOpcode(const u16* binbuf, size_t binbuf_size, u
     if (wrapped_pc + 1u >= binbuf_size)
     {
       if (settings_.show_hex)
-        dest += fmt::format("{:04x} ???? ", op1);
-      dest += fmt::format("; Insufficient data for large immediate");
+        Append(dest, "%04x ???? ", static_cast<unsigned>(op1));
+      dest += "; Insufficient data for large immediate";
       *pc += opc->size;
       return false;
     }
 
     op2 = binbuf[wrapped_pc + 1];
     if (settings_.show_hex)
-      dest += fmt::format("{:04x} {:04x} ", op1, op2);
+      Append(dest, "%04x %04x ", static_cast<unsigned>(op1), static_cast<unsigned>(op2));
   }
   else
   {
     op2 = 0;
     if (settings_.show_hex)
-      dest += fmt::format("{:04x}      ", op1);
+      Append(dest, "%04x      ", static_cast<unsigned>(op1));
   }
 
   std::string opname = opc->name;
   if (is_extended)
-    opname += fmt::format("{}{}", settings_.ext_separator, opc_ext->name);
+  {
+    opname += settings_.ext_separator;
+    opname += opc_ext->name;
+  }
   if (settings_.lower_case_ops)
     Common::ToLower(&opname);
 
   if (settings_.print_tabs)
-    dest += fmt::format("{}\t", opname);
+  {
+    dest += opname;
+    dest += '\t';
+  }
   else
-    dest += fmt::format("{:<12}", opname);
+  {
+    dest += opname;
+    if (opname.size() < 12)
+      dest.append(12 - opname.size(), ' ');
+  }
 
   if (opc->param_count > 0)
     dest += DisassembleParameters(*opc, op1, op2);

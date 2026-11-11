@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
@@ -39,14 +39,15 @@ static bool Disassemble(const u16* code, size_t size, bool line_numbers, std::st
 
 bool DumpDSPCode(const u8* code_be, size_t size_in_bytes, u32 crc)
 {
-  const std::string root_name =
-      File::GetUserPath(D_DUMPDSP_IDX) + fmt::format("DSP_UC_{:08X}", crc);
+  char name[24];
+  snprintf(name, sizeof(name), "DSP_UC_%08X", crc);
+  const std::string root_name = File::GetUserPath(D_DUMPDSP_IDX) + name;
   const std::string binary_file = root_name + ".bin";
   const std::string text_file = root_name + ".txt";
 
   if (!File::IOFile(binary_file, "wb").WriteBytes(code_be, size_in_bytes))
   {
-    PanicAlertFmt("Can't dump UCode to file '{}'!!", binary_file);
+    PanicAlert("Can't dump UCode to file '%s'!!", binary_file.c_str());
     return false;
   }
 

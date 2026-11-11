@@ -4,6 +4,7 @@
 #include "Core/DSP/DSPAnalyzer.h"
 
 #include <array>
+#include <cinttypes>
 #include <cstddef>
 
 #include "Common/Logging/Log.h"
@@ -84,7 +85,7 @@ void Analyzer::AnalyzeRange(const SDSP& dsp, u16 start_addr, u16 end_addr)
   // Next, we'll scan for potential idle skips.
   FindIdleSkips(dsp, start_addr, end_addr);
 
-  INFO_LOG_FMT(DSPLLE, "Finished analysis.");
+  INFO_LOG(DSPLLE, "Finished analysis.");
 }
 
 void Analyzer::FindInstructionStarts(const SDSP& dsp, u16 start_addr, u16 end_addr)
@@ -166,7 +167,8 @@ void Analyzer::FindIdleSkips(const SDSP& dsp, u16 start_addr, u16 end_addr)
       }
       if (found)
       {
-        INFO_LOG_FMT(DSPLLE, "Idle skip location found at {:02x} (sigNum:{})", addr, s + 1);
+        INFO_LOG(DSPLLE, "Idle skip location found at %02x (sigNum:%" PRIu64 ")", (unsigned)addr,
+                 (u64)(s + 1));
         m_code_flags[addr] |= CODE_IDLE_SKIP;
       }
     }

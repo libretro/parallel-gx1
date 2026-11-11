@@ -192,7 +192,7 @@ void DSPEmitter::EmitInstruction(UDSPInstruction inst)
       m_gpr.PushRegs();
       ABI_CallFunctionPC(FallbackExtThunk, &m_dsp_core.GetInterpreter(), inst);
       m_gpr.PopRegs();
-      INFO_LOG_FMT(DSPLLE, "Instruction not JITed(ext part): {:04x}", inst);
+      INFO_LOG(DSPLLE, "Instruction not JITed(ext part): %04x", (unsigned)inst);
       ext_is_jit = false;
     }
   }
@@ -206,7 +206,7 @@ void DSPEmitter::EmitInstruction(UDSPInstruction inst)
   else
   {
     FallBackToInterpreter(inst);
-    INFO_LOG_FMT(DSPLLE, "Instruction not JITed(main part): {:04x}", inst);
+    INFO_LOG(DSPLLE, "Instruction not JITed(main part): %04x", (unsigned)inst);
   }
 
   // Backlog
@@ -379,7 +379,7 @@ void DSPEmitter::Compile(u16 start_addr)
   {
     // just a safeguard, should never happen anymore.
     // if it does we might get stuck over in RunForCycles.
-    ERROR_LOG_FMT(DSPLLE, "Block at {:#06x} has zero size", start_addr);
+    ERROR_LOG(DSPLLE, "Block at %#06x has zero size", (unsigned)start_addr);
     m_block_size[start_addr] = 1;
   }
 

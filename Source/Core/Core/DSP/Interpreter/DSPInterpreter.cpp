@@ -161,8 +161,8 @@ void Interpreter::WriteControlRegister(u16 val)
   if ((state.control_reg & CR_HALT) != (val & CR_HALT))
   {
     // This bit is handled by Interpreter::RunCycles and DSPEmitter::CompileDispatcher
-    INFO_LOG_FMT(DSPLLE, "DSP_CONTROL halt bit changed: {:04x} -> {:04x}, PC {:04x}",
-                 state.control_reg, val, state.pc);
+    INFO_LOG(DSPLLE, "DSP_CONTROL halt bit changed: %04x -> %04x, PC %04x",
+             (unsigned)state.control_reg, (unsigned)val, (unsigned)state.pc);
   }
 
   // The CR_EXTERNAL_INT bit is handled by DSPLLE::DSP_WriteControlRegister
@@ -170,7 +170,7 @@ void Interpreter::WriteControlRegister(u16 val)
   // reset
   if ((val & CR_RESET) != 0)
   {
-    INFO_LOG_FMT(DSPLLE, "DSP_CONTROL RESET");
+    INFO_LOG(DSPLLE, "DSP_CONTROL RESET");
     m_dsp_core.Reset();
     val &= ~CR_RESET;
   }
@@ -178,7 +178,7 @@ void Interpreter::WriteControlRegister(u16 val)
   // CR_INIT_CODE, which gets unset a bit later...
   if (((state.control_reg & CR_INIT) != 0) && ((val & CR_INIT) == 0))
   {
-    INFO_LOG_FMT(DSPLLE, "DSP_CONTROL INIT");
+    INFO_LOG(DSPLLE, "DSP_CONTROL INIT");
     // Copy 1024(?) bytes of uCode from main memory 0x81000000 (or is it ARAM 00000000?)
     // to IMEM 0000 and jump to that code
     // TODO: Determine exactly how this initialization works
@@ -862,6 +862,6 @@ void Interpreter::nop(const UDSPInstruction opc)
   if (opc == 0)
     return;
 
-  ERROR_LOG_FMT(DSPLLE, "LLE: Unrecognized opcode {:#06x}", opc);
+  ERROR_LOG(DSPLLE, "LLE: Unrecognized opcode %#06x", (unsigned)opc);
 }
 }  // namespace DSP::Interpreter

@@ -7,10 +7,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cinttypes>
 #include <cstddef>
 #include <cstdio>
-
-#include <fmt/format.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -502,7 +501,9 @@ std::string pdname(u16 val)
       return pdlabel.name;
   }
 
-  return fmt::format("0x{:04x}", val);
+  char text[8];
+  snprintf(text, sizeof(text), "0x%04x", static_cast<unsigned>(val));
+  return text;
 }
 
 std::string pdregname(int val)
@@ -573,8 +574,9 @@ void InitInstructionTable()
       // If the entry already in the table is a strict subset, allow it
       if ((s_ext_op_table[i]->opcode_mask | iter->opcode_mask) != s_ext_op_table[i]->opcode_mask)
       {
-        ERROR_LOG_FMT(DSPLLE, "opcode ext table place {} already in use by {} when inserting {}", i,
-                      s_ext_op_table[i]->name, iter->name);
+        ERROR_LOG(DSPLLE,
+                  "opcode ext table place %" PRIu64 " already in use by %s when inserting %s",
+                  (u64)i, s_ext_op_table[i]->name, iter->name);
       }
     }
   }
@@ -591,7 +593,7 @@ void InitInstructionTable()
     if (s_op_table[i] == &cw)
       s_op_table[i] = &*iter;
     else
-      ERROR_LOG_FMT(DSPLLE, "opcode table place {} already in use for {}", i, iter->name);
+      ERROR_LOG(DSPLLE, "opcode table place %" PRIu64 " already in use for %s", (u64)i, iter->name);
   }
 }
 }  // namespace DSP

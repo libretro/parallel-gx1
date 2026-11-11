@@ -21,7 +21,8 @@ u16 SDSP::ReadIMEM(u16 address) const
     return irom[address & DSP_IROM_MASK];
 
   default:  // Unmapped/non-existing memory
-    ERROR_LOG_FMT(DSPLLE, "{:04x} DSP ERROR: Executing from invalid ({:04x}) memory", pc, address);
+    ERROR_LOG(DSPLLE, "%04x DSP ERROR: Executing from invalid (%04x) memory", (unsigned)pc,
+              (unsigned)address);
     return 0;
   }
 }
@@ -34,14 +35,15 @@ u16 SDSP::ReadDMEM(u16 address)
     return dram[address & DSP_DRAM_MASK];
 
   case 0x1:  // 1xxx COEF
-    DEBUG_LOG_FMT(DSPLLE, "{:04x} : Coefficient Read @ {:04x}", pc, address);
+    DEBUG_LOG(DSPLLE, "%04x : Coefficient Read @ %04x", (unsigned)pc, (unsigned)address);
     return coef[address & DSP_COEF_MASK];
 
   case 0xf:  // Fxxx HW regs
     return ReadIFX(address);
 
   default:  // Unmapped/non-existing memory
-    ERROR_LOG_FMT(DSPLLE, "{:04x} DSP ERROR: Read from UNKNOWN ({:04x}) memory", pc, address);
+    ERROR_LOG(DSPLLE, "%04x DSP ERROR: Read from UNKNOWN (%04x) memory", (unsigned)pc,
+              (unsigned)address);
     return 0;
   }
 }
@@ -59,7 +61,8 @@ void SDSP::WriteDMEM(u16 address, u16 value)
     break;
 
   default:  // Unmapped/non-existing memory
-    ERROR_LOG_FMT(DSPLLE, "{:04x} DSP ERROR: Write to UNKNOWN ({:04x}) memory", pc, address);
+    ERROR_LOG(DSPLLE, "%04x DSP ERROR: Write to UNKNOWN (%04x) memory", (unsigned)pc,
+              (unsigned)address);
     break;
   }
 }

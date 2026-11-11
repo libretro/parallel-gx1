@@ -31,7 +31,7 @@ u16 Accelerator::GetCurrentSample()
     val = (ReadMemory(m_current_address * 2) << 8) | ReadMemory(m_current_address * 2 + 1);
     break;
   default:  // produces garbage, but affects the current address
-    ERROR_LOG_FMT(DSPLLE, "GetCurrentSample() - bad format {:#x}", m_sample_format.hex);
+    ERROR_LOG(DSPLLE, "GetCurrentSample() - bad format %#x", (unsigned)m_sample_format.hex);
     break;
   }
   return val;
@@ -107,8 +107,8 @@ void Accelerator::WriteRaw(u16 value)
   }
   else
   {
-    ERROR_LOG_FMT(DSPLLE, "WriteRaw() - tried to write to address {:#x} without high bit set",
-                  m_current_address);
+    ERROR_LOG(DSPLLE, "WriteRaw() - tried to write to address %#x without high bit set",
+              m_current_address);
   }
 }
 
@@ -119,8 +119,8 @@ u16 Accelerator::ReadSample(const s16* coefs)
 
   if (m_sample_format.unk != 0)
   {
-    WARN_LOG_FMT(DSPLLE, "ReadSample() format {:#x} has unknown upper bits set",
-                 m_sample_format.hex);
+    WARN_LOG(DSPLLE, "ReadSample() format %#x has unknown upper bits set",
+             (unsigned)m_sample_format.hex);
   }
 
   u16 val = 0;
@@ -202,7 +202,8 @@ u16 Accelerator::ReadSample(const s16* coefs)
       gain_shift = 16;  // x / 65536 = x >> 16
       break;
     default:
-      ERROR_LOG_FMT(DSPLLE, "ReadSample() invalid gain mode in format {:#x}", m_sample_format.hex);
+      ERROR_LOG(DSPLLE, "ReadSample() invalid gain mode in format %#x",
+                (unsigned)m_sample_format.hex);
       break;
     }
     s32 val32 = ((static_cast<s32>(m_gain) * raw_sample) >> gain_shift) +

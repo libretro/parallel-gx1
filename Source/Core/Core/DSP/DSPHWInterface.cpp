@@ -34,8 +34,8 @@ u16 SDSP::ReadMailboxLow(Mailbox mailbox)
 
 #if defined(_DEBUG) || defined(DEBUGFAST)
   const char* const type = mailbox == Mailbox::DSP ? "DSP" : "CPU";
-  DEBUG_LOG_FMT(DSP_MAIL, "{}(RM) B:{} M:{:#010x} (pc={:#06x})", type, static_cast<int>(mailbox),
-                PeekMailbox(mailbox), pc);
+  DEBUG_LOG(DSP_MAIL, "%s(RM) B:%d M:%#010x (pc=%#06x)", type, static_cast<int>(mailbox),
+            static_cast<unsigned>(PeekMailbox(mailbox)), static_cast<unsigned>(pc));
 #endif
 
   return static_cast<u16>(value);
@@ -56,8 +56,8 @@ void SDSP::WriteMailboxLow(Mailbox mailbox, u16 value)
 
 #if defined(_DEBUG) || defined(DEBUGFAST)
   const char* const type = mailbox == Mailbox::DSP ? "DSP" : "CPU";
-  DEBUG_LOG_FMT(DSP_MAIL, "{}(WM) B:{} M:{:#010x} (pc={:#06x})", type, static_cast<int>(mailbox),
-                PeekMailbox(mailbox), pc);
+  DEBUG_LOG(DSP_MAIL, "%s(WM) B:%d M:%#010x (pc=%#06x)", type, static_cast<int>(mailbox),
+            static_cast<unsigned>(PeekMailbox(mailbox)), static_cast<unsigned>(pc));
 #endif
 }
 
@@ -84,7 +84,7 @@ void SDSP::WriteIFX(u32 address, u16 value)
     {
       // The homebrew libasnd uCode frequently writes 0 to DIRQ with a comment
       // saying "clear the interrupt" - we don't need to log in this case.
-      WARN_LOG_FMT(DSPLLE, "Unknown Interrupt Request pc={:#06x} ({:#06x})", pc, value);
+      WARN_LOG(DSPLLE, "Unknown Interrupt Request pc=%#06x (%#06x)", (unsigned)pc, (unsigned)value);
     }
     break;
 
@@ -110,7 +110,7 @@ void SDSP::WriteIFX(u32 address, u16 value)
     if (!m_ifx_regs[DSP_AMDM])
       DoDMA();
     else
-      NOTICE_LOG_FMT(DSPLLE, "Masked DMA skipped");
+      NOTICE_LOG(DSPLLE, "Masked DMA skipped");
     m_ifx_regs[DSP_DSCR] &= ~4;
     m_ifx_regs[DSP_DSBL] = 0;
     break;
@@ -175,16 +175,16 @@ void SDSP::WriteIFX(u32 address, u16 value)
 
       if (label.name && label.description)
       {
-        DEBUG_LOG_FMT(DSPLLE, "{:04x} MW {} ({:04x})", pc, label.name, value);
+        DEBUG_LOG(DSPLLE, "%04x MW %s (%04x)", (unsigned)pc, label.name, (unsigned)value);
       }
       else
       {
-        ERROR_LOG_FMT(DSPLLE, "{:04x} MW {:04x} ({:04x})", pc, address, value);
+        ERROR_LOG(DSPLLE, "%04x MW %04x (%04x)", (unsigned)pc, address, (unsigned)value);
       }
     }
     else
     {
-      ERROR_LOG_FMT(DSPLLE, "{:04x} MW {:04x} ({:04x})", pc, address, value);
+      ERROR_LOG(DSPLLE, "%04x MW %04x (%04x)", (unsigned)pc, address, (unsigned)value);
     }
     m_ifx_regs[address & 0xFF] = value;
     break;
@@ -250,16 +250,17 @@ u16 SDSP::ReadIFXImpl(u16 address)
 
       if (label.name && label.description)
       {
-        DEBUG_LOG_FMT(DSPLLE, "{:04x} MR {} ({:04x})", pc, label.name, ifx_reg);
+        DEBUG_LOG(DSPLLE, "%04x MR %s (%04x)", (unsigned)pc, label.name, (unsigned)ifx_reg);
       }
       else
       {
-        ERROR_LOG_FMT(DSPLLE, "{:04x} MR {:04x} ({:04x})", pc, address, ifx_reg);
+        ERROR_LOG(DSPLLE, "%04x MR %04x (%04x)", (unsigned)pc, (unsigned)address,
+                  (unsigned)ifx_reg);
       }
     }
     else
     {
-      ERROR_LOG_FMT(DSPLLE, "{:04x} MR {:04x} ({:04x})", pc, address, ifx_reg);
+      ERROR_LOG(DSPLLE, "%04x MR %04x (%04x)", (unsigned)pc, (unsigned)address, (unsigned)ifx_reg);
     }
     return ifx_reg;
   }
@@ -280,16 +281,16 @@ const u8* SDSP::IDMAIn(u16 dsp_addr, u32 addr, u32 size)
   Common::WriteProtectMemory(iram, DSP_IRAM_BYTE_SIZE, false);
 
   Host::CodeLoaded(m_dsp_core, addr, size);
-  NOTICE_LOG_FMT(DSPLLE, "*** Copy new UCode from {:#010x} to {:#06x} (crc: {:#08x})", addr,
-                 dsp_addr, m_iram_crc);
+  NOTICE_LOG(DSPLLE, "*** Copy new UCode from %#010x to %#06x (crc: %#08x)", addr,
+             (unsigned)dsp_addr, m_iram_crc);
 
   return reinterpret_cast<const u8*>(iram) + dsp_addr;
 }
 
 const u8* SDSP::IDMAOut(u16 dsp_addr, u32 addr, u32 size)
 {
-  ERROR_LOG_FMT(DSPLLE, "*** idma_out IRAM_DSP ({:#06x}) -> RAM ({:#010x}) : size ({:#010x})",
-                dsp_addr / 2, addr, size);
+  ERROR_LOG(DSPLLE, "*** idma_out IRAM_DSP (%#06x) -> RAM (%#010x) : size (%#010x)",
+            (unsigned)(dsp_addr / 2), addr, size);
   return nullptr;
 }
 
@@ -297,8 +298,8 @@ const u8* SDSP::IDMAOut(u16 dsp_addr, u32 addr, u32 size)
 const u8* SDSP::DDMAIn(u16 dsp_addr, u32 addr, u32 size)
 {
   Host::DMAToDSP(dram + dsp_addr / 2, addr, size);
-  DEBUG_LOG_FMT(DSPLLE, "*** ddma_in RAM ({:#010x}) -> DRAM_DSP ({:#06x}) : size ({:#010x})", addr,
-                dsp_addr / 2, size);
+  DEBUG_LOG(DSPLLE, "*** ddma_in RAM (%#010x) -> DRAM_DSP (%#06x) : size (%#010x)", addr,
+            (unsigned)(dsp_addr / 2), size);
 
   return reinterpret_cast<const u8*>(dram) + dsp_addr;
 }
@@ -306,8 +307,8 @@ const u8* SDSP::DDMAIn(u16 dsp_addr, u32 addr, u32 size)
 const u8* SDSP::DDMAOut(u16 dsp_addr, u32 addr, u32 size)
 {
   Host::DMAFromDSP(dram + dsp_addr / 2, addr, size);
-  DEBUG_LOG_FMT(DSPLLE, "*** ddma_out DRAM_DSP ({:#06x}) -> RAM ({:#010x}) : size ({:#010x})",
-                dsp_addr / 2, addr, size);
+  DEBUG_LOG(DSPLLE, "*** ddma_out DRAM_DSP (%#06x) -> RAM (%#010x) : size (%#010x)",
+            (unsigned)(dsp_addr / 2), addr, size);
 
   return reinterpret_cast<const u8*>(dram) + dsp_addr;
 }
@@ -321,16 +322,16 @@ void SDSP::DoDMA()
 
   if (len > 0x4000)
   {
-    ERROR_LOG_FMT(DSPLLE,
-                  "DMA ERROR: PC: {:04x}, Control: {:04x}, Address: {:08x}, DSP Address: {:04x}, "
-                  "Size: {:04x}",
-                  pc, ctl, addr, dsp_addr, len);
+    ERROR_LOG(DSPLLE,
+              "DMA ERROR: PC: %04x, Control: %04x, Address: %08x, DSP Address: %04x, "
+              "Size: %04x",
+              (unsigned)pc, (unsigned)ctl, addr, (unsigned)dsp_addr, (unsigned)len);
     std::exit(0);
   }
 #if defined(_DEBUG) || defined(DEBUGFAST)
-  DEBUG_LOG_FMT(
-      DSPLLE, "DMA pc: {:04x}, Control: {:04x}, Address: {:08x}, DSP Address: {:04x}, Size: {:04x}",
-      pc, ctl, addr, dsp_addr, len);
+  DEBUG_LOG(DSPLLE, "DMA pc: %04x, Control: %04x, Address: %08x, DSP Address: %04x, Size: %04x",
+            static_cast<unsigned>(pc), static_cast<unsigned>(ctl), static_cast<unsigned>(addr),
+            static_cast<unsigned>(dsp_addr), static_cast<unsigned>(len));
 #endif
 
   const u8* copied_data_ptr = nullptr;

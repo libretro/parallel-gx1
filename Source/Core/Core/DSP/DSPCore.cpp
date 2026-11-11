@@ -71,12 +71,12 @@ static bool VerifyRoms(const SDSP& dsp)
 
   if (rom_idx < 0)
   {
-    if (AskYesNoFmtT("Your DSP ROMs have incorrect hashes.\n\n"
-                     "Delete the dsp_rom.bin and dsp_coef.bin files in the GC folder in the User "
-                     "folder to use the free DSP ROM, or replace them with good dumps from a real "
-                     "GameCube/Wii.\n\n"
-                     "Would you like to stop now to fix the problem?\n"
-                     "If you select \"No\", audio might be garbled."))
+    if (AskYesNo("Your DSP ROMs have incorrect hashes.\n\n"
+                 "Delete the dsp_rom.bin and dsp_coef.bin files in the GC folder in the User "
+                 "folder to use the free DSP ROM, or replace them with good dumps from a real "
+                 "GameCube/Wii.\n\n"
+                 "Would you like to stop now to fix the problem?\n"
+                 "If you select \"No\", audio might be garbled."))
     {
       return false;
     }
@@ -84,7 +84,7 @@ static bool VerifyRoms(const SDSP& dsp)
 
   if (rom_idx >= 1 && rom_idx <= 5)
   {
-    if (AskYesNoFmtT(
+    if (AskYesNo(
             "You are using an old free DSP ROM made by the Dolphin Team.\n"
             "Due to emulation accuracy improvements, this ROM no longer works correctly.\n\n"
             "Delete the dsp_rom.bin and dsp_coef.bin files in the GC folder in the User folder "
@@ -251,7 +251,7 @@ bool SDSP::CheckExceptions()
       else
       {
 #if defined(_DEBUG) || defined(DEBUGFAST)
-        ERROR_LOG_FMT(DSPLLE, "Firing exception {} failed", i);
+        ERROR_LOG(DSPLLE, "Firing exception %d failed", static_cast<int>(i));
 #endif
       }
     }
