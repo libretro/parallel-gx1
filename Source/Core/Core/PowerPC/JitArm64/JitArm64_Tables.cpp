@@ -477,6 +477,4 @@ void JitArm64::DynaRunTable63(UGeckoInstruction inst)
 void JitArm64::CompileInstruction(PPCAnalyst::CodeOp& op)
 {
   (this->*s_dyna_op_table[op.inst.OPCD])(op.inst);
-
-  PPCTables::CountInstructionCompile(op.opinfo, js.compilerPC);
 }

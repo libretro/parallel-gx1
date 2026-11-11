@@ -3,19 +3,13 @@
 
 #include "Core/PowerPC/PPCTables.h"
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdio>
 
-#include <fmt/format.h>
-
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
-#include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
-#include "Common/Projection.h"
 
 namespace PPCTables
 {
@@ -502,8 +496,6 @@ struct Tables
 };
 }  // namespace
 
-static std::array<GekkoOPStats, TOTAL_INSTRUCTION_COUNT> s_all_instructions_stats;
-
 constexpr Tables s_tables = []() consteval {
   Tables tables{};
 
@@ -515,7 +507,6 @@ constexpr Tables s_tables = []() consteval {
     info->flags = inst.flags;
     info->type = inst.type;
     info->num_cycles = inst.num_cycles;
-    info->stats = &s_all_instructions_stats[counter];
     return counter++;
   };
 
@@ -639,16 +630,6 @@ const GekkoOPInfo* GetOpInfo(UGeckoInstruction inst, u32 pc)
   }
 }
 
-// #define OPLOG
-// #define OP_TO_LOG "mtfsb0x"
-
-#ifdef OPLOG
-namespace
-{
-std::vector<u32> rsplocations;
-}
-#endif
-
 const char* GetInstructionName(UGeckoInstruction inst, u32 pc)
 {
   const GekkoOPInfo* info = GetOpInfo(inst, pc);
@@ -659,82 +640,6 @@ bool IsValidInstruction(UGeckoInstruction inst, u32 pc)
 {
   const GekkoOPInfo* info = GetOpInfo(inst, pc);
   return info->type != OpType::Invalid && info->type != OpType::Unknown;
-}
-
-void CountInstruction(UGeckoInstruction inst, u32 pc)
-{
-  const GekkoOPInfo* info = GetOpInfo(inst, pc);
-  info->stats->run_count++;
-}
-
-void CountInstructionCompile(const GekkoOPInfo* info, u32 pc)
-{
-  info->stats->compile_count++;
-  info->stats->last_use = pc;
-
-#ifdef OPLOG
-  if (!strcmp(info->opname, OP_TO_LOG))
-  {
-    rsplocations.push_back(pc);
-  }
-#endif
-}
-
-void PrintInstructionRunCounts()
-{
-  typedef std::pair<const char*, u64> OpInfo;
-  std::array<OpInfo, TOTAL_INSTRUCTION_COUNT> temp;
-  for (size_t i = 0; i < TOTAL_INSTRUCTION_COUNT; i++)
-  {
-    const GekkoOPInfo& info = s_tables.all_instructions[i];
-    temp[i] = std::make_pair(info.opname, info.stats->run_count);
-  }
-  std::ranges::sort(temp, std::ranges::greater{}, Common::Projection::Second{});
-
-  for (auto& inst : temp)
-  {
-    if (inst.second == 0)
-      break;
-
-    INFO_LOG_FMT(POWERPC, "{} : {}", inst.first, inst.second);
-  }
-}
-
-void LogCompiledInstructions()
-{
-  static unsigned int time = 0;
-
-  File::IOFile f(fmt::format("{}inst_log{}.txt", File::GetUserPath(D_LOGS_IDX), time), "w");
-  for (size_t i = 0; i < TOTAL_INSTRUCTION_COUNT; i++)
-  {
-    const GekkoOPInfo& info = s_tables.all_instructions[i];
-    if (info.stats->compile_count > 0)
-    {
-      f.WriteString(fmt::format("{0}\t{1}\t{2}\t{3:08x}\n", info.opname, info.stats->compile_count,
-                                info.stats->run_count, info.stats->last_use));
-    }
-  }
-
-  f.Open(fmt::format("{}inst_not{}.txt", File::GetUserPath(D_LOGS_IDX), time), "w");
-  for (size_t i = 0; i < TOTAL_INSTRUCTION_COUNT; i++)
-  {
-    const GekkoOPInfo& info = s_tables.all_instructions[i];
-    if (info.stats->compile_count == 0)
-    {
-      f.WriteString(fmt::format("{0}\t{1}\t{2}\n", info.opname, info.stats->compile_count,
-                                info.stats->run_count));
-    }
-  }
-
-#ifdef OPLOG
-  f.Open(fmt::format("{}" OP_TO_LOG "_at{}.txt", File::GetUserPath(D_LOGS_IDX), time), "w");
-  for (auto& rsplocation : rsplocations)
-  {
-    f.WriteString(fmt::format(OP_TO_LOG ": {0:08x}\n", rsplocation));
-  }
-#endif
-
-  ++time;
 }
 
 }  // namespace PPCTables

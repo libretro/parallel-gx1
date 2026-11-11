@@ -94,21 +94,12 @@ enum class OpType
   Unknown,
 };
 
-struct GekkoOPStats
-{
-  u64 run_count;
-  u32 compile_count;
-  u32 last_use;
-};
-
 struct GekkoOPInfo
 {
   const char* opname;
   OpType type;
   u32 num_cycles;
   u64 flags;
-  // Mutable
-  GekkoOPStats* stats;
 };
 
 namespace PPCTables
@@ -117,9 +108,5 @@ const GekkoOPInfo* GetOpInfo(UGeckoInstruction inst, u32 pc);
 
 bool IsValidInstruction(UGeckoInstruction inst, u32 pc);
 
-void CountInstruction(UGeckoInstruction inst, u32 pc);
-void CountInstructionCompile(const GekkoOPInfo* info, u32 pc);
-void PrintInstructionRunCounts();
-void LogCompiledInstructions();
 const char* GetInstructionName(UGeckoInstruction inst, u32 pc);
 }  // namespace PPCTables
