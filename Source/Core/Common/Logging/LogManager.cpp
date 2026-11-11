@@ -4,11 +4,12 @@
 #include "Common/Logging/LogManager.h"
 
 #include <chrono>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
 
-#include <fmt/chrono.h>
 #include <fmt/format.h>
 
 #ifdef _WIN32
@@ -107,6 +108,19 @@ void GenericLogFmtImpl(LogLevel level, LogType type, const char* file, int line,
 
   const auto message = fmt::vformat(format, args);
   instance->Log(level, type, file, line, message.c_str());
+}
+
+void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format, ...)
+{
+  char message[1024];
+  va_list ap;
+  auto* instance = LogManager::GetInstance();
+  if (instance == nullptr || !instance->IsEnabled(type, level))
+    return;
+  va_start(ap, format);
+  vsnprintf(message, sizeof(message), format, ap);
+  va_end(ap);
+  instance->Log(level, type, file, line, message);
 }
 
 static size_t DeterminePathCutOffPoint()
@@ -242,26 +256,23 @@ void LogManager::Log(LogLevel level, LogType type, const char* file, int line, c
   LogWithFullPath(level, type, file + m_path_cutoff_point, line, message);
 }
 
-std::string LogManager::GetTimestamp()
-{
-  // We want milliseconds *and not hours*, so can't directly use STL formatters
-  const auto now = std::chrono::system_clock::now();
-  const auto now_s = std::chrono::floor<std::chrono::seconds>(now);
-  const auto now_ms = std::chrono::floor<std::chrono::milliseconds>(now);
-  return fmt::format("{:%M:%S}:{:03}", now_s, (now_ms - now_s).count());
-}
-
 void LogManager::LogWithFullPath(LogLevel level, LogType type, const char* file, int line,
                                  const char* message)
 {
-  const std::string msg =
-      fmt::format("{} {}:{} {}[{}]: {}\n", GetTimestamp(), file, line,
-                  LOG_LEVEL_TO_CHAR[static_cast<int>(level)], GetShortName(type), message);
+  /* minutes, seconds and milliseconds of the hour, UTC */
+  const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
+  char msg[1280];
+  snprintf(msg, sizeof(msg), "%02d:%02d:%03d %s:%d %c[%s]: %s\n",
+           static_cast<int>((ms / 60000) % 60), static_cast<int>((ms / 1000) % 60),
+           static_cast<int>(ms % 1000), file, line, LOG_LEVEL_TO_CHAR[static_cast<int>(level)],
+           GetShortName(type), message);
 
   for (const auto listener_id : m_listener_ids)
   {
     if (m_listeners[listener_id])
-      m_listeners[listener_id]->Log(level, msg.c_str());
+      m_listeners[listener_id]->Log(level, msg);
   }
 }
 

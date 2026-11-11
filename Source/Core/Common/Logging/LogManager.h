@@ -87,7 +87,6 @@ private:
   LogManager(LogManager&&) = delete;
   LogManager& operator=(LogManager&&) = delete;
 
-  static std::string GetTimestamp();
   void SetEffectiveLogLevel();
 
   retro_atomic_int_t m_effective_level{}; /* a LogLevel */

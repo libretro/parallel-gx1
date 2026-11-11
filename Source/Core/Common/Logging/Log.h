@@ -95,6 +95,18 @@ static const char LOG_LEVEL_TO_CHAR[7] = "-NEWID";
 void GenericLogFmtImpl(LogLevel level, LogType type, const char* file, int line,
                        fmt::string_view format, const fmt::format_args& args);
 
+/* A message in printf's terms, formatted into a buffer on the stack (a
+ * longer one is cut), only when its type and level are enabled. */
+#if defined(__MINGW32__)
+#define LOG_PRINTF_ATTR __attribute__((format(__MINGW_PRINTF_FORMAT, 5, 6)))
+#elif defined(__GNUC__)
+#define LOG_PRINTF_ATTR __attribute__((format(printf, 5, 6)))
+#else
+#define LOG_PRINTF_ATTR
+#endif
+void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format,
+                ...) LOG_PRINTF_ATTR;
+
 template <std::size_t NumFields, typename S, typename... Args>
 void GenericLogFmt(LogLevel level, LogType type, const char* file, int line, const S& format,
                    const Args&... args)
@@ -112,6 +124,26 @@ void GenericLogFmt(LogLevel level, LogType type, const char* file, int line, con
   GenericLogFmtImpl(level, type, file, line, format_str, fmt::make_format_args(args...));
 }
 }  // namespace Common::Log
+
+// printf capable API
+
+#define GENERIC_LOG(t, v, ...)                                                                     \
+  do                                                                                               \
+  {                                                                                                \
+    if (v <= Common::Log::MAX_EFFECTIVE_LOGLEVEL)                                                  \
+      Common::Log::GenericLog(v, t, __FILE__, __LINE__, __VA_ARGS__);                              \
+  } while (0)
+
+#define ERROR_LOG(t, ...)                                                                          \
+  GENERIC_LOG(Common::Log::LogType::t, Common::Log::LogLevel::LERROR, __VA_ARGS__)
+#define WARN_LOG(t, ...)                                                                           \
+  GENERIC_LOG(Common::Log::LogType::t, Common::Log::LogLevel::LWARNING, __VA_ARGS__)
+#define NOTICE_LOG(t, ...)                                                                         \
+  GENERIC_LOG(Common::Log::LogType::t, Common::Log::LogLevel::LNOTICE, __VA_ARGS__)
+#define INFO_LOG(t, ...)                                                                           \
+  GENERIC_LOG(Common::Log::LogType::t, Common::Log::LogLevel::LINFO, __VA_ARGS__)
+#define DEBUG_LOG(t, ...)                                                                          \
+  GENERIC_LOG(Common::Log::LogType::t, Common::Log::LogLevel::LDEBUG, __VA_ARGS__)
 
 // fmtlib capable API
 
