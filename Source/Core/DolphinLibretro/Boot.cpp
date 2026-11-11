@@ -210,6 +210,20 @@ static std::string PathLast(const std::string& path)
                      end - (slash == std::string::npos ? 0 : slash + 1) + 1);
 }
 
+/* A load that fails returns to a frontend that calls retro_deinit next,
+ * never retro_unload_game: what the load brought up comes down here, the
+ * Wii Remote scanner's threads above all, which would otherwise outlive
+ * the core's controllers. */
+static void UndoFailedLoad(bool input_up)
+{
+  if (input_up)
+    Libretro::Input::Shutdown();
+  Libretro::Log::Shutdown();
+  UICommon::ShutdownControllers();
+  UICommon::Shutdown();
+  Libretro::ResetDiskControlState();
+}
+
 bool retro_load_game(const struct retro_game_info* game)
 {
   Libretro::ResetDiskControlState();
@@ -697,6 +711,7 @@ bool retro_load_game(const struct retro_game_info* game)
       Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_NONE)
   {
     ERROR_LOG_FMT(VIDEO, "No hardware render context was granted; refusing to load");
+    UndoFailedLoad(false);
     return false;
   }
   /* GPU texture decoding, auto: with Vulkan, which decodes ahead of the frame's draws */
@@ -739,6 +754,7 @@ bool retro_load_game(const struct retro_game_info* game)
     if (normalized_game_paths.empty())
     {
       ERROR_LOG_FMT(BOOT, "Could not boot {}. M3U contains no paths", game->path);
+      UndoFailedLoad(false);
       return false;
     }
   }
@@ -794,6 +810,7 @@ bool retro_load_game(const struct retro_game_info* game)
   if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot_params)))
   {
     ERROR_LOG_FMT(BOOT, "Could not boot {}", game->path);
+    UndoFailedLoad(true);
     return false;
   }
 
