@@ -17,8 +17,8 @@ SRC_DIR := $(CORE_DIR)/Source/Core
 # Generated files
 # ----------------------------------------------------------------------------
 # Plain substitutions of the upstream templates. The per-platform configure
-# results (curl_config.h, the libusb config.h, mGBA's flags.h) are checked in
-# under Externals/<library>/makefile instead.
+# results (the libusb config.h, mGBA's flags.h) are checked in under
+# Externals/<library>/makefile instead.
 SCMREV_H        := $(GEN_DIR)/Source/Core/Common/scmrev.h
 MGBA_VERSION_C  := $(GEN_DIR)/Externals/mGBA/mgba/version.c
 
@@ -123,6 +123,7 @@ LIBRETRO_COMMON_SOURCES_C += \
 	$(CORE_DIR)/Externals/libretro-common/lists/string_list.c \
 	$(CORE_DIR)/Externals/libretro-common/memmap/memmap.c \
 	$(CORE_DIR)/Externals/libretro-common/net/net_compat.c \
+	$(CORE_DIR)/Externals/libretro-common/net/net_http.c \
 	$(CORE_DIR)/Externals/libretro-common/net/net_socket.c \
 	$(CORE_DIR)/Externals/libretro-common/net/net_socket_ssl_retro.c \
 	$(CORE_DIR)/Externals/libretro-common/queues/retro_spsc.c \
@@ -184,294 +185,6 @@ ifeq ($(OS_WIN),1)
    SFML_SOURCES_CXX += \
 	$(CORE_DIR)/Externals/SFML/SFML/src/SFML/Network/Win32/SocketImpl.cpp
 endif
-
-# CURL
-CURL_SOURCES_C :=
-CURL_SOURCES_CXX :=
-CURL_SOURCES_ASM :=
-CURL_SOURCES_OBJCXX :=
-CURL_SOURCES_C += \
-	$(CORE_DIR)/Externals/curl/curl/lib/altsvc.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/amigaos.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/asyn-ares.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/asyn-base.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/asyn-thrdd.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/bufq.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/bufref.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cf-h1-proxy.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cf-h2-proxy.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cf-haproxy.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cf-https-connect.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cf-socket.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cfilters.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/conncache.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/connect.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/content_encoding.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cookie.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cshutdn.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_addrinfo.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_des.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_endian.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_fnmatch.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_get_line.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_gethostname.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_gssapi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_memrchr.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_ntlm_core.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_range.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_rtmp.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_sasl.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_sha512_256.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_sspi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_threads.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curl_trc.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cw-out.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/cw-pause.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/dict.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/doh.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/dynhds.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/easy.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/easygetopt.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/easyoptions.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/escape.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/fake_addrinfo.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/file.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/fileinfo.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/fopen.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/formdata.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/ftp.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/ftplistparser.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/getenv.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/getinfo.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/gopher.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/hash.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/headers.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/hmac.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/hostip.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/hostip4.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/hostip6.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/hsts.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http1.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http2.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http_aws_sigv4.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http_chunks.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http_digest.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http_negotiate.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http_ntlm.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/http_proxy.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/httpsrr.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/idn.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/if2ip.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/imap.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/krb5.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/ldap.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/llist.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/macos.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/md4.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/md5.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/memdebug.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/mime.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/mprintf.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/mqtt.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/multi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/multi_ev.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/netrc.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/noproxy.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/openldap.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/parsedate.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/pingpong.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/pop3.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/progress.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/psl.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/rand.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/rename.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/request.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/rtsp.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/select.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/sendf.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/setopt.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/sha256.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/share.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/slist.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/smb.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/smtp.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/socketpair.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/socks.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/socks_gssapi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/socks_sspi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/speedcheck.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/splay.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/strcase.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/strdup.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/strequal.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/strerror.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/system_win32.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/telnet.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/tftp.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/transfer.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/uint-bset.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/uint-hash.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/uint-spbset.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/uint-table.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/url.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/urlapi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/version.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/ws.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/cleartext.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/cram.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/digest.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/digest_sspi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/gsasl.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/krb5_gssapi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/krb5_sspi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/ntlm.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/ntlm_sspi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/oauth2.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/spnego_gssapi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/spnego_sspi.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vauth/vauth.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/cipher_suite.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/gtls.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/hostcheck.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/keylog.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/mbedtls.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/mbedtls_threadlock.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/openssl.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/rustls.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/schannel.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/schannel_verify.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/vtls.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/vtls_scache.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/vtls_spack.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/wolfssl.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vtls/x509asn1.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vquic/curl_msh3.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vquic/curl_ngtcp2.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vquic/curl_osslq.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vquic/curl_quiche.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vquic/vquic.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vquic/vquic-tls.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vssh/libssh.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vssh/libssh2.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vssh/curl_path.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/vssh/wolfssh.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/base64.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/dynbuf.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/inet_ntop.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/inet_pton.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/multibyte.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/nonblock.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/strparse.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/timediff.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/timeval.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/version_win32.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/wait.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/warnless.c \
-	$(CORE_DIR)/Externals/curl/curl/lib/curlx/winapi.c
-
-# MBEDTLS
-MBEDTLS_SOURCES_C :=
-MBEDTLS_SOURCES_CXX :=
-MBEDTLS_SOURCES_ASM :=
-MBEDTLS_SOURCES_OBJCXX :=
-MBEDTLS_SOURCES_C += \
-	$(CORE_DIR)/Externals/mbedtls/library/aes.c \
-	$(CORE_DIR)/Externals/mbedtls/library/aesni.c \
-	$(CORE_DIR)/Externals/mbedtls/library/arc4.c \
-	$(CORE_DIR)/Externals/mbedtls/library/aria.c \
-	$(CORE_DIR)/Externals/mbedtls/library/asn1parse.c \
-	$(CORE_DIR)/Externals/mbedtls/library/asn1write.c \
-	$(CORE_DIR)/Externals/mbedtls/library/base64.c \
-	$(CORE_DIR)/Externals/mbedtls/library/bignum.c \
-	$(CORE_DIR)/Externals/mbedtls/library/blowfish.c \
-	$(CORE_DIR)/Externals/mbedtls/library/camellia.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ccm.c \
-	$(CORE_DIR)/Externals/mbedtls/library/chacha20.c \
-	$(CORE_DIR)/Externals/mbedtls/library/chachapoly.c \
-	$(CORE_DIR)/Externals/mbedtls/library/cipher.c \
-	$(CORE_DIR)/Externals/mbedtls/library/cipher_wrap.c \
-	$(CORE_DIR)/Externals/mbedtls/library/constant_time.c \
-	$(CORE_DIR)/Externals/mbedtls/library/cmac.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ctr_drbg.c \
-	$(CORE_DIR)/Externals/mbedtls/library/des.c \
-	$(CORE_DIR)/Externals/mbedtls/library/dhm.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ecdh.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ecdsa.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ecjpake.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ecp.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ecp_curves.c \
-	$(CORE_DIR)/Externals/mbedtls/library/entropy.c \
-	$(CORE_DIR)/Externals/mbedtls/library/entropy_poll.c \
-	$(CORE_DIR)/Externals/mbedtls/library/error.c \
-	$(CORE_DIR)/Externals/mbedtls/library/gcm.c \
-	$(CORE_DIR)/Externals/mbedtls/library/havege.c \
-	$(CORE_DIR)/Externals/mbedtls/library/hkdf.c \
-	$(CORE_DIR)/Externals/mbedtls/library/hmac_drbg.c \
-	$(CORE_DIR)/Externals/mbedtls/library/md.c \
-	$(CORE_DIR)/Externals/mbedtls/library/md2.c \
-	$(CORE_DIR)/Externals/mbedtls/library/md4.c \
-	$(CORE_DIR)/Externals/mbedtls/library/md5.c \
-	$(CORE_DIR)/Externals/mbedtls/library/memory_buffer_alloc.c \
-	$(CORE_DIR)/Externals/mbedtls/library/mps_reader.c \
-	$(CORE_DIR)/Externals/mbedtls/library/mps_trace.c \
-	$(CORE_DIR)/Externals/mbedtls/library/nist_kw.c \
-	$(CORE_DIR)/Externals/mbedtls/library/oid.c \
-	$(CORE_DIR)/Externals/mbedtls/library/padlock.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pem.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pk.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pk_wrap.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pkcs12.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pkcs5.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pkparse.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pkwrite.c \
-	$(CORE_DIR)/Externals/mbedtls/library/platform.c \
-	$(CORE_DIR)/Externals/mbedtls/library/platform_util.c \
-	$(CORE_DIR)/Externals/mbedtls/library/poly1305.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_aead.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_cipher.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_client.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_driver_wrappers.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_ecp.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_hash.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_mac.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_rsa.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_se.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_slot_management.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_crypto_storage.c \
-	$(CORE_DIR)/Externals/mbedtls/library/psa_its_file.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ripemd160.c \
-	$(CORE_DIR)/Externals/mbedtls/library/rsa.c \
-	$(CORE_DIR)/Externals/mbedtls/library/rsa_internal.c \
-	$(CORE_DIR)/Externals/mbedtls/library/sha1.c \
-	$(CORE_DIR)/Externals/mbedtls/library/sha256.c \
-	$(CORE_DIR)/Externals/mbedtls/library/sha512.c \
-	$(CORE_DIR)/Externals/mbedtls/library/threading.c \
-	$(CORE_DIR)/Externals/mbedtls/library/timing.c \
-	$(CORE_DIR)/Externals/mbedtls/library/version.c \
-	$(CORE_DIR)/Externals/mbedtls/library/version_features.c \
-	$(CORE_DIR)/Externals/mbedtls/library/xtea.c \
-	$(CORE_DIR)/Externals/mbedtls/library/debug.c \
-	$(CORE_DIR)/Externals/mbedtls/library/net_sockets.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_cache.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_ciphersuites.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_cli.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_cookie.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_msg.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_srv.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_ticket.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_tls.c \
-	$(CORE_DIR)/Externals/mbedtls/library/ssl_tls13_keys.c \
-	$(CORE_DIR)/Externals/mbedtls/library/certs.c \
-	$(CORE_DIR)/Externals/mbedtls/library/pkcs11.c \
-	$(CORE_DIR)/Externals/mbedtls/library/x509.c \
-	$(CORE_DIR)/Externals/mbedtls/library/x509_create.c \
-	$(CORE_DIR)/Externals/mbedtls/library/x509_crl.c \
-	$(CORE_DIR)/Externals/mbedtls/library/x509_crt.c \
-	$(CORE_DIR)/Externals/mbedtls/library/x509_csr.c \
-	$(CORE_DIR)/Externals/mbedtls/library/x509write_crt.c \
-	$(CORE_DIR)/Externals/mbedtls/library/x509write_csr.c
 
 # FMT
 FMT_SOURCES_C :=
@@ -724,6 +437,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/FrameClock.c \
 	$(CORE_DIR)/Source/Core/Common/ParallelFor.c \
 	$(CORE_DIR)/Source/Core/Common/Hash.c \
+	$(CORE_DIR)/Source/Core/Common/HttpService.c \
 	$(CORE_DIR)/Source/Core/Common/ObjectPool.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.c \
@@ -1472,19 +1186,6 @@ SFML_FLAGS    := -w -DSFML_STATIC -I$(EXT_DIR)/SFML/SFML/include -I$(EXT_DIR)/SF
 SFML_CXXFLAGS := -std=gnu++20
 
 
-CURL_FLAGS := -w -DBUILDING_LIBCURL -DCURL_HIDDEN_SYMBOLS -DHAVE_CONFIG_H \
-	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/curl/makefile
-ifeq ($(OS_WIN),1)
-   CURL_FLAGS += -DCURL_STATICLIB
-else
-   CURL_FLAGS += -I$(EXT_DIR)/mbedtls/include
-endif
-ifeq ($(OS_UNIX),1)
-   CURL_FLAGS += -D_GNU_SOURCE
-endif
-
-MBEDTLS_FLAGS := -w -O2 -I$(EXT_DIR)/mbedtls/include -I$(EXT_DIR)/mbedtls/library
-
 FMT_FLAGS := -w -I$(EXT_DIR)/fmt/fmt/include
 
 HIDAPI_FLAGS := -w -I$(EXT_DIR)/hidapi/hidapi-src/hidapi
@@ -1536,18 +1237,16 @@ CPPIPC_CXXFLAGS := -std=gnu++17
 DOLPHIN_FLAGS := \
 	-DENABLE_DIRECTORIES -DHAVE_THREAD_STORAGE -DENABLE_VFS -DHAS_LIBMGBA \
 	-DSFML_STATIC \
-	-DCURL_STATICLIB \
 	-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS \
 	-I$(GEN_DIR)/Source/Core \
 	-I$(SRC_DIR)/DolphinLibretro/Common -I$(SRC_DIR)/DolphinLibretro/VideoContexts \
 	-I$(EXT_DIR)/libretro-common/include \
 	-I$(EXT_DIR)/Vulkan-Headers/include \
 	-I$(EXT_DIR)/fmt/fmt/include \
-	-I$(EXT_DIR)/mbedtls/include \
 	-I$(EXT_DIR)/SFML/SFML/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
-	-I$(EXT_DIR)/curl/curl/include -I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
+	-I$(EXT_DIR)/FatFs -I$(EXT_DIR)/LZO \
 	-I$(EXT_DIR)/lz4/lz4/lib \
 	-I$(EXT_DIR)/cpp-ipc/cpp-ipc/include \
 	-isystem $(EXT_DIR)/libusb/libusb/libusb -isystem $(EXT_DIR)/watcher/watcher/include \
@@ -1594,7 +1293,7 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/file/archive_file_zstd.c) := $(L
 FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/formats/rvz/rvz.c) := -DHAVE_RZSTD
 
 # Libraries in link order; the optional ones only where they are built.
-LIB_GROUPS := DOLPHIN LIBRETRO_COMMON CURL MBEDTLS LZ4 LZO \
+LIB_GROUPS := DOLPHIN LIBRETRO_COMMON LZ4 LZO \
 	MGBA SFML FMT FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB

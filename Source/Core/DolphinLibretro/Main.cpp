@@ -10,6 +10,7 @@
 #include "Common/ChunkFile.h"
 #include "Common/Event.h"
 #include "Common/FrameClock.h"
+#include "Common/HttpService.h"
 #include "Common/IniFile.h"
 #include "Common/FileUtil.h"
 #include "Common/GL/GLContext.h"
@@ -198,12 +199,15 @@ void retro_init(void)
 
   Libretro::environ_cb(RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION,
     &Libretro::msg_interface_version);
+
+  http_service_init();
 }
 
 void retro_deinit(void)
 {
   Libretro::g_emuthread_launched = false;
   parallel_for_deinit();
+  http_service_deinit();
 #ifdef PERF_TEST
   if (perf_cb.perf_log)
     perf_cb.perf_log();

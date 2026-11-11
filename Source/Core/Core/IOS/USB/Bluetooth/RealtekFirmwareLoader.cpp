@@ -475,7 +475,7 @@ static void DownloadFirmwareFilesFromInternet(const std::string& fw_filename,
   constexpr auto base_url = "https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main/rtl_bt/";
 
   Common::HttpRequest request;
-  request.FollowRedirects(1);
+  request.FollowRedirects();
 
   const auto firmware_load_path = GetFirmwareLoadPath();
   File::CreateFullPath(firmware_load_path);
