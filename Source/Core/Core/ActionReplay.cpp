@@ -22,17 +22,19 @@
 
 #include <algorithm>
 #include <bit>
+#include <cinttypes>
+#include <cstdarg>
+#include <cstdio>
 #include <iterator>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "Common/CommonTypes.h"
 #include "Common/IniFile.h"
 #include "Common/Logging/Log.h"
+#include "Common/Logging/LogManager.h"
 #include "Common/MsgHandler.h"
 
 #include "Core/ARDecrypt.h"
@@ -184,7 +186,7 @@ std::vector<ARCode> LoadCodes(const Common::IniFile& global_ini, const Common::I
         else if (std::holds_alternative<EncryptedLine>(parse_result))
           encrypted_lines.emplace_back(std::get<EncryptedLine>(parse_result));
         else
-          PanicAlertFmtT("Action Replay Error: invalid AR code line: {0}", line);
+          PanicAlert("Action Replay Error: invalid AR code line: %s", line.c_str());
       }
     }
 
@@ -239,7 +241,9 @@ std::variant<std::monostate, AREntry, EncryptedLine> DeserializeLine(const std::
   return std::monostate{};
 }
 
-static void VLogInfo(std::string_view format, fmt::format_args args)
+// An ACTIONREPLAY info message, formatted on the stack only when it is logged.
+static void LogInfo(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
+static void LogInfo(const char* format, ...)
 {
   if (s_disable_logging)
     return;
@@ -247,13 +251,16 @@ static void VLogInfo(std::string_view format, fmt::format_args args)
   if constexpr (Common::Log::MAX_EFFECTIVE_LOGLEVEL < Common::Log::LogLevel::LINFO)
     return;
 
-  INFO_LOG_FMT(ACTIONREPLAY, "{}", fmt::vformat(format, args));
-}
+  const auto* const log = Common::Log::LogManager::GetInstance();
+  if (!log || !log->IsEnabled(Common::Log::LogType::ACTIONREPLAY, Common::Log::LogLevel::LINFO))
+    return;
 
-template <typename... Args>
-static void LogInfo(std::string_view format, const Args&... args)
-{
-  VLogInfo(format, fmt::make_format_args(args...));
+  char message[256];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(message, sizeof(message), format, args);
+  va_end(args);
+  INFO_LOG(ACTIONREPLAY, "%s", message);
 }
 
 // ----------------------
@@ -263,8 +270,8 @@ static bool Subtype_RamWriteAndFill(const Core::CPUThreadGuard& guard, const ARA
 {
   const u32 new_addr = addr.GCAddress();
 
-  LogInfo("Hardware Address: {:08x}", new_addr);
-  LogInfo("Size: {:08x}", addr.size);
+  LogInfo("Hardware Address: %08x", new_addr);
+  LogInfo("Size: %08x", addr.size);
 
   switch (addr.size)
   {
@@ -276,7 +283,7 @@ static bool Subtype_RamWriteAndFill(const Core::CPUThreadGuard& guard, const ARA
     for (u32 i = 0; i <= repeat; ++i)
     {
       ApplyMemoryPatch<u8>(guard, static_cast<u8>(data), new_addr + i);
-      LogInfo("Wrote {:08x} to address {:08x}", data & 0xFF, new_addr + i);
+      LogInfo("Wrote %08x to address %08x", data & 0xFF, new_addr + i);
     }
     LogInfo("--------");
     break;
@@ -290,7 +297,7 @@ static bool Subtype_RamWriteAndFill(const Core::CPUThreadGuard& guard, const ARA
     for (u32 i = 0; i <= repeat; ++i)
     {
       ApplyMemoryPatch<u16>(guard, static_cast<u16>(data), new_addr + i * 2);
-      LogInfo("Wrote {:08x} to address {:08x}", data & 0xFFFF, new_addr + i * 2);
+      LogInfo("Wrote %08x to address %08x", data & 0xFFFF, new_addr + i * 2);
     }
     LogInfo("--------");
     break;
@@ -301,15 +308,15 @@ static bool Subtype_RamWriteAndFill(const Core::CPUThreadGuard& guard, const ARA
     LogInfo("32-bit Write");
     LogInfo("--------");
     ApplyMemoryPatch<u32>(guard, data, new_addr);
-    LogInfo("Wrote {:08x} to address {:08x}", data, new_addr);
+    LogInfo("Wrote %08x to address %08x", data, new_addr);
     LogInfo("--------");
     break;
 
   default:
     LogInfo("Bad Size");
-    PanicAlertFmtT("Action Replay Error: Invalid size "
-                   "({0:08x} : address = {1:08x}) in Ram Write And Fill ({2})",
-                   addr.size, addr.gcaddr, s_current_code->name);
+    PanicAlert("Action Replay Error: Invalid size "
+               "(%08x : address = %08x) in Ram Write And Fill (%s)",
+               addr.size, addr.gcaddr, s_current_code->name.c_str());
     return false;
   }
 
@@ -322,8 +329,8 @@ static bool Subtype_WriteToPointer(const Core::CPUThreadGuard& guard, const ARAd
   const u32 new_addr = addr.GCAddress();
   const u32 ptr = PowerPC::MMU::HostRead<u32>(guard, new_addr);
 
-  LogInfo("Hardware Address: {:08x}", new_addr);
-  LogInfo("Size: {:08x}", addr.size);
+  LogInfo("Hardware Address: %08x", new_addr);
+  LogInfo("Size: %08x", addr.size);
 
   switch (addr.size)
   {
@@ -333,11 +340,11 @@ static bool Subtype_WriteToPointer(const Core::CPUThreadGuard& guard, const ARAd
     LogInfo("--------");
     const u8 thebyte = static_cast<u8>(data);
     const u32 offset = data >> 8;
-    LogInfo("Pointer: {:08x}", ptr);
-    LogInfo("Byte: {:08x}", thebyte);
-    LogInfo("Offset: {:08x}", offset);
+    LogInfo("Pointer: %08x", ptr);
+    LogInfo("Byte: %08x", (unsigned)thebyte);
+    LogInfo("Offset: %08x", offset);
     ApplyMemoryPatch<u8>(guard, thebyte, ptr + offset);
-    LogInfo("Wrote {:08x} to address {:08x}", thebyte, ptr + offset);
+    LogInfo("Wrote %08x to address %08x", (unsigned)thebyte, ptr + offset);
     LogInfo("--------");
     break;
   }
@@ -348,11 +355,11 @@ static bool Subtype_WriteToPointer(const Core::CPUThreadGuard& guard, const ARAd
     LogInfo("--------");
     const u16 theshort = static_cast<u16>(data);
     const u32 offset = (data >> 16) << 1;
-    LogInfo("Pointer: {:08x}", ptr);
-    LogInfo("Byte: {:08x}", theshort);
-    LogInfo("Offset: {:08x}", offset);
+    LogInfo("Pointer: %08x", ptr);
+    LogInfo("Byte: %08x", (unsigned)theshort);
+    LogInfo("Offset: %08x", offset);
     ApplyMemoryPatch<u16>(guard, theshort, ptr + offset);
-    LogInfo("Wrote {:08x} to address {:08x}", theshort, ptr + offset);
+    LogInfo("Wrote %08x to address %08x", (unsigned)theshort, ptr + offset);
     LogInfo("--------");
     break;
   }
@@ -362,15 +369,15 @@ static bool Subtype_WriteToPointer(const Core::CPUThreadGuard& guard, const ARAd
     LogInfo("Write 32-bit to pointer");
     LogInfo("--------");
     ApplyMemoryPatch<u32>(guard, data, ptr);
-    LogInfo("Wrote {:08x} to address {:08x}", data, ptr);
+    LogInfo("Wrote %08x to address %08x", data, ptr);
     LogInfo("--------");
     break;
 
   default:
     LogInfo("Bad Size");
-    PanicAlertFmtT("Action Replay Error: Invalid size "
-                   "({0:08x} : address = {1:08x}) in Write To Pointer ({2})",
-                   addr.size, addr.gcaddr, s_current_code->name);
+    PanicAlert("Action Replay Error: Invalid size "
+               "(%08x : address = %08x) in Write To Pointer (%s)",
+               addr.size, addr.gcaddr, s_current_code->name.c_str());
     return false;
   }
   return true;
@@ -381,8 +388,8 @@ static bool Subtype_AddCode(const Core::CPUThreadGuard& guard, const ARAddr& add
   // Used to increment/decrement a value in memory
   const u32 new_addr = addr.GCAddress();
 
-  LogInfo("Hardware Address: {:08x}", new_addr);
-  LogInfo("Size: {:08x}", addr.size);
+  LogInfo("Hardware Address: %08x", new_addr);
+  LogInfo("Size: %08x", addr.size);
 
   switch (addr.size)
   {
@@ -390,7 +397,7 @@ static bool Subtype_AddCode(const Core::CPUThreadGuard& guard, const ARAddr& add
     LogInfo("8-bit Add");
     LogInfo("--------");
     ApplyMemoryPatch<u8>(guard, PowerPC::MMU::HostRead<u8>(guard, new_addr) + data, new_addr);
-    LogInfo("Wrote {:02x} to address {:08x}", PowerPC::MMU::HostRead<u8>(guard, new_addr),
+    LogInfo("Wrote %02x to address %08x", (unsigned)(PowerPC::MMU::HostRead<u8>(guard, new_addr)),
             new_addr);
     LogInfo("--------");
     break;
@@ -399,7 +406,7 @@ static bool Subtype_AddCode(const Core::CPUThreadGuard& guard, const ARAddr& add
     LogInfo("16-bit Add");
     LogInfo("--------");
     ApplyMemoryPatch<u16>(guard, PowerPC::MMU::HostRead<u16>(guard, new_addr) + data, new_addr);
-    LogInfo("Wrote {:04x} to address {:08x}", PowerPC::MMU::HostRead<u16>(guard, new_addr),
+    LogInfo("Wrote %04x to address %08x", (unsigned)(PowerPC::MMU::HostRead<u16>(guard, new_addr)),
             new_addr);
     LogInfo("--------");
     break;
@@ -408,8 +415,7 @@ static bool Subtype_AddCode(const Core::CPUThreadGuard& guard, const ARAddr& add
     LogInfo("32-bit Add");
     LogInfo("--------");
     ApplyMemoryPatch<u32>(guard, PowerPC::MMU::HostRead<u32>(guard, new_addr) + data, new_addr);
-    LogInfo("Wrote {:08x} to address {:08x}", PowerPC::MMU::HostRead<u32>(guard, new_addr),
-            new_addr);
+    LogInfo("Wrote %08x to address %08x", PowerPC::MMU::HostRead<u32>(guard, new_addr), new_addr);
     LogInfo("--------");
     break;
 
@@ -424,18 +430,18 @@ static bool Subtype_AddCode(const Core::CPUThreadGuard& guard, const ARAddr& add
     const float fread = read_float + static_cast<float>(data);
     const u32 newval = std::bit_cast<u32>(fread);
     ApplyMemoryPatch<u32>(guard, newval, new_addr);
-    LogInfo("Old Value {:08x}", read);
-    LogInfo("Increment {:08x}", data);
-    LogInfo("New value {:08x}", newval);
+    LogInfo("Old Value %08x", read);
+    LogInfo("Increment %08x", data);
+    LogInfo("New value %08x", newval);
     LogInfo("--------");
     break;
   }
 
   default:
     LogInfo("Bad Size");
-    PanicAlertFmtT("Action Replay Error: Invalid size "
-                   "({0:08x} : address = {1:08x}) in Add Code ({2})",
-                   addr.size, addr.gcaddr, s_current_code->name);
+    PanicAlert("Action Replay Error: Invalid size "
+               "(%08x : address = %08x) in Add Code (%s)",
+               addr.size, addr.gcaddr, s_current_code->name.c_str());
     return false;
   }
   return true;
@@ -448,9 +454,9 @@ static bool Subtype_MasterCodeAndWriteToCCXXXXXX(const ARAddr& addr, const u32 d
   // u8  mcode_type = (data & 0xFF0000) >> 16;
   // u8  mcode_count = (data & 0xFF00) >> 8;
   // u8  mcode_number = data & 0xFF;
-  PanicAlertFmtT("Action Replay Error: Master Code and Write To CCXXXXXX not implemented ({0})\n"
-                 "Master codes are not needed. Do not use master codes.",
-                 s_current_code->name);
+  PanicAlert("Action Replay Error: Master Code and Write To CCXXXXXX not implemented (%s)\n"
+             "Master codes are not needed. Do not use master codes.",
+             s_current_code->name.c_str());
   return false;
 }
 
@@ -468,11 +474,11 @@ static bool ZeroCode_FillAndSlide(const Core::CPUThreadGuard& guard, const u32 v
   u32 val = addr;
   u32 curr_addr = new_addr;
 
-  LogInfo("Current Hardware Address: {:08x}", new_addr);
-  LogInfo("Size: {:08x}", addr.size);
-  LogInfo("Write Num: {:08x}", write_num);
-  LogInfo("Address Increment: {}", addr_incr);
-  LogInfo("Value Increment: {}", s32{val_incr});
+  LogInfo("Current Hardware Address: %08x", new_addr);
+  LogInfo("Size: %08x", addr.size);
+  LogInfo("Write Num: %08x", (unsigned)write_num);
+  LogInfo("Address Increment: %d", (int)addr_incr);
+  LogInfo("Value Increment: %d", s32{val_incr});
 
   switch (size)
   {
@@ -484,10 +490,10 @@ static bool ZeroCode_FillAndSlide(const Core::CPUThreadGuard& guard, const u32 v
       ApplyMemoryPatch<u8>(guard, static_cast<u8>(val), curr_addr);
       curr_addr += addr_incr;
       val += val_incr;
-      LogInfo("Write {:08x} to address {:08x}", val & 0xFF, curr_addr);
+      LogInfo("Write %08x to address %08x", val & 0xFF, curr_addr);
 
-      LogInfo("Value Update: {:08x}", val);
-      LogInfo("Current Hardware Address Update: {:08x}", curr_addr);
+      LogInfo("Value Update: %08x", val);
+      LogInfo("Current Hardware Address Update: %08x", curr_addr);
     }
     LogInfo("--------");
     break;
@@ -498,11 +504,11 @@ static bool ZeroCode_FillAndSlide(const Core::CPUThreadGuard& guard, const u32 v
     for (int i = 0; i < write_num; ++i)
     {
       ApplyMemoryPatch<u16>(guard, static_cast<u16>(val), curr_addr);
-      LogInfo("Write {:08x} to address {:08x}", val & 0xFFFF, curr_addr);
+      LogInfo("Write %08x to address %08x", val & 0xFFFF, curr_addr);
       curr_addr += addr_incr * 2;
       val += val_incr;
-      LogInfo("Value Update: {:08x}", val);
-      LogInfo("Current Hardware Address Update: {:08x}", curr_addr);
+      LogInfo("Value Update: %08x", val);
+      LogInfo("Current Hardware Address Update: %08x", curr_addr);
     }
     LogInfo("--------");
     break;
@@ -513,20 +519,19 @@ static bool ZeroCode_FillAndSlide(const Core::CPUThreadGuard& guard, const u32 v
     for (int i = 0; i < write_num; ++i)
     {
       ApplyMemoryPatch<u32>(guard, val, curr_addr);
-      LogInfo("Write {:08x} to address {:08x}", val, curr_addr);
+      LogInfo("Write %08x to address %08x", val, curr_addr);
       curr_addr += addr_incr * 4;
       val += val_incr;
-      LogInfo("Value Update: {:08x}", val);
-      LogInfo("Current Hardware Address Update: {:08x}", curr_addr);
+      LogInfo("Value Update: %08x", val);
+      LogInfo("Current Hardware Address Update: %08x", curr_addr);
     }
     LogInfo("--------");
     break;
 
   default:
     LogInfo("Bad Size");
-    PanicAlertFmtT(
-        "Action Replay Error: Invalid size ({0:08x} : address = {1:08x}) in Fill and Slide ({2})",
-        size, new_addr, s_current_code->name);
+    PanicAlert("Action Replay Error: Invalid size (%08x : address = %08x) in Fill and Slide (%s)",
+               (unsigned)size, new_addr, s_current_code->name.c_str());
     return false;
   }
   return true;
@@ -543,9 +548,9 @@ static bool ZeroCode_MemoryCopy(const Core::CPUThreadGuard& guard, const u32 val
 
   const u8 num_bytes = data & 0x7FFF;
 
-  LogInfo("Dest Address: {:08x}", addr_dest);
-  LogInfo("Src Address: {:08x}", addr_src);
-  LogInfo("Size: {:08x}", num_bytes);
+  LogInfo("Dest Address: %08x", addr_dest);
+  LogInfo("Src Address: %08x", addr_src);
+  LogInfo("Size: %08x", (unsigned)num_bytes);
 
   if ((data & 0xFF0000) == 0)
   {
@@ -554,14 +559,14 @@ static bool ZeroCode_MemoryCopy(const Core::CPUThreadGuard& guard, const u32 val
       LogInfo("Memory Copy With Pointers Support");
       LogInfo("--------");
       const u32 ptr_dest = PowerPC::MMU::HostRead<u32>(guard, addr_dest);
-      LogInfo("Resolved Dest Address to: {:08x}", ptr_dest);
+      LogInfo("Resolved Dest Address to: %08x", ptr_dest);
       const u32 ptr_src = PowerPC::MMU::HostRead<u32>(guard, addr_src);
-      LogInfo("Resolved Src Address to: {:08x}", ptr_src);
+      LogInfo("Resolved Src Address to: %08x", ptr_src);
       for (int i = 0; i < num_bytes; ++i)
       {
         ApplyMemoryPatch<u8>(guard, PowerPC::MMU::HostRead<u8>(guard, ptr_src + i), ptr_dest + i);
-        LogInfo("Wrote {:08x} to address {:08x}", PowerPC::MMU::HostRead<u8>(guard, ptr_src + i),
-                ptr_dest + i);
+        LogInfo("Wrote %08x to address %08x",
+                (unsigned)(PowerPC::MMU::HostRead<u8>(guard, ptr_src + i)), ptr_dest + i);
       }
       LogInfo("--------");
     }
@@ -572,8 +577,8 @@ static bool ZeroCode_MemoryCopy(const Core::CPUThreadGuard& guard, const u32 val
       for (int i = 0; i < num_bytes; ++i)
       {
         ApplyMemoryPatch<u8>(guard, PowerPC::MMU::HostRead<u8>(guard, addr_src + i), addr_dest + i);
-        LogInfo("Wrote {:08x} to address {:08x}", PowerPC::MMU::HostRead<u8>(guard, addr_src + i),
-                addr_dest + i);
+        LogInfo("Wrote %08x to address %08x",
+                (unsigned)(PowerPC::MMU::HostRead<u8>(guard, addr_src + i)), addr_dest + i);
       }
       LogInfo("--------");
       return true;
@@ -582,8 +587,8 @@ static bool ZeroCode_MemoryCopy(const Core::CPUThreadGuard& guard, const u32 val
   else
   {
     LogInfo("Bad Value");
-    PanicAlertFmtT("Action Replay Error: Invalid value ({0:08x}) in Memory Copy ({1})",
-                   (data & ~0x7FFF), s_current_code->name);
+    PanicAlert("Action Replay Error: Invalid value (%08x) in Memory Copy (%s)", (data & ~0x7FFF),
+               s_current_code->name.c_str());
     return false;
   }
   return true;
@@ -619,8 +624,8 @@ static bool NormalCode(const Core::CPUThreadGuard& guard, const ARAddr& addr, co
 
   default:
     LogInfo("Bad Subtype");
-    PanicAlertFmtT("Action Replay: Normal Code 0: Invalid Subtype {0:08x} ({1})", addr.subtype,
-                   s_current_code->name);
+    PanicAlert("Action Replay: Normal Code 0: Invalid Subtype %08x (%s)", addr.subtype,
+               s_current_code->name.c_str());
     return false;
   }
 
@@ -661,8 +666,8 @@ static bool CompareValues(const u32 val1, const u32 val2, const int type)
 
   default:
     LogInfo("Unknown Compare type");
-    PanicAlertFmtT("Action Replay: Invalid Normal Code Type {0:08x} ({1})", type,
-                   s_current_code->name);
+    PanicAlert("Action Replay: Invalid Normal Code Type %08x (%s)", (unsigned)type,
+               s_current_code->name.c_str());
     return false;
   }
 }
@@ -672,8 +677,8 @@ static bool ConditionalCode(const Core::CPUThreadGuard& guard, const ARAddr& add
 {
   const u32 new_addr = addr.GCAddress();
 
-  LogInfo("Size: {:08x}", addr.size);
-  LogInfo("Hardware Address: {:08x}", new_addr);
+  LogInfo("Size: %08x", addr.size);
+  LogInfo("Hardware Address: %08x", new_addr);
 
   bool result = true;
 
@@ -695,8 +700,8 @@ static bool ConditionalCode(const Core::CPUThreadGuard& guard, const ARAddr& add
 
   default:
     LogInfo("Bad Size");
-    PanicAlertFmtT("Action Replay: Conditional Code: Invalid Size {0:08x} ({1})", addr.size,
-                   s_current_code->name);
+    PanicAlert("Action Replay: Conditional Code: Invalid Size %08x (%s)", addr.size,
+               s_current_code->name.c_str());
     return false;
   }
 
@@ -719,8 +724,8 @@ static bool ConditionalCode(const Core::CPUThreadGuard& guard, const ARAddr& add
 
     default:
       LogInfo("Bad Subtype");
-      PanicAlertFmtT("Action Replay: Normal Code {0}: Invalid subtype {1:08x} ({2})", 1,
-                     addr.subtype, s_current_code->name);
+      PanicAlert("Action Replay: Normal Code %d: Invalid subtype %08x (%s)", 1, addr.subtype,
+                 s_current_code->name.c_str());
       return false;
     }
   }
@@ -743,8 +748,8 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
 
   s_current_code = &arcode;
 
-  LogInfo("Code Name: {}", arcode.name);
-  LogInfo("Number of codes: {}", arcode.ops.size());
+  LogInfo("Code Name: %s", arcode.name.c_str());
+  LogInfo("Number of codes: %" PRIu64, (u64)arcode.ops.size());
 
   for (const AREntry& entry : arcode.ops)
   {
@@ -776,7 +781,7 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
       continue;
     }
 
-    LogInfo("--- Running Code: {:08x} {:08x} ---", addr.address, data);
+    LogInfo("--- Running Code: %08x %08x ---", addr.address, data);
 
     // Do Fill & Slide
     if (do_fill_and_slide)
@@ -803,7 +808,7 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
     {
       LogInfo(
           "This action replay simulator does not support codes that modify Action Replay itself.");
-      PanicAlertFmtT(
+      PanicAlert(
           "This action replay simulator does not support codes that modify Action Replay itself.");
       return false;
     }
@@ -818,7 +823,7 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
     {
       const u8 zcode = data >> 29;
 
-      LogInfo("Doing Zero Code {:08x}", zcode);
+      LogInfo("Doing Zero Code %08x", (unsigned)zcode);
 
       switch (zcode)
       {
@@ -837,7 +842,7 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
         // Todo: Set register 1BB4 to 1
         LogInfo("ZCode: Executes all codes in the same row, Set register 1BB4 to 1 (zcode not "
                 "supported)");
-        PanicAlertFmtT("Zero 3 code not supported");
+        PanicAlert("Zero 3 code not supported");
         return false;
 
       case ZCODE_04:  // Fill & Slide or Memory Copy
@@ -857,7 +862,7 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
 
       default:
         LogInfo("ZCode: Unknown");
-        PanicAlertFmtT("Zero code unknown to Dolphin: {0:08x}", zcode);
+        PanicAlert("Zero code unknown to Dolphin: %08x", (unsigned)zcode);
         return false;
       }
 
@@ -866,8 +871,8 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
     }
 
     // Normal codes
-    LogInfo("Doing Normal Code {:08x}", addr.type);
-    LogInfo("Subtype: {:08x}", addr.subtype);
+    LogInfo("Doing Normal Code %08x", addr.type);
+    LogInfo("Subtype: %08x", addr.subtype);
 
     switch (addr.type)
     {
