@@ -119,9 +119,8 @@ void AudioInterfaceManager::IncreaseSampleCount(const u32 amount)
 
   if ((m_interrupt_timing - old_sample_counter) <= (m_sample_counter - old_sample_counter))
   {
-    DEBUG_LOG_FMT(
-        AUDIO_INTERFACE, "GenerateAudioInterrupt {:08x}:{:08x} at PC {:08x} control.AIINTVLD={}",
-        m_sample_counter, m_interrupt_timing, m_system.GetPPCState().pc, m_control.AIINTVLD);
+    DEBUG_LOG(AUDIO_INTERFACE, "GenerateAudioInterrupt %08x:%08x at PC %08x control.AIINTVLD=%u",
+              m_sample_counter, m_interrupt_timing, m_system.GetPPCState().pc, m_control.AIINTVLD);
     GenerateAudioInterrupt();
   }
 }
@@ -222,13 +221,14 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
         auto& ai = system.GetAudioInterface();
         if (ai.m_control.AIINTMSK != tmp_ai_ctrl.AIINTMSK)
         {
-          DEBUG_LOG_FMT(AUDIO_INTERFACE, "Change AIINTMSK to {}", tmp_ai_ctrl.AIINTMSK);
+          DEBUG_LOG(AUDIO_INTERFACE, "Change AIINTMSK to %u",
+                    static_cast<unsigned>(tmp_ai_ctrl.AIINTMSK));
           ai.m_control.AIINTMSK = tmp_ai_ctrl.AIINTMSK;
         }
 
         if (ai.m_control.AIINTVLD != tmp_ai_ctrl.AIINTVLD)
         {
-          DEBUG_LOG_FMT(AUDIO_INTERFACE, "Change AIINTVLD to {}", tmp_ai_ctrl.AIINTVLD);
+          DEBUG_LOG(AUDIO_INTERFACE, "Change AIINTVLD to %u", tmp_ai_ctrl.AIINTVLD);
           ai.m_control.AIINTVLD = tmp_ai_ctrl.AIINTVLD;
         }
 
@@ -236,24 +236,21 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
         if (tmp_ai_ctrl.AISFR != ai.m_control.AISFR)
         {
           // AISFR rates below are intentionally inverted wrt yagcd
-          DEBUG_LOG_FMT(AUDIO_INTERFACE, "Change AISFR to {}",
-                        tmp_ai_ctrl.AISFR ? "48khz" : "32khz");
+          DEBUG_LOG(AUDIO_INTERFACE, "Change AISFR to %s", tmp_ai_ctrl.AISFR ? "48khz" : "32khz");
           ai.SetAISSampleRate(tmp_ai_ctrl.AISFR ? SampleRate::AI48KHz : SampleRate::AI32KHz);
         }
 
         // Set frequency of DMA
         if (tmp_ai_ctrl.AIDFR != ai.m_control.AIDFR)
         {
-          DEBUG_LOG_FMT(AUDIO_INTERFACE, "Change AIDFR to {}",
-                        tmp_ai_ctrl.AIDFR ? "32khz" : "48khz");
+          DEBUG_LOG(AUDIO_INTERFACE, "Change AIDFR to %s", tmp_ai_ctrl.AIDFR ? "32khz" : "48khz");
           ai.SetAIDSampleRate(tmp_ai_ctrl.AIDFR ? SampleRate::AI32KHz : SampleRate::AI48KHz);
         }
 
         // Streaming counter
         if (tmp_ai_ctrl.PSTAT != ai.m_control.PSTAT)
         {
-          DEBUG_LOG_FMT(AUDIO_INTERFACE, "{} streaming audio",
-                        tmp_ai_ctrl.PSTAT ? "start" : "stop");
+          DEBUG_LOG(AUDIO_INTERFACE, "%s streaming audio", tmp_ai_ctrl.PSTAT ? "start" : "stop");
           ai.m_control.PSTAT = tmp_ai_ctrl.PSTAT;
           ai.m_last_cpu_time = core_timing.GetTicks();
 
@@ -264,14 +261,14 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
         // AI Interrupt
         if (tmp_ai_ctrl.AIINT)
         {
-          DEBUG_LOG_FMT(AUDIO_INTERFACE, "Clear AIS Interrupt");
+          DEBUG_LOG(AUDIO_INTERFACE, "Clear AIS Interrupt");
           ai.m_control.AIINT = 0;
         }
 
         // Sample Count Reset
         if (tmp_ai_ctrl.SCRESET)
         {
-          DEBUG_LOG_FMT(AUDIO_INTERFACE, "Reset AIS sample counter");
+          DEBUG_LOG(AUDIO_INTERFACE, "Reset AIS sample counter");
           ai.m_sample_counter = 0;
 
           ai.m_last_cpu_time = core_timing.GetTicks();
@@ -309,8 +306,8 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& core_timing = system.GetCoreTiming();
                    auto& ai = system.GetAudioInterface();
-                   DEBUG_LOG_FMT(AUDIO_INTERFACE, "AI_INTERRUPT_TIMING={:08x} at PC: {:08x}", val,
-                                 system.GetPPCState().pc);
+                   DEBUG_LOG(AUDIO_INTERFACE, "AI_INTERRUPT_TIMING=%08x at PC: %08x", val,
+                             system.GetPPCState().pc);
                    ai.m_interrupt_timing = val;
                    core_timing.RemoveEvent(ai.m_event_type_ai);
                    core_timing.ScheduleEvent(ai.GetAIPeriod(), ai.m_event_type_ai);

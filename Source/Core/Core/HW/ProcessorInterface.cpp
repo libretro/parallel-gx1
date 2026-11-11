@@ -112,7 +112,7 @@ void ProcessorInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   mmio->Register(base | PI_FIFO_RESET, MMIO::InvalidRead<u32>(),
                  MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    // Used by GXAbortFrame
-                   INFO_LOG_FMT(PROCESSORINTERFACE, "Wrote PI_FIFO_RESET: {:08x}", val);
+                   INFO_LOG(PROCESSORINTERFACE, "Wrote PI_FIFO_RESET: %08x", val);
                    if ((val & 1) != 0)
                    {
                      // TODO: Is this still necessary now that we reset the CP registers?
@@ -144,15 +144,15 @@ void ProcessorInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(base | PI_RESET_CODE, MMIO::ComplexRead<u32>([](Core::System& system, uintptr_t, u32) -> u32 {
                    auto& processor_interface = system.GetProcessorInterface();
-                   DEBUG_LOG_FMT(PROCESSORINTERFACE, "Read PI_RESET_CODE: {:08x}",
-                                 processor_interface.m_reset_code);
+                   DEBUG_LOG(PROCESSORINTERFACE, "Read PI_RESET_CODE: %08x",
+                             processor_interface.m_reset_code);
                    return processor_interface.m_reset_code;
                  }),
                  MMIO::ComplexWrite<u32>([](Core::System& system, uintptr_t, u32, u32 val) {
                    auto& processor_interface = system.GetProcessorInterface();
                    processor_interface.m_reset_code = val;
-                   INFO_LOG_FMT(PROCESSORINTERFACE, "Wrote PI_RESET_CODE: {:08x}",
-                                processor_interface.m_reset_code);
+                   INFO_LOG(PROCESSORINTERFACE, "Wrote PI_RESET_CODE: %08x",
+                            processor_interface.m_reset_code);
                    if (!system.IsWii() && (~processor_interface.m_reset_code & 0x4))
                    {
                      system.GetDVDInterface().ResetDrive(true);
@@ -234,14 +234,13 @@ void ProcessorInterfaceManager::SetInterrupt(u32 cause_mask, bool set)
 
   if (set && !(m_interrupt_cause & cause_mask))
   {
-    DEBUG_LOG_FMT(PROCESSORINTERFACE, "Setting Interrupt {} (set)",
-                  Debug_GetInterruptName(cause_mask));
+    DEBUG_LOG(PROCESSORINTERFACE, "Setting Interrupt %s (set)", Debug_GetInterruptName(cause_mask));
   }
 
   if (!set && (m_interrupt_cause & cause_mask))
   {
-    DEBUG_LOG_FMT(PROCESSORINTERFACE, "Setting Interrupt {} (clear)",
-                  Debug_GetInterruptName(cause_mask));
+    DEBUG_LOG(PROCESSORINTERFACE, "Setting Interrupt %s (clear)",
+              Debug_GetInterruptName(cause_mask));
   }
 
   if (set)

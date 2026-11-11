@@ -3,6 +3,7 @@
 
 #include "Core/HW/MMIO.h"
 
+#include <cinttypes>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -79,15 +80,15 @@ WriteHandlingMethod<T> ComplexWrite(WriteFn<T> fn, uintptr_t ctx)
 template <typename T>
 static T ReadInvalid(Core::System&, uintptr_t, u32 addr)
 {
-  ERROR_LOG_FMT(MEMMAP, "Trying to read {} bits from an invalid MMIO (addr={:08x})",
-                8 * sizeof(T), addr);
+  ERROR_LOG(MEMMAP, "Trying to read %" PRIu64 " bits from an invalid MMIO (addr=%08x)",
+            (u64)(8 * sizeof(T)), addr);
   return 0;
 }
 template <typename T>
 static void WriteInvalid(Core::System&, uintptr_t, u32 addr, T val)
 {
-  ERROR_LOG_FMT(MEMMAP, "Trying to write {} bits to an invalid MMIO (addr={:08x}, val={:08x})",
-                8 * sizeof(T), addr, val);
+  ERROR_LOG(MEMMAP, "Trying to write %" PRIu64 " bits to an invalid MMIO (addr=%08x, val=%08x)",
+            (u64)(8 * sizeof(T)), addr, (unsigned)val);
 }
 template <typename T>
 ReadHandlingMethod<T> InvalidRead()

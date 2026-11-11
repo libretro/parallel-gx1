@@ -3,6 +3,7 @@
 
 #include "Core/HW/HSP/HSP_DeviceGBPlayer.h"
 
+#include <cinttypes>
 #include <cstring>
 
 #if defined(HAS_LIBMGBA)
@@ -194,7 +195,7 @@ CGBPlayer_mGBA::CGBPlayer_mGBA(Core::System& system, CHSPDevice_GBPlayer* gbplay
     auto* const player = stream->player;
     player->ProcessAudioBuffer();
 
-    INFO_LOG_FMT(HSP, "GBPlayer: Audio rate changed: {}", rate);
+    INFO_LOG(HSP, "GBPlayer: Audio rate changed: %u", rate);
 
     player->m_bits_per_sample = 24 - MathUtil::IntLog2(rate);
   };
@@ -405,7 +406,8 @@ void CGBPlayer_mGBA::UpdateAudio()
   {
     // Don't IRQ if the audio runs behind somehow.
     // This shouldn't happen as long as mGBA runs for an appropriate number of cycles.
-    WARN_LOG_FMT(HSP, "GBPlayer: Audio buffer underrun: {} < {}", audio_buffered, AV_REGION_SIZE);
+    WARN_LOG(HSP, "GBPlayer: Audio buffer underrun: %" PRIu64 " < %" PRIu64, (u64)audio_buffered,
+             (u64)AV_REGION_SIZE);
     return;
   }
 
@@ -464,26 +466,26 @@ void CGBPlayer_mGBA::UpdateVideoAndScheduleNextUpdate(s64 cycles_late)
 
 u8 CGBPlayer_mGBA::ReadSIOControl()
 {
-  DEBUG_LOG_FMT(HSP, "GBPlayer: SIOControl Read");
+  DEBUG_LOG(HSP, "GBPlayer: SIOControl Read");
 
   return 0;
 }
 
 void CGBPlayer_mGBA::WriteSIOControl(u8 value)
 {
-  DEBUG_LOG_FMT(HSP, "GBPlayer: SIOControl Write: 0x{:02x}", value);
+  DEBUG_LOG(HSP, "GBPlayer: SIOControl Write: 0x%02x", (unsigned)value);
 }
 
 u32 CGBPlayer_mGBA::ReadSIOData()
 {
-  DEBUG_LOG_FMT(HSP, "GBPlayer: SIOData Read");
+  DEBUG_LOG(HSP, "GBPlayer: SIOData Read");
 
   return 0;
 }
 
 void CGBPlayer_mGBA::WriteSIOData(u32 value)
 {
-  DEBUG_LOG_FMT(HSP, "GBPlayer: SIOData Write: 0x{:08x}", value);
+  DEBUG_LOG(HSP, "GBPlayer: SIOData Write: 0x%08x", value);
 }
 
 #endif
@@ -573,7 +575,7 @@ void CHSPDevice_GBPlayer::Read(u32 address, u8* data)
   }
   default:
   {
-    WARN_LOG_FMT(HSP, "GBPlayer: Unknown read from 0x{:08x}", address);
+    WARN_LOG(HSP, "GBPlayer: Unknown read from 0x%08x", address);
     break;
   }
   }
@@ -595,13 +597,13 @@ void CHSPDevice_GBPlayer::Write(u32 address, const u8* data)
 
     if (!(m_control & (CONTROL_3V | CONTROL_5V)) && (value & (CONTROL_3V | CONTROL_5V)))
     {
-      INFO_LOG_FMT(HSP, "GBPlayer: Reset");
+      INFO_LOG(HSP, "GBPlayer: Reset");
       m_gbp->Reset();
     }
 
     if ((m_control & (CONTROL_3V | CONTROL_5V)) && !(value & (CONTROL_3V | CONTROL_5V)))
     {
-      INFO_LOG_FMT(HSP, "GBPlayer: Stop");
+      INFO_LOG(HSP, "GBPlayer: Stop");
       m_gbp->Stop();
     }
 
@@ -637,7 +639,7 @@ void CHSPDevice_GBPlayer::Write(u32 address, const u8* data)
   }
   default:
   {
-    WARN_LOG_FMT(HSP, "GBPlayer: Unknown write to 0x{:08x}", address);
+    WARN_LOG(HSP, "GBPlayer: Unknown write to 0x%08x", address);
     break;
   }
   }
@@ -669,7 +671,7 @@ void CHSPDevice_GBPlayer::AssertIRQ(IRQ irq)
   const u32 irq_bit_value = 1u << (2u * u32(irq));
 
   if ((m_irq & irq_bit_value) != 0)
-    WARN_LOG_FMT(HSP, "GBPlayer: IRQ {} is already set.", u32(irq));
+    WARN_LOG(HSP, "GBPlayer: IRQ %u is already set.", u32(irq));
 
   m_irq |= irq_bit_value | IRQ_ASSERTED;
   UpdateInterrupts();

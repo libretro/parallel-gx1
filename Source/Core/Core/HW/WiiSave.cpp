@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cinttypes>
 #include <cstdio>
 #include <cstring>
 #include <lrc_hash.h>
@@ -18,8 +19,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-#include <fmt/format.h>
 
 #include "Common/Align.h"
 #include "Common/CommonTypes.h"
@@ -120,8 +119,8 @@ public:
     header.banner_size = banner->GetStatus()->size;
     if (header.banner_size > sizeof(header.banner))
     {
-      ERROR_LOG_FMT(CORE, "NandStorage::ReadHeader: {} corrupted banner_size: {:x}", banner_path,
-                    header.banner_size);
+      ERROR_LOG(CORE, "NandStorage::ReadHeader: %s corrupted banner_size: %x", banner_path.c_str(),
+                static_cast<unsigned>(header.banner_size));
       return {};
     }
     header.tid = m_tid;
@@ -304,8 +303,7 @@ public:
     if ((banner_size < FULL_BNR_MIN) || (banner_size > FULL_BNR_MAX) ||
         (((banner_size - BNR_SZ) % ICON_SZ) != 0))
     {
-      ERROR_LOG_FMT(CONSOLE, "Not a Wii save or read failure for file header size {:x}",
-                    banner_size);
+      ERROR_LOG(CONSOLE, "Not a Wii save or read failure for file header size %x", banner_size);
       return {};
     }
 
@@ -315,9 +313,9 @@ public:
     HeaderMD5(header, md5_calc.data());
     if (md5_file != md5_calc)
     {
-      ERROR_LOG_FMT(CONSOLE, "MD5 mismatch\n {:016x}{:016x} != {:016x}{:016x}",
-                    Common::swap64(md5_file.data()), Common::swap64(md5_file.data() + 8),
-                    Common::swap64(md5_calc.data()), Common::swap64(md5_calc.data() + 8));
+      ERROR_LOG(CONSOLE, "MD5 mismatch\n %016" PRIx64 "%016" PRIx64 " != %016" PRIx64 "%016" PRIx64,
+                (u64)Common::swap64(md5_file.data()), (u64)Common::swap64(md5_file.data() + 8),
+                (u64)Common::swap64(md5_calc.data()), (u64)Common::swap64(md5_calc.data() + 8));
       return {};
     }
     return header;
@@ -443,7 +441,7 @@ public:
 
     if (!WriteSignatures())
     {
-      ERROR_LOG_FMT(CORE, "WiiSave::WriteFiles: Failed to write signatures");
+      ERROR_LOG(CORE, "WiiSave::WriteFiles: Failed to write signatures");
       return false;
     }
     return true;
@@ -503,21 +501,21 @@ CopyResult Copy(Storage* source, Storage* dest)
   const auto header = source->ReadHeader();
   if (!header)
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to read header");
+    ERROR_LOG(CORE, "WiiSave::Copy: Failed to read header");
     return CopyResult::CorruptedSource;
   }
 
   const auto bk_header = source->ReadBkHeader();
   if (!bk_header)
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to read bk header");
+    ERROR_LOG(CORE, "WiiSave::Copy: Failed to read bk header");
     return CopyResult::CorruptedSource;
   }
 
   const auto files = source->ReadFiles();
   if (!files)
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to read files");
+    ERROR_LOG(CORE, "WiiSave::Copy: Failed to read files");
     return CopyResult::CorruptedSource;
   }
 
@@ -526,7 +524,7 @@ CopyResult Copy(Storage* source, Storage* dest)
   {
     if (!dest->EraseSave())
     {
-      ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to erase existing save");
+      ERROR_LOG(CORE, "WiiSave::Copy: Failed to erase existing save");
       return CopyResult::Error;
     }
   }
@@ -534,19 +532,19 @@ CopyResult Copy(Storage* source, Storage* dest)
   // and then write it to the destination
   if (!dest->WriteHeader(*header))
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to write header");
+    ERROR_LOG(CORE, "WiiSave::Copy: Failed to write header");
     return CopyResult::Error;
   }
 
   if (!dest->WriteBkHeader(*bk_header))
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to write bk header");
+    ERROR_LOG(CORE, "WiiSave::Copy: Failed to write bk header");
     return CopyResult::Error;
   }
 
   if (!dest->WriteFiles(files->data(), files->size()))
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Copy: Failed to write files");
+    ERROR_LOG(CORE, "WiiSave::Copy: Failed to write files");
     return CopyResult::Error;
   }
 
@@ -560,14 +558,14 @@ CopyResult Import(const std::string& data_bin_path, const std::function<bool()>&
   const std::optional<Header> header = data_bin->ReadHeader();
   if (!header)
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Import: Failed to read header");
+    ERROR_LOG(CORE, "WiiSave::Import: Failed to read header");
     return CopyResult::CorruptedSource;
   }
 
   if (!WiiUtils::EnsureTMDIsImported(*ios.GetFS(), ios.GetESCore(), header->tid))
   {
-    ERROR_LOG_FMT(CORE, "WiiSave::Import: Failed to find or import TMD for title {:16x}",
-                  header->tid);
+    ERROR_LOG(CORE, "WiiSave::Import: Failed to find or import TMD for title %16" PRIx64,
+              static_cast<u64>(header->tid));
     return CopyResult::TitleMissing;
   }
 
@@ -579,9 +577,11 @@ CopyResult Import(const std::string& data_bin_path, const std::function<bool()>&
 
 static CopyResult Export(u64 tid, std::string_view export_path, IOS::HLE::Kernel* ios)
 {
-  const std::string path = fmt::format("{}/private/wii/title/{}{}{}{}/data.bin", export_path,
-                                       static_cast<char>(tid >> 24), static_cast<char>(tid >> 16),
-                                       static_cast<char>(tid >> 8), static_cast<char>(tid));
+  char title[40];
+  snprintf(title, sizeof(title), "/private/wii/title/%c%c%c%c/data.bin",
+           static_cast<char>(tid >> 24), static_cast<char>(tid >> 16), static_cast<char>(tid >> 8),
+           static_cast<char>(tid));
+  const std::string path = std::string(export_path) + title;
   return Copy(MakeNandStorage(ios->GetFS().get(), tid).get(),
               MakeDataBinStorage(&ios->GetIOSC(), path, "w+b").get());
 }

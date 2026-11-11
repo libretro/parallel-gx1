@@ -8,9 +8,10 @@
 
 #include "Core/HW/Memmap.h"
 
-#include <cstdlib>
 #include <array>
 #include <bit>
+#include <cinttypes>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <set>
@@ -201,8 +202,8 @@ void MemoryManager::Init()
 
     if (!*region.out_pointer)
     {
-      PanicAlertFmt(
-          "Memory::Init(): Failed to create view for physical region at 0x{:08X} (size 0x{:08X}).",
+      PanicAlert(
+          "Memory::Init(): Failed to create view for physical region at 0x%08X (size 0x%08X).",
           region.physical_address, region.size);
       exit(0);
     }
@@ -219,7 +220,7 @@ void MemoryManager::Init()
   /* every view is of a segment the system just made, which it fills with zeroes: the memory is
    * not written here, so no page is touched before the game touches it */
 
-  INFO_LOG_FMT(MEMMAP, "Memory system initialized. RAM at {}", fmt::ptr(m_ram));
+  INFO_LOG(MEMMAP, "Memory system initialized. RAM at %p", static_cast<const void*>(m_ram));
   m_is_initialized = true;
 }
 
@@ -268,7 +269,7 @@ bool MemoryManager::InitFastmemArena()
   m_fastmem_arena = m_arena.ReserveMemoryRegion(memory_size);
   if (!m_fastmem_arena)
   {
-    PanicAlertFmt("Memory::InitFastmemArena(): Failed finding a memory base.");
+    PanicAlert("Memory::InitFastmemArena(): Failed finding a memory base.");
     return false;
   }
 
@@ -285,9 +286,9 @@ bool MemoryManager::InitFastmemArena()
 
     if (base != view)
     {
-      PanicAlertFmt("Memory::InitFastmemArena(): Failed to map memory region at 0x{:08X} "
-                    "(size 0x{:08X}) into physical fastmem region.",
-                    region.physical_address, region.size);
+      PanicAlert("Memory::InitFastmemArena(): Failed to map memory region at 0x%08X "
+                 "(size 0x%08X) into physical fastmem region.",
+                 region.physical_address, region.size);
       return false;
     }
   }
@@ -356,15 +357,15 @@ void MemoryManager::UpdateDBATMappings(const PowerPC::BatTable& dbat_table)
             void* mapped_pointer = m_arena.MapInMemoryRegion(position, mapped_size, base, true);
             if (!mapped_pointer)
             {
-              PanicAlertFmt("Memory::UpdateDBATMappings(): Failed to map memory region at 0x{:08X} "
-                            "(size 0x{:08X}) into logical fastmem region at 0x{:08X}.",
-                            intersection_start, mapped_size, logical_address);
+              PanicAlert("Memory::UpdateDBATMappings(): Failed to map memory region at 0x%08X "
+                         "(size 0x%08X) into logical fastmem region at 0x%08X.",
+                         intersection_start, mapped_size, logical_address);
               continue;
             }
             if (m_dbat_view_count == MAX_DBAT_VIEWS)
             {
               // the view stays unmapped: accesses through it take the slow path
-              ERROR_LOG_FMT(MEMMAP, "Too many DBAT views; 0x{:08X} not mapped.", logical_address);
+              ERROR_LOG(MEMMAP, "Too many DBAT views; 0x%08X not mapped.", logical_address);
               m_arena.UnmapFromMemoryRegion(mapped_pointer, mapped_size);
               continue;
             }
@@ -487,9 +488,9 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
       {
         if (!m_arena.ChangeMappingProtection(base, mapped_size, writeable))
         {
-          PanicAlertFmt("Memory::AddPageTableMapping(): Failed to change protection for memory "
-                        "region at 0x{:08X} (size 0x{:08X}, logical fastmem region at 0x{:08X}).",
-                        intersection_start, mapped_size, logical_address);
+          PanicAlert("Memory::AddPageTableMapping(): Failed to change protection for memory "
+                     "region at 0x%08X (size 0x%08X, logical fastmem region at 0x%08X).",
+                     intersection_start, mapped_size, logical_address);
         }
       }
     }
@@ -500,9 +501,9 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
           m_arena.MapInMemoryRegion(position, mapped_size, base, writeable);
       if (!mapped_pointer)
       {
-        PanicAlertFmt("Memory::AddPageTableMapping(): Failed to map memory region at 0x{:08X} "
-                      "(size 0x{:08X}) into logical fastmem region at 0x{:08X}.",
-                      intersection_start, mapped_size, logical_address);
+        PanicAlert("Memory::AddPageTableMapping(): Failed to map memory region at 0x%08X "
+                   "(size 0x%08X) into logical fastmem region at 0x%08X.",
+                   intersection_start, mapped_size, logical_address);
         continue;
       }
       *view = LogicalMemoryView{mapped_pointer, mapped_size};
@@ -651,7 +652,7 @@ void MemoryManager::Shutdown()
   }
   m_arena.ReleaseSHMSegment();
   m_mmio_mapping.reset();
-  INFO_LOG_FMT(MEMMAP, "Memory system shut down.");
+  INFO_LOG(MEMMAP, "Memory system shut down.");
 }
 
 void MemoryManager::ShutdownFastmemArena()
@@ -698,7 +699,8 @@ u8* MemoryManager::GetPointerForRange(u32 address, size_t size) const
   if (available < size)
   {
     // The start address is in a valid region, but the end address is beyond the end of that region.
-    PanicAlertFmt("Oversized range in GetPointerForRange. {:x} bytes at {:#010x}", size, address);
+    PanicAlert("Oversized range in GetPointerForRange. %" PRIx64 " bytes at %#010x", (u64)size,
+               address);
     return nullptr;
   }
 
@@ -713,7 +715,7 @@ void MemoryManager::CopyFromEmu(void* data, u32 address, size_t size) const
   void* pointer = GetPointerForRange(address, size);
   if (!pointer)
   {
-    PanicAlertFmt("Invalid range in CopyFromEmu. {:x} bytes from {:#010x}", size, address);
+    PanicAlert("Invalid range in CopyFromEmu. %" PRIx64 " bytes from %#010x", (u64)size, address);
     return;
   }
   memcpy(data, pointer, size);
@@ -727,7 +729,7 @@ void MemoryManager::CopyToEmu(u32 address, const void* data, size_t size)
   void* pointer = GetPointerForRange(address, size);
   if (!pointer)
   {
-    PanicAlertFmt("Invalid range in CopyToEmu. {:x} bytes to {:#010x}", size, address);
+    PanicAlert("Invalid range in CopyToEmu. %" PRIx64 " bytes to %#010x", (u64)size, address);
     return;
   }
   memcpy(pointer, data, size);
@@ -741,7 +743,7 @@ void MemoryManager::Memset(u32 address, u8 value, size_t size)
   void* pointer = GetPointerForRange(address, size);
   if (!pointer)
   {
-    PanicAlertFmt("Invalid range in Memset. {:x} bytes at {:#010x}", size, address);
+    PanicAlert("Invalid range in Memset. %" PRIx64 " bytes at %#010x", (u64)size, address);
     return;
   }
   memset(pointer, value, size);
@@ -795,8 +797,7 @@ u8* MemoryManager::GetPointerAndSize(u32 address, size_t* size) const
   }
 
   auto& ppc_state = m_system.GetPPCState();
-  PanicAlertFmt("Unknown Pointer {:#010x} PC {:#010x} LR {:#010x}", address, ppc_state.pc,
-                LR(ppc_state));
+  PanicAlert("Unknown Pointer %#010x PC %#010x LR %#010x", address, ppc_state.pc, LR(ppc_state));
   *size = 0;
   return nullptr;
 }

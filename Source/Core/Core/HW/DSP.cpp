@@ -293,9 +293,9 @@ void DSPManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
         dsp.m_dsp_control.pad = tmpControl.pad;
         if (dsp.m_dsp_control.pad != 0)
         {
-          PanicAlertFmt(
-              "DSPInterface (w) DSP state (CC00500A) gets a value with junk in the padding {:08x}",
-              val);
+          PanicAlert(
+              "DSPInterface (w) DSP state (CC00500A) gets a value with junk in the padding %08x",
+              (unsigned)val);
         }
 
         dsp.UpdateInterrupts();
@@ -336,8 +336,9 @@ void DSPManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
           dsp.m_audio_dma.current_source_address = dsp.m_audio_dma.SourceAddress;
           dsp.m_audio_dma.remaining_blocks_count = dsp.m_audio_dma.AudioDMAControl.NumBlocks;
 
-          INFO_LOG_FMT(AUDIO_INTERFACE, "Audio DMA configured: {} blocks from {:#010x}",
-                       dsp.m_audio_dma.AudioDMAControl.NumBlocks, dsp.m_audio_dma.SourceAddress);
+          INFO_LOG(AUDIO_INTERFACE, "Audio DMA configured: %u blocks from %#010x",
+                   (unsigned)dsp.m_audio_dma.AudioDMAControl.NumBlocks,
+                   dsp.m_audio_dma.SourceAddress);
 
           // TODO: need hardware tests for the timing of this interrupt.
           // Sky Crawlers crashes at boot if this is scheduled less than 87 cycles in the future.
@@ -468,9 +469,9 @@ void DSPManager::Do_ARAM_DMA()
   if (m_aram_dma.Cnt.dir)
   {
     // ARAM -> MRAM
-    DEBUG_LOG_FMT(DSPINTERFACE, "DMA {:08x} bytes from ARAM {:08x} to MRAM {:08x} PC: {:08x}",
-                  m_aram_dma.Cnt.count, m_aram_dma.ARAddr, m_aram_dma.MMAddr,
-                  m_system.GetPPCState().pc);
+    DEBUG_LOG(DSPINTERFACE, "DMA %08x bytes from ARAM %08x to MRAM %08x PC: %08x",
+              m_aram_dma.Cnt.count, m_aram_dma.ARAddr, m_aram_dma.MMAddr,
+              m_system.GetPPCState().pc);
 
     // Outgoing data from ARAM is mirrored every 64MB (verified on real HW)
     m_aram_dma.ARAddr &= 0x3ffffff;
@@ -524,9 +525,9 @@ void DSPManager::Do_ARAM_DMA()
   else
   {
     // MRAM -> ARAM
-    DEBUG_LOG_FMT(DSPINTERFACE, "DMA {:08x} bytes from MRAM {:08x} to ARAM {:08x} PC: {:08x}",
-                  m_aram_dma.Cnt.count, m_aram_dma.MMAddr, m_aram_dma.ARAddr,
-                  m_system.GetPPCState().pc);
+    DEBUG_LOG(DSPINTERFACE, "DMA %08x bytes from MRAM %08x to ARAM %08x PC: %08x",
+              m_aram_dma.Cnt.count, m_aram_dma.MMAddr, m_aram_dma.ARAddr,
+              m_system.GetPPCState().pc);
 
     // Incoming data into ARAM is mirrored every 64MB (verified on real HW)
     m_aram_dma.ARAddr &= 0x3ffffff;

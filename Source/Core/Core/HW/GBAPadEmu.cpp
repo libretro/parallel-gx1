@@ -3,10 +3,11 @@
 
 #include "Core/HW/GBAPadEmu.h"
 
-#include <fmt/format.h>
+#include <cstdio>
 
 #include "Core/HW/GBAPad.h"
 
+#include "Common/StringUtil.h"
 #include "InputCommon/ControllerEmu/ControlGroup/Buttons.h"
 #include "InputCommon/GCPadStatus.h"
 
@@ -41,7 +42,7 @@ GBAPad::GBAPad(const unsigned int index) : m_reset_pending(false), m_index(index
 
 std::string GBAPad::GetName() const
 {
-  return fmt::format("GBA{}", m_index + 1);
+  return StringFromFormat("GBA%u", m_index + 1);
 }
 
 InputConfig* GBAPad::GetConfig() const

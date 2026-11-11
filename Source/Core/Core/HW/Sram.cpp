@@ -37,7 +37,7 @@ void InitSRAM(Sram* sram, const std::string& filename)
   {
     if (!file.ReadArray(sram, 1))
     {
-      ERROR_LOG_FMT(EXPANSIONINTERFACE, "EXI IPL-DEV: Could not read all of SRAM");
+      ERROR_LOG(EXPANSIONINTERFACE, "EXI IPL-DEV: Could not read all of SRAM");
       *sram = sram_dump;
     }
   }
@@ -59,7 +59,7 @@ void SetCardFlashID(Sram* sram, const u8* buffer, ExpansionInterface::Slot card_
     card_index = 1;
     break;
   default:
-    PanicAlertFmt("Invalid memcard slot {}", card_slot);
+    PanicAlert("Invalid memcard slot %u", static_cast<unsigned>(card_slot));
     return;
   }
 

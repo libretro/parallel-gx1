@@ -119,7 +119,7 @@ void WiiIPC::Init()
 
 void WiiIPC::Reset()
 {
-  INFO_LOG_FMT(WII_IPC, "Resetting ...");
+  INFO_LOG(WII_IPC, "Resetting ...");
   InitState();
 }
 
@@ -181,7 +181,7 @@ void WiiIPC::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                        (val & gpio_owner.m_hex) | (wii_ipc.m_gpio_out.m_hex & ~gpio_owner.m_hex);
                    if (wii_ipc.m_gpio_out[GPIO::DO_EJECT])
                    {
-                     INFO_LOG_FMT(WII_IPC, "Ejecting disc due to GPIO write");
+                     INFO_LOG(WII_IPC, "Ejecting disc due to GPIO write");
                      system.GetDVDInterface().EjectDisc(Core::CPUThreadGuard{system},
                                                         DVD::EjectCause::Software);
                    }
@@ -218,7 +218,7 @@ void WiiIPC::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                        (wii_ipc.m_gpio_out.m_hex & gpio_owner.m_hex) | (val & ~gpio_owner.m_hex);
                    if (wii_ipc.m_gpio_out[GPIO::DO_EJECT])
                    {
-                     INFO_LOG_FMT(WII_IPC, "Ejecting disc due to GPIO write");
+                     INFO_LOG(WII_IPC, "Ejecting disc due to GPIO write");
                      system.GetDVDInterface().EjectDisc(Core::CPUThreadGuard{system},
                                                         DVD::EjectCause::Software);
                    }
@@ -248,7 +248,7 @@ void WiiIPC::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    {
                      // The GPIO *disables* spinning up the drive
                      const bool spinup = !wii_ipc.m_gpio_out[GPIO::DI_SPIN];
-                     INFO_LOG_FMT(WII_IPC, "Resetting DI {} spinup", spinup ? "with" : "without");
+                     INFO_LOG(WII_IPC, "Resetting DI %s spinup", spinup ? "with" : "without");
                      system.GetDVDInterface().ResetDrive(spinup);
                    }
                  }));
@@ -291,8 +291,8 @@ void WiiIPC::ClearX1()
 void WiiIPC::GenerateAck(u32 address)
 {
   m_ctrl.Y2 = 1;
-  DEBUG_LOG_FMT(WII_IPC, "GenerateAck: {:08x} | {:08x} [R:{} A:{} E:{}]", m_ppc_msg, address,
-                m_ctrl.Y1, m_ctrl.Y2, m_ctrl.X1);
+  DEBUG_LOG(WII_IPC, "GenerateAck: %08x | %08x [R:%u A:%u E:%u]", m_ppc_msg, address,
+            (unsigned)m_ctrl.Y1, (unsigned)m_ctrl.Y2, (unsigned)m_ctrl.X1);
   // Based on a hardware test, the IPC interrupt takes approximately 100 TB ticks to fire
   // after Y2 is seen in the control register.
   m_system.GetCoreTiming().ScheduleEvent(100_tbticks, m_event_type_update_interrupts);
@@ -302,8 +302,8 @@ void WiiIPC::GenerateReply(u32 address)
 {
   m_arm_msg = address;
   m_ctrl.Y1 = 1;
-  DEBUG_LOG_FMT(WII_IPC, "GenerateReply: {:08x} | {:08x} [R:{} A:{} E:{}]", m_ppc_msg, address,
-                m_ctrl.Y1, m_ctrl.Y2, m_ctrl.X1);
+  DEBUG_LOG(WII_IPC, "GenerateReply: %08x | %08x [R:%u A:%u E:%u]", m_ppc_msg, address,
+            (unsigned)m_ctrl.Y1, (unsigned)m_ctrl.Y2, (unsigned)m_ctrl.X1);
   // Based on a hardware test, the IPC interrupt takes approximately 100 TB ticks to fire
   // after Y1 is seen in the control register.
   m_system.GetCoreTiming().ScheduleEvent(100_tbticks, m_event_type_update_interrupts);

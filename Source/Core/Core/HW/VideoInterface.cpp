@@ -335,18 +335,20 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   // MMIOs with unimplemented writes that trigger warnings.
   mmio->Register(
-      base | VI_VERTICAL_BEAM_POSITION, MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t, u32) -> u16 {
+      base | VI_VERTICAL_BEAM_POSITION,
+      MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t, u32) -> u16 {
         auto& vi = system.GetVideoInterface();
         vi.Sync();
         return 1 + (vi.m_half_line_count) / 2;
       }),
       MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
-        WARN_LOG_FMT(
-            VIDEOINTERFACE,
-            "Changing vertical beam position to {:#06x} - not documented or implemented yet", val);
+        WARN_LOG(VIDEOINTERFACE,
+                 "Changing vertical beam position to %#06x - not documented or implemented yet",
+                 (unsigned)val);
       }));
   mmio->Register(
-      base | VI_HORIZONTAL_BEAM_POSITION, MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t, u32) -> u16 {
+      base | VI_HORIZONTAL_BEAM_POSITION,
+      MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t, u32) -> u16 {
         auto& vi = system.GetVideoInterface();
         vi.Sync();
         u16 value = static_cast<u16>(
@@ -356,10 +358,9 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
         return std::clamp<u16>(value, 1, vi.m_h_timing_0.HLW * 2);
       }),
       MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
-        WARN_LOG_FMT(
-            VIDEOINTERFACE,
-            "Changing horizontal beam position to {:#06x} - not documented or implemented yet",
-            val);
+        WARN_LOG(VIDEOINTERFACE,
+                 "Changing horizontal beam position to %#06x - not documented or implemented yet",
+                 (unsigned)val);
       }));
 
   // The following MMIOs are interrupts related and update interrupt status
@@ -409,7 +410,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    auto& vi = system.GetVideoInterface();
                    vi.m_unknown_aa_register =
                        (vi.m_unknown_aa_register & 0x0000FFFF) | ((u32)val << 16);
-                   WARN_LOG_FMT(VIDEOINTERFACE, "Writing to the unknown AA register (hi)");
+                   WARN_LOG(VIDEOINTERFACE, "Writing to the unknown AA register (hi)");
                  }));
   mmio->Register(base | VI_UNK_AA_REG_LO, MMIO::ComplexRead<u16>([](Core::System& system, uintptr_t, u32) -> u16 {
                    auto& vi = system.GetVideoInterface();
@@ -418,7 +419,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t, u32, u16 val) {
                    auto& vi = system.GetVideoInterface();
                    vi.m_unknown_aa_register = (vi.m_unknown_aa_register & 0xFFFF0000) | val;
-                   WARN_LOG_FMT(VIDEOINTERFACE, "Writing to the unknown AA register (lo)");
+                   WARN_LOG(VIDEOINTERFACE, "Writing to the unknown AA register (lo)");
                  }));
 
   // Control register writes only updates some select bits, and additional
@@ -820,17 +821,17 @@ void VideoInterfaceManager::LogField(FieldType field, u32 xfb_address) const
 
   const auto field_index = static_cast<size_t>(field);
 
-  DEBUG_LOG_FMT(VIDEOINTERFACE,
-                "(VI->BeginField): Address: {:08X} | WPL {} | STD {} | EQ {} | PRB {} | "
-                "ACV {} | PSB {} | Field {}",
-                xfb_address, m_picture_configuration.WPL, m_picture_configuration.STD,
-                m_vertical_timing_register.EQU, vert_timing[field_index]->PRB,
-                m_vertical_timing_register.ACV, vert_timing[field_index]->PSB,
-                field_type_names[field_index]);
+  DEBUG_LOG(VIDEOINTERFACE,
+            "(VI->BeginField): Address: %08X | WPL %u | STD %u | EQ %u | PRB %u | "
+            "ACV %u | PSB %u | Field %s",
+            xfb_address, (unsigned)m_picture_configuration.WPL,
+            (unsigned)m_picture_configuration.STD, (unsigned)m_vertical_timing_register.EQU,
+            vert_timing[field_index]->PRB, (unsigned)m_vertical_timing_register.ACV,
+            vert_timing[field_index]->PSB, field_type_names[field_index]);
 
-  DEBUG_LOG_FMT(VIDEOINTERFACE, "HorizScaling: {:04x} | fbwidth {} | {} | {}",
-                m_horizontal_scaling.Hex, m_fb_width.Hex, GetTicksPerEvenField(),
-                GetTicksPerOddField());
+  DEBUG_LOG(VIDEOINTERFACE, "HorizScaling: %04x | fbwidth %u | %u | %u",
+            (unsigned)m_horizontal_scaling.Hex, (unsigned)m_fb_width.Hex, GetTicksPerEvenField(),
+            GetTicksPerOddField());
 }
 
 void VideoInterfaceManager::OutputField(FieldType field, u64 ticks)

@@ -5,6 +5,7 @@
 
 #include "Core/HW/GBACore.h"
 
+#include <cstdio>
 #include <mgba-util/vfs.h>
 #include <mgba/core/log.h>
 #include <mgba/core/timing.h>
@@ -15,7 +16,6 @@
 #include <lists/string_list.h>
 
 #include "AudioCommon/FieldAudio.h"
-#include "Core/HW/GBAVFile.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
@@ -23,6 +23,8 @@
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
+#include "Common/StringUtil.h"
+#include "Core/HW/GBAVFile.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
@@ -201,8 +203,8 @@ bool Core::Start(u64 gc_ticks)
     rom = OpenROM(m_rom_path.c_str());
     if (!rom)
     {
-      PanicAlertFmtT("Error: GBA{0} failed to open the ROM in {1}", m_device_number + 1,
-                     m_rom_path);
+      PanicAlert("Error: GBA%d failed to open the ROM in %s", m_device_number + 1,
+                 m_rom_path.c_str());
       return false;
     }
     m_rom_hash = GetROMHash(rom);
@@ -211,7 +213,7 @@ bool Core::Start(u64 gc_ticks)
   m_core = rom ? mCoreFindVF(rom) : mCoreCreate(mPLATFORM_GBA);
   if (!m_core)
   {
-    PanicAlertFmtT("Error: GBA{0} failed to create core", m_device_number + 1);
+    PanicAlert("Error: GBA%d failed to create core", m_device_number + 1);
     return false;
   }
   m_core->init(m_core);
@@ -239,8 +241,8 @@ bool Core::Start(u64 gc_ticks)
   {
     if (!m_core->loadROM(m_core, rom))
     {
-      PanicAlertFmtT("Error: GBA{0} failed to load the ROM in {1}", m_device_number + 1,
-                     m_rom_path);
+      PanicAlert("Error: GBA%d failed to load the ROM in %s", m_device_number + 1,
+                 m_rom_path.c_str());
       return false;
     }
     rom_guard.Dismiss();
@@ -277,7 +279,7 @@ bool Core::Start(u64 gc_ticks)
   // Notify the host and handle a dimension change if that happened after reset()
   SetVideoBuffer();
 
-  m_event_thread.Reset(fmt::format("GBA{}", m_device_number + 1),
+  m_event_thread.Reset(StringFromFormat("GBA%d", m_device_number + 1),
                        std::bind_front(&Core::HandleEvent, this));
   if (m_device_number < GBA_SCREENS)
     GBAScreenStart((unsigned)m_device_number, DetachScreen, this);
@@ -343,13 +345,13 @@ bool Core::LoadBIOS(const char* bios_path)
   VFile* vf = OpenReadOnlyFile(bios_path);
   if (!vf)
   {
-    ERROR_LOG_FMT(CORE, "GBA{0} failed to open the BIOS in {1}", m_device_number + 1, bios_path);
+    ERROR_LOG(CORE, "GBA%d failed to open the BIOS in %s", m_device_number + 1, bios_path);
     return false;
   }
 
   if (!m_core->loadBIOS(m_core, vf, 0))
   {
-    ERROR_LOG_FMT(CORE, "GBA{0} failed to load the BIOS in {1}", m_device_number + 1, bios_path);
+    ERROR_LOG(CORE, "GBA%d failed to load the BIOS in %s", m_device_number + 1, bios_path);
     vf->close(vf);
     return false;
   }
@@ -362,13 +364,13 @@ bool Core::LoadSave(const char* save_path)
   VFile* vf = gba_vfile_open(save_path, 1);
   if (!vf)
   {
-    PanicAlertFmtT("Error: GBA{0} failed to open the save in {1}", m_device_number + 1, save_path);
+    PanicAlert("Error: GBA%d failed to open the save in %s", m_device_number + 1, save_path);
     return false;
   }
 
   if (!m_core->loadSave(m_core, vf))
   {
-    PanicAlertFmtT("Error: GBA{0} failed to load the save in {1}", m_device_number + 1, save_path);
+    PanicAlert("Error: GBA%d failed to load the save in %s", m_device_number + 1, save_path);
     vf->close(vf);
     return false;
   }
@@ -693,9 +695,9 @@ void Core::DoState(PointerWrap& p)
   if (p.IsReadMode() && (has_rom != !m_rom_path.empty() ||
                          (has_rom && (old_hash != m_rom_hash || old_title != m_game_title))))
   {
-    ::Core::DisplayMessage(
-        fmt::format("Incompatible ROM state in GBA{}. Aborting load state.", m_device_number + 1),
-        3000);
+    ::Core::DisplayMessage(StringFromFormat("Incompatible ROM state in GBA%d. Aborting load state.",
+                                            m_device_number + 1),
+                           3000);
     p.SetVerifyMode();
     return;
   }
@@ -730,7 +732,8 @@ std::string Core::GetSavePath(std::string_view rom_path, int device_number)
 {
   // This is done to make the save file compatible with the save from the mGBA core in RA as it
   // saves in *.srm format.
-  std::string save_path = fmt::format("{}.srm", rom_path.substr(0, rom_path.find_last_of('.')));
+  std::string save_path(rom_path.substr(0, rom_path.find_last_of('.')));
+  save_path += ".srm";
 
   if (!Config::Get(Config::MAIN_GBA_SAVES_IN_ROM_PATH))
   {
