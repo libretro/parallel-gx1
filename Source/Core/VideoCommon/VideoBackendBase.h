@@ -38,7 +38,6 @@ public:
   virtual std::string GetConfigName() const = 0;
   virtual std::string GetDisplayName() const { return GetConfigName(); }
   virtual void InitBackendInfo() = 0;
-  virtual std::optional<std::string> GetWarningMessage() const { return {}; }
 
   static std::string BadShaderFilename(const char* shader_stage, int counter);
 

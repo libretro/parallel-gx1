@@ -22,21 +22,7 @@ bool GLContext::IsHeadless() const
   return true;
 }
 
-bool GLContext::MakeCurrent()
-{
-  return false;
-}
-
-bool GLContext::ClearCurrent()
-{
-  return false;
-}
-
 void GLContext::Update()
-{
-}
-
-void GLContext::UpdateSurface(void* window_handle)
 {
 }
 

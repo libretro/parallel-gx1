@@ -124,15 +124,6 @@ OutputReference::OutputReference() : ControlReference()
 {
 }
 
-bool InputReference::IsInput() const
-{
-  return true;
-}
-bool OutputReference::IsInput() const
-{
-  return false;
-}
-
 //
 // InputReference :: State
 //

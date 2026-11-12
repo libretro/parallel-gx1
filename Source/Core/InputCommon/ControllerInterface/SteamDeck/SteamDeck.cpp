@@ -104,7 +104,6 @@ private:
   {
   public:
     using AnalogInput::AnalogInput;
-    bool IsDetectable() const override { return false; }
   };
 
 public:

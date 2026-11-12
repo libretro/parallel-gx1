@@ -70,7 +70,6 @@ public:
 
   void InterruptDataOutput(const u8* data, const u32 size) override;
 
-  u8 GetWiimoteDeviceIndex() const override;
   void SetWiimoteDeviceIndex(u8 index) override;
 
   void PrepareInput(WiimoteEmu::DesiredWiimoteState* target_state,

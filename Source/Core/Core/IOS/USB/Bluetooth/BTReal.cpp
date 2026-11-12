@@ -353,32 +353,9 @@ void BluetoothRealDevice::DoState(PointerWrap& p)
   }
 }
 
-void BluetoothRealDevice::UpdateSyncButtonState(const bool is_held)
-{
-  if (GetSyncButtonState() == SyncButtonState::Unpressed && is_held)
-  {
-    m_sync_button_held_timer.Start();
-    SetSyncButtonState(SyncButtonState::Held);
-  }
-
-  if (GetSyncButtonState() == SyncButtonState::Held && is_held &&
-      m_sync_button_held_timer.ElapsedMs() > SYNC_BUTTON_HOLD_MS_TO_RESET)
-    SetSyncButtonState(SyncButtonState::LongPressed);
-  else if (GetSyncButtonState() == SyncButtonState::Held && !is_held)
-    SetSyncButtonState(SyncButtonState::Pressed);
-
-  if (GetSyncButtonState() == SyncButtonState::Ignored && !is_held)
-    SetSyncButtonState(SyncButtonState::Unpressed);
-}
-
 void BluetoothRealDevice::TriggerSyncButtonPressedEvent()
 {
   SetSyncButtonState(SyncButtonState::Pressed);
-}
-
-void BluetoothRealDevice::TriggerSyncButtonHeldEvent()
-{
-  SetSyncButtonState(SyncButtonState::LongPressed);
 }
 
 void BluetoothRealDevice::SendHCIResetCommand()

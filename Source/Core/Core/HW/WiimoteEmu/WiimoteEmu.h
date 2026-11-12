@@ -156,7 +156,6 @@ public:
   ControllerEmu::ControlGroup* GetTaTaConGroup(TaTaConGroup group) const;
   ControllerEmu::ControlGroup* GetShinkansenGroup(ShinkansenGroup group) const;
 
-  u8 GetWiimoteDeviceIndex() const override;
   void SetWiimoteDeviceIndex(u8 index) override;
 
   void PrepareInput(WiimoteEmu::DesiredWiimoteState* target_state,

@@ -102,7 +102,6 @@ public:
   virtual Platform GetVolumeType() const = 0;
   virtual bool IsDatelDisc() const = 0;
   virtual bool IsNKit() const = 0;
-  virtual bool CheckH3TableIntegrity(const Partition& partition) const { return false; }
   virtual bool CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
                                    const Partition& partition) const
   {

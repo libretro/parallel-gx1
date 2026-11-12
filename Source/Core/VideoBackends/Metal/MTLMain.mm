@@ -40,17 +40,6 @@ std::string Metal::VideoBackend::GetDisplayName() const
   return _trans("Metal");
 }
 
-std::optional<std::string> Metal::VideoBackend::GetWarningMessage() const
-{
-  if (Util::GetAdapterList().empty())
-  {
-    return _trans("No Metal-compatible GPUs were found.  "
-                  "Use the OpenGL backend or upgrade your computer/GPU");
-  }
-
-  return std::nullopt;
-}
-
 bool Metal::VideoBackend::Initialize(float backbuffer_scale)
 {
   @autoreleasepool

@@ -559,11 +559,6 @@ Report& Wiimote::ProcessReadQueue(bool repeat_last_data_report)
   return m_last_input_report;
 }
 
-u8 Wiimote::GetWiimoteDeviceIndex() const
-{
-  return m_bt_device_index;
-}
-
 void Wiimote::SetWiimoteDeviceIndex(u8 index)
 {
   m_bt_device_index = index;

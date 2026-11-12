@@ -51,8 +51,6 @@ public:
   {
   }
 
-  bool IsDetectable() const override { return Detectable; }
-
   std::string GetName() const override { return m_name; }
 
   ControlState GetState() const final { return ControlState(m_value) / m_extent; }

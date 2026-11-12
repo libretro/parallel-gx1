@@ -525,11 +525,6 @@ void Wiimote::BuildDesiredWiimoteState(DesiredWiimoteState* target_state,
       ->BuildDesiredExtensionState(&target_state->extension);
 }
 
-u8 Wiimote::GetWiimoteDeviceIndex() const
-{
-  return m_bt_device_index;
-}
-
 void Wiimote::SetWiimoteDeviceIndex(u8 index)
 {
   m_bt_device_index = index;

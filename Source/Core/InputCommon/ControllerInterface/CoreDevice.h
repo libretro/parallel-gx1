@@ -75,8 +75,6 @@ public:
   public:
     virtual ~Control() = default;
     virtual std::string GetName() const = 0;
-    virtual Input* ToInput() { return nullptr; }
-    virtual Output* ToOutput() { return nullptr; }
 
     // May be overridden to allow multiple valid names.
     // Useful for backwards-compatible configurations when names change.
@@ -84,7 +82,6 @@ public:
 
     // May be overridden to hide in UI.
     // Useful for backwards-compatible configurations when names change.
-    virtual bool IsHidden() const;
   };
 
   //
@@ -97,7 +94,6 @@ public:
   public:
     // Things like absolute axes/ absolute mouse position should override this to prevent
     // undesirable behavior in our mapping logic.
-    virtual bool IsDetectable() const { return true; }
 
     // Implementations should return a value from 0.0 to 1.0 across their normal range.
     // One input should be provided for each "direction". (e.g. 2 for each axis)
@@ -111,8 +107,6 @@ public:
     // expression-parser or controller-emu)
     virtual ControlState GetState() const = 0;
 
-    Input* ToInput() override { return this; }
-
     // Overridden by CombinedInput,
     // so hotkey logic knows Ctrl, L_Ctrl, and R_Ctrl are the same,
     // and so input detection can return the parent name.
@@ -122,7 +116,6 @@ public:
   class RelativeInput : public Input
   {
   public:
-    bool IsDetectable() const override { return false; }
   };
 
   //
@@ -135,7 +128,6 @@ public:
   public:
     ~Output() override = default;
     virtual void SetState(ControlState state) = 0;
-    Output* ToOutput() override { return this; }
   };
 
   virtual ~Device();
@@ -155,7 +147,6 @@ public:
   // to any actual physical device. Mostly used by keyboard and mouse devices,
   // and to avoid uselessly recreating the device unless really necessary.
   // Doesn't necessarily need to be set to true if the device is virtual.
-  virtual bool IsVirtualDevice() const { return false; }
 
   // (e.g. Xbox 360 controllers have controller number LEDs which should match the ID we use.)
   virtual std::optional<int> GetPreferredId() const;

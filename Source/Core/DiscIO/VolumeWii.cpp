@@ -363,28 +363,6 @@ const BlobReader& VolumeWii::GetBlobReader() const
   return *m_reader;
 }
 
-bool VolumeWii::CheckH3TableIntegrity(const Partition& partition) const
-{
-  auto it = m_partitions.find(partition);
-  if (it == m_partitions.end())
-    return false;
-  const PartitionDetails& partition_details = it->second;
-
-  const std::vector<u8>& h3_table = *partition_details.h3_table;
-  if (h3_table.size() != WII_PARTITION_H3_SIZE)
-    return false;
-
-  const IOS::ES::TMDReader& tmd = *partition_details.tmd;
-  if (!tmd.IsValid())
-    return false;
-
-  const std::vector<IOS::ES::Content> contents = tmd.GetContents();
-  if (contents.size() != 1)
-    return false;
-
-  return Common::SHA1::CalculateDigest(h3_table) == contents[0].sha1;
-}
-
 bool VolumeWii::CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
                                     const Partition& partition) const
 {

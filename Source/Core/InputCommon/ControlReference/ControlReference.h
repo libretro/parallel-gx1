@@ -37,7 +37,6 @@ public:
 
   virtual ~ControlReference();
   virtual ControlState State(const ControlState state = 0) = 0;
-  virtual bool IsInput() const = 0;
 
   template <typename T>
   T GetState()
@@ -117,7 +116,6 @@ class InputReference : public ControlReference
 {
 public:
   InputReference();
-  bool IsInput() const override;
   ControlState State(const ControlState state) override;
 };
 
@@ -130,6 +128,5 @@ class OutputReference : public ControlReference
 {
 public:
   OutputReference();
-  bool IsInput() const override;
   ControlState State(const ControlState state) override;
 };

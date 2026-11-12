@@ -31,9 +31,7 @@ class BluetoothBaseDevice : public EmulationDevice
 {
 public:
   using EmulationDevice::EmulationDevice;
-  virtual void UpdateSyncButtonState(bool is_held) {}
   virtual void TriggerSyncButtonPressedEvent() {}
-  virtual void TriggerSyncButtonHeldEvent() {}
 
 protected:
   static constexpr int ACL_PKT_SIZE = 339;

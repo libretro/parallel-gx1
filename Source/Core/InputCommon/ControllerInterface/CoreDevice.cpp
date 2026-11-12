@@ -52,7 +52,6 @@ public:
     return result;
   }
   std::string GetName() const override { return m_name; }
-  bool IsDetectable() const override { return false; }
   bool IsChild(const Input* input) const override
   {
     return m_inputs.first == input || m_inputs.second == input;
@@ -121,11 +120,6 @@ bool Device::Control::IsMatchingName(std::string_view name) const
   return GetName() == name;
 }
 
-bool Device::Control::IsHidden() const
-{
-  return false;
-}
-
 class FullAnalogSurface final : public Device::Input
 {
 public:
@@ -141,10 +135,6 @@ public:
     // E.g. "Full Axis X+"
     return "Full " + m_high.GetName();
   }
-
-  bool IsDetectable() const override { return m_low.IsDetectable() && m_high.IsDetectable(); }
-
-  bool IsHidden() const override { return m_low.IsHidden() && m_high.IsHidden(); }
 
   bool IsMatchingName(std::string_view name) const override
   {

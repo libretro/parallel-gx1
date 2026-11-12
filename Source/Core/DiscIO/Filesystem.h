@@ -87,7 +87,6 @@ public:
   virtual bool IsDirectory() const = 0;
   // The number of files and directories in a directory, including those in subdirectories.
   // Not guaranteed to return a meaningful value for files.
-  virtual u32 GetTotalChildren() const = 0;
   virtual std::string GetName() const = 0;
   virtual bool NameCaseInsensitiveEquals(std::string_view other) const = 0;
   // GetPath will find the parents of the current object and call GetName on them,

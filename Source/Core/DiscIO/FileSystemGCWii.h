@@ -41,7 +41,6 @@ public:
   u32 GetSize() const override;
   bool IsRoot() const override;
   bool IsDirectory() const override;
-  u32 GetTotalChildren() const override;
   std::string GetName() const override;
   bool NameCaseInsensitiveEquals(std::string_view other) const override;
   std::string GetPath() const override;

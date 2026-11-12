@@ -101,11 +101,6 @@ bool FileInfoGCWii::IsDirectory() const
   return (Get(EntryProperty::NAME_OFFSET) & 0xFF000000) != 0;
 }
 
-u32 FileInfoGCWii::GetTotalChildren() const
-{
-  return Get(EntryProperty::FILE_SIZE) - (m_index + 1);
-}
-
 u64 FileInfoGCWii::GetNameOffset() const
 {
   return static_cast<u64>(FST_ENTRY_SIZE) * m_total_file_infos +

@@ -49,9 +49,7 @@ public:
   void Update() override;
 
   void DoState(PointerWrap& p) override;
-  void UpdateSyncButtonState(bool is_held) override;
   void TriggerSyncButtonPressedEvent() override;
-  void TriggerSyncButtonHeldEvent() override;
 
 private:
   using BufferType = LibUSBBluetoothAdapter::BufferType;

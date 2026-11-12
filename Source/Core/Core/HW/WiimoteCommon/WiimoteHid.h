@@ -35,7 +35,6 @@ public:
   virtual void EventLinked() = 0;
   virtual void EventUnlinked() = 0;
 
-  virtual u8 GetWiimoteDeviceIndex() const = 0;
   virtual void SetWiimoteDeviceIndex(u8 index) = 0;
 
   enum class SensorBarState : bool

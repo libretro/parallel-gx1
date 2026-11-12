@@ -37,9 +37,6 @@ struct Accessors
   virtual void WriteU16(const Core::CPUThreadGuard& guard, u32 address, u16 value);
   virtual u32 ReadU32(const Core::CPUThreadGuard& guard, u32 address) const;
   virtual void WriteU32(const Core::CPUThreadGuard& guard, u32 address, u32 value);
-  virtual u64 ReadU64(const Core::CPUThreadGuard& guard, u32 address) const;
-  virtual void WriteU64(const Core::CPUThreadGuard& guard, u32 address, u64 value);
-  virtual float ReadF32(const Core::CPUThreadGuard& guard, u32 address) const;
 
   virtual iterator begin() const;
   virtual iterator end() const;
