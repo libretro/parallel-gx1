@@ -17,9 +17,6 @@
 #include <string>
 #include <vector>
 
-#include <fmt/format.h>
-#include <fmt/ranges.h>
-
 #include "Common/CommonFuncs.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -49,12 +46,15 @@ std::string HexDump(const u8* data, size_t size)
   std::string out;
   for (size_t row_start = 0; row_start < size; row_start += BYTES_PER_LINE)
   {
-    out += fmt::format("{:06x}: ", row_start);
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%06x: ", static_cast<unsigned>(row_start));
+    out += buf;
     for (size_t i = 0; i < BYTES_PER_LINE; ++i)
     {
       if (row_start + i < size)
       {
-        out += fmt::format("{:02x} ", data[row_start + i]);
+        snprintf(buf, sizeof(buf), "%02x ", data[row_start + i]);
+        out += buf;
       }
       else
       {
@@ -275,27 +275,51 @@ bool TryParse(const std::string& str, bool* const output)
 
 std::string ValueToString(u16 value)
 {
-  return fmt::format("0x{:04x}", value);
+  char buf[8];
+  snprintf(buf, sizeof(buf), "0x%04x", value);
+  return buf;
 }
 
 std::string ValueToString(u32 value)
 {
-  return fmt::format("0x{:08x}", value);
+  char buf[12];
+  snprintf(buf, sizeof(buf), "0x%08x", value);
+  return buf;
 }
 
 std::string ValueToString(u64 value)
 {
-  return fmt::format("0x{:016x}", value);
+  char buf[20];
+  snprintf(buf, sizeof(buf), "0x%016" PRIx64, value);
+  return buf;
+}
+
+/* The shortest decimal form that reads back as the same value, always with a decimal point, in
+ * the C locale whatever the host's locale is. */
+template <typename T>
+static std::string FloatToString(T value, int max_digits)
+{
+  char buf[32];
+  for (int digits = 1; digits <= max_digits; digits++)
+  {
+    CharArrayFromFormat(buf, "%.*g", digits, static_cast<double>(value));
+    T parsed;
+    if (TryParse(std::string(buf), &parsed) && parsed == value)
+      break;
+  }
+  if (!strpbrk(buf, ".eEnN"))
+    strncat(buf, ".0", sizeof(buf) - strlen(buf) - 1);
+  return buf;
 }
 
 std::string ValueToString(float value)
 {
-  return fmt::format("{:#}", value);
+  return FloatToString(value, 9);
 }
 
 std::string ValueToString(double value)
 {
-  return fmt::format("{:#}", value);
+  return FloatToString(value, 17);
 }
 
 std::string ValueToString(int value)

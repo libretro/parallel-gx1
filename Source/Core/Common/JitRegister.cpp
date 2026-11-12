@@ -3,11 +3,12 @@
 
 #include "Common/JitRegister.h"
 
+#include <cinttypes>
+#include <cstdarg>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
-
-#include <fmt/format.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
@@ -18,11 +19,6 @@
 #include <unistd.h>
 #endif
 
-#if defined USE_VTUNE
-#include <jitprofiling.h>
-#pragma comment(lib, "jitprofiling.lib")
-#endif
-
 static File::IOFile s_perf_map_file;
 
 namespace Common::JitRegister
@@ -31,14 +27,11 @@ static bool s_is_enabled = false;
 
 void Init(const std::string& perf_dir)
 {
-#ifdef USE_VTUNE
-  s_is_enabled = true;
-#endif
-
   if (!perf_dir.empty() || getenv("PERF_BUILDID_DIR"))
   {
-    const std::string dir = perf_dir.empty() ? "/tmp" : perf_dir;
-    const std::string filename = fmt::format("{}/perf-{}.map", dir, getpid());
+    char filename[1024];
+    snprintf(filename, sizeof(filename), "%s/perf-%d.map",
+             perf_dir.empty() ? "/tmp" : perf_dir.c_str(), static_cast<int>(getpid()));
     if (s_perf_map_file.Open(filename, "w"))
       s_is_enabled = true;
   }
@@ -46,10 +39,6 @@ void Init(const std::string& perf_dir)
 
 void Shutdown()
 {
-#ifdef USE_VTUNE
-  iJIT_NotifyEvent(iJVM_EVENT_TYPE_SHUTDOWN, nullptr);
-#endif
-
   if (s_perf_map_file.IsOpen())
     s_perf_map_file.Close();
 
@@ -61,22 +50,46 @@ bool IsEnabled()
   return s_is_enabled;
 }
 
-void Register(const void* base_address, u32 code_size, const std::string& symbol_name)
+static void RegisterV(const void* base_address, u32 code_size, const char* format, va_list args)
 {
-#ifdef USE_VTUNE
-  iJIT_Method_Load jmethod = {0};
-  jmethod.method_id = iJIT_GetNewMethodID();
-  jmethod.method_load_address = const_cast<void*>(base_address);
-  jmethod.method_size = code_size;
-  jmethod.method_name = const_cast<char*>(symbol_name.c_str());
-  iJIT_NotifyEvent(iJVM_EVENT_TYPE_METHOD_LOAD_FINISHED, (void*)&jmethod);
-#endif
-
   // Linux perf /tmp/perf-$pid.map:
   if (!s_perf_map_file)
     return;
 
-  const auto entry = fmt::format("{} {:x} {}\n", fmt::ptr(base_address), code_size, symbol_name);
-  s_perf_map_file.WriteBytes(entry.data(), entry.size());
+  char entry[512];
+  int len = snprintf(entry, sizeof(entry), "%" PRIxPTR " %x ",
+                     reinterpret_cast<uintptr_t>(base_address), code_size);
+  if (len < 0 || len >= static_cast<int>(sizeof(entry)) - 1)
+    return;
+  const int name_len = vsnprintf(entry + len, sizeof(entry) - len - 1, format, args);
+  if (name_len < 0)
+    return;
+  len += name_len;
+  if (len > static_cast<int>(sizeof(entry)) - 2)
+    len = static_cast<int>(sizeof(entry)) - 2;
+  entry[len++] = '\n';
+  s_perf_map_file.WriteBytes(entry, len);
+}
+
+void Register(const void* base_address, u32 code_size, const char* format, ...)
+{
+  if (!s_is_enabled)
+    return;
+  va_list args;
+  va_start(args, format);
+  RegisterV(base_address, code_size, format, args);
+  va_end(args);
+}
+
+void Register(const void* start, const void* end, const char* format, ...)
+{
+  if (!s_is_enabled)
+    return;
+  va_list args;
+  va_start(args, format);
+  RegisterV(start,
+            static_cast<u32>(static_cast<const char*>(end) - static_cast<const char*>(start)),
+            format, args);
+  va_end(args);
 }
 }  // namespace Common::JitRegister

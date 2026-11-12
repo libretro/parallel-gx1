@@ -4,6 +4,7 @@
 #include "Common/CPUDetect.h"
 #include "Common/Hash.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -37,9 +38,6 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 #endif
-
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 
 #include <features/features_cpu.h>
 
@@ -82,7 +80,9 @@ static bool ReadProcessorString(std::string* value, const std::string& name)
 static bool ReadPrivilegedCPReg(u64* value, u32 reg)
 {
   // Not sure if the value name is padded or not
-  return WindowsRegistry::ReadValue(value, SUBKEY_CORE0, fmt::format("CP {:x}", reg).c_str());
+  char name[16];
+  snprintf(name, sizeof(name), "CP %x", reg);
+  return WindowsRegistry::ReadValue(value, SUBKEY_CORE0, name);
 }
 
 static bool Read_MIDR_EL1(u64* value)
@@ -213,8 +213,10 @@ static std::string MIDRToString(u64 midr)
   u8 arch = (midr >> 16) & 0xf;
   u16 part_num = (midr >> 4) & 0xfff;
   u8 revision = midr & 0xf;
-  return fmt::format("{:02X}:{:X}:{:04b}:{:03X}:{:X}", implementer, variant, arch, part_num,
-                     revision);
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%02X:%X:%u%u%u%u:%03X:%X", implementer, variant, (arch >> 3) & 1,
+           (arch >> 2) & 1, (arch >> 1) & 1, arch & 1, part_num, revision);
+  return buf;
 }
 
 #endif
@@ -396,20 +398,20 @@ void CPUInfo::Detect()
 
 std::string CPUInfo::Summarize()
 {
-  std::vector<std::string> sum;
-  sum.push_back(model_name);
-  sum.push_back(cpu_id);
+  std::string sum = model_name;
+  sum += ',';
+  sum += cpu_id;
 
   if (bAFP)
-    sum.push_back("AFP");
+    sum += ",AFP";
   if (bAES)
-    sum.push_back("AES");
+    sum += ",AES";
   if (bCRC32)
-    sum.push_back("CRC32");
+    sum += ",CRC32";
   if (bSHA1)
-    sum.push_back("SHA1");
+    sum += ",SHA1";
   if (bSHA2)
-    sum.push_back("SHA2");
+    sum += ",SHA2";
 
-  return fmt::to_string(fmt::join(sum, ","));
+  return sum;
 }

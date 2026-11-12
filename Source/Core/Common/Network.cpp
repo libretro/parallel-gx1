@@ -8,15 +8,13 @@
 #include <vector>
 
 #ifndef _WIN32
+#include <cstdio>
 #include <cstring>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #else
 #include <winsock2.h>
 #endif
-
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 
 #include "Common/BitUtils.h"
 #include "Common/CommonFuncs.h"
@@ -61,6 +59,7 @@ std::string IPv4PortRange::ToString() const
   const u32 different_bits = first_ip_value ^ last_ip_value;
   const u32 common_high_bits = std::countl_zero(different_bits);
 
+  char buf[64];
   std::string ip_range = Common::IPAddressToString(first.ip_address);
   if (common_high_bits == 32)
   {
@@ -69,31 +68,39 @@ std::string IPv4PortRange::ToString() const
   else if ((last_ip_value - first_ip_value + 1) << common_high_bits == 0)
   {
     // An exact network range can use CIDR notation.
-    ip_range = fmt::format("{}/{}", ip_range, common_high_bits);
+    snprintf(buf, sizeof(buf), "/%u", common_high_bits);
+    ip_range += buf;
   }
   else if (common_high_bits >= 24)
   {
     // Only the last octet is different.
-    ip_range = fmt::format("{}-{}", ip_range, last.ip_address.back());
+    snprintf(buf, sizeof(buf), "-%u", last.ip_address.back());
+    ip_range += buf;
   }
   else
   {
     // Plainly specified range.
-    ip_range = fmt::format("{}-{}", ip_range, Common::IPAddressToString(last.ip_address));
+    ip_range += '-';
+    ip_range += Common::IPAddressToString(last.ip_address);
   }
 
   if (first.port == 0)
     return ip_range;
 
   if (first.port == last.port)
-    return fmt::format("{}:{}", ip_range, first.GetPortValue());
-
-  return fmt::format("{}:{}-{}", ip_range, first.GetPortValue(), last.GetPortValue());
+    snprintf(buf, sizeof(buf), ":%u", first.GetPortValue());
+  else
+    snprintf(buf, sizeof(buf), ":%u-%u", first.GetPortValue(), last.GetPortValue());
+  ip_range += buf;
+  return ip_range;
 }
 
 std::string IPAddressToString(IPAddress ip_address)
 {
-  return fmt::format("{}", fmt::join(ip_address, "."));
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%u.%u.%u.%u", ip_address[0], ip_address[1], ip_address[2],
+           ip_address[3]);
+  return buf;
 }
 
 std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
@@ -265,8 +272,10 @@ MACAddress GenerateMacAddress(const MACConsumer type)
 
 std::string MacAddressToString(const MACAddress& mac)
 {
-  return fmt::format("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}", mac[0], mac[1], mac[2], mac[3],
-                     mac[4], mac[5]);
+  char buf[18];
+  snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3],
+           mac[4], mac[5]);
+  return buf;
 }
 
 std::optional<MACAddress> StringToMacAddress(std::string_view mac_string)

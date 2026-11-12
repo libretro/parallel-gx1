@@ -3,9 +3,8 @@
 
 #include "Common/DynamicLibrary.h"
 
+#include <cstdio>
 #include <cstring>
-
-#include <fmt/format.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -51,30 +50,32 @@ std::string DynamicLibrary::GetUnprefixedFilename(const char* filename)
 
 std::string DynamicLibrary::GetVersionedFilename(const char* libname, int major, int minor)
 {
+  char name[256];
 #if defined(_WIN32)
   if (major >= 0 && minor >= 0)
-    return fmt::format("{}-{}-{}.dll", libname, major, minor);
+    snprintf(name, sizeof(name), "%s-%d-%d.dll", libname, major, minor);
   else if (major >= 0)
-    return fmt::format("{}-{}.dll", libname, major);
+    snprintf(name, sizeof(name), "%s-%d.dll", libname, major);
   else
-    return fmt::format("{}.dll", libname);
+    snprintf(name, sizeof(name), "%s.dll", libname);
 #elif defined(__APPLE__)
   const char* prefix = std::strncmp(libname, "lib", 3) ? "lib" : "";
   if (major >= 0 && minor >= 0)
-    return fmt::format("{}{}.{}.{}.dylib", prefix, libname, major, minor);
+    snprintf(name, sizeof(name), "%s%s.%d.%d.dylib", prefix, libname, major, minor);
   else if (major >= 0)
-    return fmt::format("{}{}.{}.dylib", prefix, libname, major);
+    snprintf(name, sizeof(name), "%s%s.%d.dylib", prefix, libname, major);
   else
-    return fmt::format("{}{}.dylib", prefix, libname);
+    snprintf(name, sizeof(name), "%s%s.dylib", prefix, libname);
 #else
   const char* prefix = std::strncmp(libname, "lib", 3) ? "lib" : "";
   if (major >= 0 && minor >= 0)
-    return fmt::format("{}{}.so.{}.{}", prefix, libname, major, minor);
+    snprintf(name, sizeof(name), "%s%s.so.%d.%d", prefix, libname, major, minor);
   else if (major >= 0)
-    return fmt::format("{}{}.so.{}", prefix, libname, major);
+    snprintf(name, sizeof(name), "%s%s.so.%d", prefix, libname, major);
   else
-    return fmt::format("{}{}.so", prefix, libname);
+    snprintf(name, sizeof(name), "%s%s.so", prefix, libname);
 #endif
+  return name;
 }
 
 bool DynamicLibrary::Open(const char* filename)

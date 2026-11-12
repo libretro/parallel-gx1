@@ -5,35 +5,18 @@
 
 #include <string>
 
-#include <fmt/format.h>
-
 #include "Common/CommonTypes.h"
 
 namespace Common::JitRegister
 {
 void Init(const std::string& perf_dir);
 void Shutdown();
-void Register(const void* base_address, u32 code_size, const std::string& symbol_name);
 bool IsEnabled();
 
-template <typename... Args>
-inline void Register(const void* base_address, u32 code_size, fmt::format_string<Args...> format,
-                     Args&&... args)
-{
-  if (!IsEnabled())
-    return;
-
-  Register(base_address, code_size, fmt::format(format, std::forward<Args>(args)...));
-}
-
-template <typename... Args>
-inline void Register(const void* start, const void* end, fmt::format_string<Args...> format,
-                     Args&&... args)
-{
-  if (!IsEnabled())
-    return;
-
-  u32 code_size = (u32)((const char*)end - (const char*)start);
-  Register(start, code_size, fmt::format(format, std::forward<Args>(args)...));
-}
+/* Names a block of generated code in the perf map. The name is only formatted when a map is open,
+ * and must fit on one line. */
+void Register(const void* base_address, u32 code_size, const char* format, ...)
+    DOLPHIN_PRINTF_ATTR(3, 4);
+void Register(const void* start, const void* end, const char* format, ...)
+    DOLPHIN_PRINTF_ATTR(3, 4);
 }  // namespace Common::JitRegister

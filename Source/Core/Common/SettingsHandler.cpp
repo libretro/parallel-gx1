@@ -6,10 +6,9 @@
 #include "Common/SettingsHandler.h"
 
 #include <cstddef>
+#include <cstdio>
 #include <ctime>
 #include <string>
-
-#include <fmt/chrono.h>
 
 #include "Common/CommonTypes.h"
 
@@ -77,7 +76,11 @@ SettingsReader::SettingsReader(const SettingsBuffer& buffer) : m_decoded{""}
 
 void SettingsWriter::AddSetting(std::string_view key, std::string_view value)
 {
-  WriteLine(fmt::format("{}={}\r\n", key, value));
+  std::string line(key);
+  line += '=';
+  line.append(value);
+  line += "\r\n";
+  WriteLine(line);
 }
 
 void SettingsWriter::WriteLine(std::string_view str)
@@ -121,6 +124,8 @@ std::string SettingsWriter::GenerateSerialNumber()
 
   // Must be 9 characters at most; otherwise the serial number will be rejected by SDK libraries,
   // as there is a check to ensure the string length is strictly lower than 10.
-  return fmt::format("{:09}", t % 1000000000);
+  char serial[16];
+  snprintf(serial, sizeof(serial), "%09d", static_cast<int>(t % 1000000000));
+  return serial;
 }
 }  // namespace Common

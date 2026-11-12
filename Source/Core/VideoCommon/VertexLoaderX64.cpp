@@ -51,8 +51,9 @@ VertexLoaderX64::VertexLoaderX64(const TVtxDesc& vtx_desc, const VAT& vtx_att)
   GenerateVertexLoader();
   WriteProtect(true);
 
-  Common::JitRegister::Register(region, GetCodePtr(), "VertexLoaderX64\nVtx desc: \n{}\nVAT:\n{}",
-                                vtx_desc, vtx_att);
+  Common::JitRegister::Register(region, GetCodePtr(), "VertexLoaderX64_%08x_%08x_%08x_%08x_%08x",
+                                vtx_desc.low.Hex, vtx_desc.high.Hex, vtx_att.g0.Hex, vtx_att.g1.Hex,
+                                vtx_att.g2.Hex);
 }
 
 OpArg VertexLoaderX64::GetVertexAddr(CPArray array, VertexComponentFormat attribute)

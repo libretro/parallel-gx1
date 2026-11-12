@@ -457,8 +457,8 @@ const u8* CommonAsmRoutines::GenQuantizedStoreRuntime(bool single, EQuantizeType
   const u8* load = AlignCode4();
   GenQuantizedStore(single, type, -1);
   RET();
-  Common::JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedStore_{}_{}",
-                                std::to_underlying(type), single);
+  Common::JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedStore_%d_%d",
+                                static_cast<int>(std::to_underlying(type)), single ? 1 : 0);
 
   return load;
 }
@@ -489,8 +489,8 @@ const u8* CommonAsmRoutines::GenQuantizedLoadRuntime(bool single, EQuantizeType 
   const u8* load = AlignCode4();
   GenQuantizedLoad(single, type, -1);
   RET();
-  Common::JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedLoad_{}_{}",
-                                std::to_underlying(type), single);
+  Common::JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedLoad_%d_%d",
+                                static_cast<int>(std::to_underlying(type)), single ? 1 : 0);
 
   return load;
 }

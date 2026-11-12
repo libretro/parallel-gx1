@@ -3,11 +3,11 @@
 
 #include "SHA1.h"
 
-#include <cstring>
 #include <array>
+#include <cstdio>
+#include <cstring>
 #include <memory>
 
-#include <fmt/ranges.h>
 #include <lrc_hash.h>
 
 #include "Common/Assert.h"
@@ -383,7 +383,10 @@ Digest CalculateDigest(const u8* msg, size_t len)
 
 std::string DigestToString(const Digest& digest)
 {
-  return fmt::format("{:02X}", fmt::join(digest, ""));
+  char out[sizeof(Digest) * 2 + 1];
+  for (size_t i = 0; i < digest.size(); i++)
+    snprintf(out + i * 2, 3, "%02X", digest[i]);
+  return out;
 }
 
 }  // namespace Common::SHA1

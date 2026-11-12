@@ -9,11 +9,9 @@
 #include <processthreadsapi.h>
 #endif
 
+#include <cstdio>
 #include <cstring>
 #include <string>
-
-#include <fmt/format.h>
-#include <fmt/ranges.h>
 
 #include <features/features_cpu.h>
 
@@ -166,7 +164,9 @@ void CPUInfo::Detect()
     const u32 model = ((version >> 4) & 0xf) + ((version >> 12) & 0xf0);
     const u32 stepping = version & 0xf;
 
-    cpu_id = fmt::format("{:02X}:{:02X}:{:X}", family, model, stepping);
+    char id[32];
+    snprintf(id, sizeof(id), "%02X:%02X:%X", family, model, stepping);
+    cpu_id = id;
 
     // Detect people unfortunate enough to be running Dolphin on an Atom
     if (vendor == CPUVendor::Intel && family == 6 &&
@@ -267,38 +267,38 @@ void CPUInfo::Detect()
 
 std::string CPUInfo::Summarize()
 {
-  std::vector<std::string> sum;
-  sum.push_back(model_name);
-  sum.push_back(cpu_id);
+  std::string sum = model_name;
+  sum += ',';
+  sum += cpu_id;
 
   if (bSSE3)
-    sum.push_back("SSE3");
+    sum += ",SSE3";
   if (bSSSE3)
-    sum.push_back("SSSE3");
+    sum += ",SSSE3";
   if (bSSE4_1)
-    sum.push_back("SSE4.1");
+    sum += ",SSE4.1";
   if (bSSE4_2)
-    sum.push_back("SSE4.2");
+    sum += ",SSE4.2";
   if (HTT)
-    sum.push_back("HTT");
+    sum += ",HTT";
   if (bAVX)
-    sum.push_back("AVX");
+    sum += ",AVX";
   if (bBMI1)
-    sum.push_back("BMI1");
+    sum += ",BMI1";
   if (bBMI2)
-    sum.push_back("BMI2");
+    sum += ",BMI2";
   if (bFMA)
-    sum.push_back("FMA");
+    sum += ",FMA";
   if (bMOVBE)
-    sum.push_back("MOVBE");
+    sum += ",MOVBE";
   if (bAES)
-    sum.push_back("AES");
+    sum += ",AES";
   if (bCRC32)
-    sum.push_back("CRC32");
+    sum += ",CRC32";
   if (bSHA1)
-    sum.push_back("SHA1");
+    sum += ",SHA1";
   if (bSHA2)
-    sum.push_back("SHA2");
+    sum += ",SHA2";
 
-  return fmt::to_string(fmt::join(sum, ","));
+  return sum;
 }

@@ -42,7 +42,7 @@ const u8* TrampolineCache::GenerateReadTrampoline(const TrampolineInfo& info)
 
   JMP(info.start + info.len);
 
-  Common::JitRegister::Register(trampoline, GetCodePtr(), "JIT_ReadTrampoline_{:x}", info.pc);
+  Common::JitRegister::Register(trampoline, GetCodePtr(), "JIT_ReadTrampoline_%x", info.pc);
   return trampoline;
 }
 
@@ -61,6 +61,6 @@ const u8* TrampolineCache::GenerateWriteTrampoline(const TrampolineInfo& info)
 
   JMP(info.start + info.len);
 
-  Common::JitRegister::Register(trampoline, GetCodePtr(), "JIT_WriteTrampoline_{:x}", info.pc);
+  Common::JitRegister::Register(trampoline, GetCodePtr(), "JIT_WriteTrampoline_%x", info.pc);
   return trampoline;
 }
