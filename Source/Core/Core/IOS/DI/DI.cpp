@@ -43,12 +43,18 @@ CoreTiming::EventType* DIDevice::s_finish_executing_di_command;
 DIDevice::DIDevice(EmulationKernel& ios, const std::string& device_name)
     : EmulationDevice(ios, device_name)
 {
+  u32_deque_init(&m_commands_to_execute, 16);
+}
+
+DIDevice::~DIDevice()
+{
+  u32_deque_free(&m_commands_to_execute);
 }
 
 void DIDevice::DoState(PointerWrap& p)
 {
   Device::DoState(p);
-  p.Do(m_commands_to_execute);
+  DO_RETRO_DEQUE(p, u32_deque, &m_commands_to_execute);
   p.Do(m_executing_command);
   p.Do(m_current_partition);
   p.Do(m_has_initialized);
@@ -82,7 +88,7 @@ std::optional<IPCReply> DIDevice::IOCtl(const IOCtlRequest& request)
   }
 
   const bool ready_to_execute = !m_executing_command.has_value();
-  m_commands_to_execute.push_back(request.address);
+  u32_deque_push_back_growing(&m_commands_to_execute, &request.address);
 
   if (ready_to_execute)
   {
@@ -96,14 +102,14 @@ std::optional<IPCReply> DIDevice::IOCtl(const IOCtlRequest& request)
 
 void DIDevice::ProcessQueuedIOCtl()
 {
-  if (m_commands_to_execute.empty())
+  if (u32_deque_empty(&m_commands_to_execute))
   {
     PanicAlert("IOS::HLE::DIDevice: There is no command to execute!");
     return;
   }
 
-  m_executing_command = {m_commands_to_execute.front()};
-  m_commands_to_execute.pop_front();
+  m_executing_command = {*u32_deque_front(&m_commands_to_execute)};
+  u32_deque_pop_front(&m_commands_to_execute);
 
   auto& system = GetSystem();
   IOCtlRequest request{system, m_executing_command->m_request_address};
@@ -660,7 +666,7 @@ void DIDevice::FinishDICommand(DIResult result)
 
   // DVDInterface is now ready to execute another command,
   // so we start executing a command from the queue if there is one
-  if (!m_commands_to_execute.empty())
+  if (!u32_deque_empty(&m_commands_to_execute))
   {
     ProcessQueuedIOCtl();
   }

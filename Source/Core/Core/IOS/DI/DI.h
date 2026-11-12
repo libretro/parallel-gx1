@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <deque>
 #include <optional>
 #include <string>
 
 #include "Common/CommonTypes.h"
+#include "Common/RetroDeque.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
 #include "DiscIO/Volume.h"
@@ -39,6 +39,7 @@ class DIDevice : public EmulationDevice
 {
 public:
   DIDevice(EmulationKernel& ios, const std::string& device_name);
+  ~DIDevice() override;
 
   static void InterruptFromDVDInterface(DVD::DIInterruptType interrupt_type);
   static DiscIO::Partition GetCurrentPartition();
@@ -138,7 +139,7 @@ private:
   static CoreTiming::EventType* s_finish_executing_di_command;
 
   std::optional<ExecutingCommandInfo> m_executing_command;
-  std::deque<u32> m_commands_to_execute;
+  u32_deque_t m_commands_to_execute;
 
   DiscIO::Partition m_current_partition = DiscIO::PARTITION_NONE;
 
