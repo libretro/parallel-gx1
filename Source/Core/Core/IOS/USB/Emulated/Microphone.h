@@ -52,7 +52,8 @@ private:
   virtual s16 GetVolumeModifier() const = 0;
   virtual bool AreSamplesByteSwapped() const = 0;
 
-  long DataCallback(const SampleType* input_buffer, long nframes);
+  // Converts the samples in place and queues them for the guest.
+  long DataCallback(SampleType* samples, long nframes);
   virtual bool IsMicrophoneMuted() const = 0;
   void UpdateLoudness(SampleType sample);
 

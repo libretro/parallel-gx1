@@ -101,17 +101,20 @@ void Microphone::PollRetroArchMic()
   if (!m_sampler.IsSampleOn() || m_sampler.IsMuted() || IsMicrophoneMuted())
     return;
 
-  const int frames_per_call = static_cast<int>(m_current_sampling_rate / 60);
-  std::vector<SampleType> buf(frames_per_call);
+  // A frame's worth of samples, at most 48 kHz / 60, read and converted in place.
+  SampleType buf[1024];
+  int frames_per_call = static_cast<int>(m_current_sampling_rate / 60);
+  if (frames_per_call > static_cast<int>(sizeof(buf) / sizeof(buf[0])))
+    frames_per_call = static_cast<int>(sizeof(buf) / sizeof(buf[0]));
 
   const int frames = Libretro::Input::g_microphone_interface.read_mic(
-    static_cast<retro_microphone_t*>(m_retro_mic), buf.data(), frames_per_call);
+      static_cast<retro_microphone_t*>(m_retro_mic), buf, frames_per_call);
 
   if (frames > 0)
-    DataCallback(buf.data(), frames);
+    DataCallback(buf, frames);
 }
 
-long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
+long Microphone::DataCallback(SampleType* samples, long nframes)
 {
   // Skip data if sampling is off or mute is on
   if (!m_sampler.IsSampleOn() || m_sampler.IsMuted())
@@ -119,21 +122,19 @@ long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
 
   const auto gain = ComputeGain(GetVolumeModifier());
   const bool are_samples_byte_swapped = AreSamplesByteSwapped();
-  std::vector<SampleType> converted;
-  converted.reserve(nframes);
   for (long i = 0; i < nframes; i++)
   {
     // Rounded to the nearest sample: a cast truncates toward zero, which distorts quiet
     // signals around it.
-    const FloatType scaled = input_buffer[i] * gain;
+    const FloatType scaled = samples[i] * gain;
     const SampleType le_sample = MathUtil::SaturatingCast<SampleType>(
         scaled < 0 ? scaled - FloatType(0.5) : scaled + FloatType(0.5));
     UpdateLoudness(le_sample);
-    converted.push_back(are_samples_byte_swapped ? Common::swap16(le_sample) : le_sample);
+    samples[i] = are_samples_byte_swapped ? Common::swap16(le_sample) : le_sample;
   }
 
   // A full ring keeps the older samples; the guest is behind and will catch up on those.
-  retro_spsc_write(&m_stream, converted.data(), converted.size() * sizeof(SampleType));
+  retro_spsc_write(&m_stream, samples, nframes * sizeof(SampleType));
 
   return nframes;
 }
