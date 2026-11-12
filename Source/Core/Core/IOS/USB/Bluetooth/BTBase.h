@@ -33,8 +33,10 @@ public:
   using EmulationDevice::EmulationDevice;
   virtual void TriggerSyncButtonPressedEvent() {}
 
-protected:
+  // the most an ACL packet holds, which the emulated device's queue keeps whole
   static constexpr int ACL_PKT_SIZE = 339;
+
+protected:
   static constexpr int ACL_PKT_NUM = 10;
   static constexpr int SCO_PKT_SIZE = 64;
   static constexpr int SCO_PKT_NUM = 0;

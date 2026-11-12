@@ -4,12 +4,12 @@
 #pragma once
 
 #include <cstddef>
-#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "Common/RetroDeque.h"
 #include "Core/HW/Wiimote.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
@@ -31,6 +31,16 @@ struct SQueuedEvent
   SQueuedEvent(u32 size_, u16 handle);
   SQueuedEvent() = default;
 };
+RETRO_DEQUE_DEFINE(queued_events, SQueuedEvent);
+
+// An ACL packet waiting for the endpoint
+struct ACLQueuedPacket
+{
+  u8 data[BluetoothBaseDevice::ACL_PKT_SIZE];
+  u16 size;
+  u16 conn_handle;
+};
+RETRO_DEQUE_DEFINE(acl_packets, ACLQueuedPacket);
 
 // Important to remember that this class is for /dev/usb/oh1/57e/305 ONLY
 // /dev/usb/oh1 -> internal usb bus
@@ -69,30 +79,31 @@ private:
 
   std::unique_ptr<USB::V0IntrMessage> m_hci_endpoint;
   std::unique_ptr<USB::V0BulkMessage> m_acl_endpoint;
-  std::deque<SQueuedEvent> m_event_queue;
+  // made with the device: an event is a kilobyte, which a std::deque took from the heap one
+  // event at a time
+  queued_events_t m_event_queue;
 
   class ACLPool
   {
   public:
-    explicit ACLPool(EmulationKernel& ios) : m_ios(ios), m_queue() {}
+    explicit ACLPool(EmulationKernel& ios) : m_ios(ios) { acl_packets_init(&m_queue, MAX_PACKETS); }
+    ~ACLPool() { acl_packets_free(&m_queue); }
+    ACLPool(const ACLPool&) = delete;
+    ACLPool& operator=(const ACLPool&) = delete;
     void Store(const u8* data, const u16 size, const u16 conn_handle);
 
     void WriteToEndpoint(const USB::V0BulkMessage& endpoint);
 
-    bool IsEmpty() const { return m_queue.empty(); }
+    bool IsEmpty() const { return acl_packets_empty(&m_queue); }
     // For SaveStates
-    void DoState(PointerWrap& p) { p.Do(m_queue); }
+    void DoState(PointerWrap& p) { DO_RETRO_DEQUE(p, acl_packets, &m_queue); }
 
   private:
-    struct Packet
-    {
-      u8 data[ACL_PKT_SIZE];
-      u16 size;
-      u16 conn_handle;
-    };
+    // past it, a packet is dropped
+    static constexpr size_t MAX_PACKETS = 100;
 
     EmulationKernel& m_ios;
-    std::deque<Packet> m_queue;
+    acl_packets_t m_queue;
   } m_acl_pool{GetEmulationKernel()};
 
   u32 m_packet_count[MAX_BBMOTES] = {};
