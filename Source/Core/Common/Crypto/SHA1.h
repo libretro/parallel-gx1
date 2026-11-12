@@ -10,6 +10,8 @@
 #include <type_traits>
 #include <vector>
 
+#include <lrc_hash.h>
+
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 
@@ -18,20 +20,26 @@ namespace Common::SHA1
 using Digest = std::array<u8, 160 / 8>;
 static constexpr size_t DIGEST_LEN = sizeof(Digest);
 
-class Context
+// libretro-common's SHA-1, which runs on the SHA instructions where the CPU has them
+class Context final
 {
 public:
-  virtual ~Context() = default;
-  virtual void Update(const u8* msg, size_t len) = 0;
+  Context() { sha1_stream_init(&m_state); }
+  void Update(const u8* msg, size_t len) { sha1_stream_update(&m_state, msg, len); }
   void Update(std::string_view msg)
   {
     return Update(reinterpret_cast<const u8*>(msg.data()), msg.size());
   }
-  virtual Digest Finish() = 0;
-  virtual bool HwAccelerated() const = 0;
-};
+  Digest Finish()
+  {
+    Digest digest;
+    sha1_stream_final(&m_state, digest.data());
+    return digest;
+  }
 
-std::unique_ptr<Context> CreateContext();
+private:
+  struct sha1_state m_state;
+};
 
 Digest CalculateDigest(const u8* msg, size_t len);
 

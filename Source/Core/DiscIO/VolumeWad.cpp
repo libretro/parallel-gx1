@@ -163,7 +163,7 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
 
   // Decrypt and hash in chunks: in CBC the IV of each chunk is the last
   // encrypted block before it, so the borrowed input is never copied whole.
-  std::unique_ptr<Common::SHA1::Context> sha1 = Common::SHA1::CreateContext();
+  Common::SHA1::Context sha1;
   u8 chunk[2048];
   u64 left_to_hash = content.size;
   size_t offset = 0;
@@ -173,12 +173,12 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
     const size_t n = left < sizeof(chunk) ? left : sizeof(chunk);
     context->Crypt(offset ? encrypted_data + offset - 16 : iv, encrypted_data + offset, chunk, n);
     const size_t hashed = left_to_hash < n ? size_t(left_to_hash) : n;
-    sha1->Update(chunk, hashed);
+    sha1.Update(chunk, hashed);
     left_to_hash -= hashed;
     offset += n;
   }
 
-  return sha1->Finish() == content.sha1;
+  return sha1.Finish() == content.sha1;
 }
 
 IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const

@@ -219,7 +219,7 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
 
     // Otherwise, check whether the installed content SHA1 matches the expected hash, hashing
     // the content in chunks rather than reading it whole.
-    std::unique_ptr<Common::SHA1::Context> sha1 = Common::SHA1::CreateContext();
+    Common::SHA1::Context sha1;
     u8 chunk[2048];
     u32 left = file->GetStatus()->size;
     bool ok = true;
@@ -231,10 +231,10 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
         ok = false;
         break;
       }
-      sha1->Update(chunk, n);
+      sha1.Update(chunk, n);
       left -= n;
     }
-    if (ok && sha1->Finish() == content.sha1)
+    if (ok && sha1.Finish() == content.sha1)
       stored_contents.push_back(content);
   }
 
