@@ -321,10 +321,11 @@ ReturnCode IOSC::ComputeSharedKey(Handle dest_handle, Handle private_handle, Han
   }
 
   // Calculate the ECC shared secret.
-  const std::array<u8, 0x3c> shared_secret =
+  // Its X coordinate
+  const Common::ec::SharedSecret shared_secret =
       Common::ec::ComputeSharedSecret(private_entry->data.data(), public_entry->data.data());
 
-  const auto sha1 = Common::SHA1::CalculateDigest(shared_secret.data(), shared_secret.size() / 2);
+  const auto sha1 = Common::SHA1::CalculateDigest(shared_secret.data(), shared_secret.size());
 
   dest_entry->data.resize(AES128_KEY_SIZE);
   std::memcpy(dest_entry->data.data(), sha1.data(), AES128_KEY_SIZE);

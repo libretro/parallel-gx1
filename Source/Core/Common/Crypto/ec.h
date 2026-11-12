@@ -11,6 +11,8 @@ namespace Common::ec
 {
 using Signature = std::array<u8, 60>;
 using PublicKey = std::array<u8, 60>;
+/// The X coordinate of the shared point
+using SharedSecret = std::array<u8, 30>;
 
 /// Generate a signature using ECDSA.
 Signature Sign(const u8* key, const u8* hash);
@@ -22,8 +24,9 @@ Signature Sign(const u8* key, const u8* hash);
 /// @param  hash        Message hash
 bool VerifySignature(const u8* public_key, const u8* signature, const u8* hash);
 
-/// Compute a shared secret from a private key (30 bytes) and public key (60 bytes).
-std::array<u8, 60> ComputeSharedSecret(const u8* private_key, const u8* public_key);
+/// Compute a shared secret from a private key (30 bytes) and public key (60 bytes); all zeros
+/// when the public key is not a point of the curve.
+SharedSecret ComputeSharedSecret(const u8* private_key, const u8* public_key);
 
 /// Convert a ECC private key (30 bytes) to a public key (60 bytes).
 PublicKey PrivToPub(const u8* key);

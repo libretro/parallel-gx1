@@ -401,7 +401,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Config/ConfigInfo.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/Layer.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/AES.cpp \
-	$(CORE_DIR)/Source/Core/Common/Crypto/bn.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/ec.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/HMAC.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/SHA1.cpp \
