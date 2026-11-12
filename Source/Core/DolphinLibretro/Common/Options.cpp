@@ -2246,6 +2246,14 @@ double GetCached<double>(const char* key, const double def)
   return (i < 0 || !s_cache[i].has_double) ? def : s_cache[i].double_value;
 }
 
+/* The value itself, without a copy: good until the frontend next changes the option. */
+template <>
+const char* GetCached<const char*>(const char* key, const char* def)
+{
+  const int i = Find(key);
+  return (i < 0) ? def : s_cache[i].raw.c_str();
+}
+
 template <>
 std::string GetCached<std::string>(const char* key, const std::string def)
 {

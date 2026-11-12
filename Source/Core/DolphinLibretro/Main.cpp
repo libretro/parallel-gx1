@@ -573,7 +573,7 @@ void retro_run(void)
   {
     Config::SetCurrent(Config::MAIN_WIIMOTE_CONTINUOUS_SCANNING,
       Libretro::Options::GetCached<bool>(Libretro::Options::sysconf::WIIMOTE_CONTINUOUS_SCANNING) ||
-      Libretro::Options::GetCached<std::string>(Libretro::Options::wiimote::DEFAULT_DEVICE) == "real");
+      !strcmp(Libretro::Options::GetCached<const char*>(Libretro::Options::wiimote::DEFAULT_DEVICE, ""), "real"));
     WiimoteReal::Initialize(Wiimote::InitializeMode::DO_NOT_WAIT_FOR_WIIMOTES);
   }
 

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string.h>
 
 #include <libretro.h>
 
@@ -51,10 +52,10 @@ static Common::Quaternion Heading(const Common::Quaternion& q)
 
 Mode GetMode()
 {
-  const std::string mode = Options::GetCached<std::string>(Options::gfx_settings::VR_MODE);
-  if (mode == "stereo")
+  const char* mode = Options::GetCached<const char*>(Options::gfx_settings::VR_MODE, "");
+  if (!strcmp(mode, "stereo"))
     return Mode::Stereo;
-  if (mode == "immersive")
+  if (!strcmp(mode, "immersive"))
     return Mode::Immersive;
   return Mode::Off;
 }

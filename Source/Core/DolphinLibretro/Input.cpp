@@ -1,8 +1,8 @@
 #include <array>
 #include <cassert>
+#include <string.h>
 #include <libretro.h>
 #include <retro_atomic.h>
-#include <string_view>
 #include <utility>
 
 #include "Common/Common.h"
@@ -1341,7 +1341,11 @@ void retro_set_input_state(retro_input_state_t cb)
 /// choice when the option leaves it to each port.
 static unsigned wii_port_device(unsigned device, bool altGCPorts)
 {
-  static const std::pair<std::string_view, unsigned> devices[] = {
+  static const struct
+  {
+    const char* name;
+    unsigned id;
+  } devices[] = {
       {"upright", RETRO_DEVICE_WIIMOTE},
       {"sideways", RETRO_DEVICE_WIIMOTE_SW},
       {"nunchuk", RETRO_DEVICE_WIIMOTE_NC},
@@ -1356,14 +1360,15 @@ static unsigned wii_port_device(unsigned device, bool altGCPorts)
       {"gamecube", RETRO_DEVICE_GC_ON_WII},
   };
 
-  const std::string choice =
-      Libretro::Options::GetCached<std::string>(Libretro::Options::wiimote::DEFAULT_DEVICE);
+  const char* choice =
+      Libretro::Options::GetCached<const char*>(Libretro::Options::wiimote::DEFAULT_DEVICE, "");
+  unsigned i;
 
-  for (const auto& [name, id] : devices)
+  for (i = 0; i < sizeof(devices) / sizeof(devices[0]); i++)
   {
     // With the alternative GC ports, GameCube controllers have ports 5-8 to themselves.
-    if (choice == name && !(id == RETRO_DEVICE_GC_ON_WII && altGCPorts))
-      return id;
+    if (!strcmp(choice, devices[i].name) && !(devices[i].id == RETRO_DEVICE_GC_ON_WII && altGCPorts))
+      return devices[i].id;
   }
 
   return device;

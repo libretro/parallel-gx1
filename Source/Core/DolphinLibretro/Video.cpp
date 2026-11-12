@@ -6,6 +6,7 @@
 #include "DolphinLibretro/Output.h"
 
 #include <cassert>
+#include <string.h>
 #include <memory>
 #include <vector>
 
@@ -127,10 +128,10 @@ void Init()
 {
   DEBUG_LOG(VIDEO, "Video - Init");
 
-  std::string renderer = Libretro::Options::GetCached<std::string>(
-    Libretro::Options::gfx_settings::RENDERER);
+  const char* renderer = Libretro::Options::GetCached<const char*>(
+    Libretro::Options::gfx_settings::RENDERER, "");
 
-  if (renderer == "Hardware")
+  if (!strcmp(renderer, "Hardware"))
   {
     retro_hw_context_type preferred = RETRO_HW_CONTEXT_NONE;
     if (environ_cb(RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER, &preferred))
