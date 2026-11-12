@@ -467,14 +467,6 @@ public:
   }
   ciface::Core::DeviceRemoval UpdateInput() override
   {
-#if 0
-    if (!Libretro::Input::poll_cb)
-    {
-      return ciface::Core::DeviceRemoval::Keep;
-    }
-
-    Libretro::Input::poll_cb();
-#endif
     return ciface::Core::DeviceRemoval::Keep;
   }
   std::string GetName() const override { return GetDeviceName(m_device); }
@@ -586,22 +578,6 @@ static void AddDevicesForPort(unsigned port)
   g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_MOUSE, port));
   g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_POINTER, port));
 }
-
-#if 0
-/* Disabled as it messes with the controllers index, so player 2 may end up controlling player 3, etc.
- * if controllers are not plugged back in the correct order. */
-static void RemoveDevicesForPort(unsigned port)
-{
-  g_controller_interface.RemoveDevice([&port](const auto& device) {
-    return device->GetSource() == source &&
-           (device->GetName() == GetDeviceName(RETRO_DEVICE_ANALOG) ||
-            device->GetName() == GetDeviceName(RETRO_DEVICE_JOYPAD) ||
-            device->GetName() == GetDeviceName(RETRO_DEVICE_MOUSE) ||
-            device->GetName() == GetDeviceName(RETRO_DEVICE_POINTER)) &&
-           dynamic_cast<const Device*>(device)->GetPort() == port;
-  });
-}
-#endif
 
 void Init()
 {
@@ -1283,10 +1259,6 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
     wmHotkeys->SetControlExpression(1,
       uprightToggle != MODIFIER_DISABLED_CONTROL ? uprightToggle : "");  // Upright Toggle
   }
-#if 0
-    wmHotkeys->SetControlExpression(2, "");  // Sideways Hold
-    wmHotkeys->SetControlExpression(3, "");  // Upright Hold
-#endif
 
   // Rumble
   if (f.rumble)
@@ -1607,12 +1579,6 @@ void retro_set_controller_port_device_gc(unsigned port, unsigned device)
 {
   std::string devJoypad = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_JOYPAD);
   std::string devAnalog = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_ANALOG);
-  std::string devMouse = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_MOUSE);
-  std::string devPointer = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_POINTER);
-#if 0
-  std::string devKeyboard = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_KEYBOARD);
-  std::string devLightgun = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_LIGHTGUN);
-#endif
 
   if (device == RETRO_DEVICE_GC_ON_WII) // Disconnect Wii device if we're using GC controller as device type to avoid conflict
     WiimoteCommon::OnSourceChanged(port, WiimoteSource::None);
@@ -1726,11 +1692,6 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
   std::string devJoypad = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_JOYPAD);
   std::string devAnalog = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_ANALOG);
   std::string devMouse = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_MOUSE);
-  std::string devPointer = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_POINTER);
-#if 0
-  std::string devKeyboard = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_KEYBOARD);
-  std::string devLightgun = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_LIGHTGUN);
-#endif
 
   // Take the dongle off the id and remember it, so the branches below only see
   // the remotes they were written for.
@@ -1891,10 +1852,6 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
       ControllerEmu::ControlGroup* ncButtons = wm->GetNunchukGroup(NunchukGroup::Buttons);
       ControllerEmu::ControlGroup* ncStick = wm->GetNunchukGroup(NunchukGroup::Stick);
       ControllerEmu::ControlGroup* ncShake = wm->GetNunchukGroup(NunchukGroup::Shake);
-#if 0
-      ControllerEmu::ControlGroup* ncTilt = wm->GetNunchukGroup(NunchukGroup::Tilt);
-      ControllerEmu::ControlGroup* ncSwing = wm->GetNunchukGroup(NunchukGroup::Swing);
-#endif
       ncButtons->SetControlExpression(0, "X");                             // C
       ncButtons->SetControlExpression(1, "Y");                             // Z
       ncStick->SetControlExpression(0, "`" + devAnalog + ":Y0-`");         // Up
