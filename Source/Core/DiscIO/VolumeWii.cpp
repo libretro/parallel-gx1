@@ -249,11 +249,6 @@ bool VolumeWii::HasWiiHashes() const
   return m_has_hashes;
 }
 
-bool VolumeWii::HasWiiEncryption() const
-{
-  return m_has_encryption;
-}
-
 std::vector<Partition> VolumeWii::GetPartitions() const
 {
   std::vector<Partition> partitions;
@@ -266,12 +261,6 @@ std::vector<Partition> VolumeWii::GetPartitions() const
 Partition VolumeWii::GetGamePartition() const
 {
   return m_game_partition;
-}
-
-std::optional<u32> VolumeWii::GetPartitionType(const Partition& partition) const
-{
-  auto it = m_partitions.find(partition);
-  return it != m_partitions.end() ? it->second.type : std::optional<u32>();
 }
 
 std::optional<u64> VolumeWii::GetTitleID(const Partition& partition) const

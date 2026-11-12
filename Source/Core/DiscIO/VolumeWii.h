@@ -61,10 +61,8 @@ public:
   ~VolumeWii() override;
   bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const override;
   bool HasWiiHashes() const override;
-  bool HasWiiEncryption() const override;
   std::vector<Partition> GetPartitions() const override;
   Partition GetGamePartition() const override;
-  std::optional<u32> GetPartitionType(const Partition& partition) const override;
   std::optional<u64> GetTitleID(const Partition& partition) const override;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition) const override;
   const IOS::ES::TMDReader& GetTMD(const Partition& partition) const override;

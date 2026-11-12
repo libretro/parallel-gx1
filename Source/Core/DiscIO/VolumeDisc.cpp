@@ -147,38 +147,6 @@ std::optional<u16> VolumeDisc::GetRevision(const Partition& partition) const
   return revision ? *revision : std::optional<u16>();
 }
 
-std::string VolumeDisc::GetInternalName(const Partition& partition) const
-{
-  char name[0x60];
-
-  // Triforce games have their Title stored in the boot.id file
-  if (GetVolumeType() == Platform::Triforce)
-  {
-    const BootID* boot_id = static_cast<const VolumeGC*>(this)->GetTriforceBootID();
-    return DecodeString(boot_id->game_name.data(), boot_id->game_name.size());
-  }
-
-  if (!Read(0x20, sizeof(name), reinterpret_cast<u8*>(&name), partition))
-    return std::string();
-
-  return DecodeString(name, sizeof(name));
-}
-
-std::string VolumeDisc::GetApploaderDate(const Partition& partition) const
-{
-  char date[16];
-
-  if (!Read(0x2440, sizeof(date), reinterpret_cast<u8*>(&date), partition))
-    return std::string();
-
-  return DecodeString(date, sizeof(date));
-}
-
-std::optional<u8> VolumeDisc::GetDiscNumber(const Partition& partition) const
-{
-  return ReadSwapped<u8>(6, partition);
-}
-
 u32 VolumeDisc::GetSimulatedMemorySize() const
 {
   // Simulated memory size is a 32-bit unsigned integer in the `bi2.bin` file at offset `0x04`.

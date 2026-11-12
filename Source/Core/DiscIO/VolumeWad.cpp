@@ -132,21 +132,6 @@ std::vector<u8> VolumeWAD::GetContent(u16 index) const
   return {};
 }
 
-std::vector<u64> VolumeWAD::GetContentOffsets() const
-{
-  const std::vector<IOS::ES::Content> contents = m_tmd.GetContents();
-  std::vector<u64> content_offsets;
-  content_offsets.reserve(contents.size());
-  u64 offset = m_data_offset;
-  for (const IOS::ES::Content& content : contents)
-  {
-    content_offsets.emplace_back(offset);
-    offset += Common::AlignUp(content.size, 0x40);
-  }
-
-  return content_offsets;
-}
-
 bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
                                       size_t encrypted_size,
                                       const IOS::ES::TicketReader& ticket) const

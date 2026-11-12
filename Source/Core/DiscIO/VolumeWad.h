@@ -37,7 +37,6 @@ public:
   const std::vector<u8>&
   GetCertificateChain(const Partition& partition = PARTITION_NONE) const override;
   std::vector<u8> GetContent(u16 index) const override;
-  std::vector<u64> GetContentOffsets() const override;
   bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
                              size_t encrypted_size,
                              const IOS::ES::TicketReader& ticket) const override;
@@ -46,14 +45,6 @@ public:
   std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const override;
   std::string GetMakerID(const Partition& partition = PARTITION_NONE) const override;
   std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const override;
-  std::string GetInternalName(const Partition& partition = PARTITION_NONE) const override
-  {
-    return "";
-  }
-  std::string GetApploaderDate(const Partition& partition = PARTITION_NONE) const override
-  {
-    return "";
-  }
   Platform GetVolumeType() const override;
   bool IsDatelDisc() const override;
   bool IsNKit() const override;

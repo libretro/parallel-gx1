@@ -68,13 +68,8 @@ public:
   }
 
   virtual bool HasWiiHashes() const { return false; }
-  virtual bool HasWiiEncryption() const { return false; }
   virtual std::vector<Partition> GetPartitions() const { return {}; }
   virtual Partition GetGamePartition() const { return PARTITION_NONE; }
-  virtual std::optional<u32> GetPartitionType(const Partition& partition) const
-  {
-    return std::nullopt;
-  }
   std::optional<u64> GetTitleID() const { return GetTitleID(GetGamePartition()); }
   virtual std::optional<u64> GetTitleID(const Partition& partition) const { return std::nullopt; }
   virtual const IOS::ES::TicketReader& GetTicket(const Partition& partition) const
@@ -87,7 +82,6 @@ public:
     return INVALID_CERT_CHAIN;
   }
   virtual std::vector<u8> GetContent(u16 index) const { return {}; }
-  virtual std::vector<u64> GetContentOffsets() const { return {}; }
   virtual bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
                                      size_t encrypted_size,
                                      const IOS::ES::TicketReader& ticket) const
@@ -105,14 +99,6 @@ public:
   virtual std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const = 0;
   virtual std::string GetMakerID(const Partition& partition = PARTITION_NONE) const = 0;
   virtual std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const = 0;
-  virtual std::string GetInternalName(const Partition& partition = PARTITION_NONE) const = 0;
-  std::string GetApploaderDate() const { return GetApploaderDate(GetGamePartition()); }
-  virtual std::string GetApploaderDate(const Partition& partition) const = 0;
-  // 0 is the first disc, 1 is the second disc
-  virtual std::optional<u8> GetDiscNumber(const Partition& partition = PARTITION_NONE) const
-  {
-    return 0;
-  }
   virtual Platform GetVolumeType() const = 0;
   virtual bool IsDatelDisc() const = 0;
   virtual bool IsNKit() const = 0;
@@ -138,7 +124,6 @@ public:
   virtual const BlobReader& GetBlobReader() const = 0;
 
 protected:
-  std::string DecodeString(const char* data, size_t size) const;
   static std::string FilterGameID(const char* data, size_t size);
 
   virtual u32 GetOffsetShift() const { return 0; }

@@ -34,13 +34,6 @@ const IOS::ES::TicketReader Volume::INVALID_TICKET{};
 const IOS::ES::TMDReader Volume::INVALID_TMD{};
 const std::vector<u8> Volume::INVALID_CERT_CHAIN{};
 
-std::string Volume::DecodeString(const char* data, size_t size) const
-{
-  // strnlen to trim null bytes
-  std::string string(data, strnlen(data, size));
-  return GetRegion() == Region::NTSC_J ? SHIFTJISToUTF8(string) : CP1252ToUTF8(string);
-}
-
 std::string Volume::FilterGameID(const char* data, size_t size)
 {
   std::string string(data, size);
