@@ -981,20 +981,26 @@ void BluetoothPassthroughBind()
   was_pressed = sync;
 }
 
-static int GetRetroButtonId(const std::string& name)
+static int GetRetroButtonId(const char* name)
 {
-  if (name == "A") return RETRO_DEVICE_ID_JOYPAD_A;
-  if (name == "B") return RETRO_DEVICE_ID_JOYPAD_B;
-  if (name == "X") return RETRO_DEVICE_ID_JOYPAD_X;
-  if (name == "Y") return RETRO_DEVICE_ID_JOYPAD_Y;
-  if (name == "L") return RETRO_DEVICE_ID_JOYPAD_L2;
-  if (name == "R") return RETRO_DEVICE_ID_JOYPAD_R2;
-  if (name == "L2") return RETRO_DEVICE_ID_JOYPAD_L;
-  if (name == "R2") return RETRO_DEVICE_ID_JOYPAD_R;
-  if (name == "L3") return RETRO_DEVICE_ID_JOYPAD_L3;
-  if (name == "R3") return RETRO_DEVICE_ID_JOYPAD_R3;
-  if (name == "Start") return RETRO_DEVICE_ID_JOYPAD_START;
-  if (name == "Select") return RETRO_DEVICE_ID_JOYPAD_SELECT;
+  static const struct
+  {
+    const char* name;
+    int id;
+  } buttons[] = {
+      {"A", RETRO_DEVICE_ID_JOYPAD_A},          {"B", RETRO_DEVICE_ID_JOYPAD_B},
+      {"X", RETRO_DEVICE_ID_JOYPAD_X},          {"Y", RETRO_DEVICE_ID_JOYPAD_Y},
+      {"L", RETRO_DEVICE_ID_JOYPAD_L2},         {"R", RETRO_DEVICE_ID_JOYPAD_R2},
+      {"L2", RETRO_DEVICE_ID_JOYPAD_L},         {"R2", RETRO_DEVICE_ID_JOYPAD_R},
+      {"L3", RETRO_DEVICE_ID_JOYPAD_L3},        {"R3", RETRO_DEVICE_ID_JOYPAD_R3},
+      {"Start", RETRO_DEVICE_ID_JOYPAD_START},  {"Select", RETRO_DEVICE_ID_JOYPAD_SELECT},
+  };
+  unsigned i;
+  for (i = 0; i < sizeof(buttons) / sizeof(buttons[0]); i++)
+  {
+    if (!strcmp(name, buttons[i].name))
+      return buttons[i].id;
+  }
   return -1;
 }
 
@@ -1045,9 +1051,8 @@ void Update()
 
   if (!system.IsWii() && Libretro::Input::g_has_microphone_support && gcMicEnable)
   {
-    std::string micHotkey = Libretro::Options::GetCached<std::string>(
-      Libretro::Options::sysconf_gc::HOTKEY_ACTIVATE_MICROPHONE);
-    int micButtonId = GetRetroButtonId(micHotkey);
+    const int micButtonId = GetRetroButtonId(Libretro::Options::GetCached<const char*>(
+        Libretro::Options::sysconf_gc::HOTKEY_ACTIVATE_MICROPHONE, ""));
 
     for (int i = 0; i < 4; i++)
     {
@@ -1316,10 +1321,10 @@ void UpdateGCMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned devic
   {
     GCPad* gcPad = (GCPad*)Pad::GetConfig()->GetController(port > 3 ? port - 4 : port);
     ControllerEmu::ControlGroup* gcMic = gcPad->GetGroup(PadGroup::Mic);
-    std::string gcMicButton = Libretro::Options::GetCached<std::string>
-      (Libretro::Options::sysconf_gc::HOTKEY_ACTIVATE_MICROPHONE);
+    const char* gcMicButton = Libretro::Options::GetCached<const char*>(
+        Libretro::Options::sysconf_gc::HOTKEY_ACTIVATE_MICROPHONE, "");
 
-    if (!gcMicButton.empty())
+    if (*gcMicButton)
       gcMic->SetControlExpression(0, gcMicButton);
   }
 }
