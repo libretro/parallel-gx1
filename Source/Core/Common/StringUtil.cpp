@@ -5,15 +5,15 @@
 
 #include <array>
 #include <cassert>
+#include <cerrno>
 #include <cinttypes>
+#include <clocale>
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iomanip>
 #include <iterator>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -161,23 +161,55 @@ std::string StringFromFormatV(const char* format, va_list args)
 // For Debugging. Read out an u8 array.
 std::string ArrayToString(const u8* data, u32 size, int line_len, bool spaces)
 {
-  std::ostringstream oss;
-  oss << std::setfill('0') << std::hex;
-
+  std::string out;
+  out.reserve(size * 3);
   for (int line = 0; size != 0; ++data, --size)
   {
-    oss << std::setw(2) << static_cast<int>(*data);
+    char hex[4];
+    snprintf(hex, sizeof(hex), "%02x", *data);
+    out += hex;
 
     if (line_len == ++line)
     {
-      oss << '\n';
+      out += '\n';
       line = 0;
     }
     else if (spaces)
-      oss << ' ';
+      out += ' ';
   }
 
-  return oss.str();
+  return out;
+}
+
+/* strtod/strtof read the decimal point of the host locale, so the separator is swapped for it */
+template <typename T>
+static bool TryParseDecimal(const std::string& str, T* output, T (*parse)(const char*, char**))
+{
+  char buf[64];
+  if (str.empty() || str.size() >= sizeof(buf))
+    return false;
+  const char point = *localeconv()->decimal_point;
+  for (size_t i = 0; i < str.size(); i++)
+    buf[i] = (str[i] == '.' || str[i] == ',') ? point : str[i];
+  buf[str.size()] = '\0';
+
+  char* end = nullptr;
+  errno = 0;
+  const T value = parse(buf, &end);
+  if (end == buf || *end != '\0' || errno == ERANGE)
+    return false;
+  *output = value;
+  return true;
+}
+
+bool TryParse(const std::string& str, float* output)
+{
+  return TryParseDecimal(str, output, strtof);
+}
+
+bool TryParse(const std::string& str, double* output)
+{
+  return TryParseDecimal(str, output, strtod);
 }
 
 template <typename T>
@@ -399,13 +431,16 @@ std::string PathToFileName(std::string_view path)
 
 std::vector<std::string> SplitString(const std::string& str, const char delim)
 {
-  std::istringstream iss(str);
-  std::vector<std::string> output(1);
-
-  while (std::getline(iss, *output.rbegin(), delim))
-    output.push_back("");
-
-  output.pop_back();
+  std::vector<std::string> output;
+  size_t start = 0;
+  while (start < str.size())
+  {
+    size_t end = str.find(delim, start);
+    if (end == std::string::npos)
+      end = str.size();
+    output.emplace_back(str, start, end - start);
+    start = end + 1;
+  }
   return output;
 }
 

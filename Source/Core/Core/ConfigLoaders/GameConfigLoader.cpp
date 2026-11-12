@@ -6,7 +6,6 @@
 #include <array>
 #include <map>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -142,14 +141,16 @@ static Location MapINIToRealLocation(const std::string& section, const std::stri
 
   // Attempt to load it as a configuration option
   // It will be in the format of '<System>.<Section>'
-  std::istringstream buffer(section);
-  std::string system_str, config_section;
-
-  bool fail = false;
-  std::getline(buffer, system_str, '.');
-  fail |= buffer.fail();
-  std::getline(buffer, config_section, '.');
-  fail |= buffer.fail();
+  const size_t dot = section.find('.');
+  const bool fail = dot == std::string::npos || dot + 1 >= section.size();
+  const std::string system_str = section.substr(0, dot);
+  std::string config_section;
+  if (!fail)
+  {
+    const size_t end = section.find('.', dot + 1);
+    config_section =
+        section.substr(dot + 1, end == std::string::npos ? std::string::npos : end - dot - 1);
+  }
 
   const std::optional<Config::System> system = Config::GetSystemFromName(system_str);
   if (!fail && system)

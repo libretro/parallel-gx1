@@ -3,8 +3,6 @@
 
 #include "Core/Config/MainSettings.h"
 
-#include <sstream>
-
 #include <cstdio>
 
 #include "Common/Assert.h"
@@ -468,12 +466,13 @@ static std::set<USBUtils::DeviceInfo> LoadUSBWhitelistFromString(const std::stri
 
 static std::string SaveUSBWhitelistToString(const std::set<USBUtils::DeviceInfo>& devices)
 {
-  std::ostringstream oss;
+  std::string devices_string;
   for (const auto& device : devices)
-    oss << device.ToString() << ',';
-  std::string devices_string = oss.str();
-  if (!devices_string.empty())
-    devices_string.pop_back();
+  {
+    if (!devices_string.empty())
+      devices_string += ',';
+    devices_string += device.ToString();
+  }
   return devices_string;
 }
 

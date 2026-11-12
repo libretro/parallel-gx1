@@ -3,8 +3,8 @@
 
 #include "Core/GeckoCodeConfig.h"
 
+#include <algorithm>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -29,31 +29,30 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
 
     for (auto& line : lines)
     {
-      std::istringstream ss(line);
-
-      // Some locales (e.g. fr_FR.UTF-8) don't split the string stream on space
-      // Use the C locale to workaround this behavior
-      ss.imbue(std::locale::classic());
-
       switch ((line)[0])
       {
-      // enabled or disabled code
+      // enabled or disabled code: "+$name [creator]" or "$name [creator]"
       case '+':
-        ss.seekg(1);
-        [[fallthrough]];
       case '$':
+      {
         if (!gcode.name.empty())
           gcodes.push_back(gcode);
         gcode = GeckoCode();
-        gcode.enabled = (1 == ss.tellg());  // silly
+        gcode.enabled = line[0] == '+';
         gcode.user_defined = (ini == &localIni);
-        ss.seekg(1, std::ios_base::cur);
-        // read the code name
-        std::getline(ss, gcode.name, '[');  // stop at [ character (beginning of contributor name)
-        gcode.name = StripWhitespace(gcode.name);
-        // read the code creator name
-        std::getline(ss, gcode.creator, ']');
+        const size_t start = std::min<size_t>(gcode.enabled ? 2 : 1, line.size());
+        // the code name stops at '[', where the creator's name begins
+        const size_t open = line.find('[', start);
+        gcode.name = StripWhitespace(
+            line.substr(start, open == std::string::npos ? std::string::npos : open - start));
+        if (open != std::string::npos)
+        {
+          const size_t close = line.find(']', open + 1);
+          gcode.creator = line.substr(open + 1, close == std::string::npos ? std::string::npos :
+                                                                             close - open - 1);
+        }
         break;
+      }
 
       // notes
       case '*':

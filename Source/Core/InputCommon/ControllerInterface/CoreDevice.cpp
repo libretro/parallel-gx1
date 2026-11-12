@@ -5,8 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -216,15 +216,15 @@ void DeviceQualifier::FromString(const std::string& str)
 {
   *this = {};
 
-  std::istringstream ss(str);
-
-  std::getline(ss, source, '/');
-
-  // silly
-  std::getline(ss, name, '/');
-  std::istringstream(name) >> cid;
-
-  std::getline(ss, name);
+  // "source/cid/name"; the name may itself contain '/'
+  const size_t first = str.find('/');
+  source = str.substr(0, first);
+  if (first == std::string::npos)
+    return;
+  const size_t second = str.find('/', first + 1);
+  cid = atoi(str.substr(first + 1, second - first - 1).c_str());
+  if (second != std::string::npos)
+    name = str.substr(second + 1);
 }
 
 //

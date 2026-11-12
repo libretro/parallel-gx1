@@ -7,7 +7,6 @@
 
 #include <cassert>
 #include <memory>
-#include <sstream>
 #include <vector>
 
 #ifdef _WIN32

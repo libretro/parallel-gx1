@@ -3,6 +3,7 @@
 
 #include "Core/HW/DVD/FileMonitor.h"
 
+#include <cinttypes>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -76,13 +77,12 @@ void FileLogger::Log(const DiscIO::Volume& volume, const DiscIO::Partition& part
   if (m_previous_partition == partition && m_previous_file_offset == file_offset)
     return;
 
-  const std::string size_string = Common::ThousandSeparate(file_info->GetSize() / 1000, 7);
+  const u64 size_kb = file_info->GetSize() / 1000;
   const std::string path = file_info->GetPath();
-  const std::string log_string = size_string + " kB " + path;
   if (IsSoundFile(path))
-    INFO_LOG(FILEMON, "%s", log_string.c_str());
+    INFO_LOG(FILEMON, "%7" PRIu64 " kB %s", size_kb, path.c_str());
   else
-    WARN_LOG(FILEMON, "%s", log_string.c_str());
+    WARN_LOG(FILEMON, "%7" PRIu64 " kB %s", size_kb, path.c_str());
 
   // Update the last accessed file
   m_previous_partition = partition;

@@ -8,10 +8,8 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdlib>
-#include <iomanip>
 #include <limits>
 #include <locale>
-#include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -107,43 +105,10 @@ bool TryParse(const std::string& str, T* output)
   return true;
 }
 
-template <std::floating_point T>
-bool TryParse(std::string str, T* const output)
-{
-  // Replace commas with dots.
-  std::istringstream iss(ReplaceAll(std::move(str), ",", "."));
-
-  // Use "classic" locale to force a "dot" decimal separator.
-  iss.imbue(std::locale::classic());
-
-  T tmp;
-
-  // Succeed if a value was read and the entire string was used.
-  if (iss >> tmp && iss.eof())
-  {
-    *output = tmp;
-    return true;
-  }
-
-  return false;
-}
-
-template <typename N>
-bool TryParseVector(const std::string& str, std::vector<N>* output, const char delimiter = ',')
-{
-  output->clear();
-  std::istringstream buffer(str);
-  std::string variable;
-
-  while (std::getline(buffer, variable, delimiter))
-  {
-    N tmp = 0;
-    if (!TryParse(variable, &tmp))
-      return false;
-    output->push_back(tmp);
-  }
-  return true;
-}
+/* A decimal number with '.' or ',' as the decimal separator, whatever the host locale is; the
+ * whole string must be the number. */
+bool TryParse(const std::string& str, float* output);
+bool TryParse(const std::string& str, double* output);
 
 std::string ValueToString(u16 value);
 std::string ValueToString(u32 value);
@@ -308,25 +273,6 @@ inline char ToLower(char ch)
 inline char ToUpper(char ch)
 {
   return std::toupper(ch, std::locale::classic());
-}
-
-// Thousand separator. Turns 12345678 into 12,345,678
-template <typename I>
-std::string ThousandSeparate(I value, int spaces = 0)
-{
-#ifdef _WIN32
-  std::wostringstream stream;
-#else
-  std::ostringstream stream;
-#endif
-
-  stream << std::setw(spaces) << value;
-
-#ifdef _WIN32
-  return WStringToUTF8(stream.str());
-#else
-  return stream.str();
-#endif
 }
 
 #ifdef _WIN32

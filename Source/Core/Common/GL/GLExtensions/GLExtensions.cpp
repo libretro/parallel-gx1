@@ -3,7 +3,6 @@
 
 #include "Common/GL/GLExtensions/GLExtensions.h"
 
-#include <sstream>
 #include <unordered_map>
 
 #include "Common/GL/GLContext.h"
@@ -2136,14 +2135,26 @@ static std::unordered_map<std::string, bool> s_extension_list;
 // Private initialization functions
 bool InitFunctionPointers(GLContext* context);
 
+// Reads the next space-separated word of a list into *word; returns nullptr at the end.
+static const char* NextWord(const char* p, std::string* word)
+{
+  while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+    p++;
+  if (!*p)
+    return nullptr;
+  const char* start = p;
+  while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r')
+    p++;
+  word->assign(start, p - start);
+  return p;
+}
+
 // Initializes the extension list the old way
 static void InitExtensionList21()
 {
   const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
-  std::string tmp(extensions);
-  std::istringstream buffer(tmp);
-
-  while (buffer >> tmp)
+  std::string tmp;
+  for (const char* p = extensions; p && (p = NextWord(p, &tmp));)
     s_extension_list[tmp] = true;
 }
 
@@ -2478,9 +2489,7 @@ static bool HasFeatures(const std::string& extensions)
 {
   bool result = true;
   std::string tmp;
-  std::istringstream buffer(extensions);
-
-  while (buffer >> tmp)
+  for (const char* p = extensions.c_str(); (p = NextWord(p, &tmp));)
   {
     if (tmp[0] == '!')
       result &= !s_extension_list[tmp.erase(0, 1)];

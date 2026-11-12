@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -446,14 +445,27 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
       constexpr auto is_hex_str = [](const std::string& s) {
         return !s.empty() && s.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos;
       };
-      const std::string stripped_line(StripWhitespace(line));
-      std::istringstream iss(stripped_line);
-      iss.imbue(std::locale::classic());
-      std::string word;
+      // The first four space-separated words of the line
+      std::string words[4];
+      size_t word_count = 0;
+      {
+        const std::string_view stripped_line = StripWhitespace(line);
+        size_t i = 0;
+        while (word_count < 4 && i < stripped_line.size())
+        {
+          while (i < stripped_line.size() && (stripped_line[i] == ' ' || stripped_line[i] == '\t'))
+            i++;
+          const size_t start = i;
+          while (i < stripped_line.size() && stripped_line[i] != ' ' && stripped_line[i] != '\t')
+            i++;
+          if (i > start)
+            words[word_count++] = std::string(stripped_line.substr(start, i - start));
+        }
+      }
 
       // Two columns format:
       // 80004000 zz_80004000_
-      if (!(iss >> word) || word.length() != 8 || !is_hex_str(word))
+      if (word_count < 1 || words[0].length() != 8 || !is_hex_str(words[0]))
         continue;
       column_count = 2;
 
@@ -461,17 +473,17 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
       //  Starting        Virtual
       //  address  Size   address
       //  -----------------------
-      if (iss && iss >> word && is_hex_str(word) && iss >> word && is_hex_str(word))
+      if (word_count >= 3 && is_hex_str(words[1]) && is_hex_str(words[2]))
+      {
         column_count = 3;
-      else
-        iss.str("");
 
-      // Four columns format (with optional alignment):
-      //  Starting        Virtual  File
-      //  address  Size   address  offset
-      //  ---------------------------------
-      if (iss && iss >> word && word.length() == 8 && is_hex_str(word))
-        column_count = 4;
+        // Four columns format (with optional alignment):
+        //  Starting        Virtual  File
+        //  address  Size   address  offset
+        //  ---------------------------------
+        if (word_count >= 4 && words[3].length() == 8 && is_hex_str(words[3]))
+          column_count = 4;
+      }
     }
 
     u32 address;
