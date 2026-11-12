@@ -168,6 +168,12 @@ void field_audio_mix_set_volume(enum field_audio_mix id, unsigned left, unsigned
    s_mixes[id].vol_r = (int32_t)(right + (right >> 7));
 }
 
+void field_audio_mix_set_gain_q8(enum field_audio_mix id, unsigned left, unsigned right)
+{
+   s_mixes[id].vol_l = (int32_t)(left > 256 ? 256 : left);
+   s_mixes[id].vol_r = (int32_t)(right > 256 ? 256 : right);
+}
+
 static void mix_add(field_mix_t *mix, int32_t l, int32_t r)
 {
    if (mix->cursor < FIELD_CAPACITY)

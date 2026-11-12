@@ -61,6 +61,9 @@ void field_audio_push_dma(const int16_t *pairs, size_t frames);
 void field_audio_mix_set_rate(enum field_audio_mix mix, uint32_t divisor);
 /* 0 to 255 per channel, 255 being the sample's own level. */
 void field_audio_mix_set_volume(enum field_audio_mix mix, unsigned left, unsigned right);
+/* 0 to 256 per channel, 256 being the sample's own level: for a source whose gain is not a
+ * register on that scale, so it is rounded once, here, and not again to fit 0 to 255. */
+void field_audio_mix_set_gain_q8(enum field_audio_mix mix, unsigned left, unsigned right);
 /* Big-endian right/left pairs (disc streaming). */
 void field_audio_mix_be_rl(enum field_audio_mix mix, const int16_t *pairs, size_t frames);
 /* One host-endian frame, for a source that decodes a sample at a time. */

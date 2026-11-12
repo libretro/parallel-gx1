@@ -88,15 +88,16 @@ void SpeakerLogic::SpeakerData(const u8* data, int length, float speaker_pan)
   if (reg_data.volume > volume_divisor)
     volume_divisor = reg_data.volume;
 
-  /* 0 to 255, the pan only ever turning one side down: at 0 the remote plays at its own level. */
+  /* 0 to 256, rounded to the nearest step, the pan only ever turning one side down: at 0 the
+   * remote plays at its own level. */
   volume = reg_data.volume * 256.0 / volume_divisor;
   if (speaker_pan < -1.f)
     speaker_pan = -1.f;
   if (speaker_pan > 1.f)
     speaker_pan = 1.f;
-  left = (unsigned)((speaker_pan > 0.f ? 1.f - speaker_pan : 1.f) * volume);
-  right = (unsigned)((speaker_pan < 0.f ? 1.f + speaker_pan : 1.f) * volume);
-  field_audio_mix_set_volume(mix, left > 255 ? 255 : left, right > 255 ? 255 : right);
+  left = (unsigned)((speaker_pan > 0.f ? 1.f - speaker_pan : 1.f) * volume + 0.5);
+  right = (unsigned)((speaker_pan < 0.f ? 1.f + speaker_pan : 1.f) * volume + 0.5);
+  field_audio_mix_set_gain_q8(mix, left, right);
   /* ADPCM's rate is thought to be twice the register's (3000 x2 = 6000). */
   field_audio_mix_set_rate(mix, FIELD_AUDIO_RATE_DIVIDEND /
                                     (rate_dividend / reg_data.sample_rate * 2));
