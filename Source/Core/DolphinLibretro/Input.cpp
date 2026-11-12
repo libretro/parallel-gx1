@@ -328,13 +328,6 @@ static void QualifiedName(char* out, unsigned port, const char* device_name)
   snprintf(out, DEVICE_NAME_SIZE, "%s/%u/%s", source, port, device_name);
 }
 
-static std::string GetQualifiedName(unsigned port, unsigned device)
-{
-  char name[DEVICE_NAME_SIZE];
-  QualifiedName(name, port, GetDeviceName(device));
-  return name;
-}
-
 /* Sets control index of group to the expression fmt formats. */
 static void Bind(ControllerEmu::ControlGroup* group, int index, const char* fmt, ...)
     DOLPHIN_PRINTF_ATTR(3, 4);
@@ -1069,11 +1062,23 @@ void Update()
     g_controller_interface.UpdateInput();
 }
 
-static std::string GetQualifiedNameSensor(unsigned port)
+/* "<mod> & <expr>", or expr alone with no modifier: active only while the modifier is held. */
+static void Modified(char* out, const char* mod, const char* expr)
 {
-  char name[DEVICE_NAME_SIZE];
-  QualifiedName(name, port, "Sensor");
-  return name;
+  if (!*mod || !strcmp(mod, MODIFIER_NO_MODIFIER))
+    snprintf(out, EXPRESSION_SIZE, "%s", expr);
+  else
+    snprintf(out, EXPRESSION_SIZE, "%s & %s", mod, expr);
+}
+
+/* Sets a pointing control to expr, or, aiming in VR, to it or the VR controller's direction. */
+static void BindAim(ControllerEmu::ControlGroup* group, int index, const char* expr,
+                    const char* sensor, const char* direction)
+{
+  if (sensor)
+    Bind(group, index, "(%s) | `%s:%s`", expr, sensor, direction);
+  else
+    Bind(group, index, "%s", expr);
 }
 
 // can be called from retro_run, do not reset all settings because one thing changed
@@ -1091,13 +1096,6 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
 
   if (((!system.IsWii() || !altGCPorts) && port > 3) || port > 7)
     return;
-
-  // modifier wrapper
-  auto wrap = [](const std::string& mod, const std::string& expr) {
-    if (mod == MODIFIER_NO_MODIFIER || mod.empty())
-      return expr;                   // no modifier - always active
-    return mod + " & " + expr;       // modifier held - active
-  };
 
   WiimoteEmu::Wiimote* wm = (WiimoteEmu::Wiimote*)Wiimote::GetConfig()->GetController(port);
 
@@ -1137,24 +1135,32 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
 
     if (f.irMode || f.irModifier || f.swingModifier)
     {
-      std::string devAnalog = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_ANALOG);
-      std::string devPointer = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_POINTER);
+      static const char* const kAxes[4] = {"Y1-", "Y1+", "X1-", "X1+"};
+      static const char* const kPointerAxes[4] = {"Y0-", "Y0+", "X0-", "X0+"};
+      static const char* const kDirections[4] = {"PointUp", "PointDown", "PointLeft", "PointRight"};
+      char devAnalog[DEVICE_NAME_SIZE];
+      char devPointer[DEVICE_NAME_SIZE];
+      char devSensor[DEVICE_NAME_SIZE];
+      char axis[DEVICE_NAME_SIZE * 2]; /* "`<device>:<axis>`" */
+      char expr[EXPRESSION_SIZE];
+      int i;
 
       // In VR the right controller aims the cursor too, alongside the thumbstick or mouse.
       const bool vr_aim = Libretro::Input::UsesVRMotion(port) && irMode != 0;
-      const std::string devSensor = GetQualifiedNameSensor(port);
-      auto aim = [&](const std::string& expr, const char* direction) {
-        return vr_aim ? "(" + expr + ") | `" + devSensor + ":" + direction + "`" : expr;
-      };
+      QualifiedName(devAnalog, port, "Analog");
+      QualifiedName(devPointer, port, "Pointer");
+      QualifiedName(devSensor, port, "Sensor");
 
       if (irMode == 0 || irMode == 1)
       {
         // Set right stick to control the IR
-        std::string irMod = Libretro::Options::GetCached<std::string>(Libretro::Options::wiimote::IR_MODIFIER);
-        wmIR->SetControlExpression(0, aim(wrap(irMod, "`" + devAnalog + ":Y1-`"), "PointUp")); // Up
-        wmIR->SetControlExpression(1, aim(wrap(irMod, "`" + devAnalog + ":Y1+`"), "PointDown")); // Down
-        wmIR->SetControlExpression(2, aim(wrap(irMod, "`" + devAnalog + ":X1-`"), "PointLeft")); // Left
-        wmIR->SetControlExpression(3, aim(wrap(irMod, "`" + devAnalog + ":X1+`"), "PointRight")); // Right
+        const char* irMod = Libretro::Options::GetCached<const char*>(Libretro::Options::wiimote::IR_MODIFIER, "");
+        for (i = 0; i < 4; i++)
+        {
+          snprintf(axis, sizeof(axis), "`%s:%s`", devAnalog, kAxes[i]);
+          Modified(expr, irMod, axis);
+          BindAim(wmIR, i, expr, vr_aim ? devSensor : NULL, kDirections[i]);  // Up, Down, Left, Right
+        }
 
         static_cast<ControllerEmu::NumericSetting<bool>*>(wmIR->numeric_settings[4].get())
           ->SetValue(irMode == 0);                                    // Relative input
@@ -1165,18 +1171,24 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
         ControllerEmu::ControlGroup* wmSwing = wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::Swing);
 
         // modifier controls swing plus analog
-        std::string swingModifier = Libretro::Options::GetCached<std::string>(Libretro::Options::wiimote::SWING_MODIFIER);
+        const char* swingModifier = Libretro::Options::GetCached<const char*>(Libretro::Options::wiimote::SWING_MODIFIER, "");
+        char notIrMod[DEVICE_NAME_SIZE];
 
-        if (swingModifier != MODIFIER_DISABLED_CONTROL)
+        if (strcmp(swingModifier, MODIFIER_DISABLED_CONTROL))
         {
           // we don't want whatever the irMod is set to (e.g. L3) to interfere with swinging
-          if (swingModifier == MODIFIER_NO_MODIFIER && irMod != swingModifier)
-            swingModifier = "!" + irMod;
+          if (!strcmp(swingModifier, MODIFIER_NO_MODIFIER) && strcmp(irMod, swingModifier))
+          {
+            snprintf(notIrMod, sizeof(notIrMod), "!%s", irMod);
+            swingModifier = notIrMod;
+          }
 
-          wmSwing->SetControlExpression(0, wrap(swingModifier, "`" + devAnalog + ":Y1-`"));  // Up
-          wmSwing->SetControlExpression(1, wrap(swingModifier, "`" + devAnalog + ":Y1+`"));  // Down
-          wmSwing->SetControlExpression(2, wrap(swingModifier, "`" + devAnalog + ":X1-`"));  // Left
-          wmSwing->SetControlExpression(3, wrap(swingModifier, "`" + devAnalog + ":X1+`"));  // Right
+          for (i = 0; i < 4; i++)
+          {
+            snprintf(axis, sizeof(axis), "`%s:%s`", devAnalog, kAxes[i]);
+            Modified(expr, swingModifier, axis);
+            wmSwing->SetControlExpression(i, expr);  // Up, Down, Left, Right
+          }
         }
         else
         {
@@ -1189,10 +1201,11 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
       else
       {
         // Mouse controls IR
-        wmIR->SetControlExpression(0, aim("`" + devPointer + ":Y0-`", "PointUp"));    // Up
-        wmIR->SetControlExpression(1, aim("`" + devPointer + ":Y0+`", "PointDown"));  // Down
-        wmIR->SetControlExpression(2, aim("`" + devPointer + ":X0-`", "PointLeft"));  // Left
-        wmIR->SetControlExpression(3, aim("`" + devPointer + ":X0+`", "PointRight")); // Right
+        for (i = 0; i < 4; i++)
+        {
+          snprintf(axis, sizeof(axis), "`%s:%s`", devPointer, kPointerAxes[i]);
+          BindAim(wmIR, i, axis, vr_aim ? devSensor : NULL, kDirections[i]);  // Up, Down, Left, Right
+        }
         static_cast<ControllerEmu::NumericSetting<bool>*>(wmIR->numeric_settings[4].get())
           ->SetValue(false);                                          // Relative input
         static_cast<ControllerEmu::NumericSetting<bool>*>(wmIR->numeric_settings[5].get())
@@ -1205,10 +1218,8 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
         if (irMode != 0 && irMode != 1)
         {
           ControllerEmu::ControlGroup* wmTilt = wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::Tilt);
-          wmTilt->SetControlExpression(0, "`" + devAnalog + ":Y1-`");  // Forward
-          wmTilt->SetControlExpression(1, "`" + devAnalog + ":Y1+`");  // Backward
-          wmTilt->SetControlExpression(2, "`" + devAnalog + ":X1-`");  // Left
-          wmTilt->SetControlExpression(3, "`" + devAnalog + ":X1+`");  // Right
+          for (i = 0; i < 4; i++)
+            Bind(wmTilt, i, "`%s:%s`", devAnalog, kAxes[i]);  // Forward, Backward, Left, Right
         }
       }
     }
@@ -1234,20 +1245,24 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
 
     if (wmIRPass)
     {
-      const std::string devPointer =
-        Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_POINTER);
+      char devPointer[DEVICE_NAME_SIZE];
+      QualifiedName(devPointer, port, "Pointer");
       wmIRPass->enabled.SetValue(passthrough);
-      static const char* const kObj[] = { "0", "1", "2", "3" };
       for (int i = 0; i < 4; ++i)
       {
         // Cleared when off; AreInputsBound() is half of what selects this path.
-        const std::string idx = kObj[i];
-        wmIRPass->SetControlExpression(i * 3 + 0,
-          passthrough ? "`" + devPointer + ":X" + idx + "+`" : "");
-        wmIRPass->SetControlExpression(i * 3 + 1,
-          passthrough ? "`" + devPointer + ":Y" + idx + "+`" : "");
-        wmIRPass->SetControlExpression(i * 3 + 2,
-          passthrough ? "`" + devPointer + ":Pressed" + idx + "` * 0.2" : "");
+        if (passthrough)
+        {
+          Bind(wmIRPass, i * 3 + 0, "`%s:X%d+`", devPointer, i);
+          Bind(wmIRPass, i * 3 + 1, "`%s:Y%d+`", devPointer, i);
+          Bind(wmIRPass, i * 3 + 2, "`%s:Pressed%d` * 0.2", devPointer, i);
+        }
+        else
+        {
+          wmIRPass->SetControlExpression(i * 3 + 0, "");
+          wmIRPass->SetControlExpression(i * 3 + 1, "");
+          wmIRPass->SetControlExpression(i * 3 + 2, "");
+        }
       }
     }
   }
@@ -1266,21 +1281,21 @@ void UpdateWiimoteMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned 
   // Sideways toggle
   if (wmHotkeys && f.sideways)
   {
-    std::string sidewaysToggle =
-      Libretro::Options::GetCached<std::string>(Libretro::Options::wiimote::HOTKEY_SIDEWAYS_TOGGLE);
+    const char* sidewaysToggle =
+      Libretro::Options::GetCached<const char*>(Libretro::Options::wiimote::HOTKEY_SIDEWAYS_TOGGLE, "");
 
     wmHotkeys->SetControlExpression(0,
-      sidewaysToggle != MODIFIER_DISABLED_CONTROL ? sidewaysToggle : "");  // Sideways Toggle (L3 default)
+      strcmp(sidewaysToggle, MODIFIER_DISABLED_CONTROL) ? sidewaysToggle : "");  // Sideways Toggle (L3 default)
   }
 
   // Upright toggle
   if (wmHotkeys && f.upright)
   {
-    std::string uprightToggle =
-      Libretro::Options::GetCached<std::string>(Libretro::Options::wiimote::HOTKEY_UPRIGHT_TOGGLE);
+    const char* uprightToggle =
+      Libretro::Options::GetCached<const char*>(Libretro::Options::wiimote::HOTKEY_UPRIGHT_TOGGLE, "");
 
     wmHotkeys->SetControlExpression(1,
-      uprightToggle != MODIFIER_DISABLED_CONTROL ? uprightToggle : "");  // Upright Toggle
+      strcmp(uprightToggle, MODIFIER_DISABLED_CONTROL) ? uprightToggle : "");  // Upright Toggle
   }
 
   // Rumble
@@ -1533,7 +1548,8 @@ static WiimoteEmu::Wiimote* load_saved_controller_config(unsigned port, unsigned
 
   // Rebuild devJoypad here so SetDefaultDevice is always called inside this
   // function, before UpdateReferences, regardless of which load path fires.
-  const std::string devJoypad = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_JOYPAD);
+  char devJoypad[Libretro::Input::DEVICE_NAME_SIZE];
+  Libretro::Input::QualifiedName(devJoypad, port, "Joypad");
 
   const std::string profile_directory = ::Wiimote::GetConfig()->GetUserProfileDirectoryPath();
   char profile_key[64];
