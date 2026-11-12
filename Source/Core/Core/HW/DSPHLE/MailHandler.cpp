@@ -12,35 +12,38 @@ namespace DSP::HLE
 {
 CMailHandler::CMailHandler(DSP::DSPManager& dsp) : m_dsp(dsp)
 {
+  pending_mails_init(&m_pending_mails, 64);
 }
 
 CMailHandler::~CMailHandler()
 {
+  pending_mails_free(&m_pending_mails);
 }
 
 void CMailHandler::PushMail(u32 mail, bool interrupt, int cycles_into_future)
 {
+  const PendingMail pending = {mail, false};
   if (interrupt)
   {
-    if (m_pending_mails.empty())
+    if (pending_mails_empty(&m_pending_mails))
     {
       m_dsp.GenerateDSPInterruptFromDSPEmu(DSP::INT_DSP, cycles_into_future);
     }
     else
     {
-      m_pending_mails.front().second = true;
+      pending_mails_front(&m_pending_mails)->interrupt = true;
     }
   }
-  m_pending_mails.emplace_back(mail, false);
+  pending_mails_push_back_growing(&m_pending_mails, &pending);
   DEBUG_LOG(DSP_MAIL, "DSP writes %#010x", mail);
 }
 
 u16 CMailHandler::ReadDSPMailboxHigh()
 {
   // check if we have a mail for the CPU core
-  if (!m_halted && !m_pending_mails.empty())
+  if (!m_halted && !pending_mails_empty(&m_pending_mails))
   {
-    m_last_mail = m_pending_mails.front().first;
+    m_last_mail = pending_mails_front(&m_pending_mails)->mail;
   }
   return u16(m_last_mail >> 0x10);
 }
@@ -48,12 +51,13 @@ u16 CMailHandler::ReadDSPMailboxHigh()
 u16 CMailHandler::ReadDSPMailboxLow()
 {
   // check if we have a mail for the CPU core
-  if (!m_halted && !m_pending_mails.empty())
+  if (!m_halted && !pending_mails_empty(&m_pending_mails))
   {
-    m_last_mail = m_pending_mails.front().first;
-    const bool generate_interrupt = m_pending_mails.front().second;
+    const PendingMail* const front = pending_mails_front(&m_pending_mails);
+    const bool generate_interrupt = front->interrupt;
+    m_last_mail = front->mail;
 
-    m_pending_mails.pop_front();
+    pending_mails_pop_front(&m_pending_mails);
 
     if (generate_interrupt)
     {
@@ -70,12 +74,12 @@ u16 CMailHandler::ReadDSPMailboxLow()
 
 void CMailHandler::ClearPending()
 {
-  m_pending_mails.clear();
+  pending_mails_clear(&m_pending_mails);
 }
 
 bool CMailHandler::HasPending() const
 {
-  return !m_pending_mails.empty();
+  return !pending_mails_empty(&m_pending_mails);
 }
 
 void CMailHandler::SetHalted(bool halt)
@@ -85,7 +89,30 @@ void CMailHandler::SetHalted(bool halt)
 
 void CMailHandler::DoState(PointerWrap& p)
 {
-  p.Do(m_pending_mails);
+  // As a std::deque of pairs was: the count, then each mail and its interrupt flag.
+  u32 size = static_cast<u32>(pending_mails_count(&m_pending_mails));
+  u32 i;
+  p.Do(size);
+  if (p.IsReadMode())
+  {
+    pending_mails_clear(&m_pending_mails);
+    for (i = 0; i < size; i++)
+    {
+      PendingMail pending = {0, false};
+      p.Do(pending.mail);
+      p.Do(pending.interrupt);
+      pending_mails_push_back_growing(&m_pending_mails, &pending);
+    }
+  }
+  else
+  {
+    for (i = 0; i < size; i++)
+    {
+      PendingMail* const pending = pending_mails_at(&m_pending_mails, i);
+      p.Do(pending->mail);
+      p.Do(pending->interrupt);
+    }
+  }
   p.Do(m_last_mail);
   p.Do(m_halted);
 }

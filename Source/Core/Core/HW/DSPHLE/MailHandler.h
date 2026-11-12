@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include <deque>
-#include <utility>
+#include <queues/retro_deque.h>
 
 #include "Common/CommonTypes.h"
 
@@ -16,6 +15,13 @@ class PointerWrap;
 
 namespace DSP::HLE
 {
+struct PendingMail
+{
+  u32 mail;
+  bool interrupt;  // when it is read
+};
+RETRO_DEQUE_DEFINE(pending_mails, PendingMail);
+
 class CMailHandler
 {
 public:
@@ -46,7 +52,8 @@ private:
   // The actual DSP only has a single pair of mail registers, and doesn't keep track of pending
   // mails. But for HLE, it's a lot easier to write all the mails that will be read ahead of time,
   // and then give them to the CPU in the requested order.
-  std::deque<std::pair<u32, bool>> m_pending_mails;
+  // One block, made with the handler: a burst of mails is pushed and read back without allocating.
+  pending_mails_t m_pending_mails;
   // If no pending mail exists, the last mail that was read is returned,
   // but with the top bit (0x80000000) cleared.
   u32 m_last_mail = 0;
