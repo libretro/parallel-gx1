@@ -156,6 +156,30 @@ reason a reader can see.
   `rjson_open_user` from a VFS `filestream`, parsed as they stream, with
   no document tree and no wrapper library between rjson and its caller.
 
+## Quantization outside emulation
+
+What the console computes is emulated as it computes it: TEV math, EFB
+copy formats, the DSP's arithmetic and the like keep their hardware
+rounding, and that is accuracy, not this rule. Everything the host adds
+around it - mixing and resampling audio, color correction, scaling and
+presenting, texture format conversion, custom textures, the GBA screens
+- loses no precision the console did not lose. Look for it in the code
+you touch, and fix it when you find it.
+
+- **Round, don't floor.** A value cut to fewer bits rounds to the nearest
+  step: `(v + 128) >> 8`, not `v >> 8`. A shift floors, which is a DC
+  offset in audio and a darker picture in video.
+- **Round once, at the end.** A chain of steps (volume, then
+  interpolation, then output) keeps its fraction bits until the last one.
+- **Widen by replicating bits.** 5 bits become 8 as `(v << 3) | (v >> 2)`,
+  so the top level is 255, not 248.
+- **Dither when going back to 8 bits after a change.** Color correction,
+  gamma or a matrix on an 8-bit picture, written to an 8-bit target,
+  bands without it; an unchanged round trip needs none.
+- **Intermediates hold at least the inputs' precision.** Linear-light
+  math does not pass through an RGBA8 target; audio sums in 32 bits and
+  clamps to 16 only where it stores.
+
 ## Shader generators build by calls
 
 - **A generator builds its stage through rslc's builder**
