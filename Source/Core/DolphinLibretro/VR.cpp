@@ -1,7 +1,6 @@
 #include "DolphinLibretro/VR.h"
 
-#include <algorithm>
-#include <cmath>
+#include <math.h>
 #include <string.h>
 
 #include <libretro.h>
@@ -41,13 +40,19 @@ static Common::Quaternion ToQuaternion(const float* xyzw)
   return Common::Quaternion(xyzw[3], xyzw[0], xyzw[1], xyzw[2]).Normalized();
 }
 
+/* v within -1 to 1; NaN stays NaN, as std::clamp left it. */
+static float ClampUnit(float v)
+{
+  return v < -1.0f ? -1.0f : (v > 1.0f ? 1.0f : v);
+}
+
 // A rotation about +Y by the heading of q's forward (-Z) axis, leaving out pitch and roll.
 static Common::Quaternion Heading(const Common::Quaternion& q)
 {
   const Common::Vec4& v = q.data;  // x, y, z, w
   const float yaw =
-      std::atan2(2.0f * (v.x * v.z + v.w * v.y), 1.0f - 2.0f * (v.x * v.x + v.y * v.y));
-  return Common::Quaternion(std::cos(yaw * 0.5f), 0.0f, std::sin(yaw * 0.5f), 0.0f);
+      atan2f(2.0f * (v.x * v.z + v.w * v.y), 1.0f - 2.0f * (v.x * v.x + v.y * v.y));
+  return Common::Quaternion(cosf(yaw * 0.5f), 0.0f, sinf(yaw * 0.5f), 0.0f);
 }
 
 Mode GetMode()
@@ -217,16 +222,16 @@ static void UpdateVRMotion()
     s_have_point_forward = true;
   }
   const Common::Vec3 direction = s_point_forward.Conjugate() * (remote * Common::Vec3(0, 0, -1));
-  const float yaw = std::atan2(direction.x, -direction.z);
+  const float yaw = atan2f(direction.x, -direction.z);
   const float pitch =
-      std::atan2(direction.y, std::sqrt(direction.x * direction.x + direction.z * direction.z));
-  constexpr float DEGREES = 180.0f / 3.14159265f;
-  const float half_yaw =
-      std::max(1, Options::GetCached<int>(Options::wiimote::IR_YAW, 25)) * 0.5f;
-  const float half_pitch =
-      std::max(1, Options::GetCached<int>(Options::wiimote::IR_PITCH, 25)) * 0.5f;
-  point[0] = std::clamp(yaw * DEGREES / half_yaw, -1.0f, 1.0f);
-  point[1] = std::clamp(pitch * DEGREES / half_pitch, -1.0f, 1.0f);
+      atan2f(direction.y, sqrtf(direction.x * direction.x + direction.z * direction.z));
+  const float DEGREES = 180.0f / 3.14159265f;
+  const int ir_yaw = Options::GetCached<int>(Options::wiimote::IR_YAW, 25);
+  const int ir_pitch = Options::GetCached<int>(Options::wiimote::IR_PITCH, 25);
+  const float half_yaw = (ir_yaw > 1 ? ir_yaw : 1) * 0.5f;
+  const float half_pitch = (ir_pitch > 1 ? ir_pitch : 1) * 0.5f;
+  point[0] = ClampUnit(yaw * DEGREES / half_yaw);
+  point[1] = ClampUnit(pitch * DEGREES / half_pitch);
 
   Input::SetVRMotion(0, accel, gyro, point);
 }
