@@ -13,6 +13,8 @@
 #include "Common/StringUtil.h"
 #include "Common/VariantUtil.h"
 
+#include <file/file_path.h>
+
 #include "Core/ConfigManager.h"
 
 #include "VideoCommon/Assets/DirectFilesystemAssetLibrary.h"
@@ -235,7 +237,7 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
       auto asset_map = asset.m_map;
       for (auto& [k, v] : asset_map)
       {
-        if (v.is_absolute())
+        if (path_is_absolute(v.c_str()))
         {
           WARN_LOG(VIDEO,
                    "Specified graphics mod asset '%s' for mod '%s' has an absolute path, you "
@@ -244,7 +246,7 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
         }
         else
         {
-          v = std::filesystem::path{base_path} / v;
+          v = base_path + v;
         }
       }
 

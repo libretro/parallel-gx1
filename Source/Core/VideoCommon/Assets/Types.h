@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <filesystem>
 #include <map>
 #include <string>
 
 namespace VideoCommon::Assets
 {
-using AssetMap = std::map<std::string, std::filesystem::path>;
+/* key -> UTF-8 file path */
+using AssetMap = std::map<std::string, std::string>;
 }

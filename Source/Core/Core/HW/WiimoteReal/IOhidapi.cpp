@@ -6,7 +6,6 @@
 #include <cassert>
 
 #if defined(__linux__)
-#include <filesystem>
 #endif
 
 #include "Common/Assert.h"

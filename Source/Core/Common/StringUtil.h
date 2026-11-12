@@ -8,7 +8,6 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdlib>
-#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <locale>
@@ -267,9 +266,6 @@ inline std::string UTF8ToTStr(std::string_view str)
 #endif
 
 #endif
-
-std::filesystem::path StringToPath(std::string_view path);
-std::string PathToString(const std::filesystem::path& path);
 
 namespace Common
 {

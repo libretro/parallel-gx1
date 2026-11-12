@@ -15,7 +15,7 @@ namespace VideoCommon
 namespace
 {
 // Loads additional mip levels into the texture structure until _mip<N> texture is not found
-bool LoadMips(const std::filesystem::path& asset_path, CustomTextureData::ArraySlice* data)
+bool LoadMips(const std::string& asset_path, CustomTextureData::ArraySlice* data)
 {
   if (!data) [[unlikely]]
     return false;
@@ -23,7 +23,7 @@ bool LoadMips(const std::filesystem::path& asset_path, CustomTextureData::ArrayS
   std::string path;
   std::string filename;
   std::string extension;
-  SplitPath(PathToString(asset_path), &path, &filename, &extension);
+  SplitPath(asset_path, &path, &filename, &extension);
 
   std::string extension_lower = extension;
   Common::ToLower(&extension_lower);
@@ -69,14 +69,15 @@ bool LoadMips(const std::filesystem::path& asset_path, CustomTextureData::ArrayS
 }
 }  // namespace
 bool LoadTextureDataFromFile(const CustomAssetLibrary::AssetID& asset_id,
-                             const std::filesystem::path& asset_path, AbstractTextureType type,
+                             const std::string& asset_path, AbstractTextureType type,
                              CustomTextureData* data)
 {
-  auto ext = PathToString(asset_path.extension());
+  std::string ext;
+  SplitPath(asset_path, nullptr, nullptr, &ext);
   Common::ToLower(&ext);
   if (ext == ".dds")
   {
-    if (!LoadDDSTexture(data, PathToString(asset_path)))
+    if (!LoadDDSTexture(data, asset_path))
     {
       ERROR_LOG(VIDEO, "Asset '%s' error - could not load dds texture!", asset_id.c_str());
       return false;
@@ -111,7 +112,7 @@ bool LoadTextureDataFromFile(const CustomAssetLibrary::AssetID& asset_id,
     if (slice.m_levels.empty())
       slice.m_levels.emplace_back();
 
-    if (!LoadPNGTexture(slice.m_levels.data(), PathToString(asset_path)))
+    if (!LoadPNGTexture(slice.m_levels.data(), asset_path))
     {
       ERROR_LOG(VIDEO, "Asset '%s' error - could not load png texture!", asset_id.c_str());
       return false;
