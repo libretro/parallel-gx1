@@ -44,6 +44,7 @@
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/Resources/CustomResourceManager.h"
+#include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
@@ -906,6 +907,8 @@ void retro_unload_game(void)
   if (!g_context_status.IsDestroyed() && g_video_backend)
     g_video_backend->Shutdown();
   Libretro::Video::D3D11Unlock();
+  /* the vertex loaders outlive a context, not the game */
+  VertexLoaderManager::Clear();
 
   // these are disabled in Shutdown on fullscreen/window toggle
   system.GetFifo().Shutdown();

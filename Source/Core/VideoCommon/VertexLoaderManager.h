@@ -22,6 +22,10 @@ namespace VertexLoaderManager
 {
 
 void Init();
+// The native vertex formats are the backend's, and go with its context; the loaders, the CPU's,
+// stay, and each is given a format again on its next draw.
+void ClearNativeFormats();
+// Every loader and format: the emulation is over.
 void Clear();
 
 void MarkAllDirty();

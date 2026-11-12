@@ -103,14 +103,36 @@ bool g_needs_cp_xf_consistency_check;
 
 void Init()
 {
+  /* none left from an earlier game */
+  Clear();
   MarkAllDirty();
   g_main_vertex_loaders.fill(nullptr);
   g_preprocess_vertex_loaders.fill(nullptr);
   VertexLoaderPoolsCreate();
 }
 
+void ClearNativeFormats()
+{
+  size_t cursor = 0;
+  const void* key;
+  uid_table_value* value;
+  for (auto& bucket : s_vertex_loaders)
+  {
+    auto* loader = static_cast<VertexLoaderBase*>(retro_atomic_load_acquire_ptr(&bucket));
+    for (; loader; loader = loader->m_next_loader)
+      loader->m_native_vertex_format = nullptr;
+  }
+  while ((value = uid_table_next(&s_native_vertex_map, &cursor, &key)))
+    NativeVertexFormatDelete(static_cast<NativeVertexFormat*>(value->object));
+  uid_table_clear(&s_native_vertex_map);
+  s_current_vtx_fmt = nullptr;
+  /* each VAT's loader looked up again on its next draw, and given a format there */
+  MarkAllDirty();
+}
+
 void Clear()
 {
+  ClearNativeFormats();
   for (auto& bucket : s_vertex_loaders)
   {
     auto* loader = static_cast<VertexLoaderBase*>(retro_atomic_exchange_ptr(&bucket, nullptr));
@@ -121,15 +143,10 @@ void Clear()
       loader = next;
     }
   }
+  g_main_vertex_loaders.fill(nullptr);
+  g_preprocess_vertex_loaders.fill(nullptr);
   VertexLoaderPoolsDestroy();
-  size_t cursor = 0;
-  const void* key;
-  uid_table_value* value;
-  while ((value = uid_table_next(&s_native_vertex_map, &cursor, &key)))
-    NativeVertexFormatDelete(static_cast<NativeVertexFormat*>(value->object));
   uid_table_free(&s_native_vertex_map);
-  /* freed with the rest: the next draw sets its own */
-  s_current_vtx_fmt = nullptr;
 }
 
 void UpdateVertexArrayPointers()

@@ -321,12 +321,7 @@ bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,
     system.GetFifo().Init();
     system.GetPixelEngine().Init();
     BPInit();
-  }
-  /* the vertex loaders and formats ShutdownShared freed with the old context, as every one
-   * after it does */
-  VertexLoaderManager::Init();
-  if (!is_initialized)
-  {
+    VertexLoaderManager::Init();
     system.GetVertexShaderManager().Init();
     system.GetGeometryShaderManager().Init();
     system.GetPixelShaderManager().Init();
@@ -385,5 +380,6 @@ void VideoBackendBase::ShutdownShared()
 
   m_initialized = false;
 
-  VertexLoaderManager::Clear();
+  /* the loaders stay with the emulated state, for a context given back mid-game */
+  VertexLoaderManager::ClearNativeFormats();
 }
