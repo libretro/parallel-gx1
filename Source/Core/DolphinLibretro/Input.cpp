@@ -386,7 +386,12 @@ private:
     /* Any thread: kept until retro_run hands it to the frontend. */
     void SetState(ControlState state) override
     {
-      const u16 str = (u16)(std::min(std::max(0.0, state), 1.0) * 0xFFFF);
+      /* 0 to 0xFFFF, rounded to the nearest step. */
+      int str = 0;
+      if (state >= 1.0)
+        str = 0xFFFF;
+      else if (state > 0.0)
+        str = (int)(state * 65535.0 + 0.5);
       retro_atomic_store_release_int(&m_wanted, str);
     }
     void Flush()
