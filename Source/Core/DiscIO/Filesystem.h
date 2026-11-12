@@ -83,7 +83,6 @@ public:
   // Not guaranteed to return a meaningful value for directories.
   virtual u32 GetSize() const = 0;
   // For a file, returns its size. For a directory, returns the total size of its contents.
-  u64 GetTotalSize() const;
   virtual bool IsRoot() const = 0;
   virtual bool IsDirectory() const = 0;
   // The number of files and directories in a directory, including those in subdirectories.

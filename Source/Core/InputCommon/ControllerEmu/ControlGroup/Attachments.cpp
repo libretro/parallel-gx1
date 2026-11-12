@@ -40,11 +40,6 @@ NumericSetting<int>& Attachments::GetSelectionSetting()
   return m_selection_setting;
 }
 
-SettingValue<int>& Attachments::GetAttachmentSetting()
-{
-  return m_selection_value;
-}
-
 const std::vector<std::unique_ptr<AttachedController>>& Attachments::GetAttachmentList() const
 {
   return m_attachments;

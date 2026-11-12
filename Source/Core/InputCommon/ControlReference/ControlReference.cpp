@@ -71,13 +71,6 @@ int ControlReference::BoundCount() const
   return b && b->parsed ? b->parsed->CountNumControls() : 0;
 }
 
-ParseStatus ControlReference::GetParseStatus() const
-{
-  ciface::InputReadScope scope;
-  const Binding* const b = PeekBinding();
-  return b ? b->status : ParseStatus::EmptyExpression;
-}
-
 std::string ControlReference::GetExpression() const
 {
   ciface::InputReadScope scope;

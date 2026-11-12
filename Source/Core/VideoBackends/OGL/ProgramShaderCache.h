@@ -71,7 +71,6 @@ public:
   static void BindVertexFormat(const GLVertexFormat* vertex_format);
   static void ReBindVertexFormat();
   static bool IsValidVertexFormatBound();
-  static void InvalidateVertexFormat();
   static void InvalidateVertexFormatIfBound(GLuint vao);
   static void InvalidateLastProgram();
 
@@ -89,7 +88,6 @@ public:
   static bool CheckShaderCompileResult(GLuint id, GLenum type, std::string_view code);
   static bool CheckProgramLinkResult(GLuint id, std::string_view vcode, std::string_view pcode,
                                      std::string_view gcode);
-  static StreamBuffer* GetUniformBuffer();
   static u32 GetUniformBufferAlignment();
   static void UploadConstants();
   static void UploadConstants(const void* data, u32 data_size);

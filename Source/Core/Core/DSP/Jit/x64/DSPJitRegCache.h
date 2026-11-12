@@ -125,7 +125,6 @@ public:
   // Find a free host reg, spill if used, reserve
   Gen::X64Reg GetFreeXReg();
   // Spill a specific host reg if used, reserve
-  void GetXReg(Gen::X64Reg reg);
   // Unreserve the given host reg
   void PutXReg(Gen::X64Reg reg);
 

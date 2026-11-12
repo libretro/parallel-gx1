@@ -32,8 +32,6 @@ public:
   const std::vector<GraphicsModConfig>& GetMods() const;
   std::vector<GraphicsModConfig>& GetMods();
 
-  GraphicsModConfig* GetMod(std::string_view absolute_path) const;
-
   const std::string& GetGameID() const;
 
 private:

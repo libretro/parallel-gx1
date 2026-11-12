@@ -192,14 +192,6 @@ Token Lexer::GetRealLiteral(char first_char)
   return Token(TOK_INVALID);
 }
 
-Token Lexer::PeekToken()
-{
-  const auto old_it = it;
-  const auto tok = NextToken();
-  it = old_it;
-  return tok;
-}
-
 Token Lexer::NextToken()
 {
   if (it == expr.end())

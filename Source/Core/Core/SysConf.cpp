@@ -243,11 +243,6 @@ SysConf::Entry* SysConf::GetOrAddEntry(std::string_view key, Entry::Type type)
   return &AddEntry({type, std::string(key)});
 }
 
-void SysConf::RemoveEntry(std::string_view key)
-{
-  std::erase_if(m_entries, [&key](const auto& entry) { return entry.name == key; });
-}
-
 void SysConf::InsertDefaultEntries()
 {
   AddEntry({Entry::Type::BigArray, "BT.DINF", std::vector<u8>(0x460 + 1)});

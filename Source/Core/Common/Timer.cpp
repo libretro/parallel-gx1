@@ -19,11 +19,6 @@
 namespace Common
 {
 // Elapsed time is the frontend's: the frame clock, not the host's.
-u64 Timer::NowUs()
-{
-  return frame_clock_time_us();
-}
-
 u64 Timer::NowMs()
 {
   return frame_clock_time_us() / 1000;
@@ -34,12 +29,6 @@ void Timer::Start()
   m_start_ms = NowMs();
   m_end_ms = 0;
   m_running = true;
-}
-
-void Timer::StartWithOffset(u64 offset)
-{
-  Start();
-  m_start_ms -= offset;
 }
 
 void Timer::Stop()

@@ -65,7 +65,6 @@ public:
               std::optional<std::array<u8, 4>> requested_nuid = std::nullopt);
   void Save();
   void Close();
-  bool FileIsOpen() const;
   void GetBlock(u8 index, u8* dest) const;
   void SetBlock(u8 block, const u8* buf);
   void DecryptFigure(std::array<u8, FIGURE_SIZE>* dest) const;

@@ -1038,22 +1038,6 @@ X64Reg DSPJitRegCache::GetFreeXReg()
   return reg;
 }
 
-void DSPJitRegCache::GetXReg(X64Reg reg)
-{
-  if (m_xregs[reg].guest_reg == DSP_REG_STATIC)
-  {
-    ERROR_LOG(DSPLLE, "Trying to get statically used XReg %u", std::to_underlying(reg));
-    return;
-  }
-
-  if (m_xregs[reg].guest_reg != DSP_REG_NONE)
-  {
-    SpillXReg(reg);
-  }
-  ASSERT_MSG(DSPLLE, m_xregs[reg].guest_reg == DSP_REG_NONE, "register already in use");
-  m_xregs[reg].guest_reg = DSP_REG_USED;
-}
-
 void DSPJitRegCache::PutXReg(X64Reg reg)
 {
   if (m_xregs[reg].guest_reg == DSP_REG_STATIC)

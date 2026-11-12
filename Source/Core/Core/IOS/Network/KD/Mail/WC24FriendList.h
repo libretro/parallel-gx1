@@ -25,13 +25,10 @@ class WC24FriendList final
 {
 public:
   explicit WC24FriendList(std::shared_ptr<FS::FileSystem> fs);
-  static u64 ConvertEmailToFriendCode(std::string_view email);
 
   void ReadFriendList();
   bool CheckFriendList() const;
-  void WriteFriendList() const;
 
-  bool DoesFriendExist(u64 friend_id) const;
   std::vector<u64> GetUnconfirmedFriends() const;
 
 private:

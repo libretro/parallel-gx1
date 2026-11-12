@@ -32,8 +32,6 @@ public:
 
   static void Descrambler(u8* data, u32 size);
 
-  static bool HasIPLDump();
-
 private:
   u8* m_rom = nullptr;
 

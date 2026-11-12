@@ -43,8 +43,6 @@ inline void CharArrayFromFormat(char (&out)[Count], const char* format, ...)
 std::string ArrayToString(const u8* data, u32 size, int line_len = 20, bool spaces = true);
 
 std::string_view StripWhitespace(std::string_view s);
-std::string_view StripLeadingWhitespace(std::string_view s);
-std::string_view StripTrailingWhitespace(std::string_view s);
 std::string_view StripSpaces(std::string_view s);
 std::string_view StripQuotes(std::string_view s);
 
@@ -195,7 +193,6 @@ std::string WithUnifiedPathSeparators(std::string path);
 std::string PathToFileName(std::string_view path);
 
 void StringPopBackIf(std::string* s, char c);
-size_t StringUTF8CodePointCount(std::string_view str);
 
 std::string CP1252ToUTF8(std::string_view input);
 std::string SHIFTJISToUTF8(std::string_view input);

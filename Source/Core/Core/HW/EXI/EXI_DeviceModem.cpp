@@ -289,11 +289,6 @@ void CEXIModem::DoState(PointerWrap& p)
   // snapshots and reloading thereof.
 }
 
-u16 CEXIModem::GetTxThreshold() const
-{
-  return (m_regs[Register::TX_THRESHOLD_HIGH] << 8) | m_regs[Register::TX_THRESHOLD_LOW];
-}
-
 u16 CEXIModem::GetRxThreshold() const
 {
   return (m_regs[Register::RX_THRESHOLD_HIGH] << 8) | m_regs[Register::RX_THRESHOLD_LOW];

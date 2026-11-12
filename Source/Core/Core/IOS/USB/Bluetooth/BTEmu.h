@@ -127,7 +127,6 @@ private:
   bool SendEventAuthenticationCompleted(u16 connection_handle);
   bool SendEventModeChange(u16 connection_handle, u8 mode, u16 value);
   bool SendEventDisconnect(u16 connection_handle, u8 reason);
-  bool SendEventRequestLinkKey(const bdaddr_t& bd);
   bool SendEventLinkKeyNotification(const u8 num_to_send);
 
   // Execute HCI Message

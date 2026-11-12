@@ -33,16 +33,6 @@ void WC24FriendList::ReadFriendList()
     ERROR_LOG(IOS_WC24, "There is an error in the Receive List for WC24 mail");
 }
 
-void WC24FriendList::WriteFriendList() const
-{
-  constexpr FS::Modes public_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite};
-  m_fs->CreateFullPath(PID_KD, PID_KD, FRIEND_LIST_PATH, 0, public_modes);
-  const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, FRIEND_LIST_PATH, public_modes);
-
-  if (!file || !file->Write(&m_data, 1))
-    ERROR_LOG(IOS_WC24, "Failed to open or write WC24 Receive list file");
-}
-
 bool WC24FriendList::CheckFriendList() const
 {
   // 'WcFl' magic
@@ -54,12 +44,6 @@ bool WC24FriendList::CheckFriendList() const
   }
 
   return true;
-}
-
-bool WC24FriendList::DoesFriendExist(u64 friend_id) const
-{
-  return std::ranges::any_of(m_data.friend_codes,
-                             [&friend_id](const u64 v) { return v == friend_id; });
 }
 
 std::vector<u64> WC24FriendList::GetUnconfirmedFriends() const
@@ -76,28 +60,6 @@ std::vector<u64> WC24FriendList::GetUnconfirmedFriends() const
   }
 
   return friends;
-}
-
-u64 WC24FriendList::ConvertEmailToFriendCode(std::string_view email)
-{
-  u32 upper = 0x80;
-  u32 lower{};
-
-  u32 idx{};
-  for (char chr : email)
-  {
-    if (idx == 7)
-    {
-      upper = upper | (email.size() & 0x1f);
-      break;
-    }
-
-    lower = (upper | chr) >> 0x18 | (lower | lower >> 0x1f) << 8;
-    upper = (upper | chr) * 0x100;
-    idx++;
-  }
-
-  return u64{lower} << 32 | upper;
 }
 
 }  // namespace IOS::HLE::NWC24::Mail

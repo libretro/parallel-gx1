@@ -171,11 +171,3 @@ void AbstractGfx::BaseOnConfigChanged(u32 changed_bits)
     SetPipeline(nullptr);
   }
 }
-
-bool AbstractGfx::UseGeometryShaderForUI() const
-{
-  // OpenGL doesn't render to a 2-layer backbuffer like D3D/Vulkan for quad-buffered stereo,
-  // instead drawing twice and the eye selected by glDrawBuffer() (see Presenter::RenderXFBToScreen)
-  return g_ActiveConfig.stereo_mode == StereoMode::QuadBuffer &&
-         !g_backend_info.bUsesExplictQuadBuffering;
-}

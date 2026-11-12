@@ -1132,24 +1132,6 @@ bool SkylanderPortal::IsActivated()
   return m_activated;
 }
 
-void SkylanderPortal::UpdateStatus()
-{
-
-  if (!m_status_updated)
-  {
-    for (auto& s : skylanders)
-    {
-      if (s.status & 1)
-      {
-        s.queued_status.push(Skylander::REMOVED);
-        s.queued_status.push(Skylander::ADDED);
-        s.queued_status.push(Skylander::READY);
-      }
-    }
-    m_status_updated = true;
-  }
-}
-
 // Side:
 // 0x00 = right
 // 0x01 = left and right
@@ -1263,77 +1245,6 @@ void SkylanderPortal::WriteBlock(u8 sky_num, u8 block, const u8* to_write_buf, u
   }
 }
 
-bool SkylanderPortal::RemoveSkylander(u8 sky_num)
-{
-  if (!IsSkylanderNumberValid(sky_num))
-    return false;
-
-  DEBUG_LOG(IOS_USB, "Cleared Skylander from slot %u", (unsigned)sky_num);
-  auto& skylander = skylanders[sky_num];
-
-  if (skylander.figure->FileIsOpen())
-  {
-    skylander.figure->Save();
-    skylander.figure->Close();
-  }
-
-  if (skylander.status & Skylander::READY)
-  {
-    skylander.status = Skylander::REMOVING;
-    skylander.queued_status.push(Skylander::REMOVING);
-    skylander.queued_status.push(Skylander::REMOVED);
-    return true;
-  }
-
-  return false;
-}
-
-u8 SkylanderPortal::LoadSkylander(std::unique_ptr<SkylanderFigure> figure)
-{
-
-  u32 sky_serial = 0;
-  std::array<u8, 0x10> block = {};
-  figure->GetBlock(0, block.data());
-  for (int i = 3; i > -1; i--)
-  {
-    sky_serial <<= 8;
-    sky_serial |= block[i];
-  }
-  u8 found_slot = 0xFF;
-
-  // mimics spot retaining on the portal
-  for (auto i = 0; i < MAX_SKYLANDERS; i++)
-  {
-    if ((skylanders[i].status & 1) == 0)
-    {
-      if (skylanders[i].last_id == sky_serial)
-      {
-        DEBUG_LOG(IOS_USB, "Last Id: %u", skylanders[i].last_id);
-
-        found_slot = i;
-        break;
-      }
-
-      if (i < found_slot)
-      {
-        DEBUG_LOG(IOS_USB, "Last Id: %u", skylanders[i].last_id);
-        found_slot = i;
-      }
-    }
-  }
-
-  if (found_slot != 0xFF)
-  {
-    auto& skylander = skylanders[found_slot];
-    skylander.figure = std::move(figure);
-    skylander.status = Skylander::ADDED;
-    skylander.queued_status.push(Skylander::ADDED);
-    skylander.queued_status.push(Skylander::READY);
-    skylander.last_id = sky_serial;
-  }
-  return found_slot;
-}
-
 bool SkylanderPortal::IsSkylanderNumberValid(u8 sky_num)
 {
   return sky_num < MAX_SKYLANDERS;
@@ -1342,22 +1253,6 @@ bool SkylanderPortal::IsSkylanderNumberValid(u8 sky_num)
 bool SkylanderPortal::IsBlockNumberValid(u8 block)
 {
   return block < 64;
-}
-
-std::pair<u16, u16> SkylanderPortal::CalculateIDs(const std::array<u8, 0x40 * 0x10>& file_data)
-{
-  u16 m_sky_id = file_data[0x11];
-  u16 m_sky_var = file_data[0x1D];
-  m_sky_id <<= 8;
-  m_sky_var <<= 8;
-  m_sky_id |= file_data[0x10];
-  m_sky_var |= file_data[0x1C];
-  return std::make_pair(m_sky_id, m_sky_var);
-}
-
-Skylander* SkylanderPortal::GetSkylander(u8 slot)
-{
-  return &skylanders[slot];
 }
 
 Type NormalizeSkylanderType(Type type)

@@ -361,11 +361,6 @@ FSCore& Kernel::GetFSCore()
   return *m_fs_core;
 }
 
-std::shared_ptr<FSDevice> EmulationKernel::GetFSDevice()
-{
-  return std::static_pointer_cast<FSDevice>(m_device_map.at("/dev/fs"));
-}
-
 ESCore& Kernel::GetESCore()
 {
   return *m_es_core;

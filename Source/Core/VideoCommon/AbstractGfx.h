@@ -195,7 +195,6 @@ public:
 
   // Returns true if a layer-expanding geometry shader should be used when rendering
   // the user interface on the output buffer.
-  bool UseGeometryShaderForUI() const;
 
   // Returns info about the main surface (aka backbuffer)
   SurfaceInfo GetSurfaceInfo() const;

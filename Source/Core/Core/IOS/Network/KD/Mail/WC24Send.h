@@ -45,11 +45,7 @@ public:
   u32 GetMailSize(u32 index) const;
   ErrorCode DeleteMessage(u32 index);
   std::string GetMailPath(u32 index) const;
-  u32 GetNextEntryId() const;
-  u32 GetNextEntryIndex() const;
   std::optional<u32> GetNextFreeEntryIndex() const;
-
-  ErrorCode AddRegistrationMessages(const WC24FriendList& friend_list, u64 sender);
 
 private:
   static constexpr u32 MAX_ENTRIES = 127;

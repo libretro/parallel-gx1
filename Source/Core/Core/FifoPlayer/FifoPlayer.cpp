@@ -314,17 +314,6 @@ void FifoPlayer::RefreshConfig()
   m_EarlyMemoryUpdates = Config::Get(Config::MAIN_FIFOPLAYER_EARLY_MEMORY_UPDATES);
 }
 
-void FifoPlayer::SetFileLoadedCallback(CallbackFunc callback)
-{
-  m_FileLoadedCb = std::move(callback);
-
-  // Trigger the callback immediately if the file is already loaded.
-  if (GetFile() != nullptr)
-  {
-    m_FileLoadedCb();
-  }
-}
-
 bool FifoPlayer::IsRunningWithFakeVideoInterfaceUpdates() const
 {
   if (!m_File || m_File->GetFrameCount() == 0)
@@ -333,67 +322,6 @@ bool FifoPlayer::IsRunningWithFakeVideoInterfaceUpdates() const
   }
 
   return m_File->ShouldGenerateFakeVIUpdates();
-}
-
-u32 FifoPlayer::GetMaxObjectCount() const
-{
-  u32 result = 0;
-  for (auto& frame : m_FrameInfo)
-  {
-    const u32 count = frame.part_type_counts[FramePartType::PrimitiveData];
-    if (count > result)
-      result = count;
-  }
-  return result;
-}
-
-u32 FifoPlayer::GetFrameObjectCount(u32 frame) const
-{
-  if (frame < m_FrameInfo.size())
-  {
-    return m_FrameInfo[frame].part_type_counts[FramePartType::PrimitiveData];
-  }
-
-  return 0;
-}
-
-u32 FifoPlayer::GetCurrentFrameObjectCount() const
-{
-  return GetFrameObjectCount(m_CurrentFrame);
-}
-
-void FifoPlayer::SetFrameRangeStart(u32 start)
-{
-  if (m_File)
-  {
-    const u32 lastFrame = m_File->GetFrameCount() - 1;
-    if (start > lastFrame)
-      start = lastFrame;
-
-    m_FrameRangeStart = start;
-    if (m_FrameRangeEnd < start)
-      m_FrameRangeEnd = start;
-
-    if (m_CurrentFrame < m_FrameRangeStart)
-      m_CurrentFrame = m_FrameRangeStart;
-  }
-}
-
-void FifoPlayer::SetFrameRangeEnd(u32 end)
-{
-  if (m_File)
-  {
-    const u32 lastFrame = m_File->GetFrameCount() - 1;
-    if (end > lastFrame)
-      end = lastFrame;
-
-    m_FrameRangeEnd = end;
-    if (m_FrameRangeStart > end)
-      m_FrameRangeStart = end;
-
-    if (m_CurrentFrame >= m_FrameRangeEnd)
-      m_CurrentFrame = m_FrameRangeStart;
-  }
 }
 
 void FifoPlayer::WriteFrame(const FifoFrameInfo& frame, const AnalyzedFrameInfo& info)

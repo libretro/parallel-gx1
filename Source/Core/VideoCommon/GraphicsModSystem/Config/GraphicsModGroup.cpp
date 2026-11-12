@@ -119,17 +119,6 @@ std::vector<GraphicsModConfig>& GraphicsModGroupConfig::GetMods()
   return m_graphics_mods;
 }
 
-GraphicsModConfig* GraphicsModGroupConfig::GetMod(std::string_view absolute_path) const
-{
-  if (const auto iter = m_path_to_graphics_mod.find(absolute_path);
-      iter != m_path_to_graphics_mod.end())
-  {
-    return iter->second;
-  }
-
-  return nullptr;
-}
-
 const std::string& GraphicsModGroupConfig::GetGameID() const
 {
   return m_game_id;

@@ -213,17 +213,6 @@ bool IniFile::DeleteKey(std::string_view section_name, std::string_view key)
 }
 
 // Return a list of all keys in a section
-bool IniFile::GetKeys(std::string_view section_name, std::vector<std::string>* keys) const
-{
-  const Section* section = GetSection(section_name);
-  if (!section)
-  {
-    return false;
-  }
-  *keys = section->keys_order;
-  return true;
-}
-
 // Return a list of all lines in a section
 bool IniFile::GetLines(std::string_view section_name, std::vector<std::string>* lines,
                        const bool remove_comments) const

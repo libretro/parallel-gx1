@@ -75,39 +75,6 @@ void AbstractStagingTexture::ReadTexel(u32 x, u32 y, void* out_ptr)
   std::memcpy(out_ptr, src_ptr, m_texel_size);
 }
 
-void AbstractStagingTexture::WriteTexels(const MathUtil::Rectangle<int>& rect, const void* in_ptr,
-                                         u32 in_stride)
-{
-  ASSERT(m_type != StagingTextureType::Readback);
-  if (!PrepareForAccess())
-    return;
-
-  ASSERT(rect.left >= 0 && static_cast<u32>(rect.right) <= m_config.width && rect.top >= 0 &&
-         static_cast<u32>(rect.bottom) <= m_config.height);
-
-  // Offset pointer to point to start of region being copied to.
-  char* current_ptr = m_map_pointer;
-  current_ptr += rect.top * m_map_stride;
-  current_ptr += rect.left * m_texel_size;
-
-  // Optimal path: same dimensions, same stride.
-  if (rect.left == 0 && static_cast<u32>(rect.right) == m_config.width && m_map_stride == in_stride)
-  {
-    std::memcpy(current_ptr, in_ptr, m_map_stride * rect.GetHeight());
-    return;
-  }
-
-  size_t copy_size = std::min(static_cast<size_t>(rect.GetWidth() * m_texel_size), m_map_stride);
-  int copy_height = rect.GetHeight();
-  const char* src_ptr = static_cast<const char*>(in_ptr);
-  for (int row = 0; row < copy_height; row++)
-  {
-    std::memcpy(current_ptr, src_ptr, copy_size);
-    current_ptr += m_map_stride;
-    src_ptr += in_stride;
-  }
-}
-
 void AbstractStagingTexture::WriteTexel(u32 x, u32 y, const void* in_ptr)
 {
   ASSERT(m_type != StagingTextureType::Readback);

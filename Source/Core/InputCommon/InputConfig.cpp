@@ -160,11 +160,6 @@ std::string InputConfig::GetSysProfileDirectoryPath() const
   return File::GetSysDirectory() + "Profiles/" + GetProfileDirectoryName() + "/";
 }
 
-int InputConfig::GetControllerCount() const
-{
-  return static_cast<int>(m_controllers.size());
-}
-
 void InputConfig::RegisterHotplugCallback()
 {
   // Update control references on all controllers
@@ -178,25 +173,6 @@ void InputConfig::RegisterHotplugCallback()
 void InputConfig::UnregisterHotplugCallback()
 {
   m_hotplug_event_hook.reset();
-}
-
-bool InputConfig::IsControllerControlledByGamepadDevice(int index) const
-{
-  if (static_cast<size_t>(index) >= m_controllers.size())
-    return false;
-
-  const auto& controller = m_controllers.at(index).get()->GetDefaultDevice();
-
-  // By default on Android, no device is selected
-  if (controller.source == "")
-    return false;
-
-  // Filter out anything which obviously not a gamepad
-  return !((controller.source == "Quartz")      // OSX Quartz Keyboard/Mouse
-           || (controller.source == "XInput2")  // Linux and BSD Keyboard/Mouse
-           || (controller.source == "Android" && controller.cid <= 0)  // Android non-gamepad device
-           || (controller.source == "DInput" &&
-               controller.name == "Keyboard Mouse"));  // Windows Keyboard/Mouse
 }
 
 void InputConfig::GenerateControllerTextures(const Common::IniFile& file)

@@ -68,13 +68,6 @@ void SectorReader::SetSectorSize(int blocksize)
   }
 }
 
-void SectorReader::SetChunkSize(int block_cnt)
-{
-  m_chunk_blocks = block_cnt > 1 ? block_cnt : 1;
-  // Clear cache and resize the data arrays
-  SetSectorSize(m_block_size);
-}
-
 SectorReader::~SectorReader() = default;
 
 const SectorReader::Cache* SectorReader::FindCacheLine(u64 block_num)

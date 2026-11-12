@@ -96,11 +96,9 @@ public:
                   u8 sequence);
   void DescrambleAndSeed(u8* buf, u8 sequence, std::array<u8, 32>& reply_buf);
   void GetNextAndScramble(u8 sequence, std::array<u8, 32>& reply_buf);
-  void RemoveFigure(FigureUIPosition position);
   // Returns Infinity Figure name based on data from in_file param
   std::string LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE>& buf,
                          File::IOFile in_file, FigureUIPosition position);
-  bool CreateFigure(const std::string& file_path, u32 character);
   std::string FindFigure(u32 character) const;
 
 protected:
@@ -109,7 +107,6 @@ protected:
 private:
   InfinityFigure& GetFigureByOrder(u8 order_added);
   std::array<u8, 16> GenerateInfinityFigureKey(const std::vector<u8>& sha1_data);
-  std::array<u8, 16> GenerateBlankFigureData(u32 figure_num);
   FigureBasePosition DeriveFigurePosition(FigureUIPosition position);
   void GenerateSeed(u32 seed);
   u32 GetNext();

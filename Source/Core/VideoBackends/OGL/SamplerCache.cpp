@@ -34,16 +34,6 @@ SamplerCache::~SamplerCache()
   glDeleteSamplers(1, &m_linear_sampler);
 }
 
-void SamplerCache::BindNearestSampler(int stage)
-{
-  glBindSampler(stage, m_point_sampler);
-}
-
-void SamplerCache::BindLinearSampler(int stage)
-{
-  glBindSampler(stage, m_linear_sampler);
-}
-
 void SamplerCache::SetSamplerState(u32 stage, const SamplerState& state)
 {
   if (m_active_samplers[stage].first == state && m_active_samplers[stage].second != 0)
@@ -61,11 +51,6 @@ void SamplerCache::SetSamplerState(u32 stage, const SamplerState& state)
   m_active_samplers[stage].first = state;
   m_active_samplers[stage].second = it->second;
   glBindSampler(stage, it->second);
-}
-
-void SamplerCache::InvalidateBinding(u32 stage)
-{
-  m_active_samplers[stage].second = 0;
 }
 
 void SamplerCache::SetParameters(GLuint sampler_id, const SamplerState& params)

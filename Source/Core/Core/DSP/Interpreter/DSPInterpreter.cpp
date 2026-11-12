@@ -384,19 +384,9 @@ void Interpreter::SetLongAcc(s32 reg, s64 value)
   state.r.ac[reg].val = static_cast<u64>((value << (64 - 40)) >> (64 - 40));
 }
 
-s16 Interpreter::GetAccLow(s32 reg) const
-{
-  return static_cast<s16>(m_dsp_core.DSPState().r.ac[reg].l);
-}
-
 s16 Interpreter::GetAccMid(s32 reg) const
 {
   return static_cast<s16>(m_dsp_core.DSPState().r.ac[reg].m);
-}
-
-s16 Interpreter::GetAccHigh(s32 reg) const
-{
-  return static_cast<s16>(m_dsp_core.DSPState().r.ac[reg].h);
 }
 
 s64 Interpreter::GetLongProduct() const

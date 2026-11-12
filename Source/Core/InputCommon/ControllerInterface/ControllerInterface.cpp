@@ -289,28 +289,6 @@ void ControllerInterface::SetAspectRatioAdjustment(float value)
   retro_atomic_store_release_int(&m_aspect_ratio_adjustment, bits);
 }
 
-Common::Vec2 ControllerInterface::GetWindowInputScale() const
-{
-  const int bits = retro_atomic_load_acquire_int(&m_aspect_ratio_adjustment);
-  float ar;
-  std::memcpy(&ar, &bits, sizeof(ar));
-
-  if (ar > 1)
-    return {1.f, ar};
-  else
-    return {1 / ar, 1.f};
-}
-
-void ControllerInterface::SetMouseCenteringRequested(bool center)
-{
-  retro_atomic_store_release_int(&m_requested_mouse_centering, center ? 1 : 0);
-}
-
-bool ControllerInterface::IsMouseCenteringRequested() const
-{
-  return retro_atomic_load_acquire_int(&m_requested_mouse_centering) != 0;
-}
-
 // Register a callback to be called when a device is added or removed (as from the input backends'
 // hotplug thread), or when devices are refreshed
 // Returns a handle for later removing the callback.

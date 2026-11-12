@@ -144,24 +144,3 @@ void CPState::LoadCPReg(u8 sub_cmd, u32 value)
     WARN_LOG(VIDEO, "Unknown CP register %02x set to %08x", (unsigned)sub_cmd, value);
   }
 }
-
-void CPState::FillCPMemoryArray(u32* memory) const
-{
-  memory[MATINDEX_A] = matrix_index_a.Hex;
-  memory[MATINDEX_B] = matrix_index_b.Hex;
-  memory[VCD_LO] = vtx_desc.low.Hex;
-  memory[VCD_HI] = vtx_desc.high.Hex;
-
-  for (int i = 0; i < CP_NUM_VAT_REG; ++i)
-  {
-    memory[CP_VAT_REG_A + i] = vtx_attr[i].g0.Hex;
-    memory[CP_VAT_REG_B + i] = vtx_attr[i].g1.Hex;
-    memory[CP_VAT_REG_C + i] = vtx_attr[i].g2.Hex;
-  }
-
-  for (int i = 0; i < CP_NUM_ARRAYS; ++i)
-  {
-    memory[ARRAY_BASE + i] = array_bases[static_cast<CPArray>(i)];
-    memory[ARRAY_STRIDE + i] = array_strides[static_cast<CPArray>(i)];
-  }
-}

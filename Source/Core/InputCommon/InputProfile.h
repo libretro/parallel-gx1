@@ -27,11 +27,6 @@ enum class CycleDirection : int
 class ProfileCycler
 {
 public:
-  void NextWiimoteProfile(int controller_index);
-  void PreviousWiimoteProfile(int controller_index);
-  void NextWiimoteProfileForGame(int controller_index);
-  void PreviousWiimoteProfileForGame(int controller_index);
-
 private:
   void CycleProfile(CycleDirection cycle_direction, InputConfig* device_configuration,
                     int& profile_index, int controller_index);

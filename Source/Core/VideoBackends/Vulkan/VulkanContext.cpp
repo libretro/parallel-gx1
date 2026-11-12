@@ -164,61 +164,6 @@ VulkanContext::~VulkanContext()
   vkDestroyInstance(m_instance, nullptr);
 }
 
-bool VulkanContext::CheckValidationLayerAvailablility()
-{
-  u32 extension_count = 0;
-  VkResult res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
-  if (res != VK_SUCCESS)
-  {
-    LOG_VULKAN_ERROR(res, "vkEnumerateInstanceExtensionProperties failed: ");
-    return false;
-  }
-
-  std::vector<VkExtensionProperties> extension_list(extension_count);
-  res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extension_list.data());
-  ASSERT(res == VK_SUCCESS);
-
-  u32 layer_count = 0;
-  res = vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
-  if (res != VK_SUCCESS)
-  {
-    LOG_VULKAN_ERROR(res, "vkEnumerateInstanceExtensionProperties failed: ");
-    return false;
-  }
-
-  std::vector<VkLayerProperties> layer_list(layer_count);
-  res = vkEnumerateInstanceLayerProperties(&layer_count, layer_list.data());
-  ASSERT(res == VK_SUCCESS);
-
-  bool supports_validation_layers = HasLayer(layer_list, VALIDATION_LAYER_NAME);
-
-  bool supports_debug_utils =
-      HasExtension(extension_list, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-
-  if (!supports_debug_utils && supports_validation_layers)
-  {
-    // If the instance doesn't support debug utils but we're using validation layers,
-    // try to use the implementation of the extension provided by the validation layers.
-    extension_count = 0;
-    res = vkEnumerateInstanceExtensionProperties(VALIDATION_LAYER_NAME, &extension_count, nullptr);
-    if (res != VK_SUCCESS)
-    {
-      LOG_VULKAN_ERROR(res, "vkEnumerateInstanceExtensionProperties failed: ");
-      return false;
-    }
-
-    extension_list.resize(extension_count);
-    res = vkEnumerateInstanceExtensionProperties(VALIDATION_LAYER_NAME, &extension_count,
-                                                 extension_list.data());
-    ASSERT(res == VK_SUCCESS);
-    supports_debug_utils =
-        HasExtension(extension_list, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-  }
-
-  // Check for both VK_EXT_debug_utils and VK_LAYER_KHRONOS_validation
-  return supports_debug_utils && supports_validation_layers;
-}
-
 static u32 getAPIVersion()
 {
   u32 supported_version;

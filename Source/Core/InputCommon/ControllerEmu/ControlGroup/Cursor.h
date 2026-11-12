@@ -39,8 +39,6 @@ public:
   // Vertical offset in meters.
   ControlState GetVerticalOffset() const;
 
-  void SetRelativeInput(bool enabled);
-
 private:
   Cursor::StateData UpdateState(Cursor::ReshapeData input);
 

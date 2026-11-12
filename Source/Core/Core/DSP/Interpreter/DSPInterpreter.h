@@ -207,9 +207,7 @@ private:
 
   s64 GetLongAcc(s32 reg) const;
   void SetLongAcc(s32 reg, s64 value);
-  s16 GetAccLow(s32 reg) const;
   s16 GetAccMid(s32 reg) const;
-  s16 GetAccHigh(s32 reg) const;
 
   s64 GetLongProduct() const;
   s64 GetLongProductRounded() const;

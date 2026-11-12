@@ -1078,20 +1078,6 @@ void Device::TriggerMotionPlusModeChange()
             });
 }
 
-void Device::TriggerMotionPlusCalibration()
-{
-  static constexpr u16 CALIBRATION_TRIGGER_ADDR = 0xf2;
-  static constexpr u8 CALIBRATION_TRIGGER_VALUE = 0x00;
-
-  // This triggers a hardware "zero" calibration.
-  // The effect is notiecable but output still strays from calibration data.
-  // It seems we're better off just manually determining "zero".
-  WriteData(AddressSpace::I2CBus, WiimoteEmu::MotionPlus::ACTIVE_DEVICE_ADDR,
-            CALIBRATION_TRIGGER_ADDR, {CALIBRATION_TRIGGER_VALUE}, [](ErrorCode result) {
-              DEBUG_LOG(WIIMOTE, "WiiRemote: M+ calibration trigger done: %d.", int(result));
-            });
-}
-
 bool Device::IsMotionPlusStateKnown() const
 {
   return m_mplus_state.current_mode.has_value();

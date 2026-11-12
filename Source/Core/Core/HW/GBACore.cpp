@@ -322,25 +322,6 @@ bool Core::IsStarted() const
   return m_started;
 }
 
-CoreInfo Core::GetCoreInfo() const
-{
-  CoreInfo info{};
-  info.device_number = m_device_number;
-  info.width = GBA_VIDEO_HORIZONTAL_PIXELS;
-  info.height = GBA_VIDEO_VERTICAL_PIXELS;
-
-  if (!IsStarted())
-    return info;
-
-  info.is_gba = m_core->platform(m_core) == mPlatform::mPLATFORM_GBA;
-  info.has_rom = !m_rom_path.empty();
-  info.has_ereader =
-      info.is_gba && static_cast<::GBA*>(m_core->board)->memory.hw.devices & HW_EREADER;
-  m_core->currentVideoSize(m_core, &info.width, &info.height);
-  info.game_title = m_game_title;
-  return info;
-}
-
 bool Core::LoadBIOS(const char* bios_path)
 {
   VFile* vf = OpenReadOnlyFile(bios_path);

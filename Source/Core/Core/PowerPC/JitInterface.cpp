@@ -33,11 +33,6 @@ JitInterface::JitInterface(Core::System& system) : m_system(system)
 
 JitInterface::~JitInterface() = default;
 
-void JitInterface::SetJit(std::unique_ptr<JitBase> jit)
-{
-  m_jit = std::move(jit);
-}
-
 void JitInterface::DoState(PointerWrap& p)
 {
   if (m_jit && p.IsReadMode())

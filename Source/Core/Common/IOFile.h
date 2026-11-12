@@ -102,7 +102,6 @@ public:
   bool WriteString(std::string_view str) { return WriteBytes(str.data(), str.size()); }
 
   // Writes length zero octets.
-  bool WriteZeros(size_t length);
 
   bool IsOpen() const { return m_file != nullptr; }
   // m_good is set to false when a read, write or other function fails

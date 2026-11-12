@@ -1115,11 +1115,6 @@ void Wiimote::RefreshConfig()
   m_balance_board_dump_port = Config::Get(Config::MAIN_BB_DUMP_PORT);
 }
 
-int Wiimote::GetIndex() const
-{
-  return m_index;
-}
-
 // config dialog calls this when some settings change
 void Initialize(::Wiimote::InitializeMode init_mode)
 {

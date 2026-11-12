@@ -356,11 +356,6 @@ DiscIO::Region TMDReader::GetRegion() const
   return region <= DiscIO::Region::NTSC_K ? region : DiscIO::Region::Unknown;
 }
 
-bool TMDReader::IsvWii() const
-{
-  return *(m_bytes + offsetof(TMDHeader, is_vwii));
-}
-
 std::string TMDReader::GetGameID() const
 {
   char game_id[6];

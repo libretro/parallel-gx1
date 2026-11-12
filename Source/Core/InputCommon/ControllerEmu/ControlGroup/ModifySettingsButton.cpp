@@ -59,11 +59,6 @@ void ModifySettingsButton::UpdateState()
   }
 }
 
-const std::vector<bool>& ModifySettingsButton::IsSettingToggled() const
-{
-  return m_associated_settings_toggle;
-}
-
 const std::vector<bool>& ModifySettingsButton::GetSettingsModifier() const
 {
   return m_associated_settings;

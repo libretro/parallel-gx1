@@ -159,7 +159,6 @@ public:
   std::shared_ptr<Device> GetDeviceByName(std::string_view device_name);
   std::shared_ptr<Device> GetDeviceByFileDescriptor(const u32 fd);
 
-  std::shared_ptr<FSDevice> GetFSDevice();
   std::shared_ptr<ESDevice> GetESDevice();
 
   void DoState(PointerWrap& p);

@@ -593,9 +593,4 @@ ExtensionNumber Wiimote::GetActiveExtensionNumber() const
   return m_active_extension;
 }
 
-ControllerEmu::SettingValue<bool>& Wiimote::GetMotionPlusSetting()
-{
-  return m_motion_plus_setting;
-}
-
 }  // namespace WiimoteEmu

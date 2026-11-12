@@ -635,98 +635,6 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
   return FindFigure(number);
 }
 
-void InfinityBase::RemoveFigure(FigureUIPosition position)
-{
-  InfinityFigure& figure = m_figures[static_cast<u8>(position)];
-
-  if (figure.inf_file.IsOpen())
-  {
-    figure.Save();
-    figure.inf_file.Close();
-  }
-
-  if (figure.present)
-  {
-    FigureBasePosition derived_position = DeriveFigurePosition(position);
-    if (derived_position == FigureBasePosition::Unknown)
-    {
-      ERROR_LOG(IOS_USB, "Invalid Position for Infinity Figure");
-      return;
-    }
-
-    figure.present = false;
-
-    std::array<u8, 32> figure_change_response = {
-        0xab, 0x04, static_cast<u8>(derived_position), 0x09, figure.order_added, 0x01};
-    figure_change_response[6] = GenerateChecksum(figure_change_response, 6);
-    m_figure_added_removed_response.push(figure_change_response);
-  }
-}
-
-bool InfinityBase::CreateFigure(const std::string& file_path, u32 figure_num)
-{
-  File::IOFile inf_file(file_path, "w+b");
-  if (!inf_file)
-  {
-    return false;
-  }
-
-  // Create a 320 byte file with standard NFC read/write permissions
-  std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE> file_data{};
-  u32 first_block = 0x17878E;
-  u32 other_blocks = 0x778788;
-  for (s8 i = 2; i >= 0; i--)
-  {
-    file_data[0x38 - i] = u8((first_block >> i * 8) & 0xFF);
-  }
-  for (u32 index = 1; index < 0x05; index++)
-  {
-    for (s8 i = 2; i >= 0; i--)
-    {
-      file_data[((index * 0x40) + 0x38) - i] = u8((other_blocks >> i * 8) & 0xFF);
-    }
-  }
-  // Create the vector to calculate the SHA1 hash with
-  std::vector<u8> sha1_calc = {SHA1_CONSTANT.begin(), SHA1_CONSTANT.end() - 1};
-
-  // Generate random UID, used for AES encrypt/decrypt
-  std::array<u8, 16> uid_data = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x89, 0x44, 0x00, 0xC2};
-  Common::Random::Generate(&uid_data[0], 7);
-  for (s8 i = 0; i < 7; i++)
-  {
-    sha1_calc.push_back(uid_data[i]);
-  }
-  std::array<u8, 16> figure_data = GenerateBlankFigureData(figure_num);
-
-  if (figure_data[1] == 0x00)
-    return false;
-
-  std::array<u8, 16> key = GenerateInfinityFigureKey(sha1_calc);
-
-  // Create AES Encrypt context based on AES key, use this to encrypt the character data and 4 blank
-  // blocks
-  std::unique_ptr<Common::AES::Context> ctx = Common::AES::CreateContextEncrypt(key.data());
-  std::array<u8, 16> encrypted_block = {};
-  std::array<u8, 16> encrypted_blank = {};
-
-  ctx->CryptIvZero(figure_data.data(), encrypted_block.data(), figure_data.size());
-  ctx->CryptIvZero(BLANK_BLOCK.data(), encrypted_blank.data(), BLANK_BLOCK.size());
-
-  // Copy encrypted data and UID data to the Figure File
-  memcpy(&file_data[0], uid_data.data(), uid_data.size());
-  memcpy(&file_data[16], encrypted_block.data(), encrypted_block.size());
-  memcpy(&file_data[16 * 0x04], encrypted_blank.data(), encrypted_blank.size());
-  memcpy(&file_data[16 * 0x08], encrypted_blank.data(), encrypted_blank.size());
-  memcpy(&file_data[16 * 0x0C], encrypted_blank.data(), encrypted_blank.size());
-  memcpy(&file_data[16 * 0x0D], encrypted_blank.data(), encrypted_blank.size());
-
-  DEBUG_LOG(IOS_USB, "File Data: \n%s", HexDump(file_data.data(), file_data.size()).c_str());
-
-  inf_file.WriteBytes(file_data.data(), file_data.size());
-
-  return true;
-}
-
 std::string InfinityBase::FindFigure(u32 number) const
 {
   for (auto it = list_infinity_figures.begin(); it != list_infinity_figures.end(); it++)
@@ -799,30 +707,6 @@ std::array<u8, 16> InfinityBase::GenerateInfinityFigureKey(const std::vector<u8>
     }
   }
   return key;
-}
-
-std::array<u8, 16> InfinityBase::GenerateBlankFigureData(u32 figure_num)
-{
-  std::array<u8, 16> figure_data = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                    0x00, 0x00, 0x00, 0x01, 0xD1, 0x1F};
-
-  // Figure Number, input by end user
-  figure_data[1] = u8((figure_num >> 16) & 0xFF);
-  figure_data[2] = u8((figure_num >> 8) & 0xFF);
-  figure_data[3] = u8(figure_num & 0xFF);
-
-  // Manufacture date, formatted as YY/MM/DD. Set to Infinity 1.0 release date
-  figure_data[4] = 0x0D;
-  figure_data[5] = 0x08;
-  figure_data[6] = 0x12;
-
-  u32 checksum = InfinityCRC32(figure_data);
-  for (s8 i = 3; i >= 0; i--)
-  {
-    figure_data[15 - i] = u8((checksum >> i * 8) & 0xFF);
-  }
-  DEBUG_LOG(IOS_USB, "Block 1: \n%s", HexDump(figure_data.data(), 16).c_str());
-  return figure_data;
 }
 
 void InfinityBase::DescrambleAndSeed(u8* buf, u8 sequence, std::array<u8, 32>& reply_buf)

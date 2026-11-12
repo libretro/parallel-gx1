@@ -173,7 +173,6 @@ public:
 
   // Active extension number is exposed for TAS.
   ExtensionNumber GetActiveExtensionNumber() const;
-  ControllerEmu::SettingValue<bool>& GetMotionPlusSetting();
 
   static Common::Vec3
   OverrideVec3(const ControllerEmu::ControlGroup* control_group, Common::Vec3 vec,

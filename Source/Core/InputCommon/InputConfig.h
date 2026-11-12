@@ -41,14 +41,12 @@ public:
   ControllerEmu::EmulatedController* GetController(int index) const;
   void ClearControllers();
   bool ControllersNeedToBeCreated() const;
-  bool IsControllerControlledByGamepadDevice(int index) const;
 
   std::string GetGUIName() const { return m_gui_name; }
   std::string GetProfileKey() const { return m_profile_key; }
   std::string GetProfileDirectoryName() const { return m_profile_directory_name; }
   std::string GetUserProfileDirectoryPath() const;
   std::string GetSysProfileDirectoryPath() const;
-  int GetControllerCount() const;
 
   // These should be used after creating all controllers and before clearing them, respectively.
   void RegisterHotplugCallback();

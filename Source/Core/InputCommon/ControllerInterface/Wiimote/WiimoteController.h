@@ -209,7 +209,6 @@ private:
   u8 GetDesiredLEDValue() const;
 
   void TriggerMotionPlusModeChange();
-  void TriggerMotionPlusCalibration();
 
   bool IsMotionPlusStateKnown() const;
   bool IsMotionPlusActive() const;

@@ -14,31 +14,6 @@ template class NumericSetting<int>;
 template class NumericSetting<double>;
 template class NumericSetting<bool>;
 
-const char* NumericSettingBase::GetININame() const
-{
-  return m_details.ini_name;
-}
-
-const char* NumericSettingBase::GetUIName() const
-{
-  return m_details.ui_name;
-}
-
-const char* NumericSettingBase::GetUISuffix() const
-{
-  return m_details.ui_suffix;
-}
-
-const char* NumericSettingBase::GetUIDescription() const
-{
-  return m_details.ui_description;
-}
-
-SettingVisibility NumericSettingBase::GetVisibility() const
-{
-  return m_details.visibility;
-}
-
 template <typename T>
 void NumericSetting<T>::SetExpressionFromValue()
 {

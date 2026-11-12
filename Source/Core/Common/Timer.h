@@ -10,13 +10,11 @@ namespace Common
 class Timer
 {
 public:
-  static u64 NowUs();
   static u64 NowMs();
 
   void Start();
   // Start(), then decrement start time by the offset.
   // Effectively "resumes" a timer
-  void StartWithOffset(u64 offset);
   void Stop();
   u64 ElapsedMs() const;
 

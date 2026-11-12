@@ -517,7 +517,6 @@ struct CPState final
   // Mutates the CP state based on the given command and value.
   void LoadCPReg(u8 sub_cmd, u32 value);
   // Fills memory with data from CP regs.  There should be space for 0x100 values in memory.
-  void FillCPMemoryArray(u32* memory) const;
 
   Common::EnumMap<u32, CPArray::XF_D> array_bases;
   Common::EnumMap<u32, CPArray::XF_D> array_strides;

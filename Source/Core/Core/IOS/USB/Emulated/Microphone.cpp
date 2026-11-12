@@ -240,19 +240,9 @@ Microphone::FloatType Microphone::Loudness::GetAbsoluteMean() const
   return FloatType(absolute_sum) / samples_count;
 }
 
-Microphone::FloatType Microphone::Loudness::GetAbsoluteMeanDb() const
-{
-  return GetDecibel(GetAbsoluteMean());
-}
-
 Microphone::FloatType Microphone::Loudness::GetRootMeanSquare() const
 {
   return std::sqrt(square_sum / samples_count);
-}
-
-Microphone::FloatType Microphone::Loudness::GetRootMeanSquareDb() const
-{
-  return GetDecibel(GetRootMeanSquare());
 }
 
 Microphone::FloatType Microphone::Loudness::GetCrestFactor() const
@@ -261,11 +251,6 @@ Microphone::FloatType Microphone::Loudness::GetCrestFactor() const
   if (rms == 0)
     return FloatType(0);
   return GetPeak() / rms;
-}
-
-Microphone::FloatType Microphone::Loudness::GetCrestFactorDb() const
-{
-  return GetDecibel(GetCrestFactor());
 }
 
 Microphone::FloatType Microphone::Loudness::ComputeGain(FloatType db)

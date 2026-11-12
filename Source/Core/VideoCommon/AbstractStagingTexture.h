@@ -79,7 +79,6 @@ public:
   // Copies the texels from in_ptr to the staging texture, which can be read by the GPU, with the
   // specified stride (length in bytes of each row). After updating the staging texture with all
   // changes, call CopyToTexture() to update the GPU copy.
-  void WriteTexels(const MathUtil::Rectangle<int>& rect, const void* in_ptr, u32 in_stride);
   void WriteTexel(u32 x, u32 y, const void* in_ptr);
 
   // Set by the backend. What the GPU signals once the last copy is done: a Vulkan fence counter

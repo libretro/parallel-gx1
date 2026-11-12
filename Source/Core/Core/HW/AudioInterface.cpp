@@ -314,11 +314,6 @@ void AudioInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                  }));
 }
 
-void AudioInterfaceManager::GenerateAISInterrupt()
-{
-  GenerateAudioInterrupt();
-}
-
 bool AudioInterfaceManager::IsPlaying() const
 {
   return (m_control.PSTAT == 1);
@@ -332,11 +327,6 @@ u32 AudioInterfaceManager::GetAIDSampleRateDivisor() const
 u32 AudioInterfaceManager::GetAISSampleRateDivisor() const
 {
   return m_ais_sample_rate_divisor;
-}
-
-SampleRate AudioInterfaceManager::GetAIDSampleRate() const
-{
-  return m_control.AIDFR == AID_48KHz ? SampleRate::AI48KHz : SampleRate::AI32KHz;
 }
 
 SampleRate AudioInterfaceManager::GetAISSampleRate() const

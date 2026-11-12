@@ -162,18 +162,6 @@ std::string WC24SendList::GetMailPath(u32 index) const
   return StringFromFormat("mb/s%07d.msg", GetEntryId(index));
 }
 
-u32 WC24SendList::GetNextEntryId() const
-{
-  ASSERT(!IsDisabled());
-  return Common::swap32(m_data.header.next_entry_id);
-}
-
-u32 WC24SendList::GetNextEntryIndex() const
-{
-  ASSERT(!IsDisabled());
-  return (Common::swap32(m_data.header.next_entry_offset) - 128) / 128;
-}
-
 std::vector<u32> WC24SendList::GetMailToSend() const
 {
   ASSERT(!IsDisabled());
@@ -207,64 +195,6 @@ std::optional<u32> WC24SendList::GetNextFreeEntryIndex() const
   }
 
   return std::nullopt;
-}
-
-ErrorCode WC24SendList::AddRegistrationMessages(const WC24FriendList& friend_list, u64 sender)
-{
-  ASSERT(!IsDisabled());
-  // It is possible that the user composed a message before SendMail was called.
-  ReadSendList();
-
-  const std::vector<u64> unconfirmed_friends = friend_list.GetUnconfirmedFriends();
-  for (const u64 code : unconfirmed_friends)
-  {
-    const u32 entry_index = GetNextEntryIndex();
-    const u32 msg_id = GetNextEntryId();
-    m_data.entries[entry_index].id = Common::swap32(msg_id);
-
-    const std::time_t t = std::time(nullptr);
-    std::tm gm_time{};
-    char date[64] = "";
-    if (Common::GmTime(t, &gm_time))
-      std::strftime(date, sizeof(date), "%a, %d %b %Y %X", &gm_time);
-
-    const std::string formatted_message =
-        StringFromFormat(MAIL_REGISTRATION_STRING, sender, code, date, sender, code);
-    const ErrorCode reply = WriteToVFF(SEND_BOX_PATH, GetMailPath(entry_index), m_fs,
-                                       reinterpret_cast<const u8*>(formatted_message.data()),
-                                       formatted_message.size());
-
-    if (reply != WC24_OK)
-    {
-      ERROR_LOG(IOS_WC24, "Error writing registration message to VFF");
-      return reply;
-    }
-
-    NOTICE_LOG(IOS_WC24, "Issued registration message for Wii Friend: %" PRIu64, (u64)code);
-
-    // Update the header and some fields in the body
-    m_data.entries[entry_index].msg_size =
-        Common::swap32(static_cast<u32>(formatted_message.size()));
-    m_data.header.number_of_mail = Common::swap32(GetNumberOfMail() + 1);
-    m_data.header.next_entry_id = Common::swap32(msg_id + 1);
-    m_data.header.total_size_of_messages = Common::swap32(m_data.header.total_size_of_messages) +
-                                           static_cast<u32>(formatted_message.size());
-
-    const std::optional<u32> next_entry_index = GetNextFreeEntryIndex();
-    if (!next_entry_index)
-    {
-      // If there are no free entries, we overwrite the first entry.
-      m_data.header.next_entry_offset = Common::swap32(128);
-    }
-    else
-    {
-      m_data.header.next_entry_offset = CalculateFileOffset(next_entry_index.value());
-    }
-  }
-
-  // Only flush on success.
-  WriteSendList();
-  return WC24_OK;
 }
 
 std::string_view WC24SendList::GetMailFlag() const

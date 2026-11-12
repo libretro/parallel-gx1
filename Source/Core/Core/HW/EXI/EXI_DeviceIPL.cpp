@@ -193,17 +193,6 @@ std::string CEXIIPL::FindIPLDump(const std::string& path_prefix)
   return ipl_dump_path;
 }
 
-bool CEXIIPL::HasIPLDump()
-{
-  std::string ipl_rom_path = FindIPLDump(File::GetUserPath(D_GCUSER_IDX));
-
-  // If not found, check again in Sys folder
-  if (ipl_rom_path.empty())
-    ipl_rom_path = FindIPLDump(File::GetSysDirectory() + GC_SYS_DIR);
-
-  return !ipl_rom_path.empty();
-}
-
 void CEXIIPL::LoadFontFile(const std::string& filename, u32 offset)
 {
   // Official IPL fonts are copyrighted. Dolphin ships with a set of free font alternatives but

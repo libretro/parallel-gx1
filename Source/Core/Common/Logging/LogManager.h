@@ -68,8 +68,6 @@ public:
   void SetEnable(LogType type, bool enable);
   bool IsEnabled(LogType type, LogLevel level = LogLevel::LNOTICE) const;
 
-  std::vector<LogContainer> GetLogTypes();
-
   const char* GetShortName(LogType type) const;
   const char* GetFullName(LogType type) const;
 

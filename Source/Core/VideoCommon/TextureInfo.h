@@ -150,7 +150,6 @@ public:
   bool HasMipMaps() const { return m_limited_mip_count != 0; }
   u32 GetLevelCount() const { return m_limited_mip_count + 1; }
   MipLevels GetMipMapLevels() const;
-  u32 GetFullLevelSize() const;
 
   static constexpr std::string_view format_prefix{"tex1_"};
 

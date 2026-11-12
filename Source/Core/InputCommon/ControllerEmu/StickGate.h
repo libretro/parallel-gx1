@@ -84,7 +84,6 @@ public:
   using ReshapeData = Common::DVec2;
 
   // Angle is in radians and should be non-negative
-  ControlState GetDeadzoneRadiusAtAngle(double angle) const;
   ControlState GetInputRadiusAtAngle(double angle) const;
 
   ControlState GetDeadzonePercentage() const;
@@ -95,18 +94,14 @@ public:
   virtual ReshapeData GetReshapableState(bool adjusted) const = 0;
   virtual ControlState GetDefaultInputRadiusAtAngle(double ang) const;
 
-  void SetCalibrationToDefault();
   void SetCalibrationFromGate(const StickGate& gate);
 
-  static void UpdateCalibrationData(CalibrationData& data, Common::DVec2 point1,
-                                    Common::DVec2 point2);
   static ControlState GetCalibrationDataRadiusAtAngle(const CalibrationData& data, double angle);
 
   CalibrationData GetCalibrationData() const;
   void SetCalibrationData(CalibrationData data);
 
   ReshapeData GetCenter() const;
-  void SetCenter(ReshapeData center);
 
   ~ReshapableInput() override;
   ReshapableInput(const ReshapableInput&) = delete;

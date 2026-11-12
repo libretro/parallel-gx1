@@ -115,7 +115,6 @@ public:
   GLuint GetFBO() const { return m_fbo; }
   void SetFBO(GLuint fbo) { m_fbo = fbo; }
   // Used for updating the dimensions of the system/window framebuffer.
-  void UpdateDimensions(u32 width, u32 height);
 
 protected:
   GLuint m_fbo;

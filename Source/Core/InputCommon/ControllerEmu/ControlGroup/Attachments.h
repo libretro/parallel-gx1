@@ -33,7 +33,6 @@ public:
   void SetSelectedAttachment(u32 val);
 
   NumericSetting<int>& GetSelectionSetting();
-  SettingValue<int>& GetAttachmentSetting();
 
   const std::vector<std::unique_ptr<AttachedController>>& GetAttachmentList() const;
 

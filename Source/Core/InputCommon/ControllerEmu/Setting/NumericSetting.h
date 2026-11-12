@@ -114,12 +114,6 @@ public:
 
   virtual void SetToDefault() = 0;
 
-  const char* GetININame() const;
-  const char* GetUIName() const;
-  const char* GetUISuffix() const;
-  const char* GetUIDescription() const;
-  SettingVisibility GetVisibility() const;
-
 protected:
   NumericSettingDetails m_details;
 };

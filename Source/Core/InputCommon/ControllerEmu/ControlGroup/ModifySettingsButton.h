@@ -19,7 +19,6 @@ public:
 
   void UpdateState();
 
-  const std::vector<bool>& IsSettingToggled() const;
   const std::vector<bool>& GetSettingsModifier() const;
 
 private:

@@ -827,12 +827,6 @@ OGLFramebuffer::Create(OGLTexture* color_attachment, OGLTexture* depth_attachmen
                             width, height, layers, samples, fbo);
 }
 
-void OGLFramebuffer::UpdateDimensions(u32 width, u32 height)
-{
-  m_width = width;
-  m_height = height;
-}
-
 bool SyncDone(void* sync)
 {
   GLenum result;

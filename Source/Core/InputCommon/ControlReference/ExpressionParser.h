@@ -103,7 +103,6 @@ private:
   Token GetBareword(char c);
   Token GetRealLiteral(char c);
 
-  Token PeekToken();
   Token NextToken();
 };
 

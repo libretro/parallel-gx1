@@ -288,17 +288,6 @@ bool LogManager::IsEnabled(LogType type, LogLevel level) const
   return m_log[type].m_enable && GetEffectiveLogLevel() >= level;
 }
 
-std::vector<LogManager::LogContainer> LogManager::GetLogTypes()
-{
-  std::vector<LogContainer> log_types;
-  log_types.reserve(m_log.size());
-
-  for (const auto& container : m_log)
-    log_types.emplace_back(container);
-
-  return log_types;
-}
-
 const char* LogManager::GetShortName(LogType type) const
 {
   return m_log[type].m_short_name;

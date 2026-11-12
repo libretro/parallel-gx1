@@ -38,7 +38,6 @@ public:
   /* from the class's pool: made at backend start, destroyed once every one is */
   OBJECT_POOL_MEMBERS
 
-  static VkFormat GetLinearFormat(VkFormat format);
   static VkFormat GetVkFormatForHostTextureFormat(AbstractTextureFormat format);
   static VkImageAspectFlags GetImageAspectForFormat(AbstractTextureFormat format);
   static VkImageAspectFlags GetImageViewAspectForFormat(AbstractTextureFormat format);

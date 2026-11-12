@@ -76,13 +76,6 @@ void ControlGroupContainer::UpdateGroupsReferences(
     group->UpdateReferences(env);
 }
 
-void EmulatedController::UpdateSingleControlReference(const ControllerInterface& devi,
-                                                      ControlReference*)
-{
-  // The environment's variables belong to the thread doing a rebind, so this is one.
-  UpdateReferences(devi);
-}
-
 bool EmulatedController::IsDefaultDeviceConnected() const
 {
   return retro_atomic_load_acquire_int(

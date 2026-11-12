@@ -124,7 +124,6 @@ protected:
   // like CDROMs. Setting this to a higher value helps reduce seeking
   // and IO overhead by batching reads. Do not set it too high either
   // as large reads are slow and will take too long to resolve.
-  void SetChunkSize(int blocks);
   int GetChunkSize() const { return m_chunk_blocks; }
   // Read a single block/sector.
   virtual bool GetBlock(u64 block_num, u8* out) = 0;

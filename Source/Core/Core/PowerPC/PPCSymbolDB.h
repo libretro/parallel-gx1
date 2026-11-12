@@ -28,10 +28,7 @@ public:
 
   const Common::Symbol* GetSymbolFromAddr(u32 addr) const override;
   bool NoteExists() const { return !m_notes.empty(); }
-  const Common::Note* GetNoteFromAddr(u32 addr) const;
   void DetermineNoteLayers();
-  void DeleteFunction(u32 start_address);
-  void DeleteNote(u32 start_address);
 
   std::string GetDescription(u32 addr) const;
 
@@ -39,10 +36,6 @@ public:
 
   bool LoadMapOnBoot(const Core::CPUThreadGuard& guard);
   bool LoadMap(const Core::CPUThreadGuard& guard, std::string filename, bool bad = false);
-
-  void PrintCalls(u32 funcAddr) const;
-  void PrintCallers(u32 funcAddr) const;
-  void LogFunctionCall(u32 addr);
 
   static bool FindMapFile(std::string* existing_map_file, std::string* writable_map_file);
 

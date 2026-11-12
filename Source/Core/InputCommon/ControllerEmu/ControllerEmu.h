@@ -257,7 +257,6 @@ public:
   // does the work, and one asking while it runs has its request done by that thread before
   // it stops, so nobody waits for anybody.
   void UpdateReferences(const ControllerInterface& devi);
-  void UpdateSingleControlReference(const ControllerInterface& devi, ControlReference* ref);
 
   // Reading input takes no lock: bindings are swapped whole and freed only once no reader
   // is inside. Kept so callers can mark a whole controller read as one input scope.

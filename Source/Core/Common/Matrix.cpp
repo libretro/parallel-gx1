@@ -56,13 +56,6 @@ Quaternion Quaternion::RotateZ(float rad)
   return Rotate(rad, Vec3(0, 0, 1));
 }
 
-Quaternion Quaternion::RotateXYZ(const Vec3& rads)
-{
-  const auto length = rads.Length();
-  return length ? Common::Quaternion::Rotate(length, rads / length) :
-                  Common::Quaternion::Identity();
-}
-
 Quaternion Quaternion::Rotate(float rad, const Vec3& axis)
 {
   const auto sin_angle_2 = std::sin(rad / 2);

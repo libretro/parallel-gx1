@@ -170,8 +170,6 @@ public:
   const std::vector<Input*>& Inputs() const { return m_inputs; }
   const std::vector<Output*>& Outputs() const { return m_outputs; }
 
-  Input* GetParentMostInput(Input* input) const;
-
   Input* FindInput(std::string_view name) const;
   Output* FindOutput(std::string_view name) const;
 
@@ -186,9 +184,6 @@ protected:
   // Some e.g. DInput devices expose a trigger across the full analog surface
   //  but we have no way of knowing this until the user actually maps the Input,
   //  so both center-neutral and full-surface Inputs need to be created in that case.
-  void AddFullAnalogSurfaceInputs(Input* low, Input* high);
-
-  void AddCombinedInput(std::string name, const std::pair<std::string, std::string>& inputs);
 
 private:
   int m_id = 0;
@@ -229,8 +224,6 @@ public:
   Device::Input* FindInput(std::string_view name, const Device* def_dev) const;
   Device::Output* FindOutput(std::string_view name, const Device* def_dev) const;
 
-  std::vector<std::shared_ptr<Device>> GetAllDevices() const;
-
   /* Calls fn(device, ctx) for every device, without copying the list. */
   void ForEachDevice(void (*fn)(Device* device, void* ctx), void* ctx) const
   {
@@ -243,7 +236,6 @@ public:
       fn(list->devices[i].get(), ctx);
   }
   std::vector<std::string> GetAllDeviceStrings() const;
-  bool HasDefaultDevice() const;
   std::string GetDefaultDeviceString() const;
   std::shared_ptr<Device> FindDevice(const DeviceQualifier& devq) const;
 

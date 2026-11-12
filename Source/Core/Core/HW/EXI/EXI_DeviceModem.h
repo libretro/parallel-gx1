@@ -80,7 +80,6 @@ private:
     FWT = 0x13,
   };
 
-  u16 GetTxThreshold() const;
   u16 GetRxThreshold() const;
   void SetInterruptFlag(u8 what, bool enabled, bool from_cpu);
   void HandleReadModemTransfer(void* data, u32 size);

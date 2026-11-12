@@ -94,20 +94,6 @@ std::string Device::GetQualifiedName() const
   return StringFromFormat("%s/%d/%s", GetSource().c_str(), GetId(), GetName().c_str());
 }
 
-auto Device::GetParentMostInput(Input* child) const -> Input*
-{
-  for (auto* input : m_inputs)
-  {
-    if (input->IsChild(child))
-    {
-      // Running recursively is currently unnecessary but it doesn't hurt.
-      return GetParentMostInput(input);
-    }
-  }
-
-  return child;
-}
-
 Device::Input* Device::FindInput(std::string_view name) const
 {
   for (Input* input : m_inputs)
@@ -177,19 +163,6 @@ private:
   Input& m_low;
   Input& m_high;
 };
-
-void Device::AddFullAnalogSurfaceInputs(Input* low, Input* high)
-{
-  AddInput(low);
-  AddInput(high);
-  AddInput(new FullAnalogSurface(low, high));
-  AddInput(new FullAnalogSurface(high, low));
-}
-
-void Device::AddCombinedInput(std::string name, const std::pair<std::string, std::string>& inputs)
-{
-  AddInput(new CombinedInput(std::move(name), {FindInput(inputs.first), FindInput(inputs.second)}));
-}
 
 //
 // DeviceQualifier :: ToString
@@ -284,13 +257,6 @@ std::shared_ptr<Device> DeviceContainer::FindDevice(const DeviceQualifier& devq)
   return nullptr;
 }
 
-std::vector<std::shared_ptr<Device>> DeviceContainer::GetAllDevices() const
-{
-  InputReadScope scope;
-  const DeviceList* const list = PeekDevices();
-  return list ? list->devices : std::vector<std::shared_ptr<Device>>{};
-}
-
 std::vector<std::string> DeviceContainer::GetAllDeviceStrings() const
 {
   InputReadScope scope;
@@ -307,15 +273,6 @@ std::vector<std::string> DeviceContainer::GetAllDeviceStrings() const
   }
 
   return device_strings;
-}
-
-bool DeviceContainer::HasDefaultDevice() const
-{
-  InputReadScope scope;
-  const DeviceList* const list = PeekDevices();
-  const auto& devices = list ? list->devices : NoDevices();
-  // Devices are already sorted by priority
-  return !devices.empty() && devices[0]->GetSortPriority() >= 0;
 }
 
 std::string DeviceContainer::GetDefaultDeviceString() const

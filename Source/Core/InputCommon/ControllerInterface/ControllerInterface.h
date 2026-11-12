@@ -68,12 +68,8 @@ public:
 
   // Calculated from the aspect-ratio adjustment.
   // Inputs based on window coordinates should be multiplied by this.
-  Common::Vec2 GetWindowInputScale() const;
 
   // Request that the mouse cursor should be centered in the render window at the next opportunity.
-  void SetMouseCenteringRequested(bool center);
-
-  bool IsMouseCenteringRequested() const;
 
   [[nodiscard]] Common::EventHook
   RegisterDevicesChangedCallback(Common::HookableEvent<>::CallbackType callback);

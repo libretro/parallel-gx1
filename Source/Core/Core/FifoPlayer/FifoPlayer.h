@@ -115,17 +115,12 @@ public:
   bool IsPlaying() const;
 
   FifoDataFile* GetFile() const { return m_File.get(); }
-  u32 GetMaxObjectCount() const;
-  u32 GetFrameObjectCount(u32 frame) const;
-  u32 GetCurrentFrameObjectCount() const;
   u32 GetCurrentFrameNum() const { return m_CurrentFrame; }
   const AnalyzedFrameInfo& GetAnalyzedFrameInfo(u32 frame) const { return m_FrameInfo[frame]; }
   // Frame range
   u32 GetFrameRangeStart() const { return m_FrameRangeStart; }
-  void SetFrameRangeStart(u32 start);
 
   u32 GetFrameRangeEnd() const { return m_FrameRangeEnd; }
-  void SetFrameRangeEnd(u32 end);
 
   // Object range
   u32 GetObjectRangeStart() const { return m_ObjectRangeStart; }
@@ -134,7 +129,6 @@ public:
   void SetObjectRangeEnd(u32 end) { m_ObjectRangeEnd = end; }
 
   // Callbacks
-  void SetFileLoadedCallback(CallbackFunc callback);
   void SetFrameWrittenCallback(CallbackFunc callback) { m_FrameWrittenCb = std::move(callback); }
 
   bool IsRunningWithFakeVideoInterfaceUpdates() const;

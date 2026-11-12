@@ -78,7 +78,6 @@ public:
   Entry* GetEntry(std::string_view key);
   const Entry* GetEntry(std::string_view key) const;
   Entry* GetOrAddEntry(std::string_view key, Entry::Type type);
-  void RemoveEntry(std::string_view key);
 
   // Intended for use with the non array types.
   template <typename T>

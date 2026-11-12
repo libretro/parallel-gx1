@@ -84,7 +84,6 @@ public:
   bool IsGenerated() const { return CreationStage() == NWC24CreationStage::Generated; }
   bool IsRegistered() const { return CreationStage() == NWC24CreationStage::Registered; }
 
-  u32 EnableBooting() const;
   void SetEnableBooting(u32 enable_booting);
 
   u64 Id() const;

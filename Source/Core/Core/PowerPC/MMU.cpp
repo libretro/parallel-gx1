@@ -1082,30 +1082,6 @@ void MMU::FlushDCacheLine(u32 address)
     m_ppc_state.dCache.Flush(m_memory, address);
 }
 
-void MMU::TouchDCacheLine(u32 address, bool store)
-{
-  address &= ~0x1F;
-
-  if (m_ppc_state.msr.DR)
-  {
-    auto translated_address = TranslateAddress<XCheckTLBFlag::Write>(address);
-    if (translated_address.result == TranslateAddressResultEnum::DIRECT_STORE_SEGMENT)
-    {
-      return;
-    }
-    if (translated_address.result == TranslateAddressResultEnum::PAGE_FAULT)
-    {
-      // If translation fails, generate a DSI.
-      GenerateDSIException(address, true);
-      return;
-    }
-    address = translated_address.address;
-  }
-
-  if (m_ppc_state.m_enable_dcache)
-    m_ppc_state.dCache.Touch(m_memory, address, store);
-}
-
 u32 MMU::IsOptimizableMMIOAccess(u32 address, u32 access_size) const
 {
   if (!m_ppc_state.msr.DR)

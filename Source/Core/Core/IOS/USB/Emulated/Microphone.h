@@ -78,11 +78,8 @@ private:
     FloatType GetAmplitude() const;
     FloatType GetAmplitudeDb() const;
     FloatType GetAbsoluteMean() const;
-    FloatType GetAbsoluteMeanDb() const;
     FloatType GetRootMeanSquare() const;
-    FloatType GetRootMeanSquareDb() const;
     FloatType GetCrestFactor() const;
-    FloatType GetCrestFactorDb() const;
     static FloatType ComputeGain(FloatType db);
 
     void Reset();

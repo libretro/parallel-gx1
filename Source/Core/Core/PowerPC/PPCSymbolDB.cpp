@@ -161,46 +161,6 @@ const Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr) const
   return nullptr;
 }
 
-const Common::Note* PPCSymbolDB::GetNoteFromAddr(u32 addr) const
-{
-  if (m_notes.empty())
-    return nullptr;
-
-  auto itn = m_notes.lower_bound(addr);
-
-  // If the address is exactly the start address of a symbol, we're done.
-  if (itn != m_notes.end() && itn->second.address == addr)
-    return &itn->second;
-
-  // Otherwise, check whether the address is within the bounds of a symbol.
-  if (itn == m_notes.begin())
-    return nullptr;
-
-  do
-  {
-    --itn;
-
-    // If itn's range reaches the address.
-    if (addr < itn->second.address + itn->second.size)
-      return &itn->second;
-
-    // If layer is 0, it's the last note that could possibly reach the address, as there are no more
-    // underlying notes.
-  } while (itn != m_notes.begin() && itn->second.layer != 0);
-
-  return nullptr;
-}
-
-void PPCSymbolDB::DeleteFunction(u32 start_address)
-{
-  m_functions.erase(start_address);
-}
-
-void PPCSymbolDB::DeleteNote(u32 start_address)
-{
-  m_notes.erase(start_address);
-}
-
 std::string PPCSymbolDB::GetDescription(u32 addr) const
 {
   if (const Common::Symbol* const symbol = GetSymbolFromAddr(addr))
@@ -242,58 +202,6 @@ void PPCSymbolDB::FillInCallers(XFuncMap* functions)
       }
     }
   }
-}
-
-void PPCSymbolDB::PrintCalls(u32 funcAddr) const
-{
-
-  const auto iter = m_functions.find(funcAddr);
-  if (iter == m_functions.end())
-  {
-    WARN_LOG(SYMBOLS, "Symbol does not exist");
-    return;
-  }
-
-  const Common::Symbol& f = iter->second;
-  DEBUG_LOG(SYMBOLS, "The function %s at %08x calls:", f.name.c_str(), f.address);
-  for (const Common::SCall& call : f.calls)
-  {
-    const auto n = m_functions.find(call.function);
-    if (n != m_functions.end())
-    {
-      DEBUG_LOG(SYMBOLS, "* %08x : %s", call.call_address, n->second.name.c_str());
-    }
-  }
-}
-
-void PPCSymbolDB::PrintCallers(u32 funcAddr) const
-{
-
-  const auto iter = m_functions.find(funcAddr);
-  if (iter == m_functions.end())
-    return;
-
-  const Common::Symbol& f = iter->second;
-  DEBUG_LOG(SYMBOLS, "The function %s at %08x is called by:", f.name.c_str(), f.address);
-  for (const Common::SCall& caller : f.callers)
-  {
-    const auto n = m_functions.find(caller.function);
-    if (n != m_functions.end())
-    {
-      DEBUG_LOG(SYMBOLS, "* %08x : %s", caller.call_address, n->second.name.c_str());
-    }
-  }
-}
-
-void PPCSymbolDB::LogFunctionCall(u32 addr)
-{
-
-  auto iter = m_functions.find(addr);
-  if (iter == m_functions.end())
-    return;
-
-  Common::Symbol& f = iter->second;
-  f.num_calls++;
 }
 
 // Get map file paths for the active title.

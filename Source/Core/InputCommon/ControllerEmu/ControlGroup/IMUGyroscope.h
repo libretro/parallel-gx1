@@ -27,8 +27,6 @@ public:
   // Value is in rad/s.
   ControlState GetDeadzone() const;
 
-  bool IsCalibrating() const;
-
 private:
 
   bool AreInputsBound() const;

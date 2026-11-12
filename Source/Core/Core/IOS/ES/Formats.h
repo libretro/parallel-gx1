@@ -234,7 +234,6 @@ public:
   u16 GetTitleVersion() const;
   u16 GetGroupId() const;
   DiscIO::Region GetRegion() const;
-  bool IsvWii() const;
 
   // Constructs a 6-character game ID in the format typically used by Dolphin.
   // If the 6-character game ID would contain non-alphanumeric characters,

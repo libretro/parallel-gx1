@@ -133,18 +133,6 @@ bool IOFile::RawWrite(const void* data, size_t length)
   return filestream_write(m_file, data, (int64_t)length) == (int64_t)length;
 }
 
-bool IOFile::WriteZeros(size_t length)
-{
-  static const u8 zeros[4096] = {};
-  while (length && m_good)
-  {
-    const size_t n = length < sizeof(zeros) ? length : sizeof(zeros);
-    WriteBytes(zeros, n);
-    length -= n;
-  }
-  return m_good;
-}
-
 const u8* IOFile::GetMappedPtr(u64* size)
 {
   int64_t len = 0;

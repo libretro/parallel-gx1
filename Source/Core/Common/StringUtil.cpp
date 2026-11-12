@@ -247,17 +247,7 @@ std::string_view StripWhitespace(std::string_view str)
 }
 
 // Turns "\n\r\t hello " into "hello " (trims at the start).
-std::string_view StripLeadingWhitespace(std::string_view str)
-{
-  return StripLeadingChars(str, " \t\r\n");
-}
-
 // Turns "\n\r\t hello " into "\n\r\t hello" (trims at the end).
-std::string_view StripTrailingWhitespace(std::string_view str)
-{
-  return StripTrailingChars(str, " \t\r\n");
-}
-
 std::string_view StripSpaces(std::string_view str)
 {
   return StripEnclosingChars(str, ' ');
@@ -464,14 +454,6 @@ void StringPopBackIf(std::string* s, char c)
 {
   if (!s->empty() && s->back() == c)
     s->pop_back();
-}
-
-size_t StringUTF8CodePointCount(std::string_view str)
-{
-  size_t continuation_bytes = 0;
-  for (const char c : str)
-    continuation_bytes += (c & 0xC0) == 0x80;
-  return str.size() - continuation_bytes;
 }
 
 constexpr char32_t UNICODE_REPLACEMENT_CHARACTER = 0xfffd;

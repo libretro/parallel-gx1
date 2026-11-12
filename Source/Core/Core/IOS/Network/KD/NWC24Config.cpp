@@ -186,11 +186,6 @@ void NWC24Config::SetCreationStage(NWC24CreationStage creation_stage)
   m_data.creation_stage = NWC24CreationStage(Common::swap32(u32(creation_stage)));
 }
 
-u32 NWC24Config::EnableBooting() const
-{
-  return Common::swap32(m_data.enable_booting);
-}
-
 void NWC24Config::SetEnableBooting(u32 enable_booting)
 {
   m_data.enable_booting = Common::swap32(enable_booting);

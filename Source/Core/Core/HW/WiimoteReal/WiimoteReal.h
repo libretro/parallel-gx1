@@ -100,8 +100,6 @@ public:
     QueueReport(report.REPORT_ID, &report, sizeof(report));
   }
 
-  int GetIndex() const;
-
 protected:
   // For waits on the write thread that end when the remote is being disconnected.
   const retro_atomic_int_t* RunFlag() const { return m_run_thread.Raw(); }

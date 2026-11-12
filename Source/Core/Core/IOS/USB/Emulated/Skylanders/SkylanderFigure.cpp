@@ -417,8 +417,4 @@ void SkylanderFigure::SetBlock(u8 block, const u8* buf)
 {
   memcpy(m_data.data() + (block * BLOCK_SIZE), buf, BLOCK_SIZE);
 }
-bool SkylanderFigure::FileIsOpen() const
-{
-  return m_sky_file.IsOpen();
-}
 }  // namespace IOS::HLE::USB

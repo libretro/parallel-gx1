@@ -46,7 +46,6 @@ public:
   }
 
   int BoundCount() const;
-  ciface::ExpressionParser::ParseStatus GetParseStatus() const;
   // Binds the expression to the devices in env. Builds a new binding and swaps it in, so a
   // thread reading the old one is never disturbed.
   void UpdateReference(ciface::ExpressionParser::ControlEnvironment& env);

@@ -188,27 +188,4 @@ std::string ProfileCycler::GetWiimoteInputProfilesForGame(int controller_index)
   return result;
 }
 
-void ProfileCycler::NextWiimoteProfile(int controller_index)
-{
-  CycleProfile(CycleDirection::Forward, Wiimote::GetConfig(), m_wiimote_profile_index,
-               controller_index);
-}
-
-void ProfileCycler::PreviousWiimoteProfile(int controller_index)
-{
-  CycleProfile(CycleDirection::Backward, Wiimote::GetConfig(), m_wiimote_profile_index,
-               controller_index);
-}
-
-void ProfileCycler::NextWiimoteProfileForGame(int controller_index)
-{
-  CycleProfileForGame(CycleDirection::Forward, Wiimote::GetConfig(), m_wiimote_profile_index,
-                      GetWiimoteInputProfilesForGame(controller_index), controller_index);
-}
-
-void ProfileCycler::PreviousWiimoteProfileForGame(int controller_index)
-{
-  CycleProfileForGame(CycleDirection::Backward, Wiimote::GetConfig(), m_wiimote_profile_index,
-                      GetWiimoteInputProfilesForGame(controller_index), controller_index);
-}
 }  // namespace InputProfile

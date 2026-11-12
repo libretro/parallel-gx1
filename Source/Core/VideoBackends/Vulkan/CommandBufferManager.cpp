@@ -539,14 +539,6 @@ void CommandBufferManager::Defer(const DeferredDestruction& d)
   resources.cleanup[resources.num_cleanup++] = d;
 }
 
-void CommandBufferManager::DeferBufferViewDestruction(VkBufferView object)
-{
-  DeferredDestruction d = {};
-  d.kind = DeferredDestruction::BUFFER_VIEW;
-  d.buffer_view = object;
-  Defer(d);
-}
-
 void CommandBufferManager::DeferBufferDestruction(VkBuffer buffer, const vk_heap_alloc_t& alloc)
 {
   DeferredDestruction d = {};

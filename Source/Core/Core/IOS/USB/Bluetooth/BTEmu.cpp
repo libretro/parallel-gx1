@@ -865,28 +865,6 @@ bool BluetoothEmuDevice::SendEventLinkKeyNotification(const u8 num_to_send)
   return true;
 }
 
-bool BluetoothEmuDevice::SendEventRequestLinkKey(const bdaddr_t& bd)
-{
-  SQueuedEvent event(sizeof(SHCIEventRequestLinkKey), 0);
-
-  SHCIEventRequestLinkKey* event_request_link_key = (SHCIEventRequestLinkKey*)event.buffer;
-
-  event_request_link_key->EventType = HCI_EVENT_LINK_KEY_REQ;
-  event_request_link_key->PayloadLength = sizeof(SHCIEventRequestLinkKey) - 2;
-  event_request_link_key->bdaddr = bd;
-
-  DEBUG_LOG(IOS_WIIMOTE, "Event: SendEventRequestLinkKey");
-  DEBUG_LOG(
-      IOS_WIIMOTE, "  bd: %02x:%02x:%02x:%02x:%02x:%02x",
-      (unsigned)event_request_link_key->bdaddr[0], (unsigned)event_request_link_key->bdaddr[1],
-      (unsigned)event_request_link_key->bdaddr[2], (unsigned)event_request_link_key->bdaddr[3],
-      (unsigned)event_request_link_key->bdaddr[4], (unsigned)event_request_link_key->bdaddr[5]);
-
-  AddEventToQueue(event);
-
-  return true;
-}
-
 bool BluetoothEmuDevice::SendEventReadClockOffsetComplete(u16 connection_handle)
 {
   WiimoteDevice* wiimote = AccessWiimote(connection_handle);

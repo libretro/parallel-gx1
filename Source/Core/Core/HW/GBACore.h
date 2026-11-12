@@ -73,7 +73,6 @@ public:
   void Stop();
   void Reset();
   bool IsStarted() const;
-  CoreInfo GetCoreInfo() const;
 
   void SyncJoybus(u64 gc_ticks, u16 keys);
   void SendJoybusCommand(u64 gc_ticks, int transfer_time, u8* buffer, u16 keys);

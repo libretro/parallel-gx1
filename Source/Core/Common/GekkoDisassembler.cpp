@@ -2299,25 +2299,10 @@ constexpr std::array<const char*, 32> gpr_names{
     "r22", "r23",      "r24",        "r25", "r26", "r27", "r28", "r29", "r30", "r31",
 };
 
-const char* GekkoDisassembler::GetGPRName(u32 index)
-{
-  if (index < gpr_names.size())
-    return gpr_names[index];
-
-  return nullptr;
-}
-
 constexpr std::array<const char*, 32> fpr_names{
     " f0", " f1", " f2", " f3", " f4", " f5", " f6", " f7", " f8", " f9", "f10",
     "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21",
     "f22", "f23", "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
 };
 
-const char* GekkoDisassembler::GetFPRName(u32 index)
-{
-  if (index < fpr_names.size())
-    return fpr_names[index];
-
-  return nullptr;
-}
 }  // namespace Common

@@ -410,9 +410,6 @@ private:
   const Directory& GetActiveDirectory() const;
   const BlockAlloc& GetActiveBat() const;
 
-  void UpdateDirectory(const Directory& directory);
-  void UpdateBat(const BlockAlloc& bat);
-
 public:
   static std::optional<GCMemcard> Create(std::string filename, const CardFlashId& flash_id,
                                          u16 size_mbits, bool shift_jis, u32 rtc_bias,
@@ -441,17 +438,13 @@ public:
 
   // get number of file entries in the directory
   u8 GetNumFiles() const;
-  u8 GetFileIndex(u8 fileNumber) const;
 
   // get the free blocks from bat
-  u16 GetFreeBlocks() const;
 
   // Returns index of the save with the same identity as the given DEntry, or nullopt if no save
   // with that identity exists in this card.
-  std::optional<u8> TitlePresent(const DEntry& d) const;
 
   // DEntry functions, all take u8 index < DIRLEN (127)
-  bool DEntry_IsPingPong(u8 index) const;
   // get first block for file
   u16 DEntry_FirstBlock(u8 index) const;
   // get file length in blocks
@@ -467,23 +460,18 @@ public:
   std::optional<std::pair<std::string, std::string>> GetSaveComments(u8 index) const;
 
   // Fetches a DEntry from the given file index.
-  std::optional<DEntry> GetDEntry(u8 index) const;
 
   GCMemcardGetSaveDataRetVal GetSaveData(u8 index, std::vector<GCMBlock>& saveBlocks) const;
 
   // Adds the given savefile to the memory card, if possible.
-  GCMemcardImportFileRetVal ImportFile(const Savefile& savefile);
 
   // Fetches the savefile at the given directory index, if any.
   std::optional<Savefile> ExportFile(u8 index) const;
 
   // delete a file from the directory
-  GCMemcardRemoveFileRetVal RemoveFile(u8 index);
 
   // reads the banner image
-  std::optional<std::vector<u32>> ReadBannerRGBA8(u8 index) const;
 
   // reads the animation frames
-  std::optional<std::vector<GCMemcardAnimationFrameRGBA8>> ReadAnimRGBA8(u8 index) const;
 };
 }  // namespace Memcard

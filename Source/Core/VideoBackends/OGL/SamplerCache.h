@@ -26,11 +26,8 @@ public:
   SamplerCache& operator=(SamplerCache&&) = delete;
 
   void SetSamplerState(u32 stage, const SamplerState& state);
-  void InvalidateBinding(u32 stage);
 
   void Clear();
-  void BindNearestSampler(int stage);
-  void BindLinearSampler(int stage);
 
 private:
   static void SetParameters(GLuint sampler_id, const SamplerState& params);

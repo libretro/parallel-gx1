@@ -75,7 +75,6 @@ public:
   static void CompileExceptionCheckFromJIT(JitInterface& jit_interface, ExceptionType type);
 
   /// used for the page fault unit test, don't use outside of tests!
-  void SetJit(std::unique_ptr<JitBase> jit);
 
   void Shutdown();
 

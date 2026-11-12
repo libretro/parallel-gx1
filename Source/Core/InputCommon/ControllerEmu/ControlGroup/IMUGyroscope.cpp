@@ -164,11 +164,4 @@ ControlState IMUGyroscope::GetDeadzone() const
   return m_deadzone_setting.GetValue() / 360 * MathUtil::TAU;
 }
 
-bool IMUGyroscope::IsCalibrating() const
-{
-  const auto calibration_period = m_calibration_period_setting.GetValue();
-  return calibration_period &&
-         DTToSeconds(Clock::now() - m_calibration_period_start) >= calibration_period;
-}
-
 }  // namespace ControllerEmu

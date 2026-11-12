@@ -207,11 +207,6 @@ static void AssertSlotEmpty(retro_atomic_ptr_t* slot, void* ctx)
   DEBUG_ASSERT(!retro_atomic_load_acquire_ptr(slot));
 }
 
-StreamBuffer* ProgramShaderCache::GetUniformBuffer()
-{
-  return s_buffer;
-}
-
 u32 ProgramShaderCache::GetUniformBufferAlignment()
 {
   return s_ubo_align;
@@ -544,11 +539,6 @@ void ProgramShaderCache::ReBindVertexFormat()
 bool ProgramShaderCache::IsValidVertexFormatBound()
 {
   return s_last_VAO != 0 && s_last_VAO != s_attributeless_VAO;
-}
-
-void ProgramShaderCache::InvalidateVertexFormat()
-{
-  s_last_VAO = 0;
 }
 
 void ProgramShaderCache::InvalidateVertexFormatIfBound(GLuint vao)

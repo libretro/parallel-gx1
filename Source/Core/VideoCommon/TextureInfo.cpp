@@ -205,17 +205,6 @@ TextureInfo::MipLevels TextureInfo::GetMipMapLevels() const
   return MipLevels(begin, end);
 }
 
-u32 TextureInfo::GetFullLevelSize() const
-{
-  u32 all_mips_size = 0;
-  for (const auto& mip_map : GetMipMapLevels())
-  {
-    if (mip_map.IsDataValid())
-      all_mips_size += mip_map.GetTextureSize();
-  }
-  return m_texture_size + all_mips_size;
-}
-
 TextureInfo::MipLevel::MipLevel(u32 level, const TextureInfo& parent, TexBytes* data)
     : m_level(level)
 {

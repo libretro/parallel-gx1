@@ -53,13 +53,10 @@ public:
 
   // The configured sample rate based on the control registers. Note that on GameCube, the named
   // rates are slightly higher than the names would suggest due to a hardware bug.
-  SampleRate GetAIDSampleRate() const;
   SampleRate GetAISSampleRate() const;
 
   u32 Get32KHzSampleRateDivisor() const;
   u32 Get48KHzSampleRateDivisor() const;
-
-  void GenerateAISInterrupt();
 
 private:
   // AI Control Register

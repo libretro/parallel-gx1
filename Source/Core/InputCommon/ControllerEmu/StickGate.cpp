@@ -129,12 +129,6 @@ ReshapableInput::ReshapableInput(std::string name_, std::string ui_name_, GroupT
   AddDeadzoneSetting(&m_deadzone_setting, 50);
 }
 
-ControlState ReshapableInput::GetDeadzoneRadiusAtAngle(double angle) const
-{
-  // FYI: deadzone is scaled by input radius which allows the shape to match.
-  return GetInputRadiusAtAngle(angle) * GetDeadzonePercentage();
-}
-
 ReshapableInput::~ReshapableInput()
 {
   delete static_cast<Shape*>(retro_atomic_exchange_ptr(&m_shape, nullptr));
@@ -217,11 +211,6 @@ ControlState ReshapableInput::GetDefaultInputRadiusAtAngle(double angle) const
   return GetGateRadiusAtAngle(angle);
 }
 
-void ReshapableInput::SetCalibrationToDefault()
-{
-  EditShape([](Shape& shape) { shape.calibration.clear(); });
-}
-
 void ReshapableInput::SetCalibrationFromGate(const StickGate& gate)
 {
   CalibrationData calibration(
@@ -232,19 +221,6 @@ void ReshapableInput::SetCalibrationFromGate(const StickGate& gate)
     val = gate.GetRadiusAtAngle(MathUtil::TAU * i++ / calibration.size());
 
   SetCalibrationData(std::move(calibration));
-}
-
-void ReshapableInput::UpdateCalibrationData(CalibrationData& data, Common::DVec2 point1,
-                                            Common::DVec2 point2)
-{
-  for (u32 i = 0; i != data.size(); ++i)
-  {
-    const auto angle = i * MathUtil::TAU / data.size();
-    const auto intersection =
-        GetRayLineIntersection(GetPointFromAngleAndLength(angle, 1.0), point1, point2);
-
-    data[i] = std::max(data[i], intersection.value_or(data[i]));
-  }
 }
 
 ReshapableInput::CalibrationData ReshapableInput::GetCalibrationData() const
@@ -262,11 +238,6 @@ ReshapableInput::ReshapeData ReshapableInput::GetCenter() const
 {
   ciface::InputReadScope scope;
   return PeekShape().center;
-}
-
-void ReshapableInput::SetCenter(ReshapableInput::ReshapeData center)
-{
-  EditShape([&center](Shape& shape) { shape.center = center; });
 }
 
 void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::string& base_name)

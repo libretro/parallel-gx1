@@ -264,7 +264,6 @@ public:
   // NON-BLOCKING FUNCTIONS
   s32 NewSocket(s32 af, s32 type, s32 protocol);
   s32 AddSocket(s32 fd, bool is_rw);
-  bool IsSocketBlocking(s32 wii_fd) const;
   s32 GetHostSocket(s32 wii_fd) const;
   s32 ShutdownSocket(s32 wii_fd, u32 how);
   s32 DeleteSocket(s32 wii_fd);

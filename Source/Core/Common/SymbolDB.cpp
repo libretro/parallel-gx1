@@ -76,18 +76,6 @@ void SymbolDB::Index(XFuncMap* functions)
   }
 }
 
-const Symbol* SymbolDB::GetSymbolFromName(std::string_view name) const
-{
-
-  for (auto& func : m_functions)
-  {
-    if (func.second.function_name == name)
-      return &func.second;
-  }
-
-  return nullptr;
-}
-
 std::vector<const Symbol*> SymbolDB::GetSymbolsFromName(std::string_view name) const
 {
   std::vector<const Symbol*> symbols;
@@ -99,32 +87,6 @@ std::vector<const Symbol*> SymbolDB::GetSymbolsFromName(std::string_view name) c
   }
 
   return symbols;
-}
-
-const Symbol* SymbolDB::GetSymbolFromHash(u32 hash) const
-{
-
-  auto iter = m_checksum_to_function.find(hash);
-  if (iter == m_checksum_to_function.end())
-    return nullptr;
-
-  return *iter->second.begin();
-}
-
-std::vector<const Symbol*> SymbolDB::GetSymbolsFromHash(u32 hash) const
-{
-
-  const auto iter = m_checksum_to_function.find(hash);
-
-  if (iter == m_checksum_to_function.cend())
-    return {};
-
-  return {iter->second.cbegin(), iter->second.cend()};
-}
-
-void SymbolDB::AddCompleteSymbol(const Symbol& symbol)
-{
-  m_functions[symbol.address] = symbol;
 }
 
 bool SymbolDB::RenameSymbol(const Symbol& symbol, const std::string& symbol_name)
