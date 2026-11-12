@@ -223,6 +223,19 @@ void main()
 		color.rgb = pow(color.rgb, float3(1.0 / game_gamma));
 	}
 
+	// A corrected 8-bit picture goes back to 8 bits: without dither the new values round to
+	// the same levels over whole gradients, and they band. A 4x4 ordered dither of one step
+	// spreads the rounding. Uncorrected output is a lossless round trip and is left alone.
+	if (!OptionEnabled(linear_space_output) &&
+	    (OptionEnabled(correct_color_space) || OptionEnabled(correct_gamma)))
+	{
+		float2 pixel = floor((v_tex0.xy - src_rect.xy) / src_rect.zw * target_resolution.xy);
+		uint2 p = uint2(pixel) & 3u;
+		uint b = ((p.x ^ p.y) & 1u) * 8u + (p.y & 1u) * 4u + (((p.x ^ p.y) >> 1) & 1u) * 2u +
+		         ((p.y >> 1) & 1u);
+		color.rgb += (float(b) + 0.5) / 16.0 / 255.0 - 0.5 / 255.0;
+	}
+
 	SetOutput(color);
 }
 
