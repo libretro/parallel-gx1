@@ -313,20 +313,26 @@ bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,
     return false;
   }
 
-  if(is_initialized)
-    return true;
   auto& system = Core::System::GetInstance();
-  auto& command_processor = system.GetCommandProcessor();
-  command_processor.Init();
-  system.GetFifo().Init();
-  system.GetPixelEngine().Init();
-  BPInit();
+  /* the emulated state, set up once: a context reset mid-game keeps it */
+  if (!is_initialized)
+  {
+    system.GetCommandProcessor().Init();
+    system.GetFifo().Init();
+    system.GetPixelEngine().Init();
+    BPInit();
+  }
+  /* the vertex loaders and formats ShutdownShared freed with the old context, as every one
+   * after it does */
   VertexLoaderManager::Init();
-  system.GetVertexShaderManager().Init();
-  system.GetGeometryShaderManager().Init();
-  system.GetPixelShaderManager().Init();
-  system.GetXFStateManager().Init();
-  TMEM::Init();
+  if (!is_initialized)
+  {
+    system.GetVertexShaderManager().Init();
+    system.GetGeometryShaderManager().Init();
+    system.GetPixelShaderManager().Init();
+    system.GetXFStateManager().Init();
+    TMEM::Init();
+  }
 
   g_Config.VerifyValidity();
   UpdateActiveConfig();

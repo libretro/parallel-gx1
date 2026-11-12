@@ -128,6 +128,8 @@ void Clear()
   while ((value = uid_table_next(&s_native_vertex_map, &cursor, &key)))
     NativeVertexFormatDelete(static_cast<NativeVertexFormat*>(value->object));
   uid_table_free(&s_native_vertex_map);
+  /* freed with the rest: the next draw sets its own */
+  s_current_vtx_fmt = nullptr;
 }
 
 void UpdateVertexArrayPointers()
