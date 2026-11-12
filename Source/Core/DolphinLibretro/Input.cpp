@@ -1420,12 +1420,18 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
   }
 }
 
+/* Every port's descriptors and the terminator: eight ports, none with more than 32. */
+enum
+{
+  ALL_DESCS_MAX = 8 * 32 + 1
+};
+static retro_input_descriptor s_all_descs[ALL_DESCS_MAX];
+
 void UpdateInputDescriptors()
 {
   auto& system = Core::System::GetInstance();
   bool altGCPorts = Libretro::Options::GetCached<bool>(Libretro::Options::sysconf::ALT_GC_PORTS_ON_WII);
-
-  std::vector<retro_input_descriptor> all_descs;
+  unsigned count = 0;
 
   int port_max = (system.IsWii() && altGCPorts) ? 8 : 4;
 
@@ -1476,17 +1482,17 @@ void UpdateInputDescriptors()
       break;
     }
 
-    for (int j = 0; desc[j].description != NULL; j++)
+    for (int j = 0; desc[j].description != NULL && count < ALL_DESCS_MAX - 1; j++)
     {
-      retro_input_descriptor new_desc = desc[j];
-      new_desc.port = i;
-      all_descs.push_back(new_desc);
+      s_all_descs[count] = desc[j];
+      s_all_descs[count].port = i;
+      count++;
     }
   }
 
-  all_descs.push_back({0});
+  memset(&s_all_descs[count], 0, sizeof(s_all_descs[count]));
 
-  if(!Libretro::environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, &all_descs[0]))
+  if(!Libretro::environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, s_all_descs))
   {
     WARN_LOG(COMMON, "RetroArch does not support RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS.");
   }
