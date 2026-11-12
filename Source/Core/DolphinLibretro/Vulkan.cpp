@@ -2,18 +2,15 @@
 // must be first
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 
-#include <cstring>
 #include <libretro_vulkan.h>
-#include <vector>
+#include <stdlib.h>
+#include <string.h>
 
 #include "Core/Config/MainSettings.h"
 #include "DolphinLibretro/Video.h"
 #include "DolphinLibretro/Vulkan.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/FramebufferManager.h"
-
-#include <unordered_set>
-#include <string>
 
 /* The instance, device and surface are the frontend's, and so is the
  * queue, which the frontend submits to from its own thread. */
@@ -65,13 +62,40 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkCreateInstance(const VkInstanceCreateInf
   return VK_SUCCESS;
 }
 
-static void AddNameUnique(std::vector<const char*>& list, const char* value)
+/* A list of names, as Vulkan takes them, with room for every name it can be given. */
+typedef struct
 {
-  for (const char* name : list)
-    if (!strcmp(value, name))
-      return;
+  const char** names;
+  uint32_t count;
+} name_list_t;
 
-  list.push_back(value);
+static bool HasName(const name_list_t* list, const char* value)
+{
+  uint32_t i;
+  for (i = 0; i < list->count; i++)
+  {
+    if (!strcmp(value, list->names[i]))
+      return true;
+  }
+  return false;
+}
+
+static void AddNameUnique(name_list_t* list, const char* value)
+{
+  if (!HasName(list, value))
+    list->names[list->count++] = value;
+}
+
+static bool ExtensionAvailable(const VkExtensionProperties* props, uint32_t count,
+                               const char* name)
+{
+  uint32_t i;
+  for (i = 0; i < count; i++)
+  {
+    if (!strcmp(name, props[i].extensionName))
+      return true;
+  }
+  return false;
 }
 
 static VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice,
@@ -80,107 +104,129 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDe
                                                      VkDevice* pDevice)
 {
   VkDeviceCreateInfo info = *pCreateInfo;
+  const bool use_frontend_wrapper = initInfo.create_device_wrapper != nullptr;
+  /* the backend's names, the frontend's, and the one more this adds */
+  const uint32_t max_layers = info.enabledLayerCount + initInfo.num_required_device_layers;
+  const uint32_t max_exts =
+      info.enabledExtensionCount + initInfo.num_required_device_extensions + 1;
+  VkPhysicalDeviceFeatures enabled_features{};
+  VkExtensionProperties* props = nullptr;
+  uint32_t ext_count = 0;
+  name_list_t enabled_layers;
+  name_list_t enabled_exts;
+  name_list_t filtered_exts;
+  VkResult result;
+  uint32_t i;
+
+  /* Freed before this returns: the lists only live through the create call. */
+  enabled_layers.names = (const char**)malloc((max_layers + 1) * sizeof(const char*));
+  enabled_exts.names = (const char**)malloc(max_exts * sizeof(const char*));
+  filtered_exts.names = (const char**)malloc(max_exts * sizeof(const char*));
+  enabled_layers.count = enabled_exts.count = filtered_exts.count = 0;
+  if (!enabled_layers.names || !enabled_exts.names || !filtered_exts.names)
+  {
+    result = VK_ERROR_OUT_OF_HOST_MEMORY;
+    goto done;
+  }
 
   // Copy requested layers/extensions/features from the incoming create-info
-  std::vector<const char*> enabled_layers;
-  if (info.enabledLayerCount)
-    enabled_layers.assign(info.ppEnabledLayerNames,
-                          info.ppEnabledLayerNames + info.enabledLayerCount);
-
-  std::vector<const char*> enabled_exts;
-  if (info.enabledExtensionCount)
-    enabled_exts.assign(info.ppEnabledExtensionNames,
-                        info.ppEnabledExtensionNames + info.enabledExtensionCount);
+  for (i = 0; i < info.enabledLayerCount; i++)
+    enabled_layers.names[enabled_layers.count++] = info.ppEnabledLayerNames[i];
+  for (i = 0; i < info.enabledExtensionCount; i++)
+    enabled_exts.names[enabled_exts.count++] = info.ppEnabledExtensionNames[i];
 
   // Merge in libretro-required layers/extensions/features
-  for (unsigned i = 0; i < initInfo.num_required_device_layers; i++)
-    AddNameUnique(enabled_layers, initInfo.required_device_layers[i]);
+  for (i = 0; i < initInfo.num_required_device_layers; i++)
+    AddNameUnique(&enabled_layers, initInfo.required_device_layers[i]);
 
-  for (unsigned i = 0; i < initInfo.num_required_device_extensions; i++)
-    AddNameUnique(enabled_exts, initInfo.required_device_extensions[i]);
+  for (i = 0; i < initInfo.num_required_device_extensions; i++)
+    AddNameUnique(&enabled_exts, initInfo.required_device_extensions[i]);
 
-  const bool use_frontend_wrapper = initInfo.create_device_wrapper != nullptr;
   if (!use_frontend_wrapper)
-    AddNameUnique(enabled_exts, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+    AddNameUnique(&enabled_exts, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
 
   // OR in required features bitwise (struct of VkBool32)
-  VkPhysicalDeviceFeatures enabled_features{};
   if (info.pEnabledFeatures)
     enabled_features = *info.pEnabledFeatures;
   if (!use_frontend_wrapper && initInfo.required_features)
   {
-    for (unsigned i = 0; i < sizeof(VkPhysicalDeviceFeatures) / sizeof(VkBool32); i++)
+    for (i = 0; i < sizeof(VkPhysicalDeviceFeatures) / sizeof(VkBool32); i++)
     {
       if (reinterpret_cast<const VkBool32*>(initInfo.required_features)[i])
         reinterpret_cast<VkBool32*>(&enabled_features)[i] = VK_TRUE;
     }
   }
 
-  // Build availability set for this exact physicalDevice
-  uint32_t ext_count = 0;
+  // What this exact physicalDevice offers
   vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &ext_count, nullptr);
-  std::vector<VkExtensionProperties> props(ext_count);
   if (ext_count)
-    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &ext_count, props.data());
-
-  std::unordered_set<std::string> avail;
-  avail.reserve(props.size());
-  for (const auto& p : props)
-    avail.emplace(p.extensionName);
+  {
+    props = (VkExtensionProperties*)malloc(ext_count * sizeof(VkExtensionProperties));
+    if (!props)
+    {
+      result = VK_ERROR_OUT_OF_HOST_MEMORY;
+      goto done;
+    }
+    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &ext_count, props);
+  }
 
   // The v1 callback has no device-create wrapper, so filter extensions here.
   // With v2, preserve the backend's create-info for the frontend to augment.
-  std::vector<const char*> filtered_exts;
   if (use_frontend_wrapper)
   {
-    filtered_exts = enabled_exts;
-    if (avail.find(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME) != avail.end())
-      AddNameUnique(filtered_exts, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
+    for (i = 0; i < enabled_exts.count; i++)
+      filtered_exts.names[filtered_exts.count++] = enabled_exts.names[i];
+    if (ExtensionAvailable(props, ext_count, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME))
+      AddNameUnique(&filtered_exts, VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME);
   }
   else
   {
-    filtered_exts.reserve(enabled_exts.size());
-
-    std::unordered_set<std::string> seen;
-    seen.reserve(enabled_exts.size());
-
-    for (const char* name : enabled_exts)
+    for (i = 0; i < enabled_exts.count; i++)
     {
+      const char* name = enabled_exts.names[i];
+      uint32_t j;
+      bool seen = false;
+
       if (!name)
         continue;
 
       // De-dup while preserving order
-      if (!seen.insert(name).second)
+      for (j = 0; j < i && !seen; j++)
+        seen = enabled_exts.names[j] && !strcmp(name, enabled_exts.names[j]);
+      if (seen)
         continue;
 
-      if (avail.find(name) != avail.end())
-      {
-        filtered_exts.push_back(name);
-      }
+      if (ExtensionAvailable(props, ext_count, name))
+        filtered_exts.names[filtered_exts.count++] = name;
       else
-      {
         WARN_LOG(VIDEO, "Dropping unsupported device extension: %s", name);
-      }
     }
   }
 
   // Finalize create-info with filtered lists
-  info.enabledLayerCount = static_cast<uint32_t>(enabled_layers.size());
-  info.ppEnabledLayerNames = info.enabledLayerCount ? enabled_layers.data() : nullptr;
+  info.enabledLayerCount = enabled_layers.count;
+  info.ppEnabledLayerNames = info.enabledLayerCount ? enabled_layers.names : nullptr;
 
-  info.enabledExtensionCount = static_cast<uint32_t>(filtered_exts.size());
-  info.ppEnabledExtensionNames = info.enabledExtensionCount ? filtered_exts.data() : nullptr;
-
-  if (!use_frontend_wrapper)
-    info.pEnabledFeatures = &enabled_features;
+  info.enabledExtensionCount = filtered_exts.count;
+  info.ppEnabledExtensionNames = info.enabledExtensionCount ? filtered_exts.names : nullptr;
 
   if (use_frontend_wrapper)
   {
     *pDevice = initInfo.create_device_wrapper(physicalDevice, initInfo.create_device_opaque, &info);
-    return *pDevice != VK_NULL_HANDLE ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
+    result = *pDevice != VK_NULL_HANDLE ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
+  }
+  else
+  {
+    info.pEnabledFeatures = &enabled_features;
+    result = vkCreateDevice_org(physicalDevice, &info, pAllocator, pDevice);
   }
 
-  return vkCreateDevice_org(physicalDevice, &info, pAllocator, pDevice);
+done:
+  free(props);
+  free(filtered_exts.names);
+  free(enabled_exts.names);
+  free(enabled_layers.names);
+  return result;
 }
 
 static VKAPI_ATTR void VKAPI_CALL vkDestroyInstance(VkInstance instance,
@@ -262,20 +308,28 @@ void Init(VkInstance instance, VkPhysicalDevice gpu,
   initInfo.gpu = gpu;
   initInfo.get_instance_proc_addr = get_instance_proc_addr;
 
-  static const char* extra_extensions[] = {"VK_KHR_get_physical_device_properties2"};
-  const size_t extra_extension_count = create_device_wrapper ? 0 : std::size(extra_extensions);
+  /* The frontend's extensions, and the one more the backend wants without a wrapper; kept
+   * until the device is created, and replaced on the next context. */
+  static const char** combined_extensions;
+  const unsigned combined_count = num_required_device_extensions + (create_device_wrapper ? 0 : 1);
+  unsigned i;
 
-  static std::vector<const char*> combined_extensions;
-  combined_extensions.clear();
-  combined_extensions.reserve(num_required_device_extensions + extra_extension_count);
-
-  for (unsigned i = 0; i < num_required_device_extensions; ++i)
-    combined_extensions.push_back(required_device_extensions[i]);
-  for (size_t i = 0; i < extra_extension_count; ++i)
-    combined_extensions.push_back(extra_extensions[i]);
-
-  initInfo.required_device_extensions = combined_extensions.data();
-  initInfo.num_required_device_extensions = static_cast<unsigned>(combined_extensions.size());
+  free(combined_extensions);
+  combined_extensions = (const char**)malloc((combined_count + 1) * sizeof(const char*));
+  if (!combined_extensions)
+  {
+    initInfo.required_device_extensions = required_device_extensions;
+    initInfo.num_required_device_extensions = num_required_device_extensions;
+  }
+  else
+  {
+    for (i = 0; i < num_required_device_extensions; ++i)
+      combined_extensions[i] = required_device_extensions[i];
+    if (!create_device_wrapper)
+      combined_extensions[i] = "VK_KHR_get_physical_device_properties2";
+    initInfo.required_device_extensions = combined_extensions;
+    initInfo.num_required_device_extensions = combined_count;
+  }
 
   initInfo.required_device_layers = required_device_layers;
   initInfo.num_required_device_layers = num_required_device_layers;
