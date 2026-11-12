@@ -13,6 +13,7 @@
 
 #include "Common/BitUtils.h"
 #include "Common/MsgHandler.h"
+#include "Common/StringUtil.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
@@ -148,8 +149,9 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
   });
   if (ret != LIBUSB_SUCCESS)
   {
-    m_last_open_error =
-        Common::FmtFormatT("GetDeviceList failed: {0}", LibusbUtils::ErrorWrap(ret));
+    const LibusbUtils::ErrorWrap error(ret);
+    m_last_open_error = StringFromFormat("GetDeviceList failed: %s (%d: %s)", error.GetStrError(),
+                                         error.m_error, error.GetName());
   }
 
   if (m_handle == nullptr)
@@ -578,9 +580,10 @@ bool LibUSBBluetoothAdapter::OpenDevice(const libusb_device_descriptor& device_d
   const int ret = libusb_open(device, &m_handle);
   if (ret != LIBUSB_SUCCESS)
   {
-    m_last_open_error = Common::FmtFormatT("Failed to open Bluetooth device {:04x}:{:04x}: {}",
-                                           device_descriptor.idVendor, device_descriptor.idProduct,
-                                           LibusbUtils::ErrorWrap(ret));
+    const LibusbUtils::ErrorWrap error(ret);
+    m_last_open_error = StringFromFormat("Failed to open Bluetooth device %04x:%04x: %s (%d: %s)",
+                                         device_descriptor.idVendor, device_descriptor.idProduct,
+                                         error.GetStrError(), error.m_error, error.GetName());
     return false;
   }
 
@@ -594,16 +597,20 @@ bool LibUSBBluetoothAdapter::OpenDevice(const libusb_device_descriptor& device_d
     if (result != LIBUSB_SUCCESS && result != LIBUSB_ERROR_NOT_FOUND &&
         result != LIBUSB_ERROR_NOT_SUPPORTED)
     {
-      m_last_open_error = Common::FmtFormatT(
-          "Failed to detach kernel driver for BT passthrough: {0}", LibusbUtils::ErrorWrap(result));
+      const LibusbUtils::ErrorWrap error(result);
+      m_last_open_error =
+          StringFromFormat("Failed to detach kernel driver for BT passthrough: %s (%d: %s)",
+                           error.GetStrError(), error.m_error, error.GetName());
       return false;
     }
   }
 #endif
   if (const int result2 = libusb_claim_interface(m_handle, INTERFACE); result2 != LIBUSB_SUCCESS)
   {
-    m_last_open_error = Common::FmtFormatT("Failed to claim interface for BT passthrough: {0}",
-                                           LibusbUtils::ErrorWrap(result2));
+    const LibusbUtils::ErrorWrap error(result2);
+    m_last_open_error =
+        StringFromFormat("Failed to claim interface for BT passthrough: %s (%d: %s)",
+                         error.GetStrError(), error.m_error, error.GetName());
     return false;
   }
 

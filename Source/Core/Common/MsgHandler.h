@@ -4,9 +4,6 @@
 #pragma once
 
 #include <string>
-#include <utility>
-
-#include <fmt/format.h>
 
 #include "Common/Logging/Log.h"
 
@@ -27,72 +24,15 @@ void RegisterMsgAlertHandler(MsgAlertHandler handler);
 
 [[nodiscard]] std::string GetStringT(const char* string);
 
-bool MsgAlertFmtImpl(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file,
-                     int line, fmt::string_view format, const fmt::format_args& args);
-
 /* An alert in printf's terms, formatted into a buffer on the stack (a
  * longer one is cut). */
 bool MsgAlert(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file, int line,
               const char* format, ...) DOLPHIN_PRINTF_ATTR(6, 7);
 
-template <std::size_t NumFields, typename S, typename... Args>
-bool MsgAlertFmt(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file,
-                 int line, const S& format, const Args&... args)
-{
-  static_assert(NumFields == sizeof...(args),
-                "Unexpected number of replacement fields in format string; did you pass too few or "
-                "too many arguments?");
-
-#if FMT_VERSION >= 120200
-  auto&& format_str = format;
-#elif FMT_VERSION >= 110000
-  static_assert(std::is_base_of_v<fmt::detail::compile_string, S>);
-  auto&& format_str = fmt::format_string<Args...>(format);
-#elif FMT_VERSION >= 90000
-  static_assert(fmt::detail::is_compile_string<S>::value);
-  auto&& format_str = format;
-#else
-  static_assert(fmt::is_compile_string<S>::value);
-  auto&& format_str = format;
-#endif
-  return MsgAlertFmtImpl(yes_no, style, log_type, file, line, format_str,
-                         fmt::make_format_args(args...));
-}
-
-template <std::size_t NumFields, bool has_non_positional_args, typename S, typename... Args>
-bool MsgAlertFmtT(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file,
-                  int line, const S& format, fmt::string_view translated_format,
-                  const Args&... args)
-{
-  static_assert(!has_non_positional_args,
-                "Translatable strings must use positional arguments (e.g. {0} instead of {})");
-  static_assert(NumFields == sizeof...(args),
-                "Unexpected number of replacement fields in format string; did you pass too few or "
-                "too many arguments?");
-#if FMT_VERSION < 90000
-  static_assert(fmt::is_compile_string<S>::value);
-#elif FMT_VERSION < 110000
-  static_assert(fmt::detail::is_compile_string<S>::value);
-#elif FMT_VERSION < 120200
-  static_assert(std::is_base_of_v<fmt::detail::compile_string, S>);
-#endif
-  // FMT 12.2+ guarantees this will be a compile-time string
-  auto arg_list = fmt::make_format_args(args...);
-  return MsgAlertFmtImpl(yes_no, style, log_type, file, line, translated_format, arg_list);
-}
-
 void SetEnableAlert(bool enable);
 void SetAbortOnPanicAlert(bool should_abort);
 
-// Like fmt::format, except the string becomes translatable
-template <typename... Args>
-std::string FmtFormatT(const char* string, Args&&... args)
-{
-  return fmt::format(fmt::runtime(Common::GetStringT(string)), std::forward<Args>(args)...);
-}
 }  // namespace Common
-
-// Fmt-capable variants of the macros
 
 #define GenericAlert(yes_no, style, log_type, ...)                                                 \
   Common::MsgAlert(yes_no, style, Common::Log::LogType::log_type, __FILE__, __LINE__, __VA_ARGS__)
@@ -103,51 +43,3 @@ std::string FmtFormatT(const char* string, Args&&... args)
 #define CriticalAlert(...) GenericAlert(false, Common::MsgType::Critical, MASTER_LOG, __VA_ARGS__)
 #define PanicYesNoAssert(log_type, ...)                                                            \
   GenericAlert(true, Common::MsgType::Warning, log_type, __VA_ARGS__)
-
-#define GenericAlertFmt(yes_no, style, log_type, format, ...)                                      \
-  Common::MsgAlertFmt<Common::CountFmtReplacementFields(format)>(                                  \
-      yes_no, style, Common::Log::LogType::log_type, __FILE__, __LINE__,                           \
-      FMT_STRING(format) __VA_OPT__(, ) __VA_ARGS__)
-
-#define GenericAlertFmtT(yes_no, style, log_type, format, ...)                                     \
-  Common::MsgAlertFmtT<Common::CountFmtReplacementFields(format),                                  \
-                       Common::ContainsNonPositionalArguments(format)>(                            \
-      yes_no, style, Common::Log::LogType::log_type, __FILE__, __LINE__, FMT_STRING(format),       \
-      Common::GetStringT(format) __VA_OPT__(, ) __VA_ARGS__)
-
-#define SuccessAlertFmt(format, ...)                                                               \
-  GenericAlertFmt(false, Common::MsgType::Information, MASTER_LOG,                                 \
-                  format __VA_OPT__(, ) __VA_ARGS__)
-
-#define PanicAlertFmt(format, ...)                                                                 \
-  GenericAlertFmt(false, Common::MsgType::Warning, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-#define PanicYesNoFmt(format, ...)                                                                 \
-  GenericAlertFmt(true, Common::MsgType::Warning, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-#define AskYesNoFmt(format, ...)                                                                   \
-  GenericAlertFmt(true, Common::MsgType::Question, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-#define CriticalAlertFmt(format, ...)                                                              \
-  GenericAlertFmt(false, Common::MsgType::Critical, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-// Use these macros (that do the same thing) if the message should be translated.
-#define SuccessAlertFmtT(format, ...)                                                              \
-  GenericAlertFmtT(false, Common::MsgType::Information, MASTER_LOG,                                \
-                   format __VA_OPT__(, ) __VA_ARGS__)
-
-#define PanicAlertFmtT(format, ...)                                                                \
-  GenericAlertFmtT(false, Common::MsgType::Warning, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-#define PanicYesNoFmtT(format, ...)                                                                \
-  GenericAlertFmtT(true, Common::MsgType::Warning, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-#define AskYesNoFmtT(format, ...)                                                                  \
-  GenericAlertFmtT(true, Common::MsgType::Question, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-#define CriticalAlertFmtT(format, ...)                                                             \
-  GenericAlertFmtT(false, Common::MsgType::Critical, MASTER_LOG, format __VA_OPT__(, ) __VA_ARGS__)
-
-// Variant that takes a log type, used by the assert macros
-#define PanicYesNoFmtAssert(log_type, format, ...)                                                 \
-  GenericAlertFmt(true, Common::MsgType::Warning, log_type, format __VA_OPT__(, ) __VA_ARGS__)

@@ -10,8 +10,6 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#else
-#include <fmt/format.h>
 #endif
 
 #include "Common/Logging/Log.h"
@@ -36,7 +34,7 @@ bool DefaultMsgHandler(const char* caption, const char* text, bool yes_no, MsgTy
   return IDYES == MessageBox(0, UTF8ToTStr(text).c_str(), UTF8ToTStr(caption).c_str(),
                              window_style | (yes_no ? MB_YESNO : MB_OK));
 #else
-  fmt::print(stderr, "{}\n", text);
+  fprintf(stderr, "%s\n", text);
 
   // Return no to any question (which will in general crash the emulator)
   return false;
@@ -128,16 +126,6 @@ static bool ShowMessageAlert(std::string_view text, bool yes_no, Common::Log::Lo
   }
 
   return true;
-}
-
-// This is the first stop for gui alerts where the log is updated and the
-// correct window is shown, when using fmt
-bool MsgAlertFmtImpl(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file,
-                     int line, fmt::string_view format, const fmt::format_args& args)
-{
-  const auto message = fmt::vformat(format, args);
-
-  return ShowMessageAlert(message, yes_no, log_type, style, file, line);
 }
 
 bool MsgAlert(bool yes_no, MsgType style, Common::Log::LogType log_type, const char* file, int line,

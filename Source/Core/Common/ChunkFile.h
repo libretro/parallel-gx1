@@ -324,10 +324,9 @@ public:
 
     if (IsReadMode() && cookie != arbitraryNumber)
     {
-      PanicAlertFmtT(
-          "Error: After \"{0}\", found {1} ({2:#x}) instead of save marker {3} ({4:#x}). Aborting "
-          "savestate load...",
-          prevName, cookie, cookie, arbitraryNumber, arbitraryNumber);
+      PanicAlert("Error: After \"%s\", found %u (%#x) instead of save marker %u (%#x). Aborting "
+                 "savestate load...",
+                 prevName.c_str(), cookie, cookie, arbitraryNumber, arbitraryNumber);
       SetMeasureMode();
     }
   }

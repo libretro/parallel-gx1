@@ -852,8 +852,7 @@ private:
                         std::get<FunctionExpression::ExpectedArguments>(argument_validation).text +
                         ')';
 
-      return ParseResult::MakeErrorResult(func_tok,
-                                          Common::FmtFormatT("Expected arguments: {0}", text));
+      return ParseResult::MakeErrorResult(func_tok, "Expected arguments: " + text);
     }
 
     return ParseResult::MakeSuccessfulResult(std::move(func));

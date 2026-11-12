@@ -20,8 +20,8 @@ static void GetArguments(NSArray<MTLArgument*>* arguments, u32* textures, u32* s
     const u32 length = [argument arrayLength];
     if (idx + length > 32)
     {
-      PanicAlertFmt("Making a MTLPipeline with high argument index {:d}..<{:d} for {:s}",  //
-                    idx, idx + length, [[argument name] UTF8String]);
+      PanicAlert("Making a MTLPipeline with high argument index %u..<%u for %s", idx, idx + length,
+                 [[argument name] UTF8String]);
       continue;
     }
     switch ([argument type])
@@ -30,13 +30,13 @@ static void GetArguments(NSArray<MTLArgument*>* arguments, u32* textures, u32* s
       if (textures)
         MarkAsUsed(textures, idx, length);
       else
-        PanicAlertFmt("Vertex function wants a texture!");
+        PanicAlert("Vertex function wants a texture!");
       break;
     case MTLArgumentTypeSampler:
       if (samplers)
         MarkAsUsed(samplers, idx, length);
       else
-        PanicAlertFmt("Vertex function wants a sampler!");
+        PanicAlert("Vertex function wants a sampler!");
       break;
     case MTLArgumentTypeBuffer:
       MarkAsUsed(buffers, idx, length);

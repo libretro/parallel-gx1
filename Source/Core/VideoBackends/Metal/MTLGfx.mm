@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Metal/MTLGfx.h"
 
+#include "Common/StringUtil.h"
+
 #include "VideoBackends/Metal/MTLBoundingBox.h"
 #include "VideoBackends/Metal/MTLObjectCache.h"
 #include "VideoBackends/Metal/MTLPipeline.h"
@@ -127,7 +129,7 @@ Metal::Gfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
   std::optional<std::string> msl = Util::TranslateShaderToMSL(stage, source);
   if (!msl.has_value())
   {
-    PanicAlertFmt("Failed to convert shader {} to MSL", name);
+    PanicAlert("Failed to convert shader %.*s to MSL", static_cast<int>(name.size()), name.data());
     return nullptr;
   }
 
@@ -162,7 +164,7 @@ std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromBuild(ShaderStage st
   /* Metal binds as Vulkan's sets lay out */
   if (!shader_build_compile(fn, arg, rstage, SHADER_BUILD_VULKAN, flags, &opts, &result))
   {
-    PanicAlertFmt("Failed to build shader {}: {}", name, err);
+    PanicAlert("Failed to build shader %.*s: %s", static_cast<int>(name.size()), name.data(), err);
     return nullptr;
   }
   std::string msl = Util::FinishMSL(std::string_view(result.text, result.text_len));
@@ -238,7 +240,8 @@ std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromMSL(ShaderStage stag
       stream << "*/" << std::endl;
       stream.close();
 
-      PanicAlertFmt("{} (written to {})\n", msg, filename);
+      PanicAlert("%.*s (written to %s)\n", static_cast<int>(msg.size()), msg.data(),
+                 filename.c_str());
     };
 
     auto lib = MRCTransfer([g_device newLibraryWithSource:[NSString stringWithUTF8String:msl.data()]
@@ -246,13 +249,15 @@ std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromMSL(ShaderStage stag
                                                     error:&err]);
     if (err)
     {
-      DumpBadShader(fmt::format("Failed to compile {}", name));
+      DumpBadShader(
+          StringFromFormat("Failed to compile %.*s", static_cast<int>(name.size()), name.data()));
       return nullptr;
     }
     auto fn = MRCTransfer([lib newFunctionWithName:@"main0"]);
     if (!fn)
     {
-      DumpBadShader(fmt::format("Shader {} is missing its main0 function", name));
+      DumpBadShader(StringFromFormat("Shader %.*s is missing its main0 function",
+                                     static_cast<int>(name.size()), name.data()));
       return nullptr;
     }
     if (!name.empty())
@@ -276,7 +281,8 @@ std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromMSL(ShaderStage stag
                                                                 error:&err]);
       if (err)
       {
-        DumpBadShader(fmt::format("Failed to compile compute pipeline {}", name));
+        DumpBadShader(StringFromFormat("Failed to compile compute pipeline %.*s",
+                                       static_cast<int>(name.size()), name.data()));
         return nullptr;
       }
       return std::make_unique<ComputePipeline>(stage, reflection, std::move(msl), std::move(fn),

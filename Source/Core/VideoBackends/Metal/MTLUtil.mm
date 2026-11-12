@@ -233,8 +233,7 @@ static int DetectInvertedIsHelper(id<MTLDevice> dev)
     return 0;
   if (px == 0x0000ff)
     return 1;
-  WARN_LOG_FMT(VIDEO, "metal::simd_is_helper_thread might be broken! Test shader returned {:06x}!",
-               px);
+  WARN_LOG(VIDEO, "metal::simd_is_helper_thread might be broken! Test shader returned %06x!", px);
   return -1;
 }
 
@@ -520,7 +519,7 @@ Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
     full_source.append(COMPUTE_SHADER_HEADER);
     break;
   default:
-    PanicAlertFmt("Tried to compile geometry shader for Metal, but Metal doesn't support them!");
+    PanicAlert("Tried to compile geometry shader for Metal, but Metal doesn't support them!");
     return std::nullopt;
   }
   if (Metal::g_features.subgroup_ops)
@@ -543,7 +542,7 @@ Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
   if (!rslc_compile(full_source.data(), full_source.size(), rstage, &opts, &result))
   {
     std::string path = VideoBackendBase::BadShaderFilename("rslc", num_failures++);
-    ERROR_LOG_FMT(VIDEO, "rslc could not print the MSL of a shader: {}", err);
+    ERROR_LOG(VIDEO, "rslc could not print the MSL of a shader: %s", err);
     File::CreateFullPath(path);
     f = fopen(path.c_str(), "wb");
     if (f)

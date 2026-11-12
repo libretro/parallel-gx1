@@ -58,7 +58,7 @@ bool Metal::VideoBackend::Initialize(float backbuffer_scale)
     auto devs = Util::GetAdapterList();
     if (devs.empty())
     {
-      PanicAlertFmt("No Metal GPUs detected.");
+      PanicAlert("No Metal GPUs detected.");
       return false;
     }
 
@@ -70,7 +70,7 @@ bool Metal::VideoBackend::Initialize(float backbuffer_scale)
     size_t selected_adapter_index = static_cast<size_t>(g_Config.iAdapter);
     if (selected_adapter_index >= devs.size())
     {
-      WARN_LOG_FMT(VIDEO, "Metal adapter index out of range, selecting default adapter.");
+      WARN_LOG(VIDEO, "Metal adapter index out of range, selecting default adapter.");
       selected_adapter_index = 0;
     }
     MRCOwned<id<MTLDevice>> adapter = std::move(devs[selected_adapter_index]);

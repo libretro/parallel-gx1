@@ -10,8 +10,6 @@
 #include <memory>
 #include <string>
 
-#include <fmt/format.h>
-
 #ifdef _WIN32
 #include <windows.h>
 #else
@@ -95,20 +93,6 @@ private:
 #endif
   retro_atomic_int_t m_enable{};
 };
-
-void GenericLogFmtImpl(LogLevel level, LogType type, const char* file, int line,
-                       fmt::string_view format, const fmt::format_args& args)
-{
-  auto* instance = LogManager::GetInstance();
-  if (instance == nullptr)
-    return;
-
-  if (!instance->IsEnabled(type, level))
-    return;
-
-  const auto message = fmt::vformat(format, args);
-  instance->Log(level, type, file, line, message.c_str());
-}
 
 void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format, ...)
 {

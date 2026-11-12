@@ -5,9 +5,7 @@
 
 #include <cstddef>
 
-#include <fmt/format.h>
 #include "Common/CommonTypes.h"
-#include "Common/FormatUtil.h"
 
 namespace Common::Log
 {
@@ -94,30 +92,11 @@ constexpr auto MAX_EFFECTIVE_LOGLEVEL = Common::Log::LogLevel::LINFO;
 
 static const char LOG_LEVEL_TO_CHAR[7] = "-NEWID";
 
-void GenericLogFmtImpl(LogLevel level, LogType type, const char* file, int line,
-                       fmt::string_view format, const fmt::format_args& args);
-
 /* A message in printf's terms, formatted into a buffer on the stack (a
  * longer one is cut), only when its type and level are enabled. */
 void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format, ...)
     DOLPHIN_PRINTF_ATTR(5, 6);
 
-template <std::size_t NumFields, typename S, typename... Args>
-void GenericLogFmt(LogLevel level, LogType type, const char* file, int line, const S& format,
-                   const Args&... args)
-{
-  static_assert(NumFields == sizeof...(args),
-                "Unexpected number of replacement fields in format string; did you pass too few or "
-                "too many arguments?");
-#if FMT_VERSION >= 110000 && FMT_VERSION < 120200
-  // fmt 11 made fmt::string_view no longer directly constructible from compile-time strings.
-  // In fmt 12.2+, compile-time strings are plain string literals, so this is no longer needed.
-  auto&& format_str = fmt::format_string<Args...>(format);
-#else
-  auto&& format_str = format;
-#endif
-  GenericLogFmtImpl(level, type, file, line, format_str, fmt::make_format_args(args...));
-}
 }  // namespace Common::Log
 
 // printf capable API
@@ -139,48 +118,3 @@ void GenericLogFmt(LogLevel level, LogType type, const char* file, int line, con
   GENERIC_LOG(Common::Log::LogType::t, Common::Log::LogLevel::LINFO, __VA_ARGS__)
 #define DEBUG_LOG(t, ...)                                                                          \
   GENERIC_LOG(Common::Log::LogType::t, Common::Log::LogLevel::LDEBUG, __VA_ARGS__)
-
-// fmtlib capable API
-
-#define GENERIC_LOG_FMT(t, v, format, ...)                                                         \
-  do                                                                                               \
-  {                                                                                                \
-    if (v <= Common::Log::MAX_EFFECTIVE_LOGLEVEL)                                                  \
-    {                                                                                              \
-      /* Use a macro-like name to avoid shadowing warnings */                                      \
-      constexpr auto GENERIC_LOG_FMT_N = Common::CountFmtReplacementFields(format);                \
-      Common::Log::GenericLogFmt<GENERIC_LOG_FMT_N>(                                               \
-          v, t, __FILE__, __LINE__, FMT_STRING(format) __VA_OPT__(, ) __VA_ARGS__);                \
-    }                                                                                              \
-  } while (0)
-
-#define ERROR_LOG_FMT(t, ...)                                                                      \
-  do                                                                                               \
-  {                                                                                                \
-    GENERIC_LOG_FMT(Common::Log::LogType::t,                                                       \
-                    Common::Log::LogLevel::LERROR __VA_OPT__(, ) __VA_ARGS__);                     \
-  } while (0)
-#define WARN_LOG_FMT(t, ...)                                                                       \
-  do                                                                                               \
-  {                                                                                                \
-    GENERIC_LOG_FMT(Common::Log::LogType::t,                                                       \
-                    Common::Log::LogLevel::LWARNING __VA_OPT__(, ) __VA_ARGS__);                   \
-  } while (0)
-#define NOTICE_LOG_FMT(t, ...)                                                                     \
-  do                                                                                               \
-  {                                                                                                \
-    GENERIC_LOG_FMT(Common::Log::LogType::t,                                                       \
-                    Common::Log::LogLevel::LNOTICE __VA_OPT__(, ) __VA_ARGS__);                    \
-  } while (0)
-#define INFO_LOG_FMT(t, ...)                                                                       \
-  do                                                                                               \
-  {                                                                                                \
-    GENERIC_LOG_FMT(Common::Log::LogType::t,                                                       \
-                    Common::Log::LogLevel::LINFO __VA_OPT__(, ) __VA_ARGS__);                      \
-  } while (0)
-#define DEBUG_LOG_FMT(t, ...)                                                                      \
-  do                                                                                               \
-  {                                                                                                \
-    GENERIC_LOG_FMT(Common::Log::LogType::t,                                                       \
-                    Common::Log::LogLevel::LDEBUG __VA_OPT__(, ) __VA_ARGS__);                     \
-  } while (0)
