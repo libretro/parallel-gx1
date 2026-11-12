@@ -23,6 +23,18 @@
 #include "Core/PowerPC/PPCAnalyst.h"
 
 class JitBase;
+struct JitBlock;
+
+// A block's place in one macro block's list of the blocks it holds (JitBaseBlockCache's
+// block_range_map), and the next of the block's own.
+struct JitRangeNode
+{
+  JitBlock* block;
+  JitRangeNode* next_in_range;
+  JitRangeNode* prev_in_range;
+  JitRangeNode* next_of_block;
+  u32 macro_block;
+};
 
 // offsetof is only conditionally supported for non-standard layout types,
 // so this struct needs to have a standard layout.
@@ -93,11 +105,14 @@ struct JitBlock : public JitBlockData
   // while this one is free. A block goes back to the cache's pool when it is destroyed, keeping
   // linkData's and physical_addresses' storage for the next block made in its place.
   JitBlock* next_at_address = nullptr;
+  // The macro blocks it is in, one node each
+  JitRangeNode* range_nodes = nullptr;
   bool in_use = false;
 };
 
 CODE_PTR_MAP_DEFINE(jit_link_lists, JitBlock::LinkData*);
 CODE_PTR_MAP_DEFINE(jit_block_lists, JitBlock*);
+CODE_PTR_MAP_DEFINE(jit_range_lists, JitRangeNode*);
 
 typedef void (*CompiledCode)();
 
@@ -245,7 +260,19 @@ private:
   // in macro blocks of each 0x100 bytes.
   static constexpr u32 BLOCK_RANGE_SIZE = 0x100;
   static constexpr u32 BLOCK_RANGE_MAP_MASK = ~(BLOCK_RANGE_SIZE - 1);
-  std::map<u32, std::unordered_set<JitBlock*>> block_range_map;
+  // By macro block, the list of the blocks in it.
+  jit_range_lists_t block_range_map;
+
+  void AddToMacroBlock(JitBlock* block, u32 macro_block);
+  void LeaveMacroBlocks(JitBlock* block);
+  void EraseInMacroBlock(u32 macro_block, u32 address, u32 length);
+
+  // The nodes, in chunks of RANGE_NODE_CHUNK the cache keeps, the free ones in a list
+  static constexpr size_t RANGE_NODE_CHUNK = 4096;
+  JitRangeNode** m_range_node_chunks = nullptr;
+  size_t m_num_range_node_chunks = 0;
+  size_t m_range_node_chunks_cap = 0;
+  JitRangeNode* m_free_range_nodes = nullptr;
 
   // This bitsets shows which cachelines overlap with any blocks.
   // It is used to provide a fast way to query if no icache invalidation is needed.

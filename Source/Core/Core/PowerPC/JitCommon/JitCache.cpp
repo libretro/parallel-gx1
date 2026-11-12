@@ -41,6 +41,7 @@ JitBaseBlockCache::JitBaseBlockCache(JitBase& jit) : m_jit{jit}
 {
   jit_link_lists_init(&links_to, 4096);
   jit_block_lists_init(&block_map, 8192);
+  jit_range_lists_init(&block_range_map, 8192);
 }
 
 JitBaseBlockCache::~JitBaseBlockCache()
@@ -49,6 +50,10 @@ JitBaseBlockCache::~JitBaseBlockCache()
   for (i = 0; i < m_num_block_chunks; i++)
     delete[] m_block_chunks[i];
   free(m_block_chunks);
+  for (i = 0; i < m_num_range_node_chunks; i++)
+    free(m_range_node_chunks[i]);
+  free(m_range_node_chunks);
+  jit_range_lists_free(&block_range_map);
   jit_block_lists_free(&block_map);
   jit_link_lists_free(&links_to);
 }
@@ -83,6 +88,81 @@ JitBlock* JitBaseBlockCache::TakeBlock()
   block->next_at_address = nullptr;
   block->in_use = true;
   return block;
+}
+
+void JitBaseBlockCache::AddToMacroBlock(JitBlock* block, u32 macro_block)
+{
+  JitRangeNode* node;
+  JitRangeNode** head;
+  /* once in each */
+  for (node = block->range_nodes; node; node = node->next_of_block)
+  {
+    if (node->macro_block == macro_block)
+      return;
+  }
+  if (!m_free_range_nodes)
+  {
+    JitRangeNode* chunk;
+    size_t i;
+    if (m_num_range_node_chunks == m_range_node_chunks_cap)
+    {
+      const size_t cap = m_range_node_chunks_cap ? m_range_node_chunks_cap * 2 : 16;
+      JitRangeNode** const chunks =
+          static_cast<JitRangeNode**>(realloc(m_range_node_chunks, cap * sizeof(*chunks)));
+      if (!chunks)
+        abort();
+      m_range_node_chunks = chunks;
+      m_range_node_chunks_cap = cap;
+    }
+    chunk = static_cast<JitRangeNode*>(malloc(RANGE_NODE_CHUNK * sizeof(*chunk)));
+    if (!chunk)
+      abort();
+    m_range_node_chunks[m_num_range_node_chunks++] = chunk;
+    for (i = 0; i < RANGE_NODE_CHUNK; i++)
+    {
+      chunk[i].next_of_block = m_free_range_nodes;
+      m_free_range_nodes = &chunk[i];
+    }
+  }
+  node = m_free_range_nodes;
+  m_free_range_nodes = node->next_of_block;
+
+  head = jit_range_lists_get(&block_range_map, AddressKey(macro_block));
+  node->block = block;
+  node->macro_block = macro_block;
+  node->prev_in_range = nullptr;
+  node->next_in_range = *head;
+  if (*head)
+    (*head)->prev_in_range = node;
+  *head = node;
+  node->next_of_block = block->range_nodes;
+  block->range_nodes = node;
+}
+
+void JitBaseBlockCache::LeaveMacroBlocks(JitBlock* block)
+{
+  JitRangeNode* node = block->range_nodes;
+  while (node)
+  {
+    JitRangeNode* const next = node->next_of_block;
+    if (node->prev_in_range)
+    {
+      node->prev_in_range->next_in_range = node->next_in_range;
+    }
+    else
+    {
+      JitRangeNode** const head =
+          jit_range_lists_find(&block_range_map, AddressKey(node->macro_block));
+      if (head && *head == node)
+        *head = node->next_in_range;
+    }
+    if (node->next_in_range)
+      node->next_in_range->prev_in_range = node->prev_in_range;
+    node->next_of_block = m_free_range_nodes;
+    m_free_range_nodes = node;
+    node = next;
+  }
+  block->range_nodes = nullptr;
 }
 
 void JitBaseBlockCache::ReleaseBlock(JitBlock* block)
@@ -136,12 +216,15 @@ void JitBaseBlockCache::Clear()
     for (i = 0; i < BLOCK_CHUNK; i++)
     {
       if (m_block_chunks[chunk][i].in_use)
+      {
+        LeaveMacroBlocks(&m_block_chunks[chunk][i]);
         ReleaseBlock(&m_block_chunks[chunk][i]);
+      }
     }
   }
   jit_block_lists_clear(&block_map);
   jit_link_lists_clear(&links_to);
-  block_range_map.clear();
+  jit_range_lists_clear(&block_range_map);
 
   valid_block.ClearAll();
 
@@ -208,7 +291,7 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
       valid_block.Set(i / 32);
 
     for (u32 i = range_start & BLOCK_RANGE_MAP_MASK; i < range_end; i += BLOCK_RANGE_SIZE)
-      block_range_map[i].insert(&block);
+      AddToMacroBlock(&block, i);
   }
 
   if (block_link)
@@ -384,57 +467,57 @@ void JitBaseBlockCache::InvalidateICacheInternal(u32 physical_address, u32 addre
   }
 }
 
+void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 length)
+{
+  JitRangeNode* const* const head = jit_range_lists_find(&block_range_map, AddressKey(macro_block));
+  JitRangeNode* node = head ? *head : nullptr;
+  while (node)
+  {
+    /* a block is in each macro block once: the next node is another block's */
+    JitRangeNode* const next = node->next_in_range;
+    JitBlock* const block = node->block;
+    if (block->OverlapsPhysicalRange(address, length))
+    {
+      DestroyBlock(*block);
+      for (JitBlock** at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress));
+           at && *at; at = &(*at)->next_at_address)
+      {
+        if (*at == block)
+        {
+          *at = block->next_at_address;
+          break;
+        }
+      }
+      LeaveMacroBlocks(block);
+      ReleaseBlock(block);
+    }
+    node = next;
+  }
+}
+
 void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
 {
-  // Iterate over all macro blocks which overlap the given range.
-  auto start = block_range_map.lower_bound(address & BLOCK_RANGE_MAP_MASK);
-  auto end = block_range_map.lower_bound(address + length);
-  while (start != end)
+  // Every macro block which overlaps the given range, and in each, every block that overlaps it.
+  const u32 first = address & BLOCK_RANGE_MAP_MASK;
+  const u64 end = static_cast<u64>(address) + length;
+  const u64 macro_blocks = (end - first + BLOCK_RANGE_SIZE - 1) / BLOCK_RANGE_SIZE;
+  if (macro_blocks <= block_range_map.mask + 1)
   {
-    // Iterate over all blocks in the macro block.
-    auto iter = start->second.begin();
-    while (iter != start->second.end())
+    u64 i;
+    for (i = first; i < end; i += BLOCK_RANGE_SIZE)
+      EraseInMacroBlock(static_cast<u32>(i), address, length);
+    return;
+  }
+  /* a range larger than the table: the table's macro blocks in it, from the table. Erasing leaves
+   * the table's keys as they are, empty lists included. */
+  {
+    size_t slot;
+    for (slot = 0; slot <= block_range_map.mask; slot++)
     {
-      JitBlock* block = *iter;
-      if (block->OverlapsPhysicalRange(address, length))
-      {
-        // If the block overlaps, also remove all other occupied slots in the other macro blocks.
-        // This will leak empty macro blocks, but they may be reused or cleared later on.
-        for (auto [range_start, range_end] : block->physical_addresses)
-        {
-          DEBUG_ASSERT(range_start != range_end);
-          for (u32 i = range_start & BLOCK_RANGE_MAP_MASK; i < range_end; i += BLOCK_RANGE_SIZE)
-          {
-            if (i != start->first)
-              block_range_map[i].erase(block);
-          }
-        }
-
-        // And remove the block.
-        DestroyBlock(*block);
-        for (JitBlock** at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress));
-             at && *at; at = &(*at)->next_at_address)
-        {
-          if (*at == block)
-          {
-            *at = block->next_at_address;
-            break;
-          }
-        }
-        ReleaseBlock(block);
-        iter = start->second.erase(iter);
-      }
-      else
-      {
-        iter++;
-      }
+      const uintptr_t key = block_range_map.keys[slot];
+      if (key != CODE_PTR_MAP_FREE && key >= first && key < end)
+        EraseInMacroBlock(static_cast<u32>(key), address, length);
     }
-
-    // If the macro block is empty, drop it.
-    if (start->second.empty())
-      start = block_range_map.erase(start);
-    else
-      start++;
   }
 }
 
