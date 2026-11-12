@@ -14,10 +14,14 @@
 
 namespace DX12
 {
-StreamBuffer::StreamBuffer() = default;
+StreamBuffer::StreamBuffer()
+{
+  tracked_fences_init(&m_tracked_fences, 64);
+}
 
 StreamBuffer::~StreamBuffer()
 {
+  tracked_fences_free(&m_tracked_fences);
   if (m_host_pointer)
   {
     const D3D12_RANGE written_range = {0, m_size};
@@ -74,7 +78,7 @@ bool StreamBuffer::AllocateBuffer(u32 size, bool cpu_cached)
   m_gpu_pointer = m_buffer->GetGPUVirtualAddress();
   m_current_offset = 0;
   m_current_gpu_position = 0;
-  m_tracked_fences.clear();
+  tracked_fences_clear(&m_tracked_fences);
   return true;
 }
 
@@ -157,31 +161,30 @@ void StreamBuffer::UpdateCurrentFencePosition()
 
   // Has the offset changed since the last fence?
   const u64 fence = g_dx_context->GetCurrentFenceValue();
-  if (!m_tracked_fences.empty() && m_tracked_fences.back().first == fence)
+  if (!tracked_fences_empty(&m_tracked_fences) &&
+      tracked_fences_back(&m_tracked_fences)->fence == fence)
   {
     // Still haven't executed a command buffer, so just update the offset.
-    m_tracked_fences.back().second = m_current_offset;
+    tracked_fences_back(&m_tracked_fences)->offset = m_current_offset;
     return;
   }
 
   UpdateGPUPosition();
-  m_tracked_fences.emplace_back(fence, m_current_offset);
+  {
+    const TrackedFence tracked = {fence, m_current_offset};
+    tracked_fences_push_back_growing(&m_tracked_fences, &tracked);
+  }
 }
 
 void StreamBuffer::UpdateGPUPosition()
 {
-  auto start = m_tracked_fences.begin();
-  auto end = start;
-
   const u64 completed_counter = g_dx_context->GetCompletedFenceValue();
-  while (end != m_tracked_fences.end() && completed_counter >= end->first)
+  while (!tracked_fences_empty(&m_tracked_fences) &&
+         completed_counter >= tracked_fences_front(&m_tracked_fences)->fence)
   {
-    m_current_gpu_position = end->second;
-    ++end;
+    m_current_gpu_position = tracked_fences_front(&m_tracked_fences)->offset;
+    tracked_fences_pop_front(&m_tracked_fences);
   }
-
-  if (start != end)
-    m_tracked_fences.erase(start, end);
 }
 
 bool StreamBuffer::WaitForClearSpace(u32 num_bytes)
@@ -189,14 +192,15 @@ bool StreamBuffer::WaitForClearSpace(u32 num_bytes)
   u32 new_offset = 0;
   u32 new_gpu_position = 0;
 
-  auto iter = m_tracked_fences.begin();
-  for (; iter != m_tracked_fences.end(); ++iter)
+  const size_t count = tracked_fences_count(&m_tracked_fences);
+  size_t i;
+  for (i = 0; i < count; i++)
   {
     // Would this fence bring us in line with the GPU?
     // This is the "last resort" case, where a command buffer execution has been forced
     // after no additional data has been written to it, so we can assume that after the
     // fence has been signaled the entire buffer is now consumed.
-    u32 gpu_position = iter->second;
+    u32 gpu_position = tracked_fences_at(&m_tracked_fences, i)->offset;
     if (m_current_offset == gpu_position)
     {
       new_offset = 0;
@@ -246,13 +250,20 @@ bool StreamBuffer::WaitForClearSpace(u32 num_bytes)
 
   // Did any fences satisfy this condition?
   // Has the command buffer been executed yet? If not, the caller should execute it.
-  if (iter == m_tracked_fences.end() || iter->first == g_dx_context->GetCurrentFenceValue())
+  if (i == count ||
+      tracked_fences_at(&m_tracked_fences, i)->fence == g_dx_context->GetCurrentFenceValue())
     return false;
 
   // Wait until this fence is signaled. This will fire the callback, updating the GPU position.
-  g_dx_context->WaitForFence(iter->first);
-  m_tracked_fences.erase(m_tracked_fences.begin(),
-                         m_current_offset == iter->second ? m_tracked_fences.end() : ++iter);
+  {
+    const TrackedFence waited = *tracked_fences_at(&m_tracked_fences, i);
+    size_t gone;
+    g_dx_context->WaitForFence(waited.fence);
+    /* the fences up to this one, or all of them when it lines the GPU up with the offset */
+    gone = m_current_offset == waited.offset ? tracked_fences_count(&m_tracked_fences) : i + 1;
+    while (gone--)
+      tracked_fences_pop_front(&m_tracked_fences);
+  }
   m_current_offset = new_offset;
   m_current_gpu_position = new_gpu_position;
   return true;

@@ -3,14 +3,21 @@
 
 #pragma once
 
-#include <deque>
-#include <utility>
+#include <queues/retro_deque.h>
 
 #include "Common/CommonTypes.h"
 #include "VideoBackends/D3D12/Common.h"
 
 namespace DX12
 {
+// A fence, and where the buffer's offset was when it was signalled
+struct TrackedFence
+{
+  u64 fence;
+  u32 offset;
+};
+RETRO_DEQUE_DEFINE(tracked_fences, TrackedFence);
+
 class StreamBuffer
 {
 public:
@@ -50,8 +57,9 @@ private:
   D3D12_GPU_VIRTUAL_ADDRESS m_gpu_pointer = {};
   u8* m_host_pointer = nullptr;
 
-  // List of fences and the corresponding positions in the buffer
-  std::deque<std::pair<u64, u32>> m_tracked_fences;
+  // List of fences and the corresponding positions in the buffer: one block, made with the
+  // buffer, as a std::deque allocated a block every few dozen fences
+  tracked_fences_t m_tracked_fences;
 };
 
 }  // namespace DX12
