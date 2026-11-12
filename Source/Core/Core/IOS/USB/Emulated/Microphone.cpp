@@ -123,7 +123,11 @@ long Microphone::DataCallback(const SampleType* input_buffer, long nframes)
   converted.reserve(nframes);
   for (long i = 0; i < nframes; i++)
   {
-    const SampleType le_sample = MathUtil::SaturatingCast<SampleType>(input_buffer[i] * gain);
+    // Rounded to the nearest sample: a cast truncates toward zero, which distorts quiet
+    // signals around it.
+    const FloatType scaled = input_buffer[i] * gain;
+    const SampleType le_sample = MathUtil::SaturatingCast<SampleType>(
+        scaled < 0 ? scaled - FloatType(0.5) : scaled + FloatType(0.5));
     UpdateLoudness(le_sample);
     converted.push_back(are_samples_byte_swapped ? Common::swap16(le_sample) : le_sample);
   }
