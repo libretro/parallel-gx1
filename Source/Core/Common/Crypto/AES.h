@@ -5,6 +5,8 @@
 
 #include <memory>
 
+#include <crypto/crypto.h>
+
 #include "Common/CommonTypes.h"
 
 // Dolphin only uses/implements AES-128-CBC.
@@ -17,22 +19,17 @@ enum class Mode
   Encrypt,
 };
 
-class Context
+// AES-128-CBC with one key
+class Context final
 {
-protected:
-  static constexpr size_t Nk = 4;
-  static constexpr size_t Nb = 4;
-  static constexpr size_t Nr = 10;
-  static constexpr size_t WORD_SIZE = sizeof(u32);
-  static constexpr size_t NUM_ROUND_KEYS = Nr + 1;
-
 public:
-  static constexpr size_t KEY_SIZE = Nk * WORD_SIZE;
-  static constexpr size_t BLOCK_SIZE = Nb * WORD_SIZE;
+  static constexpr size_t KEY_SIZE = 16;
+  static constexpr size_t BLOCK_SIZE = 16;
 
-  Context() = default;
-  virtual ~Context() = default;
-  virtual bool Crypt(const u8* iv, u8* iv_out, const u8* buf_in, u8* buf_out, size_t len) const = 0;
+  Context(Mode mode, const u8* key);
+  // len must be a multiple of BLOCK_SIZE; a null iv is all zeros. buf_in and buf_out may be the
+  // same buffer.
+  bool Crypt(const u8* iv, u8* iv_out, const u8* buf_in, u8* buf_out, size_t len) const;
   bool Crypt(const u8* iv, const u8* buf_in, u8* buf_out, size_t len) const
   {
     return Crypt(iv, nullptr, buf_in, buf_out, len);
@@ -41,6 +38,10 @@ public:
   {
     return Crypt(nullptr, nullptr, buf_in, buf_out, len);
   }
+
+private:
+  Mode m_mode;
+  struct aes_ctx m_ctx;
 };
 
 std::unique_ptr<Context> CreateContextEncrypt(const u8* key);
