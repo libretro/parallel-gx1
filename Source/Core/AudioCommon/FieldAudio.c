@@ -29,7 +29,7 @@ typedef struct field_mix
    unsigned cursor; /* next output frame in the open field */
 } field_mix_t;
 
-static int16_t  s_fields[FIELD_RING][FIELD_CAPACITY * 2];
+static int16_t  s_fields[FIELD_RING][FIELD_AUDIO_MAX_FRAMES * 2];
 static unsigned s_lengths[FIELD_RING];
 /* Fields sealed and released, counted forever: the CPU thread writes
  * the first, retro_run the second. */
@@ -38,6 +38,10 @@ static retro_atomic_int_t s_released;
 
 /* CPU thread only from here on. */
 static unsigned    s_open;        /* the field being written */
+/* What every source added to the open field, summed in 32 bits: clamped
+ * to 16 once, when the field is sealed, so a loud sum does not depend on
+ * the order the sources came in. Zero past the furthest cursor. */
+static int32_t     s_sums[FIELD_CAPACITY * 2];
 static unsigned    s_dma_cursor;  /* next DMA frame in it */
 static uint32_t    s_dma_divisor; /* the output rate */
 static field_mix_t s_mixes[FIELD_AUDIO_MIXES];
@@ -100,6 +104,7 @@ void field_audio_reset(void)
    }
 
    memset(s_fields, 0, sizeof(s_fields));
+   memset(s_sums, 0, sizeof(s_sums));
    memset(s_mixes, 0, sizeof(s_mixes));
    for (i = 0; i < FIELD_AUDIO_MIXES; i++)
    {
@@ -134,15 +139,15 @@ uint32_t field_audio_output_divisor(void)
 
 void field_audio_push_dma(const int16_t *pairs, size_t frames)
 {
-   int16_t *out = s_fields[s_open] + s_dma_cursor * 2;
+   int32_t *out = s_sums + s_dma_cursor * 2;
    size_t i;
    if (s_dma_cursor + frames > FIELD_CAPACITY)
       frames = FIELD_CAPACITY - s_dma_cursor;
    for (i = 0; i < frames; i++)
    {
       /* Added, as other sources may already be there. */
-      out[i * 2]     = clamp16(out[i * 2]     + from_be(pairs[i * 2 + 1]));
-      out[i * 2 + 1] = clamp16(out[i * 2 + 1] + from_be(pairs[i * 2]));
+      out[i * 2]     += from_be(pairs[i * 2 + 1]);
+      out[i * 2 + 1] += from_be(pairs[i * 2]);
    }
    s_dma_cursor += (unsigned)frames;
 }
@@ -167,9 +172,9 @@ static void mix_add(field_mix_t *mix, int32_t l, int32_t r)
 {
    if (mix->cursor < FIELD_CAPACITY)
    {
-      int16_t *out = s_fields[s_open] + mix->cursor * 2;
-      out[0] = clamp16(out[0] + l);
-      out[1] = clamp16(out[1] + r);
+      int32_t *out = s_sums + mix->cursor * 2;
+      out[0] += l;
+      out[1] += r;
       mix->cursor++;
    }
 }
@@ -291,7 +296,6 @@ static void mix_gbas(void)
 void field_audio_seal(unsigned frames)
 {
    unsigned i, ahead = 0;
-   unsigned next;
    int16_t *field;
 
    mix_gbas();
@@ -321,21 +325,23 @@ void field_audio_seal(unsigned frames)
    if (retro_atomic_load_acquire_int(&s_sealed) - retro_atomic_load_acquire_int(&s_released)
          >= FIELD_RING - 1)
    {
-      memset(field, 0, sizeof(s_fields[0]));
+      memset(s_sums, 0, sizeof(s_sums));
       s_dma_cursor = 0;
       for (i = 0; i < FIELD_AUDIO_MIXES; i++)
          s_mixes[i].cursor = 0;
       return;
    }
 
-   next = (s_open + 1) % FIELD_RING;
-   memset(s_fields[next], 0, sizeof(s_fields[0]));
-   /* Samples written past the field's end open the next one. */
+   for (i = 0; i < frames * 2; i++)
+      field[i] = clamp16(s_sums[i]);
+   /* Samples written past the field's end open the next one; what was
+    * summed behind them goes back to zero. */
    if (ahead)
-      memcpy(s_fields[next], field + frames * 2, ahead * 2 * sizeof(int16_t));
+      memmove(s_sums, s_sums + frames * 2, ahead * 2 * sizeof(int32_t));
+   memset(s_sums + ahead * 2, 0, frames * 2 * sizeof(int32_t));
 
    s_lengths[s_open] = frames;
-   s_open            = next;
+   s_open            = (s_open + 1) % FIELD_RING;
    retro_atomic_fetch_add_int(&s_sealed, 1);
 }
 
