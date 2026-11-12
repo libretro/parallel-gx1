@@ -34,7 +34,6 @@
 #endif
 
 #ifdef IPHONEOS
-#include <regex>
 #include <sys/utsname.h>
 #include <unistd.h>
 #endif
@@ -270,31 +269,21 @@ void CPUInfo::Detect()
   utsname system_info;
   uname(&system_info);
 
-  const std::string model = std::string(system_info.machine);
-  std::regex number_regex("[0-9]+");
-  std::smatch match;
-
-  if (std::regex_search(model.begin(), model.end(), match, number_regex))
+  const char* model = system_info.machine;
+  const char* number = strpbrk(model, "0123456789");
+  if (number)
   {
-    int model_number = std::stoi(match[0]);
-    int minimum_model = 99; // impossible value, in case a new type of device comes along
+    const long model_number = strtol(number, nullptr, 10);
+    long minimum_model = 99;  // impossible value, in case a new type of device comes along
 
-    if (model.find("iPhone") != std::string::npos)
-    {
+    if (strstr(model, "iPhone"))
       minimum_model = 9;
-    }
-    else if (model.find("iPad") != std::string::npos)
-    {
+    else if (strstr(model, "iPad"))
       minimum_model = 7;
-    }
-    else if (model.find("iPod") != std::string::npos)
-    {
+    else if (strstr(model, "iPod"))
       minimum_model = 9;
-    }
-    else if (model.find("AppleTV") != std::string::npos)
-    {
+    else if (strstr(model, "AppleTV"))
       minimum_model = 6;
-    }
 
     bCRC32 = model_number >= minimum_model;
   }

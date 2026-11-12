@@ -9,7 +9,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <regex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -175,8 +174,19 @@ Token Lexer::GetRealLiteral(char first_char)
   value += first_char;
   value += FetchCharsWhile([](char c) { return isdigit(c, std::locale::classic()) || ('.' == c); });
 
-  static const std::regex re(R"(\d+(\.\d+)?)");
-  if (std::regex_match(value, re))
+  // digits, optionally followed by '.' and more digits
+  size_t i = 0;
+  while (i < value.size() && value[i] >= '0' && value[i] <= '9')
+    i++;
+  bool valid = i > 0;
+  if (valid && i < value.size())
+  {
+    const size_t fraction = ++i;
+    while (i < value.size() && value[i] >= '0' && value[i] <= '9')
+      i++;
+    valid = i > fraction && i == value.size();
+  }
+  if (valid)
     return Token(TOK_LITERAL, value);
 
   return Token(TOK_INVALID);
