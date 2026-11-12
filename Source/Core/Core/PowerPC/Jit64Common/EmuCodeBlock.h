@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include <unordered_map>
 
 #include "Common/BitSet.h"
+#include "Common/CodePtrMap.h"
 #include "Common/CommonTypes.h"
 #include "Common/x64Emitter.h"
 
@@ -21,10 +21,26 @@ class Mapping;
 class Jit64;
 
 // Like XCodeBlock but has some utilities for memory access.
+CODE_PTR_MAP_DEFINE(back_patch_infos, TrampolineInfo);
+CODE_PTR_MAP_DEFINE(exception_handlers, u8*);
+
 class EmuCodeBlock : public Gen::X64CodeBlock
 {
 public:
-  explicit EmuCodeBlock(Jit64& jit) : m_jit{jit} {}
+  explicit EmuCodeBlock(Jit64& jit) : m_jit{jit}
+  {
+    /* a game's code cache holds some tens of thousands of fastmem accesses: grown to that once,
+     * kept across clears */
+    back_patch_infos_init(&m_back_patch_info, 16384);
+    exception_handlers_init(&m_exception_handler_at_loc, 64);
+  }
+  ~EmuCodeBlock()
+  {
+    exception_handlers_free(&m_exception_handler_at_loc);
+    back_patch_infos_free(&m_back_patch_info);
+  }
+  EmuCodeBlock(const EmuCodeBlock&) = delete;
+  EmuCodeBlock& operator=(const EmuCodeBlock&) = delete;
   void MemoryExceptionCheck();
 
   // Simple functions to switch between near and far code emitting
@@ -140,6 +156,8 @@ protected:
   u8* m_near_code_end = nullptr;
   bool m_near_code_write_failed = false;
 
-  std::unordered_map<u8*, TrampolineInfo> m_back_patch_info;
-  std::unordered_map<u8*, u8*> m_exception_handler_at_loc;
+  // the trampoline to patch in at each fastmem access, by its address
+  back_patch_infos_t m_back_patch_info;
+  // with memchecks, where each access's exception handler is (null for none)
+  exception_handlers_t m_exception_handler_at_loc;
 };

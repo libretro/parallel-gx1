@@ -336,7 +336,7 @@ void EmuCodeBlock::SafeLoadToReg(X64Reg reg_value, const Gen::OpArg& opAddress, 
     MovInfo mov;
     bool offsetAddedToAddress =
         UnsafeLoadToReg(reg_value, opAddress, accessSize, offset, signExtend, &mov);
-    TrampolineInfo& info = m_back_patch_info[mov.address];
+    TrampolineInfo& info = *back_patch_infos_get(&m_back_patch_info, mov.address);
     info.pc = js.compilerPC;
     info.nonAtomicSwapStoreSrc = mov.nonAtomicSwapStore ? mov.nonAtomicSwapStoreSrc : INVALID_REG;
     info.start = backpatchStart;
@@ -509,7 +509,7 @@ void EmuCodeBlock::SafeWriteRegToReg(OpArg reg_value, X64Reg reg_addr, int acces
     u8* backpatchStart = GetWritableCodePtr();
     MovInfo mov;
     UnsafeWriteRegToReg(reg_value, reg_addr, accessSize, offset, swap, &mov);
-    TrampolineInfo& info = m_back_patch_info[mov.address];
+    TrampolineInfo& info = *back_patch_infos_get(&m_back_patch_info, mov.address);
     info.pc = js.compilerPC;
     info.nonAtomicSwapStoreSrc = mov.nonAtomicSwapStore ? mov.nonAtomicSwapStoreSrc : INVALID_REG;
     info.start = backpatchStart;
@@ -1060,6 +1060,6 @@ void EmuCodeBlock::SetFPRF(Gen::X64Reg xmm, bool single)
 
 void EmuCodeBlock::Clear()
 {
-  m_back_patch_info.clear();
-  m_exception_handler_at_loc.clear();
+  back_patch_infos_clear(&m_back_patch_info);
+  exception_handlers_clear(&m_exception_handler_at_loc);
 }

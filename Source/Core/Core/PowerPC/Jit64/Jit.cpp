@@ -167,22 +167,22 @@ bool Jit64::BackPatch(SContext* ctx)
   if (!IsInSpace(codePtr))
     return false;  // this will become a regular crash real soon after this
 
-  auto it = m_back_patch_info.find(codePtr);
-  if (it == m_back_patch_info.end())
+  TrampolineInfo* const found = back_patch_infos_find(&m_back_patch_info, codePtr);
+  if (!found)
   {
     PanicAlert("BackPatch: no register use entry for address %p",
                static_cast<const void*>(codePtr));
     return false;
   }
 
-  TrampolineInfo& info = it->second;
+  TrampolineInfo& info = *found;
 
   u8* exceptionHandler = nullptr;
   if (jo.memcheck)
   {
-    auto it2 = m_exception_handler_at_loc.find(codePtr);
-    if (it2 != m_exception_handler_at_loc.end())
-      exceptionHandler = it2->second;
+    u8* const* const handler = exception_handlers_find(&m_exception_handler_at_loc, codePtr);
+    if (handler)
+      exceptionHandler = *handler;
   }
 
   // In the trampoline code, we jump back into the block at the beginning
@@ -1069,12 +1069,13 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
         SwitchToFarCode();
         if (!js.fastmemLoadStore)
         {
-          m_exception_handler_at_loc[js.fastmemLoadStore] = nullptr;
+          *exception_handlers_get(&m_exception_handler_at_loc, js.fastmemLoadStore) = nullptr;
           SetJumpTarget(js.fixupExceptionHandler ? js.exceptionHandler : memException);
         }
         else
         {
-          m_exception_handler_at_loc[js.fastmemLoadStore] = GetWritableCodePtr();
+          *exception_handlers_get(&m_exception_handler_at_loc, js.fastmemLoadStore) =
+              GetWritableCodePtr();
         }
 
         RCForkGuard gpr_guard = gpr.Fork();
