@@ -105,7 +105,6 @@ public:
   // Convenience functions
   bool Exists(const Location& location) const;
   bool DeleteKey(const Location& location);
-  void DeleteAllKeys();
 
   template <typename T>
   T Get(const Info<T>& config_info) const

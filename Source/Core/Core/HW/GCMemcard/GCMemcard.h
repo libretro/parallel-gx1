@@ -369,8 +369,6 @@ struct BlockAlloc
   explicit BlockAlloc(u16 size_mbits = MBIT_SIZE_MEMORY_CARD_2043);
 
   u16 GetNextBlock(u16 block) const;
-  u16 NextFreeBlock(u16 max_block, u16 starting_block = MC_FST_BLOCKS) const;
-  bool ClearBlocks(u16 starting_block, u16 block_count);
   u16 AssignBlocksContiguous(u16 length);
 
   void FixChecksums();
@@ -437,7 +435,6 @@ public:
   bool FixChecksums();
 
   // get number of file entries in the directory
-  u8 GetNumFiles() const;
 
   // get the free blocks from bat
 

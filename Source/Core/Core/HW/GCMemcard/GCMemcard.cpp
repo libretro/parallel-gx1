@@ -361,20 +361,6 @@ bool GCMemcard::FixChecksums()
   return true;
 }
 
-u8 GCMemcard::GetNumFiles() const
-{
-  if (!m_valid)
-    return 0;
-
-  u8 j = 0;
-  for (int i = 0; i < DIRLEN; i++)
-  {
-    if (GetActiveDirectory().m_dir_entries[i].m_gamecode != DEntry::UNINITIALIZED_GAMECODE)
-      j++;
-  }
-  return j;
-}
-
 u16 GCMemcard::DEntry_FirstBlock(u8 index) const
 {
   if (!m_valid || index >= DIRLEN)
@@ -506,52 +492,6 @@ u16 BlockAlloc::GetNextBlock(u16 block) const
 
 // Parameters and return value are expected as memory card block index,
 // not BAT index; that is, block 5 is the first file data block.
-u16 BlockAlloc::NextFreeBlock(u16 max_block, u16 starting_block) const
-{
-  if (m_free_blocks > 0)
-  {
-    const u16 last_block = BAT_SIZE + MC_FST_BLOCKS;
-    starting_block = starting_block < MC_FST_BLOCKS ? MC_FST_BLOCKS :
-                     starting_block > last_block    ? last_block :
-                                                      starting_block;
-    max_block = max_block < MC_FST_BLOCKS ? MC_FST_BLOCKS :
-                max_block > last_block    ? last_block :
-                                            max_block;
-    for (u16 i = starting_block; i < max_block; ++i)
-      if (m_map[i - MC_FST_BLOCKS] == 0)
-        return i;
-
-    for (u16 i = MC_FST_BLOCKS; i < starting_block; ++i)
-      if (m_map[i - MC_FST_BLOCKS] == 0)
-        return i;
-  }
-  return 0xFFFF;
-}
-
-bool BlockAlloc::ClearBlocks(u16 starting_block, u16 block_count)
-{
-  std::vector<u16> blocks;
-  while (starting_block != 0xFFFF && starting_block != 0)
-  {
-    blocks.push_back(starting_block);
-    starting_block = GetNextBlock(starting_block);
-  }
-  if (starting_block > 0)
-  {
-    const size_t length = blocks.size();
-    if (length != block_count)
-    {
-      return false;
-    }
-    for (unsigned int i = 0; i < length; ++i)
-      m_map[blocks.at(i) - MC_FST_BLOCKS] = 0;
-    m_free_blocks = m_free_blocks + block_count;
-
-    return true;
-  }
-  return false;
-}
-
 void BlockAlloc::FixChecksums()
 {
   std::tie(m_checksum, m_checksum_inv) = CalculateChecksums();

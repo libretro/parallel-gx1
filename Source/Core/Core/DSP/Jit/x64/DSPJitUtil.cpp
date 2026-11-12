@@ -697,12 +697,6 @@ void DSPEmitter::set_long_acc(int _reg, X64Reg acc)
 }
 
 // Returns s16 in AX
-void DSPEmitter::get_acc_l(int _reg, X64Reg acl, bool sign)
-{
-  //	return g_dsp.r[DSP_REG_ACM0 + _reg];
-  m_gpr.ReadReg(_reg + DSP_REG_ACL0, acl, sign ? RegisterExtension::Sign : RegisterExtension::Zero);
-}
-
 void DSPEmitter::set_acc_l(int _reg, const OpArg& arg)
 {
   //	return g_dsp.r[DSP_REG_ACM0 + _reg];
@@ -724,12 +718,6 @@ void DSPEmitter::set_acc_m(int _reg, const OpArg& arg)
 }
 
 // Returns s16 in AX
-void DSPEmitter::get_acc_h(int _reg, X64Reg ach, bool sign)
-{
-  //	return g_dsp.r.ac[_reg].h;
-  m_gpr.ReadReg(_reg + DSP_REG_ACH0, ach, sign ? RegisterExtension::Sign : RegisterExtension::Zero);
-}
-
 // In: s16 in AX
 void DSPEmitter::set_acc_h(int _reg, const OpArg& arg)
 {

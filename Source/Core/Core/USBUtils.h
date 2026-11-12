@@ -25,8 +25,6 @@ struct DeviceInfo
   // Extracts DeviceInfo from a string in the format "VID:PID"
   static std::optional<DeviceInfo> FromString(const std::string& str);
   std::string ToString() const;
-  std::string ToDisplayString() const;
-  std::string ToDisplayString(const std::string& name) const;
 };
 
 std::optional<std::string> GetDeviceNameFromVIDPID(u16 vid, u16 pid);

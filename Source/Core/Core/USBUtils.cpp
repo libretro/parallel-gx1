@@ -100,19 +100,6 @@ std::string DeviceInfo::ToString() const
   return StringFromFormat("%04x:%04x", (unsigned)vid, (unsigned)pid);
 }
 
-std::string DeviceInfo::ToDisplayString() const
-{
-  const std::string name =
-      // i18n: This replaces the name of a device if it cannot be found.
-      GetDeviceNameFromVIDPID(vid, pid).value_or(Common::GetStringT("Unknown Device"));
-  return ToDisplayString(name);
-}
-
-std::string DeviceInfo::ToDisplayString(const std::string& name) const
-{
-  return StringFromFormat("%s (%04x:%04x)", name.c_str(), (unsigned)vid, (unsigned)pid);
-}
-
 static std::optional<std::string> GetDeviceNameUsingKnownDevices(u16 vid, u16 pid)
 {
   const auto iter = s_known_devices.find(DeviceInfo{vid, pid});

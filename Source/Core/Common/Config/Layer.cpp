@@ -51,15 +51,6 @@ bool Layer::DeleteKey(const Location& location)
   return had_value;
 }
 
-void Layer::DeleteAllKeys()
-{
-  m_is_dirty = true;
-  for (auto& pair : m_map)
-  {
-    pair.second.reset();
-  }
-}
-
 Section Layer::GetSection(System system, const std::string& section)
 {
   return Section{m_map.lower_bound(Location{system, section, ""}),

@@ -424,7 +424,6 @@ public:
   static Matrix44 FromArray(const std::array<float, 16>& arr);
 
   static Matrix44 Translate(const Vec3& vec);
-  static Matrix44 Shear(const float a, const float b = 0);
   static Matrix44 Perspective(float fov_y, float aspect_ratio, float z_near, float z_far);
 
   static void Multiply(const Matrix44& a, const Matrix44& b, Matrix44* result);

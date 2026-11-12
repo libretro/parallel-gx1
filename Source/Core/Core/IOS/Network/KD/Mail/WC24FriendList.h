@@ -29,8 +29,6 @@ public:
   void ReadFriendList();
   bool CheckFriendList() const;
 
-  std::vector<u64> GetUnconfirmedFriends() const;
-
 private:
   static constexpr u32 FRIEND_LIST_MAGIC = 0x5763466C;  // WcFl
   static constexpr u32 MAX_ENTRIES = 100;

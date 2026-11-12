@@ -66,16 +66,6 @@ void StagingBuffer::FlushCPUCache(VkDeviceSize offset, VkDeviceSize size)
   vk_heap_flush(g_vulkan_context->GetHeap(), &m_alloc, offset, size);
 }
 
-void StagingBuffer::InvalidateGPUCache(VkCommandBuffer command_buffer,
-                                       VkAccessFlagBits dest_access_flags,
-                                       VkPipelineStageFlagBits dest_pipeline_stage,
-                                       VkDeviceSize offset, VkDeviceSize size)
-{
-  ASSERT((offset + size) <= m_size || (offset < m_size && size == VK_WHOLE_SIZE));
-  BufferMemoryBarrier(command_buffer, m_buffer, VK_ACCESS_HOST_WRITE_BIT, dest_access_flags, offset,
-                      size, VK_PIPELINE_STAGE_HOST_BIT, dest_pipeline_stage);
-}
-
 void StagingBuffer::PrepareForGPUWrite(VkCommandBuffer command_buffer,
                                        VkAccessFlagBits dst_access_flags,
                                        VkPipelineStageFlagBits dst_pipeline_stage,

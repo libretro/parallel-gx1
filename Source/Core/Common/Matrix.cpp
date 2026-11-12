@@ -338,14 +338,6 @@ Matrix44 Matrix44::Translate(const Vec3& vec)
   return mtx;
 }
 
-Matrix44 Matrix44::Shear(const float a, const float b)
-{
-  Matrix44 mtx = Matrix44::Identity();
-  mtx.data[2] = a;
-  mtx.data[6] = b;
-  return mtx;
-}
-
 Matrix44 Matrix44::Perspective(float fov_y, float aspect_ratio, float z_near, float z_far)
 {
   Matrix44 mtx{};

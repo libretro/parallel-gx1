@@ -46,20 +46,4 @@ bool WC24FriendList::CheckFriendList() const
   return true;
 }
 
-std::vector<u64> WC24FriendList::GetUnconfirmedFriends() const
-{
-  std::vector<u64> friends{};
-  for (u32 i = 0; i < MAX_ENTRIES; i++)
-  {
-    if (static_cast<FriendStatus>(Common::swap32(m_data.entries[i].status)) ==
-            FriendStatus::Unconfirmed &&
-        static_cast<FriendType>(Common::swap32(m_data.entries[i].friend_type)) == FriendType::Wii)
-    {
-      friends.push_back(Common::swap64(m_data.friend_codes.at(i)));
-    }
-  }
-
-  return friends;
-}
-
 }  // namespace IOS::HLE::NWC24::Mail
