@@ -230,7 +230,6 @@ private:
                 int W = 0) const;
   void WriteRest(XEmitter* emit, int extraBytes = 0, X64Reg operandReg = INVALID_REG,
                  bool warn_64bit_offset = true) const;
-  void WriteSingleByteOp(XEmitter* emit, u8 op, X64Reg operandReg, int bits);
   void WriteNormalOp(XEmitter* emit, bool toRM, NormalOp op, const OpArg& operand, int bits) const;
 
   u64 offset = 0;  // Also used to store immediates.
@@ -343,7 +342,6 @@ private:
 
   void Rex(int w, int r, int x, int b);
   void WriteModRM(int mod, int reg, int rm);
-  void WriteSIB(int scale, int index, int base);
   void WriteSimple1Byte(int bits, u8 byte, X64Reg reg);
   void WriteSimple2Byte(int bits, u8 byte1, u8 byte2, X64Reg reg);
   void WriteMulDivType(int bits, OpArg src, int ext);
@@ -430,16 +428,12 @@ public:
 
   // These two can not be executed in 64-bit mode on early Intel 64-bit CPU:s, only on Core2 and
   // AMD!
-  void LAHF();  // 3 cycle vector path
-  void SAHF();  // direct path fast
 
   // Stack control
   void PUSH(X64Reg reg);
   void POP(X64Reg reg);
   void PUSH(int bits, const OpArg& reg);
   void POP(int bits, const OpArg& reg);
-  void PUSHF();
-  void POPF();
 
   enum class Jump
   {
@@ -451,13 +445,11 @@ public:
 
   // Flow control
   void RET();
-  void RET_FAST();
   void UD2();
   [[nodiscard]] FixupBranch J(Jump jump = Jump::Short);
 
   void JMP(const u8* addr, bool force_near_padding = false);
   void JMPptr(const OpArg& arg);
-  void JMPself();  // infinite loop!
 #ifdef CALL
 #undef CALL
 #endif
@@ -475,12 +467,8 @@ public:
   void CMOVcc(int bits, X64Reg dest, OpArg src, CCFlags flag);
 
   // Fences
-  void LFENCE();
-  void MFENCE();
-  void SFENCE();
 
   // Bit scan
-  void BSF(int bits, X64Reg dest, const OpArg& src);  // Bottom bit to top bit
   void BSR(int bits, X64Reg dest, const OpArg& src);  // Top bit to bottom bit
 
   // Cache control
@@ -491,11 +479,6 @@ public:
     T1 = 2,   // Levels 2+ (aliased to T0 on AMD)
     T2 = 3,   // Levels 3+ (aliased to T0 on AMD)
   };
-  void PREFETCH(PrefetchLevel level, OpArg arg);
-  void MOVNTI(int bits, const OpArg& dest, X64Reg src);
-  void MOVNTDQ(const OpArg& arg, X64Reg regOp);
-  void MOVNTPS(const OpArg& arg, X64Reg regOp);
-  void MOVNTPD(const OpArg& arg, X64Reg regOp);
 
   // Multiplication / division
   void MUL(int bits, const OpArg& src);   // UNSIGNED
@@ -508,8 +491,6 @@ public:
   // Shift
   void ROL(int bits, const OpArg& dest, const OpArg& shift);
   void ROR(int bits, const OpArg& dest, const OpArg& shift);
-  void RCL(int bits, const OpArg& dest, const OpArg& shift);
-  void RCR(int bits, const OpArg& dest, const OpArg& shift);
   void SHL(int bits, const OpArg& dest, const OpArg& shift);
   void SHR(int bits, const OpArg& dest, const OpArg& shift);
   void SAR(int bits, const OpArg& dest, const OpArg& shift);
@@ -518,11 +499,8 @@ public:
   void BT(int bits, const OpArg& dest, const OpArg& index);
   void BTS(int bits, const OpArg& dest, const OpArg& index);
   void BTR(int bits, const OpArg& dest, const OpArg& index);
-  void BTC(int bits, const OpArg& dest, const OpArg& index);
 
   // Double-Precision Shift
-  void SHRD(int bits, const OpArg& dest, const OpArg& src, const OpArg& shift);
-  void SHLD(int bits, const OpArg& dest, const OpArg& src, const OpArg& shift);
 
   // Extend EAX into EDX in various ways
   void CWD(int bits = 16);
@@ -555,7 +533,6 @@ public:
 
   // Are these useful at all? Consider removing.
   void XCHG(int bits, const OpArg& a1, const OpArg& a2);
-  void XCHG_AHAL();
 
   // Byte swapping (32 and 64-bit only).
   void BSWAP(int bits, X64Reg reg);
@@ -575,67 +552,40 @@ public:
   // Available only on AMD >= Phenom or Intel >= Haswell
   void LZCNT(int bits, X64Reg dest, const OpArg& src);
   // Note: this one is actually part of BMI1
-  void TZCNT(int bits, X64Reg dest, const OpArg& src);
 
   // WARNING - These two take 11-13 cycles and are VectorPath! (AMD64)
-  void STMXCSR(const OpArg& memloc);
   void LDMXCSR(const OpArg& memloc);
 
   // Prefixes
   void LOCK();
   void REP();
-  void REPNE();
-  void FSOverride();
-  void GSOverride();
 
   // SSE/SSE2: Floating point arithmetic
-  void ADDSS(X64Reg regOp, const OpArg& arg);
   void ADDSD(X64Reg regOp, const OpArg& arg);
-  void SUBSS(X64Reg regOp, const OpArg& arg);
   void SUBSD(X64Reg regOp, const OpArg& arg);
   void MULSS(X64Reg regOp, const OpArg& arg);
   void MULSD(X64Reg regOp, const OpArg& arg);
-  void DIVSS(X64Reg regOp, const OpArg& arg);
   void DIVSD(X64Reg regOp, const OpArg& arg);
   void MINSS(X64Reg regOp, const OpArg& arg);
   void MINSD(X64Reg regOp, const OpArg& arg);
   void MAXSS(X64Reg regOp, const OpArg& arg);
-  void MAXSD(X64Reg regOp, const OpArg& arg);
-  void SQRTSS(X64Reg regOp, const OpArg& arg);
-  void SQRTSD(X64Reg regOp, const OpArg& arg);
-  void RCPSS(X64Reg regOp, const OpArg& arg);
-  void RSQRTSS(X64Reg regOp, const OpArg& arg);
 
   // SSE/SSE2: Floating point bitwise (yes)
-  void CMPSS(X64Reg regOp, const OpArg& arg, u8 compare);
   void CMPSD(X64Reg regOp, const OpArg& arg, u8 compare);
 
   // SSE/SSE2: Floating point packed arithmetic (x4 for float, x2 for double)
-  void ADDPS(X64Reg regOp, const OpArg& arg);
   void ADDPD(X64Reg regOp, const OpArg& arg);
-  void SUBPS(X64Reg regOp, const OpArg& arg);
   void SUBPD(X64Reg regOp, const OpArg& arg);
-  void CMPPS(X64Reg regOp, const OpArg& arg, u8 compare);
   void CMPPD(X64Reg regOp, const OpArg& arg, u8 compare);
   void MULPS(X64Reg regOp, const OpArg& arg);
   void MULPD(X64Reg regOp, const OpArg& arg);
-  void DIVPS(X64Reg regOp, const OpArg& arg);
   void DIVPD(X64Reg regOp, const OpArg& arg);
   void MINPS(X64Reg regOp, const OpArg& arg);
-  void MINPD(X64Reg regOp, const OpArg& arg);
   void MAXPS(X64Reg regOp, const OpArg& arg);
-  void MAXPD(X64Reg regOp, const OpArg& arg);
-  void SQRTPS(X64Reg regOp, const OpArg& arg);
-  void SQRTPD(X64Reg regOp, const OpArg& arg);
-  void RCPPS(X64Reg regOp, const OpArg& arg);
-  void RSQRTPS(X64Reg regOp, const OpArg& arg);
 
   // SSE/SSE2: Floating point packed bitwise (x4 for float, x2 for double)
-  void ANDPS(X64Reg regOp, const OpArg& arg);
   void ANDPD(X64Reg regOp, const OpArg& arg);
-  void ANDNPS(X64Reg regOp, const OpArg& arg);
   void ANDNPD(X64Reg regOp, const OpArg& arg);
-  void ORPS(X64Reg regOp, const OpArg& arg);
   void ORPD(X64Reg regOp, const OpArg& arg);
   void XORPS(X64Reg regOp, const OpArg& arg);
   void XORPD(X64Reg regOp, const OpArg& arg);
@@ -645,19 +595,14 @@ public:
   void SHUFPD(X64Reg regOp, const OpArg& arg, u8 shuffle);
 
   // SSE3
-  void MOVSLDUP(X64Reg regOp, const OpArg& arg);
-  void MOVSHDUP(X64Reg regOp, const OpArg& arg);
   void MOVDDUP(X64Reg regOp, const OpArg& arg);
 
   // SSE/SSE2: Useful alternative to shuffle in some cases.
   void UNPCKLPS(X64Reg dest, const OpArg& src);
-  void UNPCKHPS(X64Reg dest, const OpArg& src);
   void UNPCKLPD(X64Reg dest, const OpArg& src);
   void UNPCKHPD(X64Reg dest, const OpArg& src);
 
   // SSE/SSE2: Compares.
-  void COMISS(X64Reg regOp, const OpArg& arg);
-  void COMISD(X64Reg regOp, const OpArg& arg);
   void UCOMISS(X64Reg regOp, const OpArg& arg);
   void UCOMISD(X64Reg regOp, const OpArg& arg);
 
@@ -668,12 +613,8 @@ public:
   void MOVAPD(const OpArg& arg, X64Reg regOp);
 
   void MOVUPS(X64Reg regOp, const OpArg& arg);
-  void MOVUPD(X64Reg regOp, const OpArg& arg);
   void MOVUPS(const OpArg& arg, X64Reg regOp);
-  void MOVUPD(const OpArg& arg, X64Reg regOp);
 
-  void MOVDQA(X64Reg regOp, const OpArg& arg);
-  void MOVDQA(const OpArg& arg, X64Reg regOp);
   void MOVDQU(X64Reg regOp, const OpArg& arg);
   void MOVDQU(const OpArg& arg, X64Reg regOp);
 
@@ -686,11 +627,6 @@ public:
   void MOVLPD(X64Reg regOp, const OpArg& arg);
   void MOVLPS(const OpArg& arg, X64Reg regOp);
   void MOVLPD(const OpArg& arg, X64Reg regOp);
-
-  void MOVHPS(X64Reg regOp, const OpArg& arg);
-  void MOVHPD(X64Reg regOp, const OpArg& arg);
-  void MOVHPS(const OpArg& arg, X64Reg regOp);
-  void MOVHPD(const OpArg& arg, X64Reg regOp);
 
   void MOVHLPS(X64Reg regOp1, X64Reg regOp2);
   void MOVLHPS(X64Reg regOp1, X64Reg regOp2);
@@ -707,13 +643,10 @@ public:
 
   // SSE/SSE2: Generates a mask from the high bits of the components of the packed register in
   // question.
-  void MOVMSKPS(X64Reg dest, const OpArg& arg);
   void MOVMSKPD(X64Reg dest, const OpArg& arg);
 
   // SSE2: Selective byte store, mask in src register. EDI/RDI specifies store address. This is a
   // weird one.
-  void MASKMOVDQU(X64Reg dest, X64Reg src);
-  void LDDQU(X64Reg dest, const OpArg& src);
 
   // SSE/SSE2: Data type conversions.
   void CVTPS2PD(X64Reg dest, const OpArg& src);
@@ -721,8 +654,6 @@ public:
   void CVTSS2SD(X64Reg dest, const OpArg& src);
   void CVTSI2SS(X64Reg dest, const OpArg& src);
   void CVTSD2SS(X64Reg dest, const OpArg& src);
-  void CVTSI2SD(X64Reg dest, const OpArg& src);
-  void CVTDQ2PD(X64Reg regOp, const OpArg& arg);
   void CVTPD2DQ(X64Reg regOp, const OpArg& arg);
   void CVTDQ2PS(X64Reg regOp, const OpArg& arg);
   void CVTPS2DQ(X64Reg regOp, const OpArg& arg);
@@ -732,9 +663,7 @@ public:
 
   // Destinations are X64 regs (rax, rbx, ...) for these instructions.
   void CVTSS2SI(X64Reg xregdest, const OpArg& src);
-  void CVTSD2SI(X64Reg xregdest, const OpArg& src);
   void CVTTSS2SI(X64Reg xregdest, const OpArg& arg);
-  void CVTTSD2SI(X64Reg xregdest, const OpArg& arg);
 
   // SSE2: Packed integer instructions
   void PACKSSDW(X64Reg dest, const OpArg& arg);
@@ -744,7 +673,6 @@ public:
 
   void PUNPCKLBW(X64Reg dest, const OpArg& arg);
   void PUNPCKLWD(X64Reg dest, const OpArg& arg);
-  void PUNPCKLDQ(X64Reg dest, const OpArg& arg);
   void PUNPCKLQDQ(X64Reg dest, const OpArg& arg);
 
   void PTEST(X64Reg dest, const OpArg& arg);
@@ -753,103 +681,40 @@ public:
   void PXOR(X64Reg dest, const OpArg& arg);
   void POR(X64Reg dest, const OpArg& arg);
 
-  void PADDB(X64Reg dest, const OpArg& arg);
-  void PADDW(X64Reg dest, const OpArg& arg);
-  void PADDD(X64Reg dest, const OpArg& arg);
   void PADDQ(X64Reg dest, const OpArg& arg);
 
-  void PADDSB(X64Reg dest, const OpArg& arg);
-  void PADDSW(X64Reg dest, const OpArg& arg);
-  void PADDUSB(X64Reg dest, const OpArg& arg);
-  void PADDUSW(X64Reg dest, const OpArg& arg);
-
-  void PSUBB(X64Reg dest, const OpArg& arg);
-  void PSUBW(X64Reg dest, const OpArg& arg);
-  void PSUBD(X64Reg dest, const OpArg& arg);
-  void PSUBQ(X64Reg dest, const OpArg& arg);
-
-  void PSUBSB(X64Reg dest, const OpArg& arg);
-  void PSUBSW(X64Reg dest, const OpArg& arg);
-  void PSUBUSB(X64Reg dest, const OpArg& arg);
-  void PSUBUSW(X64Reg dest, const OpArg& arg);
-
-  void PAVGB(X64Reg dest, const OpArg& arg);
-  void PAVGW(X64Reg dest, const OpArg& arg);
-
-  void PCMPEQB(X64Reg dest, const OpArg& arg);
   void PCMPEQW(X64Reg dest, const OpArg& arg);
-  void PCMPEQD(X64Reg dest, const OpArg& arg);
 
-  void PCMPGTB(X64Reg dest, const OpArg& arg);
-  void PCMPGTW(X64Reg dest, const OpArg& arg);
-  void PCMPGTD(X64Reg dest, const OpArg& arg);
-
-  void PEXTRW(X64Reg dest, const OpArg& arg, u8 subreg);
   void PINSRW(X64Reg dest, const OpArg& arg, u8 subreg);
   void PINSRD(X64Reg dest, const OpArg& arg, u8 subreg);
-
-  void PMADDWD(X64Reg dest, const OpArg& arg);
-  void PSADBW(X64Reg dest, const OpArg& arg);
-
-  void PMAXSW(X64Reg dest, const OpArg& arg);
-  void PMAXUB(X64Reg dest, const OpArg& arg);
-  void PMINSW(X64Reg dest, const OpArg& arg);
-  void PMINUB(X64Reg dest, const OpArg& arg);
 
   void PMOVMSKB(X64Reg dest, const OpArg& arg);
   void PSHUFD(X64Reg dest, const OpArg& arg, u8 shuffle);
   void PSHUFB(X64Reg dest, const OpArg& arg);
 
   void PSHUFLW(X64Reg dest, const OpArg& arg, u8 shuffle);
-  void PSHUFHW(X64Reg dest, const OpArg& arg, u8 shuffle);
 
-  void PSRLW(X64Reg reg, u8 shift);
   void PSRLD(X64Reg reg, u8 shift);
   void PSRLQ(X64Reg reg, u8 shift);
   void PSRLQ(X64Reg reg, const OpArg& arg);
-  void PSRLDQ(X64Reg reg, u8 shift);
 
-  void PSLLW(X64Reg reg, u8 shift);
-  void PSLLD(X64Reg reg, u8 shift);
   void PSLLQ(X64Reg reg, u8 shift);
-  void PSLLDQ(X64Reg reg, u8 shift);
 
-  void PSRAW(X64Reg reg, u8 shift);
   void PSRAD(X64Reg reg, u8 shift);
 
   // SSE4: data type conversions
-  void PMOVSXBW(X64Reg dest, const OpArg& arg);
   void PMOVSXBD(X64Reg dest, const OpArg& arg);
-  void PMOVSXBQ(X64Reg dest, const OpArg& arg);
   void PMOVSXWD(X64Reg dest, const OpArg& arg);
-  void PMOVSXWQ(X64Reg dest, const OpArg& arg);
-  void PMOVSXDQ(X64Reg dest, const OpArg& arg);
-  void PMOVZXBW(X64Reg dest, const OpArg& arg);
   void PMOVZXBD(X64Reg dest, const OpArg& arg);
-  void PMOVZXBQ(X64Reg dest, const OpArg& arg);
   void PMOVZXWD(X64Reg dest, const OpArg& arg);
-  void PMOVZXWQ(X64Reg dest, const OpArg& arg);
-  void PMOVZXDQ(X64Reg dest, const OpArg& arg);
 
   // SSE4: blend instructions
-  void PBLENDVB(X64Reg dest, const OpArg& arg);
-  void BLENDVPS(X64Reg dest, const OpArg& arg);
   void BLENDVPD(X64Reg dest, const OpArg& arg);
-  void BLENDPS(X64Reg dest, const OpArg& arg, u8 blend);
-  void BLENDPD(X64Reg dest, const OpArg& arg, u8 blend);
 
   // SSE4: compare instructions
   void PCMPEQQ(X64Reg dest, const OpArg& arg);
 
   // AVX
-  void VADDSS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VSUBSS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VMULSS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VDIVSS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VADDPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VSUBPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VMULPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VDIVPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VADDSD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VSUBSD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VMULSD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
@@ -858,30 +723,18 @@ public:
   void VSUBPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VMULPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VDIVPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VSQRTSD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VCMPPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg, u8 compare);
-  void VSHUFPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg, u8 shuffle);
   void VSHUFPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg, u8 shuffle);
-  void VUNPCKLPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VUNPCKLPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VUNPCKHPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VBLENDVPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg, X64Reg mask);
-  void VBLENDPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg, u8 blend);
-  void VBLENDPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg, u8 blend);
 
-  void VANDPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VANDPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VANDNPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VANDNPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VORPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VORPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VXORPS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VXORPD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
 
   void VPAND(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VPANDN(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VPOR(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VPXOR(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
 
   void VPSLLQ(X64Reg regOp1, X64Reg regOp2, u8 shift);
 
@@ -890,66 +743,12 @@ public:
   void VZEROUPPER();
 
   // FMA3
-  void VFMADD132PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD213PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD231PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMADD132PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD213PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD231PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD132SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD213SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD231SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMADD132SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD213SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADD231SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB132PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB213PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB231PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMSUB132PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB213PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMSUB231PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB132SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB213SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB231SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMSUB132SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUB213SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMSUB231SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD132PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD213PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD231PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD132PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD213PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD231PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD132SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD213SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD231SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD132SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD213SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMADD231SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB132PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB213PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB231PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB132PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB213PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB231PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB132SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB213SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB231SS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB132SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB213SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFNMSUB231SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADDSUB132PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADDSUB213PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADDSUB231PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADDSUB132PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADDSUB213PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMADDSUB231PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUBADD132PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUBADD213PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUBADD231PS(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUBADD132PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUBADD213PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void VFMSUBADD231PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
 
 #define FMA4(name)                                                                                 \
   void name(X64Reg dest, X64Reg regOp1, X64Reg regOp2, const OpArg& arg);                          \
@@ -985,14 +784,8 @@ public:
   void PEXT(int bits, X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void PDEP(int bits, X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void MULX(int bits, X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-  void BZHI(int bits, X64Reg regOp1, const OpArg& arg, X64Reg regOp2);
-  void BLSR(int bits, X64Reg regOp, const OpArg& arg);
-  void BLSMSK(int bits, X64Reg regOp, const OpArg& arg);
-  void BLSI(int bits, X64Reg regOp, const OpArg& arg);
   void BEXTR(int bits, X64Reg regOp1, const OpArg& arg, X64Reg regOp2);
   void ANDN(int bits, X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-
-  void RDTSC();
 
   // Utility functions
   // The difference between this and CALL is that this aligns the stack
