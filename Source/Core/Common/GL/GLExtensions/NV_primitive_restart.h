@@ -9,10 +9,7 @@
 #define GL_PRIMITIVE_RESTART_INDEX_NV 0x8559
 
 typedef void(APIENTRYP PFNDOLPRIMITIVERESTARTINDEXNVPROC)(GLuint index);
-typedef void(APIENTRYP PFNDOLPRIMITIVERESTARTNVPROC)(void);
 
 extern PFNDOLPRIMITIVERESTARTINDEXNVPROC dolPrimitiveRestartIndexNV;
-extern PFNDOLPRIMITIVERESTARTNVPROC dolPrimitiveRestartNV;
 
 #define glPrimitiveRestartIndexNV dolPrimitiveRestartIndexNV
-#define glPrimitiveRestartNV dolPrimitiveRestartNV

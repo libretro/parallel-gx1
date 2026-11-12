@@ -25,39 +25,3 @@
 
 typedef void(APIENTRYP PFNDOLBUFFERSTORAGEPROC)(GLenum target, GLsizeiptr size, const void* data,
                                                 GLbitfield flags);
-typedef void(APIENTRYP PFNDOLCLEARTEXIMAGEPROC)(GLuint texture, GLint level, GLenum format,
-                                                GLenum type, const void* data);
-typedef void(APIENTRYP PFNDOLCLEARTEXSUBIMAGEPROC)(GLuint texture, GLint level, GLint xoffset,
-                                                   GLint yoffset, GLint zoffset, GLsizei width,
-                                                   GLsizei height, GLsizei depth, GLenum format,
-                                                   GLenum type, const void* data);
-typedef void(APIENTRYP PFNDOLBINDBUFFERSBASEPROC)(GLenum target, GLuint first, GLsizei count,
-                                                  const GLuint* buffers);
-typedef void(APIENTRYP PFNDOLBINDBUFFERSRANGEPROC)(GLenum target, GLuint first, GLsizei count,
-                                                   const GLuint* buffers, const GLintptr* offsets,
-                                                   const GLsizeiptr* sizes);
-typedef void(APIENTRYP PFNDOLBINDTEXTURESPROC)(GLuint first, GLsizei count, const GLuint* textures);
-typedef void(APIENTRYP PFNDOLBINDSAMPLERSPROC)(GLuint first, GLsizei count, const GLuint* samplers);
-typedef void(APIENTRYP PFNDOLBINDIMAGETEXTURESPROC)(GLuint first, GLsizei count,
-                                                    const GLuint* textures);
-typedef void(APIENTRYP PFNDOLBINDVERTEXBUFFERSPROC)(GLuint first, GLsizei count,
-                                                    const GLuint* buffers, const GLintptr* offsets,
-                                                    const GLsizei* strides);
-
-extern PFNDOLCLEARTEXIMAGEPROC dolClearTexImage;
-extern PFNDOLCLEARTEXSUBIMAGEPROC dolClearTexSubImage;
-extern PFNDOLBINDBUFFERSBASEPROC dolBindBuffersBase;
-extern PFNDOLBINDBUFFERSRANGEPROC dolBindBuffersRange;
-extern PFNDOLBINDTEXTURESPROC dolBindTextures;
-extern PFNDOLBINDSAMPLERSPROC dolBindSamplers;
-extern PFNDOLBINDIMAGETEXTURESPROC dolBindImageTextures;
-extern PFNDOLBINDVERTEXBUFFERSPROC dolBindVertexBuffers;
-
-#define glClearTexImage dolClearTexImage
-#define glClearTexSubImage dolClearTexSubImage
-#define glBindBuffersBase dolBindBuffersBase
-#define glBindBuffersRange dolBindBuffersRange
-#define glBindTextures dolBindTextures
-#define glBindSamplers dolBindSamplers
-#define glBindImageTextures dolBindImageTextures
-#define glBindVertexBuffers dolBindVertexBuffers

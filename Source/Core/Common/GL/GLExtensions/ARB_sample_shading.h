@@ -4,9 +4,3 @@
 */
 
 #include "Common/GL/GLExtensions/gl_common.h"
-
-typedef void(APIENTRYP PFNDOLMINSAMPLESHADINGARBPROC)(GLfloat value);
-
-extern PFNDOLMINSAMPLESHADINGARBPROC dolMinSampleShading;
-
-#define glMinSampleShading dolMinSampleShading

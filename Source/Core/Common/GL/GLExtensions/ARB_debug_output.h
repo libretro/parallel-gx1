@@ -34,22 +34,11 @@ typedef void(APIENTRYP GLDEBUGPROCARB)(GLenum source, GLenum type, GLuint id, GL
 typedef void(APIENTRYP PFNDOLDEBUGMESSAGECONTROLARBPROC)(GLenum source, GLenum type,
                                                          GLenum severity, GLsizei count,
                                                          const GLuint* ids, GLboolean enabled);
-typedef void(APIENTRYP PFNDOLDEBUGMESSAGEINSERTARBPROC)(GLenum source, GLenum type, GLuint id,
-                                                        GLenum severity, GLsizei length,
-                                                        const GLchar* buf);
 typedef void(APIENTRYP PFNDOLDEBUGMESSAGECALLBACKARBPROC)(GLDEBUGPROCARB callback,
                                                           const void* userParam);
-typedef GLuint(APIENTRYP PFNDOLGETDEBUGMESSAGELOGARBPROC)(GLuint count, GLsizei bufSize,
-                                                          GLenum* sources, GLenum* types,
-                                                          GLuint* ids, GLenum* severities,
-                                                          GLsizei* lengths, GLchar* messageLog);
 
 extern PFNDOLDEBUGMESSAGECALLBACKARBPROC dolDebugMessageCallbackARB;
 extern PFNDOLDEBUGMESSAGECONTROLARBPROC dolDebugMessageControlARB;
-extern PFNDOLDEBUGMESSAGEINSERTARBPROC dolDebugMessageInsertARB;
-extern PFNDOLGETDEBUGMESSAGELOGARBPROC dolGetDebugMessageLogARB;
 
 #define glDebugMessageCallbackARB dolDebugMessageCallbackARB
 #define glDebugMessageControlARB dolDebugMessageControlARB
-#define glDebugMessageInsertARB dolDebugMessageInsertARB
-#define glGetDebugMessageLogARB dolGetDebugMessageLogARB

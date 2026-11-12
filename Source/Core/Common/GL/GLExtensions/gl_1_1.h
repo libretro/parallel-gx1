@@ -608,1058 +608,108 @@
 #define GL_ALL_CLIENT_ATTRIB_BITS 0xFFFFFFFF
 #define GL_CLIENT_ALL_ATTRIB_BITS 0xFFFFFFFF
 
-typedef void(APIENTRYP PFNDOLCLEARINDEXPROC)(GLfloat c);
 typedef void(APIENTRYP PFNDOLCLEARCOLORPROC)(GLclampf red, GLclampf green, GLclampf blue,
                                              GLclampf alpha);
 typedef void(APIENTRYP PFNDOLCLEARPROC)(GLbitfield mask);
-typedef void(APIENTRYP PFNDOLINDEXMASKPROC)(GLuint mask);
 typedef void(APIENTRYP PFNDOLCOLORMASKPROC)(GLboolean red, GLboolean green, GLboolean blue,
                                             GLboolean alpha);
-typedef void(APIENTRYP PFNDOLALPHAFUNCPROC)(GLenum func, GLclampf ref);
-typedef void(APIENTRYP PFNDOLBLENDFUNCPROC)(GLenum sfactor, GLenum dfactor);
 typedef void(APIENTRYP PFNDOLLOGICOPPROC)(GLenum opcode);
-typedef void(APIENTRYP PFNDOLCULLFACEPROC)(GLenum mode);
 typedef void(APIENTRYP PFNDOLFRONTFACEPROC)(GLenum mode);
-typedef void(APIENTRYP PFNDOLPOINTSIZEPROC)(GLfloat size);
-typedef void(APIENTRYP PFNDOLLINEWIDTHPROC)(GLfloat width);
-typedef void(APIENTRYP PFNDOLLINESTIPPLEPROC)(GLint factor, GLushort pattern);
-typedef void(APIENTRYP PFNDOLPOLYGONMODEPROC)(GLenum face, GLenum mode);
-typedef void(APIENTRYP PFNDOLPOLYGONOFFSETPROC)(GLfloat factor, GLfloat units);
-typedef void(APIENTRYP PFNDOLPOLYGONSTIPPLEPROC)(const GLubyte* mask);
-typedef void(APIENTRYP PFNDOLGETPOLYGONSTIPPLEPROC)(GLubyte* mask);
-typedef void(APIENTRYP PFNDOLEDGEFLAGPROC)(GLboolean flag);
-typedef void(APIENTRYP PFNDOLEDGEFLAGVPROC)(const GLboolean* flag);
 typedef void(APIENTRYP PFNDOLSCISSORPROC)(GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void(APIENTRYP PFNDOLCLIPPLANEPROC)(GLenum plane, const GLdouble* equation);
-typedef void(APIENTRYP PFNDOLGETCLIPPLANEPROC)(GLenum plane, GLdouble* equation);
 typedef void(APIENTRYP PFNDOLDRAWBUFFERPROC)(GLenum mode);
-typedef void(APIENTRYP PFNDOLREADBUFFERPROC)(GLenum mode);
 typedef void(APIENTRYP PFNDOLENABLEPROC)(GLenum cap);
 typedef void(APIENTRYP PFNDOLDISABLEPROC)(GLenum cap);
-typedef GLboolean(APIENTRYP PFNDOLISENABLEDPROC)(GLenum cap);
 typedef void(APIENTRYP PFNDOLENABLECLIENTSTATEPROC)(GLenum cap);  /* 1.1 */
 typedef void(APIENTRYP PFNDOLDISABLECLIENTSTATEPROC)(GLenum cap); /* 1.1 */
-typedef void(APIENTRYP PFNDOLGETBOOLEANVPROC)(GLenum pname, GLboolean* params);
-typedef void(APIENTRYP PFNDOLGETDOUBLEVPROC)(GLenum pname, GLdouble* params);
-typedef void(APIENTRYP PFNDOLGETFLOATVPROC)(GLenum pname, GLfloat* params);
 typedef void(APIENTRYP PFNDOLGETINTEGERVPROC)(GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLPUSHATTRIBPROC)(GLbitfield mask);
-typedef void(APIENTRYP PFNDOLPOPATTRIBPROC)(void);
 typedef void(APIENTRYP PFNDOLPUSHCLIENTATTRIBPROC)(GLbitfield mask); /* 1.1 */
 typedef void(APIENTRYP PFNDOLPOPCLIENTATTRIBPROC)(void);             /* 1.1 */
-typedef GLint(APIENTRYP PFNDOLRENDERMODEPROC)(GLenum mode);
 typedef GLenum(APIENTRYP PFNDOLGETERRORPROC)(void);
 typedef const GLubyte*(APIENTRYP PFNDOLGETSTRINGPROC)(GLenum name);
 typedef void(APIENTRYP PFNDOLFINISHPROC)(void);
 typedef void(APIENTRYP PFNDOLFLUSHPROC)(void);
-typedef void(APIENTRYP PFNDOLHINTPROC)(GLenum target, GLenum mode);
 typedef void(APIENTRYP PFNDOLCLEARDEPTHPROC)(GLclampd depth);
 typedef void(APIENTRYP PFNDOLDEPTHFUNCPROC)(GLenum func);
 typedef void(APIENTRYP PFNDOLDEPTHMASKPROC)(GLboolean flag);
 typedef void(APIENTRYP PFNDOLDEPTHRANGEPROC)(GLclampd near_val, GLclampd far_val);
-typedef void(APIENTRYP PFNDOLCLEARACCUMPROC)(GLfloat red, GLfloat green, GLfloat blue,
-                                             GLfloat alpha);
-typedef void(APIENTRYP PFNDOLACCUMPROC)(GLenum op, GLfloat value);
-typedef void(APIENTRYP PFNDOLMATRIXMODEPROC)(GLenum mode);
-typedef void(APIENTRYP PFNDOLORTHOPROC)(GLdouble left, GLdouble right, GLdouble bottom,
-                                        GLdouble top, GLdouble near_val, GLdouble far_val);
-typedef void(APIENTRYP PFNDOLFRUSTUMPROC)(GLdouble left, GLdouble right, GLdouble bottom,
-                                          GLdouble top, GLdouble near_val, GLdouble far_val);
 typedef void(APIENTRYP PFNDOLVIEWPORTPROC)(GLint x, GLint y, GLsizei width, GLsizei height);
-typedef void(APIENTRYP PFNDOLPUSHMATRIXPROC)(void);
-typedef void(APIENTRYP PFNDOLPOPMATRIXPROC)(void);
-typedef void(APIENTRYP PFNDOLLOADIDENTITYPROC)(void);
-typedef void(APIENTRYP PFNDOLLOADMATRIXDPROC)(const GLdouble* m);
-typedef void(APIENTRYP PFNDOLLOADMATRIXFPROC)(const GLfloat* m);
-typedef void(APIENTRYP PFNDOLMULTMATRIXDPROC)(const GLdouble* m);
-typedef void(APIENTRYP PFNDOLMULTMATRIXFPROC)(const GLfloat* m);
-typedef void(APIENTRYP PFNDOLROTATEDPROC)(GLdouble angle, GLdouble x, GLdouble y, GLdouble z);
-typedef void(APIENTRYP PFNDOLROTATEFPROC)(GLfloat angle, GLfloat x, GLfloat y, GLfloat z);
-typedef void(APIENTRYP PFNDOLSCALEDPROC)(GLdouble x, GLdouble y, GLdouble z);
-typedef void(APIENTRYP PFNDOLSCALEFPROC)(GLfloat x, GLfloat y, GLfloat z);
-typedef void(APIENTRYP PFNDOLTRANSLATEDPROC)(GLdouble x, GLdouble y, GLdouble z);
-typedef void(APIENTRYP PFNDOLTRANSLATEFPROC)(GLfloat x, GLfloat y, GLfloat z);
-typedef GLboolean(APIENTRYP PFNDOLISLISTPROC)(GLuint list);
-typedef void(APIENTRYP PFNDOLDELETELISTSPROC)(GLuint list, GLsizei range);
-typedef GLuint(APIENTRYP PFNDOLGENLISTSPROC)(GLsizei range);
-typedef void(APIENTRYP PFNDOLNEWLISTPROC)(GLuint list, GLenum mode);
-typedef void(APIENTRYP PFNDOLENDLISTPROC)(void);
-typedef void(APIENTRYP PFNDOLCALLLISTPROC)(GLuint list);
-typedef void(APIENTRYP PFNDOLCALLLISTSPROC)(GLsizei n, GLenum type, const GLvoid* lists);
-typedef void(APIENTRYP PFNDOLLISTBASEPROC)(GLuint base);
-typedef void(APIENTRYP PFNDOLBEGINPROC)(GLenum mode);
-typedef void(APIENTRYP PFNDOLENDPROC)(void);
-typedef void(APIENTRYP PFNDOLVERTEX2DPROC)(GLdouble x, GLdouble y);
-typedef void(APIENTRYP PFNDOLVERTEX2FPROC)(GLfloat x, GLfloat y);
-typedef void(APIENTRYP PFNDOLVERTEX2IPROC)(GLint x, GLint y);
-typedef void(APIENTRYP PFNDOLVERTEX2SPROC)(GLshort x, GLshort y);
-typedef void(APIENTRYP PFNDOLVERTEX3DPROC)(GLdouble x, GLdouble y, GLdouble z);
-typedef void(APIENTRYP PFNDOLVERTEX3FPROC)(GLfloat x, GLfloat y, GLfloat z);
-typedef void(APIENTRYP PFNDOLVERTEX3IPROC)(GLint x, GLint y, GLint z);
-typedef void(APIENTRYP PFNDOLVERTEX3SPROC)(GLshort x, GLshort y, GLshort z);
-typedef void(APIENTRYP PFNDOLVERTEX4DPROC)(GLdouble x, GLdouble y, GLdouble z, GLdouble w);
-typedef void(APIENTRYP PFNDOLVERTEX4FPROC)(GLfloat x, GLfloat y, GLfloat z, GLfloat w);
-typedef void(APIENTRYP PFNDOLVERTEX4IPROC)(GLint x, GLint y, GLint z, GLint w);
-typedef void(APIENTRYP PFNDOLVERTEX4SPROC)(GLshort x, GLshort y, GLshort z, GLshort w);
-typedef void(APIENTRYP PFNDOLVERTEX2DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLVERTEX2FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLVERTEX2IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLVERTEX2SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLVERTEX3DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLVERTEX3FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLVERTEX3IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLVERTEX3SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLVERTEX4DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLVERTEX4FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLVERTEX4IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLVERTEX4SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLNORMAL3BPROC)(GLbyte nx, GLbyte ny, GLbyte nz);
-typedef void(APIENTRYP PFNDOLNORMAL3DPROC)(GLdouble nx, GLdouble ny, GLdouble nz);
-typedef void(APIENTRYP PFNDOLNORMAL3FPROC)(GLfloat nx, GLfloat ny, GLfloat nz);
-typedef void(APIENTRYP PFNDOLNORMAL3IPROC)(GLint nx, GLint ny, GLint nz);
-typedef void(APIENTRYP PFNDOLNORMAL3SPROC)(GLshort nx, GLshort ny, GLshort nz);
-typedef void(APIENTRYP PFNDOLNORMAL3BVPROC)(const GLbyte* v);
-typedef void(APIENTRYP PFNDOLNORMAL3DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLNORMAL3FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLNORMAL3IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLNORMAL3SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLINDEXDPROC)(GLdouble c);
-typedef void(APIENTRYP PFNDOLINDEXFPROC)(GLfloat c);
-typedef void(APIENTRYP PFNDOLINDEXIPROC)(GLint c);
-typedef void(APIENTRYP PFNDOLINDEXSPROC)(GLshort c);
-typedef void(APIENTRYP PFNDOLINDEXUBPROC)(GLubyte c); /* 1.1 */
-typedef void(APIENTRYP PFNDOLINDEXDVPROC)(const GLdouble* c);
-typedef void(APIENTRYP PFNDOLINDEXFVPROC)(const GLfloat* c);
-typedef void(APIENTRYP PFNDOLINDEXIVPROC)(const GLint* c);
-typedef void(APIENTRYP PFNDOLINDEXSVPROC)(const GLshort* c);
+typedef void(APIENTRYP PFNDOLINDEXUBPROC)(GLubyte c);         /* 1.1 */
 typedef void(APIENTRYP PFNDOLINDEXUBVPROC)(const GLubyte* c); /* 1.1 */
-typedef void(APIENTRYP PFNDOLCOLOR3BPROC)(GLbyte red, GLbyte green, GLbyte blue);
-typedef void(APIENTRYP PFNDOLCOLOR3DPROC)(GLdouble red, GLdouble green, GLdouble blue);
-typedef void(APIENTRYP PFNDOLCOLOR3FPROC)(GLfloat red, GLfloat green, GLfloat blue);
-typedef void(APIENTRYP PFNDOLCOLOR3IPROC)(GLint red, GLint green, GLint blue);
-typedef void(APIENTRYP PFNDOLCOLOR3SPROC)(GLshort red, GLshort green, GLshort blue);
-typedef void(APIENTRYP PFNDOLCOLOR3UBPROC)(GLubyte red, GLubyte green, GLubyte blue);
-typedef void(APIENTRYP PFNDOLCOLOR3UIPROC)(GLuint red, GLuint green, GLuint blue);
-typedef void(APIENTRYP PFNDOLCOLOR3USPROC)(GLushort red, GLushort green, GLushort blue);
-typedef void(APIENTRYP PFNDOLCOLOR4BPROC)(GLbyte red, GLbyte green, GLbyte blue, GLbyte alpha);
-typedef void(APIENTRYP PFNDOLCOLOR4DPROC)(GLdouble red, GLdouble green, GLdouble blue,
-                                          GLdouble alpha);
-typedef void(APIENTRYP PFNDOLCOLOR4FPROC)(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
-typedef void(APIENTRYP PFNDOLCOLOR4IPROC)(GLint red, GLint green, GLint blue, GLint alpha);
-typedef void(APIENTRYP PFNDOLCOLOR4SPROC)(GLshort red, GLshort green, GLshort blue, GLshort alpha);
-typedef void(APIENTRYP PFNDOLCOLOR4UBPROC)(GLubyte red, GLubyte green, GLubyte blue, GLubyte alpha);
-typedef void(APIENTRYP PFNDOLCOLOR4UIPROC)(GLuint red, GLuint green, GLuint blue, GLuint alpha);
-typedef void(APIENTRYP PFNDOLCOLOR4USPROC)(GLushort red, GLushort green, GLushort blue,
-                                           GLushort alpha);
-typedef void(APIENTRYP PFNDOLCOLOR3BVPROC)(const GLbyte* v);
-typedef void(APIENTRYP PFNDOLCOLOR3DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLCOLOR3FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLCOLOR3IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLCOLOR3SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLCOLOR3UBVPROC)(const GLubyte* v);
-typedef void(APIENTRYP PFNDOLCOLOR3UIVPROC)(const GLuint* v);
-typedef void(APIENTRYP PFNDOLCOLOR3USVPROC)(const GLushort* v);
-typedef void(APIENTRYP PFNDOLCOLOR4BVPROC)(const GLbyte* v);
-typedef void(APIENTRYP PFNDOLCOLOR4DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLCOLOR4FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLCOLOR4IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLCOLOR4SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLCOLOR4UBVPROC)(const GLubyte* v);
-typedef void(APIENTRYP PFNDOLCOLOR4UIVPROC)(const GLuint* v);
-typedef void(APIENTRYP PFNDOLCOLOR4USVPROC)(const GLushort* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD1DPROC)(GLdouble s);
-typedef void(APIENTRYP PFNDOLTEXCOORD1FPROC)(GLfloat s);
-typedef void(APIENTRYP PFNDOLTEXCOORD1IPROC)(GLint s);
-typedef void(APIENTRYP PFNDOLTEXCOORD1SPROC)(GLshort s);
-typedef void(APIENTRYP PFNDOLTEXCOORD2DPROC)(GLdouble s, GLdouble t);
-typedef void(APIENTRYP PFNDOLTEXCOORD2FPROC)(GLfloat s, GLfloat t);
-typedef void(APIENTRYP PFNDOLTEXCOORD2IPROC)(GLint s, GLint t);
-typedef void(APIENTRYP PFNDOLTEXCOORD2SPROC)(GLshort s, GLshort t);
-typedef void(APIENTRYP PFNDOLTEXCOORD3DPROC)(GLdouble s, GLdouble t, GLdouble r);
-typedef void(APIENTRYP PFNDOLTEXCOORD3FPROC)(GLfloat s, GLfloat t, GLfloat r);
-typedef void(APIENTRYP PFNDOLTEXCOORD3IPROC)(GLint s, GLint t, GLint r);
-typedef void(APIENTRYP PFNDOLTEXCOORD3SPROC)(GLshort s, GLshort t, GLshort r);
-typedef void(APIENTRYP PFNDOLTEXCOORD4DPROC)(GLdouble s, GLdouble t, GLdouble r, GLdouble q);
-typedef void(APIENTRYP PFNDOLTEXCOORD4FPROC)(GLfloat s, GLfloat t, GLfloat r, GLfloat q);
-typedef void(APIENTRYP PFNDOLTEXCOORD4IPROC)(GLint s, GLint t, GLint r, GLint q);
-typedef void(APIENTRYP PFNDOLTEXCOORD4SPROC)(GLshort s, GLshort t, GLshort r, GLshort q);
-typedef void(APIENTRYP PFNDOLTEXCOORD1DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD1FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD1IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD1SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD2DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD2FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD2IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD2SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD3DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD3FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD3IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD3SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD4DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD4FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD4IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLTEXCOORD4SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS2DPROC)(GLdouble x, GLdouble y);
-typedef void(APIENTRYP PFNDOLRASTERPOS2FPROC)(GLfloat x, GLfloat y);
-typedef void(APIENTRYP PFNDOLRASTERPOS2IPROC)(GLint x, GLint y);
-typedef void(APIENTRYP PFNDOLRASTERPOS2SPROC)(GLshort x, GLshort y);
-typedef void(APIENTRYP PFNDOLRASTERPOS3DPROC)(GLdouble x, GLdouble y, GLdouble z);
-typedef void(APIENTRYP PFNDOLRASTERPOS3FPROC)(GLfloat x, GLfloat y, GLfloat z);
-typedef void(APIENTRYP PFNDOLRASTERPOS3IPROC)(GLint x, GLint y, GLint z);
-typedef void(APIENTRYP PFNDOLRASTERPOS3SPROC)(GLshort x, GLshort y, GLshort z);
-typedef void(APIENTRYP PFNDOLRASTERPOS4DPROC)(GLdouble x, GLdouble y, GLdouble z, GLdouble w);
-typedef void(APIENTRYP PFNDOLRASTERPOS4FPROC)(GLfloat x, GLfloat y, GLfloat z, GLfloat w);
-typedef void(APIENTRYP PFNDOLRASTERPOS4IPROC)(GLint x, GLint y, GLint z, GLint w);
-typedef void(APIENTRYP PFNDOLRASTERPOS4SPROC)(GLshort x, GLshort y, GLshort z, GLshort w);
-typedef void(APIENTRYP PFNDOLRASTERPOS2DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS2FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS2IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS2SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS3DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS3FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS3IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS3SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS4DVPROC)(const GLdouble* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS4FVPROC)(const GLfloat* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS4IVPROC)(const GLint* v);
-typedef void(APIENTRYP PFNDOLRASTERPOS4SVPROC)(const GLshort* v);
-typedef void(APIENTRYP PFNDOLRECTDPROC)(GLdouble x1, GLdouble y1, GLdouble x2, GLdouble y2);
-typedef void(APIENTRYP PFNDOLRECTFPROC)(GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2);
-typedef void(APIENTRYP PFNDOLRECTIPROC)(GLint x1, GLint y1, GLint x2, GLint y2);
-typedef void(APIENTRYP PFNDOLRECTSPROC)(GLshort x1, GLshort y1, GLshort x2, GLshort y2);
-typedef void(APIENTRYP PFNDOLRECTDVPROC)(const GLdouble* v1, const GLdouble* v2);
-typedef void(APIENTRYP PFNDOLRECTFVPROC)(const GLfloat* v1, const GLfloat* v2);
-typedef void(APIENTRYP PFNDOLRECTIVPROC)(const GLint* v1, const GLint* v2);
-typedef void(APIENTRYP PFNDOLRECTSVPROC)(const GLshort* v1, const GLshort* v2);
-typedef void(APIENTRYP PFNDOLVERTEXPOINTERPROC)(GLint size, GLenum type, GLsizei stride,
-                                                const GLvoid* ptr);
-typedef void(APIENTRYP PFNDOLNORMALPOINTERPROC)(GLenum type, GLsizei stride, const GLvoid* ptr);
-typedef void(APIENTRYP PFNDOLCOLORPOINTERPROC)(GLint size, GLenum type, GLsizei stride,
-                                               const GLvoid* ptr);
-typedef void(APIENTRYP PFNDOLINDEXPOINTERPROC)(GLenum type, GLsizei stride, const GLvoid* ptr);
-typedef void(APIENTRYP PFNDOLTEXCOORDPOINTERPROC)(GLint size, GLenum type, GLsizei stride,
-                                                  const GLvoid* ptr);
-typedef void(APIENTRYP PFNDOLEDGEFLAGPOINTERPROC)(GLsizei stride, const GLvoid* ptr);
-typedef void(APIENTRYP PFNDOLGETPOINTERVPROC)(GLenum pname, GLvoid** params);
-typedef void(APIENTRYP PFNDOLARRAYELEMENTPROC)(GLint i);
 typedef void(APIENTRYP PFNDOLDRAWARRAYSPROC)(GLenum mode, GLint first, GLsizei count);
 typedef void(APIENTRYP PFNDOLDRAWELEMENTSPROC)(GLenum mode, GLsizei count, GLenum type,
                                                const GLvoid* indices);
-typedef void(APIENTRYP PFNDOLINTERLEAVEDARRAYSPROC)(GLenum format, GLsizei stride,
-                                                    const GLvoid* pointer);
-typedef void(APIENTRYP PFNDOLSHADEMODELPROC)(GLenum mode);
-typedef void(APIENTRYP PFNDOLLIGHTFPROC)(GLenum light, GLenum pname, GLfloat param);
-typedef void(APIENTRYP PFNDOLLIGHTIPROC)(GLenum light, GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLLIGHTFVPROC)(GLenum light, GLenum pname, const GLfloat* params);
-typedef void(APIENTRYP PFNDOLLIGHTIVPROC)(GLenum light, GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLGETLIGHTFVPROC)(GLenum light, GLenum pname, GLfloat* params);
-typedef void(APIENTRYP PFNDOLGETLIGHTIVPROC)(GLenum light, GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLLIGHTMODELFPROC)(GLenum pname, GLfloat param);
-typedef void(APIENTRYP PFNDOLLIGHTMODELIPROC)(GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLLIGHTMODELFVPROC)(GLenum pname, const GLfloat* params);
-typedef void(APIENTRYP PFNDOLLIGHTMODELIVPROC)(GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLMATERIALFPROC)(GLenum face, GLenum pname, GLfloat param);
-typedef void(APIENTRYP PFNDOLMATERIALIPROC)(GLenum face, GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLMATERIALFVPROC)(GLenum face, GLenum pname, const GLfloat* params);
-typedef void(APIENTRYP PFNDOLMATERIALIVPROC)(GLenum face, GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLGETMATERIALFVPROC)(GLenum face, GLenum pname, GLfloat* params);
-typedef void(APIENTRYP PFNDOLGETMATERIALIVPROC)(GLenum face, GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLCOLORMATERIALPROC)(GLenum face, GLenum mode);
-typedef void(APIENTRYP PFNDOLPIXELZOOMPROC)(GLfloat xfactor, GLfloat yfactor);
-typedef void(APIENTRYP PFNDOLPIXELSTOREFPROC)(GLenum pname, GLfloat param);
 typedef void(APIENTRYP PFNDOLPIXELSTOREIPROC)(GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLPIXELTRANSFERFPROC)(GLenum pname, GLfloat param);
-typedef void(APIENTRYP PFNDOLPIXELTRANSFERIPROC)(GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLPIXELMAPFVPROC)(GLenum map, GLsizei mapsize, const GLfloat* values);
-typedef void(APIENTRYP PFNDOLPIXELMAPUIVPROC)(GLenum map, GLsizei mapsize, const GLuint* values);
-typedef void(APIENTRYP PFNDOLPIXELMAPUSVPROC)(GLenum map, GLsizei mapsize, const GLushort* values);
-typedef void(APIENTRYP PFNDOLGETPIXELMAPFVPROC)(GLenum map, GLfloat* values);
-typedef void(APIENTRYP PFNDOLGETPIXELMAPUIVPROC)(GLenum map, GLuint* values);
-typedef void(APIENTRYP PFNDOLGETPIXELMAPUSVPROC)(GLenum map, GLushort* values);
-typedef void(APIENTRYP PFNDOLBITMAPPROC)(GLsizei width, GLsizei height, GLfloat xorig,
-                                         GLfloat yorig, GLfloat xmove, GLfloat ymove,
-                                         const GLubyte* bitmap);
 typedef void(APIENTRYP PFNDOLREADPIXELSPROC)(GLint x, GLint y, GLsizei width, GLsizei height,
                                              GLenum format, GLenum type, GLvoid* pixels);
-typedef void(APIENTRYP PFNDOLDRAWPIXELSPROC)(GLsizei width, GLsizei height, GLenum format,
-                                             GLenum type, const GLvoid* pixels);
-typedef void(APIENTRYP PFNDOLCOPYPIXELSPROC)(GLint x, GLint y, GLsizei width, GLsizei height,
-                                             GLenum type);
-typedef void(APIENTRYP PFNDOLSTENCILFUNCPROC)(GLenum func, GLint ref, GLuint mask);
-typedef void(APIENTRYP PFNDOLSTENCILMASKPROC)(GLuint mask);
-typedef void(APIENTRYP PFNDOLSTENCILOPPROC)(GLenum fail, GLenum zfail, GLenum zpass);
-typedef void(APIENTRYP PFNDOLCLEARSTENCILPROC)(GLint s);
-typedef void(APIENTRYP PFNDOLTEXGENDPROC)(GLenum coord, GLenum pname, GLdouble param);
-typedef void(APIENTRYP PFNDOLTEXGENFPROC)(GLenum coord, GLenum pname, GLfloat param);
-typedef void(APIENTRYP PFNDOLTEXGENIPROC)(GLenum coord, GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLTEXGENDVPROC)(GLenum coord, GLenum pname, const GLdouble* params);
-typedef void(APIENTRYP PFNDOLTEXGENFVPROC)(GLenum coord, GLenum pname, const GLfloat* params);
-typedef void(APIENTRYP PFNDOLTEXGENIVPROC)(GLenum coord, GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLGETTEXGENDVPROC)(GLenum coord, GLenum pname, GLdouble* params);
-typedef void(APIENTRYP PFNDOLGETTEXGENFVPROC)(GLenum coord, GLenum pname, GLfloat* params);
-typedef void(APIENTRYP PFNDOLGETTEXGENIVPROC)(GLenum coord, GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLTEXENVFPROC)(GLenum target, GLenum pname, GLfloat param);
-typedef void(APIENTRYP PFNDOLTEXENVIPROC)(GLenum target, GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLTEXENVFVPROC)(GLenum target, GLenum pname, const GLfloat* params);
-typedef void(APIENTRYP PFNDOLTEXENVIVPROC)(GLenum target, GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLGETTEXENVFVPROC)(GLenum target, GLenum pname, GLfloat* params);
-typedef void(APIENTRYP PFNDOLGETTEXENVIVPROC)(GLenum target, GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLTEXPARAMETERFPROC)(GLenum target, GLenum pname, GLfloat param);
 typedef void(APIENTRYP PFNDOLTEXPARAMETERIPROC)(GLenum target, GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLTEXPARAMETERFVPROC)(GLenum target, GLenum pname,
-                                                 const GLfloat* params);
-typedef void(APIENTRYP PFNDOLTEXPARAMETERIVPROC)(GLenum target, GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLGETTEXPARAMETERFVPROC)(GLenum target, GLenum pname, GLfloat* params);
-typedef void(APIENTRYP PFNDOLGETTEXPARAMETERIVPROC)(GLenum target, GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLGETTEXLEVELPARAMETERFVPROC)(GLenum target, GLint level, GLenum pname,
-                                                         GLfloat* params);
-typedef void(APIENTRYP PFNDOLGETTEXLEVELPARAMETERIVPROC)(GLenum target, GLint level, GLenum pname,
-                                                         GLint* params);
-typedef void(APIENTRYP PFNDOLTEXIMAGE1DPROC)(GLenum target, GLint level, GLint internalFormat,
-                                             GLsizei width, GLint border, GLenum format,
-                                             GLenum type, const GLvoid* pixels);
 typedef void(APIENTRYP PFNDOLTEXIMAGE2DPROC)(GLenum target, GLint level, GLint internalFormat,
                                              GLsizei width, GLsizei height, GLint border,
                                              GLenum format, GLenum type, const GLvoid* pixels);
-typedef void(APIENTRYP PFNDOLGETTEXIMAGEPROC)(GLenum target, GLint level, GLenum format,
-                                              GLenum type, GLvoid* pixels);
 typedef void(APIENTRYP PFNDOLGENTEXTURESPROC)(GLsizei n, GLuint* textures);
 typedef void(APIENTRYP PFNDOLDELETETEXTURESPROC)(GLsizei n, const GLuint* textures);
 typedef void(APIENTRYP PFNDOLBINDTEXTUREPROC)(GLenum target, GLuint texture);
-typedef void(APIENTRYP PFNDOLPRIORITIZETEXTURESPROC)(GLsizei n, const GLuint* textures,
-                                                     const GLclampf* priorities);
-typedef GLboolean(APIENTRYP PFNDOLARETEXTURESRESIDENTPROC)(GLsizei n, const GLuint* textures,
-                                                           GLboolean* residences);
-typedef GLboolean(APIENTRYP PFNDOLISTEXTUREPROC)(GLuint texture);
-typedef void(APIENTRYP PFNDOLTEXSUBIMAGE1DPROC)(GLenum target, GLint level, GLint xoffset,
-                                                GLsizei width, GLenum format, GLenum type,
-                                                const GLvoid* pixels);
 typedef void(APIENTRYP PFNDOLTEXSUBIMAGE2DPROC)(GLenum target, GLint level, GLint xoffset,
                                                 GLint yoffset, GLsizei width, GLsizei height,
                                                 GLenum format, GLenum type, const GLvoid* pixels);
-typedef void(APIENTRYP PFNDOLCOPYTEXIMAGE1DPROC)(GLenum target, GLint level, GLenum internalformat,
-                                                 GLint x, GLint y, GLsizei width, GLint border);
-typedef void(APIENTRYP PFNDOLCOPYTEXIMAGE2DPROC)(GLenum target, GLint level, GLenum internalformat,
-                                                 GLint x, GLint y, GLsizei width, GLsizei height,
-                                                 GLint border);
-typedef void(APIENTRYP PFNDOLCOPYTEXSUBIMAGE1DPROC)(GLenum target, GLint level, GLint xoffset,
-                                                    GLint x, GLint y, GLsizei width);
-typedef void(APIENTRYP PFNDOLCOPYTEXSUBIMAGE2DPROC)(GLenum target, GLint level, GLint xoffset,
-                                                    GLint yoffset, GLint x, GLint y, GLsizei width,
-                                                    GLsizei height);
-typedef void(APIENTRYP PFNDOLMAP1DPROC)(GLenum target, GLdouble u1, GLdouble u2, GLint stride,
-                                        GLint order, const GLdouble* points);
-typedef void(APIENTRYP PFNDOLMAP1FPROC)(GLenum target, GLfloat u1, GLfloat u2, GLint stride,
-                                        GLint order, const GLfloat* points);
-typedef void(APIENTRYP PFNDOLMAP2DPROC)(GLenum target, GLdouble u1, GLdouble u2, GLint ustride,
-                                        GLint uorder, GLdouble v1, GLdouble v2, GLint vstride,
-                                        GLint vorder, const GLdouble* points);
-typedef void(APIENTRYP PFNDOLMAP2FPROC)(GLenum target, GLfloat u1, GLfloat u2, GLint ustride,
-                                        GLint uorder, GLfloat v1, GLfloat v2, GLint vstride,
-                                        GLint vorder, const GLfloat* points);
-typedef void(APIENTRYP PFNDOLGETMAPDVPROC)(GLenum target, GLenum query, GLdouble* v);
-typedef void(APIENTRYP PFNDOLGETMAPFVPROC)(GLenum target, GLenum query, GLfloat* v);
-typedef void(APIENTRYP PFNDOLGETMAPIVPROC)(GLenum target, GLenum query, GLint* v);
-typedef void(APIENTRYP PFNDOLEVALCOORD1DPROC)(GLdouble u);
-typedef void(APIENTRYP PFNDOLEVALCOORD1FPROC)(GLfloat u);
-typedef void(APIENTRYP PFNDOLEVALCOORD1DVPROC)(const GLdouble* u);
-typedef void(APIENTRYP PFNDOLEVALCOORD1FVPROC)(const GLfloat* u);
-typedef void(APIENTRYP PFNDOLEVALCOORD2DPROC)(GLdouble u, GLdouble v);
-typedef void(APIENTRYP PFNDOLEVALCOORD2FPROC)(GLfloat u, GLfloat v);
-typedef void(APIENTRYP PFNDOLEVALCOORD2DVPROC)(const GLdouble* u);
-typedef void(APIENTRYP PFNDOLEVALCOORD2FVPROC)(const GLfloat* u);
-typedef void(APIENTRYP PFNDOLMAPGRID1DPROC)(GLint un, GLdouble u1, GLdouble u2);
-typedef void(APIENTRYP PFNDOLMAPGRID1FPROC)(GLint un, GLfloat u1, GLfloat u2);
-typedef void(APIENTRYP PFNDOLMAPGRID2DPROC)(GLint un, GLdouble u1, GLdouble u2, GLint vn,
-                                            GLdouble v1, GLdouble v2);
-typedef void(APIENTRYP PFNDOLMAPGRID2FPROC)(GLint un, GLfloat u1, GLfloat u2, GLint vn, GLfloat v1,
-                                            GLfloat v2);
-typedef void(APIENTRYP PFNDOLEVALPOINT1PROC)(GLint i);
-typedef void(APIENTRYP PFNDOLEVALPOINT2PROC)(GLint i, GLint j);
-typedef void(APIENTRYP PFNDOLEVALMESH1PROC)(GLenum mode, GLint i1, GLint i2);
-typedef void(APIENTRYP PFNDOLEVALMESH2PROC)(GLenum mode, GLint i1, GLint i2, GLint j1, GLint j2);
-typedef void(APIENTRYP PFNDOLFOGFPROC)(GLenum pname, GLfloat param);
-typedef void(APIENTRYP PFNDOLFOGIPROC)(GLenum pname, GLint param);
-typedef void(APIENTRYP PFNDOLFOGFVPROC)(GLenum pname, const GLfloat* params);
-typedef void(APIENTRYP PFNDOLFOGIVPROC)(GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLFEEDBACKBUFFERPROC)(GLsizei size, GLenum type, GLfloat* buffer);
-typedef void(APIENTRYP PFNDOLPASSTHROUGHPROC)(GLfloat token);
-typedef void(APIENTRYP PFNDOLSELECTBUFFERPROC)(GLsizei size, GLuint* buffer);
-typedef void(APIENTRYP PFNDOLINITNAMESPROC)(void);
-typedef void(APIENTRYP PFNDOLLOADNAMEPROC)(GLuint name);
-typedef void(APIENTRYP PFNDOLPUSHNAMEPROC)(GLuint name);
-typedef void(APIENTRYP PFNDOLPOPNAMEPROC)(void);
 
-extern PFNDOLCLEARINDEXPROC dolClearIndex;
 extern PFNDOLCLEARCOLORPROC dolClearColor;
 extern PFNDOLCLEARPROC dolClear;
-extern PFNDOLINDEXMASKPROC dolIndexMask;
 extern PFNDOLCOLORMASKPROC dolColorMask;
-extern PFNDOLALPHAFUNCPROC dolAlphaFunc;
-extern PFNDOLBLENDFUNCPROC dolBlendFunc;
 extern PFNDOLLOGICOPPROC dolLogicOp;
-extern PFNDOLCULLFACEPROC dolCullFace;
 extern PFNDOLFRONTFACEPROC dolFrontFace;
-extern PFNDOLPOINTSIZEPROC dolPointSize;
-extern PFNDOLLINEWIDTHPROC dolLineWidth;
-extern PFNDOLLINESTIPPLEPROC dolLineStipple;
-extern PFNDOLPOLYGONMODEPROC dolPolygonMode;
-extern PFNDOLPOLYGONOFFSETPROC dolPolygonOffset;
-extern PFNDOLPOLYGONSTIPPLEPROC dolPolygonStipple;
-extern PFNDOLGETPOLYGONSTIPPLEPROC dolGetPolygonStipple;
-extern PFNDOLEDGEFLAGPROC dolEdgeFlag;
-extern PFNDOLEDGEFLAGVPROC dolEdgeFlagv;
 extern PFNDOLSCISSORPROC dolScissor;
-extern PFNDOLCLIPPLANEPROC dolClipPlane;
-extern PFNDOLGETCLIPPLANEPROC dolGetClipPlane;
 extern PFNDOLDRAWBUFFERPROC dolDrawBuffer;
-extern PFNDOLREADBUFFERPROC dolReadBuffer;
 extern PFNDOLENABLEPROC dolEnable;
 extern PFNDOLDISABLEPROC dolDisable;
-extern PFNDOLISENABLEDPROC dolIsEnabled;
 extern PFNDOLENABLECLIENTSTATEPROC dolEnableClientState;
-extern PFNDOLDISABLECLIENTSTATEPROC dolDisableClientState;
-extern PFNDOLGETBOOLEANVPROC dolGetBooleanv;
-extern PFNDOLGETDOUBLEVPROC dolGetDoublev;
-extern PFNDOLGETFLOATVPROC dolGetFloatv;
 extern PFNDOLGETINTEGERVPROC dolGetIntegerv;
-extern PFNDOLPUSHATTRIBPROC dolPushAttrib;
-extern PFNDOLPOPATTRIBPROC dolPopAttrib;
-extern PFNDOLPUSHCLIENTATTRIBPROC dolPushClientAttrib;
-extern PFNDOLPOPCLIENTATTRIBPROC dolPopClientAttrib;
-extern PFNDOLRENDERMODEPROC dolRenderMode;
 extern PFNDOLGETERRORPROC dolGetError;
 extern PFNDOLGETSTRINGPROC dolGetString;
 extern PFNDOLFINISHPROC dolFinish;
 extern PFNDOLFLUSHPROC dolFlush;
-extern PFNDOLHINTPROC dolHint;
 extern PFNDOLCLEARDEPTHPROC dolClearDepth;
 extern PFNDOLDEPTHFUNCPROC dolDepthFunc;
 extern PFNDOLDEPTHMASKPROC dolDepthMask;
 extern PFNDOLDEPTHRANGEPROC dolDepthRange;
-extern PFNDOLCLEARACCUMPROC dolClearAccum;
-extern PFNDOLACCUMPROC dolAccum;
-extern PFNDOLMATRIXMODEPROC dolMatrixMode;
-extern PFNDOLORTHOPROC dolOrtho;
-extern PFNDOLFRUSTUMPROC dolFrustum;
 extern PFNDOLVIEWPORTPROC dolViewport;
-extern PFNDOLPUSHMATRIXPROC dolPushMatrix;
-extern PFNDOLPOPMATRIXPROC dolPopMatrix;
-extern PFNDOLLOADIDENTITYPROC dolLoadIdentity;
-extern PFNDOLLOADMATRIXDPROC dolLoadMatrixd;
-extern PFNDOLLOADMATRIXFPROC dolLoadMatrixf;
-extern PFNDOLMULTMATRIXDPROC dolMultMatrixd;
-extern PFNDOLMULTMATRIXFPROC dolMultMatrixf;
-extern PFNDOLROTATEDPROC dolRotated;
-extern PFNDOLROTATEFPROC dolRotatef;
-extern PFNDOLSCALEDPROC dolScaled;
-extern PFNDOLSCALEFPROC dolScalef;
-extern PFNDOLTRANSLATEDPROC dolTranslated;
-extern PFNDOLTRANSLATEFPROC dolTranslatef;
-extern PFNDOLISLISTPROC dolIsList;
-extern PFNDOLDELETELISTSPROC dolDeleteLists;
-extern PFNDOLGENLISTSPROC dolGenLists;
-extern PFNDOLNEWLISTPROC dolNewList;
-extern PFNDOLENDLISTPROC dolEndList;
-extern PFNDOLCALLLISTPROC dolCallList;
-extern PFNDOLCALLLISTSPROC dolCallLists;
-extern PFNDOLLISTBASEPROC dolListBase;
-extern PFNDOLBEGINPROC dolBegin;
-extern PFNDOLENDPROC dolEnd;
-extern PFNDOLVERTEX2DPROC dolVertex2d;
-extern PFNDOLVERTEX2FPROC dolVertex2f;
-extern PFNDOLVERTEX2IPROC dolVertex2i;
-extern PFNDOLVERTEX2SPROC dolVertex2s;
-extern PFNDOLVERTEX3DPROC dolVertex3d;
-extern PFNDOLVERTEX3FPROC dolVertex3f;
-extern PFNDOLVERTEX3IPROC dolVertex3i;
-extern PFNDOLVERTEX3SPROC dolVertex3s;
-extern PFNDOLVERTEX4DPROC dolVertex4d;
-extern PFNDOLVERTEX4FPROC dolVertex4f;
-extern PFNDOLVERTEX4IPROC dolVertex4i;
-extern PFNDOLVERTEX4SPROC dolVertex4s;
-extern PFNDOLVERTEX2DVPROC dolVertex2dv;
-extern PFNDOLVERTEX2FVPROC dolVertex2fv;
-extern PFNDOLVERTEX2IVPROC dolVertex2iv;
-extern PFNDOLVERTEX2SVPROC dolVertex2sv;
-extern PFNDOLVERTEX3DVPROC dolVertex3dv;
-extern PFNDOLVERTEX3FVPROC dolVertex3fv;
-extern PFNDOLVERTEX3IVPROC dolVertex3iv;
-extern PFNDOLVERTEX3SVPROC dolVertex3sv;
-extern PFNDOLVERTEX4DVPROC dolVertex4dv;
-extern PFNDOLVERTEX4FVPROC dolVertex4fv;
-extern PFNDOLVERTEX4IVPROC dolVertex4iv;
-extern PFNDOLVERTEX4SVPROC dolVertex4sv;
-extern PFNDOLNORMAL3BPROC dolNormal3b;
-extern PFNDOLNORMAL3DPROC dolNormal3d;
-extern PFNDOLNORMAL3FPROC dolNormal3f;
-extern PFNDOLNORMAL3IPROC dolNormal3i;
-extern PFNDOLNORMAL3SPROC dolNormal3s;
-extern PFNDOLNORMAL3BVPROC dolNormal3bv;
-extern PFNDOLNORMAL3DVPROC dolNormal3dv;
-extern PFNDOLNORMAL3FVPROC dolNormal3fv;
-extern PFNDOLNORMAL3IVPROC dolNormal3iv;
-extern PFNDOLNORMAL3SVPROC dolNormal3sv;
-extern PFNDOLINDEXDPROC dolIndexd;
-extern PFNDOLINDEXFPROC dolIndexf;
-extern PFNDOLINDEXIPROC dolIndexi;
-extern PFNDOLINDEXSPROC dolIndexs;
-extern PFNDOLINDEXUBPROC dolIndexub;
-extern PFNDOLINDEXDVPROC dolIndexdv;
-extern PFNDOLINDEXFVPROC dolIndexfv;
-extern PFNDOLINDEXIVPROC dolIndexiv;
-extern PFNDOLINDEXSVPROC dolIndexsv;
-extern PFNDOLINDEXUBVPROC dolIndexubv;
-extern PFNDOLCOLOR3BPROC dolColor3b;
-extern PFNDOLCOLOR3DPROC dolColor3d;
-extern PFNDOLCOLOR3FPROC dolColor3f;
-extern PFNDOLCOLOR3IPROC dolColor3i;
-extern PFNDOLCOLOR3SPROC dolColor3s;
-extern PFNDOLCOLOR3UBPROC dolColor3ub;
-extern PFNDOLCOLOR3UIPROC dolColor3ui;
-extern PFNDOLCOLOR3USPROC dolColor3us;
-extern PFNDOLCOLOR4BPROC dolColor4b;
-extern PFNDOLCOLOR4DPROC dolColor4d;
-extern PFNDOLCOLOR4FPROC dolColor4f;
-extern PFNDOLCOLOR4IPROC dolColor4i;
-extern PFNDOLCOLOR4SPROC dolColor4s;
-extern PFNDOLCOLOR4UBPROC dolColor4ub;
-extern PFNDOLCOLOR4UIPROC dolColor4ui;
-extern PFNDOLCOLOR4USPROC dolColor4us;
-extern PFNDOLCOLOR3BVPROC dolColor3bv;
-extern PFNDOLCOLOR3DVPROC dolColor3dv;
-extern PFNDOLCOLOR3FVPROC dolColor3fv;
-extern PFNDOLCOLOR3IVPROC dolColor3iv;
-extern PFNDOLCOLOR3SVPROC dolColor3sv;
-extern PFNDOLCOLOR3UBVPROC dolColor3ubv;
-extern PFNDOLCOLOR3UIVPROC dolColor3uiv;
-extern PFNDOLCOLOR3USVPROC dolColor3usv;
-extern PFNDOLCOLOR4BVPROC dolColor4bv;
-extern PFNDOLCOLOR4DVPROC dolColor4dv;
-extern PFNDOLCOLOR4FVPROC dolColor4fv;
-extern PFNDOLCOLOR4IVPROC dolColor4iv;
-extern PFNDOLCOLOR4SVPROC dolColor4sv;
-extern PFNDOLCOLOR4UBVPROC dolColor4ubv;
-extern PFNDOLCOLOR4UIVPROC dolColor4uiv;
-extern PFNDOLCOLOR4USVPROC dolColor4usv;
-extern PFNDOLTEXCOORD1DPROC dolTexCoord1d;
-extern PFNDOLTEXCOORD1FPROC dolTexCoord1f;
-extern PFNDOLTEXCOORD1IPROC dolTexCoord1i;
-extern PFNDOLTEXCOORD1SPROC dolTexCoord1s;
-extern PFNDOLTEXCOORD2DPROC dolTexCoord2d;
-extern PFNDOLTEXCOORD2FPROC dolTexCoord2f;
-extern PFNDOLTEXCOORD2IPROC dolTexCoord2i;
-extern PFNDOLTEXCOORD2SPROC dolTexCoord2s;
-extern PFNDOLTEXCOORD3DPROC dolTexCoord3d;
-extern PFNDOLTEXCOORD3FPROC dolTexCoord3f;
-extern PFNDOLTEXCOORD3IPROC dolTexCoord3i;
-extern PFNDOLTEXCOORD3SPROC dolTexCoord3s;
-extern PFNDOLTEXCOORD4DPROC dolTexCoord4d;
-extern PFNDOLTEXCOORD4FPROC dolTexCoord4f;
-extern PFNDOLTEXCOORD4IPROC dolTexCoord4i;
-extern PFNDOLTEXCOORD4SPROC dolTexCoord4s;
-extern PFNDOLTEXCOORD1DVPROC dolTexCoord1dv;
-extern PFNDOLTEXCOORD1FVPROC dolTexCoord1fv;
-extern PFNDOLTEXCOORD1IVPROC dolTexCoord1iv;
-extern PFNDOLTEXCOORD1SVPROC dolTexCoord1sv;
-extern PFNDOLTEXCOORD2DVPROC dolTexCoord2dv;
-extern PFNDOLTEXCOORD2FVPROC dolTexCoord2fv;
-extern PFNDOLTEXCOORD2IVPROC dolTexCoord2iv;
-extern PFNDOLTEXCOORD2SVPROC dolTexCoord2sv;
-extern PFNDOLTEXCOORD3DVPROC dolTexCoord3dv;
-extern PFNDOLTEXCOORD3FVPROC dolTexCoord3fv;
-extern PFNDOLTEXCOORD3IVPROC dolTexCoord3iv;
-extern PFNDOLTEXCOORD3SVPROC dolTexCoord3sv;
-extern PFNDOLTEXCOORD4DVPROC dolTexCoord4dv;
-extern PFNDOLTEXCOORD4FVPROC dolTexCoord4fv;
-extern PFNDOLTEXCOORD4IVPROC dolTexCoord4iv;
-extern PFNDOLTEXCOORD4SVPROC dolTexCoord4sv;
-extern PFNDOLRASTERPOS2DPROC dolRasterPos2d;
-extern PFNDOLRASTERPOS2FPROC dolRasterPos2f;
-extern PFNDOLRASTERPOS2IPROC dolRasterPos2i;
-extern PFNDOLRASTERPOS2SPROC dolRasterPos2s;
-extern PFNDOLRASTERPOS3DPROC dolRasterPos3d;
-extern PFNDOLRASTERPOS3FPROC dolRasterPos3f;
-extern PFNDOLRASTERPOS3IPROC dolRasterPos3i;
-extern PFNDOLRASTERPOS3SPROC dolRasterPos3s;
-extern PFNDOLRASTERPOS4DPROC dolRasterPos4d;
-extern PFNDOLRASTERPOS4FPROC dolRasterPos4f;
-extern PFNDOLRASTERPOS4IPROC dolRasterPos4i;
-extern PFNDOLRASTERPOS4SPROC dolRasterPos4s;
-extern PFNDOLRASTERPOS2DVPROC dolRasterPos2dv;
-extern PFNDOLRASTERPOS2FVPROC dolRasterPos2fv;
-extern PFNDOLRASTERPOS2IVPROC dolRasterPos2iv;
-extern PFNDOLRASTERPOS2SVPROC dolRasterPos2sv;
-extern PFNDOLRASTERPOS3DVPROC dolRasterPos3dv;
-extern PFNDOLRASTERPOS3FVPROC dolRasterPos3fv;
-extern PFNDOLRASTERPOS3IVPROC dolRasterPos3iv;
-extern PFNDOLRASTERPOS3SVPROC dolRasterPos3sv;
-extern PFNDOLRASTERPOS4DVPROC dolRasterPos4dv;
-extern PFNDOLRASTERPOS4FVPROC dolRasterPos4fv;
-extern PFNDOLRASTERPOS4IVPROC dolRasterPos4iv;
-extern PFNDOLRASTERPOS4SVPROC dolRasterPos4sv;
-extern PFNDOLRECTDPROC dolRectd;
-extern PFNDOLRECTFPROC dolRectf;
-extern PFNDOLRECTIPROC dolRecti;
-extern PFNDOLRECTSPROC dolRects;
-extern PFNDOLRECTDVPROC dolRectdv;
-extern PFNDOLRECTFVPROC dolRectfv;
-extern PFNDOLRECTIVPROC dolRectiv;
-extern PFNDOLRECTSVPROC dolRectsv;
-extern PFNDOLVERTEXPOINTERPROC dolVertexPointer;
-extern PFNDOLNORMALPOINTERPROC dolNormalPointer;
-extern PFNDOLCOLORPOINTERPROC dolColorPointer;
-extern PFNDOLINDEXPOINTERPROC dolIndexPointer;
-extern PFNDOLTEXCOORDPOINTERPROC dolTexCoordPointer;
-extern PFNDOLEDGEFLAGPOINTERPROC dolEdgeFlagPointer;
-extern PFNDOLGETPOINTERVPROC dolGetPointerv;
-extern PFNDOLARRAYELEMENTPROC dolArrayElement;
 extern PFNDOLDRAWARRAYSPROC dolDrawArrays;
 extern PFNDOLDRAWELEMENTSPROC dolDrawElements;
-extern PFNDOLINTERLEAVEDARRAYSPROC dolInterleavedArrays;
-extern PFNDOLSHADEMODELPROC dolShadeModel;
-extern PFNDOLLIGHTFPROC dolLightf;
-extern PFNDOLLIGHTIPROC dolLighti;
-extern PFNDOLLIGHTFVPROC dolLightfv;
-extern PFNDOLLIGHTIVPROC dolLightiv;
-extern PFNDOLGETLIGHTFVPROC dolGetLightfv;
-extern PFNDOLGETLIGHTIVPROC dolGetLightiv;
-extern PFNDOLLIGHTMODELFPROC dolLightModelf;
-extern PFNDOLLIGHTMODELIPROC dolLightModeli;
-extern PFNDOLLIGHTMODELFVPROC dolLightModelfv;
-extern PFNDOLLIGHTMODELIVPROC dolLightModeliv;
-extern PFNDOLMATERIALFPROC dolMaterialf;
-extern PFNDOLMATERIALIPROC dolMateriali;
-extern PFNDOLMATERIALFVPROC dolMaterialfv;
-extern PFNDOLMATERIALIVPROC dolMaterialiv;
-extern PFNDOLGETMATERIALFVPROC dolGetMaterialfv;
-extern PFNDOLGETMATERIALIVPROC dolGetMaterialiv;
-extern PFNDOLCOLORMATERIALPROC dolColorMaterial;
-extern PFNDOLPIXELZOOMPROC dolPixelZoom;
-extern PFNDOLPIXELSTOREFPROC dolPixelStoref;
 extern PFNDOLPIXELSTOREIPROC dolPixelStorei;
-extern PFNDOLPIXELTRANSFERFPROC dolPixelTransferf;
-extern PFNDOLPIXELTRANSFERIPROC dolPixelTransferi;
-extern PFNDOLPIXELMAPFVPROC dolPixelMapfv;
-extern PFNDOLPIXELMAPUIVPROC dolPixelMapuiv;
-extern PFNDOLPIXELMAPUSVPROC dolPixelMapusv;
-extern PFNDOLGETPIXELMAPFVPROC dolGetPixelMapfv;
-extern PFNDOLGETPIXELMAPUIVPROC dolGetPixelMapuiv;
-extern PFNDOLGETPIXELMAPUSVPROC dolGetPixelMapusv;
-extern PFNDOLBITMAPPROC dolBitmap;
 extern PFNDOLREADPIXELSPROC dolReadPixels;
-extern PFNDOLDRAWPIXELSPROC dolDrawPixels;
-extern PFNDOLCOPYPIXELSPROC dolCopyPixels;
-extern PFNDOLSTENCILFUNCPROC dolStencilFunc;
-extern PFNDOLSTENCILMASKPROC dolStencilMask;
-extern PFNDOLSTENCILOPPROC dolStencilOp;
-extern PFNDOLCLEARSTENCILPROC dolClearStencil;
-extern PFNDOLTEXGENDPROC dolTexGend;
-extern PFNDOLTEXGENFPROC dolTexGenf;
-extern PFNDOLTEXGENIPROC dolTexGeni;
-extern PFNDOLTEXGENDVPROC dolTexGendv;
-extern PFNDOLTEXGENFVPROC dolTexGenfv;
-extern PFNDOLTEXGENIVPROC dolTexGeniv;
-extern PFNDOLGETTEXGENDVPROC dolGetTexGendv;
-extern PFNDOLGETTEXGENFVPROC dolGetTexGenfv;
-extern PFNDOLGETTEXGENIVPROC dolGetTexGeniv;
-extern PFNDOLTEXENVFPROC dolTexEnvf;
-extern PFNDOLTEXENVIPROC dolTexEnvi;
-extern PFNDOLTEXENVFVPROC dolTexEnvfv;
-extern PFNDOLTEXENVIVPROC dolTexEnviv;
-extern PFNDOLGETTEXENVFVPROC dolGetTexEnvfv;
-extern PFNDOLGETTEXENVIVPROC dolGetTexEnviv;
-extern PFNDOLTEXPARAMETERFPROC dolTexParameterf;
 extern PFNDOLTEXPARAMETERIPROC dolTexParameteri;
-extern PFNDOLTEXPARAMETERFVPROC dolTexParameterfv;
-extern PFNDOLTEXPARAMETERIVPROC dolTexParameteriv;
-extern PFNDOLGETTEXPARAMETERFVPROC dolGetTexParameterfv;
-extern PFNDOLGETTEXPARAMETERIVPROC dolGetTexParameteriv;
-extern PFNDOLGETTEXLEVELPARAMETERFVPROC dolGetTexLevelParameterfv;
-extern PFNDOLGETTEXLEVELPARAMETERIVPROC dolGetTexLevelParameteriv;
-extern PFNDOLTEXIMAGE1DPROC dolTexImage1D;
 extern PFNDOLTEXIMAGE2DPROC dolTexImage2D;
-extern PFNDOLGETTEXIMAGEPROC dolGetTexImage;
 extern PFNDOLGENTEXTURESPROC dolGenTextures;
 extern PFNDOLDELETETEXTURESPROC dolDeleteTextures;
 extern PFNDOLBINDTEXTUREPROC dolBindTexture;
-extern PFNDOLPRIORITIZETEXTURESPROC dolPrioritizeTextures;
-extern PFNDOLARETEXTURESRESIDENTPROC dolAreTexturesResident;
-extern PFNDOLISTEXTUREPROC dolIsTexture;
-extern PFNDOLTEXSUBIMAGE1DPROC dolTexSubImage1D;
 extern PFNDOLTEXSUBIMAGE2DPROC dolTexSubImage2D;
-extern PFNDOLCOPYTEXIMAGE1DPROC dolCopyTexImage1D;
-extern PFNDOLCOPYTEXIMAGE2DPROC dolCopyTexImage2D;
-extern PFNDOLCOPYTEXSUBIMAGE1DPROC dolCopyTexSubImage1D;
-extern PFNDOLCOPYTEXSUBIMAGE2DPROC dolCopyTexSubImage2D;
-extern PFNDOLMAP1DPROC dolMap1d;
-extern PFNDOLMAP1FPROC dolMap1f;
-extern PFNDOLMAP2DPROC dolMap2d;
-extern PFNDOLMAP2FPROC dolMap2f;
-extern PFNDOLGETMAPDVPROC dolGetMapdv;
-extern PFNDOLGETMAPFVPROC dolGetMapfv;
-extern PFNDOLGETMAPIVPROC dolGetMapiv;
-extern PFNDOLEVALCOORD1DPROC dolEvalCoord1d;
-extern PFNDOLEVALCOORD1FPROC dolEvalCoord1f;
-extern PFNDOLEVALCOORD1DVPROC dolEvalCoord1dv;
-extern PFNDOLEVALCOORD1FVPROC dolEvalCoord1fv;
-extern PFNDOLEVALCOORD2DPROC dolEvalCoord2d;
-extern PFNDOLEVALCOORD2FPROC dolEvalCoord2f;
-extern PFNDOLEVALCOORD2DVPROC dolEvalCoord2dv;
-extern PFNDOLEVALCOORD2FVPROC dolEvalCoord2fv;
-extern PFNDOLMAPGRID1DPROC dolMapGrid1d;
-extern PFNDOLMAPGRID1FPROC dolMapGrid1f;
-extern PFNDOLMAPGRID2DPROC dolMapGrid2d;
-extern PFNDOLMAPGRID2FPROC dolMapGrid2f;
-extern PFNDOLEVALPOINT1PROC dolEvalPoint1;
-extern PFNDOLEVALPOINT2PROC dolEvalPoint2;
-extern PFNDOLEVALMESH1PROC dolEvalMesh1;
-extern PFNDOLEVALMESH2PROC dolEvalMesh2;
-extern PFNDOLFOGFPROC dolFogf;
-extern PFNDOLFOGIPROC dolFogi;
-extern PFNDOLFOGFVPROC dolFogfv;
-extern PFNDOLFOGIVPROC dolFogiv;
-extern PFNDOLFEEDBACKBUFFERPROC dolFeedbackBuffer;
-extern PFNDOLPASSTHROUGHPROC dolPassThrough;
-extern PFNDOLSELECTBUFFERPROC dolSelectBuffer;
-extern PFNDOLINITNAMESPROC dolInitNames;
-extern PFNDOLLOADNAMEPROC dolLoadName;
-extern PFNDOLPUSHNAMEPROC dolPushName;
-extern PFNDOLPOPNAMEPROC dolPopName;
 
-#define glClearIndex dolClearIndex
 #define glClearColor dolClearColor
 #define glClear dolClear
-#define glIndexMask dolIndexMask
 #define glColorMask dolColorMask
-#define glAlphaFunc dolAlphaFunc
-#define glBlendFunc dolBlendFunc
 #define glLogicOp dolLogicOp
-#define glCullFace dolCullFace
 #define glFrontFace dolFrontFace
-#define glPointSize dolPointSize
-#define glLineWidth dolLineWidth
-#define glLineStipple dolLineStipple
-#define glPolygonMode dolPolygonMode
-#define glPolygonOffset dolPolygonOffset
-#define glPolygonStipple dolPolygonStipple
-#define glGetPolygonStipple dolGetPolygonStipple
-#define glEdgeFlag dolEdgeFlag
-#define glEdgeFlagv dolEdgeFlagv
 #define glScissor dolScissor
-#define glClipPlane dolClipPlane
-#define glGetClipPlane dolGetClipPlane
 #define glDrawBuffer dolDrawBuffer
-#define glReadBuffer dolReadBuffer
 #define glEnable dolEnable
 #define glDisable dolDisable
-#define glIsEnabled dolIsEnabled
 #define glEnableClientState dolEnableClientState
-#define glDisableClientState dolDisableClientState
-#define glGetBooleanv dolGetBooleanv
-#define glGetDoublev dolGetDoublev
-#define glGetFloatv dolGetFloatv
 #define glGetIntegerv dolGetIntegerv
-#define glPushAttrib dolPushAttrib
-#define glPopAttrib dolPopAttrib
-#define glPushClientAttrib dolPushClientAttrib
-#define glPopClientAttrib dolPopClientAttrib
-#define glRenderMode dolRenderMode
 #define glGetError dolGetError
 #define glGetString dolGetString
 #define glFinish dolFinish
 #define glFlush dolFlush
-#define glHint dolHint
 #define glClearDepth dolClearDepth
 #define glDepthFunc dolDepthFunc
 #define glDepthMask dolDepthMask
 #define glDepthRange dolDepthRange
-#define glClearAccum dolClearAccum
-#define glAccum dolAccum
-#define glMatrixMode dolMatrixMode
-#define glOrtho dolOrtho
-#define glFrustum dolFrustum
 #define glViewport dolViewport
-#define glPushMatrix dolPushMatrix
-#define glPopMatrix dolPopMatrix
-#define glLoadIdentity dolLoadIdentity
-#define glLoadMatrixd dolLoadMatrixd
-#define glLoadMatrixf dolLoadMatrixf
-#define glMultMatrixd dolMultMatrixd
-#define glMultMatrixf dolMultMatrixf
-#define glRotated dolRotated
-#define glRotatef dolRotatef
-#define glScaled dolScaled
-#define glScalef dolScalef
-#define glTranslated dolTranslated
-#define glTranslatef dolTranslatef
-#define glIsList dolIsList
-#define glDeleteLists dolDeleteLists
-#define glGenLists dolGenLists
-#define glNewList dolNewList
-#define glEndList dolEndList
-#define glCallList dolCallList
-#define glCallLists dolCallLists
-#define glListBase dolListBase
-#define glBegin dolBegin
-#define glEnd dolEnd
-#define glVertex2d dolVertex2d
-#define glVertex2f dolVertex2f
-#define glVertex2i dolVertex2i
-#define glVertex2s dolVertex2s
-#define glVertex3d dolVertex3d
-#define glVertex3f dolVertex3f
-#define glVertex3i dolVertex3i
-#define glVertex3s dolVertex3s
-#define glVertex4d dolVertex4d
-#define glVertex4f dolVertex4f
-#define glVertex4i dolVertex4i
-#define glVertex4s dolVertex4s
-#define glVertex2dv dolVertex2dv
-#define glVertex2fv dolVertex2fv
-#define glVertex2iv dolVertex2iv
-#define glVertex2sv dolVertex2sv
-#define glVertex3dv dolVertex3dv
-#define glVertex3fv dolVertex3fv
-#define glVertex3iv dolVertex3iv
-#define glVertex3sv dolVertex3sv
-#define glVertex4dv dolVertex4dv
-#define glVertex4fv dolVertex4fv
-#define glVertex4iv dolVertex4iv
-#define glVertex4sv dolVertex4sv
-#define glNormal3b dolNormal3b
-#define glNormal3d dolNormal3d
-#define glNormal3f dolNormal3f
-#define glNormal3i dolNormal3i
-#define glNormal3s dolNormal3s
-#define glNormal3bv dolNormal3bv
-#define glNormal3dv dolNormal3dv
-#define glNormal3fv dolNormal3fv
-#define glNormal3iv dolNormal3iv
-#define glNormal3sv dolNormal3sv
-#define glIndexd dolIndexd
-#define glIndexf dolIndexf
-#define glIndexi dolIndexi
-#define glIndexs dolIndexs
-#define glIndexub dolIndexub
-#define glIndexdv dolIndexdv
-#define glIndexfv dolIndexfv
-#define glIndexiv dolIndexiv
-#define glIndexsv dolIndexsv
-#define glIndexubv dolIndexubv
-#define glColor3b dolColor3b
-#define glColor3d dolColor3d
-#define glColor3f dolColor3f
-#define glColor3i dolColor3i
-#define glColor3s dolColor3s
-#define glColor3ub dolColor3ub
-#define glColor3ui dolColor3ui
-#define glColor3us dolColor3us
-#define glColor4b dolColor4b
-#define glColor4d dolColor4d
-#define glColor4f dolColor4f
-#define glColor4i dolColor4i
-#define glColor4s dolColor4s
-#define glColor4ub dolColor4ub
-#define glColor4ui dolColor4ui
-#define glColor4us dolColor4us
-#define glColor3bv dolColor3bv
-#define glColor3dv dolColor3dv
-#define glColor3fv dolColor3fv
-#define glColor3iv dolColor3iv
-#define glColor3sv dolColor3sv
-#define glColor3ubv dolColor3ubv
-#define glColor3uiv dolColor3uiv
-#define glColor3usv dolColor3usv
-#define glColor4bv dolColor4bv
-#define glColor4dv dolColor4dv
-#define glColor4fv dolColor4fv
-#define glColor4iv dolColor4iv
-#define glColor4sv dolColor4sv
-#define glColor4ubv dolColor4ubv
-#define glColor4uiv dolColor4uiv
-#define glColor4usv dolColor4usv
-#define glTexCoord1d dolTexCoord1d
-#define glTexCoord1f dolTexCoord1f
-#define glTexCoord1i dolTexCoord1i
-#define glTexCoord1s dolTexCoord1s
-#define glTexCoord2d dolTexCoord2d
-#define glTexCoord2f dolTexCoord2f
-#define glTexCoord2i dolTexCoord2i
-#define glTexCoord2s dolTexCoord2s
-#define glTexCoord3d dolTexCoord3d
-#define glTexCoord3f dolTexCoord3f
-#define glTexCoord3i dolTexCoord3i
-#define glTexCoord3s dolTexCoord3s
-#define glTexCoord4d dolTexCoord4d
-#define glTexCoord4f dolTexCoord4f
-#define glTexCoord4i dolTexCoord4i
-#define glTexCoord4s dolTexCoord4s
-#define glTexCoord1dv dolTexCoord1dv
-#define glTexCoord1fv dolTexCoord1fv
-#define glTexCoord1iv dolTexCoord1iv
-#define glTexCoord1sv dolTexCoord1sv
-#define glTexCoord2dv dolTexCoord2dv
-#define glTexCoord2fv dolTexCoord2fv
-#define glTexCoord2iv dolTexCoord2iv
-#define glTexCoord2sv dolTexCoord2sv
-#define glTexCoord3dv dolTexCoord3dv
-#define glTexCoord3fv dolTexCoord3fv
-#define glTexCoord3iv dolTexCoord3iv
-#define glTexCoord3sv dolTexCoord3sv
-#define glTexCoord4dv dolTexCoord4dv
-#define glTexCoord4fv dolTexCoord4fv
-#define glTexCoord4iv dolTexCoord4iv
-#define glTexCoord4sv dolTexCoord4sv
-#define glRasterPos2d dolRasterPos2d
-#define glRasterPos2f dolRasterPos2f
-#define glRasterPos2i dolRasterPos2i
-#define glRasterPos2s dolRasterPos2s
-#define glRasterPos3d dolRasterPos3d
-#define glRasterPos3f dolRasterPos3f
-#define glRasterPos3i dolRasterPos3i
-#define glRasterPos3s dolRasterPos3s
-#define glRasterPos4d dolRasterPos4d
-#define glRasterPos4f dolRasterPos4f
-#define glRasterPos4i dolRasterPos4i
-#define glRasterPos4s dolRasterPos4s
-#define glRasterPos2dv dolRasterPos2dv
-#define glRasterPos2fv dolRasterPos2fv
-#define glRasterPos2iv dolRasterPos2iv
-#define glRasterPos2sv dolRasterPos2sv
-#define glRasterPos3dv dolRasterPos3dv
-#define glRasterPos3fv dolRasterPos3fv
-#define glRasterPos3iv dolRasterPos3iv
-#define glRasterPos3sv dolRasterPos3sv
-#define glRasterPos4dv dolRasterPos4dv
-#define glRasterPos4fv dolRasterPos4fv
-#define glRasterPos4iv dolRasterPos4iv
-#define glRasterPos4sv dolRasterPos4sv
-#define glRectd dolRectd
-#define glRectf dolRectf
-#define glRecti dolRecti
-#define glRects dolRects
-#define glRectdv dolRectdv
-#define glRectfv dolRectfv
-#define glRectiv dolRectiv
-#define glRectsv dolRectsv
-#define glVertexPointer dolVertexPointer
-#define glNormalPointer dolNormalPointer
-#define glColorPointer dolColorPointer
-#define glIndexPointer dolIndexPointer
-#define glTexCoordPointer dolTexCoordPointer
-#define glEdgeFlagPointer dolEdgeFlagPointer
-#define glGetPointerv dolGetPointerv
-#define glArrayElement dolArrayElement
 #define glDrawArrays dolDrawArrays
 #define glDrawElements dolDrawElements
-#define glInterleavedArrays dolInterleavedArrays
-#define glShadeModel dolShadeModel
-#define glLightf dolLightf
-#define glLighti dolLighti
-#define glLightfv dolLightfv
-#define glLightiv dolLightiv
-#define glGetLightfv dolGetLightfv
-#define glGetLightiv dolGetLightiv
-#define glLightModelf dolLightModelf
-#define glLightModeli dolLightModeli
-#define glLightModelfv dolLightModelfv
-#define glLightModeliv dolLightModeliv
-#define glMaterialf dolMaterialf
-#define glMateriali dolMateriali
-#define glMaterialfv dolMaterialfv
-#define glMaterialiv dolMaterialiv
-#define glGetMaterialfv dolGetMaterialfv
-#define glGetMaterialiv dolGetMaterialiv
-#define glColorMaterial dolColorMaterial
-#define glPixelZoom dolPixelZoom
-#define glPixelStoref dolPixelStoref
 #define glPixelStorei dolPixelStorei
-#define glPixelTransferf dolPixelTransferf
-#define glPixelTransferi dolPixelTransferi
-#define glPixelMapfv dolPixelMapfv
-#define glPixelMapuiv dolPixelMapuiv
-#define glPixelMapusv dolPixelMapusv
-#define glGetPixelMapfv dolGetPixelMapfv
-#define glGetPixelMapuiv dolGetPixelMapuiv
-#define glGetPixelMapusv dolGetPixelMapusv
-#define glBitmap dolBitmap
 #define glReadPixels dolReadPixels
-#define glDrawPixels dolDrawPixels
-#define glCopyPixels dolCopyPixels
-#define glStencilFunc dolStencilFunc
-#define glStencilMask dolStencilMask
-#define glStencilOp dolStencilOp
-#define glClearStencil dolClearStencil
-#define glTexGend dolTexGend
-#define glTexGenf dolTexGenf
-#define glTexGeni dolTexGeni
-#define glTexGendv dolTexGendv
-#define glTexGenfv dolTexGenfv
-#define glTexGeniv dolTexGeniv
-#define glGetTexGendv dolGetTexGendv
-#define glGetTexGenfv dolGetTexGenfv
-#define glGetTexGeniv dolGetTexGeniv
-#define glTexEnvf dolTexEnvf
-#define glTexEnvi dolTexEnvi
-#define glTexEnvfv dolTexEnvfv
-#define glTexEnviv dolTexEnviv
-#define glGetTexEnvfv dolGetTexEnvfv
-#define glGetTexEnviv dolGetTexEnviv
-#define glTexParameterf dolTexParameterf
 #define glTexParameteri dolTexParameteri
-#define glTexParameterfv dolTexParameterfv
-#define glTexParameteriv dolTexParameteriv
-#define glGetTexParameterfv dolGetTexParameterfv
-#define glGetTexParameteriv dolGetTexParameteriv
-#define glGetTexLevelParameterfv dolGetTexLevelParameterfv
-#define glGetTexLevelParameteriv dolGetTexLevelParameteriv
-#define glTexImage1D dolTexImage1D
 #define glTexImage2D dolTexImage2D
-#define glGetTexImage dolGetTexImage
 #define glGenTextures dolGenTextures
 #define glDeleteTextures dolDeleteTextures
 #define glBindTexture dolBindTexture
-#define glPrioritizeTextures dolPrioritizeTextures
-#define glAreTexturesResident dolAreTexturesResident
-#define glIsTexture dolIsTexture
-#define glTexSubImage1D dolTexSubImage1D
 #define glTexSubImage2D dolTexSubImage2D
-#define glCopyTexImage1D dolCopyTexImage1D
-#define glCopyTexImage2D dolCopyTexImage2D
-#define glCopyTexSubImage1D dolCopyTexSubImage1D
-#define glCopyTexSubImage2D dolCopyTexSubImage2D
-#define glMap1d dolMap1d
-#define glMap1f dolMap1f
-#define glMap2d dolMap2d
-#define glMap2f dolMap2f
-#define glGetMapdv dolGetMapdv
-#define glGetMapfv dolGetMapfv
-#define glGetMapiv dolGetMapiv
-#define glEvalCoord1d dolEvalCoord1d
-#define glEvalCoord1f dolEvalCoord1f
-#define glEvalCoord1dv dolEvalCoord1dv
-#define glEvalCoord1fv dolEvalCoord1fv
-#define glEvalCoord2d dolEvalCoord2d
-#define glEvalCoord2f dolEvalCoord2f
-#define glEvalCoord2dv dolEvalCoord2dv
-#define glEvalCoord2fv dolEvalCoord2fv
-#define glMapGrid1d dolMapGrid1d
-#define glMapGrid1f dolMapGrid1f
-#define glMapGrid2d dolMapGrid2d
-#define glMapGrid2f dolMapGrid2f
-#define glEvalPoint1 dolEvalPoint1
-#define glEvalPoint2 dolEvalPoint2
-#define glEvalMesh1 dolEvalMesh1
-#define glEvalMesh2 dolEvalMesh2
-#define glFogf dolFogf
-#define glFogi dolFogi
-#define glFogfv dolFogfv
-#define glFogiv dolFogiv
-#define glFeedbackBuffer dolFeedbackBuffer
-#define glPassThrough dolPassThrough
-#define glSelectBuffer dolSelectBuffer
-#define glInitNames dolInitNames
-#define glLoadName dolLoadName
-#define glPushName dolPushName
-#define glPopName dolPopName

@@ -47,9 +47,6 @@
 #define GL_MAX_3D_TEXTURE_SIZE 0x8073
 #define GL_TEXTURE_BINDING_3D 0x806A
 
-typedef void(APIENTRYP PFNDOLDRAWRANGEELEMENTSPROC)(GLenum mode, GLuint start, GLuint end,
-                                                    GLsizei count, GLenum type,
-                                                    const GLvoid* indices);
 typedef void(APIENTRYP PFNDOLTEXIMAGE3DPROC)(GLenum target, GLint level, GLint internalformat,
                                              GLsizei width, GLsizei height, GLsizei depth,
                                              GLint border, GLenum format, GLenum type,
@@ -58,16 +55,9 @@ typedef void(APIENTRYP PFNDOLTEXSUBIMAGE3DPROC)(GLenum target, GLint level, GLin
                                                 GLint yoffset, GLint zoffset, GLsizei width,
                                                 GLsizei height, GLsizei depth, GLenum format,
                                                 GLenum type, const GLvoid* pixels);
-typedef void(APIENTRYP PFNDOLCOPYTEXSUBIMAGE3DPROC)(GLenum target, GLint level, GLint xoffset,
-                                                    GLint yoffset, GLint zoffset, GLint x, GLint y,
-                                                    GLsizei width, GLsizei height);
 
-extern PFNDOLCOPYTEXSUBIMAGE3DPROC dolCopyTexSubImage3D;
-extern PFNDOLDRAWRANGEELEMENTSPROC dolDrawRangeElements;
 extern PFNDOLTEXIMAGE3DPROC dolTexImage3D;
 extern PFNDOLTEXSUBIMAGE3DPROC dolTexSubImage3D;
 
-#define glCopyTexSubImage3D dolCopyTexSubImage3D
-#define glDrawRangeElements dolDrawRangeElements
 #define glTexImage3D dolTexImage3D
 #define glTexSubImage3D dolTexSubImage3D

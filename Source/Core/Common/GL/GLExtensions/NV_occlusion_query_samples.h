@@ -12,24 +12,18 @@
 
 typedef void(APIENTRYP PFNDOLGENOCCLUSIONQUERIESNVPROC)(GLsizei n, GLuint* ids);
 typedef void(APIENTRYP PFNDOLDELETEOCCLUSIONQUERIESNVPROC)(GLsizei n, const GLuint* ids);
-typedef GLboolean(APIENTRYP PFNDOLISOCCLUSIONQUERYNVPROC)(GLuint id);
 typedef void(APIENTRYP PFNDOLBEGINOCCLUSIONQUERYNVPROC)(GLuint id);
 typedef void(APIENTRYP PFNDOLENDOCCLUSIONQUERYNVPROC)(void);
-typedef void(APIENTRYP PFNDOLGETOCCLUSIONQUERYIVNVPROC)(GLuint id, GLenum pname, GLint* params);
 typedef void(APIENTRYP PFNDOLGETOCCLUSIONQUERYUIVNVPROC)(GLuint id, GLenum pname, GLuint* params);
 
 extern PFNDOLGENOCCLUSIONQUERIESNVPROC dolGenOcclusionQueriesNV;
 extern PFNDOLDELETEOCCLUSIONQUERIESNVPROC dolDeleteOcclusionQueriesNV;
-extern PFNDOLISOCCLUSIONQUERYNVPROC dolIsOcclusionQueryNV;
 extern PFNDOLBEGINOCCLUSIONQUERYNVPROC dolBeginOcclusionQueryNV;
 extern PFNDOLENDOCCLUSIONQUERYNVPROC dolEndOcclusionQueryNV;
-extern PFNDOLGETOCCLUSIONQUERYIVNVPROC dolGetOcclusionQueryivNV;
 extern PFNDOLGETOCCLUSIONQUERYUIVNVPROC dolGetOcclusionQueryuivNV;
 
 #define glGenOcclusionQueriesNV dolGenOcclusionQueriesNV
 #define glDeleteOcclusionQueriesNV dolDeleteOcclusionQueriesNV
-#define glIsOcclusionQueryNV dolIsOcclusionQueryNV
 #define glBeginOcclusionQueryNV dolBeginOcclusionQueryNV
 #define glEndOcclusionQueryNV dolEndOcclusionQueryNV
-#define glGetOcclusionQueryivNV dolGetOcclusionQueryivNV
 #define glGetOcclusionQueryuivNV dolGetOcclusionQueryuivNV

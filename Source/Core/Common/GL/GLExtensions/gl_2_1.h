@@ -28,30 +28,3 @@
 #define GL_COMPRESSED_SRGB_ALPHA 0x8C49
 #define GL_COMPRESSED_SLUMINANCE 0x8C4A
 #define GL_COMPRESSED_SLUMINANCE_ALPHA 0x8C4B
-
-typedef void(APIENTRYP PFNDOLUNIFORMMATRIX2X3FVPROC)(GLint location, GLsizei count,
-                                                     GLboolean transpose, const GLfloat* value);
-typedef void(APIENTRYP PFNDOLUNIFORMMATRIX2X4FVPROC)(GLint location, GLsizei count,
-                                                     GLboolean transpose, const GLfloat* value);
-typedef void(APIENTRYP PFNDOLUNIFORMMATRIX3X2FVPROC)(GLint location, GLsizei count,
-                                                     GLboolean transpose, const GLfloat* value);
-typedef void(APIENTRYP PFNDOLUNIFORMMATRIX3X4FVPROC)(GLint location, GLsizei count,
-                                                     GLboolean transpose, const GLfloat* value);
-typedef void(APIENTRYP PFNDOLUNIFORMMATRIX4X2FVPROC)(GLint location, GLsizei count,
-                                                     GLboolean transpose, const GLfloat* value);
-typedef void(APIENTRYP PFNDOLUNIFORMMATRIX4X3FVPROC)(GLint location, GLsizei count,
-                                                     GLboolean transpose, const GLfloat* value);
-
-extern PFNDOLUNIFORMMATRIX2X3FVPROC dolUniformMatrix2x3fv;
-extern PFNDOLUNIFORMMATRIX2X4FVPROC dolUniformMatrix2x4fv;
-extern PFNDOLUNIFORMMATRIX3X2FVPROC dolUniformMatrix3x2fv;
-extern PFNDOLUNIFORMMATRIX3X4FVPROC dolUniformMatrix3x4fv;
-extern PFNDOLUNIFORMMATRIX4X2FVPROC dolUniformMatrix4x2fv;
-extern PFNDOLUNIFORMMATRIX4X3FVPROC dolUniformMatrix4x3fv;
-
-#define glUniformMatrix2x3fv dolUniformMatrix2x3fv
-#define glUniformMatrix2x4fv dolUniformMatrix2x4fv
-#define glUniformMatrix3x2fv dolUniformMatrix3x2fv
-#define glUniformMatrix3x4fv dolUniformMatrix3x4fv
-#define glUniformMatrix4x2fv dolUniformMatrix4x2fv
-#define glUniformMatrix4x3fv dolUniformMatrix4x3fv

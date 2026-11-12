@@ -245,116 +245,20 @@
 #define GL_CLAMP_FRAGMENT_COLOR 0x891B
 #define GL_ALPHA_INTEGER 0x8D97
 
-typedef void(APIENTRYP PFNDOLCOLORMASKIPROC)(GLuint index, GLboolean r, GLboolean g, GLboolean b,
-                                             GLboolean a);
-typedef void(APIENTRYP PFNDOLGETBOOLEANI_VPROC)(GLenum target, GLuint index, GLboolean* data);
-typedef void(APIENTRYP PFNDOLGETINTEGERI_VPROC)(GLenum target, GLuint index, GLint* data);
-typedef void(APIENTRYP PFNDOLENABLEIPROC)(GLenum target, GLuint index);
-typedef void(APIENTRYP PFNDOLDISABLEIPROC)(GLenum target, GLuint index);
-typedef GLboolean(APIENTRYP PFNDOLISENABLEDIPROC)(GLenum target, GLuint index);
-typedef void(APIENTRYP PFNDOLBEGINTRANSFORMFEEDBACKPROC)(GLenum primitiveMode);
-typedef void(APIENTRYP PFNDOLENDTRANSFORMFEEDBACKPROC)(void);
 typedef void(APIENTRYP PFNDOLBINDBUFFERRANGEPROC)(GLenum target, GLuint index, GLuint buffer,
                                                   GLintptr offset, GLsizeiptr size);
 typedef void(APIENTRYP PFNDOLBINDBUFFERBASEPROC)(GLenum target, GLuint index, GLuint buffer);
-typedef void(APIENTRYP PFNDOLTRANSFORMFEEDBACKVARYINGSPROC)(GLuint program, GLsizei count,
-                                                            const GLchar* const* varyings,
-                                                            GLenum bufferMode);
-typedef void(APIENTRYP PFNDOLGETTRANSFORMFEEDBACKVARYINGPROC)(GLuint program, GLuint index,
-                                                              GLsizei bufSize, GLsizei* length,
-                                                              GLsizei* size, GLenum* type,
-                                                              GLchar* name);
-typedef void(APIENTRYP PFNDOLCLAMPCOLORPROC)(GLenum target, GLenum clamp);
-typedef void(APIENTRYP PFNDOLBEGINCONDITIONALRENDERPROC)(GLuint id, GLenum mode);
-typedef void(APIENTRYP PFNDOLENDCONDITIONALRENDERPROC)(void);
 typedef void(APIENTRYP PFNDOLVERTEXATTRIBIPOINTERPROC)(GLuint index, GLint size, GLenum type,
                                                        GLsizei stride, const void* pointer);
-typedef void(APIENTRYP PFNDOLGETVERTEXATTRIBIIVPROC)(GLuint index, GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLGETVERTEXATTRIBIUIVPROC)(GLuint index, GLenum pname, GLuint* params);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI1IPROC)(GLuint index, GLint x);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI2IPROC)(GLuint index, GLint x, GLint y);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI3IPROC)(GLuint index, GLint x, GLint y, GLint z);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4IPROC)(GLuint index, GLint x, GLint y, GLint z, GLint w);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI1UIPROC)(GLuint index, GLuint x);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI2UIPROC)(GLuint index, GLuint x, GLuint y);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI3UIPROC)(GLuint index, GLuint x, GLuint y, GLuint z);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4UIPROC)(GLuint index, GLuint x, GLuint y, GLuint z,
-                                                   GLuint w);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI1IVPROC)(GLuint index, const GLint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI2IVPROC)(GLuint index, const GLint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI3IVPROC)(GLuint index, const GLint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4IVPROC)(GLuint index, const GLint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI1UIVPROC)(GLuint index, const GLuint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI2UIVPROC)(GLuint index, const GLuint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI3UIVPROC)(GLuint index, const GLuint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4UIVPROC)(GLuint index, const GLuint* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4BVPROC)(GLuint index, const GLbyte* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4SVPROC)(GLuint index, const GLshort* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4UBVPROC)(GLuint index, const GLubyte* v);
-typedef void(APIENTRYP PFNDOLVERTEXATTRIBI4USVPROC)(GLuint index, const GLushort* v);
-typedef void(APIENTRYP PFNDOLGETUNIFORMUIVPROC)(GLuint program, GLint location, GLuint* params);
-typedef void(APIENTRYP PFNDOLBINDFRAGDATALOCATIONPROC)(GLuint program, GLuint color,
-                                                       const GLchar* name);
-typedef GLint(APIENTRYP PFNDOLGETFRAGDATALOCATIONPROC)(GLuint program, const GLchar* name);
-typedef void(APIENTRYP PFNDOLUNIFORM1UIPROC)(GLint location, GLuint v0);
-typedef void(APIENTRYP PFNDOLUNIFORM2UIPROC)(GLint location, GLuint v0, GLuint v1);
-typedef void(APIENTRYP PFNDOLUNIFORM3UIPROC)(GLint location, GLuint v0, GLuint v1, GLuint v2);
-typedef void(APIENTRYP PFNDOLUNIFORM4UIPROC)(GLint location, GLuint v0, GLuint v1, GLuint v2,
-                                             GLuint v3);
-typedef void(APIENTRYP PFNDOLUNIFORM1UIVPROC)(GLint location, GLsizei count, const GLuint* value);
-typedef void(APIENTRYP PFNDOLUNIFORM2UIVPROC)(GLint location, GLsizei count, const GLuint* value);
-typedef void(APIENTRYP PFNDOLUNIFORM3UIVPROC)(GLint location, GLsizei count, const GLuint* value);
-typedef void(APIENTRYP PFNDOLUNIFORM4UIVPROC)(GLint location, GLsizei count, const GLuint* value);
-typedef void(APIENTRYP PFNDOLTEXPARAMETERIIVPROC)(GLenum target, GLenum pname, const GLint* params);
-typedef void(APIENTRYP PFNDOLTEXPARAMETERIUIVPROC)(GLenum target, GLenum pname,
-                                                   const GLuint* params);
-typedef void(APIENTRYP PFNDOLGETTEXPARAMETERIIVPROC)(GLenum target, GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLGETTEXPARAMETERIUIVPROC)(GLenum target, GLenum pname, GLuint* params);
-typedef void(APIENTRYP PFNDOLCLEARBUFFERIVPROC)(GLenum buffer, GLint drawbuffer,
-                                                const GLint* value);
-typedef void(APIENTRYP PFNDOLCLEARBUFFERUIVPROC)(GLenum buffer, GLint drawbuffer,
-                                                 const GLuint* value);
-typedef void(APIENTRYP PFNDOLCLEARBUFFERFVPROC)(GLenum buffer, GLint drawbuffer,
-                                                const GLfloat* value);
-typedef void(APIENTRYP PFNDOLCLEARBUFFERFIPROC)(GLenum buffer, GLint drawbuffer, GLfloat depth,
-                                                GLint stencil);
 typedef const GLubyte*(APIENTRYP PFNDOLGETSTRINGIPROC)(GLenum name, GLuint index);
-typedef GLboolean(APIENTRYP PFNDOLISRENDERBUFFERPROC)(GLuint renderbuffer);
-typedef void(APIENTRYP PFNDOLBINDRENDERBUFFERPROC)(GLenum target, GLuint renderbuffer);
-typedef void(APIENTRYP PFNDOLDELETERENDERBUFFERSPROC)(GLsizei n, const GLuint* renderbuffers);
-typedef void(APIENTRYP PFNDOLGENRENDERBUFFERSPROC)(GLsizei n, GLuint* renderbuffers);
-typedef void(APIENTRYP PFNDOLRENDERBUFFERSTORAGEPROC)(GLenum target, GLenum internalformat,
-                                                      GLsizei width, GLsizei height);
-typedef void(APIENTRYP PFNDOLGETRENDERBUFFERPARAMETERIVPROC)(GLenum target, GLenum pname,
-                                                             GLint* params);
-typedef GLboolean(APIENTRYP PFNDOLISFRAMEBUFFERPROC)(GLuint framebuffer);
 typedef void(APIENTRYP PFNDOLBINDFRAMEBUFFERPROC)(GLenum target, GLuint framebuffer);
 typedef void(APIENTRYP PFNDOLDELETEFRAMEBUFFERSPROC)(GLsizei n, const GLuint* framebuffers);
 typedef void(APIENTRYP PFNDOLGENFRAMEBUFFERSPROC)(GLsizei n, GLuint* framebuffers);
 typedef GLenum(APIENTRYP PFNDOLCHECKFRAMEBUFFERSTATUSPROC)(GLenum target);
-typedef void(APIENTRYP PFNDOLFRAMEBUFFERTEXTURE1DPROC)(GLenum target, GLenum attachment,
-                                                       GLenum textarget, GLuint texture,
-                                                       GLint level);
-typedef void(APIENTRYP PFNDOLFRAMEBUFFERTEXTURE2DPROC)(GLenum target, GLenum attachment,
-                                                       GLenum textarget, GLuint texture,
-                                                       GLint level);
-typedef void(APIENTRYP PFNDOLFRAMEBUFFERTEXTURE3DPROC)(GLenum target, GLenum attachment,
-                                                       GLenum textarget, GLuint texture,
-                                                       GLint level, GLint zoffset);
-typedef void(APIENTRYP PFNDOLFRAMEBUFFERRENDERBUFFERPROC)(GLenum target, GLenum attachment,
-                                                          GLenum renderbuffertarget,
-                                                          GLuint renderbuffer);
-typedef void(APIENTRYP PFNDOLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC)(GLenum target,
-                                                                      GLenum attachment,
-                                                                      GLenum pname, GLint* params);
-typedef void(APIENTRYP PFNDOLGENERATEMIPMAPPROC)(GLenum target);
 typedef void(APIENTRYP PFNDOLBLITFRAMEBUFFERPROC)(GLint srcX0, GLint srcY0, GLint srcX1,
                                                   GLint srcY1, GLint dstX0, GLint dstY0,
                                                   GLint dstX1, GLint dstY1, GLbitfield mask,
                                                   GLenum filter);
-typedef void(APIENTRYP PFNDOLRENDERBUFFERSTORAGEMULTISAMPLEPROC)(GLenum target, GLsizei samples,
-                                                                 GLenum internalformat,
-                                                                 GLsizei width, GLsizei height);
 typedef void(APIENTRYP PFNDOLFRAMEBUFFERTEXTURELAYERPROC)(GLenum target, GLenum attachment,
                                                           GLuint texture, GLint level, GLint layer);
 typedef void*(APIENTRYP PFNDOLMAPBUFFERRANGEPROC)(GLenum target, GLintptr offset, GLsizeiptr length,
@@ -364,116 +268,9 @@ typedef void(APIENTRYP PFNDOLFLUSHMAPPEDBUFFERRANGEPROC)(GLenum target, GLintptr
 typedef void(APIENTRYP PFNDOLBINDVERTEXARRAYPROC)(GLuint array);
 typedef void(APIENTRYP PFNDOLDELETEVERTEXARRAYSPROC)(GLsizei n, const GLuint* arrays);
 typedef void(APIENTRYP PFNDOLGENVERTEXARRAYSPROC)(GLsizei n, GLuint* arrays);
-typedef GLboolean(APIENTRYP PFNDOLISVERTEXARRAYPROC)(GLuint array);
 
-extern PFNDOLBEGINCONDITIONALRENDERPROC dolBeginConditionalRender;
-extern PFNDOLBEGINTRANSFORMFEEDBACKPROC dolBeginTransformFeedback;
-extern PFNDOLBINDFRAGDATALOCATIONPROC dolBindFragDataLocation;
-extern PFNDOLCLAMPCOLORPROC dolClampColor;
-extern PFNDOLCLEARBUFFERFIPROC dolClearBufferfi;
-extern PFNDOLCLEARBUFFERFVPROC dolClearBufferfv;
-extern PFNDOLCLEARBUFFERIVPROC dolClearBufferiv;
-extern PFNDOLCLEARBUFFERUIVPROC dolClearBufferuiv;
-extern PFNDOLCOLORMASKIPROC dolColorMaski;
-extern PFNDOLDISABLEIPROC dolDisablei;
-extern PFNDOLENABLEIPROC dolEnablei;
-extern PFNDOLENDCONDITIONALRENDERPROC dolEndConditionalRender;
-extern PFNDOLENDTRANSFORMFEEDBACKPROC dolEndTransformFeedback;
-extern PFNDOLGETBOOLEANI_VPROC dolGetBooleani_v;
-extern PFNDOLGETFRAGDATALOCATIONPROC dolGetFragDataLocation;
 extern PFNDOLGETSTRINGIPROC dolGetStringi;
-extern PFNDOLGETTEXPARAMETERIIVPROC dolGetTexParameterIiv;
-extern PFNDOLGETTEXPARAMETERIUIVPROC dolGetTexParameterIuiv;
-extern PFNDOLGETTRANSFORMFEEDBACKVARYINGPROC dolGetTransformFeedbackVarying;
-extern PFNDOLGETUNIFORMUIVPROC dolGetUniformuiv;
-extern PFNDOLGETVERTEXATTRIBIIVPROC dolGetVertexAttribIiv;
-extern PFNDOLGETVERTEXATTRIBIUIVPROC dolGetVertexAttribIuiv;
-extern PFNDOLISENABLEDIPROC dolIsEnabledi;
-extern PFNDOLTEXPARAMETERIIVPROC dolTexParameterIiv;
-extern PFNDOLTEXPARAMETERIUIVPROC dolTexParameterIuiv;
-extern PFNDOLTRANSFORMFEEDBACKVARYINGSPROC dolTransformFeedbackVaryings;
-extern PFNDOLUNIFORM1UIPROC dolUniform1ui;
-extern PFNDOLUNIFORM1UIVPROC dolUniform1uiv;
-extern PFNDOLUNIFORM2UIPROC dolUniform2ui;
-extern PFNDOLUNIFORM2UIVPROC dolUniform2uiv;
-extern PFNDOLUNIFORM3UIPROC dolUniform3ui;
-extern PFNDOLUNIFORM3UIVPROC dolUniform3uiv;
-extern PFNDOLUNIFORM4UIPROC dolUniform4ui;
-extern PFNDOLUNIFORM4UIVPROC dolUniform4uiv;
-extern PFNDOLVERTEXATTRIBI1IPROC dolVertexAttribI1i;
-extern PFNDOLVERTEXATTRIBI1IVPROC dolVertexAttribI1iv;
-extern PFNDOLVERTEXATTRIBI1UIPROC dolVertexAttribI1ui;
-extern PFNDOLVERTEXATTRIBI1UIVPROC dolVertexAttribI1uiv;
-extern PFNDOLVERTEXATTRIBI2IPROC dolVertexAttribI2i;
-extern PFNDOLVERTEXATTRIBI2IVPROC dolVertexAttribI2iv;
-extern PFNDOLVERTEXATTRIBI2UIPROC dolVertexAttribI2ui;
-extern PFNDOLVERTEXATTRIBI2UIVPROC dolVertexAttribI2uiv;
-extern PFNDOLVERTEXATTRIBI3IPROC dolVertexAttribI3i;
-extern PFNDOLVERTEXATTRIBI3IVPROC dolVertexAttribI3iv;
-extern PFNDOLVERTEXATTRIBI3UIPROC dolVertexAttribI3ui;
-extern PFNDOLVERTEXATTRIBI3UIVPROC dolVertexAttribI3uiv;
-extern PFNDOLVERTEXATTRIBI4BVPROC dolVertexAttribI4bv;
-extern PFNDOLVERTEXATTRIBI4IPROC dolVertexAttribI4i;
-extern PFNDOLVERTEXATTRIBI4IVPROC dolVertexAttribI4iv;
-extern PFNDOLVERTEXATTRIBI4SVPROC dolVertexAttribI4sv;
-extern PFNDOLVERTEXATTRIBI4UBVPROC dolVertexAttribI4ubv;
-extern PFNDOLVERTEXATTRIBI4UIPROC dolVertexAttribI4ui;
-extern PFNDOLVERTEXATTRIBI4UIVPROC dolVertexAttribI4uiv;
-extern PFNDOLVERTEXATTRIBI4USVPROC dolVertexAttribI4usv;
 extern PFNDOLVERTEXATTRIBIPOINTERPROC dolVertexAttribIPointer;
 
-#define glBeginConditionalRender dolBeginConditionalRender
-#define glBeginTransformFeedback dolBeginTransformFeedback
-#define glBindFragDataLocation dolBindFragDataLocation
-#define glClampColor dolClampColor
-#define glClearBufferfi dolClearBufferfi
-#define glClearBufferfv dolClearBufferfv
-#define glClearBufferiv dolClearBufferiv
-#define glClearBufferuiv dolClearBufferuiv
-#define glColorMaski dolColorMaski
-#define glDisablei dolDisablei
-#define glEnablei dolEnablei
-#define glEndConditionalRender dolEndConditionalRender
-#define glEndTransformFeedback dolEndTransformFeedback
-#define glGetBooleani_v dolGetBooleani_v
-#define glGetFragDataLocation dolGetFragDataLocation
 #define glGetStringi dolGetStringi
-#define glGetTexParameterIiv dolGetTexParameterIiv
-#define glGetTexParameterIuiv dolGetTexParameterIuiv
-#define glGetTransformFeedbackVarying dolGetTransformFeedbackVarying
-#define glGetUniformuiv dolGetUniformuiv
-#define glGetVertexAttribIiv dolGetVertexAttribIiv
-#define glGetVertexAttribIuiv dolGetVertexAttribIuiv
-#define glIsEnabledi dolIsEnabledi
-#define glTexParameterIiv dolTexParameterIiv
-#define glTexParameterIuiv dolTexParameterIuiv
-#define glTransformFeedbackVaryings dolTransformFeedbackVaryings
-#define glUniform1ui dolUniform1ui
-#define glUniform1uiv dolUniform1uiv
-#define glUniform2ui dolUniform2ui
-#define glUniform2uiv dolUniform2uiv
-#define glUniform3ui dolUniform3ui
-#define glUniform3uiv dolUniform3uiv
-#define glUniform4ui dolUniform4ui
-#define glUniform4uiv dolUniform4uiv
-#define glVertexAttribI1i dolVertexAttribI1i
-#define glVertexAttribI1iv dolVertexAttribI1iv
-#define glVertexAttribI1ui dolVertexAttribI1ui
-#define glVertexAttribI1uiv dolVertexAttribI1uiv
-#define glVertexAttribI2i dolVertexAttribI2i
-#define glVertexAttribI2iv dolVertexAttribI2iv
-#define glVertexAttribI2ui dolVertexAttribI2ui
-#define glVertexAttribI2uiv dolVertexAttribI2uiv
-#define glVertexAttribI3i dolVertexAttribI3i
-#define glVertexAttribI3iv dolVertexAttribI3iv
-#define glVertexAttribI3ui dolVertexAttribI3ui
-#define glVertexAttribI3uiv dolVertexAttribI3uiv
-#define glVertexAttribI4bv dolVertexAttribI4bv
-#define glVertexAttribI4i dolVertexAttribI4i
-#define glVertexAttribI4iv dolVertexAttribI4iv
-#define glVertexAttribI4sv dolVertexAttribI4sv
-#define glVertexAttribI4ubv dolVertexAttribI4ubv
-#define glVertexAttribI4ui dolVertexAttribI4ui
-#define glVertexAttribI4uiv dolVertexAttribI4uiv
-#define glVertexAttribI4usv dolVertexAttribI4usv
 #define glVertexAttribIPointer dolVertexAttribIPointer

@@ -12,10 +12,7 @@
 
 typedef void(APIENTRYP PFNDOLBINDFRAGDATALOCATIONINDEXEDPROC)(GLuint program, GLuint colorNumber,
                                                               GLuint index, const GLchar* name);
-typedef GLint(APIENTRYP PFNDOLGETFRAGDATAINDEXPROC)(GLuint program, const GLchar* name);
 
 extern PFNDOLBINDFRAGDATALOCATIONINDEXEDPROC dolBindFragDataLocationIndexed;
-extern PFNDOLGETFRAGDATAINDEXPROC dolGetFragDataIndex;
 
 #define glBindFragDataLocationIndexed dolBindFragDataLocationIndexed
-#define glGetFragDataIndex dolGetFragDataIndex

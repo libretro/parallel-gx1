@@ -54,42 +54,13 @@ typedef void(APIENTRYP PFNDOLDEBUGMESSAGECALLBACKPROC)(GLDEBUGPROC callback,
 typedef void(APIENTRYP PFNDOLDEBUGMESSAGECONTROLPROC)(GLenum source, GLenum type, GLenum severity,
                                                       GLsizei count, const GLuint* ids,
                                                       GLboolean enabled);
-typedef void(APIENTRYP PFNDOLDEBUGMESSAGEINSERTPROC)(GLenum source, GLenum type, GLuint id,
-                                                     GLenum severity, GLsizei length,
-                                                     const GLchar* buf);
-typedef GLuint(APIENTRYP PFNDOLGETDEBUGMESSAGELOGPROC)(GLuint count, GLsizei bufsize,
-                                                       GLenum* sources, GLenum* types, GLuint* ids,
-                                                       GLenum* severities, GLsizei* lengths,
-                                                       GLchar* messageLog);
-typedef void(APIENTRYP PFNDOLGETOBJECTLABELPROC)(GLenum identifier, GLuint name, GLsizei bufSize,
-                                                 GLsizei* length, GLchar* label);
-typedef void(APIENTRYP PFNDOLGETOBJECTPTRLABELPROC)(void* ptr, GLsizei bufSize, GLsizei* length,
-                                                    GLchar* label);
 typedef void(APIENTRYP PFNDOLOBJECTLABELPROC)(GLenum identifier, GLuint name, GLsizei length,
                                               const GLchar* label);
-typedef void(APIENTRYP PFNDOLOBJECTPTRLABELPROC)(void* ptr, GLsizei length, const GLchar* label);
-typedef void(APIENTRYP PFNDOLPOPDEBUGGROUPPROC)(void);
-typedef void(APIENTRYP PFNDOLPUSHDEBUGGROUPPROC)(GLenum source, GLuint id, GLsizei length,
-                                                 const GLchar* message);
 
 extern PFNDOLDEBUGMESSAGECALLBACKPROC dolDebugMessageCallback;
 extern PFNDOLDEBUGMESSAGECONTROLPROC dolDebugMessageControl;
-extern PFNDOLDEBUGMESSAGEINSERTPROC dolDebugMessageInsert;
-extern PFNDOLGETDEBUGMESSAGELOGPROC dolGetDebugMessageLog;
-extern PFNDOLGETOBJECTLABELPROC dolGetObjectLabel;
-extern PFNDOLGETOBJECTPTRLABELPROC dolGetObjectPtrLabel;
 extern PFNDOLOBJECTLABELPROC dolObjectLabel;
-extern PFNDOLOBJECTPTRLABELPROC dolObjectPtrLabel;
-extern PFNDOLPOPDEBUGGROUPPROC dolPopDebugGroup;
-extern PFNDOLPUSHDEBUGGROUPPROC dolPushDebugGroup;
 
 #define glDebugMessageCallback dolDebugMessageCallback
 #define glDebugMessageControl dolDebugMessageControl
-#define glDebugMessageInsert dolDebugMessageInsert
-#define glGetDebugMessageLog dolGetDebugMessageLog
-#define glGetObjectLabel dolGetObjectLabel
-#define glGetObjectPtrLabel dolGetObjectPtrLabel
 #define glObjectLabel dolObjectLabel
-#define glObjectPtrLabel dolObjectPtrLabel
-#define glPopDebugGroup dolPopDebugGroup
-#define glPushDebugGroup dolPushDebugGroup

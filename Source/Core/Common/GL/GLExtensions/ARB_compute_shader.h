@@ -26,10 +26,7 @@
 
 typedef void(APIENTRYP PFNDOLDISPATCHCOMPUTEPROC)(GLuint num_groups_x, GLuint num_groups_y,
                                                   GLuint num_groups_z);
-typedef void(APIENTRYP PFNDOLDISPATCHCOMPUTEINDIRECTPROC)(GLintptr indirect);
 
 extern PFNDOLDISPATCHCOMPUTEPROC dolDispatchCompute;
-extern PFNDOLDISPATCHCOMPUTEINDIRECTPROC dolDispatchComputeIndirect;
 
 #define glDispatchCompute dolDispatchCompute
-#define glDispatchComputeIndirect dolDispatchComputeIndirect

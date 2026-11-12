@@ -25,7 +25,3 @@
 typedef void(APIENTRY* PFNDOLSHADERSTORAGEBLOCKBINDINGPROC)(GLuint program,
                                                             GLuint storageBlockIndex,
                                                             GLuint storageBlockBinding);
-
-extern PFNDOLSHADERSTORAGEBLOCKBINDINGPROC dolShaderStorageBlockBinding;
-
-#define glShaderStorageBlockBinding dolShaderStorageBlockBinding
