@@ -3,6 +3,8 @@
 
 #include "Core/IOS/FS/HostBackend/FS.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <expected>
@@ -748,8 +750,8 @@ Result<DirectoryStats> HostFileSystem::GetDirectoryStats(const std::string& wii_
     return std::unexpected{result.error()};
 
   DirectoryStats stats{};
-  stats.used_inodes = static_cast<u32>(std::min<u64>(result->used_inodes, TOTAL_INODES));
-  stats.used_clusters = static_cast<u32>(std::min<u64>(result->used_clusters, USABLE_CLUSTERS));
+  stats.used_inodes = static_cast<u32>(MIN((u64)result->used_inodes, (u64)TOTAL_INODES));
+  stats.used_clusters = static_cast<u32>(MIN((u64)result->used_clusters, (u64)USABLE_CLUSTERS));
   return stats;
 }
 

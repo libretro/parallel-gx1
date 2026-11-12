@@ -3,6 +3,8 @@
 
 #include "Core/HW/EXI/EXI_DeviceIPL.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstring>
 #include <string>
 
@@ -170,7 +172,7 @@ bool CEXIIPL::LoadFileToIPL(const std::string& filename, u32 offset)
     return false;
 
   const u64 filesize = stream.GetSize();
-  if (!stream.ReadBytes(&m_rom[offset], std::min<u64>(filesize, ROM_SIZE - offset)))
+  if (!stream.ReadBytes(&m_rom[offset], MIN((u64)filesize, (u64)(ROM_SIZE - offset))))
     return false;
 
   m_fonts_loaded = true;

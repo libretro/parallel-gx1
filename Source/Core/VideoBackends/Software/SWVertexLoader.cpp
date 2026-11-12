@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Software/SWVertexLoader.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstddef>
 #include <limits>
 
@@ -120,7 +122,7 @@ static void ReadVertexAttribute(T* dst, DataReader src, const AttributeFormat& f
     src.Skip(base_component * GetElementSize(format.type));
 
     int i;
-    for (i = 0; i < std::min(format.components - base_component, components); i++)
+    for (i = 0; i < MIN(format.components - base_component, components); i++)
     {
       int i_dst = reverse ? components - i - 1 : i;
       switch (format.type)

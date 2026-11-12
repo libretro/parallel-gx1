@@ -3,6 +3,7 @@
 
 #include "Core/LibusbUtils.h"
 
+#include <retro_miscellaneous.h>
 
 #if defined(__LIBUSB__)
 #include <libusb.h>
@@ -212,7 +213,7 @@ std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle,
              str_result);
   }
 
-  const std::size_t str_length = std::max(0, buffer.length - 2) / 2;
+  const std::size_t str_length = MAX(0, buffer.length - 2) / 2;
   return UTF16ToUTF8(std::u16string_view{buffer.data, str_length});
 #else
   return "__LIBUSB__ not defined";

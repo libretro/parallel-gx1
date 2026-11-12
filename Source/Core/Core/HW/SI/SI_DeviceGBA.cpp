@@ -3,6 +3,8 @@
 
 #include "Core/HW/SI/SI_DeviceGBA.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -243,7 +245,7 @@ int GBASockServer::Receive(u8* si_buffer, u8 bytes)
 
   for (size_t i = 0; i < recv_data.size(); i++)
     si_buffer[i] = recv_data[i];
-  return static_cast<int>(std::min(num_received, recv_data.size()));
+  return static_cast<int>(MIN(num_received, recv_data.size()));
 }
 
 void GBASockServer::Flush()

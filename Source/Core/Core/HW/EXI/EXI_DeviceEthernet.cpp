@@ -3,6 +3,8 @@
 
 #include "Core/HW/EXI/EXI_DeviceEthernet.h"
 
+#include <retro_miscellaneous.h>
+
 #include <memory>
 #include <optional>
 #include <string>
@@ -440,7 +442,7 @@ void CEXIETHERNET::DirectFIFOWrite(const u8* data, u32 size)
   if (data != nullptr && *tx_fifo_count < BBA_TXFIFO_SIZE)
   {
     const u32 max_size = BBA_TXFIFO_SIZE - *tx_fifo_count;
-    memcpy(tx_fifo.get() + *tx_fifo_count, data, std::min(size, max_size));
+    memcpy(tx_fifo.get() + *tx_fifo_count, data, MIN(size, max_size));
   }
 
   *tx_fifo_count += size;
@@ -453,7 +455,9 @@ void CEXIETHERNET::DirectFIFOWrite(const u8* data, u32 size)
 void CEXIETHERNET::SendFromDirectFIFO()
 {
   const u8* frame = tx_fifo.get();
-  const u16 size = std::min<u16>(BBA_TXFIFO_SIZE, Common::BitCastPtr<u16>(&mBbaMem[BBA_TXFIFOCNT]));
+  const u16 fifo_count = Common::BitCastPtr<u16>(&mBbaMem[BBA_TXFIFOCNT]);
+  const u16 size =
+      static_cast<u16>(MIN(static_cast<u32>(BBA_TXFIFO_SIZE), static_cast<u32>(fifo_count)));
   if (m_network_interface->SendFrame(frame, size))
     Core::NetworkLogger()->LogBBA(frame, size);
 }

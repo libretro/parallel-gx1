@@ -3,6 +3,8 @@
 
 #include "VideoCommon/PixelEngine.h"
 
+#include <retro_miscellaneous.h>
+
 #include "Common/BitField.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -227,7 +229,7 @@ void PixelEngineManager::RaiseEvent(int set, int keep, int cycles_into_future)
 
     // Hack: Dolphin's single-core gpu timings are way too fast. Enforce a minimum delay to give
     //       games time to setup any interrupt state
-    cycles = std::max(500, cycles_into_future);
+    cycles = MAX(500, cycles_into_future);
   }
   m_system.GetCoreTiming().ScheduleEvent(cycles, m_event_type_set_token_finish, 0, from);
 }

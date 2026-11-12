@@ -3,6 +3,8 @@
 
 #include "Core/PowerPC/JitArm64/Jit.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cinttypes>
 #include <cstdio>
 #include <optional>
@@ -1026,7 +1028,7 @@ std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
 
   const size_t free_near_1_size = free_near_1.to() - free_near_1.from();
   const size_t free_far_1_size = free_far_1.to() - free_far_1.from();
-  const size_t free_1_smallest_size = std::min(free_near_1_size, free_far_1_size);
+  const size_t free_1_smallest_size = MIN(free_near_1_size, free_far_1_size);
 
   if (free_1_smallest_size >= 1024 * 1024)
   {
@@ -1038,7 +1040,7 @@ std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
 
   const size_t free_near_0_size = free_near_0.to() - free_near_0.from();
   const size_t free_far_0_size = free_far_0.to() - free_far_0.from();
-  const size_t free_0_smallest_size = std::min(free_near_0_size, free_far_0_size);
+  const size_t free_0_smallest_size = MIN(free_near_0_size, free_far_0_size);
 
   if (free_0_smallest_size == 0 && free_1_smallest_size == 0)
   {

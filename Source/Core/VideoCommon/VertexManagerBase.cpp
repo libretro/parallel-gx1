@@ -3,6 +3,8 @@
 
 #include "VideoCommon/VertexManagerBase.h"
 
+#include <retro_miscellaneous.h>
+
 #include <array>
 #include <cmath>
 #include <memory>
@@ -351,7 +353,7 @@ void VertexManagerBase::UploadUtilityVertices(const void* vertices, u32 vertex_s
   ASSERT(m_is_flushed);
 
   // Copy into the buffers usually used for GX drawing.
-  ResetBuffer(std::max(vertex_stride, 1u));
+  ResetBuffer(MAX(vertex_stride, 1u));
   if (vertices)
   {
     const u32 copy_size = vertex_stride * num_vertices;

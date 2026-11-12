@@ -3,6 +3,8 @@
 
 #include "VideoCommon/Present.h"
 
+#include <retro_miscellaneous.h>
+
 #include "Common/ChunkFile.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
@@ -340,13 +342,13 @@ MathUtil::Rectangle<int> Presenter::GetCustomCrop(const MathUtil::Rectangle<int>
 
   // Determine amount of pixels to crop from the source rect.
   const int source_crop_left =
-      std::min(g_ActiveConfig.iCropCustomLeft * efb_scale, uncropped_source_width);
-  const int source_crop_right = std::min(g_ActiveConfig.iCropCustomRight * efb_scale,
-                                         uncropped_source_width - source_crop_left);
+      MIN(g_ActiveConfig.iCropCustomLeft * efb_scale, uncropped_source_width);
+  const int source_crop_right =
+      MIN(g_ActiveConfig.iCropCustomRight * efb_scale, uncropped_source_width - source_crop_left);
   const int source_crop_top =
-      std::min(g_ActiveConfig.iCropCustomTop * efb_scale, uncropped_source_height);
-  const int source_crop_bottom = std::min(g_ActiveConfig.iCropCustomBottom * efb_scale,
-                                          uncropped_source_height - source_crop_top);
+      MIN(g_ActiveConfig.iCropCustomTop * efb_scale, uncropped_source_height);
+  const int source_crop_bottom =
+      MIN(g_ActiveConfig.iCropCustomBottom * efb_scale, uncropped_source_height - source_crop_top);
 
   return MathUtil::Rectangle<int>(source_crop_left, source_crop_top, source_crop_right,
                                   source_crop_bottom);
@@ -511,8 +513,8 @@ u32 Presenter::AutoIntegralScale() const
   const u32 height_scale =
       source_height > 0 ? ((target_height + (source_height - 1)) / source_height) : 1;
   // Limit to the max to avoid creating textures larger than their max supported resolution.
-  return std::min(std::max(width_scale, height_scale),
-                  static_cast<u32>(Config::Get(Config::GFX_MAX_EFB_SCALE)));
+  const u32 max_scale = static_cast<u32>(Config::Get(Config::GFX_MAX_EFB_SCALE));
+  return MIN(MAX(width_scale, height_scale), max_scale);
 }
 
 void Presenter::SetSuggestedWindowSize(int width, int height)
@@ -680,8 +682,8 @@ void Presenter::UpdateDrawRectangle()
         TryToSnapToXFBSize(int_draw_width, int_draw_height, rect.GetWidth(), rect.GetHeight());
       }
       // We can't draw something bigger than the window, it will crop
-      int_draw_width = std::min(int_draw_width, static_cast<int>(win_width));
-      int_draw_height = std::min(int_draw_height, static_cast<int>(win_height));
+      int_draw_width = MIN(int_draw_width, static_cast<int>(win_width));
+      int_draw_height = MIN(int_draw_height, static_cast<int>(win_height));
     }
   }
   else
@@ -716,8 +718,8 @@ std::tuple<int, int> Presenter::CalculateOutputDimensions(int width, int height,
                                                           bool allow_stretch) const
 {
   // Protect against zero width and height, a minimum of 1 will do
-  width = std::max(width, 1);
-  height = std::max(height, 1);
+  width = MAX(width, 1);
+  height = MAX(height, 1);
 
   auto [scaled_width, scaled_height] = ScaleToDisplayAspectRatio(width, height, allow_stretch);
 

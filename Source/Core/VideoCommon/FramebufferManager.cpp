@@ -3,6 +3,8 @@
 
 #include "VideoCommon/FramebufferManager.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstdio>
 #include <memory>
 
@@ -56,7 +58,7 @@ bool FramebufferManager::Initialize(int efb_scale)
     return false;
   }
 
-  m_efb_cache_tile_size = static_cast<u32>(std::max(g_ActiveConfig.iEFBAccessTileSize, 0));
+  m_efb_cache_tile_size = static_cast<u32>(MAX(g_ActiveConfig.iEFBAccessTileSize, 0));
   if (!CreateReadbackFramebuffer())
   {
     PanicAlert("Failed to create EFB readback framebuffer");
@@ -224,8 +226,8 @@ std::tuple<u32, u32> FramebufferManager::CalculateTargetSize(int efb_scale)
   if (max_size < EFB_WIDTH * m_efb_scale)
     m_efb_scale = max_size / EFB_WIDTH;
 
-  u32 new_efb_width = std::max(EFB_WIDTH * static_cast<int>(m_efb_scale), 1u);
-  u32 new_efb_height = std::max(EFB_HEIGHT * static_cast<int>(m_efb_scale), 1u);
+  u32 new_efb_width = MAX(EFB_WIDTH * static_cast<int>(m_efb_scale), 1u);
+  u32 new_efb_height = MAX(EFB_HEIGHT * static_cast<int>(m_efb_scale), 1u);
 
   return std::make_tuple(new_efb_width, new_efb_height);
 }
@@ -489,8 +491,8 @@ MathUtil::Rectangle<int> FramebufferManager::GetEFBCacheTileRect(u32 tile_index)
   const u32 start_y = tile_y * m_efb_cache_tile_size;
   const u32 start_x = tile_x * m_efb_cache_tile_size;
   return MathUtil::Rectangle<int>(
-      start_x, start_y, std::min(start_x + m_efb_cache_tile_size, static_cast<u32>(EFB_WIDTH)),
-      std::min(start_y + m_efb_cache_tile_size, static_cast<u32>(EFB_HEIGHT)));
+      start_x, start_y, MIN(start_x + m_efb_cache_tile_size, static_cast<u32>(EFB_WIDTH)),
+      MIN(start_y + m_efb_cache_tile_size, static_cast<u32>(EFB_HEIGHT)));
 }
 
 u32 FramebufferManager::PeekEFBColor(u32 x, u32 y)

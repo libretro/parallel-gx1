@@ -3,6 +3,8 @@
 
 #include "VideoCommon/PostProcessing.h"
 
+#include <retro_miscellaneous.h>
+
 #include <array>
 #include <cstring>
 #include <string>
@@ -386,7 +388,7 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
   g_gfx->SetTexture(0, src_tex);
   g_gfx->SetTexture(1, src_tex);
 
-  FillUniformBuffer(src, src_tex, std::max(src_layer, 0), g_gfx->GetCurrentFramebuffer()->GetRect(),
+  FillUniformBuffer(src, src_tex, MAX(src_layer, 0), g_gfx->GetCurrentFramebuffer()->GetRect(),
                     g_presenter->GetTargetRectangle());
   g_vertex_manager->UploadUtilityUniforms(m_uniform_staging_buffer.data(),
                                           static_cast<u32>(m_uniform_staging_buffer.size()));

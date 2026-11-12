@@ -3,6 +3,8 @@
 
 #include "VideoBackends/OGL/OGLTexture.h"
 
+#include <retro_miscellaneous.h>
+
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 #include "Common/GL/GLUtil.h"
@@ -206,8 +208,8 @@ OGLTexture::OGLTexture(const TextureConfig& tex_config, std::string_view name)
     {
       for (u32 level = 0; level < m_config.levels; level++)
       {
-        glTexImage3D(target, level, gl_internal_format, std::max(m_config.width >> level, 1u),
-                     std::max(m_config.height >> level, 1u), m_config.layers, 0,
+        glTexImage3D(target, level, gl_internal_format, MAX(m_config.width >> level, 1u),
+                     MAX(m_config.height >> level, 1u), m_config.layers, 0,
                      GetGLFormatForTextureFormat(m_config.format),
                      GetGLTypeForTextureFormat(m_config.format), nullptr);
       }
@@ -286,8 +288,8 @@ void OGLTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8
   if (layer >= m_config.layers)
     PanicAlert("Texture only has %u layer, can't update layer %u", m_config.layers, layer);
 
-  const auto expected_width = std::max(1U, m_config.width >> level);
-  const auto expected_height = std::max(1U, m_config.height >> level);
+  const auto expected_width = MAX(1U, m_config.width >> level);
+  const auto expected_height = MAX(1U, m_config.height >> level);
   if (width != expected_width || height != expected_height)
   {
     PanicAlert("Size of level %u must be %ux%u, but %ux%u requested", level, expected_width,
@@ -432,8 +434,8 @@ u8* OGLTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_
 
   if (IsCompressedFormat(m_config.format) || !g_ogl_config.bSupportsTextureStorage ||
       m_config.type == AbstractTextureType::Texture_CubeMap || level >= m_config.levels ||
-      layer >= m_config.layers || width != std::max(1U, m_config.width >> level) ||
-      height != std::max(1U, m_config.height >> level) || size > UPLOAD_BUFFER_SIZE / 4)
+      layer >= m_config.layers || width != MAX(1U, m_config.width >> level) ||
+      height != MAX(1U, m_config.height >> level) || size > UPLOAD_BUFFER_SIZE / 4)
   {
     return nullptr;
   }

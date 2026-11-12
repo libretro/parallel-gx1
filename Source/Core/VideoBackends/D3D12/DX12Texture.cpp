@@ -3,6 +3,8 @@
 
 #include "VideoBackends/D3D12/DX12Texture.h"
 
+#include <retro_miscellaneous.h>
+
 #include "Common/Align.h"
 #include "Common/Assert.h"
 #include "Common/StringUtil.h"
@@ -277,7 +279,7 @@ void DXTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
   if (source_stride != upload_stride)
   {
     const u8* src_ptr = buffer;
-    const u32 copy_size = std::min(source_stride, upload_stride);
+    const u32 copy_size = MIN(source_stride, upload_stride);
     u8* dst_ptr = static_cast<u8*>(upload_buffer_ptr);
     for (u32 i = 0; i < num_rows; i++)
     {
@@ -288,12 +290,12 @@ void DXTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
   }
   else
   {
-    std::memcpy(upload_buffer_ptr, buffer, std::min<size_t>(buffer_size, upload_size));
+    std::memcpy(upload_buffer_ptr, buffer, MIN((size_t)buffer_size, (size_t)upload_size));
   }
 
   if (staging_buffer)
   {
-    const D3D12_RANGE write_range = {0, std::min<size_t>(buffer_size, upload_size)};
+    const D3D12_RANGE write_range = {0, MIN((size_t)buffer_size, (size_t)upload_size)};
     staging_buffer->Unmap(0, &write_range);
   }
   else

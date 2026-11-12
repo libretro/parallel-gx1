@@ -1,8 +1,9 @@
+#include <cctype>
 #include <cstdio>
-#include <libretro.h>
-#include <string>
 #include <functional>
 #include <iterator>
+#include <libretro.h>
+#include <string>
 
 #include <streams/file_stream.h>
 #include <vfs/vfs_hybrid.h>
@@ -740,8 +741,8 @@ bool retro_load_game(const struct retro_game_info* game)
   std::string filename_str;
   std::string extension;
   SplitPath(normalized_game_paths.front(), &folder_path_str, &filename_str, &extension);
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                [](unsigned char c){ return std::tolower(c); });
+  for (char& c : extension)
+    c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
 
 #ifdef _WIN32
   // If SplitPath only gave us "D:", rebuild the real directory from the full path

@@ -3,6 +3,8 @@
 
 #include "VideoCommon/Fifo.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cinttypes>
 #include <features/features_cpu.h>
 
@@ -518,7 +520,7 @@ int FifoManager::RunGpuOnCpu(int ticks)
   }
 
   // Discard all available ticks as there is nothing to do any more.
-  retro_atomic_store_release_int(&m_sync_ticks, std::min(available_ticks, 0));
+  retro_atomic_store_release_int(&m_sync_ticks, MIN(available_ticks, 0));
 
   // If the GPU is idle, drop the handler.
   if (available_ticks >= 0)

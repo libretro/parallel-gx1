@@ -3,6 +3,8 @@
 
 #include "VideoCommon/TextureConfig.h"
 
+#include <retro_miscellaneous.h>
+
 #include <tuple>
 
 #include "VideoCommon/AbstractTexture.h"
@@ -20,8 +22,8 @@ MathUtil::Rectangle<int> TextureConfig::GetRect() const
 
 MathUtil::Rectangle<int> TextureConfig::GetMipRect(u32 level) const
 {
-  return {0, 0, static_cast<int>(std::max(width >> level, 1u)),
-          static_cast<int>(std::max(height >> level, 1u))};
+  return {0, 0, static_cast<int>(MAX(width >> level, 1u)),
+          static_cast<int>(MAX(height >> level, 1u))};
 }
 
 size_t TextureConfig::GetStride() const
@@ -31,5 +33,5 @@ size_t TextureConfig::GetStride() const
 
 size_t TextureConfig::GetMipStride(u32 level) const
 {
-  return AbstractTexture::CalculateStrideForFormat(format, std::max(width >> level, 1u));
+  return AbstractTexture::CalculateStrideForFormat(format, MAX(width >> level, 1u));
 }

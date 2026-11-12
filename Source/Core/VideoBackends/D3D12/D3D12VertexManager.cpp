@@ -3,6 +3,8 @@
 
 #include "VideoBackends/D3D12/D3D12VertexManager.h"
 
+#include <retro_miscellaneous.h>
+
 #include "Common/Align.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -191,8 +193,8 @@ void VertexManager::UpdatePixelShaderConstants()
 bool VertexManager::ReserveConstantStorage()
 {
   static constexpr u32 reserve_size =
-      static_cast<u32>(std::max({sizeof(PixelShaderConstants), sizeof(VertexShaderConstants),
-                                 sizeof(GeometryShaderConstants)}));
+      static_cast<u32>(MAX(MAX(sizeof(PixelShaderConstants), sizeof(VertexShaderConstants)),
+                           sizeof(GeometryShaderConstants)));
   if (m_uniform_stream_buffer.ReserveMemory(reserve_size,
                                             D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT))
   {

@@ -3,6 +3,8 @@
 
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstring>
 #include <iterator>
 #include <utility>
@@ -438,7 +440,7 @@ bool Wiimote::ProcessReadDataRequest()
 {
   // Limit the amt to 16 bytes
   // AyuanX: the MTU is 640B though... what a waste!
-  const u16 bytes_to_read = std::min<u16>(16, m_read_request.size);
+  const u16 bytes_to_read = (u16)MIN(16, m_read_request.size);
 
   if (0 == bytes_to_read)
   {

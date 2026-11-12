@@ -3,6 +3,8 @@
 
 #include "VideoBackends/OGL/OGLVertexManager.h"
 
+#include <retro_miscellaneous.h>
+
 #include <memory>
 
 #include "Common/Align.h"
@@ -67,7 +69,7 @@ bool VertexManager::Initialize()
     GLint max_buffer_size;
     glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &max_buffer_size);
     m_texel_buffer = StreamBuffer::Create(
-        GL_TEXTURE_BUFFER, std::min(max_buffer_size, static_cast<GLint>(TEXEL_STREAM_BUFFER_SIZE)));
+        GL_TEXTURE_BUFFER, MIN(max_buffer_size, static_cast<GLint>(TEXEL_STREAM_BUFFER_SIZE)));
 
     // Allocate texture views backed by buffer.
     static constexpr std::array<std::pair<TexelBufferFormat, GLenum>, NUM_TEXEL_BUFFER_FORMATS>

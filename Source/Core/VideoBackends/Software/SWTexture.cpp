@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Software/SWTexture.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstring>
 
 #include "VideoBackends/Software/CopyRegion.h"
@@ -68,8 +70,8 @@ SWTexture::SWTexture(const TextureConfig& tex_config) : AbstractTexture(tex_conf
     m_data[layer].resize(tex_config.levels);
     for (u32 level = 0; level < tex_config.levels; level++)
     {
-      m_data[layer][level].resize(std::max(tex_config.width >> level, 1u) *
-                                  std::max(tex_config.height >> level, 1u) * sizeof(Pixel));
+      m_data[layer][level].resize(MAX(tex_config.width >> level, 1u) *
+                                  MAX(tex_config.height >> level, 1u) * sizeof(Pixel));
     }
   }
 }

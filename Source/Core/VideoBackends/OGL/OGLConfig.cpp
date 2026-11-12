@@ -3,6 +3,8 @@
 
 #include "VideoBackends/OGL/OGLConfig.h"
 
+#include <retro_miscellaneous.h>
+
 #include <cstdio>
 #include <ranges>
 #include <string>
@@ -677,7 +679,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
       // included or not; it seems like NVIDIA and Intel GPUs do not include it.
       // We've inserted 1 at the back of both if not present to handle this.
       g_backend_info.AAModes.clear();
-      g_backend_info.AAModes.reserve(std::min(color_aa_modes.size(), depth_aa_modes.size()));
+      g_backend_info.AAModes.reserve(MIN(color_aa_modes.size(), depth_aa_modes.size()));
       // We only want AA modes that are supported for both the color and depth textures. Probably
       // the support is the same, though. views::reverse is used to swap the order ahead of time.
       std::ranges::set_intersection(color_aa_modes | std::views::reverse,
@@ -700,7 +702,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
       GLint max_samples = 0;
       glGetIntegerv(GL_MAX_SAMPLES, &max_samples);
       u32 supported_max_samples =
-          static_cast<u32>(std::min({max_samples, max_color_samples, max_depth_samples}));
+          static_cast<u32>(MIN(MIN(max_samples, max_color_samples), max_depth_samples));
 
       while (supported_max_samples > 1)
       {
