@@ -32,7 +32,7 @@ constexpr char s_copy_pixel_shader[] = "void main() { SetOutput(Sample()); }\n";
 
 // Resampling, gamut and gamma correction and HDR scaling for the final pass.
 constexpr char s_correction_pixel_shader[] =
-R"(/***** COLOR CORRECTION *****/
+    R"(/***** COLOR CORRECTION *****/
 
 // Color Space references:
 // https://www.unravel.com.au/understanding-color-spaces
@@ -375,8 +375,14 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
     RecompilePipeline();
   }
 
-  // The bilinear sampler does the scaling; colour correction or HDR takes the correction shader.
+  // The bilinear sampler does the scaling; colour correction or HDR takes the correction shader,
+  // built the first time either is turned on.
   const bool needs_correction = IsColorCorrectionActive();
+  if (needs_correction && !m_correction_shader_tried)
+  {
+    CompileCorrectionShader();
+    RecompilePipeline();
+  }
   const AbstractPipeline* pipeline =
       needs_correction && m_correction_pipeline ? m_correction_pipeline :
                                                   m_copy_pipeline;
@@ -428,10 +434,9 @@ bool PostProcessing::CompileShaders()
   m_copy_pixel_shader = g_gfx->CreateShaderFromSource(
       ShaderStage::Pixel, PixelShaderSource(s_copy_pixel_shader),
       "Present copy pixel shader");
-  // Optional: without it the output is copied uncorrected.
-  m_correction_pixel_shader = g_gfx->CreateShaderFromSource(
-      ShaderStage::Pixel, PixelShaderSource(s_correction_pixel_shader),
-      "Present correction pixel shader");
+  // Only built when color correction or HDR is on: most sessions never use it.
+  if (IsColorCorrectionActive())
+    CompileCorrectionShader();
 
   if (!m_vertex_shader || !m_copy_pixel_shader)
   {
@@ -439,6 +444,15 @@ bool PostProcessing::CompileShaders()
     return false;
   }
   return true;
+}
+
+void PostProcessing::CompileCorrectionShader()
+{
+  m_correction_shader_tried = true;
+  // Optional: without it the output is copied uncorrected.
+  m_correction_pixel_shader = g_gfx->CreateShaderFromSource(
+      ShaderStage::Pixel, PixelShaderSource(s_correction_pixel_shader),
+      "Present correction pixel shader");
 }
 
 bool PostProcessing::CompilePipelines()

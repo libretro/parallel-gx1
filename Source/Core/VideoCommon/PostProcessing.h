@@ -35,6 +35,7 @@ public:
 private:
   bool IsColorCorrectionActive() const;
   bool CompileShaders();
+  void CompileCorrectionShader();
   bool CompilePipelines();
   void DestroyPipelines();
   void FillUniformBuffer(const MathUtil::Rectangle<int>& src, const AbstractTexture* src_tex,
@@ -44,6 +45,7 @@ private:
   AbstractShader* m_vertex_shader = nullptr;
   AbstractShader* m_copy_pixel_shader = nullptr;
   AbstractShader* m_correction_pixel_shader = nullptr;
+  bool m_correction_shader_tried = false;
   AbstractPipeline* m_copy_pipeline = nullptr;
   AbstractPipeline* m_correction_pipeline = nullptr;
   AbstractPipeline* m_screen_pipeline = nullptr;
