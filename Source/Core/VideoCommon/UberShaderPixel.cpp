@@ -1012,7 +1012,7 @@ void up_texturing(const struct up_build* u, struct rslc_var* s, struct rslc_var*
   struct rslc_var *tex_coord, *uv, *texture_enabled, *tevind, *bs, *fmt, *bias, *bt;
   struct rslc_var *matrix_index, *matrix_id, *indtevtrans, *sw, *tw, *wrapped;
   uint32_t a[9], then_s, else_s, block;
-  char name[16];
+  char name[24]; /* "fixpoint_uv" and any u32 */
   u32 i;
 
   rslc_b_begin_block(sb->b);
