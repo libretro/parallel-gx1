@@ -3,6 +3,7 @@
 
 #include "Core/HW/EXI/BBA/BuiltIn.h"
 
+#include <algorithm>
 #include <bit>
 #include <optional>
 
@@ -28,8 +29,7 @@ namespace
 {
 u64 GetTickCountStd()
 {
-  using namespace std::chrono;
-  return duration_cast<milliseconds>(Clock::now().time_since_epoch()).count();
+  return static_cast<u64>(DTToMs(Clock::now()));
 }
 
 std::vector<u8> BuildFINFrame(StackRef* ref)

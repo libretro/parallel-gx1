@@ -129,7 +129,7 @@ private:
   std::array<retro_atomic_int_t, 256> m_scheduler_buffer{};
   std::shared_ptr<NetKDTimeDevice> m_time_device;
   // TODO: Maybe move away from Common::HttpRequest?
-  Common::HttpRequest m_http{std::chrono::minutes{1}};
+  Common::HttpRequest m_http{60 * 1000};
   // Minutes between scheduled tasks, set by the workers from server replies.
   retro_atomic_int_t m_download_span{2};
   retro_atomic_int_t m_mail_span{1};

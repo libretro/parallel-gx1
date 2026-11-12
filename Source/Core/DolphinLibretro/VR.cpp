@@ -1,7 +1,6 @@
 #include "DolphinLibretro/VR.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 
 #include <libretro.h>
@@ -32,7 +31,7 @@ static bool s_frontend_flat = false;
 // heading the cursor is measured from.
 static bool s_have_controller_velocity = false;
 static Common::Vec3 s_controller_velocity;
-static Clock::time_point s_controller_time;
+static TimePoint s_controller_time;
 static bool s_have_point_forward = false;
 static Common::Quaternion s_point_forward = Common::Quaternion::Identity();
 
@@ -173,7 +172,7 @@ static void UpdateVRMotion()
   {
     const Common::Vec3 velocity(aim.linear_velocity[0], aim.linear_velocity[1],
                                 aim.linear_velocity[2]);
-    const float dt = std::chrono::duration<float>(now - s_controller_time).count();
+    const float dt = static_cast<float>(DTToSeconds(now - s_controller_time));
     if (s_have_controller_velocity && dt > 1.0f / 500.0f && dt < 0.1f)
       acceleration += (velocity - s_controller_velocity) / dt;
     s_controller_velocity = velocity;

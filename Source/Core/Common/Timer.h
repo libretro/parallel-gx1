@@ -22,6 +22,8 @@ public:
 
   // The rest of these functions probably belong somewhere else
   static u64 GetLocalTimeSinceJan1970();
+  // The host's wall clock: microseconds since the Unix epoch, UTC
+  static u64 WallClockUs();
 
 private:
   u64 m_start_ms{0};

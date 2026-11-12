@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 
 #include "Common/FrameClock.h"
@@ -34,24 +33,37 @@ using s16 = std::int16_t;
 using s32 = std::int32_t;
 using s64 = std::int64_t;
 
-// The core's clock: elapsed time as retro_run has paced it (Common/FrameClock.h), never the
-// host's. It stands still while the frontend pauses and advances a frame at a time.
-struct FrameTimeClock
+/* The core's clock: elapsed time as retro_run has paced it (Common/FrameClock.h), never the
+ * host's. It stands still while the frontend pauses and advances a frame at a time. A TimePoint
+ * is an instant on it and a DT a span of it, both in microseconds. */
+typedef s64 TimePoint;
+typedef s64 DT;
+struct Clock
 {
-  using rep = s64;
-  using period = std::micro;
-  using duration = std::chrono::duration<rep, period>;
-  using time_point = std::chrono::time_point<FrameTimeClock>;
-  static constexpr bool is_steady = true;
-  static time_point now() { return time_point(duration(static_cast<rep>(frame_clock_time_us()))); }
+  static TimePoint now() { return static_cast<TimePoint>(frame_clock_time_us()); }
 };
 
-using Clock = FrameTimeClock;
-using TimePoint = Clock::time_point;
-using DT = Clock::duration;
-using DT_us = std::chrono::duration<double, std::micro>;
-using DT_ms = std::chrono::duration<double, std::milli>;
-using DT_s = std::chrono::duration<double, std::ratio<1>>;
+constexpr DT DTFromMs(s64 ms)
+{
+  return ms * 1000;
+}
+constexpr DT DTFromSeconds(s64 seconds)
+{
+  return seconds * 1000000;
+}
+constexpr s64 DTToMs(DT dt)
+{
+  return dt / 1000;
+}
+constexpr double DTToSeconds(DT dt)
+{
+  return static_cast<double>(dt) / 1000000.0;
+}
+/* Truncates toward zero, as a duration cast does */
+constexpr DT DTFromSecondsF(double seconds)
+{
+  return static_cast<DT>(seconds * 1000000.0);
+}
 
 /* Has the compiler check a printf format (argument @f) against the
  * arguments from @a on. MinGW names the printf its headers picked. */

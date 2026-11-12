@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <chrono>
 #include <string>
 
 #include "InputCommon/ControllerEmu/ControlGroup/ControlGroup.h"
@@ -60,7 +59,7 @@ private:
 
   int m_auto_hide_timer = AUTO_HIDE_MS;
 
-  Clock::time_point m_last_update;
+  TimePoint m_last_update;
 
   SettingValue<double> m_yaw_setting;
   SettingValue<double> m_pitch_setting;

@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <chrono>
 #include <memory>
 #include <vector>
 
@@ -153,7 +152,7 @@ private:
       NotHandled,
     };
 
-    ReportHandler(Clock::time_point expired_time);
+    ReportHandler(TimePoint expired_time);
 
     template <typename R, typename T>
     void AddHandler(std::function<R(const T&)>);
@@ -163,7 +162,7 @@ private:
     bool IsExpired() const;
 
   private:
-    const Clock::time_point m_expired_time;
+    const TimePoint m_expired_time;
     std::vector<std::function<HandlerResult(const WiimoteReal::Report& report)>> m_callbacks;
   };
 
@@ -242,13 +241,13 @@ private:
   IRState m_ir_state = {};
 
   // Used to poll for M+ periodically and wait for it to reset.
-  Clock::time_point m_mplus_wait_time = Clock::now();
+  TimePoint m_mplus_wait_time = Clock::now();
 
   // The desired mode is set based on the attached normal extension.
   std::optional<MotionPlusState::PassthroughMode> m_mplus_desired_mode;
 
   // Status report is requested every so often to update the battery level.
-  Clock::time_point m_status_outdated_time = Clock::now();
+  TimePoint m_status_outdated_time = Clock::now();
   float m_battery = 0;
   u8 m_leds = 0;
 
@@ -266,7 +265,7 @@ private:
 
   // For pulse of rumble motor to simulate multiple levels.
   retro_atomic_64_t m_rumble_level{}; /* the bits of a ControlState */
-  Clock::time_point m_last_rumble_change = Clock::now();
+  TimePoint m_last_rumble_change = Clock::now();
 
   // Assume mode is disabled so one gets set.
   InputReportID m_reporting_mode = InputReportID::ReportDisabled;
@@ -280,7 +279,7 @@ private:
 
   // World rotation. (used to rotate IR data and provide pitch, roll, yaw inputs)
   Common::Quaternion m_orientation = Common::Quaternion::Identity();
-  Clock::time_point m_last_report_time = Clock::now();
+  TimePoint m_last_report_time = Clock::now();
 };
 
 }  // namespace ciface::WiimoteController

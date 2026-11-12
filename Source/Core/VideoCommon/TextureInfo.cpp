@@ -3,6 +3,7 @@
 
 #include "VideoCommon/TextureInfo.h"
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstdio>
 

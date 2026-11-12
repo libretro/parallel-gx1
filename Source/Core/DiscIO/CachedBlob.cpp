@@ -3,7 +3,6 @@
 
 #include "DiscIO/CachedBlob.h"
 
-#include <chrono>
 #include <cinttypes>
 
 #include <retro_atomic.h>
@@ -90,7 +89,7 @@ private:
   {
     const std::unique_ptr<BlobReader> reader = std::move(m_thread_reader);
     const bool attempt_to_scrub = m_attempt_to_scrub;
-    static constexpr auto PERIODIC_LOG_TIME = std::chrono::seconds{1};
+    static constexpr DT PERIODIC_LOG_TIME = DTFromSeconds(1);
 
     const auto start_time = Clock::now();
     const u64 total_size = reader->GetDataSize();
@@ -143,7 +142,7 @@ private:
       const auto read_size = get_read_size(read_offset);
       if (read_size == 0)
       {
-        const auto total_time = DT_s{Clock::now() - start_time}.count();
+        const double total_time = DTToSeconds(Clock::now() - start_time);
 
         static constexpr auto mib_scale = double(1 << 20);
 

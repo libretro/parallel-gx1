@@ -34,7 +34,6 @@ typedef struct pollfd pollfd_t;
 #include <sys/types.h>
 #endif
 
-#include <chrono>
 #include <list>
 #include <optional>
 #include <string_view>
@@ -177,7 +176,7 @@ public:
   WiiSocket& operator=(WiiSocket&&) = delete;
 
 private:
-  using Timeout = Clock::time_point;
+  using Timeout = TimePoint;
   struct sockop
   {
     Request request;
@@ -301,7 +300,6 @@ private:
   std::unordered_map<s32, WiiSocket> WiiSockets;
   s32 errno_last = 0;
   std::vector<PollCommand> pending_polls;
-  Clock::time_point last_time =
-      Clock::now();
+  TimePoint last_time = Clock::now();
 };
 }  // namespace IOS::HLE

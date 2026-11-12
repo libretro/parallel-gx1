@@ -536,12 +536,14 @@ void InitDIMM(const DiscIO::Volume& volume)
   s_dimm_disc = DiscIO::CreateCachedBlobReader(volume.GetBlobReader().CopyReader());
 }
 
-static int PlatformPoll(WSAPOLLFD* pfds, std::size_t count, std::chrono::milliseconds timeout)
+/* timeout_ms < 0 waits for ever */
+static int PlatformPoll(WSAPOLLFD* pfds, std::size_t count, s64 timeout_ms)
 {
+  const int timeout = timeout_ms > 0x7fffffff ? 0x7fffffff : static_cast<int>(timeout_ms);
 #if defined(_WIN32)
-  return WSAPoll(pfds, ULONG(count), INT(timeout.count()));
+  return WSAPoll(pfds, ULONG(count), INT(timeout));
 #else
-  return UnixUtil::RetryOnEINTR(poll, pfds, count, timeout.count());
+  return UnixUtil::RetryOnEINTR(poll, pfds, count, timeout);
 #endif
 }
 
@@ -666,7 +668,7 @@ static std::optional<Common::IPv4Port> ReverseAdjustIPv4PortFromConfig(Common::I
 static bool BindEphemeralPort(SOCKET host_socket, Common::IPAddress ip_address,
                               u16 first_port_value, u16 last_port_value, u32 attempt_count)
 {
-  std::mt19937 rng(u32(Clock::now().time_since_epoch().count()));
+  std::mt19937 rng{static_cast<u32>(Clock::now())};
   std::uniform_int_distribution<u16> port_distribution{first_port_value, last_port_value};
 
   sockaddr_in addr = {
@@ -790,8 +792,7 @@ static s32 NetDIMMConnect(GuestSocket guest_socket, const GuestSocketAddress& gu
   WSAPOLLFD pfds[1]{{.fd = host_socket, .events = POLLOUT}};
 
   // TODO: Possible race between this socket's SetTimeOuts and others'
-  const auto timeout =
-      duration_cast<std::chrono::milliseconds>(std::chrono::microseconds{s_timeouts[0]});
+  const s64 timeout = s_timeouts[0] / 1000;
 
   // TODO: Might block if timeout is too big
   const int poll_result = PlatformPoll(pfds, 1, timeout);
@@ -854,7 +855,7 @@ static GuestSocket NetDIMMAccept(GuestSocket guest_socket, u8* guest_addr_ptr,
   WSAPOLLFD pfds[1]{{.fd = host_socket, .events = POLLIN}};
 
   // FYI: Currently using a 0ms timeout to make accept calls always non-blocking.
-  constexpr auto timeout = std::chrono::milliseconds{0};
+  constexpr s64 timeout = 0;
 
   DEBUG_LOG(AMMEDIABOARD, "NetDIMMAccept: %lld(%d)", static_cast<long long>(host_socket),
             int(guest_socket));
@@ -1270,7 +1271,7 @@ static void AMMBCommandSelect(u32 parameter_offset)
   if (nfds > std::size(s_sockets))
     nfds = u32(std::size(s_sockets));
 
-  std::chrono::milliseconds timeout{-1};
+  s64 timeout = -1;
   if (timeout_offset != 0)
   {
     std::size_t guest_timeout_size;
@@ -1286,13 +1287,11 @@ static void AMMBCommandSelect(u32 parameter_offset)
     {
       std::memcpy(&guest_timeout, guest_timeout_ptr, sizeof(guest_timeout));
 
-      timeout = duration_cast<std::chrono::milliseconds>(
-          std::chrono::seconds(guest_timeout.seconds) +
-          std::chrono::microseconds(guest_timeout.microseconds));
+      timeout = static_cast<s64>(guest_timeout.seconds) * 1000 + guest_timeout.microseconds / 1000;
     }
   }
 
-  if (timeout < std::chrono::milliseconds{})
+  if (timeout < 0)
   {
     // TODO: We should have a way to break out of any timeout on shutdown.
     // e.g. include a "wakeup" socket in each `poll` call.
@@ -1300,8 +1299,7 @@ static void AMMBCommandSelect(u32 parameter_offset)
   }
 
   DEBUG_LOG(AMMEDIABOARD_NET, "GC-AM: select( %u, 0x%08x 0x%08x 0x%08x 0x%08x ) timeout=%" PRId64,
-            nfds, readfds_offset, writefds_offset, exceptfds_offset, timeout_offset,
-            (s64)timeout.count());
+            nfds, readfds_offset, writefds_offset, exceptfds_offset, timeout_offset, timeout);
 
   // Fill with the host sockets for each guest socket less-than `nfds` in each GuestFdSet.
   std::vector<WSAPOLLFD> pollfds(nfds, WSAPOLLFD{.fd = INVALID_SOCKET});

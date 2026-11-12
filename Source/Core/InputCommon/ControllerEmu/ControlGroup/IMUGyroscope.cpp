@@ -15,7 +15,7 @@ namespace ControllerEmu
 {
 // Maximum period for calculating an average stable value.
 // Just to prevent failures due to timer overflow.
-static constexpr auto MAXIMUM_CALIBRATION_DURATION = std::chrono::hours(1);
+static constexpr DT MAXIMUM_CALIBRATION_DURATION = DTFromSeconds(60 * 60);
 
 // If calibration updates do not happen at this rate, restart calibration period.
 // This prevents calibration across periods of no regular updates. (e.g. between game sessions)
@@ -78,9 +78,7 @@ void IMUGyroscope::UpdateCalibration(const StateData& state)
   else
   {
     const auto calibration_freq =
-        m_running_calibration.Count() /
-        std::chrono::duration_cast<std::chrono::duration<double>>(now - m_calibration_period_start)
-            .count();
+        m_running_calibration.Count() / DTToSeconds(now - m_calibration_period_start);
 
     const auto potential_calibration = m_running_calibration.Mean();
     const auto current_difference = state - potential_calibration;
@@ -101,7 +99,7 @@ void IMUGyroscope::UpdateCalibration(const StateData& state)
 
   // Apply calibration after configured time.
   const auto calibration_duration = now - m_calibration_period_start;
-  if (calibration_duration >= std::chrono::duration<double>(calibration_period))
+  if (DTToSeconds(calibration_duration) >= calibration_period)
   {
     m_calibration = m_running_calibration.Mean();
 
@@ -169,8 +167,8 @@ ControlState IMUGyroscope::GetDeadzone() const
 bool IMUGyroscope::IsCalibrating() const
 {
   const auto calibration_period = m_calibration_period_setting.GetValue();
-  return calibration_period && (Clock::now() - m_calibration_period_start) >=
-                                   std::chrono::duration<double>(calibration_period);
+  return calibration_period &&
+         DTToSeconds(Clock::now() - m_calibration_period_start) >= calibration_period;
 }
 
 }  // namespace ControllerEmu

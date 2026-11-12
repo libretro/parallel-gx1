@@ -740,8 +740,7 @@ const WiiSocket::Timeout& WiiSocket::GetTimeout()
 {
   if (!timeout.has_value())
   {
-    timeout = Clock::now() +
-              std::chrono::seconds(Config::Get(Config::MAIN_NETWORK_TIMEOUT));
+    timeout = Clock::now() + DTFromSeconds(Config::Get(Config::MAIN_NETWORK_TIMEOUT));
   }
   return *timeout;
 }
@@ -950,8 +949,7 @@ void WiiSockMan::UpdatePollCommands()
     return;
 
   const auto now = Clock::now();
-  const auto elapsed_d = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_time);
-  const auto elapsed = elapsed_d.count();
+  const s64 elapsed = DTToMs(now - last_time);
   last_time = now;
 
   for (PollCommand& pcmd : pending_polls)

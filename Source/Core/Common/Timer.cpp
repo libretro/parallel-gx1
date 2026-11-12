@@ -3,12 +3,14 @@
 
 #include "Common/Timer.h"
 
-#include <chrono>
+#include <ctime>
 #include "Common/CommonFuncs.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #include <timeapi.h>
+#else
+#include <sys/time.h>
 #endif
 
 #include "Common/CommonTypes.h"
@@ -56,12 +58,6 @@ u64 Timer::ElapsedMs() const
 
 u64 Timer::GetLocalTimeSinceJan1970()
 {
-#ifdef _MSC_VER
-  std::chrono::zoned_seconds seconds(
-      std::chrono::current_zone(),
-      std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now()));
-  return seconds.get_local_time().time_since_epoch().count();
-#else
   time_t sysTime, tzDiff, tzDST;
   time(&sysTime);
   tm* gmTime = localtime(&sysTime);
@@ -77,6 +73,20 @@ u64 Timer::GetLocalTimeSinceJan1970()
   tzDiff = sysTime - mktime(gmTime);
 
   return static_cast<u64>(sysTime + tzDiff + tzDST);
+}
+
+u64 Timer::WallClockUs()
+{
+#ifdef _WIN32
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+  const u64 ticks = (static_cast<u64>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
+  /* 100 ns ticks since 1601-01-01 */
+  return (ticks - 116444736000000000ULL) / 10;
+#else
+  timeval tv;
+  gettimeofday(&tv, nullptr);
+  return static_cast<u64>(tv.tv_sec) * 1000000 + static_cast<u64>(tv.tv_usec);
 #endif
 }
 

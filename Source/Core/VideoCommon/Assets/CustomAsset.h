@@ -19,7 +19,7 @@ class CustomAsset
 {
 public:
   using ClockType = Clock;
-  using TimeType = ClockType::time_point;
+  using TimeType = TimePoint;
 
   CustomAsset(std::shared_ptr<CustomAssetLibrary> library, CustomAssetLibrary::AssetID asset_id,
               u64 session_id);

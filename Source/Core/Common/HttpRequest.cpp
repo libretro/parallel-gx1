@@ -13,8 +13,7 @@
 
 namespace Common
 {
-HttpRequest::HttpRequest(std::chrono::milliseconds timeout_ms)
-    : m_timeout_ms(static_cast<int>(timeout_ms.count()))
+HttpRequest::HttpRequest(int timeout_ms) : m_timeout_ms(timeout_ms)
 {
 }
 

@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstdio>
 #include <tuple>
 
@@ -139,7 +138,7 @@ private:
   const std::string m_name;
   const int m_index;
   int m_socket = -1;  // opened on the first request, nonblocking
-  SteadyClock::time_point m_next_reregister = SteadyClock::time_point::min();
+  TimePoint m_next_reregister = INT64_MIN;
   Proto::MessageType::PadDataResponse m_pad_data{};
   Proto::Touch m_prev_touch{};
   bool m_prev_touch_valid = false;
@@ -157,12 +156,12 @@ private:
 };
 
 using MathUtil::GRAVITY_ACCELERATION;
-constexpr auto SERVER_REREGISTER_INTERVAL = std::chrono::seconds{1};
-constexpr auto SERVER_LISTPORTS_INTERVAL = std::chrono::seconds{1};
+constexpr DT SERVER_REREGISTER_INTERVAL = DTFromSeconds(1);
+constexpr DT SERVER_LISTPORTS_INTERVAL = DTFromSeconds(1);
 constexpr int TOUCH_X_AXIS_MAX = 1000;
 constexpr int TOUCH_Y_AXIS_MAX = 500;
-constexpr auto THREAD_MAX_WAIT_INTERVAL = std::chrono::milliseconds{250};
-constexpr auto SERVER_UNRESPONSIVE_INTERVAL = std::chrono::seconds{1};  // Can be 0
+constexpr s64 THREAD_MAX_WAIT_INTERVAL_MS = 250;
+constexpr DT SERVER_UNRESPONSIVE_INTERVAL = DTFromSeconds(1);  // Can be 0
 constexpr u32 SERVER_ASKED_PADS = 4;
 
 struct Server
@@ -193,7 +192,7 @@ struct Server
   u16 m_port = 0;
   std::array<Proto::MessageType::PortInfo, Proto::PORT_COUNT> m_port_info{};
   int m_socket = -1;
-  SteadyClock::time_point m_disconnect_time = SteadyClock::now();
+  TimePoint m_disconnect_time = SteadyClock::now();
 };
 
 class InputBackend final : public ciface::InputBackend
@@ -214,7 +213,7 @@ private:
   bool m_servers_enabled = false;
   std::vector<Server> m_servers;
   u32 m_client_uid = 0;
-  SteadyClock::time_point m_next_listports_time;
+  TimePoint m_next_listports_time;
   sthread_t* m_hotplug_thread = nullptr;
   Common::Flag m_hotplug_thread_running;
   Config::ConfigChangedCallbackID m_config_change_callback_id;
@@ -244,9 +243,6 @@ void InputBackend::HotplugThreadFunc()
 
   while (m_hotplug_thread_running.IsSet())
   {
-    using namespace std::chrono;
-    using namespace std::chrono_literals;
-
     const auto now = SteadyClock::now();
     if (now >= m_next_listports_time)
     {
@@ -292,7 +288,7 @@ void InputBackend::HotplugThreadFunc()
       server_of[count++] = i;
     }
 
-    auto timeout = duration_cast<milliseconds>(m_next_listports_time - SteadyClock::now());
+    s64 timeout = DTToMs(m_next_listports_time - SteadyClock::now());
 
     // Receive controller port info within a time from our request.
     // Run this even if we sent no new requests, to disconnect devices,
@@ -302,10 +298,11 @@ void InputBackend::HotplugThreadFunc()
       // Selector's wait treats a timeout of zero as infinite timeout, which we don't want,
       // but we also don't want risk waiting for the whole SERVER_LISTPORTS_INTERVAL and hang
       // the thead trying to close this one in case we received no answers.
-      const auto current_timeout = std::max(std::min(timeout, THREAD_MAX_WAIT_INTERVAL), 1ms);
+      const s64 current_timeout =
+          std::max<s64>(std::min<s64>(timeout, THREAD_MAX_WAIT_INTERVAL_MS), 1);
       timeout -= current_timeout;
       // This will return at the first answer
-      if (net_wait_readable_any(fds, count, static_cast<int>(current_timeout.count()), ready))
+      if (net_wait_readable_any(fds, count, static_cast<int>(current_timeout), ready))
       {
         // Now check all the servers because we don't know which one(s) sent a reply
         for (unsigned j = 0; j < count; ++j)
@@ -343,7 +340,7 @@ void InputBackend::HotplugThreadFunc()
       }
       if (!m_hotplug_thread_running.IsSet())  // Avoid hanging the thread for too long
         return;
-    } while (timeout > 0ms);
+    } while (timeout > 0);
 
     // If we have failed to receive any information from the server (or even send it),
     // disconnect all devices from it (after enough time has elapsed, to avoid false positives).

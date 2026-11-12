@@ -184,9 +184,7 @@ IPCReply DolphinDevice::GetSystemTime(const IOCtlVRequest& request) const
   auto& memory = system.GetMemory();
 
   // Write Unix timestamp in milliseconds to memory address
-  const u64 milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::system_clock::now().time_since_epoch())
-                               .count();
+  const u64 milliseconds = Common::Timer::WallClockUs() / 1000;
   memory.Write_U64(milliseconds, request.io_vectors[0].address);
   return IPCReply(IPC_SUCCESS);
 }

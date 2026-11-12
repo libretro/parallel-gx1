@@ -3,10 +3,9 @@
 
 #include "Common/PcapFile.h"
 
-#include <chrono>
-
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
+#include "Common/Timer.h"
 
 namespace Common
 {
@@ -52,12 +51,9 @@ void PCAP::AddHeader(u32 link_type)
 // Not thread-safe, concurrency between multiple calls to IOFile::WriteBytes.
 void PCAP::AddPacket(const u8* bytes, size_t size)
 {
-  std::chrono::system_clock::time_point now(std::chrono::system_clock::now());
-  auto ts = now.time_since_epoch();
-  PCAPRecordHeader rec_hdr = {
-      (u32)std::chrono::duration_cast<std::chrono::seconds>(ts).count(),
-      (u32)(std::chrono::duration_cast<std::chrono::microseconds>(ts).count() % 1000000), (u32)size,
-      (u32)size};
+  const u64 now_us = Common::Timer::WallClockUs();
+  PCAPRecordHeader rec_hdr = {(u32)(now_us / 1000000), (u32)(now_us % 1000000), (u32)size,
+                              (u32)size};
   m_fp->WriteBytes(&rec_hdr, sizeof(rec_hdr));
   m_fp->WriteBytes(bytes, size);
 }

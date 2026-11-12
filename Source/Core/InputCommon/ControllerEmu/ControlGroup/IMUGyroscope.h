@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <chrono>
 #include <optional>
 #include <string>
 
@@ -42,6 +41,6 @@ private:
 
   StateData m_calibration = {};
   MathUtil::RunningMean<StateData> m_running_calibration;
-  Clock::time_point m_calibration_period_start = Clock::now();
+  TimePoint m_calibration_period_start = Clock::now();
 };
 }  // namespace ControllerEmu

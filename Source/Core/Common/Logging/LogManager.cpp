@@ -3,7 +3,6 @@
 
 #include "Common/Logging/LogManager.h"
 
-#include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -22,6 +21,7 @@
 #include "Common/Logging/ConsoleListener.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
+#include "Common/Timer.h"
 
 namespace Common::Log
 {
@@ -244,9 +244,7 @@ void LogManager::LogWithFullPath(LogLevel level, LogType type, const char* file,
                                  const char* message)
 {
   /* minutes, seconds and milliseconds of the hour, UTC */
-  const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::system_clock::now().time_since_epoch())
-                           .count();
+  const long long ms = static_cast<long long>(Common::Timer::WallClockUs() / 1000);
   char msg[1280];
   snprintf(msg, sizeof(msg), "%02d:%02d:%03d %s:%d %c[%s]: %s\n",
            static_cast<int>((ms / 60000) % 60), static_cast<int>((ms / 1000) % 60),

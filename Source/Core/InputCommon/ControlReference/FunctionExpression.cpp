@@ -4,12 +4,10 @@
 #include "InputCommon/ControlReference/FunctionExpression.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 
 namespace ciface::ExpressionParser
 {
-using FSec = std::chrono::duration<ControlState>;
 
 // usage: toggle(toggle_state_input, [clear_state_input])
 class ToggleExpression : public FunctionExpression
@@ -286,7 +284,7 @@ private:
 
     const ControlState val = GetArg(0).GetValue();
 
-    ControlState progress = std::chrono::duration_cast<FSec>(elapsed).count() / val;
+    ControlState progress = DTToSeconds(elapsed) / val;
 
     if (std::isinf(progress) || progress < 0.0)
     {
@@ -298,7 +296,7 @@ private:
     {
       const ControlState reset_count = std::floor(progress);
 
-      m_start_time += std::chrono::duration_cast<Clock::duration>(FSec(val * reset_count));
+      m_start_time += DTFromSecondsF(val * reset_count);
       progress -= reset_count;
     }
 
@@ -306,7 +304,7 @@ private:
   }
 
 private:
-  Clock::time_point m_start_time = Clock::now();
+  TimePoint m_start_time = Clock::now();
 };
 
 // usage: if(condition, true_expression, false_expression)
@@ -406,7 +404,7 @@ class SmoothExpression : public FunctionExpression
     const ControlState smooth_down = GetArgCount() == 3 ? GetArg(2).GetValue() : smooth_up;
 
     const ControlState smooth = (desired_value < m_value) ? smooth_down : smooth_up;
-    const ControlState max_move = std::chrono::duration_cast<FSec>(elapsed).count() / smooth;
+    const ControlState max_move = DTToSeconds(elapsed) / smooth;
 
     if (std::isinf(max_move))
     {
@@ -423,7 +421,7 @@ class SmoothExpression : public FunctionExpression
 
 private:
   ControlState m_value = 0.0;
-  Clock::time_point m_last_update = Clock::now();
+  TimePoint m_last_update = Clock::now();
 };
 
 // usage: hold(input, seconds)
@@ -452,7 +450,7 @@ class HoldExpression : public FunctionExpression
     {
       const auto hold_time = now - m_start_time;
 
-      if (std::chrono::duration_cast<FSec>(hold_time).count() >= GetArg(1).GetValue())
+      if (DTToSeconds(hold_time) >= GetArg(1).GetValue())
         m_state = true;
     }
 
@@ -461,7 +459,7 @@ class HoldExpression : public FunctionExpression
 
 private:
   bool m_state = false;
-  Clock::time_point m_start_time = Clock::now();
+  TimePoint m_start_time = Clock::now();
 };
 
 // usage: tap(input, seconds, taps=2)
@@ -479,7 +477,7 @@ class TapExpression : public FunctionExpression
   {
     const auto now = Clock::now();
 
-    const auto elapsed = std::chrono::duration_cast<FSec>(now - m_start_time).count();
+    const auto elapsed = DTToSeconds(now - m_start_time);
 
     const ControlState input = GetArg(0).GetValue();
     const ControlState seconds = GetArg(1).GetValue();
@@ -519,7 +517,7 @@ class TapExpression : public FunctionExpression
 private:
   bool m_released = true;
   u32 m_taps = 0;
-  Clock::time_point m_start_time = Clock::now();
+  TimePoint m_start_time = Clock::now();
 };
 
 // usage: relative(input, speed, [max_abs_value, [shared_state]])
@@ -555,7 +553,7 @@ class RelativeExpression : public FunctionExpression
     if (GetArgCount() >= 4)
       m_state = GetArg(3).GetValue();
 
-    const auto elapsed = std::chrono::duration_cast<FSec>(now - m_last_update).count();
+    const auto elapsed = DTToSeconds(now - m_last_update);
     m_last_update = now;
 
     const ControlState input = GetArg(0).GetValue();
@@ -578,7 +576,7 @@ class RelativeExpression : public FunctionExpression
 
 private:
   ControlState m_state = 0.0;
-  Clock::time_point m_last_update = Clock::now();
+  TimePoint m_last_update = Clock::now();
 };
 
 // usage: pulse(input, seconds)
@@ -606,7 +604,7 @@ class PulseExpression : public FunctionExpression
     {
       m_released = false;
 
-      const auto seconds = std::chrono::duration_cast<Clock::duration>(FSec(GetArg(1).GetValue()));
+      const auto seconds = DTFromSecondsF(GetArg(1).GetValue());
 
       if (m_state)
       {
@@ -630,7 +628,7 @@ class PulseExpression : public FunctionExpression
 private:
   bool m_released = false;
   bool m_state = false;
-  Clock::time_point m_release_time = Clock::now();
+  TimePoint m_release_time = Clock::now();
 };
 
 std::unique_ptr<FunctionExpression> MakeFunctionExpression(std::string_view name)

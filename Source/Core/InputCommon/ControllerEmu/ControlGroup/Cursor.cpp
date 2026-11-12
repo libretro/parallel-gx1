@@ -106,8 +106,7 @@ Cursor::StateData Cursor::UpdateState(Cursor::ReshapeData input)
   // TODO: Using system time is ugly.
   // Kill this after state is moved into wiimote rather than this class.
   const auto now = Clock::now();
-  const auto ms_since_update =
-      std::chrono::duration_cast<std::chrono::milliseconds>(now - m_last_update).count();
+  const auto ms_since_update = DTToMs(now - m_last_update);
   m_last_update = now;
 
   const double max_step = STEP_PER_SEC / 1000.0 * ms_since_update;

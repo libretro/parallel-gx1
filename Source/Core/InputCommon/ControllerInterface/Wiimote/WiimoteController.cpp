@@ -1219,13 +1219,13 @@ void Device::ProcessInputReport(WiimoteReal::Report& report)
 void Device::UpdateOrientation()
 {
   const auto current_report_time = Clock::now();
-  const auto elapsed_time = std::chrono::duration_cast<std::chrono::duration<float>>(
-      current_report_time - m_last_report_time);
+  const float elapsed_time =
+      static_cast<float>(DTToSeconds(current_report_time - m_last_report_time));
   m_last_report_time = current_report_time;
 
   // Apply M+ gyro data to our orientation.
   m_orientation =
-      WiimoteEmu::GetRotationFromGyroscope(m_mplus_state.gyro_data * -1 * elapsed_time.count()) *
+      WiimoteEmu::GetRotationFromGyroscope(m_mplus_state.gyro_data * -1 * elapsed_time) *
       m_orientation;
 
   // When M+ data is not available give accel/ir data more weight.
@@ -1430,21 +1430,21 @@ void Device::ProcessNormalExtensionData(const u8* ext_data, u32 ext_size)
 
 void Device::UpdateRumble()
 {
-  static constexpr auto rumble_period = std::chrono::milliseconds(100);
+  static constexpr DT rumble_period = DTFromMs(100);
 
   const s64 bits = retro_atomic_load_acquire_64(&m_rumble_level);
   ControlState rumble_level;
   std::memcpy(&rumble_level, &bits, sizeof(rumble_level));
 
-  const auto on_time = std::chrono::duration_cast<Clock::duration>(rumble_period * rumble_level);
-  const auto off_time = rumble_period - on_time;
+  const DT on_time = static_cast<DT>(rumble_period * rumble_level);
+  const DT off_time = rumble_period - on_time;
 
   const auto now = Clock::now();
 
-  if (m_rumble && (now < m_last_rumble_change + on_time || !off_time.count()))
+  if (m_rumble && (now < m_last_rumble_change + on_time || !off_time))
     return;
 
-  if (!m_rumble && (now < m_last_rumble_change + off_time || !on_time.count()))
+  if (!m_rumble && (now < m_last_rumble_change + off_time || !on_time))
     return;
 
   m_last_rumble_change = now;
@@ -1489,7 +1489,7 @@ bool Device::IsWaitingForMotionPlus() const
 void Device::WaitForMotionPlus()
 {
   DEBUG_LOG(WIIMOTE, "WiiRemote: Wait for M+.");
-  m_mplus_wait_time = Clock::now() + std::chrono::seconds{2};
+  m_mplus_wait_time = Clock::now() + DTFromSeconds(2);
 }
 
 void Device::NunchukState::ProcessData(const WiimoteEmu::Nunchuk::DataFormat& data)
@@ -1619,14 +1619,14 @@ void Device::WriteData(AddressSpace space, u8 slave, u16 address, T&& data, C&& 
   }
 }
 
-Device::ReportHandler::ReportHandler(Clock::time_point expired_time) : m_expired_time(expired_time)
+Device::ReportHandler::ReportHandler(TimePoint expired_time) : m_expired_time(expired_time)
 {
 }
 
 template <typename... T>
 void Device::AddReportHandler(T&&... callbacks)
 {
-  auto& handler = m_report_handlers.emplace_back(Clock::now() + std::chrono::seconds{5});
+  auto& handler = m_report_handlers.emplace_back(Clock::now() + DTFromSeconds(5));
   (handler.AddHandler(std::forward<T>(callbacks)), ...);
 }
 
@@ -1703,7 +1703,7 @@ bool Device::IsPerformingTask() const
 void Device::ProcessStatusReport(const InputReportStatus& status)
 {
   // Update status periodically to keep battery level value up to date.
-  m_status_outdated_time = Clock::now() + std::chrono::seconds(10);
+  m_status_outdated_time = Clock::now() + DTFromSeconds(10);
 
   m_battery = status.GetEstimatedCharge() * BATTERY_INPUT_MAX_VALUE;
   m_leds = status.leds;

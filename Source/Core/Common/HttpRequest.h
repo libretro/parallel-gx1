@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <chrono>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -17,7 +16,7 @@ namespace Common
 class HttpRequest final
 {
 public:
-  explicit HttpRequest(std::chrono::milliseconds timeout_ms = std::chrono::milliseconds{3000});
+  explicit HttpRequest(int timeout_ms = 3000);
   ~HttpRequest();
   HttpRequest(const HttpRequest&) = delete;
   HttpRequest& operator=(const HttpRequest&) = delete;

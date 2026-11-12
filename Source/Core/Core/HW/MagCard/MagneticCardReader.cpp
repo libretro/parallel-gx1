@@ -623,7 +623,7 @@ void MagneticCardReader::Update()
       DEBUG_LOG(SERIALINTERFACE_CARD, "Process: ENQ");
 
       // TODO: Get time from Core rather than assuming.
-      const auto elapsed_time = std::chrono::milliseconds{50};
+      const DT elapsed_time = DTFromMs(50);
 
       StepStateMachine(elapsed_time);
       StepStatePerson(elapsed_time);
@@ -759,7 +759,7 @@ void MagneticCardReader::StepStatePerson(DT elapsed_time)
   if (!IsCardPresent())
   {
     if (m_card_settings->insert_card_when_possible && IsReadyForCard() &&
-        m_time_since_person_moved_card > std::chrono::milliseconds{500} && *card_exists)
+        m_time_since_person_moved_card > DTFromMs(500) && *card_exists)
     {
       // Place the card in the entry slot after a delay.
       NOTICE_LOG(SERIALINTERFACE_CARD, "Inserting card.");
@@ -772,9 +772,7 @@ void MagneticCardReader::StepStatePerson(DT elapsed_time)
 
   const bool machine_moved_card_last =
       m_time_since_machine_moved_card < m_time_since_person_moved_card;
-  if ((machine_moved_card_last &&
-       m_time_since_machine_moved_card > std::chrono::milliseconds{100}) ||
-      !*card_exists)
+  if ((machine_moved_card_last && m_time_since_machine_moved_card > DTFromMs(100)) || !*card_exists)
   {
     // Take the card from the machine when ejected or if the file is deleted.
     NOTICE_LOG(SERIALINTERFACE_CARD, "Removing card.");
