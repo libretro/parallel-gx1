@@ -1587,15 +1587,18 @@ static WiimoteEmu::Wiimote* load_saved_controller_config(unsigned port, unsigned
 }
 
 // returns retropad_expr on its own, with additional mouse bindings
-static std::string bindMouse(const std::string& retropad_expr, const std::string& mouse_target)
+/* Sets control index of group to the RetroPad button, or that or the mouse's button when the
+ * default mouse bindings are on. */
+static void BindMouse(ControllerEmu::ControlGroup* group, int index, const char* retropad,
+                      const char* mouse, const char* mouse_button)
 {
   static const bool enable_default_mouse_bindings =
     Libretro::Options::GetCached<bool>(Libretro::Options::retroarch_core::ENABLE_DEFAULT_MOUSE_BINDINGS, /*def=*/true);
 
   if (!enable_default_mouse_bindings)
-    return retropad_expr;
-
-  return retropad_expr + " | `" + mouse_target + "`";
+    Libretro::Input::Bind(group, index, "%s", retropad);
+  else
+    Libretro::Input::Bind(group, index, "%s | `%s:%s`", retropad, mouse, mouse_button);
 }
 
 void retro_set_controller_port_device_gc(unsigned port, unsigned device)
@@ -1713,9 +1716,13 @@ static void retro_set_controller_port_device_gba(unsigned port)
 
 void retro_set_controller_port_device_wii(unsigned port, unsigned device)
 {
-  std::string devJoypad = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_JOYPAD);
-  std::string devAnalog = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_ANALOG);
-  std::string devMouse = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_MOUSE);
+  char devJoypad[Libretro::Input::DEVICE_NAME_SIZE];
+  char devAnalog[Libretro::Input::DEVICE_NAME_SIZE];
+  char devMouse[Libretro::Input::DEVICE_NAME_SIZE];
+  char devDSU[Libretro::Input::DEVICE_NAME_SIZE] = "";
+  Libretro::Input::QualifiedName(devJoypad, port, "Joypad");
+  Libretro::Input::QualifiedName(devAnalog, port, "Analog");
+  Libretro::Input::QualifiedName(devMouse, port, "Mouse");
 
   // Take the dongle off the id and remember it, so the branches below only see
   // the remotes they were written for.
@@ -1753,15 +1760,9 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
   bool dsu_enabled = Libretro::Options::GetCached<bool>(
       Libretro::Options::wiimote_dsu::DSU_ENABLED, false);
 
-  std::string devDSU;
   if (dsu_enabled)
   {
-    devDSU = ciface::Core::DeviceQualifier(
-      std::string("DSUClient"),
-      static_cast<int>(port),
-      std::string("DS4")).ToString();
-    //devDSU = "DSUClient/DS4/" + std::to_string(port);
-
+    snprintf(devDSU, sizeof(devDSU), "DSUClient/%u/DS4", port);
     wm->SetDefaultDevice(devDSU);
   }
   else
@@ -1782,13 +1783,13 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
 
     if (dsu_enabled)
     {
-      ccButtons->SetControlExpression(0, "`" + devDSU + ":Cross`");    // A
-      ccButtons->SetControlExpression(1, "`" + devDSU + ":Circle`");   // B
-      ccButtons->SetControlExpression(2, "`" + devDSU + ":Square`");   // X
-      ccButtons->SetControlExpression(3, "`" + devDSU + ":Triangle`"); // Y
-      ccButtons->SetControlExpression(6, "`" + devDSU + ":Share`");    // -
-      ccButtons->SetControlExpression(7, "`" + devDSU + ":Options`");  // +
-      ccButtons->SetControlExpression(8, "`" + devDSU + ":PS`");       // Home
+      Libretro::Input::Bind(ccButtons, 0, "`%s:Cross`", devDSU);    // A
+      Libretro::Input::Bind(ccButtons, 1, "`%s:Circle`", devDSU);   // B
+      Libretro::Input::Bind(ccButtons, 2, "`%s:Square`", devDSU);   // X
+      Libretro::Input::Bind(ccButtons, 3, "`%s:Triangle`", devDSU); // Y
+      Libretro::Input::Bind(ccButtons, 6, "`%s:Share`", devDSU);    // -
+      Libretro::Input::Bind(ccButtons, 7, "`%s:Options`", devDSU);  // +
+      Libretro::Input::Bind(ccButtons, 8, "`%s:PS`", devDSU);       // Home
     }
     else
     {
@@ -1804,58 +1805,58 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
     {
       if (dsu_enabled)
       {
-        ccButtons->SetControlExpression(4, "`" + devDSU + ":L1`"); // ZL
-        ccButtons->SetControlExpression(5, "`" + devDSU + ":R1`"); // ZR
-        ccTriggers->SetControlExpression(0, "`" + devDSU + ":L2`"); // L-trigger
-        ccTriggers->SetControlExpression(1, "`" + devDSU + ":R2`"); // R-trigger
-        ccTriggers->SetControlExpression(2, "`" + devDSU + ":L2`"); // L-trigger Analog
-        ccTriggers->SetControlExpression(3, "`" + devDSU + ":R2`"); // R-trigger Analog
+        Libretro::Input::Bind(ccButtons, 4, "`%s:L1`", devDSU); // ZL
+        Libretro::Input::Bind(ccButtons, 5, "`%s:R1`", devDSU); // ZR
+        Libretro::Input::Bind(ccTriggers, 0, "`%s:L2`", devDSU); // L-trigger
+        Libretro::Input::Bind(ccTriggers, 1, "`%s:R2`", devDSU); // R-trigger
+        Libretro::Input::Bind(ccTriggers, 2, "`%s:L2`", devDSU); // L-trigger Analog
+        Libretro::Input::Bind(ccTriggers, 3, "`%s:R2`", devDSU); // R-trigger Analog
       }
       else
       {
         ccButtons->SetControlExpression(4, "L");                               // ZL
         ccButtons->SetControlExpression(5, "R");                               // ZR
-        ccTriggers->SetControlExpression(0, "`" + devAnalog + ":Trigger0+`");  // L-trigger
-        ccTriggers->SetControlExpression(1, "`" + devAnalog + ":Trigger1+`");  // R-trigger
-        ccTriggers->SetControlExpression(2, "`" + devAnalog + ":Trigger0+`");  // L-trigger Analog
-        ccTriggers->SetControlExpression(3, "`" + devAnalog + ":Trigger1+`");  // R-trigger Analog
+        Libretro::Input::Bind(ccTriggers, 0, "`%s:Trigger0+`", devAnalog);  // L-trigger
+        Libretro::Input::Bind(ccTriggers, 1, "`%s:Trigger1+`", devAnalog);  // R-trigger
+        Libretro::Input::Bind(ccTriggers, 2, "`%s:Trigger0+`", devAnalog);  // L-trigger Analog
+        Libretro::Input::Bind(ccTriggers, 3, "`%s:Trigger1+`", devAnalog);  // R-trigger Analog
       }
     }
     else // Classic Controller Pro doesn't have analog triggers and L/R should be swapped with ZL/ZR
     {
-      ccButtons->SetControlExpression(4, dsu_enabled ? "`" + devDSU + ":L2`" : "L2"); // ZL
-      ccButtons->SetControlExpression(5, dsu_enabled ? "`" + devDSU + ":R2`" : "R2"); // ZR
-      ccTriggers->SetControlExpression(0, dsu_enabled ? "`" + devDSU + ":L1`" : "L"); // L
-      ccTriggers->SetControlExpression(1, dsu_enabled ? "`" + devDSU + ":R1`" : "R"); // R
+      Libretro::Input::Bind(ccButtons, 4, dsu_enabled ? "`%s:L2`" : "L2", devDSU); // ZL
+      Libretro::Input::Bind(ccButtons, 5, dsu_enabled ? "`%s:R2`" : "R2", devDSU); // ZR
+      Libretro::Input::Bind(ccTriggers, 0, dsu_enabled ? "`%s:L1`" : "L", devDSU); // L
+      Libretro::Input::Bind(ccTriggers, 1, dsu_enabled ? "`%s:R1`" : "R", devDSU); // R
     }
 
-    ccDpad->SetControlExpression(0, dsu_enabled ? "`" + devDSU + ":Pad N`" : "Up");    // Up
-    ccDpad->SetControlExpression(1, dsu_enabled ? "`" + devDSU + ":Pad S`" : "Down");  // Down
-    ccDpad->SetControlExpression(2, dsu_enabled ? "`" + devDSU + ":Pad W`" : "Left");  // Left
-    ccDpad->SetControlExpression(3, dsu_enabled ? "`" + devDSU + ":Pad E`" : "Right"); // Right
+    Libretro::Input::Bind(ccDpad, 0, dsu_enabled ? "`%s:Pad N`" : "Up", devDSU);    // Up
+    Libretro::Input::Bind(ccDpad, 1, dsu_enabled ? "`%s:Pad S`" : "Down", devDSU);  // Down
+    Libretro::Input::Bind(ccDpad, 2, dsu_enabled ? "`%s:Pad W`" : "Left", devDSU);  // Left
+    Libretro::Input::Bind(ccDpad, 3, dsu_enabled ? "`%s:Pad E`" : "Right", devDSU); // Right
 
     if (dsu_enabled)
     {
-      ccLeftStick->SetControlExpression(0, "`" + devDSU + ":Left Y-`");  // Up
-      ccLeftStick->SetControlExpression(1, "`" + devDSU + ":Left Y+`");  // Down
-      ccLeftStick->SetControlExpression(2, "`" + devDSU + ":Left X-`");  // Left
-      ccLeftStick->SetControlExpression(3, "`" + devDSU + ":Left X+`");  // Right
+      Libretro::Input::Bind(ccLeftStick, 0, "`%s:Left Y-`", devDSU);  // Up
+      Libretro::Input::Bind(ccLeftStick, 1, "`%s:Left Y+`", devDSU);  // Down
+      Libretro::Input::Bind(ccLeftStick, 2, "`%s:Left X-`", devDSU);  // Left
+      Libretro::Input::Bind(ccLeftStick, 3, "`%s:Left X+`", devDSU);  // Right
 
-      ccRightStick->SetControlExpression(0, "`" + devDSU + ":Right Y-`"); // Up
-      ccRightStick->SetControlExpression(1, "`" + devDSU + ":Right Y+`"); // Down
-      ccRightStick->SetControlExpression(2, "`" + devDSU + ":Right X-`"); // Left
-      ccRightStick->SetControlExpression(3, "`" + devDSU + ":Right X+`"); // Right
+      Libretro::Input::Bind(ccRightStick, 0, "`%s:Right Y-`", devDSU); // Up
+      Libretro::Input::Bind(ccRightStick, 1, "`%s:Right Y+`", devDSU); // Down
+      Libretro::Input::Bind(ccRightStick, 2, "`%s:Right X-`", devDSU); // Left
+      Libretro::Input::Bind(ccRightStick, 3, "`%s:Right X+`", devDSU); // Right
     }
     else
     {
-      ccLeftStick->SetControlExpression(0, "`" + devAnalog + ":Y0-`");       // Up
-      ccLeftStick->SetControlExpression(1, "`" + devAnalog + ":Y0+`");       // Down
-      ccLeftStick->SetControlExpression(2, "`" + devAnalog + ":X0-`");       // Left
-      ccLeftStick->SetControlExpression(3, "`" + devAnalog + ":X0+`");       // Right
-      ccRightStick->SetControlExpression(0, "`" + devAnalog + ":Y1-`");      // Up
-      ccRightStick->SetControlExpression(1, "`" + devAnalog + ":Y1+`");      // Down
-      ccRightStick->SetControlExpression(2, "`" + devAnalog + ":X1-`");      // Left
-      ccRightStick->SetControlExpression(3, "`" + devAnalog + ":X1+`");      // Right
+      Libretro::Input::Bind(ccLeftStick, 0, "`%s:Y0-`", devAnalog);       // Up
+      Libretro::Input::Bind(ccLeftStick, 1, "`%s:Y0+`", devAnalog);       // Down
+      Libretro::Input::Bind(ccLeftStick, 2, "`%s:X0-`", devAnalog);       // Left
+      Libretro::Input::Bind(ccLeftStick, 3, "`%s:X0+`", devAnalog);       // Right
+      Libretro::Input::Bind(ccRightStick, 0, "`%s:Y1-`", devAnalog);      // Up
+      Libretro::Input::Bind(ccRightStick, 1, "`%s:Y1+`", devAnalog);      // Down
+      Libretro::Input::Bind(ccRightStick, 2, "`%s:X1-`", devAnalog);      // Left
+      Libretro::Input::Bind(ccRightStick, 3, "`%s:X1+`", devAnalog);      // Right
     }
   }
   else if (device != RETRO_DEVICE_REAL_WIIMOTE)
@@ -1878,16 +1879,16 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
       ControllerEmu::ControlGroup* ncShake = wm->GetNunchukGroup(NunchukGroup::Shake);
       ncButtons->SetControlExpression(0, "X");                             // C
       ncButtons->SetControlExpression(1, "Y");                             // Z
-      ncStick->SetControlExpression(0, "`" + devAnalog + ":Y0-`");         // Up
-      ncStick->SetControlExpression(1, "`" + devAnalog + ":Y0+`");         // Down
-      ncStick->SetControlExpression(2, "`" + devAnalog + ":X0-`");         // Left
-      ncStick->SetControlExpression(3, "`" + devAnalog + ":X0+`");         // Right
-      ncShake->SetControlExpression(0, bindMouse("L2", devMouse + ":Middle"));  // Nunchuk shake X
-      ncShake->SetControlExpression(1, bindMouse("L2", devMouse + ":Middle"));  // Nunchuk shake Y
-      ncShake->SetControlExpression(2, bindMouse("L2", devMouse + ":Middle"));  // Nunchuk shake Z
+      Libretro::Input::Bind(ncStick, 0, "`%s:Y0-`", devAnalog);         // Up
+      Libretro::Input::Bind(ncStick, 1, "`%s:Y0+`", devAnalog);         // Down
+      Libretro::Input::Bind(ncStick, 2, "`%s:X0-`", devAnalog);         // Left
+      Libretro::Input::Bind(ncStick, 3, "`%s:X0+`", devAnalog);         // Right
+      BindMouse(ncShake, 0, "L2", devMouse, "Middle");  // Nunchuk shake X
+      BindMouse(ncShake, 1, "L2", devMouse, "Middle");  // Nunchuk shake Y
+      BindMouse(ncShake, 2, "L2", devMouse, "Middle");  // Nunchuk shake Z
 
-      wmButtons->SetControlExpression(0, bindMouse("A", devMouse + ":Left"));   // A
-      wmButtons->SetControlExpression(1, bindMouse("B", devMouse + ":Right"));  // B
+      BindMouse(wmButtons, 0, "A", devMouse, "Left");   // A
+      BindMouse(wmButtons, 1, "B", devMouse, "Right");  // B
       wmButtons->SetControlExpression(2, "Start");                         // 1
       wmButtons->SetControlExpression(3, "Select");                        // 2
       wmButtons->SetControlExpression(4, "L");                             // -
@@ -1899,8 +1900,8 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
     {
       if (device == RETRO_DEVICE_WIIMOTE)
       {
-        wmButtons->SetControlExpression(0, bindMouse("A", devMouse + ":Left"));   // A
-        wmButtons->SetControlExpression(1, bindMouse("B", devMouse + ":Right"));  // B
+        BindMouse(wmButtons, 0, "A", devMouse, "Left");   // A
+        BindMouse(wmButtons, 1, "B", devMouse, "Right");  // B
         wmButtons->SetControlExpression(2, "X");                             // 1
         wmButtons->SetControlExpression(3, "Y");                             // 2
       }
@@ -1920,30 +1921,31 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
         {
           // Input names are from DualShockUDPClient.cpp Device constructor.
           // The DSU device already converts to m/s² via accel_scale so units match.
-          wmAccel->SetControlExpression(0, "`" + devDSU + ":Accel Up`");       // Up
-          wmAccel->SetControlExpression(1, "`" + devDSU + ":Accel Down`");     // Down
-          wmAccel->SetControlExpression(2, "`" + devDSU + ":Accel Left`");     // Left
-          wmAccel->SetControlExpression(3, "`" + devDSU + ":Accel Right`");    // Right
-          wmAccel->SetControlExpression(4, "`" + devDSU + ":Accel Forward`");  // Forward
-          wmAccel->SetControlExpression(5, "`" + devDSU + ":Accel Backward`"); // Backward
+          Libretro::Input::Bind(wmAccel, 0, "`%s:Accel Up`", devDSU);       // Up
+          Libretro::Input::Bind(wmAccel, 1, "`%s:Accel Down`", devDSU);     // Down
+          Libretro::Input::Bind(wmAccel, 2, "`%s:Accel Left`", devDSU);     // Left
+          Libretro::Input::Bind(wmAccel, 3, "`%s:Accel Right`", devDSU);    // Right
+          Libretro::Input::Bind(wmAccel, 4, "`%s:Accel Forward`", devDSU);  // Forward
+          Libretro::Input::Bind(wmAccel, 5, "`%s:Accel Backward`", devDSU); // Backward
         }
 
         auto* wmGyro = static_cast<ControllerEmu::IMUGyroscope*>(
             wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUGyroscope));
         if (wmGyro)
         {
-          wmGyro->SetControlExpression(0, "`" + devDSU + ":Gyro Pitch Up`");   // Pitch Up
-          wmGyro->SetControlExpression(1, "`" + devDSU + ":Gyro Pitch Down`"); // Pitch Down
-          wmGyro->SetControlExpression(2, "`" + devDSU + ":Gyro Roll Left`");  // Roll Left
-          wmGyro->SetControlExpression(3, "`" + devDSU + ":Gyro Roll Right`"); // Roll Right
-          wmGyro->SetControlExpression(4, "`" + devDSU + ":Gyro Yaw Left`");   // Yaw Left
-          wmGyro->SetControlExpression(5, "`" + devDSU + ":Gyro Yaw Right`");  // Yaw Right
+          Libretro::Input::Bind(wmGyro, 0, "`%s:Gyro Pitch Up`", devDSU);   // Pitch Up
+          Libretro::Input::Bind(wmGyro, 1, "`%s:Gyro Pitch Down`", devDSU); // Pitch Down
+          Libretro::Input::Bind(wmGyro, 2, "`%s:Gyro Roll Left`", devDSU);  // Roll Left
+          Libretro::Input::Bind(wmGyro, 3, "`%s:Gyro Roll Right`", devDSU); // Roll Right
+          Libretro::Input::Bind(wmGyro, 4, "`%s:Gyro Yaw Left`", devDSU);   // Yaw Left
+          Libretro::Input::Bind(wmGyro, 5, "`%s:Gyro Yaw Right`", devDSU);  // Yaw Right
         }
       }
       else if (Libretro::Input::sensor_enabled[port][SENSOR_ACCELEROMETER] ||
           Libretro::Input::sensor_enabled[port][SENSOR_GYRO])
       {
-        std::string devSensor = Libretro::Input::GetQualifiedNameSensor(port);
+        char devSensor[Libretro::Input::DEVICE_NAME_SIZE];
+        Libretro::Input::QualifiedName(devSensor, port, "Sensor");
 
         if (Libretro::Input::sensor_enabled[port][SENSOR_ACCELEROMETER])
         {
@@ -1953,12 +1955,12 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
             wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUAccelerometer));
           if (wmAccel)
           {
-            wmAccel->SetControlExpression(0, "`" + devSensor + ":AccelZ+`");  // Up
-            wmAccel->SetControlExpression(1, "`" + devSensor + ":AccelZ-`");  // Down
-            wmAccel->SetControlExpression(2, "`" + devSensor + ":AccelX+`");  // Left
-            wmAccel->SetControlExpression(3, "`" + devSensor + ":AccelX-`");  // Right
-            wmAccel->SetControlExpression(4, "`" + devSensor + ":AccelY-`");  // Forward
-            wmAccel->SetControlExpression(5, "`" + devSensor + ":AccelY+`");  // Backward
+            Libretro::Input::Bind(wmAccel, 0, "`%s:AccelZ+`", devSensor);  // Up
+            Libretro::Input::Bind(wmAccel, 1, "`%s:AccelZ-`", devSensor);  // Down
+            Libretro::Input::Bind(wmAccel, 2, "`%s:AccelX+`", devSensor);  // Left
+            Libretro::Input::Bind(wmAccel, 3, "`%s:AccelX-`", devSensor);  // Right
+            Libretro::Input::Bind(wmAccel, 4, "`%s:AccelY-`", devSensor);  // Forward
+            Libretro::Input::Bind(wmAccel, 5, "`%s:AccelY+`", devSensor);  // Backward
           }
         }
         else if (auto* wmAccelOff = static_cast<ControllerEmu::IMUAccelerometer*>(
@@ -1979,12 +1981,12 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
             // Right-hand rule about +X left, +Y back, +Z up: +X is pitch down,
             // +Y rolls the top left, +Z swings the nose left. GetRawState()
             // reads these as [1]-[0], [2]-[3], [4]-[5].
-            wmGyro->SetControlExpression(0, "`" + devSensor + ":GyroX-`");  // Pitch Up
-            wmGyro->SetControlExpression(1, "`" + devSensor + ":GyroX+`");  // Pitch Down
-            wmGyro->SetControlExpression(2, "`" + devSensor + ":GyroY+`");  // Roll Left
-            wmGyro->SetControlExpression(3, "`" + devSensor + ":GyroY-`");  // Roll Right
-            wmGyro->SetControlExpression(4, "`" + devSensor + ":GyroZ+`");  // Yaw Left
-            wmGyro->SetControlExpression(5, "`" + devSensor + ":GyroZ-`");  // Yaw Right
+            Libretro::Input::Bind(wmGyro, 0, "`%s:GyroX-`", devSensor);  // Pitch Up
+            Libretro::Input::Bind(wmGyro, 1, "`%s:GyroX+`", devSensor);  // Pitch Down
+            Libretro::Input::Bind(wmGyro, 2, "`%s:GyroY+`", devSensor);  // Roll Left
+            Libretro::Input::Bind(wmGyro, 3, "`%s:GyroY-`", devSensor);  // Roll Right
+            Libretro::Input::Bind(wmGyro, 4, "`%s:GyroZ+`", devSensor);  // Yaw Left
+            Libretro::Input::Bind(wmGyro, 5, "`%s:GyroZ-`", devSensor);  // Yaw Right
           }
         }
         else if (auto* wmGyroOff = static_cast<ControllerEmu::IMUGyroscope*>(
@@ -2006,10 +2008,10 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
           if (wmAccelOff) wmAccelOff->SetControlExpression(i, "");
           if (wmGyroOff) wmGyroOff->SetControlExpression(i, "");
         }
-        wmTilt->SetControlExpression(0, "`" + devAnalog + ":Y0-`");  // Forward
-        wmTilt->SetControlExpression(1, "`" + devAnalog + ":Y0+`");  // Backward
-        wmTilt->SetControlExpression(2, "`" + devAnalog + ":X0-`");  // Left
-        wmTilt->SetControlExpression(3, "`" + devAnalog + ":X0+`");  // Right
+        Libretro::Input::Bind(wmTilt, 0, "`%s:Y0-`", devAnalog);  // Forward
+        Libretro::Input::Bind(wmTilt, 1, "`%s:Y0+`", devAnalog);  // Backward
+        Libretro::Input::Bind(wmTilt, 2, "`%s:X0-`", devAnalog);  // Left
+        Libretro::Input::Bind(wmTilt, 3, "`%s:X0+`", devAnalog);  // Right
       }
       wmButtons->SetControlExpression(4, "Select");                // -
       wmButtons->SetControlExpression(5, "Start");                 // +
@@ -2029,9 +2031,9 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
     f.irPassthrough = true;
     Libretro::Input::UpdateWiimoteMappings(f, port, device);
 
-    wmShake->SetControlExpression(0, bindMouse("R2", devMouse + ":Middle"));  // Wiimote shake X
-    wmShake->SetControlExpression(1, bindMouse("R2", devMouse + ":Middle"));  // Wiimote shake Y
-    wmShake->SetControlExpression(2, bindMouse("R2", devMouse + ":Middle"));  // Wiimote shake Z
+    BindMouse(wmShake, 0, "R2", devMouse, "Middle");  // Wiimote shake X
+    BindMouse(wmShake, 1, "R2", devMouse, "Middle");  // Wiimote shake Y
+    BindMouse(wmShake, 2, "R2", devMouse, "Middle");  // Wiimote shake Z
   }
 
   ControllerEmu::ControlGroup* wmOptions = wm->GetWiimoteGroup(WiimoteGroup::Options);
