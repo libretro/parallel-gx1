@@ -17,7 +17,7 @@
 #include "Common/CodePtrMap.h"
 #include "Common/CommonTypes.h"
 #include "Common/MemoryUtil.h"
-#include "Common/RangeSet.h"
+#include "Common/SmallRangeSet.h"
 #include "Core/HW/Memmap.h"
 #include "Core/PowerPC/Gekko.h"
 #include "Core/PowerPC/PPCAnalyst.h"
@@ -87,7 +87,7 @@ struct JitBlock : public JitBlockData
   std::vector<LinkData> linkData;
 
   // This set stores all physical addresses of all occupied instructions.
-  Common::RangeSet<u32> physical_addresses;
+  SmallRangeSet physical_addresses;
 
   // The next block at the same physical address, in the cache's list of them; the next free one
   // while this one is free. A block goes back to the cache's pool when it is destroyed, keeping

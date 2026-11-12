@@ -9,7 +9,7 @@
 
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
-#include "Common/RangeSet.h"
+#include "Common/SmallRangeSet.h"
 #include "Core/PowerPC/PPCTables.h"
 
 class PPCSymbolDB;
@@ -131,8 +131,8 @@ struct CodeBlock
   // Which GPRs this block reads from before defining, if any.
   BitSet32 m_gpr_inputs;
 
-  // Which memory locations are occupied by this block.
-  Common::RangeSet<u32> m_physical_addresses;
+  // Which memory locations are occupied by this block: in place, copied whole into the JIT's block.
+  SmallRangeSet m_physical_addresses;
 };
 
 class PPCAnalyzer
