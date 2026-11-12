@@ -3,11 +3,11 @@
 
 #include "Common/MemArena.h"
 
+#include <cinttypes>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
-
-#include <fmt/format.h>
 
 #include <windows.h>
 
@@ -119,7 +119,9 @@ static DWORD GetLowDWORD(u64 value)
 
 void MemArena::GrabSHMSegment(size_t size, std::string_view base_name)
 {
-  const std::string name = fmt::format("{}.{}", base_name, GetCurrentProcessId());
+  char name[256];
+  snprintf(name, sizeof(name), "%.*s.%lu", static_cast<int>(base_name.size()), base_name.data(),
+           static_cast<unsigned long>(GetCurrentProcessId()));
   m_memory_handle =
       CreateFileMapping(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, GetHighDWORD(size),
                         GetLowDWORD(size), UTF8ToTStr(name).c_str());
@@ -149,7 +151,7 @@ u8* MemArena::ReserveMemoryRegion(size_t memory_size)
 {
   if (m_reserved_region)
   {
-    PanicAlertFmt("Tried to reserve a second memory region from the same MemArena.");
+    PanicAlert("Tried to reserve a second memory region from the same MemArena.");
     return nullptr;
   }
 
@@ -167,18 +169,18 @@ u8* MemArena::ReserveMemoryRegion(size_t memory_size)
     }
     else
     {
-      PanicAlertFmt("Failed to map enough memory space: {}", GetLastErrorString());
+      PanicAlert("Failed to map enough memory space: %s", GetLastErrorString().c_str());
     }
   }
   else
   {
-    NOTICE_LOG_FMT(MEMMAP, "VirtualAlloc2 and/or MapViewFromFile3 unavailable. "
-                           "Falling back to legacy memory mapping.");
+    NOTICE_LOG(MEMMAP, "VirtualAlloc2 and/or MapViewFromFile3 unavailable. "
+                       "Falling back to legacy memory mapping.");
     base = static_cast<u8*>(VirtualAlloc(nullptr, memory_size, MEM_RESERVE, PAGE_READWRITE));
     if (base)
       VirtualFree(base, 0, MEM_RELEASE);
     else
-      PanicAlertFmt("Failed to find enough memory space: {}", GetLastErrorString());
+      PanicAlert("Failed to find enough memory space: %s", GetLastErrorString().c_str());
   }
 
   return base;
@@ -199,8 +201,8 @@ void MemArena::ReleaseMemoryRegion()
 
     if (mapped_region_count > 0)
     {
-      PanicAlertFmt("Error while releasing fastmem region: {} regions are still mapped!",
-                    mapped_region_count);
+      PanicAlert("Error while releasing fastmem region: %" PRIu64 " regions are still mapped!",
+                 (u64)mapped_region_count);
     }
 
     // then free memory
@@ -216,7 +218,7 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
   auto& regions = m_regions;
   if (regions.empty())
   {
-    NOTICE_LOG_FMT(MEMMAP, "Tried to map a memory region without reserving a memory block first.");
+    NOTICE_LOG(MEMMAP, "Tried to map a memory region without reserving a memory block first.");
     return nullptr;
   }
 
@@ -238,17 +240,17 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
   {
     // this should never happen, implies that the given address is before the start of the
     // reserved memory block
-    NOTICE_LOG_FMT(MEMMAP, "Invalid address {} given to map.", fmt::ptr(address));
+    NOTICE_LOG(MEMMAP, "Invalid address %p given to map.", static_cast<const void*>(address));
     return nullptr;
   }
   --it;
 
   if (it->m_is_mapped)
   {
-    NOTICE_LOG_FMT(MEMMAP,
-                   "Address to map {} with a size of 0x{:x} overlaps with existing mapping "
-                   "at {}.",
-                   fmt::ptr(address), size, fmt::ptr(it->m_start));
+    NOTICE_LOG(MEMMAP,
+               "Address to map %p with a size of 0x%" PRIx64 " overlaps with existing mapping "
+               "at %p.",
+               static_cast<const void*>(address), (u64)size, static_cast<const void*>(it->m_start));
     return nullptr;
   }
 
@@ -264,16 +266,17 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
     // if this region is smaller than the requested size we can't map
     if (mapping_size < size)
     {
-      NOTICE_LOG_FMT(MEMMAP,
-                     "Not enough free space at address {} to map 0x{:x} bytes (0x{:x} available).",
-                     fmt::ptr(mapping_address), size, mapping_size);
+      NOTICE_LOG(MEMMAP,
+                 "Not enough free space at address %p to map 0x%" PRIx64 " bytes (0x%" PRIx64
+                 " available).",
+                 static_cast<const void*>(mapping_address), (u64)size, (u64)mapping_size);
       return nullptr;
     }
 
     // split region
     if (!VirtualFree(address, size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER))
     {
-      NOTICE_LOG_FMT(MEMMAP, "Region splitting failed: {}", GetLastErrorString());
+      NOTICE_LOG(MEMMAP, "Region splitting failed: %s", GetLastErrorString().c_str());
       return nullptr;
     }
 
@@ -292,17 +295,17 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
   const size_t minimum_size = size + size_before;
   if (mapping_size < minimum_size)
   {
-    NOTICE_LOG_FMT(MEMMAP,
-                   "Not enough free space at address {} to map memory region (need 0x{:x} "
-                   "bytes, but only 0x{:x} available).",
-                   fmt::ptr(address), minimum_size, mapping_size);
+    NOTICE_LOG(MEMMAP,
+               "Not enough free space at address %p to map memory region (need 0x%" PRIx64 " "
+               "bytes, but only 0x%" PRIx64 " available).",
+               static_cast<const void*>(address), (u64)minimum_size, (u64)mapping_size);
     return nullptr;
   }
 
   // split region
   if (!VirtualFree(address, size, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER))
   {
-    NOTICE_LOG_FMT(MEMMAP, "Region splitting failed: {}", GetLastErrorString());
+    NOTICE_LOG(MEMMAP, "Region splitting failed: %s", GetLastErrorString().c_str());
     return nullptr;
   }
 
@@ -340,7 +343,7 @@ void* MemArena::MapInMemoryRegion(s64 offset, size_t size, void* base, bool writ
     WindowsMemoryRegion* const region = EnsureSplitRegionForMapping(base, size);
     if (!region)
     {
-      PanicAlertFmt("Splitting memory region failed.");
+      PanicAlert("Splitting memory region failed.");
       return nullptr;
     }
 
@@ -353,7 +356,7 @@ void* MemArena::MapInMemoryRegion(s64 offset, size_t size, void* base, bool writ
     }
     else
     {
-      PanicAlertFmt("Mapping memory region failed: {}", GetLastErrorString());
+      PanicAlert("Mapping memory region failed: %s", GetLastErrorString().c_str());
 
       // revert the split, if any
       JoinRegionsAfterUnmap(base, size);
@@ -386,7 +389,7 @@ bool MemArena::ChangeMappingProtection(void* view, size_t size, bool writeable)
   const int retval =
       VirtualProtect(view, size, writeable ? PAGE_READWRITE : PAGE_READONLY, &old_protect);
   if (retval == 0)
-    PanicAlertFmt("VirtualProtect failed: {}", GetLastErrorString());
+    PanicAlert("VirtualProtect failed: %s", GetLastErrorString().c_str());
   return retval != 0;
 }
 
@@ -396,8 +399,7 @@ bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
   auto& regions = m_regions;
   if (regions.empty())
   {
-    NOTICE_LOG_FMT(MEMMAP,
-                   "Tried to unmap a memory region without reserving a memory block first.");
+    NOTICE_LOG(MEMMAP, "Tried to unmap a memory region without reserving a memory block first.");
     return false;
   }
 
@@ -418,7 +420,7 @@ bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
   if (it == regions.end() || it->m_start != address || it->m_size != size)
   {
     // didn't find it, we were given bogus input
-    NOTICE_LOG_FMT(MEMMAP, "Invalid address/size given to unmap.");
+    NOTICE_LOG(MEMMAP, "Invalid address/size given to unmap.");
     return false;
   }
   it->m_is_mapped = false;
@@ -433,7 +435,7 @@ bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
     const size_t total_size = it_preceding->m_size + size + it_succeeding->m_size;
     if (!VirtualFree(it_preceding->m_start, total_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
     {
-      NOTICE_LOG_FMT(MEMMAP, "Region coalescing failed: {}", GetLastErrorString());
+      NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
       return false;
     }
 
@@ -447,7 +449,7 @@ bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
     const size_t total_size = it_preceding->m_size + size;
     if (!VirtualFree(it_preceding->m_start, total_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
     {
-      NOTICE_LOG_FMT(MEMMAP, "Region coalescing failed: {}", GetLastErrorString());
+      NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
       return false;
     }
 
@@ -461,7 +463,7 @@ bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
     const size_t total_size = size + it_succeeding->m_size;
     if (!VirtualFree(it->m_start, total_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
     {
-      NOTICE_LOG_FMT(MEMMAP, "Region coalescing failed: {}", GetLastErrorString());
+      NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
       return false;
     }
 
@@ -479,11 +481,11 @@ void MemArena::UnmapFromMemoryRegion(void* view, size_t size)
             view, MEM_PRESERVE_PLACEHOLDER))
     {
       if (!JoinRegionsAfterUnmap(view, size))
-        PanicAlertFmt("Joining memory region failed.");
+        PanicAlert("Joining memory region failed.");
     }
     else
     {
-      PanicAlertFmt("Unmapping memory region failed: {}", GetLastErrorString());
+      PanicAlert("Unmapping memory region failed: %s", GetLastErrorString().c_str());
     }
     return;
   }
@@ -535,7 +537,7 @@ void* LazyMemoryRegion::Create(size_t size)
           nullptr, 0));
   if (!memory)
   {
-    NOTICE_LOG_FMT(MEMMAP, "Memory reservation of {} bytes failed.", size);
+    NOTICE_LOG(MEMMAP, "Memory reservation of %" PRIu64 " bytes failed.", (u64)size);
     return nullptr;
   }
 
@@ -544,7 +546,7 @@ void* LazyMemoryRegion::Create(size_t size)
   {
     if (!VirtualFree(memory + i * BLOCK_SIZE, BLOCK_SIZE, MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER))
     {
-      NOTICE_LOG_FMT(MEMMAP, "Region splitting failed: {}", GetLastErrorString());
+      NOTICE_LOG(MEMMAP, "Region splitting failed: %s", GetLastErrorString().c_str());
 
       // release every split block as well as the remaining unsplit one
       for (size_t j = 0; j < i + 1; ++j)
@@ -562,7 +564,8 @@ void* LazyMemoryRegion::Create(size_t size)
                                         GetHighDWORD(BLOCK_SIZE), GetLowDWORD(BLOCK_SIZE), nullptr);
   if (zero_block == nullptr)
   {
-    NOTICE_LOG_FMT(MEMMAP, "CreateFileMapping() failed for zero block: {}", GetLastErrorString());
+    NOTICE_LOG(MEMMAP, "CreateFileMapping() failed for zero block: %s",
+               GetLastErrorString().c_str());
     Release();
     return nullptr;
   }
@@ -577,7 +580,7 @@ void* LazyMemoryRegion::Create(size_t size)
         PAGE_READONLY, nullptr, 0);
     if (!result)
     {
-      NOTICE_LOG_FMT(MEMMAP, "Mapping the zero block failed: {}", GetLastErrorString());
+      NOTICE_LOG(MEMMAP, "Mapping the zero block failed: %s", GetLastErrorString().c_str());
       Release();
       return nullptr;
     }
@@ -603,13 +606,13 @@ void LazyMemoryRegion::Clear()
     if (!reinterpret_cast<PUnmapViewOfFileEx>(m_memory_functions.m_address_UnmapViewOfFileEx)(
             memory + i * BLOCK_SIZE, MEM_PRESERVE_PLACEHOLDER))
     {
-      PanicAlertFmt("Failed to unmap the writable block: {}", GetLastErrorString());
+      PanicAlert("Failed to unmap the writable block: %s", GetLastErrorString().c_str());
     }
 
     // free the writable block
     if (!CloseHandle(m_writable_block_handles[i]))
     {
-      PanicAlertFmt("Failed to free the writable block: {}", GetLastErrorString());
+      PanicAlert("Failed to free the writable block: %s", GetLastErrorString().c_str());
     }
     m_writable_block_handles[i] = nullptr;
 
@@ -620,7 +623,7 @@ void LazyMemoryRegion::Clear()
             PAGE_READONLY, nullptr, 0);
     if (!map_result)
     {
-      PanicAlertFmt("Failed to re-map the zero block: {}", GetLastErrorString());
+      PanicAlert("Failed to re-map the zero block: %s", GetLastErrorString().c_str());
     }
   }
 }
@@ -666,7 +669,7 @@ void LazyMemoryRegion::MakeMemoryBlockWritable(size_t block_index)
   if (!reinterpret_cast<PUnmapViewOfFileEx>(m_memory_functions.m_address_UnmapViewOfFileEx)(
           memory + block_index * BLOCK_SIZE, MEM_PRESERVE_PLACEHOLDER))
   {
-    PanicAlertFmt("Failed to unmap the zero block: {}", GetLastErrorString());
+    PanicAlert("Failed to unmap the zero block: %s", GetLastErrorString().c_str());
     return;
   }
 
@@ -675,7 +678,7 @@ void LazyMemoryRegion::MakeMemoryBlockWritable(size_t block_index)
                                    GetHighDWORD(BLOCK_SIZE), GetLowDWORD(BLOCK_SIZE), nullptr);
   if (block == nullptr)
   {
-    PanicAlertFmt("CreateFileMapping() failed for writable block: {}", GetLastErrorString());
+    PanicAlert("CreateFileMapping() failed for writable block: %s", GetLastErrorString().c_str());
     return;
   }
 
@@ -685,7 +688,7 @@ void LazyMemoryRegion::MakeMemoryBlockWritable(size_t block_index)
       PAGE_READWRITE, nullptr, 0);
   if (!map_result)
   {
-    PanicAlertFmt("Failed to map the writable block: {}", GetLastErrorString());
+    PanicAlert("Failed to map the writable block: %s", GetLastErrorString().c_str());
     CloseHandle(block);
     return;
   }

@@ -21,7 +21,7 @@ inline int CreateEventFD(unsigned int count, int flags)
   const int result = eventfd(count, flags);
   if (result == -1)
   {
-    ERROR_LOG_FMT(COMMON, "eventfd failed: {}", Common::LastStrerrorString());
+    ERROR_LOG(COMMON, "eventfd failed: %s", Common::LastStrerrorString().c_str());
     std::abort();
   }
   return result;
@@ -59,7 +59,7 @@ struct PThreadWrapper
             this);
         result != 0)
     {
-      ERROR_LOG_FMT(COMMON, "pthread_create: {}", Common::StrerrorString(result));
+      ERROR_LOG(COMMON, "pthread_create: %s", Common::StrerrorString(result).c_str());
       std::abort();
     }
   }

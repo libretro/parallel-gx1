@@ -20,7 +20,7 @@ std::optional<std::tm> LocalTime(std::time_t time)
   if (localtime_r(&time, &local_time) == nullptr)
 #endif
   {
-    ERROR_LOG_FMT(COMMON, "Failed to convert time to local time: {}", std::strerror(errno));
+    ERROR_LOG(COMMON, "Failed to convert time to local time: %s", std::strerror(errno));
     return std::nullopt;
   }
   return local_time;

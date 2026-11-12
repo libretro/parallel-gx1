@@ -3,6 +3,8 @@
 
 #include "Common/JITMemoryTracker.h"
 
+#include <cinttypes>
+
 #include "Common/CommonTypes.h"
 #include "Common/MemoryUtil.h"
 #include "Common/MsgHandler.h"
@@ -30,7 +32,7 @@ void JITMemoryTracker::RegisterJITRegion(void* ptr, size_t size)
   quiesce_exit(&m_quiesce);
   if (known)
   {
-    PanicAlertFmt("JITMemoryTracker: region {} already registered", ptr);
+    PanicAlert("JITMemoryTracker: region %p already registered", static_cast<const void*>(ptr));
     return;
   }
 
@@ -40,7 +42,7 @@ void JITMemoryTracker::RegisterJITRegion(void* ptr, size_t size)
     if (!retro_atomic_load_acquire_ptr(&slot) && retro_atomic_cas_ptr(&slot, nullptr, info))
       return;
   }
-  PanicAlertFmt("JITMemoryTracker: more than {} JIT regions", MAX_REGIONS);
+  PanicAlert("JITMemoryTracker: more than %" PRIu64 " JIT regions", (u64)MAX_REGIONS);
   delete info;
 }
 
@@ -99,7 +101,8 @@ void JITMemoryTracker::JITRegionWriteDisableExecuteEnable(void* ptr)
     info->nest_counter--;
 
     if (info->nest_counter < 0)
-      PanicAlertFmt("JITMemoryTracker: Nest counter underflow for region {}", ptr);
+      PanicAlert("JITMemoryTracker: Nest counter underflow for region %p",
+                 static_cast<const void*>(ptr));
     else if (info->nest_counter == 0)
       WriteProtectMemory(info->start_ptr, info->size, true);
   }

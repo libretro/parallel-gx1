@@ -813,7 +813,7 @@ bool SetPlatformSocketOptions(int fd [[maybe_unused]])
   int opt_no_sigpipe = 1;
   if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &opt_no_sigpipe, sizeof(opt_no_sigpipe)) < 0)
   {
-    ERROR_LOG_FMT(COMMON, "Failed to set SO_NOSIGPIPE on socket: {}", StrNetworkError());
+    ERROR_LOG(COMMON, "Failed to set SO_NOSIGPIPE on socket: %s", StrNetworkError());
     return false;
   }
 #endif

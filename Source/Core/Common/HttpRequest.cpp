@@ -109,10 +109,10 @@ HttpRequest::Response HttpRequest::Fetch(const std::string& url, const char* met
   if (job.status != 200)
   {
     if (job.status < 0)
-      ERROR_LOG_FMT(COMMON, "Failed to {} {}", method, url);
+      ERROR_LOG(COMMON, "Failed to %s %s", method, url.c_str());
     else
-      ERROR_LOG_FMT(COMMON, "Failed to {} {}: server replied with code {}", method, url,
-                    job.status);
+      ERROR_LOG(COMMON, "Failed to %s %s: server replied with code %d", method, url.c_str(),
+                job.status);
     return {};
   }
   return buffer;

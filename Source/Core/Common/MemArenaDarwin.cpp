@@ -18,7 +18,8 @@ void MemArena::GrabSHMSegment(size_t size, std::string_view base_name)
   kern_return_t retval = vm_allocate(mach_task_self(), &m_shm_address, size, VM_FLAGS_ANYWHERE);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "GrabSHMSegment failed: vm_allocate returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "GrabSHMSegment failed: vm_allocate returned %#x",
+              static_cast<unsigned>(retval));
 
     m_shm_address = 0;
 
@@ -36,8 +37,8 @@ void MemArena::GrabSHMSegment(size_t size, std::string_view base_name)
                                      &m_shm_entry, MACH_PORT_NULL);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "GrabSHMSegment failed: mach_make_memory_entry_64 returned {0:#x}",
-                  retval);
+    ERROR_LOG(MEMMAP, "GrabSHMSegment failed: mach_make_memory_entry_64 returned %#x",
+              static_cast<unsigned>(retval));
 
     m_shm_address = 0;
     m_shm_entry = MACH_PORT_NULL;
@@ -69,7 +70,7 @@ void* MemArena::CreateView(s64 offset, size_t size)
 {
   if (m_shm_address == 0)
   {
-    ERROR_LOG_FMT(MEMMAP, "CreateView failed: no shared memory segment allocated");
+    ERROR_LOG(MEMMAP, "CreateView failed: no shared memory segment allocated");
     return nullptr;
   }
 
@@ -80,7 +81,7 @@ void* MemArena::CreateView(s64 offset, size_t size)
                                 offset, false, prot, prot, VM_INHERIT_DEFAULT);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "CreateView failed: vm_map returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "CreateView failed: vm_map returned %#x", static_cast<unsigned>(retval));
     return nullptr;
   }
 
@@ -99,14 +100,16 @@ u8* MemArena::ReserveMemoryRegion(size_t memory_size)
   kern_return_t retval = vm_allocate(mach_task_self(), &address, memory_size, VM_FLAGS_ANYWHERE);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "ReserveMemoryRegion: vm_allocate returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "ReserveMemoryRegion: vm_allocate returned %#x",
+              static_cast<unsigned>(retval));
     return nullptr;
   }
 
   retval = vm_protect(mach_task_self(), address, memory_size, true, VM_PROT_NONE);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "ReserveMemoryRegion failed: vm_prot returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "ReserveMemoryRegion failed: vm_prot returned %#x",
+              static_cast<unsigned>(retval));
     return nullptr;
   }
 
@@ -131,7 +134,7 @@ void* MemArena::MapInMemoryRegion(s64 offset, size_t size, void* base, bool writ
 {
   if (m_shm_address == 0)
   {
-    ERROR_LOG_FMT(MEMMAP, "MapInMemoryRegion failed: no shared memory segment allocated");
+    ERROR_LOG(MEMMAP, "MapInMemoryRegion failed: no shared memory segment allocated");
     return nullptr;
   }
 
@@ -145,7 +148,8 @@ void* MemArena::MapInMemoryRegion(s64 offset, size_t size, void* base, bool writ
              offset, false, prot, VM_PROT_READ | VM_PROT_WRITE, VM_INHERIT_DEFAULT);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "MapInMemoryRegion failed: vm_map returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "MapInMemoryRegion failed: vm_map returned %#x",
+              static_cast<unsigned>(retval));
     return nullptr;
   }
 
@@ -161,7 +165,8 @@ bool MemArena::ChangeMappingProtection(void* view, size_t size, bool writeable)
 
   kern_return_t retval = vm_protect(mach_task_self(), address, size, false, prot);
   if (retval != KERN_SUCCESS)
-    ERROR_LOG_FMT(MEMMAP, "ChangeMappingProtection failed: vm_protect returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "ChangeMappingProtection failed: vm_protect returned %#x",
+              static_cast<unsigned>(retval));
 
   return retval == KERN_SUCCESS;
 }
@@ -174,14 +179,16 @@ void MemArena::UnmapFromMemoryRegion(void* view, size_t size)
       vm_allocate(mach_task_self(), &address, size, VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "UnmapFromMemoryRegion failed: vm_allocate returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "UnmapFromMemoryRegion failed: vm_allocate returned %#x",
+              static_cast<unsigned>(retval));
     return;
   }
 
   retval = vm_protect(mach_task_self(), address, size, true, VM_PROT_NONE);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "UnmapFromMemoryRegion failed: vm_prot returned {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "UnmapFromMemoryRegion failed: vm_prot returned %#x",
+              static_cast<unsigned>(retval));
   }
 }
 
@@ -209,7 +216,7 @@ void* LazyMemoryRegion::Create(size_t size)
   kern_return_t retval = vm_allocate(mach_task_self(), &memory, size, VM_FLAGS_ANYWHERE);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "Failed to allocate memory space: {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "Failed to allocate memory space: %#x", static_cast<unsigned>(retval));
     return nullptr;
   }
 
@@ -229,7 +236,7 @@ void LazyMemoryRegion::Clear()
       vm_allocate(mach_task_self(), &new_memory, m_size, VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE);
   if (retval != KERN_SUCCESS)
   {
-    ERROR_LOG_FMT(MEMMAP, "Failed to reallocate memory space: {0:#x}", retval);
+    ERROR_LOG(MEMMAP, "Failed to reallocate memory space: %#x", static_cast<unsigned>(retval));
 
     m_memory = nullptr;
 

@@ -5,6 +5,7 @@
 
 #include "Common/WindowsDevice.h"
 
+#include <cinttypes>
 #include <string>
 #include <vector>
 
@@ -49,12 +50,12 @@ std::optional<std::wstring> GetPropertyHelper(auto function, auto dev,
       result != CR_SUCCESS && result != CR_BUFFER_SMALL)
   {
     if (result != CR_NO_SUCH_VALUE)
-      WARN_LOG_FMT(COMMON, "CM_Get_DevNode_Property returned: {}", result);
+      WARN_LOG(COMMON, "CM_Get_DevNode_Property returned: %" PRIu64, (u64)result);
     return std::nullopt;
   }
   if (type != expected_type)
   {
-    WARN_LOG_FMT(COMMON, "CM_Get_DevNode_Property unexpected type: 0x{:x}", type);
+    WARN_LOG(COMMON, "CM_Get_DevNode_Property unexpected type: 0x%" PRIx64, (u64)type);
     return std::nullopt;
   }
 
@@ -65,7 +66,7 @@ std::optional<std::wstring> GetPropertyHelper(auto function, auto dev,
                                    reinterpret_cast<BYTE*>(property->data()), &buffer_size, 0);
       result != CR_SUCCESS)
   {
-    ERROR_LOG_FMT(COMMON, "CM_Get_DevNode_Property returned: {}", result);
+    ERROR_LOG(COMMON, "CM_Get_DevNode_Property returned: %" PRIu64, (u64)result);
     return std::nullopt;
   }
   return property;
@@ -106,7 +107,7 @@ NullTerminatedStringList<WCHAR> GetDeviceInterfaceList(LPGUID iface_class_guid, 
 
     if (list_result != CR_SUCCESS)
     {
-      ERROR_LOG_FMT(COMMON, "CM_Get_Device_Interface_List: {}", list_result);
+      ERROR_LOG(COMMON, "CM_Get_Device_Interface_List: %" PRIu64, (u64)list_result);
       buffer[0] = 0;
     }
 
@@ -156,7 +157,7 @@ void DeviceChangeNotification::Register(CallbackType callback)
       CM_Register_Notification(&notify_filter, &m_callback, OnDevicesChanged, &m_notify_handle);
   if (cfg_rv != CR_SUCCESS)
   {
-    ERROR_LOG_FMT(COMMON, "CM_Register_Notification failed: {:x}", cfg_rv);
+    ERROR_LOG(COMMON, "CM_Register_Notification failed: %" PRIx64, (u64)cfg_rv);
   }
 }
 
@@ -168,7 +169,7 @@ void DeviceChangeNotification::Unregister()
   const CONFIGRET cfg_rv = CM_Unregister_Notification(m_notify_handle);
   if (cfg_rv != CR_SUCCESS)
   {
-    ERROR_LOG_FMT(COMMON, "CM_Unregister_Notification failed: {:x}", cfg_rv);
+    ERROR_LOG(COMMON, "CM_Unregister_Notification failed: %" PRIx64, (u64)cfg_rv);
   }
   m_notify_handle = nullptr;
 }

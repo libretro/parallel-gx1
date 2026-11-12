@@ -66,7 +66,7 @@ bool SavePNG(const std::string& path, const u8* input, u32 width, u32 height, u3
   intfstream_close(stream);
   free(stream);
   if (!ok)
-    ERROR_LOG_FMT(FRAMEDUMP, "Failed to save {} by {} image to {}", width, height, path);
+    ERROR_LOG(FRAMEDUMP, "Failed to save %u by %u image to %s", width, height, path.c_str());
   return ok;
 }
 }  // namespace Common

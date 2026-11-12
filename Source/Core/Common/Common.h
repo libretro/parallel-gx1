@@ -15,7 +15,7 @@
 #define CHECK_HEAP_INTEGRITY()                                                                     \
   {                                                                                                \
     if (!_CrtCheckMemory())                                                                        \
-      PanicAlertFmt("memory corruption detected. see log.");                                       \
+      PanicAlert("memory corruption detected. see log.");                                          \
   }
 // If you want to see how much a pain in the ass singletons are, for example:
 // {614} normal block at 0x030C5310, 188 bytes long.

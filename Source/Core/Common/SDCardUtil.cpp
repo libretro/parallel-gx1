@@ -33,6 +33,7 @@
 
 #include "Common/SDCardUtil.h"
 
+#include <cinttypes>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -200,8 +201,9 @@ bool SDCardCreate(u64 disk_size /*in MB*/, const std::string& filename)
 
   if (disk_size < 0x800000 || disk_size > 0x800000000ULL)
   {
-    ERROR_LOG_FMT(COMMON, "Trying to create SD Card image of size {}MB is out of range (8MB-32GB)",
-                  disk_size / (1024 * 1024));
+    ERROR_LOG(COMMON,
+              "Trying to create SD Card image of size %" PRIu64 "MB is out of range (8MB-32GB)",
+              (u64)(disk_size / (1024 * 1024)));
     return false;
   }
 
@@ -215,7 +217,7 @@ bool SDCardCreate(u64 disk_size /*in MB*/, const std::string& filename)
   File::IOFile file(filename, "wb");
   if (!file)
   {
-    ERROR_LOG_FMT(COMMON, "Could not create file '{}', aborting...", filename);
+    ERROR_LOG(COMMON, "Could not create file '%s', aborting...", filename.c_str());
     return false;
   }
 
@@ -276,9 +278,9 @@ bool SDCardCreate(u64 disk_size /*in MB*/, const std::string& filename)
   return true;
 
 FailWrite:
-  ERROR_LOG_FMT(COMMON, "Could not write to '{}', aborting...", filename);
+  ERROR_LOG(COMMON, "Could not write to '%s', aborting...", filename.c_str());
   if (unlink(filename.c_str()) < 0)
-    ERROR_LOG_FMT(COMMON, "unlink({}) failed: {}", filename, LastStrerrorString());
+    ERROR_LOG(COMMON, "unlink(%s) failed: %s", filename.c_str(), LastStrerrorString().c_str());
   return false;
 }
 }  // namespace Common

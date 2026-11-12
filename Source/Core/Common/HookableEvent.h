@@ -58,7 +58,7 @@ public:
   // Returns a handle that will unregister the listener when destroyed.
   [[nodiscard]] EventHook Register(CallbackType callback)
   {
-    DEBUG_LOG_FMT(COMMON, "Registering event hook handler");
+    DEBUG_LOG(COMMON, "Registering event hook handler");
     auto* listener = new Listener{{}, std::move(callback), {}};
     m_storage->Replace(nullptr, listener);
     return std::make_unique<HookImpl>(m_storage, listener);
@@ -172,11 +172,11 @@ private:
       const auto storage = weak_storage.lock();
       if (storage == nullptr)
       {
-        DEBUG_LOG_FMT(COMMON, "Handler outlived event hook");
+        DEBUG_LOG(COMMON, "Handler outlived event hook");
         return;
       }
 
-      DEBUG_LOG_FMT(COMMON, "Removing event hook handler");
+      DEBUG_LOG(COMMON, "Removing event hook handler");
 
       storage->Replace(listener_ptr, nullptr);
       call_gate_close(&listener_ptr->gate);

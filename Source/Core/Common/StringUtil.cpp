@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cassert>
+#include <cinttypes>
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
@@ -722,8 +723,8 @@ static std::string UTF16ToCP(u32 code_page, std::wstring_view input)
                                   output.data(), static_cast<int>(output.size()), nullptr, nullptr))
   {
     const DWORD error_code = GetLastError();
-    ERROR_LOG_FMT(COMMON, "WideCharToMultiByte Error in String '{}': {}", WStringToUTF8(input),
-                  error_code);
+    ERROR_LOG(COMMON, "WideCharToMultiByte Error in String '%s': %" PRIu64,
+              WStringToUTF8(input).c_str(), (u64)error_code);
     return {};
   }
 

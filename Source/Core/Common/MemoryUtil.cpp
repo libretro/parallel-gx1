@@ -108,7 +108,7 @@ void* AllocateExecutableMemory(size_t size)
 #endif
 
   if (ptr == nullptr)
-    PanicAlertFmt("Failed to allocate executable memory: {}", LastStrerrorString());
+    PanicAlert("Failed to allocate executable memory: %s", LastStrerrorString().c_str());
 
 #ifdef IPHONEOS
   g_jit_memory_tracker.RegisterJITRegion(ptr, size);
@@ -175,7 +175,7 @@ void JITPageWriteDisableExecuteEnable()
   // This can indicate the calls to JITPageWriteDisableExecuteEnable()
   // are not matched with previous calls to JITPageWriteEnableExecuteDisable()
   if (JITPageWriteNestCounter() < 0)
-    PanicAlertFmt("JITPageWriteNestCounter() underflowed");
+    PanicAlert("JITPageWriteNestCounter() underflowed");
 
 #if defined(_M_ARM_64) && defined(__APPLE__) && !defined(IPHONEOS)
   if (JITPageWriteNestCounter() == 0)
@@ -210,7 +210,7 @@ void* AllocateMemoryPages(size_t size)
 #endif
 
   if (ptr == nullptr)
-    PanicAlertFmt("Failed to allocate raw memory");
+    PanicAlert("Failed to allocate raw memory");
 
   return ptr;
 }
@@ -222,11 +222,11 @@ void* AllocateAlignedMemory(size_t size, size_t alignment)
 #else
   void* ptr = nullptr;
   if (posix_memalign(&ptr, alignment, size) != 0)
-    ERROR_LOG_FMT(MEMMAP, "Failed to allocate aligned memory");
+    ERROR_LOG(MEMMAP, "Failed to allocate aligned memory");
 #endif
 
   if (ptr == nullptr)
-    PanicAlertFmt("Failed to allocate aligned memory");
+    PanicAlert("Failed to allocate aligned memory");
 
   return ptr;
 }
@@ -238,13 +238,13 @@ bool FreeMemoryPages(void* ptr, size_t size)
 #ifdef _WIN32
     if (!VirtualFree(ptr, 0, MEM_RELEASE))
     {
-      PanicAlertFmt("FreeMemoryPages failed!\nVirtualFree: {}", GetLastErrorString());
+      PanicAlert("FreeMemoryPages failed!\nVirtualFree: %s", GetLastErrorString().c_str());
       return false;
     }
 #else
     if (munmap(ptr, size) != 0)
     {
-      PanicAlertFmt("FreeMemoryPages failed!\nmunmap: {}", LastStrerrorString());
+      PanicAlert("FreeMemoryPages failed!\nmunmap: %s", LastStrerrorString().c_str());
       return false;
     }
 #endif
@@ -274,13 +274,13 @@ bool ReadProtectMemory(void* ptr, size_t size)
   DWORD oldValue;
   if (!VirtualProtect(ptr, size, PAGE_NOACCESS, &oldValue))
   {
-    PanicAlertFmt("ReadProtectMemory failed!\nVirtualProtect: {}", GetLastErrorString());
+    PanicAlert("ReadProtectMemory failed!\nVirtualProtect: %s", GetLastErrorString().c_str());
     return false;
   }
 #else
   if (mprotect(ptr, size, PROT_NONE) != 0)
   {
-    PanicAlertFmt("ReadProtectMemory failed!\nmprotect: {}", LastStrerrorString());
+    PanicAlert("ReadProtectMemory failed!\nmprotect: %s", LastStrerrorString().c_str());
     return false;
   }
 #endif
@@ -293,7 +293,7 @@ bool WriteProtectMemory(void* ptr, size_t size, bool allowExecute)
   DWORD oldValue;
   if (!VirtualProtect(ptr, size, allowExecute ? PAGE_EXECUTE_READ : PAGE_READONLY, &oldValue))
   {
-    PanicAlertFmt("WriteProtectMemory failed!\nVirtualProtect: {}", GetLastErrorString());
+    PanicAlert("WriteProtectMemory failed!\nVirtualProtect: %s", GetLastErrorString().c_str());
     return false;
   }
 #elif !(defined(_M_ARM_64) && defined(__APPLE__) && !defined(IPHONEOS))
@@ -302,7 +302,7 @@ bool WriteProtectMemory(void* ptr, size_t size, bool allowExecute)
   // for write protection.
   if (mprotect(ptr, size, allowExecute ? (PROT_READ | PROT_EXEC) : PROT_READ) != 0)
   {
-    PanicAlertFmt("WriteProtectMemory failed!\nmprotect: {}", LastStrerrorString());
+    PanicAlert("WriteProtectMemory failed!\nmprotect: %s", LastStrerrorString().c_str());
     return false;
   }
 #endif
@@ -315,7 +315,7 @@ bool UnWriteProtectMemory(void* ptr, size_t size, bool allowExecute)
   DWORD oldValue;
   if (!VirtualProtect(ptr, size, allowExecute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE, &oldValue))
   {
-    PanicAlertFmt("UnWriteProtectMemory failed!\nVirtualProtect: {}", GetLastErrorString());
+    PanicAlert("UnWriteProtectMemory failed!\nVirtualProtect: %s", GetLastErrorString().c_str());
     return false;
   }
 #elif !(defined(_M_ARM_64) && defined(__APPLE__) && !defined(IPHONEOS))
@@ -325,7 +325,7 @@ bool UnWriteProtectMemory(void* ptr, size_t size, bool allowExecute)
   if (mprotect(ptr, size,
                allowExecute ? (PROT_READ | PROT_WRITE | PROT_EXEC) : PROT_WRITE | PROT_READ) != 0)
   {
-    PanicAlertFmt("UnWriteProtectMemory failed!\nmprotect: {}", LastStrerrorString());
+    PanicAlert("UnWriteProtectMemory failed!\nmprotect: %s", LastStrerrorString().c_str());
     return false;
   }
 #endif
@@ -386,15 +386,16 @@ ptrdiff_t AllocateWritableRegionAndGetDiff(void* rx_ptr, size_t size)
                VM_INHERIT_DEFAULT);
   if (retval != KERN_SUCCESS)
   {
-    PanicAlertFmt("AllocateWritableRegionAndGetDiff failed! vm_remap returned {0:#x}", retval);
+    PanicAlert("AllocateWritableRegionAndGetDiff failed! vm_remap returned %#x",
+               static_cast<unsigned>(retval));
     return 0;
   }
 
   u8* rw_ptr = reinterpret_cast<u8*>(rw_region);
   if (mprotect(rw_ptr, size, PROT_READ | PROT_WRITE) != 0)
   {
-    PanicAlertFmt("AllocateWritableRegionAndGetDiff failed! mprotect returned {}",
-                  LastStrerrorString());
+    PanicAlert("AllocateWritableRegionAndGetDiff failed! mprotect returned %s",
+               LastStrerrorString().c_str());
     return 0;
   }
 

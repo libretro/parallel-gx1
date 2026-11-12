@@ -3,6 +3,7 @@
 
 #include "Common/SymbolDB.h"
 
+#include <cinttypes>
 #include <cstring>
 #include <map>
 #include <string>
@@ -41,10 +42,10 @@ void SymbolDB::List()
 {
   for (const auto& func : m_functions)
   {
-    DEBUG_LOG_FMT(OSHLE, "{} @ {:08x}: {} bytes (hash {:08x}) : {} calls", func.second.name,
-                  func.second.address, func.second.size, func.second.hash, func.second.num_calls);
+    DEBUG_LOG(OSHLE, "%s @ %08x: %u bytes (hash %08x) : %d calls", func.second.name.c_str(),
+              func.second.address, func.second.size, func.second.hash, func.second.num_calls);
   }
-  INFO_LOG_FMT(OSHLE, "{} functions known in this program above.", m_functions.size());
+  INFO_LOG(OSHLE, "%" PRIu64 " functions known in this program above.", (u64)m_functions.size());
 }
 
 bool SymbolDB::IsEmpty() const

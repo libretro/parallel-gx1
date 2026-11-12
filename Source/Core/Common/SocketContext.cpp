@@ -18,9 +18,9 @@ SocketContext::SocketContext()
   const int ret = WSAStartup(MAKEWORD(2, 2), &data);
   if (ret == 0)
   {
-    INFO_LOG_FMT(COMMON, "WSAStartup succeeded, wVersion={}.{}, wHighVersion={}.{}",
-                 int(LOBYTE(data.wVersion)), int(HIBYTE(data.wVersion)),
-                 int(LOBYTE(data.wHighVersion)), int(HIBYTE(data.wHighVersion)));
+    INFO_LOG(COMMON, "WSAStartup succeeded, wVersion=%d.%d, wHighVersion=%d.%d",
+             int(LOBYTE(data.wVersion)), int(HIBYTE(data.wVersion)), int(LOBYTE(data.wHighVersion)),
+             int(HIBYTE(data.wHighVersion)));
     m_started = true;
   }
   else
@@ -30,8 +30,7 @@ SocketContext::SocketContext()
     //
     // Source:
     // https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsastartup
-    ERROR_LOG_FMT(COMMON, "WSAStartup failed with error {}: {}", ret,
-                  Common::DecodeNetworkError(ret));
+    ERROR_LOG(COMMON, "WSAStartup failed with error %d: %s", ret, Common::DecodeNetworkError(ret));
   }
 }
 SocketContext::~SocketContext()
