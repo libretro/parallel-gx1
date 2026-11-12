@@ -24,7 +24,7 @@ typedef struct field_mix
    uint64_t step;   /* source frames per output frame, 32.32; 0 when not set */
    uint64_t phase;  /* where the next output frame falls past prev, 32.32 */
    uint32_t divisor;
-   int32_t  prev_l, prev_r;
+   int32_t prev_l, prev_r; /* scaled by the volume: 8 fraction bits */
    int32_t  vol_l, vol_r; /* 0 to 256 */
    unsigned cursor; /* next output frame in the open field */
 } field_mix_t;
@@ -174,6 +174,14 @@ static void mix_add(field_mix_t *mix, int32_t l, int32_t r)
    }
 }
 
+/* A sample with 8 fraction bits, rounded to the nearest one: shifting
+ * them off would floor it: a DC offset of half a step, and distortion,
+ * on every source that is scaled or resampled. */
+static int32_t round_q8(int32_t v)
+{
+  return (v + 128) >> 8;
+}
+
 /* One source frame: added as is when the source runs at the output
  * rate, otherwise the output frames that fall between it and the last
  * one, interpolated between the two. */
@@ -181,19 +189,20 @@ static void mix_frame(field_mix_t *mix, int32_t l, int32_t r)
 {
    if (!mix->step)
       return;
-   l = (l * mix->vol_l) >> 8;
-   r = (r * mix->vol_r) >> 8;
+   /* Kept with the volume's 8 fraction bits through the interpolation,
+    * so the frame is rounded once, at the end. */
+   l *= mix->vol_l;
+   r *= mix->vol_r;
    if (mix->step == PHASE_ONE)
    {
-      mix_add(mix, l, r);
-      return;
+     mix_add(mix, round_q8(l), round_q8(r));
+     return;
    }
    while (mix->phase < PHASE_ONE)
    {
       const int32_t frac = (int32_t)(mix->phase >> 16);
-      mix_add(mix,
-            mix->prev_l + (int32_t)(((int64_t)(l - mix->prev_l) * frac) >> 16),
-            mix->prev_r + (int32_t)(((int64_t)(r - mix->prev_r) * frac) >> 16));
+      mix_add(mix, round_q8(mix->prev_l + (int32_t)(((int64_t)(l - mix->prev_l) * frac) >> 16)),
+              round_q8(mix->prev_r + (int32_t)(((int64_t)(r - mix->prev_r) * frac) >> 16)));
       mix->phase += mix->step;
    }
    mix->phase -= PHASE_ONE;
