@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Common/CodePtrMap.h"
 #include "Common/CommonTypes.h"
 #include "Common/MemoryUtil.h"
 #include "Common/RangeSet.h"
@@ -76,13 +77,27 @@ struct JitBlock : public JitBlockData
     u32 exitAddress;
     bool linkStatus;  // is it already linked?
     bool call;
+
+    // While the block is in the cache, the other exits to exitAddress, in a list the cache finds
+    // by that address: owner is the block, null when this exit is in no list.
+    JitBlock* owner = nullptr;
+    LinkData* next_to = nullptr;
+    LinkData* prev_to = nullptr;
   };
   std::vector<LinkData> linkData;
 
   // This set stores all physical addresses of all occupied instructions.
   Common::RangeSet<u32> physical_addresses;
 
+  // The next block at the same physical address, in the cache's list of them; the next free one
+  // while this one is free. A block goes back to the cache's pool when it is destroyed, keeping
+  // linkData's and physical_addresses' storage for the next block made in its place.
+  JitBlock* next_at_address = nullptr;
+  bool in_use = false;
 };
+
+CODE_PTR_MAP_DEFINE(jit_link_lists, JitBlock::LinkData*);
+CODE_PTR_MAP_DEFINE(jit_block_lists, JitBlock*);
 
 typedef void (*CompiledCode)();
 
@@ -204,13 +219,26 @@ private:
   // Fast but risky block lookup based on fast_block_map.
   size_t FastLookupIndexForAddress(u32 address, u32 msr);
 
-  // links_to hold all exit points of all valid blocks in a reverse way.
-  // It is used to query all blocks which links to an address.
-  std::unordered_map<u32, std::unordered_set<JitBlock*>> links_to;  // destination_PC -> number
+  JitBlock* TakeBlock();
+  void ReleaseBlock(JitBlock* block);
 
-  // Map indexed by the physical address of the entry point.
-  // This is used to query the block based on the current PC in a slow way.
-  std::multimap<u32, JitBlock> block_map;  // start_addr -> block
+  // links_to hold all exit points of all valid blocks in a reverse way.
+  // It is used to query all blocks which links to an address: by the destination PC, the list of
+  // exits to it (LinkData::next_to).
+  jit_link_lists_t links_to;
+
+  // The blocks by the physical address of the entry point, each a list in the order they were made
+  // (JitBlock::next_at_address). This is used to query the block based on the current PC in a
+  // slow way.
+  jit_block_lists_t block_map;
+
+  // Where the blocks live: chunks of BLOCK_CHUNK, never given back while the cache is, and the
+  // free ones in a list. A block made where one was destroyed allocates nothing.
+  static constexpr size_t BLOCK_CHUNK = 1024;
+  JitBlock** m_block_chunks = nullptr;
+  size_t m_num_block_chunks = 0;
+  size_t m_block_chunks_cap = 0;
+  JitBlock* m_free_blocks = nullptr;
 
   // Range of overlapping code indexed by a masked physical address.
   // This is used for invalidation of memory regions. The range is grouped

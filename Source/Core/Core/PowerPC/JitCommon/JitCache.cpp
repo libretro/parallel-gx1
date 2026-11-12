@@ -26,6 +26,12 @@
 
 using namespace Gen;
 
+/* An address as the key of a code address map */
+static const void* AddressKey(u32 address)
+{
+  return reinterpret_cast<const void*>(static_cast<uintptr_t>(address));
+}
+
 bool JitBlock::OverlapsPhysicalRange(u32 address, u32 length) const
 {
   return physical_addresses.overlaps(address, address + length);
@@ -33,9 +39,58 @@ bool JitBlock::OverlapsPhysicalRange(u32 address, u32 length) const
 
 JitBaseBlockCache::JitBaseBlockCache(JitBase& jit) : m_jit{jit}
 {
+  jit_link_lists_init(&links_to, 4096);
+  jit_block_lists_init(&block_map, 8192);
 }
 
-JitBaseBlockCache::~JitBaseBlockCache() = default;
+JitBaseBlockCache::~JitBaseBlockCache()
+{
+  size_t i;
+  for (i = 0; i < m_num_block_chunks; i++)
+    delete[] m_block_chunks[i];
+  free(m_block_chunks);
+  jit_block_lists_free(&block_map);
+  jit_link_lists_free(&links_to);
+}
+
+JitBlock* JitBaseBlockCache::TakeBlock()
+{
+  JitBlock* block = m_free_blocks;
+  if (!block)
+  {
+    JitBlock* chunk;
+    size_t i;
+    if (m_num_block_chunks == m_block_chunks_cap)
+    {
+      const size_t cap = m_block_chunks_cap ? m_block_chunks_cap * 2 : 16;
+      JitBlock** const chunks =
+          static_cast<JitBlock**>(realloc(m_block_chunks, cap * sizeof(*chunks)));
+      if (!chunks)
+        abort();
+      m_block_chunks = chunks;
+      m_block_chunks_cap = cap;
+    }
+    chunk = new JitBlock[BLOCK_CHUNK];
+    m_block_chunks[m_num_block_chunks++] = chunk;
+    for (i = BLOCK_CHUNK; i-- > 0;)
+    {
+      chunk[i].next_at_address = m_free_blocks;
+      m_free_blocks = &chunk[i];
+    }
+    block = m_free_blocks;
+  }
+  m_free_blocks = block->next_at_address;
+  block->next_at_address = nullptr;
+  block->in_use = true;
+  return block;
+}
+
+void JitBaseBlockCache::ReleaseBlock(JitBlock* block)
+{
+  block->in_use = false;
+  block->next_at_address = m_free_blocks;
+  m_free_blocks = block;
+}
 
 void JitBaseBlockCache::Init()
 {
@@ -67,12 +122,25 @@ void JitBaseBlockCache::Clear()
   m_jit.js.fifoWriteAddresses.clear();
   m_jit.js.pairedQuantizeAddresses.clear();
   m_jit.js.noSpeculativeConstantsAddresses.clear();
-  for (auto& e : block_map)
+  size_t chunk, i;
+  for (chunk = 0; chunk < m_num_block_chunks; chunk++)
   {
-    DestroyBlock(e.second);
+    for (i = 0; i < BLOCK_CHUNK; i++)
+    {
+      if (m_block_chunks[chunk][i].in_use)
+        DestroyBlock(m_block_chunks[chunk][i]);
+    }
   }
-  block_map.clear();
-  links_to.clear();
+  for (chunk = 0; chunk < m_num_block_chunks; chunk++)
+  {
+    for (i = 0; i < BLOCK_CHUNK; i++)
+    {
+      if (m_block_chunks[chunk][i].in_use)
+        ReleaseBlock(&m_block_chunks[chunk][i]);
+    }
+  }
+  jit_block_lists_clear(&block_map);
+  jit_link_lists_clear(&links_to);
   block_range_map.clear();
 
   valid_block.ClearAll();
@@ -100,7 +168,13 @@ JitBlock** JitBaseBlockCache::GetFastBlockMapFallback()
 JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
 {
   const u32 physical_address = m_jit.m_mmu.JitCache_TranslateAddress(em_address).address;
-  JitBlock& b = block_map.emplace(physical_address, JitBlock{})->second;
+  JitBlock& b = *TakeBlock();
+  JitBlock** at = jit_block_lists_get(&block_map, AddressKey(physical_address));
+  /* last in its address's list, as a multimap kept it */
+  while (*at)
+    at = &(*at)->next_at_address;
+  *at = &b;
+  static_cast<JitBlockData&>(b) = JitBlockData{};
   b.effectiveAddress = em_address;
   b.physicalAddress = physical_address;
   b.feature_flags = m_jit.m_ppc_state.feature_flags;
@@ -139,9 +213,15 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
 
   if (block_link)
   {
-    for (const auto& e : block.linkData)
+    for (auto& e : block.linkData)
     {
-      links_to[e.exitAddress].insert(&block);
+      JitBlock::LinkData** const head = jit_link_lists_get(&links_to, AddressKey(e.exitAddress));
+      e.owner = &block;
+      e.prev_to = nullptr;
+      e.next_to = *head;
+      if (*head)
+        (*head)->prev_to = &e;
+      *head = &e;
     }
 
     LinkBlock(block);
@@ -174,12 +254,11 @@ JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, CPUEmuFeatureFla
     translated_addr = translated.address;
   }
 
-  auto iter = block_map.equal_range(translated_addr);
-  for (; iter.first != iter.second; iter.first++)
+  JitBlock* const* const head = jit_block_lists_find(&block_map, AddressKey(translated_addr));
+  for (JitBlock* b = head ? *head : nullptr; b; b = b->next_at_address)
   {
-    JitBlock& b = iter.first->second;
-    if (b.effectiveAddress == addr && b.feature_flags == feature_flags)
-      return &b;
+    if (b->effectiveAddress == addr && b->feature_flags == feature_flags)
+      return b;
   }
 
   return nullptr;
@@ -333,16 +412,16 @@ void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
 
         // And remove the block.
         DestroyBlock(*block);
-        auto block_map_iter = block_map.equal_range(block->physicalAddress);
-        while (block_map_iter.first != block_map_iter.second)
+        for (JitBlock** at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress));
+             at && *at; at = &(*at)->next_at_address)
         {
-          if (&block_map_iter.first->second == block)
+          if (*at == block)
           {
-            block_map.erase(block_map_iter.first);
+            *at = block->next_at_address;
             break;
           }
-          block_map_iter.first++;
         }
+        ReleaseBlock(block);
         iter = start->second.erase(iter);
       }
       else
@@ -393,14 +472,14 @@ void JitBaseBlockCache::LinkBlockExits(JitBlock& block)
 void JitBaseBlockCache::LinkBlock(JitBlock& block)
 {
   LinkBlockExits(block);
-  const auto it = links_to.find(block.effectiveAddress);
-  if (it == links_to.end())
-    return;
+  JitBlock::LinkData* const* const head =
+      jit_link_lists_find(&links_to, AddressKey(block.effectiveAddress));
 
-  for (JitBlock* b2 : it->second)
+  /* each block with an exit here: once per exit, which links what the first left */
+  for (JitBlock::LinkData* e = head ? *head : nullptr; e; e = e->next_to)
   {
-    if (block.feature_flags == b2->feature_flags)
-      LinkBlockExits(*b2);
+    if (block.feature_flags == e->owner->feature_flags)
+      LinkBlockExits(*e->owner);
   }
 }
 
@@ -413,22 +492,14 @@ void JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
   }
 
   // Unlink all exits of other blocks which points to this block
-  const auto it = links_to.find(block.effectiveAddress);
-  if (it == links_to.end())
-    return;
-  for (JitBlock* sourceBlock : it->second)
+  JitBlock::LinkData* const* const head =
+      jit_link_lists_find(&links_to, AddressKey(block.effectiveAddress));
+  for (JitBlock::LinkData* e = head ? *head : nullptr; e; e = e->next_to)
   {
-    if (sourceBlock->feature_flags != block.feature_flags)
+    if (e->owner->feature_flags != block.feature_flags)
       continue;
-
-    for (auto& e : sourceBlock->linkData)
-    {
-      if (e.exitAddress == block.effectiveAddress)
-      {
-        WriteLinkBlock(e, nullptr);
-        e.linkStatus = false;
-      }
-    }
+    WriteLinkBlock(*e, nullptr);
+    e->linkStatus = false;
   }
 }
 
@@ -452,14 +523,25 @@ void JitBaseBlockCache::DestroyBlock(JitBlock& block)
   UnlinkBlock(block);
 
   // Delete linking addresses
-  for (const auto& e : block.linkData)
+  for (auto& e : block.linkData)
   {
-    auto it = links_to.find(e.exitAddress);
-    if (it == links_to.end())
+    if (!e.owner)
       continue;
-    it->second.erase(&block);
-    if (it->second.empty())
-      links_to.erase(it);
+    if (e.prev_to)
+    {
+      e.prev_to->next_to = e.next_to;
+    }
+    else
+    {
+      JitBlock::LinkData** const head = jit_link_lists_find(&links_to, AddressKey(e.exitAddress));
+      if (head && *head == &e)
+        *head = e.next_to;
+    }
+    if (e.next_to)
+      e.next_to->prev_to = e.prev_to;
+    e.owner = nullptr;
+    e.next_to = nullptr;
+    e.prev_to = nullptr;
   }
 
   // Raise an signal if we are going to call this block again
