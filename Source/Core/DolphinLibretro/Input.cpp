@@ -1,10 +1,9 @@
-#include <retro_atomic.h>
-#include <algorithm>
 #include <array>
 #include <cassert>
+#include <libretro.h>
+#include <retro_atomic.h>
 #include <string_view>
 #include <utility>
-#include <libretro.h>
 
 #include "Common/Common.h"
 #include "Common/CommonPaths.h"
@@ -361,7 +360,8 @@ private:
     std::string GetName() const override { return m_name; }
     ControlState GetState() const override
     {
-      return std::max(0.0, retro_atomic_load_acquire_int(&m_value) / m_range);
+      const ControlState value = retro_atomic_load_acquire_int(&m_value) / m_range;
+      return value > 0.0 ? value : 0.0;
     }
     void Poll()
     {
@@ -857,19 +857,25 @@ bool UsesVRMotion(unsigned port)
   return s_vr_motion && port == 0;
 }
 
+/* The part of a reading on one side of zero: 0 for the other side, and for NaN. */
+static float PositivePart(float x)
+{
+  return x > 0.0f ? x : 0.0f;
+}
+
 void SetVRMotion(unsigned port, const float accel[3], const float gyro[3], const float point[2])
 {
   for (int i = 0; i < 3; i++)
   {
-    g_accel_pos[port][i] = std::max(0.0f, accel[i]);
-    g_accel_neg[port][i] = std::max(0.0f, -accel[i]);
-    g_gyro_pos[port][i] = std::max(0.0f, gyro[i]);
-    g_gyro_neg[port][i] = std::max(0.0f, -gyro[i]);
+    g_accel_pos[port][i] = PositivePart(accel[i]);
+    g_accel_neg[port][i] = PositivePart(-accel[i]);
+    g_gyro_pos[port][i] = PositivePart(gyro[i]);
+    g_gyro_neg[port][i] = PositivePart(-gyro[i]);
   }
-  g_point[port][0] = std::max(0.0f, point[0]);
-  g_point[port][1] = std::max(0.0f, -point[0]);
-  g_point[port][2] = std::max(0.0f, -point[1]);
-  g_point[port][3] = std::max(0.0f, point[1]);
+  g_point[port][0] = PositivePart(point[0]);
+  g_point[port][1] = PositivePart(-point[0]);
+  g_point[port][2] = PositivePart(-point[1]);
+  g_point[port][3] = PositivePart(point[1]);
 }
 
 void UpdateAccelerometer(unsigned port)
@@ -895,14 +901,14 @@ void UpdateAccelerometer(unsigned port)
   }
 
   // write rotated values
-  g_accel_pos[port][0] = std::max(0.0f, ax);
-  g_accel_neg[port][0] = std::max(0.0f, -ax);
+  g_accel_pos[port][0] = PositivePart(ax);
+  g_accel_neg[port][0] = PositivePart(-ax);
 
-  g_accel_pos[port][1] = std::max(0.0f, ay);
-  g_accel_neg[port][1] = std::max(0.0f, -ay);
+  g_accel_pos[port][1] = PositivePart(ay);
+  g_accel_neg[port][1] = PositivePart(-ay);
 
-  g_accel_pos[port][2] = std::max(0.0f, az);
-  g_accel_neg[port][2] = std::max(0.0f, -az);
+  g_accel_pos[port][2] = PositivePart(az);
+  g_accel_neg[port][2] = PositivePart(-az);
 }
 
 void UpdateGyro(unsigned port)
@@ -926,14 +932,14 @@ void UpdateGyro(unsigned port)
 
   // Split across a one-sided pair; the expression parser clamps negatives away
   // (see SensorDevice::RegisterAll).
-  g_gyro_pos[port][0] = std::max(0.0f, gx);
-  g_gyro_neg[port][0] = std::max(0.0f, -gx);
+  g_gyro_pos[port][0] = PositivePart(gx);
+  g_gyro_neg[port][0] = PositivePart(-gx);
 
-  g_gyro_pos[port][1] = std::max(0.0f, gy);
-  g_gyro_neg[port][1] = std::max(0.0f, -gy);
+  g_gyro_pos[port][1] = PositivePart(gy);
+  g_gyro_neg[port][1] = PositivePart(-gy);
 
-  g_gyro_pos[port][2] = std::max(0.0f, gz);
-  g_gyro_neg[port][2] = std::max(0.0f, -gz);
+  g_gyro_pos[port][2] = PositivePart(gz);
+  g_gyro_neg[port][2] = PositivePart(-gz);
 }
 
 void ResetControllers(const WiimoteUpdateFlags& f)
