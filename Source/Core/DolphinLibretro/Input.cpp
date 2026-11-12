@@ -1,5 +1,7 @@
 #include <array>
 #include <cassert>
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 #include <libretro.h>
 #include <retro_atomic.h>
@@ -294,7 +296,7 @@ static struct retro_input_descriptor descWiimoteNunchuk[] = {
     {0},
 };
 
-static std::string GetDeviceName(unsigned device)
+static const char* GetDeviceName(unsigned device)
 {
   switch (device)
   {
@@ -314,13 +316,36 @@ static std::string GetDeviceName(unsigned device)
   return "Unknown";
 }
 
+/* A device's name as a mapping expression refers to it: "Libretro/<port>/<device>". */
+enum
+{
+  DEVICE_NAME_SIZE = 64,
+  EXPRESSION_SIZE = 512
+};
+
+static void QualifiedName(char* out, unsigned port, const char* device_name)
+{
+  snprintf(out, DEVICE_NAME_SIZE, "%s/%u/%s", source, port, device_name);
+}
+
 static std::string GetQualifiedName(unsigned port, unsigned device)
 {
-  return ciface::Core::DeviceQualifier(
-      std::string(source),
-      static_cast<int>(port),
-      GetDeviceName(device)
-  ).ToString();
+  char name[DEVICE_NAME_SIZE];
+  QualifiedName(name, port, GetDeviceName(device));
+  return name;
+}
+
+/* Sets control index of group to the expression fmt formats. */
+static void Bind(ControllerEmu::ControlGroup* group, int index, const char* fmt, ...)
+    DOLPHIN_PRINTF_ATTR(3, 4);
+static void Bind(ControllerEmu::ControlGroup* group, int index, const char* fmt, ...)
+{
+  char expression[EXPRESSION_SIZE];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(expression, sizeof(expression), fmt, args);
+  va_end(args);
+  group->SetControlExpression(index, expression);
 }
 
 class Device : public ciface::Core::Device
@@ -1046,11 +1071,9 @@ void Update()
 
 static std::string GetQualifiedNameSensor(unsigned port)
 {
-  return ciface::Core::DeviceQualifier(
-      std::string(Libretro::Input::source),
-      static_cast<int>(port),
-      std::string("Sensor")
-  ).ToString();
+  char name[DEVICE_NAME_SIZE];
+  QualifiedName(name, port, "Sensor");
+  return name;
 }
 
 // can be called from retro_run, do not reset all settings because one thing changed
@@ -1577,8 +1600,10 @@ static std::string bindMouse(const std::string& retropad_expr, const std::string
 
 void retro_set_controller_port_device_gc(unsigned port, unsigned device)
 {
-  std::string devJoypad = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_JOYPAD);
-  std::string devAnalog = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_ANALOG);
+  char devJoypad[Libretro::Input::DEVICE_NAME_SIZE];
+  char devAnalog[Libretro::Input::DEVICE_NAME_SIZE];
+  Libretro::Input::QualifiedName(devJoypad, port, "Joypad");
+  Libretro::Input::QualifiedName(devAnalog, port, "Analog");
 
   if (device == RETRO_DEVICE_GC_ON_WII) // Disconnect Wii device if we're using GC controller as device type to avoid conflict
     WiimoteCommon::OnSourceChanged(port, WiimoteSource::None);
@@ -1616,26 +1641,24 @@ void retro_set_controller_port_device_gc(unsigned port, unsigned device)
   gcButtons->SetControlExpression(3, "Y");                          // Y
   gcButtons->SetControlExpression(4, "R");                          // Z
   gcButtons->SetControlExpression(5, "Start");                      // Start
-  gcMainStick->SetControlExpression(0, "`" + devAnalog + ":Y0-`");  // Up
-  gcMainStick->SetControlExpression(1, "`" + devAnalog + ":Y0+`");  // Down
-  gcMainStick->SetControlExpression(2, "`" + devAnalog + ":X0-`");  // Left
-  gcMainStick->SetControlExpression(3, "`" + devAnalog + ":X0+`");  // Right
-  gcCStick->SetControlExpression(0, "`" + devAnalog + ":Y1-`");     // Up
-  gcCStick->SetControlExpression(1, "`" + devAnalog + ":Y1+`");     // Down
-  gcCStick->SetControlExpression(2, "`" + devAnalog + ":X1-`");     // Left
-  gcCStick->SetControlExpression(3, "`" + devAnalog + ":X1+`");     // Right
+  Libretro::Input::Bind(gcMainStick, 0, "`%s:Y0-`", devAnalog);  // Up
+  Libretro::Input::Bind(gcMainStick, 1, "`%s:Y0+`", devAnalog);  // Down
+  Libretro::Input::Bind(gcMainStick, 2, "`%s:X0-`", devAnalog);  // Left
+  Libretro::Input::Bind(gcMainStick, 3, "`%s:X0+`", devAnalog);  // Right
+  Libretro::Input::Bind(gcCStick, 0, "`%s:Y1-`", devAnalog);     // Up
+  Libretro::Input::Bind(gcCStick, 1, "`%s:Y1+`", devAnalog);     // Down
+  Libretro::Input::Bind(gcCStick, 2, "`%s:X1-`", devAnalog);     // Left
+  Libretro::Input::Bind(gcCStick, 3, "`%s:X1+`", devAnalog);     // Right
   gcDPad->SetControlExpression(0, "Up");                            // Up
   gcDPad->SetControlExpression(1, "Down");                          // Down
   gcDPad->SetControlExpression(2, "Left");                          // Left
   gcDPad->SetControlExpression(3, "Right");                         // Right
-  gcTriggers->SetControlExpression(0, "`" + devAnalog + ":Trigger0+`|(L2&!`" + devAnalog +
-                                      ":Trigger0+`)");  // L-trigger Full Press
-  gcTriggers->SetControlExpression(1, "`" + devAnalog + ":Trigger1+`|(R2&!`" + devAnalog +
-                                      ":Trigger1+`)");  // R-trigger Full Press
-  gcTriggers->SetControlExpression(2,
-                                   "`" + devAnalog + ":Trigger0+`|L3");  // L-trigger Soft Press
-  gcTriggers->SetControlExpression(3,
-                                   "`" + devAnalog + ":Trigger1+`|R3");  // R-trigger Soft Press
+  Libretro::Input::Bind(gcTriggers, 0, "`%s:Trigger0+`|(L2&!`%s:Trigger0+`)", devAnalog,
+                        devAnalog);  // L-trigger Full Press
+  Libretro::Input::Bind(gcTriggers, 1, "`%s:Trigger1+`|(R2&!`%s:Trigger1+`)", devAnalog,
+                        devAnalog);                                        // R-trigger Full Press
+  Libretro::Input::Bind(gcTriggers, 2, "`%s:Trigger0+`|L3", devAnalog);  // L-trigger Soft Press
+  Libretro::Input::Bind(gcTriggers, 3, "`%s:Trigger1+`|R3", devAnalog);  // R-trigger Soft Press
   gcTriforce->SetControlExpression(0, "L");  // Test
   gcTriforce->SetControlExpression(1, "L3&R3"); // Service
   gcTriforce->SetControlExpression(2, "Select"); // Coin
@@ -1656,7 +1679,7 @@ void retro_set_controller_port_device_gc(unsigned port, unsigned device)
 /* The emulated GBA on the link cable: its buttons on the port's RetroPad. */
 static void retro_set_controller_port_device_gba(unsigned port)
 {
-  const std::string devJoypad = Libretro::Input::GetQualifiedName(port, RETRO_DEVICE_JOYPAD);
+  char devJoypad[Libretro::Input::DEVICE_NAME_SIZE];
   GBAPad* gbaPad;
   ControllerEmu::ControlGroup* gbaButtons;
   ControllerEmu::ControlGroup* gbaDPad;
@@ -1666,6 +1689,7 @@ static void retro_set_controller_port_device_gba(unsigned port)
   Config::SetBaseOrCurrent(Config::GetInfoForSIDevice(port),
                            SerialInterface::SIDEVICE_GC_GBA_EMULATED);
 
+  Libretro::Input::QualifiedName(devJoypad, port, "Joypad");
   gbaPad = (GBAPad*)Pad::GetGBAConfig()->GetController(port);
   // load an empty inifile section, clears everything
   gbaPad->LoadConfig(&sec);

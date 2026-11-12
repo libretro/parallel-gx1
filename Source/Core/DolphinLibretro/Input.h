@@ -36,7 +36,7 @@ namespace Libretro
 {
 namespace Input
 {
-constexpr std::string_view source = "Libretro";
+static const char source[] = "Libretro";
 extern double g_accel_pos[NUM_CONTROLLERS_FOR_SENSORS][3];
 extern double g_accel_neg[NUM_CONTROLLERS_FOR_SENSORS][3];
 extern double g_gyro_pos[NUM_CONTROLLERS_FOR_SENSORS][3];
