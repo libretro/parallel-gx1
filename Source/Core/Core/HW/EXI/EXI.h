@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 #include "Core/CoreTiming.h"
 
 class PointerWrap;
@@ -109,9 +108,3 @@ constexpr const char* SlotName(Slot slot)
   return static_cast<unsigned>(slot) < 4 ? names[static_cast<unsigned>(slot)] : "Invalid";
 }
 }  // namespace ExpansionInterface
-
-template <>
-struct fmt::formatter<ExpansionInterface::Slot> : EnumFormatter<ExpansionInterface::MAX_SLOT>
-{
-  constexpr formatter() : EnumFormatter({"Slot A", "Slot B", "Serial Port 1", "Serial Port 2"}) {}
-};

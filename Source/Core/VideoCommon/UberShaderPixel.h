@@ -46,17 +46,3 @@ u32 EnumeratePixelShaderUids(PixelShaderUid* uids);
 void ClearUnusedPixelShaderUidBits(APIType api_type, const ShaderHostConfig& host_config,
                                    PixelShaderUid* uid);
 }  // namespace UberShader
-
-template <>
-struct fmt::formatter<UberShader::pixel_ubershader_uid_data>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const UberShader::pixel_ubershader_uid_data& uid, FormatContext& ctx) const
-  {
-    return fmt::format_to(
-        ctx.out(), "Pixel UberShader for {} texgens{}{}{}{}", uid.num_texgens,
-        uid.early_depth ? ", early-depth" : "", uid.per_pixel_depth ? ", per-pixel depth" : "",
-        uid.uint_output ? ", uint output" : "", uid.no_dual_src ? ", no dual-source blending" : "");
-  }
-};

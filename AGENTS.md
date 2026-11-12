@@ -24,6 +24,13 @@ touches closer, and never adds C++ that was not there.
   not, a function pointer and context in place of a callable, and a
   tagged record in place of a captured lambda. A list that is cleared
   keeps its storage, so play stops allocating once it has grown.
+- **Formatting is printf.** Logs (`ERROR_LOG` and the rest), alerts
+  (`PanicAlert`, `PanicYesNo`, ...) and assertions (`ASSERT_MSG`) take
+  printf formats that the compiler checks; 64-bit values go through
+  `PRIu64`/`PRIx64` with a `(u64)` cast, since `long` differs between
+  platforms. Text is built into a stack buffer with `snprintf`, or with
+  `StringFromFormat` where an API wants a `std::string`. fmt is gone and
+  does not come back.
 - **Frames stay small.** A function's stack frame is 4 KiB at most.
 - **A file with no C++ left becomes a `.c` file.** Its header keeps
   `extern "C"` guards while C++ still includes it.
@@ -97,7 +104,7 @@ allocation fails it.
 - **Large tables are untouched pages.** Memory that is mostly zero and
   written sparsely comes from `Common::AllocateMemoryPages`, which the
   system zeroes lazily, not `calloc` or a value-initialized vector.
-- **No hidden allocators.** `std::string`, `fmt::format`, iostream
+- **No hidden allocators.** `std::string`, `StringFromFormat`, iostream
   parsing, `std::function` captures and growing containers allocate.
   None of them run per frame, per draw or per field; a setting read in
   play is read where config changes, not with `Config::Get` per call.

@@ -5,7 +5,6 @@
 
 #include <d3d11_4.h>
 #include <dxgi1_6.h>
-#include <fmt/format.h>
 #include <vector>
 #include <wrl/client.h>
 
@@ -36,35 +35,7 @@ bool SupportsLogicOp();
 
 }  // namespace D3D
 
-// Wrapper for HRESULT to be used with fmt.  Note that we can't create a fmt::formatter directly
-// for HRESULT as HRESULT is simply a typedef on long and not a distinct type.
-// Unlike the version in Common, this variant also knows to call GetDeviceRemovedReason if needed.
-struct DX11HRWrap
-{
-  constexpr explicit DX11HRWrap(HRESULT hr) : m_hr(hr) {}
-  const HRESULT m_hr;
-};
-
 // Common::HRText, with the device's removal reason after a device removed error.
 Common::HResultText HRText(HRESULT hr);
 
 }  // namespace DX11
-
-template <>
-struct fmt::formatter<DX11::DX11HRWrap>
-{
-  constexpr auto parse(fmt::format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const DX11::DX11HRWrap& hr, FormatContext& ctx) const
-  {
-    if (hr.m_hr == DXGI_ERROR_DEVICE_REMOVED && DX11::D3D::device != nullptr)
-    {
-      return fmt::format_to(ctx.out(), "{}\nDevice removal reason: {}", Common::HRWrap(hr.m_hr),
-                            Common::HRWrap(DX11::D3D::device->GetDeviceRemovedReason()));
-    }
-    else
-    {
-      return fmt::format_to(ctx.out(), "{}", Common::HRWrap(hr.m_hr));
-    }
-  }
-};

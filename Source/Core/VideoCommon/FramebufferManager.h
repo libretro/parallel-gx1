@@ -8,7 +8,6 @@
 #include <tuple>
 
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 
 #include "VideoCommon/AbstractFramebuffer.h"
 #include "VideoCommon/AbstractPipeline.h"
@@ -31,13 +30,6 @@ enum class EFBReinterpretType
   RGB565ToRGBA6 = 5
 };
 constexpr u32 NUM_EFB_REINTERPRET_TYPES = 6;
-template <>
-struct fmt::formatter<EFBReinterpretType> : EnumFormatter<EFBReinterpretType::RGB565ToRGBA6>
-{
-  static constexpr array_type names = {"RGB8 to RGB565", "RGB8 to RGBA6",  "RGBA6 to RGB8",
-                                       "RGB6 to RGB565", "RGB565 to RGB8", "RGB565 to RGBA6"};
-  constexpr formatter() : EnumFormatter(names) {}
-};
 
 inline bool AddressRangesOverlap(u32 aLower, u32 aUpper, u32 bLower, u32 bUpper)
 {

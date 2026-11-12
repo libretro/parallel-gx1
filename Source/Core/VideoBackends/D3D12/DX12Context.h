@@ -205,37 +205,7 @@ extern DXContext* g_dx_context;
 // Whether the queue passed fence_value; never waits.
 bool FenceValueDone(u64 fence_value);
 
-// Wrapper for HRESULT to be used with fmt.  Note that we can't create a fmt::formatter directly
-// for HRESULT as HRESULT is simply a typedef on long and not a distinct type.
-// Unlike the version in Common, this variant also knows to call GetDeviceRemovedReason if needed.
-struct DX12HRWrap
-{
-  constexpr explicit DX12HRWrap(HRESULT hr) : m_hr(hr) {}
-  const HRESULT m_hr;
-};
-
 // Common::HRText, with the device's removal reason after a device removed error.
 Common::HResultText HRText(HRESULT hr);
 
 }  // namespace DX12
-
-template <>
-struct fmt::formatter<DX12::DX12HRWrap>
-{
-  constexpr auto parse(fmt::format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const DX12::DX12HRWrap& hr, FormatContext& ctx) const
-  {
-    if (hr.m_hr == DXGI_ERROR_DEVICE_REMOVED && DX12::g_dx_context != nullptr &&
-        DX12::g_dx_context->GetDevice() != nullptr)
-    {
-      return fmt::format_to(
-          ctx.out(), "{}\nDevice removal reason: {}", Common::HRWrap(hr.m_hr),
-          Common::HRWrap(DX12::g_dx_context->GetDevice()->GetDeviceRemovedReason()));
-    }
-    else
-    {
-      return fmt::format_to(ctx.out(), "{}", Common::HRWrap(hr.m_hr));
-    }
-  }
-};

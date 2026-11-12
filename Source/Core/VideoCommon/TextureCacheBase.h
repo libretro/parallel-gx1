@@ -5,7 +5,6 @@
 
 #include <array>
 #include <filesystem>
-#include <fmt/format.h>
 #include <map>
 #include <memory>
 #include <optional>
@@ -94,26 +93,6 @@ struct EFBCopyParams
   bool all_copy_filter_coefs_needed;
   bool copy_filter_can_overflow;
   bool apply_gamma;
-};
-
-template <>
-struct fmt::formatter<EFBCopyParams>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const EFBCopyParams& uid, FormatContext& ctx) const
-  {
-    std::string copy_format;
-    if (uid.copy_format == EFBCopyFormat::XFB)
-      copy_format = "XFB";
-    else
-      copy_format = fmt::to_string(uid.copy_format);
-    return fmt::format_to(ctx.out(),
-                          "format: {}, copy format: {}, depth: {}, yuv: {}, apply_gamma: {}, "
-                          "all_copy_filter_coefs_needed: {}, copy_filter_can_overflow: {}",
-                          uid.efb_format, copy_format, uid.depth, uid.yuv, uid.apply_gamma,
-                          uid.all_copy_filter_coefs_needed, uid.copy_filter_can_overflow);
-  }
 };
 
 class RcTcacheEntry;
@@ -569,7 +548,6 @@ private:
   bool CheckReadbackTexture(u32 width, u32 height, AbstractTextureFormat format);
   void DoSaveState(PointerWrap& p);
   void DoLoadState(PointerWrap& p);
-
 
   // m_textures_by_address is the authoritive version of what's actually "in" the texture cache
   // but it's possible for invalidated TCache entries to live on elsewhere

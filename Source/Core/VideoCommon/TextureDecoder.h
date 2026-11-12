@@ -7,7 +7,6 @@
 #include <tuple>
 
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 #include "VideoCommon/TexBytes.h"
 
 enum
@@ -37,14 +36,6 @@ enum class TextureFormat
   // to emulate them as part of texture cache.
   // This isn't a real value that can be used on console; it only exists for ease of implementation.
   XFB = 0xF,
-};
-template <>
-struct fmt::formatter<TextureFormat> : EnumFormatter<TextureFormat::CMPR>
-{
-  static constexpr array_type names = {"I4",     "I8",    "IA4",   "IA8",   "RGB565",
-                                       "RGB5A3", "RGBA8", nullptr, "C4",    "C8",
-                                       "C14X2",  nullptr, nullptr, nullptr, "CMPR"};
-  constexpr formatter() : EnumFormatter(names) {}
 };
 
 // The format's name, as the texture format overlay draws it.
@@ -112,17 +103,6 @@ enum class EFBCopyFormat
   // This isn't a real value that can be used on console; it only exists for ease of implementation.
   XFB = 0xF,
 };
-template <>
-struct fmt::formatter<EFBCopyFormat> : EnumFormatter<EFBCopyFormat::GB8>
-{
-  static constexpr array_type names = {
-      "R4/I4/Z4",  "R8/I8/Z8H (?)", "RA4/IA4", "RA8/IA8 (Z16 too?)",
-      "RGB565",    "RGB5A3",        "RGBA8",   "A8",
-      "R8/I8/Z8H", "G8/Z8M",        "B8/Z8L",  "RG8/Z16R (Note: G and R are reversed)",
-      "GB8/Z16L",
-  };
-  constexpr formatter() : EnumFormatter(names) {}
-};
 
 enum class TLUTFormat
 {
@@ -130,11 +110,6 @@ enum class TLUTFormat
   IA8 = 0x0,
   RGB565 = 0x1,
   RGB5A3 = 0x2,
-};
-template <>
-struct fmt::formatter<TLUTFormat> : EnumFormatter<TLUTFormat::RGB5A3>
-{
-  constexpr formatter() : EnumFormatter({"IA8", "RGB565", "RGB5A3"}) {}
 };
 
 static inline bool IsValidTLUTFormat(TLUTFormat tlutfmt)

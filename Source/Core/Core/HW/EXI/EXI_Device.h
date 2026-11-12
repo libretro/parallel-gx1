@@ -7,7 +7,6 @@
 
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 
 class PointerWrap;
 
@@ -84,53 +83,3 @@ std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, EXIDeviceType
                                              int channel_num,
                                              const Memcard::HeaderData& memcard_header_data);
 }  // namespace ExpansionInterface
-
-template <>
-struct fmt::formatter<ExpansionInterface::EXIDeviceType>
-    : EnumFormatter<ExpansionInterface::EXIDeviceType::EthernetIPC>
-{
-  static constexpr array_type names = {
-      _trans("Dummy"),
-      _trans("Memory Card"),
-      _trans("Mask ROM"),
-      // i18n: A mysterious debugging/diagnostics peripheral for the GameCube.
-      _trans("AD16"),
-      _trans("Microphone"),
-      _trans("Broadband Adapter (TAP)"),
-      _trans("Triforce Baseboard"),
-      _trans("USB Gecko"),
-      _trans("GCI Folder"),
-      _trans("Advance Game Port"),
-      _trans("Broadband Adapter (XLink Kai)"),
-      _trans("Broadband Adapter (tapserver)"),
-      _trans("Broadband Adapter (HLE)"),
-      _trans("Modem Adapter (tapserver)"),
-      _trans("Broadband Adapter (IPC)"),
-  };
-
-  constexpr formatter() : EnumFormatter(names) {}
-
-  template <typename FormatContext>
-  auto format(const ExpansionInterface::EXIDeviceType& e, FormatContext& ctx) const
-  {
-    if (e != ExpansionInterface::EXIDeviceType::None)
-    {
-      return EnumFormatter::format(e, ctx);
-    }
-    else
-    {
-      // Special-case None since it has a fixed ID (0xff) that is much larger than the rest; we
-      // don't need 200 nullptr entries in names.  We also want to format it specially in the UI.
-      switch (format_type)
-      {
-      default:
-      case 'u':
-        return fmt::format_to(ctx.out(), "None");
-      case 's':
-        return fmt::format_to(ctx.out(), "0xffu /* None */");
-      case 'n':
-        return fmt::format_to(ctx.out(), _trans("<Nothing>"));
-      }
-    }
-  }
-};

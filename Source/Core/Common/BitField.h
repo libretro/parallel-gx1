@@ -31,7 +31,6 @@
 #pragma once
 
 #include <cstddef>
-#include <fmt/format.h>
 #include <iterator>
 #include <limits>
 #include <type_traits>
@@ -185,21 +184,6 @@ private:
 };
 #pragma pack()
 
-// Use the underlying type's formatter for BitFields, if one exists
-template <std::size_t position, std::size_t bits, typename T, typename S>
-struct fmt::formatter<BitField<position, bits, T, S>>
-{
-  fmt::formatter<T> m_formatter;
-  constexpr auto parse(format_parse_context& ctx) { return m_formatter.parse(ctx); }
-  template <typename FormatContext>
-  auto format(const BitField<position, bits, T, S>& bitfield, FormatContext& ctx) const
-  {
-    return m_formatter.format(bitfield.Value(), ctx);
-  }
-};
-
-// Language limitations require the following to make these formattable
-// (formatter<BitFieldArray<position, bits, size, T>::Ref> is not legal)
 template <std::size_t position, std::size_t bits, std::size_t size, typename T, typename S>
 class BitFieldArrayConstRef;
 template <std::size_t position, std::size_t bits, std::size_t size, typename T, typename S>
@@ -355,7 +339,7 @@ private:
 // extend std::input_iterator_tag.
 // Does not satisfy LegacyForwardIterator / std::forward_iterator, as that requires use of real
 // references instead of proxy objects.
-// This iterator allows use of BitFieldArray in range-based for loops, and with fmt::join.
+// This iterator allows use of BitFieldArray in range-based for loops.
 template <std::size_t position, std::size_t bits, std::size_t size, typename T, typename S>
 class BitFieldArrayIterator
 {
@@ -408,7 +392,7 @@ private:
 // Satisfies LegacyInputIterator / std::input_iterator.
 // Does not satisfy LegacyForwardIterator / std::forward_iterator, as that requires use of real
 // references instead of proxy objects.
-// This iterator allows use of BitFieldArray in range-based for loops, and with fmt::join.
+// This iterator allows use of BitFieldArray in range-based for loops.
 template <std::size_t position, std::size_t bits, std::size_t size, typename T, typename S>
 class BitFieldArrayConstIterator
 {
@@ -464,29 +448,4 @@ public:
 private:
   const BitFieldArray<position, bits, size, T, S>* m_array;
   size_t m_index;
-};
-
-template <std::size_t position, std::size_t bits, std::size_t size, typename T, typename S>
-struct fmt::formatter<BitFieldArrayRef<position, bits, size, T, S>>
-{
-  fmt::formatter<T> m_formatter;
-  constexpr auto parse(format_parse_context& ctx) { return m_formatter.parse(ctx); }
-  template <typename FormatContext>
-  auto format(const BitFieldArrayRef<position, bits, size, T, S>& ref, FormatContext& ctx) const
-  {
-    return m_formatter.format(ref.Value(), ctx);
-  }
-};
-
-template <std::size_t position, std::size_t bits, std::size_t size, typename T, typename S>
-struct fmt::formatter<BitFieldArrayConstRef<position, bits, size, T, S>>
-{
-  fmt::formatter<T> m_formatter;
-  constexpr auto parse(format_parse_context& ctx) { return m_formatter.parse(ctx); }
-  template <typename FormatContext>
-  auto format(const BitFieldArrayConstRef<position, bits, size, T, S>& ref,
-              FormatContext& ctx) const
-  {
-    return m_formatter.format(ref.Value(), ctx);
-  }
 };

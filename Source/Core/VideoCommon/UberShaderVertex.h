@@ -36,14 +36,3 @@ enum
 };
 u32 EnumerateVertexShaderUids(VertexShaderUid* uids);
 }  // namespace UberShader
-
-template <>
-struct fmt::formatter<UberShader::vertex_ubershader_uid_data>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const UberShader::vertex_ubershader_uid_data& uid, FormatContext& ctx) const
-  {
-    return fmt::format_to(ctx.out(), "Vertex UberShader for {} texgens", uid.num_texgens);
-  }
-};

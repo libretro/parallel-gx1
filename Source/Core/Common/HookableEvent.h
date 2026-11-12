@@ -36,7 +36,7 @@ using EventHook = std::unique_ptr<HookBase>;
 // Register listeners anywhere you need them as:
 //
 //   EventHook my_hook = my_lovely_event.Register([](std::string foo, u32 bar) {
-//       fmt::print("I've been triggered with {} and {}", foo, bar)
+//       printf("I've been triggered with %s and %u", foo.c_str(), bar);
 //   });
 //
 // The hook will be automatically unregistered when the EventHook object goes out of scope.

@@ -7,10 +7,6 @@
 	url = https://github.com/libusb/libusb.git
 	shallow = true
 	shallow = true
-[submodule "Externals/fmt/fmt"]
-	path = Externals/fmt/fmt
-	url = https://github.com/fmtlib/fmt.git
-	shallow = true
 [submodule "hidapi-src"]
 	path = Externals/hidapi/hidapi-src
 	url = https://github.com/libusb/hidapi.git

@@ -4,7 +4,6 @@
 #pragma once
 
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 
 #include "VideoCommon/LightingShaderGen.h"
 #include "VideoCommon/ShaderGenCommon.h"
@@ -35,15 +34,6 @@ enum class ShaderAttrib : u32
   TexCoord5 = 13,
   TexCoord6 = 14,
   TexCoord7 = 15
-};
-template <>
-struct fmt::formatter<ShaderAttrib> : EnumFormatter<ShaderAttrib::TexCoord7>
-{
-  static constexpr array_type names = {
-      "Position",    "Position Matrix", "Normal",      "Tangent",     "Binormal",    "Color 0",
-      "Color 1",     nullptr,           "Tex Coord 0", "Tex Coord 1", "Tex Coord 2", "Tex Coord 3",
-      "Tex Coord 4", "Tex Coord 5",     "Tex Coord 6", "Tex Coord 7"};
-  constexpr formatter() : EnumFormatter(names) {}
 };
 // Intended for offsetting from Color0/TexCoord0
 constexpr ShaderAttrib operator+(ShaderAttrib attrib, int offset)

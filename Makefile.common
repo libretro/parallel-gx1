@@ -152,15 +152,6 @@ FATFS_SOURCES_C += \
 	$(CORE_DIR)/Externals/FatFs/ff.c \
 	$(CORE_DIR)/Externals/FatFs/ffunicode.c
 
-# FMT
-FMT_SOURCES_C :=
-FMT_SOURCES_CXX :=
-FMT_SOURCES_ASM :=
-FMT_SOURCES_OBJCXX :=
-FMT_SOURCES_CXX += \
-	$(CORE_DIR)/Externals/fmt/fmt/src/format.cc \
-	$(CORE_DIR)/Externals/fmt/fmt/src/os.cc
-
 # HIDAPI
 HIDAPI_SOURCES_C :=
 HIDAPI_SOURCES_CXX :=
@@ -1104,8 +1095,6 @@ endif
 
 
 
-FMT_FLAGS := -w -I$(EXT_DIR)/fmt/fmt/include
-
 HIDAPI_FLAGS := -w -I$(EXT_DIR)/hidapi/hidapi-src/hidapi
 ifeq ($(OS_UNIX),1)
    HIDAPI_FLAGS += -isystem $(EXT_DIR)/libusb/libusb/libusb
@@ -1153,7 +1142,6 @@ DOLPHIN_FLAGS := \
 	-I$(SRC_DIR)/DolphinLibretro/Common -I$(SRC_DIR)/DolphinLibretro/VideoContexts \
 	-I$(EXT_DIR)/libretro-common/include \
 	-I$(EXT_DIR)/Vulkan-Headers/include \
-	-I$(EXT_DIR)/fmt/fmt/include \
 	-I$(EXT_DIR)/hidapi/hidapi-src/hidapi \
 	$(MGBA_INC) \
 	-I$(EXT_DIR)/FatFs \
@@ -1194,7 +1182,7 @@ FILE_FLAGS_$(abspath $(EXT_DIR)/libretro-common/formats/rvz/rvz.c) := -DHAVE_RZS
 
 # Libraries in link order; the optional ones only where they are built.
 LIB_GROUPS := DOLPHIN LIBRETRO_COMMON \
-	MGBA FMT FATFS
+	MGBA FATFS
 ifeq ($(HAVE_LIBUSB),1)
    LIB_GROUPS += LIBUSB
 endif

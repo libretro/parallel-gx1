@@ -7,7 +7,6 @@
 #include <functional>
 
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 #include "Common/MathUtil.h"
 
 enum class AbstractTextureFormat : u32
@@ -92,10 +91,4 @@ struct std::hash<TextureConfig>
                    static_cast<u64>(c.height) << 16 | static_cast<u64>(c.width);
     return std::hash<u64>{}(id);
   }
-};
-
-template <>
-struct fmt::formatter<AbstractTextureType> : EnumFormatter<AbstractTextureType::Texture_CubeMap>
-{
-  constexpr formatter() : EnumFormatter({"2D Array", "2D", "Cubemap"}) {}
 };

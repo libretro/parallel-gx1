@@ -7,7 +7,6 @@
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 #include "Common/Inline.h"
 #include "Common/Swap.h"
 #include "VideoCommon/CPMemory.h"
@@ -241,16 +240,3 @@ template <bool is_preprocess = false>
 u8* RunFifo(DataReader src, u32* cycles);
 
 }  // namespace OpcodeDecoder
-
-template <>
-struct fmt::formatter<OpcodeDecoder::Primitive>
-    : EnumFormatter<OpcodeDecoder::Primitive::GX_DRAW_POINTS>
-{
-  static constexpr array_type names = {
-      "GX_DRAW_QUADS",        "GX_DRAW_QUADS_2 (nonstandard)",
-      "GX_DRAW_TRIANGLES",    "GX_DRAW_TRIANGLE_STRIP",
-      "GX_DRAW_TRIANGLE_FAN", "GX_DRAW_LINES",
-      "GX_DRAW_LINE_STRIP",   "GX_DRAW_POINTS",
-  };
-  constexpr formatter() : EnumFormatter(names) {}
-};

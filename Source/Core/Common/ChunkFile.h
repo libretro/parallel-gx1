@@ -25,8 +25,6 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"

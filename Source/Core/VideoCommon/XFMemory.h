@@ -10,7 +10,6 @@
 
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
-#include "Common/EnumFormatter.h"
 #include "VideoCommon/CPMemory.h"
 
 constexpr size_t NUM_XF_COLOR_CHANNELS = 2;
@@ -23,22 +22,12 @@ enum class TexSize : u8
   ST = 0,
   STQ = 1
 };
-template <>
-struct fmt::formatter<TexSize> : EnumFormatter<TexSize::STQ>
-{
-  constexpr formatter() : EnumFormatter({"ST (2x4 matrix)", "STQ (3x4 matrix)"}) {}
-};
 
 // Input form
 enum class TexInputForm : u8
 {
   AB11 = 0,
   ABC1 = 1
-};
-template <>
-struct fmt::formatter<TexInputForm> : EnumFormatter<TexInputForm::ABC1>
-{
-  constexpr formatter() : EnumFormatter({"AB11", "ABC1"}) {}
 };
 
 enum class NormalCount : u32
@@ -50,17 +39,6 @@ enum class NormalCount : u32
   // Call of Duty: Black Ops uses this in some cases; see https://bugs.dolphin-emu.org/issues/13070
   Invalid = 3,
 };
-template <>
-struct fmt::formatter<NormalCount> : EnumFormatter<NormalCount::Invalid>
-{
-  static constexpr array_type names = {
-      "None",
-      "Normal only",
-      "Normal, tangent, and binormal",
-      "Invalid (Normal, tangent, and binormal)",
-  };
-  constexpr formatter() : EnumFormatter(names) {}
-};
 
 // Texture generation type
 enum class TexGenType : u8
@@ -69,17 +47,6 @@ enum class TexGenType : u8
   EmbossMap = 1,  // Used when bump mapping
   Color0 = 2,
   Color1 = 3
-};
-template <>
-struct fmt::formatter<TexGenType> : EnumFormatter<TexGenType::Color1>
-{
-  static constexpr array_type names = {
-      "Regular",
-      "Emboss map (used when bump mapping)",
-      "Color channel 0",
-      "Color channel 1",
-  };
-  constexpr formatter() : EnumFormatter(names) {}
 };
 
 // Source row
@@ -99,47 +66,17 @@ enum class SourceRow : u8
   Tex6 = 11,
   Tex7 = 12
 };
-template <>
-struct fmt::formatter<SourceRow> : EnumFormatter<SourceRow::Tex7>
-{
-  static constexpr array_type names = {
-      "Geometry (input is ABC1)",
-      "Normal (input is ABC1)",
-      "Colors",
-      "Binormal T (input is ABC1)",
-      "Binormal B (input is ABC1)",
-      "Tex 0",
-      "Tex 1",
-      "Tex 2",
-      "Tex 3",
-      "Tex 4",
-      "Tex 5",
-      "Tex 6",
-      "Tex 7",
-  };
-  constexpr formatter() : EnumFormatter(names) {}
-};
 
 enum class MatSource : u32
 {
   MatColorRegister = 0,
   Vertex = 1,
 };
-template <>
-struct fmt::formatter<MatSource> : EnumFormatter<MatSource::Vertex>
-{
-  constexpr formatter() : EnumFormatter({"Material color register", "Vertex color"}) {}
-};
 
 enum class AmbSource : u32
 {
   AmbColorRegister = 0,
   Vertex = 1,
-};
-template <>
-struct fmt::formatter<AmbSource> : EnumFormatter<AmbSource::Vertex>
-{
-  constexpr formatter() : EnumFormatter({"Ambient color register", "Vertex color"}) {}
 };
 
 // Light diffuse attenuation function
@@ -148,11 +85,6 @@ enum class DiffuseFunc : u32
   None = 0,
   Sign = 1,
   Clamp = 2
-};
-template <>
-struct fmt::formatter<DiffuseFunc> : EnumFormatter<DiffuseFunc::Clamp>
-{
-  constexpr formatter() : EnumFormatter({"None", "Sign", "Clamp"}) {}
 };
 
 // Light attenuation function
@@ -163,28 +95,12 @@ enum class AttenuationFunc : u32
   Dir = 2,   // Directional light attenuation
   Spot = 3   // Spot light attenuation
 };
-template <>
-struct fmt::formatter<AttenuationFunc> : EnumFormatter<AttenuationFunc::Spot>
-{
-  static constexpr array_type names = {
-      "No attenuation",
-      "Point light attenuation",
-      "Directional light attenuation",
-      "Spot light attenuation",
-  };
-  constexpr formatter() : EnumFormatter(names) {}
-};
 
 // Projection type
 enum class ProjectionType : u32
 {
   Perspective = 0,
   Orthographic = 1
-};
-template <>
-struct fmt::formatter<ProjectionType> : EnumFormatter<ProjectionType::Orthographic>
-{
-  constexpr formatter() : EnumFormatter({"Perspective", "Orthographic"}) {}
 };
 
 // Registers and register ranges
@@ -256,21 +172,6 @@ union LitChannel
     return enablelighting ? (lightMask0_3 | (lightMask4_7 << 4)) : 0;
   }
 };
-template <>
-struct fmt::formatter<LitChannel>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const LitChannel& chan, FormatContext& ctx) const
-  {
-    return fmt::format_to(
-        ctx.out(),
-        "Material source: {0}\nEnable lighting: {1}\nLight mask: {2:x} ({2:08b})\n"
-        "Ambient source: {3}\nDiffuse function: {4}\nAttenuation function: {5}",
-        chan.matsource, chan.enablelighting ? "Yes" : "No", chan.GetFullLightMask(), chan.ambsource,
-        chan.diffusefunc, chan.attnfunc);
-  }
-};
 
 union ClipDisable
 {
@@ -279,22 +180,6 @@ union ClipDisable
   BitField<2, 1, bool, u32> disable_cpoly_clipping_acceleration;
   u32 hex;
 };
-template <>
-struct fmt::formatter<ClipDisable>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const ClipDisable& cd, FormatContext& ctx) const
-  {
-    return fmt::format_to(ctx.out(),
-                          "Disable clipping detection: {}\n"
-                          "Disable trivial rejection: {}\n"
-                          "Disable cpoly clipping acceleration: {}",
-                          cd.disable_clipping_detection ? "Yes" : "No",
-                          cd.disable_trivial_rejection ? "Yes" : "No",
-                          cd.disable_cpoly_clipping_acceleration ? "Yes" : "No");
-  }
-};
 
 union INVTXSPEC
 {
@@ -302,17 +187,6 @@ union INVTXSPEC
   BitField<2, 2, NormalCount> numnormals;
   BitField<4, 4, u32> numtextures;
   u32 hex;
-};
-template <>
-struct fmt::formatter<INVTXSPEC>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const INVTXSPEC& spec, FormatContext& ctx) const
-  {
-    return fmt::format_to(ctx.out(), "Num colors: {}\nNum normals: {}\nNum textures: {}",
-                          spec.numcolors, spec.numnormals, spec.numtextures);
-  }
 };
 
 union TexMtxInfo
@@ -327,20 +201,6 @@ union TexMtxInfo
   BitField<15, 3, u32> embosslightshift;   // light index that is used
   u32 hex;
 };
-template <>
-struct fmt::formatter<TexMtxInfo>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const TexMtxInfo& i, FormatContext& ctx) const
-  {
-    return fmt::format_to(ctx.out(),
-                          "Projection: {}\nInput form: {}\nTex gen type: {}\n"
-                          "Source row: {}\nEmboss source shift: {}\nEmboss light shift: {}",
-                          i.projection, i.inputform, i.texgentype, i.sourcerow, i.embosssourceshift,
-                          i.embosslightshift);
-  }
-};
 
 union PostMtxInfo
 {
@@ -348,18 +208,6 @@ union PostMtxInfo
   BitField<6, 2, u32> unused;           //
   BitField<8, 1, bool, u32> normalize;  // normalize before send operation
   u32 hex;
-};
-
-template <>
-struct fmt::formatter<PostMtxInfo>
-{
-  constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-  template <typename FormatContext>
-  auto format(const PostMtxInfo& i, FormatContext& ctx) const
-  {
-    return fmt::format_to(ctx.out(), "Index: {}\nNormalize before send operation: {}", i.index,
-                          i.normalize ? "Yes" : "No");
-  }
 };
 
 union NumColorChannel

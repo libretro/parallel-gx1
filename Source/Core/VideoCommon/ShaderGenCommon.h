@@ -9,8 +9,6 @@
 #include <string_view>
 #include <type_traits>
 
-#include <fmt/format.h>
-
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"

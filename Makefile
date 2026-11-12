@@ -82,7 +82,6 @@ endif
 SUBMODULE_FILES := \
    Externals/mGBA/mgba/include/mgba-util/vfs.h \
    Externals/libusb/libusb/libusb/libusb.h \
-   Externals/fmt/fmt/include/fmt/format.h \
    Externals/hidapi/hidapi-src/hidapi/hidapi.h \
    Externals/Vulkan-Headers/include/vulkan/vulkan.h
 ifneq (,$(filter-out clean,$(or $(MAKECMDGOALS),all)))
@@ -248,9 +247,6 @@ else
 endif
 ifneq (,$(filter 1,$(OS_UNIX) $(OS_APPLE)))
    FLAGS += -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
-endif
-ifeq ($(OS_APPLE),1)
-   FLAGS += -DFMT_EXCEPTIONS=0
 endif
 ifeq ($(HAVE_VULKAN),1)
    FLAGS += -DHAS_VULKAN
