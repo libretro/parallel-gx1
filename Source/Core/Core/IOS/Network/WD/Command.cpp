@@ -63,6 +63,8 @@ NetWDCommandDevice::Status NetWDCommandDevice::GetTargetStatusForMode(WD::Mode m
 NetWDCommandDevice::NetWDCommandDevice(EmulationKernel& ios, const std::string& device_name)
     : EmulationDevice(ios, device_name)
 {
+  u32_deque_init(&m_recv_frame_requests, 8);
+  u32_deque_init(&m_recv_notification_requests, 8);
   // TODO: use the MPCH setting in setting.txt to determine this value.
   m_nitro_enabled_channels = LegalNitroChannelMask;
 
@@ -75,6 +77,12 @@ NetWDCommandDevice::NetWDCommandDevice(EmulationKernel& ios, const std::string& 
   m_info.nitro_allowed_channels =
       MakeNitroAllowedChannelMask(m_info.enabled_channels, m_nitro_enabled_channels);
   m_info.initialised = true;
+}
+
+NetWDCommandDevice::~NetWDCommandDevice()
+{
+  u32_deque_free(&m_recv_notification_requests);
+  u32_deque_free(&m_recv_frame_requests);
 }
 
 void NetWDCommandDevice::Update()
@@ -95,13 +103,14 @@ void NetWDCommandDevice::ProcessRecvRequests()
   // All pending requests must still be processed when the handle to the resource manager is closed.
   const bool force_process = m_clear_all_requests.TestAndClear();
 
-  const auto process_queue = [&](std::deque<u32>& queue) {
-    if (!force_process)
-      return;
+  u32_deque_t* const queues[] = {&m_recv_notification_requests, &m_recv_frame_requests};
+  unsigned i;
 
-    while (!queue.empty())
+  for (i = 0; force_process && i < sizeof(queues) / sizeof(queues[0]); i++)
+  {
+    while (!u32_deque_empty(queues[i]))
     {
-      const auto request = queue.front();
+      const u32 request = *u32_deque_front(queues[i]);
       s32 result;
 
       // If the resource manager handle is closed while processing a request,
@@ -119,12 +128,9 @@ void NetWDCommandDevice::ProcessRecvRequests()
 
       INFO_LOG(IOS_NET, "Processed request %08x (result %08x)", request, (unsigned)result);
       GetEmulationKernel().EnqueueIPCReply(Request{system, request}, result);
-      queue.pop_front();
+      u32_deque_pop_front(queues[i]);
     }
-  };
-
-  process_queue(m_recv_notification_requests);
-  process_queue(m_recv_frame_requests);
+  }
 }
 
 void NetWDCommandDevice::HandleStateChange()
@@ -182,8 +188,8 @@ void NetWDCommandDevice::DoState(PointerWrap& p)
   p.Do(m_target_status);
   p.Do(m_nitro_enabled_channels);
   p.Do(m_info);
-  p.Do(m_recv_frame_requests);
-  p.Do(m_recv_notification_requests);
+  DO_RETRO_DEQUE(p, u32_deque, &m_recv_frame_requests);
+  DO_RETRO_DEQUE(p, u32_deque, &m_recv_notification_requests);
 }
 
 std::optional<IPCReply> NetWDCommandDevice::Open(const OpenRequest& request)
@@ -378,11 +384,11 @@ std::optional<IPCReply> NetWDCommandDevice::IOCtlV(const IOCtlVRequest& request)
     return GetInfo(request);
 
   case IOCTLV_WD_RECV_FRAME:
-    m_recv_frame_requests.emplace_back(request.address);
+    u32_deque_push_back_growing(&m_recv_frame_requests, &request.address);
     return std::nullopt;
 
   case IOCTLV_WD_RECV_NOTIFICATION:
-    m_recv_notification_requests.emplace_back(request.address);
+    u32_deque_push_back_growing(&m_recv_notification_requests, &request.address);
     return std::nullopt;
 
   case IOCTLV_WD_SET_CONFIG:

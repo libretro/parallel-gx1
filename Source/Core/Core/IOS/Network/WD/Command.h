@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include <deque>
 #include <string>
 
 #include "Common/CommonTypes.h"
+#include "Common/RetroDeque.h"
 #include "Common/Flag.h"
 #include "Common/Network.h"
 #include "Common/Swap.h"
@@ -50,6 +50,7 @@ public:
   };
 
   NetWDCommandDevice(EmulationKernel& ios, const std::string& device_name);
+  ~NetWDCommandDevice() override;
 
   std::optional<IPCReply> Open(const OpenRequest& request) override;
   std::optional<IPCReply> Close(u32 fd) override;
@@ -168,7 +169,7 @@ private:
   Info m_info;
 
   Common::Flag m_clear_all_requests;
-  std::deque<u32> m_recv_frame_requests;
-  std::deque<u32> m_recv_notification_requests;
+  u32_deque_t m_recv_frame_requests;
+  u32_deque_t m_recv_notification_requests;
 };
 }  // namespace IOS::HLE
