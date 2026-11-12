@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <deque>
 #include <map>
 #include <memory>
 #include <optional>
@@ -12,6 +11,7 @@
 #include <string_view>
 
 #include "Common/CommonTypes.h"
+#include "Common/RetroDeque.h"
 #include "Core/CoreTiming.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/IOS/IOSC.h"
@@ -206,9 +206,9 @@ private:
   u32 m_ppc_uid = 0;
   u16 m_ppc_gid = 0;
 
-  using IPCMsgQueue = std::deque<u32>;
-  IPCMsgQueue m_request_queue;  // ppc -> arm
-  IPCMsgQueue m_reply_queue;    // arm -> ppc
+  // made with the kernel: requests and replies queue up without allocating
+  u32_deque_t m_request_queue;  // ppc -> arm
+  u32_deque_t m_reply_queue;    // arm -> ppc
   u64 m_last_reply_time = 0;
   bool m_ipc_paused = false;
 };

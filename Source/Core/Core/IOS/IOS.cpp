@@ -310,6 +310,8 @@ Kernel::Kernel(u64 title_id) : m_title_id(title_id)
 EmulationKernel::EmulationKernel(Core::System& system, u64 title_id)
     : Kernel(title_id), m_system(system)
 {
+  u32_deque_init(&m_request_queue, 32);
+  u32_deque_init(&m_reply_queue, 32);
   INFO_LOG(IOS, "Starting IOS %016" PRIx64, (u64)title_id);
 
   if (!SetupMemory(m_system.GetMemory(), title_id, MemorySetupType::IOSReload))
@@ -341,6 +343,8 @@ EmulationKernel::~EmulationKernel()
 
   m_device_map.clear();
   m_socket_manager.reset();
+  u32_deque_free(&m_reply_queue);
+  u32_deque_free(&m_request_queue);
 }
 
 // The title ID is a u64 where the first 32 bits are used for the title type.
@@ -815,10 +819,11 @@ void EmulationKernel::EnqueueIPCReply(const Request& request, const s32 return_v
 
 void EmulationKernel::HandleIPCEvent(u64 userdata)
 {
+  const u32 address = static_cast<u32>(userdata);
   if (userdata & ENQUEUE_REQUEST_FLAG)
-    m_request_queue.push_back(static_cast<u32>(userdata));
+    u32_deque_push_back_growing(&m_request_queue, &address);
   else
-    m_reply_queue.push_back(static_cast<u32>(userdata));
+    u32_deque_push_back_growing(&m_reply_queue, &address);
 
   UpdateIPC();
 }
@@ -829,21 +834,22 @@ void EmulationKernel::UpdateIPC()
   if (m_ipc_paused || !wii_ipc.IsReady())
     return;
 
-  if (!m_request_queue.empty())
+  if (!u32_deque_empty(&m_request_queue))
   {
+    const u32 command = *u32_deque_front(&m_request_queue);
     wii_ipc.ClearX1();
-    wii_ipc.GenerateAck(m_request_queue.front());
-    u32 command = m_request_queue.front();
-    m_request_queue.pop_front();
+    wii_ipc.GenerateAck(command);
+    u32_deque_pop_front(&m_request_queue);
     ExecuteIPCCommand(command);
     return;
   }
 
-  if (!m_reply_queue.empty())
+  if (!u32_deque_empty(&m_reply_queue))
   {
-    wii_ipc.GenerateReply(m_reply_queue.front());
-    DEBUG_LOG(IOS, "<<-- Reply to IPC Request @ %#010x", m_reply_queue.front());
-    m_reply_queue.pop_front();
+    const u32 reply = *u32_deque_front(&m_reply_queue);
+    wii_ipc.GenerateReply(reply);
+    DEBUG_LOG(IOS, "<<-- Reply to IPC Request @ %#010x", reply);
+    u32_deque_pop_front(&m_reply_queue);
     return;
   }
 }
@@ -870,8 +876,8 @@ void EmulationKernel::UpdateWantDeterminism(const bool new_want_determinism)
 
 void EmulationKernel::DoState(PointerWrap& p)
 {
-  p.Do(m_request_queue);
-  p.Do(m_reply_queue);
+  DO_RETRO_DEQUE(p, u32_deque, &m_request_queue);
+  DO_RETRO_DEQUE(p, u32_deque, &m_reply_queue);
   p.Do(m_last_reply_time);
   p.Do(m_ipc_paused);
   p.Do(m_title_id);
