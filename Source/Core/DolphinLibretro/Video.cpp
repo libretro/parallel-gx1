@@ -177,7 +177,7 @@ void Init()
 #endif
   }
   hw_render.context_type = RETRO_HW_CONTEXT_NONE;
-  if (renderer == "Software")
+  if (!strcmp(renderer, "Software"))
     Config::SetBase(Config::MAIN_GFX_BACKEND, "Software Renderer");
   else
     Config::SetBase(Config::MAIN_GFX_BACKEND, "Null");
