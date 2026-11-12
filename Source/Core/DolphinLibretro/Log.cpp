@@ -1,4 +1,7 @@
 
+#include <stdio.h>
+#include <string.h>
+
 #include "Common/Logging/Log.h"
 #include "Common/Logging/LogManager.h"
 #include "DolphinLibretro/Log.h"
@@ -203,7 +206,7 @@ void LogFrontEnd(Common::MsgType style, const char* caption, const char* text, u
 {
   char message[1024];
 
-  if (text && std::string(text) == "Failed to create shared context for shader compiling.")
+  if (text && !strcmp(text, "Failed to create shared context for shader compiling."))
     return; // ignore
 
   snprintf(message, sizeof(message), "%s - %s",
