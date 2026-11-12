@@ -6,6 +6,7 @@
 #include "Core/HW/GBACore.h"
 
 #include <cstdio>
+#include <cstring>
 #include <mgba-util/vfs.h>
 #include <mgba/core/log.h>
 #include <mgba/core/timing.h>
@@ -560,7 +561,7 @@ void Core::SendJoybusCommand(u64 gc_ticks, int transfer_time, u8* buffer, u16 ke
 
   m_joybus_command_transfer_time = transfer_time;
   m_joybus_command = GBASIOJOYCommand(buffer[0]);
-  std::copy_n(buffer + 1, m_joybus_buffer.size(), m_joybus_buffer.data());
+  memcpy(m_joybus_buffer.data(), buffer + 1, sizeof(m_joybus_buffer));
 
   retro_atomic_store_relaxed_int(&m_command_pending, 1);
 
@@ -592,8 +593,12 @@ int Core::GetJoybusResponse(u8* data_out)
     retro_eventcount_commit_wait(&m_command_done, key);
   }
 
-  std::copy_n(m_joybus_buffer.data(), m_response_size, data_out);
-  return m_response_size;
+  /* at most the joybus buffer, whatever a savestate held */
+  size_t size = m_response_size;
+  if (size > sizeof(m_joybus_buffer))
+    size = sizeof(m_joybus_buffer);
+  memcpy(data_out, m_joybus_buffer.data(), size);
+  return static_cast<int>(size);
 }
 
 void Core::Flush()

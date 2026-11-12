@@ -1396,7 +1396,7 @@ void Device::ProcessMotionPlusExtensionData(const u8* ext_data, u32 ext_size)
   }
 
   std::array<u8, sizeof(WiimoteEmu::Nunchuk::DataFormat)> data;
-  std::copy_n(ext_data, ext_size, data.begin());
+  memcpy(data.data(), ext_data, ext_size);
 
   // Undo bit-hacks of M+ passthrough.
   WiimoteEmu::MotionPlus::ReversePassthroughModifications(*m_mplus_state.current_mode, data.data());
@@ -1594,9 +1594,9 @@ void Device::WriteData(AddressSpace space, u8 slave, u16 address, T&& data, C&& 
   write_data.address[1] = u8(address);
 
   static constexpr auto MAX_DATA_SIZE = std::size(write_data.data);
-  write_data.size = u8(std::min(std::size(data), MAX_DATA_SIZE));
+  write_data.size = u8(std::size(data) < MAX_DATA_SIZE ? std::size(data) : MAX_DATA_SIZE);
 
-  std::copy_n(std::begin(data), write_data.size, write_data.data);
+  memcpy(write_data.data, std::data(data), write_data.size);
 
   // Writes of more than 16 bytes must be split into multiple reports.
   if (std::size(data) > MAX_DATA_SIZE)

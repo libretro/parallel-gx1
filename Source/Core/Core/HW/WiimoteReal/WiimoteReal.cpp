@@ -4,6 +4,7 @@
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
 #include <algorithm>
+#include <cstring>
 #include <unordered_set>
 
 #include <queues/mpsc_stack.h>
@@ -258,7 +259,7 @@ void Wiimote::QueueWrite(u64 frame, const u8* data, size_t size)
   WriteRecord record;
   record.frame = frame;
   record.size = static_cast<u8>(size);
-  std::copy_n(data, size, record.data);
+  memcpy(record.data, data, size);
   retro_spsc_write_frames(&m_write_reports, &record, 1, sizeof(record));
   retro_eventcount_notify(&m_write_event);
 }
@@ -313,7 +314,7 @@ void Wiimote::QueueReport(WiimoteCommon::OutputReportID rpt_id, const void* data
   Report rpt(size + 2);
   rpt[0] = WR_SET_REPORT | BT_OUTPUT;
   rpt[1] = u8(rpt_id);
-  std::copy_n(queue_data, size, rpt.begin() + 2);
+  memcpy(rpt.data() + 2, queue_data, size);
   WriteReport(std::move(rpt));
 }
 
@@ -355,7 +356,7 @@ void Wiimote::EventUnlinked()
 void Wiimote::InterruptDataOutput(const u8* data, const u32 size)
 {
   Report rpt(size + REPORT_HID_HEADER_SIZE);
-  std::copy_n(data, size, rpt.data() + REPORT_HID_HEADER_SIZE);
+  memcpy(rpt.data() + REPORT_HID_HEADER_SIZE, data, size);
 
   // Convert output DATA packets to SET_REPORT packets.
   // Nintendo Wiimotes work without this translation, but 3rd

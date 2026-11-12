@@ -3,6 +3,7 @@
 
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 
+#include <cstring>
 #include <iterator>
 #include <utility>
 
@@ -286,7 +287,7 @@ void Wiimote::HandleWriteData(const OutputReportWriteData& wd)
     }
     else
     {
-      std::copy_n(wd.data, wd.size, m_eeprom.data.data() + address);
+      memcpy(m_eeprom.data.data() + address, wd.data, wd.size);
       m_eeprom_dirty = true;
     }
   }
@@ -473,7 +474,7 @@ bool Wiimote::ProcessReadDataRequest()
     else
     {
       // Read memory to be sent to Wii
-      std::copy_n(m_eeprom.data.data() + m_read_request.address, bytes_to_read, reply.data);
+      memcpy(reply.data, m_eeprom.data.data() + m_read_request.address, bytes_to_read);
       reply.size_minus_one = bytes_to_read - 1;
     }
   }

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstring>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -31,9 +32,11 @@ protected:
     // TODO: addr wraps around after 0xff
 
     u8* src = reinterpret_cast<u8*>(reg_data) + addr;
-    count = std::min(count, int(reinterpret_cast<u8*>(reg_data + 1) - src));
+    const int available = int(reinterpret_cast<u8*>(reg_data + 1) - src);
+    if (count > available)
+      count = available;
 
-    std::copy_n(src, count, data_out);
+    memcpy(data_out, src, count);
 
     return count;
   }
@@ -47,9 +50,11 @@ protected:
     // TODO: addr wraps around after 0xff
 
     u8* dst = reinterpret_cast<u8*>(reg_data) + addr;
-    count = std::min(count, int(reinterpret_cast<u8*>(reg_data + 1) - dst));
+    const int available = int(reinterpret_cast<u8*>(reg_data + 1) - dst);
+    if (count > available)
+      count = available;
 
-    std::copy_n(data_in, count, dst);
+    memcpy(dst, data_in, count);
 
     return count;
   }

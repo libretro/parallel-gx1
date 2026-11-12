@@ -482,11 +482,14 @@ void EncryptionKey::GenerateTables(const RandData& rand, const KeyData& key, con
 // Generate key from the 0x40-0x4f data in the extension register.
 EncryptionKey KeyGen::GenerateFromExtensionKeyData(const ExtKeyData& ext_key) const
 {
+  // Both are stored reversed in the extension register.
   EncryptionKey::RandData rand;
-  std::copy_n(ext_key.begin(), rand.size(), rand.rbegin());
+  for (size_t i = 0; i < rand.size(); i++)
+    rand[rand.size() - 1 - i] = ext_key[i];
 
   EncryptionKey::KeyData key;
-  std::copy_n(ext_key.begin() + rand.size(), key.size(), key.rbegin());
+  for (size_t i = 0; i < key.size(); i++)
+    key[key.size() - 1 - i] = ext_key[rand.size() + i];
 
   // The "key" is generated from "rand" and "idx".
   // The tables are generated from "rand" "key" and "idx".
