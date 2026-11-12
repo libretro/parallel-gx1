@@ -32,6 +32,75 @@ static const void* AddressKey(u32 address)
   return reinterpret_cast<const void*>(static_cast<uintptr_t>(address));
 }
 
+/* @bytes from the arena, 16-aligned; a new chunk once the one handed out from is used up */
+static void* LinkArenaAlloc(LinkDataArena* arena, size_t bytes)
+{
+  bytes = (bytes + 15) & ~static_cast<size_t>(15);
+  if (bytes > LINK_ARENA_CHUNK)
+    abort();
+  if (!arena->num_chunks || arena->used + bytes > LINK_ARENA_CHUNK)
+  {
+    if (arena->num_chunks)
+      arena->current++;
+    arena->used = 0;
+    if (arena->current == arena->num_chunks)
+    {
+      u8* chunk;
+      if (arena->num_chunks == arena->chunks_cap)
+      {
+        const size_t cap = arena->chunks_cap ? arena->chunks_cap * 2 : 8;
+        u8** const chunks = static_cast<u8**>(realloc(arena->chunks, cap * sizeof(*chunks)));
+        if (!chunks)
+          abort();
+        arena->chunks = chunks;
+        arena->chunks_cap = cap;
+      }
+      chunk = static_cast<u8*>(malloc(LINK_ARENA_CHUNK));
+      if (!chunk)
+        abort();
+      arena->chunks[arena->num_chunks++] = chunk;
+    }
+  }
+  {
+    void* const region = arena->chunks[arena->current] + arena->used;
+    arena->used += bytes;
+    return region;
+  }
+}
+
+/* @region, @old_bytes long, made @new_bytes long where it is: when it is the last handed out and
+ * its chunk has the room */
+static bool LinkArenaExtend(LinkDataArena* arena, void* region, size_t old_bytes, size_t new_bytes)
+{
+  u8* const chunk = arena->num_chunks ? arena->chunks[arena->current] : nullptr;
+  old_bytes = (old_bytes + 15) & ~static_cast<size_t>(15);
+  new_bytes = (new_bytes + 15) & ~static_cast<size_t>(15);
+  if (!chunk || static_cast<u8*>(region) + old_bytes != chunk + arena->used ||
+      arena->used - old_bytes + new_bytes > LINK_ARENA_CHUNK)
+    return false;
+  arena->used = arena->used - old_bytes + new_bytes;
+  return true;
+}
+
+void JitBlock::LinkDataList::push_back(const LinkData& exit)
+{
+  if (count == cap)
+  {
+    const u32 new_cap = cap ? cap * 2 : 8;
+    if (!data || !LinkArenaExtend(arena, data, cap * sizeof(LinkData), new_cap * sizeof(LinkData)))
+    {
+      LinkData* const moved =
+          static_cast<LinkData*>(LinkArenaAlloc(arena, new_cap * sizeof(LinkData)));
+      u32 i;
+      for (i = 0; i < count; i++)
+        moved[i] = data[i];
+      data = moved;
+    }
+    cap = new_cap;
+  }
+  data[count++] = exit;
+}
+
 bool JitBlock::OverlapsPhysicalRange(u32 address, u32 length) const
 {
   return physical_addresses.overlaps(address, address + length);
@@ -50,6 +119,9 @@ JitBaseBlockCache::~JitBaseBlockCache()
   for (i = 0; i < m_num_block_chunks; i++)
     delete[] m_block_chunks[i];
   free(m_block_chunks);
+  for (i = 0; i < m_link_arena.num_chunks; i++)
+    free(m_link_arena.chunks[i]);
+  free(m_link_arena.chunks);
   for (i = 0; i < m_num_range_node_chunks; i++)
     free(m_range_node_chunks[i]);
   free(m_range_node_chunks);
@@ -222,6 +294,19 @@ void JitBaseBlockCache::Clear()
       }
     }
   }
+  /* every block's exits, the free ones' included, gave their room back to the arena */
+  for (chunk = 0; chunk < m_num_block_chunks; chunk++)
+  {
+    for (i = 0; i < BLOCK_CHUNK; i++)
+    {
+      JitBlock::LinkDataList& exits = m_block_chunks[chunk][i].linkData;
+      exits.data = nullptr;
+      exits.count = 0;
+      exits.cap = 0;
+    }
+  }
+  m_link_arena.current = 0;
+  m_link_arena.used = 0;
   jit_block_lists_clear(&block_map);
   jit_link_lists_clear(&links_to);
   jit_range_lists_clear(&block_range_map);
@@ -262,6 +347,7 @@ JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
   b.physicalAddress = physical_address;
   b.feature_flags = m_jit.m_ppc_state.feature_flags;
   b.linkData.clear();
+  b.linkData.arena = &m_link_arena;
   b.fast_block_map_index = 0;
   return &b;
 }

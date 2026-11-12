@@ -25,6 +25,21 @@
 class JitBase;
 struct JitBlock;
 
+// Where the blocks' exits are kept: chunks of LINK_ARENA_CHUNK bytes, handed out in turn, kept
+// when the cache is cleared and handed out again from the first.
+enum
+{
+  LINK_ARENA_CHUNK = 256 * 1024
+};
+struct LinkDataArena
+{
+  u8** chunks = nullptr;
+  size_t num_chunks = 0;
+  size_t chunks_cap = 0;
+  size_t current = 0;  // the chunk handed out from
+  size_t used = 0;     // bytes of it handed out
+};
+
 // A block's place in one macro block's list of the blocks it holds (JitBaseBlockCache's
 // block_range_map), and the next of the block's own.
 struct JitRangeNode
@@ -96,7 +111,24 @@ struct JitBlock : public JitBlockData
     LinkData* next_to = nullptr;
     LinkData* prev_to = nullptr;
   };
-  std::vector<LinkData> linkData;
+
+  // The block's exits, in the cache's arena: the list being compiled is the arena's last, and grows
+  // in place; a block made in a destroyed one's place keeps its room.
+  struct LinkDataList
+  {
+    LinkData* data = nullptr;
+    u32 count = 0;
+    u32 cap = 0;
+    LinkDataArena* arena = nullptr;
+
+    LinkData* begin() { return data; }
+    LinkData* end() { return data + count; }
+    const LinkData* begin() const { return data; }
+    const LinkData* end() const { return data + count; }
+    void clear() { count = 0; }
+    void push_back(const LinkData& exit);
+  };
+  LinkDataList linkData;
 
   // This set stores all physical addresses of all occupied instructions.
   SmallRangeSet physical_addresses;
@@ -254,6 +286,9 @@ private:
   size_t m_num_block_chunks = 0;
   size_t m_block_chunks_cap = 0;
   JitBlock* m_free_blocks = nullptr;
+
+  // Where the blocks' exits are
+  LinkDataArena m_link_arena;
 
   // Range of overlapping code indexed by a masked physical address.
   // This is used for invalidation of memory regions. The range is grouped
