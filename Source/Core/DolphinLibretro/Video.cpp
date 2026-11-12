@@ -6,6 +6,7 @@
 #include "DolphinLibretro/Output.h"
 
 #include <cassert>
+#include <stdio.h>
 #include <string.h>
 #include <memory>
 #include <vector>
@@ -257,27 +258,27 @@ bool SetHWRender(retro_hw_context_type type, const int version_major, const int 
     hw_render.version_major = (version_major != -1) ? version_major : 3;
     hw_render.version_minor = (version_minor != -1) ? version_minor : 0;
 
-    std::string api_name =
-      (type == RETRO_HW_CONTEXT_OPENGLES3 || type == RETRO_HW_CONTEXT_OPENGLES_VERSION)
-          ? "OpenGL ES " + std::to_string(hw_render.version_major) + "." +
-                std::to_string(hw_render.version_minor)
-          : "OpenGL " + std::to_string(hw_render.version_major) + "." +
-                std::to_string(hw_render.version_minor);
+    char api_name[32];
+    snprintf(api_name, sizeof(api_name), "%s %u.%u",
+             (type == RETRO_HW_CONTEXT_OPENGLES3 || type == RETRO_HW_CONTEXT_OPENGLES_VERSION) ?
+                 "OpenGL ES" :
+                 "OpenGL",
+             hw_render.version_major, hw_render.version_minor);
 
     if (environ_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw_render))
     {
       // Shared context is required with "gl" video driver
       if (!environ_cb(RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT, nullptr)) {
         WARN_LOG(VIDEO, "Video - SetHWRender - unable to set shared context for %s",
-                 api_name.c_str());
+                 api_name);
       }
-      INFO_LOG(VIDEO, "Video - SetHWRender - using %s", api_name.c_str());
+      INFO_LOG(VIDEO, "Video - SetHWRender - using %s", api_name);
       Config::SetBase(Config::MAIN_GFX_BACKEND, "OGL");
       success = true;
     }
     else
     {
-      WARN_LOG(VIDEO, "Video - SetHWRender - failed to set hw renderer for %s", api_name.c_str());
+      WARN_LOG(VIDEO, "Video - SetHWRender - failed to set hw renderer for %s", api_name);
     }
     break;
   }
@@ -724,11 +725,10 @@ VkInstance CreateInstance(PFN_vkGetInstanceProcAddr get_instance_proc_addr,
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   create_info.pApplicationInfo = app;
 
-  std::vector<const char*> extensions;
-  extensions.push_back(VK_EXT_LAYER_SETTINGS_EXTENSION_NAME);
+  static const char* const extensions[] = {VK_EXT_LAYER_SETTINGS_EXTENSION_NAME};
 
-  create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-  create_info.ppEnabledExtensionNames = extensions.data();
+  create_info.enabledExtensionCount = sizeof(extensions) / sizeof(extensions[0]);
+  create_info.ppEnabledExtensionNames = extensions;
 
 
   static VkBool32 disable_arg_buffers = VK_FALSE;
