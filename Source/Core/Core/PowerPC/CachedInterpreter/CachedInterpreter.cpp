@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "Common/CommonTypes.h"
-#include "Common/GekkoDisassembler.h"
 #include "Common/Logging/Log.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"

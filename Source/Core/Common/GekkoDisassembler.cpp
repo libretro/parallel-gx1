@@ -32,11 +32,10 @@
 // Modified for use with Dolphin
 
 #include "Common/GekkoDisassembler.h"
+#include "Common/StringUtil.h"
 
 #include <array>
 #include <string>
-
-#include <fmt/format.h>
 
 #include "Common/CommonTypes.h"
 
@@ -176,9 +175,9 @@ static std::string ldst_offs(u32 val)
     return "0";
 
   if (val & 0x8000)
-    return fmt::format("-0x{:04X}", ((~val) & 0xffff) + 1);
+    return StringFromFormat("-0x%04X", ((~val) & 0xffff) + 1);
 
-  return fmt::format("0x{:04X}", val);
+  return StringFromFormat("0x%04X", val);
 }
 
 static std::string psq_offs(u32 val)
@@ -187,9 +186,9 @@ static std::string psq_offs(u32 val)
     return "0";
 
   if ((val & 0x800) != 0)
-    return fmt::format("-0x{:04X}", ((~val) & 0xfff) + 1);
+    return StringFromFormat("-0x%04X", ((~val) & 0xfff) + 1);
 
-  return fmt::format("0x{:04X}", val);
+  return StringFromFormat("0x%04X", val);
 }
 
 static std::string spr_name(int i)
@@ -409,7 +408,7 @@ void GekkoDisassembler::ill(u32 in)
   else
   {
     m_opcode = "(ill)";
-    m_operands = fmt::format("{:08x}", in);
+    m_operands = StringFromFormat("%08x", in);
   }
 }
 
@@ -432,22 +431,23 @@ std::string GekkoDisassembler::imm(u32 in, int uimm, int type, bool hex)
   switch (type)
   {
   case 0:
-    return fmt::format("{}, {}, {}", regnames[PPCGETD(in)], regnames[PPCGETA(in)], i);
+    return StringFromFormat("%s, %s, %d", regnames[PPCGETD(in)], regnames[PPCGETA(in)], i);
 
   case 1:
     if (hex)
-      return fmt::format("{}, {}, 0x{:04X}", regnames[PPCGETA(in)], regnames[PPCGETD(in)], i);
+      return StringFromFormat("%s, %s, 0x%04X", regnames[PPCGETA(in)], regnames[PPCGETD(in)],
+                              (unsigned)i);
     else
-      return fmt::format("{}, {}, {}", regnames[PPCGETA(in)], regnames[PPCGETD(in)], i);
+      return StringFromFormat("%s, %s, %d", regnames[PPCGETA(in)], regnames[PPCGETD(in)], i);
 
   case 2:
-    return fmt::format("{}, {}", regnames[PPCGETA(in)], i);
+    return StringFromFormat("%s, %d", regnames[PPCGETA(in)], i);
 
   case 3:
     if (hex)
-      return fmt::format("{}, 0x{:04X}", regnames[PPCGETD(in)], i);
+      return StringFromFormat("%s, 0x%04X", regnames[PPCGETD(in)], (unsigned)i);
     else
-      return fmt::format("{}, {}", regnames[PPCGETD(in)], i);
+      return StringFromFormat("%s, %d", regnames[PPCGETD(in)], i);
 
   default:
     return "imm(): Wrong type";
@@ -456,7 +456,7 @@ std::string GekkoDisassembler::imm(u32 in, int uimm, int type, bool hex)
 
 std::string GekkoDisassembler::ra_rb(u32 in)
 {
-  return fmt::format("{}, {}", regnames[PPCGETA(in)], regnames[PPCGETB(in)]);
+  return StringFromFormat("%s, %s", regnames[PPCGETA(in)], regnames[PPCGETB(in)]);
 }
 
 std::string GekkoDisassembler::rd_ra_rb(u32 in, int mask)
@@ -466,11 +466,11 @@ std::string GekkoDisassembler::rd_ra_rb(u32 in, int mask)
   if (mask)
   {
     if (mask & 4)
-      result += fmt::format("{}, ", regnames[PPCGETD(in)]);
+      result += StringFromFormat("%s, ", regnames[PPCGETD(in)]);
     if (mask & 2)
-      result += fmt::format("{}, ", regnames[PPCGETA(in)]);
+      result += StringFromFormat("%s, ", regnames[PPCGETA(in)]);
     if (mask & 1)
-      result += fmt::format("{}, ", regnames[PPCGETB(in)]);
+      result += StringFromFormat("%s, ", regnames[PPCGETB(in)]);
 
     size_t pos = result.rfind(", ");
     if (pos != std::string::npos)
@@ -484,7 +484,7 @@ std::string GekkoDisassembler::rd_ra_rb(u32 in, int mask)
 
 std::string GekkoDisassembler::fd_ra_rb(u32 in)
 {
-  return fmt::format("f{}, {}, {}", PPCGETD(in), regnames[PPCGETA(in)], regnames[PPCGETB(in)]);
+  return StringFromFormat("f%u, %s, %s", PPCGETD(in), regnames[PPCGETA(in)], regnames[PPCGETB(in)]);
 }
 
 void GekkoDisassembler::trapi(u32 in, unsigned char dmode)
@@ -493,12 +493,12 @@ void GekkoDisassembler::trapi(u32 in, unsigned char dmode)
 
   if (cnd != nullptr)
   {
-    m_opcode = fmt::format("t{}{}i", dmode ? 'd' : 'w', cnd);
+    m_opcode = StringFromFormat("t%c%si", dmode ? 'd' : 'w', cnd);
   }
   else
   {
-    m_opcode = fmt::format("t{}i", dmode ? 'd' : 'w');
-    m_operands = fmt::format("{}, ", PPCGETD(in));
+    m_opcode = StringFromFormat("t%ci", dmode ? 'd' : 'w');
+    m_operands = StringFromFormat("%u, ", PPCGETD(in));
   }
   m_operands += imm(in, 0, 2, false);
 }
@@ -509,12 +509,12 @@ void GekkoDisassembler::cmpi(u32 in, int uimm)
 
   if (i < 2)
   {
-    m_opcode = fmt::format("{}i", cmpname[uimm * 2 + i]);
+    m_opcode = StringFromFormat("%si", cmpname[uimm * 2 + i]);
 
     i = (int)PPCGETCRD(in);
     if (i != 0)
     {
-      m_operands += fmt::format("cr{}, ", i);
+      m_operands += StringFromFormat("cr%d, ", i);
     }
 
     m_operands += imm(in, uimm, 2, false);
@@ -530,7 +530,7 @@ void GekkoDisassembler::addi(u32 in, std::string_view ext)
   if ((in & 0x08000000) && !PPCGETA(in))
   {
     // li, lis
-    m_opcode = fmt::format("l{}", ext);
+    m_opcode = StringFromFormat("l%.*s", static_cast<int>(ext.size()), ext.data());
 
     if (ext == "i")
       m_operands = imm(in, 0, 3, false);
@@ -539,7 +539,8 @@ void GekkoDisassembler::addi(u32 in, std::string_view ext)
   }
   else
   {
-    m_opcode = fmt::format("{}{}", (in & 0x8000) ? "sub" : "add", ext);
+    m_opcode = StringFromFormat("%s%.*s", (in & 0x8000) ? "sub" : "add",
+                                static_cast<int>(ext.size()), ext.data());
 
     if (in & 0x8000)
       in = (in ^ 0xffff) + 1;
@@ -568,28 +569,30 @@ size_t GekkoDisassembler::branch(u32 in, std::string_view bname, int aform, int 
       // branch always
       if (PPCGETIDX(in) != 16)
       {
-        m_opcode = fmt::format("b{}{}", bname, ext);
+        m_opcode = StringFromFormat("b%.*s%s", static_cast<int>(bname.size()), bname.data(), ext);
       }
       else
       {
-        m_opcode = fmt::format("bc{}", ext);
-        m_operands = fmt::format("{}, {}", bo, bi);
+        m_opcode = StringFromFormat("bc%s", ext);
+        m_operands = StringFromFormat("%d, %d", bo, bi);
       }
     }
     else  // Branch conditional
     {
-      m_opcode = fmt::format("b{}{}{}{}", b_condition[((bo & 8) >> 1) + (bi & 3)], bname, ext, y);
+      m_opcode = StringFromFormat("b%s%.*s%s%c", b_condition[((bo & 8) >> 1) + (bi & 3)],
+                                  static_cast<int>(bname.size()), bname.data(), ext, y);
 
       if (bi >= 4)
       {
-        m_operands = fmt::format("cr{}", bi >> 2);
+        m_operands = StringFromFormat("cr%d", bi >> 2);
       }
     }
   }
   else
   {
     // CTR is decremented and checked
-    m_opcode = fmt::format("bd{}{}{}{}", b_decr[bo >> 1], bname, ext, y);
+    m_opcode = StringFromFormat("bd%s%.*s%s%c", b_decr[bo >> 1], static_cast<int>(bname.size()),
+                                bname.data(), ext, y);
 
     if ((bo & 16) == 0)
     {
@@ -610,9 +613,9 @@ void GekkoDisassembler::bc(u32 in)
   branch(in, "", (in & 2) ? 1 : 0, d);
 
   if (in & 2)  // AA ?
-    m_operands = fmt::format("{} ->0x{:08X}", m_operands, d);
+    m_operands = StringFromFormat("%s ->0x%08X", m_operands.c_str(), d);
   else
-    m_operands = fmt::format("{} ->0x{:08X}", m_operands, *m_iaddr + d);
+    m_operands = StringFromFormat("%s ->0x%08X", m_operands.c_str(), *m_iaddr + d);
 }
 
 void GekkoDisassembler::bli(u32 in)
@@ -622,20 +625,20 @@ void GekkoDisassembler::bli(u32 in)
   if (d & 0x02000000)
     d |= 0xfc000000;
 
-  m_opcode = fmt::format("b{}", b_ext[in & 3]);
+  m_opcode = StringFromFormat("b%s", b_ext[in & 3]);
 
   if (in & 2)  // AA ?
-    m_operands = fmt::format("->0x{:08X}", d);
+    m_operands = StringFromFormat("->0x%08X", d);
   else
-    m_operands = fmt::format("->0x{:08X}", *m_iaddr + d);
+    m_operands = StringFromFormat("->0x%08X", *m_iaddr + d);
 }
 
 void GekkoDisassembler::mcrf(u32 in, std::string_view suffix)
 {
   if ((in & 0x0063f801) == 0)
   {
-    m_opcode = fmt::format("mcrf{}", suffix);
-    m_operands = fmt::format("cr{}, cr{}", PPCGETCRD(in), PPCGETCRA(in));
+    m_opcode = StringFromFormat("mcrf%.*s", static_cast<int>(suffix.size()), suffix.data());
+    m_operands = StringFromFormat("cr%u, cr%u", PPCGETCRD(in), PPCGETCRA(in));
   }
   else
   {
@@ -651,11 +654,13 @@ void GekkoDisassembler::crop(u32 in, std::string_view n1, std::string_view n2)
 
   if ((in & 1) == 0)
   {
-    m_opcode = fmt::format("cr{}", (cra == crb && !n2.empty()) ? n2 : n1);
+    m_opcode =
+        StringFromFormat("cr%.*s", static_cast<int>(((cra == crb && !n2.empty()) ? n2 : n1).size()),
+                         ((cra == crb && !n2.empty()) ? n2 : n1).data());
     if (cra == crb && !n2.empty())
-      m_operands = fmt::format("{}, {}", crd, cra);
+      m_operands = StringFromFormat("%d, %d", crd, cra);
     else
-      m_operands = fmt::format("{}, {}, {}", crd, cra, crb);
+      m_operands = StringFromFormat("%d, %d, %d", crd, cra, crb);
   }
   else
   {
@@ -683,9 +688,10 @@ void GekkoDisassembler::rlw(u32 in, std::string_view name, int i)
   int mb = (int)PPCGETC(in);
   int me = (int)PPCGETM(in);
 
-  m_opcode = fmt::format("rlw{}{}", name, (in & 1) ? "." : "");
-  m_operands = fmt::format("{}, {}, {}{}, {}, {} ({:08x})", regnames[a], regnames[s], regsel[i],
-                           bsh, mb, me, HelperRotateMask(bsh, mb, me));
+  m_opcode = StringFromFormat("rlw%.*s%s", static_cast<int>(name.size()), name.data(),
+                              (in & 1) ? "." : "");
+  m_operands = StringFromFormat("%s, %s, %s%d, %d, %d (%08x)", regnames[a], regnames[s], regsel[i],
+                                bsh, mb, me, HelperRotateMask(bsh, mb, me));
 }
 
 void GekkoDisassembler::ori(u32 in, std::string_view name)
@@ -701,8 +707,9 @@ void GekkoDisassembler::rld(u32 in, std::string_view name, int i)
   int bsh = i ? (int)PPCGETB(in) : (int)(((in & 2) << 4) + PPCGETB(in));
   int m = (int)(in & 0x7e0) >> 5;
 
-  m_opcode = fmt::format("rld{}{}", name, (in & 1) ? "." : "");
-  m_operands = fmt::format("{}, {}, {}{}, {}", regnames[a], regnames[s], regsel[i], bsh, m);
+  m_opcode = StringFromFormat("rld%.*s%s", static_cast<int>(name.size()), name.data(),
+                              (in & 1) ? "." : "");
+  m_operands = StringFromFormat("%s, %s, %s%d, %d", regnames[a], regnames[s], regsel[i], bsh, m);
 }
 
 void GekkoDisassembler::cmp(u32 in)
@@ -715,7 +722,7 @@ void GekkoDisassembler::cmp(u32 in)
 
     i = (int)PPCGETCRD(in);
     if (i != 0)
-      m_operands += fmt::format("cr{},", i);
+      m_operands += StringFromFormat("cr%d,", i);
 
     m_operands += ra_rb(in);
   }
@@ -732,7 +739,7 @@ void GekkoDisassembler::trap(u32 in, unsigned char dmode)
 
   if (cnd != nullptr)
   {
-    m_opcode = fmt::format("t{}{}", dmode ? 'd' : 'w', cnd);
+    m_opcode = StringFromFormat("t%c%s", dmode ? 'd' : 'w', cnd);
     m_operands = ra_rb(in);
   }
   else
@@ -770,8 +777,8 @@ void GekkoDisassembler::dab(u32 in, std::string_view name, int mask, int smode, 
     if (smode)
       in = swapda(in);
 
-    m_opcode =
-        fmt::format("{}{}{}", name, oesel[chkoe && (in & PPCOE)], rcsel[(chkrc < 0) && (in & 1)]);
+    m_opcode = StringFromFormat("%.*s%s%s", static_cast<int>(name.size()), name.data(),
+                                oesel[chkoe && (in & PPCOE)], rcsel[(chkrc < 0) && (in & 1)]);
     m_operands = rd_ra_rb(in, mask);
   }
 }
@@ -789,10 +796,10 @@ void GekkoDisassembler::rrn(u32 in, std::string_view name, int smode, int chkoe,
     if (smode)
       in = swapda(in);
 
-    m_opcode =
-        fmt::format("{}{}{}", name, oesel[chkoe && (in & PPCOE)], rcsel[(chkrc < 0) && (in & 1)]);
+    m_opcode = StringFromFormat("%.*s%s%s", static_cast<int>(name.size()), name.data(),
+                                oesel[chkoe && (in & PPCOE)], rcsel[(chkrc < 0) && (in & 1)]);
     m_operands = rd_ra_rb(in, 6);
-    m_operands += fmt::format(",{}", PPCGETB(in));
+    m_operands += StringFromFormat(",%u", PPCGETB(in));
   }
 }
 
@@ -807,10 +814,10 @@ void GekkoDisassembler::mtcr(u32 in)
   }
   else
   {
-    m_opcode = fmt::format("mtcr{}", crm == 0xff ? "" : "f");
+    m_opcode = StringFromFormat("mtcr%s", crm == 0xff ? "" : "f");
 
     if (crm != 0xff)
-      m_operands += fmt::format("0x{:02x},", crm);
+      m_operands += StringFromFormat("0x%02x,", (unsigned)crm);
 
     m_operands += regnames[s];
   }
@@ -827,12 +834,12 @@ void GekkoDisassembler::msr(u32 in, int smode)
   }
   else
   {
-    m_opcode = fmt::format("m{}sr", smode ? 't' : 'f');
+    m_opcode = StringFromFormat("m%csr", smode ? 't' : 'f');
 
     if (smode)
-      m_operands = fmt::format("{}, {}", sr, regnames[s]);
+      m_operands = StringFromFormat("%d, %s", sr, regnames[s]);
     else
-      m_operands = fmt::format("{}, {}", regnames[s], sr);
+      m_operands = StringFromFormat("%s, %d", regnames[s], sr);
   }
 }
 
@@ -869,14 +876,14 @@ void GekkoDisassembler::mspr(u32 in, int smode)
       break;
     }
 
-    m_opcode = fmt::format("m{}{}", smode ? 't' : 'f', x);
+    m_opcode = StringFromFormat("m%c%s", smode ? 't' : 'f', x);
 
     if (fmt)
     {
       if (smode)
-        m_operands = fmt::format("{}, {}", spr_name(spr), regnames[d]);
+        m_operands = StringFromFormat("%s, %s", spr_name(spr).c_str(), regnames[d]);
       else
-        m_operands = fmt::format("{}, {}", regnames[d], spr_name(spr));
+        m_operands = StringFromFormat("%s, %s", regnames[d], spr_name(spr).c_str());
     }
     else
     {
@@ -910,11 +917,11 @@ void GekkoDisassembler::mtb(u32 in)
       break;
 
     default:
-      m_operands += fmt::format(",{}", tbr);
+      m_operands += StringFromFormat(",%d", tbr);
       break;
     }
 
-    m_opcode = fmt::format("mftb{}", x);
+    m_opcode = StringFromFormat("mftb%s", x);
   }
 }
 
@@ -928,11 +935,11 @@ void GekkoDisassembler::ldst(u32 in, std::string_view name, char reg)
 
   if (reg == 'r')
   {
-    m_operands = fmt::format("{}, {} ({})", regnames[s], ldst_offs(d), regnames[a]);
+    m_operands = StringFromFormat("%s, %s (%s)", regnames[s], ldst_offs(d).c_str(), regnames[a]);
   }
   else
   {
-    m_operands = fmt::format("{}{}, {} ({})", reg, s, ldst_offs(d), regnames[a]);
+    m_operands = StringFromFormat("%c%d, %s (%s)", reg, s, ldst_offs(d).c_str(), regnames[a]);
   }
 }
 
@@ -941,21 +948,21 @@ void GekkoDisassembler::fdabc(u32 in, std::string_view name, int mask)
 {
   int err = 0;
 
-  m_opcode = fmt::format("f{}{}", name, rcsel[in & 1]);
-  m_operands += fmt::format("f{}", PPCGETD(in));
+  m_opcode = StringFromFormat("f%.*s%s", static_cast<int>(name.size()), name.data(), rcsel[in & 1]);
+  m_operands += StringFromFormat("f%u", PPCGETD(in));
 
   if (mask & 4)
-    m_operands += fmt::format(", f{}", PPCGETA(in));
+    m_operands += StringFromFormat(", f%u", PPCGETA(in));
   else if ((mask & 8) == 0)
     err |= (int)PPCGETA(in);
 
   if (mask & 2)
-    m_operands += fmt::format(", f{}", PPCGETC(in));
+    m_operands += StringFromFormat(", f%u", PPCGETC(in));
   else if (PPCGETC(in) && (mask & 8) == 0)
     err |= (int)PPCGETC(in);
 
   if (mask & 1)
-    m_operands += fmt::format(", f{}", PPCGETB(in));
+    m_operands += StringFromFormat(", f%u", PPCGETB(in));
   else if (!(mask & 8))
     err |= (int)PPCGETB(in);
 
@@ -965,8 +972,8 @@ void GekkoDisassembler::fdabc(u32 in, std::string_view name, int mask)
 
 void GekkoDisassembler::fmr(u32 in)
 {
-  m_opcode = fmt::format("fmr{}", rcsel[in & 1]);
-  m_operands = fmt::format("f{}, f{}", PPCGETD(in), PPCGETB(in));
+  m_opcode = StringFromFormat("fmr%s", rcsel[in & 1]);
+  m_operands = StringFromFormat("f%u, f%u", PPCGETD(in), PPCGETB(in));
 }
 
 // Indexed float instruction: xxxx fD,rA,rB
@@ -984,8 +991,8 @@ void GekkoDisassembler::fcmp(u32 in, char c)
   }
   else
   {
-    m_opcode = fmt::format("fcmp{}", c);
-    m_operands = fmt::format("cr{}, f{}, f{}", PPCGETCRD(in), PPCGETA(in), PPCGETB(in));
+    m_opcode = StringFromFormat("fcmp%c", c);
+    m_operands = StringFromFormat("cr%u, f%u, f%u", PPCGETCRD(in), PPCGETA(in), PPCGETB(in));
   }
 }
 
@@ -997,7 +1004,7 @@ void GekkoDisassembler::mtfsb(u32 in, int n)
   }
   else
   {
-    m_opcode = fmt::format("mtfsb{}{}", n, rcsel[in & 1]);
+    m_opcode = StringFromFormat("mtfsb%d%s", n, rcsel[in & 1]);
     m_operands = std::to_string(PPCGETD(in));
   }
 }
@@ -1059,97 +1066,97 @@ void GekkoDisassembler::ps(u32 inst)
   {
   case 6:
     m_opcode = inst & 0x40 ? "psq_lux" : "psq_lx";
-    m_operands = fmt::format("p{}, r{}, r{}, {}, qr{}", FD, RA, RB, WX, IX);
+    m_operands = StringFromFormat("p%u, r%u, r%u, %u, qr%u", FD, RA, RB, WX, IX);
     return;
 
   case 7:
     m_opcode = inst & 0x40 ? "psq_stux" : "psq_stx";
-    m_operands = fmt::format("p{}, r{}, r{}, {}, qr{}", FS, RA, RB, WX, IX);
+    m_operands = StringFromFormat("p%u, r%u, r%u, %u, qr%u", FS, RA, RB, WX, IX);
     return;
 
   case 18:
     m_opcode = "ps_div";
-    m_operands = fmt::format("p{}, p{}/p{}", FD, FA, FB);
+    m_operands = StringFromFormat("p%u, p%u/p%u", FD, FA, FB);
     return;
 
   case 20:
     m_opcode = "ps_sub";
-    m_operands = fmt::format("p{}, p{}-p{}", FD, FA, FB);
+    m_operands = StringFromFormat("p%u, p%u-p%u", FD, FA, FB);
     return;
 
   case 21:
     m_opcode = "ps_add";
-    m_operands = fmt::format("p{}, p{}+p{}", FD, FA, FB);
+    m_operands = StringFromFormat("p%u, p%u+p%u", FD, FA, FB);
     return;
 
   case 23:
     m_opcode = "ps_sel";
-    m_operands = fmt::format("p{}, p{}>=0?p{}:p{}", FD, FA, FC, FB);
+    m_operands = StringFromFormat("p%u, p%u>=0?p%u:p%u", FD, FA, FC, FB);
     return;
 
   case 24:
     m_opcode = "ps_res";
-    m_operands = fmt::format("p{}, (1/p{})", FD, FB);
+    m_operands = StringFromFormat("p%u, (1/p%u)", FD, FB);
     return;
 
   case 25:
     m_opcode = "ps_mul";
-    m_operands = fmt::format("p{}, p{}*p{}", FD, FA, FC);
+    m_operands = StringFromFormat("p%u, p%u*p%u", FD, FA, FC);
     return;
 
   case 26:  // rsqrte
     m_opcode = "ps_rsqrte";
-    m_operands = fmt::format("p{}, p{}", FD, FB);
+    m_operands = StringFromFormat("p%u, p%u", FD, FB);
     return;
 
   case 28:  // msub
     m_opcode = "ps_msub";
-    m_operands = fmt::format("p{}, p{}*p{}-p{}", FD, FA, FC, FB);
+    m_operands = StringFromFormat("p%u, p%u*p%u-p%u", FD, FA, FC, FB);
     return;
 
   case 29:  // madd
     m_opcode = "ps_madd";
-    m_operands = fmt::format("p{}, p{}*p{}+p{}", FD, FA, FC, FB);
+    m_operands = StringFromFormat("p%u, p%u*p%u+p%u", FD, FA, FC, FB);
     return;
 
   case 30:  // nmsub
     m_opcode = "ps_nmsub";
-    m_operands = fmt::format("p{}, -(p{}*p{}-p{})", FD, FA, FC, FB);
+    m_operands = StringFromFormat("p%u, -(p%u*p%u-p%u)", FD, FA, FC, FB);
     return;
 
   case 31:  // nmadd
     m_opcode = "ps_nmadd";
-    m_operands = fmt::format("p{}, -(p{}*p{}+p{})", FD, FA, FC, FB);
+    m_operands = StringFromFormat("p%u, -(p%u*p%u+p%u)", FD, FA, FC, FB);
     return;
 
   case 10:
     m_opcode = "ps_sum0";
-    m_operands = fmt::format("p{}, 0=p{}+p{}, 1=p{}", FD, FA, FB, FC);
+    m_operands = StringFromFormat("p%u, 0=p%u+p%u, 1=p%u", FD, FA, FB, FC);
     return;
 
   case 11:
     m_opcode = "ps_sum1";
-    m_operands = fmt::format("p{}, 0=p{}, 1=p{}+p{}", FD, FC, FA, FB);
+    m_operands = StringFromFormat("p%u, 0=p%u, 1=p%u+p%u", FD, FC, FA, FB);
     return;
 
   case 12:
     m_opcode = "ps_muls0";
-    m_operands = fmt::format("p{}, p{}*p{}[0]", FD, FA, FC);
+    m_operands = StringFromFormat("p%u, p%u*p%u[0]", FD, FA, FC);
     return;
 
   case 13:
     m_opcode = "ps_muls1";
-    m_operands = fmt::format("p{}, p{}*p{}[1]", FD, FA, FC);
+    m_operands = StringFromFormat("p%u, p%u*p%u[1]", FD, FA, FC);
     return;
 
   case 14:
     m_opcode = "ps_madds0";
-    m_operands = fmt::format("p{}, p{}*p{}[0]+p{}", FD, FA, FC, FB);
+    m_operands = StringFromFormat("p%u, p%u*p%u[0]+p%u", FD, FA, FC, FB);
     return;
 
   case 15:
     m_opcode = "ps_madds1";
-    m_operands = fmt::format("p{}, p{}*p{}[1]+p{}", FD, FA, FC, FB);
+    m_operands = StringFromFormat("p%u, p%u*p%u[1]+p%u", FD, FA, FC, FB);
     return;
   }
 
@@ -1158,22 +1165,22 @@ void GekkoDisassembler::ps(u32 inst)
   // 10-bit suckers  (?)
   case 40:  // nmadd
     m_opcode = "ps_neg";
-    m_operands = fmt::format("p{}, -p{}", FD, FB);
+    m_operands = StringFromFormat("p%u, -p%u", FD, FB);
     return;
 
   case 72:  // nmadd
     m_opcode = "ps_mr";
-    m_operands = fmt::format("p{}, p{}", FD, FB);
+    m_operands = StringFromFormat("p%u, p%u", FD, FB);
     return;
 
   case 136:
     m_opcode = "ps_nabs";
-    m_operands = fmt::format("p{}, -|p{}|", FD, FB);
+    m_operands = StringFromFormat("p%u, -|p%u|", FD, FB);
     return;
 
   case 264:
     m_opcode = "ps_abs";
-    m_operands = fmt::format("p{}, |p{}|", FD, FB);
+    m_operands = StringFromFormat("p%u, |p%u|", FD, FB);
     return;
 
   case 0:
@@ -1185,28 +1192,28 @@ void GekkoDisassembler::ps(u32 inst)
 
     int i = (int)PPCGETCRD(inst);
     if (i != 0)
-      m_operands += fmt::format("cr{}, ", i);
-    m_operands += fmt::format("p{}, p{}", FA, FB);
+      m_operands += StringFromFormat("cr%d, ", i);
+    m_operands += StringFromFormat("p%u, p%u", FA, FB);
     return;
   }
   case 528:
     m_opcode = "ps_merge00";
-    m_operands = fmt::format("p{}, p{}[0], p{}[0]", FD, FA, FB);
+    m_operands = StringFromFormat("p%u, p%u[0], p%u[0]", FD, FA, FB);
     return;
 
   case 560:
     m_opcode = "ps_merge01";
-    m_operands = fmt::format("p{}, p{}[0], p{}[1]", FD, FA, FB);
+    m_operands = StringFromFormat("p%u, p%u[0], p%u[1]", FD, FA, FB);
     return;
 
   case 592:
     m_opcode = "ps_merge10";
-    m_operands = fmt::format("p{}, p{}[1], p{}[0]", FD, FA, FB);
+    m_operands = StringFromFormat("p%u, p%u[1], p%u[0]", FD, FA, FB);
     return;
 
   case 624:
     m_opcode = "ps_merge11";
-    m_operands = fmt::format("p{}, p{}[1], p{}[1]", FD, FA, FB);
+    m_operands = StringFromFormat("p%u, p%u[1], p%u[1]", FD, FA, FB);
     return;
 
   case 1014:
@@ -1218,7 +1225,7 @@ void GekkoDisassembler::ps(u32 inst)
   }
 
   //	default:
-  m_opcode = fmt::format("ps_{}", ((inst >> 1) & 0x1f));
+  m_opcode = StringFromFormat("ps_%u", ((inst >> 1) & 0x1f));
   m_operands = "---";
 }
 
@@ -1228,23 +1235,27 @@ void GekkoDisassembler::ps_mem(u32 inst)
   {
   case 56:
     m_opcode = "psq_l";
-    m_operands = fmt::format("p{}, {}(r{}), {}, qr{}", RS, psq_offs(inst & 0xFFF), RA, W, I);
+    m_operands =
+        StringFromFormat("p%u, %s(r%u), %u, qr%u", RS, psq_offs(inst & 0xFFF).c_str(), RA, W, I);
     break;
 
   case 57:
     m_opcode = "psq_lu";
-    m_operands = fmt::format("p{}, {}(r{}), {}, qr{}", RS, psq_offs(inst & 0xFFF), RA, W, I);
+    m_operands =
+        StringFromFormat("p%u, %s(r%u), %u, qr%u", RS, psq_offs(inst & 0xFFF).c_str(), RA, W, I);
     ;
     break;
 
   case 60:
     m_opcode = "psq_st";
-    m_operands = fmt::format("p{}, {}(r{}), {}, qr{}", RS, psq_offs(inst & 0xFFF), RA, W, I);
+    m_operands =
+        StringFromFormat("p%u, %s(r%u), %u, qr%u", RS, psq_offs(inst & 0xFFF).c_str(), RA, W, I);
     break;
 
   case 61:
     m_opcode = "psq_stu";
-    m_operands = fmt::format("p{}, {}(r{}), {}, qr{}", RS, psq_offs(inst & 0xFFF), RA, W, I);
+    m_operands =
+        StringFromFormat("p%u, %s(r%u), %u, qr%u", RS, psq_offs(inst & 0xFFF).c_str(), RA, W, I);
     break;
   }
 }
@@ -1848,7 +1859,7 @@ u32* GekkoDisassembler::DoDisassembly(bool big_endian)
       else
       {
         m_opcode = "mcrxr";
-        m_operands = fmt::format("cr{}", PPCGETCRD(in));
+        m_operands = StringFromFormat("cr%u", PPCGETCRD(in));
       }
       break;
 
@@ -2217,8 +2228,8 @@ u32* GekkoDisassembler::DoDisassembly(bool big_endian)
       case 134:
         if ((in & 0x006f0800) == 0)
         {
-          m_opcode = fmt::format("mtfsfi{}", rcsel[in & 1]);
-          m_operands = fmt::format("cr{},{}", PPCGETCRD(in), (in & 0xf000) >> 12);
+          m_opcode = StringFromFormat("mtfsfi%s", rcsel[in & 1]);
+          m_operands = StringFromFormat("cr%u,%u", PPCGETCRD(in), (in & 0xf000) >> 12);
         }
         else
         {
@@ -2244,8 +2255,8 @@ u32* GekkoDisassembler::DoDisassembly(bool big_endian)
       case 711:
         if ((in & 0x02010000) == 0)
         {
-          m_opcode = fmt::format("mtfsf{}", rcsel[in & 1]);
-          m_operands = fmt::format("0x{:x}, f{}", (in >> 17) & 0xff, PPCGETB(in));
+          m_opcode = StringFromFormat("mtfsf%s", rcsel[in & 1]);
+          m_operands = StringFromFormat("0x%x, f%u", (in >> 17) & 0xff, PPCGETB(in));
         }
         else
         {

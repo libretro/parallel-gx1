@@ -11,7 +11,6 @@
 
 #include "Common/Arm64Emitter.h"
 #include "Common/CommonTypes.h"
-#include "Common/GekkoDisassembler.h"
 #include "Common/Logging/Log.h"
 #include "Common/MathUtil.h"
 #include "Common/MsgHandler.h"
