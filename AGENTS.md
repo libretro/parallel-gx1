@@ -34,6 +34,15 @@ touches closer, and never adds C++ that was not there.
 - **Frames stay small.** A function's stack frame is 4 KiB at most.
 - **A file with no C++ left becomes a `.c` file.** Its header keeps
   `extern "C"` guards while C++ still includes it.
+- **A `std::string` that becomes a `const char*` loses `==`.** Every
+  `==` and `!=` on the variable, and on whatever it is passed to, turns
+  into a `strcmp`; a comparison left behind compiles and compares
+  addresses, never matching. Grep the variable's name through the whole
+  function after converting it.
+- **Warnings are read, not only errors.** After a build, the logs of all
+  three platforms are searched for warnings in the files the change
+  touched; `-Waddress`, `-Wstring-compare` and `-Wformat-truncation`
+  are bugs, and the build that shows them is not gated.
 
 ## Threads, waits and pacing
 
@@ -155,6 +164,26 @@ reason a reader can see.
 - **JSON is read with libretro-common's rjson.** Files are pulled through
   `rjson_open_user` from a VFS `filestream`, parsed as they stream, with
   no document tree and no wrapper library between rjson and its caller.
+
+## Contexts come and go mid-game
+
+The frontend may take the graphics context away and give a new one
+back at any point of a game: after losing its device
+(`VK_ERROR_DEVICE_LOST`), or switching video drivers.
+
+- **Only what is the backend's goes with the context.** Textures,
+  pipelines, shaders, native vertex formats and the like are freed in
+  `ShutdownShared` and made again on the new context. What is the
+  CPU's or the emulated machine's (vertex loaders and their decoders,
+  the command processor, FIFO, BP, XF and TMEM state) is set up once,
+  when the game starts, and stays until it is unloaded.
+- **A pointer into what went is forgotten with it.** A cache or a
+  "current" pointer to a backend object is cleared, or marked dirty to
+  be looked up again, in the same teardown that frees the object.
+- **Check it with a reset.** A change to setup or teardown is run with
+  the context taken away and given back on a new device mid-game. Freed
+  memory often still reads as it was, so a run that survives proves
+  little: look for every pointer the teardown leaves behind.
 
 ## Quantization outside emulation
 
