@@ -6,7 +6,7 @@
 #include <cstddef>
 
 #include "Common/CommonTypes.h"
-#include "Common/RangeSizeSet.h"
+#include "Common/FreeRangeSet.h"
 #include "Core/PowerPC/CachedInterpreter/CachedInterpreterBlockCache.h"
 #include "Core/PowerPC/CachedInterpreter/CachedInterpreterEmitter.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
@@ -83,7 +83,7 @@ private:
   static s32 CheckFPU(PowerPC::PowerPCState& ppc_state, const CheckHaltOperands& operands);
   static s32 CheckIdle(PowerPC::PowerPCState& ppc_state, const CheckIdleOperands& operands);
 
-  Common::RangeSizeSet<u8*> m_free_ranges;
+  FreeRangeSet m_free_ranges;
   CachedInterpreterBlockCache m_block_cache;
 };
 

@@ -274,7 +274,7 @@ void CachedInterpreter::Jit(u32 em_address, bool clear_cache_and_retry_on_failur
       b->near_end = GetWritableCodePtr();
       b->far_begin = b->far_end = nullptr;
 
-      // Mark the memory region that this code block uses in the RangeSizeSet.
+      // Mark the memory region that this code block uses in the free ranges.
       if (b->near_begin != b->near_end)
         m_free_ranges.erase(b->near_begin, b->near_end);
 
