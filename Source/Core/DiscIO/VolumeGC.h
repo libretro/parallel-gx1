@@ -36,12 +36,6 @@ public:
   void Prefetch(u64 offset, u64 length, const Partition& partition) const override;
   const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const override;
   std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const override;
-  std::map<Language, std::string> GetShortNames() const override;
-  std::map<Language, std::string> GetLongNames() const override;
-  std::map<Language, std::string> GetShortMakers() const override;
-  std::map<Language, std::string> GetLongMakers() const override;
-  std::map<Language, std::string> GetDescriptions() const override;
-  std::vector<u32> GetBanner(u32* width, u32* height) const override;
 
   Platform GetVolumeType() const override;
   bool IsDatelDisc() const override;
@@ -55,53 +49,6 @@ public:
   const BootID* GetTriforceBootID() const { return &m_triforce_header; }
 
 private:
-  static constexpr u32 GC_BANNER_WIDTH = 96;
-  static constexpr u32 GC_BANNER_HEIGHT = 32;
-
-  struct GCBannerInformation
-  {
-    char short_name[32];    // Short game title shown in IPL menu
-    char short_maker[32];   // Short developer, publisher names shown in IPL menu
-    char long_name[64];     // Long game title shown in IPL game start screen
-    char long_maker[64];    // Long developer, publisher names shown in IPL game
-                            // start screen
-    char description[128];  // Game description shown in IPL game start screen in
-                            // two lines.
-  };
-
-  struct GCBanner
-  {
-    u32 id;  // "BNR1" for NTSC, "BNR2" for PAL
-    u32 padding[7];
-    u16 image[GC_BANNER_WIDTH * GC_BANNER_HEIGHT];  // RGB5A3 96x32 image
-    GCBannerInformation information[6];             // information comes in six languages
-                                                    // (only one for BNR1 type)
-  };
-
-  struct ConvertedGCBanner
-  {
-    ConvertedGCBanner();
-    ~ConvertedGCBanner();
-
-    std::map<Language, std::string> short_names;
-    std::map<Language, std::string> long_names;
-    std::map<Language, std::string> short_makers;
-    std::map<Language, std::string> long_makers;
-    std::map<Language, std::string> descriptions;
-
-    std::vector<u32> image_buffer;
-    u32 image_height = 0;
-    u32 image_width = 0;
-  };
-
-  ConvertedGCBanner LoadBannerFile() const;
-  ConvertedGCBanner ExtractBannerInformation(const GCBanner& banner_file, bool is_bnr1) const;
-
-  static constexpr size_t BNR1_SIZE = sizeof(GCBanner) - sizeof(GCBannerInformation) * 5;
-  static constexpr size_t BNR2_SIZE = sizeof(GCBanner);
-
-  Common::Lazy<ConvertedGCBanner> m_converted_banner;
-
   Common::Lazy<std::unique_ptr<FileSystem>> m_file_system;
 
   std::unique_ptr<BlobReader> m_reader;

@@ -28,7 +28,6 @@
 #include "DiscIO/FileSystemGCWii.h"
 #include "DiscIO/Filesystem.h"
 #include "DiscIO/Volume.h"
-#include "DiscIO/WiiSaveBanner.h"
 
 namespace DiscIO
 {
@@ -338,26 +337,6 @@ std::string VolumeWii::GetGameTDBID(const Partition& partition) const
 Region VolumeWii::GetRegion() const
 {
   return RegionCodeToRegion(m_reader->ReadSwapped<u32>(0x4E000));
-}
-
-std::map<Language, std::string> VolumeWii::GetLongNames() const
-{
-  char16_t names[NAMES_TOTAL_CHARS];
-  const u64 read = ReadFile(*this, GetGamePartition(), "opening.bnr",
-                            reinterpret_cast<u8*>(names), NAMES_TOTAL_BYTES, 0x5C);
-  return ReadWiiNames(names, size_t(read));
-}
-
-std::vector<u32> VolumeWii::GetBanner(u32* width, u32* height) const
-{
-  *width = 0;
-  *height = 0;
-
-  const std::optional<u64> title_id = GetTitleID(GetGamePartition());
-  if (!title_id)
-    return std::vector<u32>();
-
-  return WiiSaveBanner(*title_id).GetBanner(width, height);
 }
 
 Platform VolumeWii::GetVolumeType() const

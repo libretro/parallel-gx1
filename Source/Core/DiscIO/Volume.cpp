@@ -57,22 +57,6 @@ std::string Volume::FilterGameID(const char* data, size_t size)
   return string;
 }
 
-std::map<Language, std::string> Volume::ReadWiiNames(const char16_t* data, size_t size)
-{
-  std::map<Language, std::string> names;
-  for (size_t i = 0; i < NUMBER_OF_LANGUAGES; ++i)
-  {
-    const size_t name_start = NAME_CHARS_LENGTH * i;
-    if (name_start + NAME_CHARS_LENGTH <= size)
-    {
-      const std::string name = UTF16BEToUTF8(data + name_start, NAME_CHARS_LENGTH);
-      if (!name.empty())
-        names[static_cast<Language>(i)] = name;
-    }
-  }
-  return names;
-}
-
 template <typename T = std::identity>
 static std::unique_ptr<VolumeDisc> TryCreateDisc(std::unique_ptr<BlobReader>& reader,
                                                  const T& reader_adapter_factory = {})

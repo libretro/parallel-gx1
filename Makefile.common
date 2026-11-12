@@ -395,7 +395,6 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/VideoCommon/UidTable.c \
 	$(CORE_DIR)/Source/Core/Core/HW/GBAVFile.c
 DOLPHIN_SOURCES_CXX += \
-	$(CORE_DIR)/Source/Core/Common/ColorUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/CommonFuncs.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/Config.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/ConfigInfo.cpp \
@@ -466,7 +465,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DiscIO/WbfsBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/WIABlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/WiiEncryptionCache.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/WiiSaveBanner.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AbstractFramebuffer.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AbstractGfx.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AbstractStagingTexture.cpp \

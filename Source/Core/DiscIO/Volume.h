@@ -106,12 +106,6 @@ public:
   virtual std::string GetMakerID(const Partition& partition = PARTITION_NONE) const = 0;
   virtual std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const = 0;
   virtual std::string GetInternalName(const Partition& partition = PARTITION_NONE) const = 0;
-  virtual std::map<Language, std::string> GetShortNames() const { return {}; }
-  virtual std::map<Language, std::string> GetLongNames() const { return {}; }
-  virtual std::map<Language, std::string> GetShortMakers() const { return {}; }
-  virtual std::map<Language, std::string> GetLongMakers() const { return {}; }
-  virtual std::map<Language, std::string> GetDescriptions() const { return {}; }
-  virtual std::vector<u32> GetBanner(u32* width, u32* height) const = 0;
   std::string GetApploaderDate() const { return GetApploaderDate(GetGamePartition()); }
   virtual std::string GetApploaderDate(const Partition& partition) const = 0;
   // 0 is the first disc, 1 is the second disc
@@ -148,7 +142,6 @@ protected:
   static std::string FilterGameID(const char* data, size_t size);
 
   virtual u32 GetOffsetShift() const { return 0; }
-  static std::map<Language, std::string> ReadWiiNames(const char16_t* data, size_t size);
 
   static constexpr size_t NUMBER_OF_LANGUAGES = 10;
   static constexpr size_t NAME_CHARS_LENGTH = 42;

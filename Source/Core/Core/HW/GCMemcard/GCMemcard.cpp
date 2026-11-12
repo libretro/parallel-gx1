@@ -9,7 +9,6 @@
 
 #include "Common/Assert.h"
 #include "Common/BitUtils.h"
-#include "Common/ColorUtil.h"
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
 #include "Common/MsgHandler.h"

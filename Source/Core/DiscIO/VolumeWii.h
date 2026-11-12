@@ -74,8 +74,6 @@ public:
                                                 u64 partition_data_offset);
   u64 PartitionOffsetToRawOffset(u64 offset, const Partition& partition) const override;
   std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const override;
-  std::map<Language, std::string> GetLongNames() const override;
-  std::vector<u32> GetBanner(u32* width, u32* height) const override;
 
   Platform GetVolumeType() const override;
   bool IsDatelDisc() const override;
