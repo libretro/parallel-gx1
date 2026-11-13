@@ -252,10 +252,16 @@ Wiimote::~Wiimote()
 }
 
 // Producer side of m_write_reports. A ring this deep is only full when the device has stopped
-// taking reports, and the write thread is about to drop the connection then.
+// taking reports, and the write thread is about to drop the connection then. A report longer than
+// a Wii Remote takes, which the emulated software can send, is dropped: it would not fit the record.
 void Wiimote::QueueWrite(u64 frame, const u8* data, size_t size)
 {
-  ASSERT(size <= MAX_PAYLOAD);
+  if (size > MAX_PAYLOAD)
+  {
+    WARN_LOG(WIIMOTE, "Wiimote %d: dropped a %u-byte report, longer than a Wii Remote takes",
+             m_index + 1, static_cast<unsigned>(size));
+    return;
+  }
   WriteRecord record;
   record.frame = frame;
   record.size = static_cast<u8>(size);
