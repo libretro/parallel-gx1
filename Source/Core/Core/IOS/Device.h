@@ -154,15 +154,36 @@ struct IOCtlVRequest final : Request
     u32 address = 0;
     u32 size = 0;
   };
+
+  /* The most vectors of each kind a request keeps: far more than any IOS call takes */
+  static constexpr u32 MAX_VECTORS = 32;
+
+  /* A request's vectors of one kind, kept in the request: nothing is allocated for them */
+  struct IOVectors
+  {
+    IOVector items[MAX_VECTORS];
+    u32 count = 0;
+
+    size_t size() const { return count; }
+    bool empty() const { return count == 0; }
+    const IOVector& operator[](size_t i) const { return items[i]; }
+    IOVector& operator[](size_t i) { return items[i]; }
+    /* the vector at @i; one past the end is a request the call does not expect, logged and read
+     * as an empty vector */
+    const IOVector& at(size_t i) const;
+    const IOVector* begin() const { return items; }
+    const IOVector* end() const { return items + count; }
+  };
+
   u32 request = 0;
   // In vectors are *mostly* used for input buffers. Sometimes they are also used as
   // output buffers (notably in the network code).
   // IO vectors are *mostly* used for output buffers. However, as indicated in the name,
   // they're also used as input buffers.
   // So both of them are technically IO vectors. But we're keeping them separated because
-  // merging them into a single std::vector would make using the first out vector more complicated.
-  std::vector<IOVector> in_vectors;
-  std::vector<IOVector> io_vectors;
+  // merging them into a single list would make using the first out vector more complicated.
+  IOVectors in_vectors;
+  IOVectors io_vectors;
 
   /// Returns the specified vector or nullptr if the index is out of bounds.
   const IOVector* GetVector(size_t index) const;

@@ -70,18 +70,39 @@ IOCtlVRequest::IOCtlVRequest(Core::System& system, const u32 address_) : Request
   const u32 out_number = memory.Read_U32(address + 0x14);
   const u32 vectors_base = memory.Read_U32(address + 0x18);  // address to vectors
 
-  u32 offset = 0;
-  for (size_t i = 0; i < (in_number + out_number); ++i)
+  /* past the most a request keeps, the rest are not read: a count from the emulated software, which
+   * no IOS call takes that many of */
+  const u32 in_kept = in_number < MAX_VECTORS ? in_number : MAX_VECTORS;
+  const u32 out_kept = out_number < MAX_VECTORS ? out_number : MAX_VECTORS;
+  u32 i;
+
+  if (in_kept != in_number || out_kept != out_number)
   {
-    IOVector vector;
-    vector.address = memory.Read_U32(vectors_base + offset);
-    vector.size = memory.Read_U32(vectors_base + offset + 4);
-    offset += 8;
-    if (i < in_number)
-      in_vectors.emplace_back(vector);
-    else
-      io_vectors.emplace_back(vector);
+    ERROR_LOG(IOS, "IOCtlV %#x at %#010x: %u in and %u io vectors, more than the %u kept", request,
+              address, in_number, out_number, MAX_VECTORS);
   }
+  for (i = 0; i < in_kept; i++)
+  {
+    in_vectors.items[i].address = memory.Read_U32(vectors_base + i * 8);
+    in_vectors.items[i].size = memory.Read_U32(vectors_base + i * 8 + 4);
+  }
+  in_vectors.count = in_kept;
+  for (i = 0; i < out_kept; i++)
+  {
+    const u32 offset = (in_number + i) * 8;
+    io_vectors.items[i].address = memory.Read_U32(vectors_base + offset);
+    io_vectors.items[i].size = memory.Read_U32(vectors_base + offset + 4);
+  }
+  io_vectors.count = out_kept;
+}
+
+const IOCtlVRequest::IOVector& IOCtlVRequest::IOVectors::at(size_t i) const
+{
+  static const IOVector none;
+  if (i < count)
+    return items[i];
+  ERROR_LOG(IOS, "IOCtlV vector %u asked for, of %u", static_cast<unsigned>(i), count);
+  return none;
 }
 
 const IOCtlVRequest::IOVector* IOCtlVRequest::GetVector(size_t index) const
