@@ -10,8 +10,8 @@ vulkan cold draw_uber_pipeline 0
 vulkan cold draw_wait 1
 vulkan cold driver_pipeline 157
 vulkan cold pipeline_create 157
-vulkan cold shader_create 101
-vulkan cold shader_words 270929
+vulkan cold shader_create 102
+vulkan cold shader_words 271755
 vulkan play allocs 0
 vulkan play allocs_workers 0
 vulkan recipes draw_decode 0
@@ -26,8 +26,8 @@ vulkan recipes draw_uber_pipeline 0
 vulkan recipes draw_wait 1
 vulkan recipes driver_pipeline 157
 vulkan recipes pipeline_create 157
-vulkan recipes shader_create 101
-vulkan recipes shader_words 270929
+vulkan recipes shader_create 102
+vulkan recipes shader_words 271755
 vulkan state draw_decode 0
 vulkan state draw_disk_write 0
 vulkan state draw_driver_pipeline 0
@@ -40,8 +40,8 @@ vulkan state draw_uber_pipeline 0
 vulkan state draw_wait 1
 vulkan state driver_pipeline 157
 vulkan state pipeline_create 157
-vulkan state shader_create 101
-vulkan state shader_words 270929
+vulkan state shader_create 102
+vulkan state shader_words 271755
 vulkan warm draw_decode 0
 vulkan warm draw_disk_write 0
 vulkan warm draw_driver_pipeline 0
@@ -54,5 +54,5 @@ vulkan warm draw_uber_pipeline 0
 vulkan warm draw_wait 1
 vulkan warm driver_pipeline 157
 vulkan warm pipeline_create 157
-vulkan warm shader_create 56
-vulkan warm shader_words 59050
+vulkan warm shader_create 57
+vulkan warm shader_words 59876
