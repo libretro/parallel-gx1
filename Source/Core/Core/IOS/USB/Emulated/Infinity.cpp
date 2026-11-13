@@ -135,6 +135,8 @@ static constexpr std::array<u8, 16> BLANK_BLOCK = {0x00, 0x00, 0x00, 0x00, 0x00,
 
 InfinityUSB::InfinityUSB()
 {
+  infinity_queries_init(&m_queries, 16);
+  infinity_waiting_init(&m_response_list, 16);
   m_vid = 0x0E6F;
   m_pid = 0x0129;
   m_id = (u64(m_vid) << 32 | u64(m_pid) << 16 | u64(9) << 8 | u64(1));
@@ -147,7 +149,16 @@ InfinityUSB::InfinityUSB()
   m_endpoint_descriptor.emplace_back(EndpointDescriptor{0x7, 0x5, 0x1, 0x3, 0x20, 0x1});
 }
 
-InfinityUSB::~InfinityUSB() = default;
+InfinityUSB::~InfinityUSB()
+{
+  while (!infinity_waiting_empty(&m_response_list))
+  {
+    delete *infinity_waiting_front(&m_response_list);
+    infinity_waiting_pop_front(&m_response_list);
+  }
+  infinity_waiting_free(&m_response_list);
+  infinity_queries_free(&m_queries);
+}
 
 DeviceDescriptor InfinityUSB::GetDeviceDescriptor() const
 {
@@ -253,7 +264,8 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
   // First call - constant device response
   if (buf[0] == 0x00)
   {
-    m_response_list.push(std::move(cmd));
+    IntrMessage* const waiting = cmd.release();
+    infinity_waiting_push_back_growing(&m_response_list, &waiting);
   }
   // Respond with data requested from FF command
   else if (buf[0] == 0xAA || buf[0] == 0xAB)
@@ -263,14 +275,16 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
     {
       ScheduleTransfer(std::move(cmd), infinity_base.PopAddedRemovedResponse(), 1000);
     }
-    else if (m_queries.empty())
+    else if (infinity_queries_empty(&m_queries))
     {
-      m_response_list.push(std::move(cmd));
+      IntrMessage* const waiting = cmd.release();
+      infinity_waiting_push_back_growing(&m_response_list, &waiting);
     }
     else
     {
-      ScheduleTransfer(std::move(cmd), m_queries.front(), 1000);
-      m_queries.pop();
+      const std::array<u8, 32> query = *infinity_queries_front(&m_queries);
+      infinity_queries_pop_front(&m_queries);
+      ScheduleTransfer(std::move(cmd), query, 1000);
     }
   }
   else if (buf[0] == 0xFF)
@@ -387,14 +401,15 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
 
     memcpy(data.data(), buf, 32);
     ScheduleTransfer(std::move(cmd), data, 500);
-    if (m_response_list.empty())
+    if (infinity_waiting_empty(&m_response_list))
     {
-      m_queries.push(response_data);
+      infinity_queries_push_back_growing(&m_queries, &response_data);
     }
     else
     {
-      ScheduleTransfer(std::move(m_response_list.front()), response_data, 1000);
-      m_response_list.pop();
+      std::unique_ptr<IntrMessage> waiting(*infinity_waiting_front(&m_response_list));
+      infinity_waiting_pop_front(&m_response_list);
+      ScheduleTransfer(std::move(waiting), response_data, 1000);
     }
   }
 
@@ -416,15 +431,25 @@ void InfinityUSB::ScheduleTransfer(std::unique_ptr<TransferCommand> command,
   command->ScheduleTransferCompletion(32, expected_time_us);
 }
 
+InfinityBase::InfinityBase()
+{
+  infinity_queries_init(&m_figure_added_removed_response, 16);
+}
+
+InfinityBase::~InfinityBase()
+{
+  infinity_queries_free(&m_figure_added_removed_response);
+}
+
 bool InfinityBase::HasFigureBeenAddedRemoved() const
 {
-  return !m_figure_added_removed_response.empty();
+  return !infinity_queries_empty(&m_figure_added_removed_response);
 }
 
 std::array<u8, 32> InfinityBase::PopAddedRemovedResponse()
 {
-  std::array<u8, 32> response = m_figure_added_removed_response.front();
-  m_figure_added_removed_response.pop();
+  std::array<u8, 32> response = *infinity_queries_front(&m_figure_added_removed_response);
+  infinity_queries_pop_front(&m_figure_added_removed_response);
   return response;
 }
 
@@ -630,7 +655,7 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
   std::array<u8, 32> figure_change_response = {0xab, 0x04,        static_cast<u8>(derived_position),
                                                0x09, order_added, 0x00};
   figure_change_response[6] = GenerateChecksum(figure_change_response, 6);
-  m_figure_added_removed_response.push(figure_change_response);
+  infinity_queries_push_back_growing(&m_figure_added_removed_response, &figure_change_response);
 
   return FindFigure(number);
 }

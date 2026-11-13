@@ -4,9 +4,9 @@
 #pragma once
 
 #include <array>
-#include <queue>
 #include <vector>
 
+#include <queues/retro_deque.h>
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
 #include "Core/IOS/USB/Common.h"
@@ -25,6 +25,11 @@ struct InfinityFigure final
   bool present = false;
   u8 order_added = 255;
 };
+
+// A response owed to the next interrupt transfer, and the transfers waiting for one
+typedef std::array<u8, 32> InfinityQuery;
+RETRO_DEQUE_DEFINE(infinity_queries, InfinityQuery);
+RETRO_DEQUE_DEFINE(infinity_waiting, IntrMessage*);
 
 class InfinityUSB final : public Device
 {
@@ -58,8 +63,9 @@ private:
   std::vector<ConfigDescriptor> m_config_descriptor;
   std::vector<InterfaceDescriptor> m_interface_descriptor;
   std::vector<EndpointDescriptor> m_endpoint_descriptor;
-  std::queue<std::array<u8, 32>> m_queries;
-  std::queue<std::unique_ptr<IntrMessage>> m_response_list;
+  // made with the base: a poll allocates nothing; the transfers waiting are owned here
+  infinity_queries_t m_queries;
+  infinity_waiting_t m_response_list;
 };
 
 enum class FigureUIPosition : u8
@@ -86,6 +92,11 @@ enum class FigureBasePosition : u8
 class InfinityBase final
 {
 public:
+  InfinityBase();
+  ~InfinityBase();
+  InfinityBase(const InfinityBase&) = delete;
+  InfinityBase& operator=(const InfinityBase&) = delete;
+
   bool HasFigureBeenAddedRemoved() const;
   std::array<u8, 32> PopAddedRemovedResponse();
   void GetBlankResponse(u8 sequence, std::array<u8, 32>& reply_buf);
@@ -122,6 +133,6 @@ private:
   u32 m_random_d;
 
   u8 m_figure_order = 0;
-  std::queue<std::array<u8, 32>> m_figure_added_removed_response;
+  infinity_queries_t m_figure_added_removed_response;
 };
 }  // namespace IOS::HLE::USB
