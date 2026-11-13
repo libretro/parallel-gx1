@@ -55,6 +55,9 @@ IPCReply ESDevice::Encrypt(u32 uid, const IOCtlVRequest& request)
   u8* source = memory.GetPointerForRange(request.in_vectors[2].address, size);
   u8* iv = memory.GetPointerForRange(request.io_vectors[0].address, 16);
   u8* destination = memory.GetPointerForRange(request.io_vectors[1].address, size);
+  // every buffer in emulated memory, or nothing is done
+  if (!iv || ((!source || !destination) && size != 0))
+    return IPCReply(ES_EINVAL);
 
   // TODO: Check whether the active title is allowed to encrypt.
 
@@ -75,6 +78,9 @@ IPCReply ESDevice::Decrypt(u32 uid, const IOCtlVRequest& request)
   u8* source = memory.GetPointerForRange(request.in_vectors[2].address, size);
   u8* iv = memory.GetPointerForRange(request.io_vectors[0].address, 16);
   u8* destination = memory.GetPointerForRange(request.io_vectors[1].address, size);
+  // every buffer in emulated memory, or nothing is done
+  if (!iv || ((!source || !destination) && size != 0))
+    return IPCReply(ES_EINVAL);
 
   // TODO: Check whether the active title is allowed to decrypt.
 
@@ -125,6 +131,9 @@ IPCReply ESDevice::Sign(const IOCtlVRequest& request)
       memory.GetPointerForRange(request.io_vectors[0].address, sizeof(Common::ec::Signature));
 
   if (!m_core.m_title_context.active)
+    return IPCReply(ES_EINVAL);
+  // every buffer in emulated memory, or nothing is signed
+  if (!ap_cert_out || !sig_out || (!data && data_size != 0))
     return IPCReply(ES_EINVAL);
 
   GetEmulationKernel().GetIOSC().Sign(sig_out, ap_cert_out, m_core.m_title_context.tmd.GetTitleId(),
