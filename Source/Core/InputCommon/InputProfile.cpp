@@ -21,11 +21,6 @@
 
 namespace InputProfile
 {
-namespace
-{
-constexpr int display_message_ms = 3000;
-}
-
 std::vector<std::string> GetProfilesFromSetting(const std::string& setting, const std::string& root)
 {
   const auto& setting_choices = SplitString(setting, ',');

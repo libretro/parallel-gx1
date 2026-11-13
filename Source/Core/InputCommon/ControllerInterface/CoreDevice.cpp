@@ -27,10 +27,6 @@ quiesce_t* InputQuiesce()
 
 namespace ciface::Core
 {
-// Compared to an input's current state (ideally 1.0) minus abs(initial_state) (ideally 0.0).
-// Note: Detect() logic assumes this is greater than 0.5.
-constexpr ControlState INPUT_DETECT_THRESHOLD = 0.55;
-
 class CombinedInput final : public Device::Input
 {
 public:
