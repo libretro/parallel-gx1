@@ -69,7 +69,14 @@ void CodeLoaded(DSPCore& dsp, u32 addr, size_t size)
 {
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();
-  CodeLoaded(dsp, memory.GetPointerForRange(addr, size), size);
+  const u8* const code = memory.GetPointerForRange(addr, size);
+  // code that is not in emulated memory is not hashed: the last code's hash stays
+  if (!code)
+  {
+    ERROR_LOG(DSPLLE, "DSP code at %#010x is not in emulated memory", addr);
+    return;
+  }
+  CodeLoaded(dsp, code, size);
 }
 
 void CodeLoaded(DSPCore& dsp, const u8* ptr, size_t size)
