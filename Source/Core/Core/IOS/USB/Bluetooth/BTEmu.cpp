@@ -6,6 +6,7 @@
 #include <cinttypes>
 #include <cstring>
 #include <memory>
+#include <new>
 #include <string>
 
 #include "Common/Assert.h"
@@ -80,7 +81,35 @@ BluetoothEmuDevice::BluetoothEmuDevice(EmulationKernel& ios, const std::string& 
 
 BluetoothEmuDevice::~BluetoothEmuDevice()
 {
+  ReleaseHciEndpoint();
+  ReleaseAclEndpoint();
   queued_events_free(&m_event_queue);
+}
+
+void BluetoothEmuDevice::HoldHciEndpoint(const IOCtlVRequest& request)
+{
+  ReleaseHciEndpoint();
+  m_hci_endpoint = new (m_hci_storage) USB::V0IntrMessage(GetEmulationKernel(), request);
+}
+
+void BluetoothEmuDevice::HoldAclEndpoint(const IOCtlVRequest& request)
+{
+  ReleaseAclEndpoint();
+  m_acl_endpoint = new (m_acl_storage) USB::V0BulkMessage(GetEmulationKernel(), request);
+}
+
+void BluetoothEmuDevice::ReleaseHciEndpoint()
+{
+  if (m_hci_endpoint)
+    m_hci_endpoint->~V0IntrMessage();
+  m_hci_endpoint = nullptr;
+}
+
+void BluetoothEmuDevice::ReleaseAclEndpoint()
+{
+  if (m_acl_endpoint)
+    m_acl_endpoint->~V0BulkMessage();
+  m_acl_endpoint = nullptr;
 }
 
 void BluetoothEmuDevice::DoState(PointerWrap& p)
@@ -96,8 +125,18 @@ void BluetoothEmuDevice::DoState(PointerWrap& p)
 
   Device::DoState(p);
   p.Do(m_controller_bd);
-  DoStateForMessage(GetEmulationKernel(), p, m_hci_endpoint);
-  DoStateForMessage(GetEmulationKernel(), p, m_acl_endpoint);
+  // each buffer waiting as its request's address, 0 for none, as DoStateForMessage wrote it
+  {
+    u32 hci_address = m_hci_endpoint ? m_hci_endpoint->ios_request.address : 0;
+    u32 acl_address;
+    p.Do(hci_address);
+    if (hci_address != 0)
+      HoldHciEndpoint(IOCtlVRequest{GetSystem(), hci_address});
+    acl_address = m_acl_endpoint ? m_acl_endpoint->ios_request.address : 0;
+    p.Do(acl_address);
+    if (acl_address != 0)
+      HoldAclEndpoint(IOCtlVRequest{GetSystem(), acl_address});
+  }
   p.Do(m_last_ticks);
   p.DoArray(m_packet_count);
   p.Do(m_scan_enable);
@@ -129,8 +168,8 @@ std::optional<IPCReply> BluetoothEmuDevice::Close(u32 fd)
   m_scan_enable = 0;
   m_last_ticks = 0;
   memset(m_packet_count, 0, sizeof(m_packet_count));
-  m_hci_endpoint.reset();
-  m_acl_endpoint.reset();
+  ReleaseHciEndpoint();
+  ReleaseAclEndpoint();
 
   return Device::Close(fd);
 }
@@ -173,7 +212,7 @@ std::optional<IPCReply> BluetoothEmuDevice::IOCtlV(const IOCtlVRequest& request)
     }
     case ACL_DATA_IN:  // We are given an ACL buffer to fill
     {
-      m_acl_endpoint = std::make_unique<USB::V0BulkMessage>(GetEmulationKernel(), request);
+      HoldAclEndpoint(request);
       DEBUG_LOG(IOS_WIIMOTE, "ACL_DATA_IN: %#010x", request.address);
       send_reply = false;
       break;
@@ -190,7 +229,7 @@ std::optional<IPCReply> BluetoothEmuDevice::IOCtlV(const IOCtlVRequest& request)
     const USB::V0IntrMessage ctrl{GetEmulationKernel(), request};
     if (ctrl.endpoint == HCI_EVENT)  // We are given a HCI buffer to fill
     {
-      m_hci_endpoint = std::make_unique<USB::V0IntrMessage>(GetEmulationKernel(), request);
+      HoldHciEndpoint(request);
       DEBUG_LOG(IOS_WIIMOTE, "HCI_EVENT: %#010x", request.address);
       send_reply = false;
     }
@@ -255,7 +294,7 @@ void BluetoothEmuDevice::SendACLPacket(const bdaddr_t& source, const u8* data, u
 
     GetEmulationKernel().EnqueueIPCReply(m_acl_endpoint->ios_request,
                                          sizeof(hci_acldata_hdr_t) + size);
-    m_acl_endpoint.reset();
+    ReleaseAclEndpoint();
   }
   else
   {
@@ -284,7 +323,7 @@ void BluetoothEmuDevice::AddEventToQueue(const SQueuedEvent& event)
 
       // Send a reply to indicate HCI buffer is filled
       GetEmulationKernel().EnqueueIPCReply(m_hci_endpoint->ios_request, event.size);
-      m_hci_endpoint.reset();
+      ReleaseHciEndpoint();
     }
     else  // push new one, pop oldest
     {
@@ -301,7 +340,7 @@ void BluetoothEmuDevice::AddEventToQueue(const SQueuedEvent& event)
 
       // Send a reply to indicate HCI buffer is filled
       GetEmulationKernel().EnqueueIPCReply(m_hci_endpoint->ios_request, queued_event.size);
-      m_hci_endpoint.reset();
+      ReleaseHciEndpoint();
       queued_events_pop_front(&m_event_queue);
     }
   }
@@ -328,7 +367,7 @@ void BluetoothEmuDevice::Update()
 
     // Send a reply to indicate HCI buffer is filled
     GetEmulationKernel().EnqueueIPCReply(m_hci_endpoint->ios_request, event.size);
-    m_hci_endpoint.reset();
+    ReleaseHciEndpoint();
     queued_events_pop_front(&m_event_queue);
   }
 
@@ -336,7 +375,7 @@ void BluetoothEmuDevice::Update()
   if (!m_acl_pool.IsEmpty() && m_acl_endpoint && queued_events_empty(&m_event_queue))
   {
     m_acl_pool.WriteToEndpoint(*m_acl_endpoint);
-    m_acl_endpoint.reset();
+    ReleaseAclEndpoint();
   }
 
   for (auto& wiimote : m_wiimotes)

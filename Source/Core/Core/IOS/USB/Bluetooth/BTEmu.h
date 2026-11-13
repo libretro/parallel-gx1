@@ -77,8 +77,16 @@ private:
   // this is used to trigger connecting via ACL
   u8 m_scan_enable = 0;
 
-  std::unique_ptr<USB::V0IntrMessage> m_hci_endpoint;
-  std::unique_ptr<USB::V0BulkMessage> m_acl_endpoint;
+  // The buffers the emulated software gave to fill, each made in place in its own storage when
+  // given, which a Wii Remote's every packet does: null while none is waiting.
+  alignas(USB::V0IntrMessage) u8 m_hci_storage[sizeof(USB::V0IntrMessage)];
+  alignas(USB::V0BulkMessage) u8 m_acl_storage[sizeof(USB::V0BulkMessage)];
+  USB::V0IntrMessage* m_hci_endpoint = nullptr;
+  USB::V0BulkMessage* m_acl_endpoint = nullptr;
+  void HoldHciEndpoint(const IOCtlVRequest& request);
+  void HoldAclEndpoint(const IOCtlVRequest& request);
+  void ReleaseHciEndpoint();
+  void ReleaseAclEndpoint();
   // made with the device: an event is a kilobyte, which a std::deque took from the heap one
   // event at a time
   queued_events_t m_event_queue;
