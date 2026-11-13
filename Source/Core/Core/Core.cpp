@@ -10,6 +10,7 @@
 #include <utility>
 #include <variant>
 
+#include <cstdarg>
 #include <cstdio>
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
@@ -134,10 +135,15 @@ std::string StopMessage(bool main_thread, std::string_view message)
                           message.data());
 }
 
-void DisplayMessage(std::string message, int)
+void DisplayMessage(const char* format, ...)
 {
   // Nothing is drawn over the game: the message goes to the log.
-  NOTICE_LOG(CORE, "%s", message.c_str());
+  char message[1024];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(message, sizeof(message), format, args);
+  va_end(args);
+  NOTICE_LOG(CORE, "%s", message);
 }
 
 bool IsRunning(Core::System& system)

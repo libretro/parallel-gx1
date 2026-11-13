@@ -697,8 +697,8 @@ void LibUSBBluetoothAdapter::HandleTransferError(libusb_transfer* transfer)
               LibusbUtils::ErrorWrap(transfer->status).GetName());
     if (!std::exchange(m_showed_failed_transfer, true))
     {
-      Core::DisplayMessage("Failed to send a command to the Bluetooth adapter.", 10000);
-      Core::DisplayMessage("It may not be compatible with passthrough mode.", 10000);
+      Core::DisplayMessage("Failed to send a command to the Bluetooth adapter.");
+      Core::DisplayMessage("It may not be compatible with passthrough mode.");
     }
   }
   else

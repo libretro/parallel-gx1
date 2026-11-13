@@ -23,7 +23,6 @@ u8 ReadHostMemory(u32 addr);
 void WriteHostMemory(u8 value, u32 addr);
 void DMAToDSP(u16* dst, u32 addr, u32 size);
 void DMAFromDSP(const u16* src, u32 addr, u32 size);
-void OSD_AddMessage(std::string str, u32 ms);
 bool OnThread();
 bool IsWiiHost();
 void InterruptRequest();

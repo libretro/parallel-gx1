@@ -163,7 +163,7 @@ void MagneticCardReader::Command_33_ReadData()
         MoveCard(R::READ_WRITE_HEAD);
         ReadCardFile();
 
-        Core::DisplayMessage("Inserted Magnetic Card", 4000);
+        Core::DisplayMessage("Inserted Magnetic Card");
       }
       break;
     }
@@ -284,7 +284,7 @@ void MagneticCardReader::Command_53_WriteData()
     std::memcpy(track_data->data(), payload + track_index * TRACK_SIZE, TRACK_SIZE);
   }
 
-  Core::DisplayMessage("Writing Magnetic Card", 4000);
+  Core::DisplayMessage("Writing Magnetic Card");
 
   WriteCardFile();
 
@@ -408,7 +408,7 @@ void MagneticCardReader::Command_A0_Clean()
     if (!IsCardLoaded())
     {
       NOTICE_LOG(SERIALINTERFACE_CARD, "Inserting cleaning card.");
-      Core::DisplayMessage("Inserting cleaning card", 4000);
+      Core::DisplayMessage("Inserting cleaning card");
       MoveCard(R::THERMAL_HEAD);
     }
     break;
@@ -937,7 +937,7 @@ void MagneticCardReader::EjectCard()
     ClearCardInMemory();
     MoveCard(R::ENTRY_SLOT);
 
-    Core::DisplayMessage("Ejected Magnetic Card", 4000);
+    Core::DisplayMessage("Ejected Magnetic Card");
   }
 }
 
@@ -959,7 +959,7 @@ void MagneticCardReader::DispenseCard()
   }
 
   NOTICE_LOG(SERIALINTERFACE_CARD, "Dispensing a new card.");
-  Core::DisplayMessage("Created Magnetic Card", 4000);
+  Core::DisplayMessage("Created Magnetic Card");
 
   // TODO: This behavior doesn't seem to match protocol dumps.
   MoveCard(R::DISPENSER_THERMAL);

@@ -46,9 +46,9 @@ void ModifySettingsButton::UpdateState()
         m_associated_settings[i] = !m_associated_settings[i];
 
         if (m_associated_settings[i])
-          Core::DisplayMessage(controls[i]->ui_name + ": on");
+          Core::DisplayMessage("%s: on", controls[i]->ui_name.c_str());
         else
-          Core::DisplayMessage(controls[i]->ui_name + ": off");
+          Core::DisplayMessage("%s: off", controls[i]->ui_name.c_str());
 
         m_threshold_exceeded[i] = true;
       }

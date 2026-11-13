@@ -269,7 +269,7 @@ void JitBaseBlockCache::Shutdown()
 void JitBaseBlockCache::Clear()
 {
 #if defined(_DEBUG) || defined(DEBUGFAST)
-  Core::DisplayMessage("Clearing code cache.", 3000);
+  Core::DisplayMessage("Clearing code cache.");
 #endif
   m_jit.js.fifoWriteAddresses.clear();
   m_jit.js.pairedQuantizeAddresses.clear();

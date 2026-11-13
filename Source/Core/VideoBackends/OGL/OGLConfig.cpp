@@ -777,17 +777,15 @@ bool PopulateConfig(GLContext* m_main_gl_context)
   g_Config.VerifyValidity();
   UpdateActiveConfig();
 
-  Core::DisplayMessage(StringFromFormat("Video Info: %s, %s, %s", g_ogl_config.gl_vendor,
-                                        g_ogl_config.gl_renderer, g_ogl_config.gl_version),
-                       5000);
+  Core::DisplayMessage("Video Info: %s, %s, %s", g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
+                       g_ogl_config.gl_version);
 
   if (!g_ogl_config.bSupportsGLBufferStorage && !g_ogl_config.bSupportsGLPinnedMemory)
   {
-    Core::DisplayMessage(m_main_gl_context->IsGLES() ?
-                             "Your OpenGL driver does not support EXT_buffer_storage." :
-                             "Your OpenGL driver does not support ARB_buffer_storage.",
-                         60000);
-    Core::DisplayMessage("This device's performance may be poor.", 60000);
+    Core::DisplayMessage("%s", m_main_gl_context->IsGLES() ?
+                                   "Your OpenGL driver does not support EXT_buffer_storage." :
+                                   "Your OpenGL driver does not support ARB_buffer_storage.");
+    Core::DisplayMessage("This device's performance may be poor.");
   }
 
   INFO_LOG(VIDEO, "Video Info: %s, %s, %s", g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,

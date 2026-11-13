@@ -174,12 +174,12 @@ void BluetoothRealDevice::TryToFillHCIEndpoint()
 
   if (GetSyncButtonState() == SyncButtonState::Pressed)
   {
-    Core::DisplayMessage("Scanning for Wii Remotes", 2000);
+    Core::DisplayMessage("Scanning for Wii Remotes");
     FakeSyncButtonPressedEvent(*m_hci_endpoint);
   }
   else if (GetSyncButtonState() == SyncButtonState::LongPressed)
   {
-    Core::DisplayMessage("Reset saved Wii Remote pairings", 2000);
+    Core::DisplayMessage("Reset saved Wii Remote pairings");
     FakeSyncButtonHeldEvent(*m_hci_endpoint);
   }
   else if (!m_fake_replies.empty())
@@ -326,7 +326,7 @@ void BluetoothRealDevice::DoState(PointerWrap& p)
   p.Do(passthrough_bluetooth);
   if (!passthrough_bluetooth && p.IsReadMode())
   {
-    Core::DisplayMessage("State needs Bluetooth passthrough to be disabled. Aborting load.", 4000);
+    Core::DisplayMessage("State needs Bluetooth passthrough to be disabled. Aborting load.");
     p.SetVerifyMode();
     return;
   }

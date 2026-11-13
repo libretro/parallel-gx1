@@ -148,20 +148,18 @@ void HiresTexture::Update()
     game_id_display += game_id;
   }
 
-  std::string message;
   if (g_ActiveConfig.bCacheHiresTextures)
   {
-    message = StringFromFormat("Preloading '%u' custom textures for '%s'",
-                               static_cast<unsigned>(s_hires_texture_cache.size()),
-                               game_id_display.c_str());
+    Core::DisplayMessage("Preloading '%u' custom textures for '%s'",
+                         static_cast<unsigned>(s_hires_texture_cache.size()),
+                         game_id_display.c_str());
   }
   else
   {
-    message = StringFromFormat("Found '%u' custom textures for '%s'",
-                               static_cast<unsigned>(s_hires_texture_id_to_arbmipmap.size()),
-                               game_id_display.c_str());
+    Core::DisplayMessage("Found '%u' custom textures for '%s'",
+                         static_cast<unsigned>(s_hires_texture_id_to_arbmipmap.size()),
+                         game_id_display.c_str());
   }
-  Core::DisplayMessage(message, 10000);
 }
 
 void HiresTexture::Clear()

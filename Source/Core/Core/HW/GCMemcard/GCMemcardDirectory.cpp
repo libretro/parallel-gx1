@@ -201,7 +201,7 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
 
   if (failed_loads_current_game > 0)
   {
-    Core::DisplayMessage("Warning: Save file(s) of the current game failed to load.", 10000);
+    Core::DisplayMessage("Warning: Save file(s) of the current game failed to load.");
   }
 
   m_dir1.FixChecksums();

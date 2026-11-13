@@ -72,9 +72,8 @@ void OH0::DoState(PointerWrap& p)
   {
     if (p.IsReadMode() && !m_devices.empty())
     {
-      Core::DisplayMessage("It is suggested that you unplug and replug all connected USB devices.",
-                           5000);
-      Core::DisplayMessage("If USB doesn't work properly, an emulation reset may be needed.", 5000);
+      Core::DisplayMessage("It is suggested that you unplug and replug all connected USB devices.");
+      Core::DisplayMessage("If USB doesn't work properly, an emulation reset may be needed.");
     }
     p.Do(m_insertion_hooks);
     p.Do(m_removal_hooks);

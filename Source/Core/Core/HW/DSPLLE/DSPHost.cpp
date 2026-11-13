@@ -49,11 +49,6 @@ void DMAFromDSP(const u16* src, u32 addr, u32 size)
   memory.CopyToEmuSwapped(addr, src, size);
 }
 
-void OSD_AddMessage(std::string str, u32 ms)
-{
-  Core::DisplayMessage(std::move(str), ms);
-}
-
 bool OnThread()
 {
   return Config::Get(Config::MAIN_DSP_THREAD);

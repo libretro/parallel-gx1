@@ -89,7 +89,7 @@ void BluetoothEmuDevice::DoState(PointerWrap& p)
   p.Do(passthrough_bluetooth);
   if (passthrough_bluetooth && p.IsReadMode())
   {
-    Core::DisplayMessage("State needs Bluetooth passthrough to be enabled. Aborting load.", 4000);
+    Core::DisplayMessage("State needs Bluetooth passthrough to be enabled. Aborting load.");
     p.SetVerifyMode();
     return;
   }

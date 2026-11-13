@@ -401,9 +401,9 @@ void DVDInterface::SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
 
     if (!blob.HasFastRandomAccessInBlock() && blob.GetBlockSize() > 0x200000)
     {
-      Core::DisplayMessage("You are running a disc image with a very large block size.", 60000);
-      Core::DisplayMessage("This will likely lead to performance problems.", 60000);
-      Core::DisplayMessage("You can use Dolphin's convert feature to reduce the block size.", 60000);
+      Core::DisplayMessage("You are running a disc image with a very large block size.");
+      Core::DisplayMessage("This will likely lead to performance problems.");
+      Core::DisplayMessage("You can use Dolphin's convert feature to reduce the block size.");
     }
   }
 

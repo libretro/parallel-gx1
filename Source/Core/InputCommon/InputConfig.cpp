@@ -80,9 +80,8 @@ bool InputConfig::LoadConfig()
       {
         std::string base;
         SplitPath(profile[n], nullptr, &base, nullptr);
-        Core::DisplayMessage("Loading game specific input profile '" + base + "' for device '" +
-                                 controller->GetName() + "'",
-                             6000);
+        Core::DisplayMessage("Loading game specific input profile '%s' for device '%s'",
+                             base.c_str(), controller->GetName().c_str());
 
         inifile.Load(profile[n]);
         config = *inifile.GetOrCreateSection("Profile");

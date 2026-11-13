@@ -989,7 +989,7 @@ static u32 NetDIMMBind(GuestSocket guest_socket, const GuestSocketAddress& guest
                          static_cast<unsigned>(ntohs(adjusted_ipv4port.port)));
     ERROR_LOG(AMMEDIABOARD, "NetDIMMBind: %s with error %d: %s", msg.c_str(), err,
               Common::DecodeNetworkError(err));
-    Core::DisplayMessage(msg);
+    Core::DisplayMessage("%s", msg.c_str());
   }
 
   return bind_result;

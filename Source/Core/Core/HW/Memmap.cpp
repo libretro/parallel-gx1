@@ -620,8 +620,7 @@ void MemoryManager::DoState(PointerWrap& p)
                current_fake_vmem_size, current_have_exram, current_exram_size))
   {
     Core::DisplayMessage("State is incompatible with current memory settings (MMU and/or memory "
-                         "overrides). Aborting load state.",
-                         3000);
+                         "overrides). Aborting load state.");
     p.SetVerifyMode();
     return;
   }

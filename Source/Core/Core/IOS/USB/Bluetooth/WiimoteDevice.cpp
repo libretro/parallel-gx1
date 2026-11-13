@@ -53,8 +53,6 @@ private:
   u8* m_buffer;
 };
 
-constexpr int CONNECTION_MESSAGE_TIME = 3000;
-
 WiimoteDevice::WiimoteDevice(BluetoothEmuDevice* host, bdaddr_t bd, unsigned int hid_source_number)
     : m_host(host), m_bd(bd),
       m_name(GetNumber() == WIIMOTE_BALANCE_BOARD ? "Nintendo RVL-WBC-01" : "Nintendo RVL-CNT-01")
@@ -218,8 +216,7 @@ void WiimoteDevice::Activate(bool connect)
   {
     SetBasebandState(BasebandState::RequestConnection);
 
-    Core::DisplayMessage(StringFromFormat("Wii Remote %u connected", GetNumber() + 1),
-                         CONNECTION_MESSAGE_TIME);
+    Core::DisplayMessage("Wii Remote %u connected", GetNumber() + 1);
   }
   else if (!connect && IsConnected())
   {
@@ -229,8 +226,7 @@ void WiimoteDevice::Activate(bool connect)
     // Not doing that doesn't seem to break anything.
     m_host->RemoteDisconnect(GetBD());
 
-    Core::DisplayMessage(StringFromFormat("Wii Remote %u disconnected", GetNumber() + 1),
-                         CONNECTION_MESSAGE_TIME);
+    Core::DisplayMessage("Wii Remote %u disconnected", GetNumber() + 1);
   }
 }
 
@@ -239,9 +235,7 @@ bool WiimoteDevice::EventConnectionRequest()
   if (!IsPageScanEnabled())
     return false;
 
-  Core::DisplayMessage(
-      StringFromFormat("Wii Remote %u connected from emulated software", GetNumber() + 1),
-      CONNECTION_MESSAGE_TIME);
+  Core::DisplayMessage("Wii Remote %u connected from emulated software", GetNumber() + 1);
 
   SetBasebandState(BasebandState::Complete);
 
@@ -268,9 +262,7 @@ void WiimoteDevice::EventDisconnect(u8 reason)
   // and display things like "Wii Remote %i disconnected due to inactivity!" etc.
   // FYI: It looks like reason is always 0x13 (User Ended Connection).
 
-  Core::DisplayMessage(
-      StringFromFormat("Wii Remote %u disconnected by emulated software", GetNumber() + 1),
-      CONNECTION_MESSAGE_TIME);
+  Core::DisplayMessage("Wii Remote %u disconnected by emulated software", GetNumber() + 1);
 
   Reset();
 }

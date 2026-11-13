@@ -251,9 +251,9 @@ void MemoryCard::FlushThread()
     if (do_exit)
       return;
 
-    Core::DisplayMessage(m_card_slot == ExpansionInterface::Slot::A ? "Wrote to Memory Card A" :
-                                                                      "Wrote to Memory Card B",
-                         4000);
+    Core::DisplayMessage("%s", m_card_slot == ExpansionInterface::Slot::A ?
+                                   "Wrote to Memory Card A" :
+                                   "Wrote to Memory Card B");
   }
 }
 

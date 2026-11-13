@@ -30,9 +30,8 @@ void DoState(Core::System& system, PointerWrap& p)
   p.Do(is_wii);
   if (is_wii != is_wii_currently)
   {
-    Core::DisplayMessage(
-        StringFromFormat("Cannot load a savestate created under %s mode in %s mode",
-                         is_wii ? "Wii" : "GC", is_wii_currently ? "Wii" : "GC"));
+    Core::DisplayMessage("Cannot load a savestate created under %s mode in %s mode",
+                         is_wii ? "Wii" : "GC", is_wii_currently ? "Wii" : "GC");
     p.SetMeasureMode();
     return;
   }
@@ -45,13 +44,13 @@ void DoState(Core::System& system, PointerWrap& p)
   p.Do(state_mem2_size);
   if (state_mem1_size != memory.GetRamSizeReal() || state_mem2_size != memory.GetExRamSizeReal())
   {
-    Core::DisplayMessage(StringFromFormat(
-        "Memory size mismatch!\n"
-        "Current | MEM1 %08X (%3uMB)    MEM2 %08X (%3uMB)\n"
-        "State   | MEM1 %08X (%3uMB)    MEM2 %08X (%3uMB)",
-        memory.GetRamSizeReal(), memory.GetRamSizeReal() / 0x100000U, memory.GetExRamSizeReal(),
-        memory.GetExRamSizeReal() / 0x100000U, state_mem1_size, state_mem1_size / 0x100000U,
-        state_mem2_size, state_mem2_size / 0x100000U));
+    Core::DisplayMessage("Memory size mismatch!\n"
+                         "Current | MEM1 %08X (%3uMB)    MEM2 %08X (%3uMB)\n"
+                         "State   | MEM1 %08X (%3uMB)    MEM2 %08X (%3uMB)",
+                         memory.GetRamSizeReal(), memory.GetRamSizeReal() / 0x100000U,
+                         memory.GetExRamSizeReal(), memory.GetExRamSizeReal() / 0x100000U,
+                         state_mem1_size, state_mem1_size / 0x100000U, state_mem2_size,
+                         state_mem2_size / 0x100000U);
     p.SetMeasureMode();
     return;
   }

@@ -78,9 +78,7 @@ void GeckoSockServer::GeckoConnectionWaiter(void*)
   if (!server_running.IsSet())
     return;
 
-  Core::DisplayMessage(
-      StringFromFormat("USBGecko: Listening on TCP port %u", static_cast<unsigned>(server_port)),
-      5000);
+  Core::DisplayMessage("USBGecko: Listening on TCP port %u", static_cast<unsigned>(server_port));
 
   while (server_running.IsSet())
   {
@@ -203,11 +201,11 @@ void CEXIGecko::ImmReadWrite(u32& _uData, u32 _uSize)
   switch (_uData >> 28)
   {
   case CMD_LED_OFF:
-    Core::DisplayMessage("USBGecko: No LEDs for you!", 3000);
+    Core::DisplayMessage("USBGecko: No LEDs for you!");
     break;
   case CMD_LED_ON:
-    Core::DisplayMessage("USBGecko: A piercing blue light is now shining in your general direction",
-                         3000);
+    Core::DisplayMessage(
+        "USBGecko: A piercing blue light is now shining in your general direction");
     break;
 
   case CMD_INIT:

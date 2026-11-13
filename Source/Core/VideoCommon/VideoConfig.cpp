@@ -198,8 +198,7 @@ void VideoConfig::VerifyValidity()
     if (!g_backend_info.bSupportsGeometryShaders)
     {
       Core::DisplayMessage(
-          "Stereoscopic 3D isn't supported by your GPU, support for OpenGL 3.2 is required.",
-          10000);
+          "Stereoscopic 3D isn't supported by your GPU, support for OpenGL 3.2 is required.");
       stereo_mode = StereoMode::Off;
     }
   }

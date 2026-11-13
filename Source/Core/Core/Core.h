@@ -146,10 +146,9 @@ void SetState(Core::System& system, State state, bool report_state_change = true
               bool override_achievement_restrictions = false);
 State GetState(Core::System& system);
 
-// This displays messages in a user-visible way.
-// Logs a message meant for the user; the core draws nothing over the game.
-void DisplayMessage(std::string message, int time_in_ms = 0);
-
+// Logs a message meant for the user, formatted as printf does; the core draws nothing over the
+// game.
+void DisplayMessage(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
 
 // Run a function on the CPU thread, asynchronously.
 void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function

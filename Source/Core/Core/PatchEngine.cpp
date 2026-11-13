@@ -178,14 +178,12 @@ void LoadPatches()
       std::ranges::count_if(s_on_frame, [](const Patch& patch) { return patch.enabled; });
   if (enabled_patch_count > 0)
   {
-    Core::DisplayMessage(
-        StringFromFormat("%" PRIu64 " game patch(es) enabled", (u64)enabled_patch_count));
+    Core::DisplayMessage("%" PRIu64 " game patch(es) enabled", (u64)enabled_patch_count);
   }
 
   const size_t enabled_cheat_count = ActionReplay::CountEnabledCodes() + Gecko::CountEnabledCodes();
   if (enabled_cheat_count > 0)
-    Core::DisplayMessage(
-        StringFromFormat("%" PRIu64 " cheat(s) enabled", (u64)enabled_cheat_count));
+    Core::DisplayMessage("%" PRIu64 " cheat(s) enabled", (u64)enabled_cheat_count);
 }
 
 static void ApplyPatches(const Core::CPUThreadGuard& guard, const std::vector<Patch>& patches)

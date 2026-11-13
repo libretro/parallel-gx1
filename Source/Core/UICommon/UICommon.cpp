@@ -188,7 +188,7 @@ bool TriggerSTMPowerEvent()
   if (!stm || !std::static_pointer_cast<IOS::HLE::STMEventHookDevice>(stm)->HasHookInstalled())
     return false;
 
-  Core::DisplayMessage("Shutting down", 30000);
+  Core::DisplayMessage("Shutting down");
   ios->GetSystem().GetProcessorInterface().PowerButton_Tap();
 
   return true;
