@@ -3,7 +3,7 @@
 
 #include "Core/HW/DSPHLE/UCodes/Zelda.h"
 
-#include <array>
+#include <string.h>
 
 #include "Common/BitField.h"
 #include "Common/ChunkFile.h"
@@ -168,10 +168,10 @@ void ZeldaUCode::DoState(PointerWrap& p)
   p.Do(m_mail_expected_cmd_mails);
 
   p.Do(m_sync_max_voice_id);
-  p.Do(m_sync_voice_skip_flags);
+  p.DoArray(m_sync_voice_skip_flags);
   p.Do(m_sync_flags_second_half);
 
-  p.Do(m_cmd_buffer);
+  p.DoArray(m_cmd_buffer);
   p.Do(m_read_offset);
   p.Do(m_write_offset);
   p.Do(m_pending_commands_count);
@@ -377,7 +377,8 @@ void ZeldaUCode::HandleMailLight(u32 mail)
 
     // No per-voice syncing in the light protocol.
     m_sync_max_voice_id = 0xFFFFFFFF;
-    m_sync_voice_skip_flags.fill(0xFFFF);
+    for (size_t i = 0; i < sizeof(m_sync_voice_skip_flags) / sizeof(u16); ++i)
+      m_sync_voice_skip_flags[i] = 0xFFFF;
     RenderAudio();
     m_dsphle->GetSystem().GetDSP().GenerateDSPInterruptFromDSPEmu(INT_DSP);
     break;
@@ -483,26 +484,22 @@ void ZeldaUCode::RunPendingCommands()
       auto& memory = m_dsphle->GetSystem().GetMemory();
       u32 address = Read32();
 
-      std::array<s16, 0x100> resampling_coeffs{};
-      memory.CopyFromEmuSwapped(resampling_coeffs.data(), address, sizeof(resampling_coeffs));
-      m_renderer.SetResamplingCoeffs(std::move(resampling_coeffs));
-
-      std::array<s16, 0x100> const_patterns{};
-      memory.CopyFromEmuSwapped(const_patterns.data(), address + 0x200, sizeof(const_patterns));
-      m_renderer.SetConstPatterns(std::move(const_patterns));
+      // a table that is not in emulated memory reads as zeros
+      memset(m_renderer.ResamplingCoeffs(), 0, 0x100 * sizeof(s16));
+      memory.CopyFromEmuSwapped(m_renderer.ResamplingCoeffs(), address, 0x100 * sizeof(s16));
+      memset(m_renderer.ConstPatterns(), 0, 0x100 * sizeof(s16));
+      memory.CopyFromEmuSwapped(m_renderer.ConstPatterns(), address + 0x200, 0x100 * sizeof(s16));
 
       // The sine table is only used for Dolby mixing
       // which the light protocol doesn't support.
       if ((m_flags & LIGHT_PROTOCOL) == 0)
       {
-        std::array<s16, 0x80> sine_table{};
-        memory.CopyFromEmuSwapped(sine_table.data(), address + 0x400, sizeof(sine_table));
-        m_renderer.SetSineTable(std::move(sine_table));
+        memset(m_renderer.SineTable(), 0, 0x80 * sizeof(s16));
+        memory.CopyFromEmuSwapped(m_renderer.SineTable(), address + 0x400, 0x80 * sizeof(s16));
       }
 
-      std::array<s16, 0x20> afc_coeffs{};
-      memory.CopyFromEmuSwapped(afc_coeffs.data(), Read32(), sizeof(afc_coeffs));
-      m_renderer.SetAfcCoeffs(std::move(afc_coeffs));
+      memset(m_renderer.AfcCoeffs(), 0, 0x20 * sizeof(s16));
+      memory.CopyFromEmuSwapped(m_renderer.AfcCoeffs(), Read32(), 0x20 * sizeof(s16));
 
       m_renderer.SetReverbPBBaseAddress(Read32());
 
@@ -639,8 +636,8 @@ void ZeldaUCode::RenderAudio()
       m_renderer.PrepareFrame();
 
     // TODO: Find out the actual hardware behavior for the case where
-    //       (m_rendering_voices_per_frame >> 4) >= m_sync_voice_skip_flags.size()
-    const u16 max_voices = static_cast<u16>(m_sync_voice_skip_flags.size() << 4);
+    //       (m_rendering_voices_per_frame >> 4) >= (sizeof(m_sync_voice_skip_flags) / sizeof(u16))
+    const u16 max_voices = static_cast<u16>((sizeof(m_sync_voice_skip_flags) / sizeof(u16)) << 4);
     const u16 number_of_voices =
         m_rendering_voices_per_frame < max_voices ? m_rendering_voices_per_frame : max_voices;
     while (m_rendering_curr_voice < number_of_voices)
@@ -1020,11 +1017,11 @@ void ZeldaAudioRenderer::PrepareFrame()
   if (m_prepared)
     return;
 
-  m_buf_front_left.fill(0);
-  m_buf_front_right.fill(0);
+  memset(m_buf_front_left, 0, sizeof(m_buf_front_left));
+  memset(m_buf_front_right, 0, sizeof(m_buf_front_right));
 
-  ApplyVolumeInPlace_1_15(&m_buf_back_left, 0x6784);
-  ApplyVolumeInPlace_1_15(&m_buf_back_right, 0x6784);
+  ApplyVolumeInPlace(m_buf_back_left, 0x6784, 1);
+  ApplyVolumeInPlace(m_buf_back_right, 0x6784, 1);
 
 // TODO: Back left and back right should have a filter applied to them,
 // then get mixed into front left and front right. In practice, TWW never
@@ -1036,18 +1033,15 @@ void ZeldaAudioRenderer::PrepareFrame()
 
   // Add reverb data from previous frame.
   ApplyReverb(false);
-  AddBuffersWithVolume(m_buf_front_left_reverb.data(), m_buf_back_left_reverb.data(), 0x50, 0x7FFF);
-  AddBuffersWithVolume(m_buf_front_right_reverb.data(), m_buf_back_left_reverb.data(), 0x50,
-                       0xB820);
-  AddBuffersWithVolume(m_buf_front_left_reverb.data(), m_buf_back_right_reverb.data() + 0x28, 0x28,
-                       0xB820);
-  AddBuffersWithVolume(m_buf_front_right_reverb.data(), m_buf_back_right_reverb.data() + 0x28, 0x28,
-                       0x7FFF);
-  m_buf_back_left_reverb.fill(0);
-  m_buf_back_right_reverb.fill(0);
+  AddBuffersWithVolume(m_buf_front_left_reverb, m_buf_back_left_reverb, 0x50, 0x7FFF);
+  AddBuffersWithVolume(m_buf_front_right_reverb, m_buf_back_left_reverb, 0x50, 0xB820);
+  AddBuffersWithVolume(m_buf_front_left_reverb, m_buf_back_right_reverb + 0x28, 0x28, 0xB820);
+  AddBuffersWithVolume(m_buf_front_right_reverb, m_buf_back_right_reverb + 0x28, 0x28, 0x7FFF);
+  memset(m_buf_back_left_reverb, 0, sizeof(m_buf_back_left_reverb));
+  memset(m_buf_back_right_reverb, 0, sizeof(m_buf_back_right_reverb));
 
   // Prepare patterns 2/3 - they are not constant unlike 0/1.
-  s16* pattern2 = m_const_patterns.data() + 2 * 0x40;
+  s16* pattern2 = m_const_patterns + 2 * 0x40;
   s32 yn2 = pattern2[0x40 - 2], yn1 = pattern2[0x40 - 1], v;
   for (int i = 0; i < 0x40; i += 2)
   {
@@ -1061,7 +1055,7 @@ void ZeldaAudioRenderer::PrepareFrame()
     yn1 = pattern2[i + 1];
     pattern2[i + 1] = v >> 16;
   }
-  s16* pattern3 = m_const_patterns.data() + 3 * 0x40;
+  s16* pattern3 = m_const_patterns + 3 * 0x40;
   yn2 = pattern3[0x40 - 2];
   yn1 = pattern3[0x40 - 1];
   s16 acc = yn1;
@@ -1090,11 +1084,11 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
       &m_buf_front_left_reverb,
       &m_buf_front_right_reverb,
   };
-  std::array<s16, 8>* last8_samples_buffers[4] = {
-      &m_buf_unk0_reverb_last8,
-      &m_buf_unk1_reverb_last8,
-      &m_buf_front_left_reverb_last8,
-      &m_buf_front_right_reverb_last8,
+  s16* last8_samples_buffers[4] = {
+      m_buf_unk0_reverb_last8,
+      m_buf_unk1_reverb_last8,
+      m_buf_front_left_reverb_last8,
+      m_buf_front_right_reverb_last8,
   };
 
   auto& memory = m_system.GetMemory();
@@ -1115,14 +1109,14 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
     {
       // 8 more samples because of the filter order. The first 8 samples
       // are the last 8 samples of the previous frame.
-      std::array<s16, 0x58> buffer;
+      s16 buffer[0x58];
       for (u16 i = 0; i < 8; ++i)
-        buffer[i] = (*last8_samples_buffers[rpb_idx])[i];
+        buffer[i] = last8_samples_buffers[rpb_idx][i];
 
       memory.CopyFromEmuSwapped(&buffer[8], mram_addr, 0x50 * sizeof(s16));
 
       for (u16 i = 0; i < 8; ++i)
-        (*last8_samples_buffers[rpb_idx])[i] = buffer[0x50 + i];
+        last8_samples_buffers[rpb_idx][i] = buffer[0x50 + i];
 
       auto ApplyFilter = [&] {
         // Filter the buffer using provided coefficients.
@@ -1154,7 +1148,7 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
 #endif
           continue;
         }
-        AddBuffersWithVolume(dest_buffer->data(), buffer.data(), 0x50, dest.volume);
+        AddBuffersWithVolume(*dest_buffer, buffer, 0x50, dest.volume);
       }
 
       // LSB not set, bit 1 set -> post-filtering.
@@ -1169,7 +1163,7 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
       MixingBuffer* buffer = reverb_buffers[rpb_idx];
 
       // Upload the reverb data to RAM.
-      memory.CopyToEmuSwapped(mram_addr, buffer->data(), sizeof(*buffer));
+      memory.CopyToEmuSwapped(mram_addr, *buffer, sizeof(*buffer));
 
       // a ring of no frames stays on its first frame instead of dividing by zero
       mram_buffer_idx =
@@ -1361,8 +1355,8 @@ void ZeldaAudioRenderer::AddVoice(u16 voice_id)
     };
     for (const auto& buffer : buffers)
     {
-      AddBuffersWithVolumeRamp(buffer.buffer, input_samples, buffer.volume << 16,
-                               (buffer.volume_delta << 16) / (s32)buffer.buffer->size());
+      AddBuffersWithVolumeRamp(*buffer.buffer, input_samples, buffer.volume << 16,
+                               (buffer.volume_delta << 16) / MIXING_BUFFER_SIZE);
     }
 
     vpb.dolby_volume_current = vpb.dolby_volume_target;
@@ -1397,7 +1391,7 @@ void ZeldaAudioRenderer::AddVoice(u16 voice_id)
       else
         volume_delta = vpb.channels[i].target_volume - vpb.channels[i].current_volume;
 
-      s32 volume_step = (volume_delta << 16) / (s32)input_samples.size();  // In 1.31 format.
+      s32 volume_step = (volume_delta << 16) / MIXING_BUFFER_SIZE;  // In 1.31 format.
 
       // TODO: The last value of each channel structure is used to
       // determine whether a channel should be skipped or not. Not
@@ -1415,7 +1409,7 @@ void ZeldaAudioRenderer::AddVoice(u16 voice_id)
         continue;
       }
 
-      s32 new_volume = AddBuffersWithVolumeRamp(dst_buffer, input_samples,
+      s32 new_volume = AddBuffersWithVolumeRamp(*dst_buffer, input_samples,
                                                 vpb.channels[i].current_volume << 16, volume_step);
       vpb.channels[i].current_volume = new_volume >> 16;
     }
@@ -1433,12 +1427,12 @@ void ZeldaAudioRenderer::FinalizeFrame()
 {
   // TODO: Dolby mixing.
 
-  ApplyVolumeInPlace_4_12(&m_buf_front_left, m_output_volume);
-  ApplyVolumeInPlace_4_12(&m_buf_front_right, m_output_volume);
+  ApplyVolumeInPlace(m_buf_front_left, m_output_volume, 4);
+  ApplyVolumeInPlace(m_buf_front_right, m_output_volume, 4);
 
   auto& memory = m_system.GetMemory();
-  memory.CopyToEmuSwapped(m_output_lbuf_addr, m_buf_front_left.data(), sizeof(m_buf_front_left));
-  memory.CopyToEmuSwapped(m_output_rbuf_addr, m_buf_front_right.data(), sizeof(m_buf_front_right));
+  memory.CopyToEmuSwapped(m_output_lbuf_addr, m_buf_front_left, sizeof(m_buf_front_left));
+  memory.CopyToEmuSwapped(m_output_rbuf_addr, m_buf_front_right, sizeof(m_buf_front_right));
   m_output_lbuf_addr += sizeof(m_buf_front_left);
   m_output_rbuf_addr += sizeof(m_buf_front_right);
 
@@ -1496,13 +1490,14 @@ void ZeldaAudioRenderer::LoadInputSamples(MixingBuffer* buffer, VPB* vpb)
   // Plus we need an extra four samples at the start to hold the last four
   // samples from the previous frame.
 
-  std::array<s16, 4 + 0x500 + 0x10> raw_input_samples;
+  s16 raw_input_samples[4 + 0x500 + 0x10];
   for (size_t i = 0; i < 4; ++i)
     raw_input_samples[i] = vpb->resample_buffer[i];
 
   if (vpb->use_constant_sample)
   {
-    buffer->fill(vpb->constant_sample);
+    for (int i = 0; i < MIXING_BUFFER_SIZE; ++i)
+      (*buffer)[i] = vpb->constant_sample;
     return;
   }
 
@@ -1573,12 +1568,12 @@ void ZeldaAudioRenderer::LoadInputSamples(MixingBuffer* buffer, VPB* vpb)
       break;
     }
     u16 pattern_offset = pattern_info.idx * PATTERN_SIZE;
-    s16* pattern = m_const_patterns.data() + pattern_offset;
+    s16* pattern = m_const_patterns + pattern_offset;
 
     u32 pos = vpb->current_pos_frac << 6;   // log2(PATTERN_SIZE)
     u32 step = vpb->resampling_ratio << 5;  // FIXME: ucode 24B22038 shifts by 6 (?)
 
-    for (size_t i = 0; i < buffer->size(); ++i)
+    for (int i = 0; i < MIXING_BUFFER_SIZE; ++i)
     {
       (*buffer)[i] = pattern[pos >> 16];
       pos = (pos + step) % (PATTERN_SIZE << 16);
@@ -1591,30 +1586,30 @@ void ZeldaAudioRenderer::LoadInputSamples(MixingBuffer* buffer, VPB* vpb)
   }
 
   case VPB::SRC_PCM8_FROM_ARAM:
-    DownloadPCMSamplesFromARAM<s8>(raw_input_samples.data() + 4, vpb, NeededRawSamplesCount(*vpb));
-    Resample(vpb, raw_input_samples.data(), buffer);
+    DownloadPCMSamplesFromARAM<s8>(raw_input_samples + 4, vpb, NeededRawSamplesCount(*vpb));
+    Resample(vpb, raw_input_samples, buffer);
     break;
 
   case VPB::SRC_AFC_HQ_FROM_ARAM:
   case VPB::SRC_AFC_LQ_FROM_ARAM:
-    DownloadAFCSamplesFromARAM(raw_input_samples.data() + 4, vpb, NeededRawSamplesCount(*vpb));
-    Resample(vpb, raw_input_samples.data(), buffer);
+    DownloadAFCSamplesFromARAM(raw_input_samples + 4, vpb, NeededRawSamplesCount(*vpb));
+    Resample(vpb, raw_input_samples, buffer);
     break;
 
   case VPB::SRC_PCM16_FROM_ARAM:
-    DownloadPCMSamplesFromARAM<s16>(raw_input_samples.data() + 4, vpb, NeededRawSamplesCount(*vpb));
-    Resample(vpb, raw_input_samples.data(), buffer);
+    DownloadPCMSamplesFromARAM<s16>(raw_input_samples + 4, vpb, NeededRawSamplesCount(*vpb));
+    Resample(vpb, raw_input_samples, buffer);
     break;
 
   case VPB::SRC_PCM16_FROM_MRAM:
-    DownloadRawSamplesFromMRAM(raw_input_samples.data() + 4, vpb, NeededRawSamplesCount(*vpb));
-    Resample(vpb, raw_input_samples.data(), buffer);
+    DownloadRawSamplesFromMRAM(raw_input_samples + 4, vpb, NeededRawSamplesCount(*vpb));
+    Resample(vpb, raw_input_samples, buffer);
     break;
 
   default:
     PanicAlert("Using an unknown/unimplemented sample source: %04x",
                (unsigned)vpb->samples_source_type);
-    buffer->fill(0);
+    memset(*buffer, 0, sizeof(*buffer));
     return;
   }
 }
@@ -1666,7 +1661,7 @@ void ZeldaAudioRenderer::Resample(VPB* vpb, const s16* src, MixingBuffer* dst)
 
   for (u32 i = 0; i < 4; ++i)
     vpb->resample_buffer[i] = src[(pos >> 12) + i];
-  vpb->constant_sample = (*dst)[dst->size() - 1];
+  vpb->constant_sample = (*dst)[MIXING_BUFFER_SIZE - 1];
   vpb->current_pos_frac = pos & 0xFFF;
 }
 
@@ -1990,33 +1985,33 @@ void ZeldaAudioRenderer::DoState(PointerWrap& p)
   p.Do(m_output_rbuf_addr);
   p.Do(m_output_volume);
 
-  p.Do(m_buf_front_left);
-  p.Do(m_buf_front_right);
-  p.Do(m_buf_back_left);
-  p.Do(m_buf_back_right);
-  p.Do(m_buf_front_left_reverb);
-  p.Do(m_buf_front_right_reverb);
-  p.Do(m_buf_back_left_reverb);
-  p.Do(m_buf_back_right_reverb);
-  p.Do(m_buf_unk0_reverb);
-  p.Do(m_buf_unk1_reverb);
-  p.Do(m_buf_unk0);
-  p.Do(m_buf_unk1);
-  p.Do(m_buf_unk2);
+  p.DoArray(m_buf_front_left);
+  p.DoArray(m_buf_front_right);
+  p.DoArray(m_buf_back_left);
+  p.DoArray(m_buf_back_right);
+  p.DoArray(m_buf_front_left_reverb);
+  p.DoArray(m_buf_front_right_reverb);
+  p.DoArray(m_buf_back_left_reverb);
+  p.DoArray(m_buf_back_right_reverb);
+  p.DoArray(m_buf_unk0_reverb);
+  p.DoArray(m_buf_unk1_reverb);
+  p.DoArray(m_buf_unk0);
+  p.DoArray(m_buf_unk1);
+  p.DoArray(m_buf_unk2);
 
-  p.Do(m_resampling_coeffs);
-  p.Do(m_const_patterns);
-  p.Do(m_sine_table);
-  p.Do(m_afc_coeffs);
+  p.DoArray(m_resampling_coeffs);
+  p.DoArray(m_const_patterns);
+  p.DoArray(m_sine_table);
+  p.DoArray(m_afc_coeffs);
 
   p.Do(m_aram_base_addr);
   p.Do(m_vpb_base_addr);
   p.Do(m_reverb_pb_base_addr);
 
-  p.Do(m_reverb_pb_frames_count);
-  p.Do(m_buf_unk0_reverb_last8);
-  p.Do(m_buf_unk1_reverb_last8);
-  p.Do(m_buf_front_left_reverb_last8);
-  p.Do(m_buf_front_right_reverb_last8);
+  p.DoArray(m_reverb_pb_frames_count);
+  p.DoArray(m_buf_unk0_reverb_last8);
+  p.DoArray(m_buf_unk1_reverb_last8);
+  p.DoArray(m_buf_front_left_reverb_last8);
+  p.DoArray(m_buf_front_right_reverb_last8);
 }
 }  // namespace DSP::HLE

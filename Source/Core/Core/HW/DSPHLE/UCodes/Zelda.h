@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/CommonTypes.h"
 #include "Core/HW/DSPHLE/UCodes/UCodes.h"
 
@@ -32,10 +30,11 @@ public:
   void FinalizeFrame();
 
   void SetFlags(u32 flags) { m_flags = flags; }
-  void SetSineTable(std::array<s16, 0x80>&& sine_table) { m_sine_table = sine_table; }
-  void SetConstPatterns(std::array<s16, 0x100>&& patterns) { m_const_patterns = patterns; }
-  void SetResamplingCoeffs(std::array<s16, 0x100>&& coeffs) { m_resampling_coeffs = coeffs; }
-  void SetAfcCoeffs(std::array<s16, 0x20>&& coeffs) { m_afc_coeffs = coeffs; }
+  // the tables, which the setup command copies in from emulated memory
+  s16* SineTable() { return m_sine_table; }
+  s16* ConstPatterns() { return m_const_patterns; }
+  s16* ResamplingCoeffs() { return m_resampling_coeffs; }
+  s16* AfcCoeffs() { return m_afc_coeffs; }
   void SetVPBBaseAddress(u32 addr) { m_vpb_base_addr = addr; }
   void SetReverbPBBaseAddress(u32 addr) { m_reverb_pb_base_addr = addr; }
   void SetOutputVolume(u16 volume) { m_output_volume = volume; }
@@ -54,26 +53,16 @@ private:
 
   // Apply volume to a buffer. The volume is a fixed point integer, usually
   // 1.15 or 4.12 in the DAC UCode.
-  template <size_t N, size_t B>
-  static void ApplyVolumeInPlace(std::array<s16, N>* buf, u16 vol)
+  // B is the number of integer bits of the volume
+  static void ApplyVolumeInPlace(s16* buf, u16 vol, int B)
   {
-    for (size_t i = 0; i < N; ++i)
+    for (int i = 0; i < MIXING_BUFFER_SIZE; ++i)
     {
-      s32 tmp = (u32)(*buf)[i] * (u32)vol;
+      s32 tmp = (u32)buf[i] * (u32)vol;
       tmp >>= 16 - B;
 
-      (*buf)[i] = (s16)SaturateS16(tmp);
+      buf[i] = (s16)SaturateS16(tmp);
     }
-  }
-  template <size_t N>
-  void ApplyVolumeInPlace_1_15(std::array<s16, N>* buf, u16 vol)
-  {
-    ApplyVolumeInPlace<N, 1>(buf, vol);
-  }
-  template <size_t N>
-  void ApplyVolumeInPlace_4_12(std::array<s16, N>* buf, u16 vol)
-  {
-    ApplyVolumeInPlace<N, 4>(buf, vol);
   }
 
   // Mixes two buffers together while applying a volume to one of them. The
@@ -81,24 +70,21 @@ private:
   //
   // Note: On a real GC, the stepping happens in 32 steps instead. But hey,
   // we can do better here with very low risk. Why not? :)
-  template <size_t N>
-  static s32 AddBuffersWithVolumeRamp(std::array<s16, N>* dst, const std::array<s16, N>& src,
-                                      s32 vol, s32 step)
+  static s32 AddBuffersWithVolumeRamp(s16* dst, const s16* src, s32 vol, s32 step)
   {
     if (!vol && !step)
       return vol;
 
-    for (size_t i = 0; i < N; ++i)
+    for (int i = 0; i < MIXING_BUFFER_SIZE; ++i)
     {
-      (*dst)[i] += ((vol >> 16) * src[i]) >> 16;
+      dst[i] += ((vol >> 16) * src[i]) >> 16;
       vol += step;
     }
 
     return vol;
   }
 
-  // Does not use std::array because it needs to be able to process partial
-  // buffers. Volume is in 1.15 format.
+  // Can process partial buffers. Volume is in 1.15 format.
   static void AddBuffersWithVolume(s16* dst, const s16* src, size_t count, u16 vol)
   {
     while (count--)
@@ -119,7 +105,11 @@ private:
   u16 m_output_volume = 0;
 
   // Mixing buffers.
-  typedef std::array<s16, 0x50> MixingBuffer;
+  enum
+  {
+    MIXING_BUFFER_SIZE = 0x50
+  };
+  typedef s16 MixingBuffer[MIXING_BUFFER_SIZE];
   MixingBuffer m_buf_front_left{};
   MixingBuffer m_buf_front_right{};
   MixingBuffer m_buf_back_left{};
@@ -145,10 +135,10 @@ private:
 
   // Sine table transferred from MRAM. Contains sin(x) values for x in
   // [0.0;pi/4] (sin(x) in [1.0;0.0]), in 1.15 fixed format.
-  std::array<s16, 0x80> m_sine_table{};
+  s16 m_sine_table[0x80]{};
 
   // Const patterns used for some voice samples source. 4 x 0x40 samples.
-  std::array<s16, 0x100> m_const_patterns{};
+  s16 m_const_patterns[0x100]{};
 
   // Fills up a buffer with the input samples for a voice, represented by its
   // VPB.
@@ -163,7 +153,7 @@ private:
   void Resample(VPB* vpb, const s16* src, MixingBuffer* dst);
 
   // Coefficients used for resampling.
-  std::array<s16, 0x100> m_resampling_coeffs{};
+  s16 m_resampling_coeffs[0x100]{};
 
   // On the Wii, base address of the MRAM or ExRAM region replacing ARAM.
   u32 m_aram_base_addr = 0;
@@ -177,7 +167,7 @@ private:
   // and other parameters appropriately.
   void DownloadAFCSamplesFromARAM(s16* dst, VPB* vpb, u16 requested_samples_count);
   void DecodeAFC(VPB* vpb, s16* dst, size_t block_count);
-  std::array<s16, 0x20> m_afc_coeffs{};
+  s16 m_afc_coeffs[0x20]{};
 
   // Downloads samples from MRAM while handling appropriate length / looping
   // behavior.
@@ -190,11 +180,11 @@ private:
   // per-buffer parameters. Is called twice: once before frame rendering and
   // once after.
   void ApplyReverb(bool post_rendering);
-  std::array<u16, 4> m_reverb_pb_frames_count{};
-  std::array<s16, 8> m_buf_unk0_reverb_last8{};
-  std::array<s16, 8> m_buf_unk1_reverb_last8{};
-  std::array<s16, 8> m_buf_front_left_reverb_last8{};
-  std::array<s16, 8> m_buf_front_right_reverb_last8{};
+  u16 m_reverb_pb_frames_count[4]{};
+  s16 m_buf_unk0_reverb_last8[8]{};
+  s16 m_buf_unk1_reverb_last8[8]{};
+  s16 m_buf_front_left_reverb_last8[8]{};
+  s16 m_buf_front_right_reverb_last8[8]{};
   u32 m_reverb_pb_base_addr = 0;
 
   Core::System& m_system;
@@ -247,13 +237,13 @@ private:
   // these sync mails contain 16 bit values that are used as bitfields to
   // control voice skipping on a voice per voice level.
   u32 m_sync_max_voice_id = 0;
-  std::array<u16, 256> m_sync_voice_skip_flags{};
+  u16 m_sync_voice_skip_flags[256]{};
   bool m_sync_flags_second_half = false;
 
   // Command buffer (circular queue with r/w indices). Filled by HandleMail
   // when the state machine is in WRITING_CMD state. Commands get executed
   // when entering WAITING state and we are not rendering audio.
-  std::array<u32, 64> m_cmd_buffer{};
+  u32 m_cmd_buffer[64]{};
   u32 m_read_offset = 0;
   u32 m_write_offset = 0;
   u32 m_pending_commands_count = 0;
