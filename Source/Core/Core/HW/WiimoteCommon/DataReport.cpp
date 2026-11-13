@@ -153,7 +153,7 @@ void DataReportManipulator::SetAccelData(const AccelData& new_accel)
     CoreData core = Common::BitCastPtr<CoreData>(data_ptr);
     core.acc_bits = (new_accel.value.x >> 0) & 0b11;
     core.acc_bits2 = (new_accel.value.y >> 1) & 0x1;
-    core.acc_bits2 |= (new_accel.value.z & 0xb10);
+    core.acc_bits2 |= (new_accel.value.z & 0b10);
     Common::BitCastPtr<CoreData>(data_ptr) = core;
     break;
   }
