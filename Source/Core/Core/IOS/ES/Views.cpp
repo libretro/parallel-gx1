@@ -125,6 +125,10 @@ IPCReply ESDevice::GetTicketViews(const IOCtlVRequest& request)
 ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* ticket_size,
                                      std::optional<u8> desired_version) const
 {
+  // a view that is not in the emulated software's memory
+  if (!ticket_view)
+    return ES_EINVAL;
+
   const u64 title_id = Common::swap64(&ticket_view[offsetof(ES::TicketView, title_id)]);
   const u64 ticket_id = Common::swap64(&ticket_view[offsetof(ES::TicketView, ticket_id)]);
   const u8 view_version = ticket_view[offsetof(ES::TicketView, version)];
@@ -165,6 +169,9 @@ ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* tic
     return ES_EACCES;
   }
 
+  // the ticket fits the buffer the software gave its size of
+  if (ticket_size && ticket_bytes_size > *ticket_size)
+    return ES_EINVAL;
   std::memcpy(ticket, ticket_bytes, ticket_bytes_size);
   return IPC_SUCCESS;
 }
@@ -180,9 +187,14 @@ IPCReply ESDevice::GetV0TicketFromView(const IOCtlVRequest& request)
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
+  // a buffer for the ticket that is not in emulated memory, which the core would take for a
+  // request for its size
+  u8* const ticket = memory.GetPointerForRange(request.io_vectors[0].address, sizeof(ES::Ticket));
+  if (!ticket)
+    return IPCReply(ES_EINVAL);
   return IPCReply(m_core.GetTicketFromView(
-      memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::TicketView)),
-      memory.GetPointerForRange(request.io_vectors[0].address, sizeof(ES::Ticket)), nullptr, 0));
+      memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::TicketView)), ticket,
+      nullptr, 0));
 }
 
 IPCReply ESDevice::GetTicketSizeFromView(const IOCtlVRequest& request)
@@ -220,10 +232,14 @@ IPCReply ESDevice::GetTicketFromView(const IOCtlVRequest& request)
   if (ticket_size != request.io_vectors[0].size)
     return IPCReply(ES_EINVAL);
 
+  // a buffer for the ticket that is not in emulated memory, which the core would take for a
+  // request for its size
+  u8* const ticket = memory.GetPointerForRange(request.io_vectors[0].address, ticket_size);
+  if (!ticket)
+    return IPCReply(ES_EINVAL);
   return IPCReply(m_core.GetTicketFromView(
-      memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::TicketView)),
-      memory.GetPointerForRange(request.io_vectors[0].address, ticket_size), &ticket_size,
-      std::nullopt));
+      memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::TicketView)), ticket,
+      &ticket_size, std::nullopt));
 }
 
 IPCReply ESDevice::GetTMDViewSize(const IOCtlVRequest& request)
