@@ -33,11 +33,6 @@ protected:
   void OnRawReadEndException() override {}
   void OnRawWriteEndException() override {}
   void OnSampleReadEndException() override;
-  u8 ReadMemory(u32 address) override;
-  void WriteMemory(u32 address, u8 value) override;
-
-private:
-  DSPManager& m_dsp;
 };
 
 class AESndUCode final : public UCodeInterface

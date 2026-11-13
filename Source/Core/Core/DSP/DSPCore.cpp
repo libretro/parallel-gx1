@@ -20,6 +20,8 @@
 #include "Core/DSP/DSPHost.h"
 #include "Core/DSP/Interpreter/DSPInterpreter.h"
 #include "Core/DSP/Jit/DSPEmitterBase.h"
+#include "Core/HW/DSP.h"
+#include "Core/System.h"
 
 namespace DSP
 {
@@ -103,11 +105,9 @@ static bool VerifyRoms(const SDSP& dsp)
 class LLEAccelerator final : public Accelerator
 {
 public:
-  explicit LLEAccelerator(SDSP& dsp) : m_dsp{dsp} {}
+  LLEAccelerator(SDSP& dsp, DSPManager& aram) : Accelerator(aram), m_dsp{dsp} {}
 
 protected:
-  u8 ReadMemory(u32 address) override { return Host::ReadHostMemory(address); }
-  void WriteMemory(u32 address, u8 value) override { Host::WriteHostMemory(value, address); }
   void OnRawReadEndException() override
   {
     m_dsp.SetException(ExceptionType::AcceleratorRawReadOverflow);
@@ -134,7 +134,8 @@ SDSP::~SDSP() = default;
 bool SDSP::Initialize(const DSPInitOptions& opts)
 {
   m_step_counter = 0;
-  m_accelerator = std::make_unique<LLEAccelerator>(*this);
+  /* the ARAM Host::ReadHostMemory and WriteHostMemory reach */
+  m_accelerator = std::make_unique<LLEAccelerator>(*this, Core::System::GetInstance().GetDSP());
 
   irom = static_cast<u16*>(Common::AllocateMemoryPages(DSP_IROM_BYTE_SIZE));
   iram = static_cast<u16*>(Common::AllocateMemoryPages(DSP_IRAM_BYTE_SIZE));

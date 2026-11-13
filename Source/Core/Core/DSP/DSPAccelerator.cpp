@@ -8,9 +8,20 @@
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
+#include "Core/HW/DSP.h"
 
 namespace DSP
 {
+u8 Accelerator::ReadMemory(u32 address)
+{
+  return m_aram.ReadARAM(address);
+}
+
+void Accelerator::WriteMemory(u32 address, u8 value)
+{
+  m_aram.WriteARAM(value, address);
+}
+
 u16 Accelerator::GetCurrentSample()
 {
   u16 val = 0;

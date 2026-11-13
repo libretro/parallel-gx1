@@ -237,7 +237,7 @@ void AESndUCode::DMAOutParameterBlock()
   memory.Write_U32(m_parameter_block.flags, m_parameter_block_addr + 40);
 }
 
-AESndAccelerator::AESndAccelerator(DSPManager& dsp) : m_dsp(dsp)
+AESndAccelerator::AESndAccelerator(DSPManager& dsp) : Accelerator(dsp)
 {
 }
 
@@ -249,16 +249,6 @@ void AESndAccelerator::OnSampleReadEndException()
   SetYn1(GetYn1());
   SetYn2(GetYn2());
   SetPredScale(GetPredScale());
-}
-
-u8 AESndAccelerator::ReadMemory(u32 address)
-{
-  return m_dsp.ReadARAM(address);
-}
-
-void AESndAccelerator::WriteMemory(u32 address, u8 value)
-{
-  m_dsp.WriteARAM(value, address);
 }
 
 static constexpr std::array<s16, 16> ACCELERATOR_COEFS = {};  // all zeros

@@ -10,9 +10,13 @@ class PointerWrap;
 
 namespace DSP
 {
+class DSPManager;
+
 class Accelerator
 {
 public:
+  /* @aram: where every accelerator reads and writes, LLE's and the HLE microcodes' alike */
+  explicit Accelerator(DSPManager& aram) : m_aram(aram) {}
   virtual ~Accelerator() = default;
 
   u16 ReadSample(const s16* coefs);
@@ -45,9 +49,12 @@ protected:
   virtual void OnRawReadEndException() = 0;
   virtual void OnRawWriteEndException() = 0;
   virtual void OnSampleReadEndException() = 0;
-  virtual u8 ReadMemory(u32 address) = 0;
-  virtual void WriteMemory(u32 address, u8 value) = 0;
+  /* ARAM, called directly: a sample read is not a call through the vtable */
+  u8 ReadMemory(u32 address);
+  void WriteMemory(u32 address, u8 value);
   u16 GetCurrentSample();
+
+  DSPManager& m_aram;
 
   // DSP accelerator registers.
   u32 m_start_address = 0;
