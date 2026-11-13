@@ -4,7 +4,6 @@
 #include "Core/Core.h"
 
 #include <algorithm>
-#include <deque>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -116,9 +115,11 @@ struct HostJob
   std::function<void(Core::System&)> job;
   bool run_after_stop;
 };
-// Pushed from any thread; the host thread moves them in order into s_host_jobs_ready.
+// Pushed from any thread; the host thread moves them in order onto s_host_jobs_ready, a list
+// through their links, oldest first (s_host_jobs_last its end).
 static mpsc_stack_t s_host_jobs_queue;
-static std::deque<std::unique_ptr<HostJob>> s_host_jobs_ready;
+static mpsc_stack_node_t* s_host_jobs_ready;
+static mpsc_stack_node_t* s_host_jobs_last;
 
 static thread_local bool tls_is_cpu_thread = false;
 static thread_local bool tls_is_gpu_thread = false;
@@ -920,28 +921,36 @@ void HostDispatchJobs(Core::System& system)
   for (;;)
   {
     // The stack gives the newest first; append them oldest first behind what is left.
-    const size_t at = s_host_jobs_ready.size();
-    for (mpsc_stack_node_t* node = mpsc_stack_drain(&s_host_jobs_queue); node;)
+    mpsc_stack_node_t* const drained = mpsc_stack_reverse(mpsc_stack_drain(&s_host_jobs_queue));
+    if (drained)
     {
-      mpsc_stack_node_t* next = node->next;
-      s_host_jobs_ready.emplace(s_host_jobs_ready.begin() + at,
-                                reinterpret_cast<HostJob*>(node));
-      node = next;
+      if (s_host_jobs_last)
+        s_host_jobs_last->next = drained;
+      else
+        s_host_jobs_ready = drained;
+      for (s_host_jobs_last = drained; s_host_jobs_last->next;)
+        s_host_jobs_last = s_host_jobs_last->next;
     }
-    if (s_host_jobs_ready.empty())
+    if (!s_host_jobs_ready)
       return;
 
-    std::unique_ptr<HostJob> job = std::move(s_host_jobs_ready.front());
-    s_host_jobs_ready.pop_front();
+    HostJob* const job = reinterpret_cast<HostJob*>(s_host_jobs_ready);
+    s_host_jobs_ready = s_host_jobs_ready->next;
+    if (!s_host_jobs_ready)
+      s_host_jobs_last = nullptr;
 
     if (!job->run_after_stop)
     {
       const State state = LoadState();
       if (state == State::Stopping || state == State::Uninitialized)
+      {
+        delete job;
         continue;
+      }
     }
 
     job->job(system);
+    delete job;
   }
 }
 
