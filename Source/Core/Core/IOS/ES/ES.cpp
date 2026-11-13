@@ -1027,7 +1027,8 @@ IPCReply ESDevice::SetUpStreamKey(const Context& context, const IOCtlVRequest& r
   if (!tmd.IsValid())
     return IPCReply(ES_EINVAL);
 
-  u32 handle;
+  // what the software is given back when no key is set up: 0, not the stack's last contents
+  u32 handle = 0;
   const ReturnCode ret = m_core.SetUpStreamKey(
       context.uid, memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::TicketView)),
       tmd, &handle);
