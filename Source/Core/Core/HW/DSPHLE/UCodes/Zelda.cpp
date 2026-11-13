@@ -1125,7 +1125,7 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
           s32 sample = 0;
           for (u16 j = 0; j < 8; ++j)
             sample += (s32)buffer[i + j] * rpb.filter_coeffs[j];
-          sample >>= 15;
+          sample = (s32)RoundAsDSP(sample, 15);
           buffer[i] = SaturateS16(sample);
         }
       };
@@ -1651,7 +1651,7 @@ void ZeldaAudioRenderer::Resample(VPB* vpb, const s16* src, MixingBuffer* dst)
       s64 dst_sample_unclamped = 0;
       for (size_t i = 0; i < 4; ++i)
         dst_sample_unclamped += (s64)2 * coeffs[i] * input[i];
-      dst_sample_unclamped >>= 16;
+      dst_sample_unclamped = RoundAsDSP(dst_sample_unclamped, 16);
 
       dst_sample = (s16)SaturateS16(dst_sample_unclamped);
 

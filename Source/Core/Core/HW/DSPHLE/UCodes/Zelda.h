@@ -84,13 +84,20 @@ private:
     return vol;
   }
 
+  // v >> shift rounded as the DSP rounds an accumulator to its middle word (mulmvz, movpz):
+  // to nearest, ties to even
+  static s64 RoundAsDSP(s64 v, int shift)
+  {
+    return (v + (((s64)1 << (shift - 1)) - 1) + ((v >> shift) & 1)) >> shift;
+  }
+
   // Can process partial buffers. Volume is in signed 1.15 format: the DSP multiplies it as
   // signed, so 0xB820 is about -0.56 (the inverted surround leg), not 1.44.
   static void AddBuffersWithVolume(s16* dst, const s16* src, size_t count, s16 vol)
   {
     while (count--)
     {
-      s32 vol_src = ((s32)*src++ * (s32)vol) >> 15;
+      s32 vol_src = (s32)RoundAsDSP((s32)*src++ * (s32)vol, 15);
       *dst++ += SaturateS16(vol_src);
     }
   }
