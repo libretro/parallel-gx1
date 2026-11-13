@@ -9,8 +9,8 @@
 #include "Common/Assert.h"
 #include "Common/MsgHandler.h"
 
+#include "VideoBackends/Vulkan/ObjectCache.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
-#include "VideoCommon/Constants.h"
 #include "vulkan/vulkan_core.h"
 
 namespace Vulkan
@@ -157,28 +157,35 @@ void CommandBufferManager::DestroyCommandBuffers()
 VkDescriptorPool CommandBufferManager::CreateDescriptorPool(u32 max_descriptor_sets)
 {
   /*
-   * Worst case descriptor counts according to the descriptor layout created in ObjectCache.cpp:
-   * UNIFORM_BUFFER_DYNAMIC: 3
-   * COMBINED_IMAGE_SAMPLER: NUM_UTILITY_PIXEL_SAMPLERS + NUM_COMPUTE_SHADER_SAMPLERS +
-   * VideoCommon::MAX_PIXEL_SHADER_SAMPLERS
-   * STORAGE_BUFFER: 2
-   * UNIFORM_TEXEL_BUFFER: 3
-   * STORAGE_IMAGE: 1
+   * Each type for the most of it one set of any layout holds (ObjectCache.cpp), so the pool runs
+   * out of sets before it runs out of any type: sets of the layouts that hold more of a type than
+   * a fixed share (the compute set's eight storage images, the standard set's four uniform
+   * buffers) would otherwise empty the pool of that type early, and a driver that doesn't check
+   * writes past the pool.
    */
-  const VkDescriptorPoolSize pool_sizes[5] = {
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, max_descriptor_sets * 3},
-      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-       max_descriptor_sets *
-           (VideoCommon::MAX_PIXEL_SHADER_SAMPLERS + VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS +
-            NUM_UTILITY_PIXEL_SAMPLERS)},
-      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, max_descriptor_sets * 2},
-      {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, max_descriptor_sets * 3},
-      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, max_descriptor_sets * 1},
-  };
+  static const VkDescriptorType types[5] = {
+      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+      VK_DESCRIPTOR_TYPE_STORAGE_IMAGE};
+  VkDescriptorPoolSize pool_sizes[5];
+  u32 num_pool_sizes = 0;
+  for (u32 i = 0; i < 5; i++)
+  {
+    const u32 per_set = g_object_cache->GetMostDescriptorsPerSet(types[i]);
+    if (!per_set)
+      continue;
+    pool_sizes[num_pool_sizes].type = types[i];
+    pool_sizes[num_pool_sizes].descriptorCount = max_descriptor_sets * per_set;
+    num_pool_sizes++;
+  }
 
   const VkDescriptorPoolCreateInfo pool_create_info = {
-      VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, nullptr,           0, max_descriptor_sets,
-      5,                                             pool_sizes,
+      VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      nullptr,
+      0,
+      max_descriptor_sets,
+      num_pool_sizes,
+      pool_sizes,
   };
 
   VkDevice device = g_vulkan_context->GetDevice();

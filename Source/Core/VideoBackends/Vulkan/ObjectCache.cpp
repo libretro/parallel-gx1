@@ -261,6 +261,43 @@ bool ObjectCache::CreateDescriptorSetLayouts()
   if (!g_backend_info.bSupportsDynamicVertexLoader)
     create_infos[DESCRIPTOR_SET_LAYOUT_STANDARD_SHADER_STORAGE_BUFFERS].bindingCount--;
 
+  /* each type's most descriptors in one set, over the layouts, for the pools */
+  m_num_set_descriptor_types = 0;
+  for (size_t i = 0; i < create_infos.size(); i++)
+  {
+    u32 counts[8] = {};
+    VkDescriptorType types[8];
+    u32 num_types = 0;
+    for (u32 b = 0; b < create_infos[i].bindingCount; b++)
+    {
+      const VkDescriptorSetLayoutBinding& binding = create_infos[i].pBindings[b];
+      u32 t = 0;
+      while (t < num_types && types[t] != binding.descriptorType)
+        t++;
+      if (t == num_types)
+      {
+        if (num_types == 8)
+          continue;
+        types[num_types++] = binding.descriptorType;
+      }
+      counts[t] += binding.descriptorCount;
+    }
+    for (u32 t = 0; t < num_types; t++)
+    {
+      u32 k = 0;
+      while (k < m_num_set_descriptor_types && m_set_descriptor_types[k] != types[t])
+        k++;
+      if (k == m_num_set_descriptor_types)
+      {
+        if (k == 8)
+          continue;
+        m_set_descriptor_types[m_num_set_descriptor_types++] = types[t];
+      }
+      if (counts[t] > m_most_set_descriptors[k])
+        m_most_set_descriptors[k] = counts[t];
+    }
+  }
+
   for (size_t i = 0; i < create_infos.size(); i++)
   {
     VkResult res = vkCreateDescriptorSetLayout(g_vulkan_context->GetDevice(), &create_infos[i],

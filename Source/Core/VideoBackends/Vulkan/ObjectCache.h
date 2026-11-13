@@ -41,6 +41,19 @@ public:
     return m_descriptor_set_layouts[layout];
   }
 
+  /* the most descriptors of a type one set of any layout holds: a pool with
+   * this many for each set it may allocate never runs out of a type first */
+  u32 GetMostDescriptorsPerSet(VkDescriptorType type) const
+  {
+    u32 i;
+    for (i = 0; i < m_num_set_descriptor_types; i++)
+    {
+      if (m_set_descriptor_types[i] == type)
+        return m_most_set_descriptors[i];
+    }
+    return 0;
+  }
+
   // Pipeline layout accessor. Used to fill in required field in PipelineInfo.
   VkPipelineLayout GetPipelineLayout(PIPELINE_LAYOUT layout) const
   {
@@ -86,6 +99,9 @@ private:
   void DestroyPipelineCache();
 
   std::array<VkDescriptorSetLayout, NUM_DESCRIPTOR_SET_LAYOUTS> m_descriptor_set_layouts = {};
+  VkDescriptorType m_set_descriptor_types[8] = {};
+  u32 m_most_set_descriptors[8] = {};
+  u32 m_num_set_descriptor_types = 0;
   std::array<VkPipelineLayout, NUM_PIPELINE_LAYOUTS> m_pipeline_layouts = {};
 
   StreamBuffer m_texture_upload_buffer;
