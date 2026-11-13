@@ -338,6 +338,15 @@ delivery summary, not in the commit message.
   A commit that improves a number lowers it in the same commit. Nothing
   ever raises it. A deliberate, justified exception needs its own commit
   and the user's approval.
+- **Regression programs.** What a FIFO log can't reach gets a generated
+  GameCube program: the FIFO player points the video interface at each
+  XFB copy, so a picture the video interface shows from several copies
+  needs a program that sets the video interface itself.
+  `Tools/stutter/xfbsplit.sh <core>` builds `xfbsplit.c`'s program (a
+  picture copied to the XFB in two halves, top red, bottom blue), runs it
+  and reads both colours back (`--probe`); it must print PASS. Run it with
+  the gate for any change to XFB copies, the texture cache or the
+  presenter.
 
 ### Measuring honestly
 

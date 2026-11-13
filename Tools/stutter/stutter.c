@@ -12,6 +12,9 @@
  *    --system DIR, --save DIR    the frontend's directories (.)
  *    --opt key=value             a core option, any number of them
  *    --check                     hash each new picture (no timing then)
+ *    --probe                     with --check: also give each new picture's
+ *                                colour at the middle of its top and bottom
+ *                                halves (a quarter and three quarters down)
  *    --allocs                    count the core's heap allocations after boot
  *                                (allocs.c), and report where they were made
  *    --state-out FILE            save a state after run --state-frame
@@ -111,7 +114,7 @@ static const char *backend = "vulkan";
 static const char *sysdir = ".", *savedir = ".";
 static const char *opt_key[MAX_OPTS], *opt_val[MAX_OPTS];
 static unsigned n_opts;
-static int check;
+static int check, probe;
 
 /* The frontend's state */
 
@@ -188,6 +191,18 @@ static unsigned picture_corpus_frame(const unsigned char *px, unsigned w, unsign
 }
 
 #define VKFN(name) PFN_##name p_##name = (PFN_##name)vgdpa(dev, #name)
+
+/* the picture's colour a quarter and three quarters of the way down, in
+ * the middle: bgr when its bytes are blue, green, red, else red first */
+static void print_probe(const unsigned char *px, unsigned w, unsigned h, size_t pitch, int bgr)
+{
+   const unsigned char *top = px + (size_t)(h / 4) * pitch + (size_t)(w / 2) * 4;
+   const unsigned char *bottom = px + (size_t)(h * 3 / 4) * pitch + (size_t)(w / 2) * 4;
+   const int r = bgr ? 2 : 0, b = bgr ? 0 : 2;
+
+   printf("probe frame=%u top=%02x%02x%02x bottom=%02x%02x%02x\n", frame_no, top[r], top[1],
+         top[b], bottom[r], bottom[1], bottom[b]);
+}
 
 static void check_image(const struct retro_vulkan_image *img, unsigned w, unsigned h)
 {
@@ -289,6 +304,10 @@ static void check_image(const struct retro_vulkan_image *img, unsigned w, unsign
    printf("picture frame=%u corpus=%u size=%ux%u hash=%016llx\n", frame_no,
          picture_corpus_frame((const unsigned char *)px, w, h, (size_t)w * 4), w, h,
          hash_bytes((const unsigned char *)px, (size_t)w * h * 4));
+   if (probe)
+      print_probe((const unsigned char *)px, w, h, (size_t)w * 4,
+            img->create_info.format == VK_FORMAT_B8G8R8A8_UNORM ||
+                  img->create_info.format == VK_FORMAT_B8G8R8A8_SRGB);
    p_vkUnmapMemory(dev, mem);
    p_vkDestroyCommandPool(dev, pool, NULL);
    p_vkDestroyBuffer(dev, buf, NULL);
@@ -323,6 +342,8 @@ static void video_cb(const void *data, unsigned w, unsigned h, size_t pitch)
          }
          printf("picture frame=%u corpus=%u size=%ux%u hash=%016llx\n", frame_no,
                picture_corpus_frame((const unsigned char *)data, w, h, pitch), w, h, hsh);
+         if (probe)
+            print_probe((const unsigned char *)data, w, h, pitch, 1); /* XRGB8888 */
       }
       return;
    }
@@ -545,6 +566,11 @@ int main(int argc, char **argv)
       if (!strcmp(a, "--check"))
       {
          check = 1;
+         continue;
+      }
+      if (!strcmp(a, "--probe"))
+      {
+         probe = 1;
          continue;
       }
       if (!strcmp(a, "--allocs"))
