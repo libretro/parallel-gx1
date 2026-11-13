@@ -617,7 +617,7 @@ static size_t GetReportSize(u8 rid)
     return sizeof(InputReportAck);
   default:
     if (DataReportBuilder::IsValidMode(report_id))
-      return MakeDataReportManipulator(report_id, nullptr)->GetDataSize();
+      return MakeDataReportManipulator(report_id, nullptr).GetDataSize();
     else
       return 0;
   }

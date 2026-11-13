@@ -1167,37 +1167,37 @@ void Device::ProcessInputReport(WiimoteReal::Report& report)
   auto manipulator = MakeDataReportManipulator(
       report_id, report.data() + WiimoteReal::REPORT_HID_HEADER_SIZE + sizeof(InputReportID));
 
-  if (manipulator->GetDataSize() + WiimoteReal::REPORT_HID_HEADER_SIZE > report.size())
+  if (manipulator.GetDataSize() + WiimoteReal::REPORT_HID_HEADER_SIZE > report.size())
   {
     WARN_LOG(WIIMOTE, "WiiRemote: Bad report size.");
     return;
   }
 
   // Read buttons.
-  manipulator->GetCoreData(&m_core_data);
+  manipulator.GetCoreData(&m_core_data);
 
   // Process accel data.
-  if (manipulator->HasAccel() && m_accel_calibration.has_value())
+  if (manipulator.HasAccel() && m_accel_calibration.has_value())
   {
     // FYI: This logic fails to properly handle the (never used) "interleaved" reports.
     AccelData accel_data = {};
-    manipulator->GetAccelData(&accel_data);
+    manipulator.GetAccelData(&accel_data);
 
     m_accel_data =
         accel_data.GetNormalizedValue(*m_accel_calibration) * float(MathUtil::GRAVITY_ACCELERATION);
   }
 
   // Process IR data.
-  if (manipulator->HasIR() && m_ir_state.IsFullyConfigured())
+  if (manipulator.HasIR() && m_ir_state.IsFullyConfigured())
   {
-    m_ir_state.ProcessData(*manipulator);
+    m_ir_state.ProcessData(manipulator);
   }
 
   // Process extension data.
   if (IsMotionPlusStateKnown())
   {
-    const auto ext_data = manipulator->GetExtDataPtr();
-    const auto ext_size = manipulator->GetExtDataSize();
+    const auto ext_data = manipulator.GetExtDataPtr();
+    const auto ext_size = manipulator.GetExtDataSize();
 
     if (IsMotionPlusActive())
       ProcessMotionPlusExtensionData(ext_data, ext_size);

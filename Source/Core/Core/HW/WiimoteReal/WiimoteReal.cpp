@@ -625,9 +625,9 @@ ButtonData Wiimote::GetCurrentlyPressedButtons()
     // TODO: Button data could also be pulled out of non-data reports if really wanted.
     if (DataReportBuilder::IsValidMode(mode))
     {
-      auto builder = MakeDataReportManipulator(mode, rpt.data() + 2);
+      const DataReportManipulator builder = MakeDataReportManipulator(mode, rpt.data() + 2);
       ButtonData buttons = {};
-      builder->GetCoreData(&buttons);
+      builder.GetCoreData(&buttons);
 
       return buttons;
     }
