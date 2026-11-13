@@ -153,7 +153,7 @@ private:
 
   Report& ProcessReadQueue(bool repeat_last_data_report);
   void ClearReadQueue();
-  void WriteReport(Report rpt);
+  void WriteReport(const u8* rpt, size_t size);
 
   virtual int IORead(u8* buf) = 0;
   virtual int IOWrite(u8 const* buf, size_t len) = 0;

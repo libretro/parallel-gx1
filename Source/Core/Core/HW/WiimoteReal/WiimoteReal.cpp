@@ -279,9 +279,9 @@ void Wiimote::Shutdown()
 }
 
 // to be called from CPU thread
-void Wiimote::WriteReport(Report rpt)
+void Wiimote::WriteReport(const u8* rpt, size_t size)
 {
-  if (rpt.size() >= 3)
+  if (size >= 3)
   {
     bool const new_rumble_state = (rpt[2] & 0x1) != 0;
 
@@ -309,19 +309,24 @@ void Wiimote::WriteReport(Report rpt)
   }
 
   // Sent as soon as the write thread gets to it.
-  QueueWrite(0, rpt.data(), rpt.size());
+  QueueWrite(0, rpt, size);
 }
 
 // to be called from CPU thread
 void Wiimote::QueueReport(WiimoteCommon::OutputReportID rpt_id, const void* data, unsigned int size)
 {
-  auto const queue_data = static_cast<const u8*>(data);
+  u8 rpt[MAX_PAYLOAD];
 
-  Report rpt(size + 2);
+  if (size + 2 > sizeof(rpt))
+  {
+    WARN_LOG(WIIMOTE, "Wiimote %d: dropped a %u-byte report, longer than a Wii Remote takes",
+             m_index + 1, size + 2);
+    return;
+  }
   rpt[0] = WR_SET_REPORT | BT_OUTPUT;
   rpt[1] = u8(rpt_id);
-  memcpy(rpt.data() + 2, queue_data, size);
-  WriteReport(std::move(rpt));
+  memcpy(rpt + 2, data, size);
+  WriteReport(rpt, size + 2);
 }
 
 void Wiimote::ResetDataReporting()
@@ -361,8 +366,17 @@ void Wiimote::EventUnlinked()
 
 void Wiimote::InterruptDataOutput(const u8* data, const u32 size)
 {
-  Report rpt(size + REPORT_HID_HEADER_SIZE);
-  memcpy(rpt.data() + REPORT_HID_HEADER_SIZE, data, size);
+  /* the header, then the report, with the bytes past a short one zero, as they were read */
+  u8 rpt[MAX_PAYLOAD] = {};
+  size_t rpt_size = size + static_cast<size_t>(REPORT_HID_HEADER_SIZE);
+
+  if (rpt_size > sizeof(rpt))
+  {
+    WARN_LOG(WIIMOTE, "Wiimote %d: dropped a %u-byte report, longer than a Wii Remote takes",
+             m_index + 1, static_cast<unsigned>(rpt_size));
+    return;
+  }
+  memcpy(rpt + REPORT_HID_HEADER_SIZE, data, size);
 
   // Convert output DATA packets to SET_REPORT packets.
   // Nintendo Wiimotes work without this translation, but 3rd
@@ -383,14 +397,14 @@ void Wiimote::InterruptDataOutput(const u8* data, const u32 size)
   else if (rpt[1] == u8(OutputReportID::SpeakerData) &&
            (!m_speaker_enabled_in_dolphin_config || !m_speaker_enable || m_speaker_mute))
   {
-    rpt.resize(3);
+    rpt_size = 3;
     // Translate undesired speaker data reports into rumble reports.
     rpt[1] = u8(OutputReportID::Rumble);
     // Keep only the rumble bit.
     rpt[2] &= 0x1;
   }
 
-  WriteReport(std::move(rpt));
+  WriteReport(rpt, rpt_size);
 }
 
 bool Wiimote::Read()
