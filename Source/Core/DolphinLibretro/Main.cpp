@@ -1,12 +1,10 @@
 
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
 #include <features/features_cpu.h>
 #include <libretro.h>
-#include <string>
-#include <vector>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "Common/ChunkFile.h"
 #include "Common/Event.h"
@@ -219,32 +217,28 @@ void retro_get_system_info(retro_system_info* info)
 {
   // Build a semver string from SCM_DESC_STR (e.g. "2512-226" -> "2512.0.226")
   // with the short git hash as build metadata (e.g. "+13192dec3d")
-  static std::string version_str = []() {
-    std::string desc = SCM_DESC_STR;
-    std::string major, commits;
-    auto dash = desc.find('-');
-    if (dash != std::string::npos)
+  static char version_str[128];
+  if (!version_str[0])
+  {
+    const char* const desc = SCM_DESC_STR;
+    const char* const dash = strchr(desc, '-');
+    if (dash)
     {
-      major = desc.substr(0, dash);
-      auto dash2 = desc.find('-', dash + 1);
-      commits = (dash2 != std::string::npos)
-                    ? desc.substr(dash + 1, dash2 - dash - 1)
-                    : desc.substr(dash + 1);
+      const char* const dash2 = strchr(dash + 1, '-');
+      const int commits_len =
+          dash2 ? static_cast<int>(dash2 - dash - 1) : static_cast<int>(strlen(dash + 1));
+      snprintf(version_str, sizeof(version_str), "%.*s.0.%.*s+%.10s", static_cast<int>(dash - desc),
+               desc, commits_len, dash + 1, SCM_REV_STR);
     }
     else
     {
-      major = desc;
-      commits = "0";
+      snprintf(version_str, sizeof(version_str), "%s.0.0+%.10s", desc, SCM_REV_STR);
     }
-    std::string hash = SCM_REV_STR;
-    if (hash.size() > 10)
-      hash = hash.substr(0, 10);
-    return major + ".0." + commits + "+" + hash;
-  }();
+  }
 
   info->need_fullpath = true;
   info->valid_extensions = "elf|dol|gcm|iso|tgc|wbfs|ciso|gcz|wad|wia|rvz|m3u";
-  info->library_version = version_str.c_str();
+  info->library_version = version_str;
   info->library_name = "ParaLLEl GX1";
   info->block_extract = true;
 }
@@ -294,7 +288,7 @@ void retro_run(void)
 {
   // One retro_run is one frame of the core's timebase, as long as the frontend was told.
   const double frame_hz = Libretro::g_core_refresh_rate > 1.0 ? Libretro::g_core_refresh_rate : 60.0;
-  frame_clock_advance(static_cast<unsigned>(std::lround(1e6 / frame_hz)));
+  frame_clock_advance(static_cast<unsigned>(lround(1e6 / frame_hz)));
 
   Libretro::Input::InitSensors();
   Libretro::Options::CheckForUpdatedVariables();
@@ -446,7 +440,7 @@ void retro_run(void)
 
   if ((g_widescreen &&
        Libretro::widescreen != (g_widescreen->IsGameWidescreen() || g_Config.bWidescreenHack)) ||
-      std::fabs(Libretro::FrameAspect() - Libretro::frame_aspect) > 0.001f)
+      fabsf(Libretro::FrameAspect() - Libretro::frame_aspect) > 0.001f)
   {
     retro_system_av_info info;
     retro_get_system_av_info(&info);
