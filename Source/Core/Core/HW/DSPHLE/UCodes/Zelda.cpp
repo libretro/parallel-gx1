@@ -1726,8 +1726,17 @@ void ZeldaAudioRenderer::DownloadPCMSamplesFromARAM(s16* dst, VPB* vpb, u16 requ
     T* src_ptr = reinterpret_cast<T*>(GetARAMPointerForRange(
         m_system, m_aram_base_addr, vpb->GetCurrentARAMAddr(), samples_to_download * sizeof(T)));
 
-    for (u16 i = 0; i < samples_to_download; ++i)
-      *dst++ = Common::FromBigEndian<T>(*src_ptr++) << (16 - 8 * sizeof(T));
+    // samples that are not in ARAM or emulated memory play as silence, the voice going on
+    if (!src_ptr)
+    {
+      for (u16 i = 0; i < samples_to_download; ++i)
+        *dst++ = 0;
+    }
+    else
+    {
+      for (u16 i = 0; i < samples_to_download; ++i)
+        *dst++ = Common::FromBigEndian<T>(*src_ptr++) << (16 - 8 * sizeof(T));
+    }
 
     vpb->SetRemainingLength(vpb->GetRemainingLength() - samples_to_download);
     vpb->SetCurrentARAMAddr(vpb->GetCurrentARAMAddr() + samples_to_download * sizeof(T));
@@ -1869,6 +1878,15 @@ void ZeldaAudioRenderer::DecodeAFC(VPB* vpb, s16* dst, size_t block_count)
   u8* src = (u8*)GetARAMPointerForRange(m_system, m_aram_base_addr, addr,
                                         block_count * vpb->samples_source_type);
   vpb->SetCurrentARAMAddr(addr + (u32)block_count * vpb->samples_source_type);
+
+  // blocks that are not in ARAM or emulated memory play as silence, 16 samples each, the
+  // decoder's history kept
+  if (!src)
+  {
+    for (size_t i = 0; i < block_count * 16; ++i)
+      *dst++ = 0;
+    return;
+  }
 
   for (size_t b = 0; b < block_count; ++b)
   {
