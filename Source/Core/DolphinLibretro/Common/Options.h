@@ -74,67 +74,6 @@ template <typename T>
 T GetCached(const char* key, T def = T{});
 bool IsUpdated(const char* key);
 
-template <typename T>
-class Option
-{
-public:
-  bool Updated()
-  {
-    if (m_dirty)
-    {
-      m_dirty = false;
-
-      retro_variable var{m_id};
-      T value = m_list.front().second;
-
-      if (::Libretro::environ_cb && ::Libretro::environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-      {
-        for (auto option : m_list)
-        {
-          if (option.first == var.value)
-          {
-            value = option.second;
-            break;
-          }
-        }
-      }
-
-      if (m_value != value)
-      {
-        m_value = value;
-        return true;
-      }
-    }
-    return false;
-  }
-
-  operator T() const
-  {
-    const_cast<Option*>(this)->Updated();
-    return m_value;
-  }
-
-  template <typename S>
-  bool operator==(S value)
-  {
-    return (T)(*this) == value;
-  }
-
-  template <typename S>
-  bool operator!=(S value)
-  {
-    return (T)(*this) != value;
-  }
-
-private:
-  const char* m_id;
-  const char* m_name;
-  T m_value;
-  bool m_dirty = true;
-  std::string m_options;
-  std::vector<std::pair<std::string, T>> m_list;
-};
-
 inline std::string CPUCoreToString(PowerPC::CPUCore core)
 {
   switch (core)

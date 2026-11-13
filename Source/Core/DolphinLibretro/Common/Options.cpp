@@ -2253,13 +2253,6 @@ const char* GetCached<const char*>(const char* key, const char* def)
   const int i = Find(key);
   return (i < 0) ? def : s_cache[i].raw.c_str();
 }
-
-template <>
-std::string GetCached<std::string>(const char* key, const std::string def)
-{
-  const int i = Find(key);
-  return (i < 0) ? def : s_cache[i].raw;
-}
 }  // namespace Options
 
 inline bool GetVariable(const char* key, const char*& out_value)
