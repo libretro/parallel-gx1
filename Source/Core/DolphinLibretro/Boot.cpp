@@ -3,6 +3,7 @@
 #include <string.h>
 #include <functional>
 #include <iterator>
+#include <compat/strl.h>
 #include <libretro.h>
 #include <string>
 
@@ -1029,7 +1030,7 @@ static bool RETRO_CALLCONV retro_get_image_path(unsigned index, char* path, size
   if (disk_paths[index].empty())
     return false;
 
-  strncpy(path, disk_paths[index].c_str(), len);
+  strlcpy(path, disk_paths[index].c_str(), len);
   return true;
 }
 static bool RETRO_CALLCONV retro_get_image_label(unsigned index, char* label, size_t len)
@@ -1040,7 +1041,7 @@ static bool RETRO_CALLCONV retro_get_image_label(unsigned index, char* label, si
   if (disk_paths[index].empty())
     return false;
 
-  strncpy(label, disk_paths[index].c_str(), len);
+  strlcpy(label, disk_paths[index].c_str(), len);
   return true;
 }
 
