@@ -1,10 +1,11 @@
 #include <cctype>
+#include <compat/strl.h>
 #include <cstdio>
-#include <string.h>
 #include <functional>
 #include <iterator>
-#include <compat/strl.h>
 #include <libretro.h>
+#include <stdlib.h>
+#include <string.h>
 #include <string>
 
 #include <streams/file_stream.h>
@@ -57,13 +58,44 @@ extern retro_environment_t environ_cb;
 static void InitDiskControlInterface();
 static unsigned disk_index = 0;
 static bool eject_state;
-static std::vector<std::string> disk_paths;
+/* The discs' paths, each its own copy; an image added and not yet replaced is "" */
+static char** disk_paths;
+static unsigned disk_count;
+static unsigned disk_cap;
 
 static void ResetDiskControlState()
 {
+  unsigned i;
+  for (i = 0; i < disk_count; i++)
+    free(disk_paths[i]);
+  free(disk_paths);
+  disk_paths = nullptr;
+  disk_count = 0;
+  disk_cap = 0;
   disk_index = 0;
   eject_state = false;
-  disk_paths.clear();
+}
+
+/* @path copied in at the end of the list; false out of memory */
+static bool DiskPathsAppend(const char* path)
+{
+  const size_t size = strlen(path) + 1;
+  char* copy;
+  if (disk_count == disk_cap)
+  {
+    const unsigned cap = disk_cap ? disk_cap * 2 : 4;
+    char** const paths = static_cast<char**>(realloc(disk_paths, cap * sizeof(*paths)));
+    if (!paths)
+      return false;
+    disk_paths = paths;
+    disk_cap = cap;
+  }
+  copy = static_cast<char*>(malloc(size));
+  if (!copy)
+    return false;
+  memcpy(copy, path, size);
+  disk_paths[disk_count++] = copy;
+  return true;
 }
 
 // GBPlayer
@@ -769,8 +801,8 @@ bool retro_load_game(const struct retro_game_info* game)
     }
   }
 
-  for (auto& normalized_game_path : normalized_game_paths)
-    Libretro::disk_paths.push_back(normalized_game_path);
+  for (const std::string& normalized_game_path : normalized_game_paths)
+    Libretro::DiskPathsAppend(normalized_game_path.c_str());
 
   Libretro::Input::Init();
 
@@ -952,11 +984,8 @@ static bool retro_set_eject_state(bool ejected)
 
     if (ejected)
       system.GetDVDInterface().EjectDisc(guard, DVD::EjectCause::User);
-    else if (disk_index < disk_paths.size())
-    {
-      const std::string& path = disk_paths[disk_index];
-      system.GetDVDInterface().ChangeDisc(guard, path);
-    }
+    else if (disk_index < disk_count)
+      system.GetDVDInterface().ChangeDisc(guard, disk_paths[disk_index]);
   }, true); // wait_for_completion = true
   Libretro::ResumeAfterField();
 
@@ -983,38 +1012,47 @@ static bool retro_set_image_index(unsigned index)
 
 static unsigned retro_get_num_images()
 {
-  return (unsigned)disk_paths.size();
+  return disk_count;
 }
 
 static bool retro_add_image_index()
 {
-  disk_paths.push_back("");
-
-  return true;
+  return DiskPathsAppend("");
 }
 
 static bool retro_replace_image_index(unsigned index, const struct retro_game_info* info)
 {
-  if (index >= disk_paths.size())
+  if (index >= disk_count)
     return false;
 
   if (!info->path)
   {
-    disk_paths.erase(disk_paths.begin() + index);
-    if (!disk_paths.size())
+    free(disk_paths[index]);
+    memmove(disk_paths + index, disk_paths + index + 1,
+            (disk_count - index - 1) * sizeof(*disk_paths));
+    disk_count--;
+    if (!disk_count)
       disk_index = -1;
     else if (disk_index > index)
       disk_index--;
   }
   else
-    disk_paths[index] = info->path;
+  {
+    const size_t size = strlen(info->path) + 1;
+    char* const copy = static_cast<char*>(malloc(size));
+    if (!copy)
+      return false;
+    memcpy(copy, info->path, size);
+    free(disk_paths[index]);
+    disk_paths[index] = copy;
+  }
 
   return true;
 }
 
 static bool RETRO_CALLCONV retro_set_initial_image(unsigned index, const char* path)
 {
-  if (index >= disk_paths.size())
+  if (index >= disk_count)
     index = 0;
 
   disk_index = index;
@@ -1024,24 +1062,18 @@ static bool RETRO_CALLCONV retro_set_initial_image(unsigned index, const char* p
 
 static bool RETRO_CALLCONV retro_get_image_path(unsigned index, char* path, size_t len)
 {
-  if (index >= disk_paths.size())
+  if (index >= disk_count || !disk_paths[index][0])
     return false;
 
-  if (disk_paths[index].empty())
-    return false;
-
-  strlcpy(path, disk_paths[index].c_str(), len);
+  strlcpy(path, disk_paths[index], len);
   return true;
 }
 static bool RETRO_CALLCONV retro_get_image_label(unsigned index, char* label, size_t len)
 {
-  if (index >= disk_paths.size())
+  if (index >= disk_count || !disk_paths[index][0])
     return false;
 
-  if (disk_paths[index].empty())
-    return false;
-
-  strlcpy(label, disk_paths[index].c_str(), len);
+  strlcpy(label, disk_paths[index], len);
   return true;
 }
 
