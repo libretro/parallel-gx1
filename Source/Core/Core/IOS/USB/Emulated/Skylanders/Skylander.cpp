@@ -609,6 +609,7 @@ const std::map<const std::pair<const u16, const u16>, SkyData> list_skylanders =
 
 SkylanderUSB::SkylanderUSB()
 {
+  skylander_queries_init(&m_queries, 16);
   m_vid = 0x1430;
   m_pid = 0x0150;
   m_id = (static_cast<u64>(m_vid) << 32 | static_cast<u64>(m_pid) << 16 | static_cast<u64>(9) << 8 |
@@ -622,7 +623,10 @@ SkylanderUSB::SkylanderUSB()
   m_endpoint_descriptor.emplace_back(EndpointDescriptor{0x7, 0x5, 0x2, 0x3, 0x40, 0x1});
 }
 
-SkylanderUSB::~SkylanderUSB() = default;
+SkylanderUSB::~SkylanderUSB()
+{
+  skylander_queries_free(&m_queries);
+}
 
 DeviceDescriptor SkylanderUSB::GetDeviceDescriptor() const
 {
@@ -774,7 +778,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
         interrupt_response = {0x41, buf[1], 0xFF, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                               0x00, 0x00,   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                               0x00, 0x00,   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-        m_queries.push(interrupt_response);
+        skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         expected_count = 10;
         system.GetSkylanderPortal().Activate();
       }
@@ -818,7 +822,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
         control_response = {buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]};
         expected_count = 15;
         interrupt_response = {buf[0]};
-        m_queries.push(interrupt_response);
+        skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         system.GetSkylanderPortal().SetLEDs(buf[1], buf[2], buf[3], buf[4]);
       }
       break;
@@ -859,7 +863,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
         control_response = {buf[0], buf[1]};
         expected_count = 10;
         interrupt_response = {buf[0], buf[1], 0x00, 0x19};
-        m_queries.push(interrupt_response);
+        skylander_queries_push_back_growing(&m_queries, &interrupt_response);
       }
       break;
     }
@@ -886,7 +890,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
         const u8 sky_num = buf[1] & 0xF;
         const u8 block = buf[2];
         system.GetSkylanderPortal().QueryBlock(sky_num, block, interrupt_response.data());
-        m_queries.push(interrupt_response);
+        skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         control_response = {buf[0], buf[1], buf[2]};
         expected_count = 11;
       }
@@ -908,7 +912,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
         interrupt_response = {0x52, 0x02, 0x1b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-        m_queries.push(interrupt_response);
+        skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         expected_count = 10;
       }
       break;
@@ -987,7 +991,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
         const u8 sky_num = buf[1] & 0xF;
         const u8 block = buf[2];
         system.GetSkylanderPortal().WriteBlock(sky_num, block, &buf[3], interrupt_response.data());
-        m_queries.push(interrupt_response);
+        skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         control_response = {buf[0],  buf[1],  buf[2],  buf[3],  buf[4],  buf[5],  buf[6],
                             buf[7],  buf[8],  buf[9],  buf[10], buf[11], buf[12], buf[13],
                             buf[14], buf[15], buf[16], buf[17], buf[18]};
@@ -1053,10 +1057,10 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
   }
   // If some data was requested from the Control Message, then the Interrupt message needs to
   // respond with that data. Check if the queries queue is empty
-  if (!m_queries.empty())
+  if (!skylander_queries_empty(&m_queries))
   {
-    interrupt_response = m_queries.front();
-    m_queries.pop();
+    interrupt_response = *skylander_queries_front(&m_queries);
+    skylander_queries_pop_front(&m_queries);
     // This needs to happen after ~22 milliseconds
     expected_time_us = 22000;
   }

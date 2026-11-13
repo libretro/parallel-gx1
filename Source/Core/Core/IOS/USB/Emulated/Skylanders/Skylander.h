@@ -7,6 +7,7 @@
 #include <queue>
 #include <vector>
 
+#include <queues/retro_deque.h>
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
 #include "Core/IOS/USB/Common.h"
@@ -68,6 +69,10 @@ struct SkyData
 };
 
 extern const std::map<const std::pair<const u16, const u16>, SkyData> list_skylanders;
+// A response the portal owes the next interrupt transfer
+typedef std::array<u8, 64> SkylanderQuery;
+RETRO_DEQUE_DEFINE(skylander_queries, SkylanderQuery);
+
 class SkylanderUSB final : public Device
 {
 public:
@@ -99,7 +104,8 @@ private:
   std::vector<ConfigDescriptor> m_config_descriptor;
   std::vector<InterfaceDescriptor> m_interface_descriptor;
   std::vector<EndpointDescriptor> m_endpoint_descriptor;
-  std::queue<std::array<u8, 64>> m_queries;
+  // made with the portal: answering a query allocates nothing
+  skylander_queries_t m_queries;
 };
 
 struct Skylander final
