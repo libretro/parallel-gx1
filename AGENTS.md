@@ -106,6 +106,15 @@ allocation fails it.
   a pool (`Common/ObjectPool.h`); shader text and blobs from the
   thread's stash (`VideoCommon/ShaderArena.c`); a list that is cleared
   keeps its storage.
+- **Queues are `retro_deque`s or lists through their links.** A FIFO
+  is a `RETRO_DEQUE_DEFINE` from libretro-common, made with its owner
+  and kept for its life; `Common/RetroDeque.h` has the shared u32 and
+  u8 queues and `DO_RETRO_DEQUE`, which writes a queue's state exactly
+  as a `std::deque`'s was. Nodes that already carry an `mpsc_stack`
+  link are appended in order through it, not copied into a container.
+  The macro splits its arguments on commas, so an element type such as
+  `std::array<u8, 32>` is given a typedef first. A queue of owning
+  pointers frees what is left in its owner's destructor.
 - **Fixed bounds where the hardware gives one.** A per-frame list with a
   natural bound is a fixed array; past it, the frame stops recording
   rather than allocating (the CPU-access and command-buffer-kick
