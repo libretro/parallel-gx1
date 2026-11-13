@@ -96,6 +96,12 @@ void ROMUCode::BootUCode()
   auto& memory = m_dsphle->GetSystem().GetMemory();
   const u8* pointer =
       memory.GetPointerForRange(m_current_ucode.m_ram_address, m_current_ucode.m_length);
+  // code that is not in emulated memory is not booted: the ROM microcode stays
+  if (!pointer)
+  {
+    ERROR_LOG(DSPHLE, "Ucode at %#010x is not in emulated memory", m_current_ucode.m_ram_address);
+    return;
+  }
   const u32 ector_crc = common_hash_ector(pointer, m_current_ucode.m_length);
 
   if (Config::Get(Config::MAIN_DUMP_UCODE))

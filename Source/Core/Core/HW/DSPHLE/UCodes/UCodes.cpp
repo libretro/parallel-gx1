@@ -96,6 +96,13 @@ void UCodeInterface::PrepareBootUCode(u32 mail)
     auto& memory = m_dsphle->GetSystem().GetMemory();
     const u8* pointer =
         memory.GetPointerForRange(m_next_ucode.iram_mram_addr, m_next_ucode.iram_size);
+    // code that is not in emulated memory is not booted: the current microcode stays
+    if (!pointer)
+    {
+      ERROR_LOG(DSPHLE, "New ucode at %#010x is not in emulated memory",
+                m_next_ucode.iram_mram_addr);
+      return;
+    }
     const u32 ector_crc = common_hash_ector(pointer, m_next_ucode.iram_size);
 
     if (Config::Get(Config::MAIN_DUMP_UCODE))
