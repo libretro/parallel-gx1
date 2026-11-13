@@ -360,6 +360,9 @@ std::optional<IPCReply> NetWDCommandDevice::IOCtlV(const IOCtlVRequest& request)
     auto& memory = system.GetMemory();
     u16* results = (u16*)memory.GetPointerForRange(request.io_vectors.at(0).address,
                                                    sizeof(u16) + sizeof(BSSInfo));
+    // a buffer for the results that is not in the emulated software's memory
+    if (!results)
+      return IPCReply(IPC_EINVAL);
     // first u16 indicates number of BSSInfo following
     results[0] = Common::swap16(1);
 
