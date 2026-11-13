@@ -569,12 +569,14 @@ void AXUCode::SetMainLR(u32 src_addr)
 
 void AXUCode::RunCompressor(u16 threshold, u16 release_frames, u32 table_addr, u32 millis)
 {
-  // check for L/R samples exceeding the threshold
+  // check for L/R samples reaching the threshold: the microcode compares the magnitude with it
+  // (abs, cmp) and triggers on the carry, which is set from the threshold up
   bool triggered = false;
   for (u32 i = 0; i < 32 * millis; ++i)
   {
-    if (std::abs(m_samples_main_left[i]) > int(threshold) ||
-        std::abs(m_samples_main_right[i]) > int(threshold))
+    const s64 left = m_samples_main_left[i];
+    const s64 right = m_samples_main_right[i];
+    if ((left < 0 ? -left : left) >= threshold || (right < 0 ? -right : right) >= threshold)
     {
       triggered = true;
       break;
