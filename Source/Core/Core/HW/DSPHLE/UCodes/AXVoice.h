@@ -12,7 +12,6 @@
 #endif
 
 #include <bit>
-#include <functional>
 #include <memory>
 
 #include "Common/CommonTypes.h"
@@ -127,7 +126,7 @@ union AXBuffers
 class HLEAccelerator final : public Accelerator
 {
 public:
-  explicit HLEAccelerator(DSPManager& dsp) : m_dsp(dsp) {}
+  explicit HLEAccelerator(DSPManager& dsp) : Accelerator(dsp) {}
   HLEAccelerator(const HLEAccelerator&) = delete;
   HLEAccelerator(HLEAccelerator&&) = delete;
   HLEAccelerator& operator=(const HLEAccelerator&) = delete;
@@ -167,13 +166,6 @@ protected:
       acc_pb->running = 0;
     }
   }
-
-  u8 ReadMemory(u32 address) override { return m_dsp.ReadARAM(address); }
-
-  void WriteMemory(u32 address, u8 value) override { m_dsp.WriteARAM(value, address); }
-
-private:
-  DSPManager& m_dsp;
 };
 
 // Sets up the simulated accelerator.
@@ -218,9 +210,14 @@ u16 AcceleratorGetSample(HLEAccelerator* accelerator)
 // We start getting samples not from sample 0, but 0.<curr_pos_frac>. This
 // avoids discontinuities in the audio stream, especially with very low ratios
 // which interpolate a lot of values between two "real" samples.
-u32 ResampleAudio(std::function<s16(u32)> input_callback, s16* output, u32 count, s16* last_samples,
-                  u32 curr_pos, u32 ratio, int srctype, const s16* coeffs)
+//
+// The input is read from the accelerator when one is given, else from <input>, in order: a
+// branch each call site's constant resolves, not a call through a callable per sample.
+static inline u32 ResampleAudio(HLEAccelerator* accelerator, const s16* input, s16* output,
+                                u32 count, s16* last_samples, u32 curr_pos, u32 ratio, int srctype,
+                                const s16* coeffs)
 {
+#define RESAMPLE_INPUT(n) (accelerator ? (s16)AcceleratorGetSample(accelerator) : input[n])
   int read_samples_count = 0;
 
   // If DSP DROM coefficients are available, support polyphase resampling.
@@ -239,7 +236,7 @@ u32 ResampleAudio(std::function<s16(u32)> input_callback, s16* output, u32 count
       curr_pos += ratio;
       while (curr_pos >= 0x10000)
       {
-        temp[idx++ & 3] = input_callback(read_samples_count++);
+        temp[idx++ & 3] = RESAMPLE_INPUT(read_samples_count++);
         curr_pos -= 0x10000;
       }
 
@@ -282,7 +279,7 @@ u32 ResampleAudio(std::function<s16(u32)> input_callback, s16* output, u32 count
       // circular buffer.
       while (curr_pos >= 0x10000)
       {
-        temp[idx++ & 3] = input_callback(read_samples_count++);
+        temp[idx++ & 3] = RESAMPLE_INPUT(read_samples_count++);
         curr_pos -= 0x10000;
       }
 
@@ -322,10 +319,11 @@ u32 ResampleAudio(std::function<s16(u32)> input_callback, s16* output, u32 count
     // No sample rate conversion here: simply read samples from the
     // accelerator to the output buffer.
     for (u32 i = 0; i < count; ++i)
-      output[i] = input_callback(i);
+      output[i] = RESAMPLE_INPUT(i);
 
     memcpy(last_samples, output + count - 4, 4 * sizeof(u16));
   }
+#undef RESAMPLE_INPUT
 
   return curr_pos;
 }
@@ -339,9 +337,8 @@ void GetInputSamples(HLEAccelerator* accelerator, PB_TYPE& pb, s16* samples, u16
 
   if (coeffs)
     coeffs += pb.coef_select * 0x200;
-  u32 curr_pos = ResampleAudio([accelerator](u32) { return AcceleratorGetSample(accelerator); },
-                               samples, count, pb.src.last_samples, pb.src.cur_addr_frac,
-                               HILO_TO_32(pb.src.ratio), pb.src_type, coeffs);
+  u32 curr_pos = ResampleAudio(accelerator, nullptr, samples, count, pb.src.last_samples,
+                               pb.src.cur_addr_frac, HILO_TO_32(pb.src.ratio), pb.src_type, coeffs);
   pb.src.cur_addr_frac = (curr_pos & 0xFFFF);
 
   // Update current position, YN1, YN2 and pred scale in the PB.
@@ -566,9 +563,8 @@ void ProcessVoice(HLEAccelerator* accelerator, PB_TYPE& pb, const AXBuffers& buf
 
     // We use ratio 0x55555 == (5 * 65536 + 21845) / 65536 == 5.3333 which
     // is the nearest we can get to 96/18
-    u32 curr_pos = ResampleAudio([&samples](u32 i) { return samples[i]; }, wm_samples, wm_count,
-                                 pb.remote_src.last_samples, pb.remote_src.cur_addr_frac, 0x55555,
-                                 SRCTYPE_POLYPHASE, coeffs);
+    u32 curr_pos = ResampleAudio(nullptr, samples, wm_samples, wm_count, pb.remote_src.last_samples,
+                                 pb.remote_src.cur_addr_frac, 0x55555, SRCTYPE_POLYPHASE, coeffs);
     pb.remote_src.cur_addr_frac = curr_pos & 0xFFFF;
 
 // Mix to main[0-3] and aux[0-3]
