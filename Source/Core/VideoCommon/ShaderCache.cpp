@@ -93,6 +93,13 @@ struct ShaderCache::WorkChunk
   WorkItem items[64];
 };
 
+/* The work items made when the cache is: what a draw's compiles take in play, which never grows
+ * the pool (AllocWork). */
+enum
+{
+  WORK_CHUNKS_AT_BOOT = 4
+};
+
 ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
 {
   uid_table_init(&m_gx_pipeline_cache, sizeof(GXPipelineUid));
@@ -191,6 +198,15 @@ bool ShaderCache::Initialize()
 
   if (!CompileSharedPipelines())
     return false;
+
+  {
+    int i;
+    for (i = 0; i < WORK_CHUNKS_AT_BOOT; i++)
+    {
+      if (!GrowWork())
+        return false;
+    }
+  }
 
   /* where the driver compiles on threads of its own, programs are started a few a frame
    * and drawn with once linked */
@@ -356,8 +372,9 @@ ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid, GXDrawState* draw_
       return {};
   }
 
-  AppendGXPipelineUID(uid);
-  QueuePipelineCompile(key, COMPILE_PRIORITY_ONDEMAND_PIPELINE);
+  /* recorded once, when it is queued: one refused is asked for again on a later draw */
+  if (QueuePipelineCompile(key, COMPILE_PRIORITY_ONDEMAND_PIPELINE))
+    AppendGXPipelineUID(uid);
   return {};
 }
 
@@ -1393,20 +1410,28 @@ void ShaderCache::AppendGXPipelineUID(const GXPipelineUid& config)
   uid_array_push(&m_pending_gx_pipeline_uids, &disk_uid);
 }
 
+/* Another chunk of free work items; false out of memory */
+bool ShaderCache::GrowWork()
+{
+  WorkChunk* chunk = static_cast<WorkChunk*>(calloc(1, sizeof(WorkChunk)));
+  size_t i;
+  if (!chunk)
+    return false;
+  chunk->next = m_work_chunks;
+  m_work_chunks = chunk;
+  for (i = 0; i < sizeof(chunk->items) / sizeof(chunk->items[0]); i++)
+    ReleaseWork(&chunk->items[i]);
+  return true;
+}
+
+/* A free work item; null when there is none to give. A draw's compiles (on-demand ones, and the
+ * stages their pipelines need) never grow the pool: with every item in flight, the draw goes on
+ * with the pipeline it has and asks again on a later one. Precompiling grows it. */
 ShaderCache::WorkItem* ShaderCache::AllocWork(u8 kind, u32 priority)
 {
   WorkItem* item;
-  if (!m_free_work)
-  {
-    WorkChunk* chunk = static_cast<WorkChunk*>(calloc(1, sizeof(WorkChunk)));
-    size_t i;
-    if (!chunk)
-      return nullptr;
-    chunk->next = m_work_chunks;
-    m_work_chunks = chunk;
-    for (i = 0; i < sizeof(chunk->items) / sizeof(chunk->items[0]); i++)
-      ReleaseWork(&chunk->items[i]);
-  }
+  if (!m_free_work && (priority == COMPILE_PRIORITY_ONDEMAND_PIPELINE || !GrowWork()))
+    return nullptr;
   item = m_free_work;
   m_free_work = reinterpret_cast<WorkItem*>(item->base.link.next);
   item->base.compile = WorkCompile;
@@ -1670,11 +1695,12 @@ void ShaderCache::QueuePixelUberShaderCompile(const UberShader::PixelShaderUid& 
   QueueWork(item);
 }
 
-void ShaderCache::QueuePipelineCompile(const GXPipelineUid& uid, u32 priority)
+/* false when no work item was free to queue it with */
+bool ShaderCache::QueuePipelineCompile(const GXPipelineUid& uid, u32 priority)
 {
   WorkItem* item = AllocWork(WORK_PIPELINE, priority);
   if (!item)
-    return;
+    return false;
   memcpy(item->uid, &uid, sizeof(uid));
   QueueWork(item);
   {
@@ -1682,6 +1708,7 @@ void ShaderCache::QueuePipelineCompile(const GXPipelineUid& uid, u32 priority)
     if (entry)
       entry->pending = 1;
   }
+  return true;
 }
 
 void ShaderCache::QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 priority)

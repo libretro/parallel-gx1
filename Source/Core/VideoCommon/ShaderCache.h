@@ -200,12 +200,13 @@ private:
   void QueueVertexUberShaderCompile(const UberShader::VertexShaderUid& uid, u32 priority);
   void QueuePixelShaderCompile(const PixelShaderUid& uid, u32 priority);
   void QueuePixelUberShaderCompile(const UberShader::PixelShaderUid& uid, u32 priority);
-  void QueuePipelineCompile(const GXPipelineUid& uid, u32 priority);
+  bool QueuePipelineCompile(const GXPipelineUid& uid, u32 priority);
   void QueueUberPipelineCompile(const GXUberPipelineUid& uid, u32 priority);
 
   // The compiler's work items, kept here and reused (ShaderCache.cpp). Video thread only.
   struct WorkItem;
   struct WorkChunk;
+  bool GrowWork();
   WorkItem* AllocWork(u8 kind, u32 priority);
   void ReleaseWork(WorkItem* item);
   void QueueWork(WorkItem* item);
