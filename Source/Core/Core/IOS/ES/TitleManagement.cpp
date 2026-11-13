@@ -400,6 +400,9 @@ IPCReply ESDevice::ImportContentData(Context& context, const IOCtlVRequest& requ
   u32 content_fd = memory.Read_U32(request.in_vectors[0].address);
   u32 data_size = request.in_vectors[1].size;
   u8* data_start = memory.GetPointerForRange(request.in_vectors[1].address, data_size);
+  // data that is not in emulated memory is not imported
+  if (!data_start && data_size != 0)
+    return IPCReply(ES_EINVAL);
   return IPCReply(m_core.ImportContentData(context, content_fd, data_start, data_size));
 }
 
@@ -613,6 +616,10 @@ IPCReply ESDevice::DeleteTitle(const IOCtlVRequest& request)
 
 ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
 {
+  // a view that is not in the emulated software's memory
+  if (!ticket_view)
+    return ES_EINVAL;
+
   const auto fs = m_ios.GetFS();
   const u64 title_id = Common::swap64(ticket_view + offsetof(ES::TicketView, title_id));
 
@@ -754,7 +761,8 @@ ReturnCode ESCore::ExportTitleInit(Context& context, u64 title_id, u8* tmd_bytes
 
   size_t raw_tmd_size;
   const u8* const raw_tmd = context.title_import_export.tmd.GetBytes(&raw_tmd_size);
-  if (tmd_size != raw_tmd_size)
+  // the same size, and a buffer for it in the emulated software's memory
+  if (tmd_size != raw_tmd_size || !tmd_bytes)
     return ES_EINVAL;
 
   std::memcpy(tmd_bytes, raw_tmd, raw_tmd_size);

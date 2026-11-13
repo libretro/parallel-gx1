@@ -946,6 +946,10 @@ ReturnCode ESCore::CheckStreamKeyPermissions(const u32 uid, const u8* ticket_vie
 ReturnCode ESCore::SetUpStreamKey(const u32 uid, const u8* ticket_view, const ES::TMDReader& tmd,
                                   u32* handle)
 {
+  // a view that is not in the emulated software's memory
+  if (!ticket_view)
+    return ES_EINVAL;
+
   ReturnCode ret = CheckStreamKeyPermissions(uid, ticket_view, tmd);
   if (ret != IPC_SUCCESS)
     return ret;
