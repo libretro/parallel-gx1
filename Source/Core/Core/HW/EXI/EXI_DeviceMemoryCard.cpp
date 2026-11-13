@@ -505,7 +505,12 @@ void CEXIMemoryCard::DoState(PointerWrap& p)
 void CEXIMemoryCard::DMARead(u32 addr, u32 size)
 {
   auto& memory = m_system.GetMemory();
-  m_memory_card->Read(m_address, size, memory.GetPointerForRange(addr, size));
+  // a buffer that is not in emulated memory is not read into; the transfer still completes
+  u8* const dest = memory.GetPointerForRange(addr, size);
+  if (dest)
+    m_memory_card->Read(m_address, size, dest);
+  else
+    ERROR_LOG(EXPANSIONINTERFACE, "Memory card DMA read into %#010x, not in emulated memory", addr);
 
   if ((m_address + size) % Memcard::BLOCK_SIZE == 0)
   {
@@ -523,7 +528,13 @@ void CEXIMemoryCard::DMARead(u32 addr, u32 size)
 void CEXIMemoryCard::DMAWrite(u32 addr, u32 size)
 {
   auto& memory = m_system.GetMemory();
-  m_memory_card->Write(m_address, size, memory.GetPointerForRange(addr, size));
+  // a buffer that is not in emulated memory is not written from; the transfer still completes
+  const u8* const src = memory.GetPointerForRange(addr, size);
+  if (src)
+    m_memory_card->Write(m_address, size, src);
+  else
+    ERROR_LOG(EXPANSIONINTERFACE, "Memory card DMA write from %#010x, not in emulated memory",
+              addr);
 
   if (((m_address + size) % Memcard::BLOCK_SIZE) == 0)
   {
