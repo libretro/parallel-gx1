@@ -494,6 +494,12 @@ void WiiSocket::Update(bool read, bool write, bool except)
 
           // Not a string, Windows requires a const char* for sendto
           const char* data = (const char*)memory.GetPointerForRange(BufferIn, BufferInSize);
+          if (!data && BufferInSize != 0)
+          {
+            // what a send from a bad buffer fails with: nothing is read from it
+            ReturnValue = -SO_EFAULT;
+            break;
+          }
           const std::optional<std::string> patch =
               WC24PatchEngine::GetNetworkPatchByPayload(std::string_view{data, BufferInSize});
           if (patch)
