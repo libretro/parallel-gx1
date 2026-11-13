@@ -162,9 +162,12 @@ Result<u32> HostFileSystem::ReadBytesFromFile(Fd fd, u8* ptr, u32 count)
     return std::unexpected{ResultCode::AccessDenied};
 
   const u32 file_size = static_cast<u32>(host_file->GetSize());
-  // IOS has this check in the read request handler.
-  if (count + handle->file_offset > file_size)
-    count = file_size - handle->file_offset;
+  // IOS has this check in the read request handler: a read stops at the end of the file. What is
+  // left is counted from the offset, which a savestate can put past the end of a file since
+  // shrunk, and a count near 4 GiB does not wrap past the end.
+  const u32 left = handle->file_offset < file_size ? file_size - handle->file_offset : 0;
+  if (count > left)
+    count = left;
 
   // File might be opened twice, need to seek before we read
   host_file->Seek(handle->file_offset, File::SeekOrigin::Begin);
