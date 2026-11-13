@@ -148,7 +148,6 @@ private:
   static bool IsBlockNumberValid(u8 block);
 
   bool m_activated = true;
-  bool m_status_updated = false;
   u8 m_interrupt_counter = 0;
   SkylanderLEDColor m_color_right = {};
   SkylanderLEDColor m_color_left = {};
