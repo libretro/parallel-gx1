@@ -3,9 +3,7 @@
 
 #include "Core/HW/DSPHLE/UCodes/AX.h"
 
-#include <array>
 #include <cstring>
-#include <iterator>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -54,9 +52,9 @@ void AXUCode::InitializeShared()
 bool AXUCode::LoadResamplingCoefficients(bool require_same_checksum, u32 desired_checksum)
 {
   constexpr size_t raw_coeffs_size = 0x800 * 2;
-  m_coeffs_checksum = std::nullopt;
+  m_coeffs_loaded = false;
 
-  const std::array<std::string, 2> filenames{
+  const std::string filenames[2] = {
       File::GetUserPath(D_GCUSER_IDX) + "dsp_coef.bin",
       File::GetSysDirectory() + "/GC/dsp_coef.bin",
   };
@@ -69,18 +67,18 @@ bool AXUCode::LoadResamplingCoefficients(bool require_same_checksum, u32 desired
       continue;
 
     File::IOFile fp(filename, "rb");
-    std::array<u8, raw_coeffs_size> raw_coeffs;
-    fp.ReadBytes(raw_coeffs.data(), raw_coeffs_size);
+    // read in place: the table is used only once marked loaded
+    fp.ReadBytes(m_coeffs, raw_coeffs_size);
 
-    u32 checksum = common_hash_adler32(raw_coeffs.data(), raw_coeffs_size);
+    u32 checksum = common_hash_adler32(reinterpret_cast<const u8*>(m_coeffs), raw_coeffs_size);
     if (require_same_checksum && checksum != desired_checksum)
       continue;
 
-    std::memcpy(m_coeffs.data(), raw_coeffs.data(), raw_coeffs_size);
-    for (auto& coef : m_coeffs)
-      coef = Common::swap16(coef);
+    for (size_t i = 0; i < 0x800; ++i)
+      m_coeffs[i] = Common::swap16(m_coeffs[i]);
 
     INFO_LOG(DSPHLE, "Using polyphase resampling coeffs from %s", filename.c_str());
+    m_coeffs_loaded = true;
     m_coeffs_checksum = checksum;
     return true;
   }
@@ -363,17 +361,11 @@ AXMixControl AXUCode::ConvertMixerControl(u32 mixer_control)
 
 void AXUCode::SetupProcessing(u32 init_addr)
 {
-  const std::array<BufferDesc, 9> buffers = {{
-      {m_samples_main_left, 32},
-      {m_samples_main_right, 32},
-      {m_samples_main_surround, 32},
-      {m_samples_auxA_left, 32},
-      {m_samples_auxA_right, 32},
-      {m_samples_auxA_surround, 32},
-      {m_samples_auxB_left, 32},
-      {m_samples_auxB_right, 32},
-      {m_samples_auxB_surround, 32},
-  }};
+  const BufferDesc buffers[9] = {
+      {m_samples_main_left, 32}, {m_samples_main_right, 32}, {m_samples_main_surround, 32},
+      {m_samples_auxA_left, 32}, {m_samples_auxA_right, 32}, {m_samples_auxA_surround, 32},
+      {m_samples_auxB_left, 32}, {m_samples_auxB_right, 32}, {m_samples_auxB_surround, 32},
+  };
   InitMixingBuffers<5 /*ms*/>(init_addr, buffers);
 }
 
@@ -473,15 +465,16 @@ void AXUCode::ProcessPBList(u32 pb_addr)
 
     ReadPB(memory, pb_addr, pb);
 
-    PBUpdateData updates = LoadPBUpdates(memory, pb);
+    PBUpdate updates[PB_UPDATES_MAX];
+    LoadPBUpdates(memory, pb, updates);
 
     for (int curr_ms = 0; curr_ms < 5; ++curr_ms)
     {
       ApplyUpdatesForMs(curr_ms, pb, pb.updates.num_updates, updates);
 
       ProcessVoice(static_cast<HLEAccelerator*>(m_accelerator.get()), pb, buffers, spms,
-                   ConvertMixerControl(pb.mixer_control),
-                   m_coeffs_checksum ? m_coeffs.data() : nullptr, false);
+                   ConvertMixerControl(pb.mixer_control), m_coeffs_loaded ? m_coeffs : nullptr,
+                   false);
 
       // Forward the buffers
       for (auto& ptr : buffers.ptrs)
@@ -701,13 +694,13 @@ void AXUCode::SendAUXAndMix(u32 auxa_lrs_up, u32 auxb_s_up, u32 main_l_dl, u32 m
   memory.CopyToEmuSwapped(auxb_s_up, m_samples_auxB_surround, sizeof(m_samples_auxB_surround));
 
   // Download buffers and addresses
-  const std::array<int*, 4> dl_buffers{
+  int* const dl_buffers[4] = {
       m_samples_main_left,
       m_samples_main_right,
       m_samples_auxB_left,
       m_samples_auxB_right,
   };
-  const std::array<u32, 4> dl_addrs{
+  const u32 dl_addrs[4] = {
       main_l_dl,
       main_r_dl,
       auxb_l_dl,
@@ -715,7 +708,7 @@ void AXUCode::SendAUXAndMix(u32 auxa_lrs_up, u32 auxb_s_up, u32 main_l_dl, u32 m
   };
 
   // Download and mix
-  for (size_t i = 0; i < dl_buffers.size(); ++i)
+  for (size_t i = 0; i < 4; ++i)
   {
     const int* dl_src =
         reinterpret_cast<int*>(memory.GetPointerForRange(dl_addrs[i], 32 * 5 * sizeof(int)));
@@ -802,7 +795,7 @@ void AXUCode::HandleMail(u32 mail)
 
 void AXUCode::CopyCmdList(u32 addr, u16 size)
 {
-  if (size >= std::size(m_cmdlist))
+  if (size >= sizeof(m_cmdlist) / sizeof(m_cmdlist[0]))
   {
     ERROR_LOG(DSPHLE, "Command list at %08x is too large: size=%u", addr, (unsigned)size);
     return;
@@ -837,12 +830,16 @@ void AXUCode::DoAXState(PointerWrap& p)
   p.Do(m_samples_auxB_right);
   p.Do(m_samples_auxB_surround);
 
-  auto old_checksum = m_coeffs_checksum;
-  p.Do(m_coeffs_checksum);
+  // the checksum is stored as a flag, then the checksum only when set
+  const bool old_loaded = m_coeffs_loaded;
+  const u32 old_checksum = m_coeffs_checksum;
+  p.Do(m_coeffs_loaded);
+  if (m_coeffs_loaded)
+    p.Do(m_coeffs_checksum);
 
-  if (p.IsReadMode() && m_coeffs_checksum && old_checksum != m_coeffs_checksum)
+  if (p.IsReadMode() && m_coeffs_loaded && (!old_loaded || old_checksum != m_coeffs_checksum))
   {
-    if (!LoadResamplingCoefficients(true, *m_coeffs_checksum))
+    if (!LoadResamplingCoefficients(true, m_coeffs_checksum))
     {
       Core::DisplayMessage("Could not find the DSP polyphase resampling coefficients used by the "
                            "savestate. Aborting load state.");

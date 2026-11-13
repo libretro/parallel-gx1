@@ -64,7 +64,10 @@ struct PBUpdate
   u16 pb_offset;
   u16 new_value;
 };
-using PBUpdateData = std::array<PBUpdate, 32>;
+enum
+{
+  PB_UPDATES_MAX = 32
+};
 
 // Update data - read these each 1ms subframe and use them!
 // It seems that to provide higher time precisions for MIDI events, some games

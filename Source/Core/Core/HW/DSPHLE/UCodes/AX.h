@@ -11,9 +11,7 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
-#include <optional>
 
 #include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
@@ -104,8 +102,9 @@ protected:
   // Table of coefficients for polyphase sample rate conversion.
   // The coefficients aren't always available (they are part of the DSP DROM)
   // so we also need to know if they are valid or not.
-  std::optional<u32> m_coeffs_checksum = std::nullopt;
-  std::array<s16, 0x800> m_coeffs{};
+  bool m_coeffs_loaded = false;
+  u32 m_coeffs_checksum = 0;
+  s16 m_coeffs[0x800]{};
 
   u16 m_compressor_pos = 0;
 
@@ -136,12 +135,12 @@ protected:
   };
 
   template <int Millis, size_t BufCount>
-  void InitMixingBuffers(u32 init_addr, const std::array<BufferDesc, BufCount>& buffers)
+  void InitMixingBuffers(u32 init_addr, const BufferDesc (&buffers)[BufCount])
   {
     auto& system = m_dsphle->GetSystem();
     auto& memory = system.GetMemory();
-    std::array<u16, 3 * BufCount> init_array;
-    memory.CopyFromEmuSwapped(init_array.data(), init_addr, sizeof(init_array));
+    u16 init_array[3 * BufCount];
+    memory.CopyFromEmuSwapped(init_array, init_addr, sizeof(init_array));
     for (size_t i = 0; i < BufCount; ++i)
     {
       const BufferDesc& buf = buffers[i];

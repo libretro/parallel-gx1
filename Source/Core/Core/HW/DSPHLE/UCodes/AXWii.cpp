@@ -5,8 +5,6 @@
 
 #include "Core/HW/DSPHLE/UCodes/AXWii.h"
 
-#include <array>
-
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -258,7 +256,7 @@ void AXWiiUCode::HandleCommandList()
 
 void AXWiiUCode::SetupProcessing(u32 init_addr)
 {
-  const std::array<BufferDesc, 20> buffers = {{
+  const BufferDesc buffers[20] = {
       {m_samples_main_left, 32}, {m_samples_main_right, 32}, {m_samples_main_surround, 32},
       {m_samples_auxA_left, 32}, {m_samples_auxA_right, 32}, {m_samples_auxA_surround, 32},
       {m_samples_auxB_left, 32}, {m_samples_auxB_right, 32}, {m_samples_auxB_surround, 32},
@@ -267,7 +265,7 @@ void AXWiiUCode::SetupProcessing(u32 init_addr)
       {m_samples_wm0, 6},        {m_samples_aux0, 6},        {m_samples_wm1, 6},
       {m_samples_aux1, 6},       {m_samples_wm2, 6},         {m_samples_aux2, 6},
       {m_samples_wm3, 6},        {m_samples_aux3, 6},
-  }};
+  };
   InitMixingBuffers<3 /*ms*/>(init_addr, buffers);
 }
 
@@ -479,13 +477,14 @@ void AXWiiUCode::ProcessPBList(u32 pb_addr)
     if (m_old_axwii &&
         (pb.updates.num_updates[0] | pb.updates.num_updates[1] | pb.updates.num_updates[2]))
     {
-      PBUpdateData updates = LoadPBUpdates(memory, pb);
+      PBUpdate updates[PB_UPDATES_MAX];
+      LoadPBUpdates(memory, pb, updates);
       for (int curr_ms = 0; curr_ms < 3; ++curr_ms)
       {
         ApplyUpdatesForMs(curr_ms, pb, pb.updates.num_updates, updates);
         ProcessVoice(static_cast<HLEAccelerator*>(m_accelerator.get()), pb, buffers, spms,
                      ConvertMixerControl(HILO_TO_32(pb.mixer_control)),
-                     m_coeffs_checksum ? m_coeffs.data() : nullptr, m_new_filter);
+                     m_coeffs_loaded ? m_coeffs : nullptr, m_new_filter);
 
         // Forward the buffers
         for (auto& ptr : buffers.regular_ptrs)
@@ -498,7 +497,7 @@ void AXWiiUCode::ProcessPBList(u32 pb_addr)
     {
       ProcessVoice(static_cast<HLEAccelerator*>(m_accelerator.get()), pb, buffers, 96,
                    ConvertMixerControl(HILO_TO_32(pb.mixer_control)),
-                   m_coeffs_checksum ? m_coeffs.data() : nullptr, m_new_filter);
+                   m_coeffs_loaded ? m_coeffs : nullptr, m_new_filter);
     }
 
     WritePB(memory, pb_addr, pb);
@@ -508,41 +507,35 @@ void AXWiiUCode::ProcessPBList(u32 pb_addr)
 
 void AXWiiUCode::MixAUXSamples(int aux_id, u32 write_addr, u32 read_addr, u16 volume)
 {
-  std::array<u16, 96> volume_ramp;
-  GenerateVolumeRamp(volume_ramp.data(), m_last_aux_volumes[aux_id], volume, volume_ramp.size());
+  u16 volume_ramp[96];
+  GenerateVolumeRamp(volume_ramp, m_last_aux_volumes[aux_id], volume, 96);
   m_last_aux_volumes[aux_id] = volume;
 
-  std::array<int*, 3> main_buffers{
+  int* const main_buffers[3] = {
       m_samples_main_left,
       m_samples_main_right,
       m_samples_main_surround,
   };
 
-  std::array<const int*, 3> buffers{};
+  const int* buffers[3] = {};
   switch (aux_id)
   {
   case 0:
-    buffers = {
-        m_samples_auxA_left,
-        m_samples_auxA_right,
-        m_samples_auxA_surround,
-    };
+    buffers[0] = m_samples_auxA_left;
+    buffers[1] = m_samples_auxA_right;
+    buffers[2] = m_samples_auxA_surround;
     break;
 
   case 1:
-    buffers = {
-        m_samples_auxB_left,
-        m_samples_auxB_right,
-        m_samples_auxB_surround,
-    };
+    buffers[0] = m_samples_auxB_left;
+    buffers[1] = m_samples_auxB_right;
+    buffers[2] = m_samples_auxB_surround;
     break;
 
   case 2:
-    buffers = {
-        m_samples_auxC_left,
-        m_samples_auxC_right,
-        m_samples_auxC_surround,
-    };
+    buffers[0] = m_samples_auxC_left;
+    buffers[1] = m_samples_auxC_right;
+    buffers[2] = m_samples_auxC_surround;
     break;
   }
 
@@ -558,8 +551,8 @@ void AXWiiUCode::MixAUXSamples(int aux_id, u32 write_addr, u32 read_addr, u16 vo
   }
 
   // Then read the buffers from the CPU and add to our main buffers.
-  const int* ptr = reinterpret_cast<int*>(
-      memory.GetPointerForRange(read_addr, main_buffers.size() * 3 * 32 * sizeof(int)));
+  const int* ptr =
+      reinterpret_cast<int*>(memory.GetPointerForRange(read_addr, 3 * 3 * 32 * sizeof(int)));
   // a buffer that is not in emulated memory is not mixed
   if (!ptr)
     return;
@@ -609,8 +602,8 @@ void AXWiiUCode::UploadAUXMixLRSC(int aux_id, u32* addresses, u16 volume)
 
 void AXWiiUCode::OutputSamples(u32 lr_addr, u32 surround_addr, u16 volume, bool upload_auxc)
 {
-  std::array<u16, 96> volume_ramp;
-  GenerateVolumeRamp(volume_ramp.data(), m_last_main_volume, volume, volume_ramp.size());
+  u16 volume_ramp[96];
+  GenerateVolumeRamp(volume_ramp, m_last_main_volume, volume, 96);
   m_last_main_volume = volume;
 
   auto& memory = m_dsphle->GetSystem().GetMemory();
@@ -623,7 +616,7 @@ void AXWiiUCode::OutputSamples(u32 lr_addr, u32 surround_addr, u16 volume, bool 
   }
 
   // Clamp internal buffers to 16 bits.
-  for (size_t i = 0; i < volume_ramp.size(); ++i)
+  for (size_t i = 0; i < 96; ++i)
   {
     // Cast to s64 to avoid overflow.
     s64 left = m_samples_main_left[i];
@@ -637,14 +630,14 @@ void AXWiiUCode::OutputSamples(u32 lr_addr, u32 surround_addr, u16 volume, bool 
     m_samples_main_right[i] = ClampS16(right);
   }
 
-  std::array<s16, 3 * 32 * 2> buffer;
+  s16 buffer[3 * 32 * 2];
   for (size_t i = 0; i < 3 * 32; ++i)
   {
     buffer[2 * i] = Common::swap16(m_samples_main_right[i]);
     buffer[2 * i + 1] = Common::swap16(m_samples_main_left[i]);
   }
 
-  memory.CopyToEmu(lr_addr, buffer.data(), sizeof(buffer));
+  memory.CopyToEmu(lr_addr, buffer, sizeof(buffer));
   m_mail_handler.PushMail(DSP_SYNC, true);
 }
 

@@ -45,25 +45,23 @@ namespace
 // Useful macro to convert xxx_hi + xxx_lo to xxx for 32 bits.
 #define HILO_TO_32(name) ((u32(name##_hi) << 16) | name##_lo)
 
-PBUpdateData LoadPBUpdates(Memory::MemoryManager& memory, const PB_TYPE& pb)
+void LoadPBUpdates(Memory::MemoryManager& memory, const PB_TYPE& pb, PBUpdate* updates)
 {
-  PBUpdateData updates;
   u32 updates_addr = HILO_TO_32(pb.updates.data);
-  memory.CopyFromEmuSwapped((u16*)updates.data(), updates_addr, sizeof(updates));
-  return updates;
+  memory.CopyFromEmuSwapped((u16*)updates, updates_addr, PB_UPDATES_MAX * sizeof(PBUpdate));
 }
 
 // Apply updates to a PB.
-void ApplyUpdatesForMs(int curr_ms, PB_TYPE& pb, u16* num_updates, const PBUpdateData& updates)
+void ApplyUpdatesForMs(int curr_ms, PB_TYPE& pb, u16* num_updates, const PBUpdate* updates)
 {
   u32 start_idx = 0;
   for (int i = 0; i < curr_ms; ++i)
     start_idx += num_updates[i];
 
-  if (start_idx < updates.size())
+  if (start_idx < PB_UPDATES_MAX)
   {
     const u16 count = num_updates[curr_ms];
-    if (count <= updates.size() - start_idx)
+    if (count <= PB_UPDATES_MAX - start_idx)
     {
       const u32 end_idx = start_idx + count;
       for (u32 i = start_idx; i < end_idx; ++i)
