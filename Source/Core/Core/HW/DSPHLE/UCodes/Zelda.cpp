@@ -70,6 +70,11 @@ enum ZeldaUCodeFlag
   // If set, command 0D (unknown purpose) is combined with the render command,
   // which as such takes two more command arguments. TODO: rename.
   COMBINED_CMD_0D = 0x00000400,
+
+  // If set, each frame starts by mixing the back (surround) buffers into the front buffers,
+  // which they replace, and clearing them; else the front buffers are cleared and the back
+  // ones decay.
+  BACK_MIXED_INTO_FRONT = 0x00000800,
 };
 
 struct UCodeFlags
@@ -94,7 +99,7 @@ static const UCodeFlags UCODE_FLAGS[] = {
     // Pikmin 1 GC PAL.
     {0x267FD05A, SYNC_PER_FRAME | NO_CMD_0D},
     // Super Mario Sunshine.
-    {0x56D36052, SYNC_PER_FRAME | NO_CMD_0D},
+    {0x56D36052, SYNC_PER_FRAME | NO_CMD_0D | BACK_MIXED_INTO_FRONT},
     // The Legend of Zelda: The Wind Waker.
     {0x86840740, 0},
     // The Legend of Zelda: Collector's Edition (except Wind Waker).
@@ -1017,19 +1022,40 @@ void ZeldaAudioRenderer::PrepareFrame()
   if (m_prepared)
     return;
 
-  memset(m_buf_front_left, 0, sizeof(m_buf_front_left));
-  memset(m_buf_front_right, 0, sizeof(m_buf_front_right));
+  if (m_flags & BACK_MIXED_INTO_FRONT)
+  {
+    // the back left buffer, the surround side, is folded into the front with the right leg
+    // inverted; the second half of back right into the first half of the front, the other
+    // way round
+    for (int i = 0; i < MIXING_BUFFER_SIZE; ++i)
+    {
+      m_buf_front_left[i] = (s16)SaturateS16(RoundAsDSP((s32)m_buf_back_left[i] * 0x7FFF, 15));
+      m_buf_front_right[i] =
+          (s16)SaturateS16(RoundAsDSP((s32)m_buf_back_left[i] * (s16)0xB820, 15));
+    }
+    AddBuffersWithVolume(m_buf_front_left, m_buf_back_right + 0x28, 0x28, (s16)0xB820);
+    AddBuffersWithVolume(m_buf_front_right, m_buf_back_right + 0x28, 0x28, 0x7FFF);
+    memset(m_buf_back_left, 0, sizeof(m_buf_back_left));
+    memset(m_buf_back_right, 0, sizeof(m_buf_back_right));
+    memset(m_buf_unk0, 0, sizeof(m_buf_unk0));
+    memset(m_buf_unk1, 0, sizeof(m_buf_unk1));
+  }
+  else
+  {
+    memset(m_buf_front_left, 0, sizeof(m_buf_front_left));
+    memset(m_buf_front_right, 0, sizeof(m_buf_front_right));
 
-  ApplyVolumeInPlace(m_buf_back_left, 0x6784, 1);
-  ApplyVolumeInPlace(m_buf_back_right, 0x6784, 1);
+    ApplyVolumeInPlace(m_buf_back_left, 0x6784, 1);
+    ApplyVolumeInPlace(m_buf_back_right, 0x6784, 1);
 
-// TODO: Back left and back right should have a filter applied to them,
-// then get mixed into front left and front right. In practice, TWW never
-// uses this AFAICT. PanicAlert to help me find places that use this.
+    // TODO: Back left and back right should have a filter applied to them,
+    // then get mixed into front left and front right. In practice, TWW never
+    // uses this AFAICT. PanicAlert to help me find places that use this.
 #ifdef STRICT_ZELDA_HLE
-  if (!(m_flags & LIGHT_PROTOCOL) && (m_buf_back_left[0] != 0 || m_buf_back_right[0] != 0))
-    PanicAlert("Zelda HLE using back mixing buffers");
+    if (!(m_flags & LIGHT_PROTOCOL) && (m_buf_back_left[0] != 0 || m_buf_back_right[0] != 0))
+      PanicAlert("Zelda HLE using back mixing buffers");
 #endif
+  }
 
   // Add reverb data from previous frame.
   ApplyReverb(false);
