@@ -1,7 +1,9 @@
 
+#include <compat/strl.h>
 #include <libretro.h>
 #include <cstdlib>
 #include <stdint.h>
+#include <string.h>
 
 #include <retro_atomic.h>
 #include "DolphinLibretro/Common/Options.h"
@@ -2152,7 +2154,7 @@ static void ParseValue(CachedOption* entry, const char* value)
 {
   char* end = nullptr;
 
-  entry->raw = value;
+  strlcpy(entry->raw, value, sizeof(entry->raw));
 
   entry->int_value = strtol(value, &end, 10);
   entry->has_int = (end && *end == '\0');
@@ -2251,7 +2253,7 @@ template <>
 const char* GetCached<const char*>(const char* key, const char* def)
 {
   const int i = Find(key);
-  return (i < 0) ? def : s_cache[i].raw.c_str();
+  return (i < 0) ? def : s_cache[i].raw;
 }
 }  // namespace Options
 

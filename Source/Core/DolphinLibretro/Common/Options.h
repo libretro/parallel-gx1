@@ -43,9 +43,15 @@
   {"120",nullptr},{"121",nullptr},{"122",nullptr},{"123",nullptr},{"124",nullptr}, \
   {nullptr,nullptr}
 
+/* The longest an option's value is kept: every value the core lists is far shorter */
+enum
+{
+  CACHED_OPTION_RAW_SIZE = 64
+};
+
 struct CachedOption
 {
-  std::string raw;
+  char raw[CACHED_OPTION_RAW_SIZE];
   long int_value = 0;
   double double_value = 0.0;
   bool bool_value = false;
