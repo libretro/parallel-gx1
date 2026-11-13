@@ -1171,7 +1171,9 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
       // Upload the reverb data to RAM.
       memory.CopyToEmuSwapped(mram_addr, buffer->data(), sizeof(*buffer));
 
-      mram_buffer_idx = (mram_buffer_idx + 1) % rpb.circular_buffer_size;
+      // a ring of no frames stays on its first frame instead of dividing by zero
+      mram_buffer_idx =
+          rpb.circular_buffer_size ? (mram_buffer_idx + 1) % rpb.circular_buffer_size : 0;
       m_reverb_pb_frames_count[rpb_idx] = mram_buffer_idx;
     }
   }
