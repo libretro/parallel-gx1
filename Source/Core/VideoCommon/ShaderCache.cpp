@@ -2120,9 +2120,9 @@ void ShaderCache::CompileTextureConversionPipelines()
                                                   TextureFormat::IA8, TextureFormat::RGB565,
                                                   TextureFormat::RGB5A3};
   static const TextureFormat decodable[] = {
-      TextureFormat::I4,   TextureFormat::I8,     TextureFormat::IA4,   TextureFormat::IA8,
+      TextureFormat::I4,     TextureFormat::I8,     TextureFormat::IA4,   TextureFormat::IA8,
       TextureFormat::RGB565, TextureFormat::RGB5A3, TextureFormat::RGBA8, TextureFormat::C4,
-      TextureFormat::C8,   TextureFormat::C14X2,  TextureFormat::CMPR};
+      TextureFormat::C8,     TextureFormat::C14X2,  TextureFormat::CMPR,  TextureFormat::XFB};
   static const TLUTFormat palettes[] = {TLUTFormat::IA8, TLUTFormat::RGB565, TLUTFormat::RGB5A3};
   size_t i, j;
 
