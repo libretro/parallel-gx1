@@ -230,9 +230,15 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
     INFO_LOG(IOS_WFS, "%s: %08x bytes of data at %08x from content id %u", ioctl_name, input_size,
              input_ptr, content_id);
 
+    const u8* const input = memory.GetPointerForRange(input_ptr, input_size);
+    // data that is not in emulated memory is not imported
+    if (!input && input_size != 0)
+    {
+      return_error_code = WFS_EINVAL;
+      break;
+    }
     std::vector<u8> decrypted(input_size);
-    m_aes_ctx->Crypt(m_aes_iv, m_aes_iv, memory.GetPointerForRange(input_ptr, input_size),
-                     decrypted.data(), input_size);
+    m_aes_ctx->Crypt(m_aes_iv, m_aes_iv, input, decrypted.data(), input_size);
 
     m_arc_unpacker.AddBytes(decrypted.data(), decrypted.size());
     break;
@@ -531,7 +537,14 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
     }
     else
     {
-      fp.ReadBytes(memory.GetPointerForRange(dol_addr, max_dol_size), max_dol_size);
+      u8* const dol = memory.GetPointerForRange(dol_addr, max_dol_size);
+      // the DOL is read into emulated memory, or not at all
+      if (!dol)
+      {
+        return_error_code = WFS_EINVAL;
+        break;
+      }
+      fp.ReadBytes(dol, max_dol_size);
     }
     memory.Write_U32(real_dol_size, request.buffer_out);
     break;
@@ -583,7 +596,11 @@ u32 WFSIDevice::GetTmd(u16 group_id, u32 title_id, u64 subtitle_id, u32 address,
   {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    fp.ReadBytes(memory.GetPointerForRange(address, *size), *size);
+    u8* const tmd = memory.GetPointerForRange(address, *size);
+    // the TMD is read into emulated memory, or not at all
+    if (!tmd)
+      return WFS_EINVAL;
+    fp.ReadBytes(tmd, *size);
   }
   return IPC_SUCCESS;
 }

@@ -295,13 +295,21 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
       break;
     }
 
+    u8* const dest = memory.GetPointerForRange(addr, size);
+    // the file is read into emulated memory, or not at all
+    if (!dest)
+    {
+      return_error_code = WFS_EINVAL;
+      break;
+    }
+
     const u64 previous_position = fd_obj->file.Tell();
     if (absolute)
     {
       fd_obj->file.Seek(position, File::SeekOrigin::Begin);
     }
     size_t read_bytes;
-    fd_obj->file.ReadArray(memory.GetPointerForRange(addr, size), size, &read_bytes);
+    fd_obj->file.ReadArray(dest, size, &read_bytes);
     // TODO(wfs): Handle read errors.
     if (absolute)
     {
@@ -336,12 +344,20 @@ std::optional<IPCReply> WFSSRVDevice::IOCtl(const IOCtlRequest& request)
       break;
     }
 
+    const u8* const src = memory.GetPointerForRange(addr, size);
+    // the file is written from emulated memory, or not at all
+    if (!src)
+    {
+      return_error_code = WFS_EINVAL;
+      break;
+    }
+
     const u64 previous_position = fd_obj->file.Tell();
     if (absolute)
     {
       fd_obj->file.Seek(position, File::SeekOrigin::Begin);
     }
-    fd_obj->file.WriteArray(memory.GetPointerForRange(addr, size), size);
+    fd_obj->file.WriteArray(src, size);
     // TODO(wfs): Handle write errors.
     if (absolute)
     {
