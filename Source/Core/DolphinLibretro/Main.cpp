@@ -354,12 +354,24 @@ void retro_run(void)
        * FIFO player clearing the EFB does */
       Libretro::Video::D3D11Lock();
       /* the CPU thread interrupts the loop as it gets there */
-      while (!system.GetCPU().HasCPURunStateBeenReached())
+      while (!system.GetCPU().HasCPURunStateBeenReached() &&
+             Core::GetState(system) != Core::State::Uninitialized)
         system.GetFifo().RunGpuLoop(Libretro::Video::FIELD_WEDGE_US);
       Libretro::Video::D3D11Unlock();
     }
     else
       Core::EmuThread(system, std::move(Core::g_boot_params));
+
+    /* The boot failed, the DSP or the disc not coming up (the log says
+     * why): the emulation thread has shut the hardware down again, so
+     * stop here instead of running a CPU that is not there. */
+    if (Core::GetState(system) == Core::State::Uninitialized)
+    {
+      ERROR_LOG(BOOT, "The boot failed; not running.");
+      Libretro::Log::DoLogFrontEnd(RETRO_LOG_ERROR, "The boot failed; see the log.", 5000);
+      Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
+      return;
+    }
 
     Libretro::g_emuthread_launched = true;
 
