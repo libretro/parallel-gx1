@@ -256,8 +256,11 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
   }
 
   Common::ScopeGuard socket_guard{[sock] { close(sock); }};
-  std::array<char, BUFF_SIZE> msg_buffer{};
-  auto nl_msg = reinterpret_cast<nlmsghdr*>(msg_buffer.data());
+  /* The request and the kernel's reply. IOS calls run on the CPU thread alone, so the buffer is
+   * the function's own, not 8 KiB of its stack frame. */
+  alignas(nlmsghdr) static char msg_buffer[BUFF_SIZE];
+  memset(msg_buffer, 0, sizeof(msg_buffer));
+  auto nl_msg = reinterpret_cast<nlmsghdr*>(msg_buffer);
   auto rt_msg = reinterpret_cast<rtmsg*>(NLMSG_DATA(nl_msg));
   const unsigned int pid = getpid();
 
@@ -278,11 +281,11 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
 
   // read response
   unsigned int msg_len = 0;
-  msg_buffer.fill(0);
+  memset(msg_buffer, 0, sizeof(msg_buffer));
 
   do
   {
-    auto buf_ptr = msg_buffer.data() + msg_len;
+    auto buf_ptr = msg_buffer + msg_len;
     const int read_len = recv(sock, buf_ptr, BUFF_SIZE - msg_len, 0);
     if (read_len < 0)
     {
@@ -328,7 +331,7 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
   } while (msg_len <= BUFF_SIZE && (nl_msg->nlmsg_seq != msg_seq || nl_msg->nlmsg_pid != pid));
 
   // parse the response
-  nl_msg = reinterpret_cast<nlmsghdr*>(msg_buffer.data());
+  nl_msg = reinterpret_cast<nlmsghdr*>(msg_buffer);
   for (; NLMSG_OK(nl_msg, msg_len); nl_msg = NLMSG_NEXT(nl_msg, msg_len))
   {
     rt_msg = reinterpret_cast<rtmsg*>(NLMSG_DATA(nl_msg));
