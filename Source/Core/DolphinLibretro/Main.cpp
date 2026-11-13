@@ -200,6 +200,7 @@ void retro_init(void)
     &Libretro::msg_interface_version);
 
   http_service_init();
+  Libretro::InitDiskControlInterface();
 }
 
 void retro_deinit(void)

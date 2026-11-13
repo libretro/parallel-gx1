@@ -55,9 +55,12 @@ namespace Libretro
 extern retro_environment_t environ_cb;
 
 // Disk swapping
-static void InitDiskControlInterface();
 static unsigned disk_index = 0;
 static bool eject_state;
+/* The disc the frontend asked to start on, before the content is loaded: its index in the
+ * playlist and its path, a copy; null when it asked for none */
+static unsigned initial_disk_index;
+static char* initial_disk_path;
 /* The discs' paths, each its own copy; an image added and not yet replaced is "" */
 static char** disk_paths;
 static unsigned disk_count;
@@ -96,6 +99,23 @@ static bool DiskPathsAppend(const char* path)
   memcpy(copy, path, size);
   disk_paths[disk_count++] = copy;
   return true;
+}
+
+/* The disc to start on, now the playlist is known: the one the frontend asked for when its
+ * index and path still match the list, else the first, as the disk control interface says.
+ * The request is used up either way. */
+static unsigned TakeInitialDisk()
+{
+  unsigned index = 0;
+  if (initial_disk_path && initial_disk_index < disk_count &&
+      !strcmp(disk_paths[initial_disk_index], initial_disk_path))
+  {
+    index = initial_disk_index;
+  }
+  free(initial_disk_path);
+  initial_disk_path = nullptr;
+  initial_disk_index = 0;
+  return index;
 }
 
 // GBPlayer
@@ -334,7 +354,6 @@ bool retro_load_game(const struct retro_game_info* game)
 
   Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir);
   Libretro::environ_cb(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY, &core_assets_dir);
-  Libretro::InitDiskControlInterface();
 
   if (save_dir && *save_dir)
     user_dir = std::string(save_dir) + DIR_SEP "User";
@@ -803,6 +822,21 @@ bool retro_load_game(const struct retro_game_info* game)
 
   for (const std::string& normalized_game_path : normalized_game_paths)
     Libretro::DiskPathsAppend(normalized_game_path.c_str());
+  Libretro::disk_index = Libretro::TakeInitialDisk();
+  if (Libretro::disk_index)
+  {
+    /* Boot starts on the first path and changes disc through the rest in turn: the list starts
+     * at the disc asked for, in the playlist's order from there */
+    const size_t count = normalized_game_paths.size();
+    std::vector<std::string> from_initial;
+    size_t i;
+    from_initial.reserve(count);
+    for (i = 0; i < count; i++)
+      from_initial.push_back(normalized_game_paths[(Libretro::disk_index + i) % count]);
+    normalized_game_paths.swap(from_initial);
+    NOTICE_LOG(BOOT, "Starting on disc %u of %u: %s", Libretro::disk_index + 1,
+               static_cast<unsigned>(count), normalized_game_paths.front().c_str());
+  }
 
   Libretro::Input::Init();
 
@@ -1050,13 +1084,20 @@ static bool retro_replace_image_index(unsigned index, const struct retro_game_in
   return true;
 }
 
+/* Called before the content is loaded, when the playlist is not known yet: the request is kept
+ * and checked against it once it is (TakeInitialDisk). */
 static bool RETRO_CALLCONV retro_set_initial_image(unsigned index, const char* path)
 {
-  if (index >= disk_count)
-    index = 0;
-
-  disk_index = index;
-
+  free(initial_disk_path);
+  initial_disk_path = nullptr;
+  if (path && *path)
+  {
+    const size_t size = strlen(path) + 1;
+    initial_disk_path = static_cast<char*>(malloc(size));
+    if (initial_disk_path)
+      memcpy(initial_disk_path, path, size);
+  }
+  initial_disk_index = index;
   return true;
 }
 
@@ -1077,7 +1118,7 @@ static bool RETRO_CALLCONV retro_get_image_label(unsigned index, char* label, si
   return true;
 }
 
-static void InitDiskControlInterface()
+void InitDiskControlInterface()
 {
   static retro_disk_control_ext_callback disk_control = {
       retro_set_eject_state,

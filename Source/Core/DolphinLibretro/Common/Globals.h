@@ -27,6 +27,9 @@ extern std::vector<ActionReplay::ARCode> g_ar_codes;
 void FinishFieldInFlight();
 /* After what FinishFieldInFlight was for: a parked GPU thread goes on. */
 void ResumeAfterField();
+/* The disk control interface, given to the frontend in retro_init: set_initial_image is only
+ * called before the content is loaded when the interface is there by then. */
+void InitDiskControlInterface();
 inline constexpr unsigned g_gbplayer_subsystem_id = 0x101;
 
 namespace Input
