@@ -509,10 +509,11 @@ bool retro_load_game(const struct retro_game_info* game)
     Config::SetBase(Config::MAIN_OVERCLOCK_ENABLE, multiplier != 1.0);
   }
 
-  Config::SetBase(Config::MAIN_WIIMOTE_CONTINUOUS_SCANNING,
-                  Libretro::GetOption<bool>(sysconf::WIIMOTE_CONTINUOUS_SCANNING,
-                                             /*def=*/false) ||
-                  Libretro::GetOption<std::string>(wiimote::DEFAULT_DEVICE, "frontend") == "real");
+  Config::SetBase(
+      Config::MAIN_WIIMOTE_CONTINUOUS_SCANNING,
+      Libretro::GetOption<bool>(sysconf::WIIMOTE_CONTINUOUS_SCANNING,
+                                /*def=*/false) ||
+          !strcmp(Libretro::GetOption<const char*>(wiimote::DEFAULT_DEVICE, "frontend"), "real"));
   Config::SetBase(Config::MAIN_MMU,
                   Libretro::GetOption<bool>(core::MAIN_MMU, /*def=*/false));
 
@@ -531,13 +532,13 @@ bool retro_load_game(const struct retro_game_info* game)
 
   // SYSCONF (GC)
   {
-    const std::string value =
-      Libretro::GetOption<std::string>(
-        sysconf_gc::SP1_DEVICE,
-        "255" // ExpansionInterface::EXIDeviceType::None
-      );
-
-    const int device_int = std::stoi(value);
+    /* a value that is not a number is no device, as the option's default is */
+    const char* const value = Libretro::GetOption<const char*>(
+        sysconf_gc::SP1_DEVICE, "255" /* ExpansionInterface::EXIDeviceType::None */);
+    char* end = nullptr;
+    long device_int = strtol(value, &end, 10);
+    if (end == value || *end)
+      device_int = 255;
     const auto device = static_cast<ExpansionInterface::EXIDeviceType>(device_int);
 
     Config::SetBase(Config::MAIN_SERIAL_PORT_1, device);
@@ -761,7 +762,7 @@ bool retro_load_game(const struct retro_game_info* game)
   }
 #endif
   NOTICE_LOG(BOOT, "CPU Core: %s",
-             Libretro::Options::CPUCoreToString(Config::Get(Config::MAIN_CPU_CORE)).c_str());
+             Libretro::Options::CPUCoreToString(Config::Get(Config::MAIN_CPU_CORE)));
   NOTICE_LOG(BOOT, "Fastmem enabled = %s", (Config::Get(Config::MAIN_FASTMEM)) ? "Yes" : "No");
 
   Libretro::Video::Init();
@@ -775,8 +776,9 @@ bool retro_load_game(const struct retro_game_info* game)
     return false;
   }
   /* GPU texture decoding, auto: with Vulkan, which decodes ahead of the frame's draws */
-  if (Libretro::GetOption<std::string>(Libretro::Options::gfx_settings::GPU_TEXTURE_DECODING,
-                                       "auto") == "auto")
+  if (!strcmp(Libretro::GetOption<const char*>(
+                  Libretro::Options::gfx_settings::GPU_TEXTURE_DECODING, "auto"),
+              "auto"))
   {
     Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING,
                     Libretro::Video::hw_render.context_type == RETRO_HW_CONTEXT_VULKAN);

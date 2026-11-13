@@ -80,7 +80,7 @@ template <typename T>
 T GetCached(const char* key, T def = T{});
 bool IsUpdated(const char* key);
 
-inline std::string CPUCoreToString(PowerPC::CPUCore core)
+inline const char* CPUCoreToString(PowerPC::CPUCore core)
 {
   switch (core)
   {

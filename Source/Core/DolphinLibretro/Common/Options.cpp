@@ -2310,12 +2310,13 @@ double GetOption<double>(const char* key, double def)
   return def;
 }
 
+/* The frontend's value itself, without a copy: good until the next one is asked for. */
 template <>
-std::string GetOption<std::string>(const char* key, std::string def)
+const char* GetOption<const char*>(const char* key, const char* def)
 {
   const char* val = nullptr;
   if (GetVariable(key, val))
-    return std::string(val);
+    return val;
   return def;
 }
 }  // namespace Libretro
