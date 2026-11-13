@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <string.h>
 #include <tuple>
 
 #include "Common/Config/Config.h"
@@ -22,7 +23,7 @@
 
 namespace ciface::DualShockUDPClient
 {
-constexpr std::string_view DUALSHOCKUDP_SOURCE_NAME = "DSUClient";
+static constexpr char DUALSHOCKUDP_SOURCE_NAME[] = "DSUClient";
 
 namespace Settings
 {
@@ -49,7 +50,7 @@ private:
         : m_name(name), m_buttons(buttons), m_mask(mask)
     {
     }
-    std::string GetName() const override { return m_name; }
+    const char* GetName() const override { return m_name; }
     ControlState GetState() const override { return (m_buttons & m_mask) != 0; }
 
   private:
@@ -66,7 +67,7 @@ private:
         : m_name(name), m_input(input), m_range(range), m_offset(offset)
     {
     }
-    std::string GetName() const final { return m_name; }
+    const char* GetName() const final { return m_name; }
     ControlState GetState() const final { return (ControlState(m_input) + m_offset) / m_range; }
 
   private:
@@ -98,7 +99,7 @@ private:
 
     BatteryInput(const BatteryState& battery) : m_battery(battery) {}
 
-    std::string GetName() const override { return "Battery"; }
+    const char* GetName() const override { return "Battery"; }
 
     ControlState GetState() const override
     {
@@ -122,8 +123,8 @@ public:
   Device(std::string name, int index, std::string server_address, u16 server_port, u32 client_uid);
   ~Device() override { net_close(m_socket); }
 
-  std::string GetName() const final override;
-  std::string GetSource() const final override;
+  const char* GetName() const final override;
+  const char* GetSource() const final override;
   std::optional<int> GetPreferredId() const final override;
   // Always add these at the end, given their hotplug nature
   int GetSortPriority() const override { return -5; }
@@ -500,7 +501,7 @@ void InputBackend::PopulateDevices()
   // also it's good to remove all of them before adding new ones so that their id will be set
   // correctly if they have the same name
   GetControllerInterface().RemoveDevice(
-      [](const auto* dev) { return dev->GetSource() == DUALSHOCKUDP_SOURCE_NAME; });
+      [](const auto* dev) { return !strcmp(dev->GetSource(), DUALSHOCKUDP_SOURCE_NAME); });
 
   // Users might have created more than one server on the same IP/Port.
   // Devices might end up being duplicated (if the server responds two all requests)
@@ -612,14 +613,14 @@ void Device::ResetPadData()
   m_pad_data.touch1.y = m_touch_y;
 }
 
-std::string Device::GetName() const
+const char* Device::GetName() const
 {
-  return m_name;
+  return m_name.c_str();
 }
 
-std::string Device::GetSource() const
+const char* Device::GetSource() const
 {
-  return std::string(DUALSHOCKUDP_SOURCE_NAME);
+  return DUALSHOCKUDP_SOURCE_NAME;
 }
 
 Core::DeviceRemoval Device::UpdateInput()

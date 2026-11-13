@@ -4,6 +4,7 @@
 #include "InputCommon/ControllerInterface/SteamDeck/SteamDeck.h"
 
 #include <hidapi.h>
+#include <string.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -12,7 +13,7 @@
 
 namespace ciface::SteamDeck
 {
-constexpr std::string_view STEAMDECK_SOURCE_NAME = "SteamDeck";
+static constexpr char STEAMDECK_SOURCE_NAME[] = "SteamDeck";
 
 struct DeckInputReport
 {
@@ -74,7 +75,7 @@ private:
         : m_name(name), m_buttons(buttons), m_mask(mask)
     {
     }
-    std::string GetName() const override { return m_name; }
+    const char* GetName() const override { return m_name; }
     ControlState GetState() const override { return (m_buttons & m_mask) != 0; }
 
   private:
@@ -91,7 +92,7 @@ private:
         : m_name(name), m_input(input), m_range(range)
     {
     }
-    std::string GetName() const final { return m_name; }
+    const char* GetName() const final { return m_name; }
     ControlState GetState() const final { return ControlState(m_input) / m_range; }
 
   private:
@@ -108,8 +109,8 @@ private:
 
 public:
   Device(hid_device* device);
-  std::string GetName() const final override;
-  std::string GetSource() const final override;
+  const char* GetName() const final override;
+  const char* GetSource() const final override;
   Core::DeviceRemoval UpdateInput() override;
 
 private:
@@ -184,7 +185,7 @@ void InputBackend::PopulateDevices()
   }
 
   GetControllerInterface().RemoveDevice(
-      [](const auto* dev) { return dev->GetSource() == STEAMDECK_SOURCE_NAME; });
+      [](const auto* dev) { return !strcmp(dev->GetSource(), STEAMDECK_SOURCE_NAME); });
 
   GetControllerInterface().AddDevice(std::make_shared<Device>(deck_dev));
 }
@@ -266,14 +267,14 @@ Device::Device(hid_device* device) : m_device{device}
   // clang-format on
 }
 
-std::string Device::GetName() const
+const char* Device::GetName() const
 {
   return "Steam Deck";
 }
 
-std::string Device::GetSource() const
+const char* Device::GetSource() const
 {
-  return std::string(STEAMDECK_SOURCE_NAME);
+  return STEAMDECK_SOURCE_NAME;
 }
 
 Core::DeviceRemoval Device::UpdateInput()

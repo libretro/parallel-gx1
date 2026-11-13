@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <memory>
+#include <string.h>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -51,7 +52,7 @@ public:
 
     return result;
   }
-  std::string GetName() const override { return m_name; }
+  const char* GetName() const override { return m_name.c_str(); }
   bool IsChild(const Input* input) const override
   {
     return m_inputs.first == input || m_inputs.second == input;
@@ -90,7 +91,7 @@ void Device::AddOutput(Device::Output* const o)
 
 std::string Device::GetQualifiedName() const
 {
-  return StringFromFormat("%s/%d/%s", GetSource().c_str(), GetId(), GetName().c_str());
+  return StringFromFormat("%s/%d/%s", GetSource(), GetId(), GetName());
 }
 
 Device::Input* Device::FindInput(std::string_view name) const
@@ -117,24 +118,29 @@ Device::Output* Device::FindOutput(std::string_view name) const
 
 bool Device::Control::IsMatchingName(std::string_view name) const
 {
-  return GetName() == name;
+  return std::string_view(GetName()) == name;
 }
 
 class FullAnalogSurface final : public Device::Input
 {
 public:
-  FullAnalogSurface(Input* low, Input* high) : m_low(*low), m_high(*high) {}
+  FullAnalogSurface(Input* low, Input* high) : m_low(*low), m_high(*high)
+  {
+    const char* const high_name = m_high.GetName();
+    const size_t high_length = strlen(high_name);
+    /* e.g. "Full Axis X+" */
+    snprintf(m_name, sizeof(m_name), "Full %s", high_name);
+    /* the old naming scheme, "Axis X-+": the low input's name and the high one's sign */
+    snprintf(m_old_name, sizeof(m_old_name), "%s%c", m_low.GetName(),
+             high_length ? high_name[high_length - 1] : '\0');
+  }
 
   ControlState GetState() const override
   {
     return (1 + std::max(0.0, m_high.GetState()) - std::max(0.0, m_low.GetState())) / 2;
   }
 
-  std::string GetName() const override
-  {
-    // E.g. "Full Axis X+"
-    return "Full " + m_high.GetName();
-  }
+  const char* GetName() const override { return m_name; }
 
   bool IsMatchingName(std::string_view name) const override
   {
@@ -144,14 +150,14 @@ public:
     // Old naming scheme was "Axis X-+" which is too visually similar to "Axis X+".
     // This has caused countless problems for users with mysterious misconfigurations.
     // We match this old name to support old configurations.
-    const auto old_name = m_low.GetName() + *m_high.GetName().rbegin();
-
-    return old_name == name;
+    return std::string_view(m_old_name) == name;
   }
 
 private:
   Input& m_low;
   Input& m_high;
+  char m_name[64];
+  char m_old_name[64];
 };
 
 //
@@ -205,8 +211,8 @@ void DeviceQualifier::FromDevice(const Device* const dev)
 bool DeviceQualifier::operator==(const Device* const dev) const
 {
   if (dev->GetId() == cid)
-    if (dev->GetName() == name)
-      if (dev->GetSource() == source)
+    if (!strcmp(dev->GetName(), name.c_str()))
+      if (!strcmp(dev->GetSource(), source.c_str()))
         return true;
 
   return false;

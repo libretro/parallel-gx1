@@ -31,7 +31,7 @@ public:
   {
   }
 
-  std::string GetName() const override { return m_name; }
+  const char* GetName() const override { return m_name.c_str(); }
 
   ControlState GetState() const override { return (m_value & m_mask) != 0; }
 
@@ -51,7 +51,7 @@ public:
   {
   }
 
-  std::string GetName() const override { return m_name; }
+  const char* GetName() const override { return m_name.c_str(); }
 
   ControlState GetState() const final { return ControlState(m_value) / m_extent; }
 
@@ -72,9 +72,17 @@ template <bool Detectable>
 class SignedInput final : public GenericInput<float, Detectable>
 {
 public:
-  using GenericInput<float, Detectable>::GenericInput;
+  SignedInput(const float* value, std::string name, ControlState extent)
+      : GenericInput<float, Detectable>(value, std::move(name), extent)
+  {
+    snprintf(m_signed_name, sizeof(m_signed_name), "%s%c", this->m_name.c_str(),
+             this->m_extent < 0 ? '-' : '+');
+  }
 
-  std::string GetName() const override { return this->m_name + (this->m_extent < 0 ? '-' : '+'); }
+  const char* GetName() const override { return m_signed_name; }
+
+private:
+  char m_signed_name[64];
 };
 
 using SignedAnalogInput = SignedInput<true>;
@@ -85,7 +93,7 @@ class Motor final : public Core::Device::Output
 public:
   Motor(retro_atomic_64_t* value) : m_value(value) {}
 
-  std::string GetName() const override { return "Motor"; }
+  const char* GetName() const override { return "Motor"; }
 
   void SetState(ControlState state) override
   {
@@ -138,7 +146,7 @@ void ReleaseDevices(std::optional<u32> count)
   // they could be kept alive, preventing us from re-creating the device)
   g_controller_interface.RemoveDevice(
       [&](const Core::Device* device) {
-        if (device->GetSource() != SOURCE_NAME || count == removed_devices)
+        if (strcmp(device->GetSource(), SOURCE_NAME) || count == removed_devices)
           return false;
 
         ++removed_devices;
@@ -331,12 +339,12 @@ Device::~Device()
   WiimoteReal::AddWiimoteToPool(std::move(m_wiimote));
 }
 
-std::string Device::GetName() const
+const char* Device::GetName() const
 {
   return "Wii Remote";
 }
 
-std::string Device::GetSource() const
+const char* Device::GetSource() const
 {
   return SOURCE_NAME;
 }

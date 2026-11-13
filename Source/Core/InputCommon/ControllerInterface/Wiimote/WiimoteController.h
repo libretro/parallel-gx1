@@ -31,8 +31,8 @@ public:
   Device(std::unique_ptr<WiimoteReal::Wiimote> wiimote);
   ~Device() override;
 
-  std::string GetName() const override;
-  std::string GetSource() const override;
+  const char* GetName() const override;
+  const char* GetSource() const override;
   int GetSortPriority() const override;
 
   Core::DeviceRemoval UpdateInput() override;

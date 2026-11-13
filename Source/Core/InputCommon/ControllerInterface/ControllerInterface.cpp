@@ -161,8 +161,8 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
   EditDevices([&device](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
     const auto is_id_in_use = [&device, &devices](int id) {
       return std::ranges::any_of(devices, [&device, &id](const auto& d) {
-        return d->GetSource() == device->GetSource() && d->GetName() == device->GetName() &&
-               d->GetId() == id;
+        return !strcmp(d->GetSource(), device->GetSource()) &&
+               !strcmp(d->GetName(), device->GetName()) && d->GetId() == id;
       });
     };
 

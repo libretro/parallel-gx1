@@ -351,7 +351,7 @@ private:
         : m_port(port), m_device(device), m_index(index), m_id(id), m_name(name)
     {
     }
-    std::string GetName() const override { return m_name; }
+    const char* GetName() const override { return m_name; }
     /* The state retro_run read; emulation threads never call the frontend themselves. */
     ControlState GetState() const override { return retro_atomic_load_acquire_int(&m_value); }
     void Poll()
@@ -375,7 +375,7 @@ private:
         : m_port(port), m_device(device), m_index(index), m_id(id), m_range(range), m_name(name)
     {
     }
-    std::string GetName() const override { return m_name; }
+    const char* GetName() const override { return m_name; }
     ControlState GetState() const override
     {
       const ControlState value = retro_atomic_load_acquire_int(&m_value) / m_range;
@@ -400,7 +400,7 @@ private:
   {
   public:
     Motor(u8 port) : m_port(port) {}
-    std::string GetName() const override { return "Rumble"; }
+    const char* GetName() const override { return "Rumble"; }
     /* Any thread: kept until retro_run hands it to the frontend. */
     void SetState(ControlState state) override
     {
@@ -487,8 +487,8 @@ public:
   {
     return ciface::Core::DeviceRemoval::Keep;
   }
-  std::string GetName() const override { return GetDeviceName(m_device); }
-  std::string GetSource() const override { return std::string(source); }
+  const char* GetName() const override { return GetDeviceName(m_device); }
+  const char* GetSource() const override { return source; }
   unsigned int GetPort() const { return m_port; }
 
 private:

@@ -72,8 +72,8 @@ class SensorDevice : public ciface::Core::Device
 public:
   explicit SensorDevice(unsigned port) : m_port(port) {}
 
-  std::string GetName() const override { return "Sensor"; }
-  std::string GetSource() const override { return std::string(Libretro::Input::source); }
+  const char* GetName() const override { return "Sensor"; }
+  const char* GetSource() const override { return Libretro::Input::source; }
   unsigned int GetPort() const { return m_port; }
   ciface::Core::DeviceRemoval UpdateInput() override { return ciface::Core::DeviceRemoval::Keep; }
 
@@ -82,7 +82,7 @@ private:
   {
   public:
     ScalarInput(const char* name, const double* slot) : m_name(name), m_slot(slot) {}
-    std::string GetName() const override { return m_name; }
+    const char* GetName() const override { return m_name; }
     ControlState GetState() const override { return *m_slot; }
   private:
     const char* m_name;
@@ -128,7 +128,7 @@ private:
     GyroAxis(unsigned port, Axis axis, const char* name)
         : m_port(port), m_axis(axis), m_name(name) {}
 
-    std::string GetName() const override { return m_name; }
+    const char* GetName() const override { return m_name; }
 
     ControlState GetState() const override
     {
@@ -161,6 +161,6 @@ public:
     AddInput(new GyroAxis(port, GyroAxis::YAW, "Yaw"));
   }
 
-  std::string GetName() const override { return "Gyroscope"; }
-  std::string GetSource() const override { return std::string(Libretro::Input::source); }
+  const char* GetName() const override { return "Gyroscope"; }
+  const char* GetSource() const override { return Libretro::Input::source; }
 };

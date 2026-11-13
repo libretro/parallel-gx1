@@ -74,7 +74,8 @@ public:
   {
   public:
     virtual ~Control() = default;
-    virtual std::string GetName() const = 0;
+    /* The control's name, kept by the control for as long as it lives */
+    virtual const char* GetName() const = 0;
 
     // May be overridden to allow multiple valid names.
     // Useful for backwards-compatible configurations when names change.
@@ -134,8 +135,9 @@ public:
 
   int GetId() const { return m_id; }
   void SetId(int id) { m_id = id; }
-  virtual std::string GetName() const = 0;
-  virtual std::string GetSource() const = 0;
+  /* The device's name and its backend's, kept for as long as the device lives */
+  virtual const char* GetName() const = 0;
+  virtual const char* GetSource() const = 0;
   std::string GetQualifiedName() const;
   virtual DeviceRemoval UpdateInput() { return DeviceRemoval::Keep; }
 
