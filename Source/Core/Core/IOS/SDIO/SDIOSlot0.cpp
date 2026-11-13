@@ -288,7 +288,9 @@ s32 SDIOSlot0Device::ExecuteCommand(const Request& request, u32 buffer_in, u32 b
     if (!m_card.Seek(address, File::SeekOrigin::Begin))
       ERROR_LOG(IOS_SD, "Seek failed");
 
-    if (m_card.ReadBytes(memory.GetPointerForRange(req.addr, size), size))
+    // the blocks are read into emulated memory, or not at all
+    u8* const dest = memory.GetPointerForRange(req.addr, size);
+    if (dest && m_card.ReadBytes(dest, size))
     {
       DEBUG_LOG(IOS_SD, "Outbuffer size %u got %u", rw_buffer_size, size);
     }
@@ -321,7 +323,9 @@ s32 SDIOSlot0Device::ExecuteCommand(const Request& request, u32 buffer_in, u32 b
       if (!m_card.Seek(address, File::SeekOrigin::Begin))
         ERROR_LOG(IOS_SD, "Seek failed");
 
-      if (!m_card.WriteBytes(memory.GetPointerForRange(req.addr, size), size))
+      // the blocks are written from emulated memory, or not at all
+      const u8* const src = memory.GetPointerForRange(req.addr, size);
+      if (!src || !m_card.WriteBytes(src, size))
       {
         ERROR_LOG(IOS_SD, "Write Failed");
         ret = RET_FAIL;
