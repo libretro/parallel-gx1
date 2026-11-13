@@ -8,7 +8,9 @@
 #    Tools/stutter/xfbsplit.sh <core> [frames]
 #
 # Exits 0 and prints PASS when the top is red and the bottom blue, 1 and
-# FAIL otherwise (a black picture is the XFB taken for not there).
+# FAIL otherwise (a black picture is the XFB taken for not there). With
+# the stats core it also fails on anything compiled or waited for on the
+# draw path after boot (the XFB decoding shader not built ahead).
 # BACKENDS (vulkan) lists the renderers to check, vulkan and/or software.
 
 set -e
@@ -62,7 +64,12 @@ for backend in $BACKENDS; do
    last=$(grep '^probe ' "$dir/run.txt" | tail -n 1)
    top=$(echo "$last" | sed -n 's/.*top=\([0-9a-f]*\).*/\1/p')
    bottom=$(echo "$last" | sed -n 's/.*bottom=\([0-9a-f]*\).*/\1/p')
-   if [ -n "$top" ] && is red "$top" && is blue "$bottom"; then
+   draw=$(grep '^stat draw_' "$dir/run.txt" | sed -n 's/^stat \([a-z_]*\) .* play=\([0-9]*\) .*/\1 \2/p' |
+      awk '$2 > 0 { printf "%s%s=%s", sep, $1, $2; sep = " " }')
+   if [ -n "$draw" ]; then
+      echo "xfbsplit $backend: FAIL (on the draw path after boot: $draw)"
+      status=1
+   elif [ -n "$top" ] && is red "$top" && is blue "$bottom"; then
       echo "xfbsplit $backend: PASS (top $top, bottom $bottom)"
    else
       echo "xfbsplit $backend: FAIL (top ${top:-none}, bottom ${bottom:-none}; see $dir)"
