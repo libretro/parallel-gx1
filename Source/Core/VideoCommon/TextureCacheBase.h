@@ -485,6 +485,7 @@ private:
   RcTcacheEntry DoPartialTextureUpdates(RcTcacheEntry& entry_to_update, const u8* palette,
                                         TLUTFormat tlutfmt);
   void StitchXFBCopy(RcTcacheEntry& entry_to_update);
+  bool HasXFBCopiesToStitch(u32 address, u32 size_in_bytes, u32 stride);
 
   void CheckTempSize(size_t required_size);
 

@@ -2324,7 +2324,8 @@ RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height
     GetDisplayRectForXFBEntry(entry.get(), width, height, display_rect);
     return entry;
   }
-  if (XFBMemoryUninitialized(src_data, width, height, stride))
+  if (XFBMemoryUninitialized(src_data, width, height, stride) &&
+      !HasXFBCopiesToStitch(address, total_size, stride))
     return {};
 
   // Create a new VRAM texture, and fill it with the data from guest RAM.
@@ -2414,6 +2415,24 @@ RcTcacheEntry TextureCacheBase::GetXFBFromCache(u32 address, u32 width, u32 heig
   }
 
   return {};
+}
+
+/* Whether copies kept in VRAM cover some of an XFB, to be stitched into it: a game that copies
+ * its picture in pieces never makes one that matches the XFB whole, so the XFB is built from
+ * RAM, where the pieces left only the uninitialized marker, and the pieces drawn over it. */
+bool TextureCacheBase::HasXFBCopiesToStitch(u32 address, u32 size_in_bytes, u32 stride)
+{
+  TexIndexRange iter = FindOverlappingTextures(address, size_in_bytes);
+
+  for (; iter.first != iter.second; iter.first = TexIndexNext(iter.first))
+  {
+    const TCacheEntry* const entry = iter.first->value.get();
+
+    if (entry->IsCopy() && entry->memory_stride == stride &&
+        entry->OverlapsMemoryRange(address, size_in_bytes))
+      return true;
+  }
+  return false;
 }
 
 void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
