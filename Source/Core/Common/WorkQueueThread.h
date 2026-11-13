@@ -30,6 +30,7 @@ public:
   WorkQueueThreadBase()
   {
     mpsc_stack_init(&m_items);
+    mpsc_stack_init(&m_free);
     retro_atomic_size_init(&m_pushed, 0);
     retro_atomic_size_init(&m_done, 0);
     retro_atomic_size_init(&m_cancel_to, 0);
@@ -46,6 +47,8 @@ public:
     Shutdown();
     FreeChain(m_held);
     FreeChain(reinterpret_cast<Node*>(mpsc_stack_reverse(mpsc_stack_drain(&m_items))));
+    FreeChain(m_producer_free);
+    FreeChain(reinterpret_cast<Node*>(mpsc_stack_drain(&m_free)));
     retro_eventcount_free(&m_progress);
     retro_eventcount_free(&m_wake);
   }
@@ -67,7 +70,22 @@ public:
   template <typename... Args>
   void EmplaceItem(Args&&... args)
   {
-    Node* const node = new Node{{nullptr}, T(std::forward<Args>(args)...)};
+    Node* node = nullptr;
+    if constexpr (IsSingleProducer)
+    {
+      /* a node the worker is done with: the only producer takes them, so no other thread does */
+      if (!m_producer_free)
+        m_producer_free = reinterpret_cast<Node*>(mpsc_stack_drain(&m_free));
+      node = m_producer_free;
+      if (node)
+      {
+        m_producer_free = reinterpret_cast<Node*>(node->link.next);
+        node->link.next = nullptr;
+        node->value = T(std::forward<Args>(args)...);
+      }
+    }
+    if (!node)
+      node = new Node{{nullptr}, T(std::forward<Args>(args)...)};
     mpsc_stack_push(&m_items, &node->link);
     retro_atomic_fetch_add_size(&m_pushed, 1);
     retro_eventcount_notify(&m_wake);
@@ -217,7 +235,10 @@ private:
         ++seq;
         if (seq > retro_atomic_load_acquire_size(&m_cancel_to))
           m_function(std::move(node->value));
-        delete node;
+        if constexpr (IsSingleProducer)
+          mpsc_stack_push(&m_free, &node->link);  // the producer's to take again
+        else
+          delete node;
         retro_atomic_store_release_size(&m_done, seq);
         retro_eventcount_notify(&m_progress);
         continue;
@@ -241,6 +262,9 @@ private:
   FunctionType m_function;
   std::string m_name;
   mpsc_stack_t m_items;
+  // With one producer: the nodes the worker is done with, and those the producer drained from them
+  mpsc_stack_t m_free;
+  Node* m_producer_free = nullptr;
   retro_eventcount_t m_wake;
   retro_eventcount_t m_progress;
   retro_atomic_size_t m_pushed;
