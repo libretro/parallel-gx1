@@ -3,20 +3,17 @@
 
 #include "Core/DSP/DSPHost.h"
 
-#include <string>
-
 #include "Common/CommonTypes.h"
 #include "Common/Hash.h"
 #include "Common/Logging/Log.h"
 #include "Core/Config/MainSettings.h"
+#include "Core/Core.h"
 #include "Core/DSP/DSPAnalyzer.h"
 #include "Core/DSP/DSPCodeUtil.h"
 #include "Core/DSP/DSPCore.h"
 #include "Core/HW/DSP.h"
-#include "Core/HW/DSPLLE/DSPSymbols.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
-#include "Core/Core.h"
 
 // The user of the DSPCore library must supply a few functions so that the
 // emulation core can access the environment it runs in. If the emulation
@@ -91,10 +88,6 @@ void CodeLoaded(DSPCore& dsp, const u8* ptr, size_t size)
   }
 
   NOTICE_LOG(DSPLLE, "g_dsp.iram_crc: %08x", iram_crc);
-
-  Symbols::Clear();
-  Symbols::AutoDisassembly(state, 0x0, 0x1000);
-  Symbols::AutoDisassembly(state, 0x8000, 0x9000);
 
   dsp.ClearIRAM();
   state.GetAnalyzer().Analyze(state);

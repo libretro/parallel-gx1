@@ -695,7 +695,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/DSPHLE/UCodes/Zelda.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/DSPLLE/DSPHost.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/DSPLLE/DSPLLE.cpp \
-	$(CORE_DIR)/Source/Core/Core/HW/DSPLLE/DSPSymbols.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/DVD/DVDInterface.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/DVD/AMMediaboard.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/DVD/DVDMath.cpp \
