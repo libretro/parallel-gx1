@@ -11,6 +11,7 @@
 #include "Common/CommonTypes.h"
 
 RETRO_DEQUE_DEFINE(u32_deque, u32);
+RETRO_DEQUE_DEFINE(u8_deque, u8);
 
 /* The state of the retro_deque q made by RETRO_DEQUE_DEFINE(name, ...): the
  * count as a u32, then each element as p.Do writes it - what a std::deque

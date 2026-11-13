@@ -17,11 +17,13 @@ void SerialDevice::WriteRxBytes(const u8* bytes, std::size_t size)
 
 void SerialDevice::TakeTxBytes(u8* bytes, std::size_t size)
 {
-  DEBUG_ASSERT(m_tx_buffer.size() >= size);
+  DEBUG_ASSERT(u8_deque_count(&m_tx_buffer) >= size);
 
   for (std::size_t i = 0; i < size; i++)
-    bytes[i] = m_tx_buffer[i];
-  m_tx_buffer.erase(m_tx_buffer.begin(), m_tx_buffer.begin() + size);
+  {
+    bytes[i] = *u8_deque_front(&m_tx_buffer);
+    u8_deque_pop_front(&m_tx_buffer);
+  }
 }
 
 void SerialDevice::ConsumeRxBytes(std::size_t count)
@@ -33,29 +35,24 @@ void SerialDevice::ConsumeRxBytes(std::size_t count)
 
 void SerialDevice::WriteTxBytes(const u8* bytes, std::size_t size)
 {
-  m_tx_buffer.insert(m_tx_buffer.end(), bytes, bytes + size);
+  for (std::size_t i = 0; i < size; i++)
+    u8_deque_push_back_growing(&m_tx_buffer, &bytes[i]);
 }
 
 void SerialDevice::PassThroughTxBytes(SerialDevice& other)
 {
-  // The destination buffer will often be empty or near-empty.
-  if (m_tx_buffer.size() < other.m_tx_buffer.size()) [[likely]]
-  {
-    other.m_tx_buffer.insert(other.m_tx_buffer.begin(), m_tx_buffer.begin(), m_tx_buffer.end());
-    m_tx_buffer.swap(other.m_tx_buffer);
-  }
-  else
-  {
-    m_tx_buffer.insert(m_tx_buffer.end(), other.m_tx_buffer.begin(), other.m_tx_buffer.end());
-  }
+  // other's bytes go after ours, in order
+  const std::size_t count = u8_deque_count(&other.m_tx_buffer);
+  for (std::size_t i = 0; i < count; i++)
+    u8_deque_push_back_growing(&m_tx_buffer, u8_deque_at(&other.m_tx_buffer, i));
 
-  other.m_tx_buffer.clear();
+  u8_deque_clear(&other.m_tx_buffer);
 }
 
 void SerialDevice::DoState(PointerWrap& p)
 {
   p.Do(m_rx_buffer);
-  p.Do(m_tx_buffer);
+  DO_RETRO_DEQUE(p, u8_deque, &m_tx_buffer);
 }
 
 }  // namespace Triforce

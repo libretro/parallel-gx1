@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include <deque>
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "Common/RetroDeque.h"
 
 class PointerWrap;
 
@@ -17,8 +17,8 @@ namespace Triforce
 class SerialDevice
 {
 public:
-  SerialDevice() = default;
-  virtual ~SerialDevice() = default;
+  SerialDevice() { u8_deque_init(&m_tx_buffer, 256); }
+  virtual ~SerialDevice() { u8_deque_free(&m_tx_buffer); }
 
   SerialDevice(const SerialDevice&) = delete;
   SerialDevice& operator=(const SerialDevice&) = delete;
@@ -27,7 +27,7 @@ public:
 
   void WriteRxBytes(const u8* bytes, std::size_t size);
 
-  std::size_t GetTxByteCount() const { return m_tx_buffer.size(); }
+  std::size_t GetTxByteCount() const { return u8_deque_count(&m_tx_buffer); }
 
   // Caller should ensure GetTxByteCount() >= size.
   void TakeTxBytes(u8* bytes, std::size_t size);
@@ -43,7 +43,7 @@ protected:
 
   void ConsumeRxBytes(std::size_t count);
 
-  void WriteTxByte(u8 byte) { m_tx_buffer.emplace_back(byte); }
+  void WriteTxByte(u8 byte) { u8_deque_push_back_growing(&m_tx_buffer, &byte); }
   void WriteTxBytes(const u8* bytes, std::size_t size);
 
   // Transfer the entirety of other's tx buffer to this tx buffer.
@@ -57,8 +57,8 @@ private:
   std::vector<u8> m_rx_buffer;
 
   // The stream of bytes from the device to the baseboard.
-  // It may be read in chunks so std::vector would be less appropriate here.
-  std::deque<u8> m_tx_buffer;
+  // It may be read in chunks, from the front: a ring in one block, made with the device.
+  u8_deque_t m_tx_buffer;
 };
 
 }  // namespace Triforce
