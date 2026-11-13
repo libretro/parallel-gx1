@@ -358,10 +358,28 @@ AXMixControl AXWiiUCode::ConvertMixerControl(u32 mixer_control)
 
 void AXWiiUCode::GenerateVolumeRamp(u16* output, u16 vol1, u16 vol2, size_t nvals)
 {
-  float curr = vol1;
+  // step i is vol1 + (vol2 - vol1) * (i + 1) / nvals rounded down, exactly, so the ramp ends
+  // on vol2: the whole part of the step and its remainder in nvals-ths are carried apart
+  const s32 n = (s32)nvals;
+  const s32 delta = (s32)vol2 - (s32)vol1;
+  s32 step = delta / n;
+  s32 step_rem = delta - step * n;
+  if (step_rem < 0)
+  {
+    step--;
+    step_rem += n;
+  }
+  s32 curr = vol1;
+  s32 curr_rem = 0;
   for (size_t i = 0; i < nvals; ++i)
   {
-    curr += (vol2 - vol1) / (float)nvals;
+    curr += step;
+    curr_rem += step_rem;
+    if (curr_rem >= n)
+    {
+      curr_rem -= n;
+      curr++;
+    }
     output[i] = (u16)curr;
   }
 }
