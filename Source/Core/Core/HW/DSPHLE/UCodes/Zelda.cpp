@@ -1034,8 +1034,8 @@ void ZeldaAudioRenderer::PrepareFrame()
   // Add reverb data from previous frame.
   ApplyReverb(false);
   AddBuffersWithVolume(m_buf_front_left_reverb, m_buf_back_left_reverb, 0x50, 0x7FFF);
-  AddBuffersWithVolume(m_buf_front_right_reverb, m_buf_back_left_reverb, 0x50, 0xB820);
-  AddBuffersWithVolume(m_buf_front_left_reverb, m_buf_back_right_reverb + 0x28, 0x28, 0xB820);
+  AddBuffersWithVolume(m_buf_front_right_reverb, m_buf_back_left_reverb, 0x50, (s16)0xB820);
+  AddBuffersWithVolume(m_buf_front_left_reverb, m_buf_back_right_reverb + 0x28, 0x28, (s16)0xB820);
   AddBuffersWithVolume(m_buf_front_right_reverb, m_buf_back_right_reverb + 0x28, 0x28, 0x7FFF);
   memset(m_buf_back_left_reverb, 0, sizeof(m_buf_back_left_reverb));
   memset(m_buf_back_right_reverb, 0, sizeof(m_buf_back_right_reverb));
@@ -1148,7 +1148,7 @@ void ZeldaAudioRenderer::ApplyReverb(bool post_rendering)
 #endif
           continue;
         }
-        AddBuffersWithVolume(*dest_buffer, buffer, 0x50, dest.volume);
+        AddBuffersWithVolume(*dest_buffer, buffer, 0x50, (s16)dest.volume);
       }
 
       // LSB not set, bit 1 set -> post-filtering.

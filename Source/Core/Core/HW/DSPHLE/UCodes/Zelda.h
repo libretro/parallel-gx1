@@ -84,8 +84,9 @@ private:
     return vol;
   }
 
-  // Can process partial buffers. Volume is in 1.15 format.
-  static void AddBuffersWithVolume(s16* dst, const s16* src, size_t count, u16 vol)
+  // Can process partial buffers. Volume is in signed 1.15 format: the DSP multiplies it as
+  // signed, so 0xB820 is about -0.56 (the inverted surround leg), not 1.44.
+  static void AddBuffersWithVolume(s16* dst, const s16* src, size_t count, s16 vol)
   {
     while (count--)
     {
