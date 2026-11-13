@@ -75,7 +75,8 @@ bool LibUSBBluetoothAdapter::IsWiiBTModule() const
 
 bool LibUSBBluetoothAdapter::AreCommandsPendingResponse() const
 {
-  return !m_pending_hci_transfers.empty() || !m_unacknowledged_commands.empty();
+  return !bt_pending_transfers_empty(&m_pending_hci_transfers) ||
+         !bt_outstanding_commands_empty(&m_unacknowledged_commands);
 }
 
 bool LibUSBBluetoothAdapter::HasConfiguredBluetoothDevice()
@@ -94,6 +95,8 @@ bool LibUSBBluetoothAdapter::IsConfiguredBluetoothDevice(u16 vid, u16 pid)
 
 LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 {
+  bt_pending_transfers_init(&m_pending_hci_transfers, 16);
+  bt_outstanding_commands_init(&m_unacknowledged_commands, 16);
   retro_atomic_int_init(&m_run_input_transfers, 1);
   retro_atomic_int_init(&m_input_failed, 0);
   mpsc_stack_init(&m_transfers_to_free);
@@ -193,13 +196,15 @@ LibUSBBluetoothAdapter::~LibUSBBluetoothAdapter()
 
   retro_spsc_free(&m_acl_data_queue);
   retro_spsc_free(&m_hci_event_queue);
+  bt_outstanding_commands_free(&m_unacknowledged_commands);
+  bt_pending_transfers_free(&m_pending_hci_transfers);
 }
 
 void LibUSBBluetoothAdapter::Close()
 {
   // Commands still awaiting a reply are abandoned with their transfers below.
-  m_pending_hci_transfers = {};
-  m_unacknowledged_commands.clear();
+  bt_pending_transfers_clear(&m_pending_hci_transfers);
+  bt_outstanding_commands_clear(&m_unacknowledged_commands);
 
   // Stop the repeating input transfers. A callback resubmitting meanwhile sees the flag after
   // its submit and cancels its own transfer (see HandleInputTransfer).
@@ -237,25 +242,27 @@ void LibUSBBluetoothAdapter::Update()
   const u64 timeout_ticks = Core::System::GetInstance().GetSystemTimers().GetTicksPerSecond() *
                             HCI_COMMAND_TIMEOUT_MS / 1000;
   const u64 now = EmulatedTicks();
-  while (!m_unacknowledged_commands.empty() &&
-         now - m_unacknowledged_commands.front().submit_ticks > timeout_ticks)
+  while (!bt_outstanding_commands_empty(&m_unacknowledged_commands) &&
+         now - bt_outstanding_commands_front(&m_unacknowledged_commands)->submit_ticks >
+             timeout_ticks)
   {
     WARN_LOG(IOS_WIIMOTE, "HCI command 0x%04x timed out.",
-             (unsigned)m_unacknowledged_commands.front().opcode);
-    m_unacknowledged_commands.pop_front();
+             (unsigned)bt_outstanding_commands_front(&m_unacknowledged_commands)->opcode);
+    bt_outstanding_commands_pop_front(&m_unacknowledged_commands);
   }
 
   // Allow sending commands if none are pending acknowledgement.
-  if (m_unacknowledged_commands.empty())
+  if (bt_outstanding_commands_empty(&m_unacknowledged_commands))
     m_num_hci_command_packets = 1;
 
   // Push queued commands when the controller is ready for them.
-  if (!m_pending_hci_transfers.empty() && IsControllerReadyForCommand())
+  if (!bt_pending_transfers_empty(&m_pending_hci_transfers) && IsControllerReadyForCommand())
   {
+    libusb_transfer* const transfer = *bt_pending_transfers_front(&m_pending_hci_transfers);
     DEBUG_LOG(IOS_WIIMOTE, "Submitting queued HCI command.");
 
-    PushHCICommand(m_pending_hci_transfers.front());
-    m_pending_hci_transfers.pop();
+    bt_pending_transfers_pop_front(&m_pending_hci_transfers);
+    PushHCICommand(transfer);
   }
 
   CleanCompletedTransfers();
@@ -327,7 +334,7 @@ void LibUSBBluetoothAdapter::PopACLData()
 
 bool LibUSBBluetoothAdapter::IsControllerReadyForCommand() const
 {
-  return m_num_hci_command_packets > m_unacknowledged_commands.size();
+  return m_num_hci_command_packets > bt_outstanding_commands_count(&m_unacknowledged_commands);
 }
 
 template <typename EventType>
@@ -342,16 +349,17 @@ void LibUSBBluetoothAdapter::AcknowledgeCommand(const u8* buffer, std::size_t si
   EventType ev;
   std::memcpy(&ev, buffer + sizeof(hci_event_hdr_t), sizeof(ev));
 
+  const std::size_t count = bt_outstanding_commands_count(&m_unacknowledged_commands);
   std::size_t index = 0;
-  while (index < m_unacknowledged_commands.size() &&
-         m_unacknowledged_commands[index].opcode != ev.opcode)
+  while (index < count &&
+         bt_outstanding_commands_at(&m_unacknowledged_commands, index)->opcode != ev.opcode)
   {
     index++;
   }
-  if (index < m_unacknowledged_commands.size())
+  if (index < count)
   {
     DEBUG_LOG(IOS_WIIMOTE, "HCI command acknowledged: 0x%04x", (unsigned)ev.opcode);
-    m_unacknowledged_commands.erase(m_unacknowledged_commands.begin() + index);
+    bt_outstanding_commands_erase(&m_unacknowledged_commands, index);
   }
   else if (ev.opcode != 0x0000)
   {
@@ -424,7 +432,8 @@ void LibUSBBluetoothAdapter::PushHCICommand(libusb_transfer* transfer)
   std::memcpy(&cmd, libusb_control_transfer_get_data(transfer), sizeof(cmd));
 
   // Timed from now, not from when it was queued, so a delayed command gets its full time.
-  m_unacknowledged_commands.emplace_back(OutstandingCommand{cmd.opcode, EmulatedTicks()});
+  const BTOutstandingCommand outstanding = {cmd.opcode, EmulatedTicks()};
+  bt_outstanding_commands_push_back_growing(&m_unacknowledged_commands, &outstanding);
 
   // This function is only invoked when this value is at least 1.
   assert(m_num_hci_command_packets >= 1);
@@ -484,7 +493,7 @@ void LibUSBBluetoothAdapter::SendControlTransfer(u8 type, u8 request, u8 value, 
   else
   {
     DEBUG_LOG(IOS_WIIMOTE, "Queueing HCI command while controller is busy.");
-    m_pending_hci_transfers.emplace(transfer);
+    bt_pending_transfers_push_back_growing(&m_pending_hci_transfers, &transfer);
   }
 }
 

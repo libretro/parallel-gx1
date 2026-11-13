@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <queue>
 #include <string>
 #include <vector>
 
@@ -13,6 +12,7 @@
 #include "Core/LibusbUtils.h"
 
 #include <queues/mpsc_stack.h>
+#include <queues/retro_deque.h>
 #include <retro_atomic.h>
 #include <retro_spsc.h>
 #include <rthreads/retro_eventcount.h>
@@ -20,6 +20,15 @@
 struct libusb_device_handle;
 struct libusb_device_descriptor;
 struct libusb_transfer;
+
+// A sent HCI command yet to be acknowledged
+struct BTOutstandingCommand
+{
+  u16 opcode;
+  u64 submit_ticks;  // emulated time
+};
+RETRO_DEQUE_DEFINE(bt_outstanding_commands, BTOutstandingCommand);
+RETRO_DEQUE_DEFINE(bt_pending_transfers, libusb_transfer*);
 
 template <u16 Opcode, typename CommandType>
 struct HCICommandPayload
@@ -127,17 +136,11 @@ private:
 
   // HCI commands are queued when the controller isn't ready for them.
   // They will be sent after COMMAND_COMPL or COMMAND_STATUS signal readiness.
-  std::queue<libusb_transfer*> m_pending_hci_transfers;
-
-  struct OutstandingCommand
-  {
-    u16 opcode{};
-    u64 submit_ticks{};  // emulated time
-  };
+  bt_pending_transfers_t m_pending_hci_transfers;
 
   // Sent HCI commands that have yet to receive a COMMAND_COMPL or COMMAND_STATUS response.
   // Container size will be small, around 2.
-  std::deque<OutstandingCommand> m_unacknowledged_commands;
+  bt_outstanding_commands_t m_unacknowledged_commands;
 
   bool IsControllerReadyForCommand() const;
   bool AreCommandsPendingResponse() const;
