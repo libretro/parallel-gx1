@@ -432,7 +432,8 @@ void DSPManager::UpdateAudioDMA()
     // streaming output.
     auto& memory = m_system.GetMemory();
     void* address = memory.GetPointerForRange(m_audio_dma.current_source_address, 32);
-    field_audio_push_dma(static_cast<const s16*>(address), 8);
+    // a block that is not in emulated memory plays as silence
+    field_audio_push_dma(address ? static_cast<const s16*>(address) : zero_samples, 8);
 
     if (m_audio_dma.remaining_blocks_count != 0)
     {
