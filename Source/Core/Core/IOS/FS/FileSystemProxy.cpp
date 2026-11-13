@@ -353,6 +353,9 @@ s32 FSCore::Read(u64 fd, u8* data, u32 size, std::optional<u32> ipc_buffer_addr,
   const Handle& handle = m_fd_map[fd];
   if (handle.fs_fd == INVALID_FD)
     return ConvertResult(ResultCode::Invalid);
+  // a buffer that is not in the emulated software's memory, which GetPointerForRange gives as null
+  if (size != 0 && data == nullptr)
+    return ConvertResult(ResultCode::Invalid);
 
   // Simulate the FS read logic to estimate ticks. Note: this must be done before reading.
   ticks.Add(EstimateTicksForReadWrite(handle, fd, IPC_CMD_READ, size));
@@ -383,6 +386,9 @@ s32 FSCore::Write(u64 fd, const u8* data, u32 size, std::optional<u32> ipc_buffe
 
   const Handle& handle = m_fd_map[fd];
   if (handle.fs_fd == INVALID_FD)
+    return ConvertResult(ResultCode::Invalid);
+  // a buffer that is not in the emulated software's memory, which GetPointerForRange gives as null
+  if (size != 0 && data == nullptr)
     return ConvertResult(ResultCode::Invalid);
 
   // Simulate the FS write logic to estimate ticks. Must be done before writing.
