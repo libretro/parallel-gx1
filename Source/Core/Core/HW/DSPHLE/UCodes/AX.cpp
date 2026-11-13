@@ -649,7 +649,9 @@ void AXUCode::MixAUXBLR(u32 ul_addr, u32 dl_addr)
   memory.CopyToEmuSwapped(ul_addr + sizeof(m_samples_auxB_left), m_samples_auxB_right,
                           sizeof(m_samples_auxB_right));
 
-  // Mix AUXB L/R to MAIN L/R, and replace AUXB L/R
+  // Mix AUXB L/R to MAIN L/R, and replace AUXB L/R: the right one goes in inverted (the microcode
+  // negates it before the add), as for the surround a Dolby Pro Logic II decoder takes from the
+  // difference of the two
   int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(dl_addr, 2 * 5 * 32 * sizeof(int)));
   // a buffer that is not in emulated memory is not mixed
   if (!ptr)
@@ -664,7 +666,7 @@ void AXUCode::MixAUXBLR(u32 ul_addr, u32 dl_addr)
   {
     int samp = Common::swap32(*ptr++);
     m_samples_auxB_right[i] = samp;
-    m_samples_main_right[i] += samp;
+    m_samples_main_right[i] -= samp;
   }
 }
 
