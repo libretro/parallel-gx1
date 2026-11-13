@@ -133,7 +133,12 @@ void CEXIModem::DMAWrite(u32 addr, u32 size)
   else
   {
     auto& memory = m_system.GetMemory();
-    HandleWriteModemTransfer(memory.GetPointerForRange(addr, size), size);
+    const u8* const data = memory.GetPointerForRange(addr, size);
+    // a buffer that is not in emulated memory is not sent
+    if (data)
+      HandleWriteModemTransfer(data, size);
+    else
+      ERROR_LOG(SP1, "Modem DMA write from %#010x, not in emulated memory", addr);
   }
 }
 
@@ -201,7 +206,12 @@ void CEXIModem::DMARead(u32 addr, u32 size)
   else
   {
     auto& memory = m_system.GetMemory();
-    HandleReadModemTransfer(memory.GetPointerForRange(addr, size), size);
+    u8* const data = memory.GetPointerForRange(addr, size);
+    // a buffer that is not in emulated memory is not read into
+    if (data)
+      HandleReadModemTransfer(data, size);
+    else
+      ERROR_LOG(SP1, "Modem DMA read into %#010x, not in emulated memory", addr);
   }
 }
 

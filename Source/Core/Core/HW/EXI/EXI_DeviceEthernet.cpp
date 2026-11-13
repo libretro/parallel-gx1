@@ -239,7 +239,12 @@ void CEXIETHERNET::DMAWrite(u32 addr, u32 size)
       transfer.address == BBA_WRTXFIFOD)
   {
     auto& memory = m_system.GetMemory();
-    DirectFIFOWrite(memory.GetPointerForRange(addr, size), size);
+    const u8* const data = memory.GetPointerForRange(addr, size);
+    // a buffer that is not in emulated memory is not sent
+    if (data)
+      DirectFIFOWrite(data, size);
+    else
+      ERROR_LOG(SP1, "Ethernet DMA write from %#010x, not in emulated memory", addr);
   }
   else
   {
