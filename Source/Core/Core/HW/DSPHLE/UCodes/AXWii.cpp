@@ -275,6 +275,9 @@ void AXWiiUCode::AddToLR(u32 val_addr, bool neg)
 {
   auto& memory = m_dsphle->GetSystem().GetMemory();
   int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(val_addr, 32 * 3 * sizeof(int)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ptr)
+    return;
   for (int i = 0; i < 32 * 3; ++i)
   {
     int val = (int)Common::swap32(*ptr++);
@@ -290,6 +293,9 @@ void AXWiiUCode::AddSubToLR(u32 val_addr)
 {
   auto& memory = m_dsphle->GetSystem().GetMemory();
   int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(val_addr, 2 * 32 * 3 * sizeof(int)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ptr)
+    return;
   for (int i = 0; i < 32 * 3; ++i)
   {
     int val = (int)Common::swap32(*ptr++);
@@ -536,6 +542,9 @@ void AXWiiUCode::MixAUXSamples(int aux_id, u32 write_addr, u32 read_addr, u16 vo
   // Then read the buffers from the CPU and add to our main buffers.
   const int* ptr = reinterpret_cast<int*>(
       memory.GetPointerForRange(read_addr, main_buffers.size() * 3 * 32 * sizeof(int)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ptr)
+    return;
   for (auto& main_buffer : main_buffers)
   {
     for (u32 j = 0; j < 3 * 32; ++j)
@@ -630,6 +639,9 @@ void AXWiiUCode::OutputWMSamples(u32* addresses)
   {
     int* in = buffers[i];
     u16* out = reinterpret_cast<u16*>(memory.GetPointerForRange(addresses[i], 3 * 6 * sizeof(s16)));
+    // a buffer that is not in emulated memory is not mixed
+    if (!out)
+      continue;
     for (u32 j = 0; j < 3 * 6; ++j)
     {
       s16 sample = ClampS16(in[j]);

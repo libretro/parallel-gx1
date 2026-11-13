@@ -389,6 +389,9 @@ void AXUCode::DownloadAndMixWithVolume(u32 addr, u16 vol_main, u16 vol_auxa, u16
   for (u32 i = 0; i < 3; ++i)
   {
     int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(addr, 3 * 5 * 32 * sizeof(int)));
+    // a buffer that is not in emulated memory is not mixed
+    if (!ptr)
+      continue;
     u16 volume = volumes[i];
     for (u32 j = 0; j < 3; ++j)
     {
@@ -525,6 +528,9 @@ void AXUCode::MixAUXSamples(int aux_id, u32 write_addr, u32 read_addr)
   int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(
       read_addr, sizeof(m_samples_main_left) + sizeof(m_samples_main_right) +
                      sizeof(m_samples_main_surround)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ptr)
+    return;
 
   for (auto& sample : m_samples_main_left)
     sample += (int)Common::swap32(*ptr++);
@@ -549,6 +555,9 @@ void AXUCode::SetMainLR(u32 src_addr)
 {
   auto& memory = m_dsphle->GetSystem().GetMemory();
   int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(src_addr, 5 * 32 * sizeof(int)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ptr)
+    return;
   for (u32 i = 0; i < 5 * 32; ++i)
   {
     int samp = (int)Common::swap32(*ptr++);
@@ -598,6 +607,9 @@ void AXUCode::RunCompressor(u16 threshold, u16 release_frames, u32 table_addr, u
   auto& memory = m_dsphle->GetSystem().GetMemory();
   u16* ramp = reinterpret_cast<u16*>(
       memory.GetPointerForRange(table_addr + table_offset, 32 * millis * sizeof(u16)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ramp)
+    return;
   for (u32 i = 0; i < 32 * millis; ++i)
   {
     u16 coef = Common::swap16(*ramp++);
@@ -637,6 +649,9 @@ void AXUCode::MixAUXBLR(u32 ul_addr, u32 dl_addr)
 
   // Mix AUXB L/R to MAIN L/R, and replace AUXB L/R
   int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(dl_addr, 2 * 5 * 32 * sizeof(int)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ptr)
+    return;
   for (u32 i = 0; i < 5 * 32; ++i)
   {
     int samp = Common::swap32(*ptr++);
@@ -655,6 +670,9 @@ void AXUCode::SetOppositeLR(u32 src_addr)
 {
   auto& memory = m_dsphle->GetSystem().GetMemory();
   int* ptr = reinterpret_cast<int*>(memory.GetPointerForRange(src_addr, 5 * 32 * sizeof(int)));
+  // a buffer that is not in emulated memory is not mixed
+  if (!ptr)
+    return;
   for (u32 i = 0; i < 5 * 32; ++i)
   {
     int inp = Common::swap32(*ptr++);
@@ -697,6 +715,9 @@ void AXUCode::SendAUXAndMix(u32 auxa_lrs_up, u32 auxb_s_up, u32 main_l_dl, u32 m
   {
     const int* dl_src =
         reinterpret_cast<int*>(memory.GetPointerForRange(dl_addrs[i], 32 * 5 * sizeof(int)));
+    // a buffer that is not in emulated memory is not mixed
+    if (!dl_src)
+      continue;
     for (size_t j = 0; j < 32 * 5; ++j)
       dl_buffers[i][j] += (int)Common::swap32(*dl_src++);
   }
