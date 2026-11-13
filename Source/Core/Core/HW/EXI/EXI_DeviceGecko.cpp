@@ -25,7 +25,8 @@ int GeckoSockServer::client_count;
 sthread_t* GeckoSockServer::connectionThread = nullptr;
 Common::Flag GeckoSockServer::server_running;
 mpsc_stack_t GeckoSockServer::waiting_socks;
-std::deque<int> GeckoSockServer::taken_socks;
+mpsc_stack_node_t* GeckoSockServer::taken_socks;
+mpsc_stack_node_t* GeckoSockServer::taken_socks_last;
 
 // Bytes held each way; the Gecko moves one at a time, so this is ample.
 constexpr size_t GECKO_FIFO_SIZE = 64 * 1024;
@@ -100,18 +101,22 @@ bool GeckoSockServer::GetAvailableSock()
 {
   bool sock_filled = false;
 
-  // The stack gives the newest first; queue them oldest first.
-  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&waiting_socks)); node;)
+  // The stack gives the newest first; queue them oldest first, behind those taken before.
+  mpsc_stack_node_t* const drained = mpsc_stack_reverse(mpsc_stack_drain(&waiting_socks));
+  if (drained)
   {
-    auto* waiting = reinterpret_cast<WaitingSock*>(node);
-    node = node->next;
-    taken_socks.push_back(waiting->socket);
-    delete waiting;
+    if (taken_socks_last)
+      taken_socks_last->next = drained;
+    else
+      taken_socks = drained;
+    for (taken_socks_last = drained; taken_socks_last->next;)
+      taken_socks_last = taken_socks_last->next;
   }
 
-  if (!taken_socks.empty())
+  if (taken_socks)
   {
-    const int next = taken_socks.front();
+    WaitingSock* const taken = reinterpret_cast<WaitingSock*>(taken_socks);
+    const int next = taken->socket;
     if (clientThread)
     {
       client_running.Clear();
@@ -125,7 +130,10 @@ bool GeckoSockServer::GetAvailableSock()
     retro_atomic_store_release_int(&client_gone, 0);
     clientThread = sthread_create(Common::ThreadEntry<&GeckoSockServer::ClientThread>, this);
     client_count++;
-    taken_socks.pop_front();
+    taken_socks = taken_socks->next;
+    if (!taken_socks)
+      taken_socks_last = nullptr;
+    delete taken;
     sock_filled = true;
   }
 

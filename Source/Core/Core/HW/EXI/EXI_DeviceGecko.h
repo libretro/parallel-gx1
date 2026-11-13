@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <deque>
-
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
 #include <retro_spsc.h>
@@ -52,8 +50,9 @@ private:
     int socket;
   };
   static mpsc_stack_t waiting_socks;
-  // The CPU thread's own queue of them, oldest first.
-  static std::deque<int> taken_socks;
+  // The CPU thread's own queue of them, oldest first, still in their nodes.
+  static mpsc_stack_node_t* taken_socks;
+  static mpsc_stack_node_t* taken_socks_last;
 };
 
 class CEXIGecko : public IEXIDevice, private GeckoSockServer
