@@ -31,6 +31,12 @@
 #else
 #include <unistd.h>
 #endif
+#ifdef __linux__
+#include <alloca.h>
+#include <sys/mman.h>
+
+#include <cerrno>
+#endif
 
 // The BLR optimization is nice, but it means that JITted code can overflow the
 // native stack by repeatedly running BL.  (The chance of this happening in any
@@ -168,6 +174,21 @@ void JitBase::InitBLROptimization()
   m_cleanup_after_stackfault = false;
 }
 
+#ifdef __linux__
+// Writes a byte in each page of the stack this far below the caller, highest first, so the stack
+// grows down over them.
+[[gnu::noinline]] static void TouchStackDown(size_t bytes, long page_size)
+{
+  volatile u8* const below = static_cast<volatile u8*>(alloca(bytes));
+  size_t offset = bytes;
+  while (offset)
+  {
+    offset = offset > static_cast<size_t>(page_size) ? offset - page_size : 0;
+    below[offset] = 0;
+  }
+}
+#endif
+
 void JitBase::ProtectStack()
 {
   if (!m_enable_blr_optimization)
@@ -201,7 +222,33 @@ void JitBase::ProtectStack()
     return;
   }
 
-  const uintptr_t stack_guard_addr = Common::AlignUp(stack_base_addr + GUARD_OFFSET, page_size);
+  uintptr_t stack_guard_addr = Common::AlignUp(stack_base_addr + GUARD_OFFSET, page_size);
+#ifdef __linux__
+  // A stack that grows on demand (the process's main thread, where a frontend runs the core on
+  // one thread) has no pages mapped yet below what it has used, and a guard there can't be
+  // protected. The guard goes what the JIT needs below this frame instead, and the pages down to
+  // it are touched once so they are mapped; the place is kept for the next runs on this stack.
+  if (m_stack_guard_base == stack_base_addr && m_stack_guard_at)
+  {
+    stack_guard_addr = m_stack_guard_at;
+  }
+  else
+  {
+    unsigned char resident;
+    if (mincore(reinterpret_cast<void*>(stack_guard_addr), page_size, &resident) != 0 &&
+        errno == ENOMEM)
+    {
+      constexpr size_t NEAR_STACK = 1024 * 1024;
+      const uintptr_t near_guard =
+          Common::AlignDown(stack_middle_addr - NEAR_STACK - GUARD_SIZE, page_size);
+      if (near_guard > stack_guard_addr)
+        stack_guard_addr = near_guard;
+      TouchStackDown(stack_middle_addr - stack_guard_addr, page_size);
+    }
+    m_stack_guard_base = stack_base_addr;
+    m_stack_guard_at = stack_guard_addr;
+  }
+#endif
   if (stack_guard_addr >= stack_middle_addr ||
       stack_middle_addr - stack_guard_addr < GUARD_SIZE + MIN_UNSAFE_STACK_SIZE)
   {

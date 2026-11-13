@@ -159,6 +159,9 @@ protected:
   bool m_enable_blr_optimization = false;
   bool m_cleanup_after_stackfault = false;
   u8* m_stack_guard = nullptr;
+  // where the guard goes on the stack starting at m_stack_guard_base, once worked out
+  uintptr_t m_stack_guard_base = 0;
+  uintptr_t m_stack_guard_at = 0;
 
   static const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 23> JIT_SETTINGS;
 
