@@ -200,14 +200,22 @@ std::optional<IPCReply> BluetoothEmuDevice::IOCtlV(const IOCtlVRequest& request)
       // This is the ACL datapath from CPU to Wii Remote
       const auto* acl_header = reinterpret_cast<hci_acldata_hdr_t*>(
           memory.GetPointerForRange(ctrl.data_address, sizeof(hci_acldata_hdr_t)));
+      // the header and the packet after it, both in emulated memory, or nothing is sent
+      u8* const acl_data =
+          acl_header ? memory.GetPointerForRange(ctrl.data_address + sizeof(hci_acldata_hdr_t),
+                                                 acl_header->length) :
+                       nullptr;
+      if (!acl_data)
+      {
+        ERROR_LOG(IOS_WIIMOTE, "ACL_DATA_OUT: packet at %#010x is not in emulated memory",
+                  ctrl.data_address);
+        break;
+      }
 
       DEBUG_ASSERT(HCI_BC_FLAG(acl_header->con_handle) == HCI_POINT2POINT);
       DEBUG_ASSERT(HCI_PB_FLAG(acl_header->con_handle) == HCI_PACKET_START);
 
-      SendToDevice(HCI_CON_HANDLE(acl_header->con_handle),
-                   memory.GetPointerForRange(ctrl.data_address + sizeof(hci_acldata_hdr_t),
-                                             acl_header->length),
-                   acl_header->length);
+      SendToDevice(HCI_CON_HANDLE(acl_header->con_handle), acl_data, acl_header->length);
       break;
     }
     case ACL_DATA_IN:  // We are given an ACL buffer to fill
@@ -284,8 +292,17 @@ void BluetoothEmuDevice::SendACLPacket(const bdaddr_t& source, const u8* data, u
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
 
+    // the header and the packet after it, both written into emulated memory
     hci_acldata_hdr_t* header = reinterpret_cast<hci_acldata_hdr_t*>(
-        memory.GetPointerForRange(m_acl_endpoint->data_address, sizeof(hci_acldata_hdr_t)));
+        memory.GetPointerForRange(m_acl_endpoint->data_address, sizeof(hci_acldata_hdr_t) + size));
+    if (!header)
+    {
+      ERROR_LOG(IOS_WIIMOTE, "ACL endpoint buffer at %#010x is not in emulated memory",
+                m_acl_endpoint->data_address);
+      GetEmulationKernel().EnqueueIPCReply(m_acl_endpoint->ios_request, IPC_EINVAL);
+      ReleaseAclEndpoint();
+      return;
+    }
     header->con_handle = HCI_MK_CON_HANDLE(connection_handle, HCI_PACKET_START, HCI_POINT2POINT);
     header->length = size;
 
@@ -443,8 +460,17 @@ void BluetoothEmuDevice::ACLPool::WriteToEndpoint(const USB::V0BulkMessage& endp
   auto& system = m_ios.GetSystem();
   auto& memory = system.GetMemory();
 
+  // the header and the packet after it, both written into emulated memory
   hci_acldata_hdr_t* header = (hci_acldata_hdr_t*)memory.GetPointerForRange(
-      endpoint.data_address, sizeof(hci_acldata_hdr_t));
+      endpoint.data_address, sizeof(hci_acldata_hdr_t) + size);
+  if (!header)
+  {
+    ERROR_LOG(IOS_WIIMOTE, "ACL endpoint buffer at %#010x is not in emulated memory",
+              endpoint.data_address);
+    acl_packets_pop_front(&m_queue);
+    m_ios.EnqueueIPCReply(endpoint.ios_request, IPC_EINVAL);
+    return;
+  }
   header->con_handle = HCI_MK_CON_HANDLE(conn_handle, HCI_PACKET_START, HCI_POINT2POINT);
   header->length = size;
 
