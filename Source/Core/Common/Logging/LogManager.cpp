@@ -36,63 +36,51 @@ const Config::Info<LogLevel> LOGGER_VERBOSITY{{Config::System::Logger, "Options"
 
 // Any thread may log. The file is opened for appending, where the OS makes each write land
 // whole at the end, so a message is one write and nothing is shared in user space.
-class FileLogListener : public LogListener
+#ifdef _WIN32
+static HANDLE s_log_file = INVALID_HANDLE_VALUE;
+#else
+static int s_log_file = -1;
+#endif
+
+static void FileLogOpen(const std::string& filename)
 {
-public:
-  FileLogListener(const std::string& filename)
+  File::CreateFullPath(filename);
+#ifdef _WIN32
+  s_log_file = CreateFileW(UTF8ToWString(filename).c_str(), FILE_APPEND_DATA,
+                           FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
+#else
+  s_log_file = open(filename.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+#endif
+}
+
+static void FileLogClose()
+{
+#ifdef _WIN32
+  if (s_log_file != INVALID_HANDLE_VALUE)
+    CloseHandle(s_log_file);
+  s_log_file = INVALID_HANDLE_VALUE;
+#else
+  if (s_log_file >= 0)
+    close(s_log_file);
+  s_log_file = -1;
+#endif
+}
+
+static void FileLog(void*, LogLevel, const char* msg)
+{
+  const size_t length = strlen(msg);
+#ifdef _WIN32
+  DWORD written;
+  if (s_log_file != INVALID_HANDLE_VALUE)
+    WriteFile(s_log_file, msg, static_cast<DWORD>(length), &written, nullptr);
+#else
+  if (s_log_file >= 0)
   {
-    File::CreateFullPath(filename);
-#ifdef _WIN32
-    m_file = CreateFileW(UTF8ToWString(filename).c_str(), FILE_APPEND_DATA,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
-                         FILE_ATTRIBUTE_NORMAL, nullptr);
-#else
-    m_file = open(filename.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-#endif
-    SetEnable(true);
+    [[maybe_unused]] const ssize_t written = write(s_log_file, msg, length);
   }
-
-  ~FileLogListener() override
-  {
-#ifdef _WIN32
-    if (m_file != INVALID_HANDLE_VALUE)
-      CloseHandle(m_file);
-#else
-    if (m_file >= 0)
-      close(m_file);
 #endif
-  }
-
-  void Log(LogLevel, const char* msg) override
-  {
-    if (!IsEnabled() || !IsValid())
-      return;
-
-    const size_t length = std::strlen(msg);
-#ifdef _WIN32
-    DWORD written;
-    WriteFile(m_file, msg, static_cast<DWORD>(length), &written, nullptr);
-#else
-    [[maybe_unused]] const ssize_t written = write(m_file, msg, length);
-#endif
-  }
-
-#ifdef _WIN32
-  bool IsValid() const { return m_file != INVALID_HANDLE_VALUE; }
-#else
-  bool IsValid() const { return m_file >= 0; }
-#endif
-  bool IsEnabled() const { return retro_atomic_load_relaxed_int(&m_enable) != 0; }
-  void SetEnable(bool enable) { retro_atomic_store_relaxed_int(&m_enable, enable ? 1 : 0); }
-
-private:
-#ifdef _WIN32
-  HANDLE m_file = INVALID_HANDLE_VALUE;
-#else
-  int m_file = -1;
-#endif
-  retro_atomic_int_t m_enable{};
-};
+}
 
 void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format, ...)
 {
@@ -186,9 +174,10 @@ LogManager::LogManager()
   m_log[LogType::WIIMOTE] = {"Wiimote", "Wii Remote"};
   m_log[LogType::WII_IPC] = {"WII_IPC", "WII IPC"};
 
-  RegisterListener(LogListener::FILE_LISTENER,
-                   std::make_unique<FileLogListener>(File::GetUserPath(F_MAINLOG_IDX)));
-  RegisterListener(LogListener::CONSOLE_LISTENER, std::make_unique<ConsoleListener>());
+  FileLogOpen(File::GetUserPath(F_MAINLOG_IDX));
+  RegisterListener(LogListener::FILE_LISTENER, LogListener{FileLog, nullptr});
+  ConsoleListenerInit();
+  RegisterListener(LogListener::CONSOLE_LISTENER, LogListener{ConsoleListenerLog, nullptr});
 
   // Set up log listeners
   SetEffectiveLogLevel();
@@ -211,6 +200,8 @@ LogManager::LogManager()
 LogManager::~LogManager()
 {
   Config::RemoveConfigChangedCallback(m_config_changed_callback_id);
+  FileLogClose();
+  ConsoleListenerShutdown();
 }
 
 void LogManager::SaveSettings()
@@ -253,8 +244,8 @@ void LogManager::LogWithFullPath(LogLevel level, LogType type, const char* file,
 
   for (const auto listener_id : m_listener_ids)
   {
-    if (m_listeners[listener_id])
-      m_listeners[listener_id]->Log(level, msg);
+    if (m_listeners[listener_id].log)
+      m_listeners[listener_id].log(m_listeners[listener_id].context, level, msg);
   }
 }
 
@@ -298,9 +289,9 @@ const char* LogManager::GetFullName(LogType type) const
   return m_log[type].m_full_name;
 }
 
-void LogManager::RegisterListener(LogListener::LISTENER id, std::unique_ptr<LogListener> listener)
+void LogManager::RegisterListener(LogListener::LISTENER id, LogListener listener)
 {
-  m_listeners[id] = std::move(listener);
+  m_listeners[id] = listener;
 }
 
 void LogManager::EnableListener(LogListener::LISTENER id, bool enable)

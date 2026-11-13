@@ -3,18 +3,9 @@
 
 #pragma once
 
-#include "Common/Logging/LogManager.h"
+#include "Common/Logging/Log.h"
 
-class ConsoleListener : public Common::Log::LogListener
-{
-public:
-  ConsoleListener();
-  ~ConsoleListener() override;
-
-  void Log(Common::Log::LogLevel level, const char* text) override;
-
-private:
-#if !defined _WIN32 && !defined ANDROID
-  bool m_use_color = false;
-#endif
-};
+/* The host's console, debugger output or system log: the listener LogManager starts with */
+void ConsoleListenerInit();
+void ConsoleListenerShutdown();
+void ConsoleListenerLog(void* context, Common::Log::LogLevel level, const char* text);

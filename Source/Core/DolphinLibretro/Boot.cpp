@@ -283,7 +283,6 @@ static void UndoFailedLoad(bool input_up)
 {
   if (input_up)
     Libretro::Input::Shutdown();
-  Libretro::Log::Shutdown();
   UICommon::ShutdownControllers();
   UICommon::Shutdown();
   Libretro::ResetDiskControlState();
@@ -984,7 +983,6 @@ void retro_unload_game(void)
   g_context_status.MarkUnitialized();
   Libretro::Input::Shutdown();
   Libretro::VR::Shutdown();
-  Libretro::Log::Shutdown();
   UICommon::ShutdownControllers();
   UICommon::Shutdown();
 

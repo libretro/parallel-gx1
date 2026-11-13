@@ -5,17 +5,18 @@
 
 #include <windows.h>
 
-#include "Common/StringUtil.h"
-
-ConsoleListener::ConsoleListener()
+void ConsoleListenerInit()
 {
 }
 
-ConsoleListener::~ConsoleListener()
+void ConsoleListenerShutdown()
 {
 }
 
-void ConsoleListener::Log(Common::Log::LogLevel, const char* text)
+void ConsoleListenerLog(void*, Common::Log::LogLevel, const char* text)
 {
-  ::OutputDebugStringW(UTF8ToWString(text).c_str());
+  /* a message is at most what LogManager formats it into */
+  wchar_t wide[1280];
+  if (MultiByteToWideChar(CP_UTF8, 0, text, -1, wide, sizeof(wide) / sizeof(wide[0])) > 0)
+    ::OutputDebugStringW(wide);
 }

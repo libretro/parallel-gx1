@@ -16,42 +16,30 @@ extern retro_environment_t environ_cb;
 unsigned msg_interface_version = 0;
 namespace Log
 {
-class LogListener : public Common::Log::LogListener
-{
-public:
-  LogListener(retro_log_printf_t log);
-  ~LogListener() override;
-  void Log(Common::Log::LogLevel level, const char* text) override;
+/* The frontend's log, where the core's messages go when it has one */
+static retro_log_printf_t s_frontend_log;
 
-private:
-  retro_log_printf_t m_log;
-};
+static void LogToFrontend(void*, Common::Log::LogLevel level, const char* text);
+static void ApplyLogOptions();
 
-static std::unique_ptr<LogListener> logListener;
-
+/* With a log from the frontend, messages go there instead of the console, as the core's options
+ * filter them; it stays until the log manager goes with the game. */
 void Init()
 {
   struct retro_log_callback log = {};
-  if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log) && log.log)
-    logListener = std::make_unique<LogListener>(log.log);
+  Common::Log::LogManager* const mgr = Common::Log::LogManager::GetInstance();
+  if (!environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log) || !log.log)
+    return;
 
-  if(logListener)
-  {
-    Common::Log::LogManager::GetInstance()->RegisterListener(
-      Common::Log::LogListener::CUSTOM_LISTENER,
-      std::unique_ptr<Common::Log::LogListener>(std::move(logListener))
-    );
-    Common::Log::LogManager::GetInstance()->EnableListener(Common::Log::LogListener::CUSTOM_LISTENER, true);
-    Common::Log::LogManager::GetInstance()->EnableListener(Common::Log::LogListener::LISTENER::CONSOLE_LISTENER, false);
-  }
+  s_frontend_log = log.log;
+  ApplyLogOptions();
+  mgr->RegisterListener(Common::Log::LogListener::CUSTOM_LISTENER,
+                        Common::Log::LogListener{LogToFrontend, nullptr});
+  mgr->EnableListener(Common::Log::LogListener::CUSTOM_LISTENER, true);
+  mgr->EnableListener(Common::Log::LogListener::LISTENER::CONSOLE_LISTENER, false);
 }
 
-void Shutdown()
-{
-  logListener.reset();
-}
-
-LogListener::LogListener(retro_log_printf_t log) : m_log(log)
+static void ApplyLogOptions()
 {
   Common::Log::LogManager::GetInstance()->SetConfigLogLevel(
     static_cast<Common::Log::LogLevel>(
@@ -99,34 +87,23 @@ LogListener::LogListener(retro_log_printf_t log) : m_log(log)
     Libretro::Options::GetCached<bool>(Libretro::Options::main_interface::LOG_DSP_MAIL, false));
 }
 
-LogListener::~LogListener()
-{
-  auto* mgr = Common::Log::LogManager::GetInstance();
-  if (!mgr)
-    return;
-
-  mgr->EnableListener(Common::Log::LogListener::CUSTOM_LISTENER, false);
-  mgr->EnableListener(Common::Log::LogListener::LISTENER::CONSOLE_LISTENER, true);
-  mgr->RegisterListener(Common::Log::LogListener::LISTENER::CONSOLE_LISTENER, nullptr);
-}
-
-void LogListener::Log(Common::Log::LogLevel level, const char* text)
+static void LogToFrontend(void*, Common::Log::LogLevel level, const char* text)
 {
   switch (level)
   {
   case Common::Log::LogLevel::LDEBUG:
-    m_log(RETRO_LOG_DEBUG, text);
+    s_frontend_log(RETRO_LOG_DEBUG, text);
     break;
   case Common::Log::LogLevel::LWARNING:
-    m_log(RETRO_LOG_WARN, text);
+    s_frontend_log(RETRO_LOG_WARN, text);
     break;
   case Common::Log::LogLevel::LERROR:
-    m_log(RETRO_LOG_ERROR, text);
+    s_frontend_log(RETRO_LOG_ERROR, text);
     break;
   case Common::Log::LogLevel::LNOTICE:
   case Common::Log::LogLevel::LINFO:
   default:
-    m_log(RETRO_LOG_INFO, text);
+    s_frontend_log(RETRO_LOG_INFO, text);
     break;
   }
 #if defined(ANDROID) && defined(_DEBUG)

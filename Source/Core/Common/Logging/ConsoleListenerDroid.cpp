@@ -5,15 +5,15 @@
 
 #include <android/log.h>
 
-ConsoleListener::ConsoleListener()
+void ConsoleListenerInit()
 {
 }
 
-ConsoleListener::~ConsoleListener()
+void ConsoleListenerShutdown()
 {
 }
 
-void ConsoleListener::Log(Common::Log::LogLevel level, const char* text)
+void ConsoleListenerLog(void*, Common::Log::LogLevel level, const char* text)
 {
   android_LogPriority logLevel = ANDROID_LOG_UNKNOWN;
 

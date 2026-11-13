@@ -9,7 +9,6 @@ extern unsigned msg_interface_version;
 namespace Log
 {
 void Init();
-void Shutdown();
 retro_log_level GetRetroLogLevel(Common::Log::LogLevel level);
 retro_log_level GetRetroLogLevelForMsgType(Common::MsgType level);
 void DoLogFrontEnd(retro_log_level level, const char* text, unsigned int duration);

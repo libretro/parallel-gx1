@@ -12,22 +12,24 @@
 
 #include "Common/Logging/Log.h"
 
-ConsoleListener::ConsoleListener()
+static bool s_use_color;
+
+void ConsoleListenerInit()
 {
-  m_use_color = !!isatty(fileno(stdout));
+  s_use_color = !!isatty(fileno(stdout));
 }
 
-ConsoleListener::~ConsoleListener()
+void ConsoleListenerShutdown()
 {
   fflush(nullptr);
 }
 
-void ConsoleListener::Log(Common::Log::LogLevel level, const char* text)
+void ConsoleListenerLog(void*, Common::Log::LogLevel level, const char* text)
 {
   char color_attr[16] = "";
   char reset_attr[16] = "";
 
-  if (m_use_color)
+  if (s_use_color)
   {
     strcpy(reset_attr, "\x1b[0m");
     switch (level)

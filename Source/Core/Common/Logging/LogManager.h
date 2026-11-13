@@ -24,12 +24,12 @@ namespace Common::Log
 // with the clamped LINFO level.
 extern const Config::Info<LogLevel> LOGGER_VERBOSITY;
 
-// pure virtual interface
-class LogListener
+/* Where log messages go: a function, and what it is called with. Any thread may call it. Its
+ * owner keeps the context alive while the listener is registered. */
+struct LogListener
 {
-public:
-  virtual ~LogListener() = default;
-  virtual void Log(LogLevel level, const char* msg) = 0;
+  void (*log)(void* context, LogLevel level, const char* msg);
+  void* context;
 
   enum LISTENER
   {
@@ -71,7 +71,8 @@ public:
   const char* GetShortName(LogType type) const;
   const char* GetFullName(LogType type) const;
 
-  void RegisterListener(LogListener::LISTENER id, std::unique_ptr<LogListener> listener);
+  /* a listener with a null function takes the one there away */
+  void RegisterListener(LogListener::LISTENER id, LogListener listener);
   void EnableListener(LogListener::LISTENER id, bool enable);
   bool IsListenerEnabled(LogListener::LISTENER id) const;
 
@@ -90,7 +91,7 @@ private:
   retro_atomic_int_t m_effective_level{}; /* a LogLevel */
   Config::ConfigChangedCallbackID m_config_changed_callback_id;
   EnumMap<LogContainer, LAST_LOG_TYPE> m_log{};
-  std::array<std::unique_ptr<LogListener>, LogListener::NUMBER_OF_LISTENERS> m_listeners{};
+  LogListener m_listeners[LogListener::NUMBER_OF_LISTENERS]{};
   BitSet32 m_listener_ids;
   size_t m_path_cutoff_point = 0;
 };
