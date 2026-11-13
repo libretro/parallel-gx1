@@ -4,7 +4,7 @@
 #include "Core/IOS/USB/USB_KBD.h"
 
 #include <array>
-#include <queue>
+#include <string.h>
 
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
@@ -187,6 +187,12 @@ USB_KBD::MessageData::MessageData(MessageType type, u8 modifiers_, PressedKeyDat
 USB_KBD::USB_KBD(EmulationKernel& ios, const std::string& device_name)
     : EmulationDevice(ios, device_name)
 {
+  usb_kbd_messages_init(&m_message_queue, 16);
+}
+
+USB_KBD::~USB_KBD()
+{
+  usb_kbd_messages_free(&m_message_queue);
 }
 
 std::optional<IPCReply> USB_KBD::Open(const OpenRequest& request)
@@ -196,11 +202,10 @@ std::optional<IPCReply> USB_KBD::Open(const OpenRequest& request)
   ini.Load(File::GetUserPath(F_DOLPHINCONFIG_IDX));
   ini.GetOrCreateSection("USB Keyboard")->Get("Layout", &m_keyboard_layout, KBD_LAYOUT_QWERTY);
 
-  m_message_queue = {};
+  usb_kbd_messages_clear(&m_message_queue);
   m_old_key_buffer.fill(false);
   m_old_modifiers = 0x00;
 
-  // m_message_queue.emplace(MessageType::KeyboardConnect, 0, PressedKeyData{});
   return Device::Open(request);
 }
 
@@ -213,12 +218,13 @@ std::optional<IPCReply> USB_KBD::Write(const ReadWriteRequest& request)
 std::optional<IPCReply> USB_KBD::IOCtl(const IOCtlRequest& request)
 {
   if (Config::Get(Config::MAIN_WII_KEYBOARD) && !Core::WantsDeterminism() &&
-      ControlReference::GetInputGate() && !m_message_queue.empty())
+      ControlReference::GetInputGate() && !usb_kbd_messages_empty(&m_message_queue))
   {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    memory.CopyToEmu(request.buffer_out, &m_message_queue.front(), sizeof(MessageData));
-    m_message_queue.pop();
+    memory.CopyToEmu(request.buffer_out, usb_kbd_messages_front(&m_message_queue)->data(),
+                     sizeof(MessageData));
+    usb_kbd_messages_pop_front(&m_message_queue);
   }
   return IPCReply(IPC_SUCCESS);
 }
@@ -308,6 +314,11 @@ void USB_KBD::Update()
   }
 
   if (got_event)
-    m_message_queue.emplace(MessageType::Event, modifiers, pressed_keys);
+  {
+    const MessageData message(MessageType::Event, modifiers, pressed_keys);
+    usb_kbd_messages_value_t bytes;
+    memcpy(bytes.data(), &message, sizeof(message));
+    usb_kbd_messages_push_back_growing(&m_message_queue, &bytes);
+  }
 }
 }  // namespace IOS::HLE

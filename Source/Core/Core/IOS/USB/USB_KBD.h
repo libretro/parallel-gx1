@@ -4,20 +4,25 @@
 #pragma once
 
 #include <array>
-#include <queue>
 #include <string>
 #include <type_traits>
 
+#include <queues/retro_deque.h>
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/IOS.h"
 
 namespace IOS::HLE
 {
+// A message for the next IOCtl, as the bytes copied into emulated memory
+typedef std::array<u8, 16> USBKeyboardMessage;
+RETRO_DEQUE_DEFINE(usb_kbd_messages, USBKeyboardMessage);
+
 class USB_KBD : public EmulationDevice
 {
 public:
   USB_KBD(EmulationKernel& ios, const std::string& device_name);
+  ~USB_KBD() override;
 
   std::optional<IPCReply> Open(const OpenRequest& request) override;
   std::optional<IPCReply> Write(const ReadWriteRequest& request) override;
@@ -48,7 +53,9 @@ private:
   static_assert(std::is_trivially_copyable_v<MessageData>,
                 "MessageData must be trivially copyable, as it's copied into emulated memory.");
 #pragma pack(pop)
-  std::queue<MessageData> m_message_queue;
+  static_assert(sizeof(MessageData) == sizeof(usb_kbd_messages_value_t));
+  // made with the device: a key event allocates nothing
+  usb_kbd_messages_t m_message_queue;
 
   std::array<bool, 256> m_old_key_buffer{};
   u8 m_old_modifiers = 0;
