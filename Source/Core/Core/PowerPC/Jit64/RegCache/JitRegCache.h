@@ -115,6 +115,10 @@ private:
   std::array<X64CachedReg, NUM_XREGS> m_xregs;
 };
 
+// The register cache of the general purpose registers (GPRRegCache) or of the floating point ones
+// (FPURegCache), the two classes derived from this. Which one is noted when it is made, and the
+// functions each defines for itself are reached from here through a branch on that, not a table
+// of virtual functions; through one of the two, they are called directly.
 class RegCache
 {
 public:
@@ -133,8 +137,9 @@ public:
     Yes,
   };
 
-  explicit RegCache(Jit64& jit);
-  virtual ~RegCache() = default;
+  RegCache(Jit64& jit, bool is_fpu);
+  RegCache(const RegCache&) = delete;
+  RegCache& operator=(const RegCache&) = delete;
 
   void Start();
   void SetEmitter(Gen::XEmitter* emitter);
@@ -161,9 +166,9 @@ public:
     return (IsImm(preg_t(pregs)) && ...);
   }
 
-  virtual bool IsImm(preg_t preg) const = 0;
-  virtual u32 Imm32(preg_t preg) const = 0;
-  virtual s32 SImm32(preg_t preg) const = 0;
+  bool IsImm(preg_t preg) const;
+  u32 Imm32(preg_t preg) const;
+  s32 SImm32(preg_t preg) const;
 
   bool IsBound(preg_t preg) const { return m_regs[preg].IsInHostRegister(); }
 
@@ -193,17 +198,19 @@ protected:
   friend class RCX64Reg;
   friend class RCForkGuard;
 
-  virtual Gen::OpArg GetDefaultLocation(preg_t preg) const = 0;
-  virtual void StoreRegister(preg_t preg, const Gen::OpArg& new_loc,
-                             IgnoreDiscardedRegisters ignore_discarded_registers) = 0;
-  virtual void LoadRegister(preg_t preg, Gen::X64Reg new_loc) = 0;
-  virtual void DiscardImm(preg_t preg) = 0;
+  ~RegCache() = default;
+
+  Gen::OpArg GetDefaultLocation(preg_t preg) const;
+  void StoreRegister(preg_t preg, const Gen::OpArg& new_loc,
+                     IgnoreDiscardedRegisters ignore_discarded_registers);
+  void LoadRegister(preg_t preg, Gen::X64Reg new_loc);
+  void DiscardImm(preg_t preg);
 
   // the registers in the order they are handed out, *count of them
-  virtual const Gen::X64Reg* GetAllocationOrder(size_t* count) const = 0;
+  const Gen::X64Reg* GetAllocationOrder(size_t* count) const;
 
-  virtual BitSet32 GetRegUtilization() const = 0;
-  virtual BitSet32 CountRegsIn(preg_t preg, u32 lookahead) const = 0;
+  BitSet32 GetRegUtilization() const;
+  BitSet32 CountRegsIn(preg_t preg, u32 lookahead) const;
 
   void FlushX(Gen::X64Reg reg);
   void DiscardRegister(preg_t preg);
@@ -217,7 +224,7 @@ protected:
   int NumFreeRegisters() const;
   float ScoreRegister(Gen::X64Reg xreg) const;
 
-  virtual Gen::OpArg R(preg_t preg) const = 0;
+  Gen::OpArg R(preg_t preg) const;
   Gen::X64Reg RX(preg_t preg) const;
 
   void Lock(preg_t preg);
@@ -230,6 +237,7 @@ protected:
   bool IsAnyConstraintActive() const;
 
   Jit64& m_jit;
+  const bool m_is_fpu;
   std::array<PPCCachedReg, 32> m_regs;
   std::array<X64CachedReg, NUM_XREGS> m_xregs;
   std::array<RCConstraint, 32> m_constraints;

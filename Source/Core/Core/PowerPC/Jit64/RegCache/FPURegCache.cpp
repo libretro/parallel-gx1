@@ -11,7 +11,7 @@
 
 using namespace Gen;
 
-FPURegCache::FPURegCache(Jit64& jit) : RegCache{jit}
+FPURegCache::FPURegCache(Jit64& jit) : RegCache{jit, true}
 {
 }
 

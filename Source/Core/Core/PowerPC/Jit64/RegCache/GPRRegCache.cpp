@@ -11,7 +11,7 @@
 
 using namespace Gen;
 
-GPRRegCache::GPRRegCache(Jit64& jit) : RegCache{jit}
+GPRRegCache::GPRRegCache(Jit64& jit) : RegCache{jit, false}
 {
 }
 

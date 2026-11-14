@@ -17,6 +17,8 @@
 #include "Common/x64Emitter.h"
 #include "Core/PowerPC/Jit64/Jit.h"
 #include "Core/PowerPC/Jit64/RegCache/CachedReg.h"
+#include "Core/PowerPC/Jit64/RegCache/FPURegCache.h"
+#include "Core/PowerPC/Jit64/RegCache/GPRRegCache.h"
 #include "Core/PowerPC/Jit64/RegCache/RCMode.h"
 
 using namespace Gen;
@@ -232,8 +234,70 @@ void RCForkGuard::EndFork()
   rc = nullptr;
 }
 
-RegCache::RegCache(Jit64& jit) : m_jit{jit}
+RegCache::RegCache(Jit64& jit, bool is_fpu)
+    : m_jit{jit}, m_is_fpu{is_fpu} {}
+
+// what the GPR or the FPU register cache does
+#define RC_CALL(call)                                                                              \
+  (m_is_fpu ? static_cast<FPURegCache*>(this)->call : static_cast<GPRRegCache*>(this)->call)
+#define RC_CALL_CONST(call)                                                                        \
+  (m_is_fpu ? static_cast<const FPURegCache*>(this)->call :                                        \
+              static_cast<const GPRRegCache*>(this)->call)
+
+      bool RegCache::IsImm(preg_t preg) const
 {
+  return RC_CALL_CONST(IsImm(preg));
+}
+
+u32 RegCache::Imm32(preg_t preg) const
+{
+  return RC_CALL_CONST(Imm32(preg));
+}
+
+s32 RegCache::SImm32(preg_t preg) const
+{
+  return RC_CALL_CONST(SImm32(preg));
+}
+
+Gen::OpArg RegCache::R(preg_t preg) const
+{
+  return RC_CALL_CONST(R(preg));
+}
+
+Gen::OpArg RegCache::GetDefaultLocation(preg_t preg) const
+{
+  return RC_CALL_CONST(GetDefaultLocation(preg));
+}
+
+void RegCache::StoreRegister(preg_t preg, const Gen::OpArg& new_loc,
+                             IgnoreDiscardedRegisters ignore_discarded_registers)
+{
+  RC_CALL(StoreRegister(preg, new_loc, ignore_discarded_registers));
+}
+
+void RegCache::LoadRegister(preg_t preg, Gen::X64Reg new_loc)
+{
+  RC_CALL(LoadRegister(preg, new_loc));
+}
+
+void RegCache::DiscardImm(preg_t preg)
+{
+  RC_CALL(DiscardImm(preg));
+}
+
+const Gen::X64Reg* RegCache::GetAllocationOrder(size_t* count) const
+{
+  return RC_CALL_CONST(GetAllocationOrder(count));
+}
+
+BitSet32 RegCache::GetRegUtilization() const
+{
+  return RC_CALL_CONST(GetRegUtilization());
+}
+
+BitSet32 RegCache::CountRegsIn(preg_t preg, u32 lookahead) const
+{
+  return RC_CALL_CONST(CountRegsIn(preg, lookahead));
 }
 
 void RegCache::Start()
