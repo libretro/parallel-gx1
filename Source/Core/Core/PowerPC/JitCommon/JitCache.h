@@ -139,7 +139,6 @@ struct JitBlock : public JitBlockData
   // back before it compiles that address, wherever its page is in RAM now, if the code there is
   // the same.
   u64 code_hash = 0;
-  bool suspended = false;
   JitBlock* next_suspended = nullptr;
   JitBlock* prev_suspended = nullptr;
   // In the cache's list of all suspended blocks, oldest first
@@ -152,6 +151,12 @@ struct JitBlock : public JitBlockData
   JitBlock* next_at_address = nullptr;
   // The macro blocks it is in, one node each
   JitRangeNode* range_nodes = nullptr;
+  // Code that runs on into the next page, in one page each side: that page's effective address
+  // and the physical page it is at, which can be anywhere in RAM apart from the first
+  u32 second_page_ea = 0;
+  u32 second_page_pa = 0;
+  bool two_pages = false;
+  bool suspended = false;
   bool in_use = false;
 };
 
@@ -331,12 +336,16 @@ private:
   // in all: past that the oldest are destroyed, so their code space is used again
   static constexpr u32 SUSPENDED_VERSIONS = 3;
   static constexpr u32 SUSPENDED_BLOCKS = 16384;
-  u64 HashCode(const JitBlock& block, u32 physical_address) const;
+  void FindSecondPage(JitBlock& block, const PPCAnalyst::CodeBlock& code_block,
+                      const PPCAnalyst::CodeBuffer& code_buffer);
+  bool MapCodeAddress(const JitBlock& block, u32 address, u32 first_page, u32 second_page,
+                      u32* mapped, u32* key) const;
+  bool HashCode(const JitBlock& block, u32 first_page, u32 second_page, u64* hash) const;
   bool SuspendBlock(JitBlock& block);
   void RelistSuspended();
   void LeaveSuspended(JitBlock& block);
   void EraseBlock(JitBlock* block);
-  void MoveBlock(JitBlock* block, u32 physical_address);
+  void MoveBlock(JitBlock* block, u32 first_page, u32 second_page);
   JitBlock* ResumeSuspendedBlock(u32 em_address, u32 physical_address,
                                  CPUEmuFeatureFlags feature_flags);
 

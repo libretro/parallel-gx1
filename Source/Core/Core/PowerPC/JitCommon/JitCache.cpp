@@ -28,6 +28,9 @@
 
 using namespace Gen;
 
+/* A page's offset bits */
+static const u32 PAGE_OFFSET_MASK = PowerPC::HW_PAGE_MASK;
+
 /* An address as the key of a code address map */
 static const void* AddressKey(u32 address)
 {
@@ -359,12 +362,58 @@ JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
   b.linkData.arena = &m_link_arena;
   b.fast_block_map_index = 0;
   b.code_hash = 0;
+  b.second_page_ea = 0;
+  b.second_page_pa = 0;
+  b.two_pages = false;
   b.suspended = false;
   b.next_suspended = nullptr;
   b.prev_suspended = nullptr;
   b.newer_suspended = nullptr;
   b.older_suspended = nullptr;
   return &b;
+}
+
+/* Code from two pages, the effective one after the first and its physical page not the first's,
+ * every range in one of them: the block keeps the second page, to be taken back with its code
+ * wherever each page is in RAM then */
+void JitBaseBlockCache::FindSecondPage(JitBlock& block, const PPCAnalyst::CodeBlock& code_block,
+                                       const PPCAnalyst::CodeBuffer& code_buffer)
+{
+  const u32 first_ea = block.effectiveAddress & ~PAGE_OFFSET_MASK;
+  const u32 first_pa = block.physicalAddress & ~PAGE_OFFSET_MASK;
+  const u32 second_ea = first_ea + PAGE_OFFSET_MASK + 1;
+  u32 second_pa, i;
+  bool other = false;
+
+  for (i = 0; i < code_block.m_num_instructions; i++)
+  {
+    const u32 page = code_buffer[i].address & ~PAGE_OFFSET_MASK;
+    if (page == second_ea)
+      other = true;
+    else if (page != first_ea)
+      return;
+  }
+  if (!other || !TranslateCodeAddress(second_ea, block.feature_flags, &second_pa))
+    return;
+  second_pa &= ~PAGE_OFFSET_MASK;
+  if (second_pa == first_pa)
+    return;
+  for (const SmallRange& range : block.physical_addresses)
+  {
+    u32 from = range.from;
+    while (from < range.to)
+    {
+      const u32 page_end = (from | PAGE_OFFSET_MASK) + 1;
+      if ((from & ~PAGE_OFFSET_MASK) != first_pa && (from & ~PAGE_OFFSET_MASK) != second_pa)
+        return;
+      if (!page_end)
+        break;
+      from = page_end;
+    }
+  }
+  block.second_page_ea = second_ea;
+  block.second_page_pa = second_pa;
+  block.two_pages = true;
 }
 
 void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
@@ -384,7 +433,10 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
   block.fast_block_map_index = index;
 
   block.physical_addresses = code_block.m_physical_addresses;
-  block.code_hash = HashCode(block, block.physicalAddress);
+  FindSecondPage(block, code_block, code_buffer);
+  if (!HashCode(block, block.physicalAddress & ~PAGE_OFFSET_MASK, block.second_page_pa,
+                &block.code_hash))
+    block.code_hash = 0;
 
   block.originalSize = code_block.m_num_instructions;
   for (auto [range_start, range_end] : block.physical_addresses)
@@ -576,12 +628,11 @@ void JitBaseBlockCache::EraseBlock(JitBlock* block)
   ReleaseBlock(block);
 }
 
-/* Its page is elsewhere in RAM now: the cache's lists by physical address have it there */
-void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 physical_address)
+/* Its pages are elsewhere in RAM now: the cache's lists by physical address have it there */
+void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 first_page, u32 second_page)
 {
-  const u32 delta = physical_address - block->physicalAddress;
+  SmallRangeSet moved;
   JitBlock** at;
-  u32 r;
 
   for (at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress)); at && *at;
        at = &(*at)->next_at_address)
@@ -594,15 +645,28 @@ void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 physical_address)
   }
   LeaveMacroBlocks(block);
 
-  block->physicalAddress = physical_address;
-  for (r = 0; r < block->physical_addresses.count; r++)
+  for (const SmallRange& range : block->physical_addresses)
   {
-    block->physical_addresses.ranges[r].from += delta;
-    block->physical_addresses.ranges[r].to += delta;
+    u32 from = range.from;
+    while (from < range.to)
+    {
+      const u32 page_end = (from | PAGE_OFFSET_MASK) + 1;
+      const u32 to = page_end && page_end < range.to ? page_end : range.to;
+      u32 mapped, key;
+      if (MapCodeAddress(*block, from, first_page, second_page, &mapped, &key))
+        moved.insert(mapped, mapped + (to - from));
+      from = to;
+    }
   }
+  block->physical_addresses = moved;
+  block->physicalAddress = first_page | (block->physicalAddress & PAGE_OFFSET_MASK);
+  if (block->two_pages)
+    block->second_page_pa = second_page;
+  if (!HashCode(*block, first_page, second_page, &block->code_hash))
+    block->code_hash = 0;
 
   block->next_at_address = nullptr;
-  at = jit_block_lists_get(&block_map, AddressKey(physical_address));
+  at = jit_block_lists_get(&block_map, AddressKey(block->physicalAddress));
   while (*at)
     at = &(*at)->next_at_address;
   *at = block;
@@ -621,7 +685,8 @@ void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 physical_address)
 JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, u32 physical_address,
                                                   CPUEmuFeatureFlags feature_flags)
 {
-  u32 others = 0;
+  u32 others = 0, second_ea = 0, second_pa = 0;
+  bool second_valid = false;
   JitBlock* const* const head = jit_block_lists_find(&suspended_map, AddressKey(addr));
   JitBlock* b;
   if (!head || !*head)
@@ -629,23 +694,27 @@ JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, u32 physical_address
 
   for (b = *head; b; b = b->next_suspended)
   {
-    bool in_page = true;
+    const u32 first_page = physical_address & ~PAGE_OFFSET_MASK;
+    u32 second_page = b->second_page_pa;
+    u64 hash;
     if (b->feature_flags != feature_flags)
       continue;
-    if (b->physicalAddress != physical_address)
+    if (b->two_pages)
     {
-      for (const SmallRange& range : b->physical_addresses)
+      if (b->second_page_ea != second_ea)
       {
-        if (((range.from ^ b->physicalAddress) | ((range.to - 1) ^ b->physicalAddress)) &
-            ~static_cast<u32>(PowerPC::HW_PAGE_MASK))
-          in_page = false;
+        second_ea = b->second_page_ea;
+        second_valid = TranslateCodeAddress(second_ea, feature_flags, &second_pa);
+        second_pa &= ~PAGE_OFFSET_MASK;
       }
+      second_page = second_pa;
     }
-    if (in_page && HashCode(*b, physical_address) == b->code_hash)
+    if ((!b->two_pages || second_valid) && b->code_hash &&
+        HashCode(*b, first_page, second_page, &hash) && hash == b->code_hash)
     {
       LeaveSuspended(*b);
-      if (b->physicalAddress != physical_address)
-        MoveBlock(b, physical_address);
+      if (b->physicalAddress != physical_address || second_page != b->second_page_pa)
+        MoveBlock(b, first_page, second_page);
       for (const SmallRange& range : b->physical_addresses)
       {
         for (u32 i = range.from & ~31u; i < range.to; i += 32)
@@ -809,35 +878,73 @@ void JitBaseBlockCache::InvalidateICacheInternal(u32 physical_address, u32 addre
 
 /* The code of the block as if its physicalAddress were @physical_address, word by word, its
  * ranges taken from there; 0 when any of it is not in RAM */
-u64 JitBaseBlockCache::HashCode(const JitBlock& block, u32 physical_address) const
+/* Where a physical address of the block's code is with its pages at first_page and second_page,
+ * and a key for it the same wherever they are; false for code outside its pages when they moved */
+bool JitBaseBlockCache::MapCodeAddress(const JitBlock& block, u32 address, u32 first_page,
+                                       u32 second_page, u32* mapped, u32* key) const
+{
+  const u32 page = address & ~PAGE_OFFSET_MASK;
+  const u32 old_first = block.physicalAddress & ~PAGE_OFFSET_MASK;
+  if (page == old_first)
+  {
+    *mapped = first_page | (address & PAGE_OFFSET_MASK);
+    *key = address & PAGE_OFFSET_MASK;
+    return true;
+  }
+  if (block.two_pages && page == block.second_page_pa)
+  {
+    *mapped = second_page | (address & PAGE_OFFSET_MASK);
+    *key = (PAGE_OFFSET_MASK + 1) | (address & PAGE_OFFSET_MASK);
+    return true;
+  }
+  if (first_page != old_first)
+    return false;
+  *mapped = address;
+  *key = address;
+  return true;
+}
+
+/* A hash of the block's code with its pages at first_page and second_page; false when part of it
+ * is not in RAM there */
+bool JitBaseBlockCache::HashCode(const JitBlock& block, u32 first_page, u32 second_page,
+                                 u64* hash_out) const
 {
   auto& memory = m_jit.m_system.GetMemory();
   u64 hash = 0x9E3779B97F4A7C15ull;
   for (const SmallRange& range : block.physical_addresses)
   {
-    const u32 offset = range.from - block.physicalAddress;
-    const u32 address = (physical_address + offset) & 0x3FFFFFFF;
-    const u32 size = range.to - range.from;
-    const u8* code;
-    u32 i;
-    if (address < memory.GetRamSizeReal() && size <= memory.GetRamSizeReal() - address)
-      code = memory.GetRAM() + address;
-    else if (memory.GetEXRAM() && (address >> 28) == 0x1 &&
-             (address & 0x0fffffff) < memory.GetExRamSizeReal() &&
-             size <= memory.GetExRamSizeReal() - (address & 0x0fffffff))
-      code = memory.GetEXRAM() + (address & memory.GetExRamMask());
-    else
-      return 0;
-    hash = (hash ^ offset) * 0xFF51AFD7ED558CCDull;
-    for (i = 0; i + 4 <= size; i += 4)
+    u32 from = range.from;
+    while (from < range.to)
     {
-      u32 word;
-      std::memcpy(&word, code + i, sizeof(word));
-      hash = (hash ^ word) * 0xC4CEB9FE1A85EC53ull;
-      hash ^= hash >> 31;
+      const u32 page_end = (from | PAGE_OFFSET_MASK) + 1;
+      const u32 to = page_end && page_end < range.to ? page_end : range.to;
+      const u32 size = to - from;
+      u32 mapped, key, address, i;
+      const u8* code;
+      if (!MapCodeAddress(block, from, first_page, second_page, &mapped, &key))
+        return false;
+      address = mapped & 0x3FFFFFFF;
+      if (address < memory.GetRamSizeReal() && size <= memory.GetRamSizeReal() - address)
+        code = memory.GetRAM() + address;
+      else if (memory.GetEXRAM() && (address >> 28) == 0x1 &&
+               (address & 0x0fffffff) < memory.GetExRamSizeReal() &&
+               size <= memory.GetExRamSizeReal() - (address & 0x0fffffff))
+        code = memory.GetEXRAM() + (address & memory.GetExRamMask());
+      else
+        return false;
+      hash = (hash ^ key) * 0xFF51AFD7ED558CCDull;
+      for (i = 0; i + 4 <= size; i += 4)
+      {
+        u32 word;
+        std::memcpy(&word, code + i, sizeof(word));
+        hash = (hash ^ word) * 0xC4CEB9FE1A85EC53ull;
+        hash ^= hash >> 31;
+      }
+      from = to;
     }
   }
-  return hash ? hash : 1;
+  *hash_out = hash ? hash : 1;
+  return true;
 }
 
 void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 length, bool suspend)
