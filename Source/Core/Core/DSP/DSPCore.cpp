@@ -21,7 +21,9 @@
 #include "Core/DSP/DSPAnalyzer.h"
 #include "Core/DSP/DSPHost.h"
 #include "Core/DSP/Interpreter/DSPInterpreter.h"
-#include "Core/DSP/Jit/DSPEmitterBase.h"
+#if defined(_M_X86_64)
+#include "Core/DSP/Jit/x64/DSPEmitter.h"
+#endif
 #include "Core/HW/DSP.h"
 #include "Core/System.h"
 
@@ -409,8 +411,10 @@ bool DSPCore::Initialize(const DSPInitOptions& opts)
     return false;
 
   // Initialize JIT, if necessary
+#if defined(_M_X86_64)
   if (opts.core_type == DSPInitOptions::CoreType::JIT64)
-    m_dsp_jit = JIT::CreateDSPEmitter(*this);
+    m_dsp_jit = new JIT::x64::DSPEmitter(*this);
+#endif
 
   if (!opts.capture_path.empty())
     m_dsp_cap.Open(opts.capture_path.c_str(), Common::PCAP::LinkType::User);
@@ -426,7 +430,10 @@ void DSPCore::Shutdown()
 
   m_core_state = State::Stopped;
 
-  m_dsp_jit.reset();
+#if defined(_M_X86_64)
+  delete m_dsp_jit;
+#endif
+  m_dsp_jit = nullptr;
   m_dsp.Shutdown();
   m_dsp_cap.Close();
 }
@@ -434,10 +441,10 @@ void DSPCore::Shutdown()
 // Delegate to JIT or interpreter as appropriate.
 int DSPCore::RunCycles(int cycles)
 {
+#if defined(_M_X86_64)
   if (m_dsp_jit)
-  {
     return m_dsp_jit->RunCycles(static_cast<u16>(cycles));
-  }
+#endif
 
   while (cycles > 0)
   {
@@ -455,10 +462,10 @@ void DSPCore::Reset()
 
 void DSPCore::ClearIRAM()
 {
-  if (!m_dsp_jit)
-    return;
-
-  m_dsp_jit->ClearIRAM();
+#if defined(_M_X86_64)
+  if (m_dsp_jit)
+    m_dsp_jit->ClearIRAM();
+#endif
 }
 
 void DSPCore::SetException(ExceptionType exception)
@@ -543,7 +550,9 @@ void DSPCore::DoState(PointerWrap& p)
 {
   m_dsp.DoState(p);
 
+#if defined(_M_X86_64)
   if (m_dsp_jit)
     m_dsp_jit->DoState(p);
+#endif
 }
 }  // namespace DSP

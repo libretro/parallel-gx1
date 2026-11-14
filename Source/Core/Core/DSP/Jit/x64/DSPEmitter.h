@@ -13,26 +13,26 @@
 #include "Common/x64Emitter.h"
 
 #include "Core/DSP/DSPCommon.h"
-#include "Core/DSP/Jit/DSPEmitterBase.h"
 #include "Core/DSP/Jit/x64/DSPJitRegCache.h"
 
 class PointerWrap;
 
 namespace DSP
 {
+class DSPCore;
 enum class StackRegister;
 
 namespace JIT::x64
 {
-class DSPEmitter final : public JIT::DSPEmitter, public Gen::X64CodeBlock
+class DSPEmitter final : public Gen::X64CodeBlock
 {
 public:
   explicit DSPEmitter(DSPCore& dsp);
-  ~DSPEmitter() override;
+  ~DSPEmitter();
 
-  u16 RunCycles(u16 cycles) override;
-  void DoState(PointerWrap& p) override;
-  void ClearIRAM() override;
+  u16 RunCycles(u16 cycles);
+  void DoState(PointerWrap& p);
+  void ClearIRAM();
 
   // Ext commands
   void l(UDSPInstruction opc);

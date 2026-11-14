@@ -663,7 +663,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/DSP/Interpreter/DSPIntMisc.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/Interpreter/DSPIntMultiplier.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSP/Interpreter/DSPIntTables.cpp \
-	$(CORE_DIR)/Source/Core/Core/DSP/Jit/DSPEmitterBase.cpp \
 	$(CORE_DIR)/Source/Core/Core/DSPEmulator.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoDataFile.cpp \
 	$(CORE_DIR)/Source/Core/Core/FifoPlayer/FifoPlayer.cpp \
