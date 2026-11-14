@@ -20,11 +20,7 @@ using socklen_t = int;
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
 #include "Common/CommonTypes.h"
-
-namespace Common
-{
-class PCAP;
-}
+#include "Common/PcapFile.h"
 
 namespace Core
 {
@@ -125,7 +121,7 @@ private:
   };
   void Write(const u8* data, std::size_t length);
 
-  std::unique_ptr<Common::PCAP> m_file;
+  Common::PCAP m_file;
   mpsc_stack_t m_packets{};
   retro_atomic_int_t m_writing{};
   std::map<s32, u32> m_read_sequence_number;

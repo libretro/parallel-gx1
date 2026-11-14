@@ -122,8 +122,7 @@ PCAPSSLCaptureLogger::PCAPSSLCaptureLogger()
     std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %Hh%Mm%Ss", &*local_time);
   const std::string filepath =
       File::GetUserPath(D_DUMPSSL_IDX) + SConfig::GetInstance().GetGameID() + " " + stamp + ".pcap";
-  m_file = std::make_unique<Common::PCAP>(
-      new File::IOFile(filepath, "wb", File::SharedAccess::Read), Common::PCAP::LinkType::Ethernet);
+  m_file.Open(filepath.c_str(), Common::PCAP::LinkType::Ethernet, File::SharedAccess::Read);
 }
 
 PCAPSSLCaptureLogger::~PCAPSSLCaptureLogger()
@@ -133,7 +132,7 @@ PCAPSSLCaptureLogger::~PCAPSSLCaptureLogger()
   {
     auto* packet = reinterpret_cast<Packet*>(node);
     node = node->next;
-    m_file->AddPacket(packet->bytes.data(), packet->bytes.size());
+    m_file.AddPacket(packet->bytes.data(), packet->bytes.size());
     delete packet;
   }
 }
@@ -153,7 +152,7 @@ void PCAPSSLCaptureLogger::Write(const u8* data, std::size_t length)
     {
       auto* queued = reinterpret_cast<Packet*>(node);
       node = node->next;
-      m_file->AddPacket(queued->bytes.data(), queued->bytes.size());
+      m_file.AddPacket(queued->bytes.data(), queued->bytes.size());
       delete queued;
     }
     retro_atomic_store_release_int(&m_writing, 0);

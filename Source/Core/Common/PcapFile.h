@@ -2,18 +2,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 // PCAP is a standard file format for network capture files. This also extends
-// to any capture of packetized intercommunication data. This file provides a
-// class called PCAP which is a very light wrapper around the file format,
-// allowing only creating a new PCAP capture file and appending packets to it.
-//
-// Example use:
-//   PCAP pcap(new IOFile("test.pcap", "wb"));
-//   pcap.AddPacket(pkt);  // pkt is automatically casted to u8*
+// to any capture of packetized intercommunication data. A PCAP holds the file it
+// writes, in place: Open creates the capture file and writes its header, then
+// packets are appended to it.
 
 #pragma once
 
 #include <cstddef>
-#include <memory>
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
@@ -29,23 +24,14 @@ public:
     User = 147,    // Reserved for internal use
   };
 
-  // Takes ownership of the file object. Assumes the file object is already
-  // opened in write mode.
-  explicit PCAP(File::IOFile* fp, LinkType link_type = LinkType::User) : m_fp(fp)
-  {
-    AddHeader(static_cast<u32>(link_type));
-  }
-  template <typename T>
-  void AddPacket(const T& obj)
-  {
-    AddPacket(reinterpret_cast<const u8*>(&obj), sizeof(obj));
-  }
+  bool Open(const char* path, LinkType link_type,
+            File::SharedAccess sh = File::SharedAccess::Default);
+  void Close() { m_fp.Close(); }
+  bool IsOpen() const { return m_fp.IsOpen(); }
 
   void AddPacket(const u8* bytes, size_t size);
 
 private:
-  void AddHeader(u32 link_type);
-
-  std::unique_ptr<File::IOFile> m_fp;
+  File::IOFile m_fp;
 };
 }  // namespace Common

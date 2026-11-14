@@ -11,8 +11,8 @@
 
 #include <retro_atomic.h>
 
+#include "Common/PcapFile.h"
 #include "Core/DSP/DSPAnalyzer.h"
-#include "Core/DSP/DSPCaptureLogger.h"
 
 class PointerWrap;
 
@@ -300,11 +300,8 @@ struct DSPInitOptions
   };
   CoreType core_type = CoreType::JIT64;
 
-  // Optional capture logger used to log internal DSP data transfers.
-  // Default: dummy implementation, does nothing.
-  DSPCaptureLogger* capture_logger;
-
-  DSPInitOptions() : capture_logger(new DefaultDSPCaptureLogger()) {}
+  // Where internal DSP data transfers are captured, as PCAP; empty, they are not.
+  std::string capture_path;
 };
 
 // All the state of the DSP should be in this struct. Any DSP state that is not filled on init
@@ -570,6 +567,7 @@ private:
   State m_core_state = State::Stopped;
   std::unique_ptr<Interpreter::Interpreter> m_dsp_interpreter;
   std::unique_ptr<JIT::DSPEmitter> m_dsp_jit;
-  std::unique_ptr<DSPCaptureLogger> m_dsp_cap;
+  // The capture of internal data transfers, open when one was asked for
+  Common::PCAP m_dsp_cap;
 };
 }  // namespace DSP

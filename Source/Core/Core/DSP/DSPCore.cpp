@@ -4,6 +4,8 @@
 
 #include "Core/DSP/DSPCore.h"
 
+#include "Core/DSP/DSPCaptureLogger.h"
+
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -433,7 +435,8 @@ bool DSPCore::Initialize(const DSPInitOptions& opts)
   if (opts.core_type == DSPInitOptions::CoreType::JIT64)
     m_dsp_jit = JIT::CreateDSPEmitter(*this);
 
-  m_dsp_cap.reset(opts.capture_logger);
+  if (!opts.capture_path.empty())
+    m_dsp_cap.Open(opts.capture_path.c_str(), Common::PCAP::LinkType::User);
 
   m_core_state = State::Running;
   return true;
@@ -448,7 +451,7 @@ void DSPCore::Shutdown()
 
   m_dsp_jit.reset();
   m_dsp.Shutdown();
-  m_dsp_cap.reset();
+  m_dsp_cap.Close();
 }
 
 // Delegate to JIT or interpreter as appropriate.
@@ -538,17 +541,20 @@ void DSPCore::WriteMailboxHigh(Mailbox mailbox, u16 value)
 
 void DSPCore::LogIFXRead(u16 address, u16 read_value)
 {
-  m_dsp_cap->LogIFXRead(address, read_value);
+  if (m_dsp_cap.IsOpen())
+    CaptureIFXAccess(&m_dsp_cap, true, address, read_value);
 }
 
 void DSPCore::LogIFXWrite(u16 address, u16 written_value)
 {
-  m_dsp_cap->LogIFXWrite(address, written_value);
+  if (m_dsp_cap.IsOpen())
+    CaptureIFXAccess(&m_dsp_cap, false, address, written_value);
 }
 
 void DSPCore::LogDMA(u16 control, u32 gc_address, u16 dsp_address, u16 length, const u8* data)
 {
-  m_dsp_cap->LogDMA(control, gc_address, dsp_address, length, data);
+  if (m_dsp_cap.IsOpen())
+    CaptureDMA(&m_dsp_cap, control, gc_address, dsp_address, length, data);
 }
 
 bool DSPCore::IsJITCreated() const

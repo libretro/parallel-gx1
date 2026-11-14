@@ -41,11 +41,20 @@ struct PCAPRecordHeader
 
 }  // namespace
 
-void PCAP::AddHeader(u32 link_type)
+bool PCAP::Open(const char* path, LinkType link_type, File::SharedAccess sh)
 {
-  PCAPHeader hdr = {PCAP_MAGIC, PCAP_VERSION_MAJOR,  PCAP_VERSION_MINOR, 0,
-                    0,          PCAP_CAPTURE_LENGTH, link_type};
-  m_fp->WriteBytes(&hdr, sizeof(hdr));
+  PCAPHeader hdr;
+  if (!m_fp.Open(path, "wb", sh))
+    return false;
+  hdr.magic_number = PCAP_MAGIC;
+  hdr.version_major = PCAP_VERSION_MAJOR;
+  hdr.version_minor = PCAP_VERSION_MINOR;
+  hdr.tz_offset = 0;
+  hdr.ts_accuracy = 0;
+  hdr.capture_length = PCAP_CAPTURE_LENGTH;
+  hdr.data_link_type = static_cast<u32>(link_type);
+  m_fp.WriteBytes(&hdr, sizeof(hdr));
+  return true;
 }
 
 // Not thread-safe, concurrency between multiple calls to IOFile::WriteBytes.
@@ -54,7 +63,7 @@ void PCAP::AddPacket(const u8* bytes, size_t size)
   const u64 now_us = Common::Timer::WallClockUs();
   PCAPRecordHeader rec_hdr = {(u32)(now_us / 1000000), (u32)(now_us % 1000000), (u32)size,
                               (u32)size};
-  m_fp->WriteBytes(&rec_hdr, sizeof(rec_hdr));
-  m_fp->WriteBytes(bytes, size);
+  m_fp.WriteBytes(&rec_hdr, sizeof(rec_hdr));
+  m_fp.WriteBytes(bytes, size);
 }
 }  // namespace Common

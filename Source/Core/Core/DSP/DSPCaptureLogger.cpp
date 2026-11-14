@@ -4,8 +4,6 @@
 #include "Core/DSP/DSPCaptureLogger.h"
 
 #include <cstring>
-#include <memory>
-#include <string>
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
@@ -38,37 +36,21 @@ struct DMAPacket
 };
 #pragma pack(pop)
 
-PCAPDSPCaptureLogger::PCAPDSPCaptureLogger(const std::string& pcap_filename)
-    : m_pcap(new Common::PCAP(new File::IOFile(pcap_filename, "wb")))
-{
-}
-
-PCAPDSPCaptureLogger::PCAPDSPCaptureLogger(Common::PCAP* pcap) : m_pcap(pcap)
-{
-}
-
-PCAPDSPCaptureLogger::PCAPDSPCaptureLogger(std::unique_ptr<Common::PCAP>&& pcap)
-    : m_pcap(std::move(pcap))
-{
-}
-
-void PCAPDSPCaptureLogger::LogIFXAccess(bool read, u16 address, u16 value)
+void CaptureIFXAccess(Common::PCAP* pcap, bool read, u16 address, u16 value)
 {
   IFXAccessPacket pkt;
   pkt.magic = IFX_ACCESS_PACKET_MAGIC;
-  pkt.is_read = !!read;  // Make sure we actually have 0/1.
+  pkt.is_read = read ? 1 : 0;
   pkt.address = address;
   pkt.value = value;
-
-  m_pcap->AddPacket(pkt);
+  pcap->AddPacket(reinterpret_cast<const u8*>(&pkt), sizeof(pkt));
 }
 
-void PCAPDSPCaptureLogger::LogDMA(u16 control, u32 gc_address, u16 dsp_address, u16 length,
-                                  const u8* data)
+void CaptureDMA(Common::PCAP* pcap, u16 control, u32 gc_address, u16 dsp_address, u16 length,
+                const u8* data)
 {
-  // The length of a DMA cannot be above 64K, so we use a static buffer for
-  // the construction of the packet.
-  static u8 buffer[0x10000];
+  // A DMA is at most 64 KiB: the packet is put together in a static buffer
+  static u8 buffer[sizeof(DMAPacket) + 0x10000];
 
   DMAPacket* pkt = reinterpret_cast<DMAPacket*>(&buffer[0]);
   pkt->magic = DMA_PACKET_MAGIC;
@@ -78,6 +60,6 @@ void PCAPDSPCaptureLogger::LogDMA(u16 control, u32 gc_address, u16 dsp_address, 
   pkt->length = length;
   memcpy(&buffer[sizeof(DMAPacket)], data, length);
 
-  m_pcap->AddPacket(buffer, sizeof(DMAPacket) + length);
+  pcap->AddPacket(buffer, sizeof(DMAPacket) + length);
 }
 }  // namespace DSP

@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
-
 #include "Common/CommonTypes.h"
 
 namespace Common
@@ -15,62 +12,16 @@ class PCAP;
 
 namespace DSP
 {
-// An interface used to capture and log structured data about internal DSP
-// data transfers.
-//
-// Note: these calls are done within the DSP emulator in critical paths and at
-// a high frequency. Implementations must try and avoid blocking for too long.
-class DSPCaptureLogger
-{
-public:
-  virtual ~DSPCaptureLogger() {}
-  // Accesses (reads or writes) to memory mapped registers (external
-  // interface, also known as IFX). These are always 16 bits accesses.
-  virtual void LogIFXRead(u16 address, u16 read_value) = 0;
-  virtual void LogIFXWrite(u16 address, u16 written_value) = 0;
+// Structured records of the DSP's internal data transfers, appended to a PCAP capture in a
+// custom packet format. These are called from the DSP emulator's critical paths, only while a
+// capture is open.
 
-  // DMAs to/from main memory from/to DSP memory. We let the interpretation
-  // of the "control" field to the layer that analyze the logs and do not
-  // perform our own interpretation of it. Thus there is only one call which
-  // is used for DRAM/IRAM in any direction (to/from DSP).
-  //
-  // Length is expressed in bytes, not DSP words.
-  virtual void LogDMA(u16 control, u32 gc_address, u16 dsp_address, u16 length, const u8* data) = 0;
-};
+// An access (read or write) to a memory mapped register of the external interface (IFX); these
+// are always 16 bits.
+void CaptureIFXAccess(Common::PCAP* pcap, bool read, u16 address, u16 value);
 
-// A dummy implementation of a capture logger that does nothing. This is the
-// default implementation used by the DSP emulator.
-//
-// Can also be inherited from if you want to only override part of the methods.
-class DefaultDSPCaptureLogger : public DSPCaptureLogger
-{
-public:
-  void LogIFXRead(u16 address, u16 read_value) override {}
-  void LogIFXWrite(u16 address, u16 written_value) override {}
-  void LogDMA(u16 control, u32 gc_address, u16 dsp_address, u16 length, const u8* data) override {}
-};
-
-// A capture logger implementation that logs to PCAP files in a custom
-// packet-based format.
-class PCAPDSPCaptureLogger final : public DSPCaptureLogger
-{
-public:
-  // Automatically creates a writeable file (truncate existing file).
-  PCAPDSPCaptureLogger(const std::string& pcap_filename);
-  // Takes ownership of pcap.
-  PCAPDSPCaptureLogger(Common::PCAP* pcap);
-  PCAPDSPCaptureLogger(std::unique_ptr<Common::PCAP>&& pcap);
-
-  void LogIFXRead(u16 address, u16 read_value) override { LogIFXAccess(true, address, read_value); }
-  void LogIFXWrite(u16 address, u16 written_value) override
-  {
-    LogIFXAccess(false, address, written_value);
-  }
-  void LogDMA(u16 control, u32 gc_address, u16 dsp_address, u16 length, const u8* data) override;
-
-private:
-  void LogIFXAccess(bool read, u16 address, u16 value);
-
-  std::unique_ptr<Common::PCAP> m_pcap;
-};
+// A DMA between main memory and DSP memory, either way, DRAM or IRAM; the control field is kept
+// as the register had it, for whatever reads the capture. length is in bytes, not DSP words.
+void CaptureDMA(Common::PCAP* pcap, u16 control, u32 gc_address, u16 dsp_address, u16 length,
+                const u8* data);
 }  // namespace DSP

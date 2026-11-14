@@ -19,7 +19,6 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/DSP/DSPAccelerator.h"
-#include "Core/DSP/DSPCaptureLogger.h"
 #include "Core/DSP/DSPCore.h"
 #include "Core/DSP/DSPHost.h"
 #include "Core/DSP/DSPTables.h"
@@ -134,10 +133,7 @@ static bool FillDSPInitOptions(DSPInitOptions* opts)
 #endif
 
   if (Config::Get(Config::MAIN_DSP_CAPTURE_LOG))
-  {
-    const std::string pcap_path = File::GetUserPath(D_DUMPDSP_IDX) + "dsp.pcap";
-    opts->capture_logger = new PCAPDSPCaptureLogger(pcap_path);
-  }
+    opts->capture_path = File::GetUserPath(D_DUMPDSP_IDX) + "dsp.pcap";
 
   return true;
 }
