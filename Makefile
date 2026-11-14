@@ -77,13 +77,11 @@ else
    $(error Unsupported target architecture '$(arch)': the core builds for x86_64 and arm64)
 endif
 
-# The externals are git submodules; a clone made without --recursive has them
-# empty and fails deep inside the build on a missing header.
+# libusb and hidapi are git submodules; a clone made without --recursive has
+# them empty and fails deep inside the build on a missing header.
 SUBMODULE_FILES := \
-   Externals/mGBA/mgba/include/mgba-util/vfs.h \
    Externals/libusb/libusb/libusb/libusb.h \
-   Externals/hidapi/hidapi-src/hidapi/hidapi.h \
-   Externals/Vulkan-Headers/include/vulkan/vulkan.h
+   Externals/hidapi/hidapi-src/hidapi/hidapi.h
 ifneq (,$(filter-out clean,$(or $(MAKECMDGOALS),all)))
    SUBMODULES_MISSING := $(filter-out $(wildcard $(SUBMODULE_FILES)),$(SUBMODULE_FILES))
    ifneq (,$(SUBMODULES_MISSING))

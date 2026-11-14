@@ -53,10 +53,11 @@ SCMREV_STATUS := $(shell \
 	cmp -s $(SCMREV_H).tmp $(SCMREV_H) || mv -f $(SCMREV_H).tmp $(SCMREV_H); \
 	rm -f $(SCMREV_H).tmp)
 
-MGBA_GIT    := git -C $(EXT_DIR)/mGBA/mgba
-MGBA_COMMIT := $(shell $(MGBA_GIT) describe --always --abbrev=40 --dirty 2>/dev/null || echo "(unknown)")
-MGBA_SHORT  := $(shell $(MGBA_GIT) describe --always --dirty 2>/dev/null || echo "(unknown)")
-MGBA_REV    := $(shell $(MGBA_GIT) rev-list HEAD --count 2>/dev/null || echo -1)
+# mGBA is checked in from this commit, the files the core builds and their
+# headers, with no history of its own
+MGBA_COMMIT := 0b40863f64d0940f333fa1c638e75f86f8a26a33
+MGBA_SHORT  := 0b40863
+MGBA_REV    := -1
 
 MGBA_VERSION_STATUS := $(shell \
 	mkdir -p $(dir $(MGBA_VERSION_C)); \

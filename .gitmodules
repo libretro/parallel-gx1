@@ -1,7 +1,3 @@
-[submodule "Externals/mGBA/mgba"]
-	path = Externals/mGBA/mgba
-	url = https://github.com/mgba-emu/mgba.git
-	shallow = true
 [submodule "libusb"]
 	path = Externals/libusb/libusb
 	url = https://github.com/libusb/libusb.git
@@ -11,8 +7,4 @@
 	path = Externals/hidapi/hidapi-src
 	url = https://github.com/libusb/hidapi.git
 	shallow = true
-	shallow = true
-[submodule "Externals/Vulkan-Headers"]
-	path = Externals/Vulkan-Headers
-	url = https://github.com/KhronosGroup/Vulkan-Headers.git
 	shallow = true
