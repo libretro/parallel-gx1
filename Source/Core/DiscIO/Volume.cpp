@@ -50,8 +50,10 @@ std::string Volume::FilterGameID(const char* data, size_t size)
   return string;
 }
 
+// A volume over reader, which it takes (reader is then nullptr), adapted by reader_adapter_factory;
+// nullptr with reader left as it is when it is not a disc.
 template <typename T = std::identity>
-static std::unique_ptr<VolumeDisc> TryCreateDisc(std::unique_ptr<BlobReader>& reader,
+static std::unique_ptr<VolumeDisc> TryCreateDisc(BlobReader*& reader,
                                                  const T& reader_adapter_factory = {})
 {
   if (!reader)
@@ -61,18 +63,28 @@ static std::unique_ptr<VolumeDisc> TryCreateDisc(std::unique_ptr<BlobReader>& re
   // This prevents `CachedBlobReader` from showing warnings when failing to scrub a .dol file.
 
   if (reader->ReadSwapped<u32>(0x18) == WII_DISC_MAGIC)
-    return std::make_unique<VolumeWii>(reader_adapter_factory(std::move(reader)));
+  {
+    BlobReader* const taken = reader;
+    reader = nullptr;
+    return std::make_unique<VolumeWii>(reader_adapter_factory(taken));
+  }
 
   if (reader->ReadSwapped<u32>(0x1C) == GAMECUBE_DISC_MAGIC)
-    return std::make_unique<VolumeGC>(reader_adapter_factory(std::move(reader)));
+  {
+    BlobReader* const taken = reader;
+    reader = nullptr;
+    return std::make_unique<VolumeGC>(reader_adapter_factory(taken));
+  }
 
   // No known magic words found
   return nullptr;
 }
 
-std::unique_ptr<VolumeDisc> CreateDisc(std::unique_ptr<BlobReader> reader)
+std::unique_ptr<VolumeDisc> CreateDisc(BlobReader* reader)
 {
-  return TryCreateDisc(reader);
+  std::unique_ptr<VolumeDisc> disc = TryCreateDisc(reader);
+  DestroyBlobReader(reader);
+  return disc;
 }
 
 std::unique_ptr<VolumeDisc> CreateDisc(const std::string& path)
@@ -82,15 +94,17 @@ std::unique_ptr<VolumeDisc> CreateDisc(const std::string& path)
 
 std::unique_ptr<VolumeDisc> CreateDiscForCore(const std::string& path)
 {
-  auto reader = CreateBlobReader(path);
+  BlobReader* reader = CreateBlobReader(path);
 
-  if (Config::Get(Config::MAIN_LOAD_GAME_INTO_MEMORY))
-    return TryCreateDisc(reader, CreateScrubbingCachedBlobReader);
-
-  return TryCreateDisc(reader);
+  std::unique_ptr<VolumeDisc> disc = Config::Get(Config::MAIN_LOAD_GAME_INTO_MEMORY) ?
+                                         TryCreateDisc(reader, CreateScrubbingCachedBlobReader) :
+                                         TryCreateDisc(reader);
+  DestroyBlobReader(reader);
+  return disc;
 }
 
-static std::unique_ptr<VolumeWAD> TryCreateWAD(std::unique_ptr<BlobReader>& reader)
+// As TryCreateDisc
+static std::unique_ptr<VolumeWAD> TryCreateWAD(BlobReader*& reader)
 {
   if (!reader)
     return nullptr;
@@ -99,15 +113,21 @@ static std::unique_ptr<VolumeWAD> TryCreateWAD(std::unique_ptr<BlobReader>& read
   // 0x206962 for boot2 wads
   const std::optional<u32> wad_magic = reader->ReadSwapped<u32>(0x02);
   if (wad_magic == u32(0x00204973) || wad_magic == u32(0x00206962))
-    return std::make_unique<VolumeWAD>(std::move(reader));
+  {
+    BlobReader* const taken = reader;
+    reader = nullptr;
+    return std::make_unique<VolumeWAD>(taken);
+  }
 
   // No known magic words found
   return nullptr;
 }
 
-std::unique_ptr<VolumeWAD> CreateWAD(std::unique_ptr<BlobReader> reader)
+std::unique_ptr<VolumeWAD> CreateWAD(BlobReader* reader)
 {
-  return TryCreateWAD(reader);
+  std::unique_ptr<VolumeWAD> wad = TryCreateWAD(reader);
+  DestroyBlobReader(reader);
+  return wad;
 }
 
 std::unique_ptr<VolumeWAD> CreateWAD(const std::string& path)
@@ -115,13 +135,14 @@ std::unique_ptr<VolumeWAD> CreateWAD(const std::string& path)
   return CreateWAD(CreateBlobReader(path));
 }
 
-std::unique_ptr<Volume> CreateVolume(std::unique_ptr<BlobReader> reader)
+std::unique_ptr<Volume> CreateVolume(BlobReader* reader)
 {
   std::unique_ptr<VolumeDisc> disc = TryCreateDisc(reader);
   if (disc)
     return disc;
 
   std::unique_ptr<VolumeWAD> wad = TryCreateWAD(reader);
+  DestroyBlobReader(reader);
   if (wad)
     return wad;
 

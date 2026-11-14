@@ -35,24 +35,24 @@ struct TGCHeader
   u32 file_area_virtual_offset;
 };
 
-class TGCFileReader final : public BlobReader
+class TGCFileReader final : public BlobReaderOfKind<BlobReaderKind::TGC>
 {
 public:
-  static std::unique_ptr<TGCFileReader> Create(File::DirectIOFile file);
+  static TGCFileReader* Create(File::DirectIOFile file);
 
-  BlobType GetBlobType() const override { return BlobType::TGC; }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return BlobType::TGC; }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override { return m_size; }
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override { return DataSizeType::Accurate; }
+  u64 GetRawSize() const { return m_size; }
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const { return DataSizeType::Accurate; }
 
-  u64 GetBlockSize() const override { return 0; }
-  bool HasFastRandomAccessInBlock() const override { return true; }
-  std::string GetCompressionMethod() const override { return {}; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+  u64 GetBlockSize() const { return 0; }
+  bool HasFastRandomAccessInBlock() const { return true; }
+  std::string GetCompressionMethod() const { return {}; }
+  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
-  bool Read(u64 offset, u64 nbytes, u8* out_ptr) override;
+  bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
   TGCFileReader(File::DirectIOFile file);

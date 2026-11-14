@@ -45,9 +45,9 @@ WbfsFileReader::WbfsFileReader(File::DirectIOFile file, const std::string& path)
 
 WbfsFileReader::~WbfsFileReader() = default;
 
-std::unique_ptr<BlobReader> WbfsFileReader::CopyReader() const
+BlobReader* WbfsFileReader::CopyReader() const
 {
-  auto retval = std::unique_ptr<WbfsFileReader>(new WbfsFileReader(m_files[0].file));
+  WbfsFileReader* retval = new WbfsFileReader(m_files[0].file);
   for (size_t ix = 1; ix < m_files.size(); ix++)
     retval->AddFileToList(m_files[ix].file);
   return retval;
@@ -179,13 +179,15 @@ File::DirectIOFile& WbfsFileReader::SeekToCluster(u64 offset, u64* available)
   return m_files[0].file;
 }
 
-std::unique_ptr<WbfsFileReader> WbfsFileReader::Create(File::DirectIOFile file,
-                                                       const std::string& path)
+WbfsFileReader* WbfsFileReader::Create(File::DirectIOFile file, const std::string& path)
 {
-  auto reader = std::unique_ptr<WbfsFileReader>(new WbfsFileReader(std::move(file), path));
+  WbfsFileReader* reader = new WbfsFileReader(std::move(file), path);
 
   if (!reader->IsGood())
-    reader.reset();
+  {
+    DestroyBlobReader(reader);
+    reader = nullptr;
+  }
 
   return reader;
 }

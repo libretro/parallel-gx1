@@ -287,32 +287,32 @@ private:
   u64 m_data_size = 0;
 };
 
-class DirectoryBlobReader final : public BlobReader
+class DirectoryBlobReader final : public BlobReaderOfKind<BlobReaderKind::Directory>
 {
   friend DiscContentContainer;
 
 public:
-  static std::unique_ptr<DirectoryBlobReader> Create(const std::string& dol_path);
+  static DirectoryBlobReader* Create(const std::string& dol_path);
 
   DirectoryBlobReader(DirectoryBlobReader&&) = delete;
   DirectoryBlobReader& operator=(DirectoryBlobReader&&) = delete;
-  ~DirectoryBlobReader() override;
+  ~DirectoryBlobReader();
 
-  bool Read(u64 offset, u64 length, u8* buffer) override;
-  bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const override;
-  bool ReadWiiDecrypted(u64 offset, u64 size, u8* buffer, u64 partition_data_offset) override;
+  bool Read(u64 offset, u64 length, u8* buffer);
+  bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const;
+  bool ReadWiiDecrypted(u64 offset, u64 size, u8* buffer, u64 partition_data_offset);
 
-  BlobType GetBlobType() const override;
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const;
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override;
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override { return DataSizeType::Accurate; }
+  u64 GetRawSize() const;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const { return DataSizeType::Accurate; }
 
-  u64 GetBlockSize() const override { return 0; }
-  bool HasFastRandomAccessInBlock() const override { return true; }
-  std::string GetCompressionMethod() const override { return {}; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+  u64 GetBlockSize() const { return 0; }
+  bool HasFastRandomAccessInBlock() const { return true; }
+  std::string GetCompressionMethod() const { return {}; }
+  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
   struct PartitionWithType
   {

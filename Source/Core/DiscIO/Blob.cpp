@@ -6,6 +6,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include "Common/BitUtils.h"
@@ -14,17 +15,169 @@
 #include "Common/MsgHandler.h"
 
 #include "DiscIO/CISOBlob.h"
+#include "DiscIO/CachedBlob.h"
 #include "DiscIO/CompressedBlob.h"
 #include "DiscIO/DirectoryBlob.h"
 #include "DiscIO/FileBlob.h"
 #include "DiscIO/NFSBlob.h"
+#include "DiscIO/ScrubbedBlob.h"
 #include "DiscIO/SplitFileBlob.h"
 #include "DiscIO/TGCBlob.h"
+#include "DiscIO/VolumeFileBlobReader.h"
 #include "DiscIO/WIABlob.h"
 #include "DiscIO/WbfsBlob.h"
 
 namespace DiscIO
 {
+// f called with the reader as the class it is
+template <typename Reader, typename F>
+static decltype(auto) AsOwnClass(Reader* reader, F&& f)
+{
+  constexpr bool is_const = std::is_const_v<Reader>;
+#define AS_KIND(kind, cls)                                                                         \
+  case BlobReaderKind::kind:                                                                       \
+    return f(static_cast<std::conditional_t<is_const, const cls*, cls*>>(reader));
+  switch (reader->GetKind())
+  {
+    AS_KIND(Plain, PlainFileReader)
+    AS_KIND(SplitPlain, SplitPlainFileReader)
+    AS_KIND(Directory, DirectoryBlobReader)
+    AS_KIND(Compressed, CompressedBlobReader)
+    AS_KIND(CISO, CISOFileReader)
+    AS_KIND(Wbfs, WbfsFileReader)
+    AS_KIND(TGC, TGCFileReader)
+    AS_KIND(WIARVZ, WIARVZFileReader)
+    AS_KIND(NFS, NFSFileReader)
+    AS_KIND(Scrubbed, ScrubbedBlob)
+    AS_KIND(Cached, CachedBlobReader)
+  case BlobReaderKind::VolumeFile:
+  default:
+    return f(static_cast<
+             std::conditional_t<is_const, const VolumeFileBlobReader*, VolumeFileBlobReader*>>(
+        reader));
+  }
+#undef AS_KIND
+}
+
+// Whether a class has its own Name rather than BlobReader's default
+#define HAS_OWN(cls, Name)                                                                         \
+  (!std::is_same_v<decltype(&std::remove_cv_t<cls>::Name), decltype(&BlobReader::Name)>)
+
+BlobType BlobReader::GetBlobType() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->GetBlobType(); });
+}
+
+BlobReader* BlobReader::CopyReader() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->CopyReader(); });
+}
+
+u64 BlobReader::GetRawSize() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->GetRawSize(); });
+}
+
+u64 BlobReader::GetDataSize() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->GetDataSize(); });
+}
+
+DataSizeType BlobReader::GetDataSizeType() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->GetDataSizeType(); });
+}
+
+u64 BlobReader::GetBlockSize() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->GetBlockSize(); });
+}
+
+bool BlobReader::HasFastRandomAccessInBlock() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->HasFastRandomAccessInBlock(); });
+}
+
+std::string BlobReader::GetCompressionMethod() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->GetCompressionMethod(); });
+}
+
+std::optional<int> BlobReader::GetCompressionLevel() const
+{
+  return AsOwnClass(this, [](auto* r) { return r->GetCompressionLevel(); });
+}
+
+bool BlobReader::Read(u64 offset, u64 size, u8* out_ptr)
+{
+  return AsOwnClass(this, [&](auto* r) { return r->Read(offset, size, out_ptr); });
+}
+
+bool BlobReader::SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const
+{
+  return AsOwnClass(this, [&](auto* r) {
+    using Cls = std::remove_pointer_t<decltype(r)>;
+    if constexpr (HAS_OWN(Cls, SupportsReadWiiDecrypted))
+      return r->SupportsReadWiiDecrypted(offset, size, partition_data_offset);
+    else
+      return false;
+  });
+}
+
+bool BlobReader::ReadWiiDecrypted(u64 offset, u64 size, u8* out_ptr, u64 partition_data_offset)
+{
+  return AsOwnClass(this, [&](auto* r) {
+    using Cls = std::remove_pointer_t<decltype(r)>;
+    if constexpr (HAS_OWN(Cls, ReadWiiDecrypted))
+      return r->ReadWiiDecrypted(offset, size, out_ptr, partition_data_offset);
+    else
+      return false;
+  });
+}
+
+const u8* BlobReader::View(u64 offset, u64 size) const
+{
+  return AsOwnClass(this, [&](auto* r) -> const u8* {
+    using Cls = std::remove_pointer_t<decltype(r)>;
+    if constexpr (HAS_OWN(Cls, View))
+      return r->View(offset, size);
+    else
+      return nullptr;
+  });
+}
+
+void BlobReader::Prefetch(u64 offset, u64 size) const
+{
+  AsOwnClass(this, [&](auto* r) {
+    using Cls = std::remove_pointer_t<decltype(r)>;
+    if constexpr (HAS_OWN(Cls, Prefetch))
+      r->Prefetch(offset, size);
+  });
+}
+
+bool BlobReader::IsCached() const
+{
+  return AsOwnClass(this, [](auto* r) {
+    using Cls = std::remove_pointer_t<decltype(r)>;
+    if constexpr (HAS_OWN(Cls, IsCached))
+      return r->IsCached();
+    else
+      return false;
+  });
+}
+
+void DestroyBlobReader(BlobReader* reader)
+{
+  if (!reader)
+    return;
+  AsOwnClass(reader, [](auto* r) { delete r; });
+}
+
+bool SectorReader::GetBlock(u64 block_num, u8* out)
+{
+  return static_cast<CompressedBlobReader*>(this)->GetBlock(block_num, out);
+}
+
 std::string GetName(BlobType blob_type, bool translate)
 {
   const auto translate_str = [translate](const std::string& str) {
@@ -209,7 +362,7 @@ u32 SectorReader::ReadChunk(u8* buffer, u64 chunk_num)
   return 0;
 }
 
-std::unique_ptr<BlobReader> CreateBlobReader(const std::string& filename)
+BlobReader* CreateBlobReader(const std::string& filename)
 {
   File::DirectIOFile file(filename, File::AccessMode::Read);
   u32 magic;
@@ -240,10 +393,10 @@ std::unique_ptr<BlobReader> CreateBlobReader(const std::string& filename)
   case NFS_MAGIC:
     return NFSFileReader::Create(std::move(file), filename);
   default:
-    if (auto directory_blob = DirectoryBlobReader::Create(filename))
-      return std::move(directory_blob);
-    if (auto split_blob = SplitPlainFileReader::Create(filename))
-      return std::move(split_blob);
+    if (BlobReader* directory_blob = DirectoryBlobReader::Create(filename))
+      return directory_blob;
+    if (BlobReader* split_blob = SplitPlainFileReader::Create(filename))
+      return split_blob;
 
     return PlainFileReader::Create(std::move(file));
   }

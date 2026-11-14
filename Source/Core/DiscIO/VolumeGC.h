@@ -28,7 +28,10 @@ enum class Platform;
 class VolumeGC final : public VolumeDisc
 {
 public:
-  VolumeGC(std::unique_ptr<BlobReader> reader);
+  // takes reader
+  VolumeGC(BlobReader* reader);
+  VolumeGC(const VolumeGC&) = delete;
+  VolumeGC& operator=(const VolumeGC&) = delete;
   ~VolumeGC() override;
   bool Read(u64 offset, u64 length, u8* buffer,
             const Partition& partition = PARTITION_NONE) const override;
@@ -51,7 +54,7 @@ public:
 private:
   Common::Lazy<std::unique_ptr<FileSystem>> m_file_system;
 
-  std::unique_ptr<BlobReader> m_reader;
+  BlobReader* m_reader;  // owned
 
   BootID m_triforce_header;
 

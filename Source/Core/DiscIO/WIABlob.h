@@ -20,28 +20,28 @@ constexpr u32 WIA_MAGIC = 0x01414957;  // "WIA\x1" (byteswapped to little endian
 constexpr u32 RVZ_MAGIC = 0x015A5652;  // "RVZ\x1" (byteswapped to little endian)
 
 // WIA and RVZ images, read through libretro-common's formats/rvz
-class WIARVZFileReader final : public BlobReader
+class WIARVZFileReader final : public BlobReaderOfKind<BlobReaderKind::WIARVZ>
 {
 public:
-  ~WIARVZFileReader() override;
+  ~WIARVZFileReader();
 
-  static std::unique_ptr<WIARVZFileReader> Create(File::DirectIOFile file, const std::string& path);
+  static WIARVZFileReader* Create(File::DirectIOFile file, const std::string& path);
 
-  BlobType GetBlobType() const override { return m_rvz ? BlobType::RVZ : BlobType::WIA; }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return m_rvz ? BlobType::RVZ : BlobType::WIA; }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override { return m_raw_size; }
-  u64 GetDataSize() const override { return m_data_size; }
-  DataSizeType GetDataSizeType() const override { return DataSizeType::Accurate; }
+  u64 GetRawSize() const { return m_raw_size; }
+  u64 GetDataSize() const { return m_data_size; }
+  DataSizeType GetDataSizeType() const { return DataSizeType::Accurate; }
 
-  u64 GetBlockSize() const override { return m_block_size; }
-  bool HasFastRandomAccessInBlock() const override { return false; }
-  std::string GetCompressionMethod() const override;
-  std::optional<int> GetCompressionLevel() const override { return m_level; }
+  u64 GetBlockSize() const { return m_block_size; }
+  bool HasFastRandomAccessInBlock() const { return false; }
+  std::string GetCompressionMethod() const;
+  std::optional<int> GetCompressionLevel() const { return m_level; }
 
-  bool Read(u64 offset, u64 size, u8* out_ptr) override;
-  bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const override;
-  bool ReadWiiDecrypted(u64 offset, u64 size, u8* out_ptr, u64 partition_data_offset) override;
+  bool Read(u64 offset, u64 size, u8* out_ptr);
+  bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const;
+  bool ReadWiiDecrypted(u64 offset, u64 size, u8* out_ptr, u64 partition_data_offset);
 
 private:
   WIARVZFileReader(File::DirectIOFile file, const std::string& path, bool rvz);

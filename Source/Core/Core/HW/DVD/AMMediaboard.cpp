@@ -156,7 +156,7 @@ static File::IOFile s_extra;
 static File::IOFile s_backup;
 static File::IOFile s_dimm;
 
-static std::unique_ptr<DiscIO::BlobReader> s_dimm_disc;
+static DiscIO::BlobReader* s_dimm_disc;  // owned
 
 static std::array<u8, 0x200000> s_firmware;
 static std::array<u32, 0xc0> s_media_buffer_32;
@@ -533,6 +533,7 @@ void Init()
 void InitDIMM(const DiscIO::Volume& volume)
 {
   // Load game into RAM, like on the actual Triforce.
+  DiscIO::DestroyBlobReader(s_dimm_disc);
   s_dimm_disc = DiscIO::CreateCachedBlobReader(volume.GetBlobReader().CopyReader());
 }
 
@@ -2409,7 +2410,8 @@ void Shutdown()
   s_backup.Close();
   s_dimm.Close();
 
-  s_dimm_disc.reset();
+  DiscIO::DestroyBlobReader(s_dimm_disc);
+  s_dimm_disc = nullptr;
 
   CloseAllSockets();
 }

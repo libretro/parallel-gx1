@@ -26,8 +26,7 @@
 
 namespace DiscIO
 {
-VolumeGC::VolumeGC(std::unique_ptr<BlobReader> reader)
-    : m_reader(std::move(reader)), m_is_triforce(false)
+VolumeGC::VolumeGC(BlobReader* reader) : m_reader(reader), m_is_triforce(false)
 {
   ASSERT(m_reader);
 
@@ -52,7 +51,10 @@ VolumeGC::VolumeGC(std::unique_ptr<BlobReader> reader)
   }
 }
 
-VolumeGC::~VolumeGC() = default;
+VolumeGC::~VolumeGC()
+{
+  DestroyBlobReader(m_reader);
+}
 
 bool VolumeGC::Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const
 {

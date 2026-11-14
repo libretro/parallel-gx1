@@ -535,13 +535,13 @@ bool ShouldHideFromGameList(const std::string& volume_path)
          IsBootBin(volume_path) || IsHeaderBin(volume_path);
 }
 
-std::unique_ptr<DirectoryBlobReader> DirectoryBlobReader::Create(const std::string& dol_path)
+DirectoryBlobReader* DirectoryBlobReader::Create(const std::string& dol_path)
 {
   std::string partition_root, true_root;
   if (!IsValidDirectoryBlob(dol_path, &partition_root, &true_root))
     return nullptr;
 
-  return std::unique_ptr<DirectoryBlobReader>(new DirectoryBlobReader(partition_root, true_root));
+  return new DirectoryBlobReader(partition_root, true_root);
 }
 
 DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
@@ -727,9 +727,9 @@ BlobType DirectoryBlobReader::GetBlobType() const
   return BlobType::DIRECTORY;
 }
 
-std::unique_ptr<BlobReader> DirectoryBlobReader::CopyReader() const
+BlobReader* DirectoryBlobReader::CopyReader() const
 {
-  return std::unique_ptr<DirectoryBlobReader>(new DirectoryBlobReader(*this));
+  return new DirectoryBlobReader(*this);
 }
 
 u64 DirectoryBlobReader::GetRawSize() const

@@ -26,18 +26,18 @@ CISOFileReader::CISOFileReader(File::DirectIOFile file) : m_file(std::move(file)
     m_ciso_map[idx] = (1 == header.map[idx]) ? count++ : UNUSED_BLOCK_ID;
 }
 
-std::unique_ptr<CISOFileReader> CISOFileReader::Create(File::DirectIOFile file)
+CISOFileReader* CISOFileReader::Create(File::DirectIOFile file)
 {
   CISOHeader header;
   if (file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header)) && header.magic == CISO_MAGIC)
   {
-    return std::unique_ptr<CISOFileReader>(new CISOFileReader(std::move(file)));
+    return new CISOFileReader(std::move(file));
   }
 
   return nullptr;
 }
 
-std::unique_ptr<BlobReader> CISOFileReader::CopyReader() const
+BlobReader* CISOFileReader::CopyReader() const
 {
   return Create(m_file);
 }

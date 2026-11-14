@@ -38,25 +38,24 @@ struct NFSHeader
 };
 static_assert(sizeof(NFSHeader) == 0x200);
 
-class NFSFileReader final : public BlobReader
+class NFSFileReader final : public BlobReaderOfKind<BlobReaderKind::NFS>
 {
 public:
-  static std::unique_ptr<NFSFileReader> Create(File::DirectIOFile first_file,
-                                               const std::string& directory_path);
+  static NFSFileReader* Create(File::DirectIOFile first_file, const std::string& directory_path);
 
-  BlobType GetBlobType() const override { return BlobType::NFS; }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return BlobType::NFS; }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override;
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override { return DataSizeType::LowerBound; }
+  u64 GetRawSize() const;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const { return DataSizeType::LowerBound; }
 
-  u64 GetBlockSize() const override { return BLOCK_SIZE; }
-  bool HasFastRandomAccessInBlock() const override { return false; }
-  std::string GetCompressionMethod() const override { return {}; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+  u64 GetBlockSize() const { return BLOCK_SIZE; }
+  bool HasFastRandomAccessInBlock() const { return false; }
+  std::string GetCompressionMethod() const { return {}; }
+  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
-  bool Read(u64 offset, u64 nbytes, u8* out_ptr) override;
+  bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
   using Key = std::array<u8, Common::AES::Context::KEY_SIZE>;

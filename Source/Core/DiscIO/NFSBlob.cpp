@@ -130,8 +130,7 @@ u64 NFSFileReader::CalculateExpectedDataSize(const NFSLBARange* lba_ranges, size
   return u64(greatest_block_index) * BLOCK_SIZE;
 }
 
-std::unique_ptr<NFSFileReader> NFSFileReader::Create(File::DirectIOFile first_file,
-                                                     const std::string& path)
+NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const std::string& path)
 {
   std::string directory, filename, extension;
   SplitPath(path, &directory, &filename, &extension);
@@ -157,8 +156,7 @@ std::unique_ptr<NFSFileReader> NFSFileReader::Create(File::DirectIOFile first_fi
   if (files.empty())
     return nullptr;
 
-  return std::unique_ptr<NFSFileReader>(
-      new NFSFileReader(std::move(lba_ranges), std::move(files), key, raw_size));
+  return new NFSFileReader(std::move(lba_ranges), std::move(files), key, raw_size);
 }
 
 NFSFileReader::NFSFileReader(std::vector<NFSLBARange> lba_ranges,
@@ -169,9 +167,9 @@ NFSFileReader::NFSFileReader(std::vector<NFSLBARange> lba_ranges,
   m_data_size = CalculateExpectedDataSize(m_lba_ranges.data(), m_lba_ranges.size());
 }
 
-std::unique_ptr<BlobReader> NFSFileReader::CopyReader() const
+BlobReader* NFSFileReader::CopyReader() const
 {
-  return std::unique_ptr<BlobReader>{new NFSFileReader(m_lba_ranges, m_files, m_key, m_raw_size)};
+  return new NFSFileReader(m_lba_ranges, m_files, m_key, m_raw_size);
 }
 
 u64 NFSFileReader::GetDataSize() const

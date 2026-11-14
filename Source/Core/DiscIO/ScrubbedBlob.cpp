@@ -15,12 +15,17 @@
 
 namespace DiscIO
 {
-ScrubbedBlob::ScrubbedBlob(std::unique_ptr<BlobReader> blob_reader, DiscScrubber scrubber)
-    : m_blob_reader(std::move(blob_reader)), m_scrubber(std::move(scrubber))
+ScrubbedBlob::ScrubbedBlob(BlobReader* blob_reader, DiscScrubber scrubber)
+    : m_blob_reader(blob_reader), m_scrubber(std::move(scrubber))
 {
 }
 
-std::unique_ptr<ScrubbedBlob> ScrubbedBlob::Create(const std::string& path)
+ScrubbedBlob::~ScrubbedBlob()
+{
+  DestroyBlobReader(m_blob_reader);
+}
+
+ScrubbedBlob* ScrubbedBlob::Create(const std::string& path)
 {
   std::unique_ptr<VolumeDisc> disc = CreateDisc(path);
   if (!disc)
@@ -30,16 +35,16 @@ std::unique_ptr<ScrubbedBlob> ScrubbedBlob::Create(const std::string& path)
   if (!scrubber.SetupScrub(*disc))
     return nullptr;
 
-  std::unique_ptr<BlobReader> blob = CreateBlobReader(path);
+  BlobReader* blob = CreateBlobReader(path);
   if (!blob)
     return nullptr;
 
-  return std::unique_ptr<ScrubbedBlob>(new ScrubbedBlob(std::move(blob), std::move(scrubber)));
+  return new ScrubbedBlob(blob, std::move(scrubber));
 }
 
-std::unique_ptr<BlobReader> ScrubbedBlob::CopyReader() const
+BlobReader* ScrubbedBlob::CopyReader() const
 {
-  return std::unique_ptr<ScrubbedBlob>(new ScrubbedBlob(m_blob_reader->CopyReader(), m_scrubber));
+  return new ScrubbedBlob(m_blob_reader->CopyReader(), m_scrubber);
 }
 
 bool ScrubbedBlob::Read(u64 offset, u64 size, u8* out_ptr)

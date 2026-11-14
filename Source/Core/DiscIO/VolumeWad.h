@@ -26,7 +26,14 @@ enum class Platform;
 class VolumeWAD final : public Volume
 {
 public:
-  VolumeWAD(std::unique_ptr<BlobReader> reader);
+  // takes reader
+  VolumeWAD(BlobReader* reader);
+  ~VolumeWAD();
+  VolumeWAD(const VolumeWAD&) = delete;
+  VolumeWAD& operator=(const VolumeWAD&) = delete;
+  // the reader goes with it (boot parameters hold a WAD by value)
+  VolumeWAD(VolumeWAD&& other) noexcept;
+  VolumeWAD& operator=(VolumeWAD&&) = delete;
   bool Read(u64 offset, u64 length, u8* buffer,
             const Partition& partition = PARTITION_NONE) const override;
   const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const override;
@@ -60,7 +67,7 @@ public:
 
 
 private:
-  std::unique_ptr<BlobReader> m_reader;
+  BlobReader* m_reader;  // owned
   IOS::ES::TicketReader m_ticket;
   IOS::ES::TMDReader m_tmd;
   std::vector<u8> m_cert_chain;

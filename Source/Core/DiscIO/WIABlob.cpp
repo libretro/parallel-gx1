@@ -55,8 +55,7 @@ bool WIARVZFileReader::RunRead(int armed, u64 size)
   return e == RVZ_OK && rvz_read_progress(m_reader) == size;
 }
 
-std::unique_ptr<WIARVZFileReader> WIARVZFileReader::Create(File::DirectIOFile file,
-                                                           const std::string& path)
+WIARVZFileReader* WIARVZFileReader::Create(File::DirectIOFile file, const std::string& path)
 {
   u32 magic;
   bool rvz;
@@ -67,10 +66,11 @@ std::unique_ptr<WIARVZFileReader> WIARVZFileReader::Create(File::DirectIOFile fi
     return nullptr;
   rvz = magic == RVZ_MAGIC;
 
-  std::unique_ptr<WIARVZFileReader> blob(new WIARVZFileReader(std::move(file), path, rvz));
+  WIARVZFileReader* blob = new WIARVZFileReader(std::move(file), path, rvz);
   if (!(blob->m_reader = rvz_new()) || !blob->Open())
   {
     ERROR_LOG(DISCIO, "Not a WIA or RVZ image this reads: %s", path.c_str());
+    DestroyBlobReader(blob);
     return nullptr;
   }
   blob->m_compression = rvz_compression(blob->m_reader, &blob->m_level);
@@ -80,7 +80,7 @@ std::unique_ptr<WIARVZFileReader> WIARVZFileReader::Create(File::DirectIOFile fi
   return blob;
 }
 
-std::unique_ptr<BlobReader> WIARVZFileReader::CopyReader() const
+BlobReader* WIARVZFileReader::CopyReader() const
 {
   return Create(m_file, m_path);
 }

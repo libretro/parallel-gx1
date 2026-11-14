@@ -43,26 +43,25 @@ struct CompressedBlobHeader  // 32 bytes
 class CompressedBlobReader final : public SectorReader
 {
 public:
-  static std::unique_ptr<CompressedBlobReader> Create(File::DirectIOFile file,
-                                                      const std::string& filename);
-  ~CompressedBlobReader() override;
+  static CompressedBlobReader* Create(File::DirectIOFile file, const std::string& filename);
+  ~CompressedBlobReader();
 
   const CompressedBlobHeader& GetHeader() const { return m_header; }
 
-  BlobType GetBlobType() const override { return BlobType::GCZ; }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return BlobType::GCZ; }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override { return m_file_size; }
-  u64 GetDataSize() const override { return m_header.disc_size; }
-  DataSizeType GetDataSizeType() const override { return DataSizeType::Accurate; }
+  u64 GetRawSize() const { return m_file_size; }
+  u64 GetDataSize() const { return m_header.disc_size; }
+  DataSizeType GetDataSizeType() const { return DataSizeType::Accurate; }
 
-  u64 GetBlockSize() const override { return m_header.block_size; }
-  bool HasFastRandomAccessInBlock() const override { return false; }
-  std::string GetCompressionMethod() const override { return "Deflate"; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+  u64 GetBlockSize() const { return m_header.block_size; }
+  bool HasFastRandomAccessInBlock() const { return false; }
+  std::string GetCompressionMethod() const { return "Deflate"; }
+  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
   u64 GetBlockCompressedSize(u64 block_num) const;
-  bool GetBlock(u64 block_num, u8* out_ptr) override;
+  bool GetBlock(u64 block_num, u8* out_ptr);
 
 private:
   CompressedBlobReader(File::DirectIOFile file, std::string filename);

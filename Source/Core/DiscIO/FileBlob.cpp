@@ -19,15 +19,15 @@ PlainFileReader::PlainFileReader(File::DirectIOFile file) : m_file(std::move(fil
   m_size = m_file.GetSize();
 }
 
-std::unique_ptr<PlainFileReader> PlainFileReader::Create(File::DirectIOFile file)
+PlainFileReader* PlainFileReader::Create(File::DirectIOFile file)
 {
   if (file.IsOpen())
-    return std::unique_ptr<PlainFileReader>(new PlainFileReader(std::move(file)));
+    return new PlainFileReader(std::move(file));
 
   return nullptr;
 }
 
-std::unique_ptr<BlobReader> PlainFileReader::CopyReader() const
+BlobReader* PlainFileReader::CopyReader() const
 {
   return Create(m_file);
 }

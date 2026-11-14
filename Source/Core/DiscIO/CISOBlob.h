@@ -29,24 +29,24 @@ struct CISOHeader
   u8 map[CISO_MAP_SIZE];
 };
 
-class CISOFileReader final : public BlobReader
+class CISOFileReader final : public BlobReaderOfKind<BlobReaderKind::CISO>
 {
 public:
-  static std::unique_ptr<CISOFileReader> Create(File::DirectIOFile file);
+  static CISOFileReader* Create(File::DirectIOFile file);
 
-  BlobType GetBlobType() const override { return BlobType::CISO; }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return BlobType::CISO; }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override;
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override { return DataSizeType::UpperBound; }
+  u64 GetRawSize() const;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const { return DataSizeType::UpperBound; }
 
-  u64 GetBlockSize() const override { return m_block_size; }
-  bool HasFastRandomAccessInBlock() const override { return true; }
-  std::string GetCompressionMethod() const override { return {}; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+  u64 GetBlockSize() const { return m_block_size; }
+  bool HasFastRandomAccessInBlock() const { return true; }
+  std::string GetCompressionMethod() const { return {}; }
+  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
-  bool Read(u64 offset, u64 nbytes, u8* out_ptr) override;
+  bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
   CISOFileReader(File::DirectIOFile file);

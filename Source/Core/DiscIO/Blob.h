@@ -54,26 +54,52 @@ enum class DataSizeType
 
 std::string GetName(BlobType blob_type, bool translate);
 
+// The class a BlobReader is, one for each format and for each reader made over another one
+// (scrubbed, cached, a file in a volume). GetBlobType tells the format, which a reader over
+// another one shares with it.
+enum class BlobReaderKind : u8
+{
+  Plain,
+  SplitPlain,
+  Directory,
+  Compressed,
+  CISO,
+  Wbfs,
+  TGC,
+  WIARVZ,
+  NFS,
+  Scrubbed,
+  Cached,
+  VolumeFile,
+};
+
+// The functions of a reader go to its own class through a branch on its kind, not a table of
+// virtual functions; the ones with a default here go to its class only where it has its own.
+// One is owned through a plain pointer: what makes or copies one hands it to the caller, which
+// frees it with DestroyBlobReader, as its own class.
 class BlobReader
 {
 public:
-  virtual ~BlobReader() = default;
+  BlobReader(const BlobReader&) = delete;
+  BlobReader& operator=(const BlobReader&) = delete;
 
-  virtual BlobType GetBlobType() const = 0;
-  virtual std::unique_ptr<BlobReader> CopyReader() const = 0;
+  BlobReaderKind GetKind() const { return m_kind; }
 
-  virtual u64 GetRawSize() const = 0;
-  virtual u64 GetDataSize() const = 0;
-  virtual DataSizeType GetDataSizeType() const = 0;
+  BlobType GetBlobType() const;
+  BlobReader* CopyReader() const;
+
+  u64 GetRawSize() const;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const;
 
   // Returns 0 if the format does not use blocks
-  virtual u64 GetBlockSize() const = 0;
-  virtual bool HasFastRandomAccessInBlock() const = 0;
-  virtual std::string GetCompressionMethod() const = 0;
-  virtual std::optional<int> GetCompressionLevel() const = 0;
+  u64 GetBlockSize() const;
+  bool HasFastRandomAccessInBlock() const;
+  std::string GetCompressionMethod() const;
+  std::optional<int> GetCompressionLevel() const;
 
   // NOT thread-safe - can't call this from multiple threads.
-  virtual bool Read(u64 offset, u64 size, u8* out_ptr) = 0;
+  bool Read(u64 offset, u64 size, u8* out_ptr);
   template <typename T>
   std::optional<T> ReadSwapped(u64 offset)
   {
@@ -83,38 +109,48 @@ public:
     return Common::FromBigEndian(temp);
   }
 
-  virtual bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const
-  {
-    return false;
-  }
-
-  virtual bool ReadWiiDecrypted(u64 offset, u64 size, u8* out_ptr, u64 partition_data_offset)
-  {
-    return false;
-  }
+  // false where the class has none of its own
+  bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const;
+  bool ReadWiiDecrypted(u64 offset, u64 size, u8* out_ptr, u64 partition_data_offset);
 
   // size octets at offset as they lie in the file, lent rather than copied, valid while
   // this reader lives; nullptr where the format or the file cannot lend them. Thread-safe.
-  virtual const u8* View(u64 offset, u64 size) const { return nullptr; }
+  const u8* View(u64 offset, u64 size) const;
   // Asks the OS to start reading what View(offset, size) lends; returns at once.
-  virtual void Prefetch(u64 offset, u64 size) const {}
+  void Prefetch(u64 offset, u64 size) const;
 
   // Returns true only for CachedBlobReader.
-  virtual bool IsCached() const { return false; }
+  bool IsCached() const;
 
 protected:
-  BlobReader() {}
+  // not virtual: DestroyBlobReader destroys a reader as the class it is
+  ~BlobReader() = default;
+
+  explicit BlobReader(BlobReaderKind kind) : m_kind(kind) {}
+
+private:
+  const BlobReaderKind m_kind;
+};
+
+// The base of a reader of kind K
+template <BlobReaderKind K>
+class BlobReaderOfKind : public BlobReader
+{
+protected:
+  BlobReaderOfKind() : BlobReader(K) {}
+  ~BlobReaderOfKind() = default;
 };
 
 // Provides caching and byte-operation-to-block-operations facilities.
 // Used for compressed blob and direct drive reading.
 // NOTE: GetDataSize() is expected to be evenly divisible by the sector size.
-class SectorReader : public BlobReader
+class SectorReader : public BlobReaderOfKind<BlobReaderKind::Compressed>
 {
 public:
-  ~SectorReader() override = 0;
+  bool Read(u64 offset, u64 size, u8* out_ptr);
 
-  bool Read(u64 offset, u64 size, u8* out_ptr) override;
+protected:
+  ~SectorReader();
 
 protected:
   void SetSectorSize(int blocksize);
@@ -125,13 +161,13 @@ protected:
   // and IO overhead by batching reads. Do not set it too high either
   // as large reads are slow and will take too long to resolve.
   int GetChunkSize() const { return m_chunk_blocks; }
-  // Read a single block/sector.
-  virtual bool GetBlock(u64 block_num, u8* out) = 0;
+  // Read a single block/sector: the reader's own (the GCZ reader is the only SectorReader)
+  bool GetBlock(u64 block_num, u8* out);
 
   // Read multiple contiguous blocks.
   // Default implementation just calls GetBlock in a loop, it should be
   // overridden in derived classes where possible.
-  virtual bool ReadMultipleAlignedBlocks(u64 block_num, u64 num_blocks, u8* out_ptr);
+  bool ReadMultipleAlignedBlocks(u64 block_num, u64 num_blocks, u8* out_ptr);
 
 private:
   struct Cache
@@ -194,6 +230,10 @@ private:
 };
 
 // Factory function - examines the path to choose the right type of BlobReader, and returns one.
-std::unique_ptr<BlobReader> CreateBlobReader(const std::string& filename);
+// Owned by the caller, nullptr if the file cannot be read as a disc
+BlobReader* CreateBlobReader(const std::string& filename);
+
+// Destroys a reader as the class it is and frees it; nullptr does nothing.
+void DestroyBlobReader(BlobReader* reader);
 
 }  // namespace DiscIO

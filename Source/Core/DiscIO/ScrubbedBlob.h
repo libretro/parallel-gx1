@@ -13,38 +13,31 @@ namespace DiscIO
 {
 // This class wraps another BlobReader and zeroes out data that has been
 // identified by DiscScrubber as unused.
-class ScrubbedBlob final : public BlobReader
+class ScrubbedBlob final : public BlobReaderOfKind<BlobReaderKind::Scrubbed>
 {
 public:
-  static std::unique_ptr<ScrubbedBlob> Create(const std::string& path);
+  static ScrubbedBlob* Create(const std::string& path);
+  ~ScrubbedBlob();
 
-  BlobType GetBlobType() const override { return m_blob_reader->GetBlobType(); }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return m_blob_reader->GetBlobType(); }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override { return m_blob_reader->GetRawSize(); }
-  u64 GetDataSize() const override { return m_blob_reader->GetDataSize(); }
-  DataSizeType GetDataSizeType() const override { return m_blob_reader->GetDataSizeType(); }
+  u64 GetRawSize() const { return m_blob_reader->GetRawSize(); }
+  u64 GetDataSize() const { return m_blob_reader->GetDataSize(); }
+  DataSizeType GetDataSizeType() const { return m_blob_reader->GetDataSizeType(); }
 
-  u64 GetBlockSize() const override { return m_blob_reader->GetBlockSize(); }
-  bool HasFastRandomAccessInBlock() const override
-  {
-    return m_blob_reader->HasFastRandomAccessInBlock();
-  }
-  std::string GetCompressionMethod() const override
-  {
-    return m_blob_reader->GetCompressionMethod();
-  }
-  std::optional<int> GetCompressionLevel() const override
-  {
-    return m_blob_reader->GetCompressionLevel();
-  }
+  u64 GetBlockSize() const { return m_blob_reader->GetBlockSize(); }
+  bool HasFastRandomAccessInBlock() const { return m_blob_reader->HasFastRandomAccessInBlock(); }
+  std::string GetCompressionMethod() const { return m_blob_reader->GetCompressionMethod(); }
+  std::optional<int> GetCompressionLevel() const { return m_blob_reader->GetCompressionLevel(); }
 
-  bool Read(u64 offset, u64 size, u8* out_ptr) override;
+  bool Read(u64 offset, u64 size, u8* out_ptr);
 
 private:
-  ScrubbedBlob(std::unique_ptr<BlobReader> blob_reader, DiscScrubber scrubber);
+  // takes blob_reader
+  ScrubbedBlob(BlobReader* blob_reader, DiscScrubber scrubber);
 
-  std::unique_ptr<BlobReader> m_blob_reader;
+  BlobReader* m_blob_reader;  // owned
   DiscScrubber m_scrubber;
 };
 

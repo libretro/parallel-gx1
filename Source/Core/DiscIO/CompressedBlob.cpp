@@ -98,16 +98,16 @@ bool CompressedBlobReader::Initialize()
   return ValidateBlockPointers();
 }
 
-std::unique_ptr<CompressedBlobReader> CompressedBlobReader::Create(File::DirectIOFile file,
-                                                                   const std::string& filename)
+CompressedBlobReader* CompressedBlobReader::Create(File::DirectIOFile file,
+                                                   const std::string& filename)
 {
   if (IsGCZBlob(file))
   {
-    std::unique_ptr<CompressedBlobReader> reader(
-        new CompressedBlobReader(std::move(file), filename));
+    CompressedBlobReader* reader = new CompressedBlobReader(std::move(file), filename);
 
     if (reader->m_valid)
       return reader;
+    DestroyBlobReader(reader);
   }
 
   return nullptr;
@@ -118,7 +118,7 @@ CompressedBlobReader::~CompressedBlobReader()
   rinflate_free(m_inflate);
 }
 
-std::unique_ptr<BlobReader> CompressedBlobReader::CopyReader() const
+BlobReader* CompressedBlobReader::CopyReader() const
 {
   return Create(m_file, m_file_name);
 }

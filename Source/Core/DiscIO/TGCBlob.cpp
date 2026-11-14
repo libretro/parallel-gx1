@@ -46,12 +46,12 @@ void Replace(u64 offset, u64 size, u8* out_ptr, u64 replace_offset, const T& rep
 
 namespace DiscIO
 {
-std::unique_ptr<TGCFileReader> TGCFileReader::Create(File::DirectIOFile file)
+TGCFileReader* TGCFileReader::Create(File::DirectIOFile file)
 {
   TGCHeader header;
   if (file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header)) && header.magic == TGC_MAGIC)
   {
-    return std::unique_ptr<TGCFileReader>(new TGCFileReader(std::move(file)));
+    return new TGCFileReader(std::move(file));
   }
 
   return nullptr;
@@ -98,7 +98,7 @@ TGCFileReader::TGCFileReader(File::DirectIOFile file) : m_file(std::move(file))
   }
 }
 
-std::unique_ptr<BlobReader> TGCFileReader::CopyReader() const
+BlobReader* TGCFileReader::CopyReader() const
 {
   return Create(m_file);
 }

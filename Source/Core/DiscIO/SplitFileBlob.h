@@ -15,24 +15,24 @@
 
 namespace DiscIO
 {
-class SplitPlainFileReader final : public BlobReader
+class SplitPlainFileReader final : public BlobReaderOfKind<BlobReaderKind::SplitPlain>
 {
 public:
-  static std::unique_ptr<SplitPlainFileReader> Create(std::string_view first_file_path);
+  static SplitPlainFileReader* Create(std::string_view first_file_path);
 
-  BlobType GetBlobType() const override { return BlobType::SPLIT_PLAIN; }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return BlobType::SPLIT_PLAIN; }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override { return m_size; }
-  u64 GetDataSize() const override { return m_size; }
-  DataSizeType GetDataSizeType() const override { return DataSizeType::Accurate; }
+  u64 GetRawSize() const { return m_size; }
+  u64 GetDataSize() const { return m_size; }
+  DataSizeType GetDataSizeType() const { return DataSizeType::Accurate; }
 
-  u64 GetBlockSize() const override { return 0; }
-  bool HasFastRandomAccessInBlock() const override { return true; }
-  std::string GetCompressionMethod() const override { return {}; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+  u64 GetBlockSize() const { return 0; }
+  bool HasFastRandomAccessInBlock() const { return true; }
+  std::string GetCompressionMethod() const { return {}; }
+  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
-  bool Read(u64 offset, u64 nbytes, u8* out_ptr) override;
+  bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
   struct SingleFile

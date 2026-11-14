@@ -57,7 +57,10 @@ public:
   };
   static_assert(sizeof(HashBlock) == BLOCK_HEADER_SIZE);
 
-  VolumeWii(std::unique_ptr<BlobReader> reader);
+  // takes reader
+  VolumeWii(BlobReader* reader);
+  VolumeWii(const VolumeWii&) = delete;
+  VolumeWii& operator=(const VolumeWii&) = delete;
   ~VolumeWii() override;
   bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const override;
   bool HasWiiHashes() const override;
@@ -119,7 +122,7 @@ private:
     u32 type = 0;
   };
 
-  std::unique_ptr<BlobReader> m_reader;
+  BlobReader* m_reader;  // owned
   std::map<Partition, PartitionDetails> m_partitions;
   Partition m_game_partition;
   bool m_has_hashes;

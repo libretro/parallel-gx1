@@ -138,14 +138,15 @@ protected:
   static const std::vector<u8> INVALID_CERT_CHAIN;
 };
 
-std::unique_ptr<VolumeDisc> CreateDisc(std::unique_ptr<BlobReader> reader);
+// These take the reader they are given, a volume made or not
+std::unique_ptr<VolumeDisc> CreateDisc(BlobReader* reader);
 std::unique_ptr<VolumeDisc> CreateDisc(const std::string& path);
 // This version enables caching when the "Load Games into Memory" setting is enabled.
 std::unique_ptr<VolumeDisc> CreateDiscForCore(const std::string& path);
 
-std::unique_ptr<VolumeWAD> CreateWAD(std::unique_ptr<BlobReader> reader);
+std::unique_ptr<VolumeWAD> CreateWAD(BlobReader* reader);
 std::unique_ptr<VolumeWAD> CreateWAD(const std::string& path);
-std::unique_ptr<Volume> CreateVolume(std::unique_ptr<BlobReader> reader);
+std::unique_ptr<Volume> CreateVolume(BlobReader* reader);
 std::unique_ptr<Volume> CreateVolume(const std::string& path);
 
 }  // namespace DiscIO

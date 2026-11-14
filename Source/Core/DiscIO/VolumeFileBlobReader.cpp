@@ -11,9 +11,8 @@
 
 namespace DiscIO
 {
-std::unique_ptr<VolumeFileBlobReader> VolumeFileBlobReader::Create(const Volume& volume,
-                                                                   const Partition& partition,
-                                                                   std::string_view file_path)
+VolumeFileBlobReader* VolumeFileBlobReader::Create(const Volume& volume, const Partition& partition,
+                                                   std::string_view file_path)
 {
   const FileSystem* file_system = volume.GetFileSystem(partition);
   if (!file_system)
@@ -23,8 +22,7 @@ std::unique_ptr<VolumeFileBlobReader> VolumeFileBlobReader::Create(const Volume&
   if (!file_info || file_info->IsDirectory())
     return nullptr;
 
-  return std::unique_ptr<VolumeFileBlobReader>{
-      new VolumeFileBlobReader(volume, partition, std::move(file_info))};
+  return new VolumeFileBlobReader(volume, partition, std::move(file_info));
 }
 
 VolumeFileBlobReader::VolumeFileBlobReader(const Volume& volume, const Partition& partition,
@@ -38,7 +36,7 @@ VolumeFileBlobReader::VolumeFileBlobReader(const Volume& volume, const Partition
 // with an incomplete type.
 VolumeFileBlobReader::~VolumeFileBlobReader() = default;
 
-std::unique_ptr<BlobReader> VolumeFileBlobReader::CopyReader() const
+BlobReader* VolumeFileBlobReader::CopyReader() const
 {
   ASSERT_MSG(DISCIO, false, "Unimplemented");
   return nullptr;

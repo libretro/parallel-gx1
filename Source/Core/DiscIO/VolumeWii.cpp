@@ -31,9 +31,8 @@
 
 namespace DiscIO
 {
-VolumeWii::VolumeWii(std::unique_ptr<BlobReader> reader)
-    : m_reader(std::move(reader)), m_game_partition(PARTITION_NONE),
-      m_last_decrypted_block(UINT64_MAX)
+VolumeWii::VolumeWii(BlobReader* reader)
+    : m_reader(reader), m_game_partition(PARTITION_NONE), m_last_decrypted_block(UINT64_MAX)
 {
   ASSERT(m_reader);
 
@@ -158,7 +157,10 @@ VolumeWii::VolumeWii(std::unique_ptr<BlobReader> reader)
   }
 }
 
-VolumeWii::~VolumeWii() = default;
+VolumeWii::~VolumeWii()
+{
+  DestroyBlobReader(m_reader);
+}
 
 bool VolumeWii::Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const
 {

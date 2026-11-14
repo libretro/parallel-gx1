@@ -15,26 +15,26 @@ namespace DiscIO
 {
 static constexpr u32 WBFS_MAGIC = 0x53464257;  // "WBFS" (byteswapped to little endian)
 
-class WbfsFileReader final : public BlobReader
+class WbfsFileReader final : public BlobReaderOfKind<BlobReaderKind::Wbfs>
 {
 public:
-  ~WbfsFileReader() override;
+  ~WbfsFileReader();
 
-  static std::unique_ptr<WbfsFileReader> Create(File::DirectIOFile file, const std::string& path);
+  static WbfsFileReader* Create(File::DirectIOFile file, const std::string& path);
 
-  BlobType GetBlobType() const override { return BlobType::WBFS; }
-  std::unique_ptr<BlobReader> CopyReader() const override;
+  BlobType GetBlobType() const { return BlobType::WBFS; }
+  BlobReader* CopyReader() const;
 
-  u64 GetRawSize() const override { return m_size; }
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override { return DataSizeType::UpperBound; }
+  u64 GetRawSize() const { return m_size; }
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const { return DataSizeType::UpperBound; }
 
-  u64 GetBlockSize() const override { return m_wbfs_sector_size; }
-  bool HasFastRandomAccessInBlock() const override { return true; }
-  std::string GetCompressionMethod() const override { return {}; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+  u64 GetBlockSize() const { return m_wbfs_sector_size; }
+  bool HasFastRandomAccessInBlock() const { return true; }
+  std::string GetCompressionMethod() const { return {}; }
+  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
-  bool Read(u64 offset, u64 nbytes, u8* out_ptr) override;
+  bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
   WbfsFileReader(File::DirectIOFile file, const std::string& path = "");

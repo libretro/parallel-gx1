@@ -21,8 +21,9 @@ namespace DiscIO
 class CacheFiller final
 {
 public:
-  explicit CacheFiller(std::unique_ptr<BlobReader> reader, bool attempt_to_scrub)
-      : m_thread_reader{std::move(reader)}, m_attempt_to_scrub{attempt_to_scrub}
+  // takes reader, which the thread frees when done with it
+  explicit CacheFiller(BlobReader* reader, bool attempt_to_scrub)
+      : m_thread_reader{reader}, m_attempt_to_scrub{attempt_to_scrub}
   {
     m_thread = sthread_create(Common::ThreadEntry<&CacheFiller::ThreadFunc>, this);
   }
@@ -31,7 +32,12 @@ public:
   {
     retro_atomic_store_relaxed_int(&m_stop_thread, 1);
     Common::JoinThread(m_thread);
+    // the thread's reader, when the thread never ran
+    DestroyBlobReader(m_thread_reader);
   }
+
+  CacheFiller(const CacheFiller&) = delete;
+  CacheFiller& operator=(const CacheFiller&) = delete;
 
   bool Read(u64 offset, u64 size, u8* out_ptr)
   {
@@ -87,7 +93,14 @@ private:
 
   void ThreadFunc()
   {
-    const std::unique_ptr<BlobReader> reader = std::move(m_thread_reader);
+    BlobReader* const reader = m_thread_reader;
+    m_thread_reader = nullptr;
+    Fill(reader);
+    DestroyBlobReader(reader);
+  }
+
+  void Fill(BlobReader* reader)
+  {
     const bool attempt_to_scrub = m_attempt_to_scrub;
     static constexpr DT PERIODIC_LOG_TIME = DTFromSeconds(1);
 
@@ -186,71 +199,73 @@ private:
   DiscScrubber m_scrubber;
 
   retro_atomic_int_t m_stop_thread{};
-  std::unique_ptr<BlobReader> m_thread_reader;  // handed to the thread
+  BlobReader* m_thread_reader;  // handed to the thread, which frees it
   bool m_attempt_to_scrub;
   sthread_t* m_thread = nullptr;
 };
 
-class CachedBlobReader final : public BlobReader
+CachedBlobReader::CachedBlobReader(BlobReader* reader, bool attempt_to_scrub)
+    : m_cache_filler{std::make_shared<CacheFiller>(reader->CopyReader(), attempt_to_scrub)},
+      m_reader{reader}
 {
-public:
-  explicit CachedBlobReader(std::unique_ptr<BlobReader> reader, bool attempt_to_scrub)
-      : m_cache_filler{std::make_shared<CacheFiller>(reader->CopyReader(), attempt_to_scrub)},
-        m_reader{std::move(reader)}
+  INFO_LOG(DISCIO, "CachedBlobReader: Created");
+}
 
-  {
-    INFO_LOG(DISCIO, "CachedBlobReader: Created");
-  }
+CachedBlobReader::CachedBlobReader(std::shared_ptr<CacheFiller> cache_filler, BlobReader* reader)
+    : m_cache_filler{std::move(cache_filler)}, m_reader{reader}
+{
+  INFO_LOG(DISCIO, "CachedBlobReader: Copied");
+}
 
-  CachedBlobReader(std::shared_ptr<CacheFiller> cache_filler, std::unique_ptr<BlobReader> reader)
-      : m_cache_filler{std::move(cache_filler)}, m_reader{std::move(reader)}
-  {
-    INFO_LOG(DISCIO, "CachedBlobReader: Copied");
-  }
+CachedBlobReader::~CachedBlobReader()
+{
+  DestroyBlobReader(m_reader);
+}
 
-  std::unique_ptr<BlobReader> CopyReader() const override
-  {
-    return std::make_unique<CachedBlobReader>(m_cache_filler, m_reader->CopyReader());
-  }
+BlobReader* CachedBlobReader::CopyReader() const
+{
+  return new CachedBlobReader(m_cache_filler, m_reader->CopyReader());
+}
 
-  BlobType GetBlobType() const override { return m_reader->GetBlobType(); }
-  u64 GetRawSize() const override { return GetDataSize(); }
-  u64 GetDataSize() const override { return m_reader->GetDataSize(); }
-  DataSizeType GetDataSizeType() const override { return m_reader->GetDataSizeType(); }
+BlobType CachedBlobReader::GetBlobType() const
+{
+  return m_reader->GetBlobType();
+}
 
-  u64 GetBlockSize() const override { return 0; }
-  bool HasFastRandomAccessInBlock() const override { return true; }
-  std::string GetCompressionMethod() const override { return {}; }
-  std::optional<int> GetCompressionLevel() const override { return std::nullopt; }
+u64 CachedBlobReader::GetRawSize() const
+{
+  return GetDataSize();
+}
 
-  bool Read(u64 offset, u64 size, u8* out_ptr) override
-  {
-    return m_cache_filler->Read(offset, size, out_ptr) || m_reader->Read(offset, size, out_ptr);
-  }
+u64 CachedBlobReader::GetDataSize() const
+{
+  return m_reader->GetDataSize();
+}
 
-  bool IsCached() const override { return true; }
+DataSizeType CachedBlobReader::GetDataSizeType() const
+{
+  return m_reader->GetDataSizeType();
+}
 
-private:
-  // A shared object does the cache filling for sensible CopyReader behavior.
-  const std::shared_ptr<CacheFiller> m_cache_filler;
+bool CachedBlobReader::Read(u64 offset, u64 size, u8* out_ptr)
+{
+  return m_cache_filler->Read(offset, size, out_ptr) || m_reader->Read(offset, size, out_ptr);
+}
 
-  const std::unique_ptr<BlobReader> m_reader;
-};
-
-std::unique_ptr<BlobReader> CreateCachedBlobReader(std::unique_ptr<BlobReader> reader)
+BlobReader* CreateCachedBlobReader(BlobReader* reader)
 {
   if (reader->IsCached())  // This is already CachedBlobReader.
     return reader;
 
-  return std::make_unique<CachedBlobReader>(std::move(reader), false);
+  return new CachedBlobReader(reader, false);
 }
 
-std::unique_ptr<BlobReader> CreateScrubbingCachedBlobReader(std::unique_ptr<BlobReader> reader)
+BlobReader* CreateScrubbingCachedBlobReader(BlobReader* reader)
 {
   if (reader->IsCached())  // This reader is already a CachedBlobReader.
     return reader;
 
-  return std::make_unique<CachedBlobReader>(std::move(reader), true);
+  return new CachedBlobReader(reader, true);
 }
 
 }  // namespace DiscIO
