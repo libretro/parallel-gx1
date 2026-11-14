@@ -117,6 +117,9 @@ static struct retro_rumble_interface rumble{};
 static unsigned input_types[8];
 // What the frontend set for each port, before the Wiimote device option replaces it.
 static unsigned frontend_types[8];
+// The controllers exist from Init to Shutdown; a port set outside that is applied at InitStage2
+static bool s_ports_ready = false;
+static bool s_port_pending[8];
 static bool g_init_wiimotes = false;
 static bool s_sensor_init_pending = false;
 static bool sensor_enabled[NUM_CONTROLLERS_FOR_SENSORS][SENSOR_COUNT] = {};
@@ -733,6 +736,17 @@ void InitStage2()
     if (!environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports))
       WARN_LOG(BOOT, "RetroArch does not support RETRO_ENVIRONMENT_SET_CONTROLLER_INFO.");
   }
+
+  // the console is known now: the ports the frontend set before the game loaded
+  s_ports_ready = true;
+  for (unsigned port = 0; port < 8; port++)
+  {
+    if (s_port_pending[port])
+    {
+      s_port_pending[port] = false;
+      retro_set_controller_port_device(port, frontend_types[port]);
+    }
+  }
 }
 
 void InitSensors()
@@ -839,6 +853,7 @@ void Shutdown()
   }
   s_vr_motion = false;
 
+  s_ports_ready = false;
   Keyboard::Shutdown();
   Pad::Shutdown();
   g_controller_interface.Shutdown();
@@ -1391,6 +1406,18 @@ static unsigned wii_port_device(unsigned device, bool altGCPorts)
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
+  // Before a game is loaded (or after it is unloaded) there are no controllers to set up: the
+  // frontend's choice is kept for the next load.
+  if (!Libretro::Input::s_ports_ready)
+  {
+    if (port < 8)
+    {
+      Libretro::Input::frontend_types[port] = device;
+      Libretro::Input::s_port_pending[port] = true;
+    }
+    return;
+  }
+
   auto& system = Core::System::GetInstance();
   bool altGCPorts = Libretro::Options::GetCached<bool>(Libretro::Options::sysconf::ALT_GC_PORTS_ON_WII);
 
