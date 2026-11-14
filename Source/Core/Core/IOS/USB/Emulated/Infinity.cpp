@@ -7,6 +7,8 @@
 #include <bit>
 #include <vector>
 
+#include <crypto/crypto.h>
+
 #include "Common/BitUtils.h"
 #include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
@@ -570,9 +572,10 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
 
   std::array<u8, 16> key = GenerateInfinityFigureKey(sha1_calc);
 
-  std::unique_ptr<Common::AES::Context> ctx = Common::AES::CreateContextDecrypt(key.data());
+  struct aes_ctx ctx;
   std::array<u8, 16> infinity_decrypted_block = {};
-  ctx->CryptIvZero(&buf[16], infinity_decrypted_block.data(), 16);
+  aes_init(&ctx, key.data(), key.size());
+  aes_decrypt_block(&ctx, &buf[16], infinity_decrypted_block.data());
 
   u32 number = u32(infinity_decrypted_block[1]) << 16 | u32(infinity_decrypted_block[2]) << 8 |
                u32(infinity_decrypted_block[3]);

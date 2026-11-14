@@ -399,7 +399,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Config/Config.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/ConfigInfo.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/Layer.cpp \
-	$(CORE_DIR)/Source/Core/Common/Crypto/AES.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/ec.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/HMAC.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/SHA1.cpp \
@@ -1159,7 +1158,6 @@ endif
 # Per-file additions.
 ifeq ($(ARCH_X86_64),1)
 else ifeq ($(ARCH_ARM64),1)
-   FILE_FLAGS_$(abspath $(SRC_DIR)/Common/Crypto/AES.cpp) := -march=armv8-a+crypto
    FILE_FLAGS_$(abspath $(SRC_DIR)/Common/Crypto/SHA1.cpp) := -march=armv8-a+crypto
 endif
 

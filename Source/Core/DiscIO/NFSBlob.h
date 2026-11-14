@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <crypto/crypto.h>
+
 #include <array>
 #include <limits>
 #include <memory>
@@ -10,7 +12,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/AES.h"
 #include "Common/DirectIOFile.h"
 #include "DiscIO/Blob.h"
 
@@ -58,7 +59,7 @@ public:
   bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
-  using Key = std::array<u8, Common::AES::Context::KEY_SIZE>;
+  using Key = std::array<u8, 16>;
   static constexpr u32 BLOCK_SIZE = 0x8000;
   static constexpr u32 MAX_FILE_SIZE = 0xFA00000;
 
@@ -84,7 +85,7 @@ private:
 
   std::vector<NFSLBARange> m_lba_ranges;
   std::vector<File::DirectIOFile> m_files;
-  std::unique_ptr<Common::AES::Context> m_aes_context;
+  struct aes_ctx m_aes_context;
   u64 m_raw_size;
   u64 m_data_size;
   Key m_key;

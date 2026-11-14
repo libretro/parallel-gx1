@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/AES.h"
 #include "Common/Crypto/ec.h"
 
 class PointerWrap;
@@ -262,8 +261,8 @@ private:
   Handle GetHandleFromIterator(KeyEntries::iterator iterator) const;
   bool HasOwnership(Handle handle, u32 pid) const;
   bool IsDefaultHandle(Handle handle) const;
-  ReturnCode DecryptEncrypt(Common::AES::Mode mode, Handle key_handle, u8* iv, const u8* input,
-                            size_t size, u8* output, u32 pid) const;
+  ReturnCode DecryptEncrypt(bool encrypt, Handle key_handle, u8* iv, const u8* input, size_t size,
+                            u8* output, u32 pid) const;
 
   ConsoleType m_console_type{ConsoleType::Retail};
   KeyEntries m_key_entries;

@@ -16,7 +16,6 @@
 #include "Common/Align.h"
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/AES.h"
 #include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/ParallelFor.h"
@@ -129,11 +128,11 @@ VolumeWii::VolumeWii(BlobReader* reader)
         return h3_table;
       };
 
-      auto get_key = [this, partition]() -> std::unique_ptr<Common::AES::Context> {
+      auto get_key = [this, partition]() -> PartitionKey {
         const IOS::ES::TicketReader& ticket = *m_partitions[partition].ticket;
-        if (!ticket.IsValid())
-          return nullptr;
-        return Common::AES::CreateContextDecrypt(ticket.GetTitleKey().data());
+        PartitionKey key{};
+        key.valid = ticket.IsValid() && !aes_init(&key.ctx, ticket.GetTitleKey().data(), 16);
+        return key;
       };
 
       auto get_file_system = [this, partition]() -> FileSystem {
@@ -144,14 +143,14 @@ VolumeWii::VolumeWii(BlobReader* reader)
         return ReadSwappedAndShifted(partition.offset + 0x2b8, PARTITION_NONE).value_or(0);
       };
 
-      m_partitions.emplace(
-          partition, PartitionDetails{Common::Lazy<std::unique_ptr<Common::AES::Context>>(get_key),
-                                      Common::Lazy<IOS::ES::TicketReader>(get_ticket),
-                                      Common::Lazy<IOS::ES::TMDReader>(get_tmd),
-                                      Common::Lazy<std::vector<u8>>(get_cert_chain),
-                                      Common::Lazy<std::vector<u8>>(get_h3_table),
-                                      Common::Lazy<FileSystem>(get_file_system),
-                                      Common::Lazy<u64>(get_data_offset), *partition_type});
+      m_partitions.emplace(partition,
+                           PartitionDetails{Common::Lazy<PartitionKey>(get_key),
+                                            Common::Lazy<IOS::ES::TicketReader>(get_ticket),
+                                            Common::Lazy<IOS::ES::TMDReader>(get_tmd),
+                                            Common::Lazy<std::vector<u8>>(get_cert_chain),
+                                            Common::Lazy<std::vector<u8>>(get_h3_table),
+                                            Common::Lazy<FileSystem>(get_file_system),
+                                            Common::Lazy<u64>(get_data_offset), *partition_type});
     }
   }
 }
@@ -183,12 +182,12 @@ bool VolumeWii::Read(u64 offset, u64 length, u8* buffer, const Partition& partit
     return m_reader->Read(partition_data_offset + offset, length, buffer);
   }
 
-  Common::AES::Context* aes_context = nullptr;
+  const struct aes_ctx* aes_context = nullptr;
   if (m_has_encryption)
   {
-    aes_context = partition_details.key->get();
-    if (!aes_context)
+    if (!partition_details.key->valid)
       return false;
+    aes_context = &partition_details.key->ctx;
   }
 
   while (length > 0)
@@ -388,9 +387,9 @@ bool VolumeWii::CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
 
   if (m_has_encryption)
   {
-    Common::AES::Context* aes_context = partition_details.key->get();
-    if (!aes_context)
+    if (!partition_details.key->valid)
       return false;
+    const struct aes_ctx* const aes_context = &partition_details.key->ctx;
 
     DecryptBlockHashes(encrypted_data, &hashes, aes_context);
     DecryptBlockData(encrypted_data, cluster_data_buffer, aes_context);
@@ -468,7 +467,7 @@ struct EncryptJob
   const std::array<u8, VolumeWii::BLOCK_DATA_SIZE>* in;
   const VolumeWii::HashBlock* hashes;
   u8* out;
-  const Common::AES::Context* aes;
+  const struct aes_ctx* aes;
 };
 
 void EncryptBlockJob(void* ctx, size_t i)
@@ -476,9 +475,12 @@ void EncryptBlockJob(void* ctx, size_t i)
   const EncryptJob* const job = static_cast<const EncryptJob*>(ctx);
   u8* const out_ptr = job->out + i * VolumeWii::BLOCK_TOTAL_SIZE;
 
-  job->aes->CryptIvZero(reinterpret_cast<const u8*>(&job->hashes[i]), out_ptr,
-                        VolumeWii::BLOCK_HEADER_SIZE);
-  job->aes->Crypt(out_ptr + 0x3D0, job->in[i].data(), out_ptr + VolumeWii::BLOCK_HEADER_SIZE,
+  u8 iv[AES_BLOCK_SIZE] = {};
+
+  aes_cbc_encrypt(job->aes, iv, reinterpret_cast<const u8*>(&job->hashes[i]), out_ptr,
+                  VolumeWii::BLOCK_HEADER_SIZE);
+  std::memcpy(iv, out_ptr + 0x3D0, AES_BLOCK_SIZE);
+  aes_cbc_encrypt(job->aes, iv, job->in[i].data(), out_ptr + VolumeWii::BLOCK_HEADER_SIZE,
                   VolumeWii::BLOCK_DATA_SIZE);
 }
 }  // namespace
@@ -552,23 +554,28 @@ bool VolumeWii::EncryptGroup(
   if (hash_exception_callback)
     hash_exception_callback(unencrypted_hashes.data());
 
-  auto aes_context = Common::AES::CreateContextEncrypt(key.data());
+  struct aes_ctx aes_context;
+  if (aes_init(&aes_context, key.data(), AES_KEY_SIZE))
+    return false;
 
-  EncryptJob job{unencrypted_data.data(), unencrypted_hashes.data(), out->data(),
-                 aes_context.get()};
+  EncryptJob job{unencrypted_data.data(), unencrypted_hashes.data(), out->data(), &aes_context};
   parallel_for(BLOCKS_PER_GROUP, EncryptBlockJob, &job);
 
   return true;
 }
 
-void VolumeWii::DecryptBlockHashes(const u8* in, HashBlock* out, Common::AES::Context* aes_context)
+void VolumeWii::DecryptBlockHashes(const u8* in, HashBlock* out, const struct aes_ctx* aes_context)
 {
-  aes_context->CryptIvZero(in, reinterpret_cast<u8*>(out), sizeof(HashBlock));
+  u8 iv[AES_BLOCK_SIZE] = {};
+  aes_cbc_decrypt(aes_context, iv, in, reinterpret_cast<u8*>(out), sizeof(HashBlock));
 }
 
-void VolumeWii::DecryptBlockData(const u8* in, u8* out, Common::AES::Context* aes_context)
+void VolumeWii::DecryptBlockData(const u8* in, u8* out, const struct aes_ctx* aes_context)
 {
-  aes_context->Crypt(&in[0x3d0], &in[sizeof(HashBlock)], out, BLOCK_DATA_SIZE);
+  // the IV is the encrypted header's last bytes, copied first: out may be in
+  u8 iv[AES_BLOCK_SIZE];
+  std::memcpy(iv, &in[0x3d0], AES_BLOCK_SIZE);
+  aes_cbc_decrypt(aes_context, iv, &in[sizeof(HashBlock)], out, BLOCK_DATA_SIZE);
 }
 
 }  // namespace DiscIO

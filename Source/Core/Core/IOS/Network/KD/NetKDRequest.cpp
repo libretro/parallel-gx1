@@ -11,6 +11,8 @@
 #include <string_view>
 #include <utility>
 
+#include <crypto/crypto.h>
+
 #include "Common/BitUtils.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -151,6 +153,21 @@ s32 NWC24MakeUserID(u64* nwc24_id, u32 hollywood_id, u16 id_ctr, HardwareModel h
     return NWC24::WC24_ERR_FATAL;
 
   return NWC24::WC24_OK;
+}
+
+// AES-128-OFB, which libretro-common has no mode for: the key stream is the iv encrypted again and
+// again, and iv is left at its last block. Encrypting and decrypting are the same.
+void CryptOFB(const u8* key, u8* iv, const u8* in, u8* out, size_t size)
+{
+  struct aes_ctx ctx;
+  size_t i;
+  aes_init(&ctx, key, 16);
+  for (i = 0; i < size; i++)
+  {
+    if (!(i & 15))
+      aes_encrypt_block(&ctx, iv, iv);
+    out[i] = in[i] ^ iv[i & 15];
+  }
 }
 }  // Anonymous namespace
 
@@ -773,8 +790,8 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index,
 
       file_data = std::vector<u8>(response->size() - 320);
 
-      Common::AES::CryptOFB(pubk_mod->aes_key, wc24_file.iv, wc24_file.iv, temp_buffer.data(),
-                            file_data.data(), temp_buffer.size());
+      CryptOFB(pubk_mod->aes_key, wc24_file.iv, temp_buffer.data(), file_data.data(),
+               temp_buffer.size());
     }
     else
     {

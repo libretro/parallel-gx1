@@ -13,11 +13,11 @@
 
 #include <cstdio>
 
+#include <crypto/crypto.h>
 #include <crypto/pk.h>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
-#include "Common/Crypto/AES.h"
 #include "Common/Crypto/SHA1.h"
 #include "Common/Crypto/ec.h"
 #include "Common/FileUtil.h"
@@ -332,7 +332,7 @@ ReturnCode IOSC::ComputeSharedKey(Handle dest_handle, Handle private_handle, Han
   return IPC_SUCCESS;
 }
 
-ReturnCode IOSC::DecryptEncrypt(Common::AES::Mode mode, Handle key_handle, u8* iv, const u8* input,
+ReturnCode IOSC::DecryptEncrypt(bool encrypt, Handle key_handle, u8* iv, const u8* input,
                                 size_t size, u8* output, u32 pid) const
 {
   if (!HasOwnership(key_handle, pid))
@@ -347,29 +347,27 @@ ReturnCode IOSC::DecryptEncrypt(Common::AES::Mode mode, Handle key_handle, u8* i
   if (entry->data.size() != AES128_KEY_SIZE)
     return IOSC_FAIL_INTERNAL;
 
-  auto key = entry->data.data();
-  // TODO? store enc + dec ctxs in the KeyEntry so they only need to be created once.
-  // This doesn't seem like a hot path, though.
-  std::unique_ptr<Common::AES::Context> ctx;
-  if (mode == Common::AES::Mode::Encrypt)
-    ctx = Common::AES::CreateContextEncrypt(key);
+  // whole blocks only: a ragged size leaves output and iv as they were
+  struct aes_ctx ctx;
+  if (aes_init(&ctx, entry->data.data(), 16) || size % AES_BLOCK_SIZE)
+    return IPC_SUCCESS;
+  if (encrypt)
+    aes_cbc_encrypt(&ctx, iv, input, output, size);
   else
-    ctx = Common::AES::CreateContextDecrypt(key);
-
-  ctx->Crypt(iv, iv, input, output, size);
+    aes_cbc_decrypt(&ctx, iv, input, output, size);
   return IPC_SUCCESS;
 }
 
 ReturnCode IOSC::Encrypt(Handle key_handle, u8* iv, const u8* input, size_t size, u8* output,
                          u32 pid) const
 {
-  return DecryptEncrypt(Common::AES::Mode::Encrypt, key_handle, iv, input, size, output, pid);
+  return DecryptEncrypt(true, key_handle, iv, input, size, output, pid);
 }
 
 ReturnCode IOSC::Decrypt(Handle key_handle, u8* iv, const u8* input, size_t size, u8* output,
                          u32 pid) const
 {
-  return DecryptEncrypt(Common::AES::Mode::Decrypt, key_handle, iv, input, size, output, pid);
+  return DecryptEncrypt(false, key_handle, iv, input, size, output, pid);
 }
 
 // The working storage for one public-key operation, emulation thread only.

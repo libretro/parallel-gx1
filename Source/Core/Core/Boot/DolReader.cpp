@@ -6,6 +6,8 @@
 #include <cstring>
 #include <string>
 
+#include <crypto/crypto.h>
+
 #include "Common/Align.h"
 #include "Common/BitUtils.h"
 #include "Common/IOFile.h"
@@ -210,8 +212,9 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
                                                       0xfa, 0x29, 0xf8, 0x66};
   static constexpr u8 vwii_ancast_dev_key[0x10] = {0x26, 0xaf, 0xf4, 0xbb, 0xac, 0x88, 0xbb, 0x76,
                                                    0x9d, 0xfc, 0x54, 0xdd, 0x56, 0xd8, 0xef, 0xbd};
-  std::unique_ptr<Common::AES::Context> ctx =
-      Common::AES::CreateContextDecrypt(is_dev ? vwii_ancast_dev_key : vwii_ancast_retail_key);
+  struct aes_ctx ctx;
+  if (aes_init(&ctx, is_dev ? vwii_ancast_dev_key : vwii_ancast_retail_key, 16))
+    return false;
 
   static constexpr u8 vwii_ancast_iv[0x10] = {0x59, 0x6d, 0x5a, 0x9a, 0xd7, 0x05, 0xf9, 0x4f,
                                               0xe1, 0x58, 0x02, 0x6f, 0xea, 0xa7, 0xb8, 0x87};
@@ -220,11 +223,11 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
   // The body is decrypted straight into emulated memory, behind its header.
   u8* const body =
       memory.GetPointerForRange(section_address + sizeof(EspressoAncastHeader), body_size);
-  if (!body ||
-      !ctx->Crypt(vwii_ancast_iv, section.m_data + sizeof(EspressoAncastHeader), body, body_size))
-  {
+  if (!body || body_size % AES_BLOCK_SIZE)
     return false;
-  }
+  u8 iv[AES_BLOCK_SIZE];
+  std::memcpy(iv, vwii_ancast_iv, AES_BLOCK_SIZE);
+  aes_cbc_decrypt(&ctx, iv, section.m_data + sizeof(EspressoAncastHeader), body, body_size);
   memory.CopyToEmu(section_address, &header, sizeof(EspressoAncastHeader));
 
   return true;

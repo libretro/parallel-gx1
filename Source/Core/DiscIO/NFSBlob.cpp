@@ -17,7 +17,6 @@
 #include "Common/Align.h"
 #include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/AES.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Common/Swap.h"
@@ -161,9 +160,10 @@ NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const std::s
 
 NFSFileReader::NFSFileReader(std::vector<NFSLBARange> lba_ranges,
                              std::vector<File::DirectIOFile> files, Key key, u64 raw_size)
-    : m_lba_ranges(std::move(lba_ranges)), m_files(std::move(files)),
-      m_aes_context(Common::AES::CreateContextDecrypt(key.data())), m_raw_size(raw_size), m_key(key)
+    : m_lba_ranges(std::move(lba_ranges)), m_files(std::move(files)), m_raw_size(raw_size),
+      m_key(key)
 {
+  aes_init(&m_aes_context, key.data(), key.size());
   m_data_size = CalculateExpectedDataSize(m_lba_ranges.data(), m_lba_ranges.size());
 }
 
@@ -247,8 +247,8 @@ void NFSFileReader::DecryptBlock(u64 logical_block_index)
   std::memcpy(iv.data() + iv.size() - sizeof(swapped_block_index), &swapped_block_index,
               sizeof(swapped_block_index));
 
-  m_aes_context->Crypt(iv.data(), m_current_block_encrypted.data(),
-                       m_current_block_decrypted.data(), BLOCK_SIZE);
+  aes_cbc_decrypt(&m_aes_context, iv.data(), m_current_block_encrypted.data(),
+                  m_current_block_decrypted.data(), BLOCK_SIZE);
 }
 
 bool NFSFileReader::ReadAndDecryptBlock(u64 logical_block_index)

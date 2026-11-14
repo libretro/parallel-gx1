@@ -12,7 +12,6 @@
 #include <cstdio>
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/AES.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
@@ -175,7 +174,7 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
       break;
     }
 
-    m_aes_ctx = Common::AES::CreateContextDecrypt(ticket.GetTitleKey(m_ios.GetIOSC()).data());
+    aes_init(&m_aes_ctx, ticket.GetTitleKey(m_ios.GetIOSC()).data(), 16);
 
     SetImportTitleIdAndGroupId(m_tmd.GetTitleId(), m_tmd.GetGroupId());
 
@@ -238,7 +237,8 @@ std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
       break;
     }
     std::vector<u8> decrypted(input_size);
-    m_aes_ctx->Crypt(m_aes_iv, m_aes_iv, input, decrypted.data(), input_size);
+    if (input_size % AES_BLOCK_SIZE == 0)
+      aes_cbc_decrypt(&m_aes_ctx, m_aes_iv, input, decrypted.data(), input_size);
 
     m_arc_unpacker.AddBytes(decrypted.data(), decrypted.size());
     break;

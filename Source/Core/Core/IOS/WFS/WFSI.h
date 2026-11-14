@@ -9,8 +9,9 @@
 #include <string>
 #include <vector>
 
+#include <crypto/crypto.h>
+
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/AES.h"
 #include "Core/IOS/Device.h"
 #include "Core/IOS/ES/Formats.h"
 #include "Core/IOS/IOS.h"
@@ -52,7 +53,9 @@ private:
 
   std::string m_device_name;
 
-  std::unique_ptr<Common::AES::Context> m_aes_ctx{};
+  struct aes_ctx m_aes_ctx
+  {
+  };
   u8 m_aes_iv[0x10] = {};
 
   ES::TMDReader m_tmd;

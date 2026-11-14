@@ -10,10 +10,11 @@
 #include <utility>
 #include <vector>
 
+#include <crypto/crypto.h>
+
 #include "Common/Align.h"
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/AES.h"
 #include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
@@ -157,14 +158,16 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
   if (encrypted_size != Common::AlignUp(content.size, 0x40))
     return false;
 
-  auto context = Common::AES::CreateContextDecrypt(ticket.GetTitleKey().data());
+  struct aes_ctx context;
+  if (aes_init(&context, ticket.GetTitleKey().data(), 16))
+    return false;
 
-  u8 iv[16] = {};
+  // The chain carries on from chunk to chunk in iv
+  u8 iv[AES_BLOCK_SIZE] = {};
   iv[0] = static_cast<u8>(content.index >> 8);
   iv[1] = static_cast<u8>(content.index & 0xFF);
 
-  // Decrypt and hash in chunks: in CBC the IV of each chunk is the last
-  // encrypted block before it, so the borrowed input is never copied whole.
+  // Decrypt and hash in chunks, so the borrowed input is never copied whole
   Common::SHA1::Context sha1;
   u8 chunk[2048];
   u64 left_to_hash = content.size;
@@ -173,7 +176,7 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
   {
     const size_t left = encrypted_size - offset;
     const size_t n = left < sizeof(chunk) ? left : sizeof(chunk);
-    context->Crypt(offset ? encrypted_data + offset - 16 : iv, encrypted_data + offset, chunk, n);
+    aes_cbc_decrypt(&context, iv, encrypted_data + offset, chunk, n);
     const size_t hashed = left_to_hash < n ? size_t(left_to_hash) : n;
     sha1.Update(chunk, hashed);
     left_to_hash -= hashed;
