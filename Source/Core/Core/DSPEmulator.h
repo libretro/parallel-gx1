@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include "Common/CommonTypes.h"
 
 namespace Core
@@ -12,31 +11,44 @@ class System;
 }
 class PointerWrap;
 
+// The DSP is emulated by one of two classes derived from this, DSP::HLE::DSPHLE and
+// DSP::LLE::DSPLLE. Which one is noted when it is made, and each call goes to it through a
+// branch on that, not a table of virtual functions. One is made by CreateDSPEmulator and
+// destroyed by DestroyDSPEmulator, which deletes it as what it is.
 class DSPEmulator
 {
 public:
-  virtual ~DSPEmulator();
-  virtual bool IsLLE() const = 0;
+  DSPEmulator(const DSPEmulator&) = delete;
+  DSPEmulator& operator=(const DSPEmulator&) = delete;
 
-  virtual bool Initialize(bool wii, bool dsp_thread) = 0;
-  virtual void Shutdown() = 0;
+  bool IsLLE() const { return m_is_lle; }
 
-  virtual void DoState(PointerWrap& p) = 0;
-  virtual void PauseAndLock() = 0;
-  virtual void UnpauseAndUnlock() = 0;
+  bool Initialize(bool wii, bool dsp_thread);
+  void Shutdown();
 
-  virtual void DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value) = 0;
-  virtual void DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value) = 0;
-  virtual u16 DSP_ReadMailBoxHigh(bool cpu_mailbox) = 0;
-  virtual u16 DSP_ReadMailBoxLow(bool cpu_mailbox) = 0;
-  virtual u16 DSP_ReadControlRegister() = 0;
-  virtual u16 DSP_WriteControlRegister(u16 value) = 0;
-  virtual void DSP_Update(int cycles) = 0;
-  virtual void DSP_StopSoundStream() = 0;
-  virtual u32 DSP_UpdateRate() = 0;
+  void DoState(PointerWrap& p);
+  void PauseAndLock();
+  void UnpauseAndUnlock();
+
+  void DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value);
+  void DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value);
+  u16 DSP_ReadMailBoxHigh(bool cpu_mailbox);
+  u16 DSP_ReadMailBoxLow(bool cpu_mailbox);
+  u16 DSP_ReadControlRegister();
+  u16 DSP_WriteControlRegister(u16 value);
+  void DSP_Update(int cycles);
+  void DSP_StopSoundStream();
+  u32 DSP_UpdateRate();
 
 protected:
+  explicit DSPEmulator(bool is_lle) : m_is_lle(is_lle) {}
+  ~DSPEmulator() = default;
+
   bool m_wii = false;
+
+private:
+  const bool m_is_lle;
 };
 
-std::unique_ptr<DSPEmulator> CreateDSPEmulator(Core::System& system, bool hle);
+DSPEmulator* CreateDSPEmulator(Core::System& system, bool hle);
+void DestroyDSPEmulator(DSPEmulator* emulator);

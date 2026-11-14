@@ -17,28 +17,27 @@ class PointerWrap;
 
 namespace DSP::LLE
 {
-class DSPLLE : public DSPEmulator
+class DSPLLE final : public DSPEmulator
 {
 public:
   DSPLLE();
-  ~DSPLLE() override;
+  ~DSPLLE();
 
-  bool Initialize(bool wii, bool dsp_thread) override;
-  void Shutdown() override;
-  bool IsLLE() const override { return true; }
-  void DoState(PointerWrap& p) override;
-  void PauseAndLock() override;
-  void UnpauseAndUnlock() override;
+  bool Initialize(bool wii, bool dsp_thread);
+  void Shutdown();
+  void DoState(PointerWrap& p);
+  void PauseAndLock();
+  void UnpauseAndUnlock();
 
-  void DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value) override;
-  void DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value) override;
-  u16 DSP_ReadMailBoxHigh(bool cpu_mailbox) override;
-  u16 DSP_ReadMailBoxLow(bool cpu_mailbox) override;
-  u16 DSP_ReadControlRegister() override;
-  u16 DSP_WriteControlRegister(u16 value) override;
-  void DSP_Update(int cycles) override;
-  void DSP_StopSoundStream() override;
-  u32 DSP_UpdateRate() override;
+  void DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value);
+  void DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value);
+  u16 DSP_ReadMailBoxHigh(bool cpu_mailbox);
+  u16 DSP_ReadMailBoxLow(bool cpu_mailbox);
+  u16 DSP_ReadControlRegister();
+  u16 DSP_WriteControlRegister(u16 value);
+  void DSP_Update(int cycles);
+  void DSP_StopSoundStream();
+  u32 DSP_UpdateRate();
 
 private:
   static void DSPThread(void* data);

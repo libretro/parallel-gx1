@@ -29,7 +29,9 @@
 
 namespace DSP::LLE
 {
-DSPLLE::DSPLLE() = default;
+DSPLLE::DSPLLE() : DSPEmulator(true)
+{
+}
 
 DSPLLE::~DSPLLE()
 {

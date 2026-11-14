@@ -16,7 +16,8 @@
 
 namespace DSP::HLE
 {
-DSPHLE::DSPHLE(Core::System& system) : m_mail_handler(system.GetDSP()), m_system(system)
+DSPHLE::DSPHLE(Core::System& system)
+    : DSPEmulator(false), m_mail_handler(system.GetDSP()), m_system(system)
 {
   m_ucode_slot_size = UCodeStorageSize();
   m_ucode_storage = static_cast<u8*>(::operator new(2 * m_ucode_slot_size));

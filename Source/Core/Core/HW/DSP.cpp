@@ -23,8 +23,6 @@
 
 #include "Core/HW/DSP.h"
 
-#include <memory>
-
 #include "AudioCommon/FieldAudio.h"
 
 #include "Common/ChunkFile.h"
@@ -71,7 +69,10 @@ DSPManager::DSPManager(Core::System& system) : m_system(system)
 {
 }
 
-DSPManager::~DSPManager() = default;
+DSPManager::~DSPManager()
+{
+  DestroyDSPEmulator(m_dsp_emulator);
+}
 
 // time given to LLE DSP on every read of the high bits in a mailbox
 constexpr int DSP_MAIL_SLICE = 72;
@@ -104,7 +105,7 @@ void DSPManager::CompleteARAM(u64 userdata, s64 cyclesLate)
 
 DSPEmulator* DSPManager::GetDSPEmulator()
 {
-  return m_dsp_emulator.get();
+  return m_dsp_emulator;
 }
 
 void DSPManager::Init(bool hle)
@@ -118,6 +119,7 @@ void DSPManager::Init(bool hle)
 
 void DSPManager::Reinit(bool hle)
 {
+  DestroyDSPEmulator(m_dsp_emulator);
   m_dsp_emulator = CreateDSPEmulator(m_system, hle);
   m_is_lle = m_dsp_emulator->IsLLE();
 
@@ -158,7 +160,8 @@ void DSPManager::Shutdown()
   }
 
   m_dsp_emulator->Shutdown();
-  m_dsp_emulator.reset();
+  DestroyDSPEmulator(m_dsp_emulator);
+  m_dsp_emulator = nullptr;
 }
 
 void DSPManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)

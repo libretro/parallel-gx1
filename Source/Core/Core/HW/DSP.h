@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include "Common/CommonTypes.h"
 
 class PointerWrap;
@@ -181,7 +179,7 @@ private:
   u16 m_aram_refresh = 0;
   int m_dsp_slice = 0;
 
-  std::unique_ptr<DSPEmulator> m_dsp_emulator;
+  DSPEmulator* m_dsp_emulator = nullptr;
 
   bool m_is_lle = false;
 
