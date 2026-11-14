@@ -12,13 +12,13 @@
 #include <retro_atomic.h>
 
 #include "Common/PcapFile.h"
+#include "Core/DSP/DSPAccelerator.h"
 #include "Core/DSP/DSPAnalyzer.h"
 
 class PointerWrap;
 
 namespace DSP
 {
-class Accelerator;
 class DSPCore;
 
 namespace Interpreter
@@ -467,7 +467,7 @@ private:
   // Accelerator / DMA / other hardware registers. Not GPRs.
   std::array<u16, 256> m_ifx_regs{};
 
-  std::unique_ptr<Accelerator> m_accelerator;
+  Accelerator m_accelerator{nullptr, AcceleratorKind::LLE};
   retro_atomic_int_t m_mailbox[2]{}; /* u32 values */
   DSPCore& m_dsp_core;
   Analyzer m_analyzer;

@@ -82,7 +82,8 @@ bool AESndUCode::UseNewFlagMasks() const
 }
 
 AESndUCode::AESndUCode(DSPHLE* dsphle, u32 crc)
-    : UCodeInterface(dsphle, crc), m_accelerator(dsphle->GetSystem().GetDSP())
+    : UCodeInterface(dsphle, crc),
+      m_accelerator(&dsphle->GetSystem().GetDSP(), AcceleratorKind::AESnd)
 {
 }
 
@@ -234,20 +235,6 @@ void AESndUCode::DMAOutParameterBlock()
   memory.Write_U16(m_parameter_block.volume_r, m_parameter_block_addr + 34);
   memory.Write_U32(m_parameter_block.delay, m_parameter_block_addr + 36);
   memory.Write_U32(m_parameter_block.flags, m_parameter_block_addr + 40);
-}
-
-AESndAccelerator::AESndAccelerator(DSPManager& dsp) : Accelerator(dsp)
-{
-}
-
-AESndAccelerator::~AESndAccelerator() = default;
-
-void AESndAccelerator::OnSampleReadEndException()
-{
-  // exception5 - this updates internal state
-  SetYn1(GetYn1());
-  SetYn2(GetYn2());
-  SetPredScale(GetPredScale());
 }
 
 static const s16 ACCELERATOR_COEFS[16] = {};  // all zeros

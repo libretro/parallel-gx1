@@ -8,18 +8,71 @@
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
+#include "Core/DSP/DSPCore.h"
 #include "Core/HW/DSP.h"
 
 namespace DSP
 {
+void Accelerator::Init(DSPManager* aram, AcceleratorKind kind, SDSP* dsp)
+{
+  pb = nullptr;
+  m_aram = aram;
+  m_dsp = dsp;
+  m_start_address = 0;
+  m_end_address = 0;
+  m_current_address = 0;
+  m_sample_format.hex = 0;
+  m_gain = 0;
+  m_yn1 = 0;
+  m_yn2 = 0;
+  m_pred_scale = 0;
+  m_input = 0;
+  m_reads_stopped = false;
+  m_kind = kind;
+}
+
 u8 Accelerator::ReadMemory(u32 address)
 {
-  return m_aram.ReadARAM(address);
+  return m_aram->ReadARAM(address);
 }
 
 void Accelerator::WriteMemory(u32 address, u8 value)
 {
-  m_aram.WriteARAM(value, address);
+  m_aram->WriteARAM(value, address);
+}
+
+void Accelerator::OnRawReadEndException()
+{
+  if (m_kind == AcceleratorKind::LLE)
+    m_dsp->SetException(ExceptionType::AcceleratorRawReadOverflow);
+}
+
+void Accelerator::OnRawWriteEndException()
+{
+  if (m_kind == AcceleratorKind::LLE)
+    m_dsp->SetException(ExceptionType::AcceleratorRawWriteOverflow);
+}
+
+void Accelerator::OnSampleReadEndException()
+{
+  switch (m_kind)
+  {
+  case AcceleratorKind::LLE:
+    m_dsp->SetException(ExceptionType::AcceleratorSampleReadOverflow);
+    break;
+  case AcceleratorKind::AESnd:
+    // exception5 - this updates internal state
+    SetYn1(GetYn1());
+    SetYn2(GetYn2());
+    SetPredScale(GetPredScale());
+    break;
+  case AcceleratorKind::AXGC:
+    HLE::AXGCSampleReadEnd(this);
+    break;
+  case AcceleratorKind::AXWii:
+    HLE::AXWiiSampleReadEnd(this);
+    break;
+  }
 }
 
 u16 Accelerator::GetCurrentSample()

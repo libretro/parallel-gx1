@@ -29,7 +29,7 @@ AXWiiUCode::AXWiiUCode(DSPHLE* dsphle, u32 crc)
   m_old_axwii = crc == 0xfa450138 || crc == 0x7699af32;
   m_new_filter = crc == 0x347112ba || crc == 0x4cc52064;
 
-  m_accelerator = std::make_unique<HLEAccelerator>(dsphle->GetSystem().GetDSP());
+  m_accelerator.Init(&dsphle->GetSystem().GetDSP(), AcceleratorKind::AXWii);
 }
 
 void AXWiiUCode::Initialize()
@@ -482,7 +482,7 @@ void AXWiiUCode::ProcessPBList(u32 pb_addr)
       for (int curr_ms = 0; curr_ms < 3; ++curr_ms)
       {
         ApplyUpdatesForMs(curr_ms, pb, pb.updates.num_updates, updates);
-        ProcessVoice(static_cast<HLEAccelerator*>(m_accelerator.get()), pb, buffers, spms,
+        ProcessVoice(&m_accelerator, pb, buffers, spms,
                      ConvertMixerControl(HILO_TO_32(pb.mixer_control)),
                      m_coeffs_loaded ? m_coeffs : nullptr, m_new_filter);
 
@@ -495,7 +495,7 @@ void AXWiiUCode::ProcessPBList(u32 pb_addr)
     }
     else
     {
-      ProcessVoice(static_cast<HLEAccelerator*>(m_accelerator.get()), pb, buffers, 96,
+      ProcessVoice(&m_accelerator, pb, buffers, 96,
                    ConvertMixerControl(HILO_TO_32(pb.mixer_control)),
                    m_coeffs_loaded ? m_coeffs : nullptr, m_new_filter);
     }

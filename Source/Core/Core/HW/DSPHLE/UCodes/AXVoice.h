@@ -120,38 +120,24 @@ union AXBuffers
 #endif
 };
 
-// Simulated accelerator state.
-class HLEAccelerator final : public Accelerator
+// An accelerator's sample read end for the voice it reads: loops it, or stops it.
+static void SampleReadEnd(Accelerator* accelerator)
 {
-public:
-  explicit HLEAccelerator(DSPManager& dsp) : Accelerator(dsp) {}
-  HLEAccelerator(const HLEAccelerator&) = delete;
-  HLEAccelerator(HLEAccelerator&&) = delete;
-  HLEAccelerator& operator=(const HLEAccelerator&) = delete;
-  HLEAccelerator& operator=(HLEAccelerator&&) = delete;
-  ~HLEAccelerator() override = default;
-
-  PB_TYPE* acc_pb = nullptr;
-
-protected:
-  void OnRawReadEndException() override {}
-  void OnRawWriteEndException() override {}
-  void OnSampleReadEndException() override
+  PB_TYPE* const acc_pb = static_cast<PB_TYPE*>(accelerator->pb);
+  if (acc_pb->audio_addr.looping)
   {
-    if (acc_pb->audio_addr.looping)
+    // Set the ADPCM info to continue processing at loop_addr.
+    accelerator->SetPredScale(acc_pb->adpcm_loop_info.pred_scale);
+    if (acc_pb->is_stream != 1)
     {
-      // Set the ADPCM info to continue processing at loop_addr.
-      SetPredScale(acc_pb->adpcm_loop_info.pred_scale);
-      if (acc_pb->is_stream != 1)
-      {
-        SetYn1(acc_pb->adpcm_loop_info.yn1);
-        SetYn2(acc_pb->adpcm_loop_info.yn2);
-      }
-      else
-      {
-        // Refresh YN1 and YN2. This indirectly causes the accelerator to resume reads.
-        SetYn1(GetYn1());
-        SetYn2(GetYn2());
+      accelerator->SetYn1(acc_pb->adpcm_loop_info.yn1);
+      accelerator->SetYn2(acc_pb->adpcm_loop_info.yn2);
+    }
+    else
+    {
+      // Refresh YN1 and YN2. This indirectly causes the accelerator to resume reads.
+      accelerator->SetYn1(accelerator->GetYn1());
+      accelerator->SetYn2(accelerator->GetYn2());
 #ifdef AX_GC
         // If we're streaming, increment the loop counter.
         acc_pb->loop_counter++;
@@ -163,13 +149,12 @@ protected:
       // Non looping voice reached the end -> running = 0.
       acc_pb->running = 0;
     }
-  }
-};
+}
 
 // Sets up the simulated accelerator.
-void AcceleratorSetup(HLEAccelerator* accelerator, PB_TYPE* pb)
+void AcceleratorSetup(Accelerator* accelerator, PB_TYPE* pb)
 {
-  accelerator->acc_pb = pb;
+  accelerator->pb = pb;
   accelerator->SetStartAddress(HILO_TO_32(pb->audio_addr.loop_addr));
   accelerator->SetEndAddress(HILO_TO_32(pb->audio_addr.end_addr));
   accelerator->SetCurrentAddress(HILO_TO_32(pb->audio_addr.cur_addr));
@@ -183,9 +168,9 @@ void AcceleratorSetup(HLEAccelerator* accelerator, PB_TYPE* pb)
 // Reads a sample from the accelerator. Also handles looping and
 // disabling streams that reached the end (this is done by an exception raised
 // by the accelerator on real hardware).
-u16 AcceleratorGetSample(HLEAccelerator* accelerator)
+u16 AcceleratorGetSample(Accelerator* accelerator)
 {
-  return accelerator->ReadSample(accelerator->acc_pb->adpcm.coefs);
+  return accelerator->ReadSample(static_cast<PB_TYPE*>(accelerator->pb)->adpcm.coefs);
 }
 
 // Reads samples from the input callback, resamples them to <count> samples at
@@ -211,8 +196,8 @@ u16 AcceleratorGetSample(HLEAccelerator* accelerator)
 //
 // The input is read from the accelerator when one is given, else from <input>, in order: a
 // branch each call site's constant resolves, not a call through a callable per sample.
-static inline u32 ResampleAudio(HLEAccelerator* accelerator, const s16* input, s16* output,
-                                u32 count, s16* last_samples, u32 curr_pos, u32 ratio, int srctype,
+static inline u32 ResampleAudio(Accelerator* accelerator, const s16* input, s16* output, u32 count,
+                                s16* last_samples, u32 curr_pos, u32 ratio, int srctype,
                                 const s16* coeffs)
 {
 #define RESAMPLE_INPUT(n) (accelerator ? (s16)AcceleratorGetSample(accelerator) : input[n])
@@ -328,7 +313,7 @@ static inline u32 ResampleAudio(HLEAccelerator* accelerator, const s16* input, s
 
 // Read <count> input samples from ARAM, decoding and converting rate
 // if required.
-void GetInputSamples(HLEAccelerator* accelerator, PB_TYPE& pb, s16* samples, u16 count,
+void GetInputSamples(Accelerator* accelerator, PB_TYPE& pb, s16* samples, u16 count,
                      const s16* coeffs)
 {
   AcceleratorSetup(accelerator, &pb);
@@ -416,7 +401,7 @@ static void BiquadFilter(s16* samples, u32 count, PBBiquadFilter& f)
 
 // Process 1ms of audio (for AX GC) or 3ms of audio (for AX Wii) from a PB and
 // mix it to the output buffers.
-void ProcessVoice(HLEAccelerator* accelerator, PB_TYPE& pb, const AXBuffers& buffers, u16 count,
+void ProcessVoice(Accelerator* accelerator, PB_TYPE& pb, const AXBuffers& buffers, u16 count,
                   AXMixControl mctrl, const s16* coeffs, bool new_filter)
 {
   // If the voice is not running, nothing to do.
@@ -601,4 +586,13 @@ void ProcessVoice(HLEAccelerator* accelerator, PB_TYPE& pb, const AXBuffers& buf
 
 }  // namespace
 }  // inline namespace AXGC/AXWii
+
+#ifdef AX_GC
+void AXGCSampleReadEnd(Accelerator* accelerator)
+#else
+void AXWiiSampleReadEnd(Accelerator* accelerator)
+#endif
+{
+  SampleReadEnd(accelerator);
+}
 }  // namespace DSP::HLE

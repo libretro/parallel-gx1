@@ -123,48 +123,47 @@ void SDSP::WriteIFX(u32 address, u16 value)
     break;
 
   case DSP_ACSAH:
-    m_accelerator->SetStartAddress(value << 16 |
-                                   static_cast<u16>(m_accelerator->GetStartAddress()));
+    m_accelerator.SetStartAddress(value << 16 | static_cast<u16>(m_accelerator.GetStartAddress()));
     break;
   case DSP_ACSAL:
-    m_accelerator->SetStartAddress(static_cast<u16>(m_accelerator->GetStartAddress() >> 16) << 16 |
-                                   value);
+    m_accelerator.SetStartAddress(static_cast<u16>(m_accelerator.GetStartAddress() >> 16) << 16 |
+                                  value);
     break;
   case DSP_ACEAH:
-    m_accelerator->SetEndAddress(value << 16 | static_cast<u16>(m_accelerator->GetEndAddress()));
+    m_accelerator.SetEndAddress(value << 16 | static_cast<u16>(m_accelerator.GetEndAddress()));
     break;
   case DSP_ACEAL:
-    m_accelerator->SetEndAddress(static_cast<u16>(m_accelerator->GetEndAddress() >> 16) << 16 |
-                                 value);
+    m_accelerator.SetEndAddress(static_cast<u16>(m_accelerator.GetEndAddress() >> 16) << 16 |
+                                value);
     break;
   case DSP_ACCAH:
-    m_accelerator->SetCurrentAddress(value << 16 |
-                                     static_cast<u16>(m_accelerator->GetCurrentAddress()));
+    m_accelerator.SetCurrentAddress(value << 16 |
+                                    static_cast<u16>(m_accelerator.GetCurrentAddress()));
     break;
   case DSP_ACCAL:
-    m_accelerator->SetCurrentAddress(
-        static_cast<u16>(m_accelerator->GetCurrentAddress() >> 16) << 16 | value);
+    m_accelerator.SetCurrentAddress(
+        static_cast<u16>(m_accelerator.GetCurrentAddress() >> 16) << 16 | value);
     break;
   case DSP_FORMAT:
-    m_accelerator->SetSampleFormat(value);
+    m_accelerator.SetSampleFormat(value);
     break;
   case DSP_GAIN:
-    m_accelerator->SetGain(value);
+    m_accelerator.SetGain(value);
     break;
   case DSP_YN1:
-    m_accelerator->SetYn1(value);
+    m_accelerator.SetYn1(value);
     break;
   case DSP_YN2:
-    m_accelerator->SetYn2(value);
+    m_accelerator.SetYn2(value);
     break;
   case DSP_PRED_SCALE:
-    m_accelerator->SetPredScale(value);
+    m_accelerator.SetPredScale(value);
     break;
   case DSP_ACDRAW:  // Raw accelerator write
-    m_accelerator->WriteRaw(value);
+    m_accelerator.WriteRaw(value);
     break;
   case DSP_ACIN:
-    m_accelerator->SetInput(value);
+    m_accelerator.SetInput(value);
     break;
 
   default:
@@ -211,33 +210,33 @@ u16 SDSP::ReadIFXImpl(u16 address)
     return m_ifx_regs[address & 0xFF];
 
   case DSP_ACSAH:
-    return static_cast<u16>(m_accelerator->GetStartAddress() >> 16);
+    return static_cast<u16>(m_accelerator.GetStartAddress() >> 16);
   case DSP_ACSAL:
-    return static_cast<u16>(m_accelerator->GetStartAddress());
+    return static_cast<u16>(m_accelerator.GetStartAddress());
   case DSP_ACEAH:
-    return static_cast<u16>(m_accelerator->GetEndAddress() >> 16);
+    return static_cast<u16>(m_accelerator.GetEndAddress() >> 16);
   case DSP_ACEAL:
-    return static_cast<u16>(m_accelerator->GetEndAddress());
+    return static_cast<u16>(m_accelerator.GetEndAddress());
   case DSP_ACCAH:
-    return static_cast<u16>(m_accelerator->GetCurrentAddress() >> 16);
+    return static_cast<u16>(m_accelerator.GetCurrentAddress() >> 16);
   case DSP_ACCAL:
-    return static_cast<u16>(m_accelerator->GetCurrentAddress());
+    return static_cast<u16>(m_accelerator.GetCurrentAddress());
   case DSP_FORMAT:
-    return m_accelerator->GetSampleFormat();
+    return m_accelerator.GetSampleFormat();
   case DSP_GAIN:
-    return m_accelerator->GetGain();
+    return m_accelerator.GetGain();
   case DSP_YN1:
-    return m_accelerator->GetYn1();
+    return m_accelerator.GetYn1();
   case DSP_YN2:
-    return m_accelerator->GetYn2();
+    return m_accelerator.GetYn2();
   case DSP_PRED_SCALE:
-    return m_accelerator->GetPredScale();
+    return m_accelerator.GetPredScale();
   case DSP_ACDSAMP:  // Processed sample accelerator read
-    return m_accelerator->ReadSample(reinterpret_cast<s16*>(&m_ifx_regs[DSP_COEF_A1_0]));
+    return m_accelerator.ReadSample(reinterpret_cast<s16*>(&m_ifx_regs[DSP_COEF_A1_0]));
   case DSP_ACDRAW:  // Raw accelerator read
-    return m_accelerator->ReadRaw();
+    return m_accelerator.ReadRaw();
   case DSP_ACIN:
-    return m_accelerator->GetInput();
+    return m_accelerator.GetInput();
 
   default:
   {

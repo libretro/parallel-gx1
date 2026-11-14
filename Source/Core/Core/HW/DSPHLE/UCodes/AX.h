@@ -16,15 +16,11 @@
 #include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
 #include "Common/Swap.h"
+#include "Core/DSP/DSPAccelerator.h"
 #include "Core/HW/DSPHLE/DSPHLE.h"
 #include "Core/HW/DSPHLE/UCodes/UCodes.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
-
-namespace DSP
-{
-class Accelerator;
-}
 
 namespace DSP::HLE
 {
@@ -108,7 +104,7 @@ protected:
 
   u16 m_compressor_pos = 0;
 
-  std::unique_ptr<Accelerator> m_accelerator;
+  Accelerator m_accelerator{nullptr, AcceleratorKind::AXGC};
 
   // Constructs without any GC-specific state, so it can be used by the deriving AXWii.
   AXUCode(DSPHLE* dsphle, u32 crc, bool dummy);

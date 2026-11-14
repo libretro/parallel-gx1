@@ -104,29 +104,6 @@ static bool VerifyRoms(const SDSP& dsp)
   return true;
 }
 
-class LLEAccelerator final : public Accelerator
-{
-public:
-  LLEAccelerator(SDSP& dsp, DSPManager& aram) : Accelerator(aram), m_dsp{dsp} {}
-
-protected:
-  void OnRawReadEndException() override
-  {
-    m_dsp.SetException(ExceptionType::AcceleratorRawReadOverflow);
-  }
-  void OnRawWriteEndException() override
-  {
-    m_dsp.SetException(ExceptionType::AcceleratorRawWriteOverflow);
-  }
-  void OnSampleReadEndException() override
-  {
-    m_dsp.SetException(ExceptionType::AcceleratorSampleReadOverflow);
-  }
-
-private:
-  SDSP& m_dsp;
-};
-
 SDSP::SDSP(DSPCore& core) : m_dsp_core{core}
 {
 }
@@ -137,7 +114,7 @@ bool SDSP::Initialize(const DSPInitOptions& opts)
 {
   m_step_counter = 0;
   /* the ARAM Host::ReadHostMemory and WriteHostMemory reach */
-  m_accelerator = std::make_unique<LLEAccelerator>(*this, Core::System::GetInstance().GetDSP());
+  m_accelerator.Init(&Core::System::GetInstance().GetDSP(), AcceleratorKind::LLE, this);
 
   irom = static_cast<u16*>(Common::AllocateMemoryPages(DSP_IROM_BYTE_SIZE));
   iram = static_cast<u16*>(Common::AllocateMemoryPages(DSP_IRAM_BYTE_SIZE));
@@ -406,7 +383,7 @@ void SDSP::DoState(PointerWrap& p)
 
   p.Do(m_step_counter);
   p.DoArray(m_ifx_regs);
-  m_accelerator->DoState(p);
+  m_accelerator.DoState(p);
   p.Do(m_mailbox[0]);
   p.Do(m_mailbox[1]);
   Common::UnWriteProtectMemory(iram, DSP_IRAM_BYTE_SIZE, false);

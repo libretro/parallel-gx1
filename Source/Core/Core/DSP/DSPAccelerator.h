@@ -11,13 +11,28 @@ class PointerWrap;
 namespace DSP
 {
 class DSPManager;
+struct SDSP;
+
+// Whose accelerator it is, which decides what its end exceptions do
+enum class AcceleratorKind : u8
+{
+  LLE,
+  AESnd,
+  AXGC,
+  AXWii,
+};
 
 class Accelerator
 {
 public:
-  /* @aram: where every accelerator reads and writes, LLE's and the HLE microcodes' alike */
-  explicit Accelerator(DSPManager& aram) : m_aram(aram) {}
-  virtual ~Accelerator() = default;
+  /* @aram: where every accelerator reads and writes, LLE's and the HLE microcodes' alike; @dsp:
+   * the LLE DSP an exception is raised in */
+  Accelerator(DSPManager* aram, AcceleratorKind kind, SDSP* dsp = nullptr)
+  {
+    Init(aram, kind, dsp);
+  }
+  // As made anew: its registers cleared
+  void Init(DSPManager* aram, AcceleratorKind kind, SDSP* dsp = nullptr);
 
   u16 ReadSample(const s16* coefs);
   // Zelda ucode reads ARAM through 0xffd3.
@@ -45,16 +60,19 @@ public:
 
   void DoState(PointerWrap& p);
 
+  // The AX parameter block of the voice it reads for
+  void* pb = nullptr;
+
 protected:
-  virtual void OnRawReadEndException() = 0;
-  virtual void OnRawWriteEndException() = 0;
-  virtual void OnSampleReadEndException() = 0;
-  /* ARAM, called directly: a sample read is not a call through the vtable */
+  void OnRawReadEndException();
+  void OnRawWriteEndException();
+  void OnSampleReadEndException();
   u8 ReadMemory(u32 address);
   void WriteMemory(u32 address, u8 value);
   u16 GetCurrentSample();
 
-  DSPManager& m_aram;
+  DSPManager* m_aram;
+  SDSP* m_dsp;
 
   // DSP accelerator registers.
   u32 m_start_address = 0;
@@ -106,5 +124,14 @@ protected:
   // and updating the current address register, unless the YN2 register is written to.
   // This is kept track of internally; this state is not exposed via any register.
   bool m_reads_stopped = false;
+  AcceleratorKind m_kind;
 };
+
+namespace HLE
+{
+// An AX voice's sample read end: loops it or stops it. Defined with the AX microcodes, one for
+// the GameCube's parameter blocks and one for the Wii's.
+void AXGCSampleReadEnd(Accelerator* accelerator);
+void AXWiiSampleReadEnd(Accelerator* accelerator);
+}  // namespace HLE
 }  // namespace DSP

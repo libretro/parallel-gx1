@@ -32,7 +32,7 @@ AXUCode::AXUCode(DSPHLE* dsphle, u32 crc) : AXUCode(dsphle, crc, false)
 {
   INFO_LOG(DSPHLE, "Instantiating AXUCode: crc=%08x", crc);
 
-  m_accelerator = std::make_unique<HLEAccelerator>(dsphle->GetSystem().GetDSP());
+  m_accelerator.Init(&dsphle->GetSystem().GetDSP(), AcceleratorKind::AXGC);
 }
 
 AXUCode::~AXUCode() = default;
@@ -472,9 +472,8 @@ void AXUCode::ProcessPBList(u32 pb_addr)
     {
       ApplyUpdatesForMs(curr_ms, pb, pb.updates.num_updates, updates);
 
-      ProcessVoice(static_cast<HLEAccelerator*>(m_accelerator.get()), pb, buffers, spms,
-                   ConvertMixerControl(pb.mixer_control), m_coeffs_loaded ? m_coeffs : nullptr,
-                   false);
+      ProcessVoice(&m_accelerator, pb, buffers, spms, ConvertMixerControl(pb.mixer_control),
+                   m_coeffs_loaded ? m_coeffs : nullptr, false);
 
       // Forward the buffers
       for (auto& ptr : buffers.ptrs)
@@ -850,7 +849,7 @@ void AXUCode::DoAXState(PointerWrap& p)
 
   p.Do(m_compressor_pos);
 
-  m_accelerator->DoState(p);
+  m_accelerator.DoState(p);
 }
 
 void AXUCode::DoState(PointerWrap& p)

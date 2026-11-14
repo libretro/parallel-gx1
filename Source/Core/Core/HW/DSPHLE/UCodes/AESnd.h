@@ -16,22 +16,6 @@ namespace DSP::HLE
 {
 class DSPHLE;
 
-class AESndAccelerator final : public Accelerator
-{
-public:
-  explicit AESndAccelerator(DSPManager& dsp);
-  AESndAccelerator(const AESndAccelerator&) = delete;
-  AESndAccelerator(AESndAccelerator&&) = delete;
-  AESndAccelerator& operator=(const AESndAccelerator&) = delete;
-  AESndAccelerator& operator=(AESndAccelerator&&) = delete;
-  ~AESndAccelerator() override;
-
-protected:
-  void OnRawReadEndException() override {}
-  void OnRawWriteEndException() override {}
-  void OnSampleReadEndException() override;
-};
-
 class AESndUCode final : public UCodeInterface
 {
 public:
@@ -124,7 +108,7 @@ private:
 
   s16 m_output_buffer[NUM_OUTPUT_SAMPLES * 2]{};
 
-  AESndAccelerator m_accelerator;
+  Accelerator m_accelerator;
 
   bool m_has_shown_unsupported_sample_format_warning = false;
 };
