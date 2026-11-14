@@ -4,7 +4,16 @@
 #pragma once
 
 #include <cstddef>
-#include <map>
+
+#include "Common/CodePtrMap.h"
+
+struct ConstantPoolInfo
+{
+  void* m_location;  // null while not copied
+  size_t m_size;
+};
+
+CODE_PTR_MAP_DEFINE(constant_pool_infos, ConstantPoolInfo);
 
 // Constants are copied into this pool so that they live at a memory location
 // that is close to the code that references it. This ensures that the 32-bit
@@ -16,6 +25,8 @@ public:
   static constexpr size_t ALIGNMENT = 16;
 
   ConstantPool();
+  ConstantPool(const ConstantPool&) = delete;
+  ConstantPool& operator=(const ConstantPool&) = delete;
   ~ConstantPool();
 
   void Init(void* memory, size_t size);
@@ -29,15 +40,11 @@ public:
                           size_t index);
 
 private:
-  struct ConstantInfo
-  {
-    void* m_location;
-    size_t m_size;
-  };
-
   void* m_region = nullptr;
   size_t m_region_size = 0;
   void* m_current_ptr = nullptr;
   size_t m_remaining_size = 0;
-  std::map<const void*, ConstantInfo> m_const_info;
+  // made with the pool, as large as a full pool needs (each constant takes ALIGNMENT bytes at
+  // least), so copying one in allocates nothing
+  constant_pool_infos_t m_const_info{};
 };
