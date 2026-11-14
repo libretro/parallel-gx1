@@ -15,10 +15,12 @@
 #include "Common/JitRegister.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
+#include "Core/HW/Memmap.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "Core/System.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -110,6 +112,8 @@ JitBaseBlockCache::JitBaseBlockCache(JitBase& jit) : m_jit{jit}
 {
   jit_link_lists_init(&links_to, 4096);
   jit_block_lists_init(&block_map, 8192);
+  // room for the addresses of twice the blocks kept suspended: it never grows (RelistSuspended)
+  jit_block_lists_init(&suspended_map, 2 * SUSPENDED_BLOCKS);
   jit_range_lists_init(&block_range_map, 8192);
 }
 
@@ -127,6 +131,7 @@ JitBaseBlockCache::~JitBaseBlockCache()
   free(m_range_node_chunks);
   jit_range_lists_free(&block_range_map);
   jit_block_lists_free(&block_map);
+  jit_block_lists_free(&suspended_map);
   jit_link_lists_free(&links_to);
 }
 
@@ -308,6 +313,10 @@ void JitBaseBlockCache::Clear()
   m_link_arena.current = 0;
   m_link_arena.used = 0;
   jit_block_lists_clear(&block_map);
+  jit_block_lists_clear(&suspended_map);
+  m_oldest_suspended = nullptr;
+  m_newest_suspended = nullptr;
+  m_num_suspended = 0;
   jit_link_lists_clear(&links_to);
   jit_range_lists_clear(&block_range_map);
 
@@ -349,6 +358,12 @@ JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
   b.linkData.clear();
   b.linkData.arena = &m_link_arena;
   b.fast_block_map_index = 0;
+  b.code_hash = 0;
+  b.suspended = false;
+  b.next_suspended = nullptr;
+  b.prev_suspended = nullptr;
+  b.newer_suspended = nullptr;
+  b.older_suspended = nullptr;
   return &b;
 }
 
@@ -369,6 +384,7 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
   block.fast_block_map_index = index;
 
   block.physical_addresses = code_block.m_physical_addresses;
+  block.code_hash = HashCode(block, block.physicalAddress);
 
   block.originalSize = code_block.m_num_instructions;
   for (auto [range_start, range_end] : block.physical_addresses)
@@ -426,11 +442,239 @@ JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, CPUEmuFeatureFla
   JitBlock* const* const head = jit_block_lists_find(&block_map, AddressKey(translated_addr));
   for (JitBlock* b = head ? *head : nullptr; b; b = b->next_at_address)
   {
-    if (b->effectiveAddress == addr && b->feature_flags == feature_flags)
+    if (b->effectiveAddress == addr && b->feature_flags == feature_flags && !b->suspended)
       return b;
   }
 
   return nullptr;
+}
+
+/* Out of the lookups and unlinked, its code and its place in the cache's lists kept, first in
+ * the list of those suspended at its effective address; false, and nothing done, without room
+ * for that list */
+bool JitBaseBlockCache::SuspendBlock(JitBlock& block)
+{
+  if (suspended_map.count >= 2 * SUSPENDED_BLOCKS && suspended_map.count >= 2 * m_num_suspended)
+    RelistSuspended();
+  JitBlock** const head = jit_block_lists_get(&suspended_map, AddressKey(block.effectiveAddress));
+  if (!head)
+    return false;
+
+  if (m_entry_points_ptr)
+  {
+    if (m_entry_points_ptr[block.fast_block_map_index] == block.normalEntry)
+      m_entry_points_ptr[block.fast_block_map_index] = nullptr;
+  }
+  else if (m_fast_block_map_fallback[block.fast_block_map_index] == &block)
+  {
+    m_fast_block_map_fallback[block.fast_block_map_index] = nullptr;
+  }
+  UnlinkBlock(block);
+  for (auto& e : block.linkData)
+    e.linkStatus = false;
+
+  block.suspended = true;
+  block.prev_suspended = nullptr;
+  block.next_suspended = *head;
+  if (*head)
+    (*head)->prev_suspended = &block;
+  *head = &block;
+
+  block.newer_suspended = nullptr;
+  block.older_suspended = m_newest_suspended;
+  if (m_newest_suspended)
+    m_newest_suspended->newer_suspended = &block;
+  else
+    m_oldest_suspended = &block;
+  m_newest_suspended = &block;
+  m_num_suspended++;
+  return true;
+}
+
+/* The map of suspended blocks by address keeps an address whose list has emptied: once those are
+ * half of it, it is made again from the blocks suspended now, oldest first so each address's list
+ * is newest first again */
+void JitBaseBlockCache::RelistSuspended()
+{
+  jit_block_lists_clear(&suspended_map);
+  for (JitBlock* b = m_oldest_suspended; b; b = b->newer_suspended)
+  {
+    JitBlock** const head = jit_block_lists_get(&suspended_map, AddressKey(b->effectiveAddress));
+    b->prev_suspended = nullptr;
+    b->next_suspended = nullptr;
+    if (!head)
+      continue;
+    b->next_suspended = *head;
+    if (*head)
+      (*head)->prev_suspended = b;
+    *head = b;
+  }
+}
+
+void JitBaseBlockCache::LeaveSuspended(JitBlock& block)
+{
+  if (!block.suspended)
+    return;
+  if (block.prev_suspended)
+  {
+    block.prev_suspended->next_suspended = block.next_suspended;
+  }
+  else
+  {
+    JitBlock** const head =
+        jit_block_lists_find(&suspended_map, AddressKey(block.effectiveAddress));
+    if (head && *head == &block)
+      *head = block.next_suspended;
+  }
+  if (block.next_suspended)
+    block.next_suspended->prev_suspended = block.prev_suspended;
+  block.next_suspended = nullptr;
+  block.prev_suspended = nullptr;
+
+  if (block.newer_suspended)
+    block.newer_suspended->older_suspended = block.older_suspended;
+  else
+    m_newest_suspended = block.older_suspended;
+  if (block.older_suspended)
+    block.older_suspended->newer_suspended = block.newer_suspended;
+  else
+    m_oldest_suspended = block.newer_suspended;
+  block.newer_suspended = nullptr;
+  block.older_suspended = nullptr;
+  m_num_suspended--;
+  block.suspended = false;
+}
+
+/* Destroyed and out of every list, back in the pool */
+void JitBaseBlockCache::EraseBlock(JitBlock* block)
+{
+  for (JitBlock** at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress));
+       at && *at; at = &(*at)->next_at_address)
+  {
+    if (*at == block)
+    {
+      *at = block->next_at_address;
+      break;
+    }
+  }
+  DestroyBlock(*block);
+  LeaveMacroBlocks(block);
+  ReleaseBlock(block);
+}
+
+/* Its page is elsewhere in RAM now: the cache's lists by physical address have it there */
+void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 physical_address)
+{
+  const u32 delta = physical_address - block->physicalAddress;
+  JitBlock** at;
+  u32 r;
+
+  for (at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress)); at && *at;
+       at = &(*at)->next_at_address)
+  {
+    if (*at == block)
+    {
+      *at = block->next_at_address;
+      break;
+    }
+  }
+  LeaveMacroBlocks(block);
+
+  block->physicalAddress = physical_address;
+  for (r = 0; r < block->physical_addresses.count; r++)
+  {
+    block->physical_addresses.ranges[r].from += delta;
+    block->physical_addresses.ranges[r].to += delta;
+  }
+
+  block->next_at_address = nullptr;
+  at = jit_block_lists_get(&block_map, AddressKey(physical_address));
+  while (*at)
+    at = &(*at)->next_at_address;
+  *at = block;
+  for (const SmallRange& range : block->physical_addresses)
+  {
+    for (u32 i = range.from & BLOCK_RANGE_MAP_MASK; i < range.to; i += BLOCK_RANGE_SIZE)
+      AddToMacroBlock(block, i);
+  }
+}
+
+/* The block suspended at the effective address whose code is in RAM where the address is now,
+ * taken back, its page moved if the game paged it in elsewhere. Only a block all in one page of
+ * its own can move. A game can load one of a few pieces of code into the same place in turn, so
+ * the others stay suspended for when theirs is back, the newest few: older ones are destroyed, as
+ * the invalidation would have done. */
+JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, CPUEmuFeatureFlags feature_flags)
+{
+  u32 physical_address = addr;
+  u32 others = 0;
+  JitBlock* const* const head = jit_block_lists_find(&suspended_map, AddressKey(addr));
+  JitBlock* b;
+  if (!head || !*head)
+    return nullptr;
+  if (feature_flags & FEATURE_FLAG_MSR_IR)
+  {
+    auto translated = m_jit.m_mmu.JitCache_TranslateAddress(addr);
+    if (!translated.valid)
+      return nullptr;
+    physical_address = translated.address;
+  }
+
+  for (b = *head; b; b = b->next_suspended)
+  {
+    bool in_page = true;
+    if (b->feature_flags != feature_flags)
+      continue;
+    if (b->physicalAddress != physical_address)
+    {
+      for (const SmallRange& range : b->physical_addresses)
+      {
+        if (((range.from ^ b->physicalAddress) | ((range.to - 1) ^ b->physicalAddress)) &
+            ~static_cast<u32>(PowerPC::HW_PAGE_MASK))
+          in_page = false;
+      }
+    }
+    if (in_page && HashCode(*b, physical_address) == b->code_hash)
+    {
+      LeaveSuspended(*b);
+      if (b->physicalAddress != physical_address)
+        MoveBlock(b, physical_address);
+      for (const SmallRange& range : b->physical_addresses)
+      {
+        for (u32 i = range.from & ~31u; i < range.to; i += 32)
+          valid_block.Set(i / 32);
+      }
+      if (m_jit.jo.enableBlocklink)
+        LinkBlock(*b);
+      return b;
+    }
+    others++;
+  }
+
+  /* the oldest are last: room for the one about to be compiled */
+  while (others >= SUSPENDED_VERSIONS)
+  {
+    JitBlock* oldest = nullptr;
+    for (b = *head; b; b = b->next_suspended)
+    {
+      if (b->feature_flags == feature_flags)
+        oldest = b;
+    }
+    if (!oldest)
+      break;
+    EraseBlock(oldest);
+    others--;
+  }
+  return nullptr;
+}
+
+bool JitBaseBlockCache::ResumeBlock(u32 em_address, CPUEmuFeatureFlags feature_flags)
+{
+  // here, before a compile, nothing is walking the cache's lists: the oldest suspended past the
+  // limit go
+  while (m_num_suspended > SUSPENDED_BLOCKS)
+    EraseBlock(m_oldest_suspended);
+  return MoveBlockIntoFastCache(em_address, feature_flags) != nullptr;
 }
 
 const u8* JitBaseBlockCache::Dispatch()
@@ -534,8 +778,11 @@ void JitBaseBlockCache::InvalidateICacheInternal(u32 physical_address, u32 addre
 
   if (destroy_block)
   {
-    // destroy JIT blocks
-    ErasePhysicalRange(physical_address, length);
+    // destroy JIT blocks; what the game invalidates is only suspended, and taken back when its
+    // code is in RAM again: a game that pages the same code back in, or loads one of a few pieces
+    // of code into the same place in turn, gets the blocks it had, not a recompile of all of it.
+    // What is forced is destroyed.
+    ErasePhysicalRange(physical_address, length, !forced);
 
     // If the code was actually modified, we need to clear the relevant entries from the
     // FIFO write address cache, so we don't end up with FIFO checks in places they shouldn't
@@ -553,7 +800,40 @@ void JitBaseBlockCache::InvalidateICacheInternal(u32 physical_address, u32 addre
   }
 }
 
-void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 length)
+/* The code of the block as if its physicalAddress were @physical_address, word by word, its
+ * ranges taken from there; 0 when any of it is not in RAM */
+u64 JitBaseBlockCache::HashCode(const JitBlock& block, u32 physical_address) const
+{
+  auto& memory = m_jit.m_system.GetMemory();
+  u64 hash = 0x9E3779B97F4A7C15ull;
+  for (const SmallRange& range : block.physical_addresses)
+  {
+    const u32 offset = range.from - block.physicalAddress;
+    const u32 address = (physical_address + offset) & 0x3FFFFFFF;
+    const u32 size = range.to - range.from;
+    const u8* code;
+    u32 i;
+    if (address < memory.GetRamSizeReal() && size <= memory.GetRamSizeReal() - address)
+      code = memory.GetRAM() + address;
+    else if (memory.GetEXRAM() && (address >> 28) == 0x1 &&
+             (address & 0x0fffffff) < memory.GetExRamSizeReal() &&
+             size <= memory.GetExRamSizeReal() - (address & 0x0fffffff))
+      code = memory.GetEXRAM() + (address & memory.GetExRamMask());
+    else
+      return 0;
+    hash = (hash ^ offset) * 0xFF51AFD7ED558CCDull;
+    for (i = 0; i + 4 <= size; i += 4)
+    {
+      u32 word;
+      std::memcpy(&word, code + i, sizeof(word));
+      hash = (hash ^ word) * 0xC4CEB9FE1A85EC53ull;
+      hash ^= hash >> 31;
+    }
+  }
+  return hash ? hash : 1;
+}
+
+void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 length, bool suspend)
 {
   JitRangeNode* const* const head = jit_range_lists_find(&block_range_map, AddressKey(macro_block));
   JitRangeNode* node = head ? *head : nullptr;
@@ -562,7 +842,9 @@ void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 leng
     /* a block is in each macro block once: the next node is another block's */
     JitRangeNode* const next = node->next_in_range;
     JitBlock* const block = node->block;
-    if (block->OverlapsPhysicalRange(address, length))
+    // one suspended instead is kept for when its code is in RAM again
+    if (block->OverlapsPhysicalRange(address, length) &&
+        !(suspend && block->code_hash && (block->suspended || SuspendBlock(*block))))
     {
       DestroyBlock(*block);
       for (JitBlock** at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress));
@@ -581,7 +863,7 @@ void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 leng
   }
 }
 
-void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
+void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length, bool suspend)
 {
   // Every macro block which overlaps the given range, and in each, every block that overlaps it.
   const u32 first = address & BLOCK_RANGE_MAP_MASK;
@@ -591,7 +873,7 @@ void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
   {
     u64 i;
     for (i = first; i < end; i += BLOCK_RANGE_SIZE)
-      EraseInMacroBlock(static_cast<u32>(i), address, length);
+      EraseInMacroBlock(static_cast<u32>(i), address, length, suspend);
     return;
   }
   /* a range larger than the table: the table's macro blocks in it, from the table. Erasing leaves
@@ -602,7 +884,7 @@ void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
     {
       const uintptr_t key = block_range_map.keys[slot];
       if (key != CODE_PTR_MAP_FREE && key >= first && key < end)
-        EraseInMacroBlock(static_cast<u32>(key), address, length);
+        EraseInMacroBlock(static_cast<u32>(key), address, length, suspend);
     }
   }
 }
@@ -674,6 +956,7 @@ void JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
 
 void JitBaseBlockCache::DestroyBlock(JitBlock& block)
 {
+  LeaveSuspended(block);
   if (m_entry_points_ptr)
   {
     if (m_entry_points_ptr[block.fast_block_map_index] == block.normalEntry)
@@ -720,6 +1003,8 @@ void JitBaseBlockCache::DestroyBlock(JitBlock& block)
 JitBlock* JitBaseBlockCache::MoveBlockIntoFastCache(u32 addr, CPUEmuFeatureFlags feature_flags)
 {
   JitBlock* block = GetBlockFromStartAddress(addr, feature_flags);
+  if (!block)
+    block = ResumeSuspendedBlock(addr, feature_flags);
 
   if (!block)
     return nullptr;

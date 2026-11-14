@@ -735,6 +735,10 @@ void Jit64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     }
     ClearCache();
   }
+  else if (blocks.ResumeBlock(em_address, m_ppc_state.feature_flags))
+  {
+    return;
+  }
   FreeRanges();
 
   std::size_t block_size = m_code_buffer.size();

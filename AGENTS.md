@@ -137,6 +137,19 @@ allocation fails it.
   after boot; deepen its stack to find the owner. A site that is
   "one-time" is still a stall at the moment it happens, so it goes too.
 
+## The JIT keeps what it compiled
+
+Code a game pages out and back in is not compiled again. A guest
+invalidation (icbi, dcb*) only suspends the blocks it hits: out of the
+lookups and unlinked, their code kept, listed by effective address with
+a hash of the code they were made from. Before Jit compiles an address
+it takes back a suspended block whose code is in RAM again, moved to
+the page the address is in now. The code is checked when it runs, not
+when it is invalidated, since a game may invalidate before it loads.
+Forced invalidations destroy. The suspended blocks are bounded (a few
+versions per address, a fixed number in all) and their map is made at
+boot and never grows.
+
 ## Zero-copy and borrowed lends
 
 Every change looks for copies to remove in the code it touches, and

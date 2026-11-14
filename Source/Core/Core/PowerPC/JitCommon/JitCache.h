@@ -133,6 +133,19 @@ struct JitBlock : public JitBlockData
   // This set stores all physical addresses of all occupied instructions.
   SmallRangeSet physical_addresses;
 
+  // A hash of the code it was made from, at physical_addresses taken from physicalAddress; 0 when
+  // that code was not in RAM. A guest invalidation only suspends a block with one: out of the
+  // lookups and unlinked, in the cache's list of those at its effective address. Jit takes it
+  // back before it compiles that address, wherever its page is in RAM now, if the code there is
+  // the same.
+  u64 code_hash = 0;
+  bool suspended = false;
+  JitBlock* next_suspended = nullptr;
+  JitBlock* prev_suspended = nullptr;
+  // In the cache's list of all suspended blocks, oldest first
+  JitBlock* newer_suspended = nullptr;
+  JitBlock* older_suspended = nullptr;
+
   // The next block at the same physical address, in the cache's list of them; the next free one
   // while this one is free. A block goes back to the cache's pool when it is destroyed, keeping
   // linkData's and physical_addresses' storage for the next block made in its place.
@@ -241,9 +254,13 @@ public:
   // assembly version.)
   const u8* Dispatch();
 
+  // The block suspended at the address whose code is there again, back in the lookups and
+  // linked: what Jit tries before it compiles
+  bool ResumeBlock(u32 em_address, CPUEmuFeatureFlags feature_flags);
+
   void InvalidateICache(u32 address, u32 length, bool forced);
   void InvalidateICacheLine(u32 address);
-  void ErasePhysicalRange(u32 address, u32 length);
+  void ErasePhysicalRange(u32 address, u32 length, bool suspend = false);
 
   u32* GetBlockBitSet() const;
 
@@ -279,6 +296,12 @@ private:
   // slow way.
   jit_block_lists_t block_map;
 
+  // Effective address -> the suspended blocks there, newest first (JitBlock::next_suspended)
+  jit_block_lists_t suspended_map;
+  JitBlock* m_oldest_suspended = nullptr;
+  JitBlock* m_newest_suspended = nullptr;
+  u32 m_num_suspended = 0;
+
   // Where the blocks live: chunks of BLOCK_CHUNK, never given back while the cache is, and the
   // free ones in a list. A block made where one was destroyed allocates nothing.
   static constexpr size_t BLOCK_CHUNK = 1024;
@@ -300,7 +323,18 @@ private:
 
   void AddToMacroBlock(JitBlock* block, u32 macro_block);
   void LeaveMacroBlocks(JitBlock* block);
-  void EraseInMacroBlock(u32 macro_block, u32 address, u32 length);
+  void EraseInMacroBlock(u32 macro_block, u32 address, u32 length, bool suspend);
+  // The versions of the code at one effective address kept suspended, and the blocks suspended
+  // in all: past that the oldest are destroyed, so their code space is used again
+  static constexpr u32 SUSPENDED_VERSIONS = 3;
+  static constexpr u32 SUSPENDED_BLOCKS = 16384;
+  u64 HashCode(const JitBlock& block, u32 physical_address) const;
+  bool SuspendBlock(JitBlock& block);
+  void RelistSuspended();
+  void LeaveSuspended(JitBlock& block);
+  void EraseBlock(JitBlock* block);
+  void MoveBlock(JitBlock* block, u32 physical_address);
+  JitBlock* ResumeSuspendedBlock(u32 em_address, CPUEmuFeatureFlags feature_flags);
 
   // The nodes, in chunks of RANGE_NODE_CHUNK the cache keeps, the free ones in a list
   static constexpr size_t RANGE_NODE_CHUNK = 4096;

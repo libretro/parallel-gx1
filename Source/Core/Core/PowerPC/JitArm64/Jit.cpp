@@ -947,6 +947,12 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
 
   const Common::ScopedJITPageWriteAndNoExecute enable_jit_page_writes(GetRegionPtr());
 
+  if (!SConfig::GetInstance().bJITNoBlockCache &&
+      blocks.ResumeBlock(em_address, m_ppc_state.feature_flags))
+  {
+    return;
+  }
+
   std::size_t block_size = m_code_buffer.size();
 
   // Analyze the block, collect all instructions it is made of (including inlining,
