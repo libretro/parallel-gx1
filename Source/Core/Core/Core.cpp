@@ -306,14 +306,14 @@ static void CpuThread(Core::System& system)
 /* In single core, the FIFO player's CPU core stays injected after the
  * thread function returns: RunSingleFrame runs it a field at a time, and
  * it is taken out at unload, before the hardware it drives is shut down. */
-static std::unique_ptr<CPUCoreBase> s_fifo_cpu_core;
+static CPUCoreBase* s_fifo_cpu_core;
 
 static void DetachFifoCPUCore()
 {
   Core::System& system = Core::System::GetInstance();
 
   system.GetPowerPC().InjectExternalCPUCore(nullptr);
-  s_fifo_cpu_core.reset();
+  s_fifo_cpu_core = nullptr;
   system.GetFifoPlayer().Close();
 }
 
@@ -325,9 +325,9 @@ static void FifoPlayerThread(Core::System& system)
     Common::SetCurrentThreadName("FIFO-GPU thread");
 
   // Enter CPU run loop. When we leave it - we are done.
-  if (auto cpu_core = system.GetFifoPlayer().GetCPUCore())
+  if (CPUCoreBase* const cpu_core = system.GetFifoPlayer().GetCPUCore())
   {
-    system.GetPowerPC().InjectExternalCPUCore(cpu_core.get());
+    system.GetPowerPC().InjectExternalCPUCore(cpu_core);
 
     StartingToRunning();
 
@@ -336,7 +336,7 @@ static void FifoPlayerThread(Core::System& system)
     // dont enter the blocking loop if in single core mode
     if (!system.IsDualCoreMode())
     {
-      s_fifo_cpu_core = std::move(cpu_core);
+      s_fifo_cpu_core = cpu_core;
       return;
     }
 

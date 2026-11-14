@@ -64,7 +64,8 @@ void Interpreter::UpdatePC()
 
 Interpreter::Interpreter(Core::System& system, PowerPC::PowerPCState& ppc_state, PowerPC::MMU& mmu,
                          PPCSymbolDB& ppc_symbol_db)
-    : m_system(system), m_ppc_state(ppc_state), m_mmu(mmu), m_ppc_symbol_db(ppc_symbol_db)
+    : CPUCoreBase(CPUCoreKind::Interpreter), m_system(system), m_ppc_state(ppc_state), m_mmu(mmu),
+      m_ppc_symbol_db(ppc_symbol_db)
 {
 }
 

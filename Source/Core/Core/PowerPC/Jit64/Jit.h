@@ -39,7 +39,7 @@ struct CodeBlock;
 struct CodeOp;
 }  // namespace PPCAnalyst
 
-class Jit64 : public JitBase, public QuantizedMemoryRoutines
+class Jit64 final : public JitBase, public QuantizedMemoryRoutines
 {
 public:
   explicit Jit64(Core::System& system);
@@ -47,12 +47,12 @@ public:
   Jit64(Jit64&&) = delete;
   Jit64& operator=(const Jit64&) = delete;
   Jit64& operator=(Jit64&&) = delete;
-  ~Jit64() override;
+  ~Jit64();
 
-  void Init() override;
-  void Shutdown() override;
+  void Init();
+  void Shutdown();
 
-  bool HandleFault(uintptr_t access_address, SContext* ctx) override;
+  bool HandleFault(uintptr_t access_address, SContext* ctx);
   bool BackPatch(SContext* ctx);
 
   void EnableOptimization();
@@ -60,7 +60,7 @@ public:
 
   // Jit!
 
-  void Jit(u32 em_address) override;
+  void Jit(u32 em_address);
   void Jit(u32 em_address, bool clear_cache_and_retry_on_failure);
   bool DoJit(u32 em_address, JitBlock* b, u32 nextPC);
 
@@ -76,15 +76,15 @@ public:
 
   JitCommon::ConstantPropagation& GetConstantPropagation() { return m_constant_propagation; }
 
-  JitBlockCache* GetBlockCache() override { return &blocks; }
+  JitBlockCache* GetBlockCache() { return &blocks; }
 
-  void ClearCache() override;
+  void ClearCache();
 
-  const CommonAsmRoutines* GetAsmRoutines() override { return &asm_routines; }
-  const char* GetName() const override { return "JIT64"; }
+  const CommonAsmRoutines* GetAsmRoutines() { return &asm_routines; }
+  const char* GetName() const { return "JIT64"; }
   // Run!
-  void Run() override;
-  void SingleStep() override;
+  void Run();
+  void SingleStep();
 
   // Utilities for use by opcodes
 

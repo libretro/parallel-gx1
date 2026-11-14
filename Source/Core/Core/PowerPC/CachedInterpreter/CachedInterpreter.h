@@ -22,7 +22,7 @@ enum class State;
 }
 class Interpreter;
 
-class CachedInterpreter : public JitBase, public CachedInterpreterCodeBlock
+class CachedInterpreter final : public JitBase, public CachedInterpreterCodeBlock
 {
 public:
   explicit CachedInterpreter(Core::System& system);
@@ -30,24 +30,24 @@ public:
   CachedInterpreter(CachedInterpreter&&) = delete;
   CachedInterpreter& operator=(const CachedInterpreter&) = delete;
   CachedInterpreter& operator=(CachedInterpreter&&) = delete;
-  ~CachedInterpreter() override;
+  ~CachedInterpreter();
 
-  void Init() override;
-  void Shutdown() override;
+  void Init();
+  void Shutdown();
 
-  bool HandleFault(uintptr_t access_address, SContext* ctx) override { return false; }
-  void ClearCache() override;
+  bool HandleFault(uintptr_t access_address, SContext* ctx) { return false; }
+  void ClearCache();
 
-  void Run() override;
-  void SingleStep() override;
+  void Run();
+  void SingleStep();
 
-  void Jit(u32 address) override;
+  void Jit(u32 address);
   void Jit(u32 address, bool clear_cache_and_retry_on_failure);
   bool DoJit(u32 address, JitBlock* b, u32 nextPC);
 
-  JitBaseBlockCache* GetBlockCache() override { return &m_block_cache; }
-  const char* GetName() const override { return "Cached Interpreter"; }
-  const CommonAsmRoutinesBase* GetAsmRoutines() override { return nullptr; }
+  JitBaseBlockCache* GetBlockCache() { return &m_block_cache; }
+  const char* GetName() const { return "Cached Interpreter"; }
+  const CommonAsmRoutinesBase* GetAsmRoutines() { return nullptr; }
 
 private:
   void ExecuteOneBlock();

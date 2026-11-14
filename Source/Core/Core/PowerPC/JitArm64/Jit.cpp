@@ -45,7 +45,7 @@ constexpr size_t FAR_CODE_SIZE = 1024 * 1024 * 64;
 constexpr size_t TOTAL_CODE_SIZE = NEAR_CODE_SIZE * 2 + FAR_CODE_SIZE * 2;
 
 JitArm64::JitArm64(Core::System& system)
-    : JitBase(system), m_float_emit(this)
+    : JitBase(system, CPUCoreKind::JitArm64), m_float_emit(this)
 {
 }
 

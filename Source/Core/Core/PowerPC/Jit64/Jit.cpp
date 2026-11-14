@@ -117,7 +117,7 @@ using namespace PowerPC;
 */
 
 Jit64::Jit64(Core::System& system)
-    : JitBase(system), QuantizedMemoryRoutines(*this)
+    : JitBase(system, CPUCoreKind::Jit64), QuantizedMemoryRoutines(*this)
 {
 }
 

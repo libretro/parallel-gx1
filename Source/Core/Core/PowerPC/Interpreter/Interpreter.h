@@ -20,7 +20,7 @@ struct PowerPCState;
 }  // namespace PowerPC
 class PPCSymbolDB;
 
-class Interpreter : public CPUCoreBase
+class Interpreter final : public CPUCoreBase
 {
 public:
   Interpreter(Core::System& system, PowerPC::PowerPCState& ppc_state, PowerPC::MMU& mmu,
@@ -29,16 +29,16 @@ public:
   Interpreter(Interpreter&&) = delete;
   Interpreter& operator=(const Interpreter&) = delete;
   Interpreter& operator=(Interpreter&&) = delete;
-  ~Interpreter() override;
+  ~Interpreter();
 
-  void Init() override;
-  void Shutdown() override;
-  void SingleStep() override;
+  void Init();
+  void Shutdown();
+  void SingleStep();
   int SingleStepInner();
 
-  void Run() override;
-  void ClearCache() override;
-  const char* GetName() const override;
+  void Run();
+  void ClearCache();
+  const char* GetName() const;
 
   static void unknown_instruction(Interpreter& interpreter, UGeckoInstruction inst);
 

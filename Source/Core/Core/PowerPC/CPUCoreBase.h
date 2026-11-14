@@ -3,14 +3,32 @@
 
 #pragma once
 
+#include "Common/CommonTypes.h"
+
+// Which CPU core it is: the calls below branch on it to that core's own function
+enum class CPUCoreKind : u8
+{
+  Interpreter,
+  CachedInterpreter,
+  Jit64,
+  JitArm64,
+  FifoPlayer,
+};
+
 class CPUCoreBase
 {
 public:
-  virtual ~CPUCoreBase() = default;
-  virtual void Init() = 0;
-  virtual void Shutdown() = 0;
-  virtual void ClearCache() = 0;
-  virtual void Run() = 0;
-  virtual void SingleStep() = 0;
-  virtual const char* GetName() const = 0;
+  void Init();
+  void Shutdown();
+  void ClearCache();
+  void Run();
+  void SingleStep();
+  const char* GetName() const;
+
+  const CPUCoreKind cpu_core_kind;
+
+protected:
+  explicit CPUCoreBase(CPUCoreKind kind) : cpu_core_kind(kind) {}
+  // destroyed as the core it is
+  ~CPUCoreBase() = default;
 };

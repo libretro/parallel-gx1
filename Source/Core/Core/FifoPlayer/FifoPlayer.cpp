@@ -213,64 +213,50 @@ bool FifoPlayer::IsPlaying() const
   return GetFile() != nullptr && Core::IsRunning(m_system);
 }
 
-class FifoPlayer::CPUCore final : public CPUCoreBase
+void FifoPlayerCPUCore::Init()
 {
-public:
-  explicit CPUCore(FifoPlayer* parent) : m_parent(parent) {}
-  CPUCore(const CPUCore&) = delete;
-  ~CPUCore() override {}
-  CPUCore& operator=(const CPUCore&) = delete;
+  IsPlayingBackFifologWithBrokenEFBCopies = m_parent->m_File->HasBrokenEFBCopies();
+  // Without this call, we deadlock in initialization in dual core, as the FIFO is disabled and
+  // thus ClearEfb()'s call to WaitForGPUInactive() never returns
+  m_parent->m_system.GetCPU().SetStepping(false);
 
-  void Init() override
+  m_parent->m_CurrentFrame = m_parent->m_FrameRangeStart;
+  m_parent->LoadMemory();
+}
+
+void FifoPlayerCPUCore::Shutdown()
+{
+  IsPlayingBackFifologWithBrokenEFBCopies = false;
+}
+
+void FifoPlayerCPUCore::SingleStep()
+{
+  // NOTE: AdvanceFrame() will get stuck forever in Dual Core because the FIFO
+  //   is disabled by CPU::SetStepping(true) so the frame never gets displayed.
+  PanicAlert("Cannot SingleStep the FIFO. Use Frame Advance instead.");
+}
+
+void FifoPlayerCPUCore::Run()
+{
+  auto& cpu = m_parent->m_system.GetCPU();
+  while (cpu.GetState() == CPU::State::Running)
   {
-    IsPlayingBackFifologWithBrokenEFBCopies = m_parent->m_File->HasBrokenEFBCopies();
-    // Without this call, we deadlock in initialization in dual core, as the FIFO is disabled and
-    // thus ClearEfb()'s call to WaitForGPUInactive() never returns
-    m_parent->m_system.GetCPU().SetStepping(false);
-
-    m_parent->m_CurrentFrame = m_parent->m_FrameRangeStart;
-    m_parent->LoadMemory();
-  }
-
-  void Shutdown() override { IsPlayingBackFifologWithBrokenEFBCopies = false; }
-  void ClearCache() override
-  {
-    // Nothing to clear.
-  }
-
-  void SingleStep() override
-  {
-    // NOTE: AdvanceFrame() will get stuck forever in Dual Core because the FIFO
-    //   is disabled by CPU::SetStepping(true) so the frame never gets displayed.
-    PanicAlert("Cannot SingleStep the FIFO. Use Frame Advance instead.");
-  }
-
-  const char* GetName() const override { return "FifoPlayer"; }
-  void Run() override
-  {
-    auto& cpu = m_parent->m_system.GetCPU();
-    while (cpu.GetState() == CPU::State::Running)
+    switch (m_parent->AdvanceFrame())
     {
-      switch (m_parent->AdvanceFrame())
-      {
-      case CPU::State::PowerDown:
-        cpu.Break();
-        Host_Message(HostMessageID::WMUserStop);
-        break;
+    case CPU::State::PowerDown:
+      cpu.Break();
+      Host_Message(HostMessageID::WMUserStop);
+      break;
 
-      case CPU::State::Stepping:
-        cpu.Break();
-        break;
+    case CPU::State::Stepping:
+      cpu.Break();
+      break;
 
-      case CPU::State::Running:
-        break;
-      }
+    case CPU::State::Running:
+      break;
     }
   }
-
-private:
-  FifoPlayer* m_parent;
-};
+}
 
 CPU::State FifoPlayer::AdvanceFrame()
 {
@@ -300,12 +286,12 @@ CPU::State FifoPlayer::AdvanceFrame()
   return CPU::State::Running;
 }
 
-std::unique_ptr<CPUCoreBase> FifoPlayer::GetCPUCore()
+CPUCoreBase* FifoPlayer::GetCPUCore()
 {
   if (!m_File || m_File->GetFrameCount() == 0)
     return nullptr;
 
-  return std::make_unique<CPUCore>(this);
+  return &m_cpu_core;
 }
 
 void FifoPlayer::RefreshConfig()

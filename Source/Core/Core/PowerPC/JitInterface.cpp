@@ -30,7 +30,10 @@ JitInterface::JitInterface(Core::System& system) : m_system(system)
 {
 }
 
-JitInterface::~JitInterface() = default;
+JitInterface::~JitInterface()
+{
+  DestroyJit();
+}
 
 void JitInterface::DoState(PointerWrap& p)
 {
@@ -40,35 +43,60 @@ void JitInterface::DoState(PointerWrap& p)
 
 CPUCoreBase* JitInterface::InitJitCore(PowerPC::CPUCore core)
 {
+  DestroyJit();
   switch (core)
   {
 #ifdef _M_X86_64
   case PowerPC::CPUCore::JIT64:
-    m_jit = std::make_unique<Jit64>(m_system);
+    m_jit = new Jit64(m_system);
     break;
 #endif
 #ifdef _M_ARM_64
   case PowerPC::CPUCore::JITARM64:
-    m_jit = std::make_unique<JitArm64>(m_system);
+    m_jit = new JitArm64(m_system);
     break;
 #endif
   case PowerPC::CPUCore::CachedInterpreter:
-    m_jit = std::make_unique<CachedInterpreter>(m_system);
+    m_jit = new CachedInterpreter(m_system);
     break;
 
   default:
     // Under this case the caller overrides the CPU core to the default and logs that
     // it performed the override.
-    m_jit.reset();
+    DestroyJit();
     return nullptr;
   }
   m_jit->Init();
-  return m_jit.get();
+  return m_jit;
 }
 
 CPUCoreBase* JitInterface::GetCore() const
 {
-  return m_jit.get();
+  return m_jit;
+}
+
+/* Destroyed as the JIT it is */
+void JitInterface::DestroyJit()
+{
+  switch (m_jit ? m_jit->cpu_core_kind : CPUCoreKind::Interpreter)
+  {
+#ifdef _M_X86_64
+  case CPUCoreKind::Jit64:
+    delete static_cast<Jit64*>(m_jit);
+    break;
+#endif
+#ifdef _M_ARM_64
+  case CPUCoreKind::JitArm64:
+    delete static_cast<JitArm64*>(m_jit);
+    break;
+#endif
+  case CPUCoreKind::CachedInterpreter:
+    delete static_cast<CachedInterpreter*>(m_jit);
+    break;
+  default:
+    break;
+  }
+  m_jit = nullptr;
 }
 
 #ifndef _ARCH_32
@@ -230,6 +258,6 @@ void JitInterface::Shutdown()
   if (m_jit)
   {
     m_jit->Shutdown();
-    m_jit.reset();
+    DestroyJit();
   }
 }

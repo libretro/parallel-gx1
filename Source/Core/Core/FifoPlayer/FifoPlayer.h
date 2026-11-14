@@ -90,6 +90,30 @@ struct AnalyzedFrameInfo
   }
 };
 
+class FifoPlayer;
+
+// The FIFO player as the CPU core PowerPC runs: it plays the FIFO log back
+class FifoPlayerCPUCore final : public CPUCoreBase
+{
+public:
+  explicit FifoPlayerCPUCore(FifoPlayer* parent)
+      : CPUCoreBase(CPUCoreKind::FifoPlayer), m_parent(parent)
+  {
+  }
+  FifoPlayerCPUCore(const FifoPlayerCPUCore&) = delete;
+  FifoPlayerCPUCore& operator=(const FifoPlayerCPUCore&) = delete;
+
+  void Init();
+  void Shutdown();
+  void ClearCache() {}
+  void SingleStep();
+  const char* GetName() const { return "FifoPlayer"; }
+  void Run();
+
+private:
+  FifoPlayer* m_parent;
+};
+
 class FifoPlayer
 {
 public:
@@ -110,7 +134,7 @@ public:
   // Returns nullptr if the FifoPlayer is not initialized correctly.
   // Play/Pause/Stop of the FifoLog can be controlled normally via the
   // PowerPC state.
-  std::unique_ptr<CPUCoreBase> GetCPUCore();
+  CPUCoreBase* GetCPUCore();
 
   bool IsPlaying() const;
 
@@ -134,8 +158,9 @@ public:
   bool IsRunningWithFakeVideoInterfaceUpdates() const;
 
 private:
-  class CPUCore;
-  friend class CPUCore;
+  friend class FifoPlayerCPUCore;
+
+  FifoPlayerCPUCore m_cpu_core{this};
 
   CPU::State AdvanceFrame();
 

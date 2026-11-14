@@ -189,23 +189,21 @@ protected:
   bool ShouldHandleFPExceptionForInstruction(const PPCAnalyst::CodeOp* op) const;
 
 public:
-  explicit JitBase(Core::System& system);
+  JitBase(Core::System& system, CPUCoreKind kind);
   JitBase(const JitBase&) = delete;
   JitBase(JitBase&&) = delete;
   JitBase& operator=(const JitBase&) = delete;
   JitBase& operator=(JitBase&&) = delete;
-  ~JitBase() override;
+  ~JitBase();
 
   static const u8* Dispatch(JitBase& jit);
-  virtual JitBaseBlockCache* GetBlockCache() = 0;
+  // These branch to the JIT this is
+  JitBaseBlockCache* GetBlockCache();
+  void Jit(u32 em_address);
+  const CommonAsmRoutinesBase* GetAsmRoutines();
+  bool HandleFault(uintptr_t access_address, SContext* ctx);
 
-  virtual void Jit(u32 em_address) = 0;
-
-  virtual const CommonAsmRoutinesBase* GetAsmRoutines() = 0;
-
-  virtual bool WantsPageTableMappings() const;
-
-  virtual bool HandleFault(uintptr_t access_address, SContext* ctx) = 0;
+  bool WantsPageTableMappings() const;
   bool HandleStackFault();
 
   static constexpr std::size_t code_buffer_size = 32000;

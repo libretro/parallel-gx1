@@ -79,6 +79,8 @@ public:
   void Shutdown();
 
 private:
-  std::unique_ptr<JitBase> m_jit;
+  void DestroyJit();
+
+  JitBase* m_jit = nullptr;
   Core::System& m_system;
 };

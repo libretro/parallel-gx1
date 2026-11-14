@@ -18,8 +18,7 @@
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/PPCAnalyst.h"
 
-
-class JitArm64 : public JitBase, public Arm64Gen::ARM64CodeBlock, public CommonAsmRoutinesBase
+class JitArm64 final : public JitBase, public Arm64Gen::ARM64CodeBlock, public CommonAsmRoutinesBase
 {
 public:
   explicit JitArm64(Core::System& system);
@@ -27,29 +26,29 @@ public:
   JitArm64(JitArm64&&) = delete;
   JitArm64& operator=(const JitArm64&) = delete;
   JitArm64& operator=(JitArm64&&) = delete;
-  ~JitArm64() override;
+  ~JitArm64();
 
-  void Init() override;
-  void Shutdown() override;
+  void Init();
+  void Shutdown();
 
   JitCommon::ConstantPropagation& GetConstantPropagation() { return m_constant_propagation; }
 
-  JitBaseBlockCache* GetBlockCache() override { return &blocks; }
+  JitBaseBlockCache* GetBlockCache() { return &blocks; }
   bool IsInCodeSpace(const u8* ptr) const { return IsInSpace(ptr); }
-  bool HandleFault(uintptr_t access_address, SContext* ctx) override;
+  bool HandleFault(uintptr_t access_address, SContext* ctx);
   void DoBacktrace(uintptr_t access_address, SContext* ctx);
   bool HandleFastmemFault(SContext* ctx);
 
-  void ClearCache() override;
+  void ClearCache();
 
-  CommonAsmRoutinesBase* GetAsmRoutines() override { return this; }
-  void Run() override;
-  void SingleStep() override;
+  CommonAsmRoutinesBase* GetAsmRoutines() { return this; }
+  void Run();
+  void SingleStep();
 
-  void Jit(u32 em_address) override;
+  void Jit(u32 em_address);
   void Jit(u32 em_address, bool clear_cache_and_retry_on_failure);
 
-  const char* GetName() const override { return "JITARM64"; }
+  const char* GetName() const { return "JITARM64"; }
 
   // OPCODES
   using Instruction = void (JitArm64::*)(UGeckoInstruction);

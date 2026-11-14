@@ -3,6 +3,14 @@
 
 #include "Core/PowerPC/JitCommon/JitBase.h"
 
+#include "Core/PowerPC/CachedInterpreter/CachedInterpreter.h"
+#ifdef _M_X86_64
+#include "Core/PowerPC/Jit64/Jit.h"
+#endif
+#ifdef _M_ARM_64
+#include "Core/PowerPC/JitArm64/Jit.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cinttypes>
@@ -101,9 +109,9 @@ void JitTrampoline(JitBase& jit, u32 em_address)
   jit.Jit(em_address);
 }
 
-JitBase::JitBase(Core::System& system)
-    : m_code_buffer(code_buffer_size), m_system(system), m_ppc_state(system.GetPPCState()),
-      m_mmu(system.GetMMU()),
+JitBase::JitBase(Core::System& system, CPUCoreKind kind)
+    : CPUCoreBase(kind), m_code_buffer(code_buffer_size), m_system(system),
+      m_ppc_state(system.GetPPCState()), m_mmu(system.GetMMU()),
       m_ppc_symbol_db(system.GetPPCSymbolDB())
 {
   address_set_init(&js.fifoWriteAddresses, 1024);
@@ -342,4 +350,51 @@ bool JitBase::ShouldHandleFPExceptionForInstruction(const PPCAnalyst::CodeOp* op
     return (op->opinfo->flags & FL_FLOAT_DIV) != 0;
   else
     return false;
+}
+
+#ifdef _M_X86_64
+#define JIT_JIT64(call)                                                                            \
+  case CPUCoreKind::Jit64:                                                                         \
+    return static_cast<Jit64*>(this)->call;
+#else
+#define JIT_JIT64(call)
+#endif
+#ifdef _M_ARM_64
+#define JIT_JITARM64(call)                                                                         \
+  case CPUCoreKind::JitArm64:                                                                      \
+    return static_cast<JitArm64*>(this)->call;
+#else
+#define JIT_JITARM64(call)
+#endif
+
+/* The call made on the JIT this is; @none: what a kind that is no JIT gives */
+#define JIT_CALL(call, none)                                                                       \
+  switch (cpu_core_kind)                                                                           \
+  {                                                                                                \
+  case CPUCoreKind::CachedInterpreter:                                                             \
+    return static_cast<CachedInterpreter*>(this)->call;                                            \
+    JIT_JIT64(call)                                                                                \
+    JIT_JITARM64(call)                                                                             \
+  default:                                                                                         \
+    return none;                                                                                   \
+  }
+
+JitBaseBlockCache* JitBase::GetBlockCache()
+{
+  JIT_CALL(GetBlockCache(), nullptr)
+}
+
+void JitBase::Jit(u32 em_address)
+{
+  JIT_CALL(Jit(em_address), void())
+}
+
+const CommonAsmRoutinesBase* JitBase::GetAsmRoutines()
+{
+  JIT_CALL(GetAsmRoutines(), nullptr)
+}
+
+bool JitBase::HandleFault(uintptr_t access_address, SContext* ctx)
+{
+  JIT_CALL(HandleFault(access_address, ctx), false)
 }

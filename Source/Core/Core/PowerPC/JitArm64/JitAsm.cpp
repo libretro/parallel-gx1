@@ -156,7 +156,7 @@ void JitArm64::GenerateAsm()
   {
     // Call C version of Dispatch().
     MOVP2R(ARM64Reg::X8, reinterpret_cast<void*>(&JitBase::Dispatch));
-    MOVP2R(ARM64Reg::X0, this);
+    MOVP2R(ARM64Reg::X0, static_cast<JitBase*>(this));
     BLR(ARM64Reg::X8);
 
     FixupBranch no_block_available = CBZ(ARM64Reg::X0);
@@ -168,7 +168,7 @@ void JitArm64::GenerateAsm()
 
   // Call JIT
   ResetStack();
-  ABI_CallFunction(&JitTrampoline, this, DISPATCHER_PC);
+  ABI_CallFunction(&JitTrampoline, static_cast<JitBase*>(this), DISPATCHER_PC);
 
   LDR(IndexType::Unsigned, DISPATCHER_PC, PPC_REG, PPCSTATE_OFF(pc));
 
