@@ -8,10 +8,10 @@
 #include <iosfwd>
 #include <map>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
+#include "Common/AddressSet.h"
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/ConfigInfo.h"
@@ -122,9 +122,10 @@ protected:
 
     JitBlock* curBlock;
 
-    std::unordered_set<u32> fifoWriteAddresses;
-    std::unordered_set<u32> pairedQuantizeAddresses;
-    std::unordered_set<u32> noSpeculativeConstantsAddresses;
+    // made with the JIT, so adding an address while running allocates nothing
+    address_set_t fifoWriteAddresses;
+    address_set_t pairedQuantizeAddresses;
+    address_set_t noSpeculativeConstantsAddresses;
   };
 
   PPCAnalyst::CodeBlock code_block;

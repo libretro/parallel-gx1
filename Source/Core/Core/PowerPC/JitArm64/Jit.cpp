@@ -1082,7 +1082,8 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 
   b->normalEntry = GetWritableCodePtr();
 
-  if (code_block.m_gqr_used.Count() == 1 && !js.pairedQuantizeAddresses.contains(js.blockStart))
+  if (code_block.m_gqr_used.Count() == 1 &&
+      !address_set_contains(&js.pairedQuantizeAddresses, js.blockStart))
   {
     int gqr = *code_block.m_gqr_used.begin();
     if (!code_block.m_gqr_modified[gqr] && !GQR(m_ppc_state, gqr))
@@ -1108,7 +1109,7 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 
   m_constant_propagation.Clear();
 
-  if (!js.noSpeculativeConstantsAddresses.contains(js.blockStart))
+  if (!address_set_contains(&js.noSpeculativeConstantsAddresses, js.blockStart))
   {
     IntializeSpeculativeConstants();
   }
@@ -1139,7 +1140,7 @@ bool JitArm64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
     {
       // Gather pipe writes using a non-immediate address are discovered by profiling.
       const u32 prev_address = m_code_buffer[i - 1].address;
-      bool gatherPipeIntCheck = js.fifoWriteAddresses.contains(prev_address);
+      bool gatherPipeIntCheck = address_set_contains(&js.fifoWriteAddresses, prev_address);
 
       if (jo.optimizeGatherPipe &&
           (js.fifoBytesSinceCheck >= GPFifo::GATHER_PIPE_SIZE || js.mustCheckFifo))

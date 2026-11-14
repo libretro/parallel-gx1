@@ -106,6 +106,9 @@ JitBase::JitBase(Core::System& system)
       m_mmu(system.GetMMU()),
       m_ppc_symbol_db(system.GetPPCSymbolDB())
 {
+  address_set_init(&js.fifoWriteAddresses, 1024);
+  address_set_init(&js.pairedQuantizeAddresses, 1024);
+  address_set_init(&js.noSpeculativeConstantsAddresses, 1024);
   m_registered_config_callback_id = CPUThreadConfigCallback::AddConfigChangedCallback([this] {
     if (DoesConfigNeedRefresh())
       ClearCache();
@@ -116,6 +119,9 @@ JitBase::JitBase(Core::System& system)
 JitBase::~JitBase()
 {
   CPUThreadConfigCallback::RemoveConfigChangedCallback(m_registered_config_callback_id);
+  address_set_free(&js.fifoWriteAddresses);
+  address_set_free(&js.pairedQuantizeAddresses);
+  address_set_free(&js.noSpeculativeConstantsAddresses);
 }
 
 bool JitBase::DoesConfigNeedRefresh() const
