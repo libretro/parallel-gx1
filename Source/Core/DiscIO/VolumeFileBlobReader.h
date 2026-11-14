@@ -8,10 +8,10 @@
 
 #include "Common/CommonTypes.h"
 #include "DiscIO/Blob.h"
+#include "DiscIO/Filesystem.h"
 
 namespace DiscIO
 {
-class FileInfo;
 struct Partition;
 class Volume;
 
@@ -37,11 +37,10 @@ public:
   bool Read(u64 offset, u64 length, u8* out_ptr);
 
 private:
-  VolumeFileBlobReader(const Volume& volume, const Partition& partition,
-                       std::unique_ptr<FileInfo> file_info);
+  VolumeFileBlobReader(const Volume& volume, const Partition& partition, const FileInfo& file_info);
 
   const Volume& m_volume;
   const Partition& m_partition;
-  std::unique_ptr<FileInfo> m_file_info;
+  FileInfo m_file_info;
 };
 }  // namespace DiscIO

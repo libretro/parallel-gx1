@@ -18,22 +18,19 @@ VolumeFileBlobReader* VolumeFileBlobReader::Create(const Volume& volume, const P
   if (!file_system)
     return nullptr;
 
-  std::unique_ptr<FileInfo> file_info = file_system->FindFileInfo(file_path);
-  if (!file_info || file_info->IsDirectory())
+  FileInfo file_info;
+  if (!file_system->FindFileInfo(file_path, &file_info) || file_info.IsDirectory())
     return nullptr;
 
-  return new VolumeFileBlobReader(volume, partition, std::move(file_info));
+  return new VolumeFileBlobReader(volume, partition, file_info);
 }
 
 VolumeFileBlobReader::VolumeFileBlobReader(const Volume& volume, const Partition& partition,
-                                           std::unique_ptr<FileInfo> file_info)
-    : m_volume(volume), m_partition(partition), m_file_info(std::move(file_info))
+                                           const FileInfo& file_info)
+    : m_volume(volume), m_partition(partition), m_file_info(file_info)
 {
 }
 
-// This is defined here instead of the header so that the definition of FileInfo is visible when
-// m_file_info is destroyed, preventing a compile error caused by calling unique_ptr's destructor
-// with an incomplete type.
 VolumeFileBlobReader::~VolumeFileBlobReader() = default;
 
 BlobReader* VolumeFileBlobReader::CopyReader() const
@@ -44,7 +41,7 @@ BlobReader* VolumeFileBlobReader::CopyReader() const
 
 u64 VolumeFileBlobReader::GetDataSize() const
 {
-  return m_file_info->GetSize();
+  return m_file_info.GetSize();
 }
 
 u64 VolumeFileBlobReader::GetRawSize() const
@@ -74,9 +71,9 @@ std::optional<int> VolumeFileBlobReader::GetCompressionLevel() const
 
 bool VolumeFileBlobReader::Read(u64 offset, u64 length, u8* out_ptr)
 {
-  if (offset + length > m_file_info->GetSize())
+  if (offset + length > m_file_info.GetSize())
     return false;
 
-  return m_volume.Read(m_file_info->GetOffset() + offset, length, out_ptr, m_partition);
+  return m_volume.Read(m_file_info.GetOffset() + offset, length, out_ptr, m_partition);
 }
 }  // namespace DiscIO

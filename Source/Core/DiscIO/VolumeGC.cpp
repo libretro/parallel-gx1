@@ -20,7 +20,6 @@
 #include "DiscIO/DiscExtractor.h"
 #include "DiscIO/DiscUtils.h"
 #include "DiscIO/Enums.h"
-#include "DiscIO/FileSystemGCWii.h"
 #include "DiscIO/Filesystem.h"
 #include "DiscIO/Volume.h"
 
@@ -31,19 +30,16 @@ VolumeGC::VolumeGC(BlobReader* reader)
 {
   ASSERT(m_reader);
 
-  m_file_system = [this]() -> std::unique_ptr<FileSystem> {
-    auto file_system = std::make_unique<FileSystemGCWii>(this, PARTITION_NONE);
-    return file_system->IsValid() ? std::move(file_system) : nullptr;
-  };
+  m_file_system = [this]() -> FileSystem { return FileSystem(this, PARTITION_NONE); };
 
   constexpr u32 BTID_MAGIC = 0x44495442;
   auto tmp_fs = GetFileSystem(PARTITION_NONE);
   if (tmp_fs)
   {
-    std::unique_ptr<FileInfo> file_info = tmp_fs->FindFileInfo("boot.id");
-    if (!file_info)
+    FileInfo file_info;
+    if (!tmp_fs->FindFileInfo("boot.id", &file_info))
       return;
-    const u64 file_size = ReadFile(*this, PARTITION_NONE, file_info.get(),
+    const u64 file_size = ReadFile(*this, PARTITION_NONE, &file_info,
                                    reinterpret_cast<u8*>(&m_triforce_header), sizeof(BootID));
     if (file_size >= 4 && m_triforce_header.magic == BTID_MAGIC)
     {
@@ -78,7 +74,9 @@ void VolumeGC::Prefetch(u64 offset, u64 length, const Partition& partition) cons
 
 const FileSystem* VolumeGC::GetFileSystem(const Partition& partition) const
 {
-  return m_file_system->get();
+  // nullptr when it could not be read
+  const FileSystem& file_system = *m_file_system;
+  return file_system.IsValid() ? &file_system : nullptr;
 }
 
 std::string VolumeGC::GetGameTDBID(const Partition& partition) const

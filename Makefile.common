@@ -450,7 +450,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DiscIO/Enums.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/FileBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/FileSystemGCWii.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/Filesystem.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/LaggedFibonacciGenerator.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/NFSBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/ScrubbedBlob.cpp \

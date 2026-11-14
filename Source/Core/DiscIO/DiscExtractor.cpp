@@ -49,8 +49,10 @@ u64 ReadFile(const Volume& volume, const Partition& partition, std::string_view 
   if (!file_system)
     return 0;
 
-  return ReadFile(volume, partition, file_system->FindFileInfo(path).get(), buffer, max_buffer_size,
-                  offset_in_file);
+  FileInfo file_info;
+  return ReadFile(volume, partition,
+                  file_system->FindFileInfo(path, &file_info) ? &file_info : nullptr, buffer,
+                  max_buffer_size, offset_in_file);
 }
 
 bool ExportData(const Volume& volume, const Partition& partition, u64 offset, u64 size,
@@ -97,7 +99,10 @@ bool ExportFile(const Volume& volume, const Partition& partition, std::string_vi
   if (!file_system)
     return false;
 
-  return ExportFile(volume, partition, file_system->FindFileInfo(path).get(), export_filename);
+  FileInfo file_info;
+  return ExportFile(volume, partition,
+                    file_system->FindFileInfo(path, &file_info) ? &file_info : nullptr,
+                    export_filename);
 }
 
 void ExportDirectory(const Volume& volume, const Partition& partition, const FileInfo& directory,

@@ -120,7 +120,7 @@ private:
     Common::Lazy<IOS::ES::TMDReader> tmd;
     Common::Lazy<std::vector<u8>> cert_chain;
     Common::Lazy<std::vector<u8>> h3_table;
-    Common::Lazy<std::unique_ptr<FileSystem>> file_system;
+    Common::Lazy<FileSystem> file_system;
     Common::Lazy<u64> data_offset;
     u32 type = 0;
   };

@@ -65,20 +65,20 @@ void FileLogger::Log(const DiscIO::Volume& volume, const DiscIO::Partition& part
   if (!file_system)
     return;
 
-  const std::unique_ptr<DiscIO::FileInfo> file_info = file_system->FindFileInfo(offset);
+  DiscIO::FileInfo file_info;
 
   // Do nothing if no file was found at that offset
-  if (!file_info)
+  if (!file_system->FindFileInfo(offset, &file_info))
     return;
 
-  const u64 file_offset = file_info->GetOffset();
+  const u64 file_offset = file_info.GetOffset();
 
   // Do nothing if we found the same file again
   if (m_previous_partition == partition && m_previous_file_offset == file_offset)
     return;
 
-  const u64 size_kb = file_info->GetSize() / 1000;
-  const std::string path = file_info->GetPath();
+  const u64 size_kb = file_info.GetSize() / 1000;
+  const std::string path = file_info.GetPath();
   if (IsSoundFile(path))
     INFO_LOG(FILEMON, "%7" PRIu64 " kB %s", size_kb, path.c_str());
   else

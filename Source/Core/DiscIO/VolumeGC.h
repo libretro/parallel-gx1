@@ -54,7 +54,7 @@ private:
   // Volume reaches the functions it has of its own here
   friend class Volume;
 
-  Common::Lazy<std::unique_ptr<FileSystem>> m_file_system;
+  Common::Lazy<FileSystem> m_file_system;
 
   BlobReader* m_reader;  // owned
 

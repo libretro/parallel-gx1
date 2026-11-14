@@ -25,7 +25,6 @@
 #include "DiscIO/DiscExtractor.h"
 #include "DiscIO/DiscUtils.h"
 #include "DiscIO/Enums.h"
-#include "DiscIO/FileSystemGCWii.h"
 #include "DiscIO/Filesystem.h"
 #include "DiscIO/Volume.h"
 
@@ -137,9 +136,8 @@ VolumeWii::VolumeWii(BlobReader* reader)
         return Common::AES::CreateContextDecrypt(ticket.GetTitleKey().data());
       };
 
-      auto get_file_system = [this, partition]() -> std::unique_ptr<FileSystem> {
-        auto file_system = std::make_unique<FileSystemGCWii>(this, partition);
-        return file_system->IsValid() ? std::move(file_system) : nullptr;
+      auto get_file_system = [this, partition]() -> FileSystem {
+        return FileSystem(this, partition);
       };
 
       auto get_data_offset = [this, partition]() -> u64 {
@@ -152,7 +150,7 @@ VolumeWii::VolumeWii(BlobReader* reader)
                                       Common::Lazy<IOS::ES::TMDReader>(get_tmd),
                                       Common::Lazy<std::vector<u8>>(get_cert_chain),
                                       Common::Lazy<std::vector<u8>>(get_h3_table),
-                                      Common::Lazy<std::unique_ptr<FileSystem>>(get_file_system),
+                                      Common::Lazy<FileSystem>(get_file_system),
                                       Common::Lazy<u64>(get_data_offset), *partition_type});
     }
   }
@@ -295,7 +293,11 @@ const std::vector<u8>& VolumeWii::GetCertificateChain(const Partition& partition
 const FileSystem* VolumeWii::GetFileSystem(const Partition& partition) const
 {
   auto it = m_partitions.find(partition);
-  return it != m_partitions.end() ? it->second.file_system->get() : nullptr;
+  if (it == m_partitions.end())
+    return nullptr;
+  // nullptr when it could not be read
+  const FileSystem& file_system = *it->second.file_system;
+  return file_system.IsValid() ? &file_system : nullptr;
 }
 
 u64 VolumeWii::OffsetInHashedPartitionToRawOffset(u64 offset, const Partition& partition,
