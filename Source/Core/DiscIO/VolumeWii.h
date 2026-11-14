@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Lazy.h"
 
 #include <crypto/crypto.h>
@@ -48,11 +47,11 @@ public:
 
   struct HashBlock
   {
-    std::array<Common::SHA1::Digest, 31> h0;
+    u8 h0[31][20];
     std::array<u8, 20> padding_0;
-    std::array<Common::SHA1::Digest, 8> h1;
+    u8 h1[8][20];
     std::array<u8, 32> padding_1;
-    std::array<Common::SHA1::Digest, 8> h2;
+    u8 h2[8][20];
     std::array<u8, 32> padding_2;
   };
   static_assert(sizeof(HashBlock) == BLOCK_HEADER_SIZE);

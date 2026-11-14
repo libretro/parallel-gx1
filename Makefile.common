@@ -402,7 +402,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Config/Layer.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/ec.cpp \
 	$(CORE_DIR)/Source/Core/Common/Crypto/HMAC.cpp \
-	$(CORE_DIR)/Source/Core/Common/Crypto/SHA1.cpp \
 	$(CORE_DIR)/Source/Core/Common/DirectIOFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/DynamicLibrary.cpp \
 	$(CORE_DIR)/Source/Core/Common/FatFsUtil.cpp \
@@ -1154,12 +1153,6 @@ ifeq ($(OS_WIN),1)
 endif
 ifeq ($(OS_ANDROID),1)
    DOLPHIN_FLAGS += -DENABLE_VFS_FD
-endif
-
-# Per-file additions.
-ifeq ($(ARCH_X86_64),1)
-else ifeq ($(ARCH_ARM64),1)
-   FILE_FLAGS_$(abspath $(SRC_DIR)/Common/Crypto/SHA1.cpp) := -march=armv8-a+crypto
 endif
 
 # libretro-common's archive code: zip (stored, deflate, deflate64, Zstandard) and Zstandard

@@ -17,10 +17,11 @@
 
 #include <cstdio>
 
+#include <lrc_hash.h>
+
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/Projection.h"
 #include "Common/StringUtil.h"
@@ -167,7 +168,9 @@ static size_t GetIssuerOffset(SignatureType signature_type)
 std::array<u8, 20> SignedBlobReader::GetSha1() const
 {
   const size_t skip = GetIssuerOffset(GetSignatureType());
-  return Common::SHA1::CalculateDigest(m_bytes + skip, m_size - skip);
+  std::array<u8, 20> digest;
+  SHA1Digest(m_bytes + skip, m_size - skip, digest.data());
+  return digest;
 }
 
 bool SignedBlobReader::IsSignatureValid() const

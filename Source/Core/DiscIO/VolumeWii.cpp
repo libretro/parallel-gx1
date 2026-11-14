@@ -13,10 +13,11 @@
 #include <utility>
 #include <vector>
 
+#include <lrc_hash.h>
+
 #include "Common/Align.h"
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/ParallelFor.h"
 
@@ -375,8 +376,7 @@ bool VolumeWii::CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
     return false;
   const PartitionDetails& partition_details = it->second;
 
-  if (block_index / BLOCKS_PER_GROUP * Common::SHA1::DIGEST_LEN >=
-      partition_details.h3_table->size())
+  if (block_index / BLOCKS_PER_GROUP * 20 >= partition_details.h3_table->size())
   {
     return false;
   }
@@ -401,29 +401,23 @@ bool VolumeWii::CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
     cluster_data = encrypted_data + BLOCK_HEADER_SIZE;
   }
 
-  for (u32 hash_index = 0; hash_index < 31; ++hash_index)
-  {
-    if (Common::SHA1::CalculateDigest(&cluster_data[hash_index * 0x400], 0x400) !=
-        hashes.h0[hash_index])
-    {
-      return false;
-    }
-  }
-
-  if (Common::SHA1::CalculateDigest(hashes.h0) != hashes.h1[block_index % 8])
+  u8 h0[31][20];
+  u8 digest[20];
+  SHA1DigestMany(cluster_data, 0x400, 0x400, 31, &h0[0][0]);
+  if (std::memcmp(h0, hashes.h0, sizeof(h0)))
     return false;
 
-  if (Common::SHA1::CalculateDigest(hashes.h1) != hashes.h2[block_index / 8 % 8])
+  SHA1Digest(&hashes.h0[0][0], sizeof(hashes.h0), digest);
+  if (std::memcmp(digest, hashes.h1[block_index % 8], sizeof(digest)))
     return false;
 
-  Common::SHA1::Digest h3_digest;
-  auto h3_digest_ptr =
-      partition_details.h3_table->data() + block_index / 64 * Common::SHA1::DIGEST_LEN;
-  memcpy(h3_digest.data(), h3_digest_ptr, sizeof(h3_digest));
-  if (Common::SHA1::CalculateDigest(hashes.h2) != h3_digest)
+  SHA1Digest(&hashes.h1[0][0], sizeof(hashes.h1), digest);
+  if (std::memcmp(digest, hashes.h2[block_index / 8 % 8], sizeof(digest)))
     return false;
 
-  return true;
+  SHA1Digest(&hashes.h2[0][0], sizeof(hashes.h2), digest);
+  return !std::memcmp(digest, partition_details.h3_table->data() + block_index / 64 * 20,
+                      sizeof(digest));
 }
 
 bool VolumeWii::CheckBlockIntegrity(u64 block_index, const Partition& partition) const
@@ -456,10 +450,9 @@ void HashBlockJob(void* ctx, size_t i)
   VolumeWii::HashBlock* const out = job->out;
   const size_t h1_base = Common::AlignDown(i, 8);
 
-  for (size_t j = 0; j < 31; ++j)
-    out[i].h0[j] = Common::SHA1::CalculateDigest(job->in[i].data() + j * 0x400, 0x400);
+  SHA1DigestMany(job->in[i].data(), 0x400, 0x400, 31, &out[i].h0[0][0]);
   out[i].padding_0 = {};
-  out[h1_base].h1[i - h1_base] = Common::SHA1::CalculateDigest(out[i].h0);
+  SHA1Digest(&out[i].h0[0][0], sizeof(out[i].h0), out[h1_base].h1[i - h1_base]);
 }
 
 struct EncryptJob
@@ -508,16 +501,16 @@ bool VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GR
     // H1 padding and copies
     out[h1_base].padding_1 = {};
     for (size_t j = 1; j < 8; ++j)
-      out[h1_base + j].h1 = out[h1_base].h1;
+      std::memcpy(out[h1_base + j].h1, out[h1_base].h1, sizeof(out[h1_base].h1));
 
     // H2 hash
-    out[0].h2[h1_base / 8] = Common::SHA1::CalculateDigest(out[h1_base].h1);
+    SHA1Digest(&out[h1_base].h1[0][0], sizeof(out[h1_base].h1), out[0].h2[h1_base / 8]);
   }
 
   // H2 padding and copies
   out[0].padding_2 = {};
   for (size_t j = 1; j < BLOCKS_PER_GROUP; ++j)
-    out[j].h2 = out[0].h2;
+    std::memcpy(out[j].h2, out[0].h2, sizeof(out[0].h2));
 
   return true;
 }

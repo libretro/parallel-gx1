@@ -5,7 +5,6 @@
 
 #include <array>
 
-#include "Common/Crypto/SHA1.h"
 #include "Core/IOS/Device.h"
 
 namespace IOS::HLE

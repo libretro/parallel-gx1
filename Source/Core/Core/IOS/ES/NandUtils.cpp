@@ -11,8 +11,9 @@
 
 #include <cstdio>
 
+#include <lrc_hash.h>
+
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
 #include "Common/StringUtil.h"
@@ -219,8 +220,10 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
 
     // Otherwise, check whether the installed content SHA1 matches the expected hash, hashing
     // the content in chunks rather than reading it whole.
-    Common::SHA1::Context sha1;
+    struct sha1_state sha1;
+    u8 digest[20];
     u8 chunk[2048];
+    sha1_stream_init(&sha1);
     u32 left = file->GetStatus()->size;
     bool ok = true;
     while (left)
@@ -231,10 +234,11 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
         ok = false;
         break;
       }
-      sha1.Update(chunk, n);
+      sha1_stream_update(&sha1, chunk, n);
       left -= n;
     }
-    if (ok && sha1.Finish() == content.sha1)
+    if (ok && sha1_stream_final(&sha1, digest) &&
+        !std::memcmp(digest, content.sha1.data(), sizeof(digest)))
       stored_contents.push_back(content);
   }
 

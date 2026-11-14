@@ -9,8 +9,9 @@
 
 #include <crypto/crypto.h>
 
+#include <lrc_hash.h>
+
 #include "Common/BitUtils.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/Random.h"
 #include "Common/StringUtil.h"
@@ -668,7 +669,8 @@ InfinityFigure& InfinityBase::GetFigureByOrder(u8 order_added)
 
 std::array<u8, 16> InfinityBase::GenerateInfinityFigureKey(const std::vector<u8>& sha1_data)
 {
-  Common::SHA1::Digest digest = Common::SHA1::CalculateDigest(sha1_data);
+  u8 digest[20];
+  SHA1Digest(sha1_data.data(), sha1_data.size(), digest);
   // Infinity AES keys are the first 16 bytes of the SHA1 Digest, every set of 4 bytes need to be
   // reversed due to endianness
   std::array<u8, 16> key = {};

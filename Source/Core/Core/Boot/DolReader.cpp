@@ -8,6 +8,8 @@
 
 #include <crypto/crypto.h>
 
+#include <lrc_hash.h>
+
 #include "Common/Align.h"
 #include "Common/BitUtils.h"
 #include "Common/IOFile.h"
@@ -185,9 +187,9 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
   }
 
   // Verify the body hash
-  const auto digest = Common::SHA1::CalculateDigest(
-      section.m_data + sizeof(EspressoAncastHeader), body_size);
-  if (digest != header.info_block.body_hash)
+  u8 digest[20];
+  SHA1Digest(section.m_data + sizeof(EspressoAncastHeader), body_size, digest);
+  if (std::memcmp(digest, header.info_block.body_hash, sizeof(digest)))
   {
     ERROR_LOG(BOOT, "Ancast: Body hash mismatch");
     return false;

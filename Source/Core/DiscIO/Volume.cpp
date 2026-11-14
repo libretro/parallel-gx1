@@ -13,7 +13,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/StringUtil.h"
 
 #include "Core/Config/MainSettings.h"

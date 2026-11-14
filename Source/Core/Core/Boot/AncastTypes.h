@@ -4,7 +4,6 @@
 #pragma once
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 
 // Magic number
 constexpr u32 ANCAST_MAGIC = 0xEFA282D9;
@@ -62,7 +61,7 @@ struct AncastInfoBlock
   u32 image_type;
   u32 console_type;
   u32 body_size;
-  Common::SHA1::Digest body_hash;
+  u8 body_hash[20];
   u32 version;
   u8 padding[0x38];
 };

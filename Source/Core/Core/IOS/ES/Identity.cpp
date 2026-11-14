@@ -6,7 +6,8 @@
 #include <utility>
 #include <vector>
 
-#include "Common/Crypto/SHA1.h"
+#include <lrc_hash.h>
+
 #include "Common/Crypto/ec.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
@@ -206,7 +207,8 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
     return ret;
   }
 
-  const auto hash_digest = Common::SHA1::CalculateDigest(hash, hash_size);
+  std::array<u8, 20> hash_digest;
+  SHA1Digest(hash, hash_size, hash_digest.data());
   ret = iosc.VerifyPublicKeySign(hash_digest, ap_cert, ecc_signature,
                                  sizeof(Common::ec::Signature), PID_ES);
   if (ret != IPC_SUCCESS)

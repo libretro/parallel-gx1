@@ -12,10 +12,11 @@
 
 #include <crypto/crypto.h>
 
+#include <lrc_hash.h>
+
 #include "Common/Align.h"
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/IOS/IOSC.h"
@@ -168,8 +169,10 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
   iv[1] = static_cast<u8>(content.index & 0xFF);
 
   // Decrypt and hash in chunks, so the borrowed input is never copied whole
-  Common::SHA1::Context sha1;
+  struct sha1_state sha1;
+  u8 digest[20];
   u8 chunk[2048];
+  sha1_stream_init(&sha1);
   u64 left_to_hash = content.size;
   size_t offset = 0;
   while (offset < encrypted_size)
@@ -178,12 +181,13 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
     const size_t n = left < sizeof(chunk) ? left : sizeof(chunk);
     aes_cbc_decrypt(&context, iv, encrypted_data + offset, chunk, n);
     const size_t hashed = left_to_hash < n ? size_t(left_to_hash) : n;
-    sha1.Update(chunk, hashed);
+    sha1_stream_update(&sha1, chunk, hashed);
     left_to_hash -= hashed;
     offset += n;
   }
 
-  return sha1.Finish() == content.sha1;
+  sha1_stream_final(&sha1, digest);
+  return !std::memcmp(digest, content.sha1.data(), sizeof(digest));
 }
 
 IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const

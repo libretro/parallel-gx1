@@ -8,7 +8,6 @@
 #include <string>
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "DiscIO/DiscUtils.h"
 #include "DiscIO/Enums.h"
 #include "DiscIO/Filesystem.h"

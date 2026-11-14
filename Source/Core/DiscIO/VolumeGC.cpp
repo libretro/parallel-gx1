@@ -13,7 +13,6 @@
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 
 #include "DiscIO/Blob.h"

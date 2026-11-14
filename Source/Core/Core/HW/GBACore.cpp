@@ -16,11 +16,12 @@
 #include <file/archive_file.h>
 #include <lists/string_list.h>
 
+#include <lrc_hash.h>
 #include "AudioCommon/FieldAudio.h"
+
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
@@ -152,7 +153,8 @@ static std::array<u8, 20> GetROMHash(VFile* rom)
   size_t size = rom->size(rom);
   u8* buffer = static_cast<u8*>(rom->map(rom, size, MAP_READ));
 
-  const auto digest = Common::SHA1::CalculateDigest(buffer, size);
+  std::array<u8, 20> digest;
+  SHA1Digest(buffer, size, digest.data());
   rom->unmap(rom, buffer, size);
 
   return digest;

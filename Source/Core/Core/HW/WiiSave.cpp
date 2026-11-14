@@ -22,7 +22,6 @@
 
 #include "Common/Align.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Crypto/ec.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
@@ -455,21 +454,21 @@ private:
       return false;
 
     // Read data to sign.
-    Common::SHA1::Digest data_sha1;
+    u8 data_sha1[20];
     {
       const u32 data_size = bk_header->size_of_files + sizeof(BkHeader);
       auto data = std::make_unique<u8[]>(data_size);
       m_file.Seek(sizeof(Header), File::SeekOrigin::Begin);
       if (!m_file.ReadBytes(data.get(), data_size))
         return false;
-      data_sha1 = Common::SHA1::CalculateDigest(data.get(), data_size);
+      SHA1Digest(data.get(), data_size, data_sha1);
     }
 
     // Sign the data.
     IOS::CertECC ap_cert;
     Common::ec::Signature ap_sig;
-    m_iosc.Sign(ap_sig.data(), reinterpret_cast<u8*>(&ap_cert), Titles::SYSTEM_MENU,
-                data_sha1.data(), static_cast<u32>(data_sha1.size()));
+    m_iosc.Sign(ap_sig.data(), reinterpret_cast<u8*>(&ap_cert), Titles::SYSTEM_MENU, data_sha1,
+                static_cast<u32>(sizeof(data_sha1)));
 
     // Write signatures.
     if (!m_file.Seek(0, File::SeekOrigin::End))

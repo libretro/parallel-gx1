@@ -10,8 +10,9 @@
 
 #include <cstdio>
 
+#include <lrc_hash.h>
+
 #include "Common/Align.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
 #include "Common/StringUtil.h"
@@ -408,7 +409,9 @@ IPCReply ESDevice::ImportContentData(Context& context, const IOCtlVRequest& requ
 
 static bool CheckIfContentHashMatches(const u8* content, const ES::Content& info)
 {
-  return Common::SHA1::CalculateDigest(content, info.size) == info.sha1;
+  u8 digest[20];
+  SHA1Digest(content, info.size, digest);
+  return !std::memcmp(digest, info.sha1.data(), sizeof(digest));
 }
 
 static std::string GetImportContentPath(u64 title_id, u32 content_id)

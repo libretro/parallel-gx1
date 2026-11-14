@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Swap.h"
 #include "Core/IOS/ES/Formats.h"
 #include "DiscIO/Enums.h"

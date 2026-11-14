@@ -16,9 +16,10 @@
 #include <crypto/crypto.h>
 #include <crypto/pk.h>
 
+#include <lrc_hash.h>
+
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
-#include "Common/Crypto/SHA1.h"
 #include "Common/Crypto/ec.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
@@ -325,10 +326,11 @@ ReturnCode IOSC::ComputeSharedKey(Handle dest_handle, Handle private_handle, Han
   const Common::ec::SharedSecret shared_secret =
       Common::ec::ComputeSharedSecret(private_entry->data.data(), public_entry->data.data());
 
-  const auto sha1 = Common::SHA1::CalculateDigest(shared_secret.data(), shared_secret.size());
+  u8 sha1[20];
+  SHA1Digest(shared_secret.data(), shared_secret.size(), sha1);
 
   dest_entry->data.resize(AES128_KEY_SIZE);
-  std::memcpy(dest_entry->data.data(), sha1.data(), AES128_KEY_SIZE);
+  std::memcpy(dest_entry->data.data(), sha1, AES128_KEY_SIZE);
   return IPC_SUCCESS;
 }
 
@@ -566,15 +568,16 @@ void IOSC::Sign(u8* sig_out, u8* ap_cert_out, u64 title_id, const u8* data, u32 
   CertECC cert = MakeBlankEccCert(signer, name, ap_priv.data(), 0);
   // Sign the AP cert.
   const size_t skip = offsetof(CertECC, signature.issuer);
-  const auto ap_cert_digest =
-      Common::SHA1::CalculateDigest(reinterpret_cast<const u8*>(&cert) + skip, sizeof(cert) - skip);
+  u8 ap_cert_digest[20];
+  SHA1Digest(reinterpret_cast<const u8*>(&cert) + skip, sizeof(cert) - skip, ap_cert_digest);
   cert.signature.sig =
-      Common::ec::Sign(m_key_entries[HANDLE_CONSOLE_KEY].data.data(), ap_cert_digest.data());
+      Common::ec::Sign(m_key_entries[HANDLE_CONSOLE_KEY].data.data(), ap_cert_digest);
   std::memcpy(ap_cert_out, &cert, sizeof(cert));
 
   // Sign the data.
-  const auto data_digest = Common::SHA1::CalculateDigest(data, data_size);
-  const auto signature = Common::ec::Sign(ap_priv.data(), data_digest.data());
+  u8 data_digest[20];
+  SHA1Digest(data, data_size, data_digest);
+  const auto signature = Common::ec::Sign(ap_priv.data(), data_digest);
   std::memcpy(sig_out, signature.data(), signature.size());
 }
 
