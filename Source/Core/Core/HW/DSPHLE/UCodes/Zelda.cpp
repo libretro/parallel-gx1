@@ -2002,8 +2002,9 @@ void ZeldaAudioRenderer::DownloadRawSamplesFromMRAM(s16* dst, VPB* vpb, u16 requ
       memory.CopyFromEmuSwapped(dst, addr, remaining_length * sizeof(s16));
       last_sample = dst[remaining_length - 1];
     }
+    // the rest of the request holds the last sample, after the ones read
     for (u16 i = remaining_length; i < requested_samples_count; ++i)
-      *dst++ = last_sample;
+      dst[i] = last_sample;
 
     vpb->current_position_h += remaining_length;
     vpb->SetRemainingLength(0);
