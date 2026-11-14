@@ -69,6 +69,10 @@ public:
   void* PopFifoAuxBuffer(size_t size);
 
   void FlushGpu();
+  /* The CPU thread, dual core: until the GPU has taken what is left in the
+   * FIFO, or cannot now (reads off, at the breakpoint, an interrupt for the
+   * CPU to take first, paused). The GPU loop need not be running yet. */
+  void WaitForGpuToTakeFifo();
   void RunGpu();
   /* Runs the GPU until the CPU thread ends the field (GPU_LOOP_FIELD),
    * InterruptGpuLoop is called (GPU_LOOP_INTERRUPTED), or, with wedge_us

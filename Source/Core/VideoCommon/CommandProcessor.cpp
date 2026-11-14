@@ -98,6 +98,22 @@ static inline void WriteHigh(retro_atomic_int_t* reg, u16 highbits)
   StoreReg(reg, (LoadReg(reg) & 0x0000FFFF) | (static_cast<u32>(highbits) << 16));
 }
 
+/* Dual core, before the CPU reads where the GPU reads or how far behind it is. The CP fetches
+ * ahead of what it runs, so a last block left in the FIFO is in by the time the CPU looks; the
+ * GPU thread takes a block only as it runs it, so it runs that block first. Else a game that
+ * flushes, reads the pointers to save its FIFO and later puts them back has the block run again,
+ * from inside a command, and the GPU reads garbage. */
+static void FetchLastBlock(Core::System& system)
+{
+  const auto& fifo = system.GetCommandProcessor().GetFifo();
+  const u32 distance = LoadReg(&fifo.CPReadWriteDistance);
+  if (distance && distance <= GPFifo::GATHER_PIPE_SIZE && LoadReg(&fifo.bFF_GPReadEnable) &&
+      !Fifo::AtBreakpoint(system))
+  {
+    system.GetFifo().WaitForGpuToTakeFifo();
+  }
+}
+
 CommandProcessorManager::CommandProcessorManager(Core::System& system) : m_system{system}
 {
 }
@@ -230,6 +246,7 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   {
     fifo_rw_distance_lo_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
+      FetchLastBlock(system_);
       if (LoadReg(&fifo_.CPWritePointer) >= LoadReg(&fifo_.SafeCPReadPointer))
       {
         return static_cast<u16>(LoadReg(&fifo_.CPWritePointer) - LoadReg(&fifo_.SafeCPReadPointer));
@@ -256,6 +273,7 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     fifo_rw_distance_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       const auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
+      FetchLastBlock(system_);
       if (LoadReg(&fifo_.CPWritePointer) >= LoadReg(&fifo_.SafeCPReadPointer))
       {
         return (LoadReg(&fifo_.CPWritePointer) - LoadReg(&fifo_.SafeCPReadPointer)) >> 16;
@@ -287,7 +305,11 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
   mmio->Register(
       base | FIFO_READ_POINTER_LO,
-      is_on_thread ? MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&m_fifo.SafeCPReadPointer)) :
+      is_on_thread ? MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
+        FetchLastBlock(system_);
+        return static_cast<u16>(
+            LoadReg(&system_.GetCommandProcessor().GetFifo().SafeCPReadPointer));
+      }) :
                      MMIO::DirectRead<u16>(MMIO::Utils::LowPart(&m_fifo.CPReadPointer)),
       MMIO::DirectWrite<u16>(MMIO::Utils::LowPart(&m_fifo.CPReadPointer), WMASK_LO_ALIGN_32BIT));
 
@@ -298,6 +320,7 @@ void CommandProcessorManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     fifo_read_hi_r = MMIO::ComplexRead<u16>([](Core::System& system_, uintptr_t, u32) -> u16 {
       auto& fifo_ = system_.GetCommandProcessor().GetFifo();
       system_.GetFifo().SyncGPUForRegisterAccess();
+      FetchLastBlock(system_);
       return LoadReg(&fifo_.SafeCPReadPointer) >> 16;
     });
     fifo_read_hi_w =

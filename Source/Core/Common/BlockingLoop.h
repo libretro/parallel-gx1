@@ -84,6 +84,26 @@ public:
     }
   }
 
+  // Until done() is true: it is asked again each time the loop parks, starts or stops, or
+  // NotifyWaiters is called, so the loop need not be running when this starts.
+  template <class P>
+  void WaitUntil(P done)
+  {
+    while (!done())
+    {
+      const int key = retro_eventcount_prepare_wait(&m_done);
+      if (done())
+      {
+        retro_eventcount_cancel_wait(&m_done);
+        break;
+      }
+      retro_eventcount_commit_wait(&m_done, key);
+    }
+  }
+
+  // Has WaitUntil ask again, for a change it cannot see the loop make.
+  void NotifyWaiters() { retro_eventcount_notify(&m_done); }
+
   // Half start the worker.
   // So this object is in a running state and Wait() will block until the worker calls Run().
   // This may be called from any thread and is supposed to be called at least once before Wait()

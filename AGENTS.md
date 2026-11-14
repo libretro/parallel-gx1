@@ -89,6 +89,13 @@ work over through atomics and eventcounts, and nothing waits on a clock.
 - **No locks.** Work is handed over through atomics, SPSC rings and
   eventcounts. A mutex added to fix a race is the wrong fix: give the
   state one owner.
+- **The CP fetches ahead.** In dual core the GPU thread takes a FIFO
+  block only as it runs it, while the console's CP has read it in long
+  before. Before the CPU reads the read pointer or the distance with a
+  last block or less left, it waits on an eventcount until the GPU has
+  taken it or cannot (`WaitForGpuToTakeFifo`), whether or not the GPU
+  loop is running yet: a game that saves its FIFO there and puts it
+  back later would otherwise have that block run twice.
 
 ## No allocations mid-game
 

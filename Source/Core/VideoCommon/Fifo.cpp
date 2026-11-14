@@ -136,6 +136,7 @@ void FifoManager::ExitGpuLoop()
 
   // This should break the wait loop in CPU thread
   StoreReg(&fifo.bFF_GPReadEnable, 0);
+  m_gpu_mainloop.NotifyWaiters();
   FlushGpu();
 
   // Terminate GPU thread loop
@@ -157,6 +158,8 @@ void FifoManager::EmulatorState(bool running)
   m_emu_running_state.Set(running);
   if (running)
     m_gpu_mainloop.Wakeup();
+  else
+    m_gpu_mainloop.NotifyWaiters();
 }
 
 /* Any thread: the loop returns soon, its field not ended, so its thread
@@ -430,6 +433,20 @@ int FifoManager::RunGpuLoop(s64 wedge_us)
     return GPU_LOOP_WEDGED;
   retro_atomic_store_release_int(&m_stop_gpu_loop_requested, 0);
   return GPU_LOOP_FIELD;
+}
+
+void FifoManager::WaitForGpuToTakeFifo()
+{
+  if (!m_system.IsDualCoreMode() || m_use_deterministic_gpu_thread || m_config_sync_gpu)
+    return;
+
+  auto& command_processor = m_system.GetCommandProcessor();
+  const auto& fifo = command_processor.GetFifo();
+  m_gpu_mainloop.WaitUntil([&] {
+    return !LoadReg(&fifo.CPReadWriteDistance) || !LoadReg(&fifo.bFF_GPReadEnable) ||
+           AtBreakpoint(m_system) || command_processor.IsInterruptWaiting() ||
+           !m_emu_running_state.IsSet();
+  });
 }
 
 void FifoManager::FlushGpu()
