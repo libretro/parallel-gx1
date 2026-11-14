@@ -62,9 +62,16 @@ namespace PowerPC
 MMU::MMU(Core::System& system, Memory::MemoryManager& memory, PowerPC::PowerPCManager& power_pc)
     : m_system(system), m_memory(memory), m_power_pc(power_pc), m_ppc_state(power_pc.GetPPCState())
 {
+  address_map_init(&m_page_mappings, 16384);
 }
 
-MMU::~MMU() = default;
+MMU::~MMU()
+{
+  address_map_free(&m_page_mappings);
+  std::free(m_removed_mappings);
+  std::free(m_added_mappings[0]);
+  std::free(m_added_mappings[1]);
+}
 
 void MMU::Reset()
 {
@@ -1316,13 +1323,13 @@ void MMU::ClearPageTable()
 
   // Because we removed host mappings, incremental updates won't work correctly.
   // Start over from scratch.
-  m_page_mappings.clear();
+  address_map_clear(&m_page_mappings);
   m_page_table.clear();
 }
 
 void MMU::ReloadPageTable()
 {
-  m_page_mappings.clear();
+  address_map_clear(&m_page_mappings);
 
   m_temp_page_table.clear();
   std::swap(m_page_table, m_temp_page_table);
@@ -1377,14 +1384,15 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
     return;
   }
 
-  m_removed_mappings.clear();
-  m_added_readonly_mappings.clear();
-  m_added_readwrite_mappings.clear();
+  m_num_removed_mappings = 0;
+  m_num_added_mappings[0] = 0;
+  m_num_added_mappings[1] = 0;
+  m_added_mappings_order = 0;
 
   if (m_page_table.size() != page_table_size)
   {
     m_memory.RemoveAllPageTableMappings();
-    m_page_mappings.clear();
+    address_map_clear(&m_page_mappings);
     m_page_table.resize(0);
     m_page_table.resize(page_table_size, 0);
   }
@@ -1529,24 +1537,29 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
       const u32 priority = (page_table_offset % 64 / 8) | (pte1.H << 3);
       const PageMapping page_mapping(pte2.RPN, host_mapping, priority);
 
-      const auto it = m_page_mappings.find(logical_address->Hex);
-      if (it == m_page_mappings.end()) [[likely]]
+      bool added;
+      u32* const existing = address_map_get(&m_page_mappings, logical_address->Hex, &added);
+      if (!existing)
+        continue;
+      if (added) [[likely]]
       {
         // There's no existing mapping for this logical address. Add a new mapping.
-        m_page_mappings.emplace(logical_address->Hex, page_mapping);
+        *existing = page_mapping.Hex;
       }
       else
       {
-        if (it->second.priority < priority)
+        PageMapping existing_mapping;
+        existing_mapping.Hex = *existing;
+        if (existing_mapping.priority < priority)
         {
           // An existing mapping has priority.
           continue;
         }
 
         // The new mapping has priority over an existing mapping. Replace the existing mapping.
-        if (it->second.host_mapping)
-          m_removed_mappings.emplace(it->first);
-        it->second.Hex = page_mapping.Hex;
+        if (existing_mapping.host_mapping)
+          NoteRemovedMapping(logical_address->Hex);
+        *existing = page_mapping.Hex;
       }
 
       // If the R bit isn't set yet, the actual host mapping will be created once
@@ -1554,8 +1567,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
       if (host_mapping && pte2.R)
       {
         const u32 physical_address = pte2.RPN << 12;
-        (pte2.C ? m_added_readwrite_mappings : m_added_readonly_mappings)
-            .emplace(logical_address->Hex, physical_address);
+        NoteAddedMapping(pte2.C, logical_address->Hex, physical_address);
       }
     }
   };
@@ -1595,12 +1607,15 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
 
             logical_address->SR = l;
 
-            const auto it = m_page_mappings.find(logical_address->Hex);
-            if (it != m_page_mappings.end() && priority == it->second.priority)
+            const u32* const existing = address_map_find(&m_page_mappings, logical_address->Hex);
+            PageMapping existing_mapping;
+            if (existing)
+              existing_mapping.Hex = *existing;
+            if (existing && priority == existing_mapping.priority)
             {
-              if (it->second.host_mapping)
-                m_removed_mappings.emplace(logical_address->Hex);
-              m_page_mappings.erase(it);
+              if (existing_mapping.host_mapping)
+                NoteRemovedMapping(logical_address->Hex);
+              address_map_erase(&m_page_mappings, logical_address->Hex);
 
               // It's unlikely but possible that this was shadowing another PTE that's using the
               // same logical address but has a lower priority. If this happens, we must make sure
@@ -1672,14 +1687,97 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
     }
   }
 
-  if (!m_removed_mappings.empty())
-    m_memory.RemovePageTableMappings(m_removed_mappings);
+  ApplyMappingChanges();
+}
 
-  for (const auto& [logical_address, physical_address] : m_added_readonly_mappings)
-    m_memory.AddPageTableMapping(logical_address, physical_address, false);
+void MMU::NoteRemovedMapping(u32 logical_address)
+{
+  if (m_num_removed_mappings == m_removed_mappings_capacity)
+  {
+    const u32 capacity = m_removed_mappings_capacity ? m_removed_mappings_capacity * 2 : 1024;
+    u32* const grown = static_cast<u32*>(std::realloc(m_removed_mappings, capacity * sizeof(u32)));
+    if (!grown)
+      return;
+    m_removed_mappings = grown;
+    m_removed_mappings_capacity = capacity;
+  }
+  m_removed_mappings[m_num_removed_mappings++] = logical_address;
+}
 
-  for (const auto& [logical_address, physical_address] : m_added_readwrite_mappings)
-    m_memory.AddPageTableMapping(logical_address, physical_address, true);
+void MMU::NoteAddedMapping(bool writeable, u32 logical_address, u32 physical_address)
+{
+  const int list = writeable ? 1 : 0;
+  if (m_num_added_mappings[list] == m_added_mappings_capacity[list])
+  {
+    const u32 capacity =
+        m_added_mappings_capacity[list] ? m_added_mappings_capacity[list] * 2 : 1024;
+    AddedMapping* const grown = static_cast<AddedMapping*>(
+        std::realloc(m_added_mappings[list], capacity * sizeof(AddedMapping)));
+    if (!grown)
+      return;
+    m_added_mappings[list] = grown;
+    m_added_mappings_capacity[list] = capacity;
+  }
+  AddedMapping* const added = &m_added_mappings[list][m_num_added_mappings[list]++];
+  added->logical_address = logical_address;
+  added->physical_address = physical_address;
+  added->order = m_added_mappings_order++;
+}
+
+static int CompareAddresses(const void* a, const void* b)
+{
+  const u32 x = *static_cast<const u32*>(a);
+  const u32 y = *static_cast<const u32*>(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+// two AddedMappings: logical address, physical address, order
+static int CompareAddedMappings(const void* a, const void* b)
+{
+  const u32* const x = static_cast<const u32*>(a);
+  const u32* const y = static_cast<const u32*>(b);
+  // logical address, then order
+  if (x[0] != y[0])
+    return x[0] < y[0] ? -1 : 1;
+  return x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0;
+}
+
+void MMU::ApplyMappingChanges()
+{
+  u32 i, n;
+  int list;
+
+  // CompareAddedMappings reads one as three u32s
+  static_assert(sizeof(AddedMapping) == 3 * sizeof(u32));
+
+  if (m_num_removed_mappings)
+  {
+    // in address order, each once
+    std::qsort(m_removed_mappings, m_num_removed_mappings, sizeof(u32), CompareAddresses);
+    n = 1;
+    for (i = 1; i < m_num_removed_mappings; i++)
+    {
+      if (m_removed_mappings[i] != m_removed_mappings[n - 1])
+        m_removed_mappings[n++] = m_removed_mappings[i];
+    }
+    m_memory.RemovePageTableMappings(m_removed_mappings, n);
+  }
+
+  // read only first, then read and write; in address order, the first added for one winning
+  for (list = 0; list < 2; list++)
+  {
+    AddedMapping* const added = m_added_mappings[list];
+    n = m_num_added_mappings[list];
+    if (!n)
+      continue;
+    std::qsort(added, n, sizeof(AddedMapping), CompareAddedMappings);
+    for (i = 0; i < n; i++)
+    {
+      if (i && added[i].logical_address == added[i - 1].logical_address)
+        continue;
+      m_memory.AddPageTableMapping(added[i].logical_address, added[i].physical_address, list == 1);
+    }
+  }
 }
 
 void MMU::PageTableUpdatedFromJit(MMU* mmu)
@@ -1774,11 +1872,11 @@ MMU::TranslateAddressResult MMU::TranslatePageAddress(const EffectiveAddress add
           m_memory.Write_U32(pte2.Hex, pteg_addr + 4);
 
           const u32 page_logical_address = address.Hex & ~HW_PAGE_MASK;
-          const auto it = m_page_mappings.find(page_logical_address);
-          if (it != m_page_mappings.end())
+          const u32* const mapping = address_map_find(&m_page_mappings, page_logical_address);
+          if (mapping)
           {
             const u32 priority = (pteg_addr % 64 / 8) | (pte1.H << 3);
-            if (it->second.Hex == PageMapping(pte2.RPN, true, priority).Hex)
+            if (*mapping == PageMapping(pte2.RPN, true, priority).Hex)
             {
               const u32 swapped_pte1 = Common::swap32(reinterpret_cast<u8*>(&pte1));
               std::memcpy(m_page_table.data() + pteg_addr - m_ppc_state.pagetable_base,

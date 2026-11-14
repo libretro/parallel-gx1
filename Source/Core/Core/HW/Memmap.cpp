@@ -14,7 +14,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
-#include <set>
 #include <tuple>
 
 #include "Common/ChunkFile.h"
@@ -512,17 +511,18 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
   }
 }
 
-void MemoryManager::RemovePageTableMappings(const std::set<u32>& mappings)
+void MemoryManager::RemovePageTableMappings(const u32* logical_addresses, size_t count)
 {
+  size_t i;
   switch (m_host_page_type)
   {
   case HostPageType::SmallPages:
-    for (u32 logical_address : mappings)
-      RemoveHostPageTableMapping(logical_address);
+    for (i = 0; i < count; i++)
+      RemoveHostPageTableMapping(logical_addresses[i]);
     return;
   case HostPageType::LargePages:
-    for (u32 logical_address : mappings)
-      RemoveLargePageTableMapping(logical_address);
+    for (i = 0; i < count; i++)
+      RemoveLargePageTableMapping(logical_addresses[i]);
     return;
   default:
     return;

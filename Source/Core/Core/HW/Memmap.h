@@ -5,7 +5,6 @@
 
 #include <array>
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -106,7 +105,7 @@ public:
 
   void UpdateDBATMappings(const PowerPC::BatTable& dbat_table);
   void AddPageTableMapping(u32 logical_address, u32 translated_address, bool writeable);
-  void RemovePageTableMappings(const std::set<u32>& mappings);
+  void RemovePageTableMappings(const u32* logical_addresses, size_t count);
   void RemoveAllPageTableMappings();
 
   // Routines to access physically addressed memory, designed for use by

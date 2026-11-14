@@ -5,12 +5,11 @@
 
 #include <array>
 #include <cstddef>
-#include <map>
 #include <optional>
-#include <set>
 #include <string>
 #include <vector>
 
+#include "Common/AddressMap.h"
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
 #include "Common/TypeUtils.h"
@@ -357,14 +356,30 @@ private:
   // END STATE_TO_SAVE
 
   // This keeps track of all valid page table mappings in m_page_table.
-  // The key is the logical address.
-  std::map<u32, PageMapping> m_page_mappings;
+  // The key is the logical address, the value a PageMapping's Hex.
+  address_map_t m_page_mappings{};
 
-  // These are kept around just for their memory allocations. They are always cleared before use.
+  // The host mappings one page table update removes and adds, applied at its end in address
+  // order, the first added for an address winning as before; kept with their blocks, cleared
+  // before use, so an update allocates nothing once they are as large as updates need.
+  struct AddedMapping
+  {
+    u32 logical_address;
+    u32 physical_address;
+    u32 order;  // when it was added, for the first to win
+  };
+  void NoteRemovedMapping(u32 logical_address);
+  void NoteAddedMapping(bool writeable, u32 logical_address, u32 physical_address);
+  void ApplyMappingChanges();
+
   std::vector<u8> m_temp_page_table;
-  std::set<u32> m_removed_mappings;
-  std::map<u32, u32> m_added_readonly_mappings;
-  std::map<u32, u32> m_added_readwrite_mappings;
+  u32* m_removed_mappings = nullptr;
+  u32 m_num_removed_mappings = 0;
+  u32 m_removed_mappings_capacity = 0;
+  AddedMapping* m_added_mappings[2] = {};  // read only, read and write
+  u32 m_num_added_mappings[2] = {};
+  u32 m_added_mappings_capacity[2] = {};
+  u32 m_added_mappings_order = 0;
 
   BatTable m_ibat_table;
   BatTable m_dbat_table;
