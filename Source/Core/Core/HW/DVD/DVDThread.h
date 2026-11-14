@@ -64,7 +64,8 @@ public:
   void Stop();
   void DoState(PointerWrap& p);
 
-  void SetDisc(std::unique_ptr<DiscIO::Volume> disc);
+  // takes disc, freeing the one it had
+  void SetDisc(DiscIO::Volume* disc);
   bool HasDisc() const;
 
   bool HasWiiHashes() const;
@@ -161,7 +162,7 @@ private:
   ReadRequest m_lent_reads[MAX_LENT_READS];  // CPU thread only
   int m_num_lent_reads = 0;
 
-  std::unique_ptr<DiscIO::Volume> m_disc;
+  DiscIO::Volume* m_disc = nullptr;  // owned
 
   FileMonitor::FileLogger m_file_logger;
 

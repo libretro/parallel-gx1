@@ -67,8 +67,19 @@ struct BootParameters
 {
   struct Disc
   {
+    Disc() = default;
+    // takes volume
+    Disc(std::string path_, DiscIO::VolumeDisc* volume_,
+         std::vector<std::string> auto_disc_change_paths_);
+    // the volume goes with it
+    Disc(Disc&& other) noexcept;
+    Disc& operator=(Disc&& other) noexcept;
+    Disc(const Disc&) = delete;
+    Disc& operator=(const Disc&) = delete;
+    ~Disc();
+
     std::string path;
-    std::unique_ptr<DiscIO::VolumeDisc> volume;
+    DiscIO::VolumeDisc* volume = nullptr;  // owned
     std::vector<std::string> auto_disc_change_paths;
   };
 

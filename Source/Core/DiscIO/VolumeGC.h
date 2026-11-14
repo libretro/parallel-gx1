@@ -32,26 +32,28 @@ public:
   VolumeGC(BlobReader* reader);
   VolumeGC(const VolumeGC&) = delete;
   VolumeGC& operator=(const VolumeGC&) = delete;
-  ~VolumeGC() override;
-  bool Read(u64 offset, u64 length, u8* buffer,
-            const Partition& partition = PARTITION_NONE) const override;
-  const u8* View(u64 offset, u64 length, const Partition& partition) const override;
-  void Prefetch(u64 offset, u64 length, const Partition& partition) const override;
-  const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const override;
-  std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const override;
+  ~VolumeGC();
+  bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition = PARTITION_NONE) const;
+  const u8* View(u64 offset, u64 length, const Partition& partition) const;
+  void Prefetch(u64 offset, u64 length, const Partition& partition) const;
+  const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const;
+  std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const;
 
-  Platform GetVolumeType() const override;
-  bool IsDatelDisc() const override;
-  Region GetRegion() const override;
-  BlobType GetBlobType() const override;
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override;
-  u64 GetRawSize() const override;
-  const BlobReader& GetBlobReader() const override;
+  Platform GetVolumeType() const;
+  bool IsDatelDisc() const;
+  Region GetRegion() const;
+  BlobType GetBlobType() const;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const;
+  u64 GetRawSize() const;
+  const BlobReader& GetBlobReader() const;
 
   const BootID* GetTriforceBootID() const { return &m_triforce_header; }
 
 private:
+  // Volume reaches the functions it has of its own here
+  friend class Volume;
+
   Common::Lazy<std::unique_ptr<FileSystem>> m_file_system;
 
   BlobReader* m_reader;  // owned

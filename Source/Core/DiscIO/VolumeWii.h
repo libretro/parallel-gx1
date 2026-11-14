@@ -61,33 +61,33 @@ public:
   VolumeWii(BlobReader* reader);
   VolumeWii(const VolumeWii&) = delete;
   VolumeWii& operator=(const VolumeWii&) = delete;
-  ~VolumeWii() override;
-  bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const override;
-  bool HasWiiHashes() const override;
-  std::vector<Partition> GetPartitions() const override;
-  Partition GetGamePartition() const override;
-  std::optional<u64> GetTitleID(const Partition& partition) const override;
-  const IOS::ES::TicketReader& GetTicket(const Partition& partition) const override;
-  const IOS::ES::TMDReader& GetTMD(const Partition& partition) const override;
-  const std::vector<u8>& GetCertificateChain(const Partition& partition) const override;
-  const FileSystem* GetFileSystem(const Partition& partition) const override;
+  ~VolumeWii();
+  bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const;
+  bool HasWiiHashes() const;
+  std::vector<Partition> GetPartitions() const;
+  Partition GetGamePartition() const;
+  std::optional<u64> GetTitleID(const Partition& partition) const;
+  const IOS::ES::TicketReader& GetTicket(const Partition& partition) const;
+  const IOS::ES::TMDReader& GetTMD(const Partition& partition) const;
+  const std::vector<u8>& GetCertificateChain(const Partition& partition) const;
+  const FileSystem* GetFileSystem(const Partition& partition) const;
   static u64 OffsetInHashedPartitionToRawOffset(u64 offset, const Partition& partition,
                                                 u64 partition_data_offset);
-  u64 PartitionOffsetToRawOffset(u64 offset, const Partition& partition) const override;
-  std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const override;
+  u64 PartitionOffsetToRawOffset(u64 offset, const Partition& partition) const;
+  std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const;
 
-  Platform GetVolumeType() const override;
-  bool IsDatelDisc() const override;
+  Platform GetVolumeType() const;
+  bool IsDatelDisc() const;
   bool CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
-                           const Partition& partition) const override;
-  bool CheckBlockIntegrity(u64 block_index, const Partition& partition) const override;
+                           const Partition& partition) const;
+  bool CheckBlockIntegrity(u64 block_index, const Partition& partition) const;
 
-  Region GetRegion() const override;
-  BlobType GetBlobType() const override;
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override;
-  u64 GetRawSize() const override;
-  const BlobReader& GetBlobReader() const override;
+  Region GetRegion() const;
+  BlobType GetBlobType() const;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const;
+  u64 GetRawSize() const;
+  const BlobReader& GetBlobReader() const;
 
   // The in parameter can either contain all the data to begin with,
   // or read_function can write data into the in parameter when called.
@@ -107,9 +107,12 @@ public:
   static void DecryptBlockData(const u8* in, u8* out, Common::AES::Context* aes_context);
 
 protected:
-  u32 GetOffsetShift() const override { return 2; }
+  u32 GetOffsetShift() const { return 2; }
 
 private:
+  // Volume reaches the functions it has of its own here
+  friend class Volume;
+
   struct PartitionDetails
   {
     Common::Lazy<std::unique_ptr<Common::AES::Context>> key;

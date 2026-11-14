@@ -378,11 +378,11 @@ static u64 GetDiscEndOffset(const DiscIO::VolumeDisc& disc)
     return DiscIO::DL_DVD_SIZE;
 }
 
-void DVDInterface::SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
+void DVDInterface::SetDisc(DiscIO::VolumeDisc* disc,
                            std::optional<std::vector<std::string>> auto_disc_change_paths = {})
 {
   bool had_disc = IsDiscInside();
-  bool has_disc = static_cast<bool>(disc);
+  bool has_disc = disc != nullptr;
 
   if (has_disc)
   {
@@ -420,7 +420,7 @@ void DVDInterface::SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
   if (had_disc != has_disc)
     ExpansionInterface::g_rtc_flags[ExpansionInterface::RTCFlag::DiscChanged] = true;
 
-  m_system.GetDVDThread().SetDisc(std::move(disc));
+  m_system.GetDVDThread().SetDisc(disc);
   SetLidOpen();
 
   ResetDrive(false);
@@ -444,12 +444,11 @@ void DVDInterface::EjectDiscCallback(Core::System& system, u64 userdata, s64 cyc
 void DVDInterface::InsertDiscCallback(Core::System& system, u64 userdata, s64 cyclesLate)
 {
   auto& di = system.GetDVDInterface();
-  std::unique_ptr<DiscIO::VolumeDisc> new_disc =
-      DiscIO::CreateDiscForCore(di.m_disc_path_to_insert);
+  DiscIO::VolumeDisc* new_disc = DiscIO::CreateDiscForCore(di.m_disc_path_to_insert);
 
   if (new_disc)
   {
-    di.SetDisc(std::move(new_disc), {});
+    di.SetDisc(new_disc, {});
   }
   else
   {

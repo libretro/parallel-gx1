@@ -36,21 +36,33 @@ struct Partition final
 
 constexpr Partition PARTITION_NONE(std::numeric_limits<u64>::max() - 1);
 
+// The class a Volume is
+enum class VolumeKind : u8
+{
+  GC,
+  Wii,
+  WAD,
+};
+
+// A GameCube or Wii disc (VolumeGC, VolumeWii, both a VolumeDisc) or a WAD (VolumeWAD). Which one
+// is noted when it is made, and its functions go to that class through a branch on that, not a
+// table of virtual functions; the ones with a default here go to it only where it has its own.
+// One is owned through a plain pointer and freed with DestroyVolume, as the class it is.
 class Volume
 {
 public:
-  Volume() {}
-  virtual ~Volume() {}
-  virtual bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const = 0;
+  Volume(const Volume&) = delete;
+  Volume& operator=(const Volume&) = delete;
+
+  VolumeKind GetKind() const { return m_kind; }
+
+  bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const;
   // What Read() would put in buffer, lent from the image instead, valid while this volume
   // lives; nullptr when it cannot be lent (compressed, encrypted or assembled images).
   // Thread-safe.
-  virtual const u8* View(u64 offset, u64 length, const Partition& partition) const
-  {
-    return nullptr;
-  }
+  const u8* View(u64 offset, u64 length, const Partition& partition) const;
   // Asks the OS to start reading what View() lends; returns at once.
-  virtual void Prefetch(u64 offset, u64 length, const Partition& partition) const {}
+  void Prefetch(u64 offset, u64 length, const Partition& partition) const;
   template <typename T>
   std::optional<T> ReadSwapped(u64 offset, const Partition& partition) const
   {
@@ -67,65 +79,51 @@ public:
     return static_cast<u64>(*temp) << GetOffsetShift();
   }
 
-  virtual bool HasWiiHashes() const { return false; }
-  virtual std::vector<Partition> GetPartitions() const { return {}; }
-  virtual Partition GetGamePartition() const { return PARTITION_NONE; }
+  bool HasWiiHashes() const;
+  std::vector<Partition> GetPartitions() const;
+  Partition GetGamePartition() const;
   std::optional<u64> GetTitleID() const { return GetTitleID(GetGamePartition()); }
-  virtual std::optional<u64> GetTitleID(const Partition& partition) const { return std::nullopt; }
-  virtual const IOS::ES::TicketReader& GetTicket(const Partition& partition) const
-  {
-    return INVALID_TICKET;
-  }
-  virtual const IOS::ES::TMDReader& GetTMD(const Partition& partition) const { return INVALID_TMD; }
-  virtual const std::vector<u8>& GetCertificateChain(const Partition& partition) const
-  {
-    return INVALID_CERT_CHAIN;
-  }
-  virtual std::vector<u8> GetContent(u16 index) const { return {}; }
-  virtual bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
-                                     size_t encrypted_size,
-                                     const IOS::ES::TicketReader& ticket) const
-  {
-    return false;
-  }
-  virtual IOS::ES::TicketReader GetTicketWithFixedCommonKey() const { return {}; }
+  std::optional<u64> GetTitleID(const Partition& partition) const;
+  const IOS::ES::TicketReader& GetTicket(const Partition& partition) const;
+  const IOS::ES::TMDReader& GetTMD(const Partition& partition) const;
+  const std::vector<u8>& GetCertificateChain(const Partition& partition) const;
+  std::vector<u8> GetContent(u16 index) const;
+  bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
+                             size_t encrypted_size, const IOS::ES::TicketReader& ticket) const;
+  IOS::ES::TicketReader GetTicketWithFixedCommonKey() const;
   // Returns a non-owning pointer. Returns nullptr if the file system couldn't be read.
-  virtual const FileSystem* GetFileSystem(const Partition& partition) const = 0;
-  virtual u64 PartitionOffsetToRawOffset(u64 offset, const Partition& partition) const
-  {
-    return offset;
-  }
-  virtual std::string GetGameID(const Partition& partition = PARTITION_NONE) const = 0;
-  virtual std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const = 0;
-  virtual std::string GetMakerID(const Partition& partition = PARTITION_NONE) const = 0;
-  virtual std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const = 0;
-  virtual Platform GetVolumeType() const = 0;
-  virtual bool IsDatelDisc() const = 0;
-  virtual bool IsNKit() const = 0;
-  virtual bool CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
-                                   const Partition& partition) const
-  {
-    return false;
-  }
-  virtual bool CheckBlockIntegrity(u64 block_index, const Partition& partition) const
-  {
-    return false;
-  }
-  virtual Region GetRegion() const = 0;
-  virtual Country GetCountry(const Partition& partition = PARTITION_NONE) const = 0;
-  virtual u32 GetSimulatedMemorySize() const = 0;
-  virtual BlobType GetBlobType() const = 0;
+  const FileSystem* GetFileSystem(const Partition& partition) const;
+  u64 PartitionOffsetToRawOffset(u64 offset, const Partition& partition) const;
+  std::string GetGameID(const Partition& partition = PARTITION_NONE) const;
+  std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const;
+  std::string GetMakerID(const Partition& partition = PARTITION_NONE) const;
+  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const;
+  Platform GetVolumeType() const;
+  bool IsDatelDisc() const;
+  bool IsNKit() const;
+  bool CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
+                           const Partition& partition) const;
+  bool CheckBlockIntegrity(u64 block_index, const Partition& partition) const;
+  Region GetRegion() const;
+  Country GetCountry(const Partition& partition = PARTITION_NONE) const;
+  u32 GetSimulatedMemorySize() const;
+  BlobType GetBlobType() const;
   // Size of virtual disc (may be inaccurate depending on the blob type)
-  virtual u64 GetDataSize() const = 0;
-  virtual DataSizeType GetDataSizeType() const = 0;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const;
   // Size on disc (compressed size)
-  virtual u64 GetRawSize() const = 0;
-  virtual const BlobReader& GetBlobReader() const = 0;
+  u64 GetRawSize() const;
+  const BlobReader& GetBlobReader() const;
 
 protected:
+  explicit Volume(VolumeKind kind) : m_kind(kind) {}
+  // not virtual: DestroyVolume destroys a volume as the class it is
+  ~Volume() = default;
+
   static std::string FilterGameID(const char* data, size_t size);
 
-  virtual u32 GetOffsetShift() const { return 0; }
+  // the shift of offsets in the disc's headers: the Wii's own, 0 elsewhere
+  u32 GetOffsetShift() const;
 
   static constexpr size_t NUMBER_OF_LANGUAGES = 10;
   static constexpr size_t NAME_CHARS_LENGTH = 42;
@@ -136,17 +134,24 @@ protected:
   static const IOS::ES::TicketReader INVALID_TICKET;
   static const IOS::ES::TMDReader INVALID_TMD;
   static const std::vector<u8> INVALID_CERT_CHAIN;
+
+private:
+  const VolumeKind m_kind;
 };
 
-// These take the reader they are given, a volume made or not
-std::unique_ptr<VolumeDisc> CreateDisc(BlobReader* reader);
-std::unique_ptr<VolumeDisc> CreateDisc(const std::string& path);
-// This version enables caching when the "Load Games into Memory" setting is enabled.
-std::unique_ptr<VolumeDisc> CreateDiscForCore(const std::string& path);
+// Destroys a volume as the class it is and frees it; nullptr does nothing.
+void DestroyVolume(Volume* volume);
 
-std::unique_ptr<VolumeWAD> CreateWAD(BlobReader* reader);
-std::unique_ptr<VolumeWAD> CreateWAD(const std::string& path);
-std::unique_ptr<Volume> CreateVolume(BlobReader* reader);
-std::unique_ptr<Volume> CreateVolume(const std::string& path);
+// A volume made is the caller's, freed with DestroyVolume; nullptr if none could be. These take
+// the reader they are given, a volume made or not.
+VolumeDisc* CreateDisc(BlobReader* reader);
+VolumeDisc* CreateDisc(const std::string& path);
+// This version enables caching when the "Load Games into Memory" setting is enabled.
+VolumeDisc* CreateDiscForCore(const std::string& path);
+
+VolumeWAD* CreateWAD(BlobReader* reader);
+VolumeWAD* CreateWAD(const std::string& path);
+Volume* CreateVolume(BlobReader* reader);
+Volume* CreateVolume(const std::string& path);
 
 }  // namespace DiscIO

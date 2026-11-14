@@ -27,12 +27,14 @@ ScrubbedBlob::~ScrubbedBlob()
 
 ScrubbedBlob* ScrubbedBlob::Create(const std::string& path)
 {
-  std::unique_ptr<VolumeDisc> disc = CreateDisc(path);
+  VolumeDisc* disc = CreateDisc(path);
   if (!disc)
     return nullptr;
 
   DiscScrubber scrubber;
-  if (!scrubber.SetupScrub(*disc))
+  const bool scrubbing = scrubber.SetupScrub(*disc);
+  DestroyVolume(disc);
+  if (!scrubbing)
     return nullptr;
 
   BlobReader* blob = CreateBlobReader(path);

@@ -26,7 +26,8 @@
 
 namespace DiscIO
 {
-VolumeGC::VolumeGC(BlobReader* reader) : m_reader(reader), m_is_triforce(false)
+VolumeGC::VolumeGC(BlobReader* reader)
+    : VolumeDisc(VolumeKind::GC), m_reader(reader), m_is_triforce(false)
 {
   ASSERT(m_reader);
 

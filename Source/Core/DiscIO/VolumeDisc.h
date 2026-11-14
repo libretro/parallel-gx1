@@ -40,14 +40,17 @@ public:
     std::array<std::array<char, 0x20>, 8> credit_types;  // 0xE0
   };
 
-  std::string GetGameID(const Partition& partition = PARTITION_NONE) const override;
-  Country GetCountry(const Partition& partition = PARTITION_NONE) const override;
-  std::string GetMakerID(const Partition& partition = PARTITION_NONE) const override;
-  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const override;
-  u32 GetSimulatedMemorySize() const override;
-  bool IsNKit() const override;
+  std::string GetGameID(const Partition& partition = PARTITION_NONE) const;
+  Country GetCountry(const Partition& partition = PARTITION_NONE) const;
+  std::string GetMakerID(const Partition& partition = PARTITION_NONE) const;
+  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const;
+  u32 GetSimulatedMemorySize() const;
+  bool IsNKit() const;
 
 protected:
+  explicit VolumeDisc(VolumeKind kind) : Volume(kind) {}
+  ~VolumeDisc() = default;
+
   Region RegionCodeToRegion(std::optional<u32> region_code) const;
 };
 

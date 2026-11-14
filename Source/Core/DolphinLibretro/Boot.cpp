@@ -229,7 +229,7 @@ static void SetRegionFreeFallback(const BootParameters& boot_params)
 {
   const DiscIO::Volume* volume = nullptr;
   if (const auto* disc = std::get_if<BootParameters::Disc>(&boot_params.parameters))
-    volume = disc->volume.get();
+    volume = disc->volume;
   else if (const auto* wad = std::get_if<DiscIO::VolumeWAD>(&boot_params.parameters))
     volume = wad;
 
@@ -862,12 +862,13 @@ bool retro_load_game(const struct retro_game_info* game)
     bool is_disc_title = false;
     if (!normalized_game_paths.empty())
     {
-      auto volume = DiscIO::CreateDisc(normalized_game_paths.front());
+      DiscIO::VolumeDisc* volume = DiscIO::CreateDisc(normalized_game_paths.front());
       if (volume && (volume->GetVolumeType() == DiscIO::Platform::WiiDisc || volume->GetVolumeType() == DiscIO::Platform::GameCubeDisc))
         is_disc_title = true;
       else
         WARN_LOG(BOOT, "'Disc Based Games Boot to Wii System Menu' enabled but content is not a "
                        "disc based game, ignoring Wii Menu");
+      DiscIO::DestroyVolume(volume);
     }
 
     const std::string wii_menu_tmd_file_name = Common::GetTMDFileName(Titles::SYSTEM_MENU, Common::FromWhichRoot::Configured);

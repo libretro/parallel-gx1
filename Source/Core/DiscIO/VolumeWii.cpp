@@ -32,7 +32,8 @@
 namespace DiscIO
 {
 VolumeWii::VolumeWii(BlobReader* reader)
-    : m_reader(reader), m_game_partition(PARTITION_NONE), m_last_decrypted_block(UINT64_MAX)
+    : VolumeDisc(VolumeKind::Wii), m_reader(reader), m_game_partition(PARTITION_NONE),
+      m_last_decrypted_block(UINT64_MAX)
 {
   ASSERT(m_reader);
 

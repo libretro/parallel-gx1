@@ -163,10 +163,10 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
        ".elf"}};
   if (disc_image_extensions.contains(extension))
   {
-    std::unique_ptr<DiscIO::VolumeDisc> disc = DiscIO::CreateDiscForCore(path);
+    DiscIO::VolumeDisc* disc = DiscIO::CreateDiscForCore(path);
     if (disc)
     {
-      return std::make_unique<BootParameters>(Disc{std::move(path), std::move(disc), paths},
+      return std::make_unique<BootParameters>(Disc{std::move(path), disc, paths},
                                               std::move(boot_session_data_));
     }
 
@@ -193,13 +193,51 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
 
   if (extension == ".wad")
   {
-    std::unique_ptr<DiscIO::VolumeWAD> wad = DiscIO::CreateWAD(path);
+    DiscIO::VolumeWAD* wad = DiscIO::CreateWAD(path);
     if (wad)
-      return std::make_unique<BootParameters>(std::move(*wad), std::move(boot_session_data_));
+    {
+      // the WAD moves into the parameters, its reader with it; what is left of it goes
+      auto parameters =
+          std::make_unique<BootParameters>(std::move(*wad), std::move(boot_session_data_));
+      DiscIO::DestroyVolume(wad);
+      return parameters;
+    }
   }
 
   PanicAlert("Could not recognize file %s", path.c_str());
   return {};
+}
+
+BootParameters::Disc::Disc(std::string path_, DiscIO::VolumeDisc* volume_,
+                           std::vector<std::string> auto_disc_change_paths_)
+    : path(std::move(path_)), volume(volume_),
+      auto_disc_change_paths(std::move(auto_disc_change_paths_))
+{
+}
+
+BootParameters::Disc::Disc(Disc&& other) noexcept
+    : path(std::move(other.path)), volume(other.volume),
+      auto_disc_change_paths(std::move(other.auto_disc_change_paths))
+{
+  other.volume = nullptr;
+}
+
+BootParameters::Disc& BootParameters::Disc::operator=(Disc&& other) noexcept
+{
+  if (this != &other)
+  {
+    DiscIO::DestroyVolume(volume);
+    path = std::move(other.path);
+    volume = other.volume;
+    other.volume = nullptr;
+    auto_disc_change_paths = std::move(other.auto_disc_change_paths);
+  }
+  return *this;
+}
+
+BootParameters::Disc::~Disc()
+{
+  DiscIO::DestroyVolume(volume);
 }
 
 BootParameters::IPL::IPL(DiscIO::Region region_) : region(region_)
@@ -216,13 +254,12 @@ BootParameters::IPL::IPL(DiscIO::Region region_, Disc&& disc_) : IPL(region_)
 // Inserts a disc into the emulated disc drive and returns a pointer to it.
 // The returned pointer must only be used while we are still booting,
 // because DVDThread can do whatever it wants to the disc after that.
-static const DiscIO::VolumeDisc* SetDisc(DVD::DVDInterface& dvd_interface,
-                                         std::unique_ptr<DiscIO::VolumeDisc> disc,
+// Takes disc.
+static const DiscIO::VolumeDisc* SetDisc(DVD::DVDInterface& dvd_interface, DiscIO::VolumeDisc* disc,
                                          std::vector<std::string> auto_disc_change_paths = {})
 {
-  const DiscIO::VolumeDisc* pointer = disc.get();
-  dvd_interface.SetDisc(std::move(disc), auto_disc_change_paths);
-  return pointer;
+  dvd_interface.SetDisc(disc, auto_disc_change_paths);
+  return disc;
 }
 
 bool CBoot::DVDRead(Core::System& system, const DiscIO::VolumeDisc& disc, u64 dvd_offset,
@@ -418,8 +455,10 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
     bool operator()(BootParameters::Disc& disc) const
     {
       NOTICE_LOG(BOOT, "Booting from disc: %s", disc.path.c_str());
+      DiscIO::VolumeDisc* const taken = disc.volume;
+      disc.volume = nullptr;
       const DiscIO::VolumeDisc* volume =
-          SetDisc(system.GetDVDInterface(), std::move(disc.volume), disc.auto_disc_change_paths);
+          SetDisc(system.GetDVDInterface(), taken, disc.auto_disc_change_paths);
 
       if (!volume)
         return false;

@@ -30,18 +30,19 @@ VolumeWAD::~VolumeWAD()
 }
 
 VolumeWAD::VolumeWAD(VolumeWAD&& other) noexcept
-    : m_reader(other.m_reader), m_ticket(std::move(other.m_ticket)), m_tmd(std::move(other.m_tmd)),
-      m_cert_chain(std::move(other.m_cert_chain)), m_cert_chain_offset(other.m_cert_chain_offset),
-      m_ticket_offset(other.m_ticket_offset), m_tmd_offset(other.m_tmd_offset),
-      m_data_offset(other.m_data_offset), m_opening_bnr_offset(other.m_opening_bnr_offset),
-      m_hdr_size(other.m_hdr_size), m_cert_chain_size(other.m_cert_chain_size),
-      m_ticket_size(other.m_ticket_size), m_tmd_size(other.m_tmd_size),
-      m_data_size(other.m_data_size), m_opening_bnr_size(other.m_opening_bnr_size)
+    : Volume(VolumeKind::WAD), m_reader(other.m_reader), m_ticket(std::move(other.m_ticket)),
+      m_tmd(std::move(other.m_tmd)), m_cert_chain(std::move(other.m_cert_chain)),
+      m_cert_chain_offset(other.m_cert_chain_offset), m_ticket_offset(other.m_ticket_offset),
+      m_tmd_offset(other.m_tmd_offset), m_data_offset(other.m_data_offset),
+      m_opening_bnr_offset(other.m_opening_bnr_offset), m_hdr_size(other.m_hdr_size),
+      m_cert_chain_size(other.m_cert_chain_size), m_ticket_size(other.m_ticket_size),
+      m_tmd_size(other.m_tmd_size), m_data_size(other.m_data_size),
+      m_opening_bnr_size(other.m_opening_bnr_size)
 {
   other.m_reader = nullptr;
 }
 
-VolumeWAD::VolumeWAD(BlobReader* reader) : m_reader(reader)
+VolumeWAD::VolumeWAD(BlobReader* reader) : Volume(VolumeKind::WAD), m_reader(reader)
 {
   ASSERT(m_reader);
 

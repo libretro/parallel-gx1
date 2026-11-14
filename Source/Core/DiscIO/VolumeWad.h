@@ -34,39 +34,37 @@ public:
   // the reader goes with it (boot parameters hold a WAD by value)
   VolumeWAD(VolumeWAD&& other) noexcept;
   VolumeWAD& operator=(VolumeWAD&&) = delete;
-  bool Read(u64 offset, u64 length, u8* buffer,
-            const Partition& partition = PARTITION_NONE) const override;
-  const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const override;
-  std::optional<u64> GetTitleID(const Partition& partition = PARTITION_NONE) const override;
-  const IOS::ES::TicketReader&
-  GetTicket(const Partition& partition = PARTITION_NONE) const override;
-  const IOS::ES::TMDReader& GetTMD(const Partition& partition = PARTITION_NONE) const override;
-  const std::vector<u8>&
-  GetCertificateChain(const Partition& partition = PARTITION_NONE) const override;
-  std::vector<u8> GetContent(u16 index) const override;
+  bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition = PARTITION_NONE) const;
+  const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const;
+  std::optional<u64> GetTitleID(const Partition& partition = PARTITION_NONE) const;
+  const IOS::ES::TicketReader& GetTicket(const Partition& partition = PARTITION_NONE) const;
+  const IOS::ES::TMDReader& GetTMD(const Partition& partition = PARTITION_NONE) const;
+  const std::vector<u8>& GetCertificateChain(const Partition& partition = PARTITION_NONE) const;
+  std::vector<u8> GetContent(u16 index) const;
   bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
-                             size_t encrypted_size,
-                             const IOS::ES::TicketReader& ticket) const override;
-  IOS::ES::TicketReader GetTicketWithFixedCommonKey() const override;
-  std::string GetGameID(const Partition& partition = PARTITION_NONE) const override;
-  std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const override;
-  std::string GetMakerID(const Partition& partition = PARTITION_NONE) const override;
-  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const override;
-  Platform GetVolumeType() const override;
-  bool IsDatelDisc() const override;
-  bool IsNKit() const override;
-  Region GetRegion() const override;
-  Country GetCountry(const Partition& partition = PARTITION_NONE) const override;
-  u32 GetSimulatedMemorySize() const override { return 0; }
+                             size_t encrypted_size, const IOS::ES::TicketReader& ticket) const;
+  IOS::ES::TicketReader GetTicketWithFixedCommonKey() const;
+  std::string GetGameID(const Partition& partition = PARTITION_NONE) const;
+  std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const;
+  std::string GetMakerID(const Partition& partition = PARTITION_NONE) const;
+  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const;
+  Platform GetVolumeType() const;
+  bool IsDatelDisc() const;
+  bool IsNKit() const;
+  Region GetRegion() const;
+  Country GetCountry(const Partition& partition = PARTITION_NONE) const;
+  u32 GetSimulatedMemorySize() const { return 0; }
 
-  BlobType GetBlobType() const override;
-  u64 GetDataSize() const override;
-  DataSizeType GetDataSizeType() const override;
-  u64 GetRawSize() const override;
-  const BlobReader& GetBlobReader() const override;
-
+  BlobType GetBlobType() const;
+  u64 GetDataSize() const;
+  DataSizeType GetDataSizeType() const;
+  u64 GetRawSize() const;
+  const BlobReader& GetBlobReader() const;
 
 private:
+  // Volume reaches the functions it has of its own here
+  friend class Volume;
+
   BlobReader* m_reader;  // owned
   IOS::ES::TicketReader m_ticket;
   IOS::ES::TMDReader m_tmd;

@@ -139,7 +139,8 @@ public:
 
   void RegisterMMIO(MMIO::Mapping* mmio, u32 base, bool is_wii);
 
-  void SetDisc(std::unique_ptr<DiscIO::VolumeDisc> disc,
+  // takes disc
+  void SetDisc(DiscIO::VolumeDisc* disc,
                std::optional<std::vector<std::string>> auto_disc_change_paths);
   bool IsDiscInside() const;
   void EjectDisc(const Core::CPUThreadGuard& guard, EjectCause cause);

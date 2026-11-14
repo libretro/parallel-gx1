@@ -44,6 +44,7 @@ DVDThread::~DVDThread()
   m_dvd_thread.Shutdown();
   FreeResults();
   retro_eventcount_free(&m_result_ready);
+  DiscIO::DestroyVolume(m_disc);
 }
 
 void DVDThread::FreeResultList(mpsc_stack_node_t* node)
@@ -112,7 +113,8 @@ void DVDThread::Stop()
   m_result_map.clear();
   m_num_lent_reads = 0;
 
-  m_disc.reset();
+  DiscIO::DestroyVolume(m_disc);
+  m_disc = nullptr;
 }
 
 void DVDThread::DoState(PointerWrap& p)
@@ -152,7 +154,10 @@ void DVDThread::DoState(PointerWrap& p)
     if (had_disc)
       PanicAlert("An inserted disc was expected but not found.");
     else
-      m_disc.reset();
+    {
+      DiscIO::DestroyVolume(m_disc);
+      m_disc = nullptr;
+    }
   }
 
   // TODO: Savestates can be smaller if the buffers of results aren't saved,
@@ -166,12 +171,13 @@ void DVDThread::DoState(PointerWrap& p)
   // was made. Handling that properly may be more effort than it's worth.
 }
 
-void DVDThread::SetDisc(std::unique_ptr<DiscIO::Volume> disc)
+void DVDThread::SetDisc(DiscIO::Volume* disc)
 {
   WaitUntilIdle();
   // what was read from the disc going away stays read
   MaterializeLentReads();
-  m_disc = std::move(disc);
+  DiscIO::DestroyVolume(m_disc);
+  m_disc = disc;
 }
 
 bool DVDThread::HasDisc() const

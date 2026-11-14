@@ -125,8 +125,10 @@ private:
 
     if (attempt_to_scrub)
     {
-      const auto volume = CreateVolume(reader->CopyReader());
-      if (volume != nullptr && m_scrubber.SetupScrub(*volume))
+      Volume* const volume = CreateVolume(reader->CopyReader());
+      const bool scrubbing = volume != nullptr && m_scrubber.SetupScrub(*volume);
+      DestroyVolume(volume);
+      if (scrubbing)
       {
         for (u64 i = 0; i < total_size; i += DiscScrubber::CLUSTER_SIZE)
         {
