@@ -12,12 +12,12 @@
 #include <utility>
 
 #include <crypto/crypto.h>
+#include <crypto/kdf.h>
 
 #include "Common/BitUtils.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #include "Common/FrameClock.h"
-#include "Common/Crypto/HMAC.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
 #include "Common/Projection.h"
@@ -440,9 +440,8 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
       StringFromFormat("%" PRIu64 "\nw%016" PRIu64 "\n%s\n%s", (u64)random_number,
                        (u64)m_config.Id(), str_mail_flag.c_str(), str_interval.c_str());
   std::array<u8, 20> hashed{};
-  Common::HMAC::HMACWithSHA1(MAIL_CHECK_KEY.data(), MAIL_CHECK_KEY.size(),
-                             reinterpret_cast<const u8*>(hmac_message.data()),
-                             hmac_message.size(), hashed.data());
+  hmac_sha1(MAIL_CHECK_KEY.data(), MAIL_CHECK_KEY.size(),
+            reinterpret_cast<const u8*>(hmac_message.data()), hmac_message.size(), hashed.data());
 
   // On a real Wii, strncmp is used to compare both hashes. This means that it is a case-sensitive
   // comparison. KD will generate a lowercase hash as well as expect a lowercase hash from the
