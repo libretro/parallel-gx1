@@ -400,7 +400,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/Config/Config.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/ConfigInfo.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/Layer.cpp \
-	$(CORE_DIR)/Source/Core/Common/Crypto/ec.cpp \
 	$(CORE_DIR)/Source/Core/Common/DirectIOFile.cpp \
 	$(CORE_DIR)/Source/Core/Common/DynamicLibrary.cpp \
 	$(CORE_DIR)/Source/Core/Common/FatFsUtil.cpp \

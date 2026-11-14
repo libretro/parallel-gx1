@@ -20,7 +20,6 @@
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
-#include "Common/Crypto/ec.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/StringUtil.h"
@@ -72,7 +71,7 @@ struct BootMiiKeyDump
   u32 ms_id;                     // 0x200
   u32 ca_id;                     // 0x204
   u32 ng_key_id;                 // 0x208
-  Common::ec::Signature ng_sig;  // 0x20c
+  std::array<u8, 60> ng_sig;     // 0x20c
   struct Counter
   {
     u8 boot2version;
@@ -179,7 +178,7 @@ constexpr std::array<u8, 30> DEFAULT_PRIVATE_KEY = {{
 }};
 
 // clang-format off
-constexpr Common::ec::Signature DEFAULT_SIGNATURE = {{
+constexpr std::array<u8, 60> DEFAULT_SIGNATURE = {{
     // R
     0x00, 0xD8, 0x81, 0x63, 0xB2, 0x00, 0x6B, 0x0B, 0x54, 0x82, 0x88, 0x63, 0x81, 0x1C, 0x00, 0x71,
     0x12, 0xED, 0xB7, 0xFD, 0x21, 0xAB, 0x0E, 0x50, 0x0E, 0x1F, 0xBF, 0x78, 0xAD, 0x37,
@@ -321,13 +320,17 @@ ReturnCode IOSC::ComputeSharedKey(Handle dest_handle, Handle private_handle, Han
     return IOSC_INVALID_OBJTYPE;
   }
 
-  // Calculate the ECC shared secret.
-  // Its X coordinate
-  const Common::ec::SharedSecret shared_secret =
-      Common::ec::ComputeSharedSecret(private_entry->data.data(), public_entry->data.data());
+  // Calculate the ECC shared secret: its X coordinate, all zero if the keys do not make one. The
+  // public key is the point without its uncompressed-point prefix.
+  u8 point[B233_POINT_SIZE];
+  u8 shared_secret[30];
+  point[0] = 0x04;
+  std::memcpy(point + 1, public_entry->data.data(), B233_POINT_SIZE - 1);
+  if (b233_ecdh(private_entry->data.data(), point, shared_secret) != 0)
+    std::memset(shared_secret, 0, sizeof(shared_secret));
 
   u8 sha1[20];
-  SHA1Digest(shared_secret.data(), shared_secret.size(), sha1);
+  SHA1Digest(shared_secret, sizeof(shared_secret), sha1);
 
   dest_entry->data.resize(AES128_KEY_SIZE);
   std::memcpy(dest_entry->data.data(), sha1, AES128_KEY_SIZE);
@@ -449,7 +452,11 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
   {
     ASSERT(entry->data.size() == sizeof(CertECC::public_key));
 
-    const bool ok = Common::ec::VerifySignature(entry->data.data(), signature, sha1.data());
+    u8 point[B233_POINT_SIZE];
+    point[0] = 0x04;
+    std::memcpy(point + 1, entry->data.data(), B233_POINT_SIZE - 1);
+    const bool ok =
+        b233_ecdsa_verify(point, sha1.data(), sha1.size(), signature, signature + 30) == 0;
     return ok ? IPC_SUCCESS : IOSC_FAIL_CHECKVALUE;
   }
   default:
@@ -540,7 +547,9 @@ static CertECC MakeBlankEccCert(const std::string& issuer, const std::string& na
   cert.header.public_key_type = PublicKeyType(Common::swap32(u32(PublicKeyType::ECC)));
   name.copy(cert.header.name, sizeof(cert.header.name) - 1);
   cert.header.id = Common::swap32(key_id);
-  cert.public_key = Common::ec::PrivToPub(private_key);
+  u8 point[B233_POINT_SIZE];
+  if (b233_keygen(private_key, point) == 0)
+    std::memcpy(cert.public_key.data(), point + 1, cert.public_key.size());
   return cert;
 }
 
@@ -570,15 +579,22 @@ void IOSC::Sign(u8* sig_out, u8* ap_cert_out, u64 title_id, const u8* data, u32 
   const size_t skip = offsetof(CertECC, signature.issuer);
   u8 ap_cert_digest[20];
   SHA1Digest(reinterpret_cast<const u8*>(&cert) + skip, sizeof(cert) - skip, ap_cert_digest);
-  cert.signature.sig =
-      Common::ec::Sign(m_key_entries[HANDLE_CONSOLE_KEY].data.data(), ap_cert_digest);
+  if (b233_ecdsa_sign(m_key_entries[HANDLE_CONSOLE_KEY].data.data(), ap_cert_digest,
+                      sizeof(ap_cert_digest), cert.signature.sig.data(),
+                      cert.signature.sig.data() + 30) != 0)
+  {
+    cert.signature.sig.fill(0);
+  }
   std::memcpy(ap_cert_out, &cert, sizeof(cert));
 
   // Sign the data.
   u8 data_digest[20];
   SHA1Digest(data, data_size, data_digest);
-  const auto signature = Common::ec::Sign(ap_priv.data(), data_digest);
-  std::memcpy(sig_out, signature.data(), signature.size());
+  // a signature that cannot be made is all zero
+  if (b233_ecdsa_sign(ap_priv.data(), data_digest, sizeof(data_digest), sig_out, sig_out + 30) != 0)
+  {
+    std::memset(sig_out, 0, 60);
+  }
 }
 
 void IOSC::LoadDefaultEntries()

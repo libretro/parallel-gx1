@@ -22,7 +22,6 @@
 
 #include "Common/Align.h"
 #include "Common/CommonTypes.h"
-#include "Common/Crypto/ec.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Lazy.h"
@@ -466,7 +465,7 @@ private:
 
     // Sign the data.
     IOS::CertECC ap_cert;
-    Common::ec::Signature ap_sig;
+    std::array<u8, 60> ap_sig;
     m_iosc.Sign(ap_sig.data(), reinterpret_cast<u8*>(&ap_cert), Titles::SYSTEM_MENU, data_sha1,
                 static_cast<u32>(sizeof(data_sha1)));
 

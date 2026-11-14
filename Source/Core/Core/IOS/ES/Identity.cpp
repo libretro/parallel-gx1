@@ -8,7 +8,6 @@
 
 #include <lrc_hash.h>
 
-#include "Common/Crypto/ec.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
@@ -128,8 +127,7 @@ IPCReply ESDevice::Sign(const IOCtlVRequest& request)
   u8* ap_cert_out = memory.GetPointerForRange(request.io_vectors[1].address, sizeof(CertECC));
   u32 data_size = request.in_vectors[0].size;
   u8* data = memory.GetPointerForRange(request.in_vectors[0].address, data_size);
-  u8* sig_out =
-      memory.GetPointerForRange(request.io_vectors[0].address, sizeof(Common::ec::Signature));
+  u8* sig_out = memory.GetPointerForRange(request.io_vectors[0].address, 60);
 
   if (!m_core.m_title_context.active)
     return IPCReply(ES_EINVAL);
@@ -209,8 +207,7 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
 
   std::array<u8, 20> hash_digest;
   SHA1Digest(hash, hash_size, hash_digest.data());
-  ret = iosc.VerifyPublicKeySign(hash_digest, ap_cert, ecc_signature,
-                                 sizeof(Common::ec::Signature), PID_ES);
+  ret = iosc.VerifyPublicKeySign(hash_digest, ap_cert, ecc_signature, 60, PID_ES);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(data) failed with error %d",
@@ -226,7 +223,7 @@ IPCReply ESDevice::VerifySign(const IOCtlVRequest& request)
 {
   if (!request.HasNumberOfValidVectors(3, 0))
     return IPCReply(ES_EINVAL);
-  if (request.in_vectors[1].size != sizeof(Common::ec::Signature))
+  if (request.in_vectors[1].size != 60)
     return IPCReply(ES_EINVAL);
 
   auto& system = GetSystem();
