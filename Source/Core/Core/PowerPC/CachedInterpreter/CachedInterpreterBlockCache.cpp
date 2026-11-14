@@ -18,7 +18,7 @@ void CachedInterpreterBlockCache::Init()
 
 void CachedInterpreterBlockCache::DestroyBlock(JitBlock& block)
 {
-  JitBaseBlockCache::DestroyBlock(block);
+  JitBaseBlockCache::DestroyBlockCommon(block);
 
   if (block.near_begin != block.near_end)
     m_ranges_to_free_on_next_codegen.emplace_back(block.near_begin, block.near_end);

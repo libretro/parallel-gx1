@@ -233,12 +233,11 @@ public:
   static constexpr u32 FAST_BLOCK_MAP_FALLBACK_MASK = FAST_BLOCK_MAP_FALLBACK_ELEMENTS - 1;
 
   explicit JitBaseBlockCache(JitBase& jit);
-  virtual ~JitBaseBlockCache();
+  ~JitBaseBlockCache();
 
-  virtual void Init();
+  void Init();
   void Shutdown();
   void Clear();
-  void Reset();
 
   // Code Cache
   u8** GetEntryPoints();
@@ -270,14 +269,16 @@ public:
   u32* GetBlockBitSet() const;
 
 protected:
-  virtual void DestroyBlock(JitBlock& block);
+  // These branch to the JIT's block cache, which does its part of each
+  void DestroyBlock(JitBlock& block);
+  void WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest);
+  void WriteDestroyBlock(const JitBlock& block);
+  // What every block cache does when it destroys a block
+  void DestroyBlockCommon(JitBlock& block);
 
   JitBase& m_jit;
 
 private:
-  virtual void WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest) = 0;
-  virtual void WriteDestroyBlock(const JitBlock& block);
-
   void LinkBlockExits(JitBlock& block);
   void LinkBlock(JitBlock& block);
   void UnlinkBlock(const JitBlock& block);

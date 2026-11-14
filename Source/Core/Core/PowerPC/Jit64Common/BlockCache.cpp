@@ -58,7 +58,7 @@ void JitBlockCache::Init()
 
 void JitBlockCache::DestroyBlock(JitBlock& block)
 {
-  JitBaseBlockCache::DestroyBlock(block);
+  JitBaseBlockCache::DestroyBlockCommon(block);
 
   if (block.near_begin != block.near_end)
     m_ranges_to_free_on_next_codegen_near.emplace_back(block.near_begin, block.near_end);

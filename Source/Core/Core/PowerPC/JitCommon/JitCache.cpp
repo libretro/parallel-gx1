@@ -3,6 +3,14 @@
 
 #include "Core/PowerPC/JitCommon/JitCache.h"
 
+#include "Core/PowerPC/CachedInterpreter/CachedInterpreterBlockCache.h"
+#ifdef _M_X86_64
+#include "Core/PowerPC/Jit64Common/BlockCache.h"
+#endif
+#ifdef _M_ARM_64
+#include "Core/PowerPC/JitArm64/JitArm64Cache.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -327,12 +335,6 @@ void JitBaseBlockCache::Clear()
 
   if (m_entry_points_ptr)
     m_entry_points_arena.Clear();
-}
-
-void JitBaseBlockCache::Reset()
-{
-  Shutdown();
-  Init();
 }
 
 u8** JitBaseBlockCache::GetEntryPoints()
@@ -1008,8 +1010,49 @@ u32* JitBaseBlockCache::GetBlockBitSet() const
   return valid_block.m_valid_block;
 }
 
+#ifdef _M_X86_64
+#define BLOCK_CACHE_JIT64(call)                                                                    \
+  case CPUCoreKind::Jit64:                                                                         \
+    static_cast<JitBlockCache*>(this)->call;                                                       \
+    break;
+#else
+#define BLOCK_CACHE_JIT64(call)
+#endif
+#ifdef _M_ARM_64
+#define BLOCK_CACHE_JITARM64(call)                                                                 \
+  case CPUCoreKind::JitArm64:                                                                      \
+    static_cast<JitArm64BlockCache*>(this)->call;                                                  \
+    break;
+#else
+#define BLOCK_CACHE_JITARM64(call)
+#endif
+
+/* The call made on the block cache of the JIT this is */
+#define BLOCK_CACHE_CALL(call)                                                                     \
+  switch (m_jit.cpu_core_kind)                                                                     \
+  {                                                                                                \
+  case CPUCoreKind::CachedInterpreter:                                                             \
+    static_cast<CachedInterpreterBlockCache*>(this)->call;                                         \
+    break;                                                                                         \
+    BLOCK_CACHE_JIT64(call)                                                                        \
+    BLOCK_CACHE_JITARM64(call)                                                                     \
+  default:                                                                                         \
+    break;                                                                                         \
+  }
+
+void JitBaseBlockCache::DestroyBlock(JitBlock& block)
+{
+  BLOCK_CACHE_CALL(DestroyBlock(block))
+}
+
+void JitBaseBlockCache::WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest)
+{
+  BLOCK_CACHE_CALL(WriteLinkBlock(source, dest))
+}
+
 void JitBaseBlockCache::WriteDestroyBlock(const JitBlock& block)
 {
+  BLOCK_CACHE_CALL(WriteDestroyBlock(block))
 }
 
 // Block linker
@@ -1071,7 +1114,7 @@ void JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
   }
 }
 
-void JitBaseBlockCache::DestroyBlock(JitBlock& block)
+void JitBaseBlockCache::DestroyBlockCommon(JitBlock& block)
 {
   LeaveSuspended(block);
   if (m_entry_points_ptr)

@@ -12,14 +12,14 @@ class JitBase;
 
 typedef void (*CompiledCode)();
 
-class JitArm64BlockCache : public JitBaseBlockCache
+class JitArm64BlockCache final : public JitBaseBlockCache
 {
 public:
   explicit JitArm64BlockCache(JitBase& jit);
 
-  void Init() override;
+  void Init();
 
-  void DestroyBlock(JitBlock& block) override;
+  void DestroyBlock(JitBlock& block);
 
   const std::vector<std::pair<u8*, u8*>>& GetRangesToFreeNear() const;
   const std::vector<std::pair<u8*, u8*>>& GetRangesToFreeFar() const;
@@ -32,10 +32,10 @@ public:
   static constexpr size_t BLOCK_LINK_SIZE = 3 * sizeof(u32);
   static constexpr size_t BLOCK_LINK_FAST_BL_OFFSET = BLOCK_LINK_SIZE - sizeof(u32);
 
-private:
-  void WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest) override;
-  void WriteDestroyBlock(const JitBlock& block) override;
+  void WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest);
+  void WriteDestroyBlock(const JitBlock& block);
 
+private:
   std::vector<std::pair<u8*, u8*>> m_ranges_to_free_on_next_codegen_near;
   std::vector<std::pair<u8*, u8*>> m_ranges_to_free_on_next_codegen_far;
 };
