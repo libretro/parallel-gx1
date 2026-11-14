@@ -3,7 +3,8 @@
 
 #include "Core/NetworkCaptureLogger.h"
 
-#include <array>
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 
@@ -20,141 +21,174 @@
 
 namespace Core
 {
-static std::shared_ptr<NetworkCaptureLogger> s_network_logger;
+static NetworkCaptureLogger s_none_logger(NetworkCaptureType::None);
+static NetworkCaptureLogger s_raw_logger(NetworkCaptureType::Raw);
+static NetworkCaptureLogger s_pcap_logger(NetworkCaptureType::PCAP);
 
-std::shared_ptr<NetworkCaptureLogger> NetworkLogger()
+NetworkCaptureLogger* NetworkLogger()
 {
-  const bool has_ssl = Config::Get(Config::MAIN_NETWORK_SSL_DUMP_READ) ||
-                       Config::Get(Config::MAIN_NETWORK_SSL_DUMP_WRITE);
-  const bool is_pcap = Config::Get(Config::MAIN_NETWORK_DUMP_AS_PCAP);
-  const auto current_capture_type = [&] {
-    if (is_pcap)
-      return NetworkCaptureType::PCAP;
-    if (has_ssl)
-      return NetworkCaptureType::Raw;
-    return NetworkCaptureType::None;
-  }();
-
-  if (s_network_logger && s_network_logger->GetCaptureType() == current_capture_type)
-    return s_network_logger;
-
-  switch (current_capture_type)
+  if (Config::Get(Config::MAIN_NETWORK_DUMP_AS_PCAP))
   {
-  case NetworkCaptureType::PCAP:
-    s_network_logger = std::make_shared<PCAPSSLCaptureLogger>();
-    break;
-  case NetworkCaptureType::Raw:
-    s_network_logger = std::make_shared<BinarySSLCaptureLogger>();
-    break;
-  case NetworkCaptureType::None:
-    s_network_logger = std::make_shared<DummyNetworkCaptureLogger>();
-    break;
+    s_pcap_logger.OpenPCAP();
+    return &s_pcap_logger;
   }
-  return s_network_logger;
+  if (Config::Get(Config::MAIN_NETWORK_SSL_DUMP_READ) ||
+      Config::Get(Config::MAIN_NETWORK_SSL_DUMP_WRITE))
+  {
+    return &s_raw_logger;
+  }
+  return &s_none_logger;
 }
 
 void ResetNetworkLogger()
 {
-  s_network_logger.reset();
+  s_pcap_logger.Close();
 }
 
-NetworkCaptureLogger::NetworkCaptureLogger() = default;
-NetworkCaptureLogger::~NetworkCaptureLogger() = default;
-
-void DummyNetworkCaptureLogger::OnNewSocket(s32 socket)
-{
-}
-
-void DummyNetworkCaptureLogger::LogSSLRead(const void* data, std::size_t length, s32 socket)
-{
-}
-
-void DummyNetworkCaptureLogger::LogSSLWrite(const void* data, std::size_t length, s32 socket)
-{
-}
-
-void DummyNetworkCaptureLogger::LogRead(const void* data, std::size_t length, s32 socket,
-                                        sockaddr* from)
-{
-}
-
-void DummyNetworkCaptureLogger::LogWrite(const void* data, std::size_t length, s32 socket,
-                                         sockaddr* to)
-{
-}
-
-void DummyNetworkCaptureLogger::LogBBA(const void* data, std::size_t length)
-{
-}
-
-NetworkCaptureType DummyNetworkCaptureLogger::GetCaptureType() const
-{
-  return NetworkCaptureType::None;
-}
-
-void BinarySSLCaptureLogger::LogSSLRead(const void* data, std::size_t length, s32 socket)
-{
-  if (!Config::Get(Config::MAIN_NETWORK_SSL_DUMP_READ))
-    return;
-  const std::string filename =
-      File::GetUserPath(D_DUMPSSL_IDX) + SConfig::GetInstance().GetGameID() + "_read.bin";
-  File::IOFile(filename, "ab").WriteBytes(data, length);
-}
-
-void BinarySSLCaptureLogger::LogSSLWrite(const void* data, std::size_t length, s32 socket)
-{
-  if (!Config::Get(Config::MAIN_NETWORK_SSL_DUMP_WRITE))
-    return;
-  const std::string filename =
-      File::GetUserPath(D_DUMPSSL_IDX) + SConfig::GetInstance().GetGameID() + "_write.bin";
-  File::IOFile(filename, "ab").WriteBytes(data, length);
-}
-
-NetworkCaptureType BinarySSLCaptureLogger::GetCaptureType() const
-{
-  return NetworkCaptureType::Raw;
-}
-
-PCAPSSLCaptureLogger::PCAPSSLCaptureLogger()
+void NetworkCaptureLogger::OpenPCAP()
 {
   char stamp[32] = "";
+  // the first thread here opens it; packets queued meanwhile wait for it
+  if (retro_atomic_load_acquire_int(&m_file_state) != PCAP_CLOSED ||
+      !retro_atomic_cas_int(&m_file_state, PCAP_CLOSED, PCAP_OPENING))
+  {
+    return;
+  }
   if (const auto local_time = Common::LocalTime(std::time(nullptr)))
     std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %Hh%Mm%Ss", &*local_time);
   const std::string filepath =
       File::GetUserPath(D_DUMPSSL_IDX) + SConfig::GetInstance().GetGameID() + " " + stamp + ".pcap";
   m_file.Open(filepath.c_str(), Common::PCAP::LinkType::Ethernet, File::SharedAccess::Read);
+  retro_atomic_store_release_int(&m_file_state, PCAP_OPEN);
 }
 
-PCAPSSLCaptureLogger::~PCAPSSLCaptureLogger()
+void NetworkCaptureLogger::Close()
 {
   // Nothing logs any more; write what is still queued.
+  WriteQueued();
+  m_file.Close();
+  retro_atomic_store_release_int(&m_file_state, PCAP_CLOSED);
+  for (u32 i = 0; i <= SOCKET_SEQUENCES; i++)
+    m_sequences[i].used = false;
+}
+
+/* The socket's entry, made if it has none */
+NetworkCaptureLogger::SocketSequence* NetworkCaptureLogger::Sequence(s32 socket)
+{
+  u32 i, slot = static_cast<u32>(socket) * 2654435761u % SOCKET_SEQUENCES;
+  for (i = 0; i < SOCKET_SEQUENCES; i++, slot = (slot + 1) % SOCKET_SEQUENCES)
+  {
+    SocketSequence* const entry = &m_sequences[slot];
+    if (entry->used && entry->socket == socket)
+      return entry;
+    if (!entry->used)
+    {
+      entry->used = true;
+      entry->socket = socket;
+      entry->read = 0;
+      entry->write = 0;
+      return entry;
+    }
+  }
+  return &m_sequences[SOCKET_SEQUENCES];
+}
+
+void NetworkCaptureLogger::OnNewSocket(s32 socket)
+{
+  if (m_type != NetworkCaptureType::PCAP)
+    return;
+  SocketSequence* const entry = Sequence(socket);
+  entry->read = 0;
+  entry->write = 0;
+}
+
+static void AppendRawSSL(const char* suffix, const void* data, std::size_t length)
+{
+  const std::string filename =
+      File::GetUserPath(D_DUMPSSL_IDX) + SConfig::GetInstance().GetGameID() + suffix;
+  File::IOFile(filename, "ab").WriteBytes(data, length);
+}
+
+void NetworkCaptureLogger::LogSSLRead(const void* data, std::size_t length, s32 socket)
+{
+  if (m_type == NetworkCaptureType::None || !Config::Get(Config::MAIN_NETWORK_SSL_DUMP_READ))
+    return;
+  if (m_type == NetworkCaptureType::Raw)
+    AppendRawSSL("_read.bin", data, length);
+  else
+    Log(LogType::Read, data, length, socket, nullptr);
+}
+
+void NetworkCaptureLogger::LogSSLWrite(const void* data, std::size_t length, s32 socket)
+{
+  if (m_type == NetworkCaptureType::None || !Config::Get(Config::MAIN_NETWORK_SSL_DUMP_WRITE))
+    return;
+  if (m_type == NetworkCaptureType::Raw)
+    AppendRawSSL("_write.bin", data, length);
+  else
+    Log(LogType::Write, data, length, socket, nullptr);
+}
+
+void NetworkCaptureLogger::LogRead(const void* data, std::size_t length, s32 socket, sockaddr* from)
+{
+  if (m_type == NetworkCaptureType::PCAP)
+    Log(LogType::Read, data, length, socket, from);
+}
+
+void NetworkCaptureLogger::LogWrite(const void* data, std::size_t length, s32 socket, sockaddr* to)
+{
+  if (m_type == NetworkCaptureType::PCAP)
+    Log(LogType::Write, data, length, socket, to);
+}
+
+void NetworkCaptureLogger::LogBBA(const void* data, std::size_t length)
+{
+  Packet* packet;
+  if (m_type != NetworkCaptureType::PCAP || !Config::Get(Config::MAIN_NETWORK_DUMP_BBA))
+    return;
+
+  // CEXIETHERNET's RecvHandlePacket and SendFromDirectFIFO run on different threads.
+  packet = NewPacket(length);
+  if (!packet)
+    return;
+  std::memcpy(packet->bytes, data, length);
+  Queue(packet);
+}
+
+NetworkCaptureLogger::Packet* NetworkCaptureLogger::NewPacket(std::size_t size)
+{
+  Packet* const packet = static_cast<Packet*>(std::malloc(offsetof(Packet, bytes) + size));
+  if (packet)
+    packet->size = size;
+  return packet;
+}
+
+/* Everything queued, written in the order it came */
+void NetworkCaptureLogger::WriteQueued()
+{
   for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_packets)); node;)
   {
-    auto* packet = reinterpret_cast<Packet*>(node);
+    Packet* const packet = reinterpret_cast<Packet*>(node);
     node = node->next;
-    m_file.AddPacket(packet->bytes.data(), packet->bytes.size());
-    delete packet;
+    if (m_file.IsOpen())
+      m_file.AddPacket(packet->bytes, packet->size);
+    std::free(packet);
   }
 }
 
-void PCAPSSLCaptureLogger::Write(const u8* data, std::size_t length)
+void NetworkCaptureLogger::Queue(Packet* packet)
 {
-  auto* packet = new Packet{{}, std::vector<u8>(data, data + length)};
   mpsc_stack_push(&m_packets, &packet->link);
   // Pairs with the writer's fence: it either sees this packet or this thread sees it gone.
   retro_atomic_thread_fence_seq_cst();
 
   for (;;)
   {
+    if (retro_atomic_load_acquire_int(&m_file_state) != PCAP_OPEN)
+      return;  // written once the file is open
     if (!retro_atomic_cas_int(&m_writing, 0, 1))
       return;  // the writer at work takes this packet too
-    for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_packets)); node;)
-    {
-      auto* queued = reinterpret_cast<Packet*>(node);
-      node = node->next;
-      m_file.AddPacket(queued->bytes.data(), queued->bytes.size());
-      delete queued;
-    }
+    WriteQueued();
     retro_atomic_store_release_int(&m_writing, 0);
     // A packet queued after the drain, by a thread that saw this one still writing.
     retro_atomic_thread_fence_seq_cst();
@@ -163,46 +197,7 @@ void PCAPSSLCaptureLogger::Write(const u8* data, std::size_t length)
   }
 }
 
-void PCAPSSLCaptureLogger::OnNewSocket(s32 socket)
-{
-  m_read_sequence_number[socket] = 0;
-  m_write_sequence_number[socket] = 0;
-}
-
-void PCAPSSLCaptureLogger::LogSSLRead(const void* data, std::size_t length, s32 socket)
-{
-  if (!Config::Get(Config::MAIN_NETWORK_SSL_DUMP_READ))
-    return;
-  Log(LogType::Read, data, length, socket, nullptr);
-}
-
-void PCAPSSLCaptureLogger::LogSSLWrite(const void* data, std::size_t length, s32 socket)
-{
-  if (!Config::Get(Config::MAIN_NETWORK_SSL_DUMP_WRITE))
-    return;
-  Log(LogType::Write, data, length, socket, nullptr);
-}
-
-void PCAPSSLCaptureLogger::LogRead(const void* data, std::size_t length, s32 socket, sockaddr* from)
-{
-  Log(LogType::Read, data, length, socket, from);
-}
-
-void PCAPSSLCaptureLogger::LogWrite(const void* data, std::size_t length, s32 socket, sockaddr* to)
-{
-  Log(LogType::Write, data, length, socket, to);
-}
-
-void PCAPSSLCaptureLogger::LogBBA(const void* data, std::size_t length)
-{
-  if (!Config::Get(Config::MAIN_NETWORK_DUMP_BBA))
-    return;
-
-  // CEXIETHERNET's RecvHandlePacket and SendFromDirectFIFO run on different threads.
-  Write(static_cast<const u8*>(data), length);
-}
-
-void PCAPSSLCaptureLogger::Log(LogType log_type, const void* data, std::size_t length, s32 socket,
+void NetworkCaptureLogger::Log(LogType log_type, const void* data, std::size_t length, s32 socket,
                                sockaddr* other)
 {
   const auto state = Common::SaveNetworkErrorState();
@@ -234,11 +229,13 @@ void PCAPSSLCaptureLogger::Log(LogType log_type, const void* data, std::size_t l
   LogIPv4(log_type, static_cast<const u8*>(data), static_cast<u16>(length), socket, *from, *to);
 }
 
-void PCAPSSLCaptureLogger::LogIPv4(LogType log_type, const u8* data, u16 length, s32 socket,
+void NetworkCaptureLogger::LogIPv4(LogType log_type, const u8* data, u16 length, s32 socket,
                                    const sockaddr_in& from, const sockaddr_in& to)
 {
   int socket_type;
   socklen_t option_length = sizeof(int);
+  Packet* packet;
+  u8* out;
 
   if (getsockopt(socket, SOL_SOCKET, SO_TYPE, reinterpret_cast<char*>(&socket_type),
                  &option_length) != 0 ||
@@ -246,12 +243,6 @@ void PCAPSSLCaptureLogger::LogIPv4(LogType log_type, const u8* data, u16 length,
   {
     return;
   }
-
-  std::vector<u8> packet;
-  auto insert = [&](const auto* new_data, std::size_t size) {
-    const u8* begin = reinterpret_cast<const u8*>(new_data);
-    packet.insert(packet.end(), begin, begin + size);
-  };
 
   Common::EthernetHeader ethernet_header(0x800);
   auto mac = Common::StringToMacAddress(Config::Get(Config::MAIN_WIRELESS_MAC));
@@ -261,32 +252,42 @@ void PCAPSSLCaptureLogger::LogIPv4(LogType log_type, const u8* data, u16 length,
         (log_type == LogType::Write) ? ethernet_header.source : ethernet_header.destination;
     mac_address = *mac;
   }
-  insert(&ethernet_header, ethernet_header.Size());
 
   if (socket_type == SOCK_STREAM)
   {
-    u32& sequence_number = (log_type == LogType::Read) ? m_read_sequence_number[socket] :
-                                                         m_write_sequence_number[socket];
+    SocketSequence* const entry = Sequence(socket);
+    u32& sequence_number = (log_type == LogType::Read) ? entry->read : entry->write;
     Common::TCPHeader tcp_header(from, to, sequence_number, data, length);
     sequence_number += static_cast<u32>(length);
     Common::IPv4Header ip_header(tcp_header.Size() + length, tcp_header.IPProto(), from, to);
-    insert(&ip_header, ip_header.Size());
-    insert(&tcp_header, tcp_header.Size());
+    packet = NewPacket(ethernet_header.Size() + ip_header.Size() + tcp_header.Size() + length);
+    if (!packet)
+      return;
+    out = packet->bytes;
+    std::memcpy(out, &ethernet_header, ethernet_header.Size());
+    out += ethernet_header.Size();
+    std::memcpy(out, &ip_header, ip_header.Size());
+    out += ip_header.Size();
+    std::memcpy(out, &tcp_header, tcp_header.Size());
+    out += tcp_header.Size();
   }
-  else if (socket_type == SOCK_DGRAM)
+  else
   {
     Common::UDPHeader udp_header(from, to, length);
     Common::IPv4Header ip_header(udp_header.Size() + length, udp_header.IPProto(), from, to);
-    insert(&ip_header, ip_header.Size());
-    insert(&udp_header, udp_header.Size());
+    packet = NewPacket(ethernet_header.Size() + ip_header.Size() + udp_header.Size() + length);
+    if (!packet)
+      return;
+    out = packet->bytes;
+    std::memcpy(out, &ethernet_header, ethernet_header.Size());
+    out += ethernet_header.Size();
+    std::memcpy(out, &ip_header, ip_header.Size());
+    out += ip_header.Size();
+    std::memcpy(out, &udp_header, udp_header.Size());
+    out += udp_header.Size();
   }
 
-  packet.insert(packet.end(), data, data + length);
-  Write(packet.data(), packet.size());
-}
-
-NetworkCaptureType PCAPSSLCaptureLogger::GetCaptureType() const
-{
-  return NetworkCaptureType::PCAP;
+  std::memcpy(out, data, length);
+  Queue(packet);
 }
 }  // namespace Core

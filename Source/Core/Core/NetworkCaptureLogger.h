@@ -4,9 +4,6 @@
 #pragma once
 
 #include <cstddef>
-#include <map>
-#include <memory>
-#include <vector>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -34,71 +31,31 @@ enum class NetworkCaptureType
   PCAP,
 };
 
-class NetworkCaptureLogger
+// What a game sends and receives over the network, captured as the settings ask: nothing, the
+// raw SSL streams, or everything as PCAP. One logger per kind of capture, for the whole session.
+class NetworkCaptureLogger final
 {
 public:
-  NetworkCaptureLogger();
+  explicit NetworkCaptureLogger(NetworkCaptureType type) : m_type(type) {}
   NetworkCaptureLogger(const NetworkCaptureLogger&) = delete;
-  NetworkCaptureLogger(NetworkCaptureLogger&&) = delete;
   NetworkCaptureLogger& operator=(const NetworkCaptureLogger&) = delete;
-  NetworkCaptureLogger& operator=(NetworkCaptureLogger&&) = delete;
-  virtual ~NetworkCaptureLogger();
 
-  virtual void OnNewSocket(s32 socket) = 0;
+  void OnNewSocket(s32 socket);
 
-  virtual void LogSSLRead(const void* data, std::size_t length, s32 socket) = 0;
-  virtual void LogSSLWrite(const void* data, std::size_t length, s32 socket) = 0;
+  void LogSSLRead(const void* data, std::size_t length, s32 socket);
+  void LogSSLWrite(const void* data, std::size_t length, s32 socket);
 
-  virtual void LogRead(const void* data, std::size_t length, s32 socket, sockaddr* from) = 0;
-  virtual void LogWrite(const void* data, std::size_t length, s32 socket, sockaddr* to) = 0;
+  void LogRead(const void* data, std::size_t length, s32 socket, sockaddr* from);
+  void LogWrite(const void* data, std::size_t length, s32 socket, sockaddr* to);
 
-  virtual void LogBBA(const void* data, std::size_t length) = 0;
+  void LogBBA(const void* data, std::size_t length);
 
-  virtual NetworkCaptureType GetCaptureType() const = 0;
-};
+  NetworkCaptureType GetCaptureType() const { return m_type; }
 
-class DummyNetworkCaptureLogger : public NetworkCaptureLogger
-{
-public:
-  void OnNewSocket(s32 socket) override;
-
-  void LogSSLRead(const void* data, std::size_t length, s32 socket) override;
-  void LogSSLWrite(const void* data, std::size_t length, s32 socket) override;
-
-  void LogRead(const void* data, std::size_t length, s32 socket, sockaddr* from) override;
-  void LogWrite(const void* data, std::size_t length, s32 socket, sockaddr* to) override;
-
-  void LogBBA(const void* data, std::size_t length) override;
-
-  NetworkCaptureType GetCaptureType() const override;
-};
-
-class BinarySSLCaptureLogger final : public DummyNetworkCaptureLogger
-{
-public:
-  void LogSSLRead(const void* data, std::size_t length, s32 socket) override;
-  void LogSSLWrite(const void* data, std::size_t length, s32 socket) override;
-
-  NetworkCaptureType GetCaptureType() const override;
-};
-
-class PCAPSSLCaptureLogger final : public NetworkCaptureLogger
-{
-public:
-  PCAPSSLCaptureLogger();
-  ~PCAPSSLCaptureLogger() override;
-
-  void OnNewSocket(s32 socket) override;
-
-  void LogSSLRead(const void* data, std::size_t length, s32 socket) override;
-  void LogSSLWrite(const void* data, std::size_t length, s32 socket) override;
-
-  void LogRead(const void* data, std::size_t length, s32 socket, sockaddr* from) override;
-  void LogWrite(const void* data, std::size_t length, s32 socket, sockaddr* to) override;
-
-  void LogBBA(const void* data, std::size_t length) override;
-
-  NetworkCaptureType GetCaptureType() const override;
+  // A PCAP capture's file, opened the first time it is asked for
+  void OpenPCAP();
+  // Writes what is still queued and closes the file
+  void Close();
 
 private:
   enum class LogType
@@ -107,29 +64,50 @@ private:
     Write,
   };
 
-  void Log(LogType log_type, const void* data, std::size_t length, s32 socket, sockaddr* other);
-  void LogIPv4(LogType log_type, const u8* data, u16 length, s32 socket, const sockaddr_in& from,
-               const sockaddr_in& to);
-
   // Packets come from the CPU thread, the BBA thread and the network worker. Each one queues
   // its packet, and whichever finds no writer at work becomes it and writes everything
   // queued, its own and the others', so nobody waits on the file.
   struct Packet
   {
     mpsc_stack_node_t link;  // first: the drained chain is cast back
-    std::vector<u8> bytes;
+    std::size_t size;
+    u8 bytes[1];
   };
-  void Write(const u8* data, std::size_t length);
+  static Packet* NewPacket(std::size_t size);
+  void Queue(Packet* packet);
+  void WriteQueued();
+
+  // A socket's TCP sequence numbers, by host socket; past the table's room, sockets share one
+  struct SocketSequence
+  {
+    s32 socket;
+    u32 read;
+    u32 write;
+    bool used;
+  };
+  static constexpr u32 SOCKET_SEQUENCES = 256;
+  SocketSequence* Sequence(s32 socket);
+
+  void Log(LogType log_type, const void* data, std::size_t length, s32 socket, sockaddr* other);
+  void LogIPv4(LogType log_type, const u8* data, u16 length, s32 socket, const sockaddr_in& from,
+               const sockaddr_in& to);
 
   Common::PCAP m_file;
   mpsc_stack_t m_packets{};
+  SocketSequence m_sequences[SOCKET_SEQUENCES + 1]{};
   retro_atomic_int_t m_writing{};
-  std::map<s32, u32> m_read_sequence_number;
-  std::map<s32, u32> m_write_sequence_number;
+  enum
+  {
+    PCAP_CLOSED,
+    PCAP_OPENING,
+    PCAP_OPEN,
+  };
+  retro_atomic_int_t m_file_state{};
+  NetworkCaptureType m_type;
 };
 
-// The logger the network settings ask for, made again when they change.
-std::shared_ptr<NetworkCaptureLogger> NetworkLogger();
-// Drops the logger, closing what it writes to.
+// The logger the network settings ask for now.
+NetworkCaptureLogger* NetworkLogger();
+// Closes what the loggers write to.
 void ResetNetworkLogger();
 }  // namespace Core
