@@ -84,6 +84,28 @@ private:
     return vol;
   }
 
+  // Mixes a Dolby voice into a buffer as the UCode does: the volume, in 16.16, takes a 32nd
+  // of the change asked for every two samples for the first 64 (the multiplies run one sample
+  // ahead of the additions, so the first sample has a step of its own), then holds for the
+  // last 16; each sample adds its product's top half to the buffer, saturated.
+  static void AddBuffersWithDolbyVolume(s16* dst, const s16* src, s16 vol, s16 delta)
+  {
+    const s32 step = static_cast<s32>(delta) * (1 << 11);
+    s64 v = static_cast<s64>(vol) * 65536;
+    if (!vol && !delta)
+      return;
+
+    for (int i = 0; i < MIXING_BUFFER_SIZE; ++i)
+    {
+      // samples 1 and 2 at the first volume, 3 and 4 at the next, ... 63 and 64 at the 32nd;
+      // the rest at the volume after the last step
+      if (i >= 3 && i <= 65 && (i & 1))
+        v += step;
+      const s32 volume = static_cast<s32>(v >> 16);
+      dst[i] = static_cast<s16>(SaturateS16(dst[i] + ((volume * src[i]) >> 16)));
+    }
+  }
+
   // v >> shift rounded as the DSP rounds an accumulator to its middle word (mulmvz, movpz):
   // to nearest, ties to even
   static s64 RoundAsDSP(s64 v, int shift)

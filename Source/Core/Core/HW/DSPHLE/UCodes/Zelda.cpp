@@ -80,6 +80,10 @@ enum ZeldaUCodeFlag
   // factor is first multiplied by it (a 1.15 product), then applied to the quadrant volumes it
   // has already scaled. Checked against 0x56D36052's code.
   DOLBY_REVERB_TIMES_MASTER = 0x00001000,
+
+  // If set, a Dolby voice's volume steps to its target in 32 steps over the first 64 samples
+  // and holds for the last 16, as 0x56D36052's mixer does, instead of ramping over all 80.
+  DOLBY_VOLUME_IN_32_STEPS = 0x00002000,
 };
 
 struct UCodeFlags
@@ -104,7 +108,8 @@ static const UCodeFlags UCODE_FLAGS[] = {
     // Pikmin 1 GC PAL.
     {0x267FD05A, SYNC_PER_FRAME | NO_CMD_0D},
     // Super Mario Sunshine.
-    {0x56D36052, SYNC_PER_FRAME | NO_CMD_0D | BACK_MIXED_INTO_FRONT | DOLBY_REVERB_TIMES_MASTER},
+    {0x56D36052, SYNC_PER_FRAME | NO_CMD_0D | BACK_MIXED_INTO_FRONT | DOLBY_REVERB_TIMES_MASTER |
+                     DOLBY_VOLUME_IN_32_STEPS},
     // The Legend of Zelda: The Wind Waker.
     {0x86840740, 0},
     // The Legend of Zelda: Collector's Edition (except Wind Waker).
@@ -1395,8 +1400,16 @@ void ZeldaAudioRenderer::AddVoice(u16 voice_id)
     };
     for (const auto& buffer : buffers)
     {
-      AddBuffersWithVolumeRamp(*buffer.buffer, input_samples, buffer.volume << 16,
-                               (buffer.volume_delta << 16) / MIXING_BUFFER_SIZE);
+      if (m_flags & DOLBY_VOLUME_IN_32_STEPS)
+      {
+        AddBuffersWithDolbyVolume(*buffer.buffer, input_samples, buffer.volume,
+                                  buffer.volume_delta);
+      }
+      else
+      {
+        AddBuffersWithVolumeRamp(*buffer.buffer, input_samples, buffer.volume << 16,
+                                 (buffer.volume_delta << 16) / MIXING_BUFFER_SIZE);
+      }
     }
 
     vpb.dolby_volume_current = vpb.dolby_volume_target;
