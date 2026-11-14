@@ -75,6 +75,11 @@ enum ZeldaUCodeFlag
   // which they replace, and clearing them; else the front buffers are cleared and the back
   // ones decay.
   BACK_MIXED_INTO_FRONT = 0x00000800,
+
+  // If set, a Dolby voice's reverb volume is scaled by the master volume twice: the reverb
+  // factor is first multiplied by it (a 1.15 product), then applied to the quadrant volumes it
+  // has already scaled. Checked against 0x56D36052's code.
+  DOLBY_REVERB_TIMES_MASTER = 0x00001000,
 };
 
 struct UCodeFlags
@@ -99,7 +104,7 @@ static const UCodeFlags UCODE_FLAGS[] = {
     // Pikmin 1 GC PAL.
     {0x267FD05A, SYNC_PER_FRAME | NO_CMD_0D},
     // Super Mario Sunshine.
-    {0x56D36052, SYNC_PER_FRAME | NO_CMD_0D | BACK_MIXED_INTO_FRONT},
+    {0x56D36052, SYNC_PER_FRAME | NO_CMD_0D | BACK_MIXED_INTO_FRONT | DOLBY_REVERB_TIMES_MASTER},
     // The Legend of Zelda: The Wind Waker.
     {0x86840740, 0},
     // The Legend of Zelda: Collector's Edition (except Wind Waker).
@@ -1360,11 +1365,15 @@ void ZeldaAudioRenderer::AddVoice(u16 voice_id)
     for (s16& quadrant_volume : quadrant_volumes)
       quadrant_volume = (quadrant_volume * vpb.dolby_volume_current) >> shift_factor;
 
-    // Compute reverb volume and ramp deltas.
+    // Compute reverb volume and ramp deltas; the deltas take the reverb factor alone.
+    const s16 reverb_master =
+        (m_flags & DOLBY_REVERB_TIMES_MASTER) ?
+            (s16)((vpb.dolby_volume_current * vpb.dolby_reverb_factor) >> 15) :
+            vpb.dolby_reverb_factor;
     s16 reverb_volumes[4], reverb_volume_deltas[4];
     for (size_t i = 0; i < 4; ++i)
     {
-      reverb_volumes[i] = (quadrant_volumes[i] * vpb.dolby_reverb_factor) >> shift_factor;
+      reverb_volumes[i] = (quadrant_volumes[i] * reverb_master) >> shift_factor;
       reverb_volume_deltas[i] = (volume_deltas[i] * vpb.dolby_reverb_factor) >> shift_factor;
     }
 
