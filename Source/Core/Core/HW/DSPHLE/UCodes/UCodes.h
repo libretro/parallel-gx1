@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstring>
-#include <memory>
 
 #include "Common/CommonTypes.h"
 
@@ -130,5 +129,9 @@ private:
   bool m_needs_resume_mail = false;
 };
 
-std::unique_ptr<UCodeInterface> UCodeFactory(u32 crc, DSPHLE* dsphle, bool wii);
+// The bytes one ucode is built in: as many as the largest takes
+size_t UCodeStorageSize();
+// Builds the ucode for crc in storage of UCodeStorageSize() bytes, aligned as operator new
+// aligns; nullptr for UCODE_NULL. The caller destroys it, storage it keeps.
+UCodeInterface* UCodeFactory(void* storage, u32 crc, DSPHLE* dsphle, bool wii);
 }  // namespace DSP::HLE

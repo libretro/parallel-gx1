@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include "Common/CommonTypes.h"
 #include "Core/DSPEmulator.h"
 #include "Core/HW/DSP.h"
@@ -72,8 +70,16 @@ private:
   };
   DSPState m_dsp_state;
 
-  std::unique_ptr<UCodeInterface> m_ucode;
-  std::unique_ptr<UCodeInterface> m_last_ucode;
+  // At most two ucodes live at once, the running one and the one swapped out to be resumed;
+  // each is built in one of two slots allocated with the DSPHLE, so switching ucodes in game
+  // allocates nothing.
+  UCodeInterface* BuildUCode(u32 crc);
+  void DestroyUCode(UCodeInterface*& ucode);
+
+  u8* m_ucode_storage = nullptr;
+  size_t m_ucode_slot_size = 0;
+  UCodeInterface* m_ucode = nullptr;
+  UCodeInterface* m_last_ucode = nullptr;
 
   DSP::UDSPControl m_dsp_control;
   u64 m_control_reg_init_code_clear_time = 0;

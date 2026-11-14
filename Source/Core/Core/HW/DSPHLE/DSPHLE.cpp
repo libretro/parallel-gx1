@@ -3,6 +3,8 @@
 
 #include "Core/HW/DSPHLE/DSPHLE.h"
 
+#include <new>
+
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/MsgHandler.h"
@@ -16,15 +18,38 @@ namespace DSP::HLE
 {
 DSPHLE::DSPHLE(Core::System& system) : m_mail_handler(system.GetDSP()), m_system(system)
 {
+  m_ucode_slot_size = UCodeStorageSize();
+  m_ucode_storage = static_cast<u8*>(::operator new(2 * m_ucode_slot_size));
 }
 
-DSPHLE::~DSPHLE() = default;
+DSPHLE::~DSPHLE()
+{
+  DestroyUCode(m_ucode);
+  DestroyUCode(m_last_ucode);
+  ::operator delete(m_ucode_storage);
+}
+
+// in the slot neither live ucode is in
+UCodeInterface* DSPHLE::BuildUCode(u32 crc)
+{
+  u8* slot = m_ucode_storage;
+  if (reinterpret_cast<u8*>(m_ucode) == slot || reinterpret_cast<u8*>(m_last_ucode) == slot)
+    slot += m_ucode_slot_size;
+  return UCodeFactory(slot, crc, this, m_wii);
+}
+
+void DSPHLE::DestroyUCode(UCodeInterface*& ucode)
+{
+  if (ucode)
+    ucode->~UCodeInterface();
+  ucode = nullptr;
+}
 
 bool DSPHLE::Initialize(bool wii, bool dsp_thread)
 {
   m_wii = wii;
-  m_ucode = nullptr;
-  m_last_ucode = nullptr;
+  DestroyUCode(m_ucode);
+  DestroyUCode(m_last_ucode);
 
   SetUCode(UCODE_ROM);
 
@@ -44,7 +69,7 @@ void DSPHLE::DSP_StopSoundStream()
 
 void DSPHLE::Shutdown()
 {
-  m_ucode = nullptr;
+  DestroyUCode(m_ucode);
 }
 
 void DSPHLE::DSP_Update(int cycles)
@@ -72,7 +97,8 @@ void DSPHLE::SendMailToDSP(u32 mail)
 void DSPHLE::SetUCode(u32 crc)
 {
   m_mail_handler.ClearPending();
-  m_ucode = UCodeFactory(crc, this, m_wii);
+  DestroyUCode(m_ucode);
+  m_ucode = BuildUCode(crc);
   m_ucode->Initialize();
 }
 
@@ -83,15 +109,21 @@ void DSPHLE::SwapUCode(u32 crc)
 {
   m_mail_handler.ClearPending();
 
-  if (m_last_ucode && UCodeInterface::GetCRC(m_last_ucode.get()) == crc)
+  if (m_last_ucode && UCodeInterface::GetCRC(m_last_ucode) == crc)
   {
-    m_ucode = std::move(m_last_ucode);
+    DestroyUCode(m_ucode);
+    m_ucode = m_last_ucode;
+    m_last_ucode = nullptr;
   }
   else
   {
     if (!m_last_ucode)
-      m_last_ucode = std::move(m_ucode);
-    m_ucode = UCodeFactory(crc, this, m_wii);
+    {
+      m_last_ucode = m_ucode;
+      m_ucode = nullptr;
+    }
+    DestroyUCode(m_ucode);
+    m_ucode = BuildUCode(crc);
     m_ucode->Initialize();
   }
 }
@@ -111,9 +143,9 @@ void DSPHLE::DoState(PointerWrap& p)
   p.Do(m_control_reg_init_code_clear_time);
   p.Do(m_dsp_state);
 
-  int ucode_crc = UCodeInterface::GetCRC(m_ucode.get());
+  int ucode_crc = UCodeInterface::GetCRC(m_ucode);
   int ucode_crc_before_load = ucode_crc;
-  int last_ucode_crc = UCodeInterface::GetCRC(m_last_ucode.get());
+  int last_ucode_crc = UCodeInterface::GetCRC(m_last_ucode);
   int last_ucode_crc_before_load = last_ucode_crc;
 
   p.Do(ucode_crc);
@@ -123,17 +155,20 @@ void DSPHLE::DoState(PointerWrap& p)
   // we have to reconstruct the old type of ucode so that we have a valid thing to call DoState on.
   const bool same_ucode = ucode_crc == ucode_crc_before_load;
   const bool same_last_ucode = last_ucode_crc == last_ucode_crc_before_load;
-  auto ucode = same_ucode ? std::move(m_ucode) : UCodeFactory(ucode_crc, this, m_wii);
-  auto last_ucode =
-      same_last_ucode ? std::move(m_last_ucode) : UCodeFactory(last_ucode_crc, this, m_wii);
+  // a ucode replaced is destroyed first, its slot then free for the one built
+  if (!same_ucode)
+    DestroyUCode(m_ucode);
+  if (!same_last_ucode)
+    DestroyUCode(m_last_ucode);
+  if (!same_ucode)
+    m_ucode = BuildUCode(ucode_crc);
+  if (!same_last_ucode)
+    m_last_ucode = BuildUCode(last_ucode_crc);
 
-  if (ucode)
-    ucode->DoState(p);
-  if (last_ucode)
-    last_ucode->DoState(p);
-
-  m_ucode = std::move(ucode);
-  m_last_ucode = std::move(last_ucode);
+  if (m_ucode)
+    m_ucode->DoState(p);
+  if (m_last_ucode)
+    m_last_ucode->DoState(p);
 
   m_mail_handler.DoState(p);
 }
