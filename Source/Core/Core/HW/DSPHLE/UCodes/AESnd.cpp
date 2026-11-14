@@ -6,7 +6,7 @@
 
 #include "Core/HW/DSPHLE/UCodes/AESnd.h"
 
-#include <algorithm>
+#include <cstring>
 
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
@@ -139,7 +139,7 @@ void AESndUCode::HandleMail(u32 mail)
     case MAIL_PROCESS_FIRST_VOICE:
       DEBUG_LOG(DSPHLE, "AESndUCode - MAIL_PROCESS_FIRST_VOICE");
       DMAInParameterBlock();  // dma_pb_block
-      m_output_buffer.fill(0);
+      memset(m_output_buffer, 0, sizeof(m_output_buffer));
       DoMixing();  // fall through to dsp_mixer
       // Mail is handled by DoMixing()
       break;
@@ -159,8 +159,7 @@ void AESndUCode::HandleMail(u32 mail)
       DEBUG_LOG(DSPHLE, "AESndUCode - MAIL_SEND_SAMPLES");
       // send_samples
       auto& memory = m_dsphle->GetSystem().GetMemory();
-      memory.CopyToEmuSwapped(m_parameter_block.out_buf, m_output_buffer.data(),
-                              sizeof(m_output_buffer));
+      memory.CopyToEmuSwapped(m_parameter_block.out_buf, m_output_buffer, sizeof(m_output_buffer));
       m_mail_handler.PushMail(DSP_SYNC, true);
       break;
     }
@@ -251,7 +250,7 @@ void AESndAccelerator::OnSampleReadEndException()
   SetPredScale(GetPredScale());
 }
 
-static constexpr std::array<s16, 16> ACCELERATOR_COEFS = {};  // all zeros
+static const s16 ACCELERATOR_COEFS[16] = {};  // all zeros
 
 void AESndUCode::SetUpAccelerator(u16 format, u16 gain)
 {
@@ -358,7 +357,7 @@ void AESndUCode::DoMixing()
           while (counter_h >= 1)
           {
             counter_h--;
-            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS.data());
+            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS);
             new_l = new_r;
           }
           break;
@@ -369,8 +368,8 @@ void AESndUCode::DoMixing()
           while (counter_h >= 1)
           {
             counter_h--;
-            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS.data());
-            new_l = m_accelerator.ReadSample(ACCELERATOR_COEFS.data());
+            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS);
+            new_l = m_accelerator.ReadSample(ACCELERATOR_COEFS);
           }
           break;  // falls through to mix_samples normally
 
@@ -380,7 +379,7 @@ void AESndUCode::DoMixing()
           while (counter_h >= 1)
           {
             counter_h--;
-            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS.data());
+            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS);
             new_l = new_r;
           }
           new_r ^= 0x8000;
@@ -393,8 +392,8 @@ void AESndUCode::DoMixing()
           while (counter_h >= 1)
           {
             counter_h--;
-            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS.data());
-            new_l = m_accelerator.ReadSample(ACCELERATOR_COEFS.data());
+            new_r = m_accelerator.ReadSample(ACCELERATOR_COEFS);
+            new_l = m_accelerator.ReadSample(ACCELERATOR_COEFS);
           }
           new_r ^= 0x8000;
           new_l ^= 0x8000;
@@ -405,7 +404,9 @@ void AESndUCode::DoMixing()
           // The 2012 version swapped the left and right input channels so that left comes first,
           // and then right. Before, right came before left. The 2012 version didn't update comments
           // for it, though.
-          std::swap(new_r, new_l);
+          const s16 first = new_r;
+          new_r = new_l;
+          new_l = first;
         }
         // mix_samples
         const s32 mixed_l = (static_cast<s32>(new_l) * m_parameter_block.volume_l) >> 8;

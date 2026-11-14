@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <utility>
-
 #include "Common/CommonTypes.h"
 #include "Core/HW/DSPHLE/UCodes/UCodes.h"
 
@@ -82,14 +79,9 @@ private:
   bool SwapLeftRight() const;
   bool UseNewFlagMasks() const;
 
-  std::pair<s16, s16> ReadSampleMono8Bits() const;
-  std::pair<s16, s16> ReadSampleStereo8Bits() const;
-  std::pair<s16, s16> ReadSampleMono16Bits() const;
-  std::pair<s16, s16> ReadSampleStereo16Bits() const;
-  std::pair<s16, s16> ReadSampleMono8BitsUnsigned() const;
-  std::pair<s16, s16> ReadSampleMono16BitsLittleEndian() const;
-  std::pair<s16, s16> ReadSampleStereo8BitsUnsigned() const;
-  std::pair<s16, s16> ReadSampleStereo16BitsLittleEndian() const;
+  // the sample at start_addr in one of the 8 formats sample_selector picks from; the first
+  // value goes to $ax0.h, the second to $ax1.h
+  void ReadSample(u32 sample_format, s16* ax0h, s16* ax1h) const;
 
   // Copied from libasnd/asndlib.c's t_sound_data
   struct VoiceData
@@ -148,17 +140,17 @@ private:
   static constexpr u32 INPUT_SAMPLE_BUFFER_WORD_MASK = INPUT_SAMPLE_BUFFER_SIZE_WORDS - 1;
   // Lastly, the uCode actually allocates 0x20 words, not 0x10 words, for the sample buffer,
   // but only the first 0x10 words are used except for an edge-case where they mask with 0xf and
-  // then add 1 in ReadSampleStereo16Bits and ReadSampleStereo16BitsLittleEndian - this results in
+  // then add 1 in ReadSample for the 16-bit stereo formats - this results in
   // index 0x10 possibly being read, which is otherwise unused (but this probably doesn't happen in
   // practice, as it would require the buffer address starting at 2 instead of 0). We use the same
   // oversized buffer to accurately emulate this behavior without actually reading invalid memory.
   static constexpr u32 INPUT_SAMPLE_BUFFER_SIZE_WORDS_ACTUAL = INPUT_SAMPLE_BUFFER_SIZE_WORDS * 2;
 
-  std::array<u16, INPUT_SAMPLE_BUFFER_SIZE_WORDS_ACTUAL> m_input_sample_buffer{};
+  u16 m_input_sample_buffer[INPUT_SAMPLE_BUFFER_SIZE_WORDS_ACTUAL]{};
 
   // Number of 16-bit stereo samples in the output buffer
   static constexpr u32 NUM_OUTPUT_SAMPLES = 1024;
 
-  std::array<u16, NUM_OUTPUT_SAMPLES * 2> m_output_buffer{};
+  u16 m_output_buffer[NUM_OUTPUT_SAMPLES * 2]{};
 };
 }  // namespace DSP::HLE

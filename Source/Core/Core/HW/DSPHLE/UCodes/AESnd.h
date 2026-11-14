@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <utility>
-
 #include "Common/CommonTypes.h"
 #include "Core/DSP/DSPAccelerator.h"
 #include "Core/HW/DSPHLE/UCodes/UCodes.h"
@@ -125,7 +122,7 @@ private:
   // Number of 16-bit stereo samples in the output buffer: 2ms of sample data
   static constexpr u32 NUM_OUTPUT_SAMPLES = 96;
 
-  std::array<s16, NUM_OUTPUT_SAMPLES * 2> m_output_buffer{};
+  s16 m_output_buffer[NUM_OUTPUT_SAMPLES * 2]{};
 
   AESndAccelerator m_accelerator;
 

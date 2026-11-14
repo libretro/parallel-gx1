@@ -6,6 +6,8 @@
 
 #include "Core/HW/DSPHLE/UCodes/ASnd.h"
 
+#include <cstring>
+
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/Swap.h"
@@ -124,7 +126,7 @@ void ASndUCode::HandleMail(u32 mail)
       // input_samples
       DMAInVoiceData();
       // loop_get1
-      m_output_buffer.fill(0);
+      memset(m_output_buffer, 0, sizeof(m_output_buffer));
       DoMixing(DSP_SYNC);
       // Mail is handled by DoMixing()
       break;
@@ -135,8 +137,7 @@ void ASndUCode::HandleMail(u32 mail)
       DMAInVoiceData();  // first do_dma call
       // second do_dma call
       auto& memory = m_dsphle->GetSystem().GetMemory();
-      memory.CopyFromEmuSwapped(m_output_buffer.data(), m_current_voice.out_buf,
-                                sizeof(m_output_buffer));
+      memory.CopyFromEmuSwapped(m_output_buffer, m_current_voice.out_buf, sizeof(m_output_buffer));
       DoMixing(DSP_SYNC);
       // Mail is handled by DoMixing()
       break;
@@ -158,8 +159,7 @@ void ASndUCode::HandleMail(u32 mail)
     {
       DEBUG_LOG(DSPHLE, "ASndUCode - MAIN_SEND_SAMPLES: %08x", mail);
       auto& memory = m_dsphle->GetSystem().GetMemory();
-      memory.CopyToEmuSwapped(m_current_voice.out_buf, m_output_buffer.data(),
-                              sizeof(m_output_buffer));
+      memory.CopyToEmuSwapped(m_current_voice.out_buf, m_output_buffer, sizeof(m_output_buffer));
       m_mail_handler.PushMail(DSP_SYNC, true);
       break;
     }
@@ -260,15 +260,6 @@ void ASndUCode::DoMixing(u32 return_mail)
   const u32 sample_format = m_current_voice.flags & sample_format_mask;
   const u32 sample_format_step =
       (m_current_voice.flags & FLAGS_SAMPLE_FORMAT_BYTES_MASK) >> FLAGS_SAMPLE_FORMAT_BYTES_SHIFT;
-
-  // sample_selector jump table
-  static constexpr std::array<std::pair<s16, s16> (ASndUCode::*)() const, 8> sample_selector{
-      &ASndUCode::ReadSampleMono8Bits,           &ASndUCode::ReadSampleMono16Bits,
-      &ASndUCode::ReadSampleStereo8Bits,         &ASndUCode::ReadSampleStereo16Bits,
-      &ASndUCode::ReadSampleMono8BitsUnsigned,   &ASndUCode::ReadSampleMono16BitsLittleEndian,
-      &ASndUCode::ReadSampleStereo8BitsUnsigned, &ASndUCode::ReadSampleStereo16BitsLittleEndian,
-  };
-  const auto sample_function = sample_selector[sample_format];
 
   const u32 pause_mask = UseNewFlagMasks() ? NEW_FLAGS_VOICE_PAUSE : OLD_FLAGS_VOICE_PAUSE;
 
@@ -394,13 +385,19 @@ void ASndUCode::DoMixing(u32 return_mail)
         }
         // Both paths jmpr $AR3, which is an index into sample_selector
 
-        auto [new_l, new_r] = (this->*sample_function)();
+        // sample_selector: ReadSample picks the format
+        s16 new_l;
+        s16 new_r;
         if (SwapLeftRight())
         {
           // Most versions of the ASnd ucode have the right channel come before the left channel.
           // The Desert Bus and 2024 versions swapped the left and right input channels so that left
           // comes first, and then right, matching mp3/ogg files.
-          std::swap(new_r, new_l);
+          ReadSample(sample_format, &new_r, &new_l);
+        }
+        else
+        {
+          ReadSample(sample_format, &new_l, &new_r);
         }
         // out_samp: "multiply sample x volume" - left is put in $ax0.h, right is put in $ax1.h
 
@@ -455,7 +452,7 @@ void ASndUCode::DMAInSampleData()
   // jump_load_smp_dma is used, the address is expected to already be aligned.
   const u32 addr = m_current_voice.start_addr & ~INPUT_SAMPLE_BUFFER_BYTE_MASK;
   auto& memory = m_dsphle->GetSystem().GetMemory();
-  memory.CopyFromEmuSwapped(m_input_sample_buffer.data(), addr, INPUT_SAMPLE_BUFFER_SIZE_BYTES);
+  memory.CopyFromEmuSwapped(m_input_sample_buffer, addr, INPUT_SAMPLE_BUFFER_SIZE_BYTES);
 }
 
 void ASndUCode::DMAInSampleDataAssumeAligned()
@@ -465,90 +462,63 @@ void ASndUCode::DMAInSampleDataAssumeAligned()
   // (which is set to an address from sample_selector). We can just treat it as a function though.
   const u32 addr = m_current_voice.start_addr;
   auto& memory = m_dsphle->GetSystem().GetMemory();
-  memory.CopyFromEmuSwapped(m_input_sample_buffer.data(), addr, INPUT_SAMPLE_BUFFER_SIZE_BYTES);
+  memory.CopyFromEmuSwapped(m_input_sample_buffer, addr, INPUT_SAMPLE_BUFFER_SIZE_BYTES);
 }
 
-std::pair<s16, s16> ASndUCode::ReadSampleMono8Bits() const
+void ASndUCode::ReadSample(u32 sample_format, s16* ax0h, s16* ax1h) const
 {
-  // mono_8bits
   const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  s16 result = m_input_sample_buffer[index];
-  if ((m_current_voice.start_addr & 1) == 0)
-    result >>= 8;
-  result <<= 8;
-  return {result, result};
-}
-
-std::pair<s16, s16> ASndUCode::ReadSampleStereo8Bits() const
-{
-  // stereo_8bits
-  const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  const u16 sample = m_input_sample_buffer[index];
-  const s16 right = sample & 0xff00;
-  const s16 left = sample << 8;
-  return {right, left};
-}
-std::pair<s16, s16> ASndUCode::ReadSampleMono16Bits() const
-{
-  // mono_16bits
-  const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  const s16 result = m_input_sample_buffer[index];
-  return {result, result};
-}
-
-std::pair<s16, s16> ASndUCode::ReadSampleStereo16Bits() const
-{
-  // stereo_16bits
-  const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  const s16 right = m_input_sample_buffer[index];
-  // Note that 1 is added to index after the masking - meaning that theoretically an out-of-bounds
-  // index 0x10 can be read (but the buffer is oversized both here and in the actual uCode, so the
-  // data at the out-of-bounds index will instead be 0).
-  const s16 left = m_input_sample_buffer[index + 1];
-  return {right, left};
-}
-
-std::pair<s16, s16> ASndUCode::ReadSampleMono8BitsUnsigned() const
-{
-  // mono_8bits_unsigned
-  const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  s16 result = m_input_sample_buffer[index];
-  if ((m_current_voice.start_addr & 1) == 0)
-    result >>= 8;
-  result <<= 8;
-  result ^= 0x8000;  // Flip the sign bit - effectively adding 0x8000
-  return {result, result};
-}
-
-std::pair<s16, s16> ASndUCode::ReadSampleMono16BitsLittleEndian() const
-{
-  // mono_16bits_le
-  const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  // Actual implementation is u32 result_l = result | result << 16; result = result_l >> 8;
-  const s16 result = Common::swap16(m_input_sample_buffer[index]);
-  return {result, result};
-}
-
-std::pair<s16, s16> ASndUCode::ReadSampleStereo8BitsUnsigned() const
-{
-  // stereo_8bits_unsigned
-  const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  u16 sample = m_input_sample_buffer[index] ^ 0x8080;
-  const s16 right = sample & 0xff00;
-  const s16 left = sample << 8;
-  return {right, left};
-}
-
-std::pair<s16, s16> ASndUCode::ReadSampleStereo16BitsLittleEndian() const
-{
-  // stereo_16bits_le
-  const u32 index = (m_current_voice.start_addr >> 1) & INPUT_SAMPLE_BUFFER_WORD_MASK;
-  const s16 right = Common::swap16(m_input_sample_buffer[index]);
-  // Note that 1 is added to index after the masking - meaning that theoretically an out-of-bounds
-  // index 0x10 can be read (but the buffer is oversized both here and in the actual uCode, so the
-  // data at the out-of-bounds index will instead be 0).
-  const s16 left = Common::swap16(m_input_sample_buffer[index + 1]);
-  return {right, left};
+  s16 first;
+  s16 second;
+  switch (sample_format)
+  {
+  case 0:  // mono_8bits
+  case 4:  // mono_8bits_unsigned
+  default:
+  {
+    s16 result = m_input_sample_buffer[index];
+    if ((m_current_voice.start_addr & 1) == 0)
+      result >>= 8;
+    result <<= 8;
+    if (sample_format == 4)
+      result ^= 0x8000;  // Flip the sign bit - effectively adding 0x8000
+    first = result;
+    second = result;
+    break;
+  }
+  case 1:  // mono_16bits
+    first = m_input_sample_buffer[index];
+    second = first;
+    break;
+  case 2:  // stereo_8bits
+  case 6:  // stereo_8bits_unsigned
+  {
+    u16 sample = m_input_sample_buffer[index];
+    if (sample_format == 6)
+      sample ^= 0x8080;
+    first = sample & 0xff00;
+    second = sample << 8;
+    break;
+  }
+  case 3:  // stereo_16bits
+    // Note that 1 is added to index after the masking - meaning that theoretically an
+    // out-of-bounds index 0x10 can be read (but the buffer is oversized both here and in the
+    // actual uCode, so the data at the out-of-bounds index will instead be 0).
+    first = m_input_sample_buffer[index];
+    second = m_input_sample_buffer[index + 1];
+    break;
+  case 5:  // mono_16bits_le
+    // Actual implementation is u32 result_l = result | result << 16; result = result_l >> 8;
+    first = Common::swap16(m_input_sample_buffer[index]);
+    second = first;
+    break;
+  case 7:  // stereo_16bits_le, index + 1 as in stereo_16bits
+    first = Common::swap16(m_input_sample_buffer[index]);
+    second = Common::swap16(m_input_sample_buffer[index + 1]);
+    break;
+  }
+  *ax0h = first;
+  *ax1h = second;
 }
 
 void ASndUCode::DoState(PointerWrap& p)
