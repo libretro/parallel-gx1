@@ -279,6 +279,9 @@ private:
   void InvalidateICacheInternal(u32 physical_address, u32 address, u32 length, bool forced);
 
   JitBlock* MoveBlockIntoFastCache(u32 em_address, CPUEmuFeatureFlags feature_flags);
+  bool TranslateCodeAddress(u32 em_address, CPUEmuFeatureFlags feature_flags,
+                            u32* physical_address);
+  JitBlock* FindBlock(u32 em_address, u32 physical_address, CPUEmuFeatureFlags feature_flags);
 
   // Fast but risky block lookup based on fast_block_map.
   size_t FastLookupIndexForAddress(u32 address, u32 msr);
@@ -334,7 +337,8 @@ private:
   void LeaveSuspended(JitBlock& block);
   void EraseBlock(JitBlock* block);
   void MoveBlock(JitBlock* block, u32 physical_address);
-  JitBlock* ResumeSuspendedBlock(u32 em_address, CPUEmuFeatureFlags feature_flags);
+  JitBlock* ResumeSuspendedBlock(u32 em_address, u32 physical_address,
+                                 CPUEmuFeatureFlags feature_flags);
 
   // The nodes, in chunks of RANGE_NODE_CHUNK the cache keeps, the free ones in a list
   static constexpr size_t RANGE_NODE_CHUNK = 4096;

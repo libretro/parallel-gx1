@@ -426,27 +426,41 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
   }
 }
 
-JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, CPUEmuFeatureFlags feature_flags)
+/* The physical address the code at the effective address is at, false when it does not translate */
+bool JitBaseBlockCache::TranslateCodeAddress(u32 addr, CPUEmuFeatureFlags feature_flags,
+                                             u32* physical_address)
 {
-  u32 translated_addr = addr;
   if (feature_flags & FEATURE_FLAG_MSR_IR)
   {
-    auto translated = m_jit.m_mmu.JitCache_TranslateAddress(addr);
+    const auto translated = m_jit.m_mmu.JitCache_TranslateAddress(addr);
     if (!translated.valid)
-    {
-      return nullptr;
-    }
-    translated_addr = translated.address;
+      return false;
+    *physical_address = translated.address;
+    return true;
   }
+  *physical_address = addr;
+  return true;
+}
 
-  JitBlock* const* const head = jit_block_lists_find(&block_map, AddressKey(translated_addr));
+/* The block that runs at the effective address, its code at the physical address */
+JitBlock* JitBaseBlockCache::FindBlock(u32 addr, u32 physical_address,
+                                       CPUEmuFeatureFlags feature_flags)
+{
+  JitBlock* const* const head = jit_block_lists_find(&block_map, AddressKey(physical_address));
   for (JitBlock* b = head ? *head : nullptr; b; b = b->next_at_address)
   {
     if (b->effectiveAddress == addr && b->feature_flags == feature_flags && !b->suspended)
       return b;
   }
-
   return nullptr;
+}
+
+JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, CPUEmuFeatureFlags feature_flags)
+{
+  u32 physical_address;
+  if (!TranslateCodeAddress(addr, feature_flags, &physical_address))
+    return nullptr;
+  return FindBlock(addr, physical_address, feature_flags);
 }
 
 /* Out of the lookups and unlinked, its code and its place in the cache's lists kept, first in
@@ -604,21 +618,14 @@ void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 physical_address)
  * its own can move. A game can load one of a few pieces of code into the same place in turn, so
  * the others stay suspended for when theirs is back, the newest few: older ones are destroyed, as
  * the invalidation would have done. */
-JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, CPUEmuFeatureFlags feature_flags)
+JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, u32 physical_address,
+                                                  CPUEmuFeatureFlags feature_flags)
 {
-  u32 physical_address = addr;
   u32 others = 0;
   JitBlock* const* const head = jit_block_lists_find(&suspended_map, AddressKey(addr));
   JitBlock* b;
   if (!head || !*head)
     return nullptr;
-  if (feature_flags & FEATURE_FLAG_MSR_IR)
-  {
-    auto translated = m_jit.m_mmu.JitCache_TranslateAddress(addr);
-    if (!translated.valid)
-      return nullptr;
-    physical_address = translated.address;
-  }
 
   for (b = *head; b; b = b->next_suspended)
   {
@@ -1005,9 +1012,13 @@ void JitBaseBlockCache::DestroyBlock(JitBlock& block)
 
 JitBlock* JitBaseBlockCache::MoveBlockIntoFastCache(u32 addr, CPUEmuFeatureFlags feature_flags)
 {
-  JitBlock* block = GetBlockFromStartAddress(addr, feature_flags);
+  u32 physical_address;
+  JitBlock* block;
+  if (!TranslateCodeAddress(addr, feature_flags, &physical_address))
+    return nullptr;
+  block = FindBlock(addr, physical_address, feature_flags);
   if (!block)
-    block = ResumeSuspendedBlock(addr, feature_flags);
+    block = ResumeSuspendedBlock(addr, physical_address, feature_flags);
 
   if (!block)
     return nullptr;
