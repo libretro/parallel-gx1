@@ -899,7 +899,7 @@ bool BluetoothEmuDevice::SendEventModeChange(u16 connection_handle, u8 mode, u16
 
   DEBUG_LOG(IOS_WIIMOTE, "Event: SendEventModeChange");
   DEBUG_LOG(IOS_WIIMOTE, "  Connection_Handle: %#06x", (unsigned)mode_change->Connection_Handle);
-  DEBUG_LOG(IOS_WIIMOTE, "  Current Mode: %#04x", (unsigned)(mode_change->CurrentMode = mode));
+  DEBUG_LOG(IOS_WIIMOTE, "  Current Mode: %#04x", (unsigned)mode_change->CurrentMode);
 
   AddEventToQueue(event);
 

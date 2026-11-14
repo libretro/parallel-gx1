@@ -555,9 +555,10 @@ void ZeldaUCode::RunPendingCommands()
       }
       else if (m_flags & WEIRD_CMD_0C)
       {
-        // TODO
-        NOTICE_LOG(DSPHLE, "Received an unhandled 0C command, params: %08x %08x", Read32(),
-                   Read32());
+        // TODO; the parameters are taken whether logged or not
+        const u32 param0 = Read32();
+        const u32 param1 = Read32();
+        NOTICE_LOG(DSPHLE, "Received an unhandled 0C command, params: %08x %08x", param0, param1);
       }
       else
       {
@@ -576,7 +577,11 @@ void ZeldaUCode::RunPendingCommands()
         break;
       }
 
-      WARN_LOG(DSPHLE, "CMD0D: %08x", Read32());
+      {
+        // the parameter is taken whether logged or not
+        const u32 param = Read32();
+        WARN_LOG(DSPHLE, "CMD0D: %08x", param);
+      }
       SendCommandAck(CommandAck::STANDARD, sync);
       break;
 

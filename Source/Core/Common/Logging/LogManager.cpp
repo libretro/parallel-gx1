@@ -82,6 +82,12 @@ static void FileLog(void*, LogLevel, const char* msg)
 #endif
 }
 
+bool IsLogEnabled(LogType type, LogLevel level)
+{
+  const auto* instance = LogManager::GetInstance();
+  return instance != nullptr && instance->IsEnabled(type, level);
+}
+
 void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format, ...)
 {
   char message[1024];

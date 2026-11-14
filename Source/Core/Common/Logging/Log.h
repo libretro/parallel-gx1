@@ -92,6 +92,9 @@ constexpr auto MAX_EFFECTIVE_LOGLEVEL = Common::Log::LogLevel::LINFO;
 
 static const char LOG_LEVEL_TO_CHAR[7] = "-NEWID";
 
+/* Whether a message of this type and level goes anywhere. */
+bool IsLogEnabled(LogType type, LogLevel level);
+
 /* A message in printf's terms, formatted into a buffer on the stack (a
  * longer one is cut), only when its type and level are enabled. */
 void GenericLog(LogLevel level, LogType type, const char* file, int line, const char* format, ...)
@@ -99,12 +102,13 @@ void GenericLog(LogLevel level, LogType type, const char* file, int line, const 
 
 }  // namespace Common::Log
 
-// printf capable API
+// printf capable API: the arguments are evaluated only when the message goes somewhere, so
+// they must not do anything the code relies on
 
 #define GENERIC_LOG(t, v, ...)                                                                     \
   do                                                                                               \
   {                                                                                                \
-    if (v <= Common::Log::MAX_EFFECTIVE_LOGLEVEL)                                                  \
+    if (v <= Common::Log::MAX_EFFECTIVE_LOGLEVEL && Common::Log::IsLogEnabled(t, v))               \
       Common::Log::GenericLog(v, t, __FILE__, __LINE__, __VA_ARGS__);                              \
   } while (0)
 
