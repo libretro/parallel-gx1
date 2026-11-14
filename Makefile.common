@@ -677,7 +677,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HLE/HLE_OS.cpp \
 	$(CORE_DIR)/Source/Core/Core/HLE/HLE_VarArgs.cpp \
 	$(CORE_DIR)/Source/Core/Core/HLE/HLE.cpp \
-	$(CORE_DIR)/Source/Core/Core/HW/AddressSpace.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/AudioInterface.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/CPU.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/DSP.cpp \

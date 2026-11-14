@@ -8,7 +8,6 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
-#include "Core/HW/AddressSpace.h"
 #include "Core/HW/AudioInterface.h"
 #include "Core/HW/CPU.h"
 #include "Core/HW/DSP.h"
@@ -42,8 +41,7 @@ void Init(Core::System& system, const Sram* override_sram)
   system.GetProcessorInterface().Init();
   system.GetExpansionInterface().Init(override_sram);  // Needs to be initialized before Memory
   system.GetHSP().Init();
-  system.GetMemory().Init();  // Needs to be initialized before AddressSpace
-  AddressSpace::Init();
+  system.GetMemory().Init();
   system.GetMemoryInterface().Init();
   system.GetDSP().Init(Config::Get(Config::MAIN_DSP_HLE));
   system.GetDVDInterface().Init();
@@ -71,7 +69,6 @@ void Shutdown(Core::System& system)
   system.GetDVDInterface().Shutdown();
   system.GetDSP().Shutdown();
   system.GetMemoryInterface().Shutdown();
-  AddressSpace::Shutdown();
   system.GetMemory().Shutdown();
   system.GetHSP().Shutdown();
   system.GetExpansionInterface().Shutdown();
