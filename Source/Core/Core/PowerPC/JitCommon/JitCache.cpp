@@ -926,11 +926,14 @@ void JitBaseBlockCache::LinkBlock(JitBlock& block)
   JitBlock::LinkData* const* const head =
       jit_link_lists_find(&links_to, AddressKey(block.effectiveAddress));
 
-  /* each block with an exit here: once per exit, which links what the first left */
+  /* each unlinked exit here of a block that can run goes to this block; its owner's other exits
+   * were linked when it or their blocks came */
   for (JitBlock::LinkData* e = head ? *head : nullptr; e; e = e->next_to)
   {
-    if (block.feature_flags == e->owner->feature_flags)
-      LinkBlockExits(*e->owner);
+    if (e->linkStatus || e->owner->suspended || block.feature_flags != e->owner->feature_flags)
+      continue;
+    WriteLinkBlock(*e, &block);
+    e->linkStatus = true;
   }
 }
 
