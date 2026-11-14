@@ -136,7 +136,44 @@ void Arm64RegCache::DiscardRegister(size_t preg)
     UnlockRegister(host_reg);
 }
 
-Arm64GPRCache::Arm64GPRCache() : Arm64RegCache(GUEST_GPR_COUNT + GUEST_CR_COUNT)
+// what the GPR or the FPR cache does
+#define ARM64_RC_CALL(call)                                                                        \
+  (m_is_fpr ? static_cast<Arm64FPRCache*>(this)->call : static_cast<Arm64GPRCache*>(this)->call)
+
+void Arm64RegCache::Start(PPCAnalyst::BlockRegStats& stats)
+{
+  if (!m_is_fpr)
+    static_cast<Arm64GPRCache*>(this)->Start(stats);
+}
+
+void Arm64RegCache::Flush(FlushMode mode, ARM64Reg tmp_reg,
+                          IgnoreDiscardedRegisters ignore_discarded_registers)
+{
+  ARM64_RC_CALL(Flush(mode, tmp_reg, ignore_discarded_registers));
+}
+
+BitSet32 Arm64RegCache::GetCallerSavedUsed() const
+{
+  return m_is_fpr ? static_cast<const Arm64FPRCache*>(this)->GetCallerSavedUsed() :
+                    static_cast<const Arm64GPRCache*>(this)->GetCallerSavedUsed();
+}
+
+void Arm64RegCache::GetAllocationOrder()
+{
+  ARM64_RC_CALL(GetAllocationOrder());
+}
+
+void Arm64RegCache::FlushByHost(ARM64Reg host_reg, ARM64Reg tmp_reg)
+{
+  ARM64_RC_CALL(FlushByHost(host_reg, tmp_reg));
+}
+
+void Arm64RegCache::FlushRegister(size_t preg, FlushMode mode, ARM64Reg tmp_reg)
+{
+  ARM64_RC_CALL(FlushRegister(preg, mode, tmp_reg));
+}
+
+Arm64GPRCache::Arm64GPRCache() : Arm64RegCache(GUEST_GPR_COUNT + GUEST_CR_COUNT, false)
 {
 }
 
@@ -517,7 +554,7 @@ void Arm64GPRCache::FlushByHost(ARM64Reg host_reg, ARM64Reg tmp_reg)
 // FPR Cache
 constexpr size_t GUEST_FPR_COUNT = 32;
 
-Arm64FPRCache::Arm64FPRCache() : Arm64RegCache(GUEST_FPR_COUNT)
+Arm64FPRCache::Arm64FPRCache() : Arm64RegCache(GUEST_FPR_COUNT, true)
 {
 }
 

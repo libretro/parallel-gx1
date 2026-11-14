@@ -156,24 +156,32 @@ private:
   bool m_locked = false;
 };
 
+// The register cache of the general purpose registers (Arm64GPRCache) or of the floating point
+// ones (Arm64FPRCache), the two classes derived from this. Which one is noted when it is made,
+// and what each does for itself is reached from here through a branch on that.
 class Arm64RegCache
 {
 public:
-  explicit Arm64RegCache(size_t guest_reg_count) : m_guest_registers(guest_reg_count) {}
-  virtual ~Arm64RegCache() = default;
+  Arm64RegCache(size_t guest_reg_count, bool is_fpr)
+      : m_is_fpr(is_fpr), m_guest_registers(guest_reg_count)
+  {
+  }
+  Arm64RegCache(const Arm64RegCache&) = delete;
+  Arm64RegCache& operator=(const Arm64RegCache&) = delete;
 
   void Init(JitArm64* jit);
 
-  virtual void Start(PPCAnalyst::BlockRegStats& stats) {}
+  // the GPR cache's; the FPR cache has nothing to do
+  void Start(PPCAnalyst::BlockRegStats& stats);
   void DiscardRegisters(BitSet32 regs);
   void ResetRegisters(BitSet32 regs);
   // Flushes the register cache in different ways depending on the mode.
   // A temporary register must be supplied when flushing GPRs with FlushMode::MaintainState,
   // but in other cases it can be set to ARM64Reg::INVALID_REG when convenient for the caller.
-  virtual void Flush(FlushMode mode, Arm64Gen::ARM64Reg tmp_reg,
-                     IgnoreDiscardedRegisters ignore_discarded_registers) = 0;
+  void Flush(FlushMode mode, Arm64Gen::ARM64Reg tmp_reg,
+             IgnoreDiscardedRegisters ignore_discarded_registers);
 
-  virtual BitSet32 GetCallerSavedUsed() const = 0;
+  BitSet32 GetCallerSavedUsed() const;
 
   // Returns a temporary register for use
   // Requires unlocking after done
@@ -262,8 +270,10 @@ public:
   }
 
 protected:
+  ~Arm64RegCache() = default;
+
   // Get the order of the host registers
-  virtual void GetAllocationOrder() = 0;
+  void GetAllocationOrder();
 
   // Flushes the most stale register
   void FlushMostStaleRegister();
@@ -275,11 +285,11 @@ protected:
   void UnlockRegister(Arm64Gen::ARM64Reg host_reg);
 
   // Flushes a guest register by host provided
-  virtual void FlushByHost(Arm64Gen::ARM64Reg host_reg,
-                           Arm64Gen::ARM64Reg tmp_reg = Arm64Gen::ARM64Reg::INVALID_REG) = 0;
+  void FlushByHost(Arm64Gen::ARM64Reg host_reg,
+                   Arm64Gen::ARM64Reg tmp_reg = Arm64Gen::ARM64Reg::INVALID_REG);
 
   void DiscardRegister(size_t preg);
-  virtual void FlushRegister(size_t preg, FlushMode mode, Arm64Gen::ARM64Reg tmp_reg) = 0;
+  void FlushRegister(size_t preg, FlushMode mode, Arm64Gen::ARM64Reg tmp_reg);
 
   void IncrementAllUsed()
   {
@@ -288,6 +298,9 @@ protected:
   }
 
   JitArm64* m_jit = nullptr;
+
+  // whether this is the FPR cache, else the GPR one
+  const bool m_is_fpr;
 
   // Code emitter
   Arm64Gen::ARM64XEmitter* m_emit = nullptr;
@@ -307,19 +320,18 @@ protected:
   PPCAnalyst::BlockRegStats* m_reg_stats = nullptr;
 };
 
-class Arm64GPRCache : public Arm64RegCache
+class Arm64GPRCache final : public Arm64RegCache
 {
 public:
   Arm64GPRCache();
 
-  void Start(PPCAnalyst::BlockRegStats& stats) override;
+  void Start(PPCAnalyst::BlockRegStats& stats);
 
   // Flushes the register cache in different ways depending on the mode.
   // A temporary register must be supplied when flushing GPRs with FlushMode::MaintainState,
   // but in other cases it can be set to ARM64Reg::INVALID_REG when convenient for the caller.
-  void Flush(
-      FlushMode mode, Arm64Gen::ARM64Reg tmp_reg,
-      IgnoreDiscardedRegisters ignore_discarded_registers = IgnoreDiscardedRegisters::No) override;
+  void Flush(FlushMode mode, Arm64Gen::ARM64Reg tmp_reg,
+             IgnoreDiscardedRegisters ignore_discarded_registers = IgnoreDiscardedRegisters::No);
 
   // Returns a guest GPR inside of a host register.
   // Will dump an immediate to the host register as well.
@@ -379,7 +391,7 @@ public:
     BindForWrite(GUEST_CR_OFFSET + preg, will_read, will_write);
   }
 
-  BitSet32 GetCallerSavedUsed() const override;
+  BitSet32 GetCallerSavedUsed() const;
 
   BitSet32 GetDirtyGPRs() const;
 
@@ -397,14 +409,17 @@ public:
   void ResetCRRegisters(BitSet8 regs);
 
 protected:
+  // Arm64RegCache calls these as the GPR or FPR cache it is
+  friend class Arm64RegCache;
+
   // Get the order of the host registers
-  void GetAllocationOrder() override;
+  void GetAllocationOrder();
 
   // Flushes a guest register by host provided
   void FlushByHost(Arm64Gen::ARM64Reg host_reg,
-                   Arm64Gen::ARM64Reg tmp_reg = Arm64Gen::ARM64Reg::INVALID_REG) override;
+                   Arm64Gen::ARM64Reg tmp_reg = Arm64Gen::ARM64Reg::INVALID_REG);
 
-  void FlushRegister(size_t index, FlushMode mode, Arm64Gen::ARM64Reg tmp_reg) override;
+  void FlushRegister(size_t index, FlushMode mode, Arm64Gen::ARM64Reg tmp_reg);
 
 private:
   bool IsCallerSaved(Arm64Gen::ARM64Reg reg) const;
@@ -444,16 +459,15 @@ private:
   static constexpr size_t GUEST_CR_OFFSET = GUEST_GPR_COUNT;
 };
 
-class Arm64FPRCache : public Arm64RegCache
+class Arm64FPRCache final : public Arm64RegCache
 {
 public:
   Arm64FPRCache();
 
   // Flushes the register cache in different ways depending on the mode.
   // The temporary register can be set to ARM64Reg::INVALID_REG when convenient for the caller.
-  void Flush(
-      FlushMode mode, Arm64Gen::ARM64Reg tmp_reg,
-      IgnoreDiscardedRegisters ignore_discarded_registers = IgnoreDiscardedRegisters::No) override;
+  void Flush(FlushMode mode, Arm64Gen::ARM64Reg tmp_reg,
+             IgnoreDiscardedRegisters ignore_discarded_registers = IgnoreDiscardedRegisters::No);
 
   // Returns a guest register inside of a host register
   // Will dump an immediate to the host register as well
@@ -461,7 +475,7 @@ public:
 
   Arm64Gen::ARM64Reg RW(size_t preg, RegType format, bool set_dirty = true);
 
-  BitSet32 GetCallerSavedUsed() const override;
+  BitSet32 GetCallerSavedUsed() const;
 
   bool IsSingle(size_t preg, bool lower_only = false) const;
 
@@ -471,14 +485,17 @@ public:
                       Arm64Gen::ARM64Reg tmp_reg = Arm64Gen::ARM64Reg::INVALID_REG);
 
 protected:
+  // Arm64RegCache calls these as the GPR or FPR cache it is
+  friend class Arm64RegCache;
+
   // Get the order of the host registers
-  void GetAllocationOrder() override;
+  void GetAllocationOrder();
 
   // Flushes a guest register by host provided
   void FlushByHost(Arm64Gen::ARM64Reg host_reg,
-                   Arm64Gen::ARM64Reg tmp_reg = Arm64Gen::ARM64Reg::INVALID_REG) override;
+                   Arm64Gen::ARM64Reg tmp_reg = Arm64Gen::ARM64Reg::INVALID_REG);
 
-  void FlushRegister(size_t preg, FlushMode mode, Arm64Gen::ARM64Reg tmp_reg) override;
+  void FlushRegister(size_t preg, FlushMode mode, Arm64Gen::ARM64Reg tmp_reg);
 
 private:
   bool IsCallerSaved(Arm64Gen::ARM64Reg reg) const;
