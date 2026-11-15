@@ -998,8 +998,8 @@ void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length, bool suspend
     size_t slot;
     for (slot = 0; slot <= block_range_map.mask; slot++)
     {
-      const uintptr_t key = block_range_map.keys[slot];
-      if (key != CODE_PTR_MAP_FREE && key >= first && key < end)
+      uintptr_t key;
+      if (jit_range_lists_slot_key(&block_range_map, slot, &key) && key >= first && key < end)
         EraseInMacroBlock(static_cast<u32>(key), address, length, suspend);
     }
   }

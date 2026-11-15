@@ -6,7 +6,9 @@
  * addressing, linear probing. Entries are added and found, never taken
  * out one by one, only all at once by clear, which keeps the block: once
  * it has grown to what the code cache holds, adding allocates nothing.
- * Any address is a key, null included; ~0 marks a free slot.
+ * Any address but ~0 is a key, null included. A slot holds its key plus
+ * one, so a free one is zero: a block comes zeroed from calloc, its pages
+ * untouched until entries land in them, however much room it has.
  *
  *   CODE_PTR_MAP_DEFINE(trampolines, TrampolineInfo);
  *   trampolines_t m;
@@ -23,7 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CODE_PTR_MAP_FREE (~static_cast<uintptr_t>(0))
+#define CODE_PTR_MAP_FREE (static_cast<uintptr_t>(0))
 
 #define CODE_PTR_MAP_DEFINE(name, type)                                                            \
   typedef type name##_value_t;                                                                     \
@@ -37,14 +39,14 @@
                                                                                                    \
   static inline size_t name##_slot(uintptr_t key, size_t mask)                                     \
   {                                                                                                \
-    /* code addresses differ in their low bits: spread them over the table */                     \
+    /* code addresses differ in their low bits: spread them over the table */                      \
     return static_cast<size_t>((static_cast<uint64_t>(key) * 0x9E3779B97F4A7C15ull) >> 32) & mask; \
   }                                                                                                \
                                                                                                    \
   static inline bool name##_alloc(name##_t* m, size_t slots)                                       \
   {                                                                                                \
-    m->keys = static_cast<uintptr_t*>(malloc(slots * sizeof(uintptr_t)));                         \
-    m->values = static_cast<name##_value_t*>(malloc(slots * sizeof(name##_value_t)));             \
+    m->keys = static_cast<uintptr_t*>(calloc(slots, sizeof(uintptr_t)));                           \
+    m->values = static_cast<name##_value_t*>(malloc(slots * sizeof(name##_value_t)));              \
     if (!m->keys || !m->values)                                                                    \
     {                                                                                              \
       free(m->keys);                                                                               \
@@ -54,12 +56,11 @@
       m->mask = 0;                                                                                 \
       return false;                                                                                \
     }                                                                                              \
-    memset(m->keys, 0xff, slots * sizeof(uintptr_t));                                              \
     m->mask = slots - 1;                                                                           \
     return true;                                                                                   \
   }                                                                                                \
                                                                                                    \
-  /* Room for @expected entries before it grows */                                                \
+  /* Room for @expected entries before it grows */                                                 \
   static inline bool name##_init(name##_t* m, size_t expected)                                     \
   {                                                                                                \
     size_t slots = 16;                                                                             \
@@ -83,11 +84,11 @@
   static inline void name##_clear(name##_t* m)                                                     \
   {                                                                                                \
     if (m->keys && m->count)                                                                       \
-      memset(m->keys, 0xff, (m->mask + 1) * sizeof(uintptr_t));                                    \
+      memset(m->keys, 0, (m->mask + 1) * sizeof(uintptr_t));                                       \
     m->count = 0;                                                                                  \
   }                                                                                                \
                                                                                                    \
-  static inline name##_value_t* name##_find(const name##_t* m, const void* address)               \
+  static inline name##_value_t* name##_find(const name##_t* m, const void* address)                \
   {                                                                                                \
     const uintptr_t key = reinterpret_cast<uintptr_t>(address);                                    \
     size_t i;                                                                                      \
@@ -95,14 +96,14 @@
       return nullptr;                                                                              \
     for (i = name##_slot(key, m->mask);; i = (i + 1) & m->mask)                                    \
     {                                                                                              \
-      if (m->keys[i] == key)                                                                       \
+      if (m->keys[i] == key + 1)                                                                   \
         return &m->values[i];                                                                      \
       if (m->keys[i] == CODE_PTR_MAP_FREE)                                                         \
         return nullptr;                                                                            \
     }                                                                                              \
   }                                                                                                \
                                                                                                    \
-  /* Twice the slots, every entry moved: when it is half full */                                  \
+  /* Twice the slots, every entry moved: when it is half full */                                   \
   static inline bool name##_grow(name##_t* m)                                                      \
   {                                                                                                \
     name##_t larger;                                                                               \
@@ -114,7 +115,7 @@
       size_t j;                                                                                    \
       if (m->keys[i] == CODE_PTR_MAP_FREE)                                                         \
         continue;                                                                                  \
-      for (j = name##_slot(m->keys[i], larger.mask); larger.keys[j] != CODE_PTR_MAP_FREE;          \
+      for (j = name##_slot(m->keys[i] - 1, larger.mask); larger.keys[j] != CODE_PTR_MAP_FREE;      \
            j = (j + 1) & larger.mask)                                                              \
       {                                                                                            \
       }                                                                                            \
@@ -128,8 +129,17 @@
     return true;                                                                                   \
   }                                                                                                \
                                                                                                    \
-  /* The value of @address, added zeroed if it was not there; NULL out of memory */               \
-  static inline name##_value_t* name##_get(name##_t* m, const void* address)                      \
+  /* Whether @slot holds an entry, and its key in @key if so */                                    \
+  static inline bool name##_slot_key(const name##_t* m, size_t slot, uintptr_t* key)               \
+  {                                                                                                \
+    if (m->keys[slot] == CODE_PTR_MAP_FREE)                                                        \
+      return false;                                                                                \
+    *key = m->keys[slot] - 1;                                                                      \
+    return true;                                                                                   \
+  }                                                                                                \
+                                                                                                   \
+  /* The value of @address, added zeroed if it was not there; NULL out of memory */                \
+  static inline name##_value_t* name##_get(name##_t* m, const void* address)                       \
   {                                                                                                \
     const uintptr_t key = reinterpret_cast<uintptr_t>(address);                                    \
     size_t i;                                                                                      \
@@ -140,12 +150,12 @@
     }                                                                                              \
     for (i = name##_slot(key, m->mask);; i = (i + 1) & m->mask)                                    \
     {                                                                                              \
-      if (m->keys[i] == key)                                                                       \
+      if (m->keys[i] == key + 1)                                                                   \
         return &m->values[i];                                                                      \
       if (m->keys[i] == CODE_PTR_MAP_FREE)                                                         \
         break;                                                                                     \
     }                                                                                              \
-    m->keys[i] = key;                                                                              \
+    m->keys[i] = key + 1;                                                                          \
     m->values[i] = name##_value_t{};                                                               \
     m->count++;                                                                                    \
     return &m->values[i];                                                                          \
