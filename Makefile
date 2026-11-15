@@ -77,18 +77,6 @@ else
    $(error Unsupported target architecture '$(arch)': the core builds for x86_64 and arm64)
 endif
 
-# libusb and hidapi are git submodules; a clone made without --recursive has
-# them empty and fails deep inside the build on a missing header.
-SUBMODULE_FILES := \
-   Externals/libusb/libusb/libusb/libusb.h \
-   Externals/hidapi/hidapi-src/hidapi/hidapi.h
-ifneq (,$(filter-out clean,$(or $(MAKECMDGOALS),all)))
-   SUBMODULES_MISSING := $(filter-out $(wildcard $(SUBMODULE_FILES)),$(SUBMODULE_FILES))
-   ifneq (,$(SUBMODULES_MISSING))
-      $(error Submodules are not checked out (missing $(firstword $(SUBMODULES_MISSING))). Run: git submodule update --init --recursive)
-   endif
-endif
-
 HAVE_LIBUSB        := 0
 HAVE_HIDAPI        := 0
 HAVE_D3D           := 0
@@ -287,8 +275,8 @@ LDFLAGS  += $(fpic) $(SHARED)
 # Objects
 # ----------------------------------------------------------------------------
 # Objects live under obj/<platform>-<arch>, one tree per target, so the
-# submodules stay clean and a second architecture never links the first
-# one's objects.
+# vendored sources stay clean and a second architecture never links the
+# first one's objects.
 obj_of = $(patsubst %,$(OBJ_DIR)/%.o,$(1))
 
 define LIB_template

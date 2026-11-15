@@ -201,6 +201,10 @@ reason a reader can see.
 - **libretro-common comes from upstream as it is.** A file it lacks is
   copied in unchanged from libretro/libretro-common; its files are not
   edited here.
+- **No submodules.** Every dependency is in the tree. libusb
+  (`Externals/libusb/libusb`, 1.0.29) and hidapi
+  (`Externals/hidapi/hidapi-src`) are copies of their upstream commits,
+  file for file; an update replaces the whole tree from upstream.
 - **JSON is read with libretro-common's rjson.** Files are pulled through
   `rjson_open_user` from a VFS `filestream`, parsed as they stream, with
   no document tree and no wrapper library between rjson and its caller.

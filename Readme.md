@@ -39,13 +39,7 @@ Dolphin can only be installed on devices that satisfy the above requirements. At
 ## Building
 
 This tree builds the parallel_gamecubewii libretro core with the static Makefile.
-Pull all submodules first:
-
-```sh
-git submodule update --init --recursive
-```
-
-Then run `make` from the top of the tree. Linux, macOS and Windows (MSYS2, any
+Every dependency is in the tree. Run `make` from the top of the tree. Linux, macOS and Windows (MSYS2, any
 environment) are detected; other targets take `platform=`:
 
 | Target | Command | Output |
