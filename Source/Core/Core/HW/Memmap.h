@@ -55,6 +55,7 @@ struct LogicalMemoryView
 {
   void* mapped_pointer;
   u32 mapped_size;
+  bool writeable;
 };
 
 class MemoryManager
@@ -106,6 +107,7 @@ public:
   void UpdateDBATMappings(const PowerPC::BatTable& dbat_table);
   void AddPageTableMapping(u32 logical_address, u32 translated_address, bool writeable);
   void RemovePageTableMappings(const u32* logical_addresses, size_t count);
+  bool IsPageTableMapped(u32 logical_address, bool* writeable);
   void RemoveAllPageTableMappings();
 
   // Routines to access physically addressed memory, designed for use by

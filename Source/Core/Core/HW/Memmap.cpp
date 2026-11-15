@@ -504,6 +504,10 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
                      "region at 0x%08X (size 0x%08X, logical fastmem region at 0x%08X).",
                      intersection_start, mapped_size, logical_address);
         }
+        else
+        {
+          view->writeable = writeable;
+        }
       }
     }
     else
@@ -518,7 +522,7 @@ void MemoryManager::AddHostPageTableMapping(u32 logical_address, u32 translated_
                    intersection_start, mapped_size, logical_address);
         continue;
       }
-      *view = LogicalMemoryView{mapped_pointer, mapped_size};
+      *view = LogicalMemoryView{mapped_pointer, mapped_size, writeable};
       m_page_table_view_counts[(logical_address >> 12) >> PAGE_BLOCK_SHIFT]++;
     }
   }
@@ -566,7 +570,22 @@ void MemoryManager::RemoveHostPageTableMapping(u32 logical_address)
   m_arena.UnmapFromMemoryRegion(view->mapped_pointer, view->mapped_size);
   view->mapped_pointer = nullptr;
   view->mapped_size = 0;
+  view->writeable = false;
   m_page_table_view_counts[(logical_address >> 12) >> PAGE_BLOCK_SHIFT]--;
+}
+
+/* Whether the host page with the logical address has a mapping from the page table, and if it
+ * can be written to */
+bool MemoryManager::IsPageTableMapped(u32 logical_address, bool* writeable)
+{
+  const LogicalMemoryView* const view =
+      m_is_fastmem_arena_initialized ?
+          GetPageTableView(logical_address & ~(m_page_size - 1), false) :
+          nullptr;
+  if (!view || !view->mapped_pointer)
+    return false;
+  *writeable = view->writeable;
+  return true;
 }
 
 void MemoryManager::RemoveAllPageTableMappings()
@@ -584,6 +603,7 @@ void MemoryManager::RemoveAllPageTableMappings()
         m_arena.UnmapFromMemoryRegion(block[j].mapped_pointer, block[j].mapped_size);
         block[j].mapped_pointer = nullptr;
         block[j].mapped_size = 0;
+        block[j].writeable = false;
       }
       m_page_table_view_counts[i] = 0;
     }

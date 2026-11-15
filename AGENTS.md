@@ -161,6 +161,14 @@ there included. The suspended blocks are bounded (a few
 versions per address, a fixed number in all) and their map is made at
 boot and never grows.
 
+**A page gets its host mapping when fastmem first faults on it.** The
+pages a game maps with its page table are not mapped on the host when
+the page table changes or when R is set: `MMU::MapPageForFastmemFault`
+maps one from the JIT's fault handler, the access then run again as it
+is, not backpatched. A game that swaps pages in and out pays the host a
+mapping only for those its code reads or writes through fastmem; each
+one is two or more system calls, and far more on Windows than on Linux.
+
 ## Zero-copy and borrowed lends
 
 Every change looks for copies to remove in the code it touches, and

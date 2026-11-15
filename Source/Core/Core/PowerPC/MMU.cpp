@@ -64,25 +64,16 @@ MMU::MMU(Core::System& system, Memory::MemoryManager& memory, PowerPC::PowerPCMa
 {
   address_map_init(&m_page_mappings, 16384);
 
-  /* room for the changes a whole page table brings at once, made with the MMU */
+  /* room for the mappings a whole page table's update removes at once, made with the MMU */
   m_removed_mappings = static_cast<u32*>(std::malloc(PAGE_MAPPING_CHANGES_START * sizeof(u32)));
   if (m_removed_mappings)
     m_removed_mappings_capacity = PAGE_MAPPING_CHANGES_START;
-  for (int list = 0; list < 2; list++)
-  {
-    m_added_mappings[list] =
-        static_cast<AddedMapping*>(std::malloc(PAGE_MAPPING_CHANGES_START * sizeof(AddedMapping)));
-    if (m_added_mappings[list])
-      m_added_mappings_capacity[list] = PAGE_MAPPING_CHANGES_START;
-  }
 }
 
 MMU::~MMU()
 {
   address_map_free(&m_page_mappings);
   std::free(m_removed_mappings);
-  std::free(m_added_mappings[0]);
-  std::free(m_added_mappings[1]);
 }
 
 void MMU::Reset()
@@ -1397,9 +1388,6 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
   }
 
   m_num_removed_mappings = 0;
-  m_num_added_mappings[0] = 0;
-  m_num_added_mappings[1] = 0;
-  m_added_mappings_order = 0;
 
   if (m_page_table.size() != page_table_size)
   {
@@ -1574,13 +1562,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
         *existing = page_mapping.Hex;
       }
 
-      // If the R bit isn't set yet, the actual host mapping will be created once
-      // TranslatePageAddress sets the R bit.
-      if (host_mapping && pte2.R)
-      {
-        const u32 physical_address = pte2.RPN << 12;
-        NoteAddedMapping(pte2.C, logical_address->Hex, physical_address);
-      }
+      // The host mapping is made when a fastmem access first needs it
     }
   };
 
@@ -1716,26 +1698,6 @@ void MMU::NoteRemovedMapping(u32 logical_address)
   m_removed_mappings[m_num_removed_mappings++] = logical_address;
 }
 
-void MMU::NoteAddedMapping(bool writeable, u32 logical_address, u32 physical_address)
-{
-  const int list = writeable ? 1 : 0;
-  if (m_num_added_mappings[list] == m_added_mappings_capacity[list])
-  {
-    const u32 capacity =
-        m_added_mappings_capacity[list] ? m_added_mappings_capacity[list] * 2 : 1024;
-    AddedMapping* const grown = static_cast<AddedMapping*>(
-        std::realloc(m_added_mappings[list], capacity * sizeof(AddedMapping)));
-    if (!grown)
-      return;
-    m_added_mappings[list] = grown;
-    m_added_mappings_capacity[list] = capacity;
-  }
-  AddedMapping* const added = &m_added_mappings[list][m_num_added_mappings[list]++];
-  added->logical_address = logical_address;
-  added->physical_address = physical_address;
-  added->order = m_added_mappings_order++;
-}
-
 static int CompareAddresses(const void* a, const void* b)
 {
   const u32 x = *static_cast<const u32*>(a);
@@ -1743,24 +1705,9 @@ static int CompareAddresses(const void* a, const void* b)
   return x < y ? -1 : x > y ? 1 : 0;
 }
 
-// two AddedMappings: logical address, physical address, order
-static int CompareAddedMappings(const void* a, const void* b)
-{
-  const u32* const x = static_cast<const u32*>(a);
-  const u32* const y = static_cast<const u32*>(b);
-  // logical address, then order
-  if (x[0] != y[0])
-    return x[0] < y[0] ? -1 : 1;
-  return x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0;
-}
-
 void MMU::ApplyMappingChanges()
 {
   u32 i, n;
-  int list;
-
-  // CompareAddedMappings reads one as three u32s
-  static_assert(sizeof(AddedMapping) == 3 * sizeof(u32));
 
   if (m_num_removed_mappings)
   {
@@ -1774,27 +1721,63 @@ void MMU::ApplyMappingChanges()
     }
     m_memory.RemovePageTableMappings(m_removed_mappings, n);
   }
-
-  // read only first, then read and write; in address order, the first added for one winning
-  for (list = 0; list < 2; list++)
-  {
-    AddedMapping* const added = m_added_mappings[list];
-    n = m_num_added_mappings[list];
-    if (!n)
-      continue;
-    std::qsort(added, n, sizeof(AddedMapping), CompareAddedMappings);
-    for (i = 0; i < n; i++)
-    {
-      if (i && added[i].logical_address == added[i - 1].logical_address)
-        continue;
-      m_memory.AddPageTableMapping(added[i].logical_address, added[i].physical_address, list == 1);
-    }
-  }
 }
 
 void MMU::PageTableUpdatedFromJit(MMU* mmu)
 {
   mmu->PageTableUpdated();
+}
+
+/* Whether the data TLB's entry for the address, just translated, has C set */
+static bool DataTLBChanged(const PowerPC::PowerPCState& ppc_state, u32 vpa, u32 vsid)
+{
+  const u32 tag = vpa >> HW_PAGE_INDEX_SHIFT;
+  const TLBEntry& tlbe = ppc_state.tlb[PowerPC::DATA_TLB_INDEX][tag & HW_PAGE_INDEX_MASK];
+  int way;
+  for (way = 0; way < 2; way++)
+  {
+    if (tlbe.tag[way] == tag && tlbe.vsid[way] == vsid)
+      return UPTE_Hi(tlbe.pte[way]).C != 0;
+  }
+  return false;
+}
+
+/* A fastmem access faulted at the effective address. A page the page table maps, and may have a
+ * host mapping, gets it here, the first time fastmem needs it: as a read there leaves it, R set,
+ * to write through if C is set too; one read only, as a write does, C set. True, the access can
+ * run again as it is; false for anything else, which the access's slow path is for. */
+bool MMU::MapPageForFastmemFault(u32 address)
+{
+  const u32 page = address & ~static_cast<u32>(HW_PAGE_MASK);
+  const u32* mapping;
+  PageMapping page_mapping;
+  bool mapped, writeable = false, wi = false;
+
+  if (!m_ppc_state.msr.DR || m_ppc_state.pagetable_update_pending ||
+      (m_dbat_table[address >> PowerPC::BAT_INDEX_SHIFT] & PowerPC::BAT_MAPPED_BIT))
+    return false;
+  mapping = address_map_find(&m_page_mappings, page);
+  if (!mapping)
+    return false;
+  page_mapping.Hex = *mapping;
+  if (!page_mapping.host_mapping)
+    return false;
+
+  mapped = m_memory.IsPageTableMapped(page, &writeable);
+  if (mapped && writeable)
+    return false;
+  const TranslateAddressResult result =
+      mapped ? TranslatePageAddress<XCheckTLBFlag::Write>(EffectiveAddress{address}, &wi) :
+               TranslatePageAddress<XCheckTLBFlag::Read>(EffectiveAddress{address}, &wi);
+  if (result.result != TranslateAddressResultEnum::PAGE_TABLE_TRANSLATED || wi ||
+      (result.address >> 12) != page_mapping.RPN)
+    return false;
+  /* each time, a mapping or a writeable one more: never the same fault again */
+  m_memory.AddPageTableMapping(
+      page, result.address & ~static_cast<u32>(HW_PAGE_MASK),
+      mapped || DataTLBChanged(m_ppc_state, address,
+                               UReg_SR{m_ppc_state.sr[EffectiveAddress{address}.SR]}.VSID));
+  return m_memory.IsPageTableMapped(page, &writeable) && (!mapped || writeable);
 }
 
 // Page Address Translation
@@ -1898,8 +1881,14 @@ MMU::TranslateAddressResult MMU::TranslatePageAddress(const EffectiveAddress add
               std::memcpy(m_page_table.data() + pteg_addr + 4 - m_ppc_state.pagetable_base,
                           &swapped_pte2, sizeof(swapped_pte2));
 
-              const u32 page_translated_address = pte2.RPN << 12;
-              m_memory.AddPageTableMapping(page_logical_address, page_translated_address, pte2.C);
+              /* a host mapping the page has is one to write through from now on; it gets one
+               * when a fastmem access first needs it */
+              bool writeable = false;
+              if (pte2.C && m_memory.IsPageTableMapped(page_logical_address, &writeable) &&
+                  !writeable)
+              {
+                m_memory.AddPageTableMapping(page_logical_address, pte2.RPN << 12, true);
+              }
             }
           }
         }

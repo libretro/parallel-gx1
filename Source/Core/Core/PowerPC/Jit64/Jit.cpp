@@ -153,6 +153,13 @@ bool Jit64::HandleFault(uintptr_t access_address, SContext* ctx)
                ", MSR.DR %u",
                (u64)ctx->CTX_PC, (u64)access_address, (u64)memory_base, ppc_state.msr.DR.Value());
     }
+    // a page the game's page table maps, not mapped on the host yet: mapped now, the access runs
+    // again and stays fast
+    else if (ppc_state.msr.DR && IsInSpace(reinterpret_cast<u8*>(ctx->CTX_PC)) &&
+             m_mmu.MapPageForFastmemFault(static_cast<u32>(access_address - memory_base)))
+    {
+      return true;
+    }
 
     return BackPatch(ctx);
   }

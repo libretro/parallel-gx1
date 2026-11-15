@@ -148,6 +148,13 @@ bool JitArm64::HandleFault(uintptr_t access_address, SContext* ctx)
                   static_cast<const void*>(memory.GetPhysicalBase()),
                   static_cast<const void*>(memory.GetLogicalBase()));
       }
+      // a page the game's page table maps, not mapped on the host yet: mapped now, the access
+      // runs again and stays fast
+      else if (m_ppc_state.msr.DR &&
+               m_mmu.MapPageForFastmemFault(static_cast<u32>(access_address - memory_base)))
+      {
+        success = true;
+      }
       else
       {
         success = HandleFastmemFault(ctx);
