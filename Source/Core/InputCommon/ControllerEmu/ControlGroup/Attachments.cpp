@@ -47,7 +47,7 @@ const std::vector<std::unique_ptr<AttachedController>>& Attachments::GetAttachme
 
 void Attachments::LoadConfig(Common::IniFile::Section* sec, const std::string& base)
 {
-  ControlGroup::LoadConfig(sec, base);
+  LoadConfigDefault(sec, base);
 
   SetSelectedAttachment(0);
 
@@ -72,7 +72,7 @@ void Attachments::LoadConfig(Common::IniFile::Section* sec, const std::string& b
 
 void Attachments::SaveConfig(Common::IniFile::Section* sec, const std::string& base)
 {
-  ControlGroup::SaveConfig(sec, base);
+  SaveConfigDefault(sec, base);
 
   if (GetSelectionSetting().IsSimpleValue())
   {
@@ -91,7 +91,7 @@ void Attachments::SaveConfig(Common::IniFile::Section* sec, const std::string& b
 
 void Attachments::UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env)
 {
-  ControlGroup::UpdateReferences(env);
+  UpdateReferencesDefault(env);
 
   GetSelectionSetting().GetInputReference().UpdateReference(env);
 

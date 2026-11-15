@@ -36,10 +36,10 @@ public:
 
   const std::vector<std::unique_ptr<AttachedController>>& GetAttachmentList() const;
 
-  void LoadConfig(Common::IniFile::Section* sec, const std::string& base) override;
-  void SaveConfig(Common::IniFile::Section* sec, const std::string& base) override;
+  void LoadConfig(Common::IniFile::Section* sec, const std::string& base);
+  void SaveConfig(Common::IniFile::Section* sec, const std::string& base);
 
-  void UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env) override;
+  void UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env);
 
 private:
   SettingValue<int> m_selection_value;

@@ -69,10 +69,11 @@ public:
                DefaultValue default_value = DefaultValue::AlwaysEnabled);
   virtual ~ControlGroup();
 
-  virtual void LoadConfig(Common::IniFile::Section* sec, const std::string& base);
-  virtual void SaveConfig(Common::IniFile::Section* sec, const std::string& base);
+  // These branch on the group's type to the reshapable inputs' and the attachments' own
+  void LoadConfig(Common::IniFile::Section* sec, const std::string& base);
+  void SaveConfig(Common::IniFile::Section* sec, const std::string& base);
 
-  virtual void UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env);
+  void UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env);
 
   void SetControlExpression(int index, const std::string& expression);
 
@@ -105,6 +106,13 @@ public:
   const std::string ui_name;
   const GroupType type;
 
+protected:
+  // What every group does with its controls and settings
+  void LoadConfigDefault(Common::IniFile::Section* sec, const std::string& base);
+  void SaveConfigDefault(Common::IniFile::Section* sec, const std::string& base);
+  void UpdateReferencesDefault(ciface::ExpressionParser::ControlEnvironment& env);
+
+public:
   // The default "enabled" state.
   const DefaultValue default_value;
   SettingValue<bool> enabled;

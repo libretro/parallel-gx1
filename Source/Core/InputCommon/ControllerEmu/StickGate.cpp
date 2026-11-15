@@ -298,7 +298,7 @@ ReshapableInput::ReshapeData ReshapableInput::GetCenter() const
 
 void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::string& base_name)
 {
-  ControlGroup::LoadConfig(section, base_name);
+  LoadConfigDefault(section, base_name);
 
   const std::string group(base_name + name + '/');
 
@@ -345,7 +345,7 @@ void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::s
 
 void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const std::string& base_name)
 {
-  ControlGroup::SaveConfig(section, base_name);
+  SaveConfigDefault(section, base_name);
 
   const std::string group(base_name + name + '/');
 

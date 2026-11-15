@@ -8,8 +8,10 @@
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerEmu/Control/Input.h"
 #include "InputCommon/ControllerEmu/Control/Output.h"
+#include "InputCommon/ControllerEmu/ControlGroup/Attachments.h"
 #include "InputCommon/ControllerEmu/ControllerEmu.h"
 #include "InputCommon/ControllerEmu/Setting/NumericSetting.h"
+#include "InputCommon/ControllerEmu/StickGate.h"
 
 namespace ControllerEmu
 {
@@ -55,7 +57,7 @@ void ControlGroup::AddDeadzoneSetting(SettingValue<double>* value, double maximu
 
 ControlGroup::~ControlGroup() = default;
 
-void ControlGroup::LoadConfig(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const std::string& base)
 {
   const std::string group(base + name + "/");
 
@@ -82,7 +84,7 @@ void ControlGroup::LoadConfig(Common::IniFile::Section* sec, const std::string& 
   }
 }
 
-void ControlGroup::SaveConfig(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const std::string& base)
 {
   const std::string group(base + name + "/");
 
@@ -106,7 +108,7 @@ void ControlGroup::SaveConfig(Common::IniFile::Section* sec, const std::string& 
   }
 }
 
-void ControlGroup::UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env)
+void ControlGroup::UpdateReferencesDefault(ciface::ExpressionParser::ControlEnvironment& env)
 {
   if (HasEnabledSetting())
     enabled_setting->GetInputReference().UpdateReference(env);
@@ -143,4 +145,37 @@ bool ControlGroup::HasEnabledSetting() const
   return enabled_setting != nullptr;
 }
 
+static bool IsReshapable(GroupType type)
+{
+  return type == GroupType::Stick || type == GroupType::Force || type == GroupType::Tilt ||
+         type == GroupType::Cursor;
+}
+
+void ControlGroup::LoadConfig(Common::IniFile::Section* sec, const std::string& base)
+{
+  if (IsReshapable(type))
+    static_cast<ReshapableInput*>(this)->LoadConfig(sec, base);
+  else if (type == GroupType::Attachments)
+    static_cast<Attachments*>(this)->LoadConfig(sec, base);
+  else
+    LoadConfigDefault(sec, base);
+}
+
+void ControlGroup::SaveConfig(Common::IniFile::Section* sec, const std::string& base)
+{
+  if (IsReshapable(type))
+    static_cast<ReshapableInput*>(this)->SaveConfig(sec, base);
+  else if (type == GroupType::Attachments)
+    static_cast<Attachments*>(this)->SaveConfig(sec, base);
+  else
+    SaveConfigDefault(sec, base);
+}
+
+void ControlGroup::UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env)
+{
+  if (type == GroupType::Attachments)
+    static_cast<Attachments*>(this)->UpdateReferences(env);
+  else
+    UpdateReferencesDefault(env);
+}
 }  // namespace ControllerEmu
