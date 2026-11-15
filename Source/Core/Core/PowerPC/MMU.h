@@ -373,6 +373,7 @@ private:
   void ApplyMappingChanges();
 
   std::vector<u8> m_temp_page_table;
+  static constexpr u32 PAGE_MAPPING_CHANGES_START = 16384;
   u32* m_removed_mappings = nullptr;
   u32 m_num_removed_mappings = 0;
   u32 m_removed_mappings_capacity = 0;

@@ -63,6 +63,18 @@ MMU::MMU(Core::System& system, Memory::MemoryManager& memory, PowerPC::PowerPCMa
     : m_system(system), m_memory(memory), m_power_pc(power_pc), m_ppc_state(power_pc.GetPPCState())
 {
   address_map_init(&m_page_mappings, 16384);
+
+  /* room for the changes a whole page table brings at once, made with the MMU */
+  m_removed_mappings = static_cast<u32*>(std::malloc(PAGE_MAPPING_CHANGES_START * sizeof(u32)));
+  if (m_removed_mappings)
+    m_removed_mappings_capacity = PAGE_MAPPING_CHANGES_START;
+  for (int list = 0; list < 2; list++)
+  {
+    m_added_mappings[list] =
+        static_cast<AddedMapping*>(std::malloc(PAGE_MAPPING_CHANGES_START * sizeof(AddedMapping)));
+    if (m_added_mappings[list])
+      m_added_mappings_capacity[list] = PAGE_MAPPING_CHANGES_START;
+  }
 }
 
 MMU::~MMU()
