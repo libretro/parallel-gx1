@@ -12,17 +12,31 @@ namespace Core
 {
 class CPUThreadGuard;
 }
+namespace HLE::SystemVABI
+{
+class VAList;
+}
 
 namespace HLE_OS
 {
-class HLEPrintArgs
+// The arguments of a guest printf, read off its va_list
+class HLEPrintArgs final
 {
 public:
-  virtual u32 GetU32() = 0;
-  virtual u64 GetU64() = 0;
-  virtual double GetF64() = 0;
-  virtual std::string GetString(std::optional<u32> max_length) = 0;
-  virtual std::u16string GetU16String(std::optional<u32> max_length) = 0;
+  HLEPrintArgs(const Core::CPUThreadGuard& guard, HLE::SystemVABI::VAList* list)
+      : m_guard(guard), m_va_list(list)
+  {
+  }
+
+  u32 GetU32();
+  u64 GetU64();
+  double GetF64();
+  std::string GetString(std::optional<u32> max_length);
+  std::u16string GetU16String(std::optional<u32> max_length);
+
+private:
+  const Core::CPUThreadGuard& m_guard;
+  HLE::SystemVABI::VAList* m_va_list;
 };
 
 std::string GetStringVA(HLEPrintArgs* args, std::string_view string);

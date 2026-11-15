@@ -42,7 +42,6 @@ public:
         m_stack(stack)
   {
   }
-  virtual ~VAList();
 
   // 0 - arg_ARGPOINTER
   template <ArgPointer T>
@@ -140,9 +139,15 @@ protected:
   const u32 m_fpr_max = 8;
   u32 m_stack;
 
+  // Set by VAListStruct: the registers are read from the va_list's save area, not the CPU
+  bool m_from_struct = false;
+  bool m_has_fpr_area = false;
+  u32 m_address = 0;
+  u32 m_reg_save_area = 0;
+
 private:
-  virtual u32 GetGPR(u32 gpr) const;
-  virtual double GetFPR(u32 fpr) const;
+  u32 GetGPR(u32 gpr) const;
+  double GetFPR(u32 fpr) const;
 };
 
 // See System V ABI (SVR4) for more details
@@ -151,29 +156,11 @@ private:
 //
 // Source:
 // http://refspecs.linux-foundation.org/elf/elfspec_ppc.pdf
-class VAListStruct : public VAList
+// Adds no members, so it can be held as the VAList it is
+class VAListStruct final : public VAList
 {
 public:
   explicit VAListStruct(const Core::CPUThreadGuard& guard, u32 address);
-  ~VAListStruct() override = default;
-
-private:
-  struct svr4_va_list
-  {
-    u8 gpr;
-    u8 fpr;
-    u32 overflow_arg_area;
-    u32 reg_save_area;
-  };
-  const svr4_va_list m_va_list;
-  const u32 m_address;
-  const bool m_has_fpr_area;
-
-  u32 GetGPRArea() const;
-  u32 GetFPRArea() const;
-
-  u32 GetGPR(u32 gpr) const override;
-  double GetFPR(u32 fpr) const override;
 };
 
 }  // namespace HLE::SystemVABI

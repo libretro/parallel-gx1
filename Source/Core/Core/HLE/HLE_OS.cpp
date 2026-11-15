@@ -207,37 +207,34 @@ void HLE_LogVFPrint(const Core::CPUThreadGuard& guard)
   HLE_LogFPrint(guard, ParameterType::VariableArgumentList);
 }
 
-namespace
+u32 HLEPrintArgs::GetU32()
 {
-class HLEPrintArgsVAList final : public HLEPrintArgs
+  return m_va_list->GetArgT<u32>();
+}
+
+u64 HLEPrintArgs::GetU64()
 {
-public:
-  HLEPrintArgsVAList(const Core::CPUThreadGuard& guard, HLE::SystemVABI::VAList* list)
-      : m_guard(guard), m_va_list(list)
-  {
-  }
+  return m_va_list->GetArgT<u64>();
+}
 
-  u32 GetU32() override { return m_va_list->GetArgT<u32>(); }
-  u64 GetU64() override { return m_va_list->GetArgT<u64>(); }
-  double GetF64() override { return m_va_list->GetArgT<double>(); }
-  std::string GetString(std::optional<u32> max_length) override
-  {
-    return max_length == 0u ? std::string() :
-                              PowerPC::MMU::HostGetString(m_guard, m_va_list->GetArgT<u32>(),
-                                                          max_length.value_or(0u));
-  }
-  std::u16string GetU16String(std::optional<u32> max_length) override
-  {
-    return max_length == 0u ? std::u16string() :
-                              PowerPC::MMU::HostGetU16String(m_guard, m_va_list->GetArgT<u32>(),
-                                                             max_length.value_or(0u));
-  }
+double HLEPrintArgs::GetF64()
+{
+  return m_va_list->GetArgT<double>();
+}
 
-private:
-  const Core::CPUThreadGuard& m_guard;
-  HLE::SystemVABI::VAList* m_va_list;
-};
-}  // namespace
+std::string HLEPrintArgs::GetString(std::optional<u32> max_length)
+{
+  return max_length == 0u ? std::string() :
+                            PowerPC::MMU::HostGetString(m_guard, m_va_list->GetArgT<u32>(),
+                                                        max_length.value_or(0u));
+}
+
+std::u16string HLEPrintArgs::GetU16String(std::optional<u32> max_length)
+{
+  return max_length == 0u ? std::u16string() :
+                            PowerPC::MMU::HostGetU16String(m_guard, m_va_list->GetArgT<u32>(),
+                                                           max_length.value_or(0u));
+}
 
 // Appends @text, padded with spaces to @width (to its left, or its right when @left).
 static void AppendPadded(std::string& result, std::string_view text, u32 width, bool left)
@@ -278,12 +275,13 @@ static std::string GetStringVA(Core::System& system, const Core::CPUThreadGuard&
   auto& ppc_state = system.GetPPCState();
 
   std::string string = PowerPC::MMU::HostGetString(guard, ppc_state.gpr[str_reg]);
-  std::unique_ptr<HLE::SystemVABI::VAList> ap =
+  // on the stack: a VAListStruct is held as the VAList it is
+  HLE::SystemVABI::VAList ap =
       parameter_type == ParameterType::VariableArgumentList ?
-          std::make_unique<HLE::SystemVABI::VAListStruct>(guard, ppc_state.gpr[str_reg + 1]) :
-          std::make_unique<HLE::SystemVABI::VAList>(guard, ppc_state.gpr[1] + 0x8, str_reg + 1);
+          HLE::SystemVABI::VAListStruct(guard, ppc_state.gpr[str_reg + 1]) :
+          HLE::SystemVABI::VAList(guard, ppc_state.gpr[1] + 0x8, str_reg + 1);
 
-  HLEPrintArgsVAList args(guard, ap.get());
+  HLEPrintArgs args(guard, &ap);
   return GetStringVA(&args, string);
 }
 
