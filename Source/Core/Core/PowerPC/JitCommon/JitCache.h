@@ -161,6 +161,8 @@ struct JitBlock : public JitBlockData
   // Suspended with its entry sending whatever comes in to the dispatcher, links kept: the first
   // bytes of its code, kept here, are put back when it is taken back
   bool entry_closed = false;
+  // An exit to it may have been left unlinked since it last linked those coming in
+  bool incoming_unlinked = false;
   u8 entry_code[8];
 };
 
@@ -286,8 +288,10 @@ protected:
 
 private:
   void LinkBlockExits(JitBlock& block);
+  void LinkIncoming(JitBlock& block);
   void LinkBlock(JitBlock& block);
-  void UnlinkBlock(const JitBlock& block);
+  void NoteUnlinkedExits(u32 address, CPUEmuFeatureFlags feature_flags);
+  bool UnlinkBlock(const JitBlock& block);
   void InvalidateICacheInternal(u32 physical_address, u32 address, u32 length, bool forced);
 
   JitBlock* MoveBlockIntoFastCache(u32 em_address, CPUEmuFeatureFlags feature_flags);
@@ -316,6 +320,7 @@ private:
   JitBlock* m_oldest_suspended = nullptr;
   JitBlock* m_newest_suspended = nullptr;
   u32 m_num_suspended = 0;
+  bool m_clearing = false;
 
   // Where the blocks live: chunks of BLOCK_CHUNK, never given back while the cache is, and the
   // free ones in a list. A block made where one was destroyed allocates nothing.

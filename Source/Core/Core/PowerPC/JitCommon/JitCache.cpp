@@ -294,6 +294,7 @@ void JitBaseBlockCache::Clear()
   address_set_clear(&m_jit.js.pairedQuantizeAddresses);
   address_set_clear(&m_jit.js.noSpeculativeConstantsAddresses);
   size_t chunk, i;
+  m_clearing = true;
   for (chunk = 0; chunk < m_num_block_chunks; chunk++)
   {
     for (i = 0; i < BLOCK_CHUNK; i++)
@@ -302,6 +303,7 @@ void JitBaseBlockCache::Clear()
         DestroyBlock(m_block_chunks[chunk][i]);
     }
   }
+  m_clearing = false;
   for (chunk = 0; chunk < m_num_block_chunks; chunk++)
   {
     for (i = 0; i < BLOCK_CHUNK; i++)
@@ -372,6 +374,7 @@ JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
   b.two_pages = false;
   b.suspended = false;
   b.entry_closed = false;
+  b.incoming_unlinked = false;
   b.next_suspended = nullptr;
   b.prev_suspended = nullptr;
   b.newer_suspended = nullptr;
@@ -548,6 +551,7 @@ bool JitBaseBlockCache::SuspendBlock(JitBlock& block)
     UnlinkBlock(block);
     for (auto& e : block.linkData)
       e.linkStatus = false;
+    block.incoming_unlinked = true;
   }
 
   block.suspended = true;
@@ -733,7 +737,11 @@ JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, u32 physical_address
           valid_block.Set(i / 32);
       }
       if (m_jit.jo.enableBlocklink)
-        LinkBlock(*b);
+      {
+        LinkBlockExits(*b);
+        if (b->incoming_unlinked)
+          LinkIncoming(*b);
+      }
       return b;
     }
     others++;
@@ -1107,6 +1115,10 @@ void JitBaseBlockCache::LinkBlockExits(JitBlock& block)
         WriteLinkBlock(e, destinationBlock);
         e.linkStatus = true;
       }
+      else
+      {
+        NoteUnlinkedExits(e.exitAddress, block.feature_flags);
+      }
     }
   }
 }
@@ -1114,6 +1126,25 @@ void JitBaseBlockCache::LinkBlockExits(JitBlock& block)
 void JitBaseBlockCache::LinkBlock(JitBlock& block)
 {
   LinkBlockExits(block);
+  LinkIncoming(block);
+}
+
+/* An exit to the effective address left unlinked: the blocks suspended there link those coming in
+ * when they are taken back */
+void JitBaseBlockCache::NoteUnlinkedExits(u32 address, CPUEmuFeatureFlags feature_flags)
+{
+  JitBlock* const* const head = jit_block_lists_find(&suspended_map, AddressKey(address));
+  JitBlock* b;
+  for (b = head ? *head : nullptr; b; b = b->next_suspended)
+  {
+    if (b->feature_flags == feature_flags)
+      b->incoming_unlinked = true;
+  }
+}
+
+void JitBaseBlockCache::LinkIncoming(JitBlock& block)
+{
+  block.incoming_unlinked = false;
   JitBlock::LinkData* const* const head =
       jit_link_lists_find(&links_to, AddressKey(block.effectiveAddress));
 
@@ -1128,7 +1159,8 @@ void JitBaseBlockCache::LinkBlock(JitBlock& block)
   }
 }
 
-void JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
+/* true when it unlinked an exit to it */
+bool JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
 {
   // Unlink all exits of this block.
   for (auto& e : block.linkData)
@@ -1137,6 +1169,7 @@ void JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
   }
 
   // Unlink all exits of other blocks which points to this block
+  bool unlinked = false;
   JitBlock::LinkData* const* const head =
       jit_link_lists_find(&links_to, AddressKey(block.effectiveAddress));
   for (JitBlock::LinkData* e = head ? *head : nullptr; e; e = e->next_to)
@@ -1145,7 +1178,9 @@ void JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
       continue;
     WriteLinkBlock(*e, nullptr);
     e->linkStatus = false;
+    unlinked = true;
   }
+  return unlinked;
 }
 
 void JitBaseBlockCache::DestroyBlockCommon(JitBlock& block)
@@ -1166,7 +1201,15 @@ void JitBaseBlockCache::DestroyBlockCommon(JitBlock& block)
     }
   }
 
-  UnlinkBlock(block);
+  /* some were linked to another block there, which links them again when it is taken back; a
+   * clear destroys them all */
+  if (UnlinkBlock(block) && !m_clearing)
+  {
+    JitBlock* const other = GetBlockFromStartAddress(block.effectiveAddress, block.feature_flags);
+    if (other && other != &block)
+      other->incoming_unlinked = true;
+    NoteUnlinkedExits(block.effectiveAddress, block.feature_flags);
+  }
 
   // Delete linking addresses
   for (auto& e : block.linkData)
