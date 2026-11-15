@@ -633,10 +633,10 @@ bool ObjectCache::CreatePipelineCache()
 bool ObjectCache::LoadPipelineCache()
 {
   // The cache is made from the stored blob where it lies in the mapped file.
-  struct Reader final : Common::LinearDiskCacheReader<u32, u8>
+  struct Reader final
   {
     explicit Reader(ObjectCache* cache_) : cache(cache_) {}
-    void Read(const u32& key, const u8* value, u32 value_size) override
+    void Read(const u32& key, const u8* value, u32 value_size)
     {
       if (++count != 1 || !value_size)
         return;

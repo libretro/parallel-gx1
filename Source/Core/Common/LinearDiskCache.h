@@ -31,13 +31,6 @@
 
 namespace Common
 {
-template <typename K, typename V>
-class LinearDiskCacheReader
-{
-public:
-  virtual void Read(const K& key, const V* value, u32 value_size) = 0;
-};
-
 // Dead simple unsorted key-value store with append functionality.
 // Appended entries are kept in memory, and written to the file in one write when it is synced or
 // closed: whoever appends, while a game runs, never touches the disk.
@@ -56,8 +49,10 @@ template <typename K, typename V>
 class LinearDiskCache
 {
 public:
-  // return number of read entries
-  u32 OpenAndRead(const std::string& filename, LinearDiskCacheReader<K, V>& reader)
+  // Hands each entry to reader.Read(const K& key, const V* value, u32 value_size);
+  // returns the number of entries read.
+  template <typename Reader>
+  u32 OpenAndRead(const std::string& filename, Reader& reader)
   {
     // Since we're reading/writing directly to the storage of K instances,
     // K must be trivially copyable.
@@ -254,7 +249,8 @@ public:
 private:
   // Hands each whole entry of [base, base + size) after the header to the reader; returns
   // the offset where the last whole one ends.
-  u64 ReadEntries(const u8* base, u64 size, LinearDiskCacheReader<K, V>& reader)
+  template <typename Reader>
+  u64 ReadEntries(const u8* base, u64 size, Reader& reader)
   {
     V* aligned = nullptr;
     u32 aligned_capacity = 0;

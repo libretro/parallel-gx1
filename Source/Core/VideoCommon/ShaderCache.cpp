@@ -447,11 +447,11 @@ static void UnserializePipelineUid(const SerializedUidType& uid, UidType& real_u
 template <ShaderStage stage, typename K, typename T>
 void ShaderCache::LoadShaderCache(T& cache, APIType api_type, const char* type, bool include_gameid)
 {
-  class CacheReader : public Common::LinearDiskCacheReader<K, u8>
+  class CacheReader
   {
   public:
     CacheReader(T& cache_) : cache(cache_) {}
-    void Read(const K& key, const u8* value, u32 value_size) override
+    void Read(const K& key, const u8* value, u32 value_size)
     {
       AbstractShader* const shader = g_gfx->CreateShaderFromBinary(stage, value, value_size);
       if (shader)
@@ -500,12 +500,12 @@ template <typename KeyType, typename DiskKeyType, typename T>
 void ShaderCache::LoadPipelineCache(T& cache, Common::LinearDiskCache<DiskKeyType, u8>& disk_cache,
                                     APIType api_type, const char* type, bool include_gameid)
 {
-  class CacheReader : public Common::LinearDiskCacheReader<DiskKeyType, u8>
+  class CacheReader
   {
   public:
     CacheReader(ShaderCache* this_ptr_, T& cache_) : this_ptr(this_ptr_), cache(cache_) {}
     bool AnyFailed() const { return failed; }
-    void Read(const DiskKeyType& key, const u8* value, u32 value_size) override
+    void Read(const DiskKeyType& key, const u8* value, u32 value_size)
     {
       KeyType real_uid;
       UnserializePipelineUid(key, real_uid);
