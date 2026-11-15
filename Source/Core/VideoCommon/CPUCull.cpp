@@ -5,7 +5,6 @@
 
 #include "Common/Assert.h"
 #include "Common/CPUDetect.h"
-#include "Common/MathUtil.h"
 #include "Common/MemoryUtil.h"
 #include "Core/System.h"
 
@@ -119,10 +118,18 @@ static Common::EnumMap<CPUCull::CullFunction, CullMode::All> GetCullFunction1()
   };
 }
 
-CPUCull::~CPUCull() = default;
+CPUCull::~CPUCull()
+{
+  Common::FreeAlignedMemory(m_transform_buffer);
+}
 
 void CPUCull::Init()
 {
+  if (!m_transform_buffer)
+  {
+    m_transform_buffer = static_cast<TransformedVertex*>(
+        Common::AllocateAlignedMemory(MAX_VERTICES * sizeof(TransformedVertex), 32));
+  }
   m_transform_table[false][false] = GetTransformFunction<false, false>();
   m_transform_table[false][true] = GetTransformFunction<false, true>();
   m_transform_table[true][false] = GetTransformFunction<true, false>();
@@ -143,13 +150,8 @@ bool CPUCull::AreAllVerticesCulled(VertexLoaderBase* loader, OpcodeDecoder::Prim
   const u32 stride = loader->m_native_vtx_decl.stride;
   const bool posHas3Elems = loader->m_native_vtx_decl.position.components >= 3;
   const bool perVertexPosMtx = loader->m_native_vtx_decl.posmtx.enable;
-  if (m_transform_buffer_size < count) [[unlikely]]
-  {
-    u32 new_size = MathUtil::NextPowerOf2(count);
-    m_transform_buffer_size = new_size;
-    m_transform_buffer.reset(static_cast<TransformedVertex*>(
-        Common::AllocateAlignedMemory(new_size * sizeof(TransformedVertex), 32)));
-  }
+  if (!m_transform_buffer || count > MAX_VERTICES) [[unlikely]]
+    return false;
 
   // transform functions need the projection matrix to transform to clip space
   auto& system = Core::System::GetInstance();
@@ -162,13 +164,7 @@ bool CPUCull::AreAllVerticesCulled(VertexLoaderBase* loader, OpcodeDecoder::Prim
   if (xfmem.viewport.ht > 0)  // See videosoftware Clipper.cpp:IsBackface
     cull_mode = cullmode_invert[cull_mode];
   const TransformFunction transform = m_transform_table[posHas3Elems][perVertexPosMtx];
-  transform(m_transform_buffer.get(), src, stride, count);
+  transform(m_transform_buffer, src, stride, count);
   const CullFunction cull = m_cull_table[primitive][cull_mode];
-  return cull(m_transform_buffer.get(), count);
-}
-
-template <typename T>
-void CPUCull::BufferDeleter<T>::operator()(T* ptr)
-{
-  Common::FreeAlignedMemory(ptr);
+  return cull(m_transform_buffer, count);
 }

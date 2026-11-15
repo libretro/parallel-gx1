@@ -24,13 +24,9 @@ public:
   using CullFunction = bool (*)(const CPUCull::TransformedVertex*, int);
 
 private:
-  template <typename T>
-  struct BufferDeleter
-  {
-    void operator()(T* ptr);
-  };
-  std::unique_ptr<TransformedVertex[], BufferDeleter<TransformedVertex>> m_transform_buffer{};
-  u32 m_transform_buffer_size = 0;
+  // room for the most vertices a draw has (its count is 16 bits), made in Init
+  static constexpr u32 MAX_VERTICES = 65536;
+  TransformedVertex* m_transform_buffer = nullptr;
   std::array<std::array<TransformFunction, 2>, 2> m_transform_table{};
   Common::EnumMap<Common::EnumMap<CullFunction, CullMode::All>,
                   OpcodeDecoder::Primitive::GX_DRAW_TRIANGLE_FAN>
