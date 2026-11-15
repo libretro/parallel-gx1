@@ -17,6 +17,13 @@ touches closer, and never adds C++ that was not there.
   virtual call, an explicit init and free in place of a constructor and
   destructor, no exceptions and no RTTI. Its codegen is checked to be
   faster than the C++ form, or at worst neutral.
+- **A class that loses its virtual functions can move inside the
+  object.** Once a base has no vtable, the compiler may place another,
+  still polymorphic base first, so the base no longer starts at the
+  object's address (`JitBase` sits 0x178 bytes into `Jit64`). A pointer
+  baked into emitted code, or passed through `void*` or `u64`, is cast to
+  the base type first (`static_cast<JitBase*>(this)`); a raw `this` there
+  makes the callee read the wrong bytes.
 - **No STL in the code a change touches.** `std::vector`,
   `std::function`, `std::array`, `std::string` and the rest go as the
   code around them is touched: fixed arrays where a bound is known, a
