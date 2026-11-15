@@ -135,7 +135,8 @@ struct JitBlock : public JitBlockData
 
   // A hash of the code it was made from, at physical_addresses taken from physicalAddress; 0 when
   // that code was not in RAM. A guest invalidation only suspends a block with one: out of the
-  // lookups and unlinked, in the cache's list of those at its effective address. Jit takes it
+  // lookups and the lists by physical address, in the cache's list of those at its effective
+  // address, physical_addresses where it was. Jit takes it
   // back before it compiles that address, wherever its page is in RAM now, if the code there is
   // the same.
   u64 code_hash = 0;
@@ -357,7 +358,8 @@ private:
   void RelistSuspended();
   void LeaveSuspended(JitBlock& block);
   void EraseBlock(JitBlock* block);
-  void MoveBlock(JitBlock* block, u32 first_page, u32 second_page);
+  void LeavePhysicalLists(JitBlock* block);
+  void PlaceBlock(JitBlock* block, u32 first_page, u32 second_page);
   JitBlock* ResumeSuspendedBlock(u32 em_address, u32 physical_address,
                                  CPUEmuFeatureFlags feature_flags);
 

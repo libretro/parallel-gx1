@@ -524,9 +524,8 @@ JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, CPUEmuFeatureFla
   return FindBlock(addr, physical_address, feature_flags);
 }
 
-/* Out of the lookups and unlinked, its code and its place in the cache's lists kept, first in
- * the list of those suspended at its effective address; false, and nothing done, without room
- * for that list */
+/* Out of the lookups and the lists by physical address, its code kept, first in the list of those
+ * suspended at its effective address; false, and nothing done, without room for that list */
 bool JitBaseBlockCache::SuspendBlock(JitBlock& block)
 {
   if (suspended_map.count >= 2 * SUSPENDED_BLOCKS && suspended_map.count >= 2 * m_num_suspended)
@@ -553,6 +552,10 @@ bool JitBaseBlockCache::SuspendBlock(JitBlock& block)
       e.linkStatus = false;
     block.incoming_unlinked = true;
   }
+
+  /* the code where it was is another's now: it is placed again wherever its code is when it is
+   * taken back */
+  LeavePhysicalLists(&block);
 
   block.suspended = true;
   block.prev_suspended = nullptr;
@@ -626,8 +629,8 @@ void JitBaseBlockCache::LeaveSuspended(JitBlock& block)
   block.suspended = false;
 }
 
-/* Destroyed and out of every list, back in the pool */
-void JitBaseBlockCache::EraseBlock(JitBlock* block)
+/* Out of the cache's lists by physical address, if it is in them */
+void JitBaseBlockCache::LeavePhysicalLists(JitBlock* block)
 {
   for (JitBlock** at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress));
        at && *at; at = &(*at)->next_at_address)
@@ -638,28 +641,24 @@ void JitBaseBlockCache::EraseBlock(JitBlock* block)
       break;
     }
   }
-  DestroyBlock(*block);
   LeaveMacroBlocks(block);
+}
+
+/* Destroyed and out of every list, back in the pool */
+void JitBaseBlockCache::EraseBlock(JitBlock* block)
+{
+  LeavePhysicalLists(block);
+  DestroyBlock(*block);
   ReleaseBlock(block);
 }
 
-/* Its pages are elsewhere in RAM now: the cache's lists by physical address have it there. The
- * code's hash is keyed by offset within its pages, so code_hash, found there, stays as it is. */
-void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 first_page, u32 second_page)
+/* Back in the cache's lists by physical address, with its pages at first_page and second_page,
+ * where its code is in RAM now. The code's hash is keyed by offset within its pages, so
+ * code_hash, found there, stays as it is. */
+void JitBaseBlockCache::PlaceBlock(JitBlock* block, u32 first_page, u32 second_page)
 {
   SmallRangeSet moved;
   JitBlock** at;
-
-  for (at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress)); at && *at;
-       at = &(*at)->next_at_address)
-  {
-    if (*at == block)
-    {
-      *at = block->next_at_address;
-      break;
-    }
-  }
-  LeaveMacroBlocks(block);
 
   for (const SmallRange& range : block->physical_addresses)
   {
@@ -729,8 +728,7 @@ JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, u32 physical_address
       LeaveSuspended(*b);
       if (b->entry_closed)
         WriteOpenEntry(*b);
-      if (b->physicalAddress != physical_address || second_page != b->second_page_pa)
-        MoveBlock(b, first_page, second_page);
+      PlaceBlock(b, first_page, second_page);
       for (const SmallRange& range : b->physical_addresses)
       {
         for (u32 i = range.from & ~31u; i < range.to; i += 32)
@@ -978,19 +976,10 @@ void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 leng
     JitBlock* const block = node->block;
     // one suspended instead is kept for when its code is in RAM again
     if (block->OverlapsPhysicalRange(address, length) &&
-        !(suspend && block->code_hash && (block->suspended || SuspendBlock(*block))))
+        !(suspend && block->code_hash && SuspendBlock(*block)))
     {
       DestroyBlock(*block);
-      for (JitBlock** at = jit_block_lists_find(&block_map, AddressKey(block->physicalAddress));
-           at && *at; at = &(*at)->next_at_address)
-      {
-        if (*at == block)
-        {
-          *at = block->next_at_address;
-          break;
-        }
-      }
-      LeaveMacroBlocks(block);
+      LeavePhysicalLists(block);
       ReleaseBlock(block);
     }
     node = next;
@@ -999,6 +988,19 @@ void JitBaseBlockCache::EraseInMacroBlock(u32 macro_block, u32 address, u32 leng
 
 void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length, bool suspend)
 {
+  /* what is forced goes, the suspended blocks whose code was there included */
+  if (!suspend)
+  {
+    JitBlock* b = m_oldest_suspended;
+    while (b)
+    {
+      JitBlock* const newer = b->newer_suspended;
+      if (b->OverlapsPhysicalRange(address, length))
+        EraseBlock(b);
+      b = newer;
+    }
+  }
+
   // Every macro block which overlaps the given range, and in each, every block that overlaps it.
   const u32 first = address & BLOCK_RANGE_MAP_MASK;
   const u64 end = static_cast<u64>(address) + length;

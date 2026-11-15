@@ -148,12 +148,16 @@ allocation fails it.
 
 Code a game pages out and back in is not compiled again. A guest
 invalidation (icbi, dcb*) only suspends the blocks it hits: out of the
-lookups and unlinked, their code kept, listed by effective address with
-a hash of the code they were made from. Before Jit compiles an address
-it takes back a suspended block whose code is in RAM again, moved to
-the page the address is in now. The code is checked when it runs, not
-when it is invalidated, since a game may invalidate before it loads.
-Forced invalidations destroy. The suspended blocks are bounded (a few
+lookups and the lists by physical address, their code kept, listed by
+effective address with a hash of the code they were made from. On Jit64
+a suspended block's entry is closed (a jump to the dispatcher) and its
+links stay: taking it back writes one jump, not every link, and only
+walks the exits to it when one was left unlinked. Before Jit compiles
+an address it takes back a suspended block whose code is in RAM again,
+placed in the page the address is in now. The code is checked when it
+runs, not when it is invalidated, since a game may invalidate before it
+loads. Forced invalidations destroy, suspended blocks whose code was
+there included. The suspended blocks are bounded (a few
 versions per address, a fixed number in all) and their map is made at
 boot and never grows.
 
