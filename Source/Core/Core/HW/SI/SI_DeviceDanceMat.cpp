@@ -9,7 +9,7 @@
 namespace SerialInterface
 {
 CSIDevice_DanceMat::CSIDevice_DanceMat(Core::System& system, SIDevices device, int device_number)
-    : CSIDevice_GCController(system, device, device_number)
+    : CSIDevice_GCController(system, SIDeviceClass::DanceMat, device, device_number)
 {
 }
 
@@ -20,7 +20,7 @@ int CSIDevice_DanceMat::RunBuffer(u8* buffer, int request_length)
   if (command == EBufferCommands::CMD_STATUS)
   {
     // Only used for logging.
-    ISIDevice::RunBuffer(buffer, request_length);
+    RunBufferDefault(buffer, request_length);
 
     return CreateStatusResponse(SI_DANCEMAT, buffer);
   }

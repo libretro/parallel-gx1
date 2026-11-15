@@ -13,14 +13,14 @@ namespace SerialInterface
 {
 CSIDevice_GCSteeringWheel::CSIDevice_GCSteeringWheel(Core::System& system, SIDevices device,
                                                      int device_number)
-    : CSIDevice_GCController(system, device, device_number)
+    : CSIDevice_GCController(system, SIDeviceClass::GCSteeringWheel, device, device_number)
 {
 }
 
 int CSIDevice_GCSteeringWheel::RunBuffer(u8* buffer, int request_length)
 {
   // For debug logging only
-  ISIDevice::RunBuffer(buffer, request_length);
+  RunBufferDefault(buffer, request_length);
 
   // Read the command
   const auto command = static_cast<EBufferCommands>(buffer[0]);

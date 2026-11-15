@@ -16,14 +16,14 @@ namespace SerialInterface
 {
 // --- GameCube keyboard ---
 CSIDevice_Keyboard::CSIDevice_Keyboard(Core::System& system, SIDevices device, int device_number)
-    : ISIDevice(system, device, device_number)
+    : ISIDevice(system, SIDeviceClass::Keyboard, device, device_number)
 {
 }
 
 int CSIDevice_Keyboard::RunBuffer(u8* buffer, int request_length)
 {
   // For debug logging only
-  ISIDevice::RunBuffer(buffer, request_length);
+  RunBufferDefault(buffer, request_length);
 
   // Read the command
   const auto command = static_cast<EBufferCommands>(buffer[0]);

@@ -260,7 +260,7 @@ void GBASockServer::Flush()
 }
 
 CSIDevice_GBA::CSIDevice_GBA(Core::System& system, SIDevices device, int device_number)
-    : ISIDevice(system, device, device_number)
+    : ISIDevice(system, SIDeviceClass::GBA, device, device_number)
 {
 }
 

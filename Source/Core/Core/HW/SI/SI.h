@@ -59,7 +59,8 @@ public:
 
   void RemoveDevice(int device_number);
   void AddDevice(SIDevices device, int device_number);
-  void AddDevice(std::unique_ptr<ISIDevice> device);
+  // takes device
+  void AddDevice(ISIDevice* device);
 
   SIDevices GetDeviceType(int channel) const;
 
@@ -130,7 +131,7 @@ private:
     USIChannelOut out{};
     USIChannelIn_Hi in_hi{};
     USIChannelIn_Lo in_lo{};
-    std::unique_ptr<ISIDevice> device;
+    ISIDevice* device = nullptr;  // owned
 
     bool has_recent_device_unplug = false;
   };

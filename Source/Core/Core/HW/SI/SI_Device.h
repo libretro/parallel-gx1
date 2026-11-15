@@ -112,36 +112,65 @@ enum class DataResponse
   ErrorNoResponse,
 };
 
+// The class a device is, which its calls branch on
+enum class SIDeviceClass : u8
+{
+  Null,
+  GCController,
+  TaruKonga,
+  GCAdapter,
+  DanceMat,
+  GCSteeringWheel,
+  GBA,
+  GBAEmu,
+  Keyboard,
+  AMBaseboard,
+};
+
 class ISIDevice
 {
 public:
-  ISIDevice(Core::System& system, SIDevices device_type, int device_number);
-  virtual ~ISIDevice();
+  ISIDevice(const ISIDevice&) = delete;
+  ISIDevice& operator=(const ISIDevice&) = delete;
 
   int GetDeviceNumber() const;
   SIDevices GetDeviceType() const;
+
+  // These branch to the device this is.
 
   // Run the SI Buffer
   // Return value:
   //  positive: The response length.
   //  0: Response not ready, we will try again `TransferInterval()` cycles later.
   //  -1: No response.
-  virtual int RunBuffer(u8* buffer, int request_length);
+  int RunBuffer(u8* buffer, int request_length);
 
-  virtual int TransferInterval();
+  int TransferInterval();
 
-  virtual DataResponse GetData(u32& hi, u32& low) = 0;
+  DataResponse GetData(u32& hi, u32& low);
 
   // Send a command directly (no detour per buffer)
-  virtual void SendCommand(u32 command, u8 poll) = 0;
+  void SendCommand(u32 command, u8 poll);
 
   // Savestate support
-  virtual void DoState(PointerWrap& p);
+  void DoState(PointerWrap& p);
 
   // Schedulable event
-  virtual void OnEvent(u64 userdata, s64 cycles_late);
+  void OnEvent(u64 userdata, s64 cycles_late);
+
+  const SIDeviceClass device_class;
 
 protected:
+  ISIDevice(Core::System& system, SIDeviceClass device_class, SIDevices device_type,
+            int device_number);
+  ~ISIDevice();
+
+  // What a device that has no call of its own does
+  int RunBufferDefault(u8* buffer, int request_length);
+  int TransferIntervalDefault() { return 0; }
+  void DoStateDefault(PointerWrap&) {}
+  void OnEventDefault(u64, s64) {}
+
   // Only the three high bytes of `si_device_id` are used.
   static int CreateStatusResponse(u32 si_device_id, u8* buffer);
 
@@ -155,5 +184,7 @@ int SIDevice_GetGBATransferTime(const SystemTimers::SystemTimersManager& timers,
                                 EBufferCommands cmd);
 bool SIDevice_IsGCController(SIDevices type);
 
-std::unique_ptr<ISIDevice> SIDevice_Create(Core::System& system, SIDevices device, int port_number);
+// Made with new; freed with SIDevice_Destroy as the device it is
+ISIDevice* SIDevice_Create(Core::System& system, SIDevices device, int port_number);
+void SIDevice_Destroy(ISIDevice* device);
 }  // namespace SerialInterface

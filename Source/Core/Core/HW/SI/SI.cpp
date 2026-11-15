@@ -58,7 +58,11 @@ SerialInterfaceManager::SerialInterfaceManager(Core::System& system) : m_system(
 {
 }
 
-SerialInterfaceManager::~SerialInterfaceManager() = default;
+SerialInterfaceManager::~SerialInterfaceManager()
+{
+  for (SSIChannel& channel : m_channel)
+    SIDevice_Destroy(channel.device);
+}
 
 static constexpr u32 GetRDSTBit(u32 channel)
 {
@@ -153,7 +157,7 @@ void SerialInterfaceManager::RunSIBuffer(u64 user_data, s64 cycles_late)
     const std::vector<u8> request_copy(m_si_buffer.data(), m_si_buffer.data() + request_length);
 #endif
 
-    auto* const device = m_channel[m_com_csr.CHANNEL].device.get();
+    ISIDevice* const device = m_channel[m_com_csr.CHANNEL].device;
     const s32 actual_response_length = device->RunBuffer(m_si_buffer.data(), request_length);
 
     DEBUG_LOG(SERIALINTERFACE,
@@ -209,16 +213,15 @@ void SerialInterfaceManager::DoState(PointerWrap& p)
     p.Do(m_channel[i].out.hex);
     p.Do(m_channel[i].has_recent_device_unplug);
 
-    const std::unique_ptr<ISIDevice>& device = m_channel[i].device;
-    SIDevices type = device->GetDeviceType();
+    SIDevices type = m_channel[i].device->GetDeviceType();
     p.Do(type);
 
-    if (type != device->GetDeviceType())
+    if (type != m_channel[i].device->GetDeviceType())
     {
       AddDevice(SIDevice_Create(m_system, type, i));
     }
 
-    device->DoState(p);
+    m_channel[i].device->DoState(p);
   }
 
   p.Do(m_poll);
@@ -465,10 +468,11 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
 void SerialInterfaceManager::RemoveDevice(int device_number)
 {
-  m_channel.at(device_number).device.reset();
+  SIDevice_Destroy(m_channel.at(device_number).device);
+  m_channel.at(device_number).device = nullptr;
 }
 
-void SerialInterfaceManager::AddDevice(std::unique_ptr<ISIDevice> device)
+void SerialInterfaceManager::AddDevice(ISIDevice* device)
 {
   const int device_number = device->GetDeviceNumber();
 
@@ -476,7 +480,7 @@ void SerialInterfaceManager::AddDevice(std::unique_ptr<ISIDevice> device)
   RemoveDevice(device_number);
 
   // Set the new one
-  m_channel.at(device_number).device = std::move(device);
+  m_channel.at(device_number).device = device;
 }
 
 void SerialInterfaceManager::AddDevice(const SIDevices device, int device_number)

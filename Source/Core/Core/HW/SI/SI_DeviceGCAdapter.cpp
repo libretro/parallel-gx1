@@ -16,7 +16,7 @@
 namespace SerialInterface
 {
 CSIDevice_GCAdapter::CSIDevice_GCAdapter(Core::System& system, SIDevices device, int device_number)
-    : CSIDevice_GCController(system, device, device_number)
+    : CSIDevice_GCController(system, SIDeviceClass::GCAdapter, device, device_number)
 {
   // Make sure PAD_GET_ORIGIN gets set due to a newly connected device.
   GCAdapter::ResetDeviceType(m_device_number);

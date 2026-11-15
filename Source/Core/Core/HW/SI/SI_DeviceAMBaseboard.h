@@ -22,15 +22,15 @@ class CSIDevice_AMBaseboard final : public ISIDevice
 {
 public:
   CSIDevice_AMBaseboard(Core::System& system, SIDevices device, int device_number);
-  ~CSIDevice_AMBaseboard() override;
+  ~CSIDevice_AMBaseboard();
 
-  int RunBuffer(u8* buffer, int request_length) override;
+  int RunBuffer(u8* buffer, int request_length);
 
-  DataResponse GetData(u32& hi, u32& low) override;
+  DataResponse GetData(u32& hi, u32& low);
 
-  void SendCommand(u32 command, u8 poll) override;
+  void SendCommand(u32 command, u8 poll);
 
-  void DoState(PointerWrap&) override;
+  void DoState(PointerWrap&);
 
 private:
   static constexpr u32 RESPONSE_SIZE = SerialInterfaceManager::BUFFER_SIZE;

@@ -14,10 +14,10 @@ class CSIDevice_GCAdapter final : public CSIDevice_GCController
 public:
   CSIDevice_GCAdapter(Core::System& system, SIDevices device, int device_number);
 
-  GCPadStatus GetPadStatus() override;
-  int RunBuffer(u8* buffer, int request_length) override;
+  GCPadStatus GetPadStatus();
+  int RunBuffer(u8* buffer, int request_length);
 
-  DataResponse GetData(u32& hi, u32& low) override;
+  DataResponse GetData(u32& hi, u32& low);
 
 private:
   bool m_simulate_konga{};

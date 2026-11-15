@@ -77,7 +77,7 @@ const constexpr u8 s_region_flags[] = "\x00\x00\x30\x00"
 // AM-Baseboard device on SI
 CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices device,
                                              int device_number)
-    : ISIDevice(system, device, device_number)
+    : ISIDevice(system, SIDeviceClass::AMBaseboard, device, device_number)
 {
   // Magnetic Card Reader
   m_mag_card_settings.card_path = File::GetUserPath(D_TRIUSER_IDX);
@@ -179,7 +179,7 @@ CSIDevice_AMBaseboard::~CSIDevice_AMBaseboard() = default;
 int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
 {
   // Debug logging
-  ISIDevice::RunBuffer(buffer, request_length);
+  RunBufferDefault(buffer, request_length);
 
   // Update user input.
   m_io_ports.Update();

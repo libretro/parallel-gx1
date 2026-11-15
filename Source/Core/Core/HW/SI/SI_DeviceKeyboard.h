@@ -19,17 +19,17 @@ public:
   CSIDevice_Keyboard(Core::System& system, SIDevices device, int device_number);
 
   // Run the SI Buffer
-  int RunBuffer(u8* buffer, int request_length) override;
+  int RunBuffer(u8* buffer, int request_length);
 
-  DataResponse GetData(u32& hi, u32& low) override;
+  DataResponse GetData(u32& hi, u32& low);
 
   KeyboardStatus GetKeyboardStatus() const;
 
   // Send a command directly
-  void SendCommand(u32 command, u8 poll) override;
+  void SendCommand(u32 command, u8 poll);
 
   // Savestate support
-  void DoState(PointerWrap& p) override;
+  void DoState(PointerWrap& p);
 
 private:
   using KeyArray = std::array<u8, 3>;

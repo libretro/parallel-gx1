@@ -43,10 +43,10 @@ class CSIDevice_GBA final : public ISIDevice
 public:
   CSIDevice_GBA(Core::System& system, SIDevices device, int device_number);
 
-  int RunBuffer(u8* buffer, int request_length) override;
-  int TransferInterval() override;
-  DataResponse GetData(u32& hi, u32& low) override;
-  void SendCommand(u32 command, u8 poll) override;
+  int RunBuffer(u8* buffer, int request_length);
+  int TransferInterval();
+  DataResponse GetData(u32& hi, u32& low);
+  void SendCommand(u32 command, u8 poll);
 
 private:
   enum class NextAction

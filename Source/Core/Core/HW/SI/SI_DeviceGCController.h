@@ -57,19 +57,20 @@ public:
   CSIDevice_GCController(Core::System& system, SIDevices device, int device_number);
 
   // Run the SI Buffer
-  int RunBuffer(u8* buffer, int request_length) override;
+  int RunBuffer(u8* buffer, int request_length);
 
-  DataResponse GetData(u32& hi, u32& low) override;
+  DataResponse GetData(u32& hi, u32& low);
 
   // Send a command directly
-  void SendCommand(u32 command, u8 poll) override;
+  void SendCommand(u32 command, u8 poll);
 
   // Savestate support
-  void DoState(PointerWrap& p) override;
+  void DoState(PointerWrap& p);
 
-  virtual GCPadStatus GetPadStatus();
-  virtual u32 MapPadStatus(const GCPadStatus& pad_status);
-  virtual EButtonCombo HandleButtonCombos(const GCPadStatus& pad_status);
+  // These two branch to the adapter's and the dance mat's own
+  GCPadStatus GetPadStatus();
+  u32 MapPadStatus(const GCPadStatus& pad_status);
+  EButtonCombo HandleButtonCombos(const GCPadStatus& pad_status);
 
   // Send and Receive pad input from network
 
@@ -77,6 +78,13 @@ public:
   static void Rumble(int pad_num, ControlState strength, SIDevices device);
 
 protected:
+  // For the controllers built on this one
+  CSIDevice_GCController(Core::System& system, SIDeviceClass device_class, SIDevices device,
+                         int device_number);
+
+  GCPadStatus GetPadStatusDefault();
+  u32 MapPadStatusDefault(const GCPadStatus& pad_status);
+
   void SetOrigin(const GCPadStatus& pad_status);
 };
 
@@ -86,7 +94,7 @@ class CSIDevice_TaruKonga final : public CSIDevice_GCController
 public:
   CSIDevice_TaruKonga(Core::System& system, SIDevices device, int device_number);
 
-  DataResponse GetData(u32& hi, u32& low) override;
+  DataResponse GetData(u32& hi, u32& low);
 
   static const u32 HI_BUTTON_MASK =
       (PAD_BUTTON_A | PAD_BUTTON_B | PAD_BUTTON_X | PAD_BUTTON_Y | PAD_BUTTON_START | PAD_TRIGGER_R)

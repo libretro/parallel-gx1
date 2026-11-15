@@ -13,6 +13,8 @@
 #include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/SI/SI.h"
 #include "Core/HW/SI/SI_Device.h"
+#include "Core/HW/SI/SI_DeviceDanceMat.h"
+#include "Core/HW/SI/SI_DeviceGCAdapter.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/System.h"
 #include "InputCommon/GCPadStatus.h"
@@ -22,7 +24,13 @@ namespace SerialInterface
 // --- standard GameCube controller ---
 CSIDevice_GCController::CSIDevice_GCController(Core::System& system, SIDevices device,
                                                int device_number)
-    : ISIDevice(system, device, device_number)
+    : CSIDevice_GCController(system, SIDeviceClass::GCController, device, device_number)
+{
+}
+
+CSIDevice_GCController::CSIDevice_GCController(Core::System& system, SIDeviceClass device_class_,
+                                               SIDevices device, int device_number)
+    : ISIDevice(system, device_class_, device, device_number)
 {
   // Here we set origin to perfectly centered values.
   // This purposely differs from real hardware which sets origin to current input state.
@@ -37,7 +45,7 @@ CSIDevice_GCController::CSIDevice_GCController(Core::System& system, SIDevices d
 int CSIDevice_GCController::RunBuffer(u8* buffer, int request_length)
 {
   // For debug logging only
-  ISIDevice::RunBuffer(buffer, request_length);
+  RunBufferDefault(buffer, request_length);
 
   const GCPadStatus pad_status = GetPadStatus();
   if (!pad_status.isConnected)
@@ -116,6 +124,20 @@ int CSIDevice_GCController::RunBuffer(u8* buffer, int request_length)
 
 GCPadStatus CSIDevice_GCController::GetPadStatus()
 {
+  if (device_class == SIDeviceClass::GCAdapter)
+    return static_cast<CSIDevice_GCAdapter*>(this)->GetPadStatus();
+  return GetPadStatusDefault();
+}
+
+u32 CSIDevice_GCController::MapPadStatus(const GCPadStatus& pad_status)
+{
+  if (device_class == SIDeviceClass::DanceMat)
+    return static_cast<CSIDevice_DanceMat*>(this)->MapPadStatus(pad_status);
+  return MapPadStatusDefault(pad_status);
+}
+
+GCPadStatus CSIDevice_GCController::GetPadStatusDefault()
+{
   GCPadStatus pad_status = Pad::GetStatus(m_device_number);
 
   // Our GCAdapter code sets PAD_GET_ORIGIN when a new device has been connected.
@@ -192,7 +214,7 @@ DataResponse CSIDevice_GCController::GetData(u32& hi, u32& low)
   return DataResponse::Success;
 }
 
-u32 CSIDevice_GCController::MapPadStatus(const GCPadStatus& pad_status)
+u32 CSIDevice_GCController::MapPadStatusDefault(const GCPadStatus& pad_status)
 {
   // Thankfully changing mode does not change the high bits ;)
   u32 hi = 0;
@@ -300,7 +322,7 @@ void CSIDevice_GCController::DoState(PointerWrap& p)
 }
 
 CSIDevice_TaruKonga::CSIDevice_TaruKonga(Core::System& system, SIDevices device, int device_number)
-    : CSIDevice_GCController(system, device, device_number)
+    : CSIDevice_GCController(system, SIDeviceClass::TaruKonga, device, device_number)
 {
 }
 
