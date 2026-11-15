@@ -17,6 +17,11 @@ struct PowerPCState;
 
 class CachedInterpreterEmitter
 {
+public:
+  // Every callback in the first size bytes of the region one that should never run
+  static void PoisonCode(u8* region, size_t region_size, ptrdiff_t writable_region_diff,
+                         size_t size);
+
 protected:
   // The return value of most callbacks is the distance in memory to the next callback.
   // If a callback returns 0, the block will be exited. The return value is signed to
@@ -88,6 +93,4 @@ private:
 
 class CachedInterpreterCodeBlock : public Common::CodeBlock<CachedInterpreterEmitter, false>
 {
-private:
-  void PoisonMemory(size_t size) override;
 };

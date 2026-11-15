@@ -383,7 +383,13 @@ protected:
 public:
   XEmitter() = default;
   explicit XEmitter(u8* code_ptr, u8* code_end) : code(code_ptr), m_code_end(code_end) {}
-  virtual ~XEmitter() = default;
+
+  // x86/64: 0xCC = breakpoint, over the first size bytes
+  static void PoisonCode(u8* region, size_t /*region_size*/, ptrdiff_t /*writable_region_diff*/,
+                         size_t size)
+  {
+    memset(region, 0xCC, size);
+  }
   void SetCodePtr(u8* ptr, u8* end, bool write_failed = false);
   void ReserveCodeSpace(int bytes);
   u8* AlignCodeTo(size_t alignment);
@@ -990,12 +996,6 @@ public:
 
 class X64CodeBlock : public Common::CodeBlock<XEmitter>
 {
-private:
-  void PoisonMemory(size_t size) override
-  {
-    // x86/64: 0xCC = breakpoint
-    memset(region, 0xCC, size);
-  }
 };
 
 }  // namespace Gen

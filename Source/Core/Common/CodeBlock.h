@@ -21,11 +21,6 @@ template <class T, bool executable = true>
 class CodeBlock : public T
 {
 private:
-  // A privately used function to set the executable RAM space to something invalid.
-  // For debugging usefulness it should be used to set the RAM to a host specific breakpoint
-  // instruction. Sets the first size bytes of the region.
-  virtual void PoisonMemory(size_t size) = 0;
-
   // How far into the region code may have been written since it was last poisoned: everything
   // written lies below a pointer this block's emitter wrote up to, or was handed, so a clear
   // poisons that much and leaves the untouched rest, untouched since, alone.
@@ -60,7 +55,7 @@ protected:
 
 public:
   CodeBlock() = default;
-  virtual ~CodeBlock()
+  ~CodeBlock()
   {
     if (region)
       FreeCodeSpace();
@@ -95,7 +90,9 @@ public:
   void ClearCodeSpace()
   {
     NoteCodePtr(T::GetCodePtr());
-    PoisonMemory(m_dirty_size);
+    // the emitter sets the first m_dirty_size bytes to its host's breakpoint, so that code run
+    // by accident there breaks into the debugger
+    T::PoisonCode(region, region_size, writable_region_diff, m_dirty_size);
     m_dirty_size = 0;
     T::SetCodePtr(region, region + region_size);
   }

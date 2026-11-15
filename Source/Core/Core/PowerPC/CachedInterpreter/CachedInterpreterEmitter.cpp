@@ -31,7 +31,8 @@ s32 CachedInterpreterEmitter::PoisonCallback(PowerPC::PowerPCState& ppc_state, c
   return 0;
 }
 
-void CachedInterpreterCodeBlock::PoisonMemory(size_t size)
+void CachedInterpreterEmitter::PoisonCode(u8* region, size_t region_size,
+                                          ptrdiff_t /*writable_region_diff*/, size_t size)
 {
   DEBUG_ASSERT(reinterpret_cast<std::uintptr_t>(region) % alignof(AnyCallback) == 0);
   DEBUG_ASSERT(region_size % sizeof(AnyCallback) == 0);

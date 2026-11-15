@@ -676,7 +676,17 @@ public:
   {
   }
 
-  virtual ~ARM64XEmitter() {}
+  // The JIT writes its regions through emitters of other blocks, past what this block's own
+  // pointers say: the whole region is poisoned, whatever size was written. A region that is
+  // not a multiple of u32 keeps its last bytes. AArch64: 0xD4200000 = BRK 0
+  static void PoisonCode(u8* region, size_t region_size, ptrdiff_t writable_region_diff,
+                         size_t /*size*/)
+  {
+    constexpr u32 brk_0 = 0xD4200000;
+
+    for (size_t i = 0; i < region_size; i += sizeof(u32))
+      std::memcpy(region + writable_region_diff + i, &brk_0, sizeof(u32));
+  }
 
   void SetCodePtr(u8* ptr, u8* end, bool write_failed = false);
 
@@ -1464,21 +1474,5 @@ private:
 
 class ARM64CodeBlock : public Common::CodeBlock<ARM64XEmitter>
 {
-private:
-  // The JIT writes its regions through emitters of other blocks, past what this block's own
-  // pointers say: the whole region is poisoned, whatever size was written.
-  void PoisonMemory(size_t /*size*/) override
-  {
-    // If our memory isn't a multiple of u32 then this won't write the last remaining bytes with
-    // anything
-    // Less than optimal, but there would be nothing we could do but throw a runtime warning anyway.
-    // AArch64: 0xD4200000 = BRK 0
-    constexpr u32 brk_0 = 0xD4200000;
-
-    for (size_t i = 0; i < region_size; i += sizeof(u32))
-    {
-      std::memcpy(region + writable_region_diff + i, &brk_0, sizeof(u32));
-    }
-  }
 };
 }  // namespace Arm64Gen
