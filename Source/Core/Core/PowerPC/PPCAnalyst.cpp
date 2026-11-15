@@ -280,7 +280,7 @@ bool PPCAnalyzer::CanSwapAdjacentOps(const CodeOp& a, const CodeOp& b) const
 // entire space for bl operations and find what functions
 // get called.
 static void FindFunctionsFromBranches(const Core::CPUThreadGuard& guard, u32 startAddr, u32 endAddr,
-                                      Common::SymbolDB* func_db)
+                                      PPCSymbolDB* func_db)
 {
   auto& mmu = guard.GetSystem().GetMMU();
   for (u32 addr = startAddr; addr < endAddr; addr += 4)

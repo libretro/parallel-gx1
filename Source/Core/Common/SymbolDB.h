@@ -88,13 +88,8 @@ public:
   using XFuncPtrMap = std::map<u32, std::set<Symbol*>>;
 
   SymbolDB();
-  virtual ~SymbolDB();
+  ~SymbolDB();
 
-  virtual const Symbol* GetSymbolFromAddr(u32 addr) const { return nullptr; }
-  virtual const Symbol* AddFunction(const Core::CPUThreadGuard& guard, u32 start_addr)
-  {
-    return nullptr;
-  }
   bool RenameSymbol(const Symbol& symbol, const std::string& symbol_name);
   bool RenameSymbol(const Symbol& symbol, const std::string& symbol_name,
                     const std::string& object_name);
