@@ -464,6 +464,11 @@ TextureCacheBase::TextureCacheBase()
   m_temp_size = 2048 * 2048 * 4;
   m_temp = static_cast<u8*>(Common::AllocateAlignedMemory(m_temp_size, 16));
 
+  // Room from the start for the textures the heaviest games keep pooled
+  m_texture_pool = static_cast<TexPoolSlot*>(malloc(TEXTURE_POOL_START * sizeof(*m_texture_pool)));
+  if (m_texture_pool)
+    m_texture_pool_cap = TEXTURE_POOL_START;
+
   TexDecoder_SetTexFmtOverlayOptions(m_backup_config.texfmt_overlay,
                                      m_backup_config.texfmt_overlay_center);
 
@@ -3290,7 +3295,7 @@ void TextureCacheBase::PoolTexture(AbstractTexture* texture, AbstractFramebuffer
   TexPoolSlot* pooled;
   if (m_texture_pool_count == m_texture_pool_cap)
   {
-    const size_t cap = m_texture_pool_cap ? m_texture_pool_cap * 2 : 64;
+    const size_t cap = m_texture_pool_cap ? m_texture_pool_cap * 2 : TEXTURE_POOL_START;
     TexPoolSlot* const grown =
         static_cast<TexPoolSlot*>(realloc(m_texture_pool, cap * sizeof(*grown)));
     if (!grown)

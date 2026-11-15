@@ -565,6 +565,7 @@ private:
   TCacheEntry** m_stitch_candidates = nullptr;
   size_t m_stitch_candidates_cap = 0;
 
+  static constexpr size_t TEXTURE_POOL_START = 512;
   TexPoolSlot* m_texture_pool = nullptr;
   size_t m_texture_pool_count = 0;
   size_t m_texture_pool_cap = 0;
