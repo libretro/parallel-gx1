@@ -158,6 +158,10 @@ struct JitBlock : public JitBlockData
   bool two_pages = false;
   bool suspended = false;
   bool in_use = false;
+  // Suspended with its entry sending whatever comes in to the dispatcher, links kept: the first
+  // bytes of its code, kept here, are put back when it is taken back
+  bool entry_closed = false;
+  u8 entry_code[8];
 };
 
 CODE_PTR_MAP_DEFINE(jit_link_lists, JitBlock::LinkData*);
@@ -273,6 +277,8 @@ protected:
   void DestroyBlock(JitBlock& block);
   void WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest);
   void WriteDestroyBlock(const JitBlock& block);
+  bool WriteCloseEntry(JitBlock& block);
+  void WriteOpenEntry(JitBlock& block);
   // What every block cache does when it destroys a block
   void DestroyBlockCommon(JitBlock& block);
 

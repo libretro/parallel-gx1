@@ -371,6 +371,7 @@ JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
   b.second_page_pa = 0;
   b.two_pages = false;
   b.suspended = false;
+  b.entry_closed = false;
   b.next_suspended = nullptr;
   b.prev_suspended = nullptr;
   b.newer_suspended = nullptr;
@@ -540,9 +541,14 @@ bool JitBaseBlockCache::SuspendBlock(JitBlock& block)
   {
     m_fast_block_map_fallback[block.fast_block_map_index] = nullptr;
   }
-  UnlinkBlock(block);
-  for (auto& e : block.linkData)
-    e.linkStatus = false;
+  /* closed, a block keeps its links and is linked to while suspended: taken back, it opens again
+   * and only links what was left unlinked */
+  if (!WriteCloseEntry(block))
+  {
+    UnlinkBlock(block);
+    for (auto& e : block.linkData)
+      e.linkStatus = false;
+  }
 
   block.suspended = true;
   block.prev_suspended = nullptr;
@@ -717,6 +723,8 @@ JitBlock* JitBaseBlockCache::ResumeSuspendedBlock(u32 addr, u32 physical_address
         HashCode(*b, first_page, second_page, &hash) && hash == b->code_hash)
     {
       LeaveSuspended(*b);
+      if (b->entry_closed)
+        WriteOpenEntry(*b);
       if (b->physicalAddress != physical_address || second_page != b->second_page_pa)
         MoveBlock(b, first_page, second_page);
       for (const SmallRange& range : b->physical_addresses)
@@ -1055,6 +1063,30 @@ void JitBaseBlockCache::WriteLinkBlock(const JitBlock::LinkData& source, const J
 void JitBaseBlockCache::WriteDestroyBlock(const JitBlock& block)
 {
   BLOCK_CACHE_CALL(WriteDestroyBlock(block))
+}
+
+/* The block's entry sent to the dispatcher, the code there kept; false, nothing done, for a JIT
+ * that cannot */
+bool JitBaseBlockCache::WriteCloseEntry(JitBlock& block)
+{
+#ifdef _M_X86_64
+  if (m_jit.cpu_core_kind == CPUCoreKind::Jit64)
+  {
+    static_cast<JitBlockCache*>(this)->WriteCloseEntry(block);
+    block.entry_closed = true;
+    return true;
+  }
+#endif
+  return false;
+}
+
+void JitBaseBlockCache::WriteOpenEntry(JitBlock& block)
+{
+#ifdef _M_X86_64
+  if (m_jit.cpu_core_kind == CPUCoreKind::Jit64)
+    static_cast<JitBlockCache*>(this)->WriteOpenEntry(block);
+#endif
+  block.entry_closed = false;
 }
 
 // Block linker

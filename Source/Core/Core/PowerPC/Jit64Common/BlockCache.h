@@ -25,6 +25,8 @@ public:
 
   void WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest);
   void WriteDestroyBlock(const JitBlock& block);
+  void WriteCloseEntry(JitBlock& block);
+  void WriteOpenEntry(JitBlock& block);
 
 private:
   std::vector<std::pair<u8*, u8*>> m_ranges_to_free_on_next_codegen_near;

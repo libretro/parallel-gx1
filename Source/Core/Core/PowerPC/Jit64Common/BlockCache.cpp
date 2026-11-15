@@ -3,6 +3,8 @@
 
 #include "Core/PowerPC/Jit64Common/BlockCache.h"
 
+#include <cstring>
+
 #include "Common/CommonTypes.h"
 #include "Common/x64Emitter.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
@@ -48,6 +50,21 @@ void JitBlockCache::WriteDestroyBlock(const JitBlock& block)
   // Only clear the entry point as we might still be within this block.
   Gen::XEmitter emit(block.normalEntry, block.normalEntry + 1);
   emit.INT3();
+}
+
+// A block's code is longer than a near JMP, and nothing jumps into the first instruction it
+// emits: at least as long as a CALL, or padded for fastmem to as long as the JMP of a backpatch.
+// Its exits set the PC before they jump, so whatever comes in goes to the dispatcher closed.
+void JitBlockCache::WriteCloseEntry(JitBlock& block)
+{
+  std::memcpy(block.entry_code, block.normalEntry, Gen::XEmitter::NEAR_JMP_LEN);
+  Gen::XEmitter emit(block.normalEntry, block.normalEntry + Gen::XEmitter::NEAR_JMP_LEN);
+  emit.JMP(m_jit.GetAsmRoutines()->dispatcher_no_timing_check, true);
+}
+
+void JitBlockCache::WriteOpenEntry(JitBlock& block)
+{
+  std::memcpy(block.normalEntry, block.entry_code, Gen::XEmitter::NEAR_JMP_LEN);
 }
 
 void JitBlockCache::Init()
