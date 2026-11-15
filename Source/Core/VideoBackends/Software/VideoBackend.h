@@ -8,15 +8,18 @@
 
 namespace SW
 {
-class VideoSoftware : public VideoBackendBase
+class VideoSoftware final : public VideoBackendBase
 {
-  bool Initialize(float backbuffer_scale) override;
-  void Shutdown() override;
+public:
+  VideoSoftware() : VideoBackendBase(VIDEO_BACKEND_SOFTWARE) {}
 
-  std::string GetConfigName() const override;
-  std::string GetDisplayName() const override;
+  bool Initialize(float backbuffer_scale);
+  void Shutdown();
 
-  void InitBackendInfo() override;
+  std::string GetConfigName() const;
+  std::string GetDisplayName() const;
+
+  void InitBackendInfo();
 
   static constexpr const char* CONFIG_NAME = "Software Renderer";
 };

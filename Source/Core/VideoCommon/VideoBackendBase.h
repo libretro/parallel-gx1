@@ -3,13 +3,12 @@
 
 #pragma once
 
-#include <memory>
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "VideoCommon/PerfQueryBase.h"
+#include "VideoCommon/VideoBackendKind.h"
 
 namespace MMIO
 {
@@ -31,13 +30,13 @@ enum class FieldType
 class VideoBackendBase
 {
 public:
-  virtual ~VideoBackendBase() {}
-  virtual bool Initialize(float backbuffer_scale) = 0;
-  virtual void Shutdown() = 0;
+  // These branch to the backend this is
+  bool Initialize(float backbuffer_scale);
+  void Shutdown();
 
-  virtual std::string GetConfigName() const = 0;
-  virtual std::string GetDisplayName() const { return GetConfigName(); }
-  virtual void InitBackendInfo() = 0;
+  std::string GetConfigName() const;
+  std::string GetDisplayName() const;
+  void InitBackendInfo();
 
   static std::string BadShaderFilename(const char* shader_stage, int counter);
 
@@ -48,7 +47,6 @@ public:
 
   static std::string GetDefaultBackendConfigName();
   static std::string GetDefaultBackendDisplayName();
-  static const std::vector<std::unique_ptr<VideoBackendBase>>& GetAvailableBackends();
   static void ActivateBackend(const std::string& name);
 
   // Fills the backend_info fields with the capabilities of the selected backend/device.
@@ -64,7 +62,12 @@ public:
                         BoundingBox* bounding_box);
   void ShutdownShared();
 
+  const VideoBackendKind backend_kind;
+
 protected:
+  explicit VideoBackendBase(VideoBackendKind kind) : backend_kind(kind) {}
+  ~VideoBackendBase() = default;
+
   bool m_initialized = false;
 };
 

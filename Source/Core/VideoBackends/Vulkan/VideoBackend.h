@@ -8,15 +8,17 @@
 
 namespace Vulkan
 {
-class VideoBackend : public VideoBackendBase
+class VideoBackend final : public VideoBackendBase
 {
 public:
-  bool Initialize(float backbuffer_scale) override;
-  void Shutdown() override;
+  VideoBackend() : VideoBackendBase(VIDEO_BACKEND_VULKAN) {}
 
-  std::string GetConfigName() const override { return CONFIG_NAME; }
-  std::string GetDisplayName() const override { return _trans("Vulkan"); }
-  void InitBackendInfo() override;
+  bool Initialize(float backbuffer_scale);
+  void Shutdown();
+
+  std::string GetConfigName() const { return CONFIG_NAME; }
+  std::string GetDisplayName() const { return _trans("Vulkan"); }
+  void InitBackendInfo();
 
   static constexpr const char* CONFIG_NAME = "Vulkan";
 };

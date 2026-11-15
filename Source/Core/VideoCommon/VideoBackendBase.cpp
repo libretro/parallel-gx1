@@ -5,7 +5,6 @@
 
 #include "VideoCommon/ShaderArena.h"
 
-#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -169,73 +168,127 @@ u16 VideoBackendBase::Video_GetBoundingBox(int index)
       [&] { return g_bounding_box->Get(index); });
 }
 
+// Every backend this build has, the default first
+#ifdef _WIN32
+static DX11::VideoBackend s_d3d_backend;
+static DX12::VideoBackend s_d3d12_backend;
+#endif
+#ifdef HAS_OPENGL
+static OGL::VideoBackend s_ogl_backend;
+static SW::VideoSoftware s_software_backend;
+#endif
+#ifdef HAS_VULKAN
+static Vulkan::VideoBackend s_vulkan_backend;
+#endif
+static Null::VideoBackend s_null_backend;
+
+static VideoBackendBase* const s_backends[] = {
+#if defined(HAS_VULKAN) && defined(__APPLE__)
+    // On macOS, Vulkan takes precedence over the deprecated OpenGL
+    &s_vulkan_backend,
+#endif
+#ifdef _WIN32
+    &s_d3d_backend,      &s_d3d12_backend,
+#endif
+#ifdef HAS_OPENGL
+    &s_ogl_backend,
+#endif
+#if defined(HAS_VULKAN) && !defined(__APPLE__)
+    &s_vulkan_backend,
+#endif
+#ifdef HAS_OPENGL
+    &s_software_backend,
+#endif
+    &s_null_backend,
+};
+
 static VideoBackendBase* GetDefaultVideoBackend()
 {
-  const auto& backends = VideoBackendBase::GetAvailableBackends();
-  if (backends.empty())
-    return nullptr;
-  return backends.front().get();
+  return s_backends[0];
 }
 
 std::string VideoBackendBase::GetDefaultBackendConfigName()
 {
-  auto* default_backend = GetDefaultVideoBackend();
-  return default_backend ? default_backend->GetConfigName() : "";
+  return GetDefaultVideoBackend()->GetConfigName();
 }
 
 std::string VideoBackendBase::GetDefaultBackendDisplayName()
 {
-  auto* const default_backend = GetDefaultVideoBackend();
-  return default_backend ? default_backend->GetDisplayName() : "";
-}
-
-const std::vector<std::unique_ptr<VideoBackendBase>>& VideoBackendBase::GetAvailableBackends()
-{
-  static auto s_available_backends = [] {
-    std::vector<std::unique_ptr<VideoBackendBase>> backends;
-
-#ifdef _WIN32
-    backends.push_back(std::make_unique<DX11::VideoBackend>());
-    backends.push_back(std::make_unique<DX12::VideoBackend>());
-#endif
-#ifdef HAS_OPENGL
-    backends.push_back(std::make_unique<OGL::VideoBackend>());
-#endif
-#ifdef HAS_VULKAN
-#ifdef __APPLE__
-    // Emplace the Vulkan backend at the beginning so it takes precedence over OpenGL.
-    // On macOS, we prefer Vulkan over OpenGL due to OpenGL support being deprecated by Apple.
-    backends.emplace(backends.begin(), std::make_unique<Vulkan::VideoBackend>());
-#else
-    backends.push_back(std::make_unique<Vulkan::VideoBackend>());
-#endif
-#endif
-#ifdef HAS_OPENGL
-    backends.push_back(std::make_unique<SW::VideoSoftware>());
-#endif
-    backends.push_back(std::make_unique<Null::VideoBackend>());
-
-    if (!backends.empty())
-      g_video_backend = backends.front().get();
-
-    return backends;
-  }();
-  return s_available_backends;
+  return GetDefaultVideoBackend()->GetDisplayName();
 }
 
 void VideoBackendBase::ActivateBackend(const std::string& name)
 {
-  // If empty, set it to the default backend (expected behavior)
-  if (name.empty())
+  size_t i;
+  // If empty or unknown, the default backend stays (expected behavior)
+  if (name.empty() || !g_video_backend)
     g_video_backend = GetDefaultVideoBackend();
 
-  const auto& backends = GetAvailableBackends();
-  const auto iter = std::ranges::find(backends, name, &VideoBackendBase::GetConfigName);
+  for (i = 0; i < sizeof(s_backends) / sizeof(s_backends[0]); i++)
+  {
+    if (s_backends[i]->GetConfigName() == name)
+    {
+      g_video_backend = s_backends[i];
+      return;
+    }
+  }
+}
 
-  if (iter == backends.end())
-    return;
+#ifdef _WIN32
+#define BACKEND_CASES_D3D(q, call)                                                                 \
+  case VIDEO_BACKEND_D3D11:                                                                        \
+    return static_cast<q DX11::VideoBackend*>(this)->call;                                         \
+  case VIDEO_BACKEND_D3D12:                                                                        \
+    return static_cast<q DX12::VideoBackend*>(this)->call;
+#else
+#define BACKEND_CASES_D3D(q, call)
+#endif
+#ifdef HAS_OPENGL
+#define BACKEND_CASES_OGL(q, call)                                                                 \
+  case VIDEO_BACKEND_OGL:                                                                          \
+    return static_cast<q OGL::VideoBackend*>(this)->call;                                          \
+  case VIDEO_BACKEND_SOFTWARE:                                                                     \
+    return static_cast<q SW::VideoSoftware*>(this)->call;
+#else
+#define BACKEND_CASES_OGL(q, call)
+#endif
+#ifdef HAS_VULKAN
+#define BACKEND_CASES_VULKAN(q, call)                                                              \
+  case VIDEO_BACKEND_VULKAN:                                                                       \
+    return static_cast<q Vulkan::VideoBackend*>(this)->call;
+#else
+#define BACKEND_CASES_VULKAN(q, call)
+#endif
 
-  g_video_backend = iter->get();
+/* The call made on the backend this is; Null for any this build lacks */
+#define VIDEO_BACKEND_CALL(q, call)                                                                \
+  switch (backend_kind)                                                                            \
+  {                                                                                                \
+    BACKEND_CASES_D3D(q, call)                                                                     \
+    BACKEND_CASES_OGL(q, call)                                                                     \
+    BACKEND_CASES_VULKAN(q, call)                                                                  \
+  default:                                                                                         \
+    break;                                                                                         \
+  }                                                                                                \
+  return static_cast<q Null::VideoBackend*>(this)->call;
+
+bool VideoBackendBase::Initialize(float backbuffer_scale)
+{
+  VIDEO_BACKEND_CALL(, Initialize(backbuffer_scale))
+}
+
+void VideoBackendBase::Shutdown()
+{
+  VIDEO_BACKEND_CALL(, Shutdown())
+}
+
+void VideoBackendBase::InitBackendInfo(){VIDEO_BACKEND_CALL(, InitBackendInfo())}
+
+std::string VideoBackendBase::GetConfigName() const {VIDEO_BACKEND_CALL(const, GetConfigName())}
+
+std::string VideoBackendBase::GetDisplayName() const
+{
+  VIDEO_BACKEND_CALL(const, GetDisplayName())
 }
 
 void VideoBackendBase::PopulateBackendInfo()

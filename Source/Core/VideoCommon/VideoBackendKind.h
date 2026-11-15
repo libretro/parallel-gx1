@@ -12,7 +12,8 @@ enum VideoBackendKind
   VIDEO_BACKEND_OGL,
   VIDEO_BACKEND_VULKAN,
   VIDEO_BACKEND_D3D11,
-  VIDEO_BACKEND_D3D12
+  VIDEO_BACKEND_D3D12,
+  VIDEO_BACKEND_METAL
 };
 
 extern VideoBackendKind g_video_backend_kind;

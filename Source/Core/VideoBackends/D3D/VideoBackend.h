@@ -8,16 +8,18 @@
 
 namespace DX11
 {
-class VideoBackend : public VideoBackendBase
+class VideoBackend final : public VideoBackendBase
 {
 public:
-  bool Initialize(float backbuffer_scale) override;
-  void Shutdown() override;
+  VideoBackend() : VideoBackendBase(VIDEO_BACKEND_D3D11) {}
 
-  std::string GetConfigName() const override;
-  std::string GetDisplayName() const override;
+  bool Initialize(float backbuffer_scale);
+  void Shutdown();
 
-  void InitBackendInfo() override;
+  std::string GetConfigName() const;
+  std::string GetDisplayName() const;
+
+  void InitBackendInfo();
 
   static constexpr const char* CONFIG_NAME = "D3D";
 
