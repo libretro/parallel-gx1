@@ -43,6 +43,30 @@ struct LinkDataArena
   u8* start = nullptr;  // the first LINK_ARENA_START chunks
 };
 
+// Code space destroyed blocks took, given back when the JIT next compiles; room for
+// CODE_RANGES_START from the start
+enum
+{
+  CODE_RANGES_START = 4096
+};
+struct CodeRange
+{
+  u8* from;
+  u8* to;
+};
+struct CodeRangeList
+{
+  CodeRange* data = nullptr;
+  size_t count = 0;
+  size_t cap = 0;
+
+  const CodeRange* begin() const { return data; }
+  const CodeRange* end() const { return data + count; }
+};
+void code_range_list_init(CodeRangeList* list);
+void code_range_list_push(CodeRangeList* list, u8* from, u8* to);
+void code_range_list_free(CodeRangeList* list);
+
 // A block's place in one macro block's list of the blocks it holds (JitBaseBlockCache's
 // block_range_map), and the next of the block's own.
 struct JitRangeNode

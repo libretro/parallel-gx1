@@ -11,6 +11,14 @@
 
 JitBlockCache::JitBlockCache(JitBase& jit) : JitBaseBlockCache{jit}
 {
+  code_range_list_init(&m_ranges_to_free_on_next_codegen_near);
+  code_range_list_init(&m_ranges_to_free_on_next_codegen_far);
+}
+
+JitBlockCache::~JitBlockCache()
+{
+  code_range_list_free(&m_ranges_to_free_on_next_codegen_near);
+  code_range_list_free(&m_ranges_to_free_on_next_codegen_far);
 }
 
 void JitBlockCache::WriteLinkBlock(const JitBlock::LinkData& source, const JitBlock* dest)
@@ -78,23 +86,23 @@ void JitBlockCache::DestroyBlock(JitBlock& block)
   JitBaseBlockCache::DestroyBlockCommon(block);
 
   if (block.near_begin != block.near_end)
-    m_ranges_to_free_on_next_codegen_near.emplace_back(block.near_begin, block.near_end);
+    code_range_list_push(&m_ranges_to_free_on_next_codegen_near, block.near_begin, block.near_end);
   if (block.far_begin != block.far_end)
-    m_ranges_to_free_on_next_codegen_far.emplace_back(block.far_begin, block.far_end);
+    code_range_list_push(&m_ranges_to_free_on_next_codegen_far, block.far_begin, block.far_end);
 }
 
-const std::vector<std::pair<u8*, u8*>>& JitBlockCache::GetRangesToFreeNear() const
+const CodeRangeList& JitBlockCache::GetRangesToFreeNear() const
 {
   return m_ranges_to_free_on_next_codegen_near;
 }
 
-const std::vector<std::pair<u8*, u8*>>& JitBlockCache::GetRangesToFreeFar() const
+const CodeRangeList& JitBlockCache::GetRangesToFreeFar() const
 {
   return m_ranges_to_free_on_next_codegen_far;
 }
 
 void JitBlockCache::ClearRangesToFree()
 {
-  m_ranges_to_free_on_next_codegen_near.clear();
-  m_ranges_to_free_on_next_codegen_far.clear();
+  m_ranges_to_free_on_next_codegen_near.count = 0;
+  m_ranges_to_free_on_next_codegen_far.count = 0;
 }

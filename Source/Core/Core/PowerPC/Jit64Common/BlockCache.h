@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include "Core/PowerPC/JitCommon/JitCache.h"
 
 class JitBase;
@@ -13,13 +11,14 @@ class JitBlockCache final : public JitBaseBlockCache
 {
 public:
   explicit JitBlockCache(JitBase& jit);
+  ~JitBlockCache();
 
   void Init();
 
   void DestroyBlock(JitBlock& block);
 
-  const std::vector<std::pair<u8*, u8*>>& GetRangesToFreeNear() const;
-  const std::vector<std::pair<u8*, u8*>>& GetRangesToFreeFar() const;
+  const CodeRangeList& GetRangesToFreeNear() const;
+  const CodeRangeList& GetRangesToFreeFar() const;
 
   void ClearRangesToFree();
 
@@ -29,6 +28,6 @@ public:
   void WriteOpenEntry(JitBlock& block);
 
 private:
-  std::vector<std::pair<u8*, u8*>> m_ranges_to_free_on_next_codegen_near;
-  std::vector<std::pair<u8*, u8*>> m_ranges_to_free_on_next_codegen_far;
+  CodeRangeList m_ranges_to_free_on_next_codegen_near;
+  CodeRangeList m_ranges_to_free_on_next_codegen_far;
 };

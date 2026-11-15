@@ -114,6 +114,37 @@ void JitBlock::LinkDataList::push_back(const LinkData& exit)
   data[count++] = exit;
 }
 
+void code_range_list_init(CodeRangeList* list)
+{
+  list->data = static_cast<CodeRange*>(malloc(CODE_RANGES_START * sizeof(CodeRange)));
+  list->count = 0;
+  list->cap = list->data ? CODE_RANGES_START : 0;
+}
+
+void code_range_list_push(CodeRangeList* list, u8* from, u8* to)
+{
+  if (list->count == list->cap)
+  {
+    const size_t cap = list->cap ? list->cap * 2 : CODE_RANGES_START;
+    CodeRange* const grown = static_cast<CodeRange*>(realloc(list->data, cap * sizeof(CodeRange)));
+    if (!grown)
+      abort();
+    list->data = grown;
+    list->cap = cap;
+  }
+  list->data[list->count].from = from;
+  list->data[list->count].to = to;
+  list->count++;
+}
+
+void code_range_list_free(CodeRangeList* list)
+{
+  free(list->data);
+  list->data = nullptr;
+  list->count = 0;
+  list->cap = 0;
+}
+
 bool JitBlock::OverlapsPhysicalRange(u32 address, u32 length) const
 {
   return physical_addresses.overlaps(address, address + length);

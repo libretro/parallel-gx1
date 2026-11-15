@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include "Common/Arm64Emitter.h"
 #include "Core/PowerPC/JitCommon/JitCache.h"
 
@@ -16,13 +14,14 @@ class JitArm64BlockCache final : public JitBaseBlockCache
 {
 public:
   explicit JitArm64BlockCache(JitBase& jit);
+  ~JitArm64BlockCache();
 
   void Init();
 
   void DestroyBlock(JitBlock& block);
 
-  const std::vector<std::pair<u8*, u8*>>& GetRangesToFreeNear() const;
-  const std::vector<std::pair<u8*, u8*>>& GetRangesToFreeFar() const;
+  const CodeRangeList& GetRangesToFreeNear() const;
+  const CodeRangeList& GetRangesToFreeFar() const;
 
   void ClearRangesToFree();
 
@@ -36,6 +35,6 @@ public:
   void WriteDestroyBlock(const JitBlock& block);
 
 private:
-  std::vector<std::pair<u8*, u8*>> m_ranges_to_free_on_next_codegen_near;
-  std::vector<std::pair<u8*, u8*>> m_ranges_to_free_on_next_codegen_far;
+  CodeRangeList m_ranges_to_free_on_next_codegen_near;
+  CodeRangeList m_ranges_to_free_on_next_codegen_far;
 };
