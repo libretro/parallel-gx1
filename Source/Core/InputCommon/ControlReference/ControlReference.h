@@ -35,8 +35,18 @@ public:
   static void SetInputGate(bool enable);
   static bool GetInputGate();
 
-  virtual ~ControlReference();
-  virtual ControlState State(const ControlState state = 0) = 0;
+  // An input reads its bound controls; an output sets them to state
+  enum class Kind : u8
+  {
+    Input,
+    Output,
+  };
+
+  explicit ControlReference(Kind kind = Kind::Input);
+  ~ControlReference();
+
+  // An input's value, or, for an output, 0 once its controls are set to state
+  ControlState State(const ControlState state = 0);
 
   template <typename T>
   T GetState()
@@ -59,7 +69,6 @@ public:
   void SetRange(ControlState range);
 
 protected:
-  ControlReference();
   ControlReference(const ControlReference&) = delete;
   ControlReference& operator=(const ControlReference&) = delete;
 
@@ -83,6 +92,7 @@ protected:
   retro_atomic_int_t m_has_expression{};
   // The range as the bits of a double, 1.0 until set.
   retro_atomic_64_t m_range_bits;
+  const Kind m_kind;
 };
 
 namespace ControllerEmu
@@ -107,26 +117,5 @@ inline ControlState ControlStateCast<ControlState>(ControlState value)
 }
 }  // namespace ControllerEmu
 
-//
-// InputReference
-//
-// Control reference for inputs
-//
-class InputReference : public ControlReference
-{
-public:
-  InputReference();
-  ControlState State(const ControlState state) override;
-};
-
-//
-// OutputReference
-//
-// Control reference for outputs
-//
-class OutputReference : public ControlReference
-{
-public:
-  OutputReference();
-  ControlState State(const ControlState state) override;
-};
+// A reference read for its value: an input, as it is made by default
+using InputReference = ControlReference;

@@ -105,7 +105,7 @@ void ControlReference::SetRange(ControlState range)
   retro_atomic_store_release_64(&m_range_bits, static_cast<int64_t>(bits));
 }
 
-ControlReference::ControlReference()
+ControlReference::ControlReference(Kind kind) : m_kind(kind)
 {
   SetRange(1.0);
 }
@@ -115,43 +115,20 @@ ControlReference::~ControlReference()
   delete static_cast<Binding*>(retro_atomic_exchange_ptr(&m_binding, nullptr));
 }
 
-
-InputReference::InputReference() : ControlReference()
+ControlState ControlReference::State(const ControlState state)
 {
-}
+  if (m_kind == Kind::Output)
+  {
+    ciface::InputReadScope scope;
+    const Binding* const b = PeekBinding();
+    if (b && b->parsed)
+      b->parsed->SetValue(state * GetRange());
+    return 0.0;
+  }
 
-OutputReference::OutputReference() : ControlReference()
-{
-}
-
-//
-// InputReference :: State
-//
-// Gets the state of an input reference
-// override function for ControlReference::State ...
-//
-ControlState InputReference::State(const ControlState ignore)
-{
   if (!GetInputGate())
     return 0.0;
   ciface::InputReadScope scope;
   const Binding* const b = PeekBinding();
   return b && b->parsed ? b->parsed->GetValue() * GetRange() : 0.0;
-}
-
-//
-// OutputReference :: State
-//
-// Set the state of all binded outputs
-// overrides ControlReference::State .. combined them so I could make the GUI simple / inputs ==
-// same as outputs one list
-// I was lazy and it works so watever
-//
-ControlState OutputReference::State(const ControlState state)
-{
-  ciface::InputReadScope scope;
-  const Binding* const b = PeekBinding();
-  if (b && b->parsed)
-    b->parsed->SetValue(state * GetRange());
-  return 0.0;
 }
