@@ -85,8 +85,18 @@ struct BootParameters
 
   struct Executable
   {
+    Executable() = default;
+    // takes reader
+    Executable(std::string path_, BootExecutableReader* reader_);
+    // the reader goes with it
+    Executable(Executable&& other) noexcept;
+    Executable& operator=(Executable&& other) noexcept;
+    Executable(const Executable&) = delete;
+    Executable& operator=(const Executable&) = delete;
+    ~Executable();
+
     std::string path;
-    std::unique_ptr<BootExecutableReader> reader;
+    BootExecutableReader* reader = nullptr;  // owned
   };
 
   struct NANDTitle
@@ -155,27 +165,36 @@ private:
   static bool SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType console_type);
 };
 
+enum class BootExecutableKind : u8
+{
+  Dol,
+  Elf,
+};
+
 class BootExecutableReader
 {
 public:
-  // The executable lent from the file's mapping where it has one, else read into memory.
-  explicit BootExecutableReader(const std::string& file_name);
-  // The executable at data, lent by the caller, who keeps it alive and lets the reader
-  // rewrite it in place; freed with free() by the reader when take_ownership.
-  BootExecutableReader(u8* data, size_t size, bool take_ownership);
-  virtual ~BootExecutableReader();
-
   BootExecutableReader(const BootExecutableReader&) = delete;
   BootExecutableReader& operator=(const BootExecutableReader&) = delete;
 
-  virtual u32 GetEntryPoint() const = 0;
-  virtual bool IsValid() const = 0;
-  virtual bool IsWii() const = 0;
-  virtual bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const = 0;
-  virtual bool LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db,
-                           const std::string& filename) const = 0;
+  // These branch to the reader this is
+  u32 GetEntryPoint() const;
+  bool IsValid() const;
+  bool IsWii() const;
+  bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
+  bool LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db,
+                   const std::string& filename) const;
+
+  const BootExecutableKind executable_kind;
 
 protected:
+  // The executable lent from the file's mapping where it has one, else read into memory.
+  BootExecutableReader(BootExecutableKind kind, const std::string& file_name);
+  // The executable at data, lent by the caller, who keeps it alive and lets the reader
+  // rewrite it in place; freed with free() by the reader when take_ownership.
+  BootExecutableReader(BootExecutableKind kind, u8* data, size_t size, bool take_ownership);
+  ~BootExecutableReader();
+
   // The executable's octets, read-only.
   const u8* m_bytes = nullptr;
   size_t m_size = 0;
@@ -187,6 +206,9 @@ private:
   u8* m_mutable = nullptr;
   bool m_owned = false;
 };
+
+// Frees a reader made with new as the DolReader or ElfReader it is
+void DestroyBootExecutableReader(BootExecutableReader* reader);
 
 struct StateFlags
 {

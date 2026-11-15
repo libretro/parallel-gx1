@@ -27,18 +27,18 @@ class ElfReader final : public BootExecutableReader
 public:
   explicit ElfReader(const std::string& filename);
   ElfReader(u8* data, size_t size, bool take_ownership);
-  ~ElfReader() override;
+  ~ElfReader();
   u32 Read32(int off) const { return base32[off >> 2]; }
   // Quick accessors
   ElfType GetType() const { return (ElfType)(header->e_type); }
   ElfMachine GetMachine() const { return (ElfMachine)(header->e_machine); }
-  u32 GetEntryPoint() const override { return entryPoint; }
+  u32 GetEntryPoint() const { return entryPoint; }
   u32 GetFlags() const { return (u32)(header->e_flags); }
-  bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const override;
+  bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
   bool LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db,
-                   const std::string& filename) const override;
-  bool IsValid() const override { return m_is_valid; }
-  bool IsWii() const override;
+                   const std::string& filename) const;
+  bool IsValid() const { return m_is_valid; }
+  bool IsWii() const;
 
   int GetNumSegments() const { return (int)(header->e_phnum); }
   int GetNumSections() const { return (int)(header->e_shnum); }

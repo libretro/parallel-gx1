@@ -13,18 +13,13 @@ class DolReader final : public BootExecutableReader
 public:
   explicit DolReader(const std::string& filename);
   DolReader(u8* data, size_t size, bool take_ownership);
-  ~DolReader() override;
+  ~DolReader();
 
-  bool IsValid() const override { return m_is_valid; }
-  bool IsWii() const override { return m_is_wii; }
+  bool IsValid() const { return m_is_valid; }
+  bool IsWii() const { return m_is_wii; }
   bool IsAncast() const { return m_ancast_index >= 0; }
-  u32 GetEntryPoint() const override { return m_dolheader.m_entrypoint; }
-  bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const override;
-  bool LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db,
-                   const std::string& filename) const override
-  {
-    return false;
-  }
+  u32 GetEntryPoint() const { return m_dolheader.m_entrypoint; }
+  bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
 
 private:
   enum

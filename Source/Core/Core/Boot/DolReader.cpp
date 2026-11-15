@@ -18,13 +18,14 @@
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
-DolReader::DolReader(const std::string& filename) : BootExecutableReader(filename)
+DolReader::DolReader(const std::string& filename)
+    : BootExecutableReader(BootExecutableKind::Dol, filename)
 {
   m_is_valid = Initialize();
 }
 
 DolReader::DolReader(u8* data, size_t size, bool take_ownership)
-    : BootExecutableReader(data, size, take_ownership)
+    : BootExecutableReader(BootExecutableKind::Dol, data, size, take_ownership)
 {
   m_is_valid = Initialize();
 }

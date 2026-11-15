@@ -69,13 +69,14 @@ static void byteswapSection(Elf32_Shdr& sec)
   bswap(sec.sh_type);
 }
 
-ElfReader::ElfReader(const std::string& filename) : BootExecutableReader(filename)
+ElfReader::ElfReader(const std::string& filename)
+    : BootExecutableReader(BootExecutableKind::Elf, filename)
 {
   m_is_valid = Initialize();
 }
 
 ElfReader::ElfReader(u8* data, size_t size, bool take_ownership)
-    : BootExecutableReader(data, size, take_ownership)
+    : BootExecutableReader(BootExecutableKind::Elf, data, size, take_ownership)
 {
   m_is_valid = Initialize();
 }

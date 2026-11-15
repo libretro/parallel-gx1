@@ -172,15 +172,15 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
 
     if (extension == ".elf")
     {
-      auto elf_reader = std::make_unique<ElfReader>(path);
-      return std::make_unique<BootParameters>(Executable{std::move(path), std::move(elf_reader)},
+      ElfReader* elf_reader = new ElfReader(path);
+      return std::make_unique<BootParameters>(Executable{std::move(path), elf_reader},
                                               std::move(boot_session_data_));
     }
 
     if (extension == ".dol")
     {
-      auto dol_reader = std::make_unique<DolReader>(path);
-      return std::make_unique<BootParameters>(Executable{std::move(path), std::move(dol_reader)},
+      DolReader* dol_reader = new DolReader(path);
+      return std::make_unique<BootParameters>(Executable{std::move(path), dol_reader},
                                               std::move(boot_session_data_));
     }
 
@@ -238,6 +238,34 @@ BootParameters::Disc& BootParameters::Disc::operator=(Disc&& other) noexcept
 BootParameters::Disc::~Disc()
 {
   DiscIO::DestroyVolume(volume);
+}
+
+BootParameters::Executable::Executable(std::string path_, BootExecutableReader* reader_)
+    : path(std::move(path_)), reader(reader_)
+{
+}
+
+BootParameters::Executable::Executable(Executable&& other) noexcept
+    : path(std::move(other.path)), reader(other.reader)
+{
+  other.reader = nullptr;
+}
+
+BootParameters::Executable& BootParameters::Executable::operator=(Executable&& other) noexcept
+{
+  if (this != &other)
+  {
+    DestroyBootExecutableReader(reader);
+    path = std::move(other.path);
+    reader = other.reader;
+    other.reader = nullptr;
+  }
+  return *this;
+}
+
+BootParameters::Executable::~Executable()
+{
+  DestroyBootExecutableReader(reader);
 }
 
 BootParameters::IPL::IPL(DiscIO::Region region_) : region(region_)
@@ -595,8 +623,8 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
   return std::visit(BootTitle(system, guard), boot->parameters);
 }
 
-BootExecutableReader::BootExecutableReader(const std::string& file_name)
-    : m_file(file_name, "rb")
+BootExecutableReader::BootExecutableReader(BootExecutableKind kind, const std::string& file_name)
+    : executable_kind(kind), m_file(file_name, "rb")
 {
   u64 size = 0;
   const u8* map = m_file.GetMappedPtr(&size);
@@ -617,8 +645,10 @@ BootExecutableReader::BootExecutableReader(const std::string& file_name)
   m_size = size_t(size);
 }
 
-BootExecutableReader::BootExecutableReader(u8* data, size_t size, bool take_ownership)
-    : m_bytes(data), m_size(data ? size : 0), m_mutable(data), m_owned(take_ownership)
+BootExecutableReader::BootExecutableReader(BootExecutableKind kind, u8* data, size_t size,
+                                           bool take_ownership)
+    : executable_kind(kind), m_bytes(data), m_size(data ? size : 0), m_mutable(data),
+      m_owned(take_ownership)
 {
 }
 
@@ -626,6 +656,54 @@ BootExecutableReader::~BootExecutableReader()
 {
   if (m_owned)
     std::free(m_mutable);
+}
+
+u32 BootExecutableReader::GetEntryPoint() const
+{
+  if (executable_kind == BootExecutableKind::Elf)
+    return static_cast<const ElfReader*>(this)->GetEntryPoint();
+  return static_cast<const DolReader*>(this)->GetEntryPoint();
+}
+
+bool BootExecutableReader::IsValid() const
+{
+  if (executable_kind == BootExecutableKind::Elf)
+    return static_cast<const ElfReader*>(this)->IsValid();
+  return static_cast<const DolReader*>(this)->IsValid();
+}
+
+bool BootExecutableReader::IsWii() const
+{
+  if (executable_kind == BootExecutableKind::Elf)
+    return static_cast<const ElfReader*>(this)->IsWii();
+  return static_cast<const DolReader*>(this)->IsWii();
+}
+
+bool BootExecutableReader::LoadIntoMemory(Core::System& system, bool only_in_mem1) const
+{
+  if (executable_kind == BootExecutableKind::Elf)
+    return static_cast<const ElfReader*>(this)->LoadIntoMemory(system, only_in_mem1);
+  return static_cast<const DolReader*>(this)->LoadIntoMemory(system, only_in_mem1);
+}
+
+// A DOL carries no symbols
+bool BootExecutableReader::LoadSymbols(const Core::CPUThreadGuard& guard,
+                                       PPCSymbolDB& ppc_symbol_db,
+                                       const std::string& filename) const
+{
+  if (executable_kind == BootExecutableKind::Elf)
+    return static_cast<const ElfReader*>(this)->LoadSymbols(guard, ppc_symbol_db, filename);
+  return false;
+}
+
+void DestroyBootExecutableReader(BootExecutableReader* reader)
+{
+  if (!reader)
+    return;
+  if (reader->executable_kind == BootExecutableKind::Elf)
+    delete static_cast<ElfReader*>(reader);
+  else
+    delete static_cast<DolReader*>(reader);
 }
 
 u8* BootExecutableReader::MutableBytes()
