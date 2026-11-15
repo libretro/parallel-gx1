@@ -60,7 +60,8 @@ void MemoryManager::FreePageTables()
   u32 i;
   for (i = 0; i < PAGE_BLOCKS; i++)
   {
-    std::free(m_page_table_views[i]);
+    if (!m_page_table_view_pool)
+      std::free(m_page_table_views[i]);
     m_page_table_views[i] = nullptr;
     m_page_table_view_counts[i] = 0;
     std::free(m_large_readable_pages[i]);
@@ -68,6 +69,8 @@ void MemoryManager::FreePageTables()
     std::free(m_large_writeable_pages[i]);
     m_large_writeable_pages[i] = nullptr;
   }
+  std::free(m_page_table_view_pool);
+  m_page_table_view_pool = nullptr;
 }
 
 void MemoryManager::UnmapDBATViews()
@@ -290,6 +293,16 @@ bool MemoryManager::InitFastmemArena()
                  region.physical_address, region.size);
       return false;
     }
+  }
+
+  /* every logical page's view, before the game maps any: blocks allocated in play otherwise */
+  m_page_table_view_pool = static_cast<LogicalMemoryView*>(
+      std::calloc(static_cast<size_t>(PAGE_BLOCKS) * PAGE_BLOCK_SIZE, sizeof(LogicalMemoryView)));
+  if (m_page_table_view_pool)
+  {
+    u32 i;
+    for (i = 0; i < PAGE_BLOCKS; i++)
+      m_page_table_views[i] = m_page_table_view_pool + static_cast<size_t>(i) * PAGE_BLOCK_SIZE;
   }
 
   m_is_fastmem_arena_initialized = true;

@@ -271,13 +271,15 @@ private:
   LogicalMemoryView m_dbat_views[MAX_DBAT_VIEWS]{};
   u32 m_dbat_view_count = 0;
 
-  // Per logical guest page (4 KiB), in a two-level table: a block covers PAGE_BLOCK_SIZE pages,
-  // is allocated the first time one of them is used and kept until shutdown.
+  // Per logical guest page (4 KiB), in a two-level table: a block covers PAGE_BLOCK_SIZE pages.
+  // The blocks are one allocation made with the fastmem arena, taking memory as their pages are
+  // used, and kept until shutdown.
   static constexpr u32 PAGE_BLOCK_SHIFT = 10;
   static constexpr u32 PAGE_BLOCK_SIZE = 1u << PAGE_BLOCK_SHIFT;
   static constexpr u32 PAGE_BLOCKS = 1u << (32 - 12 - PAGE_BLOCK_SHIFT);
   // the view mapped for a page table entry, mapped_pointer nullptr when none
   LogicalMemoryView* m_page_table_views[PAGE_BLOCKS]{};
+  LogicalMemoryView* m_page_table_view_pool = nullptr;
   u32 m_page_table_view_counts[PAGE_BLOCKS]{};
 
   std::array<void*, PowerPC::BAT_PAGE_COUNT> m_physical_page_mappings{};
