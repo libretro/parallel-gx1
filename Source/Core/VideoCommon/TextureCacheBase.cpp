@@ -1074,12 +1074,13 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
 
 void TextureCacheBase::DoLoadState(PointerWrap& p)
 {
-  // Helper for getting a cache entry from an ID.
-  std::map<u32, RcTcacheEntry> id_map;
+  // The cache entries by ID, which is their place in the state: one allocation, a null handle
+  // being all zero; null for an ID out of range
+  RcTcacheEntry* entries = nullptr;
+  u32 num_entries = 0;
   RcTcacheEntry null_entry;
-  auto GetEntry = [&id_map, &null_entry](u32 id) -> RcTcacheEntry& {
-    auto iter = id_map.find(id);
-    return iter == id_map.end() ? null_entry : iter->second;
+  auto GetEntry = [&entries, &num_entries, &null_entry](u32 id) -> RcTcacheEntry& {
+    return id < num_entries ? entries[id] : null_entry;
   };
 
   // Only clear out state when actually restoring/loading.
@@ -1092,6 +1093,12 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
   // Preload all cache entries.
   u32 size = 0;
   p.Do(size);
+  if (commit_state && size)
+  {
+    entries = static_cast<RcTcacheEntry*>(std::calloc(size, sizeof(RcTcacheEntry)));
+    if (entries)
+      num_entries = size;
+  }
   for (u32 i = 0; i < size; i++)
   {
     // Even if the texture isn't valid, we still need to create the cache entry object
@@ -1106,8 +1113,8 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
     }
     entry->DoState(p);
     entry->hash_from_state = entry->IsCopy();
-    if (entry->texture && commit_state)
-      id_map.emplace(i, entry);
+    if (entry->texture && i < num_entries)
+      entries[i] = entry;
   }
   p.DoMarker("TextureCacheEntries");
 
@@ -1169,6 +1176,10 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
     if (entry)
       m_bound_textures[index] = entry;
   }
+
+  for (u32 i = 0; i < num_entries; i++)
+    entries[i].reset();
+  std::free(entries);
 }
 
 void TextureCacheBase::OnFrameEnd()
