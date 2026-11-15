@@ -14,14 +14,14 @@
 
 namespace ControllerEmu
 {
-AnalogStick::AnalogStick(const char* const name_, std::unique_ptr<StickGate>&& stick_gate)
-    : AnalogStick(name_, name_, std::move(stick_gate))
+AnalogStick::AnalogStick(const char* const name_, const StickGate& stick_gate)
+    : AnalogStick(name_, name_, stick_gate)
 {
 }
 
 AnalogStick::AnalogStick(const char* const name_, const char* const ui_name_,
-                         std::unique_ptr<StickGate>&& stick_gate)
-    : ReshapableInput(name_, ui_name_, GroupType::Stick), m_stick_gate(std::move(stick_gate))
+                         const StickGate& stick_gate)
+    : ReshapableInput(name_, ui_name_, GroupType::Stick), m_stick_gate(stick_gate)
 {
   for (auto& named_direction : named_directions)
     AddInput(Translatability::Translate, named_direction);
@@ -67,7 +67,7 @@ AnalogStick::StateData AnalogStick::GetState(const InputOverrideFunction& overri
 
 ControlState AnalogStick::GetGateRadiusAtAngle(double ang) const
 {
-  return m_stick_gate->GetRadiusAtAngle(ang);
+  return m_stick_gate.GetRadiusAtAngle(ang);
 }
 
 Control* AnalogStick::GetModifierInput() const
@@ -82,7 +82,7 @@ OctagonAnalogStick::OctagonAnalogStick(const char* name_, ControlState gate_radi
 
 OctagonAnalogStick::OctagonAnalogStick(const char* name_, const char* ui_name_,
                                        ControlState gate_radius)
-    : AnalogStick(name_, ui_name_, std::make_unique<ControllerEmu::OctagonStickGate>(1.0))
+    : AnalogStick(name_, ui_name_, ControllerEmu::OctagonStickGate(1.0))
 {
   AddVirtualNotchSetting(&m_virtual_notch_setting, 45);
 

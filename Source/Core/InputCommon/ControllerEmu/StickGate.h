@@ -19,55 +19,51 @@ namespace ControllerEmu
 // Minimum stick distance from the center before virtual notches are applied.
 constexpr ControlState MINIMUM_NOTCH_DISTANCE = 0.9;
 
-// An abstract class representing the plastic shell that limits an analog stick's movement.
+// The plastic shell that limits an analog stick's movement, by its shape.
 class StickGate
 {
 public:
+  enum class Shape : u8
+  {
+    // Found on most Nintendo GC/Wii analog sticks; size is its circumscribed circle's radius.
+    Octagon,
+    // Possibly found on 3rd-party accessories; size is its radius.
+    Round,
+    // e.g. keyboard input; size is its half width.
+    Square,
+  };
+
+  StickGate(Shape shape, ControlState size) : m_shape(shape), m_size(size) {}
+
   // Angle is in radians and should be non-negative
-  virtual ControlState GetRadiusAtAngle(double ang) const = 0;
+  ControlState GetRadiusAtAngle(double ang) const;
 
   // This is provided purely as an optimization for ReshapableInput to produce a minimal amount of
   // calibration points that are saved in our config.
-  virtual std::optional<u32> GetIdealCalibrationSampleCount() const;
-
-  virtual ~StickGate() = default;
-};
-
-// An octagon-shaped stick gate is found on most Nintendo GC/Wii analog sticks.
-class OctagonStickGate : public StickGate
-{
-public:
-  // Radius of circumscribed circle
-  explicit OctagonStickGate(ControlState radius);
-  ControlState GetRadiusAtAngle(double ang) const final;
-  std::optional<u32> GetIdealCalibrationSampleCount() const final;
+  std::optional<u32> GetIdealCalibrationSampleCount() const;
 
 private:
-  const ControlState m_radius;
+  Shape m_shape;
+  ControlState m_size;
 };
 
-// A round-shaped stick gate. Possibly found on 3rd-party accessories.
-class RoundStickGate : public StickGate
+// The gates by shape; they add nothing to StickGate, so each is held as the StickGate it is.
+class OctagonStickGate final : public StickGate
 {
 public:
-  explicit RoundStickGate(ControlState radius);
-  ControlState GetRadiusAtAngle(double ang) const final;
-  std::optional<u32> GetIdealCalibrationSampleCount() const final;
-
-private:
-  const ControlState m_radius;
+  explicit OctagonStickGate(ControlState radius) : StickGate(Shape::Octagon, radius) {}
 };
 
-// A square-shaped stick gate. e.g. keyboard input.
-class SquareStickGate : public StickGate
+class RoundStickGate final : public StickGate
 {
 public:
-  explicit SquareStickGate(ControlState half_width);
-  ControlState GetRadiusAtAngle(double ang) const final;
-  std::optional<u32> GetIdealCalibrationSampleCount() const final;
+  explicit RoundStickGate(ControlState radius) : StickGate(Shape::Round, radius) {}
+};
 
-private:
-  const ControlState m_half_width;
+class SquareStickGate final : public StickGate
+{
+public:
+  explicit SquareStickGate(ControlState half_width) : StickGate(Shape::Square, half_width) {}
 };
 
 class ReshapableInput : public ControlGroup

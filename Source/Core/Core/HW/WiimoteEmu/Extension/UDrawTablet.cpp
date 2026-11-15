@@ -43,7 +43,7 @@ UDrawTablet::UDrawTablet() : Extension3rdParty("uDraw", _trans("uDraw GameTablet
 
   // Stylus
   groups.emplace_back(m_stylus = new ControllerEmu::AnalogStick(
-                          _trans("Stylus"), std::make_unique<ControllerEmu::SquareStickGate>(1.0)));
+                          _trans("Stylus"), ControllerEmu::SquareStickGate(1.0)));
 
   // Touch
   groups.emplace_back(m_touch = new ControllerEmu::Triggers(_trans("Touch")));

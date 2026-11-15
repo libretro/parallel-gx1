@@ -14,8 +14,8 @@ class AnalogStick : public ReshapableInput
 public:
   using StateData = ReshapeData;
 
-  AnalogStick(const char* name, std::unique_ptr<StickGate>&& stick_gate);
-  AnalogStick(const char* name, const char* ui_name, std::unique_ptr<StickGate>&& stick_gate);
+  AnalogStick(const char* name, const StickGate& stick_gate);
+  AnalogStick(const char* name, const char* ui_name, const StickGate& stick_gate);
 
   ReshapeData GetReshapableState(bool adjusted) const final;
   ControlState GetGateRadiusAtAngle(double ang) const override;
@@ -26,7 +26,7 @@ public:
 private:
   Control* GetModifierInput() const override;
 
-  std::unique_ptr<StickGate> m_stick_gate;
+  StickGate m_stick_gate;
 };
 
 // An AnalogStick with an OctagonStickGate

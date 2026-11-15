@@ -65,61 +65,46 @@ namespace ControllerEmu
 {
 constexpr int ReshapableInput::CALIBRATION_SAMPLE_COUNT;
 
+ControlState StickGate::GetRadiusAtAngle(double angle) const
+{
+  switch (m_shape)
+  {
+  case Shape::Octagon:
+  {
+    constexpr int sides = 8;
+    constexpr double sum_int_angles = (sides - 2) * MathUtil::PI;
+    constexpr double half_int_angle = sum_int_angles / sides / 2;
+
+    angle = std::fmod(angle, MathUtil::TAU / sides);
+    // Solve ASA triangle using The Law of Sines:
+    return m_size / std::sin(MathUtil::PI - angle - half_int_angle) * std::sin(half_int_angle);
+  }
+  case Shape::Round:
+    return m_size;
+  case Shape::Square:
+  default:
+  {
+    constexpr double section_angle = MathUtil::TAU / 4;
+    return m_size /
+           std::cos(std::fmod(angle + section_angle / 2, section_angle) - section_angle / 2);
+  }
+  }
+}
+
 std::optional<u32> StickGate::GetIdealCalibrationSampleCount() const
 {
-  return std::nullopt;
-}
-
-OctagonStickGate::OctagonStickGate(ControlState radius) : m_radius(radius)
-{
-}
-
-ControlState OctagonStickGate::GetRadiusAtAngle(double angle) const
-{
-  constexpr int sides = 8;
-  constexpr double sum_int_angles = (sides - 2) * MathUtil::PI;
-  constexpr double half_int_angle = sum_int_angles / sides / 2;
-
-  angle = std::fmod(angle, MathUtil::TAU / sides);
-  // Solve ASA triangle using The Law of Sines:
-  return m_radius / std::sin(MathUtil::PI - angle - half_int_angle) * std::sin(half_int_angle);
-}
-
-std::optional<u32> OctagonStickGate::GetIdealCalibrationSampleCount() const
-{
-  return 8;
-}
-
-RoundStickGate::RoundStickGate(ControlState radius) : m_radius(radius)
-{
-}
-
-ControlState RoundStickGate::GetRadiusAtAngle(double) const
-{
-  return m_radius;
-}
-
-std::optional<u32> RoundStickGate::GetIdealCalibrationSampleCount() const
-{
-  // The "radius" is the same at every angle so a single sample is enough.
-  return 1;
-}
-
-SquareStickGate::SquareStickGate(ControlState half_width) : m_half_width(half_width)
-{
-}
-
-ControlState SquareStickGate::GetRadiusAtAngle(double angle) const
-{
-  constexpr double section_angle = MathUtil::TAU / 4;
-  return m_half_width /
-         std::cos(std::fmod(angle + section_angle / 2, section_angle) - section_angle / 2);
-}
-
-std::optional<u32> SquareStickGate::GetIdealCalibrationSampleCount() const
-{
-  // Because angle:0 points to the right we must use 8 samples for our square.
-  return 8;
+  switch (m_shape)
+  {
+  case Shape::Octagon:
+    return 8;
+  case Shape::Round:
+    // The "radius" is the same at every angle so a single sample is enough.
+    return 1;
+  case Shape::Square:
+  default:
+    // Because angle:0 points to the right we must use 8 samples for our square.
+    return 8;
+  }
 }
 
 ReshapableInput::ReshapableInput(std::string name_, std::string ui_name_, GroupType type_)
