@@ -35,6 +35,7 @@ struct site
 {
    unsigned long a, b; /* offsets in the core, 0 for none */
    unsigned long count;
+   unsigned long bytes; /* what the site's calls asked for in all */
 };
 
 static unsigned long core_lo, core_hi, core_base;
@@ -73,12 +74,14 @@ static void record(void *ret, size_t size)
       if (s->a == a && s->b == b)
       {
          __sync_fetch_and_add(&s->count, 1UL);
+         __sync_fetch_and_add(&s->bytes, (unsigned long)size);
          break;
       }
       if (!s->a && __sync_bool_compare_and_swap(&s->a, 0UL, a))
       {
          s->b = b;
          __sync_fetch_and_add(&s->count, 1UL);
+         __sync_fetch_and_add(&s->bytes, (unsigned long)size);
          break;
       }
    }
@@ -210,8 +213,8 @@ void allocs_report(unsigned top)
          sites[n++] = sites[i];
    qsort(sites, n, sizeof(sites[0]), by_count);
    for (i = 0; i < n && i < top; i++)
-      printf("alloc_site count=%lu at=0x%lx from=0x%lx\n", sites[i].count, sites[i].a,
-            sites[i].b);
+      printf("alloc_site count=%lu bytes=%lu at=0x%lx from=0x%lx\n", sites[i].count,
+            sites[i].bytes, sites[i].a, sites[i].b);
 }
 
 #else
