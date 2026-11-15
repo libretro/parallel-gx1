@@ -99,7 +99,7 @@ void CEXIIPL::Descrambler(u8* data, u32 size)
   }
 }
 
-CEXIIPL::CEXIIPL(Core::System& system) : IEXIDevice(system)
+CEXIIPL::CEXIIPL(Core::System& system) : IEXIDevice(system, EXIDeviceClass::IPL)
 {
   // Fill the ROM: the system's zeroed pages, touched only where the dump or the fonts go
   m_rom = static_cast<u8*>(Common::AllocateMemoryPages(ROM_SIZE));

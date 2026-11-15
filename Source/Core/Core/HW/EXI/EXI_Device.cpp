@@ -3,7 +3,7 @@
 
 #include "Core/HW/EXI/EXI_Device.h"
 
-#include <memory>
+#include <type_traits>
 
 #include "Common/CommonTypes.h"
 #include "Core/HW/EXI/EXI_DeviceAD16.h"
@@ -22,11 +22,12 @@
 
 namespace ExpansionInterface
 {
-IEXIDevice::IEXIDevice(Core::System& system) : m_system(system)
+IEXIDevice::IEXIDevice(Core::System& system, EXIDeviceClass device_class_)
+    : device_class(device_class_), m_system(system)
 {
 }
 
-void IEXIDevice::ImmWrite(u32 data, u32 size)
+void IEXIDevice::ImmWriteDefault(u32 data, u32 size)
 {
   while (size--)
   {
@@ -36,7 +37,7 @@ void IEXIDevice::ImmWrite(u32 data, u32 size)
   }
 }
 
-u32 IEXIDevice::ImmRead(u32 size)
+u32 IEXIDevice::ImmReadDefault(u32 size)
 {
   u32 result = 0;
   u32 position = 0;
@@ -49,11 +50,7 @@ u32 IEXIDevice::ImmRead(u32 size)
   return result;
 }
 
-void IEXIDevice::ImmReadWrite(u32& data, u32 size)
-{
-}
-
-void IEXIDevice::DMAWrite(u32 address, u32 size)
+void IEXIDevice::DMAWriteDefault(u32 address, u32 size)
 {
   auto& memory = m_system.GetMemory();
   while (size--)
@@ -63,7 +60,7 @@ void IEXIDevice::DMAWrite(u32 address, u32 size)
   }
 }
 
-void IEXIDevice::DMARead(u32 address, u32 size)
+void IEXIDevice::DMAReadDefault(u32 address, u32 size)
 {
   auto& memory = m_system.GetMemory();
   while (size--)
@@ -74,39 +71,98 @@ void IEXIDevice::DMARead(u32 address, u32 size)
   }
 }
 
+/* The call on the device class this is: its own or, when it has none, the base's default
+ * (named Fn##Default). An empty slot is the base itself and takes every default. */
+#define EXI_CASE(kind, D, Q)                                                                       \
+  case EXIDeviceClass::kind:                                                                       \
+    return call(static_cast<Q D*>(this));
+
+#define EXI_DISPATCH(Q)                                                                            \
+  switch (device_class)                                                                            \
+  {                                                                                                \
+    EXI_CASE(Dummy, CEXIDummy, Q)                                                                  \
+    EXI_CASE(MemoryCard, CEXIMemoryCard, Q)                                                        \
+    EXI_CASE(IPL, CEXIIPL, Q)                                                                      \
+    EXI_CASE(AD16, CEXIAD16, Q)                                                                    \
+    EXI_CASE(Mic, CEXIMic, Q)                                                                      \
+    EXI_CASE(Ethernet, CEXIETHERNET, Q)                                                            \
+    EXI_CASE(Modem, CEXIModem, Q)                                                                  \
+    EXI_CASE(Gecko, CEXIGecko, Q)                                                                  \
+    EXI_CASE(AGP, CEXIAgp, Q)                                                                      \
+    EXI_CASE(Baseboard, CEXIBaseboard, Q)                                                          \
+  case EXIDeviceClass::Empty:                                                                      \
+  default:                                                                                         \
+    break;                                                                                         \
+  }                                                                                                \
+  return call(this);
+
+// Whether D has a call of its own, and not the base's
+#define EXI_HAS_OWN(D, Fn) (!std::is_same_v<decltype(&D::Fn), decltype(&IEXIDevice::Fn)>)
+
+#define EXI_CALL(Fn, Q, ...)                                                                       \
+  const auto call = [&](Q auto* device) {                                                          \
+    using D = std::remove_cv_t<std::remove_pointer_t<decltype(device)>>;                           \
+    if constexpr (EXI_HAS_OWN(D, Fn))                                                              \
+      return device->Fn(__VA_ARGS__);                                                              \
+    else                                                                                           \
+      return Fn##Default(__VA_ARGS__);                                                             \
+  };                                                                                               \
+  EXI_DISPATCH(Q)
+
+void IEXIDevice::ImmWrite(u32 data, u32 size){EXI_CALL(ImmWrite, , data, size)}
+
+u32 IEXIDevice::ImmRead(u32 size)
+{
+  EXI_CALL(ImmRead, , size)
+}
+
+void IEXIDevice::ImmReadWrite(u32& data, u32 size)
+{
+  EXI_CALL(ImmReadWrite, , data, size)
+}
+
+void IEXIDevice::DMAWrite(u32 address, u32 size)
+{
+  EXI_CALL(DMAWrite, , address, size)
+}
+
+void IEXIDevice::DMARead(u32 address, u32 size)
+{
+  EXI_CALL(DMARead, , address, size)
+}
+
 bool IEXIDevice::UseDelayedTransferCompletion() const
 {
-  return false;
+  EXI_CALL(UseDelayedTransferCompletion, const)
 }
 
 bool IEXIDevice::IsPresent() const
 {
-  return false;
+  EXI_CALL(IsPresent, const)
 }
 
 void IEXIDevice::SetCS(int cs)
 {
+  EXI_CALL(SetCS, , cs)
 }
 
 void IEXIDevice::DoState(PointerWrap& p)
 {
+  EXI_CALL(DoState, , p)
 }
 
 bool IEXIDevice::IsInterruptSet()
 {
-  return false;
+  EXI_CALL(IsInterruptSet, )
 }
 
-void IEXIDevice::TransferByte(u8& byte)
-{
-}
+void IEXIDevice::TransferByte(u8& byte){EXI_CALL(TransferByte, , byte)}
 
 // F A C T O R Y
-std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, const EXIDeviceType device_type,
-                                             const int channel_num,
-                                             const Memcard::HeaderData& memcard_header_data)
+IEXIDevice* EXIDevice_Create(Core::System& system, const EXIDeviceType device_type,
+                             const int channel_num, const Memcard::HeaderData& memcard_header_data)
 {
-  std::unique_ptr<IEXIDevice> result;
+  IEXIDevice* result;
   // XXX This computation isn't necessarily right (it holds for A/B, but not SP1)
   // However, the devices that care about slots currently only go in A/B.
   const Slot slot = static_cast<Slot>(channel_num);
@@ -114,67 +170,67 @@ std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, const EXIDevi
   switch (device_type)
   {
   case EXIDeviceType::Dummy:
-    result = std::make_unique<CEXIDummy>(system, "Dummy");
+    result = new CEXIDummy(system, "Dummy");
     break;
 
   case EXIDeviceType::MemoryCard:
   case EXIDeviceType::MemoryCardFolder:
   {
     bool gci_folder = (device_type == EXIDeviceType::MemoryCardFolder);
-    result = std::make_unique<CEXIMemoryCard>(system, slot, gci_folder, memcard_header_data);
+    result = new CEXIMemoryCard(system, slot, gci_folder, memcard_header_data);
     break;
   }
   case EXIDeviceType::MaskROM:
-    result = std::make_unique<CEXIIPL>(system);
+    result = new CEXIIPL(system);
     break;
 
   case EXIDeviceType::AD16:
-    result = std::make_unique<CEXIAD16>(system);
+    result = new CEXIAD16(system);
     break;
 
   case EXIDeviceType::Microphone:
-    result = std::make_unique<CEXIMic>(system, channel_num);
+    result = new CEXIMic(system, channel_num);
     break;
 
   case EXIDeviceType::Ethernet:
-    result = std::make_unique<CEXIETHERNET>(system, BBADeviceType::TAP);
+    result = new CEXIETHERNET(system, BBADeviceType::TAP);
     break;
 
   case EXIDeviceType::EthernetTapServer:
-    result = std::make_unique<CEXIETHERNET>(system, BBADeviceType::TAPSERVER);
+    result = new CEXIETHERNET(system, BBADeviceType::TAPSERVER);
     break;
 
   case EXIDeviceType::EthernetXLink:
-    result = std::make_unique<CEXIETHERNET>(system, BBADeviceType::XLINK);
+    result = new CEXIETHERNET(system, BBADeviceType::XLINK);
     break;
 
   case EXIDeviceType::EthernetBuiltIn:
-    result = std::make_unique<CEXIETHERNET>(system, BBADeviceType::BuiltIn);
+    result = new CEXIETHERNET(system, BBADeviceType::BuiltIn);
     break;
 
   case EXIDeviceType::EthernetIPC:
-    result = std::make_unique<CEXIETHERNET>(system, BBADeviceType::IPC);
+    result = new CEXIETHERNET(system, BBADeviceType::IPC);
     break;
 
   case EXIDeviceType::ModemTapServer:
-    result = std::make_unique<CEXIModem>(system, ModemDeviceType::TAPSERVER);
+    result = new CEXIModem(system, ModemDeviceType::TAPSERVER);
     break;
 
   case EXIDeviceType::Gecko:
-    result = std::make_unique<CEXIGecko>(system);
+    result = new CEXIGecko(system);
     break;
 
   case EXIDeviceType::AGP:
-    result = std::make_unique<CEXIAgp>(system, slot);
+    result = new CEXIAgp(system, slot);
     break;
 
   case EXIDeviceType::Baseboard:
-    result = std::make_unique<CEXIBaseboard>(system);
+    result = new CEXIBaseboard(system);
     break;
 
   case EXIDeviceType::None:
   default:
-    result = std::make_unique<IEXIDevice>(system);
+    result = new IEXIDevice(system);
     break;
   }
 
@@ -182,5 +238,37 @@ std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, const EXIDevi
     result->m_device_type = device_type;
 
   return result;
+}
+void EXIDevice_Destroy(IEXIDevice* device)
+{
+  if (!device)
+    return;
+  const auto call = [](auto* d) { delete d; };
+  switch (device->device_class)
+  {
+  case EXIDeviceClass::Dummy:
+    return call(static_cast<CEXIDummy*>(device));
+  case EXIDeviceClass::MemoryCard:
+    return call(static_cast<CEXIMemoryCard*>(device));
+  case EXIDeviceClass::IPL:
+    return call(static_cast<CEXIIPL*>(device));
+  case EXIDeviceClass::AD16:
+    return call(static_cast<CEXIAD16*>(device));
+  case EXIDeviceClass::Mic:
+    return call(static_cast<CEXIMic*>(device));
+  case EXIDeviceClass::Ethernet:
+    return call(static_cast<CEXIETHERNET*>(device));
+  case EXIDeviceClass::Modem:
+    return call(static_cast<CEXIModem*>(device));
+  case EXIDeviceClass::Gecko:
+    return call(static_cast<CEXIGecko*>(device));
+  case EXIDeviceClass::AGP:
+    return call(static_cast<CEXIAgp*>(device));
+  case EXIDeviceClass::Baseboard:
+    return call(static_cast<CEXIBaseboard*>(device));
+  case EXIDeviceClass::Empty:
+  default:
+    return call(device);
+  }
 }
 }  // namespace ExpansionInterface

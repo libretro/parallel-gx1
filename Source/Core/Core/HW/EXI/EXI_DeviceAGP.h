@@ -14,15 +14,18 @@ namespace ExpansionInterface
 {
 enum class Slot : int;
 
-class CEXIAgp : public IEXIDevice
+class CEXIAgp final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   CEXIAgp(Core::System& system, const Slot slot);
-  ~CEXIAgp() override;
-  bool IsPresent() const override { return true; }
-  void ImmWrite(u32 _uData, u32 _uSize) override;
-  u32 ImmRead(u32 _uSize) override;
-  void DoState(PointerWrap& p) override;
+  ~CEXIAgp();
+  bool IsPresent() const { return true; }
+  void ImmWrite(u32 _uData, u32 _uSize);
+  u32 ImmRead(u32 _uSize);
+  void DoState(PointerWrap& p);
 
 private:
   enum

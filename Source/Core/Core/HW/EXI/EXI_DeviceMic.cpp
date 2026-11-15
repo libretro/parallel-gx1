@@ -92,7 +92,7 @@ void CEXIMic::StreamReadOne()
 u8 const CEXIMic::exi_id[] = {0, 0x0a, 0, 0, 0};
 
 CEXIMic::CEXIMic(Core::System& system, int index)
-    : IEXIDevice(system), slot(index)
+    : IEXIDevice(system, EXIDeviceClass::Mic), slot(index)
 {
   m_position = 0;
   command = 0;

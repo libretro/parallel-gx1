@@ -18,16 +18,19 @@ void GenerateInterrupt(int flag);
 
 class CEXIBaseboard final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   explicit CEXIBaseboard(Core::System& system);
-  ~CEXIBaseboard() override;
+  ~CEXIBaseboard();
 
-  void SetCS(int cs) override;
-  bool IsInterruptSet() override;
-  bool IsPresent() const override;
-  void DoState(PointerWrap& p) override;
-  void DMAWrite(u32 addr, u32 size) override;
-  void DMARead(u32 addr, u32 size) override;
+  void SetCS(int cs);
+  bool IsInterruptSet();
+  bool IsPresent() const;
+  void DoState(PointerWrap& p);
+  void DMAWrite(u32 addr, u32 size);
+  void DMARead(u32 addr, u32 size);
 
 private:
   enum Command
@@ -54,6 +57,6 @@ private:
   File::IOFile m_backup;
 
 protected:
-  void TransferByte(u8& byte) override;
+  void TransferByte(u8& byte);
 };
 }  // namespace ExpansionInterface

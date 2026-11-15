@@ -31,19 +31,22 @@ namespace ExpansionInterface
 {
 enum class Slot : int;
 
-class CEXIMemoryCard : public IEXIDevice
+class CEXIMemoryCard final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   CEXIMemoryCard(Core::System& system, Slot slot, bool gci_folder,
                  const Memcard::HeaderData& header_data);
-  ~CEXIMemoryCard() override;
-  void SetCS(int cs) override;
-  bool IsInterruptSet() override;
-  bool UseDelayedTransferCompletion() const override;
-  bool IsPresent() const override;
-  void DoState(PointerWrap& p) override;
-  void DMARead(u32 addr, u32 size) override;
-  void DMAWrite(u32 addr, u32 size) override;
+  ~CEXIMemoryCard();
+  void SetCS(int cs);
+  bool IsInterruptSet();
+  bool UseDelayedTransferCompletion() const;
+  bool IsPresent() const;
+  void DoState(PointerWrap& p);
+  void DMARead(u32 addr, u32 size);
+  void DMAWrite(u32 addr, u32 size);
 
   // CoreTiming events need to be registered during boot since CoreTiming is DoState()-ed
   // before ExpansionInterface so we'll lose the save stated events if the callbacks are
@@ -110,6 +113,6 @@ private:
   std::unique_ptr<MemoryCardBase> m_memory_card;
 
 protected:
-  void TransferByte(u8& byte) override;
+  void TransferByte(u8& byte);
 };
 }  // namespace ExpansionInterface

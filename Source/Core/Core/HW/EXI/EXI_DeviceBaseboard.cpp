@@ -47,7 +47,7 @@ void GenerateInterrupt(int flag)
   system.GetExpansionInterface().UpdateInterrupts();
 }
 
-CEXIBaseboard::CEXIBaseboard(Core::System& system) : IEXIDevice(system)
+CEXIBaseboard::CEXIBaseboard(Core::System& system) : IEXIDevice(system, EXIDeviceClass::Baseboard)
 {
   std::string backup_filename =
       File::GetUserPath(D_TRIUSER_IDX) + "tribackup_" + SConfig::GetInstance().GetGameID() + ".bin";

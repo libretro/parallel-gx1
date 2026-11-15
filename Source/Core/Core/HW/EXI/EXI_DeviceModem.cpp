@@ -30,7 +30,8 @@ namespace ExpansionInterface
 // A receive ring this size holds dozens of frames; the guest drains it long before then.
 constexpr size_t MODEM_RECEIVE_RING_SIZE = 256 * 1024;
 
-CEXIModem::CEXIModem(Core::System& system, ModemDeviceType type) : IEXIDevice(system)
+CEXIModem::CEXIModem(Core::System& system, ModemDeviceType type)
+    : IEXIDevice(system, EXIDeviceClass::Modem)
 {
   retro_spsc_init(&m_receive_buffer, MODEM_RECEIVE_RING_SIZE);
   switch (type)

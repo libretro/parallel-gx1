@@ -12,7 +12,7 @@
 namespace ExpansionInterface
 {
 CEXIDummy::CEXIDummy(Core::System& system, std::string name)
-    : IEXIDevice(system), m_name{std::move(name)}
+    : IEXIDevice(system, EXIDeviceClass::Dummy), m_name{std::move(name)}
 {
 }
 

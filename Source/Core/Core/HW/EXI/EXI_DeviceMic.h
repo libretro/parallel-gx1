@@ -13,14 +13,17 @@
 
 namespace ExpansionInterface
 {
-class CEXIMic : public IEXIDevice
+class CEXIMic final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   CEXIMic(Core::System& system, const int index);
-  ~CEXIMic() override;
-  void SetCS(int cs) override;
-  bool IsInterruptSet() override;
-  bool IsPresent() const override;
+  ~CEXIMic();
+  void SetCS(int cs);
+  bool IsInterruptSet();
+  bool IsPresent() const;
 
   void PollLibretroMic();
 
@@ -61,7 +64,7 @@ private:
     };
   };
 
-  void TransferByte(u8& byte) override;
+  void TransferByte(u8& byte);
 
   void StreamInit();
   void StreamTerminate();

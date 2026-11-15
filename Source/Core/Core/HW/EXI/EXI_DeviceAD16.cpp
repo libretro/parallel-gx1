@@ -10,7 +10,7 @@
 
 namespace ExpansionInterface
 {
-CEXIAD16::CEXIAD16(Core::System& system) : IEXIDevice(system)
+CEXIAD16::CEXIAD16(Core::System& system) : IEXIDevice(system, EXIDeviceClass::AD16)
 {
 }
 

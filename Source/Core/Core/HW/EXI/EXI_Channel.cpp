@@ -189,7 +189,10 @@ void CEXIChannel::SendTransferComplete()
 void CEXIChannel::RemoveDevices()
 {
   for (auto& device : m_devices)
-    device.reset(nullptr);
+  {
+    EXIDevice_Destroy(device);
+    device = nullptr;
+  }
 }
 
 void CEXIChannel::AddDevice(const EXIDeviceType device_type, const int device_num)
@@ -198,8 +201,7 @@ void CEXIChannel::AddDevice(const EXIDeviceType device_type, const int device_nu
             device_num);
 }
 
-void CEXIChannel::AddDevice(std::unique_ptr<IEXIDevice> device, const int device_num,
-                            bool notify_presence_changed)
+void CEXIChannel::AddDevice(IEXIDevice* device, const int device_num, bool notify_presence_changed)
 {
   DEBUG_ASSERT(device_num < NUM_DEVICES);
 
@@ -209,7 +211,8 @@ void CEXIChannel::AddDevice(std::unique_ptr<IEXIDevice> device, const int device
            notify_presence_changed ? "true" : "false");
 
   // Replace it with the new one
-  m_devices[device_num] = std::move(device);
+  EXIDevice_Destroy(m_devices[device_num]);
+  m_devices[device_num] = device;
 
   if (notify_presence_changed)
   {
@@ -247,11 +250,11 @@ IEXIDevice* CEXIChannel::GetDevice(const u8 chip_select)
   switch (chip_select)
   {
   case 1:
-    return m_devices[0].get();
+    return m_devices[0];
   case 2:
-    return m_devices[1].get();
+    return m_devices[1];
   case 4:
-    return m_devices[2].get();
+    return m_devices[2];
   }
   return nullptr;
 }
@@ -269,7 +272,7 @@ void CEXIChannel::DoState(PointerWrap& p)
 
   for (int device_index = 0; device_index < NUM_DEVICES; ++device_index)
   {
-    std::unique_ptr<IEXIDevice>& device = m_devices[device_index];
+    IEXIDevice* const device = m_devices[device_index];
     EXIDeviceType type = device->m_device_type;
     p.Do(type);
 
@@ -279,10 +282,10 @@ void CEXIChannel::DoState(PointerWrap& p)
     }
     else
     {
-      std::unique_ptr<IEXIDevice> save_device =
+      IEXIDevice* save_device =
           EXIDevice_Create(m_system, type, m_channel_id, m_memcard_header_data);
       save_device->DoState(p);
-      AddDevice(std::move(save_device), device_index, false);
+      AddDevice(save_device, device_index, false);
     }
 
     if (type == EXIDeviceType::MemoryCardFolder && old_header_data != m_memcard_header_data)

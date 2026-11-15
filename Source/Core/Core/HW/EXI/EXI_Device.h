@@ -43,28 +43,50 @@ enum class EXIDeviceType : int
   None = 0xFF
 };
 
+// The class a device is, which its calls branch on; Empty is the base itself, an empty slot
+enum class EXIDeviceClass : u8
+{
+  Empty,
+  Dummy,
+  MemoryCard,
+  IPL,
+  AD16,
+  Mic,
+  Ethernet,
+  Modem,
+  Gecko,
+  AGP,
+  Baseboard,
+};
+
 class IEXIDevice
 {
 public:
-  explicit IEXIDevice(Core::System& system);
-  virtual ~IEXIDevice() = default;
+  explicit IEXIDevice(Core::System& system, EXIDeviceClass device_class = EXIDeviceClass::Empty);
+  ~IEXIDevice() = default;
+  IEXIDevice(const IEXIDevice&) = delete;
+  IEXIDevice& operator=(const IEXIDevice&) = delete;
+
+  // These branch to the device this is.
 
   // Immediate copy functions
-  virtual void ImmWrite(u32 data, u32 size);
-  virtual u32 ImmRead(u32 size);
-  virtual void ImmReadWrite(u32& data, u32 size);
+  void ImmWrite(u32 data, u32 size);
+  u32 ImmRead(u32 size);
+  void ImmReadWrite(u32& data, u32 size);
 
   // DMA copy functions
-  virtual void DMAWrite(u32 address, u32 size);
-  virtual void DMARead(u32 address, u32 size);
+  void DMAWrite(u32 address, u32 size);
+  void DMARead(u32 address, u32 size);
 
-  virtual bool UseDelayedTransferCompletion() const;
-  virtual bool IsPresent() const;
-  virtual void SetCS(int cs);
-  virtual void DoState(PointerWrap& p);
+  bool UseDelayedTransferCompletion() const;
+  bool IsPresent() const;
+  void SetCS(int cs);
+  void DoState(PointerWrap& p);
 
   // Is generating interrupt ?
-  virtual bool IsInterruptSet();
+  bool IsInterruptSet();
+
+  const EXIDeviceClass device_class;
 
   // For savestates. storing it here seemed cleaner than requiring each implementation to report its
   // type. I know this class is set up like an interface, but no code requires it to be strictly
@@ -72,14 +94,28 @@ public:
   EXIDeviceType m_device_type = EXIDeviceType::None;
 
 protected:
+  // What a device that has no call of its own does; the copies go a byte at a time
+  void ImmWriteDefault(u32 data, u32 size);
+  u32 ImmReadDefault(u32 size);
+  void ImmReadWriteDefault(u32&, u32) {}
+  void DMAWriteDefault(u32 address, u32 size);
+  void DMAReadDefault(u32 address, u32 size);
+  bool UseDelayedTransferCompletionDefault() const { return false; }
+  bool IsPresentDefault() const { return false; }
+  void SetCSDefault(int) {}
+  void DoStateDefault(PointerWrap&) {}
+  bool IsInterruptSetDefault() { return false; }
+  void TransferByteDefault(u8&) {}
+
   Core::System& m_system;
 
 private:
   // Byte transfer function for this device
-  virtual void TransferByte(u8& byte);
+  void TransferByte(u8& byte);
 };
 
-std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, EXIDeviceType device_type,
-                                             int channel_num,
-                                             const Memcard::HeaderData& memcard_header_data);
+// Made with new; freed with EXIDevice_Destroy as the device it is
+IEXIDevice* EXIDevice_Create(Core::System& system, EXIDeviceType device_type, int channel_num,
+                             const Memcard::HeaderData& memcard_header_data);
+void EXIDevice_Destroy(IEXIDevice* device);
 }  // namespace ExpansionInterface

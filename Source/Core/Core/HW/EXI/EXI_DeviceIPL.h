@@ -13,17 +13,20 @@ class PointerWrap;
 
 namespace ExpansionInterface
 {
-class CEXIIPL : public IEXIDevice
+class CEXIIPL final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   explicit CEXIIPL(Core::System& system);
-  ~CEXIIPL() override;
+  ~CEXIIPL();
   CEXIIPL(const CEXIIPL&) = delete;
   CEXIIPL& operator=(const CEXIIPL&) = delete;
 
-  void SetCS(int cs) override;
-  bool IsPresent() const override;
-  void DoState(PointerWrap& p) override;
+  void SetCS(int cs);
+  bool IsPresent() const;
+  void DoState(PointerWrap& p);
 
   static constexpr u32 UNIX_EPOCH = 0;         // 1970-01-01 00:00:00
   static constexpr u32 GC_EPOCH = 0x386D4380;  // 2000-01-01 00:00:00
@@ -70,7 +73,7 @@ private:
 
   void UpdateRTC();
 
-  void TransferByte(u8& data) override;
+  void TransferByte(u8& data);
 
   bool LoadFileToIPL(const std::string& filename, u32 offset);
   void LoadFontFile(const std::string& filename, u32 offset);

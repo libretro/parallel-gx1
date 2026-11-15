@@ -55,12 +55,15 @@ private:
   static mpsc_stack_node_t* taken_socks_last;
 };
 
-class CEXIGecko : public IEXIDevice, private GeckoSockServer
+class CEXIGecko final : public IEXIDevice, private GeckoSockServer
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   explicit CEXIGecko(Core::System& system);
-  bool IsPresent() const override { return true; }
-  void ImmReadWrite(u32& _uData, u32 _uSize) override;
+  bool IsPresent() const { return true; }
+  void ImmReadWrite(u32& _uData, u32 _uSize);
 
 private:
   enum

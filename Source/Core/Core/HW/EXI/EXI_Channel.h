@@ -41,8 +41,8 @@ public:
   void SendTransferComplete();
 
   void AddDevice(EXIDeviceType device_type, int device_num);
-  void AddDevice(std::unique_ptr<IEXIDevice> device, int device_num,
-                 bool notify_presence_changed = true);
+  // takes device
+  void AddDevice(IEXIDevice* device, int device_num, bool notify_presence_changed = true);
 
   // Remove all devices
   void RemoveDevices();
@@ -128,6 +128,6 @@ private:
     NUM_DEVICES = 3
   };
 
-  std::array<std::unique_ptr<IEXIDevice>, NUM_DEVICES> m_devices;
+  std::array<IEXIDevice*, NUM_DEVICES> m_devices{};  // owned
 };
 }  // namespace ExpansionInterface

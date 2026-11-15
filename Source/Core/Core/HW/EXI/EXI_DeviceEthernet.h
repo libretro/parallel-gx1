@@ -210,19 +210,22 @@ enum class BBADeviceType
   IPC,
 };
 
-class CEXIETHERNET : public IEXIDevice
+class CEXIETHERNET final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   CEXIETHERNET(Core::System& system, BBADeviceType type);
-  ~CEXIETHERNET() override;
-  void SetCS(int cs) override;
-  bool IsPresent() const override;
-  bool IsInterruptSet() override;
-  void ImmWrite(u32 data, u32 size) override;
-  u32 ImmRead(u32 size) override;
-  void DMAWrite(u32 addr, u32 size) override;
-  void DMARead(u32 addr, u32 size) override;
-  void DoState(PointerWrap& p) override;
+  ~CEXIETHERNET();
+  void SetCS(int cs);
+  bool IsPresent() const;
+  bool IsInterruptSet();
+  void ImmWrite(u32 data, u32 size);
+  u32 ImmRead(u32 size);
+  void DMAWrite(u32 addr, u32 size);
+  void DMARead(u32 addr, u32 size);
+  void DoState(PointerWrap& p);
 
 private:
   struct

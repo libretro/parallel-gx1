@@ -9,13 +9,16 @@ class PointerWrap;
 
 namespace ExpansionInterface
 {
-class CEXIAD16 : public IEXIDevice
+class CEXIAD16 final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   explicit CEXIAD16(Core::System& system);
-  void SetCS(int cs) override;
-  bool IsPresent() const override;
-  void DoState(PointerWrap& p) override;
+  void SetCS(int cs);
+  bool IsPresent() const;
+  void DoState(PointerWrap& p);
 
 private:
   enum
@@ -36,6 +39,6 @@ private:
   u32 m_command = 0;
   AD16Reg m_ad16_register;
 
-  void TransferByte(u8& byte) override;
+  void TransferByte(u8& byte);
 };
 }  // namespace ExpansionInterface

@@ -30,7 +30,8 @@ namespace ExpansionInterface
 // Multiple parts of this implementation depend on Dolphin
 // being compiled for a little endian host.
 
-CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type) : IEXIDevice(system)
+CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type)
+    : IEXIDevice(system, EXIDeviceClass::Ethernet)
 {
   // Parse MAC address from config, and generate a new one if it doesn't
   // exist or can't be parsed.

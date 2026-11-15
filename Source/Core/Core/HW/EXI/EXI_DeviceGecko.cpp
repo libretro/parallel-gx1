@@ -186,7 +186,7 @@ void GeckoSockServer::ClientThread()
   retro_atomic_store_release_int(&client_gone, 1);
 }
 
-CEXIGecko::CEXIGecko(Core::System& system) : IEXIDevice(system)
+CEXIGecko::CEXIGecko(Core::System& system) : IEXIDevice(system, EXIDeviceClass::Gecko)
 {
 }
 

@@ -18,7 +18,7 @@
 
 namespace ExpansionInterface
 {
-CEXIAgp::CEXIAgp(Core::System& system, Slot slot) : IEXIDevice(system)
+CEXIAgp::CEXIAgp(Core::System& system, Slot slot) : IEXIDevice(system, EXIDeviceClass::AGP)
 {
   ASSERT(IsMemcardSlot(slot));
   m_slot = slot;

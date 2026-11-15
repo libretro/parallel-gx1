@@ -15,19 +15,22 @@ namespace ExpansionInterface
 // DOES NOT FUNCTION AS "NO DEVICE INSERTED" -> Appears as unknown device
 class CEXIDummy final : public IEXIDevice
 {
+  // the base branches to its calls, private ones included
+  friend class IEXIDevice;
+
 public:
   CEXIDummy(Core::System& system, std::string name);
 
-  void ImmWrite(u32 data, u32 size) override;
-  u32 ImmRead(u32 size) override;
+  void ImmWrite(u32 data, u32 size);
+  u32 ImmRead(u32 size);
 
-  void DMAWrite(u32 address, u32 size) override;
-  void DMARead(u32 address, u32 size) override;
+  void DMAWrite(u32 address, u32 size);
+  void DMARead(u32 address, u32 size);
 
-  bool IsPresent() const override;
+  bool IsPresent() const;
 
 private:
-  void TransferByte(u8& byte) override;
+  void TransferByte(u8& byte);
 
   std::string m_name;
 };

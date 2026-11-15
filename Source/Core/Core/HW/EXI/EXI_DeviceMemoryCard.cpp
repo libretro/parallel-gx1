@@ -107,7 +107,7 @@ void CEXIMemoryCard::Shutdown()
 
 CEXIMemoryCard::CEXIMemoryCard(Core::System& system, const Slot slot, bool gci_folder,
                                const Memcard::HeaderData& header_data)
-    : IEXIDevice(system), m_card_slot(slot)
+    : IEXIDevice(system, EXIDeviceClass::MemoryCard), m_card_slot(slot)
 {
   ASSERT_MSG(EXPANSIONINTERFACE, IsMemcardSlot(slot), "Trying to create invalid memory card in %u.",
              static_cast<unsigned>(slot));
