@@ -38,6 +38,10 @@ struct uid_table
 void uid_table_init(struct uid_table *t, size_t key_size);
 void uid_table_free(struct uid_table *t);
 
+/* Room for expected uids before the table grows; 0 out of memory. Its
+ * slots come zeroed from calloc, their pages untouched until uids land. */
+int uid_table_reserve(struct uid_table *t, size_t expected);
+
 /* The value of key, or NULL. */
 struct uid_table_value *uid_table_find(const struct uid_table *t, const void *key);
 

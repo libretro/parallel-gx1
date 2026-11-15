@@ -64,9 +64,9 @@ static unsigned char *uid_table_probe(const struct uid_table *t, const void *key
    }
 }
 
-static int uid_table_grow(struct uid_table *t)
+/* Moves every value into cap slots */
+static int uid_table_resize(struct uid_table *t, size_t cap)
 {
-   const size_t   cap   = t->cap ? t->cap * 2 : UID_TABLE_INITIAL;
    unsigned char *slots = (unsigned char*)calloc(cap, t->slot_size);
    unsigned char *old   = t->slots;
    const size_t   old_cap = t->cap;
@@ -85,6 +85,19 @@ static int uid_table_grow(struct uid_table *t)
    }
    free(old);
    return 1;
+}
+
+static int uid_table_grow(struct uid_table *t)
+{
+   return uid_table_resize(t, t->cap ? t->cap * 2 : UID_TABLE_INITIAL);
+}
+
+int uid_table_reserve(struct uid_table *t, size_t expected)
+{
+   size_t cap = t->cap ? t->cap : UID_TABLE_INITIAL;
+   while (cap < expected * 2)
+      cap *= 2;
+   return cap == t->cap || uid_table_resize(t, cap);
 }
 
 struct uid_table_value *uid_table_find(const struct uid_table *t, const void *key)

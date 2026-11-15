@@ -107,6 +107,10 @@ ShaderCache::ShaderCache() : m_api_type{APIType::Nothing}
   uid_table_init(&m_recorded_uber_pipeline_uids, sizeof(GXUberPipelineUid));
   uid_table_init(&m_texture_reinterpret_pipelines, sizeof(u32) * 2);
   uid_table_init(&m_texture_decoding_shaders, sizeof(u32) * 2);
+  /* Room from the start for the pipelines and vertex shaders the heaviest games reach: growing
+   * moves every entry, megabytes for pipelines, in the frame that adds one */
+  uid_table_reserve(&m_gx_pipeline_cache, 1024);
+  uid_table_reserve(&m_vs_cache.shader_map, 512);
   uid_array_init(&m_pending_gx_pipeline_uids, sizeof(SerializedGXPipelineUid));
   uid_array_init(&m_pending_gx_uber_pipeline_uids, sizeof(SerializedGXUberPipelineUid));
   uid_array_init(&m_unwritten_gx_pipelines, sizeof(GXPipelineUid));
