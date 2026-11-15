@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -277,17 +278,15 @@ ParseStatus Lexer::Tokenize(std::vector<Token>& tokens)
   return ParseStatus::Successful;
 }
 
-Expression* Expression::GetLValue()
-{
-  return this;
-}
-
 class ControlExpression : public Expression
 {
 public:
-  explicit ControlExpression(ControlQualifier qualifier) : m_qualifier(std::move(qualifier)) {}
+  explicit ControlExpression(ControlQualifier qualifier)
+      : Expression(ExpressionKind::Control), m_qualifier(std::move(qualifier))
+  {
+  }
 
-  ControlState GetValue() override
+  ControlState GetValue()
   {
     if (s_hotkey_suppressions.IsSuppressed(m_input))
       return 0;
@@ -307,13 +306,13 @@ public:
 
     return std::max(0.0, m_input->GetState());
   }
-  void SetValue(ControlState value) override
+  void SetValue(ControlState value)
   {
     if (m_output)
       m_output->SetState(value);
   }
-  int CountNumControls() const override { return (m_input || m_output) ? 1 : 0; }
-  void UpdateReferences(ControlEnvironment& env) override
+  int CountNumControls() const { return (m_input || m_output) ? 1 : 0; }
+  void UpdateReferences(ControlEnvironment& env)
   {
     m_device = env.FindDevice(m_qualifier);
     m_input = env.FindInput(m_qualifier);
@@ -377,12 +376,12 @@ public:
   std::unique_ptr<Expression> rhs;
 
   BinaryExpression(TokenType op_, std::unique_ptr<Expression>&& lhs_,
-                   std::unique_ptr<Expression>&& rhs_)
-      : op(op_), lhs(std::move(lhs_)), rhs(std::move(rhs_))
+                   std::unique_ptr<Expression>&& rhs_, ExpressionKind kind = ExpressionKind::Binary)
+      : Expression(kind), op(op_), lhs(std::move(lhs_)), rhs(std::move(rhs_))
   {
   }
 
-  ControlState GetValue() override
+  ControlState GetValue()
   {
     if (op == TOK_ASSIGN || op == TOK_COMMA)
     {
@@ -432,7 +431,7 @@ public:
     }
   }
 
-  Expression* GetLValue() override
+  Expression* GetLValue()
   {
     switch (op)
     {
@@ -451,7 +450,7 @@ public:
     }
   }
 
-  void SetValue(ControlState value) override
+  void SetValue(ControlState value)
   {
     // Don't do anything special with the op we have.
     // Treat "A & B" the same as "A | B".
@@ -459,12 +458,9 @@ public:
     rhs->SetValue(value);
   }
 
-  int CountNumControls() const override
-  {
-    return lhs->CountNumControls() + rhs->CountNumControls();
-  }
+  int CountNumControls() const { return lhs->CountNumControls() + rhs->CountNumControls(); }
 
-  void UpdateReferences(ControlEnvironment& env) override
+  void UpdateReferences(ControlEnvironment& env)
   {
     lhs->UpdateReferences(env);
     rhs->UpdateReferences(env);
@@ -474,11 +470,15 @@ public:
 class CompoundAssignmentExpression : public BinaryExpression
 {
 public:
-  using BinaryExpression::BinaryExpression;
+  CompoundAssignmentExpression(TokenType op_, std::unique_ptr<Expression>&& lhs_,
+                               std::unique_ptr<Expression>&& rhs_)
+      : BinaryExpression(op_, std::move(lhs_), std::move(rhs_), ExpressionKind::CompoundAssignment)
+  {
+  }
 
-  ControlState GetValue() override { return GetLValue()->GetValue(); }
+  ControlState GetValue() { return GetLValue()->GetValue(); }
 
-  Expression* GetLValue() override
+  Expression* GetLValue()
   {
     Expression* const lvalue = lhs->GetLValue();
     const ControlState lhs_value = lvalue->GetValue();
@@ -491,20 +491,19 @@ public:
 class LiteralExpression : public Expression
 {
 public:
-  void SetValue(ControlState) override
+  LiteralExpression() : Expression(ExpressionKind::Literal) {}
+
+  void SetValue(ControlState)
   {
     // Do nothing.
   }
 
-  int CountNumControls() const override { return 1; }
+  int CountNumControls() const { return 1; }
 
-  void UpdateReferences(ControlEnvironment&) override
+  void UpdateReferences(ControlEnvironment&)
   {
     // Nothing needed.
   }
-
-protected:
-  virtual std::string GetName() const = 0;
 };
 
 class LiteralReal : public LiteralExpression
@@ -512,9 +511,7 @@ class LiteralReal : public LiteralExpression
 public:
   explicit LiteralReal(ControlState value) : m_value(value) {}
 
-  ControlState GetValue() override { return m_value; }
-
-  std::string GetName() const override { return ValueToString(m_value); }
+  ControlState GetValue() { return m_value; }
 
 private:
   const ControlState m_value{};
@@ -532,22 +529,22 @@ static ParseResult MakeLiteralExpression(const Token& token)
 class VariableExpression : public Expression
 {
 public:
-  explicit VariableExpression(std::string name) : m_name(std::move(name)) {}
+  explicit VariableExpression(std::string name)
+      : Expression(ExpressionKind::Variable), m_name(std::move(name))
+  {
+  }
 
-  ControlState GetValue() override { return m_variable_ptr ? *m_variable_ptr : 0; }
+  ControlState GetValue() { return m_variable_ptr ? *m_variable_ptr : 0; }
 
-  void SetValue(ControlState value) override
+  void SetValue(ControlState value)
   {
     if (m_variable_ptr)
       *m_variable_ptr = value;
   }
 
-  int CountNumControls() const override { return 1; }
+  int CountNumControls() const { return 1; }
 
-  void UpdateReferences(ControlEnvironment& env) override
-  {
-    m_variable_ptr = env.GetVariablePtr(m_name);
-  }
+  void UpdateReferences(ControlEnvironment& env) { m_variable_ptr = env.GetVariablePtr(m_name); }
 
 protected:
   const std::string m_name;
@@ -558,13 +555,13 @@ class HotkeyExpression : public Expression
 {
 public:
   explicit HotkeyExpression(std::vector<std::unique_ptr<ControlExpression>> inputs)
-      : m_modifiers(std::move(inputs))
+      : Expression(ExpressionKind::Hotkey), m_modifiers(std::move(inputs))
   {
     m_final_input = std::move(m_modifiers.back());
     m_modifiers.pop_back();
   }
 
-  ControlState GetValue() override
+  ControlState GetValue()
   {
     // True if we have no modifiers
     const bool modifiers_pressed = std::ranges::all_of(
@@ -602,9 +599,9 @@ public:
     return 0;
   }
 
-  void SetValue(ControlState) override {}
+  void SetValue(ControlState) {}
 
-  int CountNumControls() const override
+  int CountNumControls() const
   {
     int result = 0;
     for (auto& input : m_modifiers)
@@ -612,7 +609,7 @@ public:
     return result + m_final_input->CountNumControls();
   }
 
-  void UpdateReferences(ControlEnvironment& env) override
+  void UpdateReferences(ControlEnvironment& env)
   {
     for (auto& input : m_modifiers)
       input->UpdateReferences(env);
@@ -647,15 +644,15 @@ class CoalesceExpression : public Expression
 {
 public:
   CoalesceExpression(std::unique_ptr<Expression>&& lhs, std::unique_ptr<Expression>&& rhs)
-      : m_lhs(std::move(lhs)), m_rhs(std::move(rhs))
+      : Expression(ExpressionKind::Coalesce), m_lhs(std::move(lhs)), m_rhs(std::move(rhs))
   {
   }
 
-  ControlState GetValue() override { return GetActiveChild()->GetValue(); }
-  void SetValue(ControlState value) override { GetActiveChild()->SetValue(value); }
+  ControlState GetValue() { return GetActiveChild()->GetValue(); }
+  void SetValue(ControlState value) { GetActiveChild()->SetValue(value); }
 
-  int CountNumControls() const override { return GetActiveChild()->CountNumControls(); }
-  void UpdateReferences(ControlEnvironment& env) override
+  int CountNumControls() const { return GetActiveChild()->CountNumControls(); }
+  void UpdateReferences(ControlEnvironment& env)
   {
     m_lhs->UpdateReferences(env);
     if (m_rhs)
@@ -671,6 +668,100 @@ private:
   std::unique_ptr<Expression> m_lhs;
   std::unique_ptr<Expression> m_rhs;
 };
+
+/* The call on the node class this is: its own, its parent's for a compound assignment, or,
+ * for the l-value of a node that has none, the base's default. */
+#define EXPR_HAS_OWN(D, Fn) (!std::is_same_v<decltype(&D::Fn), decltype(&Expression::Fn)>)
+
+#define EXPR_DISPATCH(Q)                                                                           \
+  switch (expression_kind)                                                                         \
+  {                                                                                                \
+  case ExpressionKind::Control:                                                                    \
+    return call(static_cast<Q ControlExpression*>(this));                                          \
+  case ExpressionKind::Binary:                                                                     \
+    return call(static_cast<Q BinaryExpression*>(this));                                           \
+  case ExpressionKind::CompoundAssignment:                                                         \
+    return call(static_cast<Q CompoundAssignmentExpression*>(this));                               \
+  case ExpressionKind::Literal:                                                                    \
+    return call(static_cast<Q LiteralReal*>(this));                                                \
+  case ExpressionKind::Variable:                                                                   \
+    return call(static_cast<Q VariableExpression*>(this));                                         \
+  case ExpressionKind::Hotkey:                                                                     \
+    return call(static_cast<Q HotkeyExpression*>(this));                                           \
+  case ExpressionKind::Coalesce:                                                                   \
+    return call(static_cast<Q CoalesceExpression*>(this));                                         \
+  case ExpressionKind::Function:                                                                   \
+  default:                                                                                         \
+    return call(static_cast<Q FunctionExpression*>(this));                                         \
+  }
+
+ControlState Expression::GetValue()
+{
+  const auto call = [](auto* e) { return e->GetValue(); };
+  EXPR_DISPATCH()
+}
+
+void Expression::SetValue(ControlState state)
+{
+  const auto call = [&](auto* e) { e->SetValue(state); };
+  EXPR_DISPATCH()
+}
+
+int Expression::CountNumControls() const
+{
+  const auto call = [](const auto* e) { return e->CountNumControls(); };
+  EXPR_DISPATCH(const)
+}
+
+void Expression::UpdateReferences(ControlEnvironment& finder)
+{
+  const auto call = [&](auto* e) { e->UpdateReferences(finder); };
+  EXPR_DISPATCH()
+}
+
+Expression* Expression::GetLValue()
+{
+  const auto call = [this](auto* e) -> Expression* {
+    using D = std::remove_pointer_t<decltype(e)>;
+    if constexpr (EXPR_HAS_OWN(D, GetLValue))
+      return e->GetLValue();
+    else
+      return GetLValueDefault();
+  };
+  EXPR_DISPATCH()
+}
+
+void Expression::operator delete(Expression* expression, std::destroying_delete_t)
+{
+  if (expression->expression_kind == ExpressionKind::Function)
+  {
+    FunctionExpression::Destroy(static_cast<FunctionExpression*>(expression));
+    return;
+  }
+  const auto call = [](auto* e) {
+    using D = std::remove_pointer_t<decltype(e)>;
+    e->~D();
+    ::operator delete(static_cast<void*>(e));
+  };
+  switch (expression->expression_kind)
+  {
+  case ExpressionKind::Control:
+    return call(static_cast<ControlExpression*>(expression));
+  case ExpressionKind::Binary:
+    return call(static_cast<BinaryExpression*>(expression));
+  case ExpressionKind::CompoundAssignment:
+    return call(static_cast<CompoundAssignmentExpression*>(expression));
+  case ExpressionKind::Literal:
+    return call(static_cast<LiteralReal*>(expression));
+  case ExpressionKind::Variable:
+    return call(static_cast<VariableExpression*>(expression));
+  case ExpressionKind::Hotkey:
+    return call(static_cast<HotkeyExpression*>(expression));
+  case ExpressionKind::Coalesce:
+  default:
+    return call(static_cast<CoalesceExpression*>(expression));
+  }
+}
 
 std::shared_ptr<Device> ControlEnvironment::FindDevice(const ControlQualifier& qualifier) const
 {

@@ -5,6 +5,7 @@
 
 #include <map>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 
@@ -167,17 +168,44 @@ private:
   const Core::DeviceQualifier& default_device;
 };
 
+// The node an Expression is, which its calls branch on
+enum class ExpressionKind : u8
+{
+  Control,
+  Binary,
+  CompoundAssignment,
+  Literal,
+  Variable,
+  Hotkey,
+  Coalesce,
+  Function,
+};
+
 class Expression
 {
 public:
-  virtual ~Expression() = default;
-  virtual ControlState GetValue() = 0;
-  virtual void SetValue(ControlState state) = 0;
-  virtual int CountNumControls() const = 0;
-  virtual void UpdateReferences(ControlEnvironment& finder) = 0;
+  // These branch to the node this is.
+  ControlState GetValue();
+  void SetValue(ControlState state);
+  int CountNumControls() const;
+  void UpdateReferences(ControlEnvironment& finder);
 
   // Perform any side effects and return Expression to be SetValue'd.
-  virtual Expression* GetLValue();
+  Expression* GetLValue();
+
+  // Destroys and frees the node as the node it is; delete never runs this destructor alone
+  void operator delete(Expression* expression, std::destroying_delete_t);
+  ~Expression() = default;
+
+  const ExpressionKind expression_kind;
+
+protected:
+  explicit Expression(ExpressionKind kind) : expression_kind(kind) {}
+  Expression(const Expression&) = delete;
+  Expression& operator=(const Expression&) = delete;
+
+  // A node that has no l-value of its own is set itself
+  Expression* GetLValueDefault() { return this; }
 };
 
 class ParseResult
