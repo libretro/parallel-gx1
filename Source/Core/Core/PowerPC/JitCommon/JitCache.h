@@ -26,10 +26,12 @@ class JitBase;
 struct JitBlock;
 
 // Where the blocks' exits are kept: chunks of LINK_ARENA_CHUNK bytes, handed out in turn, kept
-// when the cache is cleared and handed out again from the first.
+// when the cache is cleared and handed out again from the first. The first LINK_ARENA_START are
+// one allocation made with the cache.
 enum
 {
-  LINK_ARENA_CHUNK = 256 * 1024
+  LINK_ARENA_CHUNK = 256 * 1024,
+  LINK_ARENA_START = 32
 };
 struct LinkDataArena
 {
@@ -38,6 +40,7 @@ struct LinkDataArena
   size_t chunks_cap = 0;
   size_t current = 0;  // the chunk handed out from
   size_t used = 0;     // bytes of it handed out
+  u8* start = nullptr;  // the first LINK_ARENA_START chunks
 };
 
 // A block's place in one macro block's list of the blocks it holds (JitBaseBlockCache's
@@ -324,12 +327,21 @@ private:
   bool m_clearing = false;
 
   // Where the blocks live: chunks of BLOCK_CHUNK, never given back while the cache is, and the
-  // free ones in a list. A block made where one was destroyed allocates nothing.
+  // free ones in a list. A block made where one was destroyed allocates nothing. The first
+  // BLOCK_CHUNKS_START chunks are one allocation made with the cache, its blocks handed out in
+  // turn: m_blocks_made of all the chunks' have been.
   static constexpr size_t BLOCK_CHUNK = 1024;
+  static constexpr size_t BLOCK_CHUNKS_START = 32;
   JitBlock** m_block_chunks = nullptr;
   size_t m_num_block_chunks = 0;
   size_t m_block_chunks_cap = 0;
+  size_t m_blocks_made = 0;
+  JitBlock* m_block_start = nullptr;
   JitBlock* m_free_blocks = nullptr;
+  JitBlock* BlockAt(size_t index) const
+  {
+    return &m_block_chunks[index / BLOCK_CHUNK][index % BLOCK_CHUNK];
+  }
 
   // Where the blocks' exits are
   LinkDataArena m_link_arena;
@@ -363,11 +375,16 @@ private:
   JitBlock* ResumeSuspendedBlock(u32 em_address, u32 physical_address,
                                  CPUEmuFeatureFlags feature_flags);
 
-  // The nodes, in chunks of RANGE_NODE_CHUNK the cache keeps, the free ones in a list
+  // The nodes, in chunks of RANGE_NODE_CHUNK the cache keeps, the free ones in a list; the first
+  // RANGE_NODE_CHUNKS_START are one allocation made with the cache, its nodes handed out in
+  // turn: m_range_nodes_made of all the chunks' have been
   static constexpr size_t RANGE_NODE_CHUNK = 4096;
+  static constexpr size_t RANGE_NODE_CHUNKS_START = 16;
   JitRangeNode** m_range_node_chunks = nullptr;
   size_t m_num_range_node_chunks = 0;
   size_t m_range_node_chunks_cap = 0;
+  size_t m_range_nodes_made = 0;
+  JitRangeNode* m_range_node_start = nullptr;
   JitRangeNode* m_free_range_nodes = nullptr;
 
   // This bitsets shows which cachelines overlap with any blocks.

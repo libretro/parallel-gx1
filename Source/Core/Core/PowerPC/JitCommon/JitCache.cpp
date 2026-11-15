@@ -68,7 +68,7 @@ static void* LinkArenaAlloc(LinkDataArena* arena, size_t bytes)
         arena->chunks = chunks;
         arena->chunks_cap = cap;
       }
-      chunk = static_cast<u8*>(malloc(LINK_ARENA_CHUNK));
+      chunk = static_cast<u8*>(std::malloc(LINK_ARENA_CHUNK));
       if (!chunk)
         abort();
       arena->chunks[arena->num_chunks++] = chunk;
@@ -129,19 +129,52 @@ JitBaseBlockCache::JitBaseBlockCache(JitBase& jit) : m_jit{jit}
   // room for the addresses of twice the blocks kept suspended: it never grows (RelistSuspended)
   jit_block_lists_init(&suspended_map, 2 * SUSPENDED_BLOCKS);
   jit_range_lists_init(&block_range_map, 8192);
+
+  /* the blocks, their exits and their macro block nodes the heaviest games reach, past a few
+   * thousand frames, in an allocation each that takes memory as they are handed out */
+  {
+    size_t i;
+    m_block_start =
+        static_cast<JitBlock*>(calloc(BLOCK_CHUNKS_START * BLOCK_CHUNK, sizeof(JitBlock)));
+    m_block_chunks = static_cast<JitBlock**>(malloc(2 * BLOCK_CHUNKS_START * sizeof(JitBlock*)));
+    m_link_arena.start = static_cast<u8*>(calloc(LINK_ARENA_START, LINK_ARENA_CHUNK));
+    m_link_arena.chunks = static_cast<u8**>(malloc(2 * LINK_ARENA_START * sizeof(u8*)));
+    m_range_node_start = static_cast<JitRangeNode*>(
+        calloc(RANGE_NODE_CHUNKS_START * RANGE_NODE_CHUNK, sizeof(JitRangeNode)));
+    m_range_node_chunks =
+        static_cast<JitRangeNode**>(malloc(2 * RANGE_NODE_CHUNKS_START * sizeof(JitRangeNode*)));
+    if (!m_block_start || !m_block_chunks || !m_link_arena.start || !m_link_arena.chunks ||
+        !m_range_node_start || !m_range_node_chunks)
+      abort();
+    for (i = 0; i < BLOCK_CHUNKS_START; i++)
+      m_block_chunks[i] = m_block_start + i * BLOCK_CHUNK;
+    m_num_block_chunks = BLOCK_CHUNKS_START;
+    m_block_chunks_cap = 2 * BLOCK_CHUNKS_START;
+    for (i = 0; i < LINK_ARENA_START; i++)
+      m_link_arena.chunks[i] = m_link_arena.start + i * LINK_ARENA_CHUNK;
+    m_link_arena.num_chunks = LINK_ARENA_START;
+    m_link_arena.chunks_cap = 2 * LINK_ARENA_START;
+    for (i = 0; i < RANGE_NODE_CHUNKS_START; i++)
+      m_range_node_chunks[i] = m_range_node_start + i * RANGE_NODE_CHUNK;
+    m_num_range_node_chunks = RANGE_NODE_CHUNKS_START;
+    m_range_node_chunks_cap = 2 * RANGE_NODE_CHUNKS_START;
+  }
 }
 
 JitBaseBlockCache::~JitBaseBlockCache()
 {
   size_t i;
-  for (i = 0; i < m_num_block_chunks; i++)
-    delete[] m_block_chunks[i];
+  for (i = BLOCK_CHUNKS_START; i < m_num_block_chunks; i++)
+    free(m_block_chunks[i]);
+  free(m_block_start);
   free(m_block_chunks);
-  for (i = 0; i < m_link_arena.num_chunks; i++)
+  for (i = LINK_ARENA_START; i < m_link_arena.num_chunks; i++)
     free(m_link_arena.chunks[i]);
+  free(m_link_arena.start);
   free(m_link_arena.chunks);
-  for (i = 0; i < m_num_range_node_chunks; i++)
+  for (i = RANGE_NODE_CHUNKS_START; i < m_num_range_node_chunks; i++)
     free(m_range_node_chunks[i]);
+  free(m_range_node_start);
   free(m_range_node_chunks);
   jit_range_lists_free(&block_range_map);
   jit_block_lists_free(&block_map);
@@ -152,30 +185,33 @@ JitBaseBlockCache::~JitBaseBlockCache()
 JitBlock* JitBaseBlockCache::TakeBlock()
 {
   JitBlock* block = m_free_blocks;
-  if (!block)
+  if (block)
   {
-    JitBlock* chunk;
-    size_t i;
-    if (m_num_block_chunks == m_block_chunks_cap)
-    {
-      const size_t cap = m_block_chunks_cap ? m_block_chunks_cap * 2 : 16;
-      JitBlock** const chunks =
-          static_cast<JitBlock**>(realloc(m_block_chunks, cap * sizeof(*chunks)));
-      if (!chunks)
-        abort();
-      m_block_chunks = chunks;
-      m_block_chunks_cap = cap;
-    }
-    chunk = new JitBlock[BLOCK_CHUNK];
-    m_block_chunks[m_num_block_chunks++] = chunk;
-    for (i = BLOCK_CHUNK; i-- > 0;)
-    {
-      chunk[i].next_at_address = m_free_blocks;
-      m_free_blocks = &chunk[i];
-    }
-    block = m_free_blocks;
+    m_free_blocks = block->next_at_address;
   }
-  m_free_blocks = block->next_at_address;
+  else
+  {
+    /* a new one: all zero, as a JitBlock starts */
+    if (m_blocks_made == m_num_block_chunks * BLOCK_CHUNK)
+    {
+      JitBlock* chunk;
+      if (m_num_block_chunks == m_block_chunks_cap)
+      {
+        const size_t cap = m_block_chunks_cap * 2;
+        JitBlock** const chunks =
+            static_cast<JitBlock**>(realloc(m_block_chunks, cap * sizeof(*chunks)));
+        if (!chunks)
+          abort();
+        m_block_chunks = chunks;
+        m_block_chunks_cap = cap;
+      }
+      chunk = static_cast<JitBlock*>(calloc(BLOCK_CHUNK, sizeof(JitBlock)));
+      if (!chunk)
+        abort();
+      m_block_chunks[m_num_block_chunks++] = chunk;
+    }
+    block = BlockAt(m_blocks_made++);
+  }
   block->next_at_address = nullptr;
   block->in_use = true;
   return block;
@@ -191,32 +227,35 @@ void JitBaseBlockCache::AddToMacroBlock(JitBlock* block, u32 macro_block)
     if (node->macro_block == macro_block)
       return;
   }
-  if (!m_free_range_nodes)
-  {
-    JitRangeNode* chunk;
-    size_t i;
-    if (m_num_range_node_chunks == m_range_node_chunks_cap)
-    {
-      const size_t cap = m_range_node_chunks_cap ? m_range_node_chunks_cap * 2 : 16;
-      JitRangeNode** const chunks =
-          static_cast<JitRangeNode**>(realloc(m_range_node_chunks, cap * sizeof(*chunks)));
-      if (!chunks)
-        abort();
-      m_range_node_chunks = chunks;
-      m_range_node_chunks_cap = cap;
-    }
-    chunk = static_cast<JitRangeNode*>(malloc(RANGE_NODE_CHUNK * sizeof(*chunk)));
-    if (!chunk)
-      abort();
-    m_range_node_chunks[m_num_range_node_chunks++] = chunk;
-    for (i = 0; i < RANGE_NODE_CHUNK; i++)
-    {
-      chunk[i].next_of_block = m_free_range_nodes;
-      m_free_range_nodes = &chunk[i];
-    }
-  }
   node = m_free_range_nodes;
-  m_free_range_nodes = node->next_of_block;
+  if (node)
+  {
+    m_free_range_nodes = node->next_of_block;
+  }
+  else
+  {
+    if (m_range_nodes_made == m_num_range_node_chunks * RANGE_NODE_CHUNK)
+    {
+      JitRangeNode* chunk;
+      if (m_num_range_node_chunks == m_range_node_chunks_cap)
+      {
+        const size_t cap = m_range_node_chunks_cap * 2;
+        JitRangeNode** const chunks =
+            static_cast<JitRangeNode**>(realloc(m_range_node_chunks, cap * sizeof(*chunks)));
+        if (!chunks)
+          abort();
+        m_range_node_chunks = chunks;
+        m_range_node_chunks_cap = cap;
+      }
+      chunk = static_cast<JitRangeNode*>(malloc(RANGE_NODE_CHUNK * sizeof(*chunk)));
+      if (!chunk)
+        abort();
+      m_range_node_chunks[m_num_range_node_chunks++] = chunk;
+    }
+    node = &m_range_node_chunks[m_range_nodes_made / RANGE_NODE_CHUNK]
+                               [m_range_nodes_made % RANGE_NODE_CHUNK];
+    m_range_nodes_made++;
+  }
 
   head = jit_range_lists_get(&block_range_map, AddressKey(macro_block));
   node->block = block;
@@ -293,38 +332,31 @@ void JitBaseBlockCache::Clear()
   address_set_clear(&m_jit.js.fifoWriteAddresses);
   address_set_clear(&m_jit.js.pairedQuantizeAddresses);
   address_set_clear(&m_jit.js.noSpeculativeConstantsAddresses);
-  size_t chunk, i;
+  /* the blocks handed out: the others are as they started */
+  size_t i;
   m_clearing = true;
-  for (chunk = 0; chunk < m_num_block_chunks; chunk++)
+  for (i = 0; i < m_blocks_made; i++)
   {
-    for (i = 0; i < BLOCK_CHUNK; i++)
-    {
-      if (m_block_chunks[chunk][i].in_use)
-        DestroyBlock(m_block_chunks[chunk][i]);
-    }
+    if (BlockAt(i)->in_use)
+      DestroyBlock(*BlockAt(i));
   }
   m_clearing = false;
-  for (chunk = 0; chunk < m_num_block_chunks; chunk++)
+  for (i = 0; i < m_blocks_made; i++)
   {
-    for (i = 0; i < BLOCK_CHUNK; i++)
+    JitBlock* const block = BlockAt(i);
+    if (block->in_use)
     {
-      if (m_block_chunks[chunk][i].in_use)
-      {
-        LeaveMacroBlocks(&m_block_chunks[chunk][i]);
-        ReleaseBlock(&m_block_chunks[chunk][i]);
-      }
+      LeaveMacroBlocks(block);
+      ReleaseBlock(block);
     }
   }
   /* every block's exits, the free ones' included, gave their room back to the arena */
-  for (chunk = 0; chunk < m_num_block_chunks; chunk++)
+  for (i = 0; i < m_blocks_made; i++)
   {
-    for (i = 0; i < BLOCK_CHUNK; i++)
-    {
-      JitBlock::LinkDataList& exits = m_block_chunks[chunk][i].linkData;
-      exits.data = nullptr;
-      exits.count = 0;
-      exits.cap = 0;
-    }
+    JitBlock::LinkDataList& exits = BlockAt(i)->linkData;
+    exits.data = nullptr;
+    exits.count = 0;
+    exits.cap = 0;
   }
   m_link_arena.current = 0;
   m_link_arena.used = 0;
