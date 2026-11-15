@@ -65,9 +65,6 @@ void ControllerInterface::RefreshDevices()
   // do it async, to not risk the emulated controllers default config loading not finding a default
   // device.
 
-  for (auto& backend : m_input_backends)
-    backend->PopulateDevices();
-
   WiimoteReal::PopulateDevices();
 
   if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1)
@@ -100,9 +97,6 @@ void ControllerInterface::Shutdown()
 
   // Update control references so shared_ptr<Device>s are freed up BEFORE we shutdown the backends.
   ClearDevices();
-
-  // Empty the container of input backends to deconstruct and deinitialize them.
-  m_input_backends.clear();
 
   // Make sure no devices had been added within Shutdown() in the time
   // between checking they checked atomic m_is_init bool and we changed it.
@@ -233,9 +227,6 @@ void ControllerInterface::UpdateInput()
     ciface::InputReadScope scope;
 
     tls_is_updating_devices = true;
-
-    for (auto& backend : m_input_backends)
-      backend->UpdateInput(devices_to_remove);
 
     static const std::vector<std::shared_ptr<ciface::Core::Device>> s_no_devices;
     const DeviceList* const list = PeekDevices();

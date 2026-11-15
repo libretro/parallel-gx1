@@ -10,7 +10,6 @@
 #include "Common/Matrix.h"
 
 #include "InputCommon/ControllerInterface/CoreDevice.h"
-#include "InputCommon/ControllerInterface/InputBackend.h"
 
 #include <retro_atomic.h>
 
@@ -83,8 +82,6 @@ private:
   retro_atomic_int_t m_populating_devices_counter{};
   retro_atomic_int_t m_aspect_ratio_adjustment{0x3f800000}; /* the bits of a float, 1.0f */
   retro_atomic_int_t m_requested_mouse_centering{};
-
-  std::vector<std::unique_ptr<ciface::InputBackend>> m_input_backends;
 };
 
 namespace ciface
