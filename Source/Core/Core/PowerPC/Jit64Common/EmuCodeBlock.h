@@ -29,10 +29,11 @@ class EmuCodeBlock : public Gen::X64CodeBlock
 public:
   explicit EmuCodeBlock(Jit64& jit) : m_jit{jit}
   {
-    /* a game's code cache holds some tens of thousands of fastmem accesses: grown to that once,
-     * kept across clears */
-    back_patch_infos_init(&m_back_patch_info, 16384);
-    exception_handlers_init(&m_exception_handler_at_loc, 64);
+    /* a game's code cache holds up to some hundred thousand fastmem accesses, and as many
+     * handlers where it checks for memory exceptions: room for them from the start, as growing
+     * moves every entry in one frame; kept across clears */
+    back_patch_infos_init(&m_back_patch_info, 131072);
+    exception_handlers_init(&m_exception_handler_at_loc, 131072);
   }
   ~EmuCodeBlock()
   {

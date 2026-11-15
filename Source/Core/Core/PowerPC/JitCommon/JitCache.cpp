@@ -121,8 +121,11 @@ bool JitBlock::OverlapsPhysicalRange(u32 address, u32 length) const
 
 JitBaseBlockCache::JitBaseBlockCache(JitBase& jit) : m_jit{jit}
 {
-  jit_link_lists_init(&links_to, 4096);
-  jit_block_lists_init(&block_map, 8192);
+  /* Room from the start for what the heaviest games reach: these tables grow by moving every
+   * entry into twice the room, a frame's worth of copying, and keep their room across clears.
+   * Their room takes memory only as entries come. */
+  jit_link_lists_init(&links_to, 16384);
+  jit_block_lists_init(&block_map, 262144);
   // room for the addresses of twice the blocks kept suspended: it never grows (RelistSuspended)
   jit_block_lists_init(&suspended_map, 2 * SUSPENDED_BLOCKS);
   jit_range_lists_init(&block_range_map, 8192);
