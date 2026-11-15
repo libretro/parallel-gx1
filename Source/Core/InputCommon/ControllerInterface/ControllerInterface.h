@@ -14,11 +14,6 @@
 
 #include <retro_atomic.h>
 
-// enable disable sources
-#if defined(HAVE_HIDAPI)
-#define CIFACE_USE_STEAMDECK
-#endif
-
 namespace ciface
 {
 // A thread local "input channel" is maintained to handle the state of relative inputs.

@@ -10,9 +10,6 @@
 #include "Common/Logging/Log.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
-#ifdef CIFACE_USE_STEAMDECK
-#include "InputCommon/ControllerInterface/SteamDeck/SteamDeck.h"
-#endif
 
 ControllerInterface g_controller_interface;
 
@@ -30,10 +27,6 @@ void ControllerInterface::Initialize()
     return;
 
   retro_atomic_store_release_int(&m_populating_devices_counter, 1);
-
-#ifdef CIFACE_USE_STEAMDECK
-  m_input_backends.emplace_back(ciface::SteamDeck::CreateInputBackend(this));
-#endif
 
   // Don't allow backends to add devices before the first RefreshDevices() as they will be cleaned
   // there. Or they'd end up waiting on the devices mutex if populated from another thread.

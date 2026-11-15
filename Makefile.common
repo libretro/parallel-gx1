@@ -963,7 +963,6 @@ ifeq ($(HAVE_VULKAN),1)
 endif
 ifeq ($(HAVE_HIDAPI),1)
    DOLPHIN_SOURCES_CXX += \
-	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/SteamDeck/SteamDeck.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteReal/IOhidapi.cpp
 endif
 ifeq ($(HAVE_LIBUSB),1)
