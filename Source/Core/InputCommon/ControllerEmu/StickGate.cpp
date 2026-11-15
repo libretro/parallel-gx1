@@ -6,11 +6,16 @@
 #include <algorithm>
 #include <cmath>
 #include <ranges>
+#include <type_traits>
 
 #include "Common/MathUtil.h"
 #include "Common/Matrix.h"
 #include "Common/StringUtil.h"
 #include "InputCommon/ControllerEmu/Control/Control.h"
+#include "InputCommon/ControllerEmu/ControlGroup/AnalogStick.h"
+#include "InputCommon/ControllerEmu/ControlGroup/Cursor.h"
+#include "InputCommon/ControllerEmu/ControlGroup/Force.h"
+#include "InputCommon/ControllerEmu/ControlGroup/Tilt.h"
 #include "InputCommon/ControllerEmu/Setting/NumericSetting.h"
 
 namespace
@@ -107,8 +112,9 @@ std::optional<u32> StickGate::GetIdealCalibrationSampleCount() const
   }
 }
 
-ReshapableInput::ReshapableInput(std::string name_, std::string ui_name_, GroupType type_)
-    : ControlGroup(std::move(name_), std::move(ui_name_), type_)
+ReshapableInput::ReshapableInput(std::string name_, std::string ui_name_, GroupType type_,
+                                 ReshapeKind kind)
+    : ControlGroup(std::move(name_), std::move(ui_name_), type_), m_reshape_kind(kind)
 {
   // 50 is not always enough but users can set it to more with an expression
   AddDeadzoneSetting(&m_deadzone_setting, 50);
@@ -189,11 +195,76 @@ ControlState ReshapableInput::GetCalibrationDataRadiusAtAngle(const CalibrationD
   return intersection.value_or(data[sample1_index]);
 }
 
+/* The call on the group this is: its own, an analog stick's for the octagonal one when it has
+ * none of its own, or, when neither has one, the base's default (named Fn##Default). */
+#define RESHAPE_HAS_OWN(D, Fn) (!std::is_same_v<decltype(&D::Fn), decltype(&ReshapableInput::Fn)>)
+
+#define RESHAPE_CALL(Fn, ...)                                                                      \
+  const auto call = [&](const auto* group) {                                                       \
+    using D = std::remove_cv_t<std::remove_pointer_t<decltype(group)>>;                            \
+    if constexpr (RESHAPE_HAS_OWN(D, Fn))                                                          \
+      return group->Fn(__VA_ARGS__);                                                               \
+    else                                                                                           \
+      return Fn##Default(__VA_ARGS__);                                                             \
+  };                                                                                               \
+  switch (m_reshape_kind)                                                                          \
+  {                                                                                                \
+  case ReshapeKind::OctagonAnalogStick:                                                            \
+    return call(static_cast<const OctagonAnalogStick*>(this));                                     \
+  case ReshapeKind::Force:                                                                         \
+    return call(static_cast<const Force*>(this));                                                  \
+  case ReshapeKind::Tilt:                                                                          \
+    return call(static_cast<const Tilt*>(this));                                                   \
+  case ReshapeKind::Cursor:                                                                        \
+    return call(static_cast<const Cursor*>(this));                                                 \
+  case ReshapeKind::AnalogStick:                                                                   \
+  default:                                                                                         \
+    return call(static_cast<const AnalogStick*>(this));                                            \
+  }
+
+ControlState ReshapableInput::GetVirtualNotchSize() const {RESHAPE_CALL(GetVirtualNotchSize)}
+
+ControlState ReshapableInput::GetGateRadiusAtAngle(double angle) const
+{
+  const auto call = [&](const auto* group) { return group->GetGateRadiusAtAngle(angle); };
+  switch (m_reshape_kind)
+  {
+  case ReshapeKind::OctagonAnalogStick:
+    return call(static_cast<const OctagonAnalogStick*>(this));
+  case ReshapeKind::Force:
+    return call(static_cast<const Force*>(this));
+  case ReshapeKind::Tilt:
+    return call(static_cast<const Tilt*>(this));
+  case ReshapeKind::Cursor:
+    return call(static_cast<const Cursor*>(this));
+  case ReshapeKind::AnalogStick:
+  default:
+    return call(static_cast<const AnalogStick*>(this));
+  }
+}
+
+ReshapableInput::ReshapeData ReshapableInput::GetReshapableState(bool adjusted) const
+{
+  const auto call = [&](const auto* group) { return group->GetReshapableState(adjusted); };
+  switch (m_reshape_kind)
+  {
+  case ReshapeKind::OctagonAnalogStick:
+    return call(static_cast<const OctagonAnalogStick*>(this));
+  case ReshapeKind::Force:
+    return call(static_cast<const Force*>(this));
+  case ReshapeKind::Tilt:
+    return call(static_cast<const Tilt*>(this));
+  case ReshapeKind::Cursor:
+    return call(static_cast<const Cursor*>(this));
+  case ReshapeKind::AnalogStick:
+  default:
+    return call(static_cast<const AnalogStick*>(this));
+  }
+}
+
 ControlState ReshapableInput::GetDefaultInputRadiusAtAngle(double angle) const
 {
-  // This will normally be the same as the gate radius.
-  // Unless a sub-class is doing weird things with the gate radius (e.g. Tilt)
-  return GetGateRadiusAtAngle(angle);
+  RESHAPE_CALL(GetDefaultInputRadiusAtAngle, angle)
 }
 
 void ReshapableInput::SetCalibrationFromGate(const StickGate& gate)
@@ -360,7 +431,7 @@ ReshapableInput::ReshapeData ReshapableInput::Reshape(ControlState x, ControlSta
 
 Control* ReshapableInput::GetModifierInput() const
 {
-  return nullptr;
+  RESHAPE_CALL(GetModifierInput)
 }
 
 }  // namespace ControllerEmu

@@ -20,7 +20,8 @@
 namespace ControllerEmu
 {
 Cursor::Cursor(std::string name_, std::string ui_name_)
-    : ReshapableInput(std::move(name_), std::move(ui_name_), GroupType::Cursor),
+    : ReshapableInput(std::move(name_), std::move(ui_name_), GroupType::Cursor,
+                      ReshapeKind::Cursor),
       m_last_update(Clock::now())
 {
   for (auto& named_direction : named_directions)

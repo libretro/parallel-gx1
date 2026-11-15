@@ -21,7 +21,13 @@ AnalogStick::AnalogStick(const char* const name_, const StickGate& stick_gate)
 
 AnalogStick::AnalogStick(const char* const name_, const char* const ui_name_,
                          const StickGate& stick_gate)
-    : ReshapableInput(name_, ui_name_, GroupType::Stick), m_stick_gate(stick_gate)
+    : AnalogStick(name_, ui_name_, stick_gate, ReshapeKind::AnalogStick)
+{
+}
+
+AnalogStick::AnalogStick(const char* const name_, const char* const ui_name_,
+                         const StickGate& stick_gate, ReshapeKind kind)
+    : ReshapableInput(name_, ui_name_, GroupType::Stick, kind), m_stick_gate(stick_gate)
 {
   for (auto& named_direction : named_directions)
     AddInput(Translatability::Translate, named_direction);
@@ -82,7 +88,8 @@ OctagonAnalogStick::OctagonAnalogStick(const char* name_, ControlState gate_radi
 
 OctagonAnalogStick::OctagonAnalogStick(const char* name_, const char* ui_name_,
                                        ControlState gate_radius)
-    : AnalogStick(name_, ui_name_, ControllerEmu::OctagonStickGate(1.0))
+    : AnalogStick(name_, ui_name_, ControllerEmu::OctagonStickGate(1.0),
+                  ReshapeKind::OctagonAnalogStick)
 {
   AddVirtualNotchSetting(&m_virtual_notch_setting, 45);
 

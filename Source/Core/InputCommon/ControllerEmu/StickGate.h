@@ -66,6 +66,16 @@ public:
   explicit SquareStickGate(ControlState half_width) : StickGate(Shape::Square, half_width) {}
 };
 
+// The reshapable group a ReshapableInput is, which its reshaping calls branch on
+enum class ReshapeKind : u8
+{
+  AnalogStick,
+  OctagonAnalogStick,
+  Force,
+  Tilt,
+  Cursor,
+};
+
 class ReshapableInput : public ControlGroup
 {
 public:
@@ -75,7 +85,7 @@ public:
   // Contains input radius maximums at evenly-spaced angles.
   using CalibrationData = std::vector<ControlState>;
 
-  ReshapableInput(std::string name, std::string ui_name, GroupType type);
+  ReshapableInput(std::string name, std::string ui_name, GroupType type, ReshapeKind kind);
 
   using ReshapeData = Common::DVec2;
 
@@ -84,11 +94,11 @@ public:
 
   ControlState GetDeadzonePercentage() const;
 
-  virtual ControlState GetVirtualNotchSize() const { return 0.0; }
-
-  virtual ControlState GetGateRadiusAtAngle(double angle) const = 0;
-  virtual ReshapeData GetReshapableState(bool adjusted) const = 0;
-  virtual ControlState GetDefaultInputRadiusAtAngle(double ang) const;
+  // These branch to the group this is.
+  ControlState GetVirtualNotchSize() const;
+  ControlState GetGateRadiusAtAngle(double angle) const;
+  ReshapeData GetReshapableState(bool adjusted) const;
+  ControlState GetDefaultInputRadiusAtAngle(double ang) const;
 
   void SetCalibrationFromGate(const StickGate& gate);
 
@@ -111,7 +121,18 @@ protected:
   ReshapeData Reshape(ControlState x, ControlState y, ControlState modifier = 0.0,
                       ControlState clamp = 1.0) const;
 
-  virtual Control* GetModifierInput() const;
+  Control* GetModifierInput() const;
+
+  // What a group that has no call of its own does
+  ControlState GetVirtualNotchSizeDefault() const { return 0.0; }
+  // Normally the same as the gate radius, unless a group does odd things with it (e.g. Tilt)
+  ControlState GetDefaultInputRadiusAtAngleDefault(double angle) const
+  {
+    return GetGateRadiusAtAngle(angle);
+  }
+  Control* GetModifierInputDefault() const { return nullptr; }
+
+  const ReshapeKind m_reshape_kind;
 
 private:
   void LoadConfig(Common::IniFile::Section*, const std::string& base_name) override;

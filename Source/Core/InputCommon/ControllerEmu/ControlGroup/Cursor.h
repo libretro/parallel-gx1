@@ -12,6 +12,9 @@ namespace ControllerEmu
 {
 class Cursor : public ReshapableInput
 {
+  // the base branches to its reshaping calls, private ones included
+  friend class ReshapableInput;
+
 public:
   struct StateData
   {
@@ -23,8 +26,8 @@ public:
 
   Cursor(std::string name, std::string ui_name);
 
-  ReshapeData GetReshapableState(bool adjusted) const final;
-  ControlState GetGateRadiusAtAngle(double ang) const override;
+  ReshapeData GetReshapableState(bool adjusted) const;
+  ControlState GetGateRadiusAtAngle(double ang) const;
 
   // Modifies the state
   StateData GetState(bool adjusted);

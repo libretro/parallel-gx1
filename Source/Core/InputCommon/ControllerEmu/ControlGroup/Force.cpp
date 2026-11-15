@@ -13,7 +13,8 @@
 
 namespace ControllerEmu
 {
-Force::Force(const std::string& name_) : ReshapableInput(name_, name_, GroupType::Force)
+Force::Force(const std::string& name_)
+    : ReshapableInput(name_, name_, GroupType::Force, ReshapeKind::Force)
 {
   AddInput(Translatability::Translate, _trans("Up"));
   AddInput(Translatability::Translate, _trans("Down"));

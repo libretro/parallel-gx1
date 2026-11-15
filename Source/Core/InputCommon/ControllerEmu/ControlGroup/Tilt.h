@@ -13,17 +13,20 @@ namespace ControllerEmu
 {
 class Tilt : public ReshapableInput
 {
+  // the base branches to its reshaping calls, private ones included
+  friend class ReshapableInput;
+
 public:
   using StateData = ReshapeData;
 
   explicit Tilt(const std::string& name);
 
-  ReshapeData GetReshapableState(bool adjusted) const final;
-  ControlState GetGateRadiusAtAngle(double angle) const final;
+  ReshapeData GetReshapableState(bool adjusted) const;
+  ControlState GetGateRadiusAtAngle(double angle) const;
 
   // Tilt is using the gate radius to adjust the tilt angle so we must provide an unadjusted value
   // for the default input radius.
-  ControlState GetDefaultInputRadiusAtAngle(double angle) const final;
+  ControlState GetDefaultInputRadiusAtAngle(double angle) const;
 
   StateData GetState() const;
 
@@ -31,7 +34,7 @@ public:
   ControlState GetMaxRotationalVelocity() const;
 
 private:
-  Control* GetModifierInput() const override;
+  Control* GetModifierInput() const;
 
   SettingValue<double> m_max_angle_setting;
   SettingValue<double> m_max_rotational_velocity;

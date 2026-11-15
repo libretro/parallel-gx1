@@ -13,15 +13,18 @@ namespace ControllerEmu
 {
 class Force : public ReshapableInput
 {
+  // the base branches to its reshaping calls, private ones included
+  friend class ReshapableInput;
+
 public:
   using StateData = Common::Vec3;
 
   explicit Force(const std::string& name);
 
-  ReshapeData GetReshapableState(bool adjusted) const final;
-  ControlState GetGateRadiusAtAngle(double ang) const final;
+  ReshapeData GetReshapableState(bool adjusted) const;
+  ControlState GetGateRadiusAtAngle(double ang) const;
 
-  ControlState GetDefaultInputRadiusAtAngle(double angle) const final;
+  ControlState GetDefaultInputRadiusAtAngle(double angle) const;
 
   StateData GetState(bool adjusted = true) const;
 

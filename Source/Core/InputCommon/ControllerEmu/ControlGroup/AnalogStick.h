@@ -11,20 +11,28 @@ namespace ControllerEmu
 {
 class AnalogStick : public ReshapableInput
 {
+  // the base branches to its reshaping calls, private ones included
+  friend class ReshapableInput;
+
 public:
   using StateData = ReshapeData;
 
   AnalogStick(const char* name, const StickGate& stick_gate);
   AnalogStick(const char* name, const char* ui_name, const StickGate& stick_gate);
 
-  ReshapeData GetReshapableState(bool adjusted) const final;
-  ControlState GetGateRadiusAtAngle(double ang) const override;
+protected:
+  // For the octagonal stick built on this one
+  AnalogStick(const char* name, const char* ui_name, const StickGate& stick_gate, ReshapeKind kind);
+
+public:
+  ReshapeData GetReshapableState(bool adjusted) const;
+  ControlState GetGateRadiusAtAngle(double ang) const;
 
   StateData GetState() const;
   StateData GetState(const InputOverrideFunction& override_func) const;
 
 private:
-  Control* GetModifierInput() const override;
+  Control* GetModifierInput() const;
 
   StickGate m_stick_gate;
 };
@@ -32,12 +40,15 @@ private:
 // An AnalogStick with an OctagonStickGate
 class OctagonAnalogStick : public AnalogStick
 {
+  // the base branches to its reshaping calls, private ones included
+  friend class ReshapableInput;
+
 public:
   OctagonAnalogStick(const char* name, ControlState gate_radius);
   OctagonAnalogStick(const char* name, const char* ui_name, ControlState gate_radius);
 
-  ControlState GetVirtualNotchSize() const override;
-  ControlState GetGateRadiusAtAngle(double ang) const override;
+  ControlState GetVirtualNotchSize() const;
+  ControlState GetGateRadiusAtAngle(double ang) const;
 
 private:
   SettingValue<double> m_virtual_notch_setting;
