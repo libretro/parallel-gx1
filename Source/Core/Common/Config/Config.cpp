@@ -220,7 +220,6 @@ static const std::map<System, std::string> system_to_name = {
     {System::GFX, "Graphics"},
     {System::Logger, "Logger"},
     {System::SYSCONF, "SYSCONF"},
-    {System::DualShockUDPClient, "DualShockUDPClient"},
     {System::Session, "Session"},
     {System::GameSettingsOnly, "GameSettingsOnly"},
     {System::Achievements, "Achievements"}};

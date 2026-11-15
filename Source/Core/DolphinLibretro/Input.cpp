@@ -39,9 +39,6 @@
 #include "DolphinLibretro/Common/Globals.h"
 #include "DolphinLibretro/Common/Options.h"
 #include "DolphinLibretro/VR.h"
-#ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
-#include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPClient.h"
-#endif
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControlReference/ExpressionParser.h"
 #include "InputCommon/ControllerEmu/Control/Control.h"
@@ -1069,12 +1066,6 @@ void Update()
         (input_cb(i, RETRO_DEVICE_JOYPAD, 0, micButtonId) != 0) : false;
     }
   }
-
-  bool dsu_enabled = Libretro::Options::GetCached<bool>(
-    Libretro::Options::wiimote_dsu::DSU_ENABLED, false);
-
-  if (dsu_enabled)
-    g_controller_interface.UpdateInput();
 }
 
 /* "<mod> & <expr>", or expr alone with no modifier: active only while the modifier is held. */
@@ -1762,7 +1753,6 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
   char devJoypad[Libretro::Input::DEVICE_NAME_SIZE];
   char devAnalog[Libretro::Input::DEVICE_NAME_SIZE];
   char devMouse[Libretro::Input::DEVICE_NAME_SIZE];
-  char devDSU[Libretro::Input::DEVICE_NAME_SIZE] = "";
   Libretro::Input::QualifiedName(devJoypad, port, "Joypad");
   Libretro::Input::QualifiedName(devAnalog, port, "Analog");
   Libretro::Input::QualifiedName(devMouse, port, "Mouse");
@@ -1800,18 +1790,7 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
   Common::IniFile::Section sec;
   wm->LoadConfig(&sec);
 
-  bool dsu_enabled = Libretro::Options::GetCached<bool>(
-      Libretro::Options::wiimote_dsu::DSU_ENABLED, false);
-
-  if (dsu_enabled)
-  {
-    snprintf(devDSU, sizeof(devDSU), "DSUClient/%u/DS4", port);
-    wm->SetDefaultDevice(devDSU);
-  }
-  else
-  {
-    wm->SetDefaultDevice(devJoypad);
-  }
+  wm->SetDefaultDevice(devJoypad);
 
   WiimoteUpdateFlags f;
 
@@ -1824,83 +1803,43 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
     ControllerEmu::ControlGroup* ccLeftStick = wm->GetClassicGroup(ClassicGroup::LeftStick);
     ControllerEmu::ControlGroup* ccRightStick = wm->GetClassicGroup(ClassicGroup::RightStick);
 
-    if (dsu_enabled)
-    {
-      Libretro::Input::Bind(ccButtons, 0, "`%s:Cross`", devDSU);    // A
-      Libretro::Input::Bind(ccButtons, 1, "`%s:Circle`", devDSU);   // B
-      Libretro::Input::Bind(ccButtons, 2, "`%s:Square`", devDSU);   // X
-      Libretro::Input::Bind(ccButtons, 3, "`%s:Triangle`", devDSU); // Y
-      Libretro::Input::Bind(ccButtons, 6, "`%s:Share`", devDSU);    // -
-      Libretro::Input::Bind(ccButtons, 7, "`%s:Options`", devDSU);  // +
-      Libretro::Input::Bind(ccButtons, 8, "`%s:PS`", devDSU);       // Home
-    }
-    else
-    {
-      ccButtons->SetControlExpression(0, "A");                               // A
-      ccButtons->SetControlExpression(1, "B");                               // B
-      ccButtons->SetControlExpression(2, "X");                               // X
-      ccButtons->SetControlExpression(3, "Y");                               // Y
-      ccButtons->SetControlExpression(6, "Select");                          // -
-      ccButtons->SetControlExpression(7, "Start");                           // +
-      ccButtons->SetControlExpression(8, "R3");                              // Home
-    }
+    ccButtons->SetControlExpression(0, "A");                               // A
+    ccButtons->SetControlExpression(1, "B");                               // B
+    ccButtons->SetControlExpression(2, "X");                               // X
+    ccButtons->SetControlExpression(3, "Y");                               // Y
+    ccButtons->SetControlExpression(6, "Select");                          // -
+    ccButtons->SetControlExpression(7, "Start");                           // +
+    ccButtons->SetControlExpression(8, "R3");                              // Home
     if (device == RETRO_DEVICE_WIIMOTE_CC)
     {
-      if (dsu_enabled)
-      {
-        Libretro::Input::Bind(ccButtons, 4, "`%s:L1`", devDSU); // ZL
-        Libretro::Input::Bind(ccButtons, 5, "`%s:R1`", devDSU); // ZR
-        Libretro::Input::Bind(ccTriggers, 0, "`%s:L2`", devDSU); // L-trigger
-        Libretro::Input::Bind(ccTriggers, 1, "`%s:R2`", devDSU); // R-trigger
-        Libretro::Input::Bind(ccTriggers, 2, "`%s:L2`", devDSU); // L-trigger Analog
-        Libretro::Input::Bind(ccTriggers, 3, "`%s:R2`", devDSU); // R-trigger Analog
-      }
-      else
-      {
-        ccButtons->SetControlExpression(4, "L");                               // ZL
-        ccButtons->SetControlExpression(5, "R");                               // ZR
-        Libretro::Input::Bind(ccTriggers, 0, "`%s:Trigger0+`", devAnalog);  // L-trigger
-        Libretro::Input::Bind(ccTriggers, 1, "`%s:Trigger1+`", devAnalog);  // R-trigger
-        Libretro::Input::Bind(ccTriggers, 2, "`%s:Trigger0+`", devAnalog);  // L-trigger Analog
-        Libretro::Input::Bind(ccTriggers, 3, "`%s:Trigger1+`", devAnalog);  // R-trigger Analog
-      }
+      ccButtons->SetControlExpression(4, "L");                               // ZL
+      ccButtons->SetControlExpression(5, "R");                               // ZR
+      Libretro::Input::Bind(ccTriggers, 0, "`%s:Trigger0+`", devAnalog);  // L-trigger
+      Libretro::Input::Bind(ccTriggers, 1, "`%s:Trigger1+`", devAnalog);  // R-trigger
+      Libretro::Input::Bind(ccTriggers, 2, "`%s:Trigger0+`", devAnalog);  // L-trigger Analog
+      Libretro::Input::Bind(ccTriggers, 3, "`%s:Trigger1+`", devAnalog);  // R-trigger Analog
     }
     else // Classic Controller Pro doesn't have analog triggers and L/R should be swapped with ZL/ZR
     {
-      Libretro::Input::Bind(ccButtons, 4, dsu_enabled ? "`%s:L2`" : "L2", devDSU); // ZL
-      Libretro::Input::Bind(ccButtons, 5, dsu_enabled ? "`%s:R2`" : "R2", devDSU); // ZR
-      Libretro::Input::Bind(ccTriggers, 0, dsu_enabled ? "`%s:L1`" : "L", devDSU); // L
-      Libretro::Input::Bind(ccTriggers, 1, dsu_enabled ? "`%s:R1`" : "R", devDSU); // R
+      ccButtons->SetControlExpression(4, "L2"); // ZL
+      ccButtons->SetControlExpression(5, "R2"); // ZR
+      ccTriggers->SetControlExpression(0, "L"); // L
+      ccTriggers->SetControlExpression(1, "R"); // R
     }
 
-    Libretro::Input::Bind(ccDpad, 0, dsu_enabled ? "`%s:Pad N`" : "Up", devDSU);    // Up
-    Libretro::Input::Bind(ccDpad, 1, dsu_enabled ? "`%s:Pad S`" : "Down", devDSU);  // Down
-    Libretro::Input::Bind(ccDpad, 2, dsu_enabled ? "`%s:Pad W`" : "Left", devDSU);  // Left
-    Libretro::Input::Bind(ccDpad, 3, dsu_enabled ? "`%s:Pad E`" : "Right", devDSU); // Right
+    ccDpad->SetControlExpression(0, "Up");    // Up
+    ccDpad->SetControlExpression(1, "Down");  // Down
+    ccDpad->SetControlExpression(2, "Left");  // Left
+    ccDpad->SetControlExpression(3, "Right"); // Right
 
-    if (dsu_enabled)
-    {
-      Libretro::Input::Bind(ccLeftStick, 0, "`%s:Left Y-`", devDSU);  // Up
-      Libretro::Input::Bind(ccLeftStick, 1, "`%s:Left Y+`", devDSU);  // Down
-      Libretro::Input::Bind(ccLeftStick, 2, "`%s:Left X-`", devDSU);  // Left
-      Libretro::Input::Bind(ccLeftStick, 3, "`%s:Left X+`", devDSU);  // Right
-
-      Libretro::Input::Bind(ccRightStick, 0, "`%s:Right Y-`", devDSU); // Up
-      Libretro::Input::Bind(ccRightStick, 1, "`%s:Right Y+`", devDSU); // Down
-      Libretro::Input::Bind(ccRightStick, 2, "`%s:Right X-`", devDSU); // Left
-      Libretro::Input::Bind(ccRightStick, 3, "`%s:Right X+`", devDSU); // Right
-    }
-    else
-    {
-      Libretro::Input::Bind(ccLeftStick, 0, "`%s:Y0-`", devAnalog);       // Up
-      Libretro::Input::Bind(ccLeftStick, 1, "`%s:Y0+`", devAnalog);       // Down
-      Libretro::Input::Bind(ccLeftStick, 2, "`%s:X0-`", devAnalog);       // Left
-      Libretro::Input::Bind(ccLeftStick, 3, "`%s:X0+`", devAnalog);       // Right
-      Libretro::Input::Bind(ccRightStick, 0, "`%s:Y1-`", devAnalog);      // Up
-      Libretro::Input::Bind(ccRightStick, 1, "`%s:Y1+`", devAnalog);      // Down
-      Libretro::Input::Bind(ccRightStick, 2, "`%s:X1-`", devAnalog);      // Left
-      Libretro::Input::Bind(ccRightStick, 3, "`%s:X1+`", devAnalog);      // Right
-    }
+    Libretro::Input::Bind(ccLeftStick, 0, "`%s:Y0-`", devAnalog);       // Up
+    Libretro::Input::Bind(ccLeftStick, 1, "`%s:Y0+`", devAnalog);       // Down
+    Libretro::Input::Bind(ccLeftStick, 2, "`%s:X0-`", devAnalog);       // Left
+    Libretro::Input::Bind(ccLeftStick, 3, "`%s:X0+`", devAnalog);       // Right
+    Libretro::Input::Bind(ccRightStick, 0, "`%s:Y1-`", devAnalog);      // Up
+    Libretro::Input::Bind(ccRightStick, 1, "`%s:Y1+`", devAnalog);      // Down
+    Libretro::Input::Bind(ccRightStick, 2, "`%s:X1-`", devAnalog);      // Left
+    Libretro::Input::Bind(ccRightStick, 3, "`%s:X1+`", devAnalog);      // Right
   }
   else if (device != RETRO_DEVICE_REAL_WIIMOTE)
   {
@@ -1956,35 +1895,7 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
         wmButtons->SetControlExpression(3, "A");  // 2
       }
 
-      if (dsu_enabled)
-      {
-        auto* wmAccel = static_cast<ControllerEmu::IMUAccelerometer*>(
-            wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUAccelerometer));
-        if (wmAccel)
-        {
-          // Input names are from DualShockUDPClient.cpp Device constructor.
-          // The DSU device already converts to m/s² via accel_scale so units match.
-          Libretro::Input::Bind(wmAccel, 0, "`%s:Accel Up`", devDSU);       // Up
-          Libretro::Input::Bind(wmAccel, 1, "`%s:Accel Down`", devDSU);     // Down
-          Libretro::Input::Bind(wmAccel, 2, "`%s:Accel Left`", devDSU);     // Left
-          Libretro::Input::Bind(wmAccel, 3, "`%s:Accel Right`", devDSU);    // Right
-          Libretro::Input::Bind(wmAccel, 4, "`%s:Accel Forward`", devDSU);  // Forward
-          Libretro::Input::Bind(wmAccel, 5, "`%s:Accel Backward`", devDSU); // Backward
-        }
-
-        auto* wmGyro = static_cast<ControllerEmu::IMUGyroscope*>(
-            wm->GetWiimoteGroup(WiimoteEmu::WiimoteGroup::IMUGyroscope));
-        if (wmGyro)
-        {
-          Libretro::Input::Bind(wmGyro, 0, "`%s:Gyro Pitch Up`", devDSU);   // Pitch Up
-          Libretro::Input::Bind(wmGyro, 1, "`%s:Gyro Pitch Down`", devDSU); // Pitch Down
-          Libretro::Input::Bind(wmGyro, 2, "`%s:Gyro Roll Left`", devDSU);  // Roll Left
-          Libretro::Input::Bind(wmGyro, 3, "`%s:Gyro Roll Right`", devDSU); // Roll Right
-          Libretro::Input::Bind(wmGyro, 4, "`%s:Gyro Yaw Left`", devDSU);   // Yaw Left
-          Libretro::Input::Bind(wmGyro, 5, "`%s:Gyro Yaw Right`", devDSU);  // Yaw Right
-        }
-      }
-      else if (Libretro::Input::sensor_enabled[port][SENSOR_ACCELEROMETER] ||
+      if (Libretro::Input::sensor_enabled[port][SENSOR_ACCELEROMETER] ||
           Libretro::Input::sensor_enabled[port][SENSOR_GYRO])
       {
         char devSensor[Libretro::Input::DEVICE_NAME_SIZE];

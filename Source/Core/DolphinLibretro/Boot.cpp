@@ -40,7 +40,6 @@
 #include "DolphinLibretro/Video.h"
 #include "DolphinLibretro/VideoContexts/ContextStatus.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
-#include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPClient.h"
 #include "UICommon/UICommon.h"
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/Fifo.h"
@@ -706,30 +705,6 @@ bool retro_load_game(const struct retro_game_info* game)
 
   if (Libretro::VR::IsEnabled())
     Libretro::VR::ApplyConfig();
-
-#ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
-  // wiimote - alternative input server
-  {
-    const bool dsu_enabled = Libretro::GetOption<bool>(
-        Libretro::Options::wiimote_dsu::DSU_ENABLED, false);
-
-    Config::SetBase(ciface::DualShockUDPClient::Settings::SERVERS_ENABLED, dsu_enabled);
-
-    if (dsu_enabled)
-    {
-      const int o1 = Libretro::GetOption<int>(Libretro::Options::wiimote_dsu::DSU_IP_1, 127);
-      const int o2 = Libretro::GetOption<int>(Libretro::Options::wiimote_dsu::DSU_IP_2, 0);
-      const int o3 = Libretro::GetOption<int>(Libretro::Options::wiimote_dsu::DSU_IP_3, 0);
-      const int o4 = Libretro::GetOption<int>(Libretro::Options::wiimote_dsu::DSU_IP_4, 1);
-      const int port = Libretro::GetOption<int>(Libretro::Options::wiimote_dsu::DSU_PORT, 26760);
-
-      char servers_entry[48];
-      snprintf(servers_entry, sizeof(servers_entry), "DS4:%d.%d.%d.%d:%d;", o1, o2, o3, o4, port);
-
-      Config::SetBase(ciface::DualShockUDPClient::Settings::SERVERS, std::string(servers_entry));
-    }
-  }
-#endif
 
   SConfig::GetInstance().bBootToPause = true;
 

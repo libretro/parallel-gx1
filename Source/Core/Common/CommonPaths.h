@@ -97,7 +97,6 @@
 #define GCKEYBOARD_CONFIG "GCKeyNew.ini"
 #define GFX_CONFIG "GFX.ini"
 #define LOGGER_CONFIG "Logger.ini"
-#define DUALSHOCKUDPCLIENT_CONFIG "DSUClient.ini"
 #define RETROACHIEVEMENTS_CONFIG "RetroAchievements.ini"
 
 // Files in the directory returned by GetUserPath(D_LOGS_IDX)

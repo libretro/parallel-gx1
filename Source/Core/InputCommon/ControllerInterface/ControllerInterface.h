@@ -15,7 +15,6 @@
 #include <retro_atomic.h>
 
 // enable disable sources
-#define CIFACE_USE_DUALSHOCKUDPCLIENT
 #if defined(HAVE_HIDAPI)
 #define CIFACE_USE_STEAMDECK
 #endif

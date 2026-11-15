@@ -28,7 +28,6 @@ enum class System
   GCKeyboard,
   GFX,
   Logger,
-  DualShockUDPClient,
   Session,
   GameSettingsOnly,
   Achievements,

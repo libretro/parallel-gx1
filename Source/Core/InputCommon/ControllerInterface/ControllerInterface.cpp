@@ -10,9 +10,6 @@
 #include "Common/Logging/Log.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
-#ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
-#include "InputCommon/ControllerInterface/DualShockUDPClient/DualShockUDPClient.h"
-#endif
 #ifdef CIFACE_USE_STEAMDECK
 #include "InputCommon/ControllerInterface/SteamDeck/SteamDeck.h"
 #endif
@@ -34,9 +31,6 @@ void ControllerInterface::Initialize()
 
   retro_atomic_store_release_int(&m_populating_devices_counter, 1);
 
-#ifdef CIFACE_USE_DUALSHOCKUDPCLIENT
-  m_input_backends.emplace_back(ciface::DualShockUDPClient::CreateInputBackend(this));
-#endif
 #ifdef CIFACE_USE_STEAMDECK
   m_input_backends.emplace_back(ciface::SteamDeck::CreateInputBackend(this));
 #endif
