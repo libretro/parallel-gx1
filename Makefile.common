@@ -434,7 +434,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/GL/GLExtensions/GLExtensions.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Common/Globals.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/Common/Options.cpp \
-	$(CORE_DIR)/Source/Core/DolphinLibretro/VideoContexts/GLContextLR.cpp \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/VideoContexts/ContextStatus.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/Blob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/CISOBlob.cpp \

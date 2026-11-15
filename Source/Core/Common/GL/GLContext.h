@@ -10,6 +10,7 @@
 
 #include "Common/CommonTypes.h"
 
+// The frontend's OpenGL context, through libretro's hardware rendering interface
 class GLContext
 {
 public:
@@ -20,7 +21,7 @@ public:
     OpenGLES
   };
 
-  virtual ~GLContext();
+  ~GLContext();
 
   Mode GetMode() const { return m_opengl_mode; }
   bool IsGLES() const { return m_opengl_mode == Mode::OpenGLES; }
@@ -28,22 +29,21 @@ public:
   u32 GetBackBufferWidth() const { return m_backbuffer_width; }
   u32 GetBackBufferHeight() const { return m_backbuffer_height; }
 
-  virtual bool IsHeadless() const;
+  bool IsHeadless() const;
 
-  virtual void Update();
+  void Update();
 
-  virtual void Swap();
-  virtual void SwapInterval(int interval);
+  void Swap();
+  void SwapInterval(int interval);
 
-  virtual void* GetFuncAddress(const std::string& name);
+  void* GetFuncAddress(const std::string& name);
 
-  // Creates an instance of GLContext specific to the platform we are running on.
-  // If successful, the context is made current on the calling thread.
+  // Creates the context, once the frontend's is ready.
   static std::unique_ptr<GLContext> Create(bool stereo = false, bool core = true,
                                            bool prefer_gles = false);
 
 protected:
-  virtual bool Initialize(bool stereo, bool core);
+  bool Initialize(bool stereo, bool core);
 
   Mode m_opengl_mode = Mode::Detect;
 
