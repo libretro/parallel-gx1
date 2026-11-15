@@ -633,7 +633,8 @@ void JitBaseBlockCache::EraseBlock(JitBlock* block)
   ReleaseBlock(block);
 }
 
-/* Its pages are elsewhere in RAM now: the cache's lists by physical address have it there */
+/* Its pages are elsewhere in RAM now: the cache's lists by physical address have it there. The
+ * code's hash is keyed by offset within its pages, so code_hash, found there, stays as it is. */
 void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 first_page, u32 second_page)
 {
   SmallRangeSet moved;
@@ -667,8 +668,6 @@ void JitBaseBlockCache::MoveBlock(JitBlock* block, u32 first_page, u32 second_pa
   block->physicalAddress = first_page | (block->physicalAddress & PAGE_OFFSET_MASK);
   if (block->two_pages)
     block->second_page_pa = second_page;
-  if (!HashCode(*block, first_page, second_page, &block->code_hash))
-    block->code_hash = 0;
 
   block->next_at_address = nullptr;
   at = jit_block_lists_get(&block_map, AddressKey(block->physicalAddress));
