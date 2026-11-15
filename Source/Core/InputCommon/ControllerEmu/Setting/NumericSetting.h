@@ -201,9 +201,7 @@ class SettingValue
   friend class NumericSetting<T>;
 
 public:
-  virtual ~SettingValue() = default;
-
-  virtual ValueType GetValue() const
+  ValueType GetValue() const
   {
     // Only update dynamic values when the input gate is enabled.
     // Otherwise settings will all change to 0 when window focus is lost.
@@ -223,7 +221,7 @@ public:
 
   bool IsSimpleValue() const { return !m_input.HasExpression(); }
 
-  virtual void SetValue(const ValueType value)
+  void SetValue(const ValueType value)
   {
     StoreValue(value);
 
