@@ -423,7 +423,7 @@ void Jit64::DoMergedBranchCondition()
   bool condition = !!(next.BO & BO_BRANCH_IF_TRUE);
   const u32 nextPC = js.op[1].address;
 
-  ASSERT(gpr.IsAllUnlocked());
+  DEBUG_ASSERT(gpr.IsAllUnlocked());
 
   FixupBranch pDontBranch;
   switch (test_bit)
@@ -475,7 +475,7 @@ void Jit64::DoMergedBranchImmediate(s64 val)
   bool condition = !!(next.BO & BO_BRANCH_IF_TRUE);
   const u32 nextPC = js.op[1].address;
 
-  ASSERT(gpr.IsAllUnlocked());
+  DEBUG_ASSERT(gpr.IsAllUnlocked());
 
   bool branch = false;
   switch (test_bit)
