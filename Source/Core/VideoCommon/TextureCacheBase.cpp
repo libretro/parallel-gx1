@@ -142,7 +142,9 @@ void TCacheEntry::RemoveReference(const TCacheEntry* other_entry)
  * their own storage. */
 enum
 {
-  TCACHE_ENTRY_CHUNK = 64
+  TCACHE_ENTRY_CHUNK = 64,
+  /* chunks made with the texture cache: the entries a heavy game keeps */
+  TCACHE_ENTRY_CHUNKS_START = 8
 };
 union TCacheEntrySlot
 {
@@ -158,26 +160,31 @@ static TCacheEntryChunk* s_entry_chunks;
 static TCacheEntrySlot* s_entry_free;
 static size_t s_entries_alive;
 
+/* One more chunk of free entries. */
+static bool TCacheEntryPoolGrow()
+{
+  TCacheEntryChunk* chunk = static_cast<TCacheEntryChunk*>(malloc(sizeof(TCacheEntryChunk)));
+  size_t i;
+  if (!chunk)
+    return false;
+  chunk->next = s_entry_chunks;
+  s_entry_chunks = chunk;
+  for (i = 0; i < TCACHE_ENTRY_CHUNK; i++)
+  {
+    chunk->slots[i].next_free = s_entry_free;
+    s_entry_free = &chunk->slots[i];
+  }
+  return true;
+}
+
 TCacheEntry* TCacheEntryNew(AbstractTexture* tex, AbstractFramebuffer* fb)
 {
   TCacheEntrySlot* slot;
-  if (!s_entry_free)
+  if (!s_entry_free && !TCacheEntryPoolGrow())
   {
-    TCacheEntryChunk* chunk = static_cast<TCacheEntryChunk*>(malloc(sizeof(TCacheEntryChunk)));
-    size_t i;
-    if (!chunk)
-    {
-      AbstractFramebufferDelete(fb);
-      AbstractTextureDelete(tex);
-      return nullptr;
-    }
-    chunk->next = s_entry_chunks;
-    s_entry_chunks = chunk;
-    for (i = 0; i < TCACHE_ENTRY_CHUNK; i++)
-    {
-      chunk->slots[i].next_free = s_entry_free;
-      s_entry_free = &chunk->slots[i];
-    }
+    AbstractFramebufferDelete(fb);
+    AbstractTextureDelete(tex);
+    return nullptr;
   }
   slot = s_entry_free;
   s_entry_free = slot->next_free;
@@ -216,7 +223,9 @@ void TCacheEntryPoolFree()
  * those equal, so a node another loop holds stays where it is. */
 enum
 {
-  TEX_INDEX_CHUNK = 128
+  TEX_INDEX_CHUNK = 128,
+  /* chunks each index is made with */
+  TEX_INDEX_CHUNKS_START = 4
 };
 struct TexIndexChunk
 {
@@ -260,6 +269,25 @@ static void TexIndexRotateRight(TexIndex* index, TexIndexNode* node)
   node->parent = left;
 }
 
+/* One more chunk of free nodes. */
+static bool TexIndexGrow(TexIndex* index)
+{
+  TexIndexChunk* chunk = static_cast<TexIndexChunk*>(malloc(sizeof(TexIndexChunk)));
+  size_t i;
+  if (!chunk)
+    return false;
+  chunk->next = index->chunks;
+  index->chunks = chunk;
+  for (i = 0; i < TEX_INDEX_CHUNK; i++)
+  {
+    TexIndexNode* const fresh = &chunk->nodes[i];
+    new (&fresh->value) RcTcacheEntry();
+    fresh->left = index->free_nodes;
+    index->free_nodes = fresh;
+  }
+  return true;
+}
+
 TexIndexNode* TexIndexInsert(TexIndex* index, u64 key, const RcTcacheEntry& value)
 {
   TexIndexNode* node;
@@ -267,22 +295,8 @@ TexIndexNode* TexIndexInsert(TexIndex* index, u64 key, const RcTcacheEntry& valu
   TexIndexNode* cur = index->root;
   u32 seed;
 
-  if (!index->free_nodes)
-  {
-    TexIndexChunk* chunk = static_cast<TexIndexChunk*>(malloc(sizeof(TexIndexChunk)));
-    size_t i;
-    if (!chunk)
-      return nullptr;
-    chunk->next = index->chunks;
-    index->chunks = chunk;
-    for (i = 0; i < TEX_INDEX_CHUNK; i++)
-    {
-      TexIndexNode* const fresh = &chunk->nodes[i];
-      new (&fresh->value) RcTcacheEntry();
-      fresh->left = index->free_nodes;
-      index->free_nodes = fresh;
-    }
-  }
+  if (!index->free_nodes && !TexIndexGrow(index))
+    return nullptr;
   node = index->free_nodes;
   index->free_nodes = node->left;
 
@@ -468,6 +482,21 @@ TextureCacheBase::TextureCacheBase()
   m_texture_pool = static_cast<TexPoolSlot*>(malloc(TEXTURE_POOL_START * sizeof(*m_texture_pool)));
   if (m_texture_pool)
     m_texture_pool_cap = TEXTURE_POOL_START;
+
+  /* and for their entries and index nodes, so the first textures of play make none */
+  {
+    u32 i;
+    if (!s_entry_chunks)
+    {
+      for (i = 0; i < TCACHE_ENTRY_CHUNKS_START; i++)
+        TCacheEntryPoolGrow();
+    }
+    for (i = 0; i < TEX_INDEX_CHUNKS_START; i++)
+    {
+      TexIndexGrow(&m_textures_by_hash);
+      TexIndexGrow(&m_textures_by_address);
+    }
+  }
 
   TexDecoder_SetTexFmtOverlayOptions(m_backup_config.texfmt_overlay,
                                      m_backup_config.texfmt_overlay_center);
