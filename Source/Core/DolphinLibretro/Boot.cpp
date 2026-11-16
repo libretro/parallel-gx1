@@ -136,7 +136,7 @@ void reload_cheats_from_ini()
   Libretro::g_ar_codes = ActionReplay::LoadCodes(globalIni, localIni);
 
   // Load Gecko codes
-  Libretro::g_gecko_codes = Gecko::LoadCodes(globalIni, localIni);
+  Gecko::LoadCodes(globalIni, localIni, &Libretro::g_gecko_codes);
 }
 
 void generate_cht_from_ini(std::string fileName)
@@ -161,7 +161,7 @@ void generate_cht_from_ini(std::string fileName)
     return;
   }
 
-  size_t total = Libretro::g_ar_codes.size() + Libretro::g_gecko_codes.size();
+  size_t total = Libretro::g_ar_codes.size() + Libretro::g_gecko_codes.count;
   if (total == 0)
   {
     INFO_LOG(BOOT, "Cheats: not generating cht file as no ActionReply or Gecko codes found");
@@ -194,16 +194,13 @@ void generate_cht_from_ini(std::string fileName)
                         c.enabled ? "true" : "false");
     }
 
-    for (const auto& c : Libretro::g_gecko_codes)
+    for (u32 g = 0; g < Libretro::g_gecko_codes.count; g++)
     {
-      bool first = true;
-      filestream_printf(out, "cheat%u_desc = \"%s\"\ncheat%u_code = \"", cheat_index,
-                        c.name.c_str(), cheat_index);
-      for (const auto& line : c.codes)
-      {
-        filestream_printf(out, "%s%s", first ? "" : "+", line.original_line.c_str());
-        first = false;
-      }
+      const Gecko::GeckoCode& c = Libretro::g_gecko_codes.codes[g];
+      filestream_printf(out, "cheat%u_desc = \"%s\"\ncheat%u_code = \"", cheat_index, c.name,
+                        cheat_index);
+      for (u32 l = 0; l < c.num_lines; l++)
+        filestream_printf(out, "%s%s", l ? "+" : "", c.lines[l].original_line);
       filestream_printf(out, "\"\ncheat%u_enable = %s\n\n", cheat_index++,
                         c.enabled ? "true" : "false");
     }
@@ -975,6 +972,8 @@ void retro_unload_game(void)
   Core::UndeclareAsCPUThread();
   Core::UndeclareAsGPUThread();
   Libretro::ResetDiskControlState();
+  /* the game's Gecko codes go with it */
+  Gecko::FreeCodeList(&Libretro::g_gecko_codes);
 }
 
 namespace Libretro

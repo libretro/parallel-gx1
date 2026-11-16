@@ -15,7 +15,7 @@ namespace Libretro
 {
 extern retro_environment_t environ_cb;
 extern bool g_emuthread_launched;
-extern std::vector<Gecko::GeckoCode> g_gecko_codes;
+extern Gecko::GeckoCodeList g_gecko_codes;
 extern std::vector<ActionReplay::ARCode> g_ar_codes;
 
 /* retro_run may return with the field it started still running on the

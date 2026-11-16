@@ -801,12 +801,13 @@ static bool ar_code_matches(const ActionReplay::ARCode& c, const char* code)
 static bool gecko_code_matches(const Gecko::GeckoCode& c, const char* code)
 {
   bool first = true;
-  for (const auto& line : c.codes)
+  for (u32 l = 0; l < c.num_lines; l++)
   {
-    const size_t len = line.original_line.size();
+    const char* const line = c.lines[l].original_line;
+    const size_t len = strlen(line);
     if (!first && *code++ != '+')
       return false;
-    if (strncmp(code, line.original_line.c_str(), len) != 0)
+    if (strncmp(code, line, len) != 0)
       return false;
     code += len;
     first = false;
@@ -825,8 +826,9 @@ static void enable_cheat_by_code(bool enabled, const char* code)
     }
   }
 
-  for (auto& c : Libretro::g_gecko_codes)
+  for (u32 g = 0; g < Libretro::g_gecko_codes.count; g++)
   {
+    Gecko::GeckoCode& c = Libretro::g_gecko_codes.codes[g];
     if (gecko_code_matches(c, code))
     {
       c.enabled = enabled;
@@ -879,7 +881,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
     ActionReplay::ApplyCodes(Libretro::g_ar_codes.data(), Libretro::g_ar_codes.size());
 
     // Apply Gecko
-    Gecko::SetActiveCodes(Libretro::g_gecko_codes.data(), Libretro::g_gecko_codes.size());
+    Gecko::SetActiveCodes(Libretro::g_gecko_codes.codes, Libretro::g_gecko_codes.count);
   }, true);
   Libretro::ResumeAfterField();
 }

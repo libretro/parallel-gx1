@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 
@@ -17,29 +16,34 @@ class CPUThreadGuard;
 
 namespace Gecko
 {
-class GeckoCode
+/* A line of a Gecko code: its two words, both 0 when the line is not two hexadecimal numbers,
+ * and the line as written. */
+struct GeckoCodeLine
 {
-public:
-  GeckoCode() = default;
-  struct Code
-  {
-    u32 address = 0;
-    u32 data = 0;
-    std::string original_line;
-  };
-
-  std::vector<Code> codes;
-  std::string name, creator;
-  std::vector<std::string> notes;
-
-  bool enabled = false;
-  bool default_enabled = false;
-  bool user_defined = false;
+  u32 address;
+  u32 data;
+  char* original_line;
 };
 
-bool operator==(const GeckoCode& lhs, const GeckoCode& rhs);
+/* A Gecko code of the game's INI files: its name and its lines. */
+struct GeckoCode
+{
+  char* name;
+  GeckoCodeLine* lines;
+  u32 num_lines;
+  u32 cap_lines;
+  bool enabled;
+};
 
-bool operator==(const GeckoCode::Code& lhs, const GeckoCode::Code& rhs);
+/* The codes of the game's INI files, each with its own allocations. */
+struct GeckoCodeList
+{
+  GeckoCode* codes;
+  u32 count;
+  u32 cap;
+};
+
+void FreeCodeList(GeckoCodeList* list);
 
 // Installation address for codehandler.bin in the Game's RAM
 constexpr u32 INSTALLER_BASE_ADDRESS = 0x80001800;

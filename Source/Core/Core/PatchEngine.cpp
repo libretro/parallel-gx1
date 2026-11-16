@@ -293,8 +293,12 @@ void LoadPatches()
   LoadPatchSection(globalIni);
   LoadPatchSection(localIni);
 
-  const std::vector<Gecko::GeckoCode> gecko_codes = Gecko::LoadCodes(globalIni, localIni);
-  Gecko::SetActiveCodes(gecko_codes.data(), gecko_codes.size());
+  {
+    Gecko::GeckoCodeList gecko_codes = {};
+    Gecko::LoadCodes(globalIni, localIni, &gecko_codes);
+    Gecko::SetActiveCodes(gecko_codes.codes, gecko_codes.count);
+    Gecko::FreeCodeList(&gecko_codes);
+  }
   ActionReplay::LoadAndApplyCodes(globalIni, localIni);
 
   for (i = 0; i < s_num_on_frame; i++)

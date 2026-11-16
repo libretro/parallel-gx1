@@ -3,11 +3,8 @@
 
 #include "Core/GeckoCode.h"
 
-#include <algorithm>
-#include <cinttypes>
-#include <iterator>
-#include <tuple>
-#include <vector>
+#include <cstdlib>
+#include <cstring>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
@@ -27,16 +24,6 @@ namespace Gecko
 {
 static constexpr u32 CODE_SIZE = 8;
 
-bool operator==(const GeckoCode& lhs, const GeckoCode& rhs)
-{
-  return lhs.codes == rhs.codes;
-}
-
-bool operator==(const GeckoCode::Code& lhs, const GeckoCode::Code& rhs)
-{
-  return std::tie(lhs.address, lhs.data) == std::tie(rhs.address, rhs.data);
-}
-
 enum class Installation
 {
   Uninstalled,
@@ -45,28 +32,91 @@ enum class Installation
 };
 
 static Installation s_code_handler_installed = Installation::Uninstalled;
-// the currently active codes
-static std::vector<GeckoCode> s_active_codes;
+/* The currently active codes: each one's name and where its words start among
+ * s_active_words, which holds two per line, address then data. */
+struct ActiveCode
+{
+  char* name;
+  u32 first_word;
+  u32 num_words;
+};
+static ActiveCode* s_active_codes;
+static u32 s_num_active_codes;
+static u32* s_active_words;
+
+static void FreeActiveCodes()
+{
+  u32 i;
+  for (i = 0; i < s_num_active_codes; i++)
+    std::free(s_active_codes[i].name);
+  std::free(s_active_codes);
+  std::free(s_active_words);
+  s_active_codes = nullptr;
+  s_num_active_codes = 0;
+  s_active_words = nullptr;
+}
 
 size_t CountEnabledCodes()
 {
   if (!Config::AreCheatsEnabled())
     return 0;
-  return s_active_codes.size();
+  return s_num_active_codes;
 }
 
 void SetActiveCodes(const GeckoCode* gcodes, size_t count)
 {
-  s_active_codes.clear();
+  FreeActiveCodes();
   if (Config::AreCheatsEnabled())
   {
-    for (size_t i = 0; i < count; i++)
+    size_t num_codes = 0;
+    size_t num_words = 0;
+    size_t i;
+    for (i = 0; i < count; i++)
     {
-      if (gcodes[i].enabled)
-        s_active_codes.push_back(gcodes[i]);
+      if (!gcodes[i].enabled)
+        continue;
+      num_codes++;
+      num_words += size_t(gcodes[i].num_lines) * 2;
+    }
+    if (num_codes)
+    {
+      s_active_codes = static_cast<ActiveCode*>(std::calloc(num_codes, sizeof(ActiveCode)));
+      s_active_words = static_cast<u32*>(std::malloc((num_words ? num_words : 1) * sizeof(u32)));
+      if (!s_active_codes || !s_active_words)
+      {
+        FreeActiveCodes();
+      }
+      else
+      {
+        u32 word = 0;
+        for (i = 0; i < count; i++)
+        {
+          const GeckoCode* const code = &gcodes[i];
+          ActiveCode* const active = &s_active_codes[s_num_active_codes++];
+          u32 l;
+          if (!code->enabled)
+          {
+            s_num_active_codes--;
+            continue;
+          }
+          if (code->name)
+          {
+            const size_t len = std::strlen(code->name);
+            active->name = static_cast<char*>(std::malloc(len + 1));
+            if (active->name)
+              std::memcpy(active->name, code->name, len + 1);
+          }
+          active->first_word = word;
+          active->num_words = code->num_lines * 2;
+          for (l = 0; l < code->num_lines; l++)
+          {
+            s_active_words[word++] = code->lines[l].address;
+            s_active_words[word++] = code->lines[l].data;
+          }
+        }
+      }
     }
   }
-  s_active_codes.shrink_to_fit();
 
   s_code_handler_installed = Installation::Uninstalled;
 }
@@ -134,23 +184,26 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   u32 next_address = start_address;
 
   // NOTE: Only active codes are in the list
-  for (const GeckoCode& active_code : s_active_codes)
+  for (u32 c = 0; c < s_num_active_codes; c++)
   {
+    const ActiveCode* const active_code = &s_active_codes[c];
+    const u32 size = active_code->num_words / 2 * CODE_SIZE;
     // If the code is not going to fit in the space we have left then we have to skip it
-    if (next_address + active_code.codes.size() * CODE_SIZE > end_address)
+    if (u64(next_address) + size > end_address)
     {
       NOTICE_LOG(ACTIONREPLAY,
                  "Too many GeckoCodes! Ran out of storage space in Game RAM. Could "
-                 "not write: \"%s\". Need %" PRIu64 " bytes, only %u remain.",
-                 active_code.name.c_str(), (u64)(active_code.codes.size() * CODE_SIZE),
-                 end_address - next_address);
+                 "not write: \"%s\". Need %u bytes, only %u remain.",
+                 active_code->name ? active_code->name : "", size, end_address - next_address);
       continue;
     }
 
-    for (const GeckoCode::Code& code : active_code.codes)
+    for (u32 w = 0; w < active_code->num_words; w += 2)
     {
-      PowerPC::MMU::HostWrite<u32>(guard, code.address, next_address);
-      PowerPC::MMU::HostWrite<u32>(guard, code.data, next_address + 4);
+      PowerPC::MMU::HostWrite<u32>(guard, s_active_words[active_code->first_word + w],
+                                   next_address);
+      PowerPC::MMU::HostWrite<u32>(guard, s_active_words[active_code->first_word + w + 1],
+                                   next_address + 4);
       next_address += CODE_SIZE;
     }
   }
@@ -190,7 +243,7 @@ void DoState(PointerWrap& p)
 
 void Shutdown()
 {
-  s_active_codes.clear();
+  FreeActiveCodes();
   s_code_handler_installed = Installation::Uninstalled;
 }
 
@@ -205,7 +258,7 @@ void RunCodeHandler(const Core::CPUThreadGuard& guard)
     {
       // Don't spam retry if the install failed. The corrupt / missing disk file is not likely to be
       // fixed within 1 frame of the last error.
-      if (s_active_codes.empty() || s_code_handler_installed == Installation::Failed)
+      if (!s_num_active_codes || s_code_handler_installed == Installation::Failed)
         return;
       s_code_handler_installed = InstallCodeHandlerLocked(guard);
 

@@ -3,11 +3,6 @@
 
 #pragma once
 
-#include <expected>
-#include <optional>
-#include <string>
-#include <vector>
-
 #include "Core/GeckoCode.h"
 
 namespace Common
@@ -17,7 +12,7 @@ class IniFile;
 
 namespace Gecko
 {
-std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common::IniFile& localIni);
-
-std::optional<GeckoCode::Code> DeserializeLine(const std::string& line);
+// The codes of both files into list, whose earlier codes are freed.
+void LoadCodes(const Common::IniFile& globalIni, const Common::IniFile& localIni,
+               GeckoCodeList* list);
 }  // namespace Gecko
