@@ -5,11 +5,8 @@
 
 #include <cinttypes>
 #include <cstdlib>
-#include <map>
 #include <memory>
 #include <optional>
-#include <utility>
-#include <vector>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -62,6 +59,8 @@ void DVDThread::FreeResults()
 {
   FreeResultList(m_result_chain);
   m_result_chain = nullptr;
+  FreeResultList(m_kept_results);
+  m_kept_results = nullptr;
   FreeResultList(mpsc_stack_drain(&m_result_queue));
   FreeResultList(mpsc_stack_drain(&m_free_results));
   FreeResultList(m_worker_free);
@@ -91,6 +90,16 @@ DVDThread::ResultNode* DVDThread::TakeResult(u64 id)
     }
   }
   return nullptr;
+}
+
+// CPU thread. A result goes among those kept, which stay in order of id.
+void DVDThread::KeepResult(ResultNode* node)
+{
+  mpsc_stack_node_t** link = &m_kept_results;
+  while (*link && reinterpret_cast<ResultNode*>(*link)->request.id < node->request.id)
+    link = &(*link)->next;
+  node->link.next = *link;
+  *link = &node->link;
 }
 
 void DVDThread::Start()
@@ -126,7 +135,8 @@ void DVDThread::Stop()
   m_dvd_thread.Shutdown();
 
   FreeResults();
-  m_result_map.clear();
+  FreeResultList(m_kept_results);
+  m_kept_results = nullptr;
   m_num_lent_reads = 0;
 
   DiscIO::DestroyVolume(m_disc);
@@ -138,16 +148,11 @@ void DVDThread::DoState(PointerWrap& p)
   // Ensure all requests are completed with results Push'd to m_result_queue.
   WaitUntilIdle();
 
-  // Move all results from result_queue to result_map because
-  // PointerWrap::Do supports std::map but not the queue.
+  // The results that arrived are kept, in order of id, with those a state loaded: the state
+  // holds them as a count, then each one's id, request, and octets behind their count.
   // This won't affect the behavior of FinishRead.
   while (ResultNode* const node = TakeResult(~u64{0}))
-  {
-    m_result_map.emplace(node->request.id,
-                         ReadResult(node->request, std::vector<u8>(node->data,
-                                                                   node->data + node->size)));
-    mpsc_stack_push(&m_free_results, &node->link);
-  }
+    KeepResult(node);
   // Lent reads are saved as the results the DVD thread would have made; a state loaded has
   // only those.
   if (p.IsReadMode())
@@ -155,7 +160,65 @@ void DVDThread::DoState(PointerWrap& p)
   else
     MaterializeLentReads();
 
-  p.Do(m_result_map);
+  {
+    u32 count = 0;
+    mpsc_stack_node_t* link;
+    for (link = m_kept_results; link; link = link->next)
+      count++;
+    p.Do(count);
+    if (p.IsReadMode())
+    {
+      FreeResultList(m_kept_results);
+      m_kept_results = nullptr;
+      for (; count != 0; --count)
+      {
+        ResultNode* const node = static_cast<ResultNode*>(std::calloc(1, sizeof(ResultNode)));
+        u64 id = 0;
+        u32 size = 0;
+        ReadRequest request;
+        p.Do(id);
+        p.Do(request);
+        p.Do(size);
+        if (node && size)
+          node->data = static_cast<u8*>(std::malloc(size));
+        if (!node || (size && !node->data))
+        {
+          /* not kept: its octets are passed over */
+          u8 passed[256];
+          std::free(node);
+          while (size)
+          {
+            const u32 part = size < sizeof(passed) ? size : (u32)sizeof(passed);
+            p.DoArray(passed, part);
+            size -= part;
+          }
+          continue;
+        }
+        node->request = request;
+        node->request.id = id;
+        node->size = size;
+        node->capacity = size;
+        if (size)
+          p.DoArray(node->data, size);
+        KeepResult(node);
+      }
+    }
+    else
+    {
+      for (link = m_kept_results; link; link = link->next)
+      {
+        ResultNode* const node = reinterpret_cast<ResultNode*>(link);
+        u64 id = node->request.id;
+        u32 size = node->size;
+        p.Do(id);
+        p.Do(node->request);
+        p.Do(size);
+        if (size)
+          p.DoArray(node->data, size);
+      }
+    }
+  }
+
   p.Do(m_next_id);
 
   // m_disc isn't savestated (because it points to files on the
@@ -323,10 +386,19 @@ void DVDThread::MaterializeLentReads()
     const ReadRequest& request = m_lent_reads[i];
     const u8* data = m_disc ? m_disc->View(request.dvd_offset, request.length, request.partition) :
                               nullptr;
-    std::vector<u8> buffer;
-    if (data)
-      buffer.assign(data, data + request.length);
-    m_result_map.emplace(request.id, ReadResult(request, std::move(buffer)));
+    ResultNode* const node = static_cast<ResultNode*>(std::calloc(1, sizeof(ResultNode)));
+    if (!node)
+      continue;
+    node->request = request;
+    if (data && request.length)
+      node->data = static_cast<u8*>(std::malloc(request.length));
+    if (node->data)
+    {
+      std::memcpy(node->data, data, request.length);
+      node->size = request.length;
+      node->capacity = request.length;
+    }
+    KeepResult(node);
   }
   m_num_lent_reads = 0;
 }
@@ -357,32 +429,32 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
 
   // The DVD thread may finish reads in a different order than they are wanted, so results
   // are looked up by id: in the map a savestate load filled, else among those that arrived.
-  ReadResult result;
   ResultNode* node = nullptr;
-  auto it = m_result_map.find(id);
-  if (it != m_result_map.end())
+  mpsc_stack_node_t** link;
+  for (link = &m_kept_results; *link; link = &(*link)->next)
   {
-    result = std::move(it->second);
-    m_result_map.erase(it);
-  }
-  else
-  {
-    while (!(node = TakeResult(id)))
+    if (reinterpret_cast<ResultNode*>(*link)->request.id == id)
     {
-      const int key = retro_eventcount_prepare_wait(&m_result_ready);
-      if (!mpsc_stack_empty(&m_result_queue))
-      {
-        retro_eventcount_cancel_wait(&m_result_ready);
-        continue;
-      }
-      retro_eventcount_commit_wait(&m_result_ready, key);
+      node = reinterpret_cast<ResultNode*>(*link);
+      *link = node->link.next;
+      break;
     }
+  }
+  while (!node && !(node = TakeResult(id)))
+  {
+    const int key = retro_eventcount_prepare_wait(&m_result_ready);
+    if (!mpsc_stack_empty(&m_result_queue))
+    {
+      retro_eventcount_cancel_wait(&m_result_ready);
+      continue;
+    }
+    retro_eventcount_commit_wait(&m_result_ready, key);
   }
   // We have now obtained the right ReadResult.
 
-  const ReadRequest& request = node ? node->request : result.first;
-  const u8* const data = node ? node->data : result.second.data();
-  const size_t size = node ? node->size : result.second.size();
+  const ReadRequest& request = node->request;
+  const u8* const data = node->data;
+  const size_t size = node->size;
 
   DEBUG_LOG(DVDINTERFACE, "Disc has been read. Emulated time including delay: %" PRIu64 " us.",
             (u64)((m_system.GetCoreTiming().GetTicks() - request.time_started_ticks) /
@@ -412,8 +484,7 @@ void DVDThread::FinishRead(u64 id, s64 cycles_late)
   // Notify the emulated software that the command has been executed
   dvd_interface.FinishExecutingCommand(request.reply_type, interrupt, cycles_late, data, size);
 
-  if (node)
-    mpsc_stack_push(&m_free_results, &node->link);
+  mpsc_stack_push(&m_free_results, &node->link);
 }
 
 // DVD thread. A result to fill: one handed back, or a new one while none has been.

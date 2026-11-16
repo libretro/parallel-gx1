@@ -3,11 +3,8 @@
 
 #pragma once
 
-#include <map>
 #include <memory>
 #include <optional>
-#include <utility>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -121,8 +118,6 @@ private:
 
   void ProcessReadRequest(ReadRequest&& read_request);
 
-  using ReadResult = std::pair<ReadRequest, std::vector<u8>>;
-
   CoreTiming::EventType* m_finish_read = nullptr;
 
   u64 m_next_id = 0;
@@ -153,7 +148,9 @@ private:
   mpsc_stack_t m_result_queue;
   retro_eventcount_t m_result_ready;
   mpsc_stack_node_t* m_result_chain = nullptr;  // CPU thread only
-  std::map<u64, ReadResult> m_result_map;
+  // Results a savestate holds or held, in order of id: FinishRead looks here first
+  mpsc_stack_node_t* m_kept_results = nullptr;  // CPU thread only
+  void KeepResult(ResultNode* node);
 
   // Reads the disc image can lend: no DVD thread and no buffer, the bytes copied straight
   // from the image when they are due. Their pages are prefetched when the read starts.
