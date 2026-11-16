@@ -116,6 +116,7 @@ void DVDThread::Start()
     }
   }
 
+  m_dvd_thread.Reserve(RESULTS_START);
   m_dvd_thread.Reset("DVD thread", std::bind_front(&DVDThread::ProcessReadRequest, this));
 }
 

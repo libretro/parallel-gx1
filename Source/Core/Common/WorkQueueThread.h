@@ -93,6 +93,24 @@ public:
   void Push(T&& item) { EmplaceItem(std::move(item)); }
   void Push(const T& item) { EmplaceItem(item); }
 
+  /* With one producer, called by it: nodes for `count` queued items are made now, so pushing
+   * that many deep makes none. */
+  void Reserve(std::size_t count)
+  {
+    std::size_t have = 0;
+    Node* node;
+    if (!m_producer_free)
+      m_producer_free = reinterpret_cast<Node*>(mpsc_stack_drain(&m_free));
+    for (node = m_producer_free; node; node = reinterpret_cast<Node*>(node->link.next))
+      have++;
+    for (; have < count; have++)
+    {
+      node = new Node{{nullptr}, T()};
+      node->link.next = reinterpret_cast<mpsc_stack_node_t*>(m_producer_free);
+      m_producer_free = node;
+    }
+  }
+
   // Empties the queue, skipping all work.
   // Blocks until the current work is cancelled.
   void Cancel()
