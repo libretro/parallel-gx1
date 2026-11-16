@@ -1155,8 +1155,9 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
 
 void TextureCacheBase::DoLoadState(PointerWrap& p)
 {
-  // The cache entries by ID, which is their place in the state: one allocation, a null handle
-  // being all zero; null for an ID out of range
+  // The cache entries by ID, which is their place in the state: held here while they are few,
+  // else in one allocation, a null handle being all zero; null for an ID out of range
+  RcTcacheEntry few_entries[32];
   RcTcacheEntry* entries = nullptr;
   u32 num_entries = 0;
   RcTcacheEntry null_entry;
@@ -1176,7 +1177,10 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
   p.Do(size);
   if (commit_state && size)
   {
-    entries = static_cast<RcTcacheEntry*>(std::calloc(size, sizeof(RcTcacheEntry)));
+    if (size <= sizeof(few_entries) / sizeof(few_entries[0]))
+      entries = few_entries;
+    else
+      entries = static_cast<RcTcacheEntry*>(std::calloc(size, sizeof(RcTcacheEntry)));
     if (entries)
       num_entries = size;
   }
@@ -1260,7 +1264,8 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
 
   for (u32 i = 0; i < num_entries; i++)
     entries[i].reset();
-  std::free(entries);
+  if (entries != few_entries)
+    std::free(entries);
 }
 
 void TextureCacheBase::OnFrameEnd()
