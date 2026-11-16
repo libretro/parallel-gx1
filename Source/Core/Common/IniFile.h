@@ -5,7 +5,6 @@
 
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/IniData.h"
 #include "Common/StringUtil.h"
@@ -63,8 +62,6 @@ public:
       return false;
     }
 
-    bool GetLines(std::vector<std::string>* lines, const bool remove_comments = true) const;
-
     const char* GetName() const { return name; }
 
     // The section as C data, for code that reads it with the ini_section functions
@@ -100,9 +97,6 @@ public:
   bool Exists(std::string_view section_name) const;
   // Returns true if key exists in section
   bool Exists(std::string_view section_name, std::string_view key) const;
-
-  bool GetLines(std::string_view section_name, std::vector<std::string>* lines,
-                bool remove_comments = true) const;
 
   bool DeleteKey(std::string_view section_name, std::string_view key);
 

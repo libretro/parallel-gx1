@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/StringUtil.h"
 
@@ -47,19 +46,6 @@ bool IniFile::Section::Exists(std::string_view key) const
 bool IniFile::Section::Delete(std::string_view key)
 {
   return ini_section_delete(this, key.data(), key.size());
-}
-
-bool IniFile::Section::GetLines(std::vector<std::string>* out, const bool remove_comments) const
-{
-  for (size_t i = 0; i < num_lines; i++)
-  {
-    const char* text;
-    size_t len;
-    if (ini_section_line(this, i, remove_comments, &text, &len))
-      out->emplace_back(text, len);
-  }
-
-  return true;
 }
 
 // IniFile
@@ -127,19 +113,6 @@ bool IniFile::DeleteKey(std::string_view section_name, std::string_view key)
   if (!section)
     return false;
   return section->Delete(key);
-}
-
-// Return a list of all lines in a section
-bool IniFile::GetLines(std::string_view section_name, std::vector<std::string>* lines,
-                       const bool remove_comments) const
-{
-  lines->clear();
-
-  const Section* section = GetSection(section_name);
-  if (!section)
-    return false;
-
-  return section->GetLines(lines, remove_comments);
 }
 
 bool IniFile::Load(const std::string& filename, bool keep_current_data)
