@@ -986,70 +986,71 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
   // Flush all stale binds
   FlushStaleBinds();
 
-  std::map<const TCacheEntry*, u32> entry_map;
-  std::vector<TCacheEntry*> entries_to_save;
-  auto ShouldSaveEntry = [](const RcTcacheEntry& entry) {
+  // The entries to save, in the order they are met in the address index, the hash index and the
+  // bound textures: an entry's place in that order is its ID in the state. Each one met is
+  // stamped with this save and its ID, and linked behind the last.
+  TCacheEntry* first_saved = nullptr;
+  TCacheEntry* last_saved = nullptr;
+  TCacheEntry* entry;
+  u32 num_saved = 0;
+  u32 num_by_address = 0;
+  u32 num_by_hash = 0;
+  u32 num_bound = 0;
+  u32 num_pairs = 0;
+  u32 pass;
+  u32 i;
+  const bool save_cache = Config::Get(Config::GFX_SAVE_TEXTURE_CACHE_TO_STATE);
+  const u32 stamp = ++m_save_stamp;
+  auto ShouldSaveEntry = [](const RcTcacheEntry& e) {
     // We skip non-copies as they can be decoded from RAM when the state is loaded.
     // Storing them would duplicate data in the save state file, adding to decompression time.
     // We also need to store invalidated entries, as they can't be restored from RAM.
-    return entry->IsCopy() || entry->invalidated;
+    return e->IsCopy() || e->invalidated;
   };
-  auto AddCacheEntryToMap = [&entry_map, &entries_to_save](const RcTcacheEntry& entry) -> u32 {
-    auto iter = entry_map.find(entry.get());
-    if (iter != entry_map.end())
-      return iter->second;
-
-    // Since we are sequentially allocating texture entries, we need to save the textures in the
-    // same order they were collected. This is because of iterating both the address and hash maps.
-    // Therefore, the map is used for fast lookup, and the vector for ordering.
-    u32 id = static_cast<u32>(entry_map.size());
-    entry_map.emplace(entry.get(), id);
-    entries_to_save.push_back(entry.get());
-    return id;
-  };
-  auto GetCacheEntryId = [&entry_map](const TCacheEntry* entry) -> std::optional<u32> {
-    auto iter = entry_map.find(entry);
-    return iter != entry_map.end() ? std::make_optional(iter->second) : std::nullopt;
+  auto Meet = [&](TCacheEntry* e) {
+    if (e->save_stamp == stamp)
+      return;
+    e->save_stamp = stamp;
+    e->save_id = num_saved++;
+    e->save_next = nullptr;
+    if (last_saved)
+      last_saved->save_next = e;
+    else
+      first_saved = e;
+    last_saved = e;
   };
 
-  // Transform the m_textures_by_address and m_textures_by_hash maps to a mapping
-  // of address/hash to entry ID.
-  std::vector<std::pair<u32, u32>> textures_by_address_list;
-  std::vector<std::pair<u64, u32>> textures_by_hash_list;
-  std::vector<std::pair<u32, u32>> bound_textures_list;
-  if (Config::Get(Config::GFX_SAVE_TEXTURE_CACHE_TO_STATE))
+  if (save_cache)
   {
     for (TexIndexNode* it = TexIndexFirst(&m_textures_by_address); it; it = TexIndexNext(it))
     {
       if (ShouldSaveEntry(it->value))
       {
-        const u32 id = AddCacheEntryToMap(it->value);
-        textures_by_address_list.emplace_back(static_cast<u32>(it->key), id);
+        Meet(it->value.get());
+        num_by_address++;
       }
     }
     for (TexIndexNode* it = TexIndexFirst(&m_textures_by_hash); it; it = TexIndexNext(it))
     {
       if (ShouldSaveEntry(it->value))
       {
-        const u32 id = AddCacheEntryToMap(it->value);
-        textures_by_hash_list.emplace_back(it->key, id);
+        Meet(it->value.get());
+        num_by_hash++;
       }
     }
-    for (u32 i = 0; i < m_bound_textures.size(); i++)
+    for (i = 0; i < m_bound_textures.size(); i++)
     {
-      const auto& tentry = m_bound_textures[i];
-      if (m_bound_textures[i] && ShouldSaveEntry(tentry))
+      if (m_bound_textures[i] && ShouldSaveEntry(m_bound_textures[i]))
       {
-        const u32 id = AddCacheEntryToMap(tentry);
-        bound_textures_list.emplace_back(i, id);
+        Meet(m_bound_textures[i].get());
+        num_bound++;
       }
     }
   }
 
   // Save the texture cache entries out in the order the were referenced.
-  u32 size = static_cast<u32>(entries_to_save.size());
-  p.Do(size);
-  for (TCacheEntry* entry : entries_to_save)
+  p.Do(num_saved);
+  for (entry = first_saved; entry; entry = entry->save_next)
   {
     SerializeTexture(entry->texture, entry->texture->GetConfig(), p);
     entry->DoState(p);
@@ -1058,42 +1059,78 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
 
   // Save references for each cache entry.
   // As references are circular, we need to have everything created before linking entries.
-  std::set<std::pair<u32, u32>> reference_pairs;
-  for (const auto& it : entry_map)
+  // A pair of saved entries is written once, from the one with the lower ID, or from the
+  // other where only that one holds the reference: counted first, then written.
+  for (pass = 0; pass < 2; pass++)
   {
-    const TCacheEntry* entry = it.first;
-    auto id1 = GetCacheEntryId(entry);
-    if (!id1)
-      continue;
-
-    for (u32 r = 0; r < entry->num_references; r++)
+    if (pass == 1)
+      p.Do(num_pairs);
+    for (entry = first_saved; entry; entry = entry->save_next)
     {
-      const TCacheEntry* const referenced_entry = entry->references[r];
-      auto id2 = GetCacheEntryId(referenced_entry);
-      if (!id2)
-        continue;
-
-      auto refpair1 = std::make_pair(*id1, *id2);
-      auto refpair2 = std::make_pair(*id2, *id1);
-      if (!reference_pairs.contains(refpair2))
-        reference_pairs.insert(std::move(refpair1));
+      u32 r;
+      for (r = 0; r < entry->num_references; r++)
+      {
+        TCacheEntry* const other = entry->references[r];
+        u32 id1 = entry->save_id;
+        u32 id2 = other->save_id;
+        if (other->save_stamp != stamp)
+          continue;
+        if (id1 > id2 && other->HasReference(entry))
+          continue;
+        if (pass == 0)
+        {
+          num_pairs++;
+          continue;
+        }
+        p.Do(id1);
+        p.Do(id2);
+      }
     }
   }
 
-  auto doList = [&p](const auto& list) {
-    u32 list_size = static_cast<u32>(list.size());
-    p.Do(list_size);
-    for (const auto& it : list)
+  // The address and hash indexes and the bound textures, as key and entry ID
+  p.Do(num_by_address);
+  if (save_cache)
+  {
+    for (TexIndexNode* it = TexIndexFirst(&m_textures_by_address); it; it = TexIndexNext(it))
     {
-      p.Do(it.first);
-      p.Do(it.second);
+      if (ShouldSaveEntry(it->value))
+      {
+        u32 addr = static_cast<u32>(it->key);
+        u32 id = it->value->save_id;
+        p.Do(addr);
+        p.Do(id);
+      }
     }
-  };
-
-  doList(reference_pairs);
-  doList(textures_by_address_list);
-  doList(textures_by_hash_list);
-  doList(bound_textures_list);
+  }
+  p.Do(num_by_hash);
+  if (save_cache)
+  {
+    for (TexIndexNode* it = TexIndexFirst(&m_textures_by_hash); it; it = TexIndexNext(it))
+    {
+      if (ShouldSaveEntry(it->value))
+      {
+        u64 hash = it->key;
+        u32 id = it->value->save_id;
+        p.Do(hash);
+        p.Do(id);
+      }
+    }
+  }
+  p.Do(num_bound);
+  if (save_cache)
+  {
+    for (i = 0; i < m_bound_textures.size(); i++)
+    {
+      if (m_bound_textures[i] && ShouldSaveEntry(m_bound_textures[i]))
+      {
+        u32 index = i;
+        u32 id = m_bound_textures[i]->save_id;
+        p.Do(index);
+        p.Do(id);
+      }
+    }
+  }
 
   // Free the readback texture to potentially save host-mapped GPU memory, depending on where
   // the driver mapped the staging buffer.

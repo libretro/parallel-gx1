@@ -154,6 +154,12 @@ struct TCacheEntry
   u32 num_references = 0;
   u32 references_cap = INLINE_REFERENCES;
 
+  // DoSaveState's: the save that met this entry last, its ID in that state, and the entry
+  // met after it. Not part of the state.
+  u32 save_stamp = 0;
+  u32 save_id = 0;
+  TCacheEntry* save_next = nullptr;
+
   // Pending EFB copy
   AbstractStagingTexture* pending_efb_copy = nullptr;  // owned
   u32 pending_efb_copy_width = 0;
@@ -571,6 +577,7 @@ private:
   size_t m_texture_pool_cap = 0;
   size_t m_texture_pool_bytes = 0;
   u64 m_last_entry_id = 0;
+  u32 m_save_stamp = 0;
 
   // Backup configuration values
   struct BackupConfig
