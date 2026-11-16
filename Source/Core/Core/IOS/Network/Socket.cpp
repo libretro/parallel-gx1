@@ -5,6 +5,7 @@
 #include "Core/IOS/Network/Socket.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <numeric>
 
 #ifndef _WIN32
@@ -500,12 +501,13 @@ void WiiSocket::Update(bool read, bool write, bool except)
             ReturnValue = -SO_EFAULT;
             break;
           }
-          const std::optional<std::string> patch =
-              WC24PatchEngine::GetNetworkPatchByPayload(std::string_view{data, BufferInSize});
-          if (patch)
+          size_t patched_size = 0;
+          char* const patched =
+              WC24PatchEngine::GetNetworkPatchByPayload(data, BufferInSize, &patched_size);
+          if (patched)
           {
-            data = patch->c_str();
-            BufferInSize = static_cast<u32>(patch->size());
+            data = patched;
+            BufferInSize = static_cast<u32>(patched_size);
           }
 
           // Act as non blocking when SO_MSG_NONBLOCK is specified
@@ -537,6 +539,7 @@ void WiiSocket::Update(bool read, bool write, bool except)
                    static_cast<unsigned>((local_name.sin_addr.s_addr >> 8) & 0xFF),
                    static_cast<unsigned>((local_name.sin_addr.s_addr >> 16) & 0xFF),
                    static_cast<unsigned>((local_name.sin_addr.s_addr >> 24) & 0xFF));
+          std::free(patched);
           break;
         }
         case IOCTLV_SO_RECVFROM:

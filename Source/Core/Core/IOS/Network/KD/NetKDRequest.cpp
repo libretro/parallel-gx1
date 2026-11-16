@@ -721,11 +721,11 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index,
     return NWC24::WC24_ERR_SERVER;
   }
 
-  if (std::optional<std::string> patch =
-          WC24PatchEngine::GetNetworkPatch(parts[2], WC24PatchEngine::IsKD{true}))
+  if (const char* const patch =
+          WC24PatchEngine::GetNetworkPatch(parts[2].data(), parts[2].size(), true))
   {
     const size_t index = url.find(parts[2]);
-    url.replace(index, parts[2].size(), patch.value());
+    url.replace(index, parts[2].size(), patch);
   }
 
   INFO_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_DOWNLOAD_NOW_EX - NI - URL: %s", url.c_str());

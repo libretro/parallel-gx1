@@ -1284,10 +1284,10 @@ IPCReply NetIPTopDevice::HandleGetAddressInfoRequest(const IOCtlVRequest& reques
   if (!request.in_vectors.empty() && request.in_vectors[0].size > 0)
   {
     nodeNameStr = memory.GetString(request.in_vectors[0].address, request.in_vectors[0].size);
-    if (std::optional<std::string> patch =
-            WC24PatchEngine::GetNetworkPatch(nodeNameStr, WC24PatchEngine::IsKD{false}))
+    if (const char* const patch =
+            WC24PatchEngine::GetNetworkPatch(nodeNameStr.data(), nodeNameStr.size(), false))
     {
-      nodeNameStr = patch.value();
+      nodeNameStr = patch;
     }
     pNodeName = nodeNameStr.c_str();
   }
