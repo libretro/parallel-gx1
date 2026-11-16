@@ -137,8 +137,14 @@ private:
   WindowsMemoryRegion* EnsureSplitRegionForMapping(void* address, size_t size);
   bool JoinRegionsAfterUnmap(void* address, size_t size, bool join);
   bool CoalesceFreeRegions(size_t index, const u8* end);
+  void InsertRegion(size_t index, u8* start, size_t size);
+  void EraseRegions(size_t index, size_t count);
 
-  std::vector<WindowsMemoryRegion> m_regions;
+  // What the reserved region is split into, in address order; room for REGIONS_START from the
+  // time it is reserved
+  WindowsMemoryRegion* m_regions = nullptr;
+  size_t m_num_regions = 0;
+  size_t m_regions_capacity = 0;
   void* m_reserved_region = nullptr;
   void* m_memory_handle = nullptr;
   WindowsMemoryFunctions m_memory_functions;

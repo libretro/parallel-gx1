@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include <windows.h>
@@ -39,7 +40,8 @@ namespace Common
 {
 enum
 {
-  SINGLE_PAGE_SIZE = 0x1000
+  SINGLE_PAGE_SIZE = 0x1000,
+  REGIONS_START = 16384
 };
 
 struct WindowsMemoryRegion
@@ -47,12 +49,35 @@ struct WindowsMemoryRegion
   u8* m_start;
   size_t m_size;
   bool m_is_mapped;
-
-  WindowsMemoryRegion(u8* start, size_t size, bool is_mapped)
-      : m_start(start), m_size(size), m_is_mapped(is_mapped)
-  {
-  }
 };
+
+// A free region at index, those from there on moved up
+void MemArena::InsertRegion(size_t index, u8* start, size_t size)
+{
+  if (m_num_regions == m_regions_capacity)
+  {
+    const size_t capacity = m_regions_capacity ? m_regions_capacity * 2 : REGIONS_START;
+    WindowsMemoryRegion* const grown = static_cast<WindowsMemoryRegion*>(
+        std::realloc(m_regions, capacity * sizeof(WindowsMemoryRegion)));
+    if (!grown)
+      std::abort();
+    m_regions = grown;
+    m_regions_capacity = capacity;
+  }
+  std::memmove(&m_regions[index + 1], &m_regions[index],
+               (m_num_regions - index) * sizeof(WindowsMemoryRegion));
+  m_regions[index].m_start = start;
+  m_regions[index].m_size = size;
+  m_regions[index].m_is_mapped = false;
+  m_num_regions++;
+}
+
+void MemArena::EraseRegions(size_t index, size_t count)
+{
+  std::memmove(&m_regions[index], &m_regions[index + count],
+               (m_num_regions - index - count) * sizeof(WindowsMemoryRegion));
+  m_num_regions -= count;
+}
 
 static bool InitWindowsMemoryFunctions(WindowsMemoryFunctions* functions)
 {
@@ -170,7 +195,7 @@ u8* MemArena::ReserveMemoryRegion(size_t memory_size)
     if (base)
     {
       m_reserved_region = base;
-      m_regions.emplace_back(base, memory_size, false);
+      InsertRegion(0, base, memory_size);
     }
     else
     {
@@ -198,9 +223,10 @@ void MemArena::ReleaseMemoryRegion()
     // user should have unmapped everything by this point, check if that's true and yell if not
     // (it indicates a bug in the emulated memory mapping logic)
     size_t mapped_region_count = 0;
-    for (const auto& r : m_regions)
+    size_t i;
+    for (i = 0; i < m_num_regions; i++)
     {
-      if (r.m_is_mapped)
+      if (m_regions[i].m_is_mapped)
         ++mapped_region_count;
     }
 
@@ -211,13 +237,19 @@ void MemArena::ReleaseMemoryRegion()
     }
 
     // one placeholder again, the single pages left split by UnmapFromMemoryRegion joined
-    if (mapped_region_count == 0 && !m_regions.empty())
-      CoalesceFreeRegions(0, m_regions.back().m_start + m_regions.back().m_size);
+    if (mapped_region_count == 0 && m_num_regions)
+    {
+      CoalesceFreeRegions(0, m_regions[m_num_regions - 1].m_start +
+                                 m_regions[m_num_regions - 1].m_size);
+    }
 
     // then free memory
     VirtualFree(m_reserved_region, 0, MEM_RELEASE);
     m_reserved_region = nullptr;
-    m_regions.clear();
+    std::free(m_regions);
+    m_regions = nullptr;
+    m_num_regions = 0;
+    m_regions_capacity = 0;
   }
 }
 
@@ -225,11 +257,11 @@ void MemArena::ReleaseMemoryRegion()
 // false when the system would not
 bool MemArena::CoalesceFreeRegions(size_t index, const u8* end)
 {
-  std::vector<WindowsMemoryRegion>& regions = m_regions;
+  WindowsMemoryRegion* const regions = m_regions;
   size_t last = index;
   size_t total = regions[index].m_size;
 
-  while (regions[index].m_start + total < end && last + 1 < regions.size() &&
+  while (regions[index].m_start + total < end && last + 1 < m_num_regions &&
          !regions[last + 1].m_is_mapped)
   {
     last++;
@@ -243,69 +275,67 @@ bool MemArena::CoalesceFreeRegions(size_t index, const u8* end)
     return false;
   }
   regions[index].m_size = total;
-  regions.erase(regions.begin() + index + 1, regions.begin() + last + 1);
+  EraseRegions(index + 1, last - index);
   return true;
 }
 
 WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, size_t size)
 {
   u8* const address = static_cast<u8*>(start_address);
-  auto& regions = m_regions;
-  if (regions.empty())
+  size_t index, lo, hi;
+  u8* mapping_address;
+  size_t mapping_size, size_before, minimum_size;
+
+  if (!m_num_regions)
   {
     NOTICE_LOG(MEMMAP, "Tried to map a memory region without reserving a memory block first.");
     return nullptr;
   }
 
-  // find closest region that is <= the given address by using upper bound and decrementing
-  auto it = regions.begin();
+  // the last region that starts at or before the given address
+  lo = 0;
+  hi = m_num_regions;
+  while (lo < hi)
   {
-    size_t lo = 0, hi = regions.size();
-    while (lo < hi)
-    {
-      const size_t mid = lo + (hi - lo) / 2;
-      if (address < regions[mid].m_start)
-        hi = mid;
-      else
-        lo = mid + 1;
-    }
-    it += lo;
+    const size_t mid = lo + (hi - lo) / 2;
+    if (address < m_regions[mid].m_start)
+      hi = mid;
+    else
+      lo = mid + 1;
   }
-  if (it == regions.begin())
+  if (lo == 0)
   {
     // this should never happen, implies that the given address is before the start of the
     // reserved memory block
     NOTICE_LOG(MEMMAP, "Invalid address %p given to map.", static_cast<const void*>(address));
     return nullptr;
   }
-  --it;
+  index = lo - 1;
 
-  if (it->m_is_mapped)
+  if (m_regions[index].m_is_mapped)
   {
     NOTICE_LOG(MEMMAP,
                "Address to map %p with a size of 0x%" PRIx64 " overlaps with existing mapping "
                "at %p.",
-               static_cast<const void*>(address), (u64)size, static_cast<const void*>(it->m_start));
+               static_cast<const void*>(address), (u64)size,
+               static_cast<const void*>(m_regions[index].m_start));
     return nullptr;
   }
 
-  const size_t mapping_index = it - regions.begin();
-
   // single pages unmapped are left split: joined here when what is mapped needs more than one
-  if (it->m_start + it->m_size < address + size)
+  if (m_regions[index].m_start + m_regions[index].m_size < address + size)
   {
-    if (!CoalesceFreeRegions(mapping_index, address + size))
+    if (!CoalesceFreeRegions(index, address + size))
       return nullptr;
-    it = regions.begin() + mapping_index;
   }
 
-  u8* const mapping_address = it->m_start;
-  const size_t mapping_size = it->m_size;
+  mapping_address = m_regions[index].m_start;
+  mapping_size = m_regions[index].m_size;
   if (mapping_address == address)
   {
     // if this region is already split up correctly we don't have to do anything
     if (mapping_size == size)
-      return &*it;
+      return &m_regions[index];
 
     // if this region is smaller than the requested size we can't map
     if (mapping_size < size)
@@ -325,18 +355,16 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
     }
 
     // update tracked mappings and return the first of the two
-    it->m_size = size;
-    u8* const new_mapping_start = address + size;
-    const size_t new_mapping_size = mapping_size - size;
-    regions.insert(it + 1, WindowsMemoryRegion(new_mapping_start, new_mapping_size, false));
-    return &regions[mapping_index];
+    m_regions[index].m_size = size;
+    InsertRegion(index + 1, address + size, mapping_size - size);
+    return &m_regions[index];
   }
 
   ASSERT(mapping_address < address);
 
   // is there enough space to map this?
-  const size_t size_before = static_cast<size_t>(address - mapping_address);
-  const size_t minimum_size = size + size_before;
+  size_before = static_cast<size_t>(address - mapping_address);
+  minimum_size = size + size_before;
   if (mapping_size < minimum_size)
   {
     NOTICE_LOG(MEMMAP,
@@ -353,29 +381,12 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
     return nullptr;
   }
 
-  // do we now have two regions or three regions?
-  if (mapping_size == minimum_size)
-  {
-    // split into two; update tracked mappings and return the second one
-    it->m_size = size_before;
-    u8* const new_mapping_start = address;
-    const size_t new_mapping_size = size;
-    regions.insert(it + 1, WindowsMemoryRegion(new_mapping_start, new_mapping_size, false));
-    return &regions[mapping_index + 1];
-  }
-  else
-  {
-    // split into three; update tracked mappings and return the middle one
-    it->m_size = size_before;
-    u8* const middle_mapping_start = address;
-    const size_t middle_mapping_size = size;
-    u8* const after_mapping_start = address + size;
-    const size_t after_mapping_size = mapping_size - minimum_size;
-    regions.insert(it + 1, WindowsMemoryRegion(after_mapping_start, after_mapping_size, false));
-    regions.insert(regions.begin() + mapping_index + 1,
-                   WindowsMemoryRegion(middle_mapping_start, middle_mapping_size, false));
-    return &regions[mapping_index + 1];
-  }
+  // two regions now, or three with what is left after: the one mapped is the second
+  m_regions[index].m_size = size_before;
+  if (mapping_size != minimum_size)
+    InsertRegion(index + 1, address + size, mapping_size - minimum_size);
+  InsertRegion(index + 1, address, size);
+  return &m_regions[index + 1];
 }
 
 void* MemArena::MapInMemoryRegion(s64 offset, size_t size, void* base, bool writeable)
@@ -441,82 +452,61 @@ bool MemArena::ChangeMappingProtection(void* view, size_t size, bool writeable)
 bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size, bool join)
 {
   u8* const address = static_cast<u8*>(start_address);
-  auto& regions = m_regions;
-  if (regions.empty())
+  size_t index, lo, hi, first, count, total_size;
+
+  if (!m_num_regions)
   {
     NOTICE_LOG(MEMMAP, "Tried to unmap a memory region without reserving a memory block first.");
     return false;
   }
 
   // there should be a mapping that matches the request exactly, find it
-  auto it = regions.begin();
+  lo = 0;
+  hi = m_num_regions;
+  while (lo < hi)
   {
-    size_t lo = 0, hi = regions.size();
-    while (lo < hi)
-    {
-      const size_t mid = lo + (hi - lo) / 2;
-      if (regions[mid].m_start < address)
-        lo = mid + 1;
-      else
-        hi = mid;
-    }
-    it += lo;
+    const size_t mid = lo + (hi - lo) / 2;
+    if (m_regions[mid].m_start < address)
+      lo = mid + 1;
+    else
+      hi = mid;
   }
-  if (it == regions.end() || it->m_start != address || it->m_size != size)
+  index = lo;
+  if (index == m_num_regions || m_regions[index].m_start != address ||
+      m_regions[index].m_size != size)
   {
     // didn't find it, we were given bogus input
     NOTICE_LOG(MEMMAP, "Invalid address/size given to unmap.");
     return false;
   }
-  it->m_is_mapped = false;
+  m_regions[index].m_is_mapped = false;
   if (!join)
     return true;
 
-  const bool can_join_with_preceding = it != regions.begin() && !(it - 1)->m_is_mapped;
-  const bool can_join_with_succeeding = (it + 1) != regions.end() && !(it + 1)->m_is_mapped;
-  if (can_join_with_preceding && can_join_with_succeeding)
+  // with the free one before it and the free one after it, whichever there are
+  first = index;
+  count = 1;
+  total_size = size;
+  if (index > 0 && !m_regions[index - 1].m_is_mapped)
   {
-    // join three mappings to one
-    auto it_preceding = it - 1;
-    auto it_succeeding = it + 1;
-    const size_t total_size = it_preceding->m_size + size + it_succeeding->m_size;
-    if (!VirtualFree(it_preceding->m_start, total_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
-    {
-      NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
-      return false;
-    }
-
-    it_preceding->m_size = total_size;
-    regions.erase(it, it + 2);
+    first = index - 1;
+    count++;
+    total_size += m_regions[index - 1].m_size;
   }
-  else if (can_join_with_preceding && !can_join_with_succeeding)
+  if (index + 1 < m_num_regions && !m_regions[index + 1].m_is_mapped)
   {
-    // join two mappings to one
-    auto it_preceding = it - 1;
-    const size_t total_size = it_preceding->m_size + size;
-    if (!VirtualFree(it_preceding->m_start, total_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
-    {
-      NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
-      return false;
-    }
-
-    it_preceding->m_size = total_size;
-    regions.erase(it);
+    count++;
+    total_size += m_regions[index + 1].m_size;
   }
-  else if (!can_join_with_preceding && can_join_with_succeeding)
+  if (count == 1)
+    return true;
+  if (!VirtualFree(m_regions[first].m_start, total_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
   {
-    // join two mappings to one
-    auto it_succeeding = it + 1;
-    const size_t total_size = size + it_succeeding->m_size;
-    if (!VirtualFree(it->m_start, total_size, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
-    {
-      NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
-      return false;
-    }
-
-    it->m_size = total_size;
-    regions.erase(it_succeeding);
+    NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
+    return false;
   }
+  m_regions[first].m_size = total_size;
+  EraseRegions(first + 1, count - 1);
   return true;
 }
 
