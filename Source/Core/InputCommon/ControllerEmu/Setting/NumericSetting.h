@@ -94,10 +94,8 @@ public:
 
   virtual ~NumericSettingBase() = default;
 
-  virtual void LoadFromIni(const Common::IniFile::Section& section,
-                           const std::string& group_name) = 0;
-  virtual void SaveToIni(Common::IniFile::Section& section,
-                         const std::string& group_name) const = 0;
+  virtual void LoadFromIni(const Common::IniFile::Section& section, const char* group_name) = 0;
+  virtual void SaveToIni(Common::IniFile::Section& section, const char* group_name) const = 0;
 
   virtual InputReference& GetInputReference() = 0;
   virtual const InputReference& GetInputReference() const = 0;
@@ -141,10 +139,12 @@ public:
 
   void SetToDefault() override { m_value.SetValue(m_default_value); }
 
-  void LoadFromIni(const Common::IniFile::Section& section, const std::string& group_name) override
+  void LoadFromIni(const Common::IniFile::Section& section, const char* group_name) override
   {
+    char key[256];
     std::string str_value;
-    if (section.Get(group_name + m_details.ini_name, &str_value))
+    if (Common::JoinIniKey(key, sizeof(key), group_name, m_details.ini_name) &&
+        section.Get(key, &str_value))
     {
       m_value.m_input.SetExpression(std::move(str_value));
       SimplifyIfPossible();
@@ -155,18 +155,21 @@ public:
     }
   }
 
-  void SaveToIni(Common::IniFile::Section& section, const std::string& group_name) const override
+  void SaveToIni(Common::IniFile::Section& section, const char* group_name) const override
   {
+    char key[256];
+    if (!Common::JoinIniKey(key, sizeof(key), group_name, m_details.ini_name))
+      return;
     if (IsSimpleValue())
     {
-      section.Set(group_name + m_details.ini_name, GetValue(), m_default_value);
+      section.Set(key, GetValue(), m_default_value);
     }
     else
     {
       // We can't save line breaks in a single line config. Restoring them is too complicated.
       std::string expression = m_value.m_input.GetExpression();
       ReplaceBreaksWithSpaces(expression);
-      section.Set(group_name + m_details.ini_name, expression, "");
+      section.Set(key, expression, "");
     }
   }
 

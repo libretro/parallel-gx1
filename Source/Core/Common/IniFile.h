@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -11,6 +13,20 @@
 
 namespace Common
 {
+// The key first, then second, then third into key, which has room for size characters: false,
+// and an empty key, when they do not fit.
+inline bool JoinIniKey(char* key, size_t size, const char* first, const char* second,
+                       const char* third = "")
+{
+  const int len = std::snprintf(key, size, "%s%s%s", first, second, third);
+  if (len < 0 || size_t(len) >= size)
+  {
+    key[0] = '\0';
+    return false;
+  }
+  return true;
+}
+
 // The sections of an INI file, held as ini_data: this gives its sections and keys the strings and
 // typed values the callers pass.
 class IniFile
@@ -31,16 +47,16 @@ public:
     bool Exists(std::string_view key) const;
     bool Delete(std::string_view key);
 
-    void Set(const std::string& key, std::string new_value);
+    void Set(std::string_view key, std::string new_value);
 
     template <typename T>
-    void Set(const std::string& key, T&& new_value)
+    void Set(std::string_view key, T&& new_value)
     {
       Set(key, ValueToString(std::forward<T>(new_value)));
     }
 
     template <typename T>
-    void Set(const std::string& key, T&& new_value, const std::common_type_t<T>& default_value)
+    void Set(std::string_view key, T&& new_value, const std::common_type_t<T>& default_value)
     {
       if (new_value != default_value)
         Set(key, std::forward<T>(new_value));

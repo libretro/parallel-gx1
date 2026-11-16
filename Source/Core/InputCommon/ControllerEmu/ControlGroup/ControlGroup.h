@@ -70,8 +70,8 @@ public:
   virtual ~ControlGroup();
 
   // These branch on the group's type to the reshapable inputs' and the attachments' own
-  void LoadConfig(Common::IniFile::Section* sec, const std::string& base);
-  void SaveConfig(Common::IniFile::Section* sec, const std::string& base);
+  void LoadConfig(Common::IniFile::Section* sec, const char* base);
+  void SaveConfig(Common::IniFile::Section* sec, const char* base);
 
   void UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env);
 
@@ -108,8 +108,11 @@ public:
 
 protected:
   // What every group does with its controls and settings
-  void LoadConfigDefault(Common::IniFile::Section* sec, const std::string& base);
-  void SaveConfigDefault(Common::IniFile::Section* sec, const std::string& base);
+  void LoadConfigDefault(Common::IniFile::Section* sec, const char* base);
+  void SaveConfigDefault(Common::IniFile::Section* sec, const char* base);
+
+  // Room for a key: the group's prefix, a control's name and "/Range"
+  static constexpr size_t INI_KEY_SIZE = 256;
   void UpdateReferencesDefault(ciface::ExpressionParser::ControlEnvironment& env);
 
 public:

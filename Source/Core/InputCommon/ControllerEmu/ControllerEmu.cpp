@@ -115,7 +115,7 @@ void EmulatedController::LoadConfig(Common::IniFile::Section* sec)
   LoadGroupsConfig(sec, "");
 }
 
-void ControlGroupContainer::LoadGroupsConfig(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroupContainer::LoadGroupsConfig(Common::IniFile::Section* sec, const char* base)
 {
   for (auto& cg : groups)
     cg->LoadConfig(sec, base);
@@ -128,7 +128,7 @@ void EmulatedController::SaveConfig(Common::IniFile::Section* sec)
   SaveGroupsConfig(sec, "");
 }
 
-void ControlGroupContainer::SaveGroupsConfig(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroupContainer::SaveGroupsConfig(Common::IniFile::Section* sec, const char* base)
 {
   for (auto& cg : groups)
     cg->SaveConfig(sec, base);

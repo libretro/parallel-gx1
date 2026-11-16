@@ -218,8 +218,8 @@ class ControlGroupContainer
 public:
   virtual ~ControlGroupContainer();
 
-  virtual void LoadGroupsConfig(Common::IniFile::Section* sec, const std::string& base);
-  virtual void SaveGroupsConfig(Common::IniFile::Section* sec, const std::string& base);
+  virtual void LoadGroupsConfig(Common::IniFile::Section* sec, const char* base);
+  virtual void SaveGroupsConfig(Common::IniFile::Section* sec, const char* base);
 
   virtual std::string GetName() const = 0;
   virtual std::string GetDisplayName() const;

@@ -296,22 +296,26 @@ ReshapableInput::ReshapeData ReshapableInput::GetCenter() const
   return PeekShape().center;
 }
 
-void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::string& base_name)
+void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const char* base_name)
 {
+  char group[INI_KEY_SIZE];
+  char key[INI_KEY_SIZE];
   LoadConfigDefault(section, base_name);
 
-  const std::string group(base_name + name + '/');
+  Common::JoinIniKey(group, sizeof(group), base_name, name.c_str(), "/");
 
   // Special handling for "Modifier" button "Range" settings which default to 50% instead of 100%.
   if (const auto* modifier_input = GetModifierInput())
   {
     double range = 50.0;
-    section->Get(group + modifier_input->name + "/Range", &range, 50.0);
+    Common::JoinIniKey(key, sizeof(key), group, modifier_input->name.c_str(), "/Range");
+    section->Get(key, &range, 50.0);
     modifier_input->control_ref->SetRange(range / 100);
   }
 
   std::string load_str;
-  section->Get(group + CALIBRATION_CONFIG_NAME, &load_str, "");
+  Common::JoinIniKey(key, sizeof(key), group, CALIBRATION_CONFIG_NAME);
+  section->Get(key, &load_str, "");
   const auto load_data = SplitString(load_str, ' ');
 
   CalibrationData calibration(load_data.size(), CALIBRATION_DEFAULT_VALUE);
@@ -323,7 +327,8 @@ void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::s
       sample /= CALIBRATION_CONFIG_SCALE;
   }
 
-  section->Get(group + CENTER_CONFIG_NAME, &load_str, "");
+  Common::JoinIniKey(key, sizeof(key), group, CENTER_CONFIG_NAME);
+  section->Get(key, &load_str, "");
   const auto center_data = SplitString(load_str, ' ');
 
   ReshapeData center = Common::DVec2();
@@ -343,17 +348,20 @@ void ReshapableInput::LoadConfig(Common::IniFile::Section* section, const std::s
   });
 }
 
-void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const std::string& base_name)
+void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const char* base_name)
 {
+  char group[INI_KEY_SIZE];
+  char key[INI_KEY_SIZE];
   SaveConfigDefault(section, base_name);
 
-  const std::string group(base_name + name + '/');
+  if (!Common::JoinIniKey(group, sizeof(group), base_name, name.c_str(), "/"))
+    return;
 
   // Special handling for "Modifier" button "Range" settings which default to 50% instead of 100%.
   if (const auto* modifier_input = GetModifierInput())
   {
-    section->Set(group + modifier_input->name + "/Range", modifier_input->control_ref->GetRange() * 100,
-                 50.0);
+    if (Common::JoinIniKey(key, sizeof(key), group, modifier_input->name.c_str(), "/Range"))
+      section->Set(key, modifier_input->control_ref->GetRange() * 100, 50.0);
   }
 
   const CalibrationData calibration = GetCalibrationData();
@@ -368,13 +376,15 @@ void ReshapableInput::SaveConfig(Common::IniFile::Section* section, const std::s
                         static_cast<double>(val * CALIBRATION_CONFIG_SCALE));
     calibration_data += text;
   }
-  section->Set(group + CALIBRATION_CONFIG_NAME, calibration_data, "");
+  if (Common::JoinIniKey(key, sizeof(key), group, CALIBRATION_CONFIG_NAME))
+    section->Set(key, calibration_data, "");
 
   // Save center value.
   char center_data[64];
   CharArrayFromFormat(center_data, "%.2f %.2f", static_cast<double>(center.x * CENTER_CONFIG_SCALE),
                       static_cast<double>(center.y * CENTER_CONFIG_SCALE));
-  section->Set(group + CENTER_CONFIG_NAME, std::string(center_data), "0.00 0.00");
+  if (Common::JoinIniKey(key, sizeof(key), group, CENTER_CONFIG_NAME))
+    section->Set(key, std::string(center_data), "0.00 0.00");
 }
 
 ReshapableInput::ReshapeData ReshapableInput::Reshape(ControlState x, ControlState y,

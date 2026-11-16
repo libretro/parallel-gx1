@@ -137,8 +137,8 @@ protected:
 private:
   // ControlGroup branches to these, private as they are
   friend class ControlGroup;
-  void LoadConfig(Common::IniFile::Section*, const std::string& base_name);
-  void SaveConfig(Common::IniFile::Section*, const std::string& base_name);
+  void LoadConfig(Common::IniFile::Section*, const char* base_name);
+  void SaveConfig(Common::IniFile::Section*, const char* base_name);
 
   // Calibration and center, read on every poll and set from the configuration: published
   // whole, so a poll never sees half of a change.

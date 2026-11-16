@@ -13,7 +13,7 @@ namespace Common
 {
 const std::string& IniFile::NULL_STRING = "";
 
-void IniFile::Section::Set(const std::string& key, std::string new_value)
+void IniFile::Section::Set(std::string_view key, std::string new_value)
 {
   ini_section_set(this, key.data(), key.size(), new_value.data(), new_value.size());
 }

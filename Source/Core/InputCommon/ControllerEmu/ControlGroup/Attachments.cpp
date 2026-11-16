@@ -45,14 +45,16 @@ const std::vector<std::unique_ptr<AttachedController>>& Attachments::GetAttachme
   return m_attachments;
 }
 
-void Attachments::LoadConfig(Common::IniFile::Section* sec, const std::string& base)
+void Attachments::LoadConfig(Common::IniFile::Section* sec, const char* base)
 {
+  char key[INI_KEY_SIZE];
   LoadConfigDefault(sec, base);
 
   SetSelectedAttachment(0);
 
   std::string attachment_text;
-  sec->Get(base + name, &attachment_text, "");
+  Common::JoinIniKey(key, sizeof(key), base, name.c_str());
+  sec->Get(key, &attachment_text, "");
 
   // First assume attachment string is a valid expression.
   // If it instead matches one of the names of our attachments it is overridden below.
@@ -61,32 +63,41 @@ void Attachments::LoadConfig(Common::IniFile::Section* sec, const std::string& b
   u32 n = 0;
   for (auto& ai : GetAttachmentList())
   {
-    ai->LoadGroupsConfig(sec, base + ai->GetName() + "/");
+    const std::string attachment_name = ai->GetName();
+    Common::JoinIniKey(key, sizeof(key), base, attachment_name.c_str(), "/");
+    ai->LoadGroupsConfig(sec, key);
 
-    if (ai->GetName() == attachment_text)
+    if (attachment_name == attachment_text)
       SetSelectedAttachment(n);
 
     ++n;
   }
 }
 
-void Attachments::SaveConfig(Common::IniFile::Section* sec, const std::string& base)
+void Attachments::SaveConfig(Common::IniFile::Section* sec, const char* base)
 {
+  char key[INI_KEY_SIZE];
   SaveConfigDefault(sec, base);
 
-  if (GetSelectionSetting().IsSimpleValue())
+  if (!Common::JoinIniKey(key, sizeof(key), base, name.c_str()))
   {
-    sec->Set(base + name, GetAttachmentList()[GetSelectedAttachment()]->GetName(), "None");
+  }
+  else if (GetSelectionSetting().IsSimpleValue())
+  {
+    sec->Set(key, GetAttachmentList()[GetSelectedAttachment()]->GetName(), "None");
   }
   else
   {
     std::string expression = GetSelectionSetting().GetInputReference().GetExpression();
     ReplaceBreaksWithSpaces(expression);
-    sec->Set(base + name, expression, "None");
+    sec->Set(key, expression, "None");
   }
 
   for (auto& ai : GetAttachmentList())
-    ai->SaveGroupsConfig(sec, base + ai->GetName() + "/");
+  {
+    if (Common::JoinIniKey(key, sizeof(key), base, ai->GetName().c_str(), "/"))
+      ai->SaveGroupsConfig(sec, key);
+  }
 }
 
 void Attachments::UpdateReferences(ciface::ExpressionParser::ControlEnvironment& env)

@@ -57,9 +57,11 @@ void ControlGroup::AddDeadzoneSetting(SettingValue<double>* value, double maximu
 
 ControlGroup::~ControlGroup() = default;
 
-void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const char* base)
 {
-  const std::string group(base + name + "/");
+  char group[INI_KEY_SIZE];
+  char key[INI_KEY_SIZE];
+  Common::JoinIniKey(group, sizeof(group), base, name.c_str(), "/");
 
   // enabled
   if (HasEnabledSetting())
@@ -73,20 +75,24 @@ void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const std::s
     {
       // control expression
       std::string expression;
-      sec->Get(group + c->name, &expression, "");
+      Common::JoinIniKey(key, sizeof(key), group, c->name.c_str());
+      sec->Get(key, &expression, "");
       c->control_ref->SetExpression(std::move(expression));
     }
 
     // range
     double range = 100.0;
-    sec->Get(group + c->name + "/Range", &range, 100.0);
+    Common::JoinIniKey(key, sizeof(key), group, c->name.c_str(), "/Range");
+    sec->Get(key, &range, 100.0);
     c->control_ref->SetRange(range / 100);
   }
 }
 
-void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const char* base)
 {
-  const std::string group(base + name + "/");
+  char group[INI_KEY_SIZE];
+  char key[INI_KEY_SIZE];
+  Common::JoinIniKey(group, sizeof(group), base, name.c_str(), "/");
 
   // enabled
   if (HasEnabledSetting())
@@ -101,10 +107,12 @@ void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const std::s
     std::string expression = c->control_ref->GetExpression();
     // We can't save line breaks in a single line config. Restoring them is too complicated.
     ReplaceBreaksWithSpaces(expression);
-    sec->Set(group + c->name, expression, "");
+    if (Common::JoinIniKey(key, sizeof(key), group, c->name.c_str()))
+      sec->Set(key, expression, "");
 
     // range
-    sec->Set(group + c->name + "/Range", c->control_ref->GetRange() * 100.0, 100.0);
+    if (Common::JoinIniKey(key, sizeof(key), group, c->name.c_str(), "/Range"))
+      sec->Set(key, c->control_ref->GetRange() * 100.0, 100.0);
   }
 }
 
@@ -151,7 +159,7 @@ static bool IsReshapable(GroupType type)
          type == GroupType::Cursor;
 }
 
-void ControlGroup::LoadConfig(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroup::LoadConfig(Common::IniFile::Section* sec, const char* base)
 {
   if (IsReshapable(type))
     static_cast<ReshapableInput*>(this)->LoadConfig(sec, base);
@@ -161,7 +169,7 @@ void ControlGroup::LoadConfig(Common::IniFile::Section* sec, const std::string& 
     LoadConfigDefault(sec, base);
 }
 
-void ControlGroup::SaveConfig(Common::IniFile::Section* sec, const std::string& base)
+void ControlGroup::SaveConfig(Common::IniFile::Section* sec, const char* base)
 {
   if (IsReshapable(type))
     static_cast<ReshapableInput*>(this)->SaveConfig(sec, base);
