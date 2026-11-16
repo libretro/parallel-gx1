@@ -137,6 +137,27 @@ void code_range_list_push(CodeRangeList* list, u8* from, u8* to)
   list->count++;
 }
 
+/* Where the code is one region: a range next to the last one pushed joins it, so the blocks of
+ * a whole cache being cleared, made one after the other, take a few ranges and not one each. */
+void code_range_list_push_joined(CodeRangeList* list, u8* from, u8* to)
+{
+  if (list->count)
+  {
+    CodeRange* const last = &list->data[list->count - 1];
+    if (last->to == from)
+    {
+      last->to = to;
+      return;
+    }
+    if (last->from == to)
+    {
+      last->from = from;
+      return;
+    }
+  }
+  code_range_list_push(list, from, to);
+}
+
 void code_range_list_free(CodeRangeList* list)
 {
   free(list->data);

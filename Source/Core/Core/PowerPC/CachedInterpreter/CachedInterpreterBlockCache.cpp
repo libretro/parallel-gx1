@@ -27,7 +27,8 @@ void CachedInterpreterBlockCache::DestroyBlock(JitBlock& block)
   JitBaseBlockCache::DestroyBlockCommon(block);
 
   if (block.near_begin != block.near_end)
-    code_range_list_push(&m_ranges_to_free_on_next_codegen, block.near_begin, block.near_end);
+    code_range_list_push_joined(&m_ranges_to_free_on_next_codegen, block.near_begin,
+                                block.near_end);
 }
 
 void CachedInterpreterBlockCache::ClearRangesToFree()

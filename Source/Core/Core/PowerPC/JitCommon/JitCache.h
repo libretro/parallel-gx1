@@ -65,6 +65,7 @@ struct CodeRangeList
 };
 void code_range_list_init(CodeRangeList* list);
 void code_range_list_push(CodeRangeList* list, u8* from, u8* to);
+void code_range_list_push_joined(CodeRangeList* list, u8* from, u8* to);
 void code_range_list_free(CodeRangeList* list);
 
 // A block's place in one macro block's list of the blocks it holds (JitBaseBlockCache's

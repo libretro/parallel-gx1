@@ -86,9 +86,11 @@ void JitBlockCache::DestroyBlock(JitBlock& block)
   JitBaseBlockCache::DestroyBlockCommon(block);
 
   if (block.near_begin != block.near_end)
-    code_range_list_push(&m_ranges_to_free_on_next_codegen_near, block.near_begin, block.near_end);
+    code_range_list_push_joined(&m_ranges_to_free_on_next_codegen_near, block.near_begin,
+                                block.near_end);
   if (block.far_begin != block.far_end)
-    code_range_list_push(&m_ranges_to_free_on_next_codegen_far, block.far_begin, block.far_end);
+    code_range_list_push_joined(&m_ranges_to_free_on_next_codegen_far, block.far_begin,
+                                block.far_end);
 }
 
 const CodeRangeList& JitBlockCache::GetRangesToFreeNear() const
