@@ -6,7 +6,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <variant>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -48,24 +47,14 @@ enum class FunctionKind : u8
 class FunctionExpression : public Expression
 {
 public:
-  struct ArgumentsAreValid
-  {
-  };
-
-  struct ExpectedArguments
-  {
-    std::string text;
-  };
-
-  using ArgumentValidation = std::variant<ArgumentsAreValid, ExpectedArguments>;
-
   int CountNumControls() const;
   void UpdateReferences(ControlEnvironment& env);
 
   void SetArguments(std::vector<std::unique_ptr<Expression>>&& args);
 
   // These branch to the function this is.
-  ArgumentValidation ValidateArguments();
+  // Whether the function was given the arguments it takes
+  bool ValidateArguments();
   ControlState GetValue();
   void SetValue(ControlState value);
   Expression* GetLValue();

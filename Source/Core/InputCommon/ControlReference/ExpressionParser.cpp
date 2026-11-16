@@ -955,9 +955,7 @@ private:
     }
 
     func->SetArguments(std::move(args));
-    const auto argument_validation = func->ValidateArguments();
-
-    if (std::holds_alternative<FunctionExpression::ExpectedArguments>(argument_validation))
+    if (!func->ValidateArguments())
       return ParseResult::MakeErrorResult();
 
     return ParseResult::MakeSuccessfulResult(std::move(func));

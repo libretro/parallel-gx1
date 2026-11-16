@@ -21,13 +21,13 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     // Optional 2nd argument for clearing state:
     if (GetArgCount() == 1 || GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"toggle_state_input, [clear_state_input]"};
+      return false;
   }
 
   ControlState GetValue()
@@ -67,12 +67,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return 1.0 - GetArg(0).GetValue(); }
@@ -90,12 +90,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::abs(GetArg(0).GetValue()); }
@@ -112,12 +112,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::sin(GetArg(0).GetValue()); }
@@ -134,12 +134,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::cos(GetArg(0).GetValue()); }
@@ -156,12 +156,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::tan(GetArg(0).GetValue()); }
@@ -178,12 +178,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::asin(GetArg(0).GetValue()); }
@@ -200,12 +200,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::acos(GetArg(0).GetValue()); }
@@ -222,12 +222,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::atan(GetArg(0).GetValue()); }
@@ -244,12 +244,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"y, x"};
+      return false;
   }
 
   ControlState GetValue() { return std::atan2(GetArg(0).GetValue(), GetArg(1).GetValue()); }
@@ -266,12 +266,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return std::sqrt(GetArg(0).GetValue()); }
@@ -288,12 +288,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"base, exponent"};
+      return false;
   }
 
   ControlState GetValue() { return std::pow(GetArg(0).GetValue(), GetArg(1).GetValue()); }
@@ -310,12 +310,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"a, b"};
+      return false;
   }
 
   ControlState GetValue() { return std::min(GetArg(0).GetValue(), GetArg(1).GetValue()); }
@@ -332,12 +332,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"a, b"};
+      return false;
   }
 
   ControlState GetValue() { return std::max(GetArg(0).GetValue(), GetArg(1).GetValue()); }
@@ -354,12 +354,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 3)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"value, min, max"};
+      return false;
   }
 
   ControlState GetValue()
@@ -379,12 +379,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"seconds"};
+      return false;
   }
 
   ControlState GetValue()
@@ -428,12 +428,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 3)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"condition, true_expression, false_expression"};
+      return false;
   }
 
   ControlState GetValue() { return GetLValue()->GetValue(); }
@@ -455,12 +455,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue()
@@ -481,12 +481,12 @@ private:
   friend class FunctionExpression;
 
 private:
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 1)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"expression"};
+      return false;
   }
 
   ControlState GetValue() { return GetArg(0).GetValue(); }
@@ -502,12 +502,12 @@ private:
   // the base branches to its calls
   friend class FunctionExpression;
 
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"input, amount"};
+      return false;
   }
 
   ControlState GetValue()
@@ -529,12 +529,12 @@ private:
   // the base branches to its calls
   friend class FunctionExpression;
 
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2 || GetArgCount() == 3)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"input, seconds_up, seconds_down = seconds_up"};
+      return false;
   }
 
   ControlState GetValue()
@@ -579,12 +579,12 @@ private:
   // the base branches to its calls
   friend class FunctionExpression;
 
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"input, seconds"};
+      return false;
   }
 
   ControlState GetValue()
@@ -624,12 +624,12 @@ private:
   // the base branches to its calls
   friend class FunctionExpression;
 
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2 || GetArgCount() == 3)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"input, seconds, taps = 2"};
+      return false;
   }
 
   ControlState GetValue()
@@ -690,12 +690,12 @@ private:
   // the base branches to its calls
   friend class FunctionExpression;
 
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() >= 2 && GetArgCount() <= 4)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"input, speed, [max_abs_value, [shared_state]]"};
+      return false;
   }
 
   ControlState GetValue()
@@ -755,12 +755,12 @@ private:
   // the base branches to its calls
   friend class FunctionExpression;
 
-  ArgumentValidation ValidateArguments()
+  bool ValidateArguments()
   {
     if (GetArgCount() == 2)
-      return ArgumentsAreValid{};
+      return true;
     else
-      return ExpectedArguments{"input, seconds"};
+      return false;
   }
 
   ControlState GetValue()
@@ -950,7 +950,7 @@ u32 FunctionExpression::GetArgCount() const
   }                                                                                                \
   return call(static_cast<PulseExpression*>(this));
 
-FunctionExpression::ArgumentValidation FunctionExpression::ValidateArguments()
+bool FunctionExpression::ValidateArguments()
 {
   const auto call = [](auto* f) { return f->ValidateArguments(); };
   FUNC_DISPATCH
