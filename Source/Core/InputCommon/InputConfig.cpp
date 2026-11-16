@@ -68,13 +68,13 @@ bool InputConfig::LoadConfig()
   }
 
   if (inifile.Load(File::GetUserPath(D_CONFIG_IDX) + m_ini_name + ".ini") &&
-      !inifile.GetSections().empty())
+      inifile.NumSections() != 0)
   {
     int n = 0;
 
     for (auto& controller : m_controllers)
     {
-      Common::IniFile::Section config;
+      Common::IniFile::Section* config;
       // Load settings from ini
       if (useProfile[n])
       {
@@ -84,13 +84,13 @@ bool InputConfig::LoadConfig()
                              base.c_str(), controller->GetName().c_str());
 
         inifile.Load(profile[n]);
-        config = *inifile.GetOrCreateSection("Profile");
+        config = inifile.GetOrCreateSection("Profile");
       }
       else
       {
-        config = *inifile.GetOrCreateSection(controller->GetName());
+        config = inifile.GetOrCreateSection(controller->GetName());
       }
-      controller->LoadConfig(&config);
+      controller->LoadConfig(config);
       controller->UpdateReferences(g_controller_interface);
 
       // Next profile

@@ -3,26 +3,32 @@
 
 #pragma once
 
-#include <list>
-#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "Common/IniData.h"
 #include "Common/StringUtil.h"
 
 namespace Common
 {
+// The sections of an INI file, held as ini_data: this gives its sections and keys the strings and
+// typed values the callers pass.
 class IniFile
 {
 public:
-  class Section
+  // A section: an ini_section. Those of a file are the file's; one made here is empty, of no
+  // file, and frees what it is given.
+  class Section : private ini_section
   {
     friend class IniFile;
 
   public:
-    Section();
-    explicit Section(std::string name_);
+    Section() { ini_section_init(this); }
+    ~Section() { ini_section_clear(this); }
+    Section(const Section&) = delete;
+    Section& operator=(const Section&) = delete;
+
     bool Exists(std::string_view key) const;
     bool Delete(std::string_view key);
 
@@ -59,22 +65,20 @@ public:
 
     bool GetLines(std::vector<std::string>* lines, const bool remove_comments = true) const;
 
-    using SectionMap = std::map<std::string, std::string, CaseInsensitiveLess>;
+    const char* GetName() const { return name; }
 
-    const std::string& GetName() const { return name; }
-    const SectionMap& GetValues() const { return values; }
-
-  protected:
-    std::string name;
-
-    std::vector<std::string> keys_order;
-    SectionMap values;
-
-    std::vector<std::string> m_lines;
+    // The keys, in the order they were first set
+    size_t NumKeys() const { return num_keys; }
+    const char* KeyName(size_t index) const { return keys[index].name; }
+    const char* KeyValue(size_t index) const { return keys[index].value; }
   };
 
   IniFile();
   ~IniFile();
+  IniFile(IniFile&& other);
+  IniFile& operator=(IniFile&& other);
+  IniFile(const IniFile&) = delete;
+  IniFile& operator=(const IniFile&) = delete;
 
   /**
    * Loads sections and keys.
@@ -103,10 +107,15 @@ public:
   const Section* GetSection(std::string_view section_name) const;
   Section* GetSection(std::string_view section_name);
 
-  const std::list<Section>& GetSections() const { return sections; }
+  // The sections, in the order they were first met
+  size_t NumSections() const { return m_data.num_sections; }
+  const Section& SectionAt(size_t index) const
+  {
+    return *static_cast<const Section*>(m_data.sections[index]);
+  }
 
 private:
-  std::list<Section> sections;
+  ini_data m_data;
 
   static const std::string& NULL_STRING;
 };

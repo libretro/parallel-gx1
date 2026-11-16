@@ -201,12 +201,8 @@ public:
         ini.Load(File::GetUserPath(D_GAMESETTINGS_IDX) + filename, true);
     }
 
-    const auto& system_sections = ini.GetSections();
-
-    for (const auto& section : system_sections)
-    {
-      LoadFromSystemSection(layer, section);
-    }
+    for (size_t i = 0; i < ini.NumSections(); i++)
+      LoadFromSystemSection(layer, ini.SectionAt(i));
 
     LoadControllerConfig(layer);
   }
@@ -253,8 +249,10 @@ private:
           profile_ini.Load(ini_path);
 
           const auto* ini_section = profile_ini.GetOrCreateSection("Profile");
-          for (const auto& [key, value] : ini_section->GetValues())
+          for (size_t i = 0; i < ini_section->NumKeys(); i++)
           {
+            const std::string key = ini_section->KeyName(i);
+            const std::string value = ini_section->KeyValue(i);
             Config::Location location{std::get<2>(use_data), std::get<1>(use_data) + num, key};
             layer->Set(location, value);
           }
@@ -267,8 +265,10 @@ private:
   {
     const std::string section_name = section.GetName();
 
-    for (const auto& [key, value] : section.GetValues())
+    for (size_t i = 0; i < section.NumKeys(); i++)
     {
+      const std::string key = section.KeyName(i);
+      const std::string value = section.KeyValue(i);
       const auto location = MapINIToRealLocation(section_name, key);
 
       if (location.section.empty() && location.key.empty())

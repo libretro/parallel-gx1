@@ -153,15 +153,14 @@ public:
     {
       Common::IniFile ini;
       ini.Load(File::GetUserPath(system.second));
-      const auto& system_sections = ini.GetSections();
-
-      for (const auto& section : system_sections)
+      for (size_t s = 0; s < ini.NumSections(); s++)
       {
+        const Common::IniFile::Section& section = ini.SectionAt(s);
         const std::string section_name = section.GetName();
-        const auto& section_map = section.GetValues();
 
-        for (const auto& value : section_map)
+        for (size_t k = 0; k < section.NumKeys(); k++)
         {
+          const std::pair<std::string, std::string> value(section.KeyName(k), section.KeyValue(k));
           const Config::Location location{system.first, section_name, value.first};
           const bool load_disallowed = std::ranges::any_of(
               s_setting_disallowed, [&location](const auto* l) { return *l == location; });
