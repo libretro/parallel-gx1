@@ -163,7 +163,6 @@ void LoadPatchSection(const std::string& section, std::vector<Patch>* patches,
 void LoadPatches()
 {
   const auto& sconfig = SConfig::GetInstance();
-  Common::IniFile merged = sconfig.LoadGameIni();
   Common::IniFile globalIni = sconfig.LoadDefaultGameIni();
   Common::IniFile localIni = sconfig.LoadLocalGameIni();
 
