@@ -55,6 +55,10 @@ bool ObjectCache::Initialize()
   if (!CreateStaticSamplers())
     return false;
 
+  /* the sampler table, before the first one a game asks for */
+  if (!m_sampler_capacity && !GrowSamplers())
+    return false;
+
   if (!m_texture_upload_buffer.Init(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, TEXTURE_UPLOAD_BUFFER_SIZE,
                                     VK_HEAP_UPLOAD_CACHED))
   {
