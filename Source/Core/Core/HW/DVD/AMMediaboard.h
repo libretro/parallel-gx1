@@ -239,7 +239,6 @@ void InitDIMM(const DiscIO::Volume& volume);
 void InitKeys(u32 key_a, u32 key_b, u32 key_c);
 u32 ExecuteCommand(std::array<u32, 3>& dicmd_buf, u32* diimm_buf, u32 address, u32 length);
 u32 GetGameType();
-u32 GetMediaType();
 bool GetTestMenu();
 void Shutdown();
 void DoState(PointerWrap& p);
@@ -267,7 +266,5 @@ struct IPRedirection
 using IPRedirections = std::vector<IPRedirection>;
 
 IPRedirections GetIPRedirections();
-
-s32 DebuggerGetSocket(u32 triforce_fd);
 
 };  // namespace AMMediaboard

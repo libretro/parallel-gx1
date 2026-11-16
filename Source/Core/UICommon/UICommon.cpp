@@ -124,17 +124,6 @@ void Shutdown()
   Config::Shutdown();
 }
 
-[[nodiscard]] Common::EventHook AddFlushUnsavedDataCallback(std::function<void()> callback)
-{
-  return s_flush_unsaved_data_event_hook.Register(std::move(callback));
-}
-
-void FlushUnsavedData()
-{
-  INFO_LOG(CORE, "Flushing unsaved data...");
-  s_flush_unsaved_data_event_hook.Trigger();
-}
-
 void ShutdownControllers()
 {
   g_controller_interface.Shutdown();

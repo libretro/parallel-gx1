@@ -103,7 +103,6 @@ const DSPOPCTemplate* FindExtOpInfoByOpcode(UDSPInstruction opcode);
 
 // Used by the interpreter and JIT for instruction emulation
 const DSPOPCTemplate* GetOpTemplate(UDSPInstruction inst);
-const DSPOPCTemplate* GetExtOpTemplate(UDSPInstruction inst);
 
 template <typename T, size_t N>
 auto FindByOpcode(UDSPInstruction opcode, const std::array<T, N>& data)

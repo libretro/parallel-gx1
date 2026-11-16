@@ -181,11 +181,6 @@ void http_service_run(http_job_t *job)
    }
 }
 
-const char *http_job_header(const http_job_t *job, const char *name)
-{
-   return job->headers ? net_http_header_value(job->headers, name) : NULL;
-}
-
 void http_job_free(http_job_t *job)
 {
    free(job->headers);

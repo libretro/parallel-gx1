@@ -46,7 +46,6 @@ public:
   u16 Video_GetBoundingBox(int index);
 
   static std::string GetDefaultBackendConfigName();
-  static std::string GetDefaultBackendDisplayName();
   static void ActivateBackend(const std::string& name);
 
   // Fills the backend_info fields with the capabilities of the selected backend/device.

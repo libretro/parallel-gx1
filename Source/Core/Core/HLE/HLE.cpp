@@ -280,24 +280,4 @@ u32 UnPatch(Core::System& system, std::string_view patch_name)
   return 0;
 }
 
-u32 UnpatchRange(Core::System& system, u32 start_addr, u32 end_addr)
-{
-  auto& ppc_state = system.GetPPCState();
-  auto& memory = system.GetMemory();
-  auto& jit_interface = system.GetJitInterface();
-
-  u32 count = 0;
-
-  auto i = s_hooked_addresses.lower_bound(start_addr);
-  while (i != s_hooked_addresses.end() && i->first < end_addr)
-  {
-    INFO_LOG(OSHLE, "Unpatch HLE hooks [%08x;%08x): %s at %08x", start_addr, end_addr,
-             os_patches[i->second].name, i->first);
-    ppc_state.iCache.Invalidate(memory, jit_interface, i->first);
-    i = s_hooked_addresses.erase(i);
-    count += 1;
-  }
-
-  return count;
-}
 }  // namespace HLE

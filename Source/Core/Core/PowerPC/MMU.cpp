@@ -576,39 +576,6 @@ u32 MMU::HostRead_Instruction(const Core::CPUThreadGuard& guard, const u32 addre
       address);
 }
 
-std::optional<ReadResult<u32>> MMU::HostTryReadInstruction(const Core::CPUThreadGuard& guard,
-                                                           const u32 address,
-                                                           RequestedAddressSpace space)
-{
-  if (!HostIsInstructionRAMAddress(guard, address, space))
-    return std::nullopt;
-
-  auto& mmu = guard.GetSystem().GetMMU();
-  switch (space)
-  {
-  case RequestedAddressSpace::Effective:
-  {
-    const u32 value = mmu.ReadFromHardware<XCheckTLBFlag::OpcodeNoException, u32>(address);
-    return ReadResult<u32>(!!mmu.m_ppc_state.msr.IR, value);
-  }
-  case RequestedAddressSpace::Physical:
-  {
-    const u32 value = mmu.ReadFromHardware<XCheckTLBFlag::OpcodeNoException, u32, true>(address);
-    return ReadResult<u32>(false, value);
-  }
-  case RequestedAddressSpace::Virtual:
-  {
-    if (!mmu.m_ppc_state.msr.IR)
-      return std::nullopt;
-    const u32 value = mmu.ReadFromHardware<XCheckTLBFlag::OpcodeNoException, u32>(address);
-    return ReadResult<u32>(true, value);
-  }
-  }
-
-  ASSERT(false);
-  return std::nullopt;
-}
-
 template <std::unsigned_integral T>
 T MMU::Read(const u32 address)
 {
@@ -803,29 +770,6 @@ std::u16string MMU::HostGetU16String(const Core::CPUThreadGuard& guard, u32 addr
     address += 2;
   } while (size == 0 || s.length() < size);
   return s;
-}
-
-std::optional<ReadResult<std::string>> MMU::HostTryReadString(const Core::CPUThreadGuard& guard,
-                                                              u32 address, size_t size,
-                                                              RequestedAddressSpace space)
-{
-  auto c = HostTryRead<u8>(guard, address, space);
-  if (!c)
-    return std::nullopt;
-  if (c->value == 0)
-    return ReadResult<std::string>(c->translated, "");
-
-  std::string s;
-  s += static_cast<char>(c->value);
-  while (size == 0 || s.length() < size)
-  {
-    ++address;
-    const auto res = HostTryRead<u8>(guard, address, space);
-    if (!res || res->value == 0)
-      break;
-    s += static_cast<char>(res->value);
-  }
-  return ReadResult<std::string>(c->translated, std::move(s));
 }
 
 bool MMU::IsOptimizableRAMAddress(const u32 address, const u32 access_size) const

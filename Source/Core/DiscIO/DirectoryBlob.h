@@ -34,9 +34,6 @@ enum class PartitionType : u32;
 class DirectoryBlobReader;
 class VolumeDisc;
 
-// Returns true if the path is inside a DirectoryBlob and doesn't represent the DirectoryBlob itself
-bool ShouldHideFromGameList(const std::string& volume_path);
-
 // Bytes shared by the content chunks that refer to them: a host file's path
 // (NUL included) or a run of memory. Reference counted; the bytes follow the
 // header in the same allocation.
@@ -145,7 +142,6 @@ inline ContentSource ContentFile(const std::string& path, u64 offset)
 ContentSource ContentMemory(ContentBlob* blob, u64 offset);
 ContentSource ContentBytes(const void* data, size_t size);
 ContentSource ContentPartition(u64 offset, u64 partition_data_offset);
-ContentSource ContentFixedByte(u8 byte);
 
 struct BuilderContentSource
 {

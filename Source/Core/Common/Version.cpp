@@ -19,12 +19,6 @@ namespace Common
 #define BUILD_TYPE_STR ""
 #endif
 
-const std::string& GetEmulatorName()
-{
-  static const std::string emulator_name = EMULATOR_NAME;
-  return emulator_name;
-}
-
 const std::string& GetScmRevStr()
 {
   static const std::string scm_rev_str = EMULATOR_NAME " "
@@ -51,30 +45,6 @@ const std::string& GetScmDescStr()
 {
   static const std::string scm_desc_str = SCM_DESC_STR;
   return scm_desc_str;
-}
-
-const std::string& GetScmBranchStr()
-{
-  static const std::string scm_branch_str = SCM_BRANCH_STR;
-  return scm_branch_str;
-}
-
-const std::string& GetUserAgentStr()
-{
-  static const std::string user_agent_str = EMULATOR_NAME "/" SCM_DESC_STR;
-  return user_agent_str;
-}
-
-const std::string& GetScmDistributorStr()
-{
-  static const std::string scm_distributor_str = SCM_DISTRIBUTOR_STR;
-  return scm_distributor_str;
-}
-
-int GetScmCommitsAheadMaster()
-{
-  // Note this macro can be empty if the master branch does not exist.
-  return SCM_COMMITS_AHEAD_MASTER + 0;
 }
 
 }  // namespace Common

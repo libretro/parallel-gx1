@@ -24,7 +24,6 @@ public:
 
   // Outputs a number of bytes and advances the internal state by the same amount.
   void GetBytes(size_t count, u8* out);
-  u8 GetByte();
 
   // Advances the internal state like GetBytes, but without outputting data. O(N), like GetBytes.
   void Forward(size_t count);

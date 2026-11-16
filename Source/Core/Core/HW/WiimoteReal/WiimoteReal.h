@@ -264,6 +264,5 @@ bool IsKnownDeviceId(const USBUtils::DeviceInfo&);
 
 void HandleWiimoteSourceChange(unsigned int wiimote_number);
 
-void HandleWiimotesInControllerInterfaceSettingChange();
 void PopulateDevices();
 }  // namespace WiimoteReal

@@ -51,11 +51,6 @@ bool OnThread()
   return Config::Get(Config::MAIN_DSP_THREAD);
 }
 
-bool IsWiiHost()
-{
-  return Core::System::GetInstance().IsWii();
-}
-
 void InterruptRequest()
 {
   // Fire an interrupt on the PPC ASAP.

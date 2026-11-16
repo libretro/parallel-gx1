@@ -24,7 +24,6 @@ struct CallstackEntry
   u32 vAddress = 0;
 };
 
-bool GetCallstack(const Core::CPUThreadGuard& guard, std::vector<CallstackEntry>& output);
 void PrintCallstack(const Core::CPUThreadGuard& guard, Common::Log::LogType type,
                     Common::Log::LogLevel level);
 void PrintDataBuffer(const Core::System& system, Common::Log::LogType type, u32 address, u32 size,

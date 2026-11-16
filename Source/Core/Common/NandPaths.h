@@ -34,16 +34,10 @@ std::string GetTitleContentPath(u64 title_id, std::optional<FromWhichRoot> from 
 std::string GetTMDFileName(u64 title_id, std::optional<FromWhichRoot> from = {});
 std::string GetMiiDatabasePath(std::optional<FromWhichRoot> from = {});
 
-// Returns whether a path is within an installed title's directory.
-bool IsTitlePath(const std::string& path, std::optional<FromWhichRoot> from = {},
-                 u64* title_id = nullptr);
-
 // Escapes characters that are invalid or have special meanings in the host file system
 std::string EscapeFileName(const std::string& filename);
 // Escapes characters that are invalid or have special meanings in the host file system
 std::string EscapePath(const std::string& path);
 // Reverses escaping done by EscapeFileName
 std::string UnescapeFileName(const std::string& filename);
-// Tests for a file name being "safe" as per the escaping defined in EscapeFileName
-bool IsFileNameSafe(const std::string_view filename);
 }  // namespace Common

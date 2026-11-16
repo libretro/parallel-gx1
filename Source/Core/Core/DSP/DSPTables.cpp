@@ -542,16 +542,6 @@ const DSPOPCTemplate* GetOpTemplate(UDSPInstruction inst)
   return s_op_table[inst];
 }
 
-const DSPOPCTemplate* GetExtOpTemplate(UDSPInstruction inst)
-{
-  const bool has_seven_bit_extension = (inst >> 12) == 0x3;
-
-  if (has_seven_bit_extension)
-    return s_ext_op_table[inst & 0x7F];
-
-  return s_ext_op_table[inst & 0xFF];
-}
-
 // This function could use the above GetOpTemplate, but then we'd lose the
 // nice property that it catches colliding op masks.
 void InitInstructionTable()

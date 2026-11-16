@@ -33,9 +33,6 @@ public:
 
   DynamicLibrary& operator=(void*);
 
-  // Returns the specified library name with the platform-specific suffix added.
-  static std::string GetUnprefixedFilename(const char* filename);
-
   // Returns the specified library name in platform-specific format.
   // Major/minor versions will not be included if set to -1.
   // If libname already contains the "lib" prefix, it will not be added again.

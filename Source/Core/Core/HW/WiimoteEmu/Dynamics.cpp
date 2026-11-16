@@ -383,18 +383,6 @@ void ApproachPositionWithJerk(PositionalState* state, const Common::Vec3& positi
   }
 }
 
-Common::Quaternion GetRotationFromAcceleration(const Common::Vec3& accel)
-{
-  const auto normalized_accel = accel.Normalized();
-
-  const auto angle = std::acos(normalized_accel.Dot({0, 0, 1}));
-  const auto axis = normalized_accel.Cross({0, 0, 1});
-
-  // Check that axis is non-zero to handle perfect up/down orientations.
-  return Common::Quaternion::Rotate(angle, axis.LengthSquared() ? axis.Normalized() :
-                                                                  Common::Vec3{0, 1, 0});
-}
-
 Common::Quaternion GetRotationFromGyroscope(const Common::Vec3& gyro)
 {
   const auto length = gyro.Length();

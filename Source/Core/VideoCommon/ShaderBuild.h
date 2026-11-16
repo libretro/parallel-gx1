@@ -68,10 +68,7 @@ uint32_t sb_output_location(const struct shader_build *sb, unsigned x);
 uint32_t sb_varying_location(const struct shader_build *sb, unsigned x);
 void sb_ubo(const struct shader_build *sb, struct rslc_b_quals *q, unsigned x);
 void sb_sampler(const struct shader_build *sb, struct rslc_b_quals *q, unsigned x);
-void sb_texel_buffer(const struct shader_build *sb, struct rslc_b_quals *q, unsigned x);
 void sb_ssbo(const struct shader_build *sb, struct rslc_b_quals *q, unsigned x);
-void sb_image(const struct shader_build *sb, struct rslc_b_quals *q, const char *format,
-      unsigned x);
 
 /* Expressions, shorter. */
 uint32_t sb_f(const struct shader_build *sb, double v);

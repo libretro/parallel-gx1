@@ -27,8 +27,6 @@ struct DeviceInfo
   std::string ToString() const;
 };
 
-std::optional<std::string> GetDeviceNameFromVIDPID(u16 vid, u16 pid);
-
 std::vector<DeviceInfo>
 ListDevices(const std::function<bool(const struct libusb_device_descriptor&)>& filter =
                 [](const struct libusb_device_descriptor&) { return true; });

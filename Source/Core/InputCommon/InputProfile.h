@@ -17,20 +17,4 @@ namespace InputProfile
 {
 std::vector<std::string> GetProfilesFromSetting(const std::string& setting,
                                                 const std::string& root);
-
-enum class CycleDirection : int
-{
-  Forward = 1,
-  Backward = -1
-};
-
-class ProfileCycler
-{
-public:
-private:
-  std::vector<std::string> GetProfilesForDevice(InputConfig* device_configuration);
-  std::string GetWiimoteInputProfilesForGame(int controller_index);
-
-  int m_wiimote_profile_index = 0;
-};
 }  // namespace InputProfile

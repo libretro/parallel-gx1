@@ -107,16 +107,6 @@ bool CreateDir(const char* path)
   return false;
 }
 
-bool CreateDirs(std::string_view path)
-{
-  char buf[PATH_MAX_LENGTH];
-  if (path.size() >= sizeof(buf))
-    return false;
-  std::memcpy(buf, path.data(), path.size());
-  buf[path.size()] = '\0';
-  return CreateDir(buf);
-}
-
 bool CreateFullPath(std::string_view fullPath)
 {
   char buf[PATH_MAX_LENGTH];

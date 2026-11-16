@@ -47,23 +47,4 @@ std::vector<std::string> GetProfilesFromSetting(const std::string& setting, cons
   return result;
 }
 
-std::vector<std::string> ProfileCycler::GetProfilesForDevice(InputConfig* device_configuration)
-{
-  const std::string device_profile_root_location(
-      device_configuration->GetUserProfileDirectoryPath());
-  return Common::DoFileSearch(device_profile_root_location, ".ini", true);
-}
-
-std::string ProfileCycler::GetWiimoteInputProfilesForGame(int controller_index)
-{
-  Common::IniFile game_ini = SConfig::GetInstance().LoadGameIni();
-  const auto* const control_section = game_ini.GetOrCreateSection("Controls");
-
-  std::string result;
-  char key[32];
-  snprintf(key, sizeof(key), "WiimoteProfile%d", controller_index + 1);
-  control_section->Get(key, &result);
-  return result;
-}
-
 }  // namespace InputProfile

@@ -102,20 +102,6 @@ void sb_sampler(const struct shader_build *sb, struct rslc_b_quals *q, unsigned 
       q->binding = x;
 }
 
-void sb_texel_buffer(const struct shader_build *sb, struct rslc_b_quals *q, unsigned x)
-{
-   q->storage = RSLC_B_ST_UNIFORM;
-   if (SB_GL_NO(sb, SHADER_BUILD_GL_BINDINGS))
-      return;
-   if (sb->api == SHADER_BUILD_VULKAN)
-   {
-      q->set     = sb->compute ? 0 : 1;
-      q->binding = sb->compute ? 9 + x : x + 8;
-   }
-   else
-      q->binding = x;
-}
-
 void sb_ssbo(const struct shader_build *sb, struct rslc_b_quals *q, unsigned x)
 {
    q->storage = RSLC_B_ST_BUFFER;
@@ -128,22 +114,6 @@ void sb_ssbo(const struct shader_build *sb, struct rslc_b_quals *q, unsigned x)
    }
    else
       q->binding = sb->api == SHADER_BUILD_D3D ? x + 2 : x;
-}
-
-void sb_image(const struct shader_build *sb, struct rslc_b_quals *q, const char *format,
-      unsigned x)
-{
-   q->storage = RSLC_B_ST_UNIFORM;
-   q->format  = format;
-   if (SB_GL_NO(sb, SHADER_BUILD_GL_BINDINGS))
-      return;
-   if (sb->api == SHADER_BUILD_VULKAN)
-   {
-      q->set     = 0;
-      q->binding = 11 + x;
-   }
-   else
-      q->binding = x;
 }
 
 uint32_t sb_f(const struct shader_build *sb, double v)

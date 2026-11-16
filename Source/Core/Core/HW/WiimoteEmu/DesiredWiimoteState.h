@@ -38,6 +38,4 @@ struct SerializedWiimoteState
   std::array<u8, 30> data;  // 18 bytes Wiimote, 6 bytes MotionPlus, 6 bytes Extension
 };
 
-SerializedWiimoteState SerializeDesiredState(const DesiredWiimoteState& state);
-bool DeserializeDesiredState(DesiredWiimoteState* state, const SerializedWiimoteState& serialized);
 }  // namespace WiimoteEmu

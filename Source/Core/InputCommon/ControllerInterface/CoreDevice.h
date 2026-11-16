@@ -228,7 +228,6 @@ public:
     for (i = 0; i < list->devices.size(); i++)
       fn(list->devices[i].get(), ctx);
   }
-  std::vector<std::string> GetAllDeviceStrings() const;
   std::string GetDefaultDeviceString() const;
   std::shared_ptr<Device> FindDevice(const DeviceQualifier& devq) const;
 

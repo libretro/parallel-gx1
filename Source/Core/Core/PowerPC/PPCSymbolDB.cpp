@@ -31,7 +31,6 @@ PPCSymbolDB::~PPCSymbolDB() = default;
 // Adds the function to the list, unless it's already there
 const Common::Symbol* PPCSymbolDB::AddFunction(const Core::CPUThreadGuard& guard, u32 start_addr)
 {
-
   // It's already in the list
   if (m_functions.contains(start_addr))
     return nullptr;

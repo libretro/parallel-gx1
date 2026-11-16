@@ -23,9 +23,6 @@ typedef void (*parallel_for_fn)(void *ctx, size_t index);
  * not call parallel_for itself unless it accepts that serial fallback. */
 void parallel_for(size_t count, parallel_for_fn fn, void *ctx);
 
-/* Number of threads parallel_for may run jobs on, the caller included. */
-unsigned parallel_for_threads(void);
-
 /* Joins the worker threads. Call when no batch can be running (the core's
  * retro_deinit); the next parallel_for starts the pool again. */
 void parallel_for_deinit(void);

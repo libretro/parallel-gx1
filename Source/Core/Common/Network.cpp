@@ -310,25 +310,6 @@ std::optional<MACAddress> StringToMacAddress(std::string_view mac_string)
   return std::make_optional(mac);
 }
 
-std::string BluetoothAddressToString(BluetoothAddress bdaddr)
-{
-  MACAddress mac;
-  for (size_t i = 0; i < mac.size(); i++)
-    mac[i] = bdaddr[mac.size() - 1 - i];
-  return MacAddressToString(mac);
-}
-
-std::optional<BluetoothAddress> StringToBluetoothAddress(std::string_view str)
-{
-  auto result = StringToMacAddress(str);
-  if (!result)
-    return std::nullopt;
-  BluetoothAddress bdaddr;
-  for (size_t i = 0; i < bdaddr.size(); i++)
-    bdaddr[i] = (*result)[bdaddr.size() - 1 - i];
-  return bdaddr;
-}
-
 EthernetHeader::EthernetHeader() = default;
 
 EthernetHeader::EthernetHeader(u16 ether_type) : ethertype(htons(ether_type))

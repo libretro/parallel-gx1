@@ -63,7 +63,6 @@ struct SConfig
 
   const std::string GetGameID() const;
   const std::string GetGameTDBID() const;
-  const std::string GetGameIDElfDol() const;
 
   // Returns a preference ordered list of ids to try for texture loading.
   // If launched via elf/dol, returns {elfdolid-gameid, gameid}. Otherwise returns {gameid}.
@@ -99,7 +98,6 @@ struct SConfig
   bool SetPathsAndGameMetadata(Core::System& system, const BootParameters& boot);
   DiscIO::Language GetCurrentLanguage(bool wii) const;
   DiscIO::Language GetLanguageAdjustedForRegion(bool wii, DiscIO::Region region) const;
-  std::string GetGameTDBImageRegionCode(bool wii, DiscIO::Region region) const;
 
   Common::IniFile LoadDefaultGameIni() const;
   Common::IniFile LoadLocalGameIni() const;

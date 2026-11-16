@@ -277,12 +277,9 @@ inline char ToUpper(char ch)
 std::vector<std::string> CommandLineToUtf8Argv(const wchar_t* command_line);
 #endif
 
-std::string GetEscapedHtml(std::string html);
-
 void ToLower(std::string* str);
 void ToUpper(std::string* str);
 bool CaseInsensitiveEquals(std::string_view a, std::string_view b);
-bool CaseInsensitiveContains(std::string_view haystack, std::string_view needle);
 
 // 'std::less'-like comparison function object type for case-insensitive strings.
 struct CaseInsensitiveLess

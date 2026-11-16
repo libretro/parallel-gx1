@@ -168,12 +168,6 @@ public:
     std::optional<ReadResult<U>> result = HostTryRead<U>(guard, address, space);
     return std::bit_cast<std::optional<ReadResult<T>>>(result);
   }
-  static std::optional<ReadResult<u32>>
-  HostTryReadInstruction(const Core::CPUThreadGuard& guard, u32 address,
-                         RequestedAddressSpace space = RequestedAddressSpace::Effective);
-  static std::optional<ReadResult<std::string>>
-  HostTryReadString(const Core::CPUThreadGuard& guard, u32 address, size_t size = 0,
-                    RequestedAddressSpace space = RequestedAddressSpace::Effective);
 
   // Writes a value to emulated memory using the currently active MMU settings.
   // If the write fails (eg. address does not correspond to a mapped address in the current address

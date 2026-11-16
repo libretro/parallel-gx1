@@ -145,9 +145,6 @@ inline bool CreateDir(const std::string& filename)
   return CreateDir(filename.c_str());
 }
 
-// Creates directories recursively. Returns true if successful or if the path already exists.
-bool CreateDirs(std::string_view filename);
-
 // Creates the full path to the file given in fullPath.
 // That is, for path '/a/b/c.bin', creates folders '/a' and '/a/b'.
 // Returns true if creation is successful or if the path already exists.

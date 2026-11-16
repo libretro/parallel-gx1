@@ -49,14 +49,6 @@ void shader_text_free(struct shader_text *t)
    t->failed = 0;
 }
 
-void shader_text_clear(struct shader_text *t)
-{
-   t->len    = 0;
-   t->failed = 0;
-   if (t->block)
-      t->block[SHADER_TEXT_HEAD_ROOM] = '\0';
-}
-
 /* Room for n more bytes and the NUL; 0 once failed. */
 static int shader_text_reserve(struct shader_text *t, size_t n)
 {

@@ -229,7 +229,6 @@ DepthState GetAlwaysWriteDepthState();
 BlendingState GetInvalidBlendingState();
 BlendingState GetNoBlendingBlendState();
 BlendingState GetNoColorWriteBlendState();
-SamplerState GetInvalidSamplerState();
 SamplerState GetPointSamplerState();
 SamplerState GetLinearSamplerState();
 FramebufferState GetColorFramebufferState(AbstractTextureFormat format);

@@ -160,17 +160,6 @@ const Info<SerialInterface::SIDevices>& GetInfoForSIDevice(int channel)
   return infos[channel];
 }
 
-const Info<bool>& GetInfoForAdapterRumble(int channel)
-{
-  static const std::array<const Info<bool>, 4> infos{
-      Info<bool>{{System::Main, "Core", "AdapterRumble0"}, true},
-      Info<bool>{{System::Main, "Core", "AdapterRumble1"}, true},
-      Info<bool>{{System::Main, "Core", "AdapterRumble2"}, true},
-      Info<bool>{{System::Main, "Core", "AdapterRumble3"}, true},
-  };
-  return infos[channel];
-}
-
 const Info<bool>& GetInfoForSimulateKonga(int channel)
 {
   static const std::array<const Info<bool>, 4> infos{
@@ -464,26 +453,9 @@ static std::set<USBUtils::DeviceInfo> LoadUSBWhitelistFromString(const std::stri
   return devices;
 }
 
-static std::string SaveUSBWhitelistToString(const std::set<USBUtils::DeviceInfo>& devices)
-{
-  std::string devices_string;
-  for (const auto& device : devices)
-  {
-    if (!devices_string.empty())
-      devices_string += ',';
-    devices_string += device.ToString();
-  }
-  return devices_string;
-}
-
 std::set<USBUtils::DeviceInfo> GetUSBDeviceWhitelist()
 {
   return LoadUSBWhitelistFromString(Config::Get(Config::MAIN_USB_PASSTHROUGH_DEVICES));
-}
-
-void SetUSBDeviceWhitelist(const std::set<USBUtils::DeviceInfo>& devices)
-{
-  Config::SetBase(Config::MAIN_USB_PASSTHROUGH_DEVICES, SaveUSBWhitelistToString(devices));
 }
 
 // Main.EmulatedUSBDevices
@@ -695,11 +667,6 @@ std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::
                           blocks_string.c_str(), ext.c_str());
 }
 
-bool IsDefaultMemcardPathConfigured(ExpansionInterface::Slot slot)
-{
-  return Config::Get(GetInfoForMemcardPath(slot)).empty();
-}
-
 std::string GetGCIFolderPath(ExpansionInterface::Slot slot, std::optional<DiscIO::Region> region)
 {
   return GetGCIFolderPath(Config::Get(GetInfoForGCIPath(slot)), slot, region);
@@ -759,11 +726,6 @@ std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::
   return StringFromFormat("%.*s/%s", static_cast<int>(base_path.size()), base_path.data(),
                           Config::GetDirectoryForRegion(Config::ToGameCubeRegion(used_region),
                                                         Config::RegionDirectoryStyle::Modern));
-}
-
-bool IsDefaultGCIFolderPathConfigured(ExpansionInterface::Slot slot)
-{
-  return Config::Get(GetInfoForGCIPath(slot)).empty();
 }
 
 bool AreCheatsEnabled()

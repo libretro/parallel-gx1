@@ -407,14 +407,6 @@ BlendingState GetNoColorWriteBlendState()
   return state;
 }
 
-SamplerState GetInvalidSamplerState()
-{
-  SamplerState state;
-  state.tm0.hex = 0xFFFFFFFF;
-  state.tm1.hex = 0xFFFFFFFF;
-  return state;
-}
-
 SamplerState GetPointSamplerState()
 {
   SamplerState state = {};

@@ -249,24 +249,6 @@ std::shared_ptr<Device> DeviceContainer::FindDevice(const DeviceQualifier& devq)
   return nullptr;
 }
 
-std::vector<std::string> DeviceContainer::GetAllDeviceStrings() const
-{
-  InputReadScope scope;
-  const DeviceList* const list = PeekDevices();
-  const auto& devices = list ? list->devices : NoDevices();
-
-  std::vector<std::string> device_strings;
-  DeviceQualifier device_qualifier;
-
-  for (const auto& d : devices)
-  {
-    device_qualifier.FromDevice(d.get());
-    device_strings.emplace_back(device_qualifier.ToString());
-  }
-
-  return device_strings;
-}
-
 std::string DeviceContainer::GetDefaultDeviceString() const
 {
   InputReadScope scope;

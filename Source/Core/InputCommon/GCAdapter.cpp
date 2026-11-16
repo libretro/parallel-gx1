@@ -49,9 +49,4 @@ bool IsDetected(const char** error_message)
   return false;
 }
 
-double GetCurrentPollRate()
-{
-  return 0.0;
-}
-
 }  // namespace GCAdapter

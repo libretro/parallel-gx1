@@ -590,15 +590,4 @@ CopyResult Export(u64 tid, std::string_view export_path)
   return Export(tid, export_path, &ios);
 }
 
-size_t ExportAll(std::string_view export_path)
-{
-  IOS::HLE::Kernel ios;
-  size_t exported_save_count = 0;
-  for (const u64 title : ios.GetESCore().GetInstalledTitles())
-  {
-    if (Export(title, export_path, &ios) == CopyResult::Success)
-      ++exported_save_count;
-  }
-  return exported_save_count;
-}
 }  // namespace WiiSave

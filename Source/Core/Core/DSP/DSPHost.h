@@ -24,7 +24,6 @@ void WriteHostMemory(u8 value, u32 addr);
 void DMAToDSP(u16* dst, u32 addr, u32 size);
 void DMAFromDSP(const u16* src, u32 addr, u32 size);
 bool OnThread();
-bool IsWiiHost();
 void InterruptRequest();
 void CodeLoaded(DSPCore& dsp, u32 addr, size_t size);
 void CodeLoaded(DSPCore& dsp, const u8* ptr, size_t size);

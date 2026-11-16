@@ -47,6 +47,4 @@ CopyResult Copy(Storage* source, Storage* destination);
 CopyResult Import(const std::string& data_bin_path, const std::function<bool()>& can_overwrite);
 /// Export a save to a .bin file.
 CopyResult Export(u64 tid, std::string_view export_path);
-/// Export all saves that are in the NAND. Returns the number of exported saves.
-size_t ExportAll(std::string_view export_path);
 }  // namespace WiiSave

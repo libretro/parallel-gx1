@@ -86,7 +86,6 @@ extern const Info<std::string> MAIN_BBA_BUILTIN_IP;
 extern const Info<std::string> MAIN_BBA_TAPSERVER_DESTINATION;
 extern const Info<std::string> MAIN_MODEM_TAPSERVER_DESTINATION;
 const Info<SerialInterface::SIDevices>& GetInfoForSIDevice(int channel);
-const Info<bool>& GetInfoForAdapterRumble(int channel);
 const Info<bool>& GetInfoForSimulateKonga(int channel);
 extern const Info<bool> MAIN_WII_SD_CARD;
 extern const Info<bool> MAIN_WII_SD_CARD_ENABLE_FOLDER_SYNC;
@@ -311,7 +310,6 @@ extern const Info<std::string> MAIN_BLUETOOTH_PASSTHROUGH_LINK_KEYS;
 extern const Info<bool> MAIN_USB_PASSTHROUGH_DISGUISE_PLAYSTATION_AS_WII;
 extern const Info<std::string> MAIN_USB_PASSTHROUGH_DEVICES;
 std::set<USBUtils::DeviceInfo> GetUSBDeviceWhitelist();
-void SetUSBDeviceWhitelist(const std::set<USBUtils::DeviceInfo>& devices);
 
 // Main.EmulatedUSBDevices
 
@@ -359,10 +357,8 @@ std::string GetMemcardPath(ExpansionInterface::Slot slot, std::optional<DiscIO::
                            u16 size_mb = 0x80);
 std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::Slot slot,
                            std::optional<DiscIO::Region> region, u16 size_mb = 0x80);
-bool IsDefaultMemcardPathConfigured(ExpansionInterface::Slot slot);
 std::string GetGCIFolderPath(ExpansionInterface::Slot slot, std::optional<DiscIO::Region> region);
 std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::Slot slot,
                              std::optional<DiscIO::Region> region);
-bool IsDefaultGCIFolderPathConfigured(ExpansionInterface::Slot slot);
 bool AreCheatsEnabled();
 }  // namespace Config

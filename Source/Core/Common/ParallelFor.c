@@ -188,16 +188,6 @@ void parallel_for(size_t count, parallel_for_fn fn, void *ctx)
    retro_eventcount_notify(&s_pool.idle);
 }
 
-unsigned parallel_for_threads(void)
-{
-   unsigned cores = cpu_features_get_core_amount();
-   if (cores < 1)
-      return 1;
-   if (cores > PARALLEL_FOR_MAX_WORKERS + 1)
-      return PARALLEL_FOR_MAX_WORKERS + 1;
-   return cores;
-}
-
 void parallel_for_deinit(void)
 {
    unsigned i;

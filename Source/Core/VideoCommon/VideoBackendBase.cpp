@@ -212,11 +212,6 @@ std::string VideoBackendBase::GetDefaultBackendConfigName()
   return GetDefaultVideoBackend()->GetConfigName();
 }
 
-std::string VideoBackendBase::GetDefaultBackendDisplayName()
-{
-  return GetDefaultVideoBackend()->GetDisplayName();
-}
-
 void VideoBackendBase::ActivateBackend(const std::string& name)
 {
   size_t i;

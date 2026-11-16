@@ -16,13 +16,6 @@ InputConfig* GetGBAConfig()
   return &s_config;
 }
 
-void ShutdownGBA()
-{
-  s_config.UnregisterHotplugCallback();
-
-  s_config.ClearControllers();
-}
-
 void InitializeGBA()
 {
   if (s_config.ControllersNeedToBeCreated())
@@ -42,11 +35,6 @@ void LoadGBAConfig()
   s_config.LoadConfig();
 }
 
-bool IsGBAInitialized()
-{
-  return !s_config.ControllersNeedToBeCreated();
-}
-
 GCPadStatus GetGBAStatus(int pad_num)
 {
   return static_cast<GBAPad*>(s_config.GetController(pad_num))->GetInput();
@@ -57,8 +45,4 @@ void SetGBAReset(int pad_num, bool reset)
   static_cast<GBAPad*>(s_config.GetController(pad_num))->SetReset(reset);
 }
 
-ControllerEmu::ControlGroup* GetGBAGroup(int pad_num, GBAPadGroup group)
-{
-  return static_cast<GBAPad*>(s_config.GetController(pad_num))->GetGroup(group);
-}
 }  // namespace Pad

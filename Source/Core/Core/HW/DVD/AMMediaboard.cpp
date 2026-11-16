@@ -2340,26 +2340,6 @@ u32 ExecuteCommand(std::array<u32, 3>& dicmd_buf, u32* diimm_buf, u32 address, u
   return 0;
 }
 
-u32 GetMediaType()
-{
-  switch (GetGameType())
-  {
-  default:
-  case FZeroAX:
-  case VirtuaStriker3:
-  case VirtuaStriker4:
-  case VirtuaStriker4_2006:
-  case GekitouProYakyuu:
-  case KeyOfAvalon:
-    return GDROM;
-
-  case MarioKartGP:
-  case MarioKartGP2:
-  case FZeroAXMonster:
-    return NAND;
-  }
-}
-
 // This is checking for the real game IDs (See boot.id within the game)
 u32 GetGameType()
 {
@@ -2480,12 +2460,4 @@ void DoState(PointerWrap& p)
   }
 }
 
-s32 DebuggerGetSocket(u32 triforce_fd)
-{
-  if (triforce_fd < std::size(s_sockets))
-    return s32(s_sockets[triforce_fd]);
-
-  WARN_LOG(AMMEDIABOARD, "GC-AM: Bad socket fd used by the debugger: %u", triforce_fd);
-  return -1;
-}
 }  // namespace AMMediaboard

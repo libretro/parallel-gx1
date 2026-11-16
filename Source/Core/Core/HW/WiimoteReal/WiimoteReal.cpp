@@ -1286,9 +1286,4 @@ void HandleWiimoteSourceChange(unsigned int index)
   PostToManager(ManagerCommand::Kind::SourceChange, {}, index);
 }
 
-void HandleWiimotesInControllerInterfaceSettingChange()
-{
-  PostToManager(ManagerCommand::Kind::ProcessPool);
-}
-
 }  // namespace WiimoteReal

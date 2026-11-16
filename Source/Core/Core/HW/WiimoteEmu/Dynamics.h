@@ -56,9 +56,6 @@ Common::Quaternion ComplementaryFilter(const Common::Quaternion& gyroscope,
                                        const Common::Vec3& accelerometer, float accel_weight,
                                        const Common::Vec3& accelerometer_normal = {0, 0, 1});
 
-// Estimate orientation from accelerometer data.
-Common::Quaternion GetRotationFromAcceleration(const Common::Vec3& accel);
-
 // Get a quaternion from current gyro data.
 Common::Quaternion GetRotationFromGyroscope(const Common::Vec3& gyro);
 

@@ -48,7 +48,6 @@ struct shader_text
 /* Starts empty, with room for cap bytes of text before it grows. */
 void shader_text_init(struct shader_text *t, size_t cap);
 void shader_text_free(struct shader_text *t);
-void shader_text_clear(struct shader_text *t);
 
 void shader_text_puts(struct shader_text *t, const char *s);
 void shader_text_putn(struct shader_text *t, const char *s, size_t n);

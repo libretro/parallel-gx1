@@ -56,9 +56,6 @@ void http_service_deinit(void);
 /* Runs @job on the HTTP thread and returns when it has finished. */
 void http_service_run(http_job_t *job);
 
-/* The value of response header @name in @job, NULL when there is none. */
-const char *http_job_header(const http_job_t *job, const char *name);
-
 void http_job_free(http_job_t *job);
 
 #ifdef __cplusplus

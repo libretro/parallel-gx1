@@ -48,21 +48,6 @@ void LaggedFibonacciGenerator::GetBytes(size_t count, u8* out)
   }
 }
 
-u8 LaggedFibonacciGenerator::GetByte()
-{
-  const u8 result = reinterpret_cast<u8*>(m_buffer.data())[m_position_bytes];
-
-  ++m_position_bytes;
-
-  if (m_position_bytes == LFG_K * sizeof(u32))
-  {
-    Forward();
-    m_position_bytes = 0;
-  }
-
-  return result;
-}
-
 void LaggedFibonacciGenerator::Forward(size_t count)
 {
   m_position_bytes += count;

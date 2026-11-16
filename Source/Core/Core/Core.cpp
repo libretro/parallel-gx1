@@ -167,11 +167,6 @@ bool IsCPUThread()
   return tls_is_cpu_thread;
 }
 
-bool IsGPUThread()
-{
-  return tls_is_gpu_thread;
-}
-
 bool WantsDeterminism()
 {
   return s_wants_determinism;
@@ -869,11 +864,6 @@ void Shutdown(Core::System& system)
 
   // Make sure there's nothing left over in case we're about to exit.
   HostDispatchJobs(system);
-}
-
-Common::EventHook AddOnStateChangedCallback(StateChangedCallbackFunc callback)
-{
-  return s_state_changed_event.Register(std::move(callback));
 }
 
 void NotifyStateChanged(const Core::State state)

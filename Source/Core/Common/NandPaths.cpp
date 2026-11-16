@@ -92,36 +92,6 @@ std::string GetMiiDatabasePath(std::optional<FromWhichRoot> from)
   return RootUserPath(from) + "/shared2/menu/FaceLib/RFL_DB.dat";
 }
 
-bool IsTitlePath(const std::string& path, std::optional<FromWhichRoot> from, u64* title_id)
-{
-  std::string expected_prefix = RootUserPath(from) + "/title/";
-  if (!path.starts_with(expected_prefix))
-  {
-    return false;
-  }
-
-  // Try to find a title ID in the remaining path.
-  std::string subdirectory = path.substr(expected_prefix.size());
-  std::vector<std::string> components = SplitString(subdirectory, '/');
-  if (components.size() < 2)
-  {
-    return false;
-  }
-
-  u32 title_id_high, title_id_low;
-  if (Common::FromChars(components[0], title_id_high, 16).ec != std::errc{} ||
-      Common::FromChars(components[1], title_id_low, 16).ec != std::errc{})
-  {
-    return false;
-  }
-
-  if (title_id != nullptr)
-  {
-    *title_id = (static_cast<u64>(title_id_high) << 32) | title_id_low;
-  }
-  return true;
-}
-
 static bool IsIllegalCharacter(char c)
 {
   static constexpr char illegal_chars[] = {'\"', '*', '/', ':', '<', '>', '?', '\\', '|', '\x7f'};
@@ -199,15 +169,4 @@ std::string UnescapeFileName(const std::string& filename)
   return result;
 }
 
-bool IsFileNameSafe(const std::string_view filename)
-{
-  if (filename.empty() || filename.find_first_not_of('.') == std::string_view::npos)
-    return false;
-  for (const char c : filename)
-  {
-    if (IsIllegalCharacter(c))
-      return false;
-  }
-  return true;
-}
 }  // namespace Common

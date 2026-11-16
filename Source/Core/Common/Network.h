@@ -302,9 +302,6 @@ MACAddress GenerateMacAddress(MACConsumer type);
 std::string MacAddressToString(const MACAddress& mac);
 std::optional<MACAddress> StringToMacAddress(std::string_view mac_string);
 
-std::string BluetoothAddressToString(BluetoothAddress bdaddr);
-std::optional<BluetoothAddress> StringToBluetoothAddress(std::string_view str);
-
 u16 ComputeNetworkChecksum(const void* data, u16 length, u32 initial_value = 0);
 u16 ComputeTCPNetworkChecksum(const IPAddress& from, const IPAddress& to, const void* data,
                               u16 length, u8 protocol);

@@ -17,38 +17,6 @@
 
 namespace DiscIO
 {
-std::string NameForPartitionType(u32 partition_type, bool include_prefix)
-{
-  switch (partition_type)
-  {
-  case PARTITION_DATA:
-    return "DATA";
-  case PARTITION_UPDATE:
-    return "UPDATE";
-  case PARTITION_CHANNEL:
-    return "CHANNEL";
-  case PARTITION_INSTALL:
-    // wit doesn't recognize the name "INSTALL", so we can't use it when naming partition folders
-    if (!include_prefix)
-      return "INSTALL";
-    [[fallthrough]];
-  default:
-    const std::string type_as_game_id{static_cast<char>((partition_type >> 24) & 0xFF),
-                                      static_cast<char>((partition_type >> 16) & 0xFF),
-                                      static_cast<char>((partition_type >> 8) & 0xFF),
-                                      static_cast<char>(partition_type & 0xFF)};
-    bool all_alnum = true;
-    for (const char c : type_as_game_id)
-      all_alnum = all_alnum && Common::IsAlnum(c);
-    if (all_alnum)
-    {
-      return include_prefix ? "P-" + type_as_game_id : type_as_game_id;
-    }
-
-    return (include_prefix ? "P" : "") + std::to_string(partition_type);
-  }
-}
-
 std::optional<u64> GetApploaderSize(const Volume& volume, const Partition& partition)
 {
   constexpr u64 header_size = 0x20;
@@ -215,51 +183,6 @@ static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition* par
     }
   }
   return biggest_offset;
-}
-
-bool IsGCZBlockSizeLegacyCompatible(int block_size, u64 file_size)
-{
-  // In order for versions of Dolphin prior to 5.0-11893 to be able to convert a GCZ file
-  // to ISO without messing up the final part of the file in some way, the file size
-  // must be an integer multiple of the block size (fixed in 3aa463c) and must not be
-  // an integer multiple of the block size multiplied by 32 (fixed in 26b21e3).
-  return file_size % block_size == 0 && file_size % (block_size * 32) != 0;
-}
-
-bool IsDiscImageBlockSizeValid(int block_size, BlobType format)
-{
-  switch (format)
-  {
-  case BlobType::GCZ:
-    // Block size "must" be a power of 2
-    if (!MathUtil::IsPow2(block_size))
-      return false;
-
-    break;
-  case BlobType::WIA:
-    // Block size must not be less than the minimum, and must be a multiple of it
-    if (block_size < WIA_MIN_BLOCK_SIZE || block_size % WIA_MIN_BLOCK_SIZE != 0)
-      return false;
-
-    break;
-  case BlobType::RVZ:
-    // Block size must not be smaller than the minimum
-    // Block sizes smaller than the large block size threshold must be a power of 2
-    // Block sizes larger than that threshold must be a multiple of the threshold
-    if (block_size < RVZ_MIN_BLOCK_SIZE ||
-        (block_size < RVZ_BIG_BLOCK_SIZE_LCM && !MathUtil::IsPow2(block_size)) ||
-        (block_size > RVZ_BIG_BLOCK_SIZE_LCM && block_size % RVZ_BIG_BLOCK_SIZE_LCM != 0))
-    {
-      return false;
-    }
-
-    break;
-  default:
-    ASSERT(false);
-    break;
-  }
-
-  return true;
 }
 
 }  // namespace DiscIO

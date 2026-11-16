@@ -240,19 +240,6 @@ std::optional<System> GetSystemFromName(const std::string& name)
   return {};
 }
 
-const std::string& GetLayerName(LayerType layer)
-{
-  static const std::map<LayerType, std::string> layer_to_name = {
-      {LayerType::Base, "Base"},
-      {LayerType::GlobalGame, "Global GameINI"},
-      {LayerType::LocalGame, "Local GameINI"},
-      {LayerType::Movie, "Movie"},
-      {LayerType::CommandLine, "Command Line"},
-      {LayerType::CurrentRun, "Current Run"},
-  };
-  return layer_to_name.at(layer);
-}
-
 LayerType GetActiveLayerForConfig(const Location& config)
 {
   // If config is not present in any layer, base layer is considered active.

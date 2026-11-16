@@ -137,7 +137,6 @@ bool IsRunningOrStarting(Core::System& system);
 bool IsUninitialized(Core::System& system);
 
 bool IsCPUThread();  // this tells us whether we are the CPU thread.
-bool IsGPUThread();
 
 bool WantsDeterminism();
 
@@ -158,7 +157,6 @@ void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> funct
 // for calling back into UI code without introducing a dependency on it in core
 using StateChangedCallbackFunc = std::function<void(Core::State)>;
 
-[[nodiscard]] Common::EventHook AddOnStateChangedCallback(StateChangedCallbackFunc callback);
 void NotifyStateChanged(Core::State state);
 
 void UpdateWantDeterminism(Core::System& system, bool initial = false);

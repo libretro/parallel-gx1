@@ -630,12 +630,6 @@ const GekkoOPInfo* GetOpInfo(UGeckoInstruction inst, u32 pc)
   }
 }
 
-const char* GetInstructionName(UGeckoInstruction inst, u32 pc)
-{
-  const GekkoOPInfo* info = GetOpInfo(inst, pc);
-  return info->opname;
-}
-
 bool IsValidInstruction(UGeckoInstruction inst, u32 pc)
 {
   const GekkoOPInfo* info = GetOpInfo(inst, pc);

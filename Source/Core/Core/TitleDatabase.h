@@ -27,9 +27,6 @@ public:
   // This falls back to returning an empty string if none could be found.
   const std::string& GetTitleName(const std::string& gametdb_id, DiscIO::Language language) const;
 
-  // Same as above, but takes a title ID instead of a GameTDB ID, and only works for channels.
-  const std::string& GetChannelName(u64 title_id, DiscIO::Language language) const;
-
   // Get a description for a GameTDB ID (title name if available + GameTDB ID).
   std::string Describe(const std::string& gametdb_id, DiscIO::Language language) const;
 

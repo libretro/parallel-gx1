@@ -37,17 +37,6 @@ DynamicLibrary& DynamicLibrary::operator=(void* handle)
   return *this;
 }
 
-std::string DynamicLibrary::GetUnprefixedFilename(const char* filename)
-{
-#if defined(_WIN32)
-  return std::string(filename) + ".dll";
-#elif defined(__APPLE__)
-  return std::string(filename) + ".dylib";
-#else
-  return std::string(filename) + ".so";
-#endif
-}
-
 std::string DynamicLibrary::GetVersionedFilename(const char* libname, int major, int minor)
 {
   char name[256];

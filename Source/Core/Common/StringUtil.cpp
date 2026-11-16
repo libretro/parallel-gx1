@@ -859,24 +859,6 @@ std::vector<std::string> CommandLineToUtf8Argv(const wchar_t* command_line)
 }
 #endif
 
-std::string GetEscapedHtml(std::string html)
-{
-  static constexpr std::array<std::array<const char*, 2>, 5> replacements{{
-      // Escape ampersand first to avoid escaping the ampersands in other replacements
-      {{"&", "&amp;"}},
-      {{"<", "&lt;"}},
-      {{">", "&gt;"}},
-      {{"\"", "&quot;"}},
-      {{"'", "&apos;"}},
-  }};
-
-  for (const auto& [unescaped, escaped] : replacements)
-  {
-    html = ReplaceAll(html, unescaped, escaped);
-  }
-  return html;
-}
-
 void ToLower(std::string* str)
 {
   for (char& c : *str)
@@ -899,19 +881,6 @@ bool CaseInsensitiveEquals(std::string_view a, std::string_view b)
       return false;
   }
   return true;
-}
-
-bool CaseInsensitiveContains(std::string_view haystack, std::string_view needle)
-{
-  if (needle.empty())
-    return true;
-
-  for (size_t i = 0; i + needle.size() <= haystack.size(); ++i)
-  {
-    if (CaseInsensitiveEquals(needle, haystack.substr(i, needle.size())))
-      return true;
-  }
-  return false;
 }
 
 bool CaseInsensitiveLess::operator()(std::string_view a, std::string_view b) const

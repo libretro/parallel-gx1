@@ -49,50 +49,6 @@ static void WalkTheStack(const Core::CPUThreadGuard& guard,
   }
 }
 
-// Returns callstack "formatted for debugging" - meaning that it
-// includes LR as the last item, and all items are the last step,
-// instead of "pointing ahead"
-bool GetCallstack(const Core::CPUThreadGuard& guard, std::vector<CallstackEntry>& output)
-{
-  auto& system = guard.GetSystem();
-  auto& power_pc = system.GetPowerPC();
-  const auto& ppc_state = power_pc.GetPPCState();
-
-  if (!Core::IsRunning(system) || !PowerPC::MMU::HostIsRAMAddress(guard, ppc_state.gpr[1]))
-    return false;
-
-  if (LR(ppc_state) == 0)
-  {
-    output.push_back({
-        .Name = "(error: LR=0)",
-        .vAddress = 0,
-    });
-    return false;
-  }
-
-  auto& ppc_symbol_db = power_pc.GetSymbolDB();
-
-  output.push_back({
-      .Name =
-          StringFromFormat(" * %s [ LR = %08x ]\n",
-                           ppc_symbol_db.GetDescription(LR(ppc_state)).c_str(), LR(ppc_state) - 4),
-      .vAddress = LR(ppc_state) - 4,
-  });
-
-  WalkTheStack(guard, [&output, &ppc_symbol_db](u32 func_addr) {
-    std::string func_desc = ppc_symbol_db.GetDescription(func_addr);
-    if (func_desc.empty() || func_desc == "Invalid")
-      func_desc = "(unknown)";
-
-    output.push_back({
-        .Name = StringFromFormat(" * %s [ addr = %08x ]\n", func_desc.c_str(), func_addr - 4),
-        .vAddress = func_addr - 4,
-    });
-  });
-
-  return true;
-}
-
 void PrintCallstack(const Core::CPUThreadGuard& guard, Common::Log::LogType type,
                     Common::Log::LogLevel level)
 {

@@ -154,11 +154,6 @@ std::string InputConfig::GetUserProfileDirectoryPath() const
   return File::GetUserPath(D_CONFIG_IDX) + "Profiles/" + GetProfileDirectoryName() + "/";
 }
 
-std::string InputConfig::GetSysProfileDirectoryPath() const
-{
-  return File::GetSysDirectory() + "Profiles/" + GetProfileDirectoryName() + "/";
-}
-
 void InputConfig::RegisterHotplugCallback()
 {
   // Update control references on all controllers

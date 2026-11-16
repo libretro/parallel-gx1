@@ -126,11 +126,6 @@ const std::string SConfig::GetGameTDBID() const
   return ReadMetadata().gametdb_id;
 }
 
-const std::string SConfig::GetGameIDElfDol() const
-{
-  return ReadMetadata().game_id_elf_dol;
-}
-
 const std::string SConfig::GetGameIDForTextures() const
 {
   return GetGameIDsForTextures().front();
@@ -577,46 +572,4 @@ Common::IniFile SConfig::LoadGameIni(std::string_view id, std::optional<u16> rev
   for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))
     game_ini.Load(File::GetUserPath(D_GAMESETTINGS_IDX) + filename, true);
   return game_ini;
-}
-
-std::string SConfig::GetGameTDBImageRegionCode(bool wii, DiscIO::Region region) const
-{
-  switch (region)
-  {
-  case DiscIO::Region::NTSC_J:
-  {
-    // Taiwanese games share the Japanese region code however their title ID ends with 'W'.
-    // GameTDB differentiates the covers using the code "ZH".
-    if (const std::string game_id = GetGameID(); game_id.size() >= 4 && game_id.at(3) == 'W')
-      return "ZH";
-
-    return "JA";
-  }
-  case DiscIO::Region::NTSC_U:
-    return "US";
-  case DiscIO::Region::NTSC_K:
-    return "KO";
-  case DiscIO::Region::PAL:
-  {
-    const auto user_lang = GetCurrentLanguage(wii);
-    switch (user_lang)
-    {
-    case DiscIO::Language::German:
-      return "DE";
-    case DiscIO::Language::French:
-      return "FR";
-    case DiscIO::Language::Spanish:
-      return "ES";
-    case DiscIO::Language::Italian:
-      return "IT";
-    case DiscIO::Language::Dutch:
-      return "NL";
-    case DiscIO::Language::English:
-    default:
-      return "EN";
-    }
-  }
-  default:
-    return "EN";
-  }
 }
