@@ -623,6 +623,7 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DolphinLibretro/VR.cpp \
 	$(CORE_DIR)/Source/Core/Core/ActionReplay.cpp \
 	$(CORE_DIR)/Source/Core/Core/ARDecrypt.cpp \
+	$(CORE_DIR)/Source/Core/Core/CheatCodes.cpp \
 	$(CORE_DIR)/Source/Core/Core/Boot/Boot_BS2Emu.cpp \
 	$(CORE_DIR)/Source/Core/Core/Boot/Boot_WiiWAD.cpp \
 	$(CORE_DIR)/Source/Core/Core/Boot/Boot.cpp \

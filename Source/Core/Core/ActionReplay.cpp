@@ -24,6 +24,7 @@
 #include <cerrno>
 #include <cinttypes>
 #include <cstdarg>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -36,6 +37,7 @@
 #include "Common/MsgHandler.h"
 
 #include "Core/ARDecrypt.h"
+#include "Core/CheatCodes.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/PatchEngine.h"
 #include "Core/PowerPC/MMU.h"
@@ -368,32 +370,6 @@ static void EncryptedAdd(EncryptedLines* lines, const char* line)
   lines->count++;
 }
 
-/* The codes the section's "$name" lines turn on, or off. */
-static void ReadEnabledOrDisabled(const Common::IniFile& ini, const char* section, bool enabled,
-                                  ARCodeList* list)
-{
-  const Common::IniFile::Section* const lines = ini.GetSection(section);
-  size_t i;
-  if (!lines)
-    return;
-  for (i = 0; i < lines->Data()->num_lines; i++)
-  {
-    const char* text;
-    size_t len;
-    u32 c;
-    if (!ini_section_line(lines->Data(), i, false, &text, &len) || !len || text[0] != '$')
-      continue;
-    for (c = 0; c < list->count; c++)
-    {
-      if (std::strlen(list->codes[c].name) == len - 1 &&
-          !std::memcmp(list->codes[c].name, text + 1, len - 1))
-      {
-        list->codes[c].enabled = enabled;
-      }
-    }
-  }
-}
-
 // Parses the Action Replay section of one game ini file, behind the codes already read.
 static void LoadSection(const Common::IniFile& ini, ARCodeList* list)
 {
@@ -458,8 +434,8 @@ static void LoadSection(const Common::IniFile& ini, ARCodeList* list)
   CodeFree(&current_code);
   std::free(encrypted_lines.text);
 
-  ReadEnabledOrDisabled(ini, "ActionReplay_Enabled", true, list);
-  ReadEnabledOrDisabled(ini, "ActionReplay_Disabled", false, list);
+  ReadEnabledAndDisabled(ini, "ActionReplay", list->codes, list->count, sizeof(ARCode),
+                         offsetof(ARCode, name), offsetof(ARCode, enabled));
 }
 
 void LoadCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini,

@@ -4,11 +4,13 @@
 #include "Core/GeckoCodeConfig.h"
 
 #include <cerrno>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 
 #include "Common/IniData.h"
 #include "Common/IniFile.h"
+#include "Core/CheatCodes.h"
 
 namespace Gecko
 {
@@ -139,32 +141,6 @@ static bool IsSpace(char c)
   return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
 
-/* The codes the section's "$name" lines turn on, or off. */
-static void ReadEnabledOrDisabled(const Common::IniFile& ini, const char* section, bool enabled,
-                                  GeckoCodeList* list)
-{
-  const Common::IniFile::Section* const lines = ini.GetSection(section);
-  size_t i;
-  if (!lines)
-    return;
-  for (i = 0; i < lines->Data()->num_lines; i++)
-  {
-    const char* text;
-    size_t len;
-    u32 c;
-    if (!ini_section_line(lines->Data(), i, false, &text, &len) || !len || text[0] != '$')
-      continue;
-    for (c = 0; c < list->count; c++)
-    {
-      if (std::strlen(list->codes[c].name) == len - 1 &&
-          !std::memcmp(list->codes[c].name, text + 1, len - 1))
-      {
-        list->codes[c].enabled = enabled;
-      }
-    }
-  }
-}
-
 /* The codes of one INI file, behind those already read. */
 static void LoadSection(const Common::IniFile& ini, GeckoCodeList* list)
 {
@@ -222,8 +198,8 @@ static void LoadSection(const Common::IniFile& ini, GeckoCodeList* list)
     CodeKeep(list, &code);
   CodeFree(&code);
 
-  ReadEnabledOrDisabled(ini, "Gecko_Enabled", true, list);
-  ReadEnabledOrDisabled(ini, "Gecko_Disabled", false, list);
+  ReadEnabledAndDisabled(ini, "Gecko", list->codes, list->count, sizeof(GeckoCode),
+                         offsetof(GeckoCode, name), offsetof(GeckoCode, enabled));
 }
 
 void LoadCodes(const Common::IniFile& globalIni, const Common::IniFile& localIni,

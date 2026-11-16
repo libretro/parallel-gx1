@@ -9,6 +9,7 @@
 
 #include <cerrno>
 #include <cinttypes>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "Common/IniFile.h"
 
 #include "Core/ActionReplay.h"
+#include "Core/CheatCodes.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/GeckoCode.h"
@@ -212,31 +214,6 @@ static void PatchAddEntry(Patch* patch, const PatchEntry* entry)
   patch->entries[patch->num_entries++] = *entry;
 }
 
-/* The patches the section's "$name" lines turn on, or off. */
-static void ReadEnabledOrDisabled(const Common::IniFile& ini, const char* section, bool enabled)
-{
-  const Common::IniFile::Section* const lines = ini.GetSection(section);
-  size_t i;
-  if (!lines)
-    return;
-  for (i = 0; i < lines->Data()->num_lines; i++)
-  {
-    const char* text;
-    size_t len;
-    u32 p;
-    if (!ini_section_line(lines->Data(), i, false, &text, &len) || !len || text[0] != '$')
-      continue;
-    for (p = 0; p < s_num_on_frame; p++)
-    {
-      if (std::strlen(s_on_frame[p].name) == len - 1 &&
-          !std::memcmp(s_on_frame[p].name, text + 1, len - 1))
-      {
-        s_on_frame[p].enabled = enabled;
-      }
-    }
-  }
-}
-
 /* The OnFrame patches of one INI file, behind those already read. */
 static void LoadPatchSection(const Common::IniFile& ini)
 {
@@ -278,8 +255,8 @@ static void LoadPatchSection(const Common::IniFile& ini)
     PatchKeep(&current);
   PatchFree(&current);
 
-  ReadEnabledOrDisabled(ini, "OnFrame_Enabled", true);
-  ReadEnabledOrDisabled(ini, "OnFrame_Disabled", false);
+  ReadEnabledAndDisabled(ini, "OnFrame", s_on_frame, s_num_on_frame, sizeof(Patch),
+                         offsetof(Patch, name), offsetof(Patch, enabled));
 }
 
 void LoadPatches()
