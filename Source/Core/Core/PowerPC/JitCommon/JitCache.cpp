@@ -741,8 +741,10 @@ void JitBaseBlockCache::EraseBlock(JitBlock* block)
  * code_hash, found there, stays as it is. */
 void JitBaseBlockCache::PlaceBlock(JitBlock* block, u32 first_page, u32 second_page)
 {
-  SmallRangeSet moved;
+  SmallRangeSet& moved = m_placed_ranges;
   JitBlock** at;
+
+  moved.clear();
 
   for (const SmallRange& range : block->physical_addresses)
   {

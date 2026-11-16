@@ -350,6 +350,8 @@ private:
   JitBlock* m_newest_suspended = nullptr;
   u32 m_num_suspended = 0;
   bool m_clearing = false;
+  // PlaceBlock's: where the block being placed has its code now
+  SmallRangeSet m_placed_ranges;
 
   // Where the blocks live: chunks of BLOCK_CHUNK, never given back while the cache is, and the
   // free ones in a list. A block made where one was destroyed allocates nothing. The first
