@@ -315,7 +315,7 @@ public:
     x = ptr;
   }
 
-  void DoMarker(const std::string& prevName, u32 arbitraryNumber = 0x42)
+  void DoMarker(const char* prevName, u32 arbitraryNumber = 0x42)
   {
     u32 cookie = arbitraryNumber;
     Do(cookie);
@@ -324,7 +324,7 @@ public:
     {
       PanicAlert("Error: After \"%s\", found %u (%#x) instead of save marker %u (%#x). Aborting "
                  "savestate load...",
-                 prevName.c_str(), cookie, cookie, arbitraryNumber, arbitraryNumber);
+                 prevName, cookie, cookie, arbitraryNumber, arbitraryNumber);
       SetMeasureMode();
     }
   }
