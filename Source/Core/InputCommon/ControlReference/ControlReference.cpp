@@ -83,11 +83,10 @@ bool ControlReference::HasExpression() const
   return retro_atomic_load_acquire_int(&m_has_expression) != 0;
 }
 
-std::optional<std::string> ControlReference::SetExpression(std::string expr)
+void ControlReference::SetExpression(std::string expr)
 {
   auto parse_result = ParseExpression(expr);
   Publish(new Binding{{}, std::move(expr), parse_result.status, std::move(parse_result.expr)});
-  return parse_result.description;
 }
 
 ControlState ControlReference::GetRange() const

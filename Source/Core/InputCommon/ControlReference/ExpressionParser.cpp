@@ -545,7 +545,7 @@ static ParseResult MakeLiteralExpression(const Token& token)
   if (TryParse(std::string(token.Data()), &val))
     return ParseResult::MakeSuccessfulResult(std::make_unique<LiteralReal>(val));
   else
-    return ParseResult::MakeErrorResult(token, Common::GetStringT("Invalid literal."));
+    return ParseResult::MakeErrorResult();
 }
 
 class VariableExpression : public Expression
@@ -852,11 +852,10 @@ ParseResult ParseResult::MakeSuccessfulResult(std::unique_ptr<Expression>&& expr
   return result;
 }
 
-ParseResult ParseResult::MakeErrorResult(const Token&, std::string description)
+ParseResult ParseResult::MakeErrorResult()
 {
   ParseResult result;
   result.status = ParseStatus::SyntaxError;
-  result.description = std::move(description);
   return result;
 }
 
@@ -879,7 +878,7 @@ public:
     if (Peek().type == TOK_EOF)
       return result;
 
-    return ParseResult::MakeErrorResult(Peek(), Common::GetStringT("Expected end of expression."));
+    return ParseResult::MakeErrorResult();
   }
 
 private:
@@ -907,9 +906,7 @@ private:
     return tok.type == type;
   }
 
-  ParseResult ParseFunctionArguments(const std::string_view& func_name,
-                                     std::unique_ptr<FunctionExpression>&& func,
-                                     const Token& func_tok)
+  ParseResult ParseFunctionArguments(std::unique_ptr<FunctionExpression>&& func)
   {
     std::vector<std::unique_ptr<Expression>> args;
 
@@ -952,7 +949,7 @@ private:
 
           // Comma before the next argument.
           if (TOK_COMMA != tok.type)
-            return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected closing paren."));
+            return ParseResult::MakeErrorResult();
         };
       }
     }
@@ -961,13 +958,7 @@ private:
     const auto argument_validation = func->ValidateArguments();
 
     if (std::holds_alternative<FunctionExpression::ExpectedArguments>(argument_validation))
-    {
-      const auto text = std::string(func_name) + '(' +
-                        std::get<FunctionExpression::ExpectedArguments>(argument_validation).text +
-                        ')';
-
-      return ParseResult::MakeErrorResult(func_tok, "Expected arguments: " + text);
-    }
+      return ParseResult::MakeErrorResult();
 
     return ParseResult::MakeSuccessfulResult(std::move(func));
   }
@@ -988,7 +979,7 @@ private:
         return ParseAtom(control_tok);
       }
 
-      return ParseFunctionArguments(tok.Data(), std::move(func), tok);
+      return ParseFunctionArguments(std::move(func));
     }
     case TOK_CONTROL:
     {
@@ -998,7 +989,7 @@ private:
     }
     case TOK_NOT:
     {
-      return ParseFunctionArguments("not", MakeFunctionExpression("not"), tok);
+      return ParseFunctionArguments(MakeFunctionExpression("not"));
     }
     case TOK_LITERAL:
     {
@@ -1007,7 +998,7 @@ private:
     case TOK_VARIABLE:
     {
       if (!tok.data_length)
-        return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected variable name."));
+        return ParseResult::MakeErrorResult();
       else
         return ParseResult::MakeSuccessfulResult(
             std::make_unique<VariableExpression>(std::string(tok.Data())));
@@ -1024,17 +1015,17 @@ private:
     {
       // An atom was expected but we got a subtraction symbol.
       // Interpret it as a unary minus function.
-      return ParseFunctionArguments("minus", MakeFunctionExpression("minus"), tok);
+      return ParseFunctionArguments(MakeFunctionExpression("minus"));
     }
     case TOK_ADD:
     {
       // An atom was expected but we got an addition symbol.
       // Interpret it as a unary plus.
-      return ParseFunctionArguments("plus", MakeFunctionExpression("plus"), tok);
+      return ParseFunctionArguments(MakeFunctionExpression("plus"));
     }
     default:
     {
-      return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected start of expression."));
+      return ParseResult::MakeErrorResult();
     }
     }
   }
@@ -1122,8 +1113,7 @@ private:
 
         const Token should_be_colon = Chew();
         if (should_be_colon.type != TOK_COLON)
-          return ParseResult::MakeErrorResult(should_be_colon,
-                                              Common::GetStringT("Expected colon."));
+          return ParseResult::MakeErrorResult();
 
         auto false_result = ParseInfixOperations(OperatorPrecedence(op.type));
         if (false_result.status != ParseStatus::Successful)
@@ -1155,7 +1145,7 @@ private:
     const auto rparen = Chew();
     if (rparen.type != TOK_RPAREN)
     {
-      return ParseResult::MakeErrorResult(rparen, Common::GetStringT("Expected closing paren."));
+      return ParseResult::MakeErrorResult();
     }
 
     return result;
@@ -1165,7 +1155,7 @@ private:
   {
     Token tok = Chew();
     if (tok.type != TOK_LPAREN)
-      return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected opening paren."));
+      return ParseResult::MakeErrorResult();
 
     std::vector<std::unique_ptr<ControlExpression>> inputs;
 
@@ -1174,7 +1164,7 @@ private:
       tok = Chew();
 
       if (tok.type != TOK_CONTROL && tok.type != TOK_BAREWORD)
-        return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected name of input."));
+        return ParseResult::MakeErrorResult();
 
       ControlQualifier cq;
       cq.FromString(std::string(tok.Data()));
@@ -1188,7 +1178,7 @@ private:
       if (tok.type == TOK_RPAREN)
         break;
 
-      return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected + or closing paren."));
+      return ParseResult::MakeErrorResult();
     }
 
     return ParseResult::MakeSuccessfulResult(std::make_unique<HotkeyExpression>(std::move(inputs)));
@@ -1209,12 +1199,12 @@ static ParseResult ParseComplexExpression(const std::string& str)
   std::size_t count;
   Lexer l(str.data(), str.size());
   if (!tokens)
-    return ParseResult::MakeErrorResult(Token{}, Common::GetStringT("Tokenizing failed."));
+    return ParseResult::MakeErrorResult();
   const ParseStatus tokenize_status = l.Tokenize(tokens, &count);
   if (tokenize_status != ParseStatus::Successful)
   {
     std::free(tokens);
-    return ParseResult::MakeErrorResult(Token{}, Common::GetStringT("Tokenizing failed."));
+    return ParseResult::MakeErrorResult();
   }
   ParseResult result = ParseTokens(tokens);
   std::free(tokens);

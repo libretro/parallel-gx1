@@ -207,13 +207,10 @@ class ParseResult
 public:
   static ParseResult MakeEmptyResult();
   static ParseResult MakeSuccessfulResult(std::unique_ptr<Expression>&& expr);
-  static ParseResult MakeErrorResult(const Token& token, std::string description);
+  static ParseResult MakeErrorResult();
 
   ParseStatus status = ParseStatus::EmptyExpression;
   std::unique_ptr<Expression> expr;
-
-  // Used for parse errors:
-  std::optional<std::string> description;
 
 private:
   ParseResult() = default;

@@ -62,8 +62,7 @@ public:
   // Whether there is an expression at all, without copying it.
   bool HasExpression() const;
 
-  // Returns a human-readable error description when the given expression is invalid.
-  std::optional<std::string> SetExpression(std::string expr);
+  void SetExpression(std::string expr);
 
   ControlState GetRange() const;
   void SetRange(ControlState range);
