@@ -135,7 +135,8 @@ public:
 private:
 #ifdef _WIN32
   WindowsMemoryRegion* EnsureSplitRegionForMapping(void* address, size_t size);
-  bool JoinRegionsAfterUnmap(void* address, size_t size);
+  bool JoinRegionsAfterUnmap(void* address, size_t size, bool join);
+  bool CoalesceFreeRegions(size_t index, const u8* end);
 
   std::vector<WindowsMemoryRegion> m_regions;
   void* m_reserved_region = nullptr;

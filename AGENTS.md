@@ -168,6 +168,10 @@ maps one from the JIT's fault handler, the access then run again as it
 is, not backpatched. A game that swaps pages in and out pays the host a
 mapping only for those its code reads or writes through fastmem; each
 one is two or more system calls, and far more on Windows than on Linux.
+On Windows a single page unmapped keeps its placeholder split
+(`MemArenaWin.cpp`): mapping there again is one call, unmapping one, and
+the placeholders are joined only when something larger is mapped over
+them or the region is released.
 
 ## Zero-copy and borrowed lends
 

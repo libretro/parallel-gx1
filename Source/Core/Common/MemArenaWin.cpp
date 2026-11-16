@@ -37,6 +37,11 @@ using PIsApiSetImplemented = BOOL(APIENTRY*)(PCSTR Contract);
 
 namespace Common
 {
+enum
+{
+  SINGLE_PAGE_SIZE = 0x1000
+};
+
 struct WindowsMemoryRegion
 {
   u8* m_start;
@@ -205,11 +210,41 @@ void MemArena::ReleaseMemoryRegion()
                  (u64)mapped_region_count);
     }
 
+    // one placeholder again, the single pages left split by UnmapFromMemoryRegion joined
+    if (mapped_region_count == 0 && !m_regions.empty())
+      CoalesceFreeRegions(0, m_regions.back().m_start + m_regions.back().m_size);
+
     // then free memory
     VirtualFree(m_reserved_region, 0, MEM_RELEASE);
     m_reserved_region = nullptr;
     m_regions.clear();
   }
+}
+
+// The free region at index and the free ones after it, up to end, joined into one placeholder;
+// false when the system would not
+bool MemArena::CoalesceFreeRegions(size_t index, const u8* end)
+{
+  std::vector<WindowsMemoryRegion>& regions = m_regions;
+  size_t last = index;
+  size_t total = regions[index].m_size;
+
+  while (regions[index].m_start + total < end && last + 1 < regions.size() &&
+         !regions[last + 1].m_is_mapped)
+  {
+    last++;
+    total += regions[last].m_size;
+  }
+  if (last == index)
+    return true;
+  if (!VirtualFree(regions[index].m_start, total, MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS))
+  {
+    NOTICE_LOG(MEMMAP, "Region coalescing failed: %s", GetLastErrorString().c_str());
+    return false;
+  }
+  regions[index].m_size = total;
+  regions.erase(regions.begin() + index + 1, regions.begin() + last + 1);
+  return true;
 }
 
 WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, size_t size)
@@ -255,6 +290,15 @@ WindowsMemoryRegion* MemArena::EnsureSplitRegionForMapping(void* start_address, 
   }
 
   const size_t mapping_index = it - regions.begin();
+
+  // single pages unmapped are left split: joined here when what is mapped needs more than one
+  if (it->m_start + it->m_size < address + size)
+  {
+    if (!CoalesceFreeRegions(mapping_index, address + size))
+      return nullptr;
+    it = regions.begin() + mapping_index;
+  }
+
   u8* const mapping_address = it->m_start;
   const size_t mapping_size = it->m_size;
   if (mapping_address == address)
@@ -359,7 +403,7 @@ void* MemArena::MapInMemoryRegion(s64 offset, size_t size, void* base, bool writ
       PanicAlert("Mapping memory region failed: %s", GetLastErrorString().c_str());
 
       // revert the split, if any
-      JoinRegionsAfterUnmap(base, size);
+      JoinRegionsAfterUnmap(base, size, true);
 
       return nullptr;
     }
@@ -393,7 +437,8 @@ bool MemArena::ChangeMappingProtection(void* view, size_t size, bool writeable)
   return retval != 0;
 }
 
-bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
+// The region at the address is free again; joined with the free ones beside it if join
+bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size, bool join)
 {
   u8* const address = static_cast<u8*>(start_address);
   auto& regions = m_regions;
@@ -424,6 +469,8 @@ bool MemArena::JoinRegionsAfterUnmap(void* start_address, size_t size)
     return false;
   }
   it->m_is_mapped = false;
+  if (!join)
+    return true;
 
   const bool can_join_with_preceding = it != regions.begin() && !(it - 1)->m_is_mapped;
   const bool can_join_with_succeeding = (it + 1) != regions.end() && !(it + 1)->m_is_mapped;
@@ -480,7 +527,10 @@ void MemArena::UnmapFromMemoryRegion(void* view, size_t size)
     if (reinterpret_cast<PUnmapViewOfFileEx>(m_memory_functions.m_address_UnmapViewOfFileEx)(
             view, MEM_PRESERVE_PLACEHOLDER))
     {
-      if (!JoinRegionsAfterUnmap(view, size))
+      // A single page, as the game's page table maps them, stays split: the next mapping there
+      // replaces its placeholder as it is, with no call to split it and none here to join it.
+      // EnsureSplitRegionForMapping joins them when something larger is mapped over them.
+      if (!JoinRegionsAfterUnmap(view, size, size > SINGLE_PAGE_SIZE))
         PanicAlert("Joining memory region failed.");
     }
     else
