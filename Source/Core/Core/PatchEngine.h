@@ -3,10 +3,7 @@
 
 #pragma once
 
-#include <memory>
-#include <optional>
-#include <string>
-#include <vector>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 #include "Common/Swap.h"
@@ -35,61 +32,9 @@ void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, T value, const u32 addr
 
 namespace PatchEngine
 {
-enum class PatchType
-{
-  Patch8Bit,
-  Patch16Bit,
-  Patch32Bit,
-};
-
-struct PatchEntry
-{
-  PatchEntry() = default;
-  PatchEntry(PatchType t, u32 addr, u32 value_) : type(t), address(addr), value(value_) {}
-  PatchType type = PatchType::Patch8Bit;
-  u32 address = 0;
-  u32 value = 0;
-  u32 comparand = 0;
-  bool conditional = false;
-};
-
-struct Patch
-{
-  std::string name;
-  std::vector<PatchEntry> entries;
-  bool enabled = false;
-  bool default_enabled = false;
-  bool user_defined = false;  // False if this code is shipped with Dolphin.
-};
-
-
-std::optional<PatchEntry> DeserializeLine(std::string line);
-void LoadPatchSection(const std::string& section, std::vector<Patch>* patches,
-                      const Common::IniFile& globalIni, const Common::IniFile& localIni);
 void LoadPatches();
 
 bool ApplyFramePatches(Core::System& system);
 void Shutdown();
 void Reload(Core::System& system);
-
-inline int GetPatchTypeCharLength(PatchType type)
-{
-  int size = 8;
-  switch (type)
-  {
-  case PatchType::Patch8Bit:
-    size = 2;
-    break;
-
-  case PatchType::Patch16Bit:
-    size = 4;
-    break;
-
-  case PatchType::Patch32Bit:
-    size = 8;
-    break;
-  }
-  return size;
-}
-
 }  // namespace PatchEngine

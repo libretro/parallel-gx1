@@ -7,23 +7,18 @@
 
 #include "Core/PatchEngine.h"
 
-#include <algorithm>
-#include <array>
+#include <cerrno>
 #include <cinttypes>
-#include <iterator>
-#include <optional>
-#include <string>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
-#include <cstdio>
-
-#include "Common/Assert.h"
 #include "Common/Align.h"
+#include "Common/Assert.h"
+#include "Common/IniData.h"
 #include "Common/IniFile.h"
-#include "Common/StringUtil.h"
 
 #include "Core/ActionReplay.h"
-#include "Core/CheatCodes.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/GeckoCode.h"
@@ -71,93 +66,220 @@ void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, u8* value, size_t size,
 
 namespace PatchEngine
 {
-constexpr std::array<const char*, 3> s_patch_type_strings{{
-    "byte",
-    "word",
-    "dword",
-}};
-
-static std::vector<Patch> s_on_frame;
-
-std::optional<PatchEntry> DeserializeLine(std::string line)
+enum
 {
-  std::string::size_type loc = line.find('=');
-  if (loc != std::string::npos)
-    line[loc] = ':';
+  PATCH_8BIT,
+  PATCH_16BIT,
+  PATCH_32BIT,
+};
 
-  const std::vector<std::string> items = SplitString(line, ':');
-  PatchEntry entry;
+/* One write of a patch: with conditional, made only where the address holds comparand. */
+struct PatchEntry
+{
+  u32 address;
+  u32 value;
+  u32 comparand;
+  u8 type;
+  u8 conditional;
+};
 
-  if (items.size() < 3)
-    return std::nullopt;
+/* An OnFrame patch of the game's INI files: its name, without the '$', and its writes. */
+struct Patch
+{
+  char* name;
+  PatchEntry* entries;
+  u32 num_entries;
+  u32 cap_entries;
+  bool enabled;
+};
 
-  if (!TryParse(items[0], &entry.address))
-    return std::nullopt;
-  if (!TryParse(items[2], &entry.value))
-    return std::nullopt;
+static Patch* s_on_frame;
+static u32 s_num_on_frame;
+static u32 s_cap_on_frame;
 
-  if (items.size() >= 4)
-  {
-    if (!TryParse(items[3], &entry.comparand))
-      return std::nullopt;
-    entry.conditional = true;
-  }
-
-  const auto iter = std::ranges::find(s_patch_type_strings, items[1]);
-  if (iter == s_patch_type_strings.end())
-    return std::nullopt;
-  entry.type = static_cast<PatchType>(std::distance(s_patch_type_strings.begin(), iter));
-
-  return entry;
+static void PatchFree(Patch* patch)
+{
+  std::free(patch->name);
+  std::free(patch->entries);
+  std::memset(patch, 0, sizeof(*patch));
 }
 
-void LoadPatchSection(const std::string& section, std::vector<Patch>* patches,
-                      const Common::IniFile& globalIni, const Common::IniFile& localIni)
+static void FreePatches()
 {
-  for (const auto* ini : {&globalIni, &localIni})
+  u32 i;
+  for (i = 0; i < s_num_on_frame; i++)
+    PatchFree(&s_on_frame[i]);
+  std::free(s_on_frame);
+  s_on_frame = nullptr;
+  s_num_on_frame = 0;
+  s_cap_on_frame = 0;
+}
+
+/* The patch goes behind the others, which own it from here; dropped when out of memory. */
+static void PatchKeep(Patch* patch)
+{
+  if (s_num_on_frame == s_cap_on_frame)
   {
-    std::vector<std::string> lines;
-    Patch currentPatch;
-    ini->GetLines(section, &lines);
-
-    for (std::string& line : lines)
+    const u32 cap = s_cap_on_frame ? s_cap_on_frame * 2 : 16;
+    Patch* const grown = static_cast<Patch*>(std::realloc(s_on_frame, cap * sizeof(Patch)));
+    if (!grown)
     {
-      if (line.empty())
-        continue;
-
-      if (line[0] == '$')
-      {
-        // Take care of the previous code
-        if (!currentPatch.name.empty())
-        {
-          patches->push_back(currentPatch);
-        }
-        currentPatch.entries.clear();
-
-        // Set name and whether the patch is user defined
-        currentPatch.name = line.substr(1, line.size() - 1);
-        currentPatch.user_defined = (ini == &localIni);
-      }
-      else
-      {
-        if (std::optional<PatchEntry> entry = DeserializeLine(line))
-          currentPatch.entries.push_back(*entry);
-      }
+      PatchFree(patch);
+      return;
     }
+    s_on_frame = grown;
+    s_cap_on_frame = cap;
+  }
+  s_on_frame[s_num_on_frame++] = *patch;
+  std::memset(patch, 0, sizeof(*patch));
+}
 
-    if (!currentPatch.name.empty() && !currentPatch.entries.empty())
+/* A field of a line as an unsigned number in C's notation, the whole field being the number. */
+static bool ParseField(const char* field, u32* out)
+{
+  char* end = nullptr;
+  unsigned long long value;
+  errno = 0;
+  value = std::strtoull(field, &end, 0);
+  if (!end || *end != '\0' || errno == ERANGE || value > 0xFFFFFFFFull)
+    return false;
+  *out = static_cast<u32>(value);
+  return true;
+}
+
+/* A line "address:type:value[:comparand]", where the first ':' may be a '=', type being byte,
+ * word or dword. The fields are split in a copy of the line. */
+static bool DeserializeLine(const char* text, size_t len, PatchEntry* entry)
+{
+  char* const line = static_cast<char*>(std::malloc(len + 1));
+  char* fields[4] = {};
+  u32 num_fields = 0;
+  size_t start = 0;
+  bool parsed = false;
+
+  if (!line)
+    return false;
+  std::memcpy(line, text, len);
+  line[len] = '\0';
+  {
+    char* const equals = static_cast<char*>(std::memchr(line, '=', len));
+    if (equals)
+      *equals = ':';
+  }
+  while (start < len)
+  {
+    char* const colon = static_cast<char*>(std::memchr(line + start, ':', len - start));
+    const size_t end = colon ? size_t(colon - line) : len;
+    line[end] = '\0';
+    if (num_fields < 4)
+      fields[num_fields] = line + start;
+    num_fields++;
+    start = end + 1;
+  }
+
+  std::memset(entry, 0, sizeof(*entry));
+  if (num_fields >= 3 && ParseField(fields[0], &entry->address) &&
+      ParseField(fields[2], &entry->value) &&
+      (num_fields < 4 || ParseField(fields[3], &entry->comparand)))
+  {
+    entry->conditional = num_fields >= 4;
+    parsed = true;
+    if (!std::strcmp(fields[1], "byte"))
+      entry->type = PATCH_8BIT;
+    else if (!std::strcmp(fields[1], "word"))
+      entry->type = PATCH_16BIT;
+    else if (!std::strcmp(fields[1], "dword"))
+      entry->type = PATCH_32BIT;
+    else
+      parsed = false;
+  }
+  std::free(line);
+  return parsed;
+}
+
+static void PatchAddEntry(Patch* patch, const PatchEntry* entry)
+{
+  if (patch->num_entries == patch->cap_entries)
+  {
+    const u32 cap = patch->cap_entries ? patch->cap_entries * 2 : 8;
+    PatchEntry* const grown =
+        static_cast<PatchEntry*>(std::realloc(patch->entries, cap * sizeof(PatchEntry)));
+    if (!grown)
+      return;
+    patch->entries = grown;
+    patch->cap_entries = cap;
+  }
+  patch->entries[patch->num_entries++] = *entry;
+}
+
+/* The patches the section's "$name" lines turn on, or off. */
+static void ReadEnabledOrDisabled(const Common::IniFile& ini, const char* section, bool enabled)
+{
+  const Common::IniFile::Section* const lines = ini.GetSection(section);
+  size_t i;
+  if (!lines)
+    return;
+  for (i = 0; i < lines->Data()->num_lines; i++)
+  {
+    const char* text;
+    size_t len;
+    u32 p;
+    if (!ini_section_line(lines->Data(), i, false, &text, &len) || !len || text[0] != '$')
+      continue;
+    for (p = 0; p < s_num_on_frame; p++)
     {
-      patches->push_back(currentPatch);
-    }
-
-    ReadEnabledAndDisabled(*ini, section, patches);
-
-    if (ini == &globalIni)
-    {
-      for (Patch& patch : *patches)
-        patch.default_enabled = patch.enabled;
+      if (std::strlen(s_on_frame[p].name) == len - 1 &&
+          !std::memcmp(s_on_frame[p].name, text + 1, len - 1))
+      {
+        s_on_frame[p].enabled = enabled;
+      }
     }
   }
+}
+
+/* The OnFrame patches of one INI file, behind those already read. */
+static void LoadPatchSection(const Common::IniFile& ini)
+{
+  const Common::IniFile::Section* const lines = ini.GetSection("OnFrame");
+  Patch current = {};
+  size_t i;
+
+  for (i = 0; lines && i < lines->Data()->num_lines; i++)
+  {
+    const char* text;
+    size_t len;
+    if (!ini_section_line(lines->Data(), i, true, &text, &len) || !len)
+      continue;
+
+    if (text[0] == '$')
+    {
+      // Take care of the previous code
+      if (current.name && current.name[0])
+        PatchKeep(&current);
+      current.num_entries = 0;
+
+      std::free(current.name);
+      current.name = static_cast<char*>(std::malloc(len));
+      if (current.name)
+      {
+        std::memcpy(current.name, text + 1, len - 1);
+        current.name[len - 1] = '\0';
+      }
+    }
+    else
+    {
+      PatchEntry entry;
+      if (DeserializeLine(text, len, &entry))
+        PatchAddEntry(&current, &entry);
+    }
+  }
+
+  if (current.name && current.name[0] && current.num_entries)
+    PatchKeep(&current);
+  PatchFree(&current);
+
+  ReadEnabledOrDisabled(ini, "OnFrame_Enabled", true);
+  ReadEnabledOrDisabled(ini, "OnFrame_Disabled", false);
 }
 
 void LoadPatches()
@@ -165,61 +287,63 @@ void LoadPatches()
   const auto& sconfig = SConfig::GetInstance();
   Common::IniFile globalIni = sconfig.LoadDefaultGameIni();
   Common::IniFile localIni = sconfig.LoadLocalGameIni();
+  u32 enabled_patch_count = 0;
+  u32 i;
 
-  LoadPatchSection("OnFrame", &s_on_frame, globalIni, localIni);
-
+  LoadPatchSection(globalIni);
+  LoadPatchSection(localIni);
 
   const std::vector<Gecko::GeckoCode> gecko_codes = Gecko::LoadCodes(globalIni, localIni);
   Gecko::SetActiveCodes(gecko_codes.data(), gecko_codes.size());
   ActionReplay::LoadAndApplyCodes(globalIni, localIni);
 
-  const size_t enabled_patch_count =
-      std::ranges::count_if(s_on_frame, [](const Patch& patch) { return patch.enabled; });
+  for (i = 0; i < s_num_on_frame; i++)
+    enabled_patch_count += s_on_frame[i].enabled ? 1 : 0;
   if (enabled_patch_count > 0)
-  {
-    Core::DisplayMessage("%" PRIu64 " game patch(es) enabled", (u64)enabled_patch_count);
-  }
+    Core::DisplayMessage("%u game patch(es) enabled", enabled_patch_count);
 
   const size_t enabled_cheat_count = ActionReplay::CountEnabledCodes() + Gecko::CountEnabledCodes();
   if (enabled_cheat_count > 0)
     Core::DisplayMessage("%" PRIu64 " cheat(s) enabled", (u64)enabled_cheat_count);
 }
 
-static void ApplyPatches(const Core::CPUThreadGuard& guard, const std::vector<Patch>& patches)
+static void ApplyPatches(const Core::CPUThreadGuard& guard)
 {
-  for (const Patch& patch : patches)
+  u32 p;
+  for (p = 0; p < s_num_on_frame; p++)
   {
-    if (patch.enabled)
+    const Patch* const patch = &s_on_frame[p];
+    u32 e;
+    if (!patch->enabled)
+      continue;
+    for (e = 0; e < patch->num_entries; e++)
     {
-      for (const PatchEntry& entry : patch.entries)
+      const PatchEntry* const entry = &patch->entries[e];
+      const u32 addr = entry->address;
+      const u32 value = entry->value;
+      const u32 comparand = entry->comparand;
+      switch (entry->type)
       {
-        u32 addr = entry.address;
-        u32 value = entry.value;
-        u32 comparand = entry.comparand;
-        switch (entry.type)
+      case PATCH_8BIT:
+        if (!entry->conditional ||
+            PowerPC::MMU::HostRead<u8>(guard, addr) == static_cast<u8>(comparand))
         {
-        case PatchType::Patch8Bit:
-          if (!entry.conditional ||
-              PowerPC::MMU::HostRead<u8>(guard, addr) == static_cast<u8>(comparand))
-          {
-            ApplyMemoryPatch<u8>(guard, static_cast<u8>(value), addr);
-          }
-          break;
-        case PatchType::Patch16Bit:
-          if (!entry.conditional ||
-              PowerPC::MMU::HostRead<u16>(guard, addr) == static_cast<u16>(comparand))
-          {
-            ApplyMemoryPatch<u16>(guard, static_cast<u16>(value), addr);
-          }
-          break;
-        case PatchType::Patch32Bit:
-          if (!entry.conditional || PowerPC::MMU::HostRead<u32>(guard, addr) == comparand)
-            ApplyMemoryPatch<u32>(guard, value, addr);
-          break;
-        default:
-          // unknown patchtype
-          break;
+          ApplyMemoryPatch<u8>(guard, static_cast<u8>(value), addr);
         }
+        break;
+      case PATCH_16BIT:
+        if (!entry->conditional ||
+            PowerPC::MMU::HostRead<u16>(guard, addr) == static_cast<u16>(comparand))
+        {
+          ApplyMemoryPatch<u16>(guard, static_cast<u16>(value), addr);
+        }
+        break;
+      case PATCH_32BIT:
+        if (!entry->conditional || PowerPC::MMU::HostRead<u32>(guard, addr) == comparand)
+          ApplyMemoryPatch<u32>(guard, value, addr);
+        break;
+      default:
+        break;
       }
     }
   }
@@ -268,16 +392,17 @@ static void ApplyStartupPatches(Core::System& system)
     return;
   }
 
-  ApplyPatches(guard, s_on_frame);
+  ApplyPatches(guard);
 }
 
 /* Whether a field has anything to apply: an enabled OnFrame patch, a Gecko
  * code or an Action Replay code. Usually none. */
 static bool HasFramePatches()
 {
-  for (const Patch& patch : s_on_frame)
+  u32 i;
+  for (i = 0; i < s_num_on_frame; i++)
   {
-    if (patch.enabled)
+    if (s_on_frame[i].enabled)
       return true;
   }
   return Gecko::CountEnabledCodes() != 0 || ActionReplay::CountEnabledCodes() != 0;
@@ -308,7 +433,7 @@ bool ApplyFramePatches(Core::System& system)
     return false;
   }
 
-  ApplyPatches(guard, s_on_frame);
+  ApplyPatches(guard);
 
   // Run the Gecko code handler
   Gecko::RunCodeHandler(guard);
@@ -319,7 +444,7 @@ bool ApplyFramePatches(Core::System& system)
 
 void Shutdown()
 {
-  s_on_frame.clear();
+  FreePatches();
   ActionReplay::ApplyCodes(nullptr, 0);
   Gecko::Shutdown();
 }
