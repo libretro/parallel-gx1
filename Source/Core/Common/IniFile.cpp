@@ -17,7 +17,7 @@
 
 namespace Common
 {
-void IniFile::ParseLine(std::string_view line, std::string* keyOut, std::string* valueOut)
+static void ParseLine(std::string_view line, std::string* keyOut, std::string* valueOut)
 {
   if (line.empty() || line.front() == '#')
     return;
@@ -96,11 +96,6 @@ bool IniFile::Section::Delete(std::string_view key)
   return true;
 }
 
-void IniFile::Section::SetLines(std::vector<std::string> lines)
-{
-  m_lines = std::move(lines);
-}
-
 bool IniFile::Section::GetLines(std::vector<std::string>* lines, const bool remove_comments) const
 {
   for (const std::string& line : m_lines)
@@ -166,24 +161,6 @@ IniFile::Section* IniFile::GetOrCreateSection(std::string_view section_name)
   return section;
 }
 
-bool IniFile::DeleteSection(std::string_view section_name)
-{
-  Section* s = GetSection(section_name);
-  if (!s)
-    return false;
-
-  for (auto iter = sections.begin(); iter != sections.end(); ++iter)
-  {
-    if (&(*iter) == s)
-    {
-      sections.erase(iter);
-      return true;
-    }
-  }
-
-  return false;
-}
-
 bool IniFile::Exists(std::string_view section_name) const
 {
   return GetSection(section_name) != nullptr;
@@ -198,12 +175,6 @@ bool IniFile::Exists(std::string_view section_name, std::string_view key) const
   return section->Exists(key);
 }
 
-void IniFile::SetLines(std::string_view section_name, std::vector<std::string> lines)
-{
-  Section* section = GetOrCreateSection(section_name);
-  section->SetLines(std::move(lines));
-}
-
 bool IniFile::DeleteKey(std::string_view section_name, std::string_view key)
 {
   Section* section = GetSection(section_name);
@@ -212,7 +183,6 @@ bool IniFile::DeleteKey(std::string_view section_name, std::string_view key)
   return section->Delete(key);
 }
 
-// Return a list of all keys in a section
 // Return a list of all lines in a section
 bool IniFile::GetLines(std::string_view section_name, std::vector<std::string>* lines,
                        const bool remove_comments) const
@@ -224,11 +194,6 @@ bool IniFile::GetLines(std::string_view section_name, std::vector<std::string>* 
     return false;
 
   return section->GetLines(lines, remove_comments);
-}
-
-void IniFile::SortSections()
-{
-  sections.sort();
 }
 
 bool IniFile::Load(const std::string& filename, bool keep_current_data)
@@ -334,24 +299,4 @@ bool IniFile::Save(const std::string& filename)
   return filestream_write_file_atomic(filename.c_str(), out.data(), s64(out.size()));
 }
 
-// Unit test. TODO: Move to the real unit test framework.
-/*
-   int main()
-   {
-    IniFile ini;
-    ini.Load("my.ini");
-    ini.Set("Hello", "A", "amaskdfl");
-    ini.Set("Moss", "A", "amaskdfl");
-    ini.Set("Aissa", "A", "amaskdfl");
-    //ini.Read("my.ini");
-    std::string x;
-    ini.Get("Hello", "B", &x, "boo");
-    ini.DeleteKey("Moss", "A");
-    ini.DeleteSection("Moss");
-    ini.SortSections();
-    ini.Save("my.ini");
-    //UpdateVars(ini);
-    return 0;
-   }
- */
 }  // namespace Common

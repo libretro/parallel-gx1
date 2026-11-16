@@ -57,15 +57,12 @@ public:
       return false;
     }
 
-    void SetLines(std::vector<std::string> lines);
     bool GetLines(std::vector<std::string>* lines, const bool remove_comments = true) const;
 
-    bool operator<(const Section& other) const { return name < other.name; }
     using SectionMap = std::map<std::string, std::string, CaseInsensitiveLess>;
 
     const std::string& GetName() const { return name; }
     const SectionMap& GetValues() const { return values; }
-    bool HasLines() const { return !m_lines.empty(); }
 
   protected:
     std::string name;
@@ -97,42 +94,14 @@ public:
   // Returns true if key exists in section
   bool Exists(std::string_view section_name, std::string_view key) const;
 
-  template <typename T>
-  bool GetIfExists(std::string_view section_name, std::string_view key, T* value)
-  {
-    if (Exists(section_name, key))
-      return GetOrCreateSection(section_name)->Get(key, value);
-
-    return false;
-  }
-
-  template <typename T>
-  bool GetIfExists(std::string_view section_name, std::string_view key, T* value, T default_value)
-  {
-    if (Exists(section_name, key))
-      return GetOrCreateSection(section_name)->Get(key, value, default_value);
-
-    *value = default_value;
-    return false;
-  }
-
-  void SetLines(std::string_view section_name, std::vector<std::string> lines);
   bool GetLines(std::string_view section_name, std::vector<std::string>* lines,
                 bool remove_comments = true) const;
 
   bool DeleteKey(std::string_view section_name, std::string_view key);
-  bool DeleteSection(std::string_view section_name);
-
-  void SortSections();
 
   Section* GetOrCreateSection(std::string_view section_name);
   const Section* GetSection(std::string_view section_name) const;
   Section* GetSection(std::string_view section_name);
-
-  // This function is related to parsing data from lines of INI files
-  // It's used outside of IniFile, which is why it is exposed publicly
-  // In particular it is used in PostProcessing for its configuration
-  static void ParseLine(std::string_view line, std::string* keyOut, std::string* valueOut);
 
   const std::list<Section>& GetSections() const { return sections; }
 
