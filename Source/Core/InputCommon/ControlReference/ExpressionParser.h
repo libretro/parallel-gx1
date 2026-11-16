@@ -12,6 +12,8 @@
 
 #include "InputCommon/ControllerInterface/CoreDevice.h"
 
+#include <retro_atomic.h>
+
 namespace ciface::ExpressionParser
 {
 enum TokenType
@@ -137,10 +139,34 @@ public:
   }
 };
 
+// A variable of a controller's expressions: its name and value. Freed when neither the
+// controller's table nor a bound expression holds it any more; an expression being read by another
+// thread holds the variable it reads.
+struct ExpressionVariable
+{
+  retro_atomic_int_t refs;
+  ControlState value;
+  char* name;
+};
+
+// One holder less: the last one frees the variable.
+void ReleaseExpressionVariable(ExpressionVariable* variable);
+
+// The variables of a controller's expressions, found by name; the table holds each of them.
+struct ExpressionVariables
+{
+  ExpressionVariable** items;
+  std::size_t count;
+  std::size_t cap;
+};
+
+// The table lets go of its variables, and is left empty.
+void FreeExpressionVariables(ExpressionVariables* variables);
+
 class ControlEnvironment
 {
 public:
-  using VariableContainer = std::map<std::string, std::shared_ptr<ControlState>>;
+  using VariableContainer = ExpressionVariables;
 
   ControlEnvironment(const Core::DeviceContainer& container_, const Core::DeviceQualifier& default_,
                      VariableContainer& vars)
@@ -151,9 +177,11 @@ public:
   std::shared_ptr<Core::Device> FindDevice(const ControlQualifier& qualifier) const;
   Core::Device::Input* FindInput(const ControlQualifier& qualifier) const;
   Core::Device::Output* FindOutput(const ControlQualifier& qualifier) const;
-  // Returns an existing variable by the specified name if already existing. Creates it otherwise.
-  std::shared_ptr<ControlState> GetVariablePtr(const std::string& name);
+  // The variable by the specified name, made if there is none, with a hold for the caller, who
+  // releases it; null for an empty name.
+  ExpressionVariable* AcquireVariable(const std::string& name);
 
+  // Lets go of the variables no expression holds any more.
   void CleanUnusedVariables();
 
 private:

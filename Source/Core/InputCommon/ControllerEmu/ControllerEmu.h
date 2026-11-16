@@ -272,7 +272,7 @@ private:
   void RebindNow(const ControllerInterface& devi);
 
   // Only touched by the thread doing a rebind.
-  ciface::ExpressionParser::ControlEnvironment::VariableContainer m_expression_vars;
+  ciface::ExpressionParser::ControlEnvironment::VariableContainer m_expression_vars{};
 
   mutable retro_atomic_ptr_t m_default_device{};  // DefaultDevice*
   retro_atomic_int_t m_default_device_is_connected{};

@@ -26,6 +26,8 @@ std::string ControlGroupContainer::GetDisplayName() const
 EmulatedController::~EmulatedController()
 {
   delete static_cast<DefaultDevice*>(retro_atomic_exchange_ptr(&m_default_device, nullptr));
+  // the expressions still bound hold their variables
+  ciface::ExpressionParser::FreeExpressionVariables(&m_expression_vars);
 }
 
 EmulatedController::EmulatedController() = default;

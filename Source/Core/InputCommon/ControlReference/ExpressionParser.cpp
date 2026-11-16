@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <memory>
@@ -556,21 +557,33 @@ public:
   {
   }
 
-  ControlState GetValue() { return m_variable_ptr ? *m_variable_ptr : 0; }
+  ~VariableExpression()
+  {
+    if (m_variable)
+      ReleaseExpressionVariable(m_variable);
+  }
+
+  ControlState GetValue() { return m_variable ? m_variable->value : 0; }
 
   void SetValue(ControlState value)
   {
-    if (m_variable_ptr)
-      *m_variable_ptr = value;
+    if (m_variable)
+      m_variable->value = value;
   }
 
   int CountNumControls() const { return 1; }
 
-  void UpdateReferences(ControlEnvironment& env) { m_variable_ptr = env.GetVariablePtr(m_name); }
+  void UpdateReferences(ControlEnvironment& env)
+  {
+    ExpressionVariable* const variable = env.AcquireVariable(m_name);
+    if (m_variable)
+      ReleaseExpressionVariable(m_variable);
+    m_variable = variable;
+  }
 
 protected:
   const std::string m_name;
-  std::shared_ptr<ControlState> m_variable_ptr;
+  ExpressionVariable* m_variable = nullptr;
 };
 
 class HotkeyExpression : public Expression
@@ -811,30 +824,89 @@ Device::Output* ControlEnvironment::FindOutput(const ControlQualifier& qualifier
   return device->FindOutput(qualifier.control_name);
 }
 
-std::shared_ptr<ControlState> ControlEnvironment::GetVariablePtr(const std::string& name)
+void ReleaseExpressionVariable(ExpressionVariable* variable)
 {
+  if (retro_atomic_fetch_sub_int(&variable->refs, 1) == 1)
+  {
+    std::free(variable->name);
+    std::free(variable);
+  }
+}
+
+void FreeExpressionVariables(ExpressionVariables* variables)
+{
+  std::size_t i;
+  for (i = 0; i < variables->count; i++)
+    ReleaseExpressionVariable(variables->items[i]);
+  std::free(variables->items);
+  variables->items = nullptr;
+  variables->count = 0;
+  variables->cap = 0;
+}
+
+ExpressionVariable* ControlEnvironment::AcquireVariable(const std::string& name)
+{
+  ExpressionVariable* variable = nullptr;
+  std::size_t i;
+
   // Do not accept an empty string as key, even if the expression parser already prevents this case.
   if (name.empty())
     return nullptr;
-  std::shared_ptr<ControlState>& variable = m_variables[name];
-  // If new, make a shared ptr
+  for (i = 0; i < m_variables.count; i++)
+  {
+    if (!std::strcmp(m_variables.items[i]->name, name.c_str()))
+    {
+      variable = m_variables.items[i];
+      break;
+    }
+  }
+
+  // If new, the table holds it
   if (!variable)
   {
-    variable = std::make_shared<ControlState>();
+    if (m_variables.count == m_variables.cap)
+    {
+      const std::size_t cap = m_variables.cap ? m_variables.cap * 2 : 8;
+      ExpressionVariable** const grown = static_cast<ExpressionVariable**>(
+          std::realloc(m_variables.items, cap * sizeof(ExpressionVariable*)));
+      if (!grown)
+        return nullptr;
+      m_variables.items = grown;
+      m_variables.cap = cap;
+    }
+    variable = static_cast<ExpressionVariable*>(std::calloc(1, sizeof(ExpressionVariable)));
+    if (!variable)
+      return nullptr;
+    variable->name = static_cast<char*>(std::malloc(name.size() + 1));
+    if (!variable->name)
+    {
+      std::free(variable);
+      return nullptr;
+    }
+    std::memcpy(variable->name, name.c_str(), name.size() + 1);
+    retro_atomic_store_relaxed_int(&variable->refs, 1);
+    m_variables.items[m_variables.count++] = variable;
   }
+
+  retro_atomic_fetch_add_int(&variable->refs, 1);
   return variable;
 }
 
 void ControlEnvironment::CleanUnusedVariables()
 {
-  for (auto it = m_variables.begin(); it != m_variables.end();)
+  std::size_t kept = 0;
+  std::size_t i;
+  for (i = 0; i < m_variables.count; i++)
   {
-    // Don't count ourselves as reference
-    if (it->second.use_count() <= 1)
-      m_variables.erase(it++);
+    ExpressionVariable* const variable = m_variables.items[i];
+    // Don't count ourselves as reference. Only this thread acquires a variable, so one held by the
+    // table alone stays so.
+    if (retro_atomic_load_acquire_int(&variable->refs) <= 1)
+      ReleaseExpressionVariable(variable);
     else
-      ++it;
+      m_variables.items[kept++] = variable;
   }
+  m_variables.count = kept;
 }
 
 ParseResult ParseResult::MakeEmptyResult()
