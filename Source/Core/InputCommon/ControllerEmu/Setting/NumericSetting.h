@@ -47,13 +47,6 @@ inline void SettingFromBits(s64 bits, bool* value)
   *value = bits != 0;
 }
 
-enum class SettingType
-{
-  Int,
-  Double,
-  Bool,
-};
-
 enum class SettingVisibility
 {
   Normal,
@@ -87,113 +80,55 @@ struct NumericSettingDetails
   const SettingVisibility visibility;
 };
 
-class NumericSettingBase
-{
-public:
-  NumericSettingBase(const NumericSettingDetails& details);
-
-  virtual ~NumericSettingBase() = default;
-
-  virtual void LoadFromIni(const Common::IniFile::Section& section, const char* group_name) = 0;
-  virtual void SaveToIni(Common::IniFile::Section& section, const char* group_name) const = 0;
-
-  virtual InputReference& GetInputReference() = 0;
-  virtual const InputReference& GetInputReference() const = 0;
-
-  virtual bool IsSimpleValue() const = 0;
-
-  // Convert a literal expression e.g. "7.0" to a regular value. (disables expression parsing)
-  virtual void SimplifyIfPossible() = 0;
-
-  // Convert a regular value to an expression. (used before expression editing)
-  virtual void SetExpressionFromValue() = 0;
-
-  virtual SettingType GetType() const = 0;
-
-  virtual void SetToDefault() = 0;
-
-protected:
-  NumericSettingDetails m_details;
-};
-
 template <typename T>
 class SettingValue;
 
-template <typename T>
-class NumericSetting final : public NumericSettingBase
+// A setting of a control group: the name its value is saved under, its default, and the value it
+// sets, an int, a double or a bool, which a control expression may give instead.
+class NumericSetting final
 {
 public:
-  using ValueType = T;
+  NumericSetting(SettingValue<int>* value, const NumericSettingDetails& details, int default_value,
+                 int min_value, int max_value);
+  NumericSetting(SettingValue<double>* value, const NumericSettingDetails& details,
+                 double default_value, double min_value, double max_value);
+  NumericSetting(SettingValue<bool>* value, const NumericSettingDetails& details,
+                 bool default_value, bool min_value, bool max_value);
 
-  static_assert(std::is_same<ValueType, int>() || std::is_same<ValueType, double>() ||
-                    std::is_same<ValueType, bool>(),
-                "NumericSetting is only implemented for int, double, and bool.");
+  void SetToDefault() { SetValue(m_default_value); }
 
-  NumericSetting(SettingValue<ValueType>* value, const NumericSettingDetails& details,
-                 ValueType default_value, ValueType min_value, ValueType max_value)
-      : NumericSettingBase(details), m_value(*value), m_default_value(default_value),
-        m_min_value(min_value), m_max_value(max_value)
-  {
-    SetToDefault();
-  }
+  void LoadFromIni(const Common::IniFile::Section& section, const char* group_name);
+  void SaveToIni(Common::IniFile::Section& section, const char* group_name) const;
 
-  void SetToDefault() override { m_value.SetValue(m_default_value); }
+  InputReference& GetInputReference() { return *m_input; }
+  const InputReference& GetInputReference() const { return *m_input; }
 
-  void LoadFromIni(const Common::IniFile::Section& section, const char* group_name) override
-  {
-    char key[256];
-    std::string str_value;
-    if (Common::JoinIniKey(key, sizeof(key), group_name, m_details.ini_name) &&
-        section.Get(key, &str_value))
-    {
-      m_value.m_input.SetExpression(std::move(str_value));
-      SimplifyIfPossible();
-    }
-    else
-    {
-      SetValue(m_default_value);
-    }
-  }
+  bool IsSimpleValue() const { return !m_input->HasExpression(); }
 
-  void SaveToIni(Common::IniFile::Section& section, const char* group_name) const override
-  {
-    char key[256];
-    if (!Common::JoinIniKey(key, sizeof(key), group_name, m_details.ini_name))
-      return;
-    if (IsSimpleValue())
-    {
-      section.Set(key, GetValue(), m_default_value);
-    }
-    else
-    {
-      // We can't save line breaks in a single line config. Restoring them is too complicated.
-      std::string expression = m_value.m_input.GetExpression();
-      ReplaceBreaksWithSpaces(expression);
-      section.Set(key, expression, "");
-    }
-  }
+  // Convert a literal expression e.g. "7.0" to a regular value. (disables expression parsing)
+  void SimplifyIfPossible();
 
-  bool IsSimpleValue() const override { return m_value.IsSimpleValue(); }
-  void SimplifyIfPossible() override;
-  void SetExpressionFromValue() override;
-  InputReference& GetInputReference() override { return m_value.m_input; }
-  const InputReference& GetInputReference() const override { return m_value.m_input; }
-
-  ValueType GetValue() const { return m_value.GetValue(); }
-  void SetValue(ValueType value) { m_value.SetValue(value); }
-
-  ValueType GetDefaultValue() const { return m_default_value; }
-  ValueType GetMinValue() const { return m_min_value; }
-  ValueType GetMaxValue() const { return m_max_value; }
-
-  SettingType GetType() const override;
+  // The value, kept as the setting's type keeps it: an int truncated, a bool as not zero. The
+  // expression is cleared, to use the new "simple" value.
+  void SetValue(double value);
 
 private:
-  SettingValue<ValueType>& m_value;
+  enum class Type
+  {
+    Int,
+    Double,
+    Bool,
+  };
 
-  const ValueType m_default_value;
-  const ValueType m_min_value;
-  const ValueType m_max_value;
+  // The value as its type keeps it, as a double
+  double GetCachedValue() const;
+
+  retro_atomic_64_t* m_bits;
+  // Unfortunately InputReference's state grabbing is non-const requiring a pointer here.
+  InputReference* m_input;
+  const char* m_ini_name;
+  double m_default_value;
+  Type m_type;
 };
 
 template <typename T>
@@ -201,7 +136,7 @@ class SettingValue
 {
   using ValueType = T;
 
-  friend class NumericSetting<T>;
+  friend class NumericSetting;
 
 public:
   ValueType GetValue() const

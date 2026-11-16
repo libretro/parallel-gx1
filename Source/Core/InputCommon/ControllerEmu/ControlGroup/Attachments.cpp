@@ -35,7 +35,7 @@ void Attachments::SetSelectedAttachment(u32 val)
   m_selection_setting.SetValue(val);
 }
 
-NumericSetting<int>& Attachments::GetSelectionSetting()
+NumericSetting& Attachments::GetSelectionSetting()
 {
   return m_selection_setting;
 }

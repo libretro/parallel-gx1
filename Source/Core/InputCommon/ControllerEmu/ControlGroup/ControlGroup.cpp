@@ -28,9 +28,9 @@ ControlGroup::ControlGroup(std::string name_, std::string ui_name_, const GroupT
 {
   if (default_value_ != DefaultValue::AlwaysEnabled)
   {
-    enabled_setting = std::make_unique<NumericSetting<bool>>(
-        &enabled, NumericSettingDetails{_trans("Enabled")},
-        (default_value_ == DefaultValue::Enabled), false, true);
+    enabled_setting =
+        std::make_unique<NumericSetting>(&enabled, NumericSettingDetails{_trans("Enabled")},
+                                         (default_value_ == DefaultValue::Enabled), false, true);
   }
 }
 

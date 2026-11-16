@@ -22,11 +22,8 @@ namespace ControllerEmu
 {
 class Control;
 
-class NumericSettingBase;
-struct NumericSettingDetails;
-
-template <typename T>
 class NumericSetting;
+struct NumericSettingDetails;
 
 template <typename T>
 class SettingValue;
@@ -86,8 +83,8 @@ public:
                   std::common_type_t<T> default_value_, std::common_type_t<T> min_value = {},
                   std::common_type_t<T> max_value = T(100))
   {
-    numeric_settings.emplace_back(
-        std::make_unique<NumericSetting<T>>(value, details, default_value_, min_value, max_value));
+    numeric_settings.emplace_back(std::make_unique<NumericSetting>(
+        value, details, T(default_value_), T(min_value), T(max_value)));
   }
 
   void AddVirtualNotchSetting(SettingValue<double>* value, double max_virtual_notch_deg);
@@ -119,9 +116,9 @@ public:
   // The default "enabled" state.
   const DefaultValue default_value;
   SettingValue<bool> enabled;
-  std::unique_ptr<NumericSetting<bool>> enabled_setting;
+  std::unique_ptr<NumericSetting> enabled_setting;
 
   std::vector<std::unique_ptr<Control>> controls;
-  std::vector<std::unique_ptr<NumericSettingBase>> numeric_settings;
+  std::vector<std::unique_ptr<NumericSetting>> numeric_settings;
 };
 }  // namespace ControllerEmu
