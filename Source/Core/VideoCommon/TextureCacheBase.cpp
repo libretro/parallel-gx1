@@ -1132,10 +1132,8 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
     }
   }
 
-  // Free the readback texture to potentially save host-mapped GPU memory, depending on where
-  // the driver mapped the staging buffer.
-  AbstractStagingTextureDelete(m_readback_texture);
-  m_readback_texture = nullptr;
+  // The readback texture stays for the next save: a frontend that runs ahead or rewinds saves
+  // every frame.
 }
 
 void TextureCacheBase::DoLoadState(PointerWrap& p)
