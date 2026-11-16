@@ -5,6 +5,7 @@
 
 #include <array>
 
+#include "Common/ObjectPool.h"
 #include "VideoBackends/Vulkan/Constants.h"
 #include "VideoCommon/NativeVertexFormat.h"
 
@@ -16,6 +17,9 @@ class VertexFormat final : public ::NativeVertexFormat
 {
 public:
   VertexFormat(const PortableVertexDeclaration& vtx_decl);
+
+  /* from the class's pool: made at backend start, destroyed once every one is */
+  OBJECT_POOL_MEMBERS
 
   // Passed to pipeline state creation
   const VkPipelineVertexInputStateCreateInfo& GetVertexInputStateInfo() const;

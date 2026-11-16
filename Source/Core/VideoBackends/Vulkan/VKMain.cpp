@@ -15,6 +15,7 @@
 #include "VideoBackends/Vulkan/VKPipeline.h"
 #include "VideoBackends/Vulkan/VKShader.h"
 #include "VideoBackends/Vulkan/VKTexture.h"
+#include "VideoBackends/Vulkan/VKVertexFormat.h"
 #include "VideoBackends/Vulkan/VKVertexManager.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 
@@ -91,6 +92,7 @@ void VideoBackend::Shutdown()
   VKShader::DestroyPool();
   VKTexture::DestroyPool();
   VKFramebuffer::DestroyPool();
+  VertexFormat::DestroyPool();
   StateTracker::DestroyInstance();
   delete g_command_buffer_mgr;
   g_command_buffer_mgr = nullptr;

@@ -142,4 +142,7 @@ void VertexFormat::AddAttribute(ShaderAttrib location, uint32_t binding, VkForma
   m_attribute_descriptions[m_num_attributes].offset = offset;
   m_num_attributes++;
 }
+
+/* the formats a game's vertices come in, in one chunk */
+OBJECT_POOL_DEFINE(VertexFormat, 64)
 }  // namespace Vulkan

@@ -18,6 +18,7 @@
 
 #include "VideoBackends/Vulkan/VKStreamBuffer.h"
 #include "VideoBackends/Vulkan/VKTexture.h"
+#include "VideoBackends/Vulkan/VKVertexFormat.h"
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/Constants.h"
 #include "VideoCommon/VideoCommon.h"
@@ -45,6 +46,7 @@ bool ObjectCache::Initialize()
   VKShader::CreatePool();
   VKTexture::CreatePool();
   VKFramebuffer::CreatePool();
+  VertexFormat::CreatePool();
 
   if (!CreateDescriptorSetLayouts())
     return false;
