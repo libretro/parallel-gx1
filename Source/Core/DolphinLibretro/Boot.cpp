@@ -133,7 +133,7 @@ void reload_cheats_from_ini()
   Common::IniFile localIni = sconfig.LoadLocalGameIni();
 
   // Load ActionReplay codes
-  Libretro::g_ar_codes = ActionReplay::LoadCodes(globalIni, localIni);
+  ActionReplay::LoadCodes(globalIni, localIni, &Libretro::g_ar_codes);
 
   // Load Gecko codes
   Gecko::LoadCodes(globalIni, localIni, &Libretro::g_gecko_codes);
@@ -161,7 +161,7 @@ void generate_cht_from_ini(std::string fileName)
     return;
   }
 
-  size_t total = Libretro::g_ar_codes.size() + Libretro::g_gecko_codes.count;
+  size_t total = Libretro::g_ar_codes.count + Libretro::g_gecko_codes.count;
   if (total == 0)
   {
     INFO_LOG(BOOT, "Cheats: not generating cht file as no ActionReply or Gecko codes found");
@@ -180,16 +180,13 @@ void generate_cht_from_ini(std::string fileName)
   {
     filestream_printf(out, "cheats = %u\n\n", static_cast<unsigned>(total));
 
-    for (const auto& c : Libretro::g_ar_codes)
+    for (u32 a = 0; a < Libretro::g_ar_codes.count; a++)
     {
-      bool first = true;
-      filestream_printf(out, "cheat%u_desc = \"%s\"\ncheat%u_code = \"", cheat_index,
-                        c.name.c_str(), cheat_index);
-      for (const auto& op : c.ops)
-      {
-        filestream_printf(out, "%s%08X %08X", first ? "" : "+", op.cmd_addr, op.value);
-        first = false;
-      }
+      const ActionReplay::ARCode& c = Libretro::g_ar_codes.codes[a];
+      filestream_printf(out, "cheat%u_desc = \"%s\"\ncheat%u_code = \"", cheat_index, c.name,
+                        cheat_index);
+      for (u32 o = 0; o < c.num_ops; o++)
+        filestream_printf(out, "%s%08X %08X", o ? "+" : "", c.ops[o].cmd_addr, c.ops[o].value);
       filestream_printf(out, "\"\ncheat%u_enable = %s\n\n", cheat_index++,
                         c.enabled ? "true" : "false");
     }
@@ -972,7 +969,8 @@ void retro_unload_game(void)
   Core::UndeclareAsCPUThread();
   Core::UndeclareAsGPUThread();
   Libretro::ResetDiskControlState();
-  /* the game's Gecko codes go with it */
+  /* the game's cheat codes go with it */
+  ActionReplay::FreeCodeList(&Libretro::g_ar_codes);
   Gecko::FreeCodeList(&Libretro::g_gecko_codes);
 }
 

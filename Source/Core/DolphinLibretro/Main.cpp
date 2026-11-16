@@ -784,11 +784,11 @@ void* retro_get_memory_data(unsigned id)
 static bool ar_code_matches(const ActionReplay::ARCode& c, const char* code)
 {
   bool first = true;
-  for (const auto& op : c.ops)
+  for (u32 o = 0; o < c.num_ops; o++)
   {
     char text[24];
-    const int n =
-        snprintf(text, sizeof(text), "%s%08X %08X", first ? "" : "+", op.cmd_addr, op.value);
+    const int n = snprintf(text, sizeof(text), "%s%08X %08X", first ? "" : "+", c.ops[o].cmd_addr,
+                           c.ops[o].value);
     if (n <= 0 || strncmp(code, text, static_cast<size_t>(n)) != 0)
       return false;
     code += n;
@@ -817,8 +817,9 @@ static bool gecko_code_matches(const Gecko::GeckoCode& c, const char* code)
 
 static void enable_cheat_by_code(bool enabled, const char* code)
 {
-  for (auto& c : Libretro::g_ar_codes)
+  for (u32 a = 0; a < Libretro::g_ar_codes.count; a++)
   {
+    ActionReplay::ARCode& c = Libretro::g_ar_codes.codes[a];
     if (ar_code_matches(c, code))
     {
       c.enabled = enabled;
@@ -878,7 +879,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
   Libretro::FinishFieldInFlight();
   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
     // Apply Action Replay
-    ActionReplay::ApplyCodes(Libretro::g_ar_codes.data(), Libretro::g_ar_codes.size());
+    ActionReplay::ApplyCodes(Libretro::g_ar_codes.codes, Libretro::g_ar_codes.count);
 
     // Apply Gecko
     Gecko::SetActiveCodes(Libretro::g_gecko_codes.codes, Libretro::g_gecko_codes.count);

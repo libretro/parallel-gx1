@@ -5,7 +5,7 @@ namespace Libretro
 retro_environment_t environ_cb = nullptr;
 bool g_emuthread_launched = false;
 Gecko::GeckoCodeList g_gecko_codes;
-std::vector<ActionReplay::ARCode> g_ar_codes;
+ActionReplay::ARCodeList g_ar_codes;
 
 namespace Input
 {

@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <string>
-#include <variant>
-#include <vector>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 
@@ -23,24 +21,31 @@ namespace ActionReplay
 {
 struct AREntry
 {
-  AREntry() = default;
-  AREntry(u32 _addr, u32 _value) : cmd_addr(_addr), value(_value) {}
-  u32 cmd_addr = 0;
-  u32 value = 0;
+  u32 cmd_addr;
+  u32 value;
 };
-constexpr bool operator==(const AREntry& left, const AREntry& right)
-{
-  return left.cmd_addr == right.cmd_addr && left.value == right.value;
-}
 
+/* An Action Replay code of the game's INI files: its name and its decrypted lines. */
 struct ARCode
 {
-  std::string name;
-  std::vector<AREntry> ops;
-  bool enabled = false;
-  bool default_enabled = false;
-  bool user_defined = false;
+  char* name;
+  AREntry* ops;
+  u32 num_ops;
+  u32 cap_ops;
+  bool enabled;
 };
+
+/* The codes of the game's INI files, each with its own allocations. */
+struct ARCodeList
+{
+  ARCode* codes;
+  u32 count;
+  u32 cap;
+};
+
+void FreeCodeList(ARCodeList* list);
+/* One more line behind the code's; dropped when out of memory. */
+void CodeAddOp(ARCode* code, u32 cmd_addr, u32 value);
 
 void RunAllActive(const Core::CPUThreadGuard& cpu_guard);
 
@@ -48,8 +53,7 @@ void ApplyCodes(const ARCode* codes, size_t count);
 size_t CountEnabledCodes();
 void LoadAndApplyCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini);
 
-std::vector<ARCode> LoadCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini);
-
-using EncryptedLine = std::string;
-std::variant<std::monostate, AREntry, EncryptedLine> DeserializeLine(const std::string& line);
+// The codes of both files into list, whose earlier codes are freed.
+void LoadCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini,
+               ARCodeList* list);
 }  // namespace ActionReplay

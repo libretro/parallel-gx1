@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include <optional>
 #include <cstddef>
-#include <string>
-#include <vector>
+#include <optional>
 
 #include "Core/ActionReplay.h"
 
@@ -20,7 +18,10 @@ struct GameIDAndRegion
   u32 region;
 };
 
-std::optional<GameIDAndRegion> DecryptARCode(const std::string* encrypted_lines, size_t count,
-                                             std::vector<AREntry>* result);
+// The encrypted lines, ENCRYPTED_LINE_SIZE characters each and one after the other, decrypted
+// behind the code's lines.
+constexpr size_t ENCRYPTED_LINE_SIZE = 13;
+std::optional<GameIDAndRegion> DecryptARCode(const char* encrypted_lines, size_t count,
+                                             ARCode* code);
 
 }  // namespace ActionReplay

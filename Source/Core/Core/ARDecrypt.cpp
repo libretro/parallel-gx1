@@ -10,11 +10,9 @@
 #include <array>
 #include <bit>
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
-#include <expected>
-#include <string>
 #include <utility>
-#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -402,18 +400,14 @@ static u32 GetVal(char chr)
   }
 }
 
-// Returns a vector of converted lines or an index where conversion failed.
-static std::expected<std::vector<u32>, std::size_t>
-ConvertAlphaToBinary(const std::string* alpha, size_t count)
+// The lines as two words each into result, which has room for them; false, with the line that
+// failed its parity check in failed_index, when one does.
+static bool ConvertAlphaToBinary(const char* alpha, size_t count, u32* result, size_t* failed_index)
 {
-  std::vector<u32> result;
-  result.reserve(count * 2);
-
   std::size_t current_index = 0;
   for (size_t l = 0; l < count; l++)
   {
-    const std::string& line = alpha[l];
-    assert(line.size() == 13);
+    const char* const line = alpha + l * ENCRYPTED_LINE_SIZE;
 
     u32 value_a = GetVal(line[6]) >> 3;
     u32 value_b = GetVal(line[12]) >> 1;
@@ -422,45 +416,54 @@ ConvertAlphaToBinary(const std::string* alpha, size_t count)
       value_a |= (GetVal(line[i]) << (((5 - i) * 5) + 2));
       value_b |= (GetVal(line[i + 6]) << (((5 - i) * 5) + 4));
     }
-    result.emplace_back(value_a);
-    result.emplace_back(value_b);
+    result[l * 2] = value_a;
+    result[l * 2 + 1] = value_b;
 
     const u32 parity = std::popcount(value_a ^ value_b);
     if ((parity & 1) != (GetVal(line[12]) & 1))
-      return std::unexpected{current_index};
+    {
+      *failed_index = current_index;
+      return false;
+    }
 
     ++current_index;
   }
 
-  return std::move(result);
+  return true;
 }
 
-std::optional<GameIDAndRegion> DecryptARCode(const std::string* encrypted_lines, size_t count,
-                                             std::vector<AREntry>* result)
+std::optional<GameIDAndRegion> DecryptARCode(const char* encrypted_lines, size_t count,
+                                             ARCode* code)
 {
+  u32* codes;
+  size_t failed_index = 0;
+  std::optional<GameIDAndRegion> decrypted_result;
+
   if (!count)
     return std::nullopt;
 
-  auto conversion_result = ConvertAlphaToBinary(encrypted_lines, count);
-  if (!conversion_result.has_value())
+  codes = static_cast<u32*>(std::malloc(count * 2 * sizeof(u32)));
+  if (!codes)
+    return std::nullopt;
+  if (!ConvertAlphaToBinary(encrypted_lines, count, codes, &failed_index))
   {
-    PanicAlert("Action Replay Code Decryption Error:\nParity Check Failed\n\nCulprit Code:\n%s",
-               encrypted_lines[conversion_result.error()].c_str());
+    PanicAlert("Action Replay Code Decryption Error:\nParity Check Failed\n\nCulprit Code:\n%.13s",
+               encrypted_lines + failed_index * ENCRYPTED_LINE_SIZE);
+    std::free(codes);
     return std::nullopt;
   }
 
-  auto& codes = *conversion_result;
-  const auto decrypted_result = BatchDecrypt(codes.data(), codes.size());
+  decrypted_result = BatchDecrypt(codes, count * 2);
   if (!decrypted_result.has_value())
   {
     ERROR_LOG(ACTIONREPLAY,
               "Decryption Error: CRC Check Failed. "
-              "First Code in Block (should be verification code): %s",
-              encrypted_lines[0].c_str());
+              "First Code in Block (should be verification code): %.13s",
+              encrypted_lines);
 
-    for (size_t i = 0; i < codes.size(); i += 2)
+    for (size_t i = 0; i < count * 2; i += 2)
     {
-      result->emplace_back(codes[i], codes[i + 1]);
+      CodeAddOp(code, codes[i], codes[i + 1]);
       WARN_LOG(ACTIONREPLAY, "Decrypted AR Code without verification code: %08X %08X", codes[i],
                codes[i + 1]);
     }
@@ -471,13 +474,14 @@ std::optional<GameIDAndRegion> DecryptARCode(const std::string* encrypted_lines,
              decrypted_result->region);
 
     // Skip passing the verification code back
-    for (size_t i = 2; i < codes.size(); i += 2)
+    for (size_t i = 2; i < count * 2; i += 2)
     {
-      result->emplace_back(codes[i], codes[i + 1]);
+      CodeAddOp(code, codes[i], codes[i + 1]);
       DEBUG_LOG(ACTIONREPLAY, "Decrypted AR Code: %08X %08X", codes[i], codes[i + 1]);
     }
   }
 
+  std::free(codes);
   return decrypted_result;
 }
 
