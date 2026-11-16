@@ -620,10 +620,15 @@ private:
   void PushPendingEFBCopy(TCacheEntry* entry);
   void ClearPendingEFBCopies();
 
-  // Staging texture used for readbacks.
-  // We store this in the class so that the same staging texture can be used for multiple
-  // readbacks, saving the overhead of allocating a new buffer every time.
+  // Staging textures used for readbacks, one per texture format, kept so that saves that
+  // follow each other allocate no new buffer; m_readback_texture is the one in use.
+  // Freed after READBACK_IDLE_FRAMES frames without a save.
+  static constexpr u32 READBACK_FORMATS = static_cast<u32>(AbstractTextureFormat::Undefined);
+  static constexpr u32 READBACK_IDLE_FRAMES = 60;
+  AbstractStagingTexture* m_readback_textures[READBACK_FORMATS] = {};
   AbstractStagingTexture* m_readback_texture = nullptr;
+  u32 m_readback_idle_frames = READBACK_IDLE_FRAMES;
+  void FreeReadbackTextures();
 
   void OnFrameEnd();
 

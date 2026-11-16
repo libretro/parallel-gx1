@@ -527,7 +527,7 @@ TextureCacheBase::~TextureCacheBase()
   free(m_pending_efb_copies);
   Common::FreeAlignedMemory(m_temp);
   m_temp = nullptr;
-  AbstractStagingTextureDelete(m_readback_texture);
+  FreeReadbackTextures();
   while (m_num_efb_copy_staging_textures)
     AbstractStagingTextureDelete(m_efb_copy_staging_texture_pool[--m_num_efb_copy_staging_textures]);
   free(m_efb_copy_staging_texture_pool);
@@ -846,9 +846,14 @@ void TextureCacheBase::ScaleTextureCacheEntryTo(RcTcacheEntry& entry, u32 new_wi
 
 bool TextureCacheBase::CheckReadbackTexture(u32 width, u32 height, AbstractTextureFormat format)
 {
+  // One per format: a save reads the EFB's colour and depth and the cache's entries in turn
+  const u32 slot = static_cast<u32>(format);
+  if (slot >= READBACK_FORMATS)
+    return false;
+  m_readback_idle_frames = 0;
+  m_readback_texture = m_readback_textures[slot];
   if (m_readback_texture && m_readback_texture->GetConfig().width >= width &&
-      m_readback_texture->GetConfig().height >= height &&
-      m_readback_texture->GetConfig().format == format)
+      m_readback_texture->GetConfig().height >= height)
   {
     return true;
   }
@@ -857,7 +862,19 @@ bool TextureCacheBase::CheckReadbackTexture(u32 width, u32 height, AbstractTextu
                                AbstractTextureType::Texture_2DArray);
   AbstractStagingTextureDelete(m_readback_texture);
   m_readback_texture = g_gfx->CreateStagingTexture(StagingTextureType::Readback, staging_config);
+  m_readback_textures[slot] = m_readback_texture;
   return m_readback_texture != nullptr;
+}
+
+void TextureCacheBase::FreeReadbackTextures()
+{
+  u32 i;
+  for (i = 0; i < READBACK_FORMATS; i++)
+  {
+    AbstractStagingTextureDelete(m_readback_textures[i]);
+    m_readback_textures[i] = nullptr;
+  }
+  m_readback_texture = nullptr;
 }
 
 void TextureCacheBase::SerializeTexture(AbstractTexture* tex, const TextureConfig& config,
@@ -1132,8 +1149,8 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
     }
   }
 
-  // The readback texture stays for the next save: a frontend that runs ahead or rewinds saves
-  // every frame.
+  // The readback textures stay for the next save: a frontend that runs ahead or rewinds saves
+  // every frame. OnFrameEnd frees them once no save has used them for a while.
 }
 
 void TextureCacheBase::DoLoadState(PointerWrap& p)
@@ -1254,6 +1271,11 @@ void TextureCacheBase::OnFrameEnd()
   FlushEFBCopies();
 
   Cleanup(g_presenter->FrameCount());
+
+  // Readback textures no save has used for a second go back: they can be host-mapped GPU memory
+  if (m_readback_idle_frames < READBACK_IDLE_FRAMES &&
+      ++m_readback_idle_frames == READBACK_IDLE_FRAMES)
+    FreeReadbackTextures();
 }
 
 void TCacheEntry::DoState(PointerWrap& p)
