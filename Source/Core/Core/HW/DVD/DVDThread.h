@@ -143,7 +143,10 @@ private:
   static void FreeResultList(mpsc_stack_node_t* node);
   void FreeResults();
 
-  // Results go back for the DVD thread to fill again, buffers and all.
+  // Results go back for the DVD thread to fill again, buffers and all. Start makes RESULTS_START
+  // of them with RESULT_ROOM each: a read into emulated RAM is at most a DVD ECC block.
+  static constexpr u32 RESULTS_START = 64;
+  static constexpr u32 RESULT_ROOM = 0x8000;
   ResultNode* TakeFreeResult();
   mpsc_stack_t m_free_results;
   mpsc_stack_node_t* m_worker_free = nullptr;  // DVD thread only

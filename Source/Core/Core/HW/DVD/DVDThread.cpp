@@ -101,6 +101,21 @@ void DVDThread::Start()
   // much, because this will never get exposed to the emulated game.
   m_next_id = 0;
 
+  /* results for a burst of reads, each with room for the most a read into emulated RAM asks
+   * for, before the game makes any: none is allocated in play */
+  {
+    u32 i;
+    for (i = 0; i < RESULTS_START; i++)
+    {
+      ResultNode* const node = static_cast<ResultNode*>(std::calloc(1, sizeof(ResultNode)));
+      if (!node)
+        break;
+      node->data = static_cast<u8*>(std::malloc(RESULT_ROOM));
+      node->capacity = node->data ? RESULT_ROOM : 0;
+      mpsc_stack_push(&m_free_results, &node->link);
+    }
+  }
+
   m_dvd_thread.Reset("DVD thread", std::bind_front(&DVDThread::ProcessReadRequest, this));
 }
 
