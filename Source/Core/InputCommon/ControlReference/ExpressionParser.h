@@ -8,6 +8,7 @@
 #include <new>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "InputCommon/ControllerInterface/CoreDevice.h"
 
@@ -48,19 +49,21 @@ enum TokenType
   TOK_BINARY_OPS_END,
 };
 
-class Token
+// A token of an expression: its type, and its text, lent from the expression being parsed, which
+// outlives the tokens.
+struct Token
 {
-public:
   TokenType type;
-  std::string data;
+  // The token's own text: a control's or variable's name, a literal, the operator of a compound
+  // assignment. Not terminated.
+  const char* data;
+  std::size_t data_length;
 
   // Position in the input string:
-  std::size_t string_position = 0;
-  std::size_t string_length = 0;
+  std::size_t string_position;
+  std::size_t string_length;
 
-  explicit Token(TokenType type_);
-  Token(TokenType type_, std::string data_);
-
+  std::string_view Data() const { return std::string_view(data, data_length); }
   bool IsBinaryOperator() const;
 };
 
@@ -73,36 +76,27 @@ enum class ParseStatus
   EmptyExpression,
 };
 
+// Splits an expression's text into tokens. The text is lent and outlives the lexer and its tokens.
 class Lexer
 {
 public:
-  std::string expr;
-  std::string::iterator it;
+  Lexer(const char* expr, std::size_t length);
 
-  explicit Lexer(std::string expr_);
-
-  ParseStatus Tokenize(std::vector<Token>& tokens);
+  // At most length + 1 tokens: one for each character and EOF. tokens has room for them; count
+  // is how many were made.
+  ParseStatus Tokenize(Token* tokens, std::size_t* count);
 
 private:
-  template <typename F>
-  std::string FetchCharsWhile(F&& func)
-  {
-    std::string value;
-    while (it != expr.end() && func(*it))
-    {
-      value += *it;
-      ++it;
-    }
-    return value;
-  }
+  const char* m_expr;
+  std::size_t m_length;
+  std::size_t m_pos;
 
-  std::string FetchWordChars();
+  void FetchWordChars();
+  Token MakeToken(TokenType type, std::size_t data_start, std::size_t data_end) const;
   Token GetDelimitedToken(TokenType type, char delimiter);
-  Token GetDelimitedLiteral();
   Token GetVariable();
-  Token GetFullyQualifiedControl();
-  Token GetBareword(char c);
-  Token GetRealLiteral(char c);
+  Token GetBareword();
+  Token GetRealLiteral();
 
   Token NextToken();
 };
@@ -213,14 +207,12 @@ class ParseResult
 public:
   static ParseResult MakeEmptyResult();
   static ParseResult MakeSuccessfulResult(std::unique_ptr<Expression>&& expr);
-  static ParseResult MakeErrorResult(Token token, std::string description);
+  static ParseResult MakeErrorResult(const Token& token, std::string description);
 
   ParseStatus status = ParseStatus::EmptyExpression;
   std::unique_ptr<Expression> expr;
 
   // Used for parse errors:
-  // TODO: This should probably be moved elsewhere:
-  std::optional<Token> token;
   std::optional<std::string> description;
 
 private:
@@ -228,6 +220,6 @@ private:
 };
 
 ParseResult ParseExpression(const std::string& expr);
-ParseResult ParseTokens(const std::vector<Token>& tokens);
+ParseResult ParseTokens(const Token* tokens);
 
 }  // namespace ciface::ExpressionParser

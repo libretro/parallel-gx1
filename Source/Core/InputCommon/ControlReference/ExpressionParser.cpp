@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <memory>
@@ -112,12 +113,14 @@ private:
 
 static HotkeySuppressions s_hotkey_suppressions;
 
-Token::Token(TokenType type_) : type(type_)
+static bool IsAsciiAlpha(char c)
 {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
-Token::Token(TokenType type_, std::string data_) : type(type_), data(std::move(data_))
+static bool IsAsciiDigit(char c)
 {
+  return c >= '0' && c <= '9';
 }
 
 bool Token::IsBinaryOperator() const
@@ -125,103 +128,121 @@ bool Token::IsBinaryOperator() const
   return type >= TOK_BINARY_OPS_BEGIN && type < TOK_BINARY_OPS_END;
 }
 
-Lexer::Lexer(std::string expr_) : expr(std::move(expr_))
+Lexer::Lexer(const char* expr, std::size_t length) : m_expr(expr), m_length(length), m_pos(0)
 {
-  it = expr.begin();
+}
+
+Token Lexer::MakeToken(TokenType type, std::size_t data_start, std::size_t data_end) const
+{
+  Token token;
+  token.type = type;
+  token.data = m_expr + data_start;
+  token.data_length = data_end - data_start;
+  token.string_position = 0;
+  token.string_length = 0;
+  return token;
 }
 
 Token Lexer::GetDelimitedToken(TokenType type, char delimiter)
 {
-  const std::string value = FetchCharsWhile([&](char c) { return c != delimiter && c != '\n'; });
+  const std::size_t start = m_pos;
+  while (m_pos < m_length && m_expr[m_pos] != delimiter && m_expr[m_pos] != '\n')
+    m_pos++;
 
-  if (it == expr.end() || *it != delimiter)
-    return Token(TOK_INVALID);
+  if (m_pos == m_length || m_expr[m_pos] != delimiter)
+    return MakeToken(TOK_INVALID, m_pos, m_pos);
 
-  ++it;
-  return Token(type, value);
+  m_pos++;
+  return MakeToken(type, start, m_pos - 1);
 }
 
-std::string Lexer::FetchWordChars()
+void Lexer::FetchWordChars()
 {
-  return FetchCharsWhile([](char c) {
-    return std::isalpha(c, std::locale::classic()) || std::isdigit(c, std::locale::classic()) ||
-           c == '_';
-  });
-}
-
-Token Lexer::GetDelimitedLiteral()
-{
-  return GetDelimitedToken(TOK_LITERAL, '\'');
+  while (m_pos < m_length &&
+         (IsAsciiAlpha(m_expr[m_pos]) || IsAsciiDigit(m_expr[m_pos]) || m_expr[m_pos] == '_'))
+  {
+    m_pos++;
+  }
 }
 
 Token Lexer::GetVariable()
 {
-  return Token(TOK_VARIABLE, FetchWordChars());
+  const std::size_t start = m_pos;
+  FetchWordChars();
+  return MakeToken(TOK_VARIABLE, start, m_pos);
 }
 
-Token Lexer::GetFullyQualifiedControl()
+// Its first character already read
+Token Lexer::GetBareword()
 {
-  return GetDelimitedToken(TOK_CONTROL, '`');
+  const std::size_t start = m_pos - 1;
+  FetchWordChars();
+  return MakeToken(TOK_BAREWORD, start, m_pos);
 }
 
-Token Lexer::GetBareword(char first_char)
+// Its first character, a digit, already read
+Token Lexer::GetRealLiteral()
 {
-  return Token(TOK_BAREWORD, first_char + FetchWordChars());
-}
+  const std::size_t start = m_pos - 1;
+  std::size_t i = start;
+  bool valid;
 
-Token Lexer::GetRealLiteral(char first_char)
-{
-  std::string value;
-  value += first_char;
-  value += FetchCharsWhile([](char c) { return isdigit(c, std::locale::classic()) || ('.' == c); });
+  while (m_pos < m_length && (IsAsciiDigit(m_expr[m_pos]) || m_expr[m_pos] == '.'))
+    m_pos++;
 
   // digits, optionally followed by '.' and more digits
-  size_t i = 0;
-  while (i < value.size() && value[i] >= '0' && value[i] <= '9')
+  while (i < m_pos && IsAsciiDigit(m_expr[i]))
     i++;
-  bool valid = i > 0;
-  if (valid && i < value.size())
+  valid = i > start;
+  if (valid && i < m_pos)
   {
-    const size_t fraction = ++i;
-    while (i < value.size() && value[i] >= '0' && value[i] <= '9')
+    const std::size_t fraction = ++i;
+    while (i < m_pos && IsAsciiDigit(m_expr[i]))
       i++;
-    valid = i > fraction && i == value.size();
+    valid = i > fraction && i == m_pos;
   }
   if (valid)
-    return Token(TOK_LITERAL, value);
+    return MakeToken(TOK_LITERAL, start, m_pos);
 
-  return Token(TOK_INVALID);
+  return MakeToken(TOK_INVALID, m_pos, m_pos);
 }
 
 Token Lexer::NextToken()
 {
-  if (it == expr.end())
-    return Token(TOK_EOF);
+  if (m_pos == m_length)
+    return MakeToken(TOK_EOF, m_pos, m_pos);
 
-  const char c = *it++;
+  const char c = m_expr[m_pos++];
 
   // Handle /* */ style comments.
-  if (c == '/' && it != expr.end() && *it == '*')
+  if (c == '/' && m_pos < m_length && m_expr[m_pos] == '*')
   {
-    ++it;
-    const auto end_of_comment = expr.find("*/", it - expr.begin());
-    if (end_of_comment == std::string::npos)
-      return Token(TOK_INVALID);
-    it = expr.begin() + end_of_comment + 2;
-    return Token(TOK_COMMENT);
+    std::size_t end;
+    m_pos++;
+    for (end = m_pos; end + 1 < m_length; end++)
+    {
+      if (m_expr[end] == '*' && m_expr[end + 1] == '/')
+        break;
+    }
+    if (end + 1 >= m_length)
+      return MakeToken(TOK_INVALID, m_pos, m_pos);
+    m_pos = end + 2;
+    return MakeToken(TOK_COMMENT, m_pos, m_pos);
   }
 
   const auto tok_type = GetBinaryOperatorTokenTypeFromChar(c);
   if (tok_type != TOK_INVALID)
   {
     // Check for compound assignment op, e.g. + immediately followed by =.
-    if (IsCompoundAssignmentUsableBinaryOperator(tok_type) && it != expr.end() && *it == '=')
+    if (IsCompoundAssignmentUsableBinaryOperator(tok_type) && m_pos < m_length &&
+        m_expr[m_pos] == '=')
     {
-      ++it;
-      return Token(TOK_ASSIGN, std::string{c});
+      m_pos++;
+      // the operator is the token's text
+      return MakeToken(TOK_ASSIGN, m_pos - 2, m_pos - 1);
     }
 
-    return Token(tok_type);
+    return MakeToken(tok_type, m_pos, m_pos);
   }
 
   switch (c)
@@ -230,44 +251,45 @@ Token Lexer::NextToken()
   case '\t':
   case '\n':
   case '\r':
-    return Token(TOK_WHITESPACE);
+    return MakeToken(TOK_WHITESPACE, m_pos, m_pos);
   case '(':
-    return Token(TOK_LPAREN);
+    return MakeToken(TOK_LPAREN, m_pos, m_pos);
   case ')':
-    return Token(TOK_RPAREN);
+    return MakeToken(TOK_RPAREN, m_pos, m_pos);
   case '@':
-    return Token(TOK_HOTKEY);
+    return MakeToken(TOK_HOTKEY, m_pos, m_pos);
   case '?':
-    return Token(TOK_QUESTION);
+    return MakeToken(TOK_QUESTION, m_pos, m_pos);
   case ':':
-    return Token(TOK_COLON);
+    return MakeToken(TOK_COLON, m_pos, m_pos);
   case '!':
-    return Token(TOK_NOT);
+    return MakeToken(TOK_NOT, m_pos, m_pos);
   case '\'':
-    return GetDelimitedLiteral();
+    return GetDelimitedToken(TOK_LITERAL, '\'');
   case '$':
     return GetVariable();
   case '`':
-    return GetFullyQualifiedControl();
+    return GetDelimitedToken(TOK_CONTROL, '`');
   default:
-    if (isalpha(c, std::locale::classic()))
-      return GetBareword(c);
-    else if (isdigit(c, std::locale::classic()))
-      return GetRealLiteral(c);
+    if (IsAsciiAlpha(c))
+      return GetBareword();
+    else if (IsAsciiDigit(c))
+      return GetRealLiteral();
     else
-      return Token(TOK_INVALID);
+      return MakeToken(TOK_INVALID, m_pos, m_pos);
   }
 }
 
-ParseStatus Lexer::Tokenize(std::vector<Token>& tokens)
+ParseStatus Lexer::Tokenize(Token* tokens, std::size_t* count)
 {
+  *count = 0;
   while (true)
   {
-    const std::string::iterator prev_it = it;
+    const std::size_t prev_pos = m_pos;
     Token tok = NextToken();
-    tok.string_position = prev_it - expr.begin();
-    tok.string_length = it - prev_it;
-    tokens.push_back(tok);
+    tok.string_position = prev_pos;
+    tok.string_length = m_pos - prev_pos;
+    tokens[(*count)++] = tok;
 
     if (tok.type == TOK_INVALID)
       return ParseStatus::SyntaxError;
@@ -520,7 +542,7 @@ private:
 static ParseResult MakeLiteralExpression(const Token& token)
 {
   ControlState val{};
-  if (TryParse(token.data, &val))
+  if (TryParse(std::string(token.Data()), &val))
     return ParseResult::MakeSuccessfulResult(std::make_unique<LiteralReal>(val));
   else
     return ParseResult::MakeErrorResult(token, Common::GetStringT("Invalid literal."));
@@ -830,11 +852,10 @@ ParseResult ParseResult::MakeSuccessfulResult(std::unique_ptr<Expression>&& expr
   return result;
 }
 
-ParseResult ParseResult::MakeErrorResult(Token token, std::string description)
+ParseResult ParseResult::MakeErrorResult(const Token&, std::string description)
 {
   ParseResult result;
   result.status = ParseStatus::SyntaxError;
-  result.token = std::move(token);
   result.description = std::move(description);
   return result;
 }
@@ -847,7 +868,7 @@ static bool IsInertToken(const Token& tok)
 class Parser
 {
 public:
-  explicit Parser(const std::vector<Token>& tokens_) : tokens(tokens_) { m_it = tokens.begin(); }
+  explicit Parser(const Token* tokens) : m_it(tokens) {}
   ParseResult Parse()
   {
     ParseResult result = ParseToplevel();
@@ -862,8 +883,8 @@ public:
   }
 
 private:
-  const std::vector<Token>& tokens;
-  std::vector<Token>::const_iterator m_it;
+  // The next token: the last of them is EOF
+  const Token* m_it;
 
   Token Chew()
   {
@@ -957,7 +978,7 @@ private:
     {
     case TOK_BAREWORD:
     {
-      auto func = MakeFunctionExpression(tok.data);
+      auto func = MakeFunctionExpression(tok.Data());
 
       if (!func)
       {
@@ -967,12 +988,12 @@ private:
         return ParseAtom(control_tok);
       }
 
-      return ParseFunctionArguments(tok.data, std::move(func), tok);
+      return ParseFunctionArguments(tok.Data(), std::move(func), tok);
     }
     case TOK_CONTROL:
     {
       ControlQualifier cq;
-      cq.FromString(tok.data);
+      cq.FromString(std::string(tok.Data()));
       return ParseResult::MakeSuccessfulResult(std::make_unique<ControlExpression>(cq));
     }
     case TOK_NOT:
@@ -985,10 +1006,11 @@ private:
     }
     case TOK_VARIABLE:
     {
-      if (tok.data.empty())
+      if (!tok.data_length)
         return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected variable name."));
       else
-        return ParseResult::MakeSuccessfulResult(std::make_unique<VariableExpression>(tok.data));
+        return ParseResult::MakeSuccessfulResult(
+            std::make_unique<VariableExpression>(std::string(tok.Data())));
     }
     case TOK_LPAREN:
     {
@@ -1079,7 +1101,7 @@ private:
           return rhs;
 
         // Compound assignment token has operator in the data string.
-        if (op.type == TOK_ASSIGN && !op.data.empty())
+        if (op.type == TOK_ASSIGN && op.data_length)
         {
           const TokenType op_type = GetBinaryOperatorTokenTypeFromChar(op.data[0]);
           expr = std::make_unique<CompoundAssignmentExpression>(op_type, std::move(expr),
@@ -1155,7 +1177,7 @@ private:
         return ParseResult::MakeErrorResult(tok, Common::GetStringT("Expected name of input."));
 
       ControlQualifier cq;
-      cq.FromString(tok.data);
+      cq.FromString(std::string(tok.Data()));
       inputs.emplace_back(std::make_unique<ControlExpression>(std::move(cq)));
 
       tok = Chew();
@@ -1175,20 +1197,28 @@ private:
   ParseResult ParseToplevel() { return ParseInfixOperations(); }
 };  // namespace ExpressionParser
 
-ParseResult ParseTokens(const std::vector<Token>& tokens)
+ParseResult ParseTokens(const Token* tokens)
 {
   return Parser(tokens).Parse();
 }
 
 static ParseResult ParseComplexExpression(const std::string& str)
 {
-  Lexer l(str);
-  std::vector<Token> tokens;
-  const ParseStatus tokenize_status = l.Tokenize(tokens);
+  // one token at most for each character, and EOF
+  Token* const tokens = static_cast<Token*>(std::malloc((str.size() + 1) * sizeof(Token)));
+  std::size_t count;
+  Lexer l(str.data(), str.size());
+  if (!tokens)
+    return ParseResult::MakeErrorResult(Token{}, Common::GetStringT("Tokenizing failed."));
+  const ParseStatus tokenize_status = l.Tokenize(tokens, &count);
   if (tokenize_status != ParseStatus::Successful)
-    return ParseResult::MakeErrorResult(Token(TOK_INVALID),
-                                        Common::GetStringT("Tokenizing failed."));
-  return ParseTokens(tokens);
+  {
+    std::free(tokens);
+    return ParseResult::MakeErrorResult(Token{}, Common::GetStringT("Tokenizing failed."));
+  }
+  ParseResult result = ParseTokens(tokens);
+  std::free(tokens);
+  return result;
 }
 
 static std::unique_ptr<Expression> ParseBarewordExpression(const std::string& str)
