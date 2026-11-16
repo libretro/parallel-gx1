@@ -729,10 +729,11 @@ bool retro_unserialize(const void* data, size_t size)
     Core::DeclareAsCPUThread();
 
   Libretro::Video::D3D11Lock();
-  Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
+  {
+    /* this thread is the CPU thread here: the state is read in place */
     PointerWrap p((u8**)&data, size, PointerWrap::Mode::Read);
-    State::DoState(Core::System::GetInstance(), p);
-  }, true);
+    State::DoState(system, p);
+  }
   Libretro::Video::D3D11Unlock();
 
   if (!was_cpu)
