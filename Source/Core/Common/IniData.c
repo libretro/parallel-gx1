@@ -221,6 +221,29 @@ bool ini_section_delete(struct ini_section *section,
    return true;
 }
 
+bool ini_section_line(const struct ini_section *section, size_t index,
+      bool remove_comments, const char **text, size_t *len)
+{
+   const char *line   = section->lines[index];
+   size_t      length = strlen(line);
+
+   ini_strip(&line, &length);
+   if (remove_comments)
+   {
+      const char *comment = (const char*)memchr(line, '#', length);
+      if (comment == line)
+         return false;
+      if (comment)
+      {
+         length = (size_t)(comment - line);
+         ini_strip(&line, &length);
+      }
+   }
+   *text = line;
+   *len  = length;
+   return true;
+}
+
 static bool ini_section_add_line(struct ini_section *section,
       const char *line, size_t len)
 {

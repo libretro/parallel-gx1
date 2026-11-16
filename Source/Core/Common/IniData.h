@@ -87,6 +87,12 @@ bool ini_section_set(struct ini_section *section,
 bool ini_section_delete(struct ini_section *section,
       const char *key, size_t key_len);
 
+/* The section's line at index, without the whitespace at either end: lent
+ * from the section, not terminated. With remove_comments, also without a
+ * comment from '#' on, and false for a line that is all comment. */
+bool ini_section_line(const struct ini_section *section, size_t index,
+      bool remove_comments, const char **text, size_t *len);
+
 #ifdef __cplusplus
 }
 #endif

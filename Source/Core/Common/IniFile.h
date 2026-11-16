@@ -67,6 +67,9 @@ public:
 
     const char* GetName() const { return name; }
 
+    // The section as C data, for code that reads it with the ini_section functions
+    const ini_section* Data() const { return this; }
+
     // The keys, in the order they were first set
     size_t NumKeys() const { return num_keys; }
     const char* KeyName(size_t index) const { return keys[index].name; }

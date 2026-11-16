@@ -53,23 +53,10 @@ bool IniFile::Section::GetLines(std::vector<std::string>* out, const bool remove
 {
   for (size_t i = 0; i < num_lines; i++)
   {
-    std::string_view stripped_line = StripWhitespace(lines[i]);
-
-    if (remove_comments)
-    {
-      size_t commentPos = stripped_line.find('#');
-      if (commentPos == 0)
-      {
-        continue;
-      }
-
-      if (commentPos != std::string::npos)
-      {
-        stripped_line = StripWhitespace(stripped_line.substr(0, commentPos));
-      }
-    }
-
-    out->emplace_back(stripped_line);
+    const char* text;
+    size_t len;
+    if (ini_section_line(this, i, remove_comments, &text, &len))
+      out->emplace_back(text, len);
   }
 
   return true;
