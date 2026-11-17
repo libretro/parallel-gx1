@@ -362,9 +362,10 @@ public:
   int CountNumControls() const { return (m_input || m_output) ? 1 : 0; }
   void UpdateReferences(ControlEnvironment& env)
   {
+    // The controls are those of the device held, found once
     m_device = env.FindDevice(m_qualifier);
-    m_input = env.FindInput(m_qualifier);
-    m_output = env.FindOutput(m_qualifier);
+    m_input = m_device ? m_device->FindInput(m_qualifier.control_name) : nullptr;
+    m_output = m_device ? m_device->FindOutput(m_qualifier.control_name) : nullptr;
   }
 
   Device::Input* GetInput() const { return m_input; }
@@ -879,24 +880,6 @@ std::shared_ptr<Device> ControlEnvironment::FindDevice(const ControlQualifier& q
     return container.FindDevice(qualifier.device_qualifier);
   else
     return container.FindDevice(default_device);
-}
-
-Device::Input* ControlEnvironment::FindInput(const ControlQualifier& qualifier) const
-{
-  const std::shared_ptr<Device> device = FindDevice(qualifier);
-  if (!device)
-    return nullptr;
-
-  return device->FindInput(qualifier.control_name);
-}
-
-Device::Output* ControlEnvironment::FindOutput(const ControlQualifier& qualifier) const
-{
-  const std::shared_ptr<Device> device = FindDevice(qualifier);
-  if (!device)
-    return nullptr;
-
-  return device->FindOutput(qualifier.control_name);
 }
 
 void ReleaseExpressionVariable(ExpressionVariable* variable)

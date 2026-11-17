@@ -174,10 +174,6 @@ public:
   }
 
   std::shared_ptr<Core::Device> FindDevice(const ControlQualifier& qualifier) const;
-  Core::Device::Input* FindInput(const ControlQualifier& qualifier) const;
-  Core::Device::Output* FindOutput(const ControlQualifier& qualifier) const;
-  // The variable by the specified name, made if there is none, with a hold for the caller, who
-  // releases it; null for an empty name.
   // The variable of that name, len characters terminated, which the caller now also holds; null
   // for an empty name or when out of memory.
   ExpressionVariable* AcquireVariable(const char* name, std::size_t len);
