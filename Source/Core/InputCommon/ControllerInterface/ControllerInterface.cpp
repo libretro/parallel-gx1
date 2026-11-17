@@ -175,7 +175,8 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
                              &ciface::Core::Device::GetSortPriority);
     return true;
   });
-  NOTICE_LOG(CONTROLLERINTERFACE, "Added device: %s", device->GetQualifiedName().c_str());
+  NOTICE_LOG(CONTROLLERINTERFACE, "Added device: %s/%d/%s", device->GetSource(), device->GetId(),
+             device->GetName());
 
   if (!retro_atomic_load_acquire_int(&m_populating_devices_counter))
     InvokeDevicesChangedCallbacks();
@@ -198,8 +199,8 @@ void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::De
         return std::erase_if(devices, [&callback](const auto& dev) {
                  if (callback(dev.get()))
                  {
-                   NOTICE_LOG(CONTROLLERINTERFACE, "Removed device: %s",
-                              dev->GetQualifiedName().c_str());
+                   NOTICE_LOG(CONTROLLERINTERFACE, "Removed device: %s/%d/%s", dev->GetSource(),
+                              dev->GetId(), dev->GetName());
                    return true;
                  }
                  return false;

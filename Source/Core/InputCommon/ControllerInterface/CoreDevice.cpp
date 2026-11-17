@@ -14,7 +14,6 @@
 #include <utility>
 
 #include "Common/MathUtil.h"
-#include "Common/StringUtil.h"
 
 namespace ciface
 {
@@ -84,11 +83,6 @@ void Device::AddInput(Device::Input* const i)
 void Device::AddOutput(Device::Output* const o)
 {
   m_outputs.push_back(o);
-}
-
-std::string Device::GetQualifiedName() const
-{
-  return StringFromFormat("%s/%d/%s", GetSource(), GetId(), GetName());
 }
 
 Device::Input* Device::FindInput(std::string_view name) const

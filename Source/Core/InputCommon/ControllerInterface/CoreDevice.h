@@ -138,7 +138,6 @@ public:
   /* The device's name and its backend's, kept for as long as the device lives */
   virtual const char* GetName() const = 0;
   virtual const char* GetSource() const = 0;
-  std::string GetQualifiedName() const;
   virtual DeviceRemoval UpdateInput() { return DeviceRemoval::Keep; }
 
   // May be overridden to implement hotplug removal.
