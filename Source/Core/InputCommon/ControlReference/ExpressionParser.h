@@ -122,12 +122,12 @@ public:
     has_device = col_pos != 0;
     if (has_device)
     {
-      device_qualifier.FromString(std::string(str, col_pos - 1));
+      device_qualifier.FromString(str, col_pos - 1);
       control_name.assign(str + col_pos, len - col_pos);
     }
     else
     {
-      device_qualifier.FromString(std::string());
+      device_qualifier.FromString(str, 0);
       control_name.assign(str, len);
     }
   }

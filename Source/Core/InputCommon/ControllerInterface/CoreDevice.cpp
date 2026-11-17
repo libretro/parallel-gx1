@@ -177,19 +177,39 @@ std::string DeviceQualifier::ToString() const
 //
 // Set a device qualifier from a string / unserialize
 //
-void DeviceQualifier::FromString(const std::string& str)
+void DeviceQualifier::FromString(const char* str, std::size_t len)
 {
-  *this = {};
+  const char* const end = str + len;
+  const char* first;
+  const char* second;
+  const char* p;
+  unsigned value = 0;
+  bool negative = false;
 
   // "source/cid/name"; the name may itself contain '/'
-  const size_t first = str.find('/');
-  source = str.substr(0, first);
-  if (first == std::string::npos)
+  first = static_cast<const char*>(memchr(str, '/', len));
+  source.assign(str, first ? static_cast<std::size_t>(first - str) : len);
+  cid = -1;
+  name.clear();
+  if (!first)
     return;
-  const size_t second = str.find('/', first + 1);
-  cid = atoi(str.substr(first + 1, second - first - 1).c_str());
-  if (second != std::string::npos)
-    name = str.substr(second + 1);
+  second =
+      static_cast<const char*>(memchr(first + 1, '/', static_cast<std::size_t>(end - first - 1)));
+  if (!second)
+    second = end;
+
+  // the cid as atoi reads it: after whitespace, a sign, then the digits
+  p = first + 1;
+  while (p < second && (*p == ' ' || (*p >= '\t' && *p <= '\r')))
+    p++;
+  if (p < second && (*p == '+' || *p == '-'))
+    negative = *p++ == '-';
+  while (p < second && *p >= '0' && *p <= '9')
+    value = value * 10 + static_cast<unsigned>(*p++ - '0');
+  cid = static_cast<int>(negative ? 0u - value : value);
+
+  if (second != end)
+    name.assign(second + 1, static_cast<std::size_t>(end - second - 1));
 }
 
 //

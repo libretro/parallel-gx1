@@ -94,7 +94,7 @@ ciface::Core::DeviceQualifier EmulatedController::GetDefaultDevice() const
 void EmulatedController::SetDefaultDevice(const std::string& device)
 {
   ciface::Core::DeviceQualifier devq;
-  devq.FromString(device);
+  devq.FromString(device.data(), device.size());
   SetDefaultDevice(std::move(devq));
 }
 

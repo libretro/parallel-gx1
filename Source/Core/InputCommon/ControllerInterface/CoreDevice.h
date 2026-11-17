@@ -199,7 +199,8 @@ public:
   {
   }
   void FromDevice(const Device* const dev);
-  void FromString(const std::string& str);
+  // From "source/cid/name": len characters, not terminated
+  void FromString(const char* str, std::size_t len);
   std::string ToString() const;
 
   bool operator==(const DeviceQualifier& devq) const;
