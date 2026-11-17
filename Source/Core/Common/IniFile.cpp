@@ -18,6 +18,11 @@ void IniFile::Section::Set(std::string_view key, std::string new_value)
   ini_section_set(this, key.data(), key.size(), new_value.data(), new_value.size());
 }
 
+void IniFile::Section::SetText(std::string_view key, const char* value, size_t len)
+{
+  ini_section_set(this, key.data(), key.size(), value, len);
+}
+
 bool IniFile::Section::Get(std::string_view key, std::string* value,
                            const std::string& default_value) const
 {

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <string.h>
@@ -161,15 +162,22 @@ private:
 //
 // Get string from a device qualifier / serialize
 //
-std::string DeviceQualifier::ToString() const
+std::size_t DeviceQualifier::ToString(char* buf, std::size_t size) const
 {
+  int len;
+
   if (source.empty() && (cid < 0) && name.empty())
-    return {};
+  {
+    if (size)
+      buf[0] = '\0';
+    return 0;
+  }
 
   if (cid > -1)
-    return StringFromFormat("%s/%d/%s", source.c_str(), cid, name.c_str());
+    len = snprintf(buf, size, "%s/%d/%s", source.c_str(), cid, name.c_str());
   else
-    return StringFromFormat("%s//%s", source.c_str(), name.c_str());
+    len = snprintf(buf, size, "%s//%s", source.c_str(), name.c_str());
+  return len > 0 ? static_cast<std::size_t>(len) : 0;
 }
 
 //

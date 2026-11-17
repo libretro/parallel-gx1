@@ -3,6 +3,7 @@
 
 #include "InputCommon/ControllerEmu/ControllerEmu.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -126,7 +127,21 @@ void ControlGroupContainer::LoadGroupsConfig(Common::IniFile::Section* sec, cons
 
 void EmulatedController::SaveConfig(Common::IniFile::Section* sec)
 {
-  sec->Set("Device", GetDefaultDevice().ToString(), "");
+  const ciface::Core::DeviceQualifier device = GetDefaultDevice();
+  char text[256];
+  const std::size_t len = device.ToString(text, sizeof(text));
+
+  if (!len)
+    sec->Delete("Device");
+  else if (len < sizeof(text))
+    sec->SetText("Device", text, len);
+  else if (char* const long_text = static_cast<char*>(std::malloc(len + 1)))
+  {
+    // a name too long for the stack
+    device.ToString(long_text, len + 1);
+    sec->SetText("Device", long_text, len);
+    std::free(long_text);
+  }
 
   SaveGroupsConfig(sec, "");
 }

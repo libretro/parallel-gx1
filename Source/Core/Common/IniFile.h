@@ -48,6 +48,8 @@ public:
     bool Delete(std::string_view key);
 
     void Set(std::string_view key, std::string new_value);
+    // The value is len characters, not terminated
+    void SetText(std::string_view key, const char* value, size_t len);
 
     template <typename T>
     void Set(std::string_view key, T&& new_value)

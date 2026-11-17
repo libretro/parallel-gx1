@@ -201,7 +201,9 @@ public:
   void FromDevice(const Device* const dev);
   // From "source/cid/name": len characters, not terminated
   void FromString(const char* str, std::size_t len);
-  std::string ToString() const;
+  // Writes "source/cid/name" terminated, as much as fits in size; the length of all of it, which
+  // is 0 for a qualifier of nothing.
+  std::size_t ToString(char* buf, std::size_t size) const;
 
   bool operator==(const DeviceQualifier& devq) const;
 
