@@ -112,28 +112,23 @@ public:
 
   ControlQualifier() : has_device(false) {}
 
-  operator std::string() const
+  // From "device:control", or a control of the default device: len characters, not terminated.
+  void FromString(const char* str, std::size_t len)
   {
-    if (has_device)
-      return device_qualifier.ToString() + ":" + control_name;
-    else
-      return control_name;
-  }
+    std::size_t col_pos = len;
+    while (col_pos && str[col_pos - 1] != ':')
+      col_pos--;
 
-  void FromString(const std::string& str)
-  {
-    const auto col_pos = str.find_last_of(':');
-
-    has_device = (str.npos != col_pos);
+    has_device = col_pos != 0;
     if (has_device)
     {
-      device_qualifier.FromString(str.substr(0, col_pos));
-      control_name = str.substr(col_pos + 1);
+      device_qualifier.FromString(std::string(str, col_pos - 1));
+      control_name.assign(str + col_pos, len - col_pos);
     }
     else
     {
-      device_qualifier.FromString("");
-      control_name = str;
+      device_qualifier.FromString(std::string());
+      control_name.assign(str, len);
     }
   }
 };

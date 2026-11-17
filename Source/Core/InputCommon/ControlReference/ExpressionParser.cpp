@@ -1133,8 +1133,8 @@ private:
     case TOK_CONTROL:
     {
       ControlQualifier cq;
-      cq.FromString(std::string(tok.Data()));
-      return ParseResult::MakeSuccessfulResult(new ControlExpression(cq));
+      cq.FromString(tok.data, tok.data_length);
+      return ParseResult::MakeSuccessfulResult(new ControlExpression(std::move(cq)));
     }
     case TOK_NOT:
     {
@@ -1373,7 +1373,7 @@ private:
         inputs = grown;
       }
       ControlQualifier cq;
-      cq.FromString(std::string(tok.Data()));
+      cq.FromString(tok.data, tok.data_length);
       inputs[count++] = new ControlExpression(std::move(cq));
 
       tok = Chew();
@@ -1425,7 +1425,7 @@ static Expression* ParseBarewordExpression(const std::string& str)
   qualifier.has_device = false;
 
   // This control expression will only work (find the specified control) with the default device.
-  return new ControlExpression(qualifier);
+  return new ControlExpression(std::move(qualifier));
 }
 
 ParseResult ParseExpression(const std::string& str)
