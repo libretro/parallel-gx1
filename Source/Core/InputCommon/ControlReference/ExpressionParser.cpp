@@ -382,14 +382,24 @@ class BinaryExpression : public Expression
 {
 public:
   TokenType op;
-  std::unique_ptr<Expression> lhs;
-  std::unique_ptr<Expression> rhs;
+  // Both owned, neither null
+  Expression* lhs;
+  Expression* rhs;
 
   BinaryExpression(TokenType op_, std::unique_ptr<Expression>&& lhs_,
                    std::unique_ptr<Expression>&& rhs_, ExpressionKind kind = ExpressionKind::Binary)
-      : Expression(kind), op(op_), lhs(std::move(lhs_)), rhs(std::move(rhs_))
+      : Expression(kind), op(op_), lhs(lhs_.release()), rhs(rhs_.release())
   {
   }
+
+  ~BinaryExpression()
+  {
+    delete lhs;
+    delete rhs;
+  }
+
+  BinaryExpression(const BinaryExpression&) = delete;
+  BinaryExpression& operator=(const BinaryExpression&) = delete;
 
   ControlState GetValue()
   {
@@ -733,9 +743,20 @@ class CoalesceExpression : public Expression
 {
 public:
   CoalesceExpression(std::unique_ptr<Expression>&& lhs, std::unique_ptr<Expression>&& rhs)
-      : Expression(ExpressionKind::Coalesce), m_lhs(std::move(lhs)), m_rhs(std::move(rhs))
+      : Expression(ExpressionKind::Coalesce), m_lhs(lhs.release()), m_rhs(rhs.release())
   {
   }
+
+  ~CoalesceExpression()
+  {
+    delete m_lhs;
+    // a destroying delete is not to be handed null
+    if (m_rhs)
+      delete m_rhs;
+  }
+
+  CoalesceExpression(const CoalesceExpression&) = delete;
+  CoalesceExpression& operator=(const CoalesceExpression&) = delete;
 
   ControlState GetValue() { return GetActiveChild()->GetValue(); }
   void SetValue(ControlState value) { GetActiveChild()->SetValue(value); }
@@ -749,13 +770,11 @@ public:
   }
 
 private:
-  const std::unique_ptr<Expression>& GetActiveChild() const
-  {
-    return m_lhs->CountNumControls() > 0 ? m_lhs : m_rhs;
-  }
+  Expression* GetActiveChild() const { return m_lhs->CountNumControls() > 0 ? m_lhs : m_rhs; }
 
-  std::unique_ptr<Expression> m_lhs;
-  std::unique_ptr<Expression> m_rhs;
+  // Owned: the left never null, the right null when there is none
+  Expression* m_lhs;
+  Expression* m_rhs;
 };
 
 /* The call on the node class this is: its own, its parent's for a compound assignment, or,
