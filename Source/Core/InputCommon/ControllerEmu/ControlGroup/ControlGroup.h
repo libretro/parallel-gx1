@@ -28,9 +28,6 @@ struct NumericSettingDetails;
 template <typename T>
 class SettingValue;
 
-using InputOverrideFunction = std::function<std::optional<ControlState>(
-    const std::string_view group_name, const std::string_view control_name, ControlState state)>;
-
 enum class GroupType
 {
   Other,

@@ -143,15 +143,14 @@ GCPadStatus GCPad::GetInput() const
   const auto input_scope = ReadScope();
   GCPadStatus pad = {};
 
-  if (!(m_always_connected_setting.GetValue() || IsDefaultDeviceConnected() ||
-        m_input_override_function))
+  if (!(m_always_connected_setting.GetValue() || IsDefaultDeviceConnected()))
   {
     pad.isConnected = false;
     return pad;
   }
 
   // buttons
-  m_buttons->GetState(&pad.button, button_bitmasks, m_input_override_function);
+  m_buttons->GetState(&pad.button, button_bitmasks);
 
   // set analog A/B analog to full or w/e, prolly not needed
   if (pad.button & PAD_BUTTON_A)
@@ -160,23 +159,23 @@ GCPadStatus GCPad::GetInput() const
     pad.analogB = 0xFF;
 
   // dpad
-  m_dpad->GetState(&pad.button, dpad_bitmasks, m_input_override_function);
+  m_dpad->GetState(&pad.button, dpad_bitmasks);
 
   // triforce
-  m_triforce->GetState(&pad.switches, triforce_bitmask, m_input_override_function);
+  m_triforce->GetState(&pad.switches, triforce_bitmask);
 
   // sticks
-  const auto main_stick_state = m_main_stick->GetState(m_input_override_function);
+  const auto main_stick_state = m_main_stick->GetState();
   pad.stickX = MapFloat<u8>(main_stick_state.x, GCPadStatus::MAIN_STICK_CENTER_X, 1);
   pad.stickY = MapFloat<u8>(main_stick_state.y, GCPadStatus::MAIN_STICK_CENTER_Y, 1);
 
-  const auto c_stick_state = m_c_stick->GetState(m_input_override_function);
+  const auto c_stick_state = m_c_stick->GetState();
   pad.substickX = MapFloat<u8>(c_stick_state.x, GCPadStatus::C_STICK_CENTER_X, 1);
   pad.substickY = MapFloat<u8>(c_stick_state.y, GCPadStatus::C_STICK_CENTER_Y, 1);
 
   // triggers
   std::array<ControlState, 2> triggers;
-  m_triggers->GetState(&pad.button, trigger_bitmasks, triggers.data(), m_input_override_function);
+  m_triggers->GetState(&pad.button, trigger_bitmasks, triggers.data());
   pad.triggerLeft = MapFloat<u8>(triggers[0], 0);
   pad.triggerRight = MapFloat<u8>(triggers[1], 0);
 

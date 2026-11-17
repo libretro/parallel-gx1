@@ -113,10 +113,6 @@ public:
   ReshapableInput(const ReshapableInput&) = delete;
   ReshapableInput& operator=(const ReshapableInput&) = delete;
 
-  static constexpr const char* X_INPUT_OVERRIDE = "X";
-  static constexpr const char* Y_INPUT_OVERRIDE = "Y";
-  static constexpr const char* Z_INPUT_OVERRIDE = "Z";
-
 protected:
   ReshapeData Reshape(ControlState x, ControlState y, ControlState modifier = 0.0,
                       ControlState clamp = 1.0) const;

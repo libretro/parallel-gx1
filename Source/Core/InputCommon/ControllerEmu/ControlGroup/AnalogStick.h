@@ -29,7 +29,6 @@ public:
   ControlState GetGateRadiusAtAngle(double ang) const;
 
   StateData GetState() const;
-  StateData GetState(const InputOverrideFunction& override_func) const;
 
 private:
   Control* GetModifierInput() const;

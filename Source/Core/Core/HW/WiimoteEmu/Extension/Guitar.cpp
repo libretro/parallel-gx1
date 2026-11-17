@@ -102,8 +102,7 @@ void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // stick
   {
-    const ControllerEmu::AnalogStick::StateData stick_state =
-        m_stick->GetState(m_input_override_function);
+    const ControllerEmu::AnalogStick::StateData stick_state = m_stick->GetState();
 
     guitar_data.sx = MapFloat<u8>(stick_state.x, STICK_CENTER, 0, STICK_RANGE);
     guitar_data.sy = MapFloat<u8>(stick_state.y, STICK_CENTER, 0, STICK_RANGE);
@@ -113,8 +112,7 @@ void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   if (m_slider_bar->controls[0]->control_ref->BoundCount() &&
       m_slider_bar->controls[1]->control_ref->BoundCount())
   {
-    const ControllerEmu::Slider::StateData slider_data =
-        m_slider_bar->GetState(m_input_override_function);
+    const ControllerEmu::Slider::StateData slider_data = m_slider_bar->GetState();
 
     guitar_data.sb = s_slider_bar_control_codes.lower_bound(slider_data.value)->second;
   }
@@ -125,18 +123,17 @@ void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   }
 
   // whammy bar
-  const ControllerEmu::Triggers::StateData whammy_state =
-      m_whammy->GetState(m_input_override_function);
+  const ControllerEmu::Triggers::StateData whammy_state = m_whammy->GetState();
   guitar_data.whammy = MapFloat<u8>(whammy_state.data[0], 0, 0, 0x1F);
 
   // buttons
-  m_buttons->GetState(&guitar_data.bt, guitar_button_bitmasks.data(), m_input_override_function);
+  m_buttons->GetState(&guitar_data.bt, guitar_button_bitmasks.data());
 
   // frets
-  m_frets->GetState(&guitar_data.bt, guitar_fret_bitmasks.data(), m_input_override_function);
+  m_frets->GetState(&guitar_data.bt, guitar_fret_bitmasks.data());
 
   // strum
-  m_strum->GetState(&guitar_data.bt, guitar_strum_bitmasks.data(), m_input_override_function);
+  m_strum->GetState(&guitar_data.bt, guitar_strum_bitmasks.data());
 
   // flip button bits
   guitar_data.bt ^= 0xFFFF;

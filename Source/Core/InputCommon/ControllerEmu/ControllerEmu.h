@@ -229,7 +229,6 @@ public:
   std::vector<std::unique_ptr<ControlGroup>> groups;
 
 protected:
-  InputOverrideFunction m_input_override_function;
 };
 
 class EmulatedController : public ControlGroupContainer

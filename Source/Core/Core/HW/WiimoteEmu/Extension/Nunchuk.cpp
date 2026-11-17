@@ -64,14 +64,13 @@ void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   DataFormat nc_data = {};
 
   // stick
-  const ControllerEmu::AnalogStick::StateData stick_state =
-      m_stick->GetState(m_input_override_function);
+  const ControllerEmu::AnalogStick::StateData stick_state = m_stick->GetState();
   nc_data.jx = MapFloat<u8>(stick_state.x, STICK_CENTER, 0, STICK_RANGE);
   nc_data.jy = MapFloat<u8>(stick_state.y, STICK_CENTER, 0, STICK_RANGE);
 
   // buttons
   u8 buttons = 0;
-  m_buttons->GetState(&buttons, nunchuk_button_bitmasks.data(), m_input_override_function);
+  m_buttons->GetState(&buttons, nunchuk_button_bitmasks.data());
   nc_data.SetButtons(buttons);
 
   // Acceleration data:
@@ -89,8 +88,6 @@ void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // shake
   accel += m_shake_state.acceleration;
-
-  accel = Wiimote::OverrideVec3(m_imu_accelerometer, accel, m_input_override_function);
 
   // Calibration values are 8-bit but we want 10-bit precision, so << 2.
   const auto acc = ConvertAccelData(accel, ACCEL_ZERO_G << 2, ACCEL_ONE_G << 2);

@@ -52,25 +52,6 @@ AnalogStick::StateData AnalogStick::GetState() const
   return GetReshapableState(true);
 }
 
-AnalogStick::StateData AnalogStick::GetState(const InputOverrideFunction& override_func) const
-{
-  StateData state = GetState();
-  if (!override_func)
-    return state;
-
-  if (const std::optional<ControlState> x_override = override_func(name, X_INPUT_OVERRIDE, state.x))
-  {
-    state.x = *x_override;
-  }
-
-  if (const std::optional<ControlState> y_override = override_func(name, Y_INPUT_OVERRIDE, state.y))
-  {
-    state.y = *y_override;
-  }
-
-  return state;
-}
-
 ControlState AnalogStick::GetGateRadiusAtAngle(double ang) const
 {
   return m_stick_gate.GetRadiusAtAngle(ang);

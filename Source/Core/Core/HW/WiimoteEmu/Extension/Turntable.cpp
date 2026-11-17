@@ -86,8 +86,7 @@ void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // stick
   {
-    const ControllerEmu::AnalogStick::StateData stick_state =
-        m_stick->GetState(m_input_override_function);
+    const ControllerEmu::AnalogStick::StateData stick_state = m_stick->GetState();
 
     tt_data.sx = MapFloat<u8>(stick_state.x, STICK_CENTER, 0, STICK_RANGE);
     tt_data.sy = MapFloat<u8>(stick_state.y, STICK_CENTER, 0, STICK_RANGE);
@@ -95,7 +94,7 @@ void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // left table
   {
-    const ControllerEmu::Slider::StateData lt = m_left_table->GetState(m_input_override_function);
+    const ControllerEmu::Slider::StateData lt = m_left_table->GetState();
     const s8 tt = MapFloat<s8>(lt.value, 0, -TABLE_RANGE, TABLE_RANGE);
 
     tt_data.ltable1 = tt;
@@ -104,7 +103,7 @@ void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // right table
   {
-    const ControllerEmu::Slider::StateData rt = m_right_table->GetState(m_input_override_function);
+    const ControllerEmu::Slider::StateData rt = m_right_table->GetState();
     const s8 tt = MapFloat<s8>(rt.value, 0, -TABLE_RANGE, TABLE_RANGE);
 
     tt_data.rtable1 = tt;
@@ -115,7 +114,7 @@ void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // effect dial
   {
-    const auto dial_state = m_effect_dial->GetState(m_input_override_function);
+    const auto dial_state = m_effect_dial->GetState();
     const u8 dial = MapFloat<u8>(dial_state.value, EFFECT_DIAL_CENTER, 0, EFFECT_DIAL_RANGE);
 
     tt_data.dial1 = dial;
@@ -124,13 +123,13 @@ void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // crossfade slider
   {
-    const ControllerEmu::Slider::StateData cfs = m_crossfade->GetState(m_input_override_function);
+    const ControllerEmu::Slider::StateData cfs = m_crossfade->GetState();
 
     tt_data.slider = MapFloat<u8>(cfs.value, CROSSFADE_CENTER, 0, CROSSFADE_RANGE);
   }
 
   // buttons
-  m_buttons->GetState(&tt_data.bt, turntable_button_bitmasks.data(), m_input_override_function);
+  m_buttons->GetState(&tt_data.bt, turntable_button_bitmasks.data());
 
   // flip button bits :/
   tt_data.bt ^= (BUTTON_L_GREEN | BUTTON_L_RED | BUTTON_L_BLUE | BUTTON_R_GREEN | BUTTON_R_RED |

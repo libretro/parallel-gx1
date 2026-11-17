@@ -49,7 +49,7 @@ void DrawsomeTablet::BuildDesiredExtensionState(DesiredExtensionState* target_st
   constexpr u16 CENTER_X = (MAX_X + MIN_X + 1) / 2;
   constexpr u16 CENTER_Y = (MAX_Y + MIN_Y + 1) / 2;
 
-  const auto stylus_state = m_stylus->GetState(m_input_override_function);
+  const auto stylus_state = m_stylus->GetState();
   const u16 stylus_x = MapFloat<u16>(stylus_state.x, CENTER_X, MIN_X, MAX_X);
   const u16 stylus_y = MapFloat<u16>(-stylus_state.y, CENTER_Y, MAX_Y, MIN_Y);
 
@@ -59,7 +59,7 @@ void DrawsomeTablet::BuildDesiredExtensionState(DesiredExtensionState* target_st
   tablet_data.stylus_y1 = u8(stylus_y);
   tablet_data.stylus_y2 = u8(stylus_y >> 8);
 
-  const auto touch_state = m_touch->GetState(m_input_override_function);
+  const auto touch_state = m_touch->GetState();
 
   // Note: Pen X/Y holds the last value when the pen is lifted.
   const bool is_stylus_lifted = std::lround(touch_state.data[1]) != 0;

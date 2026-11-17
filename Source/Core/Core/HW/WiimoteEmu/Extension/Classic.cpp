@@ -90,8 +90,7 @@ void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // left stick
   {
-    const ControllerEmu::AnalogStick::StateData left_stick_state =
-        m_left_stick->GetState(m_input_override_function);
+    const ControllerEmu::AnalogStick::StateData left_stick_state = m_left_stick->GetState();
 
     const u8 x = MapFloat<u8>(left_stick_state.x, LEFT_STICK_CENTER, 0, LEFT_STICK_RANGE);
     const u8 y = MapFloat<u8>(left_stick_state.y, LEFT_STICK_CENTER, 0, LEFT_STICK_RANGE);
@@ -101,8 +100,7 @@ void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // right stick
   {
-    const ControllerEmu::AnalogStick::StateData right_stick_data =
-        m_right_stick->GetState(m_input_override_function);
+    const ControllerEmu::AnalogStick::StateData right_stick_data = m_right_stick->GetState();
 
     const u8 x = MapFloat<u8>(right_stick_data.x, RIGHT_STICK_CENTER, 0, RIGHT_STICK_RANGE);
     const u8 y = MapFloat<u8>(right_stick_data.y, RIGHT_STICK_CENTER, 0, RIGHT_STICK_RANGE);
@@ -115,8 +113,7 @@ void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   // triggers
   {
     ControlState triggers[2] = {0, 0};
-    m_triggers->GetState(&buttons, classic_trigger_bitmasks.data(), triggers,
-                         m_input_override_function);
+    m_triggers->GetState(&buttons, classic_trigger_bitmasks.data(), triggers);
 
     const u8 lt = MapFloat<u8>(triggers[0], 0, 0, TRIGGER_RANGE);
     const u8 rt = MapFloat<u8>(triggers[1], 0, 0, TRIGGER_RANGE);
@@ -126,8 +123,8 @@ void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   }
 
   // buttons and dpad
-  m_buttons->GetState(&buttons, classic_button_bitmasks.data(), m_input_override_function);
-  m_dpad->GetState(&buttons, classic_dpad_bitmasks.data(), m_input_override_function);
+  m_buttons->GetState(&buttons, classic_button_bitmasks.data());
+  m_dpad->GetState(&buttons, classic_dpad_bitmasks.data());
 
   classic_data.SetButtons(buttons);
 

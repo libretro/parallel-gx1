@@ -69,10 +69,10 @@ GCPadStatus GBAPad::GetInput()
   GCPadStatus pad = {};
 
   // Buttons
-  m_buttons->GetState(&pad.button, button_bitmasks, m_input_override_function);
+  m_buttons->GetState(&pad.button, button_bitmasks);
 
   // DPad
-  m_dpad->GetState(&pad.button, dpad_bitmasks, m_input_override_function);
+  m_dpad->GetState(&pad.button, dpad_bitmasks);
 
   // Use X button as a reset signal
   if (m_reset_pending)

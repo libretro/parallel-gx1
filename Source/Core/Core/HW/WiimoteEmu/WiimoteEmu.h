@@ -173,10 +173,6 @@ public:
   // Active extension number is exposed for TAS.
   ExtensionNumber GetActiveExtensionNumber() const;
 
-  static Common::Vec3
-  OverrideVec3(const ControllerEmu::ControlGroup* control_group, Common::Vec3 vec,
-               const ControllerEmu::InputOverrideFunction& input_override_function);
-
 private:
   // Used only for error generation:
   static constexpr u8 EEPROM_I2C_ADDR = 0x50;
@@ -206,10 +202,6 @@ private:
   // Returns the world rotation from the effects of sideways/upright settings.
   Common::Quaternion GetOrientation() const;
 
-  std::optional<Common::Vec3> OverrideVec3(const ControllerEmu::ControlGroup* control_group,
-                                           std::optional<Common::Vec3> optional_vec) const;
-  Common::Vec3 OverrideVec3(const ControllerEmu::ControlGroup* control_group,
-                            Common::Vec3 vec) const;
   Common::Vec3 GetTotalAcceleration() const;
   Common::Vec3 GetTotalAngularVelocity() const;
   Common::Matrix44 GetTotalTransformation() const;

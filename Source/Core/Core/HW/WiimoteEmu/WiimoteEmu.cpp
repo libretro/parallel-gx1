@@ -483,10 +483,9 @@ void Wiimote::BuildDesiredWiimoteState(DesiredWiimoteState* target_state,
 
   // Fetch pressed buttons from user input.
   target_state->buttons.hex = 0;
-  m_buttons->GetState(&target_state->buttons.hex, button_bitmasks, m_input_override_function);
+  m_buttons->GetState(&target_state->buttons.hex, button_bitmasks);
   m_dpad->GetState(&target_state->buttons.hex,
-                   IsSideways() ? dpad_sideways_bitmasks : dpad_bitmasks,
-                   m_input_override_function);
+                   IsSideways() ? dpad_sideways_bitmasks : dpad_bitmasks);
 
   // Calculate accelerometer state.
   // Calibration values are 8-bit but we want 10-bit precision, so << 2.
@@ -667,9 +666,8 @@ ButtonData Wiimote::GetCurrentlyPressedButtons()
   const auto input_scope = ReadScope();
 
   ButtonData buttons{};
-  m_buttons->GetState(&buttons.hex, button_bitmasks, m_input_override_function);
-  m_dpad->GetState(&buttons.hex, IsSideways() ? dpad_sideways_bitmasks : dpad_bitmasks,
-                   m_input_override_function);
+  m_buttons->GetState(&buttons.hex, button_bitmasks);
+  m_dpad->GetState(&buttons.hex, IsSideways() ? dpad_sideways_bitmasks : dpad_bitmasks);
 
   return buttons;
 }
@@ -828,7 +826,7 @@ void Wiimote::StepDynamics()
 {
   EmulateSwing(&m_swing_state, m_swing, 1.f / ::Wiimote::UPDATE_FREQ);
   EmulateTilt(&m_tilt_state, m_tilt, 1.f / ::Wiimote::UPDATE_FREQ);
-  EmulatePoint(&m_point_state, m_ir, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulatePoint(&m_point_state, m_ir, 1.f / ::Wiimote::UPDATE_FREQ);
   EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ);
   EmulateIMUCursor(&m_imu_cursor_state, m_imu_ir, m_imu_accelerometer, m_imu_gyroscope,
                    1.f / ::Wiimote::UPDATE_FREQ);
@@ -870,79 +868,12 @@ Common::Quaternion Wiimote::GetOrientation() const
          Common::Quaternion::RotateX(float(MathUtil::TAU / 4 * IsUpright()));
 }
 
-std::optional<Common::Vec3> Wiimote::OverrideVec3(const ControllerEmu::ControlGroup* control_group,
-                                                  std::optional<Common::Vec3> optional_vec) const
-{
-  bool has_value = optional_vec.has_value();
-  Common::Vec3 vec = has_value ? *optional_vec : Common::Vec3{};
-
-  if (m_input_override_function)
-  {
-    if (const std::optional<ControlState> x_override = m_input_override_function(
-            control_group->name, ControllerEmu::ReshapableInput::X_INPUT_OVERRIDE, vec.x))
-    {
-      has_value = true;
-      vec.x = *x_override;
-    }
-
-    if (const std::optional<ControlState> y_override = m_input_override_function(
-            control_group->name, ControllerEmu::ReshapableInput::Y_INPUT_OVERRIDE, vec.y))
-    {
-      has_value = true;
-      vec.y = *y_override;
-    }
-
-    if (const std::optional<ControlState> z_override = m_input_override_function(
-            control_group->name, ControllerEmu::ReshapableInput::Z_INPUT_OVERRIDE, vec.z))
-    {
-      has_value = true;
-      vec.z = *z_override;
-    }
-  }
-
-  return has_value ? std::make_optional(vec) : std::nullopt;
-}
-
-Common::Vec3 Wiimote::OverrideVec3(const ControllerEmu::ControlGroup* control_group,
-                                   Common::Vec3 vec) const
-{
-  return OverrideVec3(control_group, vec, m_input_override_function);
-}
-
-Common::Vec3
-Wiimote::OverrideVec3(const ControllerEmu::ControlGroup* control_group, Common::Vec3 vec,
-                      const ControllerEmu::InputOverrideFunction& input_override_function)
-{
-  if (input_override_function)
-  {
-    if (const std::optional<ControlState> x_override = input_override_function(
-            control_group->name, ControllerEmu::ReshapableInput::X_INPUT_OVERRIDE, vec.x))
-    {
-      vec.x = *x_override;
-    }
-
-    if (const std::optional<ControlState> y_override = input_override_function(
-            control_group->name, ControllerEmu::ReshapableInput::Y_INPUT_OVERRIDE, vec.y))
-    {
-      vec.y = *y_override;
-    }
-
-    if (const std::optional<ControlState> z_override = input_override_function(
-            control_group->name, ControllerEmu::ReshapableInput::Z_INPUT_OVERRIDE, vec.z))
-    {
-      vec.z = *z_override;
-    }
-  }
-
-  return vec;
-}
-
 Common::Vec3 Wiimote::GetTotalAcceleration() const
 {
   const Common::Vec3 default_accel = Common::Vec3(0, 0, float(GRAVITY_ACCELERATION));
   const Common::Vec3 accel = m_imu_accelerometer->GetState().value_or(default_accel);
 
-  return OverrideVec3(m_imu_accelerometer, GetAcceleration(accel));
+  return GetAcceleration(accel);
 }
 
 Common::Vec3 Wiimote::GetTotalAngularVelocity() const
@@ -950,7 +881,7 @@ Common::Vec3 Wiimote::GetTotalAngularVelocity() const
   const Common::Vec3 default_ang_vel = {};
   const Common::Vec3 ang_vel = m_imu_gyroscope->GetState().value_or(default_ang_vel);
 
-  return OverrideVec3(m_imu_gyroscope, GetAngularVelocity(ang_vel));
+  return GetAngularVelocity(ang_vel);
 }
 
 Common::Matrix44 Wiimote::GetTotalTransformation() const

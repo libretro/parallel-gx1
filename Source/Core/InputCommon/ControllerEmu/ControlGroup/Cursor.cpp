@@ -87,21 +87,6 @@ Cursor::StateData Cursor::GetState(const bool adjusted)
   return state;
 }
 
-Cursor::StateData Cursor::GetState(const bool adjusted,
-                                   const ControllerEmu::InputOverrideFunction& override_func)
-{
-  StateData state = GetState(adjusted);
-  if (!override_func)
-    return state;
-
-  if (const std::optional<ControlState> x_override = override_func(name, X_INPUT_OVERRIDE, state.x))
-    state.x = *x_override;
-  if (const std::optional<ControlState> y_override = override_func(name, Y_INPUT_OVERRIDE, state.y))
-    state.y = *y_override;
-
-  return state;
-}
-
 Cursor::StateData Cursor::UpdateState(Cursor::ReshapeData input)
 {
   // TODO: Using system time is ugly.
