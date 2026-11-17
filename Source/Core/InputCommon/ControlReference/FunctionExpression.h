@@ -6,7 +6,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "InputCommon/ControlReference/ExpressionParser.h"
@@ -50,7 +49,9 @@ public:
   int CountNumControls() const;
   void UpdateReferences(ControlEnvironment& env);
 
-  void SetArguments(std::vector<std::unique_ptr<Expression>>&& args);
+  // The function takes the argument, behind those it has; false when out of memory, the argument
+  // freed.
+  bool AddArgument(std::unique_ptr<Expression>&& arg);
 
   // These branch to the function this is.
   // Whether the function was given the arguments it takes
@@ -61,6 +62,12 @@ public:
 
   // Destroys and frees the function as the function it is
   static void Destroy(FunctionExpression* function);
+
+  // Frees the arguments. Public, as a delete of a function names it even though the destroying
+  // delete of Expression is what runs it.
+  ~FunctionExpression();
+  FunctionExpression(const FunctionExpression&) = delete;
+  FunctionExpression& operator=(const FunctionExpression&) = delete;
 
   const FunctionKind function_kind;
 
@@ -77,7 +84,10 @@ protected:
   u32 GetArgCount() const;
 
 private:
-  std::vector<std::unique_ptr<Expression>> m_args;
+  // The arguments, which the function owns
+  Expression** m_args = nullptr;
+  u32 m_arg_count = 0;
+  u32 m_arg_cap = 0;
 };
 
 std::unique_ptr<FunctionExpression> MakeFunctionExpression(std::string_view name);

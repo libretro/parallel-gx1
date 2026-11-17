@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <type_traits>
 
 namespace ciface::ExpressionParser
@@ -864,21 +865,42 @@ int FunctionExpression::CountNumControls() const
 {
   int result = 0;
 
-  for (auto& arg : m_args)
-    result += arg->CountNumControls();
+  for (u32 i = 0; i < m_arg_count; i++)
+    result += m_args[i]->CountNumControls();
 
   return result;
 }
 
 void FunctionExpression::UpdateReferences(ControlEnvironment& env)
 {
-  for (auto& arg : m_args)
-    arg->UpdateReferences(env);
+  for (u32 i = 0; i < m_arg_count; i++)
+    m_args[i]->UpdateReferences(env);
 }
 
-void FunctionExpression::SetArguments(std::vector<std::unique_ptr<Expression>>&& args)
+FunctionExpression::~FunctionExpression()
 {
-  m_args = std::move(args);
+  for (u32 i = 0; i < m_arg_count; i++)
+    delete m_args[i];
+  std::free(m_args);
+}
+
+bool FunctionExpression::AddArgument(std::unique_ptr<Expression>&& arg)
+{
+  if (m_arg_count == m_arg_cap)
+  {
+    const u32 cap = m_arg_cap ? m_arg_cap * 2 : 4;
+    Expression** const grown =
+        static_cast<Expression**>(std::realloc(m_args, cap * sizeof(Expression*)));
+    if (!grown)
+    {
+      arg.reset();
+      return false;
+    }
+    m_args = grown;
+    m_arg_cap = cap;
+  }
+  m_args[m_arg_count++] = arg.release();
+  return true;
 }
 
 Expression& FunctionExpression::GetArg(u32 number)
@@ -888,7 +910,7 @@ Expression& FunctionExpression::GetArg(u32 number)
 
 u32 FunctionExpression::GetArgCount() const
 {
-  return u32(m_args.size());
+  return m_arg_count;
 }
 
 /* The call on the function class this is: its own or, when it has none, the default. */

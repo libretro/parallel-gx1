@@ -980,8 +980,6 @@ private:
 
   ParseResult ParseFunctionArguments(std::unique_ptr<FunctionExpression>&& func)
   {
-    std::vector<std::unique_ptr<Expression>> args;
-
     if (TOK_LPAREN != Peek().type)
     {
       // Single argument with no parens (useful for unary ! function)
@@ -990,7 +988,8 @@ private:
       if (ParseStatus::Successful != arg.status)
         return arg;
 
-      args.emplace_back(std::move(arg.expr));
+      if (!func->AddArgument(std::move(arg.expr)))
+        return ParseResult::MakeErrorResult();
     }
     else
     {
@@ -1012,7 +1011,8 @@ private:
           if (ParseStatus::Successful != arg.status)
             return arg;
 
-          args.emplace_back(std::move(arg.expr));
+          if (!func->AddArgument(std::move(arg.expr)))
+            return ParseResult::MakeErrorResult();
 
           // Right paren is the end of our arguments.
           const Token tok = Chew();
@@ -1026,7 +1026,6 @@ private:
       }
     }
 
-    func->SetArguments(std::move(args));
     if (!func->ValidateArguments())
       return ParseResult::MakeErrorResult();
 
@@ -1190,11 +1189,12 @@ private:
           return false_result;
 
         auto conditional = MakeFunctionExpression("if");
-        std::vector<std::unique_ptr<Expression>> args;
-        args.emplace_back(std::move(expr));
-        args.emplace_back(std::move(true_result.expr));
-        args.emplace_back(std::move(false_result.expr));
-        conditional->SetArguments(std::move(args));
+        if (!conditional->AddArgument(std::move(expr)) ||
+            !conditional->AddArgument(std::move(true_result.expr)) ||
+            !conditional->AddArgument(std::move(false_result.expr)))
+        {
+          return ParseResult::MakeErrorResult();
+        }
         expr = std::move(conditional);
       }
       else
