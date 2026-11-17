@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cmath>
-#include <memory>
 
 #include <retro_atomic.h>
 
@@ -77,7 +76,10 @@ protected:
     quiesce_node_t node;  // first: the free callback casts it back
     std::string expression;
     ciface::ExpressionParser::ParseStatus status;
-    std::unique_ptr<ciface::ExpressionParser::Expression> parsed;
+    // Owned, null when there is none
+    ciface::ExpressionParser::Expression* parsed;
+
+    ~Binding() { ciface::ExpressionParser::FreeExpression(parsed); }
   };
   static void FreeBinding(quiesce_node_t* node);
   // Only inside an InputReadScope.

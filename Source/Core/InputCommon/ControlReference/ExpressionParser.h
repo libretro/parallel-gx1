@@ -229,18 +229,24 @@ protected:
   Expression* GetLValueDefault() { return this; }
 };
 
-class ParseResult
+// Frees the expression, when there is one.
+inline void FreeExpression(Expression* expression)
 {
-public:
+  // a destroying delete is not to be handed null
+  if (expression)
+    delete expression;
+}
+
+// What a parse made: the expression it parsed into, which the receiver owns, null when there is
+// none. Only ParseExpression gives one with an error: the bareword fallback.
+struct ParseResult
+{
   static ParseResult MakeEmptyResult();
-  static ParseResult MakeSuccessfulResult(std::unique_ptr<Expression>&& expr);
+  static ParseResult MakeSuccessfulResult(Expression* expr);
   static ParseResult MakeErrorResult();
 
-  ParseStatus status = ParseStatus::EmptyExpression;
-  std::unique_ptr<Expression> expr;
-
-private:
-  ParseResult() = default;
+  ParseStatus status;
+  Expression* expr;
 };
 
 ParseResult ParseExpression(const std::string& expr);

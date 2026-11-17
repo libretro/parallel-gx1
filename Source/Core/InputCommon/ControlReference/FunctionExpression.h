@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <string_view>
 
@@ -51,7 +50,7 @@ public:
 
   // The function takes the argument, behind those it has; false when out of memory, the argument
   // freed.
-  bool AddArgument(std::unique_ptr<Expression>&& arg);
+  bool AddArgument(Expression* arg);
 
   // These branch to the function this is.
   // Whether the function was given the arguments it takes
@@ -90,6 +89,7 @@ private:
   u32 m_arg_cap = 0;
 };
 
-std::unique_ptr<FunctionExpression> MakeFunctionExpression(std::string_view name);
+// The function of that name, which the caller owns; null for none.
+FunctionExpression* MakeFunctionExpression(std::string_view name);
 
 }  // namespace ciface::ExpressionParser

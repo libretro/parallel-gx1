@@ -50,7 +50,7 @@ void ControlReference::UpdateReference(ciface::ExpressionParser::ControlEnvironm
 
     // A fresh parse to bind, leaving the published one untouched for its readers.
     auto parse_result = ParseExpression(cur->expression);
-    auto* next = new Binding{{}, cur->expression, parse_result.status, std::move(parse_result.expr)};
+    auto* next = new Binding{{}, cur->expression, parse_result.status, parse_result.expr};
     if (next->parsed)
       next->parsed->UpdateReferences(env);
 
@@ -86,7 +86,7 @@ bool ControlReference::HasExpression() const
 void ControlReference::SetExpression(std::string expr)
 {
   auto parse_result = ParseExpression(expr);
-  Publish(new Binding{{}, std::move(expr), parse_result.status, std::move(parse_result.expr)});
+  Publish(new Binding{{}, std::move(expr), parse_result.status, parse_result.expr});
 }
 
 ControlState ControlReference::GetRange() const

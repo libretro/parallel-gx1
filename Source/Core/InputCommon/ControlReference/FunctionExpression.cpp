@@ -805,58 +805,58 @@ private:
   TimePoint m_release_time = Clock::now();
 };
 
-std::unique_ptr<FunctionExpression> MakeFunctionExpression(std::string_view name)
+FunctionExpression* MakeFunctionExpression(std::string_view name)
 {
   if (name == "not")
-    return std::make_unique<NotExpression>();
+    return new NotExpression();
   if (name == "if")
-    return std::make_unique<IfExpression>();
+    return new IfExpression();
   if (name == "abs")
-    return std::make_unique<AbsExpression>();
+    return new AbsExpression();
   if (name == "sin")
-    return std::make_unique<SinExpression>();
+    return new SinExpression();
   if (name == "cos")
-    return std::make_unique<CosExpression>();
+    return new CosExpression();
   if (name == "tan")
-    return std::make_unique<TanExpression>();
+    return new TanExpression();
   if (name == "asin")
-    return std::make_unique<ASinExpression>();
+    return new ASinExpression();
   if (name == "acos")
-    return std::make_unique<ACosExpression>();
+    return new ACosExpression();
   if (name == "atan")
-    return std::make_unique<ATanExpression>();
+    return new ATanExpression();
   if (name == "atan2")
-    return std::make_unique<ATan2Expression>();
+    return new ATan2Expression();
   if (name == "sqrt")
-    return std::make_unique<SqrtExpression>();
+    return new SqrtExpression();
   if (name == "pow")
-    return std::make_unique<PowExpression>();
+    return new PowExpression();
   if (name == "min")
-    return std::make_unique<MinExpression>();
+    return new MinExpression();
   if (name == "max")
-    return std::make_unique<MaxExpression>();
+    return new MaxExpression();
   if (name == "clamp")
-    return std::make_unique<ClampExpression>();
+    return new ClampExpression();
   if (name == "timer")
-    return std::make_unique<TimerExpression>();
+    return new TimerExpression();
   if (name == "toggle")
-    return std::make_unique<ToggleExpression>();
+    return new ToggleExpression();
   if (name == "minus")
-    return std::make_unique<UnaryMinusExpression>();
+    return new UnaryMinusExpression();
   if (name == "plus")
-    return std::make_unique<UnaryPlusExpression>();
+    return new UnaryPlusExpression();
   if (name == "deadzone")
-    return std::make_unique<DeadzoneExpression>();
+    return new DeadzoneExpression();
   if (name == "smooth")
-    return std::make_unique<SmoothExpression>();
+    return new SmoothExpression();
   if (name == "hold")
-    return std::make_unique<HoldExpression>();
+    return new HoldExpression();
   if (name == "tap")
-    return std::make_unique<TapExpression>();
+    return new TapExpression();
   if (name == "relative")
-    return std::make_unique<RelativeExpression>();
+    return new RelativeExpression();
   if (name == "pulse")
-    return std::make_unique<PulseExpression>();
+    return new PulseExpression();
 
   return nullptr;
 }
@@ -884,7 +884,7 @@ FunctionExpression::~FunctionExpression()
   std::free(m_args);
 }
 
-bool FunctionExpression::AddArgument(std::unique_ptr<Expression>&& arg)
+bool FunctionExpression::AddArgument(Expression* arg)
 {
   if (m_arg_count == m_arg_cap)
   {
@@ -893,13 +893,13 @@ bool FunctionExpression::AddArgument(std::unique_ptr<Expression>&& arg)
         static_cast<Expression**>(std::realloc(m_args, cap * sizeof(Expression*)));
     if (!grown)
     {
-      arg.reset();
+      FreeExpression(arg);
       return false;
     }
     m_args = grown;
     m_arg_cap = cap;
   }
-  m_args[m_arg_count++] = arg.release();
+  m_args[m_arg_count++] = arg;
   return true;
 }
 
