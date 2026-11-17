@@ -3,6 +3,7 @@
 
 #include "InputCommon/ControllerEmu/ControllerEmu.h"
 
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -91,10 +92,10 @@ ciface::Core::DeviceQualifier EmulatedController::GetDefaultDevice() const
   return d ? d->qualifier : ciface::Core::DeviceQualifier{};
 }
 
-void EmulatedController::SetDefaultDevice(const std::string& device)
+void EmulatedController::SetDefaultDevice(const char* device)
 {
   ciface::Core::DeviceQualifier devq;
-  devq.FromString(device.data(), device.size());
+  devq.FromString(device, strlen(device));
   SetDefaultDevice(std::move(devq));
 }
 
@@ -112,7 +113,7 @@ void EmulatedController::LoadConfig(Common::IniFile::Section* sec)
 {
   std::string defdev;
   if (sec->Get("Device", &defdev, "") && !defdev.empty())
-    SetDefaultDevice(defdev);
+    SetDefaultDevice(defdev.c_str());
 
   LoadGroupsConfig(sec, "");
 }
@@ -142,11 +143,9 @@ void EmulatedController::LoadDefaults(const ControllerInterface& ciface)
   Common::IniFile::Section sec;
   LoadConfig(&sec);
 
-  const std::string& default_device_string = ciface.GetDefaultDeviceString();
-  if (!default_device_string.empty())
-  {
-    SetDefaultDevice(default_device_string);
-  }
+  ciface::Core::DeviceQualifier default_device;
+  if (ciface.GetDefaultDevice(&default_device))
+    SetDefaultDevice(std::move(default_device));
 }
 
 }  // namespace ControllerEmu

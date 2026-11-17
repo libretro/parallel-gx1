@@ -269,18 +269,17 @@ std::shared_ptr<Device> DeviceContainer::FindDevice(const DeviceQualifier& devq)
   return nullptr;
 }
 
-std::string DeviceContainer::GetDefaultDeviceString() const
+bool DeviceContainer::GetDefaultDevice(DeviceQualifier* qualifier) const
 {
   InputReadScope scope;
   const DeviceList* const list = PeekDevices();
   const auto& devices = list ? list->devices : NoDevices();
   // Devices are already sorted by priority
   if (devices.empty() || devices[0]->GetSortPriority() < 0)
-    return "";
+    return false;
 
-  DeviceQualifier device_qualifier;
-  device_qualifier.FromDevice(devices[0].get());
-  return device_qualifier.ToString();
+  qualifier->FromDevice(devices[0].get());
+  return true;
 }
 
 Device::Input* DeviceContainer::FindInput(std::string_view name, const Device* def_dev) const

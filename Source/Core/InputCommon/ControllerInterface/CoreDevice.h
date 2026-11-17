@@ -229,7 +229,8 @@ public:
     for (i = 0; i < list->devices.size(); i++)
       fn(list->devices[i].get(), ctx);
   }
-  std::string GetDefaultDeviceString() const;
+  // The qualifier of the device to bind by default; false when there is none.
+  bool GetDefaultDevice(DeviceQualifier* qualifier) const;
   std::shared_ptr<Device> FindDevice(const DeviceQualifier& devq) const;
 
   bool HasConnectedDevice(const DeviceQualifier& qualifier) const;

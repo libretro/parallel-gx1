@@ -250,7 +250,8 @@ public:
 
   bool IsDefaultDeviceConnected() const;
   ciface::Core::DeviceQualifier GetDefaultDevice() const;
-  void SetDefaultDevice(const std::string& device);
+  // From "source/cid/name", terminated
+  void SetDefaultDevice(const char* device);
   void SetDefaultDevice(ciface::Core::DeviceQualifier devq);
 
   // Rebinds every control to the current devices. Any thread may ask; one thread at a time
