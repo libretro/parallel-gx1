@@ -548,8 +548,9 @@ static ParseResult MakeLiteralExpression(const Token& token)
 class VariableExpression : public Expression
 {
 public:
-  explicit VariableExpression(std::string name)
-      : Expression(ExpressionKind::Variable), m_name(std::move(name))
+  // Takes the name, len characters in an allocation it frees
+  VariableExpression(char* name, std::size_t len)
+      : Expression(ExpressionKind::Variable), m_name(name), m_name_length(len)
   {
   }
 
@@ -557,6 +558,7 @@ public:
   {
     if (m_variable)
       ReleaseExpressionVariable(m_variable);
+    std::free(m_name);
   }
 
   ControlState GetValue() { return m_variable ? m_variable->value : 0; }
@@ -571,14 +573,15 @@ public:
 
   void UpdateReferences(ControlEnvironment& env)
   {
-    ExpressionVariable* const variable = env.AcquireVariable(m_name);
+    ExpressionVariable* const variable = env.AcquireVariable(m_name, m_name_length);
     if (m_variable)
       ReleaseExpressionVariable(m_variable);
     m_variable = variable;
   }
 
 protected:
-  const std::string m_name;
+  char* const m_name;
+  const std::size_t m_name_length;
   ExpressionVariable* m_variable = nullptr;
 };
 
@@ -916,17 +919,17 @@ void FreeExpressionVariables(ExpressionVariables* variables)
   variables->cap = 0;
 }
 
-ExpressionVariable* ControlEnvironment::AcquireVariable(const std::string& name)
+ExpressionVariable* ControlEnvironment::AcquireVariable(const char* name, std::size_t len)
 {
   ExpressionVariable* variable = nullptr;
   std::size_t i;
 
   // Do not accept an empty string as key, even if the expression parser already prevents this case.
-  if (name.empty())
+  if (!len)
     return nullptr;
   for (i = 0; i < m_variables.count; i++)
   {
-    if (!std::strcmp(m_variables.items[i]->name, name.c_str()))
+    if (!std::strcmp(m_variables.items[i]->name, name))
     {
       variable = m_variables.items[i];
       break;
@@ -949,13 +952,13 @@ ExpressionVariable* ControlEnvironment::AcquireVariable(const std::string& name)
     variable = static_cast<ExpressionVariable*>(std::calloc(1, sizeof(ExpressionVariable)));
     if (!variable)
       return nullptr;
-    variable->name = static_cast<char*>(std::malloc(name.size() + 1));
+    variable->name = static_cast<char*>(std::malloc(len + 1));
     if (!variable->name)
     {
       std::free(variable);
       return nullptr;
     }
-    std::memcpy(variable->name, name.c_str(), name.size() + 1);
+    std::memcpy(variable->name, name, len + 1);
     retro_atomic_store_relaxed_int(&variable->refs, 1);
     m_variables.items[m_variables.count++] = variable;
   }
@@ -1162,8 +1165,13 @@ private:
     {
       if (!tok.data_length)
         return ParseResult::MakeErrorResult();
-      else
-        return ParseResult::MakeSuccessfulResult(new VariableExpression(std::string(tok.Data())));
+
+      char* const name = static_cast<char*>(std::malloc(tok.data_length + 1));
+      if (!name)
+        return ParseResult::MakeErrorResult();
+      std::memcpy(name, tok.data, tok.data_length);
+      name[tok.data_length] = '\0';
+      return ParseResult::MakeSuccessfulResult(new VariableExpression(name, tok.data_length));
     }
     case TOK_LPAREN:
     {
