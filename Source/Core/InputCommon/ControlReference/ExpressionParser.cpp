@@ -8,13 +8,10 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <functional>
-#include <map>
 #include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
@@ -66,53 +63,82 @@ static TokenType GetBinaryOperatorTokenTypeFromChar(char c)
   }
 }
 
-class HotkeySuppressions
+// The inputs hotkeys hold back: while a hotkey's modifiers are pressed, its final input reads as
+// released to everything but hotkeys whose modifiers include each one holding it. One entry per
+// final input and modifier, counted, as hotkeys can share them.
+struct HotkeySuppression
 {
-public:
-  using Modifiers = std::vector<std::unique_ptr<ControlExpression>>;
-
-  struct InvokingDeleter
-  {
-    template <typename T>
-    void operator()(T* func)
-    {
-      (*func)();
-      delete func;
-    }
-  };
-
-  using Suppressor = std::unique_ptr<std::function<void()>, InvokingDeleter>;
-
-  bool IsSuppressed(Device::Input* input) const
-  {
-    // Input is suppressed if it exists in the map at all.
-    return m_suppressions.lower_bound({input, nullptr}) !=
-           m_suppressions.lower_bound({input + 1, nullptr});
-  }
-
-  bool IsSuppressedIgnoringModifiers(Device::Input* input, const Modifiers& ignore_modifiers) const;
-
-  // Suppresses each input + modifier pair.
-  // The returned object removes the suppression on destruction.
-  Suppressor MakeSuppressor(const Modifiers* modifiers,
-                            const std::unique_ptr<ControlExpression>* final_input);
-
-private:
-  using Suppression = std::pair<Device::Input*, Device::Input*>;
-  using SuppressionLevel = u16;
-
-  void RemoveSuppression(Device::Input* modifier, Device::Input* final_input)
-  {
-    auto it = m_suppressions.find({final_input, modifier});
-    if (it != m_suppressions.end() && (--it->second) == 0)
-      m_suppressions.erase(it);
-  }
-
-  // Holds counts of suppressions for each input/modifier pair.
-  std::map<Suppression, SuppressionLevel> m_suppressions;
+  Device::Input* final_input;
+  Device::Input* modifier;
+  u32 level;
 };
 
-static HotkeySuppressions s_hotkey_suppressions;
+enum
+{
+  // Entries no allocation is needed for: far more than the hotkeys pressed at once
+  HOTKEY_SUPPRESSIONS_INLINE = 64,
+};
+
+static HotkeySuppression s_suppressions_inline[HOTKEY_SUPPRESSIONS_INLINE];
+static HotkeySuppression* s_suppressions = s_suppressions_inline;
+static std::size_t s_num_suppressions;
+static std::size_t s_cap_suppressions = HOTKEY_SUPPRESSIONS_INLINE;
+
+static bool IsSuppressed(const Device::Input* input)
+{
+  // Input is suppressed if it is held back by any modifier.
+  std::size_t i;
+  for (i = 0; i < s_num_suppressions; i++)
+  {
+    if (s_suppressions[i].final_input == input)
+      return true;
+  }
+  return false;
+}
+
+static void AddSuppression(Device::Input* final_input, Device::Input* modifier)
+{
+  std::size_t i;
+  for (i = 0; i < s_num_suppressions; i++)
+  {
+    if (s_suppressions[i].final_input == final_input && s_suppressions[i].modifier == modifier)
+    {
+      s_suppressions[i].level++;
+      return;
+    }
+  }
+  if (s_num_suppressions == s_cap_suppressions)
+  {
+    const std::size_t cap = s_cap_suppressions * 2;
+    HotkeySuppression* const grown =
+        static_cast<HotkeySuppression*>(std::malloc(cap * sizeof(HotkeySuppression)));
+    if (!grown)
+      return;
+    std::memcpy(grown, s_suppressions, s_num_suppressions * sizeof(HotkeySuppression));
+    if (s_suppressions != s_suppressions_inline)
+      std::free(s_suppressions);
+    s_suppressions = grown;
+    s_cap_suppressions = cap;
+  }
+  s_suppressions[s_num_suppressions].final_input = final_input;
+  s_suppressions[s_num_suppressions].modifier = modifier;
+  s_suppressions[s_num_suppressions].level = 1;
+  s_num_suppressions++;
+}
+
+static void RemoveSuppression(Device::Input* modifier, Device::Input* final_input)
+{
+  std::size_t i;
+  for (i = 0; i < s_num_suppressions; i++)
+  {
+    if (s_suppressions[i].final_input == final_input && s_suppressions[i].modifier == modifier)
+    {
+      if (--s_suppressions[i].level == 0)
+        s_suppressions[i] = s_suppressions[--s_num_suppressions];
+      return;
+    }
+  }
+}
 
 static bool IsAsciiAlpha(char c)
 {
@@ -311,7 +337,7 @@ public:
 
   ControlState GetValue()
   {
-    if (s_hotkey_suppressions.IsSuppressed(m_input))
+    if (IsSuppressed(m_input))
       return 0;
     return GetValueIgnoringSuppression();
   }
@@ -351,45 +377,6 @@ private:
   Device::Input* m_input = nullptr;
   Device::Output* m_output = nullptr;
 };
-
-bool HotkeySuppressions::IsSuppressedIgnoringModifiers(Device::Input* input,
-                                                       const Modifiers& ignore_modifiers) const
-{
-  // Input is suppressed if it exists in the map with a modifier that we aren't ignoring.
-  auto it = m_suppressions.lower_bound({input, nullptr});
-  auto it_end = m_suppressions.lower_bound({input + 1, nullptr});
-
-  // We need to ignore L_Ctrl R_Ctrl when supplied Ctrl and vice-versa.
-  const auto is_same_modifier = [](Device::Input* i1, Device::Input* i2) {
-    return i1 && i2 && (i1 == i2 || i1->IsChild(i2) || i2->IsChild(i1));
-  };
-
-  return std::any_of(it, it_end, [&](const auto& s) {
-    return std::ranges::none_of(ignore_modifiers, [&](const auto& m) {
-      return is_same_modifier(m->GetInput(), s.first.second);
-    });
-  });
-}
-
-HotkeySuppressions::Suppressor
-HotkeySuppressions::MakeSuppressor(const Modifiers* modifiers,
-                                   const std::unique_ptr<ControlExpression>* final_input)
-{
-  for (auto& modifier : *modifiers)
-  {
-    // Inputs might be null, don't add nullptr to the map
-    if ((*final_input)->GetInput() && modifier->GetInput())
-    {
-      ++m_suppressions[{(*final_input)->GetInput(), modifier->GetInput()}];
-    }
-  }
-
-  return Suppressor(std::make_unique<std::function<void()>>([this, modifiers, final_input] {
-                      for (auto& modifier : *modifiers)
-                        RemoveSuppression(modifier->GetInput(), (*final_input)->GetInput());
-                    }).release(),
-                    InvokingDeleter{});
-}
 
 class BinaryExpression : public Expression
 {
@@ -589,26 +576,46 @@ protected:
 class HotkeyExpression : public Expression
 {
 public:
-  explicit HotkeyExpression(std::vector<std::unique_ptr<ControlExpression>> inputs)
-      : Expression(ExpressionKind::Hotkey), m_modifiers(std::move(inputs))
+  // Takes the inputs, count of them in an allocation it frees: the modifiers, then the final input.
+  HotkeyExpression(ControlExpression** inputs, u32 count)
+      : Expression(ExpressionKind::Hotkey), m_modifiers(inputs), m_num_modifiers(count - 1),
+        m_final_input(inputs[count - 1]),
+        m_suppressed(static_cast<Device::Input**>(std::calloc(count, sizeof(Device::Input*))))
   {
-    m_final_input = std::move(m_modifiers.back());
-    m_modifiers.pop_back();
   }
+
+  ~HotkeyExpression()
+  {
+    ReleaseSuppression();
+    for (u32 i = 0; i < m_num_modifiers; i++)
+      delete m_modifiers[i];
+    delete m_final_input;
+    std::free(m_modifiers);
+    std::free(m_suppressed);
+  }
+
+  HotkeyExpression(const HotkeyExpression&) = delete;
+  HotkeyExpression& operator=(const HotkeyExpression&) = delete;
 
   ControlState GetValue()
   {
     // True if we have no modifiers
-    const bool modifiers_pressed = std::ranges::all_of(
-        m_modifiers, [](const auto& input) { return input->GetValue() > CONDITION_THRESHOLD; });
+    bool modifiers_pressed = true;
+    for (u32 i = 0; i < m_num_modifiers; i++)
+    {
+      if (m_modifiers[i]->GetValue() <= CONDITION_THRESHOLD)
+      {
+        modifiers_pressed = false;
+        break;
+      }
+    }
 
     const auto final_input_state = m_final_input->GetValueIgnoringSuppression();
 
     if (modifiers_pressed)
     {
       // Ignore suppression of our own modifiers. This also allows superset modifiers to function.
-      const bool is_suppressed = s_hotkey_suppressions.IsSuppressedIgnoringModifiers(
-          m_final_input->GetInput(), m_modifiers);
+      const bool is_suppressed = IsSuppressedIgnoringModifiers(m_final_input->GetInput());
 
       if (final_input_state <= CONDITION_THRESHOLD)
         m_is_blocked = false;
@@ -627,7 +634,7 @@ public:
     }
     else
     {
-      m_suppressor = {};
+      ReleaseSuppression();
       m_is_blocked = final_input_state > CONDITION_THRESHOLD;
     }
 
@@ -639,33 +646,80 @@ public:
   int CountNumControls() const
   {
     int result = 0;
-    for (auto& input : m_modifiers)
-      result += input->CountNumControls();
+    for (u32 i = 0; i < m_num_modifiers; i++)
+      result += m_modifiers[i]->CountNumControls();
     return result + m_final_input->CountNumControls();
   }
 
   void UpdateReferences(ControlEnvironment& env)
   {
-    for (auto& input : m_modifiers)
-      input->UpdateReferences(env);
+    for (u32 i = 0; i < m_num_modifiers; i++)
+      m_modifiers[i]->UpdateReferences(env);
 
     m_final_input->UpdateReferences(env);
 
     // We must update our suppression with valid pointers.
-    if (m_suppressor)
+    if (m_suppressing)
       EnableSuppression(true);
   }
 
 private:
-  void EnableSuppression(bool force = false)
+  bool IsSuppressedIgnoringModifiers(Device::Input* input) const
   {
-    if (!m_suppressor || force)
-      m_suppressor = s_hotkey_suppressions.MakeSuppressor(&m_modifiers, &m_final_input);
+    // Input is suppressed if it is held back with a modifier that we aren't ignoring.
+    for (std::size_t s = 0; s < s_num_suppressions; s++)
+    {
+      if (s_suppressions[s].final_input != input)
+        continue;
+      bool ignored = false;
+      for (u32 i = 0; i < m_num_modifiers && !ignored; i++)
+      {
+        // We need to ignore L_Ctrl R_Ctrl when supplied Ctrl and vice-versa.
+        Device::Input* const i1 = m_modifiers[i]->GetInput();
+        Device::Input* const i2 = s_suppressions[s].modifier;
+        ignored = i1 && i2 && (i1 == i2 || i1->IsChild(i2) || i2->IsChild(i1));
+      }
+      if (!ignored)
+        return true;
+    }
+    return false;
   }
 
-  HotkeySuppressions::Modifiers m_modifiers;
-  std::unique_ptr<ControlExpression> m_final_input;
-  HotkeySuppressions::Suppressor m_suppressor;
+  // Suppresses each input + modifier pair, as they are now. The pairs are kept to be released.
+  void EnableSuppression(bool force = false)
+  {
+    if (m_suppressing && !force)
+      return;
+    ReleaseSuppression();
+    if (!m_suppressed)
+      return;
+    m_suppressed_final = m_final_input->GetInput();
+    for (u32 i = 0; i < m_num_modifiers; i++)
+    {
+      m_suppressed[i] = m_modifiers[i]->GetInput();
+      // Inputs might be null, don't suppress with nullptr
+      if (m_suppressed_final && m_suppressed[i])
+        AddSuppression(m_suppressed_final, m_suppressed[i]);
+    }
+    m_suppressing = true;
+  }
+
+  void ReleaseSuppression()
+  {
+    if (!m_suppressing)
+      return;
+    for (u32 i = 0; i < m_num_modifiers; i++)
+      RemoveSuppression(m_suppressed[i], m_suppressed_final);
+    m_suppressing = false;
+  }
+
+  ControlExpression** m_modifiers;
+  u32 m_num_modifiers;
+  ControlExpression* m_final_input;
+  // The modifiers and the final input as they were suppressed
+  Device::Input** m_suppressed;
+  Device::Input* m_suppressed_final = nullptr;
+  bool m_suppressing = false;
   bool m_is_blocked = false;
 };
 
@@ -1227,18 +1281,41 @@ private:
     if (tok.type != TOK_LPAREN)
       return ParseResult::MakeErrorResult();
 
-    std::vector<std::unique_ptr<ControlExpression>> inputs;
+    ControlExpression** inputs = nullptr;
+    u32 count = 0;
+    u32 cap = 0;
+    // The inputs are freed when the expression cannot be made
+    const auto free_inputs = [&] {
+      for (u32 i = 0; i < count; i++)
+        delete inputs[i];
+      std::free(inputs);
+    };
 
     while (true)
     {
       tok = Chew();
 
       if (tok.type != TOK_CONTROL && tok.type != TOK_BAREWORD)
+      {
+        free_inputs();
         return ParseResult::MakeErrorResult();
+      }
 
+      if (count == cap)
+      {
+        cap = cap ? cap * 2 : 4;
+        ControlExpression** const grown =
+            static_cast<ControlExpression**>(std::realloc(inputs, cap * sizeof(*inputs)));
+        if (!grown)
+        {
+          free_inputs();
+          return ParseResult::MakeErrorResult();
+        }
+        inputs = grown;
+      }
       ControlQualifier cq;
       cq.FromString(std::string(tok.Data()));
-      inputs.emplace_back(std::make_unique<ControlExpression>(std::move(cq)));
+      inputs[count++] = new ControlExpression(std::move(cq));
 
       tok = Chew();
 
@@ -1248,10 +1325,11 @@ private:
       if (tok.type == TOK_RPAREN)
         break;
 
+      free_inputs();
       return ParseResult::MakeErrorResult();
     }
 
-    return ParseResult::MakeSuccessfulResult(std::make_unique<HotkeyExpression>(std::move(inputs)));
+    return ParseResult::MakeSuccessfulResult(std::make_unique<HotkeyExpression>(inputs, count));
   }
 
   ParseResult ParseToplevel() { return ParseInfixOperations(); }
