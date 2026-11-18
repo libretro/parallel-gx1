@@ -41,6 +41,5 @@ bool Host_TASInputHasFocus();
 
 void Host_Message(HostMessageID id);
 void Host_RequestRenderWindowSize(int width, int height);
-void Host_UpdateTitle(const std::string& title);
 void Host_TitleChanged();
 

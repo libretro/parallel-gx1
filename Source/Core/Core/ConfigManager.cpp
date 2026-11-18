@@ -44,7 +44,6 @@
 #include "Core/PatchEngine.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
 #include "Core/System.h"
-#include "Core/TitleDatabase.h"
 #include "Core/WC24PatchEngine.h"
 
 #include "VideoCommon/HiresTextures.h"
@@ -142,16 +141,6 @@ const std::vector<std::string> SConfig::GetGameIDsForTextures() const
           metadata.game_id};
 }
 
-const std::string SConfig::GetTitleName() const
-{
-  return ReadMetadata().title_name;
-}
-
-const std::string SConfig::GetTitleDescription() const
-{
-  return ReadMetadata().title_description;
-}
-
 u64 SConfig::GetTitleID() const
 {
   return ReadMetadata().title_id;
@@ -236,42 +225,19 @@ void SConfig::SetRunningGameMetadata(const std::string& game_id, const std::stri
     m_debugger_game_id.clear();
   }
 
-  std::string title_name = current.title_name;
-  std::string title_description = current.title_description;
-  if (was_changed && game_id == "00000000")
-  {
-    title_name.clear();
-    title_description.clear();
-  }
-  else if (was_changed)
-  {
-    const Core::TitleDatabase title_database;
-    auto& system = Core::System::GetInstance();
-    const DiscIO::Language language = GetLanguageAdjustedForRegion(system.IsWii(), region);
-    title_name = title_database.GetTitleName(gametdb_id, language);
-    title_description = title_database.Describe(gametdb_id, language);
-  }
-
   EditMetadata([&](Metadata& metadata) {
     metadata.game_id = game_id;
     metadata.gametdb_id = gametdb_id;
     metadata.title_id = title_id;
     metadata.revision = revision;
     metadata.simulated_memory_size = simulated_memory_size;
-    metadata.title_name = title_name;
-    metadata.title_description = title_description;
   });
 
   if (!was_changed || game_id == "00000000")
     return;
 
-  NOTICE_LOG(CORE, "Active title: %s", title_description.c_str());
+  NOTICE_LOG(CORE, "Active title: %s", game_id.c_str());
   Host_TitleChanged();
-
-  auto& system = Core::System::GetInstance();
-  const bool is_running_or_starting = Core::IsRunningOrStarting(system);
-  if (is_running_or_starting)
-    Core::UpdateTitle(system);
 
   Config::AddLayer(ConfigLoaders::GenerateGlobalGameConfigLoader(game_id, revision));
   Config::AddLayer(ConfigLoaders::GenerateLocalGameConfigLoader(game_id, revision));

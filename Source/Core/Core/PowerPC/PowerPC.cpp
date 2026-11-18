@@ -339,11 +339,6 @@ void PowerPCManager::SetMode(CoreMode new_mode)
   ApplyMode();
 }
 
-const char* PowerPCManager::GetCPUName() const
-{
-  return m_cpu_core_base->GetName();
-}
-
 void PowerPCManager::InjectExternalCPUCore(CPUCoreBase* new_cpu)
 {
   // Previously injected.

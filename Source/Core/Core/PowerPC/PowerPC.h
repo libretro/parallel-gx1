@@ -267,7 +267,6 @@ public:
   CoreMode GetMode() const;
   // [NOT THREADSAFE] CPU Thread or CPU::PauseAndLock or Core::State::Uninitialized
   void SetMode(CoreMode _coreType);
-  const char* GetCPUName() const;
 
   // Set the current CPU Core to the given implementation until removed.
   // Remove the current injected CPU Core by passing nullptr.

@@ -26,10 +26,6 @@ void Host_Message(HostMessageID id)
   DEBUG_LOG(COMMON, "message id: %d\n", (int)id);
 }
 
-void Host_UpdateTitle(const std::string& title)
-{
-}
-
 void Host_RequestRenderWindowSize(int width, int height)
 {
 }

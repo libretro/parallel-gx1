@@ -72,8 +72,6 @@ struct SConfig
   // the full priority order.
   const std::string GetGameIDForTextures() const;
 
-  const std::string GetTitleName() const;
-  const std::string GetTitleDescription() const;
   u64 GetTitleID() const;
   u16 GetRevision() const;
   u32 GetSimulatedMemorySize() const;
@@ -143,8 +141,6 @@ private:
     std::string game_id;
     std::string game_id_elf_dol;
     std::string gametdb_id;
-    std::string title_name;
-    std::string title_description;
     u64 title_id = 0;
     u16 revision = 0;
     // Memory size requested by game's header.

@@ -189,8 +189,6 @@ void FrameGateKick();
 
 void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 
-void UpdateTitle(Core::System& system);
-
 void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot);
 void SingleCorePostRunShutdown();
 extern std::unique_ptr<BootParameters> g_boot_params;

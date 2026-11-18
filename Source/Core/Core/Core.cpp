@@ -561,8 +561,6 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
     system.GetPowerPC().SetMode(PowerPC::CoreMode::Interpreter);
   }
 
-  UpdateTitle(system);
-
   // these are not needed if EmuThread is launched on its own thread
   if (!s_emu_thread)
   {
@@ -826,25 +824,6 @@ void FrameGateKick()
 {
   if (s_frame_gate_ready)
     retro_eventcount_notify(&s_frame_gate);
-}
-
-void UpdateTitle(Core::System& system)
-{
-  // Settings are shown the same for both extended and summary info
-  const std::string SSettings = StringFromFormat(
-      "%s %s | %s | %s", system.GetPowerPC().GetCPUName(), system.IsDualCoreMode() ? "DC" : "SC",
-      g_video_backend->GetDisplayName().c_str(), Config::Get(Config::MAIN_DSP_HLE) ? "HLE" : "LLE");
-
-  std::string message =
-      StringFromFormat("%s | %s", Common::GetScmRevStr().c_str(), SSettings.c_str());
-  if (Config::Get(Config::MAIN_SHOW_ACTIVE_TITLE))
-  {
-    const std::string& title = SConfig::GetInstance().GetTitleDescription();
-    if (!title.empty())
-      message += " | " + title;
-  }
-
-  Host_UpdateTitle(message);
 }
 
 void Shutdown(Core::System& system)

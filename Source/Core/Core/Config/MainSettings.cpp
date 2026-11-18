@@ -326,9 +326,6 @@ const Info<ShowCursor> MAIN_SHOW_CURSOR{{System::Main, "Interface", "CursorVisib
                                         ShowCursor::OnMovement};
 const Info<bool> MAIN_LOCK_CURSOR{{System::Main, "Interface", "LockCursor"}, false};
 const Info<std::string> MAIN_INTERFACE_LANGUAGE{{System::Main, "Interface", "LanguageCode"}, ""};
-const Info<bool> MAIN_SHOW_ACTIVE_TITLE{{System::Main, "Interface", "ShowActiveTitle"}, true};
-const Info<bool> MAIN_USE_BUILT_IN_TITLE_DATABASE{
-    {System::Main, "Interface", "UseBuiltinTitleDatabase"}, true};
 const Info<std::string> MAIN_THEME_NAME{{System::Main, "Interface", "ThemeName"},
                                         DEFAULT_THEME_DIR};
 const Info<bool> MAIN_PAUSE_ON_FOCUS_LOST{{System::Main, "Interface", "PauseOnFocusLost"}, false};
