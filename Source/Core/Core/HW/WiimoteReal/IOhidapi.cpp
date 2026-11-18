@@ -22,7 +22,8 @@ static bool IsDeviceUsable(const std::string& device_path)
   {
     ERROR_LOG(WIIMOTE,
               "Could not connect to Wii Remote at \"%s\". "
-              "Do you have permission to access the device?",
+              "Do you have permission to access the device? On Linux, "
+              "Data/51-usb-device.rules gives it.",
               device_path.c_str());
     return false;
   }
@@ -110,7 +111,8 @@ bool WiimoteHidapi::ConnectInternal()
   {
     ERROR_LOG(WIIMOTE,
               "Could not connect to Wii Remote at \"%s\". "
-              "Do you have permission to access the device?",
+              "Do you have permission to access the device? On Linux, "
+              "Data/51-usb-device.rules gives it.",
               m_device_path.c_str());
   }
   return m_handle != nullptr;

@@ -1,6 +1,8 @@
-#GameCube Controller Adapter
-SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0337", TAG+="uaccess"
+# Lets the core open a real Wii Remote, or a DolphinBar, for Wii Remote
+# passthrough: the kernel makes their hidraw nodes root's, and this gives
+# them to the user playing. Install to /etc/udev/rules.d/ (or
+# /usr/lib/udev/rules.d/ for a package), then reconnect the device.
 
-#Wiimotes or DolphinBar
+# Wii Remote and Wii Remote Plus, or a DolphinBar
 SUBSYSTEM=="hidraw*", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0306", TAG+="uaccess"
 SUBSYSTEM=="hidraw*", ATTRS{idVendor}=="057e", ATTRS{idProduct}=="0330", TAG+="uaccess"
