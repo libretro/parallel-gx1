@@ -17,17 +17,6 @@
 
 namespace DiscIO
 {
-std::optional<u64> GetApploaderSize(const Volume& volume, const Partition& partition)
-{
-  constexpr u64 header_size = 0x20;
-  const std::optional<u32> apploader_size = volume.ReadSwapped<u32>(0x2440 + 0x14, partition);
-  const std::optional<u32> trailer_size = volume.ReadSwapped<u32>(0x2440 + 0x18, partition);
-  if (!apploader_size || !trailer_size)
-    return std::nullopt;
-
-  return header_size + *apploader_size + *trailer_size;
-}
-
 std::optional<u64> GetBootDOLOffset(const Volume& volume, const Partition& partition)
 {
   const Platform volume_type = volume.GetVolumeType();

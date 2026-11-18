@@ -22,7 +22,6 @@
 #include "Common/ParallelFor.h"
 
 #include "DiscIO/Blob.h"
-#include "DiscIO/DiscExtractor.h"
 #include "DiscIO/DiscUtils.h"
 #include "DiscIO/Enums.h"
 #include "DiscIO/Filesystem.h"
