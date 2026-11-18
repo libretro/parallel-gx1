@@ -198,21 +198,6 @@ T MapFloat(F input_value, T zero_value, T neg_1_value = std::numeric_limits<T>::
     return T(std::llround((zero_value - neg_1_value) * input_value + zero_value));
 }
 
-// The inverse of the function above.
-// Maps an integer in the provided range to a float in the range -1.0..1.0.
-template <typename F, typename T>
-F MapToFloat(T input_value, T zero_value, T neg_1_value = std::numeric_limits<T>::min(),
-             T pos_1_value = std::numeric_limits<T>::max())
-{
-  static_assert(std::is_integral<T>(), "T is only sane for int types.");
-  static_assert(std::is_floating_point<F>(), "F is only sane for float types.");
-
-  if (input_value >= zero_value)
-    return F(input_value - zero_value) / F(pos_1_value - zero_value);
-  else
-    return -F(zero_value - input_value) / F(zero_value - neg_1_value);
-}
-
 class ControlGroupContainer
 {
 public:

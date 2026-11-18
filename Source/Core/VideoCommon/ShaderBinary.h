@@ -38,14 +38,6 @@ static inline void ShaderBinaryFree(ShaderBinary* binary)
   ShaderBinaryInit(binary);
 }
 
-/* Takes the block a binary owns, leaving it empty. */
-static inline ShaderBinary ShaderBinaryTake(ShaderBinary* binary)
-{
-  ShaderBinary taken = *binary;
-  ShaderBinaryInit(binary);
-  return taken;
-}
-
 /* Code from elsewhere, copied into a block of its own. False if it could
  * not be allocated. */
 static inline bool ShaderBinaryCopy(ShaderBinary* binary, const void* data, size_t size)

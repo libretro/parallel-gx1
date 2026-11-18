@@ -182,5 +182,4 @@ bool ClearScreen(FramebufferManager* frame_buffer_manager, const MathUtil::Recta
 
 void OnPixelFormatChange(FramebufferManager* frame_buffer_manager, PixelFormat pixel_format,
                          DepthFormat z_format);
-void SetInterlacingMode(const BPCmd& bp);
 }  // namespace BPFunctions

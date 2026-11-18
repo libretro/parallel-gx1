@@ -31,11 +31,6 @@ enum class EFBReinterpretType
 };
 constexpr u32 NUM_EFB_REINTERPRET_TYPES = 6;
 
-inline bool AddressRangesOverlap(u32 aLower, u32 aUpper, u32 bLower, u32 bUpper)
-{
-  return !((aLower >= bUpper) || (bLower >= aUpper));
-}
-
 class FramebufferManager final
 {
 public:

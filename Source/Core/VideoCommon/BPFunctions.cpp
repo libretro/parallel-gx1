@@ -432,32 +432,4 @@ void OnPixelFormatChange(FramebufferManager* frame_buffer_manager, PixelFormat p
   ERROR_LOG(VIDEO, "Unhandled EFB format change: %u to %u", static_cast<unsigned>(old_format),
             static_cast<unsigned>(new_format));
 }
-
-void SetInterlacingMode(const BPCmd& bp)
-{
-  // TODO
-  switch (bp.address)
-  {
-  case BPMEM_FIELDMODE:
-  {
-    // SDK always sets bpmem.lineptwidth.lineaspect via BPMEM_LINEPTWIDTH
-    // just before this cmd
-    DEBUG_LOG(VIDEO, "BPMEM_FIELDMODE texLOD:%u lineaspect:%u",
-              static_cast<unsigned>(bpmem.fieldmode.texLOD.Value()),
-              static_cast<unsigned>(bpmem.lineptwidth.adjust_for_aspect_ratio.Value()));
-  }
-  break;
-  case BPMEM_FIELDMASK:
-  {
-    // Determines if fields will be written to EFB (always computed)
-    DEBUG_LOG(VIDEO, "BPMEM_FIELDMASK even:%u odd:%u",
-              static_cast<unsigned>(bpmem.fieldmask.even.Value()),
-              static_cast<unsigned>(bpmem.fieldmask.odd.Value()));
-  }
-  break;
-  default:
-    ERROR_LOG(VIDEO, "SetInterlacingMode default");
-    break;
-  }
-}
 }  // namespace BPFunctions
