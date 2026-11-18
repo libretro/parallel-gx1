@@ -72,9 +72,9 @@ public:
     template <typename T>
     bool Get(std::string_view key, T* value, const std::common_type_t<T>& default_value = {}) const
     {
-      std::string temp;
-      bool retval = Get(key, &temp);
-      if (retval && TryParse(temp, value))
+      // read where the section keeps it
+      const char* const found = ini_section_get(this, key.data(), key.size());
+      if (found && TryParse(found, value))
         return true;
       *value = default_value;
       return false;

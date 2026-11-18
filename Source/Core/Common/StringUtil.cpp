@@ -183,15 +183,16 @@ std::string ArrayToString(const u8* data, u32 size, int line_len, bool spaces)
 
 /* strtod/strtof read the decimal point of the host locale, so the separator is swapped for it */
 template <typename T>
-static bool TryParseDecimal(const std::string& str, T* output, T (*parse)(const char*, char**))
+static bool TryParseDecimal(const char* str, T* output, T (*parse)(const char*, char**))
 {
   char buf[64];
-  if (str.empty() || str.size() >= sizeof(buf))
+  const size_t len = strlen(str);
+  if (!len || len >= sizeof(buf))
     return false;
   const char point = *localeconv()->decimal_point;
-  for (size_t i = 0; i < str.size(); i++)
+  for (size_t i = 0; i < len; i++)
     buf[i] = (str[i] == '.' || str[i] == ',') ? point : str[i];
-  buf[str.size()] = '\0';
+  buf[len] = '\0';
 
   char* end = nullptr;
   errno = 0;
@@ -202,12 +203,12 @@ static bool TryParseDecimal(const std::string& str, T* output, T (*parse)(const 
   return true;
 }
 
-bool TryParse(const std::string& str, float* output)
+bool TryParse(const char* str, float* output)
 {
   return TryParseDecimal(str, output, strtof);
 }
 
-bool TryParse(const std::string& str, double* output)
+bool TryParse(const char* str, double* output)
 {
   return TryParseDecimal(str, output, strtod);
 }
@@ -281,13 +282,13 @@ void TruncateToCString(std::string* s)
     s->resize(terminator);
 }
 
-bool TryParse(const std::string& str, bool* const output)
+bool TryParse(const char* str, bool* const output)
 {
   float value;
   const bool is_valid_float = TryParse(str, &value);
-  if ((is_valid_float && value == 1) || !strcasecmp("true", str.c_str()))
+  if ((is_valid_float && value == 1) || !strcasecmp("true", str))
     *output = true;
-  else if ((is_valid_float && value == 0) || !strcasecmp("false", str.c_str()))
+  else if ((is_valid_float && value == 0) || !strcasecmp("false", str))
     *output = false;
   else
     return false;

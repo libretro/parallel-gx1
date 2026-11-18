@@ -52,11 +52,12 @@ void ReplaceBreaksWithSpaces(std::string& str);
 
 void TruncateToCString(std::string* s);
 
-bool TryParse(const std::string& str, bool* output);
+// The TryParse forms read a terminated string; those taking a std::string read its text.
+bool TryParse(const char* str, bool* output);
 
 template <typename T>
 requires(std::is_integral_v<T> || (std::is_enum_v<T> && !Common::BooleanEnum<T>))
-bool TryParse(const std::string& str, T* output, int base = 0)
+bool TryParse(const char* str, T* output, int base = 0)
 {
   char* end_ptr = nullptr;
 
@@ -68,9 +69,9 @@ bool TryParse(const std::string& str, T* output, int base = 0)
   ReadType value;
 
   if constexpr (std::is_unsigned_v<T>)
-    value = std::strtoull(str.c_str(), &end_ptr, base);
+    value = std::strtoull(str, &end_ptr, base);
   else
-    value = std::strtoll(str.c_str(), &end_ptr, base);
+    value = std::strtoll(str, &end_ptr, base);
 
   // Fail if the end of the string wasn't reached.
   if (end_ptr == nullptr || *end_ptr != '\0')
@@ -94,7 +95,7 @@ bool TryParse(const std::string& str, T* output, int base = 0)
 }
 
 template <Common::BooleanEnum T>
-bool TryParse(const std::string& str, T* output)
+bool TryParse(const char* str, T* output)
 {
   bool value;
   if (!TryParse(str, &value))
@@ -106,8 +107,21 @@ bool TryParse(const std::string& str, T* output)
 
 /* A decimal number with '.' or ',' as the decimal separator, whatever the host locale is; the
  * whole string must be the number. */
-bool TryParse(const std::string& str, float* output);
-bool TryParse(const std::string& str, double* output);
+bool TryParse(const char* str, float* output);
+bool TryParse(const char* str, double* output);
+
+template <typename T>
+bool TryParse(const std::string& str, T* output)
+{
+  return TryParse(str.c_str(), output);
+}
+
+template <typename T>
+requires(std::is_integral_v<T> || (std::is_enum_v<T> && !Common::BooleanEnum<T>))
+bool TryParse(const std::string& str, T* output, int base)
+{
+  return TryParse(str.c_str(), output, base);
+}
 
 std::string ValueToString(u16 value);
 std::string ValueToString(u32 value);
