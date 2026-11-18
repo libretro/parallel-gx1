@@ -203,7 +203,7 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
   using Translatability = ControllerEmu::Translatability;
 
   // Buttons
-  groups.emplace_back(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
+  AddGroup(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
   for (auto& named_button : {A_BUTTON, B_BUTTON, ONE_BUTTON, TWO_BUTTON, MINUS_BUTTON, PLUS_BUTTON})
   {
     m_buttons->AddInput(Translatability::DoNotTranslate, named_button);
@@ -211,19 +211,19 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
   m_buttons->AddInput(Translatability::DoNotTranslate, HOME_BUTTON, "HOME");
 
   // D-Pad
-  groups.emplace_back(m_dpad = new ControllerEmu::Buttons(DPAD_GROUP));
+  AddGroup(m_dpad = new ControllerEmu::Buttons(DPAD_GROUP));
   for (const char* named_direction : named_directions)
   {
     m_dpad->AddInput(Translatability::Translate, named_direction);
   }
 
   // i18n: "Point" refers to the action of pointing a Wii Remote.
-  groups.emplace_back(m_ir = new ControllerEmu::Cursor(IR_GROUP, _trans("Point")));
-  groups.emplace_back(m_shake = new ControllerEmu::Shake(_trans("Shake")));
-  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
-  groups.emplace_back(m_swing = new ControllerEmu::Force(_trans("Swing")));
+  AddGroup(m_ir = new ControllerEmu::Cursor(IR_GROUP, _trans("Point")));
+  AddGroup(m_shake = new ControllerEmu::Shake(_trans("Shake")));
+  AddGroup(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
+  AddGroup(m_swing = new ControllerEmu::Force(_trans("Swing")));
 
-  groups.emplace_back(m_imu_ir = new ControllerEmu::IMUCursor("IMUIR", _trans("Point")));
+  AddGroup(m_imu_ir = new ControllerEmu::IMUCursor("IMUIR", _trans("Point")));
   const auto fov_default =
       Common::DVec2(CameraLogic::CAMERA_FOV_X, CameraLogic::CAMERA_FOV_Y) / MathUtil::TAU * 360;
   m_imu_ir->AddSetting(&m_fov_x_setting,
@@ -243,15 +243,14 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
                         _trans("Camera field of view (affects sensitivity of pointing).")},
                        fov_default.y, 0.01, 180);
 
-  groups.emplace_back(m_ir_passthrough = new ControllerEmu::IRPassthrough(
-                          IR_PASSTHROUGH_GROUP, _trans("Point (Passthrough)")));
-  groups.emplace_back(m_imu_accelerometer = new ControllerEmu::IMUAccelerometer(
-                          ACCELEROMETER_GROUP, _trans("Accelerometer")));
-  groups.emplace_back(m_imu_gyroscope =
-                          new ControllerEmu::IMUGyroscope(GYROSCOPE_GROUP, _trans("Gyroscope")));
+  AddGroup(m_ir_passthrough = new ControllerEmu::IRPassthrough(IR_PASSTHROUGH_GROUP,
+                                                               _trans("Point (Passthrough)")));
+  AddGroup(m_imu_accelerometer =
+               new ControllerEmu::IMUAccelerometer(ACCELEROMETER_GROUP, _trans("Accelerometer")));
+  AddGroup(m_imu_gyroscope = new ControllerEmu::IMUGyroscope(GYROSCOPE_GROUP, _trans("Gyroscope")));
 
   // Hotkeys
-  groups.emplace_back(m_hotkeys = new ControllerEmu::ModifySettingsButton(_trans("Hotkeys")));
+  AddGroup(m_hotkeys = new ControllerEmu::ModifySettingsButton(_trans("Hotkeys")));
   // hotkeys to temporarily modify the Wii Remote orientation (sideways, upright)
   // this setting modifier is toggled
   m_hotkeys->AddInput(_trans("Sideways Toggle"), true);
@@ -261,7 +260,7 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
   m_hotkeys->AddInput(_trans("Upright Hold"), false);
 
   // Extension
-  groups.emplace_back(m_attachments = new ControllerEmu::Attachments(_trans("Extension")));
+  AddGroup(m_attachments = new ControllerEmu::Attachments(_trans("Extension")));
   m_attachments->AddAttachment(std::make_unique<WiimoteEmu::None>());
   m_attachments->AddAttachment(std::make_unique<WiimoteEmu::Nunchuk>());
   m_attachments->AddAttachment(std::make_unique<WiimoteEmu::Classic>());
@@ -276,11 +275,11 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
   m_attachments->AddSetting(&m_motion_plus_setting, {_trans("Attach MotionPlus")}, true);
 
   // Rumble
-  groups.emplace_back(m_rumble = new ControllerEmu::ControlGroup(_trans("Rumble")));
+  AddGroup(m_rumble = new ControllerEmu::ControlGroup(_trans("Rumble")));
   m_rumble->AddOutput(Translatability::Translate, _trans("Motor"));
 
   // Options
-  groups.emplace_back(m_options = new ControllerEmu::ControlGroup(_trans("Options")));
+  AddGroup(m_options = new ControllerEmu::ControlGroup(_trans("Options")));
 
   m_options->AddSetting(&m_speaker_logic.m_speaker_pan_setting,
                         {_trans("Speaker Pan"),

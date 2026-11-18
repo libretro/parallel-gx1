@@ -47,7 +47,7 @@ Turntable::Turntable() : Extension1stParty("Turntable", _trans("DJ Turntable"))
   using Translatability = ControllerEmu::Translatability;
 
   // buttons
-  groups.emplace_back(m_buttons = new ControllerEmu::Buttons(_trans("Buttons")));
+  AddGroup(m_buttons = new ControllerEmu::Buttons(_trans("Buttons")));
   for (auto& turntable_button_name : turntable_button_names)
   {
     m_buttons->AddInput(Translatability::Translate, turntable_button_name);
@@ -61,21 +61,20 @@ Turntable::Turntable() : Extension1stParty("Turntable", _trans("DJ Turntable"))
 
   // turntables
   // i18n: "Table" refers to a turntable
-  groups.emplace_back(m_left_table = new ControllerEmu::Slider("Table Left", _trans("Left Table")));
-  groups.emplace_back(m_right_table =
-                          // i18n: "Table" refers to a turntable
-                      new ControllerEmu::Slider("Table Right", _trans("Right Table")));
+  AddGroup(m_left_table = new ControllerEmu::Slider("Table Left", _trans("Left Table")));
+  AddGroup(m_right_table =
+               // i18n: "Table" refers to a turntable
+           new ControllerEmu::Slider("Table Right", _trans("Right Table")));
 
   // stick
   constexpr auto gate_radius = ControlState(STICK_GATE_RADIUS) / STICK_RADIUS;
-  groups.emplace_back(m_stick =
-                          new ControllerEmu::OctagonAnalogStick(_trans("Stick"), gate_radius));
+  AddGroup(m_stick = new ControllerEmu::OctagonAnalogStick(_trans("Stick"), gate_radius));
 
   // effect dial
-  groups.emplace_back(m_effect_dial = new ControllerEmu::Slider(_trans("Effect")));
+  AddGroup(m_effect_dial = new ControllerEmu::Slider(_trans("Effect")));
 
   // crossfade
-  groups.emplace_back(m_crossfade = new ControllerEmu::Slider(_trans("Crossfade")));
+  AddGroup(m_crossfade = new ControllerEmu::Slider(_trans("Crossfade")));
 }
 
 void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)

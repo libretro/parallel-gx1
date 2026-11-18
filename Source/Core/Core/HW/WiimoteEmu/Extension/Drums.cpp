@@ -55,7 +55,7 @@ Drums::Drums() : Extension1stParty("Drums", _trans("Drum Kit"))
   using Translatability = ControllerEmu::Translatability;
 
   // Pads.
-  groups.emplace_back(m_pads = new ControllerEmu::Buttons(_trans("Pads")));
+  AddGroup(m_pads = new ControllerEmu::Buttons(_trans("Pads")));
   for (auto& drum_pad_name : drum_pad_names)
   {
     m_pads->AddInput(Translatability::Translate, drum_pad_name);
@@ -69,13 +69,12 @@ Drums::Drums() : Extension1stParty("Drums", _trans("Drum Kit"))
                      50);
 
   // Buttons.
-  groups.emplace_back(m_buttons = new ControllerEmu::Buttons(_trans("Buttons")));
+  AddGroup(m_buttons = new ControllerEmu::Buttons(_trans("Buttons")));
   m_buttons->AddInput(Translatability::DoNotTranslate, "-");
   m_buttons->AddInput(Translatability::DoNotTranslate, "+");
 
   // Stick.
-  groups.emplace_back(m_stick =
-                          new ControllerEmu::OctagonAnalogStick(_trans("Stick"), GATE_RADIUS));
+  AddGroup(m_stick = new ControllerEmu::OctagonAnalogStick(_trans("Stick"), GATE_RADIUS));
 }
 
 void Drums::BuildDesiredExtensionState(DesiredExtensionState* target_state)

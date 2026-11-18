@@ -56,27 +56,27 @@ GCKeyboard::GCKeyboard(const unsigned int index) : m_index(index)
   using Translatability = ControllerEmu::Translatability;
 
   // buttons
-  groups.emplace_back(m_keys0x = new ControllerEmu::Buttons(_trans("Keys")));
+  AddGroup(m_keys0x = new ControllerEmu::Buttons(_trans("Keys")));
   for (const char* key : named_keys0)
     m_keys0x->AddInput(Translatability::DoNotTranslate, key);
 
-  groups.emplace_back(m_keys1x = new ControllerEmu::Buttons(_trans("Keys")));
+  AddGroup(m_keys1x = new ControllerEmu::Buttons(_trans("Keys")));
   for (const char* key : named_keys1)
     m_keys1x->AddInput(Translatability::DoNotTranslate, key);
 
-  groups.emplace_back(m_keys2x = new ControllerEmu::Buttons(_trans("Keys")));
+  AddGroup(m_keys2x = new ControllerEmu::Buttons(_trans("Keys")));
   for (const char* key : named_keys2)
     m_keys2x->AddInput(Translatability::DoNotTranslate, key);
 
-  groups.emplace_back(m_keys3x = new ControllerEmu::Buttons(_trans("Keys")));
+  AddGroup(m_keys3x = new ControllerEmu::Buttons(_trans("Keys")));
   for (const char* key : named_keys3)
     m_keys3x->AddInput(Translatability::DoNotTranslate, key);
 
-  groups.emplace_back(m_keys4x = new ControllerEmu::Buttons(_trans("Keys")));
+  AddGroup(m_keys4x = new ControllerEmu::Buttons(_trans("Keys")));
   for (const char* key : named_keys4)
     m_keys4x->AddInput(Translatability::DoNotTranslate, key);
 
-  groups.emplace_back(m_keys5x = new ControllerEmu::Buttons(_trans("Keys")));
+  AddGroup(m_keys5x = new ControllerEmu::Buttons(_trans("Keys")));
   for (const char* key : named_keys5)
     m_keys5x->AddInput(Translatability::DoNotTranslate, key);
 }

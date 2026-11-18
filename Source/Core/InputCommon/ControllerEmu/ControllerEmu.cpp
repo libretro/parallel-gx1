@@ -76,8 +76,9 @@ void EmulatedController::RebindNow(const ControllerInterface& devi)
 void ControlGroupContainer::UpdateGroupsReferences(
     ciface::ExpressionParser::ControlEnvironment& env)
 {
-  for (auto& group : groups)
-    group->UpdateReferences(env);
+  int i;
+  for (i = 0; i < num_groups; i++)
+    groups[i]->UpdateReferences(env);
 }
 
 bool EmulatedController::IsDefaultDeviceConnected() const
@@ -108,7 +109,31 @@ void EmulatedController::SetDefaultDevice(ciface::Core::DeviceQualifier devq)
                    FreeDefaultDevice);
 }
 
-ControlGroupContainer::~ControlGroupContainer() = default;
+ControlGroupContainer::~ControlGroupContainer()
+{
+  int i;
+  for (i = 0; i < num_groups; i++)
+    delete groups[i];
+  std::free(groups);
+}
+
+/* The array grows while the container is made; a controller cannot be made
+ * without its groups, so running out of memory here ends the program, as
+ * the vector this was did. */
+void ControlGroupContainer::AddGroup(ControlGroup* group)
+{
+  if (num_groups == m_cap_groups)
+  {
+    const int cap = m_cap_groups ? m_cap_groups * 2 : 16;
+    ControlGroup** const grown =
+        static_cast<ControlGroup**>(std::realloc(groups, cap * sizeof(*grown)));
+    if (!grown)
+      std::abort();
+    groups = grown;
+    m_cap_groups = cap;
+  }
+  groups[num_groups++] = group;
+}
 
 void EmulatedController::LoadConfig(Common::IniFile::Section* sec)
 {
@@ -121,8 +146,9 @@ void EmulatedController::LoadConfig(Common::IniFile::Section* sec)
 
 void ControlGroupContainer::LoadGroupsConfig(Common::IniFile::Section* sec, const char* base)
 {
-  for (auto& cg : groups)
-    cg->LoadConfig(sec, base);
+  int i;
+  for (i = 0; i < num_groups; i++)
+    groups[i]->LoadConfig(sec, base);
 }
 
 void EmulatedController::SaveConfig(Common::IniFile::Section* sec)
@@ -148,8 +174,9 @@ void EmulatedController::SaveConfig(Common::IniFile::Section* sec)
 
 void ControlGroupContainer::SaveGroupsConfig(Common::IniFile::Section* sec, const char* base)
 {
-  for (auto& cg : groups)
-    cg->SaveConfig(sec, base);
+  int i;
+  for (i = 0; i < num_groups; i++)
+    groups[i]->SaveConfig(sec, base);
 }
 
 void EmulatedController::LoadDefaults(const ControllerInterface& ciface)

@@ -22,7 +22,7 @@ GBAPad::GBAPad(const unsigned int index) : m_reset_pending(false), m_index(index
   using Translatability = ControllerEmu::Translatability;
 
   // Buttons
-  groups.emplace_back(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
+  AddGroup(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
   for (const char* named_button : {B_BUTTON, A_BUTTON, L_BUTTON, R_BUTTON})
   {
     m_buttons->AddInput(Translatability::DoNotTranslate, named_button);
@@ -33,7 +33,7 @@ GBAPad::GBAPad(const unsigned int index) : m_reset_pending(false), m_index(index
   }
 
   // DPad
-  groups.emplace_back(m_dpad = new ControllerEmu::Buttons(DPAD_GROUP));
+  AddGroup(m_dpad = new ControllerEmu::Buttons(DPAD_GROUP));
   for (const char* named_direction : named_directions)
   {
     m_dpad->AddInput(Translatability::Translate, named_direction);

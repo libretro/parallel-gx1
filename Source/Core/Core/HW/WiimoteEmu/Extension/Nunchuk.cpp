@@ -32,29 +32,29 @@ constexpr std::array<u8, 2> nunchuk_button_bitmasks{{
 Nunchuk::Nunchuk() : Extension1stParty(_trans("Nunchuk"))
 {
   // buttons
-  groups.emplace_back(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
+  AddGroup(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
   using Translatability = ControllerEmu::Translatability;
   m_buttons->AddInput(Translatability::DoNotTranslate, C_BUTTON);
   m_buttons->AddInput(Translatability::DoNotTranslate, Z_BUTTON);
 
   // stick
   constexpr auto gate_radius = ControlState(STICK_GATE_RADIUS) / STICK_RADIUS;
-  groups.emplace_back(m_stick = new ControllerEmu::OctagonAnalogStick(STICK_GROUP, gate_radius));
+  AddGroup(m_stick = new ControllerEmu::OctagonAnalogStick(STICK_GROUP, gate_radius));
 
   // Shake
   // Inverse the default intensity so shake is opposite that of wiimote.
   // This is needed by Donkey Kong Country Returns for proper shake action detection.
-  groups.emplace_back(m_shake = new ControllerEmu::Shake(_trans("Shake"), -1));
+  AddGroup(m_shake = new ControllerEmu::Shake(_trans("Shake"), -1));
 
   // tilt
-  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
+  AddGroup(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
 
   // swing
-  groups.emplace_back(m_swing = new ControllerEmu::Force(_trans("Swing")));
+  AddGroup(m_swing = new ControllerEmu::Force(_trans("Swing")));
 
   // accelerometer
-  groups.emplace_back(m_imu_accelerometer = new ControllerEmu::IMUAccelerometer(
-                          ACCELEROMETER_GROUP, _trans("Accelerometer")));
+  AddGroup(m_imu_accelerometer =
+               new ControllerEmu::IMUAccelerometer(ACCELEROMETER_GROUP, _trans("Accelerometer")));
 }
 
 void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)

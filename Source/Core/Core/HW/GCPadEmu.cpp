@@ -43,7 +43,7 @@ GCPad::GCPad(const unsigned int index) : m_index(index)
   using Translatability = ControllerEmu::Translatability;
 
   // buttons
-  groups.emplace_back(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
+  AddGroup(m_buttons = new ControllerEmu::Buttons(BUTTONS_GROUP));
   for (const char* named_button : {A_BUTTON, B_BUTTON, X_BUTTON, Y_BUTTON, Z_BUTTON})
   {
     m_buttons->AddInput(Translatability::DoNotTranslate, named_button);
@@ -52,42 +52,42 @@ GCPad::GCPad(const unsigned int index) : m_index(index)
   m_buttons->AddInput(Translatability::Translate, START_BUTTON, _trans("START"));
 
   // sticks
-  groups.emplace_back(m_main_stick = new ControllerEmu::OctagonAnalogStick(
-                          MAIN_STICK_GROUP, _trans("Control Stick"), MAIN_STICK_GATE_RADIUS));
-  groups.emplace_back(m_c_stick = new ControllerEmu::OctagonAnalogStick(
-                          C_STICK_GROUP, _trans("C Stick"), C_STICK_GATE_RADIUS));
+  AddGroup(m_main_stick = new ControllerEmu::OctagonAnalogStick(
+               MAIN_STICK_GROUP, _trans("Control Stick"), MAIN_STICK_GATE_RADIUS));
+  AddGroup(m_c_stick = new ControllerEmu::OctagonAnalogStick(C_STICK_GROUP, _trans("C Stick"),
+                                                             C_STICK_GATE_RADIUS));
 
   // triggers
-  groups.emplace_back(m_triggers = new ControllerEmu::MixedTriggers(TRIGGERS_GROUP));
+  AddGroup(m_triggers = new ControllerEmu::MixedTriggers(TRIGGERS_GROUP));
   for (const char* named_trigger : {L_DIGITAL, R_DIGITAL, L_ANALOG, R_ANALOG})
   {
     m_triggers->AddInput(Translatability::Translate, named_trigger);
   }
 
   // dpad
-  groups.emplace_back(m_dpad = new ControllerEmu::Buttons(DPAD_GROUP));
+  AddGroup(m_dpad = new ControllerEmu::Buttons(DPAD_GROUP));
   for (const char* named_direction : named_directions)
   {
     m_dpad->AddInput(Translatability::Translate, named_direction);
   }
 
   // triforce
-  groups.emplace_back(m_triforce = new ControllerEmu::Buttons(TRIFORCE_GROUP));
+  AddGroup(m_triforce = new ControllerEmu::Buttons(TRIFORCE_GROUP));
   for (const char* named_button : {TEST_BUTTON, SERVICE_BUTTON, COIN_BUTTON})
   {
     m_triforce->AddInput(Translatability::Translate, named_button);
   }
 
   // Microphone
-  groups.emplace_back(m_mic = new ControllerEmu::Buttons(MIC_GROUP));
+  AddGroup(m_mic = new ControllerEmu::Buttons(MIC_GROUP));
   m_mic->AddInput(Translatability::Translate, _trans("Button"));
 
   // rumble
-  groups.emplace_back(m_rumble = new ControllerEmu::ControlGroup(RUMBLE_GROUP));
+  AddGroup(m_rumble = new ControllerEmu::ControlGroup(RUMBLE_GROUP));
   m_rumble->AddOutput(Translatability::Translate, _trans("Motor"));
 
   // options
-  groups.emplace_back(m_options = new ControllerEmu::ControlGroup(OPTIONS_GROUP));
+  AddGroup(m_options = new ControllerEmu::ControlGroup(OPTIONS_GROUP));
   m_options->AddSetting(
       &m_always_connected_setting,
       // i18n: Treat a controller as always being connected regardless of what

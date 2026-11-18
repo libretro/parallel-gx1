@@ -65,33 +65,32 @@ Guitar::Guitar() : Extension1stParty(_trans("Guitar"))
   using Translatability = ControllerEmu::Translatability;
 
   // frets
-  groups.emplace_back(m_frets = new ControllerEmu::Buttons(_trans("Frets")));
+  AddGroup(m_frets = new ControllerEmu::Buttons(_trans("Frets")));
   for (auto& guitar_fret_name : guitar_fret_names)
   {
     m_frets->AddInput(Translatability::Translate, guitar_fret_name);
   }
 
   // strum
-  groups.emplace_back(m_strum = new ControllerEmu::Buttons(_trans("Strum")));
+  AddGroup(m_strum = new ControllerEmu::Buttons(_trans("Strum")));
   m_strum->AddInput(Translatability::Translate, _trans("Up"));
   m_strum->AddInput(Translatability::Translate, _trans("Down"));
 
   // buttons
-  groups.emplace_back(m_buttons = new ControllerEmu::Buttons(_trans("Buttons")));
+  AddGroup(m_buttons = new ControllerEmu::Buttons(_trans("Buttons")));
   m_buttons->AddInput(Translatability::DoNotTranslate, "-");
   m_buttons->AddInput(Translatability::DoNotTranslate, "+");
 
   // stick
   constexpr auto gate_radius = ControlState(STICK_GATE_RADIUS) / STICK_RADIUS;
-  groups.emplace_back(m_stick =
-                          new ControllerEmu::OctagonAnalogStick(_trans("Stick"), gate_radius));
+  AddGroup(m_stick = new ControllerEmu::OctagonAnalogStick(_trans("Stick"), gate_radius));
 
   // whammy
-  groups.emplace_back(m_whammy = new ControllerEmu::Triggers(_trans("Whammy")));
+  AddGroup(m_whammy = new ControllerEmu::Triggers(_trans("Whammy")));
   m_whammy->AddInput(Translatability::Translate, _trans("Bar"));
 
   // slider bar
-  groups.emplace_back(m_slider_bar = new ControllerEmu::Slider(_trans("Slider Bar")));
+  AddGroup(m_slider_bar = new ControllerEmu::Slider(_trans("Slider Bar")));
 }
 
 void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)

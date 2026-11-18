@@ -201,7 +201,11 @@ T MapFloat(F input_value, T zero_value, T neg_1_value = std::numeric_limits<T>::
 class ControlGroupContainer
 {
 public:
+  ControlGroupContainer() = default;
   virtual ~ControlGroupContainer();
+
+  ControlGroupContainer(const ControlGroupContainer&) = delete;
+  ControlGroupContainer& operator=(const ControlGroupContainer&) = delete;
 
   virtual void LoadGroupsConfig(Common::IniFile::Section* sec, const char* base);
   virtual void SaveGroupsConfig(Common::IniFile::Section* sec, const char* base);
@@ -211,9 +215,16 @@ public:
 
   void UpdateGroupsReferences(ciface::ExpressionParser::ControlEnvironment& env);
 
-  std::vector<std::unique_ptr<ControlGroup>> groups;
+  // Owned, the first num_groups of them: made with the container
+  ControlGroup** groups = nullptr;
+  int num_groups = 0;
 
 protected:
+  // Takes the group, behind those the container has
+  void AddGroup(ControlGroup* group);
+
+private:
+  int m_cap_groups = 0;
 };
 
 class EmulatedController : public ControlGroupContainer
