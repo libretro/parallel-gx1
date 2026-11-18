@@ -4,7 +4,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "InputCommon/ControllerEmu/ControlGroup/Buttons.h"
 
@@ -15,15 +14,27 @@ class ModifySettingsButton : public Buttons
 public:
   explicit ModifySettingsButton(const std::string& button_name);
 
+  // Room for the hotkeys a controller has
+  enum
+  {
+    MAX_HOTKEYS = 8
+  };
+
   void AddInput(std::string button_name, bool toggle = false);
 
   void UpdateState();
 
-  const std::vector<bool>& GetSettingsModifier() const;
+  // Whether the setting of the hotkey at that index is on
+  bool IsSettingActive(int index) const { return m_hotkeys[index].active; }
 
 private:
-  std::vector<bool> m_threshold_exceeded;  // internal calculation (if "state" was above threshold)
-  std::vector<bool> m_associated_settings_toggle;  // is setting toggled or hold?
-  std::vector<bool> m_associated_settings;         // result
+  struct Hotkey
+  {
+    bool toggle;            // toggled rather than held
+    bool threshold_passed;  // pressed since it last toggled
+    bool active;            // the result
+  };
+
+  Hotkey m_hotkeys[MAX_HOTKEYS] = {};
 };
 }  // namespace ControllerEmu

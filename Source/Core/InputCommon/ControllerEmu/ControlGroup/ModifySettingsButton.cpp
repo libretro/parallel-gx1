@@ -3,8 +3,6 @@
 
 #include "InputCommon/ControllerEmu/ControlGroup/ModifySettingsButton.h"
 
-#include <cstddef>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -19,10 +17,10 @@ ModifySettingsButton::ModifySettingsButton(const std::string& button_name) : But
 
 void ModifySettingsButton::AddInput(std::string button_name, bool toggle)
 {
+  if (num_controls >= MAX_HOTKEYS)
+    return;
+  m_hotkeys[num_controls].toggle = toggle;
   ControlGroup::AddInput(Translatability::Translate, std::move(button_name));
-  m_threshold_exceeded.emplace_back(false);
-  m_associated_settings.emplace_back(false);
-  m_associated_settings_toggle.emplace_back(toggle);
 }
 
 void ModifySettingsButton::UpdateState()
@@ -30,37 +28,33 @@ void ModifySettingsButton::UpdateState()
   for (int i = 0; i < num_controls; ++i)
   {
     const bool state = controls[i]->GetState<bool>();
+    Hotkey* const hotkey = &m_hotkeys[i];
 
-    if (!m_associated_settings_toggle[i])
+    if (!hotkey->toggle)
     {
       // not toggled
-      m_associated_settings[i] = state;
+      hotkey->active = state;
     }
     else
     {
       // toggle (loading savestates does not en-/disable toggle)
       // after we passed the threshold, we en-/disable. but after that, we don't change it
       // anymore
-      if (!m_threshold_exceeded[i] && state)
+      if (!hotkey->threshold_passed && state)
       {
-        m_associated_settings[i] = !m_associated_settings[i];
+        hotkey->active = !hotkey->active;
 
-        if (m_associated_settings[i])
+        if (hotkey->active)
           Core::DisplayMessage("%s: on", controls[i]->ui_name.c_str());
         else
           Core::DisplayMessage("%s: off", controls[i]->ui_name.c_str());
 
-        m_threshold_exceeded[i] = true;
+        hotkey->threshold_passed = true;
       }
 
       if (!state)
-        m_threshold_exceeded[i] = false;
+        hotkey->threshold_passed = false;
     }
   }
-}
-
-const std::vector<bool>& ModifySettingsButton::GetSettingsModifier() const
-{
-  return m_associated_settings;
 }
 }  // namespace ControllerEmu
