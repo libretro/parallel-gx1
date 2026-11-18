@@ -42,9 +42,4 @@ enum class CopyResult
 };
 
 CopyResult Copy(Storage* source, Storage* destination);
-
-/// Import a save into the NAND from a .bin file.
-CopyResult Import(const std::string& data_bin_path, const std::function<bool()>& can_overwrite);
-/// Export a save to a .bin file.
-CopyResult Export(u64 tid, std::string_view export_path);
 }  // namespace WiiSave

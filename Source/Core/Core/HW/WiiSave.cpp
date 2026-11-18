@@ -549,45 +549,4 @@ CopyResult Copy(Storage* source, Storage* dest)
   return CopyResult::Success;
 }
 
-CopyResult Import(const std::string& data_bin_path, const std::function<bool()>& can_overwrite)
-{
-  IOS::HLE::Kernel ios;
-  const auto data_bin = MakeDataBinStorage(&ios.GetIOSC(), data_bin_path, "rb");
-  const std::optional<Header> header = data_bin->ReadHeader();
-  if (!header)
-  {
-    ERROR_LOG(CORE, "WiiSave::Import: Failed to read header");
-    return CopyResult::CorruptedSource;
-  }
-
-  if (!WiiUtils::EnsureTMDIsImported(*ios.GetFS(), ios.GetESCore(), header->tid))
-  {
-    ERROR_LOG(CORE, "WiiSave::Import: Failed to find or import TMD for title %16" PRIx64,
-              static_cast<u64>(header->tid));
-    return CopyResult::TitleMissing;
-  }
-
-  const auto nand = MakeNandStorage(ios.GetFS().get(), header->tid);
-  if (nand->SaveExists() && !can_overwrite())
-    return CopyResult::Cancelled;
-  return Copy(data_bin.get(), nand.get());
-}
-
-static CopyResult Export(u64 tid, std::string_view export_path, IOS::HLE::Kernel* ios)
-{
-  char title[40];
-  snprintf(title, sizeof(title), "/private/wii/title/%c%c%c%c/data.bin",
-           static_cast<char>(tid >> 24), static_cast<char>(tid >> 16), static_cast<char>(tid >> 8),
-           static_cast<char>(tid));
-  const std::string path = std::string(export_path) + title;
-  return Copy(MakeNandStorage(ios->GetFS().get(), tid).get(),
-              MakeDataBinStorage(&ios->GetIOSC(), path, "w+b").get());
-}
-
-CopyResult Export(u64 tid, std::string_view export_path)
-{
-  IOS::HLE::Kernel ios;
-  return Export(tid, export_path, &ios);
-}
-
 }  // namespace WiiSave

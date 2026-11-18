@@ -37,9 +37,6 @@ enum class InstallType
 };
 
 bool InstallWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad, InstallType type);
-// Same as the above, but constructs a temporary IOS and VolumeWAD instance for importing
-// and does a permanent install.
-bool EnsureTMDIsImported(IOS::HLE::FS::FileSystem& fs, IOS::HLE::ESCore& es, u64 title_id);
 
 std::shared_ptr<IOS::HLE::BluetoothEmuDevice> GetBluetoothEmuDevice();
 // Same as GetBluetoothEmuDevice, but for Bluetooth passthrough.
