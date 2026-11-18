@@ -29,17 +29,6 @@ static bool HasExtension(const std::vector<VkExtensionProperties>& list, const c
   return false;
 }
 
-static bool HasLayer(const std::vector<VkLayerProperties>& list, const char* name)
-{
-  size_t i;
-  for (i = 0; i < list.size(); i++)
-  {
-    if (!std::strcmp(list[i].layerName, name))
-      return true;
-  }
-  return false;
-}
-
 VulkanContext* g_vulkan_context = nullptr;
 
 template <typename Chain, typename Element>
