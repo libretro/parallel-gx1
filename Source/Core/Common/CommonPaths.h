@@ -7,31 +7,6 @@
 #define DIR_SEP "/"
 #define DIR_SEP_CHR '/'
 
-// The current working directory
-#define ROOT_DIR "."
-
-// The normal user directory
-#ifdef _WIN32
-#define NORMAL_USER_DIR "Dolphin Emulator"
-#elif defined(__APPLE__)
-#define NORMAL_USER_DIR "Library/Application Support/Dolphin"
-#elif defined(ANDROID)
-#define NORMAL_USER_DIR "/sdcard/dolphin-emu"
-#else
-#define NORMAL_USER_DIR "dolphin-emu"
-#endif
-
-// The portable user directory
-#ifdef _WIN32
-#define PORTABLE_USER_DIR "User"
-#elif defined(__APPLE__)
-#define PORTABLE_USER_DIR "User"
-#define EMBEDDED_USER_DIR "Contents/Resources/User"
-#else
-#define PORTABLE_USER_DIR "user"
-#define EMBEDDED_USER_DIR PORTABLE_USER_DIR
-#endif
-
 // Flag file to prevent media scanning from indexing a directory
 #define NOMEDIA_FILE ".nomedia"
 
@@ -53,10 +28,8 @@
 #define MAPS_DIR "Maps"
 #define CACHE_DIR "Cache"
 #define COVERCACHE_DIR "GameCovers"
-#define REDUMPCACHE_DIR "Redump"
 #define SHADERCACHE_DIR "Shaders"
 #define RETROACHIEVEMENTSCACHE_DIR "RetroAchievements"
-#define STATESAVES_DIR "StateSaves"
 #define LOAD_DIR "Load"
 #define HIRES_TEXTURES_DIR "Textures"
 #define DUMP_DIR "Dump"
@@ -69,8 +42,6 @@
 #define WII_SYSCONF_DIR "shared2" DIR_SEP "sys"
 #define WII_WC24CONF_DIR "shared2" DIR_SEP "wc24"
 #define GBASAVES_DIR "Saves"
-#define PIPES_DIR "Pipes"
-#define MEMORYWATCHER_DIR "MemoryWatcher"
 #define WFSROOT_DIR "WFS"
 #define BACKUP_DIR "Backup"
 #define DYNAMICINPUT_DIR "DynamicInputTextures"
@@ -79,11 +50,6 @@
 #define WIISDSYNC_DIR "WiiSDSync"
 #define ASSEMBLY_DIR "SavedAssembly"
 #define WIIBANNERS_DIR "WiiBanners"
-
-// This one is only used to remove it if it was present
-#define SHADERCACHE_LEGACY_DIR "ShaderCache"
-
-// The theme directory used by default
 
 // Filenames
 // Files in the directory returned by GetUserPath(D_CONFIG_IDX)
@@ -97,19 +63,6 @@
 
 // Files in the directory returned by GetUserPath(D_LOGS_IDX)
 #define MAIN_LOG "dolphin.log"
-
-// Files in the directory returned by GetUserPath(D_WIISYSCONF_IDX)
-#define WII_SYSCONF "SYSCONF"
-
-// Files in the directory returned by GetUserPath(D_DUMP_IDX)
-#define MEM1_DUMP "mem1.raw"
-#define MEM2_DUMP "mem2.raw"
-#define ARAM_DUMP "aram.raw"
-#define FAKEVMEM_DUMP "fakevmem.raw"
-
-// Files in the directory returned by GetUserPath(D_MEMORYWATCHER_IDX)
-#define MEMORYWATCHER_LOCATIONS "Locations.txt"
-#define MEMORYWATCHER_SOCKET "MemoryWatcher"
 
 // Sys files
 
@@ -137,7 +90,6 @@
 
 // Subdirs in Sys
 #define GC_SYS_DIR "GC"
-#define WII_SYS_DIR "Wii"
 #define TRI_SYS_DIR "Triforce"
 
 // Subdirs in Config
