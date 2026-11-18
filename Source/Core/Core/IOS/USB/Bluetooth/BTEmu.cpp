@@ -404,7 +404,6 @@ void BluetoothEmuDevice::Update()
 
   if (now - m_last_ticks > interval)
   {
-    g_controller_interface.SetCurrentInputChannel(ciface::InputChannel::Bluetooth);
     g_controller_interface.UpdateInput();
 
     std::array<WiimoteEmu::DesiredWiimoteState, MAX_BBMOTES> wiimote_states;

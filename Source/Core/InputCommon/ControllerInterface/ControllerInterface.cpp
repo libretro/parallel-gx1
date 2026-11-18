@@ -17,7 +17,6 @@ ControllerInterface g_controller_interface;
 // update values in different threads by input channel. We start from InputChannel::Host on all
 // threads as hotkeys are updated from a worker thread, but UI can read from the main thread. This
 // will never interfere with game threads.
-static thread_local ciface::InputChannel tls_input_channel = ciface::InputChannel::Host;
 
 static thread_local bool tls_is_updating_devices = false;
 
@@ -250,23 +249,6 @@ void ControllerInterface::UpdateInput()
                                  [device](const auto& d) { return d.lock().get() == device; });
     });
   }
-}
-
-void ControllerInterface::SetCurrentInputChannel(ciface::InputChannel input_channel)
-{
-  tls_input_channel = input_channel;
-}
-
-ciface::InputChannel ControllerInterface::GetCurrentInputChannel()
-{
-  return tls_input_channel;
-}
-
-void ControllerInterface::SetAspectRatioAdjustment(float value)
-{
-  int bits;
-  std::memcpy(&bits, &value, sizeof(bits));
-  retro_atomic_store_release_int(&m_aspect_ratio_adjustment, bits);
 }
 
 // Register a callback to be called when a device is added or removed (as from the input backends'

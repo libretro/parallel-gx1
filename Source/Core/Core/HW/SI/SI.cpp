@@ -533,7 +533,6 @@ void SerialInterfaceManager::UpdateDevices()
 
   // Update inputs at the rate of SI
   // Typically 120hz but is variable
-  g_controller_interface.SetCurrentInputChannel(ciface::InputChannel::SerialInterface);
   g_controller_interface.UpdateInput();
 
   // Update channels and set the status bit if there's new data

@@ -13,22 +13,6 @@
 
 #include <retro_atomic.h>
 
-namespace ciface
-{
-// A thread local "input channel" is maintained to handle the state of relative inputs.
-// This allows simultaneous use of relative inputs across different input contexts.
-// e.g. binding relative mouse movements to both GameCube controllers and Wii Remotes.
-// These operate at different rates and processing one would break the other without separate state.
-enum class InputChannel
-{
-  Host,
-  SerialInterface,
-  Bluetooth,
-  Count,
-};
-
-}  // namespace ciface
-
 //
 // ControllerInterface
 //
@@ -55,20 +39,8 @@ public:
   bool IsInit() const { return retro_atomic_load_acquire_int(&m_is_init) != 0; }
   void UpdateInput();
 
-  // Set adjustment from the full render window aspect-ratio to the drawn aspect-ratio.
-  // Used to fit mouse cursor inputs to the relevant region of the render window.
-  void SetAspectRatioAdjustment(float);
-
-  // Calculated from the aspect-ratio adjustment.
-  // Inputs based on window coordinates should be multiplied by this.
-
-  // Request that the mouse cursor should be centered in the render window at the next opportunity.
-
   [[nodiscard]] Common::EventHook
   RegisterDevicesChangedCallback(Common::HookableEvent<>::CallbackType callback);
-
-  static void SetCurrentInputChannel(ciface::InputChannel);
-  static ciface::InputChannel GetCurrentInputChannel();
 
 private:
   void ClearDevices();
@@ -80,41 +52,6 @@ private:
   retro_atomic_int_t m_is_init{};
   // Populations in progress on any thread; the last to finish runs the callbacks.
   retro_atomic_int_t m_populating_devices_counter{};
-  retro_atomic_int_t m_aspect_ratio_adjustment{0x3f800000}; /* the bits of a float, 1.0f */
-  retro_atomic_int_t m_requested_mouse_centering{};
 };
-
-namespace ciface
-{
-template <typename T>
-class RelativeInputState
-{
-public:
-  void Update()
-  {
-    const auto channel = int(ControllerInterface::GetCurrentInputChannel());
-
-    m_value[channel] = m_delta[channel];
-    m_delta[channel] = {};
-  }
-
-  T GetValue() const
-  {
-    const auto channel = int(ControllerInterface::GetCurrentInputChannel());
-
-    return m_value[channel];
-  }
-
-  void Move(T delta)
-  {
-    for (auto& d : m_delta)
-      d += delta;
-  }
-
-private:
-  std::array<T, int(InputChannel::Count)> m_value;
-  std::array<T, int(InputChannel::Count)> m_delta;
-};
-}  // namespace ciface
 
 extern ControllerInterface g_controller_interface;

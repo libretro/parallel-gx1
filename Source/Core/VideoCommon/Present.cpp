@@ -13,8 +13,6 @@
 #include "Core/Host.h"
 #include "Core/System.h"
 
-#include "InputCommon/ControllerInterface/ControllerInterface.h"
-
 #include "Present.h"
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/FramebufferManager.h"
@@ -109,8 +107,6 @@ Presenter::Presenter()
 
 Presenter::~Presenter()
 {
-  // Disable ControllerInterface's aspect ratio adjustments so mapping dialog behaves normally.
-  g_controller_interface.SetAspectRatioAdjustment(1);
 }
 
 bool Presenter::Initialize()
@@ -630,12 +626,6 @@ void Presenter::UpdateDrawRectangle()
   const float win_width = static_cast<float>(m_backbuffer_width);
   const float win_height = static_cast<float>(m_backbuffer_height);
   const float win_aspect_ratio = win_width / win_height;
-
-  // FIXME: this breaks at very low widget sizes
-  // Make ControllerInterface aware of the render window region actually being used
-  // to adjust mouse cursor inputs.
-  // This also doesn't handle the image cropping settings.
-  g_controller_interface.SetAspectRatioAdjustment(draw_aspect_ratio / win_aspect_ratio);
 
   float draw_width = draw_aspect_ratio;
   float draw_height = 1;
