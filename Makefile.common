@@ -446,7 +446,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/DiscIO/Enums.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/FileBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/FileSystemGCWii.cpp \
-	$(CORE_DIR)/Source/Core/DiscIO/LaggedFibonacciGenerator.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/NFSBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/ScrubbedBlob.cpp \
 	$(CORE_DIR)/Source/Core/DiscIO/SplitFileBlob.cpp \
@@ -761,7 +760,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Core/HW/Wiimote.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteCommon/DataReport.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteEmu/Camera.cpp \
-	$(CORE_DIR)/Source/Core/Core/HW/WiimoteEmu/DesiredWiimoteState.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteEmu/Dynamics.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteEmu/EmuSubroutines.cpp \
 	$(CORE_DIR)/Source/Core/Core/HW/WiimoteEmu/Encryption.cpp \
