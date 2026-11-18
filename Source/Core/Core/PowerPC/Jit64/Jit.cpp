@@ -16,7 +16,6 @@
 #endif
 
 #include "Common/CommonTypes.h"
-#include "Common/GekkoDisassembler.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/Swap.h"
@@ -1128,8 +1127,7 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 #if defined(_DEBUG) || defined(DEBUGFAST)
     if (!gpr.SanityCheck() || !fpr.SanityCheck())
     {
-      const std::string ppc_inst = Common::GekkoDisassembler::Disassemble(op.inst.hex, em_address);
-      NOTICE_LOG(DYNA_REC, "Unflushed register: %s", ppc_inst.c_str());
+      NOTICE_LOG(DYNA_REC, "Unflushed register: %08x at %08x", op.inst.hex, em_address);
     }
 #endif
     i += js.skipInstructions;

@@ -407,7 +407,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/FileSearch.cpp \
 	$(CORE_DIR)/Source/Core/Common/FileUtil.cpp \
 	$(CORE_DIR)/Source/Core/Common/FloatUtils.cpp \
-	$(CORE_DIR)/Source/Core/Common/GekkoDisassembler.cpp \
 	$(CORE_DIR)/Source/Core/Common/HttpRequest.cpp \
 	$(CORE_DIR)/Source/Core/Common/Image.cpp \
 	$(CORE_DIR)/Source/Core/Common/IniFile.cpp \
