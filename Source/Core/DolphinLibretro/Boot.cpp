@@ -257,27 +257,93 @@ static void SetRegionFreeFallback(const BootParameters& boot_params)
 
 } // namespace Libretro
 
-/* The path without its last component, and its last component, either
- * separator taken and trailing ones ignored. */
-static std::string PathParent(const std::string& path)
+static bool PathIsSeparator(char c)
 {
-  size_t end = path.find_last_not_of("/\\");
-  size_t slash;
-  if (end == std::string::npos)
-    return std::string();
-  slash = path.find_last_of("/\\", end);
-  return slash == std::string::npos ? std::string() : path.substr(0, slash);
+  return c == '/' || c == '\\';
 }
 
-static std::string PathLast(const std::string& path)
+/* The length of the path without its last component, either separator
+ * taken and trailing ones ignored: 0 when it has no parent. */
+static size_t PathParent(const char* path, size_t len)
 {
-  size_t end = path.find_last_not_of("/\\");
-  size_t slash;
-  if (end == std::string::npos)
-    return std::string();
-  slash = path.find_last_of("/\\", end);
-  return path.substr(slash == std::string::npos ? 0 : slash + 1,
-                     end - (slash == std::string::npos ? 0 : slash + 1) + 1);
+  while (len && PathIsSeparator(path[len - 1]))
+    len--;
+  while (len && !PathIsSeparator(path[len - 1]))
+    len--;
+  return len ? len - 1 : 0;
+}
+
+/* The path's last component, trailing separators ignored: lent from the
+ * path, last_len characters long. */
+static const char* PathLast(const char* path, size_t len, size_t* last_len)
+{
+  size_t start;
+  while (len && PathIsSeparator(path[len - 1]))
+    len--;
+  start = len;
+  while (start && !PathIsSeparator(path[start - 1]))
+    start--;
+  *last_len = len - start;
+  return path + start;
+}
+
+/* The GameCube save directory the frontend would have given with the GB
+ * Player's content and core sorting undone; the GBA's own when that would
+ * not fit. */
+static const char* RebuildGBPlayerSaveDir(const char* gba_save_dir, const char* game_path)
+{
+  static char rebuilt[PATH_MAX_LENGTH];
+  const char* rom = Libretro::GBPlayer_rom_path.c_str();
+  const size_t rom_len = Libretro::GBPlayer_rom_path.size();
+  const char* base = gba_save_dir ? gba_save_dir : "";
+  size_t base_len = strlen(base);
+  const char* gba_content = "";
+  size_t gba_content_len = 0;
+  const char* gc_content = "";
+  size_t gc_content_len = 0;
+  const char* last;
+  size_t last_len;
+  retro_system_info sys_info{};
+  const char* library_name;
+  size_t library_name_len;
+  bool core_sort = false;
+  bool content_sort = false;
+  int len;
+
+  if (rom_len)
+    gba_content = PathLast(rom, PathParent(rom, rom_len), &gba_content_len);
+
+  retro_get_system_info(&sys_info);
+  library_name = sys_info.library_name;
+  library_name_len = strlen(library_name);
+
+  if (base_len && library_name_len)
+  {
+    last = PathLast(base, base_len, &last_len);
+    core_sort = Common::CaseInsensitiveEquals(std::string_view(last, last_len),
+                                              std::string_view(library_name, library_name_len));
+  }
+  if (core_sort)
+    base_len = PathParent(base, base_len);
+
+  if (gba_content_len && base_len)
+  {
+    last = PathLast(base, base_len, &last_len);
+    content_sort = Common::CaseInsensitiveEquals(std::string_view(last, last_len),
+                                                 std::string_view(gba_content, gba_content_len));
+  }
+  if (content_sort)
+  {
+    gc_content = PathLast(game_path, PathParent(game_path, strlen(game_path)), &gc_content_len);
+    base_len = PathParent(base, base_len);
+  }
+
+  len = snprintf(rebuilt, sizeof(rebuilt), "%.*s%s%.*s%s%s", (int)base_len, base,
+                 content_sort ? DIR_SEP : "", (int)gc_content_len, gc_content,
+                 core_sort ? DIR_SEP : "", core_sort ? library_name : "");
+  if (len < 0 || (size_t)len >= sizeof(rebuilt))
+    return gba_save_dir ? gba_save_dir : "";
+  return rebuilt;
 }
 
 /* A load that fails returns to a frontend that calls retro_deinit next,
@@ -301,7 +367,6 @@ bool retro_load_game(const struct retro_game_info* game)
   const char* gba_save_dir = NULL;
   const char* system_dir = NULL;
   const char* core_assets_dir = NULL;
-  std::string rebuild_save_dir;
   std::string user_dir;
   std::string sys_dir;
 
@@ -315,40 +380,8 @@ bool retro_load_game(const struct retro_game_info* game)
    */
   if (Libretro::GBPlayer_active)
   {
-    std::string gba_content_dir;
-    if (!Libretro::GBPlayer_rom_path.empty())
-      gba_content_dir = PathLast(PathParent(Libretro::GBPlayer_rom_path));
-
     Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &gba_save_dir);
-    std::string base = gba_save_dir ? gba_save_dir : "";
-
-    bool core_sort = false;
-    retro_system_info sys_info{};
-    retro_get_system_info(&sys_info);
-    const std::string library_name = sys_info.library_name;
-
-    if (!base.empty() && !library_name.empty())
-      core_sort = Common::CaseInsensitiveEquals(PathLast(base), library_name);
-    if (core_sort)
-      base = PathParent(base);
-
-    bool content_sort = false;
-    std::string gc_content_dir;
-    if (!gba_content_dir.empty() && !base.empty())
-      content_sort = Common::CaseInsensitiveEquals(PathLast(base), gba_content_dir);
-    if (content_sort)
-    {
-      gc_content_dir = PathLast(PathParent(game->path));
-      base = PathParent(base);
-    }
-
-    rebuild_save_dir = base;
-    if (content_sort)
-      rebuild_save_dir = rebuild_save_dir + DIR_SEP + gc_content_dir;
-    if (core_sort)
-      rebuild_save_dir = rebuild_save_dir + DIR_SEP + library_name;
-
-    save_dir = rebuild_save_dir.c_str();
+    save_dir = RebuildGBPlayerSaveDir(gba_save_dir, game->path);
     INFO_LOG(BOOT, "GBPlayer: GC save dir reconstructed to: '%s'", save_dir);
   }
   else
