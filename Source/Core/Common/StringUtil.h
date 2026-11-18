@@ -287,10 +287,6 @@ inline char ToUpper(char ch)
   return std::toupper(ch, std::locale::classic());
 }
 
-#ifdef _WIN32
-std::vector<std::string> CommandLineToUtf8Argv(const wchar_t* command_line);
-#endif
-
 void ToLower(std::string* str);
 void ToUpper(std::string* str);
 bool CaseInsensitiveEquals(std::string_view a, std::string_view b);

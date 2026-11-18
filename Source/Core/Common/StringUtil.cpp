@@ -25,7 +25,6 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <shellapi.h>
 #else
 #include <locale.h>
 #endif
@@ -841,25 +840,6 @@ std::u16string UTF8ToUTF16(std::string_view input)
 
 namespace Common
 {
-#ifdef _WIN32
-std::vector<std::string> CommandLineToUtf8Argv(const wchar_t* command_line)
-{
-  int nargs;
-  LPWSTR* tokenized = CommandLineToArgvW(command_line, &nargs);
-  if (!tokenized)
-    return {};
-
-  std::vector<std::string> argv(nargs);
-  for (size_t i = 0; i < nargs; ++i)
-  {
-    argv[i] = WStringToUTF8(tokenized[i]);
-  }
-
-  LocalFree(tokenized);
-  return argv;
-}
-#endif
-
 void ToLower(std::string* str)
 {
   for (char& c : *str)
