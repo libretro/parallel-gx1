@@ -19,8 +19,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/TypeUtils.h"
 
-std::string StringFromFormatV(const char* format, va_list args);
-
 std::string StringFromFormat(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
 
 // Cheap!
@@ -44,7 +42,6 @@ std::string ArrayToString(const u8* data, u32 size, int line_len = 20, bool spac
 
 std::string_view StripWhitespace(std::string_view s);
 std::string_view StripSpaces(std::string_view s);
-std::string_view StripQuotes(std::string_view s);
 
 std::string ReplaceAll(std::string result, std::string_view src, std::string_view dest);
 
@@ -212,7 +209,6 @@ std::string CP1252ToUTF8(std::string_view input);
 std::string SHIFTJISToUTF8(std::string_view input);
 std::string UTF8ToSHIFTJIS(std::string_view input);
 std::string WStringToUTF8(std::wstring_view input);
-std::string UTF16BEToUTF8(const char16_t* str, size_t max_size);  // Stops at \0
 std::string UTF16ToUTF8(std::u16string_view input);
 std::u16string UTF8ToUTF16(std::string_view input);
 
@@ -221,21 +217,11 @@ std::u16string UTF8ToUTF16(std::string_view input);
 std::wstring UTF8ToWString(std::string_view str);
 
 #ifdef _UNICODE
-inline std::string TStrToUTF8(std::wstring_view str)
-{
-  return WStringToUTF8(str);
-}
-
 inline std::wstring UTF8ToTStr(std::string_view str)
 {
   return UTF8ToWString(str);
 }
 #else
-inline std::string TStrToUTF8(std::string_view str)
-{
-  return str;
-}
-
 inline std::string UTF8ToTStr(std::string_view str)
 {
   return str;
@@ -252,14 +238,6 @@ namespace Common
 inline bool IsPrintableCharacter(char c)
 {
   return std::isprint(c, std::locale::classic());
-}
-
-/// Returns whether a character is a letter, i.e. whether 'a' <= c <= 'z' || 'A' <= c <= 'Z'
-/// is true. Use this instead of calling std::isalpha directly to ensure
-/// the C locale is being used and to avoid possibly undefined behaviour.
-inline bool IsAlpha(char c)
-{
-  return std::isalpha(c, std::locale::classic());
 }
 
 inline bool IsAlnum(char c)

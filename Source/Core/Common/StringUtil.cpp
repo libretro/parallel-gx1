@@ -124,6 +124,8 @@ bool CharArrayFromFormatV(char* out, int outsize, const char* format, va_list ar
   return false;
 }
 
+static std::string StringFromFormatV(const char* format, va_list args);
+
 std::string StringFromFormat(const char* format, ...)
 {
   va_list args;
@@ -133,7 +135,7 @@ std::string StringFromFormat(const char* format, ...)
   return res;
 }
 
-std::string StringFromFormatV(const char* format, va_list args)
+static std::string StringFromFormatV(const char* format, va_list args)
 {
   std::string temp;
   va_list copy;
@@ -251,17 +253,6 @@ std::string_view StripWhitespace(std::string_view str)
 std::string_view StripSpaces(std::string_view str)
 {
   return StripEnclosingChars(str, ' ');
-}
-
-// "\"hello\"" is turned to "hello"
-// This one assumes that the string has already been space stripped in both
-// ends, as done by StripWhitespace above, for example.
-std::string_view StripQuotes(std::string_view s)
-{
-  if (!s.empty() && '\"' == s[0] && '\"' == *s.rbegin())
-    return s.substr(1, s.size() - 2);
-
-  return s;
 }
 
 // Turns "\n\rhello" into "  hello".
@@ -596,7 +587,7 @@ private:
   }
 };
 
-template <std::integral CharType, bool BigEndian = false>
+template <std::integral CharType>
 requires(sizeof(CharType) == 2)
 class UTF16Decoder
 {
@@ -641,11 +632,7 @@ public:
   }
 
 private:
-  static constexpr u16 Load(const CharType* p)
-  {
-    const u16 unit = static_cast<u16>(*p);
-    return BigEndian ? static_cast<u16>((unit >> 8) | (unit << 8)) : unit;
-  }
+  static constexpr u16 Load(const CharType* p) { return static_cast<u16>(*p); }
 
   const CharType* m_ptr;
   const CharType* const m_end_ptr;
@@ -817,15 +804,6 @@ std::string SHIFTJISToUTF8(std::string_view input)
 std::string UTF8ToSHIFTJIS(std::string_view input)
 {
   return Convert(utf8_to_sjis, input, 1);
-}
-
-std::string UTF16BEToUTF8(const char16_t* str, size_t max_size)
-{
-  size_t length = 0;
-  while (length < max_size && str[length])
-    length++;
-  return ReEncodeString<UTF16Decoder<char16_t, true>, UTF8Encoder, char>(
-      std::u16string_view(str, length));
 }
 
 std::string UTF16ToUTF8(std::u16string_view input)
