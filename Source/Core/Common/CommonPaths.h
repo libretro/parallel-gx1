@@ -113,7 +113,6 @@
 #define MEMORYWATCHER_SOCKET "MemoryWatcher"
 
 // Sys files
-#define TOTALDB "totaldb.dsy"
 
 #define FONT_WINDOWS_1252 "font_western.bin"
 #define FONT_SHIFT_JIS "font_japanese.bin"
