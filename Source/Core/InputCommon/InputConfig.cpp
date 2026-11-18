@@ -3,6 +3,7 @@
 
 #include "InputCommon/InputConfig.h"
 
+#include <cstdio>
 #include <utility>
 #include <vector>
 
@@ -17,15 +18,17 @@
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/InputProfile.h"
 
-InputConfig::InputConfig(std::string ini_name, std::string gui_name,
-                         std::string profile_directory_name, std::string profile_key)
-    : m_ini_name(std::move(ini_name)), m_gui_name(std::move(gui_name)),
-      m_profile_directory_name(std::move(profile_directory_name)),
-      m_profile_key(std::move(profile_key))
+InputConfig::InputConfig(const char* ini_name, const char* gui_name,
+                         const char* profile_directory_name, const char* profile_key)
+    : m_ini_name(ini_name), m_gui_name(gui_name), m_profile_directory_name(profile_directory_name),
+      m_profile_key(profile_key)
 {
 }
 
-InputConfig::~InputConfig() = default;
+InputConfig::~InputConfig()
+{
+  ClearControllers();
+}
 
 bool InputConfig::LoadConfig()
 {
@@ -43,7 +46,8 @@ bool InputConfig::LoadConfig()
 
     for (int i = 0; i < 4; i++)
     {
-      const std::string profile_name = GetProfileKey() + "Profile" + num[i];
+      char profile_name[64];
+      snprintf(profile_name, sizeof(profile_name), "%sProfile%s", m_profile_key, num[i]);
 
       if (control_section->Exists(profile_name))
       {
@@ -70,10 +74,11 @@ bool InputConfig::LoadConfig()
   if (inifile.Load(File::GetUserPath(D_CONFIG_IDX) + m_ini_name + ".ini") &&
       inifile.NumSections() != 0)
   {
-    int n = 0;
+    int n;
 
-    for (auto& controller : m_controllers)
+    for (n = 0; n < m_num_controllers; n++)
     {
+      ControllerEmu::EmulatedController* const controller = m_controllers[n];
       Common::IniFile::Section* config;
       // Load settings from ini
       if (useProfile[n])
@@ -92,9 +97,6 @@ bool InputConfig::LoadConfig()
       }
       controller->LoadConfig(config);
       controller->UpdateReferences(g_controller_interface);
-
-      // Next profile
-      n++;
     }
     return true;
   }
@@ -102,12 +104,13 @@ bool InputConfig::LoadConfig()
   {
     // Only load the default profile for the first controller and clear the others,
     // otherwise they would all share the same mappings on the same (default) device
-    if (m_controllers.size() > 0)
+    int i;
+    if (m_num_controllers > 0)
     {
       m_controllers[0]->LoadDefaults(g_controller_interface);
       m_controllers[0]->UpdateReferences(g_controller_interface);
     }
-    for (size_t i = 1; i < m_controllers.size(); ++i)
+    for (i = 1; i < m_num_controllers; ++i)
     {
       // Calling the base version just clears all settings without overwriting them with a default
       m_controllers[i]->EmulatedController::LoadDefaults(g_controller_interface);
@@ -122,36 +125,38 @@ void InputConfig::SaveConfig()
   std::string ini_filename = File::GetUserPath(D_CONFIG_IDX) + m_ini_name + ".ini";
 
   Common::IniFile inifile;
+  int i;
   inifile.Load(ini_filename);
 
-  for (auto& controller : m_controllers)
-  {
-    controller->SaveConfig(inifile.GetOrCreateSection(controller->GetName()));
-  }
+  for (i = 0; i < m_num_controllers; i++)
+    m_controllers[i]->SaveConfig(inifile.GetOrCreateSection(m_controllers[i]->GetName()));
 
   inifile.Save(ini_filename);
 }
 
 ControllerEmu::EmulatedController* InputConfig::GetController(int index) const
 {
-  if (index < 0 || index >= static_cast<int>(m_controllers.size()))
+  if (index < 0 || index >= m_num_controllers)
     return nullptr;
-  return m_controllers.at(index).get();
+  return m_controllers[index];
 }
 
 void InputConfig::ClearControllers()
 {
-  m_controllers.clear();
+  int i;
+  for (i = 0; i < m_num_controllers; i++)
+    delete m_controllers[i];
+  m_num_controllers = 0;
 }
 
 bool InputConfig::ControllersNeedToBeCreated() const
 {
-  return m_controllers.empty();
+  return m_num_controllers == 0;
 }
 
 std::string InputConfig::GetUserProfileDirectoryPath() const
 {
-  return File::GetUserPath(D_CONFIG_IDX) + "Profiles/" + GetProfileDirectoryName() + "/";
+  return File::GetUserPath(D_CONFIG_IDX) + "Profiles/" + m_profile_directory_name + "/";
 }
 
 void InputConfig::RegisterHotplugCallback()
@@ -159,8 +164,9 @@ void InputConfig::RegisterHotplugCallback()
   // Update control references on all controllers
   // as configured devices may have been added or removed.
   m_hotplug_event_hook = g_controller_interface.RegisterDevicesChangedCallback([this] {
-    for (auto& controller : m_controllers)
-      controller->UpdateReferences(g_controller_interface);
+    int i;
+    for (i = 0; i < m_num_controllers; i++)
+      m_controllers[i]->UpdateReferences(g_controller_interface);
   });
 }
 
@@ -174,10 +180,9 @@ void InputConfig::GenerateControllerTextures(const Common::IniFile& file)
   m_dynamic_input_tex_config_manager.Load();
 
   std::vector<std::string> controller_names;
-  for (auto& controller : m_controllers)
-  {
-    controller_names.push_back(controller->GetName());
-  }
+  int i;
+  for (i = 0; i < m_num_controllers; i++)
+    controller_names.push_back(m_controllers[i]->GetName());
 
   m_dynamic_input_tex_config_manager.GenerateTextures(file, controller_names);
 }
@@ -187,12 +192,11 @@ void InputConfig::GenerateControllerTextures()
   const std::string ini_filename = File::GetUserPath(D_CONFIG_IDX) + m_ini_name + ".ini";
 
   Common::IniFile inifile;
+  int i;
   inifile.Load(ini_filename);
 
-  for (auto& controller : m_controllers)
-  {
-    controller->SaveConfig(inifile.GetOrCreateSection(controller->GetName()));
-  }
+  for (i = 0; i < m_num_controllers; i++)
+    m_controllers[i]->SaveConfig(inifile.GetOrCreateSection(m_controllers[i]->GetName()));
 
   GenerateControllerTextures(inifile);
 }

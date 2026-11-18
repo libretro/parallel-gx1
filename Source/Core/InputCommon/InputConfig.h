@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 #include "InputCommon/DynamicInputTextureManager.h"
@@ -24,27 +22,35 @@ class EmulatedController;
 class InputConfig
 {
 public:
-  InputConfig(std::string ini_name, std::string gui_name, std::string profile_directory_name,
-              std::string profile_key);
+  // The names are kept, not copied: literals.
+  InputConfig(const char* ini_name, const char* gui_name, const char* profile_directory_name,
+              const char* profile_key);
 
   ~InputConfig();
 
   bool LoadConfig();
   void SaveConfig();
 
+  // A config holds a Wii Remote for each slot and the balance board at most
+  enum
+  {
+    MAX_CONTROLLERS = 5
+  };
+
   template <typename T, typename... Args>
   void CreateController(Args&&... args)
   {
-    m_controllers.emplace_back(std::make_unique<T>(std::forward<Args>(args)...));
+    if (m_num_controllers < MAX_CONTROLLERS)
+      m_controllers[m_num_controllers++] = new T(std::forward<Args>(args)...);
   }
 
   ControllerEmu::EmulatedController* GetController(int index) const;
   void ClearControllers();
   bool ControllersNeedToBeCreated() const;
 
-  std::string GetGUIName() const { return m_gui_name; }
-  std::string GetProfileKey() const { return m_profile_key; }
-  std::string GetProfileDirectoryName() const { return m_profile_directory_name; }
+  const char* GetGUIName() const { return m_gui_name; }
+  const char* GetProfileKey() const { return m_profile_key; }
+  const char* GetProfileDirectoryName() const { return m_profile_directory_name; }
   std::string GetUserProfileDirectoryPath() const;
 
   // These should be used after creating all controllers and before clearing them, respectively.
@@ -56,10 +62,12 @@ public:
 
 private:
   Common::EventHook m_hotplug_event_hook;
-  std::vector<std::unique_ptr<ControllerEmu::EmulatedController>> m_controllers;
-  const std::string m_ini_name;
-  const std::string m_gui_name;
-  const std::string m_profile_directory_name;
-  const std::string m_profile_key;
+  // Owned, the first m_num_controllers of them
+  ControllerEmu::EmulatedController* m_controllers[MAX_CONTROLLERS];
+  int m_num_controllers = 0;
+  const char* const m_ini_name;
+  const char* const m_gui_name;
+  const char* const m_profile_directory_name;
+  const char* const m_profile_key;
   InputCommon::DynamicInputTextureManager m_dynamic_input_tex_config_manager;
 };

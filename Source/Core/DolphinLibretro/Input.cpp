@@ -1562,8 +1562,8 @@ static WiimoteEmu::Wiimote* load_saved_controller_config(unsigned port, unsigned
 
   const std::string profile_directory = ::Wiimote::GetConfig()->GetUserProfileDirectoryPath();
   char profile_key[64];
-  snprintf(profile_key, sizeof(profile_key), "%sProfile%u",
-           ::Wiimote::GetConfig()->GetProfileKey().c_str(), static_cast<unsigned>(port + 1));
+  snprintf(profile_key, sizeof(profile_key), "%sProfile%u", ::Wiimote::GetConfig()->GetProfileKey(),
+           static_cast<unsigned>(port + 1));
 
   // Step 1: game ini [Controls] WiimoteProfile{n} -> Profiles/Wiimote/<name>.ini [Profile]
   // LoadGameIni() already resolves the priority chain: S.ini, SOE.ini, SOUE01.ini, SOUE01r{n}.ini
