@@ -70,14 +70,14 @@ void ControllerInterface::RefreshDevices()
     InvokeDevicesChangedCallbacks();
 }
 
-void ControllerInterface::PlatformPopulateDevices(const std::function<void()>& callback)
+void ControllerInterface::PlatformPopulateDevices(void (*populate)(void))
 {
   if (!IsInit())
     return;
 
   retro_atomic_fetch_add_int(&m_populating_devices_counter, 1);
 
-  callback();
+  populate();
 
   if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1)
     InvokeDevicesChangedCallbacks();
@@ -183,8 +183,9 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
   return true;
 }
 
-void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::Device*)> callback,
-                                       bool force_devices_release)
+void ControllerInterface::RemoveDevice(bool (*should_remove)(const ciface::Core::Device* device,
+                                                             void* context),
+                                       void* context, bool force_devices_release)
 {
   // If we are shutdown (or in process of shutting down) ignore this request:
   if (!IsInit())
@@ -195,9 +196,9 @@ void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::De
              "if another thread was already here");
 
   const bool any_removed =
-      EditDevices([&callback](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
-        return std::erase_if(devices, [&callback](const auto& dev) {
-                 if (callback(dev.get()))
+      EditDevices([&](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
+        return std::erase_if(devices, [&](const auto& dev) {
+                 if (should_remove(dev.get(), context))
                  {
                    NOTICE_LOG(CONTROLLERINTERFACE, "Removed device: %s/%d/%s", dev->GetSource(),
                               dev->GetId(), dev->GetName());
@@ -210,6 +211,20 @@ void ControllerInterface::RemoveDevice(std::function<bool(const ciface::Core::De
   if (any_removed &&
       (!retro_atomic_load_acquire_int(&m_populating_devices_counter) || force_devices_release))
     InvokeDevicesChangedCallbacks();
+}
+
+// Whether the device is among those that asked to be removed: the context
+static bool IsDeviceToRemove(const ciface::Core::Device* device, void* context)
+{
+  const auto* const devices =
+      static_cast<const std::vector<std::weak_ptr<ciface::Core::Device>>*>(context);
+  size_t i;
+  for (i = 0; i < devices->size(); i++)
+  {
+    if ((*devices)[i].lock().get() == device)
+      return true;
+  }
+  return false;
 }
 
 // Update input for all devices.
@@ -243,12 +258,7 @@ void ControllerInterface::UpdateInput()
   }
 
   if (devices_to_remove.size() > 0)
-  {
-    RemoveDevice([&](const ciface::Core::Device* device) {
-      return std::ranges::any_of(devices_to_remove,
-                                 [device](const auto& d) { return d.lock().get() == device; });
-    });
-  }
+    RemoveDevice(IsDeviceToRemove, &devices_to_remove);
 }
 
 // Register a callback to be called when a device is added or removed (as from the input backends'

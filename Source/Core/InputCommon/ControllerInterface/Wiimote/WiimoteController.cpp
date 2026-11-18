@@ -136,23 +136,35 @@ void AddDevice(std::unique_ptr<WiimoteReal::Wiimote> wiimote)
   g_controller_interface.AddDevice(std::make_shared<Device>(std::move(wiimote)));
 }
 
+namespace
+{
+// How many of the source's devices are to go, and have
+struct ReleaseCount
+{
+  std::optional<u32> count;
+  u32 removed;
+};
+}  // namespace
+
+static bool ShouldReleaseDevice(const Core::Device* device, void* context)
+{
+  ReleaseCount* const release = static_cast<ReleaseCount*>(context);
+  if (strcmp(device->GetSource(), SOURCE_NAME) || release->count == release->removed)
+    return false;
+
+  ++release->removed;
+  return true;
+}
+
 void ReleaseDevices(std::optional<u32> count)
 {
-  u32 removed_devices = 0;
+  ReleaseCount release{count, 0};
 
   // Remove up to "count" remotes (or all of them if nullopt).
   // Real wiimotes will be added to the pool.
   // Make sure to force the device removal immediately (as they are shared ptrs and
   // they could be kept alive, preventing us from re-creating the device)
-  g_controller_interface.RemoveDevice(
-      [&](const Core::Device* device) {
-        if (strcmp(device->GetSource(), SOURCE_NAME) || count == removed_devices)
-          return false;
-
-        ++removed_devices;
-        return true;
-      },
-      true);
+  g_controller_interface.RemoveDevice(ShouldReleaseDevice, &release, true);
 }
 
 Device::Device(std::unique_ptr<WiimoteReal::Wiimote> wiimote) : m_wiimote(std::move(wiimote))

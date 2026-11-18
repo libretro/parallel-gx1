@@ -759,11 +759,11 @@ static void RunManagerCommand(ManagerCommand& command)
 
     if (removed_wiimote != nullptr && !is_balance_board)
       AddWiimoteToPoolNow(std::move(removed_wiimote));
-    g_controller_interface.PlatformPopulateDevices([] { ProcessWiimotePool(); });
+    g_controller_interface.PlatformPopulateDevices(ProcessWiimotePool);
     break;
   }
   case ManagerCommand::Kind::ProcessPool:
-    g_controller_interface.PlatformPopulateDevices([] { ProcessWiimotePool(); });
+    g_controller_interface.PlatformPopulateDevices(ProcessWiimotePool);
     break;
   case ManagerCommand::Kind::EmuStop:
   case ManagerCommand::Kind::EmuResume:

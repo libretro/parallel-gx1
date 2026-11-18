@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include <memory>
 
 #include "Common/HookableEvent.h"
@@ -28,14 +27,14 @@ public:
   void RefreshDevices();
   void Shutdown();
   bool AddDevice(std::shared_ptr<ciface::Core::Device> device);
-  // Removes all the devices the function returns true to.
+  // Removes all the devices the function returns true to, handed the context.
   // If all the devices shared ptrs need to be destroyed immediately,
   // set force_devices_release to true.
-  void RemoveDevice(std::function<bool(const ciface::Core::Device*)> callback,
-                    bool force_devices_release = false);
+  void RemoveDevice(bool (*should_remove)(const ciface::Core::Device* device, void* context),
+                    void* context, bool force_devices_release = false);
   // Runs a backend's population, holding back the devices-changed callbacks until it is
   // done so they run once for the batch.
-  void PlatformPopulateDevices(const std::function<void()>& callback);
+  void PlatformPopulateDevices(void (*populate)(void));
   bool IsInit() const { return retro_atomic_load_acquire_int(&m_is_init) != 0; }
   void UpdateInput();
 
