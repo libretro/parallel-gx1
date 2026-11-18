@@ -807,9 +807,9 @@ bool retro_load_game(const struct retro_game_info* game)
   std::vector<std::string> normalized_game_paths;
   normalized_game_paths.push_back(game->path);
 
-  /* The content's folder ends after its last '/' (or ':' on Windows, for a
-   * path like "C:"), its name runs from there to its last '.' after it,
-   * and its extension is the rest. */
+  /* The content's folder ends after its last '/' (or '\\' or ':' on
+   * Windows, for a path like "C:x.iso"), its name runs from there to its last
+   * '.' after it, and its extension is the rest. */
   const char* const game_path = game->path;
   const size_t game_path_len = strlen(game_path);
   size_t dir_end = game_path_len;
@@ -818,7 +818,7 @@ bool retro_load_game(const struct retro_game_info* game)
 
   while (dir_end && game_path[dir_end - 1] != '/'
 #ifdef _WIN32
-         && game_path[dir_end - 1] != ':'
+         && game_path[dir_end - 1] != '\\' && game_path[dir_end - 1] != ':'
 #endif
   )
   {
@@ -837,23 +837,8 @@ bool retro_load_game(const struct retro_game_info* game)
   if (Common::CaseInsensitiveEquals(extension, ".m3u") ||
       Common::CaseInsensitiveEquals(extension, ".m3u8"))
   {
-    size_t folder_len = dir_end;
-#ifdef _WIN32
-    // A folder of only "D:" is rebuilt from the full path: everything up to its last separator
-    if (folder_len == 2 && game_path[1] == ':')
-    {
-      for (i = game_path_len; i; i--)
-      {
-        if (game_path[i - 1] == '\\' || game_path[i - 1] == '/')
-        {
-          folder_len = i;
-          break;
-        }
-      }
-    }
-#endif
     normalized_game_paths =
-        ReadM3UFile(normalized_game_paths.front(), std::string(game_path, folder_len));
+        ReadM3UFile(normalized_game_paths.front(), std::string(game_path, dir_end));
     if (normalized_game_paths.empty())
     {
       ERROR_LOG(BOOT, "Could not boot %s. M3U contains no paths", game->path);
