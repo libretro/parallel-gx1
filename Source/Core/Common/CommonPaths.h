@@ -39,7 +39,6 @@
 #define DUMP_DSP_DIR "DSP"
 #define DUMP_SSL_DIR "SSL"
 #define LOGS_DIR "Logs"
-#define WII_SYSCONF_DIR "shared2" DIR_SEP "sys"
 #define WII_WC24CONF_DIR "shared2" DIR_SEP "wc24"
 #define GBASAVES_DIR "Saves"
 #define WFSROOT_DIR "WFS"
