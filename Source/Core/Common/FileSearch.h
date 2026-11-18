@@ -21,10 +21,4 @@ inline std::vector<std::string> DoFileSearch(std::string_view directory, std::st
   return DoFileSearch(&directory, 1, &ext, 1, recursive);
 }
 
-// all files and directories
-inline std::vector<std::string> DoFileSearchAll(std::string_view directory, bool recursive = false)
-{
-  return DoFileSearch(&directory, 1, nullptr, 0, recursive);
-}
-
 }  // namespace Common

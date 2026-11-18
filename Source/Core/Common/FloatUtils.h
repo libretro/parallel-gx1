@@ -11,12 +11,6 @@
 
 namespace Common
 {
-template <typename T>
-constexpr T SNANConstant()
-{
-  return std::numeric_limits<T>::signaling_NaN();
-}
-
 // The most significant bit of the fraction is an is-quiet bit on all architectures we care about.
 static constexpr u64 DOUBLE_QBIT = 0x0008000000000000ULL;
 static constexpr u64 DOUBLE_SIGN = 0x8000000000000000ULL;
@@ -32,12 +26,6 @@ static constexpr u32 FLOAT_FRAC = 0x007FFFFF;
 static constexpr u32 FLOAT_ZERO = 0x00000000;
 static constexpr int FLOAT_EXP_WIDTH = 8;
 static constexpr int FLOAT_FRAC_WIDTH = 23;
-
-inline bool IsQNAN(double d)
-{
-  const u64 i = std::bit_cast<u64>(d);
-  return ((i & DOUBLE_EXP) == DOUBLE_EXP) && ((i & DOUBLE_QBIT) == DOUBLE_QBIT);
-}
 
 inline bool IsSNAN(double d)
 {

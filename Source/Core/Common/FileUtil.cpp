@@ -132,34 +132,6 @@ bool CreateFullPath(std::string_view fullPath)
   return CreateDir(buf);
 }
 
-bool DeleteDir(const char* filename, IfAbsentBehavior behavior)
-{
-  const int flags = path_stat(filename);
-
-  DEBUG_LOG(COMMON, "%s: directory %s", __func__, filename);
-
-  // Return true because we care about the directory not being there, not the actual delete.
-  if (!(flags & RETRO_VFS_STAT_IS_VALID))
-  {
-    if (behavior == IfAbsentBehavior::ConsoleWarning)
-      WARN_LOG(COMMON, "%s: %s does not exist", __func__, filename);
-    return true;
-  }
-
-  if (!(flags & RETRO_VFS_STAT_IS_DIRECTORY))
-  {
-    ERROR_LOG(COMMON, "%s: Not a directory %s", __func__, filename);
-    return false;
-  }
-
-  if (!path_rmdir(filename))
-  {
-    WARN_LOG(COMMON, "%s: failed on %s", __func__, filename);
-    return false;
-  }
-  return true;
-}
-
 // Replaces destFilename if it exists.
 bool Rename(const char* srcFilename, const char* destFilename)
 {

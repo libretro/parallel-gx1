@@ -165,14 +165,6 @@ inline bool Delete(const std::string& filename,
   return Delete(filename.c_str(), behavior);
 }
 
-// Deletes a directory filename, returns true on success
-bool DeleteDir(const char* filename, IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning);
-inline bool DeleteDir(const std::string& filename,
-                      IfAbsentBehavior behavior = IfAbsentBehavior::ConsoleWarning)
-{
-  return DeleteDir(filename.c_str(), behavior);
-}
-
 // renames file srcFilename to destFilename, returns true on success
 bool Rename(const char* srcFilename, const char* destFilename);
 inline bool Rename(const std::string& srcFilename, const std::string& destFilename)

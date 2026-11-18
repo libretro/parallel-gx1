@@ -96,12 +96,6 @@ T GetUncached(const Info<T>& info)
 }
 
 template <typename T>
-T GetBase(const Info<T>& info)
-{
-  return Get(LayerType::Base, info);
-}
-
-template <typename T>
 LayerType GetActiveLayerForConfig(const Info<T>& info)
 {
   return GetActiveLayerForConfig(info.GetLocation());
@@ -140,12 +134,6 @@ void DeleteKey(LayerType layer, const Info<T>& info)
 {
   if (GetLayer(layer)->DeleteKey(info.GetLocation()))
     OnConfigChanged();
-}
-
-template <typename T>
-bool IsDefaultValue(const Info<T>& info)
-{
-  return Get(info) == info.GetDefaultValue();
 }
 
 // Used to defer OnConfigChanged until after the completion of many config changes.
