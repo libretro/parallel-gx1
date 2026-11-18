@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "InputCommon/ControllerEmu/ControlGroup/ControlGroup.h"
@@ -26,15 +24,24 @@ class Attachments : public ControlGroup
 {
 public:
   explicit Attachments(const std::string& name);
+  ~Attachments() override;
 
-  void AddAttachment(std::unique_ptr<AttachedController> att);
+  // Room for every Wii Remote extension
+  enum
+  {
+    MAX_ATTACHMENTS = 16
+  };
+
+  // Takes the attachment, behind those the group has
+  void AddAttachment(AttachedController* att);
 
   u32 GetSelectedAttachment() const;
   void SetSelectedAttachment(u32 val);
 
   NumericSetting& GetSelectionSetting();
 
-  const std::vector<std::unique_ptr<AttachedController>>& GetAttachmentList() const;
+  AttachedController* GetAttachment(u32 index) const { return m_attachments[index]; }
+  u32 GetAttachmentCount() const { return m_num_attachments; }
 
   void LoadConfig(Common::IniFile::Section* sec, const char* base);
   void SaveConfig(Common::IniFile::Section* sec, const char* base);
@@ -48,6 +55,8 @@ private:
   // For the rest, it's treated similarly to other numeric_settings in the group.
   NumericSetting m_selection_setting = {&m_selection_value, {""}, 0, 0, 0};
 
-  std::vector<std::unique_ptr<AttachedController>> m_attachments;
+  // Owned, the first m_num_attachments of them
+  AttachedController* m_attachments[MAX_ATTACHMENTS];
+  u32 m_num_attachments = 0;
 };
 }  // namespace ControllerEmu

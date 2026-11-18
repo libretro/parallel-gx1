@@ -14,9 +14,19 @@ Attachments::Attachments(const std::string& name_) : ControlGroup(name_, GroupTy
 {
 }
 
-void Attachments::AddAttachment(std::unique_ptr<AttachedController> att)
+Attachments::~Attachments()
 {
-  m_attachments.emplace_back(std::move(att));
+  u32 i;
+  for (i = 0; i < m_num_attachments; i++)
+    delete m_attachments[i];
+}
+
+void Attachments::AddAttachment(AttachedController* att)
+{
+  if (m_num_attachments < MAX_ATTACHMENTS)
+    m_attachments[m_num_attachments++] = att;
+  else
+    delete att;
 }
 
 u32 Attachments::GetSelectedAttachment() const
@@ -24,7 +34,7 @@ u32 Attachments::GetSelectedAttachment() const
   // This is originally an int, treat it as such
   const int value = m_selection_value.GetValue();
 
-  if (value > 0 && static_cast<size_t>(value) < m_attachments.size())
+  if (value > 0 && static_cast<u32>(value) < m_num_attachments)
     return u32(value);
 
   return 0;
@@ -38,11 +48,6 @@ void Attachments::SetSelectedAttachment(u32 val)
 NumericSetting& Attachments::GetSelectionSetting()
 {
   return m_selection_setting;
-}
-
-const std::vector<std::unique_ptr<AttachedController>>& Attachments::GetAttachmentList() const
-{
-  return m_attachments;
 }
 
 void Attachments::LoadConfig(Common::IniFile::Section* sec, const char* base)
@@ -60,17 +65,16 @@ void Attachments::LoadConfig(Common::IniFile::Section* sec, const char* base)
   // If it instead matches one of the names of our attachments it is overridden below.
   GetSelectionSetting().GetInputReference().SetExpression(attachment_text);
 
-  u32 n = 0;
-  for (auto& ai : GetAttachmentList())
+  u32 n;
+  for (n = 0; n < m_num_attachments; n++)
   {
+    AttachedController* const ai = m_attachments[n];
     const std::string attachment_name = ai->GetName();
     Common::JoinIniKey(key, sizeof(key), base, attachment_name.c_str(), "/");
     ai->LoadGroupsConfig(sec, key);
 
     if (attachment_name == attachment_text)
       SetSelectedAttachment(n);
-
-    ++n;
   }
 }
 
@@ -84,7 +88,7 @@ void Attachments::SaveConfig(Common::IniFile::Section* sec, const char* base)
   }
   else if (GetSelectionSetting().IsSimpleValue())
   {
-    sec->Set(key, GetAttachmentList()[GetSelectedAttachment()]->GetName(), "None");
+    sec->Set(key, m_attachments[GetSelectedAttachment()]->GetName(), "None");
   }
   else
   {
@@ -93,10 +97,11 @@ void Attachments::SaveConfig(Common::IniFile::Section* sec, const char* base)
     sec->Set(key, expression, "None");
   }
 
-  for (auto& ai : GetAttachmentList())
+  u32 i;
+  for (i = 0; i < m_num_attachments; i++)
   {
-    if (Common::JoinIniKey(key, sizeof(key), base, ai->GetName().c_str(), "/"))
-      ai->SaveGroupsConfig(sec, key);
+    if (Common::JoinIniKey(key, sizeof(key), base, m_attachments[i]->GetName().c_str(), "/"))
+      m_attachments[i]->SaveGroupsConfig(sec, key);
   }
 }
 
@@ -106,8 +111,9 @@ void Attachments::UpdateReferences(ciface::ExpressionParser::ControlEnvironment&
 
   GetSelectionSetting().GetInputReference().UpdateReference(env);
 
-  for (auto& attachment : GetAttachmentList())
-    attachment->UpdateGroupsReferences(env);
+  u32 i;
+  for (i = 0; i < m_num_attachments; i++)
+    m_attachments[i]->UpdateGroupsReferences(env);
 }
 
 }  // namespace ControllerEmu
