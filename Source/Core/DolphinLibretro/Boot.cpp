@@ -140,7 +140,7 @@ void reload_cheats_from_ini()
 }
 
 // Writes the codes as a RetroArch .cht named after the game, beside the system directory
-static void generate_cht_from_ini(const char* file_name)
+static void generate_cht_from_ini(const char* file_name, size_t file_name_len)
 {
   const char* sysdir = nullptr;
   char cheatFile[PATH_MAX_LENGTH];
@@ -162,8 +162,8 @@ static void generate_cht_from_ini(const char* file_name)
     }
   }
 
-  len = snprintf(cheatFile, sizeof(cheatFile), "%.*s/cheats/dolphin-emu/%s.cht", (int)base_len,
-                 sysdir, file_name);
+  len = snprintf(cheatFile, sizeof(cheatFile), "%.*s/cheats/dolphin-emu/%.*s.cht", (int)base_len,
+                 sysdir, (int)file_name_len, file_name);
   if (len < 0 || (size_t)len >= sizeof(cheatFile))
     return;
 
@@ -806,27 +806,54 @@ bool retro_load_game(const struct retro_game_info* game)
 
   std::vector<std::string> normalized_game_paths;
   normalized_game_paths.push_back(game->path);
-  std::string folder_path_str;
-  std::string filename_str;
-  std::string extension;
-  SplitPath(normalized_game_paths.front(), &folder_path_str, &filename_str, &extension);
-  for (char& c : extension)
-    c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
 
+  /* The content's folder ends after its last '/' (or ':' on Windows, for a
+   * path like "C:"), its name runs from there to its last '.' after it,
+   * and its extension is the rest. */
+  const char* const game_path = game->path;
+  const size_t game_path_len = strlen(game_path);
+  size_t dir_end = game_path_len;
+  size_t name_end = game_path_len;
+  size_t i;
+
+  while (dir_end && game_path[dir_end - 1] != '/'
 #ifdef _WIN32
-  // If SplitPath only gave us "D:", rebuild the real directory from the full path
-  if (folder_path_str.size() == 2 && folder_path_str[1] == ':')
-  {
-    // take everything up to the last backslash
-    size_t last_slash = normalized_game_paths.front().find_last_of("\\/");
-    if (last_slash != std::string::npos)
-      folder_path_str = normalized_game_paths.front().substr(0, last_slash + 1);
-  }
+         && game_path[dir_end - 1] != ':'
 #endif
-
-  if (extension == ".m3u" || extension == ".m3u8")
+  )
   {
-    normalized_game_paths = ReadM3UFile(normalized_game_paths.front(), folder_path_str);
+    dir_end--;
+  }
+  for (i = game_path_len; i > dir_end; i--)
+  {
+    if (game_path[i - 1] == '.')
+    {
+      name_end = i - 1;
+      break;
+    }
+  }
+
+  const std::string_view extension(game_path + name_end, game_path_len - name_end);
+  if (Common::CaseInsensitiveEquals(extension, ".m3u") ||
+      Common::CaseInsensitiveEquals(extension, ".m3u8"))
+  {
+    size_t folder_len = dir_end;
+#ifdef _WIN32
+    // A folder of only "D:" is rebuilt from the full path: everything up to its last separator
+    if (folder_len == 2 && game_path[1] == ':')
+    {
+      for (i = game_path_len; i; i--)
+      {
+        if (game_path[i - 1] == '\\' || game_path[i - 1] == '/')
+        {
+          folder_len = i;
+          break;
+        }
+      }
+    }
+#endif
+    normalized_game_paths =
+        ReadM3UFile(normalized_game_paths.front(), std::string(game_path, folder_len));
     if (normalized_game_paths.empty())
     {
       ERROR_LOG(BOOT, "Could not boot %s. M3U contains no paths", game->path);
@@ -844,7 +871,6 @@ bool retro_load_game(const struct retro_game_info* game)
      * at the disc asked for, in the playlist's order from there */
     const size_t count = normalized_game_paths.size();
     std::vector<std::string> from_initial;
-    size_t i;
     from_initial.reserve(count);
     for (i = 0; i < count; i++)
       from_initial.push_back(normalized_game_paths[(Libretro::disk_index + i) % count]);
@@ -917,7 +943,7 @@ bool retro_load_game(const struct retro_game_info* game)
   if (importCheats)
   {
     Libretro::reload_cheats_from_ini();
-    Libretro::generate_cht_from_ini(filename_str.c_str());
+    Libretro::generate_cht_from_ini(game_path + dir_end, name_end - dir_end);
   }
 
   /* The software and null renderers draw without a hardware context: no
