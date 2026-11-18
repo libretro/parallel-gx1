@@ -3,6 +3,8 @@
 
 #include "InputCommon/ControllerEmu/ControlGroup/ControlGroup.h"
 
+#include <cstdlib>
+
 #include "Common/IniFile.h"
 
 #include "InputCommon/ControlReference/ControlReference.h"
@@ -28,8 +30,7 @@ ControlGroup::ControlGroup(std::string name_, std::string ui_name_, const GroupT
 {
   if (default_value_ != DefaultValue::AlwaysEnabled)
   {
-    enabled_setting =
-        std::make_unique<NumericSetting>(&enabled, NumericSettingDetails{_trans("Enabled")},
+    enabled_setting = new NumericSetting(&enabled, NumericSettingDetails{_trans("Enabled")},
                                          (default_value_ == DefaultValue::Enabled), false, true);
   }
 }
@@ -55,7 +56,49 @@ void ControlGroup::AddDeadzoneSetting(SettingValue<double>* value, double maximu
              0, 0, maximum_deadzone);
 }
 
-ControlGroup::~ControlGroup() = default;
+ControlGroup::~ControlGroup()
+{
+  int i;
+  for (i = 0; i < num_numeric_settings; i++)
+    delete numeric_settings[i];
+  std::free(numeric_settings);
+  for (i = 0; i < num_controls; i++)
+    delete controls[i];
+  std::free(controls);
+  delete enabled_setting;
+}
+
+/* The arrays grow while the group is made; a controller cannot be made
+ * without its inputs, so running out of memory here ends the program, as
+ * the vectors these were did. */
+void ControlGroup::PushControl(Control* control)
+{
+  if (num_controls == m_cap_controls)
+  {
+    const int cap = m_cap_controls ? m_cap_controls * 2 : 8;
+    Control** const grown = static_cast<Control**>(std::realloc(controls, cap * sizeof(*grown)));
+    if (!grown)
+      std::abort();
+    controls = grown;
+    m_cap_controls = cap;
+  }
+  controls[num_controls++] = control;
+}
+
+void ControlGroup::PushSetting(NumericSetting* setting)
+{
+  if (num_numeric_settings == m_cap_numeric_settings)
+  {
+    const int cap = m_cap_numeric_settings ? m_cap_numeric_settings * 2 : 4;
+    NumericSetting** const grown =
+        static_cast<NumericSetting**>(std::realloc(numeric_settings, cap * sizeof(*grown)));
+    if (!grown)
+      std::abort();
+    numeric_settings = grown;
+    m_cap_numeric_settings = cap;
+  }
+  numeric_settings[num_numeric_settings++] = setting;
+}
 
 void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const char* base)
 {
@@ -67,11 +110,13 @@ void ControlGroup::LoadConfigDefault(Common::IniFile::Section* sec, const char* 
   if (HasEnabledSetting())
     enabled_setting->LoadFromIni(*sec, group);
 
-  for (auto& setting : numeric_settings)
-    setting->LoadFromIni(*sec, group);
+  int i;
+  for (i = 0; i < num_numeric_settings; i++)
+    numeric_settings[i]->LoadFromIni(*sec, group);
 
-  for (auto& c : controls)
+  for (i = 0; i < num_controls; i++)
   {
+    Control* const c = controls[i];
     {
       // control expression
       std::string expression;
@@ -98,11 +143,13 @@ void ControlGroup::SaveConfigDefault(Common::IniFile::Section* sec, const char* 
   if (HasEnabledSetting())
     enabled_setting->SaveToIni(*sec, group);
 
-  for (auto& setting : numeric_settings)
-    setting->SaveToIni(*sec, group);
+  int i;
+  for (i = 0; i < num_numeric_settings; i++)
+    numeric_settings[i]->SaveToIni(*sec, group);
 
-  for (auto& c : controls)
+  for (i = 0; i < num_controls; i++)
   {
+    Control* const c = controls[i];
     // control expression
     std::string expression = c->control_ref->GetExpression();
     // We can't save line breaks in a single line config. Restoring them is too complicated.
@@ -121,31 +168,33 @@ void ControlGroup::UpdateReferencesDefault(ciface::ExpressionParser::ControlEnvi
   if (HasEnabledSetting())
     enabled_setting->GetInputReference().UpdateReference(env);
 
-  for (auto& control : controls)
-    control->control_ref->UpdateReference(env);
+  int i;
+  for (i = 0; i < num_controls; i++)
+    controls[i]->control_ref->UpdateReference(env);
 
-  for (auto& setting : numeric_settings)
-    setting->GetInputReference().UpdateReference(env);
+  for (i = 0; i < num_numeric_settings; i++)
+    numeric_settings[i]->GetInputReference().UpdateReference(env);
 }
 
 void ControlGroup::SetControlExpression(int index, const std::string& expression)
 {
-  controls.at(index)->control_ref->SetExpression(expression);
+  if (index >= 0 && index < num_controls)
+    controls[index]->control_ref->SetExpression(expression);
 }
 
 void ControlGroup::AddInput(Translatability translate, std::string name_)
 {
-  controls.emplace_back(std::make_unique<Input>(translate, std::move(name_)));
+  PushControl(new Input(translate, std::move(name_)));
 }
 
 void ControlGroup::AddInput(Translatability translate, std::string name_, std::string ui_name_)
 {
-  controls.emplace_back(std::make_unique<Input>(translate, std::move(name_), std::move(ui_name_)));
+  PushControl(new Input(translate, std::move(name_), std::move(ui_name_)));
 }
 
 void ControlGroup::AddOutput(Translatability translate, std::string name_)
 {
-  controls.emplace_back(std::make_unique<Output>(translate, std::move(name_)));
+  PushControl(new Output(translate, std::move(name_)));
 }
 
 bool ControlGroup::HasEnabledSetting() const

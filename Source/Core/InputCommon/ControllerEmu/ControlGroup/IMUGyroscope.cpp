@@ -120,8 +120,13 @@ auto IMUGyroscope::GetRawState() const -> StateData
 
 bool IMUGyroscope::AreInputsBound() const
 {
-  return std::ranges::any_of(
-      controls, [](const auto& control) { return control->control_ref->BoundCount() > 0; });
+  int i;
+  for (i = 0; i < num_controls; i++)
+  {
+    if (controls[i]->control_ref->BoundCount() > 0)
+      return true;
+  }
+  return false;
 }
 
 bool IMUGyroscope::CanCalibrate() const

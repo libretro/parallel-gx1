@@ -75,7 +75,7 @@ ControlState Tilt::GetMaxRotationalVelocity() const
 
 Control* Tilt::GetModifierInput() const
 {
-  return controls[4].get();
+  return controls[4];
 }
 
 }  // namespace ControllerEmu

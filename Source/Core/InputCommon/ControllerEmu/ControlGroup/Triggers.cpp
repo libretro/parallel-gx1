@@ -20,7 +20,7 @@ Triggers::Triggers(const std::string& name_) : ControlGroup(name_, GroupType::Tr
 
 Triggers::StateData Triggers::GetState() const
 {
-  const size_t trigger_count = controls.size();
+  const size_t trigger_count = num_controls;
   const ControlState deadzone = m_deadzone_setting.GetValue() / 100;
 
   StateData result(trigger_count);

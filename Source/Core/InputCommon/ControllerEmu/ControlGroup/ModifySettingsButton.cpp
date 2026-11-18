@@ -27,7 +27,7 @@ void ModifySettingsButton::AddInput(std::string button_name, bool toggle)
 
 void ModifySettingsButton::UpdateState()
 {
-  for (size_t i = 0; i < controls.size(); ++i)
+  for (int i = 0; i < num_controls; ++i)
   {
     const bool state = controls[i]->GetState<bool>();
 

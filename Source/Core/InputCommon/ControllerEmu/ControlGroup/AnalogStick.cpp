@@ -59,7 +59,7 @@ ControlState AnalogStick::GetGateRadiusAtAngle(double ang) const
 
 Control* AnalogStick::GetModifierInput() const
 {
-  return controls[4].get();
+  return controls[4];
 }
 
 OctagonAnalogStick::OctagonAnalogStick(const char* name_, ControlState gate_radius)

@@ -20,8 +20,9 @@ public:
   template <typename C>
   void GetState(C* const buttons, const C* bitmasks) const
   {
-    for (auto& control : controls)
-      *buttons |= *(bitmasks++) * control->GetState<bool>();
+    int i;
+    for (i = 0; i < num_controls; i++)
+      *buttons |= *(bitmasks++) * controls[i]->GetState<bool>();
   }
 };
 }  // namespace ControllerEmu

@@ -814,7 +814,7 @@ bool Wiimote::IsUpright() const
 void Wiimote::SetRumble(bool on)
 {
   const auto input_scope = ReadScope();
-  m_rumble->controls.front()->control_ref->State(on);
+  m_rumble->controls[0]->control_ref->State(on);
 }
 
 void Wiimote::RefreshConfig()

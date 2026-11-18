@@ -41,7 +41,7 @@ void MixedTriggers::GetState(u16* const digital, const u16* bitmasks, ControlSta
     deadzone = 0.0;
   }
 
-  const int trigger_count = int(controls.size() / 2);
+  const int trigger_count = num_controls / 2;
   for (int i = 0; i != trigger_count; ++i)
   {
     const ControlState button_value = ApplyDeadzone(controls[i]->GetState(), deadzone);

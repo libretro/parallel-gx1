@@ -63,6 +63,9 @@ public:
                DefaultValue default_value = DefaultValue::AlwaysEnabled);
   virtual ~ControlGroup();
 
+  ControlGroup(const ControlGroup&) = delete;
+  ControlGroup& operator=(const ControlGroup&) = delete;
+
   // These branch on the group's type to the reshapable inputs' and the attachments' own
   void LoadConfig(Common::IniFile::Section* sec, const char* base);
   void SaveConfig(Common::IniFile::Section* sec, const char* base);
@@ -80,8 +83,7 @@ public:
                   std::common_type_t<T> default_value_, std::common_type_t<T> min_value = {},
                   std::common_type_t<T> max_value = T(100))
   {
-    numeric_settings.emplace_back(std::make_unique<NumericSetting>(
-        value, details, T(default_value_), T(min_value), T(max_value)));
+    PushSetting(new NumericSetting(value, details, T(default_value_), T(min_value), T(max_value)));
   }
 
   void AddVirtualNotchSetting(SettingValue<double>* value, double max_virtual_notch_deg);
@@ -109,13 +111,25 @@ protected:
   static constexpr size_t INI_KEY_SIZE = 256;
   void UpdateReferencesDefault(ciface::ExpressionParser::ControlEnvironment& env);
 
+  // Each takes the item, behind those the group has
+  void PushControl(Control* control);
+  void PushSetting(NumericSetting* setting);
+
 public:
   // The default "enabled" state.
   const DefaultValue default_value;
   SettingValue<bool> enabled;
-  std::unique_ptr<NumericSetting> enabled_setting;
+  // Owned, null for a group always enabled
+  NumericSetting* enabled_setting = nullptr;
 
-  std::vector<std::unique_ptr<Control>> controls;
-  std::vector<std::unique_ptr<NumericSetting>> numeric_settings;
+  // Owned, the first num_controls and num_numeric_settings of them: made with the group
+  Control** controls = nullptr;
+  int num_controls = 0;
+  NumericSetting** numeric_settings = nullptr;
+  int num_numeric_settings = 0;
+
+private:
+  int m_cap_controls = 0;
+  int m_cap_numeric_settings = 0;
 };
 }  // namespace ControllerEmu

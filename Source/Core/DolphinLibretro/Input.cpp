@@ -1987,7 +1987,7 @@ void retro_set_controller_port_device_wii(unsigned port, unsigned device)
   // Index 0 is "Attach MotionPlus", the only numeric setting here (the
   // attachment selector is kept out of that list). Written on both paths since
   // Dolphin defaults it to true.
-  if (!wmExtension->numeric_settings.empty())
+  if (wmExtension->num_numeric_settings)
     wmExtension->numeric_settings[0]->SetValue(wantMotionPlus);
 
   wmOptions->numeric_settings[0]->SetValue(0);      // Speaker Pan [-100, 100]
