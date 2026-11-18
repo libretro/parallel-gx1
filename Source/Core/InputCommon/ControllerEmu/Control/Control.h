@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 
 #include "InputCommon/ControlReference/ControlReference.h"
@@ -27,15 +26,20 @@ public:
     return control_ref->GetState<T>();
   }
 
-  std::unique_ptr<ControlReference> const control_ref;
+private:
+  // Kept with the control, before the pointer to it
+  ControlReference m_ref;
+
+public:
+  ControlReference* const control_ref;
   const Translatability translate;
   const std::string name;
   const std::string ui_name;
 
 protected:
-  Control(std::unique_ptr<ControlReference> ref, Translatability translate, std::string name,
+  Control(ControlReference::Kind kind, Translatability translate, std::string name,
           std::string ui_name);
-  Control(std::unique_ptr<ControlReference> ref, Translatability translate, std::string name);
+  Control(ControlReference::Kind kind, Translatability translate, std::string name);
 };
 
 }  // namespace ControllerEmu
