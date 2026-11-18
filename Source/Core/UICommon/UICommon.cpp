@@ -152,10 +152,7 @@ void CreateDirectories()
   File::CreateFullPath(File::GetUserPath(D_RETROACHIEVEMENTSCACHE_IDX));
   File::CreateFullPath(File::GetUserPath(D_ASM_ROOT_IDX));
   File::CreateFullPath(File::GetUserPath(D_WFSROOT_IDX));
-#ifndef ANDROID
-  File::CreateFullPath(File::GetUserPath(D_THEMES_IDX));
-  File::CreateFullPath(File::GetUserPath(D_STYLES_IDX));
-#else
+#ifdef ANDROID
   // Disable media scanning in directories with a .nomedia file
   File::CreateEmptyFile(File::GetUserPath(D_COVERCACHE_IDX) + DIR_SEP NOMEDIA_FILE);
 #endif
