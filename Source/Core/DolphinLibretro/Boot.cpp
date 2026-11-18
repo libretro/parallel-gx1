@@ -8,6 +8,7 @@
 #include <string.h>
 #include <string>
 
+#include <retro_miscellaneous.h>
 #include <streams/file_stream.h>
 #include <vfs/vfs_hybrid.h>
 #include "Common/CommonPaths.h"
@@ -123,7 +124,6 @@ static bool GBPlayer_active;
 
 // silence forward declaration warnings
 void reload_cheats_from_ini();
-void generate_cht_from_ini(std::string fileName);
 
 void reload_cheats_from_ini()
 {
@@ -139,25 +139,37 @@ void reload_cheats_from_ini()
   Gecko::LoadCodes(globalIni, localIni, &Libretro::g_gecko_codes);
 }
 
-void generate_cht_from_ini(std::string fileName)
+// Writes the codes as a RetroArch .cht named after the game, beside the system directory
+static void generate_cht_from_ini(const char* file_name)
 {
   const char* sysdir = nullptr;
+  char cheatFile[PATH_MAX_LENGTH];
+  size_t base_len;
+  size_t i;
+  int len;
 
   if (!Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &sysdir) || !sysdir)
     return;
 
-  std::string base = sysdir;
-  size_t pos = base.find_last_of("/\\");
-  if (pos != std::string::npos)
-      base = base.substr(0, pos);
+  // the system directory's parent, when it has one
+  base_len = strlen(sysdir);
+  for (i = base_len; i; i--)
+  {
+    if (sysdir[i - 1] == '/' || sysdir[i - 1] == '\\')
+    {
+      base_len = i - 1;
+      break;
+    }
+  }
 
-  // Write RetroArch .cht
-  std::string cheatDir = base + "/cheats/dolphin-emu/";
-  std::string cheatFile = cheatDir + fileName + ".cht";
+  len = snprintf(cheatFile, sizeof(cheatFile), "%.*s/cheats/dolphin-emu/%s.cht", (int)base_len,
+                 sysdir, file_name);
+  if (len < 0 || (size_t)len >= sizeof(cheatFile))
+    return;
 
   if (File::Exists(cheatFile))
   {
-    INFO_LOG(BOOT, "Cheats: pre-existing cht file found: %s", cheatFile.c_str());
+    INFO_LOG(BOOT, "Cheats: pre-existing cht file found: %s", cheatFile);
     return;
   }
 
@@ -171,8 +183,8 @@ void generate_cht_from_ini(std::string fileName)
   if (!File::CreateFullPath(cheatFile))
     return;
 
-  RFILE* const out = filestream_open(cheatFile.c_str(), RETRO_VFS_FILE_ACCESS_WRITE,
-                                     RETRO_VFS_FILE_ACCESS_HINT_NONE);
+  RFILE* const out =
+      filestream_open(cheatFile, RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
   unsigned cheat_index = 0;
   bool written = out != nullptr;
 
@@ -208,11 +220,11 @@ void generate_cht_from_ini(std::string fileName)
 
   if (!written)
   {
-    ERROR_LOG(BOOT, "Cheats: unable to create a new cht file at: %s", cheatFile.c_str());
+    ERROR_LOG(BOOT, "Cheats: unable to create a new cht file at: %s", cheatFile);
     return;
   }
 
-  INFO_LOG(BOOT, "Cheats: cht file created successfully at: %s", cheatFile.c_str());
+  INFO_LOG(BOOT, "Cheats: cht file created successfully at: %s", cheatFile);
 }
 
 // A region-free title runs in the fallback region, which follows the system locale and is PAL
@@ -872,7 +884,7 @@ bool retro_load_game(const struct retro_game_info* game)
   if (importCheats)
   {
     Libretro::reload_cheats_from_ini();
-    Libretro::generate_cht_from_ini(filename_str);
+    Libretro::generate_cht_from_ini(filename_str.c_str());
   }
 
   /* The software and null renderers draw without a hardware context: no
