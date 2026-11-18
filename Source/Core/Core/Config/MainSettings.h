@@ -152,19 +152,9 @@ extern const Info<bool> MAIN_DSP_CAPTURE_LOG;
 extern const Info<bool> MAIN_DSP_JIT;
 extern const Info<bool> MAIN_DUMP_UCODE;
 
-
 // Main.Display
 
-extern const Info<std::string> MAIN_FULLSCREEN_DISPLAY_RES;
-extern const Info<bool> MAIN_FULLSCREEN;
-extern const Info<bool> MAIN_RENDER_TO_MAIN;
-extern const Info<int> MAIN_RENDER_WINDOW_XPOS;
-extern const Info<int> MAIN_RENDER_WINDOW_YPOS;
-extern const Info<int> MAIN_RENDER_WINDOW_WIDTH;
-extern const Info<int> MAIN_RENDER_WINDOW_HEIGHT;
 extern const Info<bool> MAIN_RENDER_WINDOW_AUTOSIZE;
-extern const Info<bool> MAIN_KEEP_WINDOW_ON_TOP;
-extern const Info<bool> MAIN_DISABLE_SCREENSAVER;
 
 // Main.General
 
@@ -174,8 +164,6 @@ extern const Info<std::string> MAIN_FS_PATH;
 extern const Info<std::string> MAIN_WII_SD_CARD_IMAGE_PATH;
 extern const Info<std::string> MAIN_WII_SD_CARD_SYNC_FOLDER_PATH;
 extern const Info<std::string> MAIN_WFS_PATH;
-extern const Info<bool> MAIN_SHOW_LAG;
-extern const Info<bool> MAIN_SHOW_FRAME_COUNT;
 extern const Info<std::string> MAIN_WIRELESS_MAC;
 extern const Info<std::string> MAIN_SKYLANDERS_PATH;
 
@@ -202,65 +190,10 @@ extern const Info<int> MAIN_NETWORK_TIMEOUT;
 
 // Main.Interface
 
-extern const Info<bool> MAIN_USE_HIGH_CONTRAST_TOOLTIPS;
 extern const Info<bool> MAIN_USE_PANIC_HANDLERS;
 extern const Info<bool> MAIN_ABORT_ON_PANIC_ALERT;
-extern const Info<bool> MAIN_SKIP_NKIT_WARNING;
-extern const Info<bool> MAIN_CONFIRM_ON_STOP;
-
-enum class ShowCursor
-{
-  Never,
-  Constantly,
-  OnMovement,
-};
-extern const Info<ShowCursor> MAIN_SHOW_CURSOR;
 
 extern const Info<bool> MAIN_LOCK_CURSOR;
-extern const Info<std::string> MAIN_INTERFACE_LANGUAGE;
-extern const Info<std::string> MAIN_THEME_NAME;
-extern const Info<bool> MAIN_PAUSE_ON_FOCUS_LOST;
-
-// Main.GameList
-
-extern const Info<bool> MAIN_GAMELIST_LIST_DRIVES;
-extern const Info<bool> MAIN_GAMELIST_LIST_WAD;
-extern const Info<bool> MAIN_GAMELIST_LIST_ELF_DOL;
-extern const Info<bool> MAIN_GAMELIST_LIST_WII;
-extern const Info<bool> MAIN_GAMELIST_LIST_GC;
-extern const Info<bool> MAIN_GAMELIST_LIST_TRI;
-extern const Info<bool> MAIN_GAMELIST_LIST_JPN;
-extern const Info<bool> MAIN_GAMELIST_LIST_PAL;
-extern const Info<bool> MAIN_GAMELIST_LIST_USA;
-extern const Info<bool> MAIN_GAMELIST_LIST_AUSTRALIA;
-extern const Info<bool> MAIN_GAMELIST_LIST_FRANCE;
-extern const Info<bool> MAIN_GAMELIST_LIST_GERMANY;
-extern const Info<bool> MAIN_GAMELIST_LIST_ITALY;
-extern const Info<bool> MAIN_GAMELIST_LIST_KOREA;
-extern const Info<bool> MAIN_GAMELIST_LIST_NETHERLANDS;
-extern const Info<bool> MAIN_GAMELIST_LIST_RUSSIA;
-extern const Info<bool> MAIN_GAMELIST_LIST_SPAIN;
-extern const Info<bool> MAIN_GAMELIST_LIST_TAIWAN;
-extern const Info<bool> MAIN_GAMELIST_LIST_WORLD;
-extern const Info<bool> MAIN_GAMELIST_LIST_UNKNOWN;
-extern const Info<int> MAIN_GAMELIST_LIST_SORT;
-extern const Info<int> MAIN_GAMELIST_LIST_SORT_SECONDARY;
-
-extern const Info<bool> MAIN_GAMELIST_COLUMN_PLATFORM;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_DESCRIPTION;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_BANNER;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_TITLE;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_MAKER;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_FILE_NAME;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_FILE_PATH;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_GAME_ID;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_REGION;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_FILE_SIZE;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_FILE_FORMAT;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_BLOCK_SIZE;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_COMPRESSION;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_TIME_PLAYED;
-extern const Info<bool> MAIN_GAMELIST_COLUMN_TAGS;
 
 // Main.FifoPlayer
 
@@ -331,7 +264,6 @@ extern const Info<std::string> MAIN_TRIFORCE_IP_REDIRECTIONS;
 // Main.WiimoteAudioRouting
 
 static constexpr std::size_t WIIMOTE_SPEAKER_COUNT = 4;
-
 
 // GameCube path utility functions
 

@@ -89,11 +89,6 @@ const Info<TriState> GFX_MTL_MANUALLY_UPLOAD_BUFFERS{
 const Info<TriState> GFX_MTL_USE_PRESENT_DRAWABLE{
     {System::GFX, "Settings", "MTLUsePresentDrawable"}, TriState::Auto};
 
-const Info<bool> GFX_SW_DUMP_OBJECTS{{System::GFX, "Settings", "SWDumpObjects"}, false};
-const Info<bool> GFX_SW_DUMP_TEV_STAGES{{System::GFX, "Settings", "SWDumpTevStages"}, false};
-const Info<bool> GFX_SW_DUMP_TEV_TEX_FETCHES{{System::GFX, "Settings", "SWDumpTevTexFetches"},
-                                             false};
-
 const Info<bool> GFX_PREFER_GLES{{System::GFX, "Settings", "PreferGLES"}, false};
 
 const Info<bool> GFX_MODS_ENABLE{{System::GFX, "Settings", "EnableMods"}, false};
