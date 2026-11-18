@@ -687,10 +687,9 @@ private:
       bool ignored = false;
       for (u32 i = 0; i < m_num_modifiers && !ignored; i++)
       {
-        // We need to ignore L_Ctrl R_Ctrl when supplied Ctrl and vice-versa.
         Device::Input* const i1 = m_modifiers[i]->GetInput();
         Device::Input* const i2 = s_suppressions[s].modifier;
-        ignored = i1 && i2 && (i1 == i2 || i1->IsChild(i2) || i2->IsChild(i1));
+        ignored = i1 && i2 && i1 == i2;
       }
       if (!ignored)
         return true;

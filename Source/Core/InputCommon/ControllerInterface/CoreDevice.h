@@ -101,22 +101,8 @@ public:
     // If possible, negative values may be returned in situations where an opposing input is
     // activated. (e.g. When an underlying axis, X, is currently negative, "Axis X-", will return a
     // positive value and "Axis X+" may return a negative value.)
-    // Doing so is solely to allow our input detection logic to better detect false positives.
-    // This is necessary when making use of "FullAnalogSurface" as multiple inputs will be seen
-    // increasing from 0.0 to 1.0 as a user tries to map just one. The negative values provide a
-    // view of the underlying axis. (Negative values are clamped off before they reach
-    // expression-parser or controller-emu)
+    // (Negative values are clamped off before they reach expression-parser or controller-emu)
     virtual ControlState GetState() const = 0;
-
-    // Overridden by CombinedInput,
-    // so hotkey logic knows Ctrl, L_Ctrl, and R_Ctrl are the same,
-    // and so input detection can return the parent name.
-    virtual bool IsChild(const Input*) const { return false; }
-  };
-
-  class RelativeInput : public Input
-  {
-  public:
   };
 
   //
@@ -168,14 +154,6 @@ public:
 protected:
   void AddInput(Input* const i);
   void AddOutput(Output* const o);
-
-  // Pass Inputs for center-neutral (- and +) directions of some axis.
-  // This function adds those Inputs and also a FullAnalogSurface Input for each direction.
-  // This is only needed when it's not known if the particular axis is neutral in the center
-  //  or neutral on one of the extremes.
-  // Some e.g. DInput devices expose a trigger across the full analog surface
-  //  but we have no way of knowing this until the user actually maps the Input,
-  //  so both center-neutral and full-surface Inputs need to be created in that case.
 
 private:
   int m_id = 0;
