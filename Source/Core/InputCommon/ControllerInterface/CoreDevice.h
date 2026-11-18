@@ -117,7 +117,11 @@ public:
     virtual void SetState(ControlState state) = 0;
   };
 
+  Device() = default;
   virtual ~Device();
+
+  Device(const Device&) = delete;
+  Device& operator=(const Device&) = delete;
 
   int GetId() const { return m_id; }
   void SetId(int id) { m_id = id; }
@@ -145,8 +149,8 @@ public:
   static constexpr int DEFAULT_DEVICE_SORT_PRIORITY = std::numeric_limits<int>::max();
   virtual int GetSortPriority() const { return 0; }
 
-  const std::vector<Input*>& Inputs() const { return m_inputs; }
-  const std::vector<Output*>& Outputs() const { return m_outputs; }
+  Output* const* Outputs() const { return m_outputs; }
+  int NumOutputs() const { return m_num_outputs; }
 
   Input* FindInput(std::string_view name) const;
   Output* FindOutput(std::string_view name) const;
@@ -157,8 +161,13 @@ protected:
 
 private:
   int m_id = 0;
-  std::vector<Input*> m_inputs;
-  std::vector<Output*> m_outputs;
+  // Owned, the first m_num_inputs and m_num_outputs of them: made with the device
+  Input** m_inputs = nullptr;
+  int m_num_inputs = 0;
+  int m_cap_inputs = 0;
+  Output** m_outputs = nullptr;
+  int m_num_outputs = 0;
+  int m_cap_outputs = 0;
 };
 
 //

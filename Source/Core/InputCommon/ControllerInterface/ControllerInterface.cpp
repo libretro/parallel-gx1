@@ -115,8 +115,9 @@ void ControllerInterface::ClearDevices()
     for (const auto& d : devices)
     {
       // Set outputs to ZERO before destroying device
-      for (ciface::Core::Device::Output* o : d->Outputs())
-        o->SetState(0);
+      int i;
+      for (i = 0; i < d->NumOutputs(); i++)
+        d->Outputs()[i]->SetState(0);
     }
 
     // Devices could still be alive after this as there might be shared ptrs around holding them.

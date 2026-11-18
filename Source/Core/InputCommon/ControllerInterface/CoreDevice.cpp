@@ -29,13 +29,14 @@ namespace ciface::Core
 {
 Device::~Device()
 {
-  // delete inputs
-  for (Device::Input* input : m_inputs)
-    delete input;
+  int i;
+  for (i = 0; i < m_num_inputs; i++)
+    delete m_inputs[i];
+  std::free(m_inputs);
 
-  // delete outputs
-  for (Device::Output* output : m_outputs)
-    delete output;
+  for (i = 0; i < m_num_outputs; i++)
+    delete m_outputs[i];
+  std::free(m_outputs);
 }
 
 std::optional<int> Device::GetPreferredId() const
@@ -43,22 +44,44 @@ std::optional<int> Device::GetPreferredId() const
   return {};
 }
 
+/* The lists grow while the device is made; a device cannot be made
+ * without its controls, so running out of memory here ends the program, as
+ * the vectors these were did. */
 void Device::AddInput(Device::Input* const i)
 {
-  m_inputs.push_back(i);
+  if (m_num_inputs == m_cap_inputs)
+  {
+    const int cap = m_cap_inputs ? m_cap_inputs * 2 : 32;
+    Input** const grown = static_cast<Input**>(std::realloc(m_inputs, cap * sizeof(*grown)));
+    if (!grown)
+      std::abort();
+    m_inputs = grown;
+    m_cap_inputs = cap;
+  }
+  m_inputs[m_num_inputs++] = i;
 }
 
 void Device::AddOutput(Device::Output* const o)
 {
-  m_outputs.push_back(o);
+  if (m_num_outputs == m_cap_outputs)
+  {
+    const int cap = m_cap_outputs ? m_cap_outputs * 2 : 4;
+    Output** const grown = static_cast<Output**>(std::realloc(m_outputs, cap * sizeof(*grown)));
+    if (!grown)
+      std::abort();
+    m_outputs = grown;
+    m_cap_outputs = cap;
+  }
+  m_outputs[m_num_outputs++] = o;
 }
 
 Device::Input* Device::FindInput(std::string_view name) const
 {
-  for (Input* input : m_inputs)
+  int i;
+  for (i = 0; i < m_num_inputs; i++)
   {
-    if (input->IsMatchingName(name))
-      return input;
+    if (m_inputs[i]->IsMatchingName(name))
+      return m_inputs[i];
   }
 
   return nullptr;
@@ -66,10 +89,11 @@ Device::Input* Device::FindInput(std::string_view name) const
 
 Device::Output* Device::FindOutput(std::string_view name) const
 {
-  for (Output* output : m_outputs)
+  int i;
+  for (i = 0; i < m_num_outputs; i++)
   {
-    if (output->IsMatchingName(name))
-      return output;
+    if (m_outputs[i]->IsMatchingName(name))
+      return m_outputs[i];
   }
 
   return nullptr;
