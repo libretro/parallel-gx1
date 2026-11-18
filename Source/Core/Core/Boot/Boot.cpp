@@ -55,52 +55,67 @@
 #include "DiscIO/VolumeDisc.h"
 #include "DiscIO/VolumeWad.h"
 
-static void PushLine(void* ud, const char* text, size_t length)
+namespace
 {
-  static_cast<std::vector<std::string>*>(ud)->emplace_back(text, length);
+/* What reading an M3U file has found so far */
+struct M3UReader
+{
+  const std::string* m3u_path;
+  const std::string* folder_path;
+  std::vector<std::string>* result;
+  /* the paths not found, a line each, cut when they run past it */
+  char missing[1024];
+  size_t missing_len;
+};
+}  // namespace
+
+/* One line of the file: a path, else a comment or nothing. */
+static void ReadM3ULine(void* ud, const char* text, size_t length)
+{
+  M3UReader* const reader = static_cast<M3UReader*>(ud);
+  /* This is the UTF-8 representation of U+FEFF. */
+  static const char utf8_bom[] = "\xEF\xBB\xBF";
+
+  if (length >= 3 && !memcmp(text, utf8_bom, 3))
+  {
+    WARN_LOG(BOOT, "UTF-8 BOM in file: %s", reader->m3u_path->c_str());
+    text += 3;
+    length -= 3;
+  }
+
+  if (!length || text[0] == '#') /* Comments start with # */
+    return;
+
+  std::string path_to_add = File::JoinPath(*reader->folder_path, std::string(text, length));
+  if (File::Exists(path_to_add))
+  {
+    reader->result->push_back(std::move(path_to_add));
+  }
+  else if (reader->missing_len < sizeof(reader->missing))
+  {
+    const int n = snprintf(reader->missing + reader->missing_len,
+                           sizeof(reader->missing) - reader->missing_len, "%s%s",
+                           reader->missing_len ? "\n" : "", path_to_add.c_str());
+    reader->missing_len =
+        n < 0 ? sizeof(reader->missing) : reader->missing_len + static_cast<size_t>(n);
+  }
 }
 
 std::vector<std::string> ReadM3UFile(const std::string& m3u_path, const std::string& folder_path)
 {
   std::vector<std::string> result;
-  std::vector<std::string> lines;
-  /* the paths not found, a line each, cut when they run past it */
-  char missing[1024];
-  size_t missing_len = 0;
+  M3UReader reader;
 
-  File::ForEachLine(m3u_path, PushLine, &lines);
+  reader.m3u_path = &m3u_path;
+  reader.folder_path = &folder_path;
+  reader.result = &result;
+  reader.missing_len = 0;
+  File::ForEachLine(m3u_path, ReadM3ULine, &reader);
 
-  for (std::string& line : lines)
-  {
-    // This is the UTF-8 representation of U+FEFF.
-    constexpr std::string_view utf8_bom = "\xEF\xBB\xBF";
-
-    if (line.starts_with(utf8_bom))
-    {
-      WARN_LOG(BOOT, "UTF-8 BOM in file: %s", m3u_path.c_str());
-      line.erase(0, utf8_bom.length());
-    }
-
-    if (!line.empty() && line.front() != '#')  // Comments start with #
-    {
-      std::string path_to_add = File::JoinPath(folder_path, line);
-      if (File::Exists(path_to_add))
-      {
-        result.push_back(std::move(path_to_add));
-      }
-      else if (missing_len < sizeof(missing))
-      {
-        const int n = snprintf(missing + missing_len, sizeof(missing) - missing_len, "%s%s",
-                               missing_len ? "\n" : "", path_to_add.c_str());
-        missing_len = n < 0 ? sizeof(missing) : missing_len + static_cast<size_t>(n);
-      }
-    }
-  }
-
-  if (missing_len)
+  if (reader.missing_len)
   {
     PanicAlert("Files specified in the M3U file \"%s\" were not found:\n%s", m3u_path.c_str(),
-               missing);
+               reader.missing);
     return {};
   }
 
