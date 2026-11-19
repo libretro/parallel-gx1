@@ -13,7 +13,6 @@ void CustomResourceManager::Initialize()
   return;
 #endif
   m_asset_cache.Initialize();
-  m_worker_thread.Reset("resource-worker");
 
   m_xfb_event =
       GetVideoEvents().after_frame_event.Register([this](Core::System&) { XFBTriggered(); });
@@ -22,20 +21,14 @@ void CustomResourceManager::Initialize()
 void CustomResourceManager::Shutdown()
 {
   m_asset_cache.Shutdown();
-  m_worker_thread.Shutdown();
-  Reset(true);
+  Reset();
 }
 
-void CustomResourceManager::Reset(bool is_shutdown)
+void CustomResourceManager::Reset()
 {
   m_texture_data_resources.clear();
 
   m_asset_cache.Reset();
-
-  if (is_shutdown)
-    m_worker_thread.Shutdown();
-  else
-    m_worker_thread.Reset("resource-worker");
 }
 
 void CustomResourceManager::XFBTriggered()

@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "Common/HookableEvent.h"
-#include "Common/WorkQueueThread.h"
 
 #include "VideoCommon/Assets/CustomAssetCache.h"
 #include "VideoCommon/Resources/TextureDataResource.h"
@@ -19,7 +18,7 @@ class CustomResourceManager
 public:
   void Initialize();
   void Shutdown();
-  void Reset(bool is_shutdown = false);
+  void Reset();
 
   void XFBTriggered();
 
@@ -29,7 +28,6 @@ public:
 
 private:
   CustomAssetCache m_asset_cache;
-  Common::AsyncWorkThreadSP m_worker_thread;
 
   std::map<CustomAssetLibrary::AssetID, std::unique_ptr<TextureDataResource>>
       m_texture_data_resources;
