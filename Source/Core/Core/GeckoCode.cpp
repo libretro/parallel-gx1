@@ -7,22 +7,22 @@
 #include <cstring>
 
 #include "Common/ChunkFile.h"
-#include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
-#include "Common/FileUtil.h"
-#include "Common/IOFile.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
+#include "Core/GeckoCodeHandler.h"
+#include "Core/HW/Memmap.h"
 #include "Core/Host.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
-#include "Core/HW/Memmap.h"
 #include "Core/System.h"
 
 namespace Gecko
 {
 static constexpr u32 CODE_SIZE = 8;
+static_assert(GECKO_CODE_HANDLER_SIZE <=
+              INSTALLER_END_ADDRESS - INSTALLER_BASE_ADDRESS - CODE_SIZE);
 
 enum class Installation
 {
@@ -125,34 +125,21 @@ void SetActiveCodes(const GeckoCode* gcodes, size_t count)
 // NOTE: Refer to "codehandleronly.s" from Gecko OS.
 static Installation InstallCodeHandlerLocked()
 {
-  File::IOFile handler(File::GetSysDirectory() + GECKO_CODE_HANDLER, "rb");
-  if (!handler)
-  {
-    ERROR_LOG(ACTIONREPLAY, "Could not enable cheats because " GECKO_CODE_HANDLER " was missing.");
-    return Installation::Failed;
-  }
-
-  const u64 handler_size = handler.GetSize();
-  if (handler_size > INSTALLER_END_ADDRESS - INSTALLER_BASE_ADDRESS - CODE_SIZE)
-  {
-    ERROR_LOG(ACTIONREPLAY, GECKO_CODE_HANDLER " is too big. The file may be corrupt.");
-    return Installation::Failed;
-  }
-
   u8 mmio_addr = 0xCC;
   if (Core::System::GetInstance().IsWii())
   {
     mmio_addr = 0xCD;
   }
 
-  // Install code handler, from the file straight into emulated memory
+  // Install the code handler
   {
     u8* const dest = Core::System::GetInstance().GetMemory().GetPointerForRange(
-        INSTALLER_BASE_ADDRESS, handler_size);
-    if (!dest || !handler.ReadBytes(dest, handler_size))
+        INSTALLER_BASE_ADDRESS, GECKO_CODE_HANDLER_SIZE);
+    if (!dest)
       return Installation::Failed;
+    memcpy(dest, gecko_code_handler, GECKO_CODE_HANDLER_SIZE);
   }
-  const u32 data_size = static_cast<u32>(handler_size);
+  const u32 data_size = GECKO_CODE_HANDLER_SIZE;
 
   // Patch the code handler to the current system type (Gamecube/Wii)
   for (u32 h = 0; h < data_size; h += 4)
@@ -230,9 +217,9 @@ static Installation InstallCodeHandlerLocked()
 }
 
 // Gecko needs to participate in the savestate system because the handler is embedded within the
-// game directly. The PC may be inside the code handler in the save state and the codehandler.bin
-// on the disk may be different resulting in the PC pointing at a different instruction and then
-// the game malfunctions or crashes. [Also, self-modifying codes will break since the
+// game directly. The PC may be inside the code handler in the save state and the handler built
+// into another core build may be different resulting in the PC pointing at a different instruction
+// and then the game malfunctions or crashes. [Also, self-modifying codes will break since the
 // modifications will be reset]
 void DoState(PointerWrap& p)
 {

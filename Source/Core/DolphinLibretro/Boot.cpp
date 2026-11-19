@@ -558,9 +558,8 @@ bool retro_load_game(const struct retro_game_info* game)
   NOTICE_LOG(BOOT, "User Directory set to '%s'", user_dir.c_str());
   NOTICE_LOG(BOOT, "System Directory set to '%s'", sys_dir.c_str());
 
-  const std::string codehandler = std::string(sys_dir) + DIR_SEP GECKO_CODE_HANDLER;
-
-  if (!File::Exists(codehandler))
+  // The game settings stand for the system files as a whole
+  if (!File::IsDirectory((sys_dir + DIR_SEP "GameSettings").c_str()))
   {
 #if defined(ANDROID) || defined(IPHONEOS)
     // for reduced area to display the message..
@@ -568,7 +567,7 @@ bool retro_load_game(const struct retro_game_info* game)
                                                  "Core System Files Downloader -> Dolphin.zip.";
 #else
     static const char missing_core_files_msg[] =
-        "Core file " GECKO_CODE_HANDLER " missing! Open Online Updater ->\n"
+        "Core system files missing! Open Online Updater ->\n"
         "Core System Files Downloader -> Install Dolphin.zip. "
         "Restart core to take effect.";
 #endif

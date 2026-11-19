@@ -229,6 +229,9 @@ reason a reader can see.
 - **JSON is read with libretro-common's rjson.** Files are pulled through
   `rjson_open_user` from a VFS `filestream`, parsed as they stream, with
   no document tree and no wrapper library between rjson and its caller.
+- **The Gecko code handler is built in** (`Core/GeckoCodeHandler.c`),
+  not read from the system folder. A change to `docs/codehandler.s`
+  regenerates the array from the binary `docs/codehandler.ld` links.
 
 ## Game Boy content
 
