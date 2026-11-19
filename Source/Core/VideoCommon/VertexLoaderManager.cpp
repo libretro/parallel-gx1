@@ -36,12 +36,12 @@
 namespace VertexLoaderManager
 {
 // Used by zfreeze
-std::array<u32, 3> position_matrix_index_cache;
+u32 position_matrix_index_cache[3];
 // 3 vertices, 4 floats each to allow SIMD overwrite
-alignas(sizeof(std::array<float, 4>)) std::array<std::array<float, 4>, 3> position_cache;
-alignas(sizeof(std::array<float, 4>)) std::array<float, 4> normal_cache;
-alignas(sizeof(std::array<float, 4>)) std::array<float, 4> tangent_cache;
-alignas(sizeof(std::array<float, 4>)) std::array<float, 4> binormal_cache;
+alignas(16) float position_cache[3][4];
+alignas(16) float normal_cache[4];
+alignas(16) float tangent_cache[4];
+alignas(16) float binormal_cache[4];
 
 /* each PortableVertexDeclaration's NativeVertexFormat, owned here */
 static uid_table s_native_vertex_map;
@@ -97,8 +97,8 @@ Common::EnumMap<u8*, CPArray::TexCoord7> cached_arraybases;
 BitSet8 g_main_vat_dirty;
 BitSet8 g_preprocess_vat_dirty;
 bool g_bases_dirty;  // Main only
-std::array<VertexLoaderBase*, CP_NUM_VAT_REG> g_main_vertex_loaders;
-std::array<VertexLoaderBase*, CP_NUM_VAT_REG> g_preprocess_vertex_loaders;
+VertexLoaderBase* g_main_vertex_loaders[CP_NUM_VAT_REG];
+VertexLoaderBase* g_preprocess_vertex_loaders[CP_NUM_VAT_REG];
 bool g_needs_cp_xf_consistency_check;
 
 void Init()
@@ -106,8 +106,8 @@ void Init()
   /* none left from an earlier game */
   Clear();
   MarkAllDirty();
-  g_main_vertex_loaders.fill(nullptr);
-  g_preprocess_vertex_loaders.fill(nullptr);
+  memset(g_main_vertex_loaders, 0, sizeof(g_main_vertex_loaders));
+  memset(g_preprocess_vertex_loaders, 0, sizeof(g_preprocess_vertex_loaders));
   VertexLoaderPoolsCreate();
 }
 
@@ -143,8 +143,8 @@ void Clear()
       loader = next;
     }
   }
-  g_main_vertex_loaders.fill(nullptr);
-  g_preprocess_vertex_loaders.fill(nullptr);
+  memset(g_main_vertex_loaders, 0, sizeof(g_main_vertex_loaders));
+  memset(g_preprocess_vertex_loaders, 0, sizeof(g_preprocess_vertex_loaders));
   VertexLoaderPoolsDestroy();
   uid_table_free(&s_native_vertex_map);
 }

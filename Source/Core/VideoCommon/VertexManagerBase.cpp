@@ -626,9 +626,9 @@ void VertexManagerBase::DoState(PointerWrap& p)
   }
 
   p.Do(m_zslope);
-  p.Do(VertexLoaderManager::normal_cache);
-  p.Do(VertexLoaderManager::tangent_cache);
-  p.Do(VertexLoaderManager::binormal_cache);
+  p.DoArray(VertexLoaderManager::normal_cache);
+  p.DoArray(VertexLoaderManager::tangent_cache);
+  p.DoArray(VertexLoaderManager::binormal_cache);
 }
 
 void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
@@ -712,14 +712,18 @@ void VertexManagerBase::CalculateNormals(NativeVertexFormat* format)
 
   auto& system = Core::System::GetInstance();
   auto& vertex_shader_manager = system.GetVertexShaderManager();
-  if (vertex_shader_manager.constants.cached_tangent != VertexLoaderManager::tangent_cache)
+  if (memcmp(vertex_shader_manager.constants.cached_tangent, VertexLoaderManager::tangent_cache,
+             sizeof(VertexLoaderManager::tangent_cache)))
   {
-    vertex_shader_manager.constants.cached_tangent = VertexLoaderManager::tangent_cache;
+    memcpy(vertex_shader_manager.constants.cached_tangent, VertexLoaderManager::tangent_cache,
+           sizeof(VertexLoaderManager::tangent_cache));
     vertex_shader_manager.dirty = true;
   }
-  if (vertex_shader_manager.constants.cached_binormal != VertexLoaderManager::binormal_cache)
+  if (memcmp(vertex_shader_manager.constants.cached_binormal, VertexLoaderManager::binormal_cache,
+             sizeof(VertexLoaderManager::binormal_cache)))
   {
-    vertex_shader_manager.constants.cached_binormal = VertexLoaderManager::binormal_cache;
+    memcpy(vertex_shader_manager.constants.cached_binormal, VertexLoaderManager::binormal_cache,
+           sizeof(VertexLoaderManager::binormal_cache));
     vertex_shader_manager.dirty = true;
   }
 
@@ -727,9 +731,11 @@ void VertexManagerBase::CalculateNormals(NativeVertexFormat* format)
     return;
 
   VertexLoaderManager::normal_cache[3] = 0;
-  if (vertex_shader_manager.constants.cached_normal != VertexLoaderManager::normal_cache)
+  if (memcmp(vertex_shader_manager.constants.cached_normal, VertexLoaderManager::normal_cache,
+             sizeof(VertexLoaderManager::normal_cache)))
   {
-    vertex_shader_manager.constants.cached_normal = VertexLoaderManager::normal_cache;
+    memcpy(vertex_shader_manager.constants.cached_normal, VertexLoaderManager::normal_cache,
+           sizeof(VertexLoaderManager::normal_cache));
     vertex_shader_manager.dirty = true;
   }
 }

@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <string>
-
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"
 #include "VideoCommon/CPMemory.h"
@@ -60,16 +57,16 @@ void UpdateVertexArrayPointers();
 
 // Position cache for zfreeze (3 vertices, 4 floats each to allow SIMD overwrite).
 // These arrays are in reverse order.
-extern std::array<std::array<float, 4>, 3> position_cache;
-extern std::array<u32, 3> position_matrix_index_cache;
+extern float position_cache[3][4];
+extern u32 position_matrix_index_cache[3];
 // Needed for the game "LIT", which has text that has lighting enabled, but doesn't have normal
 // vectors.  The normals from the last drawn object are used instead.
 // See https://bugs.dolphin-emu.org/issues/13635
-extern std::array<float, 4> normal_cache;
+extern float normal_cache[4];
 // Store the tangent and binormal vectors for games that use emboss texgens when the vertex format
 // doesn't include them (e.g. RS2 and RS3).  These too are 4 floats each for SIMD overwrites.
-extern std::array<float, 4> tangent_cache;
-extern std::array<float, 4> binormal_cache;
+extern float tangent_cache[4];
+extern float binormal_cache[4];
 
 // VB_HAS_X. Bitmask telling what vertex components are present.
 extern u32 g_current_components;
@@ -77,8 +74,8 @@ extern u32 g_current_components;
 extern BitSet8 g_main_vat_dirty;
 extern BitSet8 g_preprocess_vat_dirty;
 extern bool g_bases_dirty;  // Main only
-extern std::array<VertexLoaderBase*, CP_NUM_VAT_REG> g_main_vertex_loaders;
-extern std::array<VertexLoaderBase*, CP_NUM_VAT_REG> g_preprocess_vertex_loaders;
+extern VertexLoaderBase* g_main_vertex_loaders[CP_NUM_VAT_REG];
+extern VertexLoaderBase* g_preprocess_vertex_loaders[CP_NUM_VAT_REG];
 extern bool g_needs_cp_xf_consistency_check;
 
 template <bool IsPreprocess = false>

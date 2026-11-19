@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <string>
-
 #include "Common/CommonTypes.h"
 #include "Common/Matrix.h"
 #include "VideoCommon/ConstantManager.h"
@@ -88,13 +85,12 @@ public:
     UpdateValue(dirty, old_value, new_value);
   }
 
-  template <size_t N>
   static DOLPHIN_FORCE_INLINE void UpdateOffsets(bool* dirty, bool include_components,
-                                                 std::array<u32, N>* old_value,
-                                                 const std::array<AttributeFormat, N>& attribute)
+                                                 u32* old_values, const AttributeFormat* attributes,
+                                                 u32 count)
   {
-    for (size_t i = 0; i < N; i++)
-      UpdateOffset(dirty, include_components, &(*old_value)[i], attribute[i]);
+    for (u32 i = 0; i < count; i++)
+      UpdateOffset(dirty, include_components, &old_values[i], attributes[i]);
   }
 
   DOLPHIN_FORCE_INLINE void SetVertexFormat(u32 components, const PortableVertexDeclaration& format)
@@ -103,13 +99,13 @@ public:
     UpdateValue(&dirty, &constants.vertex_stride, format.stride / 4);
     UpdateOffset(&dirty, true, &constants.vertex_offset_position, format.position);
     UpdateOffset(&dirty, false, &constants.vertex_offset_posmtx, format.posmtx);
-    UpdateOffsets(&dirty, true, &constants.vertex_offset_texcoords, format.texcoords);
-    UpdateOffsets(&dirty, false, &constants.vertex_offset_colors, format.colors);
-    UpdateOffsets(&dirty, false, &constants.vertex_offset_normals, format.normals);
+    UpdateOffsets(&dirty, true, constants.vertex_offset_texcoords, &format.texcoords[0], 8);
+    UpdateOffsets(&dirty, false, constants.vertex_offset_colors, &format.colors[0], 2);
+    UpdateOffsets(&dirty, false, constants.vertex_offset_normals, &format.normals[0], 3);
   }
 
 private:
-  alignas(16) std::array<float, 16> m_projection_matrix;
+  alignas(16) float m_projection_matrix[16];
 
   // track changes
   bool m_projection_graphics_mod_change = false;

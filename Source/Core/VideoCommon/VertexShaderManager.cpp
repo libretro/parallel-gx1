@@ -3,7 +3,6 @@
 
 #include "VideoCommon/VertexShaderManager.h"
 
-#include <array>
 #include <cmath>
 #include <cstring>
 #include <iterator>
@@ -32,9 +31,8 @@ LibretroVRCamera g_libretro_vr_camera;
 // and reflections draw into smaller viewports and keep the game's projection.
 static bool IsLibretroVRScreenViewport()
 {
-  return g_libretro_vr_camera.enabled &&
-         std::abs(2.0f * xfmem.viewport.wd) >= EFB_WIDTH * 0.75f &&
-         std::abs(2.0f * xfmem.viewport.ht) >= EFB_HEIGHT * 0.5f;
+  return g_libretro_vr_camera.enabled && fabsf(2.0f * xfmem.viewport.wd) >= EFB_WIDTH * 0.75f &&
+         fabsf(2.0f * xfmem.viewport.ht) >= EFB_HEIGHT * 0.5f;
 }
 
 static bool UseLibretroVRCamera()
@@ -67,7 +65,8 @@ void VertexShaderManager::Init()
 
   constants = {};
 
-  m_projection_matrix = Common::Matrix44::Identity().data;
+  memcpy(m_projection_matrix, Common::Matrix44::Identity().data.data(),
+         sizeof(m_projection_matrix));
 
   dirty = true;
 }
@@ -142,8 +141,8 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
   if (use_vr_camera)
   {
     // Remember how wide the game's camera sees, for the 2D screen.
-    vr.game_tan_x = 1.0f / std::abs(m_projection_matrix[0]);
-    vr.game_tan_y = 1.0f / std::abs(m_projection_matrix[5]);
+    vr.game_tan_x = 1.0f / fabsf(m_projection_matrix[0]);
+    vr.game_tan_y = 1.0f / fabsf(m_projection_matrix[5]);
 
     // Draw with the headset's field of view, keeping the sign of a mirrored projection.
     const float sign_x = rawProjection[0] < 0.0f ? -1.0f : 1.0f;
@@ -173,7 +172,8 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
   vr.applied = use_vr_camera;
   vr.screen_applied = use_vr_screen;
 
-  auto corrected_matrix = Common::Matrix44::FromArray(m_projection_matrix);
+  Common::Matrix44 corrected_matrix;
+  memcpy(corrected_matrix.data.data(), m_projection_matrix, sizeof(m_projection_matrix));
 
   if (use_vr_camera)
     corrected_matrix *= g_libretro_vr_camera.view;
@@ -189,7 +189,7 @@ void VertexShaderManager::SetProjectionMatrix(XFStateManager& xf_state_manager)
   {
     xf_state_manager.ResetProjection();
     auto corrected_matrix = LoadProjectionMatrix();
-    memcpy(constants.projection.data(), corrected_matrix.data.data(), 4 * sizeof(float4));
+    memcpy(constants.projection, corrected_matrix.data.data(), 4 * sizeof(float4));
   }
 }
 
@@ -235,7 +235,10 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
     const float g = (g_ActiveConfig.iMissingColorValue >> 16) & 0xFF;
     const float r = (g_ActiveConfig.iMissingColorValue >> 24) & 0xFF;
     constants.missing_color_hex = g_ActiveConfig.iMissingColorValue;
-    constants.missing_color_value = {r / 255, g / 255, b / 255, a / 255};
+    constants.missing_color_value[0] = r / 255;
+    constants.missing_color_value[1] = g / 255;
+    constants.missing_color_value[2] = b / 255;
+    constants.missing_color_value[3] = a / 255;
 
     dirty = true;
   }
@@ -246,7 +249,7 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
   {
     int startn = per_vertex_transform_matrix_changes[0] / 4;
     int endn = (per_vertex_transform_matrix_changes[1] + 3) / 4;
-    memcpy(constants.transformmatrices[startn].data(), &xfmem.posMatrices[startn * 4],
+    memcpy(constants.transformmatrices[startn], &xfmem.posMatrices[startn * 4],
            (endn - startn) * sizeof(float4));
     dirty = true;
     xf_state_manager.ResetPerVertexTransformMatrixChanges();
@@ -260,7 +263,7 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
     int endn = (per_vertex_normal_matrices_changed[1] + 2) / 3;
     for (int i = startn; i < endn; i++)
     {
-      memcpy(constants.normalmatrices[i].data(), &xfmem.normalMatrices[3 * i], 12);
+      memcpy(constants.normalmatrices[i], &xfmem.normalMatrices[3 * i], 12);
     }
     dirty = true;
     xf_state_manager.ResetPerVertexNormalMatrixChanges();
@@ -271,7 +274,7 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
   {
     int startn = post_transform_matrices_changed[0] / 4;
     int endn = (post_transform_matrices_changed[1] + 3) / 4;
-    memcpy(constants.posttransformmatrices[startn].data(), &xfmem.postMatrices[startn * 4],
+    memcpy(constants.posttransformmatrices[startn], &xfmem.postMatrices[startn * 4],
            (endn - startn) * sizeof(float4));
     dirty = true;
     xf_state_manager.ResetPostTransformMatrixChanges();
@@ -357,26 +360,26 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
     const float* norm =
         &xfmem.normalMatrices[3 * (g_main_cp_state.matrix_index_a.PosNormalMtxIdx & 31)];
 
-    memcpy(constants.posnormalmatrix.data(), pos, 3 * sizeof(float4));
-    memcpy(constants.posnormalmatrix[3].data(), norm, 3 * sizeof(float));
-    memcpy(constants.posnormalmatrix[4].data(), norm + 3, 3 * sizeof(float));
-    memcpy(constants.posnormalmatrix[5].data(), norm + 6, 3 * sizeof(float));
+    memcpy(constants.posnormalmatrix, pos, 3 * sizeof(float4));
+    memcpy(constants.posnormalmatrix[3], norm, 3 * sizeof(float));
+    memcpy(constants.posnormalmatrix[4], norm + 3, 3 * sizeof(float));
+    memcpy(constants.posnormalmatrix[5], norm + 6, 3 * sizeof(float));
     dirty = true;
   }
 
   if (xf_state_manager.DidTexMatrixAChange())
   {
     xf_state_manager.ResetTexMatrixAChange();
-    const std::array<const float*, 4> pos_matrix_ptrs{
+    const float* const pos_matrix_ptrs[4] = {
         &xfmem.posMatrices[g_main_cp_state.matrix_index_a.Tex0MtxIdx * 4],
         &xfmem.posMatrices[g_main_cp_state.matrix_index_a.Tex1MtxIdx * 4],
         &xfmem.posMatrices[g_main_cp_state.matrix_index_a.Tex2MtxIdx * 4],
         &xfmem.posMatrices[g_main_cp_state.matrix_index_a.Tex3MtxIdx * 4],
     };
 
-    for (size_t i = 0; i < pos_matrix_ptrs.size(); ++i)
+    for (size_t i = 0; i < 4; ++i)
     {
-      memcpy(constants.texmatrices[3 * i].data(), pos_matrix_ptrs[i], 3 * sizeof(float4));
+      memcpy(constants.texmatrices[3 * i], pos_matrix_ptrs[i], 3 * sizeof(float4));
     }
     dirty = true;
   }
@@ -384,16 +387,16 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
   if (xf_state_manager.DidTexMatrixBChange())
   {
     xf_state_manager.ResetTexMatrixBChange();
-    const std::array<const float*, 4> pos_matrix_ptrs{
+    const float* const pos_matrix_ptrs[4] = {
         &xfmem.posMatrices[g_main_cp_state.matrix_index_b.Tex4MtxIdx * 4],
         &xfmem.posMatrices[g_main_cp_state.matrix_index_b.Tex5MtxIdx * 4],
         &xfmem.posMatrices[g_main_cp_state.matrix_index_b.Tex6MtxIdx * 4],
         &xfmem.posMatrices[g_main_cp_state.matrix_index_b.Tex7MtxIdx * 4],
     };
 
-    for (size_t i = 0; i < pos_matrix_ptrs.size(); ++i)
+    for (size_t i = 0; i < 4; ++i)
     {
-      memcpy(constants.texmatrices[3 * i + 12].data(), pos_matrix_ptrs[i], 3 * sizeof(float4));
+      memcpy(constants.texmatrices[3 * i + 12], pos_matrix_ptrs[i], 3 * sizeof(float4));
     }
     dirty = true;
   }
@@ -490,7 +493,7 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
         projection_actions[i].actions[a]->OnProjection(&projection);
     }
 
-    memcpy(constants.projection.data(), corrected_matrix.data.data(), 4 * sizeof(float4));
+    memcpy(constants.projection, corrected_matrix.data.data(), 4 * sizeof(float4));
     dirty = true;
   }
 
