@@ -16,6 +16,7 @@
 #endif
 
 #include "Common/CommonTypes.h"
+#include "Common/IOFile.h"
 
 class PointerWrap;
 
@@ -212,35 +213,40 @@ private:
 class FileSystem
 {
 public:
-  virtual ~FileSystem() = default;
+  /// The host's file system, rooted at root_path, as the NAND.
+  ///
+  /// Ignores metadata like permissions, attributes and various checks and also
+  /// sometimes returns wrong information because metadata is not available.
+  explicit FileSystem(std::string root_path);
+  ~FileSystem();
 
-  virtual void DoState(PointerWrap& p) = 0;
+  void DoState(PointerWrap& p);
 
   /// Format the file system.
-  virtual ResultCode Format(Uid uid) = 0;
+  ResultCode Format(Uid uid);
 
   /// Get a file descriptor for accessing a file. The FD will be automatically closed after use.
-  virtual Result<FileHandle> OpenFile(Uid uid, Gid gid, const std::string& path, Mode mode) = 0;
+  Result<FileHandle> OpenFile(Uid uid, Gid gid, const std::string& path, Mode mode);
   /// Create a file if it doesn't exist and open it in read/write mode.
   Result<FileHandle> CreateAndOpenFile(Uid uid, Gid gid, const std::string& path, Modes modes);
   /// Close a file descriptor.
-  virtual ResultCode Close(Fd fd) = 0;
+  ResultCode Close(Fd fd);
   /// Read `size` bytes from the file descriptor. Returns the number of bytes read.
-  virtual Result<u32> ReadBytesFromFile(Fd fd, u8* ptr, u32 size) = 0;
+  Result<u32> ReadBytesFromFile(Fd fd, u8* ptr, u32 size);
   /// Write `size` bytes to the file descriptor. Returns the number of bytes written.
-  virtual Result<u32> WriteBytesToFile(Fd fd, const u8* ptr, u32 size) = 0;
+  Result<u32> WriteBytesToFile(Fd fd, const u8* ptr, u32 size);
   /// Reposition the file offset for a file descriptor.
-  virtual Result<u32> SeekFile(Fd fd, u32 offset, SeekMode mode) = 0;
+  Result<u32> SeekFile(Fd fd, u32 offset, SeekMode mode);
   /// Get status for a file descriptor.
   /// Guaranteed to succeed for a valid file descriptor.
-  virtual Result<FileStatus> GetFileStatus(Fd fd) = 0;
+  Result<FileStatus> GetFileStatus(Fd fd);
 
   /// Create a file with the specified path and metadata.
-  virtual ResultCode CreateFile(Uid caller_uid, Gid caller_gid, const std::string& path,
-                                FileAttribute attribute, Modes modes) = 0;
+  ResultCode CreateFile(Uid caller_uid, Gid caller_gid, const std::string& path,
+                        FileAttribute attribute, Modes modes);
   /// Create a directory with the specified path and metadata.
-  virtual ResultCode CreateDirectory(Uid caller_uid, Gid caller_gid, const std::string& path,
-                                     FileAttribute attribute, Modes modes) = 0;
+  ResultCode CreateDirectory(Uid caller_uid, Gid caller_gid, const std::string& path,
+                             FileAttribute attribute, Modes modes);
 
   /// Create any parent directories for a path with the specified metadata.
   /// Example: "/a/b" to create directory /a; "/a/b/" to create directories /a and /a/b
@@ -248,32 +254,105 @@ public:
                             FileAttribute attribute, Modes modes);
 
   /// Delete a file or directory with the specified path.
-  virtual ResultCode Delete(Uid caller_uid, Gid caller_gid, const std::string& path) = 0;
+  ResultCode Delete(Uid caller_uid, Gid caller_gid, const std::string& path);
   /// Rename a file or directory with the specified path.
-  virtual ResultCode Rename(Uid caller_uid, Gid caller_gid, const std::string& old_path,
-                            const std::string& new_path) = 0;
+  ResultCode Rename(Uid caller_uid, Gid caller_gid, const std::string& old_path,
+                    const std::string& new_path);
 
   /// List the children of a directory (non-recursively).
-  virtual Result<std::vector<std::string>> ReadDirectory(Uid caller_uid, Gid caller_gid,
-                                                         const std::string& path) = 0;
+  Result<std::vector<std::string>> ReadDirectory(Uid caller_uid, Gid caller_gid,
+                                                 const std::string& path);
 
   /// Get metadata about a file.
-  virtual Result<Metadata> GetMetadata(Uid caller_uid, Gid caller_gid, const std::string& path) = 0;
+  Result<Metadata> GetMetadata(Uid caller_uid, Gid caller_gid, const std::string& path);
   /// Set metadata for a file.
-  virtual ResultCode SetMetadata(Uid caller_uid, const std::string& path, Uid uid, Gid gid,
-                                 FileAttribute attribute, Modes modes) = 0;
+  ResultCode SetMetadata(Uid caller_uid, const std::string& path, Uid uid, Gid gid,
+                         FileAttribute attribute, Modes modes);
 
   /// Get usage information about the NAND (block size, cluster and inode counts).
-  virtual Result<NandStats> GetNandStats() = 0;
+  Result<NandStats> GetNandStats();
   /// Get usage information about a directory (used cluster and inode counts).
-  virtual Result<DirectoryStats> GetDirectoryStats(const std::string& path) = 0;
+  Result<DirectoryStats> GetDirectoryStats(const std::string& path);
 
   /// Like GetDirectoryStats() but not limited to the actual 512 MB NAND limit.
-  virtual Result<ExtendedDirectoryStats> GetExtendedDirectoryStats(const std::string& path) = 0;
+  Result<ExtendedDirectoryStats> GetExtendedDirectoryStats(const std::string& path);
 
 protected:
   void DoStateWriteOrMeasure(PointerWrap& p, const std::string& directory_path);
   void DoStateRead(PointerWrap& p, const std::string& directory_path);
+
+private:
+  struct FstEntry
+  {
+    bool CheckPermission(Uid uid, Gid gid, Mode requested_mode) const;
+    std::string name;
+    Metadata data{};
+    /// Children of this FST entry. Only valid for directories.
+    ///
+    /// We use a vector rather than a list here because iterating over children
+    /// happens a lot more often than removals.
+    /// Newly created entries are added at the end.
+    std::vector<FstEntry> children;
+  };
+
+  struct Handle
+  {
+    bool opened = false;
+    Mode mode = Mode::None;
+    std::string wii_path;
+    /// index into m_host_files, -1 when none
+    int host_file = -1;
+    u32 file_offset = 0;
+  };
+  /// One host file shared by every guest handle open on the same path, so all
+  /// accesses to it are strongly ordered like on the Wii.
+  struct HostFile
+  {
+    File::IOFile file;
+    std::string host_path;
+    u32 refs = 0;
+  };
+  enum
+  {
+    NUM_HANDLES = 16
+  };
+  Handle* AssignFreeHandle();
+  File::IOFile* GetHostFile(const Handle* handle);
+  void CloseHandle(Handle* handle);
+  void CloseAllHandles();
+  Handle* GetHandleFromFd(Fd fd);
+  Fd ConvertHandleToFd(const Handle* handle) const;
+
+  std::string BuildFilename(const std::string& wii_path) const;
+  int OpenHostFile(const std::string& host_path);
+  void ReleaseHostFile(int index);
+
+  ResultCode CreateFileOrDirectory(Uid uid, Gid gid, const std::string& path,
+                                   FileAttribute attribute, Modes modes, bool is_file);
+  bool IsFileOpened(const std::string& path) const;
+  bool IsDirectoryInUse(const std::string& path) const;
+
+  std::string GetFstFilePath() const;
+  void ResetFst();
+  void LoadFst();
+  void SaveFst();
+  /// Get the FST entry for a file (or directory).
+  /// Automatically creates fallback entries for parents if they do not exist.
+  /// Returns nullptr if the path is invalid or the file does not exist.
+  FstEntry* GetFstEntryForPath(const std::string& path);
+
+  /// FST entry for the filesystem root.
+  ///
+  /// Note that unlike a real Wii's FST, ours is the single source of truth only for
+  /// filesystem metadata and ordering. File existence must be checked by querying
+  /// the host filesystem.
+  /// The reasons for this design are twofold: existing users do not have a FST
+  /// and we do not want FS to break if the user adds or removes files in their
+  /// filesystem root manually.
+  FstEntry m_root_entry{};
+  std::string m_root_path;
+  HostFile m_host_files[NUM_HANDLES];
+  Handle m_handles[NUM_HANDLES];
 };
 
 template <typename T>

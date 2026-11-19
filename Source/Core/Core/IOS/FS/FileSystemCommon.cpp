@@ -11,7 +11,7 @@
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
 #include "Core/IOS/Device.h"
-#include "Core/IOS/FS/HostBackend/FS.h"
+#include "Core/IOS/FS/FileSystem.h"
 
 namespace IOS::HLE::FS
 {
@@ -45,7 +45,7 @@ std::unique_ptr<FileSystem> MakeFileSystem(Location location)
 {
   const std::string nand_root =
       File::GetUserPath(location == Location::Session ? D_SESSION_WIIROOT_IDX : D_WIIROOT_IDX);
-  return std::make_unique<HostFileSystem>(nand_root);
+  return std::make_unique<FileSystem>(nand_root);
 }
 
 IOS::HLE::ReturnCode ConvertResult(ResultCode code)

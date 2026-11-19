@@ -1,7 +1,7 @@
 // Copyright 2018 Dolphin Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "Core/IOS/FS/HostBackend/FS.h"
+#include "Core/IOS/FS/FileSystem.h"
 
 #include <expected>
 
@@ -13,7 +13,7 @@
 namespace IOS::HLE::FS
 {
 // This isn't theadsafe, but it's only called from the CPU thread.
-int HostFileSystem::OpenHostFile(const std::string& host_path)
+int FileSystem::OpenHostFile(const std::string& host_path)
 {
   // On the wii, all file operations are strongly ordered.
   // If a game opens the same file twice (or 8 times, looking at you PokePark Wii)
@@ -76,7 +76,7 @@ int HostFileSystem::OpenHostFile(const std::string& host_path)
   return free_index;
 }
 
-void HostFileSystem::ReleaseHostFile(int index)
+void FileSystem::ReleaseHostFile(int index)
 {
   if (index < 0 || index >= NUM_HANDLES || !m_host_files[index].refs)
     return;
@@ -88,27 +88,27 @@ void HostFileSystem::ReleaseHostFile(int index)
   host_file.host_path.clear();
 }
 
-File::IOFile* HostFileSystem::GetHostFile(const Handle* handle)
+File::IOFile* FileSystem::GetHostFile(const Handle* handle)
 {
   if (handle->host_file < 0)
     return nullptr;
   return &m_host_files[handle->host_file].file;
 }
 
-void HostFileSystem::CloseHandle(Handle* handle)
+void FileSystem::CloseHandle(Handle* handle)
 {
   ReleaseHostFile(handle->host_file);
   *handle = Handle{};
 }
 
-void HostFileSystem::CloseAllHandles()
+void FileSystem::CloseAllHandles()
 {
   int i;
   for (i = 0; i < NUM_HANDLES; i++)
     CloseHandle(&m_handles[i]);
 }
 
-Result<FileHandle> HostFileSystem::OpenFile(Uid, Gid, const std::string& path, Mode mode)
+Result<FileHandle> FileSystem::OpenFile(Uid, Gid, const std::string& path, Mode mode)
 {
   Handle* handle = AssignFreeHandle();
   if (!handle)
@@ -140,7 +140,7 @@ Result<FileHandle> HostFileSystem::OpenFile(Uid, Gid, const std::string& path, M
   return FileHandle{this, ConvertHandleToFd(handle)};
 }
 
-ResultCode HostFileSystem::Close(Fd fd)
+ResultCode FileSystem::Close(Fd fd)
 {
   Handle* handle = GetHandleFromFd(fd);
   if (!handle)
@@ -151,7 +151,7 @@ ResultCode HostFileSystem::Close(Fd fd)
   return ResultCode::Success;
 }
 
-Result<u32> HostFileSystem::ReadBytesFromFile(Fd fd, u8* ptr, u32 count)
+Result<u32> FileSystem::ReadBytesFromFile(Fd fd, u8* ptr, u32 count)
 {
   Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
@@ -185,7 +185,7 @@ Result<u32> HostFileSystem::ReadBytesFromFile(Fd fd, u8* ptr, u32 count)
   return u32(actually_read);
 }
 
-Result<u32> HostFileSystem::WriteBytesToFile(Fd fd, const u8* ptr, u32 count)
+Result<u32> FileSystem::WriteBytesToFile(Fd fd, const u8* ptr, u32 count)
 {
   Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
@@ -204,7 +204,7 @@ Result<u32> HostFileSystem::WriteBytesToFile(Fd fd, const u8* ptr, u32 count)
   return count;
 }
 
-Result<u32> HostFileSystem::SeekFile(Fd fd, std::uint32_t offset, SeekMode mode)
+Result<u32> FileSystem::SeekFile(Fd fd, std::uint32_t offset, SeekMode mode)
 {
   Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
@@ -235,7 +235,7 @@ Result<u32> HostFileSystem::SeekFile(Fd fd, std::uint32_t offset, SeekMode mode)
   return handle->file_offset;
 }
 
-Result<FileStatus> HostFileSystem::GetFileStatus(Fd fd)
+Result<FileStatus> FileSystem::GetFileStatus(Fd fd)
 {
   const Handle* handle = GetHandleFromFd(fd);
   File::IOFile* const host_file = handle ? GetHostFile(handle) : nullptr;
@@ -248,7 +248,7 @@ Result<FileStatus> HostFileSystem::GetFileStatus(Fd fd)
   return status;
 }
 
-HostFileSystem::Handle* HostFileSystem::AssignFreeHandle()
+FileSystem::Handle* FileSystem::AssignFreeHandle()
 {
   int i;
   for (i = 0; i < NUM_HANDLES; i++)
@@ -264,14 +264,14 @@ HostFileSystem::Handle* HostFileSystem::AssignFreeHandle()
   return nullptr;
 }
 
-HostFileSystem::Handle* HostFileSystem::GetHandleFromFd(Fd fd)
+FileSystem::Handle* FileSystem::GetHandleFromFd(Fd fd)
 {
   if (fd >= NUM_HANDLES || !m_handles[fd].opened)
     return nullptr;
   return &m_handles[fd];
 }
 
-Fd HostFileSystem::ConvertHandleToFd(const Handle* handle) const
+Fd FileSystem::ConvertHandleToFd(const Handle* handle) const
 {
   return Fd(handle - m_handles);
 }
