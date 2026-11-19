@@ -160,7 +160,7 @@ class Arm64RegCache
 {
 public:
   Arm64RegCache(size_t guest_reg_count, bool is_fpr)
-      : m_is_fpr(is_fpr), m_guest_registers(guest_reg_count)
+      : m_is_fpr(is_fpr), m_num_guest_registers(static_cast<u32>(guest_reg_count))
   {
   }
   Arm64RegCache(const Arm64RegCache&) = delete;
@@ -276,6 +276,8 @@ protected:
   void FlushMostStaleRegister();
 
   // Lock a register
+  // The entry of host_reg, null when the cache does not hand it out
+  HostReg* FindHostReg(Arm64Gen::ARM64Reg host_reg);
   void LockRegister(Arm64Gen::ARM64Reg host_reg);
 
   // Unlock a register
@@ -290,8 +292,8 @@ protected:
 
   void IncrementAllUsed()
   {
-    for (auto& reg : m_guest_registers)
-      reg.IncrementLastUsed();
+    for (u32 i = 0; i < m_num_guest_registers; i++)
+      m_guest_registers[i].IncrementLastUsed();
   }
 
   JitArm64* m_jit = nullptr;
@@ -305,13 +307,16 @@ protected:
   // Float emitter
   std::unique_ptr<Arm64Gen::ARM64FloatEmitter> m_float_emit;
 
-  // Host side registers that hold the host registers in order of use
-  std::vector<HostReg> m_host_registers;
+  // Host side registers that hold the host registers in order of use, the first
+  // m_num_host_registers of them
+  HostReg m_host_registers[32];
+  u32 m_num_host_registers = 0;
 
-  // Our guest GPRs
+  // Our guest GPRs, the first m_num_guest_registers of them
   // PowerPC has 32 GPRs and 8 CRs
   // PowerPC also has 32 paired FPRs
-  std::vector<OpArg> m_guest_registers;
+  OpArg m_guest_registers[40];
+  const u32 m_num_guest_registers;
 
   // Register stats for the current block
   PPCAnalyst::BlockRegStats* m_reg_stats = nullptr;

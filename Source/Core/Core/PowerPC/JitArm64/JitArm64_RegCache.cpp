@@ -48,8 +48,9 @@ ARM64Reg Arm64RegCache::GetReg()
   if (GetUnlockedRegisterCount() == 0)
     FlushMostStaleRegister();
 
-  for (auto& it : m_host_registers)
+  for (u32 host_index = 0; host_index < m_num_host_registers; host_index++)
   {
+    HostReg& it = m_host_registers[host_index];
     if (!it.IsLocked())
     {
       it.Lock();
@@ -65,7 +66,7 @@ ARM64Reg Arm64RegCache::GetReg()
 
 void Arm64RegCache::UpdateLastUsed(BitSet32 regs_used)
 {
-  for (size_t i = 0; i < m_guest_registers.size(); ++i)
+  for (size_t i = 0; i < m_num_guest_registers; ++i)
   {
     OpArg& reg = m_guest_registers[i];
     if (i < 32 && regs_used[i])
@@ -78,28 +79,37 @@ void Arm64RegCache::UpdateLastUsed(BitSet32 regs_used)
 u32 Arm64RegCache::GetUnlockedRegisterCount() const
 {
   u32 unlocked_registers = 0;
-  for (const auto& it : m_host_registers)
+  for (u32 host_index = 0; host_index < m_num_host_registers; host_index++)
   {
+    const HostReg& it = m_host_registers[host_index];
     if (!it.IsLocked())
       ++unlocked_registers;
   }
   return unlocked_registers;
 }
 
+HostReg* Arm64RegCache::FindHostReg(ARM64Reg host_reg)
+{
+  for (u32 i = 0; i < m_num_host_registers; i++)
+  {
+    if (m_host_registers[i].GetReg() == host_reg)
+      return &m_host_registers[i];
+  }
+  return nullptr;
+}
+
 void Arm64RegCache::LockRegister(ARM64Reg host_reg)
 {
-  auto reg = std::ranges::find(m_host_registers, host_reg, &HostReg::GetReg);
-  ASSERT_MSG(DYNA_REC, reg != m_host_registers.end(),
-             "Don't try locking a register that isn't in the cache. Reg %d",
+  HostReg* const reg = FindHostReg(host_reg);
+  ASSERT_MSG(DYNA_REC, reg, "Don't try locking a register that isn't in the cache. Reg %d",
              static_cast<int>(host_reg));
   reg->Lock();
 }
 
 void Arm64RegCache::UnlockRegister(ARM64Reg host_reg)
 {
-  auto reg = std::ranges::find(m_host_registers, host_reg, &HostReg::GetReg);
-  ASSERT_MSG(DYNA_REC, reg != m_host_registers.end(),
-             "Don't try unlocking a register that isn't in the cache. Reg %d",
+  HostReg* const reg = FindHostReg(host_reg);
+  ASSERT_MSG(DYNA_REC, reg, "Don't try unlocking a register that isn't in the cache. Reg %d",
              static_cast<int>(host_reg));
   reg->Unlock();
 }
@@ -109,7 +119,7 @@ void Arm64RegCache::FlushMostStaleRegister()
   size_t most_stale_preg = 0;
   u32 most_stale_amount = 0;
 
-  for (size_t i = 0; i < m_guest_registers.size(); ++i)
+  for (size_t i = 0; i < m_num_guest_registers; ++i)
   {
     const auto& reg = m_guest_registers[i];
     const u32 last_used = reg.GetLastUsed();
@@ -478,7 +488,7 @@ void Arm64GPRCache::BindForWrite(size_t index, bool will_read, bool will_write)
 void Arm64GPRCache::GetAllocationOrder()
 {
   // Callee saved registers first in hopes that we will keep everything stored there first
-  static constexpr auto allocation_order = {
+  static constexpr ARM64Reg allocation_order[] = {
       // Callee saved
       ARM64Reg::W27,
       ARM64Reg::W26,
@@ -512,15 +522,19 @@ void Arm64GPRCache::GetAllocationOrder()
       ARM64Reg::W30,
   };
 
+  static_assert(sizeof(allocation_order) / sizeof(allocation_order[0]) <=
+                sizeof(m_host_registers) / sizeof(m_host_registers[0]));
+  m_num_host_registers = 0;
   for (ARM64Reg reg : allocation_order)
-    m_host_registers.push_back(HostReg(reg));
+    m_host_registers[m_num_host_registers++] = HostReg(reg);
 }
 
 BitSet32 Arm64GPRCache::GetCallerSavedUsed() const
 {
   BitSet32 registers(0);
-  for (const auto& it : m_host_registers)
+  for (u32 host_index = 0; host_index < m_num_host_registers; host_index++)
   {
+    const HostReg& it = m_host_registers[host_index];
     if (it.IsLocked() && IsCallerSaved(it.GetReg()))
       registers[DecodeReg(it.GetReg())] = true;
   }
@@ -540,7 +554,7 @@ BitSet32 Arm64GPRCache::GetDirtyGPRs() const
 
 void Arm64GPRCache::FlushByHost(ARM64Reg host_reg, ARM64Reg tmp_reg)
 {
-  for (size_t i = 0; i < m_guest_registers.size(); ++i)
+  for (size_t i = 0; i < m_num_guest_registers; ++i)
   {
     const OpArg& reg = m_guest_registers[i];
     if (reg.IsInHostRegister() && DecodeReg(reg.GetReg()) == DecodeReg(host_reg))
@@ -561,7 +575,7 @@ Arm64FPRCache::Arm64FPRCache() : Arm64RegCache(GUEST_FPR_COUNT, true)
 void Arm64FPRCache::Flush(FlushMode mode, ARM64Reg tmp_reg,
                           IgnoreDiscardedRegisters ignore_discarded_registers)
 {
-  for (size_t i = 0; i < m_guest_registers.size(); ++i)
+  for (size_t i = 0; i < m_num_guest_registers; ++i)
   {
     if (m_guest_registers[i].IsInHostRegister())
     {
@@ -786,7 +800,7 @@ ARM64Reg Arm64FPRCache::RW(size_t preg, RegType type, bool set_dirty)
 
 void Arm64FPRCache::GetAllocationOrder()
 {
-  static constexpr auto allocation_order = {
+  static constexpr ARM64Reg allocation_order[] = {
       // Callee saved
       ARM64Reg::Q8,
       ARM64Reg::Q9,
@@ -824,13 +838,16 @@ void Arm64FPRCache::GetAllocationOrder()
       ARM64Reg::Q0,
   };
 
+  static_assert(sizeof(allocation_order) / sizeof(allocation_order[0]) <=
+                sizeof(m_host_registers) / sizeof(m_host_registers[0]));
+  m_num_host_registers = 0;
   for (ARM64Reg reg : allocation_order)
-    m_host_registers.push_back(HostReg(reg));
+    m_host_registers[m_num_host_registers++] = HostReg(reg);
 }
 
 void Arm64FPRCache::FlushByHost(ARM64Reg host_reg, ARM64Reg tmp_reg)
 {
-  for (size_t i = 0; i < m_guest_registers.size(); ++i)
+  for (size_t i = 0; i < m_num_guest_registers; ++i)
   {
     const OpArg& reg = m_guest_registers[i];
 
@@ -849,8 +866,9 @@ bool Arm64FPRCache::IsCallerSaved(ARM64Reg reg) const
 
 bool Arm64FPRCache::IsTopHalfUsed(ARM64Reg reg) const
 {
-  for (const OpArg& r : m_guest_registers)
+  for (u32 i = 0; i < m_num_guest_registers; i++)
   {
+    const OpArg& r = m_guest_registers[i];
     if (r.IsInHostRegister() && DecodeReg(r.GetReg()) == DecodeReg(reg))
       return r.GetFPRType() == RegType::Register;
   }
@@ -984,8 +1002,9 @@ void Arm64FPRCache::FlushRegisters(BitSet32 regs, FlushMode mode, ARM64Reg tmp_r
 BitSet32 Arm64FPRCache::GetCallerSavedUsed() const
 {
   BitSet32 registers(0);
-  for (const auto& it : m_host_registers)
+  for (u32 host_index = 0; host_index < m_num_host_registers; host_index++)
   {
+    const HostReg& it = m_host_registers[host_index];
     if (it.IsLocked() && (IsCallerSaved(it.GetReg()) || IsTopHalfUsed(it.GetReg())))
       registers[DecodeReg(it.GetReg())] = true;
   }
