@@ -1975,7 +1975,7 @@ void MMU::UpdateFakeMMUBat(BatTable& bat_table, u32 start_addr)
 
 void MMU::DBATUpdated()
 {
-  m_dbat_table = {};
+  memset(m_dbat_table, 0, sizeof(m_dbat_table));
   UpdateBATs(m_dbat_table, SPR_DBAT0U);
   bool extended_bats = m_system.IsWii() && HID4(m_ppc_state).SBE;
   if (extended_bats)
@@ -2003,7 +2003,7 @@ void MMU::DBATUpdated()
 
 void MMU::IBATUpdated()
 {
-  m_ibat_table = {};
+  memset(m_ibat_table, 0, sizeof(m_ibat_table));
   UpdateBATs(m_ibat_table, SPR_IBAT0U);
   bool extended_bats = m_system.IsWii() && HID4(m_ppc_state).SBE;
   if (extended_bats)

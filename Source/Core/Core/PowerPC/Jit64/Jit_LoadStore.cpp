@@ -323,7 +323,7 @@ void Jit64::dcbx(UGeckoInstruction inst)
   if (m_ppc_state.feature_flags & FEATURE_FLAG_MSR_IR)
   {
     // Translate effective address to physical address.
-    bat_lookup_failed = BATAddressLookup(addr, tmp, m_jit.m_mmu.GetIBATTable().data());
+    bat_lookup_failed = BATAddressLookup(addr, tmp, m_jit.m_mmu.GetIBATTable());
     MOV(32, R(tmp), R(effective_address));
     AND(32, R(tmp), Imm32(PowerPC::BAT_PAGE_SIZE - 1));
     AND(32, R(addr), Imm32(~(PowerPC::BAT_PAGE_SIZE - 1)));
@@ -427,7 +427,7 @@ void Jit64::dcbz(UGeckoInstruction inst)
   if (emit_fast_path)
   {
     // Perform lookup to see if we can use fast path.
-    MOV(64, R(RSCRATCH2), ImmPtr(m_mmu.GetDBATTable().data()));
+    MOV(64, R(RSCRATCH2), ImmPtr(m_mmu.GetDBATTable()));
     PUSH(RSCRATCH);
     SHR(32, R(RSCRATCH), Imm8(PowerPC::BAT_INDEX_SHIFT));
     TEST(32, MComplex(RSCRATCH2, RSCRATCH, SCALE_4, 0), Imm32(PowerPC::BAT_PHYSICAL_BIT));

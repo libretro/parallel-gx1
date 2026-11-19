@@ -69,7 +69,7 @@ constexpr u32 BAT_MAPPED_BIT = 0x1;
 constexpr u32 BAT_PHYSICAL_BIT = 0x2;
 constexpr u32 BAT_WI_BIT = 0x4;
 constexpr u32 BAT_RESULT_MASK = UINT32_C(~0x7);
-using BatTable = std::array<u32, BAT_PAGE_COUNT>;  // 128 KB
+typedef u32 BatTable[BAT_PAGE_COUNT];  // 128 KB
 
 constexpr size_t HW_PAGE_SIZE = 4096;
 constexpr size_t HW_PAGE_MASK = HW_PAGE_SIZE - 1;

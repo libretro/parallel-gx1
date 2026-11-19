@@ -361,7 +361,7 @@ FixupBranch JitArm64::CheckIfSafeAddress(Arm64Gen::ARM64Reg addr, Arm64Gen::ARM6
 {
   tmp2 = EncodeRegTo64(tmp2);
 
-  MOVP2R(tmp2, m_mmu.GetDBATTable().data());
+  MOVP2R(tmp2, m_mmu.GetDBATTable());
   LSR(tmp1, addr, PowerPC::BAT_INDEX_SHIFT);
   LDR(tmp1, tmp2, ArithOption(tmp1, true));
   FixupBranch pass = TBNZ(tmp1, MathUtil::IntLog2(PowerPC::BAT_PHYSICAL_BIT));
@@ -792,8 +792,7 @@ void JitArm64::dcbx(UGeckoInstruction inst)
   FixupBranch bat_lookup_failed;
   if (m_ppc_state.feature_flags & FEATURE_FLAG_MSR_IR)
   {
-    bat_lookup_failed =
-        BATAddressLookup(physical_addr, effective_addr, WA, m_mmu.GetIBATTable().data());
+    bat_lookup_failed = BATAddressLookup(physical_addr, effective_addr, WA, m_mmu.GetIBATTable());
     BFI(physical_addr, effective_addr, 0, PowerPC::BAT_INDEX_SHIFT);
     // Check whether a JIT cache line needs to be invalidated.
     LSR(physical_addr, physical_addr, 5 + 5);  // >> 5 for cache line size, >> 5 for width of bitset

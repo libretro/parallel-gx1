@@ -125,7 +125,7 @@ FixupBranch EmuCodeBlock::CheckIfSafeAddress(const OpArg& reg_value, X64Reg reg_
     MOV(32, R(RSCRATCH_EXTRA), R(reg_addr));
 
   // Perform lookup to see if we can use fast path.
-  MOV(64, R(RSCRATCH), ImmPtr(m_jit.m_mmu.GetDBATTable().data()));
+  MOV(64, R(RSCRATCH), ImmPtr(m_jit.m_mmu.GetDBATTable()));
   SHR(32, R(RSCRATCH_EXTRA), Imm8(PowerPC::BAT_INDEX_SHIFT));
   TEST(32, MComplex(RSCRATCH, RSCRATCH_EXTRA, SCALE_4, 0), Imm32(PowerPC::BAT_PHYSICAL_BIT));
 

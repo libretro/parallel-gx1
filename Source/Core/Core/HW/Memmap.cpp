@@ -218,7 +218,7 @@ void MemoryManager::Init()
   }
 
   m_physical_page_mappings_base = reinterpret_cast<u8*>(m_physical_page_mappings.data());
-  m_logical_page_mappings_base = reinterpret_cast<u8*>(m_logical_page_mappings.data());
+  m_logical_page_mappings_base = reinterpret_cast<u8*>(m_logical_page_mappings);
   /* every view is of a segment the system just made, which it fills with zeroes: the memory is
    * not written here, so no page is touched before the game touches it */
 
@@ -316,9 +316,9 @@ void MemoryManager::UpdateDBATMappings(const PowerPC::BatTable& dbat_table)
 
   RemoveAllPageTableMappings();
 
-  m_logical_page_mappings.fill(nullptr);
+  memset(m_logical_page_mappings, 0, sizeof(m_logical_page_mappings));
 
-  for (u32 i = 0; i < dbat_table.size(); ++i)
+  for (u32 i = 0; i < PowerPC::BAT_PAGE_COUNT; ++i)
   {
     if (dbat_table[i] & PowerPC::BAT_PHYSICAL_BIT)
     {
@@ -327,7 +327,7 @@ void MemoryManager::UpdateDBATMappings(const PowerPC::BatTable& dbat_table)
       u32 translated_address = dbat_table[i] & PowerPC::BAT_RESULT_MASK;
 
 #ifndef IPHONEOS
-      while (i + 1 < dbat_table.size())
+      while (i + 1 < PowerPC::BAT_PAGE_COUNT)
       {
         if (!(dbat_table[i + 1] & PowerPC::BAT_PHYSICAL_BIT))
         {

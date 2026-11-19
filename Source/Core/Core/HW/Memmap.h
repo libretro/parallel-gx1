@@ -285,7 +285,7 @@ private:
   u32 m_page_table_view_counts[PAGE_BLOCKS]{};
 
   std::array<void*, PowerPC::BAT_PAGE_COUNT> m_physical_page_mappings{};
-  std::array<void*, PowerPC::BAT_PAGE_COUNT> m_logical_page_mappings{};
+  void* m_logical_page_mappings[PowerPC::BAT_PAGE_COUNT] = {};
 
   // If the host page size is larger than the guest page size, these two tables keep the
   // translation of each guest page, INVALID_MAPPING when none, to tell which guest pages can be
