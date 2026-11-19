@@ -47,7 +47,8 @@ static struct mCore *gbp_core;
 static struct mRumbleIntegrator gbp_rumble;
 /* mGBA draws here; a line it does not redraw keeps what it drew */
 static mColor gbp_video[GBP_HLE_MAX_WIDTH * GBP_HLE_MAX_HEIGHT];
-/* the frontend's copy, blue in the low byte where mGBA has red */
+/* the frontend's copy when it lends no framebuffer, blue in the low byte
+ * where mGBA has red */
 static uint32_t gbp_frame[GBP_HLE_MAX_WIDTH * GBP_HLE_MAX_HEIGHT];
 static int16_t gbp_audio[GBP_HLE_AUDIO_FRAMES * 2];
 
@@ -302,7 +303,10 @@ void gbp_hle_get_av_info(struct retro_system_av_info *info)
 
 void gbp_hle_run(void)
 {
+   struct retro_framebuffer fb;
    struct mAudioBuffer *audio;
+   unsigned char *out;
+   size_t pitch;
    unsigned width;
    unsigned height;
    unsigned keys = 0;
@@ -327,12 +331,32 @@ void gbp_hle_run(void)
    gbp_core->runFrame(gbp_core);
 
    /* mGBA draws red in the low byte, the frontend wants blue there: the
-    * one pass that swaps them is the frontend's copy */
+    * one pass that swaps them writes the frontend's own framebuffer when it
+    * lends one, the core's copy when not. mGBA keeps drawing into its own:
+    * a line it does not redraw keeps what it drew, which a buffer the
+    * frontend may hand out anew each frame would not. */
    gbp_core->currentVideoSize(gbp_core, &width, &height);
+   memset(&fb, 0, sizeof(fb));
+   fb.width        = width;
+   fb.height       = height;
+   fb.access_flags = RETRO_MEMORY_ACCESS_WRITE;
+   if (gbp_environ_cb(RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER, &fb)
+         && fb.data && fb.format == RETRO_PIXEL_FORMAT_XRGB8888
+         && fb.width == width && fb.height == height
+         && fb.pitch >= width * sizeof(uint32_t))
+   {
+      out   = (unsigned char*)fb.data;
+      pitch = fb.pitch;
+   }
+   else
+   {
+      out   = (unsigned char*)gbp_frame;
+      pitch = GBP_HLE_MAX_WIDTH * sizeof(gbp_frame[0]);
+   }
    for (y = 0; y < height; y++)
    {
       const mColor *src = gbp_video + (size_t)y * GBP_HLE_MAX_WIDTH;
-      uint32_t *dst     = gbp_frame + (size_t)y * GBP_HLE_MAX_WIDTH;
+      uint32_t *dst     = (uint32_t*)(out + (size_t)y * pitch);
       unsigned x;
       for (x = 0; x < width; x++)
       {
@@ -341,8 +365,7 @@ void gbp_hle_run(void)
       }
    }
    if (gbp_video_cb)
-      gbp_video_cb(gbp_frame, width, height,
-            GBP_HLE_MAX_WIDTH * sizeof(gbp_frame[0]));
+      gbp_video_cb(out, width, height, pitch);
 
    audio = gbp_core->getAudioBuffer(gbp_core);
    for (;;)
