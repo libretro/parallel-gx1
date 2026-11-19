@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
 
 #include "Common/CommonTypes.h"
@@ -447,8 +446,8 @@ private:
   UVIFBInfoRegister m_xfb_info_bottom;
   UVIFBInfoRegister m_xfb_3d_info_top;  // Start making your stereoscopic demos! :p
   UVIFBInfoRegister m_xfb_3d_info_bottom;
-  std::array<UVIInterruptRegister, 4> m_interrupt_register{};
-  std::array<UVILatchRegister, 2> m_latch_register{};
+  UVIInterruptRegister m_interrupt_register[4] = {};
+  UVILatchRegister m_latch_register[2] = {};
   PictureConfigurationRegister m_picture_configuration;
   UVIHorizontalScaling m_horizontal_scaling;
   SVIFilterCoefTables m_filter_coef_tables;

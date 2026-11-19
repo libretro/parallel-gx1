@@ -4,9 +4,9 @@
 #include "Core/HW/VideoInterface.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -44,10 +44,10 @@ VideoInterfaceManager::~VideoInterfaceManager()
   Config::RemoveConfigChangedCallback(m_config_changed_callback_id);
 }
 
-static constexpr std::array<u32, 2> CLOCK_FREQUENCIES{{
+static const u32 CLOCK_FREQUENCIES[2] = {
     27000000,
     54000000,
-}};
+};
 
 static constexpr u32 NUM_HALF_LINES_FOR_SI_POLL = (7 * 2) + 1;  // this is how long an SI poll takes
 
@@ -146,7 +146,7 @@ void VideoInterfaceManager::Preset(bool _bNTSC)
   m_interrupt_register[2].Hex = 0;
   m_interrupt_register[3].Hex = 0;
 
-  m_latch_register = {};
+  memset(static_cast<void*>(m_latch_register), 0, sizeof(m_latch_register));
 
   m_picture_configuration.STD = 40;
   m_picture_configuration.WPL = 40;
@@ -204,7 +204,7 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     u16* ptr;
   };
 
-  std::array<MappedVar, 42> directly_mapped_vars{{
+  const MappedVar directly_mapped_vars[42] = {
       {VI_VERTICAL_TIMING, &m_vertical_timing_register.Hex},
       {VI_HORIZONTAL_TIMING_0_HI, &m_h_timing_0.Hi},
       {VI_HORIZONTAL_TIMING_0_LO, &m_h_timing_0.Lo},
@@ -247,16 +247,16 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
       {VI_FBWIDTH, &m_fb_width.Hex},
       {VI_BORDER_BLANK_END, &m_border_hblank.Lo},
       {VI_BORDER_BLANK_START, &m_border_hblank.Hi},
-  }};
+  };
 
   // Declare all the boilerplate direct MMIOs.
-  for (auto& mapped_var : directly_mapped_vars)
+  for (const MappedVar& mapped_var : directly_mapped_vars)
   {
     mmio->Register(base | mapped_var.addr, MMIO::DirectRead<u16>(mapped_var.ptr),
                    MMIO::DirectWrite<u16>(mapped_var.ptr));
   }
 
-  std::array<MappedVar, 8> update_params_on_read_vars{{
+  const MappedVar update_params_on_read_vars[8] = {
       {VI_VERTICAL_TIMING, &m_vertical_timing_register.Hex},
       {VI_HORIZONTAL_TIMING_0_HI, &m_h_timing_0.Hi},
       {VI_HORIZONTAL_TIMING_0_LO, &m_h_timing_0.Lo},
@@ -265,10 +265,10 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
       {VI_VBLANK_TIMING_EVEN_HI, &m_vblank_timing_even.Hi},
       {VI_VBLANK_TIMING_EVEN_LO, &m_vblank_timing_even.Lo},
       {VI_CLOCK, &m_clock},
-  }};
+  };
 
   // Declare all the MMIOs that update timing params.
-  for (auto& mapped_var : update_params_on_read_vars)
+  for (const MappedVar& mapped_var : update_params_on_read_vars)
   {
     mmio->Register(base | mapped_var.addr, MMIO::DirectRead<u16>(mapped_var.ptr),
                    MMIO::ComplexWrite<u16>([](Core::System& system, uintptr_t ctx, u32, u16 val) {
@@ -441,7 +441,8 @@ void VideoInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                    {
                      // shuffle2 clear all data, reset to default vals, and enter idle mode
                      vi.m_display_control_register.RST = 0;
-                     vi.m_interrupt_register = {};
+                     memset(static_cast<void*>(vi.m_interrupt_register), 0,
+                            sizeof(vi.m_interrupt_register));
                      vi.UpdateInterrupts();
                    }
 
@@ -812,12 +813,12 @@ u32 VideoInterfaceManager::GetTicksPerField() const
 
 void VideoInterfaceManager::LogField(FieldType field, u32 xfb_address) const
 {
-  static constexpr std::array<const char*, 2> field_type_names{{"Odd", "Even"}};
+  static const char* const field_type_names[2] = {"Odd", "Even"};
 
-  const std::array<const UVIVBlankTimingRegister*, 2> vert_timing{{
+  const UVIVBlankTimingRegister* const vert_timing[2] = {
       &m_vblank_timing_odd,
       &m_vblank_timing_even,
-  }};
+  };
 
   const auto field_index = static_cast<size_t>(field);
 
