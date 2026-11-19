@@ -139,6 +139,9 @@ void VertexLoaderARM64::ReadVertex(VertexComponentFormat attribute, ComponentFor
       m_float_emit.REV16(8, EncodeRegToDouble(coords), EncodeRegToDouble(coords));
       m_float_emit.SXTL(16, EncodeRegToDouble(coords), EncodeRegToDouble(coords));
       break;
+    default:
+      // the float formats are not below Float
+      break;
     }
 
     m_float_emit.SCVTF(32, coords, coords);
