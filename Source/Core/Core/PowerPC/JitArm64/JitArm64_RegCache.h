@@ -40,12 +40,9 @@ constexpr Arm64Gen::ARM64Reg DISPATCHER_PC = Arm64Gen::ARM64Reg::W26;
 #define PPCSTATE_OFF_ARRAY(elem, i)                                                                \
   (PPCSTATE_OFF(elem[0]) + sizeof(PowerPC::PowerPCState::elem[0]) * (i))
 
-#define PPCSTATE_OFF_STD_ARRAY(elem, i)                                                            \
-  (PPCSTATE_OFF(elem) + sizeof(PowerPC::PowerPCState::elem[0]) * (i))
-
 #define PPCSTATE_OFF_GPR(i) PPCSTATE_OFF_ARRAY(gpr, i)
 #define PPCSTATE_OFF_CR(i) PPCSTATE_OFF_ARRAY(cr.fields, i)
-#define PPCSTATE_OFF_SR(i) PPCSTATE_OFF_STD_ARRAY(sr, i)
+#define PPCSTATE_OFF_SR(i) PPCSTATE_OFF_ARRAY(sr, i)
 #define PPCSTATE_OFF_SPR(i) PPCSTATE_OFF_ARRAY(spr, i)
 
 static_assert(std::is_same_v<decltype(PowerPC::PowerPCState::ps[0]), PowerPC::PairedSingle&>);

@@ -55,17 +55,19 @@ constexpr size_t INST_TLB_INDEX = 1;
 
 struct TLBEntry
 {
-  using WayArray = std::array<u32, TLB_WAYS>;
-
   static constexpr u32 INVALID_TAG = 0xffffffff;
 
-  WayArray tag{INVALID_TAG, INVALID_TAG};
-  WayArray paddr{};
-  WayArray vsid{};
-  WayArray pte{};
+  u32 tag[TLB_WAYS] = {INVALID_TAG, INVALID_TAG};
+  u32 paddr[TLB_WAYS] = {};
+  u32 vsid[TLB_WAYS] = {};
+  u32 pte[TLB_WAYS] = {};
   u32 recent = 0;
 
-  void Invalidate() { tag.fill(INVALID_TAG); }
+  void Invalidate()
+  {
+    for (size_t way = 0; way < TLB_WAYS; way++)
+      tag[way] = INVALID_TAG;
+  }
 };
 
 struct PairedSingle
@@ -175,7 +177,7 @@ struct PowerPCState
   alignas(16) PairedSingle ps[32];
 #endif
 
-  std::array<u32, 16> sr{};  // Segment registers.
+  u32 sr[16]{};  // Segment registers.
 
   // special purpose registers - controls quantizers, DMA, and lots of other misc extensions.
   // also for power management, but we don't care about that.
@@ -187,7 +189,7 @@ struct PowerPCState
   u32 pagetable_base = 0;
   u32 pagetable_mask = 0;
 
-  std::array<std::array<TLBEntry, TLB_SIZE / TLB_WAYS>, NUM_TLBS> tlb;
+  TLBEntry tlb[NUM_TLBS][TLB_SIZE / TLB_WAYS];
 
   InstructionCache iCache;
   Cache dCache;

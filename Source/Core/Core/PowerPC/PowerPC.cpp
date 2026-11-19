@@ -76,7 +76,8 @@ void PowerPCManager::DoState(PointerWrap& p)
   // *((u64 *)&TL(m_ppc_state)) = SystemTimers::GetFakeTimeBase(); //works since we are little
   // endian and TL comes first :)
 
-  const std::array<u32, 16> old_sr = m_ppc_state.sr;
+  u32 old_sr[16];
+  memcpy(old_sr, m_ppc_state.sr, sizeof(old_sr));
 
   p.DoArray(m_ppc_state.gpr);
   p.Do(m_ppc_state.pc);
@@ -107,7 +108,7 @@ void PowerPCManager::DoState(PointerWrap& p)
   auto& mmu = m_system.GetMMU();
   if (p.IsReadMode())
   {
-    mmu.DoState(p, old_sr != m_ppc_state.sr);
+    mmu.DoState(p, memcmp(old_sr, m_ppc_state.sr, sizeof(old_sr)) != 0);
 
     if (!m_ppc_state.m_enable_dcache)
     {
@@ -135,7 +136,7 @@ void PowerPCManager::DoState(PointerWrap& p)
 void PowerPCManager::ResetRegisters()
 {
   std::ranges::fill(m_ppc_state.ps, PairedSingle{});
-  std::ranges::fill(m_ppc_state.sr, 0U);
+  memset(m_ppc_state.sr, 0, sizeof(m_ppc_state.sr));
   std::ranges::fill(m_ppc_state.gpr, 0U);
   std::ranges::fill(m_ppc_state.spr, 0U);
 
@@ -268,7 +269,11 @@ void PowerPCManager::Reset()
   m_ppc_state.pagetable_base = 0;
   m_ppc_state.pagetable_mask = 0;
   m_ppc_state.pagetable_update_pending = false;
-  m_ppc_state.tlb = {};
+  for (auto& tlb : m_ppc_state.tlb)
+  {
+    for (TLBEntry& entry : tlb)
+      entry = TLBEntry{};
+  }
 
   ResetRegisters();
   m_ppc_state.iCache.Reset(m_system.GetJitInterface());
