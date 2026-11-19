@@ -3,20 +3,25 @@
 
 #include "Core/PowerPC/JitArm64/Jit.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Core/PowerPC/Gekko.h"
 
 namespace
 {
+// A table built at compile time, held in a plain array
+template <typename T, int N>
+struct OpTable
+{
+  T fn[N];
+};
+
 struct JitArm64OpTemplate
 {
   u32 opcode;
   JitArm64::Instruction fn;
 };
 
-constexpr std::array<JitArm64OpTemplate, 54> s_primary_table{{
+constexpr JitArm64OpTemplate s_primary_table[] = {
     {4, &JitArm64::DynaRunTable4},    // RunTable4
     {19, &JitArm64::DynaRunTable19},  // RunTable19
     {31, &JitArm64::DynaRunTable31},  // RunTable31
@@ -84,9 +89,9 @@ constexpr std::array<JitArm64OpTemplate, 54> s_primary_table{{
     {61, &JitArm64::psq_stXX},  // psq_stu
 
     // missing: 0, 1, 2, 5, 6, 9, 22, 30, 58, 62
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 13> s_table4{{
+constexpr JitArm64OpTemplate s_table4[] = {
     // SUBOP10
     {0, &JitArm64::ps_cmpXX},      // ps_cmpu0
     {32, &JitArm64::ps_cmpXX},     // ps_cmpo0
@@ -102,9 +107,9 @@ constexpr std::array<JitArm64OpTemplate, 13> s_table4{{
     {624, &JitArm64::ps_mergeXX},  // ps_merge11
 
     {1014, &JitArm64::dcbz},  // dcbz_l
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 17> s_table4_2{{
+constexpr JitArm64OpTemplate s_table4_2[] = {
     {10, &JitArm64::ps_sumX},    // ps_sum0
     {11, &JitArm64::ps_sumX},    // ps_sum1
     {12, &JitArm64::ps_arith},   // ps_muls0
@@ -122,16 +127,16 @@ constexpr std::array<JitArm64OpTemplate, 17> s_table4_2{{
     {29, &JitArm64::ps_arith},   // ps_madd
     {30, &JitArm64::ps_arith},   // ps_nmsub
     {31, &JitArm64::ps_arith},   // ps_nmadd
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 4> s_table4_3{{
+constexpr JitArm64OpTemplate s_table4_3[] = {
     {6, &JitArm64::psq_lXX},    // psq_lx
     {7, &JitArm64::psq_stXX},   // psq_stx
     {38, &JitArm64::psq_lXX},   // psq_lux
     {39, &JitArm64::psq_stXX},  // psq_stux
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 13> s_table19{{
+constexpr JitArm64OpTemplate s_table19[] = {
     {528, &JitArm64::bcctrx},  // bcctrx
     {16, &JitArm64::bclrx},    // bclrx
     {257, &JitArm64::crXXX},   // crand
@@ -147,9 +152,9 @@ constexpr std::array<JitArm64OpTemplate, 13> s_table19{{
     {0, &JitArm64::mcrf},         // mcrf
 
     {50, &JitArm64::rfi},  // rfi
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 107> s_table31{{
+constexpr JitArm64OpTemplate s_table31[] = {
     {266, &JitArm64::addx},     // addx
     {778, &JitArm64::addx},     // addox
     {10, &JitArm64::addcx},     // addcx
@@ -289,9 +294,9 @@ constexpr std::array<JitArm64OpTemplate, 107> s_table31{{
     {854, &JitArm64::eieio},                  // eieio
     {306, &JitArm64::FallBackToInterpreter},  // tlbie
     {566, &JitArm64::DoNothing},              // tlbsync
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 9> s_table59{{
+constexpr JitArm64OpTemplate s_table59[] = {
     {18, &JitArm64::fp_arith},  // fdivsx
     {20, &JitArm64::fp_arith},  // fsubsx
     {21, &JitArm64::fp_arith},  // faddsx
@@ -301,9 +306,9 @@ constexpr std::array<JitArm64OpTemplate, 9> s_table59{{
     {29, &JitArm64::fp_arith},  // fmaddsx
     {30, &JitArm64::fp_arith},  // fnmsubsx
     {31, &JitArm64::fp_arith},  // fnmaddsx
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 15> s_table63{{
+constexpr JitArm64OpTemplate s_table63[] = {
     {264, &JitArm64::fp_logic},  // fabsx
     {32, &JitArm64::fcmpX},      // fcmpo
     {0, &JitArm64::fcmpX},       // fcmpu
@@ -320,9 +325,9 @@ constexpr std::array<JitArm64OpTemplate, 15> s_table63{{
     {38, &JitArm64::mtfsb1x},   // mtfsb1x
     {134, &JitArm64::mtfsfix},  // mtfsfix
     {711, &JitArm64::mtfsfx},   // mtfsfx
-}};
+};
 
-constexpr std::array<JitArm64OpTemplate, 10> s_table63_2{{
+constexpr JitArm64OpTemplate s_table63_2[] = {
     {18, &JitArm64::fp_arith},  // fdivx
     {20, &JitArm64::fp_arith},  // fsubx
     {21, &JitArm64::fp_arith},  // faddx
@@ -333,24 +338,26 @@ constexpr std::array<JitArm64OpTemplate, 10> s_table63_2{{
     {29, &JitArm64::fp_arith},  // fmaddx
     {30, &JitArm64::fp_arith},  // fnmsubx
     {31, &JitArm64::fp_arith},  // fnmaddx
-}};
+};
 
-constexpr std::array<JitArm64::Instruction, 64> s_dyna_op_table = []() consteval {
-  std::array<JitArm64::Instruction, 64> table{};
-  table.fill(&JitArm64::FallBackToInterpreter);
+constexpr OpTable<JitArm64::Instruction, 64> s_dyna_op_table = []() consteval {
+  OpTable<JitArm64::Instruction, 64> table{};
+  for (auto& entry : table.fn)
+    entry = &JitArm64::FallBackToInterpreter;
 
   for (auto& tpl : s_primary_table)
   {
-    ASSERT(table[tpl.opcode] == &JitArm64::FallBackToInterpreter);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == &JitArm64::FallBackToInterpreter);
+    table.fn[tpl.opcode] = tpl.fn;
   }
 
   return table;
 }();
 
-constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table4 = []() consteval {
-  std::array<JitArm64::Instruction, 1024> table{};
-  table.fill(&JitArm64::FallBackToInterpreter);
+constexpr OpTable<JitArm64::Instruction, 1024> s_dyna_op_table4 = []() consteval {
+  OpTable<JitArm64::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = &JitArm64::FallBackToInterpreter;
 
   for (u32 i = 0; i < 32; i++)
   {
@@ -358,8 +365,8 @@ constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table4 = []() conste
     for (const auto& tpl : s_table4_2)
     {
       const u32 op = fill + tpl.opcode;
-      ASSERT(table[op] == &JitArm64::FallBackToInterpreter);
-      table[op] = tpl.fn;
+      ASSERT(table.fn[op] == &JitArm64::FallBackToInterpreter);
+      table.fn[op] = tpl.fn;
     }
   }
 
@@ -369,68 +376,72 @@ constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table4 = []() conste
     for (const auto& tpl : s_table4_3)
     {
       const u32 op = fill + tpl.opcode;
-      ASSERT(table[op] == &JitArm64::FallBackToInterpreter);
-      table[op] = tpl.fn;
+      ASSERT(table.fn[op] == &JitArm64::FallBackToInterpreter);
+      table.fn[op] = tpl.fn;
     }
   }
 
   for (const auto& tpl : s_table4)
   {
     const u32 op = tpl.opcode;
-    ASSERT(table[op] == &JitArm64::FallBackToInterpreter);
-    table[op] = tpl.fn;
+    ASSERT(table.fn[op] == &JitArm64::FallBackToInterpreter);
+    table.fn[op] = tpl.fn;
   }
 
   return table;
 }();
 
-constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table19 = []() consteval {
-  std::array<JitArm64::Instruction, 1024> table{};
-  table.fill(&JitArm64::FallBackToInterpreter);
+constexpr OpTable<JitArm64::Instruction, 1024> s_dyna_op_table19 = []() consteval {
+  OpTable<JitArm64::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = &JitArm64::FallBackToInterpreter;
 
   for (const auto& tpl : s_table19)
   {
-    ASSERT(table[tpl.opcode] == &JitArm64::FallBackToInterpreter);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == &JitArm64::FallBackToInterpreter);
+    table.fn[tpl.opcode] = tpl.fn;
   }
 
   return table;
 }();
 
-constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table31 = []() consteval {
-  std::array<JitArm64::Instruction, 1024> table{};
-  table.fill(&JitArm64::FallBackToInterpreter);
+constexpr OpTable<JitArm64::Instruction, 1024> s_dyna_op_table31 = []() consteval {
+  OpTable<JitArm64::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = &JitArm64::FallBackToInterpreter;
 
   for (const auto& tpl : s_table31)
   {
-    ASSERT(table[tpl.opcode] == &JitArm64::FallBackToInterpreter);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == &JitArm64::FallBackToInterpreter);
+    table.fn[tpl.opcode] = tpl.fn;
   }
 
   return table;
 }();
 
-constexpr std::array<JitArm64::Instruction, 32> s_dyna_op_table59 = []() consteval {
-  std::array<JitArm64::Instruction, 32> table{};
-  table.fill(&JitArm64::FallBackToInterpreter);
+constexpr OpTable<JitArm64::Instruction, 32> s_dyna_op_table59 = []() consteval {
+  OpTable<JitArm64::Instruction, 32> table{};
+  for (auto& entry : table.fn)
+    entry = &JitArm64::FallBackToInterpreter;
 
   for (const auto& tpl : s_table59)
   {
-    ASSERT(table[tpl.opcode] == &JitArm64::FallBackToInterpreter);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == &JitArm64::FallBackToInterpreter);
+    table.fn[tpl.opcode] = tpl.fn;
   }
 
   return table;
 }();
 
-constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table63 = []() consteval {
-  std::array<JitArm64::Instruction, 1024> table{};
-  table.fill(&JitArm64::FallBackToInterpreter);
+constexpr OpTable<JitArm64::Instruction, 1024> s_dyna_op_table63 = []() consteval {
+  OpTable<JitArm64::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = &JitArm64::FallBackToInterpreter;
 
   for (const auto& tpl : s_table63)
   {
-    ASSERT(table[tpl.opcode] == &JitArm64::FallBackToInterpreter);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == &JitArm64::FallBackToInterpreter);
+    table.fn[tpl.opcode] = tpl.fn;
   }
 
   for (u32 i = 0; i < 32; i++)
@@ -439,8 +450,8 @@ constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table63 = []() const
     for (const auto& tpl : s_table63_2)
     {
       const u32 op = fill + tpl.opcode;
-      ASSERT(table[op] == &JitArm64::FallBackToInterpreter);
-      table[op] = tpl.fn;
+      ASSERT(table.fn[op] == &JitArm64::FallBackToInterpreter);
+      table.fn[op] = tpl.fn;
     }
   }
 
@@ -451,30 +462,30 @@ constexpr std::array<JitArm64::Instruction, 1024> s_dyna_op_table63 = []() const
 
 void JitArm64::DynaRunTable4(UGeckoInstruction inst)
 {
-  (this->*s_dyna_op_table4[inst.SUBOP10])(inst);
+  (this->*s_dyna_op_table4.fn[inst.SUBOP10])(inst);
 }
 
 void JitArm64::DynaRunTable19(UGeckoInstruction inst)
 {
-  (this->*s_dyna_op_table19[inst.SUBOP10])(inst);
+  (this->*s_dyna_op_table19.fn[inst.SUBOP10])(inst);
 }
 
 void JitArm64::DynaRunTable31(UGeckoInstruction inst)
 {
-  (this->*s_dyna_op_table31[inst.SUBOP10])(inst);
+  (this->*s_dyna_op_table31.fn[inst.SUBOP10])(inst);
 }
 
 void JitArm64::DynaRunTable59(UGeckoInstruction inst)
 {
-  (this->*s_dyna_op_table59[inst.SUBOP5])(inst);
+  (this->*s_dyna_op_table59.fn[inst.SUBOP5])(inst);
 }
 
 void JitArm64::DynaRunTable63(UGeckoInstruction inst)
 {
-  (this->*s_dyna_op_table63[inst.SUBOP10])(inst);
+  (this->*s_dyna_op_table63.fn[inst.SUBOP10])(inst);
 }
 
 void JitArm64::CompileInstruction(PPCAnalyst::CodeOp& op)
 {
-  (this->*s_dyna_op_table[op.inst.OPCD])(op.inst);
+  (this->*s_dyna_op_table.fn[op.inst.OPCD])(op.inst);
 }

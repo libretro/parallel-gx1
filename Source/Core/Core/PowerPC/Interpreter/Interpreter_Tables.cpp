@@ -3,13 +3,18 @@
 
 #include "Core/PowerPC/Interpreter/Interpreter.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Core/PowerPC/Gekko.h"
 
 namespace
 {
+// A table built at compile time, held in a plain array
+template <typename T, int N>
+struct OpTable
+{
+  T fn[N];
+};
+
 struct InterpreterOpTemplate
 {
   u32 opcode;
@@ -17,7 +22,7 @@ struct InterpreterOpTemplate
 };
 }  // namespace
 
-constexpr std::array<InterpreterOpTemplate, 54> s_primary_table{{
+constexpr InterpreterOpTemplate s_primary_table[] = {
     {4, Interpreter::RunTable4},    // RunTable4
     {19, Interpreter::RunTable19},  // RunTable19
     {31, Interpreter::RunTable31},  // RunTable31
@@ -86,9 +91,9 @@ constexpr std::array<InterpreterOpTemplate, 54> s_primary_table{{
     {61, Interpreter::psq_stu},  // psq_stu
 
     // missing: 0, 1, 2, 5, 6, 9, 22, 30, 62, 58
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 13> s_table4{{
+constexpr InterpreterOpTemplate s_table4[] = {
     // SUBOP10
     {0, Interpreter::ps_cmpu0},      // ps_cmpu0
     {32, Interpreter::ps_cmpo0},     // ps_cmpo0
@@ -104,9 +109,9 @@ constexpr std::array<InterpreterOpTemplate, 13> s_table4{{
     {624, Interpreter::ps_merge11},  // ps_merge11
 
     {1014, Interpreter::dcbz_l},  // dcbz_l
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 17> s_table4_2{{
+constexpr InterpreterOpTemplate s_table4_2[] = {
     {10, Interpreter::ps_sum0},    // ps_sum0
     {11, Interpreter::ps_sum1},    // ps_sum1
     {12, Interpreter::ps_muls0},   // ps_muls0
@@ -124,16 +129,16 @@ constexpr std::array<InterpreterOpTemplate, 17> s_table4_2{{
     {29, Interpreter::ps_madd},    // ps_madd
     {30, Interpreter::ps_nmsub},   // ps_nmsub
     {31, Interpreter::ps_nmadd},   // ps_nmadd
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 4> s_table4_3{{
+constexpr InterpreterOpTemplate s_table4_3[] = {
     {6, Interpreter::psq_lx},     // psq_lx
     {7, Interpreter::psq_stx},    // psq_stx
     {38, Interpreter::psq_lux},   // psq_lux
     {39, Interpreter::psq_stux},  // psq_stux
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 13> s_table19{{
+constexpr InterpreterOpTemplate s_table19[] = {
     {528, Interpreter::bcctrx},  // bcctrx
     {16, Interpreter::bclrx},    // bclrx
     {257, Interpreter::crand},   // crand
@@ -149,9 +154,9 @@ constexpr std::array<InterpreterOpTemplate, 13> s_table19{{
     {0, Interpreter::mcrf},     // mcrf
 
     {50, Interpreter::rfi},  // rfi
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 107> s_table31{{
+constexpr InterpreterOpTemplate s_table31[] = {
     {266, Interpreter::addx},     // addx
     {778, Interpreter::addx},     // addox
     {10, Interpreter::addcx},     // addcx
@@ -291,9 +296,9 @@ constexpr std::array<InterpreterOpTemplate, 107> s_table31{{
     {854, Interpreter::eieio},    // eieio
     {306, Interpreter::tlbie},    // tlbie
     {566, Interpreter::tlbsync},  // tlbsync
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 9> s_table59{{
+constexpr InterpreterOpTemplate s_table59[] = {
     {18, Interpreter::fdivsx},    // fdivsx // TODO
     {20, Interpreter::fsubsx},    // fsubsx
     {21, Interpreter::faddsx},    // faddsx
@@ -303,9 +308,9 @@ constexpr std::array<InterpreterOpTemplate, 9> s_table59{{
     {29, Interpreter::fmaddsx},   // fmaddsx
     {30, Interpreter::fnmsubsx},  // fnmsubsx
     {31, Interpreter::fnmaddsx},  // fnmaddsx
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 15> s_table63{{
+constexpr InterpreterOpTemplate s_table63[] = {
     {264, Interpreter::fabsx},   // fabsx
     {32, Interpreter::fcmpo},    // fcmpo
     {0, Interpreter::fcmpu},     // fcmpu
@@ -322,9 +327,9 @@ constexpr std::array<InterpreterOpTemplate, 15> s_table63{{
     {38, Interpreter::mtfsb1x},   // mtfsb1x
     {134, Interpreter::mtfsfix},  // mtfsfix
     {711, Interpreter::mtfsfx},   // mtfsfx
-}};
+};
 
-constexpr std::array<InterpreterOpTemplate, 10> s_table63_2{{
+constexpr InterpreterOpTemplate s_table63_2[] = {
     {18, Interpreter::fdivx},     // fdivx
     {20, Interpreter::fsubx},     // fsubx
     {21, Interpreter::faddx},     // faddx
@@ -335,21 +340,23 @@ constexpr std::array<InterpreterOpTemplate, 10> s_table63_2{{
     {29, Interpreter::fmaddx},    // fmaddx
     {30, Interpreter::fnmsubx},   // fnmsubx
     {31, Interpreter::fnmaddx},   // fnmaddx
-}};
+};
 
-constexpr std::array<Interpreter::Instruction, 64> s_interpreter_op_table = []() consteval {
-  std::array<Interpreter::Instruction, 64> table{};
-  table.fill(Interpreter::unknown_instruction);
+constexpr OpTable<Interpreter::Instruction, 64> s_interpreter_op_table = []() consteval {
+  OpTable<Interpreter::Instruction, 64> table{};
+  for (auto& entry : table.fn)
+    entry = Interpreter::unknown_instruction;
   for (auto& tpl : s_primary_table)
   {
-    ASSERT(table[tpl.opcode] == Interpreter::unknown_instruction);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == Interpreter::unknown_instruction);
+    table.fn[tpl.opcode] = tpl.fn;
   };
   return table;
 }();
-constexpr std::array<Interpreter::Instruction, 1024> s_interpreter_op_table4 = []() consteval {
-  std::array<Interpreter::Instruction, 1024> table{};
-  table.fill(Interpreter::unknown_instruction);
+constexpr OpTable<Interpreter::Instruction, 1024> s_interpreter_op_table4 = []() consteval {
+  OpTable<Interpreter::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = Interpreter::unknown_instruction;
 
   for (u32 i = 0; i < 32; i++)
   {
@@ -357,8 +364,8 @@ constexpr std::array<Interpreter::Instruction, 1024> s_interpreter_op_table4 = [
     for (const auto& tpl : s_table4_2)
     {
       const u32 op = fill + tpl.opcode;
-      ASSERT(table[op] == Interpreter::unknown_instruction);
-      table[op] = tpl.fn;
+      ASSERT(table.fn[op] == Interpreter::unknown_instruction);
+      table.fn[op] = tpl.fn;
     }
   }
 
@@ -368,57 +375,61 @@ constexpr std::array<Interpreter::Instruction, 1024> s_interpreter_op_table4 = [
     for (const auto& tpl : s_table4_3)
     {
       const u32 op = fill + tpl.opcode;
-      ASSERT(table[op] == Interpreter::unknown_instruction);
-      table[op] = tpl.fn;
+      ASSERT(table.fn[op] == Interpreter::unknown_instruction);
+      table.fn[op] = tpl.fn;
     }
   }
 
   for (const auto& tpl : s_table4)
   {
     const u32 op = tpl.opcode;
-    ASSERT(table[op] == Interpreter::unknown_instruction);
-    table[op] = tpl.fn;
+    ASSERT(table.fn[op] == Interpreter::unknown_instruction);
+    table.fn[op] = tpl.fn;
   }
 
   return table;
 }();
-constexpr std::array<Interpreter::Instruction, 1024> s_interpreter_op_table19 = []() consteval {
-  std::array<Interpreter::Instruction, 1024> table{};
-  table.fill(Interpreter::unknown_instruction);
+constexpr OpTable<Interpreter::Instruction, 1024> s_interpreter_op_table19 = []() consteval {
+  OpTable<Interpreter::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = Interpreter::unknown_instruction;
   for (auto& tpl : s_table19)
   {
-    ASSERT(table[tpl.opcode] == Interpreter::unknown_instruction);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == Interpreter::unknown_instruction);
+    table.fn[tpl.opcode] = tpl.fn;
   };
   return table;
 }();
-constexpr std::array<Interpreter::Instruction, 1024> s_interpreter_op_table31 = []() consteval {
-  std::array<Interpreter::Instruction, 1024> table{};
-  table.fill(Interpreter::unknown_instruction);
+constexpr OpTable<Interpreter::Instruction, 1024> s_interpreter_op_table31 = []() consteval {
+  OpTable<Interpreter::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = Interpreter::unknown_instruction;
   for (auto& tpl : s_table31)
   {
-    ASSERT(table[tpl.opcode] == Interpreter::unknown_instruction);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == Interpreter::unknown_instruction);
+    table.fn[tpl.opcode] = tpl.fn;
   };
   return table;
 }();
-constexpr std::array<Interpreter::Instruction, 32> s_interpreter_op_table59 = []() consteval {
-  std::array<Interpreter::Instruction, 32> table{};
-  table.fill(Interpreter::unknown_instruction);
+constexpr OpTable<Interpreter::Instruction, 32> s_interpreter_op_table59 = []() consteval {
+  OpTable<Interpreter::Instruction, 32> table{};
+  for (auto& entry : table.fn)
+    entry = Interpreter::unknown_instruction;
   for (auto& tpl : s_table59)
   {
-    ASSERT(table[tpl.opcode] == Interpreter::unknown_instruction);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == Interpreter::unknown_instruction);
+    table.fn[tpl.opcode] = tpl.fn;
   };
   return table;
 }();
-constexpr std::array<Interpreter::Instruction, 1024> s_interpreter_op_table63 = []() consteval {
-  std::array<Interpreter::Instruction, 1024> table{};
-  table.fill(Interpreter::unknown_instruction);
+constexpr OpTable<Interpreter::Instruction, 1024> s_interpreter_op_table63 = []() consteval {
+  OpTable<Interpreter::Instruction, 1024> table{};
+  for (auto& entry : table.fn)
+    entry = Interpreter::unknown_instruction;
   for (auto& tpl : s_table63)
   {
-    ASSERT(table[tpl.opcode] == Interpreter::unknown_instruction);
-    table[tpl.opcode] = tpl.fn;
+    ASSERT(table.fn[tpl.opcode] == Interpreter::unknown_instruction);
+    table.fn[tpl.opcode] = tpl.fn;
   };
 
   for (u32 i = 0; i < 32; i++)
@@ -427,8 +438,8 @@ constexpr std::array<Interpreter::Instruction, 1024> s_interpreter_op_table63 = 
     for (const auto& tpl : s_table63_2)
     {
       const u32 op = fill + tpl.opcode;
-      ASSERT(table[op] == Interpreter::unknown_instruction);
-      table[op] = tpl.fn;
+      ASSERT(table.fn[op] == Interpreter::unknown_instruction);
+      table.fn[op] = tpl.fn;
     }
   }
 
@@ -440,17 +451,17 @@ Interpreter::Instruction Interpreter::GetInterpreterOp(UGeckoInstruction inst)
   // Check for the appropriate subtable ahead of time.
   // (This is used by the cached interpreter and JIT, and called once per instruction, so spending a
   // bit of extra time to optimise is worthwhile)
-  Interpreter::Instruction result = s_interpreter_op_table[inst.OPCD];
+  Interpreter::Instruction result = s_interpreter_op_table.fn[inst.OPCD];
   if (result == Interpreter::RunTable4)
-    return s_interpreter_op_table4[inst.SUBOP10];
+    return s_interpreter_op_table4.fn[inst.SUBOP10];
   else if (result == Interpreter::RunTable19)
-    return s_interpreter_op_table19[inst.SUBOP10];
+    return s_interpreter_op_table19.fn[inst.SUBOP10];
   else if (result == Interpreter::RunTable31)
-    return s_interpreter_op_table31[inst.SUBOP10];
+    return s_interpreter_op_table31.fn[inst.SUBOP10];
   else if (result == Interpreter::RunTable59)
-    return s_interpreter_op_table59[inst.SUBOP5];
+    return s_interpreter_op_table59.fn[inst.SUBOP5];
   else if (result == Interpreter::RunTable63)
-    return s_interpreter_op_table63[inst.SUBOP10];
+    return s_interpreter_op_table63.fn[inst.SUBOP10];
   else
     return result;
 }
@@ -458,26 +469,26 @@ Interpreter::Instruction Interpreter::GetInterpreterOp(UGeckoInstruction inst)
 void Interpreter::RunInterpreterOp(Interpreter& interpreter, UGeckoInstruction inst)
 {
   // Will handle subtables using RunTable4 etc.
-  s_interpreter_op_table[inst.OPCD](interpreter, inst);
+  s_interpreter_op_table.fn[inst.OPCD](interpreter, inst);
 }
 
 void Interpreter::RunTable4(Interpreter& interpreter, UGeckoInstruction inst)
 {
-  s_interpreter_op_table4[inst.SUBOP10](interpreter, inst);
+  s_interpreter_op_table4.fn[inst.SUBOP10](interpreter, inst);
 }
 void Interpreter::RunTable19(Interpreter& interpreter, UGeckoInstruction inst)
 {
-  s_interpreter_op_table19[inst.SUBOP10](interpreter, inst);
+  s_interpreter_op_table19.fn[inst.SUBOP10](interpreter, inst);
 }
 void Interpreter::RunTable31(Interpreter& interpreter, UGeckoInstruction inst)
 {
-  s_interpreter_op_table31[inst.SUBOP10](interpreter, inst);
+  s_interpreter_op_table31.fn[inst.SUBOP10](interpreter, inst);
 }
 void Interpreter::RunTable59(Interpreter& interpreter, UGeckoInstruction inst)
 {
-  s_interpreter_op_table59[inst.SUBOP5](interpreter, inst);
+  s_interpreter_op_table59.fn[inst.SUBOP5](interpreter, inst);
 }
 void Interpreter::RunTable63(Interpreter& interpreter, UGeckoInstruction inst)
 {
-  s_interpreter_op_table63[inst.SUBOP10](interpreter, inst);
+  s_interpreter_op_table63.fn[inst.SUBOP10](interpreter, inst);
 }

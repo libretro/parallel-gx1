@@ -3,9 +3,9 @@
 
 #include "Core/PowerPC/PPCTables.h"
 
-#include <array>
 #include <cstddef>
 #include <cstdio>
+#include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -27,7 +27,7 @@ struct GekkoOPTemplate
 constexpr GekkoOPTemplate s_unknown_op_info = {0, "unknown_instruction", OpType::Unknown, 0,
                                                FL_ENDBLOCK};
 
-constexpr std::array<GekkoOPTemplate, 54> s_primary_table{{
+constexpr GekkoOPTemplate s_primary_table[] = {
     {4, "RunTable4", OpType::Subtable, 0, 0},
     {19, "RunTable19", OpType::Subtable, 0, 0},
     {31, "RunTable31", OpType::Subtable, 0, 0},
@@ -104,9 +104,9 @@ constexpr std::array<GekkoOPTemplate, 54> s_primary_table{{
      FL_IN_FLOAT_S | FL_OUT_A | FL_IN_A | FL_USE_FPU | FL_LOADSTORE | FL_PROGRAMEXCEPTION},
 
     // missing: 0, 1, 2, 5, 6, 9, 22, 30, 62, 58
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 13> s_table4{{
+constexpr GekkoOPTemplate s_table4[] = {
     // SUBOP10
     {0, "ps_cmpu0", OpType::PS, 1,
      FL_IN_FLOAT_AB | FL_SET_CRn | FL_USE_FPU | FL_READ_FPRF | FL_SET_FPRF | FL_PROGRAMEXCEPTION |
@@ -146,9 +146,9 @@ constexpr std::array<GekkoOPTemplate, 13> s_table4{{
          FL_PROGRAMEXCEPTION},
 
     {1014, "dcbz_l", OpType::System, 1, FL_IN_A0B | FL_LOADSTORE | FL_PROGRAMEXCEPTION},
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 17> s_table4_2{{
+constexpr GekkoOPTemplate s_table4_2[] = {
     {10, "ps_sum0", OpType::PS, 1,
      FL_OUT_FLOAT_D | FL_IN_FLOAT_ABC | FL_RC_BIT_F | FL_USE_FPU | FL_SET_FPRF |
          FL_PROGRAMEXCEPTION | FL_FLOAT_EXCEPTION},
@@ -200,18 +200,18 @@ constexpr std::array<GekkoOPTemplate, 17> s_table4_2{{
     {31, "ps_nmadd", OpType::PS, 1,
      FL_OUT_FLOAT_D | FL_IN_FLOAT_ABC | FL_RC_BIT_F | FL_USE_FPU | FL_SET_FPRF |
          FL_PROGRAMEXCEPTION | FL_FLOAT_EXCEPTION},
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 4> s_table4_3{{
+constexpr GekkoOPTemplate s_table4_3[] = {
     {6, "psq_lx", OpType::LoadPS, 1, FL_OUT_FLOAT_D | FL_IN_A0B | FL_USE_FPU | FL_LOADSTORE},
     {7, "psq_stx", OpType::StorePS, 1, FL_IN_FLOAT_S | FL_IN_A0B | FL_USE_FPU | FL_LOADSTORE},
     {38, "psq_lux", OpType::LoadPS, 1,
      FL_OUT_FLOAT_D | FL_OUT_A | FL_IN_AB | FL_USE_FPU | FL_LOADSTORE},
     {39, "psq_stux", OpType::StorePS, 1,
      FL_IN_FLOAT_S | FL_OUT_A | FL_IN_AB | FL_USE_FPU | FL_LOADSTORE},
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 13> s_table19{{
+constexpr GekkoOPTemplate s_table19[] = {
     {528, "bcctrx", OpType::Branch, 1, FL_ENDBLOCK | FL_READ_CR_BI},
     {16, "bclrx", OpType::Branch, 1, FL_ENDBLOCK | FL_READ_CR_BI},
     {257, "crand", OpType::CR, 1, 0},
@@ -228,9 +228,9 @@ constexpr std::array<GekkoOPTemplate, 13> s_table19{{
 
     {50, "rfi", OpType::System, 2,
      FL_ENDBLOCK | FL_CHECKEXCEPTIONS | FL_PROGRAMEXCEPTION | FL_SET_MSR},
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 107> s_table31{{
+constexpr GekkoOPTemplate s_table31[] = {
     {266, "addx", OpType::Integer, 1, FL_OUT_D | FL_IN_AB | FL_RC_BIT},
     {778, "addox", OpType::Integer, 1, FL_OUT_D | FL_IN_AB | FL_RC_BIT | FL_SET_OE},
     {10, "addcx", OpType::Integer, 1, FL_OUT_D | FL_IN_AB | FL_SET_CA | FL_RC_BIT},
@@ -381,9 +381,9 @@ constexpr std::array<GekkoOPTemplate, 107> s_table31{{
     {854, "eieio", OpType::System, 1, 0},
     {306, "tlbie", OpType::System, 1, FL_IN_B | FL_PROGRAMEXCEPTION},
     {566, "tlbsync", OpType::System, 1, FL_PROGRAMEXCEPTION},
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 9> s_table59{{
+constexpr GekkoOPTemplate s_table59[] = {
     {18, "fdivsx", OpType::SingleFP, 17,
      FL_OUT_FLOAT_D | FL_IN_FLOAT_AB | FL_RC_BIT_F | FL_USE_FPU | FL_SET_FPRF | FL_FLOAT_EXCEPTION |
          FL_FLOAT_DIV},  // TODO
@@ -408,9 +408,9 @@ constexpr std::array<GekkoOPTemplate, 9> s_table59{{
     {31, "fnmaddsx", OpType::SingleFP, 1,
      FL_OUT_FLOAT_D | FL_IN_FLOAT_ABC | FL_RC_BIT_F | FL_USE_FPU | FL_SET_FPRF |
          FL_FLOAT_EXCEPTION},
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 15> s_table63{{
+constexpr GekkoOPTemplate s_table63[] = {
     {264, "fabsx", OpType::DoubleFP, 1,
      FL_INOUT_FLOAT_D | FL_IN_FLOAT_B | FL_IN_FLOAT_B_BITEXACT | FL_RC_BIT_F | FL_USE_FPU},
 
@@ -445,9 +445,9 @@ constexpr std::array<GekkoOPTemplate, 15> s_table63{{
      FL_RC_BIT_F | FL_USE_FPU | FL_READ_FPRF | FL_SET_FPRF | FL_FLOAT_EXCEPTION},
     {711, "mtfsfx", OpType::SystemFP, 3,
      FL_RC_BIT_F | FL_IN_FLOAT_B | FL_USE_FPU | FL_READ_FPRF | FL_SET_FPRF | FL_FLOAT_EXCEPTION},
-}};
+};
 
-constexpr std::array<GekkoOPTemplate, 10> s_table63_2{{
+constexpr GekkoOPTemplate s_table63_2[] = {
     {18, "fdivx", OpType::DoubleFP, 31,
      FL_INOUT_FLOAT_D | FL_IN_FLOAT_AB | FL_RC_BIT_F | FL_USE_FPU | FL_SET_FPRF |
          FL_FLOAT_EXCEPTION | FL_FLOAT_DIV},
@@ -477,22 +477,23 @@ constexpr std::array<GekkoOPTemplate, 10> s_table63_2{{
     {31, "fnmaddx", OpType::DoubleFP, 1,
      FL_INOUT_FLOAT_D | FL_IN_FLOAT_ABC | FL_RC_BIT_F | FL_USE_FPU | FL_SET_FPRF |
          FL_FLOAT_EXCEPTION},
-}};
+};
 
 constexpr size_t TOTAL_INSTRUCTION_COUNT =
-    1 + s_primary_table.size() + s_table4_2.size() + s_table4_3.size() + s_table4.size() +
-    s_table31.size() + s_table19.size() + s_table59.size() + s_table63.size() + s_table63_2.size();
+    1 + ARRAY_SIZE(s_primary_table) + ARRAY_SIZE(s_table4_2) + ARRAY_SIZE(s_table4_3) +
+    ARRAY_SIZE(s_table4) + ARRAY_SIZE(s_table31) + ARRAY_SIZE(s_table19) + ARRAY_SIZE(s_table59) +
+    ARRAY_SIZE(s_table63) + ARRAY_SIZE(s_table63_2);
 
 struct Tables
 {
-  std::array<GekkoOPInfo, TOTAL_INSTRUCTION_COUNT> all_instructions{};
+  GekkoOPInfo all_instructions[TOTAL_INSTRUCTION_COUNT]{};
   u32 unknown_op_info;
-  std::array<u32, 64> primary_table{};
-  std::array<u32, 1024> table4{};
-  std::array<u32, 1024> table19{};
-  std::array<u32, 1024> table31{};
-  std::array<u32, 32> table59{};
-  std::array<u32, 1024> table63{};
+  u32 primary_table[64]{};
+  u32 table4[1024]{};
+  u32 table19[1024]{};
+  u32 table31[1024]{};
+  u32 table59[32]{};
+  u32 table63[1024]{};
 };
 }  // namespace
 
@@ -513,14 +514,16 @@ constexpr Tables s_tables = []() consteval {
   u32 unknown_op_info = make_info(s_unknown_op_info);
   tables.unknown_op_info = unknown_op_info;
 
-  tables.primary_table.fill(unknown_op_info);
+  for (u32& entry : tables.primary_table)
+    entry = unknown_op_info;
   for (auto& tpl : s_primary_table)
   {
     ASSERT(tables.primary_table[tpl.opcode] == unknown_op_info);
     tables.primary_table[tpl.opcode] = make_info(tpl);
   };
 
-  tables.table4.fill(unknown_op_info);
+  for (u32& entry : tables.table4)
+    entry = unknown_op_info;
 
   for (const auto& tpl : s_table4_2)
   {
@@ -553,28 +556,32 @@ constexpr Tables s_tables = []() consteval {
     tables.table4[op] = make_info(tpl);
   }
 
-  tables.table19.fill(unknown_op_info);
+  for (u32& entry : tables.table19)
+    entry = unknown_op_info;
   for (auto& tpl : s_table19)
   {
     ASSERT(tables.table19[tpl.opcode] == unknown_op_info);
     tables.table19[tpl.opcode] = make_info(tpl);
   };
 
-  tables.table31.fill(unknown_op_info);
+  for (u32& entry : tables.table31)
+    entry = unknown_op_info;
   for (auto& tpl : s_table31)
   {
     ASSERT(tables.table31[tpl.opcode] == unknown_op_info);
     tables.table31[tpl.opcode] = make_info(tpl);
   };
 
-  tables.table59.fill(unknown_op_info);
+  for (u32& entry : tables.table59)
+    entry = unknown_op_info;
   for (auto& tpl : s_table59)
   {
     ASSERT(tables.table59[tpl.opcode] == unknown_op_info);
     tables.table59[tpl.opcode] = make_info(tpl);
   };
 
-  tables.table63.fill(unknown_op_info);
+  for (u32& entry : tables.table63)
+    entry = unknown_op_info;
   for (auto& tpl : s_table63)
   {
     ASSERT(tables.table63[tpl.opcode] == unknown_op_info);
