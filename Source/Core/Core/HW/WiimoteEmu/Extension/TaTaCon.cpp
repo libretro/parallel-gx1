@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/TaTaCon.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -16,22 +14,22 @@
 
 namespace WiimoteEmu
 {
-constexpr std::array<u8, 6> tatacon_id{{0x00, 0x00, 0xa4, 0x20, 0x01, 0x11}};
+static const u8 tatacon_id[6] = {0x00, 0x00, 0xa4, 0x20, 0x01, 0x11};
 
-constexpr std::array<u8, 2> center_bitmasks{{
+static const u8 center_bitmasks[2] = {
     TaTaCon::CENTER_LEFT,
     TaTaCon::CENTER_RIGHT,
-}};
+};
 
-constexpr std::array<u8, 2> rim_bitmasks{{
+static const u8 rim_bitmasks[2] = {
     TaTaCon::RIM_LEFT,
     TaTaCon::RIM_RIGHT,
-}};
+};
 
-constexpr std::array<const char*, 2> position_names{{
+static const char* const position_names[2] = {
     _trans("Left"),
     _trans("Right"),
-}};
+};
 
 // i18n: The drum controller used in "Taiko no Tatsujin" games. Also known as a "TaTaCon".
 TaTaCon::TaTaCon() : Extension3rdParty("TaTaCon", _trans("Taiko Drum"))
@@ -53,8 +51,8 @@ void TaTaCon::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 {
   DesiredState tatacon_data = {};
 
-  m_center->GetState(&tatacon_data.state, center_bitmasks.data());
-  m_rim->GetState(&tatacon_data.state, rim_bitmasks.data());
+  m_center->GetState(&tatacon_data.state, center_bitmasks);
+  m_rim->GetState(&tatacon_data.state, rim_bitmasks);
 
   target_state->type = ExtensionNumber::TATACON;
   target_state->data.tatacon = tatacon_data;
@@ -77,7 +75,7 @@ void TaTaCon::Reset()
   EncryptedExtension::Reset();
 
   m_reg = {};
-  m_reg.identifier = tatacon_id;
+  memcpy(m_reg.identifier, tatacon_id, sizeof(tatacon_id));
 
   // Assuming calibration is 0xff filled like every other 3rd-party extension.
   memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));

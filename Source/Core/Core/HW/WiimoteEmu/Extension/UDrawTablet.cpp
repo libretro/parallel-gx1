@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/UDrawTablet.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -18,17 +16,17 @@
 
 namespace WiimoteEmu
 {
-constexpr std::array<u8, 6> udraw_tablet_id{{0xff, 0x00, 0xa4, 0x20, 0x01, 0x12}};
+static const u8 udraw_tablet_id[6] = {0xff, 0x00, 0xa4, 0x20, 0x01, 0x12};
 
-constexpr std::array<u8, 2> udraw_tablet_button_bitmasks{{
+static const u8 udraw_tablet_button_bitmasks[2] = {
     UDrawTablet::BUTTON_ROCKER_UP,
     UDrawTablet::BUTTON_ROCKER_DOWN,
-}};
+};
 
-constexpr std::array<const char*, 2> udraw_tablet_button_names{{
+static const char* const udraw_tablet_button_names[2] = {
     _trans("Rocker Up"),
     _trans("Rocker Down"),
-}};
+};
 
 UDrawTablet::UDrawTablet() : Extension3rdParty("uDraw", _trans("uDraw GameTablet"))
 {
@@ -98,7 +96,7 @@ void UDrawTablet::BuildDesiredExtensionState(DesiredExtensionState* target_state
   tablet_data.stylus_y2 = stylus_y >> 8;
 
   // Buttons:
-  m_buttons->GetState(&tablet_data.buttons, udraw_tablet_button_bitmasks.data());
+  m_buttons->GetState(&tablet_data.buttons, udraw_tablet_button_bitmasks);
 
   // Flip button bits
   constexpr u8 buttons_neutral_state = 0xfb;
@@ -124,7 +122,7 @@ void UDrawTablet::Reset()
 {
   EncryptedExtension::Reset();
 
-  m_reg.identifier = udraw_tablet_id;
+  memcpy(m_reg.identifier, udraw_tablet_id, sizeof(udraw_tablet_id));
 
   // Both 0x20 and 0x30 calibration sections are just filled with 0xff on the real tablet:
   memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));

@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/Classic.h"
 
-#include <array>
-
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
 
@@ -18,34 +16,29 @@
 
 namespace WiimoteEmu
 {
-constexpr std::array<u8, 6> classic_id{{0x00, 0x00, 0xa4, 0x20, 0x01, 0x01}};
+static const u8 classic_id[6] = {0x00, 0x00, 0xa4, 0x20, 0x01, 0x01};
 
-constexpr std::array<u16, 9> classic_button_bitmasks{{
-    Classic::BUTTON_A,
-    Classic::BUTTON_B,
-    Classic::BUTTON_X,
-    Classic::BUTTON_Y,
+static const u16 classic_button_bitmasks[9] = {
+    Classic::BUTTON_A,     Classic::BUTTON_B,    Classic::BUTTON_X, Classic::BUTTON_Y,
 
-    Classic::BUTTON_ZL,
-    Classic::BUTTON_ZR,
+    Classic::BUTTON_ZL,    Classic::BUTTON_ZR,
 
-    Classic::BUTTON_MINUS,
-    Classic::BUTTON_PLUS,
+    Classic::BUTTON_MINUS, Classic::BUTTON_PLUS,
 
     Classic::BUTTON_HOME,
-}};
+};
 
-constexpr std::array<u16, 2> classic_trigger_bitmasks{{
+static const u16 classic_trigger_bitmasks[2] = {
     Classic::TRIGGER_L,
     Classic::TRIGGER_R,
-}};
+};
 
-constexpr std::array<u16, 4> classic_dpad_bitmasks{{
+static const u16 classic_dpad_bitmasks[4] = {
     Classic::PAD_UP,
     Classic::PAD_DOWN,
     Classic::PAD_LEFT,
     Classic::PAD_RIGHT,
-}};
+};
 
 Classic::Classic() : Extension1stParty("Classic", _trans("Classic Controller"))
 {
@@ -111,7 +104,7 @@ void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   // triggers
   {
     ControlState triggers[2] = {0, 0};
-    m_triggers->GetState(&buttons, classic_trigger_bitmasks.data(), triggers);
+    m_triggers->GetState(&buttons, classic_trigger_bitmasks, triggers);
 
     const u8 lt = MapFloat<u8>(triggers[0], 0, 0, TRIGGER_RANGE);
     const u8 rt = MapFloat<u8>(triggers[1], 0, 0, TRIGGER_RANGE);
@@ -121,8 +114,8 @@ void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   }
 
   // buttons and dpad
-  m_buttons->GetState(&buttons, classic_button_bitmasks.data());
-  m_dpad->GetState(&buttons, classic_dpad_bitmasks.data());
+  m_buttons->GetState(&buttons, classic_button_bitmasks);
+  m_dpad->GetState(&buttons, classic_dpad_bitmasks);
 
   classic_data.SetButtons(buttons);
 
@@ -141,7 +134,7 @@ void Classic::Reset()
 {
   EncryptedExtension::Reset();
 
-  m_reg.identifier = classic_id;
+  memcpy(m_reg.identifier, classic_id, sizeof(classic_id));
 
   // Build calibration data:
   // All values are to 8 bits of precision.

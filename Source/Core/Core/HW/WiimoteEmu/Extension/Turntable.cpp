@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/Turntable.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -19,28 +17,18 @@
 
 namespace WiimoteEmu
 {
-constexpr std::array<u8, 6> turntable_id{{0x03, 0x00, 0xa4, 0x20, 0x01, 0x03}};
+static const u8 turntable_id[6] = {0x03, 0x00, 0xa4, 0x20, 0x01, 0x03};
 
-constexpr std::array<u16, 9> turntable_button_bitmasks{{
-    Turntable::BUTTON_L_GREEN,
-    Turntable::BUTTON_L_RED,
-    Turntable::BUTTON_L_BLUE,
-    Turntable::BUTTON_R_GREEN,
-    Turntable::BUTTON_R_RED,
-    Turntable::BUTTON_R_BLUE,
-    Turntable::BUTTON_MINUS,
-    Turntable::BUTTON_PLUS,
-    Turntable::BUTTON_EUPHORIA,
-}};
+static const u16 turntable_button_bitmasks[9] = {
+    Turntable::BUTTON_L_GREEN, Turntable::BUTTON_L_RED, Turntable::BUTTON_L_BLUE,
+    Turntable::BUTTON_R_GREEN, Turntable::BUTTON_R_RED, Turntable::BUTTON_R_BLUE,
+    Turntable::BUTTON_MINUS,   Turntable::BUTTON_PLUS,  Turntable::BUTTON_EUPHORIA,
+};
 
-constexpr std::array<const char*, 6> turntable_button_names{{
-    _trans("Green Left"),
-    _trans("Red Left"),
-    _trans("Blue Left"),
-    _trans("Green Right"),
-    _trans("Red Right"),
-    _trans("Blue Right"),
-}};
+static const char* const turntable_button_names[6] = {
+    _trans("Green Left"),  _trans("Red Left"),  _trans("Blue Left"),
+    _trans("Green Right"), _trans("Red Right"), _trans("Blue Right"),
+};
 
 Turntable::Turntable() : Extension1stParty("Turntable", _trans("DJ Turntable"))
 {
@@ -128,7 +116,7 @@ void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   }
 
   // buttons
-  m_buttons->GetState(&tt_data.bt, turntable_button_bitmasks.data());
+  m_buttons->GetState(&tt_data.bt, turntable_button_bitmasks);
 
   // flip button bits :/
   tt_data.bt ^= (BUTTON_L_GREEN | BUTTON_L_RED | BUTTON_L_BLUE | BUTTON_R_GREEN | BUTTON_R_RED |
@@ -150,7 +138,7 @@ void Turntable::Reset()
 {
   EncryptedExtension::Reset();
 
-  m_reg.identifier = turntable_id;
+  memcpy(m_reg.identifier, turntable_id, sizeof(turntable_id));
 
   // TODO: Is there calibration data?
 }

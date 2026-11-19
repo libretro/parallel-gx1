@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/DrawsomeTablet.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -17,7 +15,7 @@
 
 namespace WiimoteEmu
 {
-constexpr std::array<u8, 6> drawsome_tablet_id{{0xff, 0x00, 0xa4, 0x20, 0x00, 0x13}};
+static const u8 drawsome_tablet_id[6] = {0xff, 0x00, 0xa4, 0x20, 0x00, 0x13};
 
 // i18n: The "Drawsome" (combination of "Draw" and "Awesome") tablet wiimote extension by Ubisoft.
 DrawsomeTablet::DrawsomeTablet() : Extension3rdParty("Drawsome", _trans("Drawsome Tablet"))
@@ -98,7 +96,7 @@ void DrawsomeTablet::Reset()
 {
   EncryptedExtension::Reset();
 
-  m_reg.identifier = drawsome_tablet_id;
+  memcpy(m_reg.identifier, drawsome_tablet_id, sizeof(drawsome_tablet_id));
 
   // Assuming calibration data is 0xff filled.
   memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));

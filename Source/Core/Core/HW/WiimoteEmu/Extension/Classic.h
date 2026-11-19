@@ -174,7 +174,7 @@ public:
     u8 left_trigger_zero;
     u8 right_trigger_zero;
 
-    std::array<u8, 2> checksum;
+    u8 checksum[2];
   };
   static_assert(sizeof(CalibrationData) == 16, "Wrong size");
 

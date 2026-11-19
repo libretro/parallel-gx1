@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/Shinkansen.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -18,7 +16,7 @@
 namespace WiimoteEmu
 {
 // TODO: check this (only the last byte is known good)
-constexpr std::array<u8, 6> shinkansen_id{{0x00, 0x00, 0xa4, 0x20, 0x01, 0x10}};
+static const u8 shinkansen_id[6] = {0x00, 0x00, 0xa4, 0x20, 0x01, 0x10};
 
 Shinkansen::Shinkansen() : Extension3rdParty("Shinkansen", _trans("Shinkansen Controller"))
 {
@@ -117,7 +115,7 @@ void Shinkansen::Reset()
   EncryptedExtension::Reset();
 
   m_reg = {};
-  m_reg.identifier = shinkansen_id;
+  memcpy(m_reg.identifier, shinkansen_id, sizeof(shinkansen_id));
   memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));
 }
 

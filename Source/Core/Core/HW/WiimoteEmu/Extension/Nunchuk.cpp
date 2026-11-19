@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/Nunchuk.h"
 
-#include <array>
-
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -22,12 +20,12 @@
 
 namespace WiimoteEmu
 {
-constexpr std::array<u8, 6> nunchuk_id{{0x00, 0x00, 0xa4, 0x20, 0x00, 0x00}};
+static const u8 nunchuk_id[6] = {0x00, 0x00, 0xa4, 0x20, 0x00, 0x00};
 
-constexpr std::array<u8, 2> nunchuk_button_bitmasks{{
+static const u8 nunchuk_button_bitmasks[2] = {
     Nunchuk::BUTTON_C,
     Nunchuk::BUTTON_Z,
-}};
+};
 
 Nunchuk::Nunchuk() : Extension1stParty(_trans("Nunchuk"))
 {
@@ -70,7 +68,7 @@ void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   // buttons
   u8 buttons = 0;
-  m_buttons->GetState(&buttons, nunchuk_button_bitmasks.data());
+  m_buttons->GetState(&buttons, nunchuk_button_bitmasks);
   nc_data.SetButtons(buttons);
 
   // Acceleration data:
@@ -108,7 +106,7 @@ void Nunchuk::Reset()
 {
   EncryptedExtension::Reset();
 
-  m_reg.identifier = nunchuk_id;
+  memcpy(m_reg.identifier, nunchuk_id, sizeof(nunchuk_id));
 
   m_swing_state = {};
   m_tilt_state = {};

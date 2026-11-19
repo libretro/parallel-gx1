@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <string>
 
 #include "Common/ChunkFile.h"
@@ -88,7 +87,7 @@ public:
     u8 unknown5[0x9];
 
     // address 0xFA
-    std::array<u8, 6> identifier;
+    u8 identifier[6];
   };
 #pragma pack(pop)
 

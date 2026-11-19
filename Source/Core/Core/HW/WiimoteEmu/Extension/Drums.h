@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/BitField.h"
 #include "Core/HW/WiimoteEmu/Extension/Extension.h"
 #include "InputCommon/ControllerEmu/Setting/NumericSetting.h"
@@ -129,6 +127,6 @@ private:
   // Holds new drum pad hits that still need velocity data to be sent.
   u8 m_new_pad_hits = 0;
   // Holds how many more frames to send each drum-pad bit.
-  std::array<u8, 6> m_pad_remaining_frames{};
+  u8 m_pad_remaining_frames[6] = {};
 };
 }  // namespace WiimoteEmu

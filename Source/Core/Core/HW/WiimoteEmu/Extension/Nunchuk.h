@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/Common.h"
 
 #include "Core/HW/WiimoteCommon/WiimoteReport.h"
@@ -147,7 +145,7 @@ public:
     Stick stick_x;
     Stick stick_y;
 
-    std::array<u8, 2> checksum;
+    u8 checksum[2];
   };
   static_assert(sizeof(CalibrationData) == 16, "Wrong size");
 

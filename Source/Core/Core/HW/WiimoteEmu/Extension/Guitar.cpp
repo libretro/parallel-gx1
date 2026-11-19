@@ -3,7 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/Guitar.h"
 
-#include <array>
 #include <map>
 
 #include "Common/Assert.h"
@@ -32,33 +31,26 @@ static const std::map<const ControlState, const u8> s_slider_bar_control_codes{
     {1.0, 0x1F}         // bottom fret
 };
 
-constexpr std::array<u8, 6> guitar_id{{0x00, 0x00, 0xa4, 0x20, 0x01, 0x03}};
+static const u8 guitar_id[6] = {0x00, 0x00, 0xa4, 0x20, 0x01, 0x03};
 
-constexpr std::array<u16, 5> guitar_fret_bitmasks{{
-    Guitar::FRET_GREEN,
-    Guitar::FRET_RED,
-    Guitar::FRET_YELLOW,
-    Guitar::FRET_BLUE,
-    Guitar::FRET_ORANGE,
-}};
+static const u16 guitar_fret_bitmasks[5] = {
+    Guitar::FRET_GREEN, Guitar::FRET_RED,    Guitar::FRET_YELLOW,
+    Guitar::FRET_BLUE,  Guitar::FRET_ORANGE,
+};
 
-constexpr std::array<const char*, 5> guitar_fret_names{{
-    _trans("Green"),
-    _trans("Red"),
-    _trans("Yellow"),
-    _trans("Blue"),
-    _trans("Orange"),
-}};
+static const char* const guitar_fret_names[5] = {
+    _trans("Green"), _trans("Red"), _trans("Yellow"), _trans("Blue"), _trans("Orange"),
+};
 
-constexpr std::array<u16, 2> guitar_button_bitmasks{{
+static const u16 guitar_button_bitmasks[2] = {
     Guitar::BUTTON_MINUS,
     Guitar::BUTTON_PLUS,
-}};
+};
 
-constexpr std::array<u16, 2> guitar_strum_bitmasks{{
+static const u16 guitar_strum_bitmasks[2] = {
     Guitar::BAR_UP,
     Guitar::BAR_DOWN,
-}};
+};
 
 Guitar::Guitar() : Extension1stParty(_trans("Guitar"))
 {
@@ -126,13 +118,13 @@ void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   guitar_data.whammy = MapFloat<u8>(whammy_state.data[0], 0, 0, 0x1F);
 
   // buttons
-  m_buttons->GetState(&guitar_data.bt, guitar_button_bitmasks.data());
+  m_buttons->GetState(&guitar_data.bt, guitar_button_bitmasks);
 
   // frets
-  m_frets->GetState(&guitar_data.bt, guitar_fret_bitmasks.data());
+  m_frets->GetState(&guitar_data.bt, guitar_fret_bitmasks);
 
   // strum
-  m_strum->GetState(&guitar_data.bt, guitar_strum_bitmasks.data());
+  m_strum->GetState(&guitar_data.bt, guitar_strum_bitmasks);
 
   // flip button bits
   guitar_data.bt ^= 0xFFFF;
@@ -152,7 +144,7 @@ void Guitar::Reset()
 {
   EncryptedExtension::Reset();
 
-  m_reg.identifier = guitar_id;
+  memcpy(m_reg.identifier, guitar_id, sizeof(guitar_id));
 
   // TODO: Is there calibration data?
 }

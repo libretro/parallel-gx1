@@ -16,39 +16,27 @@
 
 namespace WiimoteEmu
 {
-constexpr std::array<u8, 6> drums_id{{0x01, 0x00, 0xa4, 0x20, 0x01, 0x03}};
+static const u8 drums_id[6] = {0x01, 0x00, 0xa4, 0x20, 0x01, 0x03};
 
-constexpr std::array<u8, 6> drum_pad_bitmasks{{
-    Drums::PAD_RED,
-    Drums::PAD_YELLOW,
-    Drums::PAD_BLUE,
-    Drums::PAD_ORANGE,
-    Drums::PAD_GREEN,
-    Drums::PAD_BASS,
-}};
+static const u8 drum_pad_bitmasks[6] = {
+    Drums::PAD_RED,    Drums::PAD_YELLOW, Drums::PAD_BLUE,
+    Drums::PAD_ORANGE, Drums::PAD_GREEN,  Drums::PAD_BASS,
+};
 
-constexpr std::array<const char*, 6> drum_pad_names{{
-    _trans("Red"),
-    _trans("Yellow"),
-    _trans("Blue"),
-    _trans("Orange"),
-    _trans("Green"),
-    _trans("Bass"),
-}};
+static const char* const drum_pad_names[6] = {
+    _trans("Red"),    _trans("Yellow"), _trans("Blue"),
+    _trans("Orange"), _trans("Green"),  _trans("Bass"),
+};
 
-constexpr std::array<Drums::VelocityID, 6> drum_pad_velocity_ids{{
-    Drums::VelocityID::Red,
-    Drums::VelocityID::Yellow,
-    Drums::VelocityID::Blue,
-    Drums::VelocityID::Orange,
-    Drums::VelocityID::Green,
-    Drums::VelocityID::Bass,
-}};
+static const Drums::VelocityID drum_pad_velocity_ids[6] = {
+    Drums::VelocityID::Red,    Drums::VelocityID::Yellow, Drums::VelocityID::Blue,
+    Drums::VelocityID::Orange, Drums::VelocityID::Green,  Drums::VelocityID::Bass,
+};
 
-constexpr std::array<u8, 2> drum_button_bitmasks{{
+static const u8 drum_button_bitmasks[2] = {
     Drums::BUTTON_MINUS,
     Drums::BUTTON_PLUS,
-}};
+};
 
 Drums::Drums() : Extension1stParty("Drums", _trans("Drum Kit"))
 {
@@ -95,10 +83,10 @@ void Drums::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   }
 
   state.buttons = 0;
-  m_buttons->GetState(&state.buttons, drum_button_bitmasks.data());
+  m_buttons->GetState(&state.buttons, drum_button_bitmasks);
 
   state.drum_pads = 0;
-  m_pads->GetState(&state.drum_pads, drum_pad_bitmasks.data());
+  m_pads->GetState(&state.drum_pads, drum_pad_bitmasks);
 
   state.softness = u8(0x7F - std::lround(m_hit_strength_setting.GetValue() * 0x7F / 100));
 }
@@ -142,12 +130,12 @@ void Drums::Update(const DesiredExtensionState& target_state)
   m_new_pad_hits |= ~m_prev_pad_input & current_pad_input;
   m_prev_pad_input = current_pad_input;
 
-  static_assert(std::tuple_size<decltype(m_pad_remaining_frames)>::value ==
-                    drum_pad_bitmasks.size(),
+  static_assert(sizeof(m_pad_remaining_frames) ==
+                    (sizeof(drum_pad_bitmasks) / sizeof(drum_pad_bitmasks[0])),
                 "Array sizes do not match.");
 
   // Figure out which velocity id to send. (needs to be sent once for each newly hit drum-pad)
-  for (std::size_t i = 0; i != drum_pad_bitmasks.size(); ++i)
+  for (std::size_t i = 0; i != (sizeof(drum_pad_bitmasks) / sizeof(drum_pad_bitmasks[0])); ++i)
   {
     const auto drum_pad = drum_pad_bitmasks[i];
 
@@ -180,7 +168,7 @@ void Drums::Update(const DesiredExtensionState& target_state)
   // Figure out which drum-pad bits to send.
   // Note: Relevant bits are not set until after velocity data has been sent.
   // My drums never exposed simultaneous hits. One pad bit was always sent before the other.
-  for (std::size_t i = 0; i != drum_pad_bitmasks.size(); ++i)
+  for (std::size_t i = 0; i != (sizeof(drum_pad_bitmasks) / sizeof(drum_pad_bitmasks[0])); ++i)
   {
     auto& remaining_frames = m_pad_remaining_frames[i];
 
@@ -203,14 +191,14 @@ void Drums::Reset()
 {
   EncryptedExtension::Reset();
 
-  m_reg.identifier = drums_id;
+  memcpy(m_reg.identifier, drums_id, sizeof(drums_id));
 
   // Both 16-byte blocks of calibration data seem to be 0xff filled.
   memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));
 
   m_prev_pad_input = 0;
   m_new_pad_hits = 0;
-  m_pad_remaining_frames = {};
+  memset(m_pad_remaining_frames, 0, sizeof(m_pad_remaining_frames));
 }
 
 void Drums::DoState(PointerWrap& p)

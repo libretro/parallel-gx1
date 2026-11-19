@@ -23,7 +23,7 @@ class TaTaCon : public Extension3rdParty
 public:
   struct DataFormat
   {
-    std::array<u8, 5> nothing;
+    u8 nothing[5];
 
     u8 state;
   };
