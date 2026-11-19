@@ -42,6 +42,14 @@ size_t gbp_hle_serialize_size(void);
 int gbp_hle_serialize(void *data, size_t size);
 int gbp_hle_unserialize(const void *data, size_t size);
 
+/* The working RAM as the frontend's system RAM; no save RAM, the save file
+ * being the core's own */
+void *gbp_hle_memory_data(unsigned id);
+size_t gbp_hle_memory_size(unsigned id);
+
+void gbp_hle_cheat_reset(void);
+void gbp_hle_cheat_set(unsigned index, int enabled, const char *code);
+
 #ifdef __cplusplus
 }
 #endif

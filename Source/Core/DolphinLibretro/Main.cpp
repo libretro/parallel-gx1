@@ -800,7 +800,7 @@ unsigned retro_api_version()
 size_t retro_get_memory_size(unsigned id)
 {
   if (gbp_hle_active())
-    return 0;
+    return gbp_hle_memory_size(id);
   auto& memory = Core::System::GetInstance().GetMemory();
   if (id == RETRO_MEMORY_SYSTEM_RAM)
     return memory.GetRamSizeReal();
@@ -810,7 +810,7 @@ size_t retro_get_memory_size(unsigned id)
 void* retro_get_memory_data(unsigned id)
 {
   if (gbp_hle_active())
-    return NULL;
+    return gbp_hle_memory_data(id);
   auto& memory = Core::System::GetInstance().GetMemory();
   if (id == RETRO_MEMORY_SYSTEM_RAM)
     return memory.GetRAM();
@@ -893,7 +893,10 @@ static void ApplyCheats(void*)
 void retro_cheat_reset(void)
 {
   if (gbp_hle_active())
+  {
+    gbp_hle_cheat_reset();
     return;
+  }
   const bool importCheats = Libretro::GetOption<bool>(Libretro::Options::retroarch_core::CHEATS_IMPORT, true);
 
   if (!Config::AreCheatsEnabled() || !importCheats)
@@ -910,7 +913,10 @@ void retro_cheat_reset(void)
 void retro_cheat_set(unsigned index, bool enabled, const char *code)
 {
   if (gbp_hle_active())
+  {
+    gbp_hle_cheat_set(index, enabled, code);
     return;
+  }
   if (!Config::AreCheatsEnabled())
   {
     Core::DisplayMessage("You cannot apply any cheats until you have enabled the following option:\n"

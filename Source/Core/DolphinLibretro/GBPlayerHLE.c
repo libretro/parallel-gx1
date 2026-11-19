@@ -9,6 +9,7 @@
 #include <mgba-util/audio-buffer.h>
 #include <mgba-util/image.h>
 #include <mgba-util/vfs.h>
+#include <mgba/core/cheats.h>
 #include <mgba/core/core.h>
 #include <mgba/core/interface.h>
 #include <mgba/core/log.h>
@@ -28,6 +29,10 @@
  * a Game Boy one, at its 131072 Hz, about 2200 */
 #define GBP_HLE_AUDIO_FRAMES 4096
 #define GBP_HLE_KEYS 10
+/* more than either handheld has RAM blocks */
+#define GBP_HLE_MAX_MAPS 16
+/* the longest code line the frontend hands over is copied here to split */
+#define GBP_HLE_MAX_CHEAT 1024
 
 static retro_environment_t        gbp_environ_cb;
 static retro_video_refresh_t      gbp_video_cb;
@@ -60,6 +65,29 @@ static const unsigned gbp_keys[GBP_HLE_KEYS] = {
    RETRO_DEVICE_ID_JOYPAD_R,
    RETRO_DEVICE_ID_JOYPAD_L
 };
+
+static const struct retro_input_descriptor gbp_input_descriptors[] = {
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,      "A" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,      "B" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,  "Start" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT,  "Right" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,   "Left" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,     "Up" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,   "Down" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,      "R" },
+   { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,      "L" },
+   { 0, 0, 0, 0, NULL }
+};
+
+/* The handheld's RAM where it sits in its own address space, for
+ * the frontend's achievements and cheat search */
+static struct retro_memory_descriptor gbp_maps[GBP_HLE_MAX_MAPS];
+/* the working RAM: the frontend's system RAM */
+static void *gbp_wram;
+static size_t gbp_wram_size;
+/* the frontend's codes, one set; made on the first code */
+static struct mCheatSet *gbp_cheats;
 
 /* mGBA's log has nowhere to go */
 static void gbp_log(struct mLogger *logger, int category,
@@ -132,6 +160,48 @@ static void gbp_save_path(char *out, size_t size,
    }
 }
 
+/* Every block of RAM mGBA lists, lent where it lies */
+static void gbp_set_memory_maps(void)
+{
+   const struct mCoreMemoryBlock *blocks;
+   struct retro_memory_map map;
+   size_t count = gbp_core->listMemoryBlocks(gbp_core, &blocks);
+   size_t i;
+   unsigned n = 0;
+
+   gbp_wram      = NULL;
+   gbp_wram_size = 0;
+   for (i = 0; i < count && n < GBP_HLE_MAX_MAPS; i++)
+   {
+      const struct mCoreMemoryBlock *b = &blocks[i];
+      size_t size                      = 0;
+      void *ptr;
+
+      if ((b->flags & mCORE_MEMORY_VIRTUAL) || !(b->flags & mCORE_MEMORY_WRITE))
+         continue;
+      if (!(ptr = gbp_core->getMemoryBlock(gbp_core, b->id, &size)) || !size)
+         continue;
+      /* the working RAM whole, banks and all */
+      if (!strcmp(b->internalName, "wram"))
+      {
+         gbp_wram      = ptr;
+         gbp_wram_size = size;
+      }
+      /* a banked block shows its first banks, as after a reset */
+      if (b->maxSegment && size > b->end - b->start)
+         size = b->end - b->start;
+      memset(&gbp_maps[n], 0, sizeof(gbp_maps[n]));
+      gbp_maps[n].flags = RETRO_MEMDESC_SYSTEM_RAM;
+      gbp_maps[n].ptr   = ptr;
+      gbp_maps[n].start = b->start;
+      gbp_maps[n].len   = size;
+      n++;
+   }
+   map.descriptors     = gbp_maps;
+   map.num_descriptors = n;
+   gbp_environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &map);
+}
+
 int gbp_hle_load(const char *rom_path, const char *system_dir,
       const char *save_dir)
 {
@@ -191,6 +261,9 @@ int gbp_hle_load(const char *rom_path, const char *system_dir,
       vf->close(vf);
 
    gbp_core->reset(gbp_core);
+   gbp_set_memory_maps();
+   gbp_environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS,
+         (void*)gbp_input_descriptors);
    return 1;
 }
 
@@ -199,6 +272,9 @@ void gbp_hle_unload(void)
    if (!gbp_core)
       return;
    gbp_set_rumble(&gbp_rumble, 0.0f);
+   gbp_cheats    = NULL;
+   gbp_wram      = NULL;
+   gbp_wram_size = 0;
    mCoreConfigDeinit(&gbp_core->config);
    gbp_core->deinit(gbp_core);
    gbp_core = NULL;
@@ -304,4 +380,52 @@ int gbp_hle_unserialize(const void *data, size_t size)
    if (!gbp_core || size < gbp_core->stateSize(gbp_core))
       return 0;
    return gbp_core->loadState(gbp_core, data) ? 1 : 0;
+}
+
+void *gbp_hle_memory_data(unsigned id)
+{
+   return id == RETRO_MEMORY_SYSTEM_RAM ? gbp_wram : NULL;
+}
+
+size_t gbp_hle_memory_size(unsigned id)
+{
+   return id == RETRO_MEMORY_SYSTEM_RAM ? gbp_wram_size : 0;
+}
+
+void gbp_hle_cheat_reset(void)
+{
+   struct mCheatDevice *device;
+   if (!gbp_core || !(device = gbp_core->cheatDevice(gbp_core)))
+      return;
+   mCheatDeviceClear(device);
+   gbp_cheats = NULL;
+}
+
+/* code: one cheat's lines, GameShark, Action Replay or CodeBreaker, split
+ * on '+' as the frontend joins them */
+void gbp_hle_cheat_set(unsigned index, int enabled, const char *code)
+{
+   char line[GBP_HLE_MAX_CHEAT];
+   struct mCheatDevice *device;
+   char *cur;
+   char *next;
+
+   (void)index;
+   if (!enabled || !code || !gbp_core
+         || !(device = gbp_core->cheatDevice(gbp_core)))
+      return;
+   if (!gbp_cheats)
+   {
+      if (!(gbp_cheats = device->createSet(device, NULL)))
+         return;
+      mCheatAddSet(device, gbp_cheats);
+   }
+   strlcpy(line, code, sizeof(line));
+   for (cur = line; cur; cur = next)
+   {
+      if ((next = strchr(cur, '+')))
+         *next++ = '\0';
+      if (*cur)
+         mCheatAddLine(gbp_cheats, cur, 0);
+   }
 }
