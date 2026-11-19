@@ -92,8 +92,8 @@ void MotionPlus::Reset()
   constexpr u8 IS_INTEGRATED = 0x00;
 
   // FYI: This ID changes on activation/deactivation
-  constexpr std::array<u8, 6> initial_id = {IS_INTEGRATED, 0x00, 0xA6, 0x20, 0x00, 0x05};
-  m_reg_data.ext_identifier = initial_id;
+  const u8 initial_id[6] = {IS_INTEGRATED, 0x00, 0xA6, 0x20, 0x00, 0x05};
+  memcpy(m_reg_data.ext_identifier, initial_id, sizeof(initial_id));
 
   // Build calibration data.
 
@@ -128,7 +128,7 @@ void MotionPlus::Reset()
 
   calibration.UpdateChecksum();
 
-  Common::BitCastPtr<CalibrationData>(m_reg_data.calibration_data.data()) = calibration;
+  Common::BitCastPtr<CalibrationData>(m_reg_data.calibration_data) = calibration;
 }
 
 void MotionPlus::CalibrationData::UpdateChecksum()
@@ -337,7 +337,7 @@ void MotionPlus::Activate()
   m_reg_data.ext_identifier[2] = ACTIVE_DEVICE_ADDR << 1;
 
   // We must do this to reset our extension_connected and is_mp_data flags:
-  m_reg_data.controller_data = {};
+  memset(m_reg_data.controller_data, 0, sizeof(m_reg_data.controller_data));
 
   m_reg_data.challenge_state = ChallengeState::Activating;
 
@@ -405,7 +405,7 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
   if (ActivationStatus::Active != GetActivationStatus())
     return;
 
-  u8* const data = m_reg_data.controller_data.data();
+  u8* const data = m_reg_data.controller_data;
   DataFormat mplus_data = Common::BitCastPtr<DataFormat>(data);
 
   const bool is_ext_connected = m_extension_port.IsDeviceConnected();
@@ -425,15 +425,15 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
       // Disable encryption
       {
         constexpr u8 INIT_OFFSET = offsetof(Register, init_trigger);
-        std::array<u8, 1> enc_data = {0x55};
-        m_i2c_bus.BusWrite(ACTIVE_DEVICE_ADDR, INIT_OFFSET, int(enc_data.size()), enc_data.data());
+        const u8 enc_data[1] = {0x55};
+        m_i2c_bus.BusWrite(ACTIVE_DEVICE_ADDR, INIT_OFFSET, int(sizeof(enc_data)), enc_data);
       }
 
       // Read identifier
       {
         constexpr u8 ID_OFFSET = offsetof(Register, ext_identifier);
-        std::array<u8, 6> id_data = {};
-        m_i2c_bus.BusRead(ACTIVE_DEVICE_ADDR, ID_OFFSET, int(id_data.size()), id_data.data());
+        u8 id_data[6] = {};
+        m_i2c_bus.BusRead(ACTIVE_DEVICE_ADDR, ID_OFFSET, int(sizeof(id_data)), id_data);
         m_reg_data.passthrough_ext_id_0 = id_data[0];
         m_reg_data.passthrough_ext_id_4 = id_data[4];
         m_reg_data.passthrough_ext_id_5 = id_data[5];
@@ -443,8 +443,8 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
       {
         constexpr u8 CAL_OFFSET = offsetof(Register, calibration_data);
         m_i2c_bus.BusRead(ACTIVE_DEVICE_ADDR, CAL_OFFSET,
-                          int(m_reg_data.passthrough_ext_calib.size()),
-                          m_reg_data.passthrough_ext_calib.data());
+                          int(sizeof(m_reg_data.passthrough_ext_calib)),
+                          m_reg_data.passthrough_ext_calib);
       }
     }
 
@@ -461,7 +461,7 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
   {
   case ChallengeState::PreparingX:
   {
-    std::memcpy(m_reg_data.challenge_data.data(), s_challenge_x, sizeof(s_challenge_x));
+    memcpy(m_reg_data.challenge_data, s_challenge_x, sizeof(s_challenge_x));
 
     DEBUG_LOG(WIIMOTE, "M+ parameter x ready.");
     m_reg_data.challenge_state = ChallengeState::ParameterXReady;
@@ -469,9 +469,9 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
   }
 
   case ChallengeState::PreparingY:
-    std::memcpy(m_reg_data.challenge_data.data(),
-                0 == m_reg_data.challenge_type ? s_challenge_y0 : s_challenge_y1,
-                sizeof(s_challenge_y0));
+    memcpy(m_reg_data.challenge_data,
+           0 == m_reg_data.challenge_type ? s_challenge_y0 : s_challenge_y1,
+           sizeof(s_challenge_y0));
 
     DEBUG_LOG(WIIMOTE, "M+ parameter y ready.");
     m_reg_data.challenge_state = ChallengeState::ParameterYReady;
@@ -513,7 +513,7 @@ void MotionPlus::PrepareInput(const MotionPlus::DataFormat::Data& gyroscope_data
   if (GetActivationStatus() != ActivationStatus::Active)
     return;
 
-  u8* const data = m_reg_data.controller_data.data();
+  u8* const data = m_reg_data.controller_data;
 
   // FYI: A real M+ seems to always send some garbage/mystery data for the first report,
   // followed by a normal M+ data report, and then finally passhrough data (if enabled).

@@ -186,18 +186,18 @@ private:
 #pragma pack(push, 1)
   struct Register
   {
-    std::array<u8, 21> controller_data;
+    u8 controller_data[21];
     u8 unknown_0x15[11];
 
     // address 0x20
-    std::array<u8, 0x20> calibration_data;
+    u8 calibration_data[0x20];
 
     // address 0x40
     // Data is read from the extension on the passthrough port.
-    std::array<u8, 0x10> passthrough_ext_calib;
+    u8 passthrough_ext_calib[0x10];
 
     // address 0x50
-    std::array<u8, 0x40> challenge_data;
+    u8 challenge_data[0x40];
 
     u8 unknown_0x90[0x60];
 
@@ -236,7 +236,7 @@ private:
     u8 passthrough_ext_id_5;
 
     // address 0xFA
-    std::array<u8, 6> ext_identifier;
+    u8 ext_identifier[6];
   };
 #pragma pack(pop)
   static_assert(0x100 == sizeof(Register), "Wrong size");
