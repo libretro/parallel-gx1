@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <optional>
 
+#include <retro_atomic.h>
+
 #include "Common/CPUDetect.h"
 #include "Common/CommonTypes.h"
 
@@ -35,6 +37,8 @@ BackendInfo g_backend_info;
 static std::optional<CPUThreadConfigCallback::ConfigChangedCallbackID>
     s_config_changed_callback_id = std::nullopt;
 static Common::EventHook s_check_config_event;
+// The settings changed while the game runs: the video side takes them after its next frame.
+static retro_atomic_int_t s_config_refresh_wanted;
 
 static bool IsVSyncActive(bool enabled)
 {
@@ -51,23 +55,17 @@ void VideoConfig::Refresh()
 {
   if (!s_config_changed_callback_id.has_value())
   {
-    // There was a race condition between the video thread and the host thread here, if
-    // corrections need to be made by VerifyValidity(). Briefly, the config will contain
-    // invalid values. Instead, pause the video thread first, update the config and correct
-    // it, then resume emulation, after which the video thread will detect the config has
-    // changed and act accordingly.
+    // The video side owns the settings while the game runs: it reads them and corrects them
+    // itself after a frame, so they never change under it.
     const auto config_changed_callback = [] {
-      auto& system = Core::System::GetInstance();
-
-      const bool lock_gpu_thread = Core::IsRunning(system);
-      if (lock_gpu_thread)
-        system.GetFifo().PauseAndLock();
+      if (Core::IsRunning(Core::System::GetInstance()))
+      {
+        retro_atomic_store_release_int(&s_config_refresh_wanted, 1);
+        return;
+      }
 
       g_Config.Refresh();
       g_Config.VerifyValidity();
-
-      if (lock_gpu_thread)
-        system.GetFifo().RestoreState(true);
     };
 
     s_config_changed_callback_id =
@@ -272,6 +270,13 @@ u32 VideoConfig::GetShaderPrecompilerThreads() const
 
 void CheckForConfigChanges()
 {
+  if (retro_atomic_load_acquire_int(&s_config_refresh_wanted) &&
+      retro_atomic_exchange_int(&s_config_refresh_wanted, 0))
+  {
+    g_Config.Refresh();
+    g_Config.VerifyValidity();
+  }
+
   const ShaderHostConfig old_shader_host_config = ShaderHostConfig::GetCurrent();
   const StereoMode old_stereo = g_ActiveConfig.stereo_mode;
   const u32 old_multisamples = g_ActiveConfig.iMultisamples;

@@ -75,23 +75,6 @@ void FifoManager::DoState(PointerWrap& p)
   p.Do(m_syncing_suspended);
 }
 
-void FifoManager::PauseAndLock()
-{
-  SyncGPU(SyncGPUReason::Other);
-  EmulatorState(false);
-
-  if (!m_system.IsDualCoreMode() || m_use_deterministic_gpu_thread)
-    return;
-
-  m_gpu_mainloop.Wait();
-}
-
-void FifoManager::RestoreState(const bool was_running)
-{
-  if (was_running)
-    EmulatorState(true);
-}
-
 void FifoManager::Init()
 {
   if (!m_config_callback_id)
