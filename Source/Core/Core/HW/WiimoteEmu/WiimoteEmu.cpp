@@ -505,10 +505,9 @@ void Wiimote::BuildDesiredWiimoteState(DesiredWiimoteState* target_state,
   }
 
   // Calculate MotionPlus state.
-  if (m_motion_plus_setting.GetValue())
+  target_state->has_motion_plus = m_motion_plus_setting.GetValue();
+  if (target_state->has_motion_plus)
     target_state->motion_plus = MotionPlus::GetGyroscopeData(GetTotalAngularVelocity());
-  else
-    target_state->motion_plus = std::nullopt;
 
   // Build Extension state.
   // This also allows the extension to perform any regular duties it may need.
@@ -537,7 +536,7 @@ void Wiimote::Update(const WiimoteEmu::DesiredWiimoteState& target_state)
 
   // If a new extension is requested in the GUI the change will happen here.
   HandleExtensionSwap(static_cast<ExtensionNumber>(target_state.extension.data.index()),
-                      target_state.motion_plus.has_value());
+                      target_state.has_motion_plus);
 
   // Prepare input data of the extension for reading.
   GetActiveExtension()->Update(target_state.extension);
@@ -628,8 +627,8 @@ void Wiimote::SendDataReport(const DesiredWiimoteState& target_state)
     if (m_is_motion_plus_attached)
     {
       // TODO: Make input preparation triggered by bus read.
-      m_motion_plus.PrepareInput(target_state.motion_plus.has_value() ?
-                                     target_state.motion_plus.value() :
+      m_motion_plus.PrepareInput(target_state.has_motion_plus ?
+                                     target_state.motion_plus :
                                      MotionPlus::GetDefaultGyroscopeData());
     }
 

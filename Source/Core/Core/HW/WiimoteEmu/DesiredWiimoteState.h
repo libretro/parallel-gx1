@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <optional>
-
 #include "Core/HW/WiimoteCommon/WiimoteReport.h"
 #include "Core/HW/WiimoteEmu/Camera.h"
 #include "Core/HW/WiimoteEmu/Extension/DesiredExtensionState.h"
@@ -23,7 +21,9 @@ struct DesiredWiimoteState
   WiimoteCommon::AccelData acceleration = DEFAULT_ACCELERATION;
   // No light detected by the IR camera unless set: a CameraPoint is "not visible" when made.
   CameraPoint camera_points[CameraLogic::NUM_POINTS];
-  std::optional<MotionPlus::DataFormat::Data> motion_plus = std::nullopt;
+  // Gyroscope data, valid when has_motion_plus is set.
+  bool has_motion_plus = false;
+  MotionPlus::DataFormat::Data motion_plus{};
   DesiredExtensionState extension;
 };
 
