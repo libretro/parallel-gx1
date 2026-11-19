@@ -30,9 +30,9 @@ constexpr size_t MAX_BLOCK_SIZE = 250;
 constexpr u16 DSP_IDLE_SKIP_CYCLES = 0x1000;
 
 DSPEmitter::DSPEmitter(DSPCore& dsp)
-    : m_compile_status_register{SR_INT_ENABLE | SR_EXT_INT_ENABLE}, m_blocks(MAX_BLOCKS),
-      m_block_size(MAX_BLOCKS), m_block_links(MAX_BLOCKS), m_dsp_core{dsp}
+    : m_compile_status_register{SR_INT_ENABLE | SR_EXT_INT_ENABLE}, m_dsp_core{dsp}
 {
+  ResetUnresolvedJumps();
   x64::InitInstructionTables();
   AllocCodeSpace(COMPILED_CODE_SIZE);
 
@@ -40,7 +40,73 @@ DSPEmitter::DSPEmitter(DSPCore& dsp)
   m_stub_entry_point = CompileStub();
 
   // Clear all of the block references
-  std::ranges::fill(m_blocks, (DSPCompiledCode)m_stub_entry_point);
+  for (size_t i = 0; i < MAX_BLOCKS; i++)
+    m_blocks[i] = (DSPCompiledCode)m_stub_entry_point;
+}
+
+void DSPEmitter::ResetUnresolvedJumps()
+{
+  for (u32 i = 0; i < MAX_UNRESOLVED_JUMPS; i++)
+    m_jump_pool[i].next = i + 1 < MAX_UNRESOLVED_JUMPS ? i + 1 : NO_JUMP;
+  m_free_jump = 0;
+  for (size_t i = 0; i < MAX_BLOCKS; i++)
+    m_unresolved_jumps[i] = NO_JUMP;
+}
+
+void DSPEmitter::ClearUnresolvedJumps(u16 block)
+{
+  u32 node = m_unresolved_jumps[block];
+  while (node != NO_JUMP)
+  {
+    const u32 next = m_jump_pool[node].next;
+    m_jump_pool[node].next = m_free_jump;
+    m_free_jump = node;
+    node = next;
+  }
+  m_unresolved_jumps[block] = NO_JUMP;
+}
+
+void DSPEmitter::AddUnresolvedJump(u16 block, u16 dest)
+{
+  u32* link = &m_unresolved_jumps[block];
+  u32 node = m_free_jump;
+
+  // A full pool only costs block linking: the jump keeps going through the dispatcher.
+  if (node == NO_JUMP)
+  {
+    ERROR_LOG(DSPLLE, "Too many unresolved DSP JIT jumps, not linking %#06x", (unsigned)dest);
+    return;
+  }
+
+  m_free_jump = m_jump_pool[node].next;
+  m_jump_pool[node].dest = dest;
+  m_jump_pool[node].next = NO_JUMP;
+  while (*link != NO_JUMP)
+    link = &m_jump_pool[*link].next;
+  *link = node;
+}
+
+u32 DSPEmitter::RemoveUnresolvedJumps(u16 block, u16 dest)
+{
+  u32* link = &m_unresolved_jumps[block];
+  u32 removed = 0;
+
+  while (*link != NO_JUMP)
+  {
+    const u32 node = *link;
+    if (m_jump_pool[node].dest == dest)
+    {
+      *link = m_jump_pool[node].next;
+      m_jump_pool[node].next = m_free_jump;
+      m_free_jump = node;
+      removed++;
+    }
+    else
+    {
+      link = &m_jump_pool[node].next;
+    }
+  }
+  return removed;
 }
 
 DSPEmitter::~DSPEmitter()
@@ -78,7 +144,7 @@ void DSPEmitter::ClearIRAM()
     m_blocks[i] = (DSPCompiledCode)m_stub_entry_point;
     m_block_links[i] = nullptr;
     m_block_size[i] = 0;
-    m_unresolved_jumps[i].clear();
+    ClearUnresolvedJumps(static_cast<u16>(i));
   }
   m_dsp_core.DSPState().reset_dspjit_codespace = true;
 }
@@ -94,8 +160,8 @@ void DSPEmitter::ClearIRAMandDSPJITCodespaceReset()
     m_blocks[i] = (DSPCompiledCode)m_stub_entry_point;
     m_block_links[i] = nullptr;
     m_block_size[i] = 0;
-    m_unresolved_jumps[i].clear();
   }
+  ResetUnresolvedJumps();
   m_dsp_core.DSPState().reset_dspjit_codespace = false;
 }
 
@@ -231,7 +297,7 @@ void DSPEmitter::Compile(u16 start_addr)
 {
   // Remember the current block address for later
   m_start_address = start_addr;
-  m_unresolved_jumps[start_addr].clear();
+  ClearUnresolvedJumps(start_addr);
 
   const u8* entryPoint = AlignCode16();
 
@@ -258,7 +324,7 @@ void DSPEmitter::Compile(u16 start_addr)
     m_compile_pc += opcode->size;
 
     // If the block was trying to link into itself, remove the link
-    m_unresolved_jumps[start_addr].remove(m_compile_pc);
+    RemoveUnresolvedJumps(start_addr, m_compile_pc);
 
     fixup_pc = true;
 
@@ -353,18 +419,16 @@ void DSPEmitter::Compile(u16 start_addr)
 
   // Mark this block as a linkable destination if it does not contain
   // any unresolved CALL's
-  if (m_unresolved_jumps[start_addr].empty())
+  if (!HasUnresolvedJumps(start_addr))
   {
     m_block_links[start_addr] = m_block_link_entry;
 
     for (size_t i = 0; i < 0xffff; ++i)
     {
-      if (!m_unresolved_jumps[i].empty())
+      if (HasUnresolvedJumps(static_cast<u16>(i)))
       {
         // Check if there were any blocks waiting for this block to be linkable
-        size_t size = m_unresolved_jumps[i].size();
-        m_unresolved_jumps[i].remove(start_addr);
-        if (m_unresolved_jumps[i].size() < size)
+        if (RemoveUnresolvedJumps(static_cast<u16>(i), start_addr) != 0)
         {
           // Mark the block to be recompiled again
           m_blocks[i] = (DSPCompiledCode)m_stub_entry_point;
@@ -406,11 +470,11 @@ void DSPEmitter::CompileCurrent(DSPEmitter& emitter)
     retry = false;
     for (size_t i = 0; i < 0xffff; ++i)
     {
-      if (!emitter.m_unresolved_jumps[i].empty())
+      if (emitter.HasUnresolvedJumps(static_cast<u16>(i)))
       {
-        const u16 address_to_compile = emitter.m_unresolved_jumps[i].front();
+        const u16 address_to_compile = emitter.m_jump_pool[emitter.m_unresolved_jumps[i]].dest;
         emitter.Compile(address_to_compile);
-        if (!emitter.m_unresolved_jumps[i].empty())
+        if (emitter.HasUnresolvedJumps(static_cast<u16>(i)))
           retry = true;
       }
     }
@@ -451,7 +515,7 @@ void DSPEmitter::CompileDispatcher()
 
   // Execute block. Cycles executed returned in EAX.
   MOVZX(64, 16, ECX, M_SDSP_pc());
-  MOV(64, R(RBX), ImmPtr(m_blocks.data()));
+  MOV(64, R(RBX), ImmPtr(m_blocks));
   JMPptr(MComplex(RBX, RCX, SCALE_8, 0));
 
   m_return_dispatcher = GetCodePtr();

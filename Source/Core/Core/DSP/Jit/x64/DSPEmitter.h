@@ -3,10 +3,7 @@
 
 #pragma once
 
-#include <array>
 #include <cstddef>
-#include <list>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/x64ABI.h"
@@ -314,12 +311,30 @@ private:
   u16 m_compile_status_register;
   u16 m_start_address;
 
-  std::vector<DSPCompiledCode> m_blocks;
-  std::vector<u16> m_block_size;
-  std::vector<Block> m_block_links;
+  DSPCompiledCode m_blocks[MAX_BLOCKS] = {};
+  u16 m_block_size[MAX_BLOCKS] = {};
+  Block m_block_links[MAX_BLOCKS] = {};
   Block m_block_link_entry;
 
-  std::array<std::list<u16>, MAX_BLOCKS> m_unresolved_jumps;
+  // The not-yet-compiled blocks each block jumps to, as one singly linked list per block
+  // (in the order the jumps were found) over a shared pool of entries.
+  static constexpr u32 MAX_UNRESOLVED_JUMPS = 0x10000;
+  static constexpr u32 NO_JUMP = 0xffffffff;
+  struct UnresolvedJump
+  {
+    u16 dest;
+    u32 next;
+  };
+  UnresolvedJump m_jump_pool[MAX_UNRESOLVED_JUMPS];
+  u32 m_free_jump = NO_JUMP;
+  u32 m_unresolved_jumps[MAX_BLOCKS];
+
+  void ResetUnresolvedJumps();
+  void ClearUnresolvedJumps(u16 block);
+  void AddUnresolvedJump(u16 block, u16 dest);
+  // Returns how many jumps to "dest" were removed.
+  u32 RemoveUnresolvedJumps(u16 block, u16 dest);
+  bool HasUnresolvedJumps(u16 block) const { return m_unresolved_jumps[block] != NO_JUMP; }
 
   u16 m_cycles_left = 0;
 

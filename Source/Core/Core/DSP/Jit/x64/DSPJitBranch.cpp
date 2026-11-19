@@ -137,7 +137,7 @@ void DSPEmitter::WriteBlockLink(u16 dest)
     {
       // The destination has not been compiled yet.  Add it to the list
       // of blocks that this block is waiting on.
-      m_unresolved_jumps[m_start_address].push_back(dest);
+      AddUnresolvedJump(m_start_address, dest);
     }
   }
 }
