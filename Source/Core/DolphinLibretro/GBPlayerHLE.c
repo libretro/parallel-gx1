@@ -25,8 +25,8 @@
  * the largest */
 #define GBP_HLE_MAX_WIDTH  256
 #define GBP_HLE_MAX_HEIGHT 224
-/* mGBA's ring holds this many stereo frames: a GBA frame makes about 550,
- * a Game Boy one, at its 131072 Hz, about 2200 */
+/* mGBA's ring, emptied every frame, holds this many stereo frames: a GBA
+ * frame makes about 550, a Game Boy one, at its 131072 Hz, about 2200 */
 #define GBP_HLE_AUDIO_FRAMES 4096
 #define GBP_HLE_KEYS 10
 /* more than either handheld has RAM blocks */
@@ -50,7 +50,6 @@ static mColor gbp_video[GBP_HLE_MAX_WIDTH * GBP_HLE_MAX_HEIGHT];
 /* the frontend's copy when it lends no framebuffer, blue in the low byte
  * where mGBA has red */
 static uint32_t gbp_frame[GBP_HLE_MAX_WIDTH * GBP_HLE_MAX_HEIGHT];
-static int16_t gbp_audio[GBP_HLE_AUDIO_FRAMES * 2];
 
 /* The joypad's buttons in the handheld's key order: A, B, Select, Start,
  * Right, Left, Up, Down, R, L */
@@ -89,6 +88,8 @@ static void *gbp_wram;
 static size_t gbp_wram_size;
 /* the frontend's codes, one set; made on the first code */
 static struct mCheatSet *gbp_cheats;
+
+static void gbp_audio_restart(void);
 
 /* mGBA's log has nowhere to go */
 static void gbp_log(struct mLogger *logger, int category,
@@ -262,6 +263,7 @@ int gbp_hle_load(const char *rom_path, const char *system_dir,
       vf->close(vf);
 
    gbp_core->reset(gbp_core);
+   gbp_audio_restart();
    gbp_set_memory_maps();
    gbp_environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS,
          (void*)gbp_input_descriptors);
@@ -367,23 +369,30 @@ void gbp_hle_run(void)
    if (gbp_video_cb)
       gbp_video_cb(out, width, height, pitch);
 
+   /* The frame's samples, where mGBA wrote them: the ring is emptied after
+    * each frame, so they start at its beginning, in one run */
    audio = gbp_core->getAudioBuffer(gbp_core);
-   for (;;)
+   if (audio->data.readPtr == audio->data.data && gbp_audio_batch_cb)
    {
-      size_t frames = mAudioBufferRead(audio, gbp_audio, GBP_HLE_AUDIO_FRAMES);
-      if (frames == 0)
-         break;
-      if (gbp_audio_batch_cb)
-         gbp_audio_batch_cb(gbp_audio, frames);
-      if (frames < GBP_HLE_AUDIO_FRAMES)
-         break;
+      size_t frames = mAudioBufferAvailable(audio);
+      if (frames)
+         gbp_audio_batch_cb((const int16_t*)audio->data.data, frames);
    }
+   mAudioBufferClear(audio);
+}
+
+/* mGBA's ring emptied, the next frame's samples written from its start */
+static void gbp_audio_restart(void)
+{
+   mAudioBufferClear(gbp_core->getAudioBuffer(gbp_core));
 }
 
 void gbp_hle_reset(void)
 {
-   if (gbp_core)
-      gbp_core->reset(gbp_core);
+   if (!gbp_core)
+      return;
+   gbp_core->reset(gbp_core);
+   gbp_audio_restart();
 }
 
 size_t gbp_hle_serialize_size(void)
@@ -400,9 +409,11 @@ int gbp_hle_serialize(void *data, size_t size)
 
 int gbp_hle_unserialize(const void *data, size_t size)
 {
-   if (!gbp_core || size < gbp_core->stateSize(gbp_core))
+   if (!gbp_core || size < gbp_core->stateSize(gbp_core)
+         || !gbp_core->loadState(gbp_core, data))
       return 0;
-   return gbp_core->loadState(gbp_core, data) ? 1 : 0;
+   gbp_audio_restart();
+   return 1;
 }
 
 void *gbp_hle_memory_data(unsigned id)
