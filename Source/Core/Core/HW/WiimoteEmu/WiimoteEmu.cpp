@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include <cstdio>
+#include <cstring>
 
 #include "Common/Assert.h"
 #include "Common/Common.h"
@@ -611,7 +612,7 @@ void Wiimote::SendDataReport(const DesiredWiimoteState& target_state)
     {
       // This happens when IR reporting is enabled but the camera hardware is disabled.
       // It commonly occurs when changing IR sensitivity.
-      std::fill_n(ir_data, ir_size, u8(0xff));
+      memset(ir_data, 0xff, ir_size);
     }
   }
 
@@ -638,7 +639,7 @@ void Wiimote::SendDataReport(const DesiredWiimoteState& target_state)
                                       ExtensionPort::REPORT_I2C_ADDR, ext_size, ext_data))
     {
       // Real wiimote seems to fill with 0xff on failed bus read
-      std::fill_n(ext_data, ext_size, u8(0xff));
+      memset(ext_data, 0xff, ext_size);
     }
   }
 

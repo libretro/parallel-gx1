@@ -455,7 +455,7 @@ bool Wiimote::ProcessReadDataRequest()
   reply.address = Common::swap16(m_read_request.address);
 
   // Pre-fill with zeros in case of read-error or read < 16-bytes:
-  std::ranges::fill(reply.data, 0x00);
+  memset(reply.data, 0, sizeof(reply.data));
 
   ErrorCode error_code = ErrorCode::Success;
 
