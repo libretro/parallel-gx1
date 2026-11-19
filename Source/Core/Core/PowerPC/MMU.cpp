@@ -1996,16 +1996,6 @@ MMU::TranslateAddressResult MMU::TranslateAddress(u32 address)
   return TranslatePageAddress<flag>(EffectiveAddress{address}, &wi);
 }
 
-std::optional<u32> MMU::GetTranslatedAddress(u32 address)
-{
-  auto result = TranslateAddress<XCheckTLBFlag::NoException>(address);
-  if (!result.Success())
-  {
-    return std::nullopt;
-  }
-  return std::optional<u32>(result.address);
-}
-
 void ClearDCacheLineFromJit(MMU& mmu, u32 address)
 {
   mmu.ClearDCacheLine(address);

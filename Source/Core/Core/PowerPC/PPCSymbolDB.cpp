@@ -28,24 +28,6 @@ PPCSymbolDB::PPCSymbolDB() = default;
 
 PPCSymbolDB::~PPCSymbolDB() = default;
 
-// Adds the function to the list, unless it's already there
-const Common::Symbol* PPCSymbolDB::AddFunction(u32 start_addr)
-{
-  // It's already in the list
-  if (m_functions.contains(start_addr))
-    return nullptr;
-
-  Common::Symbol symbol;
-  if (!PPCAnalyst::AnalyzeFunction(start_addr, symbol))
-    return nullptr;
-
-  const auto insert = m_functions.emplace(start_addr, std::move(symbol));
-  Common::Symbol* ptr = &insert.first->second;
-  ptr->type = Common::Symbol::Type::Function;
-  m_checksum_to_function[ptr->hash].insert(ptr);
-  return ptr;
-}
-
 void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
                                  const std::string& object_name, Common::Symbol::Type type)
 {

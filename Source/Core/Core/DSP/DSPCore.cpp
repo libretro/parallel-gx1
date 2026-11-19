@@ -115,7 +115,7 @@ SDSP::~SDSP() = default;
 bool SDSP::Initialize(const DSPInitOptions& opts)
 {
   m_step_counter = 0;
-  /* the ARAM Host::ReadHostMemory and WriteHostMemory reach */
+  /* the ARAM, through the DSP manager */
   m_accelerator.Init(&Core::System::GetInstance().GetDSP(), AcceleratorKind::LLE, this);
 
   irom = static_cast<u16*>(Common::AllocateMemoryPages(DSP_IROM_BYTE_SIZE));

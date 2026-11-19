@@ -49,7 +49,6 @@ public:
   // The size of a file.
   // Not guaranteed to return a meaningful value for directories.
   u32 GetSize() const;
-  bool IsRoot() const;
   bool IsDirectory() const;
   std::string GetName() const;
   bool NameCaseInsensitiveEquals(std::string_view other) const;

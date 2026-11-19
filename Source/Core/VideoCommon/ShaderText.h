@@ -5,16 +5,14 @@
  * The text of a shader as it is generated: one growing block of chars.
  * C89.
  *
- *  - Text is appended as it is (shader_text_puts, shader_text_putn) or
- *    formatted printf-style (shader_text_printf); the text stays NUL
- *    terminated.
+ *  - Text is appended as it is (shader_text_puts, shader_text_putn); the
+ *    text stays NUL terminated.
  *  - Room is kept in front of the text for a header a backend puts
  *    before it (shader_text_prepend): the header is written into that
  *    room, and the header and the text are one span without the text
  *    being copied.
  *  - A failed allocation leaves the text as it was and marks it failed;
- *    everything appended after that is dropped, and the owner checks
- *    shader_text_failed once, at the end.
+ *    everything appended after that is dropped.
  */
 
 #ifndef VIDEOCOMMON_SHADER_TEXT_H
@@ -26,6 +24,7 @@
 extern "C" {
 #endif
 
+/* printf-style format checking, for the generators' own formatters */
 #if defined(__GNUC__) || defined(__clang__)
 #define SHADER_TEXT_PRINTF(f, a) __attribute__((format(printf, f, a)))
 #else
@@ -53,12 +52,10 @@ void shader_text_puts(struct shader_text *t, const char *s);
 void shader_text_putn(struct shader_text *t, const char *s, size_t n);
 /* n spaces */
 void shader_text_indent(struct shader_text *t, unsigned n);
-void shader_text_printf(struct shader_text *t, const char *fmt, ...) SHADER_TEXT_PRINTF(2, 3);
 
 /* The text, NUL terminated; "" when nothing was written. */
 const char *shader_text_data(const struct shader_text *t);
 size_t shader_text_len(const struct shader_text *t);
-int shader_text_failed(const struct shader_text *t);
 
 /* Writes head into the room in front of the text and returns where the
  * two begin, as one span of head_len + len bytes; NULL if head does not

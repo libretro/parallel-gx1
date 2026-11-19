@@ -180,9 +180,3 @@ void http_service_run(http_job_t *job)
       retro_eventcount_commit_wait(&s_done, key);
    }
 }
-
-void http_job_free(http_job_t *job)
-{
-   free(job->headers);
-   job->headers = NULL;
-}

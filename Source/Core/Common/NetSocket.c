@@ -114,34 +114,6 @@ bool net_wait_readable(int fd, int timeout_ms)
    return socket_wait(fd, &rd, &wr, timeout_ms) && rd;
 }
 
-unsigned net_wait_readable_any(const int *fds, unsigned count, int timeout_ms, bool *ready)
-{
-   struct pollfd polls[32];
-   unsigned      i;
-   unsigned      n = 0;
-
-   if (count > 32)
-      count = 32;
-   memset(polls, 0, sizeof(polls));
-   for (i = 0; i < count; i++)
-   {
-      NET_POLL_FD(fds[i], &polls[i]);
-      NET_POLL_EVENT(POLLIN, &polls[i]);
-      ready[i] = false;
-   }
-   if (socket_poll(polls, count, timeout_ms) <= 0)
-      return 0;
-   for (i = 0; i < count; i++)
-   {
-      if (fds[i] >= 0 && NET_POLL_HAS_EVENT(POLLIN, &polls[i]))
-      {
-         ready[i] = true;
-         n++;
-      }
-   }
-   return n;
-}
-
 int net_udp_open(uint16_t port)
 {
    return net_open(SOCK_DGRAM, htonl(INADDR_ANY), port);

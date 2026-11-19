@@ -37,9 +37,6 @@ int net_tcp_recv(int fd, void *data, size_t len);
 
 /* Whether @fd became readable within @timeout_ms. */
 bool net_wait_readable(int fd, int timeout_ms);
-/* Waits up to @timeout_ms for any of @count sockets (at most 32) to become
- * readable; @ready[i] tells which. Returns how many are. */
-unsigned net_wait_readable_any(const int *fds, unsigned count, int timeout_ms, bool *ready);
 
 /* A UDP socket bound to @port on every address (0: any port), blocking. */
 int net_udp_open(uint16_t port);

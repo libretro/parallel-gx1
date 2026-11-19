@@ -702,11 +702,6 @@ void XEmitter::NOP(size_t size)
   }
 }
 
-void XEmitter::PAUSE()
-{
-  Write8(0xF3);
-  NOP();
-}  // use in tight spinloops for energy saving on some CPU
 void XEmitter::CLC()
 {
   CheckFlags();
@@ -1711,16 +1706,6 @@ void XEmitter::WriteFMA3Op(u8 op, X64Reg regOp1, X64Reg regOp2, const OpArg& arg
   WriteVEXOp(0x66, 0x3800 | op, regOp1, regOp2, arg, W);
 }
 
-void XEmitter::WriteFMA4Op(u8 op, X64Reg dest, X64Reg regOp1, X64Reg regOp2, const OpArg& arg,
-                           int W)
-{
-  if (!cpu_info.bFMA4)
-  {
-    PanicAlert("Trying to use FMA4 on a system that doesn't support it. Computer is v. f'n madd.");
-  }
-  WriteVEXOp4(0x66, 0x3A00 | op, dest, regOp1, arg, regOp2, W);
-}
-
 void XEmitter::WriteBMIOp(int size, u8 opPrefix, u16 op, X64Reg regOp1, X64Reg regOp2,
                           const OpArg& arg, int extrabytes)
 {
@@ -2035,10 +2020,6 @@ void XEmitter::CVTDQ2PS(X64Reg regOp, const OpArg& arg)
 void XEmitter::CVTPD2DQ(X64Reg regOp, const OpArg& arg)
 {
   WriteSSEOp(0xF2, 0xE6, regOp, arg);
-}
-void XEmitter::CVTPS2DQ(X64Reg regOp, const OpArg& arg)
-{
-  WriteSSEOp(0x66, 0x5B, regOp, arg);
 }
 
 void XEmitter::CVTTSS2SI(X64Reg regOp, const OpArg& arg)
@@ -2381,37 +2362,6 @@ void XEmitter::VFMSUB231SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg)
 {
   WriteFMA3Op(0xBB, regOp1, regOp2, arg, 1);
 }
-#define FMA4(name, op)                                                                             \
-  void XEmitter::name(X64Reg dest, X64Reg regOp1, X64Reg regOp2, const OpArg& arg)                 \
-  {                                                                                                \
-    WriteFMA4Op(op, dest, regOp1, regOp2, arg, 1);                                                 \
-  }                                                                                                \
-  void XEmitter::name(X64Reg dest, X64Reg regOp1, const OpArg& arg, X64Reg regOp2)                 \
-  {                                                                                                \
-    WriteFMA4Op(op, dest, regOp1, regOp2, arg, 0);                                                 \
-  }
-
-FMA4(VFMADDSUBPS, 0x5C)
-FMA4(VFMADDSUBPD, 0x5D)
-FMA4(VFMSUBADDPS, 0x5E)
-FMA4(VFMSUBADDPD, 0x5F)
-FMA4(VFMADDPS, 0x68)
-FMA4(VFMADDPD, 0x69)
-FMA4(VFMADDSS, 0x6A)
-FMA4(VFMADDSD, 0x6B)
-FMA4(VFMSUBPS, 0x6C)
-FMA4(VFMSUBPD, 0x6D)
-FMA4(VFMSUBSS, 0x6E)
-FMA4(VFMSUBSD, 0x6F)
-FMA4(VFNMADDPS, 0x78)
-FMA4(VFNMADDPD, 0x79)
-FMA4(VFNMADDSS, 0x7A)
-FMA4(VFNMADDSD, 0x7B)
-FMA4(VFNMSUBPS, 0x7C)
-FMA4(VFNMSUBPD, 0x7D)
-FMA4(VFNMSUBSS, 0x7E)
-FMA4(VFNMSUBSD, 0x7F)
-#undef FMA4
 
 void XEmitter::SARX(int bits, X64Reg regOp1, const OpArg& arg, X64Reg regOp2)
 {

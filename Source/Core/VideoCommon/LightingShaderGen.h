@@ -32,9 +32,8 @@ constexpr char s_lighting_struct[] = "struct Light {\n"
                                      "\tfloat4 dir;\n"
                                      "};\n";
 
-void GenerateLightingShaderHeader(ShaderCode& object, const LightingUidData& uid_data);
-/* GenerateLightingShaderHeader's dolphin_calculate_lighting_chn0 and _chn1, into chn; materials
- * and lights the uniforms' members */
+/* The lighting functions dolphin_calculate_lighting_chn0 and _chn1, into chn; materials and
+ * lights the uniforms' members */
 void BuildLightingShaderHeader(const struct shader_build* sb, const LightingUidData& uid_data,
                                struct rslc_var* materials, struct rslc_var* lights,
                                struct rslc_func** chn);

@@ -15,7 +15,6 @@ public:
   PPCSymbolDB();
   ~PPCSymbolDB();
 
-  const Common::Symbol* AddFunction(u32 start_addr);
   void AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
                       const std::string& object_name,
                       Common::Symbol::Type type = Common::Symbol::Type::Function);

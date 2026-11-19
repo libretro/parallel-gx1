@@ -250,8 +250,6 @@ public:
 
   TranslateResult JitCache_TranslateAddress(u32 address);
 
-  std::optional<u32> GetTranslatedAddress(u32 address);
-
   BatTable& GetIBATTable() { return m_ibat_table; }
   BatTable& GetDBATTable() { return m_dbat_table; }
 

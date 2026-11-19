@@ -22,16 +22,6 @@
 
 namespace DSP::Host
 {
-u8 ReadHostMemory(u32 addr)
-{
-  return Core::System::GetInstance().GetDSP().ReadARAM(addr);
-}
-
-void WriteHostMemory(u8 value, u32 addr)
-{
-  Core::System::GetInstance().GetDSP().WriteARAM(value, addr);
-}
-
 void DMAToDSP(u16* dst, u32 addr, u32 size)
 {
   auto& system = Core::System::GetInstance();

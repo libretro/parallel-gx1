@@ -361,7 +361,6 @@ private:
   void WriteAVXOp4(u8 opPrefix, u16 op, X64Reg regOp1, X64Reg regOp2, const OpArg& arg,
                    X64Reg regOp3, int W = 0);
   void WriteFMA3Op(u8 op, X64Reg regOp1, X64Reg regOp2, const OpArg& arg, int W = 0);
-  void WriteFMA4Op(u8 op, X64Reg dest, X64Reg regOp1, X64Reg regOp2, const OpArg& arg, int W = 0);
   void WriteBMIOp(int size, u8 opPrefix, u16 op, X64Reg regOp1, X64Reg regOp2, const OpArg& arg,
                   int extrabytes = 0);
   void WriteBMI1Op(int size, u8 opPrefix, u16 op, X64Reg regOp1, X64Reg regOp2, const OpArg& arg,
@@ -425,7 +424,6 @@ public:
   void NOP(size_t count = 1);
 
   // Save energy in wait-loops on P4 only. Probably not too useful.
-  void PAUSE();
 
   // Flag control
   void STC();
@@ -662,7 +660,6 @@ public:
   void CVTSD2SS(X64Reg dest, const OpArg& src);
   void CVTPD2DQ(X64Reg regOp, const OpArg& arg);
   void CVTDQ2PS(X64Reg regOp, const OpArg& arg);
-  void CVTPS2DQ(X64Reg regOp, const OpArg& arg);
 
   void CVTTPS2DQ(X64Reg regOp, const OpArg& arg);
   void CVTTPD2DQ(X64Reg regOp, const OpArg& arg);
@@ -755,32 +752,6 @@ public:
   void VFMSUB231PD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMSUB132SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
   void VFMSUB231SD(X64Reg regOp1, X64Reg regOp2, const OpArg& arg);
-
-#define FMA4(name)                                                                                 \
-  void name(X64Reg dest, X64Reg regOp1, X64Reg regOp2, const OpArg& arg);                          \
-  void name(X64Reg dest, X64Reg regOp1, const OpArg& arg, X64Reg regOp2);
-
-  FMA4(VFMADDSUBPS)
-  FMA4(VFMADDSUBPD)
-  FMA4(VFMSUBADDPS)
-  FMA4(VFMSUBADDPD)
-  FMA4(VFMADDPS)
-  FMA4(VFMADDPD)
-  FMA4(VFMADDSS)
-  FMA4(VFMADDSD)
-  FMA4(VFMSUBPS)
-  FMA4(VFMSUBPD)
-  FMA4(VFMSUBSS)
-  FMA4(VFMSUBSD)
-  FMA4(VFNMADDPS)
-  FMA4(VFNMADDPD)
-  FMA4(VFNMADDSS)
-  FMA4(VFNMADDSD)
-  FMA4(VFNMSUBPS)
-  FMA4(VFNMSUBPD)
-  FMA4(VFNMSUBSS)
-  FMA4(VFNMSUBSD)
-#undef FMA4
 
   // VEX GPR instructions
   void SARX(int bits, X64Reg regOp1, const OpArg& arg, X64Reg regOp2);

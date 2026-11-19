@@ -41,8 +41,8 @@ typedef struct http_job
    int timeout_ms;           /* without progress */
    bool follow_redirects;
    /* the result: the status, -1 when the transfer failed, and the
-    * response's header block (net_http_headers_take), freed with
-    * http_job_free */
+    * response's header block (net_http_headers_take), the caller's to
+    * free() */
    int status;
    char *headers;
    retro_atomic_int_t done;
@@ -55,8 +55,6 @@ void http_service_deinit(void);
 
 /* Runs @job on the HTTP thread and returns when it has finished. */
 void http_service_run(http_job_t *job);
-
-void http_job_free(http_job_t *job);
 
 #ifdef __cplusplus
 }

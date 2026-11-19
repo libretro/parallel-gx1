@@ -5,14 +5,9 @@
 
 #include "VideoCommon/ShaderArena.h"
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#if defined(_MSC_VER) && _MSC_VER < 1900
-#define vsnprintf _vsnprintf
-#endif
 
 static const char s_empty[1] = {0};
 
@@ -104,39 +99,6 @@ void shader_text_indent(struct shader_text *t, unsigned n)
    text[t->len] = '\0';
 }
 
-void shader_text_printf(struct shader_text *t, const char *fmt, ...)
-{
-   va_list ap;
-   int     n;
-   size_t  room;
-
-   /* most fit what is free already: one pass then */
-   if (!shader_text_reserve(t, 256))
-      return;
-   room = t->cap - t->len;
-   va_start(ap, fmt);
-   n = vsnprintf(t->block + SHADER_TEXT_HEAD_ROOM + t->len, room, fmt, ap);
-   va_end(ap);
-   if (n < 0)
-   {
-      t->failed = 1;
-      t->block[SHADER_TEXT_HEAD_ROOM + t->len] = '\0';
-      return;
-   }
-   if ((size_t)n >= room)
-   {
-      if (!shader_text_reserve(t, (size_t)n))
-      {
-         t->block[SHADER_TEXT_HEAD_ROOM + t->len] = '\0';
-         return;
-      }
-      va_start(ap, fmt);
-      vsnprintf(t->block + SHADER_TEXT_HEAD_ROOM + t->len, (size_t)n + 1, fmt, ap);
-      va_end(ap);
-   }
-   t->len += (size_t)n;
-}
-
 const char *shader_text_data(const struct shader_text *t)
 {
    return t->block ? t->block + SHADER_TEXT_HEAD_ROOM : s_empty;
@@ -145,11 +107,6 @@ const char *shader_text_data(const struct shader_text *t)
 size_t shader_text_len(const struct shader_text *t)
 {
    return t->len;
-}
-
-int shader_text_failed(const struct shader_text *t)
-{
-   return t->failed;
 }
 
 const char *shader_text_prepend(struct shader_text *t, const char *head, size_t head_len)

@@ -82,11 +82,6 @@ u64 FileInfo::GetOffset() const
   return static_cast<u64>(Get(EntryProperty::FILE_OFFSET)) << m_offset_shift;
 }
 
-bool FileInfo::IsRoot() const
-{
-  return m_index == 0;
-}
-
 bool FileInfo::IsDirectory() const
 {
   return (Get(EntryProperty::NAME_OFFSET) & 0xFF000000) != 0;
