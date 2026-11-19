@@ -45,7 +45,7 @@ void CustomResourceManager::XFBTriggered()
 
 TextureDataResource* CustomResourceManager::GetTextureDataFromAsset(
     const CustomAssetLibrary::AssetID& asset_id,
-    std::shared_ptr<VideoCommon::CustomAssetLibrary> library)
+    std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library)
 {
   auto& resource = m_texture_data_resources[asset_id];
   if (resource == nullptr)
@@ -59,7 +59,7 @@ TextureDataResource* CustomResourceManager::GetTextureDataFromAsset(
 
 Resource::ResourceContext CustomResourceManager::CreateResourceContext(
     const CustomAssetLibrary::AssetID& asset_id,
-    std::shared_ptr<VideoCommon::CustomAssetLibrary> library)
+    std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library)
 {
   return Resource::ResourceContext{asset_id, std::move(library), &m_asset_cache, this,
                                    &m_worker_thread};

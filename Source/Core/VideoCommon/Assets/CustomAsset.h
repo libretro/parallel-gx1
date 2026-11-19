@@ -14,15 +14,15 @@
 namespace VideoCommon
 {
 // An abstract class that provides operations for loading
-// data from a 'CustomAssetLibrary'
+// data from a 'DirectFilesystemAssetLibrary'
 class CustomAsset
 {
 public:
   using ClockType = Clock;
   using TimeType = TimePoint;
 
-  CustomAsset(std::shared_ptr<CustomAssetLibrary> library, CustomAssetLibrary::AssetID asset_id,
-              u64 session_id);
+  CustomAsset(std::shared_ptr<DirectFilesystemAssetLibrary> library,
+              CustomAssetLibrary::AssetID asset_id, u64 session_id);
   virtual ~CustomAsset() = default;
   CustomAsset(const CustomAsset&) = delete;
   CustomAsset(CustomAsset&&) = delete;
@@ -52,7 +52,7 @@ public:
   std::size_t GetHandle() const;
 
 protected:
-  const std::shared_ptr<CustomAssetLibrary> m_owning_library;
+  const std::shared_ptr<DirectFilesystemAssetLibrary> m_owning_library;
 
 private:
   virtual CustomAssetLibrary::LoadInfo LoadImpl(const CustomAssetLibrary::AssetID& asset_id) = 0;

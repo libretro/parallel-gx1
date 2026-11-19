@@ -26,7 +26,7 @@ public:
   struct ResourceContext
   {
     CustomAssetLibrary::AssetID primary_asset_id;
-    std::shared_ptr<CustomAssetLibrary> asset_library;
+    std::shared_ptr<DirectFilesystemAssetLibrary> asset_library;
     CustomAssetCache* asset_cache;
     CustomResourceManager* resource_manager;
     Common::AsyncWorkThreadSP* worker_queue;

@@ -7,11 +7,10 @@
 
 namespace VideoCommon
 {
-class CustomTextureData;
+class DirectFilesystemAssetLibrary;
 
-// This class provides functionality to load
-// specific data (like textures).  Where this data
-// is loaded from is implementation defined
+// What loading assets (like textures) is spoken in; the one library that loads them is
+// DirectFilesystemAssetLibrary, from the file system.
 class CustomAssetLibrary
 {
 public:
@@ -22,10 +21,5 @@ public:
   {
     std::size_t bytes_loaded = 0;
   };
-
-  virtual ~CustomAssetLibrary() = default;
-
-  // Loads a texture, if there are no levels, bytes loaded will be empty
-  virtual LoadInfo LoadTexture(const AssetID& asset_id, CustomTextureData* data) = 0;
 };
 }  // namespace VideoCommon

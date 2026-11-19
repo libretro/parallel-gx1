@@ -47,7 +47,8 @@ public:
 
   template <typename T>
   T* CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
-                 std::shared_ptr<VideoCommon::CustomAssetLibrary> library, AssetListener* listener)
+                 std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
+                 AssetListener* listener)
   {
     const auto [it, added] =
         m_asset_id_to_handle.try_emplace(asset_id, m_asset_handle_to_data.size());

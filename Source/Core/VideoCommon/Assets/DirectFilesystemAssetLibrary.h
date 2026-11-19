@@ -14,17 +14,17 @@
 
 namespace VideoCommon
 {
-// This class implements 'CustomAssetLibrary' and loads any assets
-// directly from the filesystem
+// Loads any assets directly from the filesystem
 class DirectFilesystemAssetLibrary final : public CustomAssetLibrary
 {
 public:
   DirectFilesystemAssetLibrary();
-  ~DirectFilesystemAssetLibrary() override;
+  ~DirectFilesystemAssetLibrary();
   DirectFilesystemAssetLibrary(const DirectFilesystemAssetLibrary&) = delete;
   DirectFilesystemAssetLibrary& operator=(const DirectFilesystemAssetLibrary&) = delete;
 
-  LoadInfo LoadTexture(const AssetID& asset_id, CustomTextureData* data) override;
+  // Loads a texture, if there are no levels, bytes loaded will be empty
+  LoadInfo LoadTexture(const AssetID& asset_id, CustomTextureData* data);
 
   // Assigns the asset id to a map of files, how this map is read is dependent on the data
   // For instance, a raw texture would expect the map to have a single entry and load that

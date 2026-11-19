@@ -3,6 +3,8 @@
 
 #include "VideoCommon/Assets/TextureAsset.h"
 
+#include "VideoCommon/Assets/DirectFilesystemAssetLibrary.h"
+
 #include "Common/Logging/Log.h"
 
 namespace VideoCommon

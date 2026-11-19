@@ -25,12 +25,12 @@ public:
 
   TextureDataResource*
   GetTextureDataFromAsset(const CustomAssetLibrary::AssetID& asset_id,
-                          std::shared_ptr<VideoCommon::CustomAssetLibrary> library);
+                          std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library);
 
 private:
   Resource::ResourceContext
   CreateResourceContext(const CustomAssetLibrary::AssetID& asset_id,
-                        std::shared_ptr<VideoCommon::CustomAssetLibrary> library);
+                        std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library);
   CustomAssetCache m_asset_cache;
   Common::AsyncWorkThreadSP m_worker_thread;
 
