@@ -6,7 +6,6 @@
 #include <array>
 #include <cstddef>
 #include <type_traits>
-#include <variant>
 
 #include "Common/x64Emitter.h"
 #include "Core/PowerPC/Jit64/RegCache/CachedReg.h"
@@ -20,6 +19,15 @@ class RegCache;
 
 using preg_t = size_t;
 static constexpr size_t NUM_XREGS = 16;
+
+// What a register handle holds: nothing, a host register, an immediate or a guest register
+enum class RCKind : u8
+{
+  None,
+  X64Reg,
+  Imm,
+  PReg,
+};
 
 class RCOpArg
 {
@@ -60,7 +68,10 @@ private:
   RCOpArg(RegCache* rc_, preg_t preg);
 
   RegCache* rc = nullptr;
-  std::variant<std::monostate, Gen::X64Reg, u32, preg_t> contents;
+  RCKind kind = RCKind::None;
+  // the X64Reg, the immediate or the preg, as kind says; a preg_t, so the preg calls on rc
+  // take it as one
+  preg_t value = 0;
 };
 
 class RCX64Reg
@@ -90,7 +101,8 @@ private:
   RCX64Reg(RegCache* rc_, Gen::X64Reg xr);
 
   RegCache* rc = nullptr;
-  std::variant<std::monostate, Gen::X64Reg, preg_t> contents;
+  RCKind kind = RCKind::None;  // never Imm
+  preg_t value = 0;
 };
 
 class RCForkGuard

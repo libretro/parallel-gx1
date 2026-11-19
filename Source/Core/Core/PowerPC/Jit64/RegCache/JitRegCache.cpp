@@ -8,12 +8,10 @@
 #include <cmath>
 #include <limits>
 #include <utility>
-#include <variant>
 
 #include "Common/Assert.h"
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
-#include "Common/VariantUtil.h"
 #include "Common/x64Emitter.h"
 #include "Core/PowerPC/Jit64/Jit.h"
 #include "Core/PowerPC/Jit64/RegCache/CachedReg.h"
@@ -36,15 +34,15 @@ RCOpArg RCOpArg::R(X64Reg xr)
 
 RCOpArg::RCOpArg() = default;
 
-RCOpArg::RCOpArg(u32 imm) : rc(nullptr), contents(imm)
+RCOpArg::RCOpArg(u32 imm) : rc(nullptr), kind(RCKind::Imm), value(imm)
 {
 }
 
-RCOpArg::RCOpArg(X64Reg xr) : rc(nullptr), contents(xr)
+RCOpArg::RCOpArg(X64Reg xr) : rc(nullptr), kind(RCKind::X64Reg), value(xr)
 {
 }
 
-RCOpArg::RCOpArg(RegCache* rc_, preg_t preg) : rc(rc_), contents(preg)
+RCOpArg::RCOpArg(RegCache* rc_, preg_t preg) : rc(rc_), kind(RCKind::PReg), value(preg)
 {
   rc->Lock(preg);
 }
@@ -54,92 +52,94 @@ RCOpArg::~RCOpArg()
   Unlock();
 }
 
-RCOpArg::RCOpArg(RCOpArg&& other) noexcept
-    : rc(std::exchange(other.rc, nullptr)),
-      contents(std::exchange(other.contents, std::monostate{}))
+RCOpArg::RCOpArg(RCOpArg&& other) noexcept : rc(other.rc), kind(other.kind), value(other.value)
 {
+  other.rc = nullptr;
+  other.kind = RCKind::None;
 }
 
 RCOpArg& RCOpArg::operator=(RCOpArg&& other) noexcept
 {
   Unlock();
-  rc = std::exchange(other.rc, nullptr);
-  contents = std::exchange(other.contents, std::monostate{});
+  rc = other.rc;
+  kind = other.kind;
+  value = other.value;
+  other.rc = nullptr;
+  other.kind = RCKind::None;
   return *this;
 }
 
-RCOpArg::RCOpArg(RCX64Reg&& other) noexcept
-    : rc(std::exchange(other.rc, nullptr)),
-      contents(VariantCast(std::exchange(other.contents, std::monostate{})))
+RCOpArg::RCOpArg(RCX64Reg&& other) noexcept : rc(other.rc), kind(other.kind), value(other.value)
 {
+  other.rc = nullptr;
+  other.kind = RCKind::None;
 }
 
 RCOpArg& RCOpArg::operator=(RCX64Reg&& other) noexcept
 {
   Unlock();
-  rc = std::exchange(other.rc, nullptr);
-  contents = VariantCast(std::exchange(other.contents, std::monostate{}));
+  rc = other.rc;
+  kind = other.kind;
+  value = other.value;
+  other.rc = nullptr;
+  other.kind = RCKind::None;
   return *this;
 }
 
 void RCOpArg::Realize()
 {
-  if (const preg_t* preg = std::get_if<preg_t>(&contents))
-  {
-    rc->Realize(*preg);
-  }
+  if (kind == RCKind::PReg)
+    rc->Realize(value);
 }
 
 OpArg RCOpArg::Location() const
 {
-  if (const preg_t* preg = std::get_if<preg_t>(&contents))
+  switch (kind)
   {
-    ASSERT(rc->IsRealized(*preg));
-    return rc->R(*preg);
+  case RCKind::PReg:
+    ASSERT(rc->IsRealized(value));
+    return rc->R(value);
+  case RCKind::X64Reg:
+    return Gen::R(static_cast<X64Reg>(value));
+  case RCKind::Imm:
+    return Gen::Imm32(static_cast<u32>(value));
+  default:
+    ASSERT(false);
+    return {};
   }
-  else if (const X64Reg* xr = std::get_if<X64Reg>(&contents))
-  {
-    return Gen::R(*xr);
-  }
-  else if (const u32* imm = std::get_if<u32>(&contents))
-  {
-    return Gen::Imm32(*imm);
-  }
-  ASSERT(false);
-  return {};
 }
 
 void RCOpArg::Unlock()
 {
-  if (const preg_t* preg = std::get_if<preg_t>(&contents))
+  switch (kind)
   {
+  case RCKind::PReg:
     ASSERT(rc);
-    rc->Unlock(*preg);
-  }
-  else if (const X64Reg* xr = std::get_if<X64Reg>(&contents))
-  {
+    rc->Unlock(value);
+    break;
+  case RCKind::X64Reg:
     // If rc, we got this from an RCX64Reg.
     // If !rc, we got this from RCOpArg::R.
     if (rc)
-      rc->UnlockX(*xr);
-  }
-  else
-  {
+      rc->UnlockX(static_cast<X64Reg>(value));
+    break;
+  default:
     ASSERT(!rc);
+    break;
   }
 
   rc = nullptr;
-  contents = std::monostate{};
+  kind = RCKind::None;
 }
 
 RCX64Reg::RCX64Reg() = default;
 
-RCX64Reg::RCX64Reg(RegCache* rc_, preg_t preg) : rc(rc_), contents(preg)
+RCX64Reg::RCX64Reg(RegCache* rc_, preg_t preg) : rc(rc_), kind(RCKind::PReg), value(preg)
 {
   rc->Lock(preg);
 }
 
-RCX64Reg::RCX64Reg(RegCache* rc_, X64Reg xr) : rc(rc_), contents(xr)
+RCX64Reg::RCX64Reg(RegCache* rc_, X64Reg xr) : rc(rc_), kind(RCKind::X64Reg), value(xr)
 {
   rc->LockX(xr);
 }
@@ -149,41 +149,42 @@ RCX64Reg::~RCX64Reg()
   Unlock();
 }
 
-RCX64Reg::RCX64Reg(RCX64Reg&& other) noexcept
-    : rc(std::exchange(other.rc, nullptr)),
-      contents(std::exchange(other.contents, std::monostate{}))
+RCX64Reg::RCX64Reg(RCX64Reg&& other) noexcept : rc(other.rc), kind(other.kind), value(other.value)
 {
+  other.rc = nullptr;
+  other.kind = RCKind::None;
 }
 
 RCX64Reg& RCX64Reg::operator=(RCX64Reg&& other) noexcept
 {
   Unlock();
-  rc = std::exchange(other.rc, nullptr);
-  contents = std::exchange(other.contents, std::monostate{});
+  rc = other.rc;
+  kind = other.kind;
+  value = other.value;
+  other.rc = nullptr;
+  other.kind = RCKind::None;
   return *this;
 }
 
 void RCX64Reg::Realize()
 {
-  if (const preg_t* preg = std::get_if<preg_t>(&contents))
-  {
-    rc->Realize(*preg);
-  }
+  if (kind == RCKind::PReg)
+    rc->Realize(value);
 }
 
 RCX64Reg::operator X64Reg() const&
 {
-  if (const preg_t* preg = std::get_if<preg_t>(&contents))
+  switch (kind)
   {
-    ASSERT(rc->IsRealized(*preg));
-    return rc->RX(*preg);
+  case RCKind::PReg:
+    ASSERT(rc->IsRealized(value));
+    return rc->RX(value);
+  case RCKind::X64Reg:
+    return static_cast<X64Reg>(value);
+  default:
+    ASSERT(false);
+    return {};
   }
-  else if (const X64Reg* xr = std::get_if<X64Reg>(&contents))
-  {
-    return *xr;
-  }
-  ASSERT(false);
-  return {};
 }
 
 RCX64Reg::operator OpArg() const&
@@ -193,23 +194,23 @@ RCX64Reg::operator OpArg() const&
 
 void RCX64Reg::Unlock()
 {
-  if (const preg_t* preg = std::get_if<preg_t>(&contents))
+  switch (kind)
   {
+  case RCKind::PReg:
     ASSERT(rc);
-    rc->Unlock(*preg);
-  }
-  else if (const X64Reg* xr = std::get_if<X64Reg>(&contents))
-  {
+    rc->Unlock(value);
+    break;
+  case RCKind::X64Reg:
     ASSERT(rc);
-    rc->UnlockX(*xr);
-  }
-  else
-  {
+    rc->UnlockX(static_cast<X64Reg>(value));
+    break;
+  default:
     ASSERT(!rc);
+    break;
   }
 
   rc = nullptr;
-  contents = std::monostate{};
+  kind = RCKind::None;
 }
 
 RCForkGuard::RCForkGuard(RegCache& rc_) : rc(&rc_), m_regs(rc_.m_regs), m_xregs(rc_.m_xregs)
