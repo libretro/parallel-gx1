@@ -310,8 +310,6 @@ static const char* GetDeviceName(unsigned device)
     return "Pointer";
   case RETRO_DEVICE_KEYBOARD:
     return "Keyboard";
-  case RETRO_DEVICE_LIGHTGUN:
-    return "Lightgun";
   }
   return "Unknown";
 }
@@ -566,25 +564,6 @@ Device::Device(unsigned device, unsigned p) : m_device(device), m_port(p)
     }
     return;
   case RETRO_DEVICE_KEYBOARD:
-    return;
-  case RETRO_DEVICE_LIGHTGUN:
-    // TODO: handle absolute coordinates correctly.
-    AddAxis(RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X, -320, "X-");
-    AddAxis(RETRO_DEVICE_ID_LIGHTGUN_SCREEN_X, 320, "X+");
-    AddAxis(RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y, -264, "Y-");
-    AddAxis(RETRO_DEVICE_ID_LIGHTGUN_SCREEN_Y, 264, "Y+");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_IS_OFFSCREEN, "Offscreen");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_TRIGGER, "Trigger");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_RELOAD, "Reload");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_AUX_A, "A");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_AUX_B, "B");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_START, "Start");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_SELECT, "Select");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_AUX_C, "C");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_DPAD_UP, "Up");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_DPAD_DOWN, "Down");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_DPAD_LEFT, "Left");
-    AddButton(RETRO_DEVICE_ID_LIGHTGUN_DPAD_RIGHT, "Right");
     return;
   }
 }
