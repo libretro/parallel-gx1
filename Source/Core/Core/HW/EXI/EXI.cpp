@@ -30,7 +30,11 @@ ExpansionInterfaceManager::ExpansionInterfaceManager(Core::System& system) : m_s
 {
 }
 
-ExpansionInterfaceManager::~ExpansionInterfaceManager() = default;
+ExpansionInterfaceManager::~ExpansionInterfaceManager()
+{
+  for (CEXIChannel* channel : m_channels)
+    delete channel;
+}
 
 void ExpansionInterfaceManager::AddMemoryCard(Slot slot)
 {
@@ -110,7 +114,7 @@ void ExpansionInterfaceManager::Init(const Sram* override_sram)
       Memcard::HeaderData header_data;
       Memcard::InitializeHeaderData(&header_data, flash_id, size_mbits, shift_jis, rtc_bias,
                                     sram_language, format_time + i);
-      m_channels[i] = std::make_unique<CEXIChannel>(m_system, i, header_data);
+      m_channels[i] = new CEXIChannel(m_system, i, header_data);
     }
   }
 
@@ -137,8 +141,11 @@ void ExpansionInterfaceManager::Init(const Sram* override_sram)
 
 void ExpansionInterfaceManager::Shutdown()
 {
-  for (auto& channel : m_channels)
-    channel.reset();
+  for (CEXIChannel*& channel : m_channels)
+  {
+    delete channel;
+    channel = nullptr;
+  }
 
   CEXIMemoryCard::Shutdown();
 
@@ -177,8 +184,8 @@ void ExpansionInterfaceManager::ChangeDeviceCallback(Core::System& system, u64 u
   u8 type = (u8)(userdata >> 16);
   u8 num = (u8)userdata;
 
-  system.GetExpansionInterface().m_channels.at(channel)->AddDevice(static_cast<EXIDeviceType>(type),
-                                                                   num);
+  system.GetExpansionInterface().m_channels[channel]->AddDevice(static_cast<EXIDeviceType>(type),
+                                                                num);
 }
 
 void ExpansionInterfaceManager::ChangeDevice(Slot slot, EXIDeviceType device_type,
@@ -202,12 +209,12 @@ void ExpansionInterfaceManager::ChangeDevice(u8 channel, u8 device_num, EXIDevic
 
 CEXIChannel* ExpansionInterfaceManager::GetChannel(u32 index)
 {
-  return m_channels.at(index).get();
+  return index < MAX_EXI_CHANNELS ? m_channels[index] : nullptr;
 }
 
 IEXIDevice* ExpansionInterfaceManager::GetDevice(Slot slot)
 {
-  return m_channels.at(SlotToEXIChannel(slot))->GetDevice(1 << SlotToEXIDevice(slot));
+  return m_channels[SlotToEXIChannel(slot)]->GetDevice(1 << SlotToEXIDevice(slot));
 }
 
 void ExpansionInterfaceManager::UpdateInterrupts()

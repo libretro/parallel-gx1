@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <array>
 #include <initializer_list>
-#include <memory>
 
 #include "Common/CommonTypes.h"
 #include "Core/CoreTiming.h"
@@ -95,7 +93,7 @@ private:
   CoreTiming::EventType* m_event_type_change_device = nullptr;
   CoreTiming::EventType* m_event_type_update_interrupts = nullptr;
 
-  std::array<std::unique_ptr<CEXIChannel>, MAX_EXI_CHANNELS> m_channels;
+  CEXIChannel* m_channels[MAX_EXI_CHANNELS] = {};  // owned
 
   bool m_using_overridden_sram = false;
 

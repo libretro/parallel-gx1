@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <memory>
-
 #include "Common/CommonTypes.h"
 
 #include "Core/HW/GCMemcard/GCMemcard.h"
@@ -128,6 +125,6 @@ private:
     NUM_DEVICES = 3
   };
 
-  std::array<IEXIDevice*, NUM_DEVICES> m_devices{};  // owned
+  IEXIDevice* m_devices[NUM_DEVICES] = {};  // owned
 };
 }  // namespace ExpansionInterface
