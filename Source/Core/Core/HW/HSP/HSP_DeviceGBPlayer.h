@@ -16,37 +16,11 @@ class System;
 
 namespace HSP
 {
-class CHSPDevice_GBPlayer;
+// Audio/Video data is read in chunks.
+constexpr std::size_t AV_REGION_SIZE = 0x400;
 
-class IGBPlayer
-{
-public:
-  // Audio/Video data is read in chunks.
-  static constexpr std::size_t AV_REGION_SIZE = 0x400;
-
-  IGBPlayer(Core::System&, CHSPDevice_GBPlayer*);
-  virtual ~IGBPlayer();
-
-  virtual void Reset() = 0;
-  virtual void Stop() = 0;
-
-  virtual bool IsLoaded() const = 0;
-  virtual bool IsGBA() const = 0;
-
-  virtual void SetKeys(u16) = 0;
-
-  virtual u8 ReadSIOControl() = 0;
-  virtual void WriteSIOControl(u8) = 0;
-
-  virtual u32 ReadSIOData() = 0;
-  virtual void WriteSIOData(u32) = 0;
-
-  virtual void DoState(PointerWrap& p) = 0;
-
-protected:
-  Core::System& m_system;
-  CHSPDevice_GBPlayer* const m_player;
-};
+// The handheld behind the player: mGBA when it is built in, an empty slot otherwise
+class GBPlayerBackend;
 
 class CHSPDevice_GBPlayer final : public IHSPDevice
 {
@@ -54,6 +28,7 @@ public:
   enum class IRQ : int;
 
   explicit CHSPDevice_GBPlayer(Core::System& system);
+  ~CHSPDevice_GBPlayer() override;
 
   HSPDeviceType GetDeviceType() const override { return HSPDeviceType::GBPlayer; }
 
@@ -78,12 +53,12 @@ private:
   u16 m_irq{};
 
   // Holds four scanlines in RGB5 format.
-  std::array<u16, IGBPlayer::AV_REGION_SIZE> m_scanlines{};
+  std::array<u16, AV_REGION_SIZE> m_scanlines{};
 
   // Holds PWM audio data. Entire buffer is filled and read at 4096 Hz.
-  std::array<u8, IGBPlayer::AV_REGION_SIZE> m_audio{};
+  std::array<u8, AV_REGION_SIZE> m_audio{};
 
-  std::unique_ptr<IGBPlayer> m_gbp;
+  std::unique_ptr<GBPlayerBackend> m_gbp;
 };
 
 }  // namespace HSP

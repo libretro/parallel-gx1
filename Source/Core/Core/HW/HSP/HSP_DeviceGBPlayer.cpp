@@ -50,28 +50,6 @@ constexpr u8 CONTROL_MASK_IRQ = 0x10;
 
 constexpr u32 AV_ADDRESS_MASK = 0xfe0;
 
-class CGBPlayer_Dummy final : public HSP::IGBPlayer
-{
-public:
-  using IGBPlayer::IGBPlayer;
-
-  void Reset() override {}
-  void Stop() override {}
-
-  bool IsLoaded() const override { return false; }
-  bool IsGBA() const override { return false; }
-
-  void SetKeys(u16 keys) override {}
-
-  u8 ReadSIOControl() override { return 0; }
-  void WriteSIOControl(u8) override {}
-
-  u32 ReadSIOData() override { return 0; }
-  void WriteSIOData(u32) override {}
-
-  void DoState(PointerWrap& p) override {}
-};
-
 }  // namespace
 
 namespace HSP
@@ -89,41 +67,44 @@ enum class CHSPDevice_GBPlayer::IRQ : int
 
 #if defined(HAS_LIBMGBA)
 
-class CGBPlayer_mGBA final : public IGBPlayer
+class GBPlayerBackend
 {
 public:
-  CGBPlayer_mGBA(Core::System&, CHSPDevice_GBPlayer*);
+  GBPlayerBackend(Core::System&, CHSPDevice_GBPlayer*);
 
-  CGBPlayer_mGBA(const CGBPlayer_mGBA&) = delete;
-  CGBPlayer_mGBA(CGBPlayer_mGBA&&) = delete;
-  CGBPlayer_mGBA& operator=(const CGBPlayer_mGBA&) = delete;
-  CGBPlayer_mGBA& operator=(CGBPlayer_mGBA&&) = delete;
-  ~CGBPlayer_mGBA() override;
+  GBPlayerBackend(const GBPlayerBackend&) = delete;
+  GBPlayerBackend(GBPlayerBackend&&) = delete;
+  GBPlayerBackend& operator=(const GBPlayerBackend&) = delete;
+  GBPlayerBackend& operator=(GBPlayerBackend&&) = delete;
+  ~GBPlayerBackend();
 
-  void Reset() override;
-  void Stop() override;
+  void Reset();
+  void Stop();
 
-  bool IsLoaded() const override;
-  bool IsGBA() const override;
+  bool IsLoaded() const;
+  bool IsGBA() const;
 
-  void SetKeys(u16 keys) override;
+  void SetKeys(u16 keys);
 
-  u8 ReadSIOControl() override;
-  void WriteSIOControl(u8) override;
+  u8 ReadSIOControl();
+  void WriteSIOControl(u8);
 
-  u32 ReadSIOData() override;
-  void WriteSIOData(u32) override;
+  u32 ReadSIOData();
+  void WriteSIOData(u32);
 
-  void DoState(PointerWrap& p) override;
+  void DoState(PointerWrap& p);
 
 private:
+  Core::System& m_system;
+  CHSPDevice_GBPlayer* const m_player;
+
   static constexpr std::size_t AUDIO_CHANNEL_COUNT = 2;
 
   HW::GBA::Core m_gba_core;
 
   struct AVStream : mAVStream
   {
-    CGBPlayer_mGBA* player;
+    GBPlayerBackend* player;
   } m_av_stream{};
 
   // A 4096 Hz event.
@@ -166,22 +147,22 @@ private:
 };
 
 /* The player whose updates the event runs: there is one GB Player. */
-static CGBPlayer_mGBA* s_player;
+static GBPlayerBackend* s_player;
 
-void CGBPlayer_mGBA::UpdateEvent(Core::System&, u64, s64 cycles_late)
+void GBPlayerBackend::UpdateEvent(Core::System&, u64, s64 cycles_late)
 {
   if (s_player)
     s_player->HandleUpdateEvent(cycles_late);
 }
 
-CGBPlayer_mGBA::~CGBPlayer_mGBA()
+GBPlayerBackend::~GBPlayerBackend()
 {
   if (s_player == this)
     s_player = nullptr;
 }
 
-CGBPlayer_mGBA::CGBPlayer_mGBA(Core::System& system, CHSPDevice_GBPlayer* gbplayer)
-    : IGBPlayer(system, gbplayer), m_gba_core{m_system, Config::GBPLAYER_GBA_INDEX}
+GBPlayerBackend::GBPlayerBackend(Core::System& system, CHSPDevice_GBPlayer* gbplayer)
+    : m_system{system}, m_player{gbplayer}, m_gba_core{m_system, Config::GBPLAYER_GBA_INDEX}
 {
   auto& core_timing = m_system.GetCoreTiming();
 
@@ -205,7 +186,7 @@ CGBPlayer_mGBA::CGBPlayer_mGBA(Core::System& system, CHSPDevice_GBPlayer* gbplay
   };
 }
 
-void CGBPlayer_mGBA::Reset()
+void GBPlayerBackend::Reset()
 {
   Stop();
 
@@ -221,7 +202,7 @@ void CGBPlayer_mGBA::Reset()
   mCoreCallbacks callbacks{.context = this};
 
   callbacks.videoFrameEnded = [](void* context) {
-    auto* const player = static_cast<CGBPlayer_mGBA*>(context);
+    auto* const player = static_cast<GBPlayerBackend*>(context);
     // Signal new frame to the next `Update` invocation.
     player->m_current_scanline_index = 0;
   };
@@ -232,7 +213,7 @@ void CGBPlayer_mGBA::Reset()
   UpdateVideoAndScheduleNextUpdate(0);
 }
 
-void CGBPlayer_mGBA::Stop()
+void GBPlayerBackend::Stop()
 {
   if (!m_gba_core.IsStarted())
     return;
@@ -259,17 +240,17 @@ void CGBPlayer_mGBA::Stop()
   m_bits_per_sample = 9;
 }
 
-bool CGBPlayer_mGBA::IsLoaded() const
+bool GBPlayerBackend::IsLoaded() const
 {
   return true;
 }
 
-bool CGBPlayer_mGBA::IsGBA() const
+bool GBPlayerBackend::IsGBA() const
 {
   return m_gba_core.IsStarted() && m_gba_core.GetPlatform() == mPLATFORM_GBA;
 }
 
-void CGBPlayer_mGBA::PrepareScanlineData()
+void GBPlayerBackend::PrepareScanlineData()
 {
   const u32* const video_buffer = m_gba_core.GetVideoBuffer();
   u16* const scanline_data = m_player->GetScanlineData();
@@ -291,7 +272,7 @@ void CGBPlayer_mGBA::PrepareScanlineData()
   m_current_scanline_index += scanline_count;
 }
 
-void CGBPlayer_mGBA::PrepareAudioData()
+void GBPlayerBackend::PrepareAudioData()
 {
   u8* const audio_data = m_player->GetAudioData();
   const size_t audio_size = AV_REGION_SIZE;
@@ -321,7 +302,7 @@ static constexpr u32 SampleToPWM(u16 value, u16* remainder)
   return u32(0xffff'ffff'0000'0000ull >> y);
 }
 
-void CGBPlayer_mGBA::ProcessAudioBuffer()
+void GBPlayerBackend::ProcessAudioBuffer()
 {
   auto* const audio_buffer = m_gba_core.GetAudioBuffer();
 
@@ -361,12 +342,12 @@ void CGBPlayer_mGBA::ProcessAudioBuffer()
   }
 }
 
-void CGBPlayer_mGBA::SetKeys(u16 keys)
+void GBPlayerBackend::SetKeys(u16 keys)
 {
   m_keys = keys;
 }
 
-void CGBPlayer_mGBA::DoState(PointerWrap& p)
+void GBPlayerBackend::DoState(PointerWrap& p)
 {
   m_gba_core.DoState(p);
 
@@ -387,14 +368,14 @@ void CGBPlayer_mGBA::DoState(PointerWrap& p)
   p.Do(m_bits_per_sample);
 }
 
-void CGBPlayer_mGBA::HandleUpdateEvent(s64 cycles_late)
+void GBPlayerBackend::HandleUpdateEvent(s64 cycles_late)
 {
   m_gba_core.Flush();
   UpdateAudio();
   UpdateVideoAndScheduleNextUpdate(cycles_late);
 }
 
-void CGBPlayer_mGBA::UpdateAudio()
+void GBPlayerBackend::UpdateAudio()
 {
   ProcessAudioBuffer();
 
@@ -415,7 +396,7 @@ void CGBPlayer_mGBA::UpdateAudio()
   m_player->AssertIRQ(CHSPDevice_GBPlayer::IRQ::Audio);
 }
 
-void CGBPlayer_mGBA::UpdateVideoAndScheduleNextUpdate(s64 cycles_late)
+void GBPlayerBackend::UpdateVideoAndScheduleNextUpdate(s64 cycles_late)
 {
   const s64 ticks_per_second = m_system.GetSystemTimers().GetTicksPerSecond();
 
@@ -464,40 +445,62 @@ void CGBPlayer_mGBA::UpdateVideoAndScheduleNextUpdate(s64 cycles_late)
   core_timing.ScheduleEvent(rel_ticks - cycles_late, m_update_event);
 }
 
-u8 CGBPlayer_mGBA::ReadSIOControl()
+u8 GBPlayerBackend::ReadSIOControl()
 {
   DEBUG_LOG(HSP, "GBPlayer: SIOControl Read");
 
   return 0;
 }
 
-void CGBPlayer_mGBA::WriteSIOControl(u8 value)
+void GBPlayerBackend::WriteSIOControl(u8 value)
 {
   DEBUG_LOG(HSP, "GBPlayer: SIOControl Write: 0x%02x", (unsigned)value);
 }
 
-u32 CGBPlayer_mGBA::ReadSIOData()
+u32 GBPlayerBackend::ReadSIOData()
 {
   DEBUG_LOG(HSP, "GBPlayer: SIOData Read");
 
   return 0;
 }
 
-void CGBPlayer_mGBA::WriteSIOData(u32 value)
+void GBPlayerBackend::WriteSIOData(u32 value)
 {
   DEBUG_LOG(HSP, "GBPlayer: SIOData Write: 0x%08x", value);
 }
+
+#else
+
+class GBPlayerBackend
+{
+public:
+  GBPlayerBackend(Core::System&, CHSPDevice_GBPlayer*) {}
+
+  void Reset() {}
+  void Stop() {}
+
+  bool IsLoaded() const { return false; }
+  bool IsGBA() const { return false; }
+
+  void SetKeys(u16) {}
+
+  u8 ReadSIOControl() { return 0; }
+  void WriteSIOControl(u8) {}
+
+  u32 ReadSIOData() { return 0; }
+  void WriteSIOData(u32) {}
+
+  void DoState(PointerWrap&) {}
+};
 
 #endif
 
 CHSPDevice_GBPlayer::CHSPDevice_GBPlayer(Core::System& system) : m_system{system}
 {
-#if defined(HAS_LIBMGBA)
-  m_gbp = std::make_unique<CGBPlayer_mGBA>(m_system, this);
-#else
-  m_gbp = std::make_unique<CGBPlayer_Dummy>(m_system, this);
-#endif
+  m_gbp = std::make_unique<GBPlayerBackend>(m_system, this);
 }
+
+CHSPDevice_GBPlayer::~CHSPDevice_GBPlayer() = default;
 
 void CHSPDevice_GBPlayer::Read(u32 address, u8* data)
 {
@@ -682,12 +685,5 @@ void CHSPDevice_GBPlayer::UpdateInterrupts()
   const bool set_interrupt = ((m_control & CONTROL_MASK_IRQ) == 0) && ((m_irq & IRQ_ASSERTED) != 0);
   m_system.GetProcessorInterface().SetInterrupt(ProcessorInterface::INT_CAUSE_HSP, set_interrupt);
 }
-
-IGBPlayer::IGBPlayer(Core::System& system, CHSPDevice_GBPlayer* player)
-    : m_system{system}, m_player{player}
-{
-}
-
-IGBPlayer::~IGBPlayer() = default;
 
 }  // namespace HSP
