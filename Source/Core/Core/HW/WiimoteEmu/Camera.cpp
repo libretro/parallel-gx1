@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
@@ -49,15 +50,15 @@ int CameraLogic::BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in)
   return RawWrite(&m_reg_data, addr, count, data_in);
 }
 
-std::array<CameraPoint, CameraLogic::NUM_POINTS>
-CameraLogic::GetCameraPoints(const Common::Matrix44& transform, Common::Vec2 field_of_view)
+void CameraLogic::GetCameraPoints(const Common::Matrix44& transform, Common::Vec2 field_of_view,
+                                  CameraPoint* camera_points)
 {
   using Common::Matrix33;
   using Common::Matrix44;
   using Common::Vec3;
   using Common::Vec4;
 
-  const std::array<Vec3, 2> leds{
+  const Vec3 leds[2] = {
       Vec3{-SENSOR_BAR_LED_SEPARATION / 2, 0, 0},
       Vec3{SENSOR_BAR_LED_SEPARATION / 2, 0, 0},
   };
@@ -66,14 +67,17 @@ CameraLogic::GetCameraPoints(const Common::Matrix44& transform, Common::Vec2 fie
       Matrix44::Perspective(field_of_view.y, field_of_view.x / field_of_view.y, 0.001f, 1000) *
       Matrix44::FromMatrix33(Matrix33::RotateX(float(MathUtil::TAU / 4))) * transform;
 
-  std::array<CameraPoint, CameraLogic::NUM_POINTS> camera_points;
+  // the points past the LEDs see nothing
+  for (int i = 0; i < NUM_POINTS; i++)
+    camera_points[i] = CameraPoint();
 
-  std::ranges::transform(leds, camera_points.begin(), [&](const Vec3& v) {
-    const auto point = camera_view * Vec4(v, 1.0);
+  for (int i = 0; i < 2; i++)
+  {
+    const auto point = camera_view * Vec4(leds[i], 1.0);
 
     // Check if LED is behind camera.
     if (point.z < 0)
-      return CameraPoint();
+      continue;
 
     // FYI: truncating vs. rounding seems to produce more symmetrical cursor positioning.
     const auto x = s32((1 - point.x / point.w) * CAMERA_RES_X / 2);
@@ -81,7 +85,7 @@ CameraLogic::GetCameraPoints(const Common::Matrix44& transform, Common::Vec2 fie
 
     // Check if LED is outside of view.
     if (x < 0 || y < 0 || x >= CAMERA_RES_X || y >= CAMERA_RES_Y)
-      return CameraPoint();
+      continue;
 
     // Curve fit from data using an official WM+ and sensor bar at middle "sensitivity".
     // Point sizes at minimum and maximum sensitivity differ by around 0.5 (not implemented).
@@ -89,17 +93,15 @@ CameraLogic::GetCameraPoints(const Common::Matrix44& transform, Common::Vec2 fie
 
     const auto clamped_point_size = std::clamp<s32>(std::lround(point_size), 1, MAX_POINT_SIZE);
 
-    return CameraPoint({u16(x), u16(y)}, u8(clamped_point_size));
-  });
-
-  return camera_points;
+    camera_points[i] = CameraPoint({u16(x), u16(y)}, u8(clamped_point_size));
+  }
 }
 
-void CameraLogic::Update(const std::array<CameraPoint, NUM_POINTS>& camera_points)
+void CameraLogic::Update(const CameraPoint* camera_points)
 {
   // IR data is read from offset 0x37 on real hardware.
-  auto& data = m_reg_data.camera_data;
-  data.fill(0xff);
+  u8* const data = m_reg_data.camera_data;
+  memset(data, 0xff, sizeof(m_reg_data.camera_data));
 
   constexpr u8 OBJECT_TRACKING_ENABLE = 0x08;
 
@@ -111,7 +113,7 @@ void CameraLogic::Update(const std::array<CameraPoint, NUM_POINTS>& camera_point
   switch (m_reg_data.mode)
   {
   case IR_MODE_BASIC:
-    for (std::size_t i = 0; i != camera_points.size() / 2; ++i)
+    for (std::size_t i = 0; i != NUM_POINTS / 2; ++i)
     {
       IRBasic irdata = {};
 
@@ -122,7 +124,7 @@ void CameraLogic::Update(const std::array<CameraPoint, NUM_POINTS>& camera_point
     }
     break;
   case IR_MODE_EXTENDED:
-    for (std::size_t i = 0; i != camera_points.size(); ++i)
+    for (std::size_t i = 0; i != NUM_POINTS; ++i)
     {
       const auto& p = camera_points[i];
       if (p.position.x < CAMERA_RES_X)
@@ -137,7 +139,7 @@ void CameraLogic::Update(const std::array<CameraPoint, NUM_POINTS>& camera_point
     }
     break;
   case IR_MODE_FULL:
-    for (std::size_t i = 0; i != camera_points.size(); ++i)
+    for (std::size_t i = 0; i != NUM_POINTS; ++i)
     {
       const auto& p = camera_points[i];
       if (p.position.x < CAMERA_RES_X)

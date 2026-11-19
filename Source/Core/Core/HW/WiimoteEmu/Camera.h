@@ -132,9 +132,10 @@ public:
 
   void Reset();
   void DoState(PointerWrap& p);
-  static std::array<CameraPoint, NUM_POINTS> GetCameraPoints(const Common::Matrix44& transform,
-                                                             Common::Vec2 field_of_view);
-  void Update(const std::array<CameraPoint, NUM_POINTS>& camera_points);
+  // The NUM_POINTS points the camera sees, into points
+  static void GetCameraPoints(const Common::Matrix44& transform, Common::Vec2 field_of_view,
+                              CameraPoint* points);
+  void Update(const CameraPoint* camera_points);  // NUM_POINTS of them
   void SetEnabled(bool is_enabled);
 
   static constexpr u8 I2C_ADDR = 0x58;
@@ -147,24 +148,24 @@ private:
   {
     // Contains sensitivity and other unknown data
     // TODO: Does disabling the camera peripheral reset the mode or sensitivity?
-    std::array<u8, 9> sensitivity_block1;
-    std::array<u8, 17> unk_0x09;
+    u8 sensitivity_block1[9];
+    u8 unk_0x09[17];
 
     // addr: 0x1a
-    std::array<u8, 2> sensitivity_block2;
-    std::array<u8, 20> unk_0x1c;
+    u8 sensitivity_block2[2];
+    u8 unk_0x1c[20];
 
     // addr: 0x30
     u8 enable_object_tracking;
-    std::array<u8, 2> unk_0x31;
+    u8 unk_0x31[2];
 
     // addr: 0x33
     u8 mode;
-    std::array<u8, 3> unk_0x34;
+    u8 unk_0x34[3];
 
     // addr: 0x37
-    std::array<u8, CAMERA_DATA_BYTES> camera_data;
-    std::array<u8, 165> unk_0x5b;
+    u8 camera_data[CAMERA_DATA_BYTES];
+    u8 unk_0x5b[165];
   };
 #pragma pack(pop)
 

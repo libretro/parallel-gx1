@@ -439,12 +439,12 @@ void Wiimote::UpdateButtonsStatus(const DesiredWiimoteState& target_state)
   m_status.buttons.hex = target_state.buttons.hex & ButtonData::BUTTON_MASK;
 }
 
-static std::array<CameraPoint, CameraLogic::NUM_POINTS>
-GetPassthroughCameraPoints(ControllerEmu::IRPassthrough* ir_passthrough)
+static void GetPassthroughCameraPoints(ControllerEmu::IRPassthrough* ir_passthrough,
+                                       CameraPoint* camera_points)
 {
-  std::array<CameraPoint, CameraLogic::NUM_POINTS> camera_points;
-  for (size_t i = 0; i < camera_points.size(); ++i)
+  for (size_t i = 0; i < CameraLogic::NUM_POINTS; ++i)
   {
+    camera_points[i] = CameraPoint();
     const ControlState size = ir_passthrough->GetObjectSize(i);
     if (size <= 0.0f)
       continue;
@@ -462,8 +462,6 @@ GetPassthroughCameraPoints(ControllerEmu::IRPassthrough* ir_passthrough)
         std::clamp(std::lround(size * ControlState(CameraLogic::MAX_POINT_SIZE)), long(0),
                    long(CameraLogic::MAX_POINT_SIZE));
   }
-
-  return camera_points;
 }
 
 void Wiimote::BuildDesiredWiimoteState(DesiredWiimoteState* target_state,
@@ -490,19 +488,21 @@ void Wiimote::BuildDesiredWiimoteState(DesiredWiimoteState* target_state,
   // Calculate IR camera state.
   if (m_ir_passthrough->enabled.GetValue() && m_ir_passthrough->AreInputsBound())
   {
-    target_state->camera_points = GetPassthroughCameraPoints(m_ir_passthrough);
+    GetPassthroughCameraPoints(m_ir_passthrough, target_state->camera_points);
   }
   else if (sensor_bar_state == SensorBarState::Enabled)
   {
-    target_state->camera_points = CameraLogic::GetCameraPoints(
+    CameraLogic::GetCameraPoints(
         GetTotalTransformation(),
         Common::Vec2(m_fov_x_setting.GetValue(), m_fov_y_setting.GetValue()) / 360 *
-            float(MathUtil::TAU));
+            float(MathUtil::TAU),
+        target_state->camera_points);
   }
   else
   {
     // If the sensor bar is off the camera will see no LEDs and return 0xFFs.
-    target_state->camera_points = DesiredWiimoteState::DEFAULT_CAMERA;
+    for (CameraPoint& point : target_state->camera_points)
+      point = CameraPoint();
   }
 
   // Calculate MotionPlus state.
