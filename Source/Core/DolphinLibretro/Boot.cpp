@@ -1,6 +1,7 @@
 #include <cctype>
 #include <compat/strl.h>
 #include <cstdio>
+#include <file/file_path.h>
 #include <functional>
 #include <iterator>
 #include <libretro.h>
@@ -10,6 +11,7 @@
 
 #include <retro_miscellaneous.h>
 #include <streams/file_stream.h>
+#include <string/stdstring.h>
 #include <vfs/vfs_hybrid.h>
 #include "Common/CommonPaths.h"
 #include "Common/FileUtil.h"
@@ -121,11 +123,14 @@ static unsigned TakeInitialDisk()
 // GBPlayer
 static std::string GBPlayer_rom_path;
 static bool GBPlayer_active;
+// The ROM was loaded on its own, the startup disc found in the system directory.
+static bool GBPlayer_direct;
 
 // The next load is an ordinary one unless the subsystem asks again.
 static void ResetGBPlayer()
 {
   GBPlayer_active = false;
+  GBPlayer_direct = false;
   GBPlayer_rom_path.clear();
 }
 
@@ -295,8 +300,8 @@ static const char* PathLast(const char* path, size_t len, size_t* last_len)
 }
 
 /* The GameCube save directory the frontend would have given with the GB
- * Player's content and core sorting undone; the GBA's own when that would
- * not fit. */
+ * Player's content and core sorting undone, game_path the disc's or NULL
+ * for none; the GBA's own when that would not fit. */
 static const char* RebuildGBPlayerSaveDir(const char* gba_save_dir, const char* game_path)
 {
   static char rebuilt[PATH_MAX_LENGTH];
@@ -341,7 +346,8 @@ static const char* RebuildGBPlayerSaveDir(const char* gba_save_dir, const char* 
   }
   if (content_sort)
   {
-    gc_content = PathLast(game_path, PathParent(game_path, strlen(game_path)), &gc_content_len);
+    if (game_path)
+      gc_content = PathLast(game_path, PathParent(game_path, strlen(game_path)), &gc_content_len);
     base_len = PathParent(base, base_len);
   }
 
@@ -367,8 +373,65 @@ static void UndoFailedLoad(bool input_up)
   Libretro::ResetGBPlayer();
 }
 
+/* A Game Boy, Game Boy Color or Game Boy Advance ROM, by its extension */
+static bool IsGameBoyRom(const char* path)
+{
+  const char* ext = path ? path_get_extension(path) : "";
+  return string_is_equal_noncase(ext, "gba") || string_is_equal_noncase(ext, "gbc") ||
+         string_is_equal_noncase(ext, "gb");
+}
+
+/* The Game Boy Player's startup disc: GBPlayer.<a disc image's extension>
+ * in the dolphin-emu folder of the system directory */
+static bool FindGBPlayerDisc(char* out, size_t size)
+{
+  static const char* const exts[] = {"rvz", "iso", "gcm", "ciso", "gcz", "wia", "tgc"};
+  const char* system_dir = NULL;
+  char dir[PATH_MAX_LENGTH];
+  char name[16];
+  size_t i;
+
+  if (!Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir) || !system_dir ||
+      !*system_dir)
+    return false;
+  fill_pathname_join_special(dir, system_dir, "dolphin-emu", sizeof(dir));
+  for (i = 0; i < sizeof(exts) / sizeof(exts[0]); i++)
+  {
+    snprintf(name, sizeof(name), "GBPlayer.%s", exts[i]);
+    fill_pathname_join_special(out, dir, name, size);
+    if (path_is_valid(out))
+      return true;
+  }
+  return false;
+}
+
 bool retro_load_game(const struct retro_game_info* game)
 {
+  static char gbp_disc[PATH_MAX_LENGTH];
+  struct retro_game_info gbp_game;
+
+  /* A Game Boy ROM loaded on its own plays in the Game Boy Player, booted
+   * from its startup disc */
+  if (!Libretro::GBPlayer_active && game && IsGameBoyRom(game->path))
+  {
+    if (!FindGBPlayerDisc(gbp_disc, sizeof(gbp_disc)))
+    {
+      Libretro::Log::DoLogFrontEnd(RETRO_LOG_ERROR,
+                                   "Game Boy Player: put its startup disc in the system "
+                                   "directory as dolphin-emu/GBPlayer.iso (or .rvz, .gcm, ...)",
+                                   5000);
+      return false;
+    }
+    Libretro::GBPlayer_rom_path = game->path;
+    Libretro::GBPlayer_active = true;
+    Libretro::GBPlayer_direct = true;
+    gbp_game = *game;
+    gbp_game.path = gbp_disc;
+    gbp_game.data = NULL;
+    gbp_game.size = 0;
+    game = &gbp_game;
+  }
+
   Libretro::ResetDiskControlState();
 
   const char* save_dir = NULL;
@@ -389,7 +452,7 @@ bool retro_load_game(const struct retro_game_info* game)
   if (Libretro::GBPlayer_active)
   {
     Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &gba_save_dir);
-    save_dir = RebuildGBPlayerSaveDir(gba_save_dir, game->path);
+    save_dir = RebuildGBPlayerSaveDir(gba_save_dir, Libretro::GBPlayer_direct ? NULL : game->path);
     INFO_LOG(BOOT, "GBPlayer: GC save dir reconstructed to: '%s'", save_dir);
   }
   else

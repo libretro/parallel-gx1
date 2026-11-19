@@ -238,7 +238,7 @@ void retro_get_system_info(retro_system_info* info)
   }
 
   info->need_fullpath = true;
-  info->valid_extensions = "elf|dol|gcm|iso|tgc|wbfs|ciso|gcz|wad|wia|rvz|m3u";
+  info->valid_extensions = "elf|dol|gcm|iso|tgc|wbfs|ciso|gcz|wad|wia|rvz|m3u|gba|gbc|gb";
   info->library_version = version_str;
   info->library_name = "ParaLLEl GX1";
   info->block_extract = true;
