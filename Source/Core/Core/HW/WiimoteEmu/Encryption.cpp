@@ -5,8 +5,7 @@
 
 #include "Core/HW/WiimoteEmu/Encryption.h"
 
-#include <algorithm>
-#include <bit>
+#include <cstring>
 
 #include "Common/Logging/Log.h"
 namespace
@@ -108,7 +107,7 @@ constexpr SBox keygen_sbox_1st_party = {
     0x8b, 0x9b, 0x08, 0x0f, 0xdc, 0x81, 0x18, 0x20, 0x04, 0xe4, 0x71, 0xcf, 0xe9, 0x2b, 0x42, 0x58,
 };
 
-constexpr std::array<SBox, 8> sboxes_1st_party = {{
+constexpr SBox sboxes_1st_party[8] = {
     {
         0x01, 0xa0, 0xa9, 0x62, 0xd6, 0x3f, 0x85, 0xa7, 0xb6, 0xd4, 0xfa, 0x15, 0x66, 0x17, 0x09,
         0xbd, 0x5d, 0x14, 0x34, 0x26, 0x59, 0x72, 0x91, 0x54, 0x06, 0x4f, 0xf8, 0xb0, 0x5b, 0x74,
@@ -269,7 +268,7 @@ constexpr std::array<SBox, 8> sboxes_1st_party = {{
         0x54, 0x73, 0x3a, 0x14, 0x4e, 0x01, 0x1d, 0xb6, 0xfd, 0x37, 0x48, 0x4d, 0x39, 0xcb, 0xe0,
         0x32,
     },
-}};
+};
 
 constexpr SBox keygen_sbox_3rd_party = {
     0xa4, 0x38, 0x33, 0x69, 0xd4, 0xf5, 0x6a, 0xa8, 0xd7, 0xec, 0x74, 0xa6, 0x7b, 0xc7, 0x3c, 0x41,
@@ -290,7 +289,7 @@ constexpr SBox keygen_sbox_3rd_party = {
     0x83, 0xa0, 0x76, 0x11, 0xc5, 0x43, 0x81, 0x46, 0xe5, 0xf1, 0xea, 0x95, 0xe2, 0xe4, 0x0f, 0xa1,
 };
 
-constexpr std::array<SBox, 8> sboxes_3rd_party = {{
+constexpr SBox sboxes_3rd_party[8] = {
     {
         0x2b, 0xd2, 0xa5, 0x8e, 0x26, 0x09, 0x0f, 0xf7, 0x45, 0x5b, 0x3c, 0xfd, 0x8c, 0x72, 0x22,
         0xbf, 0xca, 0xda, 0xe7, 0xaf, 0x16, 0xb2, 0x5e, 0x8a, 0x6f, 0x94, 0xb7, 0xd6, 0x1c, 0xb1,
@@ -451,7 +450,7 @@ constexpr std::array<SBox, 8> sboxes_3rd_party = {{
         0x45, 0xee, 0x51, 0x8d, 0xcc, 0x6c, 0xca, 0xeb, 0x7f, 0x68, 0x07, 0xae, 0x5e, 0x57, 0x08,
         0xe7,
     },
-}};
+};
 
 }  // namespace
 
@@ -479,7 +478,21 @@ void EncryptionKey::GenerateTables(const RandData& rand, const KeyData& key, con
   sb[7] = sbox_a[rand[2]] ^ sbox_b[rand[6]];
 }
 
-static EncryptionKey::KeyData KeyData1stParty(const EncryptionKey::RandData& rand, u32 idx)
+// Rotations of a byte by any count, taken modulo 8
+static u8 RotateRight8(u8 value, unsigned count)
+{
+  count &= 7;
+  return static_cast<u8>((value >> count) | (value << ((8 - count) & 7)));
+}
+
+static u8 RotateLeft8(u8 value, unsigned count)
+{
+  count &= 7;
+  return static_cast<u8>((value << count) | (value >> ((8 - count) & 7)));
+}
+
+static void KeyData1stParty(const EncryptionKey::RandData& rand, u32 idx,
+                            EncryptionKey::KeyData& out)
 {
   constexpr u8 ans_tbl[7][6] = {
       {0xa8, 0x77, 0xa6, 0xe0, 0xf7, 0x43}, {0x5a, 0x35, 0x85, 0xe2, 0x72, 0x97},
@@ -491,20 +504,22 @@ static EncryptionKey::KeyData KeyData1stParty(const EncryptionKey::RandData& ran
   auto& ans = ans_tbl[idx];
 
   EncryptionKey::RandData t0;
-  for (std::size_t i = 0; i != t0.size(); ++i)
+  for (size_t i = 0; i != sizeof(t0); ++i)
     t0[i] = keygen_sbox_1st_party[rand[i]];
 
-  return {
-      u8((std::rotr<u8>(ans[0] ^ t0[5], t0[2]) - t0[9]) ^ t0[4]),
-      u8((std::rotr<u8>(ans[1] ^ t0[1], t0[0]) - t0[5]) ^ t0[7]),
-      u8((std::rotr<u8>(ans[2] ^ t0[6], t0[8]) - t0[2]) ^ t0[0]),
-      u8((std::rotr<u8>(ans[3] ^ t0[4], t0[7]) - t0[3]) ^ t0[2]),
-      u8((std::rotr<u8>(ans[4] ^ t0[1], t0[6]) - t0[3]) ^ t0[4]),
-      u8((std::rotr<u8>(ans[5] ^ t0[7], t0[8]) - t0[5]) ^ t0[9]),
+  const u8 key[6] = {
+      u8((RotateRight8(ans[0] ^ t0[5], t0[2]) - t0[9]) ^ t0[4]),
+      u8((RotateRight8(ans[1] ^ t0[1], t0[0]) - t0[5]) ^ t0[7]),
+      u8((RotateRight8(ans[2] ^ t0[6], t0[8]) - t0[2]) ^ t0[0]),
+      u8((RotateRight8(ans[3] ^ t0[4], t0[7]) - t0[3]) ^ t0[2]),
+      u8((RotateRight8(ans[4] ^ t0[1], t0[6]) - t0[3]) ^ t0[4]),
+      u8((RotateRight8(ans[5] ^ t0[7], t0[8]) - t0[5]) ^ t0[9]),
   };
+  memcpy(out, key, sizeof(key));
 }
 
-static EncryptionKey::KeyData KeyData3rdParty(const EncryptionKey::RandData& rand, u32 idx)
+static void KeyData3rdParty(const EncryptionKey::RandData& rand, u32 idx,
+                            EncryptionKey::KeyData& out)
 {
   constexpr u8 ans_tbl[7][6] = {
       {0x54, 0x29, 0x28, 0x4e, 0x0f, 0xfc}, {0xa4, 0x6c, 0x87, 0x50, 0x49, 0x3c},
@@ -516,30 +531,31 @@ static EncryptionKey::KeyData KeyData3rdParty(const EncryptionKey::RandData& ran
   auto& ans = ans_tbl[idx];
 
   EncryptionKey::RandData t0;
-  for (std::size_t i = 0; i != t0.size(); ++i)
+  for (size_t i = 0; i != sizeof(t0); ++i)
     t0[i] = keygen_sbox_3rd_party[rand[i]];
 
-  return {
-      u8(t0[7] ^ (t0[6] + std::rotl<u8>(ans[0] ^ t0[0], t0[1]))),
-      u8(t0[1] ^ (t0[3] + std::rotl<u8>(ans[1] ^ t0[4], t0[2]))),
-      u8(t0[5] ^ (t0[4] + std::rotl<u8>(ans[2] ^ t0[2], t0[8]))),
-      u8(t0[0] ^ (t0[7] + std::rotl<u8>(ans[3] ^ t0[6], t0[9]))),
-      u8(t0[1] ^ (t0[8] + std::rotl<u8>(ans[4] ^ t0[5], t0[4]))),
-      u8(t0[5] ^ (t0[8] + std::rotl<u8>(ans[5] ^ t0[9], t0[3]))),
+  const u8 key[6] = {
+      u8(t0[7] ^ (t0[6] + RotateLeft8(ans[0] ^ t0[0], t0[1]))),
+      u8(t0[1] ^ (t0[3] + RotateLeft8(ans[1] ^ t0[4], t0[2]))),
+      u8(t0[5] ^ (t0[4] + RotateLeft8(ans[2] ^ t0[2], t0[8]))),
+      u8(t0[0] ^ (t0[7] + RotateLeft8(ans[3] ^ t0[6], t0[9]))),
+      u8(t0[1] ^ (t0[8] + RotateLeft8(ans[4] ^ t0[5], t0[4]))),
+      u8(t0[5] ^ (t0[8] + RotateLeft8(ans[5] ^ t0[9], t0[3]))),
   };
+  memcpy(out, key, sizeof(key));
 }
 
 // Generate key from the 0x40-0x4f data in the extension register.
-EncryptionKey GenerateExtensionKey(const std::array<u8, 16>& ext_key, bool third_party)
+EncryptionKey GenerateExtensionKey(const u8* ext_key, bool third_party)
 {
   // Both are stored reversed in the extension register.
   EncryptionKey::RandData rand;
-  for (size_t i = 0; i < rand.size(); i++)
-    rand[rand.size() - 1 - i] = ext_key[i];
+  for (size_t i = 0; i < sizeof(rand); i++)
+    rand[sizeof(rand) - 1 - i] = ext_key[i];
 
   EncryptionKey::KeyData key;
-  for (size_t i = 0; i < key.size(); i++)
-    key[key.size() - 1 - i] = ext_key[rand.size() + i];
+  for (size_t i = 0; i < sizeof(key); i++)
+    key[sizeof(key) - 1 - i] = ext_key[sizeof(rand) + i];
 
   const auto& sboxes = third_party ? sboxes_3rd_party : sboxes_1st_party;
   EncryptionKey result;
@@ -550,7 +566,12 @@ EncryptionKey GenerateExtensionKey(const std::array<u8, 16>& ext_key, bool third
   // We brute force which "idx" (0-6) the Wii used to generate its "key".
   for (u32 idx = 0; idx != 7; ++idx)
   {
-    if ((third_party ? KeyData3rdParty(rand, idx) : KeyData1stParty(rand, idx)) == key)
+    EncryptionKey::KeyData candidate;
+    if (third_party)
+      KeyData3rdParty(rand, idx, candidate);
+    else
+      KeyData1stParty(rand, idx, candidate);
+    if (!memcmp(candidate, key, sizeof(key)))
     {
       result.GenerateTables(rand, key, sboxes[idx], sboxes[idx + 1]);
       return result;

@@ -80,7 +80,7 @@ public:
     u8 unknown3[0x10];
 
     // address 0x40
-    std::array<u8, 0x10> encryption_key_data;
+    u8 encryption_key_data[0x10];
     u8 unknown4[0xA0];
 
     // address 0xF0
