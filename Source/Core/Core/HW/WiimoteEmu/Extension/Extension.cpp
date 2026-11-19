@@ -144,12 +144,12 @@ void EncryptedExtension::DoState(PointerWrap& p)
 
 void Extension1stParty::UpdateEncryptionKey()
 {
-  ext_key = KeyGen1stParty().GenerateFromExtensionKeyData(m_reg.encryption_key_data);
+  ext_key = GenerateExtensionKey(m_reg.encryption_key_data, false);
 }
 
 void Extension3rdParty::UpdateEncryptionKey()
 {
-  ext_key = KeyGen3rdParty().GenerateFromExtensionKeyData(m_reg.encryption_key_data);
+  ext_key = GenerateExtensionKey(m_reg.encryption_key_data, true);
 }
 
 }  // namespace WiimoteEmu

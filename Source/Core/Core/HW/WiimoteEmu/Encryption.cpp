@@ -479,36 +479,7 @@ void EncryptionKey::GenerateTables(const RandData& rand, const KeyData& key, con
   sb[7] = sbox_a[rand[2]] ^ sbox_b[rand[6]];
 }
 
-// Generate key from the 0x40-0x4f data in the extension register.
-EncryptionKey KeyGen::GenerateFromExtensionKeyData(const ExtKeyData& ext_key) const
-{
-  // Both are stored reversed in the extension register.
-  EncryptionKey::RandData rand;
-  for (size_t i = 0; i < rand.size(); i++)
-    rand[rand.size() - 1 - i] = ext_key[i];
-
-  EncryptionKey::KeyData key;
-  for (size_t i = 0; i < key.size(); i++)
-    key[key.size() - 1 - i] = ext_key[rand.size() + i];
-
-  // The "key" is generated from "rand" and "idx".
-  // The tables are generated from "rand" "key" and "idx".
-  // But "idx" is not sent to the extension.
-  // We brute force which "idx" (0-6) the Wii used to generate its "key".
-  for (u32 idx = 0; idx != 7; ++idx)
-  {
-    if (GenerateKeyData(rand, idx) == key)
-      return GenerateTables(rand, key, idx);
-  }
-
-  // Retail games never hit this path but some homebrew fills encryption key with 0x00.
-  // Real extensions seem to then use entirely different "sboxes" for table generation.
-  WARN_LOG(WIIMOTE, "Extension key gen did not match any idx. Generating fallback tables.");
-  return GenerateFallbackTables(rand, key);
-}
-
-EncryptionKey::KeyData KeyGen1stParty::GenerateKeyData(const EncryptionKey::RandData& rand,
-                                                       const u32 idx) const
+static EncryptionKey::KeyData KeyData1stParty(const EncryptionKey::RandData& rand, u32 idx)
 {
   constexpr u8 ans_tbl[7][6] = {
       {0xa8, 0x77, 0xa6, 0xe0, 0xf7, 0x43}, {0x5a, 0x35, 0x85, 0xe2, 0x72, 0x97},
@@ -533,8 +504,7 @@ EncryptionKey::KeyData KeyGen1stParty::GenerateKeyData(const EncryptionKey::Rand
   };
 }
 
-EncryptionKey::KeyData KeyGen3rdParty::GenerateKeyData(const EncryptionKey::RandData& rand,
-                                                       const u32 idx) const
+static EncryptionKey::KeyData KeyData3rdParty(const EncryptionKey::RandData& rand, u32 idx)
 {
   constexpr u8 ans_tbl[7][6] = {
       {0x54, 0x29, 0x28, 0x4e, 0x0f, 0xfc}, {0xa4, 0x6c, 0x87, 0x50, 0x49, 0x3c},
@@ -559,49 +529,46 @@ EncryptionKey::KeyData KeyGen3rdParty::GenerateKeyData(const EncryptionKey::Rand
   };
 }
 
-EncryptionKey KeyGen1stParty::GenerateTables(const EncryptionKey::RandData& rand,
-                                             const EncryptionKey::KeyData& key, u32 idx) const
+// Generate key from the 0x40-0x4f data in the extension register.
+EncryptionKey GenerateExtensionKey(const std::array<u8, 16>& ext_key, bool third_party)
 {
-  EncryptionKey result;
-  result.GenerateTables(rand, key, sboxes_1st_party[idx], sboxes_1st_party[idx + 1]);
-  return result;
-}
+  // Both are stored reversed in the extension register.
+  EncryptionKey::RandData rand;
+  for (size_t i = 0; i < rand.size(); i++)
+    rand[rand.size() - 1 - i] = ext_key[i];
 
-EncryptionKey KeyGen3rdParty::GenerateTables(const EncryptionKey::RandData& rand,
-                                             const EncryptionKey::KeyData& key, u32 idx) const
-{
-  EncryptionKey result;
-  result.GenerateTables(rand, key, sboxes_3rd_party[idx], sboxes_3rd_party[idx + 1]);
-  return result;
-}
+  EncryptionKey::KeyData key;
+  for (size_t i = 0; i < key.size(); i++)
+    key[key.size() - 1 - i] = ext_key[rand.size() + i];
 
-EncryptionKey KeyGen1stParty::GenerateFallbackTables(const EncryptionKey::RandData& rand,
-                                                     const EncryptionKey::KeyData& key) const
-{
+  const auto& sboxes = third_party ? sboxes_3rd_party : sboxes_1st_party;
+  EncryptionKey result;
+
+  // The "key" is generated from "rand" and "idx".
+  // The tables are generated from "rand" "key" and "idx".
+  // But "idx" is not sent to the extension.
+  // We brute force which "idx" (0-6) the Wii used to generate its "key".
+  for (u32 idx = 0; idx != 7; ++idx)
+  {
+    if ((third_party ? KeyData3rdParty(rand, idx) : KeyData1stParty(rand, idx)) == key)
+    {
+      result.GenerateTables(rand, key, sboxes[idx], sboxes[idx + 1]);
+      return result;
+    }
+  }
+
+  // Retail games never hit this path but some homebrew fills encryption key with 0x00.
+  // Real extensions seem to then use entirely different "sboxes" for table generation.
+  WARN_LOG(WIIMOTE, "Extension key gen did not match any idx. Generating fallback tables.");
+
   // Reverse engineering did not produce exact tables, only the XOR effect of each.
-  // This is the XOR difference between the tables.
-  // This also works with 0x97.
-  constexpr u8 fallback_sbox_xor = 0x17;
-
-  EncryptionKey result;
-  result.GenerateTables(rand, key, fallback_sbox_1st_party_a, fallback_sbox_1st_party_b);
-  for (auto& ft : result.ft)
-    ft ^= fallback_sbox_xor;
-  for (auto& sb : result.sb)
-    sb ^= fallback_sbox_xor;
-  return result;
-}
-
-EncryptionKey KeyGen3rdParty::GenerateFallbackTables(const EncryptionKey::RandData& rand,
-                                                     const EncryptionKey::KeyData& key) const
-{
-  // Reverse engineering did not produce exact tables, only the XOR effect of each.
-  // This is the XOR difference between the tables.
-  // This also works with 0x20, 0x60, or 0xa0
-  constexpr u8 fallback_sbox_xor = 0xe0;
-
-  EncryptionKey result;
-  result.GenerateTables(rand, key, fallback_sbox_3rd_party_a, fallback_sbox_3rd_party_b);
+  // This is the XOR difference between the tables. First party also works with 0x97,
+  // third party with 0x20, 0x60, or 0xa0.
+  const u8 fallback_sbox_xor = third_party ? 0xe0 : 0x17;
+  if (third_party)
+    result.GenerateTables(rand, key, fallback_sbox_3rd_party_a, fallback_sbox_3rd_party_b);
+  else
+    result.GenerateTables(rand, key, fallback_sbox_1st_party_a, fallback_sbox_1st_party_b);
   for (auto& ft : result.ft)
     ft ^= fallback_sbox_xor;
   for (auto& sb : result.sb)

@@ -29,44 +29,8 @@ public:
   std::array<u8, 8> sb = {};
 };
 
-class KeyGen
-{
-public:
-  virtual ~KeyGen() = default;
-
-  using ExtKeyData = std::array<u8, 16>;
-
-  EncryptionKey GenerateFromExtensionKeyData(const ExtKeyData& key_data) const;
-
-protected:
-  virtual EncryptionKey::KeyData GenerateKeyData(const EncryptionKey::RandData& rand,
-                                                 u32 idx) const = 0;
-  virtual EncryptionKey GenerateTables(const EncryptionKey::RandData& rand,
-                                       const EncryptionKey::KeyData& key, u32 idx) const = 0;
-  virtual EncryptionKey GenerateFallbackTables(const EncryptionKey::RandData& rand,
-                                               const EncryptionKey::KeyData& key) const = 0;
-};
-
-class KeyGen1stParty final : public KeyGen
-{
-private:
-  EncryptionKey::KeyData GenerateKeyData(const EncryptionKey::RandData& rand,
-                                         u32 idx) const final override;
-  EncryptionKey GenerateTables(const EncryptionKey::RandData& rand,
-                               const EncryptionKey::KeyData& key, u32 idx) const final override;
-  EncryptionKey GenerateFallbackTables(const EncryptionKey::RandData& rand,
-                                       const EncryptionKey::KeyData& key) const final override;
-};
-
-class KeyGen3rdParty final : public KeyGen
-{
-private:
-  EncryptionKey::KeyData GenerateKeyData(const EncryptionKey::RandData& rand,
-                                         u32 idx) const final override;
-  EncryptionKey GenerateTables(const EncryptionKey::RandData& rand,
-                               const EncryptionKey::KeyData& key, u32 idx) const final override;
-  EncryptionKey GenerateFallbackTables(const EncryptionKey::RandData& rand,
-                                       const EncryptionKey::KeyData& key) const final override;
-};
+// The key an extension derives from the 0x40-0x4f data in its register; first-party and
+// third-party extensions derive it from different tables.
+EncryptionKey GenerateExtensionKey(const std::array<u8, 16>& key_data, bool third_party);
 
 }  // namespace WiimoteEmu
