@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <optional>
 
 #include "Core/HW/WiimoteCommon/WiimoteReport.h"
@@ -26,13 +25,6 @@ struct DesiredWiimoteState
   CameraPoint camera_points[CameraLogic::NUM_POINTS];
   std::optional<MotionPlus::DataFormat::Data> motion_plus = std::nullopt;
   DesiredExtensionState extension;
-};
-
-// For Netplay.
-struct SerializedWiimoteState
-{
-  u8 length;
-  std::array<u8, 30> data;  // 18 bytes Wiimote, 6 bytes MotionPlus, 6 bytes Extension
 };
 
 }  // namespace WiimoteEmu
