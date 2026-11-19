@@ -322,12 +322,15 @@ VertexLoaderBase* GetOrCreateLoader(int vtx_attr_group)
 static void CheckCPConfiguration(int vtx_attr_group)
 {
   // Validate that the XF input configuration matches the CP configuration
-  u32 num_cp_colors = std::count_if(
-      g_main_cp_state.vtx_desc.low.Color.begin(), g_main_cp_state.vtx_desc.low.Color.end(),
-      [](auto format) { return format != VertexComponentFormat::NotPresent; });
-  u32 num_cp_tex_coords = std::count_if(
-      g_main_cp_state.vtx_desc.high.TexCoord.begin(), g_main_cp_state.vtx_desc.high.TexCoord.end(),
-      [](auto format) { return format != VertexComponentFormat::NotPresent; });
+  u32 num_cp_colors = 0;
+  for (u32 i = 0; i < 2; i++)
+    num_cp_colors += g_main_cp_state.vtx_desc.low.Color[i] != VertexComponentFormat::NotPresent;
+  u32 num_cp_tex_coords = 0;
+  for (u32 i = 0; i < 8; i++)
+  {
+    num_cp_tex_coords +=
+        g_main_cp_state.vtx_desc.high.TexCoord[i] != VertexComponentFormat::NotPresent;
+  }
 
   u32 num_cp_normals;
   if (g_main_cp_state.vtx_desc.low.Normal == VertexComponentFormat::NotPresent)
@@ -337,7 +340,9 @@ static void CheckCPConfiguration(int vtx_attr_group)
   else
     num_cp_normals = 1;
 
-  std::optional<u32> num_xf_normals;
+  // NO_NORMAL_COUNT when XF names none of the counts
+  constexpr u32 NO_NORMAL_COUNT = 0xFFFFFFFFu;
+  u32 num_xf_normals = NO_NORMAL_COUNT;
   switch (xfmem.invtxspec.numnormals)
   {
   case NormalCount::None:
@@ -356,8 +361,8 @@ static void CheckCPConfiguration(int vtx_attr_group)
       num_cp_tex_coords != xfmem.invtxspec.numtextures) [[unlikely]]
   {
     char xf_normals[16];
-    if (num_xf_normals.has_value())
-      snprintf(xf_normals, sizeof(xf_normals), "%u", num_xf_normals.value());
+    if (num_xf_normals != NO_NORMAL_COUNT)
+      snprintf(xf_normals, sizeof(xf_normals), "%u", num_xf_normals);
     else
       snprintf(xf_normals, sizeof(xf_normals), "invalid");
     PanicAlert("Mismatched configuration between CP and XF stages - %u/%u colors, %u/%s "
