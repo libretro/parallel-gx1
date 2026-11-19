@@ -192,7 +192,7 @@ void MemoryManager::Init()
   }
   m_arena.GrabSHMSegment(mem_size, "dolphin-emu");
 
-  m_physical_page_mappings.fill(nullptr);
+  memset(m_physical_page_mappings, 0, sizeof(m_physical_page_mappings));
 
   // Create an anonymous view of the physical memory
   for (const PhysicalMemoryRegion& region : m_physical_regions)
@@ -217,7 +217,7 @@ void MemoryManager::Init()
     }
   }
 
-  m_physical_page_mappings_base = reinterpret_cast<u8*>(m_physical_page_mappings.data());
+  m_physical_page_mappings_base = reinterpret_cast<u8*>(m_physical_page_mappings);
   m_logical_page_mappings_base = reinterpret_cast<u8*>(m_logical_page_mappings);
   /* every view is of a segment the system just made, which it fills with zeroes: the memory is
    * not written here, so no page is touched before the game touches it */

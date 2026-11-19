@@ -266,7 +266,7 @@ private:
   //
   // TODO: The actual size of RAM is 24MB; the other 8MB shouldn't be backed by actual memory.
   // TODO: Do we want to handle the mirrors of the GC RAM?
-  std::array<PhysicalMemoryRegion, 4> m_physical_regions{};
+  PhysicalMemoryRegion m_physical_regions[4] = {};
 
   // Views mapped for the DBATs: a handful of runs, one per BAT range and region.
   static constexpr u32 MAX_DBAT_VIEWS = 256;
@@ -284,7 +284,7 @@ private:
   LogicalMemoryView* m_page_table_view_pool = nullptr;
   u32 m_page_table_view_counts[PAGE_BLOCKS]{};
 
-  std::array<void*, PowerPC::BAT_PAGE_COUNT> m_physical_page_mappings{};
+  void* m_physical_page_mappings[PowerPC::BAT_PAGE_COUNT] = {};
   void* m_logical_page_mappings[PowerPC::BAT_PAGE_COUNT] = {};
 
   // If the host page size is larger than the guest page size, these two tables keep the
