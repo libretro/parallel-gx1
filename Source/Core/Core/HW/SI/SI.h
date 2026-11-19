@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
 
 #include "Common/BitField.h"
@@ -232,14 +231,14 @@ private:
 
   CoreTiming::EventType* m_event_type_change_device = nullptr;
   CoreTiming::EventType* m_event_type_tranfer_pending = nullptr;
-  std::array<CoreTiming::EventType*, MAX_SI_CHANNELS> m_event_types_device{};
+  CoreTiming::EventType* m_event_types_device[MAX_SI_CHANNELS] = {};
 
-  std::array<SSIChannel, MAX_SI_CHANNELS> m_channel;
+  SSIChannel m_channel[MAX_SI_CHANNELS];
   USIPoll m_poll;
   USIComCSR m_com_csr;
   USIStatusReg m_status_reg;
   USIEXIClockCount m_exi_clock_count;
-  std::array<u8, BUFFER_SIZE> m_si_buffer{};
+  u8 m_si_buffer[BUFFER_SIZE] = {};
 
   Core::System& m_system;
 };

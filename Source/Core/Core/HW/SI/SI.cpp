@@ -3,13 +3,11 @@
 
 #include "Core/HW/SI/SI.h"
 
-#include <array>
 #include <cstdio>
 #include <cstring>
 #include <memory>
 
 #if defined(_DEBUG)
-#include <vector>
 
 #include "Common/StringUtil.h"
 #endif
@@ -154,11 +152,12 @@ void SerialInterfaceManager::RunSIBuffer(u64 user_data, s64 cycles_late)
     const s32 expected_response_length = ConvertSILengthField(m_com_csr.INLNGTH);
 
 #if defined(_DEBUG)
-    const std::vector<u8> request_copy(m_si_buffer.data(), m_si_buffer.data() + request_length);
+    u8 request_copy[BUFFER_SIZE];
+    memcpy(request_copy, m_si_buffer, request_length);
 #endif
 
     ISIDevice* const device = m_channel[m_com_csr.CHANNEL].device;
-    const s32 actual_response_length = device->RunBuffer(m_si_buffer.data(), request_length);
+    const s32 actual_response_length = device->RunBuffer(m_si_buffer, request_length);
 
     DEBUG_LOG(SERIALINTERFACE,
               "RunSIBuffer  chan: %u  request_length: %d  expected_response_length: %d  "
@@ -172,7 +171,7 @@ void SerialInterfaceManager::RunSIBuffer(u64 user_data, s64 cycles_late)
           SERIALINTERFACE,
           "RunSIBuffer: expected_response_length(%d) != actual_response_length(%d): request: %s",
           static_cast<int>(expected_response_length), static_cast<int>(actual_response_length),
-          Common::BytesToHexString(request_copy.data(), request_copy.size()).c_str());
+          Common::BytesToHexString(request_copy, request_length).c_str());
 #else
       WARN_LOG(SERIALINTERFACE,
                "RunSIBuffer: expected_response_length(%d) != actual_response_length(%d)",
@@ -293,7 +292,7 @@ void SerialInterfaceManager::Init()
   // Supposedly set on reset, but logs from real Wii don't look like it is...
   // m_exi_clock_count.LOCK = 1;
 
-  m_si_buffer = {};
+  memset(m_si_buffer, 0, sizeof(m_si_buffer));
 }
 
 void SerialInterfaceManager::Shutdown()
@@ -307,7 +306,7 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 {
   // Register SI buffer direct accesses.
   const u32 io_buffer_base = base | SI_IO_BUFFER;
-  for (size_t i = 0; i < m_si_buffer.size(); i += sizeof(u32))
+  for (size_t i = 0; i < sizeof(m_si_buffer); i += sizeof(u32))
   {
     const u32 address = base | static_cast<u32>(io_buffer_base + i);
 
@@ -325,7 +324,7 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                      std::memcpy(&si.m_si_buffer[offset], &val, sizeof(val));
                    }, i));
   }
-  for (size_t i = 0; i < m_si_buffer.size(); i += sizeof(u16))
+  for (size_t i = 0; i < sizeof(m_si_buffer); i += sizeof(u16))
   {
     const u32 address = base | static_cast<u32>(io_buffer_base + i);
 
@@ -468,8 +467,8 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 
 void SerialInterfaceManager::RemoveDevice(int device_number)
 {
-  SIDevice_Destroy(m_channel.at(device_number).device);
-  m_channel.at(device_number).device = nullptr;
+  SIDevice_Destroy(m_channel[device_number].device);
+  m_channel[device_number].device = nullptr;
 }
 
 void SerialInterfaceManager::AddDevice(ISIDevice* device)
@@ -480,7 +479,7 @@ void SerialInterfaceManager::AddDevice(ISIDevice* device)
   RemoveDevice(device_number);
 
   // Set the new one
-  m_channel.at(device_number).device = device;
+  m_channel[device_number].device = device;
 }
 
 void SerialInterfaceManager::AddDevice(const SIDevices device, int device_number)
