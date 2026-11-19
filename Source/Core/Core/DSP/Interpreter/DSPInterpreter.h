@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <cstddef>
 
 #include "Core/DSP/DSPCommon.h"
@@ -237,7 +236,7 @@ private:
   DSPCore& m_dsp_core;
 
   static constexpr size_t WRITEBACK_LOG_SIZE = 5;
-  std::array<u16, WRITEBACK_LOG_SIZE> m_write_back_log{};
-  std::array<int, WRITEBACK_LOG_SIZE> m_write_back_log_idx{-1, -1, -1, -1, -1};
+  u16 m_write_back_log[WRITEBACK_LOG_SIZE] = {};
+  int m_write_back_log_idx[WRITEBACK_LOG_SIZE] = {-1, -1, -1, -1, -1};
 };
 }  // namespace DSP::Interpreter
