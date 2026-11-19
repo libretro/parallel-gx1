@@ -65,7 +65,7 @@ BluetoothEmuDevice::BluetoothEmuDevice(EmulationKernel& ios, const std::string& 
               (unsigned)tmp_bd[0], (unsigned)tmp_bd[1], (unsigned)tmp_bd[2], (unsigned)tmp_bd[3],
               (unsigned)tmp_bd[4], (unsigned)tmp_bd[5]);
 
-    m_wiimotes[i] = std::make_unique<WiimoteDevice>(this, tmp_bd, i);
+    m_wiimotes[i] = new WiimoteDevice(this, tmp_bd, i);
   }
 
   bt_dinf.num_registered = MAX_BBMOTES;
@@ -84,6 +84,8 @@ BluetoothEmuDevice::~BluetoothEmuDevice()
   ReleaseHciEndpoint();
   ReleaseAclEndpoint();
   queued_events_free(&m_event_queue);
+  for (WiimoteDevice* wiimote : m_wiimotes)
+    delete wiimote;
 }
 
 void BluetoothEmuDevice::HoldHciEndpoint(const IOCtlVRequest& request)
@@ -514,7 +516,7 @@ bool BluetoothEmuDevice::SendEventInquiryResponse()
   {
     if (candidate->IsInquiryScanEnabled())
     {
-      wiimote = candidate.get();
+      wiimote = candidate;
       break;
     }
   }
@@ -838,7 +840,7 @@ bool BluetoothEmuDevice::SendEventRoleChange(bdaddr_t bd, bool master)
 bool BluetoothEmuDevice::SendEventNumberOfCompletedPackets()
 {
   SQueuedEvent event((u32)(sizeof(hci_event_hdr_t) + sizeof(hci_num_compl_pkts_ep) +
-                           (sizeof(hci_num_compl_pkts_info) * m_wiimotes.size())),
+                           (sizeof(hci_num_compl_pkts_info) * MAX_BBMOTES)),
                      0);
 
   DEBUG_LOG(IOS_WIIMOTE, "Event: SendEventNumberOfCompletedPackets");
@@ -853,7 +855,7 @@ bool BluetoothEmuDevice::SendEventNumberOfCompletedPackets()
 
   u32 acc = 0;
 
-  for (unsigned int i = 0; i < m_wiimotes.size(); i++)
+  for (unsigned int i = 0; i < MAX_BBMOTES; i++)
   {
     event_hdr->length += sizeof(hci_num_compl_pkts_info);
     hci_event->num_con_handles++;
@@ -1550,7 +1552,7 @@ void BluetoothEmuDevice::CommandReadStoredLinkKey(u32 input_address)
   reply.max_num_keys = 255;
 
   if (read_stored_link_key.read_all == 1)
-    reply.num_keys_read = static_cast<u16>(m_wiimotes.size());
+    reply.num_keys_read = static_cast<u16>(MAX_BBMOTES);
   else
     ERROR_LOG(IOS_WIIMOTE, "CommandReadStoredLinkKey isn't looking for all devices");
 
@@ -1904,7 +1906,7 @@ void BluetoothEmuDevice::CommandVendorSpecific_FC4C(u32 input_address, u32 size)
 WiimoteDevice* BluetoothEmuDevice::AccessWiimoteByIndex(std::size_t index)
 {
   if (index < MAX_BBMOTES)
-    return m_wiimotes[index].get();
+    return m_wiimotes[index];
 
   return nullptr;
 }
