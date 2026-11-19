@@ -96,6 +96,14 @@ work over through atomics and eventcounts, and nothing waits on a clock.
 - **No locks.** Work is handed over through atomics, SPSC rings and
   eventcounts. A mutex added to fix a race is the wrong fix: give the
   state one owner.
+- **The CPU thread owns the machine.** No other thread pauses it and
+  stands in for it. Work for it goes in as a job (`Core::RunOnCPUThread`,
+  an mpsc stack): in dual core the CPU thread leaves the run loop at the
+  slice's end, or the frame gate, for it (`CPU::State::RunJobs`); in
+  single core it takes the jobs as its next frame starts. A caller that
+  needs the result waits on an eventcount, and never from a thread the
+  CPU thread waits for. Jobs left at shutdown are dropped and their
+  waiters let go.
 - **The CP fetches ahead.** In dual core the GPU thread takes a FIFO
   block only as it runs it, while the console's CP has read it in long
   before. Before the CPU reads the read pointer or the distance with a
