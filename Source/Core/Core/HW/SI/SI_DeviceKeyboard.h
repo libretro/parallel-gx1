@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Core/HW/SI/SI_Device.h"
 
 class PointerWrap;
@@ -32,9 +30,8 @@ public:
   void DoState(PointerWrap& p);
 
 private:
-  using KeyArray = std::array<u8, 3>;
-
-  KeyArray MapKeys(const KeyboardStatus& key_status) const;
+  // Writes the three held key codes, zero for none.
+  void MapKeys(const KeyboardStatus& key_status, u8* key) const;
 
   // Internal counter synchronizing GC and keyboard
   u8 m_counter = 0;
