@@ -57,7 +57,10 @@ void CustomAssetCache::Reset()
 void CustomAssetCache::FreeAssets()
 {
   for (u32 i = 0; i < m_num_assets; i++)
+  {
+    delete m_assets[i].listener;
     delete m_assets[i].asset;
+  }
   free(m_assets);
   free(m_index);
   free(m_schedule);
@@ -115,6 +118,13 @@ void CustomAssetCache::GrowIndex()
   free(m_index);
   m_index = index;
   m_index_capacity = capacity;
+}
+
+TextureDataResource*
+CustomAssetCache::FindResource(const CustomAssetLibrary::AssetID& asset_id) const
+{
+  const u32 handle = FindHandle(asset_id, nullptr);
+  return handle == NO_ASSET ? nullptr : m_assets[handle].listener;
 }
 
 TextureAsset*

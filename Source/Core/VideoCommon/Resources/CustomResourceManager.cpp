@@ -26,8 +26,6 @@ void CustomResourceManager::Shutdown()
 
 void CustomResourceManager::Reset()
 {
-  m_texture_data_resources.clear();
-
   m_asset_cache.Reset();
 }
 
@@ -40,13 +38,14 @@ TextureDataResource* CustomResourceManager::GetTextureDataFromAsset(
     const CustomAssetLibrary::AssetID& asset_id,
     std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library)
 {
-  auto& resource = m_texture_data_resources[asset_id];
+  TextureDataResource* resource = m_asset_cache.FindResource(asset_id);
   if (resource == nullptr)
   {
-    resource = std::make_unique<TextureDataResource>(asset_id, std::move(library), &m_asset_cache);
+    // the cache keeps it, with its asset
+    resource = new TextureDataResource(asset_id, std::move(library), &m_asset_cache);
   }
   resource->Process();
-  return resource.get();
+  return resource;
 }
 
 }  // namespace VideoCommon

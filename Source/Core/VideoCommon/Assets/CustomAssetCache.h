@@ -28,7 +28,11 @@ public:
   CustomAssetCache(const CustomAssetCache&) = delete;
   CustomAssetCache& operator=(const CustomAssetCache&) = delete;
 
-  // The asset asset_id names, made on its first request; listener hears how its loads end.
+  // The resource listening on asset_id's asset, null when it has none yet
+  TextureDataResource* FindResource(const CustomAssetLibrary::AssetID& asset_id) const;
+
+  // The asset asset_id names, made on its first request; listener, owned from here on, hears
+  // how its loads end.
   TextureAsset* CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
                             std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
                             TextureDataResource* listener);
@@ -60,8 +64,8 @@ private:
   // One per asset, indexed by its handle (handles count up from 0 as assets are made).
   struct AssetData
   {
-    TextureAsset* asset;  // owned
-    TextureDataResource* listener;
+    TextureAsset* asset;            // owned
+    TextureDataResource* listener;  // owned
     u32 prev[2];  // per queue: the asset in front, NO_ASSET at the head
     u32 next[2];  // per queue: the asset behind, NO_ASSET at the tail
     bool queued[2];

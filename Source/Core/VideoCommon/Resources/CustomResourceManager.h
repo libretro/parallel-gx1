@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <map>
 #include <memory>
 
 #include "Common/HookableEvent.h"
@@ -28,9 +27,6 @@ public:
 
 private:
   CustomAssetCache m_asset_cache;
-
-  std::map<CustomAssetLibrary::AssetID, std::unique_ptr<TextureDataResource>>
-      m_texture_data_resources;
 
   Common::EventHook m_xfb_event;
 };
