@@ -93,7 +93,7 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
   while (!m_exit_flag.IsSet())
   {
     // Claim the next asset of the current batch, if it has one left.
-    CustomAsset* item = nullptr;
+    TextureAsset* item = nullptr;
     quiesce_enter(&m_batch_quiesce);
     if (auto* batch = static_cast<Batch*>(retro_atomic_load_acquire_ptr(&m_batch)))
     {
@@ -155,7 +155,7 @@ auto CustomAssetLoader::TakeLoadResults() -> LoadResults
   return results;
 }
 
-void CustomAssetLoader::ScheduleAssetsToLoad(std::list<CustomAsset*> assets_to_load,
+void CustomAssetLoader::ScheduleAssetsToLoad(std::list<TextureAsset*> assets_to_load,
                                              u64 allowed_memory)
 {
   if (assets_to_load.empty()) [[unlikely]]

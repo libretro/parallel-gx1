@@ -11,7 +11,7 @@
 
 #include "UICommon/UICommon.h"
 
-#include "VideoCommon/Assets/CustomAsset.h"
+#include "VideoCommon/Assets/TextureAsset.h"
 
 namespace VideoCommon
 {
@@ -49,12 +49,12 @@ void CustomAssetCache::Reset()
   m_ram_used = 0;
 }
 
-void CustomAssetCache::MarkAssetPending(CustomAsset* asset)
+void CustomAssetCache::MarkAssetPending(TextureAsset* asset)
 {
   m_pending_assets.MakeAssetHighestPriority(asset->GetHandle(), asset);
 }
 
-void CustomAssetCache::MarkAssetActive(CustomAsset* asset)
+void CustomAssetCache::MarkAssetActive(TextureAsset* asset)
 {
   m_active_assets.MakeAssetHighestPriority(asset->GetHandle(), asset);
 }

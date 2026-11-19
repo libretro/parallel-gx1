@@ -11,9 +11,9 @@
 #include <rthreads/retro_eventcount.h>
 #include <rthreads/rthreads.h>
 
-#include "Common/Quiesce.h"
 #include "Common/Flag.h"
-#include "VideoCommon/Assets/CustomAsset.h"
+#include "Common/Quiesce.h"
+#include "VideoCommon/Assets/TextureAsset.h"
 
 namespace VideoCommon
 {
@@ -47,7 +47,7 @@ public:
 
   // Schedule assets to load on the worker threads
   //  and set how much memory is available for loading these additional assets.
-  void ScheduleAssetsToLoad(std::list<CustomAsset*> assets_to_load, u64 allowed_memory);
+  void ScheduleAssetsToLoad(std::list<TextureAsset*> assets_to_load, u64 allowed_memory);
 
   void Reset(bool restart_worker_threads = true);
 
@@ -76,7 +76,7 @@ private:
   struct Batch
   {
     quiesce_node_t node;  // first: the free callback casts it back
-    std::vector<CustomAsset*> assets;
+    std::vector<TextureAsset*> assets;
     s64 allowed_memory;
     retro_atomic_size_t cursor;
   };

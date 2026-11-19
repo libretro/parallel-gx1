@@ -465,7 +465,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/AbstractGfx.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AbstractStagingTexture.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/AbstractTexture.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Assets/CustomAsset.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/CustomAssetCache.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/CustomAssetLoader.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Assets/CustomTextureData.cpp \

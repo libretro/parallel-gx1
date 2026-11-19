@@ -10,9 +10,9 @@
 
 #include "Common/CommonTypes.h"
 
-#include "VideoCommon/Assets/CustomAsset.h"
 #include "VideoCommon/Assets/CustomAssetLibrary.h"
 #include "VideoCommon/Assets/CustomAssetLoader.h"
+#include "VideoCommon/Assets/TextureAsset.h"
 
 namespace VideoCommon
 {
@@ -30,11 +30,11 @@ public:
   // and load state
   struct AssetData
   {
-    std::unique_ptr<CustomAsset> asset;
+    std::unique_ptr<TextureAsset> asset;
 
     std::vector<TextureDataResource*> listeners;
 
-    CustomAsset::TimeType load_request_time = {};
+    TimePoint load_request_time = {};
     bool has_load_error = false;
 
     enum class LoadStatus
@@ -46,17 +46,16 @@ public:
     LoadStatus load_status = LoadStatus::PendingReload;
   };
 
-  template <typename T>
-  T* CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
-                 std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
-                 TextureDataResource* listener)
+  TextureAsset* CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
+                            std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
+                            TextureDataResource* listener)
   {
     const auto [it, added] =
         m_asset_id_to_handle.try_emplace(asset_id, m_asset_handle_to_data.size());
     if (added)
     {
       AssetData asset_data;
-      asset_data.asset = std::make_unique<T>(std::move(library), asset_id, it->second);
+      asset_data.asset = std::make_unique<TextureAsset>(std::move(library), asset_id, it->second);
       asset_data.load_request_time = {};
       asset_data.has_load_error = false;
 
@@ -67,7 +66,7 @@ public:
     asset_data_from_handle.listeners.push_back(listener);
     asset_data_from_handle.load_status = AssetData::LoadStatus::PendingReload;
 
-    return static_cast<T*>(asset_data_from_handle.asset.get());
+    return asset_data_from_handle.asset.get();
   }
 
   AssetData* GetAssetData(const CustomAssetLibrary::AssetID& asset_id)
@@ -85,11 +84,11 @@ public:
 
   // Notify the system that we are interested in this asset and
   // are waiting for it to be loaded
-  void MarkAssetPending(CustomAsset* asset);
+  void MarkAssetPending(TextureAsset* asset);
 
   // Notify the system we are interested in this asset and
   // it has seen activity
-  void MarkAssetActive(CustomAsset* asset);
+  void MarkAssetActive(TextureAsset* asset);
 
   void Update();
 
@@ -106,7 +105,7 @@ private:
     const auto& Elements() const { return m_assets; }
 
     // Inserts or moves the asset to the top of the queue.
-    void MakeAssetHighestPriority(u64 asset_handle, CustomAsset* asset)
+    void MakeAssetHighestPriority(u64 asset_handle, TextureAsset* asset)
     {
       RemoveAsset(asset_handle);
       m_assets.push_front(asset);
@@ -120,7 +119,7 @@ private:
 
     // Inserts an asset at lowest priority or
     //  does nothing if asset is already in the queue.
-    void InsertAsset(u64 asset_handle, CustomAsset* asset)
+    void InsertAsset(u64 asset_handle, TextureAsset* asset)
     {
       if (asset_handle >= m_iterator_lookup.size())
         m_iterator_lookup.resize(asset_handle + 1, m_assets.end());
@@ -132,7 +131,7 @@ private:
       }
     }
 
-    CustomAsset* RemoveLowestPriorityAsset()
+    TextureAsset* RemoveLowestPriorityAsset()
     {
       if (m_assets.empty()) [[unlikely]]
         return nullptr;
@@ -163,7 +162,7 @@ private:
     std::size_t Size() const { return m_assets.size(); }
 
   private:
-    std::list<CustomAsset*> m_assets;
+    std::list<TextureAsset*> m_assets;
 
     // Handle-to-iterator lookup for fast access.
     // Grows as needed on insert.

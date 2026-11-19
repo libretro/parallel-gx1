@@ -2082,7 +2082,7 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
   bool has_arbitrary_mipmaps = false;
   bool skip_texture_dump = false;
   std::shared_ptr<VideoCommon::CustomTextureData> custom_texture_data = nullptr;
-  VideoCommon::CustomAsset::TimeType load_time = {};
+  TimePoint load_time = {};
   if (g_ActiveConfig.bHiresTextures)
   {
     hires_texture = HiresTexture::Search(texture_info);

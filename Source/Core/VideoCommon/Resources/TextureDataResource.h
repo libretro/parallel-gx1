@@ -26,7 +26,7 @@ public:
   void Process();
 
   std::shared_ptr<CustomTextureData> GetData() const { return m_current_texture_data; }
-  CustomAsset::TimeType GetLoadTime() const { return m_current_time; }
+  TimePoint GetLoadTime() const { return m_current_time; }
 
   // Asset cache: the asset finished loading, or failed to.
   void NotifyAssetLoadSuccess() { m_state = State::Loading; }
@@ -46,6 +46,6 @@ private:
   TextureAsset* m_texture_asset = nullptr;
 
   std::shared_ptr<CustomTextureData> m_current_texture_data;
-  CustomAsset::TimeType m_current_time = {};
+  TimePoint m_current_time = {};
 };
 }  // namespace VideoCommon

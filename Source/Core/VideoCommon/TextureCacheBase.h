@@ -19,7 +19,6 @@
 #include "Common/MathUtil.h"
 
 #include "VideoCommon/AbstractTexture.h"
-#include "VideoCommon/Assets/CustomAsset.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/HiresTextures.h"
 #include "VideoCommon/TextureConfig.h"
@@ -167,7 +166,7 @@ struct TCacheEntry
 
   std::string texture_info_name = "";
 
-  VideoCommon::CustomAsset::TimeType last_load_time;
+  TimePoint last_load_time;
   std::shared_ptr<HiresTexture> hires_texture;
 
   TCacheEntry(AbstractTexture* tex, AbstractFramebuffer* fb);

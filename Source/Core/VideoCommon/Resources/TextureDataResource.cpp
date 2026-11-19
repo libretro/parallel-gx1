@@ -12,7 +12,7 @@ TextureDataResource::TextureDataResource(const CustomAssetLibrary::AssetID& asse
                                          CustomAssetCache* asset_cache)
     : m_asset_cache(asset_cache)
 {
-  m_texture_asset = m_asset_cache->CreateAsset<TextureAsset>(asset_id, std::move(library), this);
+  m_texture_asset = m_asset_cache->CreateAsset(asset_id, std::move(library), this);
 }
 
 void TextureDataResource::Process()
