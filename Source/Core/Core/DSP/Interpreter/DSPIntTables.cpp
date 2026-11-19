@@ -3,7 +3,7 @@
 
 #include "Core/DSP/Interpreter/DSPIntTables.h"
 
-#include <array>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 #include "Core/DSP/DSPTables.h"
@@ -19,8 +19,8 @@ struct InterpreterOpInfo
 };
 
 // clang-format off
-constexpr std::array<InterpreterOpInfo, 125> s_opcodes
-{{
+static const InterpreterOpInfo s_opcodes[125] =
+{
   {0x0000, 0xfffc, &Interpreter::nop},
 
   {0x0004, 0xfffc, &Interpreter::dar},
@@ -197,10 +197,10 @@ constexpr std::array<InterpreterOpInfo, 125> s_opcodes
   {0xf800, 0xfc00, &Interpreter::addpaxz},
   {0xfc00, 0xfe00, &Interpreter::clrl},
   {0xfe00, 0xfe00, &Interpreter::movpz},
-}};
+};
 
-constexpr std::array<InterpreterOpInfo, 25> s_opcodes_ext
-{{
+static const InterpreterOpInfo s_opcodes_ext[25] =
+{
   {0x0000, 0x00fc, &Interpreter::nop_ext},
 
   {0x0004, 0x00fc, &Interpreter::dr},
@@ -232,14 +232,27 @@ constexpr std::array<InterpreterOpInfo, 25> s_opcodes_ext
   {0x00c4, 0x00cc, &Interpreter::ldn},
   {0x00c8, 0x00cc, &Interpreter::ldm},
   {0x00cc, 0x00cc, &Interpreter::ldnm},
-}};
+};
 // clang-format on
 
 namespace
 {
-std::array<InterpreterFunction, 65536> s_op_table;
-std::array<InterpreterFunction, 256> s_ext_op_table;
+InterpreterFunction s_op_table[65536];
+InterpreterFunction s_ext_op_table[256];
 bool s_tables_initialized = false;
+
+// The function of the first entry whose masked opcode matches, or the default.
+InterpreterFunction FindFunction(UDSPInstruction opcode, const InterpreterOpInfo* table,
+                                 size_t count)
+{
+  size_t i;
+  for (i = 0; i < count; i++)
+  {
+    if ((opcode & table[i].opcode_mask) == table[i].opcode)
+      return table[i].function;
+  }
+  return &Interpreter::nop;
+}
 }  // Anonymous namespace
 
 InterpreterFunction GetOp(UDSPInstruction inst)
@@ -263,28 +276,14 @@ void InitInstructionTables()
     return;
 
   // ext op table
-  for (size_t i = 0; i < s_ext_op_table.size(); i++)
-  {
-    s_ext_op_table[i] = &Interpreter::nop;
-
-    const auto iter = FindByOpcode(static_cast<UDSPInstruction>(i), s_opcodes_ext);
-    if (iter == s_opcodes_ext.cend())
-      continue;
-
-    s_ext_op_table[i] = iter->function;
-  }
+  for (size_t i = 0; i < sizeof(s_ext_op_table) / sizeof(s_ext_op_table[0]); i++)
+    s_ext_op_table[i] = FindFunction(static_cast<UDSPInstruction>(i), s_opcodes_ext,
+                                     sizeof(s_opcodes_ext) / sizeof(s_opcodes_ext[0]));
 
   // op table
-  for (size_t i = 0; i < s_op_table.size(); i++)
-  {
-    s_op_table[i] = &Interpreter::nop;
-
-    const auto iter = FindByOpcode(static_cast<UDSPInstruction>(i), s_opcodes);
-    if (iter == s_opcodes.cend())
-      continue;
-
-    s_op_table[i] = iter->function;
-  }
+  for (size_t i = 0; i < sizeof(s_op_table) / sizeof(s_op_table[0]); i++)
+    s_op_table[i] = FindFunction(static_cast<UDSPInstruction>(i), s_opcodes,
+                                 sizeof(s_opcodes) / sizeof(s_opcodes[0]));
 
   s_tables_initialized = true;
 }

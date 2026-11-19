@@ -5,8 +5,6 @@
 
 #include "Core/DSP/DSPTables.h"
 
-#include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdio>
@@ -19,8 +17,8 @@
 namespace DSP
 {
 // clang-format off
-const std::array<DSPOPCTemplate, 230> s_opcodes =
-{{
+static const DSPOPCTemplate s_opcodes[230] =
+{
   //              # of parameters----+   {type, size, loc, lshift, mask}                                                               branch        reads PC       // instruction approximation
   // name      opcode  mask  size-V  V   param 1                       param 2                       param 3                    extendable    uncond.       updates SR
   {"NOP",      0x0000, 0xfffc,    1, 0, {},                                                                                     false, false, false, false, false}, // no operation
@@ -304,14 +302,14 @@ const std::array<DSPOPCTemplate, 230> s_opcodes =
   {"ADDPAXZ",  0xf800, 0xfc00,    1, 2, {{P_ACC,   1, 0,  9, 0x0200},  {P_AX, 1, 0, 8, 0x0100}},                                true, false, false, false, true}, // $acD.hm = $prod.hm + $ax.h; $acD.l = 0
   {"CLRL",     0xfc00, 0xfe00,    1, 1, {{P_ACCL,  1, 0, 11, 0x0800}},                                                          true, false, false, false, true}, // $acR.l = 0
   {"MOVPZ",    0xfe00, 0xfe00,    1, 1, {{P_ACC,   1, 0,  8, 0x0100}},                                                          true, false, false, false, true}, // $acD.hm = $prod.hm; $acD.l = 0
-}};
+};
 
 const DSPOPCTemplate cw =
   {"CW",     0x0000, 0x0000, 1, 1, {{P_VAL, 2, 0, 0, 0xffff}}, false, false, false, false, false};
 
 // extended opcodes
-const std::array<DSPOPCTemplate, 25> s_opcodes_ext =
-{{
+static const DSPOPCTemplate s_opcodes_ext[25] =
+{
   {"XXX",    0x0000, 0x00fc, 1, 1, {{P_VAL, 1, 0, 0, 0x00ff}}, false, false, false, false, false}, // no operation
 
   {"DR",     0x0004, 0x00fc, 1, 1, {{P_REG, 1, 0, 0, 0x0003}}, false, false, false, false, false}, // $arR--
@@ -343,10 +341,10 @@ const std::array<DSPOPCTemplate, 25> s_opcodes_ext =
   {"LDN",    0x00c4, 0x00cc, 1, 3, {{P_REGM18, 1, 0, 4, 0x0020}, {P_REGM19, 1, 0, 3, 0x0010}, {P_PRG, 1, 0, 0, 0x0003}}, false, false, false, false, false}, // $ax0.D = MEM[$arS]; $ax1.R = MEM[$ar3++]; $arS += $ixS
   {"LDM",    0x00c8, 0x00cc, 1, 3, {{P_REGM18, 1, 0, 4, 0x0020}, {P_REGM19, 1, 0, 3, 0x0010}, {P_PRG, 1, 0, 0, 0x0003}}, false, false, false, false, false}, // $ax0.D = MEM[$arS++]; $ax1.R = MEM[$ar3]; $ar3 += $ix3
   {"LDNM",   0x00cc, 0x00cc, 1, 3, {{P_REGM18, 1, 0, 4, 0x0020}, {P_REGM19, 1, 0, 3, 0x0010}, {P_PRG, 1, 0, 0, 0x0003}}, false, false, false, false, false}, // $ax0.D = MEM[$arS]; $ax1.R = MEM[$ar3]; $arS += $ixS; $ar3 += $ix3
-}};
+};
 
-const std::array<pdlabel_t, 96> pdlabels =
-{{
+const pdlabel_t pdlabels[96] =
+{
   {0xffa0, "COEF_A1_0", "COEF_A1_0",},
   {0xffa1, "COEF_A2_0", "COEF_A2_0",},
   {0xffa2, "COEF_A1_1", "COEF_A1_1",},
@@ -448,10 +446,10 @@ const std::array<pdlabel_t, 96> pdlabels =
   {0xfffd, "DMBL", "DSP Mailbox L",},
   {0xfffe, "CMBH", "CPU Mailbox H",},
   {0xffff, "CMBL", "CPU Mailbox L",},
-}};
+};
 
-const std::array<pdlabel_t, 36> regnames =
-{{
+const pdlabel_t regnames[36] =
+{
   {DSP_REG_AR0,    "AR0",     "Addr Reg 00",},
   {DSP_REG_AR1,    "AR1",     "Addr Reg 01",},
   {DSP_REG_AR2,    "AR2",     "Addr Reg 02",},
@@ -490,7 +488,7 @@ const std::array<pdlabel_t, 36> regnames =
   {DSP_REG_ACC1_FULL, "ACC1", "Accu Full 1",},
   {DSP_REG_AX0_FULL,  "AX0",  "Extra Accu 0",},
   {DSP_REG_AX1_FULL,  "AX1",  "Extra Accu 1",},
-}};
+};
 // clang-format on
 
 std::string pdname(u16 val)
@@ -515,26 +513,31 @@ namespace
 {
 constexpr size_t OPTABLE_SIZE = 0xffff + 1;
 constexpr size_t EXT_OPTABLE_SIZE = 0xff + 1;
-std::array<const DSPOPCTemplate*, OPTABLE_SIZE> s_op_table;
-std::array<const DSPOPCTemplate*, EXT_OPTABLE_SIZE> s_ext_op_table;
+const DSPOPCTemplate* s_op_table[OPTABLE_SIZE];
+const DSPOPCTemplate* s_ext_op_table[EXT_OPTABLE_SIZE];
+
+// The first template whose masked opcode matches, or nullptr.
+const DSPOPCTemplate* FindTemplate(UDSPInstruction opcode, const DSPOPCTemplate* table,
+                                   size_t count)
+{
+  size_t i;
+  for (i = 0; i < count; i++)
+  {
+    if ((opcode & table[i].opcode_mask) == table[i].opcode)
+      return &table[i];
+  }
+  return nullptr;
+}
 }  // Anonymous namespace
 
 const DSPOPCTemplate* FindOpInfoByOpcode(UDSPInstruction opcode)
 {
-  const auto iter = FindByOpcode(opcode, s_opcodes);
-  if (iter == s_opcodes.cend())
-    return nullptr;
-
-  return &*iter;
+  return FindTemplate(opcode, s_opcodes, sizeof(s_opcodes) / sizeof(s_opcodes[0]));
 }
 
 const DSPOPCTemplate* FindExtOpInfoByOpcode(UDSPInstruction opcode)
 {
-  const auto iter = FindByOpcode(opcode, s_opcodes_ext);
-  if (iter == s_opcodes_ext.cend())
-    return nullptr;
-
-  return &*iter;
+  return FindTemplate(opcode, s_opcodes_ext, sizeof(s_opcodes_ext) / sizeof(s_opcodes_ext[0]));
 }
 
 const DSPOPCTemplate* GetOpTemplate(UDSPInstruction inst)
@@ -547,43 +550,44 @@ const DSPOPCTemplate* GetOpTemplate(UDSPInstruction inst)
 void InitInstructionTable()
 {
   // ext op table
-  for (size_t i = 0; i < s_ext_op_table.size(); i++)
+  for (size_t i = 0; i < EXT_OPTABLE_SIZE; i++)
   {
     s_ext_op_table[i] = &cw;
 
-    const auto iter = FindByOpcode(static_cast<UDSPInstruction>(i), s_opcodes_ext);
-    if (iter == s_opcodes_ext.cend())
+    const DSPOPCTemplate* const op = FindExtOpInfoByOpcode(static_cast<UDSPInstruction>(i));
+    if (!op)
       continue;
 
     if (s_ext_op_table[i] == &cw)
     {
-      s_ext_op_table[i] = &*iter;
+      s_ext_op_table[i] = op;
     }
     else
     {
       // If the entry already in the table is a strict subset, allow it
-      if ((s_ext_op_table[i]->opcode_mask | iter->opcode_mask) != s_ext_op_table[i]->opcode_mask)
+      if ((s_ext_op_table[i]->opcode_mask | op->opcode_mask) != s_ext_op_table[i]->opcode_mask)
       {
         ERROR_LOG(DSPLLE,
                   "opcode ext table place %" PRIu64 " already in use by %s when inserting %s",
-                  (u64)i, s_ext_op_table[i]->name, iter->name);
+                  (u64)i, s_ext_op_table[i]->name, op->name);
       }
     }
   }
 
   // op table
-  s_op_table.fill(&cw);
+  for (size_t i = 0; i < OPTABLE_SIZE; i++)
+    s_op_table[i] = &cw;
 
-  for (size_t i = 0; i < s_op_table.size(); i++)
+  for (size_t i = 0; i < OPTABLE_SIZE; i++)
   {
-    const auto iter = FindByOpcode(static_cast<UDSPInstruction>(i), s_opcodes);
-    if (iter == s_opcodes.cend())
+    const DSPOPCTemplate* const op = FindOpInfoByOpcode(static_cast<UDSPInstruction>(i));
+    if (!op)
       continue;
 
     if (s_op_table[i] == &cw)
-      s_op_table[i] = &*iter;
+      s_op_table[i] = op;
     else
-      ERROR_LOG(DSPLLE, "opcode table place %" PRIu64 " already in use for %s", (u64)i, iter->name);
+      ERROR_LOG(DSPLLE, "opcode table place %" PRIu64 " already in use for %s", (u64)i, op->name);
   }
 }
 }  // namespace DSP

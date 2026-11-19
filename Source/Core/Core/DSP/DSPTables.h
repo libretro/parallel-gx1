@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
 
 #include "Core/DSP/DSPCommon.h"
@@ -89,8 +87,8 @@ struct pdlabel_t
   const char* description;
 };
 
-extern const std::array<pdlabel_t, 36> regnames;
-extern const std::array<pdlabel_t, 96> pdlabels;
+extern const pdlabel_t regnames[36];
+extern const pdlabel_t pdlabels[96];
 
 std::string pdname(u16 val);
 std::string pdregname(int val);
@@ -104,10 +102,4 @@ const DSPOPCTemplate* FindExtOpInfoByOpcode(UDSPInstruction opcode);
 // Used by the interpreter and JIT for instruction emulation
 const DSPOPCTemplate* GetOpTemplate(UDSPInstruction inst);
 
-template <typename T, size_t N>
-auto FindByOpcode(UDSPInstruction opcode, const std::array<T, N>& data)
-{
-  return std::ranges::find_if(
-      data, [opcode](const auto& info) { return (opcode & info.opcode_mask) == info.opcode; });
-}
 }  // namespace DSP
