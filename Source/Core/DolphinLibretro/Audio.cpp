@@ -1,4 +1,5 @@
 #include "DolphinLibretro/Audio.h"
+#include "DolphinLibretro/GBPlayerHLE.h"
 
 #include "AudioCommon/FieldAudio.h"
 #include "Core/System.h"
@@ -63,6 +64,7 @@ extern "C" {
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb)
 {
   Libretro::Audio::batch_cb = cb;
+  gbp_hle_set_audio_sample_batch(cb);
 }
 
 void retro_set_audio_sample(retro_audio_sample_t cb)

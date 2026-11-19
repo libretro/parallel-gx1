@@ -2,8 +2,9 @@
 #ifdef HAS_VULKAN
 #include "VideoBackends/Vulkan/VulkanLoader.h"
 #endif
-#include "DolphinLibretro/Video.h"
+#include "DolphinLibretro/GBPlayerHLE.h"
 #include "DolphinLibretro/Output.h"
+#include "DolphinLibretro/Video.h"
 
 #include <cassert>
 #include <stdio.h>
@@ -1068,4 +1069,5 @@ void retro_set_video_refresh(retro_video_refresh_t cb)
 {
   Libretro::Video::s_frontend_video_cb = cb;
   Libretro::Video::video_cb = Libretro::Video::CountedVideoRefresh;
+  gbp_hle_set_video_refresh(cb);
 }

@@ -24,20 +24,21 @@
 #include "Core/HW/GCKeyboard.h"
 #include "Core/HW/GCPad.h"
 #include "Core/HW/GCPadEmu.h"
+#include "Core/HW/SI/SI.h"
+#include "Core/HW/SI/SI_Device.h"
 #include "Core/HW/Wiimote.h"
 #include "Core/HW/WiimoteEmu/Extension/Classic.h"
 #include "Core/HW/WiimoteEmu/Extension/Nunchuk.h"
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
-#include "Core/HW/SI/SI.h"
-#include "Core/HW/SI/SI_Device.h"
-#include "Core/IOS/USB/Bluetooth/BTReal.h"
 #include "Core/Host.h"
+#include "Core/IOS/USB/Bluetooth/BTReal.h"
 #include "Core/System.h"
 #include "Core/WiiUtils.h"
-#include "DolphinLibretro/Input.h"
 #include "DolphinLibretro/Common/Globals.h"
 #include "DolphinLibretro/Common/Options.h"
+#include "DolphinLibretro/GBPlayerHLE.h"
+#include "DolphinLibretro/Input.h"
 #include "DolphinLibretro/VR.h"
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControlReference/ExpressionParser.h"
@@ -1321,11 +1322,13 @@ void UpdateGCMappings(const WiimoteUpdateFlags& f, unsigned port, unsigned devic
 void retro_set_input_poll(retro_input_poll_t cb)
 {
   Libretro::Input::poll_cb = cb;
+  gbp_hle_set_input_poll(cb);
 }
 
 void retro_set_input_state(retro_input_state_t cb)
 {
   Libretro::Input::input_cb = cb;
+  gbp_hle_set_input_state(cb);
 }
 
 /// The device the Wiimote device option puts on a Wii port, or the frontend's

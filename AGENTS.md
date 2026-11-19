@@ -230,6 +230,18 @@ reason a reader can see.
   `rjson_open_user` from a VFS `filestream`, parsed as they stream, with
   no document tree and no wrapper library between rjson and its caller.
 
+## Game Boy content
+
+- **A handheld ROM loaded on its own** (`.gba`, `.gbc`, `.gb`) boots the
+  Game Boy Player from its startup disc,
+  `system/dolphin-emu/GBPlayer.<disc image>`, the ROM in it. Without the
+  disc it runs on mGBA alone (`DolphinLibretro/GBPlayerHLE.c`): no
+  GameCube, no hardware context, each `retro_run` one handheld frame in
+  XRGB8888 at mGBA's own rate, the game told a Game Boy Player is there
+  (rumble). Every libretro entry point checks `gbp_hle_active()` first.
+- **One save for the three ways in:** `<save directory>/<ROM name>.srm`,
+  as the Game Boy Player and the frontend's mGBA core keep it.
+
 ## Contexts come and go mid-game
 
 The frontend may take the graphics context away and give a new one

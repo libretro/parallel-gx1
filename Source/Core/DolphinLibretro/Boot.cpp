@@ -37,6 +37,7 @@
 #include "DolphinLibretro/Audio.h"
 #include "DolphinLibretro/Common/Globals.h"
 #include "DolphinLibretro/Common/Options.h"
+#include "DolphinLibretro/GBPlayerHLE.h"
 #include "DolphinLibretro/Input.h"
 #include "DolphinLibretro/Log.h"
 #include "DolphinLibretro/VR.h"
@@ -411,15 +412,18 @@ bool retro_load_game(const struct retro_game_info* game)
   struct retro_game_info gbp_game;
 
   /* A Game Boy ROM loaded on its own plays in the Game Boy Player, booted
-   * from its startup disc */
+   * from its startup disc; without the disc, on the handheld alone */
   if (!Libretro::GBPlayer_active && game && IsGameBoyRom(game->path))
   {
     if (!FindGBPlayerDisc(gbp_disc, sizeof(gbp_disc)))
     {
-      Libretro::Log::DoLogFrontEnd(RETRO_LOG_ERROR,
-                                   "Game Boy Player: put its startup disc in the system "
-                                   "directory as dolphin-emu/GBPlayer.iso (or .rvz, .gcm, ...)",
-                                   5000);
+      const char* system_dir = NULL;
+      const char* save_dir = NULL;
+      Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &system_dir);
+      Libretro::environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir);
+      if (gbp_hle_load(game->path, system_dir, save_dir))
+        return true;
+      Libretro::Log::DoLogFrontEnd(RETRO_LOG_ERROR, "Game Boy Player: the ROM cannot run", 5000);
       return false;
     }
     Libretro::GBPlayer_rom_path = game->path;
@@ -1059,6 +1063,12 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info* i
 void retro_unload_game(void)
 {
   auto& system = Core::System::GetInstance();
+
+  if (gbp_hle_active())
+  {
+    gbp_hle_unload();
+    return;
+  }
 
   /* the video backend's teardown uses the context */
   Libretro::Video::D3D11Lock();

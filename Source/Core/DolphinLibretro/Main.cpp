@@ -8,17 +8,18 @@
 
 #include "Common/ChunkFile.h"
 #include "Common/Event.h"
+#include "Common/FileUtil.h"
 #include "Common/FrameClock.h"
+#include "Common/GL/GLContext.h"
 #include "Common/HttpService.h"
 #include "Common/IniFile.h"
-#include "Common/FileUtil.h"
-#include "Common/GL/GLContext.h"
 #include "Common/Logging/LogManager.h"
 #include "Common/ParallelFor.h"
 #include "Common/Thread.h"
-#include "Common/scmrev.h"
 #include "Common/Version.h"
+#include "Common/scmrev.h"
 #include "Core/ActionReplay.h"
+#include "Core/Boot/Boot.h"
 #include "Core/BootManager.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
@@ -37,23 +38,23 @@
 #include "Core/State.h"
 #include "Core/System.h"
 #include "DolphinLibretro/Audio.h"
-#include "DolphinLibretro/Input.h"
 #include "DolphinLibretro/Common/Options.h"
-#include "DolphinLibretro/Video.h"
+#include "DolphinLibretro/GBPlayerHLE.h"
+#include "DolphinLibretro/Input.h"
+#include "DolphinLibretro/Log.h"
 #include "DolphinLibretro/VR.h"
-#include "VideoBackends/OGL/OGLTexture.h"
+#include "DolphinLibretro/Video.h"
 #include "VideoBackends/OGL/OGLGfx.h"
+#include "VideoBackends/OGL/OGLTexture.h"
 #include "VideoCommon/AsyncRequests.h"
 #include "VideoCommon/Fifo.h"
 #include "VideoCommon/GBAScreens.h"
 #include "VideoCommon/Present.h"
-#include "VideoCommon/VertexManagerBase.h"
-#include "DolphinLibretro/Log.h"
 #include "VideoCommon/TextureConfig.h"
+#include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
 #include "VideoCommon/Widescreen.h"
-#include "Core/Boot/Boot.h"
 
 #ifdef PERF_TEST
 static struct retro_perf_callback perf_cb;
@@ -156,6 +157,7 @@ extern "C" {
 void retro_set_environment(retro_environment_t cb)
 {
   Libretro::environ_cb = cb;
+  gbp_hle_set_environment(cb);
 #ifdef PERF_TEST
   cb(RETRO_ENVIRONMENT_GET_PERF_INTERFACE, &perf_cb);
 #endif
@@ -246,6 +248,12 @@ void retro_get_system_info(retro_system_info* info)
 
 void retro_get_system_av_info(retro_system_av_info* info)
 {
+  if (gbp_hle_active())
+  {
+    gbp_hle_get_av_info(info);
+    return;
+  }
+
   int efbScale = Libretro::Options::GetCached<int>(
     Libretro::Options::gfx_settings::EFB_SCALE);
 
@@ -282,11 +290,22 @@ void retro_get_system_av_info(retro_system_av_info* info)
 
 void retro_reset(void)
 {
+  if (gbp_hle_active())
+  {
+    gbp_hle_reset();
+    return;
+  }
   Core::System::GetInstance().GetProcessorInterface().ResetButton_Tap();
 }
 
 void retro_run(void)
 {
+  if (gbp_hle_active())
+  {
+    gbp_hle_run();
+    return;
+  }
+
   // One retro_run is one frame of the core's timebase, as long as the frontend was told.
   const double frame_hz = Libretro::g_core_refresh_rate > 1.0 ? Libretro::g_core_refresh_rate : 60.0;
   frame_clock_advance(static_cast<unsigned>(lround(1e6 / frame_hz)));
@@ -660,6 +679,9 @@ size_t retro_serialize_size(void)
 {
   size_t size = 0;
 
+  if (gbp_hle_active())
+    return gbp_hle_serialize_size();
+
   Core::System& system = Core::System::GetInstance();
   if (!Core::IsRunning(system))
     return 0;
@@ -684,6 +706,8 @@ size_t retro_serialize_size(void)
 
 bool retro_serialize(void* data, size_t size)
 {
+  if (gbp_hle_active())
+    return gbp_hle_serialize(data, size) != 0;
   Core::System& system = Core::System::GetInstance();
   if (!Core::IsRunning(system))
     return false;
@@ -719,6 +743,8 @@ bool retro_serialize(void* data, size_t size)
 
 bool retro_unserialize(const void* data, size_t size)
 {
+  if (gbp_hle_active())
+    return gbp_hle_unserialize(data, size) != 0;
   Core::System& system = Core::System::GetInstance();
   if (!Core::IsRunning(system))
     return false;
@@ -754,6 +780,8 @@ bool retro_unserialize(const void* data, size_t size)
 
 unsigned retro_get_region()
 {
+  if (gbp_hle_active())
+    return RETRO_REGION_NTSC;
   Core::System& system = Core::System::GetInstance();
 
   if (DiscIO::IsNTSC(SConfig::GetInstance().m_region) ||
@@ -771,6 +799,8 @@ unsigned retro_api_version()
 
 size_t retro_get_memory_size(unsigned id)
 {
+  if (gbp_hle_active())
+    return 0;
   auto& memory = Core::System::GetInstance().GetMemory();
   if (id == RETRO_MEMORY_SYSTEM_RAM)
     return memory.GetRamSizeReal();
@@ -779,6 +809,8 @@ size_t retro_get_memory_size(unsigned id)
 
 void* retro_get_memory_data(unsigned id)
 {
+  if (gbp_hle_active())
+    return NULL;
   auto& memory = Core::System::GetInstance().GetMemory();
   if (id == RETRO_MEMORY_SYSTEM_RAM)
     return memory.GetRAM();
@@ -860,6 +892,8 @@ static void ApplyCheats(void*)
 // reset cheats to off
 void retro_cheat_reset(void)
 {
+  if (gbp_hle_active())
+    return;
   const bool importCheats = Libretro::GetOption<bool>(Libretro::Options::retroarch_core::CHEATS_IMPORT, true);
 
   if (!Config::AreCheatsEnabled() || !importCheats)
@@ -875,6 +909,8 @@ void retro_cheat_reset(void)
 // Enable/disable a cheat
 void retro_cheat_set(unsigned index, bool enabled, const char *code)
 {
+  if (gbp_hle_active())
+    return;
   if (!Config::AreCheatsEnabled())
   {
     Core::DisplayMessage("You cannot apply any cheats until you have enabled the following option:\n"

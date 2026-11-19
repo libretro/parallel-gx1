@@ -395,7 +395,8 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderText.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/StutterStats.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/UidTable.c \
-	$(CORE_DIR)/Source/Core/Core/HW/GBAVFile.c
+	$(CORE_DIR)/Source/Core/Core/HW/GBAVFile.c \
+	$(CORE_DIR)/Source/Core/DolphinLibretro/GBPlayerHLE.c
 DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/Common/CommonFuncs.cpp \
 	$(CORE_DIR)/Source/Core/Common/Config/Config.cpp \
