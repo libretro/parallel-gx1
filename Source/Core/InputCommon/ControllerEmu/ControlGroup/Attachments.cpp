@@ -6,10 +6,6 @@
 namespace ControllerEmu
 {
 
-void AttachedController::LoadDefaults()
-{
-}
-
 Attachments::Attachments(const std::string& name_) : ControlGroup(name_, GroupType::Attachments)
 {
 }

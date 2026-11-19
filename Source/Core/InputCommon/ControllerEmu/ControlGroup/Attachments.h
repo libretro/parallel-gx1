@@ -14,8 +14,6 @@ namespace ControllerEmu
 {
 class AttachedController : public ControlGroupContainer
 {
-public:
-  virtual void LoadDefaults();
 };
 
 // A container of the selected and available attachments

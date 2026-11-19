@@ -160,7 +160,8 @@ public:
 
   ControllerEmu::ControlGroup* GetGroup(NunchukGroup group);
 
-  void LoadDefaults() override;
+  // The keyboard mapping a new Wii Remote starts with
+  void LoadDefaults();
 
   static constexpr u8 BUTTON_C = 0x02;
   static constexpr u8 BUTTON_Z = 0x01;

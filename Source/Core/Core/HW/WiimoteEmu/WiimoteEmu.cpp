@@ -778,7 +778,7 @@ void Wiimote::LoadDefaults(const ControllerInterface& ciface)
   // Enable Nunchuk:
   constexpr ExtensionNumber DEFAULT_EXT = ExtensionNumber::NUNCHUK;
   m_attachments->SetSelectedAttachment(DEFAULT_EXT);
-  m_attachments->GetAttachment(DEFAULT_EXT)->LoadDefaults();
+  static_cast<Nunchuk*>(m_attachments->GetAttachment(DEFAULT_EXT))->LoadDefaults();
 }
 
 Extension* Wiimote::GetNoneExtension() const
