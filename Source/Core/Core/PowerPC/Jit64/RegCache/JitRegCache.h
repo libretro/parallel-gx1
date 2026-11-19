@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <type_traits>
 
@@ -123,8 +122,8 @@ private:
   explicit RCForkGuard(RegCache& rc_);
 
   RegCache* rc;
-  std::array<PPCCachedReg, 32> m_regs;
-  std::array<X64CachedReg, NUM_XREGS> m_xregs;
+  PPCCachedReg m_regs[32];
+  X64CachedReg m_xregs[NUM_XREGS];
 };
 
 // The register cache of the general purpose registers (GPRRegCache) or of the floating point ones
@@ -247,11 +246,12 @@ protected:
   void Realize(preg_t preg);
 
   bool IsAnyConstraintActive() const;
+  bool IsAnyXRegLocked() const;
 
   Jit64& m_jit;
   const bool m_is_fpu;
-  std::array<PPCCachedReg, 32> m_regs;
-  std::array<X64CachedReg, NUM_XREGS> m_xregs;
-  std::array<RCConstraint, 32> m_constraints;
+  PPCCachedReg m_regs[32];
+  X64CachedReg m_xregs[NUM_XREGS];
+  RCConstraint m_constraints[32];
   Gen::XEmitter* m_emitter = nullptr;
 };

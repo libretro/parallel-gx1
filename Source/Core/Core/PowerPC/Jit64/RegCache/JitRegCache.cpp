@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cinttypes>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <utility>
 
@@ -213,14 +214,20 @@ void RCX64Reg::Unlock()
   kind = RCKind::None;
 }
 
-RCForkGuard::RCForkGuard(RegCache& rc_) : rc(&rc_), m_regs(rc_.m_regs), m_xregs(rc_.m_xregs)
+static_assert(std::is_trivially_copyable_v<PPCCachedReg> &&
+              std::is_trivially_copyable_v<X64CachedReg>);
+
+RCForkGuard::RCForkGuard(RegCache& rc_) : rc(&rc_)
 {
+  memcpy(m_regs, rc_.m_regs, sizeof(m_regs));
+  memcpy(m_xregs, rc_.m_xregs, sizeof(m_xregs));
   DEBUG_ASSERT(!rc->IsAnyConstraintActive());
 }
 
-RCForkGuard::RCForkGuard(RCForkGuard&& other) noexcept
-    : rc(other.rc), m_regs(other.m_regs), m_xregs(other.m_xregs)
+RCForkGuard::RCForkGuard(RCForkGuard&& other) noexcept : rc(other.rc)
 {
+  memcpy(m_regs, other.m_regs, sizeof(m_regs));
+  memcpy(m_xregs, other.m_xregs, sizeof(m_xregs));
   other.rc = nullptr;
 }
 
@@ -230,8 +237,8 @@ void RCForkGuard::EndFork()
     return;
 
   DEBUG_ASSERT(!rc->IsAnyConstraintActive());
-  rc->m_regs = m_regs;
-  rc->m_xregs = m_xregs;
+  memcpy(rc->m_regs, m_regs, sizeof(m_regs));
+  memcpy(rc->m_xregs, m_xregs, sizeof(m_xregs));
   rc = nullptr;
 }
 
@@ -303,8 +310,9 @@ BitSet32 RegCache::CountRegsIn(preg_t preg, u32 lookahead) const
 
 void RegCache::Start()
 {
-  m_xregs.fill({});
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_XREGS; i++)
+    m_xregs[i] = X64CachedReg{};
+  for (size_t i = 0; i < 32; i++)
   {
     m_regs[i] = PPCCachedReg{GetDefaultLocation(i)};
   }
@@ -317,7 +325,7 @@ void RegCache::SetEmitter(XEmitter* emitter)
 
 bool RegCache::SanityCheck() const
 {
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < 32; i++)
   {
     if (m_regs[i].IsInHostRegister())
     {
@@ -382,8 +390,7 @@ RCForkGuard RegCache::Fork()
 
 void RegCache::Discard(BitSet32 pregs)
 {
-  DEBUG_ASSERT_MSG(DYNA_REC, std::ranges::none_of(m_xregs, &X64CachedReg::IsLocked),
-                   "Someone forgot to unlock a X64 reg");
+  DEBUG_ASSERT_MSG(DYNA_REC, !IsAnyXRegLocked(), "Someone forgot to unlock a X64 reg");
 
   for (preg_t i : pregs)
   {
@@ -400,8 +407,7 @@ void RegCache::Discard(BitSet32 pregs)
 void RegCache::Flush(BitSet32 pregs, FlushMode mode,
                      IgnoreDiscardedRegisters ignore_discarded_registers)
 {
-  DEBUG_ASSERT_MSG(DYNA_REC, std::ranges::none_of(m_xregs, &X64CachedReg::IsLocked),
-                   "Someone forgot to unlock a X64 reg");
+  DEBUG_ASSERT_MSG(DYNA_REC, !IsAnyXRegLocked(), "Someone forgot to unlock a X64 reg");
 
   for (preg_t i : pregs)
   {
@@ -447,8 +453,12 @@ void RegCache::Commit()
 
 bool RegCache::IsAllUnlocked() const
 {
-  return std::ranges::none_of(m_regs, &PPCCachedReg::IsLocked) &&
-         std::ranges::none_of(m_xregs, &X64CachedReg::IsLocked) && !IsAnyConstraintActive();
+  for (const PPCCachedReg& reg : m_regs)
+  {
+    if (reg.IsLocked())
+      return false;
+  }
+  return !IsAnyXRegLocked() && !IsAnyConstraintActive();
 }
 
 void RegCache::PreloadRegisters(BitSet32 to_preload)
@@ -465,7 +475,7 @@ void RegCache::PreloadRegisters(BitSet32 to_preload)
 BitSet32 RegCache::RegistersInUse() const
 {
   BitSet32 result;
-  for (size_t i = 0; i < m_xregs.size(); i++)
+  for (size_t i = 0; i < NUM_XREGS; i++)
   {
     if (!m_xregs[i].IsFree())
       result[i] = true;
@@ -475,8 +485,7 @@ BitSet32 RegCache::RegistersInUse() const
 
 void RegCache::FlushX(X64Reg reg)
 {
-  ASSERT_MSG(DYNA_REC, reg < m_xregs.size(), "Flushing non-existent reg %u",
-             std::to_underlying(reg));
+  ASSERT_MSG(DYNA_REC, reg < NUM_XREGS, "Flushing non-existent reg %u", std::to_underlying(reg));
   ASSERT(!m_xregs[reg].IsLocked());
   if (!m_xregs[reg].IsFree())
   {
@@ -509,12 +518,11 @@ void RegCache::BindToRegister(preg_t i, bool doLoad, bool makeDirty)
     if (doLoad)
       LoadRegister(i, xr);
 
-    ASSERT_MSG(DYNA_REC,
-               std::ranges::none_of(m_regs,
-                                    [xr](const auto& r) {
-                                      return r.IsInHostRegister() && r.GetHostRegister() == xr;
-                                    }),
-               "Xreg %u already bound", std::to_underlying(xr));
+    for (const PPCCachedReg& r : m_regs)
+    {
+      ASSERT_MSG(DYNA_REC, !(r.IsInHostRegister() && r.GetHostRegister() == xr),
+                 "Xreg %u already bound", std::to_underlying(xr));
+    }
 
     m_regs[i].SetInHostRegister(xr, makeDirty);
   }
@@ -719,5 +727,20 @@ void RegCache::Realize(preg_t preg)
 
 bool RegCache::IsAnyConstraintActive() const
 {
-  return std::ranges::any_of(m_constraints, &RCConstraint::IsActive);
+  for (const RCConstraint& constraint : m_constraints)
+  {
+    if (constraint.IsActive())
+      return true;
+  }
+  return false;
+}
+
+bool RegCache::IsAnyXRegLocked() const
+{
+  for (const X64CachedReg& xreg : m_xregs)
+  {
+    if (xreg.IsLocked())
+      return true;
+  }
+  return false;
 }
