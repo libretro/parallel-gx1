@@ -278,8 +278,7 @@ void WiimoteDevice::SetSource(WiimoteCommon::HIDWiimote* hid_source)
 
   if (m_hid_source)
   {
-    m_hid_source->SetInterruptCallback(
-        std::bind_front(&WiimoteDevice::InterruptDataInputCallback, this));
+    m_hid_source->SetInterruptTarget(this);
     Activate(true);
   }
 }
@@ -965,6 +964,16 @@ void WiimoteDevice::SendCommandToACL(u8 ident, u8 code, u8 command_length, u8* c
   m_host->SendACLPacket(GetBD(), data_frame, header->length + sizeof(l2cap_hdr_t));
 }
 
+}  // namespace IOS::HLE
+
+void WiimoteCommon::HIDWiimote::InterruptCallback(u8 hid_type, const u8* data, u32 size)
+{
+  if (m_interrupt_target)
+    m_interrupt_target->InterruptDataInputCallback(hid_type, data, size);
+}
+
+namespace IOS::HLE
+{
 void WiimoteDevice::InterruptDataInputCallback(u8 hid_type, const u8* data, u32 size)
 {
   const auto* const channel = FindChannelWithPSM(L2CAP_PSM_HID_INTR);

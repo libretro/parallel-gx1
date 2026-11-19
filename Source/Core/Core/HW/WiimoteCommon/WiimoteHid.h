@@ -12,6 +12,11 @@ namespace WiimoteEmu
 struct DesiredWiimoteState;
 }
 
+namespace IOS::HLE
+{
+class WiimoteDevice;
+}
+
 namespace WiimoteCommon
 {
 // Source: HID_010_SPC_PFL/1.0 (official HID specification)
@@ -28,8 +33,6 @@ constexpr u8 HID_PARAM_OUTPUT = 2;
 class HIDWiimote
 {
 public:
-  using InterruptCallbackType = std::function<void(u8 hid_type, const u8* data, u32 size)>;
-
   virtual ~HIDWiimote() = default;
 
   virtual void EventLinked() = 0;
@@ -48,7 +51,8 @@ public:
                             SensorBarState sensor_bar_state) = 0;
   virtual void Update(const WiimoteEmu::DesiredWiimoteState& target_state) = 0;
 
-  void SetInterruptCallback(InterruptCallbackType callback) { m_callback = std::move(callback); }
+  // The emulated Bluetooth device that receives this Wii Remote's input reports.
+  void SetInterruptTarget(IOS::HLE::WiimoteDevice* device) { m_interrupt_target = device; }
 
   // HID report type:0xa2 (data output) payloads sent to the wiimote interrupt channel.
   // Does not include HID-type header.
@@ -66,13 +70,11 @@ protected:
                       size);
   }
 
-  void InterruptCallback(u8 hid_type, const u8* data, u32 size)
-  {
-    m_callback(hid_type, data, size);
-  }
+  // Defined next to the Bluetooth device in WiimoteDevice.cpp.
+  void InterruptCallback(u8 hid_type, const u8* data, u32 size);
 
 private:
-  InterruptCallbackType m_callback;
+  IOS::HLE::WiimoteDevice* m_interrupt_target = nullptr;
 };
 
 #pragma pack(push, 1)
