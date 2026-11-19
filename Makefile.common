@@ -514,7 +514,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/VideoCommon/Present.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/RenderState.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/CustomResourceManager.cpp \
-	$(CORE_DIR)/Source/Core/VideoCommon/Resources/Resource.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/Resources/TextureDataResource.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderCache.cpp \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderGenCommon.cpp \

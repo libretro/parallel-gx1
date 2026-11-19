@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "VideoCommon/Assets/CustomAssetCache.h"
+#include "VideoCommon/Resources/TextureDataResource.h"
 
 #include <retro_miscellaneous.h>
 
@@ -139,11 +140,6 @@ void CustomAssetCache::RemoveAssetsUntilBelowMemoryLimit()
     auto* const asset = m_active_assets.RemoveLowestPriorityAsset();
 
     AssetData& asset_data = m_asset_handle_to_data[asset->GetHandle()];
-
-    for (const auto& listener : asset_data.listeners)
-    {
-      listener->AssetUnloaded();
-    }
 
     // Remove the asset's copy
     const std::size_t bytes_unloaded = asset_data.asset->Unload();

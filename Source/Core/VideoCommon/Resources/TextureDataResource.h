@@ -3,27 +3,45 @@
 
 #pragma once
 
-#include "VideoCommon/Resources/Resource.h"
+#include <memory>
 
+#include "VideoCommon/Assets/CustomAssetLibrary.h"
 #include "VideoCommon/Assets/CustomTextureData.h"
 #include "VideoCommon/Assets/TextureAsset.h"
 
 namespace VideoCommon
 {
-class TextureDataResource final : public Resource
+class CustomAssetCache;
+
+// A texture asset's data as the texture cache takes it: loaded on request, kept until the
+// asset reloads or fails to.
+class TextureDataResource
 {
 public:
-  explicit TextureDataResource(Resource::ResourceContext resource_context);
+  TextureDataResource(const CustomAssetLibrary::AssetID& asset_id,
+                      std::shared_ptr<DirectFilesystemAssetLibrary> library,
+                      CustomAssetCache* asset_cache);
 
-  std::shared_ptr<CustomTextureData> GetData() const;
-  CustomAsset::TimeType GetLoadTime() const;
+  // Marks the asset in use and takes its data once it has loaded.
+  void Process();
 
-  void MarkAsActive() override;
-  void MarkAsPending() override;
+  std::shared_ptr<CustomTextureData> GetData() const { return m_current_texture_data; }
+  CustomAsset::TimeType GetLoadTime() const { return m_current_time; }
+
+  // Asset cache: the asset finished loading, or failed to.
+  void NotifyAssetLoadSuccess() { m_state = State::Loading; }
+  void NotifyAssetLoadFailed() { m_state = State::Error; }
 
 private:
-  TaskComplete CollectPrimaryData() override;
+  enum class State
+  {
+    Loading,
+    Ready,
+    Error,
+  };
+  State m_state = State::Loading;
 
+  CustomAssetCache* m_asset_cache;
   // Note: asset cache owns the asset, we access as a reference
   TextureAsset* m_texture_asset = nullptr;
 

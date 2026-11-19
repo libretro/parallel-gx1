@@ -10,13 +10,14 @@
 
 #include "Common/CommonTypes.h"
 
-#include "VideoCommon/Assets/AssetListener.h"
 #include "VideoCommon/Assets/CustomAsset.h"
 #include "VideoCommon/Assets/CustomAssetLibrary.h"
 #include "VideoCommon/Assets/CustomAssetLoader.h"
 
 namespace VideoCommon
 {
+class TextureDataResource;
+
 // The asset cache manages custom assets (textures, shaders, meshes).
 // These assets are loaded using a priority system,
 // where assets requested more often gets loaded first.  This system
@@ -31,7 +32,7 @@ public:
   {
     std::unique_ptr<CustomAsset> asset;
 
-    std::vector<AssetListener*> listeners;
+    std::vector<TextureDataResource*> listeners;
 
     CustomAsset::TimeType load_request_time = {};
     bool has_load_error = false;
@@ -48,7 +49,7 @@ public:
   template <typename T>
   T* CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
                  std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
-                 AssetListener* listener)
+                 TextureDataResource* listener)
   {
     const auto [it, added] =
         m_asset_id_to_handle.try_emplace(asset_id, m_asset_handle_to_data.size());

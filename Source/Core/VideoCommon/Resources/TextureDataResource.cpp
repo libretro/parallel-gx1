@@ -7,42 +7,31 @@
 
 namespace VideoCommon
 {
-TextureDataResource::TextureDataResource(Resource::ResourceContext resource_context)
-    : Resource(std::move(resource_context))
+TextureDataResource::TextureDataResource(const CustomAssetLibrary::AssetID& asset_id,
+                                         std::shared_ptr<DirectFilesystemAssetLibrary> library,
+                                         CustomAssetCache* asset_cache)
+    : m_asset_cache(asset_cache)
 {
-  m_texture_asset = m_resource_context.asset_cache->CreateAsset<TextureAsset>(
-      m_resource_context.primary_asset_id, m_resource_context.asset_library, this);
+  m_texture_asset = m_asset_cache->CreateAsset<TextureAsset>(asset_id, std::move(library), this);
 }
 
-std::shared_ptr<CustomTextureData> TextureDataResource::GetData() const
+void TextureDataResource::Process()
 {
-  return m_current_texture_data;
-}
+  m_asset_cache->MarkAssetActive(m_texture_asset);
 
-CustomAsset::TimeType TextureDataResource::GetLoadTime() const
-{
-  return m_current_time;
-}
+  if (m_state != State::Loading)
+    return;
 
-Resource::TaskComplete TextureDataResource::CollectPrimaryData()
-{
   const auto last_load_time = m_texture_asset->GetLastLoadedTime();
   const auto asset = m_texture_asset->GetData();
   if (!asset)
-    return Resource::TaskComplete::No;
+  {
+    m_asset_cache->MarkAssetPending(m_texture_asset);
+    return;
+  }
 
   m_current_texture_data = asset;
   m_current_time = last_load_time;
-  return Resource::TaskComplete::Yes;
-}
-
-void TextureDataResource::MarkAsActive()
-{
-  m_resource_context.asset_cache->MarkAssetActive(m_texture_asset);
-}
-
-void TextureDataResource::MarkAsPending()
-{
-  m_resource_context.asset_cache->MarkAssetPending(m_texture_asset);
+  m_state = State::Ready;
 }
 }  // namespace VideoCommon

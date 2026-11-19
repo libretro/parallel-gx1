@@ -50,18 +50,10 @@ TextureDataResource* CustomResourceManager::GetTextureDataFromAsset(
   auto& resource = m_texture_data_resources[asset_id];
   if (resource == nullptr)
   {
-    resource =
-        std::make_unique<TextureDataResource>(CreateResourceContext(asset_id, std::move(library)));
+    resource = std::make_unique<TextureDataResource>(asset_id, std::move(library), &m_asset_cache);
   }
   resource->Process();
   return resource.get();
 }
 
-Resource::ResourceContext CustomResourceManager::CreateResourceContext(
-    const CustomAssetLibrary::AssetID& asset_id,
-    std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library)
-{
-  return Resource::ResourceContext{asset_id, std::move(library), &m_asset_cache, this,
-                                   &m_worker_thread};
-}
 }  // namespace VideoCommon
