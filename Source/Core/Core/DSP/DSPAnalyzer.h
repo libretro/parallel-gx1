@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include "Common/CommonTypes.h"
 
 // The update SR analysis is not perfect: it does not properly handle modified SR values if SR is
@@ -114,6 +113,6 @@ private:
   [[nodiscard]] u8 GetCodeFlags(u16 address) const { return m_code_flags[address]; }
 
   // Holds data about all instructions in RAM.
-  std::array<u8, 65536> m_code_flags{};
+  u8 m_code_flags[65536] = {};
 };
 }  // namespace DSP

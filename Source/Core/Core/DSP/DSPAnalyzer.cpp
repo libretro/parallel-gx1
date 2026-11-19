@@ -3,9 +3,9 @@
 
 #include "Core/DSP/DSPAnalyzer.h"
 
-#include <array>
 #include <cinttypes>
 #include <cstddef>
+#include <cstring>
 
 #include "Common/Logging/Log.h"
 
@@ -73,7 +73,7 @@ void Analyzer::Analyze(const SDSP& dsp)
 
 void Analyzer::Reset()
 {
-  m_code_flags.fill(0);
+  memset(m_code_flags, 0, sizeof(m_code_flags));
 }
 
 void Analyzer::AnalyzeRange(const SDSP& dsp, u16 start_addr, u16 end_addr)
