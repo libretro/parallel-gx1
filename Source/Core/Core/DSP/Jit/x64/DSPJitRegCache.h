@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <array>
+#include <cstddef>
 
 #include "Common/x64Emitter.h"
 
@@ -169,8 +169,11 @@ private:
   void MovToMemory(size_t reg);
   void FlushMemBackedRegs();
 
-  std::array<DynamicReg, 37> m_regs{};
-  std::array<X64CachedReg, 16> m_xregs{};
+  static constexpr size_t NUM_REGS = 37;
+  static constexpr size_t NUM_XREGS = 16;
+
+  DynamicReg m_regs[NUM_REGS] = {};
+  X64CachedReg m_xregs[NUM_XREGS] = {};
 
   DSPEmitter& m_emitter;
   bool m_is_temporary;

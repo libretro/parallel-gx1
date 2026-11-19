@@ -19,8 +19,8 @@ namespace DSP::JIT::x64
 {
 // Ordered in order of preferred use.
 // Not all of these are actually available
-constexpr std::array<X64Reg, 15> s_allocation_order = {
-    {R8, R9, R10, R11, R12, R13, R14, R15, RSI, RDI, RBX, RCX, RDX, RAX, RBP}};
+static const X64Reg s_allocation_order[15] = {R8,  R9,  R10, R11, R12, R13, R14, R15,
+                                              RSI, RDI, RBX, RCX, RDX, RAX, RBP};
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -144,7 +144,7 @@ DSPJitRegCache::DSPJitRegCache(DSPEmitter& emitter) : m_emitter(emitter), m_is_t
   m_xregs[R14].guest_reg = DSP_REG_NONE;
   m_xregs[R15].guest_reg = DSP_REG_STATIC;  // reserved for SDSP pointer
 
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     m_regs[i].mem = GetRegisterPointer(i);
     m_regs[i].size = 0;
@@ -198,8 +198,12 @@ DSPJitRegCache::DSPJitRegCache(DSPEmitter& emitter) : m_emitter(emitter), m_is_t
 }
 
 DSPJitRegCache::DSPJitRegCache(const DSPJitRegCache& cache)
-    : m_regs(cache.m_regs), m_xregs(cache.m_xregs), m_emitter(cache.m_emitter), m_is_temporary(true)
+    : m_emitter(cache.m_emitter), m_is_temporary(true)
 {
+  for (size_t i = 0; i < NUM_REGS; i++)
+    m_regs[i] = cache.m_regs[i];
+  for (size_t i = 0; i < NUM_XREGS; i++)
+    m_xregs[i] = cache.m_xregs[i];
 }
 
 DSPJitRegCache& DSPJitRegCache::operator=(const DSPJitRegCache& cache)
@@ -208,8 +212,10 @@ DSPJitRegCache& DSPJitRegCache::operator=(const DSPJitRegCache& cache)
   ASSERT_MSG(DSPLLE, m_is_temporary, "register cache not temporary??");
   m_is_merged = false;
 
-  m_xregs = cache.m_xregs;
-  m_regs = cache.m_regs;
+  for (size_t i = 0; i < NUM_XREGS; i++)
+    m_xregs[i] = cache.m_xregs[i];
+  for (size_t i = 0; i < NUM_REGS; i++)
+    m_regs[i] = cache.m_regs[i];
 
   return *this;
 }
@@ -229,7 +235,7 @@ void DSPJitRegCache::FlushRegs(DSPJitRegCache& cache, bool emit)
   cache.m_is_merged = true;
 
   // drop all guest register not used by cache
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     m_regs[i].used = false;  // used is restored later
     if (m_regs[i].loc.IsSimpleReg() && !cache.m_regs[i].loc.IsSimpleReg())
@@ -243,7 +249,7 @@ void DSPJitRegCache::FlushRegs(DSPJitRegCache& cache, bool emit)
   do
   {
     movcnt = 0;
-    for (size_t i = 0; i < m_regs.size(); i++)
+    for (size_t i = 0; i < NUM_REGS; i++)
     {
       X64Reg simple = m_regs[i].loc.GetSimpleReg();
       X64Reg simple_cache = cache.m_regs[i].loc.GetSimpleReg();
@@ -257,7 +263,7 @@ void DSPJitRegCache::FlushRegs(DSPJitRegCache& cache, bool emit)
   } while (movcnt != 0);
 
   // free all host regs that are not used for the same guest reg
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     const auto& reg = m_regs[i];
     const auto& cached_reg = cache.m_regs[i];
@@ -269,7 +275,7 @@ void DSPJitRegCache::FlushRegs(DSPJitRegCache& cache, bool emit)
   }
 
   // load all guest regs that are in memory and should be in host reg
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     if (cache.m_regs[i].loc.IsSimpleReg())
     {
@@ -289,7 +295,7 @@ void DSPJitRegCache::FlushRegs(DSPJitRegCache& cache, bool emit)
   // sync the freely used xregs
   if (!emit)
   {
-    for (size_t i = 0; i < m_xregs.size(); i++)
+    for (size_t i = 0; i < NUM_XREGS; i++)
     {
       if (cache.m_xregs[i].guest_reg == DSP_REG_USED && m_xregs[i].guest_reg == DSP_REG_NONE)
       {
@@ -303,13 +309,13 @@ void DSPJitRegCache::FlushRegs(DSPJitRegCache& cache, bool emit)
   }
 
   // consistency checks
-  for (size_t i = 0; i < m_xregs.size(); i++)
+  for (size_t i = 0; i < NUM_XREGS; i++)
   {
     ASSERT_MSG(DSPLLE, m_xregs[i].guest_reg == cache.m_xregs[i].guest_reg,
                "cache and current xreg guest_reg mismatch for %" PRIu64, (u64)i);
   }
 
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     ASSERT_MSG(DSPLLE, m_regs[i].loc.IsImm() == cache.m_regs[i].loc.IsImm(),
                "cache and current reg loc mismatch for %" PRIu64, (u64)i);
@@ -332,7 +338,7 @@ void DSPJitRegCache::FlushMemBackedRegs()
   // this should have the same effect as
   // merge(DSPJitRegCache(emitter));
 
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     ASSERT_MSG(DSPLLE, !m_regs[i].used, "register %u still in use", static_cast<u32>(i));
 
@@ -357,7 +363,7 @@ void DSPJitRegCache::FlushRegs()
 {
   FlushMemBackedRegs();
 
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     if (m_regs[i].host_reg != INVALID_REG)
     {
@@ -407,7 +413,7 @@ void DSPJitRegCache::FlushRegs()
 
 void DSPJitRegCache::LoadRegs(bool emit)
 {
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     if (m_regs[i].host_reg != INVALID_REG)
     {
@@ -420,7 +426,7 @@ void DSPJitRegCache::SaveRegs()
 {
   FlushRegs();
 
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     if (m_regs[i].host_reg != INVALID_REG)
     {
@@ -436,7 +442,7 @@ void DSPJitRegCache::PushRegs()
 {
   FlushMemBackedRegs();
 
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     if (m_regs[i].host_reg != INVALID_REG)
     {
@@ -460,7 +466,7 @@ void DSPJitRegCache::PushRegs()
     m_emitter.SUB(64, R(RSP), Imm32(8));
   }
 
-  for (size_t i = 0; i < m_xregs.size(); i++)
+  for (size_t i = 0; i < NUM_XREGS; i++)
   {
     if (m_xregs[i].guest_reg == DSP_REG_USED)
     {
@@ -478,7 +484,7 @@ void DSPJitRegCache::PushRegs()
 void DSPJitRegCache::PopRegs()
 {
   int push_count = 0;
-  for (int i = static_cast<int>(m_xregs.size() - 1); i >= 0; i--)
+  for (int i = static_cast<int>(NUM_XREGS - 1); i >= 0; i--)
   {
     if (m_xregs[i].pushed)
     {
@@ -496,7 +502,7 @@ void DSPJitRegCache::PopRegs()
     m_emitter.ADD(64, R(RSP), Imm32(8));
   }
 
-  for (size_t i = 0; i < m_regs.size(); i++)
+  for (size_t i = 0; i < NUM_REGS; i++)
   {
     if (m_regs[i].host_reg != INVALID_REG)
     {
@@ -512,7 +518,7 @@ X64Reg DSPJitRegCache::MakeABICallSafe(X64Reg reg)
 
 void DSPJitRegCache::MovToHostReg(size_t reg, X64Reg host_reg, bool load)
 {
-  ASSERT_MSG(DSPLLE, reg < m_regs.size(), "bad register name %" PRIu64, (u64)reg);
+  ASSERT_MSG(DSPLLE, reg < NUM_REGS, "bad register name %" PRIu64, (u64)reg);
   ASSERT_MSG(DSPLLE, m_regs[reg].parentReg == DSP_REG_NONE, "register %" PRIu64 " is proxy for %d",
              (u64)reg, m_regs[reg].parentReg);
   ASSERT_MSG(DSPLLE, !m_regs[reg].used, "moving to host reg in use guest reg %" PRIu64, (u64)reg);
@@ -555,7 +561,7 @@ void DSPJitRegCache::MovToHostReg(size_t reg, X64Reg host_reg, bool load)
 
 void DSPJitRegCache::MovToHostReg(size_t reg, bool load)
 {
-  ASSERT_MSG(DSPLLE, reg < m_regs.size(), "bad register name %" PRIu64, (u64)reg);
+  ASSERT_MSG(DSPLLE, reg < NUM_REGS, "bad register name %" PRIu64, (u64)reg);
   ASSERT_MSG(DSPLLE, m_regs[reg].parentReg == DSP_REG_NONE, "register %" PRIu64 " is proxy for %d",
              (u64)reg, m_regs[reg].parentReg);
   ASSERT_MSG(DSPLLE, !m_regs[reg].used, "moving to host reg in use guest reg %" PRIu64, (u64)reg);
@@ -585,7 +591,7 @@ void DSPJitRegCache::MovToHostReg(size_t reg, bool load)
 
 void DSPJitRegCache::RotateHostReg(size_t reg, int shift, bool emit)
 {
-  ASSERT_MSG(DSPLLE, reg < m_regs.size(), "bad register name %" PRIu64, (u64)reg);
+  ASSERT_MSG(DSPLLE, reg < NUM_REGS, "bad register name %" PRIu64, (u64)reg);
   ASSERT_MSG(DSPLLE, m_regs[reg].parentReg == DSP_REG_NONE, "register %" PRIu64 " is proxy for %d",
              (u64)reg, m_regs[reg].parentReg);
   ASSERT_MSG(DSPLLE, m_regs[reg].loc.IsSimpleReg(), "register %" PRIu64 " is not a simple reg",
@@ -627,7 +633,7 @@ void DSPJitRegCache::RotateHostReg(size_t reg, int shift, bool emit)
 
 void DSPJitRegCache::MovToMemory(size_t reg)
 {
-  ASSERT_MSG(DSPLLE, reg < m_regs.size(), "bad register name %" PRIu64, (u64)reg);
+  ASSERT_MSG(DSPLLE, reg < NUM_REGS, "bad register name %" PRIu64, (u64)reg);
   ASSERT_MSG(DSPLLE, m_regs[reg].parentReg == DSP_REG_NONE, "register %" PRIu64 " is proxy for %d",
              (u64)reg, m_regs[reg].parentReg);
   ASSERT_MSG(DSPLLE, !m_regs[reg].used, "moving to memory in use guest reg %" PRIu64, (u64)reg);
