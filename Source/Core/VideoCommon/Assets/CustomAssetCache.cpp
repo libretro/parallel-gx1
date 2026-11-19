@@ -4,6 +4,9 @@
 #include "VideoCommon/Assets/CustomAssetCache.h"
 #include "VideoCommon/Resources/TextureDataResource.h"
 
+#include <cstdlib>
+#include <cstring>
+
 #include <retro_miscellaneous.h>
 
 #include "Common/Logging/Log.h"
@@ -31,6 +34,11 @@ void CustomAssetCache::Initialize()
   m_asset_loader.Initialize();
 }
 
+CustomAssetCache::~CustomAssetCache()
+{
+  FreeAssets();
+}
+
 void CustomAssetCache::Shutdown()
 {
   Reset();
@@ -41,22 +49,174 @@ void CustomAssetCache::Shutdown()
 void CustomAssetCache::Reset()
 {
   m_asset_loader.Reset(true);
+  FreeAssets();
+}
 
-  m_active_assets = {};
-  m_pending_assets = {};
-  m_asset_handle_to_data.clear();
-  m_asset_id_to_handle.clear();
+void CustomAssetCache::FreeAssets()
+{
+  for (u32 i = 0; i < m_num_assets; i++)
+    delete m_assets[i].asset;
+  free(m_assets);
+  free(m_index);
+  free(m_schedule);
+  m_assets = nullptr;
+  m_index = nullptr;
+  m_schedule = nullptr;
+  m_num_assets = 0;
+  m_assets_capacity = 0;
+  m_index_capacity = 0;
+  m_queues[ACTIVE] = {};
+  m_queues[PENDING] = {};
   m_ram_used = 0;
+}
+
+static u32 HashAssetId(const CustomAssetLibrary::AssetID& asset_id)
+{
+  // FNV-1a
+  u32 hash = 2166136261u;
+  for (const char c : asset_id)
+    hash = (hash ^ static_cast<u8>(c)) * 16777619u;
+  return hash;
+}
+
+u32 CustomAssetCache::FindHandle(const CustomAssetLibrary::AssetID& asset_id, u32* slot) const
+{
+  if (!m_index_capacity)
+    return NO_ASSET;
+  const u32 mask = m_index_capacity - 1;
+  for (u32 i = HashAssetId(asset_id) & mask;; i = (i + 1) & mask)
+  {
+    const u32 handle = m_index[i];
+    if (handle == NO_ASSET || m_assets[handle].asset->GetAssetId() == asset_id)
+    {
+      if (slot)
+        *slot = i;
+      return handle;
+    }
+  }
+}
+
+void CustomAssetCache::GrowIndex()
+{
+  const u32 capacity = m_index_capacity ? m_index_capacity * 2 : 64;
+  u32* const index = static_cast<u32*>(malloc(capacity * sizeof(u32)));
+  if (!index)
+    abort();
+  memset(index, 0xFF, capacity * sizeof(u32));
+  for (u32 handle = 0; handle < m_num_assets; handle++)
+  {
+    u32 i = HashAssetId(m_assets[handle].asset->GetAssetId()) & (capacity - 1);
+    while (index[i] != NO_ASSET)
+      i = (i + 1) & (capacity - 1);
+    index[i] = handle;
+  }
+  free(m_index);
+  m_index = index;
+  m_index_capacity = capacity;
+}
+
+TextureAsset*
+CustomAssetCache::CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
+                              std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
+                              TextureDataResource* listener)
+{
+  u32 slot;
+  u32 handle = FindHandle(asset_id, &slot);
+  if (handle == NO_ASSET)
+  {
+    // keep the index at most half full
+    if ((m_num_assets + 1) * 2 > m_index_capacity)
+    {
+      GrowIndex();
+      FindHandle(asset_id, &slot);
+    }
+    if (m_num_assets == m_assets_capacity)
+    {
+      const u32 capacity = m_assets_capacity ? m_assets_capacity * 2 : 64;
+      AssetData* const assets =
+          static_cast<AssetData*>(realloc(m_assets, capacity * sizeof(AssetData)));
+      TextureAsset** const schedule =
+          static_cast<TextureAsset**>(realloc(m_schedule, capacity * sizeof(TextureAsset*)));
+      if (assets)
+        m_assets = assets;
+      if (schedule)
+        m_schedule = schedule;
+      if (!assets || !schedule)
+        abort();
+      m_assets_capacity = capacity;
+    }
+    handle = m_num_assets++;
+    AssetData& data = m_assets[handle];
+    data.asset = new TextureAsset(std::move(library), asset_id, handle);
+    data.prev[ACTIVE] = data.next[ACTIVE] = data.prev[PENDING] = data.next[PENDING] = NO_ASSET;
+    data.queued[ACTIVE] = data.queued[PENDING] = false;
+    m_index[slot] = handle;
+  }
+
+  m_assets[handle].listener = listener;
+  return m_assets[handle].asset;
+}
+
+void CustomAssetCache::QueueRemove(u32 queue, u32 handle)
+{
+  AssetData& data = m_assets[handle];
+  if (!data.queued[queue])
+    return;
+  Queue& q = m_queues[queue];
+  if (data.prev[queue] != NO_ASSET)
+    m_assets[data.prev[queue]].next[queue] = data.next[queue];
+  else
+    q.head = data.next[queue];
+  if (data.next[queue] != NO_ASSET)
+    m_assets[data.next[queue]].prev[queue] = data.prev[queue];
+  else
+    q.tail = data.prev[queue];
+  data.prev[queue] = data.next[queue] = NO_ASSET;
+  data.queued[queue] = false;
+  q.count--;
+}
+
+void CustomAssetCache::QueuePushFront(u32 queue, u32 handle)
+{
+  QueueRemove(queue, handle);
+  AssetData& data = m_assets[handle];
+  Queue& q = m_queues[queue];
+  data.prev[queue] = NO_ASSET;
+  data.next[queue] = q.head;
+  if (q.head != NO_ASSET)
+    m_assets[q.head].prev[queue] = handle;
+  else
+    q.tail = handle;
+  q.head = handle;
+  data.queued[queue] = true;
+  q.count++;
+}
+
+void CustomAssetCache::QueueInsert(u32 queue, u32 handle)
+{
+  AssetData& data = m_assets[handle];
+  if (data.queued[queue])
+    return;
+  Queue& q = m_queues[queue];
+  data.next[queue] = NO_ASSET;
+  data.prev[queue] = q.tail;
+  if (q.tail != NO_ASSET)
+    m_assets[q.tail].next[queue] = handle;
+  else
+    q.head = handle;
+  q.tail = handle;
+  data.queued[queue] = true;
+  q.count++;
 }
 
 void CustomAssetCache::MarkAssetPending(TextureAsset* asset)
 {
-  m_pending_assets.MakeAssetHighestPriority(asset->GetHandle(), asset);
+  QueuePushFront(PENDING, static_cast<u32>(asset->GetHandle()));
 }
 
 void CustomAssetCache::MarkAssetActive(TextureAsset* asset)
 {
-  m_active_assets.MakeAssetHighestPriority(asset->GetHandle(), asset);
+  QueuePushFront(ACTIVE, static_cast<u32>(asset->GetHandle()));
 }
 
 void CustomAssetCache::Update()
@@ -68,14 +228,19 @@ void CustomAssetCache::Update()
     RemoveAssetsUntilBelowMemoryLimit();
   }
 
-  if (m_pending_assets.IsEmpty())
+  if (!m_queues[PENDING].count)
     return;
 
   if (m_ram_used > m_max_ram_available)
     return;
 
+  u32 count = 0;
+  for (u32 handle = m_queues[PENDING].head; handle != NO_ASSET;
+       handle = m_assets[handle].next[PENDING])
+    m_schedule[count++] = m_assets[handle].asset;
+
   const u64 allowed_memory = m_max_ram_available - m_ram_used;
-  m_asset_loader.ScheduleAssetsToLoad(m_pending_assets.Elements(), allowed_memory);
+  m_asset_loader.ScheduleAssetsToLoad(m_schedule, count, allowed_memory);
 }
 
 void CustomAssetCache::ProcessLoadedAssets()
@@ -94,32 +259,17 @@ void CustomAssetCache::ProcessLoadedAssets()
 
   for (const auto& [handle, load_successful] : load_results.asset_handles)
   {
-    AssetData& asset_data = m_asset_handle_to_data[handle];
+    const u32 h = static_cast<u32>(handle);
+    QueueRemove(PENDING, h);
 
-    // If we have a reload request that is newer than our loaded time
-    // we need to wait for another reload.
-    if (asset_data.load_request_time > asset_data.asset->GetLastLoadedTime())
-      continue;
-
-    m_pending_assets.RemoveAsset(handle);
-
-    asset_data.load_request_time = {};
-    if (!load_successful)
+    if (load_successful)
     {
-      asset_data.has_load_error = true;
+      QueueInsert(ACTIVE, h);
+      m_assets[h].listener->NotifyAssetLoadSuccess();
     }
     else
     {
-      m_active_assets.InsertAsset(handle, asset_data.asset.get());
-      asset_data.load_status = AssetData::LoadStatus::LoadFinished;
-    }
-
-    for (const auto& listener : asset_data.listeners)
-    {
-      if (load_successful)
-        listener->NotifyAssetLoadSuccess();
-      else
-        listener->NotifyAssetLoadFailed();
+      m_assets[h].listener->NotifyAssetLoadFailed();
     }
   }
 }
@@ -135,20 +285,16 @@ void CustomAssetCache::RemoveAssetsUntilBelowMemoryLimit()
 
   // Clear out least recently used resources until
   // we get safely in our threshold
-  while (m_ram_used > threshold_ram && m_active_assets.Size() > 0)
+  while (m_ram_used > threshold_ram && m_queues[ACTIVE].count > 0)
   {
-    auto* const asset = m_active_assets.RemoveLowestPriorityAsset();
-
-    AssetData& asset_data = m_asset_handle_to_data[asset->GetHandle()];
+    TextureAsset* const asset = m_assets[m_queues[ACTIVE].tail].asset;
+    QueueRemove(ACTIVE, m_queues[ACTIVE].tail);
 
     // Remove the asset's copy
-    const std::size_t bytes_unloaded = asset_data.asset->Unload();
+    const std::size_t bytes_unloaded = asset->Unload();
     m_ram_used -= bytes_unloaded;
 
-    asset_data.load_status = AssetData::LoadStatus::Unloaded;
-    asset_data.load_request_time = {};
-
-    INFO_LOG(VIDEO, "Unloading asset: %s (%s)", asset_data.asset->GetAssetId().c_str(),
+    INFO_LOG(VIDEO, "Unloading asset: %s (%s)", asset->GetAssetId().c_str(),
              UICommon::FormatSize(bytes_unloaded).c_str());
   }
 }

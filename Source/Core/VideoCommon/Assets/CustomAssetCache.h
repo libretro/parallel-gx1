@@ -3,10 +3,7 @@
 
 #pragma once
 
-#include <list>
-#include <map>
 #include <memory>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -26,56 +23,15 @@ class TextureDataResource;
 class CustomAssetCache
 {
 public:
-  // A generic interface to describe an asset
-  // and load state
-  struct AssetData
-  {
-    std::unique_ptr<TextureAsset> asset;
+  CustomAssetCache() = default;
+  ~CustomAssetCache();
+  CustomAssetCache(const CustomAssetCache&) = delete;
+  CustomAssetCache& operator=(const CustomAssetCache&) = delete;
 
-    std::vector<TextureDataResource*> listeners;
-
-    TimePoint load_request_time = {};
-    bool has_load_error = false;
-
-    enum class LoadStatus
-    {
-      PendingReload,
-      LoadFinished,
-      Unloaded,
-    };
-    LoadStatus load_status = LoadStatus::PendingReload;
-  };
-
+  // The asset asset_id names, made on its first request; listener hears how its loads end.
   TextureAsset* CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
                             std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
-                            TextureDataResource* listener)
-  {
-    const auto [it, added] =
-        m_asset_id_to_handle.try_emplace(asset_id, m_asset_handle_to_data.size());
-    if (added)
-    {
-      AssetData asset_data;
-      asset_data.asset = std::make_unique<TextureAsset>(std::move(library), asset_id, it->second);
-      asset_data.load_request_time = {};
-      asset_data.has_load_error = false;
-
-      m_asset_handle_to_data.insert_or_assign(it->second, std::move(asset_data));
-    }
-
-    auto& asset_data_from_handle = m_asset_handle_to_data[it->second];
-    asset_data_from_handle.listeners.push_back(listener);
-    asset_data_from_handle.load_status = AssetData::LoadStatus::PendingReload;
-
-    return asset_data_from_handle.asset.get();
-  }
-
-  AssetData* GetAssetData(const CustomAssetLibrary::AssetID& asset_id)
-  {
-    const auto it_handle = m_asset_id_to_handle.find(asset_id);
-    if (it_handle == m_asset_id_to_handle.end())
-      return nullptr;
-    return &m_asset_handle_to_data[it_handle->second];
-  }
+                            TextureDataResource* listener);
 
   void Initialize();
   void Shutdown();
@@ -93,92 +49,58 @@ public:
   void Update();
 
 private:
+  enum : u32
+  {
+    NO_ASSET = 0xFFFFFFFFu,
+    // the two queues every asset can be in, each linked through the assets themselves
+    ACTIVE = 0,
+    PENDING = 1,
+  };
+
+  // One per asset, indexed by its handle (handles count up from 0 as assets are made).
+  struct AssetData
+  {
+    TextureAsset* asset;  // owned
+    TextureDataResource* listener;
+    u32 prev[2];  // per queue: the asset in front, NO_ASSET at the head
+    u32 next[2];  // per queue: the asset behind, NO_ASSET at the tail
+    bool queued[2];
+  };
+
+  // Assets in order of most recent use, head first; used to pick which to load or unload.
+  struct Queue
+  {
+    u32 head = NO_ASSET;
+    u32 tail = NO_ASSET;
+    u32 count = 0;
+  };
+
+  void QueueRemove(u32 queue, u32 handle);
+  // Inserts or moves the asset to the head.
+  void QueuePushFront(u32 queue, u32 handle);
+  // Inserts the asset at the tail, or leaves it where it is when it is already in.
+  void QueueInsert(u32 queue, u32 handle);
+
+  // The handle of asset_id, NO_ASSET when it has none yet; slot gets where it would go.
+  u32 FindHandle(const CustomAssetLibrary::AssetID& asset_id, u32* slot) const;
+  void GrowIndex();
+
+  void FreeAssets();
   void ProcessLoadedAssets();
   void RemoveAssetsUntilBelowMemoryLimit();
 
-  // Maintains a priority-sorted list of assets.
-  // Used to figure out which assets to load or unload first.
-  // Most recently used assets get marked with highest priority.
-  class AssetPriorityQueue
-  {
-  public:
-    const auto& Elements() const { return m_assets; }
+  AssetData* m_assets = nullptr;
+  u32 m_num_assets = 0;
+  u32 m_assets_capacity = 0;
 
-    // Inserts or moves the asset to the top of the queue.
-    void MakeAssetHighestPriority(u64 asset_handle, TextureAsset* asset)
-    {
-      RemoveAsset(asset_handle);
-      m_assets.push_front(asset);
-
-      // See CreateAsset for how a handle gets defined
-      if (asset_handle >= m_iterator_lookup.size())
-        m_iterator_lookup.resize(asset_handle + 1, m_assets.end());
-
-      m_iterator_lookup[asset_handle] = m_assets.begin();
-    }
-
-    // Inserts an asset at lowest priority or
-    //  does nothing if asset is already in the queue.
-    void InsertAsset(u64 asset_handle, TextureAsset* asset)
-    {
-      if (asset_handle >= m_iterator_lookup.size())
-        m_iterator_lookup.resize(asset_handle + 1, m_assets.end());
-
-      if (m_iterator_lookup[asset_handle] == m_assets.end())
-      {
-        m_assets.push_back(asset);
-        m_iterator_lookup[asset_handle] = std::prev(m_assets.end());
-      }
-    }
-
-    TextureAsset* RemoveLowestPriorityAsset()
-    {
-      if (m_assets.empty()) [[unlikely]]
-        return nullptr;
-      auto* const ret = m_assets.back();
-      if (ret != nullptr)
-      {
-        m_iterator_lookup[ret->GetHandle()] = m_assets.end();
-      }
-      m_assets.pop_back();
-      return ret;
-    }
-
-    void RemoveAsset(u64 asset_handle)
-    {
-      if (asset_handle >= m_iterator_lookup.size())
-        return;
-
-      const auto iter = m_iterator_lookup[asset_handle];
-      if (iter != m_assets.end())
-      {
-        m_assets.erase(iter);
-        m_iterator_lookup[asset_handle] = m_assets.end();
-      }
-    }
-
-    bool IsEmpty() const { return m_assets.empty(); }
-
-    std::size_t Size() const { return m_assets.size(); }
-
-  private:
-    std::list<TextureAsset*> m_assets;
-
-    // Handle-to-iterator lookup for fast access.
-    // Grows as needed on insert.
-    std::vector<decltype(m_assets)::iterator> m_iterator_lookup;
-  };
+  // Open-addressed: asset id hash to handle, NO_ASSET where free; a power of two in size.
+  u32* m_index = nullptr;
+  u32 m_index_capacity = 0;
 
   // Assets that are currently active in memory, in order of most recently used by the game.
-  AssetPriorityQueue m_active_assets;
-
-  // Assets that need to be loaded.
-  // e.g. Because the game tried to use them or because they changed on disk.
-  // Ordered by most recently used.
-  AssetPriorityQueue m_pending_assets;
-
-  std::map<std::size_t, AssetData> m_asset_handle_to_data;
-  std::map<CustomAssetLibrary::AssetID, std::size_t> m_asset_id_to_handle;
+  Queue m_queues[2];
+  // The pending queue as the loader takes it, kept between frames.
+  TextureAsset** m_schedule = nullptr;
 
   // Memory used by currently "loaded" assets.
   u64 m_ram_used = 0;

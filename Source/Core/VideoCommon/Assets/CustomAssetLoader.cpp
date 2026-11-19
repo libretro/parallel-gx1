@@ -155,15 +155,14 @@ auto CustomAssetLoader::TakeLoadResults() -> LoadResults
   return results;
 }
 
-void CustomAssetLoader::ScheduleAssetsToLoad(std::list<TextureAsset*> assets_to_load,
+void CustomAssetLoader::ScheduleAssetsToLoad(TextureAsset* const* assets, u32 count,
                                              u64 allowed_memory)
 {
-  if (assets_to_load.empty()) [[unlikely]]
+  if (!count) [[unlikely]]
     return;
 
   // There's new assets to process, publish them and notify worker threads.
-  auto* batch = new Batch{{}, {assets_to_load.begin(), assets_to_load.end()},
-                          static_cast<s64>(allowed_memory), {}};
+  auto* batch = new Batch{{}, {assets, assets + count}, static_cast<s64>(allowed_memory), {}};
   retro_atomic_size_init(&batch->cursor, 0);
   if (void* old = retro_atomic_exchange_ptr(&m_batch, batch))
     quiesce_retire(&m_batch_quiesce, &static_cast<Batch*>(old)->node, FreeBatch);

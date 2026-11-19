@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <list>
 #include <vector>
 
 #include <queues/mpsc_stack.h>
@@ -47,7 +46,7 @@ public:
 
   // Schedule assets to load on the worker threads
   //  and set how much memory is available for loading these additional assets.
-  void ScheduleAssetsToLoad(std::list<TextureAsset*> assets_to_load, u64 allowed_memory);
+  void ScheduleAssetsToLoad(TextureAsset* const* assets, u32 count, u64 allowed_memory);
 
   void Reset(bool restart_worker_threads = true);
 
