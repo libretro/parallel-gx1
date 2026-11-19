@@ -107,7 +107,9 @@ void Jit64::ps_muls(UGeckoInstruction inst)
 
   if (m_accurate_nans)
   {
-    const FixupBranch handled_nans = HandleNaNs(inst, XMM1, XMM0, Ra, std::nullopt, Rc_duplicated);
+    const OpArg a_arg = Ra;
+    const OpArg c_arg = Rc_duplicated;
+    const FixupBranch handled_nans = HandleNaNs(inst, XMM1, XMM0, &a_arg, nullptr, &c_arg);
     SetJumpTarget(handled_nans);
   }
 

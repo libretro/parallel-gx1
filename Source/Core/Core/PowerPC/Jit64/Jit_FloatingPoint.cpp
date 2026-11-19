@@ -89,9 +89,14 @@ void Jit64::FinalizeDoubleResult(X64Reg output, const OpArg& input)
   SetFPRFIfNeeded(input, false);
 }
 
-FixupBranch Jit64::HandleNaNs(UGeckoInstruction inst, X64Reg xmm, X64Reg clobber,
-                              std::optional<OpArg> Ra, std::optional<OpArg> Rb,
-                              std::optional<OpArg> Rc)
+// Whether two of the inputs are the same, a missing one only the same as another missing one
+static bool SameInput(const OpArg* a, const OpArg* b)
+{
+  return a && b ? *a == *b : a == b;
+}
+
+FixupBranch Jit64::HandleNaNs(UGeckoInstruction inst, X64Reg xmm, X64Reg clobber, const OpArg* Ra,
+                              const OpArg* Rb, const OpArg* Rc)
 {
   //                      | PowerPC  | x86
   // ---------------------+----------+---------
@@ -119,9 +124,9 @@ FixupBranch Jit64::HandleNaNs(UGeckoInstruction inst, X64Reg xmm, X64Reg clobber
     };
     if (Ra)
       check_input(*Ra);
-    if (Rb && Ra != Rb)
+    if (Rb && !SameInput(Ra, Rb))
       check_input(*Rb);
-    if (Rc && Ra != Rc && Rb != Rc)
+    if (Rc && !SameInput(Ra, Rc) && !SameInput(Rb, Rc))
       check_input(*Rc);
 
     // Otherwise, pick the PPC default NaN (will be finished below)
@@ -161,9 +166,9 @@ FixupBranch Jit64::HandleNaNs(UGeckoInstruction inst, X64Reg xmm, X64Reg clobber
       };
       if (Rc)
         check_input(*Rc);
-      if (Rb && Rb != Rc)
+      if (Rb && !SameInput(Rb, Rc))
         check_input(*Rb);
-      if (Ra && Ra != Rb && Ra != Rc)
+      if (Ra && !SameInput(Ra, Rb) && !SameInput(Ra, Rc))
         check_input(*Ra);
     }
     else
@@ -198,9 +203,9 @@ FixupBranch Jit64::HandleNaNs(UGeckoInstruction inst, X64Reg xmm, X64Reg clobber
       };
       if (Rc)
         check_input(*Rc);
-      if (Rb && Rb != Rc)
+      if (Rb && !SameInput(Rb, Rc))
         check_input(*Rb);
-      if (Ra && Ra != Rb && Ra != Rc)
+      if (Ra && !SameInput(Ra, Rb) && !SameInput(Ra, Rc))
         check_input(*Ra);
     }
 
@@ -325,19 +330,17 @@ void Jit64::fp_arith(UGeckoInstruction inst)
 
   if (m_accurate_nans)
   {
-    std::optional<FixupBranch> handled_nans;
+    const OpArg a_arg = Ra;
+    const OpArg arg2_arg = Rarg2;
     switch (inst.SUBOP5)
     {
     case 18:
-      handled_nans = HandleNaNs(inst, dest, XMM0, Ra, Rarg2, std::nullopt);
+      SetJumpTarget(HandleNaNs(inst, dest, XMM0, &a_arg, &arg2_arg, nullptr));
       break;
     case 25:
-      handled_nans = HandleNaNs(inst, dest, XMM0, Ra, std::nullopt, Rarg2);
+      SetJumpTarget(HandleNaNs(inst, dest, XMM0, &a_arg, nullptr, &arg2_arg));
       break;
     }
-
-    if (handled_nans)
-      SetJumpTarget(*handled_nans);
   }
 
   if (single)
@@ -657,12 +660,16 @@ void Jit64::fmaddXX(UGeckoInstruction inst)
     DEBUG_ASSERT(!preserve_d);
   }
 
-  std::optional<FixupBranch> handled_nans;
+  FixupBranch handled_nans;
+  bool have_handled_nans = false;
   if (!packed && m_accurate_nans)
   {
     // The clobber register is unused when not packed.
-    handled_nans =
-        HandleNaNs(inst, result_xmm, XMM0, Ra, Rb, want_rc_duplicated ? R(Rc_duplicated) : Rc);
+    const OpArg a_arg = Ra;
+    const OpArg b_arg = Rb;
+    const OpArg c_arg = want_rc_duplicated ? R(Rc_duplicated) : Rc;
+    handled_nans = HandleNaNs(inst, result_xmm, XMM0, &a_arg, &b_arg, &c_arg);
+    have_handled_nans = true;
   }
 
   // Read the comment in the interpreter function NI_madd_msub to find out what's going on here.
@@ -813,16 +820,19 @@ void Jit64::fmaddXX(UGeckoInstruction inst)
   if (packed && m_accurate_nans)
   {
     // If packed, the clobber register must be XMM0.
-    handled_nans =
-        HandleNaNs(inst, result_xmm, XMM0, Ra, Rb, want_rc_duplicated ? R(Rc_duplicated) : Rc);
+    const OpArg a_arg = Ra;
+    const OpArg b_arg = Rb;
+    const OpArg c_arg = want_rc_duplicated ? R(Rc_duplicated) : Rc;
+    handled_nans = HandleNaNs(inst, result_xmm, XMM0, &a_arg, &b_arg, &c_arg);
+    have_handled_nans = true;
   }
 
   // If the handled_nans branch was taken in the non-packed case, that means the result is NaN,
   // so we can skip the XORPD and the error-free transformation. If the handled_nans branch was
   // taken in the packed case, we don't know if both of the results were NaN or only one, so we
   // can't skip anything.
-  if (handled_nans)
-    SetJumpTarget(*handled_nans);
+  if (have_handled_nans)
+    SetJumpTarget(handled_nans);
 
   if (single)
     FinalizeSingleResult(Rd, R(result_xmm), packed, true);

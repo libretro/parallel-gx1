@@ -56,7 +56,7 @@ void Jit64::GenerateOverflow(Gen::CCFlags cond)
   // We need to do this without modifying flags so as not to break stuff that assumes flags
   // aren't clobbered (carry, branch merging): speed doesn't really matter here (this is really
   // rare).
-  static const std::array<u8, 4> ovtable = {{0, 0, XER_SO_MASK, XER_SO_MASK}};
+  static const u8 ovtable[4] = {0, 0, XER_SO_MASK, XER_SO_MASK};
   MOVZX(32, 8, RSCRATCH, PPCSTATE(xer_so_ov));
   LEA(64, RSCRATCH2, MConst(ovtable));
   MOV(8, R(RSCRATCH), MRegSum(RSCRATCH, RSCRATCH2));
@@ -519,25 +519,32 @@ void Jit64::cmpXX(UGeckoInstruction inst)
   bool merge_branch = CheckMergedBranch(crf);
 
   bool signedCompare = false;
-  std::optional<u32> imm_comparand;
+  // the comparand, when it is known now
+  bool has_imm_comparand = false;
+  u32 imm_comparand = 0;
   switch (inst.OPCD)
   {
   // cmp / cmpl
   case 31:
     signedCompare = (inst.SUBOP10 == 0);
     if (gpr.IsImm(b))
+    {
+      has_imm_comparand = true;
       imm_comparand = gpr.Imm32(b);
+    }
     break;
 
   // cmpli
   case 10:
     signedCompare = false;
+    has_imm_comparand = true;
     imm_comparand = u32(inst.UIMM);
     break;
 
   // cmpi
   case 11:
     signedCompare = true;
+    has_imm_comparand = true;
     imm_comparand = u32(s32(s16(inst.UIMM)));
     break;
 
@@ -545,11 +552,11 @@ void Jit64::cmpXX(UGeckoInstruction inst)
     PanicAlert("cmpXX");
   }
 
-  if (gpr.IsImm(a) && imm_comparand.has_value())
+  if (gpr.IsImm(a) && has_imm_comparand)
   {
     // Both registers contain immediate values, so we can pre-compile the compare result
-    s64 compareResult = signedCompare ? s64(gpr.SImm32(a)) - s64(s32(imm_comparand.value())) :
-                                        u64(gpr.Imm32(a)) - u64(imm_comparand.value());
+    s64 compareResult = signedCompare ? s64(gpr.SImm32(a)) - s64(s32(imm_comparand)) :
+                                        u64(gpr.Imm32(a)) - u64(imm_comparand);
     if (compareResult == (s32)compareResult)
     {
       MOV(64, PPCSTATE_CR(crf), Imm32((u32)compareResult));
@@ -566,7 +573,7 @@ void Jit64::cmpXX(UGeckoInstruction inst)
     return;
   }
 
-  if (!gpr.IsImm(a) && !signedCompare && imm_comparand == u32(0))
+  if (!gpr.IsImm(a) && !signedCompare && has_imm_comparand && imm_comparand == 0)
   {
     RCX64Reg Ra = gpr.Bind(a, RCMode::Read);
     RegCache::Realize(Ra);
@@ -582,21 +589,21 @@ void Jit64::cmpXX(UGeckoInstruction inst)
   }
 
   const bool comparand_needs_reg =
-      !signedCompare && imm_comparand.has_value() && (imm_comparand.value() & 0x80000000U) != 0;
+      !signedCompare && has_imm_comparand && (imm_comparand & 0x80000000U) != 0;
 
   RCOpArg Rb;
   OpArg comparand;
   if (inst.OPCD != 31)
   {
     // The comparand is from the instruction encoding, so we can't get it from the register cache.
-    comparand = Imm32(imm_comparand.value());
+    comparand = Imm32(imm_comparand);
   }
-  else if (signedCompare && imm_comparand.has_value())
+  else if (signedCompare && has_imm_comparand)
   {
     // Asking the register cache for the comparand might give us a register, but we prefer an imm.
-    comparand = Imm32(imm_comparand.value());
+    comparand = Imm32(imm_comparand);
   }
-  else if (imm_comparand != u32(0))
+  else if (!has_imm_comparand || imm_comparand != 0)
   {
     // Ask the register cache for the comparand. We prefer getting a register,
     // but may also accept imm or memory depending on the circumstances.
@@ -625,7 +632,7 @@ void Jit64::cmpXX(UGeckoInstruction inst)
       MOVZX(64, 32, input, Ra);
   }
 
-  if (imm_comparand == u32(0))
+  if (has_imm_comparand && imm_comparand == 0)
   {
     MOV(64, PPCSTATE_CR(crf), R(input));
     // Place the comparison next to the branch for macro-op fusion
@@ -673,7 +680,8 @@ void Jit64::boolX(UGeckoInstruction inst)
 
   if (gpr.IsImm(s) || gpr.IsImm(b))
   {
-    const auto [i, j] = gpr.IsImm(s) ? std::pair(s, b) : std::pair(b, s);
+    const int i = gpr.IsImm(s) ? s : b;
+    const int j = gpr.IsImm(s) ? b : s;
     u32 imm = gpr.Imm32(i);
 
     bool complement_b = (inst.SUBOP10 == 60 /* andcx */) || (inst.SUBOP10 == 412 /* orcx */);
@@ -1199,8 +1207,8 @@ void Jit64::MultiplyImmediate(u32 imm, int a, int d, bool overflow)
 
     // We could handle factors of 2^N*3, 2^N*5, and 2^N*9 using lea+shl, but testing shows
     // it seems to be slower overall.
-    static constexpr std::array<u8, 3> lea_scales{{3, 5, 9}};
-    for (size_t i = 0; i < lea_scales.size(); i++)
+    static constexpr u8 lea_scales[3] = {3, 5, 9};
+    for (size_t i = 0; i < 3; i++)
     {
       if (imm == lea_scales[i] && Ra.IsSimpleReg())
       {
@@ -1729,7 +1737,8 @@ void Jit64::addx(UGeckoInstruction inst)
 
   if (gpr.IsImm(a) || gpr.IsImm(b))
   {
-    const auto [i, j] = gpr.IsImm(a) ? std::pair(a, b) : std::pair(b, a);
+    const int i = gpr.IsImm(a) ? a : b;
+    const int j = gpr.IsImm(a) ? b : a;
     const s32 imm = gpr.SImm32(i);
     RCOpArg Rj = gpr.Use(j, RCMode::Read);
     RCX64Reg Rd = gpr.Bind(d, RCMode::Write);
@@ -2516,10 +2525,10 @@ void Jit64::twX(UGeckoInstruction inst)
     CMP(32, Ra, Rb);
   }
 
-  constexpr std::array<CCFlags, 5> conditions{{CC_A, CC_B, CC_E, CC_G, CC_L}};
-  Common::SmallVector<FixupBranch, conditions.size()> fixups;
+  constexpr CCFlags conditions[5] = {CC_A, CC_B, CC_E, CC_G, CC_L};
+  Common::SmallVector<FixupBranch, 5> fixups;
 
-  for (size_t i = 0; i < conditions.size(); i++)
+  for (size_t i = 0; i < 5; i++)
   {
     if (inst.TO & (1 << i))
     {
