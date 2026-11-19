@@ -86,7 +86,7 @@ ConstantPropagationResult ConstantPropagation::EvaluateSubImmCarry(UGeckoInstruc
   const u32 imm = s32(inst.SIMM_16);
 
   ConstantPropagationResult result(inst.RD, imm - a);
-  result.carry = imm >= a;
+  result.carry = WriteFlag(imm >= a);
   return result;
 }
 
@@ -112,7 +112,7 @@ ConstantPropagationResult ConstantPropagation::EvaluateAddImmCarry(UGeckoInstruc
   const bool rc = inst.OPCD & 1;
 
   ConstantPropagationResult result(inst.RD, a + inst.SIMM_16, rc);
-  result.carry = Interpreter::Helper_Carry(a, inst.SIMM_16);
+  result.carry = WriteFlag(Interpreter::Helper_Carry(a, inst.SIMM_16));
   return result;
 }
 
@@ -198,7 +198,7 @@ ConstantPropagationResult ConstantPropagation::EvaluateTable31Negx(UGeckoInstruc
 
   ConstantPropagationResult result(inst.RD, u32(out), inst.Rc);
   if (flags & FL_SET_OE)
-    result.overflow = (out != s64(s32(out)));
+    result.overflow = WriteFlag(out != s64(s32(out)));
   return result;
 }
 
@@ -207,7 +207,7 @@ ConstantPropagationResult ConstantPropagation::EvaluateTable31S(UGeckoInstructio
   if (!HasGPR(inst.RS))
     return {};
 
-  std::optional<bool> carry;
+  FlagWrite carry = FlagWrite::Unwritten;
   u32 a;
   const u32 s = GetGPR(inst.RS);
 
@@ -218,7 +218,7 @@ ConstantPropagationResult ConstantPropagation::EvaluateTable31S(UGeckoInstructio
     break;
   case 824:  // srawix
     a = s32(s) >> inst.SH;
-    carry = inst.SH != 0 && s32(s) < 0 && (s << (32 - inst.SH));
+    carry = WriteFlag(inst.SH != 0 && s32(s) < 0 && (s << (32 - inst.SH)));
     break;
   case 922:  // extshx
     a = s32(s16(s));
@@ -299,9 +299,9 @@ ConstantPropagationResult ConstantPropagation::EvaluateTable31AB(UGeckoInstructi
 
   ConstantPropagationResult result(inst.RD, u32(d), inst.Rc);
   if (flags & FL_SET_CA)
-    result.carry = (d >> 32 != 0);
+    result.carry = WriteFlag(d >> 32 != 0);
   if (flags & FL_SET_OE)
-    result.overflow = (d_overflow != s64(s32(d_overflow)));
+    result.overflow = WriteFlag(d_overflow != s64(s32(d_overflow)));
   return result;
 }
 
@@ -319,7 +319,7 @@ ConstantPropagation::EvaluateTable31ABOneRegisterKnown(UGeckoInstruction inst, u
     {
       ConstantPropagationResult result(inst.RD, 0, inst.Rc);
       if (flags & FL_SET_OE)
-        result.overflow = false;
+        result.overflow = WriteFlag(false);
       return result;
     }
     break;
@@ -329,7 +329,7 @@ ConstantPropagation::EvaluateTable31ABOneRegisterKnown(UGeckoInstruction inst, u
     {
       ConstantPropagationResult result(inst.RD, 0, inst.Rc);
       if (flags & FL_SET_OE)
-        result.overflow = true;
+        result.overflow = WriteFlag(true);
       return result;
     }
     [[fallthrough]];
@@ -357,9 +357,9 @@ ConstantPropagation::EvaluateTable31ABIdenticalRegisters(UGeckoInstruction inst,
   {
     ConstantPropagationResult result(inst.RD, 0, inst.Rc);
     if (flags & FL_SET_CA)
-      result.carry = true;
+      result.carry = WriteFlag(true);
     if (flags & FL_SET_OE)
-      result.overflow = false;
+      result.overflow = WriteFlag(false);
     return result;
   }
   default:
@@ -425,7 +425,7 @@ ConstantPropagationResult ConstantPropagation::EvaluateTable31SB(UGeckoInstructi
     a = u32(temp >> 32);
 
     ConstantPropagationResult result(inst.RA, a, inst.Rc);
-    result.carry = (temp & a) != 0;
+    result.carry = WriteFlag((temp & a) != 0);
     return result;
   }
   default:
@@ -488,7 +488,7 @@ ConstantPropagation::EvaluateTable31SBOneRegisterKnown(UGeckoInstruction inst, u
     if (!known_reg_is_b && value == 0)
     {
       ConstantPropagationResult result(inst.RA, 0, inst.Rc);
-      result.carry = false;
+      result.carry = WriteFlag(false);
       return result;
     }
     else

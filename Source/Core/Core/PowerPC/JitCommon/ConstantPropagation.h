@@ -7,12 +7,23 @@
 #include "Common/CommonTypes.h"
 #include "Core/PowerPC/PowerPC.h"
 
-#include <array>
 #include <cstddef>
-#include <optional>
 
 namespace JitCommon
 {
+// What an instruction writes to a flag: nothing, or the flag cleared or set
+enum class FlagWrite : u8
+{
+  Unwritten,
+  Clear,
+  Set,
+};
+
+constexpr FlagWrite WriteFlag(bool value)
+{
+  return value ? FlagWrite::Set : FlagWrite::Clear;
+}
+
 struct ConstantPropagationResult final
 {
   constexpr ConstantPropagationResult() = default;
@@ -36,11 +47,11 @@ struct ConstantPropagationResult final
   // If true, CR0 needs to be set based on gpr_value.
   bool compute_rc = false;
 
-  // If not std::nullopt, the instruction writes this to the carry flag.
-  std::optional<bool> carry = std::nullopt;
+  // What the instruction writes to the carry flag
+  FlagWrite carry = FlagWrite::Unwritten;
 
-  // If not std::nullopt, the instruction writes this to the overflow flag.
-  std::optional<bool> overflow = std::nullopt;
+  // What the instruction writes to the overflow flag
+  FlagWrite overflow = FlagWrite::Unwritten;
 };
 
 class ConstantPropagation final
@@ -106,7 +117,7 @@ private:
 
   static constexpr size_t GPR_COUNT = 32;
 
-  std::array<u32, GPR_COUNT> m_gpr_values;
+  u32 m_gpr_values[GPR_COUNT];
   BitSet32 m_gpr_values_known{};
 };
 

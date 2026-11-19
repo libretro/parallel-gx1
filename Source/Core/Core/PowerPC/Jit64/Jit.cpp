@@ -1048,11 +1048,12 @@ bool Jit64::DoJit(u32 em_address, JitBlock* b, u32 nextPC)
 
         if (constant_propagation_result.instruction_fully_executed)
         {
-          if (constant_propagation_result.carry)
-            FinalizeCarry(*constant_propagation_result.carry);
+          if (constant_propagation_result.carry != JitCommon::FlagWrite::Unwritten)
+            FinalizeCarry(constant_propagation_result.carry == JitCommon::FlagWrite::Set);
 
-          if (constant_propagation_result.overflow)
-            GenerateConstantOverflow(*constant_propagation_result.overflow);
+          if (constant_propagation_result.overflow != JitCommon::FlagWrite::Unwritten)
+            GenerateConstantOverflow(constant_propagation_result.overflow ==
+                                     JitCommon::FlagWrite::Set);
 
           // FinalizeImmediateRC is called last, because it may trigger branch merging
           if (constant_propagation_result.compute_rc)
