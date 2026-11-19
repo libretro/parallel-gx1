@@ -16,6 +16,7 @@
 
 #include <compat/strl.h>
 #include <file/file_path.h>
+#include <streams/file_stream.h>
 #include <retro_miscellaneous.h>
 
 #include "Core/HW/GBAVFile.h"
@@ -86,6 +87,9 @@ static struct retro_memory_descriptor gbp_maps[GBP_HLE_MAX_MAPS];
 /* the working RAM: the frontend's system RAM */
 static void *gbp_wram;
 static size_t gbp_wram_size;
+/* the save file mGBA writes through, opened before it knows the game
+ * saves at all */
+static char gbp_save_file[PATH_MAX_LENGTH];
 /* the frontend's codes, one set; made on the first code */
 static struct mCheatSet *gbp_cheats;
 
@@ -258,8 +262,9 @@ int gbp_hle_load(const char *rom_path, const char *system_dir,
          vf->close(vf);
    }
 
-   gbp_save_path(path, sizeof(path), rom_path, save_dir);
-   if ((vf = gba_vfile_open(path, 1)) && !gbp_core->loadSave(gbp_core, vf))
+   gbp_save_path(gbp_save_file, sizeof(gbp_save_file), rom_path, save_dir);
+   if ((vf = gba_vfile_open(gbp_save_file, 1))
+         && !gbp_core->loadSave(gbp_core, vf))
       vf->close(vf);
 
    gbp_core->reset(gbp_core);
@@ -281,6 +286,10 @@ void gbp_hle_unload(void)
    mCoreConfigDeinit(&gbp_core->config);
    gbp_core->deinit(gbp_core);
    gbp_core = NULL;
+   /* a game that never saved leaves no file behind */
+   if (*gbp_save_file && path_get_size(gbp_save_file) == 0)
+      filestream_delete(gbp_save_file);
+   *gbp_save_file = '\0';
 }
 
 void gbp_hle_get_av_info(struct retro_system_av_info *info)
