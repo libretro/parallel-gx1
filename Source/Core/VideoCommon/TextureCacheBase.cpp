@@ -2701,49 +2701,49 @@ void TextureCacheBase::StitchXFBCopy(RcTcacheEntry& stitched_entry)
   }
 }
 
-std::array<u32, 3>
+CopyFilterSums
 TextureCacheBase::GetRAMCopyFilterCoefficients(const CopyFilterCoefficients::Values& coefficients)
 {
   // To simplify the backend, we precalculate the three coefficients in common. Coefficients 0, 1
   // are for the row above, 2, 3, 4 are for the current pixel, and 5, 6 are for the row below.
-  return {
-      static_cast<u32>(coefficients[0]) + static_cast<u32>(coefficients[1]),
-      static_cast<u32>(coefficients[2]) + static_cast<u32>(coefficients[3]) +
-          static_cast<u32>(coefficients[4]),
-      static_cast<u32>(coefficients[5]) + static_cast<u32>(coefficients[6]),
-  };
+  CopyFilterSums sums;
+  sums.w[0] = static_cast<u32>(coefficients.w[0]) + static_cast<u32>(coefficients.w[1]);
+  sums.w[1] = static_cast<u32>(coefficients.w[2]) + static_cast<u32>(coefficients.w[3]) +
+              static_cast<u32>(coefficients.w[4]);
+  sums.w[2] = static_cast<u32>(coefficients.w[5]) + static_cast<u32>(coefficients.w[6]);
+  return sums;
 }
 
-std::array<u32, 3>
+CopyFilterSums
 TextureCacheBase::GetVRAMCopyFilterCoefficients(const CopyFilterCoefficients::Values& coefficients)
 {
   // If the user disables the copy filter, only apply it to the VRAM copy.
   // This way games which are sensitive to changes to the RAM copy of the XFB will be unaffected.
-  std::array<u32, 3> res = GetRAMCopyFilterCoefficients(coefficients);
+  CopyFilterSums res = GetRAMCopyFilterCoefficients(coefficients);
   if (!g_ActiveConfig.bDisableCopyFilter)
     return res;
 
   // Disabling the copy filter in options should not ignore the values the game sets completely,
   // as some games use the filter coefficients to control the brightness of the screen. Instead,
   // add all coefficients to the middle sample, so the deflicker/vertical filter has no effect.
-  res[1] = res[0] + res[1] + res[2];
-  res[0] = 0;
-  res[2] = 0;
+  res.w[1] = res.w[0] + res.w[1] + res.w[2];
+  res.w[0] = 0;
+  res.w[2] = 0;
   return res;
 }
 
-bool TextureCacheBase::AllCopyFilterCoefsNeeded(const std::array<u32, 3>& coefficients)
+bool TextureCacheBase::AllCopyFilterCoefsNeeded(const CopyFilterSums& coefficients)
 {
   // If the top/bottom coefficients are zero, no point sampling/blending from these rows.
-  return coefficients[0] != 0 || coefficients[2] != 0;
+  return coefficients.w[0] != 0 || coefficients.w[2] != 0;
 }
 
-bool TextureCacheBase::CopyFilterCanOverflow(const std::array<u32, 3>& coefficients)
+bool TextureCacheBase::CopyFilterCanOverflow(const CopyFilterSums& coefficients)
 {
   // Normally, the copy filter coefficients will sum to at most 64.  If the sum is higher than that,
   // colors are clamped to the range [0, 255], but if the sum is higher than 128, that clamping
   // breaks (as colors end up >= 512, which wraps back to 0).
-  return coefficients[0] + coefficients[1] + coefficients[2] >= 128;
+  return coefficients.w[0] + coefficients.w[1] + coefficients.w[2] >= 128;
 }
 
 void TextureCacheBase::CopyRenderTargetToTexture(
@@ -2958,7 +2958,7 @@ void TextureCacheBase::CopyRenderTargetToTexture(
 
   if (copy_to_ram)
   {
-    const std::array<u32, 3> coefficients = GetRAMCopyFilterCoefficients(filter_coefficients);
+    const CopyFilterSums coefficients = GetRAMCopyFilterCoefficients(filter_coefficients);
     PixelFormat srcFormat = bpmem.zcontrol.pixel_format;
     EFBCopyParams format(srcFormat, dstFormat, is_depth_copy, isIntensity,
                          AllCopyFilterCoefsNeeded(coefficients),
@@ -3560,7 +3560,7 @@ void TextureCacheBase::CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_c
                                            bool scale_by_half, bool linear_filter,
                                            EFBCopyFormat dst_format, bool is_intensity, float gamma,
                                            bool clamp_top, bool clamp_bottom,
-                                           const std::array<u32, 3>& filter_coefficients)
+                                           const CopyFilterSums& filter_coefficients)
 {
   // the null and software renderers keep no copies in VRAM
   if (g_video_backend_kind == VIDEO_BACKEND_NULL || g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
@@ -3586,7 +3586,7 @@ void TextureCacheBase::CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_c
   struct Uniforms
   {
     float src_left, src_top, src_width, src_height;
-    std::array<u32, 3> filter_coefficients;
+    u32 filter_coefficients[3];
     float gamma_rcp;
     float clamp_top;
     float clamp_bottom;
@@ -3601,7 +3601,7 @@ void TextureCacheBase::CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_c
   uniforms.src_top = framebuffer_rect.top * rcp_efb_height;
   uniforms.src_width = framebuffer_rect.GetWidth() * rcp_efb_width;
   uniforms.src_height = framebuffer_rect.GetHeight() * rcp_efb_height;
-  uniforms.filter_coefficients = filter_coefficients;
+  memcpy(uniforms.filter_coefficients, filter_coefficients.w, sizeof(filter_coefficients.w));
   uniforms.gamma_rcp = 1.0f / gamma;
   //   NOTE: when the clamp bits aren't set, the hardware will happily read beyond the EFB,
   //         which returns random garbage from the empty bus (confirmed by hardware tests).
@@ -3634,7 +3634,7 @@ void TextureCacheBase::CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams&
                                u32 memory_stride, const MathUtil::Rectangle<int>& src_rect,
                                bool scale_by_half, bool linear_filter, float y_scale, float gamma,
                                bool clamp_top, bool clamp_bottom,
-                               const std::array<u32, 3>& filter_coefficients)
+                               const CopyFilterSums& filter_coefficients)
 {
   if (g_video_backend_kind == VIDEO_BACKEND_NULL)
     return;
@@ -3670,12 +3670,12 @@ void TextureCacheBase::CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams&
   // Fill uniform buffer.
   struct Uniforms
   {
-    std::array<s32, 4> position_uniform;
+    s32 position_uniform[4];
     float y_scale;
     float gamma_rcp;
     float clamp_top;
     float clamp_bottom;
-    std::array<u32, 3> filter_coefficients;
+    u32 filter_coefficients[3];
     u32 copy_flags;
   };
   Uniforms encoder_params;
@@ -3696,7 +3696,7 @@ void TextureCacheBase::CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams&
   encoder_params.clamp_top = (static_cast<float>(top_coord) + .5f) * rcp_efb_height;
   const u32 bottom_coord = (clamp_bottom ? framebuffer_rect.bottom : efb_height) - 1;
   encoder_params.clamp_bottom = (static_cast<float>(bottom_coord) + .5f) * rcp_efb_height;
-  encoder_params.filter_coefficients = filter_coefficients;
+  memcpy(encoder_params.filter_coefficients, filter_coefficients.w, sizeof(filter_coefficients.w));
   encoder_params.copy_flags = TextureConversionShaderTiled::GetEncodingFlags(params);
   g_vertex_manager->UploadUtilityUniforms(&encoder_params, sizeof(encoder_params));
 

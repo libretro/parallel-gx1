@@ -104,7 +104,7 @@ EFBCopyFormat GetDrawnFormat(EFBCopyFormat dst_format)
 }
 
 u32 GetCopyFlags(EFBCopyFormat dst_format, bool is_depth_copy, bool is_intensity, float gamma_rcp,
-                 const std::array<u32, 3>& filter_coefficients)
+                 const CopyFilterSums& filter_coefficients)
 {
   return (TextureCacheBase::AllCopyFilterCoefsNeeded(filter_coefficients) ?
               COPY_FLAG_ALL_FILTER_COEFS :

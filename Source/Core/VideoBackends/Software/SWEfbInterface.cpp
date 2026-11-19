@@ -3,10 +3,7 @@
 
 #include "VideoBackends/Software/SWEfbInterface.h"
 
-#include <algorithm>
-#include <array>
 #include <cstring>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -21,9 +18,9 @@
 
 namespace EfbInterface
 {
-static std::array<u8, EFB_WIDTH * EFB_HEIGHT * 6> efb;
+static u8 efb[EFB_WIDTH * EFB_HEIGHT * 6];
 
-static std::array<u32, PQ_NUM_MEMBERS> perf_values;
+static u32 perf_values[PQ_NUM_MEMBERS];
 
 static inline u32 GetColorOffset(u16 x, u16 y)
 {
@@ -483,11 +480,11 @@ static u32 GetColor(u16 x, u16 y)
   return GetPixelColor(offset);
 }
 
-static u32 VerticalFilter(const std::array<u32, 3>& colors,
-                          const std::array<u8, 7>& filterCoefficients)
+static u32 VerticalFilter(const u32* colors, const CopyFilterCoefficients::Values& coefficients)
 {
+  const u8* const filterCoefficients = coefficients.w;
   u8 in_colors[3][4];
-  std::memcpy(&in_colors, colors.data(), sizeof(in_colors));
+  std::memcpy(&in_colors, colors, sizeof(in_colors));
 
   // Alpha channel is not used
   u8 out_color[4];
@@ -523,7 +520,7 @@ static u32 VerticalFilter(const std::array<u32, 3>& colors,
     }
 
     // TODO: this clamping behavior appears to be correct, but isn't confirmed on hardware.
-    out_color[i] = std::min(255, sum >> 6);  // clamp larger values to 255
+    out_color[i] = sum >> 6 < 255 ? sum >> 6 : 255;  // clamp larger values to 255
   }
 
   u32 out_color32;
@@ -607,9 +604,8 @@ void EncodeXFB(u8* xfb_in_ram, u32 memory_stride, const MathUtil::Rectangle<int>
   // Scanline buffer, leave room for borders
   yuv444 scanline[EFB_WIDTH + 2];
 
-  static std::vector<yuv422_packed> source;
-  source.resize(EFB_WIDTH * EFB_HEIGHT);
-  yuv422_packed* src_ptr = &source[0];
+  static yuv422_packed source[EFB_WIDTH * EFB_HEIGHT];
+  yuv422_packed* src_ptr = source;
 
   for (int y = source_rect.top; y < source_rect.bottom; y++)
   {
@@ -619,15 +615,16 @@ void EncodeXFB(u8* xfb_in_ram, u32 memory_stride, const MathUtil::Rectangle<int>
     //
     //         In our implementation, the garbage just so happens to be the top or bottom row.
     //         Statistically, that could happen.
-    const u16 y_prev = static_cast<u16>(std::max(clamp_top ? source_rect.top : 0, y - 1));
-    const u16 y_next = static_cast<u16>(
-        std::min<int>((clamp_bottom ? source_rect.bottom : EFB_HEIGHT) - 1, y + 1));
+    const int top = clamp_top ? source_rect.top : 0;
+    const int bottom = (clamp_bottom ? source_rect.bottom : EFB_HEIGHT) - 1;
+    const u16 y_prev = static_cast<u16>(y - 1 > top ? y - 1 : top);
+    const u16 y_next = static_cast<u16>(y + 1 < bottom ? y + 1 : bottom);
 
     // Get a scanline of YUV pixels in 4:4:4 format
     for (int i = 1, x = left; x < right; i++, x++)
     {
       // Get RGB colors
-      std::array<u32, 3> colors = {{GetColor(x, y_prev), GetColor(x, y), GetColor(x, y_next)}};
+      const u32 colors[3] = {GetColor(x, y_prev), GetColor(x, y), GetColor(x, y_next)};
 
       // Vertical Filter (Multisampling resolve, deflicker, brightness)
       u32 filtered = VerticalFilter(colors, filter_coefficients);
@@ -665,7 +662,7 @@ void EncodeXFB(u8* xfb_in_ram, u32 memory_stride, const MathUtil::Rectangle<int>
   const int dst_width = src_width;
   const int dst_height = src_height * y_scale;
 
-  SW::CopyRegion(source.data(), src_width, src_height, reinterpret_cast<yuv422_packed*>(xfb_in_ram),
+  SW::CopyRegion(source, src_width, src_height, reinterpret_cast<yuv422_packed*>(xfb_in_ram),
                  dst_width, dst_height);
 }
 
@@ -723,7 +720,7 @@ u32 GetPerfQueryResult(PerfQueryType type)
 
 void ResetPerfQuery()
 {
-  perf_values = {};
+  memset(perf_values, 0, sizeof(perf_values));
 }
 
 void IncPerfCounterQuadCount(PerfQueryType type)

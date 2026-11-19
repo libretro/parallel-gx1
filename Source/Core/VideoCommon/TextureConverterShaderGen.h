@@ -3,13 +3,12 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/CommonTypes.h"
 
 #include "VideoCommon/TextureDecoder.h"
 
 struct shader_build;
+struct CopyFilterSums;
 
 namespace TextureConversionShaderGen
 {
@@ -38,6 +37,6 @@ bool BuildPixelShader(struct shader_build* sb, const void* arg);
 EFBCopyFormat GetDrawnFormat(EFBCopyFormat dst_format);
 /* copy_flags for a copy */
 u32 GetCopyFlags(EFBCopyFormat dst_format, bool is_depth_copy, bool is_intensity, float gamma_rcp,
-                 const std::array<u32, 3>& filter_coefficients);
+                 const CopyFilterSums& filter_coefficients);
 
 }  // namespace TextureConversionShaderGen

@@ -39,6 +39,13 @@ class CustomTextureData;
 class GameTextureAsset;
 }  // namespace VideoCommon
 
+// The copy filter as the shaders take it: the weights of the row above, the row itself and
+// the row below, each summed
+struct CopyFilterSums
+{
+  u32 w[3];
+};
+
 constexpr std::string_view EFB_DUMP_PREFIX = "efb1";
 constexpr std::string_view XFB_DUMP_PREFIX = "xfb1";
 
@@ -411,8 +418,8 @@ public:
   // Save States
   void DoState(PointerWrap& p);
 
-  static bool AllCopyFilterCoefsNeeded(const std::array<u32, 3>& coefficients);
-  static bool CopyFilterCanOverflow(const std::array<u32, 3>& coefficients);
+  static bool AllCopyFilterCoefsNeeded(const CopyFilterSums& coefficients);
+  static bool CopyFilterCanOverflow(const CopyFilterSums& coefficients);
 
   // Get a new sampler state
   static SamplerState GetSamplerState(u32 index, float custom_tex_scale, bool custom_tex,
@@ -435,15 +442,15 @@ protected:
                           TLUTFormat palette_format);
 
   void CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams& params, u32 native_width,
-                       u32 bytes_per_row, u32 num_blocks_y, u32 memory_stride,
-                       const MathUtil::Rectangle<int>& src_rect, bool scale_by_half,
-                       bool linear_filter, float y_scale, float gamma, bool clamp_top,
-                       bool clamp_bottom, const std::array<u32, 3>& filter_coefficients);
+               u32 bytes_per_row, u32 num_blocks_y, u32 memory_stride,
+               const MathUtil::Rectangle<int>& src_rect, bool scale_by_half, bool linear_filter,
+               float y_scale, float gamma, bool clamp_top, bool clamp_bottom,
+               const CopyFilterSums& filter_coefficients);
   void CopyEFBToCacheEntry(RcTcacheEntry& entry, bool is_depth_copy,
-                                   const MathUtil::Rectangle<int>& src_rect, bool scale_by_half,
-                                   bool linear_filter, EFBCopyFormat dst_format, bool is_intensity,
-                                   float gamma, bool clamp_top, bool clamp_bottom,
-                                   const std::array<u32, 3>& filter_coefficients);
+                           const MathUtil::Rectangle<int>& src_rect, bool scale_by_half,
+                           bool linear_filter, EFBCopyFormat dst_format, bool is_intensity,
+                           float gamma, bool clamp_top, bool clamp_bottom,
+                           const CopyFilterSums& filter_coefficients);
 
   alignas(16) u8* m_temp = nullptr;
   size_t m_temp_size = 0;
@@ -535,9 +542,9 @@ private:
   u32 m_next_pattern_hash = 0;
 
   // Precomputing the coefficients for the previous, current, and next lines for the copy filter.
-  static std::array<u32, 3>
+  static CopyFilterSums
   GetRAMCopyFilterCoefficients(const CopyFilterCoefficients::Values& coefficients);
-  static std::array<u32, 3>
+  static CopyFilterSums
   GetVRAMCopyFilterCoefficients(const CopyFilterCoefficients::Values& coefficients);
 
   // Flushes a pending EFB copy to RAM from the host to the guest RAM.

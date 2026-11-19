@@ -1114,7 +1114,11 @@ union UPE_Copy
 
 union CopyFilterCoefficients
 {
-  using Values = std::array<u8, 7>;
+  // The seven weights: two for the row above, three for the row itself, two for the row below
+  struct Values
+  {
+    u8 w[7];
+  };
 
   u64 Hex;
 
@@ -1130,15 +1134,15 @@ union CopyFilterCoefficients
 
   Values GetCoefficients() const
   {
-    return {{
-        static_cast<u8>(w0),
-        static_cast<u8>(w1),
-        static_cast<u8>(w2),
-        static_cast<u8>(w3),
-        static_cast<u8>(w4),
-        static_cast<u8>(w5),
-        static_cast<u8>(w6),
-    }};
+    Values values;
+    values.w[0] = static_cast<u8>(w0);
+    values.w[1] = static_cast<u8>(w1);
+    values.w[2] = static_cast<u8>(w2);
+    values.w[3] = static_cast<u8>(w3);
+    values.w[4] = static_cast<u8>(w4);
+    values.w[5] = static_cast<u8>(w5);
+    values.w[6] = static_cast<u8>(w6);
+    return values;
   }
 };
 
