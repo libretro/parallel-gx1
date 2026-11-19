@@ -406,13 +406,13 @@ void BluetoothEmuDevice::Update()
   {
     g_controller_interface.UpdateInput();
 
-    std::array<WiimoteEmu::DesiredWiimoteState, MAX_BBMOTES> wiimote_states;
-    std::array<WiimoteDevice::NextUpdateInputCall, MAX_BBMOTES> next_call;
+    WiimoteEmu::DesiredWiimoteState wiimote_states[MAX_BBMOTES];
+    WiimoteDevice::NextUpdateInputCall next_call[MAX_BBMOTES];
 
-    for (size_t i = 0; i < m_wiimotes.size(); ++i)
+    for (size_t i = 0; i < MAX_BBMOTES; ++i)
       next_call[i] = m_wiimotes[i]->PrepareInput(&wiimote_states[i]);
 
-    for (size_t i = 0; i < m_wiimotes.size(); ++i)
+    for (size_t i = 0; i < MAX_BBMOTES; ++i)
       m_wiimotes[i]->UpdateInput(next_call[i], wiimote_states[i]);
 
     m_last_ticks = now;
