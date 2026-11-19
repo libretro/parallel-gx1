@@ -236,7 +236,7 @@ void Init();
 void FirmwareMap(bool on);
 void InitDIMM(const DiscIO::Volume& volume);
 void InitKeys(u32 key_a, u32 key_b, u32 key_c);
-u32 ExecuteCommand(std::array<u32, 3>& dicmd_buf, u32* diimm_buf, u32 address, u32 length);
+u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length);
 u32 GetGameType();
 bool GetTestMenu();
 void Shutdown();

@@ -1425,7 +1425,7 @@ static void FileReadData(Memory::MemoryManager& memory, File::IOFile* file, u32 
   }
 }
 
-u32 ExecuteCommand(std::array<u32, 3>& dicmd_buf, u32* diimm_buf, u32 address, u32 length)
+u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
 {
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();

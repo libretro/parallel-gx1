@@ -259,7 +259,7 @@ private:
   // Hardware registers
   UDISR m_DISR;
   UDICVR m_DICVR;
-  std::array<u32, 3> m_DICMDBUF{};
+  u32 m_DICMDBUF[3] = {};
   u32 m_DIMAR = 0;
   u32 m_DILENGTH = 0;
   UDICR m_DICR;

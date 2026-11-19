@@ -211,12 +211,12 @@ void DVDInterface::DTKStreamingCallback(DIInterruptType interrupt_type, const u8
   if (interrupt_type == DIInterruptType::TCINT)
   {
     // Send audio to the mixer.
-    std::array<s16, MAX_POSSIBLE_SAMPLES * 2> temp_pcm{};
+    s16 temp_pcm[MAX_POSSIBLE_SAMPLES * 2] = {};
     ASSERT(m_pending_blocks <= MAX_POSSIBLE_BLOCKS);
     const u32 pending_blocks = std::min(m_pending_blocks, MAX_POSSIBLE_BLOCKS);
-    ProcessDTKSamples(temp_pcm.data(), pending_blocks, audio_data, audio_size);
+    ProcessDTKSamples(temp_pcm, pending_blocks, audio_data, audio_size);
 
-    field_audio_mix_be_rl(FIELD_AUDIO_STREAM, temp_pcm.data(),
+    field_audio_mix_be_rl(FIELD_AUDIO_STREAM, temp_pcm,
                           pending_blocks * StreamADPCM::SAMPLES_PER_BLOCK);
 
     if (m_stream && ai.IsPlaying())
