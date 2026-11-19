@@ -123,8 +123,8 @@ bool SDSP::Initialize(const DSPInitOptions& opts)
   dram = static_cast<u16*>(Common::AllocateMemoryPages(DSP_DRAM_BYTE_SIZE));
   coef = static_cast<u16*>(Common::AllocateMemoryPages(DSP_COEF_BYTE_SIZE));
 
-  std::memcpy(irom, opts.irom_contents.data(), DSP_IROM_BYTE_SIZE);
-  std::memcpy(coef, opts.coef_contents.data(), DSP_COEF_BYTE_SIZE);
+  std::memcpy(irom, opts.irom_contents, DSP_IROM_BYTE_SIZE);
+  std::memcpy(coef, opts.coef_contents, DSP_COEF_BYTE_SIZE);
 
   // Try to load real ROM contents.
   if (!VerifyRoms(*this))

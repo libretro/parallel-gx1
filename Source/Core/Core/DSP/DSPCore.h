@@ -285,11 +285,11 @@ struct DSP_Regs
 
 struct DSPInitOptions
 {
-  // DSP IROM blob, which is where the DSP boots from. Embedded into the DSP.
-  std::array<u16, DSP_IROM_SIZE> irom_contents{};
+  // DSP IROM blob (DSP_IROM_SIZE words), which is where the DSP boots from. Embedded into the DSP.
+  const u16* irom_contents = nullptr;
 
-  // DSP DROM blob, which contains resampling coefficients.
-  std::array<u16, DSP_COEF_SIZE> coef_contents{};
+  // DSP DROM blob (DSP_COEF_SIZE words), which contains resampling coefficients.
+  const u16* coef_contents = nullptr;
 
   // Core used to emulate the DSP.
   // Default: JIT64.

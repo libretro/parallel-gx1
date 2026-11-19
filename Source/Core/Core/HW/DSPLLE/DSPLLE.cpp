@@ -4,6 +4,7 @@
 #include "Core/HW/DSPLLE/DSPLLE.h"
 
 #include <cinttypes>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -104,7 +105,7 @@ static bool LoadDSPRom(u16* rom, const std::string& filename, u32 size_in_bytes)
   return true;
 }
 
-static bool FillDSPInitOptions(DSPInitOptions* opts)
+static bool FillDSPInitOptions(DSPInitOptions* opts, u16* irom, u16* coef)
 {
   std::string irom_file = File::GetUserPath(D_GCUSER_IDX) + DSP_IROM;
   std::string coef_file = File::GetUserPath(D_GCUSER_IDX) + DSP_COEF;
@@ -114,10 +115,12 @@ static bool FillDSPInitOptions(DSPInitOptions* opts)
   if (!File::Exists(coef_file))
     coef_file = File::GetSysDirectory() + GC_SYS_DIR DIR_SEP DSP_COEF;
 
-  if (!LoadDSPRom(opts->irom_contents.data(), irom_file, DSP_IROM_BYTE_SIZE))
+  if (!LoadDSPRom(irom, irom_file, DSP_IROM_BYTE_SIZE))
     return false;
-  if (!LoadDSPRom(opts->coef_contents.data(), coef_file, DSP_COEF_BYTE_SIZE))
+  if (!LoadDSPRom(coef, coef_file, DSP_COEF_BYTE_SIZE))
     return false;
+  opts->irom_contents = irom;
+  opts->coef_contents = coef;
 
   opts->core_type = DSPInitOptions::CoreType::Interpreter;
 #ifdef _M_X86_64
@@ -135,10 +138,17 @@ bool DSPLLE::Initialize(bool wii, bool dsp_thread)
 {
   m_request_disable_thread = false;
 
-  DSPInitOptions opts;
-  if (!FillDSPInitOptions(&opts))
+  // The ROM images only live until the DSP core has copied them into its own memory.
+  u16* const rom_images =
+      static_cast<u16*>(malloc(size_t(DSP_IROM_BYTE_SIZE) + size_t(DSP_COEF_BYTE_SIZE)));
+  if (!rom_images)
     return false;
-  if (!m_dsp_core.Initialize(opts))
+
+  DSPInitOptions opts;
+  const bool initialized = FillDSPInitOptions(&opts, rom_images, rom_images + DSP_IROM_SIZE) &&
+                           m_dsp_core.Initialize(opts);
+  free(rom_images);
+  if (!initialized)
     return false;
 
   // needs to be after DSPCore_Init for the dspjit ptr
