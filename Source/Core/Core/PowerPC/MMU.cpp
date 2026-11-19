@@ -44,6 +44,7 @@
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
+#include "Common/MemoryUtil.h"
 
 #include "Core/Core.h"
 #include "Core/HW/CPU.h"
@@ -74,6 +75,34 @@ MMU::~MMU()
 {
   address_map_free(&m_page_mappings);
   std::free(m_removed_mappings);
+  Common::FreeAlignedMemory(m_page_table.data);
+  Common::FreeAlignedMemory(m_temp_page_table.data);
+}
+
+void MMU::ResizePageTable(PageTableCopy* table, u32 size)
+{
+  if (size > table->capacity)
+  {
+    u8* const data = static_cast<u8*>(Common::AllocateAlignedMemory(size, 16));
+    Common::FreeAlignedMemory(table->data);
+    table->data = data;
+    table->capacity = data ? size : 0;
+    if (!data)
+      size = 0;
+  }
+  if (size)
+    memset(table->data, 0, size);
+  table->size = size;
+}
+
+void MMU::DoPageTable(PointerWrap& p, PageTableCopy* table)
+{
+  u32 size = table->size;
+  p.Do(size);
+  if (p.IsReadMode())
+    ResizePageTable(table, size);
+  if (table->size)
+    p.DoArray(table->data, table->size);
 }
 
 void MMU::Reset()
@@ -91,25 +120,25 @@ void MMU::DoState(PointerWrap& p, bool sr_changed)
     if (!m_system.GetJitInterface().WantsPageTableMappings())
     {
       // Clear page table mappings if we have any.
-      p.Do(m_page_table);
+      DoPageTable(p, &m_page_table);
       ClearPageTable();
     }
     else if (sr_changed)
     {
       // Non-incremental update of page table mappings.
-      p.Do(m_page_table);
+      DoPageTable(p, &m_page_table);
       SRUpdated();
     }
     else
     {
       // Incremental update of page table mappings.
-      p.Do(m_temp_page_table);
-      PageTableUpdated(m_temp_page_table.data(), m_temp_page_table.size());
+      DoPageTable(p, &m_temp_page_table);
+      PageTableUpdated(m_temp_page_table.data, m_temp_page_table.size);
     }
   }
   else
   {
-    p.Do(m_page_table);
+    DoPageTable(p, &m_page_table);
   }
 }
 
@@ -1257,18 +1286,21 @@ void MMU::ClearPageTable()
   // Because we removed host mappings, incremental updates won't work correctly.
   // Start over from scratch.
   address_map_clear(&m_page_mappings);
-  m_page_table.clear();
+  m_page_table.size = 0;
 }
 
 void MMU::ReloadPageTable()
 {
   address_map_clear(&m_page_mappings);
 
-  m_temp_page_table.clear();
-  std::swap(m_page_table, m_temp_page_table);
+  // the old table becomes the one to apply, against an empty one
+  const PageTableCopy old_table = m_page_table;
+  m_page_table = m_temp_page_table;
+  m_page_table.size = 0;
+  m_temp_page_table = old_table;
 
   if (m_system.GetJitInterface().WantsPageTableMappings())
-    PageTableUpdated(m_temp_page_table.data(), m_temp_page_table.size());
+    PageTableUpdated(m_temp_page_table.data, m_temp_page_table.size);
   else
     m_memory.RemoveAllPageTableMappings();
 }
@@ -1319,15 +1351,19 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
 
   m_num_removed_mappings = 0;
 
-  if (m_page_table.size() != page_table_size)
+  if (m_page_table.size != page_table_size)
   {
     m_memory.RemoveAllPageTableMappings();
     address_map_clear(&m_page_mappings);
-    m_page_table.resize(0);
-    m_page_table.resize(page_table_size, 0);
+    ResizePageTable(&m_page_table, static_cast<u32>(page_table_size));
+    if (m_page_table.size != page_table_size)
+    {
+      PanicAlert("Out of memory for a page table of %" PRIu64 " bytes", (u64)page_table_size);
+      return;
+    }
   }
 
-  u8* old_page_table = m_page_table.data();
+  u8* old_page_table = m_page_table.data;
   const u8* new_page_table = page_table;
 
   constexpr auto compare_64_bytes = [](const u8* a, const u8* b) -> bool {
@@ -1804,11 +1840,11 @@ MMU::TranslateAddressResult MMU::TranslatePageAddress(const EffectiveAddress add
             if (*mapping == PageMapping(pte2.RPN, true, priority).Hex)
             {
               const u32 swapped_pte1 = Common::swap32(reinterpret_cast<u8*>(&pte1));
-              std::memcpy(m_page_table.data() + pteg_addr - m_ppc_state.pagetable_base,
-                          &swapped_pte1, sizeof(swapped_pte1));
+              std::memcpy(m_page_table.data + pteg_addr - m_ppc_state.pagetable_base, &swapped_pte1,
+                          sizeof(swapped_pte1));
 
               const u32 swapped_pte2 = Common::swap32(reinterpret_cast<u8*>(&pte2));
-              std::memcpy(m_page_table.data() + pteg_addr + 4 - m_ppc_state.pagetable_base,
+              std::memcpy(m_page_table.data + pteg_addr + 4 - m_ppc_state.pagetable_base,
                           &swapped_pte2, sizeof(swapped_pte2));
 
               /* a host mapping the page has is one to write through from now on; it gets one
@@ -1957,7 +1993,7 @@ void MMU::DBATUpdated()
   // Calling UpdateDBATMappings removes all fastmem page table mappings, so we have to recreate
   // them. We need to go through them anyway because there may have been a change in which DBATs
   // are shadowing which page table mappings.
-  if (!m_page_table.empty())
+  if (m_page_table.size)
     ReloadPageTable();
 #endif
 

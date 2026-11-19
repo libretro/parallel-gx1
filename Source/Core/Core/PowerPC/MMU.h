@@ -338,8 +338,21 @@ private:
   PowerPC::PowerPCManager& m_power_pc;
   PowerPC::PowerPCState& m_ppc_state;
 
+  // A copy of the guest's page table, 16-byte aligned for the comparisons; its block is kept
+  // when it empties, so a table of the same size or smaller allocates nothing.
+  struct PageTableCopy
+  {
+    u8* data = nullptr;
+    u32 size = 0;
+    u32 capacity = 0;
+  };
+  // size bytes, all zero
+  static void ResizePageTable(PageTableCopy* table, u32 size);
+  // As a std::vector<u8> is saved: its size, then its bytes
+  static void DoPageTable(PointerWrap& p, PageTableCopy* table);
+
   // STATE_TO_SAVE
-  std::vector<u8> m_page_table;
+  PageTableCopy m_page_table;
   // END STATE_TO_SAVE
 
   // This keeps track of all valid page table mappings in m_page_table.
@@ -354,7 +367,7 @@ private:
   void NoteRemovedMapping(u32 logical_address);
   void ApplyMappingChanges();
 
-  std::vector<u8> m_temp_page_table;
+  PageTableCopy m_temp_page_table;
   static constexpr u32 PAGE_MAPPING_CHANGES_START = 16384;
   u32* m_removed_mappings = nullptr;
   u32 m_num_removed_mappings = 0;
