@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -123,7 +122,13 @@ private:
     u16 remote_mtu = 0;
   };
 
-  using ChannelMap = std::map<u16, SChannel>;
+  // Open L2CAP channels, sorted by local channel ID.
+  struct ChannelEntry
+  {
+    u16 cid;
+    SChannel channel;
+  };
+  static constexpr int MAX_CHANNELS = 16;
 
   BluetoothEmuDevice* m_host;
   WiimoteCommon::HIDWiimote* m_hid_source = nullptr;
@@ -138,7 +143,8 @@ private:
   u16 m_lmp_subversion;
   LinkKeyType m_link_key;
   std::string m_name;
-  ChannelMap m_channels;
+  ChannelEntry m_channels[MAX_CHANNELS];
+  int m_channel_count = 0;
   u8 m_connection_request_counter = 0;
 
   void SetBasebandState(BasebandState);
@@ -149,7 +155,11 @@ private:
   bool LinkChannel(u16 psm);
   u16 GenerateChannelID() const;
 
-  bool DoesChannelExist(u16 scid) const { return m_channels.contains(scid); }
+  bool DoesChannelExist(u16 scid) const { return FindChannel(scid) != nullptr; }
+  const SChannel* FindChannel(u16 cid) const;
+  // Returns the channel with this ID, opening it when it does not exist yet.
+  SChannel& GetChannel(u16 cid);
+  void CloseChannel(u16 cid);
   void SendCommandToACL(u8 ident, u8 code, u8 command_length, u8* command_data);
 
   void SignalChannel(u8* data, u32 size);

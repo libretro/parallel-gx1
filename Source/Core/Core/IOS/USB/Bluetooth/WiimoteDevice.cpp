@@ -111,7 +111,27 @@ void WiimoteDevice::DoState(PointerWrap& p)
   p.Do(m_lmp_subversion);
   p.Do(m_link_key);
   p.Do(m_name);
-  p.Do(m_channels);
+  // Same layout as the std::map this replaced: a count, then each ID and channel in ID order.
+  u32 channel_count = u32(m_channel_count);
+  p.Do(channel_count);
+  if (p.IsReadMode())
+    m_channel_count = 0;
+  for (u32 i = 0; i < channel_count; i++)
+  {
+    if (p.IsReadMode())
+    {
+      u16 cid = 0;
+      p.Do(cid);
+      SChannel channel;
+      p.Do(channel);
+      GetChannel(cid) = channel;
+    }
+    else
+    {
+      p.Do(m_channels[i].cid);
+      p.Do(m_channels[i].channel);
+    }
+  }
   p.Do(m_connection_request_counter);
 }
 
@@ -153,10 +173,10 @@ void WiimoteDevice::SetBasebandState(BasebandState new_state)
 
 const WiimoteDevice::SChannel* WiimoteDevice::FindChannelWithPSM(u16 psm) const
 {
-  for (auto& [cid, channel] : m_channels)
+  for (int i = 0; i < m_channel_count; i++)
   {
-    if (channel.psm == psm)
-      return &channel;
+    if (m_channels[i].channel.psm == psm)
+      return &m_channels[i].channel;
   }
 
   return nullptr;
@@ -164,13 +184,63 @@ const WiimoteDevice::SChannel* WiimoteDevice::FindChannelWithPSM(u16 psm) const
 
 WiimoteDevice::SChannel* WiimoteDevice::FindChannelWithPSM(u16 psm)
 {
-  for (auto& [cid, channel] : m_channels)
+  for (int i = 0; i < m_channel_count; i++)
   {
-    if (channel.psm == psm)
-      return &channel;
+    if (m_channels[i].channel.psm == psm)
+      return &m_channels[i].channel;
   }
 
   return nullptr;
+}
+
+const WiimoteDevice::SChannel* WiimoteDevice::FindChannel(u16 cid) const
+{
+  for (int i = 0; i < m_channel_count; i++)
+  {
+    if (m_channels[i].cid == cid)
+      return &m_channels[i].channel;
+  }
+
+  return nullptr;
+}
+
+WiimoteDevice::SChannel& WiimoteDevice::GetChannel(u16 cid)
+{
+  int i;
+  for (i = 0; i < m_channel_count && m_channels[i].cid <= cid; i++)
+  {
+    if (m_channels[i].cid == cid)
+      return m_channels[i].channel;
+  }
+
+  if (m_channel_count == MAX_CHANNELS)
+  {
+    // Only a broken L2CAP peer opens this many channels: give it one that goes nowhere.
+    static SChannel s_overflow_channel;
+    ERROR_LOG(IOS_WIIMOTE, "L2CAP: too many channels, dropping channel %u", (unsigned)cid);
+    s_overflow_channel = SChannel();
+    return s_overflow_channel;
+  }
+
+  memmove(&m_channels[i + 1], &m_channels[i], (m_channel_count - i) * sizeof(m_channels[0]));
+  m_channel_count++;
+  m_channels[i].cid = cid;
+  m_channels[i].channel = SChannel();
+  return m_channels[i].channel;
+}
+
+void WiimoteDevice::CloseChannel(u16 cid)
+{
+  for (int i = 0; i < m_channel_count; i++)
+  {
+    if (m_channels[i].cid == cid)
+    {
+      memmove(&m_channels[i], &m_channels[i + 1],
+              (m_channel_count - i - 1) * sizeof(m_channels[0]));
+      m_channel_count--;
+      return;
+    }
+  }
 }
 
 u16 WiimoteDevice::GenerateChannelID() const
@@ -180,7 +250,7 @@ u16 WiimoteDevice::GenerateChannelID() const
 
   u16 cid = starting_id;
 
-  while (m_channels.contains(cid))
+  while (DoesChannelExist(cid))
     ++cid;
 
   return cid;
@@ -287,7 +357,7 @@ void WiimoteDevice::Reset()
 {
   SetBasebandState(BasebandState::Inactive);
   m_hid_state = HIDState::Inactive;
-  m_channels = {};
+  m_channel_count = 0;
 }
 
 void WiimoteDevice::Update()
@@ -305,8 +375,9 @@ void WiimoteDevice::Update()
     return;
 
   // Send configuration for any newly connected channels.
-  for (auto& [cid, channel] : m_channels)
+  for (int i = 0; i < m_channel_count; i++)
   {
+    SChannel& channel = m_channels[i].channel;
     if (channel.IsAccepted() && channel.state == SChannel::State::Inactive)
     {
       // A real wii remote has been observed requesting this MTU.
@@ -401,14 +472,14 @@ void WiimoteDevice::ExecuteL2capCmd(u8* ptr, u32 size)
     return;
   }
 
-  const auto itr = m_channels.find(header->dcid);
-  if (itr == m_channels.end())
+  const SChannel* const found = FindChannel(header->dcid);
+  if (!found)
   {
     ERROR_LOG(IOS_WIIMOTE, "L2CAP: SendACLPacket to unknown channel %u", (unsigned)header->dcid);
     return;
   }
 
-  const SChannel& channel = itr->second;
+  const SChannel& channel = *found;
   switch (channel.psm)
   {
   case L2CAP_PSM_SDP:
@@ -538,7 +609,7 @@ void WiimoteDevice::ReceiveConnectionReq(u8 ident, u8* data, u32 size)
     // Create the channel.
     const u16 local_cid = GenerateChannelID();
 
-    SChannel& channel = m_channels[local_cid];
+    SChannel& channel = GetChannel(local_cid);
     channel.psm = command_connection_req->psm;
     channel.remote_cid = command_connection_req->scid;
 
@@ -572,7 +643,7 @@ void WiimoteDevice::ReceiveConnectionResponse(u8 ident, u8* data, u32 size)
   DEBUG_ASSERT(rsp->status == L2CAP_NO_INFO);
   DEBUG_ASSERT(DoesChannelExist(rsp->scid));
 
-  SChannel& channel = m_channels[rsp->scid];
+  SChannel& channel = GetChannel(rsp->scid);
   channel.remote_cid = rsp->dcid;
 }
 
@@ -585,7 +656,7 @@ void WiimoteDevice::ReceiveConfigurationReq(u8 ident, u8* data, u32 size)
   DEBUG_ASSERT(command_config_req->flags == 0x00);
   DEBUG_ASSERT(DoesChannelExist(command_config_req->dcid));
 
-  SChannel& channel = m_channels[command_config_req->dcid];
+  SChannel& channel = GetChannel(command_config_req->dcid);
 
   DEBUG_LOG(IOS_WIIMOTE, "[L2CAP] ReceiveConfigurationRequest");
   DEBUG_LOG(IOS_WIIMOTE, "    Ident: %#04x", (unsigned)ident);
@@ -662,7 +733,7 @@ void WiimoteDevice::ReceiveConfigurationResponse(u8 ident, u8* data, u32 size)
 
   DEBUG_ASSERT(rsp->result == L2CAP_SUCCESS);
 
-  m_channels[rsp->scid].state = SChannel::State::Complete;
+  GetChannel(rsp->scid).state = SChannel::State::Complete;
 }
 
 void WiimoteDevice::ReceiveDisconnectionReq(u8 ident, u8* data, u32 size)
@@ -676,7 +747,7 @@ void WiimoteDevice::ReceiveDisconnectionReq(u8 ident, u8* data, u32 size)
 
   DEBUG_ASSERT(DoesChannelExist(command_disconnection_req->dcid));
 
-  m_channels.erase(command_disconnection_req->dcid);
+  CloseChannel(command_disconnection_req->dcid);
 
   l2cap_discon_req_cp rsp;
   rsp.dcid = command_disconnection_req->dcid;
@@ -693,7 +764,7 @@ void WiimoteDevice::SendConnectionRequest(u16 psm)
   const u16 local_cid = GenerateChannelID();
 
   // Create the channel.
-  SChannel& channel = m_channels[local_cid];
+  SChannel& channel = GetChannel(local_cid);
   channel.psm = psm;
 
   l2cap_con_req_cp cr;
