@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include "Common/CommonTypes.h"
 #include "Common/Matrix.h"
 #include "Core/HW/WiimoteCommon/WiimoteConstants.h"
@@ -154,7 +152,7 @@ struct OutputReportSpeakerData
   u8 rumble : 1;
   u8 : 2;
   u8 length : 5;
-  std::array<u8, DATA_SIZE> data;
+  u8 data[DATA_SIZE];
 };
 static_assert(sizeof(OutputReportSpeakerData) == 21, "Wrong size");
 

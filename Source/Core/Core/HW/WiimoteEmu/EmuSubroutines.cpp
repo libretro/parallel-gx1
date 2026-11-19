@@ -387,7 +387,7 @@ void Wiimote::HandleSpeakerData(const WiimoteCommon::OutputReportSpeakerData& rp
   // (important to keep decoder in proper state)
   if (!m_speaker_mute)
   {
-    if (rpt.length > std::size(rpt.data))
+    if (rpt.length > sizeof(rpt.data))
     {
       ERROR_LOG(WIIMOTE, "Bad speaker data length: %u", (unsigned)rpt.length);
     }
@@ -395,7 +395,7 @@ void Wiimote::HandleSpeakerData(const WiimoteCommon::OutputReportSpeakerData& rp
     {
       // Speaker data reports result in a write to the speaker hardware at offset 0x00.
       m_i2c_bus.BusWrite(SpeakerLogic::I2C_ADDR, SpeakerLogic::SPEAKER_DATA_OFFSET, rpt.length,
-                         std::data(rpt.data));
+                         rpt.data);
     }
   }
 

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/CommonTypes.h"
 #include "Common/Matrix.h"
 #include "Core/HW/WiimoteCommon/WiimoteConstants.h"
@@ -120,7 +118,8 @@ public:
   static constexpr int MAX_DATA_SIZE = 21;
 
 private:
-  TypedInputData<std::array<u8, MAX_DATA_SIZE>> m_data;
+  typedef u8 Payload[MAX_DATA_SIZE];
+  TypedInputData<Payload> m_data;
 
   DataReportManipulator m_manip;
 };
