@@ -3,8 +3,6 @@
 
 #include "Core/HW/GCPadEmu.h"
 
-#include <array>
-
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
 
@@ -174,8 +172,8 @@ GCPadStatus GCPad::GetInput() const
   pad.substickY = MapFloat<u8>(c_stick_state.y, GCPadStatus::C_STICK_CENTER_Y, 1);
 
   // triggers
-  std::array<ControlState, 2> triggers;
-  m_triggers->GetState(&pad.button, trigger_bitmasks, triggers.data());
+  ControlState triggers[2];
+  m_triggers->GetState(&pad.button, trigger_bitmasks, triggers);
   pad.triggerLeft = MapFloat<u8>(triggers[0], 0);
   pad.triggerRight = MapFloat<u8>(triggers[1], 0);
 

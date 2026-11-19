@@ -208,14 +208,13 @@ void GBASockServer::Send(const u8* si_buffer)
   if (!Connect())
     return;
 
-  std::array<u8, SEND_MAX_SIZE> send_data;
-  for (size_t i = 0; i < send_data.size(); i++)
-    send_data[i] = si_buffer[i];
+  u8 send_data[SEND_MAX_SIZE];
+  memcpy(send_data, si_buffer, sizeof(send_data));
 
   const auto cmd = static_cast<EBufferCommands>(send_data[0]);
 
-  const size_t size = cmd == EBufferCommands::CMD_WRITE_GBA ? send_data.size() : 1;
-  if (net_tcp_send(m_client, send_data.data(), size) < 0)
+  const size_t size = cmd == EBufferCommands::CMD_WRITE_GBA ? sizeof(send_data) : 1;
+  if (net_tcp_send(m_client, send_data, size) < 0)
     Disconnect();
 }
 
@@ -227,8 +226,8 @@ int GBASockServer::Receive(u8* si_buffer, u8 bytes)
   if (m_booted)
     (void)net_wait_readable(m_client, 1000);
 
-  std::array<u8, RECV_MAX_SIZE> recv_data;
-  const int received = net_tcp_recv(m_client, recv_data.data(), bytes);
+  u8 recv_data[RECV_MAX_SIZE];
+  const int received = net_tcp_recv(m_client, recv_data, bytes);
   if (received < 0)
   {
     Disconnect();
@@ -243,9 +242,8 @@ int GBASockServer::Receive(u8* si_buffer, u8 bytes)
   }
   m_booted = true;
 
-  for (size_t i = 0; i < recv_data.size(); i++)
-    si_buffer[i] = recv_data[i];
-  return static_cast<int>(MIN(num_received, recv_data.size()));
+  memcpy(si_buffer, recv_data, sizeof(recv_data));
+  return static_cast<int>(MIN(num_received, sizeof(recv_data)));
 }
 
 void GBASockServer::Flush()
