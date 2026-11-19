@@ -636,87 +636,26 @@ State GetState(Core::System& system)
     return state;
 }
 
-static bool PauseAndLock(Core::System& system)
+void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function,
+                    bool wait_for_completion)
 {
-  if (!IsRunning(system))
-    return true;
-
-  // First pause the CPU.  This acquires a wrapper mutex and converts the current thread into
-  // a temporary replacement CPU Thread.
-  const bool was_unpaused = system.GetCPU().PauseAndLock();
-
-  // audio has to come after CPU, because CPU thread can wait for audio thread (m_throttle).
-  system.GetDSP().GetDSPEmulator()->PauseAndLock();
-
-  // video has to come after CPU, because CPU thread can wait for video thread
-  // (s_efbAccessRequested).
-  system.GetFifo().PauseAndLock();
-
-  ResetRumble();
-
-  return was_unpaused;
-}
-
-static void RestoreStateAndUnlock(Core::System& system, const bool unpause_on_unlock)
-{
-  if (!IsRunning(system))
-    return;
-
-  system.GetDSP().GetDSPEmulator()->UnpauseAndUnlock();
-  ResetRumble();
-
-  // CPU is unlocked last because CPU::RestoreStateAndUnlock contains the synchronization mechanism
-  // that prevents CPU::Break from racing.
-  //
-  // The CPU is responsible for managing the Audio and FIFO state so we use its mechanism to unpause
-  // them. If we unpaused the systems above when releasing the locks then they could call CPU::Break
-  // which would require detecting it and re-pausing with CPU::SetStepping.
-  system.GetCPU().RestoreStateAndUnlock(unpause_on_unlock);
-}
-
-void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function
-                    , bool wait_for_completion
-                  )
-{
-  if (IsCPUThread())
+  // With no CPU thread, nothing runs it but the caller.
+  if (IsCPUThread() || !IsRunning(system))
   {
     function();
     return;
   }
 
-  Common::Event cpu_thread_job_finished;
-
-  // Pause the CPU (set it to stepping mode).
-  const bool was_running = PauseAndLock(system);
-
-  if (!IsRunning(system))
+  if (!wait_for_completion)
   {
-    // If the core hasn't been started, there is no active CPU thread we can race against.
-    function();
-    wait_for_completion = false;
-  }
-  else if (wait_for_completion)
-  {
-    // Queue the job function followed by triggering the event.
-    system.GetCPU().AddCPUThreadJob([&function, &cpu_thread_job_finished] {
-      function();
-      cpu_thread_job_finished.Set();
-    });
-  }
-  else
-  {
-    // Queue the job function.
     system.GetCPU().AddCPUThreadJob(std::move(function));
+    return;
   }
 
-  // Release the CPU thread, and let it execute the callback.
-  RestoreStateAndUnlock(system, was_running);
-
-  // If we're waiting for completion, block until the event fires.
-  if (wait_for_completion)
-  {
-    cpu_thread_job_finished.Wait();
-  }
+  retro_atomic_int_t done;
+  retro_atomic_int_init(&done, 0);
+  system.GetCPU().AddCPUThreadJob(std::move(function), &done);
+  system.GetCPU().WaitForJob(&done);
 }
 
 // --- Callbacks for backends / engine ---
@@ -959,17 +898,12 @@ void UpdateInputGate(bool require_focus, bool require_full_focus)
   ControlReference::SetInputGate(focus_passes && full_focus_passes);
 }
 
-CPUThreadGuard::CPUThreadGuard(Core::System& system)
-    : m_system(system), m_was_cpu_thread(IsCPUThread())
+CPUThreadGuard::CPUThreadGuard(Core::System& system) : m_system(system)
 {
-  if (!m_was_cpu_thread)
-    m_was_unpaused = PauseAndLock(system);
 }
 
 CPUThreadGuard::~CPUThreadGuard()
 {
-  if (!m_was_cpu_thread)
-    RestoreStateAndUnlock(m_system, m_was_unpaused);
 }
 
 void SingleCorePostRunShutdown()

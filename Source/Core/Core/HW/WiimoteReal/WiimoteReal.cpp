@@ -747,11 +747,14 @@ static void RunManagerCommand(ManagerCommand& command)
   case ManagerCommand::Kind::SourceChange:
   {
     std::unique_ptr<Wiimote> removed_wiimote;
-    {
-      const Core::CPUThreadGuard guard(Core::System::GetInstance());
-      removed_wiimote = TakeWiimoteFromSlot(command.index);
-      WiimoteCommon::UpdateSource(command.index);
-    }
+    const unsigned int index = command.index;
+    Core::RunOnCPUThread(
+        Core::System::GetInstance(),
+        [&removed_wiimote, index] {
+          removed_wiimote = TakeWiimoteFromSlot(index);
+          WiimoteCommon::UpdateSource(index);
+        },
+        true);
 
     // The Wiimote pool isn't currently designed to handle Balance Boards.
     // Refactoring will be needed to differentiate between remotes/boards.
@@ -1213,11 +1216,13 @@ static bool TryToConnectWiimoteToSlot(std::unique_ptr<Wiimote>& wm, unsigned int
   led_report.leds = u8(1 << (i % WIIMOTE_BALANCE_BOARD));
   wm->QueueReport(led_report);
 
-  {
-    const Core::CPUThreadGuard guard(Core::System::GetInstance());
-    PutWiimoteInSlot(i, std::move(wm));
-    WiimoteCommon::UpdateSource(i);
-  }
+  Core::RunOnCPUThread(
+      Core::System::GetInstance(),
+      [&wm, i] {
+        PutWiimoteInSlot(i, std::move(wm));
+        WiimoteCommon::UpdateSource(i);
+      },
+      true);
 
   NOTICE_LOG(WIIMOTE, "Connected real wiimote to slot %u.", i + 1);
 
@@ -1235,11 +1240,16 @@ static void TryToConnectBalanceBoard(std::unique_ptr<Wiimote> wm)
 // Manager only.
 static void HandleWiimoteDisconnect(int index)
 {
-  const Core::CPUThreadGuard guard(Core::System::GetInstance());
   // The Wii Remote object must exist through the call to UpdateSource
   // to prevent WiimoteDevice from having a dangling HIDWiimote pointer.
-  const auto temp_real_wiimote = TakeWiimoteFromSlot(index);
-  WiimoteCommon::UpdateSource(index);
+  std::unique_ptr<Wiimote> temp_real_wiimote;
+  Core::RunOnCPUThread(
+      Core::System::GetInstance(),
+      [&temp_real_wiimote, index] {
+        temp_real_wiimote = TakeWiimoteFromSlot(index);
+        WiimoteCommon::UpdateSource(index);
+      },
+      true);
 }
 
 // This is called from the GUI thread

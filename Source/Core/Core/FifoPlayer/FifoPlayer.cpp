@@ -253,6 +253,7 @@ void FifoPlayerCPUCore::Run()
       break;
 
     case CPU::State::Running:
+    case CPU::State::RunJobs:
       break;
     }
   }

@@ -51,8 +51,8 @@ void OnSourceChanged(unsigned int index, WiimoteSource source)
 
   WiimoteReal::HandleWiimoteSourceChange(index);
 
-  const Core::CPUThreadGuard guard(Core::System::GetInstance());
-  WiimoteCommon::UpdateSource(index);
+  Core::RunOnCPUThread(Core::System::GetInstance(),
+                       [index] { WiimoteCommon::UpdateSource(index); });
 }
 
 void RefreshConfig()

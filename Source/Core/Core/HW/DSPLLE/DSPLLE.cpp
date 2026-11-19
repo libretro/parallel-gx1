@@ -62,22 +62,16 @@ void DSPLLE::DSPThread(void* data)
     const int cycles = retro_atomic_load_acquire_int(&dsp_lle->m_cycle_count);
     if (cycles > 0)
     {
-      // Shut while a PauseAndLock holds the DSP; a run already inside finishes first.
-      call_gate_frame_t frame;
-      if (call_gate_enter(&dsp_lle->m_dsp_thread_gate, &frame))
+      if (dsp_lle->m_dsp_core.IsJITCreated())
       {
-        if (dsp_lle->m_dsp_core.IsJITCreated())
-        {
-          dsp_lle->m_dsp_core.RunCycles(cycles);
-        }
-        else
-        {
-          dsp_lle->m_dsp_core.GetInterpreter().RunCyclesThread(cycles);
-        }
-        retro_atomic_store_release_int(&dsp_lle->m_cycle_count, 0);
-        call_gate_exit(&dsp_lle->m_dsp_thread_gate, &frame);
-        continue;
+        dsp_lle->m_dsp_core.RunCycles(cycles);
       }
+      else
+      {
+        dsp_lle->m_dsp_core.GetInterpreter().RunCyclesThread(cycles);
+      }
+      retro_atomic_store_release_int(&dsp_lle->m_cycle_count, 0);
+      continue;
     }
 
     dsp_lle->m_ppc_event.Set();
@@ -288,22 +282,5 @@ void DSPLLE::DSP_Update(int cycles)
 u32 DSPLLE::DSP_UpdateRate()
 {
   return 12600;  // TO BE TWEAKED
-}
-
-void DSPLLE::PauseAndLock()
-{
-  call_gate_close(&m_dsp_thread_gate);
-}
-
-void DSPLLE::UnpauseAndUnlock()
-{
-  call_gate_reopen(&m_dsp_thread_gate);
-
-  if (m_is_dsp_on_thread)
-  {
-    // Signal the DSP thread so it can perform any outstanding work now (if any)
-    m_ppc_event.Wait();
-    m_dsp_event.Set();
-  }
 }
 }  // namespace DSP::LLE

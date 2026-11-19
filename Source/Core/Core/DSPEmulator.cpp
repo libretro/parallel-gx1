@@ -50,16 +50,6 @@ void DSPEmulator::DoState(PointerWrap& p)
   DSP_EMULATOR_CALL(DoState(p));
 }
 
-void DSPEmulator::PauseAndLock()
-{
-  DSP_EMULATOR_CALL(PauseAndLock());
-}
-
-void DSPEmulator::UnpauseAndUnlock()
-{
-  DSP_EMULATOR_CALL(UnpauseAndUnlock());
-}
-
 void DSPEmulator::DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value)
 {
   DSP_EMULATOR_CALL(DSP_WriteMailBoxHigh(cpu_mailbox, value));

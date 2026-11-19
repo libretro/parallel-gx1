@@ -90,13 +90,8 @@ enum class ConsoleType : u32
   ReservedTDEVSystem = 0x20000007,
 };
 
-// This is an RAII alternative to using PauseAndLock. If constructed from any thread other than the
-// CPU thread, the CPU thread is paused, and the current thread temporarily becomes the CPU thread.
-// If constructed from the CPU thread, nothing special happens.
-//
-// Some functions use a parameter of this type to indicate that the function should only be called
-// from the CPU thread. If the parameter is a pointer, the function has a fallback for being called
-// from the wrong thread (with the argument being set to nullptr).
+// Only made on the CPU thread: functions take it to say they are called there. Another thread
+// hands its work to the CPU thread with RunOnCPUThread.
 class CPUThreadGuard final
 {
 public:
@@ -112,8 +107,6 @@ public:
 
 private:
   Core::System& m_system;
-  const bool m_was_cpu_thread;
-  bool m_was_unpaused = false;
 };
 
 // These three are normally called from the Host thread. However, they can be called from any thread
@@ -149,10 +142,10 @@ State GetState(Core::System& system);
 // game.
 void DisplayMessage(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
 
-// Run a function on the CPU thread, asynchronously.
-void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function
-  , bool wait_for_completion = false
-);
+// Runs the function on the CPU thread: queued for it from another, which waits for it to be done
+// when asked to. Never asked to wait from a thread the CPU thread waits for.
+void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function,
+                    bool wait_for_completion = false);
 
 // for calling back into UI code without introducing a dependency on it in core
 using StateChangedCallbackFunc = std::function<void(Core::State)>;

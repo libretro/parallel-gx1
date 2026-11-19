@@ -24,23 +24,18 @@ CPUManager::CPUManager(Core::System& system) : m_system(system)
   retro_atomic_int_init(&m_state, static_cast<int>(State::PowerDown));
   retro_atomic_int_init(&m_stepping_claimed, 0);
   retro_atomic_int_init(&m_cpu_thread_active, 0);
-  retro_atomic_int_init(&m_paused_and_locked, 0);
-  retro_atomic_int_init(&m_system_request_stepping, 0);
   mpsc_stack_init(&m_pending_jobs);
   retro_eventcount_init(&m_stepping_released);
   retro_eventcount_init(&m_cpu_wake);
+  retro_eventcount_init(&m_jobs_done);
   retro_eventcount_init(&m_cpu_idle);
   retro_atomic_int_init(&m_cpu_run_state_reached, 0);
 }
 
 CPUManager::~CPUManager()
 {
-  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_pending_jobs); node;)
-  {
-    Job* job = reinterpret_cast<Job*>(node);
-    node = node->next;
-    delete job;
-  }
+  DropPendingJobs();
+  retro_eventcount_free(&m_jobs_done);
   retro_eventcount_free(&m_cpu_idle);
   retro_eventcount_free(&m_cpu_wake);
   retro_eventcount_free(&m_stepping_released);
@@ -60,12 +55,29 @@ void CPUManager::Init(PowerPC::CPUCore cpu_core)
 void CPUManager::Shutdown()
 {
   Stop();
+  // The CPU thread is gone: a job queued as it went is not run, its waiter let go.
+  DropPendingJobs();
   retro_atomic_store_release_int(&m_cpu_run_state_reached, 0);
   m_system.GetPowerPC().Shutdown();
 }
 
+void CPUManager::FinishJob(Job* job)
+{
+  retro_atomic_int_t* const done = job->done;
+  delete job;
+  if (done)
+  {
+    retro_atomic_store_release_int(done, 1);
+    retro_eventcount_notify(&m_jobs_done);
+  }
+}
+
 void CPUManager::ExecutePendingJobs()
 {
+  // Back to running first: a job queued after the drain below finds it running and asks again.
+  retro_atomic_cas_int(&m_state, static_cast<int>(State::RunJobs),
+                       static_cast<int>(State::Running));
+
   // The stack hands them back newest first; run them in the order they were added.
   mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_pending_jobs));
   while (node)
@@ -73,17 +85,28 @@ void CPUManager::ExecutePendingJobs()
     Job* job = reinterpret_cast<Job*>(node);
     node = node->next;
     job->function();
-    delete job;
+    FinishJob(job);
+  }
+}
+
+void CPUManager::DropPendingJobs()
+{
+  mpsc_stack_node_t* node = mpsc_stack_drain(&m_pending_jobs);
+  while (node)
+  {
+    Job* job = reinterpret_cast<Job*>(node);
+    node = node->next;
+    FinishJob(job);
   }
 }
 
 bool CPUManager::TryEnterActive(State expected)
 {
-  // Dekker with the pausing side, which stores its request and then reads this flag: either
-  // the request is seen here, or the flag is seen there and the pauser waits for it to drop.
+  // Dekker with the stepping side, which stores its state and then reads this flag: either
+  // the state is seen here, or the flag is seen there and the stepper waits for it to drop.
   retro_atomic_fetch_add_seq_cst_int(&m_cpu_thread_active, 1);
   retro_atomic_thread_fence_seq_cst();
-  if (!retro_atomic_load_seq_cst_int(&m_paused_and_locked) && LoadState() == expected)
+  if (LoadState() == expected)
     return true;
   LeaveActive();
   return false;
@@ -143,24 +166,15 @@ void CPUManager::Run()
   m_system.GetFifo().InterruptGpuLoop();
   while (LoadState() != State::PowerDown)
   {
-    // Wait out a PauseAndLock: the host thread is standing in for this one.
-    for (;;)
-    {
-      if (!retro_atomic_load_seq_cst_int(&m_paused_and_locked))
-        break;
-      const int key = retro_eventcount_prepare_wait(&m_cpu_wake);
-      if (!retro_atomic_load_seq_cst_int(&m_paused_and_locked))
-      {
-        retro_eventcount_cancel_wait(&m_cpu_wake);
-        break;
-      }
-      retro_eventcount_commit_wait(&m_cpu_wake, key);
-    }
     ExecutePendingJobs();
     CPUThreadConfigCallback::CheckForConfigChanges();
 
     switch (LoadState())
     {
+    case State::RunJobs:
+      // A job queued as the ones above were taken: back for it.
+      break;
+
     case State::Running:
       // Stopped at the frame gate before its field was granted: back to the gate first.
       if (Core::FrameGateOwed())
@@ -187,7 +201,7 @@ void CPUManager::Run()
         if (!IsStepping())
           break;
         const int key = retro_eventcount_prepare_wait(&m_cpu_wake);
-        if (!IsStepping())
+        if (!IsStepping() || HasPendingJobs())
         {
           retro_eventcount_cancel_wait(&m_cpu_wake);
           break;
@@ -208,6 +222,8 @@ void CPUManager::RunSingleFrame()
   auto& power_pc = system.GetPowerPC();
 
   Core::HostDispatchJobs(system);
+  // What other threads queued for this one, which runs the CPU only inside its frames.
+  ExecutePendingJobs();
 
   Core::s_frame_step = true;
 
@@ -299,74 +315,40 @@ void CPUManager::SetStepping(bool stepping)
 
 void CPUManager::Break()
 {
-  // If another thread is trying to PauseAndLock then we need to remember this
-  // for later to ignore the unpause_on_unlock.
-  if (retro_atomic_load_seq_cst_int(&m_paused_and_locked))
-  {
-    retro_atomic_store_release_int(&m_system_request_stepping, 1);
-    return;
-  }
-
   // We'll deadlock if we synchronize, the CPU may block waiting for our caller to
   // finish resulting in the CPU loop never terminating.
   SetStateChecked(State::Stepping);
   RunAdjacentSystems(false);
 }
 
-bool CPUManager::PauseAndLock()
+void CPUManager::AddCPUThreadJob(Common::MoveOnlyFunction<void()> function,
+                                 retro_atomic_int_t* done)
 {
-  ClaimStepping();
-
-  retro_atomic_exchange_int(&m_paused_and_locked, 1);
-
-  const bool was_unpaused = LoadState() == State::Running;
-  SetStateChecked(State::Stepping);
-  Core::FrameGateKick();
-
-  WaitForIdle();
-
-  // NOTE: It would make more sense for Core::DeclareAsCPUThread() to keep a
-  //   depth counter instead of being a boolean.
-  if (!Core::IsCPUThread())
-  {
-    m_have_fake_cpu_thread = true;
-    Core::DeclareAsCPUThread();
-  }
-
-  return was_unpaused;
-}
-
-void CPUManager::RestoreStateAndUnlock(const bool unpause_on_unlock)
-{
-  // Only need the stepping claim for this
-  if (m_have_fake_cpu_thread)
-  {
-    m_have_fake_cpu_thread = false;
-    Core::UndeclareAsCPUThread();
-  }
-
-  if (retro_atomic_exchange_int(&m_system_request_stepping, 0))
-  {
-    // A Break came in while paused: stay stepping.
-  }
-  else if (unpause_on_unlock)
-  {
-    SetStateChecked(State::Running);
-  }
-  retro_atomic_exchange_int(&m_paused_and_locked, 0);
-  WakeCPU();
-
-  RunAdjacentSystems(LoadState() == State::Running);
-
-  ReleaseStepping();
-}
-
-void CPUManager::AddCPUThreadJob(Common::MoveOnlyFunction<void()> function)
-{
-  Job* job = new Job{{}, std::move(function)};
+  Job* job = new Job{{}, std::move(function), done};
   mpsc_stack_push(&m_pending_jobs, &job->link);
-  // a thread parked at the frame gate runs it
+  /* Out of the run loop at the slice's end, or off the frame gate, for it. In single core the
+   * thread runs the CPU only inside its frames, and takes the jobs as the next one starts. */
+  if (m_system.IsDualCoreMode())
+    retro_atomic_cas_int(&m_state, static_cast<int>(State::Running),
+                         static_cast<int>(State::RunJobs));
   Core::FrameGateKick();
+  WakeCPU();
+}
+
+void CPUManager::WaitForJob(retro_atomic_int_t* done)
+{
+  for (;;)
+  {
+    if (retro_atomic_load_acquire_int(done))
+      return;
+    const int key = retro_eventcount_prepare_wait(&m_jobs_done);
+    if (retro_atomic_load_acquire_int(done))
+    {
+      retro_eventcount_cancel_wait(&m_jobs_done);
+      return;
+    }
+    retro_eventcount_commit_wait(&m_jobs_done, key);
+  }
 }
 
 bool CPUManager::HasPendingJobs()

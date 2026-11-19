@@ -265,7 +265,7 @@ public:
   void ScheduleInvalidateCacheThreadSafe(u32 address);
 
   CoreMode GetMode() const;
-  // [NOT THREADSAFE] CPU Thread or CPU::PauseAndLock or Core::State::Uninitialized
+  // [NOT THREADSAFE] CPU Thread or Core::State::Uninitialized
   void SetMode(CoreMode _coreType);
 
   // Set the current CPU Core to the given implementation until removed.
@@ -277,7 +277,7 @@ public:
   //  while it is in State::Running]
   void InjectExternalCPUCore(CPUCoreBase* core);
 
-  // Stepping requires the CPU Execution lock (CPU::PauseAndLock or CPU Thread)
+  // CPU Thread only.
   // It's not threadsafe otherwise.
   void SingleStep();
   void CheckExceptions();

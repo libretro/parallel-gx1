@@ -6,7 +6,6 @@
 #include <retro_atomic.h>
 #include <rthreads/rthreads.h>
 
-#include "Common/CallGate.h"
 #include "Common/CommonTypes.h"
 #include "Common/Event.h"
 #include "Common/Flag.h"
@@ -26,8 +25,6 @@ public:
   bool Initialize(bool wii, bool dsp_thread);
   void Shutdown();
   void DoState(PointerWrap& p);
-  void PauseAndLock();
-  void UnpauseAndUnlock();
 
   void DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value);
   void DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value);
@@ -44,7 +41,6 @@ private:
 
   DSPCore m_dsp_core;
   sthread_t* m_dsp_thread = nullptr;
-  call_gate_t m_dsp_thread_gate{};
   bool m_is_dsp_on_thread = false;
   Common::Flag m_is_running;
   retro_atomic_int_t m_cycle_count{};

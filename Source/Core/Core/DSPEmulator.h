@@ -27,8 +27,6 @@ public:
   void Shutdown();
 
   void DoState(PointerWrap& p);
-  void PauseAndLock();
-  void UnpauseAndUnlock();
 
   void DSP_WriteMailBoxHigh(bool cpu_mailbox, u16 value);
   void DSP_WriteMailBoxLow(bool cpu_mailbox, u16 value);

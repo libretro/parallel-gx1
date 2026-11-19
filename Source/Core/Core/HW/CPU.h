@@ -23,6 +23,8 @@ namespace CPU
 enum class State
 {
   Running = 0,
+  // Left the run loop to take the jobs queued for this thread, then running again
+  RunJobs = 1,
   Stepping = 2,
   PowerDown = 3
 };
@@ -78,22 +80,13 @@ public:
   // Strictly read-only.
   const State* GetStatePtr() const;
 
-  // Locks the CPU Thread (waiting for it to become idle). While this lock is held, the CPU Thread
-  // will not perform any action so it is safe to access PowerPC, CoreTiming, etc. without racing
-  // the CPU Thread.
-  //
-  // Cannot be used recursively. Cannot be used by System threads as it will deadlock. It is
-  // threadsafe otherwise.
-  //
-  // Each call to PauseAndLock must be paired with a call to RestoreStateAndUnlock. The return value
-  // for PauseAndLock is whether the state was State::Running or not and should be passed as the
-  // argument to RestoreStateAndUnlock.
-  bool PauseAndLock();
-  void RestoreStateAndUnlock(bool unpause_on_unlock);
-
-  // Adds a job to be executed during on the CPU thread. This should be combined with
-  // PauseAndLock(), as while the CPU is in the run loop, it won't execute the function.
-  void AddCPUThreadJob(Common::MoveOnlyFunction<void()> function);
+  // Any thread: queues a job for the CPU thread, which leaves the run loop for it at the end of
+  // the timing slice, or takes it parked or stepping; done, when given, is set once it ran or was
+  // dropped at shutdown.
+  void AddCPUThreadJob(Common::MoveOnlyFunction<void()> function,
+                       retro_atomic_int_t* done = nullptr);
+  // Until the job given done has been taken.
+  void WaitForJob(retro_atomic_int_t* done);
   bool HasPendingJobs();
 
   bool HasCPURunStateBeenReached() const
@@ -105,7 +98,11 @@ private:
   {
     mpsc_stack_node_t link;  // first: the drained chain is cast back to jobs
     Common::MoveOnlyFunction<void()> function;
+    retro_atomic_int_t* done;
   };
+
+  void FinishJob(Job* job);
+  void DropPendingJobs();
 
   void ExecutePendingJobs();
   void RunAdjacentSystems(bool running);
@@ -125,19 +122,17 @@ private:
   // seq_cst stores, read by the JIT through GetStatePtr.
   retro_atomic_int_t m_state;
 
-  // Only one SetStepping or PauseAndLock is in progress at a time: they may wait for the CPU
-  // thread, and two waiting together would need extra flags to tell their requests apart.
+  // Only one SetStepping is in progress at a time: it may wait for the CPU thread, and two
+  // waiting together would need extra flags to tell their requests apart.
   retro_atomic_int_t m_stepping_claimed;
   retro_eventcount_t m_stepping_released;
-  // Only touched by the thread holding the stepping claim.
-  bool m_have_fake_cpu_thread = false;
 
   // The CPU thread is inside RunLoop or SingleStep.
   retro_atomic_int_t m_cpu_thread_active;
-  retro_atomic_int_t m_paused_and_locked;
-  retro_atomic_int_t m_system_request_stepping;
-  // Wakes the CPU thread: state changed, or a pause ended.
+  // Wakes the CPU thread: state changed, or a job was queued.
   retro_eventcount_t m_cpu_wake;
+  // Wakes threads waiting for a job they queued.
+  retro_eventcount_t m_jobs_done;
   // Wakes threads waiting for the CPU thread to go idle.
   retro_eventcount_t m_cpu_idle;
 
