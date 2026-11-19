@@ -3,8 +3,7 @@
 
 #include "Core/PowerPC/PPCCache.h"
 
-#include <algorithm>
-#include <array>
+#include <cstring>
 
 #include "Common/ChunkFile.h"
 #include "Common/MemoryUtil.h"
@@ -19,80 +18,38 @@ namespace PowerPC
 {
 namespace
 {
-constexpr std::array<u32, 8> s_plru_mask{
+constexpr u32 s_plru_mask[8] = {
     11, 11, 19, 19, 37, 37, 69, 69,
 };
-constexpr std::array<u32, 8> s_plru_value{
+constexpr u32 s_plru_value[8] = {
     11, 3, 17, 1, 36, 4, 64, 0,
 };
 
-constexpr std::array<u32, 255> s_way_from_valid = [] {
-  std::array<u32, 255> data{};
-  for (size_t m = 0; m < data.size(); m++)
-  {
-    u32 w = 0;
-    while ((m & (size_t{1} << w)) != 0)
-      w++;
-    data[m] = w;
-  }
-  return data;
-}();
+// The first way not valid, for each valid mask but the full one
+constexpr u8 s_way_from_valid[255] = {
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5,
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 6,
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5,
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 7,
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5,
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 6,
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5,
+    0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+};
 
-constexpr std::array<u32, 128> s_way_from_plru = [] {
-  std::array<u32, 128> data{};
-
-  for (size_t m = 0; m < data.size(); m++)
-  {
-    std::array<u32, 7> b{};
-    for (size_t i = 0; i < b.size(); i++)
-      b[i] = u32(m & (size_t{1} << i));
-
-    u32 w = 0;
-    if (b[0] != 0)
-    {
-      if (b[2] != 0)
-      {
-        if (b[6] != 0)
-          w = 7;
-        else
-          w = 6;
-      }
-      else if (b[5] != 0)
-      {
-        w = 5;
-      }
-      else
-      {
-        w = 4;
-      }
-    }
-    else if (b[1] != 0)
-    {
-      if (b[4] != 0)
-        w = 3;
-      else
-        w = 2;
-    }
-    else if (b[3] != 0)
-    {
-      w = 1;
-    }
-    else
-    {
-      w = 0;
-    }
-
-    data[m] = w;
-  }
-
-  return data;
-}();
+// The way the tree of PLRU bits points at, for each PLRU state
+constexpr u8 s_way_from_plru[128] = {
+    0, 4, 2, 4, 0, 6, 2, 6, 1, 4, 2, 4, 1, 6, 2, 6, 0, 4, 3, 4, 0, 6, 3, 6, 1, 4, 3, 4, 1, 6, 3, 6,
+    0, 5, 2, 5, 0, 6, 2, 6, 1, 5, 2, 5, 1, 6, 2, 6, 0, 5, 3, 5, 0, 6, 3, 6, 1, 5, 3, 5, 1, 6, 3, 6,
+    0, 4, 2, 4, 0, 7, 2, 7, 1, 4, 2, 4, 1, 7, 2, 7, 0, 4, 3, 4, 0, 7, 3, 7, 1, 4, 3, 4, 1, 7, 3, 7,
+    0, 5, 2, 5, 0, 7, 2, 7, 1, 5, 2, 5, 1, 7, 2, 7, 0, 5, 3, 5, 0, 7, 3, 7, 1, 5, 3, 5, 1, 7, 3, 7,
+};
 }  // Anonymous namespace
 
 InstructionCache::~InstructionCache()
 {
-  if (m_config_callback_id)
-    Config::RemoveConfigChangedCallback(*m_config_callback_id);
+  if (m_has_config_callback)
+    Config::RemoveConfigChangedCallback(m_config_callback_id);
 }
 
 /* The entries of the valid ways, the only ones set: the tables (megabytes) are not swept. */
@@ -118,9 +75,9 @@ void Cache::Reset()
 {
   if (lookup_table)
     ClearLookups(Core::System::GetInstance().GetMemory());
-  valid.fill(0);
-  plru.fill(0);
-  modified.fill(0);
+  memset(valid, 0, sizeof(valid));
+  memset(plru, 0, sizeof(plru));
+  memset(modified, 0, sizeof(modified));
 }
 
 void InstructionCache::Reset(JitInterface& jit_interface)
@@ -155,17 +112,20 @@ void Cache::Init(Memory::MemoryManager& memory)
   }
   lookup_table_ex = lookup_table ? lookup_table + ram : nullptr;
   lookup_table_vmem = lookup_table ? lookup_table + ram + ex : nullptr;
-  data.fill({});
-  addrs.fill({});
-  valid.fill(0);
-  plru.fill(0);
-  modified.fill(0);
+  memset(data, 0, sizeof(data));
+  memset(addrs, 0, sizeof(addrs));
+  memset(valid, 0, sizeof(valid));
+  memset(plru, 0, sizeof(plru));
+  memset(modified, 0, sizeof(modified));
 }
 
 void InstructionCache::Init(Memory::MemoryManager& memory)
 {
-  if (!m_config_callback_id)
+  if (!m_has_config_callback)
+  {
     m_config_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
+    m_has_config_callback = true;
+  }
   RefreshConfig();
 
   Cache::Init(memory);
@@ -173,13 +133,14 @@ void InstructionCache::Init(Memory::MemoryManager& memory)
 
 void Cache::Store(Memory::MemoryManager& memory, u32 addr)
 {
-  auto [set, way] = GetCache(memory, addr, true);
+  const u32 set = (addr >> 5) & 0x7f;
+  const u32 way = GetCache(memory, addr, true);
 
   if (way == 0xff)
     return;
 
   if (valid[set] & (1U << way) && modified[set] & (1U << way))
-    memory.CopyToEmu((addr & ~0x1f), data[set][way].data(), 32);
+    memory.CopyToEmu((addr & ~0x1f), data[set][way], 32);
   modified[set] &= ~(1U << way);
 }
 
@@ -190,7 +151,7 @@ void Cache::FlushAll(Memory::MemoryManager& memory)
     for (size_t way = 0; way < CACHE_WAYS; way++)
     {
       if (valid[set] & (1U << way) && modified[set] & (1U << way))
-        memory.CopyToEmu(addrs[set][way], data[set][way].data(), 32);
+        memory.CopyToEmu(addrs[set][way], data[set][way], 32);
     }
   }
 
@@ -199,7 +160,8 @@ void Cache::FlushAll(Memory::MemoryManager& memory)
 
 void Cache::Invalidate(Memory::MemoryManager& memory, u32 addr)
 {
-  auto [set, way] = GetCache(memory, addr, true);
+  const u32 set = (addr >> 5) & 0x7f;
+  const u32 way = GetCache(memory, addr, true);
 
   if (way == 0xff)
     return;
@@ -220,7 +182,8 @@ void Cache::Invalidate(Memory::MemoryManager& memory, u32 addr)
 
 void Cache::Flush(Memory::MemoryManager& memory, u32 addr)
 {
-  auto [set, way] = GetCache(memory, addr, true);
+  const u32 set = (addr >> 5) & 0x7f;
+  const u32 way = GetCache(memory, addr, true);
 
   if (way == 0xff)
     return;
@@ -228,7 +191,7 @@ void Cache::Flush(Memory::MemoryManager& memory, u32 addr)
   if (valid[set] & (1U << way))
   {
     if (modified[set] & (1U << way))
-      memory.CopyToEmu((addr & ~0x1f), data[set][way].data(), 32);
+      memory.CopyToEmu((addr & ~0x1f), data[set][way], 32);
 
     if (addrs[set][way] & CACHE_VMEM_BIT)
       lookup_table_vmem[(addrs[set][way] & memory.GetFakeVMemMask()) >> 5] = 0;
@@ -247,7 +210,7 @@ void Cache::Touch(Memory::MemoryManager& memory, u32 addr, bool store)
   GetCache(memory, addr, false);
 }
 
-std::pair<u32, u32> Cache::GetCache(Memory::MemoryManager& memory, u32 addr, bool locked)
+u32 Cache::GetCache(Memory::MemoryManager& memory, u32 addr, bool locked)
 {
   addr &= ~31;
   u32 set = (addr >> 5) & 0x7f;
@@ -281,7 +244,7 @@ std::pair<u32, u32> Cache::GetCache(Memory::MemoryManager& memory, u32 addr, boo
     {
       // store the cache back to main memory
       if (modified[set] & (1 << way))
-        memory.CopyToEmu(addrs[set][way], data[set][way].data(), 32);
+        memory.CopyToEmu(addrs[set][way], data[set][way], 32);
 
       if (addrs[set][way] & CACHE_VMEM_BIT)
         lookup_table_vmem[(addrs[set][way] & memory.GetFakeVMemMask()) >> 5] = 0;
@@ -292,7 +255,7 @@ std::pair<u32, u32> Cache::GetCache(Memory::MemoryManager& memory, u32 addr, boo
     }
 
     // load
-    memory.CopyFromEmu(data[set][way].data(), (addr & ~0x1f), 32);
+    memory.CopyFromEmu(data[set][way], (addr & ~0x1f), 32);
 
     if (addr & CACHE_VMEM_BIT)
       lookup_table_vmem[(addr & memory.GetFakeVMemMask()) >> 5] = way + 1;
@@ -310,7 +273,7 @@ std::pair<u32, u32> Cache::GetCache(Memory::MemoryManager& memory, u32 addr, boo
   if (way != 0xff)
     plru[set] = (plru[set] & ~s_plru_mask[way]) | s_plru_value[way];
 
-  return {set, way};
+  return way;
 }
 
 void Cache::Read(Memory::MemoryManager& memory, u32 addr, void* buffer, u32 len, bool locked)
@@ -319,15 +282,15 @@ void Cache::Read(Memory::MemoryManager& memory, u32 addr, void* buffer, u32 len,
 
   while (len > 0)
   {
-    auto [set, way] = GetCache(memory, addr, locked);
+    const u32 set = (addr >> 5) & 0x7f;
+    const u32 way = GetCache(memory, addr, locked);
 
     u32 offset_in_block = addr - (addr & ~31);
-    u32 len_in_block = std::min<u32>(len, ((addr + 32) & ~31) - addr);
+    u32 len_in_block = len < ((addr + 32) & ~31) - addr ? len : ((addr + 32) & ~31) - addr;
 
     if (way != 0xff)
     {
-      std::memcpy(value, reinterpret_cast<u8*>(data[set][way].data()) + offset_in_block,
-                  len_in_block);
+      memcpy(value, reinterpret_cast<u8*>(data[set][way]) + offset_in_block, len_in_block);
     }
     else
     {
@@ -346,15 +309,15 @@ void Cache::Write(Memory::MemoryManager& memory, u32 addr, const void* buffer, u
 
   while (len > 0)
   {
-    auto [set, way] = GetCache(memory, addr, locked);
+    const u32 set = (addr >> 5) & 0x7f;
+    const u32 way = GetCache(memory, addr, locked);
 
     u32 offset_in_block = addr - (addr & ~31);
-    u32 len_in_block = std::min<u32>(len, ((addr + 32) & ~31) - addr);
+    u32 len_in_block = len < ((addr + 32) & ~31) - addr ? len : ((addr + 32) & ~31) - addr;
 
     if (way != 0xff)
     {
-      std::memcpy(reinterpret_cast<u8*>(data[set][way].data()) + offset_in_block, value,
-                  len_in_block);
+      memcpy(reinterpret_cast<u8*>(data[set][way]) + offset_in_block, value, len_in_block);
       modified[set] |= (1 << way);
     }
     else
