@@ -3,8 +3,6 @@
 
 #include "Core/HW/WiimoteEmu/Extension/Guitar.h"
 
-#include <map>
-
 #include "Common/Assert.h"
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
@@ -20,16 +18,30 @@
 
 namespace WiimoteEmu
 {
-static const std::map<const ControlState, const u8> s_slider_bar_control_codes{
-    // values determined using a PS3 Guitar Hero 5 controller, which maps the touchbar to Zr on
-    // Windows
-    {0.0, 0x0F},        // not touching
-    {-0.4375, 0x04},    // top fret
-    {-0.097656, 0x0A},  // second fret
-    {0.203125, 0x12},   // third fret
-    {0.578125, 0x17},   // fourth fret
-    {1.0, 0x1F}         // bottom fret
+// Values determined using a PS3 Guitar Hero 5 controller, which maps the touchbar to Zr on
+// Windows. Sorted by slider value: the first entry at or above the slider position wins.
+static const ControlState s_slider_bar_values[] = {-0.4375,  -0.097656, 0.0,
+                                                   0.203125, 0.578125,  1.0};
+static const u8 s_slider_bar_control_codes[] = {
+    0x04,  // top fret
+    0x0A,  // second fret
+    0x0F,  // not touching
+    0x12,  // third fret
+    0x17,  // fourth fret
+    0x1F,  // bottom fret
 };
+
+static u8 GetSliderBarControlCode(ControlState value)
+{
+  const int count = int(sizeof(s_slider_bar_values) / sizeof(s_slider_bar_values[0]));
+  int i;
+  for (i = 0; i < count - 1; i++)
+  {
+    if (s_slider_bar_values[i] >= value)
+      break;
+  }
+  return s_slider_bar_control_codes[i];
+}
 
 static const u8 guitar_id[6] = {0x00, 0x00, 0xa4, 0x20, 0x01, 0x03};
 
@@ -105,7 +117,7 @@ void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   {
     const ControllerEmu::Slider::StateData slider_data = m_slider_bar->GetState();
 
-    guitar_data.sb = s_slider_bar_control_codes.lower_bound(slider_data.value)->second;
+    guitar_data.sb = GetSliderBarControlCode(slider_data.value);
   }
   else
   {
