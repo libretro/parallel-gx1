@@ -73,7 +73,8 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, 
 
   bool in_far_code = false;
   const u8* fast_access_start = GetCodePtr();
-  std::optional<FixupBranch> slow_access_fixup;
+  FixupBranch slow_access_fixup;
+  bool has_slow_access_fixup = false;
 
   if (emit_fast_access)
   {
@@ -94,6 +95,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, 
       {
         FixupBranch pass = CBNZ(memory_base);
         slow_access_fixup = B();
+        has_slow_access_fixup = true;
         SetJumpTarget(pass);
       }
 
@@ -105,6 +107,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, 
       const ARM64Reg temp2 = ARM64Reg::W0;
 
       slow_access_fixup = CheckIfSafeAddress(addr, temp1, temp2);
+      has_slow_access_fixup = true;
     }
 
     if ((flags & BackPatchInfo::FLAG_STORE) && (flags & BackPatchInfo::FLAG_FLOAT))
@@ -172,8 +175,8 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, 
       }
     }
 
-    if (slow_access_fixup)
-      SetJumpTarget(*slow_access_fixup);
+    if (has_slow_access_fixup)
+      SetJumpTarget(slow_access_fixup);
 
     const ARM64Reg temp_gpr = ARM64Reg::W1;
     const int temp_gpr_index = DecodeReg(temp_gpr);
@@ -302,7 +305,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, 
 
   if (in_far_code)
   {
-    if (slow_access_fixup)
+    if (has_slow_access_fixup)
     {
       FixupBranch done = B();
       SwitchToNearCode();

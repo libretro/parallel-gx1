@@ -200,7 +200,8 @@ void JitArm64::ps_arith(UGeckoInstruction inst)
       Force25BitPrecision(rounded_c_reg, VC);
     }
 
-    std::optional<ARM64Reg> negated_b_reg;
+    // INVALID_REG until b is negated into a register
+    ARM64Reg negated_b_reg = ARM64Reg::INVALID_REG;
     switch (op5)
     {
     case 12:  // ps_muls0: d = a * c.ps0
@@ -293,12 +294,12 @@ void JitArm64::ps_arith(UGeckoInstruction inst)
       // (Transformed into -a' := b - s)
       if (negate_b)
       {
-        if (!negated_b_reg)
+        if (negated_b_reg == ARM64Reg::INVALID_REG)
         {
           m_float_emit.FNEG(size, ARM64Reg::Q4, VB);
           negated_b_reg = ARM64Reg::Q4;
         }
-        m_float_emit.FSUB(size, ARM64Reg::Q1, *negated_b_reg, result_reg);
+        m_float_emit.FSUB(size, ARM64Reg::Q1, negated_b_reg, result_reg);
       }
       else
       {

@@ -978,7 +978,8 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     return;
   }
 
-  if (std::optional<size_t> code_region_index = SetEmitterStateToFreeCodeRegion())
+  const int code_region_index = SetEmitterStateToFreeCodeRegion();
+  if (code_region_index >= 0)
   {
     u8* near_start = GetWritableCodePtr();
     u8* far_start = m_far_code.GetWritableCodePtr();
@@ -1030,10 +1031,10 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
   exit(-1);
 }
 
-std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
+int JitArm64::SetEmitterStateToFreeCodeRegion()
 {
   // Find some large free memory blocks and set code emitters to point at them. If we can't find
-  // free blocks, return std::nullopt instead, which will trigger a JIT cache clear.
+  // free blocks, return -1 instead, which will trigger a JIT cache clear.
   const auto free_near_0 = m_free_ranges_near_0.by_size_begin();
   const auto free_near_1 = m_free_ranges_near_1.by_size_begin();
   const auto free_far_0 = m_free_ranges_far_0.by_size_begin();
@@ -1048,7 +1049,7 @@ std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
     // Don't use region 0 unless region 1 is getting full. This improves cache friendliness.
     SetCodePtr(free_near_1.from(), free_near_1.to());
     m_far_code.SetCodePtr(free_far_1.from(), free_far_1.to());
-    return std::make_optional(1);
+    return 1;
   }
 
   const size_t free_near_0_size = free_near_0.to() - free_near_0.from();
@@ -1061,20 +1062,20 @@ std::optional<size_t> JitArm64::SetEmitterStateToFreeCodeRegion()
       WARN_LOG(DYNA_REC, "Failed to find free memory region in near code regions.");
     else if (free_far_0_size == 0 && free_far_1_size == 0)
       WARN_LOG(DYNA_REC, "Failed to find free memory region in far code regions.");
-    return std::nullopt;
+    return -1;
   }
 
   if (free_0_smallest_size > free_1_smallest_size)
   {
     SetCodePtr(free_near_0.from(), free_near_0.to());
     m_far_code.SetCodePtr(free_far_0.from(), free_far_0.to());
-    return std::make_optional(0);
+    return 0;
   }
   else
   {
     SetCodePtr(free_near_1.from(), free_near_1.to());
     m_far_code.SetCodePtr(free_far_1.from(), free_far_1.to());
-    return std::make_optional(1);
+    return 1;
   }
 }
 

@@ -207,7 +207,8 @@ void JitArm64::fp_arith(UGeckoInstruction inst)
     }
 
     Common::SmallVector<FixupBranch, 4> nan_fixups;
-    std::optional<FixupBranch> nan_early_fixup;
+    FixupBranch nan_early_fixup;
+    bool has_nan_early_fixup = false;
     if (m_accurate_nans)
     {
       // Check if we need to handle NaNs
@@ -254,6 +255,7 @@ void JitArm64::fp_arith(UGeckoInstruction inst)
       else
       {
         nan_early_fixup = B();
+        has_nan_early_fixup = true;
       }
 
       SwitchToNearCode();
@@ -294,8 +296,8 @@ void JitArm64::fp_arith(UGeckoInstruction inst)
       BL(GetAsmRoutines()->fmadds_eft);
     }
 
-    if (nan_early_fixup)
-      SetJumpTarget(*nan_early_fixup);
+    if (has_nan_early_fixup)
+      SetJumpTarget(nan_early_fixup);
 
     // PowerPC's nmadd/nmsub perform rounding before the final negation, which is not the case
     // for any of AArch64's FMA instructions, so we negate using a separate instruction.

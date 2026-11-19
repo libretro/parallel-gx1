@@ -327,10 +327,10 @@ void JitArm64::twx(UGeckoInstruction inst)
     CMP(gpr.R(a), gpr.R(inst.RB));
   }
 
-  constexpr std::array<CCFlags, 5> conditions{{CC_HI, CC_LO, CC_EQ, CC_GT, CC_LT}};
-  Common::SmallVector<FixupBranch, conditions.size()> fixups;
+  constexpr CCFlags conditions[5] = {CC_HI, CC_LO, CC_EQ, CC_GT, CC_LT};
+  Common::SmallVector<FixupBranch, 5> fixups;
 
-  for (size_t i = 0; i < conditions.size(); i++)
+  for (size_t i = 0; i < 5; i++)
   {
     if (inst.TO & (1U << i))
     {

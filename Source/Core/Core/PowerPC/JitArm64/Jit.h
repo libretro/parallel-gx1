@@ -289,7 +289,8 @@ protected:
   // Finds a free memory region and sets the near and far code emitters to point at that region.
   // On success, returns the index of the memory region (either 0 or 1).
   // If either near code or far code is full, returns std::nullopt.
-  std::optional<size_t> SetEmitterStateToFreeCodeRegion();
+  // The code region (0 or 1) the emitters now point into, -1 when neither has room
+  int SetEmitterStateToFreeCodeRegion();
 
   void DoDownCount();
   void Cleanup();
