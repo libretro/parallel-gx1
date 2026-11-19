@@ -95,12 +95,12 @@ private:
   iterator m_end;
 };
 
-class Layer
+class Layer final
 {
 public:
   explicit Layer(LayerType layer);
   explicit Layer(std::unique_ptr<ConfigLayerLoader> loader);
-  virtual ~Layer();
+  ~Layer();
 
   // Convenience functions
   bool Exists(const Location& location) const;
@@ -163,7 +163,7 @@ public:
   LayerType GetLayer() const;
   const LayerMap& GetLayerMap() const;
 
-protected:
+private:
   bool m_is_dirty = false;
   LayerMap m_map;
   const LayerType m_layer;
