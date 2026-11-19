@@ -111,15 +111,23 @@ TextureInfo::TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 addre
   }
 }
 
-std::string TextureInfo::NameDetails::GetFullName() const
+void TextureInfo::NameDetails::GetFullName(char* out, size_t size) const
 {
-  return base_name + "_" + texture_name + tlut_name + "_" + format_name;
+  if (!base_name[0])
+  {
+    out[0] = '\0';
+    return;
+  }
+  snprintf(out, size, "%s_%s%s_%s", base_name, texture_name, tlut_name, format_name);
 }
 
 TextureInfo::NameDetails TextureInfo::CalculateTextureName() const
 {
+  NameDetails details;
+  details.base_name[0] = details.texture_name[0] = details.tlut_name[0] = details.format_name[0] =
+      '\0';
   if (!IsDataValid())
-    return NameDetails{};
+    return details;
 
   const u8* tlut = m_tlut_data.data;
   size_t tlut_size = m_palette_size ? *m_palette_size : 0;
@@ -171,22 +179,15 @@ TextureInfo::NameDetails TextureInfo::CalculateTextureName() const
   const u64 tex_hash = xxh64(m_data.data, m_texture_size, 0);
   const u64 tlut_hash = tlut_size ? xxh64(tlut, tlut_size, 0) : 0;
 
-  char base_name[64];
-  char texture_name[24];
-  char tlut_name[24];
-  char format_name[16];
-  snprintf(base_name, sizeof(base_name), "%.*s%ux%u%s", static_cast<int>(format_prefix.size()),
-           format_prefix.data(), m_raw_width, m_raw_height, m_mipmaps_enabled ? "_m" : "");
-  snprintf(texture_name, sizeof(texture_name), "%016" PRIx64, tex_hash);
+  snprintf(details.base_name, sizeof(details.base_name), "%.*s%ux%u%s",
+           static_cast<int>(format_prefix.size()), format_prefix.data(), m_raw_width, m_raw_height,
+           m_mipmaps_enabled ? "_m" : "");
+  snprintf(details.texture_name, sizeof(details.texture_name), "%016" PRIx64, tex_hash);
   if (tlut_size)
-    snprintf(tlut_name, sizeof(tlut_name), "_%016" PRIx64, tlut_hash);
-  else
-    tlut_name[0] = '\0';
-  snprintf(format_name, sizeof(format_name), "%d", static_cast<int>(m_texture_format));
-  return {.base_name = base_name,
-          .texture_name = texture_name,
-          .tlut_name = tlut_name,
-          .format_name = format_name};
+    snprintf(details.tlut_name, sizeof(details.tlut_name), "_%016" PRIx64, tlut_hash);
+  snprintf(details.format_name, sizeof(details.format_name), "%d",
+           static_cast<int>(m_texture_format));
+  return details;
 }
 
 TextureInfo::MipLevels TextureInfo::GetMipMapLevels() const

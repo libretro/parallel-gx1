@@ -32,7 +32,8 @@ public:
   static void Update();
   static void Clear();
   static void Shutdown();
-  static std::shared_ptr<HiresTexture> Search(const TextureInfo& texture_info);
+  // The pack's texture for texture_info, null when the pack has none; kept until Clear.
+  static HiresTexture* Search(const TextureInfo& texture_info);
 
   HiresTexture(bool has_arbitrary_mipmaps, std::string id);
 

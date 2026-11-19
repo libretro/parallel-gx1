@@ -167,7 +167,7 @@ struct TCacheEntry
   std::string texture_info_name = "";
 
   TimePoint last_load_time;
-  std::shared_ptr<HiresTexture> hires_texture;
+  HiresTexture* hires_texture = nullptr;  // the pack keeps it
 
   TCacheEntry(AbstractTexture* tex, AbstractFramebuffer* fb);
 

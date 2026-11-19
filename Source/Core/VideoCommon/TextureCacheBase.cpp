@@ -1799,7 +1799,9 @@ TCacheEntry* TextureCacheBase::LoadImpl(u32 stage, bool force_reload)
   entry->frameCount = FRAMECOUNT_INVALID;
   if (entry->texture_info_name.empty() && g_ActiveConfig.bGraphicMods)
   {
-    entry->texture_info_name = texture_info.CalculateTextureName().GetFullName();
+    char name[TextureInfo::NAME_SIZE];
+    texture_info.CalculateTextureName().GetFullName(name, sizeof(name));
+    entry->texture_info_name = name;
 
     GraphicsModActionData::TextureLoad texture_load{entry->texture_info_name};
     for (const auto& action :
@@ -2078,7 +2080,7 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
     InvalidateTexture(oldest_entry);
   }
 
-  std::shared_ptr<HiresTexture> hires_texture;
+  HiresTexture* hires_texture = nullptr;
   bool has_arbitrary_mipmaps = false;
   bool skip_texture_dump = false;
   std::shared_ptr<VideoCommon::CustomTextureData> custom_texture_data = nullptr;
@@ -2106,13 +2108,17 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
   std::string texture_name = "";
 
   if (g_ActiveConfig.bGraphicMods)
-    texture_name = texture_info.CalculateTextureName().GetFullName();
+  {
+    char name[TextureInfo::NAME_SIZE];
+    texture_info.CalculateTextureName().GetFullName(name, sizeof(name));
+    texture_name = name;
+  }
 
   auto entry =
       CreateTextureEntry(TextureCreationInfo{base_hash, full_hash, bytes_per_block, palette_size},
                          texture_info, textureCacheSafetyColorSampleSize, custom_texture_data.get(),
                          has_arbitrary_mipmaps, skip_texture_dump);
-  entry->hires_texture = std::move(hires_texture);
+  entry->hires_texture = hires_texture;
   entry->last_load_time = load_time;
   entry->texture_info_name = std::move(texture_name);
   return entry;
@@ -2297,7 +2303,9 @@ RcTcacheEntry TextureCacheBase::CreateTextureEntry(
 
     if (g_ActiveConfig.bDumpTextures && !skip_texture_dump && texLevels > 0)
     {
-      const std::string basename = texture_info.CalculateTextureName().GetFullName();
+      char name[TextureInfo::NAME_SIZE];
+      texture_info.CalculateTextureName().GetFullName(name, sizeof(name));
+      const std::string basename = name;
       if (g_ActiveConfig.bDumpBaseTextures)
       {
         m_texture_dumper.DumpTexture(*entry->texture, basename, 0, entry->has_arbitrary_mips);

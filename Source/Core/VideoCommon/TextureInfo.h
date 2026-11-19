@@ -22,14 +22,22 @@ public:
               bool from_tmem, TexBytes tmem_odd, TexBytes tmem_even,
               std::optional<u32> mip_count);
 
+  // A texture's name in a texture pack, in its parts:
+  // <base_name>_<texture_name><tlut_name>_<format_name>, tex1_64x64_m_0123456789abcdef_14 say.
+  // Each part is empty for a texture whose data is not valid.
+  enum
+  {
+    NAME_SIZE = 96  // the longest full name and its terminator
+  };
   struct NameDetails
   {
-    std::string base_name;
-    std::string texture_name;
-    std::string tlut_name;
-    std::string format_name;
+    char base_name[32];
+    char texture_name[20];
+    char tlut_name[20];
+    char format_name[8];
 
-    std::string GetFullName() const;
+    // The full name into out, size bytes long; out[0] is 0 for no name.
+    void GetFullName(char* out, size_t size) const;
   };
   NameDetails CalculateTextureName() const;
 

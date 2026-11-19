@@ -24,9 +24,11 @@ touches closer, and never adds C++ that was not there.
   baked into emitted code, or passed through `void*` or `u64`, is cast to
   the base type first (`static_cast<JitBase*>(this)`); a raw `this` there
   makes the callee read the wrong bytes.
-- **No STL in the code a change touches.** `std::vector`,
-  `std::function`, `std::array`, `std::string` and the rest go as the
-  code around them is touched: fixed arrays where a bound is known, a
+- **The STL goes, all of it.** Not only in code a change touches: it
+  is taken out subsystem by subsystem, the code that runs during play
+  first. `std::vector`, `std::function`, `std::array`, `std::string`,
+  the maps and sets and the rest give way to their C89 forms: fixed
+  arrays where a bound is known, a
   pointer, count and capacity grown by doubling and kept where it is
   not, a function pointer and context in place of a callable, and a
   tagged record in place of a captured lambda. A list that is cleared
