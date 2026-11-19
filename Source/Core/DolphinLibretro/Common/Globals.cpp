@@ -6,6 +6,18 @@ retro_environment_t environ_cb = nullptr;
 bool g_emuthread_launched = false;
 Gecko::GeckoCodeList g_gecko_codes;
 ActionReplay::ARCodeList g_ar_codes;
+static retro_atomic_int_t s_shutdown_requested;
+
+void RequestShutdown()
+{
+  retro_atomic_store_release_int(&s_shutdown_requested, 1);
+}
+
+bool TakeShutdownRequest()
+{
+  return retro_atomic_load_acquire_int(&s_shutdown_requested) &&
+         retro_atomic_exchange_int(&s_shutdown_requested, 0);
+}
 
 namespace Input
 {

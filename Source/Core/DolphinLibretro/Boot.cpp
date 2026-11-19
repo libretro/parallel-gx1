@@ -1105,6 +1105,8 @@ void retro_unload_game(void)
   ActionReplay::FreeCodeList(&Libretro::g_ar_codes);
   Gecko::FreeCodeList(&Libretro::g_gecko_codes);
   Libretro::ResetGBPlayer();
+  /* a power-off the frontend never heard of goes with the game */
+  Libretro::TakeShutdownRequest();
 }
 
 namespace Libretro

@@ -19,9 +19,10 @@
 #include "Core/Core.h"
 #include "Core/CoreTiming.h"
 #include "Core/HW/SystemTimers.h"
-#include "Core/System.h"
 #include "Core/IOS/USB/Bluetooth/RealtekFirmwareLoader.h"
 #include "Core/IOS/USB/Bluetooth/hci.h"
+#include "Core/System.h"
+#include "DolphinLibretro/Common/Globals.h"
 
 namespace
 {
@@ -171,7 +172,7 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
                     "The emulated console will now stop.",
                     m_last_open_error.c_str());
     }
-    Core::QueueHostJob(&Core::Stop);
+    Libretro::RequestShutdown();
     return;
   }
 

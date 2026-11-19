@@ -221,7 +221,6 @@ void CPUManager::RunSingleFrame()
   auto& system = Core::System::GetInstance();
   auto& power_pc = system.GetPowerPC();
 
-  Core::HostDispatchJobs(system);
   // What other threads queued for this one, which runs the CPU only inside its frames.
   ExecutePendingJobs();
 

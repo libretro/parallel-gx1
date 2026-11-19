@@ -31,6 +31,11 @@ void ResumeAfterField();
  * called before the content is loaded when the interface is there by then. */
 void InitDiskControlInterface();
 inline constexpr unsigned g_gbplayer_subsystem_id = 0x101;
+/* Any thread: the console powered off, so the frontend is asked to close the game from its own
+ * thread, in the next retro_run. */
+void RequestShutdown();
+/* The frontend's thread: whether a shutdown was asked for since the last call. */
+bool TakeShutdownRequest();
 
 namespace Input
 {

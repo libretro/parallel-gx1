@@ -11,6 +11,7 @@
 #include "Core/Core.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
+#include "DolphinLibretro/Common/Globals.h"
 
 namespace IOS::HLE
 {
@@ -27,7 +28,7 @@ std::optional<IPCReply> STMImmediateDevice::IOCtl(const IOCtlRequest& request)
   case IOCTL_STM_IDLE:
   case IOCTL_STM_SHUTDOWN:
     NOTICE_LOG(IOS_STM, "IOCTL_STM_IDLE or IOCTL_STM_SHUTDOWN received, shutting down");
-    Core::QueueHostJob(&Core::Stop, false);
+    Libretro::RequestShutdown();
     break;
 
   case IOCTL_STM_RELEASE_EH:

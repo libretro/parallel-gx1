@@ -291,6 +291,9 @@ void retro_run(void)
   const double frame_hz = Libretro::g_core_refresh_rate > 1.0 ? Libretro::g_core_refresh_rate : 60.0;
   frame_clock_advance(static_cast<unsigned>(lround(1e6 / frame_hz)));
 
+  if (Libretro::TakeShutdownRequest())
+    Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, NULL);
+
   Libretro::Input::InitSensors();
   Libretro::Options::CheckForUpdatedVariables();
   if (Libretro::Options::IsUpdated(Libretro::Options::main_interface::LOG_LEVEL))

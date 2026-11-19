@@ -110,18 +110,6 @@ static void StartingToRunning(void)
                        static_cast<int>(State::Running));
 }
 
-struct HostJob
-{
-  mpsc_stack_node_t link;  // first: the drained chain is cast back to jobs
-  std::function<void(Core::System&)> job;
-  bool run_after_stop;
-};
-// Pushed from any thread; the host thread moves them in order onto s_host_jobs_ready, a list
-// through their links, oldest first (s_host_jobs_last its end).
-static mpsc_stack_t s_host_jobs_queue;
-static mpsc_stack_node_t* s_host_jobs_ready;
-static mpsc_stack_node_t* s_host_jobs_last;
-
 static thread_local bool tls_is_cpu_thread = false;
 static thread_local bool tls_is_gpu_thread = false;
 
@@ -188,9 +176,6 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot)
     Common::JoinThread(s_emu_thread);
   }
 
-  // Drain any left over jobs
-  HostDispatchJobs(system);
-
   INFO_LOG(BOOT, "Starting core = %s mode", system.IsWii() ? "Wii" : "GameCube");
   INFO_LOG(BOOT, "CPU Thread separate = %s", system.IsDualCoreMode() ? "Yes" : "No");
 
@@ -227,10 +212,6 @@ void Stop(Core::System& system)  // - Hammertime!
       !retro_atomic_cas_int(&s_state, static_cast<int>(state), static_cast<int>(State::Stopping)));
 
   NotifyStateChanged(State::Stopping);
-
-
-  // Dump left over jobs
-  HostDispatchJobs(system);
 
   system.GetFifo().EmulatorState(false);
 
@@ -778,9 +759,6 @@ void Shutdown(Core::System& system)
   for (auto& g : s_emu_thread_scope_guards)
     g.Exit();
   s_emu_thread_scope_guards.clear();
-
-  // Make sure there's nothing left over in case we're about to exit.
-  HostDispatchJobs(system);
 }
 
 void NotifyStateChanged(const Core::State state)
@@ -809,59 +787,6 @@ void UpdateWantDeterminism(Core::System& system, bool initial)
     // We need to clear the cache because some parts of the JIT depend on want_determinism,
     // e.g. use of FMA.
     system.GetJitInterface().ClearCache();
-  }
-}
-
-void QueueHostJob(std::function<void(Core::System&)> job, bool run_during_stop)
-{
-  if (!job)
-    return;
-
-  auto* host_job = new HostJob{{}, std::move(job), run_during_stop};
-  mpsc_stack_push(&s_host_jobs_queue, &host_job->link);
-  // If the the queue was empty then kick the Host to come and get this job.
-  if (!host_job->link.next)
-    Host_Message(HostMessageID::WMUserJobDispatch);
-}
-
-void HostDispatchJobs(Core::System& system)
-{
-  // WARNING: This should only run on the Host Thread.
-  // NOTE: This function is potentially re-entrant. If a job calls
-  //   Core::Stop for instance then we'll enter this a second time.
-  for (;;)
-  {
-    // The stack gives the newest first; append them oldest first behind what is left.
-    mpsc_stack_node_t* const drained = mpsc_stack_reverse(mpsc_stack_drain(&s_host_jobs_queue));
-    if (drained)
-    {
-      if (s_host_jobs_last)
-        s_host_jobs_last->next = drained;
-      else
-        s_host_jobs_ready = drained;
-      for (s_host_jobs_last = drained; s_host_jobs_last->next;)
-        s_host_jobs_last = s_host_jobs_last->next;
-    }
-    if (!s_host_jobs_ready)
-      return;
-
-    HostJob* const job = reinterpret_cast<HostJob*>(s_host_jobs_ready);
-    s_host_jobs_ready = s_host_jobs_ready->next;
-    if (!s_host_jobs_ready)
-      s_host_jobs_last = nullptr;
-
-    if (!job->run_after_stop)
-    {
-      const State state = LoadState();
-      if (state == State::Stopping || state == State::Uninitialized)
-      {
-        delete job;
-        continue;
-      }
-    }
-
-    job->job(system);
-    delete job;
   }
 }
 

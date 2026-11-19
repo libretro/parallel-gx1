@@ -135,21 +135,6 @@ void NotifyStateChanged(Core::State state);
 
 void UpdateWantDeterminism(Core::System& system, bool initial = false);
 
-// Queue an arbitrary function to asynchronously run once on the Host thread later.
-// Threadsafe. Can be called by any thread, including the Host itself.
-// Jobs will be executed in RELATIVE order. If you queue 2 jobs from the same thread
-// then they will be executed in the order they were queued; however, there is no
-// global order guarantee across threads - jobs from other threads may execute in
-// between.
-// NOTE: Make sure the jobs check the global state instead of assuming everything is
-//   still the same as when the job was queued.
-// NOTE: Jobs that are not set to run during stop will be discarded instead.
-void QueueHostJob(std::function<void(Core::System&)> job, bool run_during_stop = false);
-
-// Should be called periodically by the Host to run pending jobs.
-// WMUserJobDispatch will be sent when something is added to the queue.
-void HostDispatchJobs(Core::System& system);
-
 /* The frame gate (dual core; Core.cpp): retro_run lets the CPU thread
  * run the next field; whether one is granted and not yet ended. */
 void RunField(Core::System& system);
