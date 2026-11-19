@@ -225,7 +225,7 @@ bool VertexShaderManager::UseVertexDepthRange()
 
 // Syncs the shader constant buffers with xfmem
 // TODO: A cleaner way to control the matrices without making a mess in the parameters field
-void VertexShaderManager::SetConstants(const std::string* const* textures, u32 num_textures,
+void VertexShaderManager::SetConstants(const char* const* textures, u32 num_textures,
                                        XFStateManager& xf_state_manager)
 {
   if (constants.missing_color_hex != g_ActiveConfig.iMissingColorValue)
@@ -457,21 +457,20 @@ void VertexShaderManager::SetConstants(const std::string* const* textures, u32 n
   }
 
   // the mod manager's action lists, lent: the projection's, then each texture's
-  const std::vector<GraphicsModAction*>* projection_actions[1 + 8];
+  GraphicsModActionList projection_actions[1 + 8];
   u32 num_projection_actions = 0;
   bool have_projection_actions = false;
   if (g_ActiveConfig.bGraphicMods)
   {
     projection_actions[num_projection_actions++] =
-        &g_graphics_mod_manager->GetProjectionActions(xfmem.projection.type);
+        g_graphics_mod_manager->GetProjectionActions(xfmem.projection.type);
     for (u32 i = 0; i < num_textures && i < 8; i++)
     {
       projection_actions[num_projection_actions++] =
-          &g_graphics_mod_manager->GetProjectionTextureActions(xfmem.projection.type,
-                                                               *textures[i]);
+          g_graphics_mod_manager->GetProjectionTextureActions(xfmem.projection.type, textures[i]);
     }
     for (u32 i = 0; i < num_projection_actions; i++)
-      have_projection_actions = have_projection_actions || !projection_actions[i]->empty();
+      have_projection_actions = have_projection_actions || projection_actions[i].count != 0;
   }
 
   if (xf_state_manager.DidProjectionChange() ||
@@ -487,8 +486,8 @@ void VertexShaderManager::SetConstants(const std::string* const* textures, u32 n
     GraphicsModActionData::Projection projection{&corrected_matrix};
     for (u32 i = 0; i < num_projection_actions; i++)
     {
-      for (GraphicsModAction* action : *projection_actions[i])
-        action->OnProjection(&projection);
+      for (u32 a = 0; a < projection_actions[i].count; a++)
+        projection_actions[i].actions[a]->OnProjection(&projection);
     }
 
     memcpy(constants.projection.data(), corrected_matrix.data.data(), 4 * sizeof(float4));

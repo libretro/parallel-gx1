@@ -509,7 +509,7 @@ void VertexManagerBase::Flush()
   bool vr_textured = false;
   bool vr_samples_copy = false;
   // the names the bound cache entries hold, lent: they stay bound until BindTextures
-  const std::string* texture_names[8];
+  const char* texture_names[8];
   u32 num_texture_names = 0;
   Common::SmallVector<u32, 8> texture_units;
   std::array<SamplerState, 8> samplers;
@@ -540,10 +540,10 @@ void VertexManagerBase::Flush()
           vr_samples_copy |= cache_entry->IsCopy();
           bool named = false;
           for (u32 n = 0; n < num_texture_names; n++)
-            named = named || *texture_names[n] == cache_entry->texture_info_name;
+            named = named || !strcmp(texture_names[n], cache_entry->texture_info_name);
           if (!named)
           {
-            texture_names[num_texture_names++] = &cache_entry->texture_info_name;
+            texture_names[num_texture_names++] = cache_entry->texture_info_name;
             texture_units.push_back(i);
           }
 
@@ -574,8 +574,10 @@ void VertexManagerBase::Flush()
     for (u32 i = 0; i < num_texture_names; i++)
     {
       GraphicsModActionData::DrawStarted draw_started{texture_units, &skip};
-      for (const auto& action : g_graphics_mod_manager->GetDrawStartedActions(*texture_names[i]))
-        action->OnDrawStarted(&draw_started);
+      const GraphicsModActionList actions =
+          g_graphics_mod_manager->GetDrawStartedActions(texture_names[i]);
+      for (u32 a = 0; a < actions.count; a++)
+        actions.actions[a]->OnDrawStarted(&draw_started);
     }
 
     // Now the vertices can be flushed to the GPU. Everything following the CommitBuffer() call

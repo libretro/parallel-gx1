@@ -40,6 +40,5 @@ void PrintAction::OnTextureLoad(GraphicsModActionData::TextureLoad* texture_load
   if (!texture_load) [[unlikely]]
     return;
 
-  INFO_LOG(VIDEO, "OnTextureLoad Called.  Texture: %.*s",
-           static_cast<int>(texture_load->texture_name.size()), texture_load->texture_name.data());
+  INFO_LOG(VIDEO, "OnTextureLoad Called.  Texture: %s", texture_load->texture_name);
 }

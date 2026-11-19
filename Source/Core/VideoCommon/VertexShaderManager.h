@@ -55,7 +55,7 @@ public:
 
   // constant management
   void SetProjectionMatrix(XFStateManager& xf_state_manager);
-  void SetConstants(const std::string* const* textures, u32 num_textures,
+  void SetConstants(const char* const* textures, u32 num_textures,
                     XFStateManager& xf_state_manager);
 
   // data: 3 floats representing the X, Y and Z vertex model coordinates and the posmatrix index.

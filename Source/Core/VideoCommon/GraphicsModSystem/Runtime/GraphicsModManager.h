@@ -3,33 +3,37 @@
 
 #pragma once
 
-#include <list>
 #include <memory>
-#include <string>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 #include "VideoCommon/GraphicsModSystem/Runtime/FBInfo.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModAction.h"
 #include "VideoCommon/XFMemory.h"
 
 class GraphicsModGroupConfig;
+
+// The actions a target runs, in the order the mods name them; lent until the next Load.
+struct GraphicsModActionList
+{
+  GraphicsModAction* const* actions;
+  u32 count;
+};
+
 class GraphicsModManager
 {
 public:
+  GraphicsModManager() = default;
+  ~GraphicsModManager();
+  GraphicsModManager(const GraphicsModManager&) = delete;
+  GraphicsModManager& operator=(const GraphicsModManager&) = delete;
+
   bool Initialize();
 
-  const std::vector<GraphicsModAction*>& GetProjectionActions(ProjectionType projection_type) const;
-  const std::vector<GraphicsModAction*>&
-  GetProjectionTextureActions(ProjectionType projection_type,
-                              const std::string& texture_name) const;
-  const std::vector<GraphicsModAction*>&
-  GetDrawStartedActions(const std::string& texture_name) const;
-  const std::vector<GraphicsModAction*>&
-  GetTextureLoadActions(const std::string& texture_name) const;
-  const std::vector<GraphicsModAction*>& GetEFBActions(const FBInfo& efb) const;
+  GraphicsModActionList GetProjectionActions(ProjectionType projection_type) const;
+  GraphicsModActionList GetProjectionTextureActions(ProjectionType projection_type,
+                                                    const char* texture_name) const;
+  GraphicsModActionList GetDrawStartedActions(const char* texture_name) const;
+  GraphicsModActionList GetTextureLoadActions(const char* texture_name) const;
+  GraphicsModActionList GetEFBActions(const FBInfo& efb) const;
 
   void Load(const GraphicsModGroupConfig& config);
 
@@ -38,23 +42,42 @@ private:
 
   class DecoratedAction;
 
-  static inline const std::vector<GraphicsModAction*> m_default = {};
-  std::list<std::unique_ptr<GraphicsModAction>> m_actions;
-  std::unordered_map<ProjectionType, std::vector<GraphicsModAction*>>
-      m_projection_target_to_actions;
-  // looked up per draw by a key built on the stack
-  struct KeyHash
+  // A target and an action it runs, as Load finds them; keyed by kind and name, "d<texture>"
+  // for a draw say.
+  struct Link
   {
-    using is_transparent = void;
-    size_t operator()(std::string_view key) const { return std::hash<std::string_view>{}(key); }
+    char* key;
+    GraphicsModAction* action;
+    u32 order;
   };
-  std::unordered_map<std::string, std::vector<GraphicsModAction*>, KeyHash, std::equal_to<>>
-      m_projection_texture_target_to_actions;
-  std::unordered_map<std::string, std::vector<GraphicsModAction*>> m_draw_started_target_to_actions;
-  std::unordered_map<std::string, std::vector<GraphicsModAction*>> m_load_texture_target_to_actions;
-  std::unordered_map<FBInfo, std::vector<GraphicsModAction*>, FBInfoHasher> m_efb_target_to_actions;
+  void AddLink(const char* key, GraphicsModAction* action);
+  static int CompareLinks(const void* a, const void* b);
+  // Groups the links by key into m_targets, their actions into m_linked.
+  void BuildTargets();
+  GraphicsModActionList Find(const char* key) const;
 
-  std::unordered_set<std::string> m_groups;
+  // Owned
+  GraphicsModAction** m_actions = nullptr;
+  u32 m_num_actions = 0;
+  u32 m_actions_capacity = 0;
+
+  Link* m_links = nullptr;
+  u32 m_num_links = 0;
+  u32 m_links_capacity = 0;
+
+  // Each target's actions, a run of m_linked
+  struct Target
+  {
+    const char* key;  // a link's
+    u32 first;
+    u32 count;
+  };
+  Target* m_targets = nullptr;
+  u32 m_num_targets = 0;
+  GraphicsModAction** m_linked = nullptr;
+  // Open-addressed: key hash to target, NO_TARGET where free; a power of two in size.
+  u32* m_index = nullptr;
+  u32 m_index_capacity = 0;
 };
 
 extern std::unique_ptr<GraphicsModManager> g_graphics_mod_manager;

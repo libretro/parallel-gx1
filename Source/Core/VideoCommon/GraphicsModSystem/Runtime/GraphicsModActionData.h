@@ -3,10 +3,6 @@
 
 #pragma once
 
-#include <optional>
-#include <string_view>
-#include <vector>
-
 #include "Common/CommonTypes.h"
 #include "Common/Matrix.h"
 #include "Common/SmallVector.h"
@@ -34,6 +30,6 @@ struct Projection
 };
 struct TextureLoad
 {
-  std::string_view texture_name;
+  const char* texture_name;
 };
 }  // namespace GraphicsModActionData

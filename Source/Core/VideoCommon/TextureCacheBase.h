@@ -164,7 +164,8 @@ struct TCacheEntry
   u32 pending_efb_copy_width = 0;
   u32 pending_efb_copy_height = 0;
 
-  std::string texture_info_name = "";
+  // The name graphics mods know it by, empty until it is needed
+  char texture_info_name[TextureInfo::NAME_SIZE] = "";
 
   TimePoint last_load_time;
   HiresTexture* hires_texture = nullptr;  // the pack keeps it

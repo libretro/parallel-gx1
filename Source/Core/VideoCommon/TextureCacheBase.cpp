@@ -1797,18 +1797,16 @@ TCacheEntry* TextureCacheBase::LoadImpl(u32 stage, bool force_reload)
     return nullptr;
 
   entry->frameCount = FRAMECOUNT_INVALID;
-  if (entry->texture_info_name.empty() && g_ActiveConfig.bGraphicMods)
+  if (!entry->texture_info_name[0] && g_ActiveConfig.bGraphicMods)
   {
-    char name[TextureInfo::NAME_SIZE];
-    texture_info.CalculateTextureName().GetFullName(name, sizeof(name));
-    entry->texture_info_name = name;
+    texture_info.CalculateTextureName().GetFullName(entry->texture_info_name,
+                                                    sizeof(entry->texture_info_name));
 
     GraphicsModActionData::TextureLoad texture_load{entry->texture_info_name};
-    for (const auto& action :
-         g_graphics_mod_manager->GetTextureLoadActions(entry->texture_info_name))
-    {
-      action->OnTextureLoad(&texture_load);
-    }
+    const GraphicsModActionList actions =
+        g_graphics_mod_manager->GetTextureLoadActions(entry->texture_info_name);
+    for (u32 i = 0; i < actions.count; i++)
+      actions.actions[i]->OnTextureLoad(&texture_load);
   }
   m_bound_textures[texture_info.GetStage()] = entry;
 
@@ -2105,22 +2103,17 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
     }
   }
 
-  std::string texture_name = "";
-
-  if (g_ActiveConfig.bGraphicMods)
-  {
-    char name[TextureInfo::NAME_SIZE];
-    texture_info.CalculateTextureName().GetFullName(name, sizeof(name));
-    texture_name = name;
-  }
-
   auto entry =
       CreateTextureEntry(TextureCreationInfo{base_hash, full_hash, bytes_per_block, palette_size},
                          texture_info, textureCacheSafetyColorSampleSize, custom_texture_data.get(),
                          has_arbitrary_mipmaps, skip_texture_dump);
   entry->hires_texture = hires_texture;
   entry->last_load_time = load_time;
-  entry->texture_info_name = std::move(texture_name);
+  if (g_ActiveConfig.bGraphicMods)
+  {
+    texture_info.CalculateTextureName().GetFullName(entry->texture_info_name,
+                                                    sizeof(entry->texture_info_name));
+  }
   return entry;
 }
 
@@ -2356,9 +2349,8 @@ static void NameAndDumpCopy(TCacheEntry* entry, std::string_view prefix, const c
 {
   if (name)
   {
-    entry->texture_info_name.assign(prefix);
-    entry->texture_info_name += '_';
-    entry->texture_info_name += id;
+    snprintf(entry->texture_info_name, sizeof(entry->texture_info_name), "%.*s_%s",
+             static_cast<int>(prefix.size()), prefix.data(), id);
   }
   if (dump)
   {
@@ -2884,10 +2876,9 @@ void TextureCacheBase::CopyRenderTargetToTexture(
     info.m_texture_format = baseFormat;
     bool skip = false;
     GraphicsModActionData::PreEFB efb{tex_w, tex_h, &skip, &scaled_tex_w, &scaled_tex_h};
-    for (const auto& action : g_graphics_mod_manager->GetEFBActions(info))
-    {
-      action->BeforeEFB(&efb);
-    }
+    const GraphicsModActionList actions = g_graphics_mod_manager->GetEFBActions(info);
+    for (u32 i = 0; i < actions.count; i++)
+      actions.actions[i]->BeforeEFB(&efb);
     if (skip == true)
     {
       if (copy_to_ram)

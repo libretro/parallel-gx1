@@ -4,6 +4,8 @@
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
 
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -23,6 +25,7 @@
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsModGroup.h"
 #include "VideoCommon/GraphicsModSystem/Constants.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionFactory.h"
+#include "VideoCommon/TextureInfo.h"
 #include "VideoCommon/VideoConfig.h"
 
 std::unique_ptr<GraphicsModManager> g_graphics_mod_manager;
@@ -91,76 +94,151 @@ bool GraphicsModManager::Initialize()
   return true;
 }
 
-const std::vector<GraphicsModAction*>&
-GraphicsModManager::GetProjectionActions(ProjectionType projection_type) const
+GraphicsModManager::~GraphicsModManager()
 {
-  if (const auto it = m_projection_target_to_actions.find(projection_type);
-      it != m_projection_target_to_actions.end())
-  {
-    return it->second;
-  }
-
-  return m_default;
+  Reset();
 }
 
-const std::vector<GraphicsModAction*>&
+static constexpr u32 NO_TARGET = 0xFFFFFFFFu;
+
+static u32 HashKey(const char* key)
+{
+  // FNV-1a
+  u32 hash = 2166136261u;
+  for (; *key; key++)
+    hash = (hash ^ static_cast<u8>(*key)) * 16777619u;
+  return hash;
+}
+
+GraphicsModActionList GraphicsModManager::Find(const char* key) const
+{
+  if (!m_num_targets)
+    return {nullptr, 0};
+  const u32 mask = m_index_capacity - 1;
+  for (u32 i = HashKey(key) & mask; m_index[i] != NO_TARGET; i = (i + 1) & mask)
+  {
+    const Target& target = m_targets[m_index[i]];
+    if (!strcmp(target.key, key))
+      return {m_linked + target.first, target.count};
+  }
+  return {nullptr, 0};
+}
+
+GraphicsModActionList GraphicsModManager::GetProjectionActions(ProjectionType projection_type) const
+{
+  if (!m_num_targets)
+    return {nullptr, 0};
+  char key[16];
+  snprintf(key, sizeof(key), "p%d", static_cast<int>(projection_type));
+  return Find(key);
+}
+
+GraphicsModActionList
 GraphicsModManager::GetProjectionTextureActions(ProjectionType projection_type,
-                                                const std::string& texture_name) const
+                                                const char* texture_name) const
 {
-  if (m_projection_texture_target_to_actions.empty())
-    return m_default;
-  char key[256];
-  const int made =
-      snprintf(key, sizeof(key), "%s_%d", texture_name.c_str(), static_cast<int>(projection_type));
-  const size_t made_size = made < 0 ? 0 : static_cast<size_t>(made);
-  // texture names fit; a longer one is made on the heap
-  const std::string long_key =
-      made_size >= sizeof(key) ?
-          StringFromFormat("%s_%d", texture_name.c_str(), static_cast<int>(projection_type)) :
-          std::string();
-  const std::string_view lookup =
-      made_size >= sizeof(key) ? std::string_view(long_key) : std::string_view(key, made_size);
-  if (const auto it = m_projection_texture_target_to_actions.find(lookup);
-      it != m_projection_texture_target_to_actions.end())
-  {
-    return it->second;
-  }
-
-  return m_default;
+  if (!m_num_targets)
+    return {nullptr, 0};
+  char key[TextureInfo::NAME_SIZE + 16];
+  snprintf(key, sizeof(key), "t%s_%d", texture_name, static_cast<int>(projection_type));
+  return Find(key);
 }
 
-const std::vector<GraphicsModAction*>&
-GraphicsModManager::GetDrawStartedActions(const std::string& texture_name) const
+GraphicsModActionList GraphicsModManager::GetDrawStartedActions(const char* texture_name) const
 {
-  if (const auto it = m_draw_started_target_to_actions.find(texture_name);
-      it != m_draw_started_target_to_actions.end())
-  {
-    return it->second;
-  }
-
-  return m_default;
+  if (!m_num_targets)
+    return {nullptr, 0};
+  char key[TextureInfo::NAME_SIZE + 16];
+  snprintf(key, sizeof(key), "d%s", texture_name);
+  return Find(key);
 }
 
-const std::vector<GraphicsModAction*>&
-GraphicsModManager::GetTextureLoadActions(const std::string& texture_name) const
+GraphicsModActionList GraphicsModManager::GetTextureLoadActions(const char* texture_name) const
 {
-  if (const auto it = m_load_texture_target_to_actions.find(texture_name);
-      it != m_load_texture_target_to_actions.end())
-  {
-    return it->second;
-  }
-
-  return m_default;
+  if (!m_num_targets)
+    return {nullptr, 0};
+  char key[TextureInfo::NAME_SIZE + 16];
+  snprintf(key, sizeof(key), "l%s", texture_name);
+  return Find(key);
 }
 
-const std::vector<GraphicsModAction*>& GraphicsModManager::GetEFBActions(const FBInfo& efb) const
+static void MakeEFBKey(char* key, size_t size, u32 width, u32 height, TextureFormat format)
 {
-  if (const auto it = m_efb_target_to_actions.find(efb); it != m_efb_target_to_actions.end())
-  {
-    return it->second;
-  }
+  snprintf(key, size, "e%ux%u_%d", width, height, static_cast<int>(format));
+}
 
-  return m_default;
+GraphicsModActionList GraphicsModManager::GetEFBActions(const FBInfo& efb) const
+{
+  if (!m_num_targets)
+    return {nullptr, 0};
+  char key[48];
+  MakeEFBKey(key, sizeof(key), efb.m_width, efb.m_height, efb.m_texture_format);
+  return Find(key);
+}
+
+void GraphicsModManager::AddLink(const char* key, GraphicsModAction* action)
+{
+  if (m_num_links == m_links_capacity)
+  {
+    const u32 capacity = m_links_capacity ? m_links_capacity * 2 : 32;
+    Link* const links = static_cast<Link*>(realloc(m_links, capacity * sizeof(Link)));
+    if (!links)
+      abort();
+    m_links = links;
+    m_links_capacity = capacity;
+  }
+  Link& link = m_links[m_num_links];
+  link.key = strdup(key);
+  if (!link.key)
+    abort();
+  link.action = action;
+  link.order = m_num_links++;
+}
+
+int GraphicsModManager::CompareLinks(const void* a, const void* b)
+{
+  const Link* const la = static_cast<const Link*>(a);
+  const Link* const lb = static_cast<const Link*>(b);
+  const int by_key = strcmp(la->key, lb->key);
+  if (by_key)
+    return by_key;
+  return la->order < lb->order ? -1 : la->order > lb->order;
+}
+
+void GraphicsModManager::BuildTargets()
+{
+  if (!m_num_links)
+    return;
+  qsort(m_links, m_num_links, sizeof(Link), CompareLinks);
+
+  m_linked = static_cast<GraphicsModAction**>(malloc(m_num_links * sizeof(GraphicsModAction*)));
+  m_targets = static_cast<Target*>(malloc(m_num_links * sizeof(Target)));
+  u32 capacity = 16;
+  while (capacity < m_num_links * 2)
+    capacity *= 2;
+  m_index = static_cast<u32*>(malloc(capacity * sizeof(u32)));
+  if (!m_linked || !m_targets || !m_index)
+    abort();
+  memset(m_index, 0xFF, capacity * sizeof(u32));
+  m_index_capacity = capacity;
+
+  for (u32 i = 0; i < m_num_links; i++)
+  {
+    m_linked[i] = m_links[i].action;
+    if (m_num_targets && !strcmp(m_targets[m_num_targets - 1].key, m_links[i].key))
+    {
+      m_targets[m_num_targets - 1].count++;
+      continue;
+    }
+    Target& target = m_targets[m_num_targets];
+    target.key = m_links[i].key;
+    target.first = i;
+    target.count = 1;
+    u32 slot = HashKey(target.key) & (capacity - 1);
+    while (m_index[slot] != NO_TARGET)
+      slot = (slot + 1) & (capacity - 1);
+    m_index[slot] = m_num_targets++;
+  }
 }
 
 void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
@@ -176,13 +254,14 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
   {
     for (const GraphicsTargetGroupConfig& group : mod.m_groups)
     {
-      if (const bool inserted = m_groups.insert(group.m_name).second; !inserted)
+      if (group_to_targets.find(group.m_name) != group_to_targets.end())
       {
         WARN_LOG(
             VIDEO,
             "Specified graphics mod group '%s' for mod '%s' is already specified by another mod.",
             group.m_name.c_str(), mod.m_title.c_str());
       }
+      group_to_targets[group.m_name];
 
       const std::string internal_group = mod.m_title + "." + group.m_name;
       for (const GraphicsTargetConfig& target : group.m_targets)
@@ -216,16 +295,15 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
     }
   }
 
-  const auto create_action =
-      [filesystem_library = std::move(filesystem_library)](
-          const std::string_view& action_name, const Common::Vec3& xyz,
-          GraphicsModConfig mod_config) -> std::unique_ptr<GraphicsModAction> {
+  const auto create_action = [filesystem_library = std::move(filesystem_library)](
+                                 const std::string_view& action_name, const Common::Vec3& xyz,
+                                 GraphicsModConfig mod_config) -> GraphicsModAction* {
     auto action = GraphicsModActionFactory::Create(action_name, xyz, filesystem_library);
     if (action == nullptr)
     {
       return nullptr;
     }
-    return std::make_unique<DecoratedAction>(std::move(action), std::move(mod_config));
+    return new DecoratedAction(std::move(action), std::move(mod_config));
   };
 
   for (const auto& mod : mods)
@@ -235,54 +313,63 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
       const std::string internal_group = mod.m_title + "." + feature.m_group;
 
       const auto add_target = [&](const GraphicsTargetConfig& target) {
+        GraphicsModAction* const action = m_actions[m_num_actions - 1];
+        char key[512];
         std::visit(
             overloaded{
                 [&](const DrawStartedTextureTarget& the_target) {
-                  m_draw_started_target_to_actions[the_target.m_texture_info_string].push_back(
-                      m_actions.back().get());
+                  snprintf(key, sizeof(key), "d%s", the_target.m_texture_info_string.c_str());
+                  AddLink(key, action);
                 },
                 [&](const LoadTextureTarget& the_target) {
-                  m_load_texture_target_to_actions[the_target.m_texture_info_string].push_back(
-                      m_actions.back().get());
+                  snprintf(key, sizeof(key), "l%s", the_target.m_texture_info_string.c_str());
+                  AddLink(key, action);
                 },
                 // no action runs on texture creation or on XFB copies
                 [](const CreateTextureTarget&) {},
                 [&](const EFBTarget& the_target) {
-                  FBInfo info;
-                  info.m_height = the_target.m_height;
-                  info.m_width = the_target.m_width;
-                  info.m_texture_format = the_target.m_texture_format;
-                  m_efb_target_to_actions[info].push_back(m_actions.back().get());
+                  MakeEFBKey(key, sizeof(key), the_target.m_width, the_target.m_height,
+                             the_target.m_texture_format);
+                  AddLink(key, action);
                 },
                 [](const XFBTarget&) {},
                 [&](const ProjectionTarget& the_target) {
                   if (the_target.m_texture_info_string)
                   {
-                    const std::string lookup =
-                        StringFromFormat("%s_%d", the_target.m_texture_info_string->c_str(),
-                                         static_cast<int>(the_target.m_projection_type));
-                    m_projection_texture_target_to_actions[lookup].push_back(
-                        m_actions.back().get());
+                    snprintf(key, sizeof(key), "t%s_%d", the_target.m_texture_info_string->c_str(),
+                             static_cast<int>(the_target.m_projection_type));
                   }
                   else
                   {
-                    m_projection_target_to_actions[the_target.m_projection_type].push_back(
-                        m_actions.back().get());
+                    snprintf(key, sizeof(key), "p%d",
+                             static_cast<int>(the_target.m_projection_type));
                   }
+                  AddLink(key, action);
                 },
             },
             target);
       };
 
       const auto add_action = [&](GraphicsModConfig mod_config) -> bool {
-        auto action = create_action(feature.m_action, feature.m_action_xyz, std::move(mod_config));
+        GraphicsModAction* const action =
+            create_action(feature.m_action, feature.m_action_xyz, std::move(mod_config));
         if (action == nullptr)
         {
           WARN_LOG(VIDEO, "Failed to create action '%s' for group '%s'.", feature.m_action.c_str(),
                    feature.m_group.c_str());
           return false;
         }
-        m_actions.push_back(std::move(action));
+        if (m_num_actions == m_actions_capacity)
+        {
+          const u32 capacity = m_actions_capacity ? m_actions_capacity * 2 : 16;
+          GraphicsModAction** const actions = static_cast<GraphicsModAction**>(
+              realloc(m_actions, capacity * sizeof(GraphicsModAction*)));
+          if (!actions)
+            abort();
+          m_actions = actions;
+          m_actions_capacity = capacity;
+        }
+        m_actions[m_num_actions++] = action;
         return true;
       };
 
@@ -316,15 +403,28 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
       }
     }
   }
+
+  BuildTargets();
 }
 
 void GraphicsModManager::Reset()
 {
-  m_actions.clear();
-  m_groups.clear();
-  m_projection_target_to_actions.clear();
-  m_projection_texture_target_to_actions.clear();
-  m_draw_started_target_to_actions.clear();
-  m_load_texture_target_to_actions.clear();
-  m_efb_target_to_actions.clear();
+  for (u32 i = 0; i < m_num_actions; i++)
+    delete m_actions[i];
+  for (u32 i = 0; i < m_num_links; i++)
+    free(m_links[i].key);
+  free(m_actions);
+  free(m_links);
+  free(m_targets);
+  free(m_linked);
+  free(m_index);
+  m_actions = nullptr;
+  m_links = nullptr;
+  m_targets = nullptr;
+  m_linked = nullptr;
+  m_index = nullptr;
+  m_num_actions = m_actions_capacity = 0;
+  m_num_links = m_links_capacity = 0;
+  m_num_targets = 0;
+  m_index_capacity = 0;
 }
