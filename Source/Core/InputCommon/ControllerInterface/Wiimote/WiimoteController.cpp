@@ -451,7 +451,8 @@ void Device::RunTasks()
                    Common::BitCastPtr<AccelCalibrationData>(calibration_data.data());
                m_accel_calibration = accel_calibration.GetCalibration();
 
-               WiimoteEmu::UpdateCalibrationDataChecksum(calibration_data, 1);
+               WiimoteEmu::UpdateCalibrationDataChecksum(calibration_data.data(),
+                                                         calibration_data.size(), 1);
 
                // We could potentially try the second block at 0x26 if the checksum is bad.
                if (accel_calibration.checksum != calibration_data.back())
@@ -657,7 +658,8 @@ void Device::RunTasks()
           const auto read_checksum = std::pair(calibration_data[CALIBRATION_SIZE - 2],
                                                calibration_data[CALIBRATION_SIZE - 1]);
 
-          WiimoteEmu::UpdateCalibrationDataChecksum(calibration_data, 2);
+          WiimoteEmu::UpdateCalibrationDataChecksum(calibration_data.data(),
+                                                    calibration_data.size(), 2);
 
           Checksum checksum = Checksum::Good;
 

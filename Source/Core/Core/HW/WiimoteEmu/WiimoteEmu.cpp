@@ -87,7 +87,7 @@ void Wiimote::Reset()
   {
     // Write out existing EEPROM
     INFO_LOG(WIIMOTE, "Wrote EEPROM for %s", GetName().c_str());
-    File::IOFile(eeprom_file, "wb").WriteBytes(m_eeprom.data.data(), EEPROM_FREE_SIZE);
+    File::IOFile(eeprom_file, "wb").WriteBytes(m_eeprom.data, EEPROM_FREE_SIZE);
 
     m_eeprom_dirty = false;
   }
@@ -96,14 +96,14 @@ void Wiimote::Reset()
   if (!want_determinism && File::Exists(eeprom_file))
   {
     // Read existing EEPROM
-    File::IOFile(eeprom_file, "rb").ReadBytes(m_eeprom.data.data(), EEPROM_FREE_SIZE);
+    File::IOFile(eeprom_file, "rb").ReadBytes(m_eeprom.data, EEPROM_FREE_SIZE);
   }
   else
   {
     // Load some default data.
 
     // IR calibration:
-    std::array<u8, 11> ir_calibration = {
+    u8 ir_calibration[11] = {
         // Point 1
         IR_LOW_X & 0xFF,
         IR_LOW_Y & 0xFF,
@@ -125,33 +125,32 @@ void Wiimote::Reset()
         // Checksum
         0x00,
     };
-    UpdateCalibrationDataChecksum(ir_calibration, 1);
-    m_eeprom.ir_calibration_1 = ir_calibration;
-    m_eeprom.ir_calibration_2 = ir_calibration;
+    UpdateCalibrationDataChecksum(ir_calibration, sizeof(ir_calibration), 1);
+    memcpy(m_eeprom.ir_calibration_1, ir_calibration, sizeof(ir_calibration));
+    memcpy(m_eeprom.ir_calibration_2, ir_calibration, sizeof(ir_calibration));
 
     // Accel calibration:
     // Last byte is a checksum.
-    std::array<u8, 10> accel_calibration = {
+    u8 accel_calibration[10] = {
         ACCEL_ZERO_G, ACCEL_ZERO_G, ACCEL_ZERO_G, 0, ACCEL_ONE_G, ACCEL_ONE_G, ACCEL_ONE_G, 0, 0, 0,
     };
-    UpdateCalibrationDataChecksum(accel_calibration, 1);
-    m_eeprom.accel_calibration_1 = accel_calibration;
-    m_eeprom.accel_calibration_2 = accel_calibration;
+    UpdateCalibrationDataChecksum(accel_calibration, sizeof(accel_calibration), 1);
+    memcpy(m_eeprom.accel_calibration_1, accel_calibration, sizeof(accel_calibration));
+    memcpy(m_eeprom.accel_calibration_2, accel_calibration, sizeof(accel_calibration));
 
     // TODO: Is this needed?
     // Data of unknown purpose:
-    constexpr std::array<u8, 24> EEPROM_DATA_16D0 = {
-        0x00, 0x00, 0x00, 0xFF, 0x11, 0xEE, 0x00, 0x00, 0x33, 0xCC, 0x44, 0xBB,
-        0x00, 0x00, 0x66, 0x99, 0x77, 0x88, 0x00, 0x00, 0x2B, 0x01, 0xE8, 0x13};
-    m_eeprom.unk_2 = EEPROM_DATA_16D0;
+    static const u8 EEPROM_DATA_16D0[24] = {0x00, 0x00, 0x00, 0xFF, 0x11, 0xEE, 0x00, 0x00,
+                                            0x33, 0xCC, 0x44, 0xBB, 0x00, 0x00, 0x66, 0x99,
+                                            0x77, 0x88, 0x00, 0x00, 0x2B, 0x01, 0xE8, 0x13};
+    memcpy(m_eeprom.unk_2, EEPROM_DATA_16D0, sizeof(EEPROM_DATA_16D0));
 
     std::string mii_file = File::GetUserPath(D_SESSION_WIIROOT_IDX) + "/mii.bin";
     if (File::Exists(mii_file))
     {
       // Import from the existing mii.bin file, if present
-      File::IOFile(mii_file, "rb").ReadBytes(m_eeprom.mii_data_1.data(),
-                                             m_eeprom.mii_data_1.size());
-      m_eeprom.mii_data_2 = m_eeprom.mii_data_1;
+      File::IOFile(mii_file, "rb").ReadBytes(m_eeprom.mii_data_1, sizeof(m_eeprom.mii_data_1));
+      memcpy(m_eeprom.mii_data_2, m_eeprom.mii_data_1, sizeof(m_eeprom.mii_data_1));
     }
   }
 

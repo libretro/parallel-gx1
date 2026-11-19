@@ -204,7 +204,7 @@ void Drums::Reset()
   m_reg.identifier = drums_id;
 
   // Both 16-byte blocks of calibration data seem to be 0xff filled.
-  m_reg.calibration.fill(0xff);
+  memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));
 
   m_prev_pad_input = 0;
   m_new_pad_hits = 0;

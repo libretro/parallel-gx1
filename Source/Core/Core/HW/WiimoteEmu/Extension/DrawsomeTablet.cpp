@@ -95,7 +95,7 @@ void DrawsomeTablet::Reset()
   m_reg.identifier = drawsome_tablet_id;
 
   // Assuming calibration data is 0xff filled.
-  m_reg.calibration.fill(0xff);
+  memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));
 }
 
 ControllerEmu::ControlGroup* DrawsomeTablet::GetGroup(DrawsomeTabletGroup group)

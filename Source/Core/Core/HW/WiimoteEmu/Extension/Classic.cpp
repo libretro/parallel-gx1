@@ -142,7 +142,7 @@ void Classic::Reset()
 
   // Build calibration data:
   // All values are to 8 bits of precision.
-  m_reg.calibration = {{
+  const u8 calibration[sizeof(m_reg.calibration)] = {
       // Left Stick X max,min,center:
       CAL_STICK_CENTER + STICK_GATE_RADIUS,
       CAL_STICK_CENTER - STICK_GATE_RADIUS,
@@ -165,9 +165,11 @@ void Classic::Reset()
       // 2 checksum bytes calculated below:
       0x00,
       0x00,
-  }};
+  };
 
-  UpdateCalibrationDataChecksum(m_reg.calibration, CALIBRATION_CHECKSUM_BYTES);
+  memcpy(m_reg.calibration, calibration, sizeof(calibration));
+  UpdateCalibrationDataChecksum(m_reg.calibration, sizeof(m_reg.calibration),
+                                CALIBRATION_CHECKSUM_BYTES);
 }
 
 ControllerEmu::ControlGroup* Classic::GetGroup(ClassicGroup group)

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <numeric>
 #include <optional>
 #include <string>
 
@@ -73,23 +71,22 @@ enum class DrawsomeTabletGroup;
 enum class TaTaConGroup;
 enum class ShinkansenGroup;
 
-template <typename T>
-void UpdateCalibrationDataChecksum(T& data, int cksum_bytes)
+// Checksum is a sum of the previous bytes plus a magic value (0x55).
+// Extension calibration data has a 2nd checksum byte which is
+// the magic value (0x55) added to the previous checksum byte.
+inline void UpdateCalibrationDataChecksum(u8* data, size_t size, int cksum_bytes)
 {
-  constexpr u8 CALIBRATION_MAGIC_NUMBER = 0x55;
+  const u8 CALIBRATION_MAGIC_NUMBER = 0x55;
+  const size_t cksum_start = size - cksum_bytes;
+  u8 checksum = CALIBRATION_MAGIC_NUMBER;
+  size_t i;
 
-  static_assert(std::is_same<decltype(data[0]), u8&>::value, "Only sane for containers of u8!");
+  for (i = 0; i < cksum_start; i++)
+    checksum += data[i];
 
-  auto cksum_start = std::end(data) - cksum_bytes;
-
-  // Checksum is a sum of the previous bytes plus a magic value (0x55).
-  // Extension calibration data has a 2nd checksum byte which is
-  // the magic value (0x55) added to the previous checksum byte.
-  u8 checksum = std::accumulate(std::begin(data), cksum_start, CALIBRATION_MAGIC_NUMBER);
-
-  for (auto& i = cksum_start; i != std::end(data); ++i)
+  for (; i < size; i++)
   {
-    *i = checksum;
+    data[i] = checksum;
     checksum += CALIBRATION_MAGIC_NUMBER;
   }
 }
@@ -250,28 +247,28 @@ private:
     struct
     {
       // addr: 0x0000
-      std::array<u8, 11> ir_calibration_1;
-      std::array<u8, 11> ir_calibration_2;
+      u8 ir_calibration_1[11];
+      u8 ir_calibration_2[11];
 
-      std::array<u8, 10> accel_calibration_1;
-      std::array<u8, 10> accel_calibration_2;
+      u8 accel_calibration_1[10];
+      u8 accel_calibration_2[10];
 
       // addr: 0x002A
-      std::array<u8, 0x0FA0> user_data;
+      u8 user_data[0x0FA0];
 
       // addr: 0x0FCA
-      std::array<u8, 0x02f0> mii_data_1;
-      std::array<u8, 0x02f0> mii_data_2;
+      u8 mii_data_1[0x02f0];
+      u8 mii_data_2[0x02f0];
 
       // addr: 0x15AA
-      std::array<u8, 0x0126> unk_1;
+      u8 unk_1[0x0126];
 
       // addr: 0x16D0
-      std::array<u8, 24> unk_2;
-      std::array<u8, 24> unk_3;
+      u8 unk_2[24];
+      u8 unk_3[24];
     };
 
-    std::array<u8, EEPROM_FREE_SIZE> data;
+    u8 data[EEPROM_FREE_SIZE];
   };
 
   static_assert(EEPROM_FREE_SIZE == sizeof(UsableEEPROMData));

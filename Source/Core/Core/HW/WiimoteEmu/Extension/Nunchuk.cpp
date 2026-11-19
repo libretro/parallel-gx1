@@ -111,7 +111,7 @@ void Nunchuk::Reset()
   m_tilt_state = {};
 
   // Build calibration data:
-  m_reg.calibration = {{
+  const u8 calibration[sizeof(m_reg.calibration)] = {
       // Accel Zero X,Y,Z:
       ACCEL_ZERO_G,
       ACCEL_ZERO_G,
@@ -135,9 +135,11 @@ void Nunchuk::Reset()
       // 2 checksum bytes calculated below:
       0x00,
       0x00,
-  }};
+  };
 
-  UpdateCalibrationDataChecksum(m_reg.calibration, CALIBRATION_CHECKSUM_BYTES);
+  memcpy(m_reg.calibration, calibration, sizeof(calibration));
+  UpdateCalibrationDataChecksum(m_reg.calibration, sizeof(m_reg.calibration),
+                                CALIBRATION_CHECKSUM_BYTES);
 }
 
 ControllerEmu::ControlGroup* Nunchuk::GetGroup(NunchukGroup group)

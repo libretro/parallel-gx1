@@ -116,7 +116,7 @@ void Shinkansen::Reset()
 
   m_reg = {};
   m_reg.identifier = shinkansen_id;
-  m_reg.calibration.fill(0xff);
+  memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));
 }
 
 ControllerEmu::ControlGroup* Shinkansen::GetGroup(ShinkansenGroup group)

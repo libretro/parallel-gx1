@@ -79,7 +79,7 @@ void TaTaCon::Reset()
   m_reg.identifier = tatacon_id;
 
   // Assuming calibration is 0xff filled like every other 3rd-party extension.
-  m_reg.calibration.fill(0xff);
+  memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));
 }
 
 ControllerEmu::ControlGroup* TaTaCon::GetGroup(TaTaConGroup group)

@@ -289,7 +289,7 @@ void Wiimote::HandleWriteData(const OutputReportWriteData& wd)
     }
     else
     {
-      memcpy(m_eeprom.data.data() + address, wd.data, wd.size);
+      memcpy(m_eeprom.data + address, wd.data, wd.size);
       m_eeprom_dirty = true;
     }
   }
@@ -476,7 +476,7 @@ bool Wiimote::ProcessReadDataRequest()
     else
     {
       // Read memory to be sent to Wii
-      memcpy(reply.data, m_eeprom.data.data() + m_read_request.address, bytes_to_read);
+      memcpy(reply.data, m_eeprom.data + m_read_request.address, bytes_to_read);
       reply.size_minus_one = bytes_to_read - 1;
     }
   }

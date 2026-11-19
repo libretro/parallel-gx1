@@ -76,7 +76,7 @@ public:
     u8 unknown2[11];
 
     // address 0x20
-    std::array<u8, 0x10> calibration;
+    u8 calibration[0x10];
     u8 unknown3[0x10];
 
     // address 0x40

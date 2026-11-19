@@ -122,7 +122,7 @@ void UDrawTablet::Reset()
   m_reg.identifier = udraw_tablet_id;
 
   // Both 0x20 and 0x30 calibration sections are just filled with 0xff on the real tablet:
-  m_reg.calibration.fill(0xff);
+  memset(m_reg.calibration, 0xff, sizeof(m_reg.calibration));
 }
 
 ControllerEmu::ControlGroup* UDrawTablet::GetGroup(UDrawTabletGroup group)
