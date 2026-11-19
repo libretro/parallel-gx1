@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <algorithm>
 #include <cstring>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -23,16 +21,15 @@ protected:
   virtual int BusRead(u8 slave_addr, u8 addr, int count, u8* data_out) = 0;
   virtual int BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in) = 0;
 
-  template <typename T>
-  static int RawRead(T* reg_data, u8 addr, int count, u8* data_out)
-  {
-    static_assert(std::is_standard_layout_v<T> && std::is_trivially_copyable_v<T>);
-    static_assert(0x100 == sizeof(T));
+  // Every slave's register block is 0x100 bytes.
+  static constexpr int REGISTER_SIZE = 0x100;
 
+  static int RawRead(void* reg_data, u8 addr, int count, u8* data_out)
+  {
     // TODO: addr wraps around after 0xff
 
-    u8* src = reinterpret_cast<u8*>(reg_data) + addr;
-    const int available = int(reinterpret_cast<u8*>(reg_data + 1) - src);
+    const u8* src = static_cast<const u8*>(reg_data) + addr;
+    const int available = REGISTER_SIZE - addr;
     if (count > available)
       count = available;
 
@@ -41,16 +38,12 @@ protected:
     return count;
   }
 
-  template <typename T>
-  static int RawWrite(T* reg_data, u8 addr, int count, const u8* data_in)
+  static int RawWrite(void* reg_data, u8 addr, int count, const u8* data_in)
   {
-    static_assert(std::is_standard_layout_v<T> && std::is_trivially_copyable_v<T>);
-    static_assert(0x100 == sizeof(T));
-
     // TODO: addr wraps around after 0xff
 
-    u8* dst = reinterpret_cast<u8*>(reg_data) + addr;
-    const int available = int(reinterpret_cast<u8*>(reg_data + 1) - dst);
+    u8* dst = static_cast<u8*>(reg_data) + addr;
+    const int available = REGISTER_SIZE - addr;
     if (count > available)
       count = available;
 
@@ -73,8 +66,12 @@ public:
   int BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in);
 
 private:
+  // The Wii Remote's bus holds the speaker, the camera and the extension.
+  static constexpr int MAX_SLAVES = 4;
+
   // Pointers are unowned:
-  std::vector<I2CSlave*> m_slaves;
+  I2CSlave* m_slaves[MAX_SLAVES] = {};
+  int m_slave_count = 0;
 };
 
 }  // namespace WiimoteEmu

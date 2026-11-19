@@ -7,24 +7,31 @@ namespace WiimoteEmu
 {
 void I2CBus::AddSlave(I2CSlave* slave)
 {
-  m_slaves.emplace_back(slave);
+  if (m_slave_count < MAX_SLAVES)
+    m_slaves[m_slave_count++] = slave;
 }
 
 void I2CBus::RemoveSlave(I2CSlave* slave)
 {
-  std::erase(m_slaves, slave);
+  int kept = 0;
+  for (int i = 0; i < m_slave_count; i++)
+  {
+    if (m_slaves[i] != slave)
+      m_slaves[kept++] = m_slaves[i];
+  }
+  m_slave_count = kept;
 }
 
 void I2CBus::Reset()
 {
-  m_slaves.clear();
+  m_slave_count = 0;
 }
 
 int I2CBus::BusRead(u8 slave_addr, u8 addr, int count, u8* data_out)
 {
-  for (auto& slave : m_slaves)
+  for (int i = 0; i < m_slave_count; i++)
   {
-    auto const bytes_read = slave->BusRead(slave_addr, addr, count, data_out);
+    const int bytes_read = m_slaves[i]->BusRead(slave_addr, addr, count, data_out);
 
     // A slave responded, we are done.
     if (bytes_read)
@@ -36,9 +43,9 @@ int I2CBus::BusRead(u8 slave_addr, u8 addr, int count, u8* data_out)
 
 int I2CBus::BusWrite(u8 slave_addr, u8 addr, int count, const u8* data_in)
 {
-  for (auto& slave : m_slaves)
+  for (int i = 0; i < m_slave_count; i++)
   {
-    auto const bytes_written = slave->BusWrite(slave_addr, addr, count, data_in);
+    const int bytes_written = m_slaves[i]->BusWrite(slave_addr, addr, count, data_in);
 
     // A slave responded, we are done.
     if (bytes_written)
