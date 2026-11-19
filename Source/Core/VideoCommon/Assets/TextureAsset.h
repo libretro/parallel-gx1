@@ -5,6 +5,7 @@
 
 #include <memory>
 
+#include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
 
 #include "Common/CommonTypes.h"
@@ -52,7 +53,26 @@ public:
   // as an index
   std::size_t GetHandle() const { return m_handle; }
 
+  // The loader's report that a load finished, carried by the asset itself. Worker: records
+  // whether it loaded; true when the asset is to be pushed through LoadResultLink, false when
+  // it is still waiting to be taken. Taker: TakeLoadResult gives back the latest outcome.
+  bool PostLoadResult(bool loaded);
+  mpsc_stack_node_t* LoadResultLink() { return &m_load_result.link; }
+  static TextureAsset* FromLoadResultLink(mpsc_stack_node_t* node)
+  {
+    return reinterpret_cast<LoadResult*>(node)->asset;
+  }
+  bool TakeLoadResult();
+
 private:
+  struct LoadResult
+  {
+    mpsc_stack_node_t link;  // first: the drained chain is cast back
+    TextureAsset* asset;
+    retro_atomic_int_t queued;
+    retro_atomic_int_t loaded;
+  };
+
   struct Holder
   {
     quiesce_node_t node;  // first: the free callback casts it back
@@ -74,5 +94,7 @@ private:
   retro_atomic_64_t m_last_loaded_time{}; /* TimePoint ticks */
 
   mutable retro_atomic_ptr_t m_data{};
+
+  LoadResult m_load_result{};
 };
 }  // namespace VideoCommon

@@ -36,6 +36,8 @@ void CustomAssetCache::Initialize()
 
 CustomAssetCache::~CustomAssetCache()
 {
+  // no worker may hold an asset as it goes
+  m_asset_loader.Reset(false);
   FreeAssets();
 }
 
@@ -243,10 +245,25 @@ void CustomAssetCache::Update()
   m_asset_loader.ScheduleAssetsToLoad(m_schedule, count, allowed_memory);
 }
 
+void CustomAssetCache::OnAssetLoaded(void* context, TextureAsset* asset, bool loaded)
+{
+  CustomAssetCache* const cache = static_cast<CustomAssetCache*>(context);
+  const u32 handle = static_cast<u32>(asset->GetHandle());
+  cache->QueueRemove(PENDING, handle);
+
+  if (loaded)
+  {
+    cache->QueueInsert(ACTIVE, handle);
+    cache->m_assets[handle].listener->NotifyAssetLoadSuccess();
+  }
+  else
+  {
+    cache->m_assets[handle].listener->NotifyAssetLoadFailed();
+  }
+}
+
 void CustomAssetCache::ProcessLoadedAssets()
 {
-  const auto load_results = m_asset_loader.TakeLoadResults();
-
   // Update the ram with the change in memory from the loader
   //
   // Note: Assets with outstanding reload requests will have
@@ -255,23 +272,7 @@ void CustomAssetCache::ProcessLoadedAssets()
   // the new data loaded from the loader in the asset's shared_ptr)
   // This temporary duplication will not be reflected in the
   // resource manager's ram used
-  m_ram_used += load_results.change_in_memory;
-
-  for (const auto& [handle, load_successful] : load_results.asset_handles)
-  {
-    const u32 h = static_cast<u32>(handle);
-    QueueRemove(PENDING, h);
-
-    if (load_successful)
-    {
-      QueueInsert(ACTIVE, h);
-      m_assets[h].listener->NotifyAssetLoadSuccess();
-    }
-    else
-    {
-      m_assets[h].listener->NotifyAssetLoadFailed();
-    }
-  }
+  m_ram_used += m_asset_loader.TakeLoadResults(OnAssetLoaded, this);
 }
 
 void CustomAssetCache::RemoveAssetsUntilBelowMemoryLimit()

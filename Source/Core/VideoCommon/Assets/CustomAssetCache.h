@@ -86,6 +86,7 @@ private:
   void GrowIndex();
 
   void FreeAssets();
+  static void OnAssetLoaded(void* context, TextureAsset* asset, bool loaded);
   void ProcessLoadedAssets();
   void RemoveAssetsUntilBelowMemoryLimit();
 

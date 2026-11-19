@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
@@ -23,7 +21,7 @@ class CustomAssetLoader
 {
 public:
   CustomAssetLoader() { retro_eventcount_init(&m_worker_thread_wake); }
-  ~CustomAssetLoader() { retro_eventcount_free(&m_worker_thread_wake); }
+  ~CustomAssetLoader();
   CustomAssetLoader(const CustomAssetLoader&) = delete;
   CustomAssetLoader(CustomAssetLoader&&) = delete;
   CustomAssetLoader& operator=(const CustomAssetLoader&) = delete;
@@ -32,17 +30,10 @@ public:
   void Initialize();
   void Shutdown();
 
-  using AssetHandle = std::pair<std::size_t, bool>;
-  struct LoadResults
-
-  {
-    std::vector<AssetHandle> asset_handles;
-    s64 change_in_memory;
-  };
-
-  // Returns a vector of loaded asset handle / loaded result pairs
-  //  and the change in memory.
-  LoadResults TakeLoadResults();
+  // Calls on_loaded for each asset a worker finished loading since the last call, with
+  // whether it loaded, and returns the change in memory the loads and unloads made.
+  s64 TakeLoadResults(void (*on_loaded)(void* context, TextureAsset* asset, bool loaded),
+                      void* context);
 
   // Schedule assets to load on the worker threads
   //  and set how much memory is available for loading these additional assets.
@@ -51,6 +42,11 @@ public:
   void Reset(bool restart_worker_threads = true);
 
 private:
+  enum
+  {
+    MAX_WORKER_THREADS = 8
+  };
+
   bool StartWorkerThreads(u32 num_worker_threads);
   bool ResizeWorkerThreads(u32 num_worker_threads);
   bool HasWorkerThreads() const;
@@ -67,30 +63,31 @@ private:
 
   Common::Flag m_exit_flag;
 
-  std::vector<WorkerThread> m_worker_threads;
+  WorkerThread m_worker_threads[MAX_WORKER_THREADS] = {};
+  u32 m_num_worker_threads = 0;
 
   // One ScheduleAssetsToLoad's assets, published whole. Workers claim the next one with an
-  // atomic add on the cursor; a newer batch replaces it, and it is freed once no worker is
-  // still looking at it.
+  // atomic add on the cursor; a newer batch replaces it, and it goes back to the spares once
+  // no worker is still looking at it, its array kept for the next schedule.
   struct Batch
   {
     quiesce_node_t node;  // first: the free callback casts it back
-    std::vector<TextureAsset*> assets;
+    CustomAssetLoader* owner;
+    TextureAsset** assets;
+    u32 count;
+    u32 capacity;
     s64 allowed_memory;
     retro_atomic_size_t cursor;
   };
-  static void FreeBatch(quiesce_node_t* node);
+  static void RetireBatch(quiesce_node_t* node);
   quiesce_t m_batch_quiesce{};
   retro_atomic_ptr_t m_batch{};
+  // Retired batches, pushed by whichever thread retires them; taken by the scheduling thread.
+  mpsc_stack_t m_spare_batches{};
   // Notified after a batch is published or the exit flag is set.
   retro_eventcount_t m_worker_thread_wake;
 
-  // Results for TakeLoadResults, pushed by the workers.
-  struct Loaded
-  {
-    mpsc_stack_node_t link;  // first: the drained chain is cast back
-    AssetHandle handle;
-  };
+  // Assets whose load finished, for TakeLoadResults, linked through the assets.
   mpsc_stack_t m_loaded{};
 
   // Change in memory from just-loaded/unloaded asset results yet to be taken by the Manager.

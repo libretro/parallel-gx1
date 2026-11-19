@@ -21,6 +21,20 @@ TextureAsset::TextureAsset(std::shared_ptr<DirectFilesystemAssetLibrary> library
                            CustomAssetLibrary::AssetID asset_id, u64 asset_handle)
     : m_owning_library(std::move(library)), m_asset_id(std::move(asset_id)), m_handle(asset_handle)
 {
+  m_load_result.asset = this;
+}
+
+bool TextureAsset::PostLoadResult(bool loaded)
+{
+  retro_atomic_store_release_int(&m_load_result.loaded, loaded ? 1 : 0);
+  return !retro_atomic_exchange_int(&m_load_result.queued, 1);
+}
+
+bool TextureAsset::TakeLoadResult()
+{
+  // cleared first: a load that ends after this is posted again
+  retro_atomic_exchange_int(&m_load_result.queued, 0);
+  return retro_atomic_load_acquire_int(&m_load_result.loaded) != 0;
 }
 
 TextureAsset::~TextureAsset()

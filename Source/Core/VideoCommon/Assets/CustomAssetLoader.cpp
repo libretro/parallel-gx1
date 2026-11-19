@@ -4,6 +4,8 @@
 #include "VideoCommon/Assets/CustomAssetLoader.h"
 
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "Common/Logging/Log.h"
 #include "Common/Thread.h"
@@ -12,6 +14,19 @@
 
 namespace VideoCommon
 {
+CustomAssetLoader::~CustomAssetLoader()
+{
+  Reset(false);
+  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_spare_batches); node;)
+  {
+    Batch* const batch = reinterpret_cast<Batch*>(node);
+    node = node->next;
+    free(batch->assets);
+    delete batch;
+  }
+  retro_eventcount_free(&m_worker_thread_wake);
+}
+
 void CustomAssetLoader::Initialize()
 {
   ResizeWorkerThreads(2);
@@ -24,17 +39,16 @@ void CustomAssetLoader::Shutdown()
 
 bool CustomAssetLoader::StartWorkerThreads(u32 num_worker_threads)
 {
-  // Each thread is handed its slot, so the vector must not move once threads are running.
-  m_worker_threads.reserve(num_worker_threads);
+  if (num_worker_threads > MAX_WORKER_THREADS)
+    num_worker_threads = MAX_WORKER_THREADS;
   for (u32 i = 0; i < num_worker_threads; i++)
   {
-    WorkerThread& worker = m_worker_threads.emplace_back(WorkerThread{this, i, nullptr});
+    WorkerThread& worker = m_worker_threads[m_num_worker_threads];
+    worker = WorkerThread{this, i, nullptr};
     worker.thread = sthread_create(WorkerThreadEntry, &worker);
     if (!worker.thread)
-    {
-      m_worker_threads.pop_back();
       break;
-    }
+    m_num_worker_threads++;
   }
 
   return HasWorkerThreads();
@@ -42,7 +56,7 @@ bool CustomAssetLoader::StartWorkerThreads(u32 num_worker_threads)
 
 bool CustomAssetLoader::ResizeWorkerThreads(u32 num_worker_threads)
 {
-  if (m_worker_threads.size() == num_worker_threads)
+  if (m_num_worker_threads == num_worker_threads)
     return true;
 
   StopWorkerThreads();
@@ -51,7 +65,7 @@ bool CustomAssetLoader::ResizeWorkerThreads(u32 num_worker_threads)
 
 bool CustomAssetLoader::HasWorkerThreads() const
 {
-  return !m_worker_threads.empty();
+  return m_num_worker_threads != 0;
 }
 
 void CustomAssetLoader::StopWorkerThreads()
@@ -64,9 +78,9 @@ void CustomAssetLoader::StopWorkerThreads()
   retro_eventcount_notify(&m_worker_thread_wake);
 
   // Wait for worker threads to exit.
-  for (WorkerThread& worker : m_worker_threads)
-    Common::JoinThread(worker.thread);
-  m_worker_threads.clear();
+  for (u32 i = 0; i < m_num_worker_threads; i++)
+    Common::JoinThread(m_worker_threads[i].thread);
+  m_num_worker_threads = 0;
   m_exit_flag.Clear();
 }
 
@@ -76,9 +90,10 @@ void CustomAssetLoader::WorkerThreadEntry(void* data)
   worker->owner->WorkerThreadRun(worker->index);
 }
 
-void CustomAssetLoader::FreeBatch(quiesce_node_t* node)
+void CustomAssetLoader::RetireBatch(quiesce_node_t* node)
 {
-  delete reinterpret_cast<Batch*>(node);
+  Batch* const batch = reinterpret_cast<Batch*>(node);
+  mpsc_stack_push(&batch->owner->m_spare_batches, &batch->node.link);
 }
 
 void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
@@ -100,10 +115,10 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
       // If more memory than allowed has already been loaded, we will load nothing more
       //  until the next ScheduleAssetsToLoad from Manager.
       if (retro_atomic_load_acquire_64(&m_change_in_memory) > batch->allowed_memory)
-        retro_atomic_store_release_size(&batch->cursor, batch->assets.size());
+        retro_atomic_store_release_size(&batch->cursor, batch->count);
 
       const size_t index = retro_atomic_fetch_add_size(&batch->cursor, 1);
-      if (index < batch->assets.size())
+      if (index < batch->count)
         item = batch->assets[index];
     }
     quiesce_exit(&m_batch_quiesce);
@@ -116,8 +131,8 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
       bool has_work = m_exit_flag.IsSet();
       quiesce_enter(&m_batch_quiesce);
       if (const auto* batch = static_cast<const Batch*>(retro_atomic_load_acquire_ptr(&m_batch)))
-        has_work |= retro_atomic_load_acquire_size(const_cast<retro_atomic_size_t*>(&batch->cursor)) <
-                    batch->assets.size();
+        has_work |= retro_atomic_load_acquire_size(
+                        const_cast<retro_atomic_size_t*>(&batch->cursor)) < batch->count;
       quiesce_exit(&m_batch_quiesce);
       if (has_work)
         retro_eventcount_cancel_wait(&m_worker_thread_wake);
@@ -136,23 +151,24 @@ void CustomAssetLoader::WorkerThreadRun(u32 thread_index)
     INFO_LOG(VIDEO, "CustomAssetLoader thread %u loaded: %s (%s)", thread_index,
              item->GetAssetId().c_str(), UICommon::FormatSize(bytes_loaded).c_str());
 
-    auto* loaded = new Loaded{{}, {item->GetHandle(), bytes_loaded > 0}};
-    mpsc_stack_push(&m_loaded, &loaded->link);
+    if (item->PostLoadResult(bytes_loaded > 0))
+      mpsc_stack_push(&m_loaded, item->LoadResultLink());
   }
 }
 
-auto CustomAssetLoader::TakeLoadResults() -> LoadResults
+s64 CustomAssetLoader::TakeLoadResults(void (*on_loaded)(void* context, TextureAsset* asset,
+                                                         bool loaded),
+                                       void* context)
 {
-  LoadResults results{{}, 0};
   for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(&m_loaded)); node;)
   {
-    auto* loaded = reinterpret_cast<Loaded*>(node);
+    TextureAsset* const asset = TextureAsset::FromLoadResultLink(node);
     node = node->next;
-    results.asset_handles.push_back(loaded->handle);
-    delete loaded;
+    const bool loaded = asset->TakeLoadResult();
+    if (on_loaded)
+      on_loaded(context, asset, loaded);
   }
-  results.change_in_memory = retro_atomic_exchange_64(&m_change_in_memory, 0);
-  return results;
+  return retro_atomic_exchange_64(&m_change_in_memory, 0);
 }
 
 void CustomAssetLoader::ScheduleAssetsToLoad(TextureAsset* const* assets, u32 count,
@@ -161,28 +177,60 @@ void CustomAssetLoader::ScheduleAssetsToLoad(TextureAsset* const* assets, u32 co
   if (!count) [[unlikely]]
     return;
 
-  // There's new assets to process, publish them and notify worker threads.
-  auto* batch = new Batch{{}, {assets, assets + count}, static_cast<s64>(allowed_memory), {}};
+  // A spare batch, its array grown when the assets outnumber it; a new one only at first.
+  Batch* batch = reinterpret_cast<Batch*>(mpsc_stack_drain(&m_spare_batches));
+  if (batch)
+  {
+    // the rest go back for later schedules
+    for (mpsc_stack_node_t* rest = batch->node.link.next; rest;)
+    {
+      mpsc_stack_node_t* const next = rest->next;
+      mpsc_stack_push(&m_spare_batches, rest);
+      rest = next;
+    }
+  }
+  else
+  {
+    batch = new Batch{{}, this, nullptr, 0, 0, 0, {}};
+  }
+  if (batch->capacity < count)
+  {
+    u32 capacity = batch->capacity ? batch->capacity : 64;
+    while (capacity < count)
+      capacity *= 2;
+    TextureAsset** const array =
+        static_cast<TextureAsset**>(realloc(batch->assets, capacity * sizeof(TextureAsset*)));
+    if (!array)
+      abort();
+    batch->assets = array;
+    batch->capacity = capacity;
+  }
+  memcpy(batch->assets, assets, count * sizeof(TextureAsset*));
+  batch->count = count;
+  batch->allowed_memory = static_cast<s64>(allowed_memory);
   retro_atomic_size_init(&batch->cursor, 0);
+
+  // There's new assets to process, publish them and notify worker threads.
   if (void* old = retro_atomic_exchange_ptr(&m_batch, batch))
-    quiesce_retire(&m_batch_quiesce, &static_cast<Batch*>(old)->node, FreeBatch);
+    quiesce_retire(&m_batch_quiesce, &static_cast<Batch*>(old)->node, RetireBatch);
   retro_eventcount_notify(&m_worker_thread_wake);
 }
 
 void CustomAssetLoader::Reset(bool restart_worker_threads)
 {
-  const std::size_t worker_thread_count = m_worker_threads.size();
+  const u32 worker_thread_count = m_num_worker_threads;
   StopWorkerThreads();
 
   // No worker runs now.
-  delete static_cast<Batch*>(retro_atomic_exchange_ptr(&m_batch, nullptr));
+  if (auto* batch = static_cast<Batch*>(retro_atomic_exchange_ptr(&m_batch, nullptr)))
+    mpsc_stack_push(&m_spare_batches, &batch->node.link);
   quiesce_deinit(&m_batch_quiesce);
-  TakeLoadResults();
+  TakeLoadResults(nullptr, nullptr);
   retro_atomic_store_release_64(&m_change_in_memory, 0);
 
   if (restart_worker_threads)
   {
-    StartWorkerThreads(static_cast<u32>(worker_thread_count));
+    StartWorkerThreads(worker_thread_count);
   }
 }
 
