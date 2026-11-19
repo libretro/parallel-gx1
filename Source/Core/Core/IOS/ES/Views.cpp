@@ -69,8 +69,7 @@ IPCReply ESDevice::GetTicketViewCount(const IOCtlVRequest& request)
     NOTICE_LOG(
         IOS_ES,
         "GetViewCount: the Wii Menu is not installed; asking the frontend to close the game");
-    if (Libretro::environ_cb)
-      Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, nullptr);
+    Libretro::RequestShutdown();
   }
 
   INFO_LOG(IOS_ES, "IOCTL_ES_GETVIEWCNT for titleID: %016" PRIx64 " (View Count = %u)",

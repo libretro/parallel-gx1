@@ -439,8 +439,7 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
     }
     // Only the disc is booted, so leaving it (HOME menu → Wii Menu) would hang on a black screen. Ask the
     // frontend to close the game instead, as a real Wii returns to its menu.
-    if (Libretro::environ_cb)
-      Libretro::environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, nullptr);
+    Libretro::RequestShutdown();
     return false;
   }
 
