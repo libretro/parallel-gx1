@@ -122,6 +122,13 @@ static unsigned TakeInitialDisk()
 static std::string GBPlayer_rom_path;
 static bool GBPlayer_active;
 
+// The next load is an ordinary one unless the subsystem asks again.
+static void ResetGBPlayer()
+{
+  GBPlayer_active = false;
+  GBPlayer_rom_path.clear();
+}
+
 // silence forward declaration warnings
 void reload_cheats_from_ini();
 
@@ -357,6 +364,7 @@ static void UndoFailedLoad(bool input_up)
   UICommon::ShutdownControllers();
   UICommon::Shutdown();
   Libretro::ResetDiskControlState();
+  Libretro::ResetGBPlayer();
 }
 
 bool retro_load_game(const struct retro_game_info* game)
@@ -454,10 +462,15 @@ bool retro_load_game(const struct retro_game_info* game)
     // In order to prevent confusion for the settings of the save location between RA and the
     // emulator we just turn this off
     Config::SetBase(Config::MAIN_GBA_SAVES_IN_ROM_PATH, false);
+    // the Game Boy Player sits on the expansion port under the console
+    Config::SetBase(Config::MAIN_HSP_DEVICE, HSP::HSPDeviceType::GBPlayer);
   }
   else
   {
     Config::SetBase(Config::MAIN_GBA_ROM_PATHS[Config::GBPLAYER_GBA_INDEX], std::string{});
+    // nor does it stay there for the next game
+    if (Config::Get(Config::MAIN_HSP_DEVICE) == HSP::HSPDeviceType::GBPlayer)
+      Config::SetBase(Config::MAIN_HSP_DEVICE, HSP::HSPDeviceType::None);
   }
 
   Common::SetEnableAlert(false);
@@ -1028,6 +1041,7 @@ void retro_unload_game(void)
   /* the game's cheat codes go with it */
   ActionReplay::FreeCodeList(&Libretro::g_ar_codes);
   Gecko::FreeCodeList(&Libretro::g_gecko_codes);
+  Libretro::ResetGBPlayer();
 }
 
 namespace Libretro
