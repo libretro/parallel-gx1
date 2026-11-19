@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <variant>
-
-#include "Common/BitUtils.h"
+#include <cstring>
 
 #include "Core/HW/WiimoteEmu/Extension/Classic.h"
 #include "Core/HW/WiimoteEmu/Extension/DrawsomeTablet.h"
@@ -21,53 +19,34 @@
 
 namespace WiimoteEmu
 {
+// The extension input of one update. "type" names the active member of "data",
+// in ExtensionNumber order for DTM file index consistency.
 struct DesiredExtensionState
 {
-private:
-  template <ExtensionNumber N, typename T>
-  struct ExtNumTypePair
+  ExtensionNumber type = ExtensionNumber::NONE;
+  union
   {
-    static constexpr ExtensionNumber ext_num = N;
-    using ext_type = T;
-  };
-
-  template <typename... Ts>
-  struct ExtDataImpl
-  {
-    using type = std::variant<std::monostate, typename Ts::ext_type::DesiredState...>;
-
-    static_assert((std::is_same_v<std::variant_alternative_t<Ts::ext_num, type>,
-                                  typename Ts::ext_type::DesiredState> &&
-                   ...),
-                  "Please use ExtensionNumber enum order for DTM file index consistency.");
-  };
-
-public:
-  using ExtensionData =
-      ExtDataImpl<ExtNumTypePair<ExtensionNumber::NUNCHUK, Nunchuk>,
-                  ExtNumTypePair<ExtensionNumber::CLASSIC, Classic>,
-                  ExtNumTypePair<ExtensionNumber::GUITAR, Guitar>,
-                  ExtNumTypePair<ExtensionNumber::DRUMS, Drums>,
-                  ExtNumTypePair<ExtensionNumber::TURNTABLE, Turntable>,
-                  ExtNumTypePair<ExtensionNumber::UDRAW_TABLET, UDrawTablet>,
-                  ExtNumTypePair<ExtensionNumber::DRAWSOME_TABLET, DrawsomeTablet>,
-                  ExtNumTypePair<ExtensionNumber::TATACON, TaTaCon>,
-                  ExtNumTypePair<ExtensionNumber::SHINKANSEN, Shinkansen>>::type;
-
-  ExtensionData data = std::monostate{};
+    u8 none;
+    Nunchuk::DesiredState nunchuk;
+    Classic::DesiredState classic;
+    Guitar::DesiredState guitar;
+    Drums::DesiredState drums;
+    Turntable::DesiredState turntable;
+    UDrawTablet::DesiredState udraw_tablet;
+    DrawsomeTablet::DesiredState drawsome_tablet;
+    TaTaCon::DesiredState tatacon;
+    Shinkansen::DesiredState shinkansen;
+  } data = {};
 };
 
-template <typename T>
-void DefaultExtensionUpdate(EncryptedExtension::Register* reg,
-                            const DesiredExtensionState& target_state)
+// Copies "size" bytes of desired input into the controller data,
+// or zeroes them when the desired state is for another extension.
+inline void DefaultExtensionUpdate(EncryptedExtension::Register* reg, const void* desired,
+                                   size_t size)
 {
-  if (std::holds_alternative<T>(target_state.data))
-  {
-    Common::BitCastPtr<T>(&reg->controller_data) = std::get<T>(target_state.data);
-  }
+  if (desired)
+    memcpy(&reg->controller_data, desired, size);
   else
-  {
-    Common::BitCastPtr<T>(&reg->controller_data) = T{};
-  }
+    memset(&reg->controller_data, 0, size);
 }
 }  // namespace WiimoteEmu

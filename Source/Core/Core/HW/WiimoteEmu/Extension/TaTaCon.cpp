@@ -56,14 +56,15 @@ void TaTaCon::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   m_center->GetState(&tatacon_data.state, center_bitmasks.data());
   m_rim->GetState(&tatacon_data.state, rim_bitmasks.data());
 
-  target_state->data = tatacon_data;
+  target_state->type = ExtensionNumber::TATACON;
+  target_state->data.tatacon = tatacon_data;
 }
 
 void TaTaCon::Update(const DesiredExtensionState& target_state)
 {
   DesiredState desired_state{};
-  if (std::holds_alternative<DesiredState>(target_state.data))
-    desired_state = std::get<DesiredState>(target_state.data);
+  if (target_state.type == ExtensionNumber::TATACON)
+    desired_state = target_state.data.tatacon;
 
   // Flip button bits.
   desired_state.state ^= 0xff;

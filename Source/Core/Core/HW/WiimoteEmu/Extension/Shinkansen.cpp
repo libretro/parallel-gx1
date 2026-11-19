@@ -59,7 +59,9 @@ void Shinkansen::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 {
   using ControllerEmu::MapFloat;
 
-  DesiredState& state = target_state->data.emplace<DesiredState>();
+  target_state->type = ExtensionNumber::SHINKANSEN;
+  DesiredState& state = target_state->data.shinkansen;
+  state = DesiredState{};
 
   const auto analog = m_levers->GetState().data;
   // The game requires these specific values, all other values are treated like 0/255 (which are
@@ -89,9 +91,9 @@ void Shinkansen::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 void Shinkansen::Update(const DesiredExtensionState& target_state)
 {
   DesiredState desired_state;
-  if (std::holds_alternative<DesiredState>(target_state.data))
+  if (target_state.type == ExtensionNumber::SHINKANSEN)
   {
-    desired_state = std::get<DesiredState>(target_state.data);
+    desired_state = target_state.data.shinkansen;
   }
   else
   {

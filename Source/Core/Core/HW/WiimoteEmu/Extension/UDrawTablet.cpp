@@ -107,12 +107,17 @@ void UDrawTablet::BuildDesiredExtensionState(DesiredExtensionState* target_state
   // Always 0xff
   tablet_data.unk = 0xff;
 
-  target_state->data = tablet_data;
+  target_state->type = ExtensionNumber::UDRAW_TABLET;
+  target_state->data.udraw_tablet = tablet_data;
 }
 
 void UDrawTablet::Update(const DesiredExtensionState& target_state)
 {
-  DefaultExtensionUpdate<DataFormat>(&m_reg, target_state);
+  DefaultExtensionUpdate(&m_reg,
+                         target_state.type == ExtensionNumber::UDRAW_TABLET ?
+                             &target_state.data.udraw_tablet :
+                             nullptr,
+                         sizeof(DataFormat));
 }
 
 void UDrawTablet::Reset()

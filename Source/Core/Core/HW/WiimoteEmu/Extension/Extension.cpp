@@ -41,7 +41,7 @@ bool None::ReadDeviceDetectPin() const
 
 void None::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 {
-  target_state->data.emplace<std::monostate>();
+  target_state->type = ExtensionNumber::NONE;
 }
 
 void None::Update(const DesiredExtensionState& target_state)

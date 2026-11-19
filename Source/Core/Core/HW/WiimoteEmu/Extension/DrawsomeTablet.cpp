@@ -37,7 +37,9 @@ void DrawsomeTablet::BuildDesiredExtensionState(DesiredExtensionState* target_st
 {
   using ControllerEmu::MapFloat;
 
-  DataFormat& tablet_data = target_state->data.emplace<DataFormat>();
+  target_state->type = ExtensionNumber::DRAWSOME_TABLET;
+  DataFormat& tablet_data = target_state->data.drawsome_tablet;
+  memset(static_cast<void*>(&tablet_data), 0, sizeof(tablet_data));
 
   // Stylus X/Y (calibrated values):
   constexpr u16 MIN_X = 0x0000;
@@ -85,7 +87,11 @@ void DrawsomeTablet::BuildDesiredExtensionState(DesiredExtensionState* target_st
 
 void DrawsomeTablet::Update(const DesiredExtensionState& target_state)
 {
-  DefaultExtensionUpdate<DataFormat>(&m_reg, target_state);
+  DefaultExtensionUpdate(&m_reg,
+                         target_state.type == ExtensionNumber::DRAWSOME_TABLET ?
+                             &target_state.data.drawsome_tablet :
+                             nullptr,
+                         sizeof(DataFormat));
 }
 
 void DrawsomeTablet::Reset()

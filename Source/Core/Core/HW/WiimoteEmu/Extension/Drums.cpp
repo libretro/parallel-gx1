@@ -81,7 +81,9 @@ void Drums::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 {
   using ControllerEmu::MapFloat;
 
-  DesiredState& state = target_state->data.emplace<DesiredState>();
+  target_state->type = ExtensionNumber::DRUMS;
+  DesiredState& state = target_state->data.drums;
+  state = DesiredState{};
 
   {
     const ControllerEmu::AnalogStick::StateData stick_state = m_stick->GetState();
@@ -104,9 +106,9 @@ void Drums::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 void Drums::Update(const DesiredExtensionState& target_state)
 {
   DesiredState desired_state;
-  if (std::holds_alternative<DesiredState>(target_state.data))
+  if (target_state.type == ExtensionNumber::DRUMS)
   {
-    desired_state = std::get<DesiredState>(target_state.data);
+    desired_state = target_state.data.drums;
   }
   else
   {

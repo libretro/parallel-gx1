@@ -137,12 +137,15 @@ void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   // flip button bits
   guitar_data.bt ^= 0xFFFF;
 
-  target_state->data = guitar_data;
+  target_state->type = ExtensionNumber::GUITAR;
+  target_state->data.guitar = guitar_data;
 }
 
 void Guitar::Update(const DesiredExtensionState& target_state)
 {
-  DefaultExtensionUpdate<DataFormat>(&m_reg, target_state);
+  DefaultExtensionUpdate(
+      &m_reg, target_state.type == ExtensionNumber::GUITAR ? &target_state.data.guitar : nullptr,
+      sizeof(DataFormat));
 }
 
 void Guitar::Reset()

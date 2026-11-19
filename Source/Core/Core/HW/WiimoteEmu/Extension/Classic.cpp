@@ -126,12 +126,15 @@ void Classic::BuildDesiredExtensionState(DesiredExtensionState* target_state)
 
   classic_data.SetButtons(buttons);
 
-  target_state->data = classic_data;
+  target_state->type = ExtensionNumber::CLASSIC;
+  target_state->data.classic = classic_data;
 }
 
 void Classic::Update(const DesiredExtensionState& target_state)
 {
-  DefaultExtensionUpdate<DataFormat>(&m_reg, target_state);
+  DefaultExtensionUpdate(
+      &m_reg, target_state.type == ExtensionNumber::CLASSIC ? &target_state.data.classic : nullptr,
+      sizeof(DataFormat));
 }
 
 void Classic::Reset()

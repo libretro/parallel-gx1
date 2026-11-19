@@ -535,8 +535,7 @@ void Wiimote::Update(const WiimoteEmu::DesiredWiimoteState& target_state)
   UpdateButtonsStatus(target_state);
 
   // If a new extension is requested in the GUI the change will happen here.
-  HandleExtensionSwap(static_cast<ExtensionNumber>(target_state.extension.data.index()),
-                      target_state.has_motion_plus);
+  HandleExtensionSwap(target_state.extension.type, target_state.has_motion_plus);
 
   // Prepare input data of the extension for reading.
   GetActiveExtension()->Update(target_state.extension);

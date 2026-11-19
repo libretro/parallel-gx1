@@ -93,12 +93,15 @@ void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   const auto acc = ConvertAccelData(accel, ACCEL_ZERO_G << 2, ACCEL_ONE_G << 2);
   nc_data.SetAccel(acc.value);
 
-  target_state->data = nc_data;
+  target_state->type = ExtensionNumber::NUNCHUK;
+  target_state->data.nunchuk = nc_data;
 }
 
 void Nunchuk::Update(const DesiredExtensionState& target_state)
 {
-  DefaultExtensionUpdate<DataFormat>(&m_reg, target_state);
+  DefaultExtensionUpdate(
+      &m_reg, target_state.type == ExtensionNumber::NUNCHUK ? &target_state.data.nunchuk : nullptr,
+      sizeof(DataFormat));
 }
 
 void Nunchuk::Reset()

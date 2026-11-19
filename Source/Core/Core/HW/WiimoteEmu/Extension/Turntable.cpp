@@ -134,12 +134,16 @@ void Turntable::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   tt_data.bt ^= (BUTTON_L_GREEN | BUTTON_L_RED | BUTTON_L_BLUE | BUTTON_R_GREEN | BUTTON_R_RED |
                  BUTTON_R_BLUE | BUTTON_MINUS | BUTTON_PLUS | BUTTON_EUPHORIA);
 
-  target_state->data = tt_data;
+  target_state->type = ExtensionNumber::TURNTABLE;
+  target_state->data.turntable = tt_data;
 }
 
 void Turntable::Update(const DesiredExtensionState& target_state)
 {
-  DefaultExtensionUpdate<DataFormat>(&m_reg, target_state);
+  DefaultExtensionUpdate(
+      &m_reg,
+      target_state.type == ExtensionNumber::TURNTABLE ? &target_state.data.turntable : nullptr,
+      sizeof(DataFormat));
 }
 
 void Turntable::Reset()
