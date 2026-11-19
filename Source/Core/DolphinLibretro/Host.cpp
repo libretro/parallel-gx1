@@ -3,12 +3,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
-#ifdef __ANDROID__
-#include "InputCommon/GCAdapter.h"
-#include "InputCommon/GCPadStatus.h"
-// TODO: removed
-//#include "InputCommon/ControllerInterface/Touch/ButtonManager.h"
-#endif
 
 #include "Common/Logging/Log.h"
 #include "Core/ConfigManager.h"
@@ -49,80 +43,3 @@ bool Host_UIBlocksControllerState()
 {
   return false;
 }
-
-#ifdef __ANDROID__
-
-namespace GCAdapter
-{
-void SetAdapterCallback(std::function<void(void)> func)
-{
-}
-
-void Init()
-{
-}
-
-void StartScanThread()
-{
-}
-
-void StopScanThread()
-{
-}
-
-void Shutdown()
-{
-}
-
-GCPadStatus Input(int chan)
-{
-  return {};
-}
-
-bool DeviceConnected(int chan)
-{
-  return false;
-}
-
-bool UseAdapter()
-{
-  return false;
-}
-
-void ResetRumble()
-{
-}
-
-void Output(int chan, u8 rumble_command)
-{
-}
-
-bool IsDetected(const char** error_message)
-{
-  return false;
-}
-
-bool IsDriverDetected()
-{
-  return false;
-}
-
-void ResetDeviceType(int chan)
-{
-}
-}  // namespace GCAdapter
-
-// TODO: refactor or remove?
-/*namespace ButtonManager
-{
-bool GetButtonPressed(int padID, ButtonType button)
-{
-  return false;
-}
-float GetAxisValue(int padID, ButtonType axis)
-{
-  return 0;
-}
-}  // namespace ButtonManager
-*/
-#endif

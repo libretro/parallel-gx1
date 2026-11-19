@@ -18,10 +18,6 @@ void Shutdown()
 {
 }
 
-void SetAdapterCallback(std::function<void(void)> func)
-{
-}
-
 GCPadStatus Input(int chan)
 {
   return {};
@@ -42,11 +38,6 @@ void ResetRumble()
 
 void Output(int chan, u8 rumble_command)
 {
-}
-
-bool IsDetected(const char** error_message)
-{
-  return false;
 }
 
 }  // namespace GCAdapter

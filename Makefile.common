@@ -1052,12 +1052,6 @@ ifeq ($(OS_IOS),1)
 	$(CORE_DIR)/Source/Core/Common/JITMemoryTracker.cpp
 endif
 
-# On Android the libretro frontend provides the GC adapter interface
-# (DolphinLibretro/Host.cpp).
-ifeq ($(OS_ANDROID),1)
-   DOLPHIN_SOURCES_CXX := $(filter-out $(SRC_DIR)/InputCommon/GCAdapter.cpp,$(DOLPHIN_SOURCES_CXX))
-endif
-
 # ----------------------------------------------------------------------------
 # Per-library flags
 # ----------------------------------------------------------------------------
