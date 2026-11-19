@@ -121,27 +121,6 @@ WriteHandlingMethod<T> WriteToSmaller(Mapping* mmio, u32 high_part_addr, u32 low
 template <typename T>
 ReadHandlingMethod<T> ReadToLarger(Mapping* mmio, u32 larger_addr, u32 shift);
 
-// Use these visitors interfaces if you need to write code that performs
-// different actions based on the handling method used by a handler. Write your
-// visitor implementing that interface, then use handler->VisitHandlingMethod
-// to run the proper function.
-template <typename T>
-class ReadHandlingMethodVisitor
-{
-public:
-  virtual void VisitConstant(T value) = 0;
-  virtual void VisitDirect(const T* addr, u32 mask) = 0;
-  virtual void VisitComplex(ReadFn<T> fn, uintptr_t ctx) = 0;
-};
-template <typename T>
-class WriteHandlingMethodVisitor
-{
-public:
-  virtual void VisitNop() = 0;
-  virtual void VisitDirect(T* addr, u32 mask) = 0;
-  virtual void VisitComplex(WriteFn<T> fn, uintptr_t ctx) = 0;
-};
-
 // These classes are INTERNAL. Do not use outside of the MMIO implementation
 // code. Unfortunately, because we want to make Read() and Write() fast and
 // inlinable, we need to provide some of the implementation of these two
@@ -154,8 +133,9 @@ struct ReadHandler
 {
   ReadHandlingMethod<T> m;
 
-  // Entry point for read handling method visitors.
-  void Visit(ReadHandlingMethodVisitor<T>& visitor);
+  // The method, for code that does what it does (the JITs): constant, direct or complex, an
+  // invalid one made first if none was registered
+  const ReadHandlingMethod<T>& Method();
 
   T Read(Core::System& system, u32 addr)
   {
@@ -178,8 +158,9 @@ struct WriteHandler
 {
   WriteHandlingMethod<T> m;
 
-  // Entry point for write handling method visitors.
-  void Visit(WriteHandlingMethodVisitor<T>& visitor);
+  // The method, for code that does what it does (the JITs): nop, direct or complex, an invalid
+  // one made first if none was registered
+  const WriteHandlingMethod<T>& Method();
 
   void Write(Core::System& system, u32 addr, T val)
   {

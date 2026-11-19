@@ -210,87 +210,59 @@ bool EmuCodeBlock::UnsafeLoadToReg(X64Reg reg_value, OpArg opAddress, int access
   return offsetAddedToAddress;
 }
 
-// Visitor that generates code to read a MMIO value.
+// The load from a MMIO register into dst_reg, extended to 32 bits: a constant, a load from the
+// register's backing memory, or a call to its read function.
 template <typename T>
-class MMIOReadCodeGenerator : public MMIO::ReadHandlingMethodVisitor<T>
+static void MMIOLoad(Core::System* system, Gen::X64CodeBlock* code, BitSet32 registers_in_use,
+                     Gen::X64Reg dst_reg, u32 address, bool sign_extend,
+                     const MMIO::ReadHandlingMethod<T>& m)
 {
-public:
-  MMIOReadCodeGenerator(Core::System* system, Gen::X64CodeBlock* code, BitSet32 registers_in_use,
-                        Gen::X64Reg dst_reg, u32 address, bool sign_extend)
-      : m_system(system), m_code(code), m_registers_in_use(registers_in_use), m_dst_reg(dst_reg),
-        m_address(address), m_sign_extend(sign_extend)
-  {
-  }
+  const int sbits = 8 * sizeof(T);
+  const u32 all_ones = (1ULL << sbits) - 1;
 
-  void VisitConstant(T value) override { LoadConstantToReg(8 * sizeof(T), value); }
-  void VisitDirect(const T* addr, u32 mask) override
+  switch (m.kind)
   {
-    LoadAddrMaskToReg(8 * sizeof(T), addr, mask);
+  case MMIO::MMIO_HANDLER_CONSTANT:
+  {
+    // In practice it would be better to avoid using a register for this, but it would require
+    // refactoring a lot of JIT code.
+    u32 value = m.value;
+    if (sign_extend && sbits < 32 && (value & (1u << (sbits - 1))))
+      value |= ~all_ones;
+    code->MOV(32, R(dst_reg), Gen::Imm32(value));
+    return;
   }
-  void VisitComplex(MMIO::ReadFn<T> fn, uintptr_t ctx) override
-  {
-    CallComplex(8 * sizeof(T), fn, ctx);
-  }
-
-private:
-  // Generates code to load a constant to the destination register. In
-  // practice it would be better to avoid using a register for this, but it
-  // would require refactoring a lot of JIT code.
-  void LoadConstantToReg(int sbits, u32 value)
-  {
-    if (m_sign_extend)
+  case MMIO::MMIO_HANDLER_DIRECT:
+    code->MOV(64, R(RSCRATCH), ImmPtr(m.ptr));
+    // If we do not need to mask, we can do the sign extend while loading from memory. If masking
+    // is required, we have to first zero extend, then mask, then sign extend if needed (1 instr
+    // vs. 2/3).
+    if ((all_ones & m.mask) == all_ones)
     {
-      u32 sign = !!(value & (1 << (sbits - 1)));
-      value |= sign * ((0xFFFFFFFF >> sbits) << sbits);
-    }
-    m_code->MOV(32, R(m_dst_reg), Gen::Imm32(value));
-  }
-
-  // Generate the proper MOV instruction depending on whether the read should
-  // be sign extended or zero extended.
-  void MoveOpArgToReg(int sbits, const Gen::OpArg& arg)
-  {
-    if (m_sign_extend)
-      m_code->MOVSX(32, sbits, m_dst_reg, arg);
-    else
-      m_code->MOVZX(32, sbits, m_dst_reg, arg);
-  }
-
-  void LoadAddrMaskToReg(int sbits, const void* ptr, u32 mask)
-  {
-    m_code->MOV(64, R(RSCRATCH), ImmPtr(ptr));
-    // If we do not need to mask, we can do the sign extend while loading
-    // from memory. If masking is required, we have to first zero extend,
-    // then mask, then sign extend if needed (1 instr vs. 2/3).
-    u32 all_ones = (1ULL << sbits) - 1;
-    if ((all_ones & mask) == all_ones)
-    {
-      MoveOpArgToReg(sbits, MatR(RSCRATCH));
+      if (sign_extend)
+        code->MOVSX(32, sbits, dst_reg, MatR(RSCRATCH));
+      else
+        code->MOVZX(32, sbits, dst_reg, MatR(RSCRATCH));
     }
     else
     {
-      m_code->MOVZX(32, sbits, m_dst_reg, MatR(RSCRATCH));
-      m_code->AND(32, R(m_dst_reg), Imm32(mask));
-      if (m_sign_extend)
-        m_code->MOVSX(32, sbits, m_dst_reg, R(m_dst_reg));
+      code->MOVZX(32, sbits, dst_reg, MatR(RSCRATCH));
+      code->AND(32, R(dst_reg), Imm32(m.mask));
+      if (sign_extend)
+        code->MOVSX(32, sbits, dst_reg, R(dst_reg));
     }
+    return;
+  default:
+    code->ABI_PushRegistersAndAdjustStack(registers_in_use, 0);
+    code->ABI_CallFunctionPPC(m.fn, system, reinterpret_cast<const void*>(m.ctx), address);
+    code->ABI_PopRegistersAndAdjustStack(registers_in_use, 0);
+    if (sign_extend)
+      code->MOVSX(32, sbits, dst_reg, R(ABI_RETURN));
+    else
+      code->MOVZX(32, sbits, dst_reg, R(ABI_RETURN));
+    return;
   }
-
-  void CallComplex(int sbits, MMIO::ReadFn<T> fn, uintptr_t ctx)
-  {
-    m_code->ABI_PushRegistersAndAdjustStack(m_registers_in_use, 0);
-    m_code->ABI_CallFunctionPPC(fn, m_system, reinterpret_cast<const void*>(ctx), m_address);
-    m_code->ABI_PopRegistersAndAdjustStack(m_registers_in_use, 0);
-    MoveOpArgToReg(sbits, R(ABI_RETURN));
-  }
-
-  Core::System* m_system;
-  Gen::X64CodeBlock* m_code;
-  BitSet32 m_registers_in_use;
-  Gen::X64Reg m_dst_reg;
-  u32 m_address;
-  bool m_sign_extend;
-};
+}
 
 void EmuCodeBlock::MMIOLoadToReg(MMIO::Mapping* mmio, Gen::X64Reg reg_value,
                                  BitSet32 registers_in_use, u32 address, int access_size,
@@ -299,26 +271,17 @@ void EmuCodeBlock::MMIOLoadToReg(MMIO::Mapping* mmio, Gen::X64Reg reg_value,
   switch (access_size)
   {
   case 8:
-  {
-    MMIOReadCodeGenerator<u8> gen(&m_jit.m_system, this, registers_in_use, reg_value, address,
-                                  sign_extend);
-    mmio->GetHandlerForRead<u8>(address).Visit(gen);
+    MMIOLoad<u8>(&m_jit.m_system, this, registers_in_use, reg_value, address, sign_extend,
+                 mmio->GetHandlerForRead<u8>(address).Method());
     break;
-  }
   case 16:
-  {
-    MMIOReadCodeGenerator<u16> gen(&m_jit.m_system, this, registers_in_use, reg_value, address,
-                                   sign_extend);
-    mmio->GetHandlerForRead<u16>(address).Visit(gen);
+    MMIOLoad<u16>(&m_jit.m_system, this, registers_in_use, reg_value, address, sign_extend,
+                  mmio->GetHandlerForRead<u16>(address).Method());
     break;
-  }
   case 32:
-  {
-    MMIOReadCodeGenerator<u32> gen(&m_jit.m_system, this, registers_in_use, reg_value, address,
-                                   sign_extend);
-    mmio->GetHandlerForRead<u32>(address).Visit(gen);
+    MMIOLoad<u32>(&m_jit.m_system, this, registers_in_use, reg_value, address, sign_extend,
+                  mmio->GetHandlerForRead<u32>(address).Method());
     break;
-  }
   }
 }
 

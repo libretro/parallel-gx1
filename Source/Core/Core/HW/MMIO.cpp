@@ -197,43 +197,20 @@ ReadHandlingMethod<T> ReadToLarger(Mapping* mmio, u32 larger_addr, u32 shift)
 
 // Implementation of the ReadHandler and WriteHandler class.
 template <typename T>
-void ReadHandler<T>::Visit(ReadHandlingMethodVisitor<T>& visitor)
+const ReadHandlingMethod<T>& ReadHandler<T>::Method()
 {
-  switch (m.kind)
-  {
-  case MMIO_HANDLER_CONSTANT:
-    visitor.VisitConstant(m.value);
-    return;
-  case MMIO_HANDLER_DIRECT:
-    visitor.VisitDirect(m.ptr, m.mask);
-    return;
-  case MMIO_HANDLER_COMPLEX:
-    break;
-  default:
+  if (m.kind != MMIO_HANDLER_CONSTANT && m.kind != MMIO_HANDLER_DIRECT &&
+      m.kind != MMIO_HANDLER_COMPLEX)
     m = InvalidRead<T>();
-    break;
-  }
-  visitor.VisitComplex(m.fn, m.ctx);
+  return m;
 }
 
 template <typename T>
-void WriteHandler<T>::Visit(WriteHandlingMethodVisitor<T>& visitor)
+const WriteHandlingMethod<T>& WriteHandler<T>::Method()
 {
-  switch (m.kind)
-  {
-  case MMIO_HANDLER_NOP:
-    visitor.VisitNop();
-    return;
-  case MMIO_HANDLER_DIRECT:
-    visitor.VisitDirect(m.ptr, m.mask);
-    return;
-  case MMIO_HANDLER_COMPLEX:
-    break;
-  default:
+  if (m.kind != MMIO_HANDLER_NOP && m.kind != MMIO_HANDLER_DIRECT && m.kind != MMIO_HANDLER_COMPLEX)
     m = InvalidWrite<T>();
-    break;
-  }
-  visitor.VisitComplex(m.fn, m.ctx);
+  return m;
 }
 
 /* The handler arrays, the system's zeroed pages: every handler invalid until a method is

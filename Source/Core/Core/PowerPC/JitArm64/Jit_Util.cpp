@@ -12,188 +12,132 @@
 
 using namespace Arm64Gen;
 
+// The store of src_reg to a MMIO register: nothing, a store to the register's backing memory,
+// or a call to its write function.
 template <typename T>
-class MMIOWriteCodeGenerator : public MMIO::WriteHandlingMethodVisitor<T>
+static void MMIOWrite(Core::System* system, ARM64XEmitter* emit, BitSet32 gprs_in_use,
+                      BitSet32 fprs_in_use, ARM64Reg src_reg, u32 address,
+                      const MMIO::WriteHandlingMethod<T>& m)
 {
-public:
-  MMIOWriteCodeGenerator(Core::System* system, ARM64XEmitter* emit, BitSet32 gprs_in_use,
-                         BitSet32 fprs_in_use, ARM64Reg src_reg, u32 address)
-      : m_system(system), m_emit(emit), m_gprs_in_use(gprs_in_use), m_fprs_in_use(fprs_in_use),
-        m_src_reg(src_reg), m_address(address)
-  {
-  }
+  const int sbits = 8 * sizeof(T);
 
-  void VisitNop() override
+  switch (m.kind)
   {
-    // Do nothing
-  }
-  void VisitDirect(T* addr, u32 mask) override { WriteRegToAddr(8 * sizeof(T), addr, mask); }
-  void VisitComplex(MMIO::WriteFn<T> fn, uintptr_t ctx) override
+  case MMIO::MMIO_HANDLER_NOP:
+    return;
+  case MMIO::MMIO_HANDLER_DIRECT:
   {
-    CallComplex(8 * sizeof(T), fn, ctx);
-  }
+    const s32 offset = emit->MOVPage2R(ARM64Reg::X0, m.ptr);
+    const u32 all_ones = (1ULL << sbits) - 1;
+    ARM64Reg reg = src_reg;
 
-private:
-  void StoreFromRegister(int sbits, ARM64Reg reg, s32 offset)
-  {
+    if ((all_ones & m.mask) != all_ones)
+    {
+      emit->ANDI2R(ARM64Reg::W1, src_reg, m.mask, ARM64Reg::W1);
+      reg = ARM64Reg::W1;
+    }
     switch (sbits)
     {
     case 8:
-      m_emit->STRB(IndexType::Unsigned, reg, ARM64Reg::X0, offset);
+      emit->STRB(IndexType::Unsigned, reg, ARM64Reg::X0, offset);
       break;
     case 16:
-      m_emit->STRH(IndexType::Unsigned, reg, ARM64Reg::X0, offset);
-      break;
-    case 32:
-      m_emit->STR(IndexType::Unsigned, reg, ARM64Reg::X0, offset);
+      emit->STRH(IndexType::Unsigned, reg, ARM64Reg::X0, offset);
       break;
     default:
-      ASSERT_MSG(DYNA_REC, false, "Unknown size %d passed to MMIOWriteCodeGenerator!", sbits);
+      emit->STR(IndexType::Unsigned, reg, ARM64Reg::X0, offset);
       break;
     }
+    return;
   }
-
-  void WriteRegToAddr(int sbits, const void* ptr, u32 mask)
+  default:
   {
-    const s32 offset = m_emit->MOVPage2R(ARM64Reg::X0, ptr);
+    ARM64FloatEmitter float_emit(emit);
 
-    // If we do not need to mask, we can do the sign extend while loading
-    // from memory. If masking is required, we have to first zero extend,
-    // then mask, then sign extend if needed (1 instr vs. ~4).
-    const u32 all_ones = (1ULL << sbits) - 1;
-    if ((all_ones & mask) == all_ones)
-    {
-      StoreFromRegister(sbits, m_src_reg, offset);
-    }
-    else
-    {
-      m_emit->ANDI2R(ARM64Reg::W1, m_src_reg, mask, ARM64Reg::W1);
-      StoreFromRegister(sbits, ARM64Reg::W1, offset);
-    }
+    emit->ABI_PushRegisters(gprs_in_use);
+    float_emit.ABI_PushRegisters(fprs_in_use, ARM64Reg::X1);
+
+    emit->ABI_CallFunction(m.fn, system, m.ctx, address, src_reg);
+
+    float_emit.ABI_PopRegisters(fprs_in_use, ARM64Reg::X1);
+    emit->ABI_PopRegisters(gprs_in_use);
+    return;
   }
-
-  void CallComplex(int sbits, MMIO::WriteFn<T> fn, uintptr_t ctx)
-  {
-    ARM64FloatEmitter float_emit(m_emit);
-
-    m_emit->ABI_PushRegisters(m_gprs_in_use);
-    float_emit.ABI_PushRegisters(m_fprs_in_use, ARM64Reg::X1);
-
-    m_emit->ABI_CallFunction(fn, m_system, ctx, m_address, m_src_reg);
-
-    float_emit.ABI_PopRegisters(m_fprs_in_use, ARM64Reg::X1);
-    m_emit->ABI_PopRegisters(m_gprs_in_use);
   }
+}
 
-  Core::System* m_system;
-  ARM64XEmitter* m_emit;
-  BitSet32 m_gprs_in_use;
-  BitSet32 m_fprs_in_use;
-  ARM64Reg m_src_reg;
-  u32 m_address;
-};
-// Visitor that generates code to read a MMIO value.
+// The load from a MMIO register into dst_reg, extended to 32 bits: a constant, a load from the
+// register's backing memory, or a call to its read function.
 template <typename T>
-class MMIOReadCodeGenerator : public MMIO::ReadHandlingMethodVisitor<T>
+static void MMIORead(Core::System* system, ARM64XEmitter* emit, BitSet32 gprs_in_use,
+                     BitSet32 fprs_in_use, ARM64Reg dst_reg, u32 address, bool sign_extend,
+                     const MMIO::ReadHandlingMethod<T>& m)
 {
-public:
-  MMIOReadCodeGenerator(Core::System* system, ARM64XEmitter* emit, BitSet32 gprs_in_use,
-                        BitSet32 fprs_in_use, ARM64Reg dst_reg, u32 address, bool sign_extend)
-      : m_system(system), m_emit(emit), m_gprs_in_use(gprs_in_use), m_fprs_in_use(fprs_in_use),
-        m_dst_reg(dst_reg), m_address(address), m_sign_extend(sign_extend)
-  {
-  }
+  const int sbits = 8 * sizeof(T);
 
-  void VisitConstant(T value) override { LoadConstantToReg(8 * sizeof(T), value); }
-  void VisitDirect(const T* addr, u32 mask) override
+  switch (m.kind)
   {
-    LoadAddrMaskToReg(8 * sizeof(T), addr, mask);
-  }
-  void VisitComplex(MMIO::ReadFn<T> fn, uintptr_t ctx) override
+  case MMIO::MMIO_HANDLER_CONSTANT:
+    emit->MOVI2R(dst_reg, m.value);
+    if (sign_extend)
+      emit->SBFM(dst_reg, dst_reg, 0, sbits - 1);
+    return;
+  case MMIO::MMIO_HANDLER_DIRECT:
   {
-    CallComplex(8 * sizeof(T), fn, ctx);
-  }
+    const s32 offset = emit->MOVPage2R(ARM64Reg::X0, m.ptr);
+    // If we do not need to mask, we can do the sign extend while loading from memory. If masking
+    // is required, we have to first zero extend, then mask, then sign extend if needed (1 instr
+    // vs. ~4).
+    const u32 all_ones = (1ULL << sbits) - 1;
+    const bool masked = (all_ones & m.mask) != all_ones;
+    const bool extend_in_load = sign_extend && !masked;
 
-private:
-  void LoadConstantToReg(int sbits, u32 value)
-  {
-    m_emit->MOVI2R(m_dst_reg, value);
-    if (m_sign_extend)
-      m_emit->SBFM(m_dst_reg, m_dst_reg, 0, sbits - 1);
-  }
-
-  void LoadToRegister(int sbits, bool dont_extend, s32 offset)
-  {
     switch (sbits)
     {
     case 8:
-      if (m_sign_extend && !dont_extend)
-        m_emit->LDRSB(IndexType::Unsigned, m_dst_reg, ARM64Reg::X0, offset);
+      if (extend_in_load)
+        emit->LDRSB(IndexType::Unsigned, dst_reg, ARM64Reg::X0, offset);
       else
-        m_emit->LDRB(IndexType::Unsigned, m_dst_reg, ARM64Reg::X0, offset);
+        emit->LDRB(IndexType::Unsigned, dst_reg, ARM64Reg::X0, offset);
       break;
     case 16:
-      if (m_sign_extend && !dont_extend)
-        m_emit->LDRSH(IndexType::Unsigned, m_dst_reg, ARM64Reg::X0, offset);
+      if (extend_in_load)
+        emit->LDRSH(IndexType::Unsigned, dst_reg, ARM64Reg::X0, offset);
       else
-        m_emit->LDRH(IndexType::Unsigned, m_dst_reg, ARM64Reg::X0, offset);
-      break;
-    case 32:
-      m_emit->LDR(IndexType::Unsigned, m_dst_reg, ARM64Reg::X0, offset);
+        emit->LDRH(IndexType::Unsigned, dst_reg, ARM64Reg::X0, offset);
       break;
     default:
-      ASSERT_MSG(DYNA_REC, false, "Unknown size %d passed to MMIOReadCodeGenerator!", sbits);
+      emit->LDR(IndexType::Unsigned, dst_reg, ARM64Reg::X0, offset);
       break;
     }
-  }
-
-  void LoadAddrMaskToReg(int sbits, const void* ptr, u32 mask)
-  {
-    const s32 offset = m_emit->MOVPage2R(ARM64Reg::X0, ptr);
-
-    // If we do not need to mask, we can do the sign extend while loading
-    // from memory. If masking is required, we have to first zero extend,
-    // then mask, then sign extend if needed (1 instr vs. ~4).
-    const u32 all_ones = (1ULL << sbits) - 1;
-    if ((all_ones & mask) == all_ones)
+    if (masked)
     {
-      LoadToRegister(sbits, false, offset);
+      emit->ANDI2R(dst_reg, dst_reg, m.mask, ARM64Reg::W0);
+      if (sign_extend)
+        emit->SBFM(dst_reg, dst_reg, 0, sbits - 1);
     }
-    else
-    {
-      LoadToRegister(sbits, true, offset);
-      m_emit->ANDI2R(m_dst_reg, m_dst_reg, mask, ARM64Reg::W0);
-      if (m_sign_extend)
-        m_emit->SBFM(m_dst_reg, m_dst_reg, 0, sbits - 1);
-    }
+    return;
   }
-
-  void CallComplex(int sbits, MMIO::ReadFn<T> fn, uintptr_t ctx)
+  default:
   {
-    ARM64FloatEmitter float_emit(m_emit);
+    ARM64FloatEmitter float_emit(emit);
 
-    m_emit->ABI_PushRegisters(m_gprs_in_use);
-    float_emit.ABI_PushRegisters(m_fprs_in_use, ARM64Reg::X1);
+    emit->ABI_PushRegisters(gprs_in_use);
+    float_emit.ABI_PushRegisters(fprs_in_use, ARM64Reg::X1);
 
-    m_emit->ABI_CallFunction(fn, m_system, ctx, m_address);
+    emit->ABI_CallFunction(m.fn, system, m.ctx, address);
 
-    if (m_sign_extend)
-      m_emit->SBFM(m_dst_reg, ARM64Reg::W0, 0, sbits - 1);
+    if (sign_extend)
+      emit->SBFM(dst_reg, ARM64Reg::W0, 0, sbits - 1);
     else
-      m_emit->UBFM(m_dst_reg, ARM64Reg::W0, 0, sbits - 1);
+      emit->UBFM(dst_reg, ARM64Reg::W0, 0, sbits - 1);
 
-    float_emit.ABI_PopRegisters(m_fprs_in_use, ARM64Reg::X1);
-    m_emit->ABI_PopRegisters(m_gprs_in_use);
+    float_emit.ABI_PopRegisters(fprs_in_use, ARM64Reg::X1);
+    emit->ABI_PopRegisters(gprs_in_use);
+    return;
   }
-
-  Core::System* m_system;
-  ARM64XEmitter* m_emit;
-  BitSet32 m_gprs_in_use;
-  BitSet32 m_fprs_in_use;
-  ARM64Reg m_dst_reg;
-  u32 m_address;
-  bool m_sign_extend;
-};
+  }
+}
 
 void SwapPairs(ARM64XEmitter* emit, ARM64Reg dst_reg, ARM64Reg src_reg, u32 flags)
 {
@@ -305,24 +249,16 @@ void MMIOLoadToReg(Core::System& system, MMIO::Mapping* mmio, ARM64XEmitter* emi
 {
   ASSERT(!(flags & BackPatchInfo::FLAG_FLOAT));
 
+  const bool sign_extend = (flags & BackPatchInfo::FLAG_EXTEND) != 0;
   if (flags & BackPatchInfo::FLAG_SIZE_8)
-  {
-    MMIOReadCodeGenerator<u8> gen(&system, emit, gprs_in_use, fprs_in_use, dst_reg, address,
-                                  flags & BackPatchInfo::FLAG_EXTEND);
-    mmio->GetHandlerForRead<u8>(address).Visit(gen);
-  }
+    MMIORead<u8>(&system, emit, gprs_in_use, fprs_in_use, dst_reg, address, sign_extend,
+                 mmio->GetHandlerForRead<u8>(address).Method());
   else if (flags & BackPatchInfo::FLAG_SIZE_16)
-  {
-    MMIOReadCodeGenerator<u16> gen(&system, emit, gprs_in_use, fprs_in_use, dst_reg, address,
-                                   flags & BackPatchInfo::FLAG_EXTEND);
-    mmio->GetHandlerForRead<u16>(address).Visit(gen);
-  }
+    MMIORead<u16>(&system, emit, gprs_in_use, fprs_in_use, dst_reg, address, sign_extend,
+                  mmio->GetHandlerForRead<u16>(address).Method());
   else if (flags & BackPatchInfo::FLAG_SIZE_32)
-  {
-    MMIOReadCodeGenerator<u32> gen(&system, emit, gprs_in_use, fprs_in_use, dst_reg, address,
-                                   flags & BackPatchInfo::FLAG_EXTEND);
-    mmio->GetHandlerForRead<u32>(address).Visit(gen);
-  }
+    MMIORead<u32>(&system, emit, gprs_in_use, fprs_in_use, dst_reg, address, sign_extend,
+                  mmio->GetHandlerForRead<u32>(address).Method());
 
   ByteswapAfterLoad(emit, float_emit, dst_reg, dst_reg, flags, false, true);
 }
@@ -336,18 +272,12 @@ void MMIOWriteRegToAddr(Core::System& system, MMIO::Mapping* mmio, ARM64XEmitter
   src_reg = ByteswapBeforeStore(emit, float_emit, ARM64Reg::W1, src_reg, flags, false);
 
   if (flags & BackPatchInfo::FLAG_SIZE_8)
-  {
-    MMIOWriteCodeGenerator<u8> gen(&system, emit, gprs_in_use, fprs_in_use, src_reg, address);
-    mmio->GetHandlerForWrite<u8>(address).Visit(gen);
-  }
+    MMIOWrite<u8>(&system, emit, gprs_in_use, fprs_in_use, src_reg, address,
+                  mmio->GetHandlerForWrite<u8>(address).Method());
   else if (flags & BackPatchInfo::FLAG_SIZE_16)
-  {
-    MMIOWriteCodeGenerator<u16> gen(&system, emit, gprs_in_use, fprs_in_use, src_reg, address);
-    mmio->GetHandlerForWrite<u16>(address).Visit(gen);
-  }
+    MMIOWrite<u16>(&system, emit, gprs_in_use, fprs_in_use, src_reg, address,
+                   mmio->GetHandlerForWrite<u16>(address).Method());
   else if (flags & BackPatchInfo::FLAG_SIZE_32)
-  {
-    MMIOWriteCodeGenerator<u32> gen(&system, emit, gprs_in_use, fprs_in_use, src_reg, address);
-    mmio->GetHandlerForWrite<u32>(address).Visit(gen);
-  }
+    MMIOWrite<u32>(&system, emit, gprs_in_use, fprs_in_use, src_reg, address,
+                   mmio->GetHandlerForWrite<u32>(address).Method());
 }
