@@ -156,7 +156,7 @@ s32 CachedInterpreter::HLEFunction(PowerPC::PowerPCState& ppc_state,
 {
   const auto& [system, current_pc, hook_index] = operands;
   ppc_state.pc = current_pc;
-  HLE::Execute(Core::CPUThreadGuard{system}, current_pc, hook_index);
+  HLE::Execute(current_pc, hook_index);
   return sizeof(AnyCallback) + sizeof(operands);
 }
 

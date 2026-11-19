@@ -90,25 +90,6 @@ enum class ConsoleType : u32
   ReservedTDEVSystem = 0x20000007,
 };
 
-// Only made on the CPU thread: functions take it to say they are called there. Another thread
-// hands its work to the CPU thread with RunOnCPUThread.
-class CPUThreadGuard final
-{
-public:
-  explicit CPUThreadGuard(Core::System& system);
-  ~CPUThreadGuard();
-
-  CPUThreadGuard(const CPUThreadGuard&) = delete;
-  CPUThreadGuard(CPUThreadGuard&&) = delete;
-  CPUThreadGuard& operator=(const CPUThreadGuard&) = delete;
-  CPUThreadGuard& operator=(CPUThreadGuard&&) = delete;
-
-  Core::System& GetSystem() const { return m_system; }
-
-private:
-  Core::System& m_system;
-};
-
 // These three are normally called from the Host thread. However, they can be called from any thread
 // that isn't launched by the emulator core.
 bool Init(Core::System& system, std::unique_ptr<BootParameters> boot);

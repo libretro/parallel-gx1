@@ -15,7 +15,6 @@
 
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 

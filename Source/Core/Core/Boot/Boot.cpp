@@ -474,8 +474,7 @@ static void CopyDefaultExceptionHandlers(Core::System& system)
 }
 
 // Third boot step after BootManager and Core. See Call schedule in BootManager.cpp
-bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
-                   std::unique_ptr<BootParameters> boot)
+bool CBoot::BootUp(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
   SConfig& config = SConfig::GetInstance();
 
@@ -491,10 +490,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
   struct BootTitle
   {
-    BootTitle(Core::System& system_, const Core::CPUThreadGuard& guard_)
-        : system(system_), guard(guard_), config(SConfig::GetInstance())
-    {
-    }
+    BootTitle(Core::System& system_) : system(system_), config(SConfig::GetInstance()) {}
     bool operator()(BootParameters::Disc& disc) const
     {
       NOTICE_LOG(BOOT, "Booting from disc: %s", disc.path.c_str());
@@ -506,10 +502,10 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       if (!volume)
         return false;
 
-      if (!EmulatedBS2(system, guard, system.IsWii(), *volume))
+      if (!EmulatedBS2(system, system.IsWii(), *volume))
         return false;
 
-      SConfig::OnTitleDirectlyBooted(guard);
+      SConfig::OnTitleDirectlyBooted();
       return true;
     }
 
@@ -549,7 +545,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       }
       else
       {
-        SetupGCMemory(system, guard);
+        SetupGCMemory(system);
       }
 
       if (!executable.reader->LoadIntoMemory(system))
@@ -558,8 +554,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
         return false;
       }
 
-
-      SConfig::OnTitleDirectlyBooted(guard);
+      SConfig::OnTitleDirectlyBooted();
 
       ppc_state.pc = executable.reader->GetEntryPoint();
 
@@ -568,7 +563,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       auto& ppc_symbol_db = system.GetPPCSymbolDB();
       ppc_symbol_db.Clear();
 
-      if (executable.reader->LoadSymbols(guard, ppc_symbol_db, filename))
+      if (executable.reader->LoadSymbols(ppc_symbol_db, filename))
         HLE::PatchFunctions(system);
 
       return true;
@@ -580,8 +575,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       if (!Boot_WiiWAD(system, wad))
         return false;
 
-
-      SConfig::OnTitleDirectlyBooted(guard);
+      SConfig::OnTitleDirectlyBooted();
       return true;
     }
 
@@ -591,8 +585,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       if (!BootNANDTitle(system, nand_title.id))
         return false;
 
-
-      SConfig::OnTitleDirectlyBooted(guard);
+      SConfig::OnTitleDirectlyBooted();
       return true;
     }
 
@@ -619,7 +612,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
                 ipl.disc->auto_disc_change_paths);
       }
 
-      SConfig::OnTitleDirectlyBooted(guard);
+      SConfig::OnTitleDirectlyBooted();
       return true;
     }
 
@@ -631,11 +624,10 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
   private:
     Core::System& system;
-    const Core::CPUThreadGuard& guard;
     const SConfig& config;
   };
 
-  return std::visit(BootTitle(system, guard), boot->parameters);
+  return std::visit(BootTitle(system), boot->parameters);
 }
 
 BootExecutableReader::BootExecutableReader(BootExecutableKind kind, const std::string& file_name)
@@ -702,12 +694,11 @@ bool BootExecutableReader::LoadIntoMemory(Core::System& system, bool only_in_mem
 }
 
 // A DOL carries no symbols
-bool BootExecutableReader::LoadSymbols(const Core::CPUThreadGuard& guard,
-                                       PPCSymbolDB& ppc_symbol_db,
+bool BootExecutableReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db,
                                        const std::string& filename) const
 {
   if (executable_kind == BootExecutableKind::Elf)
-    return static_cast<const ElfReader*>(this)->LoadSymbols(guard, ppc_symbol_db, filename);
+    return static_cast<const ElfReader*>(this)->LoadSymbols(ppc_symbol_db, filename);
   return false;
 }
 

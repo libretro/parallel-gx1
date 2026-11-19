@@ -14,20 +14,18 @@ class IniFile;
 }
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 
 // Writes size octets of value to address in RAM, invalidating the instruction cache where it
 // changed. With store_existing_value, value is given back what was there.
-void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, u8* value, size_t size, const u32 address,
-                      bool store_existing_value = true);
+void ApplyMemoryPatch(u8* value, size_t size, const u32 address, bool store_existing_value = true);
 
 template <typename T>
-void ApplyMemoryPatch(const Core::CPUThreadGuard& guard, T value, const u32 address)
+void ApplyMemoryPatch(T value, const u32 address)
 {
   Common::BigEndianValue<T> big_endian{value};
-  ApplyMemoryPatch(guard, reinterpret_cast<u8*>(&big_endian), sizeof(T), address);
+  ApplyMemoryPatch(reinterpret_cast<u8*>(&big_endian), sizeof(T), address);
 }
 
 namespace PatchEngine

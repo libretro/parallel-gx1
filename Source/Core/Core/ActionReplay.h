@@ -12,11 +12,6 @@ namespace Common
 class IniFile;
 }
 
-namespace Core
-{
-class CPUThreadGuard;
-}
-
 namespace ActionReplay
 {
 struct AREntry
@@ -47,7 +42,7 @@ void FreeCodeList(ARCodeList* list);
 /* One more line behind the code's; dropped when out of memory. */
 void CodeAddOp(ARCode* code, u32 cmd_addr, u32 value);
 
-void RunAllActive(const Core::CPUThreadGuard& cpu_guard);
+void RunAllActive();
 
 void ApplyCodes(const ARCode* codes, size_t count);
 size_t CountEnabledCodes();

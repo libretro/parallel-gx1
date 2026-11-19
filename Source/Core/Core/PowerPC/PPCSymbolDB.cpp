@@ -29,14 +29,14 @@ PPCSymbolDB::PPCSymbolDB() = default;
 PPCSymbolDB::~PPCSymbolDB() = default;
 
 // Adds the function to the list, unless it's already there
-const Common::Symbol* PPCSymbolDB::AddFunction(const Core::CPUThreadGuard& guard, u32 start_addr)
+const Common::Symbol* PPCSymbolDB::AddFunction(u32 start_addr)
 {
   // It's already in the list
   if (m_functions.contains(start_addr))
     return nullptr;
 
   Common::Symbol symbol;
-  if (!PPCAnalyst::AnalyzeFunction(guard, start_addr, symbol))
+  if (!PPCAnalyst::AnalyzeFunction(start_addr, symbol))
     return nullptr;
 
   const auto insert = m_functions.emplace(start_addr, std::move(symbol));
@@ -46,18 +46,15 @@ const Common::Symbol* PPCSymbolDB::AddFunction(const Core::CPUThreadGuard& guard
   return ptr;
 }
 
-void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAddr, u32 size,
-                                 const std::string& name, const std::string& object_name,
-                                 Common::Symbol::Type type)
+void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
+                                 const std::string& object_name, Common::Symbol::Type type)
 {
-  AddKnownSymbol(guard, startAddr, size, name, object_name, type, &m_functions,
-                 &m_checksum_to_function);
+  AddKnownSymbol(startAddr, size, name, object_name, type, &m_functions, &m_checksum_to_function);
 }
 
-void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAddr, u32 size,
-                                 const std::string& name, const std::string& object_name,
-                                 Common::Symbol::Type type, XFuncMap* functions,
-                                 XFuncPtrMap* checksum_to_function)
+void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
+                                 const std::string& object_name, Common::Symbol::Type type,
+                                 XFuncMap* functions, XFuncPtrMap* checksum_to_function)
 {
   const auto [iter, inserted] = functions->try_emplace(startAddr, name);
 
@@ -69,7 +66,7 @@ void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAdd
   {
     // already got it, let's just update name, checksum & size to be sure.
     symbol.Rename(name);
-    symbol.hash = SignatureDB::ComputeCodeChecksum(guard, startAddr, startAddr + size - 4);
+    symbol.hash = SignatureDB::ComputeCodeChecksum(startAddr, startAddr + size - 4);
     symbol.size = size;
   }
   else
@@ -79,7 +76,7 @@ void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAdd
 
     if (symbol.type == Common::Symbol::Type::Function)
     {
-      PPCAnalyst::AnalyzeFunction(guard, startAddr, symbol, size);
+      PPCAnalyst::AnalyzeFunction(startAddr, symbol, size);
       // Do not truncate symbol when a size is expected
       if (size != 0 && symbol.size != size)
       {
@@ -224,7 +221,7 @@ bool PPCSymbolDB::FindMapFile(std::string* existing_map_file, std::string* writa
 }
 
 // Returns true if m_functions was changed.
-bool PPCSymbolDB::LoadMapOnBoot(const Core::CPUThreadGuard& guard)
+bool PPCSymbolDB::LoadMapOnBoot()
 {
   std::string existing_map_file;
   if (!PPCSymbolDB::FindMapFile(&existing_map_file, nullptr))
@@ -236,7 +233,7 @@ bool PPCSymbolDB::LoadMapOnBoot(const Core::CPUThreadGuard& guard)
       return false;
   }
 
-  if (!LoadMap(guard, std::move(existing_map_file)))
+  if (!LoadMap(std::move(existing_map_file)))
     return Clear();
 
   return true;
@@ -264,7 +261,7 @@ bool PPCSymbolDB::LoadMapOnBoot(const Core::CPUThreadGuard& guard)
 // This one can load both leftover map files on game discs (like Zelda) and
 // CodeWarrior-style map files.
 // bad=true means carefully load map files that might not be from exactly the right version
-bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filename, bool bad)
+bool PPCSymbolDB::LoadMap(std::string filename, bool bad)
 {
   File::LineReader f(filename);
   if (!f.IsOpen())
@@ -479,17 +476,18 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
       if (type == Common::Symbol::Type::Function)
       {
         // Can't compute the checksum if not in RAM
-        good = !bad && PowerPC::MMU::HostIsInstructionRAMAddress(guard, vaddress) &&
-               PowerPC::MMU::HostIsInstructionRAMAddress(guard, vaddress + size - 4);
+        good = !bad && PowerPC::MMU::HostIsInstructionRAMAddress(vaddress) &&
+               PowerPC::MMU::HostIsInstructionRAMAddress(vaddress + size - 4);
         if (!good)
         {
           // check for BLR before function
           PowerPC::TryReadInstResult read_result =
-              guard.GetSystem().GetMMU().TryReadInstruction(vaddress - 4);
+              Core::System::GetInstance().GetMMU().TryReadInstruction(vaddress - 4);
           if (read_result.valid && read_result.hex == 0x4e800020)
           {
             // check for BLR at end of function
-            read_result = guard.GetSystem().GetMMU().TryReadInstruction(vaddress + size - 4);
+            read_result =
+                Core::System::GetInstance().GetMMU().TryReadInstruction(vaddress + size - 4);
             good = read_result.valid && read_result.hex == 0x4e800020;
           }
         }
@@ -497,8 +495,8 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
       else
       {
         // Data type, can have any length.
-        good = !bad && PowerPC::MMU::HostIsRAMAddress(guard, vaddress) &&
-               PowerPC::MMU::HostIsRAMAddress(guard, vaddress + size - 1);
+        good = !bad && PowerPC::MMU::HostIsRAMAddress(vaddress) &&
+               PowerPC::MMU::HostIsRAMAddress(vaddress + size - 1);
       }
 
       if (good)
@@ -511,8 +509,8 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, std::string filenam
         }
         else
         {
-          AddKnownSymbol(guard, vaddress, size, name_string, object_filename_string, type,
-                         &new_functions, &checksum_to_function);
+          AddKnownSymbol(vaddress, size, name_string, object_filename_string, type, &new_functions,
+                         &checksum_to_function);
         }
       }
       else

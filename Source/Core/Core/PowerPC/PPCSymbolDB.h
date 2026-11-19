@@ -8,11 +8,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/SymbolDB.h"
 
-namespace Core
-{
-class CPUThreadGuard;
-}  // namespace Core
-
 // This has functionality overlapping Debugger_Symbolmap. Should merge that stuff in here later.
 class PPCSymbolDB final : public Common::SymbolDB
 {
@@ -20,9 +15,9 @@ public:
   PPCSymbolDB();
   ~PPCSymbolDB();
 
-  const Common::Symbol* AddFunction(const Core::CPUThreadGuard& guard, u32 start_addr);
-  void AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAddr, u32 size,
-                      const std::string& name, const std::string& object_name,
+  const Common::Symbol* AddFunction(u32 start_addr);
+  void AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
+                      const std::string& object_name,
                       Common::Symbol::Type type = Common::Symbol::Type::Function);
   void AddKnownNote(u32 start_addr, u32 size, const std::string& name);
 
@@ -34,16 +29,15 @@ public:
 
   void FillInCallers();
 
-  bool LoadMapOnBoot(const Core::CPUThreadGuard& guard);
-  bool LoadMap(const Core::CPUThreadGuard& guard, std::string filename, bool bad = false);
+  bool LoadMapOnBoot();
+  bool LoadMap(std::string filename, bool bad = false);
 
   static bool FindMapFile(std::string* existing_map_file, std::string* writable_map_file);
 
 private:
-  static void AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAddr, u32 size,
-                             const std::string& name, const std::string& object_name,
-                             Common::Symbol::Type type, XFuncMap* functions,
-                             XFuncPtrMap* checksum_to_function);
+  static void AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
+                             const std::string& object_name, Common::Symbol::Type type,
+                             XFuncMap* functions, XFuncPtrMap* checksum_to_function);
   static void AddKnownNote(u32 start_addr, u32 size, const std::string& name, XNoteMap* notes);
 
   static void DetermineNoteLayers(XNoteMap* notes);

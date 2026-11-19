@@ -18,7 +18,6 @@ class PointerWrap;
 
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 namespace Memory
@@ -135,20 +134,19 @@ public:
   // space), a PanicAlert will be shown to the user and zero (or an empty string for the string
   // case) will be returned.
   template <std::unsigned_integral T>
-  static T HostRead(const Core::CPUThreadGuard& guard, u32 address);
+  static T HostRead(u32 address);
   template <typename T>
   requires(!std::unsigned_integral<T>)
-  static T HostRead(const Core::CPUThreadGuard& guard, const u32 address)
+  static T HostRead(const u32 address)
   {
     using U = Common::MakeUnsignedSameSize<T>;
-    U result = HostRead<U>(guard, address);
+    U result = HostRead<U>(address);
     return std::bit_cast<T>(result);
   }
 
-  static u32 HostRead_Instruction(const Core::CPUThreadGuard& guard, u32 address);
-  static std::string HostGetString(const Core::CPUThreadGuard& guard, u32 address, size_t size = 0);
-  static std::u16string HostGetU16String(const Core::CPUThreadGuard& guard, u32 address,
-                                         size_t size = 0);
+  static u32 HostRead_Instruction(u32 address);
+  static std::string HostGetString(u32 address, size_t size = 0);
+  static std::u16string HostGetU16String(u32 address, size_t size = 0);
 
   // Try to read a value from emulated memory at the given address in the given memory space.
   // If the read succeeds, the returned value will be present and the ReadResult contains the read
@@ -156,16 +154,14 @@ public:
   // HostRead functions, this does not raise a user-visible alert on failure.
   template <std::unsigned_integral T>
   static std::optional<ReadResult<T>>
-  HostTryRead(const Core::CPUThreadGuard& guard, u32 address,
-              RequestedAddressSpace space = RequestedAddressSpace::Effective);
+  HostTryRead(u32 address, RequestedAddressSpace space = RequestedAddressSpace::Effective);
   template <typename T>
   static std::optional<ReadResult<T>>
-  HostTryRead(const Core::CPUThreadGuard& guard, u32 address,
-              RequestedAddressSpace space = RequestedAddressSpace::Effective)
+  HostTryRead(u32 address, RequestedAddressSpace space = RequestedAddressSpace::Effective)
       requires(!std::unsigned_integral<T>)
   {
     using U = Common::MakeUnsignedSameSize<T>;
-    std::optional<ReadResult<U>> result = HostTryRead<U>(guard, address, space);
+    std::optional<ReadResult<U>> result = HostTryRead<U>(address, space);
     return std::bit_cast<std::optional<ReadResult<T>>>(result);
   }
 
@@ -173,15 +169,13 @@ public:
   // If the write fails (eg. address does not correspond to a mapped address in the current address
   // space), a PanicAlert will be shown to the user.
   template <std::unsigned_integral T>
-  static void HostWrite(const Core::CPUThreadGuard& guard, Common::MakeAtLeastU32<T> var,
-                        u32 address);
+  static void HostWrite(Common::MakeAtLeastU32<T> var, u32 address);
   template <typename T>
-  static void HostWrite(const Core::CPUThreadGuard& guard, T var, u32 address)
-      requires(!std::unsigned_integral<T>)
+  static void HostWrite(T var, u32 address) requires(!std::unsigned_integral<T>)
   {
     using U = Common::MakeUnsignedSameSize<T>;
     U cast_var = std::bit_cast<U>(var);
-    return HostWrite<U>(guard, cast_var, address);
+    return HostWrite<U>(cast_var, address);
   }
 
   // Try to a write a value to memory at the given address in the given memory space.
@@ -190,27 +184,27 @@ public:
   // user-visible alert on failure.
   template <std::unsigned_integral T>
   static std::optional<WriteResult>
-  HostTryWrite(const Core::CPUThreadGuard& guard, Common::MakeAtLeastU32<T> var, u32 address,
+  HostTryWrite(Common::MakeAtLeastU32<T> var, u32 address,
                RequestedAddressSpace space = RequestedAddressSpace::Effective);
   template <typename T>
   static std::optional<WriteResult>
-  HostTryWrite(const Core::CPUThreadGuard& guard, const T var, const u32 address,
+  HostTryWrite(const T var, const u32 address,
                RequestedAddressSpace space = RequestedAddressSpace::Effective)
       requires(!std::unsigned_integral<T>)
   {
     using U = Common::MakeUnsignedSameSize<T>;
     U cast_var = std::bit_cast<U>(var);
-    return HostTryWrite<U>(guard, cast_var, address, space);
+    return HostTryWrite<U>(cast_var, address, space);
   }
 
   // Returns whether a read or write to the given address will resolve to a RAM access in the given
   // address space.
-  static bool HostIsRAMAddress(const Core::CPUThreadGuard& guard, u32 address,
+  static bool HostIsRAMAddress(u32 address,
                                RequestedAddressSpace space = RequestedAddressSpace::Effective);
 
   // Same as HostIsRAMAddress, but uses IBAT instead of DBAT.
   static bool
-  HostIsInstructionRAMAddress(const Core::CPUThreadGuard& guard, u32 address,
+  HostIsInstructionRAMAddress(u32 address,
                               RequestedAddressSpace space = RequestedAddressSpace::Effective);
 
   // Routines for the CPU core to access memory.

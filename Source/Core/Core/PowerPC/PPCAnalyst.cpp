@@ -74,8 +74,7 @@ static u32 EvaluateBranchTarget(UGeckoInstruction instr, u32 pc)
 // Also collect which internal branch goes the farthest.
 // If any one goes farther than the blr or rfi, assume that there is more than
 // one blr or rfi, and keep scanning.
-bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::Symbol& func,
-                     u32 max_size)
+bool AnalyzeFunction(u32 startAddr, Common::Symbol& func, u32 max_size)
 {
   if (func.name.empty())
   {
@@ -86,7 +85,7 @@ bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::S
   if (func.analyzed)
     return true;  // No error, just already did it.
 
-  auto& mmu = guard.GetSystem().GetMMU();
+  auto& mmu = Core::System::GetInstance().GetMMU();
 
   func.calls.clear();
   func.callers.clear();
@@ -99,7 +98,7 @@ bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::S
   {
     func.size += 4;
     if (func.size >= JitBase::code_buffer_size * 4 ||
-        !PowerPC::MMU::HostIsInstructionRAMAddress(guard, addr))
+        !PowerPC::MMU::HostIsInstructionRAMAddress(addr))
     {
       return false;
     }
@@ -109,7 +108,7 @@ bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::S
       func.address = startAddr;
       func.analyzed = true;
       func.size -= 4;
-      func.hash = SignatureDB::ComputeCodeChecksum(guard, startAddr, addr - 4);
+      func.hash = SignatureDB::ComputeCodeChecksum(startAddr, addr - 4);
       if (numInternalBranches == 0)
         func.flags |= Common::FFLAG_STRAIGHT;
       return true;
@@ -131,7 +130,7 @@ bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::S
         // Let's calc the checksum and get outta here
         func.address = startAddr;
         func.analyzed = true;
-        func.hash = SignatureDB::ComputeCodeChecksum(guard, startAddr, addr);
+        func.hash = SignatureDB::ComputeCodeChecksum(startAddr, addr);
         if (numInternalBranches == 0)
           func.flags |= Common::FFLAG_STRAIGHT;
         return true;

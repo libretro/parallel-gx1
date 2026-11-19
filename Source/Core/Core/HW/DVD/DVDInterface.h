@@ -18,7 +18,6 @@
 class PointerWrap;
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 namespace CoreTiming
@@ -143,10 +142,10 @@ public:
   void SetDisc(DiscIO::VolumeDisc* disc,
                std::optional<std::vector<std::string>> auto_disc_change_paths);
   bool IsDiscInside() const;
-  void EjectDisc(const Core::CPUThreadGuard& guard, EjectCause cause);
-  void ChangeDisc(const Core::CPUThreadGuard& guard, const std::vector<std::string>& paths);
-  void ChangeDisc(const Core::CPUThreadGuard& guard, const std::string& new_path);
-  bool AutoChangeDisc(const Core::CPUThreadGuard& guard);
+  void EjectDisc(EjectCause cause);
+  void ChangeDisc(const std::vector<std::string>& paths);
+  void ChangeDisc(const std::string& new_path);
+  bool AutoChangeDisc();
 
   // This function returns true and calls SConfig::SetRunningGameMetadata(Volume&, Partition&)
   // if both of the following conditions are true:

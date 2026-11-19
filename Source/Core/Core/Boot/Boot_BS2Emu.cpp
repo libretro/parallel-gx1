@@ -44,14 +44,14 @@
 
 namespace
 {
-void PresetTimeBaseTicks(Core::System& system, const Core::CPUThreadGuard& guard)
+void PresetTimeBaseTicks(Core::System& system)
 {
   const u64 emulated_time =
       ExpansionInterface::CEXIIPL::GetEmulatedTime(system, ExpansionInterface::CEXIIPL::GC_EPOCH);
 
   const u64 time_base_ticks = emulated_time * 40500000ULL;
 
-  PowerPC::MMU::HostWrite<u64>(guard, time_base_ticks, 0x800030D8);
+  PowerPC::MMU::HostWrite<u64>(time_base_ticks, 0x800030D8);
 }
 }  // Anonymous namespace
 
@@ -136,8 +136,7 @@ void CBoot::SetupBAT(Core::System& system, bool is_wii)
   mmu.IBATUpdated();
 }
 
-bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                         const DiscIO::VolumeDisc& volume)
+bool CBoot::RunApploader(Core::System& system, bool is_wii, const DiscIO::VolumeDisc& volume)
 {
   const DiscIO::Partition partition = volume.GetGamePartition();
 
@@ -172,7 +171,7 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
 
   // iAppLoaderInit
   DEBUG_LOG(BOOT, "Call iAppLoaderInit");
-  PowerPC::MMU::HostWrite<u32>(guard, 0x4E800020, 0x81300000);  // Write BLR
+  PowerPC::MMU::HostWrite<u32>(0x4E800020, 0x81300000);         // Write BLR
   HLE::Patch(system, 0x81300000, "AppLoaderReport");            // HLE OSReport for Apploader
   ppc_state.gpr[3] = 0x81300000;
   RunFunction(system, iAppLoaderInit);
@@ -231,49 +230,47 @@ bool CBoot::RunApploader(Core::System& system, const Core::CPUThreadGuard& guard
   return true;
 }
 
-void CBoot::SetupGCMemory(Core::System& system, const Core::CPUThreadGuard& guard)
+void CBoot::SetupGCMemory(Core::System& system)
 {
   auto& memory = system.GetMemory();
 
   // Booted from bootrom. 0xE5207C22 = booted from jtag
-  PowerPC::MMU::HostWrite<u32>(guard, 0x0D15EA5E, 0x80000020);
+  PowerPC::MMU::HostWrite<u32>(0x0D15EA5E, 0x80000020);
 
   // Physical Memory Size (24MB on retail)
-  PowerPC::MMU::HostWrite<u32>(guard, memory.GetRamSizeReal(), 0x80000028);
+  PowerPC::MMU::HostWrite<u32>(memory.GetRamSizeReal(), 0x80000028);
 
   // Console type - DevKit  (retail ID == 0x00000003) see YAGCD 4.2.1.1.2
   // TODO: determine why some games fail when using a retail ID.
   // (Seem to take different EXI paths, see Ikaruga for example)
   const u32 console_type = static_cast<u32>(Core::ConsoleType::LatestDevkit);
-  PowerPC::MMU::HostWrite<u32>(guard, console_type, 0x8000002C);
+  PowerPC::MMU::HostWrite<u32>(console_type, 0x8000002C);
 
   // Fake the VI Init of the IPL (YAGCD 4.2.1.4)
-  PowerPC::MMU::HostWrite<u32>(guard, DiscIO::IsNTSC(SConfig::GetInstance().m_region) ? 0 : 1,
-                               0x800000CC);
+  PowerPC::MMU::HostWrite<u32>(DiscIO::IsNTSC(SConfig::GetInstance().m_region) ? 0 : 1, 0x800000CC);
 
   // ARAM Size. 16MB main + 4/16/32MB external. (retail consoles have no external ARAM)
-  PowerPC::MMU::HostWrite<u32>(guard, 0x01000000, 0x800000d0);
+  PowerPC::MMU::HostWrite<u32>(0x01000000, 0x800000d0);
 
-  PowerPC::MMU::HostWrite<u32>(guard, 0x09a7ec80, 0x800000F8);  // Bus Clock Speed
-  PowerPC::MMU::HostWrite<u32>(guard, 0x1cf7c580, 0x800000FC);  // CPU Clock Speed
+  PowerPC::MMU::HostWrite<u32>(0x09a7ec80, 0x800000F8);  // Bus Clock Speed
+  PowerPC::MMU::HostWrite<u32>(0x1cf7c580, 0x800000FC);  // CPU Clock Speed
 
-  PowerPC::MMU::HostWrite<u32>(guard, 0x4c000064, 0x80000300);  // Write default DSI Handler: rfi
-  PowerPC::MMU::HostWrite<u32>(guard, 0x4c000064, 0x80000800);  // Write default FPU Handler: rfi
-  PowerPC::MMU::HostWrite<u32>(guard, 0x4c000064,
+  PowerPC::MMU::HostWrite<u32>(0x4c000064, 0x80000300);  // Write default DSI Handler: rfi
+  PowerPC::MMU::HostWrite<u32>(0x4c000064, 0x80000800);  // Write default FPU Handler: rfi
+  PowerPC::MMU::HostWrite<u32>(0x4c000064,
                                0x80000C00);  // Write default Syscall Handler: rfi
 
-  PresetTimeBaseTicks(system, guard);
+  PresetTimeBaseTicks(system);
 
   // HIO checks this
-  // PowerPC::MMU::HostWrite<u16>(guard, 0x8200, 0x000030e6);   // Console type
+  // PowerPC::MMU::HostWrite<u16>(0x8200, 0x000030e6);   // Console type
 }
 
 // __________________________________________________________________________________________________
 // GameCube Bootstrap 2 HLE:
 // copy the apploader to 0x81200000
 // execute the apploader, function by function, using the above utility.
-bool CBoot::EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& guard,
-                           const DiscIO::VolumeDisc& volume)
+bool CBoot::EmulatedBS2_GC(Core::System& system, const DiscIO::VolumeDisc& volume)
 {
   INFO_LOG(BOOT, "Faking GC BS2...");
 
@@ -283,7 +280,7 @@ bool CBoot::EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& gua
   SetupHID(ppc_state, /*is_wii*/ false);
   SetupBAT(system, /*is_wii*/ false);
 
-  SetupGCMemory(system, guard);
+  SetupGCMemory(system);
 
   // Datel titles don't initialize the postMatrices, but they have dual-texture coordinate
   // transformation enabled. We initialize all of xfmem to 0, which results in everything using
@@ -326,7 +323,7 @@ bool CBoot::EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& gua
   // Global pointer to Small Data Area Base (Luigi's Mansion's apploader uses it)
   ppc_state.gpr[13] = ntsc ? 0x81465320 : 0x814b4fc0;
 
-  return RunApploader(system, guard, /*is_wii*/ false, volume);
+  return RunApploader(system, /*is_wii*/ false, volume);
 }
 
 static DiscIO::Region CodeRegion(char c)
@@ -524,8 +521,7 @@ static void WriteEmptyPlayRecord()
 // Wii Bootstrap 2 HLE:
 // copy the apploader to 0x81200000
 // execute the apploader
-bool CBoot::EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& guard,
-                            const DiscIO::VolumeDisc& volume)
+bool CBoot::EmulatedBS2_Wii(Core::System& system, const DiscIO::VolumeDisc& volume)
 {
   INFO_LOG(BOOT, "Faking Wii BS2...");
   if (volume.GetVolumeType() != DiscIO::Platform::WiiDisc)
@@ -595,7 +591,7 @@ bool CBoot::EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& gu
 
   ppc_state.gpr[1] = 0x816ffff0;  // StackPointer
 
-  if (!RunApploader(system, guard, /*is_wii*/ true, volume))
+  if (!RunApploader(system, /*is_wii*/ true, volume))
     return false;
 
   // The Apploader probably just overwrote values needed for RAM Override.  Run this again!
@@ -610,8 +606,7 @@ bool CBoot::EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& gu
 
 // Returns true if apploader has run successfully. If is_wii is true, the disc
 // that volume refers to must currently be inserted into the emulated disc drive.
-bool CBoot::EmulatedBS2(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                        const DiscIO::VolumeDisc& volume)
+bool CBoot::EmulatedBS2(Core::System& system, bool is_wii, const DiscIO::VolumeDisc& volume)
 {
-  return is_wii ? EmulatedBS2_Wii(system, guard, volume) : EmulatedBS2_GC(system, guard, volume);
+  return is_wii ? EmulatedBS2_Wii(system, volume) : EmulatedBS2_GC(system, volume);
 }

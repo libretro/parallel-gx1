@@ -8,10 +8,6 @@
 
 #include "Common/CommonTypes.h"
 
-namespace Core
-{
-class CPUThreadGuard;
-}
 namespace HLE::SystemVABI
 {
 class VAList;
@@ -23,10 +19,7 @@ namespace HLE_OS
 class HLEPrintArgs final
 {
 public:
-  HLEPrintArgs(const Core::CPUThreadGuard& guard, HLE::SystemVABI::VAList* list)
-      : m_guard(guard), m_va_list(list)
-  {
-  }
+  HLEPrintArgs(HLE::SystemVABI::VAList* list) : m_va_list(list) {}
 
   u32 GetU32();
   u64 GetU64();
@@ -35,18 +28,17 @@ public:
   std::u16string GetU16String(std::optional<u32> max_length);
 
 private:
-  const Core::CPUThreadGuard& m_guard;
   HLE::SystemVABI::VAList* m_va_list;
 };
 
 std::string GetStringVA(HLEPrintArgs* args, std::string_view string);
 
-void HLE_GeneralDebugPrint(const Core::CPUThreadGuard& guard);
-void HLE_GeneralDebugVPrint(const Core::CPUThreadGuard& guard);
-void HLE_write_console(const Core::CPUThreadGuard& guard);
-void HLE_OSPanic(const Core::CPUThreadGuard& guard);
-void HLE_LogDPrint(const Core::CPUThreadGuard& guard);
-void HLE_LogVDPrint(const Core::CPUThreadGuard& guard);
-void HLE_LogFPrint(const Core::CPUThreadGuard& guard);
-void HLE_LogVFPrint(const Core::CPUThreadGuard& guard);
+void HLE_GeneralDebugPrint();
+void HLE_GeneralDebugVPrint();
+void HLE_write_console();
+void HLE_OSPanic();
+void HLE_LogDPrint();
+void HLE_LogVDPrint();
+void HLE_LogFPrint();
+void HLE_LogVFPrint();
 }  // namespace HLE_OS

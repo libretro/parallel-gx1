@@ -239,8 +239,7 @@ SectionID ElfReader::GetSectionByName(const char* name, int firstSection) const
   return -1;
 }
 
-bool ElfReader::LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db,
-                            const std::string& filename) const
+bool ElfReader::LoadSymbols(PPCSymbolDB& ppc_symbol_db, const std::string& filename) const
 {
   if (!m_is_valid)
     return false;
@@ -306,7 +305,7 @@ bool ElfReader::LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_
       default:
         continue;
       }
-      ppc_symbol_db.AddKnownSymbol(guard, value, size, name, filename, symtype);
+      ppc_symbol_db.AddKnownSymbol(value, size, name, filename, symtype);
       hasSymbols = true;
     }
   }

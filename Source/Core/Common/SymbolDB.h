@@ -16,11 +16,6 @@
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
 
-namespace Core
-{
-class CPUThreadGuard;
-}
-
 namespace Common
 {
 struct SCall

@@ -21,7 +21,6 @@ class CPUCoreBase;
 class PointerWrap;
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 namespace CoreTiming

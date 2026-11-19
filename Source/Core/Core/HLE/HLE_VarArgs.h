@@ -12,7 +12,6 @@
 
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 
@@ -36,10 +35,8 @@ concept ArgReal = std::is_floating_point_v<T>;
 class VAList
 {
 public:
-  explicit VAList(const Core::CPUThreadGuard& guard, u32 stack, u32 gpr = 3, u32 fpr = 1,
-                  u32 gpr_max = 10, u32 fpr_max = 8)
-      : m_guard(guard), m_gpr(gpr), m_fpr(fpr), m_gpr_max(gpr_max), m_fpr_max(fpr_max),
-        m_stack(stack)
+  explicit VAList(u32 stack, u32 gpr = 3, u32 fpr = 1, u32 gpr_max = 10, u32 fpr_max = 8)
+      : m_gpr(gpr), m_fpr(fpr), m_gpr_max(gpr_max), m_fpr_max(fpr_max), m_stack(stack)
   {
   }
 
@@ -52,7 +49,7 @@ public:
 
     for (size_t i = 0; i < sizeof(T); i += 1, addr += 1)
     {
-      reinterpret_cast<u8*>(&obj)[i] = PowerPC::MMU::HostRead<u8>(m_guard, addr);
+      reinterpret_cast<u8*>(&obj)[i] = PowerPC::MMU::HostRead<u8>(addr);
     }
 
     return obj;
@@ -73,7 +70,7 @@ public:
     else
     {
       m_stack = Common::AlignUp(m_stack, 4);
-      value = PowerPC::MMU::HostRead<u32>(m_guard, m_stack);
+      value = PowerPC::MMU::HostRead<u32>(m_stack);
       m_stack += 4;
     }
 
@@ -96,7 +93,7 @@ public:
     else
     {
       m_stack = Common::AlignUp(m_stack, 8);
-      value = PowerPC::MMU::HostRead<u64>(m_guard, m_stack);
+      value = PowerPC::MMU::HostRead<u64>(m_stack);
       m_stack += 8;
     }
 
@@ -117,7 +114,7 @@ public:
     else
     {
       m_stack = Common::AlignUp(m_stack, 8);
-      value = PowerPC::MMU::HostRead<double>(m_guard, m_stack);
+      value = PowerPC::MMU::HostRead<double>(m_stack);
       m_stack += 8;
     }
 
@@ -132,7 +129,6 @@ public:
   }
 
 protected:
-  const Core::CPUThreadGuard& m_guard;
   u32 m_gpr = 3;
   u32 m_fpr = 1;
   const u32 m_gpr_max = 10;
@@ -160,7 +156,7 @@ private:
 class VAListStruct final : public VAList
 {
 public:
-  explicit VAListStruct(const Core::CPUThreadGuard& guard, u32 address);
+  explicit VAListStruct(u32 address);
 };
 
 }  // namespace HLE::SystemVABI

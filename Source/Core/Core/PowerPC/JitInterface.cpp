@@ -155,7 +155,7 @@ bool JitInterface::HandleStackFault()
   return m_jit->HandleStackFault();
 }
 
-void JitInterface::ClearCache(const Core::CPUThreadGuard&)
+void JitInterface::ClearCache()
 {
   if (m_jit)
     m_jit->ClearCache();
@@ -231,12 +231,10 @@ void JitInterface::CompileExceptionCheck(ExceptionType type)
     if (type == ExceptionType::FIFOWrite)
     {
       ASSERT(Core::IsCPUThread());
-      Core::CPUThreadGuard guard(m_system);
 
       // Check in case the code has been replaced since: do we need to do this?
       const OpType optype =
-          PPCTables::GetOpInfo(PowerPC::MMU::HostRead<u32>(guard, ppc_state.pc), ppc_state.pc)
-              ->type;
+          PPCTables::GetOpInfo(PowerPC::MMU::HostRead<u32>(ppc_state.pc), ppc_state.pc)->type;
       if (optype != OpType::Store && optype != OpType::StoreFP && optype != OpType::StorePS)
         return;
     }

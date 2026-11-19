@@ -56,7 +56,6 @@ bool Load(Core::System& system)
   auto& memory = system.GetMemory();
 
   ASSERT(Core::IsCPUThread());
-  Core::CPUThreadGuard guard(system);
 
   memory.Write_U32(0x00000000, ADDRESS_INIT_SEMAPHORE);
   memory.Write_U32(0x09142001, 0x3180);
@@ -70,7 +69,7 @@ bool Load(Core::System& system)
   // Load symbols for the IPL if they exist.
   ppc_symbol_db.Clear();
 
-  if (ppc_symbol_db.LoadMap(guard, File::GetUserPath(D_MAPS_IDX) + "mios-ipl.map"))
+  if (ppc_symbol_db.LoadMap(File::GetUserPath(D_MAPS_IDX) + "mios-ipl.map"))
   {
     ::HLE::Clear();
     ::HLE::PatchFunctions(system);
@@ -96,7 +95,7 @@ bool Load(Core::System& system)
   NOTICE_LOG(IOS, "IPL ready.");
   system.SetIsMIOS(true);
   system.GetDVDInterface().UpdateRunningGameMetadata();
-  SConfig::OnTitleDirectlyBooted(guard);
+  SConfig::OnTitleDirectlyBooted();
   return true;
 }
 }  // namespace IOS::HLE::MIOS

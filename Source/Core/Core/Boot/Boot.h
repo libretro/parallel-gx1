@@ -23,7 +23,6 @@ class PPCSymbolDB;
 
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 
@@ -135,8 +134,7 @@ struct BootParameters
 class CBoot
 {
 public:
-  static bool BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
-                     std::unique_ptr<BootParameters> boot);
+  static bool BootUp(Core::System& system, std::unique_ptr<BootParameters> boot);
 
 private:
   static bool DVDRead(Core::System& system, const DiscIO::VolumeDisc& disc, u64 dvd_offset,
@@ -151,17 +149,13 @@ private:
   static void SetupMSR(Core::System& system);
   static void SetupHID(PowerPC::PowerPCState& ppc_state, bool is_wii);
   static void SetupBAT(Core::System& system, bool is_wii);
-  static bool RunApploader(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                           const DiscIO::VolumeDisc& volume);
-  static bool EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& guard,
-                             const DiscIO::VolumeDisc& volume);
-  static bool EmulatedBS2_Wii(Core::System& system, const Core::CPUThreadGuard& guard,
-                              const DiscIO::VolumeDisc& volume);
-  static bool EmulatedBS2(Core::System& system, const Core::CPUThreadGuard& guard, bool is_wii,
-                          const DiscIO::VolumeDisc& volume);
+  static bool RunApploader(Core::System& system, bool is_wii, const DiscIO::VolumeDisc& volume);
+  static bool EmulatedBS2_GC(Core::System& system, const DiscIO::VolumeDisc& volume);
+  static bool EmulatedBS2_Wii(Core::System& system, const DiscIO::VolumeDisc& volume);
+  static bool EmulatedBS2(Core::System& system, bool is_wii, const DiscIO::VolumeDisc& volume);
   static bool Load_BS2(Core::System& system, const std::string& boot_rom_filename);
 
-  static void SetupGCMemory(Core::System& system, const Core::CPUThreadGuard& guard);
+  static void SetupGCMemory(Core::System& system);
   static bool SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType console_type);
 };
 
@@ -182,8 +176,7 @@ public:
   bool IsValid() const;
   bool IsWii() const;
   bool LoadIntoMemory(Core::System& system, bool only_in_mem1 = false) const;
-  bool LoadSymbols(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db,
-                   const std::string& filename) const;
+  bool LoadSymbols(PPCSymbolDB& ppc_symbol_db, const std::string& filename) const;
 
   const BootExecutableKind executable_kind;
 

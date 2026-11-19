@@ -12,7 +12,6 @@
 
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 
@@ -24,8 +23,7 @@ struct CallstackEntry
   u32 vAddress = 0;
 };
 
-void PrintCallstack(const Core::CPUThreadGuard& guard, Common::Log::LogType type,
-                    Common::Log::LogLevel level);
+void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level);
 void PrintDataBuffer(const Core::System& system, Common::Log::LogType type, u32 address, u32 size,
                      std::string_view title);
 }  // namespace Dolphin_Debugger

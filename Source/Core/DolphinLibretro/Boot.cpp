@@ -1041,15 +1041,17 @@ static bool retro_set_eject_state(bool ejected)
   eject_state = ejected;
 
   Libretro::FinishFieldInFlight();
-  Core::RunOnCPUThread(Core::System::GetInstance(), [ejected] {
-    auto& system = Core::System::GetInstance();
-    Core::CPUThreadGuard guard{system};
+  Core::RunOnCPUThread(
+      Core::System::GetInstance(),
+      [ejected] {
+        auto& system = Core::System::GetInstance();
 
-    if (ejected)
-      system.GetDVDInterface().EjectDisc(guard, DVD::EjectCause::User);
-    else if (disk_index < disk_count)
-      system.GetDVDInterface().ChangeDisc(guard, disk_paths[disk_index]);
-  }, true); // wait_for_completion = true
+        if (ejected)
+          system.GetDVDInterface().EjectDisc(DVD::EjectCause::User);
+        else if (disk_index < disk_count)
+          system.GetDVDInterface().ChangeDisc(disk_paths[disk_index]);
+      },
+      true);  // wait_for_completion = true
   Libretro::ResumeAfterField();
 
   return true;

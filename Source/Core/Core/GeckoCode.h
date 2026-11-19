@@ -9,11 +9,6 @@
 
 class PointerWrap;
 
-namespace Core
-{
-class CPUThreadGuard;
-}
-
 namespace Gecko
 {
 /* A line of a Gecko code: its two words, both 0 when the line is not two hexadecimal numbers,
@@ -65,7 +60,7 @@ constexpr u32 MAGIC_GAMEID = 0xD01F1BAD;
 
 size_t CountEnabledCodes();
 void SetActiveCodes(const GeckoCode* gcodes, size_t count);
-void RunCodeHandler(const Core::CPUThreadGuard& guard);
+void RunCodeHandler();
 void Shutdown();
 void DoState(PointerWrap&);
 

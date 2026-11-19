@@ -21,38 +21,36 @@
 namespace Dolphin_Debugger
 {
 // Returns true if the address is not a valid RAM address or NULL.
-static bool IsStackBottom(const Core::CPUThreadGuard& guard, u32 addr)
+static bool IsStackBottom(u32 addr)
 {
-  return !addr || !PowerPC::MMU::HostIsRAMAddress(guard, addr);
+  return !addr || !PowerPC::MMU::HostIsRAMAddress(addr);
 }
 
-static void WalkTheStack(const Core::CPUThreadGuard& guard,
-                         const std::function<void(u32)>& stack_step)
+static void WalkTheStack(const std::function<void(u32)>& stack_step)
 {
-  const auto& ppc_state = guard.GetSystem().GetPPCState();
+  const auto& ppc_state = Core::System::GetInstance().GetPPCState();
 
-  if (!IsStackBottom(guard, ppc_state.gpr[1]))
+  if (!IsStackBottom(ppc_state.gpr[1]))
   {
-    u32 addr = PowerPC::MMU::HostRead<u32>(guard, ppc_state.gpr[1]);  // SP
+    u32 addr = PowerPC::MMU::HostRead<u32>(ppc_state.gpr[1]);  // SP
 
     // Walk the stack chain
-    for (int count = 0; !IsStackBottom(guard, addr + 4) && (count < 20); ++count)
+    for (int count = 0; !IsStackBottom(addr + 4) && (count < 20); ++count)
     {
-      u32 func_addr = PowerPC::MMU::HostRead<u32>(guard, addr + 4);
+      u32 func_addr = PowerPC::MMU::HostRead<u32>(addr + 4);
       stack_step(func_addr);
 
-      if (IsStackBottom(guard, addr))
+      if (IsStackBottom(addr))
         break;
 
-      addr = PowerPC::MMU::HostRead<u32>(guard, addr);
+      addr = PowerPC::MMU::HostRead<u32>(addr);
     }
   }
 }
 
-void PrintCallstack(const Core::CPUThreadGuard& guard, Common::Log::LogType type,
-                    Common::Log::LogLevel level)
+void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level)
 {
-  auto& power_pc = guard.GetSystem().GetPowerPC();
+  auto& power_pc = Core::System::GetInstance().GetPowerPC();
   const auto& ppc_state = power_pc.GetPPCState();
   auto& ppc_symbol_db = power_pc.GetSymbolDB();
 
@@ -69,7 +67,7 @@ void PrintCallstack(const Core::CPUThreadGuard& guard, Common::Log::LogType type
     GENERIC_LOG(type, level, " * %s  [ LR = %08x ]", lr_desc.c_str(), LR(ppc_state));
   }
 
-  WalkTheStack(guard, [type, level, &ppc_symbol_db](u32 func_addr) {
+  WalkTheStack([type, level, &ppc_symbol_db](u32 func_addr) {
     std::string func_desc = ppc_symbol_db.GetDescription(func_addr);
     if (func_desc.empty() || func_desc == "Invalid")
       func_desc = "(unknown)";

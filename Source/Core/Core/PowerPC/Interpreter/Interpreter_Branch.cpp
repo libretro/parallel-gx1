@@ -104,9 +104,8 @@ void Interpreter::HLEFunction(Interpreter& interpreter, UGeckoInstruction inst)
   interpreter.m_end_block = true;
 
   ASSERT(Core::IsCPUThread());
-  Core::CPUThreadGuard guard(interpreter.m_system);
 
-  HLE::Execute(guard, interpreter.m_ppc_state.pc, inst.hex);
+  HLE::Execute(interpreter.m_ppc_state.pc, inst.hex);
 }
 
 void Interpreter::rfi(Interpreter& interpreter, UGeckoInstruction inst)

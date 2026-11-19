@@ -19,11 +19,6 @@ namespace Common
 struct Symbol;
 }
 
-namespace Core
-{
-class CPUThreadGuard;
-}
-
 namespace PPCAnalyst
 {
 struct CodeOp  // 16B
@@ -208,7 +203,6 @@ private:
   bool m_enable_div_by_zero_exceptions = false;
 };
 
-bool AnalyzeFunction(const Core::CPUThreadGuard& guard, u32 startAddr, Common::Symbol& func,
-                     u32 max_size = 0);
+bool AnalyzeFunction(u32 startAddr, Common::Symbol& func, u32 max_size = 0);
 
 }  // namespace PPCAnalyst

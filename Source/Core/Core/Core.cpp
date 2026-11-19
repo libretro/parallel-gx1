@@ -527,8 +527,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 
   {
     ASSERT(IsCPUThread());
-    CPUThreadGuard guard(system);
-    if (!CBoot::BootUp(system, guard, std::move(boot)))
+    if (!CBoot::BootUp(system, std::move(boot)))
       return;
   }
 
@@ -791,8 +790,6 @@ void NotifyStateChanged(const Core::State state)
 
 void UpdateWantDeterminism(Core::System& system, bool initial)
 {
-  const Core::CPUThreadGuard guard(system);
-
   // For now, this value is not itself configurable.  Instead, individual
   // settings that depend on it, such as GPU determinism mode. should have
   // override options for testing,
@@ -811,7 +808,7 @@ void UpdateWantDeterminism(Core::System& system, bool initial)
 
     // We need to clear the cache because some parts of the JIT depend on want_determinism,
     // e.g. use of FMA.
-    system.GetJitInterface().ClearCache(guard);
+    system.GetJitInterface().ClearCache();
   }
 }
 
@@ -896,14 +893,6 @@ void UpdateInputGate(bool require_focus, bool require_full_focus)
   const bool full_focus_passes =
       !require_focus || !require_full_focus || (focus_passes && Host_RendererHasFullFocus());
   ControlReference::SetInputGate(focus_passes && full_focus_passes);
-}
-
-CPUThreadGuard::CPUThreadGuard(Core::System& system) : m_system(system)
-{
-}
-
-CPUThreadGuard::~CPUThreadGuard()
-{
 }
 
 void SingleCorePostRunShutdown()

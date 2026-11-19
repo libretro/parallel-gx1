@@ -46,8 +46,8 @@ static bool s_real_wiimotes_initialized = false;
 
 // Slots and the pool are owned by one thread, the manager (the scanner's pool thread). Other
 // threads hand it commands; the slots themselves are published pointers anyone may read.
-// A slot changes only while the manager holds the CPU thread (CPUThreadGuard), so the
-// emulated Bluetooth device, which keeps the pointer, never sees one go away under it.
+// A slot changes only in a job the manager hands the CPU thread, so the emulated Bluetooth
+// device, which keeps the pointer, never sees one go away under it.
 retro_atomic_ptr_t g_wiimotes[MAX_BBMOTES];
 
 Wiimote* GetWiimote(unsigned int index)

@@ -261,15 +261,15 @@ void SConfig::OnESTitleChanged()
   ReloadTextures(system);
 }
 
-void SConfig::OnTitleDirectlyBooted(const Core::CPUThreadGuard& guard)
+void SConfig::OnTitleDirectlyBooted()
 {
-  auto& system = guard.GetSystem();
+  auto& system = Core::System::GetInstance();
   if (!Core::IsRunningOrStarting(system))
     return;
 
   auto& ppc_symbol_db = system.GetPPCSymbolDB();
 
-  ppc_symbol_db.LoadMapOnBoot(guard);
+  ppc_symbol_db.LoadMapOnBoot();
   HLE::Reload(system);
 
   PatchEngine::Reload(system);

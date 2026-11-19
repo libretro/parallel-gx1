@@ -9,7 +9,6 @@
 
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 
@@ -22,7 +21,7 @@ class PPCSymbolDB;
 
 namespace HLE
 {
-using HookFunction = void (*)(const Core::CPUThreadGuard&);
+using HookFunction = void (*)();
 
 enum class HookType
 {
@@ -61,7 +60,7 @@ void Reload(Core::System& system);
 
 void Patch(Core::System& system, u32 pc, std::string_view func_name);
 u32 UnPatch(Core::System& system, std::string_view patch_name);
-void Execute(const Core::CPUThreadGuard& guard, u32 current_pc, u32 hook_index);
+void Execute(u32 current_pc, u32 hook_index);
 void ExecuteFromJIT(u32 current_pc, u32 hook_index, Core::System& system);
 
 // Returns the HLE hook index of the address

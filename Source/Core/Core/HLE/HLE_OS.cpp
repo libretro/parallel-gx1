@@ -28,17 +28,16 @@ enum class ParameterType : bool
   VariableArgumentList = true
 };
 
-static std::string GetStringVA(Core::System& system, const Core::CPUThreadGuard& guard,
-                               u32 str_reg = 3,
+static std::string GetStringVA(Core::System& system, u32 str_reg = 3,
                                ParameterType parameter_type = ParameterType::ParameterList);
 
-void HLE_OSPanic(const Core::CPUThreadGuard& guard)
+void HLE_OSPanic()
 {
-  auto& system = guard.GetSystem();
+  auto& system = Core::System::GetInstance();
   auto& ppc_state = system.GetPPCState();
 
-  std::string error = GetStringVA(system, guard);
-  std::string msg = GetStringVA(system, guard, 5);
+  std::string error = GetStringVA(system);
+  std::string msg = GetStringVA(system, 5);
 
   StringPopBackIf(&error, '\n');
   StringPopBackIf(&msg, '\n');
@@ -51,41 +50,40 @@ void HLE_OSPanic(const Core::CPUThreadGuard& guard)
 }
 
 // Generalized function for printing formatted string.
-static void HLE_GeneralDebugPrint(const Core::CPUThreadGuard& guard, ParameterType parameter_type)
+static void HLE_GeneralDebugPrint(ParameterType parameter_type)
 {
-  auto& system = guard.GetSystem();
+  auto& system = Core::System::GetInstance();
   const auto& ppc_state = system.GetPPCState();
 
   std::string report_message;
 
   // Is gpr3 pointing to a pointer (including nullptr) rather than an ASCII string
-  if (PowerPC::MMU::HostIsRAMAddress(guard, ppc_state.gpr[3]) &&
-      (PowerPC::MMU::HostIsRAMAddress(guard,
-                                      PowerPC::MMU::HostRead<u32>(guard, ppc_state.gpr[3])) ||
-       PowerPC::MMU::HostRead<u32>(guard, ppc_state.gpr[3]) == 0))
+  if (PowerPC::MMU::HostIsRAMAddress(ppc_state.gpr[3]) &&
+      (PowerPC::MMU::HostIsRAMAddress(PowerPC::MMU::HostRead<u32>(ppc_state.gpr[3])) ||
+       PowerPC::MMU::HostRead<u32>(ppc_state.gpr[3]) == 0))
   {
-    if (PowerPC::MMU::HostIsRAMAddress(guard, ppc_state.gpr[4]))
+    if (PowerPC::MMU::HostIsRAMAddress(ppc_state.gpr[4]))
     {
       // ___blank(void* this, const char* fmt, ...);
-      report_message = GetStringVA(system, guard, 4, parameter_type);
+      report_message = GetStringVA(system, 4, parameter_type);
     }
     else
     {
       // ___blank(void* this, int log_type, const char* fmt, ...);
-      report_message = GetStringVA(system, guard, 5, parameter_type);
+      report_message = GetStringVA(system, 5, parameter_type);
     }
   }
   else
   {
-    if (PowerPC::MMU::HostIsRAMAddress(guard, ppc_state.gpr[3]))
+    if (PowerPC::MMU::HostIsRAMAddress(ppc_state.gpr[3]))
     {
       // ___blank(const char* fmt, ...);
-      report_message = GetStringVA(system, guard, 3, parameter_type);
+      report_message = GetStringVA(system, 3, parameter_type);
     }
     else
     {
       // ___blank(int log_type, const char* fmt, ...);
-      report_message = GetStringVA(system, guard, 4, parameter_type);
+      report_message = GetStringVA(system, 4, parameter_type);
     }
   }
 
@@ -96,25 +94,25 @@ static void HLE_GeneralDebugPrint(const Core::CPUThreadGuard& guard, ParameterTy
 }
 
 // Generalized function for printing formatted string using parameter list.
-void HLE_GeneralDebugPrint(const Core::CPUThreadGuard& guard)
+void HLE_GeneralDebugPrint()
 {
-  HLE_GeneralDebugPrint(guard, ParameterType::ParameterList);
+  HLE_GeneralDebugPrint(ParameterType::ParameterList);
 }
 
 // Generalized function for printing formatted string using va_list.
-void HLE_GeneralDebugVPrint(const Core::CPUThreadGuard& guard)
+void HLE_GeneralDebugVPrint()
 {
-  HLE_GeneralDebugPrint(guard, ParameterType::VariableArgumentList);
+  HLE_GeneralDebugPrint(ParameterType::VariableArgumentList);
 }
 
 // __write_console(int fd, const void* buffer, const u32* size)
-void HLE_write_console(const Core::CPUThreadGuard& guard)
+void HLE_write_console()
 {
-  auto& system = guard.GetSystem();
+  auto& system = Core::System::GetInstance();
   const auto& ppc_state = system.GetPPCState();
 
-  std::string report_message = GetStringVA(system, guard, 4);
-  if (PowerPC::MMU::HostIsRAMAddress(guard, ppc_state.gpr[5]))
+  std::string report_message = GetStringVA(system, 4);
+  if (PowerPC::MMU::HostIsRAMAddress(ppc_state.gpr[5]))
   {
     const u32 size = system.GetMMU().Read<u32>(ppc_state.gpr[5]);
     if (size > report_message.size())
@@ -136,15 +134,15 @@ void HLE_write_console(const Core::CPUThreadGuard& guard)
 }
 
 // Log (v)dprintf message if fd is 1 (stdout) or 2 (stderr)
-static void HLE_LogDPrint(const Core::CPUThreadGuard& guard, ParameterType parameter_type)
+static void HLE_LogDPrint(ParameterType parameter_type)
 {
-  auto& system = guard.GetSystem();
+  auto& system = Core::System::GetInstance();
   const auto& ppc_state = system.GetPPCState();
 
   if (ppc_state.gpr[3] != 1 && ppc_state.gpr[3] != 2)
     return;
 
-  std::string report_message = GetStringVA(system, guard, 4, parameter_type);
+  std::string report_message = GetStringVA(system, 4, parameter_type);
   StringPopBackIf(&report_message, '\n');
   NOTICE_LOG(OSREPORT_HLE, "%08x->%08x| %s", LR(ppc_state), ppc_state.pc,
              SHIFTJISToUTF8(report_message).c_str());
@@ -152,42 +150,42 @@ static void HLE_LogDPrint(const Core::CPUThreadGuard& guard, ParameterType param
 
 // Log dprintf message
 //  -> int dprintf(int fd, const char* format, ...);
-void HLE_LogDPrint(const Core::CPUThreadGuard& guard)
+void HLE_LogDPrint()
 {
-  HLE_LogDPrint(guard, ParameterType::ParameterList);
+  HLE_LogDPrint(ParameterType::ParameterList);
 }
 
 // Log vdprintf message
 //  -> int vdprintf(int fd, const char* format, va_list ap);
-void HLE_LogVDPrint(const Core::CPUThreadGuard& guard)
+void HLE_LogVDPrint()
 {
-  HLE_LogDPrint(guard, ParameterType::VariableArgumentList);
+  HLE_LogDPrint(ParameterType::VariableArgumentList);
 }
 
 // Log (v)fprintf message if FILE is stdout or stderr
-static void HLE_LogFPrint(const Core::CPUThreadGuard& guard, ParameterType parameter_type)
+static void HLE_LogFPrint(ParameterType parameter_type)
 {
-  auto& system = guard.GetSystem();
+  auto& system = Core::System::GetInstance();
   const auto& ppc_state = system.GetPPCState();
 
   // The structure FILE is implementation defined.
   // Both libogc and Dolphin SDK seem to store the fd at the same address.
   int fd = -1;
-  if (PowerPC::MMU::HostIsRAMAddress(guard, ppc_state.gpr[3]) &&
-      PowerPC::MMU::HostIsRAMAddress(guard, ppc_state.gpr[3] + 0xF))
+  if (PowerPC::MMU::HostIsRAMAddress(ppc_state.gpr[3]) &&
+      PowerPC::MMU::HostIsRAMAddress(ppc_state.gpr[3] + 0xF))
   {
     // The fd is stored as a short at FILE+0xE.
-    fd = static_cast<short>(PowerPC::MMU::HostRead<u16>(guard, ppc_state.gpr[3] + 0xE));
+    fd = static_cast<short>(PowerPC::MMU::HostRead<u16>(ppc_state.gpr[3] + 0xE));
   }
   if (fd != 1 && fd != 2)
   {
     // On RVL SDK it seems stored at FILE+0x2.
-    fd = static_cast<short>(PowerPC::MMU::HostRead<u16>(guard, ppc_state.gpr[3] + 0x2));
+    fd = static_cast<short>(PowerPC::MMU::HostRead<u16>(ppc_state.gpr[3] + 0x2));
   }
   if (fd != 1 && fd != 2)
     return;
 
-  std::string report_message = GetStringVA(system, guard, 4, parameter_type);
+  std::string report_message = GetStringVA(system, 4, parameter_type);
   StringPopBackIf(&report_message, '\n');
   NOTICE_LOG(OSREPORT_HLE, "%08x->%08x| %s", LR(ppc_state), ppc_state.pc,
              SHIFTJISToUTF8(report_message).c_str());
@@ -195,16 +193,16 @@ static void HLE_LogFPrint(const Core::CPUThreadGuard& guard, ParameterType param
 
 // Log fprintf message
 //  -> int fprintf(FILE* stream, const char* format, ...);
-void HLE_LogFPrint(const Core::CPUThreadGuard& guard)
+void HLE_LogFPrint()
 {
-  HLE_LogFPrint(guard, ParameterType::ParameterList);
+  HLE_LogFPrint(ParameterType::ParameterList);
 }
 
 // Log vfprintf message
 //  -> int vfprintf(FILE* stream, const char* format, va_list ap);
-void HLE_LogVFPrint(const Core::CPUThreadGuard& guard)
+void HLE_LogVFPrint()
 {
-  HLE_LogFPrint(guard, ParameterType::VariableArgumentList);
+  HLE_LogFPrint(ParameterType::VariableArgumentList);
 }
 
 u32 HLEPrintArgs::GetU32()
@@ -224,16 +222,16 @@ double HLEPrintArgs::GetF64()
 
 std::string HLEPrintArgs::GetString(std::optional<u32> max_length)
 {
-  return max_length == 0u ? std::string() :
-                            PowerPC::MMU::HostGetString(m_guard, m_va_list->GetArgT<u32>(),
-                                                        max_length.value_or(0u));
+  return max_length == 0u ?
+             std::string() :
+             PowerPC::MMU::HostGetString(m_va_list->GetArgT<u32>(), max_length.value_or(0u));
 }
 
 std::u16string HLEPrintArgs::GetU16String(std::optional<u32> max_length)
 {
-  return max_length == 0u ? std::u16string() :
-                            PowerPC::MMU::HostGetU16String(m_guard, m_va_list->GetArgT<u32>(),
-                                                           max_length.value_or(0u));
+  return max_length == 0u ?
+             std::u16string() :
+             PowerPC::MMU::HostGetU16String(m_va_list->GetArgT<u32>(), max_length.value_or(0u));
 }
 
 // Appends @text, padded with spaces to @width (to its left, or its right when @left).
@@ -269,19 +267,17 @@ static void AppendFormatted(std::string& result, const char* spec, const char* c
   result.resize(at + static_cast<size_t>(n));
 }
 
-static std::string GetStringVA(Core::System& system, const Core::CPUThreadGuard& guard, u32 str_reg,
-                               ParameterType parameter_type)
+static std::string GetStringVA(Core::System& system, u32 str_reg, ParameterType parameter_type)
 {
   auto& ppc_state = system.GetPPCState();
 
-  std::string string = PowerPC::MMU::HostGetString(guard, ppc_state.gpr[str_reg]);
+  std::string string = PowerPC::MMU::HostGetString(ppc_state.gpr[str_reg]);
   // on the stack: a VAListStruct is held as the VAList it is
-  HLE::SystemVABI::VAList ap =
-      parameter_type == ParameterType::VariableArgumentList ?
-          HLE::SystemVABI::VAListStruct(guard, ppc_state.gpr[str_reg + 1]) :
-          HLE::SystemVABI::VAList(guard, ppc_state.gpr[1] + 0x8, str_reg + 1);
+  HLE::SystemVABI::VAList ap = parameter_type == ParameterType::VariableArgumentList ?
+                                   HLE::SystemVABI::VAListStruct(ppc_state.gpr[str_reg + 1]) :
+                                   HLE::SystemVABI::VAList(ppc_state.gpr[1] + 0x8, str_reg + 1);
 
-  HLEPrintArgs args(guard, &ap);
+  HLEPrintArgs args(&ap);
   return GetStringVA(&args, string);
 }
 

@@ -20,7 +20,6 @@ class IniFile;
 
 namespace Core
 {
-class CPUThreadGuard;
 class System;
 }  // namespace Core
 
@@ -84,7 +83,7 @@ struct SConfig
 
   // Triggered when Dolphin loads a title directly
   // Reloads title-specific map files, patches, etc.
-  static void OnTitleDirectlyBooted(const Core::CPUThreadGuard& guard);
+  static void OnTitleDirectlyBooted();
 
   // Direct title change from ES (Wii system)
   // Wii titles will still hit OnTitleDirectlyBooted

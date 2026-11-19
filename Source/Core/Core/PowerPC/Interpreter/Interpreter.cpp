@@ -201,13 +201,11 @@ void Interpreter::unknown_instruction(Interpreter& interpreter, UGeckoInstructio
 {
   ASSERT(Core::IsCPUThread());
   auto& system = interpreter.m_system;
-  Core::CPUThreadGuard guard(system);
 
   const u32 last_pc = interpreter.m_last_pc;
-  const u32 opcode = PowerPC::MMU::HostRead<u32>(guard, last_pc);
+  const u32 opcode = PowerPC::MMU::HostRead<u32>(last_pc);
   NOTICE_LOG(POWERPC, "Last PC = %08x : %08x", last_pc, opcode);
-  Dolphin_Debugger::PrintCallstack(guard, Common::Log::LogType::POWERPC,
-                                   Common::Log::LogLevel::LNOTICE);
+  Dolphin_Debugger::PrintCallstack(Common::Log::LogType::POWERPC, Common::Log::LogLevel::LNOTICE);
 
   const auto& ppc_state = interpreter.m_ppc_state;
   NOTICE_LOG(POWERPC,
