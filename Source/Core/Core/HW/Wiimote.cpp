@@ -14,6 +14,7 @@
 #include "Core/Config/WiimoteSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
+#include "Core/HW/CPU.h"
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 #include "Core/IOS/IOS.h"
@@ -33,6 +34,26 @@ namespace WiimoteCommon
 static retro_atomic_int_t s_wiimote_sources[MAX_BBMOTES]; /* WiimoteSource values */
 static std::optional<Config::ConfigChangedCallbackID> s_config_callback_id = std::nullopt;
 
+// The sources the emulated Bluetooth device is still to be told of, one bit each, and the one job
+// the CPU thread tells it from: queued at most once at a time, the frontend not waiting on it.
+static retro_atomic_int_t s_sources_to_update;
+static retro_atomic_int_t s_update_job_queued;
+static CPU::Job s_update_job;
+
+// CPU thread
+static void UpdateChangedSources(void*)
+{
+  // Re-armed first: a change from here on queues the job again, or is taken below.
+  retro_atomic_store_release_int(&s_update_job_queued, 0);
+  const int sources = retro_atomic_exchange_int(&s_sources_to_update, 0);
+  unsigned int i;
+  for (i = 0; i < MAX_BBMOTES; i++)
+  {
+    if (sources & (1 << i))
+      UpdateSource(i);
+  }
+}
+
 WiimoteSource GetSource(unsigned int index)
 {
   return static_cast<WiimoteSource>(retro_atomic_load_acquire_int(&s_wiimote_sources[index]));
@@ -51,8 +72,20 @@ void OnSourceChanged(unsigned int index, WiimoteSource source)
 
   WiimoteReal::HandleWiimoteSourceChange(index);
 
-  Core::RunOnCPUThread(Core::System::GetInstance(),
-                       [index] { WiimoteCommon::UpdateSource(index); });
+  Core::System& system = Core::System::GetInstance();
+  if (Core::IsCPUThread() || !Core::IsRunning(system))
+  {
+    UpdateSource(index);
+    return;
+  }
+  retro_atomic_fetch_or_int(&s_sources_to_update, 1 << index);
+  if (!retro_atomic_exchange_int(&s_update_job_queued, 1))
+  {
+    s_update_job.run = UpdateChangedSources;
+    s_update_job.context = nullptr;
+    s_update_job.done = nullptr;
+    system.GetCPU().AddCPUThreadJob(&s_update_job);
+  }
 }
 
 void RefreshConfig()
@@ -190,6 +223,9 @@ void Initialize(InitializeMode init_mode)
 
   if (!WiimoteCommon::s_config_callback_id)
     WiimoteCommon::s_config_callback_id = Config::AddConfigChangedCallback(WiimoteCommon::RefreshConfig);
+  // a job the last game's CPU thread dropped at shutdown is not queued
+  retro_atomic_store_release_int(&WiimoteCommon::s_update_job_queued, 0);
+  retro_atomic_store_release_int(&WiimoteCommon::s_sources_to_update, 0);
   WiimoteCommon::RefreshConfig();
 
   WiimoteReal::Initialize(init_mode);

@@ -64,7 +64,6 @@ void CPUManager::Shutdown()
 void CPUManager::FinishJob(Job* job)
 {
   retro_atomic_int_t* const done = job->done;
-  delete job;
   if (done)
   {
     retro_atomic_store_release_int(done, 1);
@@ -84,7 +83,7 @@ void CPUManager::ExecutePendingJobs()
   {
     Job* job = reinterpret_cast<Job*>(node);
     node = node->next;
-    job->function();
+    job->run(job->context);
     FinishJob(job);
   }
 }
@@ -320,10 +319,8 @@ void CPUManager::Break()
   RunAdjacentSystems(false);
 }
 
-void CPUManager::AddCPUThreadJob(Common::MoveOnlyFunction<void()> function,
-                                 retro_atomic_int_t* done)
+void CPUManager::AddCPUThreadJob(Job* job)
 {
-  Job* job = new Job{{}, std::move(function), done};
   mpsc_stack_push(&m_pending_jobs, &job->link);
   /* Out of the run loop at the slice's end, or off the frame gate, for it. In single core the
    * thread runs the CPU only inside its frames, and takes the jobs as the next one starts. */

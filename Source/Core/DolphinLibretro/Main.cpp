@@ -649,6 +649,12 @@ void retro_run(void)
   Libretro::Audio::PushFields();
 }
 
+/* CPU thread: the state's size, counted up from 0 in the size_t the context points at */
+static void MeasureState(void* context)
+{
+  PointerWrap p(static_cast<u8**>(context), sizeof(size_t), PointerWrap::Mode::Measure);
+  State::DoState(Core::System::GetInstance(), p);
+}
 
 size_t retro_serialize_size(void)
 {
@@ -666,10 +672,7 @@ size_t retro_serialize_size(void)
     ar->SetPassthrough(true);
 
   Libretro::Video::D3D11Lock();
-  Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
-    PointerWrap p((u8**)&size, sizeof(size_t), PointerWrap::Mode::Measure);
-    State::DoState(Core::System::GetInstance(), p);
-    }, true);  // wait = true
+  Core::RunOnCPUThread(Core::System::GetInstance(), MeasureState, &size);
   Libretro::Video::D3D11Unlock();
 
   if (system.IsDualCoreMode())
@@ -841,6 +844,19 @@ static void enable_cheat_by_code(bool enabled, const char* code)
   }
 }
 
+// CPU thread: the cheats off
+static void ShutdownPatches(void*)
+{
+  PatchEngine::Shutdown();
+}
+
+// CPU thread: the game's Action Replay and Gecko codes, as they are now
+static void ApplyCheats(void*)
+{
+  ActionReplay::ApplyCodes(Libretro::g_ar_codes.codes, Libretro::g_ar_codes.count);
+  Gecko::SetActiveCodes(Libretro::g_gecko_codes.codes, Libretro::g_gecko_codes.count);
+}
+
 // reset cheats to off
 void retro_cheat_reset(void)
 {
@@ -850,9 +866,7 @@ void retro_cheat_reset(void)
     return;
 
   Libretro::FinishFieldInFlight();
-  Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
-    PatchEngine::Shutdown();
-  }, true);
+  Core::RunOnCPUThread(Core::System::GetInstance(), ShutdownPatches, NULL);
   Libretro::ResumeAfterField();
 
   Libretro::reload_cheats_from_ini();
@@ -880,13 +894,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
   enable_cheat_by_code(enabled, code);
 
   Libretro::FinishFieldInFlight();
-  Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
-    // Apply Action Replay
-    ActionReplay::ApplyCodes(Libretro::g_ar_codes.codes, Libretro::g_ar_codes.count);
-
-    // Apply Gecko
-    Gecko::SetActiveCodes(Libretro::g_gecko_codes.codes, Libretro::g_gecko_codes.count);
-  }, true);
+  Core::RunOnCPUThread(Core::System::GetInstance(), ApplyCheats, NULL);
   Libretro::ResumeAfterField();
 }
 } // extern "C"

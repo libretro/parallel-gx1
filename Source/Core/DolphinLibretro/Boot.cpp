@@ -1112,6 +1112,17 @@ void retro_unload_game(void)
 namespace Libretro
 {
 // Disk swapping
+/* CPU thread: the disc out, or the selected one in; the context is the bool asking for out */
+static void SetEjectStateOnCPU(void* context)
+{
+  auto& system = Core::System::GetInstance();
+
+  if (*static_cast<const bool*>(context))
+    system.GetDVDInterface().EjectDisc(DVD::EjectCause::User);
+  else if (disk_index < disk_count)
+    system.GetDVDInterface().ChangeDisc(disk_paths[disk_index]);
+}
+
 static bool retro_set_eject_state(bool ejected)
 {
   if (eject_state == ejected)
@@ -1120,17 +1131,7 @@ static bool retro_set_eject_state(bool ejected)
   eject_state = ejected;
 
   Libretro::FinishFieldInFlight();
-  Core::RunOnCPUThread(
-      Core::System::GetInstance(),
-      [ejected] {
-        auto& system = Core::System::GetInstance();
-
-        if (ejected)
-          system.GetDVDInterface().EjectDisc(DVD::EjectCause::User);
-        else if (disk_index < disk_count)
-          system.GetDVDInterface().ChangeDisc(disk_paths[disk_index]);
-      },
-      true);  // wait_for_completion = true
+  Core::RunOnCPUThread(Core::System::GetInstance(), SetEjectStateOnCPU, &ejected);
   Libretro::ResumeAfterField();
 
   return true;

@@ -98,7 +98,8 @@ work over through atomics and eventcounts, and nothing waits on a clock.
   state one owner.
 - **The CPU thread owns the machine.** No other thread pauses it and
   stands in for it. Work for it goes in as a job (`Core::RunOnCPUThread`,
-  an mpsc stack): in dual core the CPU thread leaves the run loop at the
+  an mpsc stack), a function and context in a node its owner keeps until
+  the job is taken, so nothing is allocated: in dual core the CPU thread leaves the run loop at the
   slice's end, or the frame gate, for it (`CPU::State::RunJobs`); in
   single core it takes the jobs as its next frame starts. A caller that
   needs the result waits on an eventcount, and never from a thread the

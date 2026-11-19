@@ -123,10 +123,9 @@ State GetState(Core::System& system);
 // game.
 void DisplayMessage(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
 
-// Runs the function on the CPU thread: queued for it from another, which waits for it to be done
-// when asked to. Never asked to wait from a thread the CPU thread waits for.
-void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function,
-                    bool wait_for_completion = false);
+// Runs run(context) on the CPU thread: queued for it from another, which waits until it is done.
+// Never called from a thread the CPU thread waits for.
+void RunOnCPUThread(Core::System& system, void (*run)(void* context), void* context);
 
 // for calling back into UI code without introducing a dependency on it in core
 using StateChangedCallbackFunc = std::function<void(Core::State)>;

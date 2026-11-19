@@ -7,8 +7,6 @@
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
 
-#include "Common/Functional.h"
-
 namespace Core
 {
 class System;
@@ -20,6 +18,17 @@ enum class CPUCore;
 
 namespace CPU
 {
+/* A job for the CPU thread, in storage its owner keeps until the job is taken: no allocation. */
+struct Job
+{
+  mpsc_stack_node_t link; /* first: the drained chain is cast back to jobs */
+  void (*run)(void* context);
+  void* context;
+  /* set once the job ran or was dropped at shutdown, after which the CPU thread no longer
+   * touches the job; NULL for none */
+  retro_atomic_int_t* done;
+};
+
 enum class State
 {
   Running = 0,
@@ -81,10 +90,8 @@ public:
   const State* GetStatePtr() const;
 
   // Any thread: queues a job for the CPU thread, which leaves the run loop for it at the end of
-  // the timing slice, or takes it parked or stepping; done, when given, is set once it ran or was
-  // dropped at shutdown.
-  void AddCPUThreadJob(Common::MoveOnlyFunction<void()> function,
-                       retro_atomic_int_t* done = nullptr);
+  // the timing slice, or takes it parked or stepping. A job is queued again only once taken.
+  void AddCPUThreadJob(Job* job);
   // Until the job given done has been taken.
   void WaitForJob(retro_atomic_int_t* done);
   bool HasPendingJobs();
@@ -93,14 +100,8 @@ public:
   {
     return retro_atomic_load_acquire_int(&m_cpu_run_state_reached) != 0;
   }
-private:
-  struct Job
-  {
-    mpsc_stack_node_t link;  // first: the drained chain is cast back to jobs
-    Common::MoveOnlyFunction<void()> function;
-    retro_atomic_int_t* done;
-  };
 
+private:
   void FinishJob(Job* job);
   void DropPendingJobs();
 

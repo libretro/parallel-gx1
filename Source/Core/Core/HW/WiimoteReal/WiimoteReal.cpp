@@ -153,6 +153,29 @@ static std::unique_ptr<Wiimote> TakeWiimoteFromSlot(unsigned int index)
 
 static WiimoteScanner s_wiimote_scanner;
 
+// A slot's remote, handed to or taken from the CPU thread by the manager
+struct SlotChange
+{
+  unsigned int index;
+  std::unique_ptr<Wiimote> wiimote;
+};
+
+// CPU thread: the slot's remote taken out into the change, the emulated device told
+static void TakeFromSlotOnCPU(void* context)
+{
+  SlotChange* const change = static_cast<SlotChange*>(context);
+  change->wiimote = TakeWiimoteFromSlot(change->index);
+  WiimoteCommon::UpdateSource(change->index);
+}
+
+// CPU thread: the change's remote put in the slot, the emulated device told
+static void PutInSlotOnCPU(void* context)
+{
+  SlotChange* const change = static_cast<SlotChange*>(context);
+  PutWiimoteInSlot(change->index, std::move(change->wiimote));
+  WiimoteCommon::UpdateSource(change->index);
+}
+
 // Attempt to fill a real wiimote slot from the pool or by stealing from ControllerInterface.
 // Manager only.
 static void TryToFillWiimoteSlot(u32 index)
@@ -746,15 +769,9 @@ static void RunManagerCommand(ManagerCommand& command)
     break;
   case ManagerCommand::Kind::SourceChange:
   {
-    std::unique_ptr<Wiimote> removed_wiimote;
-    const unsigned int index = command.index;
-    Core::RunOnCPUThread(
-        Core::System::GetInstance(),
-        [&removed_wiimote, index] {
-          removed_wiimote = TakeWiimoteFromSlot(index);
-          WiimoteCommon::UpdateSource(index);
-        },
-        true);
+    SlotChange change{command.index, nullptr};
+    Core::RunOnCPUThread(Core::System::GetInstance(), TakeFromSlotOnCPU, &change);
+    std::unique_ptr<Wiimote> removed_wiimote = std::move(change.wiimote);
 
     // The Wiimote pool isn't currently designed to handle Balance Boards.
     // Refactoring will be needed to differentiate between remotes/boards.
@@ -1216,13 +1233,10 @@ static bool TryToConnectWiimoteToSlot(std::unique_ptr<Wiimote>& wm, unsigned int
   led_report.leds = u8(1 << (i % WIIMOTE_BALANCE_BOARD));
   wm->QueueReport(led_report);
 
-  Core::RunOnCPUThread(
-      Core::System::GetInstance(),
-      [&wm, i] {
-        PutWiimoteInSlot(i, std::move(wm));
-        WiimoteCommon::UpdateSource(i);
-      },
-      true);
+  SlotChange change{i, std::move(wm)};
+  Core::RunOnCPUThread(Core::System::GetInstance(), PutInSlotOnCPU, &change);
+  // still here when the CPU thread had gone and dropped the job
+  wm = std::move(change.wiimote);
 
   NOTICE_LOG(WIIMOTE, "Connected real wiimote to slot %u.", i + 1);
 
@@ -1242,14 +1256,8 @@ static void HandleWiimoteDisconnect(int index)
 {
   // The Wii Remote object must exist through the call to UpdateSource
   // to prevent WiimoteDevice from having a dangling HIDWiimote pointer.
-  std::unique_ptr<Wiimote> temp_real_wiimote;
-  Core::RunOnCPUThread(
-      Core::System::GetInstance(),
-      [&temp_real_wiimote, index] {
-        temp_real_wiimote = TakeWiimoteFromSlot(index);
-        WiimoteCommon::UpdateSource(index);
-      },
-      true);
+  SlotChange change{static_cast<unsigned int>(index), nullptr};
+  Core::RunOnCPUThread(Core::System::GetInstance(), TakeFromSlotOnCPU, &change);
 }
 
 // This is called from the GUI thread

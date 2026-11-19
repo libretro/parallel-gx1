@@ -616,25 +616,24 @@ State GetState(Core::System& system)
     return state;
 }
 
-void RunOnCPUThread(Core::System& system, Common::MoveOnlyFunction<void()> function,
-                    bool wait_for_completion)
+void RunOnCPUThread(Core::System& system, void (*run)(void* context), void* context)
 {
+  retro_atomic_int_t done;
+  CPU::Job job;
+
   // With no CPU thread, nothing runs it but the caller.
   if (IsCPUThread() || !IsRunning(system))
   {
-    function();
+    run(context);
     return;
   }
 
-  if (!wait_for_completion)
-  {
-    system.GetCPU().AddCPUThreadJob(std::move(function));
-    return;
-  }
-
-  retro_atomic_int_t done;
   retro_atomic_int_init(&done, 0);
-  system.GetCPU().AddCPUThreadJob(std::move(function), &done);
+  job.link.next = nullptr;
+  job.run = run;
+  job.context = context;
+  job.done = &done;
+  system.GetCPU().AddCPUThreadJob(&job);
   system.GetCPU().WaitForJob(&done);
 }
 
