@@ -4,6 +4,8 @@
 
 #include "Core/DSP/DSPCore.h"
 
+#include <cstring>
+
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/MemoryUtil.h"
@@ -16,7 +18,7 @@ namespace DSP
 {
 void SDSP::InitializeIFX()
 {
-  m_ifx_regs.fill(0);
+  memset(m_ifx_regs, 0, sizeof(m_ifx_regs));
 
   retro_atomic_store_release_int(GetMailbox(Mailbox::CPU), 0);
   retro_atomic_store_release_int(GetMailbox(Mailbox::DSP), 0);

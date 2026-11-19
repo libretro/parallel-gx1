@@ -465,7 +465,7 @@ private:
   u64 m_step_counter = 0;
 
   // Accelerator / DMA / other hardware registers. Not GPRs.
-  std::array<u16, 256> m_ifx_regs{};
+  u16 m_ifx_regs[256] = {};
 
   Accelerator m_accelerator{nullptr, AcceleratorKind::LLE};
   retro_atomic_int_t m_mailbox[2]{}; /* u32 values */
