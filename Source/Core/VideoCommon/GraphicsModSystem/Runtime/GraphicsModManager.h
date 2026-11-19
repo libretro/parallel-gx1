@@ -11,8 +11,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "Common/HookableEvent.h"
-
 #include "VideoCommon/GraphicsModSystem/Runtime/FBInfo.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModAction.h"
 #include "VideoCommon/XFMemory.h"
@@ -31,15 +29,11 @@ public:
   GetDrawStartedActions(const std::string& texture_name) const;
   const std::vector<GraphicsModAction*>&
   GetTextureLoadActions(const std::string& texture_name) const;
-  const std::vector<GraphicsModAction*>&
-  GetTextureCreateActions(const std::string& texture_name) const;
   const std::vector<GraphicsModAction*>& GetEFBActions(const FBInfo& efb) const;
-  const std::vector<GraphicsModAction*>& GetXFBActions(const FBInfo& xfb) const;
 
   void Load(const GraphicsModGroupConfig& config);
 
 private:
-  void EndOfFrame();
   void Reset();
 
   class DecoratedAction;
@@ -58,14 +52,9 @@ private:
       m_projection_texture_target_to_actions;
   std::unordered_map<std::string, std::vector<GraphicsModAction*>> m_draw_started_target_to_actions;
   std::unordered_map<std::string, std::vector<GraphicsModAction*>> m_load_texture_target_to_actions;
-  std::unordered_map<std::string, std::vector<GraphicsModAction*>>
-      m_create_texture_target_to_actions;
   std::unordered_map<FBInfo, std::vector<GraphicsModAction*>, FBInfoHasher> m_efb_target_to_actions;
-  std::unordered_map<FBInfo, std::vector<GraphicsModAction*>, FBInfoHasher> m_xfb_target_to_actions;
 
   std::unordered_set<std::string> m_groups;
-
-  Common::EventHook m_end_of_frame_event;
 };
 
 extern std::unique_ptr<GraphicsModManager> g_graphics_mod_manager;

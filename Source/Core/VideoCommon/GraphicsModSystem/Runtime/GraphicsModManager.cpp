@@ -24,7 +24,6 @@
 #include "VideoCommon/GraphicsModSystem/Constants.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionFactory.h"
 #include "VideoCommon/VideoConfig.h"
-#include "VideoCommon/VideoEvents.h"
 
 std::unique_ptr<GraphicsModManager> g_graphics_mod_manager;
 
@@ -65,18 +64,6 @@ public:
       return;
     m_action_impl->OnTextureLoad(texture_load);
   }
-  void OnTextureCreate(GraphicsModActionData::TextureCreate* texture_create) override
-  {
-    if (!m_mod.m_enabled)
-      return;
-    m_action_impl->OnTextureCreate(texture_create);
-  }
-  void OnFrameEnd() override
-  {
-    if (!m_mod.m_enabled)
-      return;
-    m_action_impl->OnFrameEnd();
-  }
 
 private:
   std::unique_ptr<GraphicsModAction> m_action_impl;
@@ -99,9 +86,6 @@ bool GraphicsModManager::Initialize()
     g_ActiveConfig.graphics_mod_config->Load();
     g_ActiveConfig.graphics_mod_config->SetChangeCount(old_game_mod_changes);
     g_graphics_mod_manager->Load(*g_ActiveConfig.graphics_mod_config);
-
-    m_end_of_frame_event =
-        GetVideoEvents().after_frame_event.Register([this](Core::System&) { EndOfFrame(); });
   }
 
   return true;
@@ -169,31 +153,9 @@ GraphicsModManager::GetTextureLoadActions(const std::string& texture_name) const
   return m_default;
 }
 
-const std::vector<GraphicsModAction*>&
-GraphicsModManager::GetTextureCreateActions(const std::string& texture_name) const
-{
-  if (const auto it = m_create_texture_target_to_actions.find(texture_name);
-      it != m_create_texture_target_to_actions.end())
-  {
-    return it->second;
-  }
-
-  return m_default;
-}
-
 const std::vector<GraphicsModAction*>& GraphicsModManager::GetEFBActions(const FBInfo& efb) const
 {
   if (const auto it = m_efb_target_to_actions.find(efb); it != m_efb_target_to_actions.end())
-  {
-    return it->second;
-  }
-
-  return m_default;
-}
-
-const std::vector<GraphicsModAction*>& GraphicsModManager::GetXFBActions(const FBInfo& xfb) const
-{
-  if (const auto it = m_efb_target_to_actions.find(xfb); it != m_efb_target_to_actions.end())
   {
     return it->second;
   }
@@ -283,10 +245,8 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
                   m_load_texture_target_to_actions[the_target.m_texture_info_string].push_back(
                       m_actions.back().get());
                 },
-                [&](const CreateTextureTarget& the_target) {
-                  m_create_texture_target_to_actions[the_target.m_texture_info_string].push_back(
-                      m_actions.back().get());
-                },
+                // no action runs on texture creation or on XFB copies
+                [](const CreateTextureTarget&) {},
                 [&](const EFBTarget& the_target) {
                   FBInfo info;
                   info.m_height = the_target.m_height;
@@ -294,13 +254,7 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
                   info.m_texture_format = the_target.m_texture_format;
                   m_efb_target_to_actions[info].push_back(m_actions.back().get());
                 },
-                [&](const XFBTarget& the_target) {
-                  FBInfo info;
-                  info.m_height = the_target.m_height;
-                  info.m_width = the_target.m_width;
-                  info.m_texture_format = the_target.m_texture_format;
-                  m_xfb_target_to_actions[info].push_back(m_actions.back().get());
-                },
+                [](const XFBTarget&) {},
                 [&](const ProjectionTarget& the_target) {
                   if (the_target.m_texture_info_string)
                   {
@@ -364,14 +318,6 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
   }
 }
 
-void GraphicsModManager::EndOfFrame()
-{
-  for (auto&& action : m_actions)
-  {
-    action->OnFrameEnd();
-  }
-}
-
 void GraphicsModManager::Reset()
 {
   m_actions.clear();
@@ -380,7 +326,5 @@ void GraphicsModManager::Reset()
   m_projection_texture_target_to_actions.clear();
   m_draw_started_target_to_actions.clear();
   m_load_texture_target_to_actions.clear();
-  m_create_texture_target_to_actions.clear();
   m_efb_target_to_actions.clear();
-  m_xfb_target_to_actions.clear();
 }

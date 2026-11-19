@@ -2106,17 +2106,7 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
   std::string texture_name = "";
 
   if (g_ActiveConfig.bGraphicMods)
-  {
-    u32 height = texture_info.GetRawHeight();
-    u32 width = texture_info.GetRawWidth();
     texture_name = texture_info.CalculateTextureName().GetFullName();
-    GraphicsModActionData::TextureCreate texture_create{texture_name, width, height, nullptr,
-                                                        nullptr};
-    for (const auto& action : g_graphics_mod_manager->GetTextureCreateActions(texture_name))
-    {
-      action->OnTextureCreate(&texture_create);
-    }
-  }
 
   auto entry =
       CreateTextureEntry(TextureCreationInfo{base_hash, full_hash, bytes_per_block, palette_size},
@@ -2878,33 +2868,23 @@ void TextureCacheBase::CopyRenderTargetToTexture(
     return;
   }
 
-  if (g_ActiveConfig.bGraphicMods)
+  if (g_ActiveConfig.bGraphicMods && !is_xfb_copy)
   {
     FBInfo info;
     info.m_width = tex_w;
     info.m_height = tex_h;
     info.m_texture_format = baseFormat;
-    if (is_xfb_copy)
+    bool skip = false;
+    GraphicsModActionData::PreEFB efb{tex_w, tex_h, &skip, &scaled_tex_w, &scaled_tex_h};
+    for (const auto& action : g_graphics_mod_manager->GetEFBActions(info))
     {
-      for (const auto& action : g_graphics_mod_manager->GetXFBActions(info))
-      {
-        action->BeforeXFB();
-      }
+      action->BeforeEFB(&efb);
     }
-    else
+    if (skip == true)
     {
-      bool skip = false;
-      GraphicsModActionData::PreEFB efb{tex_w, tex_h, &skip, &scaled_tex_w, &scaled_tex_h};
-      for (const auto& action : g_graphics_mod_manager->GetEFBActions(info))
-      {
-        action->BeforeEFB(&efb);
-      }
-      if (skip == true)
-      {
-        if (copy_to_ram)
-          UninitializeEFBMemory(dst, dstStride, bytes_per_row, num_blocks_y);
-        return;
-      }
+      if (copy_to_ram)
+        UninitializeEFBMemory(dst, dstStride, bytes_per_row, num_blocks_y);
+      return;
     }
   }
 
