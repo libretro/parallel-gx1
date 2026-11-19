@@ -433,7 +433,7 @@ u8** JitBaseBlockCache::GetEntryPoints()
 
 JitBlock** JitBaseBlockCache::GetFastBlockMapFallback()
 {
-  return m_fast_block_map_fallback.data();
+  return m_fast_block_map_fallback;
 }
 
 JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)

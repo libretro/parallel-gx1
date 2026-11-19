@@ -537,7 +537,7 @@ void Jit64::mtcrf(UGeckoInstruction inst)
     }
     else
     {
-      MOV(64, R(RSCRATCH2), ImmPtr(PowerPC::ConditionRegister::s_crTable.data()));
+      MOV(64, R(RSCRATCH2), ImmPtr(PowerPC::ConditionRegister::s_crTable));
       RCX64Reg Rs = gpr.Bind(inst.RS, RCMode::Read);
       RegCache::Realize(Rs);
       for (int i = 0; i < 8; i++)
@@ -583,7 +583,7 @@ void Jit64::mcrxr(UGeckoInstruction inst)
   // [SO OV CA 0] << 3
   SHL(32, R(RSCRATCH), Imm8(4));
 
-  MOV(64, R(RSCRATCH2), ImmPtr(PowerPC::ConditionRegister::s_crTable.data()));
+  MOV(64, R(RSCRATCH2), ImmPtr(PowerPC::ConditionRegister::s_crTable));
   MOV(64, R(RSCRATCH), MRegSum(RSCRATCH, RSCRATCH2));
   MOV(64, CROffset(inst.CRFD), R(RSCRATCH));
 

@@ -73,7 +73,7 @@
 // After resetting the stack to the top, we call _resetstkoflw() to restore
 // the guard page at the 256kb mark.
 
-const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 23> JitBase::JIT_SETTINGS{{
+const JitBase::JitSetting JitBase::JIT_SETTINGS[23] = {
     {&JitBase::bJITOff, &Config::MAIN_DEBUG_JIT_OFF},
     {&JitBase::bJITLoadStoreOff, &Config::MAIN_DEBUG_JIT_LOAD_STORE_OFF},
     {&JitBase::bJITLoadStorelXzOff, &Config::MAIN_DEBUG_JIT_LOAD_STORE_LXZ_OFF},
@@ -97,7 +97,7 @@ const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 23> JitB
     {&JitBase::m_fastmem_enabled, &Config::MAIN_FASTMEM},
     {&JitBase::m_page_table_fastmem_enabled, &Config::MAIN_PAGE_TABLE_FASTMEM},
     {&JitBase::m_accurate_cpu_cache_enabled, &Config::MAIN_ACCURATE_CPU_CACHE},
-}};
+};
 
 const u8* JitBase::Dispatch(JitBase& jit)
 {
@@ -134,17 +134,20 @@ JitBase::~JitBase()
 
 bool JitBase::DoesConfigNeedRefresh() const
 {
-  return std::ranges::any_of(JIT_SETTINGS, [this](const auto& pair) {
-    return this->*pair.first != Config::Get(*pair.second);
-  });
+  for (const JitSetting& setting : JIT_SETTINGS)
+  {
+    if (this->*setting.member != Config::Get(*setting.info))
+      return true;
+  }
+  return false;
 }
 
 void JitBase::RefreshConfig()
 {
   const bool wanted_page_table_mappings = WantsPageTableMappings();
 
-  for (const auto& [member, config_info] : JIT_SETTINGS)
-    this->*member = Config::Get(*config_info);
+  for (const JitSetting& setting : JIT_SETTINGS)
+    this->*setting.member = Config::Get(*setting.info);
 
   if (m_accurate_cpu_cache_enabled)
   {

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include "Common/CommonTypes.h"
 
 namespace PowerPC
@@ -40,7 +39,7 @@ enum CRBits
 struct ConditionRegister
 {
   // convert flags into 64-bit CR values with a lookup table
-  static const std::array<u64, 16> s_crTable;
+  static const u64 s_crTable[16];
 
   u64 fields[8];
 

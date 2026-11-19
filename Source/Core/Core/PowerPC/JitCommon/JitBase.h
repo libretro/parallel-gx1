@@ -102,7 +102,7 @@ protected:
 
     bool assumeNoPairedQuantize;
     BitSet8 constantGqrValid;
-    std::array<u32, 8> constantGqr;
+    u32 constantGqr[8];
     bool firstFPInstructionFound;
     bool isLastInstruction;
     int skipInstructions;
@@ -164,7 +164,13 @@ protected:
   uintptr_t m_stack_guard_base = 0;
   uintptr_t m_stack_guard_at = 0;
 
-  static const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 23> JIT_SETTINGS;
+  // A JIT option and the config setting it is read from
+  struct JitSetting
+  {
+    bool JitBase::*member;
+    const Config::Info<bool>* info;
+  };
+  static const JitSetting JIT_SETTINGS[23];
 
   bool DoesConfigNeedRefresh() const;
   void RefreshConfig();

@@ -426,6 +426,6 @@ private:
 
   // An alternative for the above but without a shm segment
   // in case the shm memory region couldn't be allocated.
-  std::array<JitBlock*, FAST_BLOCK_MAP_FALLBACK_ELEMENTS>
-      m_fast_block_map_fallback{};  // start_addr & mask -> number
+  JitBlock* m_fast_block_map_fallback[FAST_BLOCK_MAP_FALLBACK_ELEMENTS] =
+      {};  // start_addr & mask -> number
 };
