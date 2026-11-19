@@ -32,6 +32,7 @@ enum class Installation
 };
 
 static Installation s_code_handler_installed = Installation::Uninstalled;
+static bool s_code_handler_enabled = true;
 /* The currently active codes: each one's name and where its words start among
  * s_active_words, which holds two per line, address then data. */
 struct ActiveCode
@@ -233,9 +234,14 @@ void Shutdown()
   s_code_handler_installed = Installation::Uninstalled;
 }
 
+void SetCodeHandlerEnabled(bool enabled)
+{
+  s_code_handler_enabled = enabled;
+}
+
 void RunCodeHandler()
 {
-  if (!Config::AreCheatsEnabled())
+  if (!s_code_handler_enabled || !Config::AreCheatsEnabled())
     return;
 
   // Emulation thread only; the codes are never touched elsewhere.

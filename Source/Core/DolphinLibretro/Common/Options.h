@@ -86,6 +86,7 @@ namespace core {
   inline constexpr char FASTMEM_ARENA[] = "dolphin_fastmem_arena";
   inline constexpr char MAIN_ACCURATE_CPU_CACHE[] = "dolphin_main_accurate_cpu_cache";
   inline constexpr char CHEATS_ENABLED[] = "dolphin_cheats_enabled";
+  inline constexpr char GECKO_CODE_HANDLER[] = "dolphin_gecko_code_handler";
   inline constexpr char SKIP_GC_BIOS[] = "dolphin_skip_gc_bios";
   inline constexpr char DISC_BASED_GAMES_BOOT_TO_WII_MENU[] = "dolphin_disc_based_games_boot_to_wii_menu";
   inline constexpr char LANGUAGE[] = "dolphin_language";

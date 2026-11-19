@@ -26,6 +26,7 @@
 #include "Core/Config/SYSCONFSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
+#include "Core/GeckoCode.h"
 #include "Core/GeckoCodeConfig.h"
 #include "Core/HW/DVD/DVDInterface.h"
 #include "Core/HW/EXI/EXI_Device.h"
@@ -612,6 +613,7 @@ bool retro_load_game(const struct retro_game_info* game)
 
   Config::SetBase(Config::MAIN_ENABLE_CHEATS,
                      Libretro::GetOption<bool>(core::CHEATS_ENABLED, /*def=*/false));
+  Gecko::SetCodeHandlerEnabled(Libretro::GetOption<bool>(core::GECKO_CODE_HANDLER, /*def=*/true));
 
   Config::SetBase(Config::MAIN_SKIP_IPL, Libretro::GetOption<bool>(core::SKIP_GC_BIOS, /*def=*/true));
 

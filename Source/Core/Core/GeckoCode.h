@@ -60,6 +60,8 @@ constexpr u32 MAGIC_GAMEID = 0xD01F1BAD;
 
 size_t CountEnabledCodes();
 void SetActiveCodes(const GeckoCode* gcodes, size_t count);
+// Whether the code handler runs in the game; without it, Gecko codes do not apply
+void SetCodeHandlerEnabled(bool enabled);
 void RunCodeHandler();
 void Shutdown();
 void DoState(PointerWrap&);

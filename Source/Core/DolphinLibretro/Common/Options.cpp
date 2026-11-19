@@ -243,6 +243,20 @@ static struct retro_core_option_v2_definition option_defs[] = {
     "disabled"
   },
   {
+    Libretro::Options::core::GECKO_CODE_HANDLER,
+    "Core > Gecko Code Handler",
+    "Gecko Code Handler",
+    "Run the built-in Gecko code handler in the game so Gecko codes apply. When disabled, only Action Replay codes apply. Restart core to take effect.",
+    nullptr,
+    CATEGORY_CORE,
+    {
+      { "disabled", nullptr },
+      { "enabled",  nullptr },
+      { nullptr, nullptr }
+    },
+    "enabled"
+  },
+  {
     Libretro::Options::core::SKIP_GC_BIOS,
     "Core > Skip GameCube BIOS",
     "Skip GameCube BIOS",
