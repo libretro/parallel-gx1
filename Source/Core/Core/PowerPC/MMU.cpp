@@ -31,7 +31,6 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -1281,7 +1280,8 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
 #endif
   };
 
-  const auto get_page_index = [this](UPTE_Lo pte1, u32 hash) -> std::optional<EffectiveAddress> {
+  // Writes the logical address a page table entry maps; false if the entry cannot match.
+  const auto get_page_index = [this](UPTE_Lo pte1, u32 hash, EffectiveAddress* out) -> bool {
     u32 page_index_from_hash = hash ^ pte1.VSID;
     if (pte1.H)
       page_index_from_hash = ~page_index_from_hash;
@@ -1291,7 +1291,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
     // overwrite these bits with the API from pte1 and thereby get the correct page index.
     //
     // In other words: logical_address.API must be written to after logical_address.page_index!
-    EffectiveAddress logical_address;
+    EffectiveAddress& logical_address = *out;
     logical_address.offset = 0;
     logical_address.page_index = page_index_from_hash;
     logical_address.API = pte1.API;
@@ -1299,10 +1299,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
     // If the hash mask is large enough that one or more bits specified in pte1.API can also be
     // obtained from page_index_from_hash, check that those bits match.
     const u32 api_mask = ((m_ppc_state.pagetable_mask & ~m_ppc_state.pagetable_base) >> 16) & 0x3f;
-    if ((pte1.API & api_mask) != ((page_index_from_hash >> 10) & api_mask))
-      return std::nullopt;
-
-    return logical_address;
+    return (pte1.API & api_mask) == ((page_index_from_hash >> 10) & api_mask);
   };
 
   const auto fixup_shadowed_mappings = [this, old_page_table, new_page_table](
@@ -1360,8 +1357,8 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
 
   const auto try_add_mapping = [this, &get_page_index](UPTE_Lo pte1, UPTE_Hi pte2,
                                                        u32 page_table_offset) {
-    std::optional<EffectiveAddress> logical_address = get_page_index(pte1, page_table_offset / 64);
-    if (!logical_address)
+    EffectiveAddress logical_address;
+    if (!get_page_index(pte1, page_table_offset / 64, &logical_address))
       return;
 
     for (u32 i = 0; i < std::size(m_ppc_state.sr); ++i)
@@ -1370,7 +1367,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
       if (sr.VSID != pte1.VSID || sr.T != 0)
         continue;
 
-      logical_address->SR = i;
+      logical_address.SR = i;
 
       bool host_mapping = true;
 
@@ -1383,7 +1380,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
         // translation.)
         host_mapping = false;
       }
-      else if (m_dbat_table[logical_address->Hex >> PowerPC::BAT_INDEX_SHIFT] &
+      else if (m_dbat_table[logical_address.Hex >> PowerPC::BAT_INDEX_SHIFT] &
                PowerPC::BAT_MAPPED_BIT)
       {
         // Block address translation takes priority over page address translation.
@@ -1394,7 +1391,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
       const PageMapping page_mapping(pte2.RPN, host_mapping, priority);
 
       bool added;
-      u32* const existing = address_map_get(&m_page_mappings, logical_address->Hex, &added);
+      u32* const existing = address_map_get(&m_page_mappings, logical_address.Hex, &added);
       if (!existing)
         continue;
       if (added) [[likely]]
@@ -1414,7 +1411,7 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
 
         // The new mapping has priority over an existing mapping. Replace the existing mapping.
         if (existing_mapping.host_mapping)
-          NoteRemovedMapping(logical_address->Hex);
+          NoteRemovedMapping(logical_address.Hex);
         *existing = page_mapping.Hex;
       }
 
@@ -1445,8 +1442,8 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
         if (old_pte1.V)
         {
           const u32 priority = (k / 8) | (old_pte1.H << 3);
-          std::optional<EffectiveAddress> logical_address = get_page_index(old_pte1, (i + j) / 64);
-          if (!logical_address)
+          EffectiveAddress logical_address;
+          if (!get_page_index(old_pte1, (i + j) / 64, &logical_address))
             continue;
 
           for (u32 l = 0; l < std::size(m_ppc_state.sr); ++l)
@@ -1455,17 +1452,17 @@ void MMU::PageTableUpdated(const u8* page_table, size_t page_table_size)
             if (sr.VSID != old_pte1.VSID || sr.T != 0)
               continue;
 
-            logical_address->SR = l;
+            logical_address.SR = l;
 
-            const u32* const existing = address_map_find(&m_page_mappings, logical_address->Hex);
+            const u32* const existing = address_map_find(&m_page_mappings, logical_address.Hex);
             PageMapping existing_mapping;
             if (existing)
               existing_mapping.Hex = *existing;
             if (existing && priority == existing_mapping.priority)
             {
               if (existing_mapping.host_mapping)
-                NoteRemovedMapping(logical_address->Hex);
-              address_map_erase(&m_page_mappings, logical_address->Hex);
+                NoteRemovedMapping(logical_address.Hex);
+              address_map_erase(&m_page_mappings, logical_address.Hex);
 
               // It's unlikely but possible that this was shadowing another PTE that's using the
               // same logical address but has a lower priority. If this happens, we must make sure
