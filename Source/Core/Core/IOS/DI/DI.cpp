@@ -40,14 +40,21 @@ namespace IOS::HLE
 {
 CoreTiming::EventType* DIDevice::s_finish_executing_di_command;
 
+// The /dev/di of the running IOS, for the DVD interface's completion callbacks.
+static DIDevice* s_device;
+
 DIDevice::DIDevice(EmulationKernel& ios, const std::string& device_name)
     : EmulationDevice(ios, device_name)
 {
   u32_deque_init(&m_commands_to_execute, 16);
+  // A new IOS is built before the old one goes away, so the newest device wins.
+  s_device = this;
 }
 
 DIDevice::~DIDevice()
 {
+  if (s_device == this)
+    s_device = nullptr;
   u32_deque_free(&m_commands_to_execute);
 }
 
@@ -595,14 +602,9 @@ DIDevice::DIResult DIDevice::StartImmediateTransfer(const IOCtlRequest& request,
   return DIResult::Pending;
 }
 
-static std::shared_ptr<DIDevice> GetDevice()
+static DIDevice* GetDevice()
 {
-  auto ios = Core::System::GetInstance().GetIOS();
-  if (!ios)
-    return nullptr;
-  auto di = ios->GetDeviceByName("/dev/di");
-  // di may be empty, but static_pointer_cast returns empty in that case
-  return std::static_pointer_cast<DIDevice>(di);
+  return s_device;
 }
 
 void DIDevice::InterruptFromDVDInterface(DVD::DIInterruptType interrupt_type)
