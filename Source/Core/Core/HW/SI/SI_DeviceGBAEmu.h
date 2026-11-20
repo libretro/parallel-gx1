@@ -5,8 +5,6 @@
 
 #ifdef HAS_LIBMGBA
 
-#include <memory>
-
 #include "Common/CommonTypes.h"
 #include "Core/HW/SI/SI_Device.h"
 
@@ -44,7 +42,8 @@ private:
   u64 m_timestamp_sent = 0;
   u16 m_keys = 0;
 
-  std::shared_ptr<HW::GBA::Core> m_core;
+  // made with the device and deleted with it
+  HW::GBA::Core* m_core = nullptr;
 };
 }  // namespace SerialInterface
 #endif  // HAS_LIBMGBA

@@ -30,7 +30,7 @@ static s64 GetSyncInterval(const SystemTimers::SystemTimersManager& timers)
 CSIDevice_GBAEmu::CSIDevice_GBAEmu(Core::System& system, SIDevices device, int device_number)
     : ISIDevice(system, SIDeviceClass::GBAEmu, device, device_number)
 {
-  m_core = std::make_shared<HW::GBA::Core>(system, m_device_number);
+  m_core = new HW::GBA::Core(system, m_device_number);
   m_core->Start(system.GetCoreTiming().GetTicks());
   system.GetSerialInterface().ScheduleEvent(m_device_number,
                                             GetSyncInterval(system.GetSystemTimers()));
@@ -40,7 +40,8 @@ CSIDevice_GBAEmu::~CSIDevice_GBAEmu()
 {
   m_system.GetSerialInterface().RemoveEvent(m_device_number);
   m_core->Stop();
-  m_core.reset();
+  delete m_core;
+  m_core = nullptr;
 }
 
 int CSIDevice_GBAEmu::RunBuffer(u8* buffer, int request_length)
