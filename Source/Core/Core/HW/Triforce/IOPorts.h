@@ -3,10 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <memory>
-#include <vector>
-
 #include "Common/CommonTypes.h"
 
 class PointerWrap;
@@ -62,14 +58,23 @@ public:
   static constexpr std::size_t ANALOG_INPUT_COUNT = 8;
   static constexpr std::size_t GENERIC_OUTPUT_BYTE_COUNT = 4;
 
-  void AddIOAdapter(std::unique_ptr<IOAdapter> adapter);
+  IOPorts() = default;
+  IOPorts(const IOPorts&) = delete;
+  IOPorts& operator=(const IOPorts&) = delete;
+  ~IOPorts();
+
+  // Takes ownership.
+  void AddIOAdapter(IOAdapter* adapter);
 
   void DoState(PointerWrap& p);
 
   static constexpr u16 NEUTRAL_ANALOG_VALUE = 0x8000;
 
 private:
-  std::vector<std::unique_ptr<IOAdapter>> m_io_adapters;
+  // A game connects at most a common adapter and two of its own.
+  static constexpr int MAX_IO_ADAPTERS = 4;
+  IOAdapter* m_io_adapters[MAX_IO_ADAPTERS] = {};  // owned
+  int m_io_adapter_count = 0;
 
   u8 m_status_switches[STATUS_SWITCH_BYTE_COUNT] = {0xff, 0xff};
 

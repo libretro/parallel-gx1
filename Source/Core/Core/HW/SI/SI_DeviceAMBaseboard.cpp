@@ -83,7 +83,7 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
   m_mag_card_settings.card_path = File::GetUserPath(D_TRIUSER_IDX);
   m_mag_card_settings.card_name = "tricard_" + SConfig::GetInstance().GetGameID() + ".bin";
 
-  m_io_ports.AddIOAdapter(std::make_unique<Triforce::Common_IOAdapter>(m_system));
+  m_io_ports.AddIOAdapter(new Triforce::Common_IOAdapter(m_system));
 
   switch (AMMediaboard::GetGameType())
   {
@@ -95,8 +95,8 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
     // All this does is enable the chair motion.
     m_jvs_io_board = std::make_unique<Triforce::Sega_837_13844_JVSIOBoard>(&m_io_ports);
     auto slot_a = std::make_unique<Triforce::FZeroAXSteeringWheel>();
-    m_io_ports.AddIOAdapter(std::make_unique<Triforce::FZeroAXCommon_IOAdapter>(slot_a.get()));
-    m_io_ports.AddIOAdapter(std::make_unique<Triforce::FZeroAXDeluxe_IOAdapter>());
+    m_io_ports.AddIOAdapter(new Triforce::FZeroAXCommon_IOAdapter(slot_a.get()));
+    m_io_ports.AddIOAdapter(new Triforce::FZeroAXDeluxe_IOAdapter());
     m_serial_device_a = std::move(slot_a);
     m_serial_device_b = std::make_unique<MagCard::C1231BR>(&m_mag_card_settings);
     break;
@@ -104,8 +104,8 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
   case FZeroAXMonster:
   {
     auto slot_a = std::make_unique<Triforce::FZeroAXSteeringWheel>();
-    m_io_ports.AddIOAdapter(std::make_unique<Triforce::FZeroAXCommon_IOAdapter>(slot_a.get()));
-    m_io_ports.AddIOAdapter(std::make_unique<Triforce::FZeroAXMonster_IOAdapter>());
+    m_io_ports.AddIOAdapter(new Triforce::FZeroAXCommon_IOAdapter(slot_a.get()));
+    m_io_ports.AddIOAdapter(new Triforce::FZeroAXMonster_IOAdapter());
     m_serial_device_a = std::move(slot_a);
     break;
   }
@@ -114,14 +114,14 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
   {
     m_jvs_io_board = std::make_unique<Triforce::Namco_FCA_JVSIOBoard>(&m_io_ports);
     auto slot_a = std::make_unique<Triforce::MarioKartGPSteeringWheel>();
-    m_io_ports.AddIOAdapter(std::make_unique<Triforce::MarioKartGPCommon_IOAdapter>(slot_a.get()));
+    m_io_ports.AddIOAdapter(new Triforce::MarioKartGPCommon_IOAdapter(slot_a.get()));
     m_serial_device_a = std::move(slot_a);
     m_serial_device_b = std::make_unique<MagCard::C1231LR>(&m_mag_card_settings);
     break;
   }
   case VirtuaStriker3:
   {
-    m_io_ports.AddIOAdapter(std::make_unique<Triforce::VirtuaStriker3_IOAdapter>());
+    m_io_ports.AddIOAdapter(new Triforce::VirtuaStriker3_IOAdapter());
     break;
   }
   case VirtuaStriker4:
@@ -129,7 +129,7 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
     auto slot_a = std::make_unique<Triforce::ICCardReader>(0);
     auto slot_b = std::make_unique<Triforce::ICCardReader>(1);
     m_io_ports.AddIOAdapter(
-        std::make_unique<Triforce::VirtuaStriker4Common_IOAdapter>(slot_a.get(), slot_b.get()));
+        new Triforce::VirtuaStriker4Common_IOAdapter(slot_a.get(), slot_b.get()));
     m_serial_device_a = std::move(slot_a);
     m_serial_device_b = std::move(slot_b);
     break;
@@ -139,9 +139,9 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
     auto slot_a = std::make_unique<Triforce::ICCardReader>(0);
     auto slot_b = std::make_unique<Triforce::ICCardReader>(1);
     m_io_ports.AddIOAdapter(
-        std::make_unique<Triforce::VirtuaStriker4Common_IOAdapter>(slot_a.get(), slot_b.get()));
+        new Triforce::VirtuaStriker4Common_IOAdapter(slot_a.get(), slot_b.get()));
     m_io_ports.AddIOAdapter(
-        std::make_unique<Triforce::VirtuaStriker4_2006_IOAdapter>(slot_a.get(), slot_b.get()));
+        new Triforce::VirtuaStriker4_2006_IOAdapter(slot_a.get(), slot_b.get()));
     m_serial_device_a = std::move(slot_a);
     m_serial_device_b = std::move(slot_b);
     break;
@@ -150,8 +150,7 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
   {
     auto slot_a = std::make_unique<Triforce::ICCardReader>(0);
     auto slot_b = std::make_unique<Triforce::ICCardReader>(1);
-    m_io_ports.AddIOAdapter(
-        std::make_unique<Triforce::GekitouProYakyuu_IOAdapter>(slot_a.get(), slot_b.get()));
+    m_io_ports.AddIOAdapter(new Triforce::GekitouProYakyuu_IOAdapter(slot_a.get(), slot_b.get()));
     m_serial_device_a = std::move(slot_a);
     m_serial_device_b = std::move(slot_b);
     break;
@@ -159,8 +158,7 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
   case KeyOfAvalon:
   {
     auto deck_reader = std::make_unique<Triforce::DeckReader>();
-    m_io_ports.AddIOAdapter(
-        std::make_unique<Triforce::KeyOfAvalon_IOAdapter>(deck_reader->GetICCardReader()));
+    m_io_ports.AddIOAdapter(new Triforce::KeyOfAvalon_IOAdapter(deck_reader->GetICCardReader()));
     m_serial_device_a = std::move(deck_reader);
     m_serial_device_b = std::make_unique<Triforce::Touchscreen>();
     break;

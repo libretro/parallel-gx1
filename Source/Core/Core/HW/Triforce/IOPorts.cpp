@@ -33,8 +33,8 @@ void IOPorts::Update()
     m_analog_inputs[i] = NEUTRAL_ANALOG_VALUE;
   memset(m_coin_inputs, 0, sizeof(m_coin_inputs));
 
-  for (auto& adapter : m_io_adapters)
-    adapter->Update();
+  for (int i = 0; i != m_io_adapter_count; ++i)
+    m_io_adapters[i]->Update();
 }
 
 u8* IOPorts::GetSwitchInputs(u32 player_index)
@@ -59,14 +59,26 @@ void IOPorts::DoState(PointerWrap& p)
 
   p.Do(m_generic_outputs);
 
-  for (auto& io_adapter : m_io_adapters)
-    io_adapter->DoState(p);
+  for (int i = 0; i != m_io_adapter_count; ++i)
+    m_io_adapters[i]->DoState(p);
 }
 
-void IOPorts::AddIOAdapter(std::unique_ptr<IOAdapter> adapter)
+IOPorts::~IOPorts()
 {
+  for (int i = 0; i != m_io_adapter_count; ++i)
+    delete m_io_adapters[i];
+}
+
+void IOPorts::AddIOAdapter(IOAdapter* adapter)
+{
+  if (m_io_adapter_count == MAX_IO_ADAPTERS)
+  {
+    ERROR_LOG(SERIALINTERFACE_JVSIO, "Too many IO adapters");
+    delete adapter;
+    return;
+  }
   adapter->SetIOPorts(this);
-  m_io_adapters.emplace_back(std::move(adapter));
+  m_io_adapters[m_io_adapter_count++] = adapter;
 }
 
 IOAdapter::IOAdapter() = default;
@@ -115,9 +127,9 @@ void IOPorts::SetGenericOutputs(const u8* bytes, std::size_t size)
   }
 #endif
 
-  for (auto& adapter : m_io_adapters)
+  for (int i = 0; i != m_io_adapter_count; ++i)
   {
-    adapter->HandleGenericOutputsChanged(bits_set, bits_cleared);
+    m_io_adapters[i]->HandleGenericOutputsChanged(bits_set, bits_cleared);
   }
 }
 
