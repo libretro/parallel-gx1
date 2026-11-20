@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
 
 #include "Common/CommonTypes.h"
@@ -40,23 +39,23 @@ public:
   void AssertIRQ(IRQ);
 
   // AV_REGION_SIZE entries each, lent
-  u16* GetScanlineData() { return m_scanlines.data(); }
-  u8* GetAudioData() { return m_audio.data(); }
+  u16* GetScanlineData() { return m_scanlines; }
+  u8* GetAudioData() { return m_audio; }
 
 private:
   void UpdateInterrupts();
 
   Core::System& m_system;
 
-  std::array<u8, 0x20> m_test{};
+  u8 m_test[0x20] = {};
   u8 m_control{};
   u16 m_irq{};
 
   // Holds four scanlines in RGB5 format.
-  std::array<u16, AV_REGION_SIZE> m_scanlines{};
+  u16 m_scanlines[AV_REGION_SIZE] = {};
 
   // Holds PWM audio data. Entire buffer is filled and read at 4096 Hz.
-  std::array<u8, AV_REGION_SIZE> m_audio{};
+  u8 m_audio[AV_REGION_SIZE] = {};
 
   std::unique_ptr<GBPlayerBackend> m_gbp;
 };

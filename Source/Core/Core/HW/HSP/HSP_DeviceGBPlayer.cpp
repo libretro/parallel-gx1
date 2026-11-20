@@ -124,7 +124,7 @@ private:
   // Read mGBA's sample buffer into our below PWM audio buffer.
   void ProcessAudioBuffer();
 
-  std::array<u8, AV_REGION_SIZE * 4> m_audio_buffer{};
+  u8 m_audio_buffer[AV_REGION_SIZE * 4] = {};
   u16 m_audio_buffer_read_pos = 0;
   u16 m_audio_buffer_write_pos = 0;
 
@@ -278,13 +278,13 @@ void GBPlayerBackend::PrepareAudioData()
   const size_t audio_size = AV_REGION_SIZE;
 
   // Read from the circular buffer.
-  const size_t left = m_audio_buffer.size() - m_audio_buffer_read_pos;
+  const size_t left = sizeof(m_audio_buffer) - m_audio_buffer_read_pos;
   const size_t count = left < audio_size ? left : audio_size;
-  std::memcpy(audio_data, m_audio_buffer.data() + m_audio_buffer_read_pos, count);
-  std::memcpy(audio_data + count, m_audio_buffer.data(), audio_size - count);
+  std::memcpy(audio_data, m_audio_buffer + m_audio_buffer_read_pos, count);
+  std::memcpy(audio_data + count, m_audio_buffer, audio_size - count);
 
   m_audio_buffer_read_pos += u16(audio_size);
-  m_audio_buffer_read_pos %= m_audio_buffer.size();
+  m_audio_buffer_read_pos %= sizeof(m_audio_buffer);
 }
 
 // Takes 5 bits from a 16-bit PCM sample and converts them into 32 bits of PWM.
@@ -310,8 +310,8 @@ void GBPlayerBackend::ProcessAudioBuffer()
 
   while (true)
   {
-    std::array<std::array<s16, AUDIO_CHANNEL_COUNT>, 256> buffer;
-    const auto read_count = mAudioBufferRead(audio_buffer, buffer.data()->data(), buffer.size());
+    s16 buffer[256][AUDIO_CHANNEL_COUNT];
+    const auto read_count = mAudioBufferRead(audio_buffer, buffer[0], 256);
 
     if (read_count == 0)
       break;
@@ -337,7 +337,7 @@ void GBPlayerBackend::ProcessAudioBuffer()
         }
       }
 
-      m_audio_buffer_write_pos %= m_audio_buffer.size();
+      m_audio_buffer_write_pos %= sizeof(m_audio_buffer);
     }
   }
 }
@@ -380,8 +380,8 @@ void GBPlayerBackend::UpdateAudio()
   ProcessAudioBuffer();
 
   const auto audio_buffered =
-      (m_audio_buffer_write_pos - m_audio_buffer_read_pos + m_audio_buffer.size()) %
-      m_audio_buffer.size();
+      (m_audio_buffer_write_pos - m_audio_buffer_read_pos + sizeof(m_audio_buffer)) %
+      sizeof(m_audio_buffer);
 
   if (audio_buffered < AV_REGION_SIZE)
   {
@@ -508,7 +508,7 @@ void CHSPDevice_GBPlayer::Read(u32 address, u8* data)
   {
   case GBPRegister::Test:
   {
-    std::memcpy(data, m_test.data(), TRANSFER_SIZE);
+    std::memcpy(data, m_test, TRANSFER_SIZE);
     break;
   }
   case GBPRegister::Control:

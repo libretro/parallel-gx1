@@ -120,7 +120,7 @@ DataResponse CSIDevice_GBAEmu::GetData(u32& hi, u32& low)
 {
   GCPadStatus pad_status = Pad::GetGBAStatus(m_device_number);
 
-  static constexpr std::array<PadButton, 10> buttons_map = {
+  static const PadButton buttons_map[10] = {
       PadButton::PAD_BUTTON_A,      // A
       PadButton::PAD_BUTTON_B,      // B
       PadButton::PAD_TRIGGER_Z,     // Select
@@ -134,7 +134,7 @@ DataResponse CSIDevice_GBAEmu::GetData(u32& hi, u32& low)
   };
 
   m_keys = 0;
-  for (size_t i = 0; i < buttons_map.size(); ++i)
+  for (size_t i = 0; i < sizeof(buttons_map) / sizeof(buttons_map[0]); ++i)
     m_keys |= static_cast<u16>(static_cast<bool>((pad_status.button & buttons_map[i]))) << i;
 
   // Use X button as a reset signal for NetPlay/Movies
