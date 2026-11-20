@@ -54,11 +54,8 @@ VKTexture::~VKTexture()
   if (m_view_2d != VK_NULL_HANDLE)
     g_command_buffer_mgr->DeferImageViewDestruction(m_view_2d);
 
-  // If we don't have device memory allocated, the image is not owned by us (e.g. swapchain)
-  if (m_alloc.memory != VK_NULL_HANDLE)
-  {
-    g_command_buffer_mgr->DeferImageDestruction(m_image, m_alloc);
-  }
+  // every texture made its own image
+  g_command_buffer_mgr->DeferImageDestruction(m_image, m_alloc);
 }
 
 VKTexture* VKTexture::Create(const TextureConfig& tex_config, std::string_view name)
