@@ -32,7 +32,12 @@ namespace WiimoteReal
 using WiimoteCommon::MAX_PAYLOAD;
 
 // Includes HID "type" header byte.
-using Report = std::vector<u8>;
+// One report as read from the remote, HID header included.
+struct Report
+{
+  u8 size;
+  u8 data[MAX_PAYLOAD];
+};
 constexpr int REPORT_HID_HEADER_SIZE = 1;
 
 constexpr u32 WIIMOTE_DEFAULT_TIMEOUT = 1000;

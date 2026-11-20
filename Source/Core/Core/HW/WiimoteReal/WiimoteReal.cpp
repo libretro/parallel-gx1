@@ -354,7 +354,7 @@ void Wiimote::QueueReport(WiimoteCommon::OutputReportID rpt_id, const void* data
 
 void Wiimote::ResetDataReporting()
 {
-  m_last_input_report.clear();
+  m_last_input_report.size = 0;
 
   // "core" reporting in non-continuous mode is a wiimote's initial state.
   // FYI: This also disables rumble.
@@ -570,7 +570,7 @@ bool Wiimote::IsBalanceBoard()
 
 static bool IsDataReport(const Report& rpt)
 {
-  return rpt.size() >= 2 && rpt[1] >= u8(InputReportID::ReportCore);
+  return rpt.size >= 2 && rpt.data[1] >= u8(InputReportID::ReportCore);
 }
 
 bool Wiimote::GetNextReport(Report* report)
@@ -579,7 +579,8 @@ bool Wiimote::GetNextReport(Report* report)
   if (retro_spsc_read_begin(&m_read_reports, &span) < sizeof(ReadRecord))
     return false;
   const ReadRecord* const record = static_cast<const ReadRecord*>(span);
-  report->assign(record->data, record->data + record->size);
+  report->size = record->size;
+  memcpy(report->data, record->data, record->size);
   retro_spsc_read_end(&m_read_reports, sizeof(ReadRecord));
   return true;
 }
@@ -589,7 +590,7 @@ Report& Wiimote::ProcessReadQueue(bool repeat_last_data_report)
 {
   // If we're not repeating data reports or had a non-data report, any old report is irrelevant.
   if (!repeat_last_data_report || !IsDataReport(m_last_input_report))
-    m_last_input_report.clear();
+    m_last_input_report.size = 0;
 
   // Step through the read queue.
   while (GetNextReport(&m_last_input_report))
@@ -631,24 +632,24 @@ void Wiimote::Update(const WiimoteEmu::DesiredWiimoteState& target_state)
 
   const Report& rpt = ProcessReadQueue(repeat_reports_to_maintain_200hz);
 
-  if (rpt.empty())
+  if (rpt.size == 0)
     return;
 
-  InterruptCallback(rpt.front(), rpt.data() + REPORT_HID_HEADER_SIZE,
-                    u32(rpt.size() - REPORT_HID_HEADER_SIZE));
+  InterruptCallback(rpt.data[0], rpt.data + REPORT_HID_HEADER_SIZE,
+                    u32(rpt.size - REPORT_HID_HEADER_SIZE));
 }
 
 ButtonData Wiimote::GetCurrentlyPressedButtons()
 {
   Report& rpt = m_last_input_report;
-  if (rpt.size() >= 4)
+  if (rpt.size >= 4)
   {
-    const auto mode = InputReportID(rpt[1]);
+    const auto mode = InputReportID(rpt.data[1]);
 
     // TODO: Button data could also be pulled out of non-data reports if really wanted.
     if (DataReportBuilder::IsValidMode(mode))
     {
-      const DataReportManipulator builder = MakeDataReportManipulator(mode, rpt.data() + 2);
+      const DataReportManipulator builder = MakeDataReportManipulator(mode, rpt.data + 2);
       ButtonData buttons = {};
       builder.GetCoreData(&buttons);
 
