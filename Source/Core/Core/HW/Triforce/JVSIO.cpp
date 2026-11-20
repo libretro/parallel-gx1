@@ -597,7 +597,7 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
       auto condition_code = JVSIOCoinConditionCode::Normal;
       u16 coin_count = 0;
 
-      if (i < m_coin_counts.size())
+      if (i < IOPorts::COIN_SLOT_COUNT)
       {
         coin_count = m_coin_counts[i];
       }
@@ -632,7 +632,7 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
     NOTICE_LOG(SERIALINTERFACE_JVSIO, "CoinCounter: slot:%u adjustment:%d", (unsigned)slot,
                adjustment);
 
-    if (slot < m_coin_counts.size())
+    if (slot < IOPorts::COIN_SLOT_COUNT)
     {
       const s32 count = m_coin_counts[slot] + adjustment;
       m_coin_counts[slot] = u16(count < 0 ? 0 : count > 0x3fff ? 0x3fff : count);

@@ -28,9 +28,10 @@ namespace Triforce
 void IOPorts::Update()
 {
   m_system_inputs = 0x00;
-  m_switch_inputs.fill(0x00);
-  m_analog_inputs.fill(NEUTRAL_ANALOG_VALUE);
-  m_coin_inputs.fill(false);
+  memset(m_switch_inputs, 0, sizeof(m_switch_inputs));
+  for (std::size_t i = 0; i != ANALOG_INPUT_COUNT; ++i)
+    m_analog_inputs[i] = NEUTRAL_ANALOG_VALUE;
+  memset(m_coin_inputs, 0, sizeof(m_coin_inputs));
 
   for (auto& adapter : m_io_adapters)
     adapter->Update();
@@ -40,14 +41,14 @@ u8* IOPorts::GetSwitchInputs(u32 player_index)
 {
   ASSERT(player_index < PLAYER_COUNT);
 
-  return m_switch_inputs.data() + SWITCH_INPUT_BYTES_PER_PLAYER * player_index;
+  return m_switch_inputs + SWITCH_INPUT_BYTES_PER_PLAYER * player_index;
 }
 
 const u8* IOPorts::GetSwitchInputs(u32 player_index) const
 {
   ASSERT(player_index < PLAYER_COUNT);
 
-  return m_switch_inputs.data() + SWITCH_INPUT_BYTES_PER_PLAYER * player_index;
+  return m_switch_inputs + SWITCH_INPUT_BYTES_PER_PLAYER * player_index;
 }
 
 void IOPorts::DoState(PointerWrap& p)
@@ -73,7 +74,7 @@ IOAdapter::~IOAdapter() = default;
 
 void IOPorts::SetGenericOutputs(const u8* bytes, std::size_t size)
 {
-  if (size > m_generic_outputs.size())
+  if (size > GENERIC_OUTPUT_BYTE_COUNT)
   {
     WARN_LOG(SERIALINTERFACE_JVSIO, "SetGenericOutputs: Unexpected byte count: %" PRIu64,
              (u64)size);
@@ -82,11 +83,11 @@ void IOPorts::SetGenericOutputs(const u8* bytes, std::size_t size)
   const std::size_t bytes_to_copy =
       size < GENERIC_OUTPUT_BYTE_COUNT ? size : GENERIC_OUTPUT_BYTE_COUNT;
 
-  if (!std::memcmp(bytes, m_generic_outputs.data(), bytes_to_copy))
+  if (!std::memcmp(bytes, m_generic_outputs, bytes_to_copy))
     return;
 
-  decltype(m_generic_outputs) bits_set{};
-  decltype(m_generic_outputs) bits_cleared{};
+  u8 bits_set[GENERIC_OUTPUT_BYTE_COUNT] = {};
+  u8 bits_cleared[GENERIC_OUTPUT_BYTE_COUNT] = {};
 
   for (std::size_t i = 0; i != bytes_to_copy; ++i)
   {
@@ -116,7 +117,7 @@ void IOPorts::SetGenericOutputs(const u8* bytes, std::size_t size)
 
   for (auto& adapter : m_io_adapters)
   {
-    adapter->HandleGenericOutputsChanged(bits_set.data(), bits_cleared.data());
+    adapter->HandleGenericOutputsChanged(bits_set, bits_cleared);
   }
 }
 

@@ -56,8 +56,8 @@ private:
   // Note: Does not include JVSIO_SYNC.
   std::vector<u8> m_last_response;
 
-  std::array<u16, IOPorts::COIN_SLOT_COUNT> m_coin_counts{};
-  std::array<bool, IOPorts::COIN_SLOT_COUNT> m_coin_prev_states{};
+  u16 m_coin_counts[IOPorts::COIN_SLOT_COUNT] = {};
+  bool m_coin_prev_states[IOPorts::COIN_SLOT_COUNT] = {};
 
   IOPorts* const m_io_ports;
 };

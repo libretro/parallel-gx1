@@ -30,8 +30,8 @@ public:
   void Update();
 
   // STATUS_SWITCH_BYTE_COUNT bytes
-  u8* GetStatusSwitches() { return m_status_switches.data(); }
-  const u8* GetStatusSwitches() const { return m_status_switches.data(); }
+  u8* GetStatusSwitches() { return m_status_switches; }
+  const u8* GetStatusSwitches() const { return m_status_switches; }
 
   u8* GetSystemInputs() { return &m_system_inputs; }
   const u8* GetSystemInputs() const { return &m_system_inputs; }
@@ -41,11 +41,11 @@ public:
   const u8* GetSwitchInputs(u32 player_index) const;
 
   // ANALOG_INPUT_COUNT values
-  u16* GetAnalogInputs() { return m_analog_inputs.data(); }
-  const u16* GetAnalogInputs() const { return m_analog_inputs.data(); }
+  u16* GetAnalogInputs() { return m_analog_inputs; }
+  const u16* GetAnalogInputs() const { return m_analog_inputs; }
 
   // GENERIC_OUTPUT_BYTE_COUNT bytes
-  const u8* GetGenericOutputs() const { return m_generic_outputs.data(); }
+  const u8* GetGenericOutputs() const { return m_generic_outputs; }
 
   void SetGenericOutputs(const u8* bytes, std::size_t size);
   void ResetGenericOutputs();
@@ -54,8 +54,8 @@ public:
   static constexpr std::size_t COIN_SLOT_COUNT = 2;
 
   // COIN_SLOT_COUNT flags
-  bool* GetCoinInputs() { return m_coin_inputs.data(); }
-  const bool* GetCoinInputs() const { return m_coin_inputs.data(); }
+  bool* GetCoinInputs() { return m_coin_inputs; }
+  const bool* GetCoinInputs() const { return m_coin_inputs; }
 
   static constexpr std::size_t STATUS_SWITCH_BYTE_COUNT = 2;
   static constexpr std::size_t SWITCH_INPUT_BYTES_PER_PLAYER = 2;
@@ -71,18 +71,18 @@ public:
 private:
   std::vector<std::unique_ptr<IOAdapter>> m_io_adapters;
 
-  std::array<u8, STATUS_SWITCH_BYTE_COUNT> m_status_switches{0xff, 0xff};
+  u8 m_status_switches[STATUS_SWITCH_BYTE_COUNT] = {0xff, 0xff};
 
   // The first byte in JVSIO switch input data.
   u8 m_system_inputs = 0x00;
 
-  std::array<u8, PLAYER_COUNT * SWITCH_INPUT_BYTES_PER_PLAYER> m_switch_inputs{};
+  u8 m_switch_inputs[PLAYER_COUNT * SWITCH_INPUT_BYTES_PER_PLAYER] = {};
 
-  std::array<u16, ANALOG_INPUT_COUNT> m_analog_inputs{};
+  u16 m_analog_inputs[ANALOG_INPUT_COUNT] = {};
 
-  std::array<u8, GENERIC_OUTPUT_BYTE_COUNT> m_generic_outputs{};
+  u8 m_generic_outputs[GENERIC_OUTPUT_BYTE_COUNT] = {};
 
-  std::array<bool, COIN_SLOT_COUNT> m_coin_inputs{};
+  bool m_coin_inputs[COIN_SLOT_COUNT] = {};
 };
 
 class IOAdapter
@@ -149,7 +149,7 @@ protected:
   void HandleGenericOutputsChanged(const u8* bits_set, const u8* bits_cleared) override;
 
 private:
-  std::array<ICCardReader*, IOPorts::PLAYER_COUNT> const m_card_readers;
+  ICCardReader* const m_card_readers[IOPorts::PLAYER_COUNT];
 };
 
 class VirtuaStriker4_2006_IOAdapter final : public IOAdapter
@@ -167,7 +167,7 @@ private:
   static constexpr u8 SLOT_A_EJECT_BIT = 0x80;
   static constexpr u8 SLOT_B_EJECT_BIT = 0x20;
 
-  std::array<ICCardReader*, IOPorts::PLAYER_COUNT> const m_card_readers;
+  ICCardReader* const m_card_readers[IOPorts::PLAYER_COUNT];
 };
 
 class GekitouProYakyuu_IOAdapter final : public IOAdapter
@@ -187,7 +187,7 @@ private:
   static constexpr u8 SLOT_A_LOCK_BIT = 0x40;
   static constexpr u8 SLOT_B_LOCK_BIT = 0x10;
 
-  std::array<ICCardReader*, IOPorts::PLAYER_COUNT> const m_card_readers;
+  ICCardReader* const m_card_readers[IOPorts::PLAYER_COUNT];
 };
 
 class KeyOfAvalon_IOAdapter final : public IOAdapter
