@@ -329,7 +329,7 @@ private:
 
   // ES can only have 3 contexts at one time.
   using Context = ESCore::Context;
-  using ContextArray = std::array<Context, 3>;
+  static constexpr int NUM_CONTEXTS = 3;
 
   // Title management
   IPCReply ImportTicket(const IOCtlVRequest& request);
@@ -411,8 +411,9 @@ private:
   IPCReply DIGetTMDSize(const IOCtlVRequest& request);
   IPCReply DIGetTMD(const IOCtlVRequest& request);
 
-  ContextArray::iterator FindActiveContext(s32 fd);
-  ContextArray::iterator FindInactiveContext();
+  // nullptr when there is none.
+  Context* FindActiveContext(s32 fd);
+  Context* FindInactiveContext();
 
   bool LaunchIOS(u64 ios_title_id, HangPPC hang_ppc);
   bool LaunchPPCTitle(u64 title_id);
@@ -424,7 +425,7 @@ private:
   bool BootstrapPPC();
 
   ESCore& m_core;
-  ContextArray m_contexts;
+  Context m_contexts[NUM_CONTEXTS];
   std::string m_pending_ppc_boot_content_path;
 };
 }  // namespace IOS::HLE

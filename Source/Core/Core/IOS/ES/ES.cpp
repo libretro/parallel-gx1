@@ -548,32 +548,30 @@ void ESDevice::DoState(PointerWrap& p)
   p.Do(m_pending_ppc_boot_content_path);
 }
 
-ESDevice::ContextArray::iterator ESDevice::FindActiveContext(s32 fd)
+ESDevice::Context* ESDevice::FindActiveContext(s32 fd)
 {
-  auto it = m_contexts.begin();
-  for (; it != m_contexts.end(); ++it)
+  for (int i = 0; i < NUM_CONTEXTS; i++)
   {
-    if (it->ipc_fd == fd && it->active)
-      break;
+    if (m_contexts[i].ipc_fd == fd && m_contexts[i].active)
+      return &m_contexts[i];
   }
-  return it;
+  return nullptr;
 }
 
-ESDevice::ContextArray::iterator ESDevice::FindInactiveContext()
+ESDevice::Context* ESDevice::FindInactiveContext()
 {
-  auto it = m_contexts.begin();
-  for (; it != m_contexts.end(); ++it)
+  for (int i = 0; i < NUM_CONTEXTS; i++)
   {
-    if (!it->active)
-      break;
+    if (!m_contexts[i].active)
+      return &m_contexts[i];
   }
-  return it;
+  return nullptr;
 }
 
 IPCReply ESDevice::Open(const OpenRequest& request)
 {
   auto context = FindInactiveContext();
-  if (context == m_contexts.end())
+  if (!context)
     return IPCReply{ES_FD_EXHAUSTED};
 
   context->active = true;
@@ -586,7 +584,7 @@ IPCReply ESDevice::Open(const OpenRequest& request)
 IPCReply ESDevice::Close(u32 fd)
 {
   auto context = FindActiveContext(fd);
-  if (context == m_contexts.end())
+  if (!context)
     return IPCReply(ES_EINVAL);
 
   context->active = false;
@@ -601,7 +599,7 @@ IPCReply ESDevice::IOCtlV(const IOCtlVRequest& request)
 {
   DEBUG_LOG(IOS_ES, "%s (%#x)", GetDeviceName().c_str(), request.request);
   auto context = FindActiveContext(request.fd);
-  if (context == m_contexts.end())
+  if (!context)
     return IPCReply(ES_EINVAL);
 
   switch (request.request)
