@@ -354,7 +354,14 @@ void MemoryCard::ClearAll()
 void MemoryCard::DoState(PointerWrap& p)
 {
   p.Do(m_card_slot);
-  p.Do(m_memory_card_size);
+  // the card's size is the one it was made with: a state of another size is not loaded
+  u32 size = m_memory_card_size;
+  p.Do(size);
+  if (size != m_memory_card_size)
+  {
+    p.SetMeasureMode();
+    return;
+  }
   p.DoArray(&m_memcard_data[0], m_memory_card_size);
   // A loaded state replaces the whole card: copied to the flush buffer, every block marked, and
   // the changes posted before it dropped.
