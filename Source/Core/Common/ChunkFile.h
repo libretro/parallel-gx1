@@ -230,6 +230,20 @@ public:
     return current;
   }
 
+  // The next size bytes, passed over: the caller reads them in read mode and fills them in write
+  // mode. nullptr past the end of the buffer.
+  [[nodiscard]] u8* DoSkip(u32 size)
+  {
+    u8* const current = *m_ptr_current;
+    if (!IsMeasureMode() && size > static_cast<size_t>(m_ptr_end - current))
+    {
+      SetMeasureMode();
+      return nullptr;
+    }
+    *m_ptr_current += size;
+    return current;
+  }
+
   // The reserved u32 is set to 0, and a pointer to it is returned.
   // The caller needs to fill in the reserved u32 with the appropriate value later on, if they
   // want a non-zero value there.

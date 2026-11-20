@@ -661,7 +661,7 @@ bool GCMemcard::Format(const CardFlashId& flash_id, u16 size_mbits, bool shift_j
 /*************************************************************/
 
 s32 GCMemcard::FZEROGX_MakeSaveGameValid(const Header& cardheader, const DEntry& direntry,
-                                         std::vector<GCMBlock>& FileBuffer)
+                                         GCMBlock* FileBuffer, size_t num_blocks)
 {
   u32 i, j;
   u16 chksum = 0xFFFF;
@@ -671,7 +671,7 @@ s32 GCMemcard::FZEROGX_MakeSaveGameValid(const Header& cardheader, const DEntry&
     return 0;
 
   // also make sure that the filesize is correct
-  if (FileBuffer.size() != 4)
+  if (num_blocks != 4)
     return 0;
 
   // get encrypted destination memory card serial numbers
@@ -716,7 +716,7 @@ s32 GCMemcard::FZEROGX_MakeSaveGameValid(const Header& cardheader, const DEntry&
 /***********************************************************/
 
 s32 GCMemcard::PSO_MakeSaveGameValid(const Header& cardheader, const DEntry& direntry,
-                                     std::vector<GCMBlock>& FileBuffer)
+                                     GCMBlock* FileBuffer, size_t num_blocks)
 {
   u32 i, j;
   u32 chksum;
@@ -738,6 +738,10 @@ s32 GCMemcard::PSO_MakeSaveGameValid(const Header& cardheader, const DEntry& dir
       return 0;
     }
   }
+
+  // the system file's second block is changed
+  if (num_blocks < 2)
+    return 0;
 
   // get encrypted destination memory card serial numbers
   const auto [serial1, serial2] = cardheader.CalculateSerial();

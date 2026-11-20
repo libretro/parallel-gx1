@@ -4,7 +4,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include <rthreads/rthreads.h>
 
@@ -44,7 +43,10 @@ public:
   void DoState(PointerWrap& p) override;
 
 private:
-  bool LoadGCI(Memcard::GCIFile gci);
+  // Loads the save read into the next free entry: true, it is the card's now.
+  bool LoadGCI();
+  // The save at the index, emptied.
+  void ResetSave(u32 index);
   inline s32 SaveAreaRW(u32 block, bool writing = false);
   // s32 DirectoryRead(u32 offset, u32 length, u8* dest_address);
   s32 DirectoryWrite(u32 dest_address, u32 length, const u8* src_address);
@@ -79,9 +81,12 @@ private:
   Memcard::Directory m_dir2;
   Memcard::BlockAlloc m_bat1;
   Memcard::BlockAlloc m_bat2;
-  std::vector<Memcard::GCIFile> m_saves;
+  Memcard::GCIFile m_saves[Memcard::DIRLEN];
+  u32 m_num_saves = 0;
+  // The saves' data, at the card blocks they use (Memcard::GCIFile).
+  Memcard::GCMBlock* m_blocks = nullptr;
 
-  std::string m_save_directory;
+  char m_save_directory[PATH_MAX_LENGTH] = {};
   Common::Event m_flush_trigger;
   mpsc_stack_t m_flush_jobs{};
   Common::Flag m_flush_running{true};

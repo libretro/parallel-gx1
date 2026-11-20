@@ -428,9 +428,9 @@ public:
   static bool Format(u8* card_data, const CardFlashId& flash_id, u16 size_mbits, bool shift_jis,
                      u32 rtc_bias, u32 sram_language, u64 format_time);
   static s32 FZEROGX_MakeSaveGameValid(const Header& cardheader, const DEntry& direntry,
-                                       std::vector<GCMBlock>& FileBuffer);
+                                       GCMBlock* FileBuffer, size_t num_blocks);
   static s32 PSO_MakeSaveGameValid(const Header& cardheader, const DEntry& direntry,
-                                   std::vector<GCMBlock>& FileBuffer);
+                                   GCMBlock* FileBuffer, size_t num_blocks);
 
   bool FixChecksums();
 
