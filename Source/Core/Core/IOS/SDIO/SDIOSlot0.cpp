@@ -31,8 +31,8 @@ SDIOSlot0Device::SDIOSlot0Device(EmulationKernel& ios, const std::string& device
   if (!Config::Get(Config::MAIN_ALLOW_SD_WRITES))
     INFO_LOG(IOS_SD, "Writes to SD card disabled by user");
 
-  m_config_callback_id =
-      CPUThreadConfigCallback::AddConfigChangedCallback([this] { RefreshConfig(); });
+  m_config_callback_id = CPUThreadConfigCallback::AddConfigChangedCallback(
+      [](void* user) { static_cast<SDIOSlot0Device*>(user)->RefreshConfig(); }, this);
   m_sd_card_inserted = Config::Get(Config::MAIN_WII_SD_CARD);
 }
 

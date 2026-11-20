@@ -303,7 +303,8 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
 
   Reset();
 
-  m_config_changed_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
+  m_config_changed_callback_id = Config::AddConfigChangedCallback(
+      [](void* user) { static_cast<Wiimote*>(user)->RefreshConfig(); }, this);
   RefreshConfig();
 }
 

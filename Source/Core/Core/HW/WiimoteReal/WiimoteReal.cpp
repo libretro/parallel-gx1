@@ -262,7 +262,8 @@ Wiimote::Wiimote()
   retro_spsc_init(&m_read_reports, REPORT_RING_RECORDS * sizeof(ReadRecord));
   retro_spsc_init(&m_write_reports, REPORT_RING_RECORDS * sizeof(WriteRecord));
   retro_eventcount_init(&m_write_event);
-  m_config_changed_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
+  m_config_changed_callback_id = Config::AddConfigChangedCallback(
+      [](void* user) { static_cast<Wiimote*>(user)->RefreshConfig(); }, this);
   RefreshConfig();
 }
 

@@ -4,7 +4,6 @@
 #include "VideoCommon/VideoConfig.h"
 
 #include <algorithm>
-#include <optional>
 
 #include <retro_atomic.h>
 
@@ -34,8 +33,7 @@
 VideoConfig g_Config;
 VideoConfig g_ActiveConfig;
 BackendInfo g_backend_info;
-static std::optional<CPUThreadConfigCallback::ConfigChangedCallbackID>
-    s_config_changed_callback_id = std::nullopt;
+static CPUThreadConfigCallback::ConfigChangedCallbackID s_config_changed_callback_id;
 static Common::EventHook s_check_config_event;
 // The settings changed while the game runs: the video side takes them after its next frame.
 static retro_atomic_int_t s_config_refresh_wanted;
@@ -53,11 +51,11 @@ void UpdateActiveConfig()
 
 void VideoConfig::Refresh()
 {
-  if (!s_config_changed_callback_id.has_value())
+  if (!s_config_changed_callback_id.IsSet())
   {
     // The video side owns the settings while the game runs: it reads them and corrects them
     // itself after a frame, so they never change under it.
-    const auto config_changed_callback = [] {
+    const auto config_changed_callback = [](void*) {
       if (Core::IsRunning(Core::System::GetInstance()))
       {
         retro_atomic_store_release_int(&s_config_refresh_wanted, 1);
@@ -69,7 +67,7 @@ void VideoConfig::Refresh()
     };
 
     s_config_changed_callback_id =
-        CPUThreadConfigCallback::AddConfigChangedCallback(config_changed_callback);
+        CPUThreadConfigCallback::AddConfigChangedCallback(config_changed_callback, nullptr);
   }
 
   bVSync = Config::Get(Config::GFX_VSYNC);
@@ -212,11 +210,11 @@ void VideoConfig::Shutdown()
 {
   s_check_config_event.reset();
 
-  if (!s_config_changed_callback_id.has_value())
+  if (!s_config_changed_callback_id.IsSet())
     return;
 
-  CPUThreadConfigCallback::RemoveConfigChangedCallback(*s_config_changed_callback_id);
-  s_config_changed_callback_id.reset();
+  CPUThreadConfigCallback::RemoveConfigChangedCallback(s_config_changed_callback_id);
+  s_config_changed_callback_id = {};
 }
 
 bool VideoConfig::UsingUberShaders() const

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -20,9 +19,12 @@ struct ConfigChangedCallbackID
   size_t id = std::numeric_limits<size_t>::max();
 
   bool operator==(const ConfigChangedCallbackID&) const = default;
+  // whether it names a callback: a default one names none
+  bool IsSet() const { return id != std::numeric_limits<size_t>::max(); }
 };
 
-using ConfigChangedCallback = std::function<void()>;
+// called as func(user)
+using ConfigChangedCallback = void (*)(void* user);
 
 // Layer management
 void AddLayer(std::unique_ptr<ConfigLayerLoader> loader);
@@ -31,7 +33,8 @@ void RemoveLayer(LayerType layer);
 
 // Returns an ID that should be passed to RemoveConfigChangedCallback() when the callback is no
 // longer needed. The callback may be called from any thread.
-[[nodiscard]] ConfigChangedCallbackID AddConfigChangedCallback(ConfigChangedCallback func);
+[[nodiscard]] ConfigChangedCallbackID AddConfigChangedCallback(ConfigChangedCallback func,
+                                                               void* user);
 void RemoveConfigChangedCallback(ConfigChangedCallbackID callback_id);
 void OnConfigChanged();
 

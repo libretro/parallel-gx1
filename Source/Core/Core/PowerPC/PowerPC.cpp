@@ -249,8 +249,8 @@ void PowerPCManager::RefreshConfig()
 
 void PowerPCManager::Init(CPUCore cpu_core)
 {
-  m_registered_config_callback_id =
-      CPUThreadConfigCallback::AddConfigChangedCallback([this] { RefreshConfig(); });
+  m_registered_config_callback_id = CPUThreadConfigCallback::AddConfigChangedCallback(
+      [](void* user) { static_cast<PowerPCManager*>(user)->RefreshConfig(); }, this);
   RefreshConfig();
 
   m_invalidate_cache_thread_safe =

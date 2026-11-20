@@ -77,8 +77,9 @@ void FifoManager::DoState(PointerWrap& p)
 
 void FifoManager::Init()
 {
-  if (!m_config_callback_id)
-    m_config_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
+  if (!m_config_callback_id.IsSet())
+    m_config_callback_id = Config::AddConfigChangedCallback(
+        [](void* user) { static_cast<FifoManager*>(user)->RefreshConfig(); }, this);
   RefreshConfig();
 
   // Padded so that SIMD overreads in the vertex loader are safe
@@ -103,10 +104,10 @@ void FifoManager::Shutdown()
   m_fifo_aux_write_ptr = nullptr;
   m_fifo_aux_read_ptr = nullptr;
 
-  if (m_config_callback_id)
+  if (m_config_callback_id.IsSet())
   {
-    Config::RemoveConfigChangedCallback(*m_config_callback_id);
-    m_config_callback_id = std::nullopt;
+    Config::RemoveConfigChangedCallback(m_config_callback_id);
+    m_config_callback_id = {};
   }
 }
 

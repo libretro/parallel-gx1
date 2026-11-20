@@ -3,8 +3,6 @@
 
 #include "Core/HW/Wiimote.h"
 
-#include <optional>
-
 #include <retro_atomic.h>
 
 #include "Common/ChunkFile.h"
@@ -32,7 +30,7 @@ static std::array<u8, MAX_BBMOTES> s_last_connect_request_counter;
 namespace WiimoteCommon
 {
 static retro_atomic_int_t s_wiimote_sources[MAX_BBMOTES]; /* WiimoteSource values */
-static std::optional<Config::ConfigChangedCallbackID> s_config_callback_id = std::nullopt;
+static Config::ConfigChangedCallbackID s_config_callback_id;
 
 // The sources the emulated Bluetooth device is still to be told of, one bit each, and the one job
 // the CPU thread tells it from: queued at most once at a time, the frontend not waiting on it.
@@ -202,10 +200,10 @@ void Shutdown()
 
   WiimoteReal::Stop();
 
-  if (WiimoteCommon::s_config_callback_id)
+  if (WiimoteCommon::s_config_callback_id.IsSet())
   {
-    Config::RemoveConfigChangedCallback(*WiimoteCommon::s_config_callback_id);
-    WiimoteCommon::s_config_callback_id = std::nullopt;
+    Config::RemoveConfigChangedCallback(WiimoteCommon::s_config_callback_id);
+    WiimoteCommon::s_config_callback_id = {};
   }
 }
 
@@ -221,8 +219,9 @@ void Initialize(InitializeMode init_mode)
 
   LoadConfig();
 
-  if (!WiimoteCommon::s_config_callback_id)
-    WiimoteCommon::s_config_callback_id = Config::AddConfigChangedCallback(WiimoteCommon::RefreshConfig);
+  if (!WiimoteCommon::s_config_callback_id.IsSet())
+    WiimoteCommon::s_config_callback_id =
+        Config::AddConfigChangedCallback([](void*) { WiimoteCommon::RefreshConfig(); }, nullptr);
   // a job the last game's CPU thread dropped at shutdown is not queued
   retro_atomic_store_release_int(&WiimoteCommon::s_update_job_queued, 0);
   retro_atomic_store_release_int(&WiimoteCommon::s_sources_to_update, 0);

@@ -30,6 +30,7 @@ struct CallbackRef
   quiesce_node_t node;  // first, as above
   size_t id;
   ConfigChangedCallback func;
+  void* user;
   call_gate_t gate;
 };
 
@@ -108,9 +109,9 @@ void RemoveLayer(LayerType layer)
   OnConfigChanged();
 }
 
-ConfigChangedCallbackID AddConfigChangedCallback(ConfigChangedCallback func)
+ConfigChangedCallbackID AddConfigChangedCallback(ConfigChangedCallback func, void* user)
 {
-  auto* ref = new CallbackRef{{}, 0, std::move(func), {}};
+  auto* ref = new CallbackRef{{}, 0, func, user, {}};
   ref->id = retro_atomic_fetch_add_size(&s_next_callback_id, 1);
   for (auto& slot : s_callbacks)
   {
@@ -158,7 +159,7 @@ void OnConfigChanged()
     call_gate_frame_t frame;
     if (call_gate_enter(&ref->gate, &frame))
     {
-      ref->func();
+      ref->func(ref->user);
       call_gate_exit(&ref->gate, &frame);
     }
   }

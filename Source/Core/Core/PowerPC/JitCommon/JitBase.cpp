@@ -117,10 +117,13 @@ JitBase::JitBase(Core::System& system, CPUCoreKind kind)
   address_set_init(&js.fifoWriteAddresses, 1024);
   address_set_init(&js.pairedQuantizeAddresses, 1024);
   address_set_init(&js.noSpeculativeConstantsAddresses, 1024);
-  m_registered_config_callback_id = CPUThreadConfigCallback::AddConfigChangedCallback([this] {
-    if (DoesConfigNeedRefresh())
-      ClearCache();
-  });
+  m_registered_config_callback_id = CPUThreadConfigCallback::AddConfigChangedCallback(
+      [](void* user) {
+        JitBase* const jit = static_cast<JitBase*>(user);
+        if (jit->DoesConfigNeedRefresh())
+          jit->ClearCache();
+      },
+      this);
   // The JIT is responsible for calling RefreshConfig on Init and ClearCache
 }
 

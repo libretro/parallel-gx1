@@ -98,11 +98,12 @@ void Init()
   Core::RestoreWiiSettings(Core::RestoreReason::CrashRecovery);
 
   Config::Init();
-  const auto config_changed_callback = [] {
-    InitCustomPaths();
-    RefreshConfig();
-  };
-  s_config_changed_callback_id = Config::AddConfigChangedCallback(config_changed_callback);
+  s_config_changed_callback_id = Config::AddConfigChangedCallback(
+      [](void*) {
+        InitCustomPaths();
+        RefreshConfig();
+      },
+      nullptr);
   Config::AddLayer(ConfigLoaders::GenerateBaseConfigLoader());
   SConfig::Init();
   g_Config.Init();

@@ -181,7 +181,8 @@ void VideoInterfaceManager::Init()
 {
   Preset(true);
 
-  m_config_changed_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
+  m_config_changed_callback_id = Config::AddConfigChangedCallback(
+      [](void* user) { static_cast<VideoInterfaceManager*>(user)->RefreshConfig(); }, this);
   RefreshConfig();
 }
 

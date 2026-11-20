@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstddef>
-#include <optional>
 #include <retro_atomic.h>
 
 #include "Common/BlockingLoop.h"
@@ -152,7 +151,7 @@ private:
   bool m_syncing_suspended = false;
   Common::Event m_sync_wakeup_event;
 
-  std::optional<Config::ConfigChangedCallbackID> m_config_callback_id = std::nullopt;
+  Config::ConfigChangedCallbackID m_config_callback_id;
   bool m_config_sync_gpu = false;
   int m_config_sync_gpu_max_distance = 0;
   int m_config_sync_gpu_min_distance = 0;

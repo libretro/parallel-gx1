@@ -123,7 +123,8 @@ void InstructionCache::Init(Memory::MemoryManager& memory)
 {
   if (!m_has_config_callback)
   {
-    m_config_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
+    m_config_callback_id = Config::AddConfigChangedCallback(
+        [](void* user) { static_cast<InstructionCache*>(user)->RefreshConfig(); }, this);
     m_has_config_callback = true;
   }
   RefreshConfig();

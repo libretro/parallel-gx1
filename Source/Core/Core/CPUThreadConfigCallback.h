@@ -18,11 +18,14 @@ struct ConfigChangedCallbackID
   size_t id = std::numeric_limits<size_t>::max();
 
   bool operator==(const ConfigChangedCallbackID&) const = default;
+  // whether it names a callback: a default one names none
+  bool IsSet() const { return id != std::numeric_limits<size_t>::max(); }
 };
 
 // Returns an ID that should be passed to RemoveConfigChangedCallback() when the callback is no
 // longer needed.
-[[nodiscard]] ConfigChangedCallbackID AddConfigChangedCallback(Config::ConfigChangedCallback func);
+[[nodiscard]] ConfigChangedCallbackID AddConfigChangedCallback(Config::ConfigChangedCallback func,
+                                                               void* user);
 
 void RemoveConfigChangedCallback(ConfigChangedCallbackID callback_id);
 

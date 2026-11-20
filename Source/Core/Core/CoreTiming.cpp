@@ -203,8 +203,8 @@ void CoreTimingManager::Init()
     m_ts_pool = object_pool_create(sizeof(ThreadSafeEvent), 64);
   m_ev_lost = RegisterEvent("_lost_event", &EmptyTimedCallback);
 
-  m_registered_config_callback_id =
-      CPUThreadConfigCallback::AddConfigChangedCallback([this]() { RefreshConfig(); });
+  m_registered_config_callback_id = CPUThreadConfigCallback::AddConfigChangedCallback(
+      [](void* user) { static_cast<CoreTimingManager*>(user)->RefreshConfig(); }, this);
   RefreshConfig();
 
   m_last_oc_factor = m_config_oc_factor;

@@ -199,8 +199,8 @@ LogManager::LogManager()
 
   m_path_cutoff_point = DeterminePathCutOffPoint();
 
-  m_config_changed_callback_id =
-      Config::AddConfigChangedCallback([this]() { SetEffectiveLogLevel(); });
+  m_config_changed_callback_id = Config::AddConfigChangedCallback(
+      [](void* user) { static_cast<LogManager*>(user)->SetEffectiveLogLevel(); }, this);
 }
 
 LogManager::~LogManager()

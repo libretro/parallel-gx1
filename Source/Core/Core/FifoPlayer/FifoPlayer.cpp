@@ -172,7 +172,8 @@ bool IsPlayingBackFifologWithBrokenEFBCopies = false;
 
 FifoPlayer::FifoPlayer(Core::System& system) : m_system(system)
 {
-  m_config_changed_callback_id = Config::AddConfigChangedCallback([this] { RefreshConfig(); });
+  m_config_changed_callback_id = Config::AddConfigChangedCallback(
+      [](void* user) { static_cast<FifoPlayer*>(user)->RefreshConfig(); }, this);
   RefreshConfig();
 }
 
