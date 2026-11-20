@@ -3,10 +3,7 @@
 
 #pragma once
 
-#include <array>
-#include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -49,14 +46,14 @@ private:
   class ICCard
   {
   public:
-    using UID = std::array<u8, IC_PAGE_SIZE>;
-
-    ICCard(std::string filename, const UID& uid);
+    // A card is set up in place when it is inserted.
+    void Reset(std::string filename, const u8* uid);
 
     // Load from file if it exists, else create fresh card data.
     void Initialize();
 
-    const UID& GetUID() const { return m_uid; }
+    // IC_PAGE_SIZE bytes
+    const u8* GetUID() const { return m_uid; }
     bool IsHalted() const { return m_current_state == State::Halted; }
 
     // The card's own bytes, lent; nullptr on error.
@@ -75,11 +72,11 @@ private:
   private:
     void FlushData(u32 byte_offset, u32 byte_count);
 
-    std::array<u8, IC_PAGE_SIZE * IC_PAGE_COUNT> m_data{};
+    u8 m_data[IC_PAGE_SIZE * IC_PAGE_COUNT] = {};
 
-    const std::string m_filename;
+    std::string m_filename;
 
-    const UID m_uid;
+    u8 m_uid[IC_PAGE_SIZE] = {};
 
     enum class State : u8
     {
@@ -93,7 +90,10 @@ private:
 
   // FYI: These are more like multiple RFID tags on a single card.
   // Avalon makes use of this for not yet fully understood reasons.
-  std::vector<std::unique_ptr<ICCard>> m_ic_cards;
+  // The cards stay in place; only the first m_ic_card_count are inserted.
+  static constexpr std::size_t MAX_IC_CARDS = 4;
+  ICCard m_ic_cards[MAX_IC_CARDS];
+  std::size_t m_ic_card_count = 0;
 
   bool m_is_field_on = false;
 

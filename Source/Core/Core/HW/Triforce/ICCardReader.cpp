@@ -169,10 +169,15 @@ ICCardReader::ICCardReader(u8 slot_index) : m_slot_index{slot_index}
 
 void ICCardReader::CreateCards(u8 card_count)
 {
-  m_ic_cards.clear();
+  if (card_count > MAX_IC_CARDS)
+  {
+    ERROR_LOG(SERIALINTERFACE_CARD, "Too many IC cards: %u", (unsigned)card_count);
+    card_count = u8(MAX_IC_CARDS);
+  }
+  m_ic_card_count = 0;
 
   // Filled in with slot index and card number just for uniqueness.
-  ICCard::UID card_id = {0x00, 0x00, 0x54, 0x4D, 0x50, 0x00, m_slot_index, 0x00};
+  u8 card_id[IC_PAGE_SIZE] = {0x00, 0x00, 0x54, 0x4D, 0x50, 0x00, m_slot_index, 0x00};
 
   for (u8 i = 0; i != card_count; ++i)
   {
@@ -186,9 +191,9 @@ void ICCardReader::CreateCards(u8 card_count)
     const std::string filename = File::GetUserPath(D_TRIUSER_IDX) + "tricard_" +
                                  SConfig::GetInstance().GetGameID() + "_" + slot_name + ".bin";
 
-    card_id.back() = i;
+    card_id[IC_PAGE_SIZE - 1] = i;
 
-    m_ic_cards.emplace_back(std::make_unique<ICCard>(filename, card_id));
+    m_ic_cards[m_ic_card_count++].Reset(filename, card_id);
   }
 }
 
@@ -257,8 +262,8 @@ void ICCardReader::Update()
       // FYI: We don't verify that this session was actually created before using it.
       // This is fine, but I'm sure it's not really hardware accurate.
       const std::size_t index = card_session & 0xffu;
-      if (index < m_ic_cards.size())
-        return m_ic_cards[index].get();
+      if (index < m_ic_card_count)
+        return &m_ic_cards[index];
     }
 
     ERROR_LOG(SERIALINTERFACE_CARD, "Unexpected card session: %04x", (unsigned)card_session);
@@ -268,7 +273,7 @@ void ICCardReader::Update()
   };
 
   // Note: Command and response payload sizes are multiples of 8-bytes.
-  std::array<u8, 8> small_reply_payload{};
+  u8 small_reply_payload[8] = {};
 
   // Will be later assigned to `small_reply_payload` or some region of the card data itself.
   const u8* reply_payload = nullptr;
@@ -330,8 +335,8 @@ void ICCardReader::Update()
 
     m_is_field_on = false;
 
-    for (auto& card : m_ic_cards)
-      card->SetIdle();
+    for (std::size_t i = 0; i != m_ic_card_count; ++i)
+      m_ic_cards[i].SetIdle();
 
     break;
   }
@@ -355,8 +360,8 @@ void ICCardReader::Update()
     INFO_LOG(SERIALINTERFACE_CARD, "InsertCheck: %u", (unsigned)unknown_parameter);
 
     bool is_card_present = false;
-    for (const auto& card : m_ic_cards)
-      is_card_present = is_card_present || !card->IsHalted();
+    for (std::size_t i = 0; i != m_ic_card_count; ++i)
+      is_card_present = is_card_present || !m_ic_cards[i].IsHalted();
 
     if (is_card_present &&
         m_card_present_insert_check_count <
@@ -381,23 +386,23 @@ void ICCardReader::Update()
              Common::BytesToHexString(input_payload + 2, 8).c_str());
 
     const ICCard* first_non_halted_card = nullptr;
-    for (const auto& card : m_ic_cards)
+    for (std::size_t i = 0; i != m_ic_card_count; ++i)
     {
-      if (!card->IsHalted())
+      if (!m_ic_cards[i].IsHalted())
       {
-        first_non_halted_card = card.get();
+        first_non_halted_card = &m_ic_cards[i];
         break;
       }
     }
 
     if (first_non_halted_card)
     {
-      reply_payload = first_non_halted_card->GetUID().data();
-      reply_payload_size = first_non_halted_card->GetUID().size();
+      reply_payload = first_non_halted_card->GetUID();
+      reply_payload_size = IC_PAGE_SIZE;
 
       size_t active_cards = 0;
-      for (const auto& card : m_ic_cards)
-        active_cards += !card->IsHalted();
+      for (std::size_t i = 0; i != m_ic_card_count; ++i)
+        active_cards += !m_ic_cards[i].IsHalted();
       const bool additional_cards = active_cards > 1;
 
       // Avalon seems to like a value of 0x00 or 0x01. 0x01 causes two cards to be processed.
@@ -421,19 +426,19 @@ void ICCardReader::Update()
     INFO_LOG(SERIALINTERFACE_CARD, "SelectCard: %s", Common::BytesToHexString(card_uid, 8).c_str());
 
     std::size_t found_card = 0;
-    while (found_card < m_ic_cards.size() &&
-           std::memcmp(m_ic_cards[found_card]->GetUID().data(), card_uid, 8))
+    while (found_card < m_ic_card_count &&
+           std::memcmp(m_ic_cards[found_card].GetUID(), card_uid, 8))
     {
       found_card++;
     }
 
-    if (found_card < m_ic_cards.size())
+    if (found_card < m_ic_card_count)
     {
       const u16 card_session = CARD_SESSION_BASE | u16(found_card);
 
-      Common::WriteSwap16(small_reply_payload.data(), card_session);
-      reply_payload = small_reply_payload.data();
-      reply_payload_size = small_reply_payload.size();
+      Common::WriteSwap16(small_reply_payload, card_session);
+      reply_payload = small_reply_payload;
+      reply_payload_size = sizeof(small_reply_payload);
 
       // Avalon's tests specifically want 0x00.
       status_code = 0x00;
@@ -515,9 +520,9 @@ void ICCardReader::Update()
 
     const u16 new_count = ic_card->DecreaseUseCount(page, amount);
 
-    Common::WriteSwap16(small_reply_payload.data(), new_count);
-    reply_payload = small_reply_payload.data();
-    reply_payload_size = small_reply_payload.size();
+    Common::WriteSwap16(small_reply_payload, new_count);
+    reply_payload = small_reply_payload;
+    reply_payload_size = sizeof(small_reply_payload);
 
     break;
   }
@@ -635,13 +640,13 @@ const u8* ICCardReader::ICCard::ReadData(u16 page, u16 page_count, std::size_t* 
   const u32 byte_count = page_count * IC_PAGE_SIZE;
 
   *size = 0;
-  if (byte_count + byte_offset > m_data.size())
+  if (byte_count + byte_offset > sizeof(m_data))
   {
     WARN_LOG(SERIALINTERFACE_CARD, "ReadData: Attempt to read beyond end of card.");
     return nullptr;
   }
 
-  const u8* const data = m_data.data() + byte_offset;
+  const u8* const data = m_data + byte_offset;
 
   DEBUG_LOG(SERIALINTERFACE_CARD, "\n%s", HexDump(data, byte_count).c_str());
 
@@ -664,13 +669,13 @@ bool ICCardReader::ICCard::WriteData(u16 page, const u8* data, std::size_t size)
     return false;
   }
 
-  if (size + byte_offset > m_data.size())
+  if (size + byte_offset > sizeof(m_data))
   {
     WARN_LOG(SERIALINTERFACE_CARD, "WriteData: Attempt to write beyond end of card.");
     return false;
   }
 
-  std::memcpy(m_data.data() + byte_offset, data, size);
+  std::memcpy(m_data + byte_offset, data, size);
 
   DEBUG_LOG(SERIALINTERFACE_CARD, "\n%s", HexDump(data, size).c_str());
 
@@ -682,7 +687,7 @@ bool ICCardReader::ICCard::WriteData(u16 page, const u8* data, std::size_t size)
 u16 ICCardReader::ICCard::DecreaseUseCount(u16 page, u16 amount)
 {
   const u32 byte_offset = page * IC_PAGE_SIZE;
-  auto* const addr = m_data.data() + byte_offset;
+  auto* const addr = m_data + byte_offset;
 
   const u16 previous_use_count = Common::swap16(addr);
 
@@ -705,7 +710,7 @@ u16 ICCardReader::ICCard::DecreaseUseCount(u16 page, u16 amount)
 void ICCardReader::ICCard::FlushData(u32 byte_offset, u32 byte_count)
 {
   File::DirectIOFile file{m_filename, File::AccessMode::Write, File::OpenMode::Always};
-  if (!file.OffsetWrite(byte_offset, m_data.data() + byte_offset, byte_count))
+  if (!file.OffsetWrite(byte_offset, m_data + byte_offset, byte_count))
   {
     ERROR_LOG(SERIALINTERFACE_CARD, "FlushData: Failed to write to: %s", m_filename.c_str());
   }
@@ -717,14 +722,19 @@ void ICCardReader::DoState(PointerWrap& p)
 
   // TODO: Think about what to do with the card data on the filesystem.
 
-  auto card_count = u8(m_ic_cards.size());
+  auto card_count = u8(m_ic_card_count);
   p.Do(card_count);
 
-  if (card_count != m_ic_cards.size())
+  if (card_count > MAX_IC_CARDS)
+  {
+    p.SetMeasureMode();
+    return;
+  }
+  if (card_count != m_ic_card_count)
     CreateCards(card_count);
 
-  for (auto& card : m_ic_cards)
-    card->DoState(p);
+  for (std::size_t i = 0; i != m_ic_card_count; ++i)
+    m_ic_cards[i].DoState(p);
 
   p.Do(m_is_field_on);
 
@@ -739,24 +749,27 @@ void ICCardReader::ICCard::DoState(PointerWrap& p)
   p.Do(m_current_state);
 }
 
-ICCardReader::ICCard::ICCard(std::string filename, const UID& uid)
-    : m_filename{std::move(filename)}, m_uid{uid}
+void ICCardReader::ICCard::Reset(std::string filename, const u8* uid)
 {
+  memset(m_data, 0, sizeof(m_data));
+  m_filename = std::move(filename);
+  memcpy(m_uid, uid, sizeof(m_uid));
+  m_current_state = State::Idle;
 }
 
 void ICCardReader::ICCard::Initialize()
 {
-  if (!LoadCardData(m_filename, m_data.data(), m_data.size()))
+  if (!LoadCardData(m_filename, m_data, sizeof(m_data)))
   {
     NOTICE_LOG(SERIALINTERFACE_CARD, "Creating new IC Card data.");
-    InitializeCardData(m_data.data());
+    InitializeCardData(m_data);
     FlushData(READ_ONLY_PAGE_INDEX * IC_PAGE_SIZE, IC_PAGE_SIZE * 2);
   }
 }
 
 bool ICCardReader::IsCardPresent() const
 {
-  return !m_ic_cards.empty();
+  return m_ic_card_count != 0;
 }
 
 bool ICCardReader::IsEjecting() const
@@ -777,8 +790,8 @@ void ICCardReader::InsertCard()
   NOTICE_LOG(SERIALINTERFACE_CARD, "InsertCard");
 
   CreateCards(1);
-  for (auto& card : m_ic_cards)
-    card->Initialize();
+  for (std::size_t i = 0; i != m_ic_card_count; ++i)
+    m_ic_cards[i].Initialize();
 }
 
 void ICCardReader::EjectCard()
@@ -788,7 +801,7 @@ void ICCardReader::EjectCard()
 
   NOTICE_LOG(SERIALINTERFACE_CARD, "EjectCard");
 
-  m_ic_cards.clear();
+  m_ic_card_count = 0;
 
   m_eject_timer = 120;
   m_card_present_insert_check_count = 0;
