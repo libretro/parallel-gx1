@@ -37,8 +37,8 @@ CEXIModem::CEXIModem(Core::System& system, ModemDeviceType type)
   switch (type)
   {
   case ModemDeviceType::TAPSERVER:
-    m_network_interface = std::make_unique<TAPServerNetworkInterface>(
-        this, Config::Get(Config::MAIN_MODEM_TAPSERVER_DESTINATION));
+    m_network_interface =
+        new TAPServerNetworkInterface(this, Config::Get(Config::MAIN_MODEM_TAPSERVER_DESTINATION));
     INFO_LOG(SP1, "Created tapserver physical network interface.");
     break;
   }
@@ -51,6 +51,7 @@ CEXIModem::~CEXIModem()
 {
   m_network_interface->RecvStop();
   m_network_interface->Deactivate();
+  delete m_network_interface;
   retro_spsc_free(&m_receive_buffer);
 }
 

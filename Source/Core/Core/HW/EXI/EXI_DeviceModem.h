@@ -151,7 +151,8 @@ private:
     void HandleReceivedFrame(std::string&& data);
   };
 
-  std::unique_ptr<NetworkInterface> m_network_interface;
+  // made with the device and deleted with it
+  NetworkInterface* m_network_interface = nullptr;
 
   static constexpr u32 INVALID_TRANSFER_DESCRIPTOR = 0xFFFFFFFF;
 

@@ -173,7 +173,7 @@ void CEXIETHERNET::BuiltInBBAInterface::PollData(std::size_t* datasize)
       if (socket_data.has_value())
       {
         *datasize = socket_data->size();
-        std::memcpy(m_eth_ref->mRecvBuffer.get(), socket_data->data(), *datasize);
+        std::memcpy(m_eth_ref->mRecvBuffer, socket_data->data(), *datasize);
       }
     }
     else if (!WillQueueOverrun())
@@ -795,7 +795,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
                        "Killing Dolphin...");
         std::exit(0);
       }
-      std::memcpy(self->m_eth_ref->mRecvBuffer.get(), self->m_queue_data[self->m_queue_read].data(),
+      std::memcpy(self->m_eth_ref->mRecvBuffer, self->m_queue_data[self->m_queue_read].data(),
                   datasize);
       self->m_queue_read++;
       self->m_queue_read &= 15;
@@ -813,7 +813,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
 
     if (datasize > 0)
     {
-      u8* buffer = reinterpret_cast<u8*>(self->m_eth_ref->mRecvBuffer.get());
+      u8* buffer = reinterpret_cast<u8*>(self->m_eth_ref->mRecvBuffer);
       Common::PacketView packet(buffer, datasize);
       const auto packet_type = packet.GetEtherType();
       if (packet_type.has_value() && packet_type == Common::IPV4_ETHERTYPE)

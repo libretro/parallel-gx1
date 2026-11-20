@@ -177,7 +177,7 @@ void CEXIETHERNET::XLinkNetworkInterface::ReadThreadHandler(void* data)
       if ((bytes_read - 4) < BBA_RECV_SIZE)
       {
         // Copy payload into BBA buffer as an ethernet frame
-        memmove(self->m_eth_ref->mRecvBuffer.get(), self->m_in_frame + 4, bytes_read - 4);
+        memmove(self->m_eth_ref->mRecvBuffer, self->m_in_frame + 4, bytes_read - 4);
 
         // Check the frame size again after the header is removed
         if (bytes_read < 1)

@@ -309,8 +309,8 @@ private:
   void set_rwp(u16 value);
   bool RecvHandlePacket();
 
-  std::unique_ptr<u8[]> mBbaMem;
-  std::unique_ptr<u8[]> tx_fifo;
+  u8 mBbaMem[BBA_MEM_SIZE] = {};
+  u8 tx_fifo[BBA_TXFIFO_SIZE] = {};
 
   class NetworkInterface
   {
@@ -520,9 +520,10 @@ private:
     retro_atomic_int_t m_read_thread_shutdown{};
   };
 
-  std::unique_ptr<NetworkInterface> m_network_interface;
+  // made with the device and deleted with it
+  NetworkInterface* m_network_interface = nullptr;
 
-  std::unique_ptr<u8[]> mRecvBuffer;
+  u8 mRecvBuffer[BBA_RECV_SIZE] = {};
   u32 mRecvBufferLength = 0;
 };
 }  // namespace ExpansionInterface

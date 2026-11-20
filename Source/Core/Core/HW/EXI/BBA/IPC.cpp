@@ -139,7 +139,7 @@ void CEXIETHERNET::IPCBBAInterface::ReadThreadHandler()
 {
   // Frames are received straight into the adapter's receive buffer; one
   // that arrives while receiving is off is dropped.
-  u8* const buffer = m_eth_ref->mRecvBuffer.get();
+  u8* const buffer = m_eth_ref->mRecvBuffer;
   for (;;)
   {
     const int size =

@@ -68,7 +68,7 @@ void CEXIETHERNET::TAPServerNetworkInterface::HandleReceivedFrame(std::string&& 
     return;
   }
 
-  std::memcpy(m_eth_ref->mRecvBuffer.get(), data.data(), data.size());
+  std::memcpy(m_eth_ref->mRecvBuffer, data.data(), data.size());
   m_eth_ref->mRecvBufferLength = static_cast<u32>(data.size());
   m_eth_ref->RecvHandlePacket();
 }

@@ -79,7 +79,7 @@ void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(void* data)
     if (select(self->fd + 1, &rfds, nullptr, nullptr, &timeout) <= 0)
       continue;
 
-    const int read_bytes = read(self->fd, self->m_eth_ref->mRecvBuffer.get(), BBA_RECV_SIZE);
+    const int read_bytes = read(self->fd, self->m_eth_ref->mRecvBuffer, BBA_RECV_SIZE);
     if (read_bytes < 0)
     {
       ERROR_LOG(SP1, "Failed to read from BBA, err=%d", read_bytes);
@@ -87,7 +87,7 @@ void CEXIETHERNET::TAPNetworkInterface::ReadThreadHandler(void* data)
     else if (self->readEnabled.IsSet())
     {
       INFO_LOG(SP1, "Read data: %s",
-               ArrayToString(self->m_eth_ref->mRecvBuffer.get(), read_bytes, 0x10).c_str());
+               ArrayToString(self->m_eth_ref->mRecvBuffer, read_bytes, 0x10).c_str());
       self->m_eth_ref->mRecvBufferLength = read_bytes;
       self->m_eth_ref->RecvHandlePacket();
     }
