@@ -27,7 +27,7 @@ void NetNCDManageDevice::DoState(PointerWrap& p)
   p.Do(m_ipc_fd);
 }
 
-std::optional<IPCReply> NetNCDManageDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply NetNCDManageDevice::IOCtlV(const IOCtlVRequest& request)
 {
   s32 return_value = IPC_SUCCESS;
   u32 common_result = 0;

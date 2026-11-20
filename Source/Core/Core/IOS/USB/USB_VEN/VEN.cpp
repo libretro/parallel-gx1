@@ -17,7 +17,7 @@ namespace IOS::HLE
 {
 USB_VEN::~USB_VEN() = default;
 
-std::optional<IPCReply> USB_VEN::IOCtl(const IOCtlRequest& request)
+IPCReply USB_VEN::IOCtl(const IOCtlRequest& request)
 {
   request.Log(GetDeviceName(), Common::Log::LogType::IOS_USB);
   switch (request.request)
@@ -49,7 +49,7 @@ std::optional<IPCReply> USB_VEN::IOCtl(const IOCtlRequest& request)
   }
 }
 
-std::optional<IPCReply> USB_VEN::IOCtlV(const IOCtlVRequest& request)
+IPCReply USB_VEN::IOCtlV(const IOCtlVRequest& request)
 {
   static const std::map<u32, u32> s_num_vectors = {
       {USB::IOCTLV_USBV5_CTRLMSG, 2},

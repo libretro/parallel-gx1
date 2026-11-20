@@ -16,7 +16,7 @@ namespace IOS::HLE
 {
 USB_HIDv5::~USB_HIDv5() = default;
 
-std::optional<IPCReply> USB_HIDv5::IOCtl(const IOCtlRequest& request)
+IPCReply USB_HIDv5::IOCtl(const IOCtlRequest& request)
 {
   request.Log(GetDeviceName(), Common::Log::LogType::IOS_USB);
   switch (request.request)
@@ -45,7 +45,7 @@ std::optional<IPCReply> USB_HIDv5::IOCtl(const IOCtlRequest& request)
   }
 }
 
-std::optional<IPCReply> USB_HIDv5::IOCtlV(const IOCtlVRequest& request)
+IPCReply USB_HIDv5::IOCtlV(const IOCtlVRequest& request)
 {
   switch (request.request)
   {

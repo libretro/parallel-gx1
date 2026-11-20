@@ -43,9 +43,9 @@ public:
   BluetoothRealDevice(EmulationKernel& ios, const std::string& device_name);
   ~BluetoothRealDevice() override;
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> Close(u32 fd) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply Close(u32 fd) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
   void Update() override;
 
   void DoState(PointerWrap& p) override;

@@ -23,7 +23,7 @@ NetKDTimeDevice::NetKDTimeDevice(EmulationKernel& ios, const std::string& device
 
 NetKDTimeDevice::~NetKDTimeDevice() = default;
 
-std::optional<IPCReply> NetKDTimeDevice::IOCtl(const IOCtlRequest& request)
+IPCReply NetKDTimeDevice::IOCtl(const IOCtlRequest& request)
 {
   enum : u32
   {

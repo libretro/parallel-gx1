@@ -24,9 +24,9 @@ public:
   USB_KBD(EmulationKernel& ios, const std::string& device_name);
   ~USB_KBD() override;
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> Write(const ReadWriteRequest& request) override;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply Write(const ReadWriteRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
   void Update() override;
 
 private:

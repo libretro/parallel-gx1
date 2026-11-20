@@ -44,7 +44,7 @@ class STMImmediateDevice final : public EmulationDevice
 {
 public:
   using EmulationDevice::EmulationDevice;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
 };
 
 // The /dev/stm/eventhook
@@ -53,7 +53,7 @@ class STMEventHookDevice final : public EmulationDevice
 public:
   using EmulationDevice::EmulationDevice;
   ~STMEventHookDevice() override;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
   void DoState(PointerWrap& p) override;
 
   bool HasHookInstalled() const;

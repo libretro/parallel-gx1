@@ -39,7 +39,7 @@ class WFSIDevice : public EmulationDevice
 public:
   WFSIDevice(EmulationKernel& ios, const std::string& device_name);
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
 
 private:
   u32 GetTmd(u16 group_id, u32 title_id, u64 subtitle_id, u32 address, u32* size) const;

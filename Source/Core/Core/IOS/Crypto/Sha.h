@@ -13,8 +13,8 @@ class ShaDevice final : public EmulationDevice
 {
 public:
   ShaDevice(EmulationKernel& ios, const std::string& device_name);
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
   enum class ShaIoctlv : u32
   {

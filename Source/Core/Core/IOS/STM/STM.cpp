@@ -17,7 +17,7 @@ namespace IOS::HLE
 {
 static std::unique_ptr<IOCtlRequest> s_event_hook_request;
 
-std::optional<IPCReply> STMImmediateDevice::IOCtl(const IOCtlRequest& request)
+IPCReply STMImmediateDevice::IOCtl(const IOCtlRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
@@ -84,7 +84,7 @@ STMEventHookDevice::~STMEventHookDevice()
   s_event_hook_request.reset();
 }
 
-std::optional<IPCReply> STMEventHookDevice::IOCtl(const IOCtlRequest& request)
+IPCReply STMEventHookDevice::IOCtl(const IOCtlRequest& request)
 {
   if (request.request != IOCTL_STM_EVENTHOOK)
     return IPCReply(IPC_UNKNOWN);
@@ -94,7 +94,7 @@ std::optional<IPCReply> STMEventHookDevice::IOCtl(const IOCtlRequest& request)
 
   // IOCTL_STM_EVENTHOOK waits until the reset button or power button is pressed.
   s_event_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), request.address);
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 void STMEventHookDevice::DoState(PointerWrap& p)

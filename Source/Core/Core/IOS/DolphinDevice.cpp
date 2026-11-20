@@ -195,7 +195,7 @@ DolphinDevice::DolphinDevice(EmulationKernel& ios, const std::string& device_nam
   m_timer.Start();
 }
 
-std::optional<IPCReply> DolphinDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply DolphinDevice::IOCtlV(const IOCtlVRequest& request)
 {
   if (Core::WantsDeterminism())
     return IPCReply(IPC_EACCES);

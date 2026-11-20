@@ -181,7 +181,7 @@ static IPCReply GetReplyForSuperblockOperation(int ios_version, ResultCode resul
   return GetFSReply(ConvertResult(result), ticks);
 }
 
-std::optional<IPCReply> FSDevice::Open(const OpenRequest& request)
+IPCReply FSDevice::Open(const OpenRequest& request)
 {
   return MakeIPCReply([&](Ticks t) {
     return m_core
@@ -224,7 +224,7 @@ FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path,
   return {this, static_cast<s64>(fd), ticks};
 }
 
-std::optional<IPCReply> FSDevice::Close(u32 fd)
+IPCReply FSDevice::Close(u32 fd)
 {
   return MakeIPCReply([&](Ticks t) { return m_core.Close(static_cast<u64>(fd), t); });
 }
@@ -336,7 +336,7 @@ bool FSCore::HasCacheForFile(u64 fd, u32 offset) const
   return m_cache_fd == fd && m_cache_chain_index == chain_index;
 }
 
-std::optional<IPCReply> FSDevice::Read(const ReadWriteRequest& request)
+IPCReply FSDevice::Read(const ReadWriteRequest& request)
 {
   return MakeIPCReply([&](Ticks t) {
     auto& system = GetSystem();
@@ -370,7 +370,7 @@ s32 FSCore::Read(u64 fd, u8* data, u32 size, std::optional<u32> ipc_buffer_addr,
   return *result;
 }
 
-std::optional<IPCReply> FSDevice::Write(const ReadWriteRequest& request)
+IPCReply FSDevice::Write(const ReadWriteRequest& request)
 {
   return MakeIPCReply([&](Ticks t) {
     auto& system = GetSystem();
@@ -404,7 +404,7 @@ s32 FSCore::Write(u64 fd, const u8* data, u32 size, std::optional<u32> ipc_buffe
   return *result;
 }
 
-std::optional<IPCReply> FSDevice::Seek(const SeekRequest& request)
+IPCReply FSDevice::Seek(const SeekRequest& request)
 {
   return MakeIPCReply([&](Ticks t) {
     return m_core.Seek(request.fd, request.offset, HLE::FS::SeekMode(request.mode), t);
@@ -466,7 +466,7 @@ static Result<T> GetParams(Memory::MemoryManager& memory, const IOCtlRequest& re
   return params;
 }
 
-std::optional<IPCReply> FSDevice::IOCtl(const IOCtlRequest& request)
+IPCReply FSDevice::IOCtl(const IOCtlRequest& request)
 {
   const auto it = m_core.m_fd_map.find(request.fd);
   if (it == m_core.m_fd_map.end())
@@ -501,7 +501,7 @@ std::optional<IPCReply> FSDevice::IOCtl(const IOCtlRequest& request)
   }
 }
 
-std::optional<IPCReply> FSDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply FSDevice::IOCtlV(const IOCtlVRequest& request)
 {
   const auto it = m_core.m_fd_map.find(request.fd);
   if (it == m_core.m_fd_map.end())

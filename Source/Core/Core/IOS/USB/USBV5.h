@@ -66,8 +66,8 @@ class USBV5ResourceManager : public USBHost
 public:
   using USBHost::USBHost;
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override = 0;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override = 0;
+  IPCReply IOCtl(const IOCtlRequest& request) override = 0;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override = 0;
 
   void DoState(PointerWrap& p) override;
 
@@ -75,13 +75,13 @@ protected:
   struct USBV5Device;
   USBV5Device* GetUSBV5Device(u32 in_buffer);
 
-  std::optional<IPCReply> GetDeviceChange(const IOCtlRequest& request);
+  IPCReply GetDeviceChange(const IOCtlRequest& request);
   IPCReply SetAlternateSetting(USBV5Device& device, const IOCtlRequest& request);
   IPCReply Shutdown(const IOCtlRequest& request);
   IPCReply SuspendResume(USBV5Device& device, const IOCtlRequest& request);
 
-  using Handler = std::function<std::optional<IPCReply>(USBV5Device&)>;
-  std::optional<IPCReply> HandleDeviceIOCtl(const IOCtlRequest& request, const Handler& handler);
+  using Handler = std::function<IPCReply(USBV5Device&)>;
+  IPCReply HandleDeviceIOCtl(const IOCtlRequest& request, const Handler& handler);
   IPCReply GetUSBVersion(const IOCtlRequest& request) const;
 
   void OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> device) override;

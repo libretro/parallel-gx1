@@ -192,19 +192,19 @@ void Device::DoState(PointerWrap& p)
   p.Do(m_is_active);
 }
 
-std::optional<IPCReply> Device::Open(const OpenRequest& request)
+IPCReply Device::Open(const OpenRequest& request)
 {
   m_is_active = true;
   return IPCReply{IPC_SUCCESS};
 }
 
-std::optional<IPCReply> Device::Close(u32 fd)
+IPCReply Device::Close(u32 fd)
 {
   m_is_active = false;
   return IPCReply{IPC_SUCCESS};
 }
 
-std::optional<IPCReply> Device::Unsupported(const Request& request)
+IPCReply Device::Unsupported(const Request& request)
 {
   static const std::map<IPCCommandType, std::string_view> names{{
       {IPC_CMD_READ, "Read"},

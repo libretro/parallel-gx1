@@ -16,8 +16,8 @@ public:
   using USBV5ResourceManager::USBV5ResourceManager;
   ~USB_VEN() override;
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
 private:
   IPCReply CancelEndpoint(USBV5Device& device, const IOCtlRequest& request);

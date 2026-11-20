@@ -9,7 +9,7 @@
 
 namespace IOS::HLE
 {
-std::optional<IPCReply> BluetoothStubDevice::Open(const OpenRequest& request)
+IPCReply BluetoothStubDevice::Open(const OpenRequest& request)
 {
   PanicAlert("Bluetooth passthrough mode is enabled, but Dolphin was built without libusb."
              " Passthrough mode cannot be used.");

@@ -677,7 +677,7 @@ std::shared_ptr<Device> EmulationKernel::GetDeviceByFileDescriptor(const u32 fd)
 }
 
 // Returns the FD for the newly opened device (on success) or an error code.
-std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
+IPCReply EmulationKernel::OpenDevice(OpenRequest& request)
 {
   const s32 new_fd = GetFreeDeviceID();
   INFO_LOG(IOS, "Opening %s (mode %d, fd %d)", request.path.c_str(),
@@ -716,16 +716,16 @@ std::optional<IPCReply> EmulationKernel::OpenDevice(OpenRequest& request)
     return IPCReply{IPC_ENOENT, 3700_tbticks};
   }
 
-  std::optional<IPCReply> result = device->Open(request);
-  if (result && result->return_value >= IPC_SUCCESS)
+  IPCReply result = device->Open(request);
+  if (result.has_reply && result.return_value >= IPC_SUCCESS)
   {
     m_fdmap[new_fd] = device;
-    result->return_value = new_fd;
+    result.return_value = new_fd;
   }
   return result;
 }
 
-std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request)
+IPCReply EmulationKernel::HandleIPCCommand(const Request& request)
 {
   if (request.command < IPC_CMD_OPEN || request.command > IPC_CMD_IOCTLV)
     return IPCReply{IPC_EINVAL, 978_tbticks};
@@ -740,7 +740,7 @@ std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request
   if (!device)
     return IPCReply{IPC_EINVAL, 550_tbticks};
 
-  std::optional<IPCReply> ret;
+  IPCReply ret = IPCReply::None();
 
   switch (request.command)
   {
@@ -778,19 +778,19 @@ std::optional<IPCReply> EmulationKernel::HandleIPCCommand(const Request& request
 void EmulationKernel::ExecuteIPCCommand(const u32 address)
 {
   Request request{GetSystem(), address};
-  std::optional<IPCReply> result = HandleIPCCommand(request);
+  IPCReply result = HandleIPCCommand(request);
 
-  if (!result)
+  if (!result.has_reply)
     return;
 
   // Ensure replies happen in order
   auto& core_timing = GetSystem().GetCoreTiming();
   const s64 ticks_until_last_reply = m_last_reply_time - core_timing.GetTicks();
   if (ticks_until_last_reply > 0)
-    result->reply_delay_ticks += ticks_until_last_reply;
-  m_last_reply_time = core_timing.GetTicks() + result->reply_delay_ticks;
+    result.reply_delay_ticks += ticks_until_last_reply;
+  m_last_reply_time = core_timing.GetTicks() + result.reply_delay_ticks;
 
-  EnqueueIPCReply(request, result->return_value, result->reply_delay_ticks);
+  EnqueueIPCReply(request, result.return_value, result.reply_delay_ticks);
 }
 
 // Happens AS SOON AS IPC gets a new pointer!
@@ -1018,7 +1018,7 @@ IPCReply::IPCReply(s32 return_value_) : IPCReply(return_value_, 4000_tbticks)
 }
 
 IPCReply::IPCReply(s32 return_value_, u64 reply_delay_ticks_)
-    : return_value(return_value_), reply_delay_ticks(reply_delay_ticks_)
+    : return_value(return_value_), reply_delay_ticks(reply_delay_ticks_), has_reply(true)
 {
 }
 }  // namespace IOS::HLE

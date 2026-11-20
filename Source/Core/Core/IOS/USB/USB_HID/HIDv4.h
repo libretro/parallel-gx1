@@ -22,7 +22,7 @@ public:
   USB_HIDv4(EmulationKernel& ios, const std::string& device_name);
   ~USB_HIDv4() override;
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
 
   void DoState(PointerWrap& p) override;
 
@@ -30,7 +30,7 @@ private:
   std::shared_ptr<USB::Device> GetDeviceByIOSID(s32 ios_id) const;
 
   IPCReply CancelInterrupt(const IOCtlRequest& request);
-  std::optional<IPCReply> GetDeviceChange(const IOCtlRequest& request);
+  IPCReply GetDeviceChange(const IOCtlRequest& request);
   IPCReply Shutdown(const IOCtlRequest& request);
   s32 SubmitTransfer(USB::Device& device, const IOCtlRequest& request);
 

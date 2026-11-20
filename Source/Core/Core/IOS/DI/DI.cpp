@@ -61,13 +61,13 @@ void DIDevice::DoState(PointerWrap& p)
   p.Do(m_last_length);
 }
 
-std::optional<IPCReply> DIDevice::Open(const OpenRequest& request)
+IPCReply DIDevice::Open(const OpenRequest& request)
 {
   InitializeIfFirstTime();
   return Device::Open(request);
 }
 
-std::optional<IPCReply> DIDevice::IOCtl(const IOCtlRequest& request)
+IPCReply DIDevice::IOCtl(const IOCtlRequest& request)
 {
   InitializeIfFirstTime();
 
@@ -97,7 +97,7 @@ std::optional<IPCReply> DIDevice::IOCtl(const IOCtlRequest& request)
 
   // FinishIOCtl will be called after the command has been executed
   // to reply to the request, so we shouldn't reply here.
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 void DIDevice::ProcessQueuedIOCtl()
@@ -672,7 +672,7 @@ void DIDevice::FinishDICommand(DIResult result)
   }
 }
 
-std::optional<IPCReply> DIDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply DIDevice::IOCtlV(const IOCtlVRequest& request)
 {
   // IOCtlVs are not queued since they don't (currently) go into DVDInterface and act
   // asynchronously. This does mean that an IOCtlV can be executed while an IOCtl is in progress,

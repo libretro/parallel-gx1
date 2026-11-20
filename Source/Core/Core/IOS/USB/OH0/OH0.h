@@ -34,14 +34,14 @@ public:
   OH0(EmulationKernel& ios, const std::string& device_name);
   ~OH0() override;
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
   std::pair<ReturnCode, u64> DeviceOpen(u16 vid, u16 pid);
   void DeviceClose(u64 device_id);
-  std::optional<IPCReply> DeviceIOCtl(u64 device_id, const IOCtlRequest& request);
-  std::optional<IPCReply> DeviceIOCtlV(u64 device_id, const IOCtlVRequest& request);
+  IPCReply DeviceIOCtl(u64 device_id, const IOCtlRequest& request);
+  IPCReply DeviceIOCtlV(u64 device_id, const IOCtlVRequest& request);
 
   void DoState(PointerWrap& p) override;
 
@@ -51,10 +51,10 @@ private:
   IPCReply GetRhDesca(const IOCtlRequest& request) const;
   IPCReply GetRhPortStatus(const IOCtlVRequest& request) const;
   IPCReply SetRhPortStatus(const IOCtlVRequest& request);
-  std::optional<IPCReply> RegisterRemovalHook(u64 device_id, const IOCtlRequest& request);
-  std::optional<IPCReply> RegisterInsertionHook(const IOCtlVRequest& request);
-  std::optional<IPCReply> RegisterInsertionHookWithID(const IOCtlVRequest& request);
-  std::optional<IPCReply> RegisterClassChangeHook(const IOCtlVRequest& request);
+  IPCReply RegisterRemovalHook(u64 device_id, const IOCtlRequest& request);
+  IPCReply RegisterInsertionHook(const IOCtlVRequest& request);
+  IPCReply RegisterInsertionHookWithID(const IOCtlVRequest& request);
+  IPCReply RegisterClassChangeHook(const IOCtlVRequest& request);
   s32 SubmitTransfer(USB::Device& device, const IOCtlVRequest& request);
 
   bool HasDeviceWithVidPid(u16 vid, u16 pid) const;

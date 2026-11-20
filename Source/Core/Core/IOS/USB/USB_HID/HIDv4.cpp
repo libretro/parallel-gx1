@@ -28,7 +28,7 @@ USB_HIDv4::USB_HIDv4(EmulationKernel& ios, const std::string& device_name)
 
 USB_HIDv4::~USB_HIDv4() = default;
 
-std::optional<IPCReply> USB_HIDv4::IOCtl(const IOCtlRequest& request)
+IPCReply USB_HIDv4::IOCtl(const IOCtlRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
@@ -83,7 +83,7 @@ IPCReply USB_HIDv4::CancelInterrupt(const IOCtlRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> USB_HIDv4::GetDeviceChange(const IOCtlRequest& request)
+IPCReply USB_HIDv4::GetDeviceChange(const IOCtlRequest& request)
 {
   if (request.buffer_out == 0 || request.buffer_out_size != 0x600)
     return IPCReply(IPC_EINVAL);
@@ -97,7 +97,7 @@ std::optional<IPCReply> USB_HIDv4::GetDeviceChange(const IOCtlRequest& request)
     m_has_pending_changes = false;
     m_is_shut_down = false;
   }
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 IPCReply USB_HIDv4::Shutdown(const IOCtlRequest& request)

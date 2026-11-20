@@ -89,8 +89,8 @@ public:
 
   ~NetSSLDevice() override;
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
   int GetSSLFreeID() const;
 

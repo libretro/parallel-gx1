@@ -263,7 +263,7 @@ int NetSSLDevice::GetSSLFreeID() const
   return 0;
 }
 
-std::optional<IPCReply> NetSSLDevice::IOCtl(const IOCtlRequest& request)
+IPCReply NetSSLDevice::IOCtl(const IOCtlRequest& request)
 {
   request.Log(GetDeviceName(), Common::Log::LogType::IOS_SSL, Common::Log::LogLevel::LINFO);
   return IPCReply(IPC_SUCCESS);
@@ -326,7 +326,7 @@ static bool LoadCertFile(File::FileLoan* cert, const char* name, const u8* corre
   return true;
 }
 
-std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
 {
   u32 BufferIn = 0, BufferIn2 = 0, BufferIn3 = 0;
   u32 BufferInSize = 0, BufferInSize2 = 0, BufferInSize3 = 0;
@@ -603,7 +603,7 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     {
       GetEmulationKernel().GetSocketManager()->DoSock(_SSL[sslID].sockfd, request,
                                                       IOCTLV_NET_SSL_DOHANDSHAKE);
-      return std::nullopt;
+      return IPCReply::None();
     }
     else
     {
@@ -618,7 +618,7 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     {
       GetEmulationKernel().GetSocketManager()->DoSock(_SSL[sslID].sockfd, request,
                                                       IOCTLV_NET_SSL_WRITE);
-      return std::nullopt;
+      return IPCReply::None();
     }
     else
     {
@@ -642,7 +642,7 @@ std::optional<IPCReply> NetSSLDevice::IOCtlV(const IOCtlVRequest& request)
     {
       GetEmulationKernel().GetSocketManager()->DoSock(_SSL[sslID].sockfd, request,
                                                       IOCTLV_NET_SSL_READ);
-      return std::nullopt;
+      return IPCReply::None();
     }
     else
     {

@@ -104,7 +104,7 @@ void SDIOSlot0Device::OpenInternal()
   }
 }
 
-std::optional<IPCReply> SDIOSlot0Device::Open(const OpenRequest& request)
+IPCReply SDIOSlot0Device::Open(const OpenRequest& request)
 {
   OpenInternal();
   m_registers.fill(0);
@@ -114,7 +114,7 @@ std::optional<IPCReply> SDIOSlot0Device::Open(const OpenRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> SDIOSlot0Device::Close(u32 fd)
+IPCReply SDIOSlot0Device::Close(u32 fd)
 {
   m_card.Close();
   m_block_length = 0;
@@ -123,7 +123,7 @@ std::optional<IPCReply> SDIOSlot0Device::Close(u32 fd)
   return Device::Close(fd);
 }
 
-std::optional<IPCReply> SDIOSlot0Device::IOCtl(const IOCtlRequest& request)
+IPCReply SDIOSlot0Device::IOCtl(const IOCtlRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
@@ -153,7 +153,7 @@ std::optional<IPCReply> SDIOSlot0Device::IOCtl(const IOCtlRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> SDIOSlot0Device::IOCtlV(const IOCtlVRequest& request)
+IPCReply SDIOSlot0Device::IOCtlV(const IOCtlVRequest& request)
 {
   switch (request.request)
   {
@@ -448,7 +448,7 @@ IPCReply SDIOSlot0Device::SetClk(const IOCtlRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> SDIOSlot0Device::SendCommand(const IOCtlRequest& request)
+IPCReply SDIOSlot0Device::SendCommand(const IOCtlRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
@@ -463,7 +463,7 @@ std::optional<IPCReply> SDIOSlot0Device::SendCommand(const IOCtlRequest& request
   {
     // Check if the condition is already true
     EventNotify();
-    return std::nullopt;
+    return IPCReply::None();
   }
 
   return IPCReply(IPC_SUCCESS);

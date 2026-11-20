@@ -1035,7 +1035,7 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
   return IPCReply{IPC_SUCCESS};
 }
 
-std::optional<IPCReply> NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
+IPCReply NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
 {
   enum : u32
   {

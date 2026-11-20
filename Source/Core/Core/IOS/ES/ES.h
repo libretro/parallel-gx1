@@ -247,9 +247,9 @@ public:
 
   void DoState(PointerWrap& p) override;
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> Close(u32 fd) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply Close(u32 fd) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
   ESCore& GetCore() const { return m_core; }
 
@@ -365,8 +365,8 @@ private:
   IPCReply GetTitleDirectory(const IOCtlVRequest& request);
   IPCReply GetTitleId(const IOCtlVRequest& request);
   IPCReply GetConsumption(const IOCtlVRequest& request);
-  std::optional<IPCReply> Launch(const IOCtlVRequest& request);
-  std::optional<IPCReply> LaunchBC(const IOCtlVRequest& request);
+  IPCReply Launch(const IOCtlVRequest& request);
+  IPCReply LaunchBC(const IOCtlVRequest& request);
   IPCReply DIVerify(const IOCtlVRequest& request);
   IPCReply SetUpStreamKey(const Context& context, const IOCtlVRequest& request);
   IPCReply DeleteStreamKey(const IOCtlVRequest& request);

@@ -33,7 +33,7 @@ class WFSSRVDevice : public EmulationDevice
 public:
   WFSSRVDevice(EmulationKernel& ios, const std::string& device_name);
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
 
   s32 Rename(std::string source, std::string dest) const;
   void SetHomeDir(const std::string& home_dir);

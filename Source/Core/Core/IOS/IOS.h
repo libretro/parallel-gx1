@@ -51,8 +51,17 @@ struct IPCReply
   explicit IPCReply(s32 return_value_);
   explicit IPCReply(s32 return_value_, u64 reply_delay_ticks_);
 
+  // No reply yet: the device answers the request later through EnqueueIPCReply.
+  static IPCReply None()
+  {
+    IPCReply reply(0, 0);
+    reply.has_reply = false;
+    return reply;
+  }
+
   s32 return_value;
   u64 reply_delay_ticks;
+  bool has_reply;
 };
 
 constexpr SystemTimers::TimeBaseTick IPC_OVERHEAD_TICKS = 2700_tbticks;
@@ -189,13 +198,13 @@ public:
 
 private:
   void ExecuteIPCCommand(u32 address);
-  std::optional<IPCReply> HandleIPCCommand(const Request& request);
+  IPCReply HandleIPCCommand(const Request& request);
 
   void AddDevice(std::unique_ptr<Device> device);
 
   void AddStaticDevices();
   s32 GetFreeDeviceID();
-  std::optional<IPCReply> OpenDevice(OpenRequest& request);
+  IPCReply OpenDevice(OpenRequest& request);
 
   Core::System& m_system;
 

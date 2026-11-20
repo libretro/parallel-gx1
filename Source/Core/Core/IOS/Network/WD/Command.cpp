@@ -192,7 +192,7 @@ void NetWDCommandDevice::DoState(PointerWrap& p)
   DO_RETRO_DEQUE(p, u32_deque, &m_recv_notification_requests);
 }
 
-std::optional<IPCReply> NetWDCommandDevice::Open(const OpenRequest& request)
+IPCReply NetWDCommandDevice::Open(const OpenRequest& request)
 {
   if (m_ipc_owner_fd < 0)
   {
@@ -221,7 +221,7 @@ std::optional<IPCReply> NetWDCommandDevice::Open(const OpenRequest& request)
   return Device::Open(request);
 }
 
-std::optional<IPCReply> NetWDCommandDevice::Close(u32 fd)
+IPCReply NetWDCommandDevice::Close(u32 fd)
 {
   if (m_ipc_owner_fd < 0 || fd != u32(m_ipc_owner_fd))
   {
@@ -335,7 +335,7 @@ IPCReply NetWDCommandDevice::GetInfo(const IOCtlVRequest& request) const
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> NetWDCommandDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply NetWDCommandDevice::IOCtlV(const IOCtlVRequest& request)
 {
   switch (request.request)
   {
@@ -388,11 +388,11 @@ std::optional<IPCReply> NetWDCommandDevice::IOCtlV(const IOCtlVRequest& request)
 
   case IOCTLV_WD_RECV_FRAME:
     u32_deque_push_back_growing(&m_recv_frame_requests, &request.address);
-    return std::nullopt;
+    return IPCReply::None();
 
   case IOCTLV_WD_RECV_NOTIFICATION:
     u32_deque_push_back_growing(&m_recv_notification_requests, &request.address);
-    return std::nullopt;
+    return IPCReply::None();
 
   case IOCTLV_WD_SET_CONFIG:
   case IOCTLV_WD_GET_CONFIG:

@@ -41,14 +41,14 @@ BluetoothRealDevice::~BluetoothRealDevice()
   SaveLinkKeys();
 }
 
-std::optional<IPCReply> BluetoothRealDevice::Open(const OpenRequest& request)
+IPCReply BluetoothRealDevice::Open(const OpenRequest& request)
 {
   m_lib_usb_bt_adapter = std::make_unique<LibUSBBluetoothAdapter>();
 
   return Device::Open(request);
 }
 
-std::optional<IPCReply> BluetoothRealDevice::Close(u32 fd)
+IPCReply BluetoothRealDevice::Close(u32 fd)
 {
   m_hci_endpoint.reset();
   m_acl_endpoint.reset();
@@ -63,7 +63,7 @@ std::optional<IPCReply> BluetoothRealDevice::Close(u32 fd)
   return Device::Close(fd);
 }
 
-std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request)
 {
   switch (request.request)
   {
@@ -129,7 +129,7 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
     {
       m_acl_endpoint = std::move(cmd);
       TryToFillACLEndpoint();
-      return std::nullopt;
+      return IPCReply::None();
     }
 
     auto& memory = GetSystem().GetMemory();
@@ -146,7 +146,7 @@ std::optional<IPCReply> BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request
     {
       m_hci_endpoint = std::move(cmd);
       TryToFillHCIEndpoint();
-      return std::nullopt;
+      return IPCReply::None();
     }
 
     ERROR_LOG(IOS_WIIMOTE, "IOCTLV_USBV0_INTRMSG: Unknown endpoint: 0x%02x",

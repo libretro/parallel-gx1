@@ -125,7 +125,7 @@ void WFSIDevice::FinalizePatchInstall()
   File::MoveWithOverwrite(WFS::NativePath(patch_dir), WFS::NativePath(current_title_dir));
 }
 
-std::optional<IPCReply> WFSIDevice::IOCtl(const IOCtlRequest& request)
+IPCReply WFSIDevice::IOCtl(const IOCtlRequest& request)
 {
   s32 return_error_code = IPC_SUCCESS;
 

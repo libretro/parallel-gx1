@@ -121,13 +121,13 @@ public:
 
   void DoState(PointerWrap& p) override;
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> Close(u32 fd) override;
-  std::optional<IPCReply> Read(const ReadWriteRequest& request) override;
-  std::optional<IPCReply> Write(const ReadWriteRequest& request) override;
-  std::optional<IPCReply> Seek(const SeekRequest& request) override;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply Close(u32 fd) override;
+  IPCReply Read(const ReadWriteRequest& request) override;
+  IPCReply Write(const ReadWriteRequest& request) override;
+  IPCReply Seek(const SeekRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
 private:
   enum

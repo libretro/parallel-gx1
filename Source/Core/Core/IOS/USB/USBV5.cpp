@@ -128,7 +128,7 @@ USBV5ResourceManager::USBV5Device* USBV5ResourceManager::GetUSBV5Device(u32 in_b
   return usbv5_device;
 }
 
-std::optional<IPCReply> USBV5ResourceManager::GetDeviceChange(const IOCtlRequest& request)
+IPCReply USBV5ResourceManager::GetDeviceChange(const IOCtlRequest& request)
 {
   if (request.buffer_out_size != 0x180 || m_devicechange_hook_request)
     return IPCReply(IPC_EINVAL);
@@ -140,7 +140,7 @@ std::optional<IPCReply> USBV5ResourceManager::GetDeviceChange(const IOCtlRequest
     TriggerDeviceChangeReply();
     m_has_pending_changes = false;
   }
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 IPCReply USBV5ResourceManager::SetAlternateSetting(USBV5Device& device, const IOCtlRequest& request)
@@ -188,8 +188,8 @@ IPCReply USBV5ResourceManager::SuspendResume(USBV5Device& device, const IOCtlReq
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> USBV5ResourceManager::HandleDeviceIOCtl(const IOCtlRequest& request,
-                                                                const Handler& handler)
+IPCReply USBV5ResourceManager::HandleDeviceIOCtl(const IOCtlRequest& request,
+                                                 const Handler& handler)
 {
   if (request.buffer_in == 0 || request.buffer_in_size != 0x20)
     return IPCReply(IPC_EINVAL);

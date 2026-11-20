@@ -164,7 +164,7 @@ bool BluetoothEmuDevice::RemoteDisconnect(const bdaddr_t& address)
   return SendEventDisconnect(GetConnectionHandle(address), 0x13);
 }
 
-std::optional<IPCReply> BluetoothEmuDevice::Close(u32 fd)
+IPCReply BluetoothEmuDevice::Close(u32 fd)
 {
   // Clean up state
   m_scan_enable = 0;
@@ -176,7 +176,7 @@ std::optional<IPCReply> BluetoothEmuDevice::Close(u32 fd)
   return Device::Close(fd);
 }
 
-std::optional<IPCReply> BluetoothEmuDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply BluetoothEmuDevice::IOCtlV(const IOCtlVRequest& request)
 {
   bool send_reply = true;
   switch (request.request)
@@ -256,7 +256,7 @@ std::optional<IPCReply> BluetoothEmuDevice::IOCtlV(const IOCtlVRequest& request)
   }
 
   if (!send_reply)
-    return std::nullopt;
+    return IPCReply::None();
   return IPCReply(IPC_SUCCESS);
 }
 

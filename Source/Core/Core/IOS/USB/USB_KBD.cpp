@@ -195,7 +195,7 @@ USB_KBD::~USB_KBD()
   usb_kbd_messages_free(&m_message_queue);
 }
 
-std::optional<IPCReply> USB_KBD::Open(const OpenRequest& request)
+IPCReply USB_KBD::Open(const OpenRequest& request)
 {
   INFO_LOG(IOS, "USB_KBD: Open");
   Common::IniFile ini;
@@ -209,13 +209,13 @@ std::optional<IPCReply> USB_KBD::Open(const OpenRequest& request)
   return Device::Open(request);
 }
 
-std::optional<IPCReply> USB_KBD::Write(const ReadWriteRequest& request)
+IPCReply USB_KBD::Write(const ReadWriteRequest& request)
 {
   // Stubbed.
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> USB_KBD::IOCtl(const IOCtlRequest& request)
+IPCReply USB_KBD::IOCtl(const IOCtlRequest& request)
 {
   if (Config::Get(Config::MAIN_WII_KEYBOARD) && !Core::WantsDeterminism() &&
       ControlReference::GetInputGate() && !usb_kbd_messages_empty(&m_message_queue))

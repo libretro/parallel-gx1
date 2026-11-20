@@ -27,10 +27,10 @@ public:
 
   void DoState(PointerWrap& p) override;
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> Close(u32 fd) override;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply Close(u32 fd) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
 private:
   // SD Host Controller Registers
@@ -134,7 +134,7 @@ private:
   IPCReply ReadHCRegister(const IOCtlRequest& request);
   IPCReply ResetCard(const IOCtlRequest& request);
   IPCReply SetClk(const IOCtlRequest& request);
-  std::optional<IPCReply> SendCommand(const IOCtlRequest& request);
+  IPCReply SendCommand(const IOCtlRequest& request);
   IPCReply GetStatus(const IOCtlRequest& request);
   IPCReply GetOCRegister(const IOCtlRequest& request);
 

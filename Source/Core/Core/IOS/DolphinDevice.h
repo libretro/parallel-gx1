@@ -12,7 +12,7 @@ class DolphinDevice final : public EmulationDevice
 {
 public:
   DolphinDevice(EmulationKernel& ios, const std::string& device_name);
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
 private:
   IPCReply GetElapsedTime(const IOCtlVRequest& request) const;

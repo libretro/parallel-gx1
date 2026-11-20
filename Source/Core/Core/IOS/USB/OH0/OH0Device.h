@@ -19,10 +19,10 @@ class OH0Device final : public EmulationDevice
 public:
   OH0Device(EmulationKernel& ios, const std::string& device_name);
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
-  std::optional<IPCReply> Close(u32 fd) override;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
+  IPCReply Close(u32 fd) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
   void DoState(PointerWrap& p) override;
 
 private:

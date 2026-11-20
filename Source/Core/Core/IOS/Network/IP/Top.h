@@ -71,8 +71,8 @@ public:
   NetIPTopDevice(EmulationKernel& ios, const std::string& device_name);
 
   void DoState(PointerWrap& p) override;
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
   void Update() override;
 
@@ -91,17 +91,17 @@ private:
   };
 
   template <typename Method, typename Request>
-  std::optional<IPCReply> LaunchAsyncTask(Method method, const Request& request)
+  IPCReply LaunchAsyncTask(Method method, const Request& request)
   {
     m_work_queue.EmplaceItem(AsyncTask{request, std::bind(method, this, request)});
-    return std::nullopt;
+    return IPCReply::None();
   }
 
   IPCReply HandleInitInterfaceRequest(const IOCtlRequest& request);
   IPCReply HandleSocketRequest(const IOCtlRequest& request);
   IPCReply HandleICMPSocketRequest(const IOCtlRequest& request);
   IPCReply HandleCloseRequest(const IOCtlRequest& request);
-  std::optional<IPCReply> HandleDoSockRequest(const IOCtlRequest& request);
+  IPCReply HandleDoSockRequest(const IOCtlRequest& request);
   IPCReply HandleShutdownRequest(const IOCtlRequest& request);
   IPCReply HandleListenRequest(const IOCtlRequest& request);
   IPCReply HandleGetSockOptRequest(const IOCtlRequest& request);
@@ -112,13 +112,13 @@ private:
   IPCReply HandleInetAToNRequest(const IOCtlRequest& request);
   IPCReply HandleInetPToNRequest(const IOCtlRequest& request);
   IPCReply HandleInetNToPRequest(const IOCtlRequest& request);
-  std::optional<IPCReply> HandlePollRequest(const IOCtlRequest& request);
+  IPCReply HandlePollRequest(const IOCtlRequest& request);
   IPCReply HandleGetHostByNameRequest(const IOCtlRequest& request);
   IPCReply HandleICMPCancelRequest(const IOCtlRequest& request);
 
   IPCReply HandleGetInterfaceOptRequest(const IOCtlVRequest& request);
-  std::optional<IPCReply> HandleSendToRequest(const IOCtlVRequest& request);
-  std::optional<IPCReply> HandleRecvFromRequest(const IOCtlVRequest& request);
+  IPCReply HandleSendToRequest(const IOCtlVRequest& request);
+  IPCReply HandleRecvFromRequest(const IOCtlVRequest& request);
   IPCReply HandleGetAddressInfoRequest(const IOCtlVRequest& request);
   IPCReply HandleICMPPingRequest(const IOCtlVRequest& request);
 

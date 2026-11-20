@@ -17,7 +17,7 @@ class NetNCDManageDevice : public EmulationDevice
 public:
   NetNCDManageDevice(EmulationKernel& ios, const std::string& device_name);
 
-  std::optional<IPCReply> IOCtlV(const IOCtlVRequest& request) override;
+  IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
   void DoState(PointerWrap& p) override;
 

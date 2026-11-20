@@ -39,7 +39,7 @@ public:
   IPCReply HandleNWC24CheckMailNow(const IOCtlRequest& request);
   ~NetKDRequestDevice() override;
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
   void Update() override;
 
 private:
@@ -63,10 +63,10 @@ private:
   void IncrementSchedulerWord(size_t index);
 
   template <typename Method, typename Request>
-  std::optional<IPCReply> LaunchAsyncTask(Method method, const Request& request)
+  IPCReply LaunchAsyncTask(Method method, const Request& request)
   {
     m_work_queue.EmplaceItem(AsyncTask{request, std::bind(method, this, request)});
-    return std::nullopt;
+    return IPCReply::None();
   }
 
   enum class CurrentFunction : u32

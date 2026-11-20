@@ -20,7 +20,7 @@ ShaDevice::ShaDevice(EmulationKernel& ios, const std::string& device_name)
 {
 }
 
-std::optional<IPCReply> ShaDevice::Open(const OpenRequest& request)
+IPCReply ShaDevice::Open(const OpenRequest& request)
 {
   return Device::Open(request);
 }
@@ -85,7 +85,7 @@ HLE::ReturnCode ShaDevice::ProcessShaCommand(ShaIoctlv command, const IOCtlVRequ
   return ok ? HLE::ReturnCode::IPC_SUCCESS : HLE::ReturnCode::IPC_EACCES;
 }
 
-std::optional<IPCReply> ShaDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply ShaDevice::IOCtlV(const IOCtlVRequest& request)
 {
   HLE::ReturnCode return_code = IPC_EINVAL;
   ShaIoctlv command = static_cast<ShaIoctlv>(request.request);

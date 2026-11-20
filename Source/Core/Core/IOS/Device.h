@@ -215,19 +215,13 @@ public:
   const std::string& GetDeviceName() const { return m_name; }
   // Replies to Open and Close requests are sent by the IPC request handler (HandleCommand),
   // not by the devices themselves.
-  virtual std::optional<IPCReply> Open(const OpenRequest& request);
-  virtual std::optional<IPCReply> Close(u32 fd);
-  virtual std::optional<IPCReply> Seek(const SeekRequest& seek) { return Unsupported(seek); }
-  virtual std::optional<IPCReply> Read(const ReadWriteRequest& read) { return Unsupported(read); }
-  virtual std::optional<IPCReply> Write(const ReadWriteRequest& write)
-  {
-    return Unsupported(write);
-  }
-  virtual std::optional<IPCReply> IOCtl(const IOCtlRequest& ioctl) { return Unsupported(ioctl); }
-  virtual std::optional<IPCReply> IOCtlV(const IOCtlVRequest& ioctlv)
-  {
-    return Unsupported(ioctlv);
-  }
+  virtual IPCReply Open(const OpenRequest& request);
+  virtual IPCReply Close(u32 fd);
+  virtual IPCReply Seek(const SeekRequest& seek) { return Unsupported(seek); }
+  virtual IPCReply Read(const ReadWriteRequest& read) { return Unsupported(read); }
+  virtual IPCReply Write(const ReadWriteRequest& write) { return Unsupported(write); }
+  virtual IPCReply IOCtl(const IOCtlRequest& ioctl) { return Unsupported(ioctl); }
+  virtual IPCReply IOCtlV(const IOCtlVRequest& ioctlv) { return Unsupported(ioctlv); }
   virtual void Update() {}
   virtual void UpdateWantDeterminism(bool new_want_determinism) {}
   virtual DeviceType GetDeviceType() const { return m_device_type; }
@@ -242,7 +236,7 @@ protected:
   bool m_is_active = false;
 
 private:
-  std::optional<IPCReply> Unsupported(const Request& request);
+  IPCReply Unsupported(const Request& request);
 };
 
 // Helper class for Devices that we know are only ever instantiated under an EmulationKernel.

@@ -27,7 +27,7 @@ public:
   USBHost(EmulationKernel& ios, const std::string& device_name);
   ~USBHost() override;
 
-  std::optional<IPCReply> Open(const OpenRequest& request) override;
+  IPCReply Open(const OpenRequest& request) override;
 
   void DoState(PointerWrap& p) override;
 
@@ -46,8 +46,8 @@ protected:
   virtual void OnDeviceChangeEnd();
   virtual bool ShouldAddDevice(const USB::Device& device) const;
 
-  std::optional<IPCReply> HandleTransfer(const std::shared_ptr<USB::Device>& device, u32 request,
-                                         const std::function<s32()>& submit) const;
+  IPCReply HandleTransfer(const std::shared_ptr<USB::Device>& device, u32 request,
+                          const std::function<s32()>& submit) const;
 
   // Emulation thread only. Device lists from the scan thread wait in m_pending_devices until
   // Update takes them, so this and everything derived from it in the subclasses stay on one

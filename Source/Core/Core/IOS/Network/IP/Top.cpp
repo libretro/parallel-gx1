@@ -474,7 +474,7 @@ static DefaultInterface GetSystemDefaultInterfaceOrFallback()
   return GetSystemDefaultInterface().value_or(FALLBACK_VALUES);
 }
 
-std::optional<IPCReply> NetIPTopDevice::IOCtl(const IOCtlRequest& request)
+IPCReply NetIPTopDevice::IOCtl(const IOCtlRequest& request)
 {
   if (Core::WantsDeterminism())
   {
@@ -531,7 +531,7 @@ std::optional<IPCReply> NetIPTopDevice::IOCtl(const IOCtlRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> NetIPTopDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply NetIPTopDevice::IOCtlV(const IOCtlVRequest& request)
 {
   switch (request.request)
   {
@@ -619,7 +619,7 @@ IPCReply NetIPTopDevice::HandleCloseRequest(const IOCtlRequest& request)
   return IPCReply(return_value);
 }
 
-std::optional<IPCReply> NetIPTopDevice::HandleDoSockRequest(const IOCtlRequest& request)
+IPCReply NetIPTopDevice::HandleDoSockRequest(const IOCtlRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
@@ -627,7 +627,7 @@ std::optional<IPCReply> NetIPTopDevice::HandleDoSockRequest(const IOCtlRequest& 
   const u32 fd = memory.Read_U32(request.buffer_in);
   GetEmulationKernel().GetSocketManager()->DoSock(fd, request,
                                                   static_cast<NET_IOCTL>(request.request));
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 IPCReply NetIPTopDevice::HandleShutdownRequest(const IOCtlRequest& request)
@@ -877,7 +877,7 @@ IPCReply NetIPTopDevice::HandleInetNToPRequest(const IOCtlRequest& request)
   return IPCReply(0);
 }
 
-std::optional<IPCReply> NetIPTopDevice::HandlePollRequest(const IOCtlRequest& request)
+IPCReply NetIPTopDevice::HandlePollRequest(const IOCtlRequest& request)
 {
   auto sm = GetEmulationKernel().GetSocketManager();
 
@@ -920,7 +920,7 @@ std::optional<IPCReply> NetIPTopDevice::HandlePollRequest(const IOCtlRequest& re
 
   // Prevents blocking emulation on a blocking poll
   sm->AddPollCommand({request.address, request.buffer_out, std::move(ufds), timeout});
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 IPCReply NetIPTopDevice::HandleGetHostByNameRequest(const IOCtlRequest& request)
@@ -1237,24 +1237,24 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
   return IPCReply(0);
 }
 
-std::optional<IPCReply> NetIPTopDevice::HandleSendToRequest(const IOCtlVRequest& request)
+IPCReply NetIPTopDevice::HandleSendToRequest(const IOCtlVRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
   u32 fd = memory.Read_U32(request.in_vectors[1].address);
   GetEmulationKernel().GetSocketManager()->DoSock(fd, request, IOCTLV_SO_SENDTO);
-  return std::nullopt;
+  return IPCReply::None();
 }
 
-std::optional<IPCReply> NetIPTopDevice::HandleRecvFromRequest(const IOCtlVRequest& request)
+IPCReply NetIPTopDevice::HandleRecvFromRequest(const IOCtlVRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
   u32 fd = memory.Read_U32(request.in_vectors[0].address);
   GetEmulationKernel().GetSocketManager()->DoSock(fd, request, IOCTLV_SO_RECVFROM);
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 IPCReply NetIPTopDevice::HandleGetAddressInfoRequest(const IOCtlVRequest& request)

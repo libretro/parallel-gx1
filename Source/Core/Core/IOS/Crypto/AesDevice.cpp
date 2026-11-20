@@ -23,12 +23,12 @@ AesDevice::AesDevice(EmulationKernel& ios, const std::string& device_name)
 {
 }
 
-std::optional<IPCReply> AesDevice::Open(const OpenRequest& request)
+IPCReply AesDevice::Open(const OpenRequest& request)
 {
   return Device::Open(request);
 }
 
-std::optional<IPCReply> AesDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply AesDevice::IOCtlV(const IOCtlVRequest& request)
 {
   auto& system = GetSystem();
   auto& memory = system.GetMemory();

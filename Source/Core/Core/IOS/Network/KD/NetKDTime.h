@@ -16,7 +16,7 @@ public:
   NetKDTimeDevice(EmulationKernel& ios, const std::string& device_name);
   ~NetKDTimeDevice() override;
 
-  std::optional<IPCReply> IOCtl(const IOCtlRequest& request) override;
+  IPCReply IOCtl(const IOCtlRequest& request) override;
 
   // Returns seconds since Wii epoch
   // +/- any bias set from IOCTL_NW24_SET_UNIVERSAL_TIME

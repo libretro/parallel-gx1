@@ -570,7 +570,7 @@ ESDevice::ContextArray::iterator ESDevice::FindInactiveContext()
   return it;
 }
 
-std::optional<IPCReply> ESDevice::Open(const OpenRequest& request)
+IPCReply ESDevice::Open(const OpenRequest& request)
 {
   auto context = FindInactiveContext();
   if (context == m_contexts.end())
@@ -583,7 +583,7 @@ std::optional<IPCReply> ESDevice::Open(const OpenRequest& request)
   return Device::Open(request);
 }
 
-std::optional<IPCReply> ESDevice::Close(u32 fd)
+IPCReply ESDevice::Close(u32 fd)
 {
   auto context = FindActiveContext(fd);
   if (context == m_contexts.end())
@@ -597,7 +597,7 @@ std::optional<IPCReply> ESDevice::Close(u32 fd)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> ESDevice::IOCtlV(const IOCtlVRequest& request)
+IPCReply ESDevice::IOCtlV(const IOCtlVRequest& request)
 {
   DEBUG_LOG(IOS_ES, "%s (%#x)", GetDeviceName().c_str(), request.request);
   auto context = FindActiveContext(request.fd);
@@ -774,7 +774,7 @@ IPCReply ESDevice::GetConsumption(const IOCtlVRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> ESDevice::Launch(const IOCtlVRequest& request)
+IPCReply ESDevice::Launch(const IOCtlVRequest& request)
 {
   if (!request.HasNumberOfValidVectors(2, 0))
     return IPCReply(ES_EINVAL);
@@ -804,10 +804,10 @@ std::optional<IPCReply> ESDevice::Launch(const IOCtlVRequest& request)
   // ES_LAUNCH involves restarting IOS, which results in two acknowledgements in a row
   // (one from the previous IOS for this IPC request, and one from the new one as it boots).
   // Nothing should be written to the command buffer if the launch succeeded for obvious reasons.
-  return std::nullopt;
+  return IPCReply::None();
 }
 
-std::optional<IPCReply> ESDevice::LaunchBC(const IOCtlVRequest& request)
+IPCReply ESDevice::LaunchBC(const IOCtlVRequest& request)
 {
   if (!request.HasNumberOfValidVectors(0, 0))
     return IPCReply(ES_EINVAL);
@@ -820,7 +820,7 @@ std::optional<IPCReply> ESDevice::LaunchBC(const IOCtlVRequest& request)
   if (!LaunchTitle(0x0000000100000100))
     return IPCReply(FS_ENOENT);
 
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 // This is technically an ioctlv in IOS's ES, but it is an internal API which cannot be

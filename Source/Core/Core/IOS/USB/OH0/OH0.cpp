@@ -24,14 +24,14 @@ OH0::OH0(EmulationKernel& ios, const std::string& device_name) : USBHost(ios, de
 
 OH0::~OH0() = default;
 
-std::optional<IPCReply> OH0::Open(const OpenRequest& request)
+IPCReply OH0::Open(const OpenRequest& request)
 {
   if (HasFeature(m_ios.GetVersion(), Feature::NewUSB))
     return IPCReply(IPC_EACCES);
   return USBHost::Open(request);
 }
 
-std::optional<IPCReply> OH0::IOCtl(const IOCtlRequest& request)
+IPCReply OH0::IOCtl(const IOCtlRequest& request)
 {
   request.Log(GetDeviceName(), Common::Log::LogType::IOS_USB);
   switch (request.request)
@@ -45,7 +45,7 @@ std::optional<IPCReply> OH0::IOCtl(const IOCtlRequest& request)
   }
 }
 
-std::optional<IPCReply> OH0::IOCtlV(const IOCtlVRequest& request)
+IPCReply OH0::IOCtlV(const IOCtlVRequest& request)
 {
   INFO_LOG(IOS_USB, "/dev/usb/oh0 - IOCtlV %u", request.request);
   switch (request.request)
@@ -165,16 +165,16 @@ IPCReply OH0::SetRhPortStatus(const IOCtlVRequest& request)
   return IPCReply(IPC_SUCCESS);
 }
 
-std::optional<IPCReply> OH0::RegisterRemovalHook(const u64 device_id, const IOCtlRequest& request)
+IPCReply OH0::RegisterRemovalHook(const u64 device_id, const IOCtlRequest& request)
 {
   // IOS only allows a single device removal hook.
   const bool inserted = m_removal_hooks.try_emplace(device_id, request.address).second;
   if (!inserted)
     return IPCReply(IPC_EEXIST);
-  return std::nullopt;
+  return IPCReply::None();
 }
 
-std::optional<IPCReply> OH0::RegisterInsertionHook(const IOCtlVRequest& request)
+IPCReply OH0::RegisterInsertionHook(const IOCtlVRequest& request)
 {
   if (!request.HasNumberOfValidVectors(2, 0))
     return IPCReply(IPC_EINVAL);
@@ -188,10 +188,10 @@ std::optional<IPCReply> OH0::RegisterInsertionHook(const IOCtlVRequest& request)
     return IPCReply(IPC_SUCCESS);
   // TODO: figure out whether IOS allows more than one hook.
   m_insertion_hooks[{vid, pid}] = request.address;
-  return std::nullopt;
+  return IPCReply::None();
 }
 
-std::optional<IPCReply> OH0::RegisterInsertionHookWithID(const IOCtlVRequest& request)
+IPCReply OH0::RegisterInsertionHookWithID(const IOCtlVRequest& request)
 {
   if (!request.HasNumberOfValidVectors(3, 1))
     return IPCReply(IPC_EINVAL);
@@ -208,17 +208,17 @@ std::optional<IPCReply> OH0::RegisterInsertionHookWithID(const IOCtlVRequest& re
   m_insertion_hooks.insert({{vid, pid}, request.address});
   // The output vector is overwritten with an ID to use with ioctl 31 for cancelling the hook.
   memory.Write_U32(vid << 16 | pid, request.io_vectors[0].address);
-  return std::nullopt;
+  return IPCReply::None();
 }
 
-std::optional<IPCReply> OH0::RegisterClassChangeHook(const IOCtlVRequest& request)
+IPCReply OH0::RegisterClassChangeHook(const IOCtlVRequest& request)
 {
   if (!request.HasNumberOfValidVectors(1, 0))
     return IPCReply(IPC_EINVAL);
   WARN_LOG(IOS_USB, "Unimplemented IOCtlV: USB::IOCTLV_USBV0_DEVICECLASSCHANGE (no reply)");
   request.Dump(GetSystem(), GetDeviceName(), Common::Log::LogType::IOS_USB,
                Common::Log::LogLevel::LWARNING);
-  return std::nullopt;
+  return IPCReply::None();
 }
 
 bool OH0::HasDeviceWithVidPid(const u16 vid, const u16 pid) const
@@ -283,7 +283,7 @@ void OH0::DeviceClose(const u64 device_id)
   m_opened_devices.erase(device_id);
 }
 
-std::optional<IPCReply> OH0::DeviceIOCtl(const u64 device_id, const IOCtlRequest& request)
+IPCReply OH0::DeviceIOCtl(const u64 device_id, const IOCtlRequest& request)
 {
   const auto device = GetDeviceById(device_id);
   if (!device)
@@ -305,7 +305,7 @@ std::optional<IPCReply> OH0::DeviceIOCtl(const u64 device_id, const IOCtlRequest
   }
 }
 
-std::optional<IPCReply> OH0::DeviceIOCtlV(const u64 device_id, const IOCtlVRequest& request)
+IPCReply OH0::DeviceIOCtlV(const u64 device_id, const IOCtlVRequest& request)
 {
   const auto device = GetDeviceById(device_id);
   if (!device)
