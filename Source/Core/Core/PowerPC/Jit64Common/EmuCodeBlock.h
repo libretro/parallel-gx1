@@ -119,7 +119,10 @@ public:
   bool WriteClobbersRegValue(int accessSize, bool swap);
 
   // returns true if an exception could have been caused
-  bool WriteToConstAddress(int accessSize, Gen::OpArg arg, u32 address, BitSet32 registersInUse);
+  // update: the instruction binds a register after the store, which a fault handled in a
+  // trampoline would jump over, so its store is no fastmem one
+  bool WriteToConstAddress(int accessSize, Gen::OpArg arg, u32 address, BitSet32 registersInUse,
+                           bool update);
   void WriteToConstRamAddress(int accessSize, Gen::OpArg arg, u32 address, bool swap = true);
 
   void JitGetAndClearCAOV(bool oe);

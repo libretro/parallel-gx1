@@ -506,7 +506,7 @@ void Jit64::stX(UGeckoInstruction inst)
     const bool exception = [&] {
       RCOpArg Rs = gpr.Use(s, RCMode::Read);
       RegCache::Realize(Rs);
-      return WriteToConstAddress(accessSize, Rs, addr, CallerSavedRegistersInUse());
+      return WriteToConstAddress(accessSize, Rs, addr, CallerSavedRegistersInUse(), update);
     }();
     if (update)
     {

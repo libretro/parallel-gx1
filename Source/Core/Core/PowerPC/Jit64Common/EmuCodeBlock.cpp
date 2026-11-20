@@ -594,7 +594,7 @@ bool EmuCodeBlock::WriteClobbersRegValue(int accessSize, bool swap)
 }
 
 bool EmuCodeBlock::WriteToConstAddress(int accessSize, OpArg arg, u32 address,
-                                       BitSet32 registersInUse)
+                                       BitSet32 registersInUse, bool update)
 {
   arg = FixImmediate(accessSize, arg);
 
@@ -624,6 +624,22 @@ bool EmuCodeBlock::WriteToConstAddress(int accessSize, OpArg arg, u32 address,
   {
     WriteToConstRamAddress(accessSize, arg, address);
     return false;
+  }
+  else if (!update && m_jit.jo.fastmem && (m_jit.m_ppc_state.feature_flags & FEATURE_FLAG_MSR_DR) &&
+           !(m_jit.m_mmu.GetDBATTable()[address >> PowerPC::BAT_INDEX_SHIFT] &
+             PowerPC::BAT_MAPPED_BIT))
+  {
+    // An address the page table translates: fastmem, as for one in a register, the fault
+    // handler mapping its page or sending the access to its slow path.
+    if (!arg.IsImm() && (!arg.IsSimpleReg() ||
+                         (WriteClobbersRegValue(accessSize, true) && !arg.IsSimpleReg(RSCRATCH))))
+    {
+      MOV(accessSize, R(RSCRATCH), arg);
+      arg = R(RSCRATCH);
+    }
+    MOV(32, R(RSCRATCH2), Imm32(address));
+    SafeWriteRegToReg(arg, RSCRATCH2, accessSize, 0, registersInUse);
+    return true;
   }
   else
   {

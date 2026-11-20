@@ -134,7 +134,7 @@ void Jit64::stfXXX(UGeckoInstruction inst)
   {
     u32 addr = (a ? gpr.Imm32(a) : 0) + imm;
     bool exception =
-        WriteToConstAddress(accessSize, R(RSCRATCH), addr, CallerSavedRegistersInUse());
+        WriteToConstAddress(accessSize, R(RSCRATCH), addr, CallerSavedRegistersInUse(), update);
 
     if (update)
     {
