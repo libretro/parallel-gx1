@@ -267,7 +267,7 @@ public:
   }
 
 protected:
-  ~Arm64RegCache() = default;
+  ~Arm64RegCache() { delete m_float_emit; }
 
   // Get the order of the host registers
   void GetAllocationOrder();
@@ -305,7 +305,8 @@ protected:
   Arm64Gen::ARM64XEmitter* m_emit = nullptr;
 
   // Float emitter
-  std::unique_ptr<Arm64Gen::ARM64FloatEmitter> m_float_emit;
+  // made by Init, deleted with the cache
+  Arm64Gen::ARM64FloatEmitter* m_float_emit = nullptr;
 
   // Host side registers that hold the host registers in order of use, the first
   // m_num_host_registers of them

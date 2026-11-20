@@ -19,7 +19,8 @@ void Arm64RegCache::Init(JitArm64* jit)
 {
   m_jit = jit;
   m_emit = jit;
-  m_float_emit.reset(new ARM64FloatEmitter(m_emit));
+  delete m_float_emit;
+  m_float_emit = new ARM64FloatEmitter(m_emit);
   GetAllocationOrder();
 }
 
