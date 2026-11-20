@@ -4,8 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <optional>
-#include <tuple>
 
 #include "Common/CommonTypes.h"
 
@@ -138,7 +136,10 @@ protected:
     AbstractFramebuffer* framebuffer;
     AbstractStagingTexture* readback_texture;
     AbstractPipeline* copy_pipeline;
-    std::vector<EFBCacheTile> tiles;
+    // num_tiles of them, kept as they grow
+    EFBCacheTile* tiles;
+    u32 num_tiles;
+    u32 tiles_capacity;
     bool out_of_date;
     bool has_active_tiles;
     bool needs_refresh;
@@ -174,7 +175,7 @@ protected:
   void DrawPokeVertices(const EFBPokeVertex* vertices, u32 vertex_count,
                         const AbstractPipeline* pipeline);
 
-  std::tuple<u32, u32> CalculateTargetSize(int efb_scale);
+  void CalculateTargetSize(int efb_scale, u32* width, u32* height);
 
   void DoLoadState(PointerWrap& p);
   void DoSaveState(PointerWrap& p);

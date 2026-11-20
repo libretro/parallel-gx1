@@ -6,6 +6,8 @@
 #include <retro_miscellaneous.h>
 
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 
 #include "Common/ChunkFile.h"
@@ -48,6 +50,8 @@ FramebufferManager::~FramebufferManager()
   DestroyReadbackPipelines();
   DestroyReadbackFramebuffer();
   DestroyEFBFramebuffer();
+  free(m_efb_color_cache.tiles);
+  free(m_efb_depth_cache.tiles);
 }
 
 bool FramebufferManager::Initialize(int efb_scale)
@@ -215,7 +219,7 @@ float FramebufferManager::EFBToScaledYf(float y) const
   return y * ((float)GetEFBHeight() / (float)EFB_HEIGHT);
 }
 
-std::tuple<u32, u32> FramebufferManager::CalculateTargetSize(int efb_scale)
+void FramebufferManager::CalculateTargetSize(int efb_scale, u32* width, u32* height)
 {
   if (efb_scale == EFB_SCALE_AUTO_INTEGRAL)
     m_efb_scale = g_presenter->AutoIntegralScale();
@@ -226,15 +230,14 @@ std::tuple<u32, u32> FramebufferManager::CalculateTargetSize(int efb_scale)
   if (max_size < EFB_WIDTH * m_efb_scale)
     m_efb_scale = max_size / EFB_WIDTH;
 
-  u32 new_efb_width = MAX(EFB_WIDTH * static_cast<int>(m_efb_scale), 1u);
-  u32 new_efb_height = MAX(EFB_HEIGHT * static_cast<int>(m_efb_scale), 1u);
-
-  return std::make_tuple(new_efb_width, new_efb_height);
+  *width = MAX(EFB_WIDTH * static_cast<int>(m_efb_scale), 1u);
+  *height = MAX(EFB_HEIGHT * static_cast<int>(m_efb_scale), 1u);
 }
 
 bool FramebufferManager::CreateEFBFramebuffer(int efb_scale)
 {
-  auto [width, height] = CalculateTargetSize(efb_scale);
+  u32 width, height;
+  CalculateTargetSize(efb_scale, &width, &height);
 
   const TextureConfig efb_color_texture_config = GetEFBColorTextureConfig(width, height);
   const TextureConfig efb_depth_texture_config = GetEFBDepthTextureConfig(width, height);
@@ -413,8 +416,12 @@ bool FramebufferManager::ReinterpretPixelData(EFBReinterpretType convtype)
   g_gfx->Draw(0, 3);
 
   // And swap the framebuffers around, so we do new drawing to the converted framebuffer.
-  std::swap(m_efb_color_texture, m_efb_convert_color_texture);
-  std::swap(m_efb_framebuffer, m_efb_convert_framebuffer);
+  AbstractTexture* const color_texture = m_efb_color_texture;
+  m_efb_color_texture = m_efb_convert_color_texture;
+  m_efb_convert_color_texture = color_texture;
+  AbstractFramebuffer* const framebuffer = m_efb_framebuffer;
+  m_efb_framebuffer = m_efb_convert_framebuffer;
+  m_efb_convert_framebuffer = framebuffer;
   g_gfx->EndUtilityDrawing();
   InvalidatePeekCache(true);
   return true;
@@ -562,7 +569,7 @@ void FramebufferManager::RefreshPeekCache()
   }
 
   bool flush_command_buffer = false;
-  for (u32 i = 0; i < m_efb_color_cache.tiles.size(); i++)
+  for (u32 i = 0; i < m_efb_color_cache.num_tiles; i++)
   {
     if (m_efb_color_cache.tiles[i].frame_access_mask != 0 && !m_efb_color_cache.tiles[i].present)
     {
@@ -591,7 +598,7 @@ void FramebufferManager::InvalidatePeekCache(bool forced)
   {
     if (m_efb_color_cache.has_active_tiles)
     {
-      for (u32 i = 0; i < m_efb_color_cache.tiles.size(); i++)
+      for (u32 i = 0; i < m_efb_color_cache.num_tiles; i++)
       {
         m_efb_color_cache.tiles[i].present = false;
       }
@@ -606,7 +613,7 @@ void FramebufferManager::InvalidatePeekCache(bool forced)
   {
     if (m_efb_depth_cache.has_active_tiles)
     {
-      for (u32 i = 0; i < m_efb_depth_cache.tiles.size(); i++)
+      for (u32 i = 0; i < m_efb_depth_cache.num_tiles; i++)
       {
         m_efb_depth_cache.tiles[i].present = false;
       }
@@ -632,7 +639,7 @@ void FramebufferManager::FlagPeekCacheAsOutOfDate()
 
 void FramebufferManager::EndOfFrame()
 {
-  for (u32 i = 0; i < m_efb_color_cache.tiles.size(); i++)
+  for (u32 i = 0; i < m_efb_color_cache.num_tiles; i++)
   {
     m_efb_color_cache.tiles[i].frame_access_mask <<= 1;
     m_efb_depth_cache.tiles[i].frame_access_mask <<= 1;
@@ -792,10 +799,21 @@ bool FramebufferManager::CreateReadbackFramebuffer()
     m_efb_cache_tile_row_stride = 1;
   }
 
-  m_efb_color_cache.tiles.resize(total_tiles);
-  std::ranges::fill(m_efb_color_cache.tiles, EFBCacheTile{false, 0});
-  m_efb_depth_cache.tiles.resize(total_tiles);
-  std::ranges::fill(m_efb_depth_cache.tiles, EFBCacheTile{false, 0});
+  EFBCacheData* const caches[2] = {&m_efb_color_cache, &m_efb_depth_cache};
+  for (EFBCacheData* const data : caches)
+  {
+    if (total_tiles > data->tiles_capacity)
+    {
+      EFBCacheTile* const tiles =
+          static_cast<EFBCacheTile*>(realloc(data->tiles, total_tiles * sizeof(EFBCacheTile)));
+      if (!tiles)
+        return false;
+      data->tiles = tiles;
+      data->tiles_capacity = total_tiles;
+    }
+    memset(data->tiles, 0, total_tiles * sizeof(EFBCacheTile));
+    data->num_tiles = total_tiles;
+  }
 
   return true;
 }
