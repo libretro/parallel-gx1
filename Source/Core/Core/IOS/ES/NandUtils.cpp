@@ -25,7 +25,7 @@ namespace IOS::HLE
 {
 static ES::TMDReader FindTMD(FSCore& fs, const std::string& tmd_path, Ticks ticks)
 {
-  const auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmd_path, FS::Mode::Read, {}, ticks);
+  const auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmd_path, FS::Mode::Read, ticks);
   if (fd.Get() < 0)
     return {};
 
@@ -458,7 +458,7 @@ s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size,
     return FS::ConvertResult(result);
   }
 
-  auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmp_path, FS::Mode::ReadWrite, {}, ticks);
+  auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmp_path, FS::Mode::ReadWrite, ticks);
   if (fd.Get() < 0)
   {
     ERROR_LOG(IOS_ES, "Failed to open temporary file %s: %" PRId64, tmp_path.c_str(),
@@ -466,7 +466,7 @@ s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size,
     return fd.Get();
   }
 
-  if (fs.Write(fd.Get(), data, size, {}, ticks) != s32(size))
+  if (fs.WriteBytes(fd.Get(), data, size, ticks) != s32(size))
   {
     ERROR_LOG(IOS_ES, "Failed to write to temporary file %s", tmp_path.c_str());
     return ES_EIO;

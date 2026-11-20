@@ -407,7 +407,7 @@ u16 EmulationKernel::GetGidForPPC() const
 static u8* ReadBootContent(FSCore& fs, const std::string& path, size_t max_size, size_t* size,
                            Ticks ticks = {})
 {
-  const auto fd = fs.Open(0, 0, path, FS::Mode::Read, {}, ticks);
+  const auto fd = fs.Open(0, 0, path, FS::Mode::Read, ticks);
   u8* buffer;
   if (fd.Get() < 0)
     return nullptr;

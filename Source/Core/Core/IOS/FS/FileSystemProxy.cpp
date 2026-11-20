@@ -276,14 +276,26 @@ IPCReply FSDevice::Open(const OpenRequest& request)
 {
   return MakeIPCReply([&](Ticks t) {
     return m_core
-        .Open(request.uid, request.gid, request.path, static_cast<Mode>(request.flags & 3),
-              request.fd, t)
+        .OpenWithFd(request.uid, request.gid, request.path, static_cast<Mode>(request.flags & 3),
+                    request.fd, t)
         .Release();
   });
 }
 
 FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path, FS::Mode mode,
-                              std::optional<u32> ipc_fd, Ticks ticks)
+                              Ticks ticks)
+{
+  return DoOpen(uid, gid, path, mode, false, 0, ticks);
+}
+
+FSCore::ScopedFd FSCore::OpenWithFd(FS::Uid uid, FS::Gid gid, const std::string& path,
+                                    FS::Mode mode, u32 ipc_fd, Ticks ticks)
+{
+  return DoOpen(uid, gid, path, mode, true, ipc_fd, ticks);
+}
+
+FSCore::ScopedFd FSCore::DoOpen(FS::Uid uid, FS::Gid gid, const std::string& path, FS::Mode mode,
+                                bool has_ipc_fd, u32 ipc_fd, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
@@ -293,7 +305,7 @@ FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path,
   if (path.size() >= 64)
     return {this, ConvertResult(ResultCode::Invalid), ticks};
 
-  const u64 fd = ipc_fd.has_value() ? u64(*ipc_fd) : m_next_fd++;
+  const u64 fd = has_ipc_fd ? u64(ipc_fd) : m_next_fd++;
 
   if (path == "/dev/fs")
   {
@@ -432,12 +444,22 @@ IPCReply FSDevice::Read(const ReadWriteRequest& request)
   return MakeIPCReply([&](Ticks t) {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    return m_core.Read(request.fd, memory.GetPointerForRange(request.buffer, request.size),
-                       request.size, request.buffer, t);
+    return m_core.ReadForIPC(request.fd, memory.GetPointerForRange(request.buffer, request.size),
+                             request.size, request.buffer, t);
   });
 }
 
-s32 FSCore::Read(u64 fd, u8* data, u32 size, std::optional<u32> ipc_buffer_addr, Ticks ticks)
+s32 FSCore::ReadBytes(u64 fd, u8* data, u32 size, Ticks ticks)
+{
+  return DoRead(fd, data, size, false, 0, ticks);
+}
+
+s32 FSCore::ReadForIPC(u64 fd, u8* data, u32 size, u32 ipc_buffer_addr, Ticks ticks)
+{
+  return DoRead(fd, data, size, true, ipc_buffer_addr, ticks);
+}
+
+s32 FSCore::DoRead(u64 fd, u8* data, u32 size, bool from_ipc, u32 ipc_buffer_addr, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
@@ -452,8 +474,8 @@ s32 FSCore::Read(u64 fd, u8* data, u32 size, std::optional<u32> ipc_buffer_addr,
   ticks.Add(EstimateTicksForReadWrite(handle, fd, IPC_CMD_READ, size));
 
   const Result<u32> result = m_ios.GetFS()->ReadBytesFromFile(handle.fs_fd, data, size);
-  if (ipc_buffer_addr)
-    LogResult(CodeOf(result), "Read(%s, 0x%08x, %u)", handle.name, *ipc_buffer_addr, size);
+  if (from_ipc)
+    LogResult(CodeOf(result), "Read(%s, 0x%08x, %u)", handle.name, ipc_buffer_addr, size);
 
   if (!result)
     return ConvertResult(result.error());
@@ -466,12 +488,23 @@ IPCReply FSDevice::Write(const ReadWriteRequest& request)
   return MakeIPCReply([&](Ticks t) {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    return m_core.Write(request.fd, memory.GetPointerForRange(request.buffer, request.size),
-                        request.size, request.buffer, t);
+    return m_core.WriteForIPC(request.fd, memory.GetPointerForRange(request.buffer, request.size),
+                              request.size, request.buffer, t);
   });
 }
 
-s32 FSCore::Write(u64 fd, const u8* data, u32 size, std::optional<u32> ipc_buffer_addr, Ticks ticks)
+s32 FSCore::WriteBytes(u64 fd, const u8* data, u32 size, Ticks ticks)
+{
+  return DoWrite(fd, data, size, false, 0, ticks);
+}
+
+s32 FSCore::WriteForIPC(u64 fd, const u8* data, u32 size, u32 ipc_buffer_addr, Ticks ticks)
+{
+  return DoWrite(fd, data, size, true, ipc_buffer_addr, ticks);
+}
+
+s32 FSCore::DoWrite(u64 fd, const u8* data, u32 size, bool from_ipc, u32 ipc_buffer_addr,
+                    Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
@@ -486,8 +519,8 @@ s32 FSCore::Write(u64 fd, const u8* data, u32 size, std::optional<u32> ipc_buffe
   ticks.Add(EstimateTicksForReadWrite(handle, fd, IPC_CMD_WRITE, size));
 
   const Result<u32> result = m_ios.GetFS()->WriteBytesToFile(handle.fs_fd, data, size);
-  if (ipc_buffer_addr)
-    LogResult(CodeOf(result), "Write(%s, 0x%08x, %u)", handle.name, *ipc_buffer_addr, size);
+  if (from_ipc)
+    LogResult(CodeOf(result), "Write(%s, 0x%08x, %u)", handle.name, ipc_buffer_addr, size);
 
   if (!result)
     return ConvertResult(result.error());

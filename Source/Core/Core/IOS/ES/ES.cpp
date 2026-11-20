@@ -456,7 +456,7 @@ bool ESDevice::LaunchPPCTitle(u64 title_id)
   auto& kernel = GetEmulationKernel();
   auto& fs_core = kernel.GetFSCore();
   if (const auto launch_file_fd =
-          fs_core.Open(PID_KERNEL, PID_KERNEL, LAUNCH_FILE_PATH, FS::Mode::Read, {}, &ticks);
+          fs_core.Open(PID_KERNEL, PID_KERNEL, LAUNCH_FILE_PATH, FS::Mode::Read, &ticks);
       launch_file_fd.Get() < 0)
   {
     if (WriteLaunchFile(tmd, &ticks) != IPC_SUCCESS)

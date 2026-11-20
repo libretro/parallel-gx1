@@ -30,7 +30,7 @@ s32 ESCore::OpenContent(const ES::TMDReader& tmd, u16 content_index, u32 uid, Ti
       continue;
 
     const std::string path = GetContentPath(title_id, content, ticks);
-    auto fd = m_ios.GetFSCore().Open(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read, {}, ticks);
+    auto fd = m_ios.GetFSCore().Open(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read, ticks);
     if (fd.Get() < 0)
       return fd.Get();
 
@@ -107,7 +107,7 @@ s32 ESCore::ReadContent(u32 cfd, u8* buffer, u32 size, u32 uid, Ticks ticks)
   if (!entry.m_opened)
     return IPC_EINVAL;
 
-  return m_ios.GetFSCore().Read(entry.m_fd, buffer, size, {}, ticks);
+  return m_ios.GetFSCore().ReadBytes(entry.m_fd, buffer, size, ticks);
 }
 
 IPCReply ESDevice::ReadContent(u32 uid, const IOCtlVRequest& request)

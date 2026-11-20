@@ -646,7 +646,7 @@ SharedContentMap::SharedContentMap(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
 
   Entry entry;
   const auto fd =
-      fs_core.Open(PID_KERNEL, PID_KERNEL, CONTENT_MAP_PATH, HLE::FS::Mode::Read, {}, &m_ticks);
+      fs_core.Open(PID_KERNEL, PID_KERNEL, CONTENT_MAP_PATH, HLE::FS::Mode::Read, &m_ticks);
   if (fd.Get() < 0)
     return;
   while (fs_core.Read(fd.Get(), &entry, 1, &m_ticks) == sizeof(entry))
@@ -750,7 +750,7 @@ constexpr char UID_MAP_PATH[] = "/sys/uid.sys";
 UIDSys::UIDSys(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
 {
   if (const auto fd =
-          fs_core.Open(PID_KERNEL, PID_KERNEL, UID_MAP_PATH, HLE::FS::Mode::Read, {}, &m_ticks);
+          fs_core.Open(PID_KERNEL, PID_KERNEL, UID_MAP_PATH, HLE::FS::Mode::Read, &m_ticks);
       fd.Get() >= 0)
   {
     while (true)
