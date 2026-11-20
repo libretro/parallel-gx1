@@ -14,8 +14,9 @@ WidescreenManager* g_widescreen = nullptr;
 
 WidescreenManager::WidescreenManager()
 {
-  if (std::optional<bool> is_game_widescreen = GetWidescreenOverride())
-    m_is_game_widescreen = *is_game_widescreen;
+  bool is_game_widescreen;
+  if (GetWidescreenOverride(&is_game_widescreen))
+    m_is_game_widescreen = is_game_widescreen;
 
   // Throw a warning as unsupported aspect ratio modes have no specific behavior to them
   const bool is_valid_suggested_aspect_mode =
@@ -36,8 +37,9 @@ WidescreenManager::WidescreenManager()
       // If the widescreen flag isn't being overridden by any settings,
       // reset it to default if heuristic aren't running or to the last
       // heuristic value if they were running.
-      if (std::optional<bool> is_game_widescreen = GetWidescreenOverride())
-        m_is_game_widescreen = *is_game_widescreen;
+      bool overridden_widescreen;
+      if (GetWidescreenOverride(&overridden_widescreen))
+        m_is_game_widescreen = overridden_widescreen;
       else
         m_is_game_widescreen = (m_heuristic_state == HeuristicState::Active_Found_Anamorphic);
     }
@@ -51,31 +53,37 @@ WidescreenManager::WidescreenManager()
   }
 }
 
-std::optional<bool> WidescreenManager::GetWidescreenOverride() const
+bool WidescreenManager::GetWidescreenOverride(bool* is_game_widescreen) const
 {
-  std::optional<bool> is_game_widescreen;
+  bool overridden = false;
 
   auto& system = Core::System::GetInstance();
   if (system.IsWii())
-    is_game_widescreen = Config::Get(Config::SYSCONF_WIDESCREEN);
+  {
+    *is_game_widescreen = Config::Get(Config::SYSCONF_WIDESCREEN);
+    overridden = true;
+  }
 
   // suggested_aspect_mode overrides SYSCONF_WIDESCREEN
-  if (g_ActiveConfig.suggested_aspect_mode == AspectMode::ForceStandard)
-    is_game_widescreen = false;
-  else if (g_ActiveConfig.suggested_aspect_mode == AspectMode::ForceWide)
-    is_game_widescreen = true;
+  if (g_ActiveConfig.suggested_aspect_mode == AspectMode::ForceStandard ||
+      g_ActiveConfig.suggested_aspect_mode == AspectMode::ForceWide)
+  {
+    *is_game_widescreen = g_ActiveConfig.suggested_aspect_mode == AspectMode::ForceWide;
+    overridden = true;
+  }
 
   // If widescreen hack is disabled override game's AR if UI is set to 4:3 or 16:9.
   if (!g_ActiveConfig.bWidescreenHack)
   {
     const auto aspect_mode = g_ActiveConfig.aspect_mode;
-    if (aspect_mode == AspectMode::ForceStandard)
-      is_game_widescreen = false;
-    else if (aspect_mode == AspectMode::ForceWide)
-      is_game_widescreen = true;
+    if (aspect_mode == AspectMode::ForceStandard || aspect_mode == AspectMode::ForceWide)
+    {
+      *is_game_widescreen = aspect_mode == AspectMode::ForceWide;
+      overridden = true;
+    }
   }
 
-  return is_game_widescreen;
+  return overridden;
 }
 
 // Heuristic to detect if a GameCube game is in 16:9 anamorphic widescreen mode.
@@ -94,7 +102,8 @@ void WidescreenManager::UpdateWidescreenHeuristic()
   if (g_ActiveConfig.suggested_aspect_mode != AspectMode::Auto)
     return;
 
-  std::optional<bool> is_game_widescreen = GetWidescreenOverride();
+  bool is_game_widescreen = false;
+  bool has_widescreen = GetWidescreenOverride(&is_game_widescreen);
 
   // If widescreen hack isn't active and aspect_mode (UI) is 4:3 or 16:9 don't use heuristic.
   if (g_ActiveConfig.bWidescreenHack || (g_ActiveConfig.aspect_mode != AspectMode::ForceStandard &&
@@ -121,6 +130,7 @@ void WidescreenManager::UpdateWidescreenHeuristic()
     {
       // If either perspective or orthographic projections look anamorphic, it's a safe bet.
       is_game_widescreen = true;
+      has_widescreen = true;
       m_heuristic_state = HeuristicState::Active_Found_Anamorphic;
     }
     else if (persp_looks_normal || looks_normal(ortho))
@@ -132,7 +142,10 @@ void WidescreenManager::UpdateWidescreenHeuristic()
       // Unless we were in a situation which was orthographically anamorphic
       // we won't consider orthographic data for changes from 16:9 to 4:3.
       if (persp_looks_normal || was_orthographically_anamorphic)
+      {
         is_game_widescreen = false;
+        has_widescreen = true;
+      }
       m_heuristic_state = HeuristicState::Active_Found_Normal;
     }
     else
@@ -143,8 +156,8 @@ void WidescreenManager::UpdateWidescreenHeuristic()
     m_was_orthographically_anamorphic = ortho_looks_anamorphic;
   }
 
-  if (is_game_widescreen.has_value())
-    m_is_game_widescreen = is_game_widescreen.value();
+  if (has_widescreen)
+    m_is_game_widescreen = is_game_widescreen;
 }
 
 void WidescreenManager::DoState(PointerWrap& p)

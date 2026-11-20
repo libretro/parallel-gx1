@@ -33,7 +33,8 @@ private:
   };
 
   // Returns whether the widescreen state wants to change, and its target value
-  std::optional<bool> GetWidescreenOverride() const;
+  // Whether a setting decides the game is widescreen, writing what it decides.
+  bool GetWidescreenOverride(bool* is_game_widescreen) const;
   void UpdateWidescreenHeuristic();
 
   bool m_is_game_widescreen = false;
