@@ -17,9 +17,9 @@
 
 namespace
 {
-constexpr std::array<u8, 3> ACK_NO_ERROR{'E', '0', '0'};
-constexpr std::array<u8, 3> ACK_POWER_ON{'C', '0', '1'};
-constexpr std::array<u8, 3> ACK_POWER_OFF{'C', '0', '6'};
+const u8 ACK_NO_ERROR[3] = {'E', '0', '0'};
+const u8 ACK_POWER_ON[3] = {'C', '0', '1'};
+const u8 ACK_POWER_OFF[3] = {'C', '0', '6'};
 }  // namespace
 
 namespace Triforce
@@ -116,7 +116,7 @@ void MarioKartGPSteeringWheel::ProcessRequest(const u8* request)
   {
   case 0:
     // The game seems to expect this on power up.
-    WriteTxBytes(ACK_NO_ERROR.data(), ACK_NO_ERROR.size());
+    WriteTxBytes(ACK_NO_ERROR, sizeof(ACK_NO_ERROR));
     ++m_init_state;
     break;
 
@@ -128,12 +128,12 @@ void MarioKartGPSteeringWheel::ProcessRequest(const u8* request)
 
     if (m_init_state == 1)
     {
-      WriteTxBytes(ACK_POWER_OFF.data(), ACK_POWER_OFF.size());
+      WriteTxBytes(ACK_POWER_OFF, sizeof(ACK_POWER_OFF));
       ++m_init_state;
     }
     else
     {
-      WriteTxBytes(ACK_POWER_ON.data(), ACK_POWER_ON.size());
+      WriteTxBytes(ACK_POWER_ON, sizeof(ACK_POWER_ON));
       m_init_state = 1;
     }
     break;
