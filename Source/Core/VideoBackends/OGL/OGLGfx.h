@@ -7,7 +7,7 @@
 #include "VideoCommon/Constants.h"
 #include "OGLTexture.h"
 
-class GLContext;
+#include "Common/GL/GLContext.h"
 
 namespace OGL
 {
@@ -17,7 +17,7 @@ class OGLTexture;
 class OGLGfx final : public AbstractGfx
 {
 public:
-  OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scale);
+  OGLGfx(const GLContext& main_gl_context, float backbuffer_scale);
   ~OGLGfx();
 
   bool IsHeadless() const;
@@ -74,9 +74,7 @@ public:
   void SelectRightBuffer();
   void SelectMainBuffer();
 
-
   // Only call methods from this on the GPU thread.
-  GLContext* GetMainGLContext() const { return m_main_gl_context.get(); }
   bool IsGLES() const;
 
   // Invalidates a cached texture binding. Required for texel buffers when they borrow the units.
@@ -105,7 +103,7 @@ private:
   void ApplyDepthState(const DepthState state);
   void ApplyBlendingState(const BlendingState state);
 
-  std::unique_ptr<GLContext> m_main_gl_context;
+  GLContext m_main_gl_context;
   OGLFramebuffer* m_system_framebuffer = nullptr;
   std::array<const OGLTexture*, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> m_bound_textures{};
   std::array<const AbstractTexture*, VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS>

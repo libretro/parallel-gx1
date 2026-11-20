@@ -845,7 +845,7 @@ static void InitVersion()
 
 static void* GetFuncAddress(GLContext* context, const std::string& name, void** func)
 {
-  *func = context->GetFuncAddress(name);
+  *func = context->GetFuncAddress(name.c_str());
   if (*func == nullptr)
   {
 #if defined(__linux__) || defined(__APPLE__)

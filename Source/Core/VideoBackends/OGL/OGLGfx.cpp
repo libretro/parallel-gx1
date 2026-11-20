@@ -116,8 +116,8 @@ static void APIENTRY ClearDepthf(GLfloat depthval)
   glClearDepth(depthval);
 }
 
-OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scale)
-    : m_main_gl_context(std::move(main_gl_context)),
+OGLGfx::OGLGfx(const GLContext& main_gl_context, float backbuffer_scale)
+    : m_main_gl_context(main_gl_context),
       m_current_rasterization_state(RenderState::GetInvalidRasterizationState()),
       m_current_depth_state(RenderState::GetInvalidDepthState()),
       m_current_blend_state(RenderState::GetInvalidBlendingState()),
@@ -127,11 +127,11 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
   // The frontend's framebuffer, which frames are presented into.
   m_system_framebuffer = new OGLFramebuffer(
       nullptr, nullptr, AbstractTextureFormat::RGBA8, AbstractTextureFormat::Undefined,
-      std::max(m_main_gl_context->GetBackBufferWidth(), 1u),
-      std::max(m_main_gl_context->GetBackBufferHeight(), 1u), 1, 1, 0);
+      std::max(m_main_gl_context.GetBackBufferWidth(), 1u),
+      std::max(m_main_gl_context.GetBackBufferHeight(), 1u), 1, 1, 0);
   m_current_framebuffer = m_system_framebuffer;
 
-  if (!m_main_gl_context->IsGLES())
+  if (!m_main_gl_context.IsGLES())
   {
     // OpenGL 3 doesn't provide GLES like float functions for depth.
     // They are in core in OpenGL 4.1, so almost every driver should support them.
@@ -185,7 +185,7 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
   glGenFramebuffers(1, &m_shared_draw_framebuffer);
 
   if (g_backend_info.bSupportsPrimitiveRestart)
-    GLUtil::EnablePrimitiveRestart(m_main_gl_context.get());
+    GLUtil::EnablePrimitiveRestart(&m_main_gl_context);
 
   UpdateActiveConfig();
 }
@@ -430,7 +430,7 @@ void OGLGfx::PresentBackbuffer()
   }
 
   // Swap the back and front buffers, presenting the image.
-  m_main_gl_context->Swap();
+  m_main_gl_context.Swap();
 }
 
 void OGLGfx::OnConfigChanged(u32 bits)
@@ -673,7 +673,7 @@ void OGLGfx::UnbindTexture(const AbstractTexture* texture)
 
 bool OGLGfx::IsGLES() const
 {
-  return m_main_gl_context->IsGLES();
+  return m_main_gl_context.IsGLES();
 }
 
 void OGLGfx::BindSharedReadFramebuffer()
@@ -695,8 +695,8 @@ void OGLGfx::RestoreFramebufferBinding()
 
 SurfaceInfo OGLGfx::GetSurfaceInfo() const
 {
-  return {std::max(m_main_gl_context->GetBackBufferWidth(), 1u),
-          std::max(m_main_gl_context->GetBackBufferHeight(), 1u), m_backbuffer_scale,
+  return {std::max(m_main_gl_context.GetBackBufferWidth(), 1u),
+          std::max(m_main_gl_context.GetBackBufferHeight(), 1u), m_backbuffer_scale,
           AbstractTextureFormat::RGBA8};
 }
 

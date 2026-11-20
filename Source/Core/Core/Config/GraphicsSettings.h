@@ -76,8 +76,6 @@ extern const Info<bool> GFX_CPU_CULL;
 extern const Info<TriState> GFX_MTL_MANUALLY_UPLOAD_BUFFERS;
 extern const Info<TriState> GFX_MTL_USE_PRESENT_DRAWABLE;
 
-extern const Info<bool> GFX_PREFER_GLES;
-
 extern const Info<bool> GFX_MODS_ENABLE;
 
 // Graphics.Enhancements

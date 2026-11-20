@@ -88,8 +88,6 @@ const Info<TriState> GFX_MTL_MANUALLY_UPLOAD_BUFFERS{
 const Info<TriState> GFX_MTL_USE_PRESENT_DRAWABLE{
     {System::GFX, "Settings", "MTLUsePresentDrawable"}, TriState::Auto};
 
-const Info<bool> GFX_PREFER_GLES{{System::GFX, "Settings", "PreferGLES"}, false};
-
 const Info<bool> GFX_MODS_ENABLE{{System::GFX, "Settings", "EnableMods"}, false};
 
 const Info<VertexLoaderType> GFX_VERTEX_LOADER_TYPE{{System::GFX, "Settings", "VertexLoaderType"},

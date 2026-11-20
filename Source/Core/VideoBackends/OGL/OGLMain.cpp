@@ -75,14 +75,11 @@ std::string VideoBackend::GetDisplayName() const
 
 void VideoBackend::InitBackendInfo()
 {
-  std::unique_ptr<GLContext> temp_gl_context =
-      GLContext::Create(g_Config.stereo_mode == StereoMode::QuadBuffer, true,
-                        Config::Get(Config::GFX_PREFER_GLES));
-
-  if (!temp_gl_context)
+  GLContext temp_gl_context;
+  if (!temp_gl_context.Initialize())
     return;
 
-  FillBackendInfo(temp_gl_context.get());
+  FillBackendInfo(&temp_gl_context);
 }
 
 bool VideoBackend::InitializeGLExtensions(GLContext* context)
@@ -193,16 +190,14 @@ bool VideoBackend::FillBackendInfo(GLContext* context)
 
 bool VideoBackend::Initialize(float backbuffer_scale)
 {
-  std::unique_ptr<GLContext> main_gl_context =
-      GLContext::Create(g_Config.stereo_mode == StereoMode::QuadBuffer, true,
-                        Config::Get(Config::GFX_PREFER_GLES));
-  if (!main_gl_context)
+  GLContext main_gl_context;
+  if (!main_gl_context.Initialize())
     return false;
 
-  if (!FillBackendInfo(main_gl_context.get()))
+  if (!FillBackendInfo(&main_gl_context))
     return false;
 
-  OGLGfx* const gfx = new OGLGfx(std::move(main_gl_context), backbuffer_scale);
+  OGLGfx* const gfx = new OGLGfx(main_gl_context, backbuffer_scale);
   ProgramShaderCache::Init();
   g_sampler_cache = new SamplerCache();
 
