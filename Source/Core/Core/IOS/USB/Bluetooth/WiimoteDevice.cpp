@@ -59,7 +59,8 @@ WiimoteDevice::WiimoteDevice(BluetoothEmuDevice* host, const bdaddr_t& bd,
 {
   // The name depends on the address's last byte, so it comes after the address.
   memcpy(m_bd, bd, sizeof(m_bd));
-  m_name = GetNumber() == WIIMOTE_BALANCE_BOARD ? "Nintendo RVL-WBC-01" : "Nintendo RVL-CNT-01";
+  strcpy(m_name,
+         GetNumber() == WIIMOTE_BALANCE_BOARD ? "Nintendo RVL-WBC-01" : "Nintendo RVL-CNT-01");
   INFO_LOG(IOS_WIIMOTE, "Wiimote: #%u Constructed", GetNumber());
 
   static const u8 wiimote_class[HCI_CLASS_SIZE] = {0x00, 0x04, 0x48};
@@ -116,7 +117,16 @@ void WiimoteDevice::DoState(PointerWrap& p)
   p.Do(m_lmp_version);
   p.Do(m_lmp_subversion);
   p.Do(m_link_key);
-  p.Do(m_name);
+  // Saved as a std::string was: its length, then its characters.
+  u32 name_length = u32(strlen(m_name));
+  p.Do(name_length);
+  if (name_length >= sizeof(m_name))
+  {
+    p.SetMeasureMode();
+    return;
+  }
+  p.DoArray(m_name, name_length);
+  m_name[name_length] = '\0';
   // Same layout as the std::map this replaced: a count, then each ID and channel in ID order.
   u32 channel_count = u32(m_channel_count);
   p.Do(channel_count);

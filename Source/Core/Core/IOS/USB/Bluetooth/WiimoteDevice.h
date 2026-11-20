@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 
 #include "Common/CommonTypes.h"
 #include "Core/HW/WiimoteCommon/WiimoteHid.h"
@@ -74,7 +73,7 @@ public:
   void SetSource(WiimoteCommon::HIDWiimote*);
 
   const bdaddr_t& GetBD() const { return m_bd; }
-  const char* GetName() const { return m_name.c_str(); }
+  const char* GetName() const { return m_name; }
   u8 GetLMPVersion() const { return m_lmp_version; }
   u16 GetLMPSubVersion() const { return m_lmp_subversion; }
   // Broadcom Corporation
@@ -139,7 +138,7 @@ private:
   u8 m_lmp_version;
   u16 m_lmp_subversion;
   u8 m_link_key[HCI_KEY_SIZE];
-  std::string m_name;
+  char m_name[32] = {};
   ChannelEntry m_channels[MAX_CHANNELS];
   int m_channel_count = 0;
   u8 m_connection_request_counter = 0;
