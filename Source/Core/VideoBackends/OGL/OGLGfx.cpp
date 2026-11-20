@@ -124,15 +124,12 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
       m_backbuffer_scale(backbuffer_scale)
 {
   g_video_backend_kind = VIDEO_BACKEND_OGL;
-  // Create the window framebuffer.
-  if (!m_main_gl_context->IsHeadless())
-  {
-    m_system_framebuffer = new OGLFramebuffer(
-        nullptr, nullptr, AbstractTextureFormat::RGBA8,
-        AbstractTextureFormat::Undefined, std::max(m_main_gl_context->GetBackBufferWidth(), 1u),
-        std::max(m_main_gl_context->GetBackBufferHeight(), 1u), 1, 1, 0);
-    m_current_framebuffer = m_system_framebuffer;
-  }
+  // The frontend's framebuffer, which frames are presented into.
+  m_system_framebuffer = new OGLFramebuffer(
+      nullptr, nullptr, AbstractTextureFormat::RGBA8, AbstractTextureFormat::Undefined,
+      std::max(m_main_gl_context->GetBackBufferWidth(), 1u),
+      std::max(m_main_gl_context->GetBackBufferHeight(), 1u), 1, 1, 0);
+  m_current_framebuffer = m_system_framebuffer;
 
   if (!m_main_gl_context->IsGLES())
   {
@@ -203,7 +200,8 @@ OGLGfx::~OGLGfx()
 
 bool OGLGfx::IsHeadless() const
 {
-  return m_main_gl_context->IsHeadless();
+  // it always presents into the frontend's framebuffer
+  return false;
 }
 
 AbstractTexture* OGLGfx::CreateTexture(const TextureConfig& config,

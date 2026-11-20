@@ -39,15 +39,6 @@ bool GLContext::Initialize(bool stereo, bool core)
   return g_context_status.IsReady();
 }
 
-bool GLContext::IsHeadless() const
-{
-  return false;
-}
-
-void GLContext::Update()
-{
-}
-
 void GLContext::Swap()
 {
   Libretro::Video::video_cb(RETRO_HW_FRAME_BUFFER_VALID, m_backbuffer_width, m_backbuffer_height,

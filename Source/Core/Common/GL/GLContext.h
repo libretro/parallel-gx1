@@ -29,10 +29,6 @@ public:
   u32 GetBackBufferWidth() const { return m_backbuffer_width; }
   u32 GetBackBufferHeight() const { return m_backbuffer_height; }
 
-  bool IsHeadless() const;
-
-  void Update();
-
   void Swap();
 
   void* GetFuncAddress(const std::string& name);
