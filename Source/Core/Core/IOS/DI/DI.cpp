@@ -55,7 +55,10 @@ void DIDevice::DoState(PointerWrap& p)
 {
   Device::DoState(p);
   DO_RETRO_DEQUE(p, u32_deque, &m_commands_to_execute);
-  p.Do(m_executing_command);
+  // Same layout as the std::optional this replaced: a presence flag, then the command if present.
+  p.Do(m_has_executing_command);
+  if (m_has_executing_command)
+    p.Do(m_executing_command);
   p.Do(m_current_partition);
   p.Do(m_has_initialized);
   p.Do(m_last_length);
@@ -87,7 +90,7 @@ IPCReply DIDevice::IOCtl(const IOCtlRequest& request)
              request.request, (unsigned)command);
   }
 
-  const bool ready_to_execute = !m_executing_command.has_value();
+  const bool ready_to_execute = !m_has_executing_command;
   u32_deque_push_back_growing(&m_commands_to_execute, &request.address);
 
   if (ready_to_execute)
@@ -108,11 +111,12 @@ void DIDevice::ProcessQueuedIOCtl()
     return;
   }
 
-  m_executing_command = {*u32_deque_front(&m_commands_to_execute)};
+  m_executing_command = ExecutingCommandInfo(*u32_deque_front(&m_commands_to_execute));
+  m_has_executing_command = true;
   u32_deque_pop_front(&m_commands_to_execute);
 
   auto& system = GetSystem();
-  IOCtlRequest request{system, m_executing_command->m_request_address};
+  IOCtlRequest request{system, m_executing_command.m_request_address};
   const DIResult finished = StartIOCtl(request);
   if (finished != DIResult::Pending)
   {
@@ -583,7 +587,7 @@ DIDevice::DIResult DIDevice::StartImmediateTransfer(const IOCtlRequest& request,
              request.buffer_out_size);
   }
 
-  m_executing_command->m_copy_diimmbuf = write_to_buf;
+  m_executing_command.m_copy_diimmbuf = write_to_buf;
 
   auto& system = GetSystem();
   system.GetDVDInterface().ExecuteCommand(DVD::ReplyType::IOS);
@@ -644,7 +648,7 @@ void DIDevice::FinishDICommandCallback(Core::System& system, u64 userdata, s64 t
 
 void DIDevice::FinishDICommand(DIResult result)
 {
-  if (!m_executing_command.has_value())
+  if (!m_has_executing_command)
   {
     PanicAlert("IOS::HLE::DIDevice: There is no command to finish!");
     return;
@@ -654,13 +658,13 @@ void DIDevice::FinishDICommand(DIResult result)
   auto& memory = system.GetMemory();
   auto* mmio = memory.GetMMIOMapping();
 
-  IOCtlRequest request{system, m_executing_command->m_request_address};
-  if (m_executing_command->m_copy_diimmbuf)
+  IOCtlRequest request{system, m_executing_command.m_request_address};
+  if (m_executing_command.m_copy_diimmbuf)
     memory.Write_U32(mmio->Read<u32>(system, ADDRESS_DIIMMBUF), request.buffer_out);
 
   GetEmulationKernel().EnqueueIPCReply(request, static_cast<s32>(result));
 
-  m_executing_command.reset();
+  m_has_executing_command = false;
 
   // DVDInterface is now ready to execute another command,
   // so we start executing a command from the queue if there is one

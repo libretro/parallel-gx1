@@ -139,7 +139,9 @@ private:
 
   static CoreTiming::EventType* s_finish_executing_di_command;
 
-  std::optional<ExecutingCommandInfo> m_executing_command;
+  // m_executing_command is valid while m_has_executing_command is set.
+  bool m_has_executing_command = false;
+  ExecutingCommandInfo m_executing_command;
   u32_deque_t m_commands_to_execute;
 
   DiscIO::Partition m_current_partition = DiscIO::PARTITION_NONE;
