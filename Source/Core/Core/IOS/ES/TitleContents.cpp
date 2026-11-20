@@ -23,7 +23,7 @@ s32 ESCore::OpenContent(const ES::TMDReader& tmd, u16 content_index, u32 uid, Ti
   if (!tmd.GetContent(content_index, &content))
     return ES_EINVAL;
 
-  for (size_t i = 0; i < m_content_table.size(); ++i)
+  for (size_t i = 0; i < NUM_CONTENT_SLOTS; ++i)
   {
     OpenedContent& entry = m_content_table[i];
     if (entry.m_opened)
@@ -98,7 +98,7 @@ IPCReply ESDevice::OpenActiveTitleContent(u32 caller_uid, const IOCtlVRequest& r
 
 s32 ESCore::ReadContent(u32 cfd, u8* buffer, u32 size, u32 uid, Ticks ticks)
 {
-  if (cfd >= m_content_table.size())
+  if (cfd >= NUM_CONTENT_SLOTS)
     return ES_EINVAL;
   OpenedContent& entry = m_content_table[cfd];
 
@@ -129,7 +129,7 @@ IPCReply ESDevice::ReadContent(u32 uid, const IOCtlVRequest& request)
 
 s32 ESCore::CloseContent(u32 cfd, u32 uid, Ticks ticks)
 {
-  if (cfd >= m_content_table.size())
+  if (cfd >= NUM_CONTENT_SLOTS)
     return ES_EINVAL;
 
   OpenedContent& entry = m_content_table[cfd];
@@ -159,7 +159,7 @@ IPCReply ESDevice::CloseContent(u32 uid, const IOCtlVRequest& request)
 
 s32 ESCore::SeekContent(u32 cfd, u32 offset, SeekMode mode, u32 uid, Ticks ticks)
 {
-  if (cfd >= m_content_table.size())
+  if (cfd >= NUM_CONTENT_SLOTS)
     return ES_EINVAL;
 
   OpenedContent& entry = m_content_table[cfd];

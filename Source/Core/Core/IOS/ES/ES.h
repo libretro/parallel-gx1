@@ -221,8 +221,8 @@ private:
 
   Kernel& m_ios;
 
-  using ContentTable = std::array<OpenedContent, 16>;
-  ContentTable m_content_table;
+  static constexpr u32 NUM_CONTENT_SLOTS = 16;
+  OpenedContent m_content_table[NUM_CONTENT_SLOTS];
 
   TitleContext m_title_context{};
 
