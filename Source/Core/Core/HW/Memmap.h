@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -93,7 +92,7 @@ public:
   u8* GetL1Cache() { return m_l1_cache; }
   u8*& GetFakeVMEM() { return m_fake_vmem; }
 
-  MMIO::Mapping* GetMMIOMapping() const { return m_mmio_mapping.get(); }
+  MMIO::Mapping* GetMMIOMapping() const { return m_mmio_mapping; }
 
   // Init and Shutdown
   bool IsInitialized() const { return m_is_initialized; }
@@ -219,7 +218,8 @@ private:
   // END STATE_TO_SAVE
 
   // MMIO mapping object.
-  std::unique_ptr<MMIO::Mapping> m_mmio_mapping;
+  // made at Init, deleted at Shutdown
+  MMIO::Mapping* m_mmio_mapping = nullptr;
 
   // The MemArena class
   Common::MemArena m_arena;

@@ -53,6 +53,7 @@ MemoryManager::MemoryManager(Core::System& system)
 MemoryManager::~MemoryManager()
 {
   FreePageTables();
+  delete m_mmio_mapping;
 }
 
 void MemoryManager::FreePageTables()
@@ -109,25 +110,26 @@ MemoryManager::HostPageType MemoryManager::GetHostPageTypeForPageSize(u32 page_s
 
 void MemoryManager::InitMMIO(Core::System& system)
 {
-  m_mmio_mapping = std::make_unique<MMIO::Mapping>();
+  delete m_mmio_mapping;
+  m_mmio_mapping = new MMIO::Mapping();
 
-  system.GetCommandProcessor().RegisterMMIO(m_mmio_mapping.get(), 0x0C000000);
-  system.GetPixelEngine().RegisterMMIO(m_mmio_mapping.get(), 0x0C001000);
-  system.GetVideoInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0C002000);
-  system.GetProcessorInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0C003000);
-  system.GetMemoryInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0C004000);
-  system.GetDSP().RegisterMMIO(m_mmio_mapping.get(), 0x0C005000);
-  system.GetDVDInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0C006000, false);
-  system.GetSerialInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0C006400);
-  system.GetExpansionInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0C006800);
-  system.GetAudioInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0C006C00);
+  system.GetCommandProcessor().RegisterMMIO(m_mmio_mapping, 0x0C000000);
+  system.GetPixelEngine().RegisterMMIO(m_mmio_mapping, 0x0C001000);
+  system.GetVideoInterface().RegisterMMIO(m_mmio_mapping, 0x0C002000);
+  system.GetProcessorInterface().RegisterMMIO(m_mmio_mapping, 0x0C003000);
+  system.GetMemoryInterface().RegisterMMIO(m_mmio_mapping, 0x0C004000);
+  system.GetDSP().RegisterMMIO(m_mmio_mapping, 0x0C005000);
+  system.GetDVDInterface().RegisterMMIO(m_mmio_mapping, 0x0C006000, false);
+  system.GetSerialInterface().RegisterMMIO(m_mmio_mapping, 0x0C006400);
+  system.GetExpansionInterface().RegisterMMIO(m_mmio_mapping, 0x0C006800);
+  system.GetAudioInterface().RegisterMMIO(m_mmio_mapping, 0x0C006C00);
   if (system.IsWii())
   {
-    system.GetWiiIPC().RegisterMMIO(m_mmio_mapping.get(), 0x0D000000);
-    system.GetDVDInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0D006000, true);
-    system.GetSerialInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0D006400);
-    system.GetExpansionInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0D006800);
-    system.GetAudioInterface().RegisterMMIO(m_mmio_mapping.get(), 0x0D006C00);
+    system.GetWiiIPC().RegisterMMIO(m_mmio_mapping, 0x0D000000);
+    system.GetDVDInterface().RegisterMMIO(m_mmio_mapping, 0x0D006000, true);
+    system.GetSerialInterface().RegisterMMIO(m_mmio_mapping, 0x0D006400);
+    system.GetExpansionInterface().RegisterMMIO(m_mmio_mapping, 0x0D006800);
+    system.GetAudioInterface().RegisterMMIO(m_mmio_mapping, 0x0D006C00);
   }
 }
 
@@ -683,7 +685,8 @@ void MemoryManager::Shutdown()
     *region.out_pointer = nullptr;
   }
   m_arena.ReleaseSHMSegment();
-  m_mmio_mapping.reset();
+  delete m_mmio_mapping;
+  m_mmio_mapping = nullptr;
   INFO_LOG(MEMMAP, "Memory system shut down.");
 }
 
