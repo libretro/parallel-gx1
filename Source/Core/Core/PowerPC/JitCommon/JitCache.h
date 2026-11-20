@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <bitset>
 #include <cstdlib>
 #include <cstring>
 #include <map>

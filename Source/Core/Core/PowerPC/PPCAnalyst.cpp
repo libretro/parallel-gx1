@@ -3,11 +3,6 @@
 
 #include "Core/PowerPC/PPCAnalyst.h"
 
-#include <algorithm>
-#include <map>
-#include <string>
-#include <vector>
-
 #include <cstdio>
 
 #include "Common/Assert.h"
@@ -320,7 +315,9 @@ void PPCAnalyzer::ReorderInstructionsCore(u32 instructions, CodeOp* code, bool r
       if (CanSwapAdjacentOps(a, b))
       {
         // Alright, let's bubble it!
-        std::swap(a, b);
+        const CodeOp swapped = a;
+        a = b;
+        b = swapped;
 
         if (i != start)
         {
@@ -528,8 +525,8 @@ bool PPCAnalyzer::IsBusyWaitLoop(CodeBlock* block, CodeOp* code, size_t instruct
   // used busy loops are DSP register interactions, which are bl/cmp/bne
   // (with the bl target a pure function that follows the above rules). We
   // don't detect these at the moment.
-  std::bitset<32> write_disallowed_regs;
-  std::bitset<32> written_regs;
+  u32 write_disallowed_regs = 0;
+  u32 written_regs = 0;
   for (size_t i = 0; i <= instructions; ++i)
   {
     if (code[i].opinfo->type == OpType::Branch)
@@ -558,17 +555,17 @@ bool PPCAnalyzer::IsBusyWaitLoop(CodeBlock* block, CodeOp* code, size_t instruct
       {
         if (reg == -1)
           continue;
-        if (written_regs[reg])
+        if (written_regs & (1u << reg))
           continue;
-        write_disallowed_regs[reg] = true;
+        write_disallowed_regs |= 1u << reg;
       }
       for (int reg : code[i].regsOut)
       {
         if (reg == -1)
           continue;
-        if (write_disallowed_regs[reg])
+        if (write_disallowed_regs & (1u << reg))
           return false;
-        written_regs[reg] = true;
+        written_regs |= 1u << reg;
       }
     }
   }
