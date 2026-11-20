@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <utility>
 
 #include "Common/CommonTypes.h"
@@ -51,8 +50,8 @@ const DecodingShaderInfo* GetDecodingShaderInfo(TextureFormat format);
 std::pair<u32, u32> GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height);
 
 // Returns the GLSL string containing the texture decoding shader for the specified format.
-ShaderCode GenerateDecodingShader(TextureFormat format, std::optional<TLUTFormat> palette_format,
-                                   APIType api_type);
+ShaderCode GenerateDecodingShader(TextureFormat format, const TLUTFormat* palette_format,
+                                  APIType api_type);
 
 // Returns the GLSL string containing the palette conversion shader for the specified format.
 ShaderCode GeneratePaletteConversionShader(TLUTFormat palette_format, APIType api_type);

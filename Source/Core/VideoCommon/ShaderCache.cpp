@@ -2074,10 +2074,10 @@ const AbstractPipeline* ShaderCache::GetTextureReinterpretPipeline(TextureFormat
 
 /* Builds and keeps the shader decoding format, with its palette's format, or that there is none. */
 const AbstractShader* ShaderCache::BuildTextureDecodingShader(TextureFormat format,
-                                                              std::optional<TLUTFormat> palette_format)
+                                                              const TLUTFormat* palette_format)
 {
   const u32 key[2] = {static_cast<u32>(format),
-                      static_cast<u32>(palette_format.value_or(TLUTFormat::IA8))};
+                      static_cast<u32>(palette_format ? *palette_format : TLUTFormat::IA8)};
   uid_table_value* const value = uid_table_get(&m_texture_decoding_shaders, key);
   if (!value)
     return nullptr;
@@ -2092,12 +2092,11 @@ const AbstractShader* ShaderCache::BuildTextureDecodingShader(TextureFormat form
   return ShaderOf(value);
 }
 
-const AbstractShader*
-ShaderCache::GetTextureDecodingShader(TextureFormat format,
-                                      std::optional<TLUTFormat> palette_format)
+const AbstractShader* ShaderCache::GetTextureDecodingShader(TextureFormat format,
+                                                            const TLUTFormat* palette_format)
 {
   const u32 key[2] = {static_cast<u32>(format),
-                      static_cast<u32>(palette_format.value_or(TLUTFormat::IA8))};
+                      static_cast<u32>(palette_format ? *palette_format : TLUTFormat::IA8)};
   const uid_table_value* found = uid_table_find(&m_texture_decoding_shaders, key);
   if (found)
     return ShaderOf(found);
@@ -2142,11 +2141,11 @@ void ShaderCache::CompileTextureConversionPipelines()
       continue;
     if (!info->palette_size)
     {
-      BuildTextureDecodingShader(decodable[i], std::nullopt);
+      BuildTextureDecodingShader(decodable[i], nullptr);
       continue;
     }
     for (j = 0; j < sizeof(palettes) / sizeof(palettes[0]); j++)
-      BuildTextureDecodingShader(decodable[i], palettes[j]);
+      BuildTextureDecodingShader(decodable[i], &palettes[j]);
   }
 }
 }  // namespace VideoCommon

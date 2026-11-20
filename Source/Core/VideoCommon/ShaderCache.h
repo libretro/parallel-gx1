@@ -5,9 +5,8 @@
 
 #include <cstddef>
 #include <cstring>
-#include <set>
 #include <memory>
-#include <optional>
+#include <set>
 #include <unordered_map>
 #include <utility>
 
@@ -130,8 +129,9 @@ public:
                                                         TextureFormat to_format);
 
   // Texture decoding compute shaders
+  // palette_format nullptr for a format without a palette
   const AbstractShader* GetTextureDecodingShader(TextureFormat format,
-                                                 std::optional<TLUTFormat> palette_format);
+                                                 const TLUTFormat* palette_format);
 
 private:
   static constexpr size_t NUM_PALETTE_CONVERSION_SHADERS = 3;
@@ -152,7 +152,7 @@ private:
   const AbstractPipeline* BuildTextureReinterpretPipeline(TextureFormat from_format,
                                                           TextureFormat to_format);
   const AbstractShader* BuildTextureDecodingShader(TextureFormat format,
-                                                   std::optional<TLUTFormat> palette_format);
+                                                   const TLUTFormat* palette_format);
 
   // GX shader compiler methods
   AbstractShader* CompileVertexShader(const VertexShaderUid& uid) const;

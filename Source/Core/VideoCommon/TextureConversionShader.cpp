@@ -1346,15 +1346,15 @@ std::pair<u32, u32> GetDispatchCount(const DecodingShaderInfo* info, u32 width, 
           (height + (info->group_size_y - 1)) / info->group_size_y};
 }
 
-ShaderCode GenerateDecodingShader(TextureFormat format, std::optional<TLUTFormat> palette_format,
-                                   APIType api_type)
+ShaderCode GenerateDecodingShader(TextureFormat format, const TLUTFormat* palette_format,
+                                  APIType api_type)
 {
   const DecodingShaderInfo* info = GetDecodingShaderInfo(format);
   ShaderCode ss;
   if (!info)
     return ss;
 
-  if (palette_format.has_value())
+  if (palette_format)
   {
     switch (*palette_format)
     {
