@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <vector>
+#include <cstddef>
 
 #include "Common/CommonTypes.h"
 #include "Common/RetroDeque.h"
@@ -17,8 +17,8 @@ namespace Triforce
 class SerialDevice
 {
 public:
-  SerialDevice() { u8_deque_init(&m_tx_buffer, 256); }
-  virtual ~SerialDevice() { u8_deque_free(&m_tx_buffer); }
+  SerialDevice();
+  virtual ~SerialDevice();
 
   SerialDevice(const SerialDevice&) = delete;
   SerialDevice& operator=(const SerialDevice&) = delete;
@@ -38,8 +38,8 @@ public:
 
 protected:
   // Pending received bytes, lent until the next Rx write or consume.
-  const u8* GetRxBytes() const { return m_rx_buffer.data(); }
-  std::size_t GetRxByteCount() const { return m_rx_buffer.size(); }
+  const u8* GetRxBytes() const { return m_rx_buffer + m_rx_start; }
+  std::size_t GetRxByteCount() const { return m_rx_end - m_rx_start; }
 
   void ConsumeRxBytes(std::size_t count);
 
@@ -51,10 +51,13 @@ protected:
 
 private:
   // The stream of bytes from the baseboard to the device.
-  // FYI: Current device implementations tend to empty the entire buffer in one go,
-  //  so std::vector's O(n) erase-at-front should be a non-issue.
-  // The contiguous data of std::vector is convenient for packet parsing.
-  std::vector<u8> m_rx_buffer;
+  // Pending bytes are m_rx_buffer[m_rx_start, m_rx_end), kept contiguous for packet parsing.
+  // Consuming only moves m_rx_start; a write slides what is left to the front when it needs the
+  // room, and the buffer only grows when the pending bytes outgrow it.
+  u8* m_rx_buffer = nullptr;
+  std::size_t m_rx_start = 0;
+  std::size_t m_rx_end = 0;
+  std::size_t m_rx_capacity = 0;
 
   // The stream of bytes from the device to the baseboard.
   // It may be read in chunks, from the front: a ring in one block, made with the device.
