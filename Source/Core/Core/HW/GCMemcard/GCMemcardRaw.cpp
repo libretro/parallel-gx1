@@ -3,9 +3,7 @@
 
 #include "Core/HW/GCMemcard/GCMemcardRaw.h"
 
-#include <algorithm>
 #include <bit>
-#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -84,6 +82,13 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
   memcpy(m_flush_buffer, m_memcard_data, m_memory_card_size);
   const u32 num_blocks = (m_memory_card_size + Memcard::BLOCK_SIZE - 1) / Memcard::BLOCK_SIZE;
   m_num_blocks = num_blocks < MAX_BLOCKS ? num_blocks : MAX_BLOCKS;
+  m_change_pool = static_cast<Change*>(std::malloc(sizeof(Change) * NUM_CHANGES));
+  if (m_change_pool)
+  {
+    u32 i;
+    for (i = 0; i < NUM_CHANGES; i++)
+      mpsc_stack_push(&m_free_changes, &m_change_pool[i].link);
+  }
   m_flush_thread = sthread_create(Common::ThreadEntry<&MemoryCard::FlushThread>, this);
 }
 
@@ -96,25 +101,62 @@ MemoryCard::~MemoryCard()
 
     Common::JoinThread(m_flush_thread);
   }
-  for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_changes); node;)
-  {
-    mpsc_stack_node_t* const next = node->next;
-    std::free(node);
-    node = next;
-  }
+  std::free(m_change_pool);
   std::free(m_memcard_data);
+}
+
+void MemoryCard::LockFlush()
+{
+  // held by the flush thread while it writes the file, by the CPU thread while it applies
+  while (retro_atomic_fetch_or_int(&m_flush_lock, 1))
+  {
+  }
+}
+
+void MemoryCard::UnlockFlush()
+{
+  retro_atomic_store_release_int(&m_flush_lock, 0);
+}
+
+MemoryCard::Change* MemoryCard::TakeChange()
+{
+  if (!m_cpu_free_changes)
+    m_cpu_free_changes = mpsc_stack_drain(&m_free_changes);
+  if (!m_cpu_free_changes)
+  {
+    // every change is posted: apply them here, which frees them
+    LockFlush();
+    ApplyChanges();
+    UnlockFlush();
+    m_cpu_free_changes = mpsc_stack_drain(&m_free_changes);
+  }
+  mpsc_stack_node_t* const node = m_cpu_free_changes;
+  if (node)
+    m_cpu_free_changes = node->next;
+  return reinterpret_cast<Change*>(node);
 }
 
 void MemoryCard::PostChange(u32 offset, u32 length, const u8* data)
 {
-  auto* change = static_cast<Change*>(
-      std::malloc(offsetof(Change, data) + (data ? length : 0) + 1));
-  change->offset = offset;
-  change->length = length;
-  change->fill = data == nullptr;
-  if (data)
-    memcpy(change->data, data, length);
-  mpsc_stack_push(&m_changes, &change->link);
+  do
+  {
+    Change* const change = TakeChange();
+    if (!change)
+      return;
+    // a fill is one change, data CHANGE_DATA_SIZE bytes at most
+    const u32 part = !data || length < CHANGE_DATA_SIZE ? length : CHANGE_DATA_SIZE;
+    change->offset = offset;
+    change->length = part;
+    change->fill = data == nullptr;
+    if (data)
+    {
+      memcpy(change->data, data, part);
+      data += part;
+    }
+    mpsc_stack_push(&m_changes, &change->link);
+    offset += part;
+    length -= part;
+  } while (length);
 }
 
 void MemoryCard::ApplyChanges()
@@ -136,7 +178,7 @@ void MemoryCard::ApplyChanges()
         m_flush_dirty[block >> 5] |= 1u << (block & 31);
       }
     }
-    std::free(change);
+    mpsc_stack_push(&m_free_changes, &change->link);
   }
 }
 
@@ -244,9 +286,11 @@ void MemoryCard::FlushThread()
       return;
     }
 
+    LockFlush();
     ApplyChanges();
     if (!WriteChanges(file, whole))
       m_dirty.Set();
+    UnlockFlush();
 
     if (do_exit)
       return;
@@ -312,7 +356,21 @@ void MemoryCard::DoState(PointerWrap& p)
   p.Do(m_card_slot);
   p.Do(m_memory_card_size);
   p.DoArray(&m_memcard_data[0], m_memory_card_size);
-  // A loaded state replaces the whole card; the flush thread gets it as one change.
+  // A loaded state replaces the whole card: copied to the flush buffer, every block marked, and
+  // the changes posted before it dropped.
   if (p.IsReadMode())
-    PostChange(0, m_memory_card_size, &m_memcard_data[0]);
+  {
+    u32 block;
+    LockFlush();
+    for (mpsc_stack_node_t* node = mpsc_stack_drain(&m_changes); node;)
+    {
+      mpsc_stack_node_t* const next = node->next;
+      mpsc_stack_push(&m_free_changes, node);
+      node = next;
+    }
+    memcpy(m_flush_buffer, m_memcard_data, m_memory_card_size);
+    for (block = 0; block < m_num_blocks; block++)
+      m_flush_dirty[block >> 5] |= 1u << (block & 31);
+    UnlockFlush();
+  }
 }

@@ -32,6 +32,13 @@ public:
   void DoState(PointerWrap& p) override;
 
 private:
+  enum
+  {
+    // the most a change carries: a write of more is posted as several
+    CHANGE_DATA_SIZE = 0x200,
+    // changes in flight; when all are, the CPU thread applies them itself
+    NUM_CHANGES = 1024
+  };
   // A change the flush thread has yet to copy into its own buffer: length bytes at offset,
   // taken from data, or set to 0xFF when fill.
   struct Change
@@ -40,11 +47,18 @@ private:
     u32 offset;
     u32 length;
     bool fill;
-    u8 data[1];
+    u8 data[CHANGE_DATA_SIZE];
   };
   // CPU thread: hands a change to the flush thread.
   void PostChange(u32 offset, u32 length, const u8* data);
-  // Flush thread: applies what was posted, oldest first, marking the blocks it touched.
+  // CPU thread: a free change, applying the posted ones to have one if none is.
+  Change* TakeChange();
+  // The flush buffer and its marks are the caller's until UnlockFlush; it waits for the other
+  // thread to be done with them.
+  void LockFlush();
+  void UnlockFlush();
+  // Applies what was posted, oldest first, marking the blocks it touched, and frees the
+  // changes. Under LockFlush.
   void ApplyChanges();
   // Flush thread: writes the marked blocks, a run of them at a time, or the whole card.
   bool WriteChanges(File::IOFile& file, bool whole);
@@ -62,6 +76,12 @@ private:
   // The flush thread's own copy, brought up to date from m_changes before each write.
   u8* m_flush_buffer = nullptr;
   mpsc_stack_t m_changes{};
+  // NUM_CHANGES of them, made with the card; the free ones are pushed back to m_free_changes
+  // and taken from there by the CPU thread, a whole chain at a time, to m_cpu_free_changes.
+  Change* m_change_pool = nullptr;
+  mpsc_stack_t m_free_changes{};
+  mpsc_stack_node_t* m_cpu_free_changes = nullptr;
+  retro_atomic_int_t m_flush_lock{};
   // Flush thread: one bit per block, set where m_flush_buffer differs from the file.
   enum
   {
