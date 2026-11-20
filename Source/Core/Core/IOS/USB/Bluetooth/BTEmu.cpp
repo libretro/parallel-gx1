@@ -50,10 +50,10 @@ BluetoothEmuDevice::BluetoothEmuDevice(EmulationKernel& ios, const std::string& 
 
     // Previous records can be safely overwritten, since they are backed up
     // stored reversed
-    for (std::size_t b = 0; b < tmp_bd.size(); b++)
+    for (std::size_t b = 0; b < sizeof(tmp_bd); b++)
     {
-      bt_dinf.active[i].bdaddr[tmp_bd.size() - 1 - b] = tmp_bd[b];
-      bt_dinf.registered[i].bdaddr[tmp_bd.size() - 1 - b] = tmp_bd[b];
+      bt_dinf.active[i].bdaddr[sizeof(tmp_bd) - 1 - b] = tmp_bd[b];
+      bt_dinf.registered[i].bdaddr[sizeof(tmp_bd) - 1 - b] = tmp_bd[b];
     }
 
     const auto& wm_name =
@@ -537,7 +537,7 @@ bool BluetoothEmuDevice::SendEventInquiryResponse()
   u8* const buffer = event.buffer + sizeof(SHCIEventInquiryResult);
   const auto response = reinterpret_cast<hci_inquiry_response*>(buffer);
 
-  response->bdaddr = wiimote->GetBD();
+  memcpy(response->bdaddr, wiimote->GetBD(), sizeof(bdaddr_t));
   response->page_scan_rep_mode = 1;
   response->page_scan_period_mode = 0;
   response->page_scan_mode = 0;
@@ -569,7 +569,7 @@ bool BluetoothEmuDevice::SendEventConnectionComplete(const bdaddr_t& bd, u8 stat
   connection_complete->PayloadLength = sizeof(SHCIEventConnectionComplete) - 2;
   connection_complete->EventStatus = status;
   connection_complete->Connection_Handle = GetConnectionHandle(bd);
-  connection_complete->bdaddr = bd;
+  memcpy(connection_complete->bdaddr, bd, sizeof(bdaddr_t));
   connection_complete->LinkType = HCI_LINK_ACL;
   connection_complete->EncryptionEnabled = HCI_ENCRYPTION_MODE_NONE;
 
@@ -603,7 +603,7 @@ bool BluetoothEmuDevice::SendEventRequestConnection(const WiimoteDevice& wiimote
 
   event_request_connection->EventType = HCI_EVENT_CON_REQ;
   event_request_connection->PayloadLength = sizeof(SHCIEventRequestConnection) - 2;
-  event_request_connection->bdaddr = wiimote.GetBD();
+  memcpy(event_request_connection->bdaddr, wiimote.GetBD(), sizeof(bdaddr_t));
   event_request_connection->uclass[0] = wiimote.GetClass()[0];
   event_request_connection->uclass[1] = wiimote.GetClass()[1];
   event_request_connection->uclass[2] = wiimote.GetClass()[2];
@@ -692,7 +692,7 @@ bool BluetoothEmuDevice::SendEventRemoteNameReq(const bdaddr_t& bd)
   remote_name_req->EventType = HCI_EVENT_REMOTE_NAME_REQ_COMPL;
   remote_name_req->PayloadLength = sizeof(SHCIEventRemoteNameReq) - 2;
   remote_name_req->EventStatus = 0x00;
-  remote_name_req->bdaddr = bd;
+  memcpy(remote_name_req->bdaddr, bd, sizeof(bdaddr_t));
   strcpy((char*)remote_name_req->RemoteName, wiimote->GetName());
 
   DEBUG_LOG(IOS_WIIMOTE, "Event: SendEventRemoteNameReq");
@@ -809,7 +809,7 @@ bool BluetoothEmuDevice::SendEventCommandStatus(u16 opcode)
   return true;
 }
 
-bool BluetoothEmuDevice::SendEventRoleChange(bdaddr_t bd, bool master)
+bool BluetoothEmuDevice::SendEventRoleChange(const bdaddr_t& bd, bool master)
 {
   WiimoteDevice* wiimote = AccessWiimote(bd);
   if (wiimote == nullptr)
@@ -822,7 +822,7 @@ bool BluetoothEmuDevice::SendEventRoleChange(bdaddr_t bd, bool master)
   role_change->EventType = HCI_EVENT_ROLE_CHANGE;
   role_change->PayloadLength = sizeof(SHCIEventRoleChange) - 2;
   role_change->EventStatus = 0x00;
-  role_change->bdaddr = bd;
+  memcpy(role_change->bdaddr, bd, sizeof(bdaddr_t));
   role_change->NewRole = master ? 0x00 : 0x01;
 
   AddEventToQueue(event);
@@ -927,7 +927,7 @@ bool BluetoothEmuDevice::SendEventLinkKeyNotification(const u8 num_to_send)
   {
     hci_link_key_rep_cp* link_key_info =
         (hci_link_key_rep_cp*)((u8*)&event_link_key->bdaddr + sizeof(hci_link_key_rep_cp) * i);
-    link_key_info->bdaddr = m_wiimotes[i]->GetBD();
+    memcpy(link_key_info->bdaddr, m_wiimotes[i]->GetBD(), sizeof(bdaddr_t));
     std::memcpy(link_key_info->key, m_wiimotes[i]->GetLinkKey().data(), HCI_KEY_SIZE);
 
     DEBUG_LOG(IOS_WIIMOTE, "  bd: %02x:%02x:%02x:%02x:%02x:%02x",
@@ -1326,7 +1326,7 @@ void BluetoothEmuDevice::CommandLinkKeyRep(u32 input_address)
 
   hci_link_key_rep_rp reply;
   reply.status = 0x00;
-  reply.bdaddr = key_rep.bdaddr;
+  memcpy(reply.bdaddr, key_rep.bdaddr, sizeof(bdaddr_t));
 
   SendEventCommandComplete(HCI_CMD_LINK_KEY_REP, &reply, sizeof(hci_link_key_rep_rp));
 }
@@ -1346,7 +1346,7 @@ void BluetoothEmuDevice::CommandLinkKeyNegRep(u32 input_address)
 
   hci_link_key_neg_rep_rp reply;
   reply.status = 0x00;
-  reply.bdaddr = key_neg.bdaddr;
+  memcpy(reply.bdaddr, key_neg.bdaddr, sizeof(bdaddr_t));
 
   SendEventCommandComplete(HCI_CMD_LINK_KEY_NEG_REP, &reply, sizeof(hci_link_key_neg_rep_rp));
 }
@@ -1858,7 +1858,7 @@ void BluetoothEmuDevice::CommandReadBDAdrr(u32 input_address)
 {
   hci_read_bdaddr_rp reply;
   reply.status = 0x00;
-  reply.bdaddr = m_controller_bd;
+  memcpy(reply.bdaddr, m_controller_bd, sizeof(bdaddr_t));
 
   INFO_LOG(IOS_WIIMOTE, "Command: HCI_CMD_READ_BDADDR:");
   DEBUG_LOG(IOS_WIIMOTE, "return:");
@@ -1914,7 +1914,7 @@ WiimoteDevice* BluetoothEmuDevice::AccessWiimoteByIndex(std::size_t index)
 u16 BluetoothEmuDevice::GetConnectionHandle(const bdaddr_t& address)
 {
   // Handles are normally generated per connection but HLE allows fixed values for each remote.
-  return 0x100 + address.back();
+  return 0x100 + address[BLUETOOTH_BDADDR_SIZE - 1];
 }
 
 u32 BluetoothEmuDevice::GetWiimoteNumberFromConnectionHandle(u16 connection_handle)
@@ -1926,9 +1926,9 @@ u32 BluetoothEmuDevice::GetWiimoteNumberFromConnectionHandle(u16 connection_hand
 WiimoteDevice* BluetoothEmuDevice::AccessWiimote(const bdaddr_t& address)
 {
   // Fixed bluetooth addresses are generated in WiimoteDevice::WiimoteDevice.
-  const auto wiimote = AccessWiimoteByIndex(address.back());
+  const auto wiimote = AccessWiimoteByIndex(address[BLUETOOTH_BDADDR_SIZE - 1]);
 
-  if (wiimote && wiimote->GetBD() == address)
+  if (wiimote && memcmp(wiimote->GetBD(), address, sizeof(bdaddr_t)) == 0)
     return wiimote;
 
   return nullptr;

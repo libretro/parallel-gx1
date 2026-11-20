@@ -370,7 +370,7 @@ void BluetoothRealDevice::SendHCIDeleteLinkKeyCommand()
   INFO_LOG(IOS_WIIMOTE, "SendHCIDeleteLinkKeyCommand");
 
   HCICommandPayload<HCI_CMD_DELETE_STORED_LINK_KEY, hci_delete_stored_link_key_cp> payload;
-  payload.command.bdaddr = {};
+  memset(payload.command.bdaddr, 0, sizeof(bdaddr_t));
   payload.command.delete_all = 0x01;
 
   m_lib_usb_bt_adapter->SendControlTransfer(&payload, sizeof(payload));
@@ -397,7 +397,7 @@ bool BluetoothRealDevice::SendHCIStoreLinkKeyCommand()
       bdaddr_t bdaddr;
       linkkey_t linkkey;
     };
-    std::array<LinkKey, MAX_LINK_KEYS> link_keys{};
+    LinkKey link_keys[MAX_LINK_KEYS] = {};
   } payload;
   static_assert(sizeof(Payload) == 4 + (6 + 16) * MAX_LINK_KEYS);
 
@@ -408,7 +408,10 @@ bool BluetoothRealDevice::SendHCIStoreLinkKeyCommand()
   payload.command.num_keys_write = num_link_keys;
 
   for (u8 index = 0; index < num_link_keys; index++)
-    payload.link_keys[index] = {m_link_keys[index].bdaddr, m_link_keys[index].linkkey};
+  {
+    memcpy(payload.link_keys[index].bdaddr, m_link_keys[index].bdaddr, sizeof(bdaddr_t));
+    payload.link_keys[index].linkkey = m_link_keys[index].linkkey;
+  }
 
   m_lib_usb_bt_adapter->SendControlTransfer(&payload, payload_size);
   return true;
@@ -451,9 +454,10 @@ void BluetoothRealDevice::SetLinkKey(const bdaddr_t& bdaddr, const linkkey_t& li
 {
   // sorted by address: find the slot, replace or insert
   std::size_t index = 0;
-  while (index < m_link_key_count && m_link_keys[index].bdaddr < bdaddr)
+  while (index < m_link_key_count &&
+         memcmp(m_link_keys[index].bdaddr, bdaddr, sizeof(bdaddr_t)) < 0)
     index++;
-  if (index < m_link_key_count && m_link_keys[index].bdaddr == bdaddr)
+  if (index < m_link_key_count && memcmp(m_link_keys[index].bdaddr, bdaddr, sizeof(bdaddr_t)) == 0)
   {
     m_link_keys[index].linkkey = linkkey;
     return;
@@ -465,7 +469,8 @@ void BluetoothRealDevice::SetLinkKey(const bdaddr_t& bdaddr, const linkkey_t& li
   }
   for (std::size_t i = m_link_key_count; i > index; i--)
     m_link_keys[i] = m_link_keys[i - 1];
-  m_link_keys[index] = {bdaddr, linkkey};
+  memcpy(m_link_keys[index].bdaddr, bdaddr, sizeof(bdaddr_t));
+  m_link_keys[index].linkkey = linkkey;
   m_link_key_count++;
 }
 
@@ -473,7 +478,7 @@ void BluetoothRealDevice::EraseLinkKey(const bdaddr_t& bdaddr)
 {
   for (std::size_t index = 0; index < m_link_key_count; index++)
   {
-    if (m_link_keys[index].bdaddr != bdaddr)
+    if (memcmp(m_link_keys[index].bdaddr, bdaddr, sizeof(bdaddr_t)) != 0)
       continue;
     for (std::size_t i = index + 1; i < m_link_key_count; i++)
       m_link_keys[i - 1] = m_link_keys[i];
@@ -513,7 +518,7 @@ void BluetoothRealDevice::LoadLinkKeys()
       continue;
 
     const auto address_string = pair.substr(0, index);
-    std::optional<bdaddr_t> address = Common::StringToMacAddress(address_string);
+    std::optional<Common::MACAddress> address = Common::StringToMacAddress(address_string);
     if (!address)
     {
       ERROR_LOG(IOS_WIIMOTE, "Malformed MAC address (%.*s). Skipping loading of current link key.",
@@ -522,8 +527,8 @@ void BluetoothRealDevice::LoadLinkKeys()
     }
 
     bdaddr_t mac;
-    for (std::size_t i = 0; i < mac.size(); i++)
-      mac[i] = (*address)[mac.size() - 1 - i];
+    for (std::size_t i = 0; i < sizeof(mac); i++)
+      mac[i] = (*address)[sizeof(mac) - 1 - i];
 
     const auto key_string = pair.substr(index + 1);
     linkkey_t key{};
@@ -542,10 +547,10 @@ void BluetoothRealDevice::SaveLinkKeys()
   {
     const bdaddr_t& bdaddr = m_link_keys[index].bdaddr;
     const linkkey_t& linkkey = m_link_keys[index].linkkey;
-    bdaddr_t address;
+    Common::MACAddress address;
     // Reverse the address so that it is stored in the correct order in the config file
-    for (std::size_t i = 0; i < address.size(); i++)
-      address[i] = bdaddr[address.size() - 1 - i];
+    for (std::size_t i = 0; i < sizeof(bdaddr_t); i++)
+      address[i] = bdaddr[sizeof(bdaddr_t) - 1 - i];
 
     config_string += Common::MacAddressToString(address);
     config_string += '=';

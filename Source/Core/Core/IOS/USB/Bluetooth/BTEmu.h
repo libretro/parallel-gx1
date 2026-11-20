@@ -72,7 +72,7 @@ public:
 private:
   WiimoteDevice* m_wiimotes[MAX_BBMOTES] = {};
 
-  bdaddr_t m_controller_bd{{0x11, 0x02, 0x19, 0x79, 0x00, 0xff}};
+  bdaddr_t m_controller_bd = {0x11, 0x02, 0x19, 0x79, 0x00, 0xff};
 
   // this is used to trigger connecting via ACL
   u8 m_scan_enable = 0;
@@ -141,7 +141,7 @@ private:
   bool SendEventConPacketTypeChange(u16 connection_handle, u16 packet_type);
   bool SendEventReadRemoteVerInfo(u16 connection_handle);
   bool SendEventReadRemoteFeatures(u16 connection_handle);
-  bool SendEventRoleChange(bdaddr_t bd, bool master);
+  bool SendEventRoleChange(const bdaddr_t& bd, bool master);
   bool SendEventNumberOfCompletedPackets();
   bool SendEventAuthenticationCompleted(u16 connection_handle);
   bool SendEventModeChange(u16 connection_handle, u8 mode, u16 value);

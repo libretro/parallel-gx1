@@ -53,11 +53,13 @@ private:
   u8* m_buffer;
 };
 
-WiimoteDevice::WiimoteDevice(BluetoothEmuDevice* host, bdaddr_t bd, unsigned int hid_source_number)
-    : m_host(host), m_bd(bd),
+WiimoteDevice::WiimoteDevice(BluetoothEmuDevice* host, const bdaddr_t& bd,
+                             unsigned int hid_source_number)
+    : m_host(host),
       m_name(GetNumber() == WIIMOTE_BALANCE_BOARD ? "Nintendo RVL-WBC-01" : "Nintendo RVL-CNT-01")
 
 {
+  memcpy(m_bd, bd, sizeof(m_bd));
   INFO_LOG(IOS_WIIMOTE, "Wiimote: #%u Constructed", GetNumber());
 
   m_link_key.fill(0xa0 + GetNumber());
@@ -137,7 +139,7 @@ void WiimoteDevice::DoState(PointerWrap& p)
 
 u32 WiimoteDevice::GetNumber() const
 {
-  return GetBD().back();
+  return GetBD()[BLUETOOTH_BDADDR_SIZE - 1];
 }
 
 bool WiimoteDevice::IsInquiryScanEnabled() const

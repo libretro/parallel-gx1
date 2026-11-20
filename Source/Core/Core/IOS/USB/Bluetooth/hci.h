@@ -96,8 +96,7 @@
 /*
  * Bluetooth device address
  */
-using bdaddr_t = std::array<u8, BLUETOOTH_BDADDR_SIZE>;
-constexpr bdaddr_t BDADDR_ANY{};
+typedef u8 bdaddr_t[BLUETOOTH_BDADDR_SIZE];
 
 /**************************************************************************
  **************************************************************************
