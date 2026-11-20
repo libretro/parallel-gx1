@@ -660,17 +660,17 @@ std::shared_ptr<Device> EmulationKernel::GetDeviceByName(std::string_view device
   return iterator != m_device_map.end() ? iterator->second : nullptr;
 }
 
-std::shared_ptr<Device> EmulationKernel::GetDeviceByFileDescriptor(const u32 fd)
+Device* EmulationKernel::GetDeviceByFileDescriptor(const u32 fd)
 {
   if (fd < IPC_MAX_FDS)
-    return m_fdmap[fd];
+    return m_fdmap[fd].get();
 
   switch (fd)
   {
   case 0x10000:
-    return GetDeviceByName("/dev/aes");
+    return GetDeviceByName("/dev/aes").get();
   case 0x10001:
-    return GetDeviceByName("/dev/sha");
+    return GetDeviceByName("/dev/sha").get();
   default:
     return nullptr;
   }
@@ -736,7 +736,7 @@ IPCReply EmulationKernel::HandleIPCCommand(const Request& request)
     return OpenDevice(open_request);
   }
 
-  const auto device = GetDeviceByFileDescriptor(request.fd);
+  Device* const device = GetDeviceByFileDescriptor(request.fd);
   if (!device)
     return IPCReply{IPC_EINVAL, 550_tbticks};
 
@@ -745,10 +745,11 @@ IPCReply EmulationKernel::HandleIPCCommand(const Request& request)
   switch (request.command)
   {
   case IPC_CMD_CLOSE:
+    // The descriptor may hold the only reference to the device, so close it before letting go.
+    ret = device->Close(request.fd);
     // if the fd is not a special IOS FD, we need to reset it too
     if (request.fd < IPC_MAX_FDS)
       m_fdmap[request.fd].reset();
-    ret = device->Close(request.fd);
     break;
   case IPC_CMD_READ:
     ret = device->Read(ReadWriteRequest{GetSystem(), request.address});

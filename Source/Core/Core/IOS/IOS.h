@@ -167,7 +167,8 @@ public:
   // Get a resource manager by name.
   // This only works for devices which are part of the device map.
   std::shared_ptr<Device> GetDeviceByName(std::string_view device_name);
-  std::shared_ptr<Device> GetDeviceByFileDescriptor(const u32 fd);
+  // Not owning: the device map or the descriptor table keeps the device alive.
+  Device* GetDeviceByFileDescriptor(const u32 fd);
 
   std::shared_ptr<ESDevice> GetESDevice();
 
