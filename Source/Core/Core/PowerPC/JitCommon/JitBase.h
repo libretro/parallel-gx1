@@ -208,6 +208,8 @@ public:
   void Jit(u32 em_address);
   const CommonAsmRoutinesBase* GetAsmRoutines();
   bool HandleFault(uintptr_t access_address, SContext* ctx);
+  // The game changed its page table (Jit64::RestoreFastmemAccesses)
+  void RestoreFastmemAccesses();
 
   bool WantsPageTableMappings() const;
   bool HandleStackFault();

@@ -145,6 +145,12 @@ bool JitInterface::HandleFault(uintptr_t access_address, SContext* ctx)
   return m_jit->HandleFault(access_address, ctx);
 }
 
+void JitInterface::RestoreFastmemAccesses()
+{
+  if (m_jit)
+    m_jit->RestoreFastmemAccesses();
+}
+
 bool JitInterface::HandleStackFault()
 {
   if (!m_jit)

@@ -48,6 +48,7 @@ public:
   // Memory Utilities
   bool HandleFault(uintptr_t access_address, SContext* ctx);
   bool HandleStackFault();
+  void RestoreFastmemAccesses();
 
   // Clearing CodeCache
   void ClearCache();

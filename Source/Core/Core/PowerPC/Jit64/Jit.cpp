@@ -4,6 +4,7 @@
 #include "Core/PowerPC/Jit64/Jit.h"
 
 #include <cinttypes>
+#include <cstring>
 #include <map>
 #include <string>
 #include <utility>
@@ -137,6 +138,7 @@ bool Jit64::HandleFault(uintptr_t access_address, SContext* ctx)
   // many of them in a typical program/game.
 
   auto& memory = m_system.GetMemory();
+  bool missing = false;
 
   if (memory.IsAddressInFastmemArea(reinterpret_cast<u8*>(access_address)))
   {
@@ -155,18 +157,18 @@ bool Jit64::HandleFault(uintptr_t access_address, SContext* ctx)
     // a page the game's page table maps, not mapped on the host yet: mapped now, the access runs
     // again and stays fast
     else if (ppc_state.msr.DR && IsInSpace(reinterpret_cast<u8*>(ctx->CTX_PC)) &&
-             m_mmu.MapPageForFastmemFault(static_cast<u32>(access_address - memory_base)))
+             m_mmu.MapPageForFastmemFault(static_cast<u32>(access_address - memory_base), &missing))
     {
       return true;
     }
 
-    return BackPatch(ctx);
+    return BackPatch(ctx, missing);
   }
 
   return false;
 }
 
-bool Jit64::BackPatch(SContext* ctx)
+bool Jit64::BackPatch(SContext* ctx, bool restorable)
 {
   u8* codePtr = reinterpret_cast<u8*>(ctx->CTX_PC);
 
@@ -198,16 +200,30 @@ bool Jit64::BackPatch(SContext* ctx)
   // into the original code if necessary to ensure there is enough space
   // to insert the backpatch jump.)
 
-  js.generatingTrampoline = true;
-  js.trampolineExceptionHandler = exceptionHandler;
-  js.compilerPC = info.pc;
+  const u8* trampoline = info.trampoline;
+  if (!trampoline)
+  {
+    js.generatingTrampoline = true;
+    js.trampolineExceptionHandler = exceptionHandler;
+    js.compilerPC = info.pc;
 
-  // Generate the trampoline.
-  const u8* trampoline = trampolines.GenerateTrampoline(info);
-  js.generatingTrampoline = false;
-  js.trampolineExceptionHandler = nullptr;
+    // Generate the trampoline.
+    trampoline = trampolines.GenerateTrampoline(info);
+    info.trampoline = trampoline;
+    js.generatingTrampoline = false;
+    js.trampolineExceptionHandler = nullptr;
+  }
 
   u8* start = info.start;
+
+  if (restorable && info.len <= sizeof(m_fastmem_sites[0].code) &&
+      m_num_fastmem_sites < MAX_FASTMEM_SITES)
+  {
+    FastmemSite& site = m_fastmem_sites[m_num_fastmem_sites++];
+    site.start = start;
+    site.len = static_cast<u8>(info.len);
+    std::memcpy(site.code, start, info.len);
+  }
 
   // Patch the original memory operation.
   XEmitter emitter(start, start + info.len);
@@ -307,6 +323,7 @@ void Jit64::Init()
 
 void Jit64::ClearCache()
 {
+  m_num_fastmem_sites = 0;
   blocks.Clear();
   blocks.ClearRangesToFree();
   trampolines.ClearCodeSpace();
@@ -319,12 +336,31 @@ void Jit64::ClearCache()
   ResetFreeMemoryRanges();
 }
 
+void Jit64::RestoreFastmemAccesses()
+{
+  u32 i;
+  for (i = 0; i < m_num_fastmem_sites; i++)
+    std::memcpy(m_fastmem_sites[i].start, m_fastmem_sites[i].code, m_fastmem_sites[i].len);
+  m_num_fastmem_sites = 0;
+}
+
 void Jit64::FreeRanges()
 {
   // Check if any code blocks have been freed in the block cache and transfer this information to
   // the local rangesets to allow overwriting them with new code.
   for (const auto& [from, to] : blocks.GetRangesToFreeNear())
+  {
+    u32 i = 0;
+    // code to be written over is not put back
+    while (i < m_num_fastmem_sites)
+    {
+      if (m_fastmem_sites[i].start >= from && m_fastmem_sites[i].start < to)
+        m_fastmem_sites[i] = m_fastmem_sites[--m_num_fastmem_sites];
+      else
+        i++;
+    }
     m_free_ranges_near.insert(from, to);
+  }
   for (const auto& [from, to] : blocks.GetRangesToFreeFar())
     m_free_ranges_far.insert(from, to);
   blocks.ClearRangesToFree();

@@ -165,7 +165,7 @@ public:
   void InvalidateTLBEntry(u32 address);
   void PageTableUpdated();
   static void PageTableUpdatedFromJit(MMU* mmu);
-  bool MapPageForFastmemFault(u32 address);
+  bool MapPageForFastmemFault(u32 address, bool* missing);
   void DBATUpdated();
   void IBATUpdated();
 

@@ -53,7 +53,10 @@ public:
   void Shutdown();
 
   bool HandleFault(uintptr_t access_address, SContext* ctx);
-  bool BackPatch(SContext* ctx);
+  bool BackPatch(SContext* ctx, bool restorable);
+  // The game mapped pages: the accesses sent to their slow path by a page it had yet to map are
+  // fast again (one that faults again goes back to the slow path)
+  void RestoreFastmemAccesses();
 
   void EnableOptimization();
   void EnableBlockLink();
@@ -280,4 +283,17 @@ private:
 
   FreeRangeSet m_free_ranges_near;
   FreeRangeSet m_free_ranges_far;
+
+  // Fastmem accesses backpatched for a page the game had yet to map, with the code they had: a
+  // game that swaps its pages in and out faults once on each, and would run the rest of its
+  // accesses there through the slow path. Dropped with the code they are in.
+  struct FastmemSite
+  {
+    u8* start;
+    u8 len;
+    u8 code[31];
+  };
+  static constexpr u32 MAX_FASTMEM_SITES = 256;
+  FastmemSite m_fastmem_sites[MAX_FASTMEM_SITES];
+  u32 m_num_fastmem_sites = 0;
 };

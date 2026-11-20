@@ -402,3 +402,11 @@ bool JitBase::HandleFault(uintptr_t access_address, SContext* ctx)
 {
   JIT_CALL(HandleFault(access_address, ctx), false)
 }
+
+void JitBase::RestoreFastmemAccesses()
+{
+#ifdef _M_X86_64
+  if (cpu_core_kind == CPUCoreKind::Jit64)
+    static_cast<Jit64*>(this)->RestoreFastmemAccesses();
+#endif
+}

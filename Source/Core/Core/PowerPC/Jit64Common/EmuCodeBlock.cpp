@@ -303,6 +303,7 @@ void EmuCodeBlock::SafeLoadToReg(X64Reg reg_value, const Gen::OpArg& opAddress, 
     info.pc = js.compilerPC;
     info.nonAtomicSwapStoreSrc = mov.nonAtomicSwapStore ? mov.nonAtomicSwapStoreSrc : INVALID_REG;
     info.start = backpatchStart;
+    info.trampoline = nullptr;
     info.read = true;
     info.op_reg = reg_value;
     info.op_arg = opAddress;
@@ -476,6 +477,7 @@ void EmuCodeBlock::SafeWriteRegToReg(OpArg reg_value, X64Reg reg_addr, int acces
     info.pc = js.compilerPC;
     info.nonAtomicSwapStoreSrc = mov.nonAtomicSwapStore ? mov.nonAtomicSwapStoreSrc : INVALID_REG;
     info.start = backpatchStart;
+    info.trampoline = nullptr;
     info.read = false;
     info.op_arg = reg_value;
     info.op_reg = reg_addr;

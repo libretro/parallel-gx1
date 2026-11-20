@@ -1197,6 +1197,7 @@ void MMU::ReloadPageTable()
 void MMU::PageTableUpdated()
 {
   m_ppc_state.pagetable_update_pending = false;
+  m_system.GetJitInterface().RestoreFastmemAccesses();
 
   if (!m_system.GetJitInterface().WantsPageTableMappings())
   {
@@ -1598,20 +1599,26 @@ static bool DataTLBChanged(const PowerPC::PowerPCState& ppc_state, u32 vpa, u32 
 /* A fastmem access faulted at the effective address. A page the page table maps, and may have a
  * host mapping, gets it here, the first time fastmem needs it: as a read there leaves it, R set,
  * to write through if C is set too; one read only, as a write does, C set. True, the access can
- * run again as it is; false for anything else, which the access's slow path is for. */
-bool MMU::MapPageForFastmemFault(u32 address)
+ * run again as it is; false for anything else, which the access's slow path is for, missing set
+ * when the page table maps nothing there: the game is yet to map the page, after which the same
+ * access can be fast. */
+bool MMU::MapPageForFastmemFault(u32 address, bool* missing)
 {
   const u32 page = address & ~static_cast<u32>(HW_PAGE_MASK);
   const u32* mapping;
   PageMapping page_mapping;
   bool mapped, writeable = false, wi = false;
 
+  *missing = false;
   if (!m_ppc_state.msr.DR || m_ppc_state.pagetable_update_pending ||
       (m_dbat_table[address >> PowerPC::BAT_INDEX_SHIFT] & PowerPC::BAT_MAPPED_BIT))
     return false;
   mapping = address_map_find(&m_page_mappings, page);
   if (!mapping)
+  {
+    *missing = true;
     return false;
+  }
   page_mapping.Hex = *mapping;
   if (!page_mapping.host_mapping)
     return false;

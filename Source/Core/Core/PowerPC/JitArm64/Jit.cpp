@@ -121,6 +121,7 @@ bool JitArm64::HandleFault(uintptr_t access_address, SContext* ctx)
 #endif
 
   bool success = false;
+  bool missing;
 
   // Handle BLR stack faults, may happen in C++ code.
   const uintptr_t stack_guard = reinterpret_cast<uintptr_t>(m_stack_guard);
@@ -150,8 +151,8 @@ bool JitArm64::HandleFault(uintptr_t access_address, SContext* ctx)
       }
       // a page the game's page table maps, not mapped on the host yet: mapped now, the access
       // runs again and stays fast
-      else if (m_ppc_state.msr.DR &&
-               m_mmu.MapPageForFastmemFault(static_cast<u32>(access_address - memory_base)))
+      else if (m_ppc_state.msr.DR && m_mmu.MapPageForFastmemFault(
+                                         static_cast<u32>(access_address - memory_base), &missing))
       {
         success = true;
       }

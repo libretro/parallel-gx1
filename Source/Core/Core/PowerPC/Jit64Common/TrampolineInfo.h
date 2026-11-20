@@ -15,6 +15,9 @@ struct TrampolineInfo final
   // The start of the store operation that failed -- we will patch a JMP here
   u8* start = nullptr;
 
+  // The trampoline made for it, when it first faulted; made once, as the access can be put back
+  const u8* trampoline = nullptr;
+
   // The start + len = end of the store operation (points to the next instruction)
   u16 len = 0;
 
