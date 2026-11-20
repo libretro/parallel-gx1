@@ -113,16 +113,16 @@ void DIDevice::ProcessQueuedIOCtl()
 
   auto& system = GetSystem();
   IOCtlRequest request{system, m_executing_command->m_request_address};
-  auto finished = StartIOCtl(request);
-  if (finished)
+  const DIResult finished = StartIOCtl(request);
+  if (finished != DIResult::Pending)
   {
     system.GetCoreTiming().ScheduleEvent(IPC_OVERHEAD_TICKS, s_finish_executing_di_command,
-                                         static_cast<u64>(finished.value()));
+                                         static_cast<u64>(finished));
     return;
   }
 }
 
-std::optional<DIDevice::DIResult> DIDevice::WriteIfFits(const IOCtlRequest& request, u32 value)
+DIDevice::DIResult DIDevice::WriteIfFits(const IOCtlRequest& request, u32 value)
 {
   if (request.buffer_out_size < 4)
   {
@@ -148,7 +148,7 @@ struct DiscRange
 };
 }  // namespace
 
-std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& request)
+DIDevice::DIResult DIDevice::StartIOCtl(const IOCtlRequest& request)
 {
   if (request.buffer_in_size != 0x20)
   {
@@ -206,7 +206,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     m_last_length = position;  // An actual mistake in IOS
     system.GetDVDInterface().PerformDecryptingRead(position, length, request.buffer_out,
                                                    m_current_partition, DVD::ReplyType::IOS);
-    return {};
+    return DIResult::Pending;
   }
   case DIIoctl::DVDLowWaitForCoverClose:
     // This is a bit awkward to implement, as it doesn't return for a long time, so just act as if
@@ -354,7 +354,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
           m_last_length = length;
           mmio->Write<u32>(system, ADDRESS_DILENGTH, length);
           system.GetDVDInterface().ForceOutOfBoundsRead(DVD::ReplyType::IOS);
-          return {};
+          return DIResult::Pending;
         }
         else
         {
@@ -538,8 +538,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
 }
 
-std::optional<DIDevice::DIResult> DIDevice::StartDMATransfer(u32 command_length,
-                                                             const IOCtlRequest& request)
+DIDevice::DIResult DIDevice::StartDMATransfer(u32 command_length, const IOCtlRequest& request)
 {
   if (request.buffer_out_size < command_length)
   {
@@ -572,10 +571,9 @@ std::optional<DIDevice::DIResult> DIDevice::StartDMATransfer(u32 command_length,
 
   system.GetDVDInterface().ExecuteCommand(DVD::ReplyType::IOS);
   // Reply will be posted when done by FinishIOCtl.
-  return {};
+  return DIResult::Pending;
 }
-std::optional<DIDevice::DIResult> DIDevice::StartImmediateTransfer(const IOCtlRequest& request,
-                                                                   bool write_to_buf)
+DIDevice::DIResult DIDevice::StartImmediateTransfer(const IOCtlRequest& request, bool write_to_buf)
 {
   if (write_to_buf && request.buffer_out_size < 4)
   {
@@ -590,7 +588,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartImmediateTransfer(const IOCtlRe
   auto& system = GetSystem();
   system.GetDVDInterface().ExecuteCommand(DVD::ReplyType::IOS);
   // Reply will be posted when done by FinishIOCtl.
-  return {};
+  return DIResult::Pending;
 }
 
 static std::shared_ptr<DIDevice> GetDevice()

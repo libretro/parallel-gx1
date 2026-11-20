@@ -102,6 +102,8 @@ public:
 
   enum class DIResult : s32
   {
+    // Not a reply: the command is still running and replies when it finishes.
+    Pending = 0,
     Success = 1,
     DriveError = 2,
     CoverClosed = 4,
@@ -124,11 +126,10 @@ private:
   friend void ::IOS::HLE::Init(Core::System&);
 
   void ProcessQueuedIOCtl();
-  std::optional<DIResult> StartIOCtl(const IOCtlRequest& request);
-  std::optional<DIResult> WriteIfFits(const IOCtlRequest& request, u32 value);
-  std::optional<DIResult> StartDMATransfer(u32 command_length, const IOCtlRequest& request);
-  std::optional<DIResult> StartImmediateTransfer(const IOCtlRequest& request,
-                                                 bool write_to_buf = true);
+  DIResult StartIOCtl(const IOCtlRequest& request);
+  DIResult WriteIfFits(const IOCtlRequest& request, u32 value);
+  DIResult StartDMATransfer(u32 command_length, const IOCtlRequest& request);
+  DIResult StartImmediateTransfer(const IOCtlRequest& request, bool write_to_buf = true);
 
   void ChangePartition(const DiscIO::Partition partition);
   void InitializeIfFirstTime();
