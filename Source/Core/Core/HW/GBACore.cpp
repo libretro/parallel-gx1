@@ -390,13 +390,13 @@ void Core::SetVideoBuffer()
   {
     // GBPlayer expects a GBA-sized video buffer even in GB mode.
     // Clear it first to avoid stuck colors from the previous game on switch from GBA->GB.
-    m_video_buffer.clear();
-    m_video_buffer.resize(std::size_t{GBA_VIDEO_HORIZONTAL_PIXELS} * GBA_VIDEO_VERTICAL_PIXELS);
+    m_video_pixels = GBA_VIDEO_HORIZONTAL_PIXELS * GBA_VIDEO_VERTICAL_PIXELS;
+    memset(m_video_buffer, 0, m_video_pixels * sizeof(u32));
 
     constexpr size_t GB_VIDEO_OFFSET = 1960;
 
     m_core->setVideoBuffer(
-        m_core, m_video_buffer.data() + ((GetPlatform() == mPLATFORM_GBA) ? 0 : GB_VIDEO_OFFSET),
+        m_core, m_video_buffer + ((GetPlatform() == mPLATFORM_GBA) ? 0 : GB_VIDEO_OFFSET),
         GBA_VIDEO_HORIZONTAL_PIXELS);
   }
   else
@@ -406,7 +406,11 @@ void Core::SetVideoBuffer()
     size_t stride;
     u32* const lent = m_screen ? GBAScreenBuffer((unsigned)m_device_number, &stride) : nullptr;
     m_core->currentVideoSize(m_core, &width, &height);
-    m_video_buffer.resize(std::size_t{width} * height);
+    /* growing zero-fills like the std::vector this replaced */
+    const u32 pixels = width * height <= MAX_VIDEO_PIXELS ? width * height : u32(MAX_VIDEO_PIXELS);
+    if (pixels > m_video_pixels)
+      memset(m_video_buffer + m_video_pixels, 0, (pixels - m_video_pixels) * sizeof(u32));
+    m_video_pixels = pixels;
     if (lent)
     {
       m_core->setVideoBuffer(m_core, lent, stride);
@@ -414,7 +418,7 @@ void Core::SetVideoBuffer()
     else
     {
       m_screen = false;
-      m_core->setVideoBuffer(m_core, m_video_buffer.data(), width);
+      m_core->setVideoBuffer(m_core, m_video_buffer, width);
     }
   }
 }
@@ -439,7 +443,7 @@ void Core::ScreenFrameEnded(void* context)
   else if (core->m_screen)
   {
     core->m_screen = false;
-    core->m_core->setVideoBuffer(core->m_core, core->m_video_buffer.data(), width);
+    core->m_core->setVideoBuffer(core->m_core, core->m_video_buffer, width);
   }
 }
 
@@ -604,7 +608,7 @@ void Core::HandleEvent(SyncEvent event)
       u32 height;
       m_screen = false;
       m_core->currentVideoSize(m_core, &width, &height);
-      m_core->setVideoBuffer(m_core, m_video_buffer.data(), width);
+      m_core->setVideoBuffer(m_core, m_video_buffer, width);
     }
     GBAScreenDetached((unsigned)m_device_number);
     return;
@@ -691,7 +695,15 @@ void Core::DoState(PointerWrap& p)
 
   Start(0);
 
-  p.Do(m_video_buffer);
+  // Same layout as the std::vector this replaced: the pixel count, then the pixels.
+  p.Do(m_video_pixels);
+  if (m_video_pixels > MAX_VIDEO_PIXELS)
+  {
+    m_video_pixels = 0;
+    p.SetMeasureMode();
+    return;
+  }
+  p.DoArray(m_video_buffer, m_video_pixels);
   p.Do(m_last_gc_ticks);
   p.Do(m_gc_ticks_remainder);
   p.Do(m_keys);

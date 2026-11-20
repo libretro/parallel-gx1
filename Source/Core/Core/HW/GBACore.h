@@ -84,7 +84,7 @@ public:
   mCore* GetCore() { return m_core; }
 
   mAudioBuffer* GetAudioBuffer() { return m_core->getAudioBuffer(m_core); }
-  const u32* GetVideoBuffer() const { return m_video_buffer.data(); }
+  const u32* GetVideoBuffer() const { return m_video_buffer; }
 
   mPlatform GetPlatform() const { return m_core->platform(m_core); }
   u32 GetAudioSampleRate() const { return m_core->audioSampleRate(m_core); }
@@ -142,7 +142,10 @@ private:
   bool m_waiting_for_event = false;
   SIODriver m_sio_driver{};
   AVStream m_stream{};
-  std::vector<u32> m_video_buffer;
+  // Big enough for the largest screen mGBA draws: a Super Game Boy frame, 256x224.
+  static constexpr size_t MAX_VIDEO_PIXELS = 256 * 224;
+  u32 m_video_buffer[MAX_VIDEO_PIXELS] = {};
+  u32 m_video_pixels = 0;  // how much of m_video_buffer the current screen size uses
 
   u64 m_last_gc_ticks = 0;
   u64 m_gc_ticks_remainder = 0;
