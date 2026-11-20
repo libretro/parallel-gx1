@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -19,8 +18,8 @@ public:
   static TextureInfo FromStage(u32 stage);
   TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 address,
               TextureFormat texture_format, TLUTFormat tlut_format, u32 width, u32 height,
-              bool from_tmem, TexBytes tmem_odd, TexBytes tmem_even,
-              std::optional<u32> mip_count);
+              bool from_tmem, TexBytes tmem_odd, TexBytes tmem_even, bool has_mipmaps,
+              u32 mip_count);
 
   // A texture's name in a texture pack, in its parts:
   // <base_name>_<texture_name><tlut_name>_<format_name>, tex1_64x64_m_0123456789abcdef_14 say.
@@ -54,7 +53,8 @@ public:
   TextureFormat GetTextureFormat() const { return m_texture_format; }
   TLUTFormat GetTlutFormat() const { return m_tlut_format; }
 
-  std::optional<u32> GetPaletteSize() const { return m_palette_size; }
+  // 0 for a texture without a palette
+  u32 GetPaletteSize() const { return m_palette_size; }
   u32 GetTextureSize() const { return m_texture_size; }
 
   u32 GetBlockWidth() const { return m_block_width; }
@@ -180,7 +180,7 @@ private:
   u32 m_limited_mip_count = 0;
 
   u32 m_texture_size = 0;
-  std::optional<u32> m_palette_size;
+  u32 m_palette_size = 0;
 
   u32 m_block_width;
   u32 m_expanded_width;

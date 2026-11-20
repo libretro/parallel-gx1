@@ -32,12 +32,8 @@ TextureInfo TextureInfo::FromStage(u32 stage)
   const u32 tlutaddr = tex.texTlut.tmem_offset << 9;
   const TexBytes tlut_data = TexDecoder_GetTmem(tlutaddr);
 
-  std::optional<u32> mip_count;
   const bool has_mipmaps = tex.texMode0.mipmap_filter != MipMode::None;
-  if (has_mipmaps)
-  {
-    mip_count = (tex.texMode1.max_lod + 0xf) / 0x10;
-  }
+  const u32 mip_count = has_mipmaps ? (tex.texMode1.max_lod + 0xf) / 0x10 : 0;
 
   const bool from_tmem = tex.texImage1.cache_manually_managed != 0;
   const u32 tmem_address_even = from_tmem ? tex.texImage1.tmem_even * TMEM_LINE_SIZE : 0;
@@ -47,8 +43,8 @@ TextureInfo TextureInfo::FromStage(u32 stage)
   {
     return TextureInfo(stage, TexDecoder_GetTmem(tmem_address_even), tlut_data, address,
                        texture_format, tlut_format, width, height, true,
-                       TexDecoder_GetTmem(tmem_address_odd),
-                       TexDecoder_GetTmem(tmem_address_even), mip_count);
+                       TexDecoder_GetTmem(tmem_address_odd), TexDecoder_GetTmem(tmem_address_even),
+                       has_mipmaps, mip_count);
   }
 
   auto& system = Core::System::GetInstance();
@@ -57,13 +53,13 @@ TextureInfo TextureInfo::FromStage(u32 stage)
   data.data = memory.GetPointerAndSize(address, &data.size);
   const TexBytes none = {};
   return TextureInfo(stage, data, tlut_data, address, texture_format, tlut_format, width, height,
-                     false, none, none, mip_count);
+                     false, none, none, has_mipmaps, mip_count);
 }
 
 TextureInfo::TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 address,
                          TextureFormat texture_format, TLUTFormat tlut_format, u32 width,
                          u32 height, bool from_tmem, TexBytes tmem_odd, TexBytes tmem_even,
-                         std::optional<u32> mip_count)
+                         bool has_mipmaps, u32 mip_count)
     : m_data(data), m_tlut_data(tlut_data), m_address(address), m_from_tmem(from_tmem),
       m_tmem_even(tmem_even), m_tmem_odd(tmem_odd), m_texture_format(texture_format),
       m_tlut_format(tlut_format), m_raw_width(width), m_raw_height(height), m_stage(stage)
@@ -87,7 +83,7 @@ TextureInfo::TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 addre
     ERROR_LOG(VIDEO, "Trying to use an invalid texture address %#010x", GetRawAddress());
     m_data_valid = false;
   }
-  else if (m_palette_size && tlut_data.size < *m_palette_size)
+  else if (m_palette_size && tlut_data.size < m_palette_size)
   {
     ERROR_LOG(VIDEO, "Trying to use an invalid TLUT address %#010x", GetRawAddress());
     m_data_valid = false;
@@ -97,10 +93,10 @@ TextureInfo::TextureInfo(u32 stage, TexBytes data, TexBytes tlut_data, u32 addre
     m_data_valid = true;
   }
 
-  if (mip_count)
+  if (has_mipmaps)
   {
     m_mipmaps_enabled = true;
-    const u32 raw_mip_count = *mip_count;
+    const u32 raw_mip_count = mip_count;
 
     // GPUs don't like when the specified mipmap count would require more than one 1x1-sized LOD in
     // the mipmap chain
@@ -130,7 +126,7 @@ TextureInfo::NameDetails TextureInfo::CalculateTextureName() const
     return details;
 
   const u8* tlut = m_tlut_data.data;
-  size_t tlut_size = m_palette_size ? *m_palette_size : 0;
+  size_t tlut_size = m_palette_size;
 
   // checking for min/max on paletted textures
   u32 min = 0xffff;
@@ -174,7 +170,7 @@ TextureInfo::NameDetails TextureInfo::CalculateTextureName() const
     tlut += 2 * min;
   }
 
-  DEBUG_ASSERT(tlut_size <= m_palette_size.value_or(0));
+  DEBUG_ASSERT(tlut_size <= m_palette_size);
 
   const u64 tex_hash = xxh64(m_data.data, m_texture_size, 0);
   const u64 tlut_hash = tlut_size ? xxh64(tlut, tlut_size, 0) : 0;

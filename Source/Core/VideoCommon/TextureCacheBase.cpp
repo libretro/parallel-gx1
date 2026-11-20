@@ -1851,10 +1851,10 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
   u32 palette_size = 0;
   if (texture_info.GetPaletteSize())
   {
-    palette_size = *texture_info.GetPaletteSize();
+    palette_size = texture_info.GetPaletteSize();
     full_hash =
-        base_hash ^ common_hash64(texture_info.GetTlutAddress(), *texture_info.GetPaletteSize(),
-                                      textureCacheSafetyColorSampleSize);
+        base_hash ^ common_hash64(texture_info.GetTlutAddress(), texture_info.GetPaletteSize(),
+                                  textureCacheSafetyColorSampleSize);
   }
   else
   {
