@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -29,38 +28,6 @@ namespace PowerPC
 {
 class PowerPCManager;
 struct PowerPCState;
-
-enum class RequestedAddressSpace
-{
-  Effective,  // whatever the current MMU state is
-  Physical,   // as if the MMU was turned off
-  Virtual,    // specifically want MMU turned on, fails if off
-};
-
-template <typename T>
-struct ReadResult
-{
-  // whether the address had to be translated (given address was treated as virtual) or not (given
-  // address was treated as physical)
-  bool translated;
-
-  // the actual value that was read
-  T value;
-
-  ReadResult(bool translated_, T&& value_) : translated(translated_), value(std::forward<T>(value_))
-  {
-  }
-  ReadResult(bool translated_, const T& value_) : translated(translated_), value(value_) {}
-};
-
-struct WriteResult
-{
-  // whether the address had to be translated (given address was treated as virtual) or not (given
-  // address was treated as physical)
-  bool translated;
-
-  explicit WriteResult(bool translated_) : translated(translated_) {}
-};
 
 constexpr int BAT_INDEX_SHIFT = 17;
 constexpr u32 BAT_PAGE_SIZE = 1 << BAT_INDEX_SHIFT;
@@ -148,23 +115,6 @@ public:
   static std::string HostGetString(u32 address, size_t size = 0);
   static std::u16string HostGetU16String(u32 address, size_t size = 0);
 
-  // Try to read a value from emulated memory at the given address in the given memory space.
-  // If the read succeeds, the returned value will be present and the ReadResult contains the read
-  // value and information on whether the given address had to be translated or not. Unlike the
-  // HostRead functions, this does not raise a user-visible alert on failure.
-  template <std::unsigned_integral T>
-  static std::optional<ReadResult<T>>
-  HostTryRead(u32 address, RequestedAddressSpace space = RequestedAddressSpace::Effective);
-  template <typename T>
-  static std::optional<ReadResult<T>>
-  HostTryRead(u32 address, RequestedAddressSpace space = RequestedAddressSpace::Effective)
-      requires(!std::unsigned_integral<T>)
-  {
-    using U = Common::MakeUnsignedSameSize<T>;
-    std::optional<ReadResult<U>> result = HostTryRead<U>(address, space);
-    return std::bit_cast<std::optional<ReadResult<T>>>(result);
-  }
-
   // Writes a value to emulated memory using the currently active MMU settings.
   // If the write fails (eg. address does not correspond to a mapped address in the current address
   // space), a PanicAlert will be shown to the user.
@@ -178,34 +128,12 @@ public:
     return HostWrite<U>(cast_var, address);
   }
 
-  // Try to a write a value to memory at the given address in the given memory space.
-  // If the write succeeds, the returned TryWriteResult contains information on whether the given
-  // address had to be translated or not. Unlike the HostWrite functions, this does not raise a
-  // user-visible alert on failure.
-  template <std::unsigned_integral T>
-  static std::optional<WriteResult>
-  HostTryWrite(Common::MakeAtLeastU32<T> var, u32 address,
-               RequestedAddressSpace space = RequestedAddressSpace::Effective);
-  template <typename T>
-  static std::optional<WriteResult>
-  HostTryWrite(const T var, const u32 address,
-               RequestedAddressSpace space = RequestedAddressSpace::Effective)
-      requires(!std::unsigned_integral<T>)
-  {
-    using U = Common::MakeUnsignedSameSize<T>;
-    U cast_var = std::bit_cast<U>(var);
-    return HostTryWrite<U>(cast_var, address, space);
-  }
-
-  // Returns whether a read or write to the given address will resolve to a RAM access in the given
-  // address space.
-  static bool HostIsRAMAddress(u32 address,
-                               RequestedAddressSpace space = RequestedAddressSpace::Effective);
+  // Returns whether a read or write to the given address will resolve to a RAM access with the
+  // current MMU settings.
+  static bool HostIsRAMAddress(u32 address);
 
   // Same as HostIsRAMAddress, but uses IBAT instead of DBAT.
-  static bool
-  HostIsInstructionRAMAddress(u32 address,
-                              RequestedAddressSpace space = RequestedAddressSpace::Effective);
+  static bool HostIsInstructionRAMAddress(u32 address);
 
   // Routines for the CPU core to access memory.
 

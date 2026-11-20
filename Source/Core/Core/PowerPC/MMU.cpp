@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -617,46 +618,6 @@ template u32 MMU::Read<u32>(const u32 address);
 template u64 MMU::Read<u64>(const u32 address);
 
 template <std::unsigned_integral T>
-std::optional<ReadResult<T>> MMU::HostTryRead(const u32 address, RequestedAddressSpace space)
-{
-  if (!HostIsRAMAddress(address, space))
-    return std::nullopt;
-
-  auto& mmu = Core::System::GetInstance().GetMMU();
-  switch (space)
-  {
-  case RequestedAddressSpace::Effective:
-  {
-    T value = mmu.ReadFromHardware<XCheckTLBFlag::NoException, T>(address);
-    return ReadResult<T>(!!mmu.m_ppc_state.msr.DR, std::move(value));
-  }
-  case RequestedAddressSpace::Physical:
-  {
-    T value = mmu.ReadFromHardware<XCheckTLBFlag::NoException, T, true>(address);
-    return ReadResult<T>(false, std::move(value));
-  }
-  case RequestedAddressSpace::Virtual:
-  {
-    if (!mmu.m_ppc_state.msr.DR)
-      return std::nullopt;
-    T value = mmu.ReadFromHardware<XCheckTLBFlag::NoException, T>(address);
-    return ReadResult<T>(true, std::move(value));
-  }
-  }
-
-  ASSERT(false);
-  return std::nullopt;
-}
-template std::optional<ReadResult<u8>> MMU::HostTryRead<u8>(const u32 address,
-                                                            RequestedAddressSpace space);
-template std::optional<ReadResult<u16>> MMU::HostTryRead<u16>(const u32 address,
-                                                              RequestedAddressSpace space);
-template std::optional<ReadResult<u32>> MMU::HostTryRead<u32>(const u32 address,
-                                                              RequestedAddressSpace space);
-template std::optional<ReadResult<u64>> MMU::HostTryRead<u64>(const u32 address,
-                                                              RequestedAddressSpace space);
-
-template <std::unsigned_integral T>
 void MMU::Write(const Common::MakeAtLeastU32<T> var, const u32 address)
 {
   WriteToHardware<XCheckTLBFlag::Write>(address, var, sizeof(T));
@@ -710,51 +671,6 @@ void MMU::HostWrite<u64>(const u64 var, const u32 address)
   auto& mmu = Core::System::GetInstance().GetMMU();
   mmu.WriteToHardware<XCheckTLBFlag::NoException>(address, static_cast<u32>(var >> 32), 4);
   mmu.WriteToHardware<XCheckTLBFlag::NoException>(address + sizeof(u32), static_cast<u32>(var), 4);
-}
-
-template <std::unsigned_integral T>
-std::optional<WriteResult> MMU::HostTryWrite(const Common::MakeAtLeastU32<T> var, const u32 address,
-                                             RequestedAddressSpace space)
-{
-  constexpr auto size = sizeof(T);
-
-  if (!HostIsRAMAddress(address, space))
-    return std::nullopt;
-
-  auto& mmu = Core::System::GetInstance().GetMMU();
-  switch (space)
-  {
-  case RequestedAddressSpace::Effective:
-    mmu.WriteToHardware<XCheckTLBFlag::NoException>(address, var, size);
-    return WriteResult(!!mmu.m_ppc_state.msr.DR);
-  case RequestedAddressSpace::Physical:
-    mmu.WriteToHardware<XCheckTLBFlag::NoException, true>(address, var, size);
-    return WriteResult(false);
-  case RequestedAddressSpace::Virtual:
-    if (!mmu.m_ppc_state.msr.DR)
-      return std::nullopt;
-    mmu.WriteToHardware<XCheckTLBFlag::NoException>(address, var, size);
-    return WriteResult(true);
-  }
-
-  ASSERT(false);
-  return std::nullopt;
-}
-template std::optional<WriteResult> MMU::HostTryWrite<u8>(const u32 var, const u32 address,
-                                                          RequestedAddressSpace space);
-template std::optional<WriteResult> MMU::HostTryWrite<u16>(const u32 var, const u32 address,
-                                                           RequestedAddressSpace space);
-template std::optional<WriteResult> MMU::HostTryWrite<u32>(const u32 var, const u32 address,
-                                                           RequestedAddressSpace space);
-template <>
-std::optional<WriteResult> MMU::HostTryWrite<u64>(const u64 var, const u32 address,
-                                                  RequestedAddressSpace space)
-{
-  const auto result = HostTryWrite<u32>(static_cast<u32>(var >> 32), address, space);
-  if (!result)
-    return result;
-
-  return HostTryWrite<u32>(static_cast<u32>(var), address + 4, space);
 }
 
 std::string MMU::HostGetString(u32 address, size_t size)
@@ -834,49 +750,23 @@ bool MMU::IsEffectiveRAMAddress(const u32 address)
   return translate_address.Success() && IsPhysicalRAMAddress(translate_address.address);
 }
 
-bool MMU::HostIsRAMAddress(u32 address, RequestedAddressSpace space)
+bool MMU::HostIsRAMAddress(u32 address)
 {
   auto& mmu = Core::System::GetInstance().GetMMU();
-  switch (space)
-  {
-  case RequestedAddressSpace::Effective:
-    return mmu.m_ppc_state.msr.DR ? mmu.IsEffectiveRAMAddress<XCheckTLBFlag::NoException>(address) :
-                                    mmu.IsPhysicalRAMAddress(address);
-  case RequestedAddressSpace::Physical:
-    return mmu.IsPhysicalRAMAddress(address);
-  case RequestedAddressSpace::Virtual:
-    if (!mmu.m_ppc_state.msr.DR)
-      return false;
-    return mmu.IsEffectiveRAMAddress<XCheckTLBFlag::NoException>(address);
-  }
-
-  ASSERT(false);
-  return false;
+  return mmu.m_ppc_state.msr.DR ? mmu.IsEffectiveRAMAddress<XCheckTLBFlag::NoException>(address) :
+                                  mmu.IsPhysicalRAMAddress(address);
 }
 
-bool MMU::HostIsInstructionRAMAddress(u32 address, RequestedAddressSpace space)
+bool MMU::HostIsInstructionRAMAddress(u32 address)
 {
   // Instructions are always 32bit aligned.
   if (address & 3)
     return false;
 
   auto& mmu = Core::System::GetInstance().GetMMU();
-  switch (space)
-  {
-  case RequestedAddressSpace::Effective:
-    return mmu.m_ppc_state.msr.IR ?
-               mmu.IsEffectiveRAMAddress<XCheckTLBFlag::OpcodeNoException>(address) :
-               mmu.IsPhysicalRAMAddress(address);
-  case RequestedAddressSpace::Physical:
-    return mmu.IsPhysicalRAMAddress(address);
-  case RequestedAddressSpace::Virtual:
-    if (!mmu.m_ppc_state.msr.IR)
-      return false;
-    return mmu.IsEffectiveRAMAddress<XCheckTLBFlag::OpcodeNoException>(address);
-  }
-
-  ASSERT(false);
-  return false;
+  return mmu.m_ppc_state.msr.IR ?
+             mmu.IsEffectiveRAMAddress<XCheckTLBFlag::OpcodeNoException>(address) :
+             mmu.IsPhysicalRAMAddress(address);
 }
 
 void MMU::DMA_LCToMemory(const u32 mem_address, const u32 cache_address, const u32 num_blocks)
