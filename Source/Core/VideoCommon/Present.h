@@ -35,6 +35,8 @@ public:
 
   Presenter();
   ~Presenter();
+  Presenter(const Presenter&) = delete;
+  Presenter& operator=(const Presenter&) = delete;
 
   void ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u64 ticks);
   void ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height);
@@ -95,7 +97,7 @@ public:
                          const AbstractTexture* source_texture,
                          const MathUtil::Rectangle<int>& source_rc);
 
-  VideoCommon::PostProcessing* GetPostProcessor() const { return m_post_processor.get(); }
+  VideoCommon::PostProcessing* GetPostProcessor() const { return m_post_processor; }
 
   int FrameCount() const { return m_frame_count; }
 
@@ -173,7 +175,8 @@ private:
   int m_last_window_request_width = 0;
   int m_last_window_request_height = 0;
 
-  std::unique_ptr<VideoCommon::PostProcessing> m_post_processor;
+  // made by Initialize, kept until the presenter goes
+  VideoCommon::PostProcessing* m_post_processor = nullptr;
 
   u64 m_frame_count = 0;
   u64 m_present_count = 0;

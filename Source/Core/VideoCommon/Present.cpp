@@ -111,6 +111,7 @@ Presenter::Presenter()
 
 Presenter::~Presenter()
 {
+  delete m_post_processor;
 }
 
 bool Presenter::Initialize()
@@ -123,7 +124,8 @@ bool Presenter::Initialize()
   {
     SetBackbuffer(g_gfx->GetSurfaceInfo());
 
-    m_post_processor = std::make_unique<VideoCommon::PostProcessing>();
+    delete m_post_processor;
+    m_post_processor = new VideoCommon::PostProcessing();
     if (!m_post_processor->Initialize(m_backbuffer_format))
       return false;
   }
@@ -833,7 +835,7 @@ void Presenter::Present()
                                 m_backbuffer_height);
     RenderXFBToScreen(render_target_rc, m_xfb_entry->texture, render_source_rc);
     if (gba_screens)
-      GBAScreensDraw(m_post_processor.get(), m_backbuffer_width, m_backbuffer_height);
+      GBAScreensDraw(m_post_processor, m_backbuffer_width, m_backbuffer_height);
   }
 
   // Present to the window system.
