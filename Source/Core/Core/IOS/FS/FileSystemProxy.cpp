@@ -108,7 +108,11 @@ void FSDevice::DoState(PointerWrap& p)
   Device::DoState(p);
   p.Do(m_core.m_dirty_cache);
   p.Do(m_core.m_cache_chain_index);
-  p.Do(m_core.m_cache_fd);
+  // Same layout as the std::optional this replaced: a presence flag, then the descriptor if
+  // present.
+  p.Do(m_core.m_has_cache_fd);
+  if (m_core.m_has_cache_fd)
+    p.Do(m_core.m_cache_fd);
   p.Do(m_core.m_next_fd);
   m_core.DoFdState(p);
 }
@@ -339,10 +343,10 @@ s32 FSCore::Close(u64 fd, Ticks ticks)
   const Handle& handle = GetHandle(fd);
   if (handle.fs_fd != INVALID_FD)
   {
-    if (fd == m_cache_fd)
+    if (m_has_cache_fd && fd == m_cache_fd)
     {
       ticks.Add(SimulateFlushFileCache());
-      m_cache_fd.reset();
+      m_has_cache_fd = false;
     }
 
     if (handle.superblock_flush_needed)
@@ -371,16 +375,17 @@ u64 FSCore::SimulatePopulateFileCache(u64 fd, u32 offset, u32 file_size)
     ticks += GetClusterReadTbTicks(m_ios.GetVersion());
 
   m_cache_fd = fd;
+  m_has_cache_fd = true;
   m_cache_chain_index = static_cast<u16>(offset / CLUSTER_DATA_SIZE);
   return ticks;
 }
 
 u64 FSCore::SimulateFlushFileCache()
 {
-  if (!m_cache_fd.has_value() || !m_dirty_cache)
+  if (!m_has_cache_fd || !m_dirty_cache)
     return 0;
   m_dirty_cache = false;
-  GetHandle(*m_cache_fd).superblock_flush_needed = true;
+  GetHandle(m_cache_fd).superblock_flush_needed = true;
   return GetClusterWriteTbTicks(m_ios.GetVersion());
 }
 
@@ -436,7 +441,7 @@ u64 FSCore::EstimateTicksForReadWrite(const Handle& handle, u64 fd, IPCCommandTy
 bool FSCore::HasCacheForFile(u64 fd, u32 offset) const
 {
   const u16 chain_index = static_cast<u16>(offset / CLUSTER_DATA_SIZE);
-  return m_cache_fd == fd && m_cache_chain_index == chain_index;
+  return m_has_cache_fd && m_cache_fd == fd && m_cache_chain_index == chain_index;
 }
 
 IPCReply FSDevice::Read(const ReadWriteRequest& request)

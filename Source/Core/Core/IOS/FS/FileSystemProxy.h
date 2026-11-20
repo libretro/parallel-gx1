@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 #include <utility>
 
@@ -112,7 +111,9 @@ private:
 
   bool m_dirty_cache = false;
   u16 m_cache_chain_index = 0;
-  std::optional<u64> m_cache_fd;
+  // m_cache_fd is valid while m_has_cache_fd is set.
+  bool m_has_cache_fd = false;
+  u64 m_cache_fd = 0;
   // The first 0x18 IDs are reserved for the PPC.
   u64 m_next_fd = 0x18;
 
