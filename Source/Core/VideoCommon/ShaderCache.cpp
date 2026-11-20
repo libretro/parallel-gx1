@@ -352,9 +352,9 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid,
   STUTTER_DRAW_MARK(t);
   const bool exists_in_cache = it != nullptr;
   AbstractPipeline* pipeline = nullptr;
-  std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(key);
-  if (pipeline_config)
-    pipeline = g_gfx->CreatePipeline(*pipeline_config);
+  AbstractPipelineConfig pipeline_config;
+  if (GetGXPipelineConfig(key, &pipeline_config))
+    pipeline = g_gfx->CreatePipeline(pipeline_config);
   if (g_ActiveConfig.bShaderCache && !exists_in_cache)
     AppendGXPipelineUID(uid);
   const AbstractPipeline* const kept = InsertGXPipeline(key, pipeline);
@@ -362,8 +362,8 @@ const AbstractPipeline* ShaderCache::GetPipelineForUid(const GXPipelineUid& uid,
   return kept;
 }
 
-std::optional<const AbstractPipeline*>
-ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid, GXDrawState* draw_state)
+bool ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid, GXDrawState* draw_state,
+                                         const AbstractPipeline** pipeline)
 {
   GXPipelineUid key;
   GXPipelineKey(m_api_type, m_host_config, uid, &key, draw_state);
@@ -371,16 +371,16 @@ ShaderCache::GetPipelineForUidAsync(const GXPipelineUid& uid, GXDrawState* draw_
   if (it)
   {
     // compiling in the background, or not
-    if (!it->pending)
-      return PipelineOf(it);
-    else
-      return {};
+    if (it->pending)
+      return false;
+    *pipeline = PipelineOf(it);
+    return true;
   }
 
   /* recorded once, when it is queued: one refused is asked for again on a later draw */
   if (QueuePipelineCompile(key, COMPILE_PRIORITY_ONDEMAND_PIPELINE))
     AppendGXPipelineUID(uid);
-  return {};
+  return false;
 }
 
 const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineUid& uid,
@@ -399,9 +399,9 @@ const AbstractPipeline* ShaderCache::GetUberPipelineForUid(const GXUberPipelineU
 
   STUTTER_DRAW_MARK(t);
   AbstractPipeline* pipeline = nullptr;
-  std::optional<AbstractPipelineConfig> pipeline_config = GetGXPipelineConfig(key);
-  if (pipeline_config)
-    pipeline = g_gfx->CreatePipeline(*pipeline_config);
+  AbstractPipelineConfig pipeline_config;
+  if (GetGXPipelineConfig(key, &pipeline_config))
+    pipeline = g_gfx->CreatePipeline(pipeline_config);
   const AbstractPipeline* const kept = InsertGXUberPipeline(key, pipeline);
   STUTTER_DRAW_SINCE(STUTTER_DRAW_UBER_PIPELINE, t);
   return kept;
@@ -519,11 +519,11 @@ void ShaderCache::LoadPipelineCache(T& cache, Common::LinearDiskCache<DiskKeyTyp
       if (failed || uid_table_find(&cache, &real_uid))
         return;
 
-      auto config = this_ptr->GetGXPipelineConfig(real_uid);
-      if (!config)
+      AbstractPipelineConfig config;
+      if (!this_ptr->GetGXPipelineConfig(real_uid, &config))
         return;
 
-      AbstractPipeline* const pipeline = g_gfx->CreatePipeline(*config, value, value_size);
+      AbstractPipeline* const pipeline = g_gfx->CreatePipeline(config, value, value_size);
       if (!pipeline)
       {
         // If any of the pipelines fail to create, consider the cache stale.
@@ -901,8 +901,7 @@ AbstractPipelineConfig ShaderCache::GetGXPipelineConfig(
   return config;
 }
 
-std::optional<AbstractPipelineConfig>
-ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in)
+bool ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in, AbstractPipelineConfig* out)
 {
   GXPipelineUid config;
   GXPipelineBuildUid(config_in, &config);
@@ -924,7 +923,7 @@ ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in)
     ps = InsertPixelShader(ps_uid, CompilePixelShader(ps_uid));
 
   if (!vs || !ps)
-    return {};
+    return false;
 
   const AbstractShader* gs = nullptr;
   if (NeedsGeometryShader(config.gs_uid))
@@ -935,11 +934,12 @@ ShaderCache::GetGXPipelineConfig(const GXPipelineUid& config_in)
     else
       gs = CreateGeometryShader(config.gs_uid);
     if (!gs)
-      return {};
+      return false;
   }
 
-  return GetGXPipelineConfig(config.vertex_format, vs, gs, ps, config.rasterization_state,
+  *out = GetGXPipelineConfig(config.vertex_format, vs, gs, ps, config.rasterization_state,
                              config.depth_state, config.blending_state, AbstractPipelineUsage::GX);
+  return true;
 }
 
 /* Edits the uid in place, based on driver bugs and other special configurations. */
@@ -1074,8 +1074,8 @@ static void GXPipelineBuildUid(const GXPipelineUid& key, GXPipelineUid* uid)
     *uid = VideoCommon::ApplyDriverBugs(key);
 }
 
-std::optional<AbstractPipelineConfig>
-ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in)
+bool ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in,
+                                      AbstractPipelineConfig* out)
 {
   GXUberPipelineUid config;
   UberPipelineBuildUid(config_in, &config);
@@ -1097,7 +1097,7 @@ ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in)
     ps = InsertPixelUberShader(ps_uid, CompilePixelUberShader(ps_uid));
 
   if (!vs || !ps)
-    return {};
+    return false;
 
   const AbstractShader* gs = nullptr;
   if (NeedsGeometryShader(config.gs_uid))
@@ -1108,12 +1108,13 @@ ShaderCache::GetGXPipelineConfig(const GXUberPipelineUid& config_in)
     else
       gs = CreateGeometryShader(config.gs_uid);
     if (!gs)
-      return {};
+      return false;
   }
 
-  return GetGXPipelineConfig(config.vertex_format, vs, gs, ps, config.rasterization_state,
-                             config.depth_state, config.blending_state,
-                             AbstractPipelineUsage::GXUber);
+  *out =
+      GetGXPipelineConfig(config.vertex_format, vs, gs, ps, config.rasterization_state,
+                          config.depth_state, config.blending_state, AbstractPipelineUsage::GXUber);
+  return true;
 }
 
 const AbstractPipeline* ShaderCache::InsertGXPipeline(const GXPipelineUid& config,
@@ -1487,12 +1488,7 @@ void ShaderCache::QueueWork(WorkItem* item)
     item->has_config = false;
     if (ready)
     {
-      std::optional<AbstractPipelineConfig> config = GetGXPipelineConfig(uid);
-      if (config)
-      {
-        item->config = *config;
-        item->has_config = true;
-      }
+      item->has_config = GetGXPipelineConfig(uid, &item->config);
     }
   }
   else if (item->kind == WORK_UBER_PIPELINE)
@@ -1518,12 +1514,7 @@ void ShaderCache::QueueWork(WorkItem* item)
     item->has_config = false;
     if (ready)
     {
-      std::optional<AbstractPipelineConfig> config = GetGXPipelineConfig(uid);
-      if (config)
-      {
-        item->config = *config;
-        item->has_config = true;
-      }
+      item->has_config = GetGXPipelineConfig(uid, &item->config);
     }
   }
 

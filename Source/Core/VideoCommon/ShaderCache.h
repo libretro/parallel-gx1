@@ -81,10 +81,10 @@ public:
   const AbstractPipeline* GetUberPipelineForUid(const GXUberPipelineUid& uid,
                                                 GXDrawState* draw_state = nullptr);
 
-  // Accesses ShaderGen shader caches asynchronously.
-  // The optional will be empty if this pipeline is now background compiling.
-  std::optional<const AbstractPipeline*> GetPipelineForUidAsync(const GXPipelineUid& uid,
-                                                                GXDrawState* draw_state = nullptr);
+  // Accesses ShaderGen shader caches asynchronously: false, the pipeline is now background
+  // compiling; true, *pipeline is it, nullptr when it failed.
+  bool GetPipelineForUidAsync(const GXPipelineUid& uid, GXDrawState* draw_state,
+                              const AbstractPipeline** pipeline);
 
   // Shared shaders
   const AbstractShader* GetScreenQuadVertexShader() const
@@ -181,8 +181,9 @@ private:
                       const AbstractShader* geometry_shader, const AbstractShader* pixel_shader,
                       const RasterizationState& rasterization_state, const DepthState& depth_state,
                       const BlendingState& blending_state, AbstractPipelineUsage usage);
-  std::optional<AbstractPipelineConfig> GetGXPipelineConfig(const GXPipelineUid& uid);
-  std::optional<AbstractPipelineConfig> GetGXPipelineConfig(const GXUberPipelineUid& uid);
+  // false when a shader of it fails
+  bool GetGXPipelineConfig(const GXPipelineUid& uid, AbstractPipelineConfig* config);
+  bool GetGXPipelineConfig(const GXUberPipelineUid& uid, AbstractPipelineConfig* config);
   void WriteGXPipelineCacheData(const GXPipelineUid& config, const AbstractPipeline* pipeline);
   const AbstractPipeline* InsertGXPipeline(const GXPipelineUid& config,
                                            AbstractPipeline* pipeline);

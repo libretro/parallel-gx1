@@ -860,18 +860,19 @@ void VertexManagerBase::UpdatePipelineObject()
       return;
     }
     // Can we background compile shaders? If so, get the pipeline asynchronously.
-    auto res =
-        g_shader_cache->GetPipelineForUidAsync(m_current_pipeline_config, &m_current_draw_state);
-    if (res && (!*res || (*res)->IsReady()))
+    const AbstractPipeline* pipeline = nullptr;
+    const bool built = g_shader_cache->GetPipelineForUidAsync(m_current_pipeline_config,
+                                                              &m_current_draw_state, &pipeline);
+    if (built && (!pipeline || pipeline->IsReady()))
     {
       // Specialized shaders are ready, prefer these.
-      m_current_pipeline_object = *res;
+      m_current_pipeline_object = pipeline;
       m_current_draw_state_set = true;
       return;
     }
     /* built and still compiling on the driver's threads: asked again
      * next draw, until it is ready */
-    if (res)
+    if (built)
       m_pipeline_config_changed = true;
 
     if (g_ActiveConfig.iShaderCompilationMode == ShaderCompilationMode::AsynchronousUberShaders)
