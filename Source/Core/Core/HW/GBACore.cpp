@@ -148,16 +148,13 @@ static VFile* OpenROM(const char* rom_path)
   return vf;
 }
 
-static std::array<u8, 20> GetROMHash(VFile* rom)
+static void GetROMHash(VFile* rom, u8* digest)
 {
   size_t size = rom->size(rom);
   u8* buffer = static_cast<u8*>(rom->map(rom, size, MAP_READ));
 
-  std::array<u8, 20> digest;
-  SHA1Digest(buffer, size, digest.data());
+  SHA1Digest(buffer, size, digest);
   rom->unmap(rom, buffer, size);
-
-  return digest;
 }
 
 Core::Core(::Core::System& system, int device_number)
@@ -210,7 +207,7 @@ bool Core::Start(u64 gc_ticks)
                  m_rom_path.c_str());
       return false;
     }
-    m_rom_hash = GetROMHash(rom);
+    GetROMHash(rom, m_rom_hash);
   }
 
   m_core = rom ? mCoreFindVF(rom) : mCoreCreate(mPLATFORM_GBA);
@@ -306,7 +303,7 @@ void Core::Stop()
   m_started = false;
   m_rom_path = {};
   m_save_path = {};
-  m_rom_hash = {};
+  memset(m_rom_hash, 0, sizeof(m_rom_hash));
   m_game_title = {};
 }
 
@@ -548,7 +545,7 @@ void Core::SendJoybusCommand(u64 gc_ticks, int transfer_time, u8* buffer, u16 ke
 
   m_joybus_command_transfer_time = transfer_time;
   m_joybus_command = GBASIOJOYCommand(buffer[0]);
-  memcpy(m_joybus_buffer.data(), buffer + 1, sizeof(m_joybus_buffer));
+  memcpy(m_joybus_buffer, buffer + 1, sizeof(m_joybus_buffer));
 
   retro_atomic_store_relaxed_int(&m_command_pending, 1);
 
@@ -584,7 +581,7 @@ int Core::GetJoybusResponse(u8* data_out)
   size_t size = m_response_size;
   if (size > sizeof(m_joybus_buffer))
     size = sizeof(m_joybus_buffer);
-  memcpy(data_out, m_joybus_buffer.data(), size);
+  memcpy(data_out, m_joybus_buffer, size);
   return static_cast<int>(size);
 }
 
@@ -623,8 +620,7 @@ void Core::HandleEvent(SyncEvent event)
 
   if (m_link_enabled)
   {
-    m_response_size =
-        u8(GBASIOJOYSendCommand(&m_sio_driver, m_joybus_command, m_joybus_buffer.data()));
+    m_response_size = u8(GBASIOJOYSendCommand(&m_sio_driver, m_joybus_command, m_joybus_buffer));
   }
   else
   {
@@ -679,13 +675,15 @@ void Core::DoState(PointerWrap& p)
 
   bool has_rom = !m_rom_path.empty();
   p.Do(has_rom);
-  auto old_hash = m_rom_hash;
+  u8 old_hash[sizeof(m_rom_hash)];
+  memcpy(old_hash, m_rom_hash, sizeof(old_hash));
   p.Do(m_rom_hash);
   auto old_title = m_game_title;
   p.Do(m_game_title);
 
   if (p.IsReadMode() && (has_rom != !m_rom_path.empty() ||
-                         (has_rom && (old_hash != m_rom_hash || old_title != m_game_title))))
+                         (has_rom && (memcmp(old_hash, m_rom_hash, sizeof(old_hash)) != 0 ||
+                                      old_title != m_game_title))))
   {
     ::Core::DisplayMessage("Incompatible ROM state in GBA%d. Aborting load state.",
                            m_device_number + 1);

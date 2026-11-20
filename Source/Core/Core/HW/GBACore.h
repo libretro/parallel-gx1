@@ -5,11 +5,9 @@
 
 #ifdef HAS_LIBMGBA
 
-#include <array>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include <retro_atomic.h>
 #include <rthreads/retro_eventcount.h>
@@ -133,7 +131,7 @@ private:
   bool m_screen = false;
   std::string m_rom_path;
   std::string m_save_path;
-  std::array<u8, 20> m_rom_hash{};
+  u8 m_rom_hash[20] = {};
   std::string m_game_title;
 
   mCore* m_core{};
@@ -157,7 +155,7 @@ private:
   GBASIOJOYCommand m_joybus_command{};
 
   // Commands are synchronous. This buffer is used for the command and the response.
-  std::array<u8, 5> m_joybus_buffer{};  // State saved.
+  u8 m_joybus_buffer[5] = {};  // State saved.
 
   // Set by the GBA thread after filling in the above buffer.
   u8 m_response_size{};  // State saved.
