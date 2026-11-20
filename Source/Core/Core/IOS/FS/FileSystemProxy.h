@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -91,8 +89,8 @@ private:
     u16 gid = 0;
     u32 uid = 0;
     FS::Fd fs_fd = INVALID_FD;
-    // We use a std::array to keep this savestate friendly.
-    std::array<char, 64> name{};
+    // A fixed array keeps this savestate friendly.
+    char name[64] = {};
     bool superblock_flush_needed = false;
   };
 
@@ -108,7 +106,24 @@ private:
   std::optional<u64> m_cache_fd;
   // The first 0x18 IDs are reserved for the PPC.
   u64 m_next_fd = 0x18;
-  std::map<u64, Handle> m_fd_map;
+
+  // Open descriptors. Entries never move while open, so a Handle reference stays valid until
+  // its descriptor is closed.
+  struct FdEntry
+  {
+    bool used;
+    u64 fd;
+    Handle handle;
+  };
+  static constexpr int MAX_FD_ENTRIES = 64;
+  FdEntry m_fd_entries[MAX_FD_ENTRIES] = {};
+  int m_fd_count = 0;
+
+  Handle* FindHandle(u64 fd);
+  // Returns the descriptor's handle, adding a default one when it is not open.
+  Handle& GetHandle(u64 fd);
+  void EraseHandle(u64 fd);
+  void DoFdState(PointerWrap& p);
 
   friend class FSDevice;
 };

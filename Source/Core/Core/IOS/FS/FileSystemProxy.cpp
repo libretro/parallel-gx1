@@ -110,7 +110,98 @@ void FSDevice::DoState(PointerWrap& p)
   p.Do(m_core.m_cache_chain_index);
   p.Do(m_core.m_cache_fd);
   p.Do(m_core.m_next_fd);
-  p.Do(m_core.m_fd_map);
+  m_core.DoFdState(p);
+}
+
+FSCore::Handle* FSCore::FindHandle(u64 fd)
+{
+  for (int i = 0; i < MAX_FD_ENTRIES; i++)
+  {
+    if (m_fd_entries[i].used && m_fd_entries[i].fd == fd)
+      return &m_fd_entries[i].handle;
+  }
+  return nullptr;
+}
+
+FSCore::Handle& FSCore::GetHandle(u64 fd)
+{
+  Handle* const handle = FindHandle(fd);
+  if (handle)
+    return *handle;
+
+  for (int i = 0; i < MAX_FD_ENTRIES; i++)
+  {
+    if (m_fd_entries[i].used)
+      continue;
+    m_fd_entries[i].used = true;
+    m_fd_entries[i].fd = fd;
+    m_fd_entries[i].handle = Handle{};
+    m_fd_count++;
+    return m_fd_entries[i].handle;
+  }
+
+  // Only lookups of descriptors that were never opened can get here: give them a closed one.
+  static Handle s_overflow_handle;
+  ERROR_LOG(IOS_FS, "Too many descriptors, dropping %" PRIu64, fd);
+  s_overflow_handle = Handle{};
+  return s_overflow_handle;
+}
+
+void FSCore::EraseHandle(u64 fd)
+{
+  for (int i = 0; i < MAX_FD_ENTRIES; i++)
+  {
+    if (m_fd_entries[i].used && m_fd_entries[i].fd == fd)
+    {
+      m_fd_entries[i].used = false;
+      m_fd_count--;
+      return;
+    }
+  }
+}
+
+// Same layout as the std::map this replaced: a count, then each descriptor and handle in
+// descriptor order.
+void FSCore::DoFdState(PointerWrap& p)
+{
+  u32 count = u32(m_fd_count);
+  p.Do(count);
+
+  if (p.IsReadMode())
+  {
+    for (int i = 0; i < MAX_FD_ENTRIES; i++)
+      m_fd_entries[i].used = false;
+    m_fd_count = 0;
+    for (u32 i = 0; i < count; i++)
+    {
+      u64 fd = 0;
+      p.Do(fd);
+      Handle handle;
+      p.Do(handle);
+      GetHandle(fd) = handle;
+    }
+    return;
+  }
+
+  int order[MAX_FD_ENTRIES];
+  int n = 0;
+  for (int i = 0; i < MAX_FD_ENTRIES; i++)
+  {
+    if (!m_fd_entries[i].used)
+      continue;
+    int j = n++;
+    while (j > 0 && m_fd_entries[order[j - 1]].fd > m_fd_entries[i].fd)
+    {
+      order[j] = order[j - 1];
+      j--;
+    }
+    order[j] = i;
+  }
+  for (int i = 0; i < n; i++)
+  {
+    p.Do(m_fd_entries[order[i]].fd);
+    p.Do(m_fd_entries[order[i]].handle);
+  }
 }
 
 static ResultCode CodeOf(ResultCode code)
@@ -196,7 +287,7 @@ FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path,
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
-  if (m_fd_map.size() >= 16)
+  if (m_fd_count >= 16)
     return {this, ConvertResult(ResultCode::NoFreeHandle), ticks};
 
   if (path.size() >= 64)
@@ -206,7 +297,7 @@ FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path,
 
   if (path == "/dev/fs")
   {
-    m_fd_map[fd] = {gid, uid, INVALID_FD};
+    GetHandle(fd) = Handle{gid, uid, INVALID_FD};
     return {this, static_cast<s64>(fd), ticks};
   }
 
@@ -217,10 +308,10 @@ FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path,
   if (!backend_fd)
     return {this, ConvertResult(backend_fd.error()), ticks};
 
-  auto& handle = m_fd_map[fd] = {gid, uid, backend_fd->Release()};
+  Handle& handle = GetHandle(fd) = Handle{gid, uid, backend_fd->Release()};
   /* zero-padded, unterminated when it fills the field */
-  handle.name.fill(0);
-  std::memcpy(handle.name.data(), path.c_str(), std::min(path.size(), handle.name.size()));
+  memset(handle.name, 0, sizeof(handle.name));
+  memcpy(handle.name, path.c_str(), std::min(path.size(), sizeof(handle.name)));
   return {this, static_cast<s64>(fd), ticks};
 }
 
@@ -233,7 +324,7 @@ s32 FSCore::Close(u64 fd, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
-  const auto& handle = m_fd_map[fd];
+  const Handle& handle = GetHandle(fd);
   if (handle.fs_fd != INVALID_FD)
   {
     if (fd == m_cache_fd)
@@ -246,14 +337,14 @@ s32 FSCore::Close(u64 fd, Ticks ticks)
       ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
 
     const ResultCode result = m_ios.GetFS()->Close(handle.fs_fd);
-    LogResult(CodeOf(result), "Close(%s)", handle.name.data());
-    m_fd_map.erase(fd);
+    LogResult(CodeOf(result), "Close(%s)", handle.name);
+    EraseHandle(fd);
     if (result != ResultCode::Success)
       return ConvertResult(result);
   }
   else
   {
-    m_fd_map.erase(fd);
+    EraseHandle(fd);
   }
   return IPC_SUCCESS;
 }
@@ -277,7 +368,7 @@ u64 FSCore::SimulateFlushFileCache()
   if (!m_cache_fd.has_value() || !m_dirty_cache)
     return 0;
   m_dirty_cache = false;
-  m_fd_map[*m_cache_fd].superblock_flush_needed = true;
+  GetHandle(*m_cache_fd).superblock_flush_needed = true;
   return GetClusterWriteTbTicks(m_ios.GetVersion());
 }
 
@@ -304,7 +395,7 @@ u64 FSCore::EstimateTicksForReadWrite(const Handle& handle, u64 fd, IPCCommandTy
       ticks += (is_write ? GetClusterWriteTbTicks : GetClusterReadTbTicks)(m_ios.GetVersion());
       copy_length = CLUSTER_DATA_SIZE;
       if (is_write)
-        m_fd_map[fd].superblock_flush_needed = true;
+        GetHandle(fd).superblock_flush_needed = true;
     }
     else
     {
@@ -350,7 +441,7 @@ s32 FSCore::Read(u64 fd, u8* data, u32 size, std::optional<u32> ipc_buffer_addr,
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
-  const Handle& handle = m_fd_map[fd];
+  const Handle& handle = GetHandle(fd);
   if (handle.fs_fd == INVALID_FD)
     return ConvertResult(ResultCode::Invalid);
   // a buffer that is not in the emulated software's memory, which GetPointerForRange gives as null
@@ -362,7 +453,7 @@ s32 FSCore::Read(u64 fd, u8* data, u32 size, std::optional<u32> ipc_buffer_addr,
 
   const Result<u32> result = m_ios.GetFS()->ReadBytesFromFile(handle.fs_fd, data, size);
   if (ipc_buffer_addr)
-    LogResult(CodeOf(result), "Read(%s, 0x%08x, %u)", handle.name.data(), *ipc_buffer_addr, size);
+    LogResult(CodeOf(result), "Read(%s, 0x%08x, %u)", handle.name, *ipc_buffer_addr, size);
 
   if (!result)
     return ConvertResult(result.error());
@@ -384,7 +475,7 @@ s32 FSCore::Write(u64 fd, const u8* data, u32 size, std::optional<u32> ipc_buffe
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
-  const Handle& handle = m_fd_map[fd];
+  const Handle& handle = GetHandle(fd);
   if (handle.fs_fd == INVALID_FD)
     return ConvertResult(ResultCode::Invalid);
   // a buffer that is not in the emulated software's memory, which GetPointerForRange gives as null
@@ -396,7 +487,7 @@ s32 FSCore::Write(u64 fd, const u8* data, u32 size, std::optional<u32> ipc_buffe
 
   const Result<u32> result = m_ios.GetFS()->WriteBytesToFile(handle.fs_fd, data, size);
   if (ipc_buffer_addr)
-    LogResult(CodeOf(result), "Write(%s, 0x%08x, %u)", handle.name.data(), *ipc_buffer_addr, size);
+    LogResult(CodeOf(result), "Write(%s, 0x%08x, %u)", handle.name, *ipc_buffer_addr, size);
 
   if (!result)
     return ConvertResult(result.error());
@@ -415,13 +506,12 @@ s32 FSCore::Seek(u64 fd, u32 offset, FS::SeekMode mode, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
-  const Handle& handle = m_fd_map[fd];
+  const Handle& handle = GetHandle(fd);
   if (handle.fs_fd == INVALID_FD)
     return ConvertResult(ResultCode::Invalid);
 
   const Result<u32> result = m_ios.GetFS()->SeekFile(handle.fs_fd, offset, mode);
-  LogResult(CodeOf(result), "Seek(%s, 0x%08x, %d)", handle.name.data(), offset,
-            static_cast<int>(mode));
+  LogResult(CodeOf(result), "Seek(%s, 0x%08x, %d)", handle.name, offset, static_cast<int>(mode));
   if (!result)
     return ConvertResult(result.error());
   return *result;
@@ -468,34 +558,34 @@ static Result<T> GetParams(Memory::MemoryManager& memory, const IOCtlRequest& re
 
 IPCReply FSDevice::IOCtl(const IOCtlRequest& request)
 {
-  const auto it = m_core.m_fd_map.find(request.fd);
-  if (it == m_core.m_fd_map.end())
+  FSCore::Handle* const handle = m_core.FindHandle(request.fd);
+  if (!handle)
     return IPCReply(ConvertResult(ResultCode::Invalid));
 
   switch (request.request)
   {
   case ISFS_IOCTL_FORMAT:
-    return Format(it->second, request);
+    return Format(*handle, request);
   case ISFS_IOCTL_GETSTATS:
-    return GetStats(it->second, request);
+    return GetStats(*handle, request);
   case ISFS_IOCTL_CREATEDIR:
-    return CreateDirectory(it->second, request);
+    return CreateDirectory(*handle, request);
   case ISFS_IOCTL_SETATTR:
-    return SetAttribute(it->second, request);
+    return SetAttribute(*handle, request);
   case ISFS_IOCTL_GETATTR:
-    return GetAttribute(it->second, request);
+    return GetAttribute(*handle, request);
   case ISFS_IOCTL_DELETE:
-    return DeleteFile(it->second, request);
+    return DeleteFile(*handle, request);
   case ISFS_IOCTL_RENAME:
-    return RenameFile(it->second, request);
+    return RenameFile(*handle, request);
   case ISFS_IOCTL_CREATEFILE:
-    return CreateFile(it->second, request);
+    return CreateFile(*handle, request);
   case ISFS_IOCTL_SETFILEVERCTRL:
-    return SetFileVersionControl(it->second, request);
+    return SetFileVersionControl(*handle, request);
   case ISFS_IOCTL_GETFILESTATS:
-    return GetFileStats(it->second, request);
+    return GetFileStats(*handle, request);
   case ISFS_IOCTL_SHUTDOWN:
-    return Shutdown(it->second, request);
+    return Shutdown(*handle, request);
   default:
     return GetFSReply(ConvertResult(ResultCode::Invalid));
   }
@@ -503,16 +593,16 @@ IPCReply FSDevice::IOCtl(const IOCtlRequest& request)
 
 IPCReply FSDevice::IOCtlV(const IOCtlVRequest& request)
 {
-  const auto it = m_core.m_fd_map.find(request.fd);
-  if (it == m_core.m_fd_map.end())
+  FSCore::Handle* const handle = m_core.FindHandle(request.fd);
+  if (!handle)
     return IPCReply(ConvertResult(ResultCode::Invalid));
 
   switch (request.request)
   {
   case ISFS_IOCTLV_READDIR:
-    return ReadDirectory(it->second, request);
+    return ReadDirectory(*handle, request);
   case ISFS_IOCTLV_GETUSAGE:
-    return GetUsage(it->second, request);
+    return GetUsage(*handle, request);
   default:
     return GetFSReply(ConvertResult(ResultCode::Invalid));
   }
@@ -768,12 +858,12 @@ IPCReply FSDevice::GetFileStats(const Handle& handle, const IOCtlRequest& reques
 FS::Result<FS::FileStatus> FSCore::GetFileStatus(u64 fd, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
-  const auto& handle = m_fd_map[fd];
+  const Handle& handle = GetHandle(fd);
   if (handle.fs_fd == INVALID_FD)
     return std::unexpected{ResultCode::Invalid};
 
   auto status = m_ios.GetFS()->GetFileStatus(handle.fs_fd);
-  LogResult(CodeOf(status), "GetFileStatus(%s)", handle.name.data());
+  LogResult(CodeOf(status), "GetFileStatus(%s)", handle.name);
   return status;
 }
 
