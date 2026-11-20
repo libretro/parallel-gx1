@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -59,8 +58,8 @@ public:
 private:
   void SetupGciFolder(const Memcard::HeaderData& header_data);
   void SetupRawMemcard(u16 size_mb);
-  static void EventCompleteFindInstance(Core::System& system, u64 userdata,
-                                        const std::function<void(CEXIMemoryCard*)>& callback);
+  // The memory card in the event's slot, or nullptr when the slot holds something else.
+  static CEXIMemoryCard* EventCompleteFindInstance(Core::System& system, u64 userdata);
 
   // Scheduled when a command that required delayed end signaling is done.
   static void CmdDoneCallback(Core::System& system, u64 userdata, s64 cyclesLate);

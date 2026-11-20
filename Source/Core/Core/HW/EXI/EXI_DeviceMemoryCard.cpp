@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <array>
-#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -54,8 +53,7 @@ static Common::EnumMap<char, MAX_MEMCARD_SLOT> s_card_short_names{'A', 'B'};
 
 // Takes care of the nasty recovery of the 'this' pointer from card_slot,
 // stored in the userdata parameter of the CoreTiming event.
-void CEXIMemoryCard::EventCompleteFindInstance(Core::System& system, u64 userdata,
-                                               const std::function<void(CEXIMemoryCard*)>& callback)
+CEXIMemoryCard* CEXIMemoryCard::EventCompleteFindInstance(Core::System& system, u64 userdata)
 {
   Slot card_slot = static_cast<Slot>(userdata);
   IEXIDevice* self = system.GetExpansionInterface().GetDevice(card_slot);
@@ -64,21 +62,24 @@ void CEXIMemoryCard::EventCompleteFindInstance(Core::System& system, u64 userdat
     if (self->m_device_type == EXIDeviceType::MemoryCard ||
         self->m_device_type == EXIDeviceType::MemoryCardFolder)
     {
-      callback(static_cast<CEXIMemoryCard*>(self));
+      return static_cast<CEXIMemoryCard*>(self);
     }
   }
+  return nullptr;
 }
 
 void CEXIMemoryCard::CmdDoneCallback(Core::System& system, u64 userdata, s64)
 {
-  EventCompleteFindInstance(system, userdata,
-                            [](CEXIMemoryCard* instance) { instance->CmdDone(); });
+  CEXIMemoryCard* const instance = EventCompleteFindInstance(system, userdata);
+  if (instance)
+    instance->CmdDone();
 }
 
 void CEXIMemoryCard::TransferCompleteCallback(Core::System& system, u64 userdata, s64)
 {
-  EventCompleteFindInstance(system, userdata,
-                            [](CEXIMemoryCard* instance) { instance->TransferComplete(); });
+  CEXIMemoryCard* const instance = EventCompleteFindInstance(system, userdata);
+  if (instance)
+    instance->TransferComplete();
 }
 
 void CEXIMemoryCard::Init(CoreTiming::CoreTimingManager& core_timing)
