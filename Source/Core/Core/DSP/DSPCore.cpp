@@ -398,12 +398,14 @@ void SDSP::DoState(PointerWrap& p)
   p.DoArray(dram, DSP_DRAM_SIZE);
 }
 
-DSPCore::DSPCore()
-    : m_dsp{*this}, m_dsp_interpreter{std::make_unique<Interpreter::Interpreter>(*this)}
+DSPCore::DSPCore() : m_dsp{*this}, m_dsp_interpreter{new Interpreter::Interpreter(*this)}
 {
 }
 
-DSPCore::~DSPCore() = default;
+DSPCore::~DSPCore()
+{
+  delete m_dsp_interpreter;
+}
 
 bool DSPCore::Initialize(const DSPInitOptions& opts)
 {

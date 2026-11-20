@@ -6,7 +6,6 @@
 
 #include <array>
 #include <cstddef>
-#include <memory>
 #include <string>
 
 #include <retro_atomic.h>
@@ -565,7 +564,8 @@ public:
 private:
   SDSP m_dsp;
   State m_core_state = State::Stopped;
-  std::unique_ptr<Interpreter::Interpreter> m_dsp_interpreter;
+  // made with the core, kept until it goes
+  Interpreter::Interpreter* const m_dsp_interpreter;
   // the x64 JIT, when asked for and there is one
   JIT::x64::DSPEmitter* m_dsp_jit = nullptr;
   // The capture of internal data transfers, open when one was asked for
