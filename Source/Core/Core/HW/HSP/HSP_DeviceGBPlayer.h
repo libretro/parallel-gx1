@@ -26,6 +26,8 @@ public:
 
   explicit CHSPDevice_GBPlayer(Core::System& system);
   ~CHSPDevice_GBPlayer() override;
+  CHSPDevice_GBPlayer(const CHSPDevice_GBPlayer&) = delete;
+  CHSPDevice_GBPlayer& operator=(const CHSPDevice_GBPlayer&) = delete;
 
   HSPDeviceType GetDeviceType() const override { return HSPDeviceType::GBPlayer; }
 
