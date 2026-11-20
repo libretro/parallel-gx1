@@ -26,12 +26,11 @@
 #include "Common/CPUDetect.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/Event.h"
 #include "Common/FatFsUtil.h"
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
-#include "Common/Event.h"
-#include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Common/TimeUtil.h"
@@ -81,7 +80,19 @@ namespace Core
 {
 static bool s_wants_determinism;
 
-static std::vector<Common::ScopeGuard<Common::MoveOnlyFunction<void()>>> s_emu_thread_scope_guards;
+/* What EmuThread brought up, taken down again in reverse (EmuThreadTeardown): when EmuThread
+ * returns on its own thread, or when the boot fails; in single core, where it returns once the
+ * game has booted, by Shutdown. */
+struct EmuThreadStages
+{
+  Core::System* system;
+  bool state;     // the state goes back to Uninitialized
+  bool sd_sync;   // the Wii SD card image is synced back to its folder
+  bool hw;        // the hardware is shut down
+  bool gpu_loop;  // dual core: the GPU loop is told to stop
+  bool wii_fs;    // the Wii filesystem is cleaned up
+};
+static EmuThreadStages s_emu_thread_stages; /* single core, until Shutdown */
 std::unique_ptr<BootParameters> g_boot_params;
 // Declarations and definitions
 sthread_t* s_emu_thread = nullptr;
@@ -326,27 +337,65 @@ static void FifoPlayerThread(Core::System& system)
   }
 }
 
-// Returns a RAII object for video backend initialization and deinitialization.
-// Returns nullptr on failure.
-[[nodiscard]] static auto GetInitializedVideoGuard(Core::System& system)
+// Readies the video side for the CPU thread: true when the GPU loop is to be stopped at the end.
+static bool InitializeVideoThreads(Core::System& system)
 {
-  using GuardType = Common::ScopeGuard<Common::MoveOnlyFunction<void()>>;
-
   if (system.IsDualCoreMode())
   {
     // The frontend runs the GPU loop on its own thread; all that is left here is to make sure
     // that loop is told to stop.
     AsyncRequests::GetInstance()->SetPassthrough(false);
-    return std::make_unique<GuardType>([&system] {
-      INFO_LOG(CONSOLE, "%s", StopMessage(true, "Wait for Video Loop to exit ...").c_str());
-      system.GetFifo().ExitGpuLoop();
-      INFO_LOG(CONSOLE, "%s", StopMessage(true, "GPU thread stopped.").c_str());
-    });
+    return true;
   }
 
   DeclareAsGPUThread();
   AsyncRequests::GetInstance()->SetPassthrough(true);
-  return std::make_unique<GuardType>([] {});
+  return false;
+}
+
+static void EmuThreadTeardown(EmuThreadStages* stages)
+{
+  Core::System& system = *stages->system;
+  if (stages->wii_fs)
+    Core::CleanUpWiiFileSystemContents(BootSessionData());
+  if (stages->gpu_loop)
+  {
+    INFO_LOG(CONSOLE, "%s", StopMessage(true, "Wait for Video Loop to exit ...").c_str());
+    system.GetFifo().ExitGpuLoop();
+    INFO_LOG(CONSOLE, "%s", StopMessage(true, "GPU thread stopped.").c_str());
+  }
+  if (stages->hw)
+  {
+    INFO_LOG(CONSOLE, "%s", StopMessage(false, "Shutting down HW").c_str());
+    HW::Shutdown(system);
+    INFO_LOG(CONSOLE, "%s", StopMessage(false, "HW shutdown").c_str());
+
+    // The config must be restored only after the whole HW has shut down,
+    // not when it is still running.
+    BootManager::RestoreConfig();
+
+    PatchEngine::Shutdown();
+    HLE::Clear();
+    ResetNetworkLogger();
+  }
+  if (stages->sd_sync && Config::Get(Config::MAIN_ALLOW_SD_WRITES))
+  {
+    const bool sync_ok = Common::SyncSDImageToSDFolder([] { return false; });
+    if (!sync_ok)
+    {
+      PanicAlert("Failed to sync SD card with folder. All changes made this session will be "
+                 "discarded on next boot if you do not manually re-issue a resync in Config > "
+                 "Wii > SD Card Settings > %s!",
+                 Common::GetStringT(Common::SD_UNPACK_TEXT).c_str());
+    }
+  }
+  if (stages->state)
+  {
+    StoreState(State::Uninitialized);
+
+    INFO_LOG(CONSOLE, "Stop\t\t---- Shutdown complete ----");
+  }
+  *stages = EmuThreadStages{};
 }
 
 namespace
@@ -406,11 +455,14 @@ bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 // See the BootManager.cpp file description for a complete call schedule.
 void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
-  Common::ScopeGuard flag_guard{[] {
-    StoreState(State::Uninitialized);
-
-    INFO_LOG(CONSOLE, "Stop\t\t---- Shutdown complete ----");
-  }};
+  // taken down on every return but the one single core leaves to Shutdown
+  struct Stages
+  {
+    EmuThreadStages stages{};
+    ~Stages() { EmuThreadTeardown(&stages); }
+  } emu;
+  emu.stages.system = &system;
+  emu.stages.state = true;
 
   Common::SetCurrentThreadName("Emuthread - Starting");
 
@@ -437,46 +489,15 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
     sync_sd_folder = Common::SyncSDFolderToSDImage([] { return false; }, Core::WantsDeterminism());
   }
 
-  Common::ScopeGuard sd_folder_sync_guard{[sync_sd_folder] {
-    if (sync_sd_folder && Config::Get(Config::MAIN_ALLOW_SD_WRITES))
-    {
-      const bool sync_ok = Common::SyncSDImageToSDFolder([] { return false; });
-      if (!sync_ok)
-      {
-        PanicAlert("Failed to sync SD card with folder. All changes made this session will be "
-                   "discarded on next boot if you do not manually re-issue a resync in Config > "
-                   "Wii > SD Card Settings > %s!",
-                   Common::GetStringT(Common::SD_UNPACK_TEXT).c_str());
-      }
-    }
-  }};
+  emu.stages.sd_sync = sync_sd_folder;
 
   // Wiimote input config is loaded in OnESTitleChanged
 
   HW::Init(system, nullptr);
+  emu.stages.hw = true;
 
-  Common::ScopeGuard hw_guard{[&system] {
-    INFO_LOG(CONSOLE, "%s", StopMessage(false, "Shutting down HW").c_str());
-    HW::Shutdown(system);
-    INFO_LOG(CONSOLE, "%s", StopMessage(false, "HW shutdown").c_str());
-
-    // The config must be restored only after the whole HW has shut down,
-    // not when it is still running.
-    BootManager::RestoreConfig();
-
-    PatchEngine::Shutdown();
-    HLE::Clear();
-    ResetNetworkLogger();
-  }};
-
-  // In single-core mode: This holds a video backend shutdown function.
-  // In dual-core mode: This holds a GPU thread stopping function (which does the backend shutdown).
-  const auto video_guard = GetInitializedVideoGuard(system);
-  if (!video_guard)
-  {
-    PanicAlert("Failed to initialize video backend!");
-    return;
-  }
+  // In dual-core mode the GPU loop is stopped at the end (which does the backend shutdown).
+  emu.stages.gpu_loop = InitializeVideoThreads(system);
 
   if (cpu_info.HTT)
     Config::SetBaseOrCurrent(Config::MAIN_DSP_THREAD, cpu_info.num_cores > 4);
@@ -509,18 +530,11 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   // Initialise Wii filesystem contents.
   // This is done here after Boot and not in BootManager to ensure that we operate
   // with the correct title context since save copying requires title directories to exist.
-  auto bsd_ptr = std::make_shared<BootSessionData>(std::move(boot_session_data));
-  Common::ScopeGuard wiifs_guard {
-    [bsd_ptr]() {
-      if (!bsd_ptr)
-        return;
-      Core::CleanUpWiiFileSystemContents(*bsd_ptr);
-    }
-  };
   if (system.IsWii())
+  {
     Core::InitializeWiiFileSystemContents(boot_session_data);
-  else
-    wiifs_guard.Dismiss();
+    emu.stages.wii_fs = true;
+  }
 
   // This adds the SyncGPU handler to CoreTiming, so now CoreTiming::Advance might block.
   system.GetFifo().Prepare();
@@ -535,26 +549,11 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
     system.GetPowerPC().SetMode(PowerPC::CoreMode::Interpreter);
   }
 
-  // these are not needed if EmuThread is launched on its own thread
+  // Single core returns here once the game has booted: Shutdown takes it all down.
   if (!s_emu_thread)
   {
-    s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
-      [g = std::move(flag_guard)]() mutable { g.Exit(); }));
-
-    s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
-      [g = std::move(hw_guard)]() mutable { g.Exit(); }));
-
-    if (system.IsDualCoreMode() && video_guard)
-    {
-      auto* vg_ptr = video_guard.get();
-      s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
-        [vg_ptr]() {
-          if (vg_ptr) vg_ptr->Exit();
-      }));
-    }
-
-    s_emu_thread_scope_guards.emplace_back(Common::MoveOnlyFunction<void()>(
-      [g = std::move(wiifs_guard)]() mutable { g.Exit(); }));
+    s_emu_thread_stages = emu.stages;
+    emu.stages = EmuThreadStages{};
   }
 
   // Become the CPU thread.
@@ -743,9 +742,8 @@ void Shutdown(Core::System& system)
   Common::JoinThread(s_emu_thread);
   if (s_fifo_cpu_core)
     DetachFifoCPUCore();
-  for (auto& g : s_emu_thread_scope_guards)
-    g.Exit();
-  s_emu_thread_scope_guards.clear();
+  if (s_emu_thread_stages.system)
+    EmuThreadTeardown(&s_emu_thread_stages);
 }
 
 void UpdateWantDeterminism(Core::System& system, bool initial)
