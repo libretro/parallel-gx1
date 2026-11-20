@@ -38,15 +38,9 @@ static Common::EventHook s_check_config_event;
 // The settings changed while the game runs: the video side takes them after its next frame.
 static retro_atomic_int_t s_config_refresh_wanted;
 
-static bool IsVSyncActive(bool enabled)
-{
-  return enabled;
-}
-
 void UpdateActiveConfig()
 {
   g_ActiveConfig = g_Config;
-  g_ActiveConfig.bVSyncActive = IsVSyncActive(g_ActiveConfig.bVSync);
 }
 
 void VideoConfig::Refresh()
@@ -70,7 +64,6 @@ void VideoConfig::Refresh()
         CPUThreadConfigCallback::AddConfigChangedCallback(config_changed_callback, nullptr);
   }
 
-  bVSync = Config::Get(Config::GFX_VSYNC);
   iAdapter = Config::Get(Config::GFX_ADAPTER);
   iManuallyUploadBuffers = Config::Get(Config::GFX_MTL_MANUALLY_UPLOAD_BUFFERS);
   iUsePresentDrawable = Config::Get(Config::GFX_MTL_USE_PRESENT_DRAWABLE);
@@ -281,7 +274,6 @@ void CheckForConfigChanges()
   const auto old_anisotropy = g_ActiveConfig.iMaxAnisotropy;
   const int old_efb_access_tile_size = g_ActiveConfig.iEFBAccessTileSize;
   const auto old_texture_filtering_mode = g_ActiveConfig.texture_filtering_mode;
-  const bool old_vsync = g_ActiveConfig.bVSyncActive;
   const bool old_bbox = g_ActiveConfig.bBBoxEnable;
   const int old_efb_scale = g_ActiveConfig.iEFBScale;
   const u32 old_game_mod_changes =
@@ -328,8 +320,6 @@ void CheckForConfigChanges()
     changed_bits |= CONFIG_CHANGE_BIT_ANISOTROPY;
   if (old_texture_filtering_mode != g_ActiveConfig.texture_filtering_mode)
     changed_bits |= CONFIG_CHANGE_BIT_FORCE_TEXTURE_FILTERING;
-  if (old_vsync != g_ActiveConfig.bVSyncActive)
-    changed_bits |= CONFIG_CHANGE_BIT_VSYNC;
   if (old_bbox != g_ActiveConfig.bBBoxEnable)
     changed_bits |= CONFIG_CHANGE_BIT_BBOX;
   if (old_efb_scale != g_ActiveConfig.iEFBScale)

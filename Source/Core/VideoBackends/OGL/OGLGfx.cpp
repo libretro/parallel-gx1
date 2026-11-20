@@ -172,10 +172,6 @@ OGLGfx::OGLGfx(std::unique_ptr<GLContext> main_gl_context, float backbuffer_scal
     }
   }
 
-  // Handle VSync on/off
-  if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VSYNC))
-    m_main_gl_context->SwapInterval(g_ActiveConfig.bVSyncActive);
-
   if (g_backend_info.bSupportsClipControl)
     glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE);
 
@@ -442,9 +438,6 @@ void OGLGfx::PresentBackbuffer()
 void OGLGfx::OnConfigChanged(u32 bits)
 {
   BaseOnConfigChanged(bits);
-
-  if (bits & CONFIG_CHANGE_BIT_VSYNC && !DriverDetails::HasBug(DriverDetails::BUG_BROKEN_VSYNC))
-    m_main_gl_context->SwapInterval(g_ActiveConfig.bVSyncActive);
 
   if (bits & CONFIG_CHANGE_BIT_ANISOTROPY)
     g_sampler_cache->Clear();

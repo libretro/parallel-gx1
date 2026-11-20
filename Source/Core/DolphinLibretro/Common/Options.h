@@ -153,13 +153,6 @@ namespace sysconf {
 }  // namespace sysconf
 
 // ======================================================
-// Graphics > Hardware
-// ======================================================
-namespace gfx_hardware {
-//  constexpr const char VSYNC[] = "dolphin_vysnc";
-}  // namespace gfx_hardware
-
-// ======================================================
 // Graphics > Settings
 // ======================================================
 namespace gfx_settings {

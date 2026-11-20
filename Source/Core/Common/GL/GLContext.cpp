@@ -54,10 +54,6 @@ void GLContext::Swap()
                             0);
 }
 
-void GLContext::SwapInterval(int interval)
-{
-}
-
 void* GLContext::GetFuncAddress(const std::string& name)
 {
   return (void*)Libretro::Video::hw_render.get_proc_address(name.c_str());

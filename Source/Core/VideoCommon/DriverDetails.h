@@ -184,19 +184,6 @@ enum Bug
   // Mesa meta misses to disable the scissor test.
   BUG_BROKEN_COPYIMAGE,
 
-  // Bug: ARM Mali managed to break disabling vsync
-  // Affected Devices: Mali
-  // Started Version: r5p0-rev2
-  // Ended Version: -1
-  // If we disable vsync with eglSwapInterval(dpy, 0) then the screen will stop showing new updates
-  // after a handful of swaps.
-  // This was noticed on a Samsung Galaxy S6 with its Android 5.1.1 update.
-  // The default Android 5.0 image didn't encounter this issue.
-  // We can't actually detect what the driver version is on Android, so until the driver version
-  // lands that displays the version in
-  // the GL_VERSION string, we will have to force vsync to be enabled at all times.
-  BUG_BROKEN_VSYNC,
-
   // Bug: Broken lines in geometry shaders
   // Affected Devices: Mesa r600/radeonsi, Mesa Sandy Bridge
   // Started Version: -1

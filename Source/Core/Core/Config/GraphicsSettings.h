@@ -23,7 +23,6 @@ namespace Config
 
 // Graphics.Hardware
 
-extern const Info<bool> GFX_VSYNC;
 extern const Info<int> GFX_ADAPTER;
 
 // Graphics.Settings

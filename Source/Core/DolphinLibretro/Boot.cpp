@@ -678,10 +678,6 @@ bool retro_load_game(const struct retro_game_info* game)
   Config::SetBase(Config::SYSCONF_WIIMOTE_MOTOR,
                  Libretro::GetOption<bool>(sysconf::ENABLE_RUMBLE, /*def=*/true));
 
-  // Graphics.Hardware
-  //Config::SetBase(Config::GFX_VSYNC,
-  //               Libretro::GetOption<bool>(gfx_hardware::VSYNC, /*def=*/false));
-
   // Graphics.Settings
   Config::SetBase(Config::GFX_WIDESCREEN_HACK,
                  Libretro::GetOption<bool>(gfx_settings::WIDESCREEN_HACK, /*def=*/false));

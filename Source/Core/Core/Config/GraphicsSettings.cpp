@@ -13,7 +13,6 @@ namespace Config
 
 // Graphics.Hardware
 
-const Info<bool> GFX_VSYNC{{System::GFX, "Hardware", "VSync"}, false};
 const Info<int> GFX_ADAPTER{{System::GFX, "Hardware", "Adapter"}, 0};
 
 // Graphics.Settings

@@ -25,7 +25,8 @@
 Metal::Gfx::Gfx(MRCOwned<CAMetalLayer*> layer) : m_layer(std::move(layer))
 {
   UpdateActiveConfig();
-  [m_layer setDisplaySyncEnabled:g_ActiveConfig.bVSyncActive];
+  // the frontend paces the frames
+  [m_layer setDisplaySyncEnabled:NO];
 
   SetupSurface();
   g_state_tracker->FlushEncoders();
@@ -329,9 +330,6 @@ void Metal::Gfx::OnConfigChanged(u32 bits)
 {
   AbstractGfx::OnConfigChanged(bits);
 
-  if (bits & CONFIG_CHANGE_BIT_VSYNC)
-    [m_layer setDisplaySyncEnabled:g_ActiveConfig.bVSyncActive];
-
   if (bits & CONFIG_CHANGE_BIT_ANISOTROPY)
   {
     g_object_cache->ReloadSamplers();
@@ -513,9 +511,7 @@ void Metal::Gfx::PresentBackbuffer()
       // when windowed (or fullscreen with vsync enabled, but that's more understandable).
       // On the other hand, it helps Xcode's GPU captures start and stop on frame boundaries
       // which is convenient.  Put it here as a default-off config, which we can override in Xcode.
-      // It also seems to improve frame pacing, so enable it by default with vsync
-      if (g_ActiveConfig.iUsePresentDrawable == TriState::On ||
-          (g_ActiveConfig.iUsePresentDrawable == TriState::Auto && g_ActiveConfig.bVSyncActive))
+      if (g_ActiveConfig.iUsePresentDrawable == TriState::On)
         [g_state_tracker->GetRenderCmdBuf() presentDrawable:m_drawable];
       else
         [g_state_tracker->GetRenderCmdBuf()

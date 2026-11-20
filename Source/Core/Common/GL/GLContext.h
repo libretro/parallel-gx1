@@ -34,7 +34,6 @@ public:
   void Update();
 
   void Swap();
-  void SwapInterval(int interval);
 
   void* GetFuncAddress(const std::string& name);
 

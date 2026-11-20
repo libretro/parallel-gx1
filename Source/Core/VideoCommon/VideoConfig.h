@@ -94,7 +94,6 @@ enum ConfigChangeBits : u32
   CONFIG_CHANGE_BIT_TARGET_SIZE = (1 << 3),
   CONFIG_CHANGE_BIT_ANISOTROPY = (1 << 4),
   CONFIG_CHANGE_BIT_FORCE_TEXTURE_FILTERING = (1 << 5),
-  CONFIG_CHANGE_BIT_VSYNC = (1 << 6),
   CONFIG_CHANGE_BIT_BBOX = (1 << 7),
   CONFIG_CHANGE_BIT_ASPECT_RATIO = (1 << 8),
   CONFIG_CHANGE_BIT_HDR = (1 << 10),
@@ -176,8 +175,6 @@ struct VideoConfig final
   static void Shutdown();
 
   // General
-  bool bVSync = false;
-  bool bVSyncActive = false;
   bool bWidescreenHack = false;
   AspectMode aspect_mode{};
   int custom_aspect_width = 1;
