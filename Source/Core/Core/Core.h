@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -17,7 +16,6 @@
 
 #include "Common/CommonTypes.h"
 #include "Common/Functional.h"
-#include "Common/HookableEvent.h"
 
 struct BootParameters;
 
@@ -126,11 +124,6 @@ void DisplayMessage(const char* format, ...) DOLPHIN_PRINTF_ATTR(1, 2);
 // Runs run(context) on the CPU thread: queued for it from another, which waits until it is done.
 // Never called from a thread the CPU thread waits for.
 void RunOnCPUThread(Core::System& system, void (*run)(void* context), void* context);
-
-// for calling back into UI code without introducing a dependency on it in core
-using StateChangedCallbackFunc = std::function<void(Core::State)>;
-
-void NotifyStateChanged(Core::State state);
 
 void UpdateWantDeterminism(Core::System& system, bool initial = false);
 

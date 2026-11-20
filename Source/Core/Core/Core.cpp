@@ -85,7 +85,6 @@ static std::vector<Common::ScopeGuard<Common::MoveOnlyFunction<void()>>> s_emu_t
 std::unique_ptr<BootParameters> g_boot_params;
 // Declarations and definitions
 sthread_t* s_emu_thread = nullptr;
-static Common::HookableEvent<Core::State> s_state_changed_event;
 
 bool s_frame_step = false;
 
@@ -210,8 +209,6 @@ void Stop(Core::System& system)  // - Hammertime!
       return;
   } while (
       !retro_atomic_cas_int(&s_state, static_cast<int>(state), static_cast<int>(State::Stopping)));
-
-  NotifyStateChanged(State::Stopping);
 
   system.GetFifo().EmulatorState(false);
 
@@ -409,11 +406,8 @@ bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 // See the BootManager.cpp file description for a complete call schedule.
 void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 {
-  NotifyStateChanged(State::Starting);
   Common::ScopeGuard flag_guard{[] {
     StoreState(State::Uninitialized);
-
-    NotifyStateChanged(State::Uninitialized);
 
     INFO_LOG(CONSOLE, "Stop\t\t---- Shutdown complete ----");
   }};
@@ -600,11 +594,6 @@ void SetState(Core::System& system, State state, bool report_state_change,
       break;
     }
   }
-
-  // Certain callers only change the state momentarily. Sending a callback for them causes
-  // unwanted updates, such as the Pause/Play button flickering between states on frame advance.
-  if (report_state_change)
-    NotifyStateChanged(GetState(system));
 }
 
 State GetState(Core::System& system)
@@ -675,7 +664,6 @@ void Callback_NewField(Core::System& system)
   {
     s_frame_step = false;
     system.GetCPU().Break();
-    NotifyStateChanged(Core::GetState(system));
   }
 
 
@@ -758,11 +746,6 @@ void Shutdown(Core::System& system)
   for (auto& g : s_emu_thread_scope_guards)
     g.Exit();
   s_emu_thread_scope_guards.clear();
-}
-
-void NotifyStateChanged(const Core::State state)
-{
-  s_state_changed_event.Trigger(state);
 }
 
 void UpdateWantDeterminism(Core::System& system, bool initial)
