@@ -5,9 +5,7 @@
 
 #include <algorithm>
 #include <bit>
-#include <tuple>
 #include <type_traits>
-#include <utility>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -73,28 +71,32 @@ static T ReadUnpaired(PowerPC::MMU& mmu, u32 addr)
   return mmu.Read<T>(addr);
 }
 
+// both halves of a pair, read as one access
 template <typename T>
-static std::pair<T, T> ReadPair(PowerPC::MMU& mmu, u32 addr);
+static void ReadPair(PowerPC::MMU& mmu, u32 addr, T* first, T* second);
 
 template <>
-std::pair<u8, u8> ReadPair<u8>(PowerPC::MMU& mmu, u32 addr)
+void ReadPair<u8>(PowerPC::MMU& mmu, u32 addr, u8* first, u8* second)
 {
   const u16 val = mmu.Read<u16>(addr);
-  return {u8(val >> 8), u8(val)};
+  *first = u8(val >> 8);
+  *second = u8(val);
 }
 
 template <>
-std::pair<u16, u16> ReadPair<u16>(PowerPC::MMU& mmu, u32 addr)
+void ReadPair<u16>(PowerPC::MMU& mmu, u32 addr, u16* first, u16* second)
 {
   const u32 val = mmu.Read<u32>(addr);
-  return {u16(val >> 16), u16(val)};
+  *first = u16(val >> 16);
+  *second = u16(val);
 }
 
 template <>
-std::pair<u32, u32> ReadPair<u32>(PowerPC::MMU& mmu, u32 addr)
+void ReadPair<u32>(PowerPC::MMU& mmu, u32 addr, u32* first, u32* second)
 {
   const u64 val = mmu.Read<u64>(addr);
-  return {u32(val >> 32), u32(val)};
+  *first = u32(val >> 32);
+  *second = u32(val);
 }
 
 template <typename T>
@@ -197,7 +199,8 @@ static void Helper_Quantize(PowerPC::MMU& mmu, const PowerPC::PowerPCState* ppcs
 }
 
 template <typename T>
-std::pair<double, double> LoadAndDequantize(PowerPC::MMU& mmu, u32 addr, u32 instW, u32 ld_scale)
+static void LoadAndDequantize(PowerPC::MMU& mmu, u32 addr, u32 instW, u32 ld_scale, double* out0,
+                              double* out1)
 {
   using U = std::make_unsigned_t<T>;
 
@@ -210,12 +213,14 @@ std::pair<double, double> LoadAndDequantize(PowerPC::MMU& mmu, u32 addr, u32 ins
   }
   else
   {
-    const auto [first, second] = ReadPair<U>(mmu, addr);
+    U first, second;
+    ReadPair<U>(mmu, addr, &first, &second);
     ps0 = float(T(first)) * m_dequantizeTable[ld_scale];
     ps1 = float(T(second)) * m_dequantizeTable[ld_scale];
   }
   // ps0 and ps1 always contain finite and normal numbers. So we can just cast them to double
-  return {static_cast<double>(ps0), static_cast<double>(ps1)};
+  *out0 = static_cast<double>(ps0);
+  *out1 = static_cast<double>(ps1);
 }
 
 static void Helper_Dequantize(PowerPC::MMU& mmu, PowerPC::PowerPCState* ppcs, u32 addr, u32 instI,
@@ -239,26 +244,27 @@ static void Helper_Dequantize(PowerPC::MMU& mmu, PowerPC::PowerPCState* ppcs, u3
     }
     else
     {
-      const auto [first, second] = ReadPair<u32>(mmu, addr);
+      u32 first, second;
+      ReadPair<u32>(mmu, addr, &first, &second);
       ps0 = std::bit_cast<double>(ConvertToDouble(first));
       ps1 = std::bit_cast<double>(ConvertToDouble(second));
     }
     break;
 
   case QUANTIZE_U8:
-    std::tie(ps0, ps1) = LoadAndDequantize<u8>(mmu, addr, instW, ld_scale);
+    LoadAndDequantize<u8>(mmu, addr, instW, ld_scale, &ps0, &ps1);
     break;
 
   case QUANTIZE_U16:
-    std::tie(ps0, ps1) = LoadAndDequantize<u16>(mmu, addr, instW, ld_scale);
+    LoadAndDequantize<u16>(mmu, addr, instW, ld_scale, &ps0, &ps1);
     break;
 
   case QUANTIZE_S8:
-    std::tie(ps0, ps1) = LoadAndDequantize<s8>(mmu, addr, instW, ld_scale);
+    LoadAndDequantize<s8>(mmu, addr, instW, ld_scale, &ps0, &ps1);
     break;
 
   case QUANTIZE_S16:
-    std::tie(ps0, ps1) = LoadAndDequantize<s16>(mmu, addr, instW, ld_scale);
+    LoadAndDequantize<s16>(mmu, addr, instW, ld_scale, &ps0, &ps1);
     break;
 
   case QUANTIZE_INVALID1:
