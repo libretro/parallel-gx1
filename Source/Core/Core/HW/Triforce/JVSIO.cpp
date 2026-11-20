@@ -145,20 +145,30 @@ private:
 class JVSIOResponseWriter
 {
 public:
-  explicit JVSIOResponseWriter(std::vector<u8>* buffer) : m_buffer{*buffer} {}
+  // Writes into buffer, capacity bytes long; *size is how much of it holds the frame.
+  JVSIOResponseWriter(u8* buffer, std::size_t capacity, std::size_t* size)
+      : m_buffer{buffer}, m_capacity{capacity}, m_size{*size}
+  {
+  }
 
-  void AddData(u8 value) { m_buffer.emplace_back(value); }
+  // Bytes past the capacity are counted but dropped: the frame overflows and EndFrame cuts it.
+  void AddData(u8 value)
+  {
+    if (m_size < m_capacity)
+      m_buffer[m_size] = value;
+    m_size++;
+  }
 
   void AddData(const void* data, std::size_t size)
   {
     const u8* const bytes = static_cast<const u8*>(data);
-    m_buffer.insert(m_buffer.end(), bytes, bytes + size);
+    for (std::size_t i = 0; i < size; i++)
+      AddData(bytes[i]);
   }
 
   void StartFrame(u8 destination_node)
   {
-    m_buffer.clear();
-    m_buffer.reserve(2 + 255);
+    m_size = 0;
 
     // Note: The JVSIO_SYNC is not included here.
     AddData(destination_node);
@@ -168,12 +178,12 @@ public:
 
   void EndFrame(JVSIOStatusCode status_code)
   {
-    std::size_t count_with_checksum = m_buffer.size() - 1;
+    std::size_t count_with_checksum = m_size - 1;
 
     if (count_with_checksum > 255)
     {
       status_code = JVSIOStatusCode::ResponseOverflow;
-      m_buffer.resize(3);
+      m_size = 3;
       count_with_checksum = 2;
       return;
     }
@@ -184,22 +194,28 @@ public:
 
     // Write checksum.
     u8 checksum = 0;
-    for (const u8 byte_value : m_buffer)
-      checksum += byte_value;
+    for (std::size_t i = 0; i < m_size; i++)
+      checksum += m_buffer[i];
     AddData(checksum);
   }
 
   void StartReport()
   {
     // To be filled in later with SetLastReportCode.
-    m_last_report_code_index = m_buffer.size();
-    m_buffer.emplace_back();
+    m_last_report_code_index = m_size;
+    AddData(0);
   }
 
-  void SetLastReportCode(JVSIOReportCode code) { m_buffer[m_last_report_code_index] = u8(code); }
+  void SetLastReportCode(JVSIOReportCode code)
+  {
+    if (m_last_report_code_index < m_capacity)
+      m_buffer[m_last_report_code_index] = u8(code);
+  }
 
 private:
-  std::vector<u8>& m_buffer;
+  u8* const m_buffer;
+  const std::size_t m_capacity;
+  std::size_t& m_size;
 
   std::size_t m_last_report_code_index{};
 };
@@ -303,10 +319,10 @@ void JVSIOBoard::Update()
     {
       ERROR_LOG(SERIALINTERFACE_JVSIO, "Bad checksum");
 
-      JVSIOResponseWriter writer{&m_last_response};
+      JVSIOResponseWriter writer{m_last_response, MAX_RESPONSE_SIZE, &m_last_response_size};
       writer.StartFrame(JVSIO_HOST_ADDRESS);
       writer.EndFrame(JVSIOStatusCode::ChecksumError);
-      WriteResponse(m_last_response.data(), m_last_response.size());
+      WriteResponse(m_last_response, m_last_response_size);
       continue;
     }
 
@@ -357,7 +373,7 @@ void JVSIOBoard::ProcessBroadcastRequest(JVSIORequestReader* request)
     // TODO: Does the real hardware reset coin counts ?
 
     m_io_ports->ResetGenericOutputs();
-    m_last_response.clear();
+    m_last_response_size = 0;
     break;
   }
   case JVSIOCommand::SetAddress:
@@ -377,11 +393,11 @@ void JVSIOBoard::ProcessBroadcastRequest(JVSIORequestReader* request)
     m_client_address = address;
     m_io_ports->GetStatusSwitches()[1] &= ~0x01u;  // Update "sense" line.
 
-    JVSIOResponseWriter writer{&m_last_response};
+    JVSIOResponseWriter writer{m_last_response, MAX_RESPONSE_SIZE, &m_last_response_size};
     writer.StartFrame(JVSIO_HOST_ADDRESS);
     writer.AddData(u8(JVSIOReportCode::Okay));
     writer.EndFrame(JVSIOStatusCode::Okay);
-    WriteResponse(m_last_response.data(), m_last_response.size());
+    WriteResponse(m_last_response, m_last_response_size);
     break;
   }
   default:
@@ -398,11 +414,11 @@ void JVSIOBoard::ProcessUnicastRequest(JVSIORequestReader* request)
   {
     request->SkipBytes(1);
     INFO_LOG(SERIALINTERFACE_JVSIO, "DataRetransmit");
-    WriteResponse(m_last_response.data(), m_last_response.size());
+    WriteResponse(m_last_response, m_last_response_size);
     return;
   }
 
-  JVSIOResponseWriter response{&m_last_response};
+  JVSIOResponseWriter response{m_last_response, MAX_RESPONSE_SIZE, &m_last_response_size};
   response.StartFrame(JVSIO_HOST_ADDRESS);
 
   FrameContext ctx{*request, response};
@@ -441,7 +457,7 @@ void JVSIOBoard::ProcessUnicastRequest(JVSIORequestReader* request)
     }
   }
 
-  WriteResponse(m_last_response.data(), m_last_response.size());
+  WriteResponse(m_last_response, m_last_response_size);
 }
 
 void JVSIOBoard::WriteResponse(const u8* response, std::size_t size)
@@ -775,7 +791,17 @@ void JVSIOBoard::DoState(PointerWrap& p)
 
   p.Do(m_client_address);
 
-  p.Do(m_last_response);
+  // Same layout as the std::vector this replaced: the byte count, then the bytes.
+  u32 response_size = u32(m_last_response_size);
+  p.Do(response_size);
+  if (response_size > MAX_RESPONSE_SIZE)
+  {
+    m_last_response_size = 0;
+    p.SetMeasureMode();
+    return;
+  }
+  m_last_response_size = response_size;
+  p.DoArray(m_last_response, response_size);
 
   p.Do(m_coin_counts);
   p.Do(m_coin_prev_states);

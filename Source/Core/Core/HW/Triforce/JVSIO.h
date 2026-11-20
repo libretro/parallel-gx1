@@ -5,7 +5,6 @@
 
 #include <array>
 #include <expected>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -54,7 +53,11 @@ private:
   u8 m_client_address = 0;
 
   // Note: Does not include JVSIO_SYNC.
-  std::vector<u8> m_last_response;
+  // A frame is at most 3 header bytes, 255 more and a checksum; the rest is room for a frame
+  // that overflows, which EndFrame cuts back to its header.
+  static constexpr std::size_t MAX_RESPONSE_SIZE = 1024;
+  u8 m_last_response[MAX_RESPONSE_SIZE] = {};
+  std::size_t m_last_response_size = 0;
 
   u16 m_coin_counts[IOPorts::COIN_SLOT_COUNT] = {};
   bool m_coin_prev_states[IOPorts::COIN_SLOT_COUNT] = {};
