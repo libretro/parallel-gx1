@@ -4,7 +4,7 @@
 #include "Core/HW/EXI/EXI_DeviceMemoryCard.h"
 
 #include <algorithm>
-#include <array>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -121,7 +121,7 @@ CEXIMemoryCard::CEXIMemoryCard(Core::System& system, const Slot slot, bool gci_f
   m_command = Command::NintendoID;
   m_status = MC_STATUS_BUSY | MC_STATUS_UNLOCKED | MC_STATUS_READY;
   m_position = 0;
-  m_programming_buffer.fill(0);
+  memset(m_programming_buffer, 0, sizeof(m_programming_buffer));
   // Nintendo Memory Card EXI IDs
   // 0x00000004 Memory Card 59     4Mbit
   // 0x00000008 Memory Card 123    8Mb
@@ -144,10 +144,10 @@ CEXIMemoryCard::CEXIMemoryCard(Core::System& system, const Slot slot, bool gci_f
   }
 
   m_memory_card_size = m_memory_card->GetCardId() * SIZE_TO_Mb;
-  std::array<u8, 20> header{};
-  m_memory_card->Read(0, static_cast<s32>(header.size()), header.data());
+  u8 header[20] = {};
+  m_memory_card->Read(0, static_cast<s32>(sizeof(header)), header);
   auto& sram = system.GetSRAM();
-  SetCardFlashID(&sram, header.data(), m_card_slot);
+  SetCardFlashID(&sram, header, m_card_slot);
 }
 
 std::pair<std::string /* path */, bool /* migrate */>

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
 #include <string>
 #include <utility>
@@ -104,7 +103,7 @@ private:
   Command m_command;
   int m_status;
   u32 m_position;
-  std::array<u8, 128> m_programming_buffer;
+  u8 m_programming_buffer[128];
   //! memory card parameters
   unsigned int m_card_id;
   unsigned int m_address;
