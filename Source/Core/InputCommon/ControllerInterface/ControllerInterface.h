@@ -39,7 +39,7 @@ public:
   void UpdateInput();
 
   [[nodiscard]] Common::EventHook
-  RegisterDevicesChangedCallback(Common::HookableEvent<>::CallbackType callback);
+  RegisterDevicesChangedCallback(Common::HookableEvent<>::CallbackType callback, void* user);
 
 private:
   void ClearDevices();

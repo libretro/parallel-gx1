@@ -14,8 +14,9 @@ void CustomResourceManager::Initialize()
 #endif
   m_asset_cache.Initialize();
 
-  m_xfb_event =
-      GetVideoEvents().after_frame_event.Register([this](Core::System&) { XFBTriggered(); });
+  m_xfb_event = GetVideoEvents().after_frame_event.Register(
+      [](void* user, Core::System&) { static_cast<CustomResourceManager*>(user)->XFBTriggered(); },
+      this);
 }
 
 void CustomResourceManager::Shutdown()

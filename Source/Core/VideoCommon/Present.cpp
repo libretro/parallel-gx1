@@ -98,11 +98,15 @@ Presenter::Presenter()
 {
   auto& video_events = GetVideoEvents();
 
-  m_config_changed =
-      video_events.config_changed_event.Register([this](u32 bits) { ConfigChanged(bits); });
+  m_config_changed = video_events.config_changed_event.Register(
+      [](void* user, u32 bits) { static_cast<Presenter*>(user)->ConfigChanged(bits); }, this);
 
   m_end_field_hook = video_events.vi_end_field_event.Register(
-      [this] { retro_atomic_store_relaxed_int(&m_immediate_swap_happened_this_field, 0); });
+      [](void* user) {
+        retro_atomic_store_relaxed_int(
+            &static_cast<Presenter*>(user)->m_immediate_swap_happened_this_field, 0);
+      },
+      this);
 }
 
 Presenter::~Presenter()

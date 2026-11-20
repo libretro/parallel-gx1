@@ -639,8 +639,8 @@ private:
 
   void OnFrameEnd();
 
-  Common::EventHook m_frame_event =
-      GetVideoEvents().after_frame_event.Register([this](Core::System&) { OnFrameEnd(); });
+  Common::EventHook m_frame_event = GetVideoEvents().after_frame_event.Register(
+      [](void* user, Core::System&) { static_cast<TextureCacheBase*>(user)->OnFrameEnd(); }, this);
 
   VideoCommon::TextureUtils::TextureDumper m_texture_dumper;
 };

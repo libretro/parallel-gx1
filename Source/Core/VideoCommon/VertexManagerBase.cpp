@@ -105,10 +105,13 @@ bool VertexManagerBase::BaseInitialize()
 {
   auto& video_events = GetVideoEvents();
 
-  m_frame_end_event =
-      video_events.after_frame_event.Register([this](Core::System&) { OnEndFrame(); });
+  m_frame_end_event = video_events.after_frame_event.Register(
+      [](void* user, Core::System&) { static_cast<VertexManagerBase*>(user)->OnEndFrame(); }, this);
   m_after_present_event = video_events.after_present_event.Register(
-      [this](const PresentInfo& pi) { m_ticks_elapsed = pi.emulated_timestamp; });
+      [](void* user, PresentInfo& pi) {
+        static_cast<VertexManagerBase*>(user)->m_ticks_elapsed = pi.emulated_timestamp;
+      },
+      this);
   index_generator_init(&m_index_generator, g_backend_info.bSupportsPrimitiveRestart, g_Config.UseVSForLinePointExpand());
   m_cpu_cull.Init();
   return true;

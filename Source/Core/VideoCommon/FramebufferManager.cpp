@@ -93,8 +93,9 @@ bool FramebufferManager::Initialize(int efb_scale)
     return false;
   }
 
-  m_end_of_frame_event =
-      GetVideoEvents().after_frame_event.Register([this](Core::System&) { EndOfFrame(); });
+  m_end_of_frame_event = GetVideoEvents().after_frame_event.Register(
+      [](void* user, Core::System&) { static_cast<FramebufferManager*>(user)->EndOfFrame(); },
+      this);
 
   return true;
 }

@@ -163,11 +163,14 @@ void InputConfig::RegisterHotplugCallback()
 {
   // Update control references on all controllers
   // as configured devices may have been added or removed.
-  m_hotplug_event_hook = g_controller_interface.RegisterDevicesChangedCallback([this] {
-    int i;
-    for (i = 0; i < m_num_controllers; i++)
-      m_controllers[i]->UpdateReferences(g_controller_interface);
-  });
+  m_hotplug_event_hook = g_controller_interface.RegisterDevicesChangedCallback(
+      [](void* user) {
+        InputConfig* const config = static_cast<InputConfig*>(user);
+        int i;
+        for (i = 0; i < config->m_num_controllers; i++)
+          config->m_controllers[i]->UpdateReferences(g_controller_interface);
+      },
+      this);
 }
 
 void InputConfig::UnregisterHotplugCallback()

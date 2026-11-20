@@ -266,9 +266,10 @@ void ControllerInterface::UpdateInput()
 // Returns a handle for later removing the callback.
 
 Common::EventHook
-ControllerInterface::RegisterDevicesChangedCallback(Common::HookableEvent<>::CallbackType callback)
+ControllerInterface::RegisterDevicesChangedCallback(Common::HookableEvent<>::CallbackType callback,
+                                                    void* user)
 {
-  return m_devices_changed_event.Register(std::move(callback));
+  return m_devices_changed_event.Register(callback, user);
 }
 
 // Invoke all callbacks that were registered

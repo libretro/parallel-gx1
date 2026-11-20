@@ -204,8 +204,8 @@ void VideoConfig::VerifyValidity()
 
 void VideoConfig::Init()
 {
-  s_check_config_event =
-      GetVideoEvents().after_frame_event.Register([](Core::System&) { CheckForConfigChanges(); });
+  s_check_config_event = GetVideoEvents().after_frame_event.Register(
+      [](void*, Core::System&) { CheckForConfigChanges(); }, nullptr);
 }
 
 void VideoConfig::Shutdown()

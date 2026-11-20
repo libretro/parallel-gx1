@@ -217,7 +217,8 @@ bool ShaderCache::Initialize()
    * and drawn with once linked */
   m_async_shader_compiler.SetDeferred(g_gfx->CompilesShadersOnItsOwnThreads());
   m_frame_end_handler = GetVideoEvents().after_frame_event.Register(
-      [this](Core::System&) { RetrieveAsyncShaders(); });
+      [](void* user, Core::System&) { static_cast<ShaderCache*>(user)->RetrieveAsyncShaders(); },
+      this);
   return true;
 }
 

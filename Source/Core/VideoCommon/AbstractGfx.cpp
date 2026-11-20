@@ -17,8 +17,8 @@ AbstractGfx* g_gfx = nullptr;
 
 AbstractGfx::AbstractGfx()
 {
-  m_config_changed =
-      GetVideoEvents().config_changed_event.Register([this](u32 bits) { OnConfigChanged(bits); });
+  m_config_changed = GetVideoEvents().config_changed_event.Register(
+      [](void* user, u32 bits) { static_cast<AbstractGfx*>(user)->OnConfigChanged(bits); }, this);
 }
 
 void AbstractGfx::BaseBeginUtilityDrawing()

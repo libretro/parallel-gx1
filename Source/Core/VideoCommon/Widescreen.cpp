@@ -31,25 +31,32 @@ WidescreenManager::WidescreenManager()
   auto& system = Core::System::GetInstance();
   auto& video_events = system.GetVideoEvents();
 
-  m_config_changed = video_events.config_changed_event.Register([this](u32 bits) {
-    if (bits & (CONFIG_CHANGE_BIT_ASPECT_RATIO))
-    {
-      // If the widescreen flag isn't being overridden by any settings,
-      // reset it to default if heuristic aren't running or to the last
-      // heuristic value if they were running.
-      bool overridden_widescreen;
-      if (GetWidescreenOverride(&overridden_widescreen))
-        m_is_game_widescreen = overridden_widescreen;
-      else
-        m_is_game_widescreen = (m_heuristic_state == HeuristicState::Active_Found_Anamorphic);
-    }
-  });
+  m_config_changed = video_events.config_changed_event.Register(
+      [](void* user, u32 bits) {
+        WidescreenManager* const self = static_cast<WidescreenManager*>(user);
+        if (bits & (CONFIG_CHANGE_BIT_ASPECT_RATIO))
+        {
+          // If the widescreen flag isn't being overridden by any settings,
+          // reset it to default if heuristic aren't running or to the last
+          // heuristic value if they were running.
+          bool overridden_widescreen;
+          if (self->GetWidescreenOverride(&overridden_widescreen))
+            self->m_is_game_widescreen = overridden_widescreen;
+          else
+            self->m_is_game_widescreen =
+                (self->m_heuristic_state == HeuristicState::Active_Found_Anamorphic);
+        }
+      },
+      this);
 
   // VertexManager doesn't maintain statistics in Wii mode.
   if (!system.IsWii())
   {
     m_update_widescreen = video_events.after_frame_event.Register(
-        [this](Core::System&) { UpdateWidescreenHeuristic(); });
+        [](void* user, Core::System&) {
+          static_cast<WidescreenManager*>(user)->UpdateWidescreenHeuristic();
+        },
+        this);
   }
 }
 
