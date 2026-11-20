@@ -55,11 +55,11 @@ private:
 
 WiimoteDevice::WiimoteDevice(BluetoothEmuDevice* host, const bdaddr_t& bd,
                              unsigned int hid_source_number)
-    : m_host(host),
-      m_name(GetNumber() == WIIMOTE_BALANCE_BOARD ? "Nintendo RVL-WBC-01" : "Nintendo RVL-CNT-01")
-
+    : m_host(host)
 {
+  // The name depends on the address's last byte, so it comes after the address.
   memcpy(m_bd, bd, sizeof(m_bd));
+  m_name = GetNumber() == WIIMOTE_BALANCE_BOARD ? "Nintendo RVL-WBC-01" : "Nintendo RVL-CNT-01";
   INFO_LOG(IOS_WIIMOTE, "Wiimote: #%u Constructed", GetNumber());
 
   m_link_key.fill(0xa0 + GetNumber());
