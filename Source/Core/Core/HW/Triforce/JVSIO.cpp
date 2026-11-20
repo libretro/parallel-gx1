@@ -284,11 +284,11 @@ void JVSIOBoard::Update()
       continue;
     }
 
-    std::array<u8, 2 + 255> unescaped_data;
+    u8 unescaped_data[2 + 255];
 
     // Read 2 header bytes.
     std::size_t header_escaped_size;
-    if (!UnescapeData(rx + 1, rx_size - 1, unescaped_data.data(), 2, &header_escaped_size))
+    if (!UnescapeData(rx + 1, rx_size - 1, unescaped_data, 2, &header_escaped_size))
       break;  // Wait for more data.
 
     const u8 destination_node = unescaped_data[0];
@@ -297,7 +297,7 @@ void JVSIOBoard::Update()
     // Read remaining frame bytes.
     std::size_t payload_escaped_size;
     if (!UnescapeData(rx + 1 + header_escaped_size, rx_size - 1 - header_escaped_size,
-                      unescaped_data.data() + 2, payload_size, &payload_escaped_size))
+                      unescaped_data + 2, payload_size, &payload_escaped_size))
     {
       break;  // Wait for more data.
     }
@@ -326,7 +326,7 @@ void JVSIOBoard::Update()
       continue;
     }
 
-    JVSIORequestReader request{unescaped_data.data() + 2, std::size_t(payload_size) - 1};
+    JVSIORequestReader request{unescaped_data + 2, std::size_t(payload_size) - 1};
 
     if (destination_node == JVSIO_BROADCAST_ADDRESS)
     {
