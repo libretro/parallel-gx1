@@ -585,7 +585,7 @@ static bool CanCauseGatherPipeInterruptCheck(const CodeOp& op)
          op.opinfo->type == OpType::StorePS;
 }
 
-u32 PPCAnalyzer::Analyze(u32 address, CodeBlock* block, CodeBuffer* buffer,
+u32 PPCAnalyzer::Analyze(u32 address, CodeBlock* block, CodeOp* buffer,
                          std::size_t block_size) const
 {
   // Clear block stats
@@ -605,7 +605,7 @@ u32 PPCAnalyzer::Analyze(u32 address, CodeBlock* block, CodeBuffer* buffer,
   block->m_gqr_used = BitSet8(0);
   block->m_physical_addresses.clear();
 
-  CodeOp* const code = buffer->data();
+  CodeOp* const code = buffer;
 
   bool found_exit = false;
   bool found_call = false;

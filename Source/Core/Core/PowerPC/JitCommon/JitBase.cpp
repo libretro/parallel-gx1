@@ -110,8 +110,8 @@ void JitTrampoline(JitBase& jit, u32 em_address)
 }
 
 JitBase::JitBase(Core::System& system, CPUCoreKind kind)
-    : CPUCoreBase(kind), m_code_buffer(code_buffer_size), m_system(system),
-      m_ppc_state(system.GetPPCState()), m_mmu(system.GetMMU()),
+    : CPUCoreBase(kind), m_code_buffer(new PPCAnalyst::CodeOp[code_buffer_size]()),
+      m_system(system), m_ppc_state(system.GetPPCState()), m_mmu(system.GetMMU()),
       m_ppc_symbol_db(system.GetPPCSymbolDB())
 {
   address_set_init(&js.fifoWriteAddresses, 1024);
@@ -126,6 +126,7 @@ JitBase::JitBase(Core::System& system, CPUCoreKind kind)
 
 JitBase::~JitBase()
 {
+  delete[] m_code_buffer;
   CPUThreadConfigCallback::RemoveConfigChangedCallback(m_registered_config_callback_id);
   address_set_free(&js.fifoWriteAddresses);
   address_set_free(&js.pairedQuantizeAddresses);

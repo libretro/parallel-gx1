@@ -280,7 +280,7 @@ public:
 
   JitBlock* AllocateBlock(u32 em_address);
   void FinalizeBlock(JitBlock& block, bool block_link, const PPCAnalyst::CodeBlock& code_block,
-                     const PPCAnalyst::CodeBuffer& code_buffer);
+                     const PPCAnalyst::CodeOp* code_buffer);
 
   // Look for the block in the slow but accurate way.
   // This function shall be used if FastLookupIndexForAddress() failed.
@@ -389,7 +389,7 @@ private:
   static constexpr u32 SUSPENDED_VERSIONS = 3;
   static constexpr u32 SUSPENDED_BLOCKS = 16384;
   void FindSecondPage(JitBlock& block, const PPCAnalyst::CodeBlock& code_block,
-                      const PPCAnalyst::CodeBuffer& code_buffer);
+                      const PPCAnalyst::CodeOp* code_buffer);
   bool MapCodeAddress(const JitBlock& block, u32 address, u32 first_page, u32 second_page,
                       u32* mapped, u32* key) const;
   bool HashCode(const JitBlock& block, u32 first_page, u32 second_page, u64* hash) const;

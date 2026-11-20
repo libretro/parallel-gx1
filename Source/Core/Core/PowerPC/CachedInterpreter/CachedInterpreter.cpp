@@ -252,8 +252,7 @@ void CachedInterpreter::Jit(u32 em_address, bool clear_cache_and_retry_on_failur
   }
   FreeRanges();
 
-  const u32 nextPC =
-      analyzer.Analyze(em_address, &code_block, &m_code_buffer, m_code_buffer.size());
+  const u32 nextPC = analyzer.Analyze(em_address, &code_block, m_code_buffer, code_buffer_size);
   if (code_block.m_memory_exception)
   {
     // Address of instruction could not be translated

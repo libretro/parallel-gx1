@@ -960,12 +960,12 @@ void JitArm64::Jit(u32 em_address, bool clear_cache_and_retry_on_failure)
     return;
   }
 
-  std::size_t block_size = m_code_buffer.size();
+  std::size_t block_size = code_buffer_size;
 
   // Analyze the block, collect all instructions it is made of (including inlining,
   // if that is enabled), reorder instructions for optimal performance, and join joinable
   // instructions.
-  const u32 nextPC = analyzer.Analyze(em_address, &code_block, &m_code_buffer, block_size);
+  const u32 nextPC = analyzer.Analyze(em_address, &code_block, m_code_buffer, block_size);
 
   if (code_block.m_memory_exception)
   {

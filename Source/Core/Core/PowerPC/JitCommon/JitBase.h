@@ -129,7 +129,7 @@ protected:
   };
 
   PPCAnalyst::CodeBlock code_block;
-  PPCAnalyst::CodeBuffer m_code_buffer;
+  PPCAnalyst::CodeOp* m_code_buffer;  // code_buffer_size entries, owned
   PPCAnalyst::PPCAnalyzer analyzer;
 
   CPUThreadConfigCallback::ConfigChangedCallbackID m_registered_config_callback_id;

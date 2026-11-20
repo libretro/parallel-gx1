@@ -470,7 +470,7 @@ JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
  * every range in one of them: the block keeps the second page, to be taken back with its code
  * wherever each page is in RAM then */
 void JitBaseBlockCache::FindSecondPage(JitBlock& block, const PPCAnalyst::CodeBlock& code_block,
-                                       const PPCAnalyst::CodeBuffer& code_buffer)
+                                       const PPCAnalyst::CodeOp* code_buffer)
 {
   const u32 first_ea = block.effectiveAddress & ~PAGE_OFFSET_MASK;
   const u32 first_pa = block.physicalAddress & ~PAGE_OFFSET_MASK;
@@ -511,7 +511,7 @@ void JitBaseBlockCache::FindSecondPage(JitBlock& block, const PPCAnalyst::CodeBl
 
 void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
                                       const PPCAnalyst::CodeBlock& code_block,
-                                      const PPCAnalyst::CodeBuffer& code_buffer)
+                                      const PPCAnalyst::CodeOp* code_buffer)
 {
   size_t index = FastLookupIndexForAddress(block.effectiveAddress, block.feature_flags);
   if (m_entry_points_ptr)
