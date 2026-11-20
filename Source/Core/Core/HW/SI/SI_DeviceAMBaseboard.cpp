@@ -93,30 +93,30 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
   {
     // This board enables DX mode on AX machines.
     // All this does is enable the chair motion.
-    m_jvs_io_board = std::make_unique<Triforce::Sega_837_13844_JVSIOBoard>(&m_io_ports);
-    auto slot_a = std::make_unique<Triforce::FZeroAXSteeringWheel>();
-    m_io_ports.AddIOAdapter(new Triforce::FZeroAXCommon_IOAdapter(slot_a.get()));
+    m_jvs_io_board = new Triforce::Sega_837_13844_JVSIOBoard(&m_io_ports);
+    auto* const slot_a = new Triforce::FZeroAXSteeringWheel();
+    m_io_ports.AddIOAdapter(new Triforce::FZeroAXCommon_IOAdapter(slot_a));
     m_io_ports.AddIOAdapter(new Triforce::FZeroAXDeluxe_IOAdapter());
-    m_serial_device_a = std::move(slot_a);
-    m_serial_device_b = std::make_unique<MagCard::C1231BR>(&m_mag_card_settings);
+    m_serial_device_a = slot_a;
+    m_serial_device_b = new MagCard::C1231BR(&m_mag_card_settings);
     break;
   }
   case FZeroAXMonster:
   {
-    auto slot_a = std::make_unique<Triforce::FZeroAXSteeringWheel>();
-    m_io_ports.AddIOAdapter(new Triforce::FZeroAXCommon_IOAdapter(slot_a.get()));
+    auto* const slot_a = new Triforce::FZeroAXSteeringWheel();
+    m_io_ports.AddIOAdapter(new Triforce::FZeroAXCommon_IOAdapter(slot_a));
     m_io_ports.AddIOAdapter(new Triforce::FZeroAXMonster_IOAdapter());
-    m_serial_device_a = std::move(slot_a);
+    m_serial_device_a = slot_a;
     break;
   }
   case MarioKartGP:
   case MarioKartGP2:
   {
-    m_jvs_io_board = std::make_unique<Triforce::Namco_FCA_JVSIOBoard>(&m_io_ports);
-    auto slot_a = std::make_unique<Triforce::MarioKartGPSteeringWheel>();
-    m_io_ports.AddIOAdapter(new Triforce::MarioKartGPCommon_IOAdapter(slot_a.get()));
-    m_serial_device_a = std::move(slot_a);
-    m_serial_device_b = std::make_unique<MagCard::C1231LR>(&m_mag_card_settings);
+    m_jvs_io_board = new Triforce::Namco_FCA_JVSIOBoard(&m_io_ports);
+    auto* const slot_a = new Triforce::MarioKartGPSteeringWheel();
+    m_io_ports.AddIOAdapter(new Triforce::MarioKartGPCommon_IOAdapter(slot_a));
+    m_serial_device_a = slot_a;
+    m_serial_device_b = new MagCard::C1231LR(&m_mag_card_settings);
     break;
   }
   case VirtuaStriker3:
@@ -126,41 +126,38 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
   }
   case VirtuaStriker4:
   {
-    auto slot_a = std::make_unique<Triforce::ICCardReader>(0);
-    auto slot_b = std::make_unique<Triforce::ICCardReader>(1);
-    m_io_ports.AddIOAdapter(
-        new Triforce::VirtuaStriker4Common_IOAdapter(slot_a.get(), slot_b.get()));
-    m_serial_device_a = std::move(slot_a);
-    m_serial_device_b = std::move(slot_b);
+    auto* const slot_a = new Triforce::ICCardReader(0);
+    auto* const slot_b = new Triforce::ICCardReader(1);
+    m_io_ports.AddIOAdapter(new Triforce::VirtuaStriker4Common_IOAdapter(slot_a, slot_b));
+    m_serial_device_a = slot_a;
+    m_serial_device_b = slot_b;
     break;
   }
   case VirtuaStriker4_2006:
   {
-    auto slot_a = std::make_unique<Triforce::ICCardReader>(0);
-    auto slot_b = std::make_unique<Triforce::ICCardReader>(1);
-    m_io_ports.AddIOAdapter(
-        new Triforce::VirtuaStriker4Common_IOAdapter(slot_a.get(), slot_b.get()));
-    m_io_ports.AddIOAdapter(
-        new Triforce::VirtuaStriker4_2006_IOAdapter(slot_a.get(), slot_b.get()));
-    m_serial_device_a = std::move(slot_a);
-    m_serial_device_b = std::move(slot_b);
+    auto* const slot_a = new Triforce::ICCardReader(0);
+    auto* const slot_b = new Triforce::ICCardReader(1);
+    m_io_ports.AddIOAdapter(new Triforce::VirtuaStriker4Common_IOAdapter(slot_a, slot_b));
+    m_io_ports.AddIOAdapter(new Triforce::VirtuaStriker4_2006_IOAdapter(slot_a, slot_b));
+    m_serial_device_a = slot_a;
+    m_serial_device_b = slot_b;
     break;
   }
   case GekitouProYakyuu:
   {
-    auto slot_a = std::make_unique<Triforce::ICCardReader>(0);
-    auto slot_b = std::make_unique<Triforce::ICCardReader>(1);
-    m_io_ports.AddIOAdapter(new Triforce::GekitouProYakyuu_IOAdapter(slot_a.get(), slot_b.get()));
-    m_serial_device_a = std::move(slot_a);
-    m_serial_device_b = std::move(slot_b);
+    auto* const slot_a = new Triforce::ICCardReader(0);
+    auto* const slot_b = new Triforce::ICCardReader(1);
+    m_io_ports.AddIOAdapter(new Triforce::GekitouProYakyuu_IOAdapter(slot_a, slot_b));
+    m_serial_device_a = slot_a;
+    m_serial_device_b = slot_b;
     break;
   }
   case KeyOfAvalon:
   {
-    auto deck_reader = std::make_unique<Triforce::DeckReader>();
+    auto* const deck_reader = new Triforce::DeckReader();
     m_io_ports.AddIOAdapter(new Triforce::KeyOfAvalon_IOAdapter(deck_reader->GetICCardReader()));
-    m_serial_device_a = std::move(deck_reader);
-    m_serial_device_b = std::make_unique<Triforce::Touchscreen>();
+    m_serial_device_a = deck_reader;
+    m_serial_device_b = new Triforce::Touchscreen();
     break;
   }
   default:
@@ -169,10 +166,15 @@ CSIDevice_AMBaseboard::CSIDevice_AMBaseboard(Core::System& system, SIDevices dev
 
   // Fallback to a Sega board.
   if (m_jvs_io_board == nullptr)
-    m_jvs_io_board = std::make_unique<Triforce::Sega_837_13551_JVSIOBoard>(&m_io_ports);
+    m_jvs_io_board = new Triforce::Sega_837_13551_JVSIOBoard(&m_io_ports);
 }
 
-CSIDevice_AMBaseboard::~CSIDevice_AMBaseboard() = default;
+CSIDevice_AMBaseboard::~CSIDevice_AMBaseboard()
+{
+  delete m_serial_device_b;
+  delete m_serial_device_a;
+  delete m_jvs_io_board;
+}
 
 int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
 {
@@ -527,8 +529,8 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
       data_offset += out_length;
     };
 
-    process_serial_device(m_serial_device_a.get(), GCAMCommand::SerialA);
-    process_serial_device(m_serial_device_b.get(), GCAMCommand::SerialB);
+    process_serial_device(m_serial_device_a, GCAMCommand::SerialA);
+    process_serial_device(m_serial_device_b, GCAMCommand::SerialB);
 
     data_out[0] = 0x01;                                // Status code ?
     data_out[1] = data_offset - response_header_size;  // Length

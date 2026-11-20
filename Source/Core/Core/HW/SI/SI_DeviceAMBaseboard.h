@@ -41,16 +41,17 @@ private:
 
   Triforce::IOPorts m_io_ports;
 
-  std::unique_ptr<Triforce::JVSIOBoard> m_jvs_io_board;
+  // the boards and devices made with the device, deleted with it
+  Triforce::JVSIOBoard* m_jvs_io_board = nullptr;
 
   // Magnetic Card Reader
   MagCard::MagneticCardReader::Settings m_mag_card_settings;
 
   // Serial A
-  std::unique_ptr<Triforce::SerialDevice> m_serial_device_a;
+  Triforce::SerialDevice* m_serial_device_a = nullptr;
 
   // Serial B
-  std::unique_ptr<Triforce::SerialDevice> m_serial_device_b;
+  Triforce::SerialDevice* m_serial_device_b = nullptr;
 };
 
 }  // namespace SerialInterface
