@@ -491,7 +491,7 @@ static void FinishIOSBoot(Core::System& system, u64 ios_title_id)
 {
   // Shut down the active IOS first before switching to the new one.
   system.SetIOS(nullptr);
-  system.SetIOS(std::make_unique<EmulationKernel>(system, ios_title_id));
+  system.SetIOS(new EmulationKernel(system, ios_title_id));
 }
 
 static constexpr SystemTimers::TimeBaseTick GetIOSBootTicks(u32 version)
@@ -992,7 +992,7 @@ void Init(Core::System& system)
       core_timing.RegisterEvent("FinishDICommand", DIDevice::FinishDICommandCallback);
 
   // Start with IOS80 to simulate part of the Wii boot process.
-  system.SetIOS(std::make_unique<EmulationKernel>(system, Titles::SYSTEM_MENU_IOS));
+  system.SetIOS(new EmulationKernel(system, Titles::SYSTEM_MENU_IOS));
   // On a Wii, boot2 launches the system menu IOS, which then launches the system menu
   // (which bootstraps the PPC). Bootstrapping the PPC results in memory values being set up.
   // This means that the constants in the 0x3100 region are always set up by the time

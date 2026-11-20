@@ -148,7 +148,8 @@ public:
   void SetIsWii(bool is_wii) { m_is_wii = is_wii; }
 
   IOS::HLE::EmulationKernel* GetIOS() const;
-  void SetIOS(std::unique_ptr<IOS::HLE::EmulationKernel> ios);
+  // takes the kernel, nullptr for none; the one it replaces is deleted
+  void SetIOS(IOS::HLE::EmulationKernel* ios);
 
   AudioInterface::AudioInterfaceManager& GetAudioInterface() const;
   CPU::CPUManager& GetCPU() const;
@@ -194,7 +195,7 @@ private:
   System();
 
   struct Impl;
-  std::unique_ptr<Impl> m_impl;
+  Impl* const m_impl;
 
   bool m_separate_cpu_and_gpu_threads = false;
   bool m_mmu_enabled = false;

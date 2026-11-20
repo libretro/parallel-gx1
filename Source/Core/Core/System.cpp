@@ -59,8 +59,12 @@ struct System::Impl
   // Built first since other constructors may register hooks right away.
   VideoEvents m_video_events;
 
-
-  std::unique_ptr<IOS::HLE::EmulationKernel> m_ios;
+  // SetIOS's kernel, deleted where the other members go, in their order
+  struct OwnedIOS
+  {
+    IOS::HLE::EmulationKernel* kernel = nullptr;
+    ~OwnedIOS() { delete kernel; }
+  } m_ios;
 
   AudioInterface::AudioInterfaceManager m_audio_interface;
   CoreTiming::CoreTimingManager m_core_timing;
@@ -97,11 +101,14 @@ struct System::Impl
   FifoPlayer m_fifo_player;
 };
 
-System::System() : m_impl{std::make_unique<Impl>(*this)}
+System::System() : m_impl{new Impl(*this)}
 {
 }
 
-System::~System() = default;
+System::~System()
+{
+  delete m_impl;
+}
 
 void System::Initialize()
 {
@@ -113,12 +120,15 @@ void System::Initialize()
 
 IOS::HLE::EmulationKernel* System::GetIOS() const
 {
-  return m_impl->m_ios.get();
+  return m_impl->m_ios.kernel;
 }
 
-void System::SetIOS(std::unique_ptr<IOS::HLE::EmulationKernel> ios)
+void System::SetIOS(IOS::HLE::EmulationKernel* ios)
 {
-  m_impl->m_ios = std::move(ios);
+  // the new kernel is in place before the old one goes
+  IOS::HLE::EmulationKernel* const old_ios = m_impl->m_ios.kernel;
+  m_impl->m_ios.kernel = ios;
+  delete old_ios;
 }
 
 AudioInterface::AudioInterfaceManager& System::GetAudioInterface() const
