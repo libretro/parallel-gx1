@@ -3,12 +3,11 @@
 
 #include "Core/HW/GCMemcard/GCMemcardRaw.h"
 
-#include <cstddef>
-#include <cstdlib>
 #include <algorithm>
 #include <bit>
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -46,7 +45,7 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
     // Measure size of the existing memcard file.
     m_memory_card_size = (u32)file.GetSize();
     m_nintendo_card_id = m_memory_card_size / SIZE_TO_Mb;
-    m_memcard_data = std::make_unique_for_overwrite<u8[]>(m_memory_card_size);
+    m_memcard_data = static_cast<u8*>(std::malloc(size_t(m_memory_card_size) * 2));
 
     INFO_LOG(EXPANSIONINTERFACE, "Reading memory card %s", m_filename.c_str());
     size_t got = 0;
@@ -60,7 +59,7 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
     m_nintendo_card_id = size_mbits;
     m_memory_card_size = size_mbits * SIZE_TO_Mb;
 
-    m_memcard_data = std::make_unique<u8[]>(m_memory_card_size);
+    m_memcard_data = static_cast<u8*>(std::calloc(2, m_memory_card_size));
 
     // Fills in the first 5 blocks (MC_HDR_SIZE bytes)
     const auto& sram = Core::System::GetInstance().GetSRAM();
@@ -81,8 +80,8 @@ MemoryCard::MemoryCard(std::string filename, ExpansionInterface::Slot card_slot,
 
   // Class members (including inherited ones) have now been initialized, so
   // it's safe to startup the flush thread (which reads them).
-  m_flush_buffer = std::make_unique<u8[]>(m_memory_card_size);
-  memcpy(&m_flush_buffer[0], &m_memcard_data[0], m_memory_card_size);
+  m_flush_buffer = m_memcard_data + m_memory_card_size;
+  memcpy(m_flush_buffer, m_memcard_data, m_memory_card_size);
   const u32 num_blocks = (m_memory_card_size + Memcard::BLOCK_SIZE - 1) / Memcard::BLOCK_SIZE;
   m_num_blocks = num_blocks < MAX_BLOCKS ? num_blocks : MAX_BLOCKS;
   m_flush_thread = sthread_create(Common::ThreadEntry<&MemoryCard::FlushThread>, this);
@@ -103,6 +102,7 @@ MemoryCard::~MemoryCard()
     std::free(node);
     node = next;
   }
+  std::free(m_memcard_data);
 }
 
 void MemoryCard::PostChange(u32 offset, u32 length, const u8* data)

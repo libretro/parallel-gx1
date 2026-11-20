@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 
 #include <queues/mpsc_stack.h>
@@ -57,10 +56,11 @@ private:
   }
 
   std::string m_filename;
+  // Both halves of one allocation, m_memory_card_size bytes each.
   // The card as the emulated side sees it; CPU thread only.
-  std::unique_ptr<u8[]> m_memcard_data;
+  u8* m_memcard_data = nullptr;
   // The flush thread's own copy, brought up to date from m_changes before each write.
-  std::unique_ptr<u8[]> m_flush_buffer;
+  u8* m_flush_buffer = nullptr;
   mpsc_stack_t m_changes{};
   // Flush thread: one bit per block, set where m_flush_buffer differs from the file.
   enum
