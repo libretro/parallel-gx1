@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include "Common/CommonTypes.h"
 #include "Core/HW/HSP/HSP_Device.h"
 
@@ -57,7 +55,8 @@ private:
   // Holds PWM audio data. Entire buffer is filled and read at 4096 Hz.
   u8 m_audio[AV_REGION_SIZE] = {};
 
-  std::unique_ptr<GBPlayerBackend> m_gbp;
+  // made with the device and deleted with it
+  GBPlayerBackend* m_gbp = nullptr;
 };
 
 }  // namespace HSP

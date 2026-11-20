@@ -14,7 +14,10 @@
 namespace HSP
 {
 HSPManager::HSPManager() = default;
-HSPManager::~HSPManager() = default;
+HSPManager::~HSPManager()
+{
+  delete m_device;
+}
 
 void HSPManager::Init()
 {
@@ -23,7 +26,8 @@ void HSPManager::Init()
 
 void HSPManager::Shutdown()
 {
-  m_device.reset();
+  delete m_device;
+  m_device = nullptr;
 }
 
 void HSPManager::Read(u32 address, u8* data)
@@ -58,14 +62,12 @@ void HSPManager::DoState(PointerWrap& p)
   m_device->DoState(p);
 }
 
-void HSPManager::SetDevice(std::unique_ptr<IHSPDevice> device)
-{
-  m_device = std::move(device);
-}
-
 void HSPManager::SetDevice(const HSPDeviceType device)
 {
-  SetDevice(HSPDevice_Create(device));
+  // the new one is made before the old one goes
+  IHSPDevice* const old_device = m_device;
+  m_device = HSPDevice_Create(device);
+  delete old_device;
 }
 
 }  // namespace HSP

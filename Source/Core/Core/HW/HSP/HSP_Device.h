@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include "Common/CommonTypes.h"
 
 class PointerWrap;
@@ -38,6 +36,7 @@ public:
   virtual void DoState(PointerWrap& p);
 };
 
-std::unique_ptr<IHSPDevice> HSPDevice_Create(HSPDeviceType device);
+// a new device of the type, the caller's to delete
+IHSPDevice* HSPDevice_Create(HSPDeviceType device);
 
 }  // namespace HSP

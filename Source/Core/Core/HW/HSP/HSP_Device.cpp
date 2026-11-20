@@ -18,19 +18,19 @@ void IHSPDevice::DoState(PointerWrap& p)
 {
 }
 
-std::unique_ptr<IHSPDevice> HSPDevice_Create(const HSPDeviceType device)
+IHSPDevice* HSPDevice_Create(const HSPDeviceType device)
 {
   auto& system = Core::System::GetInstance();
 
   switch (device)
   {
   case HSPDeviceType::ARAMExpansion:
-    return std::make_unique<CHSPDevice_ARAMExpansion>();
+    return new CHSPDevice_ARAMExpansion();
   case HSPDeviceType::GBPlayer:
-    return std::make_unique<CHSPDevice_GBPlayer>(system);
+    return new CHSPDevice_GBPlayer(system);
   case HSPDeviceType::None:
   default:
-    return std::make_unique<CHSPDevice_Null>();
+    return new CHSPDevice_Null();
   }
 }
 }  // namespace HSP

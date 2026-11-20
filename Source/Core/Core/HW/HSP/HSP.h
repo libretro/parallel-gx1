@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include "Common/CommonTypes.h"
 #include "Core/HW/HSP/HSP_Device.h"
 
@@ -30,10 +28,10 @@ public:
 
   void DoState(PointerWrap& p);
 
-  void SetDevice(std::unique_ptr<IHSPDevice> device);
   void SetDevice(HSPDeviceType device);
 
 private:
-  std::unique_ptr<IHSPDevice> m_device;
+  // the device on the port, made by SetDevice and deleted when replaced or at Shutdown
+  IHSPDevice* m_device = nullptr;
 };
 }  // namespace HSP

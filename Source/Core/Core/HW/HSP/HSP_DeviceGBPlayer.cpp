@@ -497,10 +497,13 @@ public:
 
 CHSPDevice_GBPlayer::CHSPDevice_GBPlayer(Core::System& system) : m_system{system}
 {
-  m_gbp = std::make_unique<GBPlayerBackend>(m_system, this);
+  m_gbp = new GBPlayerBackend(m_system, this);
 }
 
-CHSPDevice_GBPlayer::~CHSPDevice_GBPlayer() = default;
+CHSPDevice_GBPlayer::~CHSPDevice_GBPlayer()
+{
+  delete m_gbp;
+}
 
 void CHSPDevice_GBPlayer::Read(u32 address, u8* data)
 {
