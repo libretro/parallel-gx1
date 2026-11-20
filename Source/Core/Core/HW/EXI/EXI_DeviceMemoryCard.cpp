@@ -203,8 +203,8 @@ void CEXIMemoryCard::SetupGciFolder(const Memcard::HeaderData& header_data)
     }
   }
 
-  m_memory_card = std::make_unique<GCMemcardDirectory>(dir_path + DIR_SEP, m_card_slot, header_data,
-                                                       current_game_id);
+  m_memory_card =
+      new GCMemcardDirectory(dir_path + DIR_SEP, m_card_slot, header_data, current_game_id);
 }
 
 void CEXIMemoryCard::SetupRawMemcard(u16 size_mb)
@@ -212,7 +212,7 @@ void CEXIMemoryCard::SetupRawMemcard(u16 size_mb)
   const std::string filename =
       Config::GetMemcardPath(m_card_slot, SConfig::GetInstance().m_region, size_mb);
 
-  m_memory_card = std::make_unique<MemoryCard>(filename, m_card_slot, size_mb);
+  m_memory_card = new MemoryCard(filename, m_card_slot, size_mb);
 }
 
 CEXIMemoryCard::~CEXIMemoryCard()
@@ -220,6 +220,7 @@ CEXIMemoryCard::~CEXIMemoryCard()
   auto& core_timing = m_system.GetCoreTiming();
   core_timing.RemoveEvent(s_et_cmd_done[m_card_slot]);
   core_timing.RemoveEvent(s_et_transfer_complete[m_card_slot]);
+  delete m_memory_card;
 }
 
 bool CEXIMemoryCard::UseDelayedTransferCompletion() const

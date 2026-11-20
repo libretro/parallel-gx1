@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -108,7 +107,8 @@ private:
   unsigned int m_card_id;
   unsigned int m_address;
   u32 m_memory_card_size;
-  std::unique_ptr<MemoryCardBase> m_memory_card;
+  // the card, raw or a GCI folder, made with the device and deleted with it
+  MemoryCardBase* m_memory_card = nullptr;
 
 protected:
   void TransferByte(u8& byte);
