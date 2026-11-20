@@ -541,7 +541,7 @@ bool BluetoothEmuDevice::SendEventInquiryResponse()
   response->page_scan_rep_mode = 1;
   response->page_scan_period_mode = 0;
   response->page_scan_mode = 0;
-  std::memcpy(response->uclass, wiimote->GetClass().data(), HCI_CLASS_SIZE);
+  std::memcpy(response->uclass, wiimote->GetClass(), HCI_CLASS_SIZE);
   response->clock_offset = 0x3818;
 
   DEBUG_LOG(IOS_WIIMOTE, "Event: Send Fake Inquiry of one controller");
@@ -721,7 +721,7 @@ bool BluetoothEmuDevice::SendEventReadRemoteFeatures(u16 connection_handle)
   read_remote_features->PayloadLength = sizeof(SHCIEventReadRemoteFeatures) - 2;
   read_remote_features->EventStatus = 0x00;
   read_remote_features->ConnectionHandle = connection_handle;
-  std::memcpy(read_remote_features->features, wiimote->GetFeatures().data(), HCI_FEATURES_SIZE);
+  std::memcpy(read_remote_features->features, wiimote->GetFeatures(), HCI_FEATURES_SIZE);
 
   DEBUG_LOG(IOS_WIIMOTE, "Event: SendEventReadRemoteFeatures");
   DEBUG_LOG(IOS_WIIMOTE, "  Connection_Handle: %#06x",
@@ -928,7 +928,7 @@ bool BluetoothEmuDevice::SendEventLinkKeyNotification(const u8 num_to_send)
     hci_link_key_rep_cp* link_key_info =
         (hci_link_key_rep_cp*)((u8*)&event_link_key->bdaddr + sizeof(hci_link_key_rep_cp) * i);
     memcpy(link_key_info->bdaddr, m_wiimotes[i]->GetBD(), sizeof(bdaddr_t));
-    std::memcpy(link_key_info->key, m_wiimotes[i]->GetLinkKey().data(), HCI_KEY_SIZE);
+    std::memcpy(link_key_info->key, m_wiimotes[i]->GetLinkKey(), HCI_KEY_SIZE);
 
     DEBUG_LOG(IOS_WIIMOTE, "  bd: %02x:%02x:%02x:%02x:%02x:%02x",
               (unsigned)link_key_info->bdaddr[0], (unsigned)link_key_info->bdaddr[1],

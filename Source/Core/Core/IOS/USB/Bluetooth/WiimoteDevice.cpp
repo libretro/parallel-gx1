@@ -62,9 +62,13 @@ WiimoteDevice::WiimoteDevice(BluetoothEmuDevice* host, const bdaddr_t& bd,
   m_name = GetNumber() == WIIMOTE_BALANCE_BOARD ? "Nintendo RVL-WBC-01" : "Nintendo RVL-CNT-01";
   INFO_LOG(IOS_WIIMOTE, "Wiimote: #%u Constructed", GetNumber());
 
-  m_link_key.fill(0xa0 + GetNumber());
-  m_class = {0x00, 0x04, 0x48};
-  m_features = {0xBC, 0x02, 0x04, 0x38, 0x08, 0x00, 0x00, 0x00};
+  static const u8 wiimote_class[HCI_CLASS_SIZE] = {0x00, 0x04, 0x48};
+  static const u8 wiimote_features[HCI_FEATURES_SIZE] = {0xBC, 0x02, 0x04, 0x38,
+                                                         0x08, 0x00, 0x00, 0x00};
+
+  memset(m_link_key, 0xa0 + GetNumber(), sizeof(m_link_key));
+  memcpy(m_class, wiimote_class, sizeof(m_class));
+  memcpy(m_features, wiimote_features, sizeof(m_features));
   m_lmp_version = 0x2;
   m_lmp_subversion = 0x229;
 

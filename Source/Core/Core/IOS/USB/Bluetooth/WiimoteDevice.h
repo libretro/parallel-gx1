@@ -24,10 +24,6 @@ class BluetoothEmuDevice;
 class WiimoteDevice
 {
 public:
-  using ClassType = std::array<u8, HCI_CLASS_SIZE>;
-  using FeaturesType = std::array<u8, HCI_FEATURES_SIZE>;
-  using LinkKeyType = std::array<u8, HCI_KEY_SIZE>;
-
   WiimoteDevice(BluetoothEmuDevice* host, const bdaddr_t& bd, unsigned int hid_source_number);
   ~WiimoteDevice();
 
@@ -83,9 +79,10 @@ public:
   u16 GetLMPSubVersion() const { return m_lmp_subversion; }
   // Broadcom Corporation
   u16 GetManufactorID() const { return 0x000F; }
-  const ClassType& GetClass() const { return m_class; }
-  const FeaturesType& GetFeatures() const { return m_features; }
-  const LinkKeyType& GetLinkKey() const { return m_link_key; }
+  // HCI_CLASS_SIZE, HCI_FEATURES_SIZE and HCI_KEY_SIZE bytes.
+  const u8* GetClass() const { return m_class; }
+  const u8* GetFeatures() const { return m_features; }
+  const u8* GetLinkKey() const { return m_link_key; }
 
 private:
   enum class BasebandState
@@ -137,11 +134,11 @@ private:
   BasebandState m_baseband_state = BasebandState::Inactive;
   HIDState m_hid_state = HIDState::Inactive;
   bdaddr_t m_bd;
-  ClassType m_class;
-  FeaturesType m_features;
+  u8 m_class[HCI_CLASS_SIZE];
+  u8 m_features[HCI_FEATURES_SIZE];
   u8 m_lmp_version;
   u16 m_lmp_subversion;
-  LinkKeyType m_link_key;
+  u8 m_link_key[HCI_KEY_SIZE];
   std::string m_name;
   ChannelEntry m_channels[MAX_CHANNELS];
   int m_channel_count = 0;
