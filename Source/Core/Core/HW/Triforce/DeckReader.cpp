@@ -96,7 +96,11 @@ bool DeckSkip(rjson_t* json, enum rjson_type t)
   }
 }
 
-std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
+// The most cards a deck file can hold; more than any game reads.
+constexpr std::size_t MAX_DECK_CARDS = 256;
+
+// Fills deck (MAX_DECK_CARDS long) and *count; false when the file is missing or invalid.
+bool LoadCardDeckFromFile(CardIdentifier* deck, std::size_t* count)
 {
   // Example json format:
   // table defaults to 0. quantity defaults to 1.
@@ -125,10 +129,11 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
   if (!file)
   {
     ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: cannot read %s", filename.c_str());
-    return std::nullopt;
+    return false;
   }
   rjson_t* const json = rjson_open_user(DeckRead, file, 4096);
-  std::optional<std::vector<CardIdentifier>> result;
+  bool has_result = false;
+  *count = 0;
   bool ok = json && rjson_next(json) == RJSON_OBJECT;
   bool cards = false;
 
@@ -151,10 +156,12 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
     if (t != RJSON_ARRAY)
       break;
     cards = true;
-    result.emplace();
+    has_result = true;
+    *count = 0;
     while (ok && (t = rjson_next(json)) != RJSON_ARRAY_END)
     {
-      std::optional<u16> card_index;
+      bool has_card_index = false;
+      u16 card_index = 0;
       CardIdentifier card_id{};
       u8 quantity = 1;
       if (t != RJSON_OBJECT)
@@ -170,7 +177,10 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
         if (t != RJSON_NUMBER)
           ok = DeckSkip(json, t);
         else if (name == "index")
+        {
           card_index = static_cast<u16>(rjson_get_double(json));
+          has_card_index = true;
+        }
         else if (name == "table")
           card_id.table_index = static_cast<u8>(rjson_get_double(json));
         else if (name == "quantity")
@@ -179,13 +189,21 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
       ok = ok && t == RJSON_OBJECT_END;
       if (!ok)
         break;
-      if (!card_index)
+      if (!has_card_index)
       {
         ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Invalid \"index\" field.");
         continue;
       }
-      card_id.card_index = *card_index;
-      result->resize(result->size() + quantity, card_id);
+      card_id.card_index = card_index;
+      for (u8 i = 0; i < quantity; i++)
+      {
+        if (*count == MAX_DECK_CARDS)
+        {
+          ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: Too many cards.");
+          break;
+        }
+        deck[(*count)++] = card_id;
+      }
     }
     ok = ok && t == RJSON_ARRAY_END;
   }
@@ -193,7 +211,7 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
   if (json && rjson_get_error(json)[0])
   {
     ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: %s", rjson_get_error(json));
-    result.reset();
+    has_result = false;
   }
   else if (json && ok && !cards)
   {
@@ -202,7 +220,7 @@ std::optional<std::vector<CardIdentifier>> LoadCardDeckFromFile()
   if (json)
     rjson_free(json);
   filestream_close(file);
-  return ok ? result : std::nullopt;
+  return ok && has_result;
 }
 
 }  // namespace
@@ -413,13 +431,14 @@ void DeckReader::HandleCommand()
       WriteTxByte(0xaa);
       WriteTxByte(u8(CDReaderCommand::ReadCard));
 
-      if (const auto deck = LoadCardDeckFromFile())
+      CardIdentifier deck[MAX_DECK_CARDS];
+      std::size_t deck_count = 0;
+      if (LoadCardDeckFromFile(deck, &deck_count))
       {
         // What happens with more than 30 cards ?
-        WriteTxByte(u8(deck->size() * sizeof(CardIdentifier)));
+        WriteTxByte(u8(deck_count * sizeof(CardIdentifier)));
 
-        WriteTxBytes(reinterpret_cast<const u8*>(deck->data()),
-                     deck->size() * sizeof(CardIdentifier));
+        WriteTxBytes(reinterpret_cast<const u8*>(deck), deck_count * sizeof(CardIdentifier));
       }
       else
       {
