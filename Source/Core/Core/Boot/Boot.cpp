@@ -747,7 +747,7 @@ void StateFlags::UpdateChecksum()
   checksum = std::accumulate(flag_data.cbegin(), flag_data.cend(), 0U);
 }
 
-void UpdateStateFlags(const std::function<void(StateFlags*)>& update_function)
+void UpdateStateFlags(void (*update_function)(StateFlags*))
 {
   CreateSystemMenuTitleDirs();
   const std::string file_path = Common::GetTitleDataPath(Titles::SYSTEM_MENU) + "/" WII_STATE;
