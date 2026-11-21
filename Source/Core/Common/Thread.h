@@ -4,7 +4,7 @@
 #pragma once
 
 #ifndef _WIN32
-#include <tuple>
+#include <cstddef>
 #endif
 
 #include <rthreads/rthreads.h>
@@ -66,8 +66,8 @@ inline void JoinThread(sthread_t*& thread)
 }
 
 #ifndef _WIN32
-// Returns the lowest address of the stack and the size of the stack
-std::tuple<void*, size_t> GetCurrentThreadStack();
+// The lowest address of the stack into *stack_addr and its size into *stack_size
+void GetCurrentThreadStack(void** stack_addr, size_t* stack_size);
 #endif
 
 }  // namespace Common

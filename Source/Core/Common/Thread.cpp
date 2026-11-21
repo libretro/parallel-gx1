@@ -65,13 +65,17 @@ void LowerCurrentThreadPriority()
 static thread_local void* s_stack_addr;
 static thread_local size_t s_stack_size;
 
-std::tuple<void*, size_t> GetCurrentThreadStack()
+void GetCurrentThreadStack(void** out_stack_addr, size_t* out_stack_size)
 {
   void* stack_addr;
   size_t stack_size;
 
   if (s_stack_size)
-    return std::make_tuple(s_stack_addr, s_stack_size);
+  {
+    *out_stack_addr = s_stack_addr;
+    *out_stack_size = s_stack_size;
+    return;
+  }
 
   pthread_t self = pthread_self();
 
@@ -102,7 +106,8 @@ std::tuple<void*, size_t> GetCurrentThreadStack()
 
   s_stack_addr = stack_addr;
   s_stack_size = stack_size;
-  return std::make_tuple(stack_addr, stack_size);
+  *out_stack_addr = stack_addr;
+  *out_stack_size = stack_size;
 }
 
 #endif

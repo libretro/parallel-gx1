@@ -224,7 +224,9 @@ void JitBase::ProtectStack()
     return;
   }
 #else
-  auto [stack_addr, stack_size] = Common::GetCurrentThreadStack();
+  void* stack_addr;
+  size_t stack_size;
+  Common::GetCurrentThreadStack(&stack_addr, &stack_size);
 
   const uintptr_t stack_base_addr = reinterpret_cast<uintptr_t>(stack_addr);
   const uintptr_t stack_middle_addr = reinterpret_cast<uintptr_t>(&stack_addr);
