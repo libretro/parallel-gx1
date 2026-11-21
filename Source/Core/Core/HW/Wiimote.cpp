@@ -25,7 +25,6 @@
 #include "InputCommon/InputConfig.h"
 
 // Limit the amount of wiimote connect requests, when a button is pressed in disconnected state
-static std::array<u8, MAX_BBMOTES> s_last_connect_request_counter;
 
 namespace WiimoteCommon
 {
@@ -239,7 +238,6 @@ void ResetAllWiimotes()
 void LoadConfig()
 {
   s_config.LoadConfig();
-  s_last_connect_request_counter.fill(0);
 }
 
 void GenerateDynamicInputTextures()
