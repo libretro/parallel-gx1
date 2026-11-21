@@ -164,6 +164,6 @@ private:
   // Received bytes, written by the network thread and read by the CPU thread, which alone
   // touches m_regs.
   retro_spsc_t m_receive_buffer;
-  std::array<u8, 0x20> m_regs{};
+  u8 m_regs[0x20]{};
 };
 }  // namespace ExpansionInterface

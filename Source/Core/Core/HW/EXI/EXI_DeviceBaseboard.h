@@ -52,7 +52,7 @@ private:
   u32 m_position = 0;
   u32 m_backup_dma_offset = 0;
   u32 m_backup_dma_length = 0;
-  std::array<u8, 4> m_command{};
+  u8 m_command[4]{};
   u16 m_backup_offset = 0;
   File::IOFile m_backup;
 

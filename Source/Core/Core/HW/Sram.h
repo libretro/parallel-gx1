@@ -33,7 +33,6 @@ distribution.
 -------------------------------------------------------------*/
 #pragma once
 
-#include <array>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -44,7 +43,7 @@ namespace ExpansionInterface
 enum class Slot : int;
 }
 
-using CardFlashId = std::array<u8, 12>;
+typedef u8 CardFlashId[12];
 
 #pragma pack(push, 1)
 

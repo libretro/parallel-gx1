@@ -98,7 +98,7 @@ void CEXIModem::ImmWrite(u32 data, u32 size)
   {  // Write device register
     u8 reg_num = static_cast<uint8_t>((m_transfer_descriptor >> 24) & 0x1F);
     bool should_update_interrupts = false;
-    for (; size && reg_num < m_regs.size(); size--)
+    for (; size && reg_num < sizeof(m_regs); size--)
     {
       should_update_interrupts |=
           ((reg_num == Register::INTERRUPT_MASK) || (reg_num == Register::PENDING_INTERRUPT_MASK));
@@ -176,7 +176,7 @@ u32 CEXIModem::ImmRead(u32 size)
     u32 ret = 0;
     for (u8 z = 0; z < size; z++)
     {
-      if (reg_num + z >= m_regs.size())
+      if (reg_num + z >= sizeof(m_regs))
       {
         break;
       }
