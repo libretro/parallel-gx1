@@ -34,10 +34,6 @@ typedef struct pollfd pollfd_t;
 #include <sys/types.h>
 #endif
 
-#include <list>
-#include <optional>
-#include <string_view>
-#include <unordered_map>
 #include <utility>
 
 #include "Common/CommonTypes.h"
@@ -210,6 +206,10 @@ private:
 
   void DoSock(const Request& request, NET_IOCTL type);
   void DoSock(const Request& request, SSL_IOCTL type);
+  // The pending operations, in the order they were queued.
+  sockop* GetSockop(u32 index);
+  bool AddSockop(const sockop& op);
+  void RemoveSockop(u32 index);
   void Update(bool read, bool write, bool except);
   void UpdateConnectingState(s32 connect_rv);
   ConnectingState GetConnectingState() const;
@@ -222,9 +222,14 @@ private:
   s32 wii_fd = -1;
   bool nonBlock = false;
   ConnectingState connecting_state = ConnectingState::None;
-  std::list<sockop> pending_sockops;
 
-  std::optional<Timeout> timeout;
+  // A Request has no default constructor, so the operations are built in place.
+  static constexpr u32 MAX_PENDING_SOCKOPS = 32;
+  alignas(sockop) unsigned char pending_sockop_storage[MAX_PENDING_SOCKOPS][sizeof(sockop)];
+  u32 pending_sockop_count = 0;
+
+  bool has_timeout = false;
+  Timeout timeout;
 };
 
 class WiiSockMan
@@ -240,7 +245,8 @@ public:
   {
     u32 request_addr = 0;
     u32 buffer_out = 0;
-    std::vector<pollfd_t> wii_fds;
+    pollfd_t wii_fds[WII_SOCKET_FD_MAX] = {};
+    u32 wii_fd_count = 0;
     s64 timeout = 0;
   };
 
@@ -251,7 +257,7 @@ public:
   WiiSockMan& operator=(WiiSockMan&&) = delete;
   ~WiiSockMan();
 
-  s32 GetNetErrorCode(s32 ret, std::string_view caller, bool is_rw);
+  s32 GetNetErrorCode(s32 ret, const char* caller, bool is_rw);
 
   void Update();
   static sockaddr_in ToNativeAddrIn(WiiSockAddrIn from);
@@ -260,7 +266,8 @@ public:
   static s32 ConvertEvents(s32 events, ConvertDirection dir);
 
   void DoState(PointerWrap& p);
-  void AddPollCommand(const PollCommand& cmd);
+  // Returns false when too many polls are pending.
+  bool AddPollCommand(const PollCommand& cmd);
   // NON-BLOCKING FUNCTIONS
   s32 NewSocket(s32 af, s32 type, s32 protocol);
   s32 AddSocket(s32 fd, bool is_rw);
@@ -269,13 +276,13 @@ public:
   s32 DeleteSocket(s32 wii_fd);
   s32 GetLastNetError() const { return errno_last; }
   void SetLastNetError(s32 error) { errno_last = error; }
-  void Clean() { WiiSockets.clear(); }
+  void Clean();
   void EnqueueIPCReply(const Request& request, s32 return_value) const;
   template <typename T>
   void DoSock(s32 sock, const Request& request, T type)
   {
-    auto socket_entry = WiiSockets.find(sock);
-    if (socket_entry == WiiSockets.end())
+    WiiSocket* const socket = FindSocket(sock);
+    if (!socket)
     {
       ERROR_LOG(IOS_NET, "DoSock: Error, fd not found (%08x, %08X, %08X)",
                 static_cast<unsigned>(sock), static_cast<unsigned>(request.address),
@@ -284,7 +291,7 @@ public:
     }
     else
     {
-      socket_entry->second.DoSock(request, type);
+      socket->DoSock(request, type);
     }
   }
 
@@ -292,13 +299,20 @@ public:
 
 private:
   void UpdatePollCommands();
+  WiiSocket* FindSocket(s32 wii_fd);
+  const WiiSocket* FindSocket(s32 wii_fd) const;
+  void DestroySocket(s32 wii_fd);
 
   friend class WiiSocket;
 
   EmulationKernel& m_ios;
-  std::unordered_map<s32, WiiSocket> WiiSockets;
+  // The sockets by Wii descriptor, built in their slots, which are in use while built.
+  alignas(WiiSocket) unsigned char m_socket_storage[WII_SOCKET_FD_MAX][sizeof(WiiSocket)];
+  bool m_socket_used[WII_SOCKET_FD_MAX] = {};
   s32 errno_last = 0;
-  std::vector<PollCommand> pending_polls;
+  static constexpr u32 MAX_PENDING_POLLS = 16;
+  PollCommand pending_polls[MAX_PENDING_POLLS];
+  u32 pending_poll_count = 0;
   TimePoint last_time = Clock::now();
 };
 }  // namespace IOS::HLE

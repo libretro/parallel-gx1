@@ -897,7 +897,12 @@ IPCReply NetIPTopDevice::HandlePollRequest(const IOCtlRequest& request)
     return IPCReply(-SO_EINVAL);
   }
 
-  std::vector<pollfd_t> ufds(nfds);
+  WiiSockMan::PollCommand command;
+  command.request_addr = request.address;
+  command.buffer_out = request.buffer_out;
+  command.wii_fd_count = nfds;
+  command.timeout = timeout;
+  pollfd_t* const ufds = command.wii_fds;
 
   for (u32 i = 0; i < nfds; ++i)
   {
@@ -919,7 +924,8 @@ IPCReply NetIPTopDevice::HandlePollRequest(const IOCtlRequest& request)
   }
 
   // Prevents blocking emulation on a blocking poll
-  sm->AddPollCommand({request.address, request.buffer_out, std::move(ufds), timeout});
+  if (!sm->AddPollCommand(command))
+    return IPCReply(-SO_ENOMEM);
   return IPCReply::None();
 }
 

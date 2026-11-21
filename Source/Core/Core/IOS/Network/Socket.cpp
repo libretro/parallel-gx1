@@ -90,15 +90,47 @@ WiiSockMan::WiiSockMan(EmulationKernel& ios) : m_ios(ios)
 {
 }
 
-WiiSockMan::~WiiSockMan() = default;
+WiiSockMan::~WiiSockMan()
+{
+  Clean();
+}
+
+WiiSocket* WiiSockMan::FindSocket(s32 wii_fd)
+{
+  if (wii_fd < 0 || wii_fd >= WII_SOCKET_FD_MAX || !m_socket_used[wii_fd])
+    return nullptr;
+  return reinterpret_cast<WiiSocket*>(m_socket_storage[wii_fd]);
+}
+
+const WiiSocket* WiiSockMan::FindSocket(s32 wii_fd) const
+{
+  if (wii_fd < 0 || wii_fd >= WII_SOCKET_FD_MAX || !m_socket_used[wii_fd])
+    return nullptr;
+  return reinterpret_cast<const WiiSocket*>(m_socket_storage[wii_fd]);
+}
+
+void WiiSockMan::DestroySocket(s32 wii_fd)
+{
+  WiiSocket* const socket = FindSocket(wii_fd);
+  if (!socket)
+    return;
+  socket->~WiiSocket();
+  m_socket_used[wii_fd] = false;
+}
+
+void WiiSockMan::Clean()
+{
+  for (s32 wii_fd = 0; wii_fd < WII_SOCKET_FD_MAX; wii_fd++)
+    DestroySocket(wii_fd);
+}
 
 // Don't use string! (see https://github.com/dolphin-emu/dolphin/pull/3143)
-s32 WiiSockMan::GetNetErrorCode(s32 ret, std::string_view caller, bool is_rw)
+s32 WiiSockMan::GetNetErrorCode(s32 ret, const char* caller, bool is_rw)
 {
 #ifdef _WIN32
   s32 error_code = WSAGetLastError();
   // Some programs might hijack WinSock2 (e.g. ReShade) and alter the expected return value.
-  if (error_code == WSAEINVAL && caller == "SO_CONNECT")
+  if (error_code == WSAEINVAL && std::strcmp(caller, "SO_CONNECT") == 0)
   {
     // Note:
     // In order to preserve backward compatibility, this error is reported as WSAEINVAL to Windows
@@ -121,9 +153,8 @@ s32 WiiSockMan::GetNetErrorCode(s32 ret, std::string_view caller, bool is_rw)
   const s32 return_value = TranslateErrorCode(error_code, is_rw);
   const auto level =
       return_value == -SO_EAGAIN ? Common::Log::LogLevel::LINFO : Common::Log::LogLevel::LERROR;
-  GENERIC_LOG(Common::Log::LogType::IOS_NET, level, "%.*s failed with error %d: %s, ret = %d",
-              static_cast<int>(caller.size()), caller.data(), error_code,
-              Common::DecodeNetworkError(error_code), ret);
+  GENERIC_LOG(Common::Log::LogType::IOS_NET, level, "%s failed with error %d: %s, ret = %d", caller,
+              error_code, Common::DecodeNetworkError(error_code), ret);
 
   SetLastNetError(return_value);
 
@@ -136,6 +167,8 @@ WiiSocket::~WiiSocket()
   {
     (void)CloseFd();
   }
+  while (pending_sockop_count != 0)
+    RemoveSockop(pending_sockop_count - 1);
 }
 
 void WiiSocket::SetFd(s32 s)
@@ -182,8 +215,9 @@ s32 WiiSocket::Shutdown(u32 how)
   const s32 ret = m_socket_manager.GetNetErrorCode(shutdown(fd, how), "SO_SHUTDOWN", false);
   const bool shut_read = how == 0 || how == 2;
   const bool shut_write = how == 1 || how == 2;
-  for (auto& op : pending_sockops)
+  for (u32 i = 0; i < pending_sockop_count; i++)
   {
+    sockop& op = *GetSockop(i);
     // TODO: Create hwtest for SSL
     if (op.is_ssl)
       continue;
@@ -227,10 +261,10 @@ s32 WiiSocket::CloseFd()
   }
   fd = -1;
 
-  for (auto it = pending_sockops.begin(); it != pending_sockops.end();)
+  while (pending_sockop_count != 0)
   {
-    m_socket_manager.EnqueueIPCReply(it->request, -SO_ENOTCONN);
-    it = pending_sockops.erase(it);
+    m_socket_manager.EnqueueIPCReply(GetSockop(0)->request, -SO_ENOTCONN);
+    RemoveSockop(0);
   }
   connecting_state = ConnectingState::None;
   return ReturnValue;
@@ -269,9 +303,10 @@ void WiiSocket::Update(bool read, bool write, bool except)
   auto& system = m_socket_manager.m_ios.GetSystem();
   auto& memory = system.GetMemory();
 
-  auto it = pending_sockops.begin();
-  while (it != pending_sockops.end())
+  u32 index = 0;
+  while (index < pending_sockop_count)
   {
+    sockop* const it = GetSockop(index);
     s32 ReturnValue = 0;
     bool forceNonBlock = false;
     IPCCommandType ct = it->request.command;
@@ -615,7 +650,7 @@ void WiiSocket::Update(bool read, bool write, bool except)
 
     if (it->is_aborted)
     {
-      it = pending_sockops.erase(it);
+      RemoveSockop(index);
       continue;
     }
 
@@ -631,11 +666,11 @@ void WiiSocket::Update(bool read, bool write, bool except)
                 ReturnValue, nonBlock ? "true" : "false", forceNonBlock ? "true" : "false");
 
       m_socket_manager.EnqueueIPCReply(it->request, ReturnValue);
-      it = pending_sockops.erase(it);
+      RemoveSockop(index);
     }
     else
     {
-      ++it;
+      ++index;
     }
   }
 }
@@ -747,30 +782,58 @@ bool WiiSocket::IsTCP() const
 
 const WiiSocket::Timeout& WiiSocket::GetTimeout()
 {
-  if (!timeout.has_value())
+  if (!has_timeout)
   {
     timeout = Clock::now() + DTFromSeconds(Config::Get(Config::MAIN_NETWORK_TIMEOUT));
+    has_timeout = true;
   }
-  return *timeout;
+  return timeout;
 }
 
 void WiiSocket::ResetTimeout()
 {
-  timeout.reset();
+  has_timeout = false;
 }
 
 void WiiSocket::DoSock(const Request& request, NET_IOCTL type)
 {
   sockop so = {request, false};
   so.net_type = type;
-  pending_sockops.push_back(so);
+  if (!AddSockop(so))
+    m_socket_manager.EnqueueIPCReply(request, -SO_ENOBUFS);
 }
 
 void WiiSocket::DoSock(const Request& request, SSL_IOCTL type)
 {
   sockop so = {request, true};
   so.ssl_type = type;
-  pending_sockops.push_back(so);
+  if (!AddSockop(so))
+    m_socket_manager.EnqueueIPCReply(request, SSL_ERR_FAILED);
+}
+
+WiiSocket::sockop* WiiSocket::GetSockop(u32 index)
+{
+  return reinterpret_cast<sockop*>(pending_sockop_storage[index]);
+}
+
+bool WiiSocket::AddSockop(const sockop& op)
+{
+  if (pending_sockop_count == MAX_PENDING_SOCKOPS)
+  {
+    ERROR_LOG(IOS_NET, "Socket %d: too many pending operations", static_cast<int>(wii_fd));
+    return false;
+  }
+  new (pending_sockop_storage[pending_sockop_count]) sockop(op);
+  pending_sockop_count++;
+  return true;
+}
+
+void WiiSocket::RemoveSockop(u32 index)
+{
+  for (u32 i = index; i + 1 < pending_sockop_count; i++)
+    *GetSockop(i) = *GetSockop(i + 1);
+  pending_sockop_count--;
+  GetSockop(pending_sockop_count)->~sockop();
 }
 
 s32 WiiSockMan::AddSocket(s32 fd, bool is_rw)
@@ -784,7 +847,7 @@ s32 WiiSockMan::AddSocket(s32 fd, bool is_rw)
   for (wii_fd = 0; wii_fd < WII_SOCKET_FD_MAX; ++wii_fd)
   {
     // Find an available socket fd
-    if (!WiiSockets.contains(wii_fd))
+    if (!m_socket_used[wii_fd])
       break;
   }
 
@@ -797,7 +860,8 @@ s32 WiiSockMan::AddSocket(s32 fd, bool is_rw)
   }
   else
   {
-    WiiSocket& sock = WiiSockets.emplace(wii_fd, *this).first->second;
+    WiiSocket& sock = *new (m_socket_storage[wii_fd]) WiiSocket(*this);
+    m_socket_used[wii_fd] = true;
     sock.SetFd(fd);
     sock.SetWiiFd(wii_fd);
     Core::NetworkLogger()->OnNewSocket(fd);
@@ -862,28 +926,28 @@ s32 WiiSockMan::NewSocket(s32 af, s32 type, s32 protocol)
 
 s32 WiiSockMan::GetHostSocket(s32 wii_fd) const
 {
-  auto socket_entry = WiiSockets.find(wii_fd);
-  if (socket_entry != WiiSockets.end())
-    return socket_entry->second.fd;
+  const WiiSocket* const socket = FindSocket(wii_fd);
+  if (socket)
+    return socket->fd;
   return -EBADF;
 }
 
 s32 WiiSockMan::ShutdownSocket(s32 wii_fd, u32 how)
 {
-  auto socket_entry = WiiSockets.find(wii_fd);
-  if (socket_entry != WiiSockets.end())
-    return socket_entry->second.Shutdown(how);
+  WiiSocket* const socket = FindSocket(wii_fd);
+  if (socket)
+    return socket->Shutdown(how);
   return -SO_EBADF;
 }
 
 s32 WiiSockMan::DeleteSocket(s32 wii_fd)
 {
   s32 ReturnValue = -SO_EBADF;
-  auto socket_entry = WiiSockets.find(wii_fd);
-  if (socket_entry != WiiSockets.end())
+  WiiSocket* const socket = FindSocket(wii_fd);
+  if (socket)
   {
-    ReturnValue = socket_entry->second.CloseFd();
-    WiiSockets.erase(socket_entry);
+    ReturnValue = socket->CloseFd();
+    DestroySocket(wii_fd);
   }
   return ReturnValue;
 }
@@ -902,43 +966,43 @@ void WiiSockMan::Update()
   FD_ZERO(&write_fds);
   FD_ZERO(&except_fds);
 
-  auto socket_iter = WiiSockets.begin();
-  auto end_socks = WiiSockets.end();
-
-  while (socket_iter != end_socks)
+  for (s32 wii_fd = 0; wii_fd < WII_SOCKET_FD_MAX; wii_fd++)
   {
-    const WiiSocket& sock = socket_iter->second;
-    if (sock.IsValid())
+    const WiiSocket* const sock = FindSocket(wii_fd);
+    if (!sock)
+      continue;
+    if (sock->IsValid())
     {
-      FD_SET(sock.fd, &read_fds);
-      FD_SET(sock.fd, &write_fds);
-      FD_SET(sock.fd, &except_fds);
-      nfds = std::max(nfds, sock.fd + 1);
-      ++socket_iter;
+      FD_SET(sock->fd, &read_fds);
+      FD_SET(sock->fd, &write_fds);
+      FD_SET(sock->fd, &except_fds);
+      if (sock->fd + 1 > nfds)
+        nfds = sock->fd + 1;
     }
     else
     {
       // Good time to clean up invalid sockets.
-      socket_iter = WiiSockets.erase(socket_iter);
+      DestroySocket(wii_fd);
     }
   }
 
   const s32 ret = select(nfds, &read_fds, &write_fds, &except_fds, &t);
 
-  if (ret >= 0)
+  // A socket an update accepts may land in a later slot and be updated in this pass too, with
+  // nothing set for it.
+  for (s32 wii_fd = 0; wii_fd < WII_SOCKET_FD_MAX; wii_fd++)
   {
-    for (auto& pair : WiiSockets)
+    WiiSocket* const sock = FindSocket(wii_fd);
+    if (!sock)
+      continue;
+    if (ret >= 0 && sock->IsValid())
     {
-      WiiSocket& sock = pair.second;
-      sock.Update(FD_ISSET(sock.fd, &read_fds) != 0, FD_ISSET(sock.fd, &write_fds) != 0,
-                  FD_ISSET(sock.fd, &except_fds) != 0);
+      sock->Update(FD_ISSET(sock->fd, &read_fds) != 0, FD_ISSET(sock->fd, &write_fds) != 0,
+                   FD_ISSET(sock->fd, &except_fds) != 0);
     }
-  }
-  else
-  {
-    for (auto& elem : WiiSockets)
+    else
     {
-      elem.second.Update(false, false, false);
+      sock->Update(false, false, false);
     }
   }
   UpdatePollCommands();
@@ -948,65 +1012,77 @@ void WiiSockMan::UpdatePollCommands()
 {
   static constexpr int error_event = (POLLHUP | POLLERR);
 
-  if (pending_polls.empty())
+  if (pending_poll_count == 0)
     return;
 
   const auto now = Clock::now();
   const s64 elapsed = DTToMs(now - last_time);
   last_time = now;
 
-  for (PollCommand& pcmd : pending_polls)
+  for (u32 i = 0; i < pending_poll_count; i++)
   {
+    PollCommand& pcmd = pending_polls[i];
     // Don't touch negative timeouts
     if (pcmd.timeout > 0)
-      pcmd.timeout = std::max<s64>(0, pcmd.timeout - elapsed);
+      pcmd.timeout = pcmd.timeout > elapsed ? pcmd.timeout - elapsed : 0;
   }
 
   auto& system = m_ios.GetSystem();
   auto& memory = system.GetMemory();
 
-  std::erase_if(pending_polls, [&system, &memory, this](PollCommand& pcmd) {
+  // Commands that finish are replied to and removed; the rest keep their order.
+  u32 kept = 0;
+  for (u32 command = 0; command < pending_poll_count; command++)
+  {
+    PollCommand& pcmd = pending_polls[command];
     const auto request = Request(system, pcmd.request_addr);
-    auto& pfds = pcmd.wii_fds;
+    pollfd_t* const pfds = pcmd.wii_fds;
+    const u32 pfd_count = pcmd.wii_fd_count;
     int ret = 0;
 
     // Happens only on savestate load
     if (pfds[0].revents & error_event)
     {
-      ret = static_cast<int>(pfds.size());
+      ret = static_cast<int>(pfd_count);
     }
     else
     {
       // Make the behavior of poll consistent across platforms by not passing:
       //  - Set with invalid fds, revents is set to 0 (Linux) or POLLNVAL (Windows)
       //  - Set without a valid socket, raises an error on Windows
-      std::vector<int> original_order(pfds.size());
-      std::iota(original_order.begin(), original_order.end(), 0);
-      // Select indices with valid fds
-      const auto partition_result = std::ranges::partition(original_order, [&](auto i) {
-        return GetHostSocket(memory.Read_U32(pcmd.buffer_out + 0xc * i)) >= 0;
-      });
-      const auto n_valid = std::distance(original_order.begin(), partition_result.begin());
-
-      // Move all the valid pollfds to the front of the vector
-      for (auto i = 0; i < n_valid; ++i)
-        std::swap(pfds[i], pfds[original_order[i]]);
+      // The pollfds with valid fds are polled together and put back where they were.
+      pollfd_t valid[WII_SOCKET_FD_MAX];
+      u32 valid_index[WII_SOCKET_FD_MAX];
+      u32 n_valid = 0;
+      for (u32 i = 0; i < pfd_count; ++i)
+      {
+        if (GetHostSocket(memory.Read_U32(pcmd.buffer_out + 0xc * i)) >= 0)
+        {
+          valid_index[n_valid] = i;
+          valid[n_valid] = pfds[i];
+          n_valid++;
+        }
+      }
 
       if (n_valid > 0)
-        ret = poll(pfds.data(), n_valid, 0);
+        ret = poll(valid, n_valid, 0);
       if (ret < 0)
         ret = GetNetErrorCode(ret, "UpdatePollCommands", false);
 
-      // Move everything back to where they were
-      for (auto i = 0; i < n_valid; ++i)
-        std::swap(pfds[i], pfds[original_order[i]]);
+      for (u32 i = 0; i < n_valid; ++i)
+        pfds[valid_index[i]] = valid[i];
     }
 
     if (ret == 0 && pcmd.timeout)
-      return false;
+    {
+      if (kept != command)
+        pending_polls[kept] = pcmd;
+      kept++;
+      continue;
+    }
 
     // Translate native to Wii events,
-    for (u32 i = 0; i < pfds.size(); ++i)
+    for (u32 i = 0; i < pfd_count; ++i)
     {
       const int revents = ConvertEvents(pfds[i].revents, ConvertDirection::NativeToWii);
 
@@ -1018,8 +1094,8 @@ void WiiSockMan::UpdatePollCommands()
                 (unsigned)revents, (int)pfds[i].events, (int)pfds[i].revents);
     }
     EnqueueIPCReply(request, ret);
-    return true;
-  });
+  }
+  pending_poll_count = kept;
 }
 
 sockaddr_in WiiSockMan::ToNativeAddrIn(WiiSockAddrIn from)
@@ -1086,30 +1162,60 @@ WiiSockAddrIn WiiSockMan::ToWiiAddrIn(const sockaddr_in& from, socklen_t addrlen
 
 void WiiSockMan::DoState(PointerWrap& p)
 {
+  // Saved as the container was: a size_t count, then each command's addresses and its pollfds
+  // as a u32 count and the structures.
   bool saving = p.IsWriteMode() || p.IsMeasureMode();
-  auto size = pending_polls.size();
+  size_t size = pending_poll_count;
   p.Do(size);
   if (!saving)
-    pending_polls.resize(size);
-  for (auto& pcmd : pending_polls)
   {
+    if (size > MAX_PENDING_POLLS)
+    {
+      p.SetMeasureMode();
+      return;
+    }
+    pending_poll_count = static_cast<u32>(size);
+  }
+  for (u32 i = 0; i < pending_poll_count; i++)
+  {
+    PollCommand& pcmd = pending_polls[i];
     p.Do(pcmd.request_addr);
     p.Do(pcmd.buffer_out);
-    p.Do(pcmd.wii_fds);
+    u32 fd_count = pcmd.wii_fd_count;
+    p.Do(fd_count);
+    if (!saving)
+    {
+      if (fd_count == 0 || fd_count > WII_SOCKET_FD_MAX)
+      {
+        pending_poll_count = 0;
+        p.SetMeasureMode();
+        return;
+      }
+      pcmd.wii_fd_count = fd_count;
+      pcmd.timeout = 0;
+    }
+    p.DoArray(pcmd.wii_fds, fd_count);
   }
 
   if (saving)
     return;
-  for (auto& pcmd : pending_polls)
+  for (u32 i = 0; i < pending_poll_count; i++)
   {
-    for (auto& wfd : pcmd.wii_fds)
-      wfd.revents = (POLLHUP | POLLERR);
+    PollCommand& pcmd = pending_polls[i];
+    for (u32 j = 0; j < pcmd.wii_fd_count; j++)
+      pcmd.wii_fds[j].revents = (POLLHUP | POLLERR);
   }
 }
 
-void WiiSockMan::AddPollCommand(const PollCommand& cmd)
+bool WiiSockMan::AddPollCommand(const PollCommand& cmd)
 {
-  pending_polls.push_back(cmd);
+  if (pending_poll_count == MAX_PENDING_POLLS)
+  {
+    ERROR_LOG(IOS_NET, "Too many pending polls");
+    return false;
+  }
+  pending_polls[pending_poll_count++] = cmd;
+  return true;
 }
 
 void WiiSockMan::UpdateWantDeterminism(bool want)
