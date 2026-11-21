@@ -126,8 +126,9 @@ void Guitar::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   }
 
   // whammy bar
-  const ControllerEmu::Triggers::StateData whammy_state = m_whammy->GetState();
-  guitar_data.whammy = MapFloat<u8>(whammy_state.data[0], 0, 0, 0x1F);
+  ControlState whammy_state;
+  m_whammy->GetState(&whammy_state, 1);
+  guitar_data.whammy = MapFloat<u8>(whammy_state, 0, 0, 0x1F);
 
   // buttons
   m_buttons->GetState(&guitar_data.bt, guitar_button_bitmasks);

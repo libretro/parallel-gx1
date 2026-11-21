@@ -61,7 +61,8 @@ void Shinkansen::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   DesiredState& state = target_state->data.shinkansen;
   state = DesiredState{};
 
-  const auto analog = m_levers->GetState().data;
+  ControlState analog[2];
+  m_levers->GetState(analog, 2);
   // The game requires these specific values, all other values are treated like 0/255 (which are
   // guesses).
   const u8 brake_values[] = {0, 53, 79, 105, 132, 159, 187, 217, 250};

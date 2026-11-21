@@ -59,8 +59,9 @@ void UDrawTablet::BuildDesiredExtensionState(DesiredExtensionState* target_state
   // Note: Pressure values are valid even when stylus is lifted.
   constexpr u8 max_pressure = 0xff;
 
-  const auto touch_state = m_touch->GetState();
-  tablet_data.pressure = static_cast<u8>(touch_state.data[0] * max_pressure);
+  ControlState touch_state[2];
+  m_touch->GetState(touch_state, 2);
+  tablet_data.pressure = static_cast<u8>(touch_state[0] * max_pressure);
 
   // Stylus X/Y:
   // Min/Max X values (when touched) produced on my device: 0x4f, 0x7B3
@@ -80,7 +81,7 @@ void UDrawTablet::BuildDesiredExtensionState(DesiredExtensionState* target_state
   u16 stylus_x = 0xfff;
   u16 stylus_y = 0xfff;
 
-  const bool is_stylus_lifted = std::lround(touch_state.data[1]) != 0;
+  const bool is_stylus_lifted = std::lround(touch_state[1]) != 0;
 
   const auto stylus_state = m_stylus->GetState();
 

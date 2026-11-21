@@ -3,9 +3,7 @@
 
 #include "InputCommon/ControllerEmu/ControlGroup/Triggers.h"
 
-#include <algorithm>
 #include <cstddef>
-#include <optional>
 #include <string>
 
 #include "InputCommon/ControllerEmu/Control/Control.h"
@@ -18,16 +16,22 @@ Triggers::Triggers(const std::string& name_) : ControlGroup(name_, GroupType::Tr
   AddDeadzoneSetting(&m_deadzone_setting, 50);
 }
 
-Triggers::StateData Triggers::GetState() const
+void Triggers::GetState(ControlState* out, std::size_t count) const
 {
-  const size_t trigger_count = num_controls;
+  const std::size_t trigger_count = static_cast<std::size_t>(num_controls);
   const ControlState deadzone = m_deadzone_setting.GetValue() / 100;
 
-  StateData result(trigger_count);
-  for (size_t i = 0; i < trigger_count; ++i)
-    result.data[i] = std::min(ApplyDeadzone(controls[i]->GetState(), deadzone), 1.0);
-
-  return result;
+  for (std::size_t i = 0; i < count; ++i)
+  {
+    ControlState state = 0;
+    if (i < trigger_count)
+    {
+      state = ApplyDeadzone(controls[i]->GetState(), deadzone);
+      if (state > 1.0)
+        state = 1.0;
+    }
+    out[i] = state;
+  }
 }
 
 }  // namespace ControllerEmu

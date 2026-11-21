@@ -59,10 +59,11 @@ void DrawsomeTablet::BuildDesiredExtensionState(DesiredExtensionState* target_st
   tablet_data.stylus_y1 = u8(stylus_y);
   tablet_data.stylus_y2 = u8(stylus_y >> 8);
 
-  const auto touch_state = m_touch->GetState();
+  ControlState touch_state[2];
+  m_touch->GetState(touch_state, 2);
 
   // Note: Pen X/Y holds the last value when the pen is lifted.
-  const bool is_stylus_lifted = std::lround(touch_state.data[1]) != 0;
+  const bool is_stylus_lifted = std::lround(touch_state[1]) != 0;
 
   constexpr u8 NEUTRAL_STATUS = 0x8;
   constexpr u8 PEN_LIFTED_BIT = 0x10;
@@ -77,7 +78,7 @@ void DrawsomeTablet::BuildDesiredExtensionState(DesiredExtensionState* target_st
   // Pressure (0 - 0x7ff):
   constexpr u16 MAX_PRESSURE = 0x7ff;
 
-  const u16 pressure = MapFloat<u16>(touch_state.data[0], 0, 0, MAX_PRESSURE);
+  const u16 pressure = MapFloat<u16>(touch_state[0], 0, 0, MAX_PRESSURE);
 
   tablet_data.pressure1 = u8(pressure);
   tablet_data.pressure2 = u8(pressure >> 8);
