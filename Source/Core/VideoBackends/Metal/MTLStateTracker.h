@@ -237,8 +237,8 @@ private:
   {
     NSString* label;
     id<MTLRenderPipelineState> pipeline;
-    std::array<id<MTLBuffer>, 2> vertex_buffers;
-    std::array<id<MTLBuffer>, 3> fragment_buffers;
+    id<MTLBuffer> vertex_buffers[2];
+    id<MTLBuffer> fragment_buffers[3];
     u32 width;
     u32 height;
     MathUtil::Rectangle<int> scissor_rect;
@@ -257,11 +257,11 @@ private:
     Util::Viewport viewport;
     const Pipeline* render_pipeline = nullptr;
     const ComputePipeline* compute_pipeline = nullptr;
-    std::array<id<MTLTexture>, MAX_TEXTURES> textures = {};
-    std::array<id<MTLSamplerState>, MAX_SAMPLERS> samplers = {};
-    std::array<float, MAX_SAMPLERS> sampler_min_lod;
-    std::array<float, MAX_SAMPLERS> sampler_max_lod;
-    std::array<SamplerState, MAX_SAMPLERS> sampler_states;
+    id<MTLTexture> textures[MAX_TEXTURES] = {};
+    id<MTLSamplerState> samplers[MAX_SAMPLERS] = {};
+    float sampler_min_lod[MAX_SAMPLERS];
+    float sampler_max_lod[MAX_SAMPLERS];
+    SamplerState sampler_states[MAX_SAMPLERS];
     const Texture* compute_texture = nullptr;
     std::unique_ptr<u8[]> utility_uniform;
     u32 utility_uniform_size = 0;

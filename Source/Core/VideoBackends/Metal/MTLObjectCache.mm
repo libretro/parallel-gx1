@@ -365,7 +365,7 @@ public:
   std::condition_variable m_cv;
   std::map<PipelineID, StoredPipeline> m_pipelines;
   std::map<const Shader*, std::vector<PipelineID>> m_shaders;
-  std::array<u32, 3> m_pipeline_counter;
+  u32 m_pipeline_counter[3];
 
   StoredPipeline CreatePipeline(const AbstractPipelineConfig& config)
   {
