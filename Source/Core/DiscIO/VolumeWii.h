@@ -76,9 +76,6 @@ public:
 
   Platform GetVolumeType() const;
   bool IsDatelDisc() const;
-  bool CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
-                           const Partition& partition) const;
-  bool CheckBlockIntegrity(u64 block_index, const Partition& partition) const;
 
   Region GetRegion() const;
   BlobType GetBlobType() const;
@@ -121,7 +118,6 @@ private:
     Common::Lazy<IOS::ES::TicketReader> ticket;
     Common::Lazy<IOS::ES::TMDReader> tmd;
     Common::Lazy<std::vector<u8>> cert_chain;
-    Common::Lazy<std::vector<u8>> h3_table;
     Common::Lazy<FileSystem> file_system;
     Common::Lazy<u64> data_offset;
     u32 type = 0;

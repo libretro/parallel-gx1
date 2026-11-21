@@ -114,20 +114,6 @@ VolumeWii::VolumeWii(BlobReader* reader)
         return cert_chain;
       };
 
-      auto get_h3_table = [this, partition]() -> std::vector<u8> {
-        if (!m_has_hashes)
-          return {};
-        const std::optional<u64> h3_table_offset = ReadSwappedAndShifted(
-            partition.offset + WII_PARTITION_H3_OFFSET_ADDRESS, PARTITION_NONE);
-        if (!h3_table_offset)
-          return {};
-        std::vector<u8> h3_table(WII_PARTITION_H3_SIZE);
-        if (!m_reader->Read(partition.offset + *h3_table_offset, WII_PARTITION_H3_SIZE,
-                            h3_table.data()))
-          return {};
-        return h3_table;
-      };
-
       auto get_key = [this, partition]() -> PartitionKey {
         const IOS::ES::TicketReader& ticket = *m_partitions[partition].ticket;
         PartitionKey key{};
@@ -148,7 +134,6 @@ VolumeWii::VolumeWii(BlobReader* reader)
                                             Common::Lazy<IOS::ES::TicketReader>(get_ticket),
                                             Common::Lazy<IOS::ES::TMDReader>(get_tmd),
                                             Common::Lazy<std::vector<u8>>(get_cert_chain),
-                                            Common::Lazy<std::vector<u8>>(get_h3_table),
                                             Common::Lazy<FileSystem>(get_file_system),
                                             Common::Lazy<u64>(get_data_offset), *partition_type});
     }
@@ -365,73 +350,6 @@ u64 VolumeWii::GetRawSize() const
 const BlobReader& VolumeWii::GetBlobReader() const
 {
   return *m_reader;
-}
-
-bool VolumeWii::CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
-                                    const Partition& partition) const
-{
-  auto it = m_partitions.find(partition);
-  if (it == m_partitions.end())
-    return false;
-  const PartitionDetails& partition_details = it->second;
-
-  if (block_index / BLOCKS_PER_GROUP * 20 >= partition_details.h3_table->size())
-  {
-    return false;
-  }
-
-  HashBlock hashes;
-  u8 cluster_data_buffer[BLOCK_DATA_SIZE];
-  const u8* cluster_data;
-
-  if (m_has_encryption)
-  {
-    if (!partition_details.key->valid)
-      return false;
-    const struct aes_ctx* const aes_context = &partition_details.key->ctx;
-
-    DecryptBlockHashes(encrypted_data, &hashes, aes_context);
-    DecryptBlockData(encrypted_data, cluster_data_buffer, aes_context);
-    cluster_data = cluster_data_buffer;
-  }
-  else
-  {
-    std::memcpy(&hashes, encrypted_data, BLOCK_HEADER_SIZE);
-    cluster_data = encrypted_data + BLOCK_HEADER_SIZE;
-  }
-
-  u8 h0[31][20];
-  u8 digest[20];
-  SHA1DigestMany(cluster_data, 0x400, 0x400, 31, &h0[0][0]);
-  if (std::memcmp(h0, hashes.h0, sizeof(h0)))
-    return false;
-
-  SHA1Digest(&hashes.h0[0][0], sizeof(hashes.h0), digest);
-  if (std::memcmp(digest, hashes.h1[block_index % 8], sizeof(digest)))
-    return false;
-
-  SHA1Digest(&hashes.h1[0][0], sizeof(hashes.h1), digest);
-  if (std::memcmp(digest, hashes.h2[block_index / 8 % 8], sizeof(digest)))
-    return false;
-
-  SHA1Digest(&hashes.h2[0][0], sizeof(hashes.h2), digest);
-  return !std::memcmp(digest, partition_details.h3_table->data() + block_index / 64 * 20,
-                      sizeof(digest));
-}
-
-bool VolumeWii::CheckBlockIntegrity(u64 block_index, const Partition& partition) const
-{
-  auto it = m_partitions.find(partition);
-  if (it == m_partitions.end())
-    return false;
-  const PartitionDetails& partition_details = it->second;
-  const u64 cluster_offset =
-      partition.offset + *partition_details.data_offset + block_index * BLOCK_TOTAL_SIZE;
-
-  std::vector<u8> cluster(BLOCK_TOTAL_SIZE);
-  if (!m_reader->Read(cluster_offset, cluster.size(), cluster.data()))
-    return false;
-  return CheckBlockIntegrity(block_index, cluster.data(), partition);
 }
 
 namespace

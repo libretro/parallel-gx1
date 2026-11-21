@@ -158,23 +158,6 @@ std::optional<u64> Volume::GetTitleID(const Partition& partition) const
   }
 }
 
-// the Wii disc's alone
-bool Volume::CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
-                                 const Partition& partition) const
-{
-  if (m_kind != VolumeKind::Wii)
-    return false;
-  return static_cast<const VolumeWii*>(this)->CheckBlockIntegrity(block_index, encrypted_data,
-                                                                  partition);
-}
-
-bool Volume::CheckBlockIntegrity(u64 block_index, const Partition& partition) const
-{
-  if (m_kind != VolumeKind::Wii)
-    return false;
-  return static_cast<const VolumeWii*>(this)->CheckBlockIntegrity(block_index, partition);
-}
-
 u32 Volume::GetOffsetShift() const
 {
   if (m_kind != VolumeKind::Wii)

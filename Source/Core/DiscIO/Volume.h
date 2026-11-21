@@ -100,9 +100,6 @@ public:
   Platform GetVolumeType() const;
   bool IsDatelDisc() const;
   bool IsNKit() const;
-  bool CheckBlockIntegrity(u64 block_index, const u8* encrypted_data,
-                           const Partition& partition) const;
-  bool CheckBlockIntegrity(u64 block_index, const Partition& partition) const;
   Region GetRegion() const;
   Country GetCountry(const Partition& partition = PARTITION_NONE) const;
   u32 GetSimulatedMemorySize() const;
