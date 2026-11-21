@@ -3,7 +3,6 @@
 
 #include "Core/IOS/USB/Emulated/Skylanders/Skylander.h"
 
-#include <map>
 #include <vector>
 
 #include "AudioCommon/FieldAudio.h"
@@ -14,7 +13,20 @@
 
 namespace IOS::HLE::USB
 {
-const std::map<const std::pair<const u16, const u16>, SkyData> list_skylanders = {
+namespace
+{
+struct SkylanderListEntry
+{
+  struct
+  {
+    u16 figure_id;
+    u16 variant_id;
+  } key;
+  SkyData data;
+};
+}  // namespace
+
+static const SkylanderListEntry list_skylanders[] = {
     {{0, 0x0000}, {"Whirlwind", Game::SpyrosAdv, Element::Air, Type::Skylander}},
     {{0, 0x1801}, {"Whirlwind (S2)", Game::Giants, Element::Air, Type::Skylander}},
     {{0, 0x1812}, {"Whirlwind (Stone)", Game::Giants, Element::Air, Type::Skylander}},
@@ -606,6 +618,16 @@ const std::map<const std::pair<const u16, const u16>, SkyData> list_skylanders =
     {{3502, 0x4000}, {"Sea Trophy", Game::Superchargers, Element::Water, Type::Trophy}},
     {{3503, 0x4000}, {"Kaos Trophy", Game::Superchargers, Element::Other, Type::Trophy}},
 };
+
+const SkyData* FindSkylander(u16 figure_id, u16 variant_id)
+{
+  for (const SkylanderListEntry& entry : list_skylanders)
+  {
+    if (entry.key.figure_id == figure_id && entry.key.variant_id == variant_id)
+      return &entry.data;
+  }
+  return nullptr;
+}
 
 SkylanderUSB::SkylanderUSB()
 {

@@ -183,13 +183,11 @@ FigureData SkylanderFigure::GetData() const
   FigureData figure_data = {.figure_id = Common::BitCastPtr<u16>(m_data.data() + 0x10),
                             .variant_id = Common::BitCastPtr<u16>(m_data.data() + 0x1C)};
 
-  auto filter = std::make_pair(figure_data.figure_id, figure_data.variant_id);
   Type type = Type::Item;
-  if (const auto it = IOS::HLE::USB::list_skylanders.find(filter);
-      it != IOS::HLE::USB::list_skylanders.end())
+  if (const SkyData* const found =
+          IOS::HLE::USB::FindSkylander(figure_data.figure_id, figure_data.variant_id))
   {
-    auto found = it->second;
-    type = found.type;
+    type = found->type;
   }
 
   figure_data.normalized_type = NormalizeSkylanderType(type);

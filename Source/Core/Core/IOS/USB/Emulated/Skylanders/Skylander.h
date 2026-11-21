@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <map>
 #include <vector>
 
 #include <queues/retro_deque.h>
@@ -67,7 +66,8 @@ struct SkyData
   Type type = Type::Unknown;
 };
 
-extern const std::map<const std::pair<const u16, const u16>, SkyData> list_skylanders;
+// The known figure with this ID and variant, or nullptr
+const SkyData* FindSkylander(u16 figure_id, u16 variant_id);
 // A response the portal owes the next interrupt transfer
 typedef std::array<u8, 64> SkylanderQuery;
 RETRO_DEQUE_DEFINE(skylander_queries, SkylanderQuery);
