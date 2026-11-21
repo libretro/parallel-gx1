@@ -195,9 +195,6 @@ bool FifoPlayer::Open(const std::string& filename)
     m_FrameRangeEnd = m_File->GetFrameCount() - 1;
   }
 
-  if (m_FileLoadedCb)
-    m_FileLoadedCb();
-
   return (m_File != nullptr);
 }
 
@@ -275,9 +272,6 @@ CPU::State FifoPlayer::AdvanceFrame()
     LoadTextureMemory();
     FlushWGP();
   }
-
-  if (m_FrameWrittenCb)
-    m_FrameWrittenCb();
 
   if (m_EarlyMemoryUpdates && m_CurrentFrame == m_FrameRangeStart)
     WriteAllMemoryUpdates();

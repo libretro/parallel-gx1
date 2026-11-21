@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <set>
 #include <string>
@@ -117,8 +116,6 @@ private:
 class FifoPlayer
 {
 public:
-  using CallbackFunc = std::function<void()>;
-
   explicit FifoPlayer(Core::System& system);
   FifoPlayer(const FifoPlayer&) = delete;
   FifoPlayer(FifoPlayer&&) = delete;
@@ -151,9 +148,6 @@ public:
   void SetObjectRangeStart(u32 start) { m_ObjectRangeStart = start; }
   u32 GetObjectRangeEnd() const { return m_ObjectRangeEnd; }
   void SetObjectRangeEnd(u32 end) { m_ObjectRangeEnd = end; }
-
-  // Callbacks
-  void SetFrameWrittenCallback(CallbackFunc callback) { m_FrameWrittenCb = std::move(callback); }
 
   bool IsRunningWithFakeVideoInterfaceUpdates() const;
 
@@ -217,8 +211,6 @@ private:
   u32 m_ElapsedCycles = 0;
   u32 m_FrameFifoSize = 0;
 
-  CallbackFunc m_FileLoadedCb = nullptr;
-  CallbackFunc m_FrameWrittenCb = nullptr;
   Config::ConfigChangedCallbackID m_config_changed_callback_id;
 
   std::unique_ptr<FifoDataFile> m_File;
