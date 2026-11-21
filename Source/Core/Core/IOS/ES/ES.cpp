@@ -1105,11 +1105,12 @@ ReturnCode ESCore::WriteNewCertToStore(const ES::CertReader& cert)
   const ReturnCode ret = ReadCertStore(&current_store, &current_store_size);
   if (ret == IPC_SUCCESS)
   {
-    const std::map<std::string, ES::CertReader> certs =
-        ES::ParseCertChain(current_store, current_store_size);
+    size_t offset;
+    const bool present =
+        ES::FindCertInChain(current_store, current_store_size, cert.GetName().c_str(), &offset);
     std::free(current_store);
     // The cert is already present in the store. Nothing to do.
-    if (certs.contains(cert.GetName()))
+    if (present)
       return IPC_SUCCESS;
   }
 
@@ -1142,14 +1143,16 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
     return ES_EINVAL;
 
   // Find the direct issuer and the CA certificates for the blob.
-  const std::map<std::string, ES::CertReader> certs =
-      ES::ParseCertChain(cert_chain, cert_chain_size);
-  const auto issuer_cert_iterator = certs.find(parents[2]);
-  const auto ca_cert_iterator = certs.find(parents[1]);
-  if (issuer_cert_iterator == certs.end() || ca_cert_iterator == certs.end())
+  size_t issuer_cert_offset;
+  size_t ca_cert_offset;
+  if (!ES::FindCertInChain(cert_chain, cert_chain_size, parents[2].c_str(), &issuer_cert_offset) ||
+      !ES::FindCertInChain(cert_chain, cert_chain_size, parents[1].c_str(), &ca_cert_offset))
+  {
     return ES_UNKNOWN_ISSUER;
-  const ES::CertReader& issuer_cert = issuer_cert_iterator->second;
-  const ES::CertReader& ca_cert = ca_cert_iterator->second;
+  }
+  const ES::CertReader issuer_cert{cert_chain + issuer_cert_offset,
+                                   cert_chain_size - issuer_cert_offset};
+  const ES::CertReader ca_cert{cert_chain + ca_cert_offset, cert_chain_size - ca_cert_offset};
 
   // Some blobs can only be signed by specific certificates.
   if (!IsIssuerCorrect(type, issuer_cert))

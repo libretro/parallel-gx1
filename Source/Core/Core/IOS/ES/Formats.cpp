@@ -936,23 +936,33 @@ const u8* CertReader::GetPublicKey(size_t* size) const
   }
 }
 
-std::map<std::string, CertReader> ParseCertChain(const u8* chain, size_t size)
+bool ReadCertInChain(const u8* chain, size_t size, size_t offset, size_t* cert_size, char* name)
 {
-  std::map<std::string, CertReader> certs;
+  if (offset >= size)
+    return false;
+  const CertReader cert_reader{chain + offset, size - offset};
+  if (!cert_reader.IsValid())
+    return false;
+  cert_reader.GetBytes(cert_size);
+  const std::string cert_name = cert_reader.GetName();
+  std::memcpy(name, cert_name.c_str(), cert_name.size() + 1);
+  return true;
+}
 
+bool FindCertInChain(const u8* chain, size_t size, const char* name, size_t* offset)
+{
   size_t processed = 0;
-  while (processed != size)
+  size_t cert_size;
+  char cert_name[CERT_NAME_BUFFER_SIZE];
+  while (ReadCertInChain(chain, size, processed, &cert_size, cert_name))
   {
-    CertReader cert_reader{chain + processed, size - processed};
-    if (!cert_reader.IsValid())
-      return certs;
-
-    size_t cert_size;
-    cert_reader.GetBytes(&cert_size);
+    if (!std::strcmp(cert_name, name))
+    {
+      *offset = processed;
+      return true;
+    }
     processed += cert_size;
-    std::string name = cert_reader.GetName();
-    certs.emplace(std::move(name), std::move(cert_reader));
   }
-  return certs;
+  return false;
 }
 }  // namespace IOS::ES

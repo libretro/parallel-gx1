@@ -3,6 +3,7 @@
 
 #include "Core/IOS/ES/ES.h"
 
+#include <cstring>
 #include <utility>
 #include <vector>
 
@@ -143,25 +144,40 @@ IPCReply ESDevice::Sign(const IOCtlVRequest& request)
 ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_signature,
                               const u8* certs_bytes, size_t certs_size)
 {
-  const std::map<std::string, ES::CertReader> certs = ES::ParseCertChain(certs_bytes, certs_size);
-  if (certs.empty())
-    return ES_EINVAL;
-
-  auto ap_iterator = certs.begin();
-  for (; ap_iterator != certs.end(); ++ap_iterator)
+  // The AP certificate is the one whose name, longer than "AP", sorts first
+  bool any_cert = false;
+  bool found_ap = false;
+  size_t ap_offset = 0;
+  char ap_name[ES::CERT_NAME_BUFFER_SIZE];
+  size_t processed = 0;
+  size_t cert_size;
+  char cert_name[ES::CERT_NAME_BUFFER_SIZE];
+  while (ES::ReadCertInChain(certs_bytes, certs_size, processed, &cert_size, cert_name))
   {
-    if (ap_iterator->first.length() > 2 && ap_iterator->first.compare(0, 2, "AP") == 0)
-      break;
+    any_cert = true;
+    if (std::strlen(cert_name) > 2 && !std::strncmp(cert_name, "AP", 2) &&
+        (!found_ap || std::strcmp(cert_name, ap_name) < 0))
+    {
+      found_ap = true;
+      ap_offset = processed;
+      std::memcpy(ap_name, cert_name, sizeof(ap_name));
+    }
+    processed += cert_size;
   }
-  if (ap_iterator == certs.end())
+  if (!any_cert)
+    return ES_EINVAL;
+  if (!found_ap)
     return ES_UNKNOWN_ISSUER;
-  const ES::CertReader& ap = ap_iterator->second;
+  const ES::CertReader ap{certs_bytes + ap_offset, certs_size - ap_offset};
 
   const auto ap_issuers = SplitString(ap.GetIssuer(), '-');
-  const auto ng_iterator = ap_issuers.size() > 1 ? certs.find(*ap_issuers.rbegin()) : certs.end();
-  if (ng_iterator == certs.end())
+  size_t ng_offset;
+  if (ap_issuers.size() <= 1 ||
+      !ES::FindCertInChain(certs_bytes, certs_size, ap_issuers.back().c_str(), &ng_offset))
+  {
     return ES_UNKNOWN_ISSUER;
-  const ES::CertReader& ng = ng_iterator->second;
+  }
+  const ES::CertReader ng{certs_bytes + ng_offset, certs_size - ng_offset};
 
   IOSC& iosc = m_ios.GetIOSC();
   IOSC::Handle ng_cert;

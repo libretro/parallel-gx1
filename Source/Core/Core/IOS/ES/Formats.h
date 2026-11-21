@@ -366,6 +366,12 @@ private:
   bool m_is_valid = false;
 };
 
-std::map<std::string, CertReader> ParseCertChain(const u8* chain, size_t size);
+// A certificate name, NUL-terminated
+constexpr size_t CERT_NAME_BUFFER_SIZE = 0x41;
+// The certificate at offset in a chain: its size into *cert_size and its name into name, of
+// CERT_NAME_BUFFER_SIZE; false at the chain's end or an invalid certificate, where a walk stops
+bool ReadCertInChain(const u8* chain, size_t size, size_t offset, size_t* cert_size, char* name);
+// The offset of the chain's first certificate named name; false when the walk finds none
+bool FindCertInChain(const u8* chain, size_t size, const char* name, size_t* offset);
 }  // namespace ES
 }  // namespace IOS
