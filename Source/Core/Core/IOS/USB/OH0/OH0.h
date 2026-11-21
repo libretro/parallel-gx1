@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <utility>
 
@@ -59,8 +57,11 @@ private:
 
   bool HasDeviceWithVidPid(u16 vid, u16 pid) const;
   void OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> device) override;
-  template <typename T>
-  void TriggerHook(std::map<T, u32>& hooks, T value, ReturnCode return_value);
+  void TriggerInsertionHook(USB::DeviceInfo info, ReturnCode return_value);
+  void TriggerRemovalHook(u64 device_id, ReturnCode return_value);
+  void ReplyToHook(u32 address, ReturnCode return_value);
+  bool IsDeviceOpened(u64 device_id) const;
+  void SetDeviceOpened(u64 device_id, bool opened);
 
   struct DeviceEntry
   {
@@ -70,9 +71,25 @@ private:
   };
   static_assert(sizeof(DeviceEntry) == 8, "sizeof(DeviceEntry) must be 8");
 
-  // Device info (VID, PID) → command address for pending hook requests
-  std::map<USB::DeviceInfo, u32> m_insertion_hooks;
-  std::map<u64, u32> m_removal_hooks;
-  std::set<u64> m_opened_devices;
+  // The pending hook requests' command addresses, by device info (VID, PID) or device ID, and
+  // the opened devices: each sorted by its key, as the maps and set they replace were saved
+  static constexpr u32 MAX_ENTRIES = 32;
+  struct InsertionHook
+  {
+    USB::DeviceInfo info;
+    u32 address;
+  };
+  struct RemovalHook
+  {
+    u64 device_id;
+    u32 address;
+  };
+  InsertionHook m_insertion_hooks[MAX_ENTRIES]{};
+  u32 m_insertion_hook_count = 0;
+  RemovalHook m_removal_hooks[MAX_ENTRIES]{};
+  u32 m_removal_hook_count = 0;
+  u64 m_opened_devices[MAX_ENTRIES]{};
+  u32 m_opened_device_count = 0;
+  void SetInsertionHook(USB::DeviceInfo info, u32 address, bool replace);
 };
 }  // namespace IOS::HLE

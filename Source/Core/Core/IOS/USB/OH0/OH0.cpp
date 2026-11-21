@@ -75,9 +75,45 @@ void OH0::DoState(PointerWrap& p)
       Core::DisplayMessage("It is suggested that you unplug and replug all connected USB devices.");
       Core::DisplayMessage("If USB doesn't work properly, an emulation reset may be needed.");
     }
-    p.Do(m_insertion_hooks);
-    p.Do(m_removal_hooks);
-    p.Do(m_opened_devices);
+    // as a map, a map and a set: each a count and then its entries in order
+    u32 count = m_insertion_hook_count;
+    p.Do(count);
+    if (count > MAX_ENTRIES)
+    {
+      p.SetMeasureMode();
+      return;
+    }
+    m_insertion_hook_count = count;
+    for (u32 i = 0; i < count; i++)
+    {
+      p.Do(m_insertion_hooks[i].info);
+      p.Do(m_insertion_hooks[i].address);
+    }
+
+    count = m_removal_hook_count;
+    p.Do(count);
+    if (count > MAX_ENTRIES)
+    {
+      p.SetMeasureMode();
+      return;
+    }
+    m_removal_hook_count = count;
+    for (u32 i = 0; i < count; i++)
+    {
+      p.Do(m_removal_hooks[i].device_id);
+      p.Do(m_removal_hooks[i].address);
+    }
+
+    count = m_opened_device_count;
+    p.Do(count);
+    if (count > MAX_ENTRIES)
+    {
+      p.SetMeasureMode();
+      return;
+    }
+    m_opened_device_count = count;
+    for (u32 i = 0; i < count; i++)
+      p.Do(m_opened_devices[i]);
   }
   USBHost::DoState(p);
 }
@@ -91,9 +127,8 @@ IPCReply OH0::CancelInsertionHook(const IOCtlRequest& request)
   auto& memory = system.GetMemory();
 
   // IOS assigns random IDs, but ours are simply the VID + PID (see RegisterInsertionHookWithID)
-  TriggerHook(m_insertion_hooks,
-              {memory.Read_U16(request.buffer_in), memory.Read_U16(request.buffer_in + 2)},
-              USB_ECANCELED);
+  TriggerInsertionHook({memory.Read_U16(request.buffer_in), memory.Read_U16(request.buffer_in + 2)},
+                       USB_ECANCELED);
   return IPCReply(IPC_SUCCESS);
 }
 
@@ -168,9 +203,21 @@ IPCReply OH0::SetRhPortStatus(const IOCtlVRequest& request)
 IPCReply OH0::RegisterRemovalHook(const u64 device_id, const IOCtlRequest& request)
 {
   // IOS only allows a single device removal hook.
-  const bool inserted = m_removal_hooks.try_emplace(device_id, request.address).second;
-  if (!inserted)
+  u32 slot = 0;
+  while (slot < m_removal_hook_count && m_removal_hooks[slot].device_id < device_id)
+    slot++;
+  if (slot < m_removal_hook_count && m_removal_hooks[slot].device_id == device_id)
     return IPCReply(IPC_EEXIST);
+  if (m_removal_hook_count == MAX_ENTRIES)
+  {
+    ERROR_LOG(IOS_USB, "Too many device removal hooks");
+    return IPCReply(IPC_EEXIST);
+  }
+  for (u32 i = m_removal_hook_count; i > slot; i--)
+    m_removal_hooks[i] = m_removal_hooks[i - 1];
+  m_removal_hooks[slot].device_id = device_id;
+  m_removal_hooks[slot].address = request.address;
+  m_removal_hook_count++;
   return IPCReply::None();
 }
 
@@ -187,7 +234,7 @@ IPCReply OH0::RegisterInsertionHook(const IOCtlVRequest& request)
   if (HasDeviceWithVidPid(vid, pid))
     return IPCReply(IPC_SUCCESS);
   // TODO: figure out whether IOS allows more than one hook.
-  m_insertion_hooks[{vid, pid}] = request.address;
+  SetInsertionHook({vid, pid}, request.address, true);
   return IPCReply::None();
 }
 
@@ -205,7 +252,7 @@ IPCReply OH0::RegisterInsertionHookWithID(const IOCtlVRequest& request)
   if (!trigger_only_for_new_device && HasDeviceWithVidPid(vid, pid))
     return IPCReply(IPC_SUCCESS);
   // TODO: figure out whether IOS allows more than one hook.
-  m_insertion_hooks.insert({{vid, pid}, request.address});
+  SetInsertionHook({vid, pid}, request.address, false);
   // The output vector is overwritten with an ID to use with ioctl 31 for cancelling the hook.
   memory.Write_U32(vid << 16 | pid, request.io_vectors[0].address);
   return IPCReply::None();
@@ -232,27 +279,115 @@ void OH0::OnDeviceChange(const ChangeEvent event, std::shared_ptr<USB::Device> d
 {
   if (event == ChangeEvent::Inserted)
   {
-    TriggerHook(m_insertion_hooks, {device->GetVid(), device->GetPid()}, IPC_SUCCESS);
+    TriggerInsertionHook({device->GetVid(), device->GetPid()}, IPC_SUCCESS);
   }
   else if (event == ChangeEvent::Removed)
   {
-    TriggerHook(m_removal_hooks, device->GetId(), IPC_SUCCESS);
+    TriggerRemovalHook(device->GetId(), IPC_SUCCESS);
 
     // This fixes a problem where Rock Band 3 randomly fails to detect reconnected microphones.
     // Real IOS behavior untested.
-    m_opened_devices.erase(device->GetId());
+    SetDeviceOpened(device->GetId(), false);
   }
 }
 
-template <typename T>
-void OH0::TriggerHook(std::map<T, u32>& hooks, T value, const ReturnCode return_value)
+void OH0::ReplyToHook(u32 address, ReturnCode return_value)
 {
-  const auto hook = hooks.find(value);
-  if (hook == hooks.end())
-    return;
-  GetEmulationKernel().EnqueueIPCReply(Request{GetSystem(), hook->second}, return_value, 0,
+  GetEmulationKernel().EnqueueIPCReply(Request{GetSystem(), address}, return_value, 0,
                                        CoreTiming::FromThread::ANY);
-  hooks.erase(hook);
+}
+
+// Hooks are keyed by VID alone, as DeviceInfo orders them: a hook for a VID already hooked keeps
+// that hook's PID.
+void OH0::SetInsertionHook(USB::DeviceInfo info, u32 address, bool replace)
+{
+  u32 slot = 0;
+  while (slot < m_insertion_hook_count && m_insertion_hooks[slot].info.vid < info.vid)
+    slot++;
+  if (slot < m_insertion_hook_count && m_insertion_hooks[slot].info.vid == info.vid)
+  {
+    if (replace)
+      m_insertion_hooks[slot].address = address;
+    return;
+  }
+  if (m_insertion_hook_count == MAX_ENTRIES)
+  {
+    ERROR_LOG(IOS_USB, "Too many device insertion hooks");
+    return;
+  }
+  for (u32 i = m_insertion_hook_count; i > slot; i--)
+    m_insertion_hooks[i] = m_insertion_hooks[i - 1];
+  m_insertion_hooks[slot].info = info;
+  m_insertion_hooks[slot].address = address;
+  m_insertion_hook_count++;
+}
+
+void OH0::TriggerInsertionHook(USB::DeviceInfo info, ReturnCode return_value)
+{
+  for (u32 slot = 0; slot < m_insertion_hook_count; slot++)
+  {
+    if (m_insertion_hooks[slot].info.vid == info.vid)
+    {
+      const u32 address = m_insertion_hooks[slot].address;
+      for (u32 i = slot; i + 1 < m_insertion_hook_count; i++)
+        m_insertion_hooks[i] = m_insertion_hooks[i + 1];
+      m_insertion_hook_count--;
+      ReplyToHook(address, return_value);
+      return;
+    }
+  }
+}
+
+void OH0::TriggerRemovalHook(u64 device_id, ReturnCode return_value)
+{
+  for (u32 slot = 0; slot < m_removal_hook_count; slot++)
+  {
+    if (m_removal_hooks[slot].device_id == device_id)
+    {
+      const u32 address = m_removal_hooks[slot].address;
+      for (u32 i = slot; i + 1 < m_removal_hook_count; i++)
+        m_removal_hooks[i] = m_removal_hooks[i + 1];
+      m_removal_hook_count--;
+      ReplyToHook(address, return_value);
+      return;
+    }
+  }
+}
+
+bool OH0::IsDeviceOpened(u64 device_id) const
+{
+  for (u32 i = 0; i < m_opened_device_count; i++)
+  {
+    if (m_opened_devices[i] == device_id)
+      return true;
+  }
+  return false;
+}
+
+void OH0::SetDeviceOpened(u64 device_id, bool opened)
+{
+  u32 slot = 0;
+  while (slot < m_opened_device_count && m_opened_devices[slot] < device_id)
+    slot++;
+  const bool present = slot < m_opened_device_count && m_opened_devices[slot] == device_id;
+  if (opened && !present)
+  {
+    if (m_opened_device_count == MAX_ENTRIES)
+    {
+      ERROR_LOG(IOS_USB, "Too many opened devices");
+      return;
+    }
+    for (u32 i = m_opened_device_count; i > slot; i--)
+      m_opened_devices[i] = m_opened_devices[i - 1];
+    m_opened_devices[slot] = device_id;
+    m_opened_device_count++;
+  }
+  else if (!opened && present)
+  {
+    for (u32 i = slot; i + 1 < m_opened_device_count; i++)
+      m_opened_devices[i] = m_opened_devices[i + 1];
+    m_opened_device_count--;
+  }
 }
 
 std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
@@ -265,12 +400,12 @@ std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
       continue;
     has_device_with_vid_pid = true;
 
-    if (m_opened_devices.contains(device.second->GetId()) || !device.second->Attach())
+    if (IsDeviceOpened(device.second->GetId()) || !device.second->Attach())
     {
       continue;
     }
 
-    m_opened_devices.emplace(device.second->GetId());
+    SetDeviceOpened(device.second->GetId(), true);
     return {IPC_SUCCESS, device.second->GetId()};
   }
   // IOS doesn't allow opening the same device more than once (IPC_EEXIST)
@@ -279,8 +414,8 @@ std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
 
 void OH0::DeviceClose(const u64 device_id)
 {
-  TriggerHook(m_removal_hooks, device_id, IPC_ENOENT);
-  m_opened_devices.erase(device_id);
+  TriggerRemovalHook(device_id, IPC_ENOENT);
+  SetDeviceOpened(device_id, false);
 }
 
 IPCReply OH0::DeviceIOCtl(const u64 device_id, const IOCtlRequest& request)
@@ -298,7 +433,7 @@ IPCReply OH0::DeviceIOCtl(const u64 device_id, const IOCtlRequest& request)
     // Unimplemented because libusb doesn't do power management.
     return IPCReply(IPC_SUCCESS);
   case USB::IOCTL_USBV0_RESET_DEVICE:
-    TriggerHook(m_removal_hooks, device_id, IPC_SUCCESS);
+    TriggerRemovalHook(device_id, IPC_SUCCESS);
     return IPCReply(IPC_SUCCESS);
   default:
     return IPCReply(IPC_EINVAL);
