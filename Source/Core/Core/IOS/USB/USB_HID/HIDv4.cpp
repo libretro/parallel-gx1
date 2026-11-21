@@ -147,18 +147,80 @@ void USB_HIDv4::DoState(PointerWrap& p)
     m_devicechange_hook_request.reset();
   }
 
-  p.Do(m_ios_ids);
-  p.Do(m_device_ids);
+  // As two maps were: the IOS IDs and their devices in IOS ID order, then the devices and their
+  // IOS IDs in device order
+  u32 count = m_id_count;
+  p.Do(count);
+  if (p.IsReadMode())
+  {
+    if (count > MAX_DEVICES)
+    {
+      p.SetMeasureMode();
+      return;
+    }
+    for (u32 i = 0; i < count; i++)
+    {
+      p.Do(m_ids[i].ios_id);
+      p.Do(m_ids[i].device_id);
+    }
+    m_id_count = count;
+    // the second map holds the same pairs
+    u32 inverse_count = 0;
+    p.Do(inverse_count);
+    for (u32 i = 0; i < inverse_count; i++)
+    {
+      u64 device_id = 0;
+      s32 ios_id = 0;
+      p.Do(device_id);
+      p.Do(ios_id);
+    }
+  }
+  else
+  {
+    for (u32 i = 0; i < m_id_count; i++)
+    {
+      p.Do(m_ids[i].ios_id);
+      p.Do(m_ids[i].device_id);
+    }
+    // the pairs by device: a sort of their indices, a handful at most
+    u8 order[MAX_DEVICES];
+    for (u32 i = 0; i < m_id_count; i++)
+    {
+      u32 j = i;
+      for (; j > 0 && m_ids[order[j - 1]].device_id > m_ids[i].device_id; j--)
+        order[j] = order[j - 1];
+      order[j] = static_cast<u8>(i);
+    }
+    u32 inverse_count = m_id_count;
+    p.Do(inverse_count);
+    for (u32 i = 0; i < m_id_count; i++)
+    {
+      p.Do(m_ids[order[i]].device_id);
+      p.Do(m_ids[order[i]].ios_id);
+    }
+  }
 
   USBHost::DoState(p);
 }
 
 std::shared_ptr<USB::Device> USB_HIDv4::GetDeviceByIOSID(const s32 ios_id) const
 {
-  const auto iterator = m_ios_ids.find(ios_id);
-  if (iterator == m_ios_ids.cend())
-    return nullptr;
-  return GetDeviceById(iterator->second);
+  for (u32 i = 0; i < m_id_count; i++)
+  {
+    if (m_ids[i].ios_id == ios_id)
+      return GetDeviceById(m_ids[i].device_id);
+  }
+  return nullptr;
+}
+
+const USB_HIDv4::DeviceIds* USB_HIDv4::FindByDeviceId(u64 device_id) const
+{
+  for (u32 i = 0; i < m_id_count; i++)
+  {
+    if (m_ids[i].device_id == device_id)
+      return &m_ids[i];
+  }
+  return nullptr;
 }
 
 void USB_HIDv4::OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> device)
@@ -166,19 +228,31 @@ void USB_HIDv4::OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> d
   {
     if (event == ChangeEvent::Inserted)
     {
-      const auto id = device->GetId();
-      s32 new_id = 0;
-      while (!m_ios_ids.emplace(new_id, id).second)
-        ++new_id;
-
-      m_device_ids[id] = new_id;
+      // the lowest free IOS ID, kept in order
+      u32 slot = 0;
+      while (slot < m_id_count && m_ids[slot].ios_id == static_cast<s32>(slot))
+        slot++;
+      if (m_id_count < MAX_DEVICES)
+      {
+        for (u32 i = m_id_count; i > slot; i--)
+          m_ids[i] = m_ids[i - 1];
+        m_ids[slot].ios_id = static_cast<s32>(slot);
+        m_ids[slot].device_id = device->GetId();
+        m_id_count++;
+      }
+      else
+      {
+        ERROR_LOG(IOS_USB, "Too many HID devices");
+      }
     }
     else if (event == ChangeEvent::Removed)
     {
-      if (const auto it = m_device_ids.find(device->GetId()); it != m_device_ids.end())
+      if (const DeviceIds* const ids = FindByDeviceId(device->GetId()))
       {
-        m_ios_ids.erase(it->second);
-        m_device_ids.erase(it);
+        const u32 slot = static_cast<u32>(ids - m_ids);
+        for (u32 i = slot; i + 1 < m_id_count; i++)
+          m_ids[i] = m_ids[i + 1];
+        m_id_count--;
       }
     }
   }
@@ -271,7 +345,8 @@ std::vector<u8> USB_HIDv4::GetDeviceEntry(const USB::Device& device) const
   std::vector<u8> entry(8);
   const std::vector<u8> descriptors = GetDescriptors(device);
   const u32 entry_size = Common::swap32(static_cast<u32>(entry.size() + descriptors.size()));
-  const u32 ios_device_id = Common::swap32(m_device_ids.at(device.GetId()));
+  const DeviceIds* const ids = FindByDeviceId(device.GetId());
+  const u32 ios_device_id = Common::swap32(static_cast<u32>(ids ? ids->ios_id : -1));
   std::memcpy(entry.data(), &entry_size, sizeof(entry_size));
   std::memcpy(entry.data() + 4, &ios_device_id, sizeof(ios_device_id));
   entry.insert(entry.end(), descriptors.begin(), descriptors.end());

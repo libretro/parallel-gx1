@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,8 +44,15 @@ private:
   bool m_has_pending_changes = true;
   bool m_is_shut_down = false;
   std::unique_ptr<IOCtlRequest> m_devicechange_hook_request;
-  // IOS device IDs <=> USB device IDs
-  std::map<s32, u64> m_ios_ids;
-  std::map<u64, s32> m_device_ids;
+  // IOS device IDs <=> USB device IDs, sorted by IOS ID
+  struct DeviceIds
+  {
+    s32 ios_id;
+    u64 device_id;
+  };
+  static constexpr u32 MAX_DEVICES = 64;
+  DeviceIds m_ids[MAX_DEVICES]{};
+  u32 m_id_count = 0;
+  const DeviceIds* FindByDeviceId(u64 device_id) const;
 };
 }  // namespace IOS::HLE
