@@ -149,8 +149,8 @@ public:
 protected:
   explicit Kernel(u64 title_id);
 
-  std::unique_ptr<FSCore> m_fs_core;
-  std::unique_ptr<ESCore> m_es_core;
+  FSCore* m_fs_core = nullptr;  // owned
+  ESCore* m_es_core = nullptr;  // owned
 
   bool m_is_responsible_for_nand_root = false;
   u64 m_title_id = 0;

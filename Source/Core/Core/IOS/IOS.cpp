@@ -294,12 +294,14 @@ Kernel::Kernel(IOSC::ConsoleType console_type) : m_iosc(console_type)
   m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session).release();
   ASSERT(m_fs);
 
-  m_fs_core = std::make_unique<FSCore>(*this);
-  m_es_core = std::make_unique<ESCore>(*this);
+  m_fs_core = new FSCore(*this);
+  m_es_core = new ESCore(*this);
 }
 
 Kernel::~Kernel()
 {
+  delete m_es_core;
+  delete m_fs_core;
   delete m_fs;
   if (m_is_responsible_for_nand_root)
     Core::ShutdownWiiRoot();
@@ -331,9 +333,9 @@ EmulationKernel::EmulationKernel(Core::System& system, u64 title_id)
   AddDevice(new AesDevice(*this, "/dev/aes"));
   AddDevice(new ShaDevice(*this, "/dev/sha"));
 
-  m_fs_core = std::make_unique<FSCore>(*this);
+  m_fs_core = new FSCore(*this);
   AddDevice(new FSDevice(*this, *m_fs_core, "/dev/fs"));
-  m_es_core = std::make_unique<ESCore>(*this);
+  m_es_core = new ESCore(*this);
   AddDevice(new ESDevice(*this, *m_es_core, "/dev/es"));
 
   AddStaticDevices();
