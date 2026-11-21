@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cinttypes>
-#include <map>
 #include <utility>
 
 #include "Common/Logging/Log.h"
@@ -213,16 +212,30 @@ IPCReply Device::Close(u32 fd)
 
 IPCReply Device::Unsupported(const Request& request)
 {
-  static const std::map<IPCCommandType, std::string_view> names{{
-      {IPC_CMD_READ, "Read"},
-      {IPC_CMD_WRITE, "Write"},
-      {IPC_CMD_SEEK, "Seek"},
-      {IPC_CMD_IOCTL, "IOCtl"},
-      {IPC_CMD_IOCTLV, "IOCtlV"},
-  }};
+  const char* name;
+  switch (request.command)
+  {
+  case IPC_CMD_READ:
+    name = "Read";
+    break;
+  case IPC_CMD_WRITE:
+    name = "Write";
+    break;
+  case IPC_CMD_SEEK:
+    name = "Seek";
+    break;
+  case IPC_CMD_IOCTL:
+    name = "IOCtl";
+    break;
+  case IPC_CMD_IOCTLV:
+    name = "IOCtlV";
+    break;
+  default:
+    name = "Unknown";
+    break;
+  }
 
-  WARN_LOG(IOS, "%s does not support %.*s()", m_name.c_str(),
-           static_cast<int>(names.at(request.command).size()), names.at(request.command).data());
+  WARN_LOG(IOS, "%s does not support %s()", m_name.c_str(), name);
   return IPCReply{IPC_EINVAL};
 }
 }  // namespace IOS::HLE
