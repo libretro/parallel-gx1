@@ -43,8 +43,11 @@ private:
   u32 m_rom_mask = 0;
   u32 m_eeprom_size = 0;
   u32 m_eeprom_mask = 0;
-  std::vector<u8> m_rom;
-  std::vector<u8> m_eeprom;
+  // Owned; their sizes are those of the data loaded, which the masks above may not cover.
+  u8* m_rom = nullptr;
+  u32 m_rom_buffer_size = 0;
+  u8* m_eeprom = nullptr;
+  u32 m_eeprom_buffer_size = 0;
 
   //! Helper
   u32 m_position = 0;
@@ -59,9 +62,11 @@ private:
   u32 m_eeprom_status_mask = 0;
   bool m_eeprom_write_status = false;
 
-  void LoadFileToROM(const std::string& filename);
-  void LoadFileToEEPROM(const std::string& filename);
-  void SaveFileFromEEPROM(const std::string& filename);
+  void LoadFileToROM(const char* filename);
+  void LoadFileToEEPROM(const char* filename);
+  void SaveFileFromEEPROM(const char* filename);
+  // The cart path without its extension, where the save sits beside the ROM.
+  void GetCartBasePath(char* out, size_t out_size) const;
   void LoadRom();
   void CRC8(const u8* data, u32 size);
 

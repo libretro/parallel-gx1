@@ -3,9 +3,13 @@
 
 #include "Core/HW/EXI/EXI_DeviceAGP.h"
 
-#include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <string>
-#include <vector>
+
+#include <compat/strl.h>
+#include <file/file_path.h>
+#include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
@@ -33,15 +37,46 @@ CEXIAgp::CEXIAgp(Core::System& system, Slot slot) : IEXIDevice(system, EXIDevice
 
 CEXIAgp::~CEXIAgp()
 {
-  std::string path;
-  std::string filename;
-  std::string ext;
-  std::string gbapath;
-  SplitPath(Config::Get(Config::GetInfoForAGPCartPath(m_slot)), &path, &filename, &ext);
-  gbapath = path + filename;
+  // Room is left for the ".sav" put after the base path.
+  char path[PATH_MAX_LENGTH];
+  GetCartBasePath(path, sizeof(path) - 4);
 
-  if (!gbapath.empty())
-    SaveFileFromEEPROM(gbapath + ".sav");
+  if (path[0])
+  {
+    strlcat(path, ".sav", sizeof(path));
+    SaveFileFromEEPROM(path);
+  }
+  std::free(m_rom);
+  std::free(m_eeprom);
+}
+
+void CEXIAgp::GetCartBasePath(char* out, size_t out_size) const
+{
+  strlcpy(out, Config::Get(Config::GetInfoForAGPCartPath(m_slot)).c_str(), out_size);
+  path_remove_extension(out);
+}
+
+// Makes a buffer of size bytes, zeroed, in place of the one at *buffer.
+static void ResizeBuffer(u8** buffer, u32* buffer_size, u32 size)
+{
+  std::free(*buffer);
+  *buffer = size ? static_cast<u8*>(std::calloc(size, 1)) : nullptr;
+  *buffer_size = *buffer ? size : 0;
+}
+
+// Saves a buffer as a vector of bytes was: a u32 count, then the bytes.
+static void DoBuffer(PointerWrap& p, u8** buffer, u32* buffer_size)
+{
+  u32 size = *buffer_size;
+  p.Do(size);
+  if (p.IsReadMode() && size != *buffer_size)
+    ResizeBuffer(buffer, buffer_size, size);
+  if (size != *buffer_size)
+  {
+    p.SetMeasureMode();
+    return;
+  }
+  p.DoArray(*buffer, size);
 }
 
 void CEXIAgp::CRC8(const u8* data, u32 size)
@@ -73,20 +108,19 @@ void CEXIAgp::CRC8(const u8* data, u32 size)
 void CEXIAgp::LoadRom()
 {
   // Load whole ROM dump
-  std::string path;
-  std::string filename;
-  std::string ext;
-  SplitPath(Config::Get(Config::GetInfoForAGPCartPath(m_slot)), &path, &filename, &ext);
-  const std::string gbapath = path + filename;
-  LoadFileToROM(gbapath + ext);
-  INFO_LOG(EXPANSIONINTERFACE, "Loaded GBA rom: %s card: %u", gbapath.c_str(),
-           static_cast<unsigned>(m_slot));
-  LoadFileToEEPROM(gbapath + ".sav");
-  INFO_LOG(EXPANSIONINTERFACE, "Loaded GBA sav: %s card: %u", gbapath.c_str(),
-           static_cast<unsigned>(m_slot));
+  // Room is left for the ".sav" put after the base path.
+  char path[PATH_MAX_LENGTH];
+  GetCartBasePath(path, sizeof(path) - 4);
+  LoadFileToROM(Config::Get(Config::GetInfoForAGPCartPath(m_slot)).c_str());
+  INFO_LOG(EXPANSIONINTERFACE, "Loaded GBA rom: %s card: %u", path, static_cast<unsigned>(m_slot));
+  const size_t base_length = std::strlen(path);
+  strlcat(path, ".sav", sizeof(path));
+  LoadFileToEEPROM(path);
+  path[base_length] = '\0';
+  INFO_LOG(EXPANSIONINTERFACE, "Loaded GBA sav: %s card: %u", path, static_cast<unsigned>(m_slot));
 }
 
-void CEXIAgp::LoadFileToROM(const std::string& filename)
+void CEXIAgp::LoadFileToROM(const char* filename)
 {
   File::IOFile pStream(filename, "rb");
   if (pStream)
@@ -95,18 +129,18 @@ void CEXIAgp::LoadFileToROM(const std::string& filename)
     m_rom_size = filesize & 0xFFFFFFFF;
     m_rom_mask = (m_rom_size - 1);
 
-    m_rom.resize(m_rom_size);
+    ResizeBuffer(&m_rom, &m_rom_buffer_size, m_rom_size);
 
-    pStream.ReadBytes(m_rom.data(), filesize);
+    pStream.ReadBytes(m_rom, m_rom_buffer_size);
   }
   else
   {
     // dummy rom data
-    m_rom.resize(0x2000);
+    ResizeBuffer(&m_rom, &m_rom_buffer_size, 0x2000);
   }
 }
 
-void CEXIAgp::LoadFileToEEPROM(const std::string& filename)
+void CEXIAgp::LoadFileToEEPROM(const char* filename)
 {
   // Technically one of EEPROM, Flash, SRAM, FRAM
   File::IOFile pStream(filename, "rb");
@@ -116,8 +150,8 @@ void CEXIAgp::LoadFileToEEPROM(const std::string& filename)
     m_eeprom_size = filesize & 0xFFFFFFFF;
     m_eeprom_mask = (m_eeprom_size - 1);
 
-    m_eeprom.resize(m_eeprom_size);
-    pStream.ReadBytes(m_eeprom.data(), filesize);
+    ResizeBuffer(&m_eeprom, &m_eeprom_buffer_size, m_eeprom_size);
+    pStream.ReadBytes(m_eeprom, m_eeprom_buffer_size);
     if ((m_eeprom_size == 512) || (m_eeprom_size == 8192))
     {
       // Handle endian read - could be done with byte access in 0xAE commands instead
@@ -126,7 +160,7 @@ void CEXIAgp::LoadFileToEEPROM(const std::string& filename)
         u64 NewVal = 0;
         for (u32 indexb = 0; indexb < 8; indexb++)
           NewVal = (NewVal << 0x8) | m_eeprom[index * 8 + indexb];
-        ((u64*)(m_eeprom.data()))[index] = NewVal;
+        ((u64*)m_eeprom)[index] = NewVal;
       }
       m_eeprom_add_end = (m_eeprom_size == 512 ? (2 + 6) : (2 + 14));
       m_eeprom_add_mask = (m_eeprom_size == 512 ? 0x3F : 0x3FF);
@@ -139,11 +173,11 @@ void CEXIAgp::LoadFileToEEPROM(const std::string& filename)
   else
   {
     m_eeprom_size = 0;
-    m_eeprom.clear();
+    ResizeBuffer(&m_eeprom, &m_eeprom_buffer_size, 0);
   }
 }
 
-void CEXIAgp::SaveFileFromEEPROM(const std::string& filename)
+void CEXIAgp::SaveFileFromEEPROM(const char* filename)
 {
   File::IOFile pStream(filename, "wb");
   if (pStream)
@@ -151,18 +185,25 @@ void CEXIAgp::SaveFileFromEEPROM(const std::string& filename)
     if ((m_eeprom_size == 512) || (m_eeprom_size == 8192))
     {
       // Handle endian write - could be done with byte access in 0xAE commands instead
-      std::vector<u8> temp_eeprom(m_eeprom_size);
+      // Each word is written big-endian over itself, then put back.
       for (u32 index = 0; index < (m_eeprom_size / 8); index++)
       {
-        u64 NewVal = ((u64*)(m_eeprom.data()))[index];
+        const u64 NewVal = ((u64*)m_eeprom)[index];
         for (u32 indexb = 0; indexb < 8; indexb++)
-          temp_eeprom[index * 8 + (7 - indexb)] = (NewVal >> (indexb * 8)) & 0xFF;
+          m_eeprom[index * 8 + (7 - indexb)] = (NewVal >> (indexb * 8)) & 0xFF;
       }
-      pStream.WriteBytes(temp_eeprom.data(), m_eeprom_size);
+      pStream.WriteBytes(m_eeprom, m_eeprom_size);
+      for (u32 index = 0; index < (m_eeprom_size / 8); index++)
+      {
+        u64 NewVal = 0;
+        for (u32 indexb = 0; indexb < 8; indexb++)
+          NewVal = (NewVal << 0x8) | m_eeprom[index * 8 + indexb];
+        ((u64*)m_eeprom)[index] = NewVal;
+      }
     }
     else
     {
-      pStream.WriteBytes(m_eeprom.data(), m_eeprom_size);
+      pStream.WriteBytes(m_eeprom, m_eeprom_size);
     }
   }
 }
@@ -227,7 +268,7 @@ u32 CEXIAgp::ImmRead(u32 _uSize)
     if (m_eeprom_size == 0)
       RomVal1 = 0xFF;
     else
-      RomVal1 = (m_eeprom.data())[m_eeprom_pos];
+      RomVal1 = m_eeprom[m_eeprom_pos];
     CRC8(&RomVal1, 1);
     uData = (RomVal1 << 24) | (m_hash << 16);
     m_current_cmd = 0;
@@ -236,7 +277,7 @@ u32 CEXIAgp::ImmRead(u32 _uSize)
     // Change to byte access instead of endian file access?
     RomVal1 = EE_READ_FALSE;
     if ((m_eeprom_size != 0) && (m_eeprom_pos >= EE_IGNORE_BITS) &&
-        ((((u64*)m_eeprom.data())[(m_eeprom_cmd >> 1) & m_eeprom_add_mask]) >>
+        ((((u64*)m_eeprom)[(m_eeprom_cmd >> 1) & m_eeprom_add_mask]) >>
          ((EE_DATA_BITS - 1) - (m_eeprom_pos - EE_IGNORE_BITS))) &
             0x1)
     {
@@ -298,7 +339,7 @@ void CEXIAgp::ImmWrite(u32 _uData, u32 _uSize)
     // ToDo: Flash special handling
     m_eeprom_pos = ((_uData & 0xFFFF0000) >> 0x10) & m_eeprom_mask;
     if (m_eeprom_size != 0)
-      ((m_eeprom.data()))[(m_eeprom_pos)] = (_uData & 0x0000FF00) >> 0x8;
+      (m_eeprom)[(m_eeprom_pos)] = (_uData & 0x0000FF00) >> 0x8;
     HashCmd = (_uData & 0xFF000000) >> 24;
     CRC8(&HashCmd, 1);
     HashCmd = (_uData & 0x00FF0000) >> 16;
@@ -320,7 +361,7 @@ void CEXIAgp::ImmWrite(u32 _uData, u32 _uSize)
       {
         // Change to byte access instead of endian file access?
         if (m_eeprom_size != 0)
-          ((u64*)(m_eeprom.data()))[(m_eeprom_cmd >> 1) & m_eeprom_add_mask] = m_eeprom_data;
+          ((u64*)m_eeprom)[(m_eeprom_cmd >> 1) & m_eeprom_add_mask] = m_eeprom_data;
         m_eeprom_write_status = true;
       }
     }
@@ -365,7 +406,7 @@ void CEXIAgp::DoState(PointerWrap& p)
   p.Do(m_slot);
   p.Do(m_address);
   p.Do(m_current_cmd);
-  p.Do(m_eeprom);
+  DoBuffer(p, &m_eeprom, &m_eeprom_buffer_size);
   p.Do(m_eeprom_cmd);
   p.Do(m_eeprom_data);
   p.Do(m_eeprom_mask);
@@ -379,7 +420,7 @@ void CEXIAgp::DoState(PointerWrap& p)
   p.Do(m_hash);
   p.Do(m_position);
   p.Do(m_return_pos);
-  p.Do(m_rom);
+  DoBuffer(p, &m_rom, &m_rom_buffer_size);
   p.Do(m_rom_mask);
   p.Do(m_rom_size);
   p.Do(m_rw_offset);
