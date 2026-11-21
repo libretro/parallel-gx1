@@ -41,6 +41,21 @@ std::string FileSystem::BuildFilename(const std::string& wii_path) const
   return m_root_path;
 }
 
+bool FileSystem::BuildFilename(const char* wii_path, char* out, size_t out_size) const
+{
+  ASSERT(!m_root_path.empty());
+
+  const size_t root_length = m_root_path.size();
+  if (root_length >= out_size)
+    return false;
+  std::memcpy(out, m_root_path.c_str(), root_length + 1);
+  if (wii_path[0] == '/')
+    return Common::EscapePathTo(wii_path, out + root_length, out_size - root_length);
+
+  ASSERT_MSG(IOS_FS, false, "Invalid Wii path '%s' given to BuildFilename()", wii_path);
+  return true;
+}
+
 namespace
 {
 struct SerializedFstEntry
@@ -353,10 +368,24 @@ void FileSystem::DoState(PointerWrap& p)
     Handle& handle = m_handles[i];
     p.Do(handle.opened);
     p.Do(handle.mode);
-    p.Do(handle.wii_path);
+    // As a string was: its length, then its characters.
+    u32 path_length = static_cast<u32>(std::strlen(handle.wii_path));
+    p.Do(path_length);
+    if (path_length >= sizeof(handle.wii_path))
+    {
+      p.SetMeasureMode();
+      return;
+    }
+    p.DoArray(handle.wii_path, path_length);
+    handle.wii_path[path_length] = '\0';
     p.Do(handle.file_offset);
     if (handle.opened)
-      handle.host_file = OpenHostFile(BuildFilename(handle.wii_path));
+    {
+      char host_path[HOST_PATH_SIZE];
+      handle.host_file = BuildFilename(handle.wii_path, host_path, sizeof(host_path)) ?
+                             OpenHostFile(host_path) :
+                             -1;
+    }
   }
 }
 
@@ -438,23 +467,23 @@ ResultCode FileSystem::CreateDirectory(Uid uid, Gid gid, const std::string& path
   return CreateFileOrDirectory(uid, gid, path, attr, modes, false);
 }
 
-bool FileSystem::IsFileOpened(const std::string& path) const
+bool FileSystem::IsFileOpened(const char* path) const
 {
   int i;
   for (i = 0; i < NUM_HANDLES; i++)
   {
-    if (m_handles[i].opened && m_handles[i].wii_path == path)
+    if (m_handles[i].opened && std::strcmp(m_handles[i].wii_path, path) == 0)
       return true;
   }
   return false;
 }
 
-bool FileSystem::IsDirectoryInUse(const std::string& path) const
+bool FileSystem::IsDirectoryInUse(const char* path) const
 {
   int i;
   for (i = 0; i < NUM_HANDLES; i++)
   {
-    if (m_handles[i].opened && m_handles[i].wii_path.starts_with(path))
+    if (m_handles[i].opened && std::strncmp(m_handles[i].wii_path, path, std::strlen(path)) == 0)
       return true;
   }
   return false;
@@ -478,9 +507,9 @@ ResultCode FileSystem::Delete(Uid uid, Gid gid, const std::string& path)
   if (!File::Exists(host_path))
     return ResultCode::NotFound;
 
-  if (File::IsFile(host_path) && !IsFileOpened(path))
+  if (File::IsFile(host_path) && !IsFileOpened(path.c_str()))
     File::Delete(host_path);
-  else if (File::IsDirectory(host_path) && !IsDirectoryInUse(path))
+  else if (File::IsDirectory(host_path) && !IsDirectoryInUse(path.c_str()))
     File::DeleteDirRecursively(host_path);
   else
     return ResultCode::InUse;
@@ -526,8 +555,8 @@ ResultCode FileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
   if (entry->data.is_file && split_old_path.file_name != split_new_path.file_name)
     return ResultCode::Invalid;
 
-  if ((!entry->data.is_file && IsDirectoryInUse(old_path)) ||
-      (entry->data.is_file && IsFileOpened(old_path)))
+  if ((!entry->data.is_file && IsDirectoryInUse(old_path.c_str())) ||
+      (entry->data.is_file && IsFileOpened(old_path.c_str())))
   {
     return ResultCode::InUse;
   }

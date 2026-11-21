@@ -72,8 +72,8 @@ static void RestoreFile(const std::string& path_in_nand)
 static bool CopyNandFile(FS::FileSystem* source_fs, const std::string& source_file,
                          FS::FileSystem* dest_fs, const std::string& dest_file)
 {
-  auto source_handle =
-      source_fs->OpenFile(IOS::PID_KERNEL, IOS::PID_KERNEL, source_file, IOS::HLE::FS::Mode::Read);
+  auto source_handle = source_fs->OpenFile(IOS::PID_KERNEL, IOS::PID_KERNEL, source_file.c_str(),
+                                           IOS::HLE::FS::Mode::Read);
   // If the source file doesn't exist, there is nothing more to do.
   // This function must not create an empty file on the destination filesystem.
   if (!source_handle)

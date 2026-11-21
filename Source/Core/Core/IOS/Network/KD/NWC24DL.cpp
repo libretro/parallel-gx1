@@ -141,7 +141,7 @@ std::optional<WC24PubkMod> NWC24Dl::GetWC24PubkMod(u16 entry_index) const
   const std::string path =
       StringFromFormat("/title/%08x/%08x/data/wc24pubk.mod", lower_title_id, high_title_id);
 
-  const auto file = m_fs->OpenFile(PID_KD, PID_KD, path, IOS::HLE::FS::Mode::Read);
+  const auto file = m_fs->OpenFile(PID_KD, PID_KD, path.c_str(), IOS::HLE::FS::Mode::Read);
   if (!file)
     return std::nullopt;
 

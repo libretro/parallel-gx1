@@ -1079,7 +1079,7 @@ ReturnCode ESCore::ReadCertStore(u8** bytes, size_t* size) const
   *bytes = nullptr;
   *size = 0;
   const auto store_file =
-      m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH, FS::Mode::Read);
+      m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH.c_str(), FS::Mode::Read);
   if (!store_file)
     return FS::ConvertResult(store_file.error());
 

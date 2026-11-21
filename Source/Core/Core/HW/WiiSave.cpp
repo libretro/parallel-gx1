@@ -110,7 +110,7 @@ public:
       return {};
 
     const auto banner_path = m_data_dir + "/banner.bin";
-    const auto banner = m_fs->OpenFile(*m_uid, *m_gid, banner_path, FS::Mode::Read);
+    const auto banner = m_fs->OpenFile(*m_uid, *m_gid, banner_path.c_str(), FS::Mode::Read);
     if (!banner)
       return {};
     Header header{};
@@ -221,7 +221,7 @@ private:
       save_file.type = metadata->is_file ? SaveFile::Type::File : SaveFile::Type::Directory;
       save_file.path = path.substr(m_data_dir.size() + 1);
       save_file.data = [this, path]() -> std::optional<std::vector<u8>> {
-        const auto file = m_fs->OpenFile(*m_uid, *m_gid, path, FS::Mode::Read);
+        const auto file = m_fs->OpenFile(*m_uid, *m_gid, path.c_str(), FS::Mode::Read);
         if (!file)
           return {};
         std::vector<u8> data(file->GetStatus()->size);

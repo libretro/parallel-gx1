@@ -99,14 +99,14 @@ Result<FileStatus> FileHandle::GetStatus() const
 Result<FileHandle> FileSystem::CreateAndOpenFile(Uid uid, Gid gid, const std::string& path,
                                                  Modes modes)
 {
-  if (Result<FileHandle> file = OpenFile(uid, gid, path, Mode::ReadWrite))
+  if (Result<FileHandle> file = OpenFile(uid, gid, path.c_str(), Mode::ReadWrite))
     return file;
 
   const ResultCode result = CreateFile(uid, gid, path, 0, modes);
   if (result != ResultCode::Success)
     return std::unexpected{result};
 
-  return OpenFile(uid, gid, path, Mode::ReadWrite);
+  return OpenFile(uid, gid, path.c_str(), Mode::ReadWrite);
 }
 
 ResultCode FileSystem::CreateFullPath(Uid uid, Gid gid, const std::string& path,
@@ -256,7 +256,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
       }
 
       std::array<u8, BUFFER_CHUNK_SIZE> buffer;
-      Result<FileHandle> handle = OpenFile(0, 0, child_path, Mode::Write);
+      Result<FileHandle> handle = OpenFile(0, 0, child_path.c_str(), Mode::Write);
       if (!handle)
       {
         ERROR_LOG(IOS_FS, "DoStateRead failed to call OpenFile for %s: %u", child_path.c_str(),
@@ -348,7 +348,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
     if (child_metadata->is_file)
     {
       std::array<u8, BUFFER_CHUNK_SIZE> buffer;
-      Result<FileHandle> handle = OpenFile(0, 0, child_path, Mode::Read);
+      Result<FileHandle> handle = OpenFile(0, 0, child_path.c_str(), Mode::Read);
       if (!handle)
       {
         ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call OpenFile for %s: %u",

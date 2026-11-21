@@ -954,7 +954,8 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
   // We require the user's serial number.
   const std::string settings_file_path =
       Common::GetTitleDataPath(Titles::SYSTEM_MENU) + "/" WII_SETTING;
-  const auto file = m_ios.GetFS()->OpenFile(PID_KD, PID_KD, settings_file_path, FS::Mode::Read);
+  const auto file =
+      m_ios.GetFS()->OpenFile(PID_KD, PID_KD, settings_file_path.c_str(), FS::Mode::Read);
   if (!file)
   {
     WriteReturnValue(memory, NWC24::WC24_ERR_FILE_OPEN, request.buffer_out);
@@ -1115,7 +1116,8 @@ IPCReply NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
       std::string area, model;
 
       const auto fs = m_ios.GetFS();
-      if (const auto file = fs->OpenFile(PID_KD, PID_KD, settings_file_path, FS::Mode::Read))
+      if (const auto file =
+              fs->OpenFile(PID_KD, PID_KD, settings_file_path.c_str(), FS::Mode::Read))
       {
         Common::SettingsBuffer data;
         if (file->Read(data.data(), data.size()))

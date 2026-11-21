@@ -3,6 +3,7 @@
 
 #include "Core/IOS/FS/FileSystem.h"
 
+#include <cstring>
 #include <expected>
 
 #include "Common/FileUtil.h"
@@ -13,7 +14,7 @@
 namespace IOS::HLE::FS
 {
 // This isn't theadsafe, but it's only called from the CPU thread.
-int FileSystem::OpenHostFile(const std::string& host_path)
+int FileSystem::OpenHostFile(const char* host_path)
 {
   // On the wii, all file operations are strongly ordered.
   // If a game opens the same file twice (or 8 times, looking at you PokePark Wii)
@@ -41,7 +42,7 @@ int FileSystem::OpenHostFile(const std::string& host_path)
         free_index = i;
       continue;
     }
-    if (host_file.host_path == host_path)
+    if (std::strcmp(host_file.host_path, host_path) == 0)
     {
       host_file.refs++;
       return i;
@@ -61,17 +62,19 @@ int FileSystem::OpenHostFile(const std::string& host_path)
         PanicYesNo("File \"%s\" could not be opened!\n"
                    "This may happen with improper permissions or use by another process.\n"
                    "Press \"Yes\" to make another attempt.",
-                   host_path.c_str());
+                   host_path);
 
     if (!try_again)
     {
       // We've failed to open the file:
-      ERROR_LOG(IOS_FS, "OpenHostFile %s", host_path.c_str());
+      ERROR_LOG(IOS_FS, "OpenHostFile %s", host_path);
       return -1;
     }
   }
 
-  host_file.host_path = host_path;
+  // BuildFilename fits every host path in a buffer this size.
+  std::strncpy(host_file.host_path, host_path, sizeof(host_file.host_path) - 1);
+  host_file.host_path[sizeof(host_file.host_path) - 1] = '\0';
   host_file.refs = 1;
   return free_index;
 }
@@ -85,7 +88,7 @@ void FileSystem::ReleaseHostFile(int index)
   if (--host_file.refs)
     return;
   host_file.file.Close();
-  host_file.host_path.clear();
+  host_file.host_path[0] = '\0';
 }
 
 File::IOFile* FileSystem::GetHostFile(const Handle* handle)
@@ -108,13 +111,22 @@ void FileSystem::CloseAllHandles()
     CloseHandle(&m_handles[i]);
 }
 
-Result<FileHandle> FileSystem::OpenFile(Uid, Gid, const std::string& path, Mode mode)
+Result<FileHandle> FileSystem::OpenFile(Uid, Gid, const char* path, Mode mode)
 {
+  const size_t path_length = std::strlen(path);
+  if (path_length >= sizeof(Handle::wii_path))
+    return std::unexpected{ResultCode::Invalid};
+
   Handle* handle = AssignFreeHandle();
   if (!handle)
     return std::unexpected{ResultCode::NoFreeHandle};
 
-  const std::string host_path = BuildFilename(path);
+  char host_path[HOST_PATH_SIZE];
+  if (!BuildFilename(path, host_path, sizeof(host_path)))
+  {
+    *handle = Handle{};
+    return std::unexpected{ResultCode::Invalid};
+  }
   if (File::IsDirectory(host_path))
   {
     *handle = Handle{};
@@ -134,7 +146,7 @@ Result<FileHandle> FileSystem::OpenFile(Uid, Gid, const std::string& path, Mode 
     return std::unexpected{ResultCode::AccessDenied};
   }
 
-  handle->wii_path = path;
+  std::memcpy(handle->wii_path, path, path_length + 1);
   handle->mode = mode;
   handle->file_offset = 0;
   return FileHandle{this, ConvertHandleToFd(handle)};

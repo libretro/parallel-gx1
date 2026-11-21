@@ -369,7 +369,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   const auto fs = system.GetIOS()->GetFS();
   {
     Common::SettingsBuffer data;
-    const auto file = fs->OpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path,
+    const auto file = fs->OpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path.c_str(),
                                    IOS::HLE::FS::Mode::Read);
     if (file && file->Read(data.data(), data.size()))
     {

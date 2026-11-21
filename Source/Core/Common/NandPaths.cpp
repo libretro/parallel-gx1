@@ -4,6 +4,7 @@
 #include "Common/NandPaths.h"
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -144,6 +145,95 @@ std::string EscapePath(const std::string& path)
     escaped += EscapeFileName(split_strings[i]);
   }
   return escaped;
+}
+
+// Appends size bytes of text to out at *length, as long as they fit with a terminator after them.
+static bool AppendEscaped(char* out, size_t out_size, size_t* length, const char* text, size_t size)
+{
+  if (size >= out_size - *length)
+    return false;
+  memcpy(out + *length, text, size);
+  *length += size;
+  return true;
+}
+
+// EscapeFileName on the size bytes at name, appended to out.
+static bool AppendEscapedFileName(char* out, size_t out_size, size_t* length, const char* name,
+                                  size_t size)
+{
+  size_t i;
+  bool only_dots = true;
+  for (i = 0; i < size; i++)
+  {
+    if (name[i] != '.')
+    {
+      only_dots = false;
+      break;
+    }
+  }
+
+  // Prevent paths from containing special names like ., .., ..., ...., and so on
+  if (only_dots)
+  {
+    for (i = 0; i < size; i++)
+    {
+      if (!AppendEscaped(out, out_size, length, "__2e__", 6))
+        return false;
+    }
+    return true;
+  }
+
+  // Double underscores are escaped first, since escape sequences use them; the escape of a double
+  // underscore holds no character that needs escaping itself.
+  for (i = 0; i < size; i++)
+  {
+    const char c = name[i];
+    if (c == '_' && i + 1 < size && name[i + 1] == '_')
+    {
+      if (!AppendEscaped(out, out_size, length, "__5f____5f__", 12))
+        return false;
+      i++;
+    }
+    else if (IsIllegalCharacter(c))
+    {
+      char escaped[8];
+      snprintf(escaped, sizeof(escaped), "__%02x__", static_cast<unsigned char>(c));
+      if (!AppendEscaped(out, out_size, length, escaped, 6))
+        return false;
+    }
+    else if (!AppendEscaped(out, out_size, length, &c, 1))
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool EscapePathTo(const char* path, char* out, size_t out_size)
+{
+  // As EscapePath: the path's '/'-separated parts escaped and joined by '/', where a part ends at
+  // each '/' and the last ends with the path, so a trailing '/' leaves no empty part after it.
+  const size_t path_length = strlen(path);
+  size_t length = 0;
+  size_t start = 0;
+  bool first = true;
+
+  if (out_size == 0)
+    return false;
+  while (start < path_length)
+  {
+    const char* const slash =
+        static_cast<const char*>(memchr(path + start, '/', path_length - start));
+    const size_t end = slash ? static_cast<size_t>(slash - path) : path_length;
+    if (!first && !AppendEscaped(out, out_size, &length, "/", 1))
+      return false;
+    first = false;
+    if (!AppendEscapedFileName(out, out_size, &length, path + start, end - start))
+      return false;
+    start = end + 1;
+  }
+  out[length] = '\0';
+  return true;
 }
 
 std::string UnescapeFileName(const std::string& filename)

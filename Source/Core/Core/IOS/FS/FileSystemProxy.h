@@ -60,8 +60,8 @@ public:
   // These are the equivalent of the IPC command handlers so IPC overhead is included
   // in timing calculations.
   // Open takes the next free descriptor; OpenWithFd uses the one the PPC asked for.
-  ScopedFd Open(FS::Uid uid, FS::Gid gid, const std::string& path, FS::Mode mode, Ticks ticks = {});
-  ScopedFd OpenWithFd(FS::Uid uid, FS::Gid gid, const std::string& path, FS::Mode mode, u32 ipc_fd,
+  ScopedFd Open(FS::Uid uid, FS::Gid gid, const char* path, FS::Mode mode, Ticks ticks = {});
+  ScopedFd OpenWithFd(FS::Uid uid, FS::Gid gid, const char* path, FS::Mode mode, u32 ipc_fd,
                       Ticks ticks = {});
   s32 Close(u64 fd, Ticks ticks = {});
   // The ForIPC versions also log the PPC buffer address.
@@ -97,7 +97,7 @@ private:
     bool superblock_flush_needed = false;
   };
 
-  ScopedFd DoOpen(FS::Uid uid, FS::Gid gid, const std::string& path, FS::Mode mode, bool has_ipc_fd,
+  ScopedFd DoOpen(FS::Uid uid, FS::Gid gid, const char* path, FS::Mode mode, bool has_ipc_fd,
                   u32 ipc_fd, Ticks ticks);
   s32 DoRead(u64 fd, u8* data, u32 size, bool from_ipc, u32 ipc_buffer_addr, Ticks ticks);
   s32 DoWrite(u64 fd, const u8* data, u32 size, bool from_ipc, u32 ipc_buffer_addr, Ticks ticks);

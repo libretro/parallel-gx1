@@ -30,7 +30,7 @@ s32 ESCore::OpenContent(const ES::TMDReader& tmd, u16 content_index, u32 uid, Ti
       continue;
 
     const std::string path = GetContentPath(title_id, content, ticks);
-    auto fd = m_ios.GetFSCore().Open(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read, ticks);
+    auto fd = m_ios.GetFSCore().Open(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read, ticks);
     if (fd.Get() < 0)
       return fd.Get();
 

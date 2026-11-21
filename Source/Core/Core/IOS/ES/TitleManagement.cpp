@@ -647,7 +647,8 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
   {
     ASSERT(ticket.IsValid());
     ASSERT(ticket.IsV1Ticket() == was_v1_ticket);
-    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, ticket_path, FS::Mode::ReadWrite);
+    const auto file =
+        fs->OpenFile(PID_KERNEL, PID_KERNEL, ticket_path.c_str(), FS::Mode::ReadWrite);
     if (!file || !file->Write(new_ticket, new_ticket_size))
       return ES_EIO;
   }

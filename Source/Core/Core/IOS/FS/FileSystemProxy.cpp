@@ -248,15 +248,20 @@ enum class FileLookupMode
 // Note: lookups normally stop at the first non existing path (as the FST cannot be traversed
 // further when a directory doesn't exist). However for the sake of simplicity we assume that the
 // entire lookup succeeds because otherwise we'd need to check whether every path component exists.
-static SystemTimers::TimeBaseTick EstimateFileLookupTicks(const std::string& path,
-                                                          FileLookupMode mode)
+static SystemTimers::TimeBaseTick EstimateFileLookupTicks(const char* path, FileLookupMode mode)
 {
-  const size_t number_of_path_components = std::ranges::count(path, '/');
+  size_t number_of_path_components = 0;
+  size_t length = 0;
+  for (; path[length]; length++)
+  {
+    if (path[length] == '/')
+      number_of_path_components++;
+  }
   if (number_of_path_components == 0)
     return 0_tbticks;
 
   // Paths that end with a slash are invalid and rejected early in FS.
-  if (!path.empty() && *path.rbegin() == '/')
+  if (path[length - 1] == '/')
     return 300_tbticks;
 
   if (mode == FileLookupMode::Normal)
@@ -286,19 +291,19 @@ IPCReply FSDevice::Open(const OpenRequest& request)
   });
 }
 
-FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const std::string& path, FS::Mode mode,
+FSCore::ScopedFd FSCore::Open(FS::Uid uid, FS::Gid gid, const char* path, FS::Mode mode,
                               Ticks ticks)
 {
   return DoOpen(uid, gid, path, mode, false, 0, ticks);
 }
 
-FSCore::ScopedFd FSCore::OpenWithFd(FS::Uid uid, FS::Gid gid, const std::string& path,
-                                    FS::Mode mode, u32 ipc_fd, Ticks ticks)
+FSCore::ScopedFd FSCore::OpenWithFd(FS::Uid uid, FS::Gid gid, const char* path, FS::Mode mode,
+                                    u32 ipc_fd, Ticks ticks)
 {
   return DoOpen(uid, gid, path, mode, true, ipc_fd, ticks);
 }
 
-FSCore::ScopedFd FSCore::DoOpen(FS::Uid uid, FS::Gid gid, const std::string& path, FS::Mode mode,
+FSCore::ScopedFd FSCore::DoOpen(FS::Uid uid, FS::Gid gid, const char* path, FS::Mode mode,
                                 bool has_ipc_fd, u32 ipc_fd, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
@@ -306,12 +311,13 @@ FSCore::ScopedFd FSCore::DoOpen(FS::Uid uid, FS::Gid gid, const std::string& pat
   if (m_fd_count >= 16)
     return {this, ConvertResult(ResultCode::NoFreeHandle), ticks};
 
-  if (path.size() >= 64)
+  const size_t path_length = std::strlen(path);
+  if (path_length >= 64)
     return {this, ConvertResult(ResultCode::Invalid), ticks};
 
   const u64 fd = has_ipc_fd ? u64(ipc_fd) : m_next_fd++;
 
-  if (path == "/dev/fs")
+  if (std::strcmp(path, "/dev/fs") == 0)
   {
     GetHandle(fd) = Handle{gid, uid, INVALID_FD};
     return {this, static_cast<s64>(fd), ticks};
@@ -320,14 +326,14 @@ FSCore::ScopedFd FSCore::DoOpen(FS::Uid uid, FS::Gid gid, const std::string& pat
   ticks.Add(EstimateFileLookupTicks(path, FileLookupMode::Normal));
 
   auto backend_fd = m_ios.GetFS()->OpenFile(uid, gid, path, mode);
-  LogResult(CodeOf(backend_fd), "OpenFile(%s)", path.c_str());
+  LogResult(CodeOf(backend_fd), "OpenFile(%s)", path);
   if (!backend_fd)
     return {this, ConvertResult(backend_fd.error()), ticks};
 
   Handle& handle = GetHandle(fd) = Handle{gid, uid, backend_fd->Release()};
   /* zero-padded, unterminated when it fills the field */
   memset(handle.name, 0, sizeof(handle.name));
-  memcpy(handle.name, path.c_str(), std::min(path.size(), sizeof(handle.name)));
+  memcpy(handle.name, path, path_length < sizeof(handle.name) ? path_length : sizeof(handle.name));
   return {this, static_cast<s64>(fd), ticks};
 }
 
@@ -770,7 +776,7 @@ IPCReply FSDevice::GetAttribute(const Handle& handle, const IOCtlRequest& reques
   auto& memory = system.GetMemory();
 
   const std::string path = memory.GetString(request.buffer_in, 64);
-  const auto ticks = EstimateFileLookupTicks(path, FileLookupMode::Split);
+  const auto ticks = EstimateFileLookupTicks(path.c_str(), FileLookupMode::Split);
   const Result<Metadata> metadata = m_ios.GetFS()->GetMetadata(handle.uid, handle.gid, path);
   LogResult(CodeOf(metadata), "GetMetadata(%s)", path.c_str());
   if (!metadata)

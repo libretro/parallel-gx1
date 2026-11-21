@@ -21,7 +21,7 @@ WiiNetConfig::WiiNetConfig() = default;
 void WiiNetConfig::ReadConfig(FS::FileSystem* fs)
 {
   {
-    const auto file = fs->OpenFile(PID_NCD, PID_NCD, CONFIG_PATH, FS::Mode::Read);
+    const auto file = fs->OpenFile(PID_NCD, PID_NCD, CONFIG_PATH.c_str(), FS::Mode::Read);
     if (file && file->Read(&m_data, 1))
       return;
   }

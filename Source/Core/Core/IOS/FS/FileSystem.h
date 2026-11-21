@@ -226,7 +226,7 @@ public:
   ResultCode Format(Uid uid);
 
   /// Get a file descriptor for accessing a file. The FD will be automatically closed after use.
-  Result<FileHandle> OpenFile(Uid uid, Gid gid, const std::string& path, Mode mode);
+  Result<FileHandle> OpenFile(Uid uid, Gid gid, const char* path, Mode mode);
   /// Create a file if it doesn't exist and open it in read/write mode.
   Result<FileHandle> CreateAndOpenFile(Uid uid, Gid gid, const std::string& path, Modes modes);
   /// Close a file descriptor.
@@ -295,11 +295,19 @@ private:
     std::vector<FstEntry> children;
   };
 
+  enum
+  {
+    // Longer than any path the FS takes: a longer one does not open.
+    HANDLE_PATH_SIZE = 256,
+    // A host path: the root and an escaped Wii path.
+    HOST_PATH_SIZE = 2048
+  };
+
   struct Handle
   {
     bool opened = false;
     Mode mode = Mode::None;
-    std::string wii_path;
+    char wii_path[HANDLE_PATH_SIZE] = {};
     /// index into m_host_files, -1 when none
     int host_file = -1;
     u32 file_offset = 0;
@@ -309,7 +317,7 @@ private:
   struct HostFile
   {
     File::IOFile file;
-    std::string host_path;
+    char host_path[HOST_PATH_SIZE] = {};
     u32 refs = 0;
   };
   enum
@@ -324,13 +332,15 @@ private:
   Fd ConvertHandleToFd(const Handle* handle) const;
 
   std::string BuildFilename(const std::string& wii_path) const;
-  int OpenHostFile(const std::string& host_path);
+  // Writes the host path of wii_path to out; returns false when it does not fit.
+  bool BuildFilename(const char* wii_path, char* out, size_t out_size) const;
+  int OpenHostFile(const char* host_path);
   void ReleaseHostFile(int index);
 
   ResultCode CreateFileOrDirectory(Uid uid, Gid gid, const std::string& path,
                                    FileAttribute attribute, Modes modes, bool is_file);
-  bool IsFileOpened(const std::string& path) const;
-  bool IsDirectoryInUse(const std::string& path) const;
+  bool IsFileOpened(const char* path) const;
+  bool IsDirectoryInUse(const char* path) const;
 
   std::string GetFstFilePath() const;
   void ResetFst();

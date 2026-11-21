@@ -305,7 +305,7 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
   VffFatFsCallbacks callbacks;
   ErrorCode return_value;
   Common::RunInFatFsContext(callbacks, [&] {
-    auto temp = fs->OpenFile(PID_KD, PID_KD, path, FS::Mode::ReadWrite);
+    auto temp = fs->OpenFile(PID_KD, PID_KD, path.c_str(), FS::Mode::ReadWrite);
     if (!temp)
     {
       ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", path.c_str());
@@ -360,7 +360,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename,
   VffFatFsCallbacks callbacks;
   ErrorCode return_value;
   Common::RunInFatFsContext(callbacks, [&] {
-    auto temp = fs->OpenFile(PID_KD, PID_KD, path, FS::Mode::ReadWrite);
+    auto temp = fs->OpenFile(PID_KD, PID_KD, path.c_str(), FS::Mode::ReadWrite);
     if (!temp)
     {
       ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", path.c_str());
@@ -411,7 +411,7 @@ ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename
   VffFatFsCallbacks callbacks;
   ErrorCode return_value;
   Common::RunInFatFsContext(callbacks, [&] {
-    auto temp = fs->OpenFile(PID_KD, PID_KD, path, FS::Mode::ReadWrite);
+    auto temp = fs->OpenFile(PID_KD, PID_KD, path.c_str(), FS::Mode::ReadWrite);
     if (!temp)
     {
       ERROR_LOG(IOS_WC24, "Failed to open VFF at: %s", path.c_str());

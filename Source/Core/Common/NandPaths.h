@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <optional>
 #include <string>
 
@@ -38,6 +39,9 @@ std::string GetMiiDatabasePath(std::optional<FromWhichRoot> from = {});
 std::string EscapeFileName(const std::string& filename);
 // Escapes characters that are invalid or have special meanings in the host file system
 std::string EscapePath(const std::string& path);
+// Writes EscapePath(path) to out; returns false, leaving out unspecified, when it does not fit
+// in out_size bytes with its terminator.
+bool EscapePathTo(const char* path, char* out, size_t out_size);
 // Reverses escaping done by EscapeFileName
 std::string UnescapeFileName(const std::string& filename);
 }  // namespace Common

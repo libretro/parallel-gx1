@@ -25,7 +25,7 @@ namespace IOS::HLE
 {
 static ES::TMDReader FindTMD(FSCore& fs, const std::string& tmd_path, Ticks ticks)
 {
-  const auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmd_path, FS::Mode::Read, ticks);
+  const auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmd_path.c_str(), FS::Mode::Read, ticks);
   if (fd.Get() < 0)
     return {};
 
@@ -54,7 +54,7 @@ ES::TicketReader ESCore::FindSignedTicket(u64 title_id, std::optional<u8> desire
 {
   std::string path = desired_version == 1 ? Common::GetV1TicketFileName(title_id) :
                                             Common::GetTicketFileName(title_id);
-  auto ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
+  auto ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read);
   if (!ticket_file)
   {
     if (desired_version)
@@ -63,7 +63,7 @@ ES::TicketReader ESCore::FindSignedTicket(u64 title_id, std::optional<u8> desire
 
     // Check if we are dealing with a v1 ticket
     path = Common::GetV1TicketFileName(title_id);
-    ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
+    ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read);
 
     if (!ticket_file)
       return {};
@@ -207,7 +207,7 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
       continue;
 
     // Check whether the content file exists.
-    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
+    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read);
     if (!file.has_value())
       continue;
 
@@ -458,7 +458,7 @@ s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size,
     return FS::ConvertResult(result);
   }
 
-  auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmp_path, FS::Mode::ReadWrite, ticks);
+  auto fd = fs.Open(PID_KERNEL, PID_KERNEL, tmp_path.c_str(), FS::Mode::ReadWrite, ticks);
   if (fd.Get() < 0)
   {
     ERROR_LOG(IOS_ES, "Failed to open temporary file %s: %" PRId64, tmp_path.c_str(),
