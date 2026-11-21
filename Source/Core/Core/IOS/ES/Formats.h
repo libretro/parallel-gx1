@@ -8,7 +8,6 @@
 
 #include <array>
 #include <cstddef>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -331,6 +330,9 @@ class UIDSys final
 {
 public:
   explicit UIDSys(HLE::FSCore& fs_core);
+  ~UIDSys();
+  UIDSys(const UIDSys&) = delete;
+  UIDSys& operator=(const UIDSys&) = delete;
 
   u32 GetUIDFromTitle(u64 title_id) const;
   u32 GetOrInsertUIDForTitle(u64 title_id);
@@ -340,7 +342,16 @@ public:
 
 private:
   HLE::FS::FileSystem* m_fs;  // not owning: the kernel's FS
-  std::map<u32, u64> m_entries;
+  // The UIDs and their titles, sorted by UID
+  struct Entry
+  {
+    u32 uid;
+    u64 title_id;
+  };
+  void AddEntry(u32 uid, u64 title_id);
+  Entry* m_entries = nullptr;
+  u32 m_entry_count = 0;
+  u32 m_entry_capacity = 0;
   u64 m_ticks = 0;
 };
 

@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -782,35 +781,70 @@ UIDSys::UIDSys(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
   {
     while (true)
     {
-      std::pair<u32, u64> entry = ReadUidSysEntry(fs_core, fd.Get(), &m_ticks);
+      const std::pair<u32, u64> entry = ReadUidSysEntry(fs_core, fd.Get(), &m_ticks);
       if (!entry.first && !entry.second)
         break;
 
-      m_entries.insert(std::move(entry));
+      AddEntry(entry.first, entry.second);
     }
   }
 
-  if (m_entries.empty())
+  if (!m_entry_count)
   {
     GetOrInsertUIDForTitle(Titles::SYSTEM_MENU);
   }
 }
 
+UIDSys::~UIDSys()
+{
+  std::free(m_entries);
+}
+
+void UIDSys::AddEntry(u32 uid, u64 title_id)
+{
+  u32 low = 0;
+  u32 high = m_entry_count;
+  while (low < high)
+  {
+    const u32 mid = low + (high - low) / 2;
+    if (m_entries[mid].uid < uid)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  // a UID seen again keeps its first title
+  if (low < m_entry_count && m_entries[low].uid == uid)
+    return;
+  if (m_entry_count == m_entry_capacity)
+  {
+    const u32 capacity = m_entry_capacity ? m_entry_capacity * 2 : 64;
+    Entry* const grown = static_cast<Entry*>(std::realloc(m_entries, capacity * sizeof(Entry)));
+    if (!grown)
+      return;
+    m_entries = grown;
+    m_entry_capacity = capacity;
+  }
+  std::memmove(m_entries + low + 1, m_entries + low, (m_entry_count - low) * sizeof(Entry));
+  m_entries[low].uid = uid;
+  m_entries[low].title_id = title_id;
+  m_entry_count++;
+}
+
 u32 UIDSys::GetUIDFromTitle(u64 title_id) const
 {
-  for (const auto& entry : m_entries)
+  for (u32 i = 0; i < m_entry_count; i++)
   {
-    if (entry.second == title_id)
-      return entry.first;
+    if (m_entries[i].title_id == title_id)
+      return m_entries[i].uid;
   }
   return 0;
 }
 
 u32 UIDSys::GetNextUID() const
 {
-  if (m_entries.empty())
+  if (!m_entry_count)
     return FIRST_PPC_UID;
-  return m_entries.rbegin()->first + 1;
+  return m_entries[m_entry_count - 1].uid + 1;
 }
 
 u32 UIDSys::GetOrInsertUIDForTitle(const u64 title_id)
@@ -823,7 +857,7 @@ u32 UIDSys::GetOrInsertUIDForTitle(const u64 title_id)
   }
 
   const u32 uid = GetNextUID();
-  m_entries.insert({uid, title_id});
+  AddEntry(uid, title_id);
 
   // Byte swap before writing.
   const u64 swapped_title_id = Common::swap64(title_id);
