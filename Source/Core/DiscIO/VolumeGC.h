@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Lazy.h"
 #include "DiscIO/Filesystem.h"
 #include "DiscIO/Volume.h"
 #include "DiscIO/VolumeDisc.h"
@@ -54,13 +53,15 @@ private:
   // Volume reaches the functions it has of its own here
   friend class Volume;
 
-  Common::Lazy<FileSystem> m_file_system;
-
   BlobReader* m_reader;  // owned
 
-  BootID m_triforce_header;
-
+  // Set before the file system is read, which asks for the volume type
   bool m_is_triforce;
+
+  // Read when the volume is made, after m_reader and m_is_triforce
+  FileSystem m_file_system;
+
+  BootID m_triforce_header;
 };
 
 }  // namespace DiscIO

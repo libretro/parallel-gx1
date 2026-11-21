@@ -25,11 +25,10 @@
 namespace DiscIO
 {
 VolumeGC::VolumeGC(BlobReader* reader)
-    : VolumeDisc(VolumeKind::GC), m_reader(reader), m_is_triforce(false)
+    : VolumeDisc(VolumeKind::GC), m_reader(reader), m_is_triforce(false),
+      m_file_system(this, PARTITION_NONE)
 {
   ASSERT(m_reader);
-
-  m_file_system = [this]() -> FileSystem { return FileSystem(this, PARTITION_NONE); };
 
   constexpr u32 BTID_MAGIC = 0x44495442;
   auto tmp_fs = GetFileSystem(PARTITION_NONE);
@@ -74,8 +73,7 @@ void VolumeGC::Prefetch(u64 offset, u64 length, const Partition& partition) cons
 const FileSystem* VolumeGC::GetFileSystem(const Partition& partition) const
 {
   // nullptr when it could not be read
-  const FileSystem& file_system = *m_file_system;
-  return file_system.IsValid() ? &file_system : nullptr;
+  return m_file_system.IsValid() ? &m_file_system : nullptr;
 }
 
 std::string VolumeGC::GetGameTDBID(const Partition& partition) const
