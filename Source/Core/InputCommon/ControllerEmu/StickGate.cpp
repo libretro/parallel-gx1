@@ -28,8 +28,9 @@ constexpr auto CENTER_CONFIG_NAME = "Center";
 constexpr auto CENTER_CONFIG_SCALE = 100;
 
 // Calculate distance to intersection of a ray with a line segment defined by two points.
-std::optional<double> GetRayLineIntersection(Common::DVec2 ray, Common::DVec2 point1,
-                                             Common::DVec2 point2)
+// Returns false, leaving distance as it was, when there is none.
+static bool GetRayLineIntersection(Common::DVec2 ray, Common::DVec2 point1, Common::DVec2 point2,
+                                   double* distance)
 {
   const auto diff = point2 - point1;
 
@@ -37,17 +38,18 @@ std::optional<double> GetRayLineIntersection(Common::DVec2 ray, Common::DVec2 po
   if (std::abs(dot) < 0.00001)
   {
     // Both points are on top of each other.
-    return std::nullopt;
+    return false;
   }
 
   const auto segment_position = point1.Dot({ray.y, -ray.x}) / dot;
   if (segment_position < -0.00001 || segment_position > 1.00001)
   {
     // Ray does not pass through segment.
-    return std::nullopt;
+    return false;
   }
 
-  return diff.Cross(-point1) / dot;
+  *distance = diff.Cross(-point1) / dot;
+  return true;
 }
 
 double GetNearestNotch(double angle, double virtual_notch_angle)
@@ -186,13 +188,12 @@ ControlState ReshapableInput::GetCalibrationDataRadiusAtAngle(const CalibrationD
   const double sample1_angle = sample1_index * MathUtil::TAU / data.size();
   const double sample2_angle = sample2_index * MathUtil::TAU / data.size();
 
-  const auto intersection =
-      GetRayLineIntersection(GetPointFromAngleAndLength(angle, 1.0),
-                             GetPointFromAngleAndLength(sample1_angle, data[sample1_index]),
-                             GetPointFromAngleAndLength(sample2_angle, data[sample2_index]));
-
-  // Intersection has no value when points are on top of each other.
-  return intersection.value_or(data[sample1_index]);
+  // There is no intersection when the points are on top of each other.
+  double radius = data[sample1_index];
+  GetRayLineIntersection(GetPointFromAngleAndLength(angle, 1.0),
+                         GetPointFromAngleAndLength(sample1_angle, data[sample1_index]),
+                         GetPointFromAngleAndLength(sample2_angle, data[sample2_index]), &radius);
+  return radius;
 }
 
 /* The call on the group this is: its own, an analog stick's for the octagonal one when it has

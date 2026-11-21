@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "Common/MathUtil.h"
@@ -22,7 +21,8 @@ public:
 
   StateData GetRawState() const;
   // Also updates the state by default
-  std::optional<StateData> GetState(bool update = true);
+  // Returns false, leaving state as it was, when no input is bound.
+  bool GetState(StateData* state, bool update = true);
 
   // Value is in rad/s.
   ControlState GetDeadzone() const;

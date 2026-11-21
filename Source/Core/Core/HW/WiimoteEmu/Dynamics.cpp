@@ -306,22 +306,24 @@ void EmulateIMUCursor(IMUCursorState* state, ControllerEmu::IMUCursor* imu_ir_gr
                       ControllerEmu::IMUAccelerometer* imu_accelerometer_group,
                       ControllerEmu::IMUGyroscope* imu_gyroscope_group, float time_elapsed)
 {
-  const auto ang_vel = imu_gyroscope_group->GetState();
+  Common::Vec3 ang_vel;
+  const bool has_ang_vel = imu_gyroscope_group->GetState(&ang_vel);
 
   // Reset if pointing is disabled or we have no gyro data.
-  if (!imu_ir_group->enabled.GetValue() || !ang_vel.has_value())
+  if (!imu_ir_group->enabled.GetValue() || !has_ang_vel)
   {
     *state = {};
     return;
   }
 
   // Apply rotation from gyro data.
-  const auto gyro_rotation = GetRotationFromGyroscope(*ang_vel * -1 * time_elapsed);
+  const auto gyro_rotation = GetRotationFromGyroscope(ang_vel * -1 * time_elapsed);
   state->rotation = gyro_rotation * state->rotation;
 
   // If we have some non-zero accel data use it to adjust gyro drift.
   const auto accel_weight = imu_ir_group->GetAccelWeight();
-  auto const accel = imu_accelerometer_group->GetState().value_or(Common::Vec3{});
+  Common::Vec3 accel{};
+  imu_accelerometer_group->GetState(&accel);
   if (accel.LengthSquared())
     state->rotation = ComplementaryFilter(state->rotation, accel, accel_weight);
 

@@ -33,16 +33,15 @@ bool IMUAccelerometer::AreInputsBound() const
   return false;
 }
 
-std::optional<IMUAccelerometer::StateData> IMUAccelerometer::GetState() const
+bool IMUAccelerometer::GetState(StateData* state) const
 {
   if (!AreInputsBound())
-    return std::nullopt;
+    return false;
 
-  StateData state;
-  state.x = (controls[2]->GetState() - controls[3]->GetState());
-  state.y = (controls[5]->GetState() - controls[4]->GetState());
-  state.z = (controls[0]->GetState() - controls[1]->GetState());
-  return state;
+  state->x = (controls[2]->GetState() - controls[3]->GetState());
+  state->y = (controls[5]->GetState() - controls[4]->GetState());
+  state->z = (controls[0]->GetState() - controls[1]->GetState());
+  return true;
 }
 
 }  // namespace ControllerEmu

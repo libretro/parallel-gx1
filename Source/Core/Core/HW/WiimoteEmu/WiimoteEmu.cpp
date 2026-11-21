@@ -863,16 +863,16 @@ Common::Quaternion Wiimote::GetOrientation() const
 
 Common::Vec3 Wiimote::GetTotalAcceleration() const
 {
-  const Common::Vec3 default_accel = Common::Vec3(0, 0, float(GRAVITY_ACCELERATION));
-  const Common::Vec3 accel = m_imu_accelerometer->GetState().value_or(default_accel);
+  Common::Vec3 accel = Common::Vec3(0, 0, float(GRAVITY_ACCELERATION));
+  m_imu_accelerometer->GetState(&accel);
 
   return GetAcceleration(accel);
 }
 
 Common::Vec3 Wiimote::GetTotalAngularVelocity() const
 {
-  const Common::Vec3 default_ang_vel = {};
-  const Common::Vec3 ang_vel = m_imu_gyroscope->GetState().value_or(default_ang_vel);
+  Common::Vec3 ang_vel = {};
+  m_imu_gyroscope->GetState(&ang_vel);
 
   return GetAngularVelocity(ang_vel);
 }

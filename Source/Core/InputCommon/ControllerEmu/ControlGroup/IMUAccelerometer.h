@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "Common/Matrix.h"
@@ -18,7 +17,8 @@ public:
 
   IMUAccelerometer(std::string name, std::string ui_name);
 
-  std::optional<StateData> GetState() const;
+  // Returns false, leaving state as it was, when no input is bound.
+  bool GetState(StateData* state) const;
 
   bool AreInputsBound() const;
 };
