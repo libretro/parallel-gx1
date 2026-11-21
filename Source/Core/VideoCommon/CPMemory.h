@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -524,7 +523,7 @@ struct CPState final
   TMatrixIndexB matrix_index_b{};
   TVtxDesc vtx_desc;
   // Most games only use the first VtxAttr and simply reconfigure it all the time as needed.
-  std::array<VAT, CP_NUM_VAT_REG> vtx_attr{};
+  VAT vtx_attr[CP_NUM_VAT_REG]{};
 };
 static_assert(std::is_trivially_copyable_v<CPState>);
 

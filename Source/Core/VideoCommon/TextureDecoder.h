@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <tuple>
 
 #include "Common/CommonTypes.h"
@@ -14,7 +13,7 @@ enum
   TMEM_SIZE = 1024 * 1024,
   TMEM_LINE_SIZE = 32,
 };
-alignas(16) extern std::array<u8, TMEM_SIZE> s_tex_mem;
+alignas(16) extern u8 s_tex_mem[TMEM_SIZE];
 
 enum class TextureFormat
 {
@@ -161,7 +160,7 @@ static inline bool CanReinterpretTextureOnGPU(TextureFormat from_format, Texture
 
 inline TexBytes TexDecoder_GetTmem(size_t offset)
 {
-  TexBytes tmem = {s_tex_mem.data(), TMEM_SIZE};
+  TexBytes tmem = {s_tex_mem, TMEM_SIZE};
   return TexBytesSkip(tmem, offset);
 }
 

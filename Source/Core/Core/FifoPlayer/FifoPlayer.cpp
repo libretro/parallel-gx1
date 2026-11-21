@@ -620,8 +620,8 @@ void FifoPlayer::LoadTextureMemory()
                 "TMEM_SIZE matches the size of texture memory in FifoDataFile");
   /* what the file has of it, the rest zero */
   if (m_File->GetTexMemSize())
-    std::memcpy(s_tex_mem.data(), m_File->GetTexMem(), m_File->GetTexMemSize());
-  std::memset(s_tex_mem.data() + m_File->GetTexMemSize(), 0,
+    std::memcpy(s_tex_mem, m_File->GetTexMem(), m_File->GetTexMemSize());
+  std::memset(s_tex_mem + m_File->GetTexMemSize(), 0,
               FifoDataFile::TEX_MEM_SIZE - m_File->GetTexMemSize());
 }
 

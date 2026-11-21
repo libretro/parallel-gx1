@@ -380,7 +380,7 @@ bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,
   {
     memset(reinterpret_cast<u8*>(&g_main_cp_state), 0, sizeof(g_main_cp_state));
     memset(reinterpret_cast<u8*>(&g_preprocess_cp_state), 0, sizeof(g_preprocess_cp_state));
-    s_tex_mem.fill(0);
+    std::memset(s_tex_mem, 0, sizeof(s_tex_mem));
   }
   // do not initialize again for the config window
   m_initialized = true;

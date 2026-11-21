@@ -2446,7 +2446,7 @@ RcTcacheEntry TextureCacheBase::GetXFBTexture(u32 address, u32 width, u32 height
   entry->frameCount = FRAMECOUNT_INVALID;
   if (!g_ActiveConfig.UseGPUTextureDecoding() ||
       !DecodeTextureOnGPU(entry, 0, src_data, total_size, entry->format.texfmt, width, height,
-                          width, height, stride, s_tex_mem.data(), entry->format.tlutfmt))
+                          width, height, stride, s_tex_mem, entry->format.tlutfmt))
   {
     const u32 decoded_size = width * height * sizeof(u32);
     /* decoded straight into the backend's upload memory where it lends some */

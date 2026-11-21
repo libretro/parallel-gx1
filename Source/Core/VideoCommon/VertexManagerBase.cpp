@@ -77,8 +77,7 @@ constexpr Common::EnumMap<PrimitiveType, Primitive::GX_DRAW_POINTS> primitive_fr
 // Just in case any game decides to take this into account, we do both these
 // tests with a large amount of slop.
 
-static float CalculateProjectionViewportRatio(const Projection::Raw& projection,
-                                              const Viewport& viewport)
+static float CalculateProjectionViewportRatio(const float* projection, const Viewport& viewport)
 {
   const float projection_ar = projection[2] / projection[0];
   const float viewport_ar = viewport.wd / viewport.ht;

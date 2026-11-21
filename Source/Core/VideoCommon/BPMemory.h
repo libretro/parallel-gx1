@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <string>
 #include <utility>
 
@@ -976,7 +975,7 @@ union TevKSel
 
 struct AllTevKSels
 {
-  std::array<TevKSel, 8> ksel;
+  TevKSel ksel[8];
 
   KonstSel GetKonstColor(u32 tev_stage) const
   {
@@ -1268,7 +1267,7 @@ static_assert(sizeof(TexUnit) == sizeof(u32) * 4 * 7 + sizeof(u32));
 
 union AllTexUnits
 {
-  std::array<u32, 8 * 8> AllRegisters;
+  u32 AllRegisters[8 * 8];
 
   const TexUnit& GetUnit(u32 UnitId) const
   {
@@ -1282,8 +1281,8 @@ private:
   template <u32 UnitId>
   struct TexUnitPadding
   {
-    static_assert(UnitId != 0, "Can't use 0 as sizeof(std::array<u32, 0>) != 0");
-    std::array<u32, TexUnitAddress::ComputeOffset(UnitId)> pad;
+    static_assert(UnitId != 0, "Can't use 0 as an array can't be empty");
+    u32 pad[TexUnitAddress::ComputeOffset(UnitId)];
   };
 
   TexUnit tex0;

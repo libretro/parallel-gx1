@@ -4,8 +4,6 @@
 
 #include "VideoCommon/TMEM.h"
 
-#include <array>
-
 #include "Common/ChunkFile.h"
 #include "VideoCommon/BPMemory.h"
 
@@ -97,7 +95,7 @@ struct TextureUnitState
 
 static u32 CalculateUnitSize(TextureUnitState::BankConfig bank_config);
 
-static std::array<TextureUnitState, 8> s_unit;
+static TextureUnitState s_unit[8];
 
 // On TMEM configuration changed:
 // 1. invalidate stage.
@@ -254,7 +252,7 @@ void FinalizeBinds(BitSet32 used_textures)
     {  // Self-overlap
       s_unit[i].state = TextureUnitState::State::VALID;
     }
-    for (size_t j = 0; j < s_unit.size(); j++)
+    for (size_t j = 0; j < sizeof(s_unit) / sizeof(s_unit[0]); j++)
     {
       if (j != i && s_unit[i].Overlaps(s_unit[j]))
       {
@@ -279,7 +277,8 @@ bool IsValid(u32 unit)
 
 void Init()
 {
-  s_unit.fill({});
+  for (TextureUnitState& unit : s_unit)
+    unit = TextureUnitState();
 }
 
 void DoState(PointerWrap& p)

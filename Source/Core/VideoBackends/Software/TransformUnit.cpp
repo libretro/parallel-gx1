@@ -61,7 +61,7 @@ static void MultiplyVec3Mat34(const Vec3& vec, const float* mat, Vec3& result)
   result.z = mat[8] * vec.x + mat[9] * vec.y + mat[10] * vec.z + mat[11];
 }
 
-static void MultipleVec3Perspective(const Vec3& vec, const Projection::Raw& proj, Vec4& result)
+static void MultipleVec3Perspective(const Vec3& vec, const float* proj, Vec4& result)
 {
   result.x = proj[0] * vec.x + proj[1] * vec.z;
   result.y = proj[2] * vec.y + proj[3] * vec.z;
@@ -70,7 +70,7 @@ static void MultipleVec3Perspective(const Vec3& vec, const Projection::Raw& proj
   result.w = -vec.z;
 }
 
-static void MultipleVec3Ortho(const Vec3& vec, const Projection::Raw& proj, Vec4& result)
+static void MultipleVec3Ortho(const Vec3& vec, const float* proj, Vec4& result)
 {
   result.x = proj[0] * vec.x + proj[1];
   result.y = proj[2] * vec.y + proj[3];

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstring>
 
@@ -20,7 +19,7 @@ static bool TexFmt_Overlay_Center = false;
 
 // TRAM
 // STATE_TO_SAVE
-alignas(16) std::array<u8, TMEM_SIZE> s_tex_mem;
+alignas(16) u8 s_tex_mem[TMEM_SIZE];
 
 int TexDecoder_GetTexelSizeInNibbles(TextureFormat format)
 {

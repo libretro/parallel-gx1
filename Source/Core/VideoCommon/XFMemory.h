@@ -6,8 +6,6 @@
 // X.h defines None to be 0, which causes problems with some of the enums
 #undef None
 
-#include <array>
-
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
 #include "VideoCommon/CPMemory.h"
@@ -263,9 +261,7 @@ struct Viewport
 
 struct Projection
 {
-  using Raw = std::array<float, 6>;
-
-  Raw rawProjection;
+  float rawProjection[6];
   ProjectionType type;
 };
 
