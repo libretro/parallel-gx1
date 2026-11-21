@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <string>
 #include <vector>
 
@@ -13,7 +12,7 @@
 
 class VertexLoaderUID
 {
-  std::array<u32, 5> vid{};
+  u32 vid[5]{};
   size_t hash = 0;
 
 public:
@@ -28,7 +27,11 @@ public:
     hash = CalculateHash();
   }
 
-  bool operator==(const VertexLoaderUID& rh) const { return vid == rh.vid; }
+  bool operator==(const VertexLoaderUID& rh) const
+  {
+    return vid[0] == rh.vid[0] && vid[1] == rh.vid[1] && vid[2] == rh.vid[2] &&
+           vid[3] == rh.vid[3] && vid[4] == rh.vid[4];
+  }
   size_t GetHash() const { return hash; }
 
 private:
@@ -36,7 +39,7 @@ private:
   {
     size_t h = SIZE_MAX;
 
-    for (auto word : vid)
+    for (u32 word : vid)
     {
       h = h * 137 + word;
     }

@@ -27,7 +27,7 @@ private:
   // room for the most vertices a draw has (its count is 16 bits), made in Init
   static constexpr u32 MAX_VERTICES = 65536;
   TransformedVertex* m_transform_buffer = nullptr;
-  std::array<std::array<TransformFunction, 2>, 2> m_transform_table{};
+  TransformFunction m_transform_table[2][2]{};
   Common::EnumMap<Common::EnumMap<CullFunction, CullMode::All>,
                   OpcodeDecoder::Primitive::GX_DRAW_TRIANGLE_FAN>
       m_cull_table{};

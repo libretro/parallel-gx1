@@ -3,7 +3,6 @@
 
 #include "VideoCommon/VertexLoader_Normal.h"
 
-#include <array>
 #include <type_traits>
 
 #include "Common/CommonTypes.h"
@@ -92,7 +91,14 @@ void Normal_ReadIndex_Indices3(VertexLoader* loader)
 using Common::EnumMap;
 using Formats = EnumMap<TPipelineFunction, ComponentFormat::InvalidFloat7>;
 using Elements = EnumMap<Formats, NormalComponentCount::NTB>;
-using Indices = std::array<Elements, 2>;
+// Indexed by whether the normal, tangent and binormal each have their own index.
+struct Indices
+{
+  Elements by_index3[2];
+
+  constexpr Elements& operator[](bool index3) { return by_index3[index3]; }
+  constexpr const Elements& operator[](bool index3) const { return by_index3[index3]; }
+};
 using Types = EnumMap<Indices, VertexComponentFormat::Index16>;
 
 consteval Types InitializeTable()

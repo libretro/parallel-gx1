@@ -3,7 +3,6 @@
 
 #include "VideoCommon/VertexLoaderX64.h"
 
-#include <array>
 #include <cstring>
 
 #include "Common/BitSet.h"
@@ -465,7 +464,7 @@ void VertexLoaderX64::GenerateVertexLoader()
     m_dst_ofs += sizeof(u32);
   }
 
-  std::array<u32, 8> texmatidx_ofs;
+  u32 texmatidx_ofs[8];
   for (size_t i = 0; i < m_VtxDesc.low.TexMatIdx.Size(); i++)
   {
     if (m_VtxDesc.low.TexMatIdx[i])

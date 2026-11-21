@@ -10,6 +10,18 @@
 #include "VideoCommon/CPMemory.h"
 #include "VideoCommon/VertexLoader.h"
 
+// Normal sizes, indexed by whether the normal, tangent and binormal each have their own index.
+struct VertexLoaderNormalSizes
+{
+  using Elements = Common::EnumMap<Common::EnumMap<u32, ComponentFormat::InvalidFloat7>,
+                                   NormalComponentCount::NTB>;
+
+  Elements by_index3[2];
+
+  constexpr Elements& operator[](bool index3) { return by_index3[index3]; }
+  constexpr const Elements& operator[](bool index3) const { return by_index3[index3]; }
+};
+
 class VertexLoader_Normal
 {
 public:
@@ -26,10 +38,7 @@ private:
   template <typename T, auto last_member>
   using EnumMap = typename Common::EnumMap<T, last_member>;
 
-  using SizeTable = EnumMap<
-      std::array<EnumMap<EnumMap<u32, ComponentFormat::InvalidFloat7>, NormalComponentCount::NTB>,
-                 2>,
-      VertexComponentFormat::Index16>;
+  using SizeTable = EnumMap<VertexLoaderNormalSizes, VertexComponentFormat::Index16>;
 
   static constexpr SizeTable s_table_size = []() consteval {
     SizeTable table{};
