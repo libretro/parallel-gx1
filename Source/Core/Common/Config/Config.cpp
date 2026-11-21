@@ -4,7 +4,7 @@
 #include "Common/Config/Config.h"
 
 #include <cstdlib>
-#include <map>
+#include <cstring>
 #include <type_traits>
 #include <utility>
 
@@ -213,32 +213,30 @@ void ClearCurrentRunLayer()
   PublishLayer(LayerType::CurrentRun, std::make_shared<Layer>(LayerType::CurrentRun));
 }
 
-static const std::map<System, std::string> system_to_name = {
-    {System::Main, "Dolphin"},
-    {System::GCPad, "GCPad"},
-    {System::WiiPad, "Wiimote"},
-    {System::GCKeyboard, "GCKeyboard"},
-    {System::GFX, "Graphics"},
-    {System::Logger, "Logger"},
-    {System::SYSCONF, "SYSCONF"},
-    {System::Session, "Session"},
-    {System::GameSettingsOnly, "GameSettingsOnly"},
-    {System::Achievements, "Achievements"}};
+// Each system's name, in the order of System
+static const char* const s_system_names[] = {
+    "Dolphin",  "SYSCONF", "GCPad",   "Wiimote",          "GCKeyboard",
+    "Graphics", "Logger",  "Session", "GameSettingsOnly", "Achievements",
+};
+static_assert(sizeof(s_system_names) / sizeof(s_system_names[0]) ==
+              static_cast<size_t>(System::Achievements) + 1);
 
-const std::string& GetSystemName(System system)
+const char* GetSystemName(System system)
 {
-  return system_to_name.at(system);
+  return s_system_names[static_cast<size_t>(system)];
 }
 
-std::optional<System> GetSystemFromName(const std::string& name)
+bool GetSystemFromName(const char* name, System* system)
 {
-  for (const auto& entry : system_to_name)
+  for (size_t i = 0; i < sizeof(s_system_names) / sizeof(s_system_names[0]); i++)
   {
-    if (entry.second == name)
-      return entry.first;
+    if (!std::strcmp(s_system_names[i], name))
+    {
+      *system = static_cast<System>(i);
+      return true;
+    }
   }
-
-  return {};
+  return false;
 }
 
 LayerType GetActiveLayerForConfig(const Location& config)
