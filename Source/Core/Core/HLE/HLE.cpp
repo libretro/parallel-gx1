@@ -5,7 +5,8 @@
 
 #include <algorithm>
 #include <array>
-#include <map>
+#include <cstdlib>
+#include <cstring>
 
 #include "Common/CommonTypes.h"
 
@@ -22,8 +23,63 @@
 
 namespace HLE
 {
-// Map addresses to the HLE hook index
-static std::map<u32, u32> s_hooked_addresses;
+// The hooked addresses and their HLE hook indexes, sorted by address
+struct HookedAddress
+{
+  u32 address;
+  u32 index;
+};
+static HookedAddress* s_hooked;
+static u32 s_hooked_count;
+static u32 s_hooked_capacity;
+
+// The first slot whose address is not below address
+static u32 FindHookSlot(u32 address)
+{
+  u32 low = 0;
+  u32 high = s_hooked_count;
+  while (low < high)
+  {
+    const u32 mid = low + (high - low) / 2;
+    if (s_hooked[mid].address < address)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  return low;
+}
+
+static void SetHook(u32 address, u32 index)
+{
+  const u32 slot = FindHookSlot(address);
+  if (slot < s_hooked_count && s_hooked[slot].address == address)
+  {
+    s_hooked[slot].index = index;
+    return;
+  }
+  if (s_hooked_count == s_hooked_capacity)
+  {
+    const u32 capacity = s_hooked_capacity ? s_hooked_capacity * 2 : 256;
+    HookedAddress* const grown =
+        static_cast<HookedAddress*>(std::realloc(s_hooked, capacity * sizeof(HookedAddress)));
+    if (!grown)
+      return;
+    s_hooked = grown;
+    s_hooked_capacity = capacity;
+  }
+  std::memmove(s_hooked + slot + 1, s_hooked + slot,
+               (s_hooked_count - slot) * sizeof(HookedAddress));
+  s_hooked[slot].address = address;
+  s_hooked[slot].index = index;
+  s_hooked_count++;
+}
+
+static void RemoveHookSlot(u32 slot)
+{
+  std::memmove(s_hooked + slot, s_hooked + slot + 1,
+               (s_hooked_count - slot - 1) * sizeof(HookedAddress));
+  s_hooked_count--;
+}
 
 // clang-format off
 constexpr std::array<Hook, 23> os_patches{{
@@ -71,7 +127,7 @@ void Patch(Core::System& system, u32 addr, std::string_view func_name)
   {
     if (os_patches[i].name == func_name)
     {
-      s_hooked_addresses[addr] = i;
+      SetHook(addr, i);
       ppc_state.iCache.Invalidate(memory, jit_interface, addr);
       return;
     }
@@ -114,18 +170,15 @@ void PatchFunctions(Core::System& system)
   auto& ppc_symbol_db = power_pc.GetSymbolDB();
 
   // Remove all hooks that aren't fixed address hooks
-  for (auto i = s_hooked_addresses.begin(); i != s_hooked_addresses.end();)
+  u32 kept = 0;
+  for (u32 i = 0; i < s_hooked_count; i++)
   {
-    if (os_patches[i->second].flags != HookFlag::Fixed)
-    {
-      ppc_state.iCache.Invalidate(memory, jit_interface, i->first);
-      i = s_hooked_addresses.erase(i);
-    }
+    if (os_patches[s_hooked[i].index].flags != HookFlag::Fixed)
+      ppc_state.iCache.Invalidate(memory, jit_interface, s_hooked[i].address);
     else
-    {
-      ++i;
-    }
+      s_hooked[kept++] = s_hooked[i];
   }
+  s_hooked_count = kept;
 
   for (u32 i = 1; i < os_patches.size(); ++i)
   {
@@ -137,7 +190,7 @@ void PatchFunctions(Core::System& system)
     {
       for (u32 addr = symbol->address; addr < symbol->address + symbol->size; addr += 4)
       {
-        s_hooked_addresses[addr] = i;
+        SetHook(addr, i);
         ppc_state.iCache.Invalidate(memory, jit_interface, addr);
       }
       INFO_LOG(OSHLE, "Patching %s %08x", os_patches[i].name, symbol->address);
@@ -148,7 +201,10 @@ void PatchFunctions(Core::System& system)
 
 void Clear()
 {
-  s_hooked_addresses.clear();
+  std::free(s_hooked);
+  s_hooked = nullptr;
+  s_hooked_count = 0;
+  s_hooked_capacity = 0;
 }
 
 void Reload(Core::System& system)
@@ -179,8 +235,8 @@ void ExecuteFromJIT(u32 current_pc, u32 hook_index, Core::System& system)
 
 u32 GetHookByAddress(u32 address)
 {
-  auto iter = s_hooked_addresses.find(address);
-  return (iter != s_hooked_addresses.end()) ? iter->second : 0;
+  const u32 slot = FindHookSlot(address);
+  return (slot < s_hooked_count && s_hooked[slot].address == address) ? s_hooked[slot].index : 0;
 }
 
 u32 GetHookByFunctionAddress(PPCSymbolDB& ppc_symbol_db, u32 address)
@@ -243,19 +299,20 @@ u32 UnPatch(Core::System& system, std::string_view patch_name)
     const u32 patch_idx = static_cast<u32>(std::distance(os_patches.begin(), patch));
     u32 addr = 0;
     // Reverse search by OSPatch key instead of address
-    for (auto i = s_hooked_addresses.begin(); i != s_hooked_addresses.end();)
+    u32 kept = 0;
+    for (u32 i = 0; i < s_hooked_count; i++)
     {
-      if (i->second == patch_idx)
+      if (s_hooked[i].index == patch_idx)
       {
-        addr = i->first;
-        ppc_state.iCache.Invalidate(memory, jit_interface, i->first);
-        i = s_hooked_addresses.erase(i);
+        addr = s_hooked[i].address;
+        ppc_state.iCache.Invalidate(memory, jit_interface, addr);
       }
       else
       {
-        ++i;
+        s_hooked[kept++] = s_hooked[i];
       }
     }
+    s_hooked_count = kept;
     return addr;
   }
 
@@ -265,7 +322,9 @@ u32 UnPatch(Core::System& system, std::string_view patch_name)
     const Common::Symbol* const symbol = symbols.front();
     for (u32 addr = symbol->address; addr < symbol->address + symbol->size; addr += 4)
     {
-      s_hooked_addresses.erase(addr);
+      const u32 slot = FindHookSlot(addr);
+      if (slot < s_hooked_count && s_hooked[slot].address == addr)
+        RemoveHookSlot(slot);
       ppc_state.iCache.Invalidate(memory, jit_interface, addr);
     }
     return symbol->address;
