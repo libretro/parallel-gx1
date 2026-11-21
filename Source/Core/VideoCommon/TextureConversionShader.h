@@ -47,7 +47,9 @@ const DecodingShaderInfo* GetDecodingShaderInfo(TextureFormat format);
 
 // Determine how many thread groups should be dispatched for an image of the specified width/height.
 // First is the number of X groups, second is the number of Y groups, Z is always one.
-std::pair<u32, u32> GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height);
+// The compute groups decoding a width by height texture takes.
+void GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height, u32* groups_x,
+                      u32* groups_y);
 
 // Returns the GLSL string containing the texture decoding shader for the specified format.
 ShaderCode GenerateDecodingShader(TextureFormat format, const TLUTFormat* palette_format,

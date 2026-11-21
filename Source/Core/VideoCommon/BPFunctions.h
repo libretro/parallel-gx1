@@ -149,10 +149,6 @@ struct ScissorResult
   }
 
 private:
-  ScissorResult(ScissorPos scissor_top_left, ScissorPos scissor_bottom_right,
-                ScissorOffset scissor_offset, std::pair<float, float> viewport_x,
-                std::pair<float, float> viewport_y);
-
   void CopyRectangles(const ScissorResult& other)
   {
     u32 i;

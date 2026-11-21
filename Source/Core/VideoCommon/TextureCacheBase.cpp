@@ -689,8 +689,9 @@ bool TextureCacheBase::DidLinkedAssetsChange(const TCacheEntry& entry)
   return resource->GetLoadTime() > entry.last_load_time;
 }
 
-std::pair<RcTcacheEntry, u32>
-TextureCacheBase::CreatePaletteEntryWithOffset(const RcTcacheEntry& entry, const u8* palette)
+RcTcacheEntry TextureCacheBase::CreatePaletteEntryWithOffset(const RcTcacheEntry& entry,
+                                                             const u8* palette,
+                                                             u32* texel_buffer_offset)
 {
   DEBUG_ASSERT(g_backend_info.bSupportsPaletteConversion);
 
@@ -698,9 +699,10 @@ TextureCacheBase::CreatePaletteEntryWithOffset(const RcTcacheEntry& entry, const
   new_config.levels = 1;
   new_config.flags |= AbstractTextureFlag_RenderTarget;
 
+  *texel_buffer_offset = 0;
   RcTcacheEntry decoded_entry = AllocateCacheEntry(new_config);
   if (!decoded_entry)
-    return {nullptr, 0};
+    return decoded_entry;
 
   decoded_entry->SetGeneralParameters(entry->addr, entry->size_in_bytes, entry->format,
                                       entry->should_force_safe_hashing);
@@ -712,17 +714,16 @@ TextureCacheBase::CreatePaletteEntryWithOffset(const RcTcacheEntry& entry, const
   decoded_entry->may_have_overlapping_textures = entry->may_have_overlapping_textures;
 
   const u32 palette_size = entry->format == TextureFormat::I4 ? 32 : 512;
-  u32 texel_buffer_offset;
   if (!g_vertex_manager->UploadTexelBuffer(palette, palette_size,
                                            TexelBufferFormat::TEXEL_BUFFER_FORMAT_R16_UINT,
-                                           &texel_buffer_offset))
+                                           texel_buffer_offset))
   {
     ERROR_LOG(VIDEO, "Texel buffer upload of %u bytes failed", palette_size);
   }
 
   TexIndexInsert(&m_textures_by_address, decoded_entry->addr, decoded_entry);
 
-  return {decoded_entry, texel_buffer_offset};
+  return decoded_entry;
 }
 
 void TextureCacheBase::RenderPaletteEntry(u32 texel_buffer_offset, const RcTcacheEntry& entry,
@@ -1367,8 +1368,9 @@ RcTcacheEntry TextureCacheBase::DoPartialTextureUpdates(RcTcacheEntry& entry_to_
 
         if (isPaletteTexture)
         {
-          const auto [decoded_entry, texel_buffer_offset] =
-              CreatePaletteEntryWithOffset(entry, palette);
+          u32 texel_buffer_offset;
+          const RcTcacheEntry decoded_entry =
+              CreatePaletteEntryWithOffset(entry, palette, &texel_buffer_offset);
           RenderPaletteEntry(texel_buffer_offset, decoded_entry, entry->texture, tlutfmt);
           if (decoded_entry)
           {
@@ -2016,8 +2018,8 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
     {
       auto existing_entry = decoded_entry;
       u32 texel_buffer_offset = 0;
-      std::tie(decoded_entry, texel_buffer_offset) =
-          CreatePaletteEntryWithOffset(decoded_entry, texture_info.GetTlutAddress());
+      decoded_entry = CreatePaletteEntryWithOffset(decoded_entry, texture_info.GetTlutAddress(),
+                                                   &texel_buffer_offset);
       RenderPaletteEntry(texel_buffer_offset, decoded_entry, existing_entry->texture,
                          texture_info.GetTlutFormat());
     }
@@ -2028,8 +2030,9 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
 
   if (unconverted_copy)
   {
-    const auto [decoded_entry, texel_buffer_offset] =
-        CreatePaletteEntryWithOffset(unconverted_copy->value, texture_info.GetTlutAddress());
+    u32 texel_buffer_offset;
+    const RcTcacheEntry decoded_entry = CreatePaletteEntryWithOffset(
+        unconverted_copy->value, texture_info.GetTlutAddress(), &texel_buffer_offset);
     RenderPaletteEntry(texel_buffer_offset, decoded_entry, unconverted_copy->value->texture,
                        texture_info.GetTlutFormat());
 
@@ -3768,20 +3771,20 @@ bool TextureCacheBase::DecodeTextureOnGPU(RcTcacheEntry& entry, u32 dst_level, c
                 palette_offset};
   g_vertex_manager->UploadUtilityUniforms(&uniforms, sizeof(uniforms));
 
-  auto dispatch_groups =
-      TextureConversionShaderTiled::GetDispatchCount(info, aligned_width, aligned_height);
+  u32 groups_x, groups_y;
+  TextureConversionShaderTiled::GetDispatchCount(info, aligned_width, aligned_height, &groups_x,
+                                                 &groups_y);
   const auto copy_rect = entry->texture->GetConfig().GetMipRect(dst_level);
   /* ahead of the draws where the backend can, so no render pass ends for it */
-  if (g_gfx->DecodeTextureAhead(shader, info->group_size_x, info->group_size_y,
-                                dispatch_groups.first, dispatch_groups.second, m_decoding_texture,
-                                entry->texture, copy_rect, dst_level))
+  if (g_gfx->DecodeTextureAhead(shader, info->group_size_x, info->group_size_y, groups_x, groups_y,
+                                m_decoding_texture, entry->texture, copy_rect, dst_level))
   {
     return true;
   }
 
   g_gfx->SetComputeImageTexture(0, m_decoding_texture, false, true);
-  g_gfx->DispatchComputeShader(shader, info->group_size_x, info->group_size_y, 1,
-                               dispatch_groups.first, dispatch_groups.second, 1);
+  g_gfx->DispatchComputeShader(shader, info->group_size_x, info->group_size_y, 1, groups_x,
+                               groups_y, 1);
 
   // Copy from decoding texture -> final texture
   // This is because we don't want to have to create compute view for every layer

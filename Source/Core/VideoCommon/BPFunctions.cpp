@@ -97,20 +97,24 @@ static RangeList ComputeScissorRanges(int start, int end, int offset, int efb_di
 }
 }  // namespace
 
+// the lower and the higher of a and b, a first when they are equal (std::minmax's order)
+static float LowerOf(float a, float b)
+{
+  return b < a ? b : a;
+}
+static float HigherOf(float a, float b)
+{
+  return b < a ? a : b;
+}
+
 ScissorResult::ScissorResult(ScissorPos scissor_top_left, ScissorPos scissor_bottom_right,
                              ScissorOffset scissor_offset, const Viewport& viewport)
-    : ScissorResult(scissor_top_left, scissor_bottom_right, scissor_offset,
-                    std::minmax(viewport.xOrig - viewport.wd, viewport.xOrig + viewport.wd),
-                    std::minmax(viewport.yOrig - viewport.ht, viewport.yOrig + viewport.ht))
-{
-}
-ScissorResult::ScissorResult(ScissorPos scissor_top_left, ScissorPos scissor_bottom_right,
-                             ScissorOffset scissor_offset, std::pair<float, float> viewport_x,
-                             std::pair<float, float> viewport_y)
     : scissor_tl{.hex = scissor_top_left.hex}, scissor_br{.hex = scissor_bottom_right.hex},
-      scissor_off{.hex = scissor_offset.hex}, viewport_left(viewport_x.first),
-      viewport_right(viewport_x.second), viewport_top(viewport_y.first),
-      viewport_bottom(viewport_y.second)
+      scissor_off{.hex = scissor_offset.hex},
+      viewport_left(LowerOf(viewport.xOrig - viewport.wd, viewport.xOrig + viewport.wd)),
+      viewport_right(HigherOf(viewport.xOrig - viewport.wd, viewport.xOrig + viewport.wd)),
+      viewport_top(LowerOf(viewport.yOrig - viewport.ht, viewport.yOrig + viewport.ht)),
+      viewport_bottom(HigherOf(viewport.yOrig - viewport.ht, viewport.yOrig + viewport.ht))
 {
   // Range is [left, right] and [top, bottom] (closed intervals)
   const int left = scissor_tl.x;

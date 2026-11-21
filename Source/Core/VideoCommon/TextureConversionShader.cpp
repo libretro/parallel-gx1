@@ -1336,14 +1336,19 @@ const DecodingShaderInfo* GetDecodingShaderInfo(TextureFormat format)
   return iter != s_decoding_shader_info.end() ? &iter->second : nullptr;
 }
 
-std::pair<u32, u32> GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height)
+void GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height, u32* groups_x,
+                      u32* groups_y)
 {
   // Flatten to a single dimension?
   if (info->group_flatten)
-    return {(width * height + (info->group_size_x - 1)) / info->group_size_x, 1};
+  {
+    *groups_x = (width * height + (info->group_size_x - 1)) / info->group_size_x;
+    *groups_y = 1;
+    return;
+  }
 
-  return {(width + (info->group_size_x - 1)) / info->group_size_x,
-          (height + (info->group_size_y - 1)) / info->group_size_y};
+  *groups_x = (width + (info->group_size_x - 1)) / info->group_size_x;
+  *groups_y = (height + (info->group_size_y - 1)) / info->group_size_y;
 }
 
 ShaderCode GenerateDecodingShader(TextureFormat format, const TLUTFormat* palette_format,

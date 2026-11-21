@@ -489,8 +489,9 @@ private:
 
   RcTcacheEntry GetXFBFromCache(u32 address, u32 width, u32 height, u32 stride);
 
-  std::pair<RcTcacheEntry, u32> CreatePaletteEntryWithOffset(const RcTcacheEntry& entry,
-                                                             const u8* palette);
+  // the texel buffer offset of the palette written through the pointer
+  RcTcacheEntry CreatePaletteEntryWithOffset(const RcTcacheEntry& entry, const u8* palette,
+                                             u32* texel_buffer_offset);
 
   RcTcacheEntry CreateReinterpretEntry(const RcTcacheEntry& existing_entry,
                                        TextureFormat new_format);
