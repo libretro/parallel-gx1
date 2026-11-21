@@ -4,16 +4,16 @@
 #include "Core/HW/DVD/FileMonitor.h"
 
 #include <cinttypes>
-#include <memory>
 #include <string>
-#include <unordered_set>
 
 #include <cstdio>
+#include <cstring>
+
+#include <string/stdstring.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/Logging/LogManager.h"
-#include "Common/StringUtil.h"
 
 #include "DiscIO/Filesystem.h"
 #include "DiscIO/Volume.h"
@@ -21,13 +21,24 @@
 namespace FileMonitor
 {
 // Filtered files
-static bool IsSoundFile(const std::string& filename)
+static bool IsSoundFile(const char* filename)
 {
-  std::string extension;
-  SplitPath(filename, nullptr, nullptr, &extension);
-  Common::ToLower(&extension);
+  // the extension is from the last dot of the file name
+  const char* name = filename;
+  for (const char* c = filename; *c; c++)
+  {
+#ifdef _WIN32
+    if (*c == '/' || *c == ':')
+#else
+    if (*c == '/')
+#endif
+      name = c + 1;
+  }
+  const char* const extension = std::strrchr(name, '.');
+  if (!extension)
+    return false;
 
-  static const std::unordered_set<std::string> extensions = {
+  static const char* const extensions[] = {
       ".adp",    // 1080 Avalanche, Crash Bandicoot, etc.
       ".adx",    // Sonic Adventure 2 Battle, etc.
       ".afc",    // Zelda WW
@@ -42,8 +53,12 @@ static bool IsSoundFile(const std::string& filename)
       ".ssm",    // Custom Robo, Kirby Air Ride, etc.
       ".str",    // Harry Potter & the Sorcerer's Stone
   };
-
-  return extensions.contains(extension);
+  for (size_t i = 0; i < sizeof(extensions) / sizeof(extensions[0]); i++)
+  {
+    if (string_is_equal_case_insensitive(extension, extensions[i]))
+      return true;
+  }
+  return false;
 }
 
 FileLogger::FileLogger() = default;
@@ -79,7 +94,7 @@ void FileLogger::Log(const DiscIO::Volume& volume, const DiscIO::Partition& part
 
   const u64 size_kb = file_info.GetSize() / 1000;
   const std::string path = file_info.GetPath();
-  if (IsSoundFile(path))
+  if (IsSoundFile(path.c_str()))
     INFO_LOG(FILEMON, "%7" PRIu64 " kB %s", size_kb, path.c_str());
   else
     WARN_LOG(FILEMON, "%7" PRIu64 " kB %s", size_kb, path.c_str());
