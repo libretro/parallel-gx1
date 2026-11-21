@@ -15,7 +15,9 @@
 
 namespace IOS::HLE
 {
-static std::unique_ptr<IOCtlRequest> s_event_hook_request;
+// The pending event hook request's address, 0 for none: the request stays in guest memory
+// until it is answered
+static u32 s_event_hook_address;
 
 IPCReply STMImmediateDevice::IOCtl(const IOCtlRequest& request)
 {
@@ -32,15 +34,18 @@ IPCReply STMImmediateDevice::IOCtl(const IOCtlRequest& request)
     break;
 
   case IOCTL_STM_RELEASE_EH:
-    if (!s_event_hook_request)
+  {
+    if (!s_event_hook_address)
     {
       return_value = IPC_ENOENT;
       break;
     }
-    memory.Write_U32(0, s_event_hook_request->buffer_out);
-    GetEmulationKernel().EnqueueIPCReply(*s_event_hook_request, IPC_SUCCESS);
-    s_event_hook_request.reset();
+    const IOCtlRequest hook(system, s_event_hook_address);
+    memory.Write_U32(0, hook.buffer_out);
+    GetEmulationKernel().EnqueueIPCReply(hook, IPC_SUCCESS);
+    s_event_hook_address = 0;
     break;
+  }
 
   case IOCTL_STM_HOTRESET:
     INFO_LOG(IOS_STM, "%s - IOCtl:", GetDeviceName().c_str());
@@ -81,7 +86,7 @@ IPCReply STMImmediateDevice::IOCtl(const IOCtlRequest& request)
 
 STMEventHookDevice::~STMEventHookDevice()
 {
-  s_event_hook_request.reset();
+  s_event_hook_address = 0;
 }
 
 IPCReply STMEventHookDevice::IOCtl(const IOCtlRequest& request)
@@ -89,45 +94,37 @@ IPCReply STMEventHookDevice::IOCtl(const IOCtlRequest& request)
   if (request.request != IOCTL_STM_EVENTHOOK)
     return IPCReply(IPC_UNKNOWN);
 
-  if (s_event_hook_request)
+  if (s_event_hook_address)
     return IPCReply(IPC_EEXIST);
 
   // IOCTL_STM_EVENTHOOK waits until the reset button or power button is pressed.
-  s_event_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), request.address);
+  s_event_hook_address = request.address;
   return IPCReply::None();
 }
 
 void STMEventHookDevice::DoState(PointerWrap& p)
 {
   Device::DoState(p);
-  u32 address = s_event_hook_request ? s_event_hook_request->address : 0;
-  p.Do(address);
-  if (address != 0)
-  {
-    s_event_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), address);
-  }
-  else
-  {
-    s_event_hook_request.reset();
-  }
+  p.Do(s_event_hook_address);
 }
 
 bool STMEventHookDevice::HasHookInstalled() const
 {
-  return s_event_hook_request != nullptr;
+  return s_event_hook_address != 0;
 }
 
 void STMEventHookDevice::TriggerEvent(const u32 event) const
 {
   // If the device isn't open, ignore the button press.
-  if (!m_is_active || !s_event_hook_request)
+  if (!m_is_active || !s_event_hook_address)
     return;
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
-  memory.Write_U32(event, s_event_hook_request->buffer_out);
-  GetEmulationKernel().EnqueueIPCReply(*s_event_hook_request, IPC_SUCCESS);
-  s_event_hook_request.reset();
+  const IOCtlRequest hook(system, s_event_hook_address);
+  memory.Write_U32(event, hook.buffer_out);
+  GetEmulationKernel().EnqueueIPCReply(hook, IPC_SUCCESS);
+  s_event_hook_address = 0;
 }
 
 void STMEventHookDevice::ResetButton() const

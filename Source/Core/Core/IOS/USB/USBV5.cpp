@@ -96,16 +96,7 @@ struct DeviceEntry
 void USBV5ResourceManager::DoState(PointerWrap& p)
 {
   p.Do(m_has_pending_changes);
-  u32 hook_address = m_devicechange_hook_request ? m_devicechange_hook_request->address : 0;
-  p.Do(hook_address);
-  if (hook_address != 0)
-  {
-    m_devicechange_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), hook_address);
-  }
-  else
-  {
-    m_devicechange_hook_request.reset();
-  }
+  p.Do(m_devicechange_hook_address);
 
   p.Do(m_usbv5_devices);
   USBHost::DoState(p);
@@ -130,9 +121,9 @@ USBV5ResourceManager::USBV5Device* USBV5ResourceManager::GetUSBV5Device(u32 in_b
 
 IPCReply USBV5ResourceManager::GetDeviceChange(const IOCtlRequest& request)
 {
-  if (request.buffer_out_size != 0x180 || m_devicechange_hook_request)
+  if (request.buffer_out_size != 0x180 || m_devicechange_hook_address)
     return IPCReply(IPC_EINVAL);
-  m_devicechange_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), request.address);
+  m_devicechange_hook_address = request.address;
   // If there are pending changes, the reply is sent immediately (instead of on device
   // insertion/removal).
   if (m_has_pending_changes)
@@ -164,10 +155,11 @@ IPCReply USBV5ResourceManager::Shutdown(const IOCtlRequest& request)
   {
     return IPCReply(IPC_EINVAL);
   }
-  if (m_devicechange_hook_request)
+  if (m_devicechange_hook_address)
   {
-    GetEmulationKernel().EnqueueIPCReply(*m_devicechange_hook_request, IPC_SUCCESS);
-    m_devicechange_hook_request.reset();
+    GetEmulationKernel().EnqueueIPCReply(Request(GetSystem(), m_devicechange_hook_address),
+                                         IPC_SUCCESS);
+    m_devicechange_hook_address = 0;
   }
   return IPCReply(IPC_SUCCESS);
 }
@@ -252,7 +244,7 @@ void USBV5ResourceManager::OnDeviceChangeEnd()
 // Emulation thread only, like the rest of the host state.
 void USBV5ResourceManager::TriggerDeviceChangeReply()
 {
-  if (!m_devicechange_hook_request)
+  if (!m_devicechange_hook_address)
   {
     m_has_pending_changes = true;
     return;
@@ -260,6 +252,7 @@ void USBV5ResourceManager::TriggerDeviceChangeReply()
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
+  const IOCtlRequest hook(system, m_devicechange_hook_address);
   u8 num_devices = 0;
   for (auto it = m_usbv5_devices.crbegin(); it != m_usbv5_devices.crend(); ++it)
   {
@@ -291,14 +284,12 @@ void USBV5ResourceManager::TriggerDeviceChangeReply()
     entry.interface_number = usbv5_device.interface_number;
     entry.num_altsettings = device->GetNumberOfAltSettings(entry.interface_number);
 
-    memory.CopyToEmu(m_devicechange_hook_request->buffer_out + sizeof(entry) * num_devices, &entry,
-                     sizeof(entry));
+    memory.CopyToEmu(hook.buffer_out + sizeof(entry) * num_devices, &entry, sizeof(entry));
     ++num_devices;
   }
 
-  GetEmulationKernel().EnqueueIPCReply(*m_devicechange_hook_request, num_devices, 0,
-                                       CoreTiming::FromThread::ANY);
-  m_devicechange_hook_request.reset();
+  GetEmulationKernel().EnqueueIPCReply(hook, num_devices, 0, CoreTiming::FromThread::ANY);
+  m_devicechange_hook_address = 0;
   INFO_LOG(IOS_USB, "%u USBv5 device(s), including interfaces", (unsigned)num_devices);
 }
 }  // namespace IOS::HLE

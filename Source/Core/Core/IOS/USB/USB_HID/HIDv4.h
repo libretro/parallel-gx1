@@ -43,7 +43,8 @@ private:
 
   bool m_has_pending_changes = true;
   bool m_is_shut_down = false;
-  std::unique_ptr<IOCtlRequest> m_devicechange_hook_request;
+  // The pending device change request's address, 0 for none
+  u32 m_devicechange_hook_address = 0;
   // IOS device IDs <=> USB device IDs, sorted by IOS ID
   struct DeviceIds
   {

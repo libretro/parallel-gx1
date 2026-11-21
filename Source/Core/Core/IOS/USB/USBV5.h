@@ -89,7 +89,8 @@ protected:
   virtual bool HasInterfaceNumberInIDs() const = 0;
 
   bool m_has_pending_changes = true;
-  std::unique_ptr<IOCtlRequest> m_devicechange_hook_request;
+  // The pending device change request's address, 0 for none
+  u32 m_devicechange_hook_address = 0;
 
   // Each interface of a USB device is internally considered as a unique device.
   // USBv5 resource managers can handle up to 32 devices/interfaces.

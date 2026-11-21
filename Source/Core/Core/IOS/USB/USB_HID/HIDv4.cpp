@@ -87,7 +87,7 @@ IPCReply USB_HIDv4::GetDeviceChange(const IOCtlRequest& request)
   if (request.buffer_out == 0 || request.buffer_out_size != 0x600)
     return IPCReply(IPC_EINVAL);
 
-  m_devicechange_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), request.address);
+  m_devicechange_hook_address = request.address;
   // If there are pending changes, the reply is sent immediately (instead of on device
   // insertion/removal).
   if (m_has_pending_changes || m_is_shut_down)
@@ -101,13 +101,14 @@ IPCReply USB_HIDv4::GetDeviceChange(const IOCtlRequest& request)
 
 IPCReply USB_HIDv4::Shutdown(const IOCtlRequest& request)
 {
-  if (m_devicechange_hook_request != nullptr)
+  if (m_devicechange_hook_address)
   {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    memory.Write_U32(0xffffffff, m_devicechange_hook_request->buffer_out);
-    GetEmulationKernel().EnqueueIPCReply(*m_devicechange_hook_request, -1);
-    m_devicechange_hook_request.reset();
+    const IOCtlRequest hook(system, m_devicechange_hook_address);
+    memory.Write_U32(0xffffffff, hook.buffer_out);
+    GetEmulationKernel().EnqueueIPCReply(hook, -1);
+    m_devicechange_hook_address = 0;
     m_is_shut_down = true;
   }
   return IPCReply(IPC_SUCCESS);
@@ -135,16 +136,7 @@ s32 USB_HIDv4::SubmitTransfer(USB::Device& device, const IOCtlRequest& request)
 void USB_HIDv4::DoState(PointerWrap& p)
 {
   p.Do(m_has_pending_changes);
-  u32 hook_address = m_devicechange_hook_request ? m_devicechange_hook_request->address : 0;
-  p.Do(hook_address);
-  if (hook_address != 0)
-  {
-    m_devicechange_hook_request = std::make_unique<IOCtlRequest>(GetSystem(), hook_address);
-  }
-  else
-  {
-    m_devicechange_hook_request.reset();
-  }
+  p.Do(m_devicechange_hook_address);
 
   // As two maps were: the IOS IDs and their devices in IOS ID order, then the devices and their
   // IOS IDs in device order
@@ -268,7 +260,7 @@ bool USB_HIDv4::ShouldAddDevice(const USB::Device& device) const
 
 void USB_HIDv4::TriggerDeviceChangeReply()
 {
-  if (!m_devicechange_hook_request)
+  if (!m_devicechange_hook_address)
   {
     m_has_pending_changes = true;
     return;
@@ -276,14 +268,15 @@ void USB_HIDv4::TriggerDeviceChangeReply()
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
+  const IOCtlRequest hook(system, m_devicechange_hook_address);
 
   {
-    const u32 dest = m_devicechange_hook_request->buffer_out;
+    const u32 dest = hook.buffer_out;
     u32 offset = 0;
     for (const auto& device : m_devices)
     {
       const std::vector<u8> device_section = GetDeviceEntry(*device.second.get());
-      if (offset + device_section.size() > m_devicechange_hook_request->buffer_out_size - 1)
+      if (offset + device_section.size() > hook.buffer_out_size - 1)
       {
         WARN_LOG(IOS_USB, "Too many devices connected, skipping");
         break;
@@ -295,9 +288,8 @@ void USB_HIDv4::TriggerDeviceChangeReply()
     memory.Write_U32(0xffffffff, dest + offset);
   }
 
-  GetEmulationKernel().EnqueueIPCReply(*m_devicechange_hook_request, IPC_SUCCESS, 0,
-                                       CoreTiming::FromThread::ANY);
-  m_devicechange_hook_request.reset();
+  GetEmulationKernel().EnqueueIPCReply(hook, IPC_SUCCESS, 0, CoreTiming::FromThread::ANY);
+  m_devicechange_hook_address = 0;
 }
 
 template <typename T>
