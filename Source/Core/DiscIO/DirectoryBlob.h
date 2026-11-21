@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstddef>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -328,6 +327,7 @@ private:
   explicit DirectoryBlobReader(const DirectoryBlobReader& rhs);
 
   const DirectoryBlobPartition* GetPartition(u64 offset, u64 size, u64 partition_data_offset) const;
+  const DirectoryBlobPartition* FindPartition(u64 partition_data_offset) const;
 
   bool EncryptPartitionData(u64 offset, u64 size, u8* buffer, u64 partition_data_offset,
                             u64 partition_data_decrypted_size);
@@ -365,7 +365,10 @@ private:
 
   // For Wii:
   DiscContentContainer m_nonpartition_contents;
-  std::map<u64, DirectoryBlobPartition> m_partitions;
+  // The partitions and their data offsets, which rise
+  DirectoryBlobPartition* m_partitions;
+  u64* m_partition_data_offsets;
+  u32 m_partition_count;
   WiiEncryptionCache m_encryption_cache;
 
   bool m_is_wii;

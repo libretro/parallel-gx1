@@ -4,7 +4,6 @@
 #include "DiscIO/DirectoryBlob.h"
 
 #include <cstring>
-#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -457,7 +456,8 @@ DirectoryBlobReader* DirectoryBlobReader::Create(const std::string& dol_path)
 
 DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
                                          const std::string& true_root)
-    : m_encryption_cache(this)
+    : m_partitions(nullptr), m_partition_data_offsets(nullptr), m_partition_count(0),
+      m_encryption_cache(this)
 {
   InitFileSlots();
   DirectoryBlobPartition game_partition(game_partition_root, {});
@@ -504,11 +504,22 @@ DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
 
 DirectoryBlobReader::DirectoryBlobReader(const DirectoryBlobReader& rhs)
     : m_gamecube_pseudopartition(rhs.m_gamecube_pseudopartition),
-      m_nonpartition_contents(rhs.m_nonpartition_contents), m_partitions(rhs.m_partitions),
-      m_encryption_cache(this), m_is_wii(rhs.m_is_wii), m_encrypted(rhs.m_encrypted),
-      m_data_size(rhs.m_data_size)
+      m_nonpartition_contents(rhs.m_nonpartition_contents), m_partitions(nullptr),
+      m_partition_data_offsets(nullptr), m_partition_count(0), m_encryption_cache(this),
+      m_is_wii(rhs.m_is_wii), m_encrypted(rhs.m_encrypted), m_data_size(rhs.m_data_size)
 {
   InitFileSlots();
+  if (rhs.m_partition_count)
+  {
+    m_partitions = new DirectoryBlobPartition[rhs.m_partition_count];
+    m_partition_data_offsets = new u64[rhs.m_partition_count];
+    for (u32 i = 0; i < rhs.m_partition_count; i++)
+    {
+      m_partitions[i] = rhs.m_partitions[i];
+      m_partition_data_offsets[i] = rhs.m_partition_data_offsets[i];
+    }
+    m_partition_count = rhs.m_partition_count;
+  }
 }
 
 void DirectoryBlobReader::InitFileSlots()
@@ -532,6 +543,8 @@ DirectoryBlobReader::~DirectoryBlobReader()
     if (m_file_slots[i].file)
       filestream_close(m_file_slots[i].file);
   }
+  delete[] m_partitions;
+  delete[] m_partition_data_offsets;
 }
 
 bool DirectoryBlobReader::ReadContentFile(const char* name, size_t name_len, u64 offset,
@@ -592,14 +605,20 @@ bool DirectoryBlobReader::Read(u64 offset, u64 length, u8* buffer)
 const DirectoryBlobPartition* DirectoryBlobReader::GetPartition(u64 offset, u64 size,
                                                                 u64 partition_data_offset) const
 {
-  const auto it = m_partitions.find(partition_data_offset);
-  if (it == m_partitions.end())
+  const DirectoryBlobPartition* const partition = FindPartition(partition_data_offset);
+  if (!partition || offset + size > partition->GetDataSize())
     return nullptr;
+  return partition;
+}
 
-  if (offset + size > it->second.GetDataSize())
-    return nullptr;
-
-  return &it->second;
+const DirectoryBlobPartition* DirectoryBlobReader::FindPartition(u64 partition_data_offset) const
+{
+  for (u32 i = 0; i < m_partition_count; i++)
+  {
+    if (m_partition_data_offsets[i] == partition_data_offset)
+      return &m_partitions[i];
+  }
+  return nullptr;
 }
 
 bool DirectoryBlobReader::SupportsReadWiiDecrypted(u64 offset, u64 size,
@@ -622,15 +641,15 @@ bool DirectoryBlobReader::EncryptPartitionData(u64 offset, u64 size, u8* buffer,
                                                u64 partition_data_offset,
                                                u64 partition_data_decrypted_size)
 {
-  auto it = m_partitions.find(partition_data_offset);
-  if (it == m_partitions.end())
+  const DirectoryBlobPartition* const partition = FindPartition(partition_data_offset);
+  if (!partition)
     return false;
 
   if (!m_encrypted)
-    return it->second.GetContents().Read(offset, size, buffer, this);
+    return partition->GetContents().Read(offset, size, buffer, this);
 
   return m_encryption_cache.EncryptGroups(offset, size, buffer, partition_data_offset,
-                                          partition_data_decrypted_size, it->second.GetKey());
+                                          partition_data_decrypted_size, partition->GetKey());
 }
 
 BlobType DirectoryBlobReader::GetBlobType() const
@@ -768,6 +787,9 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
     Write32((PARTITION_TABLE_ADDRESS + PARTITION_SUBTABLE2_OFFSET) >> 2, 0xC, partition_table);
   }
 
+  m_partitions = new DirectoryBlobPartition[partitions.size()];
+  m_partition_data_offsets = new u64[partitions.size()];
+
   constexpr u64 STANDARD_UPDATE_PARTITION_ADDRESS = 0x50000;
   constexpr u64 STANDARD_GAME_PARTITION_ADDRESS = 0xF800000;
   u64 partition_address = STANDARD_UPDATE_PARTITION_ADDRESS;
@@ -796,7 +818,9 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
     const u64 encrypted_data_size =
         (data_size / VolumeWii::BLOCK_DATA_SIZE) * VolumeWii::BLOCK_TOTAL_SIZE;
     const u64 partition_data_offset = partition_address + PARTITION_DATA_OFFSET;
-    m_partitions.emplace(partition_data_offset, std::move(partitions[i].partition));
+    m_partitions[m_partition_count] = std::move(partitions[i].partition);
+    m_partition_data_offsets[m_partition_count] = partition_data_offset;
+    m_partition_count++;
     m_nonpartition_contents.Add(partition_data_offset, encrypted_data_size,
                                 ContentPartition(0, partition_data_offset));
     const u64 unaligned_next_partition_address = VolumeWii::OffsetInHashedPartitionToRawOffset(
