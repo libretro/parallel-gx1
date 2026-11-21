@@ -95,8 +95,6 @@ HINSTANCE s_bthprops_lib = nullptr;
 
 bool s_loaded_ok = false;
 
-std::unordered_map<BTH_ADDR, std::time_t> s_connect_times;
-
 #define DYN_FUNC_UNLOAD(func) p##func = nullptr;
 
 // Attempt to load the function from the given module handle.
