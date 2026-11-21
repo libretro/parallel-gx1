@@ -202,12 +202,12 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
   const auto fs = m_ios.GetFS();
   for (const ES::Content& content : contents)
   {
-    const std::string path = GetContentPath(tmd.GetTitleId(), content);
-    if (path.empty())
+    char path[64];
+    if (!GetContentPath(tmd.GetTitleId(), content, path, sizeof(path)))
       continue;
 
     // Check whether the content file exists.
-    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read);
+    const auto file = fs->OpenFile(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read);
     if (!file.has_value())
       continue;
 
@@ -442,6 +442,24 @@ std::string ESCore::GetContentPath(const u64 title_id, const ES::Content& conten
     return content_map.GetFilenameFromSHA1(content.sha1).value_or("");
   }
   return StringFromFormat("%s/%08x.app", Common::GetTitleContentPath(title_id).c_str(), content.id);
+}
+
+bool ESCore::GetContentPath(const u64 title_id, const ES::Content& content, char* out,
+                            size_t out_size, Ticks ticks) const
+{
+  if (content.IsShared())
+  {
+    u64 map_ticks = 0;
+    const bool found = ES::SharedContentMap::FindFilename(m_ios.GetFSCore(), content.sha1, out,
+                                                          out_size, &map_ticks);
+    ticks.Add(map_ticks);
+    return found;
+  }
+  // Common::GetTitleContentPath, without a root.
+  const int length =
+      snprintf(out, out_size, "/title/%08x/%08x/content/%08x.app", static_cast<u32>(title_id >> 32),
+               static_cast<u32>(title_id), content.id);
+  return length >= 0 && static_cast<size_t>(length) < out_size;
 }
 
 s32 ESDevice::WriteSystemFile(const std::string& path, const u8* data, u32 size, Ticks ticks)

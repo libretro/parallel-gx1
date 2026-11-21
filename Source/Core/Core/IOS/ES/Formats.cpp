@@ -658,6 +658,33 @@ SharedContentMap::SharedContentMap(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
 
 SharedContentMap::~SharedContentMap() = default;
 
+bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const std::array<u8, 20>& sha1, char* out,
+                                    size_t out_size, u64* ticks)
+{
+  Entry entry;
+  Entry found;
+  bool has_found = false;
+  const auto fd =
+      fs_core.Open(PID_KERNEL, PID_KERNEL, CONTENT_MAP_PATH, HLE::FS::Mode::Read, ticks);
+  if (fd.Get() < 0)
+    return false;
+  // Every entry is read, as by the constructor, and the first match is the one used.
+  while (fs_core.Read(fd.Get(), &entry, 1, ticks) == sizeof(entry))
+  {
+    if (!has_found && std::memcmp(entry.sha1.data(), sha1.data(), sha1.size()) == 0)
+    {
+      found = entry;
+      has_found = true;
+    }
+  }
+  if (!has_found)
+    return false;
+
+  const int length = snprintf(out, out_size, "/shared1/%.*s.app", static_cast<int>(found.id.size()),
+                              reinterpret_cast<const char*>(found.id.data()));
+  return length >= 0 && static_cast<size_t>(length) < out_size;
+}
+
 std::optional<std::string>
 SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const
 {

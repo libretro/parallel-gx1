@@ -29,8 +29,11 @@ s32 ESCore::OpenContent(const ES::TMDReader& tmd, u16 content_index, u32 uid, Ti
     if (entry.m_opened)
       continue;
 
-    const std::string path = GetContentPath(title_id, content, ticks);
-    auto fd = m_ios.GetFSCore().Open(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read, ticks);
+    // A shared content missing from the map opens "", which fails as before.
+    char path[64];
+    if (!GetContentPath(title_id, content, path, sizeof(path), ticks))
+      path[0] = '\0';
+    auto fd = m_ios.GetFSCore().Open(PID_KERNEL, PID_KERNEL, path, FS::Mode::Read, ticks);
     if (fd.Get() < 0)
       return fd.Get();
 

@@ -199,6 +199,10 @@ private:
   void FinishAllStaleImports();
 
   std::string GetContentPath(u64 title_id, const ES::Content& content, Ticks ticks = {}) const;
+  // Writes the content's path to out; returns false, as the string version returns "", when a
+  // shared content is not in the map.
+  bool GetContentPath(u64 title_id, const ES::Content& content, char* out, size_t out_size,
+                      Ticks ticks = {}) const;
 
   bool IsActiveTitlePermittedByTicket(const u8* ticket_view) const;
 

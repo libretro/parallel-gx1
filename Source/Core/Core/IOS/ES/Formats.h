@@ -307,6 +307,10 @@ public:
   ~SharedContentMap();
 
   std::optional<std::string> GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const;
+  // Writes the path of the shared content with this hash to out, reading the map as constructing
+  // one does and adding the same ticks; returns false when there is none or it does not fit.
+  static bool FindFilename(HLE::FSCore& fs_core, const std::array<u8, 20>& sha1, char* out,
+                           size_t out_size, u64* ticks);
   std::string AddSharedContent(const std::array<u8, 20>& sha1);
   bool DeleteSharedContent(const std::array<u8, 20>& sha1);
   std::vector<std::array<u8, 20>> GetHashes() const;
