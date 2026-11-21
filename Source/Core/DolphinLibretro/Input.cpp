@@ -571,10 +571,10 @@ Device::Device(unsigned device, unsigned p) : m_device(device), m_port(p)
 
 static void AddDevicesForPort(unsigned port)
 {
-  g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_JOYPAD, port));
-  g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_ANALOG, port));
-  g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_MOUSE, port));
-  g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_POINTER, port));
+  g_controller_interface.AddDevice(new Device(RETRO_DEVICE_JOYPAD, port));
+  g_controller_interface.AddDevice(new Device(RETRO_DEVICE_ANALOG, port));
+  g_controller_interface.AddDevice(new Device(RETRO_DEVICE_MOUSE, port));
+  g_controller_interface.AddDevice(new Device(RETRO_DEVICE_POINTER, port));
 }
 
 void Init()
@@ -609,7 +609,7 @@ void Init()
   }
 
   g_controller_interface.Initialize();
-  g_controller_interface.AddDevice(std::make_shared<Device>(RETRO_DEVICE_KEYBOARD, 0));
+  g_controller_interface.AddDevice(new Device(RETRO_DEVICE_KEYBOARD, 0));
 
   GCAdapter::Init();
   Pad::Initialize();
@@ -767,7 +767,7 @@ void InitSensors()
 
       if (sensor_enabled[i][SENSOR_ACCELEROMETER] || sensor_enabled[i][SENSOR_GYRO])
       {
-        auto sensor = std::make_shared<SensorDevice>(i);
+        SensorDevice* const sensor = new SensorDevice(i);
         sensor->RegisterAll();
         g_controller_interface.AddDevice(sensor);
         s_sensor_registered[i] = true;
@@ -789,7 +789,7 @@ static void RefreshSensors(unsigned port)
   sensor_enabled[port][SENSOR_GYRO] = sensor_interface.set_sensor_state(port, RETRO_SENSOR_GYROSCOPE_ENABLE, 60);
   if ((sensor_enabled[port][SENSOR_ACCELEROMETER] || sensor_enabled[port][SENSOR_GYRO]) && !s_sensor_registered[port])
   {
-    auto sensor = std::make_shared<SensorDevice>(port);
+    SensorDevice* const sensor = new SensorDevice(port);
     sensor->RegisterAll();
     g_controller_interface.AddDevice(sensor);
     s_sensor_registered[port] = true;

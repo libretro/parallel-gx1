@@ -123,6 +123,15 @@ public:
   Device(const Device&) = delete;
   Device& operator=(const Device&) = delete;
 
+  // A device is counted: made with one reference, it takes another for each holder (a device
+  // list, a bound control) and is freed with the last.
+  void AddRef() { retro_atomic_fetch_add_int(&m_refs, 1); }
+  void Release()
+  {
+    if (retro_atomic_fetch_sub_int(&m_refs, 1) == 1)
+      delete this;
+  }
+
   int GetId() const { return m_id; }
   void SetId(int id) { m_id = id; }
   /* The device's name and its backend's, kept for as long as the device lives */
@@ -160,6 +169,7 @@ protected:
   void AddOutput(Output* const o);
 
 private:
+  retro_atomic_int_t m_refs{1};
   int m_id = 0;
   // Owned, the first m_num_inputs and m_num_outputs of them: made with the device
   Input** m_inputs = nullptr;
@@ -203,6 +213,9 @@ public:
 class DeviceContainer
 {
 public:
+  // The most devices listed at once
+  static constexpr u32 MAX_DEVICES = 64;
+
   Device::Input* FindInput(std::string_view name, const Device* def_dev) const;
   Device::Output* FindOutput(std::string_view name, const Device* def_dev) const;
 
@@ -214,12 +227,13 @@ public:
     size_t i;
     if (!list)
       return;
-    for (i = 0; i < list->devices.size(); i++)
-      fn(list->devices[i].get(), ctx);
+    for (i = 0; i < list->count; i++)
+      fn(list->devices[i], ctx);
   }
   // The qualifier of the device to bind by default; false when there is none.
   bool GetDefaultDevice(DeviceQualifier* qualifier) const;
-  std::shared_ptr<Device> FindDevice(const DeviceQualifier& devq) const;
+  // The device matching devq with a reference the caller releases; nullptr when there is none
+  Device* FindDevice(const DeviceQualifier& devq) const;
 
   bool HasConnectedDevice(const DeviceQualifier& qualifier) const;
 
@@ -231,10 +245,12 @@ public:
 protected:
   // The devices, sorted by priority. Never changed once published: a writer copies it,
   // edits the copy and swaps it in, and the old one is freed once no reader is inside.
+  // Each device in a list is held by a reference of the list's.
   struct DeviceList
   {
     quiesce_node_t node;  // first: the free callback casts it back
-    std::vector<std::shared_ptr<Device>> devices;
+    u32 count;
+    Device* devices[MAX_DEVICES];
   };
 
   // The current list, or null for none. Only inside an InputReadScope.
@@ -245,7 +261,8 @@ protected:
 
   // Swaps in edit's result, made from a copy of the current devices. edit returns false to
   // leave the list as it is; it may run more than once if another thread swaps in a list
-  // meanwhile. Returns whether a list was swapped in.
+  // meanwhile. Returns whether a list was swapped in. A device edit puts in takes a reference
+  // for the list; one it takes out has the list's reference released.
   template <typename Edit>
   bool EditDevices(Edit&& edit)
   {
@@ -253,12 +270,20 @@ protected:
     for (;;)
     {
       void* const cur = retro_atomic_load_acquire_ptr(&m_device_list);
-      auto* next = new DeviceList{{}, {}};
+      DeviceList* const next = new DeviceList{};
       if (cur)
-        next->devices = static_cast<const DeviceList*>(cur)->devices;
-      if (!edit(next->devices))
       {
-        delete next;
+        const DeviceList* const current = static_cast<const DeviceList*>(cur);
+        next->count = current->count;
+        for (u32 i = 0; i < next->count; i++)
+        {
+          next->devices[i] = current->devices[i];
+          next->devices[i]->AddRef();
+        }
+      }
+      if (!edit(next))
+      {
+        FreeDeviceList(&next->node);
         return false;
       }
       if (retro_atomic_cas_ptr(&m_device_list, cur, next))
@@ -267,7 +292,7 @@ protected:
           quiesce_retire(InputQuiesce(), &static_cast<DeviceList*>(cur)->node, FreeDeviceList);
         return true;
       }
-      delete next;
+      FreeDeviceList(&next->node);
     }
   }
 

@@ -26,7 +26,8 @@ public:
   // Can be called by any thread at any time (when initialized).
   void RefreshDevices();
   void Shutdown();
-  bool AddDevice(std::shared_ptr<ciface::Core::Device> device);
+  // takes device's reference
+  bool AddDevice(ciface::Core::Device* device);
   // Removes all the devices the function returns true to, handed the context.
   // If all the devices shared ptrs need to be destroyed immediately,
   // set force_devices_release to true.

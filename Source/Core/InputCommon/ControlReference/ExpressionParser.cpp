@@ -333,6 +333,13 @@ public:
       : Expression(ExpressionKind::Control), m_qualifier(std::move(qualifier))
   {
   }
+  ~ControlExpression()
+  {
+    if (m_device)
+      m_device->Release();
+  }
+  ControlExpression(const ControlExpression&) = delete;
+  ControlExpression& operator=(const ControlExpression&) = delete;
 
   ControlState GetValue()
   {
@@ -363,6 +370,8 @@ public:
   void UpdateReferences(ControlEnvironment& env)
   {
     // The controls are those of the device held, found once
+    if (m_device)
+      m_device->Release();
     m_device = env.FindDevice(m_qualifier);
     m_input = m_device ? m_device->FindInput(m_qualifier.control_name) : nullptr;
     m_output = m_device ? m_device->FindOutput(m_qualifier.control_name) : nullptr;
@@ -371,8 +380,8 @@ public:
   Device::Input* GetInput() const { return m_input; }
 
 private:
-  // Keep a shared_ptr to the device so the control pointer doesn't become invalid.
-  std::shared_ptr<Device> m_device;
+  // Hold a reference to the device so the control pointer doesn't become invalid.
+  Device* m_device = nullptr;
   ControlQualifier m_qualifier;
   Device::Input* m_input = nullptr;
   Device::Output* m_output = nullptr;
@@ -873,7 +882,7 @@ void Expression::operator delete(Expression* expression, std::destroying_delete_
   }
 }
 
-std::shared_ptr<Device> ControlEnvironment::FindDevice(const ControlQualifier& qualifier) const
+Device* ControlEnvironment::FindDevice(const ControlQualifier& qualifier) const
 {
   if (qualifier.has_device)
     return container.FindDevice(qualifier.device_qualifier);

@@ -37,7 +37,7 @@ void ControllerInterface::Initialize()
   {
     ciface::InputReadScope scope;
     const DeviceList* const list = PeekDevices();
-    devices_empty = !list || list->devices.empty();
+    devices_empty = !list || list->count == 0;
   }
 
   if (retro_atomic_fetch_sub_int(&m_populating_devices_counter, 1) == 1 && !devices_empty)
@@ -53,7 +53,7 @@ void ControllerInterface::RefreshDevices()
   // one swap of the whole list, so each lands complete, before or after this refresh's.
   retro_atomic_fetch_add_int(&m_populating_devices_counter, 1);
 
-  // Make sure shared_ptr<Device> objects are released before repopulating.
+  // Make sure the devices are released before repopulating.
   ClearDevices();
 
   // Some of these calls won't immediately populate devices, but will do it async
@@ -94,7 +94,7 @@ void ControllerInterface::Shutdown()
   // Additional safety measure to avoid InvokeDevicesChangedCallbacks()
   retro_atomic_store_release_int(&m_populating_devices_counter, 1);
 
-  // Update control references so shared_ptr<Device>s are freed up BEFORE we shutdown the backends.
+  // Update control references so the devices are freed up BEFORE we shutdown the backends.
   ClearDevices();
 
   // Make sure no devices had been added within Shutdown() in the time
@@ -107,21 +107,24 @@ void ControllerInterface::Shutdown()
 
 void ControllerInterface::ClearDevices()
 {
-  const bool cleared = EditDevices([](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
-    if (devices.empty())
+  const bool cleared = EditDevices([](DeviceList* list) {
+    if (list->count == 0)
       return false;
 
-    for (const auto& d : devices)
+    for (u32 d = 0; d < list->count; d++)
     {
       // Set outputs to ZERO before destroying device
+      ciface::Core::Device* const device = list->devices[d];
       int i;
-      for (i = 0; i < d->NumOutputs(); i++)
-        d->Outputs()[i]->SetState(0);
+      for (i = 0; i < device->NumOutputs(); i++)
+        device->Outputs()[i]->SetState(0);
     }
 
-    // Devices could still be alive after this as there might be shared ptrs around holding them.
+    // Devices could still be alive after this as bound controls may still hold them.
     // The InvokeDevicesChangedCallbacks() underneath should always clean all of them (it needs to).
-    devices.clear();
+    for (u32 d = 0; d < list->count; d++)
+      list->devices[d]->Release();
+    list->count = 0;
     return true;
   });
 
@@ -129,23 +132,40 @@ void ControllerInterface::ClearDevices()
     InvokeDevicesChangedCallbacks();
 }
 
-bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device)
+bool ControllerInterface::AddDevice(ciface::Core::Device* device)
 {
   // If we are shutdown (or in process of shutting down) ignore this request:
   if (!IsInit())
+  {
+    device->Release();
     return false;
+  }
 
   ASSERT_MSG(CONTROLLERINTERFACE, !tls_is_updating_devices,
              "Devices shouldn't be added within input update calls, there is a risk of deadlock "
              "if another thread was already here");
 
-  EditDevices([&device](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
-    const auto is_id_in_use = [&device, &devices](int id) {
-      return std::ranges::any_of(devices, [&device, &id](const auto& d) {
-        return !strcmp(d->GetSource(), device->GetSource()) &&
-               !strcmp(d->GetName(), device->GetName()) && d->GetId() == id;
-      });
+  bool added = false;
+  EditDevices([device, &added](DeviceList* list) {
+    const auto is_id_in_use = [device, list](int id) {
+      for (u32 i = 0; i < list->count; i++)
+      {
+        const ciface::Core::Device* const d = list->devices[i];
+        if (!strcmp(d->GetSource(), device->GetSource()) &&
+            !strcmp(d->GetName(), device->GetName()) && d->GetId() == id)
+        {
+          return true;
+        }
+      }
+      return false;
     };
+
+    added = false;
+    if (list->count == MAX_DEVICES)
+    {
+      ERROR_LOG(CONTROLLERINTERFACE, "Too many input devices");
+      return false;
+    }
 
     const auto preferred_id = device->GetPreferredId();
     if (preferred_id.has_value() && !is_id_in_use(*preferred_id))
@@ -163,20 +183,34 @@ bool ControllerInterface::AddDevice(std::shared_ptr<ciface::Core::Device> device
       device->SetId(id);
     }
 
-    devices.emplace_back(device);
-
     // We can't (and don't want) to control the order in which devices are added, but we need
     // their order to be consistent, and we need the same one to always be the first, where present
     // (the keyboard and mouse device usually). This is because when defaulting a controller
     // profile, it will automatically select the first device in the list as its default. It would
     // be nice to sort devices by Source then Name then ID, but it's better to leave them sorted by
     // the add order. This also avoids breaking the order on other platforms that are less tested.
-    std::ranges::stable_sort(devices, std::ranges::greater{},
-                             &ciface::Core::Device::GetSortPriority);
+    // So it goes after every device of its sort priority or above.
+    const int priority = device->GetSortPriority();
+    u32 slot = list->count;
+    while (slot > 0 && list->devices[slot - 1]->GetSortPriority() < priority)
+      slot--;
+    for (u32 i = list->count; i > slot; i--)
+      list->devices[i] = list->devices[i - 1];
+    device->AddRef();
+    list->devices[slot] = device;
+    list->count++;
+    added = true;
     return true;
   });
+  if (!added)
+  {
+    device->Release();
+    return false;
+  }
   NOTICE_LOG(CONTROLLERINTERFACE, "Added device: %s/%d/%s", device->GetSource(), device->GetId(),
              device->GetName());
+  // the list holds it now
+  device->Release();
 
   if (!retro_atomic_load_acquire_int(&m_populating_devices_counter))
     InvokeDevicesChangedCallbacks();
@@ -195,33 +229,47 @@ void ControllerInterface::RemoveDevice(bool (*should_remove)(const ciface::Core:
              "Devices shouldn't be removed within input update calls, there is a risk of deadlock "
              "if another thread was already here");
 
-  const bool any_removed =
-      EditDevices([&](std::vector<std::shared_ptr<ciface::Core::Device>>& devices) {
-        return std::erase_if(devices, [&](const auto& dev) {
-                 if (should_remove(dev.get(), context))
-                 {
-                   NOTICE_LOG(CONTROLLERINTERFACE, "Removed device: %s/%d/%s", dev->GetSource(),
-                              dev->GetId(), dev->GetName());
-                   return true;
-                 }
-                 return false;
-               }) != 0;
-      });
+  const bool any_removed = EditDevices([should_remove, context](DeviceList* list) {
+    u32 kept = 0;
+    for (u32 i = 0; i < list->count; i++)
+    {
+      ciface::Core::Device* const dev = list->devices[i];
+      if (should_remove(dev, context))
+      {
+        NOTICE_LOG(CONTROLLERINTERFACE, "Removed device: %s/%d/%s", dev->GetSource(), dev->GetId(),
+                   dev->GetName());
+        dev->Release();
+      }
+      else
+      {
+        list->devices[kept++] = dev;
+      }
+    }
+    const bool removed = kept != list->count;
+    list->count = kept;
+    return removed;
+  });
 
   if (any_removed &&
       (!retro_atomic_load_acquire_int(&m_populating_devices_counter) || force_devices_release))
     InvokeDevicesChangedCallbacks();
 }
 
+// The devices that asked to be removed, each held by a reference so none is freed and its address
+// reused before the removal
+struct DevicesToRemove
+{
+  ciface::Core::Device* devices[ciface::Core::DeviceContainer::MAX_DEVICES];
+  u32 count;
+};
+
 // Whether the device is among those that asked to be removed: the context
 static bool IsDeviceToRemove(const ciface::Core::Device* device, void* context)
 {
-  const auto* const devices =
-      static_cast<const std::vector<std::weak_ptr<ciface::Core::Device>>*>(context);
-  size_t i;
-  for (i = 0; i < devices->size(); i++)
+  const DevicesToRemove* const to_remove = static_cast<const DevicesToRemove*>(context);
+  for (u32 i = 0; i < to_remove->count; i++)
   {
-    if ((*devices)[i].lock().get() == device)
+    if (to_remove->devices[i] == device)
       return true;
   }
   return false;
@@ -235,30 +283,38 @@ void ControllerInterface::UpdateInput()
   if (!IsInit())
     return;
 
-  // The devices to remove are collected as weak pointers: they are not kept alive by this, and
-  // if somebody else removed them meanwhile, we'll know which ones are gone.
-  std::vector<std::weak_ptr<ciface::Core::Device>> devices_to_remove;
+  // The devices to remove are collected with references of their own: if somebody else removed
+  // them meanwhile, they are simply not in the list any more.
+  DevicesToRemove devices_to_remove;
+  devices_to_remove.count = 0;
 
   {
     ciface::InputReadScope scope;
 
     tls_is_updating_devices = true;
 
-    static const std::vector<std::shared_ptr<ciface::Core::Device>> s_no_devices;
     const DeviceList* const list = PeekDevices();
-    for (const auto& d : list ? list->devices : s_no_devices)
+    for (u32 i = 0; list && i < list->count; i++)
     {
+      ciface::Core::Device* const d = list->devices[i];
       // Theoretically we could avoid updating input on devices that don't have any references to
       // them, but in practice a few devices types could break in different ways, so we don't
       if (d->UpdateInput() == ciface::Core::DeviceRemoval::Remove)
-        devices_to_remove.push_back(d);
+      {
+        d->AddRef();
+        devices_to_remove.devices[devices_to_remove.count++] = d;
+      }
     }
 
     tls_is_updating_devices = false;
   }
 
-  if (devices_to_remove.size() > 0)
+  if (devices_to_remove.count > 0)
+  {
     RemoveDevice(IsDeviceToRemove, &devices_to_remove);
+    for (u32 i = 0; i < devices_to_remove.count; i++)
+      devices_to_remove.devices[i]->Release();
+  }
 }
 
 // Register a callback to be called when a device is added or removed (as from the input backends'

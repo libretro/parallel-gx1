@@ -168,7 +168,8 @@ public:
   {
   }
 
-  std::shared_ptr<Core::Device> FindDevice(const ControlQualifier& qualifier) const;
+  // with a reference the caller releases
+  Core::Device* FindDevice(const ControlQualifier& qualifier) const;
   // The variable of that name, len characters terminated, which the caller now also holds; null
   // for an empty name or when out of memory.
   ExpressionVariable* AcquireVariable(const char* name, std::size_t len);

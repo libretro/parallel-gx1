@@ -194,31 +194,32 @@ bool DeviceQualifier::operator==(const DeviceQualifier& devq) const
   return std::tie(cid, name, source) == std::tie(devq.cid, devq.name, devq.source);
 }
 
-static const std::vector<std::shared_ptr<Device>>& NoDevices()
-{
-  static const std::vector<std::shared_ptr<Device>> s_none;
-  return s_none;
-}
-
 void DeviceContainer::FreeDeviceList(quiesce_node_t* node)
 {
-  delete reinterpret_cast<DeviceList*>(node);
+  DeviceList* const list = reinterpret_cast<DeviceList*>(node);
+  for (u32 i = 0; i < list->count; i++)
+    list->devices[i]->Release();
+  delete list;
 }
 
 DeviceContainer::~DeviceContainer()
 {
-  delete static_cast<DeviceList*>(retro_atomic_exchange_ptr(&m_device_list, nullptr));
+  void* const list = retro_atomic_exchange_ptr(&m_device_list, nullptr);
+  if (list)
+    FreeDeviceList(&static_cast<DeviceList*>(list)->node);
 }
 
-std::shared_ptr<Device> DeviceContainer::FindDevice(const DeviceQualifier& devq) const
+Device* DeviceContainer::FindDevice(const DeviceQualifier& devq) const
 {
   InputReadScope scope;
   const DeviceList* const list = PeekDevices();
-  const auto& devices = list ? list->devices : NoDevices();
-  for (const auto& d : devices)
+  for (u32 i = 0; list && i < list->count; i++)
   {
-    if (devq == d.get())
-      return d;
+    if (devq == list->devices[i])
+    {
+      list->devices[i]->AddRef();
+      return list->devices[i];
+    }
   }
 
   return nullptr;
@@ -228,12 +229,11 @@ bool DeviceContainer::GetDefaultDevice(DeviceQualifier* qualifier) const
 {
   InputReadScope scope;
   const DeviceList* const list = PeekDevices();
-  const auto& devices = list ? list->devices : NoDevices();
   // Devices are already sorted by priority
-  if (devices.empty() || devices[0]->GetSortPriority() < 0)
+  if (!list || list->count == 0 || list->devices[0]->GetSortPriority() < 0)
     return false;
 
-  qualifier->FromDevice(devices[0].get());
+  qualifier->FromDevice(list->devices[0]);
   return true;
 }
 
@@ -248,10 +248,9 @@ Device::Input* DeviceContainer::FindInput(std::string_view name, const Device* d
 
   InputReadScope scope;
   const DeviceList* const list = PeekDevices();
-  const auto& devices = list ? list->devices : NoDevices();
-  for (const auto& d : devices)
+  for (u32 d = 0; list && d < list->count; d++)
   {
-    Device::Input* const i = d->FindInput(name);
+    Device::Input* const i = list->devices[d]->FindInput(name);
 
     if (i)
       return i;
@@ -267,8 +266,12 @@ Device::Output* DeviceContainer::FindOutput(std::string_view name, const Device*
 
 bool DeviceContainer::HasConnectedDevice(const DeviceQualifier& qualifier) const
 {
-  const auto device = FindDevice(qualifier);
-  return device != nullptr && device->IsValid();
+  Device* const device = FindDevice(qualifier);
+  if (!device)
+    return false;
+  const bool valid = device->IsValid();
+  device->Release();
+  return valid;
 }
 
 }  // namespace ciface::Core
