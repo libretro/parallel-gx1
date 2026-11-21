@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Lazy.h"
 #include "Common/Swap.h"
 
 namespace WiiSave
@@ -97,8 +96,10 @@ public:
     Type type{};
     /// File name relative to the title data directory.
     std::string path;
-    // Only valid for regular (i.e. non-directory) files.
-    Common::Lazy<std::optional<std::vector<u8>>> data;
+    // Where a data.bin file's encrypted data is, its size and IV; read through ReadFileData
+    u64 data_pos = 0;
+    u32 data_size = 0;
+    std::array<u8, 0x10> iv{};
   };
 
   virtual ~Storage() = default;
@@ -109,6 +110,9 @@ public:
   virtual std::optional<std::vector<SaveFile>> ReadFiles() = 0;
   virtual bool WriteHeader(const Header& header) = 0;
   virtual bool WriteBkHeader(const BkHeader& bk_header) = 0;
-  virtual bool WriteFiles(const SaveFile* files, size_t count) = 0;
+  // Reads a regular file's data, which this storage listed, into data
+  virtual bool ReadFileData(const SaveFile& file, std::vector<u8>* data) = 0;
+  // Writes the files source listed, reading their data from it
+  virtual bool WriteFiles(Storage* source, const SaveFile* files, size_t count) = 0;
 };
 }  // namespace WiiSave

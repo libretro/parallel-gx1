@@ -24,7 +24,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
-#include "Common/Lazy.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
 #include "Common/Swap.h"
@@ -164,11 +163,24 @@ public:
 
   bool WriteBkHeader(const BkHeader& bk_header) override { return true; }
 
-  bool WriteFiles(const SaveFile* files, size_t count) override
+  bool ReadFileData(const SaveFile& save_file, std::vector<u8>* data) override
+  {
+    if (!m_uid || !m_gid)
+      return false;
+    const std::string path = m_data_dir + '/' + save_file.path;
+    const auto file = m_fs->OpenFile(*m_uid, *m_gid, path.c_str(), FS::Mode::Read);
+    if (!file)
+      return false;
+    data->resize(file->GetStatus()->size);
+    return file->Read(data->data(), data->size()).has_value();
+  }
+
+  bool WriteFiles(Storage* source, const SaveFile* files, size_t count) override
   {
     if (!m_uid || !m_gid)
       return false;
 
+    std::vector<u8> data;
     for (size_t i = 0; i < count; i++)
     {
       const SaveFile& file = files[i];
@@ -177,9 +189,11 @@ public:
       if (file.type == SaveFile::Type::File)
       {
         const auto raw_file = m_fs->CreateAndOpenFile(*m_uid, *m_gid, path, modes);
-        const std::optional<std::vector<u8>>& data = *file.data;
-        if (!data || !raw_file || !raw_file->Write(data->data(), data->size()))
+        if (!source->ReadFileData(file, &data) || !raw_file ||
+            !raw_file->Write(data.data(), data.size()))
+        {
           return false;
+        }
       }
       else if (file.type == SaveFile::Type::Directory)
       {
@@ -220,15 +234,6 @@ private:
       save_file.attributes = 0;
       save_file.type = metadata->is_file ? SaveFile::Type::File : SaveFile::Type::Directory;
       save_file.path = path.substr(m_data_dir.size() + 1);
-      save_file.data = [this, path]() -> std::optional<std::vector<u8>> {
-        const auto file = m_fs->OpenFile(*m_uid, *m_gid, path.c_str(), FS::Mode::Read);
-        if (!file)
-          return {};
-        std::vector<u8> data(file->GetStatus()->size);
-        if (!file->Read(data.data(), data.size()))
-          return std::nullopt;
-        return data;
-      };
       m_files_list.emplace_back(std::move(save_file));
       m_files_size += sizeof(FileHDR);
 
@@ -359,22 +364,10 @@ public:
         const u32 size = file_hdr.size;
         const u32 rounded_size = Common::AlignUp<u32>(size, BLOCK_SZ);
         const u64 pos = m_file.Tell();
-        std::array<u8, 0x10> iv = file_hdr.iv;
 
-        save_file.data = [this, size, rounded_size, iv,
-                          pos]() mutable -> std::optional<std::vector<u8>> {
-          std::vector<u8> file_data(rounded_size);
-          if (!m_file.Seek(pos, File::SeekOrigin::Begin) ||
-              !m_file.ReadBytes(file_data.data(), rounded_size))
-          {
-            return {};
-          }
-
-          m_iosc.Decrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv.data(), file_data.data(), rounded_size,
-                         file_data.data(), IOS::PID_ES);
-          file_data.resize(size);
-          return file_data;
-        };
+        save_file.data_pos = pos;
+        save_file.data_size = size;
+        save_file.iv = file_hdr.iv;
         m_file.Seek(pos + rounded_size, File::SeekOrigin::Begin);
       }
       files.emplace_back(std::move(save_file));
@@ -396,11 +389,28 @@ public:
     return m_file.Seek(sizeof(Header), File::SeekOrigin::Begin) && m_file.WriteArray(&bk_header, 1);
   }
 
-  bool WriteFiles(const SaveFile* files, size_t count) override
+  bool ReadFileData(const SaveFile& save_file, std::vector<u8>* data) override
+  {
+    const u32 rounded_size = Common::AlignUp<u32>(save_file.data_size, BLOCK_SZ);
+    data->resize(rounded_size);
+    if (!m_file.Seek(save_file.data_pos, File::SeekOrigin::Begin) ||
+        !m_file.ReadBytes(data->data(), rounded_size))
+    {
+      return false;
+    }
+    std::array<u8, 0x10> iv = save_file.iv;
+    m_iosc.Decrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv.data(), data->data(), rounded_size,
+                   data->data(), IOS::PID_ES);
+    data->resize(save_file.data_size);
+    return true;
+  }
+
+  bool WriteFiles(Storage* source, const SaveFile* files, size_t count) override
   {
     if (!m_file.Seek(sizeof(Header) + sizeof(BkHeader), File::SeekOrigin::Begin))
       return false;
 
+    std::vector<u8> data;
     for (size_t i = 0; i < count; i++)
     {
       const SaveFile& save_file = files[i];
@@ -414,25 +424,24 @@ public:
       /* zero-padded, unterminated when it fills the field */
       std::memcpy(file_hdr.name.data(), save_file.path.data(), save_file.path.length());
 
-      std::optional<std::vector<u8>> data;
-      if (file_hdr.type == 1)
+      const bool has_data = file_hdr.type == 1;
+      if (has_data)
       {
-        data = *save_file.data;
-        if (!data)
+        if (!source->ReadFileData(save_file, &data))
           return false;
-        file_hdr.size = static_cast<u32>(data->size());
+        file_hdr.size = static_cast<u32>(data.size());
       }
 
       if (!m_file.WriteArray(&file_hdr, 1))
         return false;
 
-      if (data)
+      if (has_data)
       {
-        std::vector<u8> file_data_enc(Common::AlignUp(data->size(), BLOCK_SZ));
-        std::ranges::copy(*data, file_data_enc.begin());
-        m_iosc.Encrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, file_hdr.iv.data(), file_data_enc.data(),
-                       file_data_enc.size(), file_data_enc.data(), IOS::PID_ES);
-        if (!m_file.WriteBytes(file_data_enc.data(), file_data_enc.size()))
+        // zero-padded to whole blocks, encrypted in place
+        data.resize(Common::AlignUp(data.size(), BLOCK_SZ));
+        m_iosc.Encrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, file_hdr.iv.data(), data.data(), data.size(),
+                       data.data(), IOS::PID_ES);
+        if (!m_file.WriteBytes(data.data(), data.size()))
           return false;
       }
     }
@@ -540,7 +549,7 @@ CopyResult Copy(Storage* source, Storage* dest)
     return CopyResult::Error;
   }
 
-  if (!dest->WriteFiles(files->data(), files->size()))
+  if (!dest->WriteFiles(source, files->data(), files->size()))
   {
     ERROR_LOG(CORE, "WiiSave::Copy: Failed to write files");
     return CopyResult::Error;
