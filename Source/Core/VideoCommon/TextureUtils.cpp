@@ -58,7 +58,7 @@ void TextureDumper::DumpTexture(const ::AbstractTexture& texture, std::string ba
   const std::string dump_dir =
       File::GetUserPath(D_DUMPTEXTURES_IDX) + SConfig::GetInstance().GetGameID();
 
-  if (m_dumped_textures.empty())
+  if (!m_dumped_textures.count)
   {
     if (!File::IsDirectory(dump_dir))
       File::CreateDir(dump_dir);
@@ -67,16 +67,16 @@ void TextureDumper::DumpTexture(const ::AbstractTexture& texture, std::string ba
     {
       std::string name;
       SplitPath(filename, nullptr, &name, nullptr);
-      m_dumped_textures.insert(name);
+      string_set_add(&m_dumped_textures, name.c_str(), name.size());
     }
 
     NOTICE_LOG(VIDEO, "Found %" PRIu64 " dumped textures that will not be re-dumped.",
-               (u64)m_dumped_textures.size());
+               (u64)m_dumped_textures.count);
   }
 
   const std::string name = BuildDumpTextureFilename(std::move(basename), level, is_arbitrary);
-  const bool file_existed = !m_dumped_textures.insert(name).second;
-  if (file_existed)
+  // a name the set has, or cannot take, is not dumped
+  if (!string_set_add(&m_dumped_textures, name.c_str(), name.size()))
     return;
 
   texture.Save(dump_dir + "/" + name + ".png", level);

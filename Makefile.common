@@ -389,6 +389,7 @@ DOLPHIN_SOURCES_C += \
 	$(CORE_DIR)/Source/Core/Common/NetSocket.c \
 	$(CORE_DIR)/Source/Core/Common/ObjectPool.c \
 	$(CORE_DIR)/Source/Core/Common/Quiesce.c \
+	$(CORE_DIR)/Source/Core/Common/StringSet.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/IndexGenerator.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderArena.c \
 	$(CORE_DIR)/Source/Core/VideoCommon/ShaderBuild.c \
