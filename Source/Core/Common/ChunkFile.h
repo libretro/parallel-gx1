@@ -15,11 +15,7 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <deque>
-#include <list>
-#include <map>
 #include <optional>
-#include <set>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -63,80 +59,10 @@ public:
   bool IsMeasureMode() const { return m_mode == Mode::Measure; }
   bool IsVerifyMode() const { return m_mode == Mode::Verify; }
 
-  template <typename K, class V>
-  void Do(std::map<K, V>& x)
-  {
-    u32 count = (u32)x.size();
-    Do(count);
-
-    switch (m_mode)
-    {
-    case Mode::Read:
-      for (x.clear(); count != 0; --count)
-      {
-        std::pair<K, V> pair;
-        Do(pair.first);
-        Do(pair.second);
-        x.insert(pair);
-      }
-      break;
-
-    case Mode::Write:
-    case Mode::Measure:
-    case Mode::Verify:
-      for (auto& elem : x)
-      {
-        Do(elem.first);
-        Do(elem.second);
-      }
-      break;
-    }
-  }
-
-  template <typename V>
-  void Do(std::set<V>& x)
-  {
-    u32 count = (u32)x.size();
-    Do(count);
-
-    switch (m_mode)
-    {
-    case Mode::Read:
-      for (x.clear(); count != 0; --count)
-      {
-        V value = {};
-        Do(value);
-        x.insert(value);
-      }
-      break;
-
-    case Mode::Write:
-    case Mode::Measure:
-    case Mode::Verify:
-      for (const V& val : x)
-      {
-        Do(val);
-      }
-      break;
-    }
-  }
-
   template <typename T>
   void Do(std::vector<T>& x)
   {
     DoContiguousContainer(x);
-  }
-
-  template <typename T>
-  void Do(std::list<T>& x)
-  {
-    DoContainer(x);
-  }
-
-  template <typename T>
-  void Do(std::deque<T>& x)
-  {
-    DoContainer(x);
   }
 
   template <typename T>
@@ -364,12 +290,6 @@ private:
 
     if (size > 0)
       DoArray(&container[0], size);
-  }
-
-  template <typename T>
-  void DoContainer(T& x)
-  {
-    DoEachElement(x, [](PointerWrap& p, typename T::value_type& elem) { p.Do(elem); });
   }
 
   DOLPHIN_FORCE_INLINE void DoVoid(void* data, u32 size)
