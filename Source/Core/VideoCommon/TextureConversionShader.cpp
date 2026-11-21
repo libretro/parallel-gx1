@@ -4,7 +4,6 @@
 #include "VideoCommon/TextureConversionShader.h"
 
 #include <cstring>
-#include <map>
 #include <string_view>
 
 #include "Common/CommonTypes.h"
@@ -956,7 +955,13 @@ float4 GetPaletteColorNormalized(uint index)
 
 )";
 
-static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
+struct DecodingShaderEntry
+{
+  TextureFormat format;
+  DecodingShaderInfo info;
+};
+
+static const DecodingShaderEntry s_decoding_shader_info[] = {
     {TextureFormat::I4,
      {TEXEL_BUFFER_FORMAT_R8_UINT, 0, 8, 8, false,
       R"(
@@ -1332,8 +1337,12 @@ static const std::map<TextureFormat, DecodingShaderInfo> s_decoding_shader_info{
 
 const DecodingShaderInfo* GetDecodingShaderInfo(TextureFormat format)
 {
-  auto iter = s_decoding_shader_info.find(format);
-  return iter != s_decoding_shader_info.end() ? &iter->second : nullptr;
+  for (size_t i = 0; i < sizeof(s_decoding_shader_info) / sizeof(s_decoding_shader_info[0]); i++)
+  {
+    if (s_decoding_shader_info[i].format == format)
+      return &s_decoding_shader_info[i].info;
+  }
+  return nullptr;
 }
 
 void GetDispatchCount(const DecodingShaderInfo* info, u32 width, u32 height, u32* groups_x,
