@@ -22,7 +22,7 @@ namespace
 struct LayerRef
 {
   quiesce_node_t node;  // first: the free callback casts it back to the whole
-  std::shared_ptr<Layer> layer;
+  Layer* layer;         // owned
 };
 
 struct CallbackRef
@@ -55,7 +55,9 @@ quiesce_t* detail::InfoQuiesce()
 
 static void FreeLayerRef(quiesce_node_t* node)
 {
-  delete reinterpret_cast<LayerRef*>(node);
+  LayerRef* const ref = reinterpret_cast<LayerRef*>(node);
+  delete ref->layer;
+  delete ref;
 }
 
 static void FreeCallbackRef(quiesce_node_t* node)
@@ -68,39 +70,39 @@ static Layer* PeekLayer(LayerType type)
 {
   const auto* ref =
       static_cast<const LayerRef*>(retro_atomic_load_acquire_ptr(&s_layers[size_t(type)]));
-  return ref ? ref->layer.get() : nullptr;
+  return ref ? ref->layer : nullptr;
 }
 
-static void PublishLayer(LayerType type, std::shared_ptr<Layer> layer)
+// takes layer
+static void PublishLayer(LayerType type, Layer* layer)
 {
-  LayerRef* ref = layer ? new LayerRef{{}, std::move(layer)} : nullptr;
+  LayerRef* ref = layer ? new LayerRef{{}, layer} : nullptr;
   void* old = retro_atomic_exchange_ptr(&s_layers[size_t(type)], ref);
   if (old)
     quiesce_retire(&s_quiesce, &static_cast<LayerRef*>(old)->node, FreeLayerRef);
 }
 
-static void AddLayerInternal(std::shared_ptr<Layer> layer)
+// Entered here, left in the destructor
+static Layer* EnterLayer(LayerType type)
 {
-  const Config::LayerType layer_type = layer->GetLayer();
-  PublishLayer(layer_type, std::move(layer));
-  OnConfigChanged();
-}
-
-void AddLayer(std::unique_ptr<ConfigLayerLoader> loader)
-{
-  AddLayerInternal(std::make_shared<Layer>(std::move(loader)));
-}
-
-std::shared_ptr<Layer> GetLayer(LayerType layer)
-{
-  std::shared_ptr<Layer> result;
   quiesce_enter(&s_quiesce);
-  const auto* ref =
-      static_cast<const LayerRef*>(retro_atomic_load_acquire_ptr(&s_layers[size_t(layer)]));
-  if (ref)
-    result = ref->layer;
+  return PeekLayer(type);
+}
+
+LayerAccess::LayerAccess(LayerType type) : layer(EnterLayer(type))
+{
+}
+
+LayerAccess::~LayerAccess()
+{
   quiesce_exit(&s_quiesce);
-  return result;
+}
+
+void AddLayer(ConfigLayerLoader* loader)
+{
+  Layer* const layer = new Layer(loader);
+  PublishLayer(layer->GetLayer(), layer);
+  OnConfigChanged();
 }
 
 void RemoveLayer(LayerType layer)
@@ -210,7 +212,7 @@ void Shutdown()
 
 void ClearCurrentRunLayer()
 {
-  PublishLayer(LayerType::CurrentRun, std::make_shared<Layer>(LayerType::CurrentRun));
+  PublishLayer(LayerType::CurrentRun, new Layer(LayerType::CurrentRun));
 }
 
 // Each system's name, in the order of System

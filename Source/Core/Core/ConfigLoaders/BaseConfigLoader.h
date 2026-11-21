@@ -31,5 +31,6 @@ void TransferSYSCONFControlToGuest();
 void TransferSYSCONFControlFromGuest(WriteBackChangedValues write_back_changed_values);
 void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip,
                    std::function<bool(const Config::Location&)> predicate = {});
-std::unique_ptr<Config::ConfigLayerLoader> GenerateBaseConfigLoader();
+// The caller's, handed on to Config::AddLayer
+Config::ConfigLayerLoader* GenerateBaseConfigLoader();
 }  // namespace ConfigLoaders

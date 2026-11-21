@@ -269,8 +269,8 @@ private:
 };
 
 // Loader generation
-std::unique_ptr<Config::ConfigLayerLoader> GenerateBaseConfigLoader()
+Config::ConfigLayerLoader* GenerateBaseConfigLoader()
 {
-  return std::make_unique<BaseConfigLayerLoader>();
+  return new BaseConfigLayerLoader();
 }
 }  // namespace ConfigLoaders

@@ -99,7 +99,8 @@ class Layer final
 {
 public:
   explicit Layer(LayerType layer);
-  explicit Layer(std::unique_ptr<ConfigLayerLoader> loader);
+  // takes loader
+  explicit Layer(ConfigLayerLoader* loader);
   ~Layer();
 
   // Convenience functions
@@ -167,6 +168,6 @@ private:
   bool m_is_dirty = false;
   LayerMap m_map;
   const LayerType m_layer;
-  std::unique_ptr<ConfigLayerLoader> m_loader;
+  ConfigLayerLoader* m_loader = nullptr;  // owned
 };
 }  // namespace Config

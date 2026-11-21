@@ -27,8 +27,20 @@ struct ConfigChangedCallbackID
 using ConfigChangedCallback = void (*)(void* user);
 
 // Layer management
-void AddLayer(std::unique_ptr<ConfigLayerLoader> loader);
-std::shared_ptr<Layer> GetLayer(LayerType layer);
+// takes loader
+void AddLayer(ConfigLayerLoader* loader);
+
+// The layer of a type, kept alive while this is in scope; nullptr when there is none
+class LayerAccess
+{
+public:
+  explicit LayerAccess(LayerType type);
+  ~LayerAccess();
+  LayerAccess(const LayerAccess&) = delete;
+  LayerAccess& operator=(const LayerAccess&) = delete;
+
+  Layer* const layer;
+};
 void RemoveLayer(LayerType layer);
 
 // Returns an ID that should be passed to RemoveConfigChangedCallback() when the callback is no
@@ -61,7 +73,8 @@ T Get(LayerType layer, const Info<T>& info)
 {
   if (layer == LayerType::Meta)
     return Get(info);
-  return GetLayer(layer)->Get(info);
+  const LayerAccess access(layer);
+  return access.layer->Get(info);
 }
 
 template <typename T>
@@ -108,7 +121,12 @@ LayerType GetActiveLayerForConfig(const Info<T>& info)
 template <typename InfoT, typename ValueT>
 void Set(LayerType layer, const InfoT& info, const ValueT& value)
 {
-  if (GetLayer(layer)->Set(info, value))
+  bool changed;
+  {
+    const LayerAccess access(layer);
+    changed = access.layer->Set(info, value);
+  }
+  if (changed)
     OnConfigChanged();
 }
 
@@ -136,7 +154,12 @@ void SetBaseOrCurrent(const Info<InfoT>& info, const ValueT& value)
 template <typename T>
 void DeleteKey(LayerType layer, const Info<T>& info)
 {
-  if (GetLayer(layer)->DeleteKey(info.GetLocation()))
+  bool changed;
+  {
+    const LayerAccess access(layer);
+    changed = access.layer->DeleteKey(info.GetLocation());
+  }
+  if (changed)
     OnConfigChanged();
 }
 

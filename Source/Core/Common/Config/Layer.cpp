@@ -20,8 +20,7 @@ Layer::Layer(LayerType type) : m_layer(type)
 {
 }
 
-Layer::Layer(std::unique_ptr<ConfigLayerLoader> loader)
-    : m_layer(loader->GetLayer()), m_loader(std::move(loader))
+Layer::Layer(ConfigLayerLoader* loader) : m_layer(loader->GetLayer()), m_loader(loader)
 {
   Load();
 }
@@ -29,6 +28,7 @@ Layer::Layer(std::unique_ptr<ConfigLayerLoader> loader)
 Layer::~Layer()
 {
   Save();
+  delete m_loader;
 }
 
 bool Layer::Exists(const Location& location) const
