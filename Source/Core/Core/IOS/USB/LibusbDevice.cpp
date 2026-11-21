@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
-#include <map>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -471,12 +470,22 @@ void LibusbDevice::TransferCallback(libusb_transfer* transfer)
   });
 }
 
-static const std::map<u8, const char*> s_transfer_types = {
-    {LIBUSB_TRANSFER_TYPE_CONTROL, "Control"},
-    {LIBUSB_TRANSFER_TYPE_ISOCHRONOUS, "Isochronous"},
-    {LIBUSB_TRANSFER_TYPE_BULK, "Bulk"},
-    {LIBUSB_TRANSFER_TYPE_INTERRUPT, "Interrupt"},
-};
+static const char* GetTransferTypeName(u8 type)
+{
+  switch (type)
+  {
+  case LIBUSB_TRANSFER_TYPE_CONTROL:
+    return "Control";
+  case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS:
+    return "Isochronous";
+  case LIBUSB_TRANSFER_TYPE_BULK:
+    return "Bulk";
+  case LIBUSB_TRANSFER_TYPE_INTERRUPT:
+    return "Interrupt";
+  default:
+    return "Unknown";
+  }
+}
 
 void LibusbDevice::TransferEndpoint::AddTransfer(std::unique_ptr<TransferCommand> command,
                                                  libusb_transfer* transfer)
@@ -539,7 +548,7 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(
   case LIBUSB_TRANSFER_STALL:
     ERROR_LOG(IOS_USB, "[%04x:%04x %u] %s transfer (endpoint %#04x) failed: %s",
               (unsigned)device->m_vid, (unsigned)device->m_pid,
-              (unsigned)device->m_active_interface, s_transfer_types.at(transfer->type),
+              (unsigned)device->m_active_interface, GetTransferTypeName(transfer->type),
               (unsigned)transfer->endpoint, libusb_error_name(transfer->status));
     return_value = transfer->status == LIBUSB_TRANSFER_STALL ? -7004 : -5;
     break;
