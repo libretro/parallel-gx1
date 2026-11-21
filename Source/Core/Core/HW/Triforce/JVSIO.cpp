@@ -434,24 +434,24 @@ void JVSIOBoard::ProcessUnicastRequest(JVSIORequestReader* request)
     ctx.response.StartReport();
 
     const auto cmd = JVSIOCommand(ctx.request.ReadByte());
-    const auto command_result = HandleCommand(cmd, ctx);
+    JVSIOReportCode command_result;
 
     // Entire frame error.
-    if (!command_result.has_value())
+    if (!HandleCommand(cmd, ctx, &command_result))
     {
       ERROR_LOG(SERIALINTERFACE_JVSIO, "HandleCommand: cmd:%02x StatusCode:%u", (unsigned)u8(cmd),
-                (unsigned)u8(command_result.error()));
-      ctx.response.EndFrame(command_result.error());
+                (unsigned)u8(JVSIOStatusCode::UnknownCommand));
+      ctx.response.EndFrame(JVSIOStatusCode::UnknownCommand);
       break;
     }
 
-    ctx.response.SetLastReportCode(*command_result);
+    ctx.response.SetLastReportCode(command_result);
 
     // Command error.
-    if (*command_result != JVSIOReportCode::Okay)
+    if (command_result != JVSIOReportCode::Okay)
     {
       ERROR_LOG(SERIALINTERFACE_JVSIO, "HandleCommand: cmd:%02x ReportCode:%u", (unsigned)u8(cmd),
-                (unsigned)u8(*command_result));
+                (unsigned)u8(command_result));
       ctx.response.EndFrame(JVSIOStatusCode::Okay);
       break;
     }
@@ -480,7 +480,14 @@ void JVSIOBoard::WriteResponse(const u8* response, std::size_t size)
   }
 }
 
-auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerResponse
+// Sets a command's report code; the command was known
+static bool Report(JVSIOReportCode* report, JVSIOReportCode code)
+{
+  *report = code;
+  return true;
+}
+
+bool JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx, JVSIOReportCode* report)
 {
   switch (cmd)
   {
@@ -488,19 +495,19 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
   {
     ctx.response.AddData(0x11);
     INFO_LOG(SERIALINTERFACE_JVSIO, "CommandRevision");
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::JVSRevision:
   {
     ctx.response.AddData(0x20);
     INFO_LOG(SERIALINTERFACE_JVSIO, "JVSRevision");
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::CommVersion:
   {
     ctx.response.AddData(0x10);
     INFO_LOG(SERIALINTERFACE_JVSIO, "CommVersion");
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::MainID:
   {
@@ -509,7 +516,7 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
     const void* const null_byte = std::memchr(remaining_bytes, 0, remaining_count);
 
     if (!null_byte)
-      return JVSIOReportCode::ParameterDataError;
+      return Report(report, JVSIOReportCode::ParameterDataError);
 
     std::string_view main_id_str{reinterpret_cast<const char*>(remaining_bytes),
                                  std::size_t(static_cast<const u8*>(null_byte) - remaining_bytes)};
@@ -517,12 +524,12 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
 
     INFO_LOG(SERIALINTERFACE_JVSIO, "MainID: %.*s", static_cast<int>(main_id_str.size()),
              main_id_str.data());
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::SwitchInput:
   {
     if (ctx.request.RemainingByteCount() < 2)
-      return JVSIOReportCode::ParameterSizeError;
+      return Report(report, JVSIOReportCode::ParameterSizeError);
 
     const u8 player_count = ctx.request.ReadByte();
     const u8 bytes_per_player = ctx.request.ReadByte();
@@ -547,12 +554,12 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
         ctx.response.AddData(u8{});
     }
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::AnalogInput:
   {
     if (ctx.request.RemainingByteCount() < 1)
-      return JVSIOReportCode::ParameterSizeError;
+      return Report(report, JVSIOReportCode::ParameterSizeError);
 
     const u8 channel_count = ctx.request.ReadByte();
 
@@ -576,17 +583,17 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
       ctx.response.AddData(u8(IOPorts::NEUTRAL_ANALOG_VALUE));
     }
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::GenericOutput:
   {
     if (ctx.request.RemainingByteCount() < 1)
-      return JVSIOReportCode::ParameterSizeError;
+      return Report(report, JVSIOReportCode::ParameterSizeError);
 
     const u8 byte_count = ctx.request.ReadByte();
 
     if (ctx.request.RemainingByteCount() < byte_count)
-      return JVSIOReportCode::ParameterSizeError;
+      return Report(report, JVSIOReportCode::ParameterSizeError);
 
     const u8* const outputs = ctx.request.PeekBytes();
 
@@ -597,12 +604,12 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
 
     ctx.request.SkipBytes(byte_count);
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::CoinInput:
   {
     if (ctx.request.RemainingByteCount() < 1)
-      return JVSIOReportCode::ParameterSizeError;
+      return Report(report, JVSIOReportCode::ParameterSizeError);
 
     const u8 slot_count = ctx.request.ReadByte();
 
@@ -630,13 +637,13 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
       ctx.response.AddData(u8(data));
     }
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::CoinCounterDec:
   case JVSIOCommand::CoinCounterInc:
   {
     if (ctx.request.RemainingByteCount() < 3)
-      return JVSIOReportCode::ParameterSizeError;
+      return Report(report, JVSIOReportCode::ParameterSizeError);
 
     const u8 slot = ctx.request.ReadByte();
     const u32 coin_msb = ctx.request.ReadByte();
@@ -654,17 +661,18 @@ auto JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerRes
       m_coin_counts[slot] = u16(count < 0 ? 0 : count > 0x3fff ? 0x3fff : count);
     }
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   default:
-    return std::unexpected{JVSIOStatusCode::UnknownCommand};
+    return false;
   }
 }
 
 // JVS board specs largely sourced from:
 // https://www.arcade-projects.com/threads/jvs-information-extractor.2071/
 
-auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerResponse
+bool Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx,
+                                         JVSIOReportCode* report)
 {
   switch (cmd)
   {
@@ -673,7 +681,7 @@ auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> 
     INFO_LOG(SERIALINTERFACE_JVSIO, "IOIdentify");
     static const char id[] = "namco ltd.;FCA-1;Ver1.01;JPN,Multipurpose + Rotary Encoder";
     ctx.response.AddData(id, sizeof(id));
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::FeatureCheck:
   {
@@ -690,12 +698,12 @@ auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> 
     ctx.response.AddData(features.data(), sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::NamcoCommand:
   {
     if (ctx.request.RemainingByteCount() < 1)
-      return JVSIOReportCode::ParameterSizeError;
+      return Report(report, JVSIOReportCode::ParameterSizeError);
 
     const u8 namco_command = ctx.request.ReadByte();
 
@@ -704,7 +712,7 @@ auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> 
       constexpr u32 param_size = 4;
 
       if (ctx.request.RemainingByteCount() < param_size)
-        return JVSIOReportCode::ParameterSizeError;
+        return Report(report, JVSIOReportCode::ParameterSizeError);
 
       INFO_LOG(SERIALINTERFACE_JVSIO, "NAMCO_COMMAND(%02x): %s", (unsigned)namco_command,
                Common::BytesToHexString(ctx.request.PeekBytes(), param_size).c_str());
@@ -715,17 +723,18 @@ auto Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> 
     else
     {
       ERROR_LOG(SERIALINTERFACE_JVSIO, "Unknown NAMCO_COMMAND: %02x", (unsigned)namco_command);
-      return JVSIOReportCode::ParameterDataError;
+      return Report(report, JVSIOReportCode::ParameterDataError);
     }
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   default:
-    return JVSIOBoard::HandleCommand(cmd, ctx);
+    return JVSIOBoard::HandleCommand(cmd, ctx, report);
   }
 }
 
-auto Sega_837_13551_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerResponse
+bool Sega_837_13551_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx,
+                                              JVSIOReportCode* report)
 {
   switch (cmd)
   {
@@ -734,7 +743,7 @@ auto Sega_837_13551_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
     INFO_LOG(SERIALINTERFACE_JVSIO, "IOIdentify");
     static const char id[] = "SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551 ;Ver1.00;98/10";
     ctx.response.AddData(id, sizeof(id));
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::FeatureCheck:
   {
@@ -748,14 +757,15 @@ auto Sega_837_13551_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
     ctx.response.AddData(features.data(), sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   default:
-    return JVSIOBoard::HandleCommand(cmd, ctx);
+    return JVSIOBoard::HandleCommand(cmd, ctx, report);
   }
 }
 
-auto Sega_837_13844_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx) -> HandlerResponse
+bool Sega_837_13844_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx,
+                                              JVSIOReportCode* report)
 {
   switch (cmd)
   {
@@ -764,7 +774,7 @@ auto Sega_837_13844_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
     INFO_LOG(SERIALINTERFACE_JVSIO, "IOIdentify");
     static const char id[] = "SEGA ENTERPRISES,LTD.;837-13844-01 I/O CNTL BD2 ;Ver1.00;99/07";
     ctx.response.AddData(id, sizeof(id));
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   case JVSIOCommand::FeatureCheck:
   {
@@ -778,10 +788,10 @@ auto Sega_837_13844_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
     ctx.response.AddData(features.data(), sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
-    return JVSIOReportCode::Okay;
+    return Report(report, JVSIOReportCode::Okay);
   }
   default:
-    return JVSIOBoard::HandleCommand(cmd, ctx);
+    return JVSIOBoard::HandleCommand(cmd, ctx, report);
   }
 }
 

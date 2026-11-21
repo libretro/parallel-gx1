@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <expected>
 
 #include "Common/CommonTypes.h"
 
@@ -33,15 +32,15 @@ public:
   void DoState(PointerWrap& p) override;
 
 protected:
-  using HandlerResponse = std::expected<JVSIOReportCode, JVSIOStatusCode>;
-
   struct FrameContext
   {
     JVSIORequestReader& request;
     JVSIOResponseWriter& response;
   };
 
-  virtual HandlerResponse HandleCommand(JVSIOCommand cmd, FrameContext ctx);
+  // The command's report code into *report; false when the command is unknown, which fails the
+  // whole frame
+  virtual bool HandleCommand(JVSIOCommand cmd, FrameContext ctx, JVSIOReportCode* report);
 
 private:
   void ProcessBroadcastRequest(JVSIORequestReader* request);
@@ -71,7 +70,7 @@ class Namco_FCA_JVSIOBoard final : public JVSIOBoard
 public:
   using JVSIOBoard::JVSIOBoard;
 
-  HandlerResponse HandleCommand(JVSIOCommand cmd, FrameContext ctx) override;
+  bool HandleCommand(JVSIOCommand cmd, FrameContext ctx, JVSIOReportCode* report) override;
 };
 
 // Used by VirtuaStriker4 and others.
@@ -80,7 +79,7 @@ class Sega_837_13551_JVSIOBoard final : public JVSIOBoard
 public:
   using JVSIOBoard::JVSIOBoard;
 
-  HandlerResponse HandleCommand(JVSIOCommand cmd, FrameContext ctx) override;
+  bool HandleCommand(JVSIOCommand cmd, FrameContext ctx, JVSIOReportCode* report) override;
 };
 
 // Used by FZeroAX (Deluxe).
@@ -89,7 +88,7 @@ class Sega_837_13844_JVSIOBoard final : public JVSIOBoard
 public:
   using JVSIOBoard::JVSIOBoard;
 
-  HandlerResponse HandleCommand(JVSIOCommand cmd, FrameContext ctx) override;
+  bool HandleCommand(JVSIOCommand cmd, FrameContext ctx, JVSIOReportCode* report) override;
 };
 
 }  // namespace Triforce
