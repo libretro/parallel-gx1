@@ -4,7 +4,6 @@
 #pragma once
 
 #include <bitset>
-#include <unordered_map>
 
 #include "VideoBackends/D3D12/Common.h"
 #include "VideoCommon/RenderState.h"
@@ -68,6 +67,13 @@ private:
 
   D3D12_CPU_DESCRIPTOR_HANDLE m_heap_base_cpu{};
 
-  std::unordered_map<SamplerState, D3D12_CPU_DESCRIPTOR_HANDLE> m_sampler_map;
+  // The samplers made, sorted by their state's bits; one per descriptor at most
+  struct CachedSampler
+  {
+    u64 key;
+    D3D12_CPU_DESCRIPTOR_HANDLE handle;
+  };
+  CachedSampler* m_samplers = nullptr;
+  u32 m_sampler_count = 0;
 };
 }  // namespace DX12

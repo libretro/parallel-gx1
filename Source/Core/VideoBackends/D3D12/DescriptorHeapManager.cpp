@@ -3,6 +3,9 @@
 
 #include "VideoBackends/D3D12/DescriptorHeapManager.h"
 
+#include <cstdlib>
+#include <cstring>
+
 #include "Common/Assert.h"
 
 #include "VideoBackends/D3D12/DX12Context.h"
@@ -82,7 +85,10 @@ void DescriptorHeapManager::Free(const DescriptorHandle& handle)
 }
 
 SamplerHeapManager::SamplerHeapManager() = default;
-SamplerHeapManager::~SamplerHeapManager() = default;
+SamplerHeapManager::~SamplerHeapManager()
+{
+  std::free(m_samplers);
+}
 
 static void GetD3DSamplerDesc(D3D12_SAMPLER_DESC* desc, const SamplerState& state)
 {
@@ -137,10 +143,20 @@ static void GetD3DSamplerDesc(D3D12_SAMPLER_DESC* desc, const SamplerState& stat
 
 bool SamplerHeapManager::Lookup(const SamplerState& ss, D3D12_CPU_DESCRIPTOR_HANDLE* handle)
 {
-  const auto it = m_sampler_map.find(ss);
-  if (it != m_sampler_map.end())
+  const u64 key = ss.Hex();
+  u32 low = 0;
+  u32 high = m_sampler_count;
+  while (low < high)
   {
-    *handle = it->second;
+    const u32 mid = low + (high - low) / 2;
+    if (m_samplers[mid].key < key)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  if (low < m_sampler_count && m_samplers[low].key == key)
+  {
+    *handle = m_samplers[low].handle;
     return true;
   }
 
@@ -150,6 +166,7 @@ bool SamplerHeapManager::Lookup(const SamplerState& ss, D3D12_CPU_DESCRIPTOR_HAN
     // It's still not free, since we have to recreate all our samplers again.
     WARN_LOG(VIDEO, "Out of samplers, resetting CPU heap");
     Clear();
+    low = 0;
   }
 
   D3D12_SAMPLER_DESC desc = {};
@@ -159,7 +176,11 @@ bool SamplerHeapManager::Lookup(const SamplerState& ss, D3D12_CPU_DESCRIPTOR_HAN
                                                   m_current_offset * m_descriptor_increment_size};
   g_dx_context->GetDevice()->CreateSampler(&desc, new_handle);
 
-  m_sampler_map.emplace(ss, new_handle);
+  std::memmove(m_samplers + low + 1, m_samplers + low,
+               (m_sampler_count - low) * sizeof(CachedSampler));
+  m_samplers[low].key = key;
+  m_samplers[low].handle = new_handle;
+  m_sampler_count++;
   m_current_offset++;
   *handle = new_handle;
   return true;
@@ -167,7 +188,7 @@ bool SamplerHeapManager::Lookup(const SamplerState& ss, D3D12_CPU_DESCRIPTOR_HAN
 
 void SamplerHeapManager::Clear()
 {
-  m_sampler_map.clear();
+  m_sampler_count = 0;
   m_current_offset = 0;
 }
 
@@ -181,6 +202,11 @@ bool SamplerHeapManager::Create(ID3D12Device* device, u32 num_descriptors)
     return false;
 
   m_num_descriptors = num_descriptors;
+  std::free(m_samplers);
+  m_samplers = static_cast<CachedSampler*>(std::malloc(num_descriptors * sizeof(CachedSampler)));
+  m_sampler_count = 0;
+  if (!m_samplers)
+    return false;
   m_descriptor_increment_size =
       device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
   m_heap_base_cpu = m_descriptor_heap->GetCPUDescriptorHandleForHeapStart();

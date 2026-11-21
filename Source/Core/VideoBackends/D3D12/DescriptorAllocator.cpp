@@ -79,12 +79,23 @@ bool SamplerAllocator::Create(ID3D12Device* device)
 bool SamplerAllocator::GetGroupHandle(const SamplerStateSet& sss,
                                       D3D12_GPU_DESCRIPTOR_HANDLE* handle)
 {
-  auto it = m_sampler_map.find(sss);
-  if (it != m_sampler_map.end())
+  u32 low = 0;
+  u32 high = m_group_count;
+  while (low < high)
   {
-    *handle = it->second;
+    const u32 mid = low + (high - low) / 2;
+    if (m_groups[mid].states < sss)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  if (low < m_group_count && m_groups[low].states == sss)
+  {
+    *handle = m_groups[low].handle;
     return true;
   }
+  if (m_group_count == MAX_GROUPS)
+    return false;
 
   // Allocate a group of descriptors.
   DescriptorHandle allocation;
@@ -107,7 +118,11 @@ bool SamplerAllocator::GetGroupHandle(const SamplerStateSet& sss,
       VideoCommon::MAX_PIXEL_SHADER_SAMPLERS, source_handles.data(), source_sizes.data(),
       D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
   *handle = allocation.gpu_handle;
-  m_sampler_map.emplace(sss, allocation.gpu_handle);
+  for (u32 i = m_group_count; i > low; i--)
+    m_groups[i] = m_groups[i - 1];
+  m_groups[low].states = sss;
+  m_groups[low].handle = allocation.gpu_handle;
+  m_group_count++;
   return true;
 }
 
@@ -115,12 +130,12 @@ bool SamplerAllocator::ShouldReset() const
 {
   // We only reset the sampler heap if more than half of the descriptors are used.
   // This saves descriptor copying when there isn't a large number of sampler configs per frame.
-  return m_sampler_map.size() >= (D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE / 2);
+  return m_group_count >= (D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE / 2);
 }
 
 void SamplerAllocator::Reset()
 {
   DescriptorAllocator::Reset();
-  m_sampler_map.clear();
+  m_group_count = 0;
 }
 }  // namespace DX12

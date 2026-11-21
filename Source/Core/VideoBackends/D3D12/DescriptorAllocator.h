@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <map>
-
 #include "VideoBackends/D3D12/DescriptorHeapManager.h"
 #include "VideoCommon/Constants.h"
 
@@ -55,7 +53,16 @@ public:
   void Reset();
 
 private:
-  std::map<SamplerStateSet, D3D12_GPU_DESCRIPTOR_HANDLE> m_sampler_map;
+  // The sampler groups made, sorted by their states' bytes; the heap holds this many groups
+  static constexpr u32 MAX_GROUPS =
+      D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE / VideoCommon::MAX_PIXEL_SHADER_SAMPLERS;
+  struct CachedGroup
+  {
+    SamplerStateSet states;
+    D3D12_GPU_DESCRIPTOR_HANDLE handle;
+  };
+  CachedGroup m_groups[MAX_GROUPS];
+  u32 m_group_count = 0;
 };
 
 }  // namespace DX12
