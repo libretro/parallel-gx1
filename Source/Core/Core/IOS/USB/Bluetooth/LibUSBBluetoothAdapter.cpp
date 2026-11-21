@@ -111,46 +111,60 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 
   const bool has_configured_bt = HasConfiguredBluetoothDevice();
 
-  const int ret = m_context.GetDeviceList([&](libusb_device* device) {
-    libusb_device_descriptor device_descriptor;
-    libusb_get_device_descriptor(device, &device_descriptor);
-    auto [make_config_descriptor_ret, config_descriptor] =
-        LibusbUtils::MakeConfigDescriptor(device);
-    if (make_config_descriptor_ret != LIBUSB_SUCCESS || !config_descriptor)
-    {
-      ERROR_LOG(IOS_WIIMOTE, "Failed to get config descriptor for device %04x:%04x: %s (%d: %s)",
-                (unsigned)device_descriptor.idVendor, (unsigned)device_descriptor.idProduct,
-                LibusbUtils::ErrorWrap(make_config_descriptor_ret).GetStrError(),
-                LibusbUtils::ErrorWrap(make_config_descriptor_ret).m_error,
-                LibusbUtils::ErrorWrap(make_config_descriptor_ret).GetName());
-      return true;
-    }
+  struct Scan
+  {
+    LibUSBBluetoothAdapter* adapter;
+    bool has_configured_bt;
+  };
+  Scan scan{this, has_configured_bt};
+  const int ret = m_context.GetDeviceList(
+      [](void* user, libusb_device* device) -> bool {
+        const Scan* const scan_state = static_cast<const Scan*>(user);
+        LibUSBBluetoothAdapter* const adapter = scan_state->adapter;
+        libusb_device_descriptor device_descriptor;
+        libusb_get_device_descriptor(device, &device_descriptor);
+        auto [make_config_descriptor_ret, config_descriptor] =
+            LibusbUtils::MakeConfigDescriptor(device);
+        if (make_config_descriptor_ret != LIBUSB_SUCCESS || !config_descriptor)
+        {
+          ERROR_LOG(IOS_WIIMOTE,
+                    "Failed to get config descriptor for device %04x:%04x: %s (%d: %s)",
+                    (unsigned)device_descriptor.idVendor, (unsigned)device_descriptor.idProduct,
+                    LibusbUtils::ErrorWrap(make_config_descriptor_ret).GetStrError(),
+                    LibusbUtils::ErrorWrap(make_config_descriptor_ret).m_error,
+                    LibusbUtils::ErrorWrap(make_config_descriptor_ret).GetName());
+          return true;
+        }
 
-    if (has_configured_bt &&
-        !IsConfiguredBluetoothDevice(device_descriptor.idVendor, device_descriptor.idProduct))
-    {
-      return true;
-    }
+        if (scan_state->has_configured_bt &&
+            !IsConfiguredBluetoothDevice(device_descriptor.idVendor, device_descriptor.idProduct))
+        {
+          return true;
+        }
 
-    if (IsBluetoothDevice(device_descriptor) && OpenDevice(device_descriptor, device))
-    {
-      const auto manufacturer =
-          LibusbUtils::GetStringDescriptor(m_handle, device_descriptor.iManufacturer).value_or("?");
-      const auto product =
-          LibusbUtils::GetStringDescriptor(m_handle, device_descriptor.iProduct).value_or("?");
-      const auto serial_number =
-          LibusbUtils::GetStringDescriptor(m_handle, device_descriptor.iSerialNumber).value_or("?");
-      NOTICE_LOG(IOS_WIIMOTE, "Using device %04x:%04x (rev %x) for Bluetooth: %s %s %s",
-                 (unsigned)device_descriptor.idVendor, (unsigned)device_descriptor.idProduct,
-                 (unsigned)device_descriptor.bcdDevice, manufacturer.c_str(), product.c_str(),
-                 serial_number.c_str());
+        if (IsBluetoothDevice(device_descriptor) && adapter->OpenDevice(device_descriptor, device))
+        {
+          const auto manufacturer =
+              LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iManufacturer)
+                  .value_or("?");
+          const auto product =
+              LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iProduct)
+                  .value_or("?");
+          const auto serial_number =
+              LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iSerialNumber)
+                  .value_or("?");
+          NOTICE_LOG(IOS_WIIMOTE, "Using device %04x:%04x (rev %x) for Bluetooth: %s %s %s",
+                     (unsigned)device_descriptor.idVendor, (unsigned)device_descriptor.idProduct,
+                     (unsigned)device_descriptor.bcdDevice, manufacturer.c_str(), product.c_str(),
+                     serial_number.c_str());
 
-      m_device_vid = device_descriptor.idVendor;
-      m_device_pid = device_descriptor.idProduct;
-      return false;
-    }
-    return true;
-  });
+          adapter->m_device_vid = device_descriptor.idVendor;
+          adapter->m_device_pid = device_descriptor.idProduct;
+          return false;
+        }
+        return true;
+      },
+      &scan);
   if (ret != LIBUSB_SUCCESS)
   {
     const LibusbUtils::ErrorWrap error(ret);

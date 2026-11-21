@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -21,7 +20,7 @@ template <typename T>
 using UniquePtr = std::unique_ptr<T, void (*)(T*)>;
 
 // Return false to stop iterating the device list.
-using GetDeviceListCallback = std::function<bool(libusb_device* device)>;
+typedef bool (*GetDeviceListCallback)(void* user, libusb_device* device);
 
 class Context
 {
@@ -36,7 +35,7 @@ public:
 #endif
 
   // Only valid if the context is valid.
-  int GetDeviceList(const GetDeviceListCallback& callback) const;
+  int GetDeviceList(GetDeviceListCallback callback, void* user) const;
 
 private:
   class Impl;

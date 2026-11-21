@@ -232,21 +232,30 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
 
     if (m_context.IsValid())
     {
-      const int ret = m_context.GetDeviceList([&](libusb_device* device) {
-        libusb_device_descriptor descriptor;
-        libusb_get_device_descriptor(device, &descriptor);
-        if (descriptor.idVendor == 0x1209 && descriptor.idProduct == 0x2882)
-        {
-          WakeupSantrollerDevice(device);
-        }
-        const USBUtils::DeviceInfo device_info{descriptor.idVendor, descriptor.idProduct};
-        if (!Config::USBDeviceListHas(whitelist.c_str(), &device_info))
-          return true;
+      struct Scan
+      {
+        const char* whitelist;
+        DeviceMap* new_devices;
+      };
+      Scan scan{whitelist.c_str(), new_devices};
+      const int ret = m_context.GetDeviceList(
+          [](void* user, libusb_device* device) -> bool {
+            const Scan* const scan_state = static_cast<const Scan*>(user);
+            libusb_device_descriptor descriptor;
+            libusb_get_device_descriptor(device, &descriptor);
+            if (descriptor.idVendor == 0x1209 && descriptor.idProduct == 0x2882)
+            {
+              WakeupSantrollerDevice(device);
+            }
+            const USBUtils::DeviceInfo device_info{descriptor.idVendor, descriptor.idProduct};
+            if (!Config::USBDeviceListHas(scan_state->whitelist, &device_info))
+              return true;
 
-        auto usb_device = std::make_unique<USB::LibusbDevice>(device, descriptor);
-        AddDevice(std::move(usb_device), new_devices);
-        return true;
-      });
+            auto usb_device = std::make_unique<USB::LibusbDevice>(device, descriptor);
+            AddDevice(std::move(usb_device), scan_state->new_devices);
+            return true;
+          },
+          &scan);
       if (ret != LIBUSB_SUCCESS)
         WARN_LOG(IOS_USB, "GetDeviceList failed: %s (%d: %s)",
                  LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,

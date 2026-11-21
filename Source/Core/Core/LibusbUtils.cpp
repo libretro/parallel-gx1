@@ -66,7 +66,7 @@ public:
 
   libusb_context* GetContext() const { return m_context; }
 
-  int GetDeviceList(const GetDeviceListCallback& callback) const
+  int GetDeviceList(GetDeviceListCallback callback, void* user) const
   {
     // libusb_get_device_list is thread-safe in libusb itself.
     libusb_device** list;
@@ -76,7 +76,7 @@ public:
 
     for (ssize_t i = 0; i < count; ++i)
     {
-      if (!callback(list[i]))
+      if (!callback(user, list[i]))
         break;
     }
     libusb_free_device_list(list, 1);
@@ -107,7 +107,7 @@ class Context::Impl
 {
 public:
   libusb_context* GetContext() const { return nullptr; }
-  int GetDeviceList(GetDeviceListCallback callback) const { return -1; }
+  int GetDeviceList(GetDeviceListCallback callback, void* user) const { return -1; }
 };
 #endif
 
@@ -135,9 +135,9 @@ bool Context::IsValid() const
   return m_impl->GetContext() != nullptr;
 }
 
-int Context::GetDeviceList(const GetDeviceListCallback& callback) const
+int Context::GetDeviceList(GetDeviceListCallback callback, void* user) const
 {
-  return m_impl->GetDeviceList(callback);
+  return m_impl->GetDeviceList(callback, user);
 }
 
 std::pair<int, ConfigDescriptor> MakeConfigDescriptor(libusb_device* device, u8 config_num)
