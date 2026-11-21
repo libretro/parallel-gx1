@@ -7,7 +7,6 @@
 #include <cinttypes>
 #include <cstddef>
 #include <cstring>
-#include <map>
 #include <utility>
 #include <vector>
 
@@ -188,21 +187,38 @@ constexpr std::array<u8, 60> DEFAULT_SIGNATURE = {{
 }};
 // clang-format on
 
-const std::map<std::pair<IOSC::ObjectType, IOSC::ObjectSubType>, size_t> s_type_to_size_map = {{
-    {{IOSC::TYPE_SECRET_KEY, IOSC::ObjectSubType::AES128}, 16},
-    {{IOSC::TYPE_SECRET_KEY, IOSC::ObjectSubType::MAC}, 20},
-    {{IOSC::TYPE_SECRET_KEY, IOSC::ObjectSubType::ECC233}, 30},
-    {{IOSC::TYPE_PUBLIC_KEY, IOSC::ObjectSubType::RSA2048}, 256},
-    {{IOSC::TYPE_PUBLIC_KEY, IOSC::ObjectSubType::RSA4096}, 512},
-    {{IOSC::TYPE_PUBLIC_KEY, IOSC::ObjectSubType::ECC233}, 60},
-    {{IOSC::TYPE_DATA, IOSC::ObjectSubType::Data}, 0},
-    {{IOSC::TYPE_DATA, IOSC::ObjectSubType::Version}, 0},
-}};
-
 static size_t GetSizeForType(IOSC::ObjectType type, IOSC::ObjectSubType subtype)
 {
-  const auto iterator = s_type_to_size_map.find({type, subtype});
-  return iterator != s_type_to_size_map.end() ? iterator->second : 0;
+  switch (type)
+  {
+  case IOSC::TYPE_SECRET_KEY:
+    switch (subtype)
+    {
+    case IOSC::ObjectSubType::AES128:
+      return 16;
+    case IOSC::ObjectSubType::MAC:
+      return 20;
+    case IOSC::ObjectSubType::ECC233:
+      return 30;
+    default:
+      return 0;
+    }
+  case IOSC::TYPE_PUBLIC_KEY:
+    switch (subtype)
+    {
+    case IOSC::ObjectSubType::RSA2048:
+      return 256;
+    case IOSC::ObjectSubType::RSA4096:
+      return 512;
+    case IOSC::ObjectSubType::ECC233:
+      return 60;
+    default:
+      return 0;
+    }
+  default:
+    // data objects have no fixed size
+    return 0;
+  }
 }
 
 IOSC::IOSC(ConsoleType console_type) : m_console_type(console_type)
