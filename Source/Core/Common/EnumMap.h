@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <array>
+#include <cstddef>
 
 #include "Common/TypeUtils.h"
 
@@ -20,9 +20,8 @@ class EnumMap final
   using T = decltype(last_member);
   static constexpr size_t s_size = static_cast<size_t>(last_member) + 1;
 
-  using array_type = std::array<V, s_size>;
-  using iterator = typename array_type::iterator;
-  using const_iterator = typename array_type::const_iterator;
+  using iterator = V*;
+  using const_iterator = const V*;
 
 public:
   constexpr EnumMap() = default;
@@ -61,19 +60,23 @@ public:
 
   constexpr size_t size() const noexcept { return s_size; }
 
-  constexpr V* data() { return m_array.data(); }
-  constexpr const V* data() const { return m_array.data(); }
+  constexpr V* data() { return m_array; }
+  constexpr const V* data() const { return m_array; }
 
-  constexpr iterator begin() { return m_array.begin(); }
-  constexpr iterator end() { return m_array.end(); }
-  constexpr const_iterator begin() const { return m_array.begin(); }
-  constexpr const_iterator end() const { return m_array.end(); }
-  constexpr const_iterator cbegin() const { return m_array.cbegin(); }
-  constexpr const_iterator cend() const { return m_array.cend(); }
+  constexpr iterator begin() { return m_array; }
+  constexpr iterator end() { return m_array + s_size; }
+  constexpr const_iterator begin() const { return m_array; }
+  constexpr const_iterator end() const { return m_array + s_size; }
+  constexpr const_iterator cbegin() const { return m_array; }
+  constexpr const_iterator cend() const { return m_array + s_size; }
 
-  constexpr void fill(const V& v) { m_array.fill(v); }
+  constexpr void fill(const V& v)
+  {
+    for (std::size_t i = 0; i != s_size; ++i)
+      m_array[i] = v;
+  }
 
 private:
-  array_type m_array{};
+  V m_array[s_size]{};
 };
 }  // namespace Common
