@@ -18,17 +18,6 @@
 #include "Common/StringUtil.h"
 #include "Core/Core.h"
 
-namespace
-{
-
-void AppendBytes(std::vector<u8>* container, const void* data, std::size_t size)
-{
-  const u8* const bytes = static_cast<const u8*>(data);
-  container->insert(container->end(), bytes, bytes + size);
-}
-
-}  // namespace
-
 namespace MagCard
 {
 
@@ -127,7 +116,7 @@ void MagneticCardReader::Command_33_ReadData()
     CardCapture = 0x32,   // pull in card
   };
 
-  if (m_current_packet.size() < 3)
+  if (m_current_packet_size < 3)
   {
     SetPError(P::SYSTEM_ERR);
     return;
@@ -182,7 +171,7 @@ void MagneticCardReader::Command_33_ReadData()
     for (auto track_index : track_indices)
     {
       auto& track_data = m_card_data[track_index];
-      if (!track_data.has_value())
+      if (!track_data.present)
       {
         SetPError(P::READ_ERR);
         WARN_LOG(SERIALINTERFACE_CARD, "Command_33_ReadData: Empty track %02" PRIx64,
@@ -191,7 +180,7 @@ void MagneticCardReader::Command_33_ReadData()
         return;
       }
 
-      AppendBytes(&m_command_payload, track_data->data(), track_data->size());
+      AppendPayload(track_data.data, sizeof(track_data.data));
     }
     break;
   }
@@ -217,14 +206,14 @@ void MagneticCardReader::Command_35_GetData()
 
     for (auto& track_data : m_card_data)
     {
-      if (!track_data.has_value())
+      if (!track_data.present)
       {
         SetPError(P::READ_ERR);
         // TODO: Are we supposed to return partial data ?
         return;
       }
 
-      AppendBytes(&m_command_payload, track_data->data(), track_data->size());
+      AppendPayload(track_data.data, sizeof(track_data.data));
     }
     break;
   default:
@@ -248,7 +237,7 @@ void MagneticCardReader::Command_53_WriteData()
     Standard = 0x30,  // 69-bytes
   };
 
-  if (m_current_packet.size() < 3)
+  if (m_current_packet_size < 3)
   {
     SetPError(P::SYSTEM_ERR);
     return;
@@ -263,8 +252,8 @@ void MagneticCardReader::Command_53_WriteData()
 
   const auto track_indices = GetTrackIndicesForTrackType(track);
   const auto proper_payload_size = track_indices.size() * TRACK_SIZE;
-  const u8* const payload = m_current_packet.data() + 3;
-  const std::size_t payload_size = m_current_packet.size() - 3;
+  const u8* const payload = m_current_packet + 3;
+  const std::size_t payload_size = m_current_packet_size - 3;
 
   if (mode != Mode::Standard || !IsCardLoaded() || track_indices.size() == 0 ||
       payload_size != proper_payload_size)
@@ -280,8 +269,8 @@ void MagneticCardReader::Command_53_WriteData()
   for (auto track_index : track_indices)
   {
     auto& track_data = m_card_data[track_index];
-    track_data.emplace();
-    std::memcpy(track_data->data(), payload + track_index * TRACK_SIZE, TRACK_SIZE);
+    track_data.present = true;
+    std::memcpy(track_data.data, payload + track_index * TRACK_SIZE, TRACK_SIZE);
   }
 
   Core::DisplayMessage("Writing Magnetic Card");
@@ -317,7 +306,7 @@ void MagneticCardReader::Command_7B_PrintImage()
 
 void MagneticCardReader::Command_7C_PrintLine()
 {
-  if (m_current_packet.size() < 3)
+  if (m_current_packet_size < 3)
   {
     SetPError(P::SYSTEM_ERR);
     return;
@@ -433,7 +422,7 @@ void MagneticCardReader::Command_B0_DispenseCard()
 
   // MarioKart GP1 issues this command without options.
   auto mode = Mode::Dispense;
-  if (!m_current_packet.empty())
+  if (m_current_packet_size != 0)
   {
     mode = Mode(m_current_packet[0]);
   }
@@ -502,7 +491,7 @@ void MagneticCardReader::Command_D0_ControlShutter()
 
 void MagneticCardReader::Command_F0_GetVersion()
 {
-  AppendBytes(&m_command_payload, VERSION_STRING.data(), VERSION_STRING.size());
+  AppendPayload(VERSION_STRING.data(), VERSION_STRING.size());
 
   m_status.SoftReset();
   FinishCommand();
@@ -510,7 +499,8 @@ void MagneticCardReader::Command_F0_GetVersion()
 
 void MagneticCardReader::ClearCardInMemory()
 {
-  m_card_data.fill(std::nullopt);
+  for (TrackData& track_data : m_card_data)
+    track_data.present = false;
 }
 
 void MagneticCardReader::ReadCardFile()
@@ -539,17 +529,18 @@ void MagneticCardReader::ReadCardFile()
   for (u32 track_num = 0; track_num != tracks_to_read; ++track_num)
   {
     auto& track_data = m_card_data[track_num];
-    track_data.emplace();
+    track_data.present = true;
+    std::memset(track_data.data, 0, sizeof(track_data.data));
 
-    if (!file.Read(track_data->data(), track_data->size()))
+    if (!file.Read(track_data.data, sizeof(track_data.data)))
     {
       ERROR_LOG(SERIALINTERFACE_CARD, "File read failed.");
-      track_data.reset();
+      track_data.present = false;
       break;
     }
 
     DEBUG_LOG(SERIALINTERFACE_CARD, "ReadCardFile: track:%u data:%s", track_num,
-              HexDump(track_data->data(), track_data->size()).c_str());
+              HexDump(track_data.data, sizeof(track_data.data)).c_str());
   }
 }
 
@@ -565,11 +556,11 @@ void MagneticCardReader::WriteCardFile()
 
   File::DirectIOFile file{full_path, File::AccessMode::Write};
 
-  for (std::size_t track_num = 0; track_num != m_card_data.size(); ++track_num)
+  for (std::size_t track_num = 0; track_num != NUM_TRACKS; ++track_num)
   {
     const auto& track_data = m_card_data[track_num];
 
-    if (!track_data.has_value())
+    if (!track_data.present)
     {
       DEBUG_LOG(SERIALINTERFACE_CARD, "WriteCardFile: Skipping empty track:%" PRIu64,
                 (u64)track_num);
@@ -577,12 +568,12 @@ void MagneticCardReader::WriteCardFile()
     }
 
     DEBUG_LOG(SERIALINTERFACE_CARD, "WriteCardFile: track:%" PRIu64 " data:%s", (u64)track_num,
-              HexDump(track_data->data(), track_data->size()).c_str());
+              HexDump(track_data.data, sizeof(track_data.data)).c_str());
 
     // FYI: Our simple file format assumes contiguously filled tracks.
     // I don't think games ever just skip the 2nd track,
     //  but we better write out every used tracks at the correct offset in case they do.
-    if (!file.OffsetWrite(track_num * TRACK_SIZE, track_data->data(), track_data->size()))
+    if (!file.OffsetWrite(track_num * TRACK_SIZE, track_data.data, sizeof(track_data.data)))
     {
       ERROR_LOG(SERIALINTERFACE_CARD, "File write failed.");
     }
@@ -717,7 +708,9 @@ bool MagneticCardReader::ReceivePacket(const u8* packet, std::size_t size)
   // Copy the payload.
   // We're skipping the command number and the host's 3 status bytes,
   //  and dropping the END_OF_TEXT and checksum.
-  m_current_packet.assign(packet + 4, packet + size - 2);
+  // A packet is at most 255 bytes, so its parameters fit.
+  m_current_packet_size = u32(size - 6);
+  std::memcpy(m_current_packet, packet + 4, m_current_packet_size);
 
   // TODO: Is this sensible for every command ?
   m_status.SoftReset();
@@ -725,7 +718,7 @@ bool MagneticCardReader::ReceivePacket(const u8* packet, std::size_t size)
   // Start the new command.
   m_status.s = S::RUNNING_COMMAND;
   m_current_step = 1;
-  m_command_payload.clear();
+  m_command_payload_size = 0;
 
   return true;
 }
@@ -863,7 +856,7 @@ void MagneticCardReader::StepStateMachine(DT elapsed_time)
 void MagneticCardReader::BuildPacket()
 {
   // Header and footer add 6 bytes.
-  const u8 payload_size = u8(m_command_payload.size() + 6);
+  const u8 payload_size = u8(m_command_payload_size + 6);
 
   WriteTxByte(START_OF_TEXT);  // Not included in the checksum.
 
@@ -872,7 +865,7 @@ void MagneticCardReader::BuildPacket()
   };
   WriteTxBytes(lead_in, sizeof(lead_in));
 
-  WriteTxBytes(m_command_payload.data(), m_command_payload.size());
+  WriteTxBytes(m_command_payload, m_command_payload_size);
 
   WriteTxByte(END_OF_TEXT);
 
@@ -880,8 +873,8 @@ void MagneticCardReader::BuildPacket()
   u8 packet_checksum = END_OF_TEXT;
   for (const u8 b : lead_in)
     packet_checksum ^= b;
-  for (const u8 b : m_command_payload)
-    packet_checksum ^= b;
+  for (u32 i = 0; i < m_command_payload_size; i++)
+    packet_checksum ^= m_command_payload[i];
   WriteTxByte(packet_checksum);
 }
 
@@ -970,6 +963,30 @@ bool MagneticCardReader::IsReadyForCard()
   return !IsCardPresent();
 }
 
+void MagneticCardReader::AppendPayload(const void* data, std::size_t size)
+{
+  if (size > sizeof(m_command_payload) - m_command_payload_size)
+  {
+    ERROR_LOG(SERIALINTERFACE_CARD, "Response data too long");
+    return;
+  }
+  std::memcpy(m_command_payload + m_command_payload_size, data, size);
+  m_command_payload_size += u32(size);
+}
+
+static bool DoPacketData(PointerWrap& p, u8* data, u32* size, u32 capacity)
+{
+  p.Do(*size);
+  if (*size > capacity)
+  {
+    *size = 0;
+    p.SetMeasureMode();
+    return false;
+  }
+  p.DoArray(data, *size);
+  return true;
+}
+
 void MagneticCardReader::DoState(PointerWrap& p)
 {
   SerialDevice::DoState(p);
@@ -977,15 +994,23 @@ void MagneticCardReader::DoState(PointerWrap& p)
   // Outgoing packet.
   p.Do(m_status);
   p.Do(m_current_command);
-  p.Do(m_command_payload);
+  // The buffers are saved as vectors were, a u32 count and the bytes, and the tracks as optionals
+  // were, whether each is there and then its bytes.
+  if (!DoPacketData(p, m_command_payload, &m_command_payload_size, sizeof(m_command_payload)))
+    return;
 
   // Command state.
-  p.Do(m_current_packet);
+  if (!DoPacketData(p, m_current_packet, &m_current_packet_size, sizeof(m_current_packet)))
+    return;
   p.Do(m_current_step);
 
   // The card data in memory.
   for (auto& track : m_card_data)
-    p.Do(track);
+  {
+    p.Do(track.present);
+    if (track.present)
+      p.DoArray(track.data, TRACK_SIZE);
+  }
 
   p.Do(m_time_since_machine_moved_card);
   p.Do(m_time_since_person_moved_card);

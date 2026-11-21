@@ -14,7 +14,7 @@ namespace MagCard
 void C1231BR::Command_10_Initialize()
 {
   // TODO: Not hardware tested.
-  if (!m_current_packet.empty())
+  if (m_current_packet_size != 0)
   {
     if (InitMode(m_current_packet[0]) == InitMode::EjectAfter)
     {
@@ -35,7 +35,7 @@ void C1231BR::Command_D0_ControlShutter()
     Open = 0x31,
   };
 
-  if (m_current_packet.empty())
+  if (m_current_packet_size == 0)
   {
     SetPError(P::SYSTEM_ERR);
     FinishCommand();

@@ -180,15 +180,26 @@ protected:
   // TODO: What's the default value on just powered up hardware ?
   u8 m_current_command = 0;
 
+  // A packet's size is a byte, so neither its parameters nor a response's data are longer.
+  static constexpr std::size_t MAX_PACKET_DATA = 256;
+
   // The data included in every ENQUIRY response.
-  std::vector<u8> m_command_payload;
+  u8 m_command_payload[MAX_PACKET_DATA] = {};
+  u32 m_command_payload_size = 0;
 
   // The card track data in memory.
-  using TrackData = std::optional<std::array<u8, TRACK_SIZE>>;
-  std::array<TrackData, NUM_TRACKS> m_card_data;
+  struct TrackData
+  {
+    bool present;
+    u8 data[TRACK_SIZE];
+  };
+  TrackData m_card_data[NUM_TRACKS] = {};
 
   // The parameter data of the command being processed.
-  std::vector<u8> m_current_packet;
+  u8 m_current_packet[MAX_PACKET_DATA] = {};
+  u32 m_current_packet_size = 0;
+
+  void AppendPayload(const void* data, std::size_t size);
 
   // The progress state of the current command.
   // 0 == not running a command.
