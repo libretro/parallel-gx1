@@ -32,6 +32,52 @@ void EFBReinterpretPixelData(EFBReinterpretType convtype)
   g_framebuffer_manager->ReinterpretPixelData(convtype);
 }
 
+struct EFBPeek
+{
+  u32 x;
+  u32 y;
+  u32 color;
+  float depth;
+};
+
+struct EFBPokeColorEvent
+{
+  u32 x;
+  u32 y;
+  u32 color;
+};
+
+struct EFBPokeDepthEvent
+{
+  u32 x;
+  u32 y;
+  float depth;
+};
+
+static void PeekColorOnGPU(void* data)
+{
+  EFBPeek* const peek = static_cast<EFBPeek*>(data);
+  peek->color = g_framebuffer_manager->PeekEFBColor(peek->x, peek->y);
+}
+
+static void PeekDepthOnGPU(void* data)
+{
+  EFBPeek* const peek = static_cast<EFBPeek*>(data);
+  peek->depth = g_framebuffer_manager->PeekEFBDepth(peek->x, peek->y);
+}
+
+static void PokeColorOnGPU(void* data)
+{
+  const EFBPokeColorEvent* const poke = static_cast<const EFBPokeColorEvent*>(data);
+  g_framebuffer_manager->PokeEFBColor(poke->x, poke->y, poke->color);
+}
+
+static void PokeDepthOnGPU(void* data)
+{
+  const EFBPokeDepthEvent* const poke = static_cast<const EFBPokeDepthEvent*>(data);
+  g_framebuffer_manager->PokeEFBDepth(poke->x, poke->y, poke->depth);
+}
+
 static u32 PeekColorInternal(u16 x, u16 y)
 {
   if (g_video_backend_kind == VIDEO_BACKEND_NULL)
@@ -39,9 +85,11 @@ static u32 PeekColorInternal(u16 x, u16 y)
   if (g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
     return EfbInterface::PeekColor(x, y);
 
-  u32 color = AsyncRequests::GetInstance()->PushBlockingEvent([&] {
-    return g_framebuffer_manager->PeekEFBColor(x, y);
-  });
+  EFBPeek peek;
+  peek.x = x;
+  peek.y = y;
+  AsyncRequests::GetInstance()->PushBlockingEvent(PeekColorOnGPU, &peek);
+  u32 color = peek.color;
 
   // a little-endian value is expected to be returned
   color = ((color & 0xFF00FF00) | ((color >> 16) & 0xFF) | ((color << 16) & 0xFF0000));
@@ -98,9 +146,11 @@ static u32 PeekDepthInternal(u16 x, u16 y)
   if (g_video_backend_kind == VIDEO_BACKEND_SOFTWARE)
     return EfbInterface::PeekDepth(x, y);
 
-  float depth = AsyncRequests::GetInstance()->PushBlockingEvent([&] {
-    return g_framebuffer_manager->PeekEFBDepth(x, y);
-  });
+  EFBPeek peek;
+  peek.x = x;
+  peek.y = y;
+  AsyncRequests::GetInstance()->PushBlockingEvent(PeekDepthOnGPU, &peek);
+  float depth = peek.depth;
 
   // Depth buffer is inverted for improved precision near far plane
   if (!g_backend_info.bSupportsReversedDepthRange)
@@ -143,12 +193,13 @@ void EFBPokeColor(u16 x, u16 y, u32 poke_data)
 
   // Convert to expected format (BGRA->RGBA)
   // TODO: Check alpha, depending on mode?
-  const u32 color =
+  EFBPokeColorEvent poke;
+  poke.x = x;
+  poke.y = y;
+  poke.color =
       ((poke_data & 0xFF00FF00) | ((poke_data >> 16) & 0xFF) | ((poke_data << 16) & 0xFF0000));
 
-  AsyncRequests::GetInstance()->PushEvent([x, y, color] {
-    g_framebuffer_manager->PokeEFBColor(x, y, color);
-  });
+  AsyncRequests::GetInstance()->PushEvent(PokeColorOnGPU, &poke, sizeof(poke));
 }
 
 void EFBPokeDepth(u16 x, u16 y, u32 poke_data)
@@ -163,7 +214,9 @@ void EFBPokeDepth(u16 x, u16 y, u32 poke_data)
   if (!g_backend_info.bSupportsReversedDepthRange)
     depth = 1.0f - depth;
 
-  AsyncRequests::GetInstance()->PushEvent([x, y, depth] {
-    g_framebuffer_manager->PokeEFBDepth(x, y, depth);
-  });
+  EFBPokeDepthEvent poke;
+  poke.x = x;
+  poke.y = y;
+  poke.depth = depth;
+  AsyncRequests::GetInstance()->PushEvent(PokeDepthOnGPU, &poke, sizeof(poke));
 }

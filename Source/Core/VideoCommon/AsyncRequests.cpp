@@ -32,7 +32,16 @@ void AsyncRequests::PullEvents()
 
   Request* request;
   while (retro_waitable_spsc_read(&m_queue, &request, sizeof(request)) == sizeof(request))
-    request->run(request);
+  {
+    retro_atomic_int_t* const done = request->done;
+    request->fn(request->data);
+    if (done)
+    {
+      // The caller owns the request again from here on.
+      retro_atomic_store_release_int(done, 1);
+      retro_eventcount_notify(&m_completed);
+    }
+  }
 }
 
 void AsyncRequests::Submit(Request* request)

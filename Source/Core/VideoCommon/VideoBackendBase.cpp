@@ -89,6 +89,51 @@ std::string VideoBackendBase::BadShaderFilename(const char* shader_stage, int co
 }
 
 // Run from the CPU thread (from VideoInterface.cpp)
+struct ViSwapEvent
+{
+  u32 xfb_addr;
+  u32 fb_width;
+  u32 fb_stride;
+  u32 fb_height;
+  u64 ticks;
+};
+
+struct BoundingBoxRead
+{
+  u32 index;
+  u16 value;
+};
+
+static void ViSwapOnGPU(void* data)
+{
+  const ViSwapEvent* const swap = static_cast<const ViSwapEvent*>(data);
+  g_presenter->ViSwap(swap->xfb_addr, swap->fb_width, swap->fb_stride, swap->fb_height,
+                      swap->ticks);
+}
+
+static void SetNextSwapOnGPU(void* data)
+{
+  u64 ticks;
+  std::memcpy(&ticks, data, sizeof(ticks));
+  g_presenter->SetNextSwapEstimatedTicks(ticks);
+}
+
+static void FlushPerfQueryOnGPU(void*)
+{
+  g_perf_query->FlushResults();
+}
+
+static void ReadBoundingBoxOnGPU(void* data)
+{
+  BoundingBoxRead* const read = static_cast<BoundingBoxRead*>(data);
+  read->value = g_bounding_box->Get(read->index);
+}
+
+static void DoStateOnGPU(void* data)
+{
+  VideoCommon_DoState(*static_cast<PointerWrap*>(data));
+}
+
 void VideoBackendBase::Video_OutputXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height,
                                        u64 ticks)
 {
@@ -101,9 +146,13 @@ void VideoBackendBase::Video_OutputXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride
   {
     system.GetFifo().SyncGPU(Fifo::SyncGPUReason::Swap);
 
-    AsyncRequests::GetInstance()->PushEvent([=] {
-      g_presenter->ViSwap(xfb_addr, fb_width, fb_stride, fb_height, ticks);
-    });
+    ViSwapEvent swap;
+    swap.xfb_addr = xfb_addr;
+    swap.fb_width = fb_width;
+    swap.fb_stride = fb_stride;
+    swap.fb_height = fb_height;
+    swap.ticks = ticks;
+    AsyncRequests::GetInstance()->PushEvent(ViSwapOnGPU, &swap, sizeof(swap));
   }
 
   // Inform the Presenter of the next estimated swap time.
@@ -112,10 +161,10 @@ void VideoBackendBase::Video_OutputXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride
   const s64 refresh_rate_den = vi.GetTargetRefreshRateDenominator();
   const s64 refresh_rate_num = vi.GetTargetRefreshRateNumerator();
 
-  const auto next_swap_estimated_ticks =
+  const u64 next_swap_estimated_ticks =
       ticks + (system.GetSystemTimers().GetTicksPerSecond() * refresh_rate_den / refresh_rate_num);
-  AsyncRequests::GetInstance()->PushEvent(
-      [=] { g_presenter->SetNextSwapEstimatedTicks(next_swap_estimated_ticks); });
+  AsyncRequests::GetInstance()->PushEvent(SetNextSwapOnGPU, &next_swap_estimated_ticks,
+                                          sizeof(next_swap_estimated_ticks));
 }
 
 u32 VideoBackendBase::Video_GetQueryResult(PerfQueryType type)
@@ -130,7 +179,7 @@ u32 VideoBackendBase::Video_GetQueryResult(PerfQueryType type)
 
   if (!g_perf_query->IsFlushed())
   {
-    AsyncRequests::GetInstance()->PushBlockingEvent([] { g_perf_query->FlushResults(); });
+    AsyncRequests::GetInstance()->PushBlockingEvent(FlushPerfQueryOnGPU, nullptr);
   }
 
   return g_perf_query->GetQueryResult(type);
@@ -164,8 +213,10 @@ u16 VideoBackendBase::Video_GetBoundingBox(int index)
   auto& system = Core::System::GetInstance();
   system.GetFifo().SyncGPU(Fifo::SyncGPUReason::BBox);
 
-  return AsyncRequests::GetInstance()->PushBlockingEvent(
-      [&] { return g_bounding_box->Get(index); });
+  BoundingBoxRead read;
+  read.index = index;
+  AsyncRequests::GetInstance()->PushBlockingEvent(ReadBoundingBoxOnGPU, &read);
+  return read.value;
 }
 
 // Every backend this build has, the default first
@@ -316,8 +367,7 @@ void VideoBackendBase::DoState(PointerWrap& p)
     return;
   }
 
-  AsyncRequests::GetInstance()->PushBlockingEvent([&] { VideoCommon_DoState(p); });
-
+  AsyncRequests::GetInstance()->PushBlockingEvent(DoStateOnGPU, &p);
 }
 
 bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,

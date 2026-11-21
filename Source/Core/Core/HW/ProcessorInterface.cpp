@@ -72,6 +72,11 @@ void ProcessorInterfaceManager::Init()
       core_timing.RegisterEvent("IOSNotifyPowerButton", IOSNotifyPowerButtonCallback);
 }
 
+static void ResetVideoBufferOnGPU(void*)
+{
+  Core::System::GetInstance().GetFifo().ResetVideoBuffer();
+}
+
 void ProcessorInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
 {
   mmio->Register(base | PI_INTERRUPT_CAUSE, MMIO::DirectRead<u32>(&m_interrupt_cause),
@@ -130,8 +135,7 @@ void ProcessorInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
                      // NOTE: GPFifo::ResetGatherPipe() only affects
                      // CPU state, so we can call it directly
 
-                     AsyncRequests::GetInstance()->PushEvent(
-                         [] { Core::System::GetInstance().GetFifo().ResetVideoBuffer(); });
+                     AsyncRequests::GetInstance()->PushEvent(ResetVideoBufferOnGPU, nullptr, 0);
                    }
                  }));
 

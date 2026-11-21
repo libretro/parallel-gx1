@@ -3,12 +3,8 @@
 
 #pragma once
 
-#include <concepts>
-#include <functional>
-#include <new>
-#include <optional>
-#include <type_traits>
-#include <utility>
+#include <cstddef>
+#include <cstring>
 
 #include <retro_atomic.h>
 #include <retro_waitable_spsc.h>
@@ -23,6 +19,8 @@ class PointerWrap;
 class AsyncRequests
 {
 public:
+  typedef void (*Function)(void* data);
+
   AsyncRequests();
   ~AsyncRequests();
 
@@ -30,64 +28,40 @@ public:
   void PullEvents();
 
   // The following are called from the CPU thread.
-  template <std::invocable<> F>
-  void PushEvent(F&& callback)
+
+  // Runs fn on a copy of the size bytes at payload, without waiting for it.
+  void PushEvent(Function fn, const void* payload, size_t size)
   {
     if (m_passthrough)
     {
-      std::invoke(std::forward<F>(callback));
+      fn(const_cast<void*>(payload));
       return;
     }
-
-    using Fn = std::decay_t<F>;
-    struct Owned : Request
-    {
-      Fn fn;
-      static void Run(Request* r)
-      {
-        Owned* const self = static_cast<Owned*>(r);
-        std::invoke(self->fn);
-        self->~Owned();
-      }
-    };
-    static_assert(sizeof(Owned) <= SLOT_SIZE && alignof(Owned) <= SLOT_ALIGN,
-                  "an event's callback does not fit a slot");
-    Submit(new (NextSlot()) Owned{{&Owned::Run}, Fn(std::forward<F>(callback))});
+    Slot* const slot = NextSlot();
+    if (size)
+      std::memcpy(slot->payload.bytes, payload, size);
+    slot->request.fn = fn;
+    slot->request.data = slot->payload.bytes;
+    slot->request.done = nullptr;
+    Submit(&slot->request);
   }
 
-  template <std::invocable<> F>
-  auto PushBlockingEvent(F&& callback) -> std::invoke_result_t<F>
+  // Runs fn(user) and waits for it to return; fn hands back any result through user.
+  void PushBlockingEvent(Function fn, void* user)
   {
     if (m_passthrough)
-      return std::invoke(std::forward<F>(callback));
-
-    using R = std::invoke_result_t<F>;
-    using Fn = std::remove_reference_t<F>;
-    struct Blocking : Request
     {
-      Fn* fn;
-      retro_atomic_int_t done;
-      std::conditional_t<std::is_void_v<R>, char, std::optional<R>> result;
-      static void Run(Request* r)
-      {
-        Blocking* const self = static_cast<Blocking*>(r);
-        if constexpr (std::is_void_v<R>)
-          std::invoke(*self->fn);
-        else
-          self->result.emplace(std::invoke(*self->fn));
-        // The caller owns this request again from here on.
-        retro_atomic_store_release_int(&self->done, 1);
-        retro_eventcount_notify(&s_singleton.m_completed);
-      }
-    };
-    Blocking request;
-    request.run = &Blocking::Run;
-    request.fn = &callback;
-    retro_atomic_int_init(&request.done, 0);
+      fn(user);
+      return;
+    }
+    retro_atomic_int_t done;
+    Request request;
+    retro_atomic_int_init(&done, 0);
+    request.fn = fn;
+    request.data = user;
+    request.done = &done;
     Submit(&request);
-    WaitDone(&request.done);
-    if constexpr (!std::is_void_v<R>)
-      return std::move(*request.result);
+    WaitDone(&done);
   }
 
   // Not thread-safe. Only set during initialization.
@@ -98,7 +72,9 @@ public:
 private:
   struct Request
   {
-    void (*run)(Request*);
+    Function fn;
+    void* data;
+    retro_atomic_int_t* done;  // set by a blocking request: the caller waits on it
   };
 
   /* Events are built in slots taken in turn, never on the heap: at most
@@ -108,13 +84,24 @@ private:
   {
     QUEUE_REQUESTS = 1024,
     SLOT_COUNT = 2048,
-    SLOT_SIZE = 64,
-    SLOT_ALIGN = 16
+    SLOT_PAYLOAD = 40
   };
 
-  void* NextSlot()
+  struct Slot
   {
-    void* slot = m_slots[m_next_slot & (SLOT_COUNT - 1)];
+    Request request;
+    union
+    {
+      unsigned long long align;
+      double align_double;
+      void* align_pointer;
+      unsigned char bytes[SLOT_PAYLOAD];
+    } payload;
+  };
+
+  Slot* NextSlot()
+  {
+    Slot* const slot = &m_slots[m_next_slot & (SLOT_COUNT - 1)];
     m_next_slot++;
     return slot;
   }
@@ -124,7 +111,7 @@ private:
 
   static AsyncRequests s_singleton;
 
-  alignas(SLOT_ALIGN) unsigned char m_slots[SLOT_COUNT][SLOT_SIZE];
+  Slot m_slots[SLOT_COUNT];
   unsigned m_next_slot = 0;
   retro_waitable_spsc_t m_queue;
   retro_eventcount_t m_completed;
