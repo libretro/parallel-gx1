@@ -39,6 +39,19 @@ public:
   CacheFiller(const CacheFiller&) = delete;
   CacheFiller& operator=(const CacheFiller&) = delete;
 
+  // A reference for another reader
+  CacheFiller* AddRef()
+  {
+    retro_atomic_fetch_add_int(&m_refs, 1);
+    return this;
+  }
+  // Drops a reference, freeing the filler with the last
+  void Release()
+  {
+    if (retro_atomic_fetch_sub_int(&m_refs, 1) == 1)
+      delete this;
+  }
+
   bool Read(u64 offset, u64 size, u8* out_ptr)
   {
     if (size == 0)
@@ -200,6 +213,7 @@ private:
 
   DiscScrubber m_scrubber;
 
+  retro_atomic_int_t m_refs{1};
   retro_atomic_int_t m_stop_thread{};
   BlobReader* m_thread_reader;  // handed to the thread, which frees it
   bool m_attempt_to_scrub;
@@ -207,14 +221,13 @@ private:
 };
 
 CachedBlobReader::CachedBlobReader(BlobReader* reader, bool attempt_to_scrub)
-    : m_cache_filler{std::make_shared<CacheFiller>(reader->CopyReader(), attempt_to_scrub)},
-      m_reader{reader}
+    : m_cache_filler{new CacheFiller(reader->CopyReader(), attempt_to_scrub)}, m_reader{reader}
 {
   INFO_LOG(DISCIO, "CachedBlobReader: Created");
 }
 
-CachedBlobReader::CachedBlobReader(std::shared_ptr<CacheFiller> cache_filler, BlobReader* reader)
-    : m_cache_filler{std::move(cache_filler)}, m_reader{reader}
+CachedBlobReader::CachedBlobReader(CacheFiller* cache_filler, BlobReader* reader)
+    : m_cache_filler{cache_filler}, m_reader{reader}
 {
   INFO_LOG(DISCIO, "CachedBlobReader: Copied");
 }
@@ -222,11 +235,12 @@ CachedBlobReader::CachedBlobReader(std::shared_ptr<CacheFiller> cache_filler, Bl
 CachedBlobReader::~CachedBlobReader()
 {
   DestroyBlobReader(m_reader);
+  m_cache_filler->Release();
 }
 
 BlobReader* CachedBlobReader::CopyReader() const
 {
-  return new CachedBlobReader(m_cache_filler, m_reader->CopyReader());
+  return new CachedBlobReader(m_cache_filler->AddRef(), m_reader->CopyReader());
 }
 
 BlobType CachedBlobReader::GetBlobType() const

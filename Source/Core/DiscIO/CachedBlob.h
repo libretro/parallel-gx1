@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include <optional>
 #include <string>
 
@@ -20,7 +19,8 @@ class CachedBlobReader final : public BlobReaderOfKind<BlobReaderKind::Cached>
 public:
   // take reader
   CachedBlobReader(BlobReader* reader, bool attempt_to_scrub);
-  CachedBlobReader(std::shared_ptr<CacheFiller> cache_filler, BlobReader* reader);
+  // takes reader and a reference to cache_filler
+  CachedBlobReader(CacheFiller* cache_filler, BlobReader* reader);
   ~CachedBlobReader();
 
   BlobReader* CopyReader() const;
@@ -40,8 +40,9 @@ public:
   bool IsCached() const { return true; }
 
 private:
-  // A shared object does the cache filling for sensible CopyReader behavior.
-  const std::shared_ptr<CacheFiller> m_cache_filler;
+  // A shared object does the cache filling for sensible CopyReader behavior: each copy holds a
+  // reference, and the last frees it.
+  CacheFiller* const m_cache_filler;
 
   BlobReader* const m_reader;  // owned
 };
