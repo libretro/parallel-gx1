@@ -50,9 +50,11 @@ static std::tuple<int, int> FindClosestIntegerResolution(float width, float heig
   int int_height = floored_height;
 
   float min_aspect_ratio_distance = std::numeric_limits<float>::max();
-  for (const int new_width : std::array<int, 2>{ceiled_width, floored_width})
+  const int widths[2] = {ceiled_width, floored_width};
+  const int heights[2] = {ceiled_height, floored_height};
+  for (const int new_width : widths)
   {
-    for (const int new_height : std::array<int, 2>{ceiled_height, floored_height})
+    for (const int new_height : heights)
     {
       const float new_aspect_ratio = static_cast<float>(new_width) / new_height;
       const float aspect_ratio_distance = std::abs((new_aspect_ratio / aspect_ratio) - 1.f);

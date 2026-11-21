@@ -5,7 +5,6 @@
 
 #include <retro_miscellaneous.h>
 
-#include <array>
 #include <cstring>
 #include <string>
 
@@ -245,11 +244,11 @@ void main()
 struct Uniforms
 {
   // bools are s32
-  std::array<float, 4> source_resolution;
-  std::array<float, 4> target_resolution;
-  std::array<float, 4> window_resolution;
-  std::array<float, 4> stereo_views;
-  std::array<float, 4> src_rect;
+  float source_resolution[4];
+  float target_resolution[4];
+  float window_resolution[4];
+  float stereo_views[4];
+  float src_rect[4];
   s32 src_layer;
   u32 time;
   s32 graphics_api;
@@ -265,6 +264,14 @@ struct Uniforms
   float hdr_paper_white_nits;
   float hdr_sdr_white_nits;
 };
+
+static void SetFloat4(float* out, float x, float y, float z, float w)
+{
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  out[3] = w;
+}
 
 constexpr char s_uniform_block[] = R"(UBO_BINDING(std140, 1) uniform PSBlock {
   float4 resolution;
@@ -507,18 +514,18 @@ void PostProcessing::FillUniformBuffer(const MathUtil::Rectangle<int>& src,
   const bool hdr = m_framebuffer_format == AbstractTextureFormat::RGBA16F;
 
   Uniforms u = {};
-  u.source_resolution = {static_cast<float>(src_tex->GetWidth()),
-                         static_cast<float>(src_tex->GetHeight()), rcp_src_width, rcp_src_height};
-  u.target_resolution = {static_cast<float>(dst.GetWidth()), static_cast<float>(dst.GetHeight()),
-                         1.0f / static_cast<float>(dst.GetWidth()),
-                         1.0f / static_cast<float>(dst.GetHeight())};
-  u.window_resolution = {static_cast<float>(wnd.GetWidth()), static_cast<float>(wnd.GetHeight()),
-                         1.0f / static_cast<float>(wnd.GetWidth()),
-                         1.0f / static_cast<float>(wnd.GetHeight())};
-  u.src_rect = {static_cast<float>(src.left) * rcp_src_width,
-                static_cast<float>(src.top) * rcp_src_height,
-                static_cast<float>(src.GetWidth()) * rcp_src_width,
-                static_cast<float>(src.GetHeight()) * rcp_src_height};
+  SetFloat4(u.source_resolution, static_cast<float>(src_tex->GetWidth()),
+            static_cast<float>(src_tex->GetHeight()), rcp_src_width, rcp_src_height);
+  SetFloat4(u.target_resolution, static_cast<float>(dst.GetWidth()),
+            static_cast<float>(dst.GetHeight()), 1.0f / static_cast<float>(dst.GetWidth()),
+            1.0f / static_cast<float>(dst.GetHeight()));
+  SetFloat4(u.window_resolution, static_cast<float>(wnd.GetWidth()),
+            static_cast<float>(wnd.GetHeight()), 1.0f / static_cast<float>(wnd.GetWidth()),
+            1.0f / static_cast<float>(wnd.GetHeight()));
+  SetFloat4(u.src_rect, static_cast<float>(src.left) * rcp_src_width,
+            static_cast<float>(src.top) * rcp_src_height,
+            static_cast<float>(src.GetWidth()) * rcp_src_width,
+            static_cast<float>(src.GetHeight()) * rcp_src_height);
   u.src_layer = src_layer;
   u.graphics_api = static_cast<s32>(g_backend_info.api_type);
   u.correct_color_space = cc.bCorrectColorSpace;

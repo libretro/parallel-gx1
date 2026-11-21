@@ -4,7 +4,6 @@
 #include "VideoCommon/RenderState.h"
 
 #include <algorithm>
-#include <array>
 
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/TextureConfig.h"
@@ -208,7 +207,7 @@ void BlendingState::ApproximateLogicOpWithBlending()
   // TODO: This previously had a warning about SRC and DST being aliased and not to mix them,
   // but INVSRCCLR and INVDSTCLR were also aliased and were mixed.
   // Thus, NOR, EQUIV, INVERT, COPY_INVERTED, and OR_INVERTED duplicate(d) other values.
-  static constexpr std::array<LogicOpApproximation, 16> approximations = {{
+  static constexpr LogicOpApproximation approximations[16] = {
       // clang-format off
       {false, false, SrcBlendFactor::One,       DstBlendFactor::Zero},        // CLEAR (Shader outputs 0)
       {true,  false, SrcBlendFactor::DstClr,    DstBlendFactor::Zero},        // AND
@@ -227,7 +226,7 @@ void BlendingState::ApproximateLogicOpWithBlending()
       {true,  false, SrcBlendFactor::InvDstClr, DstBlendFactor::InvSrcClr},   // NAND
       {false, false, SrcBlendFactor::One,       DstBlendFactor::Zero},        // SET (Shader outputs 255)
       // clang-format on
-  }};
+  };
 
   logic_op_enable = false;
   use_dual_src = false;

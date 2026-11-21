@@ -114,11 +114,11 @@ void AbstractGfx::BaseScaleTexture(AbstractFramebuffer* dst_framebuffer,
       ConvertFramebufferRectangle(src_rect, src_texture->GetWidth(), src_texture->GetHeight());
   const float rcp_src_width = 1.0f / src_texture->GetWidth();
   const float rcp_src_height = 1.0f / src_texture->GetHeight();
-  const std::array<float, 4> uniforms = {{converted_src_rect.left * rcp_src_width,
-                                          converted_src_rect.top * rcp_src_height,
-                                          converted_src_rect.GetWidth() * rcp_src_width,
-                                          converted_src_rect.GetHeight() * rcp_src_height}};
-  g_vertex_manager->UploadUtilityUniforms(&uniforms, sizeof(uniforms));
+  const float uniforms[4] = {converted_src_rect.left * rcp_src_width,
+                             converted_src_rect.top * rcp_src_height,
+                             converted_src_rect.GetWidth() * rcp_src_width,
+                             converted_src_rect.GetHeight() * rcp_src_height};
+  g_vertex_manager->UploadUtilityUniforms(uniforms, sizeof(uniforms));
 
   // Discard if we're overwriting the whole thing.
   if (static_cast<u32>(dst_rect.GetWidth()) == dst_framebuffer->GetWidth() &&
