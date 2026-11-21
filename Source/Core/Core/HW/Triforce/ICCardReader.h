@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <string>
+#include <retro_miscellaneous.h>
 
 #include "Common/CommonTypes.h"
 
@@ -47,7 +47,7 @@ private:
   {
   public:
     // A card is set up in place when it is inserted.
-    void Reset(std::string filename, const u8* uid);
+    void Reset(const char* filename, const u8* uid);
 
     // Load from file if it exists, else create fresh card data.
     void Initialize();
@@ -74,7 +74,7 @@ private:
 
     u8 m_data[IC_PAGE_SIZE * IC_PAGE_COUNT] = {};
 
-    std::string m_filename;
+    char m_filename[PATH_MAX_LENGTH] = {};
 
     u8 m_uid[IC_PAGE_SIZE] = {};
 

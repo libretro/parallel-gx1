@@ -8,6 +8,8 @@
 
 #include <cstdio>
 
+#include <compat/strl.h>
+
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
 #include "Common/DirectIOFile.h"
@@ -36,7 +38,7 @@ u8 CheckSumXOR(const u8* data, std::size_t size)
   return checksum;
 }
 
-bool LoadCardData(const std::string& filename, u8* data, std::size_t size)
+bool LoadCardData(const char* filename, u8* data, std::size_t size)
 {
   File::DirectIOFile file{filename, File::AccessMode::Read};
 
@@ -47,19 +49,19 @@ bool LoadCardData(const std::string& filename, u8* data, std::size_t size)
   if (file_size > size)
   {
     WARN_LOG(SERIALINTERFACE_CARD, "Unexpected size of %" PRIu64 " for file: %s", (u64)file_size,
-             filename.c_str());
+             filename);
   }
 
   const u64 read_size = file_size < size ? file_size : u64(size);
 
   if (!file.Read(data, read_size))
   {
-    ERROR_LOG(SERIALINTERFACE_CARD, "Failed to read from file: %s", filename.c_str());
+    ERROR_LOG(SERIALINTERFACE_CARD, "Failed to read from file: %s", filename);
     return false;
   }
 
   INFO_LOG(SERIALINTERFACE_CARD, "Loaded %" PRIu64 " bytes from file: %s", (u64)read_size,
-           filename.c_str());
+           filename);
   return true;
 }
 
@@ -188,8 +190,10 @@ void ICCardReader::CreateCards(u8 card_count)
     if (i > 0)
       snprintf(slot_name, sizeof(slot_name), "slot%u%c", m_slot_index + 1u, char('a' + i));
 
-    const std::string filename = File::GetUserPath(D_TRIUSER_IDX) + "tricard_" +
-                                 SConfig::GetInstance().GetGameID() + "_" + slot_name + ".bin";
+    char filename[PATH_MAX_LENGTH];
+    snprintf(filename, sizeof(filename), "%stricard_%s_%s.bin",
+             File::GetUserPath(D_TRIUSER_IDX).c_str(), SConfig::GetInstance().GetGameID().c_str(),
+             slot_name);
 
     card_id[IC_PAGE_SIZE - 1] = i;
 
@@ -712,7 +716,7 @@ void ICCardReader::ICCard::FlushData(u32 byte_offset, u32 byte_count)
   File::DirectIOFile file{m_filename, File::AccessMode::Write, File::OpenMode::Always};
   if (!file.OffsetWrite(byte_offset, m_data + byte_offset, byte_count))
   {
-    ERROR_LOG(SERIALINTERFACE_CARD, "FlushData: Failed to write to: %s", m_filename.c_str());
+    ERROR_LOG(SERIALINTERFACE_CARD, "FlushData: Failed to write to: %s", m_filename);
   }
 }
 
@@ -749,10 +753,10 @@ void ICCardReader::ICCard::DoState(PointerWrap& p)
   p.Do(m_current_state);
 }
 
-void ICCardReader::ICCard::Reset(std::string filename, const u8* uid)
+void ICCardReader::ICCard::Reset(const char* filename, const u8* uid)
 {
   memset(m_data, 0, sizeof(m_data));
-  m_filename = std::move(filename);
+  strlcpy(m_filename, filename, sizeof(m_filename));
   memcpy(m_uid, uid, sizeof(m_uid));
   m_current_state = State::Idle;
 }

@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <formats/rjson.h>
+#include <retro_miscellaneous.h>
 #include <streams/file_stream.h>
 
 #include "Common/BitUtils.h"
@@ -121,14 +122,15 @@ bool LoadCardDeckFromFile(CardIdentifier* deck, std::size_t* count)
   //   ]
   // }
 
-  const std::string filename = File::GetUserPath(D_TRIUSER_IDX) + "tricard_" +
-                               SConfig::GetInstance().GetGameID() + "_deck.json";
+  char filename[PATH_MAX_LENGTH];
+  snprintf(filename, sizeof(filename), "%stricard_%s_deck.json",
+           File::GetUserPath(D_TRIUSER_IDX).c_str(), SConfig::GetInstance().GetGameID().c_str());
 
-  RFILE* const file = filestream_open(filename.c_str(), RETRO_VFS_FILE_ACCESS_READ,
-                                      RETRO_VFS_FILE_ACCESS_HINT_NONE);
+  RFILE* const file =
+      filestream_open(filename, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
   if (!file)
   {
-    ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: cannot read %s", filename.c_str());
+    ERROR_LOG(SERIALINTERFACE_CARD, "LoadCardDeckFromFile: cannot read %s", filename);
     return false;
   }
   rjson_t* const json = rjson_open_user(DeckRead, file, 4096);
@@ -172,18 +174,17 @@ bool LoadCardDeckFromFile(CardIdentifier* deck, std::size_t* count)
       while (ok && (t = rjson_next(json)) == RJSON_STRING)
       {
         key = rjson_get_string(json, &len);
-        const std::string_view name(key, len);
         t = rjson_next(json);
         if (t != RJSON_NUMBER)
           ok = DeckSkip(json, t);
-        else if (name == "index")
+        else if (len == 5 && memcmp(key, "index", 5) == 0)
         {
           card_index = static_cast<u16>(rjson_get_double(json));
           has_card_index = true;
         }
-        else if (name == "table")
+        else if (len == 5 && memcmp(key, "table", 5) == 0)
           card_id.table_index = static_cast<u8>(rjson_get_double(json));
-        else if (name == "quantity")
+        else if (len == 8 && memcmp(key, "quantity", 8) == 0)
           quantity = static_cast<u8>(rjson_get_double(json));
       }
       ok = ok && t == RJSON_OBJECT_END;
