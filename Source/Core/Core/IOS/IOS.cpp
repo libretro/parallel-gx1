@@ -7,6 +7,7 @@
 #include <array>
 #include <cinttypes>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <string>
@@ -680,8 +681,8 @@ Device* EmulationKernel::GetDeviceByFileDescriptor(const u32 fd)
 IPCReply EmulationKernel::OpenDevice(OpenRequest& request)
 {
   const s32 new_fd = GetFreeDeviceID();
-  INFO_LOG(IOS, "Opening %s (mode %d, fd %d)", request.path.c_str(),
-           std::to_underlying(request.flags), new_fd);
+  INFO_LOG(IOS, "Opening %s (mode %d, fd %d)", request.path, std::to_underlying(request.flags),
+           new_fd);
   if (new_fd < 0 || new_fd >= IPC_MAX_FDS)
   {
     ERROR_LOG(IOS, "Couldn't get a free fd, too many open files");
@@ -690,29 +691,34 @@ IPCReply EmulationKernel::OpenDevice(OpenRequest& request)
   request.fd = new_fd;
 
   std::shared_ptr<Device> device;
-  if (request.path.starts_with("/dev/usb/oh0/") && !GetDeviceByName(request.path) &&
+  if (std::strncmp(request.path, "/dev/usb/oh0/", 13) == 0 && !GetDeviceByName(request.path) &&
       !HasFeature(GetVersion(), Feature::NewUSB))
   {
     device = std::make_shared<OH0Device>(*this, request.path);
   }
-  else if (request.path.starts_with("/dev/"))
+  else if (std::strncmp(request.path, "/dev/", 5) == 0)
   {
     device = GetDeviceByName(request.path);
   }
-  else if (request.path.starts_with('/'))
+  else if (request.path[0] == '/')
   {
     device = GetDeviceByName("/dev/fs");
   }
 
   if (!device)
   {
-    constexpr std::string_view cios_devices[] = {"/dev/flash", "/dev/mload", "/dev/sdio/sdhc",
-                                                 "/dev/usb123", "/dev/usb2"};
-    static_assert(std::ranges::is_sorted(cios_devices));
-    if (std::ranges::binary_search(cios_devices, request.path))
-      WARN_LOG(IOS, "Possible anti-piracy check for cIOS device %s", request.path.c_str());
+    static const char* const cios_devices[] = {"/dev/flash", "/dev/mload", "/dev/sdio/sdhc",
+                                               "/dev/usb123", "/dev/usb2"};
+    bool is_cios_device = false;
+    for (const char* cios_device : cios_devices)
+    {
+      if (std::strcmp(request.path, cios_device) == 0)
+        is_cios_device = true;
+    }
+    if (is_cios_device)
+      WARN_LOG(IOS, "Possible anti-piracy check for cIOS device %s", request.path);
     else
-      ERROR_LOG(IOS, "Unknown device: %s", request.path.c_str());
+      ERROR_LOG(IOS, "Unknown device: %s", request.path);
     return IPCReply{IPC_ENOENT, 3700_tbticks};
   }
 

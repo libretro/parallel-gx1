@@ -98,7 +98,10 @@ enum OpenMode : s32
 
 struct OpenRequest final : Request
 {
-  std::string path;
+  // IOS paths are at most 64 bytes; a longer one, which every device and the FS reject, is kept
+  // only up to this length.
+  static constexpr u32 MAX_PATH_LENGTH = 255;
+  char path[MAX_PATH_LENGTH + 1] = {};
   OpenMode flags = IOS_OPEN_READ;
   // The UID and GID are not part of the IPC request sent from the PPC to the Starlet,
   // but they are set after they reach IOS and are dispatched to the appropriate module.
