@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -88,19 +87,16 @@ public:
   u64 GetRawSize() const;
   const BlobReader& GetBlobReader() const;
 
-  // The in parameter can either contain all the data to begin with,
-  // or read_function can write data into the in parameter when called.
-  // The latter lets reading run in parallel with hashing.
-  // This function returns false iff read_function returns false.
-  static bool HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GROUP],
-                        HashBlock out[BLOCKS_PER_GROUP],
-                        const std::function<bool(size_t block)>& read_function = {});
+  // Hashes the blocks of a group, whose data is all in in.
+  static void HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GROUP],
+                        HashBlock out[BLOCKS_PER_GROUP]);
 
+  // Reads a group's decrypted blocks into unencrypted_data and its hashes into unencrypted_hashes,
+  // the caller's scratch, then writes the encrypted group, GROUP_TOTAL_SIZE bytes, to out.
   static bool EncryptGroup(u64 offset, u64 partition_data_offset, u64 partition_data_decrypted_size,
-                           const std::array<u8, AES_KEY_SIZE>& key, BlobReader* blob,
-                           std::array<u8, GROUP_TOTAL_SIZE>* out,
-                           const std::function<void(HashBlock hash_blocks[BLOCKS_PER_GROUP])>&
-                               hash_exception_callback = {});
+                           const std::array<u8, AES_KEY_SIZE>& key, BlobReader* blob, u8* out,
+                           std::array<u8, BLOCK_DATA_SIZE>* unencrypted_data,
+                           HashBlock* unencrypted_hashes);
 
   static void DecryptBlockHashes(const u8* in, HashBlock* out, const struct aes_ctx* aes_context);
   static void DecryptBlockData(const u8* in, u8* out, const struct aes_ctx* aes_context);

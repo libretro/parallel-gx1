@@ -477,21 +477,10 @@ void EncryptBlockJob(void* ctx, size_t i)
 }
 }  // namespace
 
-bool VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GROUP],
-                          HashBlock out[BLOCKS_PER_GROUP],
-                          const std::function<bool(size_t block)>& read_function)
+void VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GROUP],
+                          HashBlock out[BLOCKS_PER_GROUP])
 {
-  // The reads go through one blob reader, so they stay on this thread; the 64 blocks of hashing
-  // are spread over the shared worker pool.
-  if (read_function)
-  {
-    for (size_t i = 0; i < BLOCKS_PER_GROUP; ++i)
-    {
-      if (!read_function(i))
-        return false;
-    }
-  }
-
+  // The 64 blocks of hashing are spread over the shared worker pool.
   HashJob job{in, out};
   parallel_for(BLOCKS_PER_GROUP, HashBlockJob, &job);
 
@@ -510,47 +499,38 @@ bool VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GR
   out[0].padding_2 = {};
   for (size_t j = 1; j < BLOCKS_PER_GROUP; ++j)
     std::memcpy(out[j].h2, out[0].h2, sizeof(out[0].h2));
-
-  return true;
 }
 
-bool VolumeWii::EncryptGroup(
-    u64 offset, u64 partition_data_offset, u64 partition_data_decrypted_size,
-    const std::array<u8, AES_KEY_SIZE>& key, BlobReader* blob,
-    std::array<u8, GROUP_TOTAL_SIZE>* out,
-    const std::function<void(HashBlock hash_blocks[BLOCKS_PER_GROUP])>& hash_exception_callback)
+bool VolumeWii::EncryptGroup(u64 offset, u64 partition_data_offset,
+                             u64 partition_data_decrypted_size,
+                             const std::array<u8, AES_KEY_SIZE>& key, BlobReader* blob, u8* out,
+                             std::array<u8, BLOCK_DATA_SIZE>* unencrypted_data,
+                             HashBlock* unencrypted_hashes)
 {
-  std::vector<std::array<u8, BLOCK_DATA_SIZE>> unencrypted_data(BLOCKS_PER_GROUP);
-  std::vector<HashBlock> unencrypted_hashes(BLOCKS_PER_GROUP);
+  // The reads go through one blob reader, so they stay on this thread.
+  for (size_t block = 0; block < BLOCKS_PER_GROUP; ++block)
+  {
+    if (offset + (block + 1) * BLOCK_DATA_SIZE <= partition_data_decrypted_size)
+    {
+      if (!blob->ReadWiiDecrypted(offset + block * BLOCK_DATA_SIZE, BLOCK_DATA_SIZE,
+                                  unencrypted_data[block].data(), partition_data_offset))
+      {
+        return false;
+      }
+    }
+    else
+    {
+      unencrypted_data[block].fill(0);
+    }
+  }
 
-  const bool success =
-      HashGroup(unencrypted_data.data(), unencrypted_hashes.data(), [&](size_t block) {
-        if (offset + (block + 1) * BLOCK_DATA_SIZE <= partition_data_decrypted_size)
-        {
-          if (!blob->ReadWiiDecrypted(offset + block * BLOCK_DATA_SIZE, BLOCK_DATA_SIZE,
-                                      unencrypted_data[block].data(), partition_data_offset))
-          {
-            return false;
-          }
-        }
-        else
-        {
-          unencrypted_data[block].fill(0);
-        }
-        return true;
-      });
-
-  if (!success)
-    return false;
-
-  if (hash_exception_callback)
-    hash_exception_callback(unencrypted_hashes.data());
+  HashGroup(unencrypted_data, unencrypted_hashes);
 
   struct aes_ctx aes_context;
   if (aes_init(&aes_context, key.data(), AES_KEY_SIZE))
     return false;
 
-  EncryptJob job{unencrypted_data.data(), unencrypted_hashes.data(), out->data(), &aes_context};
+  EncryptJob job{unencrypted_data, unencrypted_hashes, out, &aes_context};
   parallel_for(BLOCKS_PER_GROUP, EncryptBlockJob, &job);
 
   return true;
