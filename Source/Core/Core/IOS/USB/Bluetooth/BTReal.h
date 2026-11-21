@@ -5,9 +5,7 @@
 
 #if defined(__LIBUSB__)
 #include <array>
-#include <functional>
 #include <memory>
-#include <queue>
 #include <string>
 
 #include <retro_atomic.h>
@@ -70,7 +68,11 @@ private:
   Common::Timer m_sync_button_held_timer;
 
   // Enqueued when we observe a command to which we need to fake a reply.
-  std::queue<std::function<void(USB::V0IntrMessage&)>> m_fake_replies;
+  // The vendor command opcodes still to fake a reply to, oldest first
+  static constexpr u32 MAX_FAKE_REPLIES = 32;
+  u16 m_fake_reply_opcodes[MAX_FAKE_REPLIES] = {};
+  u32 m_fake_reply_head = 0;
+  u32 m_fake_reply_count = 0;
 
   // This stores the address of paired devices and associated link keys, sorted by address.
   // It is needed because some adapters forget all stored link keys when they are reset,

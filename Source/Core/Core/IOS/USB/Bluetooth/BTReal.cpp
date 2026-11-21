@@ -53,7 +53,8 @@ IPCReply BluetoothRealDevice::Close(u32 fd)
   m_hci_endpoint.reset();
   m_acl_endpoint.reset();
 
-  m_fake_replies = {};
+  m_fake_reply_head = 0;
+  m_fake_reply_count = 0;
 
   // FYI: LibUSBBluetoothAdapter destruction will attempt to wait for command completion.
   SendHCIResetCommand();
@@ -76,8 +77,15 @@ IPCReply BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request)
     const u16 opcode = Common::swap16(memory.Read_U16(cmd->data_address));
     if (!m_lib_usb_bt_adapter->IsWiiBTModule() && (opcode == 0xFC4C || opcode == 0xFC4F))
     {
-      m_fake_replies.emplace(
-          std::bind_front(&BluetoothRealDevice::FakeVendorCommandReply, this, opcode));
+      if (m_fake_reply_count < MAX_FAKE_REPLIES)
+      {
+        m_fake_reply_opcodes[(m_fake_reply_head + m_fake_reply_count) % MAX_FAKE_REPLIES] = opcode;
+        m_fake_reply_count++;
+      }
+      else
+      {
+        ERROR_LOG(IOS_WIIMOTE, "Too many vendor commands awaiting a reply");
+      }
     }
     else
     {
@@ -182,10 +190,12 @@ void BluetoothRealDevice::TryToFillHCIEndpoint()
     Core::DisplayMessage("Reset saved Wii Remote pairings");
     FakeSyncButtonHeldEvent(*m_hci_endpoint);
   }
-  else if (!m_fake_replies.empty())
+  else if (m_fake_reply_count)
   {
-    std::invoke(m_fake_replies.front(), *m_hci_endpoint);
-    m_fake_replies.pop();
+    const u16 opcode = m_fake_reply_opcodes[m_fake_reply_head];
+    m_fake_reply_head = (m_fake_reply_head + 1) % MAX_FAKE_REPLIES;
+    m_fake_reply_count--;
+    FakeVendorCommandReply(opcode, *m_hci_endpoint);
   }
   else
   {
