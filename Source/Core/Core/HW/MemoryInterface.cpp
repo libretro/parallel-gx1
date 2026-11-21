@@ -3,7 +3,6 @@
 
 #include "Core/HW/MemoryInterface.h"
 
-#include <array>
 #include <cstring>
 #include <type_traits>
 
@@ -104,7 +103,7 @@ void MemoryInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
   mmio->Register(base | MI_PROT_ADDR_HI, MMIO::DirectRead<u16>(&m_mi_mem.prot_addr.lo),
                  MMIO::DirectWrite<u16>(&m_mi_mem.prot_addr.lo));
 
-  for (u32 i = 0; i < m_mi_mem.timers.size(); ++i)
+  for (u32 i = 0; i < sizeof(m_mi_mem.timers) / sizeof(m_mi_mem.timers[0]); ++i)
   {
     auto& timer = m_mi_mem.timers[i];
     mmio->Register(base | (MI_TIMER0_HI + 4 * i), MMIO::DirectRead<u16>(&timer.hi),

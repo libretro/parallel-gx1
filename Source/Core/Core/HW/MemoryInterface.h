@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
 
 #include "Common/BitField.h"
@@ -108,13 +107,13 @@ private:
 
   struct MIMemStruct
   {
-    std::array<MIRegion, 4> regions;
+    MIRegion regions[4];
     MIProtType prot_type;
     MIIRQMask irq_mask;
     MIIRQFlag irq_flag;
     u16 unknown1 = 0;
     MIProtAddr prot_addr;
-    std::array<MITimer, 10> timers;
+    MITimer timers[10];
     u16 unknown2 = 0;
   };
 
