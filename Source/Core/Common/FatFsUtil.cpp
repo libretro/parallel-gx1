@@ -349,12 +349,8 @@ static u64 GetSize(const File::FSTEntry& entry)
   return size;
 }
 
-static bool Pack(const std::function<bool()>& cancelled, const File::FSTEntry& entry, bool is_root,
-                 std::vector<u8>& tmp_buffer)
+static bool Pack(const File::FSTEntry& entry, bool is_root, std::vector<u8>& tmp_buffer)
 {
-  if (cancelled())
-    return false;
-
   if (!entry.isDirectory)
   {
     File::IOFile src(entry.physicalName, "rb");
@@ -393,9 +389,6 @@ static bool Pack(const std::function<bool()>& cancelled, const File::FSTEntry& e
     u64 size = entry.size;
     while (size > 0)
     {
-      if (cancelled())
-        return false;
-
       u32 chunk_size =
           static_cast<u32>(size < tmp_buffer.size() ? size : u64(tmp_buffer.size()));
       if (!src.ReadBytes(tmp_buffer.data(), chunk_size))
@@ -461,7 +454,7 @@ static bool Pack(const std::function<bool()>& cancelled, const File::FSTEntry& e
 
   for (const File::FSTEntry& child : entry.children)
   {
-    if (!Pack(cancelled, child, false, tmp_buffer))
+    if (!Pack(child, false, tmp_buffer))
       return false;
   }
 
@@ -515,7 +508,7 @@ static void SortFST(File::FSTEntry* root)
     SortFST(&child);
 }
 
-bool SyncSDFolderToSDImage(const std::function<bool()>& cancelled, bool deterministic)
+bool SyncSDFolderToSDImage(bool deterministic)
 {
   const std::string source_dir = File::GetUserPath(D_WIISDCARDSYNCFOLDER_IDX);
   const std::string image_path = File::GetUserPath(F_WIISDCARDIMAGE_IDX);
@@ -607,7 +600,7 @@ bool SyncSDFolderToSDImage(const std::function<bool()>& cancelled, bool determin
   }
   Common::ScopeGuard unmount_guard{[] { f_unmount(""); }};
 
-  if (!Pack(cancelled, root, true, tmp_buffer))
+  if (!Pack(root, true, tmp_buffer))
   {
     ERROR_LOG(COMMON, "Failed to pack folder %s to SD image at %s", source_dir.c_str(),
               temp_image_path.c_str());
@@ -636,12 +629,9 @@ bool SyncSDFolderToSDImage(const std::function<bool()>& cancelled, bool determin
   return true;
 }
 
-static bool Unpack(const std::function<bool()>& cancelled, const std::string& path,
-                   bool is_directory, const char* name, std::vector<u8>& tmp_buffer)
+static bool Unpack(const std::string& path, bool is_directory, const char* name,
+                   std::vector<u8>& tmp_buffer)
 {
-  if (cancelled())
-    return false;
-
   if (!is_directory)
   {
     FIL src{};
@@ -663,9 +653,6 @@ static bool Unpack(const std::function<bool()>& cancelled, const std::string& pa
     u32 size = f_size(&src);
     while (size > 0)
     {
-      if (cancelled())
-        return false;
-
       u32 chunk_size = size < tmp_buffer.size() ? size : static_cast<u32>(tmp_buffer.size());
       u32 read_size;
       const auto read_error_code = f_read(&src, tmp_buffer.data(), chunk_size, &read_size);
@@ -771,7 +758,7 @@ static bool Unpack(const std::function<bool()>& cancelled, const std::string& pa
     std::string child_path(path);
     child_path += '/';
     child_path.append(childname);
-    if (!Unpack(cancelled, child_path, entry.fattrib & AM_DIR, entry.fname, tmp_buffer))
+    if (!Unpack(child_path, entry.fattrib & AM_DIR, entry.fname, tmp_buffer))
     {
       return false;
     }
@@ -796,7 +783,7 @@ static bool Unpack(const std::function<bool()>& cancelled, const std::string& pa
   return true;
 }
 
-bool SyncSDImageToSDFolder(const std::function<bool()>& cancelled)
+bool SyncSDImageToSDFolder()
 {
   const std::string image_path = File::GetUserPath(F_WIISDCARDIMAGE_IDX);
   const std::string target_dir = File::GetUserPath(D_WIISDCARDSYNCFOLDER_IDX);
@@ -856,7 +843,7 @@ bool SyncSDImageToSDFolder(const std::function<bool()>& cancelled)
   }
 
   std::vector<u8> tmp_buffer(MAX_CLUSTER_SIZE);
-  if (!Unpack(cancelled, target_dir_without_slash, true, "", tmp_buffer))
+  if (!Unpack(target_dir_without_slash, true, "", tmp_buffer))
   {
     ERROR_LOG(COMMON, "Failed to unpack SD image %s to %s", image_path.c_str(), target_dir.c_str());
     File::DeleteDirRecursively(target_dir_without_slash);

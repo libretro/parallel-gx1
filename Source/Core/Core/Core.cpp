@@ -380,7 +380,7 @@ static void EmuThreadTeardown(EmuThreadStages* stages)
   }
   if (stages->sd_sync && Config::Get(Config::MAIN_ALLOW_SD_WRITES))
   {
-    const bool sync_ok = Common::SyncSDImageToSDFolder([] { return false; });
+    const bool sync_ok = Common::SyncSDImageToSDFolder();
     if (!sync_ok)
     {
       PanicAlert("Failed to sync SD card with folder. All changes made this session will be "
@@ -486,7 +486,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
                         Config::Get(Config::MAIN_WII_SD_CARD_ENABLE_FOLDER_SYNC);
   if (sync_sd_folder)
   {
-    sync_sd_folder = Common::SyncSDFolderToSDImage([] { return false; }, Core::WantsDeterminism());
+    sync_sd_folder = Common::SyncSDFolderToSDImage(Core::WantsDeterminism());
   }
 
   emu.stages.sd_sync = sync_sd_folder;

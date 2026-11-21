@@ -13,8 +13,8 @@ namespace Common
 static constexpr auto SD_PACK_TEXT = _trans("Pack SD Card Now");
 static constexpr auto SD_UNPACK_TEXT = _trans("Unpack SD Card Now");
 
-bool SyncSDFolderToSDImage(const std::function<bool()>& cancelled, bool deterministic);
-bool SyncSDImageToSDFolder(const std::function<bool()>& cancelled);
+bool SyncSDFolderToSDImage(bool deterministic);
+bool SyncSDImageToSDFolder();
 
 class FatFsCallbacks
 {
