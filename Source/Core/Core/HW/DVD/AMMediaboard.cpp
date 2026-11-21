@@ -109,7 +109,7 @@ struct GuestFdSet
 {
   static constexpr std::size_t BIT_COUNT = 256;
 
-  std::array<u8, BIT_COUNT / CHAR_BIT> bits{};
+  u8 bits[BIT_COUNT / CHAR_BIT]{};
 
   constexpr bool IsFdSet(GuestSocket s) const
   {
@@ -137,13 +137,13 @@ struct GuestSocketAddress
   u8 ip_family;
   u16 port;  // Network byte order.
   Common::IPAddress ip_address;
-  std::array<u8, 8> padding;
+  u8 padding[8];
 };
 static_assert(sizeof(GuestSocketAddress) == 16);
 
 static bool s_firmware_map = false;
 static bool s_test_menu = false;
-static std::array<u32, 3> s_timeouts = {20000, 20000, 20000};
+static u32 s_timeouts[3] = {20000, 20000, 20000};
 static u32 s_last_error = SSC_SUCCESS;
 
 static u32 s_gcam_key_a = 0;
@@ -158,20 +158,20 @@ static File::IOFile s_dimm;
 
 static DiscIO::BlobReader* s_dimm_disc;  // owned
 
-static std::array<u8, 0x200000> s_firmware;
-static std::array<u32, 0xc0> s_media_buffer_32;
-static u8* const s_media_buffer = reinterpret_cast<u8*>(s_media_buffer_32.data());
+static u8 s_firmware[0x200000];
+static u32 s_media_buffer_32[0xc0];
+static u8* const s_media_buffer = reinterpret_cast<u8*>(s_media_buffer_32);
 
 // Both Execute paths write responses to s_media_buffer, so one overwrites the other.
 // Keep separate copies so each path's DMA Read returns its own response.
-static std::array<u32, 8> s_exec1_last_response{};
-static std::array<u32, 8> s_exec2_last_response{};
+static u32 s_exec1_last_response[8]{};
+static u32 s_exec2_last_response[8]{};
 
 static CoreTiming::EventType* s_et_test_hw_phase2 = nullptr;
-static std::array<u8, 0x4ffe00> s_network_command_buffer;
-static std::array<u8, 0x80000> s_network_buffer;
-static std::array<u8, 0x1000> s_allnet_buffer;
-static std::array<u8, 0x8500> s_allnet_settings;
+static u8 s_network_command_buffer[0x4ffe00];
+static u8 s_network_buffer[0x80000];
+static u8 s_allnet_buffer[0x1000];
+static u8 s_allnet_settings[0x8500];
 
 static Common::IPAddress s_game_modified_ip_address;
 
@@ -191,15 +191,17 @@ static const MediaBoardRange s_mediaboard_ranges[] = {
     {DIMMCommandVersion1, 0x40, s_media_buffer, sizeof(s_media_buffer_32)},
     {DIMMCommandVersion2, 0x60, s_media_buffer, sizeof(s_media_buffer_32)},
     {DIMMCommandVersion2_2, 0x220, s_media_buffer, sizeof(s_media_buffer_32)},
-    {NetworkCommandAddress1, 0x1040, s_network_command_buffer.data(), s_network_command_buffer.size()},
-    {NetworkCommandAddress2, 0x40000, s_network_command_buffer.data(), s_network_command_buffer.size()},  // TODO: Guesswork, verify this.
-    {NetworkBufferAddress1, 0x10000, s_network_buffer.data(), s_network_buffer.size()},
-    {NetworkBufferAddress2, 0x10000, s_network_buffer.data(), s_network_buffer.size()},
-    {NetworkBufferAddress3, 0x50000, s_network_buffer.data(), s_network_buffer.size()},
-    {NetworkBufferAddress4, 0xc0000, s_network_buffer.data(), s_network_buffer.size()},  // TODO: size bigger than buffer's?
-    {NetworkBufferAddress5, 0x10000, s_network_buffer.data(), s_network_buffer.size()},
-    {AllNetSettings, 0x8000, s_allnet_settings.data(), s_allnet_settings.size()},
-    {AllNetBuffer, 0x1000, s_allnet_buffer.data(), s_allnet_buffer.size()},
+    {NetworkCommandAddress1, 0x1040, s_network_command_buffer, sizeof(s_network_command_buffer)},
+    {NetworkCommandAddress2, 0x40000, s_network_command_buffer,
+     sizeof(s_network_command_buffer)},  // TODO: Guesswork, verify this.
+    {NetworkBufferAddress1, 0x10000, s_network_buffer, sizeof(s_network_buffer)},
+    {NetworkBufferAddress2, 0x10000, s_network_buffer, sizeof(s_network_buffer)},
+    {NetworkBufferAddress3, 0x50000, s_network_buffer, sizeof(s_network_buffer)},
+    {NetworkBufferAddress4, 0xc0000, s_network_buffer,
+     sizeof(s_network_buffer)},  // TODO: size bigger than buffer's?
+    {NetworkBufferAddress5, 0x10000, s_network_buffer, sizeof(s_network_buffer)},
+    {AllNetSettings, 0x8000, s_allnet_settings, sizeof(s_allnet_settings)},
+    {AllNetBuffer, 0x1000, s_allnet_buffer, sizeof(s_allnet_buffer)},
 };
 
 // The host bytes behind a mediaboard address, lent; nullptr when unmapped.
@@ -253,7 +255,7 @@ static const GameMapEntry s_game_map[] = {
 // Sockets FDs are required to go from 0 to 63.
 // Games use the FD as indexes so we have to workaround it.
 
-static std::array<SOCKET, SOCKET_FD_MAX> s_sockets;
+static SOCKET s_sockets[SOCKET_FD_MAX];
 
 // TODO: Verify this.
 static constexpr u32 FIRST_VALID_FD = 1;
@@ -269,11 +271,11 @@ static GuestSocket GetAvailableGuestSocket()
   // For some unknown reasons, the fd was:
   //  - shared between a client (connect) and a server (accept) socket.
   //  - closed but still used by the other in an invalid state.
-  u32 count = std::size(s_sockets);
+  u32 count = SOCKET_FD_MAX;
   while (count--)
   {
     const u32 i = s_next_valid_fd;
-    s_next_valid_fd = (s_next_valid_fd + 1) % std::size(s_sockets);
+    s_next_valid_fd = (s_next_valid_fd + 1) % SOCKET_FD_MAX;
     if (i < FIRST_VALID_FD)
       continue;
     if (s_sockets[i] == INVALID_SOCKET)
@@ -288,7 +290,7 @@ static SOCKET GetHostSocket(GuestSocket x)
 {
   const auto index = u32(x);
 
-  if (index < std::size(s_sockets))
+  if (index < SOCKET_FD_MAX)
     return s_sockets[index];
 
   WARN_LOG(AMMEDIABOARD, "GC-AM: Bad GuestSocket value: %u", index);
@@ -297,7 +299,7 @@ static SOCKET GetHostSocket(GuestSocket x)
 
 static GuestSocket GetGuestSocket(SOCKET x)
 {
-  for (std::size_t i = FIRST_VALID_FD; i < std::size(s_sockets); i++)
+  for (std::size_t i = FIRST_VALID_FD; i < SOCKET_FD_MAX; i++)
   {
     if (s_sockets[i] == x)
       return GuestSocket(i);
@@ -444,9 +446,9 @@ static File::IOFile OpenOrCreateFile(const std::string& filename)
 static void TestHwPhase2Callback(Core::System& system, u64 userdata, s64 cycles_late)
 {
   const bool is_exec2 = (userdata != 0);
-  auto& response = is_exec2 ? s_exec2_last_response : s_exec1_last_response;
+  u32* const response = is_exec2 ? s_exec2_last_response : s_exec1_last_response;
 
-  response.fill(0);
+  std::memset(response, 0, sizeof(s_exec1_last_response));
   response[0] = 0x03020000;  // sub_cmd=0x02, cmd_class=0x03
   response[1] = 2;           // testStatus = GOOD
   response[2] = 100;         // checkProgress
@@ -460,15 +462,16 @@ static void TestHwPhase2Callback(Core::System& system, u64 userdata, s64 cycles_
 
 void Init()
 {
-  s_media_buffer_32.fill(0);
-  s_exec1_last_response.fill(0);
-  s_exec2_last_response.fill(0);
-  s_network_buffer.fill(0);
-  s_network_command_buffer.fill(0);
-  s_firmware.fill(-1);
-  s_sockets.fill(SOCKET_ERROR);
-  s_allnet_buffer.fill(0);
-  s_allnet_settings.fill(0);
+  std::memset(s_media_buffer_32, 0, sizeof(s_media_buffer_32));
+  std::memset(s_exec1_last_response, 0, sizeof(s_exec1_last_response));
+  std::memset(s_exec2_last_response, 0, sizeof(s_exec2_last_response));
+  std::memset(s_network_buffer, 0, sizeof(s_network_buffer));
+  std::memset(s_network_command_buffer, 0, sizeof(s_network_command_buffer));
+  std::memset(s_firmware, 0xFF, sizeof(s_firmware));
+  for (SOCKET& socket : s_sockets)
+    socket = SOCKET_ERROR;
+  std::memset(s_allnet_buffer, 0, sizeof(s_allnet_buffer));
+  std::memset(s_allnet_settings, 0, sizeof(s_allnet_settings));
 
   s_game_modified_ip_address = {};
   s_netconfig_read_pending = false;
@@ -525,7 +528,7 @@ void Init()
 
   const u64 boot_size = sega_boot.GetSize();
   const u64 length = boot_size < sizeof(s_firmware) ? boot_size : u64(sizeof(s_firmware));
-  sega_boot.ReadBytes(s_firmware.data(), length);
+  sega_boot.ReadBytes(s_firmware, length);
 
   s_test_menu = true;
 }
@@ -1095,7 +1098,7 @@ static void AMMBCommandClosesocket(u32 parameter_offset)
   NOTICE_LOG(AMMEDIABOARD_NET, "GC-AM: closesocket( %lld(%u) ):%d", static_cast<long long>(fd),
              u32(guest_socket), ret);
 
-  if (u32(guest_socket) < std::size(s_sockets))
+  if (u32(guest_socket) < SOCKET_FD_MAX)
     s_sockets[u32(guest_socket)] = SOCKET_ERROR;
 
   s_media_buffer_32[1] = ret;
@@ -1269,8 +1272,8 @@ static void AMMBCommandSelect(u32 parameter_offset)
   const u32 timeout_offset = s_media_buffer_32[parameter_offset + 4];
 
   // Games sometimes send 256 (the bit size of GuestFdSet).
-  if (nfds > std::size(s_sockets))
-    nfds = u32(std::size(s_sockets));
+  if (nfds > SOCKET_FD_MAX)
+    nfds = u32(SOCKET_FD_MAX);
 
   s64 timeout = -1;
   if (timeout_offset != 0)
@@ -1303,36 +1306,38 @@ static void AMMBCommandSelect(u32 parameter_offset)
             nfds, readfds_offset, writefds_offset, exceptfds_offset, timeout_offset, timeout);
 
   // Fill with the host sockets for each guest socket less-than `nfds` in each GuestFdSet.
-  std::vector<WSAPOLLFD> pollfds(nfds, WSAPOLLFD{.fd = INVALID_SOCKET});
+  WSAPOLLFD pollfds[SOCKET_FD_MAX];
+  for (u32 i = 0; i < nfds; i++)
+  {
+    pollfds[i] = WSAPOLLFD{};
+    pollfds[i].fd = INVALID_SOCKET;
+  }
 
-  FillPollFdsFromGuestFdSet(pollfds.data(), pollfds.size(), readfds_offset, POLLIN);
-  FillPollFdsFromGuestFdSet(pollfds.data(), pollfds.size(), writefds_offset, POLLOUT);
-  FillPollFdsFromGuestFdSet(pollfds.data(), pollfds.size(), exceptfds_offset, POLLPRI);
+  FillPollFdsFromGuestFdSet(pollfds, nfds, readfds_offset, POLLIN);
+  FillPollFdsFromGuestFdSet(pollfds, nfds, writefds_offset, POLLOUT);
+  FillPollFdsFromGuestFdSet(pollfds, nfds, exceptfds_offset, POLLPRI);
 
   // Erase "INVALID" entries and also entries that weren't in any GuestFdSet.
+  std::size_t pollfd_count = 0;
+  for (u32 i = 0; i < nfds; i++)
   {
-    std::size_t kept = 0;
-    for (std::size_t i = 0; i < pollfds.size(); i++)
-    {
-      if (pollfds[i].fd != INVALID_SOCKET)
-        pollfds[kept++] = pollfds[i];
-    }
-    pollfds.resize(kept);
+    if (pollfds[i].fd != INVALID_SOCKET)
+      pollfds[pollfd_count++] = pollfds[i];
   }
 
   // TODO: There may be some edge cases where
   // poll's (POLLIN,POLLOUT,POLLPRI) don't map 1:1 with select's (readfds,writefds,exceptfds).
 
   DEBUG_LOG(AMMEDIABOARD, "AMMBCommandSelect: Polling with socket count: %" PRIu64,
-            (u64)pollfds.size());
+            (u64)pollfd_count);
 
-  const int ret = PlatformPoll(pollfds.data(), pollfds.size(), timeout);
+  const int ret = PlatformPoll(pollfds, pollfd_count, timeout);
 
   if (ret >= 0)
   {
-    WriteGuestFdSetFromPollFds(readfds_offset, pollfds.data(), pollfds.size(), POLLIN);
-    WriteGuestFdSetFromPollFds(writefds_offset, pollfds.data(), pollfds.size(), POLLOUT);
-    WriteGuestFdSetFromPollFds(exceptfds_offset, pollfds.data(), pollfds.size(), POLLPRI);
+    WriteGuestFdSetFromPollFds(readfds_offset, pollfds, pollfd_count, POLLIN);
+    WriteGuestFdSetFromPollFds(writefds_offset, pollfds, pollfd_count, POLLOUT);
+    WriteGuestFdSetFromPollFds(exceptfds_offset, pollfds, pollfd_count, POLLPRI);
     DEBUG_LOG(AMMEDIABOARD_NET, "GC-AM: select result: %d", ret);
   }
   else
@@ -1619,14 +1624,14 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
     if (offset == DIMMCommandVersion2 && length == 0x20)
     {
       DEBUG_LOG(AMMEDIABOARD, "GC-AM: Read Execute1 response (saved)");
-      memory.CopyToEmu(address, reinterpret_cast<const u8*>(s_exec1_last_response.data()),
+      memory.CopyToEmu(address, reinterpret_cast<const u8*>(s_exec1_last_response),
                        sizeof(s_exec1_last_response));
       return 0;
     }
     if (offset == DIMMCommandVersion2_2 && length == 0x20)
     {
       DEBUG_LOG(AMMEDIABOARD, "GC-AM: Read Execute2 response (saved)");
-      memory.CopyToEmu(address, reinterpret_cast<const u8*>(s_exec2_last_response.data()),
+      memory.CopyToEmu(address, reinterpret_cast<const u8*>(s_exec2_last_response),
                        sizeof(s_exec2_last_response));
       return 0;
     }
@@ -1719,7 +1724,7 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
         break;
       case AMMBCommand::InetAddr:
       {
-        const char* ip_address = reinterpret_cast<char*>(s_network_command_buffer.data());
+        const char* ip_address = reinterpret_cast<char*>(s_network_command_buffer);
 
         // IP address shouldn't be longer than 15
         // TODO: Shouldn't this look at 16 characters for lack of null-termination?
@@ -1873,7 +1878,7 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
       s_media_buffer[3] |= 0x80;  // Command complete flag
 
       // Save Execute2 response before it gets clobbered by subsequent operations
-      memcpy(s_exec2_last_response.data(), s_media_buffer_32.data(), sizeof(s_exec2_last_response));
+      memcpy(s_exec2_last_response, s_media_buffer_32, sizeof(s_exec2_last_response));
 
       memory.Memset(address, 0, length);
 
@@ -1893,7 +1898,7 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
 
     if (s_firmware_map)
     {
-      if (!SafeCopyToEmu(memory, address, s_firmware.data(), s_firmware.size(), offset, length))
+      if (!SafeCopyToEmu(memory, address, s_firmware, sizeof(s_firmware), offset, length))
       {
         ERROR_LOG(AMMEDIABOARD, "GC-AM: Invalid firmware buffer range: offset=%u, length=%u",
                   offset, length);
@@ -1938,8 +1943,7 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
       if (offset >= 0x00400000 && offset <= 0x600000)
       {
         const u32 fw_offset = offset - 0x00400000;
-        if (!SafeCopyFromEmu(memory, s_firmware.data(), address, s_firmware.size(), fw_offset,
-                             length))
+        if (!SafeCopyFromEmu(memory, s_firmware, address, sizeof(s_firmware), fw_offset, length))
         {
           ERROR_LOG(AMMEDIABOARD, "GC-AM: Invalid firmware write: offset=%u, length=%u", fw_offset,
                     length);
@@ -2097,8 +2101,7 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
         memset(s_media_buffer + 0x20, 0, 0x20);
 
         // Save Execute1 response before it gets clobbered by Execute2 operations
-        memcpy(s_exec1_last_response.data(), s_media_buffer_32.data(),
-               sizeof(s_exec1_last_response));
+        memcpy(s_exec1_last_response, s_media_buffer_32, sizeof(s_exec1_last_response));
 
         ExpansionInterface::GenerateInterrupt(0x04);
         return 0;
@@ -2292,7 +2295,8 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
 
         for (u32 i = 0; i < 0x20; i += 0x10)
         {
-          const std::array<u32, 4> data_u32 = Common::BitCastPtr<std::array<u32, 4>>(data + i);
+          u32 data_u32[4];
+          std::memcpy(data_u32, data + i, sizeof(data_u32));
           NOTICE_LOG(AMMEDIABOARD_NET, "GC-AM: %08x %08x %08x %08x", data_u32[0], data_u32[1],
                      data_u32[2], data_u32[3]);
         }
@@ -2322,7 +2326,7 @@ u32 ExecuteCommand(u32* dicmd_buf, u32* diimm_buf, u32 address, u32 length)
       memset(s_media_buffer + 0x20, 0, 0x20);
 
       // Save Execute1 response for DI Execute path
-      memcpy(s_exec1_last_response.data(), s_media_buffer_32.data(), sizeof(s_exec1_last_response));
+      memcpy(s_exec1_last_response, s_media_buffer_32, sizeof(s_exec1_last_response));
       return 0;
     }
 
@@ -2372,7 +2376,7 @@ bool GetTestMenu()
 
 static void CloseAllSockets()
 {
-  for (u32 i = FIRST_VALID_FD; i < std::size(s_sockets); ++i)
+  for (u32 i = FIRST_VALID_FD; i < SOCKET_FD_MAX; ++i)
   {
     if (s_sockets[i] != INVALID_SOCKET)
     {
@@ -2437,7 +2441,7 @@ void DoState(PointerWrap& p)
   GuestFdSet created_sockets{};
   if (p.IsWriteMode() || p.IsVerifyMode())
   {
-    for (u32 i = FIRST_VALID_FD; i < std::size(s_sockets); ++i)
+    for (u32 i = FIRST_VALID_FD; i < SOCKET_FD_MAX; ++i)
     {
       if (s_sockets[i] != INVALID_SOCKET)
         created_sockets.SetFd(GuestSocket(i));
@@ -2450,7 +2454,7 @@ void DoState(PointerWrap& p)
   {
     CloseAllSockets();
 
-    for (u32 i = FIRST_VALID_FD; i < std::size(s_sockets); ++i)
+    for (u32 i = FIRST_VALID_FD; i < SOCKET_FD_MAX; ++i)
     {
       if (!created_sockets.IsFdSet(GuestSocket(i)))
         continue;
