@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
-#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -143,16 +142,13 @@ inline FileInfo::const_iterator FileInfo::cend() const
   return end();
 }
 
-// The file system of a GameCube disc or a Wii partition: its FST, read when made. Movable (the
-// entries point into the FST, which moves with it), not copyable.
+// The file system of a GameCube disc or a Wii partition: its FST, read when made. Neither copied
+// nor moved: its entries point into the FST.
 class FileSystem
 {
 public:
-  // An invalid one
-  FileSystem() : m_valid(false) {}
   FileSystem(const VolumeDisc* volume, const Partition& partition);
-  FileSystem(FileSystem&& other) = default;
-  FileSystem& operator=(FileSystem&& other) = default;
+  ~FileSystem();
   FileSystem(const FileSystem&) = delete;
   FileSystem& operator=(const FileSystem&) = delete;
 
@@ -172,8 +168,16 @@ private:
   bool m_valid;
   std::vector<u8> m_file_system_table;
   FileInfo m_root;
-  // Maps the end offset of files to FST indexes
-  mutable std::map<u64, u32> m_offset_file_info_cache;
+  // The files with data, sorted by end offset, one per end offset (the lowest FST index); built
+  // on the first search by offset
+  struct FileEnd
+  {
+    u64 end;
+    u32 index;
+  };
+  static int CompareFileEnds(const void* a, const void* b);
+  mutable FileEnd* m_file_ends;
+  mutable u32 m_file_end_count;
 };
 
 }  // namespace DiscIO

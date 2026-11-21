@@ -4,8 +4,8 @@
 #include "DiscIO/Filesystem.h"
 
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
-#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -206,7 +206,7 @@ bool FileInfo::IsValid(u64 fst_size, const FileInfo& parent_directory) const
 }
 
 FileSystem::FileSystem(const VolumeDisc* volume, const Partition& partition)
-    : m_valid(false), m_root(nullptr, 0, 0, 0)
+    : m_valid(false), m_root(nullptr, 0, 0, 0), m_file_ends(nullptr), m_file_end_count(0)
 {
   u8 offset_shift;
   // Check if this is a GameCube or Wii disc
@@ -318,15 +318,34 @@ bool FileSystem::FindFileInfo(std::string_view path, const FileInfo& directory,
   return false;
 }
 
+FileSystem::~FileSystem()
+{
+  std::free(m_file_ends);
+}
+
+int FileSystem::CompareFileEnds(const void* a, const void* b)
+{
+  const FileEnd* const end_a = static_cast<const FileEnd*>(a);
+  const FileEnd* const end_b = static_cast<const FileEnd*>(b);
+  if (end_a->end != end_b->end)
+    return end_a->end < end_b->end ? -1 : 1;
+  return end_a->index < end_b->index ? -1 : end_a->index > end_b->index ? 1 : 0;
+}
+
 bool FileSystem::FindFileInfo(u64 disc_offset, FileInfo* file_info) const
 {
   if (!IsValid())
     return false;
 
-  // Build a cache (unless there already is one)
-  if (m_offset_file_info_cache.empty())
+  // Build the table on the first search
+  if (!m_file_ends)
   {
-    u32 fst_entries = m_root.GetSize();
+    const u32 fst_entries = m_root.GetSize();
+    FileEnd* const ends =
+        static_cast<FileEnd*>(std::malloc((fst_entries ? fst_entries : 1) * sizeof(FileEnd)));
+    if (!ends)
+      return false;
+    u32 count = 0;
     for (u32 i = 0; i < fst_entries; i++)
     {
       const FileInfo entry(m_root, i);
@@ -334,16 +353,40 @@ bool FileSystem::FindFileInfo(u64 disc_offset, FileInfo* file_info) const
       {
         const u32 size = entry.GetSize();
         if (size != 0)
-          m_offset_file_info_cache.emplace(entry.GetOffset() + size, i);
+        {
+          ends[count].end = entry.GetOffset() + size;
+          ends[count].index = i;
+          count++;
+        }
       }
     }
+    std::qsort(ends, count, sizeof(FileEnd), CompareFileEnds);
+
+    // Keep the first file of each end offset
+    u32 kept = 0;
+    for (u32 i = 0; i < count; i++)
+    {
+      if (kept == 0 || ends[kept - 1].end != ends[i].end)
+        ends[kept++] = ends[i];
+    }
+    m_file_ends = ends;
+    m_file_end_count = kept;
   }
 
   // Get the first file that ends after disc_offset
-  const auto it = m_offset_file_info_cache.upper_bound(disc_offset);
-  if (it == m_offset_file_info_cache.end())
+  u32 low = 0;
+  u32 high = m_file_end_count;
+  while (low < high)
+  {
+    const u32 mid = low + (high - low) / 2;
+    if (m_file_ends[mid].end <= disc_offset)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  if (low == m_file_end_count)
     return false;
-  const FileInfo result(m_root, it->second);
+  const FileInfo result(m_root, m_file_ends[low].index);
 
   // If the file's start isn't after disc_offset, success
   if (result.GetOffset() > disc_offset)
