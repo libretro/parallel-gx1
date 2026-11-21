@@ -526,8 +526,8 @@ void DXFramebuffer::ClearRenderTargets(const ClearColor& color_value,
 {
   if (m_rtv_descriptor)
   {
-    g_dx_context->GetCommandList()->ClearRenderTargetView(
-        m_rtv_descriptor.cpu_handle, color_value.data(), rectangle ? 1 : 0, rectangle);
+    g_dx_context->GetCommandList()->ClearRenderTargetView(m_rtv_descriptor.cpu_handle, color_value,
+                                                          rectangle ? 1 : 0, rectangle);
   }
 }
 

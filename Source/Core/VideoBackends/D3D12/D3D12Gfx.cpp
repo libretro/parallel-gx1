@@ -130,11 +130,10 @@ void Gfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool color_enab
     {
       d3d_frame_buffer->TransitionRenderTargets();
 
-      const std::array<float, 4> clear_color = {
-          {static_cast<float>((color >> 16) & 0xFF) / 255.0f,
-           static_cast<float>((color >> 8) & 0xFF) / 255.0f,
-           static_cast<float>((color >> 0) & 0xFF) / 255.0f,
-           static_cast<float>((color >> 24) & 0xFF) / 255.0f}};
+      const ClearColor clear_color = {static_cast<float>((color >> 16) & 0xFF) / 255.0f,
+                                      static_cast<float>((color >> 8) & 0xFF) / 255.0f,
+                                      static_cast<float>((color >> 0) & 0xFF) / 255.0f,
+                                      static_cast<float>((color >> 24) & 0xFF) / 255.0f};
       d3d_frame_buffer->ClearRenderTargets(clear_color, &d3d_clear_rc);
       color_enable = false;
       alpha_enable = false;
@@ -654,7 +653,7 @@ void Gfx::UpdateDescriptorTables()
 
 bool Gfx::UpdateSRVDescriptorTable()
 {
-  static constexpr std::array<UINT, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> src_sizes = {
+  static constexpr UINT src_sizes[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS] = {
       1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   DescriptorHandle dst_base_handle;
   const UINT dst_handle_sizes = VideoCommon::MAX_PIXEL_SHADER_SAMPLERS;
@@ -664,7 +663,7 @@ bool Gfx::UpdateSRVDescriptorTable()
 
   g_dx_context->GetDevice()->CopyDescriptors(
       1, &dst_base_handle.cpu_handle, &dst_handle_sizes, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS,
-      m_state.textures.data(), src_sizes.data(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+      m_state.textures, src_sizes, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
   m_state.srv_descriptor_base = dst_base_handle.gpu_handle;
   m_dirty_bits = (m_dirty_bits & ~DirtyState_Textures) | DirtyState_SRV_Descriptor;
   return true;

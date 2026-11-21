@@ -9,7 +9,6 @@
 #include "VideoCommon/TextureConfig.h"
 #include "VideoCommon/VideoCommon.h"
 
-#include <array>
 #include <memory>
 #include <tuple>
 
@@ -31,8 +30,6 @@ extern bool g_frontend_takes_frames;
 class Presenter final
 {
 public:
-  using ClearColor = std::array<float, 4>;
-
   Presenter();
   ~Presenter();
   Presenter(const Presenter&) = delete;

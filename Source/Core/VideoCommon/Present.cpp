@@ -823,7 +823,7 @@ void Presenter::Present()
   }
 
   g_gfx->BeginUtilityDrawing();
-  const bool backbuffer_bound = g_gfx->BindBackbuffer({{0.0f, 0.0f, 0.0f, 1.0f}});
+  const bool backbuffer_bound = g_gfx->BindBackbuffer({0.0f, 0.0f, 0.0f, 1.0f});
 
   // Render the XFB to the screen.
   if (backbuffer_bound && m_xfb_entry)

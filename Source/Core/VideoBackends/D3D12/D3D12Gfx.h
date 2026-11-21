@@ -161,8 +161,8 @@ private:
   {
     ID3D12RootSignature* root_signature = nullptr;
     DXShader* compute_shader = nullptr;
-    std::array<D3D12_GPU_VIRTUAL_ADDRESS, 4> constant_buffers = {};
-    std::array<D3D12_CPU_DESCRIPTOR_HANDLE, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> textures = {};
+    D3D12_GPU_VIRTUAL_ADDRESS constant_buffers[4] = {};
+    D3D12_CPU_DESCRIPTOR_HANDLE textures[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS] = {};
     D3D12_CPU_DESCRIPTOR_HANDLE vs_srv = {};
     D3D12_CPU_DESCRIPTOR_HANDLE ps_uav = {};
     SamplerStateSet samplers = {};

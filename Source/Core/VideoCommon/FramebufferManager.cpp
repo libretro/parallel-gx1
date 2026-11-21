@@ -299,7 +299,7 @@ bool FramebufferManager::CreateEFBFramebuffer(int efb_scale)
   }
 
   // Clear the renderable textures out.
-  g_gfx->SetAndClearFramebuffer(m_efb_framebuffer, {{0.0f, 0.0f, 0.0f, 0.0f}},
+  g_gfx->SetAndClearFramebuffer(m_efb_framebuffer, {0.0f, 0.0f, 0.0f, 0.0f},
                                 g_backend_info.bSupportsReversedDepthRange ? 1.0f : 0.0f);
 
   // Pixel Shader uses EFB scale as a constant, dirty that in case it changed
@@ -1229,7 +1229,7 @@ void FramebufferManager::DoLoadState(PointerWrap& p)
       color_tex.texture->GetLayers() != m_efb_color_texture->GetLayers())
   {
     WARN_LOG(VIDEO, "Failed to deserialize EFB contents. Clearing instead.");
-    g_gfx->SetAndClearFramebuffer(m_efb_framebuffer, {{0.0f, 0.0f, 0.0f, 0.0f}},
+    g_gfx->SetAndClearFramebuffer(m_efb_framebuffer, {0.0f, 0.0f, 0.0f, 0.0f},
                                   g_backend_info.bSupportsReversedDepthRange ? 1.0f : 0.0f);
     FreeDeserialized(color_tex);
     FreeDeserialized(depth_tex);

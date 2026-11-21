@@ -375,7 +375,7 @@ void DXFramebuffer::Clear(const ClearColor& color_value, float depth_value)
   }
 
   if (m_rtv)
-    D3D::context->ClearRenderTargetView(m_rtv.Get(), color_value.data());
+    D3D::context->ClearRenderTargetView(m_rtv.Get(), color_value);
 }
 
 DXFramebuffer*

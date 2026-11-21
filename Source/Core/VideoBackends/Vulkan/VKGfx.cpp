@@ -366,7 +366,7 @@ void VKGfx::SetAndClearFramebuffer(AbstractFramebuffer* framebuffer, const Clear
   BindFramebuffer(vkfb);
 
   VkClearValue clear_color_value;
-  std::memcpy(clear_color_value.color.float32, color_value.data(),
+  std::memcpy(clear_color_value.color.float32, color_value,
               sizeof(clear_color_value.color.float32));
   VkClearValue clear_depth_value;
   clear_depth_value.depthStencil.depth = depth_value;

@@ -9,7 +9,6 @@
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/ShaderBuild.h"
 
-#include <array>
 #include <memory>
 #include <vector>
 
@@ -35,7 +34,7 @@ struct SurfaceInfo
   AbstractTextureFormat format = {};
 };
 
-using ClearColor = std::array<float, 4>;
+typedef float ClearColor[4];
 
 // AbstractGfx is the root of Dolphin's Graphics API abstraction layer.
 //
