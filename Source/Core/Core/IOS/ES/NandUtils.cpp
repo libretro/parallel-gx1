@@ -136,12 +136,12 @@ static std::vector<u64> GetTitlesInTitleOrImport(FS::FileSystem* fs, const std::
 
 std::vector<u64> ESCore::GetInstalledTitles() const
 {
-  return GetTitlesInTitleOrImport(m_ios.GetFS().get(), "/title");
+  return GetTitlesInTitleOrImport(m_ios.GetFS(), "/title");
 }
 
 std::vector<u64> ESCore::GetTitleImports() const
 {
-  return GetTitlesInTitleOrImport(m_ios.GetFS().get(), "/import");
+  return GetTitlesInTitleOrImport(m_ios.GetFS(), "/import");
 }
 
 std::vector<u64> ESCore::GetTitlesWithTickets() const
@@ -354,7 +354,7 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
               (u64)tmd.GetTitleId());
     return false;
   }
-  DeleteDirectoriesIfEmpty(m_ios.GetFS().get(), import_content_dir);
+  DeleteDirectoriesIfEmpty(m_ios.GetFS(), import_content_dir);
   return true;
 }
 
@@ -416,8 +416,8 @@ void ESCore::FinishStaleImport(u64 title_id)
   if (!import_tmd.IsValid())
   {
     fs->Delete(PID_KERNEL, PID_KERNEL, Common::GetImportTitlePath(title_id) + "/content");
-    DeleteDirectoriesIfEmpty(fs.get(), Common::GetImportTitlePath(title_id));
-    DeleteDirectoriesIfEmpty(fs.get(), Common::GetTitlePath(title_id));
+    DeleteDirectoriesIfEmpty(fs, Common::GetImportTitlePath(title_id));
+    DeleteDirectoriesIfEmpty(fs, Common::GetTitlePath(title_id));
   }
   else
   {

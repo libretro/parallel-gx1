@@ -319,7 +319,7 @@ private:
   struct Entry;
   u32 m_last_id = 0;
   std::vector<Entry> m_entries;
-  std::shared_ptr<HLE::FS::FileSystem> m_fs;
+  HLE::FS::FileSystem* m_fs;  // not owning: the kernel's FS
   u64 m_ticks = 0;
 };
 
@@ -335,7 +335,7 @@ public:
   u64 GetTicks() const { return m_ticks; }
 
 private:
-  std::shared_ptr<HLE::FS::FileSystem> m_fs;
+  HLE::FS::FileSystem* m_fs;  // not owning: the kernel's FS
   std::map<u32, u64> m_entries;
   u64 m_ticks = 0;
 };

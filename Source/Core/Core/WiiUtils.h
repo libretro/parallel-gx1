@@ -38,7 +38,7 @@ enum class InstallType
 
 bool InstallWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad, InstallType type);
 
-std::shared_ptr<IOS::HLE::BluetoothEmuDevice> GetBluetoothEmuDevice();
+IOS::HLE::BluetoothEmuDevice* GetBluetoothEmuDevice();
 // Same as GetBluetoothEmuDevice, but for Bluetooth passthrough.
-std::shared_ptr<IOS::HLE::BluetoothRealDevice> GetBluetoothRealDevice();
+IOS::HLE::BluetoothRealDevice* GetBluetoothRealDevice();
 }  // namespace WiiUtils

@@ -133,9 +133,12 @@ public:
   // Not virtual: an emulation kernel is always owned, and destroyed, as one.
   ~Kernel();
 
+  Kernel(const Kernel&) = delete;
+  Kernel& operator=(const Kernel&) = delete;
+
   // These are *always* part of the IOS kernel and always available.
   // They are also the only available resource managers even before loading any module.
-  std::shared_ptr<FS::FileSystem> GetFS();
+  FS::FileSystem* GetFS();
   FSCore& GetFSCore();
   ESCore& GetESCore();
 
@@ -153,8 +156,9 @@ protected:
   u64 m_title_id = 0;
 
   IOSC m_iosc;
-  std::shared_ptr<FS::FileSystem> m_fs;
-  std::shared_ptr<WiiSockMan> m_socket_manager;
+  // Owned; outlives the devices, which are destroyed with the emulation kernel.
+  FS::FileSystem* m_fs = nullptr;
+  WiiSockMan* m_socket_manager = nullptr;  // owned
 };
 
 // HLE for an IOS tied to emulation: base kernel which may have additional modules loaded.
@@ -166,17 +170,18 @@ public:
 
   // Get a resource manager by name.
   // This only works for devices which are part of the device map.
-  std::shared_ptr<Device> GetDeviceByName(std::string_view device_name);
+  // Not owning, like every device pointer the kernel hands out.
+  Device* GetDeviceByName(const char* device_name);
   // Not owning: the device map or the descriptor table keeps the device alive.
   Device* GetDeviceByFileDescriptor(const u32 fd);
 
-  std::shared_ptr<ESDevice> GetESDevice();
+  ESDevice* GetESDevice();
 
   void DoState(PointerWrap& p);
   void UpdateDevices();
   void UpdateWantDeterminism(bool new_want_determinism);
 
-  std::shared_ptr<WiiSockMan> GetSocketManager();
+  WiiSockMan* GetSocketManager();
 
   void HandleIPCEvent(u64 userdata);
   void UpdateIPC();
@@ -201,7 +206,10 @@ private:
   void ExecuteIPCCommand(u32 address);
   IPCReply HandleIPCCommand(const Request& request);
 
-  void AddDevice(std::unique_ptr<Device> device);
+  // Takes ownership of a static device, replacing one of the same name.
+  void AddDevice(Device* device);
+  // Points a descriptor at device, destroying the OH0 device the descriptor owned, if any.
+  void SetDescriptor(u32 fd, Device* device);
 
   void AddStaticDevices();
   s32 GetFreeDeviceID();
@@ -210,9 +218,21 @@ private:
   Core::System& m_system;
 
   static constexpr u8 IPC_MAX_FDS = 0x18;
-  std::map<std::string, std::shared_ptr<Device>, std::less<>> m_device_map;
+  static constexpr u32 MAX_DEVICES = 64;
+
+  struct DeviceEntry
+  {
+    Device* device;  // owned
+    u32 created;     // devices are destroyed newest first, so a device outlives later ones
+  };
+
+  // The static devices, sorted by name: their state is saved in this order.
+  DeviceEntry m_devices[MAX_DEVICES] = {};
+  u32 m_device_count = 0;
+  u32 m_devices_created = 0;
   // TODO: make this fdmap per process.
-  std::array<std::shared_ptr<Device>, IPC_MAX_FDS> m_fdmap;
+  // A static device, or an OH0 device the descriptor owns.
+  Device* m_fdmap[IPC_MAX_FDS] = {};
 
   u32 m_ppc_uid = 0;
   u16 m_ppc_gid = 0;

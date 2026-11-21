@@ -238,7 +238,7 @@ void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data)
   // even upon the first launch as they are normally created by the system menu.
   // Because we do not require the system menu to be run, WiiConnect24 files must be copied
   // to the NAND manually.
-  if (!CopySysmenuFilesToFS(fs.get(), File::GetSysDirectory() + WII_USER_DIR, ""))
+  if (!CopySysmenuFilesToFS(fs, File::GetSysDirectory() + WII_USER_DIR, ""))
     WARN_LOG(CORE, "Failed to copy initial System Menu files to the NAND");
 
   if (WiiRootIsTemporary())
@@ -266,7 +266,7 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
   const auto configured_fs = FS::MakeFileSystem(FS::Location::Configured);
 
   // Copy back Mii data
-  if (!CopyNandFile(ios->GetFS().get(), Common::GetMiiDatabasePath(), configured_fs.get(),
+  if (!CopyNandFile(ios->GetFS(), Common::GetMiiDatabasePath(), configured_fs.get(),
                     Common::GetMiiDatabasePath()))
   {
     WARN_LOG(CORE, "Failed to copy Mii database to the NAND");
@@ -276,7 +276,7 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
   {
     INFO_LOG(CORE, "Wii FS Cleanup: Copying %016" PRIx64 ".", (u64)title_id);
 
-    const auto session_save = WiiSave::MakeNandStorage(ios->GetFS().get(), title_id);
+    const auto session_save = WiiSave::MakeNandStorage(ios->GetFS(), title_id);
 
     // FS won't write the save if the directory doesn't exist
     const std::string title_path = Common::GetTitleDataPath(title_id);

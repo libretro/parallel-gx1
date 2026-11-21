@@ -20,7 +20,7 @@ namespace NWC24
 class NWC24Dl final
 {
 public:
-  explicit NWC24Dl(std::shared_ptr<FS::FileSystem> fs);
+  explicit NWC24Dl(FS::FileSystem* fs);
 
   bool ReadDlList();
   void WriteDlList() const;
@@ -129,7 +129,7 @@ private:
   };
 #pragma pack(pop)
 
-  std::shared_ptr<FS::FileSystem> m_fs;
+  FS::FileSystem* m_fs;  // not owning: the kernel's FS outlives its devices
   DLList m_data;
   bool m_is_disabled = false;
 };

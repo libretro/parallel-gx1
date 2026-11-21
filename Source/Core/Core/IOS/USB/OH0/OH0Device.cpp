@@ -37,7 +37,7 @@ OH0Device::OH0Device(EmulationKernel& ios, const std::string& name)
 
 void OH0Device::DoState(PointerWrap& p)
 {
-  m_oh0 = std::static_pointer_cast<OH0>(GetEmulationKernel().GetDeviceByName("/dev/usb/oh0"));
+  m_oh0 = static_cast<OH0*>(GetEmulationKernel().GetDeviceByName("/dev/usb/oh0"));
   Device::DoState(p);
   p.Do(m_vid);
   p.Do(m_pid);
@@ -49,7 +49,7 @@ IPCReply OH0Device::Open(const OpenRequest& request)
   if (m_vid == 0 && m_pid == 0)
     return IPCReply(IPC_ENOENT);
 
-  m_oh0 = std::static_pointer_cast<OH0>(GetEmulationKernel().GetDeviceByName("/dev/usb/oh0"));
+  m_oh0 = static_cast<OH0*>(GetEmulationKernel().GetDeviceByName("/dev/usb/oh0"));
 
   ReturnCode return_code;
   std::tie(return_code, m_device_id) = m_oh0->DeviceOpen(m_vid, m_pid);

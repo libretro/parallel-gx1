@@ -84,7 +84,7 @@ public:
     return ReadBytes(fd, reinterpret_cast<u8*>(data), static_cast<u32>(sizeof(T) * count), ticks);
   }
 
-  std::shared_ptr<FS::FileSystem> GetFS() const { return m_ios.GetFS(); }
+  FS::FileSystem* GetFS() const { return m_ios.GetFS(); }
 
 private:
   struct Handle

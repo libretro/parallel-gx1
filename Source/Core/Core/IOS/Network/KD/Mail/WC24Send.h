@@ -31,7 +31,7 @@ constexpr const char SEND_BOX_PATH[] = "/" WII_WC24CONF_DIR "/mbox"
 class WC24SendList final
 {
 public:
-  explicit WC24SendList(std::shared_ptr<FS::FileSystem> fs);
+  explicit WC24SendList(FS::FileSystem* fs);
 
   bool ReadSendList();
   bool CheckSendList() const;
@@ -96,7 +96,7 @@ private:
 #pragma pack(pop)
 
   SendList m_data;
-  std::shared_ptr<FS::FileSystem> m_fs;
+  FS::FileSystem* m_fs;  // not owning: the kernel's FS outlives its devices
   bool m_is_disabled = false;
 };
 }  // namespace NWC24::Mail

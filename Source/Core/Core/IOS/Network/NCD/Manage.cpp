@@ -18,7 +18,7 @@ namespace IOS::HLE
 NetNCDManageDevice::NetNCDManageDevice(EmulationKernel& ios, const std::string& device_name)
     : EmulationDevice(ios, device_name)
 {
-  config.ReadConfig(ios.GetFS().get());
+  config.ReadConfig(ios.GetFS());
 }
 
 void NetNCDManageDevice::DoState(PointerWrap& p)
@@ -98,14 +98,14 @@ IPCReply NetNCDManageDevice::IOCtlV(const IOCtlVRequest& request)
 
   case IOCTLV_NCD_READCONFIG:
     INFO_LOG(IOS_NET, "NET_NCD_MANAGE: IOCTLV_NCD_READCONFIG");
-    config.ReadConfig(m_ios.GetFS().get());
+    config.ReadConfig(m_ios.GetFS());
     config.WriteToMem(memory, request.io_vectors.at(0).address);
     break;
 
   case IOCTLV_NCD_WRITECONFIG:
     INFO_LOG(IOS_NET, "NET_NCD_MANAGE: IOCTLV_NCD_WRITECONFIG");
     config.ReadFromMem(memory, request.in_vectors.at(0).address);
-    config.WriteConfig(m_ios.GetFS().get());
+    config.WriteConfig(m_ios.GetFS());
     break;
 
   case IOCTLV_NCD_GETLINKSTATUS:

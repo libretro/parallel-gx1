@@ -17,7 +17,7 @@
 
 namespace IOS::HLE::NWC24::Mail
 {
-WC24FriendList::WC24FriendList(std::shared_ptr<FS::FileSystem> fs) : m_fs{std::move(fs)}
+WC24FriendList::WC24FriendList(FS::FileSystem* fs) : m_fs{fs}
 {
   ReadFriendList();
 }

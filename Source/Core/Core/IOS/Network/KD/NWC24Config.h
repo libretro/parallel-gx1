@@ -48,7 +48,7 @@ enum class NWC24CreationStage : u32
 class NWC24Config final
 {
 public:
-  explicit NWC24Config(std::shared_ptr<FS::FileSystem> fs);
+  explicit NWC24Config(FS::FileSystem* fs);
 
   void ReadConfig();
   void WriteCBK() const;
@@ -124,7 +124,7 @@ private:
   };
 #pragma pack(pop)
 
-  std::shared_ptr<FS::FileSystem> m_fs;
+  FS::FileSystem* m_fs;  // not owning: the kernel's FS outlives its devices
   ConfigData m_data;
 };
 }  // namespace NWC24

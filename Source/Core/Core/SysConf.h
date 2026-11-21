@@ -25,7 +25,7 @@ class FileSystem;
 class SysConf final
 {
 public:
-  explicit SysConf(std::shared_ptr<IOS::HLE::FS::FileSystem> fs);
+  explicit SysConf(IOS::HLE::FS::FileSystem* fs);
   ~SysConf();
 
   void Clear();
@@ -97,5 +97,5 @@ private:
   bool LoadFromFile(const IOS::HLE::FS::FileHandle& file);
 
   std::vector<Entry> m_entries;
-  std::shared_ptr<IOS::HLE::FS::FileSystem> m_fs;
+  IOS::HLE::FS::FileSystem* m_fs;  // not owning
 };

@@ -372,7 +372,7 @@ IPCReply WFSIDevice::IOCtl(const IOCtlRequest& request)
     auto device = GetEmulationKernel().GetDeviceByName("/dev/usb/wfssrv");
     if (!device)
       break;
-    std::static_pointer_cast<WFSSRVDevice>(device)->SetHomeDir(homedir_path);
+    static_cast<WFSSRVDevice*>(device)->SetHomeDir(homedir_path);
     return_error_code = IPC_SUCCESS;
     break;
   }

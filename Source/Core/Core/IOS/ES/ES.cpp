@@ -876,7 +876,7 @@ ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& 
   const auto fs = kernel.GetFS();
   if (!m_core.FindInstalledTMD(tmd.GetTitleId()).IsValid())
   {
-    if (const ReturnCode ret = WriteTmdForDiVerify(fs.get(), tmd))
+    if (const ReturnCode ret = WriteTmdForDiVerify(fs, tmd))
     {
       ERROR_LOG(IOS_ES, "DiVerify failed to write disc TMD to NAND.");
       return ret;

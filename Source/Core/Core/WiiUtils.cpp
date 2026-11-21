@@ -127,7 +127,7 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
   // Under normal conditions, these two log files are created by the Wii Shop channel at some point
   // during the process of downloading a game, and some games (eg. Mega Man 9) refuse to load DLC if
   // they are not present. So ensure they exist and create them if they don't.
-  if (!CreateShopLogs(fs.get()))
+  if (!CreateShopLogs(fs))
   {
     PanicAlert("WAD installation failed: Could not create Wii Shop log files.");
     return false;
@@ -191,23 +191,23 @@ bool InstallWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad, InstallType
   return true;
 }
 
-static std::shared_ptr<IOS::HLE::Device> GetBluetoothDevice()
+static IOS::HLE::Device* GetBluetoothDevice()
 {
   auto* ios = Core::System::GetInstance().GetIOS();
   return ios ? ios->GetDeviceByName("/dev/usb/oh1/57e/305") : nullptr;
 }
 
-std::shared_ptr<IOS::HLE::BluetoothEmuDevice> GetBluetoothEmuDevice()
+IOS::HLE::BluetoothEmuDevice* GetBluetoothEmuDevice()
 {
   if (Config::Get(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED))
     return nullptr;
-  return std::static_pointer_cast<IOS::HLE::BluetoothEmuDevice>(GetBluetoothDevice());
+  return static_cast<IOS::HLE::BluetoothEmuDevice*>(GetBluetoothDevice());
 }
 
-std::shared_ptr<IOS::HLE::BluetoothRealDevice> GetBluetoothRealDevice()
+IOS::HLE::BluetoothRealDevice* GetBluetoothRealDevice()
 {
   if (!Config::Get(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED))
     return nullptr;
-  return std::static_pointer_cast<IOS::HLE::BluetoothRealDevice>(GetBluetoothDevice());
+  return static_cast<IOS::HLE::BluetoothRealDevice*>(GetBluetoothDevice());
 }
 }  // namespace WiiUtils

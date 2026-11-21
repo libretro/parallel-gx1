@@ -172,7 +172,7 @@ bool TriggerSTMPowerEvent()
     return false;
 
   const auto stm = ios->GetDeviceByName("/dev/stm/eventhook");
-  if (!stm || !std::static_pointer_cast<IOS::HLE::STMEventHookDevice>(stm)->HasHookInstalled())
+  if (!stm || !static_cast<IOS::HLE::STMEventHookDevice*>(stm)->HasHookInstalled())
     return false;
 
   Core::DisplayMessage("Shutting down");

@@ -24,7 +24,7 @@ constexpr const char FRIEND_LIST_PATH[] = "/" WII_WC24CONF_DIR "/nwc24fl.bin";
 class WC24FriendList final
 {
 public:
-  explicit WC24FriendList(std::shared_ptr<FS::FileSystem> fs);
+  explicit WC24FriendList(FS::FileSystem* fs);
 
   void ReadFriendList();
   bool CheckFriendList() const;
@@ -85,7 +85,7 @@ private:
 #pragma pack(pop)
 
   FriendList m_data;
-  std::shared_ptr<FS::FileSystem> m_fs;
+  FS::FileSystem* m_fs;  // not owning: the kernel's FS outlives its devices
 };
 }  // namespace NWC24::Mail
 }  // namespace IOS::HLE

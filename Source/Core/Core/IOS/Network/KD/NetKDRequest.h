@@ -33,7 +33,7 @@ class NetKDRequestDevice : public EmulationDevice
 {
 public:
   NetKDRequestDevice(EmulationKernel& ios, const std::string& device_name,
-                     const std::shared_ptr<NetKDTimeDevice>& time_device);
+                     NetKDTimeDevice* time_device);
   IPCReply HandleNWC24DownloadNowEx(const IOCtlRequest& request);
   NWC24::ErrorCode KDDownload(const u16 entry_index, const std::optional<u8> subtask_id);
   IPCReply HandleNWC24CheckMailNow(const IOCtlRequest& request);
@@ -127,7 +127,7 @@ private:
   mpsc_stack_t m_async_replies{};
   retro_atomic_int_t m_error_count{};
   std::array<retro_atomic_int_t, 256> m_scheduler_buffer{};
-  std::shared_ptr<NetKDTimeDevice> m_time_device;
+  NetKDTimeDevice* m_time_device;  // made before this device, so destroyed after it
   // TODO: Maybe move away from Common::HttpRequest?
   Common::HttpRequest m_http{60 * 1000};
   // Minutes between scheduled tasks, set by the workers from server replies.

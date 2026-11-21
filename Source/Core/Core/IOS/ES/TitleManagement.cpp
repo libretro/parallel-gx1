@@ -102,7 +102,7 @@ ReturnCode ESCore::ImportTicket(const u8* ticket_bytes, size_t ticket_size, cons
       return verify_ret;
   }
 
-  const ReturnCode write_ret = WriteTicket(m_ios.GetFS().get(), ticket);
+  const ReturnCode write_ret = WriteTicket(m_ios.GetFS(), ticket);
   if (write_ret != IPC_SUCCESS)
     return write_ret;
 

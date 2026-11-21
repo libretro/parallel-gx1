@@ -299,8 +299,8 @@ public:
 };
 }  // namespace
 
-ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
-                     const std::shared_ptr<FS::FileSystem>& fs, const u8* data, size_t size)
+ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
+                     const u8* data, size_t size)
 {
   VffFatFsCallbacks callbacks;
   ErrorCode return_value;
@@ -354,8 +354,8 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename,
   return return_value;
 }
 
-ErrorCode ReadFromVFF(const std::string& path, const std::string& filename,
-                      const std::shared_ptr<FS::FileSystem>& fs, std::vector<u8>& out)
+ErrorCode ReadFromVFF(const std::string& path, const std::string& filename, FS::FileSystem* fs,
+                      std::vector<u8>& out)
 {
   VffFatFsCallbacks callbacks;
   ErrorCode return_value;
@@ -406,7 +406,7 @@ ErrorCode ReadFromVFF(const std::string& path, const std::string& filename,
 }
 
 ErrorCode DeleteFileFromVFF(const std::string& path, const std::string& filename,
-                            const std::shared_ptr<FS::FileSystem>& fs)
+                            FS::FileSystem* fs)
 {
   VffFatFsCallbacks callbacks;
   ErrorCode return_value;

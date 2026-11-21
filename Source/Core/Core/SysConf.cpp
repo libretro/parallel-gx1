@@ -33,7 +33,7 @@ static size_t GetNonArrayEntrySize(SysConf::Entry::Type type)
     return 0;
   }
 }
-SysConf::SysConf(std::shared_ptr<IOS::HLE::FS::FileSystem> fs) : m_fs{std::move(fs)}
+SysConf::SysConf(IOS::HLE::FS::FileSystem* fs) : m_fs{fs}
 {
   Load();
 }

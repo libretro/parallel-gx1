@@ -26,7 +26,7 @@ public:
   void DoState(PointerWrap& p) override;
 
 private:
-  std::shared_ptr<OH0> m_oh0;
+  OH0* m_oh0 = nullptr;  // a static device, which outlives the descriptors' devices
   u16 m_vid = 0;
   u16 m_pid = 0;
   u64 m_device_id = 0;

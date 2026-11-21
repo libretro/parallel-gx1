@@ -291,7 +291,7 @@ Kernel::Kernel(IOSC::ConsoleType console_type) : m_iosc(console_type)
   if (m_is_responsible_for_nand_root)
     Core::InitializeWiiRoot(false);
 
-  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session);
+  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session).release();
   ASSERT(m_fs);
 
   m_fs_core = std::make_unique<FSCore>(*this);
@@ -300,6 +300,7 @@ Kernel::Kernel(IOSC::ConsoleType console_type) : m_iosc(console_type)
 
 Kernel::~Kernel()
 {
+  delete m_fs;
   if (m_is_responsible_for_nand_root)
     Core::ShutdownWiiRoot();
 }
@@ -324,16 +325,16 @@ EmulationKernel::EmulationKernel(Core::System& system, u64 title_id)
     return;
   }
 
-  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session);
+  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session).release();
   ASSERT(m_fs);
 
-  AddDevice(std::make_unique<AesDevice>(*this, "/dev/aes"));
-  AddDevice(std::make_unique<ShaDevice>(*this, "/dev/sha"));
+  AddDevice(new AesDevice(*this, "/dev/aes"));
+  AddDevice(new ShaDevice(*this, "/dev/sha"));
 
   m_fs_core = std::make_unique<FSCore>(*this);
-  AddDevice(std::make_unique<FSDevice>(*this, *m_fs_core, "/dev/fs"));
+  AddDevice(new FSDevice(*this, *m_fs_core, "/dev/fs"));
   m_es_core = std::make_unique<ESCore>(*this);
-  AddDevice(std::make_unique<ESDevice>(*this, *m_es_core, "/dev/es"));
+  AddDevice(new ESDevice(*this, *m_es_core, "/dev/es"));
 
   AddStaticDevices();
 }
@@ -342,8 +343,25 @@ EmulationKernel::~EmulationKernel()
 {
   m_system.GetCoreTiming().RemoveAllEvents(s_event_enqueue);
 
-  m_device_map.clear();
-  m_socket_manager.reset();
+  // Descriptors' own devices first, then the static ones newest first: none outlives a device it
+  // uses.
+  for (u32 i = 0; i < IPC_MAX_FDS; i++)
+    SetDescriptor(i, nullptr);
+  while (m_device_count != 0)
+  {
+    u32 newest = 0;
+    for (u32 i = 1; i < m_device_count; i++)
+    {
+      if (m_devices[i].created > m_devices[newest].created)
+        newest = i;
+    }
+    delete m_devices[newest].device;
+    m_device_count--;
+    std::memmove(&m_devices[newest], &m_devices[newest + 1],
+                 (m_device_count - newest) * sizeof(m_devices[0]));
+  }
+  delete m_socket_manager;
+  m_socket_manager = nullptr;
   u32_deque_free(&m_reply_queue);
   u32_deque_free(&m_request_queue);
 }
@@ -356,7 +374,7 @@ u32 Kernel::GetVersion() const
   return static_cast<u32>(m_title_id);
 }
 
-std::shared_ptr<FS::FileSystem> Kernel::GetFS()
+FS::FileSystem* Kernel::GetFS()
 {
   return m_fs;
 }
@@ -371,12 +389,14 @@ ESCore& Kernel::GetESCore()
   return *m_es_core;
 }
 
-std::shared_ptr<ESDevice> EmulationKernel::GetESDevice()
+ESDevice* EmulationKernel::GetESDevice()
 {
-  return std::static_pointer_cast<ESDevice>(m_device_map.at("/dev/es"));
+  Device* const device = GetDeviceByName("/dev/es");
+  ASSERT(device);
+  return static_cast<ESDevice*>(device);
 }
 
-std::shared_ptr<WiiSockMan> EmulationKernel::GetSocketManager()
+WiiSockMan* EmulationKernel::GetSocketManager()
 {
   return m_socket_manager;
 }
@@ -558,10 +578,41 @@ void EmulationKernel::InitIPC()
   m_system.GetWiiIPC().GenerateAck(0);
 }
 
-void EmulationKernel::AddDevice(std::unique_ptr<Device> device)
+void EmulationKernel::AddDevice(Device* device)
 {
   ASSERT(device->GetDeviceType() == Device::DeviceType::Static);
-  m_device_map.insert_or_assign(device->GetDeviceName(), std::move(device));
+  const char* const name = device->GetDeviceName().c_str();
+
+  // The first entry not ordered before name.
+  u32 index = 0;
+  while (index != m_device_count &&
+         std::strcmp(m_devices[index].device->GetDeviceName().c_str(), name) < 0)
+  {
+    index++;
+  }
+
+  if (index != m_device_count &&
+      std::strcmp(m_devices[index].device->GetDeviceName().c_str(), name) == 0)
+  {
+    delete m_devices[index].device;
+  }
+  else
+  {
+    ASSERT(m_device_count < MAX_DEVICES);
+    std::memmove(&m_devices[index + 1], &m_devices[index],
+                 (m_device_count - index) * sizeof(m_devices[0]));
+    m_device_count++;
+  }
+  m_devices[index].device = device;
+  m_devices[index].created = m_devices_created++;
+}
+
+void EmulationKernel::SetDescriptor(u32 fd, Device* device)
+{
+  Device* const old = m_fdmap[fd];
+  m_fdmap[fd] = device;
+  if (old && old != device && old->GetDeviceType() == Device::DeviceType::OH0)
+    delete old;
 }
 
 void EmulationKernel::AddStaticDevices()
@@ -569,60 +620,58 @@ void EmulationKernel::AddStaticDevices()
   const Feature features = GetFeatures(GetVersion());
 
   // Dolphin-specific device for letting homebrew access and alter emulator state.
-  AddDevice(std::make_unique<DolphinDevice>(*this, "/dev/dolphin"));
+  AddDevice(new DolphinDevice(*this, "/dev/dolphin"));
 
   // OH1 (Bluetooth)
-  AddDevice(std::make_unique<DeviceStub>(*this, "/dev/usb/oh1"));
+  AddDevice(new DeviceStub(*this, "/dev/usb/oh1"));
   if (!Config::Get(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED))
-    AddDevice(std::make_unique<BluetoothEmuDevice>(*this, "/dev/usb/oh1/57e/305"));
+    AddDevice(new BluetoothEmuDevice(*this, "/dev/usb/oh1/57e/305"));
   else
-    AddDevice(std::make_unique<BluetoothRealDevice>(*this, "/dev/usb/oh1/57e/305"));
+    AddDevice(new BluetoothRealDevice(*this, "/dev/usb/oh1/57e/305"));
 
   // Other core modules
-  AddDevice(std::make_unique<STMImmediateDevice>(*this, "/dev/stm/immediate"));
-  AddDevice(std::make_unique<STMEventHookDevice>(*this, "/dev/stm/eventhook"));
-  AddDevice(std::make_unique<DIDevice>(*this, "/dev/di"));
-  AddDevice(std::make_unique<SDIOSlot0Device>(*this, "/dev/sdio/slot0"));
-  AddDevice(std::make_unique<DeviceStub>(*this, "/dev/sdio/slot1"));
+  AddDevice(new STMImmediateDevice(*this, "/dev/stm/immediate"));
+  AddDevice(new STMEventHookDevice(*this, "/dev/stm/eventhook"));
+  AddDevice(new DIDevice(*this, "/dev/di"));
+  AddDevice(new SDIOSlot0Device(*this, "/dev/sdio/slot0"));
+  AddDevice(new DeviceStub(*this, "/dev/sdio/slot1"));
 
   // Network modules
   if (HasFeature(features, Feature::KD) || HasFeature(features, Feature::SO) ||
       HasFeature(features, Feature::SSL))
   {
-    m_socket_manager = std::make_shared<IOS::HLE::WiiSockMan>(*this);
+    m_socket_manager = new IOS::HLE::WiiSockMan(*this);
   }
   if (HasFeature(features, Feature::KD))
   {
-    constexpr auto time_device_name = "/dev/net/kd/time";
-    AddDevice(std::make_unique<NetKDTimeDevice>(*this, time_device_name));
-    const auto time_device =
-        std::static_pointer_cast<NetKDTimeDevice>(GetDeviceByName(time_device_name));
-    AddDevice(std::make_unique<NetKDRequestDevice>(*this, "/dev/net/kd/request", time_device));
+    NetKDTimeDevice* const time_device = new NetKDTimeDevice(*this, "/dev/net/kd/time");
+    AddDevice(time_device);
+    AddDevice(new NetKDRequestDevice(*this, "/dev/net/kd/request", time_device));
   }
   if (HasFeature(features, Feature::NCD))
   {
-    AddDevice(std::make_unique<NetNCDManageDevice>(*this, "/dev/net/ncd/manage"));
+    AddDevice(new NetNCDManageDevice(*this, "/dev/net/ncd/manage"));
   }
   if (HasFeature(features, Feature::WiFi))
   {
-    AddDevice(std::make_unique<NetWDCommandDevice>(*this, "/dev/net/wd/command"));
+    AddDevice(new NetWDCommandDevice(*this, "/dev/net/wd/command"));
   }
   if (HasFeature(features, Feature::SO))
   {
-    AddDevice(std::make_unique<NetIPTopDevice>(*this, "/dev/net/ip/top"));
+    AddDevice(new NetIPTopDevice(*this, "/dev/net/ip/top"));
   }
   if (HasFeature(features, Feature::SSL))
   {
-    AddDevice(std::make_unique<NetSSLDevice>(*this, "/dev/net/ssl"));
+    AddDevice(new NetSSLDevice(*this, "/dev/net/ssl"));
   }
 
   // USB modules
   // OH0 is unconditionally added because this device path is registered in all cases.
-  AddDevice(std::make_unique<OH0>(*this, "/dev/usb/oh0"));
+  AddDevice(new OH0(*this, "/dev/usb/oh0"));
   if (HasFeature(features, Feature::NewUSB))
   {
-    AddDevice(std::make_unique<USB_HIDv5>(*this, "/dev/usb/hid"));
-    AddDevice(std::make_unique<USB_VEN>(*this, "/dev/usb/ven"));
+    AddDevice(new USB_HIDv5(*this, "/dev/usb/hid"));
+    AddDevice(new USB_VEN(*this, "/dev/usb/ven"));
 
     // TODO(IOS): register /dev/usb/usb, /dev/usb/msc, /dev/usb/hub and /dev/usb/ehc
     //            as stubs that return IPC_EACCES.
@@ -630,15 +679,15 @@ void EmulationKernel::AddStaticDevices()
   else
   {
     if (HasFeature(features, Feature::USB_HIDv4))
-      AddDevice(std::make_unique<USB_HIDv4>(*this, "/dev/usb/hid"));
+      AddDevice(new USB_HIDv4(*this, "/dev/usb/hid"));
     if (HasFeature(features, Feature::USB_KBD))
-      AddDevice(std::make_unique<USB_KBD>(*this, "/dev/usb/kbd"));
+      AddDevice(new USB_KBD(*this, "/dev/usb/kbd"));
   }
 
   if (HasFeature(features, Feature::WFS))
   {
-    AddDevice(std::make_unique<WFSSRVDevice>(*this, "/dev/usb/wfssrv"));
-    AddDevice(std::make_unique<WFSIDevice>(*this, "/dev/wfsi"));
+    AddDevice(new WFSSRVDevice(*this, "/dev/usb/wfssrv"));
+    AddDevice(new WFSIDevice(*this, "/dev/wfsi"));
   }
 }
 
@@ -655,23 +704,35 @@ s32 EmulationKernel::GetFreeDeviceID()
   return -1;
 }
 
-std::shared_ptr<Device> EmulationKernel::GetDeviceByName(std::string_view device_name)
+Device* EmulationKernel::GetDeviceByName(const char* device_name)
 {
-  const auto iterator = m_device_map.find(device_name);
-  return iterator != m_device_map.end() ? iterator->second : nullptr;
+  u32 low = 0;
+  u32 high = m_device_count;
+  while (low < high)
+  {
+    const u32 mid = low + (high - low) / 2;
+    const int order = std::strcmp(m_devices[mid].device->GetDeviceName().c_str(), device_name);
+    if (order == 0)
+      return m_devices[mid].device;
+    if (order < 0)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  return nullptr;
 }
 
 Device* EmulationKernel::GetDeviceByFileDescriptor(const u32 fd)
 {
   if (fd < IPC_MAX_FDS)
-    return m_fdmap[fd].get();
+    return m_fdmap[fd];
 
   switch (fd)
   {
   case 0x10000:
-    return GetDeviceByName("/dev/aes").get();
+    return GetDeviceByName("/dev/aes");
   case 0x10001:
-    return GetDeviceByName("/dev/sha").get();
+    return GetDeviceByName("/dev/sha");
   default:
     return nullptr;
   }
@@ -690,11 +751,12 @@ IPCReply EmulationKernel::OpenDevice(OpenRequest& request)
   }
   request.fd = new_fd;
 
-  std::shared_ptr<Device> device;
+  Device* device = nullptr;
   if (std::strncmp(request.path, "/dev/usb/oh0/", 13) == 0 && !GetDeviceByName(request.path) &&
       !HasFeature(GetVersion(), Feature::NewUSB))
   {
-    device = std::make_shared<OH0Device>(*this, request.path);
+    // Owned by the descriptor once it opens.
+    device = new OH0Device(*this, request.path);
   }
   else if (std::strncmp(request.path, "/dev/", 5) == 0)
   {
@@ -725,8 +787,12 @@ IPCReply EmulationKernel::OpenDevice(OpenRequest& request)
   IPCReply result = device->Open(request);
   if (result.has_reply && result.return_value >= IPC_SUCCESS)
   {
-    m_fdmap[new_fd] = device;
+    SetDescriptor(new_fd, device);
     result.return_value = new_fd;
+  }
+  else if (device->GetDeviceType() == Device::DeviceType::OH0)
+  {
+    delete device;
   }
   return result;
 }
@@ -755,7 +821,7 @@ IPCReply EmulationKernel::HandleIPCCommand(const Request& request)
     ret = device->Close(request.fd);
     // if the fd is not a special IOS FD, we need to reset it too
     if (request.fd < IPC_MAX_FDS)
-      m_fdmap[request.fd].reset();
+      SetDescriptor(request.fd, nullptr);
     break;
   case IPC_CMD_READ:
     ret = device->Read(ReadWriteRequest{GetSystem(), request.address});
@@ -864,11 +930,11 @@ void EmulationKernel::UpdateIPC()
 void EmulationKernel::UpdateDevices()
 {
   // Check if a hardware device must be updated
-  for (const auto& entry : m_device_map)
+  for (u32 i = 0; i < m_device_count; i++)
   {
-    if (entry.second->IsOpened())
+    if (m_devices[i].device->IsOpened())
     {
-      entry.second->Update();
+      m_devices[i].device->Update();
     }
   }
 }
@@ -877,8 +943,8 @@ void EmulationKernel::UpdateWantDeterminism(const bool new_want_determinism)
 {
   if (m_socket_manager)
     m_socket_manager->UpdateWantDeterminism(new_want_determinism);
-  for (const auto& device : m_device_map)
-    device.second->UpdateWantDeterminism(new_want_determinism);
+  for (u32 i = 0; i < m_device_count; i++)
+    m_devices[i].device->UpdateWantDeterminism(new_want_determinism);
 }
 
 void EmulationKernel::DoState(PointerWrap& p)
@@ -900,8 +966,8 @@ void EmulationKernel::DoState(PointerWrap& p)
   if (m_socket_manager)
     m_socket_manager->DoState(p);
 
-  for (const auto& entry : m_device_map)
-    entry.second->DoState(p);
+  for (u32 i = 0; i < m_device_count; i++)
+    m_devices[i].device->DoState(p);
 
   if (p.IsReadMode())
   {
@@ -919,20 +985,23 @@ void EmulationKernel::DoState(PointerWrap& p)
         {
           std::string device_name;
           p.Do(device_name);
-          m_fdmap[i] = GetDeviceByName(device_name);
+          SetDescriptor(i, GetDeviceByName(device_name.c_str()));
           break;
         }
         case Device::DeviceType::OH0:
-          m_fdmap[i] = std::make_shared<OH0Device>(*this, "");
-          m_fdmap[i]->DoState(p);
+        {
+          OH0Device* const device = new OH0Device(*this, "");
+          SetDescriptor(i, device);
+          device->DoState(p);
           break;
+        }
         }
       }
     }
   }
   else
   {
-    for (auto& descriptor : m_fdmap)
+    for (Device* descriptor : m_fdmap)
     {
       u32 exists = descriptor ? 1 : 0;
       p.Do(exists);
