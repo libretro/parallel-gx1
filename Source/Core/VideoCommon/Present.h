@@ -10,7 +10,6 @@
 #include "VideoCommon/VideoCommon.h"
 
 #include <memory>
-#include <tuple>
 
 #include <retro_atomic.h>
 
@@ -112,18 +111,18 @@ private:
 
   // Scales a raw XFB resolution to the target (display) aspect ratio,
   // also accounting for crop and other minor adjustments
-  std::tuple<int, int> CalculateOutputDimensions(int width, int height,
-                                                 bool allow_stretch = true) const;
-  std::tuple<float, float> ApplyStandardAspectCrop(float width, float height,
-                                                   bool allow_stretch = true) const;
+  void CalculateOutputDimensions(int width, int height, int* out_width, int* out_height,
+                                 bool allow_stretch = true) const;
+  // Crops width and height in place to the forced aspect ratio, if any
+  void ApplyStandardAspectCrop(float* width, float* height, bool allow_stretch = true) const;
   // Scales a raw XFB resolution to the target (display) aspect ratio
-  std::tuple<float, float> ScaleToDisplayAspectRatio(int width, int height,
-                                                     bool allow_stretch = true) const;
+  void ScaleToDisplayAspectRatio(int width, int height, float* out_width, float* out_height,
+                                 bool allow_stretch = true) const;
 
   // Use this to convert a single target rectangle to two stereo rectangles
-  std::tuple<MathUtil::Rectangle<int>, MathUtil::Rectangle<int>>
-  ConvertStereoRectangle(const MathUtil::Rectangle<int>& rc) const;
-
+  void ConvertStereoRectangle(const MathUtil::Rectangle<int>& rc,
+                              MathUtil::Rectangle<int>* out_left,
+                              MathUtil::Rectangle<int>* out_right) const;
 
   // Backbuffer (window) size and render area
   int m_backbuffer_width = 0;
