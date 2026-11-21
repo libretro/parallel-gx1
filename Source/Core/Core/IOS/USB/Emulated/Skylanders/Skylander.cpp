@@ -1104,8 +1104,9 @@ void SkylanderPortal::Activate()
   {
     if (s.status & 1)
     {
-      s.queued_status.push(Skylander::ADDED);
-      s.queued_status.push(Skylander::READY);
+      s.queued_status[0] = Skylander::ADDED;
+      s.queued_status[1] = Skylander::READY;
+      s.queued_status_count = 2;
     }
   }
 
@@ -1118,10 +1119,10 @@ void SkylanderPortal::Deactivate()
   for (auto& s : skylanders)
   {
     // check if at the end of the updates there would be a figure on the portal
-    if (!s.queued_status.empty())
+    if (s.queued_status_count)
     {
-      s.status = s.queued_status.back();
-      s.queued_status = std::queue<u8>();
+      s.status = s.queued_status[s.queued_status_count - 1];
+      s.queued_status_count = 0;
     }
 
     s.status &= 1;
@@ -1188,10 +1189,11 @@ std::array<u8, 64> SkylanderPortal::GetStatus()
   {
     auto& s = skylanders[i];
 
-    if (!s.queued_status.empty())
+    if (s.queued_status_count)
     {
-      s.status = s.queued_status.front();
-      s.queued_status.pop();
+      s.status = s.queued_status[0];
+      s.queued_status[0] = s.queued_status[1];
+      s.queued_status_count--;
     }
     status <<= 2;
     status |= s.status;

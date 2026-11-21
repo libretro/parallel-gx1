@@ -4,7 +4,6 @@
 #pragma once
 
 #include <map>
-#include <queue>
 #include <vector>
 
 #include <queues/retro_deque.h>
@@ -112,7 +111,9 @@ struct Skylander final
 {
   std::unique_ptr<SkylanderFigure> figure;
   u8 status = 0;
-  std::queue<u8> queued_status;
+  // The statuses still to report, oldest first; Activate queues two at most
+  u8 queued_status[2] = {};
+  u8 queued_status_count = 0;
   u32 last_id = 0;
 
   enum : u8
