@@ -133,7 +133,7 @@ static void SetAttribute(MTLVertexDescriptor* desc, ShaderAttrib attribute,
 
 template <size_t N>
 static void SetAttributes(MTLVertexDescriptor* desc, ShaderAttrib attribute,
-                          const std::array<AttributeFormat, N>& format)
+                          const AttributeFormat (&format)[N])
 {
   for (size_t i = 0; i < N; ++i)
     SetAttribute(desc, attribute + i, format[i]);

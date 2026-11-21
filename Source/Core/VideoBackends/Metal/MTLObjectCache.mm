@@ -280,8 +280,7 @@ public:
       }
     };
     template <size_t N>
-    static void CopyAll(std::array<VertexAttribute, N>& output,
-                        const std::array<AttributeFormat, N>& input)
+    static void CopyAll(VertexAttribute (&output)[N], const AttributeFormat (&input)[N])
     {
       for (size_t i = 0; i < N; ++i)
         output[i] = VertexAttribute(input[i]);
@@ -346,9 +345,9 @@ public:
 
     u8 v_stride;
     VertexAttribute v_position;
-    std::array<VertexAttribute, 3> v_normals;
-    std::array<VertexAttribute, 2> v_colors;
-    std::array<VertexAttribute, 8> v_texcoords;
+    VertexAttribute v_normals[3];
+    VertexAttribute v_colors[2];
+    VertexAttribute v_texcoords[8];
     VertexAttribute v_posmtx;
     const Shader* vertex_shader;
     const Shader* fragment_shader;
