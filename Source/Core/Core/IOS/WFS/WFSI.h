@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include <memory>
 #include <cstddef>
 #include <string>
@@ -26,9 +25,9 @@ public:
 
   void AddBytes(const u8* bytes, size_t size);
 
-  // a file's name and its octets, which stay valid until the callback returns
-  using WriteCallback = std::function<void(const std::string&, const u8*, size_t)>;
-  void Extract(const WriteCallback& callback);
+  // Hands each file to callback: its path and its octets, which stay valid until it returns
+  typedef void (*WriteCallback)(void* user, const char* filename, const u8* bytes, size_t size);
+  void Extract(WriteCallback callback, void* user);
 
 private:
   std::vector<u8> m_whole_file;
@@ -60,6 +59,7 @@ private:
 
   ES::TMDReader m_tmd;
   std::string m_base_extract_path;
+  static void ExtractFile(void* user, const char* filename, const u8* bytes, size_t size);
 
   u64 m_current_title_id = 0;
   std::string m_current_title_id_str;
