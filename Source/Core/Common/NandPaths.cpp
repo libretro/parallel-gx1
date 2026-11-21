@@ -209,6 +209,18 @@ static bool AppendEscapedFileName(char* out, size_t out_size, size_t* length, co
   return true;
 }
 
+bool EscapeFileNameTo(const char* name, size_t size, char* out, size_t out_size)
+{
+  size_t length = 0;
+  bool fits;
+  if (out_size == 0)
+    return false;
+  fits = AppendEscapedFileName(out, out_size, &length, name, size);
+  // An append that does not fit writes nothing, so what is there is whole and leaves room.
+  out[length] = '\0';
+  return fits;
+}
+
 bool EscapePathTo(const char* path, char* out, size_t out_size)
 {
   // As EscapePath: the path's '/'-separated parts escaped and joined by '/', where a part ends at

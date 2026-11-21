@@ -26,6 +26,7 @@
 #include "Common/IOFile.h"
 
 #include <compat/strl.h>
+#include <encodings/shiftjis.h>
 #include <streams/file_stream.h>
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
@@ -43,30 +44,27 @@
 
 static const char* MC_HDR = "MC_SYSTEM_AREA";
 
-static std::string GenerateDefaultGCIFilename(const Memcard::DEntry& entry,
-                                              bool card_encoding_is_shift_jis)
+// Writes the escaped "maker-game-file.gci" name of a save to out, each part decoded from the
+// card's encoding and cut at its first NUL; returns false when it had to be cut short.
+static bool GenerateDefaultGCIFilename(const Memcard::DEntry& entry,
+                                       bool card_encoding_is_shift_jis, char* out, size_t out_size)
 {
-  const auto string_decoder = card_encoding_is_shift_jis ? SHIFTJISToUTF8 : CP1252ToUTF8;
-  const auto strip_null = [](const std::string_view& s) {
-    const auto offset = s.find('\0');
-    if (offset == std::string_view::npos)
-      return s;
-    return s.substr(0, offset);
-  };
+  size_t (*const decode)(char*, size_t, const char*, size_t) =
+      card_encoding_is_shift_jis ? sjis_to_utf8 : cp1252_to_utf8;
+  char makercode[3 * sizeof(entry.m_makercode) + 1];
+  char gamecode[3 * sizeof(entry.m_gamecode) + 1];
+  char filename[3 * sizeof(entry.m_filename) + 1];
+  char name[sizeof(makercode) + sizeof(gamecode) + sizeof(filename) + 8];
 
-  const std::string_view makercode(reinterpret_cast<const char*>(entry.m_makercode.data()),
-                                   entry.m_makercode.size());
-  const std::string_view gamecode(reinterpret_cast<const char*>(entry.m_gamecode.data()),
-                                  entry.m_gamecode.size());
-  const std::string_view filename(reinterpret_cast<const char*>(entry.m_filename.data()),
-                                  entry.m_filename.size());
-  std::string name(strip_null(string_decoder(makercode)));
-  name += '-';
-  name += strip_null(string_decoder(gamecode));
-  name += '-';
-  name += strip_null(string_decoder(filename));
-  name += ".gci";
-  return Common::EscapeFileName(name);
+  // A part's decoding ends at its terminator or at a NUL it decoded, whichever is first.
+  decode(makercode, sizeof(makercode), reinterpret_cast<const char*>(entry.m_makercode.data()),
+         entry.m_makercode.size());
+  decode(gamecode, sizeof(gamecode), reinterpret_cast<const char*>(entry.m_gamecode.data()),
+         entry.m_gamecode.size());
+  decode(filename, sizeof(filename), reinterpret_cast<const char*>(entry.m_filename.data()),
+         entry.m_filename.size());
+  snprintf(name, sizeof(name), "%s-%s-%s.gci", makercode, gamecode, filename);
+  return Common::EscapeFileNameTo(name, std::strlen(name), out, out_size);
 }
 
 /* A string as a std::string was: a u32 length, then the characters */
@@ -690,22 +688,31 @@ void GCMemcardDirectory::QueueDirtySaves()
         }
         if (!save.HasFilename())
         {
-          std::string default_save_name =
-              m_save_directory + GenerateDefaultGCIFilename(save.m_gci_header, m_hdr.IsShiftJIS());
+          // The directory, then the generated name, both cut short to fit if they must.
+          char* const default_save_name = save.m_filename;
+          const size_t name_size = sizeof(save.m_filename);
+          strlcpy(default_save_name, m_save_directory, name_size);
+          const size_t directory_length = std::strlen(default_save_name);
+          GenerateDefaultGCIFilename(save.m_gci_header, m_hdr.IsShiftJIS(),
+                                     default_save_name + directory_length,
+                                     name_size - directory_length);
 
           // Check to see if another file is using the same name
           // This seems unlikely except in the case of file corruption
           // otherwise what user would name another file this way?
           for (int j = 0; File::Exists(default_save_name) && j < 10; ++j)
           {
-            default_save_name.insert(default_save_name.end() - 4, '0');
+            // Insert a '0' before the ".gci", as long as there is room for it.
+            const size_t length = std::strlen(default_save_name);
+            if (length < 4 || length + 1 >= name_size)
+              break;
+            std::memmove(default_save_name + length - 3, default_save_name + length - 4, 5);
+            default_save_name[length - 4] = '0';
           }
           if (File::Exists(default_save_name))
           {
-            PanicAlert("Failed to find new filename.\n%s\n will be overwritten",
-                       default_save_name.c_str());
+            PanicAlert("Failed to find new filename.\n%s\n will be overwritten", default_save_name);
           }
-          strlcpy(save.m_filename, default_save_name.c_str(), sizeof(save.m_filename));
         }
         PostFlushJob(save, false);
       }
@@ -753,11 +760,11 @@ void GCMemcardDirectory::WriteQueuedJobs()
 
     if (job->retire)
     {
-      const std::string name = job->filename;
-      const std::string deleted_name = name + ".deleted";
+      char deleted_name[sizeof(Memcard::GCIFile::m_filename) + 8];
+      snprintf(deleted_name, sizeof(deleted_name), "%s.deleted", job->filename);
       if (File::Exists(deleted_name))
         File::Delete(deleted_name);
-      File::Rename(name, deleted_name);
+      File::Rename(job->filename, deleted_name);
       continue;
     }
 
