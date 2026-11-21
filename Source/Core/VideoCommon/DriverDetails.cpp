@@ -3,7 +3,7 @@
 
 #include "VideoCommon/DriverDetails.h"
 
-#include <map>
+#include <cstring>
 
 #ifdef __APPLE__
 #include "Common/CommonFuncs.h"
@@ -156,7 +156,9 @@ constexpr BugInfo m_known_bugs[] = {
      -1.0, -1.0, true},
 };
 
-static std::map<Bug, BugInfo> m_bugs;
+// Whether each bug was found or overridden, and whether the driver has it
+static bool m_bug_known[BUG_COUNT];
+static bool m_bug_present[BUG_COUNT];
 
 void Init(API api, Vendor vendor, Driver driver, const double version, const Family family,
           std::string name)
@@ -203,7 +205,8 @@ void Init(API api, Vendor vendor, Driver driver, const double version, const Fam
 #endif
 
   // Clear bug list, as the API may have changed
-  m_bugs.clear();
+  std::memset(m_bug_known, 0, sizeof(m_bug_known));
+  std::memset(m_bug_present, 0, sizeof(m_bug_present));
 
   for (const auto& bug : m_known_bugs)
   {
@@ -214,23 +217,24 @@ void Init(API api, Vendor vendor, Driver driver, const double version, const Fam
         (bug.m_versionstart <= m_version || bug.m_versionstart == -1) &&
         (bug.m_versionend > m_version || bug.m_versionend == -1))
     {
-      m_bugs.emplace(bug.m_bug, bug);
+      // the first match counts
+      if (!m_bug_known[bug.m_bug])
+      {
+        m_bug_known[bug.m_bug] = true;
+        m_bug_present[bug.m_bug] = bug.m_hasbug;
+      }
     }
   }
 }
 
 bool HasBug(Bug bug)
 {
-  const auto it = m_bugs.find(bug);
-  if (it == m_bugs.end())
-    return false;
-  return it->second.m_hasbug;
+  return m_bug_known[bug] && m_bug_present[bug];
 }
 
 void OverrideBug(Bug bug, bool new_value)
 {
-  const auto [it, added] = m_bugs.try_emplace(
-      bug, BugInfo{m_api, m_os, m_vendor, m_driver, m_family, bug, -1, -1, false});
-  it->second.m_hasbug = new_value;
+  m_bug_known[bug] = true;
+  m_bug_present[bug] = new_value;
 }
 }  // namespace DriverDetails

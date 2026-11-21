@@ -328,7 +328,9 @@ enum Bug
   // Affected devices: Official AMD (RADV is unaffected)
   // Started Version: -1
   // Ended Version: -1
-  BUG_BROKEN_DEPTH_CLAMP_CONTROL
+  BUG_BROKEN_DEPTH_CLAMP_CONTROL,
+
+  BUG_COUNT
 };
 
 // Initializes our internal vendor, device family, and driver version
