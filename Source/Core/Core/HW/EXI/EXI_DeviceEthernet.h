@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <map>
+#include <cstdlib>
 #include <vector>
 
 #ifdef _WIN32
@@ -429,6 +429,7 @@ private:
         : NetworkInterface(eth_ref), m_dns_ip(std::move(dns_ip)), m_local_ip(std::move(local_ip))
     {
     }
+    ~BuiltInBBAInterface() override { std::free(m_arp_table); }
     bool Activate() override;
     void Deactivate() override;
     bool IsActivated() override;
@@ -470,7 +471,16 @@ private:
     Common::MACAddress m_current_mac{};
     u32 m_router_ip = 0;
     Common::MACAddress m_router_mac{};
-    std::map<u32, Common::MACAddress> m_arp_table;
+    // The addresses given MACs, sorted by IP
+    struct ARPEntry
+    {
+      u32 ip;
+      Common::MACAddress mac;
+    };
+    ARPEntry* m_arp_table = nullptr;
+    u32 m_arp_count = 0;
+    u32 m_arp_capacity = 0;
+    void SetARPEntry(u32 inet_ip, const Common::MACAddress& mac);
     int m_upnp_httpd = -1;
 #if defined(WIN32) || defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) ||          \
     defined(__OpenBSD__) || defined(__NetBSD__) || defined(__HAIKU__)
@@ -491,7 +501,7 @@ private:
     void InitUDPPort(u16 port);
     void HandleUDPFrame(const Common::UDPPacket& packet);
     void HandleUPnPClient();
-    const Common::MACAddress& ResolveAddress(u32 inet_ip);
+    Common::MACAddress ResolveAddress(u32 inet_ip);
   };
 
   class IPCBBAInterface : public NetworkInterface

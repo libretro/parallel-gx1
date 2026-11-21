@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstring>
 #include <optional>
 
 #ifdef _WIN32
@@ -89,10 +90,10 @@ bool CEXIETHERNET::BuiltInBBAInterface::Activate()
     ip = 0;
   m_current_ip = ip;
   m_current_mac = Common::BitCastPtr<Common::MACAddress>(&m_eth_ref->mBbaMem[BBA_NAFR_PAR0]);
-  m_arp_table[m_current_ip] = m_current_mac;
+  SetARPEntry(m_current_ip, m_current_mac);
   m_router_ip = (m_current_ip & 0xFFFFFF) | 0x01000000;
   m_router_mac = Common::GenerateMacAddress(Common::MACConsumer::BBA);
-  m_arp_table[m_router_ip] = m_router_mac;
+  SetARPEntry(m_router_ip, m_router_mac);
 
   m_network_ref.Clear();
 
@@ -117,7 +118,7 @@ void CEXIETHERNET::BuiltInBBAInterface::Deactivate()
 
   RunRequests();
   m_network_ref.Clear();
-  m_arp_table.clear();
+  m_arp_count = 0;
   net_close(m_upnp_httpd);
   m_upnp_httpd = -1;
 }
@@ -597,19 +598,55 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUPnPClient()
   WriteToQueue(result.Build());
 }
 
-const Common::MACAddress& CEXIETHERNET::BuiltInBBAInterface::ResolveAddress(u32 inet_ip)
+void CEXIETHERNET::BuiltInBBAInterface::SetARPEntry(u32 inet_ip, const Common::MACAddress& mac)
 {
-  auto it = m_arp_table.lower_bound(inet_ip);
-  if (it != m_arp_table.end() && it->first == inet_ip)
+  u32 low = 0;
+  u32 high = m_arp_count;
+  while (low < high)
   {
-    return it->second;
+    const u32 mid = low + (high - low) / 2;
+    if (m_arp_table[mid].ip < inet_ip)
+      low = mid + 1;
+    else
+      high = mid;
   }
-  else
+  if (low < m_arp_count && m_arp_table[low].ip == inet_ip)
   {
-    return m_arp_table
-        .emplace_hint(it, inet_ip, Common::GenerateMacAddress(Common::MACConsumer::BBA))
-        ->second;
+    m_arp_table[low].mac = mac;
+    return;
   }
+  if (m_arp_count == m_arp_capacity)
+  {
+    const u32 capacity = m_arp_capacity ? m_arp_capacity * 2 : 16;
+    ARPEntry* const grown =
+        static_cast<ARPEntry*>(std::realloc(m_arp_table, capacity * sizeof(ARPEntry)));
+    if (!grown)
+      return;
+    m_arp_table = grown;
+    m_arp_capacity = capacity;
+  }
+  std::memmove(m_arp_table + low + 1, m_arp_table + low, (m_arp_count - low) * sizeof(ARPEntry));
+  m_arp_table[low].ip = inet_ip;
+  m_arp_table[low].mac = mac;
+  m_arp_count++;
+}
+
+Common::MACAddress CEXIETHERNET::BuiltInBBAInterface::ResolveAddress(u32 inet_ip)
+{
+  for (u32 low = 0, high = m_arp_count; low < high;)
+  {
+    const u32 mid = low + (high - low) / 2;
+    if (m_arp_table[mid].ip == inet_ip)
+      return m_arp_table[mid].mac;
+    if (m_arp_table[mid].ip < inet_ip)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  // an address seen the first time gets a MAC of its own
+  const Common::MACAddress mac = Common::GenerateMacAddress(Common::MACConsumer::BBA);
+  SetARPEntry(inet_ip, mac);
+  return mac;
 }
 
 void CEXIETHERNET::BuiltInBBAInterface::Post(Request::Kind kind, std::vector<u8> frame)
