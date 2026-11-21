@@ -51,13 +51,6 @@ IPCReply USB_VEN::IOCtl(const IOCtlRequest& request)
 
 IPCReply USB_VEN::IOCtlV(const IOCtlVRequest& request)
 {
-  static const std::map<u32, u32> s_num_vectors = {
-      {USB::IOCTLV_USBV5_CTRLMSG, 2},
-      {USB::IOCTLV_USBV5_INTRMSG, 2},
-      {USB::IOCTLV_USBV5_BULKMSG, 2},
-      {USB::IOCTLV_USBV5_ISOMSG, 4},
-  };
-
   switch (request.request)
   {
   case USB::IOCTLV_USBV5_CTRLMSG:
@@ -65,7 +58,9 @@ IPCReply USB_VEN::IOCtlV(const IOCtlVRequest& request)
   case USB::IOCTLV_USBV5_BULKMSG:
   case USB::IOCTLV_USBV5_ISOMSG:
   {
-    if (request.in_vectors.size() + request.io_vectors.size() != s_num_vectors.at(request.request))
+    // isochronous messages take four vectors, the others two
+    const size_t num_vectors = request.request == USB::IOCTLV_USBV5_ISOMSG ? 4 : 2;
+    if (request.in_vectors.size() + request.io_vectors.size() != num_vectors)
       return IPCReply(IPC_EINVAL);
     USBV5Device* device = GetUSBV5Device(request.in_vectors[0].address);
     if (!device)
