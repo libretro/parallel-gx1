@@ -12,7 +12,6 @@
 #include <numeric>
 #include <optional>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -173,10 +172,19 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
   if (paths.size() == 1)
     paths.clear();
 
-  static const std::unordered_set<std::string> disc_image_extensions = {
-      {".gcm", ".bin", ".iso", ".tgc", ".wbfs", ".ciso", ".gcz", ".wia", ".rvz", ".nfs", ".dol",
-       ".elf"}};
-  if (disc_image_extensions.contains(extension))
+  static const char* const disc_image_extensions[] = {".gcm",  ".bin",  ".iso", ".tgc",
+                                                      ".wbfs", ".ciso", ".gcz", ".wia",
+                                                      ".rvz",  ".nfs",  ".dol", ".elf"};
+  bool is_disc_image = false;
+  for (size_t i = 0; i < sizeof(disc_image_extensions) / sizeof(disc_image_extensions[0]); i++)
+  {
+    if (!std::strcmp(extension.c_str(), disc_image_extensions[i]))
+    {
+      is_disc_image = true;
+      break;
+    }
+  }
+  if (is_disc_image)
   {
     DiscIO::VolumeDisc* disc = DiscIO::CreateDiscForCore(path);
     if (disc)
