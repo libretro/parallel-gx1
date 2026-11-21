@@ -4,7 +4,6 @@
 #pragma once
 
 #if defined(__LIBUSB__)
-#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -65,7 +64,7 @@ private:
   public:
     void AddTransfer(std::unique_ptr<TransferCommand> command, libusb_transfer* transfer);
     void HandleTransfer(libusb_transfer* tr,
-                        const std::function<s32(const TransferCommand&)>& function);
+                        s32 (*fill)(libusb_transfer* transfer, const TransferCommand& command));
     void CancelTransfers();
     // Whether any transfer was ever queued here.
     bool IsUsed() const { return m_used; }

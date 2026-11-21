@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
-#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -440,34 +439,36 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
 void LibusbDevice::CtrlTransferCallback(libusb_transfer* transfer)
 {
   auto* device = static_cast<LibusbDevice*>(transfer->user_data);
-  device->m_transfer_endpoints[0].HandleTransfer(transfer, [&](const auto& cmd) {
-    cmd.FillBuffer(libusb_control_transfer_get_data(transfer), transfer->actual_length);
-    // The return code is the total transfer length -- *including* the setup packet.
-    return transfer->length;
-  });
+  device->m_transfer_endpoints[0].HandleTransfer(
+      transfer, [](libusb_transfer* completed, const TransferCommand& cmd) -> s32 {
+        cmd.FillBuffer(libusb_control_transfer_get_data(completed), completed->actual_length);
+        // The return code is the total transfer length -- *including* the setup packet.
+        return completed->length;
+      });
 }
 
 void LibusbDevice::TransferCallback(libusb_transfer* transfer)
 {
   auto* device = static_cast<LibusbDevice*>(transfer->user_data);
-  device->m_transfer_endpoints[transfer->endpoint].HandleTransfer(transfer, [&](const auto& cmd) {
-    switch (transfer->type)
-    {
-    case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS:
-    {
-      auto& iso_msg = static_cast<const IsoMessage&>(cmd);
-      cmd.FillBuffer(transfer->buffer, iso_msg.length);
-      for (size_t i = 0; i < iso_msg.num_packets; ++i)
-        iso_msg.SetPacketReturnValue(i, transfer->iso_packet_desc[i].actual_length);
-      // Note: isochronous transfers *must* return 0 as the return value. Anything else
-      // (such as the number of bytes transferred) is considered as a failure.
-      return static_cast<s32>(IPC_SUCCESS);
-    }
-    default:
-      cmd.FillBuffer(transfer->buffer, transfer->actual_length);
-      return static_cast<s32>(transfer->actual_length);
-    }
-  });
+  device->m_transfer_endpoints[transfer->endpoint].HandleTransfer(
+      transfer, [](libusb_transfer* completed, const TransferCommand& cmd) -> s32 {
+        switch (completed->type)
+        {
+        case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS:
+        {
+          auto& iso_msg = static_cast<const IsoMessage&>(cmd);
+          cmd.FillBuffer(completed->buffer, iso_msg.length);
+          for (size_t i = 0; i < iso_msg.num_packets; ++i)
+            iso_msg.SetPacketReturnValue(i, completed->iso_packet_desc[i].actual_length);
+          // Note: isochronous transfers *must* return 0 as the return value. Anything else
+          // (such as the number of bytes transferred) is considered as a failure.
+          return static_cast<s32>(IPC_SUCCESS);
+        }
+        default:
+          cmd.FillBuffer(completed->buffer, completed->actual_length);
+          return static_cast<s32>(completed->actual_length);
+        }
+      });
 }
 
 static const char* GetTransferTypeName(u8 type)
@@ -509,8 +510,9 @@ LibusbDevice::TransferEndpoint::~TransferEndpoint()
     delete static_cast<InFlight*>(retro_atomic_exchange_ptr(&slot, nullptr));
 }
 
-void LibusbDevice::TransferEndpoint::HandleTransfer(
-    libusb_transfer* transfer, const std::function<s32(const TransferCommand&)>& fn)
+void LibusbDevice::TransferEndpoint::HandleTransfer(libusb_transfer* transfer,
+                                                    s32 (*fill)(libusb_transfer* transfer,
+                                                                const TransferCommand& command))
 {
   // libusb's event thread: completions never run concurrently with each other.
   std::unique_ptr<InFlight> in_flight;
@@ -539,7 +541,7 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(
   switch (transfer->status)
   {
   case LIBUSB_TRANSFER_COMPLETED:
-    return_value = fn(cmd);
+    return_value = fill(transfer, cmd);
     break;
   case LIBUSB_TRANSFER_ERROR:
   case LIBUSB_TRANSFER_CANCELLED:
