@@ -138,6 +138,9 @@ protected:
 
   // Is a card beyond the "ENTRY_SLOT" position ?
   bool IsCardLoaded() const;
+  // The card file's path, the settings' directory and name joined
+  void GetCardFilePath(char* out, std::size_t out_size) const;
+  bool CardFileExists() const;
 
   virtual bool IsReadyForCard();
 

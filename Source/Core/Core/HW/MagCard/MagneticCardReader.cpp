@@ -8,11 +8,13 @@
 #include "Core/HW/MagCard/MagneticCardReader.h"
 
 #include <cinttypes>
+#include <cstdio>
 #include <cstring>
+
+#include <retro_miscellaneous.h>
 
 #include "Common/DirectIOFile.h"
 #include "Common/FileUtil.h"
-#include "Common/Lazy.h"
 #include "Common/Logging/Log.h"
 #include "Common/SmallVector.h"
 #include "Common/StringUtil.h"
@@ -503,6 +505,19 @@ void MagneticCardReader::ClearCardInMemory()
     track_data.present = false;
 }
 
+void MagneticCardReader::GetCardFilePath(char* out, std::size_t out_size) const
+{
+  std::snprintf(out, out_size, "%s%s", m_card_settings->card_path.c_str(),
+                m_card_settings->card_name.c_str());
+}
+
+bool MagneticCardReader::CardFileExists() const
+{
+  char full_path[PATH_MAX_LENGTH];
+  GetCardFilePath(full_path, sizeof(full_path));
+  return File::Exists(full_path);
+}
+
 void MagneticCardReader::ReadCardFile()
 {
   NOTICE_LOG(SERIALINTERFACE_CARD, "Reading card data from: %s",
@@ -510,7 +525,8 @@ void MagneticCardReader::ReadCardFile()
 
   ClearCardInMemory();
 
-  const std::string full_path = m_card_settings->card_path + m_card_settings->card_name;
+  char full_path[PATH_MAX_LENGTH];
+  GetCardFilePath(full_path, sizeof(full_path));
 
   File::DirectIOFile file{full_path, File::AccessMode::Read};
 
@@ -552,7 +568,8 @@ void MagneticCardReader::WriteCardFile()
 
   NOTICE_LOG(SERIALINTERFACE_CARD, "Writing card data to: %s", m_card_settings->card_name.c_str());
 
-  const auto full_path = m_card_settings->card_path + m_card_settings->card_name;
+  char full_path[PATH_MAX_LENGTH];
+  GetCardFilePath(full_path, sizeof(full_path));
 
   File::DirectIOFile file{full_path, File::AccessMode::Write};
 
@@ -744,15 +761,10 @@ void MagneticCardReader::StepStatePerson(DT elapsed_time)
   if (IsCardLoaded())
     return;
 
-  Common::Lazy<bool> card_exists{[&] {
-    const auto full_path = m_card_settings->card_path + m_card_settings->card_name;
-    return File::Exists(full_path);
-  }};
-
   if (!IsCardPresent())
   {
     if (m_card_settings->insert_card_when_possible && IsReadyForCard() &&
-        m_time_since_person_moved_card > DTFromMs(500) && *card_exists)
+        m_time_since_person_moved_card > DTFromMs(500) && CardFileExists())
     {
       // Place the card in the entry slot after a delay.
       NOTICE_LOG(SERIALINTERFACE_CARD, "Inserting card.");
@@ -765,7 +777,8 @@ void MagneticCardReader::StepStatePerson(DT elapsed_time)
 
   const bool machine_moved_card_last =
       m_time_since_machine_moved_card < m_time_since_person_moved_card;
-  if ((machine_moved_card_last && m_time_since_machine_moved_card > DTFromMs(100)) || !*card_exists)
+  if ((machine_moved_card_last && m_time_since_machine_moved_card > DTFromMs(100)) ||
+      !CardFileExists())
   {
     // Take the card from the machine when ejected or if the file is deleted.
     NOTICE_LOG(SERIALINTERFACE_CARD, "Removing card.");
