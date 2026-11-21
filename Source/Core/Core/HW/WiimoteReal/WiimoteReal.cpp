@@ -4,8 +4,8 @@
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
-#include <unordered_set>
 
 #include <queues/mpsc_stack.h>
 #include <retro_atomic.h>
@@ -56,37 +56,83 @@ Wiimote* GetWiimote(unsigned int index)
 }
 
 // Connected Wiimotes' IDs, so we don't connect more than once to the same device. The scanner
-// reads and adds to it, a Wiimote going away takes its ID out; each change swaps in a copy.
+// reads and adds to it, a Wiimote going away takes its ID out; each change swaps in a copy: one
+// block holding the IDs NUL-terminated one after another.
 struct KnownIds
 {
   quiesce_node_t node;  // first: the free callback casts it back
-  std::unordered_set<std::string> ids;
+  u32 count;
+  size_t size;  // the bytes of ids
+  char ids[1];
 };
 static quiesce_t s_known_ids_quiesce;
 static retro_atomic_ptr_t s_known_ids;
 
 static void FreeKnownIds(quiesce_node_t* node)
 {
-  delete reinterpret_cast<KnownIds*>(node);
+  std::free(node);
 }
 
-template <typename Edit>
-static void EditKnownIds(Edit&& edit)
+static bool KnownIdsHas(const KnownIds* known, const char* id)
+{
+  const char* p = known->ids;
+  for (u32 i = 0; i < known->count; i++)
+  {
+    if (!std::strcmp(p, id))
+      return true;
+    p += std::strlen(p) + 1;
+  }
+  return false;
+}
+
+// Swaps in a copy of the IDs with add put in, when it is not there, and remove taken out; either
+// may be nullptr.
+static void EditKnownIds(const char* add, const char* remove)
 {
   quiesce_enter(&s_known_ids_quiesce);
   for (;;)
   {
     void* const cur = retro_atomic_load_acquire_ptr(&s_known_ids);
-    auto* next = new KnownIds{{}, cur ? static_cast<const KnownIds*>(cur)->ids :
-                                        std::unordered_set<std::string>{}};
-    edit(next->ids);
+    const KnownIds* const known = static_cast<const KnownIds*>(cur);
+    const bool adding = add && !(known && KnownIdsHas(known, add));
+    const size_t size = (known ? known->size : 0) + (adding ? std::strlen(add) + 1 : 0);
+    KnownIds* const next = static_cast<KnownIds*>(std::malloc(sizeof(KnownIds) + size));
+    if (!next)
+      break;
+    std::memset(next, 0, sizeof(KnownIds));
+
+    char* out = next->ids;
+    if (known)
+    {
+      const char* p = known->ids;
+      for (u32 i = 0; i < known->count; i++)
+      {
+        const size_t length = std::strlen(p) + 1;
+        if (!remove || std::strcmp(p, remove))
+        {
+          std::memcpy(out, p, length);
+          out += length;
+          next->count++;
+        }
+        p += length;
+      }
+    }
+    if (adding)
+    {
+      const size_t length = std::strlen(add) + 1;
+      std::memcpy(out, add, length);
+      out += length;
+      next->count++;
+    }
+    next->size = static_cast<size_t>(out - next->ids);
+
     if (retro_atomic_cas_ptr(&s_known_ids, cur, next))
     {
       if (cur)
         quiesce_retire(&s_known_ids_quiesce, &static_cast<KnownIds*>(cur)->node, FreeKnownIds);
       break;
     }
-    delete next;
+    std::free(next);
   }
   quiesce_exit(&s_known_ids_quiesce);
 }
@@ -296,7 +342,7 @@ void Wiimote::QueueWrite(u64 frame, const u8* data, size_t size)
 
 void Wiimote::Shutdown()
 {
-  EditKnownIds([this](std::unordered_set<std::string>& ids) { ids.erase(GetId()); });
+  EditKnownIds(nullptr, GetId().c_str());
 
   StopThread();
   ClearReadQueue();
@@ -994,18 +1040,14 @@ void WiimoteScanner::ThreadFunc()
 
       for (auto& wiimote : results.wii_remotes)
       {
-        EditKnownIds([&wiimote](std::unordered_set<std::string>& ids) {
-          ids.insert(wiimote->GetId());
-        });
+        EditKnownIds(wiimote->GetId().c_str(), nullptr);
         PostToManager(ManagerCommand::Kind::AddToPool, std::move(wiimote));
         PostToManager(ManagerCommand::Kind::ProcessPool);
       }
 
       for (auto& bboard : results.balance_boards)
       {
-        EditKnownIds([&bboard](std::unordered_set<std::string>& ids) {
-          ids.insert(bboard->GetId());
-        });
+        EditKnownIds(bboard->GetId().c_str(), nullptr);
         PostToManager(ManagerCommand::Kind::ConnectBalanceBoard, std::move(bboard));
       }
     }
@@ -1291,7 +1333,7 @@ bool IsNewWiimote(const std::string& identifier)
 {
   quiesce_enter(&s_known_ids_quiesce);
   const auto* known = static_cast<const KnownIds*>(retro_atomic_load_acquire_ptr(&s_known_ids));
-  const bool is_new = !known || !known->ids.contains(identifier);
+  const bool is_new = !known || !KnownIdsHas(known, identifier.c_str());
   quiesce_exit(&s_known_ids_quiesce);
   return is_new;
 }
