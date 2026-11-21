@@ -3,7 +3,8 @@
 
 #include "VideoBackends/OGL/SamplerCache.h"
 
-#include <memory>
+#include <cstdlib>
+#include <cstring>
 
 #include "Common/CommonTypes.h"
 #include "VideoBackends/OGL/OGLConfig.h"
@@ -30,27 +31,61 @@ SamplerCache::SamplerCache()
 SamplerCache::~SamplerCache()
 {
   Clear();
+  std::free(m_cache);
   glDeleteSamplers(1, &m_point_sampler);
   glDeleteSamplers(1, &m_linear_sampler);
 }
 
 void SamplerCache::SetSamplerState(u32 stage, const SamplerState& state)
 {
-  if (m_active_samplers[stage].first == state && m_active_samplers[stage].second != 0)
+  if (m_active_samplers[stage].state == state && m_active_samplers[stage].sampler != 0)
     return;
 
-  auto it = m_cache.find(state);
-  if (it == m_cache.end())
+  const u64 key = state.Hex();
+  u32 low = 0;
+  u32 high = m_cache_count;
+  while (low < high)
   {
-    GLuint sampler;
-    glGenSamplers(1, &sampler);
-    SetParameters(sampler, state);
-    it = m_cache.emplace(state, sampler).first;
+    const u32 mid = low + (high - low) / 2;
+    if (m_cache[mid].key < key)
+      low = mid + 1;
+    else
+      high = mid;
   }
 
-  m_active_samplers[stage].first = state;
-  m_active_samplers[stage].second = it->second;
-  glBindSampler(stage, it->second);
+  GLuint sampler;
+  if (low < m_cache_count && m_cache[low].key == key)
+  {
+    sampler = m_cache[low].sampler;
+  }
+  else
+  {
+    glGenSamplers(1, &sampler);
+    SetParameters(sampler, state);
+    if (m_cache_count == m_cache_capacity)
+    {
+      const u32 capacity = m_cache_capacity ? m_cache_capacity * 2 : 64;
+      CachedSampler* const grown =
+          static_cast<CachedSampler*>(std::realloc(m_cache, capacity * sizeof(CachedSampler)));
+      if (grown)
+      {
+        m_cache = grown;
+        m_cache_capacity = capacity;
+      }
+    }
+    // out of memory, the sampler goes uncached
+    if (m_cache_count < m_cache_capacity)
+    {
+      std::memmove(m_cache + low + 1, m_cache + low, (m_cache_count - low) * sizeof(CachedSampler));
+      m_cache[low].key = key;
+      m_cache[low].sampler = sampler;
+      m_cache_count++;
+    }
+  }
+
+  m_active_samplers[stage].state = state;
+  m_active_samplers[stage].sampler = sampler;
+  glBindSampler(stage, sampler);
 }
 
 void SamplerCache::SetParameters(GLuint sampler_id, const SamplerState& params)
@@ -96,10 +131,10 @@ void SamplerCache::SetParameters(GLuint sampler_id, const SamplerState& params)
 
 void SamplerCache::Clear()
 {
-  for (auto& p : m_cache)
-    glDeleteSamplers(1, &p.second);
-  for (auto& p : m_active_samplers)
-    p.second = 0;
-  m_cache.clear();
+  for (u32 i = 0; i < m_cache_count; i++)
+    glDeleteSamplers(1, &m_cache[i].sampler);
+  for (ActiveSampler& active : m_active_samplers)
+    active.sampler = 0;
+  m_cache_count = 0;
 }
 }  // namespace OGL

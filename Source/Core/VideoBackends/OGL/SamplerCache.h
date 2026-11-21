@@ -3,10 +3,6 @@
 
 #pragma once
 
-#include <array>
-#include <map>
-#include <memory>
-
 #include "Common/CommonTypes.h"
 #include "Common/GL/GLExtensions/GLExtensions.h"
 #include "VideoCommon/Constants.h"
@@ -32,9 +28,22 @@ public:
 private:
   static void SetParameters(GLuint sampler_id, const SamplerState& params);
 
-  std::map<SamplerState, GLuint> m_cache;
-  std::array<std::pair<SamplerState, GLuint>, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS>
-      m_active_samplers{};
+  // The samplers made, sorted by their state's bits
+  struct CachedSampler
+  {
+    u64 key;
+    GLuint sampler;
+  };
+  CachedSampler* m_cache = nullptr;
+  u32 m_cache_count = 0;
+  u32 m_cache_capacity = 0;
+
+  struct ActiveSampler
+  {
+    SamplerState state;
+    GLuint sampler;
+  };
+  ActiveSampler m_active_samplers[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS]{};
 
   GLuint m_point_sampler;
   GLuint m_linear_sampler;
