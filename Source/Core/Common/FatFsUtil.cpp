@@ -866,13 +866,14 @@ bool SyncSDImageToSDFolder()
   return true;
 }
 
-void RunInFatFsContext(FatFsCallbacks& callbacks, const std::function<void()>& function)
+bool RunInFatFsContext(FatFsCallbacks& callbacks, void (*function)(void* user), void* user)
 {
   const FatFsUse fatfs_use;
   if (!fatfs_use)
-    return;
+    return false;
   s_callbacks = &callbacks;
-  Common::ScopeGuard callbacks_guard{[] { s_callbacks = nullptr; }};
-  function();
+  function(user);
+  s_callbacks = nullptr;
+  return true;
 }
 }  // namespace Common

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <functional>
-
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
 
@@ -30,5 +28,7 @@ public:
   virtual u32 GetCurrentTimeFAT();
 };
 
-void RunInFatFsContext(FatFsCallbacks& callbacks, const std::function<void()>& function);
+// Runs function with FatFs reading and writing through callbacks; false, without running it, when
+// FatFs is busy on another thread
+bool RunInFatFsContext(FatFsCallbacks& callbacks, void (*function)(void* user), void* user);
 }  // namespace Common
