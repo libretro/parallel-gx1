@@ -3,7 +3,9 @@
 
 #include "Common/GL/GLExtensions/GLExtensions.h"
 
-#include <unordered_map>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 
 #include "Common/GL/GLContext.h"
 #include "Common/Logging/Log.h"
@@ -539,13 +541,94 @@ namespace GLExtensions
 {
 // Private members and functions
 static u32 s_gl_version;
-static std::unordered_map<std::string, bool> s_extension_list;
+// The supported extension names: NUL-terminated in one pool, with their offsets sorted by name
+// once the list is built
+static char* s_extension_pool;
+static size_t s_extension_pool_size;
+static size_t s_extension_pool_capacity;
+static size_t* s_extension_offsets;
+static u32 s_extension_count;
+static u32 s_extension_capacity;
+
+static void ClearExtensions()
+{
+  s_extension_pool_size = 0;
+  s_extension_count = 0;
+}
+
+static void AddExtension(const char* name, size_t length)
+{
+  if (s_extension_pool_size + length + 1 > s_extension_pool_capacity)
+  {
+    size_t capacity = s_extension_pool_capacity ? s_extension_pool_capacity : 4096;
+    while (capacity < s_extension_pool_size + length + 1)
+      capacity *= 2;
+    char* const grown = static_cast<char*>(std::realloc(s_extension_pool, capacity));
+    if (!grown)
+      return;
+    s_extension_pool = grown;
+    s_extension_pool_capacity = capacity;
+  }
+  if (s_extension_count == s_extension_capacity)
+  {
+    const u32 capacity = s_extension_capacity ? s_extension_capacity * 2 : 256;
+    size_t* const grown =
+        static_cast<size_t*>(std::realloc(s_extension_offsets, capacity * sizeof(size_t)));
+    if (!grown)
+      return;
+    s_extension_offsets = grown;
+    s_extension_capacity = capacity;
+  }
+  std::memcpy(s_extension_pool + s_extension_pool_size, name, length);
+  s_extension_pool[s_extension_pool_size + length] = '\0';
+  s_extension_offsets[s_extension_count++] = s_extension_pool_size;
+  s_extension_pool_size += length + 1;
+}
+
+static void AddExtension(const char* name)
+{
+  AddExtension(name, std::strlen(name));
+}
+
+static int CompareExtensions(const void* a, const void* b)
+{
+  return std::strcmp(s_extension_pool + *static_cast<const size_t*>(a),
+                     s_extension_pool + *static_cast<const size_t*>(b));
+}
+
+static void SortExtensions()
+{
+  std::qsort(s_extension_offsets, s_extension_count, sizeof(size_t), CompareExtensions);
+}
+
+// Whether the list has the name of length characters
+static bool HasExtension(const char* name, size_t length)
+{
+  u32 low = 0;
+  u32 high = s_extension_count;
+  while (low < high)
+  {
+    const u32 mid = low + (high - low) / 2;
+    const char* const entry = s_extension_pool + s_extension_offsets[mid];
+    int result = std::strncmp(entry, name, length);
+    if (result == 0)
+      result = entry[length] != '\0' ? 1 : 0;
+    if (result == 0)
+      return true;
+    if (result < 0)
+      low = mid + 1;
+    else
+      high = mid;
+  }
+  return false;
+}
 
 // Private initialization functions
 bool InitFunctionPointers(GLContext* context);
 
-// Reads the next space-separated word of a list into *word; returns nullptr at the end.
-static const char* NextWord(const char* p, std::string* word)
+// Finds the next space-separated word of a list, its start in *word and its length in *length;
+// returns where the word ends, or nullptr at the end.
+static const char* NextWord(const char* p, const char** word, size_t* length)
 {
   while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
     p++;
@@ -554,7 +637,8 @@ static const char* NextWord(const char* p, std::string* word)
   const char* start = p;
   while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r')
     p++;
-  word->assign(start, p - start);
+  *word = start;
+  *length = static_cast<size_t>(p - start);
   return p;
 }
 
@@ -562,32 +646,33 @@ static const char* NextWord(const char* p, std::string* word)
 static void InitExtensionList21()
 {
   const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
-  std::string tmp;
-  for (const char* p = extensions; p && (p = NextWord(p, &tmp));)
-    s_extension_list[tmp] = true;
+  const char* word;
+  size_t length;
+  for (const char* p = extensions; p && (p = NextWord(p, &word, &length));)
+    AddExtension(word, length);
 }
 
 static void InitExtensionList(GLContext* context)
 {
-  s_extension_list.clear();
+  ClearExtensions();
   if (context->IsGLES())
   {
     switch (s_gl_version)
     {
     default:
     case 320:
-      s_extension_list["VERSION_GLES_3_2"] = true;
+      AddExtension("VERSION_GLES_3_2");
       [[fallthrough]];
     case 310:
-      s_extension_list["VERSION_GLES_3_1"] = true;
+      AddExtension("VERSION_GLES_3_1");
       [[fallthrough]];
     case 300:
-      s_extension_list["VERSION_GLES_3"] = true;
+      AddExtension("VERSION_GLES_3");
       break;
     }
 
     // We always have ES 2.0
-    s_extension_list["VERSION_GLES_2"] = true;
+    AddExtension("VERSION_GLES_2");
   }
   else
   {
@@ -616,7 +701,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_4_5",
       };
       for (auto it : gl450exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 440:
@@ -633,7 +718,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_4_4",
       };
       for (auto it : gl440exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 430:
@@ -662,7 +747,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_4_3",
       };
       for (auto it : gl430exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 420:
@@ -683,7 +768,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_4_2",
       };
       for (auto it : gl420exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 410:
@@ -698,7 +783,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_4_1",
       };
       for (auto it : gl410exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 400:
@@ -719,7 +804,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_4_0",
       };
       for (auto it : gl400exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 330:
@@ -738,7 +823,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_3_3",
       };
       for (auto it : gl330exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 320:
@@ -756,7 +841,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_3_2",
       };
       for (auto it : gl320exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 310:
@@ -772,7 +857,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_3_1",
       };
       for (auto it : gl310exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 300:
@@ -804,7 +889,7 @@ static void InitExtensionList(GLContext* context)
           "VERSION_3_0",
       };
       for (auto it : gl300exts)
-        s_extension_list[it] = true;
+        AddExtension(it);
       [[fallthrough]];
     }
     case 210:
@@ -819,18 +904,21 @@ static void InitExtensionList(GLContext* context)
       break;
     }
     // So we can easily determine if we are running desktop GL
-    s_extension_list["VERSION_GL"] = true;
+    AddExtension("VERSION_GL");
   }
 
   if (s_gl_version < 300)
   {
     InitExtensionList21();
-    return;
   }
-  GLint NumExtension = 0;
-  glGetIntegerv(GL_NUM_EXTENSIONS, &NumExtension);
-  for (GLint i = 0; i < NumExtension; ++i)
-    s_extension_list[std::string((const char*)glGetStringi(GL_EXTENSIONS, i))] = true;
+  else
+  {
+    GLint NumExtension = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &NumExtension);
+    for (GLint i = 0; i < NumExtension; ++i)
+      AddExtension((const char*)glGetStringi(GL_EXTENSIONS, i));
+  }
+  SortExtensions();
 }
 static void InitVersion()
 {
@@ -863,9 +951,9 @@ u32 Version()
 {
   return s_gl_version;
 }
-bool Supports(const std::string& name)
+bool Supports(const char* name)
 {
-  return s_extension_list[name];
+  return HasExtension(name, std::strlen(name));
 }
 
 bool Init(GLContext* context)
@@ -897,15 +985,16 @@ bool Init(GLContext* context)
 static bool HasFeatures(const char* extensions)
 {
   bool result = true;
-  std::string tmp;
-  for (const char* p = extensions; (p = NextWord(p, &tmp));)
+  const char* word;
+  size_t length;
+  for (const char* p = extensions; (p = NextWord(p, &word, &length));)
   {
-    if (tmp[0] == '!')
-      result &= !s_extension_list[tmp.erase(0, 1)];
-    else if (tmp[0] == '|')
-      result |= s_extension_list[tmp.erase(0, 1)];
+    if (word[0] == '!')
+      result &= !HasExtension(word + 1, length - 1);
+    else if (word[0] == '|')
+      result |= HasExtension(word + 1, length - 1);
     else
-      result &= s_extension_list[tmp];
+      result &= HasExtension(word, length);
   }
   return result;
 }
