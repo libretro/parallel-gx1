@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <memory>
 #include <ranges>
-#include <set>
 #include <utility>
 
 #ifdef __LIBUSB__
@@ -76,27 +75,53 @@ void USBScanner::WaitForFirstScan()
 bool USBScanner::AddClient(USBHost* client)
 {
   const auto* cur = static_cast<const Clients*>(retro_atomic_load_acquire_ptr(&m_clients));
-  auto* next = new Clients{{}, cur ? cur->set : std::set<USBHost*>{}};
-  const bool should_start_scanning = next->set.empty();
-  const bool client_is_new = next->set.insert(client).second;
+  const u32 count = cur ? cur->count : 0;
+  u32 slot = 0;
+  while (slot < count &&
+         reinterpret_cast<uintptr_t>(cur->hosts[slot]) < reinterpret_cast<uintptr_t>(client))
+    slot++;
+  if (slot < count && cur->hosts[slot] == client)
+    return false;
+  if (count == MAX_CLIENTS)
+  {
+    ERROR_LOG(IOS_USB, "Too many USB scanner clients");
+    return false;
+  }
+
+  auto* next = new Clients{};
+  for (u32 i = 0; i < slot; i++)
+    next->hosts[i] = cur->hosts[i];
+  next->hosts[slot] = client;
+  for (u32 i = slot; i < count; i++)
+    next->hosts[i + 1] = cur->hosts[i];
+  next->count = count + 1;
+  const bool should_start_scanning = count == 0;
   if (void* old = retro_atomic_exchange_ptr(&m_clients, next))
     quiesce_retire(&m_quiesce, &static_cast<Clients*>(old)->node, FreeClients);
 
   if (should_start_scanning)
     StartScanning();
 
-  return client_is_new;
+  return true;
 }
 
 bool USBScanner::RemoveClient(USBHost* client)
 {
   const auto* cur = static_cast<const Clients*>(retro_atomic_load_acquire_ptr(&m_clients));
-  if (!cur || !cur->set.contains(client))
+  u32 slot = 0;
+  while (cur && slot < cur->count && cur->hosts[slot] != client)
+    slot++;
+  if (!cur || slot == cur->count)
     return false;
 
-  auto* next = new Clients{{}, cur->set};
-  next->set.erase(client);
-  const bool should_stop_scanning = next->set.empty();
+  auto* next = new Clients{};
+  for (u32 i = 0, j = 0; i < cur->count; i++)
+  {
+    if (i != slot)
+      next->hosts[j++] = cur->hosts[i];
+  }
+  next->count = cur->count - 1;
+  const bool should_stop_scanning = next->count == 0;
   if (void* old = retro_atomic_exchange_ptr(&m_clients, next))
     quiesce_retire(&m_quiesce, &static_cast<Clients*>(old)->node, FreeClients);
 
@@ -187,8 +212,8 @@ void USBScanner::NotifyClients()
   const auto* clients = static_cast<const Clients*>(retro_atomic_load_acquire_ptr(&m_clients));
   if (devices && clients)
   {
-    for (USBHost* client : clients->set)
-      client->OnDevicesChanged(devices->map);
+    for (u32 i = 0; i < clients->count; i++)
+      clients->hosts[i]->OnDevicesChanged(devices->map);
   }
   quiesce_exit(&m_quiesce);
 

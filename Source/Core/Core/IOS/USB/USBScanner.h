@@ -5,7 +5,6 @@
 
 #include <map>
 #include <memory>
-#include <set>
 
 #include <rthreads/rthreads.h>
 
@@ -62,10 +61,13 @@ private:
     quiesce_node_t node;  // first: the free callback casts it back
     DeviceMap map;
   };
+  // Sorted by address, the order the hosts are told in
+  static constexpr u32 MAX_CLIENTS = 16;
   struct Clients
   {
     quiesce_node_t node;  // first, as above
-    std::set<USBHost*> set;
+    u32 count;
+    USBHost* hosts[MAX_CLIENTS];
   };
   static void FreeDevices(quiesce_node_t* node);
   static void FreeClients(quiesce_node_t* node);
