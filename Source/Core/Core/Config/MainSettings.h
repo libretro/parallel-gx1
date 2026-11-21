@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <set>
 #include <string>
 #include <utility>
 
@@ -239,7 +238,9 @@ extern const Info<std::string> MAIN_BLUETOOTH_PASSTHROUGH_LINK_KEYS;
 
 extern const Info<bool> MAIN_USB_PASSTHROUGH_DISGUISE_PLAYSTATION_AS_WII;
 extern const Info<std::string> MAIN_USB_PASSTHROUGH_DEVICES;
-std::set<USBUtils::DeviceInfo> GetUSBDeviceWhitelist();
+// Whether a device list, "VID:PID" pairs split by commas, has the device; with device nullptr,
+// whether it has any
+bool USBDeviceListHas(const char* list, const USBUtils::DeviceInfo* device);
 
 // Main.EmulatedUSBDevices
 

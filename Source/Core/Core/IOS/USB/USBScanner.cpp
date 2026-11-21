@@ -201,8 +201,8 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
 #ifdef __LIBUSB__
   if (!Core::WantsDeterminism())
   {
-    const auto whitelist = Config::GetUSBDeviceWhitelist();
-    if (whitelist.empty())
+    const std::string whitelist = Config::Get(Config::MAIN_USB_PASSTHROUGH_DEVICES);
+    if (!Config::USBDeviceListHas(whitelist.c_str(), nullptr))
       return true;
 
     if (m_context.IsValid())
@@ -215,7 +215,7 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
           WakeupSantrollerDevice(device);
         }
         const USBUtils::DeviceInfo device_info{descriptor.idVendor, descriptor.idProduct};
-        if (!whitelist.contains(device_info))
+        if (!Config::USBDeviceListHas(whitelist.c_str(), &device_info))
           return true;
 
         auto usb_device = std::make_unique<USB::LibusbDevice>(device, descriptor);

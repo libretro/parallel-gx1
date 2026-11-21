@@ -4,6 +4,7 @@
 #include "Core/Config/MainSettings.h"
 
 #include <cstdio>
+#include <cstring>
 
 #include "Common/Assert.h"
 #include "Common/CommonPaths.h"
@@ -365,21 +366,55 @@ const Info<bool> MAIN_USB_PASSTHROUGH_DISGUISE_PLAYSTATION_AS_WII{
 const Info<std::string> MAIN_USB_PASSTHROUGH_DEVICES{{System::Main, "USBPassthrough", "Devices"},
                                                      ""};
 
-static std::set<USBUtils::DeviceInfo> LoadUSBWhitelistFromString(const std::string& devices_string)
+// A hex number from begin, read as far as hex digits go, into *out; false when there is no digit
+// or it does not fit 16 bits
+static bool ParseUSBIdHex(const char* begin, const char* end, u16* out)
 {
-  std::set<USBUtils::DeviceInfo> devices;
-  for (const auto& pair : SplitString(devices_string, ','))
+  u32 value = 0;
+  const char* p = begin;
+  for (; p != end; p++)
   {
-    auto device = USBUtils::DeviceInfo::FromString(pair);
-    if (device)
-      devices.emplace(*device);
+    u32 digit;
+    if (*p >= '0' && *p <= '9')
+      digit = static_cast<u32>(*p - '0');
+    else if (*p >= 'a' && *p <= 'f')
+      digit = static_cast<u32>(*p - 'a' + 10);
+    else if (*p >= 'A' && *p <= 'F')
+      digit = static_cast<u32>(*p - 'A' + 10);
+    else
+      break;
+    if (value > 0xFFFF)
+      continue;
+    value = value * 16 + digit;
   }
-  return devices;
+  if (p == begin || value > 0xFFFF)
+    return false;
+  *out = static_cast<u16>(value);
+  return true;
 }
 
-std::set<USBUtils::DeviceInfo> GetUSBDeviceWhitelist()
+bool USBDeviceListHas(const char* list, const USBUtils::DeviceInfo* device)
 {
-  return LoadUSBWhitelistFromString(Config::Get(Config::MAIN_USB_PASSTHROUGH_DEVICES));
+  const char* entry = list;
+  for (;;)
+  {
+    const char* entry_end = std::strchr(entry, ',');
+    if (!entry_end)
+      entry_end = entry + std::strlen(entry);
+
+    const char* colon = static_cast<const char*>(std::memchr(entry, ':', entry_end - entry));
+    USBUtils::DeviceInfo info;
+    if (colon && ParseUSBIdHex(entry, colon, &info.vid) &&
+        ParseUSBIdHex(colon + 1, entry_end, &info.pid) &&
+        (!device || (info.vid == device->vid && info.pid == device->pid)))
+    {
+      return true;
+    }
+
+    if (!*entry_end)
+      return false;
+    entry = entry_end + 1;
+  }
 }
 
 // Main.EmulatedUSBDevices
