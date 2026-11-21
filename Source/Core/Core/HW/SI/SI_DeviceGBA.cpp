@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <queue>
 
 #include <queues/mpsc_stack.h>
 
@@ -29,16 +28,21 @@ namespace
 {
 sthread_t* s_connection_thread = nullptr;
 // Accepted sockets, pushed by the connection thread and taken by the CPU thread, which keeps
-// its own queue of them oldest first.
+// the drained nodes linked oldest first until it hands their sockets out.
 struct WaitingSock
 {
   mpsc_stack_node_t link;  // first: the drained chain is cast back
   int socket;
 };
+struct TakenSocks
+{
+  mpsc_stack_node_t* head;
+  mpsc_stack_node_t* tail;
+};
 mpsc_stack_t s_waiting_socks;
 mpsc_stack_t s_waiting_clocks;
-std::queue<int> s_taken_socks;
-std::queue<int> s_taken_clocks;
+TakenSocks s_taken_socks;
+TakenSocks s_taken_clocks;
 
 void PushSock(mpsc_stack_t* stack, int socket)
 {
@@ -46,19 +50,29 @@ void PushSock(mpsc_stack_t* stack, int socket)
   mpsc_stack_push(stack, &waiting->link);
 }
 
-int TakeSock(mpsc_stack_t* stack, std::queue<int>& taken)
+int TakeSock(mpsc_stack_t* stack, TakenSocks* taken)
 {
-  for (mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(stack)); node;)
+  mpsc_stack_node_t* node = mpsc_stack_reverse(mpsc_stack_drain(stack));
+  if (node)
   {
-    auto* waiting = reinterpret_cast<WaitingSock*>(node);
-    node = node->next;
-    taken.push(waiting->socket);
-    delete waiting;
+    if (taken->tail)
+      taken->tail->next = node;
+    else
+      taken->head = node;
+    while (node->next)
+      node = node->next;
+    taken->tail = node;
   }
-  if (taken.empty())
+
+  mpsc_stack_node_t* const first = taken->head;
+  if (!first)
     return -1;
-  const int socket = taken.front();
-  taken.pop();
+  taken->head = first->next;
+  if (!taken->head)
+    taken->tail = nullptr;
+  auto* const waiting = reinterpret_cast<WaitingSock*>(first);
+  const int socket = waiting->socket;
+  delete waiting;
   return socket;
 }
 int s_num_connected;
@@ -113,12 +127,12 @@ void GBAConnectionWaiter_Shutdown()
 
 static int GetNextSock()
 {
-  return TakeSock(&s_waiting_socks, s_taken_socks);
+  return TakeSock(&s_waiting_socks, &s_taken_socks);
 }
 
 static int GetNextClock()
 {
-  return TakeSock(&s_waiting_clocks, s_taken_clocks);
+  return TakeSock(&s_waiting_clocks, &s_taken_clocks);
 }
 
 GBASockServer::GBASockServer()
