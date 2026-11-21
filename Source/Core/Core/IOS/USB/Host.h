@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -46,8 +45,8 @@ protected:
   virtual void OnDeviceChangeEnd();
   virtual bool ShouldAddDevice(const USB::Device& device) const;
 
-  IPCReply HandleTransfer(const std::shared_ptr<USB::Device>& device, u32 request,
-                          const std::function<s32()>& submit) const;
+  // The reply to a transfer submitted to device, from what submitting it returned
+  IPCReply TransferReply(const USB::Device& device, u32 request, s32 ret) const;
 
   // Emulation thread only. Device lists from the scan thread wait in m_pending_devices until
   // Update takes them, so this and everything derived from it in the subclasses stay on one

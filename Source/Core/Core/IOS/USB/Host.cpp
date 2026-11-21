@@ -148,19 +148,14 @@ void USBHost::OnDevicesChangedInternal(const USBScanner::DeviceMap& new_devices)
     OnDeviceChangeEnd();
 }
 
-IPCReply USBHost::HandleTransfer(const std::shared_ptr<USB::Device>& device, u32 request,
-                                 const std::function<s32()>& submit) const
+IPCReply USBHost::TransferReply(const USB::Device& device, u32 request, s32 ret) const
 {
-  if (!device)
-    return IPCReply(IPC_ENOENT);
-
-  const s32 ret = submit();
   if (ret == IPC_SUCCESS)
     return IPCReply::None();
 
   ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to submit transfer (request %u): %s",
-            (unsigned)device->GetVid(), (unsigned)device->GetPid(), request,
-            device->GetErrorName(ret).c_str());
+            (unsigned)device.GetVid(), (unsigned)device.GetPid(), request,
+            device.GetErrorName(ret).c_str());
   return IPCReply(ret <= 0 ? ret : IPC_EINVAL);
 }
 

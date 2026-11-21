@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <functional>
 #include <memory>
 
 #include "Common/CommonTypes.h"
@@ -80,8 +79,8 @@ protected:
   IPCReply Shutdown(const IOCtlRequest& request);
   IPCReply SuspendResume(USBV5Device& device, const IOCtlRequest& request);
 
-  using Handler = std::function<IPCReply(USBV5Device&)>;
-  IPCReply HandleDeviceIOCtl(const IOCtlRequest& request, const Handler& handler);
+  // The device a device ioctl names; nullptr when the request is malformed or names none
+  USBV5Device* GetIOCtlDevice(const IOCtlRequest& request);
   IPCReply GetUSBVersion(const IOCtlRequest& request) const;
 
   void OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> device) override;

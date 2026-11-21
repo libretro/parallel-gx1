@@ -188,15 +188,11 @@ IPCReply USBV5ResourceManager::SuspendResume(USBV5Device& device, const IOCtlReq
   return IPCReply(IPC_SUCCESS);
 }
 
-IPCReply USBV5ResourceManager::HandleDeviceIOCtl(const IOCtlRequest& request,
-                                                 const Handler& handler)
+USBV5ResourceManager::USBV5Device* USBV5ResourceManager::GetIOCtlDevice(const IOCtlRequest& request)
 {
   if (request.buffer_in == 0 || request.buffer_in_size != 0x20)
-    return IPCReply(IPC_EINVAL);
-  USBV5Device* device = GetUSBV5Device(request.buffer_in);
-  if (!device)
-    return IPCReply(IPC_EINVAL);
-  return handler(*device);
+    return nullptr;
+  return GetUSBV5Device(request.buffer_in);
 }
 
 IPCReply USBV5ResourceManager::GetUSBVersion(const IOCtlRequest& request) const

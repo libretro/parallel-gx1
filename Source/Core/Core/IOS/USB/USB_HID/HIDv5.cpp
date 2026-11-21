@@ -28,16 +28,22 @@ IPCReply USB_HIDv5::IOCtl(const IOCtlRequest& request)
   case USB::IOCTL_USBV5_SHUTDOWN:
     return Shutdown(request);
   case USB::IOCTL_USBV5_GETDEVPARAMS:
-    return HandleDeviceIOCtl(request,
-                             [&](USBV5Device& device) { return GetDeviceInfo(device, request); });
+  {
+    USBV5Device* const device = GetIOCtlDevice(request);
+    return device ? GetDeviceInfo(*device, request) : IPCReply(IPC_EINVAL);
+  }
   case USB::IOCTL_USBV5_ATTACHFINISH:
     return IPCReply(IPC_SUCCESS);
   case USB::IOCTL_USBV5_SUSPEND_RESUME:
-    return HandleDeviceIOCtl(request,
-                             [&](USBV5Device& device) { return SuspendResume(device, request); });
+  {
+    USBV5Device* const device = GetIOCtlDevice(request);
+    return device ? SuspendResume(*device, request) : IPCReply(IPC_EINVAL);
+  }
   case USB::IOCTL_USBV5_CANCELENDPOINT:
-    return HandleDeviceIOCtl(request,
-                             [&](USBV5Device& device) { return CancelEndpoint(device, request); });
+  {
+    USBV5Device* const device = GetIOCtlDevice(request);
+    return device ? CancelEndpoint(*device, request) : IPCReply(IPC_EINVAL);
+  }
   default:
     request.DumpUnknown(GetSystem(), GetDeviceName(), Common::Log::LogType::IOS_USB,
                         Common::Log::LogLevel::LERROR);
@@ -64,8 +70,10 @@ IPCReply USB_HIDv5::IOCtlV(const IOCtlVRequest& request)
       host_device->Attach();
     else
       host_device->AttachAndChangeInterface(device->interface_number);
-    return HandleTransfer(host_device, request.request,
-                          [&, this] { return SubmitTransfer(*device, *host_device, request); });
+    if (!host_device)
+      return IPCReply(IPC_ENOENT);
+    return TransferReply(*host_device, request.request,
+                         SubmitTransfer(*device, *host_device, request));
   }
   default:
     request.DumpUnknown(GetSystem(), GetDeviceName(), Common::Log::LogType::IOS_USB);
