@@ -3,7 +3,6 @@
 
 #include "Core/Debugger/Debugger_SymbolMap.h"
 
-#include <functional>
 #include <string>
 
 #include <cstdio>
@@ -26,28 +25,6 @@ static bool IsStackBottom(u32 addr)
   return !addr || !PowerPC::MMU::HostIsRAMAddress(addr);
 }
 
-static void WalkTheStack(const std::function<void(u32)>& stack_step)
-{
-  const auto& ppc_state = Core::System::GetInstance().GetPPCState();
-
-  if (!IsStackBottom(ppc_state.gpr[1]))
-  {
-    u32 addr = PowerPC::MMU::HostRead<u32>(ppc_state.gpr[1]);  // SP
-
-    // Walk the stack chain
-    for (int count = 0; !IsStackBottom(addr + 4) && (count < 20); ++count)
-    {
-      u32 func_addr = PowerPC::MMU::HostRead<u32>(addr + 4);
-      stack_step(func_addr);
-
-      if (IsStackBottom(addr))
-        break;
-
-      addr = PowerPC::MMU::HostRead<u32>(addr);
-    }
-  }
-}
-
 void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level)
 {
   auto& power_pc = Core::System::GetInstance().GetPowerPC();
@@ -67,12 +44,25 @@ void PrintCallstack(Common::Log::LogType type, Common::Log::LogLevel level)
     GENERIC_LOG(type, level, " * %s  [ LR = %08x ]", lr_desc.c_str(), LR(ppc_state));
   }
 
-  WalkTheStack([type, level, &ppc_symbol_db](u32 func_addr) {
+  if (IsStackBottom(ppc_state.gpr[1]))
+    return;
+
+  u32 addr = PowerPC::MMU::HostRead<u32>(ppc_state.gpr[1]);  // SP
+
+  // Walk the stack chain
+  for (int count = 0; !IsStackBottom(addr + 4) && (count < 20); ++count)
+  {
+    const u32 func_addr = PowerPC::MMU::HostRead<u32>(addr + 4);
     std::string func_desc = ppc_symbol_db.GetDescription(func_addr);
     if (func_desc.empty() || func_desc == "Invalid")
       func_desc = "(unknown)";
     GENERIC_LOG(type, level, " * %s [ addr = %08x ]", func_desc.c_str(), func_addr);
-  });
+
+    if (IsStackBottom(addr))
+      break;
+
+    addr = PowerPC::MMU::HostRead<u32>(addr);
+  }
 }
 
 void PrintDataBuffer(const Core::System& system, Common::Log::LogType type, u32 address, u32 size,
