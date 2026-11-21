@@ -5,8 +5,8 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -30,8 +30,8 @@
 namespace DiscIO
 {
 VolumeWii::VolumeWii(BlobReader* reader)
-    : VolumeDisc(VolumeKind::Wii), m_reader(reader), m_game_partition(PARTITION_NONE),
-      m_last_decrypted_block(UINT64_MAX)
+    : VolumeDisc(VolumeKind::Wii), m_reader(reader), m_partitions(nullptr), m_partition_count(0),
+      m_game_partition(PARTITION_NONE), m_last_decrypted_block(UINT64_MAX)
 {
   ASSERT(m_reader);
 
@@ -40,6 +40,11 @@ VolumeWii::VolumeWii(BlobReader* reader)
 
   if (m_has_encryption && !m_has_hashes)
     ERROR_LOG(DISCIO, "Wii disc has encryption but no hashes! This probably won't work well");
+
+  // The partition offsets, sorted, without repeats
+  u64* offsets = nullptr;
+  u32 count = 0;
+  u32 capacity = 0;
 
   for (u32 partition_group = 0; partition_group < 4; ++partition_group)
   {
@@ -60,8 +65,6 @@ VolumeWii::VolumeWii(BlobReader* reader)
       if (!partition_offset)
         continue;
 
-      const Partition partition(*partition_offset);
-
       const std::optional<u32> partition_type =
           m_reader->ReadSwapped<u32>(*partition_table_offset + (i * 8) + 4);
       if (!partition_type)
@@ -69,79 +72,126 @@ VolumeWii::VolumeWii(BlobReader* reader)
 
       // If this is the game partition, set m_game_partition
       if (m_game_partition == PARTITION_NONE && *partition_type == 0)
-        m_game_partition = partition;
+        m_game_partition = Partition(*partition_offset);
 
-      auto get_ticket = [this, partition]() -> IOS::ES::TicketReader {
-        // read straight into the reader
-        IOS::ES::TicketReader ticket;
-        u8* const bytes = ticket.ResizeBytes(sizeof(IOS::ES::Ticket));
-        if (!bytes || !m_reader->Read(partition.offset, sizeof(IOS::ES::Ticket), bytes))
-          return INVALID_TICKET;
-        return ticket;
-      };
+      u32 at = count;
+      while (at > 0 && offsets[at - 1] > *partition_offset)
+        at--;
+      if (at > 0 && offsets[at - 1] == *partition_offset)
+        continue;
 
-      auto get_tmd = [this, partition]() -> IOS::ES::TMDReader {
-        const std::optional<u32> tmd_size =
-            m_reader->ReadSwapped<u32>(partition.offset + WII_PARTITION_TMD_SIZE_ADDRESS);
-        const std::optional<u64> tmd_address = ReadSwappedAndShifted(
-            partition.offset + WII_PARTITION_TMD_OFFSET_ADDRESS, PARTITION_NONE);
-        if (!tmd_size || !tmd_address)
-          return INVALID_TMD;
-        if (!IOS::ES::IsValidTMDSize(*tmd_size))
-        {
-          // This check is normally done by ES in ES_DiVerify, but that would happen too late
-          // (after allocating the buffer), so we do the check here.
-          ERROR_LOG(DISCIO, "Invalid TMD size");
-          return INVALID_TMD;
-        }
-        IOS::ES::TMDReader tmd;
-        u8* const bytes = tmd.ResizeBytes(*tmd_size);
-        if (!bytes || !m_reader->Read(partition.offset + *tmd_address, *tmd_size, bytes))
-          return INVALID_TMD;
-        return tmd;
-      };
-
-      auto get_cert_chain = [this, partition]() -> std::vector<u8> {
-        const std::optional<u32> size =
-            m_reader->ReadSwapped<u32>(partition.offset + WII_PARTITION_CERT_CHAIN_SIZE_ADDRESS);
-        const std::optional<u64> address = ReadSwappedAndShifted(
-            partition.offset + WII_PARTITION_CERT_CHAIN_OFFSET_ADDRESS, PARTITION_NONE);
-        if (!size || !address)
-          return {};
-        std::vector<u8> cert_chain(*size);
-        if (!m_reader->Read(partition.offset + *address, *size, cert_chain.data()))
-          return {};
-        return cert_chain;
-      };
-
-      auto get_key = [this, partition]() -> PartitionKey {
-        const IOS::ES::TicketReader& ticket = *m_partitions[partition].ticket;
-        PartitionKey key{};
-        key.valid = ticket.IsValid() && !aes_init(&key.ctx, ticket.GetTitleKey().data(), 16);
-        return key;
-      };
-
-      auto get_file_system = [this, partition]() -> FileSystem {
-        return FileSystem(this, partition);
-      };
-
-      auto get_data_offset = [this, partition]() -> u64 {
-        return ReadSwappedAndShifted(partition.offset + 0x2b8, PARTITION_NONE).value_or(0);
-      };
-
-      m_partitions.emplace(partition,
-                           PartitionDetails{Common::Lazy<PartitionKey>(get_key),
-                                            Common::Lazy<IOS::ES::TicketReader>(get_ticket),
-                                            Common::Lazy<IOS::ES::TMDReader>(get_tmd),
-                                            Common::Lazy<std::vector<u8>>(get_cert_chain),
-                                            Common::Lazy<FileSystem>(get_file_system),
-                                            Common::Lazy<u64>(get_data_offset), *partition_type});
+      if (count == capacity)
+      {
+        const u32 new_capacity = capacity ? capacity * 2 : 8;
+        u64* const grown = static_cast<u64*>(std::realloc(offsets, new_capacity * sizeof(u64)));
+        if (!grown)
+          continue;
+        offsets = grown;
+        capacity = new_capacity;
+      }
+      std::memmove(offsets + at + 1, offsets + at, (count - at) * sizeof(u64));
+      offsets[at] = *partition_offset;
+      count++;
     }
   }
+
+  if (count)
+  {
+    m_partitions = new PartitionDetails[count];
+    m_partition_count = count;
+    for (u32 i = 0; i < count; i++)
+      LoadPartition(&m_partitions[i], Partition(offsets[i]));
+  }
+  std::free(offsets);
+}
+
+void VolumeWii::LoadPartition(PartitionDetails* details, const Partition& partition)
+{
+  details->partition = partition;
+  details->data_offset =
+      ReadSwappedAndShifted(partition.offset + 0x2b8, PARTITION_NONE).value_or(0);
+  details->file_system = nullptr;
+  details->tmd_read = false;
+  details->cert_chain_read = false;
+
+  // read straight into the reader
+  u8* const bytes = details->ticket.ResizeBytes(sizeof(IOS::ES::Ticket));
+  if (!bytes || !m_reader->Read(partition.offset, sizeof(IOS::ES::Ticket), bytes))
+    details->ticket = INVALID_TICKET;
+
+  // Only an encrypted disc's reads use the key
+  std::memset(&details->key, 0, sizeof(details->key));
+  details->key.valid = m_has_encryption && details->ticket.IsValid() &&
+                       !aes_init(&details->key.ctx, details->ticket.GetTitleKey().data(), 16);
+}
+
+const VolumeWii::PartitionDetails* VolumeWii::FindPartition(const Partition& partition) const
+{
+  for (u32 i = 0; i < m_partition_count; i++)
+  {
+    if (m_partitions[i].partition == partition)
+      return &m_partitions[i];
+  }
+  return nullptr;
+}
+
+const IOS::ES::TMDReader& VolumeWii::GetPartitionTMD(const PartitionDetails& details) const
+{
+  if (details.tmd_read)
+    return details.tmd;
+  details.tmd_read = true;
+
+  const u64 offset = details.partition.offset;
+  const std::optional<u32> tmd_size =
+      m_reader->ReadSwapped<u32>(offset + WII_PARTITION_TMD_SIZE_ADDRESS);
+  const std::optional<u64> tmd_address =
+      ReadSwappedAndShifted(offset + WII_PARTITION_TMD_OFFSET_ADDRESS, PARTITION_NONE);
+  if (!tmd_size || !tmd_address)
+    return details.tmd;
+  if (!IOS::ES::IsValidTMDSize(*tmd_size))
+  {
+    // This check is normally done by ES in ES_DiVerify, but that would happen too late
+    // (after allocating the buffer), so we do the check here.
+    ERROR_LOG(DISCIO, "Invalid TMD size");
+    return details.tmd;
+  }
+  u8* const bytes = details.tmd.ResizeBytes(*tmd_size);
+  if (!bytes || !m_reader->Read(offset + *tmd_address, *tmd_size, bytes))
+    details.tmd = INVALID_TMD;
+  return details.tmd;
+}
+
+const std::vector<u8>& VolumeWii::GetPartitionCertChain(const PartitionDetails& details) const
+{
+  if (details.cert_chain_read)
+    return details.cert_chain;
+  details.cert_chain_read = true;
+
+  const u64 offset = details.partition.offset;
+  const std::optional<u32> size =
+      m_reader->ReadSwapped<u32>(offset + WII_PARTITION_CERT_CHAIN_SIZE_ADDRESS);
+  const std::optional<u64> address =
+      ReadSwappedAndShifted(offset + WII_PARTITION_CERT_CHAIN_OFFSET_ADDRESS, PARTITION_NONE);
+  if (!size || !address)
+    return details.cert_chain;
+  details.cert_chain.resize(*size);
+  if (!m_reader->Read(offset + *address, *size, details.cert_chain.data()))
+    details.cert_chain.clear();
+  return details.cert_chain;
+}
+
+const FileSystem& VolumeWii::GetPartitionFileSystem(const PartitionDetails& details) const
+{
+  if (!details.file_system)
+    details.file_system = new FileSystem(this, details.partition);
+  return *details.file_system;
 }
 
 VolumeWii::~VolumeWii()
 {
+  for (u32 i = 0; i < m_partition_count; i++)
+    delete m_partitions[i].file_system;
+  delete[] m_partitions;
   DestroyBlobReader(m_reader);
 }
 
@@ -150,12 +200,11 @@ bool VolumeWii::Read(u64 offset, u64 length, u8* buffer, const Partition& partit
   if (partition == PARTITION_NONE)
     return m_reader->Read(offset, length, buffer);
 
-  auto it = m_partitions.find(partition);
-  if (it == m_partitions.end())
+  const PartitionDetails* const partition_details = FindPartition(partition);
+  if (!partition_details)
     return false;
-  const PartitionDetails& partition_details = it->second;
 
-  const u64 partition_data_offset = partition.offset + *partition_details.data_offset;
+  const u64 partition_data_offset = partition.offset + partition_details->data_offset;
   if (m_has_hashes && m_has_encryption &&
       m_reader->SupportsReadWiiDecrypted(offset, length, partition_data_offset))
   {
@@ -170,9 +219,9 @@ bool VolumeWii::Read(u64 offset, u64 length, u8* buffer, const Partition& partit
   const struct aes_ctx* aes_context = nullptr;
   if (m_has_encryption)
   {
-    if (!partition_details.key->valid)
+    if (!partition_details->key.valid)
       return false;
-    aes_context = &partition_details.key->ctx;
+    aes_context = &partition_details->key.ctx;
   }
 
   while (length > 0)
@@ -237,9 +286,9 @@ bool VolumeWii::HasWiiHashes() const
 std::vector<Partition> VolumeWii::GetPartitions() const
 {
   std::vector<Partition> partitions;
-  partitions.reserve(m_partitions.size());
-  for (const auto& partition : m_partitions)
-    partitions.push_back(partition.first);
+  partitions.reserve(m_partition_count);
+  for (u32 i = 0; i < m_partition_count; i++)
+    partitions.push_back(m_partitions[i].partition);
   return partitions;
 }
 
@@ -258,29 +307,29 @@ std::optional<u64> VolumeWii::GetTitleID(const Partition& partition) const
 
 const IOS::ES::TicketReader& VolumeWii::GetTicket(const Partition& partition) const
 {
-  auto it = m_partitions.find(partition);
-  return it != m_partitions.end() ? *it->second.ticket : INVALID_TICKET;
+  const PartitionDetails* const details = FindPartition(partition);
+  return details ? details->ticket : INVALID_TICKET;
 }
 
 const IOS::ES::TMDReader& VolumeWii::GetTMD(const Partition& partition) const
 {
-  auto it = m_partitions.find(partition);
-  return it != m_partitions.end() ? *it->second.tmd : INVALID_TMD;
+  const PartitionDetails* const details = FindPartition(partition);
+  return details ? GetPartitionTMD(*details) : INVALID_TMD;
 }
 
 const std::vector<u8>& VolumeWii::GetCertificateChain(const Partition& partition) const
 {
-  auto it = m_partitions.find(partition);
-  return it != m_partitions.end() ? *it->second.cert_chain : INVALID_CERT_CHAIN;
+  const PartitionDetails* const details = FindPartition(partition);
+  return details ? GetPartitionCertChain(*details) : INVALID_CERT_CHAIN;
 }
 
 const FileSystem* VolumeWii::GetFileSystem(const Partition& partition) const
 {
-  auto it = m_partitions.find(partition);
-  if (it == m_partitions.end())
+  const PartitionDetails* const details = FindPartition(partition);
+  if (!details)
     return nullptr;
   // nullptr when it could not be read
-  const FileSystem& file_system = *it->second.file_system;
+  const FileSystem& file_system = GetPartitionFileSystem(*details);
   return file_system.IsValid() ? &file_system : nullptr;
 }
 
@@ -296,10 +345,10 @@ u64 VolumeWii::OffsetInHashedPartitionToRawOffset(u64 offset, const Partition& p
 
 u64 VolumeWii::PartitionOffsetToRawOffset(u64 offset, const Partition& partition) const
 {
-  auto it = m_partitions.find(partition);
-  if (it == m_partitions.end())
+  const PartitionDetails* const details = FindPartition(partition);
+  if (!details)
     return offset;
-  const u64 data_offset = *it->second.data_offset;
+  const u64 data_offset = details->data_offset;
 
   if (!m_has_hashes)
     return partition.offset + data_offset + offset;

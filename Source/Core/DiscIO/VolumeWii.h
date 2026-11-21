@@ -4,14 +4,12 @@
 #pragma once
 
 #include <array>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/Lazy.h"
 
 #include <crypto/crypto.h>
 #include "Core/IOS/ES/Formats.h"
@@ -112,19 +110,31 @@ private:
     bool valid;
   };
 
+  // A partition's details; the key and data offset are read up front since every read needs
+  // them, the rest on first use
   struct PartitionDetails
   {
-    Common::Lazy<PartitionKey> key;
-    Common::Lazy<IOS::ES::TicketReader> ticket;
-    Common::Lazy<IOS::ES::TMDReader> tmd;
-    Common::Lazy<std::vector<u8>> cert_chain;
-    Common::Lazy<FileSystem> file_system;
-    Common::Lazy<u64> data_offset;
-    u32 type = 0;
+    Partition partition;
+    u64 data_offset;
+    PartitionKey key;
+    IOS::ES::TicketReader ticket;
+    mutable IOS::ES::TMDReader tmd;
+    mutable std::vector<u8> cert_chain;
+    mutable FileSystem* file_system;
+    mutable bool tmd_read;
+    mutable bool cert_chain_read;
   };
 
+  const PartitionDetails* FindPartition(const Partition& partition) const;
+  void LoadPartition(PartitionDetails* details, const Partition& partition);
+  const IOS::ES::TMDReader& GetPartitionTMD(const PartitionDetails& details) const;
+  const std::vector<u8>& GetPartitionCertChain(const PartitionDetails& details) const;
+  const FileSystem& GetPartitionFileSystem(const PartitionDetails& details) const;
+
   BlobReader* m_reader;  // owned
-  std::map<Partition, PartitionDetails> m_partitions;
+  // Sorted by offset
+  PartitionDetails* m_partitions;
+  u32 m_partition_count;
   Partition m_game_partition;
   bool m_has_hashes;
   bool m_has_encryption;
