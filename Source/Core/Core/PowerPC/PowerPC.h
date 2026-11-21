@@ -5,7 +5,6 @@
 
 #include <array>
 #include <cstddef>
-#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -171,8 +170,9 @@ struct PowerPCState
   bool m_enable_dcache = false;
 
 #ifdef _M_X86_64
-  // This member exists only for the purpose of an assertion that its offset <= 0x100.
-  std::tuple<> above_fits_in_first_0x100;
+  // This member exists only for the purpose of an assertion that its offset <= 0x100; one byte,
+  // as the empty tuple it was.
+  u8 above_fits_in_first_0x100;
 
   alignas(16) PairedSingle ps[32];
 #endif
