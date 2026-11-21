@@ -5,7 +5,6 @@
 
 #include <retro_miscellaneous.h>
 
-#include <array>
 #include <cmath>
 #include <memory>
 
@@ -514,7 +513,7 @@ void VertexManagerBase::Flush()
   const char* texture_names[8];
   u32 num_texture_names = 0;
   Common::SmallVector<u32, 8> texture_units;
-  std::array<SamplerState, 8> samplers;
+  SamplerState samplers[8];
   if (!m_cull_all)
   {
     if (!g_ActiveConfig.bGraphicMods)

@@ -1056,7 +1056,7 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
         num_by_hash++;
       }
     }
-    for (i = 0; i < m_bound_textures.size(); i++)
+    for (i = 0; i < sizeof(m_bound_textures) / sizeof(m_bound_textures[0]); i++)
     {
       if (m_bound_textures[i] && ShouldSaveEntry(m_bound_textures[i]))
       {
@@ -1138,7 +1138,7 @@ void TextureCacheBase::DoSaveState(PointerWrap& p)
   p.Do(num_bound);
   if (save_cache)
   {
-    for (i = 0; i < m_bound_textures.size(); i++)
+    for (i = 0; i < sizeof(m_bound_textures) / sizeof(m_bound_textures[0]); i++)
     {
       if (m_bound_textures[i] && ShouldSaveEntry(m_bound_textures[i]))
       {
@@ -1246,7 +1246,7 @@ void TextureCacheBase::DoLoadState(PointerWrap& p)
   }
 
   // Clear bound textures
-  for (u32 i = 0; i < m_bound_textures.size(); i++)
+  for (u32 i = 0; i < sizeof(m_bound_textures) / sizeof(m_bound_textures[0]); i++)
     m_bound_textures[i].reset();
 
   // Fill in bound textures
@@ -1572,12 +1572,11 @@ SamplerState TextureCacheBase::GetSamplerState(u32 index, float custom_tex_scale
   return state;
 }
 
-void TextureCacheBase::BindTextures(BitSet32 used_textures,
-                                    const std::array<SamplerState, 8>& samplers)
+void TextureCacheBase::BindTextures(BitSet32 used_textures, const SamplerState* samplers)
 {
   auto& system = Core::System::GetInstance();
   auto& pixel_shader_manager = system.GetPixelShaderManager();
-  for (u32 i = 0; i < m_bound_textures.size(); i++)
+  for (u32 i = 0; i < sizeof(m_bound_textures) / sizeof(m_bound_textures[0]); i++)
   {
     const RcTcacheEntry& tentry = m_bound_textures[i];
     if (used_textures[i] && tentry)
@@ -1596,10 +1595,6 @@ void TextureCacheBase::BindTextures(BitSet32 used_textures,
 
 class ArbitraryMipmapDetector
 {
-private:
-  using PixelRGBAf = std::array<float, 4>;
-  using PixelRGBAu8 = std::array<u8, 4>;
-
 public:
   explicit ArbitraryMipmapDetector() = default;
 
@@ -1654,7 +1649,9 @@ public:
       auto diff = mip.AverageDiff(dst);
       total_diff += diff;
 
-      std::swap(src, dst);
+      u8* const swap = src;
+      src = dst;
+      dst = swap;
     }
 
     auto all_levels = total_diff / (level_count - 1);
@@ -1674,12 +1671,6 @@ private:
     Shape shape;
     const u8* pixels;
 
-    static PixelRGBAu8 SampleLinear(const u8* src, const Shape& src_shape, u32 x, u32 y)
-    {
-      const auto* p = src + (x + y * src_shape.row_length) * 4;
-      return {{p[0], p[1], p[2], p[3]}};
-    }
-
     // Puts a downsampled image in dst. dst must be at least width*height*4
     static void Downsample(const u8* src, const Shape& src_shape, u8* dst, const Shape& dst_shape)
     {
@@ -1687,20 +1678,19 @@ private:
       {
         for (u32 j = 0; j < dst_shape.width; ++j)
         {
-          auto x = j * 2;
-          auto y = i * 2;
-          const std::array<PixelRGBAu8, 4> samples{{
-              SampleLinear(src, src_shape, x, y),
-              SampleLinear(src, src_shape, x + 1, y),
-              SampleLinear(src, src_shape, x, y + 1),
-              SampleLinear(src, src_shape, x + 1, y + 1),
-          }};
+          const u32 x = j * 2;
+          const u32 y = i * 2;
+          // The 2x2 block of source pixels this one averages.
+          const u8* const top_left = src + (x + y * src_shape.row_length) * 4;
+          const u8* const top_right = top_left + 4;
+          const u8* const bottom_left = top_left + src_shape.row_length * 4;
+          const u8* const bottom_right = bottom_left + 4;
 
-          auto* dst_pixel = dst + (j + i * dst_shape.row_length) * 4;
+          u8* const dst_pixel = dst + (j + i * dst_shape.row_length) * 4;
           for (int channel = 0; channel < 4; channel++)
           {
-            uint32_t channel_value = samples[0][channel] + samples[1][channel] +
-                                     samples[2][channel] + samples[3][channel];
+            uint32_t channel_value = top_left[channel] + top_right[channel] + bottom_left[channel] +
+                                     bottom_right[channel];
             dst_pixel[channel] = (channel_value + 2) / 4;
           }
         }
@@ -3122,7 +3112,7 @@ void TextureCacheBase::FlushEFBCopies()
 
 void TextureCacheBase::FlushStaleBinds()
 {
-  for (u32 i = 0; i < m_bound_textures.size(); i++)
+  for (u32 i = 0; i < sizeof(m_bound_textures) / sizeof(m_bound_textures[0]); i++)
   {
     if (!TMEM::IsCached(i))
       m_bound_textures[i].reset();

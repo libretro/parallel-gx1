@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -395,7 +394,8 @@ public:
   RcTcacheEntry GetXFBTexture(u32 address, u32 width, u32 height, u32 stride,
                               MathUtil::Rectangle<int>* display_rect);
 
-  void BindTextures(BitSet32 used_textures, const std::array<SamplerState, 8>& samplers);
+  // samplers holds one state per texture unit.
+  void BindTextures(BitSet32 used_textures, const SamplerState* samplers);
   void CopyRenderTargetToTexture(u32 dstAddr, EFBCopyFormat dstFormat, u32 width, u32 height,
                                  u32 dstStride, bool is_depth_copy,
                                  const MathUtil::Rectangle<int>& srcRect, bool isIntensity,
@@ -573,7 +573,7 @@ private:
 
   // m_bound_textures are actually active in the current draw
   // It's valid for textures to be in here after they've been invalidated
-  std::array<RcTcacheEntry, 8> m_bound_textures{};
+  RcTcacheEntry m_bound_textures[8]{};
 
   // the overlapping copies StitchXFBCopy draws, kept for the next call
   TCacheEntry** m_stitch_candidates = nullptr;

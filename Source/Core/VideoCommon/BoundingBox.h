@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <memory>
 
 #include "Common/CommonTypes.h"
@@ -45,8 +44,8 @@ private:
 
   bool m_is_active = false;
 
-  std::array<BBoxType, NUM_BBOX_VALUES> m_values = {};
-  std::array<bool, NUM_BBOX_VALUES> m_dirty = {};
+  BBoxType m_values[NUM_BBOX_VALUES] = {};
+  bool m_dirty[NUM_BBOX_VALUES] = {};
   bool m_is_valid = true;
 
   // Nintendo's SDK seems to write "default" bounding box values before every draw (1023 0 1023 0
@@ -59,7 +58,7 @@ private:
   //
   // This produces much better results than just returning garbage, which can cause games like
   // Ultimate Spider-Man to crash
-  std::array<u16, 4> m_bounding_box_fallback = {};
+  u16 m_bounding_box_fallback[4] = {};
 };
 
 /* Deletes a bounding box as the backend's own class; NULL is let be. */

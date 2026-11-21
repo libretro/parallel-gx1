@@ -50,7 +50,7 @@ void BoundingBox::Flush()
     for (u32 i = start; i < end; ++i)
       m_dirty[i] = false;
 
-    Write(start, m_values.data() + start, end - start);
+    Write(start, m_values + start, end - start);
   }
 }
 
