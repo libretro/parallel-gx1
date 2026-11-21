@@ -5,8 +5,8 @@
 
 #include <array>
 #include <cinttypes>
+#include <cstring>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include <cstdio>
@@ -358,6 +358,21 @@ bool ESCore::InitImport(const ES::TMDReader& tmd)
   return true;
 }
 
+// Whether an import's content directory keeps name: the TMD or one of its contents
+static bool IsExpectedImportEntry(const char* name, const std::vector<ES::Content>& contents)
+{
+  if (!std::strcmp(name, "title.tmd"))
+    return true;
+  for (const ES::Content& content : contents)
+  {
+    char content_name[16];
+    std::snprintf(content_name, sizeof(content_name), "%08x.app", content.id);
+    if (!std::strcmp(name, content_name))
+      return true;
+  }
+  return false;
+}
+
 bool ESCore::FinishImport(const ES::TMDReader& tmd)
 {
   const auto fs = m_ios.GetFS();
@@ -365,9 +380,7 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
   const std::string import_content_dir = Common::GetImportTitlePath(title_id) + "/content";
 
   // Remove everything not listed in the TMD.
-  std::unordered_set<std::string> expected_entries = {"title.tmd"};
-  for (const auto& content_info : tmd.GetContents())
-    expected_entries.insert(StringFromFormat("%08x.app", content_info.id));
+  const std::vector<ES::Content> contents = tmd.GetContents();
   const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, import_content_dir);
   if (!entries)
     return false;
@@ -378,7 +391,7 @@ bool ESCore::FinishImport(const ES::TMDReader& tmd)
     // There should not be any directory in there. Remove it.
     if (fs->ReadDirectory(PID_KERNEL, PID_KERNEL, absolute_path))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path);
-    else if (!expected_entries.contains(name))
+    else if (!IsExpectedImportEntry(name.c_str(), contents))
       fs->Delete(PID_KERNEL, PID_KERNEL, absolute_path);
   }
 
