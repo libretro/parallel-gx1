@@ -32,7 +32,6 @@
 #include "Core/System.h"
 
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
-#include "InputCommon/ControllerInterface/Wiimote/WiimoteController.h"
 
 namespace WiimoteReal
 {
@@ -222,8 +221,7 @@ static void PutInSlotOnCPU(void* context)
   WiimoteCommon::UpdateSource(change->index);
 }
 
-// Attempt to fill a real wiimote slot from the pool or by stealing from ControllerInterface.
-// Manager only.
+// Attempt to fill a real wiimote slot from the pool. Manager only.
 static void TryToFillWiimoteSlot(u32 index)
 {
   if (GetWiimote(index) ||
@@ -232,15 +230,8 @@ static void TryToFillWiimoteSlot(u32 index)
     return;
   }
 
-  // If the pool is empty, attempt to steal from ControllerInterface.
   if (s_wiimote_pool.empty())
-  {
-    ciface::WiimoteController::ReleaseDevices(1);
-
-    // Still empty?
-    if (s_wiimote_pool.empty())
-      return;
-  }
+    return;
 
   if (TryToConnectWiimoteToSlot(s_wiimote_pool.front().wiimote, index))
     s_wiimote_pool.erase(s_wiimote_pool.begin());
@@ -252,24 +243,11 @@ void PopulateDevices()
   s_wiimote_scanner.PopulateDevices();
 }
 
-// Attempts to fill enabled real wiimote slots.
-// Push/pull wiimotes to/from ControllerInterface as needed. Manager only.
+// Attempts to fill enabled real wiimote slots. Manager only.
 static void ProcessWiimotePool()
 {
   for (u32 index = 0; index != MAX_WIIMOTES; ++index)
     TryToFillWiimoteSlot(index);
-
-  if (Config::Get(Config::MAIN_CONNECT_WIIMOTES_FOR_CONTROLLER_INTERFACE))
-  {
-    for (auto& entry : s_wiimote_pool)
-      ciface::WiimoteController::AddDevice(std::move(entry.wiimote));
-
-    s_wiimote_pool.clear();
-  }
-  else
-  {
-    ciface::WiimoteController::ReleaseDevices();
-  }
 }
 
 static void AddWiimoteToPoolNow(std::unique_ptr<Wiimote> wiimote)
@@ -999,22 +977,18 @@ void WiimoteScanner::ThreadFunc()
     for (const auto& backend : backends)
       backend->Update();
 
-    // If we don't want Wiimotes in ControllerInterface, we may not need them at all.
-    if (!Config::Get(Config::MAIN_CONNECT_WIIMOTES_FOR_CONTROLLER_INTERFACE))
+    auto& system = Core::System::GetInstance();
+    // We don't want any remotes in passthrough mode or running in GC mode.
+    const bool core_running = Core::GetState(system) != Core::State::Uninitialized;
+    if (Config::Get(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED) ||
+        (core_running && !system.IsWii()))
     {
-      auto& system = Core::System::GetInstance();
-      // We don't want any remotes in passthrough mode or running in GC mode.
-      const bool core_running = Core::GetState(system) != Core::State::Uninitialized;
-      if (Config::Get(Config::MAIN_BLUETOOTH_PASSTHROUGH_ENABLED) ||
-          (core_running && !system.IsWii()))
-      {
-        continue;
-      }
-
-      // We don't want any remotes if we already connected everything we need.
-      if (0 == CalculateWantedWiimotes() && 0 == CalculateWantedBB())
-        continue;
+      continue;
     }
+
+    // We don't want any remotes if we already connected everything we need.
+    if (0 == CalculateWantedWiimotes() && 0 == CalculateWantedBB())
+      continue;
 
     // Stop scanning if not in continuous mode.
     WiimoteScanMode scan_mode;
@@ -1234,8 +1208,7 @@ void Shutdown()
   for (unsigned int i = 0; i < MAX_BBMOTES; ++i)
     HandleWiimoteDisconnect(i);
 
-  // Release remotes from ControllerInterface and empty the pool.
-  ciface::WiimoteController::ReleaseDevices();
+  // Empty the pool.
   s_wiimote_pool.clear();
   t_is_manager = false;
 

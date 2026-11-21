@@ -603,7 +603,6 @@ DOLPHIN_SOURCES_CXX += \
 	$(CORE_DIR)/Source/Core/InputCommon/ControllerEmu/Setting/NumericSetting.cpp \
 	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/ControllerInterface.cpp \
 	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/CoreDevice.cpp \
-	$(CORE_DIR)/Source/Core/InputCommon/ControllerInterface/Wiimote/WiimoteController.cpp \
 	$(CORE_DIR)/Source/Core/InputCommon/ControlReference/ControlReference.cpp \
 	$(CORE_DIR)/Source/Core/InputCommon/ControlReference/ExpressionParser.cpp \
 	$(CORE_DIR)/Source/Core/InputCommon/ControlReference/FunctionExpression.cpp \
