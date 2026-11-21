@@ -4,8 +4,6 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
-#include <optional>
-#include <utility>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -37,17 +35,25 @@ using ws_ssize_t = ssize_t;
 
 using Common::SEND_FLAGS;
 
-TAPServerConnection::TAPServerConnection(std::string destination,
-                                         std::function<void(std::string&&)> recv_cb,
-                                         std::size_t max_frame_size)
-    : m_destination(std::move(destination)), m_recv_cb(std::move(recv_cb)),
-      m_max_frame_size(max_frame_size)
+TAPServerConnection::TAPServerConnection(const char* destination, RecvCallback recv_cb,
+                                         void* recv_user, std::size_t max_frame_size)
+    : m_destination(strdup(destination ? destination : "")), m_recv_cb(recv_cb),
+      m_recv_user(recv_user), m_max_frame_size(max_frame_size),
+      m_frame_buffer(static_cast<u8*>(std::malloc(max_frame_size ? max_frame_size : 1)))
 {
 }
 
-static int ConnectToDestination(const std::string& destination)
+TAPServerConnection::~TAPServerConnection()
 {
-  if (destination.empty())
+  // The read thread writes the frame buffer until it is joined.
+  Deactivate();
+  std::free(m_frame_buffer);
+  std::free(m_destination);
+}
+
+static int ConnectToDestination(const char* destination)
+{
+  if (!destination || !destination[0])
   {
     ERROR_LOG(SP1, "Cannot connect: destination is empty\n");
     return -1;
@@ -59,24 +65,33 @@ static int ConnectToDestination(const std::string& destination)
   if (destination[0] != '/')
   {
     // IP address or hostname
-    const std::size_t colon_offset = destination.find(':');
-    if (colon_offset == std::string::npos)
+    const char* const colon = std::strchr(destination, ':');
+    if (!colon)
     {
       ERROR_LOG(SP1, "Destination IP address does not include port\n");
       return -1;
     }
 
+    char host[256];
+    const std::size_t host_len = static_cast<std::size_t>(colon - destination);
+    if (host_len >= sizeof(host))
+    {
+      ERROR_LOG(SP1, "Destination IP address is not valid\n");
+      return -1;
+    }
+    std::memcpy(host, destination, host_len);
+    host[host_len] = '\0';
+
     sockaddr_in* sin = reinterpret_cast<sockaddr_in*>(&ss);
     uint32_t dest_ip;
-    if (!net_resolve_ipv4(destination.substr(0, colon_offset).c_str(), &dest_ip))
+    if (!net_resolve_ipv4(host, &dest_ip))
     {
       ERROR_LOG(SP1, "Destination IP address is not valid\n");
       return -1;
     }
     sin->sin_addr.s_addr = dest_ip;
     sin->sin_family = AF_INET;
-    const std::string port_str = destination.substr(colon_offset + 1);
-    const int dest_port = std::atoi(port_str.c_str());
+    const int dest_port = std::atoi(colon + 1);
     if (dest_port < 1 || dest_port > 65535)
     {
       ERROR_LOG(SP1, "Destination port is not valid\n");
@@ -90,13 +105,13 @@ static int ConnectToDestination(const std::string& destination)
   {
     // UNIX socket
     sockaddr_un* sun = reinterpret_cast<sockaddr_un*>(&ss);
-    if (destination.size() + 1 > sizeof(sun->sun_path))
+    if (std::strlen(destination) + 1 > sizeof(sun->sun_path))
     {
       ERROR_LOG(SP1, "Socket path is too long; unable to create tapserver connection\n");
       return -1;
     }
     sun->sun_family = AF_UNIX;
-    std::strcpy(sun->sun_path, destination.c_str());
+    std::strcpy(sun->sun_path, destination);
     ss_size = sizeof(*sun);
 #else
   }
@@ -172,20 +187,24 @@ void TAPServerConnection::RecvStop()
   m_read_enabled.Clear();
 }
 
-bool TAPServerConnection::SendAndRemoveAllHDLCFrames(std::string* send_buf)
+bool TAPServerConnection::SendAndRemoveAllHDLCFrames(u8* send_buf, std::size_t* send_size)
 {
-  while (!send_buf->empty())
+  // Bytes before consumed have been sent, or skipped before a frame's start flag.
+  std::size_t consumed = 0;
+  bool ok = true;
+  while (consumed != *send_size)
   {
-    const std::size_t start_offset = send_buf->find(0x7E);
-    if (start_offset == std::string::npos)
-    {
+    const u8* const begin = send_buf + consumed;
+    const std::size_t remaining = *send_size - consumed;
+    const u8* const start = static_cast<const u8*>(std::memchr(begin, 0x7E, remaining));
+    if (!start)
       break;
-    }
-    const std::size_t end_sentinel_offset = send_buf->find(0x7E, start_offset + 1);
-    if (end_sentinel_offset == std::string::npos)
-    {
+    const std::size_t start_offset = static_cast<std::size_t>(start - send_buf);
+    const u8* const end_sentinel =
+        static_cast<const u8*>(std::memchr(start + 1, 0x7E, *send_size - start_offset - 1));
+    if (!end_sentinel)
       break;
-    }
+    const std::size_t end_sentinel_offset = static_cast<std::size_t>(end_sentinel - send_buf);
     const std::size_t end_offset = end_sentinel_offset + 1;
     const std::size_t size = end_offset - start_offset;
 
@@ -193,21 +212,28 @@ bool TAPServerConnection::SendAndRemoveAllHDLCFrames(std::string* send_buf)
     if (send(m_fd, reinterpret_cast<const char*>(size_bytes), 2, SEND_FLAGS) != 2)
     {
       ERROR_LOG(SP1, "SendAndRemoveAllHDLCFrames(): could not write size field");
-      return false;
+      ok = false;
+      break;
     }
-    const int written_bytes =
-        send(m_fd, send_buf->data() + start_offset, static_cast<int>(size), SEND_FLAGS);
+    const int written_bytes = send(m_fd, reinterpret_cast<const char*>(send_buf + start_offset),
+                                   static_cast<int>(size), SEND_FLAGS);
     if (u32(written_bytes) != size)
     {
       ERROR_LOG(SP1,
                 "SendAndRemoveAllHDLCFrames(): expected to write %" PRIu64
                 " bytes, instead wrote %d",
                 (u64)size, written_bytes);
-      return false;
+      ok = false;
+      break;
     }
-    *send_buf = send_buf->substr(end_offset);
+    consumed = end_offset;
   }
-  return true;
+  if (consumed)
+  {
+    std::memmove(send_buf, send_buf + consumed, *send_size - consumed);
+    *send_size -= consumed;
+  }
+  return ok;
 }
 
 bool TAPServerConnection::SendFrame(const u8* frame, u32 size)
@@ -247,7 +273,6 @@ void TAPServerConnection::ReadThreadHandler()
 
   std::size_t frame_bytes_received = 0;
   std::size_t frame_bytes_expected = 0;
-  std::string frame_data;
 
   while (!m_read_shutdown.IsSet())
   {
@@ -283,7 +308,6 @@ void TAPServerConnection::ReadThreadHandler()
       else if (bytes_read == 2)
       {
         frame_bytes_expected = size_bytes[0] | (size_bytes[1] << 8);
-        frame_data.resize(frame_bytes_expected, '\0');
         if (frame_bytes_expected > m_max_frame_size)
         {
           ERROR_LOG(SP1, "Packet is too large (%" PRIu64 " bytes); dropping it",
@@ -317,7 +341,6 @@ void TAPServerConnection::ReadThreadHandler()
         break;
       }
       frame_bytes_expected |= (size_high << 8);
-      frame_data.resize(frame_bytes_expected, '\0');
       if (frame_bytes_expected > m_max_frame_size)
       {
         ERROR_LOG(SP1, "Packet is too large (%" PRIu64 " bytes); dropping it",
@@ -333,9 +356,18 @@ void TAPServerConnection::ReadThreadHandler()
     case ReadState::DATA:
     case ReadState::SKIP:
     {
-      const std::size_t bytes_to_read = frame_data.size() - frame_bytes_received;
-      const ws_ssize_t bytes_read = recv(m_fd, frame_data.data() + frame_bytes_received,
-                                         static_cast<ws_ssize_t>(bytes_to_read), 0);
+      // A frame being kept lands whole in the frame buffer; one being skipped is read through
+      // it a buffer at a time.
+      std::size_t bytes_to_read = frame_bytes_expected - frame_bytes_received;
+      u8* dest = m_frame_buffer + frame_bytes_received;
+      if (read_state == ReadState::SKIP)
+      {
+        dest = m_frame_buffer;
+        if (bytes_to_read > m_max_frame_size)
+          bytes_to_read = m_max_frame_size;
+      }
+      const ws_ssize_t bytes_read =
+          recv(m_fd, reinterpret_cast<char*>(dest), static_cast<ws_ssize_t>(bytes_to_read), 0);
       if (bytes_read <= 0)
       {
         ERROR_LOG(SP1, "Failed to read data from destination: %s", Common::StrNetworkError());
@@ -346,9 +378,8 @@ void TAPServerConnection::ReadThreadHandler()
       {
         if (read_state == ReadState::DATA)
         {
-          m_recv_cb(std::move(frame_data));
+          m_recv_cb(m_recv_user, m_frame_buffer, frame_bytes_expected);
         }
-        frame_data.clear();
         frame_bytes_received = 0;
         frame_bytes_expected = 0;
         read_state = ReadState::SIZE;

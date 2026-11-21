@@ -380,7 +380,7 @@ private:
   private:
     TAPServerConnection m_tapserver_if;
 
-    void HandleReceivedFrame(std::string&& data);
+    static void HandleReceivedFrame(void* user, const u8* data, std::size_t size);
   };
 
   class XLinkNetworkInterface : public NetworkInterface

@@ -16,6 +16,10 @@ namespace ExpansionInterface
 {
 
 static constexpr std::size_t MODEM_RECV_SIZE = 0x800;
+// The AT buffers' sizes are read back through 8-bit registers.
+static constexpr std::size_t MODEM_AT_BUFFER_SIZE = 0x100;
+// Holds the unsent part of the outgoing HDLC stream; a frame is far smaller.
+static constexpr std::size_t MODEM_SEND_BUFFER_SIZE = 0x10000;
 
 enum
 {
@@ -90,9 +94,9 @@ private:
   // CPU thread: brings the receive registers and interrupt in line with the ring.
   void SyncReceiveState();
   void SendComplete();
-  void AddToReceiveBuffer(std::string&& data);
+  void AddToReceiveBuffer(const u8* data, std::size_t size);
   void RunAllPendingATCommands();
-  void AddATReply(const std::string& data);
+  void AddATReply(const char* reply);
 
   static bool TransferIsResetCommand(u32 transfer_descriptor)
   {
@@ -123,7 +127,7 @@ private:
     virtual bool Activate() { return false; }
     virtual void Deactivate() {}
     virtual bool IsActivated() { return false; }
-    virtual bool SendAndRemoveAllHDLCFrames(std::string*) { return false; }
+    virtual bool SendAndRemoveAllHDLCFrames(u8*, std::size_t*) { return false; }
     virtual bool RecvInit() { return false; }
     virtual void RecvStart() {}
     virtual void RecvStop() {}
@@ -134,13 +138,13 @@ private:
   class TAPServerNetworkInterface : public NetworkInterface
   {
   public:
-    TAPServerNetworkInterface(CEXIModem* modem_ref, const std::string& destination);
+    TAPServerNetworkInterface(CEXIModem* modem_ref, const char* destination);
 
   public:
     bool Activate() override;
     void Deactivate() override;
     bool IsActivated() override;
-    bool SendAndRemoveAllHDLCFrames(std::string* send_buffer) override;
+    bool SendAndRemoveAllHDLCFrames(u8* send_buffer, std::size_t* send_size) override;
     bool RecvInit() override;
     void RecvStart() override;
     void RecvStop() override;
@@ -148,7 +152,7 @@ private:
   private:
     TAPServerConnection m_tapserver_if;
 
-    void HandleReceivedFrame(std::string&& data);
+    static void HandleReceivedFrame(void* user, const u8* data, std::size_t size);
   };
 
   // made with the device and deleted with it
@@ -158,9 +162,12 @@ private:
 
   u32 m_transfer_descriptor = INVALID_TRANSFER_DESCRIPTOR;
 
-  std::string m_at_command_data;
-  std::string m_at_reply_data;
-  std::string m_send_buffer;
+  char m_at_command_data[MODEM_AT_BUFFER_SIZE];
+  std::size_t m_at_command_size = 0;
+  char m_at_reply_data[MODEM_AT_BUFFER_SIZE];
+  std::size_t m_at_reply_size = 0;
+  u8 m_send_buffer[MODEM_SEND_BUFFER_SIZE];
+  std::size_t m_send_size = 0;
   // Received bytes, written by the network thread and read by the CPU thread, which alone
   // touches m_regs.
   retro_spsc_t m_receive_buffer;

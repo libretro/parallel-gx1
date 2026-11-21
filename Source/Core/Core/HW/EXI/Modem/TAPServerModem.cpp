@@ -7,12 +7,10 @@ namespace ExpansionInterface
 {
 
 CEXIModem::TAPServerNetworkInterface::TAPServerNetworkInterface(CEXIModem* modem_ref,
-                                                                const std::string& destination)
+                                                                const char* destination)
     : NetworkInterface(modem_ref),
-      m_tapserver_if(
-          destination,
-          std::bind(&TAPServerNetworkInterface::HandleReceivedFrame, this, std::placeholders::_1),
-          MODEM_RECV_SIZE)
+      m_tapserver_if(destination, &TAPServerNetworkInterface::HandleReceivedFrame, this,
+                     MODEM_RECV_SIZE)
 {
 }
 
@@ -31,11 +29,12 @@ bool CEXIModem::TAPServerNetworkInterface::IsActivated()
   return m_tapserver_if.IsActivated();
 }
 
-bool CEXIModem::TAPServerNetworkInterface::SendAndRemoveAllHDLCFrames(std::string* send_buffer)
+bool CEXIModem::TAPServerNetworkInterface::SendAndRemoveAllHDLCFrames(u8* send_buffer,
+                                                                      std::size_t* send_size)
 {
-  const std::size_t orig_size = send_buffer->size();
-  const bool send_succeeded = m_tapserver_if.SendAndRemoveAllHDLCFrames(send_buffer);
-  if (send_succeeded && (send_buffer->size() < orig_size))
+  const std::size_t orig_size = *send_size;
+  const bool send_succeeded = m_tapserver_if.SendAndRemoveAllHDLCFrames(send_buffer, send_size);
+  if (send_succeeded && (*send_size < orig_size))
     m_modem_ref->SendComplete();
   return send_succeeded;
 }
@@ -55,9 +54,10 @@ void CEXIModem::TAPServerNetworkInterface::RecvStop()
   m_tapserver_if.RecvStop();
 }
 
-void CEXIModem::TAPServerNetworkInterface::HandleReceivedFrame(std::string&& data)
+void CEXIModem::TAPServerNetworkInterface::HandleReceivedFrame(void* user, const u8* data,
+                                                               std::size_t size)
 {
-  m_modem_ref->AddToReceiveBuffer(std::move(data));
+  static_cast<TAPServerNetworkInterface*>(user)->m_modem_ref->AddToReceiveBuffer(data, size);
 }
 
 }  // namespace ExpansionInterface

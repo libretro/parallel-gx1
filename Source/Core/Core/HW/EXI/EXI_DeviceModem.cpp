@@ -3,10 +3,7 @@
 
 #include "Core/HW/EXI/EXI_DeviceModem.h"
 
-#include <algorithm>
 #include <cstring>
-#include <memory>
-#include <string>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -37,8 +34,8 @@ CEXIModem::CEXIModem(Core::System& system, ModemDeviceType type)
   switch (type)
   {
   case ModemDeviceType::TAPSERVER:
-    m_network_interface =
-        new TAPServerNetworkInterface(this, Config::Get(Config::MAIN_MODEM_TAPSERVER_DESTINATION));
+    m_network_interface = new TAPServerNetworkInterface(
+        this, Config::Get(Config::MAIN_MODEM_TAPSERVER_DESTINATION).c_str());
     INFO_LOG(SP1, "Created tapserver physical network interface.");
     break;
   }
@@ -231,11 +228,12 @@ void CEXIModem::HandleReadModemTransfer(void* data, u32 size)
   if ((m_transfer_descriptor & 0x0F000000) == 0x03000000)
   {
     // AT command buffer
-    const std::size_t bytes_to_copy = std::min<std::size_t>(size, m_at_reply_data.size());
-    std::memcpy(data, m_at_reply_data.data(), bytes_to_copy);
-    m_at_reply_data = m_at_reply_data.substr(bytes_to_copy);
-    m_regs[Register::AT_REPLY_SIZE] = static_cast<u8>(m_at_reply_data.size());
-    SetInterruptFlag(Interrupt::AT_REPLY_DATA_AVAILABLE, !m_at_reply_data.empty(), true);
+    const std::size_t bytes_to_copy = size < m_at_reply_size ? size : m_at_reply_size;
+    std::memcpy(data, m_at_reply_data, bytes_to_copy);
+    m_at_reply_size -= bytes_to_copy;
+    std::memmove(m_at_reply_data, m_at_reply_data + bytes_to_copy, m_at_reply_size);
+    m_regs[Register::AT_REPLY_SIZE] = static_cast<u8>(m_at_reply_size);
+    SetInterruptFlag(Interrupt::AT_REPLY_DATA_AVAILABLE, m_at_reply_size != 0, true);
   }
   else if ((m_transfer_descriptor & 0x0F000000) == 0x08000000)
   {
@@ -267,19 +265,35 @@ void CEXIModem::HandleWriteModemTransfer(const void* data, u32 size)
 
   if ((m_transfer_descriptor & 0x0F000000) == 0x03000000)
   {  // AT command buffer
-    m_at_command_data.append(static_cast<const char*>(data), size);
+    std::size_t count = size;
+    if (count > sizeof(m_at_command_data) - m_at_command_size)
+    {
+      ERROR_LOG(SP1, "Modem AT command buffer full; dropped %u bytes",
+                (unsigned)(count - (sizeof(m_at_command_data) - m_at_command_size)));
+      count = sizeof(m_at_command_data) - m_at_command_size;
+    }
+    std::memcpy(m_at_command_data + m_at_command_size, data, count);
+    m_at_command_size += count;
     RunAllPendingATCommands();
-    m_regs[Register::AT_COMMAND_SIZE] = static_cast<u8>(m_at_command_data.size());
+    m_regs[Register::AT_COMMAND_SIZE] = static_cast<u8>(m_at_command_size);
   }
   else if ((m_transfer_descriptor & 0x0F000000) == 0x08000000)
   {  // Packet send buffer
-    m_send_buffer.append(static_cast<const char*>(data), size);
+    std::size_t count = size;
+    if (count > sizeof(m_send_buffer) - m_send_size)
+    {
+      ERROR_LOG(SP1, "Modem send buffer full; dropped %u bytes",
+                (unsigned)(count - (sizeof(m_send_buffer) - m_send_size)));
+      count = sizeof(m_send_buffer) - m_send_size;
+    }
+    std::memcpy(m_send_buffer + m_send_size, data, count);
+    m_send_size += count;
     // A more accurate implementation would only set this interrupt if the send
     // FIFO has enough space; however, we can clear the send FIFO "instantly"
     // from the emulated program's perspective, so we always tell it the send
     // FIFO is empty.
     SetInterruptFlag(Interrupt::SEND_BUFFER_BELOW_THRESHOLD, true, true);
-    m_network_interface->SendAndRemoveAllHDLCFrames(&m_send_buffer);
+    m_network_interface->SendAndRemoveAllHDLCFrames(m_send_buffer, &m_send_size);
   }
   else
   {
@@ -323,7 +337,7 @@ void CEXIModem::SetInterruptFlag(u8 what, bool enabled, bool from_cpu)
 void CEXIModem::SyncReceiveState()
 {
   const std::size_t received = retro_spsc_read_avail(&m_receive_buffer);
-  const u16 bytes_available = static_cast<u16>(std::min<std::size_t>(received, 0x200));
+  const u16 bytes_available = static_cast<u16>(received < 0x200 ? received : 0x200);
   m_regs[Register::BYTES_AVAILABLE_HIGH] = (bytes_available >> 8) & 0xFF;
   m_regs[Register::BYTES_AVAILABLE_LOW] = bytes_available & 0xFF;
   const bool above = received >= GetRxThreshold();
@@ -346,39 +360,58 @@ void CEXIModem::SendComplete()
   SetInterruptFlag(Interrupt::SEND_BUFFER_BELOW_THRESHOLD, true, true);
 }
 
-void CEXIModem::AddToReceiveBuffer(std::string&& data)
+void CEXIModem::AddToReceiveBuffer(const u8* data, std::size_t size)
 {
   // Network thread: hand the bytes over and have the CPU thread look at the interrupt.
-  if (retro_spsc_write(&m_receive_buffer, data.data(), data.size()) != data.size())
+  if (retro_spsc_write(&m_receive_buffer, data, size) != size)
     ERROR_LOG(SP1, "Modem receive ring full; dropped part of a frame");
   m_system.GetExpansionInterface().ScheduleUpdateInterrupts(CoreTiming::FromThread::NON_CPU, 0);
 }
 
-void CEXIModem::AddATReply(const std::string& data)
+void CEXIModem::AddATReply(const char* reply)
 {
-  m_at_reply_data += data;
-  m_regs[Register::AT_REPLY_SIZE] = static_cast<u8>(m_at_reply_data.size());
-  SetInterruptFlag(Interrupt::AT_REPLY_DATA_AVAILABLE, !m_at_reply_data.empty(), true);
+  std::size_t count = std::strlen(reply);
+  if (count > sizeof(m_at_reply_data) - m_at_reply_size)
+  {
+    ERROR_LOG(SP1, "Modem AT reply buffer full; dropped part of a reply");
+    count = sizeof(m_at_reply_data) - m_at_reply_size;
+  }
+  std::memcpy(m_at_reply_data + m_at_reply_size, reply, count);
+  m_at_reply_size += count;
+  m_regs[Register::AT_REPLY_SIZE] = static_cast<u8>(m_at_reply_size);
+  SetInterruptFlag(Interrupt::AT_REPLY_DATA_AVAILABLE, m_at_reply_size != 0, true);
 }
 
 void CEXIModem::RunAllPendingATCommands()
 {
-  for (std::size_t newline_pos = m_at_command_data.find_first_of("\r\n");
-       newline_pos != std::string::npos; newline_pos = m_at_command_data.find_first_of("\r\n"))
+  for (;;)
   {
-    std::string command = m_at_command_data.substr(0, newline_pos);
-    m_at_command_data = m_at_command_data.substr(newline_pos + 1);
+    std::size_t newline_pos = 0;
+    while (newline_pos != m_at_command_size && m_at_command_data[newline_pos] != '\r' &&
+           m_at_command_data[newline_pos] != '\n')
+    {
+      newline_pos++;
+    }
+    if (newline_pos == m_at_command_size)
+      break;
 
-    INFO_LOG(SP1, "Received AT command: %s", command.c_str());
+    // The buffer holds fewer bytes than this, so the command always fits with its terminator.
+    char command[MODEM_AT_BUFFER_SIZE + 1];
+    std::memcpy(command, m_at_command_data, newline_pos);
+    command[newline_pos] = '\0';
+    m_at_command_size -= newline_pos + 1;
+    std::memmove(m_at_command_data, m_at_command_data + newline_pos + 1, m_at_command_size);
 
-    if (command.substr(0, 3) == "ATZ" || command == "ATH0")
+    INFO_LOG(SP1, "Received AT command: %s", command);
+
+    if (std::strncmp(command, "ATZ", 3) == 0 || std::strcmp(command, "ATH0") == 0)
     {
       // Reset (ATZ) or hang up (ATH0)
       m_network_interface->RecvStop();
       m_network_interface->Deactivate();
       AddATReply("OK\r");
     }
-    else if (command.substr(0, 3) == "ATD")
+    else if (std::strncmp(command, "ATD", 3) == 0)
     {
       // Dial
       if (m_network_interface->Activate())

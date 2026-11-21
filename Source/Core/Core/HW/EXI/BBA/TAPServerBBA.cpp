@@ -14,10 +14,8 @@ namespace ExpansionInterface
 CEXIETHERNET::TAPServerNetworkInterface::TAPServerNetworkInterface(CEXIETHERNET* eth_ref,
                                                                    const std::string& destination)
     : NetworkInterface(eth_ref),
-      m_tapserver_if(
-          destination,
-          std::bind(&TAPServerNetworkInterface::HandleReceivedFrame, this, std::placeholders::_1),
-          BBA_RECV_SIZE)
+      m_tapserver_if(destination.c_str(), &TAPServerNetworkInterface::HandleReceivedFrame, this,
+                     BBA_RECV_SIZE)
 {
 }
 
@@ -59,18 +57,20 @@ bool CEXIETHERNET::TAPServerNetworkInterface::SendFrame(const u8* frame, u32 siz
   return ret;
 }
 
-void CEXIETHERNET::TAPServerNetworkInterface::HandleReceivedFrame(std::string&& data)
+void CEXIETHERNET::TAPServerNetworkInterface::HandleReceivedFrame(void* user, const u8* data,
+                                                                  std::size_t size)
 {
-  if (data.size() > BBA_RECV_SIZE)
+  if (size > BBA_RECV_SIZE)
   {
     ERROR_LOG(SP1, "Received BBA frame of size %" PRIu64 ", which is larger than maximum size %d",
-              (u64)data.size(), BBA_RECV_SIZE);
+              (u64)size, BBA_RECV_SIZE);
     return;
   }
 
-  std::memcpy(m_eth_ref->mRecvBuffer, data.data(), data.size());
-  m_eth_ref->mRecvBufferLength = static_cast<u32>(data.size());
-  m_eth_ref->RecvHandlePacket();
+  CEXIETHERNET* const eth = static_cast<TAPServerNetworkInterface*>(user)->m_eth_ref;
+  std::memcpy(eth->mRecvBuffer, data, size);
+  eth->mRecvBufferLength = static_cast<u32>(size);
+  eth->RecvHandlePacket();
 }
 
 }  // namespace ExpansionInterface

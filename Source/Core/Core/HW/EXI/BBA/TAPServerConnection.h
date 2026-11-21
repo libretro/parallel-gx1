@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include <functional>
-#include <string>
+#include <cstddef>
 
 #include <rthreads/rthreads.h>
 
@@ -18,9 +17,14 @@ namespace ExpansionInterface
 class TAPServerConnection
 {
 public:
-  using RecvCallback = std::function<void(std::string&&)>;
+  // Called on the read thread with each received frame; data is only valid during the call.
+  typedef void (*RecvCallback)(void* user, const u8* data, std::size_t size);
 
-  TAPServerConnection(std::string destination, RecvCallback recv_cb, std::size_t max_frame_size);
+  TAPServerConnection(const char* destination, RecvCallback recv_cb, void* recv_user,
+                      std::size_t max_frame_size);
+  ~TAPServerConnection();
+  TAPServerConnection(const TAPServerConnection&) = delete;
+  TAPServerConnection& operator=(const TAPServerConnection&) = delete;
 
   bool Activate();
   void Deactivate();
@@ -28,13 +32,16 @@ public:
   bool RecvInit();
   void RecvStart();
   void RecvStop();
-  bool SendAndRemoveAllHDLCFrames(std::string* send_buf);
+  // Sends every complete HDLC frame in send_buf and moves what is left to its start.
+  bool SendAndRemoveAllHDLCFrames(u8* send_buf, std::size_t* send_size);
   bool SendFrame(const u8* frame, u32 size);
 
 private:
-  const std::string m_destination;
+  char* m_destination;  // owned
   const RecvCallback m_recv_cb;
+  void* const m_recv_user;
   const std::size_t m_max_frame_size;
+  u8* m_frame_buffer;  // owned, m_max_frame_size bytes: the frame being read
   Common::SocketContext m_socket_context;
 
   int m_fd = -1;
