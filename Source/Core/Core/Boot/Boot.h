@@ -117,11 +117,11 @@ struct BootParameters
     std::string dff_path;
   };
 
-  static std::unique_ptr<BootParameters>
-  GenerateFromFile(std::string boot_path, BootSessionData boot_session_data_ = BootSessionData());
-  static std::unique_ptr<BootParameters>
-  GenerateFromFile(std::vector<std::string> paths,
-                   BootSessionData boot_session_data_ = BootSessionData());
+  // The caller's, freed with delete; nullptr when the file is not recognized
+  static BootParameters* GenerateFromFile(std::string boot_path,
+                                          BootSessionData boot_session_data_ = BootSessionData());
+  static BootParameters* GenerateFromFile(std::vector<std::string> paths,
+                                          BootSessionData boot_session_data_ = BootSessionData());
 
   using Parameters = std::variant<Disc, Executable, DiscIO::VolumeWAD, NANDTitle, IPL, DFF>;
   BootParameters(Parameters&& parameters_, BootSessionData boot_session_data_ = BootSessionData());
@@ -133,7 +133,8 @@ struct BootParameters
 class CBoot
 {
 public:
-  static bool BootUp(Core::System& system, std::unique_ptr<BootParameters> boot);
+  // takes boot
+  static bool BootUp(Core::System& system, BootParameters* boot);
 
 private:
   static bool DVDRead(Core::System& system, const DiscIO::VolumeDisc& disc, u64 dvd_offset,

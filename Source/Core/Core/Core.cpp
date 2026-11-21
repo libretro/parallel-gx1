@@ -93,7 +93,7 @@ struct EmuThreadStages
   bool wii_fs;    // the Wii filesystem is cleaned up
 };
 static EmuThreadStages s_emu_thread_stages; /* single core, until Shutdown */
-std::unique_ptr<BootParameters> g_boot_params;
+BootParameters* g_boot_params;
 // Declarations and definitions
 sthread_t* s_emu_thread = nullptr;
 
@@ -172,13 +172,14 @@ bool WantsDeterminism()
 
 // This is called from the GUI thread. See the booting call schedule in
 // BootManager.cpp
-bool Init(Core::System& system, std::unique_ptr<BootParameters> boot)
+bool Init(Core::System& system, BootParameters* boot)
 {
   if (s_emu_thread)
   {
     if (!IsUninitialized(system))
     {
       PanicAlert("Emu Thread already running");
+      delete boot;
       return false;
     }
 
@@ -195,7 +196,8 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot)
   StoreState(State::Starting);
 
   // Do not launch EmuThread — Libretro handles it manually
-  g_boot_params = std::move(boot);
+  delete g_boot_params;
+  g_boot_params = boot;
 
   return true;
 }
@@ -403,13 +405,14 @@ namespace
 struct EmuThreadArgs
 {
   Core::System* system;
-  std::unique_ptr<BootParameters> boot;
+  BootParameters* boot;  // handed to the thread
 };
 
 void EmuThreadEntry(void* data)
 {
-  std::unique_ptr<EmuThreadArgs> args(static_cast<EmuThreadArgs*>(data));
-  EmuThread(*args->system, std::move(args->boot));
+  const EmuThreadArgs args = *static_cast<EmuThreadArgs*>(data);
+  delete static_cast<EmuThreadArgs*>(data);
+  EmuThread(*args.system, args.boot);
 }
 }  // namespace
 
@@ -434,7 +437,7 @@ static bool FieldGranted()
          0;
 }
 
-bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
+bool StartEmuThread(Core::System& system, BootParameters* boot)
 {
   if (!s_frame_gate_ready)
     s_frame_gate_ready = retro_eventcount_init(&s_frame_gate);
@@ -442,18 +445,19 @@ bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
   retro_atomic_store_release_int(&s_fields_ended, 0);
   s_frame_gate_owed = false;
 
-  EmuThreadArgs* const args = new EmuThreadArgs{&system, std::move(boot)};
+  EmuThreadArgs* const args = new EmuThreadArgs{&system, boot};
   s_emu_thread = sthread_create(EmuThreadEntry, args);
   if (s_emu_thread)
     return true;
   delete args;
+  delete boot;
   return false;
 }
 
 // Initialize and create emulation thread
 // Call browser: Init():s_emu_thread().
 // See the BootManager.cpp file description for a complete call schedule.
-void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
+void EmuThread(Core::System& system, BootParameters* boot)
 {
   // taken down on every return but the one single core leaves to Shutdown
   struct Stages
@@ -508,6 +512,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
                                                     Config::Get(Config::MAIN_DSP_THREAD)))
   {
     PanicAlert("Failed to initialize DSP emulation!");
+    delete boot;
     return;
   }
 
@@ -523,7 +528,7 @@ void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot)
 
   {
     ASSERT(IsCPUThread());
-    if (!CBoot::BootUp(system, std::move(boot)))
+    if (!CBoot::BootUp(system, boot))
       return;
   }
 

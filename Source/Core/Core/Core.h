@@ -90,7 +90,8 @@ enum class ConsoleType : u32
 
 // These three are normally called from the Host thread. However, they can be called from any thread
 // that isn't launched by the emulator core.
-bool Init(Core::System& system, std::unique_ptr<BootParameters> boot);
+// takes boot
+bool Init(Core::System& system, BootParameters* boot);
 void Stop(Core::System& system);
 void Shutdown(Core::System& system);
 
@@ -140,11 +141,13 @@ void FrameGateKick();
 
 void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 
-void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot);
+// takes boot
+void EmuThread(Core::System& system, BootParameters* boot);
 void SingleCorePostRunShutdown();
-extern std::unique_ptr<BootParameters> g_boot_params;
+extern BootParameters* g_boot_params;  // owned until the emulation thread takes it
 // Starts EmuThread on its own thread (dual core); s_emu_thread is its handle.
-bool StartEmuThread(Core::System& system, std::unique_ptr<BootParameters> boot);
+// takes boot
+bool StartEmuThread(Core::System& system, BootParameters* boot);
 extern sthread_t* s_emu_thread;
 extern bool s_frame_step;
 

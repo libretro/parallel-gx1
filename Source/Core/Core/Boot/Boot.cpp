@@ -139,15 +139,15 @@ BootParameters::BootParameters(Parameters&& parameters_, BootSessionData boot_se
 {
 }
 
-std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::string boot_path,
-                                                                 BootSessionData boot_session_data_)
+BootParameters* BootParameters::GenerateFromFile(std::string boot_path,
+                                                 BootSessionData boot_session_data_)
 {
   return GenerateFromFile(std::vector<std::string>{std::move(boot_path)},
                           std::move(boot_session_data_));
 }
 
-std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std::string> paths,
-                                                                 BootSessionData boot_session_data_)
+BootParameters* BootParameters::GenerateFromFile(std::vector<std::string> paths,
+                                                 BootSessionData boot_session_data_)
 {
   ASSERT(!paths.empty());
 
@@ -189,22 +189,21 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
     DiscIO::VolumeDisc* disc = DiscIO::CreateDiscForCore(path);
     if (disc)
     {
-      return std::make_unique<BootParameters>(Disc{std::move(path), disc, paths},
-                                              std::move(boot_session_data_));
+      return new BootParameters(Disc{std::move(path), disc, paths}, std::move(boot_session_data_));
     }
 
     if (extension == ".elf")
     {
       ElfReader* elf_reader = new ElfReader(path);
-      return std::make_unique<BootParameters>(Executable{std::move(path), elf_reader},
-                                              std::move(boot_session_data_));
+      return new BootParameters(Executable{std::move(path), elf_reader},
+                                std::move(boot_session_data_));
     }
 
     if (extension == ".dol")
     {
       DolReader* dol_reader = new DolReader(path);
-      return std::make_unique<BootParameters>(Executable{std::move(path), dol_reader},
-                                              std::move(boot_session_data_));
+      return new BootParameters(Executable{std::move(path), dol_reader},
+                                std::move(boot_session_data_));
     }
 
     PanicAlert("\"%s\" is an invalid GCM/ISO file, or is not a GC/Wii ISO.", path.c_str());
@@ -212,7 +211,7 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
   }
 
   if (extension == ".dff")
-    return std::make_unique<BootParameters>(DFF{std::move(path)}, std::move(boot_session_data_));
+    return new BootParameters(DFF{std::move(path)}, std::move(boot_session_data_));
 
   if (extension == ".wad")
   {
@@ -220,15 +219,14 @@ std::unique_ptr<BootParameters> BootParameters::GenerateFromFile(std::vector<std
     if (wad)
     {
       // the WAD moves into the parameters, its reader with it; what is left of it goes
-      auto parameters =
-          std::make_unique<BootParameters>(std::move(*wad), std::move(boot_session_data_));
+      auto parameters = new BootParameters(std::move(*wad), std::move(boot_session_data_));
       DiscIO::DestroyVolume(wad);
       return parameters;
     }
   }
 
   PanicAlert("Could not recognize file %s", path.c_str());
-  return {};
+  return nullptr;
 }
 
 BootParameters::Disc::Disc(std::string path_, DiscIO::VolumeDisc* volume_,
@@ -482,7 +480,7 @@ static void CopyDefaultExceptionHandlers(Core::System& system)
 }
 
 // Third boot step after BootManager and Core. See Call schedule in BootManager.cpp
-bool CBoot::BootUp(Core::System& system, std::unique_ptr<BootParameters> boot)
+bool CBoot::BootUp(Core::System& system, BootParameters* boot)
 {
   SConfig& config = SConfig::GetInstance();
 
@@ -635,7 +633,9 @@ bool CBoot::BootUp(Core::System& system, std::unique_ptr<BootParameters> boot)
     const SConfig& config;
   };
 
-  return std::visit(BootTitle(system), boot->parameters);
+  const bool booted = std::visit(BootTitle(system), boot->parameters);
+  delete boot;
+  return booted;
 }
 
 BootExecutableReader::BootExecutableReader(BootExecutableKind kind, const std::string& file_name)

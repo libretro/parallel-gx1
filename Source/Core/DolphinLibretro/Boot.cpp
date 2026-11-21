@@ -957,7 +957,7 @@ bool retro_load_game(const struct retro_game_info* game)
   }
 
   const bool disc_based_games_boot_to_wii_menu = Libretro::GetOption<bool>(Libretro::Options::core::DISC_BASED_GAMES_BOOT_TO_WII_MENU, false);
-  std::unique_ptr<BootParameters> boot_params = BootParameters::GenerateFromFile(normalized_game_paths);
+  BootParameters* boot_params = BootParameters::GenerateFromFile(normalized_game_paths);
 
   if (disc_based_games_boot_to_wii_menu)
   {
@@ -984,14 +984,15 @@ bool retro_load_game(const struct retro_game_info* game)
     if (is_disc_title && wii_menu_installed)
     {
       Config::SetBase(Config::MAIN_DEFAULT_ISO, normalized_game_paths.front());
-      boot_params = std::make_unique<BootParameters>(BootParameters::NANDTitle{Titles::SYSTEM_MENU});
+      delete boot_params;
+      boot_params = new BootParameters(BootParameters::NANDTitle{Titles::SYSTEM_MENU});
     }
   }
 
   if (boot_params)
     Libretro::SetRegionFreeFallback(*boot_params);
 
-  if (!BootManager::BootCore(Core::System::GetInstance(), std::move(boot_params)))
+  if (!BootManager::BootCore(Core::System::GetInstance(), boot_params))
   {
     ERROR_LOG(BOOT, "Could not boot %s", game->path);
     UndoFailedLoad(true);

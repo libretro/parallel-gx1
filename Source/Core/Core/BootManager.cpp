@@ -45,7 +45,7 @@
 namespace BootManager
 {
 // Boot the ISO or file
-bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot)
+bool BootCore(Core::System& system, BootParameters* boot)
 {
   if (!boot)
     return false;
@@ -53,7 +53,10 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot)
   SConfig& StartUp = SConfig::GetInstance();
 
   if (!StartUp.SetPathsAndGameMetadata(system, *boot))
+  {
+    delete boot;
     return false;
+  }
 
   // Override out-of-region languages/countries to prevent games from crashing or behaving oddly
   if (!Config::Get(Config::MAIN_OVERRIDE_REGION_SETTINGS))
@@ -195,15 +198,16 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot)
                         std::holds_alternative<BootParameters::Disc>(boot->parameters);
   if (load_ipl)
   {
-    return Core::Init(
-        system,
-        std::make_unique<BootParameters>(
-            BootParameters::IPL{StartUp.m_region,
-                                std::move(std::get<BootParameters::Disc>(boot->parameters))},
-            std::move(boot->boot_session_data)));
+    BootParameters* const ipl_boot = new BootParameters(
+        BootParameters::IPL{StartUp.m_region,
+                            std::move(std::get<BootParameters::Disc>(boot->parameters))},
+        std::move(boot->boot_session_data));
+    const bool initialized = Core::Init(system, ipl_boot);
+    delete boot;
+    return initialized;
   }
 
-  return Core::Init(system, std::move(boot));
+  return Core::Init(system, boot);
 }
 
 void RestoreConfig()

@@ -369,7 +369,8 @@ void retro_run(void)
     }
     if (system.IsDualCoreMode())
     {
-      Core::StartEmuThread(system, std::move(Core::g_boot_params));
+      Core::StartEmuThread(system, Core::g_boot_params);
+      Core::g_boot_params = nullptr;
 
       /* until the CPU thread has reached its run loop, this thread runs
        * the GPU: what the CPU thread does first may wait on it, as the
@@ -382,7 +383,11 @@ void retro_run(void)
       Libretro::Video::D3D11Unlock();
     }
     else
-      Core::EmuThread(system, std::move(Core::g_boot_params));
+    {
+      BootParameters* const boot = Core::g_boot_params;
+      Core::g_boot_params = nullptr;
+      Core::EmuThread(system, boot);
+    }
 
     /* The boot failed, the DSP or the disc not coming up (the log says
      * why): the emulation thread has shut the hardware down again, so
