@@ -98,8 +98,18 @@ NetIPTopDevice::NetIPTopDevice(EmulationKernel& ios, const std::string& device_n
 #endif
 
   m_work_queue.Reset("Network Worker", [this](const AsyncTask& task) {
-    const IPCReply reply = task.handler();
-    auto* async_reply = new AsyncReply{{}, task.request, reply.return_value};
+    s32 return_value;
+    if (task.ioctl_handler)
+    {
+      const IOCtlRequest request(GetSystem(), task.request.address);
+      return_value = (this->*task.ioctl_handler)(request).return_value;
+    }
+    else
+    {
+      const IOCtlVRequest request(GetSystem(), task.request.address);
+      return_value = (this->*task.ioctlv_handler)(request).return_value;
+    }
+    auto* async_reply = new AsyncReply{{}, task.request, return_value};
     mpsc_stack_push(&m_async_replies, &async_reply->link);
   });
 }

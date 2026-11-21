@@ -183,7 +183,7 @@ NetKDRequestDevice::NetKDRequestDevice(EmulationKernel& ios, const std::string& 
   StoreSchedulerWord(1, Common::swap32(-1));
 
   m_work_queue.Reset("WiiConnect24 Worker", [this](const AsyncTask& task) {
-    const IPCReply reply = task.handler();
+    const IPCReply reply = (this->*task.handler)(task.request);
     auto* async_reply = new AsyncReply{{}, task.request, reply.return_value};
     mpsc_stack_push(&m_async_replies, &async_reply->link);
   });

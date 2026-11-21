@@ -77,10 +77,13 @@ public:
   void Update() override;
 
 private:
+  // A request the worker runs, and the handler of its kind that answers it; the worker reads the
+  // request again, which stays put in guest memory until it is answered
   struct AsyncTask
   {
     IOS::HLE::Request request;
-    std::function<IPCReply()> handler;
+    IPCReply (NetIPTopDevice::*ioctl_handler)(const IOCtlRequest& request);
+    IPCReply (NetIPTopDevice::*ioctlv_handler)(const IOCtlVRequest& request);
   };
 
   struct AsyncReply
@@ -90,10 +93,16 @@ private:
     s32 return_value;
   };
 
-  template <typename Method, typename Request>
-  IPCReply LaunchAsyncTask(Method method, const Request& request)
+  IPCReply LaunchAsyncTask(IPCReply (NetIPTopDevice::*handler)(const IOCtlRequest& request),
+                           const IOCtlRequest& request)
   {
-    m_work_queue.EmplaceItem(AsyncTask{request, std::bind(method, this, request)});
+    m_work_queue.EmplaceItem(AsyncTask{request, handler, nullptr});
+    return IPCReply::None();
+  }
+  IPCReply LaunchAsyncTask(IPCReply (NetIPTopDevice::*handler)(const IOCtlVRequest& request),
+                           const IOCtlVRequest& request)
+  {
+    m_work_queue.EmplaceItem(AsyncTask{request, nullptr, handler});
     return IPCReply::None();
   }
 

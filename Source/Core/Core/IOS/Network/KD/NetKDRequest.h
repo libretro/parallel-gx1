@@ -43,10 +43,11 @@ public:
   void Update() override;
 
 private:
+  // A request the worker runs: the request, copied, and the handler that answers it
   struct AsyncTask
   {
-    IOS::HLE::Request request;
-    std::function<IPCReply()> handler;
+    IOCtlRequest request;
+    IPCReply (NetKDRequestDevice::*handler)(const IOCtlRequest& request);
   };
 
   struct AsyncReply
@@ -62,10 +63,10 @@ private:
   void StoreSchedulerWord(size_t index, u32 swapped);
   void IncrementSchedulerWord(size_t index);
 
-  template <typename Method, typename Request>
-  IPCReply LaunchAsyncTask(Method method, const Request& request)
+  IPCReply LaunchAsyncTask(IPCReply (NetKDRequestDevice::*handler)(const IOCtlRequest& request),
+                           const IOCtlRequest& request)
   {
-    m_work_queue.EmplaceItem(AsyncTask{request, std::bind(method, this, request)});
+    m_work_queue.EmplaceItem(AsyncTask{request, handler});
     return IPCReply::None();
   }
 
