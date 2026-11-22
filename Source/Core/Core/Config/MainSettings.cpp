@@ -555,14 +555,13 @@ std::string GetBootROMPath(const std::string& region_directory)
   return path;
 }
 
-std::string GetMemcardPath(ExpansionInterface::Slot slot, std::optional<DiscIO::Region> region,
-                           u16 size_mb)
+std::string GetMemcardPath(ExpansionInterface::Slot slot, DiscIO::Region region, u16 size_mb)
 {
   return GetMemcardPath(Config::Get(GetInfoForMemcardPath(slot)), slot, region, size_mb);
 }
 
 std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::Slot slot,
-                           std::optional<DiscIO::Region> region, u16 size_mb)
+                           DiscIO::Region region, u16 size_mb)
 {
   const std::string blocks_string =
       size_mb < Memcard::MBIT_SIZE_MEMORY_CARD_2043 ?
@@ -573,8 +572,8 @@ std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::
   {
     // Use default memcard path if there is no user defined one.
     const bool is_slot_a = slot == ExpansionInterface::Slot::A;
-    const std::string region_string = Config::GetDirectoryForRegion(
-        Config::ToGameCubeRegion(region ? *region : Config::Get(Config::MAIN_FALLBACK_REGION)));
+    const std::string region_string =
+        Config::GetDirectoryForRegion(Config::ToGameCubeRegion(region));
     return StringFromFormat("%s%s.%s%s.raw", File::GetUserPath(D_GCUSER_IDX).c_str(),
                             is_slot_a ? GC_MEMCARDA : GC_MEMCARDB, region_string.c_str(),
                             blocks_string.c_str());
@@ -596,47 +595,40 @@ std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::
   constexpr std::string_view jp_region = "." JAP_DIR;
   constexpr std::string_view eu_region = "." EUR_DIR;
   constexpr std::string_view dv_region = "." DEV_DIR;
-  std::optional<DiscIO::Region> path_region = std::nullopt;
   if (name.ends_with(us_region))
   {
     name = name.substr(0, name.size() - us_region.size());
-    path_region = DiscIO::Region::NTSC_U;
   }
   else if (name.ends_with(jp_region))
   {
     name = name.substr(0, name.size() - jp_region.size());
-    path_region = DiscIO::Region::NTSC_J;
   }
   else if (name.ends_with(eu_region))
   {
     name = name.substr(0, name.size() - eu_region.size());
-    path_region = DiscIO::Region::PAL;
   }
   else if (name.ends_with(dv_region))
   {
     name = name.substr(0, name.size() - dv_region.size());
-    path_region = DiscIO::Region::DEV;
   }
 
-  const DiscIO::Region used_region =
-      region ? *region : (path_region ? *path_region : Config::Get(Config::MAIN_FALLBACK_REGION));
+  const DiscIO::Region used_region = region;
   return StringFromFormat("%s%s.%s%s%s", dir.c_str(), name.c_str(),
                           Config::GetDirectoryForRegion(Config::ToGameCubeRegion(used_region)),
                           blocks_string.c_str(), ext.c_str());
 }
 
-std::string GetGCIFolderPath(ExpansionInterface::Slot slot, std::optional<DiscIO::Region> region)
+std::string GetGCIFolderPath(ExpansionInterface::Slot slot, DiscIO::Region region)
 {
   return GetGCIFolderPath(Config::Get(GetInfoForGCIPath(slot)), slot, region);
 }
 
 std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::Slot slot,
-                             std::optional<DiscIO::Region> region)
+                             DiscIO::Region region)
 {
   if (configured_folder.empty())
   {
-    const auto region_dir = Config::GetDirectoryForRegion(
-        Config::ToGameCubeRegion(region ? *region : Config::Get(Config::MAIN_FALLBACK_REGION)));
+    const auto region_dir = Config::GetDirectoryForRegion(Config::ToGameCubeRegion(region));
     const bool is_slot_a = slot == ExpansionInterface::Slot::A;
     return StringFromFormat("%s%s/Card %c", File::GetUserPath(D_GCUSER_IDX).c_str(), region_dir,
                             is_slot_a ? 'A' : 'B');
@@ -657,30 +649,24 @@ std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::
   constexpr std::string_view eu_region = "/" EUR_DIR;
   constexpr std::string_view dv_region = "/" DEV_DIR;
   std::string_view base_path = configured_folder;
-  std::optional<DiscIO::Region> path_region = std::nullopt;
   if (base_path.ends_with(us_region))
   {
     base_path = base_path.substr(0, base_path.size() - us_region.size());
-    path_region = DiscIO::Region::NTSC_U;
   }
   else if (base_path.ends_with(jp_region))
   {
     base_path = base_path.substr(0, base_path.size() - jp_region.size());
-    path_region = DiscIO::Region::NTSC_J;
   }
   else if (base_path.ends_with(eu_region))
   {
     base_path = base_path.substr(0, base_path.size() - eu_region.size());
-    path_region = DiscIO::Region::PAL;
   }
   else if (base_path.ends_with(dv_region))
   {
     base_path = base_path.substr(0, base_path.size() - dv_region.size());
-    path_region = DiscIO::Region::DEV;
   }
 
-  const DiscIO::Region used_region =
-      region ? *region : (path_region ? *path_region : Config::Get(Config::MAIN_FALLBACK_REGION));
+  const DiscIO::Region used_region = region;
   return StringFromFormat("%.*s/%s", static_cast<int>(base_path.size()), base_path.data(),
                           Config::GetDirectoryForRegion(Config::ToGameCubeRegion(used_region),
                                                         Config::RegionDirectoryStyle::Modern));

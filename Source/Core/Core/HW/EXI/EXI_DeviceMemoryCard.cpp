@@ -150,16 +150,15 @@ CEXIMemoryCard::CEXIMemoryCard(Core::System& system, const Slot slot, bool gci_f
   SetCardFlashID(&sram, header, m_card_slot);
 }
 
-std::pair<std::string /* path */, bool /* migrate */>
-CEXIMemoryCard::GetGCIFolderPath(Slot card_slot)
+bool CEXIMemoryCard::GetGCIFolderPath(Slot card_slot, std::string* path)
 {
-  std::string path_override = Config::Get(Config::GetInfoForGCIPathOverride(card_slot));
-
-  if (!path_override.empty())
-    return {std::move(path_override), false};
+  *path = Config::Get(Config::GetInfoForGCIPathOverride(card_slot));
+  if (!path->empty())
+    return false;
 
   const DiscIO::Region region = Config::ToGameCubeRegion(SConfig::GetInstance().m_region);
-  return {Config::GetGCIFolderPath(card_slot, region), true};
+  *path = Config::GetGCIFolderPath(card_slot, region);
+  return true;
 }
 
 void CEXIMemoryCard::SetupGciFolder(const Memcard::HeaderData& header_data)
@@ -172,8 +171,8 @@ void CEXIMemoryCard::SetupGciFolder(const Memcard::HeaderData& header_data)
     current_game_id = Common::swap32(reinterpret_cast<const u8*>(game_id.c_str()));
   }
 
-  const auto [dir_path, migrate] =
-      GetGCIFolderPath(m_card_slot);
+  std::string dir_path;
+  const bool migrate = GetGCIFolderPath(m_card_slot, &dir_path);
 
   const File::FileInfo file_info(dir_path);
   if (!file_info.Exists())

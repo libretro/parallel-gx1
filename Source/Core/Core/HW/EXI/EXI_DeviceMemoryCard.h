@@ -51,7 +51,8 @@ public:
   static void Init(CoreTiming::CoreTimingManager& core_timing);
   static void Shutdown();
 
-  static std::pair<std::string /* path */, bool /* migrate */> GetGCIFolderPath(Slot card_slot);
+  // The folder in path; true when a raw card is to be migrated into it on first use
+  static bool GetGCIFolderPath(Slot card_slot, std::string* path);
 
 private:
   void SetupGciFolder(const Memcard::HeaderData& header_data);
