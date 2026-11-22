@@ -10,23 +10,23 @@
 
 namespace GraphicsModActionFactory
 {
-std::unique_ptr<GraphicsModAction> Create(std::string_view name, const Common::Vec3& xyz)
+GraphicsModAction* Create(std::string_view name, const Common::Vec3& xyz)
 {
   if (name == PrintAction::factory_name)
   {
-    return std::make_unique<PrintAction>();
+    return new PrintAction();
   }
   else if (name == SkipAction::factory_name)
   {
-    return std::make_unique<SkipAction>();
+    return new SkipAction();
   }
   else if (name == MoveAction::factory_name)
   {
-    return std::make_unique<MoveAction>(xyz);
+    return new MoveAction(xyz);
   }
   else if (name == ScaleAction::factory_name)
   {
-    return std::make_unique<ScaleAction>(xyz);
+    return new ScaleAction(xyz);
   }
 
   return nullptr;

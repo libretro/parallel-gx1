@@ -26,15 +26,19 @@
 #include "VideoCommon/TextureInfo.h"
 #include "VideoCommon/VideoConfig.h"
 
-std::unique_ptr<GraphicsModManager> g_graphics_mod_manager;
+GraphicsModManager* g_graphics_mod_manager;
 
 class GraphicsModManager::DecoratedAction final : public GraphicsModAction
 {
 public:
-  DecoratedAction(std::unique_ptr<GraphicsModAction> action, GraphicsModConfig mod)
-      : m_action_impl(std::move(action)), m_mod(std::move(mod))
+  // Takes action
+  DecoratedAction(GraphicsModAction* action, GraphicsModConfig mod)
+      : m_action_impl(action), m_mod(std::move(mod))
   {
   }
+  ~DecoratedAction() override { delete m_action_impl; }
+  DecoratedAction(const DecoratedAction&) = delete;
+  DecoratedAction& operator=(const DecoratedAction&) = delete;
   void OnDrawStarted(GraphicsModActionData::DrawStarted* draw_started) override
   {
     if (!m_mod.m_enabled)
@@ -67,7 +71,7 @@ public:
   }
 
 private:
-  std::unique_ptr<GraphicsModAction> m_action_impl;
+  GraphicsModAction* m_action_impl;  // owned
   GraphicsModConfig m_mod;
 };
 
@@ -270,12 +274,12 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
 
   const auto create_action = [](const std::string_view& action_name, const Common::Vec3& xyz,
                                 GraphicsModConfig mod_config) -> GraphicsModAction* {
-    auto action = GraphicsModActionFactory::Create(action_name, xyz);
+    GraphicsModAction* const action = GraphicsModActionFactory::Create(action_name, xyz);
     if (action == nullptr)
     {
       return nullptr;
     }
-    return new DecoratedAction(std::move(action), std::move(mod_config));
+    return new DecoratedAction(action, std::move(mod_config));
   };
 
   for (const auto& mod : mods)

@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include "VideoCommon/GraphicsModSystem/Runtime/FBInfo.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModAction.h"
 #include "VideoCommon/XFMemory.h"
@@ -80,4 +78,4 @@ private:
   u32 m_index_capacity = 0;
 };
 
-extern std::unique_ptr<GraphicsModManager> g_graphics_mod_manager;
+extern GraphicsModManager* g_graphics_mod_manager;

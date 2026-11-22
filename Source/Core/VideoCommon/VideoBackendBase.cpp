@@ -396,7 +396,8 @@ bool VideoBackendBase::InitializeShared(AbstractGfx* gfx,
   g_presenter = new VideoCommon::Presenter();
   g_framebuffer_manager = new FramebufferManager();
   g_shader_cache = new VideoCommon::ShaderCache();
-  g_graphics_mod_manager = std::make_unique<GraphicsModManager>();
+  delete g_graphics_mod_manager;
+  g_graphics_mod_manager = new GraphicsModManager();
   g_widescreen = new WidescreenManager();
 
   if (!g_vertex_manager->Initialize() || !g_shader_cache->Initialize() ||
@@ -459,7 +460,8 @@ void VideoBackendBase::ShutdownShared()
   g_bounding_box = nullptr;
   PerfQueryBaseDelete(g_perf_query);
   g_perf_query = nullptr;
-  g_graphics_mod_manager.reset();
+  delete g_graphics_mod_manager;
+  g_graphics_mod_manager = nullptr;
   delete g_texture_cache;
   g_texture_cache = nullptr;
   TCacheEntryPoolFree();
