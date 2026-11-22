@@ -5,6 +5,8 @@
 
 #include <cassert>
 #include <cinttypes>
+#include <cstdlib>
+#include <cwchar>
 
 #include <algorithm>
 #include <array>
@@ -591,9 +593,12 @@ WiimoteScannerWindows::WiimoteScannerWindows()
 {
   init_lib();
 
-  m_device_change_notification.Register([this](Common::DeviceChangeNotification::EventType) {
-    retro_atomic_store_release_int(&m_devices_changed, 1);
-  });
+  m_device_change_notification.Register(
+      [](void* user, Common::DeviceChangeNotification::EventType) {
+        retro_atomic_store_release_int(
+            &static_cast<WiimoteScannerWindows*>(user)->m_devices_changed, 1);
+      },
+      this);
 }
 
 void WiimoteScannerWindows::Update()
@@ -853,7 +858,8 @@ static std::vector<WiimoteScannerWindows::EnumeratedWiimoteInterface> GetAllWiim
   auto class_guid = GUID_DEVINTERFACE_HID;
   constexpr ULONG flags = CM_GET_DEVICE_INTERFACE_LIST_PRESENT;
 
-  for (auto* hid_iface : Common::GetDeviceInterfaceList(&class_guid, nullptr, flags))
+  WCHAR* const hid_ifaces = Common::GetDeviceInterfaceList(&class_guid, nullptr, flags);
+  for (WCHAR* hid_iface = hid_ifaces; hid_iface && *hid_iface; hid_iface += wcslen(hid_iface) + 1)
   {
     DEBUG_LOG(WIIMOTE, "Found HID interface.");
 
@@ -935,6 +941,7 @@ static std::vector<WiimoteScannerWindows::EnumeratedWiimoteInterface> GetAllWiim
     // Once here, we are confident that this is a Wii device.
     results.push_back({hid_iface, is_balance_board});
   }
+  std::free(hid_ifaces);
 
   return results;
 }

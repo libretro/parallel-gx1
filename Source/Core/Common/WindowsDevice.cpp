@@ -6,6 +6,7 @@
 #include "Common/WindowsDevice.h"
 
 #include <cinttypes>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -85,8 +86,7 @@ std::optional<std::wstring> GetDeviceInterfaceStringProperty(LPCWSTR iface,
                            DEVPROP_TYPE_STRING);
 }
 
-NullTerminatedStringList<WCHAR> GetDeviceInterfaceList(LPGUID iface_class_guid, DEVINSTID device_id,
-                                                       ULONG flags)
+WCHAR* GetDeviceInterfaceList(LPGUID iface_class_guid, DEVINSTID device_id, ULONG flags)
 {
   while (true)
   {
@@ -96,14 +96,19 @@ NullTerminatedStringList<WCHAR> GetDeviceInterfaceList(LPGUID iface_class_guid, 
     if (size_result != CR_SUCCESS || list_size == 0)
       list_size = 1;
 
-    auto buffer = std::make_unique_for_overwrite<WCHAR[]>(list_size);
+    WCHAR* const buffer = static_cast<WCHAR*>(std::malloc(list_size * sizeof(WCHAR)));
+    if (!buffer)
+      return nullptr;
     const auto list_result =
-        CM_Get_Device_Interface_List(iface_class_guid, device_id, buffer.get(), list_size, flags);
+        CM_Get_Device_Interface_List(iface_class_guid, device_id, buffer, list_size, flags);
 
     // "A new device can be added to the system causing the size returned to no longer be valid."
     // Microsoft recommends trying again in a loop.
     if (list_result == CR_BUFFER_SMALL)
+    {
+      std::free(buffer);
       continue;
+    }
 
     if (list_result != CR_SUCCESS)
     {
@@ -111,7 +116,7 @@ NullTerminatedStringList<WCHAR> GetDeviceInterfaceList(LPGUID iface_class_guid, 
       buffer[0] = 0;
     }
 
-    return {std::move(buffer)};
+    return buffer;
   }
 }
 
@@ -121,14 +126,14 @@ static __callback DWORD OnDevicesChanged(_In_ HCMNOTIFICATION notify_handle, _In
                                              PCM_NOTIFY_EVENT_DATA event_data,
                                          _In_ DWORD event_data_size)
 {
-  auto& callback = *static_cast<DeviceChangeNotification::CallbackType*>(context);
+  const auto& listener = *static_cast<const DeviceChangeNotification::Listener*>(context);
   switch (action)
   {
   case CM_NOTIFY_ACTION_DEVICEINTERFACEARRIVAL:
-    callback(DeviceChangeNotification::EventType::Arrival);
+    listener.callback(listener.user, DeviceChangeNotification::EventType::Arrival);
     break;
   case CM_NOTIFY_ACTION_DEVICEINTERFACEREMOVAL:
-    callback(DeviceChangeNotification::EventType::Removal);
+    listener.callback(listener.user, DeviceChangeNotification::EventType::Removal);
     break;
   default:
     break;
@@ -143,10 +148,11 @@ DeviceChangeNotification::~DeviceChangeNotification()
   Unregister();
 }
 
-void DeviceChangeNotification::Register(CallbackType callback)
+void DeviceChangeNotification::Register(CallbackType callback, void* user)
 {
   Unregister();
-  m_callback = std::move(callback);
+  m_listener.callback = callback;
+  m_listener.user = user;
 
   CM_NOTIFY_FILTER notify_filter{
       .cbSize = sizeof(notify_filter),
@@ -154,7 +160,7 @@ void DeviceChangeNotification::Register(CallbackType callback)
       .u{.DeviceInterface{.ClassGuid = GUID_DEVINTERFACE_HID}},
   };
   const CONFIGRET cfg_rv =
-      CM_Register_Notification(&notify_filter, &m_callback, OnDevicesChanged, &m_notify_handle);
+      CM_Register_Notification(&notify_filter, &m_listener, OnDevicesChanged, &m_notify_handle);
   if (cfg_rv != CR_SUCCESS)
   {
     ERROR_LOG(COMMON, "CM_Register_Notification failed: %" PRIx64, (u64)cfg_rv);

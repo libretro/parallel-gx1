@@ -15,7 +15,6 @@
 #include <rthreads/rthreads.h>
 
 #include "Common/CommonTypes.h"
-#include "Common/Functional.h"
 
 struct BootParameters;
 

@@ -5,8 +5,6 @@
 
 #ifdef _WIN32
 
-#include <iterator>
-#include <memory>
 #include <optional>
 #include <string>
 
@@ -21,8 +19,6 @@
 #include <devpropdef.h>
 #include <setupapi.h>
 
-#include "Common/Functional.h"
-
 namespace Common
 {
 std::optional<std::wstring> GetDevNodeStringProperty(DEVINST device,
@@ -31,46 +27,9 @@ std::optional<std::wstring> GetDevNodeStringProperty(DEVINST device,
 std::optional<std::wstring> GetDeviceInterfaceStringProperty(LPCWSTR iface,
                                                              const DEVPROPKEY* requested_property);
 
-// Allows iterating null-separated/terminated string lists returned by the Windows API.
-template <typename T>
-struct NullTerminatedStringList
-{
-  class Iterator
-  {
-    friend NullTerminatedStringList;
-
-  public:
-    constexpr T* operator*() { return m_ptr; }
-
-    constexpr Iterator& operator++()
-    {
-      m_ptr += std::basic_string_view(m_ptr).size() + 1;
-      return *this;
-    }
-
-    constexpr Iterator operator++(int)
-    {
-      const auto result{*this};
-      ++*this;
-      return result;
-    }
-
-    constexpr bool operator==(std::default_sentinel_t) const { return *m_ptr == T{}; }
-
-  private:
-    constexpr Iterator(T* ptr) : m_ptr{ptr} {}
-
-    T* m_ptr;
-  };
-
-  constexpr auto begin() const { return Iterator{list.get()}; }
-  constexpr auto end() const { return std::default_sentinel; }
-
-  std::unique_ptr<T[]> list;
-};
-
-NullTerminatedStringList<WCHAR> GetDeviceInterfaceList(LPGUID iface_class_guid, DEVINSTID device_id,
-                                                       ULONG flags);
+// The device interfaces as a list of null-terminated strings, ended by an empty one;
+// freed with std::free.
+WCHAR* GetDeviceInterfaceList(LPGUID iface_class_guid, DEVINSTID device_id, ULONG flags);
 
 class DeviceChangeNotification
 {
@@ -80,13 +39,18 @@ public:
     Arrival,
     Removal,
   };
-  using CallbackType = Common::MoveOnlyFunction<void(EventType)>;
+  typedef void (*CallbackType)(void* user, EventType event);
+  struct Listener
+  {
+    CallbackType callback;
+    void* user;
+  };
 
   DeviceChangeNotification();
   ~DeviceChangeNotification();
 
   // FYI: Currently hardcoded to a GUID_DEVINTERFACE_HID filter.
-  void Register(CallbackType callback);
+  void Register(CallbackType callback, void* user);
   void Unregister();
 
   DeviceChangeNotification(const DeviceChangeNotification&) = delete;
@@ -95,7 +59,7 @@ public:
   void operator=(DeviceChangeNotification&&) = delete;
 
 private:
-  CallbackType m_callback{};
+  Listener m_listener{};
   HCMNOTIFICATION m_notify_handle{nullptr};
 };
 
