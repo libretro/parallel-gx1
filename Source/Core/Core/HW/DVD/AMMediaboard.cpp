@@ -551,22 +551,21 @@ static int PlatformPoll(WSAPOLLFD* pfds, std::size_t count, s64 timeout_ms)
 #endif
 }
 
-std::optional<ParsedIPRedirection> ParseIPRedirection(std::string_view str)
+bool ParseIPRedirection(std::string_view str, ParsedIPRedirection* parsed)
 {
   // Everything after a space is the description.
   const auto ip_pair_str = str.substr(0, str.find(' '));
 
-  const auto parts = SplitStringIntoArray<2>(ip_pair_str, '=');
-  if (!parts.has_value())
-    return std::nullopt;
+  std::string_view parts[2];
+  if (!SplitStringIntoArray(ip_pair_str, '=', parts, 2))
+    return false;
 
   const bool have_description = ip_pair_str.size() != str.size();
 
-  return ParsedIPRedirection{
-      .original = (*parts)[0],
-      .replacement = (*parts)[1],
-      .description = have_description ? str.substr(ip_pair_str.size() + 1) : std::string_view{},
-  };
+  parsed->original = parts[0];
+  parsed->replacement = parts[1];
+  parsed->description = have_description ? str.substr(ip_pair_str.size() + 1) : std::string_view{};
+  return true;
 }
 
 // Caller should check if it matches first!
@@ -624,12 +623,12 @@ IPRedirections GetIPRedirections()
       end = redirections.size();
     const std::string_view ip_pair_str = redirections.substr(start, end - start);
     start = end + 1;
-    const auto parts = ParseIPRedirection(ip_pair_str);
-    if (parts.has_value())
+    ParsedIPRedirection parts;
+    if (ParseIPRedirection(ip_pair_str, &parts))
     {
       Common::IPv4PortRange original, replacement;
-      if (Common::StringToIPv4PortRange(parts->original, &original) &&
-          Common::StringToIPv4PortRange(parts->replacement, &replacement))
+      if (Common::StringToIPv4PortRange(parts.original, &original) &&
+          Common::StringToIPv4PortRange(parts.replacement, &replacement))
       {
         result.emplace_back(original, replacement);
         continue;
@@ -643,28 +642,35 @@ IPRedirections GetIPRedirections()
   return result;
 }
 
-static std::optional<Common::IPv4Port> AdjustIPv4PortFromConfig(Common::IPv4Port subject)
+// Each false when no redirection applies
+static bool AdjustIPv4PortFromConfig(Common::IPv4Port subject, Common::IPv4Port* adjusted)
 {
   // TODO: We should parse this elsewhere to avoid repeated string manipulations.
   for (auto&& redirection : GetIPRedirections())
   {
     if (redirection.original.IsMatch(subject))
-      return redirection.Apply(subject);
+    {
+      *adjusted = redirection.Apply(subject);
+      return true;
+    }
   }
 
-  return std::nullopt;
+  return false;
 }
 
-static std::optional<Common::IPv4Port> ReverseAdjustIPv4PortFromConfig(Common::IPv4Port subject)
+static bool ReverseAdjustIPv4PortFromConfig(Common::IPv4Port subject, Common::IPv4Port* adjusted)
 {
   // TODO: We should parse this elsewhere to avoid repeated string manipulations.
   for (auto&& redirection : GetIPRedirections())
   {
     if (redirection.replacement.IsMatch(subject))
-      return redirection.Reverse(subject);
+    {
+      *adjusted = redirection.Reverse(subject);
+      return true;
+    }
   }
 
-  return std::nullopt;
+  return false;
 }
 
 // Ports are in host byte order.
@@ -710,15 +716,15 @@ static s32 NetDIMMConnect(GuestSocket guest_socket, const GuestSocketAddress& gu
   };
 
   // Adjust destination IP and port.
-  const auto adjusted_ipv4port = AdjustIPv4PortFromConfig({guest_addr.ip_address, guest_addr.port});
-  if (adjusted_ipv4port.has_value())
+  Common::IPv4Port adjusted_ipv4port;
+  if (AdjustIPv4PortFromConfig({guest_addr.ip_address, guest_addr.port}, &adjusted_ipv4port))
   {
-    addr.sin_addr = std::bit_cast<in_addr>(adjusted_ipv4port->ip_address);
-    addr.sin_port = adjusted_ipv4port->port;
+    addr.sin_addr = std::bit_cast<in_addr>(adjusted_ipv4port.ip_address);
+    addr.sin_port = adjusted_ipv4port.port;
 
     INFO_LOG(AMMEDIABOARD, "NetDIMMConnect: Redirecting to: %s:%u",
-             Common::IPAddressToString(adjusted_ipv4port->ip_address).c_str(),
-             (unsigned)ntohs(adjusted_ipv4port->port));
+             Common::IPAddressToString(adjusted_ipv4port.ip_address).c_str(),
+             (unsigned)ntohs(adjusted_ipv4port.port));
   }
   else
   {
@@ -730,13 +736,13 @@ static s32 NetDIMMConnect(GuestSocket guest_socket, const GuestSocketAddress& gu
 
   // See if we have a redirection for the game modified IP.
   // If so, adjust the source IP by binding the socket.
-  const auto adjusted_source_ipv4port = AdjustIPv4PortFromConfig({s_game_modified_ip_address, 0});
-  if (adjusted_source_ipv4port.has_value())
+  Common::IPv4Port adjusted_source_ipv4port;
+  if (AdjustIPv4PortFromConfig({s_game_modified_ip_address, 0}, &adjusted_source_ipv4port))
   {
     // FYI: We don't handle the situation if games bind outgoing TCP themselves.
     // But I think that's unlikely.
 
-    const u16 first_port_value = adjusted_source_ipv4port->GetPortValue();
+    const u16 first_port_value = adjusted_source_ipv4port.GetPortValue();
 
     // If port zero is included then we don't care about the port number.
     const bool use_any_port = first_port_value == 0;
@@ -746,7 +752,7 @@ static s32 NetDIMMConnect(GuestSocket guest_socket, const GuestSocketAddress& gu
     // This magic 999 is here just to match our default config..
     const u16 last_port_value = use_any_port ? 0 : first_port_value + 999;
 
-    const auto bind_result = BindEphemeralPort(host_socket, adjusted_source_ipv4port->ip_address,
+    const auto bind_result = BindEphemeralPort(host_socket, adjusted_source_ipv4port.ip_address,
                                                first_port_value, last_port_value, attempt_count);
 
     if (!bind_result)
@@ -910,11 +916,11 @@ static GuestSocket NetDIMMAccept(GuestSocket guest_socket, u8* guest_addr_ptr,
       .ip_address = std::bit_cast<Common::IPAddress>(addr.sin_addr),
   };
 
-  if (const auto adjusted_ipv4port =
-          ReverseAdjustIPv4PortFromConfig({guest_addr.ip_address, guest_addr.port}))
+  Common::IPv4Port adjusted_ipv4port;
+  if (ReverseAdjustIPv4PortFromConfig({guest_addr.ip_address, guest_addr.port}, &adjusted_ipv4port))
   {
-    guest_addr.ip_address = adjusted_ipv4port->ip_address;
-    guest_addr.port = adjusted_ipv4port->port;
+    guest_addr.ip_address = adjusted_ipv4port.ip_address;
+    guest_addr.port = adjusted_ipv4port.port;
 
     NOTICE_LOG(AMMEDIABOARD, "AMMBCommandAccept: Translating result to: %s:%u",
                Common::IPAddressToString(guest_addr.ip_address).c_str(),
@@ -948,9 +954,10 @@ static Common::IPv4Port GetAdjustedBindIPv4Port(Common::IPv4Port socket_addr)
              Common::IPAddressToString(s_game_modified_ip_address).c_str());
   }
 
-  if (const auto adjusted_ipv4 = AdjustIPv4PortFromConfig(considered_ipv4))
+  Common::IPv4Port adjusted_ipv4;
+  if (AdjustIPv4PortFromConfig(considered_ipv4, &adjusted_ipv4))
   {
-    socket_addr = *adjusted_ipv4;
+    socket_addr = adjusted_ipv4;
     INFO_LOG(AMMEDIABOARD, "GetAdjustedBindIPv4Port: Redirecting to: %s:%u",
              Common::IPAddressToString(socket_addr.ip_address).c_str(),
              (unsigned)ntohs(socket_addr.port));

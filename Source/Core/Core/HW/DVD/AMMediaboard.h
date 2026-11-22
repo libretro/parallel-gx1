@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <optional>
 #include <string_view>
 
 #include "Common/ChunkFile.h"
@@ -249,7 +248,8 @@ struct ParsedIPRedirection
   std::string_view description;
 };
 
-std::optional<ParsedIPRedirection> ParseIPRedirection(std::string_view str);
+// False when str is not original=replacement
+bool ParseIPRedirection(std::string_view str, ParsedIPRedirection* parsed);
 
 struct IPRedirection
 {

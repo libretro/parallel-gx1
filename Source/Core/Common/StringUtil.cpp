@@ -867,3 +867,28 @@ std::string BytesToHexString(const u8* bytes, size_t size)
   return result;
 }
 }  // namespace Common
+
+bool SplitStringIntoArray(std::string_view subject, char delim, std::string_view* parts,
+                          std::size_t count)
+{
+  std::size_t index = 0;
+  std::size_t start = 0;
+  for (;;)
+  {
+    // Too many delim.
+    if (index == count)
+      return false;
+
+    const std::size_t end = subject.find(delim, start);
+    if (end == std::string_view::npos)
+    {
+      parts[index++] = subject.substr(start);
+      break;
+    }
+    parts[index++] = subject.substr(start, end - start);
+    start = end + 1;
+  }
+
+  // Too few delim.
+  return index == count;
+}

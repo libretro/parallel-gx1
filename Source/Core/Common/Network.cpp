@@ -112,16 +112,15 @@ bool StringToIPv4PortRange(std::string_view subject, IPv4PortRange* result)
     read_index = subject.size();
   auto read_pos = subject.begin() + read_index;
 
-  const auto first_ip_octets = SplitStringIntoArray<4>(subject.substr(0, read_index), '.');
-
-  if (!first_ip_octets.has_value())
+  std::string_view first_ip_octets[4];
+  if (!SplitStringIntoArray(subject.substr(0, read_index), '.', first_ip_octets, 4))
     return false;  // Wrong number of octets.
 
   *result = IPv4PortRange{};
 
   for (u32 i = 0; i != result->first.ip_address.size(); ++i)
   {
-    if (!TryParse(std::string((*first_ip_octets)[i]), &result->first.ip_address[i]))
+    if (!TryParse(std::string(first_ip_octets[i]), &result->first.ip_address[i]))
       return false;  // Bad octet.
   }
 

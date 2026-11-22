@@ -10,7 +10,6 @@
 #include <cstdlib>
 #include <limits>
 #include <locale>
-#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -155,39 +154,10 @@ std::from_chars_result FromChars(std::string_view sv, std::floating_point auto& 
 
 std::vector<std::string> SplitString(const std::string& str, char delim);
 
-// Returns `nullopt` if subject does not contain exactly (Count - 1) delim.
-template <std::size_t Count>
-requires(Count > 1)
-std::optional<std::array<std::string_view, Count>> SplitStringIntoArray(std::string_view subject,
-                                                                        char delim)
-{
-  std::optional<std::array<std::string_view, Count>> result;
-  result.emplace();
-
-  std::size_t index = 0;
-  std::size_t start = 0;
-  for (;;)
-  {
-    // Too many delim.
-    if (index == Count)
-      return std::nullopt;
-
-    const std::size_t end = subject.find(delim, start);
-    if (end == std::string_view::npos)
-    {
-      (*result)[index++] = subject.substr(start);
-      break;
-    }
-    (*result)[index++] = subject.substr(start, end - start);
-    start = end + 1;
-  }
-
-  // Too few delim.
-  if (index != Count)
-    return std::nullopt;
-
-  return result;
-}
+// Splits subject at delim into count parts; false, with parts unspecified, unless subject holds
+// exactly count - 1 delims.
+bool SplitStringIntoArray(std::string_view subject, char delim, std::string_view* parts,
+                          std::size_t count);
 
 // "C:/Windows/winhelp.exe" to "C:/Windows/", "winhelp", ".exe"
 // This requires forward slashes to be used for the path separators, even on Windows.
