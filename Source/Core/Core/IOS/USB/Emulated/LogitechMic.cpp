@@ -103,6 +103,11 @@ LogitechMic::LogitechMic(u8 index) : m_index(index)
   m_id = u64(m_vid) << 32 | u64(m_pid) << 16 | u64(9) << 8 | u64(index + 1);
 }
 
+LogitechMic::~LogitechMic()
+{
+  delete m_microphone;
+}
+
 static const DeviceDescriptor DEVICE_DESCRIPTOR{0x12,   0x01,   0x0200, 0x00, 0x00, 0x00, 0x08,
                                                 0x046d, 0x0a03, 0x0001, 0x01, 0x02, 0x00, 0x01};
 
@@ -152,7 +157,7 @@ bool LogitechMic::Attach()
             (unsigned)m_index);
   if (!m_microphone)
   {
-    m_microphone = std::make_unique<MicrophoneLogitech>(m_sampler, m_index);
+    m_microphone = new MicrophoneLogitech(m_sampler, m_index);
     m_microphone->Initialize();
   }
   m_device_attached = true;

@@ -41,11 +41,11 @@ SplitPathResult SplitPathAndBasename(std::string_view path)
           std::string(path.substr(last_separator + 1))};
 }
 
-std::unique_ptr<FileSystem> MakeFileSystem(Location location)
+FileSystem* MakeFileSystem(Location location)
 {
   const std::string nand_root =
       File::GetUserPath(location == Location::Session ? D_SESSION_WIIROOT_IDX : D_WIIROOT_IDX);
-  return std::make_unique<FileSystem>(nand_root);
+  return new FileSystem(nand_root);
 }
 
 IOS::HLE::ReturnCode ConvertResult(ResultCode code)

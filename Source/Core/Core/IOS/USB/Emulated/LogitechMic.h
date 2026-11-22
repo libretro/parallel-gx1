@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -32,6 +31,7 @@ class LogitechMic final : public Device
 {
 public:
   explicit LogitechMic(u8 index);
+  ~LogitechMic() override;
 
   DeviceDescriptor GetDeviceDescriptor() const override;
   std::vector<ConfigDescriptor> GetConfigurations() const override;
@@ -65,6 +65,6 @@ private:
   u8 m_index = 0;
   u8 m_active_interface = 0;
   bool m_device_attached = false;
-  std::unique_ptr<Microphone> m_microphone{};
+  Microphone* m_microphone = nullptr;  // owned
 };
 }  // namespace IOS::HLE::USB

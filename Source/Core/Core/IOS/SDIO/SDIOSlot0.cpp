@@ -4,7 +4,6 @@
 #include "Core/IOS/SDIO/SDIOSlot0.h"
 
 #include <cstdio>
-#include <memory>
 #include <vector>
 
 #include "Common/ChunkFile.h"
@@ -68,19 +67,20 @@ void SDIOSlot0Device::DoState(PointerWrap& p)
 
 void SDIOSlot0Device::EventNotify()
 {
-  if (!m_event)
+  if (!m_event_request_address)
     return;
 
-  if ((m_sd_card_inserted && m_event->type == EVENT_INSERT) ||
-      (!m_sd_card_inserted && m_event->type == EVENT_REMOVE))
+  if ((m_sd_card_inserted && m_event_type == EVENT_INSERT) ||
+      (!m_sd_card_inserted && m_event_type == EVENT_REMOVE))
   {
     if (m_sd_card_inserted)
       INFO_LOG(IOS_SD, "Notifying PPC of SD card insertion");
     else
       INFO_LOG(IOS_SD, "Notifying PPC of SD card removal");
 
-    GetEmulationKernel().EnqueueIPCReply(m_event->request, m_event->type);
-    m_event.reset();
+    GetEmulationKernel().EnqueueIPCReply(Request{GetSystem(), m_event_request_address},
+                                         m_event_type);
+    m_event_request_address = 0;
   }
 }
 
@@ -337,7 +337,8 @@ s32 SDIOSlot0Device::ExecuteCommand(const Request& request, u32 buffer_in, u32 b
 
   case EVENT_REGISTER:  // async
     INFO_LOG(IOS_SD, "Register event %x", req.arg);
-    m_event = std::make_unique<Event>(static_cast<EventType>(req.arg), request);
+    m_event_type = static_cast<EventType>(req.arg);
+    m_event_request_address = request.address;
     ret = RET_EVENT_REGISTER;
     break;
 
@@ -345,13 +346,14 @@ s32 SDIOSlot0Device::ExecuteCommand(const Request& request, u32 buffer_in, u32 b
   case EVENT_UNREGISTER:
   {
     INFO_LOG(IOS_SD, "Unregister event %x", req.arg);
-    if (!m_event)
+    if (!m_event_request_address)
       return IPC_EINVAL;
     // release returns 0
     // unknown sd int
     // technically we do it out of order, oh well
-    GetEmulationKernel().EnqueueIPCReply(m_event->request, EVENT_INVALID);
-    m_event.reset();
+    GetEmulationKernel().EnqueueIPCReply(Request{GetSystem(), m_event_request_address},
+                                         EVENT_INVALID);
+    m_event_request_address = 0;
     break;
   }
 

@@ -114,7 +114,7 @@ private:
 
 struct Skylander final
 {
-  std::unique_ptr<SkylanderFigure> figure;
+  SkylanderFigure* figure = nullptr;  // owned by the portal
   u8 status = 0;
   // The statuses still to report, oldest first; Activate queues two at most
   u8 queued_status[2] = {};
@@ -140,6 +140,11 @@ struct SkylanderLEDColor final
 class SkylanderPortal final
 {
 public:
+  SkylanderPortal() = default;
+  SkylanderPortal(const SkylanderPortal&) = delete;
+  SkylanderPortal& operator=(const SkylanderPortal&) = delete;
+  ~SkylanderPortal();
+
   void Activate();
   void Deactivate();
   bool IsActivated();

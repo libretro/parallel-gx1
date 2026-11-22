@@ -54,11 +54,6 @@ static void HeaderMD5(const Header& header, u8* out)
 
 constexpr u32 s_ng_id = 0x0403AC68;
 
-void StorageDeleter::operator()(Storage* p) const
-{
-  delete p;
-}
-
 namespace FS = IOS::HLE::FS;
 
 class NandStorage final : public Storage
@@ -499,14 +494,19 @@ private:
   File::IOFile m_file;
 };
 
-StoragePointer MakeNandStorage(FS::FileSystem* fs, u64 tid)
+Storage* MakeNandStorage(FS::FileSystem* fs, u64 tid)
 {
-  return StoragePointer{new NandStorage{fs, tid}};
+  return new NandStorage{fs, tid};
 }
 
-StoragePointer MakeDataBinStorage(IOS::HLE::IOSC* iosc, const std::string& path, const char* mode)
+Storage* MakeDataBinStorage(IOS::HLE::IOSC* iosc, const std::string& path, const char* mode)
 {
-  return StoragePointer{new DataBinStorage{iosc, path, mode}};
+  return new DataBinStorage{iosc, path, mode};
+}
+
+void FreeStorage(Storage* storage)
+{
+  delete storage;
 }
 
 CopyResult Copy(Storage* source, Storage* dest)

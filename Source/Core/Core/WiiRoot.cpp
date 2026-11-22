@@ -263,10 +263,10 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
 
   IOS::HLE::EmulationKernel* ios = Core::System::GetInstance().GetIOS();
 
-  const auto configured_fs = FS::MakeFileSystem(FS::Location::Configured);
+  FS::FileSystem* const configured_fs = FS::MakeFileSystem(FS::Location::Configured);
 
   // Copy back Mii data
-  if (!CopyNandFile(ios->GetFS(), Common::GetMiiDatabasePath(), configured_fs.get(),
+  if (!CopyNandFile(ios->GetFS(), Common::GetMiiDatabasePath(), configured_fs,
                     Common::GetMiiDatabasePath()))
   {
     WARN_LOG(CORE, "Failed to copy Mii database to the NAND");
@@ -276,22 +276,27 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
   {
     INFO_LOG(CORE, "Wii FS Cleanup: Copying %016" PRIx64 ".", (u64)title_id);
 
-    const auto session_save = WiiSave::MakeNandStorage(ios->GetFS(), title_id);
+    WiiSave::Storage* const session_save = WiiSave::MakeNandStorage(ios->GetFS(), title_id);
 
     // FS won't write the save if the directory doesn't exist
     const std::string title_path = Common::GetTitleDataPath(title_id);
     configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, title_path + '/', 0,
                                   {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
 
-    const auto user_save = WiiSave::MakeNandStorage(configured_fs.get(), title_id);
+    WiiSave::Storage* const user_save = WiiSave::MakeNandStorage(configured_fs, title_id);
 
     const std::string backup_path = StringFromFormat(
         "%s/%016" PRIx64 ".bin", File::GetUserPath(D_BACKUP_IDX).c_str(), (u64)title_id);
-    const auto backup_save = WiiSave::MakeDataBinStorage(&ios->GetIOSC(), backup_path, "w+b");
+    WiiSave::Storage* const backup_save =
+        WiiSave::MakeDataBinStorage(&ios->GetIOSC(), backup_path, "w+b");
 
     // Backup the existing save just in case it's still needed.
-    WiiSave::Copy(user_save.get(), backup_save.get());
-    WiiSave::Copy(session_save.get(), user_save.get());
+    WiiSave::Copy(user_save, backup_save);
+    WiiSave::Copy(session_save, user_save);
+    WiiSave::FreeStorage(backup_save);
+    WiiSave::FreeStorage(user_save);
+    WiiSave::FreeStorage(session_save);
   }
+  delete configured_fs;
 }
 }  // namespace Core

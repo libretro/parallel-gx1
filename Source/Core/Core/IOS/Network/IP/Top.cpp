@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -221,14 +222,11 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
 
 #ifdef _WIN32
   DWORD forward_table_size = 0;
-  std::unique_ptr<MIB_IPFORWARDTABLE> forward_table;
+  PMIB_IPFORWARDTABLE forward_table = nullptr;
   if (GetIpForwardTable(nullptr, &forward_table_size, FALSE) == ERROR_INSUFFICIENT_BUFFER)
-  {
-    forward_table =
-        std::unique_ptr<MIB_IPFORWARDTABLE>((PMIB_IPFORWARDTABLE) operator new(forward_table_size));
-  }
+    forward_table = static_cast<PMIB_IPFORWARDTABLE>(std::malloc(forward_table_size));
 
-  DWORD result = GetIpForwardTable(forward_table.get(), &forward_table_size, FALSE);
+  DWORD result = GetIpForwardTable(forward_table, &forward_table_size, FALSE);
   // can return ERROR_MORE_DATA on XP even after the first call
   while (result == NO_ERROR || result == ERROR_MORE_DATA)
   {
@@ -244,8 +242,9 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
     if (result == NO_ERROR)
       break;
 
-    result = GetIpForwardTable(forward_table.get(), &forward_table_size, FALSE);
+    result = GetIpForwardTable(forward_table, &forward_table_size, FALSE);
   }
+  std::free(forward_table);
 
 #elif defined(__linux__)
   constexpr int BUFF_SIZE = 8192;
@@ -385,12 +384,10 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
 {
   auto routing_table = GetSystemInterfaceRouting();
 #ifdef _WIN32
-  std::unique_ptr<MIB_IPADDRTABLE> ip_table;
+  PMIB_IPADDRTABLE ip_table = nullptr;
   DWORD ip_table_size = 0;
   if (GetIpAddrTable(nullptr, &ip_table_size, FALSE) == ERROR_INSUFFICIENT_BUFFER)
-  {
-    ip_table = std::unique_ptr<MIB_IPADDRTABLE>((PMIB_IPADDRTABLE) operator new(ip_table_size));
-  }
+    ip_table = static_cast<PMIB_IPADDRTABLE>(std::malloc(ip_table_size));
 
   // find the interface IP used for the default route and use that
   NET_IFINDEX if_index = NET_IFINDEX_UNSPECIFIED;
@@ -404,19 +401,22 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
   }
 
   if (if_index != NET_IFINDEX_UNSPECIFIED &&
-      GetIpAddrTable(ip_table.get(), &ip_table_size, FALSE) == NO_ERROR)
+      GetIpAddrTable(ip_table, &ip_table_size, FALSE) == NO_ERROR)
   {
     for (DWORD i = 0; i < ip_table->dwNumEntries; ++i)
     {
       const auto& entry = ip_table->table[i];
       if (entry.dwIndex == if_index)
       {
-        return DefaultInterface{std::bit_cast<in_addr>(entry.dwAddr),
-                                std::bit_cast<in_addr>(entry.dwMask),
-                                std::bit_cast<in_addr>(entry.dwBCastAddr), routing_table};
+        DefaultInterface found{std::bit_cast<in_addr>(entry.dwAddr),
+                               std::bit_cast<in_addr>(entry.dwMask),
+                               std::bit_cast<in_addr>(entry.dwBCastAddr), routing_table};
+        std::free(ip_table);
+        return found;
       }
     }
   }
+  std::free(ip_table);
 #elif defined(__ANDROID__)
   // getifaddrs() needs API 24: the fallback interface stands in
   (void)routing_table;

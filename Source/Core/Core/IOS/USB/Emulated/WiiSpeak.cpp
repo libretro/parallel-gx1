@@ -53,7 +53,10 @@ WiiSpeak::WiiSpeak()
   m_id = u64(m_vid) << 32 | u64(m_pid) << 16 | u64(9) << 8 | u64(1);
 }
 
-WiiSpeak::~WiiSpeak() = default;
+WiiSpeak::~WiiSpeak()
+{
+  delete m_microphone;
+}
 
 DeviceDescriptor WiiSpeak::GetDeviceDescriptor() const
 {
@@ -83,7 +86,7 @@ bool WiiSpeak::Attach()
   DEBUG_LOG(IOS_USB, "[%04x:%04x] Opening device", (unsigned)m_vid, (unsigned)m_pid);
   if (!m_microphone)
   {
-    m_microphone = std::make_unique<MicrophoneWiiSpeak>(m_sampler);
+    m_microphone = new MicrophoneWiiSpeak(m_sampler);
     m_microphone->Initialize();
   }
   m_device_attached = true;

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <memory>
 #include <vector>
 
 #include "Common/CommonTypes.h"
@@ -93,7 +92,7 @@ private:
   u8 m_active_interface = 0;
   bool m_device_attached = false;
   bool init = false;
-  std::unique_ptr<Microphone> m_microphone{};
+  Microphone* m_microphone = nullptr;  // owned
   const DeviceDescriptor m_device_descriptor{0x12,  0x1,    0x200,  0,   0,   0,   0x10,
                                              0x57E, 0x0308, 0x0214, 0x1, 0x2, 0x0, 0x1};
   const std::vector<ConfigDescriptor> m_config_descriptor{

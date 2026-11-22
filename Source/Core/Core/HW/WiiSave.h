@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <functional>
-#include <memory>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -22,14 +21,10 @@ class IOSC;
 namespace WiiSave
 {
 class Storage;
-struct StorageDeleter
-{
-  void operator()(Storage* p) const;
-};
-
-using StoragePointer = std::unique_ptr<Storage, StorageDeleter>;
-StoragePointer MakeNandStorage(IOS::HLE::FS::FileSystem* fs, u64 tid);
-StoragePointer MakeDataBinStorage(IOS::HLE::IOSC* iosc, const std::string& path, const char* mode);
+// Each freed with FreeStorage
+Storage* MakeNandStorage(IOS::HLE::FS::FileSystem* fs, u64 tid);
+Storage* MakeDataBinStorage(IOS::HLE::IOSC* iosc, const std::string& path, const char* mode);
+void FreeStorage(Storage* storage);
 
 enum class CopyResult
 {

@@ -119,13 +119,6 @@ private:
   // Used to trigger using SDHC instead of SDSC
   static constexpr u64 SDSC_MAX_SIZE = 0x80000000;
 
-  struct Event
-  {
-    Event(EventType type_, Request request_) : type(type_), request(request_) {}
-    EventType type;
-    Request request;
-  };
-
   void RefreshConfig();
 
   void EventNotify();
@@ -152,8 +145,10 @@ private:
 
   u64 GetAddressFromRequest(u32 arg) const;
 
-  // TODO: do we need more than one?
-  std::unique_ptr<Event> m_event;
+  // The request waiting for an event, kept by address as the guest leaves it until the reply;
+  // 0 for none. TODO: do we need more than one?
+  u32 m_event_request_address = 0;
+  EventType m_event_type = EVENT_INVALID;
 
   u32 m_status = CARD_NOT_EXIST;
   SDProtocol m_protocol = SDProtocol::V1;

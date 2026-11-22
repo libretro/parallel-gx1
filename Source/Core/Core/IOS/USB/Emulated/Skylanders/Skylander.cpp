@@ -1140,6 +1140,12 @@ void SkylanderUSB::ScheduleTransfer(TransferCommand* command, const std::array<u
   command->ScheduleTransferCompletion(expected_count, expected_time_us);
 }
 
+SkylanderPortal::~SkylanderPortal()
+{
+  for (Skylander& s : skylanders)
+    delete s.figure;
+}
+
 void SkylanderPortal::Activate()
 {
   if (m_activated)

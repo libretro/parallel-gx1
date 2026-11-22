@@ -291,7 +291,7 @@ Kernel::Kernel(IOSC::ConsoleType console_type) : m_iosc(console_type)
   if (m_is_responsible_for_nand_root)
     Core::InitializeWiiRoot(false);
 
-  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session).release();
+  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session);
   ASSERT(m_fs);
 
   m_fs_core = new FSCore(*this);
@@ -327,7 +327,7 @@ EmulationKernel::EmulationKernel(Core::System& system, u64 title_id)
     return;
   }
 
-  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session).release();
+  m_fs = FS::MakeFileSystem(IOS::HLE::FS::Location::Session);
   ASSERT(m_fs);
 
   AddDevice(new AesDevice(*this, "/dev/aes"));
