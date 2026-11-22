@@ -5,7 +5,6 @@
 
 #include <array>
 #include <map>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -30,7 +29,7 @@
 namespace ConfigLoaders
 {
 // Returns all possible filenames in ascending order of priority
-std::vector<std::string> GetGameIniFilenames(std::string_view id, std::optional<u16> revision)
+std::vector<std::string> GetGameIniFilenames(std::string_view id, u16 revision)
 {
   std::vector<std::string> filenames;
 
@@ -54,9 +53,8 @@ std::vector<std::string> GetGameIniFilenames(std::string_view id, std::optional<
   filenames.push_back(StringFromFormat("%.*s.ini", static_cast<int>(id.size()), id.data()));
 
   // INIs with specific revisions
-  if (revision)
-    filenames.push_back(StringFromFormat("%.*sr%u.ini", static_cast<int>(id.size()), id.data(),
-                                         (unsigned)(*revision)));
+  filenames.push_back(
+      StringFromFormat("%.*sr%u.ini", static_cast<int>(id.size()), id.data(), (unsigned)revision));
 
   return filenames;
 }

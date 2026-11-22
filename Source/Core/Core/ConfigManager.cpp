@@ -524,7 +524,7 @@ Common::IniFile SConfig::LoadGameIni() const
   return LoadGameIni(GetGameID(), GetRevision());
 }
 
-Common::IniFile SConfig::LoadDefaultGameIni(std::string_view id, std::optional<u16> revision)
+Common::IniFile SConfig::LoadDefaultGameIni(std::string_view id, u16 revision)
 {
   Common::IniFile game_ini;
   for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))
@@ -532,7 +532,7 @@ Common::IniFile SConfig::LoadDefaultGameIni(std::string_view id, std::optional<u
   return game_ini;
 }
 
-Common::IniFile SConfig::LoadLocalGameIni(std::string_view id, std::optional<u16> revision)
+Common::IniFile SConfig::LoadLocalGameIni(std::string_view id, u16 revision)
 {
   Common::IniFile game_ini;
   for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))
@@ -540,7 +540,7 @@ Common::IniFile SConfig::LoadLocalGameIni(std::string_view id, std::optional<u16
   return game_ini;
 }
 
-Common::IniFile SConfig::LoadGameIni(std::string_view id, std::optional<u16> revision)
+Common::IniFile SConfig::LoadGameIni(std::string_view id, u16 revision)
 {
   Common::IniFile game_ini;
   for (const std::string& filename : ConfigLoaders::GetGameIniFilenames(id, revision))

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -100,9 +99,9 @@ struct SConfig
   Common::IniFile LoadLocalGameIni() const;
   Common::IniFile LoadGameIni() const;
 
-  static Common::IniFile LoadDefaultGameIni(std::string_view id, std::optional<u16> revision);
-  static Common::IniFile LoadLocalGameIni(std::string_view id, std::optional<u16> revision);
-  static Common::IniFile LoadGameIni(std::string_view id, std::optional<u16> revision);
+  static Common::IniFile LoadDefaultGameIni(std::string_view id, u16 revision);
+  static Common::IniFile LoadLocalGameIni(std::string_view id, u16 revision);
+  static Common::IniFile LoadGameIni(std::string_view id, u16 revision);
 
   SConfig(const SConfig&) = delete;
   SConfig& operator=(const SConfig&) = delete;
