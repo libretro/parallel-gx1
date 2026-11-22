@@ -627,12 +627,11 @@ IPRedirections GetIPRedirections()
     const auto parts = ParseIPRedirection(ip_pair_str);
     if (parts.has_value())
     {
-      const auto original = Common::StringToIPv4PortRange(parts->original);
-      const auto replacement = Common::StringToIPv4PortRange(parts->replacement);
-
-      if (original.has_value() && replacement.has_value())
+      Common::IPv4PortRange original, replacement;
+      if (Common::StringToIPv4PortRange(parts->original, &original) &&
+          Common::StringToIPv4PortRange(parts->replacement, &replacement))
       {
-        result.emplace_back(*original, *replacement);
+        result.emplace_back(original, replacement);
         continue;
       }
 
@@ -1389,8 +1388,9 @@ static void AMMBCommandModifyMyIPaddr(u32 parameter_offset)
   NOTICE_LOG(AMMEDIABOARD_NET, "GC-AM: modifyMyIPaddr(%.*s)",
              static_cast<int>(ip_address_str.size()), ip_address_str.data());
 
-  if (const auto parse_result = Common::StringToIPv4PortRange(ip_address_str))
-    s_game_modified_ip_address = parse_result->first.ip_address;
+  Common::IPv4PortRange parse_result;
+  if (Common::StringToIPv4PortRange(ip_address_str, &parse_result))
+    s_game_modified_ip_address = parse_result.first.ip_address;
 }
 
 static void FileWriteData(Memory::MemoryManager& memory, File::IOFile* file, u32 seek_pos,

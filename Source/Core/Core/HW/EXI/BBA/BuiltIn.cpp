@@ -439,11 +439,11 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
           continue;
 
         Common::PacketView view(tcp_buf.data.data(), tcp_buf.data.size());
-        auto tcp_packet = view.GetTCPPacket();  // This is always a tcp packet
-        if (!tcp_packet.has_value())            // should never happen but just in case
+        Common::TCPPacket tcp_packet;
+        if (!view.GetTCPPacket(&tcp_packet))  // always a tcp packet; just in case
           continue;
 
-        const u32 seq_end = static_cast<u32>(tcp_buf.seq_id + tcp_packet->data.size());
+        const u32 seq_end = static_cast<u32>(tcp_buf.seq_id + tcp_packet.data.size());
         if (seq_end <= ack_num)
         {
           tcp_buf.used = false;  // confirmed data received
@@ -453,11 +453,11 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& 
         }
         // partial data, adjust the packet for next ack
         const u16 ack_size = ack_num - tcp_buf.seq_id;
-        tcp_packet->data.erase(tcp_packet->data.begin(), tcp_packet->data.begin() + ack_size);
+        tcp_packet.data.erase(tcp_packet.data.begin(), tcp_packet.data.begin() + ack_size);
 
         tcp_buf.seq_id += ack_size;
-        tcp_packet->tcp_header.sequence_number = htonl(tcp_buf.seq_id);
-        tcp_buf.data = tcp_packet->Build();
+        tcp_packet.tcp_header.sequence_number = htonl(tcp_buf.seq_id);
+        tcp_buf.data = tcp_packet.Build();
       }
     }
   }
@@ -684,15 +684,15 @@ void CEXIETHERNET::BuiltInBBAInterface::RunRequests()
 bool CEXIETHERNET::BuiltInBBAInterface::SendFrame(const u8* frame, u32 size)
 {
   // CPU thread: check the frame and hand it to the read thread, which owns the network stack.
-  const std::optional<u16> ethertype = Common::PacketView(frame, size).GetEtherType();
-  if (!ethertype.has_value())
+  u16 ethertype;
+  if (!Common::PacketView(frame, size).GetEtherType(&ethertype))
   {
     ERROR_LOG(SP1, "Unable to send frame with invalid ethernet header");
     return false;
   }
-  if (*ethertype != Common::IPV4_ETHERTYPE && *ethertype != Common::ARP_ETHERTYPE)
+  if (ethertype != Common::IPV4_ETHERTYPE && ethertype != Common::ARP_ETHERTYPE)
   {
-    ERROR_LOG(SP1, "Unsupported EtherType %#06x", (unsigned)(*ethertype));
+    ERROR_LOG(SP1, "Unsupported EtherType %#06x", (unsigned)ethertype);
     return false;
   }
   Post(Request::Kind::Frame, std::vector<u8>(frame, frame + size));
@@ -704,56 +704,56 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
 {
   const Common::PacketView view(frame, size);
 
-  const std::optional<u16> ethertype = view.GetEtherType();
-  if (!ethertype.has_value())
+  u16 ethertype;
+  if (!view.GetEtherType(&ethertype))
   {
     ERROR_LOG(SP1, "Unable to send frame with invalid ethernet header");
     return;
   }
 
-  switch (*ethertype)
+  switch (ethertype)
   {
   case Common::IPV4_ETHERTYPE:
   {
-    const std::optional<u8> ip_proto = view.GetIPProto();
-    if (!ip_proto.has_value())
+    u8 ip_proto;
+    if (!view.GetIPProto(&ip_proto))
     {
       ERROR_LOG(SP1, "Unable to send frame with invalid IP header");
       return;
     }
 
-    switch (*ip_proto)
+    switch (ip_proto)
     {
     case IPPROTO_UDP:
     {
-      const auto udp_packet = view.GetUDPPacket();
-      if (!udp_packet.has_value())
+      Common::UDPPacket udp_packet;
+      if (!view.GetUDPPacket(&udp_packet))
       {
         ERROR_LOG(SP1, "Unable to send frame with invalid UDP header");
         return;
       }
 
-      if (ntohs(udp_packet->udp_header.destination_port) == 67)
+      if (ntohs(udp_packet.udp_header.destination_port) == 67)
       {
-        HandleDHCP(*udp_packet);
+        HandleDHCP(udp_packet);
       }
       else
       {
-        HandleUDPFrame(*udp_packet);
+        HandleUDPFrame(udp_packet);
       }
       break;
     }
 
     case IPPROTO_TCP:
     {
-      const auto tcp_packet = view.GetTCPPacket();
-      if (!tcp_packet.has_value())
+      Common::TCPPacket tcp_packet;
+      if (!view.GetTCPPacket(&tcp_packet))
       {
         ERROR_LOG(SP1, "Unable to send frame with invalid TCP header");
         return;
       }
 
-      HandleTCPFrame(*tcp_packet);
+      HandleTCPFrame(tcp_packet);
       break;
     }
 
@@ -765,7 +765,7 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
     }
 
     default:
-      ERROR_LOG(SP1, "Unsupported IP protocol %u", (unsigned)(*ip_proto));
+      ERROR_LOG(SP1, "Unsupported IP protocol %u", (unsigned)ip_proto);
       break;
     }
     break;
@@ -773,19 +773,19 @@ void CEXIETHERNET::BuiltInBBAInterface::ProcessFrame(const u8* frame, u32 size)
 
   case Common::ARP_ETHERTYPE:
   {
-    const auto arp_packet = view.GetARPPacket();
-    if (!arp_packet.has_value())
+    Common::ARPPacket arp_packet;
+    if (!view.GetARPPacket(&arp_packet))
     {
       ERROR_LOG(SP1, "Unable to send frame with invalid ARP header");
       return;
     }
 
-    HandleARP(*arp_packet);
+    HandleARP(arp_packet);
     break;
   }
 
   default:
-    ERROR_LOG(SP1, "Unsupported EtherType %#06x", (unsigned)(*ethertype));
+    ERROR_LOG(SP1, "Unsupported EtherType %#06x", (unsigned)ethertype);
     return;
   }
 
@@ -852,8 +852,8 @@ void CEXIETHERNET::BuiltInBBAInterface::ReadThreadHandler(void* data)
     {
       u8* buffer = reinterpret_cast<u8*>(self->m_eth_ref->mRecvBuffer);
       Common::PacketView packet(buffer, datasize);
-      const auto packet_type = packet.GetEtherType();
-      if (packet_type.has_value() && packet_type == Common::IPV4_ETHERTYPE)
+      u16 packet_type;
+      if (packet.GetEtherType(&packet_type) && packet_type == Common::IPV4_ETHERTYPE)
       {
         SetIPIdentification(buffer, datasize, ++self->m_ip_frame_id);
       }

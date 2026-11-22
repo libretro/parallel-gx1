@@ -103,7 +103,7 @@ std::string IPAddressToString(IPAddress ip_address)
   return buf;
 }
 
-std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
+bool StringToIPv4PortRange(std::string_view subject, IPv4PortRange* result)
 {
   // TODO: This could be optimized and improved a lot.
 
@@ -115,15 +115,14 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
   const auto first_ip_octets = SplitStringIntoArray<4>(subject.substr(0, read_index), '.');
 
   if (!first_ip_octets.has_value())
-    return std::nullopt;  // Wrong number of octets.
+    return false;  // Wrong number of octets.
 
-  std::optional<IPv4PortRange> result;
-  result.emplace();
+  *result = IPv4PortRange{};
 
   for (u32 i = 0; i != result->first.ip_address.size(); ++i)
   {
     if (!TryParse(std::string((*first_ip_octets)[i]), &result->first.ip_address[i]))
-      return std::nullopt;  // Bad octet.
+      return false;  // Bad octet.
   }
 
   if (read_pos == subject.end())
@@ -132,7 +131,7 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
     result->last.ip_address = result->first.ip_address;
     result->first.port = 0;
     result->last.port = u16(-1);
-    return result;
+    return true;
   }
 
   if (*read_pos == '-')
@@ -151,7 +150,7 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
     const std::size_t octet_share_count = 4 - last_ip_octets.size();
 
     if (octet_share_count >= 4)
-      return std::nullopt;  // Too many octets.
+      return false;  // Too many octets.
 
     std::memcpy(result->last.ip_address.data(), result->first.ip_address.data(),
                 octet_share_count);
@@ -160,12 +159,12 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
     for (auto&& octet_str : last_ip_octets)
     {
       if (!TryParse(octet_str, &result->last.ip_address[i]))
-        return std::nullopt;  // Bad octet.
+        return false;  // Bad octet.
       ++i;
     }
 
     if (result->first.ip_address > result->last.ip_address)
-      return std::nullopt;  // Reversed range.
+      return false;  // Reversed range.
 
     read_pos = last_ip_end;
   }
@@ -178,7 +177,7 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
     const auto [parse_end, ec] = FromChars({read_pos, subject.end()}, network_prefix_length);
 
     if (ec != std::errc{} || network_prefix_length > 32)
-      return std::nullopt;  // Bad network prefix.
+      return false;  // Bad network prefix.
 
     read_pos += parse_end - std::to_address(read_pos);  // Working around MSVC iterators..
 
@@ -198,11 +197,11 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
     // Ports not specified.
     result->first.port = 0;
     result->last.port = u16(-1);
-    return result;
+    return true;
   }
 
   if (*read_pos != ':')
-    return std::nullopt;  // Unexpected character.
+    return false;  // Unexpected character.
 
   u16 first_port_u16{};
   {
@@ -211,7 +210,7 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
 
     const auto [parse_end, ec] = FromChars({read_pos, subject.end()}, first_port_u16);
     if (ec != std::errc{})
-      return std::nullopt;  // Bad first port.
+      return false;  // Bad first port.
 
     result->first.port = std::bit_cast<u16>(Common::BigEndianValue(first_port_u16));
 
@@ -222,11 +221,11 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
   {
     // Last port not specified.
     result->last.port = result->first.port;
-    return result;
+    return true;
   }
 
   if (*read_pos != '-')
-    return std::nullopt;  // Unexpected character.
+    return false;  // Unexpected character.
 
   u16 first_last_u16{};
   {
@@ -235,7 +234,7 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
 
     const auto [parse_end, ec] = FromChars({read_pos, subject.end()}, first_last_u16);
     if (ec != std::errc{} || first_last_u16 < first_port_u16)
-      return std::nullopt;  // Bad last port.
+      return false;  // Bad last port.
 
     result->last.port = std::bit_cast<u16>(Common::BigEndianValue(first_last_u16));
 
@@ -243,9 +242,9 @@ std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject)
   }
 
   if (read_pos != subject.end())
-    return std::nullopt;
+    return false;
 
-  return result;
+  return true;
 }
 
 MACAddress GenerateMacAddress(const MACConsumer type)
@@ -278,10 +277,10 @@ std::string MacAddressToString(const MACAddress& mac)
   return buf;
 }
 
-std::optional<MACAddress> StringToMacAddress(std::string_view mac_string)
+bool StringToMacAddress(std::string_view mac_string, MACAddress* out)
 {
   if (mac_string.empty())
-    return std::nullopt;
+    return false;
 
   int x = 0;
   MACAddress mac{};
@@ -305,9 +304,10 @@ std::optional<MACAddress> StringToMacAddress(std::string_view mac_string)
   // nibble is a character in the MAC address, making 12 characters
   // in total.
   if (x / 2 != MAC_ADDRESS_SIZE)
-    return std::nullopt;
+    return false;
 
-  return std::make_optional(mac);
+  *out = mac;
+  return true;
 }
 
 EthernetHeader::EthernetHeader() = default;
@@ -679,38 +679,41 @@ PacketView::PacketView(const u8* ptr, std::size_t size) : m_ptr(ptr), m_size(siz
 {
 }
 
-std::optional<u16> PacketView::GetEtherType() const
+bool PacketView::GetEtherType(u16* ether_type) const
 {
   if (m_size < EthernetHeader::SIZE)
-    return std::nullopt;
+    return false;
   const std::size_t offset = offsetof(EthernetHeader, ethertype);
-  return ntohs(Common::BitCastPtr<u16>(m_ptr + offset));
+  *ether_type = ntohs(Common::BitCastPtr<u16>(m_ptr + offset));
+  return true;
 }
 
-std::optional<ARPPacket> PacketView::GetARPPacket() const
+bool PacketView::GetARPPacket(ARPPacket* packet) const
 {
   if (m_size < ARPPacket::SIZE)
-    return std::nullopt;
-  return Common::BitCastPtr<ARPPacket>(m_ptr);
+    return false;
+  *packet = Common::BitCastPtr<ARPPacket>(m_ptr);
+  return true;
 }
 
-std::optional<u8> PacketView::GetIPProto() const
+bool PacketView::GetIPProto(u8* ip_proto) const
 {
   if (m_size < EthernetHeader::SIZE + IPv4Header::SIZE)
-    return std::nullopt;
-  return m_ptr[EthernetHeader::SIZE + offsetof(IPv4Header, protocol)];
+    return false;
+  *ip_proto = m_ptr[EthernetHeader::SIZE + offsetof(IPv4Header, protocol)];
+  return true;
 }
 
-std::optional<TCPPacket> PacketView::GetTCPPacket() const
+bool PacketView::GetTCPPacket(TCPPacket* packet) const
 {
   if (m_size < TCPPacket::MIN_SIZE)
-    return std::nullopt;
-  TCPPacket result;
+    return false;
+  TCPPacket& result = *packet;
   result.eth_header = Common::BitCastPtr<EthernetHeader>(m_ptr);
   result.ip_header = Common::BitCastPtr<IPv4Header>(m_ptr + EthernetHeader::SIZE);
   const u16 offset = result.ip_header.DefinedSize() + EthernetHeader::SIZE;
   if (m_size < offset + TCPHeader::SIZE)
-    return std::nullopt;
+    return false;
   result.ipv4_options =
       std::vector<u8>(m_ptr + EthernetHeader::SIZE + IPv4Header::SIZE, m_ptr + offset);
   result.tcp_header = Common::BitCastPtr<TCPHeader>(m_ptr + offset);
@@ -720,24 +723,24 @@ std::optional<TCPPacket> PacketView::GetTCPPacket() const
   const std::size_t end = EthernetHeader::SIZE + total_len;
 
   if (m_size < end || end < data_offset)
-    return std::nullopt;
+    return false;
 
   result.tcp_options = std::vector<u8>(m_ptr + offset + TCPHeader::SIZE, m_ptr + data_offset);
   result.data = std::vector<u8>(m_ptr + data_offset, m_ptr + end);
 
-  return result;
+  return true;
 }
 
-std::optional<UDPPacket> PacketView::GetUDPPacket() const
+bool PacketView::GetUDPPacket(UDPPacket* packet) const
 {
   if (m_size < UDPPacket::MIN_SIZE)
-    return std::nullopt;
-  UDPPacket result;
+    return false;
+  UDPPacket& result = *packet;
   result.eth_header = Common::BitCastPtr<EthernetHeader>(m_ptr);
   result.ip_header = Common::BitCastPtr<IPv4Header>(m_ptr + EthernetHeader::SIZE);
   const u16 offset = result.ip_header.DefinedSize() + EthernetHeader::SIZE;
   if (m_size < offset + UDPHeader::SIZE)
-    return std::nullopt;
+    return false;
   result.ipv4_options =
       std::vector<u8>(m_ptr + EthernetHeader::SIZE + IPv4Header::SIZE, m_ptr + offset);
   result.udp_header = Common::BitCastPtr<UDPHeader>(m_ptr + offset);
@@ -747,11 +750,11 @@ std::optional<UDPPacket> PacketView::GetUDPPacket() const
   const std::size_t end = offset + total_len;
 
   if (m_size < end || end < data_offset)
-    return std::nullopt;
+    return false;
 
   result.data = std::vector<u8>(m_ptr + data_offset, m_ptr + end);
 
-  return result;
+  return true;
 }
 
 NetworkErrorState SaveNetworkErrorState()

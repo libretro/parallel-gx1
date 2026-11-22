@@ -254,11 +254,12 @@ class PacketView
 public:
   PacketView(const u8* ptr, std::size_t size);
 
-  std::optional<u16> GetEtherType() const;
-  std::optional<ARPPacket> GetARPPacket() const;
-  std::optional<u8> GetIPProto() const;
-  std::optional<TCPPacket> GetTCPPacket() const;
-  std::optional<UDPPacket> GetUDPPacket() const;
+  // Each false when the frame is too short for it
+  bool GetEtherType(u16* ether_type) const;
+  bool GetARPPacket(ARPPacket* packet) const;
+  bool GetIPProto(u8* ip_proto) const;
+  bool GetTCPPacket(TCPPacket* packet) const;
+  bool GetUDPPacket(UDPPacket* packet) const;
 
 private:
   const u8* m_ptr;
@@ -295,12 +296,13 @@ struct IPv4PortRange
 std::string IPAddressToString(IPAddress ip_address);
 
 // Syntax is: first_ip[-last_ip|/network_prefix_length][:first_port[-last_port]]
-std::optional<IPv4PortRange> StringToIPv4PortRange(std::string_view subject);
+bool StringToIPv4PortRange(std::string_view subject, IPv4PortRange* range);
 
 MACAddress GenerateMacAddress(MACConsumer type);
 
 std::string MacAddressToString(const MACAddress& mac);
-std::optional<MACAddress> StringToMacAddress(std::string_view mac_string);
+// out is left alone when mac_string is not a MAC address
+bool StringToMacAddress(std::string_view mac_string, MACAddress* out);
 
 u16 ComputeNetworkChecksum(const void* data, u16 length, u32 initial_value = 0);
 u16 ComputeTCPNetworkChecksum(const IPAddress& from, const IPAddress& to, const void* data,

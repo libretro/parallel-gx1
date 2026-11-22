@@ -555,8 +555,8 @@ void BluetoothRealDevice::LoadLinkKeys()
       continue;
 
     const auto address_string = pair.substr(0, index);
-    std::optional<Common::MACAddress> address = Common::StringToMacAddress(address_string);
-    if (!address)
+    Common::MACAddress address;
+    if (!Common::StringToMacAddress(address_string, &address))
     {
       ERROR_LOG(IOS_WIIMOTE, "Malformed MAC address (%.*s). Skipping loading of current link key.",
                 static_cast<int>(address_string.size()), address_string.data());
@@ -565,7 +565,7 @@ void BluetoothRealDevice::LoadLinkKeys()
 
     bdaddr_t mac;
     for (std::size_t i = 0; i < sizeof(mac); i++)
-      mac[i] = (*address)[sizeof(mac) - 1 - i];
+      mac[i] = address[sizeof(mac) - 1 - i];
 
     const auto key_string = pair.substr(index + 1);
     linkkey_t key{};

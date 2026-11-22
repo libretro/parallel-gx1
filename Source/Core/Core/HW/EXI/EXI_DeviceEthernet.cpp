@@ -36,14 +36,15 @@ CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type)
   // Parse MAC address from config, and generate a new one if it doesn't
   // exist or can't be parsed.
   std::string mac_addr_setting = Config::Get(Config::MAIN_BBA_MAC);
-  std::optional<Common::MACAddress> mac_addr = Common::StringToMacAddress(mac_addr_setting);
+  Common::MACAddress mac_addr;
+  const bool mac_addr_valid = Common::StringToMacAddress(mac_addr_setting, &mac_addr);
 
   Common::ToLower(&mac_addr_setting);
 
-  if (!mac_addr)
+  if (!mac_addr_valid)
   {
     mac_addr = Common::GenerateMacAddress(Common::MACConsumer::BBA);
-    mac_addr_setting = Common::MacAddressToString(mac_addr.value());
+    mac_addr_setting = Common::MacAddressToString(mac_addr);
     Config::SetBaseOrCurrent(Config::MAIN_BBA_MAC, mac_addr_setting);
     Config::Save();
   }
@@ -95,7 +96,7 @@ CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type)
 
   MXHardReset();
 
-  const auto& mac = mac_addr.value();
+  const auto& mac = mac_addr;
   memcpy(&mBbaMem[BBA_NAFR_PAR0], mac.data(), mac.size());
 
   // HACK: .. fully established 100BASE-T link

@@ -245,12 +245,12 @@ void NetworkCaptureLogger::LogIPv4(LogType log_type, const u8* data, u16 length,
   }
 
   Common::EthernetHeader ethernet_header(0x800);
-  auto mac = Common::StringToMacAddress(Config::Get(Config::MAIN_WIRELESS_MAC));
-  if (mac)
+  Common::MACAddress mac;
+  if (Common::StringToMacAddress(Config::Get(Config::MAIN_WIRELESS_MAC), &mac))
   {
     auto& mac_address =
         (log_type == LogType::Write) ? ethernet_header.source : ethernet_header.destination;
-    mac_address = *mac;
+    mac_address = mac;
   }
 
   if (socket_type == SOCK_STREAM)

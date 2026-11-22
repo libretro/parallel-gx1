@@ -29,22 +29,21 @@ Common::MACAddress GetMACAddress()
   if (Core::WantsDeterminism())
     wireless_mac = "12:34:56:78:9a:bc";
 
-  std::optional<Common::MACAddress> mac = Common::StringToMacAddress(wireless_mac);
-
-  if (!mac)
+  Common::MACAddress mac;
+  if (!Common::StringToMacAddress(wireless_mac, &mac))
   {
     mac = Common::GenerateMacAddress(Common::MACConsumer::IOS);
-    SaveMACAddress(mac.value());
+    SaveMACAddress(mac);
     if (!wireless_mac.empty())
     {
       ERROR_LOG(IOS_NET,
                 "The MAC provided (%s) is invalid. We have "
                 "generated another one for you.",
-                Common::MacAddressToString(mac.value()).c_str());
+                Common::MacAddressToString(mac).c_str());
     }
   }
 
-  INFO_LOG(IOS_NET, "Using MAC address: %s", Common::MacAddressToString(mac.value()).c_str());
-  return mac.value();
+  INFO_LOG(IOS_NET, "Using MAC address: %s", Common::MacAddressToString(mac).c_str());
+  return mac;
 }
 }  // namespace IOS::Net
