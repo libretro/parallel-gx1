@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <map>
-#include <memory>
-
 #include <rthreads/rthreads.h>
 
 #include <retro_atomic.h>
@@ -24,11 +21,26 @@ namespace IOS::HLE
 {
 class USBHost;
 
+// Devices sorted by ID, the list holding a reference on each
+struct USBDeviceList
+{
+  static constexpr u32 MAX_DEVICES = 64;
+  u32 count;
+  u64 ids[MAX_DEVICES];
+  USB::Device* devices[MAX_DEVICES];
+};
+void usb_device_list_clear(USBDeviceList* list);
+// dst starts empty
+void usb_device_list_copy(USBDeviceList* dst, const USBDeviceList* src);
+USB::Device* usb_device_list_find(const USBDeviceList* list, u64 id);
+// Takes the reference held on device, replacing any device with its ID
+void usb_device_list_add(USBDeviceList* list, USB::Device* device);
+// Returns the device with the list's reference on it
+USB::Device* usb_device_list_take(USBDeviceList* list, u32 index);
+
 class USBScanner final
 {
 public:
-  using DeviceMap = std::map<u64, std::shared_ptr<USB::Device>>;
-
   ~USBScanner();
 
   bool AddClient(USBHost* client);
@@ -36,7 +48,8 @@ public:
 
   void WaitForFirstScan();
 
-  DeviceMap GetDevices() const;
+  // out starts empty
+  void GetDevices(USBDeviceList* out) const;
 
 #if defined(__LIBUSB__)
   void Shutdown();
@@ -48,10 +61,9 @@ private:
 
   bool UpdateDevices();
   void ScanThread();
-  bool AddNewDevices(DeviceMap* new_devices) const;
+  bool AddNewDevices(USBDeviceList* new_devices) const;
   static void WakeupSantrollerDevice(libusb_device* device);
-  static void AddEmulatedDevices(DeviceMap* new_devices);
-  static void AddDevice(std::unique_ptr<USB::Device> device, DeviceMap* new_devices);
+  static void AddEmulatedDevices(USBDeviceList* new_devices);
 
   // The device list and the clients are each published whole: the scan thread replaces the
   // list, the emulation thread (the only one adding and removing clients) replaces the set.
@@ -59,7 +71,7 @@ private:
   struct Devices
   {
     quiesce_node_t node;  // first: the free callback casts it back
-    DeviceMap map;
+    USBDeviceList list;
   };
   // Sorted by address, the order the hosts are told in
   static constexpr u32 MAX_CLIENTS = 16;
@@ -71,7 +83,8 @@ private:
   };
   static void FreeDevices(quiesce_node_t* node);
   static void FreeClients(quiesce_node_t* node);
-  void PublishDevices(DeviceMap map);
+  // Takes the devices in list, leaving it empty
+  void PublishDevices(USBDeviceList* list);
   // Tells the clients about the current devices. Scan thread.
   void NotifyClients();
 

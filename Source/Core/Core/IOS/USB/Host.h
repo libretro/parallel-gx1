@@ -3,9 +3,6 @@
 
 #pragma once
 
-#include <map>
-#include <memory>
-#include <optional>
 #include <string>
 
 #include <retro_atomic.h>
@@ -30,7 +27,7 @@ public:
 
   void DoState(PointerWrap& p) override;
 
-  void OnDevicesChanged(const USBScanner::DeviceMap& new_devices);
+  void OnDevicesChanged(const USBDeviceList* new_devices);
 
 protected:
   enum class ChangeEvent
@@ -38,10 +35,9 @@ protected:
     Inserted,
     Removed,
   };
-  using DeviceChangeHooks = std::map<std::shared_ptr<USB::Device>, ChangeEvent>;
-
-  std::shared_ptr<USB::Device> GetDeviceById(u64 device_id) const;
-  virtual void OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> changed_device);
+  // Borrowed from m_devices: valid until the device list next changes
+  USB::Device* GetDeviceById(u64 device_id) const;
+  virtual void OnDeviceChange(ChangeEvent event, USB::Device* changed_device);
   virtual void OnDeviceChangeEnd();
   virtual bool ShouldAddDevice(const USB::Device& device) const;
 
@@ -51,13 +47,14 @@ protected:
   // Emulation thread only. Device lists from the scan thread wait in m_pending_devices until
   // Update takes them, so this and everything derived from it in the subclasses stay on one
   // thread.
-  std::map<u64, std::shared_ptr<USB::Device>> m_devices;
+  USBDeviceList m_devices{};
 
 private:
   void Update() override;
-  void OnDevicesChangedInternal(const USBScanner::DeviceMap& new_devices);
+  void OnDevicesChangedInternal(const USBDeviceList* new_devices);
+  void UpdateFromScanner();
 
   bool m_has_initialised = false;
-  retro_atomic_ptr_t m_pending_devices{};  // USBScanner::DeviceMap*
+  retro_atomic_ptr_t m_pending_devices{};  // USBDeviceList*
 };
 }  // namespace IOS::HLE

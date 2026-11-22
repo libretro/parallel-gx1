@@ -3,12 +3,7 @@
 
 #include "Core/IOS/USB/Host.h"
 
-#include <functional>
-#include <map>
-#include <memory>
-#include <optional>
 #include <string>
-#include <utility>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
@@ -24,6 +19,14 @@
 
 namespace IOS::HLE
 {
+static void FreePendingDevices(USBDeviceList* list)
+{
+  if (!list)
+    return;
+  usb_device_list_clear(list);
+  delete list;
+}
+
 USBHost::USBHost(EmulationKernel& ios, const std::string& device_name)
     : EmulationDevice(ios, device_name)
 {
@@ -32,7 +35,9 @@ USBHost::USBHost(EmulationKernel& ios, const std::string& device_name)
 USBHost::~USBHost()
 {
   GetSystem().GetUSBScanner().RemoveClient(this);
-  delete static_cast<USBScanner::DeviceMap*>(retro_atomic_exchange_ptr(&m_pending_devices, nullptr));
+  FreePendingDevices(
+      static_cast<USBDeviceList*>(retro_atomic_exchange_ptr(&m_pending_devices, nullptr)));
+  usb_device_list_clear(&m_devices);
 }
 
 IPCReply USBHost::Open(const OpenRequest& request)
@@ -43,7 +48,7 @@ IPCReply USBHost::Open(const OpenRequest& request)
     // Force a device scan to complete, because some games (including Your Shape) only care
     // about the initial device list (in the first GETDEVICECHANGE reply).
     GetSystem().GetUSBScanner().WaitForFirstScan();
-    OnDevicesChangedInternal(GetSystem().GetUSBScanner().GetDevices());
+    UpdateFromScanner();
     m_has_initialised = true;
   }
   return IPCReply(IPC_SUCCESS);
@@ -56,20 +61,17 @@ void USBHost::DoState(PointerWrap& p)
   {
     // After a state has loaded, there may be insertion hooks for devices that were
     // already plugged in, and which need to be triggered.
-    m_devices.clear();
-    OnDevicesChangedInternal(GetSystem().GetUSBScanner().GetDevices());
+    usb_device_list_clear(&m_devices);
+    UpdateFromScanner();
   }
 }
 
-std::shared_ptr<USB::Device> USBHost::GetDeviceById(const u64 device_id) const
+USB::Device* USBHost::GetDeviceById(const u64 device_id) const
 {
-  const auto it = m_devices.find(device_id);
-  if (it == m_devices.end())
-    return nullptr;
-  return it->second;
+  return usb_device_list_find(&m_devices, device_id);
 }
 
-void USBHost::OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> changed_device)
+void USBHost::OnDeviceChange(ChangeEvent event, USB::Device* changed_device)
 {
 }
 
@@ -86,60 +88,69 @@ void USBHost::Update()
 {
   if (Core::WantsDeterminism())
   {
-    OnDevicesChangedInternal(GetSystem().GetUSBScanner().GetDevices());
+    UpdateFromScanner();
     return;
   }
 
-  if (auto* pending = static_cast<USBScanner::DeviceMap*>(
-          retro_atomic_exchange_ptr(&m_pending_devices, nullptr)))
+  if (USBDeviceList* const pending =
+          static_cast<USBDeviceList*>(retro_atomic_exchange_ptr(&m_pending_devices, nullptr)))
   {
-    OnDevicesChangedInternal(*pending);
-    delete pending;
+    OnDevicesChangedInternal(pending);
+    FreePendingDevices(pending);
   }
+}
+
+void USBHost::UpdateFromScanner()
+{
+  USBDeviceList devices;
+  GetSystem().GetUSBScanner().GetDevices(&devices);
+  OnDevicesChangedInternal(&devices);
+  usb_device_list_clear(&devices);
 }
 
 // Scan thread: only the newest list matters, so it replaces any still waiting.
-void USBHost::OnDevicesChanged(const USBScanner::DeviceMap& new_devices)
+void USBHost::OnDevicesChanged(const USBDeviceList* new_devices)
 {
   if (Core::WantsDeterminism())
     return;
-  delete static_cast<USBScanner::DeviceMap*>(
-      retro_atomic_exchange_ptr(&m_pending_devices, new USBScanner::DeviceMap(new_devices)));
+  USBDeviceList* const copy = new USBDeviceList;
+  usb_device_list_copy(copy, new_devices);
+  FreePendingDevices(
+      static_cast<USBDeviceList*>(retro_atomic_exchange_ptr(&m_pending_devices, copy)));
 }
 
-void USBHost::OnDevicesChangedInternal(const USBScanner::DeviceMap& new_devices)
+void USBHost::OnDevicesChangedInternal(const USBDeviceList* new_devices)
 {
-
   bool changes = false;
 
-  for (auto it = m_devices.begin(); it != m_devices.end();)
+  u32 i = 0;
+  while (i < m_devices.count)
   {
-    const auto& [id, device] = *it;
-    if (!new_devices.contains(id))
+    if (usb_device_list_find(new_devices, m_devices.ids[i]))
     {
-      INFO_LOG(IOS_USB, "%s - Removed device: %04x:%04x", GetDeviceName().c_str(),
-               (unsigned)device->GetVid(), (unsigned)device->GetPid());
+      i++;
+      continue;
+    }
+    USB::Device* const device = usb_device_list_take(&m_devices, i);
+    INFO_LOG(IOS_USB, "%s - Removed device: %04x:%04x", GetDeviceName().c_str(),
+             (unsigned)device->GetVid(), (unsigned)device->GetPid());
 
-      changes = true;
-      auto device_copy = device;
-      it = m_devices.erase(it);
-      OnDeviceChange(ChangeEvent::Removed, std::move(device_copy));
-    }
-    else
-    {
-      ++it;
-    }
+    changes = true;
+    OnDeviceChange(ChangeEvent::Removed, device);
+    device->Release();
   }
 
-  for (const auto& [id, device] : new_devices)
+  for (i = 0; i < new_devices->count; i++)
   {
-    if (!m_devices.contains(id) && ShouldAddDevice(*device))
+    USB::Device* const device = new_devices->devices[i];
+    if (!usb_device_list_find(&m_devices, new_devices->ids[i]) && ShouldAddDevice(*device))
     {
       INFO_LOG(IOS_USB, "%s - New device: %04x:%04x", GetDeviceName().c_str(),
                (unsigned)device->GetVid(), (unsigned)device->GetPid());
 
       changes = true;
-      m_devices.emplace(id, device);
+      device->AddRef();
+      usb_device_list_add(&m_devices, device);
       OnDeviceChange(ChangeEvent::Inserted, device);
     }
   }

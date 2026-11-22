@@ -83,7 +83,7 @@ protected:
   USBV5Device* GetIOCtlDevice(const IOCtlRequest& request);
   IPCReply GetUSBVersion(const IOCtlRequest& request) const;
 
-  void OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> device) override;
+  void OnDeviceChange(ChangeEvent event, USB::Device* device) override;
   void OnDeviceChangeEnd() override;
   void TriggerDeviceChangeReply();
   virtual bool HasInterfaceNumberInIDs() const = 0;

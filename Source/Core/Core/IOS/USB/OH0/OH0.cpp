@@ -70,7 +70,7 @@ IPCReply OH0::IOCtlV(const IOCtlVRequest& request)
 void OH0::DoState(PointerWrap& p)
 {
   {
-    if (p.IsReadMode() && !m_devices.empty())
+    if (p.IsReadMode() && m_devices.count != 0)
     {
       Core::DisplayMessage("It is suggested that you unplug and replug all connected USB devices.");
       Core::DisplayMessage("If USB doesn't work properly, an emulation reset may be needed.");
@@ -146,17 +146,18 @@ IPCReply OH0::GetDeviceList(const IOCtlVRequest& request) const
 
   const u8 interface_class = memory.Read_U8(request.in_vectors[1].address);
   u8 entries_count = 0;
-  for (const auto& device : m_devices)
+  for (u32 i = 0; i < m_devices.count; i++)
   {
+    const USB::Device* const device = m_devices.devices[i];
     if (entries_count >= max_entries_count)
       break;
-    if (!device.second->HasClass(interface_class))
+    if (!device->HasClass(interface_class))
       continue;
 
     DeviceEntry entry;
     entry.unknown = 0;
-    entry.vid = Common::swap16(device.second->GetVid());
-    entry.pid = Common::swap16(device.second->GetPid());
+    entry.vid = Common::swap16(device->GetVid());
+    entry.pid = Common::swap16(device->GetPid());
     memory.CopyToEmu(request.io_vectors[1].address + 8 * entries_count++, &entry, 8);
   }
   memory.Write_U8(entries_count, request.io_vectors[0].address);
@@ -270,12 +271,15 @@ IPCReply OH0::RegisterClassChangeHook(const IOCtlVRequest& request)
 
 bool OH0::HasDeviceWithVidPid(const u16 vid, const u16 pid) const
 {
-  return std::ranges::any_of(m_devices, [=](const auto& device) {
-    return device.second->GetVid() == vid && device.second->GetPid() == pid;
-  });
+  for (u32 i = 0; i < m_devices.count; i++)
+  {
+    if (m_devices.devices[i]->GetVid() == vid && m_devices.devices[i]->GetPid() == pid)
+      return true;
+  }
+  return false;
 }
 
-void OH0::OnDeviceChange(const ChangeEvent event, std::shared_ptr<USB::Device> device)
+void OH0::OnDeviceChange(const ChangeEvent event, USB::Device* device)
 {
   if (event == ChangeEvent::Inserted)
   {
@@ -394,19 +398,20 @@ std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
 {
 
   bool has_device_with_vid_pid = false;
-  for (const auto& device : m_devices)
+  for (u32 i = 0; i < m_devices.count; i++)
   {
-    if (device.second->GetVid() != vid || device.second->GetPid() != pid)
+    USB::Device* const device = m_devices.devices[i];
+    if (device->GetVid() != vid || device->GetPid() != pid)
       continue;
     has_device_with_vid_pid = true;
 
-    if (IsDeviceOpened(device.second->GetId()) || !device.second->Attach())
+    if (IsDeviceOpened(device->GetId()) || !device->Attach())
     {
       continue;
     }
 
-    SetDeviceOpened(device.second->GetId(), true);
-    return {IPC_SUCCESS, device.second->GetId()};
+    SetDeviceOpened(device->GetId(), true);
+    return {IPC_SUCCESS, device->GetId()};
   }
   // IOS doesn't allow opening the same device more than once (IPC_EEXIST)
   return {has_device_with_vid_pid ? IPC_EEXIST : IPC_ENOENT, 0};

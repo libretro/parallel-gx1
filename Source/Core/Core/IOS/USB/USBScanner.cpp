@@ -3,10 +3,7 @@
 
 #include "Core/IOS/USB/USBScanner.h"
 
-#include <algorithm>
-#include <memory>
-#include <ranges>
-#include <utility>
+#include <cstring>
 
 #ifdef __LIBUSB__
 #include <libusb.h>
@@ -30,17 +27,94 @@
 
 namespace IOS::HLE
 {
+void usb_device_list_clear(USBDeviceList* list)
+{
+  for (u32 i = 0; i < list->count; i++)
+    list->devices[i]->Release();
+  list->count = 0;
+}
+
+void usb_device_list_copy(USBDeviceList* dst, const USBDeviceList* src)
+{
+  u32 i;
+  for (i = 0; i < src->count; i++)
+  {
+    dst->ids[i] = src->ids[i];
+    dst->devices[i] = src->devices[i];
+    dst->devices[i]->AddRef();
+  }
+  dst->count = src->count;
+}
+
+static u32 usb_device_list_lower_bound(const USBDeviceList* list, u64 id)
+{
+  u32 lo = 0;
+  u32 hi = list->count;
+  while (lo < hi)
+  {
+    const u32 mid = lo + (hi - lo) / 2;
+    if (list->ids[mid] < id)
+      lo = mid + 1;
+    else
+      hi = mid;
+  }
+  return lo;
+}
+
+USB::Device* usb_device_list_find(const USBDeviceList* list, u64 id)
+{
+  const u32 i = usb_device_list_lower_bound(list, id);
+  return i < list->count && list->ids[i] == id ? list->devices[i] : nullptr;
+}
+
+void usb_device_list_add(USBDeviceList* list, USB::Device* device)
+{
+  const u64 id = device->GetId();
+  const u32 i = usb_device_list_lower_bound(list, id);
+  if (i < list->count && list->ids[i] == id)
+  {
+    list->devices[i]->Release();
+    list->devices[i] = device;
+    return;
+  }
+  if (list->count == USBDeviceList::MAX_DEVICES)
+  {
+    ERROR_LOG(IOS_USB, "Too many USB devices");
+    device->Release();
+    return;
+  }
+  memmove(&list->ids[i + 1], &list->ids[i], (list->count - i) * sizeof(list->ids[0]));
+  memmove(&list->devices[i + 1], &list->devices[i], (list->count - i) * sizeof(list->devices[0]));
+  list->ids[i] = id;
+  list->devices[i] = device;
+  list->count++;
+}
+
+USB::Device* usb_device_list_take(USBDeviceList* list, u32 index)
+{
+  USB::Device* const device = list->devices[index];
+  list->count--;
+  memmove(&list->ids[index], &list->ids[index + 1], (list->count - index) * sizeof(list->ids[0]));
+  memmove(&list->devices[index], &list->devices[index + 1],
+          (list->count - index) * sizeof(list->devices[0]));
+  return device;
+}
+
 USBScanner::~USBScanner()
 {
   StopScanning();
-  delete static_cast<Devices*>(retro_atomic_exchange_ptr(&m_devices, nullptr));
+  if (Devices* const devices =
+          static_cast<Devices*>(retro_atomic_exchange_ptr(&m_devices, nullptr)))
+    FreeDevices(&devices->node);
   delete static_cast<Clients*>(retro_atomic_exchange_ptr(&m_clients, nullptr));
   quiesce_deinit(&m_quiesce);
 }
 
 void USBScanner::FreeDevices(quiesce_node_t* node)
 {
-  delete reinterpret_cast<Devices*>(node);
+  Devices* const devices = reinterpret_cast<Devices*>(node);
+  usb_device_list_clear(&devices->list);
+  delete devices;
 }
 
 void USBScanner::FreeClients(quiesce_node_t* node)
@@ -48,9 +122,14 @@ void USBScanner::FreeClients(quiesce_node_t* node)
   delete reinterpret_cast<Clients*>(node);
 }
 
-void USBScanner::PublishDevices(DeviceMap map)
+void USBScanner::PublishDevices(USBDeviceList* list)
 {
-  auto* next = new Devices{{}, std::move(map)};
+  Devices* const next = new Devices;
+  next->node = {};
+  memcpy(&next->list.ids, list->ids, list->count * sizeof(list->ids[0]));
+  memcpy(&next->list.devices, list->devices, list->count * sizeof(list->devices[0]));
+  next->list.count = list->count;
+  list->count = 0;
   if (void* old = retro_atomic_exchange_ptr(&m_devices, next))
     quiesce_retire(&m_quiesce, &static_cast<Devices*>(old)->node, FreeDevices);
 }
@@ -155,7 +234,9 @@ void USBScanner::ScanThread()
     // Rescan every few frames, about 50 ms.
     frame_clock_wait_until(frame_clock_now() + 3, m_thread_running.Raw());
   }
-  PublishDevices({});
+  USBDeviceList none;
+  none.count = 0;
+  PublishDevices(&none);
   m_first_scan_complete_flag.Set(false);
 }
 
@@ -168,30 +249,41 @@ void USBScanner::StopScanning()
   }
 }
 
-USBScanner::DeviceMap USBScanner::GetDevices() const
+void USBScanner::GetDevices(USBDeviceList* out) const
 {
   quiesce_enter(&m_quiesce);
   const auto* devices = static_cast<const Devices*>(retro_atomic_load_acquire_ptr(&m_devices));
-  DeviceMap copy = devices ? devices->map : DeviceMap{};
+  if (devices)
+    usb_device_list_copy(out, &devices->list);
+  else
+    out->count = 0;
   quiesce_exit(&m_quiesce);
-  return copy;
 }
 
 // This is called from the scan thread. Returns false if we failed to update the device list.
 bool USBScanner::UpdateDevices()
 {
-  DeviceMap new_devices;
+  USBDeviceList new_devices;
+  new_devices.count = 0;
   if (!AddNewDevices(&new_devices))
+  {
+    usb_device_list_clear(&new_devices);
     return false;
+  }
 
   // Only this thread replaces the list, so the current one stays valid here.
   const auto* devices = static_cast<const Devices*>(retro_atomic_load_acquire_ptr(&m_devices));
-  static const DeviceMap s_none;
-  const DeviceMap& current = devices ? devices->map : s_none;
-  if (!std::ranges::equal(std::views::keys(current), std::views::keys(new_devices)))
+  const u32 current_count = devices ? devices->list.count : 0;
+  if (current_count != new_devices.count ||
+      (current_count != 0 &&
+       memcmp(devices->list.ids, new_devices.ids, current_count * sizeof(new_devices.ids[0])) != 0))
   {
-    PublishDevices(std::move(new_devices));
+    PublishDevices(&new_devices);
     NotifyClients();
+  }
+  else
+  {
+    usb_device_list_clear(&new_devices);
   }
 
   return true;
@@ -213,14 +305,14 @@ void USBScanner::NotifyClients()
   if (devices && clients)
   {
     for (u32 i = 0; i < clients->count; i++)
-      clients->hosts[i]->OnDevicesChanged(devices->map);
+      clients->hosts[i]->OnDevicesChanged(&devices->list);
   }
   quiesce_exit(&m_quiesce);
 
   call_gate_exit(&m_notify_gate, &frame);
 }
 
-bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
+bool USBScanner::AddNewDevices(USBDeviceList* new_devices) const
 {
   AddEmulatedDevices(new_devices);
 #ifdef __LIBUSB__
@@ -235,7 +327,7 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
       struct Scan
       {
         const char* whitelist;
-        DeviceMap* new_devices;
+        USBDeviceList* new_devices;
       };
       Scan scan{whitelist.c_str(), new_devices};
       const int ret = m_context.GetDeviceList(
@@ -251,8 +343,7 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
             if (!Config::USBDeviceListHas(scan_state->whitelist, &device_info))
               return true;
 
-            auto usb_device = std::make_unique<USB::LibusbDevice>(device, descriptor);
-            AddDevice(std::move(usb_device), scan_state->new_devices);
+            usb_device_list_add(scan_state->new_devices, new USB::LibusbDevice(device, descriptor));
             return true;
           },
           &scan);
@@ -266,29 +357,25 @@ bool USBScanner::AddNewDevices(DeviceMap* new_devices) const
   return true;
 }
 
-void USBScanner::AddEmulatedDevices(DeviceMap* new_devices)
+void USBScanner::AddEmulatedDevices(USBDeviceList* new_devices)
 {
   if (Config::Get(Config::MAIN_EMULATE_SKYLANDER_PORTAL))
   {
-    auto skylanderportal = std::make_unique<USB::SkylanderUSB>();
-    AddDevice(std::move(skylanderportal), new_devices);
+    usb_device_list_add(new_devices, new USB::SkylanderUSB());
   }
   if (Config::Get(Config::MAIN_EMULATE_INFINITY_BASE))
   {
-    auto infinity_base = std::make_unique<USB::InfinityUSB>();
-    AddDevice(std::move(infinity_base), new_devices);
+    usb_device_list_add(new_devices, new USB::InfinityUSB());
   }
   if (Config::Get(Config::MAIN_EMULATE_WII_SPEAK))
   {
-    auto wii_speak = std::make_unique<USB::WiiSpeak>();
-    AddDevice(std::move(wii_speak), new_devices);
+    usb_device_list_add(new_devices, new USB::WiiSpeak());
   }
   for (u8 index = 0; index != Config::EMULATED_LOGITECH_MIC_COUNT; ++index)
   {
     if (Config::Get(Config::MAIN_EMULATE_LOGITECH_MIC[index]))
     {
-      auto logitech_mic = std::make_unique<USB::LogitechMic>(index);
-      AddDevice(std::move(logitech_mic), new_devices);
+      usb_device_list_add(new_devices, new USB::LogitechMic(index));
     }
   }
 }
@@ -314,11 +401,6 @@ void USBScanner::WakeupSantrollerDevice(libusb_device* device)
     libusb_close(lusb_handle);
   }
 #endif
-}
-
-void USBScanner::AddDevice(std::unique_ptr<USB::Device> device, DeviceMap* new_devices)
-{
-  (*new_devices)[device->GetId()] = std::move(device);
 }
 
 }  // namespace IOS::HLE

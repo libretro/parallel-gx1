@@ -26,7 +26,7 @@ public:
   void DoState(PointerWrap& p) override;
 
 private:
-  std::shared_ptr<USB::Device> GetDeviceByIOSID(s32 ios_id) const;
+  USB::Device* GetDeviceByIOSID(s32 ios_id) const;
 
   IPCReply CancelInterrupt(const IOCtlRequest& request);
   IPCReply GetDeviceChange(const IOCtlRequest& request);
@@ -35,7 +35,7 @@ private:
 
   void TriggerDeviceChangeReply();
   std::vector<u8> GetDeviceEntry(const USB::Device& device) const;
-  void OnDeviceChange(ChangeEvent, std::shared_ptr<USB::Device>) override;
+  void OnDeviceChange(ChangeEvent, USB::Device*) override;
   bool ShouldAddDevice(const USB::Device& device) const override;
 
   static constexpr u32 VERSION = 0x40001;

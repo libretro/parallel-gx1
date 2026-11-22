@@ -56,7 +56,7 @@ private:
   s32 SubmitTransfer(USB::Device& device, const IOCtlVRequest& request);
 
   bool HasDeviceWithVidPid(u16 vid, u16 pid) const;
-  void OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> device) override;
+  void OnDeviceChange(ChangeEvent event, USB::Device* device) override;
   void TriggerInsertionHook(USB::DeviceInfo info, ReturnCode return_value);
   void TriggerRemovalHook(u64 device_id, ReturnCode return_value);
   void ReplyToHook(u32 address, ReturnCode return_value);

@@ -191,7 +191,7 @@ void USB_HIDv4::DoState(PointerWrap& p)
   USBHost::DoState(p);
 }
 
-std::shared_ptr<USB::Device> USB_HIDv4::GetDeviceByIOSID(const s32 ios_id) const
+USB::Device* USB_HIDv4::GetDeviceByIOSID(const s32 ios_id) const
 {
   for (u32 i = 0; i < m_id_count; i++)
   {
@@ -211,7 +211,7 @@ const USB_HIDv4::DeviceIds* USB_HIDv4::FindByDeviceId(u64 device_id) const
   return nullptr;
 }
 
-void USB_HIDv4::OnDeviceChange(ChangeEvent event, std::shared_ptr<USB::Device> device)
+void USB_HIDv4::OnDeviceChange(ChangeEvent event, USB::Device* device)
 {
   {
     if (event == ChangeEvent::Inserted)
@@ -270,9 +270,9 @@ void USB_HIDv4::TriggerDeviceChangeReply()
   {
     const u32 dest = hook.buffer_out;
     u32 offset = 0;
-    for (const auto& device : m_devices)
+    for (u32 i = 0; i < m_devices.count; i++)
     {
-      const std::vector<u8> device_section = GetDeviceEntry(*device.second.get());
+      const std::vector<u8> device_section = GetDeviceEntry(*m_devices.devices[i]);
       if (offset + device_section.size() > hook.buffer_out_size - 1)
       {
         WARN_LOG(IOS_USB, "Too many devices connected, skipping");

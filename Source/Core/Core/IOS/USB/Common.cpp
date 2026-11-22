@@ -79,6 +79,17 @@ u16 IsoMessage::SetPacketsReturnValueFromSize(u16 data_size) const
 
 Device::~Device() = default;
 
+void Device::AddRef()
+{
+  retro_atomic_fetch_add_int(&m_refs, 1);
+}
+
+void Device::Release()
+{
+  if (retro_atomic_fetch_sub_int(&m_refs, 1) == 1)
+    delete this;
+}
+
 u64 Device::GetId() const
 {
   return m_id;

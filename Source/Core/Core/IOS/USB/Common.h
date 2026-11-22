@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include <retro_atomic.h>
+
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Device.h"
 
@@ -167,10 +169,14 @@ private:
                                    Memory::MemoryManager& memory) const;
 };
 
+// Shared between the scan thread's list and the hosts': each holder keeps a reference.
 class Device
 {
 public:
   virtual ~Device();
+  void AddRef();
+  // Deletes the device once the last reference goes
+  void Release();
   u64 GetId() const;
   u16 GetVid() const;
   u16 GetPid() const;
@@ -201,5 +207,8 @@ public:
 
 protected:
   u64 m_id = 0xFFFFFFFFFFFFFFFF;
+
+private:
+  retro_atomic_int_t m_refs{1};
 };
 }  // namespace IOS::HLE::USB

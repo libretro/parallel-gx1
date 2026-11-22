@@ -124,7 +124,7 @@ IPCReply USB_VEN::GetDeviceInfo(USBV5Device& device, const IOCtlRequest& request
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  const std::shared_ptr<USB::Device> host_device = GetDeviceById(device.host_id);
+  USB::Device* const host_device = GetDeviceById(device.host_id);
   const u8 alt_setting = memory.Read_U8(request.buffer_in + 8);
 
   memory.Memset(request.buffer_out, 0, request.buffer_out_size);

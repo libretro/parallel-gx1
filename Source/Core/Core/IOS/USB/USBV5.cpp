@@ -203,8 +203,7 @@ IPCReply USBV5ResourceManager::GetUSBVersion(const IOCtlRequest& request) const
   return IPCReply(IPC_SUCCESS);
 }
 
-void USBV5ResourceManager::OnDeviceChange(const ChangeEvent event,
-                                          std::shared_ptr<USB::Device> device)
+void USBV5ResourceManager::OnDeviceChange(const ChangeEvent event, USB::Device* device)
 {
   const u64 host_device_id = device->GetId();
   if (event == ChangeEvent::Inserted)
