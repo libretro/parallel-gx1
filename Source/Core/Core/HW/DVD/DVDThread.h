@@ -75,8 +75,7 @@ public:
   // if both of the following conditions are true:
   // - A disc is inserted
   // - The title_id argument doesn't contain a value, or its value matches the disc's title ID
-  bool UpdateRunningGameMetadata(const DiscIO::Partition& partition,
-                                 std::optional<u64> title_id = {});
+  bool UpdateRunningGameMetadata(const DiscIO::Partition& partition, const u64* title_id = nullptr);
 
   void StartRead(u64 dvd_offset, u32 length, const DiscIO::Partition& partition,
                  DVD::ReplyType reply_type, s64 ticks_until_completion);

@@ -151,7 +151,8 @@ public:
   // if both of the following conditions are true:
   // - A disc is inserted
   // - The title_id argument doesn't contain a value, or its value matches the disc's title ID
-  bool UpdateRunningGameMetadata(std::optional<u64> title_id = {});
+  // title_id may be null, matching any disc
+  bool UpdateRunningGameMetadata(const u64* title_id = nullptr);
 
   // Direct access to DI for IOS HLE (simpler to implement than how real IOS accesses DI,
   // and lets us skip encrypting/decrypting in some cases)

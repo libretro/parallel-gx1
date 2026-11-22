@@ -62,7 +62,7 @@ public:
   bool HasWiiHashes() const;
   std::vector<Partition> GetPartitions() const;
   Partition GetGamePartition() const;
-  std::optional<u64> GetTitleID(const Partition& partition) const;
+  bool GetTitleID(const Partition& partition, u64* title_id) const;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition) const;
   const IOS::ES::TMDReader& GetTMD(const Partition& partition) const;
   const std::vector<u8>& GetCertificateChain(const Partition& partition) const;

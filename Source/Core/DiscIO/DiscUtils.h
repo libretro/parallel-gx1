@@ -74,10 +74,12 @@ constexpr int RVZ_MIN_BLOCK_SIZE = 0x8000;
 // 2 MiB (0x200000): for RVZ, block sizes larger than 2 MiB must be an integer multiple of 2 MiB.
 constexpr int RVZ_BIG_BLOCK_SIZE_LCM = 0x200000;
 
-std::optional<u64> GetBootDOLOffset(const Volume& volume, const Partition& partition);
-std::optional<u32> GetBootDOLSize(const Volume& volume, const Partition& partition, u64 dol_offset);
-std::optional<u64> GetFSTOffset(const Volume& volume, const Partition& partition);
-std::optional<u64> GetFSTSize(const Volume& volume, const Partition& partition);
+// Each false when the disc does not say
+bool GetBootDOLOffset(const Volume& volume, const Partition& partition, u64* dol_offset);
+bool GetBootDOLSize(const Volume& volume, const Partition& partition, u64 dol_offset,
+                    u32* dol_size);
+bool GetFSTOffset(const Volume& volume, const Partition& partition, u64* fst_offset);
+bool GetFSTSize(const Volume& volume, const Partition& partition, u64* fst_size);
 
 u64 GetBiggestReferencedOffset(const Volume& volume);
 

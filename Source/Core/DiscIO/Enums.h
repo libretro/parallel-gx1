@@ -84,10 +84,9 @@ Country TypicalCountryForRegion(Region region);
 Region SysConfCountryToRegion(u8 country_code);
 // Avoid using this function if you can. Country codes aren't always reliable region indicators.
 Region CountryCodeToRegion(u8 country_code, Platform platform,
-                           Region expected_region = Region::Unknown,
-                           std::optional<u16> revision = {});
+                           Region expected_region = Region::Unknown, const u16* revision = nullptr);
 Country CountryCodeToCountry(u8 country_code, Platform platform, Region region = Region::Unknown,
-                             std::optional<u16> revision = {});
+                             const u16* revision = nullptr);
 
 Region GetSysMenuRegion(u16 title_version);
 

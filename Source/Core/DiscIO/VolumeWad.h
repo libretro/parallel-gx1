@@ -36,7 +36,7 @@ public:
   VolumeWAD& operator=(VolumeWAD&&) = delete;
   bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition = PARTITION_NONE) const;
   const FileSystem* GetFileSystem(const Partition& partition = PARTITION_NONE) const;
-  std::optional<u64> GetTitleID(const Partition& partition = PARTITION_NONE) const;
+  bool GetTitleID(const Partition& partition, u64* title_id) const;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition = PARTITION_NONE) const;
   const IOS::ES::TMDReader& GetTMD(const Partition& partition = PARTITION_NONE) const;
   const std::vector<u8>& GetCertificateChain(const Partition& partition = PARTITION_NONE) const;
@@ -47,7 +47,7 @@ public:
   std::string GetGameID(const Partition& partition = PARTITION_NONE) const;
   std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const;
   std::string GetMakerID(const Partition& partition = PARTITION_NONE) const;
-  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const;
+  bool GetRevision(const Partition& partition, u16* revision) const;
   Platform GetVolumeType() const;
   bool IsDatelDisc() const;
   bool IsNKit() const;

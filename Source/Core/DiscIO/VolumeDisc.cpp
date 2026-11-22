@@ -86,11 +86,14 @@ Country VolumeDisc::GetCountry(const Partition& partition) const
   else
   {
     // The 0 that we use as a default value is mapped to Country::Unknown and Region::Unknown
-    country_byte = ReadSwapped<u8>(3, partition).value_or(0);
+    if (!ReadSwapped<u8>(3, partition, &country_byte))
+      country_byte = 0;
   }
 
   const Region region = GetRegion();
-  const std::optional<u16> revision = GetRevision();
+  u16 revision_value;
+  const u16* const revision =
+      GetRevision(PARTITION_NONE, &revision_value) ? &revision_value : nullptr;
 
   if (CountryCodeToRegion(country_byte, GetVolumeType(), region, revision) != region)
     return TypicalCountryForRegion(region);
@@ -98,12 +101,9 @@ Country VolumeDisc::GetCountry(const Partition& partition) const
   return CountryCodeToCountry(country_byte, GetVolumeType(), region, revision);
 }
 
-Region VolumeDisc::RegionCodeToRegion(std::optional<u32> region_code) const
+Region VolumeDisc::RegionCodeToRegion(u32 region_code) const
 {
-  if (!region_code)
-    return Region::Unknown;
-
-  const Region region = static_cast<Region>(*region_code);
+  const Region region = static_cast<Region>(region_code);
   return region <= Region::NTSC_K ? region : Region::Unknown;
 }
 
@@ -140,10 +140,13 @@ std::string VolumeDisc::GetMakerID(const Partition& partition) const
   return FilterGameID(maker_id, sizeof(maker_id));
 }
 
-std::optional<u16> VolumeDisc::GetRevision(const Partition& partition) const
+bool VolumeDisc::GetRevision(const Partition& partition, u16* revision) const
 {
-  std::optional<u8> revision = ReadSwapped<u8>(7, partition);
-  return revision ? *revision : std::optional<u16>();
+  u8 value;
+  if (!ReadSwapped<u8>(7, partition, &value))
+    return false;
+  *revision = value;
+  return true;
 }
 
 u32 VolumeDisc::GetSimulatedMemorySize() const
@@ -151,13 +154,15 @@ u32 VolumeDisc::GetSimulatedMemorySize() const
   // Simulated memory size is a 32-bit unsigned integer in the `bi2.bin` file at offset `0x04`.
   // Apploader reads this and "simulates" a smaller memory size. Originally useful for simulating
   // 24 MiB of memory on devkits with 48 MiB.
-  return ReadSwapped<u32>(BI2_ADDRESS + 0x04, GetGamePartition()).value_or(0);
+  u32 size;
+  return ReadSwapped<u32>(BI2_ADDRESS + 0x04, GetGamePartition(), &size) ? size : 0;
 }
 
 bool VolumeDisc::IsNKit() const
 {
   constexpr u32 NKIT_MAGIC = 0x4E4B4954;  // "NKIT"
-  return ReadSwapped<u32>(0x200, PARTITION_NONE) == NKIT_MAGIC;
+  u32 magic;
+  return ReadSwapped<u32>(0x200, PARTITION_NONE, &magic) && magic == NKIT_MAGIC;
 }
 
 }  // namespace DiscIO

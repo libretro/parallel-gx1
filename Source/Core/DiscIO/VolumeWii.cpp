@@ -35,8 +35,9 @@ VolumeWii::VolumeWii(BlobReader* reader)
 {
   ASSERT(m_reader);
 
-  m_has_hashes = m_reader->ReadSwapped<u8>(0x60) == u8(0);
-  m_has_encryption = m_reader->ReadSwapped<u8>(0x61) == u8(0);
+  u8 flag;
+  m_has_hashes = m_reader->ReadSwapped<u8>(0x60, &flag) && flag == 0;
+  m_has_encryption = m_reader->ReadSwapped<u8>(0x61, &flag) && flag == 0;
 
   if (m_has_encryption && !m_has_hashes)
     ERROR_LOG(DISCIO, "Wii disc has encryption but no hashes! This probably won't work well");
@@ -48,36 +49,34 @@ VolumeWii::VolumeWii(BlobReader* reader)
 
   for (u32 partition_group = 0; partition_group < 4; ++partition_group)
   {
-    const std::optional<u32> number_of_partitions =
-        m_reader->ReadSwapped<u32>(0x40000 + (partition_group * 8));
-    if (!number_of_partitions)
+    u32 number_of_partitions;
+    if (!m_reader->ReadSwapped<u32>(0x40000 + (partition_group * 8), &number_of_partitions))
       continue;
 
-    const std::optional<u64> partition_table_offset =
-        ReadSwappedAndShifted(0x40000 + (partition_group * 8) + 4, PARTITION_NONE);
-    if (!partition_table_offset)
+    u64 partition_table_offset;
+    if (!ReadSwappedAndShifted(0x40000 + (partition_group * 8) + 4, PARTITION_NONE,
+                               &partition_table_offset))
       continue;
 
     for (u32 i = 0; i < number_of_partitions; i++)
     {
-      const std::optional<u64> partition_offset =
-          ReadSwappedAndShifted(*partition_table_offset + (i * 8), PARTITION_NONE);
-      if (!partition_offset)
+      u64 partition_offset;
+      if (!ReadSwappedAndShifted(partition_table_offset + (i * 8), PARTITION_NONE,
+                                 &partition_offset))
         continue;
 
-      const std::optional<u32> partition_type =
-          m_reader->ReadSwapped<u32>(*partition_table_offset + (i * 8) + 4);
-      if (!partition_type)
+      u32 partition_type;
+      if (!m_reader->ReadSwapped<u32>(partition_table_offset + (i * 8) + 4, &partition_type))
         continue;
 
       // If this is the game partition, set m_game_partition
-      if (m_game_partition == PARTITION_NONE && *partition_type == 0)
-        m_game_partition = Partition(*partition_offset);
+      if (m_game_partition == PARTITION_NONE && partition_type == 0)
+        m_game_partition = Partition(partition_offset);
 
       u32 at = count;
-      while (at > 0 && offsets[at - 1] > *partition_offset)
+      while (at > 0 && offsets[at - 1] > partition_offset)
         at--;
-      if (at > 0 && offsets[at - 1] == *partition_offset)
+      if (at > 0 && offsets[at - 1] == partition_offset)
         continue;
 
       if (count == capacity)
@@ -90,7 +89,7 @@ VolumeWii::VolumeWii(BlobReader* reader)
         capacity = new_capacity;
       }
       std::memmove(offsets + at + 1, offsets + at, (count - at) * sizeof(u64));
-      offsets[at] = *partition_offset;
+      offsets[at] = partition_offset;
       count++;
     }
   }
@@ -108,8 +107,8 @@ VolumeWii::VolumeWii(BlobReader* reader)
 void VolumeWii::LoadPartition(PartitionDetails* details, const Partition& partition)
 {
   details->partition = partition;
-  details->data_offset =
-      ReadSwappedAndShifted(partition.offset + 0x2b8, PARTITION_NONE).value_or(0);
+  if (!ReadSwappedAndShifted(partition.offset + 0x2b8, PARTITION_NONE, &details->data_offset))
+    details->data_offset = 0;
   details->file_system = nullptr;
   details->tmd_read = false;
   details->cert_chain_read = false;
@@ -142,21 +141,21 @@ const IOS::ES::TMDReader& VolumeWii::GetPartitionTMD(const PartitionDetails& det
   details.tmd_read = true;
 
   const u64 offset = details.partition.offset;
-  const std::optional<u32> tmd_size =
-      m_reader->ReadSwapped<u32>(offset + WII_PARTITION_TMD_SIZE_ADDRESS);
-  const std::optional<u64> tmd_address =
-      ReadSwappedAndShifted(offset + WII_PARTITION_TMD_OFFSET_ADDRESS, PARTITION_NONE);
-  if (!tmd_size || !tmd_address)
+  u32 tmd_size;
+  u64 tmd_address;
+  if (!m_reader->ReadSwapped<u32>(offset + WII_PARTITION_TMD_SIZE_ADDRESS, &tmd_size) ||
+      !ReadSwappedAndShifted(offset + WII_PARTITION_TMD_OFFSET_ADDRESS, PARTITION_NONE,
+                             &tmd_address))
     return details.tmd;
-  if (!IOS::ES::IsValidTMDSize(*tmd_size))
+  if (!IOS::ES::IsValidTMDSize(tmd_size))
   {
     // This check is normally done by ES in ES_DiVerify, but that would happen too late
     // (after allocating the buffer), so we do the check here.
     ERROR_LOG(DISCIO, "Invalid TMD size");
     return details.tmd;
   }
-  u8* const bytes = details.tmd.ResizeBytes(*tmd_size);
-  if (!bytes || !m_reader->Read(offset + *tmd_address, *tmd_size, bytes))
+  u8* const bytes = details.tmd.ResizeBytes(tmd_size);
+  if (!bytes || !m_reader->Read(offset + tmd_address, tmd_size, bytes))
     details.tmd = INVALID_TMD;
   return details.tmd;
 }
@@ -168,14 +167,14 @@ const std::vector<u8>& VolumeWii::GetPartitionCertChain(const PartitionDetails& 
   details.cert_chain_read = true;
 
   const u64 offset = details.partition.offset;
-  const std::optional<u32> size =
-      m_reader->ReadSwapped<u32>(offset + WII_PARTITION_CERT_CHAIN_SIZE_ADDRESS);
-  const std::optional<u64> address =
-      ReadSwappedAndShifted(offset + WII_PARTITION_CERT_CHAIN_OFFSET_ADDRESS, PARTITION_NONE);
-  if (!size || !address)
+  u32 size;
+  u64 address;
+  if (!m_reader->ReadSwapped<u32>(offset + WII_PARTITION_CERT_CHAIN_SIZE_ADDRESS, &size) ||
+      !ReadSwappedAndShifted(offset + WII_PARTITION_CERT_CHAIN_OFFSET_ADDRESS, PARTITION_NONE,
+                             &address))
     return details.cert_chain;
-  details.cert_chain.resize(*size);
-  if (!m_reader->Read(offset + *address, *size, details.cert_chain.data()))
+  details.cert_chain.resize(size);
+  if (!m_reader->Read(offset + address, size, details.cert_chain.data()))
     details.cert_chain.clear();
   return details.cert_chain;
 }
@@ -297,12 +296,13 @@ Partition VolumeWii::GetGamePartition() const
   return m_game_partition;
 }
 
-std::optional<u64> VolumeWii::GetTitleID(const Partition& partition) const
+bool VolumeWii::GetTitleID(const Partition& partition, u64* title_id) const
 {
   const IOS::ES::TicketReader& ticket = GetTicket(partition);
   if (!ticket.IsValid())
-    return {};
-  return ticket.GetTitleId();
+    return false;
+  *title_id = ticket.GetTitleId();
+  return true;
 }
 
 const IOS::ES::TicketReader& VolumeWii::GetTicket(const Partition& partition) const
@@ -363,7 +363,10 @@ std::string VolumeWii::GetGameTDBID(const Partition& partition) const
 
 Region VolumeWii::GetRegion() const
 {
-  return RegionCodeToRegion(m_reader->ReadSwapped<u32>(0x4E000));
+  u32 region_code;
+  if (!m_reader->ReadSwapped<u32>(0x4E000, &region_code))
+    return Region::Unknown;
+  return RegionCodeToRegion(region_code);
 }
 
 Platform VolumeWii::GetVolumeType() const

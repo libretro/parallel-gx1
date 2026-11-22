@@ -99,19 +99,13 @@ u64 DiscScrubber::ToClusterOffset(u64 offset) const
 bool DiscScrubber::ReadFromVolume(const Volume& disc, u64 offset, u32& buffer,
                                   const Partition& partition)
 {
-  std::optional<u32> value = disc.ReadSwapped<u32>(offset, partition);
-  if (value)
-    buffer = *value;
-  return value.has_value();
+  return disc.ReadSwapped<u32>(offset, partition, &buffer);
 }
 
 bool DiscScrubber::ReadFromVolume(const Volume& disc, u64 offset, u64& buffer,
                                   const Partition& partition)
 {
-  std::optional<u64> value = disc.ReadSwappedAndShifted(offset, partition);
-  if (value)
-    buffer = *value;
-  return value.has_value();
+  return disc.ReadSwappedAndShifted(offset, partition, &buffer);
 }
 
 bool DiscScrubber::ParseDisc(const Volume& disc)
@@ -196,20 +190,19 @@ bool DiscScrubber::ParsePartitionData(const Volume& disc, const Partition& parti
   MarkAsUsedE(partition_data_offset, 0, 0x2440 + apploader_size + apploader_trailer_size);
 
   // DOL
-  const std::optional<u64> dol_offset = GetBootDOLOffset(disc, partition);
-  if (!dol_offset)
+  u64 dol_offset;
+  if (!GetBootDOLOffset(disc, partition, &dol_offset))
     return false;
-  const std::optional<u64> dol_size = GetBootDOLSize(disc, partition, *dol_offset);
-  if (!dol_size)
+  u32 dol_size;
+  if (!GetBootDOLSize(disc, partition, dol_offset, &dol_size))
     return false;
-  MarkAsUsedE(partition_data_offset, *dol_offset, *dol_size);
+  MarkAsUsedE(partition_data_offset, dol_offset, dol_size);
 
   // FST
-  const std::optional<u64> fst_offset = GetFSTOffset(disc, partition);
-  const std::optional<u64> fst_size = GetFSTSize(disc, partition);
-  if (!fst_offset || !fst_size)
+  u64 fst_offset, fst_size;
+  if (!GetFSTOffset(disc, partition, &fst_offset) || !GetFSTSize(disc, partition, &fst_size))
     return false;
-  MarkAsUsedE(partition_data_offset, *fst_offset, *fst_size);
+  MarkAsUsedE(partition_data_offset, fst_offset, fst_size);
 
   // Go through the filesystem and mark entries as used
   ParseFileSystemData(partition_data_offset, filesystem->GetRoot());

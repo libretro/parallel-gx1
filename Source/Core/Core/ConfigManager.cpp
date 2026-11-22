@@ -167,16 +167,25 @@ void SConfig::SetRunningGameMetadata(const DiscIO::Volume& volume,
 {
   if (partition == volume.GetGamePartition())
   {
-    SetRunningGameMetadata(volume.GetGameID(), volume.GetGameTDBID(),
-                           volume.GetTitleID().value_or(0), volume.GetRevision().value_or(0),
+    u64 title_id;
+    u16 revision;
+    if (!volume.GetTitleID(&title_id))
+      title_id = 0;
+    if (!volume.GetRevision(DiscIO::PARTITION_NONE, &revision))
+      revision = 0;
+    SetRunningGameMetadata(volume.GetGameID(), volume.GetGameTDBID(), title_id, revision,
                            volume.GetRegion(), volume.GetSimulatedMemorySize());
   }
   else
   {
-    SetRunningGameMetadata(volume.GetGameID(partition), volume.GetGameTDBID(partition),
-                           volume.GetTitleID(partition).value_or(0),
-                           volume.GetRevision(partition).value_or(0), volume.GetRegion(),
-                           volume.GetSimulatedMemorySize());
+    u64 title_id;
+    u16 revision;
+    if (!volume.GetTitleID(partition, &title_id))
+      title_id = 0;
+    if (!volume.GetRevision(partition, &revision))
+      revision = 0;
+    SetRunningGameMetadata(volume.GetGameID(partition), volume.GetGameTDBID(partition), title_id,
+                           revision, volume.GetRegion(), volume.GetSimulatedMemorySize());
   }
 }
 
@@ -189,7 +198,7 @@ void SConfig::SetRunningGameMetadata(const IOS::ES::TMDReader& tmd, DiscIO::Plat
   // (IOS HLE ES calls us with a TMDReader rather than a volume when launching
   // a disc game, because ES has no reason to be accessing the disc directly.)
   if (platform == DiscIO::Platform::WiiWAD ||
-      !Core::System::GetInstance().GetDVDInterface().UpdateRunningGameMetadata(tmd_title_id))
+      !Core::System::GetInstance().GetDVDInterface().UpdateRunningGameMetadata(&tmd_title_id))
   {
     // If not launching a disc game, just read everything from the TMD.
     SetRunningGameMetadata(tmd.GetGameID(), tmd.GetGameTDBID(), tmd_title_id, tmd.GetTitleVersion(),

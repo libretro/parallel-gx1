@@ -17,69 +17,66 @@
 
 namespace DiscIO
 {
-std::optional<u64> GetBootDOLOffset(const Volume& volume, const Partition& partition)
+bool GetBootDOLOffset(const Volume& volume, const Partition& partition, u64* dol_offset)
 {
   const Platform volume_type = volume.GetVolumeType();
   if (!IsDisc(volume_type))
-    return std::nullopt;
-
-  std::optional<u64> dol_offset = volume.ReadSwappedAndShifted(0x420, partition);
+    return false;
 
   // Datel AR disc has 0x00000000 as the offset (invalid) and doesn't use it in the AppLoader.
-  if (dol_offset && *dol_offset == 0)
-    dol_offset.reset();
-
-  return dol_offset;
+  return volume.ReadSwappedAndShifted(0x420, partition, dol_offset) && *dol_offset != 0;
 }
 
-std::optional<u32> GetBootDOLSize(const Volume& volume, const Partition& partition, u64 dol_offset)
+bool GetBootDOLSize(const Volume& volume, const Partition& partition, u64 dol_offset,
+                    u32* dol_size_out)
 {
   if (!IsDisc(volume.GetVolumeType()))
-    return std::nullopt;
+    return false;
 
   u32 dol_size = 0;
 
   // Iterate through the 7 code segments
   for (size_t i = 0; i < 7; i++)
   {
-    const std::optional<u32> offset = volume.ReadSwapped<u32>(dol_offset + 0x00 + i * 4, partition);
-    const std::optional<u32> size = volume.ReadSwapped<u32>(dol_offset + 0x90 + i * 4, partition);
-    if (!offset || !size)
-      return {};
-    if (*offset + *size > dol_size)
-      dol_size = *offset + *size;
+    u32 offset, size;
+    if (!volume.ReadSwapped<u32>(dol_offset + 0x00 + i * 4, partition, &offset) ||
+        !volume.ReadSwapped<u32>(dol_offset + 0x90 + i * 4, partition, &size))
+      return false;
+    if (offset + size > dol_size)
+      dol_size = offset + size;
   }
 
   // Iterate through the 11 data segments
   for (size_t i = 0; i < 11; i++)
   {
-    const std::optional<u32> offset = volume.ReadSwapped<u32>(dol_offset + 0x1c + i * 4, partition);
-    const std::optional<u32> size = volume.ReadSwapped<u32>(dol_offset + 0xac + i * 4, partition);
-    if (!offset || !size)
-      return {};
-    if (*offset + *size > dol_size)
-      dol_size = *offset + *size;
+    u32 offset, size;
+    if (!volume.ReadSwapped<u32>(dol_offset + 0x1c + i * 4, partition, &offset) ||
+        !volume.ReadSwapped<u32>(dol_offset + 0xac + i * 4, partition, &size))
+      return false;
+    if (offset + size > dol_size)
+      dol_size = offset + size;
   }
 
-  return dol_size;
+  *dol_size_out = dol_size;
+  return true;
 }
 
-std::optional<u64> GetFSTOffset(const Volume& volume, const Partition& partition)
+bool GetFSTOffset(const Volume& volume, const Partition& partition, u64* fst_offset)
 {
   const Platform volume_type = volume.GetVolumeType();
   if (!IsDisc(volume_type))
-    return std::nullopt;
+    return false;
 
-  return volume.ReadSwappedAndShifted(0x424, partition);
+  return volume.ReadSwappedAndShifted(0x424, partition, fst_offset);
 }
 
-std::optional<u64> GetFSTSize(const Volume& volume, const Partition& partition)
+bool GetFSTSize(const Volume& volume, const Partition& partition, u64* fst_size)
 {
   const Platform volume_type = volume.GetVolumeType();
   if (!IsDisc(volume_type))
-    return std::nullopt;
+    return false;
 
-  return volume.ReadSwappedAndShifted(0x428, partition);
+  return volume.ReadSwappedAndShifted(0x428, partition, fst_size);
 }
 
 static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition* partitions,
@@ -96,7 +93,8 @@ u64 GetBiggestReferencedOffset(const Volume& volume)
   size_t kept = 0;
   for (size_t i = 0; i < partitions.size(); i++)
   {
-    if (volume.ReadSwapped<u32>(0x18, partitions[i]) == WII_DISC_MAGIC)
+    u32 magic;
+    if (volume.ReadSwapped<u32>(0x18, partitions[i], &magic) && magic == WII_DISC_MAGIC)
       partitions[kept++] = partitions[i];
   }
   partitions.resize(kept);
@@ -141,23 +139,22 @@ static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition* par
         biggest_offset = offset;
     }
 
-    const std::optional<u64> dol_offset = GetBootDOLOffset(volume, partition);
-    if (dol_offset)
+    u64 dol_offset;
+    if (GetBootDOLOffset(volume, partition, &dol_offset))
     {
-      const std::optional<u64> dol_size = GetBootDOLSize(volume, partition, *dol_offset);
-      if (dol_size)
+      u32 dol_size;
+      if (GetBootDOLSize(volume, partition, dol_offset, &dol_size))
       {
-        const u64 offset = volume.PartitionOffsetToRawOffset(*dol_offset + *dol_size, partition);
+        const u64 offset = volume.PartitionOffsetToRawOffset(dol_offset + dol_size, partition);
         if (offset > biggest_offset)
         biggest_offset = offset;
       }
     }
 
-    const std::optional<u64> fst_offset = GetFSTOffset(volume, partition);
-    const std::optional<u64> fst_size = GetFSTSize(volume, partition);
-    if (fst_offset && fst_size)
+    u64 fst_offset, fst_size;
+    if (GetFSTOffset(volume, partition, &fst_offset) && GetFSTSize(volume, partition, &fst_size))
     {
-      const u64 offset = volume.PartitionOffsetToRawOffset(*fst_offset + *fst_size, partition);
+      const u64 offset = volume.PartitionOffsetToRawOffset(fst_offset + fst_size, partition);
       if (offset > biggest_offset)
         biggest_offset = offset;
     }

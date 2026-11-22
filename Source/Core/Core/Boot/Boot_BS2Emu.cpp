@@ -143,15 +143,16 @@ bool CBoot::RunApploader(Core::System& system, bool is_wii, const DiscIO::Volume
   // Load Apploader to Memory - The apploader is hardcoded to begin at 0x2440 on the disc,
   // but the size can differ between discs. Compare with YAGCD chap 13.
   constexpr u32 offset = 0x2440;
-  const std::optional<u32> entry = volume.ReadSwapped<u32>(offset + 0x10, partition);
-  const std::optional<u32> size = volume.ReadSwapped<u32>(offset + 0x14, partition);
-  const std::optional<u32> trailer = volume.ReadSwapped<u32>(offset + 0x18, partition);
-  if (!entry || !size || !trailer || *entry == UINT32_MAX || *size + *trailer == UINT32_MAX)
+  u32 entry_value, size_value, trailer_value;
+  if (!volume.ReadSwapped<u32>(offset + 0x10, partition, &entry_value) ||
+      !volume.ReadSwapped<u32>(offset + 0x14, partition, &size_value) ||
+      !volume.ReadSwapped<u32>(offset + 0x18, partition, &trailer_value) ||
+      entry_value == UINT32_MAX || size_value + trailer_value == UINT32_MAX)
   {
     INFO_LOG(BOOT, "Invalid apploader. Your disc image is probably corrupted.");
     return false;
   }
-  DVDRead(system, volume, offset + 0x20, 0x01200000, *size + *trailer, partition);
+  DVDRead(system, volume, offset + 0x20, 0x01200000, size_value + trailer_value, partition);
 
   // TODO - Make Apploader(or just RunFunction()) debuggable!!!
 
@@ -164,7 +165,7 @@ bool CBoot::RunApploader(Core::System& system, bool is_wii, const DiscIO::Volume
   ppc_state.gpr[3] = iAppLoaderFuncAddr + 0;
   ppc_state.gpr[4] = iAppLoaderFuncAddr + 4;
   ppc_state.gpr[5] = iAppLoaderFuncAddr + 8;
-  RunFunction(system, *entry);
+  RunFunction(system, entry_value);
   const u32 iAppLoaderInit = mmu.Read<u32>(iAppLoaderFuncAddr + 0);
   const u32 iAppLoaderMain = mmu.Read<u32>(iAppLoaderFuncAddr + 4);
   const u32 iAppLoaderClose = mmu.Read<u32>(iAppLoaderFuncAddr + 8);

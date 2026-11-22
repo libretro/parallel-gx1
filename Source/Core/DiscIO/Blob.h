@@ -99,13 +99,15 @@ public:
 
   // NOT thread-safe - can't call this from multiple threads.
   bool Read(u64 offset, u64 size, u8* out_ptr);
+  // False, leaving out alone, when the read fails
   template <typename T>
-  std::optional<T> ReadSwapped(u64 offset)
+  bool ReadSwapped(u64 offset, T* out)
   {
     T temp;
     if (!Read(offset, sizeof(T), reinterpret_cast<u8*>(&temp)))
-      return std::nullopt;
-    return Common::FromBigEndian(temp);
+      return false;
+    *out = Common::FromBigEndian(temp);
+    return true;
   }
 
   // false where the class has none of its own

@@ -42,7 +42,7 @@ public:
   std::string GetGameID(const Partition& partition = PARTITION_NONE) const;
   Country GetCountry(const Partition& partition = PARTITION_NONE) const;
   std::string GetMakerID(const Partition& partition = PARTITION_NONE) const;
-  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const;
+  bool GetRevision(const Partition& partition, u16* revision) const;
   u32 GetSimulatedMemorySize() const;
   bool IsNKit() const;
 
@@ -50,7 +50,7 @@ protected:
   explicit VolumeDisc(VolumeKind kind) : Volume(kind) {}
   ~VolumeDisc() = default;
 
-  Region RegionCodeToRegion(std::optional<u32> region_code) const;
+  Region RegionCodeToRegion(u32 region_code) const;
 };
 
 static_assert(sizeof(VolumeDisc::BootID) == 480);

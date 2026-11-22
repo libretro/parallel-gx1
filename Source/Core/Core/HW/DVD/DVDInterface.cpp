@@ -526,7 +526,7 @@ void DVDInterface::SetLidOpen()
     GenerateDIInterrupt(DIInterruptType::CVRINT);
 }
 
-bool DVDInterface::UpdateRunningGameMetadata(std::optional<u64> title_id)
+bool DVDInterface::UpdateRunningGameMetadata(const u64* title_id)
 {
   auto& dvd_thread = m_system.GetDVDThread();
 

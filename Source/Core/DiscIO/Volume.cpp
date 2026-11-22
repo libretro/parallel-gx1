@@ -129,7 +129,7 @@ OWN(const FileSystem*, GetFileSystem, (const Partition& partition), (partition))
 OWN(std::string, GetGameID, (const Partition& partition), (partition))
 OWN(std::string, GetGameTDBID, (const Partition& partition), (partition))
 OWN(std::string, GetMakerID, (const Partition& partition), (partition))
-OWN(std::optional<u16>, GetRevision, (const Partition& partition), (partition))
+OWN(bool, GetRevision, (const Partition& partition, u16* revision), (partition, revision))
 OWN(Platform, GetVolumeType, (), ())
 OWN(bool, IsDatelDisc, (), ())
 OWN(bool, IsNKit, (), ())
@@ -145,16 +145,16 @@ OWN(const BlobReader&, GetBlobReader, (), ())
 #undef OWN
 
 // overloaded, so named here by class: the Wii disc and the WAD have their own
-std::optional<u64> Volume::GetTitleID(const Partition& partition) const
+bool Volume::GetTitleID(const Partition& partition, u64* title_id) const
 {
   switch (m_kind)
   {
   case VolumeKind::Wii:
-    return static_cast<const VolumeWii*>(this)->GetTitleID(partition);
+    return static_cast<const VolumeWii*>(this)->GetTitleID(partition, title_id);
   case VolumeKind::WAD:
-    return static_cast<const VolumeWAD*>(this)->GetTitleID(partition);
+    return static_cast<const VolumeWAD*>(this)->GetTitleID(partition, title_id);
   default:
-    return std::nullopt;
+    return false;
   }
 }
 
@@ -192,14 +192,15 @@ static VolumeDisc* TryCreateDisc(BlobReader*& reader, const T& reader_adapter_fa
   // `reader_adapter_factory` is used *after* successful magic word read.
   // This prevents `CachedBlobReader` from showing warnings when failing to scrub a .dol file.
 
-  if (reader->ReadSwapped<u32>(0x18) == WII_DISC_MAGIC)
+  u32 magic;
+  if (reader->ReadSwapped<u32>(0x18, &magic) && magic == WII_DISC_MAGIC)
   {
     BlobReader* const taken = reader;
     reader = nullptr;
     return new VolumeWii(reader_adapter_factory(taken));
   }
 
-  if (reader->ReadSwapped<u32>(0x1C) == GAMECUBE_DISC_MAGIC)
+  if (reader->ReadSwapped<u32>(0x1C, &magic) && magic == GAMECUBE_DISC_MAGIC)
   {
     BlobReader* const taken = reader;
     reader = nullptr;
@@ -241,8 +242,9 @@ static VolumeWAD* TryCreateWAD(BlobReader*& reader)
 
   // Check for WAD
   // 0x206962 for boot2 wads
-  const std::optional<u32> wad_magic = reader->ReadSwapped<u32>(0x02);
-  if (wad_magic == u32(0x00204973) || wad_magic == u32(0x00206962))
+  u32 wad_magic;
+  if (reader->ReadSwapped<u32>(0x02, &wad_magic) &&
+      (wad_magic == u32(0x00204973) || wad_magic == u32(0x00206962)))
   {
     BlobReader* const taken = reader;
     reader = nullptr;

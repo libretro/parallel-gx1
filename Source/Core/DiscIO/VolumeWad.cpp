@@ -49,12 +49,18 @@ VolumeWAD::VolumeWAD(BlobReader* reader) : Volume(VolumeKind::WAD), m_reader(rea
   ASSERT(m_reader);
 
   // Source: http://wiibrew.org/wiki/WAD_files
-  m_hdr_size = m_reader->ReadSwapped<u32>(0x00).value_or(0);
-  m_cert_chain_size = m_reader->ReadSwapped<u32>(0x08).value_or(0);
-  m_ticket_size = m_reader->ReadSwapped<u32>(0x10).value_or(0);
-  m_tmd_size = m_reader->ReadSwapped<u32>(0x14).value_or(0);
-  m_data_size = m_reader->ReadSwapped<u32>(0x18).value_or(0);
-  m_opening_bnr_size = m_reader->ReadSwapped<u32>(0x1C).value_or(0);
+  if (!m_reader->ReadSwapped<u32>(0x00, &m_hdr_size))
+    m_hdr_size = 0;
+  if (!m_reader->ReadSwapped<u32>(0x08, &m_cert_chain_size))
+    m_cert_chain_size = 0;
+  if (!m_reader->ReadSwapped<u32>(0x10, &m_ticket_size))
+    m_ticket_size = 0;
+  if (!m_reader->ReadSwapped<u32>(0x14, &m_tmd_size))
+    m_tmd_size = 0;
+  if (!m_reader->ReadSwapped<u32>(0x18, &m_data_size))
+    m_data_size = 0;
+  if (!m_reader->ReadSwapped<u32>(0x1C, &m_opening_bnr_size))
+    m_opening_bnr_size = 0;
 
   m_cert_chain_offset = Common::AlignUp(m_hdr_size, 0x40);
   m_ticket_offset = m_cert_chain_offset + Common::AlignUp(m_cert_chain_size, 0x40);
@@ -112,7 +118,9 @@ Country VolumeWAD::GetCountry(const Partition& partition) const
     return TypicalCountryForRegion(GetSysMenuRegion(m_tmd.GetTitleVersion()));
 
   const Region region = GetRegion();
-  const std::optional<u16> revision = GetRevision();
+  u16 revision_value;
+  const u16* const revision =
+      GetRevision(PARTITION_NONE, &revision_value) ? &revision_value : nullptr;
   if (CountryCodeToRegion(country_byte, Platform::WiiWAD, region, revision) != region)
     return TypicalCountryForRegion(region);
 
@@ -294,17 +302,18 @@ std::string VolumeWAD::GetMakerID(const Partition& partition) const
   return FilterGameID(temp, sizeof(temp));
 }
 
-std::optional<u64> VolumeWAD::GetTitleID(const Partition& partition) const
+bool VolumeWAD::GetTitleID(const Partition& partition, u64* title_id) const
 {
-  return ReadSwapped<u64>(m_ticket_offset + 0x01DC, partition);
+  return ReadSwapped<u64>(m_ticket_offset + 0x01DC, partition, title_id);
 }
 
-std::optional<u16> VolumeWAD::GetRevision(const Partition& partition) const
+bool VolumeWAD::GetRevision(const Partition& partition, u16* revision) const
 {
   if (!m_tmd.IsValid())
-    return {};
+    return false;
 
-  return m_tmd.GetTitleVersion();
+  *revision = m_tmd.GetTitleVersion();
+  return true;
 }
 
 Platform VolumeWAD::GetVolumeType() const

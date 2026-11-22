@@ -112,7 +112,10 @@ Region VolumeGC::GetRegion() const
     }
   }
 
-  return RegionCodeToRegion(m_reader->ReadSwapped<u32>(0x458));
+  u32 region_code;
+  if (!m_reader->ReadSwapped<u32>(0x458, &region_code))
+    return Region::Unknown;
+  return RegionCodeToRegion(region_code);
 }
 
 BlobType VolumeGC::GetBlobType() const
@@ -150,7 +153,8 @@ Platform VolumeGC::GetVolumeType() const
 
 bool VolumeGC::IsDatelDisc() const
 {
-  return GetGameID() == "DTLX01" || !GetBootDOLOffset(*this, PARTITION_NONE).has_value();
+  u64 dol_offset;
+  return GetGameID() == "DTLX01" || !GetBootDOLOffset(*this, PARTITION_NONE, &dol_offset);
 }
 
 }  // namespace DiscIO

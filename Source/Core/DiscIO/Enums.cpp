@@ -211,7 +211,7 @@ Region SysConfCountryToRegion(u8 country_code)
 }
 
 Region CountryCodeToRegion(u8 country_code, Platform platform, Region expected_region,
-                           std::optional<u16> revision)
+                           const u16* revision)
 {
   switch (country_code)
   {
@@ -280,8 +280,7 @@ Region CountryCodeToRegion(u8 country_code, Platform platform, Region expected_r
   }
 }
 
-Country CountryCodeToCountry(u8 country_code, Platform platform, Region region,
-                             std::optional<u16> revision)
+Country CountryCodeToCountry(u8 country_code, Platform platform, Region region, const u16* revision)
 {
   switch (country_code)
   {

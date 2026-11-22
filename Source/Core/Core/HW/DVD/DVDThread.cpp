@@ -304,8 +304,7 @@ bool DVDThread::IsInsertedDiscRunning()
   return SConfig::GetInstance().GetGameID() == m_disc->GetGameID();
 }
 
-bool DVDThread::UpdateRunningGameMetadata(const DiscIO::Partition& partition,
-                                          std::optional<u64> title_id)
+bool DVDThread::UpdateRunningGameMetadata(const DiscIO::Partition& partition, const u64* title_id)
 {
   if (!m_disc)
     return false;
@@ -314,8 +313,8 @@ bool DVDThread::UpdateRunningGameMetadata(const DiscIO::Partition& partition,
 
   if (title_id)
   {
-    const std::optional<u64> volume_title_id = m_disc->GetTitleID(partition);
-    if (!volume_title_id || *volume_title_id != *title_id)
+    u64 volume_title_id;
+    if (!m_disc->GetTitleID(partition, &volume_title_id) || volume_title_id != *title_id)
       return false;
   }
 

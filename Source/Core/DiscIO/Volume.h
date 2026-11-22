@@ -62,27 +62,31 @@ public:
   const u8* View(u64 offset, u64 length, const Partition& partition) const;
   // Asks the OS to start reading what View() lends; returns at once.
   void Prefetch(u64 offset, u64 length, const Partition& partition) const;
+  // Each false, leaving out alone, when the read fails
   template <typename T>
-  std::optional<T> ReadSwapped(u64 offset, const Partition& partition) const
+  bool ReadSwapped(u64 offset, const Partition& partition, T* out) const
   {
     T temp;
     if (!Read(offset, sizeof(T), reinterpret_cast<u8*>(&temp), partition))
-      return std::nullopt;
-    return Common::FromBigEndian(temp);
+      return false;
+    *out = Common::FromBigEndian(temp);
+    return true;
   }
-  std::optional<u64> ReadSwappedAndShifted(u64 offset, const Partition& partition) const
+  bool ReadSwappedAndShifted(u64 offset, const Partition& partition, u64* out) const
   {
-    const std::optional<u32> temp = ReadSwapped<u32>(offset, partition);
-    if (!temp)
-      return std::nullopt;
-    return static_cast<u64>(*temp) << GetOffsetShift();
+    u32 temp;
+    if (!ReadSwapped<u32>(offset, partition, &temp))
+      return false;
+    *out = static_cast<u64>(temp) << GetOffsetShift();
+    return true;
   }
 
   bool HasWiiHashes() const;
   std::vector<Partition> GetPartitions() const;
   Partition GetGamePartition() const;
-  std::optional<u64> GetTitleID() const { return GetTitleID(GetGamePartition()); }
-  std::optional<u64> GetTitleID(const Partition& partition) const;
+  // False when the volume has no title ID
+  bool GetTitleID(u64* title_id) const { return GetTitleID(GetGamePartition(), title_id); }
+  bool GetTitleID(const Partition& partition, u64* title_id) const;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition) const;
   const IOS::ES::TMDReader& GetTMD(const Partition& partition) const;
   const std::vector<u8>& GetCertificateChain(const Partition& partition) const;
@@ -96,7 +100,8 @@ public:
   std::string GetGameID(const Partition& partition = PARTITION_NONE) const;
   std::string GetGameTDBID(const Partition& partition = PARTITION_NONE) const;
   std::string GetMakerID(const Partition& partition = PARTITION_NONE) const;
-  std::optional<u16> GetRevision(const Partition& partition = PARTITION_NONE) const;
+  // False when the volume has no revision
+  bool GetRevision(const Partition& partition, u16* revision) const;
   Platform GetVolumeType() const;
   bool IsDatelDisc() const;
   bool IsNKit() const;
