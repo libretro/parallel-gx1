@@ -228,7 +228,7 @@ int InfinityUSB::SetAltSetting(u8 alt_setting)
   return 0;
 }
 
-int InfinityUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
+int InfinityUSB::SubmitTransfer(CtrlMessage* cmd)
 {
   DEBUG_LOG(IOS_USB,
             "[%04x:%04x %u] Control: bRequestType=%02x bRequest=%02x wValue=%04x"
@@ -236,15 +236,17 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
             (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface,
             (unsigned)cmd->request_type, (unsigned)cmd->request, (unsigned)cmd->value,
             (unsigned)cmd->index, (unsigned)cmd->length);
+  delete cmd;
   return 0;
 }
-int InfinityUSB::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
+int InfinityUSB::SubmitTransfer(BulkMessage* cmd)
 {
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Bulk: length=%04x endpoint=%02x", (unsigned)m_vid,
             (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
+  delete cmd;
   return 0;
 }
-int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
+int InfinityUSB::SubmitTransfer(IntrMessage* cmd)
 {
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Interrupt: length=%04x endpoint=%02x", (unsigned)m_vid,
             (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
@@ -256,6 +258,7 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
   if (cmd->length != 32 || buf == nullptr)
   {
     ERROR_LOG(IOS_USB, "Infinity Base command invalid");
+    delete cmd;
     return IPC_EINVAL;
   }
 
@@ -264,7 +267,7 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
   // First call - constant device response
   if (buf[0] == 0x00)
   {
-    IntrMessage* const waiting = cmd.release();
+    IntrMessage* const waiting = cmd;
     infinity_waiting_push_back_growing(&m_response_list, &waiting);
   }
   // Respond with data requested from FF command
@@ -273,18 +276,18 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
     // If a new figure has been added or removed, get the updated figure response
     if (infinity_base.HasFigureBeenAddedRemoved())
     {
-      ScheduleTransfer(std::move(cmd), infinity_base.PopAddedRemovedResponse(), 1000);
+      ScheduleTransfer(cmd, infinity_base.PopAddedRemovedResponse(), 1000);
     }
     else if (infinity_queries_empty(&m_queries))
     {
-      IntrMessage* const waiting = cmd.release();
+      IntrMessage* const waiting = cmd;
       infinity_waiting_push_back_growing(&m_response_list, &waiting);
     }
     else
     {
       const std::array<u8, 32> query = *infinity_queries_front(&m_queries);
       infinity_queries_pop_front(&m_queries);
-      ScheduleTransfer(std::move(cmd), query, 1000);
+      ScheduleTransfer(cmd, query, 1000);
     }
   }
   else if (buf[0] == 0xFF)
@@ -400,35 +403,41 @@ int InfinityUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
     }
 
     memcpy(data.data(), buf, 32);
-    ScheduleTransfer(std::move(cmd), data, 500);
+    ScheduleTransfer(cmd, data, 500);
     if (infinity_waiting_empty(&m_response_list))
     {
       infinity_queries_push_back_growing(&m_queries, &response_data);
     }
     else
     {
-      std::unique_ptr<IntrMessage> waiting(*infinity_waiting_front(&m_response_list));
+      IntrMessage* const waiting = *infinity_waiting_front(&m_response_list);
       infinity_waiting_pop_front(&m_response_list);
-      ScheduleTransfer(std::move(waiting), response_data, 1000);
+      ScheduleTransfer(waiting, response_data, 1000);
     }
+  }
+  else
+  {
+    delete cmd;
   }
 
   return 0;
 }
 
-int InfinityUSB::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
+int InfinityUSB::SubmitTransfer(IsoMessage* cmd)
 {
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Isochronous: length=%04x endpoint=%02x num_packets=%02x",
             (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface, cmd->length,
             (unsigned)cmd->endpoint, (unsigned)cmd->num_packets);
+  delete cmd;
   return 0;
 }
 
-void InfinityUSB::ScheduleTransfer(std::unique_ptr<TransferCommand> command,
-                                   const std::array<u8, 32>& data, u64 expected_time_us)
+void InfinityUSB::ScheduleTransfer(TransferCommand* command, const std::array<u8, 32>& data,
+                                   u64 expected_time_us)
 {
   command->FillBuffer(data.data(), 32);
   command->ScheduleTransferCompletion(32, expected_time_us);
+  delete command;
 }
 
 InfinityBase::InfinityBase()

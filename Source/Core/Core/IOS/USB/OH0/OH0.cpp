@@ -475,28 +475,26 @@ s32 OH0::SubmitTransfer(USB::Device& device, const IOCtlVRequest& ioctlv)
     if (!ioctlv.HasNumberOfValidVectors(6, 1) ||
         Common::swap16(memory.Read_U16(ioctlv.in_vectors[4].address)) != ioctlv.io_vectors[0].size)
       return IPC_EINVAL;
-    return device.SubmitTransfer(
-        std::make_unique<USB::V0CtrlMessage>(GetEmulationKernel(), ioctlv));
+    return device.SubmitTransfer(new USB::V0CtrlMessage(GetEmulationKernel(), ioctlv));
 
   case USB::IOCTLV_USBV0_BLKMSG:
   case USB::IOCTLV_USBV0_LBLKMSG:
     if (!ioctlv.HasNumberOfValidVectors(2, 1) ||
         memory.Read_U16(ioctlv.in_vectors[1].address) != ioctlv.io_vectors[0].size)
       return IPC_EINVAL;
-    return device.SubmitTransfer(std::make_unique<USB::V0BulkMessage>(
+    return device.SubmitTransfer(new USB::V0BulkMessage(
         GetEmulationKernel(), ioctlv, ioctlv.request == USB::IOCTLV_USBV0_LBLKMSG));
 
   case USB::IOCTLV_USBV0_INTRMSG:
     if (!ioctlv.HasNumberOfValidVectors(2, 1) ||
         memory.Read_U16(ioctlv.in_vectors[1].address) != ioctlv.io_vectors[0].size)
       return IPC_EINVAL;
-    return device.SubmitTransfer(
-        std::make_unique<USB::V0IntrMessage>(GetEmulationKernel(), ioctlv));
+    return device.SubmitTransfer(new USB::V0IntrMessage(GetEmulationKernel(), ioctlv));
 
   case USB::IOCTLV_USBV0_ISOMSG:
     if (!ioctlv.HasNumberOfValidVectors(3, 2))
       return IPC_EINVAL;
-    return device.SubmitTransfer(std::make_unique<USB::V0IsoMessage>(GetEmulationKernel(), ioctlv));
+    return device.SubmitTransfer(new USB::V0IsoMessage(GetEmulationKernel(), ioctlv));
 
   default:
     return IPC_EINVAL;

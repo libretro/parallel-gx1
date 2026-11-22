@@ -214,7 +214,7 @@ static constexpr u32 USBGETAID(EndpointControlSelector cs, RequestCode request, 
   return USBGETAID(std::to_underlying(cs), std::to_underlying(request), index);
 }
 
-int LogitechMic::GetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
+int LogitechMic::GetAudioControl(CtrlMessage* cmd)
 {
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
@@ -288,7 +288,7 @@ int LogitechMic::GetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   return ret;
 }
 
-int LogitechMic::SetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
+int LogitechMic::SetAudioControl(CtrlMessage* cmd)
 {
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
@@ -351,7 +351,7 @@ int LogitechMic::SetAudioControl(std::unique_ptr<CtrlMessage>& cmd)
   return ret;
 }
 
-int LogitechMic::EndpointAudioControl(std::unique_ptr<CtrlMessage>& cmd)
+int LogitechMic::EndpointAudioControl(CtrlMessage* cmd)
 {
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
@@ -547,7 +547,35 @@ static constexpr u16 LogitechUSBHDR(u8 dir, u8 type, u8 recipient, RequestCode r
   return USBHDR(dir, type, recipient, std::to_underlying(request));
 }
 
-int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
+int LogitechMic::SubmitTransfer(CtrlMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int LogitechMic::SubmitTransfer(BulkMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int LogitechMic::SubmitTransfer(IntrMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int LogitechMic::SubmitTransfer(IsoMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int LogitechMic::HandleTransfer(CtrlMessage* cmd)
 {
   // Reference: https://www.usb.org/sites/default/files/audio10.pdf
   DEBUG_LOG(IOS_USB,
@@ -691,19 +719,19 @@ int LogitechMic::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   return IPC_SUCCESS;
 }
 
-int LogitechMic::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
+int LogitechMic::HandleTransfer(BulkMessage* cmd)
 {
   cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_SUCCESS);
   return IPC_SUCCESS;
 }
 
-int LogitechMic::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
+int LogitechMic::HandleTransfer(IntrMessage* cmd)
 {
   cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_SUCCESS);
   return IPC_SUCCESS;
 }
 
-int LogitechMic::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
+int LogitechMic::HandleTransfer(IsoMessage* cmd)
 {
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();

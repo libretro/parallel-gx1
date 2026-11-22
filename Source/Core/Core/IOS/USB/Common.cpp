@@ -21,13 +21,13 @@ EmulationKernel& TransferCommand::GetEmulationKernel() const
   return m_ios;
 }
 
-std::unique_ptr<u8[]> TransferCommand::MakeBuffer(const size_t size) const
+u8* TransferCommand::MakeBuffer(const size_t size) const
 {
   ASSERT_MSG(IOS_USB, data_address != 0, "Invalid data_address");
-  auto buffer = std::make_unique<u8[]>(size);
+  u8* const buffer = static_cast<u8*>(std::malloc(size ? size : 1));
   auto& system = m_ios.GetSystem();
   auto& memory = system.GetMemory();
-  memory.CopyFromEmu(buffer.get(), data_address, size);
+  memory.CopyFromEmu(buffer, data_address, size);
   return buffer;
 }
 

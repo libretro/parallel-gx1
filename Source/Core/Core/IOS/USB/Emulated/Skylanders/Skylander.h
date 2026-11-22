@@ -87,14 +87,19 @@ public:
   int ChangeInterface(u8 iface) override;
   int GetNumberOfAltSettings(u8 iface) override;
   int SetAltSetting(u8 alt_setting) override;
-  int SubmitTransfer(std::unique_ptr<CtrlMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<BulkMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<IntrMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<IsoMessage> message) override;
-  void ScheduleTransfer(std::unique_ptr<TransferCommand> command, const std::array<u8, 64>& data,
+  int SubmitTransfer(CtrlMessage* message) override;
+  int SubmitTransfer(BulkMessage* message) override;
+  int SubmitTransfer(IntrMessage* message) override;
+  int SubmitTransfer(IsoMessage* message) override;
+  void ScheduleTransfer(TransferCommand* command, const std::array<u8, 64>& data,
                         s32 expected_count, u64 expected_time_us);
 
 private:
+  // What each SubmitTransfer does with its message, which it frees afterwards
+  int HandleTransfer(CtrlMessage* cmd);
+  int HandleTransfer(BulkMessage* cmd);
+  int HandleTransfer(IntrMessage* cmd);
+  int HandleTransfer(IsoMessage* cmd);
   u16 m_vid = 0;
   u16 m_pid = 0;
   u8 m_active_interface = 0;

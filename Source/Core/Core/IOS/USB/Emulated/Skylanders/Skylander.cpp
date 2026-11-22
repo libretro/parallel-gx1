@@ -724,7 +724,35 @@ int SkylanderUSB::SetAltSetting(u8 alt_setting)
 // https://marijnkneppers.dev/posts
 // https://github.com/tresni/PoweredPortals/wiki/USB-Protocols
 // https://pastebin.com/EqtTRzeF
-int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
+int SkylanderUSB::SubmitTransfer(CtrlMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int SkylanderUSB::SubmitTransfer(BulkMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int SkylanderUSB::SubmitTransfer(IntrMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int SkylanderUSB::SubmitTransfer(IsoMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
 {
   DEBUG_LOG(IOS_USB,
             "[%04x:%04x %u] Control: bRequestType=%02x bRequest=%u wValue=%04x"
@@ -1030,11 +1058,11 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   if (expected_count == 0)
     return IPC_EINVAL;
 
-  ScheduleTransfer(std::move(cmd), control_response, expected_count, expected_time_us);
+  ScheduleTransfer(cmd, control_response, expected_count, expected_time_us);
   return 0;
 }
 
-int SkylanderUSB::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
+int SkylanderUSB::HandleTransfer(BulkMessage* cmd)
 {
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Bulk: length=%u endpoint=%u", (unsigned)m_vid, (unsigned)m_pid,
             (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
@@ -1045,7 +1073,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
 // it needs to respond with either the status of the console if there are no Control Messages that
 // require a response, or with the relevant response data that is requested from the Control
 // Message.
-int SkylanderUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
+int SkylanderUSB::HandleTransfer(IntrMessage* cmd)
 {
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Interrupt: length=%u endpoint=%u", (unsigned)m_vid,
             (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
@@ -1073,7 +1101,7 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
     memcpy(audio_buf, buf, cmd->length);
     expected_time_us = 0;
     expected_count = cmd->length;
-    ScheduleTransfer(std::move(cmd), audio_interrupt_response, expected_count, expected_time_us);
+    ScheduleTransfer(cmd, audio_interrupt_response, expected_count, expected_time_us);
 
     return 0;
   }
@@ -1093,11 +1121,11 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
     expected_time_us = 2000;
   }
   expected_count = 32;
-  ScheduleTransfer(std::move(cmd), interrupt_response, expected_count, expected_time_us);
+  ScheduleTransfer(cmd, interrupt_response, expected_count, expected_time_us);
   return 0;
 }
 
-int SkylanderUSB::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
+int SkylanderUSB::HandleTransfer(IsoMessage* cmd)
 {
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Isochronous: length=%u endpoint=%u num_packets=%u",
             (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface, cmd->length,
@@ -1105,9 +1133,8 @@ int SkylanderUSB::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
   return 0;
 }
 
-void SkylanderUSB::ScheduleTransfer(std::unique_ptr<TransferCommand> command,
-                                    const std::array<u8, 64>& data, s32 expected_count,
-                                    u64 expected_time_us)
+void SkylanderUSB::ScheduleTransfer(TransferCommand* command, const std::array<u8, 64>& data,
+                                    s32 expected_count, u64 expected_time_us)
 {
   command->FillBuffer(data.data(), expected_count);
   command->ScheduleTransferCompletion(expected_count, expected_time_us);

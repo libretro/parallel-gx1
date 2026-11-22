@@ -43,17 +43,22 @@ public:
   int ChangeInterface(u8 iface) override;
   int GetNumberOfAltSettings(u8 iface) override;
   int SetAltSetting(u8 alt_setting) override;
-  int SubmitTransfer(std::unique_ptr<CtrlMessage> cmd) override;
-  int SubmitTransfer(std::unique_ptr<BulkMessage> cmd) override;
-  int SubmitTransfer(std::unique_ptr<IntrMessage> cmd) override;
-  int SubmitTransfer(std::unique_ptr<IsoMessage> cmd) override;
+  int SubmitTransfer(CtrlMessage* cmd) override;
+  int SubmitTransfer(BulkMessage* cmd) override;
+  int SubmitTransfer(IntrMessage* cmd) override;
+  int SubmitTransfer(IsoMessage* cmd) override;
 
 private:
+  // What each SubmitTransfer does with its message, which it frees afterwards
+  int HandleTransfer(CtrlMessage* cmd);
+  int HandleTransfer(BulkMessage* cmd);
+  int HandleTransfer(IntrMessage* cmd);
+  int HandleTransfer(IsoMessage* cmd);
   LogitechMicState m_sampler{};
 
-  int GetAudioControl(std::unique_ptr<CtrlMessage>& cmd);
-  int SetAudioControl(std::unique_ptr<CtrlMessage>& cmd);
-  int EndpointAudioControl(std::unique_ptr<CtrlMessage>& cmd);
+  int GetAudioControl(CtrlMessage* cmd);
+  int SetAudioControl(CtrlMessage* cmd);
+  int EndpointAudioControl(CtrlMessage* cmd);
 
   const u16 m_vid = 0x046d;
   const u16 m_pid = 0x0a03;

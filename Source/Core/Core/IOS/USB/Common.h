@@ -119,7 +119,8 @@ struct TransferCommand
   // This can be overridden for additional processing before replying.
   virtual void OnTransferComplete(s32 return_value) const;
   void ScheduleTransferCompletion(s32 return_value, u32 expected_time_us) const;
-  std::unique_ptr<u8[]> MakeBuffer(size_t size) const;
+  // A copy of the guest buffer, freed with std::free
+  u8* MakeBuffer(size_t size) const;
   void FillBuffer(const u8* src, size_t size) const;
 
 protected:
@@ -192,10 +193,11 @@ public:
   virtual int ChangeInterface(u8 iface) = 0;
   virtual int GetNumberOfAltSettings(u8 iface) = 0;
   virtual int SetAltSetting(u8 alt_setting) = 0;
-  virtual int SubmitTransfer(std::unique_ptr<CtrlMessage> message) = 0;
-  virtual int SubmitTransfer(std::unique_ptr<BulkMessage> message) = 0;
-  virtual int SubmitTransfer(std::unique_ptr<IntrMessage> message) = 0;
-  virtual int SubmitTransfer(std::unique_ptr<IsoMessage> message) = 0;
+  // Each takes message, freeing it with delete once done with it
+  virtual int SubmitTransfer(CtrlMessage* message) = 0;
+  virtual int SubmitTransfer(BulkMessage* message) = 0;
+  virtual int SubmitTransfer(IntrMessage* message) = 0;
+  virtual int SubmitTransfer(IsoMessage* message) = 0;
 
 protected:
   u64 m_id = 0xFFFFFFFFFFFFFFFF;

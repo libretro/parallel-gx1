@@ -46,12 +46,17 @@ public:
   int ChangeInterface(u8 iface) override;
   int GetNumberOfAltSettings(u8 iface) override;
   int SetAltSetting(u8 alt_setting) override;
-  int SubmitTransfer(std::unique_ptr<CtrlMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<BulkMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<IntrMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<IsoMessage> message) override;
+  int SubmitTransfer(CtrlMessage* message) override;
+  int SubmitTransfer(BulkMessage* message) override;
+  int SubmitTransfer(IntrMessage* message) override;
+  int SubmitTransfer(IsoMessage* message) override;
 
 private:
+  // What each SubmitTransfer does with its message, which it frees afterwards
+  int HandleTransfer(CtrlMessage* cmd);
+  int HandleTransfer(BulkMessage* cmd);
+  int HandleTransfer(IntrMessage* cmd);
+  int HandleTransfer(IsoMessage* cmd);
   WiiSpeakState m_sampler{};
 
   enum Registers
@@ -80,8 +85,8 @@ private:
     SP_RIN = 0x200d
   };
 
-  void GetRegister(const std::unique_ptr<CtrlMessage>& cmd) const;
-  void SetRegister(const std::unique_ptr<CtrlMessage>& cmd);
+  void GetRegister(CtrlMessage* cmd) const;
+  void SetRegister(CtrlMessage* cmd);
 
   const u16 m_vid = 0x057E;
   const u16 m_pid = 0x0308;

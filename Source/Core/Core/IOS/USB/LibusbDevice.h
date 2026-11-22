@@ -4,8 +4,6 @@
 #pragma once
 
 #if defined(__LIBUSB__)
-#include <map>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -41,10 +39,10 @@ public:
   int ChangeInterface(u8 iface) override;
   int GetNumberOfAltSettings(u8 iface) override;
   int SetAltSetting(u8 alt_setting) override;
-  int SubmitTransfer(std::unique_ptr<CtrlMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<BulkMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<IntrMessage> message) override;
-  int SubmitTransfer(std::unique_ptr<IsoMessage> message) override;
+  int SubmitTransfer(CtrlMessage* message) override;
+  int SubmitTransfer(BulkMessage* message) override;
+  int SubmitTransfer(IntrMessage* message) override;
+  int SubmitTransfer(IsoMessage* message) override;
 
 private:
   std::vector<LibusbUtils::ConfigDescriptor> m_config_descriptors;
@@ -62,7 +60,8 @@ private:
   class TransferEndpoint final
   {
   public:
-    void AddTransfer(std::unique_ptr<TransferCommand> command, libusb_transfer* transfer);
+    // takes command
+    void AddTransfer(TransferCommand* command, libusb_transfer* transfer);
     void HandleTransfer(libusb_transfer* tr,
                         s32 (*fill)(libusb_transfer* transfer, const TransferCommand& command));
     void CancelTransfers();
@@ -82,7 +81,7 @@ private:
     struct InFlight
     {
       libusb_transfer* transfer;
-      std::unique_ptr<TransferCommand> command;
+      TransferCommand* command;  // owned
     };
     static constexpr size_t MAX_IN_FLIGHT = 64;
     std::array<retro_atomic_ptr_t, MAX_IN_FLIGHT> m_in_flight{};

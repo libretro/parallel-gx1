@@ -119,15 +119,12 @@ s32 USB_HIDv4::SubmitTransfer(USB::Device& device, const IOCtlRequest& request)
   switch (request.request)
   {
   case USB::IOCTL_USBV4_CTRLMSG:
-    return device.SubmitTransfer(
-        std::make_unique<USB::V4CtrlMessage>(GetEmulationKernel(), request));
+    return device.SubmitTransfer(new USB::V4CtrlMessage(GetEmulationKernel(), request));
   case USB::IOCTL_USBV4_GET_US_STRING:
-    return device.SubmitTransfer(
-        std::make_unique<USB::V4GetUSStringMessage>(GetEmulationKernel(), request));
+    return device.SubmitTransfer(new USB::V4GetUSStringMessage(GetEmulationKernel(), request));
   case USB::IOCTL_USBV4_INTRMSG_IN:
   case USB::IOCTL_USBV4_INTRMSG_OUT:
-    return device.SubmitTransfer(
-        std::make_unique<USB::V4IntrMessage>(GetEmulationKernel(), request));
+    return device.SubmitTransfer(new USB::V4IntrMessage(GetEmulationKernel(), request));
   default:
     return IPC_EINVAL;
   }

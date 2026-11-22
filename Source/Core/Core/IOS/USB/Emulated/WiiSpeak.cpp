@@ -127,7 +127,35 @@ int WiiSpeak::SetAltSetting(u8 alt_setting)
   return 0;
 }
 
-int WiiSpeak::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
+int WiiSpeak::SubmitTransfer(CtrlMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int WiiSpeak::SubmitTransfer(BulkMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int WiiSpeak::SubmitTransfer(IntrMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int WiiSpeak::SubmitTransfer(IsoMessage* cmd)
+{
+  const int ret = HandleTransfer(cmd);
+  delete cmd;
+  return ret;
+}
+
+int WiiSpeak::HandleTransfer(CtrlMessage* cmd)
 {
   DEBUG_LOG(IOS_USB,
             "[%04x:%04x %u] Control: bRequestType=%02x bRequest=%02x wValue=%04x"
@@ -204,19 +232,19 @@ int WiiSpeak::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   return IPC_SUCCESS;
 }
 
-int WiiSpeak::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
+int WiiSpeak::HandleTransfer(BulkMessage* cmd)
 {
   cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_SUCCESS);
   return IPC_SUCCESS;
 }
 
-int WiiSpeak::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
+int WiiSpeak::HandleTransfer(IntrMessage* cmd)
 {
   cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_SUCCESS);
   return IPC_SUCCESS;
 }
 
-int WiiSpeak::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
+int WiiSpeak::HandleTransfer(IsoMessage* cmd)
 {
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
@@ -275,7 +303,7 @@ int WiiSpeak::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
   return IPC_SUCCESS;
 }
 
-void WiiSpeak::SetRegister(const std::unique_ptr<CtrlMessage>& cmd)
+void WiiSpeak::SetRegister(CtrlMessage* cmd)
 {
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
@@ -368,7 +396,7 @@ void WiiSpeak::SetRegister(const std::unique_ptr<CtrlMessage>& cmd)
   }
 }
 
-void WiiSpeak::GetRegister(const std::unique_ptr<CtrlMessage>& cmd) const
+void WiiSpeak::GetRegister(CtrlMessage* cmd) const
 {
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();

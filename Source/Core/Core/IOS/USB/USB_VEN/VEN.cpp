@@ -92,16 +92,13 @@ s32 USB_VEN::SubmitTransfer(USB::Device& device, const IOCtlVRequest& ioctlv)
   switch (ioctlv.request)
   {
   case USB::IOCTLV_USBV5_CTRLMSG:
-    return device.SubmitTransfer(
-        std::make_unique<USB::V5CtrlMessage>(GetEmulationKernel(), ioctlv));
+    return device.SubmitTransfer(new USB::V5CtrlMessage(GetEmulationKernel(), ioctlv));
   case USB::IOCTLV_USBV5_INTRMSG:
-    return device.SubmitTransfer(
-        std::make_unique<USB::V5IntrMessage>(GetEmulationKernel(), ioctlv));
+    return device.SubmitTransfer(new USB::V5IntrMessage(GetEmulationKernel(), ioctlv));
   case USB::IOCTLV_USBV5_BULKMSG:
-    return device.SubmitTransfer(
-        std::make_unique<USB::V5BulkMessage>(GetEmulationKernel(), ioctlv));
+    return device.SubmitTransfer(new USB::V5BulkMessage(GetEmulationKernel(), ioctlv));
   case USB::IOCTLV_USBV5_ISOMSG:
-    return device.SubmitTransfer(std::make_unique<USB::V5IsoMessage>(GetEmulationKernel(), ioctlv));
+    return device.SubmitTransfer(new USB::V5IsoMessage(GetEmulationKernel(), ioctlv));
   default:
     return IPC_EINVAL;
   }

@@ -87,11 +87,10 @@ s32 USB_HIDv5::SubmitTransfer(USBV5Device& device, USB::Device& host_device,
   switch (ioctlv.request)
   {
   case USB::IOCTLV_USBV5_CTRLMSG:
-    return host_device.SubmitTransfer(
-        std::make_unique<USB::V5CtrlMessage>(GetEmulationKernel(), ioctlv));
+    return host_device.SubmitTransfer(new USB::V5CtrlMessage(GetEmulationKernel(), ioctlv));
   case USB::IOCTLV_USBV5_INTRMSG:
   {
-    auto message = std::make_unique<USB::V5IntrMessage>(GetEmulationKernel(), ioctlv);
+    USB::V5IntrMessage* const message = new USB::V5IntrMessage(GetEmulationKernel(), ioctlv);
 
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
@@ -105,7 +104,7 @@ s32 USB_HIDv5::SubmitTransfer(USBV5Device& device, USB::Device& host_device,
     else
       message->endpoint = data->interrupt_in_endpoint;
 
-    return host_device.SubmitTransfer(std::move(message));
+    return host_device.SubmitTransfer(message);
   }
   default:
     return IPC_EINVAL;

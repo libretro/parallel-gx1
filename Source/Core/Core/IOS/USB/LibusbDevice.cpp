@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <utility>
@@ -280,14 +281,16 @@ int LibusbDevice::SubmitPlayStationRockBand3InstrumentControlTransfer()
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x89, 0x00,
       0x00, 0x00, 0x00, 0x00, 0xe9, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   const size_t size = length + LIBUSB_CONTROL_SETUP_SIZE;
-  auto buffer = std::make_unique<u8[]>(size);
-  std::ranges::copy(enable_instrument_inputs, buffer.get() + LIBUSB_CONTROL_SETUP_SIZE);
+  u8* const buffer = static_cast<u8*>(std::malloc(size));
+  if (!buffer)
+    return LIBUSB_ERROR_NO_MEM;
+  memcpy(buffer + LIBUSB_CONTROL_SETUP_SIZE, enable_instrument_inputs.data(), length);
 
-  libusb_fill_control_setup(buffer.get(), 0x21, 0x09, 0x0300, 0x00, length);
+  libusb_fill_control_setup(buffer, 0x21, 0x09, 0x0300, 0x00, length);
 
   libusb_transfer* transfer = libusb_alloc_transfer(0);
-  transfer->flags |= LIBUSB_TRANSFER_FREE_TRANSFER;
-  libusb_fill_control_transfer(transfer, m_handle, buffer.release(), nullptr, this, 0);
+  transfer->flags |= LIBUSB_TRANSFER_FREE_TRANSFER | LIBUSB_TRANSFER_FREE_BUFFER;
+  libusb_fill_control_transfer(transfer, m_handle, buffer, nullptr, this, 0);
   return libusb_submit_transfer(transfer);
 }
 
@@ -296,10 +299,13 @@ static bool IsRockBand3LEDControlTransfer(const CtrlMessage& cmd)
   return cmd.request_type == 0x21 && cmd.request == 0x9 && cmd.length == 8;
 }
 
-int LibusbDevice::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
+int LibusbDevice::SubmitTransfer(CtrlMessage* cmd)
 {
   if (!m_device_attached)
+  {
+    delete cmd;
     return LIBUSB_ERROR_NOT_FOUND;
+  }
 
   DEBUG_LOG(IOS_USB,
             "[%04x:%04x %u] Control: bRequestType=%02x bRequest=%02x wValue=%04x"
@@ -325,12 +331,14 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
                   (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface,
                   (unsigned)cmd->index, LibusbUtils::ErrorWrap(ret).GetStrError(),
                   LibusbUtils::ErrorWrap(ret).m_error, LibusbUtils::ErrorWrap(ret).GetName());
+        delete cmd;
         return ret;
       }
     }
     const int ret = SetAltSetting(static_cast<u8>(cmd->value));
     if (ret == LIBUSB_SUCCESS)
       cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, cmd->length);
+    delete cmd;
     return ret;
   }
   case USBHDR(DIR_HOST2DEVICE, TYPE_STANDARD, REC_DEVICE, REQUEST_SET_CONFIGURATION):
@@ -345,18 +353,24 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
       ClaimAllInterfaces(cmd->value);
       cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, cmd->length);
     }
+    delete cmd;
     return ret;
   }
   }
 
   const size_t size = cmd->length + LIBUSB_CONTROL_SETUP_SIZE;
-  auto buffer = std::make_unique<u8[]>(size);
-  libusb_fill_control_setup(buffer.get(), cmd->request_type, cmd->request, cmd->value, cmd->index,
+  u8* const buffer = static_cast<u8*>(std::malloc(size));
+  if (!buffer)
+  {
+    delete cmd;
+    return LIBUSB_ERROR_NO_MEM;
+  }
+  libusb_fill_control_setup(buffer, cmd->request_type, cmd->request, cmd->value, cmd->index,
                             cmd->length);
 
   auto& system = cmd->GetEmulationKernel().GetSystem();
   auto& memory = system.GetMemory();
-  memory.CopyFromEmu(buffer.get() + LIBUSB_CONTROL_SETUP_SIZE, cmd->data_address, cmd->length);
+  memory.CopyFromEmu(buffer + LIBUSB_CONTROL_SETUP_SIZE, cmd->data_address, cmd->length);
 
   // If the game is telling a Rock Band 3 device what player LEDs to turn on, take the opportunity
   // to also tell the device to enable instrument inputs if necessary
@@ -366,8 +380,8 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
 
   libusb_transfer* transfer = libusb_alloc_transfer(0);
   transfer->flags |= LIBUSB_TRANSFER_FREE_TRANSFER;
-  libusb_fill_control_transfer(transfer, m_handle, buffer.release(), CtrlTransferCallback, this, 0);
-  m_transfer_endpoints[0].AddTransfer(std::move(cmd), transfer);
+  libusb_fill_control_transfer(transfer, m_handle, buffer, CtrlTransferCallback, this, 0);
+  m_transfer_endpoints[0].AddTransfer(cmd, transfer);
   int ret = libusb_submit_transfer(transfer);
 
   if (submit_rock_band_3_instrument_control_transfer)
@@ -376,51 +390,58 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<CtrlMessage> cmd)
   return ret;
 }
 
-int LibusbDevice::SubmitTransfer(std::unique_ptr<BulkMessage> cmd)
+int LibusbDevice::SubmitTransfer(BulkMessage* cmd)
 {
   if (!m_device_attached)
+  {
+    delete cmd;
     return LIBUSB_ERROR_NOT_FOUND;
+  }
 
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Bulk: length=%04x endpoint=%02x", (unsigned)m_vid,
             (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
 
   libusb_transfer* transfer = libusb_alloc_transfer(0);
-  libusb_fill_bulk_transfer(transfer, m_handle, cmd->endpoint,
-                            cmd->MakeBuffer(cmd->length).release(), cmd->length, TransferCallback,
-                            this, 0);
+  libusb_fill_bulk_transfer(transfer, m_handle, cmd->endpoint, cmd->MakeBuffer(cmd->length),
+                            cmd->length, TransferCallback, this, 0);
   transfer->flags |= LIBUSB_TRANSFER_FREE_TRANSFER;
-  m_transfer_endpoints[transfer->endpoint].AddTransfer(std::move(cmd), transfer);
+  m_transfer_endpoints[transfer->endpoint].AddTransfer(cmd, transfer);
   return libusb_submit_transfer(transfer);
 }
 
-int LibusbDevice::SubmitTransfer(std::unique_ptr<IntrMessage> cmd)
+int LibusbDevice::SubmitTransfer(IntrMessage* cmd)
 {
   if (!m_device_attached)
+  {
+    delete cmd;
     return LIBUSB_ERROR_NOT_FOUND;
+  }
 
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Interrupt: length=%04x endpoint=%02x", (unsigned)m_vid,
             (unsigned)m_pid, (unsigned)m_active_interface, cmd->length, (unsigned)cmd->endpoint);
 
   libusb_transfer* transfer = libusb_alloc_transfer(0);
-  libusb_fill_interrupt_transfer(transfer, m_handle, cmd->endpoint,
-                                 cmd->MakeBuffer(cmd->length).release(), cmd->length,
-                                 TransferCallback, this, 0);
+  libusb_fill_interrupt_transfer(transfer, m_handle, cmd->endpoint, cmd->MakeBuffer(cmd->length),
+                                 cmd->length, TransferCallback, this, 0);
   transfer->flags |= LIBUSB_TRANSFER_FREE_TRANSFER;
-  m_transfer_endpoints[transfer->endpoint].AddTransfer(std::move(cmd), transfer);
+  m_transfer_endpoints[transfer->endpoint].AddTransfer(cmd, transfer);
   return libusb_submit_transfer(transfer);
 }
 
-int LibusbDevice::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
+int LibusbDevice::SubmitTransfer(IsoMessage* cmd)
 {
   if (!m_device_attached)
+  {
+    delete cmd;
     return LIBUSB_ERROR_NOT_FOUND;
+  }
 
   DEBUG_LOG(IOS_USB, "[%04x:%04x %u] Isochronous: length=%04x endpoint=%02x num_packets=%02x",
             (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_active_interface, cmd->length,
             (unsigned)cmd->endpoint, (unsigned)cmd->num_packets);
 
   libusb_transfer* transfer = libusb_alloc_transfer(cmd->num_packets);
-  transfer->buffer = cmd->MakeBuffer(cmd->length).release();
+  transfer->buffer = cmd->MakeBuffer(cmd->length);
   transfer->callback = TransferCallback;
   transfer->dev_handle = m_handle;
   transfer->endpoint = cmd->endpoint;
@@ -432,7 +453,7 @@ int LibusbDevice::SubmitTransfer(std::unique_ptr<IsoMessage> cmd)
   transfer->timeout = 0;
   transfer->type = LIBUSB_TRANSFER_TYPE_ISOCHRONOUS;
   transfer->user_data = this;
-  m_transfer_endpoints[transfer->endpoint].AddTransfer(std::move(cmd), transfer);
+  m_transfer_endpoints[transfer->endpoint].AddTransfer(cmd, transfer);
   return libusb_submit_transfer(transfer);
 }
 
@@ -488,11 +509,11 @@ static const char* GetTransferTypeName(u8 type)
   }
 }
 
-void LibusbDevice::TransferEndpoint::AddTransfer(std::unique_ptr<TransferCommand> command,
+void LibusbDevice::TransferEndpoint::AddTransfer(TransferCommand* command,
                                                  libusb_transfer* transfer)
 {
   m_used = true;
-  auto* in_flight = new InFlight{transfer, std::move(command)};
+  InFlight* const in_flight = new InFlight{transfer, command};
   for (auto& slot : m_in_flight)
   {
     if (!retro_atomic_load_acquire_ptr(&slot) && retro_atomic_cas_ptr(&slot, nullptr, in_flight))
@@ -501,13 +522,21 @@ void LibusbDevice::TransferEndpoint::AddTransfer(std::unique_ptr<TransferCommand
   // More than MAX_IN_FLIGHT outstanding on one endpoint: the reply goes out when it completes,
   // it just cannot be cancelled.
   ERROR_LOG(IOS_USB, "Too many transfers in flight on one endpoint");
+  delete command;
   delete in_flight;
 }
 
 LibusbDevice::TransferEndpoint::~TransferEndpoint()
 {
   for (auto& slot : m_in_flight)
-    delete static_cast<InFlight*>(retro_atomic_exchange_ptr(&slot, nullptr));
+  {
+    InFlight* const in_flight = static_cast<InFlight*>(retro_atomic_exchange_ptr(&slot, nullptr));
+    if (in_flight)
+    {
+      delete in_flight->command;
+      delete in_flight;
+    }
+  }
 }
 
 void LibusbDevice::TransferEndpoint::HandleTransfer(libusb_transfer* transfer,
@@ -515,13 +544,13 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(libusb_transfer* transfer,
                                                                 const TransferCommand& command))
 {
   // libusb's event thread: completions never run concurrently with each other.
-  std::unique_ptr<InFlight> in_flight;
+  InFlight* in_flight = nullptr;
   for (auto& slot : m_in_flight)
   {
     auto* candidate = static_cast<InFlight*>(retro_atomic_load_acquire_ptr(&slot));
     if (candidate && candidate->transfer == transfer)
     {
-      in_flight.reset(static_cast<InFlight*>(retro_atomic_exchange_ptr(&slot, nullptr)));
+      in_flight = static_cast<InFlight*>(retro_atomic_exchange_ptr(&slot, nullptr));
       break;
     }
   }
@@ -531,11 +560,12 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(libusb_transfer* transfer,
   if (!in_flight)
   {
     ERROR_LOG(IOS_USB, "No such transfer");
+    std::free(transfer->buffer);
+    transfer->buffer = nullptr;
     return;
   }
 
-  const std::unique_ptr<u8[]> buffer(transfer->buffer);
-  const auto& cmd = *in_flight->command;
+  const TransferCommand& cmd = *in_flight->command;
   const auto* device = static_cast<LibusbDevice*>(transfer->user_data);
   s32 return_value = LIBUSB_SUCCESS;
   switch (transfer->status)
@@ -559,6 +589,10 @@ void LibusbDevice::TransferEndpoint::HandleTransfer(libusb_transfer* transfer,
     break;
   }
   cmd.OnTransferComplete(return_value);
+  std::free(transfer->buffer);
+  transfer->buffer = nullptr;
+  delete in_flight->command;
+  delete in_flight;
 }
 
 void LibusbDevice::TransferEndpoint::CancelTransfers()
