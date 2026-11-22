@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -24,8 +23,9 @@ public:
   u32 GetU32();
   u64 GetU64();
   double GetF64();
-  std::string GetString(std::optional<u32> max_length);
-  std::u16string GetU16String(std::optional<u32> max_length);
+  // max_length null for none; 0 reads nothing, not even the argument
+  std::string GetString(const u32* max_length);
+  std::u16string GetU16String(const u32* max_length);
 
 private:
   HLE::SystemVABI::VAList* m_va_list;

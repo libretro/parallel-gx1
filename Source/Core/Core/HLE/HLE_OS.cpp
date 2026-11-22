@@ -220,18 +220,18 @@ double HLEPrintArgs::GetF64()
   return m_va_list->GetArgT<double>();
 }
 
-std::string HLEPrintArgs::GetString(std::optional<u32> max_length)
+std::string HLEPrintArgs::GetString(const u32* max_length)
 {
-  return max_length == 0u ?
-             std::string() :
-             PowerPC::MMU::HostGetString(m_va_list->GetArgT<u32>(), max_length.value_or(0u));
+  if (max_length && *max_length == 0)
+    return std::string();
+  return PowerPC::MMU::HostGetString(m_va_list->GetArgT<u32>(), max_length ? *max_length : 0);
 }
 
-std::u16string HLEPrintArgs::GetU16String(std::optional<u32> max_length)
+std::u16string HLEPrintArgs::GetU16String(const u32* max_length)
 {
-  return max_length == 0u ?
-             std::u16string() :
-             PowerPC::MMU::HostGetU16String(m_va_list->GetArgT<u32>(), max_length.value_or(0u));
+  if (max_length && *max_length == 0)
+    return std::u16string();
+  return PowerPC::MMU::HostGetU16String(m_va_list->GetArgT<u32>(), max_length ? *max_length : 0);
 }
 
 // Appends @text, padded with spaces to @width (to its left, or its right when @left).
@@ -322,26 +322,31 @@ std::string GetStringVA(HLEPrintArgs* args, std::string_view string)
       ++i;
     }
 
-    const auto take_field_or_precision = [&](bool* left_justified_flag_ptr) -> std::optional<u32> {
+    // false when the guest gives none
+    const auto take_field_or_precision = [&](bool* left_justified_flag_ptr, u32* out) -> bool {
       if (i >= string.size())
-        return std::nullopt;
+        return false;
 
       if (string[i] == '*')
       {
         ++i;
         const s32 result_tmp = std::bit_cast<s32>(args->GetU32());
         if (result_tmp >= 0)
-          return static_cast<u32>(result_tmp);
+        {
+          *out = static_cast<u32>(result_tmp);
+          return true;
+        }
 
         if (left_justified_flag_ptr)
         {
           // field width; this results in positive field width and left_justified flag set
           *left_justified_flag_ptr = true;
-          return static_cast<u32>(-static_cast<s64>(result_tmp));
+          *out = static_cast<u32>(-static_cast<s64>(result_tmp));
+          return true;
         }
 
         // precision; this is ignored
-        return std::nullopt;
+        return false;
       }
 
       size_t start = i;
@@ -352,22 +357,34 @@ std::string GetStringVA(HLEPrintArgs* args, std::string_view string)
         while (start < i && string[start] == '0')
           ++start;
         if (start == i)
-          return 0;
+        {
+          *out = 0;
+          return true;
+        }
         u32 result_tmp = 0;
         const std::string tmp(string, start, i - start);
         if (TryParse(tmp, &result_tmp, 10))
-          return result_tmp;
+        {
+          *out = result_tmp;
+          return true;
+        }
       }
 
-      return std::nullopt;
+      return false;
     };
 
-    const std::optional<u32> field_width = take_field_or_precision(&left_justified_flag);
-    std::optional<u32> precision = std::nullopt;
+    u32 field_width = 0;
+    const bool has_field_width = take_field_or_precision(&left_justified_flag, &field_width);
+    if (!has_field_width)
+      field_width = 0;
+    u32 precision = 0;
+    bool has_precision = false;
     if (i < string.size() && string[i] == '.')
     {
       ++i;
-      precision = take_field_or_precision(nullptr).value_or(0);
+      if (!take_field_or_precision(nullptr, &precision))
+        precision = 0;
+      has_precision = true;
     }
 
     enum class LengthModifier
@@ -423,10 +440,10 @@ std::string GetStringVA(HLEPrintArgs* args, std::string_view string)
                        sign_prepended_flag ? "+" : "", space_prepended_flag ? " " : "",
                        alternative_allowed && alternative_form_flag ? "#" : "",
                        padding_zeroes_flag ? "0" : "");
-      if (field_width)
-        n += snprintf(spec + n, sizeof(spec) - n, "%u", *field_width);
-      if (precision_allowed && precision)
-        snprintf(spec + n, sizeof(spec) - n, ".%u", *precision);
+      if (has_field_width)
+        n += snprintf(spec + n, sizeof(spec) - n, "%u", field_width);
+      if (precision_allowed && has_precision)
+        snprintf(spec + n, sizeof(spec) - n, ".%u", precision);
     };
     switch (format_specifier)
     {
@@ -439,12 +456,14 @@ std::string GetStringVA(HLEPrintArgs* args, std::string_view string)
         // that's really just a guess. Ideally we can figure out a way to autodetect this, but if
         // not we should probably just expose a setting for it in the debugger somewhere. For now
         // we just assume 16 bits.
-        AppendPadded(result, UTF8ToSHIFTJIS(UTF16ToUTF8(args->GetU16String(precision))),
-                     field_width.value_or(0), left_justified_flag);
+        AppendPadded(
+            result,
+            UTF8ToSHIFTJIS(UTF16ToUTF8(args->GetU16String(has_precision ? &precision : nullptr))),
+            field_width, left_justified_flag);
       }
       else
       {
-        AppendPadded(result, args->GetString(precision), field_width.value_or(0),
+        AppendPadded(result, args->GetString(has_precision ? &precision : nullptr), field_width,
                      left_justified_flag);
       }
       break;
@@ -457,12 +476,12 @@ std::string GetStringVA(HLEPrintArgs* args, std::string_view string)
         // Same problem as with wide strings here.
         const char16_t wide_char = static_cast<char16_t>(value);
         AppendPadded(result, UTF8ToSHIFTJIS(UTF16ToUTF8(std::u16string_view(&wide_char, 1))),
-                     field_width.value_or(0), left_justified_flag);
+                     field_width, left_justified_flag);
       }
       else
       {
         const char c = static_cast<char>(value);
-        AppendPadded(result, std::string_view(&c, 1), field_width.value_or(0), left_justified_flag);
+        AppendPadded(result, std::string_view(&c, 1), field_width, left_justified_flag);
       }
       break;
     }
