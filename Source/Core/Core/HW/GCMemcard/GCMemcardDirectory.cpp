@@ -822,18 +822,19 @@ void MigrateFromMemcardFile(const std::string& directory_name, ExpansionInterfac
   const std::string ini_memcard = Config::GetMemcardPath(card_slot, region);
   if (File::Exists(ini_memcard))
   {
-    auto [error_code, memcard] = Memcard::GCMemcard::Open(ini_memcard.c_str());
-    if (!error_code.HasCriticalErrors() && memcard && memcard->IsValid())
+    Memcard::GCMemcard memcard;
+    const Memcard::GCMemcardErrorCode error_code = memcard.Open(ini_memcard);
+    if (!error_code.HasCriticalErrors() && memcard.IsValid())
     {
       for (u8 i = 0; i < Memcard::DIRLEN; i++)
       {
-        const auto savefile = memcard->ExportFile(i);
-        if (!savefile)
+        Memcard::Savefile savefile;
+        if (!memcard.ExportFile(i, &savefile))
           continue;
 
         std::string filepath =
-            directory_name + DIR_SEP + Memcard::GenerateFilename(savefile->dir_entry) + ".gci";
-        Memcard::WriteGCISavefile(filepath, *savefile);
+            directory_name + DIR_SEP + Memcard::GenerateFilename(savefile.dir_entry) + ".gci";
+        Memcard::WriteGCISavefile(filepath, savefile);
       }
     }
   }

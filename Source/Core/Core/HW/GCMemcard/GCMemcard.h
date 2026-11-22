@@ -223,10 +223,10 @@ struct Header
   explicit Header(const HeaderData& data);
 
   // Calculates the card serial numbers used for encrypting some save files.
-  std::pair<u32, u32> CalculateSerial() const;
+  void CalculateSerial(u32* serial1, u32* serial2) const;
 
   void FixChecksums();
-  std::pair<u16, u16> CalculateChecksums() const;
+  void CalculateChecksums(u16* sum, u16* inv) const;
 
   GCMemcardErrorCode CheckForErrors(u16 card_size_mbits) const;
 
@@ -337,7 +337,7 @@ struct Directory
   bool Replace(const DEntry& entry, size_t index);
 
   void FixChecksums();
-  std::pair<u16, u16> CalculateChecksums() const;
+  void CalculateChecksums(u16* sum, u16* inv) const;
 
   GCMemcardErrorCode CheckForErrors() const;
 
@@ -372,7 +372,7 @@ struct BlockAlloc
   u16 AssignBlocksContiguous(u16 length);
 
   void FixChecksums();
-  std::pair<u16, u16> CalculateChecksums() const;
+  void CalculateChecksums(u16* sum, u16* inv) const;
 
   GCMemcardErrorCode CheckForErrors(u16 size_mbits) const;
 };
@@ -402,18 +402,16 @@ private:
   int m_active_directory;
   int m_active_bat;
 
-  GCMemcard();
-
   const Directory& GetActiveDirectory() const;
   const BlockAlloc& GetActiveBat() const;
 
 public:
-  static std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> Open(std::string filename);
-
+  GCMemcard();
   GCMemcard(const GCMemcard&) = delete;
   GCMemcard& operator=(const GCMemcard&) = delete;
-  GCMemcard(GCMemcard&&) = default;
-  GCMemcard& operator=(GCMemcard&&) = default;
+
+  // Reads the card in the file; valid only when that has no critical errors
+  GCMemcardErrorCode Open(const std::string& filename);
 
   bool IsValid() const { return m_valid; }
   static bool Format(u8* card_data, const CardFlashId& flash_id, u16 size_mbits, bool shift_jis,
@@ -432,6 +430,6 @@ public:
   GCMemcardGetSaveDataRetVal GetSaveData(u8 index, std::vector<GCMBlock>& saveBlocks) const;
 
   // Fetches the savefile at the given directory index, if any.
-  std::optional<Savefile> ExportFile(u8 index) const;
+  bool ExportFile(u8 index, Savefile* savefile) const;
 };
 }  // namespace Memcard

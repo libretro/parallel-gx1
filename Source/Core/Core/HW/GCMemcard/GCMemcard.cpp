@@ -17,13 +17,14 @@
 
 #include "Core/HW/GCMemcard/GCMemcardUtils.h"
 
-static constexpr std::optional<u64> BytesToMegabits(u64 bytes)
+// 0 for a size that is not a whole number of megabits
+static constexpr u64 BytesToMegabits(u64 bytes)
 {
   const u64 factor = ((1024 * 1024) / 8);
   const u64 megabits = bytes / factor;
   const u64 remainder = bytes % factor;
   if (remainder != 0)
-    return std::nullopt;
+    return 0;
   return megabits;
 }
 
@@ -72,19 +73,19 @@ GCMemcard::GCMemcard()
 {
 }
 
-std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::string filename)
+GCMemcardErrorCode GCMemcard::Open(const std::string& filename)
 {
   GCMemcardErrorCode error_code;
   File::IOFile file(filename, "rb");
   if (!file.IsOpen())
   {
     error_code.Set(GCMemcardValidityIssues::FAILED_TO_OPEN);
-    return std::make_pair(error_code, std::nullopt);
+    return error_code;
   }
 
   // check if the filesize is a valid memory card size
   const u64 filesize = file.GetSize();
-  const u64 filesize_megabits = BytesToMegabits(filesize).value_or(0);
+  const u64 filesize_megabits = BytesToMegabits(filesize);
   const std::array<u16, 6> valid_megabits = {{
       MBIT_SIZE_MEMORY_CARD_59,
       MBIT_SIZE_MEMORY_CARD_123,
@@ -103,48 +104,47 @@ std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::str
   if (size_index == valid_megabits.size())
   {
     error_code.Set(GCMemcardValidityIssues::INVALID_CARD_SIZE);
-    return std::make_pair(error_code, std::nullopt);
+    return error_code;
   }
 
   const u16 card_size_mbits = static_cast<u16>(filesize_megabits);
 
   // read the entire card into memory
-  GCMemcard card;
   file.Seek(0, File::SeekOrigin::Begin);
-  if (!file.ReadBytes(&card.m_header_block, BLOCK_SIZE) ||
-      !file.ReadBytes(&card.m_directory_blocks[0], BLOCK_SIZE) ||
-      !file.ReadBytes(&card.m_directory_blocks[1], BLOCK_SIZE) ||
-      !file.ReadBytes(&card.m_bat_blocks[0], BLOCK_SIZE) ||
-      !file.ReadBytes(&card.m_bat_blocks[1], BLOCK_SIZE))
+  if (!file.ReadBytes(&m_header_block, BLOCK_SIZE) ||
+      !file.ReadBytes(&m_directory_blocks[0], BLOCK_SIZE) ||
+      !file.ReadBytes(&m_directory_blocks[1], BLOCK_SIZE) ||
+      !file.ReadBytes(&m_bat_blocks[0], BLOCK_SIZE) ||
+      !file.ReadBytes(&m_bat_blocks[1], BLOCK_SIZE))
   {
     error_code.Set(GCMemcardValidityIssues::IO_ERROR);
-    return std::make_pair(error_code, std::nullopt);
+    return error_code;
   }
 
   const u16 card_size_blocks = card_size_mbits * MBIT_TO_BLOCKS;
   const u16 user_data_blocks = card_size_blocks - MC_FST_BLOCKS;
-  card.m_data_blocks.reserve(user_data_blocks);
+  m_data_blocks.reserve(user_data_blocks);
   for (u16 i = 0; i < user_data_blocks; ++i)
   {
-    GCMBlock& block = card.m_data_blocks.emplace_back();
+    GCMBlock& block = m_data_blocks.emplace_back();
     if (!file.ReadArray(block.m_block.data(), BLOCK_SIZE))
     {
       error_code.Set(GCMemcardValidityIssues::IO_ERROR);
-      return std::make_pair(error_code, std::nullopt);
+      return error_code;
     }
   }
 
   file.Close();
 
-  card.m_size_blocks = card_size_blocks;
-  card.m_size_mb = card_size_mbits;
+  m_size_blocks = card_size_blocks;
+  m_size_mb = card_size_mbits;
 
   // can return invalid card size, invalid checksum, data in unused area
   // data in unused area is okay, otherwise fail
-  const GCMemcardErrorCode header_error_code = card.m_header_block.CheckForErrors(card_size_mbits);
+  const GCMemcardErrorCode header_error_code = m_header_block.CheckForErrors(card_size_mbits);
   error_code |= header_error_code;
   if (header_error_code.HasCriticalErrors())
-    return std::make_pair(error_code, std::nullopt);
+    return error_code;
 
   // The GC BIOS counts any card as corrupted as long as at least any two of [dir0, dir1, bat0,
   // bat1] are corrupted. Yes, even if we have one valid dir and one valid bat, and even if those
@@ -165,15 +165,15 @@ std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::str
   // later turns out they do not match each other (eg. claimed block count of a file in the
   // directory does not match the actual block count arrived at by following BAT), the card will be
   // treated as corrupted, even if perhaps a different combination of the two blocks would result in
-  // a valid memory card.
+  // a valid memory
 
   // can return invalid checksum, data in unused area
-  GCMemcardErrorCode dir_block_0_error_code = card.m_directory_blocks[0].CheckForErrors();
-  GCMemcardErrorCode dir_block_1_error_code = card.m_directory_blocks[1].CheckForErrors();
+  GCMemcardErrorCode dir_block_0_error_code = m_directory_blocks[0].CheckForErrors();
+  GCMemcardErrorCode dir_block_1_error_code = m_directory_blocks[1].CheckForErrors();
 
   // can return invalid card size, invalid checksum, data in unused area, free block mismatch
-  GCMemcardErrorCode bat_block_0_error_code = card.m_bat_blocks[0].CheckForErrors(card_size_mbits);
-  GCMemcardErrorCode bat_block_1_error_code = card.m_bat_blocks[1].CheckForErrors(card_size_mbits);
+  GCMemcardErrorCode bat_block_0_error_code = m_bat_blocks[0].CheckForErrors(card_size_mbits);
+  GCMemcardErrorCode bat_block_1_error_code = m_bat_blocks[1].CheckForErrors(card_size_mbits);
 
   const bool dir_block_0_valid = !dir_block_0_error_code.HasCriticalErrors();
   const bool dir_block_1_valid = !dir_block_1_error_code.HasCriticalErrors();
@@ -198,7 +198,7 @@ std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::str
     error_code |= dir_block_1_error_code;
     error_code |= bat_block_0_error_code;
     error_code |= bat_block_1_error_code;
-    return std::make_pair(error_code, std::nullopt);
+    return error_code;
   }
 
   // if exactly one block is corrupted copy and update it over the non-corrupted block
@@ -206,31 +206,31 @@ std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::str
   {
     if (!dir_block_0_valid)
     {
-      card.m_directory_blocks[0] = card.m_directory_blocks[1];
-      card.m_directory_blocks[0].m_update_counter = card.m_directory_blocks[0].m_update_counter + 1;
-      card.m_directory_blocks[0].FixChecksums();
-      dir_block_0_error_code = card.m_directory_blocks[0].CheckForErrors();
+      m_directory_blocks[0] = m_directory_blocks[1];
+      m_directory_blocks[0].m_update_counter = m_directory_blocks[0].m_update_counter + 1;
+      m_directory_blocks[0].FixChecksums();
+      dir_block_0_error_code = m_directory_blocks[0].CheckForErrors();
     }
     else if (!dir_block_1_valid)
     {
-      card.m_directory_blocks[1] = card.m_directory_blocks[0];
-      card.m_directory_blocks[1].m_update_counter = card.m_directory_blocks[1].m_update_counter + 1;
-      card.m_directory_blocks[1].FixChecksums();
-      dir_block_1_error_code = card.m_directory_blocks[1].CheckForErrors();
+      m_directory_blocks[1] = m_directory_blocks[0];
+      m_directory_blocks[1].m_update_counter = m_directory_blocks[1].m_update_counter + 1;
+      m_directory_blocks[1].FixChecksums();
+      dir_block_1_error_code = m_directory_blocks[1].CheckForErrors();
     }
     else if (!bat_block_0_valid)
     {
-      card.m_bat_blocks[0] = card.m_bat_blocks[1];
-      card.m_bat_blocks[0].m_update_counter = card.m_bat_blocks[0].m_update_counter + 1;
-      card.m_bat_blocks[0].FixChecksums();
-      bat_block_0_error_code = card.m_bat_blocks[0].CheckForErrors(card_size_mbits);
+      m_bat_blocks[0] = m_bat_blocks[1];
+      m_bat_blocks[0].m_update_counter = m_bat_blocks[0].m_update_counter + 1;
+      m_bat_blocks[0].FixChecksums();
+      bat_block_0_error_code = m_bat_blocks[0].CheckForErrors(card_size_mbits);
     }
     else if (!bat_block_1_valid)
     {
-      card.m_bat_blocks[1] = card.m_bat_blocks[0];
-      card.m_bat_blocks[1].m_update_counter = card.m_bat_blocks[1].m_update_counter + 1;
-      card.m_bat_blocks[1].FixChecksums();
-      bat_block_1_error_code = card.m_bat_blocks[1].CheckForErrors(card_size_mbits);
+      m_bat_blocks[1] = m_bat_blocks[0];
+      m_bat_blocks[1].m_update_counter = m_bat_blocks[1].m_update_counter + 1;
+      m_bat_blocks[1].FixChecksums();
+      bat_block_1_error_code = m_bat_blocks[1].CheckForErrors(card_size_mbits);
     }
     else
     {
@@ -248,29 +248,29 @@ std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::str
 
   // These are compared as signed values by the GC BIOS. There is no protection against overflow, so
   // if one block is MAX_VAL and the other is MIN_VAL it still picks the MAX_VAL one as the active
-  // one, even if that results in a corrupted memory card.
+  // one, even if that results in a corrupted memory
   // TODO: We could try to be smarter about this to rescue seemingly-corrupted cards.
 
-  if (card.m_directory_blocks[0].m_update_counter >= card.m_directory_blocks[1].m_update_counter)
-    card.m_active_directory = 0;
+  if (m_directory_blocks[0].m_update_counter >= m_directory_blocks[1].m_update_counter)
+    m_active_directory = 0;
   else
-    card.m_active_directory = 1;
+    m_active_directory = 1;
 
-  if (card.m_bat_blocks[0].m_update_counter >= card.m_bat_blocks[1].m_update_counter)
-    card.m_active_bat = 0;
+  if (m_bat_blocks[0].m_update_counter >= m_bat_blocks[1].m_update_counter)
+    m_active_bat = 0;
   else
-    card.m_active_bat = 1;
+    m_active_bat = 1;
 
   // check for consistency between the active Dir and BAT
   const GCMemcardErrorCode dir_bat_consistency_error_code =
-      card.GetActiveDirectory().CheckForErrorsWithBat(card.GetActiveBat());
+      GetActiveDirectory().CheckForErrorsWithBat(GetActiveBat());
   error_code |= dir_bat_consistency_error_code;
   if (error_code.HasCriticalErrors())
-    return std::make_pair(error_code, std::nullopt);
+    return error_code;
 
-  card.m_valid = true;
+  m_valid = true;
 
-  return std::make_pair(error_code, std::move(card));
+  return error_code;
 }
 
 const Directory& GCMemcard::GetActiveDirectory() const
@@ -283,7 +283,7 @@ const BlockAlloc& GCMemcard::GetActiveBat() const
   return m_bat_blocks[m_active_bat];
 }
 
-static std::pair<u16, u16> CalculateMemcardChecksums(const u8* data, size_t size)
+static void CalculateMemcardChecksums(const u8* data, size_t size, u16* sum_out, u16* inv_out)
 {
   ASSERT(size % 2 == 0);
   u16 csum = 0;
@@ -304,7 +304,8 @@ static std::pair<u16, u16> CalculateMemcardChecksums(const u8* data, size_t size
   if (inv_csum == 0xffff)
     inv_csum = 0;
 
-  return std::make_pair(csum, inv_csum);
+  *sum_out = csum;
+  *inv_out = inv_csum;
 }
 
 u16 GCMemcard::DEntry_FirstBlock(u8 index) const
@@ -350,7 +351,10 @@ u16 BlockAlloc::GetNextBlock(u16 block) const
 // not BAT index; that is, block 5 is the first file data block.
 void BlockAlloc::FixChecksums()
 {
-  std::tie(m_checksum, m_checksum_inv) = CalculateChecksums();
+  u16 checksum_sum, checksum_inv;
+  CalculateChecksums(&checksum_sum, &checksum_inv);
+  m_checksum = checksum_sum;
+  m_checksum_inv = checksum_inv;
 }
 
 u16 BlockAlloc::AssignBlocksContiguous(u16 length)
@@ -371,17 +375,16 @@ u16 BlockAlloc::AssignBlocksContiguous(u16 length)
   return starting;
 }
 
-std::pair<u16, u16> BlockAlloc::CalculateChecksums() const
+void BlockAlloc::CalculateChecksums(u16* sum_out, u16* inv_out) const
 {
   static_assert(std::is_trivially_copyable<BlockAlloc>());
 
-  std::array<u8, sizeof(BlockAlloc)> raw;
-  memcpy(raw.data(), this, raw.size());
-
+  // the checksummed bytes read in place
   constexpr size_t checksum_area_start = offsetof(BlockAlloc, m_update_counter);
   constexpr size_t checksum_area_end = sizeof(BlockAlloc);
   constexpr size_t checksum_area_size = checksum_area_end - checksum_area_start;
-  return CalculateMemcardChecksums(&raw[checksum_area_start], checksum_area_size);
+  CalculateMemcardChecksums(reinterpret_cast<const u8*>(this) + checksum_area_start,
+                            checksum_area_size, sum_out, inv_out);
 }
 
 GCMemcardErrorCode BlockAlloc::CheckForErrors(u16 size_mbits) const
@@ -389,7 +392,8 @@ GCMemcardErrorCode BlockAlloc::CheckForErrors(u16 size_mbits) const
   GCMemcardErrorCode error_code;
 
   // verify checksums
-  const auto [checksum_sum, checksum_inv] = CalculateChecksums();
+  u16 checksum_sum, checksum_inv;
+  CalculateChecksums(&checksum_sum, &checksum_inv);
   if (checksum_sum != m_checksum || checksum_inv != m_checksum_inv)
     error_code.Set(GCMemcardValidityIssues::INVALID_CHECKSUM);
 
@@ -452,20 +456,16 @@ GCMemcardGetSaveDataRetVal GCMemcard::GetSaveData(u8 index, std::vector<GCMBlock
   return GCMemcardGetSaveDataRetVal::SUCCESS;
 }
 
-std::optional<Savefile> GCMemcard::ExportFile(u8 index) const
+bool GCMemcard::ExportFile(u8 index, Savefile* savefile) const
 {
   if (!m_valid || index >= DIRLEN)
-    return std::nullopt;
+    return false;
 
-  Savefile savefile;
-  savefile.dir_entry = GetActiveDirectory().m_dir_entries[index];
-  if (savefile.dir_entry.m_gamecode == DEntry::UNINITIALIZED_GAMECODE)
-    return std::nullopt;
+  savefile->dir_entry = GetActiveDirectory().m_dir_entries[index];
+  if (savefile->dir_entry.m_gamecode == DEntry::UNINITIALIZED_GAMECODE)
+    return false;
 
-  if (GetSaveData(index, savefile.blocks) != GCMemcardGetSaveDataRetVal::SUCCESS)
-    return std::nullopt;
-
-  return savefile;
+  return GetSaveData(index, savefile->blocks) == GCMemcardGetSaveDataRetVal::SUCCESS;
 }
 
 bool GCMemcard::Format(u8* card_data, const CardFlashId& flash_id, u16 size_mbits, bool shift_jis,
@@ -513,7 +513,8 @@ s32 GCMemcard::FZEROGX_MakeSaveGameValid(const Header& cardheader, const DEntry&
     return 0;
 
   // get encrypted destination memory card serial numbers
-  const auto [serial1, serial2] = cardheader.CalculateSerial();
+  u32 serial1, serial2;
+  cardheader.CalculateSerial(&serial1, &serial2);
 
   // set new serial numbers
   *(u16*)&FileBuffer[1].m_block[0x0066] = Common::swap16(u16(Common::swap32(serial1) >> 16));
@@ -582,7 +583,8 @@ s32 GCMemcard::PSO_MakeSaveGameValid(const Header& cardheader, const DEntry& dir
     return 0;
 
   // get encrypted destination memory card serial numbers
-  const auto [serial1, serial2] = cardheader.CalculateSerial();
+  u32 serial1, serial2;
+  cardheader.CalculateSerial(&serial1, &serial2);
 
   // set new serial numbers
   *(u32*)&FileBuffer[1].m_block[0x0158] = serial1;
@@ -683,22 +685,23 @@ Header::Header(const HeaderData& data)
   FixChecksums();
 }
 
-std::pair<u32, u32> Header::CalculateSerial() const
+void Header::CalculateSerial(u32* serial1_out, u32* serial2_out) const
 {
   static_assert(std::is_trivially_copyable<Header>());
 
-  std::array<u8, 32> raw;
-  memcpy(raw.data(), this, raw.size());
+  // the first 32 bytes, read in place
+  const u8* const raw = reinterpret_cast<const u8*>(this);
 
   u32 serial1 = 0;
   u32 serial2 = 0;
-  for (size_t i = 0; i < raw.size(); i += 8)
+  for (size_t i = 0; i < 32; i += 8)
   {
     serial1 ^= Common::BitCastPtr<u32>(&raw[i + 0]);
     serial2 ^= Common::BitCastPtr<u32>(&raw[i + 4]);
   }
 
-  return std::make_pair(serial1, serial2);
+  *serial1_out = serial1;
+  *serial2_out = serial2;
 }
 
 DEntry::DEntry()
@@ -708,20 +711,22 @@ DEntry::DEntry()
 
 void Header::FixChecksums()
 {
-  std::tie(m_checksum, m_checksum_inv) = CalculateChecksums();
+  u16 checksum_sum, checksum_inv;
+  CalculateChecksums(&checksum_sum, &checksum_inv);
+  m_checksum = checksum_sum;
+  m_checksum_inv = checksum_inv;
 }
 
-std::pair<u16, u16> Header::CalculateChecksums() const
+void Header::CalculateChecksums(u16* sum_out, u16* inv_out) const
 {
   static_assert(std::is_trivially_copyable<Header>());
 
-  std::array<u8, sizeof(Header)> raw;
-  memcpy(raw.data(), this, raw.size());
-
+  // the checksummed bytes read in place
   constexpr size_t checksum_area_start = offsetof(Header, m_data);
   constexpr size_t checksum_area_end = offsetof(Header, m_checksum);
   constexpr size_t checksum_area_size = checksum_area_end - checksum_area_start;
-  return CalculateMemcardChecksums(&raw[checksum_area_start], checksum_area_size);
+  CalculateMemcardChecksums(reinterpret_cast<const u8*>(this) + checksum_area_start,
+                            checksum_area_size, sum_out, inv_out);
 }
 
 GCMemcardErrorCode Header::CheckForErrors(u16 card_size_mbits) const
@@ -740,7 +745,8 @@ GCMemcardErrorCode Header::CheckForErrors(u16 card_size_mbits) const
   }
 
   // verify checksums
-  const auto [checksum_sum, checksum_inv] = CalculateChecksums();
+  u16 checksum_sum, checksum_inv;
+  CalculateChecksums(&checksum_sum, &checksum_inv);
   if (checksum_sum != m_checksum || checksum_inv != m_checksum_inv)
     error_code.Set(GCMemcardValidityIssues::INVALID_CHECKSUM);
 
@@ -772,20 +778,22 @@ bool Directory::Replace(const DEntry& entry, size_t index)
 
 void Directory::FixChecksums()
 {
-  std::tie(m_checksum, m_checksum_inv) = CalculateChecksums();
+  u16 checksum_sum, checksum_inv;
+  CalculateChecksums(&checksum_sum, &checksum_inv);
+  m_checksum = checksum_sum;
+  m_checksum_inv = checksum_inv;
 }
 
-std::pair<u16, u16> Directory::CalculateChecksums() const
+void Directory::CalculateChecksums(u16* sum_out, u16* inv_out) const
 {
   static_assert(std::is_trivially_copyable<Directory>());
 
-  std::array<u8, sizeof(Directory)> raw;
-  memcpy(raw.data(), this, raw.size());
-
+  // the checksummed bytes read in place
   constexpr size_t checksum_area_start = offsetof(Directory, m_dir_entries);
   constexpr size_t checksum_area_end = offsetof(Directory, m_checksum);
   constexpr size_t checksum_area_size = checksum_area_end - checksum_area_start;
-  return CalculateMemcardChecksums(&raw[checksum_area_start], checksum_area_size);
+  CalculateMemcardChecksums(reinterpret_cast<const u8*>(this) + checksum_area_start,
+                            checksum_area_size, sum_out, inv_out);
 }
 
 GCMemcardErrorCode Directory::CheckForErrors() const
@@ -793,7 +801,8 @@ GCMemcardErrorCode Directory::CheckForErrors() const
   GCMemcardErrorCode error_code;
 
   // verify checksums
-  const auto [checksum_sum, checksum_inv] = CalculateChecksums();
+  u16 checksum_sum, checksum_inv;
+  CalculateChecksums(&checksum_sum, &checksum_inv);
   if (checksum_sum != m_checksum || checksum_inv != m_checksum_inv)
     error_code.Set(GCMemcardValidityIssues::INVALID_CHECKSUM);
 
