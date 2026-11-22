@@ -19,6 +19,8 @@ std::string RootUserPath(FromWhichRoot from)
   int idx{};
   switch (from)
   {
+  case FromWhichRoot::None:
+    return "";
   case FromWhichRoot::Configured:
     idx = D_WIIROOT_IDX;
     break;
@@ -34,13 +36,8 @@ std::string RootUserPath(FromWhichRoot from)
   return dir;
 }
 
-static std::string RootUserPath(std::optional<FromWhichRoot> from)
-{
-  return from ? RootUserPath(*from) : "";
-}
-
 /* root + dir + "%08x/%08x" of the title ID + suffix */
-static std::string TitleIDPath(std::optional<FromWhichRoot> from, const char* dir, u64 title_id,
+static std::string TitleIDPath(FromWhichRoot from, const char* dir, u64 title_id,
                                const char* suffix)
 {
   char id[20];
@@ -53,42 +50,42 @@ static std::string TitleIDPath(std::optional<FromWhichRoot> from, const char* di
   return path;
 }
 
-std::string GetImportTitlePath(u64 title_id, std::optional<FromWhichRoot> from)
+std::string GetImportTitlePath(u64 title_id, FromWhichRoot from)
 {
   return TitleIDPath(from, "/import/", title_id, "");
 }
 
-std::string GetTicketFileName(u64 title_id, std::optional<FromWhichRoot> from)
+std::string GetTicketFileName(u64 title_id, FromWhichRoot from)
 {
   return TitleIDPath(from, "/ticket/", title_id, ".tik");
 }
 
-std::string GetV1TicketFileName(u64 title_id, std::optional<FromWhichRoot> from)
+std::string GetV1TicketFileName(u64 title_id, FromWhichRoot from)
 {
   return TitleIDPath(from, "/ticket/", title_id, ".tv1");
 }
 
-std::string GetTitlePath(u64 title_id, std::optional<FromWhichRoot> from)
+std::string GetTitlePath(u64 title_id, FromWhichRoot from)
 {
   return TitleIDPath(from, "/title/", title_id, "");
 }
 
-std::string GetTitleDataPath(u64 title_id, std::optional<FromWhichRoot> from)
+std::string GetTitleDataPath(u64 title_id, FromWhichRoot from)
 {
   return GetTitlePath(title_id, from) + "/data";
 }
 
-std::string GetTitleContentPath(u64 title_id, std::optional<FromWhichRoot> from)
+std::string GetTitleContentPath(u64 title_id, FromWhichRoot from)
 {
   return GetTitlePath(title_id, from) + "/content";
 }
 
-std::string GetTMDFileName(u64 title_id, std::optional<FromWhichRoot> from)
+std::string GetTMDFileName(u64 title_id, FromWhichRoot from)
 {
   return GetTitleContentPath(title_id, from) + "/title.tmd";
 }
 
-std::string GetMiiDatabasePath(std::optional<FromWhichRoot> from)
+std::string GetMiiDatabasePath(FromWhichRoot from)
 {
   return RootUserPath(from) + "/shared2/menu/FaceLib/RFL_DB.dat";
 }
