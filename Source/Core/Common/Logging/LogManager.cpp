@@ -311,22 +311,24 @@ bool LogManager::IsListenerEnabled(LogListener::LISTENER id) const
 }
 
 // Singleton. Ugh.
-static std::unique_ptr<LogManager> s_log_manager;
+static LogManager* s_log_manager;
 
 LogManager* LogManager::GetInstance()
 {
-  return s_log_manager.get();
+  return s_log_manager;
 }
 
 void LogManager::Init()
 {
-  s_log_manager = std::unique_ptr<LogManager>(new LogManager());
+  delete s_log_manager;
+  s_log_manager = new LogManager();
 }
 
 void LogManager::Shutdown()
 {
   if (s_log_manager)
     s_log_manager->SaveSettings();
-  s_log_manager.reset();
+  delete s_log_manager;
+  s_log_manager = nullptr;
 }
 }  // namespace Common::Log

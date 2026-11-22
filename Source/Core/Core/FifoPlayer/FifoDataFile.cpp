@@ -108,7 +108,7 @@ static bool InFile(u64 offset, u64 size, u64 file_size)
   return offset <= file_size && size <= file_size - offset;
 }
 
-std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bool flagsOnly)
+FifoDataFile* FifoDataFile::Load(const std::string& filename, bool flagsOnly)
 {
   File::IOFile file;
   file.Open(filename, "rb");
@@ -154,7 +154,7 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
     header.mem2_size = Memory::MEM2_SIZE_RETAIL;
   }
 
-  auto dataFile = std::make_unique<FifoDataFile>();
+  FifoDataFile* const dataFile = new FifoDataFile();
 
   dataFile->m_Flags = header.flags;
   dataFile->m_Version = header.file_version;
@@ -197,7 +197,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
                   memory.GetRamSizeReal(), memory.GetRamSizeReal() / 0x100000,
                   memory.GetExRamSizeReal(), memory.GetExRamSizeReal() / 0x100000, header.mem1_size,
                   header.mem1_size / 0x100000, header.mem2_size, header.mem2_size / 0x100000);
-    return nullptr;
+    {
+      delete dataFile;
+      return nullptr;
+    }
   }
 
   /* the rest comes from the whole file, read once: frames and updates lend from it */
@@ -206,7 +209,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
   if (!dataFile->m_file || !file.Seek(0, File::SeekOrigin::Begin) ||
       !file.ReadBytes(dataFile->m_file, static_cast<size_t>(file_size)))
   {
-    return panic_failed_to_read();
+    {
+      delete dataFile;
+      return panic_failed_to_read();
+    }
   }
   const u8* const data = dataFile->m_file;
 
@@ -224,7 +230,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
       !read_regs(dataFile->m_XFRegs.data(), XF_REGS_SIZE, header.xfRegsOffset,
                  header.xfRegsSize))
   {
-    return panic_failed_to_read();
+    {
+      delete dataFile;
+      return panic_failed_to_read();
+    }
   }
 
   // Texture memory saving was added in version 4.
@@ -232,7 +241,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
   {
     const u32 size = std::min<u32>(TEX_MEM_SIZE, header.texMemSize);
     if (!InFile(header.texMemOffset, size, file_size))
+    {
+      delete dataFile;
       return panic_failed_to_read();
+    }
     dataFile->m_tex_mem = data + header.texMemOffset;
     dataFile->m_tex_mem_size = size;
   }
@@ -243,7 +255,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
 
   // The frames, and the number of memory updates of them all, for one block
   if (!InFile(header.frameListOffset, u64{header.frameCount} * sizeof(FileFrameInfo), file_size))
+  {
+    delete dataFile;
     return panic_failed_to_read();
+  }
   u64 num_updates = 0;
   for (u32 i = 0; i < header.frameCount; ++i)
   {
@@ -253,7 +268,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
         !InFile(src.memoryUpdatesOffset, u64{src.numMemoryUpdates} * sizeof(FileMemoryUpdate),
                 file_size))
     {
-      return panic_failed_to_read();
+      {
+        delete dataFile;
+        return panic_failed_to_read();
+      }
     }
     num_updates += src.numMemoryUpdates;
   }
@@ -261,7 +279,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
   dataFile->m_frames = static_cast<FifoFrameInfo*>(
       malloc(header.frameCount * sizeof(FifoFrameInfo) + num_updates * sizeof(MemoryUpdate) + 1));
   if (!dataFile->m_frames)
+  {
+    delete dataFile;
     return panic_failed_to_read();
+  }
   MemoryUpdate* updates = reinterpret_cast<MemoryUpdate*>(dataFile->m_frames + header.frameCount);
 
   for (u32 i = 0; i < header.frameCount; ++i)
@@ -283,7 +304,10 @@ std::unique_ptr<FifoDataFile> FifoDataFile::Load(const std::string& filename, bo
                   data + src.memoryUpdatesOffset + u64{j} * sizeof(FileMemoryUpdate),
                   sizeof(src_update));
       if (!InFile(src_update.dataOffset, src_update.dataSize, file_size))
+      {
+        delete dataFile;
         return panic_failed_to_read();
+      }
       MemoryUpdate& dst_update = *updates++;
       dst_update.fifoPosition = src_update.fifoPosition;
       dst_update.address = src_update.address;

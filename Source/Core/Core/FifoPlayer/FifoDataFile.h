@@ -80,7 +80,8 @@ public:
   const FifoFrameInfo& GetFrame(u32 frame) const { return m_frames[frame]; }
   u32 GetFrameCount() const { return m_num_frames; }
 
-  static std::unique_ptr<FifoDataFile> Load(const std::string& filename, bool flagsOnly);
+  // Freed with delete
+  static FifoDataFile* Load(const std::string& filename, bool flagsOnly);
 
 private:
   enum

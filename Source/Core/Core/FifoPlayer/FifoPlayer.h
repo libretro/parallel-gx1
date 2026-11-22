@@ -135,7 +135,7 @@ public:
 
   bool IsPlaying() const;
 
-  FifoDataFile* GetFile() const { return m_File.get(); }
+  FifoDataFile* GetFile() const { return m_File; }
   u32 GetCurrentFrameNum() const { return m_CurrentFrame; }
   const AnalyzedFrameInfo& GetAnalyzedFrameInfo(u32 frame) const { return m_FrameInfo[frame]; }
   // Frame range
@@ -213,7 +213,7 @@ private:
 
   Config::ConfigChangedCallbackID m_config_changed_callback_id;
 
-  std::unique_ptr<FifoDataFile> m_File;
+  FifoDataFile* m_File = nullptr;  // owned
 
   std::vector<AnalyzedFrameInfo> m_FrameInfo;
 };

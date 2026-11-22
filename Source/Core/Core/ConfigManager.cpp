@@ -404,7 +404,7 @@ struct SetGameMetadata
 
   bool operator()(const BootParameters::DFF& dff) const
   {
-    std::unique_ptr<FifoDataFile> dff_file(FifoDataFile::Load(dff.dff_path, true));
+    FifoDataFile* const dff_file = FifoDataFile::Load(dff.dff_path, true);
     if (!dff_file)
       return false;
 
@@ -421,6 +421,7 @@ struct SetGameMetadata
       config->SetRunningGameMetadata(game_id);
     }
 
+    delete dff_file;
     return true;
   }
 

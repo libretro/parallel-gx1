@@ -180,6 +180,7 @@ FifoPlayer::FifoPlayer(Core::System& system) : m_system(system)
 FifoPlayer::~FifoPlayer()
 {
   Config::RemoveConfigChangedCallback(m_config_changed_callback_id);
+  delete m_File;
 }
 
 bool FifoPlayer::Open(const std::string& filename)
@@ -190,7 +191,7 @@ bool FifoPlayer::Open(const std::string& filename)
 
   if (m_File)
   {
-    FifoPlaybackAnalyzer::AnalyzeFrames(m_File.get(), m_FrameInfo);
+    FifoPlaybackAnalyzer::AnalyzeFrames(m_File, m_FrameInfo);
 
     m_FrameRangeEnd = m_File->GetFrameCount() - 1;
   }
@@ -200,7 +201,8 @@ bool FifoPlayer::Open(const std::string& filename)
 
 void FifoPlayer::Close()
 {
-  m_File.reset();
+  delete m_File;
+  m_File = nullptr;
 
   m_FrameRangeStart = 0;
   m_FrameRangeEnd = 0;
