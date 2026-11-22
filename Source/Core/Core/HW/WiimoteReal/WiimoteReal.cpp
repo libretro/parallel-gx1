@@ -37,8 +37,8 @@ namespace WiimoteReal
 {
 using namespace WiimoteCommon;
 
-static void TryToConnectBalanceBoard(std::unique_ptr<Wiimote>);
-static bool TryToConnectWiimoteToSlot(std::unique_ptr<Wiimote>&, unsigned int);
+static void TryToConnectBalanceBoard(Wiimote*);
+static bool TryToConnectWiimoteToSlot(Wiimote**, unsigned int);
 static void HandleWiimoteDisconnect(int index);
 
 static bool s_real_wiimotes_initialized = false;
@@ -138,21 +138,32 @@ static void EditKnownIds(const char* add, const char* remove)
 
 struct WiimotePoolEntry
 {
-  std::unique_ptr<Wiimote> wiimote;
-  u64 entry_frame = frame_clock_now();
-
-  bool IsExpired() const
-  {
-    // Keep wii remotes in the pool for a bit, about five seconds, before disconnecting them.
-    constexpr u64 POOL_FRAMES = 5 * 60;
-
-    return frame_clock_now() - entry_frame > POOL_FRAMES;
-  }
+  Wiimote* wiimote;  // owned
+  u64 entry_frame;
 };
 
-// Connected wii remotes are placed here when no open slot is set to "Real".
+static bool IsPoolEntryExpired(const WiimotePoolEntry* entry)
+{
+  // Keep wii remotes in the pool for a bit, about five seconds, before disconnecting them.
+  constexpr u64 POOL_FRAMES = 5 * 60;
+
+  return frame_clock_now() - entry->entry_frame > POOL_FRAMES;
+}
+
+// Connected wii remotes are placed here when no open slot is set to "Real", oldest first.
 // They are then automatically disconnected after some time. Manager only.
-static std::vector<WiimotePoolEntry> s_wiimote_pool;
+static constexpr u32 MAX_POOL_WIIMOTES = 16;
+static WiimotePoolEntry s_wiimote_pool[MAX_POOL_WIIMOTES];
+static u32 s_wiimote_pool_count = 0;
+
+// Disconnects the pool's remote at index, keeping the rest in order
+static void RemoveFromPool(u32 index)
+{
+  delete s_wiimote_pool[index].wiimote;
+  s_wiimote_pool_count--;
+  memmove(&s_wiimote_pool[index], &s_wiimote_pool[index + 1],
+          (s_wiimote_pool_count - index) * sizeof(s_wiimote_pool[0]));
+}
 
 // What other threads ask of the manager.
 struct ManagerCommand
@@ -169,31 +180,31 @@ struct ManagerCommand
   };
   mpsc_stack_node_t link;  // first: the drained chain is cast back
   Kind kind;
-  std::unique_ptr<Wiimote> wiimote;
+  Wiimote* wiimote;  // owned
   unsigned int index;
 };
 // The manager waits on the frame clock, so posting a command wakes it through that.
 static mpsc_stack_t s_manager_commands;
 static retro_atomic_int_t s_manager_running;
-static thread_local bool t_is_manager = false;
 
-static void PostToManager(ManagerCommand::Kind kind, std::unique_ptr<Wiimote> wiimote = {},
+// Takes wiimote
+static void PostToManager(ManagerCommand::Kind kind, Wiimote* wiimote = nullptr,
                           unsigned int index = 0)
 {
-  auto* command = new ManagerCommand{{}, kind, std::move(wiimote), index};
+  auto* command = new ManagerCommand{{}, kind, wiimote, index};
   mpsc_stack_push(&s_manager_commands, &command->link);
   frame_clock_wake_all();
 }
 
-static void PutWiimoteInSlot(unsigned int index, std::unique_ptr<Wiimote> wiimote)
+// Takes wiimote
+static void PutWiimoteInSlot(unsigned int index, Wiimote* wiimote)
 {
-  delete static_cast<Wiimote*>(retro_atomic_exchange_ptr(&g_wiimotes[index], wiimote.release()));
+  delete static_cast<Wiimote*>(retro_atomic_exchange_ptr(&g_wiimotes[index], wiimote));
 }
 
-static std::unique_ptr<Wiimote> TakeWiimoteFromSlot(unsigned int index)
+static Wiimote* TakeWiimoteFromSlot(unsigned int index)
 {
-  return std::unique_ptr<Wiimote>(
-      static_cast<Wiimote*>(retro_atomic_exchange_ptr(&g_wiimotes[index], nullptr)));
+  return static_cast<Wiimote*>(retro_atomic_exchange_ptr(&g_wiimotes[index], nullptr));
 }
 
 static WiimoteScanner s_wiimote_scanner;
@@ -202,7 +213,7 @@ static WiimoteScanner s_wiimote_scanner;
 struct SlotChange
 {
   unsigned int index;
-  std::unique_ptr<Wiimote> wiimote;
+  Wiimote* wiimote;  // owned
 };
 
 // CPU thread: the slot's remote taken out into the change, the emulated device told
@@ -217,7 +228,8 @@ static void TakeFromSlotOnCPU(void* context)
 static void PutInSlotOnCPU(void* context)
 {
   SlotChange* const change = static_cast<SlotChange*>(context);
-  PutWiimoteInSlot(change->index, std::move(change->wiimote));
+  PutWiimoteInSlot(change->index, change->wiimote);
+  change->wiimote = nullptr;
   WiimoteCommon::UpdateSource(change->index);
 }
 
@@ -230,11 +242,11 @@ static void TryToFillWiimoteSlot(u32 index)
     return;
   }
 
-  if (s_wiimote_pool.empty())
+  if (s_wiimote_pool_count == 0)
     return;
 
-  if (TryToConnectWiimoteToSlot(s_wiimote_pool.front().wiimote, index))
-    s_wiimote_pool.erase(s_wiimote_pool.begin());
+  if (TryToConnectWiimoteToSlot(&s_wiimote_pool[0].wiimote, index))
+    RemoveFromPool(0);
 }
 
 void PopulateDevices()
@@ -250,7 +262,8 @@ static void ProcessWiimotePool()
     TryToFillWiimoteSlot(index);
 }
 
-static void AddWiimoteToPoolNow(std::unique_ptr<Wiimote> wiimote)
+// Takes wiimote
+static void AddWiimoteToPoolNow(Wiimote* wiimote)
 {
   // Our real wiimote class requires an index.
   // Within the pool it's only going to be used for logging purposes.
@@ -259,23 +272,22 @@ static void AddWiimoteToPoolNow(std::unique_ptr<Wiimote> wiimote)
   if (!wiimote->Connect(POOL_WIIMOTE_INDEX))
   {
     ERROR_LOG(WIIMOTE, "Failed to connect real wiimote.");
+    delete wiimote;
+    return;
+  }
+
+  if (s_wiimote_pool_count == MAX_POOL_WIIMOTES)
+  {
+    ERROR_LOG(WIIMOTE, "Too many real wiimotes waiting in the pool.");
+    delete wiimote;
     return;
   }
 
   wiimote->EmuStop();
 
-  s_wiimote_pool.emplace_back(WiimotePoolEntry{std::move(wiimote)});
-}
-
-void AddWiimoteToPool(std::unique_ptr<Wiimote> wiimote)
-{
-  // ControllerInterface hands remotes back from inside the manager's own pool processing,
-  // which expects them in the pool on return.
-  if (t_is_manager)
-    AddWiimoteToPoolNow(std::move(wiimote));
-  else if (retro_atomic_load_acquire_int(&s_manager_running))
-    PostToManager(ManagerCommand::Kind::AddToPool, std::move(wiimote));
-  // With no manager the remote is simply let go, which disconnects it.
+  s_wiimote_pool[s_wiimote_pool_count].wiimote = wiimote;
+  s_wiimote_pool[s_wiimote_pool_count].entry_frame = frame_clock_now();
+  s_wiimote_pool_count++;
 }
 
 // Records each ring holds: 256 reports is over a second of input at the Wiimote's 200 Hz.
@@ -755,11 +767,11 @@ void WiimoteScanner::StopThread()
 
     // The scanner thread frees its backends only after it sees the running flag drop, which
     // happens after this, so the list stays valid here.
-    if (const auto* backends = static_cast<const std::vector<WiimoteScannerBackend*>*>(
-            retro_atomic_load_acquire_ptr(&m_backends_published)))
+    if (const Backends* const backends =
+            static_cast<const Backends*>(retro_atomic_load_acquire_ptr(&m_backends_published)))
     {
-      for (WiimoteScannerBackend* backend : *backends)
-        backend->RequestStopSearching();
+      for (u32 i = 0; i < backends->count; i++)
+        backends->backends[i]->RequestStopSearching();
     }
 
     m_scan_thread_running.Clear();
@@ -788,23 +800,27 @@ static void RunManagerCommand(ManagerCommand& command)
   switch (command.kind)
   {
   case ManagerCommand::Kind::AddToPool:
-    AddWiimoteToPoolNow(std::move(command.wiimote));
+    AddWiimoteToPoolNow(command.wiimote);
+    command.wiimote = nullptr;
     break;
   case ManagerCommand::Kind::ConnectBalanceBoard:
-    TryToConnectBalanceBoard(std::move(command.wiimote));
+    TryToConnectBalanceBoard(command.wiimote);
+    command.wiimote = nullptr;
     break;
   case ManagerCommand::Kind::SourceChange:
   {
     SlotChange change{command.index, nullptr};
     Core::RunOnCPUThread(Core::System::GetInstance(), TakeFromSlotOnCPU, &change);
-    std::unique_ptr<Wiimote> removed_wiimote = std::move(change.wiimote);
+    Wiimote* const removed_wiimote = change.wiimote;
 
     // The Wiimote pool isn't currently designed to handle Balance Boards.
     // Refactoring will be needed to differentiate between remotes/boards.
     const bool is_balance_board = command.index == WIIMOTE_BALANCE_BOARD;
 
     if (removed_wiimote != nullptr && !is_balance_board)
-      AddWiimoteToPoolNow(std::move(removed_wiimote));
+      AddWiimoteToPoolNow(removed_wiimote);
+    else
+      delete removed_wiimote;
     g_controller_interface.PlatformPopulateDevices(ProcessWiimotePool);
     break;
   }
@@ -840,6 +856,7 @@ static void RunManagerCommands()
     auto* command = reinterpret_cast<ManagerCommand*>(node);
     node = node->next;
     RunManagerCommand(*command);
+    delete command->wiimote;
     delete command;
   }
 }
@@ -847,7 +864,6 @@ static void RunManagerCommands()
 void WiimoteScanner::PoolThreadFunc()
 {
   Common::SetCurrentThreadName("Wiimote Pool Thread");
-  t_is_manager = true;
 
   // Toggle between 1010 and 0101.
   u8 led_value = 0b1010;
@@ -881,34 +897,34 @@ void WiimoteScanner::PoolThreadFunc()
     for (unsigned int i = 0; i < MAX_BBMOTES; ++i)
       if (Wiimote* const wiimote = GetWiimote(i))
         wiimote->Poke();
-    for (auto& entry : s_wiimote_pool)
-      entry.wiimote->Poke();
+    for (u32 i = 0; i < s_wiimote_pool_count; i++)
+      s_wiimote_pool[i].wiimote->Poke();
 
     // Remove stale pool entries.
-    for (auto it = s_wiimote_pool.begin(); it != s_wiimote_pool.end();)
+    for (u32 i = 0; i < s_wiimote_pool_count;)
     {
-      if (!it->wiimote->IsConnected())
+      if (!s_wiimote_pool[i].wiimote->IsConnected())
       {
         INFO_LOG(WIIMOTE, "Removing disconnected wiimote pool entry.");
-        it = s_wiimote_pool.erase(it);
+        RemoveFromPool(i);
       }
-      else if (it->IsExpired())
+      else if (IsPoolEntryExpired(&s_wiimote_pool[i]))
       {
         INFO_LOG(WIIMOTE, "Removing expired wiimote pool entry.");
-        it = s_wiimote_pool.erase(it);
+        RemoveFromPool(i);
       }
       else
       {
-        ++it;
+        ++i;
       }
     }
 
     // Make wiimote pool LEDs dance.
-    for (auto& wiimote : s_wiimote_pool)
+    for (u32 i = 0; i < s_wiimote_pool_count; i++)
     {
       OutputReportLeds leds = {};
       leds.leds = led_value;
-      wiimote.wiimote->QueueReport(leds);
+      s_wiimote_pool[i].wiimote->QueueReport(leds);
     }
 
     led_value ^= 0b1111;
@@ -916,12 +932,26 @@ void WiimoteScanner::PoolThreadFunc()
 
   // What was posted before the stop still runs, so no remote handed over is lost.
   RunManagerCommands();
-  t_is_manager = false;
 }
 
 void WiimoteScanner::PopulateDevices()
 {
   PostToManager(ManagerCommand::Kind::ProcessPool);
+}
+
+// Scanner thread: a remote a backend found, handed to the manager
+static void HandFoundToManager(void* user, Wiimote* wiimote, bool is_balance_board)
+{
+  EditKnownIds(wiimote->GetId().c_str(), nullptr);
+  if (is_balance_board)
+  {
+    PostToManager(ManagerCommand::Kind::ConnectBalanceBoard, wiimote);
+  }
+  else
+  {
+    PostToManager(ManagerCommand::Kind::AddToPool, wiimote);
+    PostToManager(ManagerCommand::Kind::ProcessPool);
+  }
 }
 
 void WiimoteScanner::ThreadFunc()
@@ -941,18 +971,15 @@ void WiimoteScanner::ThreadFunc()
   // HIDAPI backend on macOS has an error condition when IOHIDManagerCreate and IOHIDManagerClose
   // are called on different threads (and so reference different CFRunLoops) which can cause an
   // EXC_BAD_ACCES crash.
-  std::vector<std::unique_ptr<WiimoteScannerBackend>> backends;
+  Backends backends;
+  backends.count = 0;
 #ifdef _WIN32
-  backends.emplace_back(std::make_unique<WiimoteScannerWindows>());
+  backends.backends[backends.count++] = new WiimoteScannerWindows();
 #endif
 #ifdef HAVE_HIDAPI
-  backends.emplace_back(std::make_unique<WiimoteScannerHidapi>());
+  backends.backends[backends.count++] = new WiimoteScannerHidapi();
 #endif
-
-  std::vector<WiimoteScannerBackend*> published;
-  for (const auto& backend : backends)
-    published.push_back(backend.get());
-  retro_atomic_store_release_ptr(&m_backends_published, &published);
+  retro_atomic_store_release_ptr(&m_backends_published, &backends);
 
   // About half a second of frontend frames between looks for remotes.
   constexpr u64 SCAN_FRAMES = 30;
@@ -974,8 +1001,8 @@ void WiimoteScanner::ThreadFunc()
       break;
 
     // Currently does nothing. To be removed.
-    for (const auto& backend : backends)
-      backend->Update();
+    for (u32 i = 0; i < backends.count; i++)
+      backends.backends[i]->Update();
 
     auto& system = Core::System::GetInstance();
     // We don't want any remotes in passthrough mode or running in GC mode.
@@ -1007,28 +1034,18 @@ void WiimoteScanner::ThreadFunc()
     // This allows Windows, hidapi, and DolphinBar remotes to be quickly discovered.
     const bool should_perform_inquiry = scan_mode != WiimoteScanMode::DO_NOT_SCAN;
 
-    for (const auto& backend : backends)
+    for (u32 i = 0; i < backends.count; i++)
     {
-      auto results =
-          should_perform_inquiry ? backend->FindNewWiimotes() : backend->FindAttachedWiimotes();
-
-      for (auto& wiimote : results.wii_remotes)
-      {
-        EditKnownIds(wiimote->GetId().c_str(), nullptr);
-        PostToManager(ManagerCommand::Kind::AddToPool, std::move(wiimote));
-        PostToManager(ManagerCommand::Kind::ProcessPool);
-      }
-
-      for (auto& bboard : results.balance_boards)
-      {
-        EditKnownIds(bboard->GetId().c_str(), nullptr);
-        PostToManager(ManagerCommand::Kind::ConnectBalanceBoard, std::move(bboard));
-      }
+      if (should_perform_inquiry)
+        backends.backends[i]->FindNewWiimotes(HandFoundToManager, nullptr);
+      else
+        backends.backends[i]->FindAttachedWiimotes(HandFoundToManager, nullptr);
     }
   }
 
   retro_atomic_store_release_ptr(&m_backends_published, nullptr);
-  backends.clear();
+  for (u32 i = 0; i < backends.count; i++)
+    delete backends.backends[i];
 
   Common::JoinThread(pool_thread);
   retro_atomic_store_release_int(&s_manager_running, 0);
@@ -1204,19 +1221,19 @@ void Shutdown()
   NOTICE_LOG(WIIMOTE, "WiimoteReal::Shutdown");
 
   // The manager has stopped, so this thread now owns the slots and the pool.
-  t_is_manager = true;
   for (unsigned int i = 0; i < MAX_BBMOTES; ++i)
     HandleWiimoteDisconnect(i);
 
   // Empty the pool.
-  s_wiimote_pool.clear();
-  t_is_manager = false;
+  while (s_wiimote_pool_count)
+    RemoveFromPool(s_wiimote_pool_count - 1);
 
   // Commands nobody will run now.
   for (mpsc_stack_node_t* node = mpsc_stack_drain(&s_manager_commands); node;)
   {
     auto* command = reinterpret_cast<ManagerCommand*>(node);
     node = node->next;
+    delete command->wiimote;
     delete command;
   }
 }
@@ -1232,8 +1249,10 @@ void Pause()
 }
 
 // Manager only.
-static bool TryToConnectWiimoteToSlot(std::unique_ptr<Wiimote>& wm, unsigned int i)
+// On success *wm is taken, left null unless the CPU thread had gone, which leaves it to the caller.
+static bool TryToConnectWiimoteToSlot(Wiimote** wm_slot, unsigned int i)
 {
+  Wiimote* const wm = *wm_slot;
   if (Config::Get(Config::GetInfoForWiimoteSource(i)) != WiimoteSource::Real || GetWiimote(i))
     return false;
 
@@ -1250,22 +1269,22 @@ static bool TryToConnectWiimoteToSlot(std::unique_ptr<Wiimote>& wm, unsigned int
   led_report.leds = u8(1 << (i % WIIMOTE_BALANCE_BOARD));
   wm->QueueReport(led_report);
 
-  SlotChange change{i, std::move(wm)};
+  SlotChange change{i, wm};
   Core::RunOnCPUThread(Core::System::GetInstance(), PutInSlotOnCPU, &change);
   // still here when the CPU thread had gone and dropped the job
-  wm = std::move(change.wiimote);
+  *wm_slot = change.wiimote;
 
   NOTICE_LOG(WIIMOTE, "Connected real wiimote to slot %u.", i + 1);
 
   return true;
 }
 
-static void TryToConnectBalanceBoard(std::unique_ptr<Wiimote> wm)
+// Takes wm
+static void TryToConnectBalanceBoard(Wiimote* wm)
 {
-  if (TryToConnectWiimoteToSlot(wm, WIIMOTE_BALANCE_BOARD))
-    return;
-
-  NOTICE_LOG(WIIMOTE, "No open slot for real balance board.");
+  if (!TryToConnectWiimoteToSlot(&wm, WIIMOTE_BALANCE_BOARD))
+    NOTICE_LOG(WIIMOTE, "No open slot for real balance board.");
+  delete wm;
 }
 
 // Manager only.
@@ -1275,6 +1294,7 @@ static void HandleWiimoteDisconnect(int index)
   // to prevent WiimoteDevice from having a dangling HIDWiimote pointer.
   SlotChange change{static_cast<unsigned int>(index), nullptr};
   Core::RunOnCPUThread(Core::System::GetInstance(), TakeFromSlotOnCPU, &change);
+  delete change.wiimote;
 }
 
 // This is called from the GUI thread

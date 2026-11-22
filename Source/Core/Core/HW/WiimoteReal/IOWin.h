@@ -62,8 +62,8 @@ public:
 
   WiimoteScannerWindows();
 
-  FindResults FindNewWiimotes() override;
-  FindResults FindAttachedWiimotes() override;
+  void FindNewWiimotes(FoundFn found, void* user) override;
+  void FindAttachedWiimotes(FoundFn found, void* user) override;
 
   void Update() override;
   void RequestStopSearching() override {}
@@ -72,7 +72,7 @@ public:
   static void RemoveRememberedWiimotes();
 
 private:
-  FindResults FindWiimoteHIDDevices();
+  void FindWiimoteHIDDevices(FoundFn found, void* user);
 
   // This vector is updated after we receive a device change notification.
   std::vector<EnumeratedWiimoteInterface> m_wiimote_hid_interfaces;

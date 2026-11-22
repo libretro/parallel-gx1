@@ -939,15 +939,13 @@ static std::vector<WiimoteScannerWindows::EnumeratedWiimoteInterface> GetAllWiim
   return results;
 }
 
-auto WiimoteScannerWindows::FindWiimoteHIDDevices() -> FindResults
+void WiimoteScannerWindows::FindWiimoteHIDDevices(FoundFn found, void* user)
 {
   if (retro_atomic_exchange_int(&m_devices_changed, 0))
   {
     m_wiimote_hid_interfaces = GetAllWiimoteHIDInterfaces();
     INFO_LOG(WIIMOTE, "Found %" PRIu64 " HID interface(s).", (u64)m_wiimote_hid_interfaces.size());
   }
-
-  FindResults results;
 
   for (auto& [hid_iface, is_balance_board] : m_wiimote_hid_interfaces)
   {
@@ -957,12 +955,13 @@ auto WiimoteScannerWindows::FindWiimoteHIDDevices() -> FindResults
 
     DEBUG_LOG(WIIMOTE, "Creating WiimoteWindows");
 
-    auto wiimote = std::make_unique<WiimoteWindows>(hid_iface);
+    WiimoteWindows* const wiimote = new WiimoteWindows(hid_iface);
     if (!wiimote->ConnectInternal())
     {
       // This happens frequently.
       // Windows and DolphinBar both expose interfaces for non-connected Wii Remotes.
       DEBUG_LOG(WIIMOTE, "ConnectInternal failed");
+      delete wiimote;
       continue;
     }
 
@@ -970,27 +969,22 @@ auto WiimoteScannerWindows::FindWiimoteHIDDevices() -> FindResults
     if (!is_balance_board.has_value())
       is_balance_board = wiimote->IsBalanceBoard();
 
-    if (*is_balance_board)
-      results.balance_boards.emplace_back(std::move(wiimote));
-    else
-      results.wii_remotes.emplace_back(std::move(wiimote));
+    found(user, wiimote, *is_balance_board);
   }
-
-  return results;
 }
 
-auto WiimoteScannerWindows::FindNewWiimotes() -> FindResults
+void WiimoteScannerWindows::FindNewWiimotes(FoundFn found, void* user)
 {
   // Ideally we'd only enumerate the radios once.
   RemoveUnusableWiimoteBluetoothDevices();
   DiscoverAndPairWiimotes(DEFAULT_INQUIRY_LENGTH);
 
-  return FindWiimoteHIDDevices();
+  FindWiimoteHIDDevices(found, user);
 }
 
-auto WiimoteScannerWindows::FindAttachedWiimotes() -> FindResults
+void WiimoteScannerWindows::FindAttachedWiimotes(FoundFn found, void* user)
 {
-  return FindWiimoteHIDDevices();
+  FindWiimoteHIDDevices(found, user);
 }
 
 }  // namespace WiimoteReal

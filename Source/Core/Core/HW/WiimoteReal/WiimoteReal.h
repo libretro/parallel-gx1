@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/Config/Config.h"
 #include "Common/Event.h"
@@ -207,19 +205,16 @@ public:
   // requests the backend to stop scanning if FindWiimotes is blocking
   virtual void RequestStopSearching() = 0;
 
-  struct FindResults
-  {
-    std::vector<std::unique_ptr<Wiimote>> wii_remotes;
-    std::vector<std::unique_ptr<Wiimote>> balance_boards;
-  };
+  // Takes wiimote, freeing it with delete once done with it
+  typedef void (*FoundFn)(void* user, Wiimote* wiimote, bool is_balance_board);
 
   // Implementations are expected to perform a new inquiry if possible.
-  // Only not-yet-in-use remotes shall be returned.
-  virtual FindResults FindNewWiimotes() { return FindAttachedWiimotes(); }
+  // Only not-yet-in-use remotes shall be handed to found.
+  virtual void FindNewWiimotes(FoundFn found, void* user) { FindAttachedWiimotes(found, user); }
 
-  // Implementations shall return not-not-in-use already connected remotes.
+  // Implementations shall hand found the not-in-use already connected remotes.
   // e.g. DolphinBar interfaces would be found here.
-  virtual FindResults FindAttachedWiimotes() { return {}; }
+  virtual void FindAttachedWiimotes(FoundFn found, void* user) {}
 };
 
 enum class WiimoteScanMode
@@ -242,8 +237,14 @@ private:
   void ThreadFunc();
   void PoolThreadFunc();
 
-  // The scanner thread's backends, as a std::vector<WiimoteScannerBackend*>* while it runs,
-  // so StopThread can interrupt a search.
+  static constexpr u32 MAX_BACKENDS = 2;
+  struct Backends
+  {
+    u32 count;
+    WiimoteScannerBackend* backends[MAX_BACKENDS];
+  };
+  // The scanner thread's backends, as a Backends* while it runs, so StopThread can interrupt a
+  // search.
   retro_atomic_ptr_t m_backends_published{};
 
   sthread_t* m_scan_thread = nullptr;
@@ -256,8 +257,6 @@ private:
 // The real remote in a slot, or null. Changed only by the scanner's pool thread, while it holds
 // the CPU thread.
 Wiimote* GetWiimote(unsigned int index);
-
-void AddWiimoteToPool(std::unique_ptr<Wiimote>);
 
 bool IsValidDeviceName(std::string_view name);
 bool IsWiimoteName(std::string_view name);

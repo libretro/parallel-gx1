@@ -61,10 +61,8 @@ WiimoteScannerHidapi::~WiimoteScannerHidapi()
     ERROR_LOG(WIIMOTE, "Failed to clean up hidapi.");
 }
 
-auto WiimoteScannerHidapi::FindAttachedWiimotes() -> FindResults
+void WiimoteScannerHidapi::FindAttachedWiimotes(FoundFn found, void* user)
 {
-  FindResults results;
-
   hid_device_info* list = hid_enumerate(0x0, 0x0);  // FYI: 0 for all VID/PID.
   for (hid_device_info* device = list; device != nullptr; device = device->next)
   {
@@ -74,22 +72,17 @@ auto WiimoteScannerHidapi::FindAttachedWiimotes() -> FindResults
     if (!is_wiimote || !IsNewWiimote(device->path) || !IsDeviceUsable(device->path))
       continue;
 
-    auto wiimote = std::make_unique<WiimoteHidapi>(device->path);
+    WiimoteHidapi* const wiimote = new WiimoteHidapi(device->path);
     const bool is_balance_board = IsBalanceBoardName(name) || wiimote->IsBalanceBoard();
-    if (is_balance_board)
-      results.balance_boards.emplace_back(std::move(wiimote));
-    else
-      results.wii_remotes.emplace_back(std::move(wiimote));
 
     NOTICE_LOG(WIIMOTE, "Found %s at %s: %s %s (%04x:%04x)",
                is_balance_board ? "balance board" : "Wiimote", device->path,
                WStringToUTF8(device->manufacturer_string).c_str(),
                WStringToUTF8(device->product_string).c_str(), (unsigned)device->vendor_id,
                (unsigned)device->product_id);
+    found(user, wiimote, is_balance_board);
   }
   hid_free_enumeration(list);
-
-  return results;
 }
 
 WiimoteHidapi::WiimoteHidapi(std::string device_path) : m_device_path(std::move(device_path))

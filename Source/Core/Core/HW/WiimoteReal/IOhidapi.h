@@ -36,7 +36,7 @@ public:
   WiimoteScannerHidapi();
   ~WiimoteScannerHidapi() override;
 
-  FindResults FindAttachedWiimotes() override;
+  void FindAttachedWiimotes(FoundFn found, void* user) override;
 
   void Update() override {}                // not needed for hidapi
   void RequestStopSearching() override {}  // not needed for hidapi
