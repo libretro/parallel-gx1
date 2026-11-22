@@ -14,7 +14,6 @@
 #include <cstdio>
 #include <cstring>
 #include <lrc_hash.h>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -465,11 +464,19 @@ private:
     u8 data_sha1[20];
     {
       const u32 data_size = bk_header->size_of_files + sizeof(BkHeader);
-      auto data = std::make_unique<u8[]>(data_size);
+      u8 chunk[2048];
+      struct sha1_state sha1;
+      sha1_stream_init(&sha1);
       m_file.Seek(sizeof(Header), File::SeekOrigin::Begin);
-      if (!m_file.ReadBytes(data.get(), data_size))
-        return false;
-      SHA1Digest(data.get(), data_size, data_sha1);
+      for (u32 done = 0; done < data_size;)
+      {
+        const u32 n = std::min<u32>(data_size - done, sizeof(chunk));
+        if (!m_file.ReadBytes(chunk, n))
+          return false;
+        sha1_stream_update(&sha1, chunk, n);
+        done += n;
+      }
+      sha1_stream_final(&sha1, data_sha1);
     }
 
     // Sign the data.
