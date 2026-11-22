@@ -344,7 +344,8 @@ static bool GetBitString(u32* ctrl, u32* out, u8 len)
   return true;
 }
 
-static std::optional<GameIDAndRegion> BatchDecrypt(u32* codes, size_t count)
+// False when the verification code does not check out
+static bool BatchDecrypt(u32* codes, size_t count, GameIDAndRegion* result)
 {
   const auto size = static_cast<u32>(count);
 
@@ -357,7 +358,7 @@ static std::optional<GameIDAndRegion> BatchDecrypt(u32* codes, size_t count)
   const u32 tmp = codes[0];
   codes[0] &= 0x0FFFFFFF;
   if ((tmp >> 28) != VerifyCode(codes, count))
-    return std::nullopt;
+    return false;
 
   std::array<u32, 4> tmparray = {
       codes[0],
@@ -375,7 +376,9 @@ static std::optional<GameIDAndRegion> BatchDecrypt(u32* codes, size_t count)
 
   // Grab gameid and region from the last decrypted code
   // TODO: Maybe check this against Dolphin's GameID? - "code is for wrong game" type msg
-  return GameIDAndRegion{tmparray2[1], tmparray2[5]};
+  result->game_id = tmparray2[1];
+  result->region = tmparray2[5];
+  return true;
 
   // Unfinished (so says Parasyte :p )
 }
@@ -432,29 +435,27 @@ static bool ConvertAlphaToBinary(const char* alpha, size_t count, u32* result, s
   return true;
 }
 
-std::optional<GameIDAndRegion> DecryptARCode(const char* encrypted_lines, size_t count,
-                                             ARCode* code)
+void DecryptARCode(const char* encrypted_lines, size_t count, ARCode* code)
 {
   u32* codes;
   size_t failed_index = 0;
-  std::optional<GameIDAndRegion> decrypted_result;
+  GameIDAndRegion decrypted_result;
 
   if (!count)
-    return std::nullopt;
+    return;
 
   codes = static_cast<u32*>(std::malloc(count * 2 * sizeof(u32)));
   if (!codes)
-    return std::nullopt;
+    return;
   if (!ConvertAlphaToBinary(encrypted_lines, count, codes, &failed_index))
   {
     PanicAlert("Action Replay Code Decryption Error:\nParity Check Failed\n\nCulprit Code:\n%.13s",
                encrypted_lines + failed_index * ENCRYPTED_LINE_SIZE);
     std::free(codes);
-    return std::nullopt;
+    return;
   }
 
-  decrypted_result = BatchDecrypt(codes, count * 2);
-  if (!decrypted_result.has_value())
+  if (!BatchDecrypt(codes, count * 2, &decrypted_result))
   {
     ERROR_LOG(ACTIONREPLAY,
               "Decryption Error: CRC Check Failed. "
@@ -470,8 +471,8 @@ std::optional<GameIDAndRegion> DecryptARCode(const char* encrypted_lines, size_t
   }
   else
   {
-    INFO_LOG(ACTIONREPLAY, "Decrypted AR Code: GameID:%08X Region:%u", decrypted_result->game_id,
-             decrypted_result->region);
+    INFO_LOG(ACTIONREPLAY, "Decrypted AR Code: GameID:%08X Region:%u", decrypted_result.game_id,
+             decrypted_result.region);
 
     // Skip passing the verification code back
     for (size_t i = 2; i < count * 2; i += 2)
@@ -482,7 +483,6 @@ std::optional<GameIDAndRegion> DecryptARCode(const char* encrypted_lines, size_t
   }
 
   std::free(codes);
-  return decrypted_result;
 }
 
 }  // namespace ActionReplay
