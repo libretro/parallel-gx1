@@ -2074,7 +2074,8 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
   HiresTexture* hires_texture = nullptr;
   bool has_arbitrary_mipmaps = false;
   bool skip_texture_dump = false;
-  std::shared_ptr<VideoCommon::CustomTextureData> custom_texture_data = nullptr;
+  // borrowed from the resource
+  VideoCommon::CustomTextureData* custom_texture_data = nullptr;
   TimePoint load_time = {};
   if (g_ActiveConfig.bHiresTextures)
   {
@@ -2098,7 +2099,7 @@ RcTcacheEntry TextureCacheBase::GetTexture(const int textureCacheSafetyColorSamp
 
   auto entry =
       CreateTextureEntry(TextureCreationInfo{base_hash, full_hash, bytes_per_block, palette_size},
-                         texture_info, textureCacheSafetyColorSampleSize, custom_texture_data.get(),
+                         texture_info, textureCacheSafetyColorSampleSize, custom_texture_data,
                          has_arbitrary_mipmaps, skip_texture_dump);
   entry->hires_texture = hires_texture;
   entry->last_load_time = load_time;

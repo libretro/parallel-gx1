@@ -8,11 +8,17 @@
 namespace VideoCommon
 {
 TextureDataResource::TextureDataResource(const CustomAssetLibrary::AssetID& asset_id,
-                                         std::shared_ptr<DirectFilesystemAssetLibrary> library,
+                                         DirectFilesystemAssetLibrary* library,
                                          CustomAssetCache* asset_cache)
     : m_asset_cache(asset_cache)
 {
-  m_texture_asset = m_asset_cache->CreateAsset(asset_id, std::move(library), this);
+  m_texture_asset = m_asset_cache->CreateAsset(asset_id, library, this);
+}
+
+TextureDataResource::~TextureDataResource()
+{
+  if (m_current_texture_data)
+    m_current_texture_data->Release();
 }
 
 void TextureDataResource::Process()
@@ -23,14 +29,16 @@ void TextureDataResource::Process()
     return;
 
   const auto last_load_time = m_texture_asset->GetLastLoadedTime();
-  const auto asset = m_texture_asset->GetData();
-  if (!asset)
+  CustomTextureData* const data = m_texture_asset->GetData();
+  if (!data)
   {
     m_asset_cache->MarkAssetPending(m_texture_asset);
     return;
   }
 
-  m_current_texture_data = asset;
+  if (m_current_texture_data)
+    m_current_texture_data->Release();
+  m_current_texture_data = data;
   m_current_time = last_load_time;
   m_state = State::Ready;
 }

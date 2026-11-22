@@ -20,8 +20,9 @@ namespace VideoCommon
 class TextureAsset
 {
 public:
-  TextureAsset(std::shared_ptr<DirectFilesystemAssetLibrary> library,
-               CustomAssetLibrary::AssetID asset_id, u64 session_id);
+  // Keeps a reference on library
+  TextureAsset(DirectFilesystemAssetLibrary* library, CustomAssetLibrary::AssetID asset_id,
+               u64 session_id);
   ~TextureAsset();
   TextureAsset(const TextureAsset&) = delete;
   TextureAsset(TextureAsset&&) = delete;
@@ -36,11 +37,9 @@ public:
   // returns the number of bytes unloaded; 0 if another thread is busy with it.
   std::size_t Unload();
 
-  // Callees should understand that the type returned is
-  // a local copy and 'GetData()' needs to be called
-  // to ensure the latest copy is available if
-  // they want to handle reloads
-  [[nodiscard]] std::shared_ptr<CustomTextureData> GetData() const;
+  // The data as last loaded, with a reference the caller releases; null when not loaded.
+  // GetData needs to be called again to see a reload.
+  [[nodiscard]] CustomTextureData* GetData() const;
 
   // Returns the time that the data was last loaded
   TimePoint GetLastLoadedTime() const;
@@ -76,15 +75,15 @@ private:
   struct Holder
   {
     quiesce_node_t node;  // first: the free callback casts it back
-    std::shared_ptr<CustomTextureData> data;
+    CustomTextureData* data;  // a reference held
   };
 
   static void FreeHolder(quiesce_node_t* node);
 
   // Publishes freshly loaded data; null unloads.
-  void SetData(std::shared_ptr<CustomTextureData> data);
+  void SetData(CustomTextureData* data);  // takes the reference on data
 
-  const std::shared_ptr<DirectFilesystemAssetLibrary> m_owning_library;
+  DirectFilesystemAssetLibrary* const m_owning_library;  // a reference held
   CustomAssetLibrary::AssetID m_asset_id;
   std::size_t m_handle;
 

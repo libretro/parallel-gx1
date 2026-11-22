@@ -21,9 +21,8 @@ public:
 
   void XFBTriggered();
 
-  TextureDataResource*
-  GetTextureDataFromAsset(const CustomAssetLibrary::AssetID& asset_id,
-                          std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library);
+  TextureDataResource* GetTextureDataFromAsset(const CustomAssetLibrary::AssetID& asset_id,
+                                               VideoCommon::DirectFilesystemAssetLibrary* library);
 
 private:
   CustomAssetCache m_asset_cache;

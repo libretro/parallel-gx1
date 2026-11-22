@@ -42,7 +42,15 @@ static u32* s_index;
 static u32 s_index_capacity;
 static u32 s_num_preloaded;
 
-static auto s_file_library = std::make_shared<VideoCommon::DirectFilesystemAssetLibrary>();
+// One reference held here, one by each asset made from it
+static VideoCommon::DirectFilesystemAssetLibrary* s_file_library;
+
+static VideoCommon::DirectFilesystemAssetLibrary* FileLibrary()
+{
+  if (!s_file_library)
+    s_file_library = new VideoCommon::DirectFilesystemAssetLibrary();
+  return s_file_library;
+}
 
 static u32 HashName(const char* name)
 {
@@ -195,8 +203,8 @@ void HiresTexture::Update()
         {
           // Since this is just a texture (single file) the mapper doesn't really matter
           // just provide a string
-          s_file_library->SetAssetIDMapData(filename,
-                                            std::map<std::string, std::string>{{"texture", path}});
+          FileLibrary()->SetAssetIDMapData(filename,
+                                           std::map<std::string, std::string>{{"texture", path}});
 
           if (g_ActiveConfig.bCacheHiresTextures)
           {
@@ -249,7 +257,9 @@ void HiresTexture::Clear()
   s_index = nullptr;
   s_num_entries = s_entries_capacity = s_index_capacity = 0;
   s_num_preloaded = 0;
-  s_file_library = std::make_shared<VideoCommon::DirectFilesystemAssetLibrary>();
+  if (s_file_library)
+    s_file_library->Release();
+  s_file_library = new VideoCommon::DirectFilesystemAssetLibrary();
 }
 
 HiresTexture* HiresTexture::Search(const TextureInfo& texture_info)
@@ -267,7 +277,7 @@ VideoCommon::TextureDataResource* HiresTexture::LoadTexture() const
 {
   auto& system = Core::System::GetInstance();
   auto& custom_resource_manager = system.GetCustomResourceManager();
-  return custom_resource_manager.GetTextureDataFromAsset(m_id, s_file_library);
+  return custom_resource_manager.GetTextureDataFromAsset(m_id, FileLibrary());
 }
 
 std::set<std::string> GetTextureDirectoriesWithGameId(const std::string& root_directory,

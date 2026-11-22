@@ -35,15 +35,15 @@ void CustomResourceManager::XFBTriggered()
   m_asset_cache.Update();
 }
 
-TextureDataResource* CustomResourceManager::GetTextureDataFromAsset(
-    const CustomAssetLibrary::AssetID& asset_id,
-    std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library)
+TextureDataResource*
+CustomResourceManager::GetTextureDataFromAsset(const CustomAssetLibrary::AssetID& asset_id,
+                                               VideoCommon::DirectFilesystemAssetLibrary* library)
 {
   TextureDataResource* resource = m_asset_cache.FindResource(asset_id);
   if (resource == nullptr)
   {
     // the cache keeps it, with its asset
-    resource = new TextureDataResource(asset_id, std::move(library), &m_asset_cache);
+    resource = new TextureDataResource(asset_id, library, &m_asset_cache);
   }
   resource->Process();
   return resource;

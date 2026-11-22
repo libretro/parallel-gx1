@@ -6,15 +6,26 @@
 #include <cstddef>
 #include <string>
 
+#include <retro_atomic.h>
+
 #include "Common/Buffer.h"
 #include "Common/CommonTypes.h"
 #include "VideoCommon/TextureConfig.h"
 
 namespace VideoCommon
 {
+// Shared between an asset and the texture cache: each holder keeps a reference
 class CustomTextureData
 {
 public:
+  void AddRef() { retro_atomic_fetch_add_int(&m_refs, 1); }
+  // Deletes the data once the last reference goes
+  void Release()
+  {
+    if (retro_atomic_fetch_sub_int(&m_refs, 1) == 1)
+      delete this;
+  }
+
   struct ArraySlice
   {
     struct Level
@@ -28,6 +39,9 @@ public:
     std::vector<Level> m_levels;
   };
   std::vector<ArraySlice> m_slices;
+
+private:
+  retro_atomic_int_t m_refs{1};
 };
 
 bool LoadDDSTexture(CustomTextureData* texture, const std::string& filename);

@@ -23,6 +23,14 @@ public:
   DirectFilesystemAssetLibrary(const DirectFilesystemAssetLibrary&) = delete;
   DirectFilesystemAssetLibrary& operator=(const DirectFilesystemAssetLibrary&) = delete;
 
+  // Shared by the assets made from it: each keeps a reference, the last deletes it
+  void AddRef() { retro_atomic_fetch_add_int(&m_refs, 1); }
+  void Release()
+  {
+    if (retro_atomic_fetch_sub_int(&m_refs, 1) == 1)
+      delete this;
+  }
+
   // Loads a texture, if there are no levels, bytes loaded will be empty
   LoadInfo LoadTexture(const AssetID& asset_id, CustomTextureData* data);
 
@@ -38,5 +46,7 @@ private:
   // Written while mods and texture packs load, read by the loader threads: a lock-free map
   // keyed by the string's bytes, each value swapped whole.
   atomic_value_map_t* m_asset_id_to_asset_map_path;  // AssetMapValue
+
+  retro_atomic_int_t m_refs{1};
 };
 }  // namespace VideoCommon

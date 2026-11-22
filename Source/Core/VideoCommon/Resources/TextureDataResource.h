@@ -19,13 +19,16 @@ class TextureDataResource
 {
 public:
   TextureDataResource(const CustomAssetLibrary::AssetID& asset_id,
-                      std::shared_ptr<DirectFilesystemAssetLibrary> library,
-                      CustomAssetCache* asset_cache);
+                      DirectFilesystemAssetLibrary* library, CustomAssetCache* asset_cache);
+  ~TextureDataResource();
+  TextureDataResource(const TextureDataResource&) = delete;
+  TextureDataResource& operator=(const TextureDataResource&) = delete;
 
   // Marks the asset in use and takes its data once it has loaded.
   void Process();
 
-  std::shared_ptr<CustomTextureData> GetData() const { return m_current_texture_data; }
+  // Borrowed: valid until the next Process
+  CustomTextureData* GetData() const { return m_current_texture_data; }
   TimePoint GetLoadTime() const { return m_current_time; }
 
   // Asset cache: the asset finished loading, or failed to.
@@ -45,7 +48,7 @@ private:
   // Note: asset cache owns the asset, we access as a reference
   TextureAsset* m_texture_asset = nullptr;
 
-  std::shared_ptr<CustomTextureData> m_current_texture_data;
+  CustomTextureData* m_current_texture_data = nullptr;  // a reference held
   TimePoint m_current_time = {};
 };
 }  // namespace VideoCommon

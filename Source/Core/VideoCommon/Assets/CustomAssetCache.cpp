@@ -127,10 +127,9 @@ CustomAssetCache::FindResource(const CustomAssetLibrary::AssetID& asset_id) cons
   return handle == NO_ASSET ? nullptr : m_assets[handle].listener;
 }
 
-TextureAsset*
-CustomAssetCache::CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
-                              std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
-                              TextureDataResource* listener)
+TextureAsset* CustomAssetCache::CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
+                                            VideoCommon::DirectFilesystemAssetLibrary* library,
+                                            TextureDataResource* listener)
 {
   u32 slot;
   u32 handle = FindHandle(asset_id, &slot);
@@ -159,7 +158,7 @@ CustomAssetCache::CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
     }
     handle = m_num_assets++;
     AssetData& data = m_assets[handle];
-    data.asset = new TextureAsset(std::move(library), asset_id, handle);
+    data.asset = new TextureAsset(library, asset_id, handle);
     data.prev[ACTIVE] = data.next[ACTIVE] = data.prev[PENDING] = data.next[PENDING] = NO_ASSET;
     data.queued[ACTIVE] = data.queued[PENDING] = false;
     m_index[slot] = handle;

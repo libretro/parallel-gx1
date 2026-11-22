@@ -34,7 +34,7 @@ public:
   // The asset asset_id names, made on its first request; listener, owned from here on, hears
   // how its loads end.
   TextureAsset* CreateAsset(const CustomAssetLibrary::AssetID& asset_id,
-                            std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library,
+                            VideoCommon::DirectFilesystemAssetLibrary* library,
                             TextureDataResource* listener);
 
   void Initialize();
