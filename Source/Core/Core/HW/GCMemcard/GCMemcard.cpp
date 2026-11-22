@@ -72,21 +72,6 @@ GCMemcard::GCMemcard()
 {
 }
 
-std::optional<GCMemcard> GCMemcard::Create(std::string filename, const CardFlashId& flash_id,
-                                           u16 size_mbits, bool shift_jis, u32 rtc_bias,
-                                           u32 sram_language, u64 format_time)
-{
-  GCMemcard card;
-  card.m_filename = std::move(filename);
-
-  // TODO: Format() not only formats the card but also writes it to disk at m_filename.
-  // Those tasks should probably be separated.
-  if (!card.Format(flash_id, size_mbits, shift_jis, rtc_bias, sram_language, format_time))
-    return std::nullopt;
-
-  return std::move(card);
-}
-
 std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::string filename)
 {
   GCMemcardErrorCode error_code;
@@ -151,7 +136,6 @@ std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> GCMemcard::Open(std::str
 
   file.Close();
 
-  card.m_filename = std::move(filename);
   card.m_size_blocks = card_size_blocks;
   card.m_size_mb = card_size_mbits;
 
@@ -299,29 +283,6 @@ const BlockAlloc& GCMemcard::GetActiveBat() const
   return m_bat_blocks[m_active_bat];
 }
 
-bool GCMemcard::IsShiftJIS() const
-{
-  return m_header_block.IsShiftJIS();
-}
-
-bool GCMemcard::Save()
-{
-  File::IOFile mcdFile(m_filename, "wb");
-  mcdFile.Seek(0, File::SeekOrigin::Begin);
-
-  mcdFile.WriteBytes(&m_header_block, BLOCK_SIZE);
-  mcdFile.WriteBytes(&m_directory_blocks[0], BLOCK_SIZE);
-  mcdFile.WriteBytes(&m_directory_blocks[1], BLOCK_SIZE);
-  mcdFile.WriteBytes(&m_bat_blocks[0], BLOCK_SIZE);
-  mcdFile.WriteBytes(&m_bat_blocks[1], BLOCK_SIZE);
-  for (unsigned int i = 0; i < m_size_blocks - MC_FST_BLOCKS; ++i)
-  {
-    mcdFile.WriteBytes(m_data_blocks[i].m_block.data(), m_data_blocks[i].m_block.size());
-  }
-
-  return mcdFile.Close();
-}
-
 static std::pair<u16, u16> CalculateMemcardChecksums(const u8* data, size_t size)
 {
   ASSERT(size % 2 == 0);
@@ -346,20 +307,6 @@ static std::pair<u16, u16> CalculateMemcardChecksums(const u8* data, size_t size
   return std::make_pair(csum, inv_csum);
 }
 
-bool GCMemcard::FixChecksums()
-{
-  if (!m_valid)
-    return false;
-
-  m_header_block.FixChecksums();
-  m_directory_blocks[0].FixChecksums();
-  m_directory_blocks[1].FixChecksums();
-  m_bat_blocks[0].FixChecksums();
-  m_bat_blocks[1].FixChecksums();
-
-  return true;
-}
-
 u16 GCMemcard::DEntry_FirstBlock(u8 index) const
 {
   if (!m_valid || index >= DIRLEN)
@@ -380,96 +327,6 @@ u16 GCMemcard::DEntry_BlockCount(u8 index) const
   if (blocks > (u16)m_size_blocks)
     return 0xFFFF;
   return blocks;
-}
-
-std::optional<std::vector<u8>> GCMemcard::GetSaveDataBytes(u8 save_index, size_t offset,
-                                                           size_t length) const
-{
-  if (!m_valid || save_index >= DIRLEN)
-    return std::nullopt;
-
-  const DEntry& entry = GetActiveDirectory().m_dir_entries[save_index];
-  const BlockAlloc& bat = GetActiveBat();
-  const u16 block_count = entry.m_block_count;
-  const u16 first_block = entry.m_first_block;
-  const size_t block_max = MC_FST_BLOCKS + m_data_blocks.size();
-  if (block_count == 0xFFFF || first_block < MC_FST_BLOCKS || first_block >= block_max)
-    return std::nullopt;
-
-  const u32 file_size = block_count * BLOCK_SIZE;
-  if (offset >= file_size)
-    return std::nullopt;
-
-  const size_t bytes_to_copy = length < file_size - offset ? length : file_size - offset;
-  std::vector<u8> result;
-  result.reserve(bytes_to_copy);
-
-  u16 current_block = first_block;
-  size_t offset_in_current_block = offset;
-  size_t bytes_remaining = bytes_to_copy;
-
-  // skip unnecessary blocks at start
-  while (offset_in_current_block >= BLOCK_SIZE)
-  {
-    offset_in_current_block -= BLOCK_SIZE;
-    current_block = bat.GetNextBlock(current_block);
-    if (current_block < MC_FST_BLOCKS || current_block >= block_max)
-      return std::nullopt;
-  }
-
-  // then copy one block at a time into the result vector
-  while (true)
-  {
-    const GCMBlock& block = m_data_blocks[current_block - MC_FST_BLOCKS];
-    const size_t bytes_in_current_block_left = BLOCK_SIZE - offset_in_current_block;
-    const size_t bytes_in_current_block_left_to_copy =
-        bytes_remaining < bytes_in_current_block_left ? bytes_remaining :
-                                                        bytes_in_current_block_left;
-
-    const auto data_to_copy_begin = block.m_block.begin() + offset_in_current_block;
-    const auto data_to_copy_end = data_to_copy_begin + bytes_in_current_block_left_to_copy;
-    result.insert(result.end(), data_to_copy_begin, data_to_copy_end);
-
-    bytes_remaining -= bytes_in_current_block_left_to_copy;
-    if (bytes_remaining == 0)
-      break;
-
-    offset_in_current_block = 0;
-    current_block = bat.GetNextBlock(current_block);
-    if (current_block < MC_FST_BLOCKS || current_block >= block_max)
-      return std::nullopt;
-  }
-
-  return std::make_optional(std::move(result));
-}
-
-std::optional<std::pair<std::string, std::string>> GCMemcard::GetSaveComments(u8 index) const
-{
-  if (!m_valid || index >= DIRLEN)
-    return std::nullopt;
-
-  const u32 address = GetActiveDirectory().m_dir_entries[index].m_comments_address;
-  if (address == 0xFFFFFFFF)
-    return std::nullopt;
-
-  const auto data = GetSaveDataBytes(index, address, DENTRY_STRLEN * 2);
-  if (!data || data->size() != DENTRY_STRLEN * 2)
-    return std::nullopt;
-
-  const auto string_decoder = IsShiftJIS() ? SHIFTJISToUTF8 : CP1252ToUTF8;
-  const auto strip_null = [](const std::string& s) {
-    auto offset = s.find('\0');
-    if (offset == std::string::npos)
-      offset = s.length();
-    return s.substr(0, offset);
-  };
-
-  const u8* address_1 = data->data();
-  const u8* address_2 = address_1 + DENTRY_STRLEN;
-  const std::string encoded_1(reinterpret_cast<const char*>(address_1), DENTRY_STRLEN);
-  const std::string encoded_2(reinterpret_cast<const char*>(address_2), DENTRY_STRLEN);
-  return std::make_pair(strip_null(string_decoder(encoded_1)),
-                        strip_null(string_decoder(encoded_2)));
 }
 
 BlockAlloc::BlockAlloc(u16 size_mbits)
@@ -628,25 +485,6 @@ bool GCMemcard::Format(u8* card_data, const CardFlashId& flash_id, u16 size_mbit
   std::memcpy(&card_data[BLOCK_SIZE * 4], &bat, BLOCK_SIZE);
 
   return true;
-}
-
-bool GCMemcard::Format(const CardFlashId& flash_id, u16 size_mbits, bool shift_jis, u32 rtc_bias,
-                       u32 sram_language, u64 format_time)
-{
-  m_header_block = Header(flash_id, size_mbits, shift_jis, rtc_bias, sram_language, format_time);
-  m_directory_blocks[0] = m_directory_blocks[1] = Directory();
-  m_bat_blocks[0] = m_bat_blocks[1] = BlockAlloc(size_mbits);
-
-  m_size_mb = size_mbits;
-  m_size_blocks = (u32)m_size_mb * MBIT_TO_BLOCKS;
-  m_data_blocks.clear();
-  m_data_blocks.resize(m_size_blocks - MC_FST_BLOCKS);
-
-  m_active_directory = 0;
-  m_active_bat = 0;
-  m_valid = true;
-
-  return Save();
 }
 
 /*************************************************************/

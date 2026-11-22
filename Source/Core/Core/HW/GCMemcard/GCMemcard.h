@@ -390,7 +390,6 @@ class GCMemcard
 {
 private:
   bool m_valid;
-  std::string m_filename;
 
   u32 m_size_blocks;
   u16 m_size_mb;
@@ -409,10 +408,6 @@ private:
   const BlockAlloc& GetActiveBat() const;
 
 public:
-  static std::optional<GCMemcard> Create(std::string filename, const CardFlashId& flash_id,
-                                         u16 size_mbits, bool shift_jis, u32 rtc_bias,
-                                         u32 sram_language, u64 format_time);
-
   static std::pair<GCMemcardErrorCode, std::optional<GCMemcard>> Open(std::string filename);
 
   GCMemcard(const GCMemcard&) = delete;
@@ -421,10 +416,6 @@ public:
   GCMemcard& operator=(GCMemcard&&) = default;
 
   bool IsValid() const { return m_valid; }
-  bool IsShiftJIS() const;
-  bool Save();
-  bool Format(const CardFlashId& flash_id, u16 size_mbits, bool shift_jis, u32 rtc_bias,
-              u32 sram_language, u64 format_time);
   static bool Format(u8* card_data, const CardFlashId& flash_id, u16 size_mbits, bool shift_jis,
                      u32 rtc_bias, u32 sram_language, u64 format_time);
   static s32 FZEROGX_MakeSaveGameValid(const Header& cardheader, const DEntry& direntry,
@@ -432,43 +423,15 @@ public:
   static s32 PSO_MakeSaveGameValid(const Header& cardheader, const DEntry& direntry,
                                    GCMBlock* FileBuffer, size_t num_blocks);
 
-  bool FixChecksums();
-
-  // get number of file entries in the directory
-
-  // get the free blocks from bat
-
-  // Returns index of the save with the same identity as the given DEntry, or nullopt if no save
-  // with that identity exists in this card.
-
   // DEntry functions, all take u8 index < DIRLEN (127)
   // get first block for file
   u16 DEntry_FirstBlock(u8 index) const;
   // get file length in blocks
   u16 DEntry_BlockCount(u8 index) const;
 
-  std::optional<std::vector<u8>>
-  GetSaveDataBytes(u8 save_index, size_t offset = 0,
-                   size_t length = std::numeric_limits<size_t>::max()) const;
-
-  // Returns, if available, the two strings shown on the save file in the GC BIOS, in UTF8.
-  // The first is the big line on top, usually the game title, and the second is the smaller line
-  // next to the block size, often a progress indicator or subtitle.
-  std::optional<std::pair<std::string, std::string>> GetSaveComments(u8 index) const;
-
-  // Fetches a DEntry from the given file index.
-
   GCMemcardGetSaveDataRetVal GetSaveData(u8 index, std::vector<GCMBlock>& saveBlocks) const;
-
-  // Adds the given savefile to the memory card, if possible.
 
   // Fetches the savefile at the given directory index, if any.
   std::optional<Savefile> ExportFile(u8 index) const;
-
-  // delete a file from the directory
-
-  // reads the banner image
-
-  // reads the animation frames
 };
 }  // namespace Memcard
