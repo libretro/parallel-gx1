@@ -35,7 +35,7 @@ public:
   NetKDRequestDevice(EmulationKernel& ios, const std::string& device_name,
                      NetKDTimeDevice* time_device);
   IPCReply HandleNWC24DownloadNowEx(const IOCtlRequest& request);
-  NWC24::ErrorCode KDDownload(const u16 entry_index, const std::optional<u8> subtask_id);
+  NWC24::ErrorCode KDDownload(const u16 entry_index, s32 subtask_id);
   IPCReply HandleNWC24CheckMailNow(const IOCtlRequest& request);
   ~NetKDRequestDevice() override;
 
@@ -107,8 +107,8 @@ private:
   void LogError(ErrorType error_type, s32 error_code);
   void SchedulerTimer();
   void SchedulerWorker(SchedulerEvent event);
-  NWC24::ErrorCode DetermineDownloadTask(u16* entry_index, std::optional<u8>* subtask_id) const;
-  NWC24::ErrorCode DetermineSubtask(u16 entry_index, std::optional<u8>* subtask_id) const;
+  NWC24::ErrorCode DetermineDownloadTask(u16* entry_index, s32* subtask_id) const;
+  NWC24::ErrorCode DetermineSubtask(u16 entry_index, s32* subtask_id) const;
 
   static constexpr u32 MAX_MAIL_SIZE = 208952;
   static std::string GetValueFromCGIResponse(const std::string& response, const std::string& key);

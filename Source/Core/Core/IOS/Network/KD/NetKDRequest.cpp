@@ -297,7 +297,7 @@ void NetKDRequestDevice::SchedulerWorker(const SchedulerEvent event)
   if (event == SchedulerEvent::Download)
   {
     u16 entry_index{};
-    std::optional<u8> subtask_id{};
+    s32 subtask_id = NWC24::NO_SUBTASK;
     NWC24::ErrorCode code = DetermineDownloadTask(&entry_index, &subtask_id);
     if (code != NWC24::WC24_OK)
     {
@@ -476,8 +476,7 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
   return NWC24::WC24_OK;
 }
 
-NWC24::ErrorCode NetKDRequestDevice::DetermineDownloadTask(u16* entry_index,
-                                                           std::optional<u8>* subtask_id) const
+NWC24::ErrorCode NetKDRequestDevice::DetermineDownloadTask(u16* entry_index, s32* subtask_id) const
 {
   // As the scheduler does not tell us which entry to download, we must determine that.
   // A correct entry is one that hasn't been downloaded the longest compared to other entries.
@@ -525,8 +524,7 @@ NWC24::ErrorCode NetKDRequestDevice::DetermineDownloadTask(u16* entry_index,
   return NWC24::WC24_OK;
 }
 
-NWC24::ErrorCode NetKDRequestDevice::DetermineSubtask(u16 entry_index,
-                                                      std::optional<u8>* subtask_id) const
+NWC24::ErrorCode NetKDRequestDevice::DetermineSubtask(u16 entry_index, s32* subtask_id) const
 {
   // Before we do anything, determine if this task wants to be downloaded
   if (m_dl_list.IsSubtaskDownloadDisabled(entry_index))
@@ -675,8 +673,7 @@ NWC24::ErrorCode NetKDRequestDevice::KDSendMail()
   return NWC24::WC24_OK;
 }
 
-NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index,
-                                                const std::optional<u8> subtask_id)
+NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index, const s32 subtask_id)
 {
   bool success = false;
   Common::ScopeGuard state_guard([&] {
@@ -779,8 +776,8 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index,
 
     if (m_dl_list.IsEncrypted(entry_index))
     {
-      std::optional<NWC24::WC24PubkMod> pubk_mod = m_dl_list.GetWC24PubkMod(entry_index);
-      if (!pubk_mod)
+      NWC24::WC24PubkMod pubk_mod;
+      if (!m_dl_list.GetWC24PubkMod(entry_index, &pubk_mod))
       {
         ERROR_LOG(IOS_WC24, "Failed to get wc24pubk.mod for the current task.");
         LogError(ErrorType::KD_Download, NWC24::WC24_ERR_FILE_OPEN);
@@ -789,7 +786,7 @@ NWC24::ErrorCode NetKDRequestDevice::KDDownload(const u16 entry_index,
 
       file_data = std::vector<u8>(response->size() - 320);
 
-      CryptOFB(pubk_mod->aes_key, wc24_file.iv, temp_buffer.data(), file_data.data(),
+      CryptOFB(pubk_mod.aes_key, wc24_file.iv, temp_buffer.data(), file_data.data(),
                temp_buffer.size());
     }
     else
@@ -906,7 +903,7 @@ IPCReply NetKDRequestDevice::HandleNWC24DownloadNowEx(const IOCtlRequest& reques
   }
   else
   {
-    reply = KDDownload(entry_index, std::nullopt);
+    reply = KDDownload(entry_index, NWC24::NO_SUBTASK);
   }
 
   WriteReturnValue(memory, reply, request.buffer_out);

@@ -8,7 +8,6 @@
 #include <cstring>
 #include <ctime>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -67,15 +66,15 @@ bool WC24SendList::ReadSendList()
       m_data.header.next_entry_offset >
           sizeof(MailListEntry) * (MAX_ENTRIES - 1) + sizeof(MailListEntry))
   {
-    const std::optional<u32> next_entry_index = GetNextFreeEntryIndex();
-    if (!next_entry_index)
+    u32 next_entry_index;
+    if (!GetNextFreeEntryIndex(&next_entry_index))
     {
       // If there are no free entries, we will have to overwrite an entry.
       m_data.header.next_entry_offset = Common::swap32(128);
     }
     else
     {
-      m_data.header.next_entry_offset = CalculateFileOffset(next_entry_index.value());
+      m_data.header.next_entry_offset = CalculateFileOffset(next_entry_index);
     }
   }
 
@@ -186,15 +185,18 @@ std::vector<u32> WC24SendList::GetMailToSend() const
   return mails;
 }
 
-std::optional<u32> WC24SendList::GetNextFreeEntryIndex() const
+bool WC24SendList::GetNextFreeEntryIndex(u32* free_index) const
 {
   for (u32 index = 0; index < MAX_ENTRIES; index++)
   {
     if (GetEntryId(index) == 0)
-      return index;
+    {
+      *free_index = index;
+      return true;
+    }
   }
 
-  return std::nullopt;
+  return false;
 }
 
 std::string_view WC24SendList::GetMailFlag() const

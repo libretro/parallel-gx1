@@ -92,31 +92,31 @@ bool NWC24Dl::DoesEntryExist(u16 entry_index) const
   return m_data.entries[entry_index].low_title_id != 0;
 }
 
-std::string NWC24Dl::GetDownloadURL(u16 entry_index, std::optional<u8> subtask_id) const
+std::string NWC24Dl::GetDownloadURL(u16 entry_index, s32 subtask_id) const
 {
   ASSERT(!IsDisabled());
   std::string url(m_data.entries[entry_index].dl_url);
 
   // Determine if we need to append the subtask to the URL.
-  if (subtask_id &&
+  if (subtask_id != NO_SUBTASK &&
       Common::ExtractBit(Common::swap32(m_data.entries[entry_index].subtask_bitmask), 1))
   {
-    url.append(StringFromFormat(".%02d", (unsigned)(*subtask_id)));
+    url.append(StringFromFormat(".%02d", (unsigned)subtask_id));
   }
 
   return url;
 }
 
-std::string NWC24Dl::GetVFFContentName(u16 entry_index, std::optional<u8> subtask_id) const
+std::string NWC24Dl::GetVFFContentName(u16 entry_index, s32 subtask_id) const
 {
   ASSERT(!IsDisabled());
   std::string content(m_data.entries[entry_index].filename);
 
   // Determine if we need to append the subtask to the name.
-  if (subtask_id &&
+  if (subtask_id != NO_SUBTASK &&
       Common::ExtractBit(Common::swap32(m_data.entries[entry_index].subtask_bitmask), 0))
   {
-    content.append(StringFromFormat(".%02d", (unsigned)(*subtask_id)));
+    content.append(StringFromFormat(".%02d", (unsigned)subtask_id));
   }
 
   return content;
@@ -131,10 +131,9 @@ std::string NWC24Dl::GetVFFPath(u16 entry_index) const
   return StringFromFormat("/title/%08x/%08x/data/wc24dl.vff", lower_title_id, high_title_id);
 }
 
-std::optional<WC24PubkMod> NWC24Dl::GetWC24PubkMod(u16 entry_index) const
+bool NWC24Dl::GetWC24PubkMod(u16 entry_index, WC24PubkMod* pubk_mod) const
 {
   ASSERT(!IsDisabled());
-  WC24PubkMod pubk_mod;
   const u32 lower_title_id = Common::swap32(m_data.entries[entry_index].low_title_id);
   const u32 high_title_id = Common::swap32(m_data.entries[entry_index].high_title_id);
 
@@ -143,12 +142,11 @@ std::optional<WC24PubkMod> NWC24Dl::GetWC24PubkMod(u16 entry_index) const
 
   const auto file = m_fs->OpenFile(PID_KD, PID_KD, path.c_str(), IOS::HLE::FS::Mode::Read);
   if (!file)
-    return std::nullopt;
+    return false;
 
-  if (!file->Read(&pubk_mod, 1))
-    return std::nullopt;
-
-  return pubk_mod;
+  if (!file->Read(pubk_mod, 1))
+    return false;
+  return true;
 }
 
 bool NWC24Dl::IsEncrypted(u16 entry_index) const
@@ -221,12 +219,12 @@ u64 NWC24Dl::GetDownloadMargin(u16 entry_index) const
   return Common::swap16(m_data.entries[entry_index].dl_margin) * SECONDS_PER_MINUTE;
 }
 
-void NWC24Dl::SetNextDownloadTime(u16 record_index, u64 value, std::optional<u8> subtask_id)
+void NWC24Dl::SetNextDownloadTime(u16 record_index, u64 value, s32 subtask_id)
 {
   ASSERT(!IsDisabled());
-  if (subtask_id)
+  if (subtask_id != NO_SUBTASK)
   {
-    m_data.entries[record_index].subtask_timestamps[*subtask_id] =
+    m_data.entries[record_index].subtask_timestamps[subtask_id] =
         Common::swap32(static_cast<u32>(value / SECONDS_PER_MINUTE));
   }
 

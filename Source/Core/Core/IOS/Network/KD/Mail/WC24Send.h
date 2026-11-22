@@ -6,7 +6,6 @@
 #include <array>
 #include <cinttypes>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -45,7 +44,8 @@ public:
   u32 GetMailSize(u32 index) const;
   ErrorCode DeleteMessage(u32 index);
   std::string GetMailPath(u32 index) const;
-  std::optional<u32> GetNextFreeEntryIndex() const;
+  // False when every entry is taken
+  bool GetNextFreeEntryIndex(u32* index) const;
 
 private:
   static constexpr u32 MAX_ENTRIES = 127;

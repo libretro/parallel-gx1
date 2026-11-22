@@ -4,7 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <optional>
 #include <string>
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Network/KD/WC24File.h"
@@ -17,6 +16,9 @@ class FileSystem;
 }
 namespace NWC24
 {
+// A subtask ID, or NO_SUBTASK for a task as a whole
+constexpr s32 NO_SUBTASK = -1;
+
 class NWC24Dl final
 {
 public:
@@ -35,14 +37,14 @@ public:
   bool HasSubtask(u16 entry_index) const;
   bool IsSubtaskDownloadDisabled(u16 entry_index) const;
   bool IsValidSubtask(u16 entry_index, u8 subtask_id) const;
-  std::string GetVFFContentName(u16 entry_index, std::optional<u8> subtask_id) const;
-  std::string GetDownloadURL(u16 entry_index, std::optional<u8> subtask_id) const;
+  std::string GetVFFContentName(u16 entry_index, s32 subtask_id) const;
+  std::string GetDownloadURL(u16 entry_index, s32 subtask_id) const;
   std::string GetVFFPath(u16 entry_index) const;
-  std::optional<WC24PubkMod> GetWC24PubkMod(u16 entry_index) const;
+  bool GetWC24PubkMod(u16 entry_index, WC24PubkMod* pubk_mod) const;
 
   u64 GetNextDownloadTime(u16 record_index) const;
   u64 GetDownloadMargin(u16 entry_index) const;
-  void SetNextDownloadTime(u16 record_index, u64 value, std::optional<u8> subtask_id);
+  void SetNextDownloadTime(u16 record_index, u64 value, s32 subtask_id);
   u64 GetRetryTime(u16 entry_index) const;
   u64 GetLastSubtaskDownloadTime(u16 entry_index, u8 subtask_id) const;
 
