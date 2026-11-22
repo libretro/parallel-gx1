@@ -103,11 +103,6 @@ std::string BlobReader::GetCompressionMethod() const
   return AsOwnClass(this, [](auto* r) { return r->GetCompressionMethod(); });
 }
 
-std::optional<int> BlobReader::GetCompressionLevel() const
-{
-  return AsOwnClass(this, [](auto* r) { return r->GetCompressionLevel(); });
-}
-
 bool BlobReader::Read(u64 offset, u64 size, u8* out_ptr)
 {
   return AsOwnClass(this, [&](auto* r) { return r->Read(offset, size, out_ptr); });

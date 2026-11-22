@@ -54,7 +54,6 @@ public:
   u64 GetBlockSize() const { return BLOCK_SIZE; }
   bool HasFastRandomAccessInBlock() const { return false; }
   std::string GetCompressionMethod() const { return {}; }
-  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
   bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 

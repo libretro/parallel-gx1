@@ -32,7 +32,6 @@ public:
   u64 GetBlockSize() const { return m_wbfs_sector_size; }
   bool HasFastRandomAccessInBlock() const { return true; }
   std::string GetCompressionMethod() const { return {}; }
-  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
   bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 

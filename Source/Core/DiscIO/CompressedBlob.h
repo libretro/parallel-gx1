@@ -58,7 +58,6 @@ public:
   u64 GetBlockSize() const { return m_header.block_size; }
   bool HasFastRandomAccessInBlock() const { return false; }
   std::string GetCompressionMethod() const { return "Deflate"; }
-  std::optional<int> GetCompressionLevel() const { return std::nullopt; }
 
   u64 GetBlockCompressedSize(u64 block_num) const;
   bool GetBlock(u64 block_num, u8* out_ptr);

@@ -29,7 +29,6 @@ public:
   u64 GetBlockSize() const { return m_blob_reader->GetBlockSize(); }
   bool HasFastRandomAccessInBlock() const { return m_blob_reader->HasFastRandomAccessInBlock(); }
   std::string GetCompressionMethod() const { return m_blob_reader->GetCompressionMethod(); }
-  std::optional<int> GetCompressionLevel() const { return m_blob_reader->GetCompressionLevel(); }
 
   bool Read(u64 offset, u64 size, u8* out_ptr);
 

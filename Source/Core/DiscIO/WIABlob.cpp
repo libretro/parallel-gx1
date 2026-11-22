@@ -73,7 +73,7 @@ WIARVZFileReader* WIARVZFileReader::Create(File::DirectIOFile file, const std::s
     DestroyBlobReader(blob);
     return nullptr;
   }
-  blob->m_compression = rvz_compression(blob->m_reader, &blob->m_level);
+  blob->m_compression = rvz_compression(blob->m_reader, nullptr);
   blob->m_raw_size = blob->m_file.GetSize();
   blob->m_data_size = rvz_disc_size(blob->m_reader);
   blob->m_block_size = rvz_chunk_size(blob->m_reader);

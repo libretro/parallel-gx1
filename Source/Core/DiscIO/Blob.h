@@ -96,7 +96,6 @@ public:
   u64 GetBlockSize() const;
   bool HasFastRandomAccessInBlock() const;
   std::string GetCompressionMethod() const;
-  std::optional<int> GetCompressionLevel() const;
 
   // NOT thread-safe - can't call this from multiple threads.
   bool Read(u64 offset, u64 size, u8* out_ptr);

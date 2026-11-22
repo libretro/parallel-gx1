@@ -37,7 +37,6 @@ public:
   u64 GetBlockSize() const { return m_block_size; }
   bool HasFastRandomAccessInBlock() const { return false; }
   std::string GetCompressionMethod() const;
-  std::optional<int> GetCompressionLevel() const { return m_level; }
 
   bool Read(u64 offset, u64 size, u8* out_ptr);
   bool SupportsReadWiiDecrypted(u64 offset, u64 size, u64 partition_data_offset) const;
@@ -54,7 +53,6 @@ private:
   struct rvz* m_reader = nullptr;
   bool m_rvz;
   int m_compression = 0;
-  int m_level = 0;
   u64 m_raw_size = 0;
   u64 m_data_size = 0;
   u64 m_block_size = 0;
