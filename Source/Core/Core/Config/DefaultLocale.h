@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <optional>
-
 #include "Common/CommonTypes.h"
 
 namespace DiscIO
@@ -16,7 +14,6 @@ enum class Region;
 namespace Config
 {
 DiscIO::Language GetDefaultLanguage();
-std::optional<u8> GetOptionalDefaultCountry();
 u8 GetDefaultCountry();
 DiscIO::Region GetDefaultRegion();
 }  // namespace Config
