@@ -12,18 +12,6 @@ class SysConf;
 
 namespace IOS::HLE
 {
-template <typename T>
-static void DoStateForMessage(EmulationKernel& ios, PointerWrap& p, std::unique_ptr<T>& message)
-{
-  u32 request_address = (message != nullptr) ? message->ios_request.address : 0;
-  p.Do(request_address);
-  if (request_address != 0)
-  {
-    IOCtlVRequest request{ios.GetSystem(), request_address};
-    message = std::make_unique<T>(ios, request);
-  }
-}
-
 void BackUpBTInfoSection(const SysConf* sysconf);
 void RestoreBTInfoSection(SysConf* sysconf);
 

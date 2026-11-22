@@ -7,7 +7,6 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -39,19 +38,39 @@ BluetoothRealDevice::BluetoothRealDevice(EmulationKernel& ios, const std::string
 BluetoothRealDevice::~BluetoothRealDevice()
 {
   SaveLinkKeys();
+  delete m_hci_endpoint;
+  delete m_acl_endpoint;
+  delete m_lib_usb_bt_adapter;
+}
+
+// The message waiting on a request, kept as the request's address, 0 for none
+template <typename T>
+static void DoStateForMessage(EmulationKernel& ios, PointerWrap& p, T*& message)
+{
+  u32 request_address = (message != nullptr) ? message->ios_request.address : 0;
+  p.Do(request_address);
+  if (request_address != 0)
+  {
+    IOCtlVRequest request{ios.GetSystem(), request_address};
+    delete message;
+    message = new T(ios, request);
+  }
 }
 
 IPCReply BluetoothRealDevice::Open(const OpenRequest& request)
 {
-  m_lib_usb_bt_adapter = std::make_unique<LibUSBBluetoothAdapter>();
+  delete m_lib_usb_bt_adapter;
+  m_lib_usb_bt_adapter = new LibUSBBluetoothAdapter();
 
   return Device::Open(request);
 }
 
 IPCReply BluetoothRealDevice::Close(u32 fd)
 {
-  m_hci_endpoint.reset();
-  m_acl_endpoint.reset();
+  delete m_hci_endpoint;
+  m_hci_endpoint = nullptr;
+  delete m_acl_endpoint;
+  m_acl_endpoint = nullptr;
 
   m_fake_reply_head = 0;
   m_fake_reply_count = 0;
@@ -59,7 +78,8 @@ IPCReply BluetoothRealDevice::Close(u32 fd)
   // FYI: LibUSBBluetoothAdapter destruction will attempt to wait for command completion.
   SendHCIResetCommand();
 
-  m_lib_usb_bt_adapter.reset();
+  delete m_lib_usb_bt_adapter;
+  m_lib_usb_bt_adapter = nullptr;
 
   return Device::Close(fd);
 }
@@ -73,7 +93,8 @@ IPCReply BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request)
   {
     auto& memory = GetSystem().GetMemory();
 
-    auto cmd = std::make_unique<USB::V0CtrlMessage>(GetEmulationKernel(), request);
+    const USB::V0CtrlMessage ctrl(GetEmulationKernel(), request);
+    const USB::V0CtrlMessage* const cmd = &ctrl;
     const u16 opcode = Common::swap16(memory.Read_U16(cmd->data_address));
     if (!m_lib_usb_bt_adapter->IsWiiBTModule() && (opcode == 0xFC4C || opcode == 0xFC4F))
     {
@@ -132,10 +153,11 @@ IPCReply BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request)
   // ACL data (incoming or outgoing)
   case USB::IOCTLV_USBV0_BLKMSG:
   {
-    auto cmd = std::make_unique<USB::V0BulkMessage>(GetEmulationKernel(), request);
+    USB::V0BulkMessage* const cmd = new USB::V0BulkMessage(GetEmulationKernel(), request);
     if (cmd->endpoint == ACL_DATA_IN)
     {
-      m_acl_endpoint = std::move(cmd);
+      delete m_acl_endpoint;
+      m_acl_endpoint = cmd;
       TryToFillACLEndpoint();
       return IPCReply::None();
     }
@@ -144,21 +166,24 @@ IPCReply BluetoothRealDevice::IOCtlV(const IOCtlVRequest& request)
     const u8* const payload = memory.GetPointerForRange(cmd->data_address, cmd->length);
     if (payload)
       m_lib_usb_bt_adapter->SendBulkTransfer(cmd->endpoint, payload, cmd->length);
+    delete cmd;
     break;
   }
   // Incoming HCI events
   case USB::IOCTLV_USBV0_INTRMSG:
   {
-    auto cmd = std::make_unique<USB::V0IntrMessage>(GetEmulationKernel(), request);
+    USB::V0IntrMessage* const cmd = new USB::V0IntrMessage(GetEmulationKernel(), request);
     if (cmd->endpoint == HCI_EVENT)
     {
-      m_hci_endpoint = std::move(cmd);
+      delete m_hci_endpoint;
+      m_hci_endpoint = cmd;
       TryToFillHCIEndpoint();
       return IPCReply::None();
     }
 
     ERROR_LOG(IOS_WIIMOTE, "IOCTLV_USBV0_INTRMSG: Unknown endpoint: 0x%02x",
               (unsigned)cmd->endpoint);
+    delete cmd;
     break;
   }
   default:
@@ -209,7 +234,8 @@ void BluetoothRealDevice::TryToFillHCIEndpoint()
     GetEmulationKernel().EnqueueIPCReply(m_hci_endpoint->ios_request, s32(buffer.size()));
   }
 
-  m_hci_endpoint.reset();
+  delete m_hci_endpoint;
+  m_hci_endpoint = nullptr;
 }
 
 auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
@@ -327,7 +353,8 @@ void BluetoothRealDevice::TryToFillACLEndpoint()
   GetEmulationKernel().EnqueueIPCReply(m_acl_endpoint->ios_request, s32(size));
   m_lib_usb_bt_adapter->PopACLData();
 
-  m_acl_endpoint.reset();
+  delete m_acl_endpoint;
+  m_acl_endpoint = nullptr;
 }
 
 void BluetoothRealDevice::DoState(PointerWrap& p)

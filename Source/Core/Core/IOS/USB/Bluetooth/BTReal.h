@@ -5,7 +5,6 @@
 
 #if defined(__LIBUSB__)
 #include <array>
-#include <memory>
 #include <string>
 
 #include <retro_atomic.h>
@@ -52,7 +51,7 @@ public:
 private:
   using BufferType = LibUSBBluetoothAdapter::BufferType;
 
-  std::unique_ptr<LibUSBBluetoothAdapter> m_lib_usb_bt_adapter;
+  LibUSBBluetoothAdapter* m_lib_usb_bt_adapter = nullptr;  // owned
 
   static constexpr u32 SYNC_BUTTON_HOLD_MS_TO_RESET = 10000;
 
@@ -90,8 +89,9 @@ private:
   void EraseLinkKey(const bdaddr_t& bdaddr);
 
   // Endpoints provided by the emulated software.
-  std::unique_ptr<USB::V0IntrMessage> m_hci_endpoint;
-  std::unique_ptr<USB::V0BulkMessage> m_acl_endpoint;
+  // Owned, the requests waiting for an HCI event and ACL data
+  USB::V0IntrMessage* m_hci_endpoint = nullptr;
+  USB::V0BulkMessage* m_acl_endpoint = nullptr;
 
   // Used for proper Bluetooth packet timing, especially for Wii remote speaker data.
 
