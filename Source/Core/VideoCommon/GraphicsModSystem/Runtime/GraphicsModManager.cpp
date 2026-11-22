@@ -19,9 +19,7 @@
 
 #include "Core/ConfigManager.h"
 
-#include "VideoCommon/Assets/DirectFilesystemAssetLibrary.h"
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsMod.h"
-#include "VideoCommon/GraphicsModSystem/Config/GraphicsModAsset.h"
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsModGroup.h"
 #include "VideoCommon/GraphicsModSystem/Constants.h"
 #include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionFactory.h"
@@ -247,8 +245,6 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
 
   const auto& mods = config.GetMods();
 
-  auto filesystem_library = std::make_shared<VideoCommon::DirectFilesystemAssetLibrary>();
-
   std::map<std::string, std::vector<GraphicsTargetConfig>> group_to_targets;
   for (const auto& mod : mods)
   {
@@ -270,35 +266,11 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
         group_to_targets[internal_group].push_back(target);
       }
     }
-
-    std::string base_path;
-    SplitPath(mod.GetAbsolutePath(), &base_path, nullptr, nullptr);
-    for (const GraphicsModAssetConfig& asset : mod.m_assets)
-    {
-      auto asset_map = asset.m_map;
-      for (auto& [k, v] : asset_map)
-      {
-        if (path_is_absolute(v.c_str()))
-        {
-          WARN_LOG(VIDEO,
-                   "Specified graphics mod asset '%s' for mod '%s' has an absolute path, you "
-                   "shouldn't release this to users.",
-                   asset.m_asset_id.c_str(), mod.m_title.c_str());
-        }
-        else
-        {
-          v = base_path + v;
-        }
-      }
-
-      filesystem_library->SetAssetIDMapData(asset.m_asset_id, std::move(asset_map));
-    }
   }
 
-  const auto create_action = [filesystem_library = std::move(filesystem_library)](
-                                 const std::string_view& action_name, const Common::Vec3& xyz,
-                                 GraphicsModConfig mod_config) -> GraphicsModAction* {
-    auto action = GraphicsModActionFactory::Create(action_name, xyz, filesystem_library);
+  const auto create_action = [](const std::string_view& action_name, const Common::Vec3& xyz,
+                                GraphicsModConfig mod_config) -> GraphicsModAction* {
+    auto action = GraphicsModActionFactory::Create(action_name, xyz);
     if (action == nullptr)
     {
       return nullptr;

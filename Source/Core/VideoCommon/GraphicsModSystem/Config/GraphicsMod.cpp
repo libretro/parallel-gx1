@@ -269,89 +269,6 @@ bool ReadFeature(rjson_t* json, GraphicsModFeatureConfig* feature)
   return t == RJSON_OBJECT_END;
 }
 
-/* { "name": ..., "data": { key: path, ... } } after its '{' */
-bool ReadAsset(rjson_t* json, GraphicsModAssetConfig* asset)
-{
-  static const char* const names[] = {"name", "data"};
-  enum rjson_type name_type = RJSON_DONE;
-  enum rjson_type data_type = RJSON_DONE;
-  std::string bad_key;
-  enum rjson_type t;
-  while ((t = rjson_next(json)) == RJSON_STRING)
-  {
-    const int k = Key(json, names, 2);
-    t = rjson_next(json);
-    if (k == 0)
-    {
-      name_type = t;
-      if (t == RJSON_STRING)
-        asset->m_asset_id = Text(json);
-    }
-    else if (k == 1)
-    {
-      data_type = t;
-      asset->m_map.clear();
-      bad_key.clear();
-      if (t == RJSON_OBJECT)
-      {
-        while ((t = rjson_next(json)) == RJSON_STRING)
-        {
-          std::string key(Text(json));
-          t = rjson_next(json);
-          if (t == RJSON_STRING)
-            asset->m_map[key] = Text(json);
-          else if (bad_key.empty())
-            bad_key = std::move(key);
-          if (!Skip(json, t))
-            return false;
-        }
-        if (t != RJSON_OBJECT_END)
-          return false;
-        continue;
-      }
-    }
-    if (!Skip(json, t))
-      return false;
-  }
-  if (t != RJSON_OBJECT_END)
-    return false;
-
-  if (name_type == RJSON_DONE)
-  {
-    ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified asset has no name");
-    return false;
-  }
-  if (name_type != RJSON_STRING)
-  {
-    ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified asset has a name "
-                     "that is not a string");
-    return false;
-  }
-  if (data_type == RJSON_DONE)
-  {
-    ERROR_LOG(VIDEO, "Failed to load mod configuration file, specified asset '%s' has no data",
-              asset->m_asset_id.c_str());
-    return false;
-  }
-  if (data_type != RJSON_OBJECT)
-  {
-    ERROR_LOG(VIDEO,
-              "Failed to load mod configuration file, specified asset '%s' has data "
-              "that is not an object",
-              asset->m_asset_id.c_str());
-    return false;
-  }
-  if (!bad_key.empty())
-  {
-    ERROR_LOG(VIDEO,
-              "Failed to load mod configuration file, specified asset '%s' has data "
-              "with a value for key '%s' that is not a string",
-              asset->m_asset_id.c_str(), bad_key.c_str());
-    return false;
-  }
-  return true;
-}
-
 /* An array member of objects, each through read into a new element of out. */
 template <typename T, typename F>
 bool ReadObjects(rjson_t* json, enum rjson_type t, std::vector<T>* out, std::string_view what,
@@ -378,13 +295,13 @@ bool ReadObjects(rjson_t* json, enum rjson_type t, std::vector<T>* out, std::str
 /* A mod's metadata.json */
 bool ReadConfig(rjson_t* json, GraphicsModConfig* mod)
 {
-  static const char* const names[] = {"meta", "groups", "features", "assets"};
+  static const char* const names[] = {"meta", "groups", "features"};
   enum rjson_type t = rjson_next(json);
   if (t != RJSON_OBJECT)
     return Skip(json, t);
   while ((t = rjson_next(json)) == RJSON_STRING)
   {
-    const int k = Key(json, names, 4);
+    const int k = Key(json, names, 3);
     bool ok;
     t = rjson_next(json);
     switch (k)
@@ -397,9 +314,6 @@ bool ReadConfig(rjson_t* json, GraphicsModConfig* mod)
       break;
     case 2:
       ok = ReadObjects(json, t, &mod->m_features, "feature", ReadFeature);
-      break;
-    case 3:
-      ok = ReadObjects(json, t, &mod->m_assets, "asset", ReadAsset);
       break;
     default:
       ok = Skip(json, t);

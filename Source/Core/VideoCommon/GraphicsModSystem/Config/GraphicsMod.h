@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-#include "VideoCommon/GraphicsModSystem/Config/GraphicsModAsset.h"
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsModFeature.h"
 #include "VideoCommon/GraphicsModSystem/Config/GraphicsTargetGroup.h"
 
@@ -29,7 +28,6 @@ struct GraphicsModConfig
 
   std::vector<GraphicsTargetGroupConfig> m_groups;
   std::vector<GraphicsModFeatureConfig> m_features;
-  std::vector<GraphicsModAssetConfig> m_assets;
 
   static std::optional<GraphicsModConfig> Create(const std::string& file, Source source);
 

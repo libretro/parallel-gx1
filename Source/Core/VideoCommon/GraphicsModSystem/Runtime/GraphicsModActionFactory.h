@@ -12,7 +12,5 @@
 
 namespace GraphicsModActionFactory
 {
-std::unique_ptr<GraphicsModAction>
-Create(std::string_view name, const Common::Vec3& xyz,
-       std::shared_ptr<VideoCommon::DirectFilesystemAssetLibrary> library);
+std::unique_ptr<GraphicsModAction> Create(std::string_view name, const Common::Vec3& xyz);
 }
