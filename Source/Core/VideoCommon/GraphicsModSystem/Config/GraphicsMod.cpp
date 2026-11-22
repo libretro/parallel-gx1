@@ -167,10 +167,10 @@ bool ReadTarget(rjson_t* json, std::vector<GraphicsTargetConfig>* targets)
   }
   if (t != RJSON_OBJECT_END)
     return false;
-  auto target = MakeTarget(fields[0], fields[1], fields[2]);
-  if (!target)
+  GraphicsTargetConfig target;
+  if (!MakeTarget(fields[0], fields[1], fields[2], &target))
     return false;
-  targets->push_back(std::move(*target));
+  targets->push_back(std::move(target));
   return true;
 }
 

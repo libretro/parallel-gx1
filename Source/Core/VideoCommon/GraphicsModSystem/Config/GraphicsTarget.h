@@ -3,55 +3,36 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
-#include <variant>
 
 #include "Common/CommonTypes.h"
 #include "VideoCommon/TextureDecoder.h"
 #include "VideoCommon/XFMemory.h"
 
-struct TextureTarget
+enum class GraphicsTargetKind
 {
-  std::string m_texture_info_string;
+  DrawStartedTexture,
+  LoadTexture,
+  CreateTexture,
+  EFB,
+  XFB,
+  Projection,
 };
 
-struct DrawStartedTextureTarget final : public TextureTarget
+// What a mod's feature applies to; which fields are set depends on the kind
+struct GraphicsTargetConfig
 {
+  GraphicsTargetKind kind = GraphicsTargetKind::DrawStartedTexture;
+  // the texture targets, and a projection when has_texture_info is set
+  bool has_texture_info = false;
+  std::string texture_info;
+  // EFB and XFB
+  u32 width = 0;
+  u32 height = 0;
+  TextureFormat texture_format = TextureFormat::I4;
+  // a projection
+  ProjectionType projection_type = ProjectionType::Perspective;
 };
-
-struct LoadTextureTarget final : public TextureTarget
-{
-};
-
-struct CreateTextureTarget final : public TextureTarget
-{
-};
-
-struct FBTarget
-{
-  u32 m_height = 0;
-  u32 m_width = 0;
-  TextureFormat m_texture_format = TextureFormat::I4;
-};
-
-struct EFBTarget final : public FBTarget
-{
-};
-
-struct XFBTarget final : public FBTarget
-{
-};
-
-struct ProjectionTarget
-{
-  std::optional<std::string> m_texture_info_string;
-  ProjectionType m_projection_type = ProjectionType::Perspective;
-};
-
-using GraphicsTargetConfig =
-    std::variant<DrawStartedTextureTarget, LoadTextureTarget, CreateTextureTarget, EFBTarget,
-                 XFBTarget, ProjectionTarget>;
 
 /* A target field as a mod's file gives it: absent, a string, or a value of another kind. */
 struct GraphicsTargetField
@@ -66,6 +47,6 @@ struct GraphicsTargetField
   std::string text;
 };
 
-std::optional<GraphicsTargetConfig> MakeTarget(const GraphicsTargetField& type,
-                                               const GraphicsTargetField& texture_filename,
-                                               const GraphicsTargetField& value);
+// False, with the problem logged, for a target the mod gives wrongly
+bool MakeTarget(const GraphicsTargetField& type, const GraphicsTargetField& texture_filename,
+                const GraphicsTargetField& value, GraphicsTargetConfig* target);

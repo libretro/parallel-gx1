@@ -5,27 +5,24 @@
 
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
-#include "Common/VariantUtil.h"
 #include "VideoCommon/TextureCacheBase.h"
 
 namespace
 {
-template <typename T, std::enable_if_t<std::is_base_of_v<FBTarget, T>, int> = 0>
-std::optional<T> MakeFBTarget(const GraphicsTargetField& texture_filename_field,
-                              std::string_view prefix)
+bool MakeFBTarget(const GraphicsTargetField& texture_filename_field, std::string_view prefix,
+                  GraphicsTargetConfig* fb)
 {
-  T fb;
   if (texture_filename_field.kind == GraphicsTargetField::Kind::Absent)
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, option 'texture_filename' not found");
-    return std::nullopt;
+    return false;
   }
   if (texture_filename_field.kind != GraphicsTargetField::Kind::String)
   {
     ERROR_LOG(
         VIDEO,
         "Failed to load mod configuration file, option 'texture_filename' is not a string type");
-    return std::nullopt;
+    return false;
   }
   const std::string& texture_filename = texture_filename_field.text;
   const auto texture_filename_without_prefix = texture_filename.substr(prefix.size() + 1);
@@ -34,14 +31,14 @@ std::optional<T> MakeFBTarget(const GraphicsTargetField& texture_filename_field,
   {
     ERROR_LOG(VIDEO,
               "Failed to load mod configuration file, value in 'texture_filename' is not valid");
-    return std::nullopt;
+    return false;
   }
   const auto split_width_height_values = SplitString(texture_filename_without_prefix, 'x');
   if (split_width_height_values.size() != 2)
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, value in 'texture_filename' is "
                      "not valid, width and height separator found more matches than expected");
-    return std::nullopt;
+    return false;
   }
 
   const std::size_t width_underscore_pos = split_width_height_values[0].find_last_of('_');
@@ -54,11 +51,11 @@ std::optional<T> MakeFBTarget(const GraphicsTargetField& texture_filename_field,
   {
     width_str = split_width_height_values[0].substr(width_underscore_pos + 1);
   }
-  if (!TryParse(width_str, &fb.m_width))
+  if (!TryParse(width_str, &fb->width))
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, value in 'texture_filename' is "
                      "not valid, width not a number");
-    return std::nullopt;
+    return false;
   }
 
   const std::size_t height_underscore_pos = split_width_height_values[1].find_first_of('_');
@@ -67,14 +64,14 @@ std::optional<T> MakeFBTarget(const GraphicsTargetField& texture_filename_field,
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, value in 'texture_filename' is "
                      "not valid, underscore after height is missing or incomplete");
-    return std::nullopt;
+    return false;
   }
   const std::string height_str = split_width_height_values[1].substr(0, height_underscore_pos);
-  if (!TryParse(height_str, &fb.m_height))
+  if (!TryParse(height_str, &fb->height))
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, value in 'texture_filename' is "
                      "not valid, height not a number");
-    return std::nullopt;
+    return false;
   }
 
   const std::size_t format_underscore_pos =
@@ -95,155 +92,137 @@ std::optional<T> MakeFBTarget(const GraphicsTargetField& texture_filename_field,
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, value in 'texture_filename' is "
                      "not valid, texture format is not a number");
-    return std::nullopt;
+    return false;
   }
   if (!IsValidTextureFormat(static_cast<TextureFormat>(format)))
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, value in 'texture_filename' is "
                      "not valid, texture format is not valid");
-    return std::nullopt;
+    return false;
   }
-  fb.m_texture_format = static_cast<TextureFormat>(format);
+  fb->texture_format = static_cast<TextureFormat>(format);
 
-  return fb;
+  return true;
 }
-std::optional<std::string> ExtractTextureFilename(const GraphicsTargetField& texture_filename)
+
+bool ExtractTextureFilename(const GraphicsTargetField& texture_filename, std::string* out)
 {
   if (texture_filename.kind == GraphicsTargetField::Kind::Absent)
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, option 'texture_filename' not found");
-    return std::nullopt;
+    return false;
   }
   if (texture_filename.kind != GraphicsTargetField::Kind::String)
   {
     ERROR_LOG(
         VIDEO,
         "Failed to load mod configuration file, option 'texture_filename' is not a string type");
-    return std::nullopt;
+    return false;
   }
-  std::string texture_info = texture_filename.text;
+  std::string& texture_info = *out;
+  texture_info = texture_filename.text;
 
-  const auto handle_fb_texture =
-      [&texture_info](std::string_view type) -> std::optional<std::string> {
-    const auto letter_n_pos = texture_info.find("_n");
-    if (letter_n_pos == std::string::npos)
-    {
-      ERROR_LOG(VIDEO,
-                "Failed to load mod configuration file, value in 'texture_filename' "
-                "is %.*s without a count",
-                static_cast<int>(type.size()), type.data());
-      return std::nullopt;
-    }
-
-    const auto post_underscore = texture_info.find_first_of('_', letter_n_pos + 2);
-    if (post_underscore == std::string::npos)
-      return texture_info.erase(letter_n_pos, texture_info.size() - letter_n_pos);
-    else
-      return texture_info.erase(letter_n_pos, post_underscore - letter_n_pos);
-  };
-
+  const char* type;
   if (texture_info.starts_with(EFB_DUMP_PREFIX))
-    return handle_fb_texture("an efb");
+    type = "an efb";
   else if (texture_info.starts_with(XFB_DUMP_PREFIX))
-    return handle_fb_texture("a xfb");
-  return texture_info;
+    type = "a xfb";
+  else
+    return true;
+
+  // an EFB or XFB copy loses its count
+  const auto letter_n_pos = texture_info.find("_n");
+  if (letter_n_pos == std::string::npos)
+  {
+    ERROR_LOG(VIDEO,
+              "Failed to load mod configuration file, value in 'texture_filename' "
+              "is %s without a count",
+              type);
+    return false;
+  }
+
+  const auto post_underscore = texture_info.find_first_of('_', letter_n_pos + 2);
+  if (post_underscore == std::string::npos)
+    texture_info.erase(letter_n_pos, texture_info.size() - letter_n_pos);
+  else
+    texture_info.erase(letter_n_pos, post_underscore - letter_n_pos);
+  return true;
 }
 }  // namespace
 
-std::optional<GraphicsTargetConfig> MakeTarget(const GraphicsTargetField& type_field,
-                                               const GraphicsTargetField& texture_filename,
-                                               const GraphicsTargetField& value)
+bool MakeTarget(const GraphicsTargetField& type_field, const GraphicsTargetField& texture_filename,
+                const GraphicsTargetField& value, GraphicsTargetConfig* target)
 {
+  *target = GraphicsTargetConfig{};
   if (type_field.kind == GraphicsTargetField::Kind::Absent)
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, option 'type' not found");
-    return std::nullopt;
+    return false;
   }
   if (type_field.kind != GraphicsTargetField::Kind::String)
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, option 'type' is not a string type");
-    return std::nullopt;
+    return false;
   }
   const std::string& type = type_field.text;
-  if (type == "draw_started")
+  if (type == "draw_started" || type == "load_texture" || type == "create_texture")
   {
-    std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
-    if (!texture_info.has_value())
-      return std::nullopt;
-
-    DrawStartedTextureTarget target;
-    target.m_texture_info_string = texture_info.value();
-    return target;
-  }
-  else if (type == "load_texture")
-  {
-    std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
-    if (!texture_info.has_value())
-      return std::nullopt;
-
-    LoadTextureTarget target;
-    target.m_texture_info_string = texture_info.value();
-    return target;
-  }
-  else if (type == "create_texture")
-  {
-    std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
-    if (!texture_info.has_value())
-      return std::nullopt;
-
-    CreateTextureTarget target;
-    target.m_texture_info_string = texture_info.value();
-    return target;
+    target->kind = type == "draw_started" ? GraphicsTargetKind::DrawStartedTexture :
+                   type == "load_texture" ? GraphicsTargetKind::LoadTexture :
+                                            GraphicsTargetKind::CreateTexture;
+    target->has_texture_info = true;
+    return ExtractTextureFilename(texture_filename, &target->texture_info);
   }
   else if (type == "efb")
   {
-    return MakeFBTarget<EFBTarget>(texture_filename, EFB_DUMP_PREFIX);
+    target->kind = GraphicsTargetKind::EFB;
+    return MakeFBTarget(texture_filename, EFB_DUMP_PREFIX, target);
   }
   else if (type == "xfb")
   {
-    return MakeFBTarget<XFBTarget>(texture_filename, EFB_DUMP_PREFIX);
+    target->kind = GraphicsTargetKind::XFB;
+    return MakeFBTarget(texture_filename, EFB_DUMP_PREFIX, target);
   }
   else if (type == "projection")
   {
-    ProjectionTarget target;
+    target->kind = GraphicsTargetKind::Projection;
     if (texture_filename.kind != GraphicsTargetField::Kind::Absent)
     {
-      std::optional<std::string> texture_info = ExtractTextureFilename(texture_filename);
-      if (!texture_info.has_value())
-        return std::nullopt;
-      target.m_texture_info_string = texture_info;
+      if (!ExtractTextureFilename(texture_filename, &target->texture_info))
+        return false;
+      target->has_texture_info = true;
     }
     if (value.kind == GraphicsTargetField::Kind::Absent)
     {
       ERROR_LOG(VIDEO, "Failed to load mod configuration file, option 'value' not found");
-      return std::nullopt;
+      return false;
     }
     if (value.kind != GraphicsTargetField::Kind::String)
     {
       ERROR_LOG(VIDEO,
                 "Failed to load mod configuration file, option 'value' is not a string type");
-      return std::nullopt;
+      return false;
     }
     const std::string& value_str = value.text;
     if (value_str == "2d")
     {
-      target.m_projection_type = ProjectionType::Orthographic;
+      target->projection_type = ProjectionType::Orthographic;
     }
     else if (value_str == "3d")
     {
-      target.m_projection_type = ProjectionType::Perspective;
+      target->projection_type = ProjectionType::Perspective;
     }
     else
     {
       ERROR_LOG(VIDEO, "Failed to load mod configuration file, option 'value' is not a valid "
                        "value, valid values are: 2d, 3d");
-      return std::nullopt;
+      return false;
     }
-    return target;
+    return true;
   }
   else
   {
     ERROR_LOG(VIDEO, "Failed to load mod configuration file, option 'type' is not a valid value");
   }
-  return std::nullopt;
+  return false;
 }

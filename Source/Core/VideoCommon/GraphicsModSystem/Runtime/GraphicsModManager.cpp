@@ -8,12 +8,10 @@
 #include <cstring>
 #include <string>
 #include <string_view>
-#include <variant>
 
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
-#include "Common/VariantUtil.h"
 
 #include <file/file_path.h>
 
@@ -291,39 +289,37 @@ void GraphicsModManager::Load(const GraphicsModGroupConfig& config)
       const auto add_target = [&](const GraphicsTargetConfig& target) {
         GraphicsModAction* const action = m_actions[m_num_actions - 1];
         char key[512];
-        std::visit(
-            overloaded{
-                [&](const DrawStartedTextureTarget& the_target) {
-                  snprintf(key, sizeof(key), "d%s", the_target.m_texture_info_string.c_str());
-                  AddLink(key, action);
-                },
-                [&](const LoadTextureTarget& the_target) {
-                  snprintf(key, sizeof(key), "l%s", the_target.m_texture_info_string.c_str());
-                  AddLink(key, action);
-                },
-                // no action runs on texture creation or on XFB copies
-                [](const CreateTextureTarget&) {},
-                [&](const EFBTarget& the_target) {
-                  MakeEFBKey(key, sizeof(key), the_target.m_width, the_target.m_height,
-                             the_target.m_texture_format);
-                  AddLink(key, action);
-                },
-                [](const XFBTarget&) {},
-                [&](const ProjectionTarget& the_target) {
-                  if (the_target.m_texture_info_string)
-                  {
-                    snprintf(key, sizeof(key), "t%s_%d", the_target.m_texture_info_string->c_str(),
-                             static_cast<int>(the_target.m_projection_type));
-                  }
-                  else
-                  {
-                    snprintf(key, sizeof(key), "p%d",
-                             static_cast<int>(the_target.m_projection_type));
-                  }
-                  AddLink(key, action);
-                },
-            },
-            target);
+        switch (target.kind)
+        {
+        case GraphicsTargetKind::DrawStartedTexture:
+          snprintf(key, sizeof(key), "d%s", target.texture_info.c_str());
+          AddLink(key, action);
+          break;
+        case GraphicsTargetKind::LoadTexture:
+          snprintf(key, sizeof(key), "l%s", target.texture_info.c_str());
+          AddLink(key, action);
+          break;
+        // no action runs on texture creation or on XFB copies
+        case GraphicsTargetKind::CreateTexture:
+        case GraphicsTargetKind::XFB:
+          break;
+        case GraphicsTargetKind::EFB:
+          MakeEFBKey(key, sizeof(key), target.width, target.height, target.texture_format);
+          AddLink(key, action);
+          break;
+        case GraphicsTargetKind::Projection:
+          if (target.has_texture_info)
+          {
+            snprintf(key, sizeof(key), "t%s_%d", target.texture_info.c_str(),
+                     static_cast<int>(target.projection_type));
+          }
+          else
+          {
+            snprintf(key, sizeof(key), "p%d", static_cast<int>(target.projection_type));
+          }
+          AddLink(key, action);
+          break;
+        }
       };
 
       const auto add_action = [&](GraphicsModConfig mod_config) -> bool {
