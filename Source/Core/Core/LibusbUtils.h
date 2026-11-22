@@ -3,9 +3,8 @@
 
 #pragma once
 
-#include <memory>
 #include <optional>
-#include <utility>
+#include <string>
 
 #include "Common/CommonTypes.h"
 
@@ -16,9 +15,6 @@ struct libusb_device_handle;
 
 namespace LibusbUtils
 {
-template <typename T>
-using UniquePtr = std::unique_ptr<T, void (*)(T*)>;
-
 // Return false to stop iterating the device list.
 typedef bool (*GetDeviceListCallback)(void* user, libusb_device* device);
 
@@ -27,6 +23,8 @@ class Context
 public:
   Context();
   ~Context();
+  Context(const Context&) = delete;
+  Context& operator=(const Context&) = delete;
 
   operator libusb_context*() const;
   bool IsValid() const;
@@ -39,11 +37,8 @@ public:
 
 private:
   class Impl;
-  std::unique_ptr<Impl> m_impl;
+  Impl* m_impl;  // owned
 };
-
-using ConfigDescriptor = UniquePtr<libusb_config_descriptor>;
-std::pair<int, ConfigDescriptor> MakeConfigDescriptor(libusb_device* device, u8 config_num = 0);
 
 // A libusb error code with its description and name; most libusb functions return an int
 // rather than a libusb_error.

@@ -16,6 +16,7 @@
 #include "Core/IOS/USB/Common.h"
 #include "Core/LibusbUtils.h"
 
+struct libusb_config_descriptor;
 struct libusb_device;
 struct libusb_device_descriptor;
 struct libusb_device_handle;
@@ -45,7 +46,9 @@ public:
   int SubmitTransfer(IsoMessage* message) override;
 
 private:
-  std::vector<LibusbUtils::ConfigDescriptor> m_config_descriptors;
+  // One per configuration, null where libusb could not read it; made with the device
+  libusb_config_descriptor** m_config_descriptors = nullptr;
+  u8 m_config_count = 0;
   u16 m_vid = 0;
   u16 m_pid = 0;
   u16 m_spoofed_vid = 0;
@@ -96,6 +99,8 @@ private:
   void DisguisePlayStationDevice();
   int SubmitPlayStationRockBand3InstrumentControlTransfer();
 
+  static int ClaimInterface(const LibusbDevice* device, u8 i);
+  static int ReleaseInterface(const LibusbDevice* device, u8 i);
   int ClaimAllInterfaces(u8 config_num) const;
   int ReleaseAllInterfaces(u8 config_num) const;
   int ReleaseAllInterfacesForCurrentConfig() const;

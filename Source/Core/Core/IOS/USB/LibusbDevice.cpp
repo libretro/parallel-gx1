@@ -34,9 +34,15 @@ LibusbDevice::LibusbDevice(libusb_device* device, const libusb_device_descriptor
           static_cast<u64>(libusb_get_bus_number(device)) << 8 |
           static_cast<u64>(libusb_get_device_address(device)));
 
-  for (u8 i = 0; i < descriptor.bNumConfigurations; ++i)
+  m_config_descriptors = static_cast<libusb_config_descriptor**>(
+      std::calloc(descriptor.bNumConfigurations ? descriptor.bNumConfigurations : 1,
+                  sizeof(*m_config_descriptors)));
+  if (m_config_descriptors)
+    m_config_count = descriptor.bNumConfigurations;
+  for (u8 i = 0; i < m_config_count; ++i)
   {
-    auto [ret, config_descriptor] = LibusbUtils::MakeConfigDescriptor(m_device, i);
+    libusb_config_descriptor* config_descriptor = nullptr;
+    const int ret = libusb_get_config_descriptor(m_device, i, &config_descriptor);
     if (ret != LIBUSB_SUCCESS || !config_descriptor)
     {
       WARN_LOG(IOS_USB, "Failed to make config descriptor %u for %04x:%04x: %s (%d: %s)",
@@ -44,7 +50,7 @@ LibusbDevice::LibusbDevice(libusb_device* device, const libusb_device_descriptor
                LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
                LibusbUtils::ErrorWrap(ret).GetName());
     }
-    m_config_descriptors.emplace_back(std::move(config_descriptor));
+    m_config_descriptors[i] = ret == LIBUSB_SUCCESS ? config_descriptor : nullptr;
   }
 
   if (Config::Get(Config::MAIN_USB_PASSTHROUGH_DISGUISE_PLAYSTATION_AS_WII))
@@ -59,6 +65,12 @@ LibusbDevice::~LibusbDevice()
     libusb_close(m_handle);
   }
   libusb_unref_device(m_device);
+  for (u8 i = 0; i < m_config_count; ++i)
+  {
+    if (m_config_descriptors[i])
+      libusb_free_config_descriptor(m_config_descriptors[i]);
+  }
+  std::free(m_config_descriptors);
 }
 
 DeviceDescriptor LibusbDevice::GetDeviceDescriptor() const
@@ -76,8 +88,9 @@ DeviceDescriptor LibusbDevice::GetDeviceDescriptor() const
 std::vector<ConfigDescriptor> LibusbDevice::GetConfigurations() const
 {
   std::vector<ConfigDescriptor> descriptors;
-  for (const auto& config_descriptor : m_config_descriptors)
+  for (u8 i = 0; i < m_config_count; ++i)
   {
+    const libusb_config_descriptor* const config_descriptor = m_config_descriptors[i];
     if (!config_descriptor)
     {
       ERROR_LOG(IOS_USB, "Ignoring invalid config descriptor for %04x:%04x", (unsigned)m_vid,
@@ -85,7 +98,7 @@ std::vector<ConfigDescriptor> LibusbDevice::GetConfigurations() const
       continue;
     }
     ConfigDescriptor descriptor;
-    std::memcpy(&descriptor, config_descriptor.get(), sizeof(descriptor));
+    std::memcpy(&descriptor, config_descriptor, sizeof(descriptor));
     descriptors.push_back(descriptor);
   }
   return descriptors;
@@ -94,7 +107,7 @@ std::vector<ConfigDescriptor> LibusbDevice::GetConfigurations() const
 std::vector<InterfaceDescriptor> LibusbDevice::GetInterfaces(const u8 config) const
 {
   std::vector<InterfaceDescriptor> descriptors;
-  if (config >= m_config_descriptors.size() || !m_config_descriptors[config])
+  if (config >= m_config_count || !m_config_descriptors[config])
   {
     ERROR_LOG(IOS_USB, "Invalid config descriptor %u for %04x:%04x", (unsigned)config,
               (unsigned)m_vid, (unsigned)m_pid);
@@ -117,7 +130,7 @@ std::vector<EndpointDescriptor>
 LibusbDevice::GetEndpoints(const u8 config, const u8 interface_number, const u8 alt_setting) const
 {
   std::vector<EndpointDescriptor> descriptors;
-  if (config >= m_config_descriptors.size() || !m_config_descriptors[config])
+  if (config >= m_config_count || !m_config_descriptors[config])
   {
     ERROR_LOG(IOS_USB, "Invalid config descriptor %u for %04x:%04x", (unsigned)config,
               (unsigned)m_vid, (unsigned)m_pid);
@@ -613,39 +626,51 @@ int LibusbDevice::GetNumberOfAltSettings(const u8 interface_number)
   return m_config_descriptors[0]->interface[interface_number].num_altsetting;
 }
 
-template <typename Configs, typename Function>
-static int DoForEachInterface(const Configs& configs, u8 config_num, Function action)
+// Runs action on each interface of the configuration, stopping at the first error, which it
+// returns; LIBUSB_ERROR_NOT_FOUND for a configuration with no descriptor or no interfaces.
+static int DoForEachInterface(libusb_config_descriptor* const* configs, u8 config_count,
+                              u8 config_num, int (*action)(const LibusbDevice* device, u8 i),
+                              const LibusbDevice* device)
 {
   int ret = LIBUSB_ERROR_NOT_FOUND;
-  if (configs.size() <= config_num || !configs[config_num])
+  if (config_count <= config_num || !configs[config_num])
     return ret;
   for (u8 i = 0; i < configs[config_num]->bNumInterfaces; ++i)
   {
-    ret = action(i);
+    ret = action(device, i);
     if (ret < LIBUSB_SUCCESS)
       break;
   }
   return ret;
 }
 
-int LibusbDevice::ClaimAllInterfaces(u8 config_num) const
+int LibusbDevice::ClaimInterface(const LibusbDevice* device, u8 i)
 {
-  const int ret = DoForEachInterface(m_config_descriptors, config_num, [this](u8 i) {
   // On macos detaching would fail without root or entitlement.
   // We assume user is using GCAdapterDriver and therefore don't want to detach anything
 #if !defined(__APPLE__)
-    const int ret2 = libusb_detach_kernel_driver(m_handle, i);
-    if (ret2 < LIBUSB_SUCCESS && ret2 != LIBUSB_ERROR_NOT_FOUND &&
-        ret2 != LIBUSB_ERROR_NOT_SUPPORTED)
-    {
-      ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to detach kernel driver: %s (%d: %s)", (unsigned)m_vid,
-                (unsigned)m_pid, LibusbUtils::ErrorWrap(ret2).GetStrError(),
-                LibusbUtils::ErrorWrap(ret2).m_error, LibusbUtils::ErrorWrap(ret2).GetName());
-      return ret2;
-    }
+  const int ret = libusb_detach_kernel_driver(device->m_handle, i);
+  if (ret < LIBUSB_SUCCESS && ret != LIBUSB_ERROR_NOT_FOUND && ret != LIBUSB_ERROR_NOT_SUPPORTED)
+  {
+    ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to detach kernel driver: %s (%d: %s)",
+              (unsigned)device->m_vid, (unsigned)device->m_pid,
+              LibusbUtils::ErrorWrap(ret).GetStrError(), LibusbUtils::ErrorWrap(ret).m_error,
+              LibusbUtils::ErrorWrap(ret).GetName());
+    return ret;
+  }
 #endif
-    return libusb_claim_interface(m_handle, i);
-  });
+  return libusb_claim_interface(device->m_handle, i);
+}
+
+int LibusbDevice::ReleaseInterface(const LibusbDevice* device, u8 i)
+{
+  return libusb_release_interface(device->m_handle, i);
+}
+
+int LibusbDevice::ClaimAllInterfaces(u8 config_num) const
+{
+  const int ret =
+      DoForEachInterface(m_config_descriptors, m_config_count, config_num, ClaimInterface, this);
   if (ret < LIBUSB_SUCCESS)
   {
     ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to claim all interfaces (configuration %u)",
@@ -656,9 +681,8 @@ int LibusbDevice::ClaimAllInterfaces(u8 config_num) const
 
 int LibusbDevice::ReleaseAllInterfaces(u8 config_num) const
 {
-  const int ret = DoForEachInterface(m_config_descriptors, config_num, [this](u8 i) {
-    return libusb_release_interface(m_handle, i);
-  });
+  const int ret =
+      DoForEachInterface(m_config_descriptors, m_config_count, config_num, ReleaseInterface, this);
   if (ret < LIBUSB_SUCCESS && ret != LIBUSB_ERROR_NO_DEVICE && ret != LIBUSB_ERROR_NOT_FOUND)
   {
     ERROR_LOG(IOS_USB, "[%04x:%04x] Failed to release all interfaces (configuration %u)",

@@ -111,11 +111,14 @@ public:
 };
 #endif
 
-Context::Context() : m_impl{std::make_unique<Impl>()}
+Context::Context() : m_impl{new Impl()}
 {
 }
 
-Context::~Context() = default;
+Context::~Context()
+{
+  delete m_impl;
+}
 
 #if defined(__LIBUSB__)
 void Context::Shutdown()
@@ -138,19 +141,6 @@ bool Context::IsValid() const
 int Context::GetDeviceList(GetDeviceListCallback callback, void* user) const
 {
   return m_impl->GetDeviceList(callback, user);
-}
-
-std::pair<int, ConfigDescriptor> MakeConfigDescriptor(libusb_device* device, u8 config_num)
-{
-#if defined(__LIBUSB__)
-  libusb_config_descriptor* descriptor = nullptr;
-  const int ret = libusb_get_config_descriptor(device, config_num, &descriptor);
-  if (ret == LIBUSB_SUCCESS)
-    return {ret, ConfigDescriptor{descriptor, libusb_free_config_descriptor}};
-#else
-  const int ret = -1;
-#endif
-  return {ret, ConfigDescriptor{nullptr, [](auto) {}}};
 }
 
 const char* ErrorWrap::GetName() const

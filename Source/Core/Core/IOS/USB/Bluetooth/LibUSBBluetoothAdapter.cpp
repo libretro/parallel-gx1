@@ -123,8 +123,11 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
         LibUSBBluetoothAdapter* const adapter = scan_state->adapter;
         libusb_device_descriptor device_descriptor;
         libusb_get_device_descriptor(device, &device_descriptor);
-        auto [make_config_descriptor_ret, config_descriptor] =
-            LibusbUtils::MakeConfigDescriptor(device);
+        libusb_config_descriptor* config_descriptor = nullptr;
+        const int make_config_descriptor_ret =
+            libusb_get_config_descriptor(device, 0, &config_descriptor);
+        if (config_descriptor)
+          libusb_free_config_descriptor(config_descriptor);
         if (make_config_descriptor_ret != LIBUSB_SUCCESS || !config_descriptor)
         {
           ERROR_LOG(IOS_WIIMOTE,
