@@ -45,13 +45,6 @@ public:
   // Resize is purposely not provided as it often unnecessarily copies data about to be overwritten.
   void resize(std::size_t) = delete;
 
-  std::pair<PtrType, size_type> extract()
-  {
-    std::pair result = {std::move(m_ptr), m_size};
-    reset();
-    return result;
-  }
-
   void swap(BufferBase& other)
   {
     std::swap(m_ptr, other.m_ptr);
