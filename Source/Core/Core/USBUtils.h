@@ -4,7 +4,6 @@
 #pragma once
 
 #include <functional>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,7 +22,6 @@ struct DeviceInfo
   constexpr auto operator<=>(const DeviceInfo& other) const = default;
 
   // Extracts DeviceInfo from a string in the format "VID:PID"
-  static std::optional<DeviceInfo> FromString(const std::string& str);
   std::string ToString() const;
 };
 
