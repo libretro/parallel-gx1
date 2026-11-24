@@ -24,11 +24,8 @@ Gfx::CreateNativeVertexFormat(const PortableVertexDeclaration& vtx_decl)
 
 static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
 {
-  using FormatMap = Common::EnumMap<DXGI_FORMAT, ComponentFormat::InvalidFloat7>;
-  static constexpr auto f = [](FormatMap a) { return a; };  // Deduction helper
-
-  static constexpr FormatMap d3d_float_format_lookup[4] = {
-      f({
+  static constexpr DXGI_FORMAT d3d_float_format_lookup[4][8] = {
+      {
           DXGI_FORMAT_R8_UNORM,
           DXGI_FORMAT_R8_SNORM,
           DXGI_FORMAT_R16_UNORM,
@@ -37,8 +34,8 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_R32_FLOAT,
           DXGI_FORMAT_R32_FLOAT,
           DXGI_FORMAT_R32_FLOAT,
-      }),
-      f({
+      },
+      {
           DXGI_FORMAT_R8G8_UNORM,
           DXGI_FORMAT_R8G8_SNORM,
           DXGI_FORMAT_R16G16_UNORM,
@@ -47,8 +44,8 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_R32G32_FLOAT,
           DXGI_FORMAT_R32G32_FLOAT,
           DXGI_FORMAT_R32G32_FLOAT,
-      }),
-      f({
+      },
+      {
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
@@ -57,8 +54,8 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_R32G32B32_FLOAT,
           DXGI_FORMAT_R32G32B32_FLOAT,
           DXGI_FORMAT_R32G32B32_FLOAT,
-      }),
-      f({
+      },
+      {
           DXGI_FORMAT_R8G8B8A8_UNORM,
           DXGI_FORMAT_R8G8B8A8_SNORM,
           DXGI_FORMAT_R16G16B16A16_UNORM,
@@ -67,11 +64,11 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_R32G32B32A32_FLOAT,
           DXGI_FORMAT_R32G32B32A32_FLOAT,
           DXGI_FORMAT_R32G32B32A32_FLOAT,
-      }),
+      },
   };
 
-  static constexpr FormatMap d3d_integer_format_lookup[4] = {
-      f({
+  static constexpr DXGI_FORMAT d3d_integer_format_lookup[4][8] = {
+      {
           DXGI_FORMAT_R8_UINT,
           DXGI_FORMAT_R8_SINT,
           DXGI_FORMAT_R16_UINT,
@@ -80,8 +77,8 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
-      }),
-      f({
+      },
+      {
           DXGI_FORMAT_R8G8_UINT,
           DXGI_FORMAT_R8G8_SINT,
           DXGI_FORMAT_R16G16_UINT,
@@ -90,8 +87,8 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
-      }),
-      f({
+      },
+      {
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
@@ -100,8 +97,8 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
-      }),
-      f({
+      },
+      {
           DXGI_FORMAT_R8G8B8A8_UINT,
           DXGI_FORMAT_R8G8B8A8_SINT,
           DXGI_FORMAT_R16G16B16A16_UINT,
@@ -110,11 +107,11 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
           DXGI_FORMAT_UNKNOWN,
-      }),
+      },
   };
 
-  DXGI_FORMAT retval =
-      integer ? d3d_integer_format_lookup[size - 1][t] : d3d_float_format_lookup[size - 1][t];
+  DXGI_FORMAT retval = integer ? d3d_integer_format_lookup[size - 1][static_cast<u32>(t)] :
+                                 d3d_float_format_lookup[size - 1][static_cast<u32>(t)];
   if (retval == DXGI_FORMAT_UNKNOWN)
   {
     PanicAlert("VarToD3D: Invalid type/size combo %u, %d, %s", static_cast<unsigned>(t), size,
