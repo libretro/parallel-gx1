@@ -42,6 +42,9 @@ struct TitleContext
 
 class ESDevice;
 
+// A desired ticket version that takes whichever version is installed
+constexpr int ANY_TICKET_VERSION = -1;
+
 class ESCore final
 {
 public:
@@ -83,8 +86,7 @@ public:
 
   ES::TMDReader FindImportTMD(u64 title_id, Ticks ticks = {}) const;
   ES::TMDReader FindInstalledTMD(u64 title_id, Ticks ticks = {}) const;
-  ES::TicketReader FindSignedTicket(u64 title_id,
-                                    std::optional<u8> desired_version = std::nullopt) const;
+  ES::TicketReader FindSignedTicket(u64 title_id, int desired_version = ANY_TICKET_VERSION) const;
 
   // Get installed titles (in /title) without checking for TMDs at all.
   std::vector<u64> GetInstalledTitles() const;
@@ -158,7 +160,7 @@ public:
 
   // Views
   ReturnCode GetTicketFromView(const u8* ticket_view, u8* ticket, u32* ticket_size,
-                               std::optional<u8> desired_version) const;
+                               int desired_version) const;
 
   ReturnCode SetUpStreamKey(u32 uid, const u8* ticket_view, const ES::TMDReader& tmd, u32* handle);
 

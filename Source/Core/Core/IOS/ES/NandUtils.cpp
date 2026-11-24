@@ -50,14 +50,14 @@ ES::TMDReader ESCore::FindInstalledTMD(u64 title_id, Ticks ticks) const
   return FindTMD(m_ios.GetFSCore(), Common::GetTMDFileName(title_id), ticks);
 }
 
-ES::TicketReader ESCore::FindSignedTicket(u64 title_id, std::optional<u8> desired_version) const
+ES::TicketReader ESCore::FindSignedTicket(u64 title_id, int desired_version) const
 {
   std::string path = desired_version == 1 ? Common::GetV1TicketFileName(title_id) :
                                             Common::GetTicketFileName(title_id);
   auto ticket_file = m_ios.GetFS()->OpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), FS::Mode::Read);
   if (!ticket_file)
   {
-    if (desired_version)
+    if (desired_version != ANY_TICKET_VERSION)
       // Desired ticket does not exist.
       return {};
 
@@ -452,7 +452,9 @@ std::string ESCore::GetContentPath(const u64 title_id, const ES::Content& conten
   {
     ES::SharedContentMap content_map{m_ios.GetFSCore()};
     ticks.Add(content_map.GetTicks());
-    return content_map.GetFilenameFromSHA1(content.sha1).value_or("");
+    std::string filename;
+    content_map.GetFilenameFromSHA1(content.sha1, &filename);
+    return filename;
   }
   return StringFromFormat("%s/%08x.app", Common::GetTitleContentPath(title_id).c_str(), content.id);
 }

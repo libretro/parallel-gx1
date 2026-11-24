@@ -506,7 +506,8 @@ static bool HasAllRequiredContents(Kernel& ios, const ES::TMDReader& tmd)
 
     if (content.IsShared())
     {
-      if (!shared_content_map.GetFilenameFromSHA1(content.sha1).has_value())
+      std::string filename;
+      if (!shared_content_map.GetFilenameFromSHA1(content.sha1, &filename))
         return false;
       continue;
     }
@@ -918,8 +919,8 @@ IPCReply ESDevice::ExportTitleDone(Context& context, const IOCtlVRequest& reques
 ReturnCode ESCore::DeleteSharedContent(const std::array<u8, 20>& sha1) const
 {
   ES::SharedContentMap map{m_ios.GetFSCore()};
-  const auto content_path = map.GetFilenameFromSHA1(sha1);
-  if (!content_path)
+  std::string content_path;
+  if (!map.GetFilenameFromSHA1(sha1, &content_path))
     return ES_EINVAL;
 
   // Check whether the shared content is used by a system title.
@@ -955,7 +956,7 @@ ReturnCode ESCore::DeleteSharedContent(const std::array<u8, 20>& sha1) const
     return ES_EINVAL;
 
   // Delete the shared content and update the content map.
-  const auto delete_result = m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, *content_path);
+  const auto delete_result = m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, content_path);
   if (delete_result != FS::ResultCode::Success)
     return FS::ConvertResult(delete_result);
 

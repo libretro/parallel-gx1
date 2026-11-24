@@ -305,7 +305,8 @@ public:
   explicit SharedContentMap(HLE::FSCore& fs_core);
   ~SharedContentMap();
 
-  std::optional<std::string> GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const;
+  // False when no shared content has that hash
+  bool GetFilenameFromSHA1(const std::array<u8, 20>& sha1, std::string* filename) const;
   // Writes the path of the shared content with this hash to out, reading the map as constructing
   // one does and adding the same ticks; returns false when there is none or it does not fit.
   static bool FindFilename(HLE::FSCore& fs_core, const std::array<u8, 20>& sha1, char* out,

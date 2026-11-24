@@ -684,8 +684,8 @@ bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const std::array<u8, 2
   return length >= 0 && static_cast<size_t>(length) < out_size;
 }
 
-std::optional<std::string>
-SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const
+bool SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1,
+                                           std::string* filename) const
 {
   const Entry* it = nullptr;
   for (const Entry& entry : m_entries)
@@ -697,11 +697,12 @@ SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1) const
     }
   }
   if (!it)
-    return {};
+    return false;
 
   const std::string_view id_string(reinterpret_cast<const char*>(it->id.data()), it->id.size());
-  return StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()),
-                          id_string.data());
+  *filename =
+      StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()), id_string.data());
+  return true;
 }
 
 std::vector<std::array<u8, 20>> SharedContentMap::GetHashes() const
@@ -716,8 +717,9 @@ std::vector<std::array<u8, 20>> SharedContentMap::GetHashes() const
 
 std::string SharedContentMap::AddSharedContent(const std::array<u8, 20>& sha1)
 {
-  if (auto filename = GetFilenameFromSHA1(sha1))
-    return *std::move(filename);
+  std::string filename;
+  if (GetFilenameFromSHA1(sha1, &filename))
+    return filename;
 
   Entry& entry = m_entries.emplace_back();
   static_assert(sizeof(m_last_id) == 4,

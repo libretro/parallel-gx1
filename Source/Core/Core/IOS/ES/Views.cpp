@@ -122,7 +122,7 @@ IPCReply ESDevice::GetTicketViews(const IOCtlVRequest& request)
 }
 
 ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* ticket_size,
-                                     std::optional<u8> desired_version) const
+                                     int desired_version) const
 {
   // a view that is not in the emulated software's memory
   if (!ticket_view)
@@ -131,7 +131,8 @@ ReturnCode ESCore::GetTicketFromView(const u8* ticket_view, u8* ticket, u32* tic
   const u64 title_id = Common::swap64(&ticket_view[offsetof(ES::TicketView, title_id)]);
   const u64 ticket_id = Common::swap64(&ticket_view[offsetof(ES::TicketView, ticket_id)]);
   const u8 view_version = ticket_view[offsetof(ES::TicketView, version)];
-  const u8 version = desired_version.value_or(view_version);
+  const u8 version =
+      desired_version != ANY_TICKET_VERSION ? static_cast<u8>(desired_version) : view_version;
 
   const auto installed_ticket = FindSignedTicket(title_id, version);
   if (!installed_ticket.IsValid())
@@ -210,7 +211,7 @@ IPCReply ESDevice::GetTicketSizeFromView(const IOCtlVRequest& request)
   auto& memory = system.GetMemory();
   const ReturnCode ret = m_core.GetTicketFromView(
       memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::TicketView)), nullptr,
-      &ticket_size, std::nullopt);
+      &ticket_size, ANY_TICKET_VERSION);
   memory.Write_U32(ticket_size, request.io_vectors[0].address);
   return IPCReply(ret);
 }
@@ -238,7 +239,7 @@ IPCReply ESDevice::GetTicketFromView(const IOCtlVRequest& request)
     return IPCReply(ES_EINVAL);
   return IPCReply(m_core.GetTicketFromView(
       memory.GetPointerForRange(request.in_vectors[0].address, sizeof(ES::TicketView)), ticket,
-      &ticket_size, std::nullopt));
+      &ticket_size, ANY_TICKET_VERSION));
 }
 
 IPCReply ESDevice::GetTMDViewSize(const IOCtlVRequest& request)
