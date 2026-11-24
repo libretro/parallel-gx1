@@ -34,7 +34,7 @@ struct NFSHeader
   u32 unknown_1;
   u32 unknown_2;
   u32 lba_range_count;
-  std::array<NFSLBARange, 61> lba_ranges;
+  NFSLBARange lba_ranges[61];
   u32 end_magic;  // SGGE
 };
 static_assert(sizeof(NFSHeader) == 0x200);
@@ -58,11 +58,11 @@ public:
   bool Read(u64 offset, u64 nbytes, u8* out_ptr);
 
 private:
-  using Key = std::array<u8, 16>;
   static constexpr u32 BLOCK_SIZE = 0x8000;
   static constexpr u32 MAX_FILE_SIZE = 0xFA00000;
 
-  static bool ReadKey(const std::string& path, const std::string& directory, Key* key_out);
+  // key_out: 16 bytes
+  static bool ReadKey(const std::string& path, const std::string& directory, u8* key_out);
   static std::vector<NFSLBARange> GetLBARanges(const NFSHeader& header);
   static std::vector<File::DirectIOFile> OpenFiles(const std::string& directory,
                                                    File::DirectIOFile first_file,
@@ -70,16 +70,16 @@ private:
   static u64 CalculateExpectedRawSize(const NFSLBARange* lba_ranges, size_t count);
   static u64 CalculateExpectedDataSize(const NFSLBARange* lba_ranges, size_t count);
 
-  NFSFileReader(std::vector<NFSLBARange> lba_ranges, std::vector<File::DirectIOFile> files, Key key,
-                u64 raw_size);
+  NFSFileReader(std::vector<NFSLBARange> lba_ranges, std::vector<File::DirectIOFile> files,
+                const u8* key, u64 raw_size);
 
   u64 ToPhysicalBlockIndex(u64 logical_block_index) const;
   bool ReadEncryptedBlock(u64 physical_block_index);
   void DecryptBlock(u64 logical_block_index);
   bool ReadAndDecryptBlock(u64 logical_block_index);
 
-  std::array<u8, BLOCK_SIZE> m_current_block_encrypted;
-  std::array<u8, BLOCK_SIZE> m_current_block_decrypted;
+  u8 m_current_block_encrypted[BLOCK_SIZE];
+  u8 m_current_block_decrypted[BLOCK_SIZE];
   u64 m_current_logical_block_index = std::numeric_limits<u64>::max();
 
   std::vector<NFSLBARange> m_lba_ranges;
@@ -87,7 +87,7 @@ private:
   struct aes_ctx m_aes_context;
   u64 m_raw_size;
   u64 m_data_size;
-  Key m_key;
+  u8 m_key[16];
 };
 
 }  // namespace DiscIO

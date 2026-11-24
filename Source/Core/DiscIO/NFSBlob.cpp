@@ -8,11 +8,11 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
-
 
 #include "Common/Align.h"
 #include "Common/BitUtils.h"
@@ -23,7 +23,7 @@
 
 namespace DiscIO
 {
-bool NFSFileReader::ReadKey(const std::string& path, const std::string& directory, Key* key_out)
+bool NFSFileReader::ReadKey(const std::string& path, const std::string& directory, u8* key_out)
 {
   const std::string_view directory_without_trailing_slash =
       std::string_view(directory).substr(0, directory.size() - 1);
@@ -39,7 +39,7 @@ bool NFSFileReader::ReadKey(const std::string& path, const std::string& director
 
   const std::string key_path = parent + "code/htk.bin";
   File::DirectIOFile key_file(key_path, File::AccessMode::Read);
-  if (!key_file.Read(key_out->data(), key_out->size()))
+  if (!key_file.Read(key_out, 16))
   {
     ERROR_LOG(DISCIO, "Failed to read from %s", key_path.c_str());
     return false;
@@ -52,7 +52,7 @@ std::vector<NFSLBARange> NFSFileReader::GetLBARanges(const NFSHeader& header)
 {
   const size_t stored_count = Common::swap32(header.lba_range_count);
   const size_t lba_range_count =
-      stored_count < header.lba_ranges.size() ? stored_count : header.lba_ranges.size();
+      stored_count < ARRAY_SIZE(header.lba_ranges) ? stored_count : ARRAY_SIZE(header.lba_ranges);
 
   std::vector<NFSLBARange> lba_ranges;
   lba_ranges.reserve(lba_range_count);
@@ -136,8 +136,8 @@ NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const std::s
   if (filename + extension != "hif_000000.nfs")
     return nullptr;
 
-  std::array<u8, 16> key;
-  if (!ReadKey(path, directory, &key))
+  u8 key[16];
+  if (!ReadKey(path, directory, key))
     return nullptr;
 
   NFSHeader header;
@@ -159,11 +159,11 @@ NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const std::s
 }
 
 NFSFileReader::NFSFileReader(std::vector<NFSLBARange> lba_ranges,
-                             std::vector<File::DirectIOFile> files, Key key, u64 raw_size)
-    : m_lba_ranges(std::move(lba_ranges)), m_files(std::move(files)), m_raw_size(raw_size),
-      m_key(key)
+                             std::vector<File::DirectIOFile> files, const u8* key, u64 raw_size)
+    : m_lba_ranges(std::move(lba_ranges)), m_files(std::move(files)), m_raw_size(raw_size), m_key()
 {
-  aes_init(&m_aes_context, key.data(), key.size());
+  std::memcpy(m_key, key, sizeof(m_key));
+  aes_init(&m_aes_context, m_key, sizeof(m_key));
   m_data_size = CalculateExpectedDataSize(m_lba_ranges.data(), m_lba_ranges.size());
 }
 
@@ -219,10 +219,10 @@ bool NFSFileReader::ReadEncryptedBlock(u64 physical_block_index)
     File::DirectIOFile& file_1 = m_files[file_index];
     File::DirectIOFile& file_2 = m_files[file_index + 1];
 
-    if (!file_1.OffsetRead(offset_in_file, m_current_block_encrypted.data(), PART_1_SIZE))
+    if (!file_1.OffsetRead(offset_in_file, m_current_block_encrypted, PART_1_SIZE))
       return false;
 
-    if (!file_2.OffsetRead(0, m_current_block_encrypted.data() + PART_1_SIZE, PART_2_SIZE))
+    if (!file_2.OffsetRead(0, m_current_block_encrypted + PART_1_SIZE, PART_2_SIZE))
       return false;
   }
   else
@@ -231,7 +231,7 @@ bool NFSFileReader::ReadEncryptedBlock(u64 physical_block_index)
 
     File::DirectIOFile& file = m_files[file_index];
 
-    if (!file.OffsetRead(offset_in_file, m_current_block_encrypted.data(), BLOCK_SIZE))
+    if (!file.OffsetRead(offset_in_file, m_current_block_encrypted, BLOCK_SIZE))
     {
       return false;
     }
@@ -242,13 +242,13 @@ bool NFSFileReader::ReadEncryptedBlock(u64 physical_block_index)
 
 void NFSFileReader::DecryptBlock(u64 logical_block_index)
 {
-  std::array<u8, 16> iv{};
+  u8 iv[16]{};
   const u64 swapped_block_index = Common::swap64(logical_block_index);
-  std::memcpy(iv.data() + iv.size() - sizeof(swapped_block_index), &swapped_block_index,
+  std::memcpy(iv + ARRAY_SIZE(iv) - sizeof(swapped_block_index), &swapped_block_index,
               sizeof(swapped_block_index));
 
-  aes_cbc_decrypt(&m_aes_context, iv.data(), m_current_block_encrypted.data(),
-                  m_current_block_decrypted.data(), BLOCK_SIZE);
+  aes_cbc_decrypt(&m_aes_context, iv, m_current_block_encrypted, m_current_block_decrypted,
+                  BLOCK_SIZE);
 }
 
 bool NFSFileReader::ReadAndDecryptBlock(u64 logical_block_index)
@@ -258,7 +258,7 @@ bool NFSFileReader::ReadAndDecryptBlock(u64 logical_block_index)
   if (physical_block_index == std::numeric_limits<u64>::max())
   {
     // The block isn't physically present. Treat its contents as all zeroes.
-    m_current_block_decrypted.fill(0);
+    std::memset(m_current_block_decrypted, 0, sizeof(m_current_block_decrypted));
   }
   else
   {
@@ -292,7 +292,7 @@ bool NFSFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
 
     const u64 block_left = BLOCK_SIZE - offset_in_block;
     const u64 bytes_to_copy = nbytes < block_left ? nbytes : block_left;
-    std::memcpy(out_ptr, m_current_block_decrypted.data() + offset_in_block, bytes_to_copy);
+    std::memcpy(out_ptr, m_current_block_decrypted + offset_in_block, bytes_to_copy);
 
     offset += bytes_to_copy;
     nbytes -= bytes_to_copy;
