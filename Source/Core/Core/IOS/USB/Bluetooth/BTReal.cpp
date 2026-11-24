@@ -251,7 +251,7 @@ auto BluetoothRealDevice::ProcessHCIEvent(BufferType buffer) -> BufferType
     hci_link_key_notification_ep notification;
     std::memcpy(&notification, buffer.data() + sizeof(hci_event_hdr_t), sizeof(notification));
     linkkey_t key;
-    std::memcpy(key.data(), notification.key, key.size());
+    std::memcpy(key, notification.key, sizeof(key));
     SetLinkKey(notification.bdaddr, key);
   }
 
@@ -447,7 +447,7 @@ bool BluetoothRealDevice::SendHCIStoreLinkKeyCommand()
   for (u8 index = 0; index < num_link_keys; index++)
   {
     memcpy(payload.link_keys[index].bdaddr, m_link_keys[index].bdaddr, sizeof(bdaddr_t));
-    payload.link_keys[index].linkkey = m_link_keys[index].linkkey;
+    std::memcpy(payload.link_keys[index].linkkey, m_link_keys[index].linkkey, sizeof(linkkey_t));
   }
 
   m_lib_usb_bt_adapter->SendControlTransfer(&payload, payload_size);
@@ -496,7 +496,7 @@ void BluetoothRealDevice::SetLinkKey(const bdaddr_t& bdaddr, const linkkey_t& li
     index++;
   if (index < m_link_key_count && memcmp(m_link_keys[index].bdaddr, bdaddr, sizeof(bdaddr_t)) == 0)
   {
-    m_link_keys[index].linkkey = linkkey;
+    std::memcpy(m_link_keys[index].linkkey, linkkey, sizeof(linkkey_t));
     return;
   }
   if (m_link_key_count == MAX_STORED_LINK_KEYS)
@@ -507,7 +507,7 @@ void BluetoothRealDevice::SetLinkKey(const bdaddr_t& bdaddr, const linkkey_t& li
   for (std::size_t i = m_link_key_count; i > index; i--)
     m_link_keys[i] = m_link_keys[i - 1];
   memcpy(m_link_keys[index].bdaddr, bdaddr, sizeof(bdaddr_t));
-  m_link_keys[index].linkkey = linkkey;
+  std::memcpy(m_link_keys[index].linkkey, linkkey, sizeof(linkkey_t));
   m_link_key_count++;
 }
 
@@ -570,7 +570,7 @@ void BluetoothRealDevice::LoadLinkKeys()
     const auto key_string = pair.substr(index + 1);
     linkkey_t key{};
     size_t pos = 0;
-    for (size_t i = 0; i < key_string.length() && pos != key.size(); i += 2)
+    for (size_t i = 0; i < key_string.length() && pos != sizeof(key); i += 2)
       TryParse(std::string(key_string.substr(i, 2)), &key[pos++], 16);
 
     SetLinkKey(mac, key);

@@ -13,7 +13,7 @@
 
 namespace Common
 {
-using SettingsBuffer = std::array<u8, 0x100>;
+typedef u8 SettingsBuffer[0x100];
 
 class SettingsWriter
 {

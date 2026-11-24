@@ -15,7 +15,10 @@
 namespace IOS::HLE
 {
 // A message for the next IOCtl, as the bytes copied into emulated memory
-typedef std::array<u8, 16> USBKeyboardMessage;
+struct USBKeyboardMessage
+{
+  u8 bytes[16];
+};
 RETRO_DEQUE_DEFINE(usb_kbd_messages, USBKeyboardMessage);
 
 class USB_KBD : public EmulationDevice
@@ -37,8 +40,6 @@ private:
     Event = 2
   };
 
-  using PressedKeyData = std::array<u8, 6>;
-
 #pragma pack(push, 1)
   struct MessageData
   {
@@ -46,9 +47,10 @@ private:
     u32 unk1 = 0;
     u8 modifiers = 0;
     u8 unk2 = 0;
-    PressedKeyData pressed_keys{};
+    u8 pressed_keys[6]{};
 
-    MessageData(MessageType msg_type, u8 modifiers, PressedKeyData pressed_keys);
+    // pressed_keys: 6 key codes
+    MessageData(MessageType msg_type, u8 modifiers, const u8* pressed_keys);
   };
   static_assert(std::is_trivially_copyable_v<MessageData>,
                 "MessageData must be trivially copyable, as it's copied into emulated memory.");

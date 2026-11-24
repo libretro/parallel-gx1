@@ -32,7 +32,7 @@ enum class SyncButtonState
   Ignored,
 };
 
-using linkkey_t = std::array<u8, 16>;
+typedef u8 linkkey_t[16];
 
 class BluetoothRealDevice final : public BluetoothBaseDevice
 {

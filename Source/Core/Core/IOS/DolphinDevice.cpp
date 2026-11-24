@@ -125,7 +125,7 @@ IPCReply GetRealProductCode(Core::System& system, const IOCtlVRequest& request)
 
   Common::SettingsBuffer data;
 
-  if (!file.ReadBytes(data.data(), data.size()))
+  if (!file.ReadBytes(data, sizeof(data)))
     return IPCReply(IPC_ENOENT);
 
   const Common::SettingsReader settings_reader(data);

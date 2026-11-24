@@ -61,7 +61,7 @@ std::string SettingsReader::GetValue(std::string_view key) const
 SettingsReader::SettingsReader(const SettingsBuffer& buffer) : m_decoded{""}
 {
   u32 key = INITIAL_SEED;
-  for (u32 position = 0; position < buffer.size(); ++position)
+  for (u32 position = 0; position < sizeof(SettingsBuffer); ++position)
   {
     m_decoded.push_back((u8)(buffer[position] ^ key));
     key = (key >> 31) | (key << 1);
@@ -110,7 +110,7 @@ void SettingsWriter::WriteLine(std::string_view str)
 
 void SettingsWriter::WriteByte(u8 b)
 {
-  if (m_position >= m_buffer.size())
+  if (m_position >= sizeof(m_buffer))
     return;
 
   m_buffer[m_position] = b ^ m_key;

@@ -958,7 +958,7 @@ IPCReply NetKDRequestDevice::HandleRequestRegisterUserId(const IOS::HLE::IOCtlRe
   }
 
   Common::SettingsBuffer data;
-  if (!file->Read(data.data(), data.size()))
+  if (!file->Read(data, sizeof(data)))
   {
     WriteReturnValue(memory, NWC24::WC24_ERR_FILE_READ, request.buffer_out);
     LogError(ErrorType::Account, NWC24::WC24_ERR_FILE_READ);
@@ -1113,7 +1113,7 @@ IPCReply NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
               fs->OpenFile(PID_KD, PID_KD, settings_file_path.c_str(), FS::Mode::Read))
       {
         Common::SettingsBuffer data;
-        if (file->Read(data.data(), data.size()))
+        if (file->Read(data, sizeof(data)))
         {
           const Common::SettingsReader settings_reader{data};
           area = settings_reader.GetValue("AREA");

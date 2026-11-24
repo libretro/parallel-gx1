@@ -27,7 +27,7 @@ namespace
 {
 // Crazy ugly
 #ifdef _WIN32
-constexpr std::array<u8, 256> s_key_codes_qwerty{
+constexpr u8 s_key_codes_qwerty[256]{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x2A,  // Backspace
     0x2B,  // Tab
@@ -99,7 +99,7 @@ constexpr std::array<u8, 256> s_key_codes_qwerty{
     0x00,  // Nothing interesting past this point.
 };
 
-constexpr std::array<u8, 256> s_key_codes_azerty{
+constexpr u8 s_key_codes_azerty[256]{
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x2A,  // Backspace
     0x2B,  // Tab
@@ -171,16 +171,16 @@ constexpr std::array<u8, 256> s_key_codes_azerty{
     0x00,  // Nothing interesting past this point.
 };
 #else
-constexpr std::array<u8, 256> s_key_codes_qwerty{};
+constexpr u8 s_key_codes_qwerty[256]{};
 
-constexpr std::array<u8, 256> s_key_codes_azerty{};
+constexpr u8 s_key_codes_azerty[256]{};
 #endif
 }  // Anonymous namespace
 
-USB_KBD::MessageData::MessageData(MessageType type, u8 modifiers_, PressedKeyData pressed_keys_)
-    : msg_type{Common::swap32(static_cast<u32>(type))}, modifiers{modifiers_},
-      pressed_keys{pressed_keys_}
+USB_KBD::MessageData::MessageData(MessageType type, u8 modifiers_, const u8* pressed_keys_)
+    : msg_type{Common::swap32(static_cast<u32>(type))}, modifiers{modifiers_}
 {
+  std::memcpy(pressed_keys, pressed_keys_, sizeof(pressed_keys));
 }
 
 // TODO: support in netplay/movies.
@@ -223,7 +223,7 @@ IPCReply USB_KBD::IOCtl(const IOCtlRequest& request)
   {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    memory.CopyToEmu(request.buffer_out, usb_kbd_messages_front(&m_message_queue)->data(),
+    memory.CopyToEmu(request.buffer_out, usb_kbd_messages_front(&m_message_queue)->bytes,
                      sizeof(MessageData));
     usb_kbd_messages_pop_front(&m_message_queue);
   }
@@ -246,7 +246,7 @@ void USB_KBD::Update()
     return;
 
   u8 modifiers = 0x00;
-  PressedKeyData pressed_keys{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  u8 pressed_keys[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   bool got_event = false;
   size_t num_pressed_keys = 0;
   for (size_t i = 0; i < ARRAY_SIZE(m_old_key_buffer); i++)
@@ -276,7 +276,7 @@ void USB_KBD::Update()
         pressed_keys[num_pressed_keys] = key_code;
 
         num_pressed_keys++;
-        if (num_pressed_keys == pressed_keys.size())
+        if (num_pressed_keys == sizeof(pressed_keys))
           break;
       }
 
@@ -318,7 +318,7 @@ void USB_KBD::Update()
   {
     const MessageData message(MessageType::Event, modifiers, pressed_keys);
     usb_kbd_messages_value_t bytes;
-    memcpy(bytes.data(), &message, sizeof(message));
+    memcpy(bytes.bytes, &message, sizeof(message));
     usb_kbd_messages_push_back_growing(&m_message_queue, &bytes);
   }
 }

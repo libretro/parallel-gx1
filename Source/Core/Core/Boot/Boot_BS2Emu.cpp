@@ -371,7 +371,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
     Common::SettingsBuffer data;
     const auto file = fs->OpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path.c_str(),
                                    IOS::HLE::FS::Mode::Read);
-    if (file && file->Read(data.data(), data.size()))
+    if (file && file->Read(data, sizeof(data)))
     {
       const Common::SettingsReader settings_reader(data);
       serno = settings_reader.GetValue("SERNO");
@@ -432,7 +432,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   const auto settings_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
                                                    settings_file_path, {rw_mode, rw_mode, rw_mode});
   if (!settings_file ||
-      !settings_file->Write(settings_writer.GetBytes().data(), settings_writer.GetBytes().size()))
+      !settings_file->Write(settings_writer.GetBytes(), sizeof(Common::SettingsBuffer)))
   {
     PanicAlert("SetupWiiMemory: Can't create setting.txt file");
     return false;
@@ -441,7 +441,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   auto& memory = system.GetMemory();
 
   // Write the 256 byte setting.txt to memory.
-  memory.CopyToEmu(0x3800, settings_writer.GetBytes().data(), settings_writer.GetBytes().size());
+  memory.CopyToEmu(0x3800, settings_writer.GetBytes(), sizeof(Common::SettingsBuffer));
 
   INFO_LOG(BOOT, "Setup Wii Memory...");
 
