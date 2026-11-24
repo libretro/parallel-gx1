@@ -40,7 +40,7 @@ struct Header
   Common::BigEndianValue<u32> banner_size;  // (0x72A0 or 0xF0A0, also seen 0xBAA0)
   u8 permissions;
   u8 unk1;                   // maybe permissions is a be16
-  std::array<u8, 0x10> md5;  // md5 of plaintext header with md5 blanker applied
+  u8 md5[0x10];              // md5 of plaintext header with md5 blanker applied
   Common::BigEndianValue<u16> unk2;
   u8 banner[FULL_BNR_MAX];
 };
@@ -58,10 +58,10 @@ struct BkHeader
   Common::BigEndianValue<u32> unk1;
   Common::BigEndianValue<u32> unk2;
   Common::BigEndianValue<u32> total_size;
-  std::array<u8, 64> unk3;
+  u8 unk3[64];
   Common::BigEndianValue<u64> tid;
-  std::array<u8, 6> mac_address;
-  std::array<u8, 0x12> padding;
+  u8 mac_address[6];
+  u8 padding[0x12];
 };
 static_assert(sizeof(BkHeader) == 0x80, "BkHeader has an incorrect size");
 
@@ -72,10 +72,10 @@ struct FileHDR
   u8 permissions;
   u8 attrib;
   u8 type;  // (1=file, 2=directory)
-  std::array<char, 0x40> name;
-  std::array<u8, 5> padding;
-  std::array<u8, 0x10> iv;
-  std::array<u8, 0x20> unk;
+  char name[0x40];
+  u8 padding[5];
+  u8 iv[0x10];
+  u8 unk[0x20];
 };
 static_assert(sizeof(FileHDR) == 0x80, "FileHDR has an incorrect size");
 #pragma pack(pop)
@@ -98,7 +98,7 @@ public:
     // Where a data.bin file's encrypted data is, its size and IV; read through ReadFileData
     u64 data_pos = 0;
     u32 data_size = 0;
-    std::array<u8, 0x10> iv{};
+    u8 iv[0x10]{};
   };
 
   virtual ~Storage() = default;

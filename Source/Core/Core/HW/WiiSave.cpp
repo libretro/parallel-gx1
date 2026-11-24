@@ -36,12 +36,10 @@
 
 namespace WiiSave
 {
-using Md5 = std::array<u8, 0x10>;
-
-constexpr std::array<u8, 0x10> s_sd_initial_iv{{0x21, 0x67, 0x12, 0xE6, 0xAA, 0x1F, 0x68, 0x9F,
-                                                0x95, 0xC5, 0xA2, 0x23, 0x24, 0xDC, 0x6A, 0x98}};
-constexpr Md5 s_md5_blanker{{0x0E, 0x65, 0x37, 0x81, 0x99, 0xBE, 0x45, 0x17, 0xAB, 0x06, 0xEC, 0x22,
-                             0x45, 0x1A, 0x57, 0x93}};
+constexpr u8 s_sd_initial_iv[0x10]{0x21, 0x67, 0x12, 0xE6, 0xAA, 0x1F, 0x68, 0x9F,
+                                   0x95, 0xC5, 0xA2, 0x23, 0x24, 0xDC, 0x6A, 0x98};
+constexpr u8 s_md5_blanker[0x10]{0x0E, 0x65, 0x37, 0x81, 0x99, 0xBE, 0x45, 0x17,
+                                 0xAB, 0x06, 0xEC, 0x22, 0x45, 0x1A, 0x57, 0x93};
 
 static void HeaderMD5(const Header& header, u8* out)
 {
@@ -115,7 +113,7 @@ public:
       return false;
     }
     header.tid = m_tid;
-    header.md5 = s_md5_blanker;
+    std::memcpy(header.md5, s_md5_blanker, sizeof(header.md5));
     const u8 mode = GetBinMode(banner_path);
     if (!mode || !banner->Read(header.banner, header.banner_size))
       return false;
@@ -123,9 +121,9 @@ public:
     // remove nocopy flag
     header.banner[7] &= ~1;
 
-    Md5 md5_calc;
-    HeaderMD5(header, md5_calc.data());
-    header.md5 = md5_calc;
+    u8 md5_calc[0x10];
+    HeaderMD5(header, md5_calc);
+    std::memcpy(header.md5, md5_calc, sizeof(header.md5));
     return true;
   }
 
@@ -301,8 +299,9 @@ public:
     if (!m_file.Seek(0, File::SeekOrigin::Begin) || !m_file.ReadArray(&header, 1))
       return false;
 
-    std::array<u8, 0x10> iv = s_sd_initial_iv;
-    m_iosc.Decrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv.data(), reinterpret_cast<const u8*>(&header),
+    u8 iv[0x10];
+    std::memcpy(iv, s_sd_initial_iv, sizeof(iv));
+    m_iosc.Decrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv, reinterpret_cast<const u8*>(&header),
                    sizeof(Header), reinterpret_cast<u8*>(&header), IOS::PID_ES);
     const u32 banner_size = header.banner_size;
     if ((banner_size < FULL_BNR_MIN) || (banner_size > FULL_BNR_MAX) ||
@@ -312,15 +311,16 @@ public:
       return false;
     }
 
-    Md5 md5_file = header.md5;
-    header.md5 = s_md5_blanker;
-    Md5 md5_calc;
-    HeaderMD5(header, md5_calc.data());
-    if (md5_file != md5_calc)
+    u8 md5_file[0x10];
+    std::memcpy(md5_file, header.md5, sizeof(md5_file));
+    std::memcpy(header.md5, s_md5_blanker, sizeof(header.md5));
+    u8 md5_calc[0x10];
+    HeaderMD5(header, md5_calc);
+    if (std::memcmp(md5_file, md5_calc, sizeof(md5_file)) != 0)
     {
       ERROR_LOG(CONSOLE, "MD5 mismatch\n %016" PRIx64 "%016" PRIx64 " != %016" PRIx64 "%016" PRIx64,
-                (u64)Common::swap64(md5_file.data()), (u64)Common::swap64(md5_file.data() + 8),
-                (u64)Common::swap64(md5_calc.data()), (u64)Common::swap64(md5_calc.data() + 8));
+                (u64)Common::swap64(md5_file), (u64)Common::swap64(md5_file + 8),
+                (u64)Common::swap64(md5_calc), (u64)Common::swap64(md5_calc + 8));
       return false;
     }
     return true;
@@ -360,8 +360,7 @@ public:
       if (type != SaveFile::Type::Directory && type != SaveFile::Type::File)
         return false;
       save_file.type = type;
-      save_file.path =
-          std::string{file_hdr.name.data(), strnlen(file_hdr.name.data(), file_hdr.name.size())};
+      save_file.path = std::string{file_hdr.name, strnlen(file_hdr.name, sizeof(file_hdr.name))};
       if (type == SaveFile::Type::File)
       {
         const u32 size = file_hdr.size;
@@ -370,7 +369,7 @@ public:
 
         save_file.data_pos = pos;
         save_file.data_size = size;
-        save_file.iv = file_hdr.iv;
+        std::memcpy(save_file.iv, file_hdr.iv, sizeof(save_file.iv));
         m_file.Seek(pos + rounded_size, File::SeekOrigin::Begin);
       }
       files.emplace_back(std::move(save_file));
@@ -383,8 +382,9 @@ public:
   bool WriteHeader(const Header& header) override
   {
     Header encrypted_header;
-    std::array<u8, 0x10> iv = s_sd_initial_iv;
-    m_iosc.Encrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv.data(), reinterpret_cast<const u8*>(&header),
+    u8 iv[0x10];
+    std::memcpy(iv, s_sd_initial_iv, sizeof(iv));
+    m_iosc.Encrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv, reinterpret_cast<const u8*>(&header),
                    sizeof(Header), reinterpret_cast<u8*>(&encrypted_header), IOS::PID_ES);
     return m_file.Seek(0, File::SeekOrigin::Begin) && m_file.WriteArray(&encrypted_header, 1);
   }
@@ -403,9 +403,10 @@ public:
     {
       return false;
     }
-    std::array<u8, 0x10> iv = save_file.iv;
-    m_iosc.Decrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv.data(), data->data(), rounded_size,
-                   data->data(), IOS::PID_ES);
+    u8 iv[0x10];
+    std::memcpy(iv, save_file.iv, sizeof(iv));
+    m_iosc.Decrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv, data->data(), rounded_size, data->data(),
+                   IOS::PID_ES);
     data->resize(save_file.data_size);
     return true;
   }
@@ -424,10 +425,10 @@ public:
       file_hdr.permissions = save_file.mode;
       file_hdr.attrib = save_file.attributes;
       file_hdr.type = static_cast<u8>(save_file.type);
-      if (save_file.path.length() > file_hdr.name.size())
+      if (save_file.path.length() > sizeof(file_hdr.name))
         return false;
       /* zero-padded, unterminated when it fills the field */
-      std::memcpy(file_hdr.name.data(), save_file.path.data(), save_file.path.length());
+      std::memcpy(file_hdr.name, save_file.path.data(), save_file.path.length());
 
       const bool has_data = file_hdr.type == 1;
       if (has_data)
@@ -444,7 +445,7 @@ public:
       {
         // zero-padded to whole blocks, encrypted in place
         data.resize(Common::AlignUp(data.size(), BLOCK_SZ));
-        m_iosc.Encrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, file_hdr.iv.data(), data.data(), data.size(),
+        m_iosc.Encrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, file_hdr.iv, data.data(), data.size(),
                        data.data(), IOS::PID_ES);
         if (!m_file.WriteBytes(data.data(), data.size()))
           return false;
@@ -487,8 +488,8 @@ private:
 
     // Sign the data.
     IOS::CertECC ap_cert;
-    std::array<u8, 60> ap_sig;
-    m_iosc.Sign(ap_sig.data(), reinterpret_cast<u8*>(&ap_cert), Titles::SYSTEM_MENU, data_sha1,
+    u8 ap_sig[60];
+    m_iosc.Sign(ap_sig, reinterpret_cast<u8*>(&ap_cert), Titles::SYSTEM_MENU, data_sha1,
                 static_cast<u32>(sizeof(data_sha1)));
 
     // Write signatures.
@@ -496,7 +497,7 @@ private:
       return false;
     const u32 SIGNATURE_END_MAGIC = Common::swap32(0x2f536969);
     const IOS::CertECC device_certificate = m_iosc.GetDeviceCertificate();
-    return m_file.WriteArray(ap_sig.data(), ap_sig.size()) &&
+    return m_file.WriteArray(ap_sig, sizeof(ap_sig)) &&
            m_file.WriteArray(&SIGNATURE_END_MAGIC, 1) &&
            m_file.WriteArray(&device_certificate, 1) && m_file.WriteArray(&ap_cert, 1);
   }
