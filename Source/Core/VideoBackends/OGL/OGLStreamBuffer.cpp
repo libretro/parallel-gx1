@@ -233,7 +233,7 @@ StreamBuffer::~StreamBuffer()
   glDeleteBuffers(1, &m_buffer);
 }
 
-std::pair<u8*, u32> StreamBuffer::Map(u32 size)
+u8* StreamBuffer::Map(u32 size, u32* offset)
 {
   u8* pointer;
   switch (m_kind)
@@ -247,19 +247,23 @@ std::pair<u8*, u32> StreamBuffer::Map(u32 size)
     pointer = (u8*)glMapBufferRange(m_buffertype, m_iterator, size,
                                     GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT |
                                         GL_MAP_UNSYNCHRONIZED_BIT);
-    return std::make_pair(pointer, m_iterator);
+    *offset = m_iterator;
+    return pointer;
   case MAP_AND_SYNC:
     AllocMemory(size);
     pointer = (u8*)glMapBufferRange(m_buffertype, m_iterator, size,
                                     GL_MAP_WRITE_BIT | GL_MAP_FLUSH_EXPLICIT_BIT |
                                         GL_MAP_UNSYNCHRONIZED_BIT);
-    return std::make_pair(pointer, m_iterator);
+    *offset = m_iterator;
+    return pointer;
   case BUFFER_STORAGE:
   case PINNED_MEMORY:
     AllocMemory(size);
-    return std::make_pair(m_pointer + m_iterator, m_iterator);
+    *offset = m_iterator;
+    return m_pointer + m_iterator;
   default:  // BUFFER_SUB_DATA, BUFFER_DATA
-    return std::make_pair(m_pointer, 0u);
+    *offset = 0;
+    return m_pointer;
   }
 }
 

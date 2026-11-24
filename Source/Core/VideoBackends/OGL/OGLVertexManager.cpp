@@ -104,9 +104,10 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
     return false;
 
   const u32 elem_size = GetTexelBufferElementSize(format);
-  const auto dst = m_texel_buffer->Map(data_size, elem_size);
-  std::memcpy(dst.first, data, data_size);
-  *out_offset = dst.second / elem_size;
+  u32 offset;
+  u8* const dst = m_texel_buffer->Map(data_size, elem_size, &offset);
+  std::memcpy(dst, data, data_size);
+  *out_offset = offset / elem_size;
   m_texel_buffer->Unmap(data_size);
 
   // Bind the correct view to the texel buffer slot.
@@ -126,12 +127,13 @@ bool VertexManager::UploadTexelBuffer(const void* data, u32 data_size, TexelBuff
   if (reserve_size > m_texel_buffer->GetSize())
     return false;
 
-  const auto dst = m_texel_buffer->Map(reserve_size, elem_size);
+  u32 offset;
+  u8* const dst = m_texel_buffer->Map(reserve_size, elem_size, &offset);
   const u32 palette_byte_offset = Common::AlignUp(data_size, palette_elem_size);
-  std::memcpy(dst.first, data, data_size);
-  std::memcpy(dst.first + palette_byte_offset, palette_data, palette_size);
-  *out_offset = dst.second / elem_size;
-  *out_palette_offset = (dst.second + palette_byte_offset) / palette_elem_size;
+  std::memcpy(dst, data, data_size);
+  std::memcpy(dst + palette_byte_offset, palette_data, palette_size);
+  *out_offset = offset / elem_size;
+  *out_palette_offset = (offset + palette_byte_offset) / palette_elem_size;
   m_texel_buffer->Unmap(palette_byte_offset + palette_size);
 
   glActiveTexture(GL_TEXTURE0);
@@ -159,12 +161,13 @@ void VertexManager::ResetBuffer(u32 vertex_stride)
 {
   CheckBufferBinding();
 
-  auto buffer = m_vertex_buffer->Map(MAXVBUFFERSIZE, vertex_stride);
-  m_cur_buffer_pointer = m_base_buffer_pointer = buffer.first;
-  m_end_buffer_pointer = buffer.first + MAXVBUFFERSIZE;
+  u32 offset;
+  u8* const vertices = m_vertex_buffer->Map(MAXVBUFFERSIZE, vertex_stride, &offset);
+  m_cur_buffer_pointer = m_base_buffer_pointer = vertices;
+  m_end_buffer_pointer = vertices + MAXVBUFFERSIZE;
 
-  buffer = m_index_buffer->Map(MAXIBUFFERSIZE * sizeof(u16));
-  index_generator_start(&m_index_generator, reinterpret_cast<u16*>(buffer.first));
+  u8* const indices = m_index_buffer->Map(MAXIBUFFERSIZE * sizeof(u16), &offset);
+  index_generator_start(&m_index_generator, reinterpret_cast<u16*>(indices));
 }
 
 void VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,

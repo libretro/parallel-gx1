@@ -223,27 +223,27 @@ void ProgramShaderCache::UploadConstants()
   auto& geometry_shader_manager = system.GetGeometryShaderManager();
   if (pixel_shader_manager.dirty || vertex_shader_manager.dirty || geometry_shader_manager.dirty)
   {
-    auto buffer = s_buffer->Map(s_ubo_buffer_size, s_ubo_align);
+    u32 offset;
+    u8* const buffer = s_buffer->Map(s_ubo_buffer_size, s_ubo_align, &offset);
 
-    memcpy(buffer.first, &pixel_shader_manager.constants, sizeof(PixelShaderConstants));
+    memcpy(buffer, &pixel_shader_manager.constants, sizeof(PixelShaderConstants));
 
     u64 size = Common::AlignUp(sizeof(PixelShaderConstants), s_ubo_align);
 
-    memcpy(buffer.first + size, &vertex_shader_manager.constants, sizeof(VertexShaderConstants));
+    memcpy(buffer + size, &vertex_shader_manager.constants, sizeof(VertexShaderConstants));
     size += Common::AlignUp(sizeof(VertexShaderConstants), s_ubo_align);
 
-    memcpy(buffer.first + size, &geometry_shader_manager.constants,
-           sizeof(GeometryShaderConstants));
+    memcpy(buffer + size, &geometry_shader_manager.constants, sizeof(GeometryShaderConstants));
 
     s_buffer->Unmap(s_ubo_buffer_size);
 
-    glBindBufferRange(GL_UNIFORM_BUFFER, 1, s_buffer->m_buffer, buffer.second,
+    glBindBufferRange(GL_UNIFORM_BUFFER, 1, s_buffer->m_buffer, offset,
                       sizeof(PixelShaderConstants));
     size = Common::AlignUp(sizeof(PixelShaderConstants), s_ubo_align);
-    glBindBufferRange(GL_UNIFORM_BUFFER, 2, s_buffer->m_buffer, buffer.second + size,
+    glBindBufferRange(GL_UNIFORM_BUFFER, 2, s_buffer->m_buffer, offset + size,
                       sizeof(VertexShaderConstants));
     size += Common::AlignUp(sizeof(VertexShaderConstants), s_ubo_align);
-    glBindBufferRange(GL_UNIFORM_BUFFER, 4, s_buffer->m_buffer, buffer.second + size,
+    glBindBufferRange(GL_UNIFORM_BUFFER, 4, s_buffer->m_buffer, offset + size,
                       sizeof(GeometryShaderConstants));
 
     pixel_shader_manager.dirty = false;
@@ -256,13 +256,14 @@ void ProgramShaderCache::UploadConstants(const void* data, u32 data_size)
 {
   // allocate and copy
   const u32 alloc_size = Common::AlignUp(data_size, s_ubo_align);
-  auto buffer = s_buffer->Map(alloc_size, s_ubo_align);
-  std::memcpy(buffer.first, data, data_size);
+  u32 offset;
+  u8* const buffer = s_buffer->Map(alloc_size, s_ubo_align, &offset);
+  std::memcpy(buffer, data, data_size);
   s_buffer->Unmap(alloc_size);
 
   // bind the same sub-buffer to all stages
   for (u32 index = 1; index <= 4; index++)
-    glBindBufferRange(GL_UNIFORM_BUFFER, index, s_buffer->m_buffer, buffer.second, data_size);
+    glBindBufferRange(GL_UNIFORM_BUFFER, index, s_buffer->m_buffer, offset, data_size);
 }
 
 unsigned ProgramShaderCache::GLSLVersionNumber(bool* es)

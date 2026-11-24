@@ -430,7 +430,8 @@ void OGLTexture::DestroyUploadBuffer()
 
 u8* OGLTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_t size, u32 layer)
 {
-  std::pair<u8*, u32> mapped;
+  u8* mapped;
+  u32 offset;
 
   if (IsCompressedFormat(m_config.format) || !g_ogl_config.bSupportsTextureStorage ||
       m_config.type == AbstractTextureType::Texture_CubeMap || level >= m_config.levels ||
@@ -449,16 +450,16 @@ u8* OGLTexture::LendLoad(u32 level, u32 width, u32 height, u32 row_length, size_
   if (!s_upload_buffer)
     return nullptr;
 
-  mapped = s_upload_buffer->Map(static_cast<u32>(size), 4);
+  mapped = s_upload_buffer->Map(static_cast<u32>(size), 4, &offset);
   glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-  s_lent_load.offset = mapped.second;
+  s_lent_load.offset = offset;
   s_lent_load.size = static_cast<u32>(size);
   s_lent_load.level = level;
   s_lent_load.layer = layer;
   s_lent_load.width = width;
   s_lent_load.height = height;
   s_lent_load.row_length = row_length;
-  return mapped.first;
+  return mapped;
 }
 
 void OGLTexture::CommitLoad()

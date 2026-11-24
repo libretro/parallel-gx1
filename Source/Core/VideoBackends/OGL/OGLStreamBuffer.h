@@ -37,25 +37,24 @@ public:
   u32 GetSize() const { return m_size; }
   u32 GetCurrentOffset() const { return m_iterator; }
 
-  /* This mapping function will return a pair of:
-   * - the pointer to the mapped buffer
-   * - the offset into the real GPU buffer (always multiple of stride)
+  /* This mapping function returns the pointer to the mapped buffer and
+   * fills offset with the offset into the real GPU buffer (always multiple of stride).
    * On mapping, the maximum of size for allocation has to be set.
    * The size really pushed into this fifo only has to be known on Unmapping.
    * Mapping invalidates the current buffer content,
    * so it isn't allowed to access the old content any more.
    */
-  std::pair<u8*, u32> Map(u32 size);
+  u8* Map(u32 size, u32* offset);
   void Unmap(u32 used_size);
 
-  std::pair<u8*, u32> Map(u32 size, u32 stride)
+  u8* Map(u32 size, u32 stride, u32* offset)
   {
     u32 padding = m_iterator % stride;
     if (padding)
     {
       m_iterator += stride - padding;
     }
-    return Map(size);
+    return Map(size, offset);
   }
 
   const u32 m_buffer;
