@@ -11,19 +11,18 @@
 
 namespace Common
 {
-std::optional<std::tm> LocalTime(std::time_t time)
+bool LocalTime(std::time_t time, std::tm* local_time)
 {
-  std::tm local_time;
 #ifdef _WIN32
-  if (localtime_s(&local_time, &time) != 0)
+  if (localtime_s(local_time, &time) != 0)
 #else
-  if (localtime_r(&time, &local_time) == nullptr)
+  if (localtime_r(&time, local_time) == nullptr)
 #endif
   {
     ERROR_LOG(COMMON, "Failed to convert time to local time: %s", std::strerror(errno));
-    return std::nullopt;
+    return false;
   }
-  return local_time;
+  return true;
 }
 
 bool GmTime(std::time_t time, std::tm* out)

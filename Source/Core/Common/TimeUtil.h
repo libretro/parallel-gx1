@@ -4,12 +4,12 @@
 #pragma once
 
 #include <ctime>
-#include <optional>
 
 namespace Common
 {
-// Threadsafe and error-checking variant of std::localtime()
-std::optional<std::tm> LocalTime(std::time_t time);
+// Threadsafe and error-checking std::localtime(): fills @local_time, false when @time cannot be
+// converted.
+bool LocalTime(std::time_t time, std::tm* local_time);
 
 // Threadsafe std::gmtime(): fills @out, false when @time cannot be converted.
 bool GmTime(std::time_t time, std::tm* out);

@@ -121,7 +121,9 @@ int SDCardDiskIOCtl(File::IOFile* image, u8 pdrv, u8 cmd, void* buff)
 u32 GetSystemTimeFAT()
 {
   const std::time_t time = std::time(nullptr);
-  std::tm tm = *Common::LocalTime(time);
+  // zeroed, should the host fail to convert it
+  std::tm tm{};
+  Common::LocalTime(time, &tm);
 
   DWORD fattime = 0;
   fattime |= (tm.tm_year - 80) << 25;

@@ -54,8 +54,9 @@ void NetworkCaptureLogger::OpenPCAP()
   {
     return;
   }
-  if (const auto local_time = Common::LocalTime(std::time(nullptr)))
-    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %Hh%Mm%Ss", &*local_time);
+  std::tm local_time;
+  if (Common::LocalTime(std::time(nullptr), &local_time))
+    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %Hh%Mm%Ss", &local_time);
   const std::string filepath =
       File::GetUserPath(D_DUMPSSL_IDX) + SConfig::GetInstance().GetGameID() + " " + stamp + ".pcap";
   m_file.Open(filepath.c_str(), Common::PCAP::LinkType::Ethernet, File::SharedAccess::Read);
