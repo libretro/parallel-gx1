@@ -161,7 +161,7 @@ const char* ErrorWrap::GetStrError() const
 #endif
 }
 
-std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle, uint8_t desc_index)
+bool GetStringDescriptor(libusb_device_handle* dev_handle, uint8_t desc_index, std::string* out)
 {
 #if defined(__LIBUSB__)
   struct StringDescriptor
@@ -181,7 +181,7 @@ std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle,
   {
     ERROR_LOG(IOS_USB, "libusb_get_string_descriptor(desc_index=%d, lang_id=0) result:%d",
               static_cast<int>(desc_index), lang_id_result);
-    return std::nullopt;
+    return false;
   }
 
   const u16 lang_id = buffer.data[0];
@@ -193,7 +193,7 @@ std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle,
   {
     ERROR_LOG(IOS_USB, "libusb_get_string_descriptor(desc_index=%d, lang_id=%u) result:%d",
               static_cast<int>(desc_index), (unsigned)lang_id, str_result);
-    return std::nullopt;
+    return false;
   }
 
   // The UTF-16 data size should be even and equal to the return value.
@@ -204,9 +204,11 @@ std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle,
   }
 
   const std::size_t str_length = MAX(0, buffer.length - 2) / 2;
-  return UTF16ToUTF8(std::u16string_view{buffer.data, str_length});
+  *out = UTF16ToUTF8(std::u16string_view{buffer.data, str_length});
+  return true;
 #else
-  return "__LIBUSB__ not defined";
+  *out = "__LIBUSB__ not defined";
+  return true;
 #endif
 }
 

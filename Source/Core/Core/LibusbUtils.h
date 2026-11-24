@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -51,8 +50,7 @@ struct ErrorWrap
   const char* GetName() const;
 };
 
-// Returns the UTF-16 descriptor converted to UTF-8 or returns nullopt on error.
-std::optional<std::string> GetStringDescriptor(libusb_device_handle* dev_handle,
-                                               uint8_t desc_index);
+// The UTF-16 descriptor converted to UTF-8; false on error.
+bool GetStringDescriptor(libusb_device_handle* dev_handle, uint8_t desc_index, std::string* out);
 
 }  // namespace LibusbUtils

@@ -147,15 +147,16 @@ LibUSBBluetoothAdapter::LibUSBBluetoothAdapter()
 
         if (IsBluetoothDevice(device_descriptor) && adapter->OpenDevice(device_descriptor, device))
         {
-          const auto manufacturer =
-              LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iManufacturer)
-                  .value_or("?");
-          const auto product =
-              LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iProduct)
-                  .value_or("?");
-          const auto serial_number =
-              LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iSerialNumber)
-                  .value_or("?");
+          std::string manufacturer, product, serial_number;
+          if (!LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iManufacturer,
+                                                &manufacturer))
+            manufacturer = "?";
+          if (!LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iProduct,
+                                                &product))
+            product = "?";
+          if (!LibusbUtils::GetStringDescriptor(adapter->m_handle, device_descriptor.iSerialNumber,
+                                                &serial_number))
+            serial_number = "?";
           NOTICE_LOG(IOS_WIIMOTE, "Using device %04x:%04x (rev %x) for Bluetooth: %s %s %s",
                      (unsigned)device_descriptor.idVendor, (unsigned)device_descriptor.idProduct,
                      (unsigned)device_descriptor.bcdDevice, manufacturer.c_str(), product.c_str(),
