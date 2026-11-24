@@ -97,11 +97,18 @@ void gs_emit_vertex(struct gs_build* g, struct rslc_var* v, bool first_vertex)
   sb_do(sb, sb_call(sb, "EmitVertex", 0));
 }
 
+/* the pos member of a vertex variable */
+struct gs_pos_ref
+{
+  struct rslc_var* var;
+  int pos;
+};
+
 /* v.pos */
 uint32_t gs_pos_of(const struct shader_build* sb, const void* ctx)
 {
-  const std::pair<struct rslc_var*, int>* p = static_cast<const std::pair<struct rslc_var*, int>*>(ctx);
-  return sb_mem(sb, sb_ref(sb, p->first), static_cast<uint32_t>(p->second));
+  const struct gs_pos_ref* p = static_cast<const struct gs_pos_ref*>(ctx);
+  return sb_mem(sb, sb_ref(sb, p->var), static_cast<uint32_t>(p->pos));
 }
 
 /* (((ctexoffset[k] >> i) & 0x1) != 0) */
@@ -211,7 +218,7 @@ bool BuildGeometryShader(struct shader_build* sb, const void* arg)
     struct rslc_var* end = rslc_b_local(sb->b, "end", vs_output, 0, false);
     struct sb_place s_place = {start, nullptr, -1}, e_place = {end, nullptr, -1};
     struct sb_place v0 = {vs, nullptr, 0}, v1 = {vs, nullptr, 1};
-    std::pair<struct rslc_var*, int> pa(end, plain.pos), pb(start, plain.pos);
+    struct gs_pos_ref pa = {end, plain.pos}, pb = {start, plain.pos};
     BuildAssignVSOutputMembers(sb, &plain, &s_place, &v0, host_config);
     BuildAssignVSOutputMembers(sb, &plain, &e_place, &v1, host_config);
     offset = BuildLineOffset(sb, g.gsblock[1], gs_pos_of, &pa, gs_pos_of, &pb, nullptr);
