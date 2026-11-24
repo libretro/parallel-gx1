@@ -401,7 +401,7 @@ void DXContext::DeferResourceDestruction(ID3D12Resource* resource)
 
 void DXContext::DeferDescriptorDestruction(DescriptorHeapManager& manager, u32 index)
 {
-  m_command_lists[m_current_command_list].pending_descriptors.emplace_back(manager, index);
+  m_command_lists[m_current_command_list].pending_descriptors.push_back({&manager, index});
 }
 
 void DXContext::ResetSamplerAllocators()
@@ -420,7 +420,7 @@ void DXContext::RecreateGXRootSignature()
 void DXContext::DestroyPendingResources(CommandListResources& cmdlist)
 {
   for (const auto& dd : cmdlist.pending_descriptors)
-    dd.first.Free(dd.second);
+    dd.manager->Free(dd.index);
   cmdlist.pending_descriptors.clear();
 
   for (ID3D12Resource* res : cmdlist.pending_resources)

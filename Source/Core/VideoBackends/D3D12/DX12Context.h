@@ -155,7 +155,12 @@ private:
     DescriptorAllocator descriptor_allocator;
     SamplerAllocator sampler_allocator;
     std::vector<ID3D12Resource*> pending_resources;
-    std::vector<std::pair<DescriptorHeapManager&, u32>> pending_descriptors;
+    struct PendingDescriptor
+    {
+      DescriptorHeapManager* manager;
+      u32 index;
+    };
+    std::vector<PendingDescriptor> pending_descriptors;
     u64 ready_fence_value = 0;
   };
 
