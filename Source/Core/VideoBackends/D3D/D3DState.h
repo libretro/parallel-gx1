@@ -258,9 +258,9 @@ private:
 
   struct Resources
   {
-    std::array<ID3D11ShaderResourceView*, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> textures;
-    std::array<ID3D11SamplerState*, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> samplers;
-    std::array<ID3D11Buffer*, 2> pixelConstants;
+    ID3D11ShaderResourceView* textures[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS];
+    ID3D11SamplerState* samplers[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS];
+    ID3D11Buffer* pixelConstants[2];
     ID3D11Buffer* vertexConstants;
     ID3D11Buffer* geometryConstants;
     ID3D11Buffer* vertexBuffer;
@@ -285,11 +285,9 @@ private:
 
   // Compute resources are synced with the graphics resources when we need them.
   ID3D11Buffer* m_compute_constants = nullptr;
-  std::array<ID3D11ShaderResourceView*, VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS>
-      m_compute_textures{};
-  std::array<ID3D11SamplerState*, VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS> m_compute_samplers{};
-  std::array<ID3D11UnorderedAccessView*, VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS>
-      m_compute_images{};
+  ID3D11ShaderResourceView* m_compute_textures[VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS]{};
+  ID3D11SamplerState* m_compute_samplers[VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS]{};
+  ID3D11UnorderedAccessView* m_compute_images[VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS]{};
   ID3D11ComputeShader* m_compute_shader = nullptr;
 };
 

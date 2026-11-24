@@ -20,6 +20,7 @@
 #include "VideoCommon/VideoConfig.h"
 
 #include <algorithm>
+#include <retro_miscellaneous.h>
 #include <string_view>
 #include "VideoCommon/VideoBackendKind.h"
 
@@ -651,7 +652,7 @@ void OGLGfx::SetComputeImageTexture(u32 index, AbstractTexture* texture, bool re
 
 void OGLGfx::UnbindTexture(const AbstractTexture* texture)
 {
-  for (size_t i = 0; i < m_bound_textures.size(); i++)
+  for (size_t i = 0; i < ARRAY_SIZE(m_bound_textures); i++)
   {
     if (m_bound_textures[i] != texture)
       continue;
@@ -661,7 +662,7 @@ void OGLGfx::UnbindTexture(const AbstractTexture* texture)
     m_bound_textures[i] = nullptr;
   }
 
-  for (size_t i = 0; i < m_bound_image_textures.size(); i++)
+  for (size_t i = 0; i < ARRAY_SIZE(m_bound_image_textures); i++)
   {
     if (m_bound_image_textures[i] != texture)
       continue;

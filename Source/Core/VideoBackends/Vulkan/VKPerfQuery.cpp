@@ -194,8 +194,8 @@ void PerfQuery::ReadbackQueries(u32 query_count)
   // Read back from the GPU.
   VkResult res = vkGetQueryPoolResults(
       g_vulkan_context->GetDevice(), m_query_pool, m_query_readback_pos, query_count,
-      query_count * sizeof(PerfQueryDataType), m_query_result_buffer.data(),
-      sizeof(PerfQueryDataType), VK_QUERY_RESULT_WAIT_BIT);
+      query_count * sizeof(PerfQueryDataType), m_query_result_buffer, sizeof(PerfQueryDataType),
+      VK_QUERY_RESULT_WAIT_BIT);
   if (res != VK_SUCCESS)
     LOG_VULKAN_ERROR(res, "vkGetQueryPoolResults failed: ");
 

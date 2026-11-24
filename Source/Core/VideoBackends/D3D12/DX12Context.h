@@ -5,6 +5,7 @@
 
 #include <array>
 #include <memory>
+#include <retro_miscellaneous.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/HRWrap.h"
@@ -79,11 +80,11 @@ public:
   DescriptorHeapManager& GetRTVHeapManager() { return m_rtv_heap_manager; }
   DescriptorHeapManager& GetDSVHeapManager() { return m_dsv_heap_manager; }
   SamplerHeapManager& GetSamplerHeapManager() { return m_sampler_heap_manager; }
-  ID3D12DescriptorHeap* const* GetGPUDescriptorHeaps() const
+  ID3D12DescriptorHeap* const* GetGPUDescriptorHeaps() const { return m_gpu_descriptor_heaps; }
+  u32 GetGPUDescriptorHeapCount() const
   {
-    return m_gpu_descriptor_heaps.data();
+    return static_cast<u32>(ARRAY_SIZE(m_gpu_descriptor_heaps));
   }
-  u32 GetGPUDescriptorHeapCount() const { return static_cast<u32>(m_gpu_descriptor_heaps.size()); }
   const DescriptorHandle& GetNullSRVDescriptor() const { return m_null_srv_descriptor; }
 
   // Root signature access.
@@ -185,14 +186,14 @@ private:
   u32 m_current_fence_value = 0;
   u64 m_completed_fence_value = 0;
 
-  std::array<CommandListResources, NUM_COMMAND_LISTS> m_command_lists;
+  CommandListResources m_command_lists[NUM_COMMAND_LISTS];
   u32 m_current_command_list = NUM_COMMAND_LISTS - 1;
 
   DescriptorHeapManager m_descriptor_heap_manager;
   DescriptorHeapManager m_rtv_heap_manager;
   DescriptorHeapManager m_dsv_heap_manager;
   SamplerHeapManager m_sampler_heap_manager;
-  std::array<ID3D12DescriptorHeap*, 2> m_gpu_descriptor_heaps = {};
+  ID3D12DescriptorHeap* m_gpu_descriptor_heaps[2] = {};
   DescriptorHandle m_null_srv_descriptor;
   D3D_FEATURE_LEVEL m_feature_level = D3D_FEATURE_LEVEL_11_0;
 

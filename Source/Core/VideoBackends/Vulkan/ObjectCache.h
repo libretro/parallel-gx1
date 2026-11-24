@@ -98,11 +98,11 @@ private:
   bool ValidatePipelineCache(const u8* data, size_t data_length);
   void DestroyPipelineCache();
 
-  std::array<VkDescriptorSetLayout, NUM_DESCRIPTOR_SET_LAYOUTS> m_descriptor_set_layouts = {};
+  VkDescriptorSetLayout m_descriptor_set_layouts[NUM_DESCRIPTOR_SET_LAYOUTS] = {};
   VkDescriptorType m_set_descriptor_types[8] = {};
   u32 m_most_set_descriptors[8] = {};
   u32 m_num_set_descriptor_types = 0;
-  std::array<VkPipelineLayout, NUM_PIPELINE_LAYOUTS> m_pipeline_layouts = {};
+  VkPipelineLayout m_pipeline_layouts[NUM_PIPELINE_LAYOUTS] = {};
 
   StreamBuffer m_texture_upload_buffer;
 

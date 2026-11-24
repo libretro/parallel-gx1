@@ -56,7 +56,7 @@ private:
   u32 m_query_readback_pos = 0;
   u32 m_query_next_pos = 0;
   ActiveQuery m_query_buffer[PERF_QUERY_BUFFER_SIZE] = {};
-  std::array<PerfQueryDataType, PERF_QUERY_BUFFER_SIZE> m_query_result_buffer = {};
+  PerfQueryDataType m_query_result_buffer[PERF_QUERY_BUFFER_SIZE] = {};
 };
 
 }  // namespace Vulkan

@@ -27,7 +27,7 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
   using FormatMap = Common::EnumMap<DXGI_FORMAT, ComponentFormat::InvalidFloat7>;
   static constexpr auto f = [](FormatMap a) { return a; };  // Deduction helper
 
-  static constexpr std::array<FormatMap, 4> d3d_float_format_lookup = {
+  static constexpr FormatMap d3d_float_format_lookup[4] = {
       f({
           DXGI_FORMAT_R8_UNORM,
           DXGI_FORMAT_R8_SNORM,
@@ -70,7 +70,7 @@ static DXGI_FORMAT VarToD3D(ComponentFormat t, int size, bool integer)
       }),
   };
 
-  static constexpr std::array<FormatMap, 4> d3d_integer_format_lookup = {
+  static constexpr FormatMap d3d_integer_format_lookup[4] = {
       f({
           DXGI_FORMAT_R8_UINT,
           DXGI_FORMAT_R8_SINT,
@@ -158,8 +158,8 @@ ID3D11InputLayout* D3DVertexFormat::GetInputLayout(const void* vs_bytecode, size
   if (layout)
     return layout;
 
-  HRESULT hr = D3D::device->CreateInputLayout(m_elems.data(), m_num_elems, vs_bytecode,
-                                              vs_bytecode_size, &layout);
+  HRESULT hr =
+      D3D::device->CreateInputLayout(m_elems, m_num_elems, vs_bytecode, vs_bytecode_size, &layout);
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to create input layout: %s", DX11::HRText(hr).text);
 
   // This method can be called from multiple threads, so ensure that only one thread sets the

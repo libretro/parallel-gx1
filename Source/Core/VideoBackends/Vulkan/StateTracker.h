@@ -157,18 +157,18 @@ private:
   // shader bindings
   struct
   {
-    std::array<VkDescriptorBufferInfo, NUM_UBO_DESCRIPTOR_SET_BINDINGS> gx_ubo_bindings;
-    std::array<u32, NUM_UBO_DESCRIPTOR_SET_BINDINGS> gx_ubo_offsets;
+    VkDescriptorBufferInfo gx_ubo_bindings[NUM_UBO_DESCRIPTOR_SET_BINDINGS];
+    u32 gx_ubo_offsets[NUM_UBO_DESCRIPTOR_SET_BINDINGS];
     VkDescriptorBufferInfo utility_ubo_binding;
     u32 utility_ubo_offset;
-    std::array<VkDescriptorImageInfo, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> samplers;
-    std::array<VkBufferView, NUM_COMPUTE_TEXEL_BUFFERS> texel_buffers;
+    VkDescriptorImageInfo samplers[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS];
+    VkBufferView texel_buffers[NUM_COMPUTE_TEXEL_BUFFERS];
     VkDescriptorBufferInfo ssbo;
     VkDescriptorBufferInfo gx_uber_vertex_ssbo;
-    std::array<VkDescriptorImageInfo, VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS> image_textures;
+    VkDescriptorImageInfo image_textures[VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS];
   } m_bindings = {};
-  std::array<VkDescriptorSet, NUM_GX_DESCRIPTOR_SETS> m_gx_descriptor_sets = {};
-  std::array<VkDescriptorSet, NUM_UTILITY_DESCRIPTOR_SETS> m_utility_descriptor_sets = {};
+  VkDescriptorSet m_gx_descriptor_sets[NUM_GX_DESCRIPTOR_SETS] = {};
+  VkDescriptorSet m_utility_descriptor_sets[NUM_UTILITY_DESCRIPTOR_SETS] = {};
   VkDescriptorSet m_compute_descriptor_set = VK_NULL_HANDLE;
 
   // rasterization

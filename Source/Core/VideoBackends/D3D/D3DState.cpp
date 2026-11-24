@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"
@@ -247,8 +248,8 @@ void StateManager::SetComputeUAV(u32 index, ID3D11UnorderedAccessView* uav)
     return;
 
   m_compute_images[index] = uav;
-  D3D::context->CSSetUnorderedAccessViews(0, static_cast<u32>(m_compute_images.size()),
-                                          m_compute_images.data(), nullptr);
+  D3D::context->CSSetUnorderedAccessViews(0, static_cast<u32>(ARRAY_SIZE(m_compute_images)),
+                                          m_compute_images, nullptr);
 }
 
 void StateManager::SetComputeShader(ID3D11ComputeShader* shader)
@@ -268,7 +269,7 @@ void StateManager::SyncComputeBindings()
     D3D::context->CSSetConstantBuffers(0, 1, &m_compute_constants);
   }
 
-  for (u32 start = 0; start < static_cast<u32>(m_compute_textures.size());)
+  for (u32 start = 0; start < static_cast<u32>(ARRAY_SIZE(m_compute_textures));)
   {
     if (m_compute_textures[start] == m_pending.textures[start])
     {
@@ -279,7 +280,7 @@ void StateManager::SyncComputeBindings()
     m_compute_textures[start] = m_pending.textures[start];
 
     u32 end = start + 1;
-    for (; end < static_cast<u32>(m_compute_textures.size()); end++)
+    for (; end < static_cast<u32>(ARRAY_SIZE(m_compute_textures)); end++)
     {
       if (m_compute_textures[end] == m_pending.textures[end])
         break;
@@ -291,7 +292,7 @@ void StateManager::SyncComputeBindings()
     start = end;
   }
 
-  for (u32 start = 0; start < static_cast<u32>(m_compute_samplers.size());)
+  for (u32 start = 0; start < static_cast<u32>(ARRAY_SIZE(m_compute_samplers));)
   {
     if (m_compute_samplers[start] == m_pending.samplers[start])
     {
@@ -302,7 +303,7 @@ void StateManager::SyncComputeBindings()
     m_compute_samplers[start] = m_pending.samplers[start];
 
     u32 end = start + 1;
-    for (; end < static_cast<u32>(m_compute_samplers.size()); end++)
+    for (; end < static_cast<u32>(ARRAY_SIZE(m_compute_samplers)); end++)
     {
       if (m_compute_samplers[end] == m_pending.samplers[end])
         break;
@@ -340,7 +341,7 @@ void StateManager::Restore()
                                        m_pending.framebuffer->GetDSV());
     }
   }
-  D3D::context->PSSetConstantBuffers(0, 2, m_pending.pixelConstants.data());
+  D3D::context->PSSetConstantBuffers(0, 2, m_pending.pixelConstants);
   D3D::context->VSSetConstantBuffers(0, 1, &m_pending.vertexConstants);
   D3D::context->VSSetConstantBuffers(1, 1, &m_pending.vertexConstants);
   D3D::context->GSSetConstantBuffers(0, 1, &m_pending.geometryConstants);
@@ -349,8 +350,8 @@ void StateManager::Restore()
   D3D::context->IASetIndexBuffer(m_pending.indexBuffer, DXGI_FORMAT_R16_UINT, 0);
   D3D::context->IASetPrimitiveTopology(m_pending.topology);
   D3D::context->IASetInputLayout(m_pending.inputLayout);
-  D3D::context->PSSetShaderResources(0, 8, m_pending.textures.data());
-  D3D::context->PSSetSamplers(0, 8, m_pending.samplers.data());
+  D3D::context->PSSetShaderResources(0, 8, m_pending.textures);
+  D3D::context->PSSetSamplers(0, 8, m_pending.samplers);
   D3D::context->PSSetShader(m_pending.pixelShader, nullptr, 0);
   D3D::context->VSSetShader(m_pending.vertexShader, nullptr, 0);
   D3D::context->GSSetShader(m_pending.geometryShader, nullptr, 0);
@@ -360,12 +361,12 @@ void StateManager::Restore()
   /* the compute stage's, as last set */
   D3D::context->CSSetShader(m_compute_shader, nullptr, 0);
   D3D::context->CSSetConstantBuffers(0, 1, &m_compute_constants);
-  D3D::context->CSSetShaderResources(0, static_cast<u32>(m_compute_textures.size()),
-                                     m_compute_textures.data());
-  D3D::context->CSSetSamplers(0, static_cast<u32>(m_compute_samplers.size()),
-                              m_compute_samplers.data());
-  D3D::context->CSSetUnorderedAccessViews(0, static_cast<u32>(m_compute_images.size()),
-                                          m_compute_images.data(), nullptr);
+  D3D::context->CSSetShaderResources(0, static_cast<u32>(ARRAY_SIZE(m_compute_textures)),
+                                     m_compute_textures);
+  D3D::context->CSSetSamplers(0, static_cast<u32>(ARRAY_SIZE(m_compute_samplers)),
+                              m_compute_samplers);
+  D3D::context->CSSetUnorderedAccessViews(0, static_cast<u32>(ARRAY_SIZE(m_compute_images)),
+                                          m_compute_images, nullptr);
 
   m_current = m_pending;
   m_dirtyFlags = 0;
@@ -433,8 +434,8 @@ ID3D11SamplerState* StateCache::Get(SamplerState state)
                           D3D11_FILTER_MIN_MAG_MIP_POINT;
   }
 
-  static constexpr std::array<D3D11_TEXTURE_ADDRESS_MODE, 3> address_modes = {
-      {D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_MIRROR}};
+  static constexpr D3D11_TEXTURE_ADDRESS_MODE address_modes[3] = {
+      D3D11_TEXTURE_ADDRESS_CLAMP, D3D11_TEXTURE_ADDRESS_WRAP, D3D11_TEXTURE_ADDRESS_MIRROR};
   sampdc.AddressU = address_modes[static_cast<u32>(state.tm0.wrap_u.Value())];
   sampdc.AddressV = address_modes[static_cast<u32>(state.tm0.wrap_v.Value())];
   sampdc.MaxLOD = state.tm1.max_lod / 16.f;
@@ -471,12 +472,15 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
     if (state.alpha_update)
       tdesc.RenderTargetWriteMask |= D3D11_COLOR_WRITE_ENABLE_ALPHA;
 
-    static constexpr std::array<D3D11_LOGIC_OP, 16> logic_ops = {
-        {D3D11_LOGIC_OP_CLEAR, D3D11_LOGIC_OP_AND, D3D11_LOGIC_OP_AND_REVERSE, D3D11_LOGIC_OP_COPY,
-         D3D11_LOGIC_OP_AND_INVERTED, D3D11_LOGIC_OP_NOOP, D3D11_LOGIC_OP_XOR, D3D11_LOGIC_OP_OR,
-         D3D11_LOGIC_OP_NOR, D3D11_LOGIC_OP_EQUIV, D3D11_LOGIC_OP_INVERT, D3D11_LOGIC_OP_OR_REVERSE,
-         D3D11_LOGIC_OP_COPY_INVERTED, D3D11_LOGIC_OP_OR_INVERTED, D3D11_LOGIC_OP_NAND,
-         D3D11_LOGIC_OP_SET}};
+    static constexpr D3D11_LOGIC_OP logic_ops[16] = {
+        D3D11_LOGIC_OP_CLEAR,         D3D11_LOGIC_OP_AND,
+        D3D11_LOGIC_OP_AND_REVERSE,   D3D11_LOGIC_OP_COPY,
+        D3D11_LOGIC_OP_AND_INVERTED,  D3D11_LOGIC_OP_NOOP,
+        D3D11_LOGIC_OP_XOR,           D3D11_LOGIC_OP_OR,
+        D3D11_LOGIC_OP_NOR,           D3D11_LOGIC_OP_EQUIV,
+        D3D11_LOGIC_OP_INVERT,        D3D11_LOGIC_OP_OR_REVERSE,
+        D3D11_LOGIC_OP_COPY_INVERTED, D3D11_LOGIC_OP_OR_INVERTED,
+        D3D11_LOGIC_OP_NAND,          D3D11_LOGIC_OP_SET};
     tdesc.LogicOpEnable = TRUE;
     tdesc.LogicOp = logic_ops[u32(state.logic_mode.Value())];
 
@@ -505,16 +509,24 @@ ID3D11BlendState* StateCache::Get(BlendingState state)
     tdesc.RenderTargetWriteMask |= D3D11_COLOR_WRITE_ENABLE_ALPHA;
 
   const bool use_dual_source = state.use_dual_src;
-  const std::array<D3D11_BLEND, 8> src_factors = {
-      {D3D11_BLEND_ZERO, D3D11_BLEND_ONE, D3D11_BLEND_DEST_COLOR, D3D11_BLEND_INV_DEST_COLOR,
-       use_dual_source ? D3D11_BLEND_SRC1_ALPHA : D3D11_BLEND_SRC_ALPHA,
-       use_dual_source ? D3D11_BLEND_INV_SRC1_ALPHA : D3D11_BLEND_INV_SRC_ALPHA,
-       D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_INV_DEST_ALPHA}};
-  const std::array<D3D11_BLEND, 8> dst_factors = {
-      {D3D11_BLEND_ZERO, D3D11_BLEND_ONE, D3D11_BLEND_SRC_COLOR, D3D11_BLEND_INV_SRC_COLOR,
-       use_dual_source ? D3D11_BLEND_SRC1_ALPHA : D3D11_BLEND_SRC_ALPHA,
-       use_dual_source ? D3D11_BLEND_INV_SRC1_ALPHA : D3D11_BLEND_INV_SRC_ALPHA,
-       D3D11_BLEND_DEST_ALPHA, D3D11_BLEND_INV_DEST_ALPHA}};
+  const D3D11_BLEND src_factors[8] = {
+      D3D11_BLEND_ZERO,
+      D3D11_BLEND_ONE,
+      D3D11_BLEND_DEST_COLOR,
+      D3D11_BLEND_INV_DEST_COLOR,
+      use_dual_source ? D3D11_BLEND_SRC1_ALPHA : D3D11_BLEND_SRC_ALPHA,
+      use_dual_source ? D3D11_BLEND_INV_SRC1_ALPHA : D3D11_BLEND_INV_SRC_ALPHA,
+      D3D11_BLEND_DEST_ALPHA,
+      D3D11_BLEND_INV_DEST_ALPHA};
+  const D3D11_BLEND dst_factors[8] = {
+      D3D11_BLEND_ZERO,
+      D3D11_BLEND_ONE,
+      D3D11_BLEND_SRC_COLOR,
+      D3D11_BLEND_INV_SRC_COLOR,
+      use_dual_source ? D3D11_BLEND_SRC1_ALPHA : D3D11_BLEND_SRC_ALPHA,
+      use_dual_source ? D3D11_BLEND_INV_SRC1_ALPHA : D3D11_BLEND_INV_SRC_ALPHA,
+      D3D11_BLEND_DEST_ALPHA,
+      D3D11_BLEND_INV_DEST_ALPHA};
 
   tdesc.SrcBlend = src_factors[u32(state.src_factor.Value())];
   tdesc.SrcBlendAlpha = src_factors[u32(state.src_factor_alpha.Value())];
@@ -535,8 +547,8 @@ ID3D11RasterizerState* StateCache::Get(RasterizationState state)
   if (auto* cached = static_cast<ID3D11RasterizerState*>(retro_atomic_load_acquire_ptr(slot)))
     return cached;
 
-  static constexpr std::array<D3D11_CULL_MODE, 4> cull_modes = {
-      {D3D11_CULL_NONE, D3D11_CULL_BACK, D3D11_CULL_FRONT, D3D11_CULL_BACK}};
+  static constexpr D3D11_CULL_MODE cull_modes[4] = {D3D11_CULL_NONE, D3D11_CULL_BACK,
+                                                    D3D11_CULL_FRONT, D3D11_CULL_BACK};
 
   D3D11_RASTERIZER_DESC desc = {};
   desc.FillMode = D3D11_FILL_SOLID;
@@ -594,9 +606,9 @@ ID3D11DepthStencilState* StateCache::Get(DepthState state)
 
 D3D11_PRIMITIVE_TOPOLOGY StateCache::GetPrimitiveTopology(PrimitiveType primitive)
 {
-  static constexpr std::array<D3D11_PRIMITIVE_TOPOLOGY, 4> primitives = {
-      {D3D11_PRIMITIVE_TOPOLOGY_POINTLIST, D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
-       D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP}};
+  static constexpr D3D11_PRIMITIVE_TOPOLOGY primitives[4] = {
+      D3D11_PRIMITIVE_TOPOLOGY_POINTLIST, D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
+      D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP};
   return primitives[static_cast<u32>(primitive)];
 }
 

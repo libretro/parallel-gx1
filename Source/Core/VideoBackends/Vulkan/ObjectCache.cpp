@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <cstring>
+#include <retro_miscellaneous.h>
 #include <type_traits>
 
 #include "Common/FileUtil.h"
@@ -157,7 +159,7 @@ bool ObjectCache::CreateDescriptorSetLayouts()
 {
   // The geometry shader buffer must be last in this binding set, as we don't include it
   // if geometry shaders are not supported by the device. See the decrement below.
-  static const std::array<VkDescriptorSetLayoutBinding, 4> standard_ubo_bindings{{
+  static const VkDescriptorSetLayoutBinding standard_ubo_bindings[4]{
       {UBO_DESCRIPTOR_SET_BINDING_PS, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1,
        VK_SHADER_STAGE_FRAGMENT_BIT},
       {UBO_DESCRIPTOR_SET_BINDING_VS, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1,
@@ -166,40 +168,39 @@ bool ObjectCache::CreateDescriptorSetLayouts()
        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
       {UBO_DESCRIPTOR_SET_BINDING_GS, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1,
        VK_SHADER_STAGE_GEOMETRY_BIT},
-  }};
+  };
 
   constexpr u32 MAX_PIXEL_SAMPLER_ARRAY_SIZE = 8;
   constexpr u32 TOTAL_PIXEL_SAMPLER_BINDINGS =
       1 + (VideoCommon::MAX_PIXEL_SHADER_SAMPLERS - MAX_PIXEL_SAMPLER_ARRAY_SIZE);
   static_assert(VideoCommon::MAX_PIXEL_SHADER_SAMPLERS == 16, "Update descriptor sampler bindings");
 
-  static const std::array<VkDescriptorSetLayoutBinding, TOTAL_PIXEL_SAMPLER_BINDINGS>
-      standard_sampler_bindings{{
-          {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_PIXEL_SAMPLER_ARRAY_SIZE,
-           VK_SHADER_STAGE_FRAGMENT_BIT},
-          {8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-          {9, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-          {10, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-          {11, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-          {12, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-          {13, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-          {14, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-          {15, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-      }};
+  static const VkDescriptorSetLayoutBinding standard_sampler_bindings[TOTAL_PIXEL_SAMPLER_BINDINGS]{
+      {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_PIXEL_SAMPLER_ARRAY_SIZE,
+       VK_SHADER_STAGE_FRAGMENT_BIT},
+      {8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      {9, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      {10, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      {11, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      {12, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      {13, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      {14, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+      {15, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+  };
 
   // The dynamic veretex loader's vertex buffer must be last here, for similar reasons
-  static const std::array<VkDescriptorSetLayoutBinding, 2> standard_ssbo_bindings{{
+  static const VkDescriptorSetLayoutBinding standard_ssbo_bindings[2]{
       {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
       {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
-  }};
+  };
 
-  static const std::array<VkDescriptorSetLayoutBinding, 1> utility_ubo_bindings{{
+  static const VkDescriptorSetLayoutBinding utility_ubo_bindings[1]{
       {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1,
        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
-  }};
+  };
 
   // Utility samplers aren't dynamically indexed.
-  static const std::array<VkDescriptorSetLayoutBinding, 9> utility_sampler_bindings{{
+  static const VkDescriptorSetLayoutBinding utility_sampler_bindings[9]{
       {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
       {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
       {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -209,9 +210,9 @@ bool ObjectCache::CreateDescriptorSetLayouts()
       {6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
       {7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
       {8, VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-  }};
+  };
 
-  static const std::array<VkDescriptorSetLayoutBinding, 19> compute_set_bindings{{
+  static const VkDescriptorSetLayoutBinding compute_set_bindings[19]{
       {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_COMPUTE_BIT},
       {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT},
       {2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT},
@@ -231,24 +232,25 @@ bool ObjectCache::CreateDescriptorSetLayouts()
       {16, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT},
       {17, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT},
       {18, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT},
-  }};
+  };
 
-  std::array<VkDescriptorSetLayoutBinding, 4> ubo_bindings = standard_ubo_bindings;
+  VkDescriptorSetLayoutBinding ubo_bindings[ARRAY_SIZE(standard_ubo_bindings)];
+  std::memcpy(ubo_bindings, standard_ubo_bindings, sizeof(ubo_bindings));
 
-  std::array<VkDescriptorSetLayoutCreateInfo, NUM_DESCRIPTOR_SET_LAYOUTS> create_infos{{
+  VkDescriptorSetLayoutCreateInfo create_infos[NUM_DESCRIPTOR_SET_LAYOUTS]{
       {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(ubo_bindings.size()), ubo_bindings.data()},
+       static_cast<u32>(ARRAY_SIZE(ubo_bindings)), ubo_bindings},
       {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(standard_sampler_bindings.size()), standard_sampler_bindings.data()},
+       static_cast<u32>(ARRAY_SIZE(standard_sampler_bindings)), standard_sampler_bindings},
       {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(standard_ssbo_bindings.size()), standard_ssbo_bindings.data()},
+       static_cast<u32>(ARRAY_SIZE(standard_ssbo_bindings)), standard_ssbo_bindings},
       {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(utility_ubo_bindings.size()), utility_ubo_bindings.data()},
+       static_cast<u32>(ARRAY_SIZE(utility_ubo_bindings)), utility_ubo_bindings},
       {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(utility_sampler_bindings.size()), utility_sampler_bindings.data()},
+       static_cast<u32>(ARRAY_SIZE(utility_sampler_bindings)), utility_sampler_bindings},
       {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(compute_set_bindings.size()), compute_set_bindings.data()},
-  }};
+       static_cast<u32>(ARRAY_SIZE(compute_set_bindings)), compute_set_bindings},
+  };
 
   // Don't set the GS bit if geometry shaders aren't available.
   if (g_ActiveConfig.UseVSForLinePointExpand())
@@ -269,7 +271,7 @@ bool ObjectCache::CreateDescriptorSetLayouts()
 
   /* each type's most descriptors in one set, over the layouts, for the pools */
   m_num_set_descriptor_types = 0;
-  for (size_t i = 0; i < create_infos.size(); i++)
+  for (size_t i = 0; i < ARRAY_SIZE(create_infos); i++)
   {
     u32 counts[8] = {};
     VkDescriptorType types[8];
@@ -304,7 +306,7 @@ bool ObjectCache::CreateDescriptorSetLayouts()
     }
   }
 
-  for (size_t i = 0; i < create_infos.size(); i++)
+  for (size_t i = 0; i < ARRAY_SIZE(create_infos); i++)
   {
     VkResult res = vkCreateDescriptorSetLayout(g_vulkan_context->GetDevice(), &create_infos[i],
                                                nullptr, &m_descriptor_set_layouts[i]);
@@ -332,42 +334,42 @@ bool ObjectCache::CreatePipelineLayouts()
   // Descriptor sets for each pipeline layout.
   // In the standard set, the SSBO must be the last descriptor, as we do not include it
   // when fragment stores and atomics are not supported by the device.
-  const std::array<VkDescriptorSetLayout, 3> standard_sets{
+  const VkDescriptorSetLayout standard_sets[3]{
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_STANDARD_UNIFORM_BUFFERS],
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_STANDARD_SAMPLERS],
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_STANDARD_SHADER_STORAGE_BUFFERS],
   };
-  const std::array<VkDescriptorSetLayout, 3> uber_sets{
+  const VkDescriptorSetLayout uber_sets[3]{
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_STANDARD_UNIFORM_BUFFERS],
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_STANDARD_SAMPLERS],
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_STANDARD_SHADER_STORAGE_BUFFERS],
   };
-  const std::array<VkDescriptorSetLayout, 2> utility_sets{
+  const VkDescriptorSetLayout utility_sets[2]{
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_UTILITY_UNIFORM_BUFFER],
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_UTILITY_SAMPLERS],
   };
-  const std::array<VkDescriptorSetLayout, 1> compute_sets{
+  const VkDescriptorSetLayout compute_sets[1]{
       m_descriptor_set_layouts[DESCRIPTOR_SET_LAYOUT_COMPUTE],
   };
 
   // Info for each pipeline layout
-  std::array<VkPipelineLayoutCreateInfo, NUM_PIPELINE_LAYOUTS> pipeline_layout_info{{
+  VkPipelineLayoutCreateInfo pipeline_layout_info[NUM_PIPELINE_LAYOUTS]{
       // Standard
       {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(standard_sets.size()), standard_sets.data(), 0, nullptr},
+       static_cast<u32>(ARRAY_SIZE(standard_sets)), standard_sets, 0, nullptr},
 
       // Uber
       {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(uber_sets.size()), uber_sets.data(), 0, nullptr},
+       static_cast<u32>(ARRAY_SIZE(uber_sets)), uber_sets, 0, nullptr},
 
       // Utility
       {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(utility_sets.size()), utility_sets.data(), 0, nullptr},
+       static_cast<u32>(ARRAY_SIZE(utility_sets)), utility_sets, 0, nullptr},
 
       // Compute
       {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, 0,
-       static_cast<u32>(compute_sets.size()), compute_sets.data(), 0, nullptr},
-  }};
+       static_cast<u32>(ARRAY_SIZE(compute_sets)), compute_sets, 0, nullptr},
+  };
 
   const bool ssbos_in_standard =
       g_backend_info.bSupportsBBox || g_ActiveConfig.UseVSForLinePointExpand();
@@ -379,7 +381,7 @@ bool ObjectCache::CreatePipelineLayouts()
   if (!ssbos_in_standard && !g_backend_info.bSupportsDynamicVertexLoader)
     pipeline_layout_info[PIPELINE_LAYOUT_UBER].setLayoutCount--;
 
-  for (size_t i = 0; i < pipeline_layout_info.size(); i++)
+  for (size_t i = 0; i < ARRAY_SIZE(pipeline_layout_info); i++)
   {
     VkResult res;
     if ((res = vkCreatePipelineLayout(g_vulkan_context->GetDevice(), &pipeline_layout_info[i],
@@ -462,12 +464,12 @@ VkSampler ObjectCache::GetSampler(const SamplerState& info)
     }
   }
 
-  static constexpr std::array<VkFilter, 4> filters = {{VK_FILTER_NEAREST, VK_FILTER_LINEAR}};
-  static constexpr std::array<VkSamplerMipmapMode, 2> mipmap_modes = {
-      {VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_SAMPLER_MIPMAP_MODE_LINEAR}};
-  static constexpr std::array<VkSamplerAddressMode, 4> address_modes = {
-      {VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_REPEAT,
-       VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT}};
+  static constexpr VkFilter filters[4] = {VK_FILTER_NEAREST, VK_FILTER_LINEAR};
+  static constexpr VkSamplerMipmapMode mipmap_modes[2] = {VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                                                          VK_SAMPLER_MIPMAP_MODE_LINEAR};
+  static constexpr VkSamplerAddressMode address_modes[4] = {
+      VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_REPEAT,
+      VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT};
 
   VkSamplerCreateInfo create_info = {
       VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,              // VkStructureType         sType

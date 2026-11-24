@@ -105,9 +105,8 @@ private:
 
   GLContext m_main_gl_context;
   OGLFramebuffer* m_system_framebuffer = nullptr;
-  std::array<const OGLTexture*, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> m_bound_textures{};
-  std::array<const AbstractTexture*, VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS>
-      m_bound_image_textures{};
+  const OGLTexture* m_bound_textures[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS]{};
+  const AbstractTexture* m_bound_image_textures[VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS]{};
   AbstractTexture* m_bound_image_texture = nullptr;
   RasterizationState m_current_rasterization_state;
   DepthState m_current_depth_state;

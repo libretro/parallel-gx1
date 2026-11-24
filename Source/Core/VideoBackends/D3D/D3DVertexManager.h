@@ -27,7 +27,7 @@ public:
 private:
   void AddAttribute(const AttributeFormat& format, ShaderAttrib semantic_index);
 
-  std::array<D3D11_INPUT_ELEMENT_DESC, 32> m_elems{};
+  D3D11_INPUT_ELEMENT_DESC m_elems[32]{};
   UINT m_num_elems = 0;
 
   retro_atomic_ptr_t m_layout{};
@@ -75,7 +75,7 @@ private:
 
 
   ComPtr<ID3D11Buffer> m_texel_buffer = nullptr;
-  std::array<ComPtr<ID3D11ShaderResourceView>, NUM_TEXEL_BUFFER_FORMATS> m_texel_buffer_views;
+  ComPtr<ID3D11ShaderResourceView> m_texel_buffer_views[NUM_TEXEL_BUFFER_FORMATS];
   u32 m_texel_buffer_offset = 0;
 };
 

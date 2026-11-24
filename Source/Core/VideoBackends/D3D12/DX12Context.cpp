@@ -9,6 +9,7 @@
 #include <cstring>
 #include <dxgi1_6.h>
 #include <queue>
+#include <retro_miscellaneous.h>
 #include <vector>
 
 #include "Common/Assert.h"
@@ -213,8 +214,8 @@ bool DXContext::CreateGXRootSignature()
   //  - VideoCommon::MAX_PIXEL_SHADER_SAMPLERS samplers (visible in PS).
   //  - 1 UAV (visible in PS).
 
-  std::array<D3D12_ROOT_PARAMETER, NUM_ROOT_PARAMETERS> params;
-  std::array<D3D12_DESCRIPTOR_RANGE, NUM_ROOT_PARAMETERS> ranges;
+  D3D12_ROOT_PARAMETER params[NUM_ROOT_PARAMETERS];
+  D3D12_DESCRIPTOR_RANGE ranges[NUM_ROOT_PARAMETERS];
   u32 param_count = 0;
   SetRootParamCBV(&params[param_count], 0, D3D12_SHADER_VISIBILITY_PIXEL);
   param_count++;
@@ -257,7 +258,7 @@ bool DXContext::CreateGXRootSignature()
     param_count++;
   }
 
-  return BuildRootSignature(m_device.Get(), &m_gx_root_signature, params.data(), param_count);
+  return BuildRootSignature(m_device.Get(), &m_gx_root_signature, params, param_count);
 }
 
 bool DXContext::CreateUtilityRootSignature()
@@ -267,14 +268,14 @@ bool DXContext::CreateUtilityRootSignature()
   //  - 8 textures (visible in PS).
   //  - 8 samplers (visible in PS).
 
-  std::array<D3D12_ROOT_PARAMETER, NUM_ROOT_PARAMETERS> params;
-  std::array<D3D12_DESCRIPTOR_RANGE, NUM_ROOT_PARAMETERS> ranges;
+  D3D12_ROOT_PARAMETER params[NUM_ROOT_PARAMETERS];
+  D3D12_DESCRIPTOR_RANGE ranges[NUM_ROOT_PARAMETERS];
   SetRootParamCBV(&params[ROOT_PARAMETER_PS_CBV], 0, D3D12_SHADER_VISIBILITY_ALL);
   SetRootParamTable(&params[ROOT_PARAMETER_PS_SRV], &ranges[ROOT_PARAMETER_PS_SRV],
                     D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 8, D3D12_SHADER_VISIBILITY_PIXEL);
   SetRootParamTable(&params[ROOT_PARAMETER_PS_SAMPLERS], &ranges[ROOT_PARAMETER_PS_SAMPLERS],
                     D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0, 8, D3D12_SHADER_VISIBILITY_PIXEL);
-  return BuildRootSignature(m_device.Get(), &m_utility_root_signature, params.data(), 3);
+  return BuildRootSignature(m_device.Get(), &m_utility_root_signature, params, 3);
 }
 
 bool DXContext::CreateComputeRootSignature()
@@ -285,8 +286,8 @@ bool DXContext::CreateComputeRootSignature()
   //  - 8 samplers.
   //  - 1 UAV.
 
-  std::array<D3D12_ROOT_PARAMETER, NUM_ROOT_PARAMETERS> params;
-  std::array<D3D12_DESCRIPTOR_RANGE, NUM_ROOT_PARAMETERS> ranges;
+  D3D12_ROOT_PARAMETER params[NUM_ROOT_PARAMETERS];
+  D3D12_DESCRIPTOR_RANGE ranges[NUM_ROOT_PARAMETERS];
   SetRootParamCBV(&params[CS_ROOT_PARAMETER_CBV], 0, D3D12_SHADER_VISIBILITY_ALL);
   SetRootParamTable(&params[CS_ROOT_PARAMETER_SRV], &ranges[CS_ROOT_PARAMETER_CBV],
                     D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0, 8, D3D12_SHADER_VISIBILITY_ALL);
@@ -294,7 +295,7 @@ bool DXContext::CreateComputeRootSignature()
                     D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 0, 8, D3D12_SHADER_VISIBILITY_ALL);
   SetRootParamTable(&params[CS_ROOT_PARAMETER_UAV], &ranges[CS_ROOT_PARAMETER_UAV],
                     D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0, 1, D3D12_SHADER_VISIBILITY_ALL);
-  return BuildRootSignature(m_device.Get(), &m_compute_root_signature, params.data(), 4);
+  return BuildRootSignature(m_device.Get(), &m_compute_root_signature, params, 4);
 }
 
 bool DXContext::CreateTextureUploadBuffer()
@@ -379,9 +380,8 @@ void DXContext::ExecuteCommandList(bool wait_for_completion)
   // Close and queue command list.
   HRESULT hr = res.command_list->Close();
   ASSERT_MSG(VIDEO, SUCCEEDED(hr), "Failed to close command list: %s", DX12::HRText(hr).text);
-  const std::array<ID3D12CommandList*, 1> execute_lists{res.command_list.Get()};
-  m_command_queue->ExecuteCommandLists(static_cast<UINT>(execute_lists.size()),
-                                       execute_lists.data());
+  ID3D12CommandList* const execute_lists[1]{res.command_list.Get()};
+  m_command_queue->ExecuteCommandLists(static_cast<UINT>(ARRAY_SIZE(execute_lists)), execute_lists);
 
   // Update fence when GPU has completed.
   hr = m_command_queue->Signal(m_fence.Get(), m_current_fence_value);

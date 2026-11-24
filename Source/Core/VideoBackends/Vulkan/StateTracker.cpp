@@ -14,6 +14,8 @@
 #include "VideoBackends/Vulkan/VulkanContext.h"
 #include "VideoCommon/Constants.h"
 
+#include <retro_miscellaneous.h>
+
 namespace Vulkan
 {
 static StateTracker* s_state_tracker = nullptr;
@@ -280,8 +282,10 @@ void StateTracker::UnbindTexture(VkImageView view)
 
 void StateTracker::InvalidateCachedState()
 {
-  m_gx_descriptor_sets.fill(VK_NULL_HANDLE);
-  m_utility_descriptor_sets.fill(VK_NULL_HANDLE);
+  for (VkDescriptorSet& set : m_gx_descriptor_sets)
+    set = VK_NULL_HANDLE;
+  for (VkDescriptorSet& set : m_utility_descriptor_sets)
+    set = VK_NULL_HANDLE;
   m_compute_descriptor_set = VK_NULL_HANDLE;
   m_dirty_flags |= DIRTY_FLAG_ALL_DESCRIPTORS | DIRTY_FLAG_VIEWPORT | DIRTY_FLAG_SCISSOR |
                    DIRTY_FLAG_PIPELINE | DIRTY_FLAG_COMPUTE_SHADER | DIRTY_FLAG_DESCRIPTOR_SETS |
@@ -575,7 +579,7 @@ void StateTracker::UpdateGXDescriptorSet()
   const size_t MAX_DESCRIPTOR_WRITES = NUM_UBO_DESCRIPTOR_SET_BINDINGS +  // UBO
                                        1 +                                // Samplers
                                        2;                                 // SSBO
-  std::array<VkWriteDescriptorSet, MAX_DESCRIPTOR_WRITES> writes;
+  VkWriteDescriptorSet writes[MAX_DESCRIPTOR_WRITES];
   u32 num_writes = 0;
 
   const bool needs_gs_ubo =
@@ -626,7 +630,7 @@ void StateTracker::UpdateGXDescriptorSet()
                             0,
                             static_cast<u32>(VideoCommon::MAX_PIXEL_SHADER_SAMPLERS),
                             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                            m_bindings.samplers.data(),
+                            m_bindings.samplers,
                             nullptr,
                             nullptr};
     m_dirty_flags = (m_dirty_flags & ~DIRTY_FLAG_GX_SAMPLERS) | DIRTY_FLAG_DESCRIPTOR_SETS;
@@ -667,26 +671,25 @@ void StateTracker::UpdateGXDescriptorSet()
   }
 
   if (num_writes > 0)
-    vkUpdateDescriptorSets(g_vulkan_context->GetDevice(), num_writes, writes.data(), 0, nullptr);
+    vkUpdateDescriptorSets(g_vulkan_context->GetDevice(), num_writes, writes, 0, nullptr);
 
   if (m_dirty_flags & DIRTY_FLAG_DESCRIPTOR_SETS)
   {
-    vkCmdBindDescriptorSets(g_command_buffer_mgr->GetCurrentCommandBuffer(),
-                            VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->GetVkPipelineLayout(), 0,
-                            needs_ssbo ? NUM_GX_DESCRIPTOR_SETS : (NUM_GX_DESCRIPTOR_SETS - 1),
-                            m_gx_descriptor_sets.data(),
-                            needs_gs_ubo ? NUM_UBO_DESCRIPTOR_SET_BINDINGS :
-                                           (NUM_UBO_DESCRIPTOR_SET_BINDINGS - 1),
-                            m_bindings.gx_ubo_offsets.data());
+    vkCmdBindDescriptorSets(
+        g_command_buffer_mgr->GetCurrentCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS,
+        m_pipeline->GetVkPipelineLayout(), 0,
+        needs_ssbo ? NUM_GX_DESCRIPTOR_SETS : (NUM_GX_DESCRIPTOR_SETS - 1), m_gx_descriptor_sets,
+        needs_gs_ubo ? NUM_UBO_DESCRIPTOR_SET_BINDINGS : (NUM_UBO_DESCRIPTOR_SET_BINDINGS - 1),
+        m_bindings.gx_ubo_offsets);
     m_dirty_flags &= ~(DIRTY_FLAG_DESCRIPTOR_SETS | DIRTY_FLAG_GX_UBO_OFFSETS);
   }
   else if (m_dirty_flags & DIRTY_FLAG_GX_UBO_OFFSETS)
   {
     vkCmdBindDescriptorSets(
         g_command_buffer_mgr->GetCurrentCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS,
-        m_pipeline->GetVkPipelineLayout(), 0, 1, m_gx_descriptor_sets.data(),
+        m_pipeline->GetVkPipelineLayout(), 0, 1, m_gx_descriptor_sets,
         needs_gs_ubo ? NUM_UBO_DESCRIPTOR_SET_BINDINGS : (NUM_UBO_DESCRIPTOR_SET_BINDINGS - 1),
-        m_bindings.gx_ubo_offsets.data());
+        m_bindings.gx_ubo_offsets);
     m_dirty_flags &= ~DIRTY_FLAG_GX_UBO_OFFSETS;
   }
 }
@@ -694,7 +697,7 @@ void StateTracker::UpdateGXDescriptorSet()
 void StateTracker::UpdateUtilityDescriptorSet()
 {
   // Max number of updates - UBO, Samplers, TexelBuffer
-  std::array<VkWriteDescriptorSet, 3> dswrites;
+  VkWriteDescriptorSet dswrites[3];
   u32 writes = 0;
 
   // Allocate descriptor sets.
@@ -729,7 +732,7 @@ void StateTracker::UpdateUtilityDescriptorSet()
                           0,
                           NUM_UTILITY_PIXEL_SAMPLERS,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                          m_bindings.samplers.data(),
+                          m_bindings.samplers,
                           nullptr,
                           nullptr};
     dswrites[writes++] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -741,19 +744,19 @@ void StateTracker::UpdateUtilityDescriptorSet()
                           VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
                           nullptr,
                           nullptr,
-                          m_bindings.texel_buffers.data()};
+                          m_bindings.texel_buffers};
 
     m_dirty_flags = (m_dirty_flags & ~DIRTY_FLAG_UTILITY_BINDINGS) | DIRTY_FLAG_DESCRIPTOR_SETS;
   }
 
   if (writes > 0)
-    vkUpdateDescriptorSets(g_vulkan_context->GetDevice(), writes, dswrites.data(), 0, nullptr);
+    vkUpdateDescriptorSets(g_vulkan_context->GetDevice(), writes, dswrites, 0, nullptr);
 
   if (m_dirty_flags & DIRTY_FLAG_DESCRIPTOR_SETS)
   {
     vkCmdBindDescriptorSets(g_command_buffer_mgr->GetCurrentCommandBuffer(),
                             VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->GetVkPipelineLayout(), 0,
-                            NUM_UTILITY_DESCRIPTOR_SETS, m_utility_descriptor_sets.data(), 1,
+                            NUM_UTILITY_DESCRIPTOR_SETS, m_utility_descriptor_sets, 1,
                             &m_bindings.utility_ubo_offset);
     m_dirty_flags &= ~(DIRTY_FLAG_DESCRIPTOR_SETS | DIRTY_FLAG_UTILITY_UBO_OFFSET);
   }
@@ -761,7 +764,7 @@ void StateTracker::UpdateUtilityDescriptorSet()
   {
     vkCmdBindDescriptorSets(g_command_buffer_mgr->GetCurrentCommandBuffer(),
                             VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->GetVkPipelineLayout(), 0,
-                            1, m_utility_descriptor_sets.data(), 1, &m_bindings.utility_ubo_offset);
+                            1, m_utility_descriptor_sets, 1, &m_bindings.utility_ubo_offset);
     m_dirty_flags &= ~(DIRTY_FLAG_DESCRIPTOR_SETS | DIRTY_FLAG_UTILITY_UBO_OFFSET);
   }
 }
@@ -769,7 +772,7 @@ void StateTracker::UpdateUtilityDescriptorSet()
 void StateTracker::UpdateComputeDescriptorSet(VkCommandBuffer command_buffer)
 {
   // Max number of updates - UBO, Samplers, TexelBuffer, Image
-  std::array<VkWriteDescriptorSet, 4> dswrites;
+  VkWriteDescriptorSet dswrites[4];
 
   // Allocate descriptor sets.
   if (m_dirty_flags & DIRTY_FLAG_COMPUTE_BINDINGS)
@@ -793,7 +796,7 @@ void StateTracker::UpdateComputeDescriptorSet(VkCommandBuffer command_buffer)
                    0,
                    VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS,
                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                   m_bindings.samplers.data(),
+                   m_bindings.samplers,
                    nullptr,
                    nullptr};
     dswrites[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -805,7 +808,7 @@ void StateTracker::UpdateComputeDescriptorSet(VkCommandBuffer command_buffer)
                    VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
                    nullptr,
                    nullptr,
-                   m_bindings.texel_buffers.data()};
+                   m_bindings.texel_buffers};
     dswrites[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                    nullptr,
                    m_compute_descriptor_set,
@@ -813,12 +816,12 @@ void StateTracker::UpdateComputeDescriptorSet(VkCommandBuffer command_buffer)
                    0,
                    VideoCommon::MAX_COMPUTE_SHADER_SAMPLERS,
                    VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                   m_bindings.image_textures.data(),
+                   m_bindings.image_textures,
                    nullptr,
                    nullptr};
 
-    vkUpdateDescriptorSets(g_vulkan_context->GetDevice(), static_cast<uint32_t>(dswrites.size()),
-                           dswrites.data(), 0, nullptr);
+    vkUpdateDescriptorSets(g_vulkan_context->GetDevice(),
+                           static_cast<uint32_t>(ARRAY_SIZE(dswrites)), dswrites, 0, nullptr);
     m_dirty_flags =
         (m_dirty_flags & ~DIRTY_FLAG_COMPUTE_BINDINGS) | DIRTY_FLAG_COMPUTE_DESCRIPTOR_SET;
   }
