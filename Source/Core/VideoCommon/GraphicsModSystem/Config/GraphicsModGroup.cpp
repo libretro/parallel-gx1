@@ -39,10 +39,10 @@ void GraphicsModGroupConfig::Load()
   std::set<std::string> known_paths;
   if (File::Exists(file_path))
   {
-    auto mods = LoadGraphicsModProfile(file_path);
-    if (!mods)
+    std::vector<GraphicsModConfig> mods;
+    if (!LoadGraphicsModProfile(file_path, &mods))
       return;
-    for (auto& mod : *mods)
+    for (auto& mod : mods)
     {
       known_paths.insert(mod.GetAbsolutePath());
       m_graphics_mods.push_back(std::move(mod));
@@ -63,8 +63,9 @@ void GraphicsModGroupConfig::Load()
         if (known_paths.contains(file_copy))
           return;
 
-        if (auto mod = GraphicsModConfig::Create(file_copy, source))
-          m_graphics_mods.push_back(std::move(*mod));
+        GraphicsModConfig mod;
+        if (GraphicsModConfig::Create(file_copy, source, &mod))
+          m_graphics_mods.push_back(std::move(mod));
       }
     }
   };

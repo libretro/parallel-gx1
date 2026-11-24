@@ -342,8 +342,9 @@ bool ReadProfileMod(rjson_t* json, std::vector<GraphicsModConfig>* mods)
                                       "weight"};
   GraphicsTargetField source, path;
   long groups = -1, features = -1;
-  std::optional<bool> enabled;
-  std::optional<double> weight;
+  bool has_enabled = false, enabled = false;
+  bool has_weight = false;
+  double weight = 0;
   enum rjson_type t;
   while ((t = rjson_next(json)) == RJSON_STRING)
   {
@@ -367,14 +368,13 @@ bool ReadProfileMod(rjson_t* json, std::vector<GraphicsModConfig>* mods)
       break;
     }
     case 4:
-      enabled.reset();
-      if (t == RJSON_TRUE || t == RJSON_FALSE)
-        enabled = t == RJSON_TRUE;
+      has_enabled = t == RJSON_TRUE || t == RJSON_FALSE;
+      enabled = t == RJSON_TRUE;
       ok = Skip(json, t);
       break;
     case 5:
-      weight.reset();
-      if (t == RJSON_NUMBER)
+      has_weight = t == RJSON_NUMBER;
+      if (has_weight)
         weight = rjson_get_double(json);
       ok = Skip(json, t);
       break;
@@ -393,43 +393,46 @@ bool ReadProfileMod(rjson_t* json, std::vector<GraphicsModConfig>* mods)
   {
     return true;
   }
-  auto mod = source.kind == GraphicsTargetField::Kind::String && source.text == "system" ?
-                 GraphicsModConfig::Create(File::GetSysDirectory() +
-                                               DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR + path.text,
-                                           GraphicsModConfig::Source::System) :
-                 GraphicsModConfig::Create(File::GetUserPath(D_GRAPHICSMOD_IDX) + path.text,
-                                           GraphicsModConfig::Source::User);
-  if (!mod)
+  GraphicsModConfig mod;
+  const bool created =
+      source.kind == GraphicsTargetField::Kind::String && source.text == "system" ?
+          GraphicsModConfig::Create(File::GetSysDirectory() + DOLPHIN_SYSTEM_GRAPHICS_MOD_DIR +
+                                        path.text,
+                                    GraphicsModConfig::Source::System, &mod) :
+          GraphicsModConfig::Create(File::GetUserPath(D_GRAPHICSMOD_IDX) + path.text,
+                                    GraphicsModConfig::Source::User, &mod);
+  if (!created)
     return true;
-  if ((groups < 0 || static_cast<size_t>(groups) == mod->m_groups.size()) &&
-      (features < 0 || static_cast<size_t>(features) == mod->m_features.size()))
+  if ((groups < 0 || static_cast<size_t>(groups) == mod.m_groups.size()) &&
+      (features < 0 || static_cast<size_t>(features) == mod.m_features.size()))
   {
-    if (enabled)
-      mod->m_enabled = *enabled;
-    if (weight)
-      mod->m_weight = static_cast<u16>(*weight);
+    if (has_enabled)
+      mod.m_enabled = enabled;
+    if (has_weight)
+      mod.m_weight = static_cast<u16>(weight);
   }
-  mods->push_back(std::move(*mod));
+  mods->push_back(std::move(mod));
   return true;
 }
 }  // namespace
 
-std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& file_path,
-                                                           Source source)
+bool GraphicsModConfig::Create(const std::string& file_path, Source source,
+                               GraphicsModConfig* config)
 {
-  GraphicsModConfig result;
+  GraphicsModConfig& result = *config;
+  result = GraphicsModConfig{};
   {
     Document doc(file_path);
     if (!doc.json)
     {
       ERROR_LOG(VIDEO, "Failed to load graphics mod json file '%s'", file_path.c_str());
-      return std::nullopt;
+      return false;
     }
     if (!ReadConfig(doc.json, &result))
     {
       if (*rjson_get_error(doc.json))
         LogParseError(doc.json, "graphics mod", file_path);
-      return std::nullopt;
+      return false;
     }
   }
   result.m_source = source;
@@ -442,7 +445,7 @@ std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& fi
           VIDEO,
           "Failed to load graphics mod json file '%s' due to it not matching the base path: %s",
           file_path.c_str(), base_path.c_str());
-      return std::nullopt;
+      return false;
     }
     result.m_relative_path = file_path.substr(base_path.size());
   }
@@ -455,12 +458,12 @@ std::optional<GraphicsModConfig> GraphicsModConfig::Create(const std::string& fi
           VIDEO,
           "Failed to load graphics mod json file '%s' due to it not matching the base path: %s",
           file_path.c_str(), base_path.c_str());
-      return std::nullopt;
+      return false;
     }
     result.m_relative_path = file_path.substr(base_path.size());
   }
 
-  return result;
+  return true;
 }
 
 std::string GraphicsModConfig::GetAbsolutePath() const
@@ -476,13 +479,13 @@ std::string GraphicsModConfig::GetAbsolutePath() const
   }
 }
 
-std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::string& file_path)
+bool LoadGraphicsModProfile(const std::string& file_path, std::vector<GraphicsModConfig>* mods_out)
 {
   Document doc(file_path);
   if (!doc.json)
   {
     ERROR_LOG(VIDEO, "Failed to load graphics mod group json file '%s'", file_path.c_str());
-    return std::nullopt;
+    return false;
   }
   enum rjson_type t = rjson_next(doc.json);
   if (t != RJSON_OBJECT)
@@ -493,11 +496,12 @@ std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::
       ERROR_LOG(VIDEO,
                 "Failed to load graphics mod group json file '%s' due to root not being an object!",
                 file_path.c_str());
-    return std::nullopt;
+    return false;
   }
 
   static const char* const names[] = {"mods"};
-  std::vector<GraphicsModConfig> mods;
+  std::vector<GraphicsModConfig>& mods = *mods_out;
+  mods.clear();
   while ((t = rjson_next(doc.json)) == RJSON_STRING)
   {
     const int k = Key(doc.json, names, 1);
@@ -520,7 +524,7 @@ std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::
   if (t != RJSON_OBJECT_END)
   {
     LogParseError(doc.json, "graphics mod group", file_path);
-    return std::nullopt;
+    return false;
   }
-  return mods;
+  return true;
 }

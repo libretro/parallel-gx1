@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -29,11 +28,12 @@ struct GraphicsModConfig
   std::vector<GraphicsTargetGroupConfig> m_groups;
   std::vector<GraphicsModFeatureConfig> m_features;
 
-  static std::optional<GraphicsModConfig> Create(const std::string& file, Source source);
+  // False, with the problem logged, for a file that is not a graphics mod
+  static bool Create(const std::string& file, Source source, GraphicsModConfig* config);
 
   std::string GetAbsolutePath() const;
 };
 
-/* The mods a game's profile lists, with its enabled and weight applied; nullopt where
+/* The mods a game's profile lists, with its enabled and weight applied; false where
  * the profile cannot be read. */
-std::optional<std::vector<GraphicsModConfig>> LoadGraphicsModProfile(const std::string& file);
+bool LoadGraphicsModProfile(const std::string& file, std::vector<GraphicsModConfig>* mods);
