@@ -5,6 +5,7 @@
 
 #include <cinttypes>
 #include <cstring>
+#include <retro_miscellaneous.h>
 #include <string>
 
 #include <cstdio>
@@ -209,7 +210,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
     auto& data_out = m_response_buffers[m_current_response_buffer_index];
 
     // Need room for the checksum.
-    const auto usable_out_size = data_out.size() - 1;
+    const auto usable_out_size = sizeof(data_out) - 1;
 
     constexpr int response_header_size = 2;
     u32 data_offset = response_header_size;
@@ -233,7 +234,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
                 " - data_in(begin=%p, current=%p, end=%p, n_in=%u)\n"
                 " - data_out(offset=%u, size=%" PRIu64 ", n_out=%u)",
                 static_cast<const void*>(buffer + 2), static_cast<const void*>(data_in),
-                static_cast<const void*>(data_in_end), n_in, data_offset, (u64)data_out.size(),
+                static_cast<const void*>(data_in_end), n_in, data_offset, (u64)sizeof(data_out),
                 n_out);
       data_in = data_in_end;
       return false;
@@ -259,7 +260,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = out_length;
 
-        std::memcpy(data_out.data() + data_offset, status_switches, out_length);
+        std::memcpy(data_out + data_offset, status_switches, out_length);
 
         data_offset += out_length;
         break;
@@ -275,7 +276,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
 
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = 16;
-        memcpy(data_out.data() + data_offset, "AADE-01B98394904", 16);
+        memcpy(data_out + data_offset, "AADE-01B98394904", 16);
 
         data_offset += 16;
         break;
@@ -469,7 +470,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
         data_out[data_offset++] = gcam_command;
         data_out[data_offset++] = u8(out_length);
 
-        m_jvs_io_board->TakeTxBytes(data_out.data() + data_offset, out_length);
+        m_jvs_io_board->TakeTxBytes(data_out + data_offset, out_length);
 
         data_offset += out_length;
         break;
@@ -524,7 +525,7 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
       data_out[data_offset++] = u8(cmd);
       data_out[data_offset++] = u8(out_length);
 
-      serial_device->TakeTxBytes(data_out.data() + data_offset, out_length);
+      serial_device->TakeTxBytes(data_out + data_offset, out_length);
 
       data_offset += out_length;
     };
@@ -536,30 +537,30 @@ int CSIDevice_AMBaseboard::RunBuffer(u8* buffer, int request_length)
     data_out[1] = data_offset - response_header_size;  // Length
 
     // Zero-fill the rest of the buffer.
-    std::memset(data_out.data() + data_offset, 0x00, usable_out_size - data_offset);
+    std::memset(data_out + data_offset, 0x00, usable_out_size - data_offset);
 
     // Compute the checksum (bitwise-xor of additive sum).
     u8 sum = 0;
     for (u32 i = 0; i < data_offset; i++)
       sum += data_out[i];
     const u8 checksum = u8(~sum);
-    data_out.back() = checksum;
+    data_out[sizeof(data_out) - 1] = checksum;
 
     DEBUG_LOG(SERIALINTERFACE_AMBB, "Command response: %s",
-              HexDump(data_out.data(), data_out.size()).c_str());
+              HexDump(data_out, sizeof(data_out)).c_str());
 
     // Switch to next buffer and return it.
-    if (++m_current_response_buffer_index == m_response_buffers.size())
+    if (++m_current_response_buffer_index == ARRAY_SIZE(m_response_buffers))
       m_current_response_buffer_index = 0;
 
     auto& response_buffer = m_response_buffers[m_current_response_buffer_index];
 
-    const bool buffer_has_data = response_buffer.front() != 0x00;
+    const bool buffer_has_data = response_buffer[0] != 0x00;
     if (!buffer_has_data)
       return 0;
 
-    std::memcpy(buffer, response_buffer.data(), response_buffer.size());
-    return int(response_buffer.size());
+    std::memcpy(buffer, response_buffer, sizeof(response_buffer));
+    return int(sizeof(response_buffer));
   }
   default:
   {

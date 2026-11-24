@@ -13,7 +13,7 @@ namespace MagCard
 u8 C1231LR::GetPositionValue()
 {
   // True "R" (Card Position) values.
-  static constexpr std::array<u8, std::size_t(R::MAX_POSITIONS)> POSITION_VALUES{
+  static constexpr u8 POSITION_VALUES[std::size_t(R::MAX_POSITIONS)]{
       0x30,  // NO_CARD
       0x31,  // READ_WRITE_HEAD
       0x32,  // THERMAL_HEAD

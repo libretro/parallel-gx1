@@ -224,11 +224,10 @@ FifoDataFile* FifoDataFile::Load(const std::string& filename, bool flagsOnly)
     std::memcpy(regs, data + offset, n * sizeof(u32));
     return true;
   };
-  if (!read_regs(dataFile->m_BPMem.data(), BP_MEM_SIZE, header.bpMemOffset, header.bpMemSize) ||
-      !read_regs(dataFile->m_CPMem.data(), CP_MEM_SIZE, header.cpMemOffset, header.cpMemSize) ||
-      !read_regs(dataFile->m_XFMem.data(), XF_MEM_SIZE, header.xfMemOffset, header.xfMemSize) ||
-      !read_regs(dataFile->m_XFRegs.data(), XF_REGS_SIZE, header.xfRegsOffset,
-                 header.xfRegsSize))
+  if (!read_regs(dataFile->m_BPMem, BP_MEM_SIZE, header.bpMemOffset, header.bpMemSize) ||
+      !read_regs(dataFile->m_CPMem, CP_MEM_SIZE, header.cpMemOffset, header.cpMemSize) ||
+      !read_regs(dataFile->m_XFMem, XF_MEM_SIZE, header.xfMemOffset, header.xfMemSize) ||
+      !read_regs(dataFile->m_XFRegs, XF_REGS_SIZE, header.xfRegsOffset, header.xfRegsSize))
   {
     {
       delete dataFile;

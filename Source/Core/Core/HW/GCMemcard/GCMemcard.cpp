@@ -4,6 +4,7 @@
 #include "Core/HW/GCMemcard/GCMemcard.h"
 
 #include <cstring>
+#include <retro_miscellaneous.h>
 #include <utility>
 #include <vector>
 
@@ -86,22 +87,18 @@ GCMemcardErrorCode GCMemcard::Open(const std::string& filename)
   // check if the filesize is a valid memory card size
   const u64 filesize = file.GetSize();
   const u64 filesize_megabits = BytesToMegabits(filesize);
-  const std::array<u16, 6> valid_megabits = {{
-      MBIT_SIZE_MEMORY_CARD_59,
-      MBIT_SIZE_MEMORY_CARD_123,
-      MBIT_SIZE_MEMORY_CARD_251,
-      MBIT_SIZE_MEMORY_CARD_507,
-      MBIT_SIZE_MEMORY_CARD_1019,
-      MBIT_SIZE_MEMORY_CARD_2043,
-  }};
+  const u16 valid_megabits[6] = {
+      MBIT_SIZE_MEMORY_CARD_59,  MBIT_SIZE_MEMORY_CARD_123,  MBIT_SIZE_MEMORY_CARD_251,
+      MBIT_SIZE_MEMORY_CARD_507, MBIT_SIZE_MEMORY_CARD_1019, MBIT_SIZE_MEMORY_CARD_2043,
+  };
 
   size_t size_index;
-  for (size_index = 0; size_index < valid_megabits.size(); size_index++)
+  for (size_index = 0; size_index < ARRAY_SIZE(valid_megabits); size_index++)
   {
     if (valid_megabits[size_index] == filesize_megabits)
       break;
   }
-  if (size_index == valid_megabits.size())
+  if (size_index == ARRAY_SIZE(valid_megabits))
   {
     error_code.Set(GCMemcardValidityIssues::INVALID_CARD_SIZE);
     return error_code;

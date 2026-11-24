@@ -36,7 +36,7 @@ private:
   static constexpr u32 RESPONSE_SIZE = SerialInterfaceManager::BUFFER_SIZE;
 
   // Reply has to be delayed due a bug in the parser
-  std::array<std::array<u8, RESPONSE_SIZE>, 2> m_response_buffers{};
+  u8 m_response_buffers[2][RESPONSE_SIZE]{};
   u8 m_current_response_buffer_index = 0;
 
   Triforce::IOPorts m_io_ports;

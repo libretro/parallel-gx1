@@ -112,7 +112,7 @@ struct StackRef
   u32 ack_base;
   u16 window_size;
   u64 delay;
-  std::array<TcpBuffer, MAX_TCP_BUFFER> tcp_buffers;
+  TcpBuffer tcp_buffers[MAX_TCP_BUFFER];
   bool ready;
   sockaddr_in from;
   sockaddr_in to;

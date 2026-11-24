@@ -54,7 +54,7 @@ u8 C1231BR::GetPositionValue()
   // True "R" (Card Position) values.
   // FYI: I see a 0xd0 command transition from: 11000 -> 01110 -> 00111
   // Are these 5 bits individual sensors placed within the machine ?
-  static constexpr std::array<u8, std::size_t(R::MAX_POSITIONS)> POSITION_VALUES{
+  static constexpr u8 POSITION_VALUES[std::size_t(R::MAX_POSITIONS)]{
       0b00000,  // NO_CARD
       0b11000,  // READ_WRITE_HEAD
       0b00111,  // THERMAL_HEAD

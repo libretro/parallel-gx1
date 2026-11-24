@@ -5,6 +5,7 @@
 
 #include <cstring>
 #include <memory>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -234,7 +235,7 @@ SectorReader::Cache* SectorReader::GetEmptyCacheLine()
 {
   Cache* oldest = &m_cache[0];
   // Find the Least Recently Used cache line to replace.
-  for (size_t i = 1; i < m_cache.size(); i++)
+  for (size_t i = 1; i < ARRAY_SIZE(m_cache); i++)
   {
     Cache& line = m_cache[i];
     if (line.IsLessRecentlyUsedThan(*oldest))

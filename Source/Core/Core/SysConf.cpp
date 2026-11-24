@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <retro_miscellaneous.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -139,8 +140,8 @@ bool SysConf::Save() const
   buffer.reserve(SYSCONF_SIZE);
 
   // Header
-  constexpr std::array<u8, 4> version{{'S', 'C', 'v', '0'}};
-  buffer.insert(buffer.end(), version.cbegin(), version.cend());
+  constexpr u8 version[4]{'S', 'C', 'v', '0'};
+  buffer.insert(buffer.end(), version, version + sizeof(version));
   AppendToBuffer<u16>(&buffer, static_cast<u16>(m_entries.size()));
 
   const size_t entries_begin_offset = buffer.size() + sizeof(u16) * (m_entries.size() + 1);
@@ -188,8 +189,8 @@ bool SysConf::Save() const
 
   // Make sure the buffer size is 0x4000 bytes now and write the footer.
   buffer.resize(SYSCONF_SIZE);
-  constexpr std::array<u8, 4> footer = {{'S', 'C', 'e', 'd'}};
-  std::ranges::copy(footer, buffer.end() - footer.size());
+  constexpr u8 footer[4] = {'S', 'C', 'e', 'd'};
+  std::ranges::copy(footer, buffer.end() - ARRAY_SIZE(footer));
 
   // Write the new data.
   const std::string temp_file = "/tmp/SYSCONF";

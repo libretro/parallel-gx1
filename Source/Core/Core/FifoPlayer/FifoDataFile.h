@@ -66,10 +66,10 @@ public:
   bool HasBrokenEFBCopies() const;
   static bool ShouldGenerateFakeVIUpdates();
 
-  u32* GetBPMem() { return m_BPMem.data(); }
-  u32* GetCPMem() { return m_CPMem.data(); }
-  u32* GetXFMem() { return m_XFMem.data(); }
-  u32* GetXFRegs() { return m_XFRegs.data(); }
+  u32* GetBPMem() { return m_BPMem; }
+  u32* GetCPMem() { return m_CPMem; }
+  u32* GetXFMem() { return m_XFMem; }
+  u32* GetXFRegs() { return m_XFRegs; }
   /* the file's texture memory, lent: TEX_MEM_SIZE bytes at most, GetTexMemSize of them */
   const u8* GetTexMem() const { return m_tex_mem; }
   u32 GetTexMemSize() const { return m_tex_mem_size; }
@@ -91,10 +91,10 @@ private:
 
   bool GetFlag(u32 flag) const;
 
-  std::array<u32, BP_MEM_SIZE> m_BPMem{};
-  std::array<u32, CP_MEM_SIZE> m_CPMem{};
-  std::array<u32, XF_MEM_SIZE> m_XFMem{};
-  std::array<u32, XF_REGS_SIZE> m_XFRegs{};
+  u32 m_BPMem[BP_MEM_SIZE]{};
+  u32 m_CPMem[CP_MEM_SIZE]{};
+  u32 m_XFMem[XF_MEM_SIZE]{};
+  u32 m_XFRegs[XF_REGS_SIZE]{};
   u32 m_ram_size_real = 0;
   u32 m_exram_size_real = 0;
 

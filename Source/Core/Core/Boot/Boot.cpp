@@ -10,6 +10,7 @@
 #include <cstring>
 #include <memory>
 #include <numeric>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -321,12 +322,12 @@ bool CBoot::DVDRead(Core::System& system, const DiscIO::VolumeDisc& disc, u64 dv
 
 bool CBoot::DVDReadDiscID(Core::System& system, const DiscIO::VolumeDisc& disc, u32 output_address)
 {
-  std::array<u8, 0x20> buffer;
-  if (!disc.Read(0, buffer.size(), buffer.data(), DiscIO::PARTITION_NONE))
+  u8 buffer[0x20];
+  if (!disc.Read(0, ARRAY_SIZE(buffer), buffer, DiscIO::PARTITION_NONE))
     return false;
 
   auto& memory = system.GetMemory();
-  memory.CopyToEmu(output_address, buffer.data(), buffer.size());
+  memory.CopyToEmu(output_address, buffer, ARRAY_SIZE(buffer));
 
   // Transition out of the DiscIdNotRead state (which the drive should be in at this point,
   // on the assumption that this is only used for the first read)
@@ -731,9 +732,12 @@ void StateFlags::UpdateChecksum()
 {
   constexpr size_t length_in_bytes = sizeof(StateFlags) - 4;
   constexpr size_t num_elements = length_in_bytes / sizeof(u32);
-  std::array<u32, num_elements> flag_data;
-  std::memcpy(flag_data.data(), &flags, length_in_bytes);
-  checksum = std::accumulate(flag_data.cbegin(), flag_data.cend(), 0U);
+  u32 flag_data[num_elements];
+  std::memcpy(flag_data, &flags, length_in_bytes);
+  u32 sum = 0;
+  for (size_t i = 0; i < num_elements; i++)
+    sum += flag_data[i];
+  checksum = sum;
 }
 
 void UpdateStateFlags(void (*update_function)(StateFlags*))

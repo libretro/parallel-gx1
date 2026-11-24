@@ -6,6 +6,7 @@
 #include <array>
 #include <memory>
 #include <queue>
+#include <retro_miscellaneous.h>
 #include <vector>
 
 #include <cstdio>
@@ -152,8 +153,8 @@ void GeckoSockServer::ClientThread()
 
     {
       // what's an ideal buffer size?
-      std::array<char, 128> buffer;
-      const int got = net_tcp_recv(client, buffer.data(), buffer.size());
+      char buffer[128];
+      const int got = net_tcp_recv(client, buffer, ARRAY_SIZE(buffer));
       if (got < 0)
         client_running.Clear();
 
@@ -162,7 +163,7 @@ void GeckoSockServer::ClientThread()
         did_nothing = false;
 
         // A full ring drops the excess; a guest that stopped reading would never take it.
-        retro_spsc_write(&recv_fifo, buffer.data(), got);
+        retro_spsc_write(&recv_fifo, buffer, got);
       }
 
       if (const size_t pending = retro_spsc_read_avail(&send_fifo))

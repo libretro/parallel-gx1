@@ -226,7 +226,7 @@ private:
   static constexpr int CACHE_LINES = 32;
   u32 m_block_size = 0;    // Bytes in a sector/block
   u32 m_chunk_blocks = 1;  // Number of sectors/blocks in a chunk
-  std::array<Cache, CACHE_LINES> m_cache;
+  Cache m_cache[CACHE_LINES];
 };
 
 // Factory function - examines the path to choose the right type of BlobReader, and returns one.

@@ -259,16 +259,15 @@ bool CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref, std:
   {
   case IPPROTO_UDP:
   {
-    std::array<u8, MAX_UDP_LENGTH> buffer;
+    u8 buffer[MAX_UDP_LENGTH];
     u32 remote_ip = 0;
-    (void)ref->udp_socket.Receive(buffer.data(), MAX_UDP_LENGTH, &datasize, &remote_ip,
-                                  &remote_port);
+    (void)ref->udp_socket.Receive(buffer, MAX_UDP_LENGTH, &datasize, &remote_ip, &remote_port);
     if (datasize > 0)
     {
       ref->from.sin_port = htons(remote_port);
       ref->from.sin_addr.s_addr = remote_ip;
       ref->my_mac = ResolveAddress(remote_ip);
-      const std::vector<u8> udp_data(buffer.begin(), buffer.begin() + datasize);
+      const std::vector<u8> udp_data(buffer, buffer + datasize);
       const Common::UDPPacket packet(ref->bba_mac, ref->my_mac, ref->from, ref->to, udp_data);
       *out = packet.Build();
       return true;
@@ -309,15 +308,15 @@ bool CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref, std:
     // set default size to 0 to avoid issue
     datasize = 0;
     const bool can_go = (GetTickCountStd() - ref->poke_time > 100 || ref->window_size > 2000);
-    std::array<u8, MAX_TCP_LENGTH> buffer;
+    u8 buffer[MAX_TCP_LENGTH];
     if (tcp_buffer != nullptr && ref->ready && can_go)
-      st = ref->tcp_socket.Receive(buffer.data(), MAX_TCP_LENGTH, &datasize);
+      st = ref->tcp_socket.Receive(buffer, MAX_TCP_LENGTH, &datasize);
 
     if (datasize > 0)
     {
       Common::TCPPacket packet(ref->bba_mac, ref->my_mac, ref->from, ref->to, ref->seq_num,
                                ref->ack_num, BBA_TCP_FLAG_ACK | BBA_TCP_FLAG_PSH);
-      packet.data = std::vector<u8>(buffer.begin(), buffer.begin() + datasize);
+      packet.data = std::vector<u8>(buffer, buffer + datasize);
 
       // build buffer
       tcp_buffer->seq_id = ref->seq_num;
