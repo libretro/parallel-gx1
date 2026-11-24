@@ -7,7 +7,6 @@
 #include <bit>
 #include <cinttypes>
 #include <cstring>
-#include <optional>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -29,16 +28,24 @@ namespace Arm64Gen
 {
 namespace
 {
-// For ADD/SUB
-std::optional<std::pair<u32, bool>> IsImmArithmetic(uint64_t input)
+// For ADD/SUB: the 12-bit immediate and whether it is shifted left by 12
+bool IsImmArithmetic(uint64_t input, u32* val, bool* shift)
 {
   if (input < 4096)
-    return std::pair{static_cast<u32>(input), false};
+  {
+    *val = static_cast<u32>(input);
+    *shift = false;
+    return true;
+  }
 
   if ((input & 0xFFF000) == input)
-    return std::pair{static_cast<u32>(input >> 12), true};
+  {
+    *val = static_cast<u32>(input >> 12);
+    *shift = true;
+    return true;
+  }
 
-  return std::nullopt;
+  return false;
 }
 
 float FPImm8ToFloat(u8 bits)
@@ -52,7 +59,7 @@ float FPImm8ToFloat(u8 bits)
   return std::bit_cast<float>(f);
 }
 
-std::optional<u8> FPImm8FromFloat(float value)
+bool FPImm8FromFloat(float value, u8* out)
 {
   const u32 f = std::bit_cast<u32>(value);
   const u32 mantissa4 = (f & 0x7FFFFF) >> 19;
@@ -60,15 +67,16 @@ std::optional<u8> FPImm8FromFloat(float value)
   const u32 sign = f >> 31;
 
   if ((exponent >> 7) == ((exponent >> 6) & 1))
-    return std::nullopt;
+    return false;
 
   const u8 imm8 = (sign << 7) | ((!(exponent >> 7)) << 6) | ((exponent & 3) << 4) | mantissa4;
   const float new_float = FPImm8ToFloat(imm8);
 
   if (new_float != value)
-    return std::nullopt;
+    return false;
 
-  return imm8;
+  *out = imm8;
+  return true;
 }
 }  // Anonymous namespace
 
@@ -4378,9 +4386,10 @@ void ARM64XEmitter::CMPI2R(ARM64Reg Rn, u64 imm, ARM64Reg scratch)
 
 bool ARM64XEmitter::TryADDI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm)
 {
-  if (const auto result = IsImmArithmetic(imm))
+  u32 val;
+  bool shift;
+  if (IsImmArithmetic(imm, &val, &shift))
   {
-    const auto [val, shift] = *result;
     ADD(Rd, Rn, val, shift);
     return true;
   }
@@ -4390,9 +4399,10 @@ bool ARM64XEmitter::TryADDI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm)
 
 bool ARM64XEmitter::TrySUBI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm)
 {
-  if (const auto result = IsImmArithmetic(imm))
+  u32 val;
+  bool shift;
+  if (IsImmArithmetic(imm, &val, &shift))
   {
-    const auto [val, shift] = *result;
     SUB(Rd, Rn, val, shift);
     return true;
   }
@@ -4402,9 +4412,10 @@ bool ARM64XEmitter::TrySUBI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm)
 
 bool ARM64XEmitter::TryCMPI2R(ARM64Reg Rn, u64 imm)
 {
-  if (const auto result = IsImmArithmetic(imm))
+  u32 val;
+  bool shift;
+  if (IsImmArithmetic(imm, &val, &shift))
   {
-    const auto [val, shift] = *result;
     CMP(Rn, val, shift);
     return true;
   }
@@ -4449,6 +4460,7 @@ void ARM64FloatEmitter::MOVI2F(ARM64Reg Rd, float value, ARM64Reg scratch, bool 
 {
   ASSERT_MSG(DYNA_REC, !IsDouble(Rd), "MOVI2F does not yet support double precision");
 
+  u8 imm;
   if (value == 0.0f)
   {
     FMOV(Rd, IsDouble(Rd) ? ARM64Reg::ZR : ARM64Reg::WZR);
@@ -4457,9 +4469,9 @@ void ARM64FloatEmitter::MOVI2F(ARM64Reg Rd, float value, ARM64Reg scratch, bool 
     // TODO: There are some other values we could generate with the float-imm instruction, like
     // 1.0...
   }
-  else if (const auto imm = FPImm8FromFloat(value))
+  else if (FPImm8FromFloat(value, &imm))
   {
-    FMOV(Rd, *imm);
+    FMOV(Rd, imm);
   }
   else
   {
