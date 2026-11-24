@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <optional>
+#include <utility>
 
 namespace Common
 {
@@ -11,23 +11,25 @@ template <typename Callable>
 class ScopeGuard final
 {
 public:
-  ScopeGuard(Callable&& finalizer) : m_finalizer(std::forward<Callable>(finalizer)) {}
-
-  ScopeGuard(ScopeGuard&& other) : m_finalizer(std::move(other.m_finalizer))
+  ScopeGuard(Callable&& finalizer) : m_finalizer(std::forward<Callable>(finalizer)), m_active(true)
   {
-    other.m_finalizer.reset();
+  }
+
+  ScopeGuard(ScopeGuard&& other)
+      : m_finalizer(std::move(other.m_finalizer)), m_active(other.m_active)
+  {
+    other.m_active = false;
   }
 
   ~ScopeGuard() { Exit(); }
-  void Dismiss() { m_finalizer.reset(); }
+  void Dismiss() { m_active = false; }
   void Exit()
   {
-    if (!m_finalizer.has_value())
+    if (!m_active)
       return;
 
-    auto fn = std::move(*m_finalizer);
-    m_finalizer.reset();
-    fn();  // must not throw
+    m_active = false;
+    m_finalizer();  // must not throw
   }
 
   ScopeGuard(const ScopeGuard&) = delete;
@@ -35,7 +37,8 @@ public:
   void operator=(const ScopeGuard&) = delete;
 
 private:
-  std::optional<Callable> m_finalizer;
+  Callable m_finalizer;
+  bool m_active;
 };
 
 }  // Namespace Common
