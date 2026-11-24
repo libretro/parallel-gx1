@@ -318,15 +318,15 @@ void TransformColor(const InputVertexData* src, OutputVertexData* dst)
   for (u32 chan = 0; chan < NUM_XF_COLOR_CHANNELS; chan++)
   {
     // abgr
-    std::array<u8, 4> matcolor;
-    std::array<u8, 4> chancolor;
+    u8 matcolor[4];
+    u8 chancolor[4];
 
     // color
     const LitChannel& colorchan = xfmem.color[chan];
     if (colorchan.matsource == MatSource::Vertex)
-      matcolor = src->color[chan];
+      std::memcpy(matcolor, src->color[chan], sizeof(matcolor));
     else
-      std::memcpy(matcolor.data(), &xfmem.matColor[chan], sizeof(u32));
+      std::memcpy(matcolor, &xfmem.matColor[chan], sizeof(u32));
 
     if (colorchan.enablelighting)
     {
@@ -361,7 +361,7 @@ void TransformColor(const InputVertexData* src, OutputVertexData* dst)
     }
     else
     {
-      chancolor = matcolor;
+      std::memcpy(chancolor, matcolor, sizeof(chancolor));
     }
 
     // alpha
@@ -395,8 +395,8 @@ void TransformColor(const InputVertexData* src, OutputVertexData* dst)
     }
 
     // abgr -> rgba
-    const u32 rgba_color = Common::swap32(chancolor.data());
-    std::memcpy(dst->color[chan].data(), &rgba_color, sizeof(u32));
+    const u32 rgba_color = Common::swap32(chancolor);
+    std::memcpy(dst->color[chan], &rgba_color, sizeof(u32));
   }
 }
 

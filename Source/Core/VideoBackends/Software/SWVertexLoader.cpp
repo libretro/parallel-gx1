@@ -158,33 +158,34 @@ static void ReadVertexAttribute(T* dst, DataReader src, const AttributeFormat& f
   }
 }
 
+static void SetDefaultColor(u8* color)
+{
+  color[Tev::ALP_C] = g_ActiveConfig.iMissingColorValue & 0xFF;
+  color[Tev::BLU_C] = (g_ActiveConfig.iMissingColorValue >> 8) & 0xFF;
+  color[Tev::GRN_C] = (g_ActiveConfig.iMissingColorValue >> 16) & 0xFF;
+  color[Tev::RED_C] = (g_ActiveConfig.iMissingColorValue >> 24) & 0xFF;
+}
+
 static void ParseColorAttributes(InputVertexData* dst, DataReader& src,
                                  const PortableVertexDeclaration& vdec)
 {
-  const auto set_default_color = [](std::array<u8, 4>& color) {
-    color[Tev::ALP_C] = g_ActiveConfig.iMissingColorValue & 0xFF;
-    color[Tev::BLU_C] = (g_ActiveConfig.iMissingColorValue >> 8) & 0xFF;
-    color[Tev::GRN_C] = (g_ActiveConfig.iMissingColorValue >> 16) & 0xFF;
-    color[Tev::RED_C] = (g_ActiveConfig.iMissingColorValue >> 24) & 0xFF;
-  };
-
   if (vdec.colors[0].enable)
   {
     // Use color0 for channel 0, and color1 for channel 1 if both colors 0 and 1 are present.
-    ReadVertexAttribute<u8>(dst->color[0].data(), src, vdec.colors[0], 0, 4, true);
+    ReadVertexAttribute<u8>(dst->color[0], src, vdec.colors[0], 0, 4, true);
     if (vdec.colors[1].enable)
-      ReadVertexAttribute<u8>(dst->color[1].data(), src, vdec.colors[1], 0, 4, true);
+      ReadVertexAttribute<u8>(dst->color[1], src, vdec.colors[1], 0, 4, true);
     else
-      set_default_color(dst->color[1]);
+      SetDefaultColor(dst->color[1]);
   }
   else
   {
     // If only one of the color attributes is enabled, it is directed to color 0.
     if (vdec.colors[1].enable)
-      ReadVertexAttribute<u8>(dst->color[0].data(), src, vdec.colors[1], 0, 4, true);
+      ReadVertexAttribute<u8>(dst->color[0], src, vdec.colors[1], 0, 4, true);
     else
-      set_default_color(dst->color[0]);
-    set_default_color(dst->color[1]);
+      SetDefaultColor(dst->color[0]);
+    SetDefaultColor(dst->color[1]);
   }
 }
 
@@ -195,7 +196,7 @@ void SWVertexLoader::ParseVertex(const PortableVertexDeclaration& vdec, int inde
 
   ReadVertexAttribute<float>(&m_vertex.position.x, src, vdec.position, 0, 3, false);
 
-  for (std::size_t i = 0; i < m_vertex.normal.size(); i++)
+  for (std::size_t i = 0; i < ARRAY_SIZE(m_vertex.normal); i++)
   {
     ReadVertexAttribute<float>(&m_vertex.normal[i].x, src, vdec.normals[i], 0, 3, false);
   }
@@ -226,7 +227,7 @@ void SWVertexLoader::ParseVertex(const PortableVertexDeclaration& vdec, int inde
 
   ParseColorAttributes(&m_vertex, src, vdec);
 
-  for (std::size_t i = 0; i < m_vertex.texCoords.size(); i++)
+  for (std::size_t i = 0; i < ARRAY_SIZE(m_vertex.texCoords); i++)
   {
     ReadVertexAttribute<float>(&m_vertex.texCoords[i].x, src, vdec.texcoords[i], 0, 2, false);
 

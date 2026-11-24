@@ -36,6 +36,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "VideoBackends/Software/Clipper.h"
 
+#include <cstring>
+
 #include "Common/Assert.h"
 
 #include "VideoBackends/Software/NativeVertexFormat.h"
@@ -386,10 +388,10 @@ static void CopyLineVertex(OutputVertexData* dst, const OutputVertexData* src, i
   dst->screenPosition.y = src->screenPosition.y + py * line_half_width;
   dst->screenPosition.z = src->screenPosition.z;
 
-  dst->normal = src->normal;
-  dst->color = src->color;
+  std::memcpy(dst->normal, src->normal, sizeof(dst->normal));
+  std::memcpy(dst->color, src->color, sizeof(dst->color));
 
-  dst->texCoords = src->texCoords;
+  std::memcpy(dst->texCoords, src->texCoords, sizeof(dst->texCoords));
 
   if (apply_line_offset && LINE_PT_TEX_OFFSETS[bpmem.lineptwidth.lineoff] != 0)
   {
@@ -465,10 +467,10 @@ static void CopyPointVertex(OutputVertexData* dst, const OutputVertexData* src, 
   dst->screenPosition.y = src->screenPosition.y + (py ? 1 : -1) * point_radius;
   dst->screenPosition.z = src->screenPosition.z;
 
-  dst->normal = src->normal;
-  dst->color = src->color;
+  std::memcpy(dst->normal, src->normal, sizeof(dst->normal));
+  std::memcpy(dst->color, src->color, sizeof(dst->color));
 
-  dst->texCoords = src->texCoords;
+  std::memcpy(dst->texCoords, src->texCoords, sizeof(dst->texCoords));
 
   const float point_offset = LINE_PT_TEX_OFFSETS[bpmem.lineptwidth.pointoff];
   if (point_offset != 0)
