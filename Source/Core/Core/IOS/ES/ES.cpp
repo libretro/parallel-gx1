@@ -6,6 +6,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <memory>
+#include <retro_miscellaneous.h>
 #include <utility>
 #include <vector>
 
@@ -992,7 +993,7 @@ ReturnCode ESCore::SetUpStreamKey(const u32 uid, const u8* ticket_view, const ES
     return ret;
 
   const u8 index = ticket_bytes[offsetof(ES::Ticket, common_key_index)];
-  if (index >= IOSC::COMMON_KEY_HANDLES.size())
+  if (index >= ARRAY_SIZE(IOSC::COMMON_KEY_HANDLES))
     return ES_INVALID_TICKET;
 
   return m_ios.GetIOSC().ImportSecretKey(*handle, IOSC::COMMON_KEY_HANDLES[index], iv,

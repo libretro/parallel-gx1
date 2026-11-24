@@ -5,6 +5,7 @@
 
 #include <cinttypes>
 #include <cstddef>
+#include <retro_miscellaneous.h>
 #include <utility>
 #include <vector>
 
@@ -236,7 +237,7 @@ static ReturnCode InitTitleImportKey(const u8* ticket_bytes, IOSC& iosc, IOSC::H
   u8 iv[16] = {};
   std::memcpy(iv, ticket_bytes + offsetof(ES::Ticket, title_id), sizeof(u64));
   const u8 index = ticket_bytes[offsetof(ES::Ticket, common_key_index)];
-  if (index >= IOSC::COMMON_KEY_HANDLES.size())
+  if (index >= ARRAY_SIZE(IOSC::COMMON_KEY_HANDLES))
     return ES_INVALID_TICKET;
 
   return iosc.ImportSecretKey(*handle, IOSC::COMMON_KEY_HANDLES[index], iv,

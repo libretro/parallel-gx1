@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -538,7 +539,7 @@ void TicketReader::GetTitleKey(const HLE::IOSC& iosc, u8* key) const
   std::memcpy(iv, m_bytes + offsetof(Ticket, title_id), sizeof(Ticket::title_id));
 
   u8 index = m_bytes[offsetof(Ticket, common_key_index)];
-  if (index >= HLE::IOSC::COMMON_KEY_HANDLES.size())
+  if (index >= ARRAY_SIZE(HLE::IOSC::COMMON_KEY_HANDLES))
   {
     PanicAlert("Bad common key index for title %016" PRIx64 ": %u -- using common key 0",
                (u64)GetTitleId(), (unsigned)index);

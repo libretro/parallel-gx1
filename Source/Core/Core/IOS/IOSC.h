@@ -57,7 +57,7 @@ static_assert(sizeof(SignatureRSA2048) == 0x180, "Wrong size for SignatureRSA204
 struct SignatureECC
 {
   SignatureType type;
-  std::array<u8, 60> sig;
+  u8 sig[60];
   u8 fill[0x40];
   char issuer[0x40];
 };
@@ -71,13 +71,11 @@ struct CertHeader
   u32 id;
 };
 
-using RSA2048PublicKey = std::array<u8, 0x100>;
-
 struct CertRSA4096RSA2048
 {
   SignatureRSA4096 signature;
   CertHeader header;
-  RSA2048PublicKey public_key;
+  u8 public_key[0x100];
   u8 exponent[0x4];
   u8 pad[0x34];
 };
@@ -87,7 +85,7 @@ struct CertRSA2048RSA2048
 {
   SignatureRSA2048 signature;
   CertHeader header;
-  RSA2048PublicKey public_key;
+  u8 public_key[0x100];
   u8 exponent[0x4];
   u8 pad[0x34];
 };
@@ -98,8 +96,8 @@ struct CertRSA2048ECC
 {
   SignatureRSA2048 signature;
   CertHeader header;
-  std::array<u8, 60> public_key;
-  std::array<u8, 60> padding;
+  u8 public_key[60];
+  u8 padding[60];
 };
 static_assert(sizeof(CertRSA2048ECC) == 0x240, "Wrong size for CertRSA2048ECC");
 
@@ -108,8 +106,8 @@ struct CertECC
 {
   SignatureECC signature;
   CertHeader header;
-  std::array<u8, 60> public_key;
-  std::array<u8, 60> padding;
+  u8 public_key[60];
+  u8 padding[60];
 };
 static_assert(sizeof(CertECC) == 0x180, "Wrong size for CertECC");
 #pragma pack(pop)
@@ -162,8 +160,7 @@ public:
     HANDLE_ROOT_KEY = 0xfffffff,
   };
 
-  static constexpr std::array<DefaultHandle, 2> COMMON_KEY_HANDLES = {HANDLE_COMMON_KEY,
-                                                                      HANDLE_NEW_COMMON_KEY};
+  static constexpr DefaultHandle COMMON_KEY_HANDLES[2] = {HANDLE_COMMON_KEY, HANDLE_NEW_COMMON_KEY};
 
   enum ObjectType : u8
   {
@@ -243,7 +240,6 @@ private:
     u32 owner_mask = 0;
   };
   // The Wii's IOSC is limited to 32 entries, including 12 built-in entries.
-  using KeyEntries = std::array<KeyEntry, 32>;
 
   enum class SearchMode
   {
@@ -254,20 +250,20 @@ private:
   void LoadDefaultEntries();
   void LoadEntries();
 
-  KeyEntries::iterator FindFreeEntry();
+  KeyEntry* FindFreeEntry();
   KeyEntry* FindEntry(Handle handle);
   const KeyEntry* FindEntry(Handle handle, SearchMode mode = SearchMode::ExcludeRootKey) const;
 
-  Handle GetHandleFromIterator(KeyEntries::iterator iterator) const;
+  Handle GetHandleFromIterator(const KeyEntry* entry) const;
   bool HasOwnership(Handle handle, u32 pid) const;
   bool IsDefaultHandle(Handle handle) const;
   ReturnCode DecryptEncrypt(bool encrypt, Handle key_handle, u8* iv, const u8* input, size_t size,
                             u8* output, u32 pid) const;
 
   ConsoleType m_console_type{ConsoleType::Retail};
-  KeyEntries m_key_entries;
+  KeyEntry m_key_entries[32];
   KeyEntry m_root_key_entry;
-  std::array<u8, 60> m_console_signature{};
+  u8 m_console_signature[60]{};
   u32 m_ms_id = 0;
   u32 m_ca_id = 0;
   u32 m_console_key_id = 0;

@@ -5,6 +5,7 @@
 
 #include <map>
 #include <memory>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -246,7 +247,7 @@ IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const
   }
 
   const u8 specified_index = m_ticket.GetCommonKeyIndex();
-  if (specified_index < IOS::HLE::IOSC::COMMON_KEY_HANDLES.size() &&
+  if (specified_index < ARRAY_SIZE(IOS::HLE::IOSC::COMMON_KEY_HANDLES) &&
       CheckContentIntegrity(smallest_content, content_data, content_size, m_ticket))
   {
     std::free(content_data);
@@ -255,7 +256,7 @@ IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const
 
   // Try every common key index except the one we already tried
   IOS::ES::TicketReader new_ticket = m_ticket;
-  for (u8 i = 0; i < IOS::HLE::IOSC::COMMON_KEY_HANDLES.size(); ++i)
+  for (u8 i = 0; i < ARRAY_SIZE(IOS::HLE::IOSC::COMMON_KEY_HANDLES); ++i)
   {
     if (i != specified_index)
     {
