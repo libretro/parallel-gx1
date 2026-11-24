@@ -42,34 +42,33 @@ void CopyImageRegion(const ImagePixelData& src, ImagePixelData& dst, const Rect&
   }
 }
 
-std::optional<ImagePixelData> LoadImage(const std::string& path)
+bool LoadImage(const std::string& path, ImagePixelData* image)
 {
   File::IOFile file;
   if (!file.Open(path, "rb"))
-    return std::nullopt;
+    return false;
 
   Common::UniqueBuffer<u8> buffer(file.GetSize());
   if (!file.ReadBytes(buffer.data(), file.GetSize()))
-    return std::nullopt;
+    return false;
 
-  ImagePixelData image;
   Common::UniqueBuffer<u8> data;
-  if (!Common::LoadPNG(buffer.data(), buffer.size(), &data, &image.width, &image.height))
-    return std::nullopt;
+  if (!Common::LoadPNG(buffer.data(), buffer.size(), &data, &image->width, &image->height))
+    return false;
 
-  image.pixels.resize(image.width * image.height);
-  for (u32 x = 0; x < image.width; x++)
+  image->pixels.resize(image->width * image->height);
+  for (u32 x = 0; x < image->width; x++)
   {
-    for (u32 y = 0; y < image.height; y++)
+    for (u32 y = 0; y < image->height; y++)
     {
-      const u32 index = y * image.width + x;
+      const u32 index = y * image->width + x;
       const auto pixel =
           Pixel{data[index * 4], data[index * 4 + 1], data[index * 4 + 2], data[index * 4 + 3]};
-      image.pixels[index] = pixel;
+      image->pixels[index] = pixel;
     }
   }
 
-  return image;
+  return true;
 }
 
 bool WriteImage(const std::string& path, const ImagePixelData& image)

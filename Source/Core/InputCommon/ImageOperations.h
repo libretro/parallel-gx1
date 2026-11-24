@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,7 +46,8 @@ struct ImagePixelData
 void CopyImageRegion(const ImagePixelData& src, ImagePixelData& dst, const Rect& src_region,
                      const Rect& dst_region);
 
-std::optional<ImagePixelData> LoadImage(const std::string& path);
+// Fills image with the PNG at path
+bool LoadImage(const std::string& path, ImagePixelData* image);
 
 bool WriteImage(const std::string& path, const ImagePixelData& image);
 

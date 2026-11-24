@@ -3,7 +3,6 @@
 
 #include "InputCommon/DynamicInputTextures/DITConfiguration.h"
 
-#include <optional>
 #include <string>
 
 #include "Common/IniFile.h"
@@ -40,14 +39,14 @@ void Configuration::GenerateTexture(const Common::IniFile& file,
   // Two copies of the loaded texture
   // The first one is used as a fallback if a key or device isn't mapped
   // the second one is used as the final image to write to the textures directory
-  const auto original_image = LoadImage(m_base_path + texture_data.m_image_name);
-  if (!original_image)
+  ImagePixelData original_image;
+  if (!LoadImage(m_base_path + texture_data.m_image_name, &original_image))
   {
     ERROR_LOG(VIDEO, "Failed to load image '%s' needed for dynamic input texture generation",
               texture_data.m_image_name.c_str());
     return;
   }
-  auto image_to_write = original_image;
+  ImagePixelData image_to_write = original_image;
 
   bool dirty = false;
 
@@ -107,8 +106,8 @@ void Configuration::GenerateTexture(const Common::IniFile& file,
       else
       {
         const std::string full_image_path = m_base_path + input_image_iter->second;
-        const auto host_key_image = LoadImage(full_image_path);
-        if (!host_key_image)
+        ImagePixelData host_key_image;
+        if (!LoadImage(full_image_path, &host_key_image))
         {
           ERROR_LOG(VIDEO, "Failed to load image '%s' needed for dynamic input texture generation",
                     full_image_path.c_str());
@@ -118,25 +117,23 @@ void Configuration::GenerateTexture(const Common::IniFile& file,
         for (const auto& rect : rects)
         {
           InputCommon::ImagePixelData pixel_data;
-          if (host_key_image->width == rect.GetWidth() &&
-              host_key_image->height == rect.GetHeight())
+          if (host_key_image.width == rect.GetWidth() && host_key_image.height == rect.GetHeight())
           {
-            pixel_data = *host_key_image;
+            pixel_data = host_key_image;
           }
           else if (texture_data.m_preserve_aspect_ratio)
           {
-            pixel_data =
-                ResizeKeepAspectRatio(ResizeMode::Nearest, *host_key_image, rect.GetWidth(),
-                                      rect.GetHeight(), Pixel{0, 0, 0, 0});
+            pixel_data = ResizeKeepAspectRatio(ResizeMode::Nearest, host_key_image, rect.GetWidth(),
+                                               rect.GetHeight(), Pixel{0, 0, 0, 0});
           }
           else
           {
             pixel_data =
-                Resize(ResizeMode::Nearest, *host_key_image, rect.GetWidth(), rect.GetHeight());
+                Resize(ResizeMode::Nearest, host_key_image, rect.GetWidth(), rect.GetHeight());
           }
 
-          CopyImageRegion(pixel_data, *image_to_write,
-                          Rect{0, 0, rect.GetWidth(), rect.GetHeight()}, rect);
+          CopyImageRegion(pixel_data, image_to_write, Rect{0, 0, rect.GetWidth(), rect.GetHeight()},
+                          rect);
           dirty = true;
         }
       }
@@ -146,7 +143,7 @@ void Configuration::GenerateTexture(const Common::IniFile& file,
   if (dirty)
   {
     (*output)[texture_data.m_generated_folder_name][texture_data.m_hires_texture_name] =
-        std::move(*image_to_write);
+        std::move(image_to_write);
   }
 }
 }  // namespace InputCommon::DynamicInputTextures
