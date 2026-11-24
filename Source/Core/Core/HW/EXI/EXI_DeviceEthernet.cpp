@@ -5,10 +5,9 @@
 
 #include <retro_miscellaneous.h>
 
-#include <memory>
-#include <optional>
-#include <string>
 #include <cctype>
+#include <memory>
+#include <string>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"

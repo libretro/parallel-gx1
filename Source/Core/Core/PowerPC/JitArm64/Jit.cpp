@@ -7,7 +7,6 @@
 
 #include <cinttypes>
 #include <cstdio>
-#include <optional>
 #include <utility>
 
 #include "Common/Arm64Emitter.h"

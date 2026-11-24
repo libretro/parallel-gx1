@@ -4,7 +4,6 @@
 #include "Core/WiiRoot.h"
 
 #include <cinttypes>
-#include <optional>
 #include <string>
 #include <vector>
 

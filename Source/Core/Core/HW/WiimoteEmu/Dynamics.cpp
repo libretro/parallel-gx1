@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <optional>
 
 #include "Common/MathUtil.h"
 #include "Core/Config/SYSCONFSettings.h"

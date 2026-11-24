@@ -4,7 +4,6 @@
 #include "Core/IOS/Crypto/Sha.h"
 
 #include <cstring>
-#include <optional>
 
 #include <lrc_hash.h>
 

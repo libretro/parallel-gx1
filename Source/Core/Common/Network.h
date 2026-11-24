@@ -5,7 +5,6 @@
 
 #include <array>
 #include <initializer_list>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>

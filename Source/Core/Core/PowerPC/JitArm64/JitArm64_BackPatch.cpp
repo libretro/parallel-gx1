@@ -5,7 +5,6 @@
 
 #include <cinttypes>
 #include <cstddef>
-#include <optional>
 #include <string>
 
 #include "Common/Align.h"

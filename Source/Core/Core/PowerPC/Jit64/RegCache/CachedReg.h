@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstddef>
-#include <optional>
 
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"

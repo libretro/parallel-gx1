@@ -5,7 +5,6 @@
 
 #include <cmath>
 #include <limits>
-#include <optional>
 
 #include "Common/Assert.h"
 #include "Common/CPUDetect.h"

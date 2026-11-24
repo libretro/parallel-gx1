@@ -5,7 +5,6 @@
 
 #include <map>
 #include <mutex>
-#include <optional>
 
 #include "Common/Assert.h"
 #include "Common/MsgHandler.h"

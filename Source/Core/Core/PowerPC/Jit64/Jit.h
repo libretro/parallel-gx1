@@ -17,8 +17,6 @@
 // ----------
 #pragma once
 
-#include <optional>
-
 #include "Common/CommonTypes.h"
 #include "Common/FreeRangeSet.h"
 #include "Common/x64Emitter.h"

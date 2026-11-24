@@ -4,7 +4,6 @@
 #include "DiscIO/VolumeDisc.h"
 
 #include <memory>
-#include <optional>
 #include <string>
 
 #include "Common/CommonTypes.h"

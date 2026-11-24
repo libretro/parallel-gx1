@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include <crypto/crypto.h>

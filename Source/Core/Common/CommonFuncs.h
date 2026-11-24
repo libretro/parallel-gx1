@@ -4,7 +4,6 @@
 #pragma once
 
 #ifdef _WIN32
-#include <optional>
 #include <windows.h>
 #include <appmodel.h>
 #endif

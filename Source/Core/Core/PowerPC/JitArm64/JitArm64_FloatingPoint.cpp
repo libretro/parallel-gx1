@@ -3,8 +3,6 @@
 
 #include "Core/PowerPC/JitArm64/Jit.h"
 
-#include <optional>
-
 #include "Common/Arm64Emitter.h"
 #include "Common/CPUDetect.h"
 #include "Common/CommonTypes.h"

@@ -6,7 +6,6 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <memory>
-#include <optional>
 
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"

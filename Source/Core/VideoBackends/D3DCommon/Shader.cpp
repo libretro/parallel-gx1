@@ -3,7 +3,6 @@
 
 #include "VideoBackends/D3DCommon/Shader.h"
 
-#include <optional>
 #include <string>
 #include <string_view>
 

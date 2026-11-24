@@ -6,7 +6,6 @@
 #include <array>
 #include <bit>
 #include <cstring>
-#include <optional>
 #include <type_traits>
 #include <utility>
 

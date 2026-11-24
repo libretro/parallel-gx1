@@ -3,7 +3,6 @@
 
 #include "Core/IOS/Network/MACUtils.h"
 
-#include <optional>
 #include <string>
 
 #include "Common/Logging/Log.h"

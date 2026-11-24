@@ -3,7 +3,6 @@
 
 #include "DiscIO/DiscUtils.h"
 
-#include <optional>
 #include <string>
 #include <vector>
 

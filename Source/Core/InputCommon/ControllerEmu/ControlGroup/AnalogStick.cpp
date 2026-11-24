@@ -3,8 +3,6 @@
 
 #include "InputCommon/ControllerEmu/ControlGroup/AnalogStick.h"
 
-#include <optional>
-
 #include "Common/Common.h"
 #include "Common/MathUtil.h"
 

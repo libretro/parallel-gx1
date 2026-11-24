@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
 
 #include "DiscIO/Blob.h"

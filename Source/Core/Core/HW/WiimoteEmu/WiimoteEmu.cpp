@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <optional>
 #include <string_view>
 
 #include <cstdio>

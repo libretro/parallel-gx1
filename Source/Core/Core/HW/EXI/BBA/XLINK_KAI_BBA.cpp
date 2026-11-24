@@ -11,7 +11,6 @@
 
 #include <cinttypes>
 #include <cstring>
-#include <optional>
 
 // BBA implementation with UDP interface to XLink Kai PC/MAC/RaspberryPi client
 // For more information please see: https://www.teamxlink.co.uk/wiki/Emulator_Integration_Protocol
