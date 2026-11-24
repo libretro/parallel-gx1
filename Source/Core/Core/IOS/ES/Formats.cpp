@@ -760,17 +760,20 @@ bool SharedContentMap::WriteEntries() const
          HLE::FS::ResultCode::Success;
 }
 
-static std::pair<u32, u64> ReadUidSysEntry(HLE::FSCore& fs, u64 fd, u64* ticks)
+// False at the end of the file or on an empty entry
+static bool ReadUidSysEntry(HLE::FSCore& fs, u64 fd, u64* ticks, u32* uid, u64* title_id)
 {
-  u64 title_id = 0;
-  if (fs.Read(fd, &title_id, 1, ticks) != sizeof(title_id))
-    return {};
+  u64 raw_title_id = 0;
+  if (fs.Read(fd, &raw_title_id, 1, ticks) != sizeof(raw_title_id))
+    return false;
 
-  u32 uid = 0;
-  if (fs.Read(fd, &uid, 1, ticks) != sizeof(uid))
-    return {};
+  u32 raw_uid = 0;
+  if (fs.Read(fd, &raw_uid, 1, ticks) != sizeof(raw_uid))
+    return false;
 
-  return {Common::swap32(uid), Common::swap64(title_id)};
+  *uid = Common::swap32(raw_uid);
+  *title_id = Common::swap64(raw_title_id);
+  return *uid || *title_id;
 }
 
 constexpr char UID_MAP_PATH[] = "/sys/uid.sys";
@@ -780,14 +783,10 @@ UIDSys::UIDSys(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
           fs_core.Open(PID_KERNEL, PID_KERNEL, UID_MAP_PATH, HLE::FS::Mode::Read, &m_ticks);
       fd.Get() >= 0)
   {
-    while (true)
-    {
-      const std::pair<u32, u64> entry = ReadUidSysEntry(fs_core, fd.Get(), &m_ticks);
-      if (!entry.first && !entry.second)
-        break;
-
-      AddEntry(entry.first, entry.second);
-    }
+    u32 uid;
+    u64 title_id;
+    while (ReadUidSysEntry(fs_core, fd.Get(), &m_ticks, &uid, &title_id))
+      AddEntry(uid, title_id);
   }
 
   if (!m_entry_count)
