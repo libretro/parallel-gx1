@@ -169,7 +169,7 @@ extern const Info<std::string> MAIN_SKYLANDERS_PATH;
 
 #ifdef HAS_LIBMGBA
 extern const Info<std::string> MAIN_GBA_BIOS_PATH;
-extern const std::array<Info<std::string>, 5> MAIN_GBA_ROM_PATHS;
+extern const Info<std::string> MAIN_GBA_ROM_PATHS[5];
 extern const Info<std::string> MAIN_GBA_SAVES_PATH;
 extern const Info<bool> MAIN_GBA_SAVES_IN_ROM_PATH;
 
@@ -253,11 +253,10 @@ extern const Info<s16> MAIN_WII_SPEAK_VOLUME_MODIFIER;
 
 static constexpr std::size_t EMULATED_LOGITECH_MIC_COUNT = 4;
 
-extern const std::array<Info<bool>, EMULATED_LOGITECH_MIC_COUNT> MAIN_EMULATE_LOGITECH_MIC;
-extern const std::array<Info<std::string>, EMULATED_LOGITECH_MIC_COUNT>
-    MAIN_LOGITECH_MIC_MICROPHONE;
-extern const std::array<Info<bool>, EMULATED_LOGITECH_MIC_COUNT> MAIN_LOGITECH_MIC_MUTED;
-extern const std::array<Info<s16>, EMULATED_LOGITECH_MIC_COUNT> MAIN_LOGITECH_MIC_VOLUME_MODIFIER;
+extern const Info<bool> MAIN_EMULATE_LOGITECH_MIC[EMULATED_LOGITECH_MIC_COUNT];
+extern const Info<std::string> MAIN_LOGITECH_MIC_MICROPHONE[EMULATED_LOGITECH_MIC_COUNT];
+extern const Info<bool> MAIN_LOGITECH_MIC_MUTED[EMULATED_LOGITECH_MIC_COUNT];
+extern const Info<s16> MAIN_LOGITECH_MIC_VOLUME_MODIFIER[EMULATED_LOGITECH_MIC_COUNT];
 
 extern const Info<std::string> MAIN_TRIFORCE_IP_REDIRECTIONS;
 

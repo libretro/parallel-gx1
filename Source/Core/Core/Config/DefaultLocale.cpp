@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -59,16 +60,19 @@ static bool TryParseLanguage(const std::string& locale, DiscIO::Language* langua
   }
 
   // Same order as in Wii SYSCONF
-  constexpr std::array<std::string_view, 10> LANGUAGES = {
+  constexpr std::string_view LANGUAGES[10] = {
       "ja", "en", "de", "fr", "es", "it", "nl", "zh", "zh", "ko",
   };
 
-  const auto it = std::ranges::find(LANGUAGES, split_locale[0]);
-  if (it == LANGUAGES.cend())
-    return false;
-
-  *language = static_cast<DiscIO::Language>(it - LANGUAGES.cbegin());
-  return true;
+  for (size_t i = 0; i < ARRAY_SIZE(LANGUAGES); i++)
+  {
+    if (LANGUAGES[i] == split_locale[0])
+    {
+      *language = static_cast<DiscIO::Language>(i);
+      return true;
+    }
+  }
+  return false;
 }
 
 static DiscIO::Language ComputeDefaultLanguage()
@@ -131,7 +135,7 @@ static bool ComputeDefaultCountry(u8* country_out)
 {
   // clang-format off
   // Same order as in Wii SYSCONF
-  static constexpr std::array<std::string_view, 178> COUNTRIES = {
+  static constexpr std::string_view COUNTRIES[178] = {
     "--", "JP", "--", "--", "--", "--", "--", "--", "AI", "AG", "AR", "AW", "BS", "BB", "BZ", "BO",
     "BR", "VG", "CA", "KY", "CL", "CO", "CR", "DM", "DO", "EC", "SV", "GF", "GD", "GP", "GT", "GY",
     "HT", "HN", "JM", "MQ", "MX", "MS", "AN", "NI", "PA", "PY", "PE", "KN", "LC", "VC", "SR", "TT",
@@ -153,12 +157,15 @@ static bool ComputeDefaultCountry(u8* country_out)
   if (country == "BQ" || country == "CW" || country == "SX")
     country = "AN";
 
-  const auto it = std::ranges::find(COUNTRIES, country);
-  if (it == COUNTRIES.cend())
-    return false;
-
-  *country_out = static_cast<u8>(it - COUNTRIES.cbegin());
-  return true;
+  for (size_t i = 0; i < ARRAY_SIZE(COUNTRIES); i++)
+  {
+    if (COUNTRIES[i] == country)
+    {
+      *country_out = static_cast<u8>(i);
+      return true;
+    }
+  }
+  return false;
 }
 
 // From the default country, which always has a value (the fallback when the host gives none)

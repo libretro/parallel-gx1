@@ -148,7 +148,7 @@ const Info<std::string> MAIN_BBA_BUILTIN_IP{{System::Main, "Core", "BBA_BUILTIN_
 
 const Info<SerialInterface::SIDevices>& GetInfoForSIDevice(int channel)
 {
-  static const std::array<const Info<SerialInterface::SIDevices>, 4> infos{
+  static const Info<SerialInterface::SIDevices> infos[4]{
       Info<SerialInterface::SIDevices>{{System::Main, "Core", "SIDevice0"},
                                        SerialInterface::SIDEVICE_GC_CONTROLLER},
       Info<SerialInterface::SIDevices>{{System::Main, "Core", "SIDevice1"},
@@ -163,7 +163,7 @@ const Info<SerialInterface::SIDevices>& GetInfoForSIDevice(int channel)
 
 const Info<bool>& GetInfoForSimulateKonga(int channel)
 {
-  static const std::array<const Info<bool>, 4> infos{
+  static const Info<bool> infos[4]{
       Info<bool>{{System::Main, "Core", "SimulateKonga0"}, false},
       Info<bool>{{System::Main, "Core", "SimulateKonga1"}, false},
       Info<bool>{{System::Main, "Core", "SimulateKonga2"}, false},
@@ -276,7 +276,7 @@ const Info<std::string> MAIN_SKYLANDERS_PATH{{System::Main, "General", "Skylande
 
 #ifdef HAS_LIBMGBA
 const Info<std::string> MAIN_GBA_BIOS_PATH{{System::Main, "GBA", "BIOS"}, ""};
-const std::array<Info<std::string>, 5> MAIN_GBA_ROM_PATHS{
+const Info<std::string> MAIN_GBA_ROM_PATHS[5]{
     Info<std::string>{{System::Main, "GBA", "Rom1"}, ""},
     Info<std::string>{{System::Main, "GBA", "Rom2"}, ""},
     Info<std::string>{{System::Main, "GBA", "Rom3"}, ""},
@@ -435,22 +435,22 @@ const Info<bool> MAIN_WII_SPEAK_MUTED{{System::Main, "EmulatedUSBDevices", "WiiS
 const Info<s16> MAIN_WII_SPEAK_VOLUME_MODIFIER{
     {System::Main, "EmulatedUSBDevices", "WiiSpeakVolumeModifier"}, 0};
 
-const std::array<Info<bool>, EMULATED_LOGITECH_MIC_COUNT> MAIN_EMULATE_LOGITECH_MIC{
+const Info<bool> MAIN_EMULATE_LOGITECH_MIC[EMULATED_LOGITECH_MIC_COUNT]{
     Info<bool>{{System::Main, "EmulatedUSBDevices", "EmulateLogitechMic1"}, false},
     Info<bool>{{System::Main, "EmulatedUSBDevices", "EmulateLogitechMic2"}, false},
     Info<bool>{{System::Main, "EmulatedUSBDevices", "EmulateLogitechMic3"}, false},
     Info<bool>{{System::Main, "EmulatedUSBDevices", "EmulateLogitechMic4"}, false}};
-const std::array<Info<std::string>, EMULATED_LOGITECH_MIC_COUNT> MAIN_LOGITECH_MIC_MICROPHONE{
+const Info<std::string> MAIN_LOGITECH_MIC_MICROPHONE[EMULATED_LOGITECH_MIC_COUNT]{
     Info<std::string>{{System::Main, "EmulatedUSBDevices", "LogitechMic1Microphone"}, ""},
     Info<std::string>{{System::Main, "EmulatedUSBDevices", "LogitechMic2Microphone"}, ""},
     Info<std::string>{{System::Main, "EmulatedUSBDevices", "LogitechMic3Microphone"}, ""},
     Info<std::string>{{System::Main, "EmulatedUSBDevices", "LogitechMic4Microphone"}, ""}};
-const std::array<Info<bool>, EMULATED_LOGITECH_MIC_COUNT> MAIN_LOGITECH_MIC_MUTED{
+const Info<bool> MAIN_LOGITECH_MIC_MUTED[EMULATED_LOGITECH_MIC_COUNT]{
     Info<bool>{{System::Main, "EmulatedUSBDevices", "LogitechMic1Muted"}, false},
     Info<bool>{{System::Main, "EmulatedUSBDevices", "LogitechMic2Muted"}, false},
     Info<bool>{{System::Main, "EmulatedUSBDevices", "LogitechMic3Muted"}, false},
     Info<bool>{{System::Main, "EmulatedUSBDevices", "LogitechMic4Muted"}, false}};
-const std::array<Info<s16>, EMULATED_LOGITECH_MIC_COUNT> MAIN_LOGITECH_MIC_VOLUME_MODIFIER{
+const Info<s16> MAIN_LOGITECH_MIC_VOLUME_MODIFIER[EMULATED_LOGITECH_MIC_COUNT]{
     Info<s16>{{System::Main, "EmulatedUSBDevices", "LogitechMic1VolumeModifier"}, 0},
     Info<s16>{{System::Main, "EmulatedUSBDevices", "LogitechMic2VolumeModifier"}, 0},
     Info<s16>{{System::Main, "EmulatedUSBDevices", "LogitechMic3VolumeModifier"}, 0},

@@ -36,6 +36,6 @@ struct SYSCONFSetting
   SysConf::Entry::Type type;
 };
 
-extern const std::array<SYSCONFSetting, 11> SYSCONF_SETTINGS;
+extern const SYSCONFSetting SYSCONF_SETTINGS[11];
 
 }  // namespace Config
