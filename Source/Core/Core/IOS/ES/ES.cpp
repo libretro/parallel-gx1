@@ -979,8 +979,8 @@ ReturnCode ESCore::SetUpStreamKey(const u32 uid, const u8* ticket_view, const ES
     return ret;
 
   // Create the handle and return it.
-  std::array<u8, 16> iv{};
-  std::memcpy(iv.data(), &title_id, sizeof(title_id));
+  u8 iv[16] = {};
+  std::memcpy(iv, &title_id, sizeof(title_id));
   ret = m_ios.GetIOSC().CreateObject(handle, IOSC::ObjectType::TYPE_SECRET_KEY,
                                      IOSC::ObjectSubType::AES128, PID_ES);
   if (ret != IPC_SUCCESS)
@@ -995,7 +995,7 @@ ReturnCode ESCore::SetUpStreamKey(const u32 uid, const u8* ticket_view, const ES
   if (index >= IOSC::COMMON_KEY_HANDLES.size())
     return ES_INVALID_TICKET;
 
-  return m_ios.GetIOSC().ImportSecretKey(*handle, IOSC::COMMON_KEY_HANDLES[index], iv.data(),
+  return m_ios.GetIOSC().ImportSecretKey(*handle, IOSC::COMMON_KEY_HANDLES[index], iv,
                                          &ticket_bytes[offsetof(ES::Ticket, title_key)], PID_ES);
 }
 

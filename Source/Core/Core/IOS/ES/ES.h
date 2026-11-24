@@ -66,7 +66,7 @@ public:
     {
       bool valid = false;
       u32 id = 0;
-      std::array<u8, 16> iv{};
+      u8 iv[16]{};
       std::vector<u8> buffer;
     };
     ContentContext content;

@@ -129,7 +129,7 @@ IPCReply ESDevice::ImportTicket(const IOCtlVRequest& request)
                                       request.in_vectors[1].size));
 }
 
-constexpr std::array<u8, 16> NULL_KEY{};
+constexpr u8 NULL_KEY[16]{};
 
 // Used for exporting titles and importing them back (ImportTmd and ExportTitleInit).
 static ReturnCode InitBackupKey(u64 tid, u32 title_flags, IOSC& iosc, IOSC::Handle* key)
@@ -151,7 +151,7 @@ static ReturnCode InitBackupKey(u64 tid, u32 title_flags, IOSC& iosc, IOSC::Hand
   // Otherwise, use a null key.
   ReturnCode ret =
       iosc.CreateObject(key, IOSC::TYPE_SECRET_KEY, IOSC::ObjectSubType::AES128, PID_ES);
-  return ret == IPC_SUCCESS ? iosc.ImportSecretKey(*key, NULL_KEY.data(), PID_ES) : ret;
+  return ret == IPC_SUCCESS ? iosc.ImportSecretKey(*key, NULL_KEY, PID_ES) : ret;
 }
 
 static void ResetTitleImportContext(ESCore::Context* context, IOSC& iosc)
@@ -233,13 +233,13 @@ static ReturnCode InitTitleImportKey(const u8* ticket_bytes, IOSC& iosc, IOSC::H
   if (ret != IPC_SUCCESS)
     return ret;
 
-  std::array<u8, 16> iv{};
-  std::memcpy(iv.data(), ticket_bytes + offsetof(ES::Ticket, title_id), sizeof(u64));
+  u8 iv[16] = {};
+  std::memcpy(iv, ticket_bytes + offsetof(ES::Ticket, title_id), sizeof(u64));
   const u8 index = ticket_bytes[offsetof(ES::Ticket, common_key_index)];
   if (index >= IOSC::COMMON_KEY_HANDLES.size())
     return ES_INVALID_TICKET;
 
-  return iosc.ImportSecretKey(*handle, IOSC::COMMON_KEY_HANDLES[index], iv.data(),
+  return iosc.ImportSecretKey(*handle, IOSC::COMMON_KEY_HANDLES[index], iv,
                               &ticket_bytes[offsetof(ES::Ticket, title_key)], PID_ES);
 }
 
@@ -430,7 +430,7 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
   // decrypted in place: the encrypted bytes are not needed after
   u8* const decrypted_data = context.title_import_export.content.buffer.data();
   const ReturnCode decrypt_ret = m_ios.GetIOSC().Decrypt(
-      context.title_import_export.key_handle, context.title_import_export.content.iv.data(),
+      context.title_import_export.key_handle, context.title_import_export.content.iv,
       decrypted_data, context.title_import_export.content.buffer.size(), decrypted_data, PID_ES);
   if (decrypt_ret != IPC_SUCCESS)
     return decrypt_ret;
@@ -864,8 +864,8 @@ ReturnCode ESCore::ExportContentData(Context& context, u32 content_fd, u8* data,
   std::memset(data + read_size, 0, aligned_size - static_cast<u32>(read_size));
 
   return m_ios.GetIOSC().Encrypt(context.title_import_export.key_handle,
-                                 context.title_import_export.content.iv.data(), data, aligned_size,
-                                 data, PID_ES);
+                                 context.title_import_export.content.iv, data, aligned_size, data,
+                                 PID_ES);
 }
 
 IPCReply ESDevice::ExportContentData(Context& context, const IOCtlVRequest& request)

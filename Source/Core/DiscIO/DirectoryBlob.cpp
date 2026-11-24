@@ -897,7 +897,11 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
                                  ticket_bytes, this);
   }
   if (ticket.IsValid())
-    partition->SetKey(ticket.GetTitleKey().data());
+  {
+    u8 title_key[16];
+    ticket.GetTitleKey(title_key);
+    partition->SetKey(title_key);
+  }
 }
 
 DirectoryBlobPartition::DirectoryBlobPartition(std::string root_directory, const bool* is_wii)

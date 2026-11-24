@@ -210,7 +210,9 @@ IPCReply WFSIDevice::IOCtl(const IOCtlRequest& request)
       break;
     }
 
-    aes_init(&m_aes_ctx, ticket.GetTitleKey(m_ios.GetIOSC()).data(), 16);
+    u8 title_key[16];
+    ticket.GetTitleKey(m_ios.GetIOSC(), title_key);
+    aes_init(&m_aes_ctx, title_key, 16);
 
     SetImportTitleIdAndGroupId(m_tmd.GetTitleId(), m_tmd.GetGroupId());
 

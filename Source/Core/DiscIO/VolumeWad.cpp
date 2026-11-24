@@ -167,7 +167,9 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
     return false;
 
   struct aes_ctx context;
-  if (aes_init(&context, ticket.GetTitleKey().data(), 16))
+  u8 title_key[16];
+  ticket.GetTitleKey(title_key);
+  if (aes_init(&context, title_key, 16))
     return false;
 
   // The chain carries on from chunk to chunk in iv

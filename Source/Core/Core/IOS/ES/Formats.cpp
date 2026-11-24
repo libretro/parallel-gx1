@@ -532,7 +532,7 @@ u8 TicketReader::GetCommonKeyIndex() const
   return m_bytes[offsetof(Ticket, common_key_index)];
 }
 
-std::array<u8, 16> TicketReader::GetTitleKey(const HLE::IOSC& iosc) const
+void TicketReader::GetTitleKey(const HLE::IOSC& iosc, u8* key) const
 {
   u8 iv[16] = {};
   std::memcpy(iv, m_bytes + offsetof(Ticket, title_id), sizeof(Ticket::title_id));
@@ -546,15 +546,12 @@ std::array<u8, 16> TicketReader::GetTitleKey(const HLE::IOSC& iosc) const
   }
   auto common_key_handle = HLE::IOSC::COMMON_KEY_HANDLES[index];
 
-  std::array<u8, 16> key;
-  iosc.Decrypt(common_key_handle, iv, &m_bytes[offsetof(Ticket, title_key)], 16, key.data(),
-               PID_ES);
-  return key;
+  iosc.Decrypt(common_key_handle, iv, &m_bytes[offsetof(Ticket, title_key)], 16, key, PID_ES);
 }
 
-std::array<u8, 16> TicketReader::GetTitleKey() const
+void TicketReader::GetTitleKey(u8* key) const
 {
-  return GetTitleKey(HLE::IOSC{GetConsoleType()});
+  GetTitleKey(HLE::IOSC{GetConsoleType()}, key);
 }
 
 HLE::IOSC::ConsoleType TicketReader::GetConsoleType() const
@@ -609,15 +606,15 @@ HLE::ReturnCode TicketReader::Unpersonalise(HLE::IOSC& iosc)
   if (ret != IPC_SUCCESS)
     return ret;
 
-  std::array<u8, 16> iv{};
-  std::memcpy(iv.data(), ticket_begin + offsetof(Ticket, ticket_id), sizeof(Ticket::ticket_id));
+  u8 iv[16] = {};
+  std::memcpy(iv, ticket_begin + offsetof(Ticket, ticket_id), sizeof(Ticket::ticket_id));
 
-  std::array<u8, 16> key{};
-  ret = iosc.Decrypt(key_handle, iv.data(), ticket_begin + offsetof(Ticket, title_key),
-                     sizeof(Ticket::title_key), key.data(), PID_ES);
+  u8 key[16] = {};
+  ret = iosc.Decrypt(key_handle, iv, ticket_begin + offsetof(Ticket, title_key),
+                     sizeof(Ticket::title_key), key, PID_ES);
   // Finally, IOS copies the decrypted title key back to the ticket buffer.
   if (ret == IPC_SUCCESS)
-    std::memcpy(ticket_begin + offsetof(Ticket, title_key), key.data(), key.size());
+    std::memcpy(ticket_begin + offsetof(Ticket, title_key), key, sizeof(key));
 
   return ret;
 }

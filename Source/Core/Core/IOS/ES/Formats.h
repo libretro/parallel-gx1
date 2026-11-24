@@ -286,10 +286,11 @@ public:
   u64 GetTitleId() const;
   u8 GetCommonKeyIndex() const;
   // Get the decrypted title key.
-  std::array<u8, 16> GetTitleKey(const HLE::IOSC& iosc) const;
+  // key: 16 bytes
+  void GetTitleKey(const HLE::IOSC& iosc, u8* key) const;
   // Same as the above version, but guesses the console type depending on the issuer
   // and constructs a temporary IOSC instance.
-  std::array<u8, 16> GetTitleKey() const;
+  void GetTitleKey(u8* key) const;
 
   // Infers the console type (retail or devkit) based on the certificate issuer.
   HLE::IOSC::ConsoleType GetConsoleType() const;

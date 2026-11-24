@@ -119,8 +119,12 @@ void VolumeWii::LoadPartition(PartitionDetails* details, const Partition& partit
 
   // Only an encrypted disc's reads use the key
   std::memset(&details->key, 0, sizeof(details->key));
-  details->key.valid = m_has_encryption && details->ticket.IsValid() &&
-                       !aes_init(&details->key.ctx, details->ticket.GetTitleKey().data(), 16);
+  if (m_has_encryption && details->ticket.IsValid())
+  {
+    u8 title_key[16];
+    details->ticket.GetTitleKey(title_key);
+    details->key.valid = !aes_init(&details->key.ctx, title_key, 16);
+  }
 }
 
 const VolumeWii::PartitionDetails* VolumeWii::FindPartition(const Partition& partition) const
