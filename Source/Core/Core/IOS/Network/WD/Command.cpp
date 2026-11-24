@@ -299,7 +299,7 @@ IPCReply NetWDCommandDevice::Disassociate(const IOCtlVRequest& request)
   auto& memory = system.GetMemory();
 
   Common::MACAddress mac;
-  memory.CopyFromEmu(mac.data(), vector->address, mac.size());
+  memory.CopyFromEmu(mac.bytes, vector->address, sizeof(mac.bytes));
 
   INFO_LOG(IOS_NET, "WD_Disassociate: MAC %s", Common::MacAddressToString(mac).c_str());
 

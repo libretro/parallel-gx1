@@ -119,7 +119,7 @@ IPCReply NetNCDManageDevice::IOCtlV(const IOCtlVRequest& request)
     INFO_LOG(IOS_NET, "NET_NCD_MANAGE: IOCTLV_NCD_GETWIRELESSMACADDRESS");
 
     const Common::MACAddress address = IOS::Net::GetMACAddress();
-    memory.CopyToEmu(request.io_vectors.at(1).address, address.data(), address.size());
+    memory.CopyToEmu(request.io_vectors.at(1).address, address.bytes, sizeof(address.bytes));
     break;
   }
 

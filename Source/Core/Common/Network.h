@@ -39,18 +39,19 @@ enum DHCPConst
   MESSAGE_REPLY = 2
 };
 
-using MACAddress = std::array<u8, MAC_ADDRESS_SIZE>;
-
-// Note: Bluetooth address display order is reverse of the storage order.
-struct BluetoothAddress : std::array<u8, MAC_ADDRESS_SIZE>
+struct MACAddress
 {
+  u8 bytes[MAC_ADDRESS_SIZE];
 };
 
 constexpr std::size_t IPV4_ADDR_LEN = 4;
-using IPAddress = std::array<u8, IPV4_ADDR_LEN>;
-constexpr IPAddress IP_ADDR_ANY = {0, 0, 0, 0};
-constexpr IPAddress IP_ADDR_BROADCAST = {255, 255, 255, 255};
-constexpr IPAddress IP_ADDR_SSDP = {239, 255, 255, 250};
+struct IPAddress
+{
+  u8 bytes[IPV4_ADDR_LEN];
+};
+constexpr IPAddress IP_ADDR_ANY = {{0, 0, 0, 0}};
+constexpr IPAddress IP_ADDR_BROADCAST = {{255, 255, 255, 255}};
+constexpr IPAddress IP_ADDR_SSDP = {{239, 255, 255, 250}};
 constexpr u16 SSDP_PORT = 1900;
 constexpr u16 IPV4_ETHERTYPE = 0x800;
 constexpr u16 ARP_ETHERTYPE = 0x806;

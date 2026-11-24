@@ -96,7 +96,7 @@ CEXIETHERNET::CEXIETHERNET(Core::System& system, BBADeviceType type)
   MXHardReset();
 
   const auto& mac = mac_addr;
-  memcpy(&mBbaMem[BBA_NAFR_PAR0], mac.data(), mac.size());
+  memcpy(&mBbaMem[BBA_NAFR_PAR0], mac.bytes, sizeof(mac.bytes));
 
   // HACK: .. fully established 100BASE-T link
   mBbaMem[BBA_NWAYS] = NWAYS_LS100 | NWAYS_LPNWAY | NWAYS_100TXF | NWAYS_ANCLPT;

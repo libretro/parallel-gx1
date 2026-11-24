@@ -1178,7 +1178,7 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
   case 0x1004:  // mac address
   {
     const Common::MACAddress address = IOS::Net::GetMACAddress();
-    memory.CopyToEmu(request.io_vectors[0].address, address.data(), address.size());
+    memory.CopyToEmu(request.io_vectors[0].address, address.bytes, sizeof(address.bytes));
     break;
   }
 

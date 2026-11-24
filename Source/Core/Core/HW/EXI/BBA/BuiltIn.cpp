@@ -194,8 +194,8 @@ void CEXIETHERNET::BuiltInBBAInterface::PollData(std::size_t* datasize)
 void CEXIETHERNET::BuiltInBBAInterface::HandleARP(const Common::ARPPacket& packet)
 {
   const auto& [hwdata, arpdata] = packet;
-  if (arpdata.sender_address == m_current_mac && arpdata.sender_ip == 0 &&
-      arpdata.target_ip == m_current_ip)
+  if (!std::memcmp(arpdata.sender_address.bytes, m_current_mac.bytes, sizeof(m_current_mac)) &&
+      arpdata.sender_ip == 0 && arpdata.target_ip == m_current_ip)
   {
     // Ignore ARP probe to itself (RFC 5227) sometimes used to prevent IP collision
     return;
@@ -495,9 +495,11 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleUDPFrame(const Common::UDPPacket& 
 {
   const auto& [hwdata, ip_header, udp_header, ip_options, data] = packet;
   u32 target = 0;
-  const u32 destination_addr = ip_header.destination_addr == Common::IP_ADDR_ANY ?
-                                   m_router_ip :  // dns request
-                                   std::bit_cast<u32>(ip_header.destination_addr);
+  const u32 destination_addr =
+      !std::memcmp(ip_header.destination_addr.bytes, Common::IP_ADDR_ANY.bytes,
+                   sizeof(Common::IP_ADDR_ANY)) ?
+          m_router_ip :  // dns request
+          std::bit_cast<u32>(ip_header.destination_addr);
 
   StackRef* ref = m_network_ref.GetAvailableSlot(udp_header.source_port);
   if (ref->ip == 0)

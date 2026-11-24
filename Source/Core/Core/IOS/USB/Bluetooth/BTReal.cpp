@@ -565,7 +565,7 @@ void BluetoothRealDevice::LoadLinkKeys()
 
     bdaddr_t mac;
     for (std::size_t i = 0; i < sizeof(mac); i++)
-      mac[i] = address[sizeof(mac) - 1 - i];
+      mac[i] = address.bytes[sizeof(mac) - 1 - i];
 
     const auto key_string = pair.substr(index + 1);
     linkkey_t key{};
@@ -587,7 +587,7 @@ void BluetoothRealDevice::SaveLinkKeys()
     Common::MACAddress address;
     // Reverse the address so that it is stored in the correct order in the config file
     for (std::size_t i = 0; i < sizeof(bdaddr_t); i++)
-      address[i] = bdaddr[sizeof(bdaddr_t) - 1 - i];
+      address.bytes[i] = bdaddr[sizeof(bdaddr_t) - 1 - i];
 
     config_string += Common::MacAddressToString(address);
     config_string += '=';

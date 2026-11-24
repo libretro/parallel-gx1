@@ -74,7 +74,7 @@ std::string IPv4PortRange::ToString() const
   else if (common_high_bits >= 24)
   {
     // Only the last octet is different.
-    snprintf(buf, sizeof(buf), "-%u", last.ip_address.back());
+    snprintf(buf, sizeof(buf), "-%u", last.ip_address.bytes[IPV4_ADDR_LEN - 1]);
     ip_range += buf;
   }
   else
@@ -98,8 +98,8 @@ std::string IPv4PortRange::ToString() const
 std::string IPAddressToString(IPAddress ip_address)
 {
   char buf[16];
-  snprintf(buf, sizeof(buf), "%u.%u.%u.%u", ip_address[0], ip_address[1], ip_address[2],
-           ip_address[3]);
+  snprintf(buf, sizeof(buf), "%u.%u.%u.%u", ip_address.bytes[0], ip_address.bytes[1],
+           ip_address.bytes[2], ip_address.bytes[3]);
   return buf;
 }
 
@@ -118,9 +118,9 @@ bool StringToIPv4PortRange(std::string_view subject, IPv4PortRange* result)
 
   *result = IPv4PortRange{};
 
-  for (u32 i = 0; i != result->first.ip_address.size(); ++i)
+  for (u32 i = 0; i != IPV4_ADDR_LEN; ++i)
   {
-    if (!TryParse(std::string(first_ip_octets[i]), &result->first.ip_address[i]))
+    if (!TryParse(std::string(first_ip_octets[i]), &result->first.ip_address.bytes[i]))
       return false;  // Bad octet.
   }
 
@@ -151,18 +151,18 @@ bool StringToIPv4PortRange(std::string_view subject, IPv4PortRange* result)
     if (octet_share_count >= 4)
       return false;  // Too many octets.
 
-    std::memcpy(result->last.ip_address.data(), result->first.ip_address.data(),
-                octet_share_count);
+    std::memcpy(result->last.ip_address.bytes, result->first.ip_address.bytes, octet_share_count);
 
     std::size_t i = octet_share_count;
     for (auto&& octet_str : last_ip_octets)
     {
-      if (!TryParse(octet_str, &result->last.ip_address[i]))
+      if (!TryParse(octet_str, &result->last.ip_address.bytes[i]))
         return false;  // Bad octet.
       ++i;
     }
 
-    if (result->first.ip_address > result->last.ip_address)
+    if (std::memcmp(result->first.ip_address.bytes, result->last.ip_address.bytes, IPV4_ADDR_LEN) >
+        0)
       return false;  // Reversed range.
 
     read_pos = last_ip_end;
@@ -248,31 +248,31 @@ bool StringToIPv4PortRange(std::string_view subject, IPv4PortRange* result)
 
 MACAddress GenerateMacAddress(const MACConsumer type)
 {
-  constexpr std::array<u8, 3> oui_bba{{0x00, 0x09, 0xbf}};
-  constexpr std::array<u8, 3> oui_ios{{0x00, 0x17, 0xab}};
+  static const u8 oui_bba[3] = {0x00, 0x09, 0xbf};
+  static const u8 oui_ios[3] = {0x00, 0x17, 0xab};
 
   MACAddress mac{};
 
   switch (type)
   {
   case MACConsumer::BBA:
-    std::memcpy(mac.data(), oui_bba.data(), oui_bba.size());
+    std::memcpy(mac.bytes, oui_bba, sizeof(oui_bba));
     break;
   case MACConsumer::IOS:
-    std::memcpy(mac.data(), oui_ios.data(), oui_ios.size());
+    std::memcpy(mac.bytes, oui_ios, sizeof(oui_ios));
     break;
   }
 
   // Generate the 24-bit NIC-specific portion of the MAC address.
-  Random::Generate(&mac[3], 3);
+  Random::Generate(&mac.bytes[3], 3);
   return mac;
 }
 
 std::string MacAddressToString(const MACAddress& mac)
 {
   char buf[18];
-  snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3],
-           mac[4], mac[5]);
+  snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x", mac.bytes[0], mac.bytes[1],
+           mac.bytes[2], mac.bytes[3], mac.bytes[4], mac.bytes[5]);
   return buf;
 }
 
@@ -289,12 +289,12 @@ bool StringToMacAddress(std::string_view mac_string, MACAddress* out)
     char c = Common::ToLower(mac_string.at(i));
     if (c >= '0' && c <= '9')
     {
-      mac[x / 2] |= (c - '0') << ((x & 1) ? 0 : 4);
+      mac.bytes[x / 2] |= (c - '0') << ((x & 1) ? 0 : 4);
       ++x;
     }
     else if (c >= 'a' && c <= 'f')
     {
-      mac[x / 2] |= (c - 'a' + 10) << ((x & 1) ? 0 : 4);
+      mac.bytes[x / 2] |= (c - 'a' + 10) << ((x & 1) ? 0 : 4);
       ++x;
     }
   }
@@ -334,8 +334,8 @@ IPv4Header::IPv4Header(u16 data_size, u8 ip_proto, const sockaddr_in& from, cons
   flags_fragment_offset = htons(0x4000);
   ttl = 0x40;
   protocol = ip_proto;
-  std::memcpy(source_addr.data(), &from.sin_addr, IPV4_ADDR_LEN);
-  std::memcpy(destination_addr.data(), &to.sin_addr, IPV4_ADDR_LEN);
+  std::memcpy(source_addr.bytes, &from.sin_addr, IPV4_ADDR_LEN);
+  std::memcpy(destination_addr.bytes, &to.sin_addr, IPV4_ADDR_LEN);
 
   header_checksum = htons(ComputeNetworkChecksum(this, Size()));
 }
