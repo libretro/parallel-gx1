@@ -36,7 +36,8 @@ public:
   IPCReply IOCtl(const IOCtlRequest& request) override;
   IPCReply IOCtlV(const IOCtlVRequest& request) override;
 
-  std::pair<ReturnCode, u64> DeviceOpen(u16 vid, u16 pid);
+  // device_id is 0 unless the device opened
+  ReturnCode DeviceOpen(u16 vid, u16 pid, u64* device_id);
   void DeviceClose(u64 device_id);
   IPCReply DeviceIOCtl(u64 device_id, const IOCtlRequest& request);
   IPCReply DeviceIOCtlV(u64 device_id, const IOCtlVRequest& request);

@@ -51,9 +51,7 @@ IPCReply OH0Device::Open(const OpenRequest& request)
 
   m_oh0 = static_cast<OH0*>(GetEmulationKernel().GetDeviceByName("/dev/usb/oh0"));
 
-  ReturnCode return_code;
-  std::tie(return_code, m_device_id) = m_oh0->DeviceOpen(m_vid, m_pid);
-  return IPCReply(return_code);
+  return IPCReply(m_oh0->DeviceOpen(m_vid, m_pid, &m_device_id));
 }
 
 IPCReply OH0Device::Close(u32 fd)

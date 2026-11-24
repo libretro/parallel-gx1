@@ -394,7 +394,7 @@ void OH0::SetDeviceOpened(u64 device_id, bool opened)
   }
 }
 
-std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
+ReturnCode OH0::DeviceOpen(const u16 vid, const u16 pid, u64* device_id)
 {
 
   bool has_device_with_vid_pid = false;
@@ -411,10 +411,12 @@ std::pair<ReturnCode, u64> OH0::DeviceOpen(const u16 vid, const u16 pid)
     }
 
     SetDeviceOpened(device->GetId(), true);
-    return {IPC_SUCCESS, device->GetId()};
+    *device_id = device->GetId();
+    return IPC_SUCCESS;
   }
   // IOS doesn't allow opening the same device more than once (IPC_EEXIST)
-  return {has_device_with_vid_pid ? IPC_EEXIST : IPC_ENOENT, 0};
+  *device_id = 0;
+  return has_device_with_vid_pid ? IPC_EEXIST : IPC_ENOENT;
 }
 
 void OH0::DeviceClose(const u64 device_id)
