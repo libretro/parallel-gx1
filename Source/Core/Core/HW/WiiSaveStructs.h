@@ -9,7 +9,6 @@
 #pragma once
 
 #include <array>
-#include <optional>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -105,9 +104,11 @@ public:
   virtual ~Storage() = default;
   virtual bool SaveExists() const = 0;
   virtual bool EraseSave() = 0;
-  virtual std::optional<Header> ReadHeader() = 0;
-  virtual std::optional<BkHeader> ReadBkHeader() = 0;
-  virtual std::optional<std::vector<SaveFile>> ReadFiles() = 0;
+  // Each false when the save cannot be read
+  virtual bool ReadHeader(Header* header) = 0;
+  virtual bool ReadBkHeader(BkHeader* bk_header) = 0;
+  // Lends the files the save lists, valid until the storage next reads or changes them
+  virtual bool ReadFiles(const SaveFile** files, size_t* count) = 0;
   virtual bool WriteHeader(const Header& header) = 0;
   virtual bool WriteBkHeader(const BkHeader& bk_header) = 0;
   // Reads a regular file's data, which this storage listed, into data

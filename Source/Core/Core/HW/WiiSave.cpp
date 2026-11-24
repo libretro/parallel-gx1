@@ -14,7 +14,6 @@
 #include <cstdio>
 #include <cstring>
 #include <lrc_hash.h>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -69,7 +68,7 @@ public:
   bool SaveExists() const override
   {
     return !m_files_list.empty() ||
-           (m_uid && m_gid && m_fs->GetMetadata(*m_uid, *m_gid, m_data_dir + "/banner.bin"));
+           (m_has_ids && m_fs->GetMetadata(m_uid, m_gid, m_data_dir + "/banner.bin"));
   }
 
   bool EraseSave() override
@@ -97,28 +96,29 @@ public:
     return true;
   }
 
-  std::optional<Header> ReadHeader() override
+  bool ReadHeader(Header* header_out) override
   {
-    if (!m_uid || !m_gid)
-      return {};
+    if (!m_has_ids)
+      return false;
 
     const auto banner_path = m_data_dir + "/banner.bin";
-    const auto banner = m_fs->OpenFile(*m_uid, *m_gid, banner_path.c_str(), FS::Mode::Read);
+    const auto banner = m_fs->OpenFile(m_uid, m_gid, banner_path.c_str(), FS::Mode::Read);
     if (!banner)
-      return {};
-    Header header{};
+      return false;
+    Header& header = *header_out;
+    header = Header{};
     header.banner_size = banner->GetStatus()->size;
     if (header.banner_size > sizeof(header.banner))
     {
       ERROR_LOG(CORE, "NandStorage::ReadHeader: %s corrupted banner_size: %x", banner_path.c_str(),
                 static_cast<unsigned>(header.banner_size));
-      return {};
+      return false;
     }
     header.tid = m_tid;
     header.md5 = s_md5_blanker;
     const u8 mode = GetBinMode(banner_path);
     if (!mode || !banner->Read(header.banner, header.banner_size))
-      return {};
+      return false;
     header.permissions = mode;
     // remove nocopy flag
     header.banner[7] &= ~1;
@@ -126,12 +126,13 @@ public:
     Md5 md5_calc;
     HeaderMD5(header, md5_calc.data());
     header.md5 = md5_calc;
-    return header;
+    return true;
   }
 
-  std::optional<BkHeader> ReadBkHeader() override
+  bool ReadBkHeader(BkHeader* bk_hdr_out) override
   {
-    BkHeader bk_hdr{};
+    BkHeader& bk_hdr = *bk_hdr_out;
+    bk_hdr = BkHeader{};
     bk_hdr.size = BK_LISTED_SZ;
     bk_hdr.magic = BK_HDR_MAGIC;
     bk_hdr.ngid = s_ng_id;
@@ -139,19 +140,24 @@ public:
     bk_hdr.size_of_files = m_files_size;
     bk_hdr.total_size = m_files_size + FULL_CERT_SZ;
     bk_hdr.tid = m_tid;
-    return bk_hdr;
+    return true;
   }
 
-  std::optional<std::vector<SaveFile>> ReadFiles() override { return m_files_list; }
+  bool ReadFiles(const SaveFile** files, size_t* count) override
+  {
+    *files = m_files_list.data();
+    *count = m_files_list.size();
+    return true;
+  }
 
   bool WriteHeader(const Header& header) override
   {
-    if (!m_uid || !m_gid)
+    if (!m_has_ids)
       return false;
 
     const std::string banner_file_path = m_data_dir + "/banner.bin";
     const FS::Modes modes = GetFsMode(header.permissions);
-    const auto file = m_fs->CreateAndOpenFile(*m_uid, *m_gid, banner_file_path, modes);
+    const auto file = m_fs->CreateAndOpenFile(m_uid, m_gid, banner_file_path, modes);
     return file && file->Write(header.banner, header.banner_size);
   }
 
@@ -159,10 +165,10 @@ public:
 
   bool ReadFileData(const SaveFile& save_file, std::vector<u8>* data) override
   {
-    if (!m_uid || !m_gid)
+    if (!m_has_ids)
       return false;
     const std::string path = m_data_dir + '/' + save_file.path;
-    const auto file = m_fs->OpenFile(*m_uid, *m_gid, path.c_str(), FS::Mode::Read);
+    const auto file = m_fs->OpenFile(m_uid, m_gid, path.c_str(), FS::Mode::Read);
     if (!file)
       return false;
     data->resize(file->GetStatus()->size);
@@ -171,7 +177,7 @@ public:
 
   bool WriteFiles(Storage* source, const SaveFile* files, size_t count) override
   {
-    if (!m_uid || !m_gid)
+    if (!m_has_ids)
       return false;
 
     std::vector<u8> data;
@@ -182,7 +188,7 @@ public:
       const std::string path = m_data_dir + '/' + file.path;
       if (file.type == SaveFile::Type::File)
       {
-        const auto raw_file = m_fs->CreateAndOpenFile(*m_uid, *m_gid, path, modes);
+        const auto raw_file = m_fs->CreateAndOpenFile(m_uid, m_gid, path, modes);
         if (!source->ReadFileData(file, &data) || !raw_file ||
             !raw_file->Write(data.data(), data.size()))
         {
@@ -191,11 +197,11 @@ public:
       }
       else if (file.type == SaveFile::Type::Directory)
       {
-        const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(*m_uid, *m_gid, path);
+        const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(m_uid, m_gid, path);
         if (meta && meta->is_file)
           return false;
 
-        const FS::ResultCode result = m_fs->CreateDirectory(*m_uid, *m_gid, path, 0, modes);
+        const FS::ResultCode result = m_fs->CreateDirectory(m_uid, m_gid, path, 0, modes);
         if (result != FS::ResultCode::Success)
           return false;
       }
@@ -206,10 +212,10 @@ public:
 private:
   void ScanForFiles(const std::string& dir)
   {
-    if (!m_uid || !m_gid)
+    if (!m_has_ids)
       return;
 
-    const auto entries = m_fs->ReadDirectory(*m_uid, *m_gid, dir);
+    const auto entries = m_fs->ReadDirectory(m_uid, m_gid, dir);
     if (!entries)
       return;
 
@@ -219,7 +225,7 @@ private:
         continue;
 
       const std::string path = dir + '/' + elem;
-      const FS::Result<FS::Metadata> metadata = m_fs->GetMetadata(*m_uid, *m_gid, path);
+      const FS::Result<FS::Metadata> metadata = m_fs->GetMetadata(m_uid, m_gid, path);
       if (!metadata)
         return;
 
@@ -245,6 +251,7 @@ private:
       return;
     m_uid = metadata->uid;
     m_gid = metadata->gid;
+    m_has_ids = true;
   }
 
   static constexpr FS::Modes GetFsMode(u8 bin_mode)
@@ -259,7 +266,7 @@ private:
 
   u8 GetBinMode(const std::string& path) const
   {
-    if (const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(*m_uid, *m_gid, path))
+    if (const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(m_uid, m_gid, path))
       return GetBinMode(meta->modes);
     return 0;
   }
@@ -267,8 +274,9 @@ private:
   FS::FileSystem* m_fs = nullptr;
   std::string m_data_dir;
   u64 m_tid = 0;
-  std::optional<u32> m_uid;
-  std::optional<u16> m_gid;
+  bool m_has_ids = false;
+  u32 m_uid = 0;
+  u16 m_gid = 0;
   std::vector<SaveFile> m_files_list;
   u32 m_files_size = 0;
 };
@@ -287,11 +295,11 @@ public:
 
   bool EraseSave() override { return m_file.GetSize() == 0 || m_file.Resize(0); }
 
-  std::optional<Header> ReadHeader() override
+  bool ReadHeader(Header* header_out) override
   {
-    Header header;
+    Header& header = *header_out;
     if (!m_file.Seek(0, File::SeekOrigin::Begin) || !m_file.ReadArray(&header, 1))
-      return {};
+      return false;
 
     std::array<u8, 0x10> iv = s_sd_initial_iv;
     m_iosc.Decrypt(IOS::HLE::IOSC::HANDLE_SD_KEY, iv.data(), reinterpret_cast<const u8*>(&header),
@@ -301,7 +309,7 @@ public:
         (((banner_size - BNR_SZ) % ICON_SZ) != 0))
     {
       ERROR_LOG(CONSOLE, "Not a Wii save or read failure for file header size %x", banner_size);
-      return {};
+      return false;
     }
 
     Md5 md5_file = header.md5;
@@ -313,43 +321,44 @@ public:
       ERROR_LOG(CONSOLE, "MD5 mismatch\n %016" PRIx64 "%016" PRIx64 " != %016" PRIx64 "%016" PRIx64,
                 (u64)Common::swap64(md5_file.data()), (u64)Common::swap64(md5_file.data() + 8),
                 (u64)Common::swap64(md5_calc.data()), (u64)Common::swap64(md5_calc.data() + 8));
-      return {};
+      return false;
     }
-    return header;
+    return true;
   }
 
-  std::optional<BkHeader> ReadBkHeader() override
+  bool ReadBkHeader(BkHeader* bk_header) override
+  {
+    m_file.Seek(sizeof(Header), File::SeekOrigin::Begin);
+    if (!m_file.ReadArray(bk_header, 1))
+      return false;
+    if (bk_header->size != BK_LISTED_SZ || bk_header->magic != BK_HDR_MAGIC)
+      return false;
+    if (bk_header->size_of_files + FULL_CERT_SZ != bk_header->total_size)
+      return false;
+    return true;
+  }
+
+  bool ReadFiles(const SaveFile** files_out, size_t* count) override
   {
     BkHeader bk_header;
-    m_file.Seek(sizeof(Header), File::SeekOrigin::Begin);
-    if (!m_file.ReadArray(&bk_header, 1))
-      return {};
-    if (bk_header.size != BK_LISTED_SZ || bk_header.magic != BK_HDR_MAGIC)
-      return {};
-    if (bk_header.size_of_files + FULL_CERT_SZ != bk_header.total_size)
-      return {};
-    return bk_header;
-  }
+    if (!ReadBkHeader(&bk_header) ||
+        !m_file.Seek(sizeof(Header) + sizeof(BkHeader), File::SeekOrigin::Begin))
+      return false;
 
-  std::optional<std::vector<SaveFile>> ReadFiles() override
-  {
-    const std::optional<BkHeader> bk_header = ReadBkHeader();
-    if (!bk_header || !m_file.Seek(sizeof(Header) + sizeof(BkHeader), File::SeekOrigin::Begin))
-      return {};
-
-    std::vector<SaveFile> files;
-    for (u32 i = 0; i < bk_header->number_of_files; ++i)
+    std::vector<SaveFile>& files = m_files;
+    files.clear();
+    for (u32 i = 0; i < bk_header.number_of_files; ++i)
     {
       SaveFile save_file;
       FileHDR file_hdr;
       if (!m_file.ReadArray(&file_hdr, 1) || file_hdr.magic != FILE_HDR_MAGIC)
-        return {};
+        return false;
 
       save_file.mode = file_hdr.permissions;
       save_file.attributes = file_hdr.attrib;
       const SaveFile::Type type = static_cast<SaveFile::Type>(file_hdr.type);
       if (type != SaveFile::Type::Directory && type != SaveFile::Type::File)
-        return {};
+        return false;
       save_file.type = type;
       save_file.path =
           std::string{file_hdr.name.data(), strnlen(file_hdr.name.data(), file_hdr.name.size())};
@@ -366,7 +375,9 @@ public:
       }
       files.emplace_back(std::move(save_file));
     }
-    return files;
+    *files_out = files.data();
+    *count = files.size();
+    return true;
   }
 
   bool WriteHeader(const Header& header) override
@@ -451,14 +462,14 @@ public:
 private:
   bool WriteSignatures()
   {
-    const std::optional<BkHeader> bk_header = ReadBkHeader();
-    if (!bk_header)
+    BkHeader bk_header;
+    if (!ReadBkHeader(&bk_header))
       return false;
 
     // Read data to sign.
     u8 data_sha1[20];
     {
-      const u32 data_size = bk_header->size_of_files + sizeof(BkHeader);
+      const u32 data_size = bk_header.size_of_files + sizeof(BkHeader);
       u8 chunk[2048];
       struct sha1_state sha1;
       sha1_stream_init(&sha1);
@@ -492,6 +503,7 @@ private:
 
   IOS::HLE::IOSC& m_iosc;
   File::IOFile m_file;
+  std::vector<SaveFile> m_files;  // what ReadFiles lends
 };
 
 Storage* MakeNandStorage(FS::FileSystem* fs, u64 tid)
@@ -509,25 +521,25 @@ void FreeStorage(Storage* storage)
   delete storage;
 }
 
-CopyResult Copy(Storage* source, Storage* dest)
+static CopyResult CopyWithHeader(Storage* source, Storage* dest, Header* header)
 {
   // first make sure we can read all the data from the source
-  const auto header = source->ReadHeader();
-  if (!header)
+  if (!source->ReadHeader(header))
   {
     ERROR_LOG(CORE, "WiiSave::Copy: Failed to read header");
     return CopyResult::CorruptedSource;
   }
 
-  const auto bk_header = source->ReadBkHeader();
-  if (!bk_header)
+  BkHeader bk_header;
+  if (!source->ReadBkHeader(&bk_header))
   {
     ERROR_LOG(CORE, "WiiSave::Copy: Failed to read bk header");
     return CopyResult::CorruptedSource;
   }
 
-  const auto files = source->ReadFiles();
-  if (!files)
+  const Storage::SaveFile* files;
+  size_t file_count;
+  if (!source->ReadFiles(&files, &file_count))
   {
     ERROR_LOG(CORE, "WiiSave::Copy: Failed to read files");
     return CopyResult::CorruptedSource;
@@ -550,19 +562,28 @@ CopyResult Copy(Storage* source, Storage* dest)
     return CopyResult::Error;
   }
 
-  if (!dest->WriteBkHeader(*bk_header))
+  if (!dest->WriteBkHeader(bk_header))
   {
     ERROR_LOG(CORE, "WiiSave::Copy: Failed to write bk header");
     return CopyResult::Error;
   }
 
-  if (!dest->WriteFiles(source, files->data(), files->size()))
+  if (!dest->WriteFiles(source, files, file_count))
   {
     ERROR_LOG(CORE, "WiiSave::Copy: Failed to write files");
     return CopyResult::Error;
   }
 
   return CopyResult::Success;
+}
+
+CopyResult Copy(Storage* source, Storage* dest)
+{
+  // The header holds the whole banner, too big for the stack.
+  Header* const header = new Header;
+  const CopyResult result = CopyWithHeader(source, dest, header);
+  delete header;
+  return result;
 }
 
 }  // namespace WiiSave
