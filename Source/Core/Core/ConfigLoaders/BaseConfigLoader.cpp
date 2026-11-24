@@ -160,14 +160,13 @@ public:
 
         for (size_t k = 0; k < section.NumKeys(); k++)
         {
-          const std::pair<std::string, std::string> value(section.KeyName(k), section.KeyValue(k));
-          const Config::Location location{system.first, section_name, value.first};
+          const Config::Location location{system.first, section_name, section.KeyName(k)};
           const bool load_disallowed = std::ranges::any_of(
               s_setting_disallowed, [&location](const auto* l) { return *l == location; });
           if (load_disallowed)
             continue;
 
-          layer->Set(location, value.second);
+          layer->Set(location, std::string(section.KeyValue(k)));
         }
       }
     }
