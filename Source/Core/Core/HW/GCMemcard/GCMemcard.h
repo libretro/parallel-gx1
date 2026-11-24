@@ -148,7 +148,7 @@ struct GCMBlock
 {
   GCMBlock();
   void Erase();
-  std::array<u8, BLOCK_SIZE> m_block;
+  u8 m_block[BLOCK_SIZE];
 };
 static_assert(sizeof(GCMBlock) == BLOCK_SIZE);
 static_assert(std::is_trivially_copyable_v<GCMBlock>);
@@ -162,7 +162,7 @@ struct HeaderData
   // so the data from m_serial until m_dtv_status (inclusive)
 
   // 12 bytes at 0x0000
-  std::array<u8, 12> m_serial;
+  u8 m_serial[12];
 
   // 8 bytes at 0x000c: Time of format (OSTime value)
   Common::BigEndianValue<u64> m_format_time;
@@ -197,7 +197,7 @@ struct Header
   HeaderData m_data;
 
   // 468 bytes at 0x0026: Unused (0xff)
-  std::array<u8, 468> m_unused_1;
+  u8 m_unused_1[468];
 
   // 2 bytes at 0x01fa: Update Counter (?, probably unused)
   // TODO: This seems to be 0xFFFF in all my memory cards, might still be part of m_unused_1.
@@ -210,7 +210,7 @@ struct Header
   u16 m_checksum_inv;
 
   // 0x1e00 bytes at 0x0200: Unused (0xff)
-  std::array<u8, 7680> m_unused_2;
+  u8 m_unused_2[7680];
 
   // initialize an unformatted header block
   explicit Header();
@@ -239,13 +239,13 @@ struct DEntry
 {
   DEntry();
 
-  static constexpr std::array<u8, 4> UNINITIALIZED_GAMECODE{{0xFF, 0xFF, 0xFF, 0xFF}};
+  static constexpr u8 UNINITIALIZED_GAMECODE[4]{0xFF, 0xFF, 0xFF, 0xFF};
 
   // 4 bytes at 0x00: Gamecode
-  std::array<u8, 4> m_gamecode;
+  u8 m_gamecode[4];
 
   // 2 bytes at 0x04: Makercode
-  std::array<u8, 2> m_makercode;
+  u8 m_makercode[2];
 
   // 1 byte at 0x06: reserved/unused (always 0xff, has no effect)
   u8 m_unused_1;
@@ -261,7 +261,7 @@ struct DEntry
   u8 m_banner_and_icon_flags;
 
   // 0x20 bytes at 0x08: Filename
-  std::array<u8, DENTRY_STRLEN> m_filename;
+  u8 m_filename[DENTRY_STRLEN];
 
   // 4 bytes at 0x28: Time of file's last modification in seconds since 12am, January 1st, 2000
   Common::BigEndianValue<u32> m_modification_time;
@@ -302,7 +302,7 @@ struct DEntry
   Common::BigEndianValue<u16> m_block_count;
 
   // 2 bytes at 0x3a: Reserved/unused (always 0xffff, has no effect)
-  std::array<u8, 2> m_unused_2;
+  u8 m_unused_2[2];
 
   // 4 bytes at 0x3c: Address of the two comments within the file data
   Common::BigEndianValue<u32> m_comments_address;
@@ -315,10 +315,10 @@ struct BlockAlloc;
 struct Directory
 {
   // 127 files of 0x40 bytes each
-  std::array<DEntry, DIRLEN> m_dir_entries;
+  DEntry m_dir_entries[DIRLEN];
 
   // 0x3a bytes at 0x1fc0: Unused, always 0xFF
-  std::array<u8, 0x3a> m_padding;
+  u8 m_padding[0x3a];
 
   // 2 bytes at 0x1ffa: Update Counter
   Common::BigEndianValue<s16> m_update_counter;
@@ -364,7 +364,7 @@ struct BlockAlloc
   Common::BigEndianValue<u16> m_last_allocated_block;
 
   // 0x1ff8 bytes at 0x000a: Map of allocated Blocks
-  std::array<Common::BigEndianValue<u16>, BAT_SIZE> m_map;
+  Common::BigEndianValue<u16> m_map[BAT_SIZE];
 
   explicit BlockAlloc(u16 size_mbits = MBIT_SIZE_MEMORY_CARD_2043);
 
@@ -395,8 +395,8 @@ private:
   u16 m_size_mb;
 
   Header m_header_block;
-  std::array<Directory, 2> m_directory_blocks;
-  std::array<BlockAlloc, 2> m_bat_blocks;
+  Directory m_directory_blocks[2];
+  BlockAlloc m_bat_blocks[2];
   std::vector<GCMBlock> m_data_blocks;
 
   int m_active_directory;

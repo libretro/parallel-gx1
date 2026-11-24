@@ -3,6 +3,7 @@
 
 #include "Core/HW/GCMemcard/GCMemcardUtils.h"
 
+#include <retro_miscellaneous.h>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -45,12 +46,12 @@ bool HasSameIdentity(const DEntry& lhs, const DEntry& rhs)
   // m_filename as a nullterminated string for determining if two files identify as the same, as not
   // doing so would cause more harm and confusion than good in practice.
 
-  if (lhs.m_gamecode != rhs.m_gamecode)
+  if (std::memcmp(lhs.m_gamecode, rhs.m_gamecode, sizeof(lhs.m_gamecode)) != 0)
     return false;
-  if (lhs.m_makercode != rhs.m_makercode)
+  if (std::memcmp(lhs.m_makercode, rhs.m_makercode, sizeof(lhs.m_makercode)) != 0)
     return false;
 
-  for (size_t i = 0; i < lhs.m_filename.size(); ++i)
+  for (size_t i = 0; i < ARRAY_SIZE(lhs.m_filename); ++i)
   {
     const u8 a = lhs.m_filename[i];
     const u8 b = rhs.m_filename[i];
@@ -74,7 +75,7 @@ bool WriteGCISavefile(const std::string& filename, const Savefile& savefile)
 
   for (const GCMBlock& block : savefile.blocks)
   {
-    if (!file.WriteBytes(block.m_block.data(), block.m_block.size()))
+    if (!file.WriteBytes(block.m_block, ARRAY_SIZE(block.m_block)))
       return false;
   }
 
@@ -83,20 +84,20 @@ bool WriteGCISavefile(const std::string& filename, const Savefile& savefile)
 
 std::string GenerateFilename(const DEntry& entry)
 {
-  const std::string maker(reinterpret_cast<const char*>(entry.m_makercode.data()),
-                          entry.m_makercode.size());
-  const std::string gamecode(reinterpret_cast<const char*>(entry.m_gamecode.data()),
-                             entry.m_gamecode.size());
+  const std::string maker(reinterpret_cast<const char*>(entry.m_makercode),
+                          ARRAY_SIZE(entry.m_makercode));
+  const std::string gamecode(reinterpret_cast<const char*>(entry.m_gamecode),
+                             ARRAY_SIZE(entry.m_gamecode));
 
   // prevent going out of bounds when all bytes of m_filename are non-null
   size_t length = 0;
-  for (size_t i = 0; i < entry.m_filename.size(); ++i)
+  for (size_t i = 0; i < ARRAY_SIZE(entry.m_filename); ++i)
   {
     if (entry.m_filename[i] == 0)
       break;
     ++length;
   }
-  const std::string filename(reinterpret_cast<const char*>(entry.m_filename.data()), length);
+  const std::string filename(reinterpret_cast<const char*>(entry.m_filename), length);
 
   return Common::EscapeFileName(maker + '-' + gamecode + '-' + filename);
 }

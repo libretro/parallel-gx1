@@ -96,9 +96,9 @@ void GCIFile::EraseSaveBlocks(GCMBlock* pool)
 
 bool GCIFile::HasCopyProtection() const
 {
-  if ((strcmp(reinterpret_cast<const char*>(m_gci_header.m_filename.data()), "PSO_SYSTEM") == 0) ||
-      (strcmp(reinterpret_cast<const char*>(m_gci_header.m_filename.data()), "PSO3_SYSTEM") == 0) ||
-      (strcmp(reinterpret_cast<const char*>(m_gci_header.m_filename.data()), "f_zero.dat") == 0))
+  if ((strcmp(reinterpret_cast<const char*>(m_gci_header.m_filename), "PSO_SYSTEM") == 0) ||
+      (strcmp(reinterpret_cast<const char*>(m_gci_header.m_filename), "PSO3_SYSTEM") == 0) ||
+      (strcmp(reinterpret_cast<const char*>(m_gci_header.m_filename), "f_zero.dat") == 0))
     return true;
   return false;
 }

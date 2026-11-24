@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -57,12 +58,12 @@ static bool GenerateDefaultGCIFilename(const Memcard::DEntry& entry,
   char name[sizeof(makercode) + sizeof(gamecode) + sizeof(filename) + 8];
 
   // A part's decoding ends at its terminator or at a NUL it decoded, whichever is first.
-  decode(makercode, sizeof(makercode), reinterpret_cast<const char*>(entry.m_makercode.data()),
-         entry.m_makercode.size());
-  decode(gamecode, sizeof(gamecode), reinterpret_cast<const char*>(entry.m_gamecode.data()),
-         entry.m_gamecode.size());
-  decode(filename, sizeof(filename), reinterpret_cast<const char*>(entry.m_filename.data()),
-         entry.m_filename.size());
+  decode(makercode, sizeof(makercode), reinterpret_cast<const char*>(entry.m_makercode),
+         ARRAY_SIZE(entry.m_makercode));
+  decode(gamecode, sizeof(gamecode), reinterpret_cast<const char*>(entry.m_gamecode),
+         ARRAY_SIZE(entry.m_gamecode));
+  decode(filename, sizeof(filename), reinterpret_cast<const char*>(entry.m_filename),
+         ARRAY_SIZE(entry.m_filename));
   snprintf(name, sizeof(name), "%s-%s-%s.gci", makercode, gamecode, filename);
   return Common::EscapeFileNameTo(name, std::strlen(name), out, out_size);
 }
@@ -210,7 +211,7 @@ GCMemcardDirectory::GCMemcardDirectory(std::string directory, ExpansionInterface
         continue;
       }
 
-      const bool current_game = m_game_id == Common::swap32(gci.m_gci_header.m_gamecode.data());
+      const bool current_game = m_game_id == Common::swap32(gci.m_gci_header.m_gamecode);
       if (current_game != (pass == 0))
         continue;
 
@@ -477,10 +478,11 @@ inline void GCMemcardDirectory::SyncSaves()
 
   for (u32 i = 0; i < Memcard::DIRLEN; ++i)
   {
-    if (current->m_dir_entries[i].m_gamecode != Memcard::DEntry::UNINITIALIZED_GAMECODE)
+    if (std::memcmp(current->m_dir_entries[i].m_gamecode, Memcard::DEntry::UNINITIALIZED_GAMECODE,
+                    sizeof(Memcard::DEntry::UNINITIALIZED_GAMECODE)) != 0)
     {
       INFO_LOG(EXPANSIONINTERFACE, "Syncing save %#x",
-               Common::swap32(current->m_dir_entries[i].m_gamecode.data()));
+               Common::swap32(current->m_dir_entries[i].m_gamecode));
       bool added = false;
       while (i >= m_num_saves)
       {
@@ -492,16 +494,16 @@ inline void GCMemcardDirectory::SyncSaves()
                           Memcard::DENTRY_SIZE))
       {
         m_saves[i].m_dirty = true;
-        const u32 gamecode = Common::swap32(m_saves[i].m_gci_header.m_gamecode.data());
-        const u32 new_gamecode = Common::swap32(current->m_dir_entries[i].m_gamecode.data());
+        const u32 gamecode = Common::swap32(m_saves[i].m_gci_header.m_gamecode);
+        const u32 new_gamecode = Common::swap32(current->m_dir_entries[i].m_gamecode);
         const u32 old_start = m_saves[i].m_gci_header.m_first_block;
         const u32 new_start = current->m_dir_entries[i].m_first_block;
 
         if ((gamecode != 0xFFFFFFFF) && (gamecode != new_gamecode))
         {
           PanicAlert("Game overwrote with another games save. Data corruption ahead %#x, %#x",
-                     Common::swap32(m_saves[i].m_gci_header.m_gamecode.data()),
-                     Common::swap32(current->m_dir_entries[i].m_gamecode.data()));
+                     Common::swap32(m_saves[i].m_gci_header.m_gamecode),
+                     Common::swap32(current->m_dir_entries[i].m_gamecode));
         }
         memcpy((u8*)&(m_saves[i].m_gci_header), (u8*)&(current->m_dir_entries[i]),
                Memcard::DENTRY_SIZE);
@@ -520,8 +522,9 @@ inline void GCMemcardDirectory::SyncSaves()
     else if ((i < m_num_saves) && (*(u32*)&(m_saves[i].m_gci_header) != 0xFFFFFFFF))
     {
       INFO_LOG(EXPANSIONINTERFACE, "Clearing and/or deleting save %#x",
-               Common::swap32(m_saves[i].m_gci_header.m_gamecode.data()));
-      m_saves[i].m_gci_header.m_gamecode = Memcard::DEntry::UNINITIALIZED_GAMECODE;
+               Common::swap32(m_saves[i].m_gci_header.m_gamecode));
+      std::memcpy(m_saves[i].m_gci_header.m_gamecode, Memcard::DEntry::UNINITIALIZED_GAMECODE,
+                  sizeof(m_saves[i].m_gci_header.m_gamecode));
       m_saves[i].m_num_save_blocks = 0;
       m_saves[i].m_num_used_blocks = 0;
       m_saves[i].m_dirty = true;
@@ -535,7 +538,8 @@ inline s32 GCMemcardDirectory::SaveAreaRW(u32 block, bool writing)
   for (u16 i = 0; i < m_num_saves; ++i)
   {
     Memcard::GCIFile& save = m_saves[i];
-    if (save.m_gci_header.m_gamecode != Memcard::DEntry::UNINITIALIZED_GAMECODE)
+    if (std::memcmp(save.m_gci_header.m_gamecode, Memcard::DEntry::UNINITIALIZED_GAMECODE,
+                    sizeof(Memcard::DEntry::UNINITIALIZED_GAMECODE)) != 0)
     {
       if (!save.m_num_used_blocks)
       {
@@ -561,7 +565,7 @@ inline s32 GCMemcardDirectory::SaveAreaRW(u32 block, bool writing)
           return -1;
         }
         m_last_block = block;
-        m_last_block_address = data->m_block.data();
+        m_last_block_address = data->m_block;
         return m_last_block;
       }
     }
@@ -674,7 +678,8 @@ void GCMemcardDirectory::QueueDirtySaves()
     Memcard::GCIFile& save = m_saves[i];
     if (save.m_dirty)
     {
-      if (save.m_gci_header.m_gamecode != Memcard::DEntry::UNINITIALIZED_GAMECODE)
+      if (std::memcmp(save.m_gci_header.m_gamecode, Memcard::DEntry::UNINITIALIZED_GAMECODE,
+                      sizeof(Memcard::DEntry::UNINITIALIZED_GAMECODE)) != 0)
       {
         save.m_dirty = false;
         if (!save.m_num_save_blocks)
@@ -731,7 +736,7 @@ void GCMemcardDirectory::QueueDirtySaves()
     // simultaneously
     // this ensures that the save data for all of the current games gci files are stored in the
     // savestate
-    const u32 gamecode = Common::swap32(save.m_gci_header.m_gamecode.data());
+    const u32 gamecode = Common::swap32(save.m_gci_header.m_gamecode);
     if (gamecode != m_game_id && gamecode != 0xFFFFFFFF && save.m_num_save_blocks)
     {
       INFO_LOG(EXPANSIONINTERFACE, "Flushing savedata to disk for %s", save.m_filename);

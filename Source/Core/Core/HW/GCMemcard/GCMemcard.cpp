@@ -124,7 +124,7 @@ GCMemcardErrorCode GCMemcard::Open(const std::string& filename)
   for (u16 i = 0; i < user_data_blocks; ++i)
   {
     GCMBlock& block = m_data_blocks.emplace_back();
-    if (!file.ReadArray(block.m_block.data(), BLOCK_SIZE))
+    if (!file.ReadArray(block.m_block, BLOCK_SIZE))
     {
       error_code.Set(GCMemcardValidityIssues::IO_ERROR);
       return error_code;
@@ -398,7 +398,7 @@ GCMemcardErrorCode BlockAlloc::CheckForErrors(u16 size_mbits) const
   {
     // check if free block count matches the actual amount of free blocks in m_map
     const u16 total_available_blocks = (size_mbits * MBIT_TO_BLOCKS) - MC_FST_BLOCKS;
-    ASSERT(total_available_blocks <= m_map.size());
+    ASSERT(total_available_blocks <= ARRAY_SIZE(m_map));
     u16 blocks_in_use = 0;
     for (size_t i = 0; i < total_available_blocks; ++i)
     {
@@ -411,7 +411,7 @@ GCMemcardErrorCode BlockAlloc::CheckForErrors(u16 size_mbits) const
       error_code.Set(GCMemcardValidityIssues::FREE_BLOCK_MISMATCH);
 
     // remaining blocks map to nothing on hardware and must be empty
-    for (size_t i = total_available_blocks; i < m_map.size(); ++i)
+    for (size_t i = total_available_blocks; i < ARRAY_SIZE(m_map); ++i)
     {
       if (m_map[i] != 0)
       {
@@ -459,7 +459,8 @@ bool GCMemcard::ExportFile(u8 index, Savefile* savefile) const
     return false;
 
   savefile->dir_entry = GetActiveDirectory().m_dir_entries[index];
-  if (savefile->dir_entry.m_gamecode == DEntry::UNINITIALIZED_GAMECODE)
+  if (!std::memcmp(savefile->dir_entry.m_gamecode, DEntry::UNINITIALIZED_GAMECODE,
+                   sizeof(DEntry::UNINITIALIZED_GAMECODE)))
     return false;
 
   return GetSaveData(index, savefile->blocks) == GCMemcardGetSaveDataRetVal::SUCCESS;
@@ -502,7 +503,7 @@ s32 GCMemcard::FZEROGX_MakeSaveGameValid(const Header& cardheader, const DEntry&
   u16 chksum = 0xFFFF;
 
   // check for F-Zero GX system file
-  if (strcmp(reinterpret_cast<const char*>(direntry.m_filename.data()), "f_zero.dat") != 0)
+  if (strcmp(reinterpret_cast<const char*>(direntry.m_filename), "f_zero.dat") != 0)
     return 0;
 
   // also make sure that the filesize is correct
@@ -560,10 +561,10 @@ s32 GCMemcard::PSO_MakeSaveGameValid(const Header& cardheader, const DEntry& dir
   u32 pso3offset = 0x00;
 
   // check for PSO1&2 system file
-  if (strcmp(reinterpret_cast<const char*>(direntry.m_filename.data()), "PSO_SYSTEM") != 0)
+  if (strcmp(reinterpret_cast<const char*>(direntry.m_filename), "PSO_SYSTEM") != 0)
   {
     // check for PSO3 system file
-    if (strcmp(reinterpret_cast<const char*>(direntry.m_filename.data()), "PSO3_SYSTEM") == 0)
+    if (strcmp(reinterpret_cast<const char*>(direntry.m_filename), "PSO3_SYSTEM") == 0)
     {
       // PSO3 data block size adjustment
       pso3offset = 0x10;
@@ -624,7 +625,7 @@ GCMBlock::GCMBlock()
 
 void GCMBlock::Erase()
 {
-  memset(m_block.data(), 0xFF, m_block.size());
+  memset(m_block, 0xFF, ARRAY_SIZE(m_block));
 }
 
 Header::Header()
@@ -735,8 +736,8 @@ GCMemcardErrorCode Header::CheckForErrors(u16 card_size_mbits) const
     error_code.Set(GCMemcardValidityIssues::MISMATCHED_CARD_SIZE);
 
   // unused areas, should always be filled with 0xFF
-  if (!IsFilledWithFF(m_unused_1.data(), m_unused_1.size()) ||
-      !IsFilledWithFF(m_unused_2.data(), m_unused_2.size()))
+  if (!IsFilledWithFF(m_unused_1, ARRAY_SIZE(m_unused_1)) ||
+      !IsFilledWithFF(m_unused_2, ARRAY_SIZE(m_unused_2)))
   {
     error_code.Set(GCMemcardValidityIssues::DATA_IN_UNUSED_AREA);
   }
@@ -765,7 +766,7 @@ Directory::Directory()
 
 bool Directory::Replace(const DEntry& entry, size_t index)
 {
-  if (index >= m_dir_entries.size())
+  if (index >= ARRAY_SIZE(m_dir_entries))
     return false;
 
   m_dir_entries[index] = entry;
@@ -804,7 +805,7 @@ GCMemcardErrorCode Directory::CheckForErrors() const
     error_code.Set(GCMemcardValidityIssues::INVALID_CHECKSUM);
 
   // unused area, should always be filled with 0xFF
-  if (!IsFilledWithFF(m_padding.data(), m_padding.size()))
+  if (!IsFilledWithFF(m_padding, ARRAY_SIZE(m_padding)))
     error_code.Set(GCMemcardValidityIssues::DATA_IN_UNUSED_AREA);
 
   return error_code;
@@ -817,7 +818,8 @@ GCMemcardErrorCode Directory::CheckForErrorsWithBat(const BlockAlloc& bat) const
   for (u8 i = 0; i < DIRLEN; ++i)
   {
     const DEntry& entry = m_dir_entries[i];
-    if (entry.m_gamecode == DEntry::UNINITIALIZED_GAMECODE)
+    if (!std::memcmp(entry.m_gamecode, DEntry::UNINITIALIZED_GAMECODE,
+                     sizeof(DEntry::UNINITIALIZED_GAMECODE)))
       continue;
 
     // check if we end up with the same number of blocks when traversing through the BAT using the
