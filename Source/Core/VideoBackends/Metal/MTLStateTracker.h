@@ -117,10 +117,12 @@ public:
   Map AllocateForTextureUpload(size_t amt);
   Map Allocate(UploadBuffer buffer_idx, size_t amt, AlignMask align)
   {
-    Preallocate(buffer_idx, amt);
+    size_t pos;
+    Preallocate(buffer_idx, amt, &pos);
     return CommitPreallocation(buffer_idx, amt, align);
   }
-  std::pair<void*, size_t> Preallocate(UploadBuffer buffer_idx, size_t amt);
+  /// The CPU pointer to the space, and in pos its offset into the buffer
+  void* Preallocate(UploadBuffer buffer_idx, size_t amt, size_t* pos);
   /// Must follow a call to Preallocate where amt is >= to the one provided here
   Map CommitPreallocation(UploadBuffer buffer_idx, size_t amt, AlignMask align)
   {

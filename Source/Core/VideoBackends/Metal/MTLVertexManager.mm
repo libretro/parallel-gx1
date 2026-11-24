@@ -57,16 +57,18 @@ void Metal::VertexManager::ResetBuffer(u32 vertex_stride)
 {
   const u32 max_vertex_size = 65535 * vertex_stride;
   const u32 vertex_alloc = max_vertex_size + vertex_stride - 1;  // for alignment
-  auto vertex = g_state_tracker->Preallocate(StateTracker::UploadBuffer::Vertex, vertex_alloc);
-  auto index =
-      g_state_tracker->Preallocate(StateTracker::UploadBuffer::Index, MAXIBUFFERSIZE * sizeof(u16));
+  size_t vertex_pos, index_pos;
+  void* const vertex =
+      g_state_tracker->Preallocate(StateTracker::UploadBuffer::Vertex, vertex_alloc, &vertex_pos);
+  void* const index = g_state_tracker->Preallocate(StateTracker::UploadBuffer::Index,
+                                                   MAXIBUFFERSIZE * sizeof(u16), &index_pos);
 
   // Align the base vertex
-  m_base_vertex = (vertex.second + vertex_stride - 1) / vertex_stride;
-  m_vertex_offset = m_base_vertex * vertex_stride - vertex.second;
-  m_cur_buffer_pointer = m_base_buffer_pointer = static_cast<u8*>(vertex.first) + m_vertex_offset;
+  m_base_vertex = (vertex_pos + vertex_stride - 1) / vertex_stride;
+  m_vertex_offset = m_base_vertex * vertex_stride - vertex_pos;
+  m_cur_buffer_pointer = m_base_buffer_pointer = static_cast<u8*>(vertex) + m_vertex_offset;
   m_end_buffer_pointer = m_base_buffer_pointer + max_vertex_size;
-  index_generator_start(&m_index_generator, static_cast<u16*>(index.first));
+  index_generator_start(&m_index_generator, static_cast<u16*>(index));
 }
 
 void Metal::VertexManager::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 num_indices,

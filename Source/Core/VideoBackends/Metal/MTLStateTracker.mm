@@ -167,7 +167,7 @@ Metal::StateTracker::Map Metal::StateTracker::AllocateForTextureUpload(size_t am
   return ret;
 }
 
-std::pair<void*, size_t> Metal::StateTracker::Preallocate(UploadBuffer buffer_idx, size_t amt)
+void* Metal::StateTracker::Preallocate(UploadBuffer buffer_idx, size_t amt, size_t* pos)
 {
   BufferPair& buffer = m_upload_buffers[static_cast<int>(buffer_idx)];
   u64 last_draw = u64(retro_atomic_load_acquire_64(&m_last_finished_draw));
@@ -208,8 +208,8 @@ std::pair<void*, size_t> Metal::StateTracker::Preallocate(UploadBuffer buffer_id
       ASSERT_MSG(VIDEO, buffer.gpubuffer, "Failed to allocate MTLBuffer (out of memory?)");
     }
   }
-  size_t pos = buffer.usage.Pos();
-  return std::make_pair(reinterpret_cast<char*>(buffer.buffer) + pos, pos);
+  *pos = buffer.usage.Pos();
+  return reinterpret_cast<char*>(buffer.buffer) + *pos;
 }
 
 Metal::StateTracker::Map Metal::StateTracker::CommitPreallocation(UploadBuffer buffer_idx,
