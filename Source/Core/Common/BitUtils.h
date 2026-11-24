@@ -181,13 +181,6 @@ inline auto BitCastPtr(PtrType* ptr) noexcept -> BitCastPtrType<T, PtrType>
   return BitCastPtrType<T, PtrType>{ptr};
 }
 
-// Similar to BitCastPtr, but specifically for aliasing structs to arrays.
-template <typename ValueType, typename From>
-[[nodiscard]] constexpr auto BitCastToArray(const From& obj) noexcept
-{
-  return std::bit_cast<std::array<ValueType, sizeof(From) / sizeof(ValueType)>>(obj);
-}
-
 template <typename T>
 constexpr void SetBit(T& value, size_t bit_number, bool bit_value)
 {

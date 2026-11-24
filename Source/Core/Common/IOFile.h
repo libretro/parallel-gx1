@@ -80,18 +80,6 @@ public:
     return m_good;
   }
 
-  template <typename T, std::size_t N>
-  bool ReadArray(std::array<T, N>* elements, size_t* num_read = nullptr)
-  {
-    return ReadArray(elements->data(), elements->size(), num_read);
-  }
-
-  template <typename T, std::size_t N>
-  bool WriteArray(const std::array<T, N>& elements)
-  {
-    return WriteArray(elements.data(), elements.size());
-  }
-
   bool ReadBytes(void* data, size_t length) { return ReadArray(static_cast<char*>(data), length); }
 
   bool WriteBytes(const void* data, size_t length)
