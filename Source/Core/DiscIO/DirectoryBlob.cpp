@@ -351,17 +351,26 @@ bool DiscContentContainer::Read(u64 offset, u64 length, u8* buffer, DirectoryBlo
   return true;
 }
 
-static std::optional<PartitionType> ParsePartitionDirectoryName(const std::string& name)
+static bool ParsePartitionDirectoryName(const std::string& name, PartitionType* type)
 {
   if (name.size() < 2)
-    return {};
+    return false;
 
   if (!strcasecmp(name.c_str(), "DATA"))
-    return PartitionType::Game;
+  {
+    *type = PartitionType::Game;
+    return true;
+  }
   if (!strcasecmp(name.c_str(), "UPDATE"))
-    return PartitionType::Update;
+  {
+    *type = PartitionType::Update;
+    return true;
+  }
   if (!strcasecmp(name.c_str(), "CHANNEL"))
-    return PartitionType::Channel;
+  {
+    *type = PartitionType::Channel;
+    return true;
+  }
 
   if (name[0] == 'P' || name[0] == 'p')
   {
@@ -369,7 +378,8 @@ static std::optional<PartitionType> ParsePartitionDirectoryName(const std::strin
     if (name[1] == '-' && name.size() == 6)
     {
       const u32 result = Common::swap32(reinterpret_cast<const u8*>(name.data() + 2));
-      return static_cast<PartitionType>(result);
+      *type = static_cast<PartitionType>(result);
+      return true;
     }
 
     // e.g. "P0"
@@ -380,11 +390,14 @@ static std::optional<PartitionType> ParsePartitionDirectoryName(const std::strin
     {
       u32 result;
       if (TryParse(name.substr(1), &result))
-        return static_cast<PartitionType>(result);
+      {
+        *type = static_cast<PartitionType>(result);
+        return true;
+      }
     }
   }
 
-  return {};
+  return false;
 }
 
 static bool IsDirectorySeparator(char c)
@@ -460,7 +473,7 @@ DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
       m_encryption_cache(this)
 {
   InitFileSlots();
-  DirectoryBlobPartition game_partition(game_partition_root, {});
+  DirectoryBlobPartition game_partition(game_partition_root, nullptr);
   m_is_wii = game_partition.IsWii();
 
   if (!m_is_wii)
@@ -481,18 +494,20 @@ DirectoryBlobReader::DirectoryBlobReader(const std::string& game_partition_root,
 
     std::string game_partition_directory_name = game_partition_root.substr(true_root.size());
     game_partition_directory_name.pop_back();  // Remove trailing slash
-    if (ParsePartitionDirectoryName(game_partition_directory_name) == PartitionType::Game)
+    PartitionType root_type;
+    if (ParsePartitionDirectoryName(game_partition_directory_name, &root_type) &&
+        root_type == PartitionType::Game)
     {
       const File::FSTEntry true_root_entry = File::ScanDirectoryTree(true_root, false);
       for (const File::FSTEntry& entry : true_root_entry.children)
       {
         if (entry.isDirectory)
         {
-          const std::optional<PartitionType> type = ParsePartitionDirectoryName(entry.virtualName);
-          if (type && *type != PartitionType::Game)
+          PartitionType type;
+          if (ParsePartitionDirectoryName(entry.virtualName, &type) && type != PartitionType::Game)
           {
-            partitions.emplace_back(DirectoryBlobPartition(entry.physicalName + "/", m_is_wii),
-                                    *type);
+            partitions.emplace_back(DirectoryBlobPartition(entry.physicalName + "/", &m_is_wii),
+                                    type);
           }
         }
       }
@@ -885,8 +900,7 @@ void DirectoryBlobReader::SetPartitionHeader(DirectoryBlobPartition* partition,
     partition->SetKey(ticket.GetTitleKey());
 }
 
-DirectoryBlobPartition::DirectoryBlobPartition(std::string root_directory,
-                                               std::optional<bool> is_wii)
+DirectoryBlobPartition::DirectoryBlobPartition(std::string root_directory, const bool* is_wii)
     : m_root_directory(std::move(root_directory))
 {
   // the header is put together in place and added once the DOL and FST
@@ -909,9 +923,9 @@ DirectoryBlobPartition::DirectoryBlobPartition(std::string root_directory,
   m_contents.Add(DISCHEADER_ADDRESS, DISCHEADER_SIZE, ContentMemory(header_blob, 0));
 }
 
-void DirectoryBlobPartition::SetDiscType(std::optional<bool> is_wii, const u8* disc_header)
+void DirectoryBlobPartition::SetDiscType(const bool* is_wii, const u8* disc_header)
 {
-  if (is_wii.has_value())
+  if (is_wii)
   {
     m_is_wii = *is_wii;
   }

@@ -6,7 +6,6 @@
 #include <array>
 #include <cstddef>
 #include <memory>
-#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -228,7 +227,8 @@ class DirectoryBlobPartition
 {
 public:
   DirectoryBlobPartition() = default;
-  DirectoryBlobPartition(std::string root_directory, std::optional<bool> is_wii);
+  // is_wii is detected from the disc header when null
+  DirectoryBlobPartition(std::string root_directory, const bool* is_wii);
 
   DirectoryBlobPartition(const DirectoryBlobPartition&) = default;
   DirectoryBlobPartition& operator=(const DirectoryBlobPartition&) = default;
@@ -245,7 +245,7 @@ public:
   void SetKey(std::array<u8, VolumeWii::AES_KEY_SIZE> key) { m_key = key; }
 
 private:
-  void SetDiscType(std::optional<bool> is_wii, const u8* disc_header);
+  void SetDiscType(const bool* is_wii, const u8* disc_header);
   void SetBI2FromFile(const std::string& bi2_path);
 
   // Returns DOL address
