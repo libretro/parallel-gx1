@@ -209,9 +209,10 @@ constexpr Seeds genseeds = [] {
   return seeds;
 }();
 
-static std::pair<u32, u32> GetCode(const u32* src)
+static void GetCode(const u32* src, u32* addr, u32* val)
 {
-  return {Common::swap32(src[0]), Common::swap32(src[1])};
+  *addr = Common::swap32(src[0]);
+  *val = Common::swap32(src[1]);
 }
 
 static void SetCode(u32* dst, u32 addr, u32 val)
@@ -300,7 +301,8 @@ static void Unscramble2(u32* addr, u32* val)
 
 static void DecryptCode(const Seeds& seeds, u32* code)
 {
-  auto [addr, val] = GetCode(code);
+  u32 addr, val;
+  GetCode(code, &addr, &val);
   Unscramble1(&addr, &val);
 
   for (u32 i = 0; i < 32;)
