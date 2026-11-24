@@ -43,19 +43,19 @@ std::string HttpRequest::GetHeaderValue(std::string_view name) const
   return value ? std::string(value) : std::string();
 }
 
-HttpRequest::Response HttpRequest::Get(const std::string& url)
+bool HttpRequest::Get(const std::string& url, std::vector<u8>* response)
 {
-  return Fetch(url, "GET", nullptr, nullptr, 0);
+  return Fetch(url, "GET", nullptr, nullptr, 0, response);
 }
 
-HttpRequest::Response HttpRequest::Post(const std::string& url, std::string_view payload)
+bool HttpRequest::Post(const std::string& url, std::string_view payload, std::vector<u8>* response)
 {
-  return Fetch(url, "POST", "application/x-www-form-urlencoded", payload.data(), payload.size());
+  return Fetch(url, "POST", "application/x-www-form-urlencoded", payload.data(), payload.size(),
+               response);
 }
 
-HttpRequest::Response HttpRequest::PostMultiform(const std::string& url,
-                                                 const Multiform* multiform,
-                                                 size_t multiform_count)
+bool HttpRequest::PostMultiform(const std::string& url, const Multiform* multiform,
+                                size_t multiform_count, std::vector<u8>* response)
 {
   static const char boundary[] = "------------------------dolphinemuwc24";
   std::string body;
@@ -74,7 +74,7 @@ HttpRequest::Response HttpRequest::PostMultiform(const std::string& url,
   body += "--\r\n";
   std::string content_type = "multipart/form-data; boundary=";
   content_type += boundary;
-  return Fetch(url, "POST", content_type.c_str(), body.data(), body.size());
+  return Fetch(url, "POST", content_type.c_str(), body.data(), body.size(), response);
 }
 
 static bool AppendBody(void* userdata, const void* data, size_t len)
@@ -85,11 +85,10 @@ static bool AppendBody(void* userdata, const void* data, size_t len)
   return true;
 }
 
-HttpRequest::Response HttpRequest::Fetch(const std::string& url, const char* method,
-                                         const char* content_type, const void* body,
-                                         size_t body_len)
+bool HttpRequest::Fetch(const std::string& url, const char* method, const char* content_type,
+                        const void* body, size_t body_len, std::vector<u8>* response)
 {
-  std::vector<u8> buffer;
+  response->clear();
   http_job_t job{};
   job.url = url.c_str();
   job.method = method;
@@ -97,7 +96,7 @@ HttpRequest::Response HttpRequest::Fetch(const std::string& url, const char* met
   job.body = body;
   job.body_len = body_len;
   job.sink = AppendBody;
-  job.sink_userdata = &buffer;
+  job.sink_userdata = response;
   job.timeout_ms = m_timeout_ms;
   job.follow_redirects = m_follow_redirects;
   http_service_run(&job);
@@ -112,8 +111,8 @@ HttpRequest::Response HttpRequest::Fetch(const std::string& url, const char* met
     else
       ERROR_LOG(COMMON, "Failed to %s %s: server replied with code %d", method, url.c_str(),
                 job.status);
-    return {};
+    return false;
   }
-  return buffer;
+  return true;
 }
 }  // namespace Common
