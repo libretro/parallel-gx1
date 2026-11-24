@@ -23,6 +23,7 @@ using HostDevices = std::unordered_map<std::string, Data::HostKeyToImagePath>;
 /* A texture as the file gives it, before the file's defaults are known. */
 struct PendingTexture
 {
+  std::string name;
   Data data;
   HostDevices host_controls;
   bool has_image = false;
@@ -275,7 +276,7 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
 {
   RFILE* const file = filestream_open(json_file.c_str(), RETRO_VFS_FILE_ACCESS_READ,
                                       RETRO_VFS_FILE_ACCESS_HINT_NONE);
-  std::vector<std::pair<std::string, PendingTexture>> textures;
+  std::vector<PendingTexture> textures;
   HostDevices default_host_controls;
   std::string generated_folder_name = SConfig::GetInstance().GetGameID() + "_Generated";
   double specification = 1;
@@ -324,13 +325,13 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
         textures.clear();
         while (ok && (t = rjson_next(r.json)) == RJSON_STRING)
         {
-          std::pair<std::string, PendingTexture> texture;
-          texture.first = Text(r.json);
+          PendingTexture texture;
+          texture.name = Text(r.json);
           t = rjson_next(r.json);
           if (t != RJSON_OBJECT)
             ok = Skip(r.json, t);
           else
-            ok = ReadTexture(&r, &texture.second);
+            ok = ReadTexture(&r, &texture);
           textures.emplace_back(std::move(texture));
         }
         ok = ok && t == RJSON_OBJECT_END;
@@ -377,11 +378,11 @@ bool LoadSpecification(const std::string& json_file, std::vector<Data>& input_te
 
   /* in the order of their names, as the textures were taken before */
   std::stable_sort(textures.begin(), textures.end(),
-                   [](const auto& a, const auto& b) { return a.first < b.first; });
-  for (auto& [name, texture] : textures)
+                   [](const auto& a, const auto& b) { return a.name < b.name; });
+  for (PendingTexture& texture : textures)
   {
     Data& texture_data = texture.data;
-    texture_data.m_hires_texture_name = name;
+    texture_data.m_hires_texture_name = texture.name;
     if (!texture.has_image || !texture.has_emulated_controls)
     {
       ERROR_LOG(VIDEO,
