@@ -407,7 +407,7 @@ namespace
 {
 struct HashJob
 {
-  const std::array<u8, VolumeWii::BLOCK_DATA_SIZE>* in;
+  const u8 (*in)[VolumeWii::BLOCK_DATA_SIZE];
   VolumeWii::HashBlock* out;
 };
 
@@ -418,14 +418,14 @@ void HashBlockJob(void* ctx, size_t i)
   VolumeWii::HashBlock* const out = job->out;
   const size_t h1_base = Common::AlignDown(i, 8);
 
-  SHA1DigestMany(job->in[i].data(), 0x400, 0x400, 31, &out[i].h0[0][0]);
-  out[i].padding_0 = {};
+  SHA1DigestMany(job->in[i], 0x400, 0x400, 31, &out[i].h0[0][0]);
+  std::memset(out[i].padding_0, 0, sizeof(out[i].padding_0));
   SHA1Digest(&out[i].h0[0][0], sizeof(out[i].h0), out[h1_base].h1[i - h1_base]);
 }
 
 struct EncryptJob
 {
-  const std::array<u8, VolumeWii::BLOCK_DATA_SIZE>* in;
+  const u8 (*in)[VolumeWii::BLOCK_DATA_SIZE];
   const VolumeWii::HashBlock* hashes;
   u8* out;
   const struct aes_ctx* aes;
@@ -441,12 +441,12 @@ void EncryptBlockJob(void* ctx, size_t i)
   aes_cbc_encrypt(job->aes, iv, reinterpret_cast<const u8*>(&job->hashes[i]), out_ptr,
                   VolumeWii::BLOCK_HEADER_SIZE);
   std::memcpy(iv, out_ptr + 0x3D0, AES_BLOCK_SIZE);
-  aes_cbc_encrypt(job->aes, iv, job->in[i].data(), out_ptr + VolumeWii::BLOCK_HEADER_SIZE,
+  aes_cbc_encrypt(job->aes, iv, job->in[i], out_ptr + VolumeWii::BLOCK_HEADER_SIZE,
                   VolumeWii::BLOCK_DATA_SIZE);
 }
 }  // namespace
 
-void VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GROUP],
+void VolumeWii::HashGroup(const u8 in[BLOCKS_PER_GROUP][BLOCK_DATA_SIZE],
                           HashBlock out[BLOCKS_PER_GROUP])
 {
   // The 64 blocks of hashing are spread over the shared worker pool.
@@ -456,7 +456,7 @@ void VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GR
   for (size_t h1_base = 0; h1_base < BLOCKS_PER_GROUP; h1_base += 8)
   {
     // H1 padding and copies
-    out[h1_base].padding_1 = {};
+    std::memset(out[h1_base].padding_1, 0, sizeof(out[h1_base].padding_1));
     for (size_t j = 1; j < 8; ++j)
       std::memcpy(out[h1_base + j].h1, out[h1_base].h1, sizeof(out[h1_base].h1));
 
@@ -465,15 +465,14 @@ void VolumeWii::HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GR
   }
 
   // H2 padding and copies
-  out[0].padding_2 = {};
+  std::memset(out[0].padding_2, 0, sizeof(out[0].padding_2));
   for (size_t j = 1; j < BLOCKS_PER_GROUP; ++j)
     std::memcpy(out[j].h2, out[0].h2, sizeof(out[0].h2));
 }
 
 bool VolumeWii::EncryptGroup(u64 offset, u64 partition_data_offset,
-                             u64 partition_data_decrypted_size,
-                             const std::array<u8, AES_KEY_SIZE>& key, BlobReader* blob, u8* out,
-                             std::array<u8, BLOCK_DATA_SIZE>* unencrypted_data,
+                             u64 partition_data_decrypted_size, const u8* key, BlobReader* blob,
+                             u8* out, u8 (*unencrypted_data)[BLOCK_DATA_SIZE],
                              HashBlock* unencrypted_hashes)
 {
   // The reads go through one blob reader, so they stay on this thread.
@@ -482,21 +481,21 @@ bool VolumeWii::EncryptGroup(u64 offset, u64 partition_data_offset,
     if (offset + (block + 1) * BLOCK_DATA_SIZE <= partition_data_decrypted_size)
     {
       if (!blob->ReadWiiDecrypted(offset + block * BLOCK_DATA_SIZE, BLOCK_DATA_SIZE,
-                                  unencrypted_data[block].data(), partition_data_offset))
+                                  unencrypted_data[block], partition_data_offset))
       {
         return false;
       }
     }
     else
     {
-      unencrypted_data[block].fill(0);
+      std::memset(unencrypted_data[block], 0, BLOCK_DATA_SIZE);
     }
   }
 
   HashGroup(unencrypted_data, unencrypted_hashes);
 
   struct aes_ctx aes_context;
-  if (aes_init(&aes_context, key.data(), AES_KEY_SIZE))
+  if (aes_init(&aes_context, key, AES_KEY_SIZE))
     return false;
 
   EncryptJob job{unencrypted_data, unencrypted_hashes, out, &aes_context};

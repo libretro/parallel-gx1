@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <variant>
@@ -241,8 +242,8 @@ public:
   const std::string& GetRootDirectory() const { return m_root_directory; }
   const DiscContentContainer& GetContents() const { return m_contents; }
 
-  const std::array<u8, VolumeWii::AES_KEY_SIZE>& GetKey() const { return m_key; }
-  void SetKey(std::array<u8, VolumeWii::AES_KEY_SIZE> key) { m_key = key; }
+  const u8* GetKey() const { return m_key; }
+  void SetKey(const u8* key) { std::memcpy(m_key, key, sizeof(m_key)); }
 
 private:
   void SetDiscType(const bool* is_wii, const u8* disc_header);
@@ -271,7 +272,7 @@ private:
 
   DiscContentContainer m_contents;
 
-  std::array<u8, VolumeWii::AES_KEY_SIZE> m_key{};
+  u8 m_key[VolumeWii::AES_KEY_SIZE]{};
 
   std::string m_root_directory;
   bool m_is_wii = false;

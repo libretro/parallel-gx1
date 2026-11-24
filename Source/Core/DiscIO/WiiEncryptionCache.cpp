@@ -27,13 +27,13 @@ WiiEncryptionCache::~WiiEncryptionCache()
 }
 
 const u8* WiiEncryptionCache::EncryptGroup(u64 offset, u64 partition_data_offset,
-                                           u64 partition_data_decrypted_size, const Key& key)
+                                           u64 partition_data_decrypted_size, const u8* key)
 {
   // Only allocate memory if this function actually ends up getting called
   if (!m_cache)
   {
     m_cache = static_cast<u8*>(std::malloc(VolumeWii::GROUP_TOTAL_SIZE));
-    m_unencrypted_data = static_cast<std::array<u8, VolumeWii::BLOCK_DATA_SIZE>*>(
+    m_unencrypted_data = static_cast<u8(*)[VolumeWii::BLOCK_DATA_SIZE]>(
         std::malloc(VolumeWii::BLOCKS_PER_GROUP * sizeof(*m_unencrypted_data)));
     m_unencrypted_hashes = static_cast<VolumeWii::HashBlock*>(
         std::malloc(VolumeWii::BLOCKS_PER_GROUP * sizeof(*m_unencrypted_hashes)));
@@ -72,7 +72,7 @@ const u8* WiiEncryptionCache::EncryptGroup(u64 offset, u64 partition_data_offset
 }
 
 bool WiiEncryptionCache::EncryptGroups(u64 offset, u64 size, u8* out_ptr, u64 partition_data_offset,
-                                       u64 partition_data_decrypted_size, const Key& key)
+                                       u64 partition_data_decrypted_size, const u8* key)
 {
   while (size > 0)
   {

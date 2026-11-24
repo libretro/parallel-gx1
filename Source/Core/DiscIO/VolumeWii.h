@@ -44,11 +44,11 @@ public:
   struct HashBlock
   {
     u8 h0[31][20];
-    std::array<u8, 20> padding_0;
+    u8 padding_0[20];
     u8 h1[8][20];
-    std::array<u8, 32> padding_1;
+    u8 padding_1[32];
     u8 h2[8][20];
-    std::array<u8, 32> padding_2;
+    u8 padding_2[32];
   };
   static_assert(sizeof(HashBlock) == BLOCK_HEADER_SIZE);
 
@@ -82,15 +82,14 @@ public:
   const BlobReader& GetBlobReader() const;
 
   // Hashes the blocks of a group, whose data is all in in.
-  static void HashGroup(const std::array<u8, BLOCK_DATA_SIZE> in[BLOCKS_PER_GROUP],
+  static void HashGroup(const u8 in[BLOCKS_PER_GROUP][BLOCK_DATA_SIZE],
                         HashBlock out[BLOCKS_PER_GROUP]);
 
   // Reads a group's decrypted blocks into unencrypted_data and its hashes into unencrypted_hashes,
   // the caller's scratch, then writes the encrypted group, GROUP_TOTAL_SIZE bytes, to out.
   static bool EncryptGroup(u64 offset, u64 partition_data_offset, u64 partition_data_decrypted_size,
-                           const std::array<u8, AES_KEY_SIZE>& key, BlobReader* blob, u8* out,
-                           std::array<u8, BLOCK_DATA_SIZE>* unencrypted_data,
-                           HashBlock* unencrypted_hashes);
+                           const u8* key, BlobReader* blob, u8* out,
+                           u8 (*unencrypted_data)[BLOCK_DATA_SIZE], HashBlock* unencrypted_hashes);
 
   static void DecryptBlockHashes(const u8* in, HashBlock* out, const struct aes_ctx* aes_context);
   static void DecryptBlockData(const u8* in, u8* out, const struct aes_ctx* aes_context);
