@@ -77,12 +77,6 @@ public:
     Do(x.second);
   }
 
-  template <typename T, std::size_t N>
-  void DoArray(std::array<T, N>& x)
-  {
-    DoArray(x.data(), static_cast<u32>(x.size()));
-  }
-
   template <typename V, auto last_member, typename = decltype(last_member)>
   void DoArray(Common::EnumMap<V, last_member>& x)
   {
