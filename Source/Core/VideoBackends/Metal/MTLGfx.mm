@@ -127,14 +127,14 @@ std::unique_ptr<AbstractShader>
 Metal::Gfx::CreateShaderFromSource(ShaderStage stage, std::string_view source,
                                    std::string_view name)
 {
-  std::optional<std::string> msl = Util::TranslateShaderToMSL(stage, source);
-  if (!msl.has_value())
+  std::string msl;
+  if (!Util::TranslateShaderToMSL(stage, source, &msl))
   {
     PanicAlert("Failed to convert shader %.*s to MSL", static_cast<int>(name.size()), name.data());
     return nullptr;
   }
 
-  return CreateShaderFromMSL(stage, std::move(*msl), source, name);
+  return CreateShaderFromMSL(stage, std::move(msl), source, name);
 }
 
 std::unique_ptr<AbstractShader> Metal::Gfx::CreateShaderFromBuild(ShaderStage stage,

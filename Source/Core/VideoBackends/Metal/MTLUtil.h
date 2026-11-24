@@ -55,7 +55,7 @@ static inline bool HasStencil(AbstractTextureFormat format)
   return format == AbstractTextureFormat::D24_S8 || format == AbstractTextureFormat::D32F_S8;
 }
 
-std::optional<std::string> TranslateShaderToMSL(ShaderStage stage, std::string_view source);
+bool TranslateShaderToMSL(ShaderStage stage, std::string_view source, std::string* msl);
 /* rslc's MSL with the header and fixups every shader gets */
 std::string FinishMSL(std::string_view compiled);
 

@@ -492,8 +492,8 @@ static constexpr std::pair<std::string_view, std::string_view> MSL_FIXUPS[] = {
      "_Pragma(\"unroll\") for (uint chan = 0u; chan < 2u; chan++)"},
 };
 
-std::optional<std::string>
-Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
+bool Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source,
+                                       std::string* msl)
 {
   static int num_failures;
   char err[1024];
@@ -520,7 +520,7 @@ Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
     break;
   default:
     PanicAlert("Tried to compile geometry shader for Metal, but Metal doesn't support them!");
-    return std::nullopt;
+    return false;
   }
   if (Metal::g_features.subgroup_ops)
     full_source.append(SUBGROUP_HELPER_HEADER);
@@ -551,11 +551,12 @@ Metal::Util::TranslateShaderToMSL(ShaderStage stage, std::string_view source)
       fprintf(f, "\n/* rslc: %s */\n", err);
       fclose(f);
     }
-    return std::nullopt;
+    return false;
   }
   compiled = result.text;
   rslc_result_free(&result, &opts);
-  return FinishMSL(compiled);
+  *msl = FinishMSL(compiled);
+  return true;
 }
 
 std::string Metal::Util::FinishMSL(std::string_view compiled)
