@@ -72,19 +72,19 @@ bool VertexManager::Initialize()
         GL_TEXTURE_BUFFER, MIN(max_buffer_size, static_cast<GLint>(TEXEL_STREAM_BUFFER_SIZE)));
 
     // Allocate texture views backed by buffer.
-    static constexpr std::array<std::pair<TexelBufferFormat, GLenum>, NUM_TEXEL_BUFFER_FORMATS>
-        format_mapping = {{
-            {TEXEL_BUFFER_FORMAT_R8_UINT, GL_R8UI},
-            {TEXEL_BUFFER_FORMAT_R16_UINT, GL_R16UI},
-            {TEXEL_BUFFER_FORMAT_RGBA8_UINT, GL_RGBA8UI},
-            {TEXEL_BUFFER_FORMAT_R32G32_UINT, GL_RG32UI},
-        }};
+    // indexed by TexelBufferFormat
+    static const GLenum format_mapping[NUM_TEXEL_BUFFER_FORMATS] = {
+        GL_R8UI,
+        GL_R16UI,
+        GL_RGBA8UI,
+        GL_RG32UI,
+    };
     glGenTextures(static_cast<GLsizei>(m_texel_buffer_views.size()), m_texel_buffer_views.data());
     glActiveTexture(GL_MUTABLE_TEXTURE_INDEX);
-    for (const auto& it : format_mapping)
+    for (u32 i = 0; i < NUM_TEXEL_BUFFER_FORMATS; i++)
     {
-      glBindTexture(GL_TEXTURE_BUFFER, m_texel_buffer_views[it.first]);
-      glTexBuffer(GL_TEXTURE_BUFFER, it.second, m_texel_buffer->GetGLBufferId());
+      glBindTexture(GL_TEXTURE_BUFFER, m_texel_buffer_views[i]);
+      glTexBuffer(GL_TEXTURE_BUFFER, format_mapping[i], m_texel_buffer->GetGLBufferId());
     }
   }
 

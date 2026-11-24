@@ -92,17 +92,17 @@ bool VertexManager::Initialize()
     return false;
   }
 
-  static constexpr std::array<std::pair<TexelBufferFormat, VkFormat>, NUM_TEXEL_BUFFER_FORMATS>
-      format_mapping = {{
-          {TEXEL_BUFFER_FORMAT_R8_UINT, VK_FORMAT_R8_UINT},
-          {TEXEL_BUFFER_FORMAT_R16_UINT, VK_FORMAT_R16_UINT},
-          {TEXEL_BUFFER_FORMAT_RGBA8_UINT, VK_FORMAT_R8G8B8A8_UINT},
-          {TEXEL_BUFFER_FORMAT_R32G32_UINT, VK_FORMAT_R32G32_UINT},
-      }};
-  for (const auto& it : format_mapping)
+  // indexed by TexelBufferFormat
+  static const VkFormat format_mapping[NUM_TEXEL_BUFFER_FORMATS] = {
+      VK_FORMAT_R8_UINT,
+      VK_FORMAT_R16_UINT,
+      VK_FORMAT_R8G8B8A8_UINT,
+      VK_FORMAT_R32G32_UINT,
+  };
+  for (u32 i = 0; i < NUM_TEXEL_BUFFER_FORMATS; i++)
   {
-    if ((m_texel_buffer_views[it.first] = CreateTexelBufferView(m_texel_stream_buffer.GetBuffer(),
-                                                                it.second)) == VK_NULL_HANDLE)
+    if ((m_texel_buffer_views[i] = CreateTexelBufferView(m_texel_stream_buffer.GetBuffer(),
+                                                         format_mapping[i])) == VK_NULL_HANDLE)
     {
       PanicAlert("Failed to create texel buffer view");
       return false;
