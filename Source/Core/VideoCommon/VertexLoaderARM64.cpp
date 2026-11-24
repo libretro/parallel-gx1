@@ -59,11 +59,11 @@ VertexLoaderARM64::VertexLoaderARM64(const TVtxDesc& vtx_desc, const VAT& vtx_at
   WriteProtect(true);
 }
 
-// Returns the register to use as the base and an offset from that register.
+// Gives the register to use as the base and an offset from that register.
 // For indexed attributes, the index is read into scratch1_reg, and then scratch1_reg with no offset
-// is returned. For direct attributes, an offset from src_reg is returned.
-std::pair<Arm64Gen::ARM64Reg, u32> VertexLoaderARM64::GetVertexAddr(CPArray array,
-                                                                    VertexComponentFormat attribute)
+// is given. For direct attributes, an offset from src_reg is given.
+void VertexLoaderARM64::GetVertexAddr(CPArray array, VertexComponentFormat attribute,
+                                      Arm64Gen::ARM64Reg* reg, u32* offset)
 {
   if (IsIndexed(attribute))
   {
@@ -93,11 +93,13 @@ std::pair<Arm64Gen::ARM64Reg, u32> VertexLoaderARM64::GetVertexAddr(CPArray arra
     LDR(IndexType::Unsigned, EncodeRegTo64(scratch2_reg), arraybase_reg,
         static_cast<u8>(array) * 8);
     ADD(EncodeRegTo64(scratch1_reg), EncodeRegTo64(scratch1_reg), EncodeRegTo64(scratch2_reg));
-    return {EncodeRegTo64(scratch1_reg), 0};
+    *reg = EncodeRegTo64(scratch1_reg);
+    *offset = 0;
   }
   else
   {
-    return {src_reg, m_src_ofs};
+    *reg = src_reg;
+    *offset = m_src_ofs;
   }
 }
 
@@ -396,7 +398,9 @@ void VertexLoaderARM64::GenerateVertexLoader()
   {
     const int pos_elements = m_VtxAttr.g0.PosElements == CoordComponentCount::XY ? 2 : 3;
 
-    const auto [reg, offset] = GetVertexAddr(CPArray::Position, m_VtxDesc.low.Position);
+    ARM64Reg reg;
+    u32 offset;
+    GetVertexAddr(CPArray::Position, m_VtxDesc.low.Position, &reg, &offset);
     ReadVertex(m_VtxDesc.low.Position, m_VtxAttr.g0.PosFormat, pos_elements, pos_elements,
                m_VtxAttr.g0.ByteDequant, m_VtxAttr.g0.PosFrac, &m_native_vtx_decl.position, reg,
                offset);
@@ -409,7 +413,9 @@ void VertexLoaderARM64::GenerateVertexLoader()
     const u8 scaling_exponent = SCALE_MAP[m_VtxAttr.g0.NormalFormat];
 
     // Normal
-    auto [reg, offset] = GetVertexAddr(CPArray::Normal, m_VtxDesc.low.Normal);
+    ARM64Reg reg;
+    u32 offset;
+    GetVertexAddr(CPArray::Normal, m_VtxDesc.low.Normal, &reg, &offset);
     ReadVertex(m_VtxDesc.low.Normal, m_VtxAttr.g0.NormalFormat, 3, 3, true, scaling_exponent,
                &m_native_vtx_decl.normals[0], reg, offset);
 
@@ -422,7 +428,7 @@ void VertexLoaderARM64::GenerateVertexLoader()
       // Tangent
       // If in Index3 mode, and indexed components are used, replace the index with a new index.
       if (index3)
-        std::tie(reg, offset) = GetVertexAddr(CPArray::Normal, m_VtxDesc.low.Normal);
+        GetVertexAddr(CPArray::Normal, m_VtxDesc.low.Normal, &reg, &offset);
       // The tangent comes after the normal; even in index3 mode, an extra offset of load_bytes is
       // applied. Note that this is different from adding 1 to the index, as the stride for indices
       // may be different from the size of the tangent itself.
@@ -430,7 +436,7 @@ void VertexLoaderARM64::GenerateVertexLoader()
                  &m_native_vtx_decl.normals[1], reg, offset + load_bytes);
       // Binormal
       if (index3)
-        std::tie(reg, offset) = GetVertexAddr(CPArray::Normal, m_VtxDesc.low.Normal);
+        GetVertexAddr(CPArray::Normal, m_VtxDesc.low.Normal, &reg, &offset);
       ReadVertex(m_VtxDesc.low.Normal, m_VtxAttr.g0.NormalFormat, 3, 3, true, scaling_exponent,
                  &m_native_vtx_decl.normals[2], reg, offset + load_bytes * 2);
     }
@@ -444,7 +450,9 @@ void VertexLoaderARM64::GenerateVertexLoader()
 
     if (m_VtxDesc.low.Color[i] != VertexComponentFormat::NotPresent)
     {
-      const auto [reg, offset] = GetVertexAddr(CPArray::Color0 + i, m_VtxDesc.low.Color[i]);
+      ARM64Reg reg;
+      u32 offset;
+      GetVertexAddr(CPArray::Color0 + i, m_VtxDesc.low.Color[i], &reg, &offset);
       ReadColor(m_VtxDesc.low.Color[i], m_VtxAttr.GetColorFormat(i), reg, offset);
       m_native_vtx_decl.colors[i].components = 4;
       m_native_vtx_decl.colors[i].enable = true;
@@ -464,7 +472,9 @@ void VertexLoaderARM64::GenerateVertexLoader()
     const int elements = m_VtxAttr.GetTexElements(i) == TexComponentCount::S ? 1 : 2;
     if (m_VtxDesc.high.TexCoord[i] != VertexComponentFormat::NotPresent)
     {
-      const auto [reg, offset] = GetVertexAddr(CPArray::TexCoord0 + i, m_VtxDesc.high.TexCoord[i]);
+      ARM64Reg reg;
+      u32 offset;
+      GetVertexAddr(CPArray::TexCoord0 + i, m_VtxDesc.high.TexCoord[i], &reg, &offset);
       u8 scaling_exponent = m_VtxAttr.GetTexFrac(i);
       ReadVertex(m_VtxDesc.high.TexCoord[i], m_VtxAttr.GetTexFormat(i), elements,
                  m_VtxDesc.low.TexMatIdx[i] ? 2 : elements, m_VtxAttr.g0.ByteDequant,
