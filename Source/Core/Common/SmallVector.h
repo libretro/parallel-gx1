@@ -83,11 +83,11 @@ public:
     return data()[i];
   }
 
-  auto data() { return m_array.data()->Ptr(); }
+  auto data() { return m_array[0].Ptr(); }
   auto begin() { return data(); }
   auto end() { return data() + m_size; }
 
-  auto data() const { return m_array.data()->Ptr(); }
+  auto data() const { return m_array[0].Ptr(); }
   auto begin() const { return data(); }
   auto end() const { return data() + m_size; }
 
@@ -110,7 +110,7 @@ public:
   void clear() { resize(0); }
 
 private:
-  std::array<ManuallyConstructedValue<T>, MaxSize> m_array;
+  ManuallyConstructedValue<T> m_array[MaxSize];
   size_t m_size = 0;
 };
 

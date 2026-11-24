@@ -660,7 +660,8 @@ private:
 
   // This function solves the "parallel moves" problem common in compilers.
   // The arguments are mutated!
-  void ParallelMoves(RegisterMove* begin, RegisterMove* end, std::array<u8, 32>* source_gpr_usages);
+  // source_gpr_usages: 32 counts, one per GPR
+  void ParallelMoves(RegisterMove* begin, RegisterMove* end, u8* source_gpr_usages);
 
   template <typename T>
   void MOVI2RImpl(ARM64Reg Rd, T imm);
@@ -1105,7 +1106,7 @@ public:
     if constexpr (!std::is_void_v<FuncRet>)
       static_assert(sizeof(FuncRet) <= 16, "Large return types are not supported");
 
-    std::array<u8, 32> source_gpr_uses{};
+    u8 source_gpr_uses[32]{};
 
     auto check_argument = [&](auto& arg) {
       using Arg = std::decay_t<decltype(arg)>;
@@ -1167,7 +1168,7 @@ public:
       if (!pending_moves.empty())
       {
         ParallelMoves(pending_moves.data(), pending_moves.data() + pending_moves.size(),
-                      &source_gpr_uses);
+                      source_gpr_uses);
       }
     }
 

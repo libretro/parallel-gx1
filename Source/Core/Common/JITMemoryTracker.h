@@ -41,7 +41,7 @@ private:
   JITRegionInfo* FindRegion(void* ptr);
 
   static constexpr size_t MAX_REGIONS = 64;
-  std::array<retro_atomic_ptr_t, MAX_REGIONS> m_jit_regions{};
+  retro_atomic_ptr_t m_jit_regions[MAX_REGIONS]{};
   quiesce_t m_quiesce{};
 };
 }  // namespace Common

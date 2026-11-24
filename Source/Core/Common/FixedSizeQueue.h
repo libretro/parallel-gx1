@@ -80,7 +80,7 @@ public:
   bool empty() const noexcept { return size() == 0; }
 
 private:
-  std::array<T, N> storage{};
+  T storage[N]{};
   int head = 0;
   int tail = 0;
   // Sacrifice 4 bytes for a simpler implementation. may optimize away in the future.

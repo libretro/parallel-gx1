@@ -33,12 +33,8 @@ enum class System
   Achievements,
 };
 
-constexpr std::array<LayerType, 7> SEARCH_ORDER{{
-    LayerType::CurrentRun,
-    LayerType::Movie,
-    LayerType::LocalGame,
-    LayerType::GlobalGame,
-    LayerType::CommandLine,
-    LayerType::Base,
-}};
+constexpr LayerType SEARCH_ORDER[7]{
+    LayerType::CurrentRun, LayerType::Movie,       LayerType::LocalGame,
+    LayerType::GlobalGame, LayerType::CommandLine, LayerType::Base,
+};
 }  // namespace Config

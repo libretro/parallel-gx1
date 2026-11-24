@@ -86,8 +86,8 @@ struct BaseAndDec
   int m_base;
   int m_dec;
 };
-extern const std::array<BaseAndDec, 32> frsqrte_expected;
-extern const std::array<BaseAndDec, 32> fres_expected;
+extern const BaseAndDec frsqrte_expected[32];
+extern const BaseAndDec fres_expected[32];
 
 // PowerPC approximation algorithms
 double ApproximateReciprocalSquareRoot(double val);

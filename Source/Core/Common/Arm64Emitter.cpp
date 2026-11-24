@@ -1787,8 +1787,7 @@ void ARM64XEmitter::ADRP(ARM64Reg Rd, s64 imm)
 
 // This is using a hand-rolled algorithm. The goal is zero memory allocations, not necessarily
 // the best JIT-time time complexity. (The number of moves is usually very small.)
-void ARM64XEmitter::ParallelMoves(RegisterMove* begin, RegisterMove* end,
-                                  std::array<u8, 32>* source_gpr_usages)
+void ARM64XEmitter::ParallelMoves(RegisterMove* begin, RegisterMove* end, u8* source_gpr_usages)
 {
   // X0-X7 are used for passing arguments.
   // X18-X31 are either callee saved or used for special purposes.
@@ -1804,10 +1803,10 @@ void ARM64XEmitter::ParallelMoves(RegisterMove* begin, RegisterMove* end,
     {
       RegisterMove* prev_move = current_move;
       --current_move;
-      if ((*source_gpr_usages)[DecodeReg(current_move->dst)] == 0)
+      if (source_gpr_usages[DecodeReg(current_move->dst)] == 0)
       {
         MOV(current_move->dst, current_move->src);
-        (*source_gpr_usages)[DecodeReg(current_move->src)]--;
+        source_gpr_usages[DecodeReg(current_move->src)]--;
         std::move(prev_move, end, current_move);
         --end;
         removed_moves_during_this_loop_iteration = true;
@@ -1819,7 +1818,7 @@ void ARM64XEmitter::ParallelMoves(RegisterMove* begin, RegisterMove* end,
       // We need to break a cycle using a temporary register.
 
       size_t temp_reg = temp_reg_begin;
-      while ((*source_gpr_usages)[temp_reg] != 0)
+      while (source_gpr_usages[temp_reg] != 0)
       {
         ++temp_reg;
         ASSERT_MSG(DYNA_REC, temp_reg != temp_reg_end, "Out of registers");
@@ -1830,8 +1829,8 @@ void ARM64XEmitter::ParallelMoves(RegisterMove* begin, RegisterMove* end,
           (Is64Bit(src) ? EncodeRegTo64 : EncodeRegTo32)(static_cast<ARM64Reg>(temp_reg));
 
       MOV(dst, src);
-      (*source_gpr_usages)[DecodeReg(dst)] = (*source_gpr_usages)[DecodeReg(src)];
-      (*source_gpr_usages)[DecodeReg(src)] = 0;
+      source_gpr_usages[DecodeReg(dst)] = source_gpr_usages[DecodeReg(src)];
+      source_gpr_usages[DecodeReg(src)] = 0;
 
       for (RegisterMove* move = begin; move != end; ++move)
       {
