@@ -4,17 +4,17 @@
 #include "Common/Matrix.h"
 
 #include <cmath>
+#include <cstring>
 
 #include "Common/MathUtil.h"
 
 namespace
 {
-// Multiply a NxM matrix by a MxP matrix.
+// Multiply a NxM matrix by a MxP matrix. out may alias a or b.
 template <int N, int M, int P, typename T>
-auto MatrixMultiply(const std::array<T, N * M>& a, const std::array<T, M * P>& b)
-    -> std::array<T, N * P>
+void MatrixMultiply(const T* a, const T* b, T* out)
 {
-  std::array<T, N * P> result;
+  T result[N * P];
 
   for (int n = 0; n != N; ++n)
   {
@@ -29,7 +29,7 @@ auto MatrixMultiply(const std::array<T, N * M>& a, const std::array<T, M * P>& b
     }
   }
 
-  return result;
+  std::memcpy(out, result, sizeof(result));
 }
 
 }  // namespace
@@ -204,12 +204,12 @@ Matrix33 Matrix33::Scale(const Vec3& vec)
 
 void Matrix33::Multiply(const Matrix33& a, const Matrix33& b, Matrix33* result)
 {
-  result->data = MatrixMultiply<3, 3, 3>(a.data, b.data);
+  MatrixMultiply<3, 3, 3>(a.data, b.data, result->data);
 }
 
 void Matrix33::Multiply(const Matrix33& a, const Vec3& vec, Vec3* result)
 {
-  result->data = MatrixMultiply<3, 3, 1>(a.data, vec.data);
+  MatrixMultiply<3, 3, 1>(a.data, vec.data, result->data);
 }
 
 float Matrix33::Determinant() const
@@ -296,10 +296,10 @@ Matrix44 Matrix44::FromQuaternion(const Quaternion& q)
   return FromMatrix33(Matrix33::FromQuaternion(q));
 }
 
-Matrix44 Matrix44::FromArray(const std::array<float, 16>& arr)
+Matrix44 Matrix44::FromArray(const float* arr)
 {
   Matrix44 mtx;
-  mtx.data = arr;
+  std::memcpy(mtx.data, arr, sizeof(mtx.data));
   return mtx;
 }
 
@@ -326,18 +326,20 @@ Matrix44 Matrix44::Perspective(float fov_y, float aspect_ratio, float z_near, fl
 
 void Matrix44::Multiply(const Matrix44& a, const Matrix44& b, Matrix44* result)
 {
-  result->data = MatrixMultiply<4, 4, 4>(a.data, b.data);
+  MatrixMultiply<4, 4, 4>(a.data, b.data, result->data);
 }
 
 Vec3 Matrix44::Transform(const Vec3& v, float w) const
 {
-  const auto result = MatrixMultiply<4, 4, 1>(data, {v.x, v.y, v.z, w});
+  const float point[4] = {v.x, v.y, v.z, w};
+  float result[4];
+  MatrixMultiply<4, 4, 1>(data, point, result);
   return Vec3{result[0], result[1], result[2]};
 }
 
 void Matrix44::Multiply(const Matrix44& a, const Vec4& vec, Vec4* result)
 {
-  result->data = MatrixMultiply<4, 4, 1>(a.data, vec.data);
+  MatrixMultiply<4, 4, 1>(a.data, vec.data, result->data);
 }
 
 float Matrix44::Determinant() const

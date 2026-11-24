@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstring>
 #include <iterator>
+#include <retro_miscellaneous.h>
 
 #include "Common/BitUtils.h"
 #include "Common/ChunkFile.h"
@@ -485,7 +486,7 @@ void MotionPlus::Update(const DesiredExtensionState& target_state)
 MotionPlus::DataFormat::Data MotionPlus::GetGyroscopeData(const Common::Vec3& angular_velocity)
 {
   DataFormat::Data result;
-  for (size_t i = 0; i != angular_velocity.data.size(); ++i)
+  for (size_t i = 0; i != ARRAY_SIZE(angular_velocity.data); ++i)
   {
     const float rad_per_sec = angular_velocity.data[i];
 

@@ -91,7 +91,7 @@ union TVec3
     return {f(x, scalar), f(y, scalar), f(z, scalar)};
   }
 
-  std::array<T, 3> data = {};
+  T data[3] = {};
 
   struct
   {
@@ -189,7 +189,7 @@ union TVec4
   constexpr TVec4& operator*=(T scalar) { return *this *= TVec4{scalar, scalar, scalar, scalar}; }
   constexpr TVec4& operator/=(T scalar) { return *this /= TVec4{scalar, scalar, scalar, scalar}; }
 
-  std::array<T, 4> data = {};
+  T data[4] = {};
 
   struct
   {
@@ -278,7 +278,7 @@ union TVec2
 
   constexpr TVec2 operator-() const { return {-x, -y}; }
 
-  std::array<T, 2> data = {};
+  T data[2] = {};
 
   struct
   {
@@ -399,7 +399,7 @@ public:
   }
 
   // Note: Row-major storage order.
-  std::array<float, 9> data;
+  float data[9];
 };
 
 inline Matrix33 operator*(Matrix33 lhs, const Matrix33& rhs)
@@ -419,7 +419,7 @@ public:
   static Matrix44 Identity();
   static Matrix44 FromMatrix33(const Matrix33& m33);
   static Matrix44 FromQuaternion(const Quaternion& q);
-  static Matrix44 FromArray(const std::array<float, 16>& arr);
+  static Matrix44 FromArray(const float* arr);
 
   static Matrix44 Translate(const Vec3& vec);
   static Matrix44 Perspective(float fov_y, float aspect_ratio, float z_near, float z_far);
@@ -441,7 +441,7 @@ public:
   }
 
   // Note: Row-major storage order.
-  std::array<float, 16> data;
+  float data[16];
 };
 
 inline Matrix44 operator*(Matrix44 lhs, const Matrix44& rhs)

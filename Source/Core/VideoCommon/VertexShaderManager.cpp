@@ -65,8 +65,7 @@ void VertexShaderManager::Init()
 
   constants = {};
 
-  memcpy(m_projection_matrix, Common::Matrix44::Identity().data.data(),
-         sizeof(m_projection_matrix));
+  memcpy(m_projection_matrix, Common::Matrix44::Identity().data, sizeof(m_projection_matrix));
 
   dirty = true;
 }
@@ -173,7 +172,7 @@ Common::Matrix44 VertexShaderManager::LoadProjectionMatrix()
   vr.screen_applied = use_vr_screen;
 
   Common::Matrix44 corrected_matrix;
-  memcpy(corrected_matrix.data.data(), m_projection_matrix, sizeof(m_projection_matrix));
+  memcpy(corrected_matrix.data, m_projection_matrix, sizeof(m_projection_matrix));
 
   if (use_vr_camera)
     corrected_matrix *= g_libretro_vr_camera.view;
@@ -189,7 +188,7 @@ void VertexShaderManager::SetProjectionMatrix(XFStateManager& xf_state_manager)
   {
     xf_state_manager.ResetProjection();
     auto corrected_matrix = LoadProjectionMatrix();
-    memcpy(constants.projection, corrected_matrix.data.data(), 4 * sizeof(float4));
+    memcpy(constants.projection, corrected_matrix.data, 4 * sizeof(float4));
   }
 }
 
@@ -493,7 +492,7 @@ void VertexShaderManager::SetConstants(const char* const* textures, u32 num_text
         projection_actions[i].actions[a]->OnProjection(&projection);
     }
 
-    memcpy(constants.projection, corrected_matrix.data.data(), 4 * sizeof(float4));
+    memcpy(constants.projection, corrected_matrix.data, 4 * sizeof(float4));
     dirty = true;
   }
 

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <retro_miscellaneous.h>
 
 #include "Common/MathUtil.h"
 #include "Core/Config/SYSCONFSettings.h"
@@ -82,7 +83,7 @@ void EmulateShake(PositionalState* state, ControllerEmu::Shake* const shake_grou
                   float time_elapsed)
 {
   auto target_position = shake_group->GetState() * float(shake_group->GetIntensity() / 2);
-  for (std::size_t i = 0; i != target_position.data.size(); ++i)
+  for (std::size_t i = 0; i != ARRAY_SIZE(target_position.data); ++i)
   {
     if (state->velocity.data[i] * std::copysign(1.f, target_position.data[i]) < 0 ||
         state->position.data[i] / target_position.data[i] > 0.5)
@@ -95,7 +96,7 @@ void EmulateShake(PositionalState* state, ControllerEmu::Shake* const shake_grou
   const auto travel_time = 1 / shake_group->GetFrequency() / 2;
 
   Common::Vec3 jerk;
-  for (std::size_t i = 0; i != target_position.data.size(); ++i)
+  for (std::size_t i = 0; i != ARRAY_SIZE(target_position.data); ++i)
   {
     const auto half_distance =
         std::max(std::abs(target_position.data[i]), std::abs(state->position.data[i]));
@@ -117,7 +118,7 @@ void EmulateTilt(RotationalState* state, ControllerEmu::Tilt* const tilt_group, 
   const auto target_angle = Common::Vec3(pitch, -roll, 0);
 
   // For each axis, wrap around current angle if target is farther than 180 degrees.
-  for (std::size_t i = 0; i != target_angle.data.size(); ++i)
+  for (std::size_t i = 0; i != ARRAY_SIZE(target_angle.data); ++i)
   {
     auto& angle = state->angle.data[i];
     if (std::abs(angle - target_angle.data[i]) > float(MathUtil::PI))
@@ -285,7 +286,7 @@ void ApproachAngleWithAccel(RotationalState* state, const Common::Vec3& angle_ta
   const auto change_in_angle =
       state->angular_velocity * time_elapsed + accel * time_elapsed * time_elapsed / 2;
 
-  for (std::size_t i = 0; i != offset.data.size(); ++i)
+  for (std::size_t i = 0; i != ARRAY_SIZE(offset.data); ++i)
   {
     // If new angle will overshoot stop right on target.
     if (std::abs(offset.data[i]) < 0.0001 || (change_in_angle.data[i] / offset.data[i] > 1.0))
@@ -366,7 +367,7 @@ void ApproachPositionWithJerk(PositionalState* state, const Common::Vec3& positi
                                   state->acceleration * time_elapsed * time_elapsed / 2 +
                                   jerk * time_elapsed * time_elapsed * time_elapsed / 6;
 
-  for (std::size_t i = 0; i != offset.data.size(); ++i)
+  for (std::size_t i = 0; i != ARRAY_SIZE(offset.data); ++i)
   {
     // If new velocity will overshoot assume we would have stopped right on target.
     // TODO: Improve check to see if less jerk would have caused undershoot.
