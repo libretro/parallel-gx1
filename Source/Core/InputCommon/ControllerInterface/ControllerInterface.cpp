@@ -167,21 +167,12 @@ bool ControllerInterface::AddDevice(ciface::Core::Device* device)
       return false;
     }
 
-    const auto preferred_id = device->GetPreferredId();
-    if (preferred_id.has_value() && !is_id_in_use(*preferred_id))
-    {
-      // Use the device's preferred ID if available.
-      device->SetId(*preferred_id);
-    }
-    else
-    {
-      // Find the first available ID to use.
-      int id = 0;
-      while (is_id_in_use(id))
-        ++id;
+    // Find the first available ID to use.
+    int id = 0;
+    while (is_id_in_use(id))
+      ++id;
 
-      device->SetId(id);
-    }
+    device->SetId(id);
 
     // We can't (and don't want) to control the order in which devices are added, but we need
     // their order to be consistent, and we need the same one to always be the first, where present

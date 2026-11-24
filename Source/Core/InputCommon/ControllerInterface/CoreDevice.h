@@ -5,7 +5,6 @@
 
 #include <limits>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -149,7 +148,6 @@ public:
   // Doesn't necessarily need to be set to true if the device is virtual.
 
   // (e.g. Xbox 360 controllers have controller number LEDs which should match the ID we use.)
-  virtual std::optional<int> GetPreferredId() const;
 
   // Use this to change the order in which devices are sorted in their list.
   // A higher priority means it will be one of the first ones (smaller index), making it more

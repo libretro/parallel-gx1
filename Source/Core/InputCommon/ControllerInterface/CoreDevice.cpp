@@ -39,11 +39,6 @@ Device::~Device()
   std::free(m_outputs);
 }
 
-std::optional<int> Device::GetPreferredId() const
-{
-  return {};
-}
-
 /* The lists grow while the device is made; a device cannot be made
  * without its controls, so running out of memory here ends the program, as
  * the vectors these were did. */
