@@ -33,7 +33,8 @@ struct MemoryValues
   u32 sysmenu_sync;
 };
 
-const std::array<MemoryValues, 41>& GetMemoryValues();
+// count: number of entries
+const MemoryValues* GetMemoryValues(size_t* count);
 
 enum class Feature
 {

@@ -202,6 +202,6 @@ bool WC24SendList::GetNextFreeEntryIndex(u32* free_index) const
 std::string_view WC24SendList::GetMailFlag() const
 {
   ASSERT(!IsDisabled());
-  return {m_data.header.mail_flag.data(), m_data.header.mail_flag.size()};
+  return {m_data.header.mail_flag, sizeof(m_data.header.mail_flag)};
 }
 }  // namespace IOS::HLE::NWC24::Mail

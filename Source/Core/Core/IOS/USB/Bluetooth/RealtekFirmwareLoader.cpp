@@ -35,12 +35,12 @@ constexpr std::string_view RTL_EPATCH_SIGNATURE_V2 = "RTBTCore";
 #pragma pack(push, 1)
 struct rtl_vendor_cmd
 {
-  std::array<u8, 5> data;
+  u8 data[5];
 };
 static_assert(sizeof(rtl_vendor_cmd) == 5);
 struct rtl_epatch_header
 {
-  std::array<u8, 8> signature;
+  u8 signature[8];
   u32 fw_version;
   u16 num_patches;
 };
@@ -50,7 +50,7 @@ struct rtl_download_cmd
   static constexpr int DATA_LEN = 252;
 
   u8 index;
-  std::array<u8, DATA_LEN> data;
+  u8 data[DATA_LEN];
 };
 static_assert(sizeof(rtl_download_cmd) == 253);
 struct rtl_download_response
@@ -228,11 +228,11 @@ static Common::UniqueBuffer<char> ParseFirmware(const char* fw_data, std::size_t
   }
 
   const rtl_epatch_header epatch_info = Common::BitCastPtr<rtl_epatch_header>(fw_data);
-  if (std::memcmp(epatch_info.signature.data(), RTL_EPATCH_SIGNATURE.data(),
-                  epatch_info.signature.size()) != 0)
+  if (std::memcmp(epatch_info.signature, RTL_EPATCH_SIGNATURE.data(),
+                  sizeof(epatch_info.signature)) != 0)
   {
-    if (std::memcmp(epatch_info.signature.data(), RTL_EPATCH_SIGNATURE_V2.data(),
-                    epatch_info.signature.size()) == 0)
+    if (std::memcmp(epatch_info.signature, RTL_EPATCH_SIGNATURE_V2.data(),
+                    sizeof(epatch_info.signature)) == 0)
     {
       ERROR_LOG(IOS_WIIMOTE, "EPATCH v2 not implemented. Please report device to developers.");
     }
@@ -394,7 +394,7 @@ static bool LoadFirmware(LibUSBBluetoothAdapter& adapter, const char* data, std:
   std::size_t offset = 0;
   while (size - offset > rtl_download_cmd::DATA_LEN)
   {
-    std::memcpy(payload.command.data.data(), data + offset, rtl_download_cmd::DATA_LEN);
+    std::memcpy(payload.command.data, data + offset, rtl_download_cmd::DATA_LEN);
 
     if (!WriteFirmwareBlock(adapter, &payload, sizeof(payload)))
       return false;
@@ -412,7 +412,7 @@ static bool LoadFirmware(LibUSBBluetoothAdapter& adapter, const char* data, std:
   // Mark data end.
   payload.command.index |= 0x80u;
   payload.header.length -= u8(bytes_short_of_full_block);
-  std::memcpy(payload.command.data.data(), data + offset, last_block_size);
+  std::memcpy(payload.command.data, data + offset, last_block_size);
 
   if (!WriteFirmwareBlock(adapter, &payload, sizeof(payload) - bytes_short_of_full_block))
     return false;

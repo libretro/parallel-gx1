@@ -106,10 +106,19 @@ constexpr u32 PLACEHOLDER = 0xDEADBEEF;
 
 static bool SetupMemory(Memory::MemoryManager& memory, u64 ios_title_id, MemorySetupType setup_type)
 {
-  auto target_imv = std::ranges::find(GetMemoryValues(), static_cast<u16>(ios_title_id & 0xffff),
-                                      &MemoryValues::ios_number);
+  size_t imv_count;
+  const MemoryValues* const imvs = GetMemoryValues(&imv_count);
+  const MemoryValues* target_imv = nullptr;
+  for (size_t i = 0; i < imv_count; i++)
+  {
+    if (imvs[i].ios_number == static_cast<u16>(ios_title_id & 0xffff))
+    {
+      target_imv = &imvs[i];
+      break;
+    }
+  }
 
-  if (target_imv == GetMemoryValues().end())
+  if (!target_imv)
   {
     ERROR_LOG(IOS, "Unknown IOS version: %016" PRIx64, (u64)ios_title_id);
     return false;

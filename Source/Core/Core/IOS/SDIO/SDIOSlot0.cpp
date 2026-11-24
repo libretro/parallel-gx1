@@ -235,7 +235,11 @@ s32 SDIOSlot0Device::ExecuteCommand(const Request& request, u32 buffer_in, u32 b
 
   case SEND_CSD:
   {
-    const std::array<u32, 4> csd = m_protocol == SDProtocol::V1 ? GetCSDv1() : GetCSDv2();
+    u32 csd[4];
+    if (m_protocol == SDProtocol::V1)
+      GetCSDv1(csd);
+    else
+      GetCSDv2(csd);
     memory.Write_U32(csd[0], buffer_out + 12);
     memory.Write_U32(csd[1], buffer_out + 8);
     memory.Write_U32(csd[2], buffer_out + 4);
@@ -550,7 +554,7 @@ u32 SDIOSlot0Device::GetOCRegister() const
   return ocr;
 }
 
-std::array<u32, 4> SDIOSlot0Device::GetCSDv1() const
+void SDIOSlot0Device::GetCSDv1(u32* csd) const
 {
   u64 size = m_card.GetSize();
 
@@ -632,15 +636,13 @@ std::array<u32, 4> SDIOSlot0Device::GetCSDv1() const
   // was sent in reverse and IOS is only flipping the endianness of the four words.... It's weird.
 
   // Form the csd using the description above
-  return {{
-      0x000007f0,
-      0x035b5080 | (read_bl_len << 8) | (c_size >> 10),
-      0x003ffc7f | (c_size << 22) | (c_size_mult << 7),
-      0x80040040 | (read_bl_len << 18),
-  }};
+  csd[0] = 0x000007f0;
+  csd[1] = 0x035b5080 | (read_bl_len << 8) | (c_size >> 10);
+  csd[2] = 0x003ffc7f | (c_size << 22) | (c_size_mult << 7);
+  csd[3] = 0x80040040 | (read_bl_len << 18);
 }
 
-std::array<u32, 4> SDIOSlot0Device::GetCSDv2() const
+void SDIOSlot0Device::GetCSDv2(u32* csd) const
 {
   const u64 size = m_card.GetSize();
 
@@ -690,12 +692,10 @@ std::array<u32, 4> SDIOSlot0Device::GetCSDv2() const
   // constexpr u32 crc = 0;
 
   // Form the csd using the description above
-  return {{
-      0x00400e00,
-      0x5a5f5900,
-      0x0000007f | (c_size << 8),
-      0x800a4000,
-  }};
+  csd[0] = 0x00400e00;
+  csd[1] = 0x5a5f5900;
+  csd[2] = 0x0000007f | (c_size << 8);
+  csd[3] = 0x800a4000;
 }
 
 u64 SDIOSlot0Device::GetAddressFromRequest(u32 arg) const

@@ -1075,7 +1075,7 @@ void WiimoteDevice::InterruptDataInputCallback(u8 hid_type, const u8* data, u32 
   {
     l2cap_hdr_t header;
     u8 hid_type;
-    std::array<u8, WiimoteCommon::MAX_PAYLOAD - sizeof(hid_type)> data;
+    u8 data[WiimoteCommon::MAX_PAYLOAD - sizeof(hid_type)];
   } data_frame;
 
   static_assert(sizeof(data_frame) == sizeof(data_frame.data) + sizeof(u8) + sizeof(l2cap_hdr_t));
@@ -1083,7 +1083,7 @@ void WiimoteDevice::InterruptDataInputCallback(u8 hid_type, const u8* data, u32 
   data_frame.header.dcid = channel->remote_cid;
   data_frame.header.length = u16(sizeof(hid_type) + size);
   data_frame.hid_type = hid_type;
-  std::memcpy(data_frame.data.data(), data, size);
+  std::memcpy(data_frame.data, data, size);
 
   const u32 data_frame_size = data_frame.header.length + sizeof(l2cap_hdr_t);
 

@@ -139,8 +139,9 @@ private:
 
   u32 GetOCRegister() const;
 
-  std::array<u32, 4> GetCSDv1() const;
-  std::array<u32, 4> GetCSDv2() const;
+  // csd: 4 words
+  void GetCSDv1(u32* csd) const;
+  void GetCSDv2(u32* csd) const;
   void InitSDHC();
 
   u64 GetAddressFromRequest(u32 arg) const;

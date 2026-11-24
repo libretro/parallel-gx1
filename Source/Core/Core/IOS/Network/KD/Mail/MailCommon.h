@@ -30,8 +30,8 @@ struct MailListHeader final
   u32 next_entry_offset;
   u32 unk1;
   u32 vff_free_space;
-  std::array<u8, 48> unk2;
-  std::array<char, 40> mail_flag;
+  u8 unk2[48];
+  char mail_flag[40];
 };
 static_assert(sizeof(MailListHeader) == 128);
 
@@ -66,9 +66,9 @@ struct MailListEntry final
   u32 message_offset;
   // Set to message_length if content transfer encoding is not base64.
   u32 encoded_length;
-  std::array<MultipartEntry, 2> multipart_entries;
-  std::array<u32, 2> multipart_sizes;
-  std::array<u32, 2> multipart_content_types;
+  MultipartEntry multipart_entries[2];
+  u32 multipart_sizes[2];
+  u32 multipart_content_types[2];
   u32 message_length;
   u32 dwc_id;
   u32 always_0x80000000;

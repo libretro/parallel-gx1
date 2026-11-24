@@ -94,10 +94,10 @@ HardwareModel GetHardwareModel(std::string_view model)
 s32 NWC24MakeUserID(u64* nwc24_id, u32 hollywood_id, u16 id_ctr, HardwareModel hardware_model,
                     u8 area_code)
 {
-  static constexpr std::array<u8, 8> table2{
+  static constexpr u8 table2[8]{
       0x1, 0x5, 0x0, 0x4, 0x2, 0x3, 0x6, 0x7,
   };
-  static constexpr std::array<u8, 16> table1{
+  static constexpr u8 table1[16]{
       0x4, 0xB, 0x7, 0x9, 0xF, 0x1, 0xD, 0x3, 0xC, 0x2, 0x6, 0xE, 0x8, 0x0, 0xA, 0x5,
   };
 
@@ -439,14 +439,14 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
   const std::string hmac_message =
       StringFromFormat("%" PRIu64 "\nw%016" PRIu64 "\n%s\n%s", (u64)random_number,
                        (u64)m_config.Id(), str_mail_flag.c_str(), str_interval.c_str());
-  std::array<u8, 20> hashed{};
+  u8 hashed[20]{};
   hmac_sha1(MAIL_CHECK_KEY, ARRAY_SIZE(MAIL_CHECK_KEY),
-            reinterpret_cast<const u8*>(hmac_message.data()), hmac_message.size(), hashed.data());
+            reinterpret_cast<const u8*>(hmac_message.data()), hmac_message.size(), hashed);
 
   // On a real Wii, strncmp is used to compare both hashes. This means that it is a case-sensitive
   // comparison. KD will generate a lowercase hash as well as expect a lowercase hash from the
   // server.
-  if (Common::BytesToHexString(hashed.data(), hashed.size()) != server_hmac)
+  if (Common::BytesToHexString(hashed, sizeof(hashed)) != server_hmac)
   {
     ERROR_LOG(IOS_WC24, "NET_KD_REQ: IOCTL_NWC24_CHECK_MAIL_NOW: Server HMAC is invalid.");
     return NWC24::WC24_ERR_SERVER;
@@ -1172,11 +1172,11 @@ IPCReply NetKDRequestDevice::IOCtl(const IOCtlRequest& request)
 
     // On a real Wii, GetSchedulerStat copies memory containing a list of error codes recorded by
     // KD among other things.
-    std::array<u32, 256> buffer;
-    for (size_t i = 0; i < buffer.size(); ++i)
+    u32 buffer[256];
+    for (size_t i = 0; i < 256; ++i)
       buffer[i] = LoadSchedulerWord(i);
     const u32 out_size = std::min(request.buffer_out_size, 256U);
-    memory.CopyToEmu(request.buffer_out, buffer.data(), out_size);
+    memory.CopyToEmu(request.buffer_out, buffer, out_size);
     break;
   }
 
