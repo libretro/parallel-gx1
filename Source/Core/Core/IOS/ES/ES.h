@@ -105,7 +105,7 @@ public:
   GetStoredContentsFromTMD(const ES::TMDReader& tmd,
                            CheckContentHashes check_content_hashes = CheckContentHashes::No) const;
   u32 GetSharedContentsCount() const;
-  std::vector<std::array<u8, 20>> GetSharedContents() const;
+  std::vector<ES::Sha1Hash> GetSharedContents() const;
 
   // Title contents
   s32 OpenContent(const ES::TMDReader& tmd, u16 content_index, u32 uid, Ticks ticks = {});
@@ -149,7 +149,8 @@ public:
   ReturnCode DeleteTitle(u64 title_id);
   ReturnCode DeleteTitleContent(u64 title_id) const;
   ReturnCode DeleteTicket(const u8* ticket_view);
-  ReturnCode DeleteSharedContent(const std::array<u8, 20>& sha1) const;
+  // sha1: 20 bytes
+  ReturnCode DeleteSharedContent(const u8* sha1) const;
   ReturnCode DeleteContent(u64 title_id, u32 content_id) const;
 
   ReturnCode GetDeviceId(u32* device_id) const;

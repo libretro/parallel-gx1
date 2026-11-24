@@ -411,7 +411,7 @@ static bool CheckIfContentHashMatches(const u8* content, const ES::Content& info
 {
   u8 digest[20];
   SHA1Digest(content, info.size, digest);
-  return !std::memcmp(digest, info.sha1.data(), sizeof(digest));
+  return !std::memcmp(digest, info.sha1, sizeof(digest));
 }
 
 static std::string GetImportContentPath(u64 title_id, u32 content_id)
@@ -916,7 +916,7 @@ IPCReply ESDevice::ExportTitleDone(Context& context, const IOCtlVRequest& reques
   return IPCReply(m_core.ExportTitleDone(context));
 }
 
-ReturnCode ESCore::DeleteSharedContent(const std::array<u8, 20>& sha1) const
+ReturnCode ESCore::DeleteSharedContent(const u8* sha1) const
 {
   ES::SharedContentMap map{m_ios.GetFSCore()};
   std::string content_path;
@@ -941,7 +941,7 @@ ReturnCode ESCore::DeleteSharedContent(const std::array<u8, 20>& sha1) const
     const auto contents = tmd.GetContents();
     for (const auto& content : contents)
     {
-      if (content.sha1 == sha1)
+      if (!std::memcmp(content.sha1, sha1, sizeof(content.sha1)))
       {
         is_used_by_system_title = true;
         break;
@@ -968,14 +968,14 @@ ReturnCode ESCore::DeleteSharedContent(const std::array<u8, 20>& sha1) const
 
 IPCReply ESDevice::DeleteSharedContent(const IOCtlVRequest& request)
 {
-  std::array<u8, 20> sha1;
-  if (!request.HasNumberOfValidVectors(1, 0) || request.in_vectors[0].size != sha1.size())
+  u8 sha1[20];
+  if (!request.HasNumberOfValidVectors(1, 0) || request.in_vectors[0].size != sizeof(sha1))
     return IPCReply(ES_EINVAL);
 
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  memory.CopyFromEmu(sha1.data(), request.in_vectors[0].address, request.in_vectors[0].size);
+  memory.CopyFromEmu(sha1, request.in_vectors[0].address, request.in_vectors[0].size);
   return IPCReply(m_core.DeleteSharedContent(sha1));
 }
 }  // namespace IOS::HLE

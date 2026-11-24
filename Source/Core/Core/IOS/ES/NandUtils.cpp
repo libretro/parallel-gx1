@@ -238,7 +238,7 @@ ESCore::GetStoredContentsFromTMD(const ES::TMDReader& tmd,
       left -= n;
     }
     if (ok && sha1_stream_final(&sha1, digest) &&
-        !std::memcmp(digest, content.sha1.data(), sizeof(digest)))
+        !std::memcmp(digest, content.sha1, sizeof(digest)))
       stored_contents.push_back(content);
   }
 
@@ -260,7 +260,7 @@ u32 ESCore::GetSharedContentsCount() const
   return count;
 }
 
-std::vector<std::array<u8, 20>> ESCore::GetSharedContents() const
+std::vector<ES::Sha1Hash> ESCore::GetSharedContents() const
 {
   const ES::SharedContentMap map{m_ios.GetFSCore()};
   return map.GetHashes();

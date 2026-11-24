@@ -87,6 +87,12 @@ struct TMDHeader
 static_assert(sizeof(TMDHeader) == 0x1e4, "TMDHeader has the wrong size");
 static_assert(offsetof(TMDHeader, ios_id) == 0x184);
 
+// A SHA-1 digest, by value
+struct Sha1Hash
+{
+  u8 bytes[20];
+};
+
 struct Content
 {
   bool IsShared() const;
@@ -95,7 +101,7 @@ struct Content
   u16 index;
   u16 type;
   u64 size;
-  std::array<u8, 20> sha1;
+  u8 sha1[20];
 };
 static_assert(sizeof(Content) == 36, "Content has the wrong size");
 bool operator==(const Content&, const Content&);
@@ -190,7 +196,8 @@ public:
   u8* ResizeBytes(size_t size);
 
   /// Get the SHA1 hash for this signed blob (starting at the issuer).
-  std::array<u8, 20> GetSha1() const;
+  // out: 20 bytes
+  void GetSha1(u8* out) const;
 
   // Only checks whether the signature data could be parsed. The signature is not verified.
   bool IsSignatureValid() const;
@@ -305,14 +312,15 @@ public:
   ~SharedContentMap();
 
   // False when no shared content has that hash
-  bool GetFilenameFromSHA1(const std::array<u8, 20>& sha1, std::string* filename) const;
+  // sha1: 20 bytes
+  bool GetFilenameFromSHA1(const u8* sha1, std::string* filename) const;
   // Writes the path of the shared content with this hash to out, reading the map as constructing
   // one does and adding the same ticks; returns false when there is none or it does not fit.
-  static bool FindFilename(HLE::FSCore& fs_core, const std::array<u8, 20>& sha1, char* out,
-                           size_t out_size, u64* ticks);
-  std::string AddSharedContent(const std::array<u8, 20>& sha1);
-  bool DeleteSharedContent(const std::array<u8, 20>& sha1);
-  std::vector<std::array<u8, 20>> GetHashes() const;
+  static bool FindFilename(HLE::FSCore& fs_core, const u8* sha1, char* out, size_t out_size,
+                           u64* ticks);
+  std::string AddSharedContent(const u8* sha1);
+  bool DeleteSharedContent(const u8* sha1);
+  std::vector<Sha1Hash> GetHashes() const;
 
   u64 GetTicks() const { return m_ticks; }
 

@@ -418,8 +418,8 @@ static bool RSAPublic(const u8* n, size_t n_size, const u8* e, const u8* sig, u8
   return true;
 }
 
-ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle signer_handle,
-                                     const u8* signature, size_t signature_size, u32 pid) const
+ReturnCode IOSC::VerifyPublicKeySign(const u8* sha1, Handle signer_handle, const u8* signature,
+                                     size_t signature_size, u32 pid) const
 {
   if (!HasOwnership(signer_handle, pid))
     return IOSC_EACCES;
@@ -442,15 +442,15 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
     ASSERT(signature_size == expected_key_size);
 
     const u8* const exponent = reinterpret_cast<const u8*>(&entry->misc_data);
-    int ret = rsa_pkcs1_verify(entry->data.data(), entry->data.size(), exponent, 4,
-                               RSA_HASH_SHA1, sha1.data(), sha1.size(), signature, signature_size);
+    int ret = rsa_pkcs1_verify(entry->data.data(), entry->data.size(), exponent, 4, RSA_HASH_SHA1,
+                               sha1, 20, signature, signature_size);
     if (ret != 0 && m_console_type == ConsoleType::RVT)
     {
       // Some dev signatures do not have proper PKCS#1 padding. Just powmod and check it ends with
       // digest.
       u8 result[0x200];
       if (RSAPublic(entry->data.data(), entry->data.size(), exponent, signature, result) &&
-          memcmp(&result[signature_size - sha1.size()], sha1.data(), sha1.size()) == 0)
+          memcmp(&result[signature_size - 20], sha1, 20) == 0)
       {
         ret = 0;
       }
@@ -471,8 +471,7 @@ ReturnCode IOSC::VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle sign
     u8 point[B233_POINT_SIZE];
     point[0] = 0x04;
     std::memcpy(point + 1, entry->data.data(), B233_POINT_SIZE - 1);
-    const bool ok =
-        b233_ecdsa_verify(point, sha1.data(), sha1.size(), signature, signature + 30) == 0;
+    const bool ok = b233_ecdsa_verify(point, sha1, 20, signature, signature + 30) == 0;
     return ok ? IPC_SUCCESS : IOSC_FAIL_CHECKVALUE;
   }
   default:
@@ -499,8 +498,9 @@ ReturnCode IOSC::ImportCertificate(const ES::CertReader& cert, Handle signer_han
 
   size_t signature_size;
   const u8* const signature = cert.GetSignatureData(&signature_size);
-  if (VerifyPublicKeySign(cert.GetSha1(), signer_handle, signature, signature_size, pid) !=
-      IPC_SUCCESS)
+  u8 cert_sha1[20];
+  cert.GetSha1(cert_sha1);
+  if (VerifyPublicKeySign(cert_sha1, signer_handle, signature, signature_size, pid) != IPC_SUCCESS)
   {
     return IOSC_FAIL_CHECKVALUE;
   }

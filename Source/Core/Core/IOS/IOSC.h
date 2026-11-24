@@ -208,8 +208,9 @@ public:
   ReturnCode Decrypt(Handle key_handle, u8* iv, const u8* input, size_t size, u8* output,
                      u32 pid) const;
 
-  ReturnCode VerifyPublicKeySign(const std::array<u8, 20>& sha1, Handle signer_handle,
-                                 const u8* signature, size_t signature_size, u32 pid) const;
+  // sha1: 20 bytes
+  ReturnCode VerifyPublicKeySign(const u8* sha1, Handle signer_handle, const u8* signature,
+                                 size_t signature_size, u32 pid) const;
   // Import a certificate (signed by the certificate in signer_handle) into dest_handle.
   ReturnCode ImportCertificate(const ES::CertReader& cert, Handle signer_handle, Handle dest_handle,
                                u32 pid);

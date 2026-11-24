@@ -272,7 +272,7 @@ IPCReply ESDevice::GetSharedContents(const IOCtlVRequest& request) const
   if (request.io_vectors[0].size != 20 * max_count)
     return IPCReply(ES_EINVAL);
 
-  const std::vector<std::array<u8, 20>> hashes = m_core.GetSharedContents();
+  const std::vector<ES::Sha1Hash> hashes = m_core.GetSharedContents();
   const u32 hash_count = static_cast<u32>(hashes.size());
   const u32 count = hash_count < max_count ? hash_count : max_count;
   memory.CopyToEmu(request.io_vectors[0].address, hashes.data(), 20 * count);

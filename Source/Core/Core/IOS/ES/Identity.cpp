@@ -198,7 +198,9 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
 
   size_t ap_signature_size;
   const u8* const ap_signature = ap.GetSignatureData(&ap_signature_size);
-  ret = iosc.VerifyPublicKeySign(ap.GetSha1(), ng_cert, ap_signature, ap_signature_size, PID_ES);
+  u8 ap_sha1[20];
+  ap.GetSha1(ap_sha1);
+  ret = iosc.VerifyPublicKeySign(ap_sha1, ng_cert, ap_signature, ap_signature_size, PID_ES);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG(IOS_ES, "VerifySign: IOSC_VerifyPublicKeySign(ap) failed with error %d",
@@ -221,8 +223,8 @@ ReturnCode ESCore::VerifySign(const u8* hash, size_t hash_size, const u8* ecc_si
     return ret;
   }
 
-  std::array<u8, 20> hash_digest;
-  SHA1Digest(hash, hash_size, hash_digest.data());
+  u8 hash_digest[20];
+  SHA1Digest(hash, hash_size, hash_digest);
   ret = iosc.VerifyPublicKeySign(hash_digest, ap_cert, ecc_signature, 60, PID_ES);
   if (ret != IPC_SUCCESS)
   {

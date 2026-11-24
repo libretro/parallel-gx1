@@ -1193,8 +1193,9 @@ ReturnCode ESCore::VerifyContainer(VerifyContainerType type, VerifyMode mode,
   // Verify the signature.
   size_t signature_size;
   const u8* const signature = signed_blob.GetSignatureData(&signature_size);
-  ret = iosc.VerifyPublicKeySign(signed_blob.GetSha1(), issuer_handle, signature, signature_size,
-                                 PID_ES);
+  u8 blob_sha1[20];
+  signed_blob.GetSha1(blob_sha1);
+  ret = iosc.VerifyPublicKeySign(blob_sha1, issuer_handle, signature, signature_size, PID_ES);
   if (ret != IPC_SUCCESS)
   {
     ERROR_LOG(IOS_ES, "VerifyContainer: IOSC_VerifyPublicKeySign failed with error %d",

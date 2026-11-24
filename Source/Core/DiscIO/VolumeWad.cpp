@@ -194,7 +194,7 @@ bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8*
   }
 
   sha1_stream_final(&sha1, digest);
-  return !std::memcmp(digest, content.sha1.data(), sizeof(digest));
+  return !std::memcmp(digest, content.sha1, sizeof(digest));
 }
 
 IOS::ES::TicketReader VolumeWAD::GetTicketWithFixedCommonKey() const

@@ -71,7 +71,7 @@ bool Content::IsOptional() const
 bool operator==(const Content& lhs, const Content& rhs)
 {
   return lhs.id == rhs.id && lhs.index == rhs.index && lhs.type == rhs.type &&
-         lhs.size == rhs.size && lhs.sha1 == rhs.sha1;
+         lhs.size == rhs.size && !std::memcmp(lhs.sha1, rhs.sha1, sizeof(lhs.sha1));
 }
 
 SignedBlobReader::SignedBlobReader(const u8* bytes, size_t size)
@@ -163,12 +163,10 @@ static size_t GetIssuerOffset(SignatureType signature_type)
   }
 }
 
-std::array<u8, 20> SignedBlobReader::GetSha1() const
+void SignedBlobReader::GetSha1(u8* out) const
 {
   const size_t skip = GetIssuerOffset(GetSignatureType());
-  std::array<u8, 20> digest;
-  SHA1Digest(m_bytes + skip, m_size - skip, digest.data());
-  return digest;
+  SHA1Digest(m_bytes + skip, m_size - skip, out);
 }
 
 bool SignedBlobReader::IsSignatureValid() const
@@ -407,7 +405,7 @@ bool TMDReader::GetContent(u16 index, Content* content) const
   content->index = Common::swap16(content_base + offsetof(Content, index));
   content->type = Common::swap16(content_base + offsetof(Content, type));
   content->size = Common::swap64(content_base + offsetof(Content, size));
-  std::memcpy(content->sha1.data(), content_base + offsetof(Content, sha1), content->sha1.size());
+  std::memcpy(content->sha1, content_base + offsetof(Content, sha1), sizeof(content->sha1));
 
   return true;
 }
@@ -632,9 +630,9 @@ void TicketReader::OverwriteCommonKeyIndex(u8 index)
 struct SharedContentMap::Entry
 {
   // ID string
-  std::array<u8, 8> id;
+  u8 id[8];
   // Binary SHA1 hash
-  std::array<u8, 20> sha1;
+  u8 sha1[20];
 };
 
 constexpr char CONTENT_MAP_PATH[] = "/shared1/content.map";
@@ -656,7 +654,7 @@ SharedContentMap::SharedContentMap(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
 
 SharedContentMap::~SharedContentMap() = default;
 
-bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const std::array<u8, 20>& sha1, char* out,
+bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const u8* sha1, char* out,
                                     size_t out_size, u64* ticks)
 {
   Entry entry;
@@ -669,7 +667,7 @@ bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const std::array<u8, 2
   // Every entry is read, as by the constructor, and the first match is the one used.
   while (fs_core.Read(fd.Get(), &entry, 1, ticks) == sizeof(entry))
   {
-    if (!has_found && std::memcmp(entry.sha1.data(), sha1.data(), sha1.size()) == 0)
+    if (!has_found && std::memcmp(entry.sha1, sha1, sizeof(entry.sha1)) == 0)
     {
       found = entry;
       has_found = true;
@@ -678,18 +676,18 @@ bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const std::array<u8, 2
   if (!has_found)
     return false;
 
-  const int length = snprintf(out, out_size, "/shared1/%.*s.app", static_cast<int>(found.id.size()),
-                              reinterpret_cast<const char*>(found.id.data()));
+  const int length =
+      snprintf(out, out_size, "/shared1/%.*s.app", static_cast<int>(sizeof(found.id)),
+               reinterpret_cast<const char*>(found.id));
   return length >= 0 && static_cast<size_t>(length) < out_size;
 }
 
-bool SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1,
-                                           std::string* filename) const
+bool SharedContentMap::GetFilenameFromSHA1(const u8* sha1, std::string* filename) const
 {
   const Entry* it = nullptr;
   for (const Entry& entry : m_entries)
   {
-    if (std::memcmp(entry.sha1.data(), sha1.data(), sha1.size()) == 0)
+    if (std::memcmp(entry.sha1, sha1, sizeof(entry.sha1)) == 0)
     {
       it = &entry;
       break;
@@ -698,23 +696,22 @@ bool SharedContentMap::GetFilenameFromSHA1(const std::array<u8, 20>& sha1,
   if (!it)
     return false;
 
-  const std::string_view id_string(reinterpret_cast<const char*>(it->id.data()), it->id.size());
+  const std::string_view id_string(reinterpret_cast<const char*>(it->id), sizeof(it->id));
   *filename =
       StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()), id_string.data());
   return true;
 }
 
-std::vector<std::array<u8, 20>> SharedContentMap::GetHashes() const
+std::vector<Sha1Hash> SharedContentMap::GetHashes() const
 {
-  std::vector<std::array<u8, 20>> hashes;
-  hashes.reserve(m_entries.size());
-  for (const auto& content_entry : m_entries)
-    hashes.emplace_back(content_entry.sha1);
+  std::vector<Sha1Hash> hashes(m_entries.size());
+  for (size_t i = 0; i < m_entries.size(); i++)
+    std::memcpy(hashes[i].bytes, m_entries[i].sha1, sizeof(hashes[i].bytes));
 
   return hashes;
 }
 
-std::string SharedContentMap::AddSharedContent(const std::array<u8, 20>& sha1)
+std::string SharedContentMap::AddSharedContent(const u8* sha1)
 {
   std::string filename;
   if (GetFilenameFromSHA1(sha1, &filename))
@@ -723,24 +720,30 @@ std::string SharedContentMap::AddSharedContent(const std::array<u8, 20>& sha1)
   Entry& entry = m_entries.emplace_back();
   static_assert(sizeof(m_last_id) == 4,
                 "'m_last_id' must be represented by 8 characters when formatted in hexadecimal.");
-  static_assert(std::tuple_size_v<decltype(entry.id)> == sizeof(m_last_id) * 2,
-                "'entry.id' must be a std::array capable of storing every nibble of 'm_last_id'.");
+  static_assert(sizeof(entry.id) == sizeof(m_last_id) * 2,
+                "'entry.id' must be capable of storing every nibble of 'm_last_id'.");
   char id[9];
   snprintf(id, sizeof(id), "%08x", m_last_id);
-  std::memcpy(entry.id.data(), id, entry.id.size());
-  entry.sha1 = sha1;
+  std::memcpy(entry.id, id, sizeof(entry.id));
+  std::memcpy(entry.sha1, sha1, sizeof(entry.sha1));
 
   WriteEntries();
   m_last_id++;
 
-  const std::string_view id_string(reinterpret_cast<const char*>(entry.id.data()), entry.id.size());
+  const std::string_view id_string(reinterpret_cast<const char*>(entry.id), sizeof(entry.id));
   return StringFromFormat("/shared1/%.*s.app", static_cast<int>(id_string.size()),
                           id_string.data());
 }
 
-bool SharedContentMap::DeleteSharedContent(const std::array<u8, 20>& sha1)
+bool SharedContentMap::DeleteSharedContent(const u8* sha1)
 {
-  std::erase_if(m_entries, [&sha1](const auto& entry) { return entry.sha1 == sha1; });
+  size_t kept = 0;
+  for (size_t i = 0; i < m_entries.size(); i++)
+  {
+    if (std::memcmp(m_entries[i].sha1, sha1, sizeof(m_entries[i].sha1)) != 0)
+      m_entries[kept++] = m_entries[i];
+  }
+  m_entries.resize(kept);
   return WriteEntries();
 }
 
