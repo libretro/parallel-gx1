@@ -125,17 +125,15 @@ struct StackRef
 
 // Max 10 at same time, I think most gc game had a
 // limit of 8 in the GC framework
-using StackRefs = std::array<StackRef, 10>;
+constexpr size_t MAX_STACK_REFS = 10;
 
 class NetworkRef
 {
 public:
-  StackRefs& data() { return m_stacks; }
-  const StackRefs& data() const { return m_stacks; }
-  auto begin() { return m_stacks.begin(); }
-  auto begin() const { return m_stacks.cbegin(); }
-  auto end() { return m_stacks.end(); }
-  auto end() const { return m_stacks.cend(); }
+  StackRef* begin() { return m_stacks; }
+  const StackRef* begin() const { return m_stacks; }
+  StackRef* end() { return m_stacks + MAX_STACK_REFS; }
+  const StackRef* end() const { return m_stacks + MAX_STACK_REFS; }
 
   StackRef* GetAvailableSlot(u16 port);
   StackRef* GetTCPSlot(u16 src_port, u16 dst_port, u32 ip);
@@ -143,5 +141,5 @@ public:
   void Clear();
 
 private:
-  StackRefs m_stacks;
+  StackRef m_stacks[MAX_STACK_REFS];
 };

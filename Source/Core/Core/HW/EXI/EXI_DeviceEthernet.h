@@ -445,7 +445,7 @@ private:
     u16 m_ip_frame_id = 0;
     u8 m_queue_read = 0;
     u8 m_queue_write = 0;
-    std::array<std::vector<u8>, 16> m_queue_data;
+    std::vector<u8> m_queue_data[16];
 
     // The read thread owns the whole network stack. The CPU thread hands it outgoing frames and
     // start/stop requests through this stack instead of sharing the stack's state.
