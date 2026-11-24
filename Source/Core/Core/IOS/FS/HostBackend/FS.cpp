@@ -86,10 +86,14 @@ struct SerializedFstEntry
 static_assert(std::is_standard_layout<SerializedFstEntry>());
 static_assert(sizeof(SerializedFstEntry) == 0x20);
 
-template <typename T>
-auto GetMetadataFields(T& obj)
+template <typename D, typename S>
+static void CopyMetadataFields(D* dst, const S& src)
 {
-  return std::tie(obj.uid, obj.gid, obj.is_file, obj.modes, obj.attribute);
+  dst->uid = src.uid;
+  dst->gid = src.gid;
+  dst->is_file = src.is_file;
+  dst->modes = src.modes;
+  dst->attribute = src.attribute;
 }
 
 // Convert the host directory entries into ones that can be exposed to the emulated system.
@@ -190,7 +194,7 @@ void FileSystem::LoadFst()
       return false;
 
     result->name = entry.GetName();
-    GetMetadataFields(result->data) = GetMetadataFields(entry);
+    CopyMetadataFields(&result->data, entry);
     for (size_t i = 0; i < entry.num_children; ++i)
     {
       if (!parse(parse, depth + 1, &result->children.emplace_back()))
@@ -214,7 +218,7 @@ void FileSystem::SaveFst()
   auto collect_entries = [&to_write](const auto& collect, const FstEntry& entry) -> void {
     SerializedFstEntry& serialized = to_write.emplace_back();
     serialized.SetName(entry.name);
-    GetMetadataFields(serialized) = GetMetadataFields(entry.data);
+    CopyMetadataFields(&serialized, entry.data);
     serialized.num_children = u32(entry.children.size());
     for (const FstEntry& child : entry.children)
       collect(collect, child);
