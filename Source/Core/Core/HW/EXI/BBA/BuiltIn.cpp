@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <bit>
 #include <cstring>
-#include <optional>
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
@@ -170,19 +169,19 @@ void CEXIETHERNET::BuiltInBBAInterface::PollData(std::size_t* datasize)
     if (*datasize == 0)
     {
       // Send it to the network buffer if empty
-      const auto socket_data = TryGetDataFromSocket(&net_ref);
-      if (socket_data.has_value())
+      std::vector<u8> socket_data;
+      if (TryGetDataFromSocket(&net_ref, &socket_data))
       {
-        *datasize = socket_data->size();
-        std::memcpy(m_eth_ref->mRecvBuffer, socket_data->data(), *datasize);
+        *datasize = socket_data.size();
+        std::memcpy(m_eth_ref->mRecvBuffer, socket_data.data(), *datasize);
       }
     }
     else if (!WillQueueOverrun())
     {
       // Otherwise, enqueue it
-      const auto socket_data = TryGetDataFromSocket(&net_ref);
-      if (socket_data.has_value())
-        WriteToQueue(std::move(*socket_data));
+      std::vector<u8> socket_data;
+      if (TryGetDataFromSocket(&net_ref, &socket_data))
+        WriteToQueue(std::move(socket_data));
     }
     else
     {
@@ -251,8 +250,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleDHCP(const Common::UDPPacket& pack
   WriteToQueue(response.Build());
 }
 
-std::optional<std::vector<u8>>
-CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref)
+bool CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref, std::vector<u8>* out)
 {
   std::size_t datasize = 0;
   u16 remote_port = 0;
@@ -272,7 +270,8 @@ CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref)
       ref->my_mac = ResolveAddress(remote_ip);
       const std::vector<u8> udp_data(buffer.begin(), buffer.begin() + datasize);
       const Common::UDPPacket packet(ref->bba_mac, ref->my_mac, ref->from, ref->to, udp_data);
-      return packet.Build();
+      *out = packet.Build();
+      return true;
     }
     break;
   }
@@ -292,7 +291,7 @@ CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref)
     }
     case BbaTcpSocket::ConnectingState::None:
     case BbaTcpSocket::ConnectingState::Connecting:
-      return std::nullopt;
+      return false;
     case BbaTcpSocket::ConnectingState::Connected:
       break;
     }
@@ -328,7 +327,8 @@ CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref)
       tcp_buffer->used = true;
       ref->seq_num += static_cast<u32>(datasize);
       ref->poke_time = GetTickCountStd();
-      return tcp_buffer->data;
+      *out = tcp_buffer->data;
+      return true;
     }
     if (GetTickCountStd() - ref->delay > 3000)
     {
@@ -336,13 +336,14 @@ CEXIETHERNET::BuiltInBBAInterface::TryGetDataFromSocket(StackRef* ref)
       {
         ref->ip = 0;
         ref->tcp_socket.Disconnect();
-        return BuildFINFrame(ref);
+        *out = BuildFINFrame(ref);
+        return true;
       }
     }
     break;
   }
 
-  return std::nullopt;
+  return false;
 }
 
 void CEXIETHERNET::BuiltInBBAInterface::HandleTCPFrame(const Common::TCPPacket& packet)

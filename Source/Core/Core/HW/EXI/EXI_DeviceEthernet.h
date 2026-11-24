@@ -493,7 +493,8 @@ private:
     void WriteToQueue(std::vector<u8> data);
     bool WillQueueOverrun() const;
     void PollData(std::size_t* datasize);
-    std::optional<std::vector<u8>> TryGetDataFromSocket(StackRef* ref);
+    // fills out with the frame to hand the adapter
+    bool TryGetDataFromSocket(StackRef* ref, std::vector<u8>* out);
 
     void HandleARP(const Common::ARPPacket& packet);
     void HandleDHCP(const Common::UDPPacket& packet);
