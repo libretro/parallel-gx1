@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <expected>
-#include <optional>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -181,34 +180,32 @@ void FileSystem::LoadFst()
   if (!file)
     return;
 
-  const auto parse_entry = [&file](const auto& parse, size_t depth) -> std::optional<FstEntry> {
+  // Each child is parsed in place in its parent's list, not copied up into it
+  const auto parse_entry = [&file](const auto& parse, size_t depth, FstEntry* result) -> bool {
     if (depth > MaxPathDepth)
-      return std::nullopt;
+      return false;
 
     SerializedFstEntry entry;
     if (!file.ReadArray(&entry, 1))
-      return std::nullopt;
+      return false;
 
-    FstEntry result;
-    result.name = entry.GetName();
-    GetMetadataFields(result.data) = GetMetadataFields(entry);
+    result->name = entry.GetName();
+    GetMetadataFields(result->data) = GetMetadataFields(entry);
     for (size_t i = 0; i < entry.num_children; ++i)
     {
-      const auto maybe_child = parse(parse, depth + 1);
-      if (!maybe_child.has_value())
-        return std::nullopt;
-      result.children.push_back(*maybe_child);
+      if (!parse(parse, depth + 1, &result->children.emplace_back()))
+        return false;
     }
-    return result;
+    return true;
   };
 
-  const auto root_entry = parse_entry(parse_entry, 0);
-  if (!root_entry.has_value())
+  FstEntry root_entry;
+  if (!parse_entry(parse_entry, 0, &root_entry))
   {
     ERROR_LOG(IOS_FS, "Failed to parse FST: at least one of the entries was invalid");
     return;
   }
-  m_root_entry = *root_entry;
+  m_root_entry = std::move(root_entry);
 }
 
 void FileSystem::SaveFst()
