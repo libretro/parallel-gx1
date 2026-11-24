@@ -217,19 +217,24 @@ private:
     if (m_id == "00000000")
       return;
 
-    const std::array<std::tuple<std::string, std::string, Config::System>, 3> profile_info = {{
-        std::make_tuple("Pad", "GCPad", Config::System::GCPad),
-        std::make_tuple("GBA", "GBA", Config::System::GCPad),
-        std::make_tuple("Wiimote", "Wiimote", Config::System::WiiPad),
-    }};
+    static const struct
+    {
+      const char* type;
+      const char* profile_dir;
+      Config::System system;
+    } profile_info[] = {
+        {"Pad", "GCPad", Config::System::GCPad},
+        {"GBA", "GBA", Config::System::GCPad},
+        {"Wiimote", "Wiimote", Config::System::WiiPad},
+    };
 
     for (const auto& use_data : profile_info)
     {
-      std::string type = std::get<0>(use_data);
-      std::string path = "Profiles/" + std::get<1>(use_data) + "/";
+      std::string type = use_data.type;
+      std::string path = std::string("Profiles/") + use_data.profile_dir + "/";
 
       const auto control_section = [&](std::string key) {
-        return Config::Location{std::get<2>(use_data), "Controls", std::move(key)};
+        return Config::Location{use_data.system, "Controls", std::move(key)};
       };
 
       for (const char num : nums)
@@ -253,7 +258,8 @@ private:
           {
             const std::string key = ini_section->KeyName(i);
             const std::string value = ini_section->KeyValue(i);
-            Config::Location location{std::get<2>(use_data), std::get<1>(use_data) + num, key};
+            Config::Location location{use_data.system, std::string(use_data.profile_dir) + num,
+                                      key};
             layer->Set(location, value);
           }
         }
