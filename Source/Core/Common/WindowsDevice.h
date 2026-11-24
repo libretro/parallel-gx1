@@ -5,7 +5,6 @@
 
 #ifdef _WIN32
 
-#include <optional>
 #include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -21,11 +20,12 @@
 
 namespace Common
 {
-std::optional<std::wstring> GetDevNodeStringProperty(DEVINST device,
-                                                     const DEVPROPKEY* requested_property);
+// Each false when the property is missing or not a string
+bool GetDevNodeStringProperty(DEVINST device, const DEVPROPKEY* requested_property,
+                              std::wstring* out);
 
-std::optional<std::wstring> GetDeviceInterfaceStringProperty(LPCWSTR iface,
-                                                             const DEVPROPKEY* requested_property);
+bool GetDeviceInterfaceStringProperty(LPCWSTR iface, const DEVPROPKEY* requested_property,
+                                      std::wstring* out);
 
 // The device interfaces as a list of null-terminated strings, ended by an empty one;
 // freed with std::free.

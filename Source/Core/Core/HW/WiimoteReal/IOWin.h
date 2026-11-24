@@ -57,7 +57,9 @@ public:
   struct EnumeratedWiimoteInterface
   {
     std::wstring hid_iface;
-    std::optional<bool> is_balance_board;
+    // Whether is_balance_board is known, from the name or from asking the remote
+    bool balance_board_known;
+    bool is_balance_board;
   };
 
   WiimoteScannerWindows();

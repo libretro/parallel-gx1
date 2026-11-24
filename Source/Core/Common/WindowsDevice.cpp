@@ -40,9 +40,8 @@ CONFIGRET WINAPI CM_Unregister_Notification(HCMNOTIFICATION NotifyContext);
 
 namespace Common
 {
-std::optional<std::wstring> GetPropertyHelper(auto function, auto dev,
-                                              const DEVPROPKEY* requested_property,
-                                              DEVPROPTYPE expected_type)
+static bool GetPropertyHelper(auto function, auto dev, const DEVPROPKEY* requested_property,
+                              DEVPROPTYPE expected_type, std::wstring* property)
 {
   DEVPROPTYPE type{};
   ULONG buffer_size{};
@@ -52,38 +51,37 @@ std::optional<std::wstring> GetPropertyHelper(auto function, auto dev,
   {
     if (result != CR_NO_SUCH_VALUE)
       WARN_LOG(COMMON, "CM_Get_DevNode_Property returned: %" PRIu64, (u64)result);
-    return std::nullopt;
+    return false;
   }
   if (type != expected_type)
   {
     WARN_LOG(COMMON, "CM_Get_DevNode_Property unexpected type: 0x%" PRIx64, (u64)type);
-    return std::nullopt;
+    return false;
   }
 
-  std::optional<std::wstring> property;
   // FYI: It's legal to write the null terminator at data()[size()] of std::basic_string.
-  property.emplace(buffer_size / sizeof(WCHAR) - 1, L'\0');
+  property->assign(buffer_size / sizeof(WCHAR) - 1, L'\0');
   if (const auto result = function(dev, requested_property, &type,
                                    reinterpret_cast<BYTE*>(property->data()), &buffer_size, 0);
       result != CR_SUCCESS)
   {
     ERROR_LOG(COMMON, "CM_Get_DevNode_Property returned: %" PRIu64, (u64)result);
-    return std::nullopt;
+    return false;
   }
-  return property;
+  return true;
 }
 
-std::optional<std::wstring> GetDevNodeStringProperty(DEVINST dev,
-                                                     const DEVPROPKEY* requested_property)
+bool GetDevNodeStringProperty(DEVINST dev, const DEVPROPKEY* requested_property, std::wstring* out)
 {
-  return GetPropertyHelper(CM_Get_DevNode_Property, dev, requested_property, DEVPROP_TYPE_STRING);
+  return GetPropertyHelper(CM_Get_DevNode_Property, dev, requested_property, DEVPROP_TYPE_STRING,
+                           out);
 }
 
-std::optional<std::wstring> GetDeviceInterfaceStringProperty(LPCWSTR iface,
-                                                             const DEVPROPKEY* requested_property)
+bool GetDeviceInterfaceStringProperty(LPCWSTR iface, const DEVPROPKEY* requested_property,
+                                      std::wstring* out)
 {
   return GetPropertyHelper(CM_Get_Device_Interface_Property, iface, requested_property,
-                           DEVPROP_TYPE_STRING);
+                           DEVPROP_TYPE_STRING, out);
 }
 
 WCHAR* GetDeviceInterfaceList(LPGUID iface_class_guid, DEVINSTID device_id, ULONG flags)
