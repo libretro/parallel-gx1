@@ -15,7 +15,6 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -76,36 +75,6 @@ public:
   {
     Do(x.first);
     Do(x.second);
-  }
-
-  template <typename T>
-  void Do(std::optional<T>& x)
-  {
-    bool present = x.has_value();
-    Do(present);
-
-    switch (m_mode)
-    {
-    case Mode::Read:
-      if (present)
-      {
-        x = std::make_optional<T>();
-        Do(x.value());
-      }
-      else
-      {
-        x = std::nullopt;
-      }
-      break;
-
-    case Mode::Write:
-    case Mode::Measure:
-    case Mode::Verify:
-      if (present)
-        Do(x.value());
-
-      break;
-    }
   }
 
   template <typename T, std::size_t N>
