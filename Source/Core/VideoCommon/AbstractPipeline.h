@@ -53,21 +53,31 @@ struct AbstractPipelineConfig
 
   bool operator==(const AbstractPipelineConfig& rhs) const
   {
-    return std::tie(vertex_format, vertex_shader, geometry_shader, pixel_shader,
-                    rasterization_state.hex, depth_state.hex, blending_state.hex,
-                    framebuffer_state.hex, usage) ==
-           std::tie(rhs.vertex_format, rhs.vertex_shader, rhs.geometry_shader, rhs.pixel_shader,
-                    rhs.rasterization_state.hex, rhs.depth_state.hex, rhs.blending_state.hex,
-                    rhs.framebuffer_state.hex, rhs.usage);
+    return vertex_format == rhs.vertex_format && vertex_shader == rhs.vertex_shader &&
+           geometry_shader == rhs.geometry_shader && pixel_shader == rhs.pixel_shader &&
+           rasterization_state.hex == rhs.rasterization_state.hex &&
+           depth_state.hex == rhs.depth_state.hex && blending_state.hex == rhs.blending_state.hex &&
+           framebuffer_state.hex == rhs.framebuffer_state.hex && usage == rhs.usage;
   }
   bool operator<(const AbstractPipelineConfig& rhs) const
   {
-    return std::tie(vertex_format, vertex_shader, geometry_shader, pixel_shader,
-                    rasterization_state.hex, depth_state.hex, blending_state.hex,
-                    framebuffer_state.hex, usage) <
-           std::tie(rhs.vertex_format, rhs.vertex_shader, rhs.geometry_shader, rhs.pixel_shader,
-                    rhs.rasterization_state.hex, rhs.depth_state.hex, rhs.blending_state.hex,
-                    rhs.framebuffer_state.hex, rhs.usage);
+    if (vertex_format != rhs.vertex_format)
+      return vertex_format < rhs.vertex_format;
+    if (vertex_shader != rhs.vertex_shader)
+      return vertex_shader < rhs.vertex_shader;
+    if (geometry_shader != rhs.geometry_shader)
+      return geometry_shader < rhs.geometry_shader;
+    if (pixel_shader != rhs.pixel_shader)
+      return pixel_shader < rhs.pixel_shader;
+    if (rasterization_state.hex != rhs.rasterization_state.hex)
+      return rasterization_state.hex < rhs.rasterization_state.hex;
+    if (depth_state.hex != rhs.depth_state.hex)
+      return depth_state.hex < rhs.depth_state.hex;
+    if (blending_state.hex != rhs.blending_state.hex)
+      return blending_state.hex < rhs.blending_state.hex;
+    if (framebuffer_state.hex != rhs.framebuffer_state.hex)
+      return framebuffer_state.hex < rhs.framebuffer_state.hex;
+    return usage < rhs.usage;
   }
 };
 

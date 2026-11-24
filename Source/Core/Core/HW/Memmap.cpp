@@ -649,10 +649,10 @@ void MemoryManager::DoState(PointerWrap& p)
   // If we're loading a savestate and any of the above differs between the savestate and the current
   // state, cancel the load. This is technically possible to support but would require a bunch of
   // reinitialization of things that depend on these.
-  if (std::tie(state_ram_size, state_l1_cache_size, state_have_fake_vmem, state_fake_vmem_size,
-               state_have_exram, state_exram_size) !=
-      std::tie(current_ram_size, current_l1_cache_size, current_have_fake_vmem,
-               current_fake_vmem_size, current_have_exram, current_exram_size))
+  if (state_ram_size != current_ram_size || state_l1_cache_size != current_l1_cache_size ||
+      state_have_fake_vmem != current_have_fake_vmem ||
+      state_fake_vmem_size != current_fake_vmem_size || state_have_exram != current_have_exram ||
+      state_exram_size != current_exram_size)
   {
     Core::DisplayMessage("State is incompatible with current memory settings (MMU and/or memory "
                          "overrides). Aborting load state.");

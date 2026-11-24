@@ -82,11 +82,19 @@ struct EFBCopyParams
 
   bool operator<(const EFBCopyParams& rhs) const
   {
-    return std::tie(efb_format, copy_format, depth, yuv, all_copy_filter_coefs_needed,
-                    copy_filter_can_overflow,
-                    apply_gamma) < std::tie(rhs.efb_format, rhs.copy_format, rhs.depth, rhs.yuv,
-                                            rhs.all_copy_filter_coefs_needed,
-                                            rhs.copy_filter_can_overflow, rhs.apply_gamma);
+    if (efb_format != rhs.efb_format)
+      return efb_format < rhs.efb_format;
+    if (copy_format != rhs.copy_format)
+      return copy_format < rhs.copy_format;
+    if (depth != rhs.depth)
+      return depth < rhs.depth;
+    if (yuv != rhs.yuv)
+      return yuv < rhs.yuv;
+    if (all_copy_filter_coefs_needed != rhs.all_copy_filter_coefs_needed)
+      return all_copy_filter_coefs_needed < rhs.all_copy_filter_coefs_needed;
+    if (copy_filter_can_overflow != rhs.copy_filter_can_overflow)
+      return copy_filter_can_overflow < rhs.copy_filter_can_overflow;
+    return apply_gamma < rhs.apply_gamma;
   }
 
   PixelFormat efb_format;

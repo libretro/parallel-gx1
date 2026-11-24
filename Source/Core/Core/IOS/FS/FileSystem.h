@@ -78,8 +78,7 @@ struct Modes
 };
 inline bool operator==(const Modes& lhs, const Modes& rhs)
 {
-  const auto fields = [](const Modes& obj) { return std::tie(obj.owner, obj.group, obj.other); };
-  return fields(lhs) == fields(rhs);
+  return lhs.owner == rhs.owner && lhs.group == rhs.group && lhs.other == rhs.other;
 }
 
 struct Metadata
@@ -170,10 +169,7 @@ struct SplitPathResult
 };
 inline bool operator==(const SplitPathResult& lhs, const SplitPathResult& rhs)
 {
-  const auto fields = [](const SplitPathResult& obj) {
-    return std::tie(obj.parent, obj.file_name);
-  };
-  return fields(lhs) == fields(rhs);
+  return lhs.parent == rhs.parent && lhs.file_name == rhs.file_name;
 }
 
 /// Split a path into a parent path and the file name. Takes a *valid non-root* path.

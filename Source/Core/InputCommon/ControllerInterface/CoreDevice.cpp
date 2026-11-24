@@ -186,7 +186,7 @@ bool DeviceQualifier::operator==(const Device* const dev) const
 
 bool DeviceQualifier::operator==(const DeviceQualifier& devq) const
 {
-  return std::tie(cid, name, source) == std::tie(devq.cid, devq.name, devq.source);
+  return cid == devq.cid && name == devq.name && source == devq.source;
 }
 
 void DeviceContainer::FreeDeviceList(quiesce_node_t* node)

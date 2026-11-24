@@ -70,8 +70,8 @@ bool Content::IsOptional() const
 
 bool operator==(const Content& lhs, const Content& rhs)
 {
-  auto fields = [](const Content& c) { return std::tie(c.id, c.index, c.type, c.size, c.sha1); };
-  return fields(lhs) == fields(rhs);
+  return lhs.id == rhs.id && lhs.index == rhs.index && lhs.type == rhs.type &&
+         lhs.size == rhs.size && lhs.sha1 == rhs.sha1;
 }
 
 SignedBlobReader::SignedBlobReader(const u8* bytes, size_t size)

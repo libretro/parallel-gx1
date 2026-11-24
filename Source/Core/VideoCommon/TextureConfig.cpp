@@ -11,8 +11,8 @@
 
 bool TextureConfig::operator==(const TextureConfig& o) const
 {
-  return std::tie(width, height, levels, layers, samples, format, flags, type) ==
-         std::tie(o.width, o.height, o.levels, o.layers, o.samples, o.format, o.flags, o.type);
+  return width == o.width && height == o.height && levels == o.levels && layers == o.layers &&
+         samples == o.samples && format == o.format && flags == o.flags && type == o.type;
 }
 
 MathUtil::Rectangle<int> TextureConfig::GetRect() const

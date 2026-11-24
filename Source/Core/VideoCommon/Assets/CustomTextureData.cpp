@@ -142,10 +142,10 @@ constexpr DDS_PIXELFORMAT DDSPF_R8G8B8 = {
 
 static constexpr bool DDSPixelFormatMatches(const DDS_PIXELFORMAT& pf1, const DDS_PIXELFORMAT& pf2)
 {
-  return std::tie(pf1.dwSize, pf1.dwFlags, pf1.dwFourCC, pf1.dwRGBBitCount, pf1.dwRBitMask,
-                  pf1.dwGBitMask, pf1.dwGBitMask, pf1.dwBBitMask, pf1.dwABitMask) ==
-         std::tie(pf2.dwSize, pf2.dwFlags, pf2.dwFourCC, pf2.dwRGBBitCount, pf2.dwRBitMask,
-                  pf2.dwGBitMask, pf2.dwGBitMask, pf2.dwBBitMask, pf2.dwABitMask);
+  return pf1.dwSize == pf2.dwSize && pf1.dwFlags == pf2.dwFlags && pf1.dwFourCC == pf2.dwFourCC &&
+         pf1.dwRGBBitCount == pf2.dwRGBBitCount && pf1.dwRBitMask == pf2.dwRBitMask &&
+         pf1.dwGBitMask == pf2.dwGBitMask && pf1.dwBBitMask == pf2.dwBBitMask &&
+         pf1.dwABitMask == pf2.dwABitMask;
 }
 
 struct DDSLoadInfo

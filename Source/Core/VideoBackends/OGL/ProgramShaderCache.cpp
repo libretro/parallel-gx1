@@ -190,14 +190,17 @@ void SHADER::DestroyShaders()
 
 bool PipelineProgramKey::operator==(const PipelineProgramKey& rhs) const
 {
-  return std::tie(vertex_shader_id, geometry_shader_id, pixel_shader_id) ==
-         std::tie(rhs.vertex_shader_id, rhs.geometry_shader_id, rhs.pixel_shader_id);
+  return vertex_shader_id == rhs.vertex_shader_id && geometry_shader_id == rhs.geometry_shader_id &&
+         pixel_shader_id == rhs.pixel_shader_id;
 }
 
 bool PipelineProgramKey::operator<(const PipelineProgramKey& rhs) const
 {
-  return std::tie(vertex_shader_id, geometry_shader_id, pixel_shader_id) <
-         std::tie(rhs.vertex_shader_id, rhs.geometry_shader_id, rhs.pixel_shader_id);
+  if (vertex_shader_id != rhs.vertex_shader_id)
+    return vertex_shader_id < rhs.vertex_shader_id;
+  if (geometry_shader_id != rhs.geometry_shader_id)
+    return geometry_shader_id < rhs.geometry_shader_id;
+  return pixel_shader_id < rhs.pixel_shader_id;
 }
 
 static_assert(sizeof(PipelineProgramKey) == 3 * sizeof(u64), "the key's bytes are the key");
