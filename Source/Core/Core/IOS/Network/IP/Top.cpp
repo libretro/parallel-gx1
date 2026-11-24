@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -120,7 +119,8 @@ void NetIPTopDevice::DoState(PointerWrap& p)
   Device::DoState(p);
 }
 
-static std::optional<u32> inet_pton(const char* src)
+// False when src is not a dotted IPv4 address
+static bool inet_pton(const char* src, u32* out)
 {
   int saw_digit = 0;
   int octets = 0;
@@ -135,30 +135,31 @@ static std::optional<u32> inet_pton(const char* src)
       unsigned int newt = (*tp * 10) + (ch - '0');
 
       if (newt > 255)
-        return std::nullopt;
+        return false;
       *tp = newt;
       if (!saw_digit)
       {
         if (++octets > 4)
-          return std::nullopt;
+          return false;
         saw_digit = 1;
       }
     }
     else if (ch == '.' && saw_digit)
     {
       if (octets == 4)
-        return std::nullopt;
+        return false;
       *++tp = 0;
       saw_digit = 0;
     }
     else
     {
-      return std::nullopt;
+      return false;
     }
   }
   if (octets < 4)
-    return std::nullopt;
-  return std::bit_cast<u32>(tmp);
+    return false;
+  *out = std::bit_cast<u32>(tmp);
+  return true;
 }
 
 // Maps SOCKOPT level from Wii to native
@@ -380,7 +381,8 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
   return routing_table;
 }
 
-static std::optional<DefaultInterface> GetSystemDefaultInterface()
+// False when the host has no default interface to report
+static bool GetSystemDefaultInterface(DefaultInterface* out)
 {
   auto routing_table = GetSystemInterfaceRouting();
 #ifdef _WIN32
@@ -408,11 +410,11 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
       const auto& entry = ip_table->table[i];
       if (entry.dwIndex == if_index)
       {
-        DefaultInterface found{std::bit_cast<in_addr>(entry.dwAddr),
-                               std::bit_cast<in_addr>(entry.dwMask),
-                               std::bit_cast<in_addr>(entry.dwBCastAddr), routing_table};
+        *out = DefaultInterface{std::bit_cast<in_addr>(entry.dwAddr),
+                                std::bit_cast<in_addr>(entry.dwMask),
+                                std::bit_cast<in_addr>(entry.dwBCastAddr), routing_table};
         std::free(ip_table);
-        return found;
+        return true;
       }
     }
   }
@@ -423,7 +425,7 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
 #else
   // Assume that the address that is used to access the Internet corresponds
   // to the default interface.
-  auto get_default_address = []() -> std::optional<in_addr> {
+  auto get_default_address = [](in_addr* default_address) -> bool {
     const int sock = socket(AF_INET, SOCK_DGRAM, 0);
     Common::ScopeGuard sock_guard{[sock] { close(sock); }};
 
@@ -435,41 +437,43 @@ static std::optional<DefaultInterface> GetSystemDefaultInterface()
     addr.sin_addr.s_addr = inet_addr("8.8.8.8");
     addr.sin_port = htons(53);
     if (connect(sock, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == -1)
-      return {};
+      return false;
     if (getsockname(sock, reinterpret_cast<sockaddr*>(&addr), &length) == -1)
-      return {};
-    return addr.sin_addr;
+      return false;
+    *default_address = addr.sin_addr;
+    return true;
   };
 
   auto get_addr = [](const sockaddr* addr) {
     return reinterpret_cast<const sockaddr_in*>(addr)->sin_addr;
   };
 
-  const auto default_interface_address = get_default_address();
-  if (!default_interface_address)
-    return {};
+  in_addr default_interface_address;
+  if (!get_default_address(&default_interface_address))
+    return false;
 
   ifaddrs* iflist;
   if (getifaddrs(&iflist) != 0)
-    return {};
+    return false;
   Common::ScopeGuard iflist_guard{[iflist] { freeifaddrs(iflist); }};
 
   for (const ifaddrs* iface = iflist; iface; iface = iface->ifa_next)
   {
     if (iface->ifa_addr && iface->ifa_addr->sa_family == AF_INET &&
-        get_addr(iface->ifa_addr).s_addr == default_interface_address->s_addr)
+        get_addr(iface->ifa_addr).s_addr == default_interface_address.s_addr)
     {
       // this isn't fully correct, but this will make calls to get the routing table at least return
       // the gateway
       if (routing_table.empty())
         routing_table = {{0, {}, {}, get_addr(iface->ifa_dstaddr)}};
 
-      return DefaultInterface{get_addr(iface->ifa_addr), get_addr(iface->ifa_netmask),
+      *out = DefaultInterface{get_addr(iface->ifa_addr), get_addr(iface->ifa_netmask),
                               get_addr(iface->ifa_broadaddr), routing_table};
+      return true;
     }
   }
 #endif
-  return std::nullopt;
+  return false;
 }
 
 static DefaultInterface GetSystemDefaultInterfaceOrFallback()
@@ -481,7 +485,10 @@ static DefaultInterface GetSystemDefaultInterfaceOrFallback()
   static const InterfaceRouting FALLBACK_ROUTING = {.gateway = FALLBACK_GATEWAY};
   static const DefaultInterface FALLBACK_VALUES = {
       FALLBACK_IP, FALLBACK_NETMASK, FALLBACK_BROADCAST, {FALLBACK_ROUTING}};
-  return GetSystemDefaultInterface().value_or(FALLBACK_VALUES);
+  DefaultInterface found;
+  if (GetSystemDefaultInterface(&found))
+    return found;
+  return FALLBACK_VALUES;
 }
 
 IPCReply NetIPTopDevice::IOCtl(const IOCtlRequest& request)
@@ -860,11 +867,11 @@ IPCReply NetIPTopDevice::HandleInetPToNRequest(const IOCtlRequest& request)
   const std::string address = memory.GetString(request.buffer_in);
   INFO_LOG(IOS_NET, "IOCTL_SO_INETPTON (Translating: %s)", address.c_str());
 
-  const std::optional<u32> result = inet_pton(address.c_str());
-  if (!result)
+  u32 result;
+  if (!inet_pton(address.c_str(), &result))
     return IPCReply(0);
 
-  memory.CopyToEmu(request.buffer_out + 4, &*result, sizeof(u32));
+  memory.CopyToEmu(request.buffer_out + 4, &result, sizeof(u32));
   return IPCReply(1);
 }
 
