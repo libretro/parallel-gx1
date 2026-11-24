@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <optional>
 #include <vector>
 
 #include <retro_atomic.h>
@@ -40,7 +39,7 @@ public:
 
   // This is provided purely as an optimization for ReshapableInput to produce a minimal amount of
   // calibration points that are saved in our config.
-  std::optional<u32> GetIdealCalibrationSampleCount() const;
+  u32 GetIdealCalibrationSampleCount() const;
 
 private:
   Shape m_shape;
@@ -79,9 +78,6 @@ enum class ReshapeKind : u8
 class ReshapableInput : public ControlGroup
 {
 public:
-  // This is the number of samples we generate but any number could be loaded from config.
-  static constexpr int CALIBRATION_SAMPLE_COUNT = 32;
-
   // Contains input radius maximums at evenly-spaced angles.
   using CalibrationData = std::vector<ControlState>;
 

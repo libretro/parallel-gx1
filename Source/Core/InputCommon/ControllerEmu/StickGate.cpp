@@ -70,7 +70,6 @@ Common::DVec2 GetPointFromAngleAndLength(double angle, double length)
 
 namespace ControllerEmu
 {
-constexpr int ReshapableInput::CALIBRATION_SAMPLE_COUNT;
 
 ControlState StickGate::GetRadiusAtAngle(double angle) const
 {
@@ -98,7 +97,7 @@ ControlState StickGate::GetRadiusAtAngle(double angle) const
   }
 }
 
-std::optional<u32> StickGate::GetIdealCalibrationSampleCount() const
+u32 StickGate::GetIdealCalibrationSampleCount() const
 {
   switch (m_shape)
   {
@@ -270,8 +269,7 @@ ControlState ReshapableInput::GetDefaultInputRadiusAtAngle(double angle) const
 
 void ReshapableInput::SetCalibrationFromGate(const StickGate& gate)
 {
-  CalibrationData calibration(
-      gate.GetIdealCalibrationSampleCount().value_or(CALIBRATION_SAMPLE_COUNT));
+  CalibrationData calibration(gate.GetIdealCalibrationSampleCount());
 
   u32 i = 0;
   for (auto& val : calibration)
