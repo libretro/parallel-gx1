@@ -5,7 +5,6 @@
 
 #include <expected>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -191,6 +190,7 @@ public:
   ~FileHandle();
   FileHandle(const FileHandle&) = delete;
   FileHandle& operator=(const FileHandle&) = delete;
+  // closes the descriptor held, then takes other's
   FileHandle& operator=(FileHandle&&);
 
   /// Release the FD so that it is not automatically closed.
@@ -207,7 +207,8 @@ public:
 
 private:
   FileSystem* m_fs;
-  std::optional<Fd> m_fd;
+  Fd m_fd;
+  bool m_has_fd;  // cleared once released or moved from
 };
 
 class FileSystem
@@ -368,7 +369,7 @@ private:
 template <typename T>
 Result<size_t> FileHandle::Read(T* ptr, size_t count) const
 {
-  const Result<u32> bytes = m_fs->ReadBytesFromFile(*m_fd, reinterpret_cast<u8*>(ptr),
+  const Result<u32> bytes = m_fs->ReadBytesFromFile(m_fd, reinterpret_cast<u8*>(ptr),
                                                     static_cast<u32>(sizeof(T) * count));
   if (!bytes)
     return bytes;
@@ -380,7 +381,7 @@ Result<size_t> FileHandle::Read(T* ptr, size_t count) const
 template <typename T>
 Result<size_t> FileHandle::Write(const T* ptr, size_t count) const
 {
-  const auto result = m_fs->WriteBytesToFile(*m_fd, reinterpret_cast<const u8*>(ptr),
+  const auto result = m_fs->WriteBytesToFile(m_fd, reinterpret_cast<const u8*>(ptr),
                                              static_cast<u32>(sizeof(T) * count));
   if (!result)
     return result;

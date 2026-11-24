@@ -57,43 +57,51 @@ IOS::HLE::ReturnCode ConvertResult(ResultCode code)
   return static_cast<ReturnCode>(-(static_cast<s32>(code) + 100));
 }
 
-FileHandle::FileHandle(FileSystem* fs, Fd fd) : m_fs{fs}, m_fd{fd}
+FileHandle::FileHandle(FileSystem* fs, Fd fd) : m_fs{fs}, m_fd{fd}, m_has_fd{true}
 {
 }
 
-FileHandle::FileHandle(FileHandle&& other) : m_fs{other.m_fs}, m_fd{other.m_fd}
+FileHandle::FileHandle(FileHandle&& other)
+    : m_fs{other.m_fs}, m_fd{other.m_fd}, m_has_fd{other.m_has_fd}
 {
-  other.m_fd.reset();
+  other.m_has_fd = false;
 }
 
 FileHandle& FileHandle::operator=(FileHandle&& other)
 {
-  if (std::tie(m_fs, m_fd) != std::tie(other.m_fs, other.m_fd))
-    *this = std::move(other);
+  if (this != &other)
+  {
+    if (m_has_fd && m_fs)
+      ASSERT(m_fs->Close(m_fd) == FS::ResultCode::Success);
+    m_fs = other.m_fs;
+    m_fd = other.m_fd;
+    m_has_fd = other.m_has_fd;
+    other.m_has_fd = false;
+  }
   return *this;
 }
 
 FileHandle::~FileHandle()
 {
-  if (m_fd && m_fs)
-    ASSERT(m_fs->Close(*m_fd) == FS::ResultCode::Success);
+  if (m_has_fd && m_fs)
+    ASSERT(m_fs->Close(m_fd) == FS::ResultCode::Success);
 }
 
 Fd FileHandle::Release()
 {
-  const Fd fd = m_fd.value();
-  m_fd.reset();
-  return fd;
+  ASSERT(m_has_fd);
+  m_has_fd = false;
+  return m_fd;
 }
 
 Result<u32> FileHandle::Seek(u32 offset, SeekMode mode) const
 {
-  return m_fs->SeekFile(*m_fd, offset, mode);
+  return m_fs->SeekFile(m_fd, offset, mode);
 }
 
 Result<FileStatus> FileHandle::GetStatus() const
 {
-  return m_fs->GetFileStatus(*m_fd);
+  return m_fs->GetFileStatus(m_fd);
 }
 
 Result<FileHandle> FileSystem::CreateAndOpenFile(Uid uid, Gid gid, const std::string& path,
