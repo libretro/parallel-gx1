@@ -212,7 +212,7 @@ private:
   void LoadControllerConfig(Config::Layer* layer) const
   {
     // Game INIs can have controller profiles embedded in to them
-    static const std::array<char, 4> nums = {{'1', '2', '3', '4'}};
+    static const char nums[4] = {'1', '2', '3', '4'};
 
     if (m_id == "00000000")
       return;

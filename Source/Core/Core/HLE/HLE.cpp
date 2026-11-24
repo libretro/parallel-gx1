@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <retro_miscellaneous.h>
 
 #include "Common/CommonTypes.h"
 
@@ -82,7 +83,7 @@ static void RemoveHookSlot(u32 slot)
 }
 
 // clang-format off
-constexpr std::array<Hook, 23> os_patches{{
+constexpr Hook os_patches[23]{
     // Placeholder, os_patches[0] is the "non-existent function" index
     {"FAKE_TO_SKIP_0",               HLE_Misc::UnimplementedFunction,       HookType::Replace, HookFlag::Generic},
 
@@ -115,7 +116,7 @@ constexpr std::array<Hook, 23> os_patches{{
     {"GeckoCodehandler",             HLE_Misc::GeckoCodeHandlerICacheFlush, HookType::Start,   HookFlag::Fixed},
     {"GeckoHandlerReturnTrampoline", HLE_Misc::GeckoReturnTrampoline,       HookType::Replace, HookFlag::Fixed},
     {"AppLoaderReport",              HLE_OS::HLE_GeneralDebugPrint,         HookType::Start,   HookFlag::Fixed} // apploader needs OSReport-like function
-}};
+};
 // clang-format on
 
 void Patch(Core::System& system, u32 addr, std::string_view func_name)
@@ -123,7 +124,7 @@ void Patch(Core::System& system, u32 addr, std::string_view func_name)
   auto& ppc_state = system.GetPPCState();
   auto& memory = system.GetMemory();
   auto& jit_interface = system.GetJitInterface();
-  for (u32 i = 1; i < os_patches.size(); ++i)
+  for (u32 i = 1; i < ARRAY_SIZE(os_patches); ++i)
   {
     if (os_patches[i].name == func_name)
     {
@@ -180,7 +181,7 @@ void PatchFunctions(Core::System& system)
   }
   s_hooked_count = kept;
 
-  for (u32 i = 1; i < os_patches.size(); ++i)
+  for (u32 i = 1; i < ARRAY_SIZE(os_patches); ++i)
   {
     // Fixed hooks don't map to symbols
     if (os_patches[i].flags == HookFlag::Fixed)
@@ -217,7 +218,7 @@ void Reload(Core::System& system)
 void Execute(u32 current_pc, u32 hook_index)
 {
   hook_index &= 0xFFFFF;
-  if (hook_index > 0 && hook_index < os_patches.size())
+  if (hook_index > 0 && hook_index < ARRAY_SIZE(os_patches))
   {
     os_patches[hook_index].function();
   }
@@ -296,7 +297,7 @@ u32 UnPatch(Core::System& system, std::string_view patch_name)
 
   if (patch->flags == HookFlag::Fixed)
   {
-    const u32 patch_idx = static_cast<u32>(std::distance(os_patches.begin(), patch));
+    const u32 patch_idx = static_cast<u32>(patch - os_patches);
     u32 addr = 0;
     // Reverse search by OSPatch key instead of address
     u32 kept = 0;

@@ -7,6 +7,7 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <cwchar>
+#include <retro_miscellaneous.h>
 
 #include <algorithm>
 #include <array>
@@ -287,11 +288,11 @@ static bool AuthenticateWiimote(HANDLE radio_handle, const BLUETOOTH_RADIO_INFO&
       (auth_method == AuthenticationMethod::SyncButton) ? radio_info.address : btdi->Address;
 
   // The Bluetooth device address is stored in the typical order (reverse of display order).
-  std::array<WCHAR, sizeof(bdaddr_to_use.rgBytes)> pass_key;
-  std::ranges::copy(bdaddr_to_use.rgBytes, pass_key.data());
+  WCHAR pass_key[sizeof(bdaddr_to_use.rgBytes)];
+  std::ranges::copy(bdaddr_to_use.rgBytes, pass_key);
 
-  const DWORD auth_result = pBluetoothAuthenticateDevice(nullptr, radio_handle, btdi,
-                                                        pass_key.data(), ULONG(pass_key.size()));
+  const DWORD auth_result = pBluetoothAuthenticateDevice(nullptr, radio_handle, btdi, pass_key,
+                                                         ULONG(ARRAY_SIZE(pass_key)));
   if (ERROR_SUCCESS != auth_result)
   {
     // FYI: Tends to fail with ERROR_NO_MORE_ITEMS or ERROR_GEN_FAILURE.
@@ -723,10 +724,10 @@ int WiimoteWindows::OverlappedRead(u8* data, DWORD size)
   }
 
   // Wait for either our wakeup event or the above I/O operation.
-  const std::array<HANDLE, 2> objs{m_wakeup_event, m_hid_overlap_read.hEvent};
+  const HANDLE objs[2]{m_wakeup_event, m_hid_overlap_read.hEvent};
   constexpr bool wait_for_all = false;
-  const auto wait_result = WaitForMultipleObjects(DWORD(objs.size()), objs.data(), wait_for_all,
-                                                  WIIMOTE_DEFAULT_TIMEOUT);
+  const auto wait_result =
+      WaitForMultipleObjects(DWORD(ARRAY_SIZE(objs)), objs, wait_for_all, WIIMOTE_DEFAULT_TIMEOUT);
   bool io_pending = true;
   switch (wait_result)
   {
