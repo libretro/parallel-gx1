@@ -152,24 +152,20 @@ void ESDevice::FinishInit()
 {
   GetEmulationKernel().InitIPC();
 
-  std::optional<u64> pending_launch_title_id;
+  u64 pending_launch_title_id = 0;
+  bool has_pending_launch = false;
 
   {
     const auto launch_file = GetEmulationKernel().GetFS()->OpenFile(
         PID_KERNEL, PID_KERNEL, LAUNCH_FILE_PATH, FS::Mode::Read);
     if (launch_file)
-    {
-      u64 id;
-      if (launch_file->Read(&id, 1).has_value())
-        pending_launch_title_id = id;
-    }
+      has_pending_launch = launch_file->Read(&pending_launch_title_id, 1).has_value();
   }
 
-  if (pending_launch_title_id.has_value())
+  if (has_pending_launch)
   {
-    NOTICE_LOG(IOS, "Re-launching title %016" PRIx64 " after IOS reload.",
-               (u64)(*pending_launch_title_id));
-    LaunchTitle(*pending_launch_title_id, HangPPC::No);
+    NOTICE_LOG(IOS, "Re-launching title %016" PRIx64 " after IOS reload.", pending_launch_title_id);
+    LaunchTitle(pending_launch_title_id, HangPPC::No);
   }
 }
 
