@@ -23,29 +23,33 @@ struct DefaultState
 
 namespace detail
 {
+// Each false, leaving out alone, when str_value does not parse as a T
 template <typename T>
 requires(!Common::Enum<T>)
-std::optional<T> TryParse(const std::string& str_value)
+bool TryParse(const std::string& str_value, T* out)
 {
   T value;
   if (!::TryParse(str_value, &value))
-    return std::nullopt;
-  return value;
+    return false;
+  *out = value;
+  return true;
 }
 
 template <Common::Enum T>
-std::optional<T> TryParse(const std::string& str_value)
+bool TryParse(const std::string& str_value, T* out)
 {
-  const auto result = TryParse<std::underlying_type_t<T>>(str_value);
-  if (result)
-    return static_cast<T>(*result);
-  return {};
+  std::underlying_type_t<T> value;
+  if (!TryParse<std::underlying_type_t<T>>(str_value, &value))
+    return false;
+  *out = static_cast<T>(value);
+  return true;
 }
 
 template <>
-inline std::optional<std::string> TryParse(const std::string& str_value)
+inline bool TryParse(const std::string& str_value, std::string* out)
 {
-  return str_value;
+  *out = str_value;
+  return true;
 }
 }  // namespace detail
 
@@ -110,16 +114,18 @@ public:
   template <typename T>
   T Get(const Info<T>& config_info) const
   {
-    return Get<T>(config_info.GetLocation()).value_or(config_info.GetDefaultValue());
+    T value;
+    return Get<T>(config_info.GetLocation(), &value) ? value : config_info.GetDefaultValue();
   }
 
+  // False, leaving out alone, when the layer has no parseable value there
   template <typename T>
-  std::optional<T> Get(const Location& location) const
+  bool Get(const Location& location, T* out) const
   {
     const auto iter = m_map.find(location);
     if (iter == m_map.end() || !iter->second.has_value())
-      return std::nullopt;
-    return detail::TryParse<T>(*iter->second);
+      return false;
+    return detail::TryParse<T>(*iter->second, out);
   }
 
   template <typename T>

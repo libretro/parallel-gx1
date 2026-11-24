@@ -234,9 +234,10 @@ private:
 
       for (const char num : nums)
       {
-        if (auto profile = layer->Get<std::string>(control_section(type + "Profile" + num)))
+        std::string profile;
+        if (layer->Get<std::string>(control_section(type + "Profile" + num), &profile))
         {
-          std::string ini_path = File::GetUserPath(D_CONFIG_IDX) + path + *profile + ".ini";
+          std::string ini_path = File::GetUserPath(D_CONFIG_IDX) + path + profile + ".ini";
           if (!File::Exists(ini_path))
           {
             // TODO: PanicAlert shouldn't be used for this.

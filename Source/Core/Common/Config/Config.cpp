@@ -259,22 +259,21 @@ LayerType GetActiveLayerForConfig(const Location& config)
   return result;
 }
 
-std::optional<std::string> GetAsString(const Location& config)
+bool GetAsString(const Location& config, std::string* out)
 {
-  std::optional<std::string> result;
+  bool found = false;
   quiesce_enter(&s_quiesce);
   for (auto type : SEARCH_ORDER)
   {
     const Layer* layer = type == LayerType::Meta ? nullptr : PeekLayer(type);
-    if (layer)
+    if (layer && layer->Get<std::string>(config, out))
     {
-      result = layer->Get<std::string>(config);
-      if (result.has_value())
-        break;
+      found = true;
+      break;
     }
   }
   quiesce_exit(&s_quiesce);
-  return result;
+  return found;
 }
 
 ConfigChangeCallbackGuard::ConfigChangeCallbackGuard()

@@ -66,7 +66,8 @@ const char* GetSystemName(System system);
 bool GetSystemFromName(const char* name, System* system);
 LayerType GetActiveLayerForConfig(const Location&);
 
-std::optional<std::string> GetAsString(const Location&);
+// False when no layer has a value there
+bool GetAsString(const Location& location, std::string* out);
 
 template <typename T>
 T Get(LayerType layer, const Info<T>& info)
@@ -105,11 +106,14 @@ T Get(const Info<T>& info)
 template <typename T>
 T GetUncached(const Info<T>& info)
 {
-  const std::optional<std::string> str = GetAsString(info.GetLocation());
-  if (!str)
+  std::string str;
+  if (!GetAsString(info.GetLocation(), &str))
     return info.GetDefaultValue();
 
-  return detail::TryParse<T>(*str).value_or(info.GetDefaultValue());
+  T value;
+  if (!detail::TryParse<T>(str, &value))
+    return info.GetDefaultValue();
+  return value;
 }
 
 template <typename T>
