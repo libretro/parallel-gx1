@@ -7,7 +7,6 @@
 
 #include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
-#include "Common/Swap.h"
 
 namespace IOS::HLE::USB::SkylanderCrypto
 {
@@ -35,51 +34,6 @@ u16 ComputeCRC16(const u8* data, size_t size)
   }
 
   return crc;
-}
-// CRC-64 algorithm that is limited to 48 bits every iteration
-u64 ComputeCRC48(const u8* data, size_t size)
-{
-  const u64 polynomial = 0x42f0e1eba9ea3693;
-  const u64 initial_register_value = 2ULL * 2ULL * 3ULL * 1103ULL * 12868356821ULL;
-
-  u64 crc = initial_register_value;
-  for (size_t i = 0; i < size; ++i)
-  {
-    crc ^= (static_cast<u64>(data[i]) << 40);
-    for (size_t j = 0; j < 8; ++j)
-    {
-      if (Common::ExtractBit(crc, 47))
-      {
-        crc = (crc << 1) ^ polynomial;
-      }
-      else
-      {
-        crc <<= 1;
-      }
-    }
-  }
-  return crc & 0x0000FFFFFFFFFFFF;
-}
-u64 CalculateKeyA(u8 sector, const u8* nuid)
-{
-  if (sector == 0)
-  {
-    return 73ULL * 2017ULL * 560381651ULL;
-  }
-
-  std::array<u8, 5> data = {nuid[0], nuid[1], nuid[2], nuid[3], sector};
-
-  u64 big_endian_crc = ComputeCRC48(data.data(), data.size());
-  u64 little_endian_crc = Common::swap64(big_endian_crc) >> 16;
-
-  return little_endian_crc;
-}
-void ComputeChecksumType0(const u8* data_start, u8* output)
-{
-  std::array<u8, 0x1E> input = {};
-  memcpy(input.data(), data_start, 0x1E);
-  u16 crc = ComputeCRC16(input.data(), input.size());
-  memcpy(output, &crc, 2);
 }
 void ComputeChecksumType1(const u8* data_start, u8* output)
 {

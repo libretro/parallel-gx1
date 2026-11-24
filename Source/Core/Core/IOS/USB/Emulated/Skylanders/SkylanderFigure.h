@@ -4,7 +4,6 @@
 #pragma once
 
 #include <array>
-#include <optional>
 #include <string>
 
 #include "Common/CommonTypes.h"
@@ -61,8 +60,6 @@ class SkylanderFigure
 public:
   SkylanderFigure(const std::string& file_path);
   SkylanderFigure(File::IOFile file);
-  bool Create(u16 sky_id, u16 sky_var,
-              std::optional<std::array<u8, 4>> requested_nuid = std::nullopt);
   void Save();
   void Close();
   void GetBlock(u8 index, u8* dest) const;
@@ -72,8 +69,6 @@ public:
   void SetData(FigureData* data);
 
 private:
-  void PopulateSectorTrailers();
-  void PopulateKeys();
   void GenerateIncompleteHashIn(u8* dest) const;
   // input: FIGURE_SIZE octets
   void Encrypt(const u8* input);

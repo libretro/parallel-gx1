@@ -14,7 +14,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
-#include "Common/Random.h"
 #include "Common/StringUtil.h"
 #include "Core/IOS/USB/Emulated/Skylanders/Skylander.h"
 #include "Core/IOS/USB/Emulated/Skylanders/SkylanderCrypto.h"
@@ -23,34 +22,6 @@ using namespace IOS::HLE::USB::SkylanderCrypto;
 
 namespace IOS::HLE::USB
 {
-void SkylanderFigure::PopulateSectorTrailers()
-{
-  // Set the sector permissions
-  u32 first_block = 0x690F0F0F;
-  u32 other_blocks = 0x69080F7F;
-  memcpy(&m_data[0x36], &first_block, sizeof(first_block));
-  for (size_t index = 1; index < 0x10; index++)
-  {
-    memcpy(&m_data[(index * 0x40) + 0x36], &other_blocks, sizeof(other_blocks));
-  }
-}
-
-void SkylanderFigure::PopulateKeys()
-{
-  for (u8 sector = 0; sector < 0x10; sector++)
-  {
-    u16 key_offset = (sector * 64) + (3 * 16);
-    u64 key = CalculateKeyA(sector, m_data.data());
-
-    for (u32 j = 0; j < 6; j++)
-    {
-      u16 index = key_offset + (5 - j);
-      u8 byte = (key >> (j * 8)) & 0xFF;
-      m_data[index] = byte;
-    }
-  }
-}
-
 SkylanderFigure::SkylanderFigure(const std::string& file_path)
 {
   m_sky_file = File::IOFile(file_path, "w+b");
@@ -126,46 +97,6 @@ SkylanderFigure::SkylanderFigure(File::IOFile file)
   m_sky_file = std::move(file);
   m_sky_file.Seek(0, File::SeekOrigin::Begin);
   m_sky_file.ReadBytes(m_data.data(), m_data.size());
-}
-bool SkylanderFigure::Create(u16 sky_id, u16 sky_var,
-                             std::optional<std::array<u8, 4>> requested_nuid)
-{
-  if (!m_sky_file)
-  {
-    return false;
-  }
-
-  memset(m_data.data(), 0, m_data.size());
-
-  PopulateSectorTrailers();
-
-  // Set the NUID of the figure
-  if (requested_nuid)
-    std::memcpy(&m_data[0], requested_nuid->data(), 4);
-  else
-    Common::Random::Generate(&m_data[0], 4);
-
-  // The BCC (Block Check Character)
-  m_data[4] = m_data[0] ^ m_data[1] ^ m_data[2] ^ m_data[3];
-
-  // ATQA
-  m_data[5] = 0x81;
-  m_data[6] = 0x01;
-
-  // SAK
-  m_data[7] = 0x0F;
-
-  // Set the skylander info
-  memcpy(&m_data[0x10], &sky_id, sizeof(sky_id));
-  memcpy(&m_data[0x1C], &sky_var, sizeof(sky_var));
-
-  // Set checksum
-  ComputeChecksumType0(m_data.data(), m_data.data() + 0x1E);
-
-  PopulateKeys();
-
-  Save();
-  return true;
 }
 void SkylanderFigure::Save()
 {
