@@ -59,15 +59,15 @@ namespace
 {
 struct SerializedFstEntry
 {
-  std::string_view GetName() const { return {name.data(), strnlen(name.data(), name.size())}; }
+  std::string_view GetName() const { return {name, strnlen(name, ARRAY_SIZE(name))}; }
   void SetName(std::string_view new_name)
   {
-    const size_t size = new_name.length() < name.size() ? new_name.length() : name.size();
-    std::memcpy(name.data(), new_name.data(), size);
+    const size_t size = new_name.length() < ARRAY_SIZE(name) ? new_name.length() : ARRAY_SIZE(name);
+    std::memcpy(name, new_name.data(), size);
   }
 
   /// File name
-  std::array<char, 12> name{};
+  char name[12]{};
   /// File owner user ID
   Common::BigEndianValue<Uid> uid{};
   /// File owner group ID

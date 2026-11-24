@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <retro_miscellaneous.h>
 #include <vector>
 
 #include <crypto/crypto.h>
@@ -61,26 +62,26 @@ IPCReply AesDevice::IOCtlV(const IOCtlVRequest& request)
 
     std::vector<u8> input = std::vector<u8>(request.in_vectors[0].size);
     std::vector<u8> output = std::vector<u8>(request.io_vectors[0].size);
-    std::array<u8, 0x10> key = {0};
-    std::array<u8, 0x10> iv = {0};
+    u8 key[0x10] = {0};
+    u8 iv[0x10] = {0};
     memory.CopyFromEmu(input.data(), request.in_vectors[0].address, input.size());
-    memory.CopyFromEmu(key.data(), request.in_vectors[1].address, key.size());
-    memory.CopyFromEmu(iv.data(), request.io_vectors[1].address, iv.size());
+    memory.CopyFromEmu(key, request.in_vectors[1].address, ARRAY_SIZE(key));
+    memory.CopyFromEmu(iv, request.io_vectors[1].address, ARRAY_SIZE(iv));
 
     // whole blocks only: a ragged size leaves output and iv as they were
     struct aes_ctx context;
     const size_t size = std::min(output.size(), input.size());
-    aes_init(&context, key.data(), key.size());
+    aes_init(&context, key, ARRAY_SIZE(key));
     if (size % AES_BLOCK_SIZE == 0)
     {
       if (command == AesIoctlv::Encrypt)
-        aes_cbc_encrypt(&context, iv.data(), input.data(), output.data(), size);
+        aes_cbc_encrypt(&context, iv, input.data(), output.data(), size);
       else
-        aes_cbc_decrypt(&context, iv.data(), input.data(), output.data(), size);
+        aes_cbc_decrypt(&context, iv, input.data(), output.data(), size);
     }
 
     memory.CopyToEmu(request.io_vectors[0].address, output.data(), output.size());
-    memory.CopyToEmu(request.io_vectors[1].address, iv.data(), iv.size());
+    memory.CopyToEmu(request.io_vectors[1].address, iv, ARRAY_SIZE(iv));
     return_code = ReturnCode::IPC_SUCCESS;
     break;
   }

@@ -57,7 +57,7 @@ private:
   // made with the device: a key event allocates nothing
   usb_kbd_messages_t m_message_queue;
 
-  std::array<bool, 256> m_old_key_buffer{};
+  bool m_old_key_buffer[256]{};
   u8 m_old_modifiers = 0;
 
   bool IsKeyPressed(int key) const;

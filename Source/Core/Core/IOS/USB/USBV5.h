@@ -101,7 +101,7 @@ protected:
     u16 number = 0;
     u64 host_id = 0;
   };
-  std::array<USBV5Device, 32> m_usbv5_devices{};
+  USBV5Device m_usbv5_devices[32]{};
   u16 m_current_device_number = 0x21;
 };
 }  // namespace IOS::HLE

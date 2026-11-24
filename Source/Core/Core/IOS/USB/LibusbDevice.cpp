@@ -289,7 +289,7 @@ void LibusbDevice::DisguisePlayStationDevice()
 int LibusbDevice::SubmitPlayStationRockBand3InstrumentControlTransfer()
 {
   constexpr size_t length = 40;
-  constexpr std::array<u8, length> enable_instrument_inputs = {
+  constexpr u8 enable_instrument_inputs[length] = {
       0xe9, 0x00, 0x89, 0x1b, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x89, 0x00,
       0x00, 0x00, 0x00, 0x00, 0xe9, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -297,7 +297,7 @@ int LibusbDevice::SubmitPlayStationRockBand3InstrumentControlTransfer()
   u8* const buffer = static_cast<u8*>(std::malloc(size));
   if (!buffer)
     return LIBUSB_ERROR_NO_MEM;
-  memcpy(buffer + LIBUSB_CONTROL_SETUP_SIZE, enable_instrument_inputs.data(), length);
+  memcpy(buffer + LIBUSB_CONTROL_SETUP_SIZE, enable_instrument_inputs, length);
 
   libusb_fill_control_setup(buffer, 0x21, 0x09, 0x0300, 0x00, length);
 

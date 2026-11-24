@@ -7,6 +7,7 @@
 #include <array>
 #include <cinttypes>
 #include <expected>
+#include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
 #include "Common/FileUtil.h"
@@ -263,7 +264,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
         return;
       }
 
-      std::array<u8, BUFFER_CHUNK_SIZE> buffer;
+      u8 buffer[BUFFER_CHUNK_SIZE];
       Result<FileHandle> handle = OpenFile(0, 0, child_path.c_str(), Mode::Write);
       if (!handle)
       {
@@ -277,10 +278,10 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
       while (i < child_metadata.size)
       {
         const u32 bytes_to_write =
-            std::min(child_metadata.size - i, static_cast<u32>(buffer.size()));
-        p_.DoArray(buffer.data(), bytes_to_write);
+            std::min(child_metadata.size - i, static_cast<u32>(ARRAY_SIZE(buffer)));
+        p_.DoArray(buffer, bytes_to_write);
 
-        Result<size_t> write_result = handle->Write(buffer.data(), bytes_to_write);
+        Result<size_t> write_result = handle->Write(buffer, bytes_to_write);
         if (!write_result)
         {
           ERROR_LOG(IOS_FS, "DoStateRead failed to call Write for %s: %u", child_path.c_str(),
@@ -355,7 +356,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
 
     if (child_metadata->is_file)
     {
-      std::array<u8, BUFFER_CHUNK_SIZE> buffer;
+      u8 buffer[BUFFER_CHUNK_SIZE];
       Result<FileHandle> handle = OpenFile(0, 0, child_path.c_str(), Mode::Read);
       if (!handle)
       {
@@ -369,8 +370,8 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
       while (i < child_metadata->size)
       {
         const u32 bytes_to_read =
-            std::min(child_metadata->size - i, static_cast<u32>(buffer.size()));
-        Result<size_t> read_result = handle->Read(buffer.data(), bytes_to_read);
+            std::min(child_metadata->size - i, static_cast<u32>(ARRAY_SIZE(buffer)));
+        Result<size_t> read_result = handle->Read(buffer, bytes_to_read);
         if (!read_result)
         {
           ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call Read for %s: %u",
@@ -388,7 +389,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
           return;
         }
 
-        p_.DoArray(buffer.data(), bytes_to_read);
+        p_.DoArray(buffer, bytes_to_read);
         i += bytes_to_read;
       }
     }

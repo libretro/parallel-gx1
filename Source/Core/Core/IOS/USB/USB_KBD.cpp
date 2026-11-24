@@ -4,6 +4,7 @@
 #include "Core/IOS/USB/USB_KBD.h"
 
 #include <array>
+#include <retro_miscellaneous.h>
 #include <string.h>
 
 #include "Common/FileUtil.h"
@@ -203,7 +204,7 @@ IPCReply USB_KBD::Open(const OpenRequest& request)
   ini.GetOrCreateSection("USB Keyboard")->Get("Layout", &m_keyboard_layout, KBD_LAYOUT_QWERTY);
 
   usb_kbd_messages_clear(&m_message_queue);
-  m_old_key_buffer.fill(false);
+  std::memset(m_old_key_buffer, 0, sizeof(m_old_key_buffer));
   m_old_modifiers = 0x00;
 
   return Device::Open(request);
@@ -248,7 +249,7 @@ void USB_KBD::Update()
   PressedKeyData pressed_keys{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   bool got_event = false;
   size_t num_pressed_keys = 0;
-  for (size_t i = 0; i < m_old_key_buffer.size(); i++)
+  for (size_t i = 0; i < ARRAY_SIZE(m_old_key_buffer); i++)
   {
     const bool key_pressed_now = IsKeyPressed(static_cast<int>(i));
     const bool key_pressed_before = m_old_key_buffer[i];

@@ -90,7 +90,7 @@ private:
   struct SendList final
   {
     MailListHeader header;
-    std::array<MailListEntry, MAX_ENTRIES> entries;
+    MailListEntry entries[MAX_ENTRIES];
   };
   static_assert(sizeof(SendList) == SEND_LIST_SIZE);
 #pragma pack(pop)

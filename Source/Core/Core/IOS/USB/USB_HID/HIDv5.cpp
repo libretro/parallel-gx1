@@ -98,7 +98,7 @@ s32 USB_HIDv5::SubmitTransfer(USBV5Device& device, USB::Device& host_device,
     // Unlike VEN, the endpoint is determined by the value at 8-12.
     // If it's non-zero, HID submits the request to the interrupt OUT endpoint.
     // Otherwise, the request is submitted to the IN endpoint.
-    AdditionalDeviceData* data = &m_additional_device_data[&device - m_usbv5_devices.data()];
+    AdditionalDeviceData* data = &m_additional_device_data[&device - m_usbv5_devices];
     if (memory.Read_U32(ioctlv.in_vectors[0].address + 8) != 0)
       message->endpoint = data->interrupt_out_endpoint;
     else
@@ -126,11 +126,11 @@ IPCReply USB_HIDv5::CancelEndpoint(USBV5Device& device, const IOCtlRequest& requ
     break;
   case 1:
     // TODO: cancel all queued interrupt transfers with return code -7022.
-    endpoint = m_additional_device_data[&device - m_usbv5_devices.data()].interrupt_in_endpoint;
+    endpoint = m_additional_device_data[&device - m_usbv5_devices].interrupt_in_endpoint;
     break;
   case 2:
     // TODO: cancel all queued interrupt transfers with return code -7022.
-    endpoint = m_additional_device_data[&device - m_usbv5_devices.data()].interrupt_out_endpoint;
+    endpoint = m_additional_device_data[&device - m_usbv5_devices].interrupt_out_endpoint;
     break;
   }
 
@@ -181,7 +181,7 @@ IPCReply USB_HIDv5::GetDeviceInfo(USBV5Device& device, const IOCtlRequest& reque
     {
       const bool is_in_endpoint = (endpoint.bEndpointAddress & ENDPOINT_IN) != 0;
 
-      AdditionalDeviceData* data = &m_additional_device_data[&device - m_usbv5_devices.data()];
+      AdditionalDeviceData* data = &m_additional_device_data[&device - m_usbv5_devices];
       if (is_in_endpoint)
         data->interrupt_in_endpoint = endpoint.bEndpointAddress;
       else

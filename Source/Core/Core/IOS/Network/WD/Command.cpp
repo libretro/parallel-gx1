@@ -4,6 +4,7 @@
 #include "Core/IOS/Network/WD/Command.h"
 
 #include <cstring>
+#include <retro_miscellaneous.h>
 #include <string>
 
 #include "Common/BitSet.h"
@@ -73,7 +74,7 @@ NetWDCommandDevice::NetWDCommandDevice(EmulationKernel& ios, const std::string& 
   m_info.enabled_channels = 0xfffe;
   m_info.channel = SelectWifiChannel(m_info.enabled_channels, 0);
   // The country code is supposed to be null terminated as it is logged with printf in WD.
-  std::strncpy(m_info.country_code.data(), "US", m_info.country_code.size());
+  std::strncpy(m_info.country_code, "US", sizeof(m_info.country_code));
   m_info.nitro_allowed_channels =
       MakeNitroAllowedChannelMask(m_info.enabled_channels, m_nitro_enabled_channels);
   m_info.initialised = true;

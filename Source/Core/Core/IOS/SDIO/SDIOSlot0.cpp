@@ -4,6 +4,7 @@
 #include "Core/IOS/SDIO/SDIOSlot0.h"
 
 #include <cstdio>
+#include <retro_miscellaneous.h>
 #include <vector>
 
 #include "Common/ChunkFile.h"
@@ -107,7 +108,7 @@ void SDIOSlot0Device::OpenInternal()
 IPCReply SDIOSlot0Device::Open(const OpenRequest& request)
 {
   OpenInternal();
-  m_registers.fill(0);
+  std::memset(m_registers, 0, sizeof(m_registers));
 
   m_is_active = true;
 
@@ -375,7 +376,7 @@ IPCReply SDIOSlot0Device::WriteHCRegister(const IOCtlRequest& request)
 
   INFO_LOG(IOS_SD, "IOCTL_WRITEHCR %#010x - %#010x", reg, val);
 
-  if (reg >= m_registers.size())
+  if (reg >= ARRAY_SIZE(m_registers))
   {
     WARN_LOG(IOS_SD, "IOCTL_WRITEHCR out of range");
     return IPCReply(IPC_SUCCESS);
@@ -407,7 +408,7 @@ IPCReply SDIOSlot0Device::ReadHCRegister(const IOCtlRequest& request)
 
   const u32 reg = memory.Read_U32(request.buffer_in);
 
-  if (reg >= m_registers.size())
+  if (reg >= ARRAY_SIZE(m_registers))
   {
     WARN_LOG(IOS_SD, "IOCTL_READHCR out of range");
     return IPCReply(IPC_SUCCESS);

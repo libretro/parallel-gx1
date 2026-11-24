@@ -112,9 +112,9 @@ private:
 
   static constexpr u32 MAX_MAIL_SIZE = 208952;
   static std::string GetValueFromCGIResponse(const std::string& response, const std::string& key);
-  static constexpr std::array<u8, 20> MAIL_CHECK_KEY = {0xce, 0x4c, 0xf2, 0x9a, 0x3d, 0x6b, 0xe1,
-                                                        0xc2, 0x61, 0x91, 0x72, 0xb5, 0xcb, 0x29,
-                                                        0x8c, 0x89, 0x72, 0xd4, 0x50, 0xad};
+  static constexpr u8 MAIL_CHECK_KEY[20] = {0xce, 0x4c, 0xf2, 0x9a, 0x3d, 0x6b, 0xe1,
+                                            0xc2, 0x61, 0x91, 0x72, 0xb5, 0xcb, 0x29,
+                                            0x8c, 0x89, 0x72, 0xd4, 0x50, 0xad};
 
   static constexpr u32 DEFAULT_SCHEDULER_SPAN_MINUTES = 11;
 
@@ -127,7 +127,7 @@ private:
   // Replies from the worker threads, handed to the emulation thread by Update.
   mpsc_stack_t m_async_replies{};
   retro_atomic_int_t m_error_count{};
-  std::array<retro_atomic_int_t, 256> m_scheduler_buffer{};
+  retro_atomic_int_t m_scheduler_buffer[256]{};
   NetKDTimeDevice* m_time_device;  // made before this device, so destroyed after it
   // TODO: Maybe move away from Common::HttpRequest?
   Common::HttpRequest m_http{60 * 1000};

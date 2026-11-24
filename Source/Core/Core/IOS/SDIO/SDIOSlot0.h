@@ -160,7 +160,7 @@ private:
   u32 m_block_length = 0;
   u32 m_bus_width = 0;
 
-  std::array<u32, 0x200 / sizeof(u32)> m_registers{};
+  u32 m_registers[0x200 / sizeof(u32)]{};
 
   File::IOFile m_card;
 

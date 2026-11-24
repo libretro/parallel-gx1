@@ -32,6 +32,6 @@ private:
     u8 interrupt_in_endpoint = 0;
     u8 interrupt_out_endpoint = 0;
   };
-  std::array<AdditionalDeviceData, 32> m_additional_device_data{};
+  AdditionalDeviceData m_additional_device_data[32]{};
 };
 }  // namespace IOS::HLE

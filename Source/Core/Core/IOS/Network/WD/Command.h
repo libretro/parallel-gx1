@@ -134,10 +134,10 @@ private:
     Common::MACAddress mac{};
     Common::BigEndianValue<u16> enabled_channels{};
     Common::BigEndianValue<u16> nitro_allowed_channels{};
-    std::array<char, 4> country_code{};
+    char country_code[4]{};
     u8 channel{};
     bool initialised{};
-    std::array<char, 0x80> wl_version{};
+    char wl_version[0x80]{};
   };
   static_assert(sizeof(Info) == 0x90);
 #pragma pack(pop)

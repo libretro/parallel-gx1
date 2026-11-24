@@ -26,8 +26,8 @@ public:
 
   struct ShaContext
   {
-    std::array<u32, 5> states;
-    std::array<u32, 2> length;  // length in bits of total data contributed to SHA-1 hash
+    u32 states[5];
+    u32 length[2];  // length in bits of total data contributed to SHA-1 hash
   };
 
 private:

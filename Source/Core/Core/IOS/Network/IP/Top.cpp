@@ -124,8 +124,8 @@ static bool inet_pton(const char* src, u32* out)
 {
   int saw_digit = 0;
   int octets = 0;
-  std::array<unsigned char, 4> tmp{};
-  unsigned char* tp = tmp.data();
+  unsigned char tmp[4]{};
+  unsigned char* tp = tmp;
   char ch;
 
   while ((ch = *src++) != '\0')

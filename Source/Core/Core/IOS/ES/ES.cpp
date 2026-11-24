@@ -46,7 +46,7 @@ struct DirectoryToCreate
 };
 
 constexpr FS::Modes public_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite};
-constexpr std::array<DirectoryToCreate, 9> s_directories_to_create = {{
+constexpr DirectoryToCreate s_directories_to_create[9] = {
     {"/sys", 0, {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None}},
     {"/ticket", 0, {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None}},
     {"/title", 0, {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read}},
@@ -56,7 +56,7 @@ constexpr std::array<DirectoryToCreate, 9> s_directories_to_create = {{
     {"/import", 0, {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None}},
     {"/meta", 0, public_modes, SYSMENU_UID, SYSMENU_GID},
     {"/wfs", 0, {FS::Mode::ReadWrite, FS::Mode::None, FS::Mode::None}, PID_UNKNOWN, PID_UNKNOWN},
-}};
+};
 
 constexpr const char LAUNCH_FILE_PATH[] = "/sys/launch.sys";
 constexpr const char SPACE_FILE_PATH[] = "/sys/space.sys";

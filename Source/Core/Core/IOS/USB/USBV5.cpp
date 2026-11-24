@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstring>
 #include <ranges>
+#include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
 #include "Common/ChunkFile.h"
@@ -109,7 +110,7 @@ USBV5ResourceManager::USBV5Device* USBV5ResourceManager::GetUSBV5Device(u32 in_b
   const u8 index = memory.Read_U8(in_buffer + offsetof(DeviceID, index));
   const u16 number = memory.Read_U16(in_buffer + offsetof(DeviceID, number));
 
-  if (index >= m_usbv5_devices.size())
+  if (index >= ARRAY_SIZE(m_usbv5_devices))
     return nullptr;
 
   USBV5Device* usbv5_device = &m_usbv5_devices[index];
@@ -213,9 +214,17 @@ void USBV5ResourceManager::OnDeviceChange(const ChangeEvent event, USB::Device* 
       if (interface.bAlternateSetting != 0)
         continue;
 
-      auto it = std::ranges::find_if(m_usbv5_devices | std::views::reverse,
-                                     [](const USBV5Device& entry) { return !entry.in_use; });
-      if (it == m_usbv5_devices.rend())
+      /* the free slot nearest the end */
+      USBV5Device* it = nullptr;
+      for (size_t i = ARRAY_SIZE(m_usbv5_devices); i-- > 0;)
+      {
+        if (!m_usbv5_devices[i].in_use)
+        {
+          it = &m_usbv5_devices[i];
+          break;
+        }
+      }
+      if (!it)
         return;
 
       it->in_use = true;
@@ -253,9 +262,9 @@ void USBV5ResourceManager::TriggerDeviceChangeReply()
   auto& memory = system.GetMemory();
   const IOCtlRequest hook(system, m_devicechange_hook_address);
   u8 num_devices = 0;
-  for (auto it = m_usbv5_devices.crbegin(); it != m_usbv5_devices.crend(); ++it)
+  for (size_t index = ARRAY_SIZE(m_usbv5_devices); index-- > 0;)
   {
-    const USBV5Device& usbv5_device = *it;
+    const USBV5Device& usbv5_device = m_usbv5_devices[index];
     if (!usbv5_device.in_use)
       continue;
 
@@ -275,7 +284,7 @@ void USBV5ResourceManager::TriggerDeviceChangeReply()
       // just pretend the value is 0xe7 (most common value according to hwtests).
       entry.id.reserved = 0xe7;
     }
-    entry.id.index = static_cast<u8>(std::distance(m_usbv5_devices.cbegin(), it.base()) - 1);
+    entry.id.index = static_cast<u8>(index);
     entry.id.number = Common::swap16(usbv5_device.number);
     entry.vid = Common::swap16(device->GetVid());
     entry.pid = Common::swap16(device->GetPid());

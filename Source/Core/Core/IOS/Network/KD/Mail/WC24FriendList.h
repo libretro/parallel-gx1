@@ -77,8 +77,8 @@ private:
   struct FriendList final
   {
     FriendListHeader header;
-    std::array<u64, MAX_ENTRIES> friend_codes;
-    std::array<FriendListEntry, MAX_ENTRIES> entries;
+    u64 friend_codes[MAX_ENTRIES];
+    FriendListEntry entries[MAX_ENTRIES];
   };
   static_assert(sizeof(FriendList) == 32864);
   static_assert(std::is_trivially_copyable_v<FriendList>);

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cinttypes>
+#include <retro_miscellaneous.h>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -439,7 +440,7 @@ NWC24::ErrorCode NetKDRequestDevice::KDCheckMail(u32* mail_flag, u32* interval)
       StringFromFormat("%" PRIu64 "\nw%016" PRIu64 "\n%s\n%s", (u64)random_number,
                        (u64)m_config.Id(), str_mail_flag.c_str(), str_interval.c_str());
   std::array<u8, 20> hashed{};
-  hmac_sha1(MAIL_CHECK_KEY.data(), MAIL_CHECK_KEY.size(),
+  hmac_sha1(MAIL_CHECK_KEY, ARRAY_SIZE(MAIL_CHECK_KEY),
             reinterpret_cast<const u8*>(hmac_message.data()), hmac_message.size(), hashed.data());
 
   // On a real Wii, strncmp is used to compare both hashes. This means that it is a case-sensitive

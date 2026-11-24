@@ -4,6 +4,7 @@
 #include "Core/IOS/USB/Emulated/LogitechMic.h"
 
 #include <cassert>
+#include <retro_miscellaneous.h>
 
 #include <algorithm>
 #include <utility>
@@ -419,7 +420,7 @@ int LogitechMic::EndpointAudioControl(CtrlMessage* cmd)
   return ret;
 }
 
-static constexpr std::array<u8, 121> FULL_DESCRIPTOR = {
+static constexpr u8 FULL_DESCRIPTOR[121] = {
     /* Configuration 1 */
     0x09,       /* bLength */
     0x02,       /* bDescriptorType */
@@ -598,7 +599,7 @@ int LogitechMic::HandleTransfer(CtrlMessage* cmd)
     DEBUG_LOG(IOS_USB, "[%04x:%04x %u:%u] REQUEST_GET_DESCRIPTOR index=%04x value=%04x",
               (unsigned)m_vid, (unsigned)m_pid, (unsigned)m_index, (unsigned)m_active_interface,
               (unsigned)cmd->index, (unsigned)cmd->value);
-    cmd->FillBuffer(FULL_DESCRIPTOR.data(), std::min<size_t>(cmd->length, FULL_DESCRIPTOR.size()));
+    cmd->FillBuffer(FULL_DESCRIPTOR, std::min<size_t>(cmd->length, ARRAY_SIZE(FULL_DESCRIPTOR)));
     cmd->GetEmulationKernel().EnqueueIPCReply(cmd->ios_request, IPC_SUCCESS);
     break;
   }
