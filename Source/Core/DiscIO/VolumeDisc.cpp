@@ -26,7 +26,7 @@ std::string VolumeDisc::GetGameID(const Partition& partition) const
     // Construct game ID from the BTID
     id[0] = 'G';
 
-    memcpy(id + 1, boot_id->game_id.data() + 2, 2);
+    memcpy(id + 1, boot_id->game_id + 2, 2);
 
     switch (GetCountry())
     {
