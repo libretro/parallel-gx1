@@ -10,7 +10,6 @@
 #include <cstring>
 #include <memory>
 #include <numeric>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -289,15 +288,11 @@ BootParameters::Executable::~Executable()
   DestroyBootExecutableReader(reader);
 }
 
-BootParameters::IPL::IPL(DiscIO::Region region_) : region(region_)
+BootParameters::IPL::IPL(DiscIO::Region region_, Disc&& disc_)
+    : region(region_), disc(std::move(disc_))
 {
   const std::string directory = Config::GetDirectoryForRegion(region);
   path = Config::GetBootROMPath(directory);
-}
-
-BootParameters::IPL::IPL(DiscIO::Region region_, Disc&& disc_) : IPL(region_)
-{
-  disc = std::move(disc_);
 }
 
 // Inserts a disc into the emulated disc drive and returns a pointer to it.
@@ -601,23 +596,16 @@ bool CBoot::BootUp(Core::System& system, BootParameters* boot)
       NOTICE_LOG(BOOT, "Booting GC IPL: %s", ipl.path.c_str());
       if (!File::Exists(ipl.path))
       {
-        if (ipl.disc)
-          PanicAlert("Cannot start the game, because the GC IPL could not be found.");
-        else
-          PanicAlert("Cannot find the GC IPL.");
+        PanicAlert("Cannot start the game, because the GC IPL could not be found.");
         return false;
       }
 
       if (!Load_BS2(system, ipl.path))
         return false;
 
-      if (ipl.disc)
-      {
-        NOTICE_LOG(BOOT, "Inserting disc: %s", ipl.disc->path.c_str());
-
-        SetDisc(system.GetDVDInterface(), DiscIO::CreateDiscForCore(ipl.disc->path),
-                ipl.disc->auto_disc_change_paths);
-      }
+      NOTICE_LOG(BOOT, "Inserting disc: %s", ipl.disc.path.c_str());
+      SetDisc(system.GetDVDInterface(), DiscIO::CreateDiscForCore(ipl.disc.path),
+              ipl.disc.auto_disc_change_paths);
 
       SConfig::OnTitleDirectlyBooted();
       return true;
