@@ -700,9 +700,9 @@ VKPipeline* VKPipeline::Create(const AbstractPipelineConfig& config)
           empty_vertex_input_state;
 
   // Input assembly
-  static constexpr std::array<VkPrimitiveTopology, 4> vk_primitive_topologies = {
-      {VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-       VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP}};
+  static constexpr VkPrimitiveTopology vk_primitive_topologies[4] = {
+      VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+      VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP};
   VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, nullptr, 0,
       vk_primitive_topologies[static_cast<u32>(build.rasterization_state.primitive.Value())],

@@ -69,7 +69,7 @@ DXVertexFormat::DXVertexFormat(const PortableVertexDeclaration& vtx_decl)
 
 void DXVertexFormat::GetInputLayoutDesc(D3D12_INPUT_LAYOUT_DESC* desc) const
 {
-  desc->pInputElementDescs = m_attribute_descriptions.data();
+  desc->pInputElementDescs = m_attribute_descriptions;
   desc->NumElements = m_num_attributes;
 }
 

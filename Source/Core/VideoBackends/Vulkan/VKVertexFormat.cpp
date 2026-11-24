@@ -128,7 +128,7 @@ void VertexFormat::SetupInputState()
   m_input_state_info.vertexBindingDescriptionCount = 1;
   m_input_state_info.pVertexBindingDescriptions = &m_binding_description;
   m_input_state_info.vertexAttributeDescriptionCount = m_num_attributes;
-  m_input_state_info.pVertexAttributeDescriptions = m_attribute_descriptions.data();
+  m_input_state_info.pVertexAttributeDescriptions = m_attribute_descriptions;
 }
 
 void VertexFormat::AddAttribute(ShaderAttrib location, uint32_t binding, VkFormat format,

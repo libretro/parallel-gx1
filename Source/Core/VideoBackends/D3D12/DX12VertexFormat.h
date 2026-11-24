@@ -28,7 +28,7 @@ private:
                     DXGI_FORMAT format, u32 offset);
   void MapAttributes();
 
-  std::array<D3D12_INPUT_ELEMENT_DESC, MAX_VERTEX_ATTRIBUTES> m_attribute_descriptions = {};
+  D3D12_INPUT_ELEMENT_DESC m_attribute_descriptions[MAX_VERTEX_ATTRIBUTES] = {};
   u32 m_num_attributes = 0;
 };
 }  // namespace DX12

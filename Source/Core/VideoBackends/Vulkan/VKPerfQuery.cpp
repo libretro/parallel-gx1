@@ -4,6 +4,7 @@
 #include "VideoBackends/Vulkan/VKPerfQuery.h"
 
 #include <cstring>
+#include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
 #include "Common/MsgHandler.h"
@@ -45,7 +46,7 @@ void PerfQuery::EnableQuery(PerfQueryGroup group)
   // Block if there are no free slots.
   // Otherwise, try to keep half of them available.
   const u32 query_count = QueryCount();
-  if (query_count > m_query_buffer.size() / 2)
+  if (query_count > ARRAY_SIZE(m_query_buffer) / 2)
     PartialFlush(query_count == PERF_QUERY_BUFFER_SIZE);
 
   // Ensure command buffer is ready to go before beginning the query, that way we don't submit
@@ -95,7 +96,7 @@ void PerfQuery::ResetQuery()
   vkCmdResetQueryPool(g_command_buffer_mgr->GetCurrentCommandBuffer(), m_query_pool, 0,
                       PERF_QUERY_BUFFER_SIZE);
 
-  std::memset(m_query_buffer.data(), 0, sizeof(ActiveQuery) * m_query_buffer.size());
+  std::memset(m_query_buffer, 0, sizeof(ActiveQuery) * ARRAY_SIZE(m_query_buffer));
 }
 
 u32 PerfQuery::GetQueryResult(PerfQueryType type)

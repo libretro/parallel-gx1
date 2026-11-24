@@ -106,7 +106,7 @@ class Tev
 
   // color order: ABGR
   Common::EnumMap<TevColor, TevOutput::Color2> Reg;
-  std::array<TevColor, 4> KonstantColors;
+  TevColor KonstantColors[4];
   TevColor RawTexColor;
   TevColor TexColor;
   TevColor RasColor;

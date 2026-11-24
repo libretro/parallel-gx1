@@ -13,7 +13,7 @@ namespace BBoxManager
 namespace
 {
 // Current bounding box coordinates.
-std::array<u16, 4> s_coordinates{};
+u16 s_coordinates[4]{};
 }  // Anonymous namespace
 
 u16 GetCoordinate(Coordinate coordinate)

@@ -103,6 +103,6 @@ private:
   float m_backbuffer_scale;
 
   // Keep a copy of sampler states to avoid cache lookups every draw
-  std::array<SamplerState, VideoCommon::MAX_PIXEL_SHADER_SAMPLERS> m_sampler_states = {};
+  SamplerState m_sampler_states[VideoCommon::MAX_PIXEL_SHADER_SAMPLERS] = {};
 };
 }  // namespace Vulkan

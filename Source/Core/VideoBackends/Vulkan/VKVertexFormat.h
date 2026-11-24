@@ -33,8 +33,7 @@ private:
 
   VkVertexInputBindingDescription m_binding_description = {};
 
-  std::array<VkVertexInputAttributeDescription, MAX_VERTEX_ATTRIBUTES> m_attribute_descriptions =
-      {};
+  VkVertexInputAttributeDescription m_attribute_descriptions[MAX_VERTEX_ATTRIBUTES] = {};
 
   VkPipelineVertexInputStateCreateInfo m_input_state_info = {};
 

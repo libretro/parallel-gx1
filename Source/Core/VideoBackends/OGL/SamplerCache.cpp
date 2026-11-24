@@ -106,8 +106,7 @@ void SamplerCache::SetParameters(GLuint sampler_id, const SamplerState& params)
   glSamplerParameteri(sampler_id, GL_TEXTURE_MIN_FILTER, min_filter);
   glSamplerParameteri(sampler_id, GL_TEXTURE_MAG_FILTER, mag_filter);
 
-  static constexpr std::array<GLenum, 3> address_modes = {
-      {GL_CLAMP_TO_EDGE, GL_REPEAT, GL_MIRRORED_REPEAT}};
+  static constexpr GLenum address_modes[3] = {GL_CLAMP_TO_EDGE, GL_REPEAT, GL_MIRRORED_REPEAT};
 
   glSamplerParameteri(sampler_id, GL_TEXTURE_WRAP_S,
                       address_modes[static_cast<u32>(params.tm0.wrap_u.Value())]);

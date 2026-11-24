@@ -38,8 +38,7 @@ VertexManager::~VertexManager()
 {
   if (g_backend_info.bSupportsPaletteConversion)
   {
-    glDeleteTextures(static_cast<GLsizei>(m_texel_buffer_views.size()),
-                     m_texel_buffer_views.data());
+    glDeleteTextures(static_cast<GLsizei>(ARRAY_SIZE(m_texel_buffer_views)), m_texel_buffer_views);
   }
 
   // VAO must be found when destroying the index buffer.
@@ -79,7 +78,7 @@ bool VertexManager::Initialize()
         GL_RGBA8UI,
         GL_RG32UI,
     };
-    glGenTextures(static_cast<GLsizei>(m_texel_buffer_views.size()), m_texel_buffer_views.data());
+    glGenTextures(static_cast<GLsizei>(ARRAY_SIZE(m_texel_buffer_views)), m_texel_buffer_views);
     glActiveTexture(GL_MUTABLE_TEXTURE_INDEX);
     for (u32 i = 0; i < NUM_TEXEL_BUFFER_FORMATS; i++)
     {

@@ -49,7 +49,7 @@ private:
   // TODO: This should be size_t, but the base class uses u32s
   using PerfQueryDataType = u64;
   static const u32 PERF_QUERY_BUFFER_SIZE = 512;
-  std::array<ActiveQuery, PERF_QUERY_BUFFER_SIZE> m_query_buffer = {};
+  ActiveQuery m_query_buffer[PERF_QUERY_BUFFER_SIZE] = {};
   u32 m_unresolved_queries = 0;
   u32 m_query_resolve_pos = 0;
   u32 m_query_readback_pos = 0;

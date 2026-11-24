@@ -81,6 +81,6 @@ private:
   int Slot(u32 x) const { return x >> m_bit_per_slot; }
   const int m_bit_per_slot;
 
-  std::array<GLsync, SYNC_POINTS> m_fences{};
+  GLsync m_fences[SYNC_POINTS]{};
 };
 }  // namespace OGL

@@ -56,6 +56,6 @@ private:
   StreamBuffer* m_vertex_buffer = nullptr;
   StreamBuffer* m_index_buffer = nullptr;
   StreamBuffer* m_texel_buffer = nullptr;
-  std::array<GLuint, NUM_TEXEL_BUFFER_FORMATS> m_texel_buffer_views{};
+  GLuint m_texel_buffer_views[NUM_TEXEL_BUFFER_FORMATS]{};
 };
 }  // namespace OGL

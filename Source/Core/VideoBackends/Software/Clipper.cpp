@@ -372,7 +372,7 @@ void ProcessTriangle(OutputVertexData* v0, OutputVertexData* v1, OutputVertexDat
   }
 }
 
-constexpr std::array<float, 8> LINE_PT_TEX_OFFSETS = {
+constexpr float LINE_PT_TEX_OFFSETS[8] = {
     0, 1 / 16.f, 1 / 8.f, 1 / 4.f, 1 / 2.f, 1, 1, 1,
 };
 

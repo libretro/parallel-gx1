@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdio>
+#include <retro_miscellaneous.h>
 #include <utility>
 
 #include "Common/CommonTypes.h"
@@ -445,7 +446,7 @@ void VKGfx::UnbindTexture(const AbstractTexture* texture)
 void VKGfx::ResetSamplerStates()
 {
   // Invalidate all sampler states, next draw will re-initialize them.
-  for (u32 i = 0; i < m_sampler_states.size(); i++)
+  for (u32 i = 0; i < ARRAY_SIZE(m_sampler_states); i++)
   {
     m_sampler_states[i] = RenderState::GetPointSamplerState();
     StateTracker::GetInstance()->SetSampler(i, g_object_cache->GetPointSampler());

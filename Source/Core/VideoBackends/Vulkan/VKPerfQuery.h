@@ -55,7 +55,7 @@ private:
   VkQueryPool m_query_pool = VK_NULL_HANDLE;
   u32 m_query_readback_pos = 0;
   u32 m_query_next_pos = 0;
-  std::array<ActiveQuery, PERF_QUERY_BUFFER_SIZE> m_query_buffer = {};
+  ActiveQuery m_query_buffer[PERF_QUERY_BUFFER_SIZE] = {};
   std::array<PerfQueryDataType, PERF_QUERY_BUFFER_SIZE> m_query_result_buffer = {};
 };
 

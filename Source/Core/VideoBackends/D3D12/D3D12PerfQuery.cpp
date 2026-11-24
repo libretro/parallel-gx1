@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <retro_miscellaneous.h>
 
 #include "Common/Assert.h"
 #include "Common/Logging/Log.h"
@@ -56,9 +57,9 @@ void PerfQuery::EnableQuery(PerfQueryGroup group)
   // Block if there are no free slots.
   // Otherwise, try to keep half of them available.
   const u32 query_count = QueryCount();
-  if (query_count > m_query_buffer.size() / 2)
+  if (query_count > ARRAY_SIZE(m_query_buffer) / 2)
   {
-    const bool do_resolve = m_unresolved_queries > m_query_buffer.size() / 2;
+    const bool do_resolve = m_unresolved_queries > ARRAY_SIZE(m_query_buffer) / 2;
     const bool blocking = query_count == PERF_QUERY_BUFFER_SIZE;
     PartialFlush(do_resolve, blocking);
   }

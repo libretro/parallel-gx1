@@ -53,7 +53,7 @@ protected:
   StreamBuffer m_index_stream_buffer;
   StreamBuffer m_uniform_stream_buffer;
   StreamBuffer m_texel_stream_buffer;
-  std::array<VkBufferView, NUM_TEXEL_BUFFER_FORMATS> m_texel_buffer_views = {};
+  VkBufferView m_texel_buffer_views[NUM_TEXEL_BUFFER_FORMATS] = {};
   u32 m_uniform_buffer_reserve_size = 0;
 };
 }  // namespace Vulkan

@@ -49,7 +49,7 @@ protected:
   StreamBuffer m_index_stream_buffer;
   StreamBuffer m_uniform_stream_buffer;
   StreamBuffer m_texel_stream_buffer;
-  std::array<DescriptorHandle, NUM_TEXEL_BUFFER_FORMATS> m_texel_buffer_views = {};
+  DescriptorHandle m_texel_buffer_views[NUM_TEXEL_BUFFER_FORMATS] = {};
   DescriptorHandle m_vertex_srv = {};
 };
 

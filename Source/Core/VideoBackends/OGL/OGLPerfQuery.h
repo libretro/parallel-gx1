@@ -41,7 +41,7 @@ private:
   void FlushOne();
 
   // This contains gl query objects with unretrieved results.
-  std::array<ActiveQuery, PERF_QUERY_BUFFER_SIZE> m_query_buffer;
+  ActiveQuery m_query_buffer[PERF_QUERY_BUFFER_SIZE];
   u32 m_query_read_pos = 0;
 
   GLenum m_query_type = 0;

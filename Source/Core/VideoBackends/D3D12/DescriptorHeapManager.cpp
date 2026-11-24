@@ -123,9 +123,9 @@ static void GetD3DSamplerDesc(D3D12_SAMPLER_DESC* desc, const SamplerState& stat
     }
   }
 
-  static constexpr std::array<D3D12_TEXTURE_ADDRESS_MODE, 3> address_modes = {
-      {D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-       D3D12_TEXTURE_ADDRESS_MODE_MIRROR}};
+  static constexpr D3D12_TEXTURE_ADDRESS_MODE address_modes[3] = {
+      D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+      D3D12_TEXTURE_ADDRESS_MODE_MIRROR};
   desc->AddressU = address_modes[static_cast<u32>(state.tm0.wrap_u.Value())];
   desc->AddressV = address_modes[static_cast<u32>(state.tm0.wrap_v.Value())];
   desc->AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;

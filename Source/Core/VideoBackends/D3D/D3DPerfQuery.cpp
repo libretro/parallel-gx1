@@ -10,6 +10,8 @@
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
 
+#include <retro_miscellaneous.h>
+
 namespace DX11
 {
 PerfQuery::PerfQuery() : m_query_read_pos()
@@ -30,13 +32,13 @@ void PerfQuery::EnableQuery(PerfQueryGroup group)
   u32 query_count = QueryCount();
 
   // Is this sane?
-  if (query_count > m_query_buffer.size() / 2)
+  if (query_count > ARRAY_SIZE(m_query_buffer) / 2)
   {
     WeakFlush();
     query_count = QueryCount();
   }
 
-  if (m_query_buffer.size() == query_count)
+  if (ARRAY_SIZE(m_query_buffer) == query_count)
   {
     // TODO
     FlushOne();
@@ -47,7 +49,7 @@ void PerfQuery::EnableQuery(PerfQueryGroup group)
   // start query
   if (group == PQG_ZCOMP_ZCOMPLOC || group == PQG_ZCOMP)
   {
-    auto& entry = m_query_buffer[(m_query_read_pos + query_count) % m_query_buffer.size()];
+    auto& entry = m_query_buffer[(m_query_read_pos + query_count) % ARRAY_SIZE(m_query_buffer)];
 
     D3D::context->Begin(entry.query.Get());
     entry.query_group = group;
@@ -61,8 +63,9 @@ void PerfQuery::DisableQuery(PerfQueryGroup group)
   // stop query
   if (group == PQG_ZCOMP_ZCOMPLOC || group == PQG_ZCOMP)
   {
-    auto& entry = m_query_buffer[(m_query_read_pos + QueryCount() + m_query_buffer.size() - 1) %
-                                 m_query_buffer.size()];
+    auto& entry =
+        m_query_buffer[(m_query_read_pos + QueryCount() + ARRAY_SIZE(m_query_buffer) - 1) %
+                       ARRAY_SIZE(m_query_buffer)];
     D3D::context->End(entry.query.Get());
   }
 }
@@ -117,7 +120,7 @@ void PerfQuery::FlushOne()
     native_res_result /= g_ActiveConfig.iMultisamples;
   AddQueryResult(entry.query_group, static_cast<u32>(native_res_result));
 
-  m_query_read_pos = (m_query_read_pos + 1) % m_query_buffer.size();
+  m_query_read_pos = (m_query_read_pos + 1) % ARRAY_SIZE(m_query_buffer);
   SubQueryCount(1);
 }
 
@@ -145,7 +148,7 @@ void PerfQuery::WeakFlush()
                                     EFB_HEIGHT / g_framebuffer_manager->GetEFBHeight();
       SetQueryResult(entry.query_group, static_cast<u32>(native_res_result));
 
-      m_query_read_pos = (m_query_read_pos + 1) % m_query_buffer.size();
+      m_query_read_pos = (m_query_read_pos + 1) % ARRAY_SIZE(m_query_buffer);
       SubQueryCount(1);
     }
     else

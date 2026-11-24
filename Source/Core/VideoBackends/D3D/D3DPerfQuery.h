@@ -40,7 +40,7 @@ private:
   // when testing in SMS: 64 was too small, 128 was ok
   static const int PERF_QUERY_BUFFER_SIZE = 512;
 
-  std::array<ActiveQuery, PERF_QUERY_BUFFER_SIZE> m_query_buffer;
+  ActiveQuery m_query_buffer[PERF_QUERY_BUFFER_SIZE];
   int m_query_read_pos;
 };
 

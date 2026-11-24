@@ -757,10 +757,10 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   present_queue_info.queueCount = 1;
   present_queue_info.pQueuePriorities = queue_priorities;
 
-  std::array<VkDeviceQueueCreateInfo, 2> queue_infos = {{
+  VkDeviceQueueCreateInfo queue_infos[2] = {
       graphics_queue_info,
       present_queue_info,
-  }};
+  };
 
   device_info.queueCreateInfoCount = 1;
   if (m_graphics_queue_family_index != m_present_queue_family_index &&
@@ -768,7 +768,7 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   {
     device_info.queueCreateInfoCount = 2;
   }
-  device_info.pQueueCreateInfos = queue_infos.data();
+  device_info.pQueueCreateInfos = queue_infos;
 
   if (!SelectDeviceExtensions(surface != VK_NULL_HANDLE))
     return false;
