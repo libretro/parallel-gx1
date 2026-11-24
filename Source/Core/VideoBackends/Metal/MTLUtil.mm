@@ -486,7 +486,11 @@ static const std::string_view MSL_HEADER =
     // These are usually when the compiler doesn't think a switch is exhaustive
     "#pragma clang diagnostic ignored \"-Wreturn-type\"\n";
 
-static constexpr std::pair<std::string_view, std::string_view> MSL_FIXUPS[] = {
+static const struct
+{
+  std::string_view from;
+  std::string_view to;
+} MSL_FIXUPS[] = {
     // Force-unroll the lighting loop in ubershaders, which greatly reduces register pressure on AMD
     {"for (uint chan = 0u; chan < 2u; chan++)",
      "_Pragma(\"unroll\") for (uint chan = 0u; chan < 2u; chan++)"},
@@ -571,12 +575,12 @@ std::string Metal::Util::FinishMSL(std::string_view compiled)
     size_t next = piece.size();
     for (const auto& fixup : MSL_FIXUPS)
     {
-      size_t found = piece.find(fixup.first);
+      size_t found = piece.find(fixup.from);
       if (found == std::string_view::npos)
         continue;
       piece = piece.substr(0, found);
-      fixup_piece = fixup.second;
-      next = found + fixup.first.size();
+      fixup_piece = fixup.to;
+      next = found + fixup.from.size();
     }
     output += piece;
     output += fixup_piece;

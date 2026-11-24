@@ -20,7 +20,6 @@
 #include "Common/FrameClock.h"
 #include "Common/Logging/Log.h"
 #include "Common/NandPaths.h"
-#include "Common/Projection.h"
 #include "Common/SettingsHandler.h"
 #include "Common/StringUtil.h"
 
@@ -51,41 +50,42 @@ enum class HardwareModel : u8
 
 u8 GetAreaCode(std::string_view area)
 {
-  static constexpr std::array<std::pair<std::string_view, u8>, 13> regions{{
-      {"JPN", 0},
-      {"USA", 1},
-      {"EUR", 2},
-      {"AUS", 2},
-      {"BRA", 1},
-      {"TWN", 3},
-      {"ROC", 3},
-      {"KOR", 4},
-      {"HKG", 5},
-      {"ASI", 5},
-      {"LTN", 1},
-      {"SAF", 2},
-      {"CHN", 6},
-  }};
+  static const struct
+  {
+    const char* name;
+    u8 code;
+  } regions[] = {
+      {"JPN", 0}, {"USA", 1}, {"EUR", 2}, {"AUS", 2}, {"BRA", 1}, {"TWN", 3}, {"ROC", 3},
+      {"KOR", 4}, {"HKG", 5}, {"ASI", 5}, {"LTN", 1}, {"SAF", 2}, {"CHN", 6},
+  };
 
-  const auto entry_pos = std::ranges::find(regions, area, Common::Projection::Key{});
-  if (entry_pos != regions.end())
-    return entry_pos->second;
+  for (size_t i = 0; i < sizeof(regions) / sizeof(regions[0]); i++)
+  {
+    if (area == regions[i].name)
+      return regions[i].code;
+  }
 
   return 7;  // Unknown
 }
 
 HardwareModel GetHardwareModel(std::string_view model)
 {
-  static constexpr std::array<std::pair<std::string_view, HardwareModel>, 4> models{{
+  static const struct
+  {
+    const char* name;
+    HardwareModel model;
+  } models[] = {
       {"RVL", HardwareModel::RVL},
       {"RVT", HardwareModel::RVT},
       {"RVV", HardwareModel::RVV},
       {"RVD", HardwareModel::RVD},
-  }};
+  };
 
-  const auto entry_pos = std::ranges::find(models, model, Common::Projection::Key{});
-  if (entry_pos != models.cend())
-    return entry_pos->second;
+  for (size_t i = 0; i < sizeof(models) / sizeof(models[0]); i++)
+  {
+    if (model == models[i].name)
+      return models[i].model;
+  }
 
   return HardwareModel::Unknown;
 }

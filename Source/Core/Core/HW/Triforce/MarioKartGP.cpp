@@ -63,13 +63,19 @@ void MarioKartGPCommon_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set
 
   const u8 bits_changed_0 = bits_set[0] | bits_cleared[0];
 
-  constexpr auto LED_NAMES = std::to_array<std::pair<u8, const char*>>({
+  static const struct
+  {
+    u8 value;
+    const char* name;
+  } LED_NAMES[] = {
       {0x04, "ITEM BUTTON"},
       {0x08, "CANCEL BUTTON"},
-  });
+  };
 
-  for (const auto& [led_value, led_name] : LED_NAMES)
+  for (size_t i = 0; i < sizeof(LED_NAMES) / sizeof(LED_NAMES[0]); i++)
   {
+    const u8 led_value = LED_NAMES[i].value;
+    const char* const led_name = LED_NAMES[i].name;
     if (bits_changed_0 & led_value)
     {
       INFO_LOG(SERIALINTERFACE_JVSIO, "JVS-IO: %s: %s", led_name,

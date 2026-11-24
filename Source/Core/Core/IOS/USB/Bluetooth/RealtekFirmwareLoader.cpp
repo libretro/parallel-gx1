@@ -76,7 +76,11 @@ bool IsRealtekVID(u16 vid)
 bool IsKnownRealtekBluetoothDevice(u16 vid, u16 pid)
 {
   // This list comes mostly from Linux source: drivers/bluetooth/btusb.c
-  constexpr std::pair<u16, u16> realtek_ids[] = {
+  static const struct
+  {
+    u16 vid;
+    u16 pid;
+  } realtek_ids[] = {
       // Realtek 8821CE Bluetooth devices
       {0x13d3, 0x3529},
       {0x13d3, 0x3533},
@@ -205,7 +209,7 @@ bool IsKnownRealtekBluetoothDevice(u16 vid, u16 pid)
 
   for (const auto& id : realtek_ids)
   {
-    if (id.first == vid && id.second == pid)
+    if (id.vid == vid && id.pid == pid)
       return true;
   }
   return false;

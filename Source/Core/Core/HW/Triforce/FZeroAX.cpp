@@ -84,17 +84,19 @@ void FZeroAXCommon_IOAdapter::HandleGenericOutputsChanged(const u8* bits_set, co
 {
   const u8 bits_changed_0 = bits_set[0] | bits_cleared[0];
 
-  constexpr auto LED_NAMES = std::to_array<std::pair<u8, const char*>>({
-      {0x80, "START BUTTON"},
-      {0x20, "VIEW CHANGE 1"},
-      {0x10, "VIEW CHANGE 2"},
-      {0x08, "VIEW CHANGE 3"},
-      {0x04, "VIEW CHANGE 4"},
-      {0x40, "BOOST"},
-  });
-
-  for (const auto& [led_value, led_name] : LED_NAMES)
+  static const struct
   {
+    u8 value;
+    const char* name;
+  } LED_NAMES[] = {
+      {0x80, "START BUTTON"},  {0x20, "VIEW CHANGE 1"}, {0x10, "VIEW CHANGE 2"},
+      {0x08, "VIEW CHANGE 3"}, {0x04, "VIEW CHANGE 4"}, {0x40, "BOOST"},
+  };
+
+  for (size_t i = 0; i < sizeof(LED_NAMES) / sizeof(LED_NAMES[0]); i++)
+  {
+    const u8 led_value = LED_NAMES[i].value;
+    const char* const led_name = LED_NAMES[i].name;
     if (bits_changed_0 & led_value)
     {
       INFO_LOG(SERIALINTERFACE_JVSIO, "JVS-IO: %s: %s", led_name,
