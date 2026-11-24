@@ -304,10 +304,11 @@ BootParameters::IPL::IPL(DiscIO::Region region_, Disc&& disc_) : IPL(region_)
 // The returned pointer must only be used while we are still booting,
 // because DVDThread can do whatever it wants to the disc after that.
 // Takes disc.
-static const DiscIO::VolumeDisc* SetDisc(DVD::DVDInterface& dvd_interface, DiscIO::VolumeDisc* disc,
-                                         std::vector<std::string> auto_disc_change_paths = {})
+static const DiscIO::VolumeDisc*
+SetDisc(DVD::DVDInterface& dvd_interface, DiscIO::VolumeDisc* disc,
+        const std::vector<std::string>& auto_disc_change_paths = {})
 {
-  dvd_interface.SetDisc(disc, auto_disc_change_paths);
+  dvd_interface.SetDisc(disc, &auto_disc_change_paths);
   return disc;
 }
 

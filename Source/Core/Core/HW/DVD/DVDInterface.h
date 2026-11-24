@@ -4,9 +4,8 @@
 #pragma once
 
 #include <array>
-#include <memory>
-#include <optional>
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -138,9 +137,8 @@ public:
 
   void RegisterMMIO(MMIO::Mapping* mmio, u32 base, bool is_wii);
 
-  // takes disc
-  void SetDisc(DiscIO::VolumeDisc* disc,
-               std::optional<std::vector<std::string>> auto_disc_change_paths);
+  // takes disc; the auto disc change paths are kept when null
+  void SetDisc(DiscIO::VolumeDisc* disc, const std::vector<std::string>* auto_disc_change_paths);
   bool IsDiscInside() const;
   void EjectDisc(EjectCause cause);
   void ChangeDisc(const std::vector<std::string>& paths);
