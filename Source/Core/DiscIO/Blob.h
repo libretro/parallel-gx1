@@ -16,7 +16,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/Swap.h"
@@ -152,7 +151,8 @@ protected:
   ~SectorReader();
 
 protected:
-  void SetSectorSize(int blocksize);
+  // False when the cache for blocks of this size cannot be allocated
+  bool SetSectorSize(int blocksize);
   int GetSectorSize() const { return m_block_size; }
   // Set the chunk size -> the number of blocks to read at a time.
   // Default value is 1 but that is too low for physical devices
@@ -171,7 +171,7 @@ protected:
 private:
   struct Cache
   {
-    std::vector<u8> data;
+    u8* data = nullptr;  // a slice of m_cache_storage
     u64 block_idx = 0;
     u32 num_blocks = 0;
 
@@ -226,6 +226,7 @@ private:
   u32 m_block_size = 0;    // Bytes in a sector/block
   u32 m_chunk_blocks = 1;  // Number of sectors/blocks in a chunk
   Cache m_cache[CACHE_LINES];
+  u8* m_cache_storage = nullptr;  // all lines' data in one allocation
 };
 
 // Factory function - examines the path to choose the right type of BlobReader, and returns one.

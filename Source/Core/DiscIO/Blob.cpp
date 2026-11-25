@@ -3,6 +3,7 @@
 
 #include "DiscIO/Blob.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <retro_miscellaneous.h>
@@ -207,17 +208,24 @@ std::string GetName(BlobType blob_type, bool translate)
   }
 }
 
-void SectorReader::SetSectorSize(int blocksize)
+bool SectorReader::SetSectorSize(int blocksize)
 {
   m_block_size = blocksize > 0 ? blocksize : 0;
-  for (auto& cache_entry : m_cache)
+  const size_t line_size = static_cast<size_t>(m_chunk_blocks) * m_block_size;
+  std::free(m_cache_storage);
+  m_cache_storage = static_cast<u8*>(std::calloc(CACHE_LINES, line_size ? line_size : 1));
+  for (int i = 0; i < CACHE_LINES; i++)
   {
-    cache_entry.Reset();
-    cache_entry.data.resize(m_chunk_blocks * m_block_size);
+    m_cache[i].Reset();
+    m_cache[i].data = m_cache_storage ? m_cache_storage + i * line_size : nullptr;
   }
+  return m_cache_storage != nullptr;
 }
 
-SectorReader::~SectorReader() = default;
+SectorReader::~SectorReader()
+{
+  std::free(m_cache_storage);
+}
 
 const SectorReader::Cache* SectorReader::FindCacheLine(u64 block_num)
 {
@@ -259,7 +267,7 @@ const SectorReader::Cache* SectorReader::GetCacheLine(u64 block_num)
   Cache* cache = GetEmptyCacheLine();
   // We only read aligned chunks, this avoids duplicate overlapping entries.
   u64 chunk_idx = block_num / m_chunk_blocks;
-  u32 blocks_read = ReadChunk(cache->data.data(), chunk_idx);
+  u32 blocks_read = ReadChunk(cache->data, chunk_idx);
   if (!blocks_read)
     return nullptr;
   cache->Fill(chunk_idx * m_chunk_blocks, blocks_read);
@@ -293,7 +301,7 @@ bool SectorReader::Read(u64 offset, u64 size, u8* out_ptr)
     u32 can_read = m_block_size * cache->num_blocks - read_offset;
     u32 was_read = static_cast<u32>(can_read < remain ? u64(can_read) : remain);
 
-    std::memcpy(out_ptr, cache->data.data() + read_offset, was_read);
+    std::memcpy(out_ptr, cache->data + read_offset, was_read);
 
     offset += was_read;
     out_ptr += was_read;

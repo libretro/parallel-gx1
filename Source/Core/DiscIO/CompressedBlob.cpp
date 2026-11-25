@@ -97,7 +97,8 @@ bool CompressedBlobReader::Initialize()
   if (!(m_inflate = rinflate_new(15)))
     return false;
 
-  SetSectorSize(m_header.block_size);
+  if (!SetSectorSize(m_header.block_size))
+    return false;
 
   return ValidateBlockPointers();
 }
