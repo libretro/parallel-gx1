@@ -47,7 +47,7 @@ public:
   void Flush();
 
 private:
-  std::vector<u8> m_texture_buf;
+  u8* m_texture_buf = nullptr;
 };
 
 class NullFramebuffer final : public AbstractFramebuffer

@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Null/NullTexture.h"
 
+#include <cstdlib>
+
 namespace Null
 {
 NullTexture::NullTexture(const TextureConfig& tex_config) : AbstractTexture(tex_config)
@@ -28,12 +30,15 @@ void NullTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u
 NullStagingTexture::NullStagingTexture(StagingTextureType type, const TextureConfig& config)
     : AbstractStagingTexture(type, config)
 {
-  m_texture_buf.resize(m_texel_size * config.width * config.height);
-  m_map_pointer = reinterpret_cast<char*>(m_texture_buf.data());
+  m_texture_buf = static_cast<u8*>(std::calloc(config.height, m_texel_size * config.width));
+  m_map_pointer = reinterpret_cast<char*>(m_texture_buf);
   m_map_stride = m_texel_size * config.width;
 }
 
-NullStagingTexture::~NullStagingTexture() = default;
+NullStagingTexture::~NullStagingTexture()
+{
+  std::free(m_texture_buf);
+}
 
 void NullStagingTexture::CopyFromTexture(const AbstractTexture* src,
                                          const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
