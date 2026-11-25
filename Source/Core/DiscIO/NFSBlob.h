@@ -8,7 +8,6 @@
 #include <limits>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/DirectIOFile.h"
@@ -62,15 +61,16 @@ private:
 
   // key_out: 16 bytes
   static bool ReadKey(const std::string& path, const std::string& directory, u8* key_out);
-  static std::vector<NFSLBARange> GetLBARanges(const NFSHeader& header);
-  static std::vector<File::DirectIOFile> OpenFiles(const std::string& directory,
-                                                   File::DirectIOFile first_file,
-                                                   u64 expected_raw_size, u64* raw_size_out);
+  // The header's ranges, byteswapped, into m_lba_ranges
+  void GetLBARanges(const NFSHeader& header);
+  // The hif_*.nfs files into m_files; false if one is missing or they are too small
+  bool OpenFiles(const std::string& directory, File::DirectIOFile first_file,
+                 u64 expected_raw_size);
   static u64 CalculateExpectedRawSize(const NFSLBARange* lba_ranges, size_t count);
   static u64 CalculateExpectedDataSize(const NFSLBARange* lba_ranges, size_t count);
 
-  NFSFileReader(std::vector<NFSLBARange> lba_ranges, std::vector<File::DirectIOFile> files,
-                const u8* key, u64 raw_size);
+  NFSFileReader() = default;
+  void SetKey(const u8* key);
 
   u64 ToPhysicalBlockIndex(u64 logical_block_index) const;
   bool ReadEncryptedBlock(u64 physical_block_index);
@@ -81,12 +81,16 @@ private:
   u8 m_current_block_decrypted[BLOCK_SIZE];
   u64 m_current_logical_block_index = std::numeric_limits<u64>::max();
 
-  std::vector<NFSLBARange> m_lba_ranges;
-  std::vector<File::DirectIOFile> m_files;
+  NFSLBARange m_lba_ranges[61];  // as many as a header holds
+  size_t m_lba_range_count = 0;
+  // An 8.5 GB disc needs 35 files of MAX_FILE_SIZE
+  static constexpr size_t MAX_FILES = 64;
+  File::DirectIOFile m_files[MAX_FILES];
+  size_t m_file_count = 0;
   struct aes_ctx m_aes_context;
-  u64 m_raw_size;
-  u64 m_data_size;
-  u8 m_key[16];
+  u64 m_raw_size = 0;
+  u64 m_data_size = 0;
+  u8 m_key[16] = {};
 };
 
 }  // namespace DiscIO

@@ -11,7 +11,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include "Common/Align.h"
 #include "Common/BitUtils.h"
@@ -47,36 +46,35 @@ bool NFSFileReader::ReadKey(const std::string& path, const std::string& director
   return true;
 }
 
-std::vector<NFSLBARange> NFSFileReader::GetLBARanges(const NFSHeader& header)
+void NFSFileReader::GetLBARanges(const NFSHeader& header)
 {
+  static_assert(ARRAY_SIZE(m_lba_ranges) == ARRAY_SIZE(header.lba_ranges));
   const size_t stored_count = Common::swap32(header.lba_range_count);
-  const size_t lba_range_count =
+  m_lba_range_count =
       stored_count < ARRAY_SIZE(header.lba_ranges) ? stored_count : ARRAY_SIZE(header.lba_ranges);
 
-  std::vector<NFSLBARange> lba_ranges;
-  lba_ranges.reserve(lba_range_count);
-
-  for (size_t i = 0; i < lba_range_count; ++i)
+  for (size_t i = 0; i < m_lba_range_count; ++i)
   {
     const NFSLBARange& unswapped_lba_range = header.lba_ranges[i];
-    lba_ranges.push_back(NFSLBARange{Common::swap32(unswapped_lba_range.start_block),
-                                     Common::swap32(unswapped_lba_range.num_blocks)});
+    m_lba_ranges[i].start_block = Common::swap32(unswapped_lba_range.start_block);
+    m_lba_ranges[i].num_blocks = Common::swap32(unswapped_lba_range.num_blocks);
   }
-
-  return lba_ranges;
 }
 
-std::vector<File::DirectIOFile> NFSFileReader::OpenFiles(const std::string& directory,
-                                                         File::DirectIOFile first_file,
-                                                         u64 expected_raw_size, u64* raw_size_out)
+bool NFSFileReader::OpenFiles(const std::string& directory, File::DirectIOFile first_file,
+                              u64 expected_raw_size)
 {
   const u64 file_count = Common::AlignUp(expected_raw_size, MAX_FILE_SIZE) / MAX_FILE_SIZE;
+  if (file_count > MAX_FILES)
+  {
+    ERROR_LOG(DISCIO, "%s needs %" PRIu64 " NFS files, more than %zu", directory.c_str(),
+              file_count, MAX_FILES);
+    return false;
+  }
 
-  std::vector<File::DirectIOFile> files;
-  files.reserve(file_count);
-
-  *raw_size_out = first_file.GetSize();
-  files.emplace_back(std::move(first_file));
+  m_raw_size = first_file.GetSize();
+  m_files[0] = std::move(first_file);
+  m_file_count = 1;
 
   for (u64 i = 1; i < file_count; ++i)
   {
@@ -87,23 +85,23 @@ std::vector<File::DirectIOFile> NFSFileReader::OpenFiles(const std::string& dire
     if (!child.IsOpen())
     {
       ERROR_LOG(DISCIO, "Failed to open %s", child_path.c_str());
-      return {};
+      return false;
     }
 
-    *raw_size_out += child.GetSize();
-    files.emplace_back(std::move(child));
+    m_raw_size += child.GetSize();
+    m_files[m_file_count++] = std::move(child);
   }
 
-  if (*raw_size_out < expected_raw_size)
+  if (m_raw_size < expected_raw_size)
   {
     ERROR_LOG(DISCIO,
               "Expected sum of NFS file sizes for %s to be at least %" PRIu64
               " bytes, but it was %" PRIu64 " bytes",
-              directory.c_str(), expected_raw_size, *raw_size_out);
-    return {};
+              directory.c_str(), expected_raw_size, m_raw_size);
+    return false;
   }
 
-  return files;
+  return true;
 }
 
 u64 NFSFileReader::CalculateExpectedRawSize(const NFSLBARange* lba_ranges, size_t count)
@@ -143,32 +141,40 @@ NFSFileReader* NFSFileReader::Create(File::DirectIOFile first_file, const std::s
   if (!first_file.OffsetRead(0, reinterpret_cast<u8*>(&header), sizeof(header)) || header.magic != NFS_MAGIC)
     return nullptr;
 
-  std::vector<NFSLBARange> lba_ranges = GetLBARanges(header);
+  NFSFileReader* const reader = new NFSFileReader;
+  reader->GetLBARanges(header);
 
-  const u64 expected_raw_size = CalculateExpectedRawSize(lba_ranges.data(), lba_ranges.size());
+  const u64 expected_raw_size =
+      CalculateExpectedRawSize(reader->m_lba_ranges, reader->m_lba_range_count);
 
-  u64 raw_size;
-  std::vector<File::DirectIOFile> files =
-      OpenFiles(directory, std::move(first_file), expected_raw_size, &raw_size);
-
-  if (files.empty())
+  if (!reader->OpenFiles(directory, std::move(first_file), expected_raw_size))
+  {
+    DestroyBlobReader(reader);
     return nullptr;
+  }
 
-  return new NFSFileReader(std::move(lba_ranges), std::move(files), key, raw_size);
+  reader->SetKey(key);
+  return reader;
 }
 
-NFSFileReader::NFSFileReader(std::vector<NFSLBARange> lba_ranges,
-                             std::vector<File::DirectIOFile> files, const u8* key, u64 raw_size)
-    : m_lba_ranges(std::move(lba_ranges)), m_files(std::move(files)), m_raw_size(raw_size), m_key()
+void NFSFileReader::SetKey(const u8* key)
 {
   std::memcpy(m_key, key, sizeof(m_key));
   aes_init(&m_aes_context, m_key, sizeof(m_key));
-  m_data_size = CalculateExpectedDataSize(m_lba_ranges.data(), m_lba_ranges.size());
+  m_data_size = CalculateExpectedDataSize(m_lba_ranges, m_lba_range_count);
 }
 
 BlobReader* NFSFileReader::CopyReader() const
 {
-  return new NFSFileReader(m_lba_ranges, m_files, m_key, m_raw_size);
+  NFSFileReader* const reader = new NFSFileReader;
+  std::memcpy(reader->m_lba_ranges, m_lba_ranges, sizeof(m_lba_ranges));
+  reader->m_lba_range_count = m_lba_range_count;
+  for (size_t i = 0; i < m_file_count; i++)
+    reader->m_files[i] = m_files[i];
+  reader->m_file_count = m_file_count;
+  reader->m_raw_size = m_raw_size;
+  reader->SetKey(m_key);
+  return reader;
 }
 
 u64 NFSFileReader::GetDataSize() const
@@ -185,8 +191,9 @@ u64 NFSFileReader::ToPhysicalBlockIndex(u64 logical_block_index) const
 {
   u64 physical_blocks_so_far = 0;
 
-  for (const NFSLBARange& range : m_lba_ranges)
+  for (size_t i = 0; i < m_lba_range_count; i++)
   {
+    const NFSLBARange& range = m_lba_ranges[i];
     if (logical_block_index >= range.start_block &&
         logical_block_index < range.start_block + range.num_blocks)
     {
@@ -215,6 +222,8 @@ bool NFSFileReader::ReadEncryptedBlock(u64 physical_block_index)
     constexpr size_t PART_1_SIZE = BLOCK_SIZE - sizeof(NFSHeader);
     constexpr size_t PART_2_SIZE = sizeof(NFSHeader);
 
+    if (file_index + 1 >= m_file_count)
+      return false;
     File::DirectIOFile& file_1 = m_files[file_index];
     File::DirectIOFile& file_2 = m_files[file_index + 1];
 
@@ -228,6 +237,8 @@ bool NFSFileReader::ReadEncryptedBlock(u64 physical_block_index)
   {
     // Normal case. The read is offset by 0x200 bytes, but it's all within one file.
 
+    if (file_index >= m_file_count)
+      return false;
     File::DirectIOFile& file = m_files[file_index];
 
     if (!file.OffsetRead(offset_in_file, m_current_block_encrypted, BLOCK_SIZE))
