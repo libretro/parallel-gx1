@@ -87,42 +87,46 @@ void SaveToSYSCONF(Config::LayerType layer, SkipIfControlledByGuest skip,
       retro_atomic_load_acquire_int(&s_sysconf_controlled_by_guest))
     return;
 
-  IOS::HLE::Kernel ios;
-  SysConf sysconf{ios.GetFS()};
-
-  for (const Config::SYSCONFSetting& setting : Config::SYSCONF_SETTINGS)
+  // The kernel is too large for the stack
+  IOS::HLE::Kernel* const ios = new IOS::HLE::Kernel;
   {
-    std::visit(
-        [&](auto* info) {
-          if (predicate && !predicate(info->GetLocation()))
-            return;
+    SysConf sysconf{ios->GetFS()};
 
-          const std::string key = info->GetLocation().section + "." + info->GetLocation().key;
+    for (const Config::SYSCONFSetting& setting : Config::SYSCONF_SETTINGS)
+    {
+      std::visit(
+          [&](auto* info) {
+            if (predicate && !predicate(info->GetLocation()))
+              return;
 
-          if (setting.type == SysConf::Entry::Type::Long)
-          {
-            sysconf.SetData<u32>(key, setting.type, Config::Get(layer, *info));
-          }
-          else if (setting.type == SysConf::Entry::Type::Byte)
-          {
-            sysconf.SetData<u8>(key, setting.type, static_cast<u8>(Config::Get(layer, *info)));
-          }
-          else if (setting.type == SysConf::Entry::Type::BigArray)
-          {
-            // Somewhat hacky support for IPL.SADR. The setting only stores the
-            // first 4 bytes even thought the SYSCONF entry is much bigger.
-            SysConf::Entry* entry = sysconf.GetOrAddEntry(key, setting.type);
-            if (entry->bytes.size() < 0x1007 + 1)
-              entry->bytes.resize(0x1007 + 1);
-            *reinterpret_cast<u32*>(entry->bytes.data()) = Config::Get(layer, *info);
-          }
-        },
-        setting.config_info);
+            const std::string key = info->GetLocation().section + "." + info->GetLocation().key;
+
+            if (setting.type == SysConf::Entry::Type::Long)
+            {
+              sysconf.SetData<u32>(key, setting.type, Config::Get(layer, *info));
+            }
+            else if (setting.type == SysConf::Entry::Type::Byte)
+            {
+              sysconf.SetData<u8>(key, setting.type, static_cast<u8>(Config::Get(layer, *info)));
+            }
+            else if (setting.type == SysConf::Entry::Type::BigArray)
+            {
+              // Somewhat hacky support for IPL.SADR. The setting only stores the
+              // first 4 bytes even thought the SYSCONF entry is much bigger.
+              SysConf::Entry* entry = sysconf.GetOrAddEntry(key, setting.type);
+              if (entry->bytes.size() < 0x1007 + 1)
+                entry->bytes.resize(0x1007 + 1);
+              *reinterpret_cast<u32*>(entry->bytes.data()) = Config::Get(layer, *info);
+            }
+          },
+          setting.config_info);
+    }
+
+    sysconf.SetData<u32>("IPL.CB", SysConf::Entry::Type::Long, 0);
+    IOS::HLE::RestoreBTInfoSection(&sysconf);
+    sysconf.Save();
   }
-
-  sysconf.SetData<u32>("IPL.CB", SysConf::Entry::Type::Long, 0);
-  IOS::HLE::RestoreBTInfoSection(&sysconf);
-  sysconf.Save();
+  delete ios;
 }
 
 const std::map<Config::System, int> system_to_ini = {
@@ -232,38 +236,42 @@ private:
     if (retro_atomic_load_acquire_int(&s_sysconf_controlled_by_guest))
       return;
 
-    IOS::HLE::Kernel ios;
-    SysConf sysconf{ios.GetFS()};
-    for (const Config::SYSCONFSetting& setting : Config::SYSCONF_SETTINGS)
+    // The kernel is too large for the stack
+    IOS::HLE::Kernel* const ios = new IOS::HLE::Kernel;
     {
-      std::visit(
-          [&](auto* info) {
-            const Config::Location location = info->GetLocation();
-            const std::string key = location.section + "." + location.key;
-            if (setting.type == SysConf::Entry::Type::Long)
-            {
-              layer->Set(location, sysconf.GetData<u32>(key, info->GetDefaultValue()));
-            }
-            else if (setting.type == SysConf::Entry::Type::Byte)
-            {
-              layer->Set(location, sysconf.GetData<u8>(key, info->GetDefaultValue()));
-            }
-            else if (setting.type == SysConf::Entry::Type::BigArray)
-            {
-              // Somewhat hacky support for IPL.SADR. The setting only stores the
-              // first 4 bytes even thought the SYSCONF entry is much bigger.
-              u32 value = info->GetDefaultValue();
-              SysConf::Entry* entry = sysconf.GetEntry(key);
-              if (entry)
+      SysConf sysconf{ios->GetFS()};
+      for (const Config::SYSCONFSetting& setting : Config::SYSCONF_SETTINGS)
+      {
+        std::visit(
+            [&](auto* info) {
+              const Config::Location location = info->GetLocation();
+              const std::string key = location.section + "." + location.key;
+              if (setting.type == SysConf::Entry::Type::Long)
               {
-                std::memcpy(&value, entry->bytes.data(),
-                            std::min(entry->bytes.size(), sizeof(u32)));
+                layer->Set(location, sysconf.GetData<u32>(key, info->GetDefaultValue()));
               }
-              layer->Set(location, value);
-            }
-          },
-          setting.config_info);
+              else if (setting.type == SysConf::Entry::Type::Byte)
+              {
+                layer->Set(location, sysconf.GetData<u8>(key, info->GetDefaultValue()));
+              }
+              else if (setting.type == SysConf::Entry::Type::BigArray)
+              {
+                // Somewhat hacky support for IPL.SADR. The setting only stores the
+                // first 4 bytes even thought the SYSCONF entry is much bigger.
+                u32 value = info->GetDefaultValue();
+                SysConf::Entry* entry = sysconf.GetEntry(key);
+                if (entry)
+                {
+                  std::memcpy(&value, entry->bytes.data(),
+                              std::min(entry->bytes.size(), sizeof(u32)));
+                }
+                layer->Set(location, value);
+              }
+            },
+            setting.config_info);
+      }
     }
+    delete ios;
   }
 };
 

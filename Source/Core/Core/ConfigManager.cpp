@@ -386,8 +386,10 @@ struct SetGameMetadata
 
   bool operator()(const BootParameters::NANDTitle& nand_title) const
   {
-    IOS::HLE::Kernel ios;
-    const IOS::ES::TMDReader tmd = ios.GetESCore().FindInstalledTMD(nand_title.id);
+    // The kernel is too large for the stack
+    IOS::HLE::Kernel* const ios = new IOS::HLE::Kernel;
+    const IOS::ES::TMDReader tmd = ios->GetESCore().FindInstalledTMD(nand_title.id);
+    delete ios;
     if (!tmd.IsValid() || !IOS::ES::IsChannel(nand_title.id))
     {
       PanicAlert("This title cannot be booted.");
