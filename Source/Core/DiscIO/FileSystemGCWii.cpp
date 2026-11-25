@@ -8,7 +8,6 @@
 #include <cstring>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
@@ -205,7 +204,8 @@ bool FileInfo::IsValid(u64 fst_size, const FileInfo& parent_directory) const
 }
 
 FileSystem::FileSystem(const VolumeDisc* volume, const Partition& partition)
-    : m_valid(false), m_root(nullptr, 0, 0, 0), m_file_ends(nullptr), m_file_end_count(0)
+    : m_valid(false), m_file_system_table(nullptr), m_root(nullptr, 0, 0, 0), m_file_ends(nullptr),
+      m_file_end_count(0)
 {
   u8 offset_shift;
   // Check if this is a GameCube or Wii disc
@@ -239,15 +239,15 @@ FileSystem::FileSystem(const VolumeDisc* volume, const Partition& partition)
   }
 
   // Read the whole FST
-  m_file_system_table.resize(fst_size);
-  if (!volume->Read(fst_offset, fst_size, m_file_system_table.data(), partition))
+  m_file_system_table = static_cast<u8*>(std::malloc(fst_size));
+  if (!m_file_system_table || !volume->Read(fst_offset, fst_size, m_file_system_table, partition))
   {
     ERROR_LOG(DISCIO, "Couldn't read file system table");
     return;
   }
 
   // Create the root object
-  m_root = FileInfo(m_file_system_table.data(), offset_shift);
+  m_root = FileInfo(m_file_system_table, offset_shift);
   if (!m_root.IsDirectory())
   {
     ERROR_LOG(DISCIO, "File system root is not a directory");
@@ -320,6 +320,7 @@ bool FileSystem::FindFileInfo(std::string_view path, const FileInfo& directory,
 FileSystem::~FileSystem()
 {
   std::free(m_file_ends);
+  std::free(m_file_system_table);
 }
 
 int FileSystem::CompareFileEnds(const void* a, const void* b)

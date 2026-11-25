@@ -8,7 +8,6 @@
 #include <iterator>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "DiscIO/Volume.h"
@@ -166,7 +165,7 @@ private:
   bool FindFileInfo(std::string_view path, const FileInfo& directory, FileInfo* file_info) const;
 
   bool m_valid;
-  std::vector<u8> m_file_system_table;
+  u8* m_file_system_table;
   FileInfo m_root;
   // The files with data, sorted by end offset, one per end offset (the lowest FST index); built
   // on the first search by offset
