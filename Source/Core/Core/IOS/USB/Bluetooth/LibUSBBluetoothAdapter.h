@@ -4,7 +4,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "Common/Buffer.h"
 
@@ -117,7 +116,9 @@ private:
   retro_spsc_t m_hci_event_queue;
   retro_spsc_t m_acl_data_queue;
   std::size_t m_acl_peeked = 0;
-  std::vector<u8> m_acl_bounce;
+  // A packet split at the ring's end: its length and up to a whole transfer of payload
+  static constexpr std::size_t ACL_BOUNCE_SIZE = sizeof(u16) + 1024;
+  u8 m_acl_bounce[ACL_BOUNCE_SIZE];
 
   // All transfers are alloc'd and linked here until complete.
   FreeNode* m_live_transfers = nullptr;

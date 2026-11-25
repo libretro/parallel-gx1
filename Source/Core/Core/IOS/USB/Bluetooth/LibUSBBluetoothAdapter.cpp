@@ -341,9 +341,9 @@ const u8* LibUSBBluetoothAdapter::PeekACLData(std::size_t* size)
     return static_cast<const u8*>(ring) + sizeof(length);
 
   // Only a ring without a mirror splits a packet at its end.
-  m_acl_bounce.resize(m_acl_peeked);
-  retro_spsc_peek(&m_acl_data_queue, m_acl_bounce.data(), m_acl_peeked);
-  return m_acl_bounce.data() + sizeof(length);
+  static_assert(ACL_BOUNCE_SIZE == sizeof(u16) + BUFFER_SIZE);
+  retro_spsc_peek(&m_acl_data_queue, m_acl_bounce, m_acl_peeked);
+  return m_acl_bounce + sizeof(length);
 }
 
 void LibUSBBluetoothAdapter::PopACLData()
