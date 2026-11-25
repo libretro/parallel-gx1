@@ -6,7 +6,6 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/Config/Config.h"
@@ -66,27 +65,21 @@ enum class FramePartType
 
 struct FramePart
 {
-  constexpr FramePart(FramePartType type, u32 start, u32 end, const CPState& cpmem)
-      : m_type(type), m_start(start), m_end(end), m_cpmem(cpmem)
-  {
-  }
-
-  const FramePartType m_type;
-  const u32 m_start;
-  const u32 m_end;
-  const CPState m_cpmem;
+  FramePartType m_type;
+  u32 m_start;
+  u32 m_end;
+  CPState m_cpmem;
 };
 
+// A frame's parts in an allocation grown by doubling; FifoPlayer frees it
 struct AnalyzedFrameInfo
 {
-  std::vector<FramePart> parts;
-  Common::EnumMap<u32, FramePartType::EFBCopy> part_type_counts;
+  FramePart* parts;
+  size_t part_count;
+  size_t part_capacity;
 
-  void AddPart(FramePartType type, u32 start, u32 end, const CPState& cpmem)
-  {
-    parts.emplace_back(type, start, end, cpmem);
-    part_type_counts[type]++;
-  }
+  // False when out of memory
+  bool AddPart(FramePartType type, u32 start, u32 end, const CPState& cpmem);
 };
 
 class FifoPlayer;
@@ -215,5 +208,7 @@ private:
 
   FifoDataFile* m_File = nullptr;  // owned
 
-  std::vector<AnalyzedFrameInfo> m_FrameInfo;
+  AnalyzedFrameInfo* m_FrameInfo = nullptr;  // one per frame of m_File
+  u32 m_frame_info_count = 0;
+  void FreeFrameInfo();
 };

@@ -4,7 +4,9 @@
 #include "Core/FifoPlayer/FifoPlayer.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
+#include <new>
 #include <type_traits>
 
 #include "Common/Assert.h"
@@ -32,12 +34,34 @@
 // TODO: Move texMem somewhere else so this isn't an issue.
 #include "VideoCommon/TextureDecoder.h"
 
+bool AnalyzedFrameInfo::AddPart(FramePartType type, u32 start, u32 end, const CPState& cpmem)
+{
+  static_assert(std::is_trivially_copyable_v<FramePart>);
+  if (part_count == part_capacity)
+  {
+    const size_t capacity = part_capacity ? part_capacity * 2 : 16;
+    FramePart* const grown =
+        static_cast<FramePart*>(std::realloc(parts, capacity * sizeof(FramePart)));
+    if (!grown)
+      return false;
+    parts = grown;
+    part_capacity = capacity;
+  }
+  FramePart& part = parts[part_count++];
+  part.m_type = type;
+  part.m_start = start;
+  part.m_end = end;
+  new (&part.m_cpmem) CPState(cpmem);
+  return true;
+}
+
 namespace
 {
 class FifoPlaybackAnalyzer final : public OpcodeDecoder::Callback
 {
 public:
-  static void AnalyzeFrames(FifoDataFile* file, std::vector<AnalyzedFrameInfo>& frame_info);
+  // frame_info holds one zeroed entry per frame of file
+  static void AnalyzeFrames(FifoDataFile* file, AnalyzedFrameInfo* frame_info);
 
   explicit FifoPlaybackAnalyzer(const u32* cpmem) : m_cpmem(cpmem) {}
 
@@ -71,12 +95,9 @@ public:
   CPState m_cpmem;
 };
 
-void FifoPlaybackAnalyzer::AnalyzeFrames(FifoDataFile* file,
-                                         std::vector<AnalyzedFrameInfo>& frame_info)
+void FifoPlaybackAnalyzer::AnalyzeFrames(FifoDataFile* file, AnalyzedFrameInfo* frame_info)
 {
   FifoPlaybackAnalyzer analyzer(file->GetCPMem());
-  frame_info.clear();
-  frame_info.resize(file->GetFrameCount());
 
   for (u32 frame_no = 0; frame_no < file->GetFrameCount(); frame_no++)
   {
@@ -181,6 +202,16 @@ FifoPlayer::~FifoPlayer()
 {
   Config::RemoveConfigChangedCallback(m_config_changed_callback_id);
   delete m_File;
+  FreeFrameInfo();
+}
+
+void FifoPlayer::FreeFrameInfo()
+{
+  for (u32 i = 0; i < m_frame_info_count; i++)
+    std::free(m_FrameInfo[i].parts);
+  std::free(m_FrameInfo);
+  m_FrameInfo = nullptr;
+  m_frame_info_count = 0;
 }
 
 bool FifoPlayer::Open(const std::string& filename)
@@ -191,6 +222,17 @@ bool FifoPlayer::Open(const std::string& filename)
 
   if (m_File)
   {
+    FreeFrameInfo();
+    const u32 frame_count = m_File->GetFrameCount();
+    m_FrameInfo = static_cast<AnalyzedFrameInfo*>(
+        std::calloc(frame_count ? frame_count : 1, sizeof(AnalyzedFrameInfo)));
+    if (!m_FrameInfo)
+    {
+      delete m_File;
+      m_File = nullptr;
+      return false;
+    }
+    m_frame_info_count = frame_count;
     FifoPlaybackAnalyzer::AnalyzeFrames(m_File, m_FrameInfo);
 
     m_FrameRangeEnd = m_File->GetFrameCount() - 1;
@@ -326,8 +368,9 @@ void FifoPlayer::WriteFrame(const FifoFrameInfo& frame, const AnalyzedFrameInfo&
     memory_update = frame.numMemoryUpdates;
   }
 
-  for (const FramePart& part : info.parts)
+  for (size_t p = 0; p < info.part_count; p++)
   {
+    const FramePart& part = info.parts[p];
     bool show_part;
 
     if (part.m_type == FramePartType::PrimitiveData)
