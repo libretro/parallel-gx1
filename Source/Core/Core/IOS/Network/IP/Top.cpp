@@ -9,7 +9,6 @@
 #include <cstring>
 #include <string>
 #include <utility>
-#include <vector>
 
 #ifndef _WIN32
 #include <netdb.h>
@@ -208,17 +207,32 @@ struct InterfaceRouting
   in_addr gateway;
 };
 
-struct DefaultInterface
+// The guest's routing table buffer holds far fewer; the rest are dropped
+constexpr u32 MAX_ROUTES = 32;
+
+struct RoutingTable
 {
-  in_addr inet;                                 // IPv4 address
-  in_addr netmask;                              // IPv4 subnet mask
-  in_addr broadcast;                            // IPv4 broadcast address
-  std::vector<InterfaceRouting> routing_table;  // IPv4 routing table
+  InterfaceRouting routes[MAX_ROUTES];
+  u32 count;
 };
 
-static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
+static void AddRoute(RoutingTable* table, const InterfaceRouting& route)
 {
-  std::vector<InterfaceRouting> routing_table;
+  if (table->count < MAX_ROUTES)
+    table->routes[table->count++] = route;
+}
+
+struct DefaultInterface
+{
+  in_addr inet;                // IPv4 address
+  in_addr netmask;             // IPv4 subnet mask
+  in_addr broadcast;           // IPv4 broadcast address
+  RoutingTable routing_table;  // IPv4 routing table
+};
+
+static void GetSystemInterfaceRouting(RoutingTable* routing_table)
+{
+  routing_table->count = 0;
 
 #ifdef _WIN32
   DWORD forward_table_size = 0;
@@ -233,10 +247,11 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
     for (DWORD i = 0; i < forward_table->dwNumEntries; i++)
     {
       const MIB_IPFORWARDROW& entry = forward_table->table[i];
-      routing_table.emplace_back(entry.dwForwardIfIndex,
-                                 std::bit_cast<in_addr>(entry.dwForwardDest),
-                                 std::bit_cast<in_addr>(entry.dwForwardMask),
-                                 std::bit_cast<in_addr>(entry.dwForwardNextHop));
+      const InterfaceRouting route = {entry.dwForwardIfIndex,
+                                      std::bit_cast<in_addr>(entry.dwForwardDest),
+                                      std::bit_cast<in_addr>(entry.dwForwardMask),
+                                      std::bit_cast<in_addr>(entry.dwForwardNextHop)};
+      AddRoute(routing_table, route);
     }
 
     if (result == NO_ERROR)
@@ -254,14 +269,14 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
   if (sock < 0)
   {
     ERROR_LOG(IOS_NET, "Failed to open netlink socket, error %s", Common::StrNetworkError());
-    return {};
+    return;
   }
 
   if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, static_cast<const void*>(&socket_timeout),
                  sizeof(socket_timeout)) < 0)
   {
     ERROR_LOG(IOS_NET, "Failed to set netlink socket recv timeout: %s", Common::StrNetworkError());
-    return {};
+    return;
   }
 
   Common::ScopeGuard socket_guard{[sock] { close(sock); }};
@@ -285,7 +300,7 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
   if (send(sock, nl_msg, nl_msg->nlmsg_len, 0) < 0)
   {
     ERROR_LOG(IOS_NET, "Failed to send netlink request (%s)", Common::StrNetworkError());
-    return {};
+    return;
   }
 
   // read response
@@ -299,7 +314,7 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
     if (read_len < 0)
     {
       ERROR_LOG(IOS_NET, "Failed to receive netlink response (%s)", Common::StrNetworkError());
-      return {};
+      return;
     }
 
     nl_msg = reinterpret_cast<nlmsghdr*>(buf_ptr);
@@ -307,7 +322,7 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
     {
       ERROR_LOG(IOS_NET, "Received netlink error response (%s)",
                 NLMSG_OK(nl_msg, static_cast<unsigned int>(read_len)) ? "true" : "false");
-      return {};
+      return;
     }
 
     if (nl_msg->nlmsg_type == NLMSG_ERROR)
@@ -322,7 +337,7 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
         ERROR_LOG(IOS_NET, "Received netlink error %d: %s", err->error,
                   Common::DecodeNetworkError(-err->error));
       }
-      return {};
+      return;
     }
 
     // if its the last msg, we are done
@@ -373,17 +388,16 @@ static std::vector<InterfaceRouting> GetSystemInterfaceRouting()
                           0 :
                           (1 << rt_msg->rtm_dst_len) - 1;
     route.netmask.s_addr = mask;
-    routing_table.push_back(route);
+    AddRoute(routing_table, route);
   }
 #endif
-
-  return routing_table;
 }
 
 // False when the host has no default interface to report
 static bool GetSystemDefaultInterface(DefaultInterface* out)
 {
-  auto routing_table = GetSystemInterfaceRouting();
+  RoutingTable& routing_table = out->routing_table;
+  GetSystemInterfaceRouting(&routing_table);
 #ifdef _WIN32
   PMIB_IPADDRTABLE ip_table = nullptr;
   DWORD ip_table_size = 0;
@@ -392,12 +406,12 @@ static bool GetSystemDefaultInterface(DefaultInterface* out)
 
   // find the interface IP used for the default route and use that
   NET_IFINDEX if_index = NET_IFINDEX_UNSPECIFIED;
-  for (InterfaceRouting route : routing_table)
+  for (u32 i = 0; i < routing_table.count; i++)
   {
-    if (route.destination.s_addr != 0)
+    if (routing_table.routes[i].destination.s_addr != 0)
       continue;
 
-    if_index = route.index;
+    if_index = routing_table.routes[i].index;
     break;
   }
 
@@ -409,9 +423,9 @@ static bool GetSystemDefaultInterface(DefaultInterface* out)
       const auto& entry = ip_table->table[i];
       if (entry.dwIndex == if_index)
       {
-        *out = DefaultInterface{std::bit_cast<in_addr>(entry.dwAddr),
-                                std::bit_cast<in_addr>(entry.dwMask),
-                                std::bit_cast<in_addr>(entry.dwBCastAddr), routing_table};
+        out->inet = std::bit_cast<in_addr>(entry.dwAddr);
+        out->netmask = std::bit_cast<in_addr>(entry.dwMask);
+        out->broadcast = std::bit_cast<in_addr>(entry.dwBCastAddr);
         std::free(ip_table);
         return true;
       }
@@ -463,11 +477,15 @@ static bool GetSystemDefaultInterface(DefaultInterface* out)
     {
       // this isn't fully correct, but this will make calls to get the routing table at least return
       // the gateway
-      if (routing_table.empty())
-        routing_table = {{0, {}, {}, get_addr(iface->ifa_dstaddr)}};
+      if (routing_table.count == 0)
+      {
+        const InterfaceRouting route = {0, {}, {}, get_addr(iface->ifa_dstaddr)};
+        AddRoute(&routing_table, route);
+      }
 
-      *out = DefaultInterface{get_addr(iface->ifa_addr), get_addr(iface->ifa_netmask),
-                              get_addr(iface->ifa_broadaddr), routing_table};
+      out->inet = get_addr(iface->ifa_addr);
+      out->netmask = get_addr(iface->ifa_netmask);
+      out->broadcast = get_addr(iface->ifa_broadaddr);
       return true;
     }
   }
@@ -475,19 +493,16 @@ static bool GetSystemDefaultInterface(DefaultInterface* out)
   return false;
 }
 
-static DefaultInterface GetSystemDefaultInterfaceOrFallback()
+static void GetSystemDefaultInterfaceOrFallback(DefaultInterface* out)
 {
-  static const in_addr FALLBACK_IP = std::bit_cast<in_addr>(inet_addr("10.0.1.30"));
-  static const in_addr FALLBACK_NETMASK = std::bit_cast<in_addr>(inet_addr("255.255.255.0"));
-  static const in_addr FALLBACK_BROADCAST = std::bit_cast<in_addr>(inet_addr("10.0.1.255"));
-  static const in_addr FALLBACK_GATEWAY = std::bit_cast<in_addr>(inet_addr("10.0.1.1"));
-  static const InterfaceRouting FALLBACK_ROUTING = {.gateway = FALLBACK_GATEWAY};
-  static const DefaultInterface FALLBACK_VALUES = {
-      FALLBACK_IP, FALLBACK_NETMASK, FALLBACK_BROADCAST, {FALLBACK_ROUTING}};
-  DefaultInterface found;
-  if (GetSystemDefaultInterface(&found))
-    return found;
-  return FALLBACK_VALUES;
+  if (GetSystemDefaultInterface(out))
+    return;
+  out->inet = std::bit_cast<in_addr>(inet_addr("10.0.1.30"));
+  out->netmask = std::bit_cast<in_addr>(inet_addr("255.255.255.0"));
+  out->broadcast = std::bit_cast<in_addr>(inet_addr("10.0.1.255"));
+  const InterfaceRouting route = {0, {}, {}, std::bit_cast<in_addr>(inet_addr("10.0.1.1"))};
+  out->routing_table.count = 0;
+  AddRoute(&out->routing_table, route);
 }
 
 IPCReply NetIPTopDevice::IOCtl(const IOCtlRequest& request)
@@ -819,7 +834,8 @@ IPCReply NetIPTopDevice::HandleGetPeerNameRequest(const IOCtlRequest& request)
 
 IPCReply NetIPTopDevice::HandleGetHostIDRequest(const IOCtlRequest& request)
 {
-  const DefaultInterface net_interface = GetSystemDefaultInterfaceOrFallback();
+  DefaultInterface net_interface;
+  GetSystemDefaultInterfaceOrFallback(&net_interface);
   const u32 host_ip = ntohl(net_interface.inet.s_addr);
   INFO_LOG(IOS_NET, "IOCTL_SO_GETHOSTID = %u.%u.%u.%u", host_ip >> 24, (host_ip >> 16) & 0xFF,
            (host_ip >> 8) & 0xFF, host_ip & 0xFF);
@@ -1198,7 +1214,8 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
     // XXX: this isn't exactly right; the buffer can be larger than 12 bytes,
     // in which case, depending on some interface settings, SO can write 12 more bytes
     memory.Write_U32(0xC, request.io_vectors[1].address);
-    const DefaultInterface net_interface = GetSystemDefaultInterfaceOrFallback();
+    DefaultInterface net_interface;
+    GetSystemDefaultInterfaceOrFallback(&net_interface);
     memory.Write_U32(ntohl(net_interface.inet.s_addr), request.io_vectors[0].address);
     memory.Write_U32(ntohl(net_interface.netmask.s_addr), request.io_vectors[0].address + 4);
     memory.Write_U32(ntohl(net_interface.broadcast.s_addr), request.io_vectors[0].address + 8);
@@ -1213,9 +1230,11 @@ IPCReply NetIPTopDevice::HandleGetInterfaceOptRequest(const IOCtlVRequest& reque
 
   case 0x4006:  // get routing table
   {
-    const DefaultInterface net_interface = GetSystemDefaultInterfaceOrFallback();
-    for (InterfaceRouting route : net_interface.routing_table)
+    DefaultInterface net_interface;
+    GetSystemDefaultInterfaceOrFallback(&net_interface);
+    for (u32 i = 0; i < net_interface.routing_table.count; i++)
     {
+      const InterfaceRouting& route = net_interface.routing_table.routes[i];
       memory.Write_U32(ntohl(route.destination.s_addr), request.io_vectors[0].address + param5);
       memory.Write_U32(ntohl(route.netmask.s_addr), request.io_vectors[0].address + param5 + 4);
       memory.Write_U32(ntohl(route.gateway.s_addr), request.io_vectors[0].address + param5 + 8);
