@@ -39,14 +39,14 @@ void VideoBackend::InitBackendInfo()
         VulkanContext::GPUList gpu_list = VulkanContext::EnumerateGPUs(temp_instance);
         VulkanContext::PopulateBackendInfoAdapters(&g_backend_info, gpu_list);
 
-        if (!gpu_list.empty())
+        if (gpu_list.count != 0)
         {
           // Use the selected adapter, or the first to fill features.
           size_t device_index = static_cast<size_t>(g_Config.iAdapter);
-          if (device_index >= gpu_list.size())
+          if (device_index >= gpu_list.count)
             device_index = 0;
 
-          VkPhysicalDevice gpu = gpu_list[device_index];
+          VkPhysicalDevice gpu = gpu_list.devices[device_index];
           VulkanContext::PhysicalDeviceInfo properties(gpu);
           VulkanContext::PopulateBackendInfoFeatures(&g_backend_info, gpu, properties);
           VulkanContext::PopulateBackendInfoMultisampleModes(&g_backend_info, gpu, properties);

@@ -775,7 +775,7 @@ static bool CreateDeviceInternal(
   }
 
   Vulkan::VulkanContext::GPUList gpu_list = Vulkan::VulkanContext::EnumerateGPUs(instance);
-  if (gpu_list.empty())
+  if (gpu_list.count == 0)
   {
     ERROR_LOG(VIDEO, "No Vulkan physical devices available.");
     Vulkan::UnloadVulkanLibrary();
@@ -786,7 +786,7 @@ static bool CreateDeviceInternal(
   Vulkan::VulkanContext::PopulateBackendInfoAdapters(&g_backend_info, gpu_list);
 
   if (gpu == VK_NULL_HANDLE)
-    gpu = gpu_list[0];
+    gpu = gpu_list.devices[0];
   Vulkan::g_vulkan_context =
       Vulkan::VulkanContext::Create(instance, gpu, surface, false, false, s_instance_api_version);
   if (!Vulkan::g_vulkan_context)

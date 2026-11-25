@@ -4,6 +4,7 @@
 #include "VideoBackends/Vulkan/VulkanContext.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 #include "Common/Assert.h"
@@ -17,10 +18,10 @@ namespace Vulkan
 {
 static constexpr const char* VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
 
-static bool HasExtension(const std::vector<VkExtensionProperties>& list, const char* name)
+static bool HasExtension(const VkExtensionProperties* list, u32 count, const char* name)
 {
-  size_t i;
-  for (i = 0; i < list.size(); i++)
+  u32 i;
+  for (i = 0; i < count; i++)
   {
     if (!std::strcmp(list[i].extensionName, name))
       return true;
@@ -182,8 +183,9 @@ VkInstance VulkanContext::CreateVulkanInstance(bool enable_debug_utils,
                                                bool enable_validation_layer,
                                                u32* out_vk_api_version)
 {
-  std::vector<const char*> enabled_extensions;
-  if (!SelectInstanceExtensions(&enabled_extensions, enable_debug_utils,
+  const char* enabled_extensions[MAX_EXTENSIONS];
+  u32 enabled_extension_count = 0;
+  if (!SelectInstanceExtensions(enabled_extensions, &enabled_extension_count, enable_debug_utils,
                                 enable_validation_layer))
     return VK_NULL_HANDLE;
 
@@ -203,8 +205,8 @@ VkInstance VulkanContext::CreateVulkanInstance(bool enable_debug_utils,
   instance_create_info.pNext = nullptr;
   instance_create_info.flags = 0;
   instance_create_info.pApplicationInfo = &app_info;
-  instance_create_info.enabledExtensionCount = static_cast<uint32_t>(enabled_extensions.size());
-  instance_create_info.ppEnabledExtensionNames = enabled_extensions.data();
+  instance_create_info.enabledExtensionCount = enabled_extension_count;
+  instance_create_info.ppEnabledExtensionNames = enabled_extensions;
   instance_create_info.enabledLayerCount = 0;
   instance_create_info.ppEnabledLayerNames = nullptr;
 
@@ -226,10 +228,10 @@ VkInstance VulkanContext::CreateVulkanInstance(bool enable_debug_utils,
   return instance;
 }
 
-bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension_list,
-                                             bool enable_debug_utils,
-                                             bool validation_layer_enabled)
+bool VulkanContext::SelectInstanceExtensions(const char** extension_list, u32* extension_count_out,
+                                             bool enable_debug_utils, bool validation_layer_enabled)
 {
+  *extension_count_out = 0;
   u32 extension_count = 0;
   VkResult res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
   if (res != VK_SUCCESS)
@@ -244,13 +246,15 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
     return false;
   }
 
-  std::vector<VkExtensionProperties> available_extension_list(extension_count);
-  res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count,
-                                               available_extension_list.data());
+  VkExtensionProperties* const available_extension_list = static_cast<VkExtensionProperties*>(
+      std::calloc(extension_count, sizeof(VkExtensionProperties)));
+  if (!available_extension_list)
+    return false;
+  res = vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, available_extension_list);
   ASSERT(res == VK_SUCCESS);
 
   u32 validation_layer_extension_count = 0;
-  std::vector<VkExtensionProperties> validation_layer_extension_list;
+  VkExtensionProperties* validation_layer_extension_list = nullptr;
   if (validation_layer_enabled)
   {
     res = vkEnumerateInstanceExtensionProperties(VALIDATION_LAYER_NAME,
@@ -262,32 +266,36 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
     }
     else
     {
-      validation_layer_extension_list.resize(validation_layer_extension_count);
+      validation_layer_extension_list = static_cast<VkExtensionProperties*>(
+          std::calloc(validation_layer_extension_count ? validation_layer_extension_count : 1,
+                      sizeof(VkExtensionProperties)));
+      if (!validation_layer_extension_list)
+        validation_layer_extension_count = 0;
       res = vkEnumerateInstanceExtensionProperties(VALIDATION_LAYER_NAME,
                                                    &validation_layer_extension_count,
-                                                   validation_layer_extension_list.data());
+                                                   validation_layer_extension_list);
       ASSERT(res == VK_SUCCESS);
     }
   }
 
-  for (const auto& extension_properties : available_extension_list)
-    INFO_LOG(VIDEO, "Available extension: %s", extension_properties.extensionName);
+  for (u32 i = 0; i < extension_count; i++)
+    INFO_LOG(VIDEO, "Available extension: %s", available_extension_list[i].extensionName);
 
-  for (const auto& extension_properties : validation_layer_extension_list)
+  for (u32 i = 0; i < validation_layer_extension_count; i++)
   {
     INFO_LOG(VIDEO, "Available extension in validation layer: %s",
-             extension_properties.extensionName);
+             validation_layer_extension_list[i].extensionName);
   }
 
   auto AddExtension = [&](const char* name, bool required) {
     bool extension_supported =
-        HasExtension(available_extension_list, name) ||
-        HasExtension(validation_layer_extension_list, name);
+        HasExtension(available_extension_list, extension_count, name) ||
+        HasExtension(validation_layer_extension_list, validation_layer_extension_count, name);
 
-    if (extension_supported)
+    if (extension_supported && *extension_count_out < MAX_EXTENSIONS)
     {
       INFO_LOG(VIDEO, "Enabling extension: %s", name);
-      extension_list->push_back(name);
+      extension_list[(*extension_count_out)++] = name;
       return true;
     }
 
@@ -310,29 +318,24 @@ bool VulkanContext::SelectInstanceExtensions(std::vector<const char*>* extension
     WARN_LOG(VIDEO, "Vulkan: Debug utils requested, but extension is not available.");
   }
 
+  std::free(validation_layer_extension_list);
+  std::free(available_extension_list);
   return true;
 }
 
 VulkanContext::GPUList VulkanContext::EnumerateGPUs(VkInstance instance)
 {
-  u32 gpu_count = 0;
-  VkResult res = vkEnumeratePhysicalDevices(instance, &gpu_count, nullptr);
-  if (res != VK_SUCCESS)
+  GPUList gpus = {};
+  u32 gpu_count = MAX_GPUS;
+  // VK_INCOMPLETE: more than MAX_GPUS, the first of which are listed
+  VkResult res = vkEnumeratePhysicalDevices(instance, &gpu_count, gpus.devices);
+  if (res != VK_SUCCESS && res != VK_INCOMPLETE)
   {
     LOG_VULKAN_ERROR(res, "vkEnumeratePhysicalDevices failed: ");
     return {};
   }
 
-  GPUList gpus;
-  gpus.resize(gpu_count);
-
-  res = vkEnumeratePhysicalDevices(instance, &gpu_count, gpus.data());
-  if (res != VK_SUCCESS)
-  {
-    LOG_VULKAN_ERROR(res, "vkEnumeratePhysicalDevices failed: ");
-    return {};
-  }
-
+  gpus.count = gpu_count;
   return gpus;
 }
 
@@ -382,8 +385,9 @@ void VulkanContext::PopulateBackendInfo(BackendInfo* backend_info)
 void VulkanContext::PopulateBackendInfoAdapters(BackendInfo* backend_info, const GPUList& gpu_list)
 {
   backend_info->Adapters.clear();
-  for (VkPhysicalDevice physical_device : gpu_list)
+  for (u32 i = 0; i < gpu_list.count; i++)
   {
+    VkPhysicalDevice physical_device = gpu_list.devices[i];
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(physical_device, &properties);
     backend_info->Adapters.push_back(properties.deviceName);
@@ -543,19 +547,24 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
     return false;
   }
 
-  std::vector<VkExtensionProperties> available_extension_list(extension_count);
+  VkExtensionProperties* const available_extension_list = static_cast<VkExtensionProperties*>(
+      std::calloc(extension_count, sizeof(VkExtensionProperties)));
+  if (!available_extension_list)
+    return false;
   res = vkEnumerateDeviceExtensionProperties(m_physical_device, nullptr, &extension_count,
-                                             available_extension_list.data());
+                                             available_extension_list);
   ASSERT(res == VK_SUCCESS);
 
-  for (const auto& extension_properties : available_extension_list)
-    INFO_LOG(VIDEO, "Available extension: %s", extension_properties.extensionName);
+  for (u32 i = 0; i < extension_count; i++)
+    INFO_LOG(VIDEO, "Available extension: %s", available_extension_list[i].extensionName);
 
+  m_device_extension_count = 0;
   auto AddExtension = [&](const char* name, bool required) {
-    if (HasExtension(available_extension_list, name))
+    if (HasExtension(available_extension_list, extension_count, name) &&
+        m_device_extension_count < MAX_EXTENSIONS)
     {
       INFO_LOG(VIDEO, "Enabling extension: %s", name);
-      m_device_extensions.push_back(name);
+      m_device_extensions[m_device_extension_count++] = name;
       return true;
     }
 
@@ -566,7 +575,10 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   };
 
   if (enable_surface && !AddExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, true))
+  {
+    std::free(available_extension_list);
     return false;
+  }
 
   AddExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, false);
   AddExtension("VK_KHR_portability_subset", false);
@@ -574,7 +586,8 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   /* the extension is enabled only with its feature there to enable */
   m_extended_dynamic_state = false;
   if (m_device_info.apiVersion >= VK_API_VERSION_1_1 && vkGetPhysicalDeviceFeatures2 &&
-      HasExtension(available_extension_list, VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME))
+      HasExtension(available_extension_list, extension_count,
+                   VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME))
   {
     VkPhysicalDeviceExtendedDynamicStateFeaturesEXT eds = {};
     VkPhysicalDeviceFeatures2 features2 = {};
@@ -587,8 +600,8 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
   }
   m_dynamic_blending = false;
   m_dynamic_logic_op = false;
-  if (m_extended_dynamic_state &&
-      HasExtension(available_extension_list, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME))
+  if (m_extended_dynamic_state && HasExtension(available_extension_list, extension_count,
+                                               VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME))
   {
     VkPhysicalDeviceExtendedDynamicState3FeaturesEXT eds3 = {};
     VkPhysicalDeviceFeatures2 features2 = {};
@@ -609,7 +622,8 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
     VkPhysicalDeviceExtendedDynamicState2FeaturesEXT eds2 = {};
     VkPhysicalDeviceFeatures2 features2 = {};
     m_dynamic_logic_op = false;
-    if (HasExtension(available_extension_list, VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME))
+    if (HasExtension(available_extension_list, extension_count,
+                     VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME))
     {
       eds2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT;
       features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -622,8 +636,10 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
 
   m_fast_linking = false;
   if (m_extended_dynamic_state && vkGetPhysicalDeviceProperties2 &&
-      HasExtension(available_extension_list, VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME) &&
-      HasExtension(available_extension_list, VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME))
+      HasExtension(available_extension_list, extension_count,
+                   VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME) &&
+      HasExtension(available_extension_list, extension_count,
+                   VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME))
   {
     VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gpl = {};
     VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT gpl_props = {};
@@ -655,6 +671,7 @@ bool VulkanContext::SelectDeviceExtensions(bool enable_surface)
         AddExtension(VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME, false);
   }
 
+  std::free(available_extension_list);
   return true;
 }
 
@@ -678,9 +695,13 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
     return false;
   }
 
-  std::vector<VkQueueFamilyProperties> queue_family_properties(queue_family_count);
+  // Only the first MAX_QUEUE_FAMILIES are looked at
+  constexpr u32 MAX_QUEUE_FAMILIES = 32;
+  VkQueueFamilyProperties queue_family_properties[MAX_QUEUE_FAMILIES];
+  if (queue_family_count > MAX_QUEUE_FAMILIES)
+    queue_family_count = MAX_QUEUE_FAMILIES;
   vkGetPhysicalDeviceQueueFamilyProperties(m_physical_device, &queue_family_count,
-                                           queue_family_properties.data());
+                                           queue_family_properties);
   INFO_LOG(VIDEO, "%u vulkan queue families", queue_family_count);
 
   // Find graphics and present queues.
@@ -771,15 +792,10 @@ bool VulkanContext::CreateDevice(VkSurfaceKHR surface, bool enable_validation_la
   if (!SelectDeviceExtensions(surface != VK_NULL_HANDLE))
     return false;
 
-  // convert std::string list to a char pointer list which we can feed in
-  std::vector<const char*> extension_name_pointers;
-  for (const std::string& name : m_device_extensions)
-    extension_name_pointers.push_back(name.c_str());
-
   device_info.enabledLayerCount = 0;
   device_info.ppEnabledLayerNames = nullptr;
-  device_info.enabledExtensionCount = static_cast<uint32_t>(extension_name_pointers.size());
-  device_info.ppEnabledExtensionNames = extension_name_pointers.data();
+  device_info.enabledExtensionCount = m_device_extension_count;
+  device_info.ppEnabledExtensionNames = m_device_extensions;
 
   WarnMissingDeviceFeatures();
 
@@ -994,8 +1010,12 @@ void VulkanContext::DisableDebugUtils()
 
 bool VulkanContext::SupportsDeviceExtension(const char* name) const
 {
-  return std::ranges::any_of(m_device_extensions,
-                             [name](const std::string& extension) { return extension == name; });
+  for (u32 i = 0; i < m_device_extension_count; i++)
+  {
+    if (!std::strcmp(m_device_extensions[i], name))
+      return true;
+  }
+  return false;
 }
 
 static bool DriverIsMesa(VkDriverId driver_id)

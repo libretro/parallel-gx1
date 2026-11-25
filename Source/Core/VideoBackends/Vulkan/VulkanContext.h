@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "VideoBackends/Vulkan/Constants.h"
@@ -66,8 +65,13 @@ public:
   static VkInstance CreateVulkanInstance(bool enable_debug_utils,
                                          bool enable_validation_layer, u32* out_vk_api_version);
 
-  // Returns a list of Vulkan-compatible GPUs.
-  using GPUList = std::vector<VkPhysicalDevice>;
+  // The Vulkan-compatible GPUs, the first MAX_GPUS of them
+  static constexpr u32 MAX_GPUS = 16;
+  struct GPUList
+  {
+    VkPhysicalDevice devices[MAX_GPUS];
+    u32 count;
+  };
   static GPUList EnumerateGPUs(VkInstance instance);
 
   // Populates backend/video config.
@@ -136,9 +140,10 @@ public:
   vk_heap_t* GetHeap() { return &m_heap; }
 
 private:
-  static bool SelectInstanceExtensions(std::vector<const char*>* extension_list,
-                                       bool enable_debug_utils,
-                                       bool validation_layer_enabled);
+  // Extension names are string literals; at most this many are enabled
+  static constexpr u32 MAX_EXTENSIONS = 16;
+  static bool SelectInstanceExtensions(const char** extension_list, u32* extension_count,
+                                       bool enable_debug_utils, bool validation_layer_enabled);
   bool SelectDeviceExtensions(bool enable_surface);
   void WarnMissingDeviceFeatures();
   bool CreateDevice(VkSurfaceKHR surface, bool enable_validation_layer);
@@ -161,7 +166,8 @@ private:
 
   PhysicalDeviceInfo m_device_info;
 
-  std::vector<std::string> m_device_extensions;
+  const char* m_device_extensions[MAX_EXTENSIONS] = {};
+  u32 m_device_extension_count = 0;
   bool m_extended_dynamic_state = false;
   bool m_dynamic_blending = false;
   bool m_dynamic_logic_op = false;
