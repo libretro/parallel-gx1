@@ -145,6 +145,11 @@ private:
   u32 m_video_buffer[MAX_VIDEO_PIXELS] = {};
   u32 m_video_pixels = 0;  // how much of m_video_buffer the current screen size uses
 
+  // mGBA's savestate, grown and kept across DoState calls
+  u8* m_state_buffer = nullptr;
+  size_t m_state_capacity = 0;
+  bool GrowStateBuffer(size_t size);
+
   u64 m_last_gc_ticks = 0;
   u64 m_gc_ticks_remainder = 0;
   u16 m_keys = 0;

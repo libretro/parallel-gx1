@@ -6,6 +6,7 @@
 #include "Core/HW/GBACore.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <mgba-util/vfs.h>
 #include <mgba/core/log.h>
@@ -182,6 +183,22 @@ Core::~Core()
   MutexDeinit(&m_core_sync.audioBufferMutex);
 
   retro_eventcount_free(&m_command_done);
+  free(m_state_buffer);
+}
+
+bool Core::GrowStateBuffer(size_t size)
+{
+  if (size <= m_state_capacity)
+    return true;
+  size_t capacity = m_state_capacity ? m_state_capacity : 1;
+  while (capacity < size)
+    capacity *= 2;
+  u8* const grown = static_cast<u8*>(realloc(m_state_buffer, capacity));
+  if (!grown)
+    return false;
+  m_state_buffer = grown;
+  m_state_capacity = capacity;
+  return true;
 }
 
 bool Core::Start(u64 gc_ticks)
@@ -709,20 +726,29 @@ void Core::DoState(PointerWrap& p)
   p.Do(m_response_size);
   p.Do(m_joybus_buffer);
 
-  std::vector<u8> core_state;
-  core_state.resize(m_core->stateSize(m_core));
+  // Same layout as the std::vector this replaced: the byte count, then the bytes.
+  const size_t state_size = m_core->stateSize(m_core);
+  if (!GrowStateBuffer(state_size))
+  {
+    p.SetMeasureMode();
+    return;
+  }
 
   if (p.IsWriteMode() || p.IsVerifyMode())
-  {
-    m_core->saveState(m_core, core_state.data());
-  }
+    m_core->saveState(m_core, m_state_buffer);
 
-  p.Do(core_state);
-
-  if (p.IsReadMode() && m_core->stateSize(m_core) == core_state.size())
+  u32 stored_size = static_cast<u32>(state_size);
+  p.Do(stored_size);
+  if (stored_size && !GrowStateBuffer(stored_size))
   {
-    m_core->loadState(m_core, core_state.data());
+    p.SetMeasureMode();
+    return;
   }
+  if (stored_size)
+    p.DoArray(m_state_buffer, stored_size);
+
+  if (p.IsReadMode() && state_size == stored_size)
+    m_core->loadState(m_core, m_state_buffer);
 }
 
 std::string Core::GetSavePath(std::string_view rom_path, int device_number)
