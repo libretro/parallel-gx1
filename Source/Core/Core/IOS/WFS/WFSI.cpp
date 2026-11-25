@@ -6,9 +6,9 @@
 #include <cinttypes>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <retro_miscellaneous.h>
@@ -41,19 +41,44 @@ std::string GroupIdStr(u16 gid)
 
 namespace IOS::HLE
 {
-void ARCUnpacker::Reset()
+ARCUnpacker::~ARCUnpacker()
 {
-  m_whole_file.clear();
+  std::free(m_whole_file);
 }
 
-void ARCUnpacker::AddBytes(const u8* bytes, size_t size)
+void ARCUnpacker::Reset()
 {
-  m_whole_file.insert(m_whole_file.end(), bytes, bytes + size);
+  m_size = 0;
+}
+
+u8* ARCUnpacker::Append(size_t size)
+{
+  if (size > m_capacity - m_size)
+  {
+    size_t capacity = m_capacity ? m_capacity : 4096;
+    while (capacity - m_size < size)
+      capacity *= 2;
+    u8* const grown = static_cast<u8*>(std::realloc(m_whole_file, capacity));
+    if (!grown)
+      return nullptr;
+    m_whole_file = grown;
+    m_capacity = capacity;
+  }
+  u8* const appended = m_whole_file + m_size;
+  std::memset(appended, 0, size);
+  m_size += size;
+  return appended;
 }
 
 void ARCUnpacker::Extract(WriteCallback callback, void* user)
 {
-  const u32 fourcc = Common::swap32(m_whole_file.data());
+  // The header and the root node
+  if (m_size < 0x20 + 0xC)
+  {
+    ERROR_LOG(IOS_WFS, "ARCUnpacker: archive is too small (%zu bytes)", m_size);
+    return;
+  }
+  const u32 fourcc = Common::swap32(m_whole_file);
   if (fourcc != 0x55AA382D)
   {
     ERROR_LOG(IOS_WFS, "ARCUnpacker: invalid fourcc (%08x)", fourcc);
@@ -61,7 +86,7 @@ void ARCUnpacker::Extract(WriteCallback callback, void* user)
   }
 
   // Read the root node to get the number of nodes.
-  u8* nodes_directory = m_whole_file.data() + 0x20;
+  u8* nodes_directory = m_whole_file + 0x20;
   u32 nodes_count = Common::swap32(nodes_directory + 8);
   constexpr u32 NODE_SIZE = 0xC;
   char* string_table = reinterpret_cast<char*>(nodes_directory + nodes_count * NODE_SIZE);
@@ -108,7 +133,7 @@ void ARCUnpacker::Extract(WriteCallback callback, void* user)
     }
     else
     {
-      callback(user, path, m_whole_file.data() + data_offset, size);
+      callback(user, path, m_whole_file + data_offset, size);
     }
   }
 }
@@ -274,11 +299,15 @@ IPCReply WFSIDevice::IOCtl(const IOCtlRequest& request)
       return_error_code = WFS_EINVAL;
       break;
     }
-    std::vector<u8> decrypted(input_size);
+    // Decrypted straight onto the end of the archive; a ragged size is left zeroed
+    u8* const decrypted = m_arc_unpacker.Append(input_size);
+    if (!decrypted)
+    {
+      return_error_code = WFS_EINVAL;
+      break;
+    }
     if (input_size % AES_BLOCK_SIZE == 0)
-      aes_cbc_decrypt(&m_aes_ctx, m_aes_iv, input, decrypted.data(), input_size);
-
-    m_arc_unpacker.AddBytes(decrypted.data(), decrypted.size());
+      aes_cbc_decrypt(&m_aes_ctx, m_aes_iv, input, decrypted, input_size);
     break;
   }
 

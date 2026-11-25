@@ -3,10 +3,9 @@
 
 #pragma once
 
-#include <memory>
 #include <cstddef>
+#include <memory>
 #include <string>
-#include <vector>
 
 #include <crypto/crypto.h>
 
@@ -20,17 +19,24 @@ namespace IOS::HLE
 class ARCUnpacker
 {
 public:
-  ARCUnpacker() { Reset(); }
+  ARCUnpacker() = default;
+  ~ARCUnpacker();
+  ARCUnpacker(const ARCUnpacker&) = delete;
+  ARCUnpacker& operator=(const ARCUnpacker&) = delete;
   void Reset();
 
-  void AddBytes(const u8* bytes, size_t size);
+  // size zeroed bytes at the end of the archive, or nullptr when out of memory
+  u8* Append(size_t size);
 
   // Hands each file to callback: its path and its octets, which stay valid until it returns
   typedef void (*WriteCallback)(void* user, const char* filename, const u8* bytes, size_t size);
   void Extract(WriteCallback callback, void* user);
 
 private:
-  std::vector<u8> m_whole_file;
+  // Grown by doubling and kept across Reset
+  u8* m_whole_file = nullptr;
+  size_t m_size = 0;
+  size_t m_capacity = 0;
 };
 
 class WFSIDevice : public EmulationDevice
