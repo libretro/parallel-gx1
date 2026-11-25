@@ -4,6 +4,7 @@
 #include "Core/HW/EXI/BBA/TAP_Win32.h"
 
 #include <cinttypes>
+#include <cstring>
 
 #include "Common/Assert.h"
 #include "Common/Logging/Log.h"
@@ -240,7 +241,6 @@ bool CEXIETHERNET::TAPNetworkInterface::Activate()
   if (mReadOverlapped.hEvent == nullptr || mWriteOverlapped.hEvent == nullptr)
     return false;
 
-  mWriteBuffer.reserve(1518);
   return RecvInit();
 }
 
@@ -334,11 +334,16 @@ bool CEXIETHERNET::TAPNetworkInterface::SendFrame(const u8* frame, u32 size)
   }
 
   // Copy to write buffer.
-  mWriteBuffer.assign(frame, frame + size);
+  if (size > sizeof(mWriteBuffer))
+  {
+    ERROR_LOG(SP1, "Unable to send a frame of %u bytes", size);
+    return false;
+  }
+  std::memcpy(mWriteBuffer, frame, size);
   mWritePending = true;
 
   // Queue async write.
-  if (WriteFile(mHAdapter, mWriteBuffer.data(), size, &transferred, &mWriteOverlapped))
+  if (WriteFile(mHAdapter, mWriteBuffer, size, &transferred, &mWriteOverlapped))
   {
     // Returning immediately is not likely to happen, but if so, reset the event state manually.
     ResetEvent(mWriteOverlapped.hEvent);

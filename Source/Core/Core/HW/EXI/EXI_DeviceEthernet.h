@@ -356,7 +356,7 @@ private:
     HANDLE mHAdapter = INVALID_HANDLE_VALUE;
     OVERLAPPED mReadOverlapped = {};
     OVERLAPPED mWriteOverlapped = {};
-    std::vector<u8> mWriteBuffer;
+    u8 mWriteBuffer[Common::MAX_FRAME_SIZE];
     bool mWritePending = false;
 #elif defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
     int fd = -1;
