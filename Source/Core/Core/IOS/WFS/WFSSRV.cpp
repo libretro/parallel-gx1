@@ -3,8 +3,8 @@
 
 #include "Core/IOS/WFS/WFSSRV.h"
 
-#include <algorithm>
 #include <cinttypes>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -34,6 +34,11 @@ WFSSRVDevice::WFSSRVDevice(EmulationKernel& ios, const std::string& device_name)
   m_device_name = "msc01";
 }
 
+WFSSRVDevice::~WFSSRVDevice()
+{
+  std::free(m_hanging);
+}
+
 IPCReply WFSSRVDevice::IOCtl(const IOCtlRequest& request)
 {
   int return_error_code = IPC_SUCCESS;
@@ -59,9 +64,9 @@ IPCReply WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     INFO_LOG(IOS_WFS, "IOCTL_WFS_SHUTDOWN");
 
     // Close all hanging attach/detach ioctls with an appropriate error code.
-    for (auto address : m_hanging)
+    for (size_t i = 0; i < m_hanging_count; i++)
     {
-      IOCtlRequest hanging_request{system, address};
+      IOCtlRequest hanging_request{system, m_hanging[i]};
       memory.Write_U32(0x80000000, hanging_request.buffer_out);
       memory.Write_U32(0, hanging_request.buffer_out + 4);
       memory.Write_U32(0, hanging_request.buffer_out + 8);
@@ -95,7 +100,16 @@ IPCReply WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     INFO_LOG(IOS_WFS, "IOCTL_WFS_ATTACH_DETACH(%u)", request.request);
 
     // Leave hanging, but we need to acknowledge the request at shutdown time.
-    m_hanging.push_back(request.address);
+    if (m_hanging_count == m_hanging_capacity)
+    {
+      const size_t capacity = m_hanging_capacity ? m_hanging_capacity * 2 : 8;
+      u32* const grown = static_cast<u32*>(std::realloc(m_hanging, capacity * sizeof(u32)));
+      if (!grown)
+        break;
+      m_hanging = grown;
+      m_hanging_capacity = capacity;
+    }
+    m_hanging[m_hanging_count++] = request.address;
     return IPCReply::None();
 
   case IOCTL_WFS_FLUSH:
@@ -210,6 +224,12 @@ IPCReply WFSSRVDevice::IOCtl(const IOCtlRequest& request)
     path = NormalizePath(path);
 
     const u16 fd = GetNewFileDescriptor();
+    if (fd == MAX_FDS)
+    {
+      ERROR_LOG(IOS_WFS, "%s(%s, %u): no free file descriptor", ioctl_name, path.c_str(), mode);
+      return_error_code = WFS_EBADFD;
+      break;
+    }
     FileDescriptor* fd_obj = &m_fds[fd];
     fd_obj->in_use = true;
     fd_obj->path = path;
@@ -392,8 +412,12 @@ s32 WFSSRVDevice::Rename(std::string source, std::string dest) const
 
   INFO_LOG(IOS_WFS, "IOCTL_WFS_RENAME: %s to %s", source.c_str(), dest.c_str());
 
-  const bool opened =
-      std::ranges::any_of(m_fds, [&](const auto& fd) { return fd.in_use && fd.path == source; });
+  bool opened = false;
+  for (u16 i = 0; i < m_fd_count; i++)
+  {
+    if (m_fds[i].in_use && m_fds[i].path == source)
+      opened = true;
+  }
 
   if (opened)
     return WFS_FILE_IS_OPENED;
@@ -454,7 +478,7 @@ std::string WFSSRVDevice::NormalizePath(const std::string& path) const
 
 WFSSRVDevice::FileDescriptor* WFSSRVDevice::FindFileDescriptor(u16 fd)
 {
-  if (fd >= m_fds.size() || !m_fds[fd].in_use)
+  if (fd >= m_fd_count || !m_fds[fd].in_use)
   {
     return nullptr;
   }
@@ -463,15 +487,16 @@ WFSSRVDevice::FileDescriptor* WFSSRVDevice::FindFileDescriptor(u16 fd)
 
 u16 WFSSRVDevice::GetNewFileDescriptor()
 {
-  for (u32 i = 0; i < m_fds.size(); ++i)
+  for (u16 i = 0; i < m_fd_count; ++i)
   {
     if (!m_fds[i].in_use)
     {
       return i;
     }
   }
-  m_fds.resize(m_fds.size() + 1);
-  return static_cast<u16>(m_fds.size() - 1);
+  if (m_fd_count == MAX_FDS)
+    return MAX_FDS;
+  return m_fd_count++;
 }
 
 void WFSSRVDevice::ReleaseFileDescriptor(u16 fd)
@@ -483,10 +508,12 @@ void WFSSRVDevice::ReleaseFileDescriptor(u16 fd)
   }
   fd_obj->in_use = false;
 
-  // Garbage collect and shrink the array if possible.
-  while (!m_fds.empty() && !m_fds[m_fds.size() - 1].in_use)
+  // Shrink the count past the descriptors no longer in use, closing them as before.
+  while (m_fd_count && !m_fds[m_fd_count - 1].in_use)
   {
-    m_fds.resize(m_fds.size() - 1);
+    FileDescriptor& last = m_fds[--m_fd_count];
+    last.file.Close();
+    last.path.clear();
   }
 }
 

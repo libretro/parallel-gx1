@@ -4,7 +4,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/IOFile.h"
@@ -32,6 +31,7 @@ class WFSSRVDevice : public EmulationDevice
 {
 public:
   WFSSRVDevice(EmulationKernel& ios, const std::string& device_name);
+  ~WFSSRVDevice() override;
 
   IPCReply IOCtl(const IOCtlRequest& request) override;
 
@@ -92,14 +92,19 @@ private:
 
     bool Open();
   };
-  std::vector<FileDescriptor> m_fds;
+  static constexpr u16 MAX_FDS = 64;
+  FileDescriptor m_fds[MAX_FDS];
+  u16 m_fd_count = 0;  // one past the last descriptor in use
 
   FileDescriptor* FindFileDescriptor(u16 fd);
+  // MAX_FDS when all of them are in use
   u16 GetNewFileDescriptor();
   void ReleaseFileDescriptor(u16 fd);
 
   // List of addresses of IPC requests left hanging that need closing at
   // shutdown time.
-  std::vector<u32> m_hanging;
+  u32* m_hanging = nullptr;  // grown by doubling and kept
+  size_t m_hanging_count = 0;
+  size_t m_hanging_capacity = 0;
 };
 }  // namespace IOS::HLE
