@@ -88,11 +88,15 @@ public:
   ES::TicketReader FindSignedTicket(u64 title_id, int desired_version = ANY_TICKET_VERSION) const;
 
   // Get installed titles (in /title) without checking for TMDs at all.
-  std::vector<u64> GetInstalledTitles() const;
+  // Called for each title; returning false stops the walk
+  typedef bool (*TitleVisitor)(u64 title_id, void* context);
+  void ForEachInstalledTitle(TitleVisitor visit, void* context) const;
+  u32 GetInstalledTitleCount() const;
   // Get titles which are being imported (in /import) without checking for TMDs at all.
-  std::vector<u64> GetTitleImports() const;
+  void ForEachTitleImport(TitleVisitor visit, void* context) const;
   // Get titles for which there is a ticket (in /ticket).
-  std::vector<u64> GetTitlesWithTickets() const;
+  void ForEachTitleWithTicket(TitleVisitor visit, void* context) const;
+  u32 GetTitleWithTicketCount() const;
 
   enum class CheckContentHashes : bool
   {
@@ -200,6 +204,7 @@ private:
   bool WriteImportTMD(const ES::TMDReader& tmd);
   // Finish stale imports and clear the import directory.
   void FinishStaleImport(u64 title_id);
+  static bool FinishStaleImportVisitor(u64 title_id, void* context);
   void FinishAllStaleImports();
 
   std::string GetContentPath(u64 title_id, const ES::Content& content, Ticks ticks = {}) const;
@@ -388,7 +393,6 @@ private:
 
   // Title information
   IPCReply GetTitleCount(size_t title_count, const IOCtlVRequest& request);
-  IPCReply GetTitles(const u64* titles, size_t title_count, const IOCtlVRequest& request);
   IPCReply GetOwnedTitleCount(const IOCtlVRequest& request);
   IPCReply GetOwnedTitles(const IOCtlVRequest& request);
   IPCReply GetTitleCount(const IOCtlVRequest& request);

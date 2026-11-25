@@ -146,34 +146,47 @@ IPCReply ESDevice::GetTitleCount(size_t title_count, const IOCtlVRequest& reques
   return IPCReply(IPC_SUCCESS);
 }
 
-IPCReply ESDevice::GetTitles(const u64* titles, size_t title_count, const IOCtlVRequest& request)
+namespace
 {
-  if (!request.HasNumberOfValidVectors(1, 1))
-    return IPCReply(ES_EINVAL);
+// Writes title IDs to the guest's list until it is full
+struct TitleListWriter
+{
+  Memory::MemoryManager* memory;
+  u32 address;
+  u32 max_count;
+  u32 count;
+};
 
-  auto& system = GetSystem();
-  auto& memory = system.GetMemory();
-  const size_t max_count = memory.Read_U32(request.in_vectors[0].address);
-  const size_t count = max_count < title_count ? max_count : title_count;
-  for (size_t i = 0; i < count; i++)
-  {
-    memory.Write_U64(titles[i], request.io_vectors[0].address + static_cast<u32>(i) * sizeof(u64));
-    INFO_LOG(IOS_ES, "     title %016" PRIx64, (u64)titles[i]);
-  }
-  return IPCReply(IPC_SUCCESS);
+bool WriteTitle(u64 title_id, void* context)
+{
+  TitleListWriter* const writer = static_cast<TitleListWriter*>(context);
+  if (writer->count >= writer->max_count)
+    return false;
+  writer->memory->Write_U64(title_id, writer->address + writer->count * sizeof(u64));
+  INFO_LOG(IOS_ES, "     title %016" PRIx64, (u64)title_id);
+  writer->count++;
+  return true;
 }
+}  // namespace
 
 IPCReply ESDevice::GetTitleCount(const IOCtlVRequest& request)
 {
-  const std::vector<u64> titles = m_core.GetInstalledTitles();
-  INFO_LOG(IOS_ES, "GetTitleCount: %" PRIu64 " titles", (u64)titles.size());
-  return GetTitleCount(titles.size(), request);
+  const u32 count = m_core.GetInstalledTitleCount();
+  INFO_LOG(IOS_ES, "GetTitleCount: %u titles", count);
+  return GetTitleCount(count, request);
 }
 
 IPCReply ESDevice::GetTitles(const IOCtlVRequest& request)
 {
-  const std::vector<u64> titles = m_core.GetInstalledTitles();
-  return GetTitles(titles.data(), titles.size(), request);
+  if (!request.HasNumberOfValidVectors(1, 1))
+    return IPCReply(ES_EINVAL);
+
+  auto& memory = GetSystem().GetMemory();
+  TitleListWriter writer = {&memory, request.io_vectors[0].address,
+                            memory.Read_U32(request.in_vectors[0].address), 0};
+  if (writer.max_count)
+    m_core.ForEachInstalledTitle(WriteTitle, &writer);
+  return IPCReply(IPC_SUCCESS);
 }
 
 IPCReply ESDevice::GetStoredTMDSize(const IOCtlVRequest& request)
@@ -226,15 +239,22 @@ IPCReply ESDevice::GetStoredTMD(const IOCtlVRequest& request)
 
 IPCReply ESDevice::GetOwnedTitleCount(const IOCtlVRequest& request)
 {
-  const std::vector<u64> titles = m_core.GetTitlesWithTickets();
-  INFO_LOG(IOS_ES, "GetOwnedTitleCount: %" PRIu64 " titles", (u64)titles.size());
-  return GetTitleCount(titles.size(), request);
+  const u32 count = m_core.GetTitleWithTicketCount();
+  INFO_LOG(IOS_ES, "GetOwnedTitleCount: %u titles", count);
+  return GetTitleCount(count, request);
 }
 
 IPCReply ESDevice::GetOwnedTitles(const IOCtlVRequest& request)
 {
-  const std::vector<u64> titles = m_core.GetTitlesWithTickets();
-  return GetTitles(titles.data(), titles.size(), request);
+  if (!request.HasNumberOfValidVectors(1, 1))
+    return IPCReply(ES_EINVAL);
+
+  auto& memory = GetSystem().GetMemory();
+  TitleListWriter writer = {&memory, request.io_vectors[0].address,
+                            memory.Read_U32(request.in_vectors[0].address), 0};
+  if (writer.max_count)
+    m_core.ForEachTitleWithTicket(WriteTitle, &writer);
+  return IPCReply(IPC_SUCCESS);
 }
 
 IPCReply ESDevice::GetBoot2Version(const IOCtlVRequest& request)

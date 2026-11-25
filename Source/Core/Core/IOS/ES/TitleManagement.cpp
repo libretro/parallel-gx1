@@ -919,6 +919,41 @@ IPCReply ESDevice::ExportTitleDone(Context& context, const IOCtlVRequest& reques
   return IPCReply(m_core.ExportTitleDone(context));
 }
 
+namespace
+{
+struct SharedContentUse
+{
+  const ESCore* core;
+  const u8* sha1;
+  bool is_used_by_system_title;
+};
+
+bool IsSharedContentUsedBy(u64 title_id, void* context)
+{
+  SharedContentUse* const use = static_cast<SharedContentUse*>(context);
+  if (!ES::IsTitleType(title_id, ES::TitleType::System))
+    return true;
+
+  const auto tmd = use->core->FindInstalledTMD(title_id);
+  if (!tmd.IsValid())
+  {
+    use->is_used_by_system_title = true;
+    return false;
+  }
+
+  for (u16 i = 0; i < tmd.GetNumContents(); ++i)
+  {
+    ES::Content content;
+    if (tmd.GetContent(i, &content) && !std::memcmp(content.sha1, use->sha1, sizeof(content.sha1)))
+    {
+      use->is_used_by_system_title = true;
+      return false;
+    }
+  }
+  return true;
+}
+}  // namespace
+
 ReturnCode ESCore::DeleteSharedContent(const u8* sha1) const
 {
   ES::SharedContentMap map{m_ios.GetFSCore()};
@@ -927,35 +962,11 @@ ReturnCode ESCore::DeleteSharedContent(const u8* sha1) const
     return ES_EINVAL;
 
   // Check whether the shared content is used by a system title.
-  const std::vector<u64> titles = GetInstalledTitles();
-  bool is_used_by_system_title = false;
-  for (const u64 id : titles)
-  {
-    if (!ES::IsTitleType(id, ES::TitleType::System))
-      continue;
-
-    const auto tmd = FindInstalledTMD(id);
-    if (!tmd.IsValid())
-    {
-      is_used_by_system_title = true;
-      break;
-    }
-
-    for (u16 i = 0; i < tmd.GetNumContents(); ++i)
-    {
-      ES::Content content;
-      if (tmd.GetContent(i, &content) && !std::memcmp(content.sha1, sha1, sizeof(content.sha1)))
-      {
-        is_used_by_system_title = true;
-        break;
-      }
-    }
-    if (is_used_by_system_title)
-      break;
-  }
+  SharedContentUse use = {this, sha1, false};
+  ForEachInstalledTitle(IsSharedContentUsedBy, &use);
 
   // Any shared content used by a system title cannot be deleted.
-  if (is_used_by_system_title)
+  if (use.is_used_by_system_title)
     return ES_EINVAL;
 
   // Delete the shared content and update the content map.

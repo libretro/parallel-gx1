@@ -248,6 +248,43 @@ void InitializeWiiFileSystemContents(const BootSessionData& boot_session_data)
   }
 }
 
+struct SaveCopyContext
+{
+  IOS::HLE::EmulationKernel* ios;
+  FS::FileSystem* configured_fs;
+};
+
+// Copies one title's save from the session NAND back to the configured one, backing it up first
+static bool CopySaveBack(u64 title_id, void* context)
+{
+  IOS::HLE::EmulationKernel* const ios = static_cast<SaveCopyContext*>(context)->ios;
+  FS::FileSystem* const configured_fs = static_cast<SaveCopyContext*>(context)->configured_fs;
+
+  INFO_LOG(CORE, "Wii FS Cleanup: Copying %016" PRIx64 ".", (u64)title_id);
+
+  WiiSave::Storage* const session_save = WiiSave::MakeNandStorage(ios->GetFS(), title_id);
+
+  // FS won't write the save if the directory doesn't exist
+  const std::string title_path = Common::GetTitleDataPath(title_id);
+  configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, title_path + '/', 0,
+                                {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
+
+  WiiSave::Storage* const user_save = WiiSave::MakeNandStorage(configured_fs, title_id);
+
+  const std::string backup_path = StringFromFormat(
+      "%s/%016" PRIx64 ".bin", File::GetUserPath(D_BACKUP_IDX).c_str(), (u64)title_id);
+  WiiSave::Storage* const backup_save =
+      WiiSave::MakeDataBinStorage(&ios->GetIOSC(), backup_path, "w+b");
+
+  // Backup the existing save just in case it's still needed.
+  WiiSave::Copy(user_save, backup_save);
+  WiiSave::Copy(session_save, user_save);
+  WiiSave::FreeStorage(backup_save);
+  WiiSave::FreeStorage(user_save);
+  WiiSave::FreeStorage(session_save);
+  return true;
+}
+
 void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
 {
   // In TAS mode, copy back always.
@@ -271,31 +308,8 @@ void CleanUpWiiFileSystemContents(const BootSessionData& boot_session_data)
     WARN_LOG(CORE, "Failed to copy Mii database to the NAND");
   }
 
-  for (const u64 title_id : ios->GetESCore().GetInstalledTitles())
-  {
-    INFO_LOG(CORE, "Wii FS Cleanup: Copying %016" PRIx64 ".", (u64)title_id);
-
-    WiiSave::Storage* const session_save = WiiSave::MakeNandStorage(ios->GetFS(), title_id);
-
-    // FS won't write the save if the directory doesn't exist
-    const std::string title_path = Common::GetTitleDataPath(title_id);
-    configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, title_path + '/', 0,
-                                  {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
-
-    WiiSave::Storage* const user_save = WiiSave::MakeNandStorage(configured_fs, title_id);
-
-    const std::string backup_path = StringFromFormat(
-        "%s/%016" PRIx64 ".bin", File::GetUserPath(D_BACKUP_IDX).c_str(), (u64)title_id);
-    WiiSave::Storage* const backup_save =
-        WiiSave::MakeDataBinStorage(&ios->GetIOSC(), backup_path, "w+b");
-
-    // Backup the existing save just in case it's still needed.
-    WiiSave::Copy(user_save, backup_save);
-    WiiSave::Copy(session_save, user_save);
-    WiiSave::FreeStorage(backup_save);
-    WiiSave::FreeStorage(user_save);
-    WiiSave::FreeStorage(session_save);
-  }
+  SaveCopyContext save_copy = {ios, configured_fs};
+  ios->GetESCore().ForEachInstalledTitle(CopySaveBack, &save_copy);
   delete configured_fs;
 }
 }  // namespace Core

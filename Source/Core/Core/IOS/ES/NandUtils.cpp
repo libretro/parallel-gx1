@@ -90,16 +90,15 @@ static bool IsValidPartOfTitleID(const std::string& string)
   return true;
 }
 
-static std::vector<u64> GetTitlesInTitleOrImport(FS::FileSystem* fs, const std::string& titles_dir)
+static void ForEachTitleInTitleOrImport(FS::FileSystem* fs, const std::string& titles_dir,
+                                        ESCore::TitleVisitor visit, void* context)
 {
   const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, titles_dir);
   if (!entries)
   {
     ERROR_LOG(IOS_ES, "%s is not a directory", titles_dir.c_str());
-    return {};
+    return;
   }
-
-  std::vector<u64> title_ids;
 
   // The /title and /import directories contain one directory per title type, and each of them has
   // a directory per title (where the name is the low 32 bits of the title ID in %08x format).
@@ -126,34 +125,52 @@ static std::vector<u64> GetTitlesInTitleOrImport(FS::FileSystem* fs, const std::
 
       const u32 type = std::stoul(title_type, nullptr, 16);
       const u32 identifier = std::stoul(title_identifier, nullptr, 16);
-      title_ids.push_back(static_cast<u64>(type) << 32 | identifier);
+      if (!visit(static_cast<u64>(type) << 32 | identifier, context))
+        return;
     }
   }
-
-  return title_ids;
 }
 
-std::vector<u64> ESCore::GetInstalledTitles() const
+static bool CountTitle(u64 title_id, void* context)
 {
-  return GetTitlesInTitleOrImport(m_ios.GetFS(), "/title");
+  (void)title_id;
+  ++*static_cast<u32*>(context);
+  return true;
 }
 
-std::vector<u64> ESCore::GetTitleImports() const
+void ESCore::ForEachInstalledTitle(TitleVisitor visit, void* context) const
 {
-  return GetTitlesInTitleOrImport(m_ios.GetFS(), "/import");
+  ForEachTitleInTitleOrImport(m_ios.GetFS(), "/title", visit, context);
 }
 
-std::vector<u64> ESCore::GetTitlesWithTickets() const
+u32 ESCore::GetInstalledTitleCount() const
+{
+  u32 count = 0;
+  ForEachInstalledTitle(CountTitle, &count);
+  return count;
+}
+
+void ESCore::ForEachTitleImport(TitleVisitor visit, void* context) const
+{
+  ForEachTitleInTitleOrImport(m_ios.GetFS(), "/import", visit, context);
+}
+
+u32 ESCore::GetTitleWithTicketCount() const
+{
+  u32 count = 0;
+  ForEachTitleWithTicket(CountTitle, &count);
+  return count;
+}
+
+void ESCore::ForEachTitleWithTicket(TitleVisitor visit, void* context) const
 {
   const auto fs = m_ios.GetFS();
   const auto entries = fs->ReadDirectory(PID_KERNEL, PID_KERNEL, "/ticket");
   if (!entries)
   {
     ERROR_LOG(IOS_ES, "/ticket is not a directory");
-    return {};
+    return;
   }
-
-  std::vector<u64> title_ids;
 
   // The /ticket directory contains one directory per title type, and each of them contains
   // one ticket per title (where the name is the low 32 bits of the title ID in %08x format).
@@ -180,11 +197,10 @@ std::vector<u64> ESCore::GetTitlesWithTickets() const
 
       const u32 type = std::stoul(title_type, nullptr, 16);
       const u32 identifier = std::stoul(name_without_ext, nullptr, 16);
-      title_ids.push_back(static_cast<u64>(type) << 32 | identifier);
+      if (!visit(static_cast<u64>(type) << 32 | identifier, context))
+        return;
     }
   }
-
-  return title_ids;
 }
 
 u16 ESCore::GetStoredContentsCount(const ES::TMDReader& tmd,
@@ -437,11 +453,15 @@ void ESCore::FinishStaleImport(u64 title_id)
   }
 }
 
+bool ESCore::FinishStaleImportVisitor(u64 title_id, void* context)
+{
+  static_cast<ESCore*>(context)->FinishStaleImport(title_id);
+  return true;
+}
+
 void ESCore::FinishAllStaleImports()
 {
-  const std::vector<u64> titles = GetTitleImports();
-  for (const u64& title_id : titles)
-    FinishStaleImport(title_id);
+  ForEachTitleImport(FinishStaleImportVisitor, this);
 }
 
 std::string ESCore::GetContentPath(const u64 title_id, const ES::Content& content,
