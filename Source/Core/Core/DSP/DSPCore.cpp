@@ -7,7 +7,6 @@
 #include "Core/DSP/DSPCaptureLogger.h"
 
 #include <algorithm>
-#include <array>
 #include <memory>
 #include <type_traits>
 

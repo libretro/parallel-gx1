@@ -4,7 +4,6 @@
 #include "Core/SysConf.h"
 
 #include <algorithm>
-#include <array>
 #include <cstdio>
 #include <retro_miscellaneous.h>
 

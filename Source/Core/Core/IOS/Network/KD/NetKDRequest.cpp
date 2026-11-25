@@ -5,7 +5,6 @@
 #include "Common/Thread.h"
 
 #include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <retro_miscellaneous.h>
 #include <string>

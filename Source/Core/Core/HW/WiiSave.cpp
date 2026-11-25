@@ -9,7 +9,6 @@
 #include "Core/HW/WiiSave.h"
 
 #include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>

@@ -3,7 +3,6 @@
 
 #include "DiscIO/VolumeWii.h"
 
-#include <array>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>

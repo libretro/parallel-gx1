@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/EnumMap.h"
 #include "VideoCommon/BPMemory.h"
 

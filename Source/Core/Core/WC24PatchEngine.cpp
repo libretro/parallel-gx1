@@ -6,7 +6,6 @@
 
 #include "Core/WC24PatchEngine.h"
 
-#include <array>
 #include <cerrno>
 #include <clocale>
 #include <cstddef>

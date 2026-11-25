@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/GL/GLExtensions/GLExtensions.h"
 
 #include "VideoCommon/PerfQueryBase.h"

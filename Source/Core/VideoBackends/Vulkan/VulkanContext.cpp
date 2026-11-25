@@ -4,7 +4,6 @@
 #include "VideoBackends/Vulkan/VulkanContext.h"
 
 #include <algorithm>
-#include <array>
 #include <cstring>
 
 #include "Common/Assert.h"

@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <cstddef>
 
 #include <retro_atomic.h>

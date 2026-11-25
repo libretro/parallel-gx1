@@ -4,7 +4,6 @@
 #include "Core/Config/DefaultLocale.h"
 
 #include <algorithm>
-#include <array>
 #include <retro_miscellaneous.h>
 #include <string>
 #include <string_view>

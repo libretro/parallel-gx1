@@ -4,7 +4,6 @@
 #include "VideoBackends/D3D/D3DBoundingBox.h"
 
 #include <algorithm>
-#include <array>
 #include <cstring>
 
 #include "Common/Assert.h"

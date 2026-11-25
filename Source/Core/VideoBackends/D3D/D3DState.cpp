@@ -4,7 +4,6 @@
 #include "VideoBackends/D3D/D3DState.h"
 
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <retro_miscellaneous.h>
 

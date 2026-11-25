@@ -5,7 +5,6 @@
 
 #include <crypto/crypto.h>
 
-#include <array>
 #include <limits>
 #include <memory>
 #include <string>

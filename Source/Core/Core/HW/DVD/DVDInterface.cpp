@@ -4,7 +4,6 @@
 #include "Core/HW/DVD/DVDInterface.h"
 
 #include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <memory>
 #include <string>

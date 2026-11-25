@@ -7,7 +7,6 @@
 #include "VideoBackends/Vulkan/VKShader.h"
 
 #include <algorithm>
-#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <retro_miscellaneous.h>

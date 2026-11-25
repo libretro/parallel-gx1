@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/ObjectPool.h"
 #include "VideoBackends/Vulkan/Constants.h"
 #include "VideoCommon/NativeVertexFormat.h"

@@ -3,8 +3,6 @@
 
 #include "Core/PowerPC/JitArm64/Jit.h"
 
-#include <array>
-
 #include "Common/Arm64Emitter.h"
 #include "Common/Assert.h"
 #include "Common/CommonTypes.h"

@@ -4,7 +4,6 @@
 #include "VideoBackends/Software/SWBoundingBox.h"
 
 #include <algorithm>
-#include <array>
 
 #include "Common/CommonTypes.h"
 

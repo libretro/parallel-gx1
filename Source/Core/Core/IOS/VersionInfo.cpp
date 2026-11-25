@@ -4,7 +4,6 @@
 #include "Core/IOS/VersionInfo.h"
 
 #include <algorithm>
-#include <array>
 
 #include "Common/CommonTypes.h"
 #include "Core/CommonTitles.h"

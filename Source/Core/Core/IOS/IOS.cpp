@@ -4,7 +4,6 @@
 #include "Core/IOS/IOS.h"
 
 #include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>

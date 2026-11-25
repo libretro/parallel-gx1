@@ -4,7 +4,6 @@
 #include "Core/HLE/HLE.h"
 
 #include <algorithm>
-#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <retro_miscellaneous.h>

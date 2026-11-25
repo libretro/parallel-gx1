@@ -3,7 +3,6 @@
 
 #include "Core/HW/EXI/EXI.h"
 
-#include <array>
 #include <memory>
 
 #include "Common/ChunkFile.h"

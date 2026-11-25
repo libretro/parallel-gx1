@@ -3,7 +3,6 @@
 
 #include "Core/IOS/USB/Emulated/Infinity.h"
 
-#include <array>
 #include <bit>
 #include <retro_miscellaneous.h>
 #include <vector>

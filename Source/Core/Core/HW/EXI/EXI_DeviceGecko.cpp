@@ -3,7 +3,6 @@
 
 #include "Core/HW/EXI/EXI_DeviceGecko.h"
 
-#include <array>
 #include <memory>
 #include <queue>
 #include <retro_miscellaneous.h>

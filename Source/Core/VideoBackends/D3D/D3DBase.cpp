@@ -4,7 +4,6 @@
 #include "VideoBackends/D3D/D3DBase.h"
 
 #include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>

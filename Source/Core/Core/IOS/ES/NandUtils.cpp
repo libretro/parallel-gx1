@@ -3,7 +3,6 @@
 
 #include "Core/IOS/ES/ES.h"
 
-#include <array>
 #include <cinttypes>
 #include <cstring>
 #include <string>

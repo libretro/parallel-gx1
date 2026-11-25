@@ -4,7 +4,6 @@
 #include "Core/IOS/Crypto/AesDevice.h"
 
 #include <algorithm>
-#include <array>
 #include <memory>
 #include <retro_miscellaneous.h>
 #include <vector>

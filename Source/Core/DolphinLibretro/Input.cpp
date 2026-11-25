@@ -1,4 +1,3 @@
-#include <array>
 #include <cassert>
 #include <stdarg.h>
 #include <stdio.h>

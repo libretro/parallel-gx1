@@ -4,7 +4,6 @@
 #include "Core/Boot/Boot.h"
 
 #include <algorithm>
-#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

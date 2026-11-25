@@ -3,7 +3,6 @@
 
 #include "Core/IOS/USB/USB_KBD.h"
 
-#include <array>
 #include <retro_miscellaneous.h>
 #include <string.h>
 

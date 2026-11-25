@@ -6,8 +6,6 @@
 #include "Common/CommonTypes.h"
 #include "Common/Swap.h"
 
-#include <array>
-
 namespace IOS::HLE::NWC24::Mail
 {
 constexpr u32 MAIL_LIST_MAGIC = 0x57635466;  // WcTf

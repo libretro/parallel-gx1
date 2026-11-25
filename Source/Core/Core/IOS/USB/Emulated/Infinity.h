@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <vector>
 
 #include <queues/retro_deque.h>

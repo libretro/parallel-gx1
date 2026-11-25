@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 namespace Config
 {
 // Layers in ascending order of priority.

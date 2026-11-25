@@ -3,7 +3,6 @@
 
 #include "Core/ConfigLoaders/GameConfigLoader.h"
 
-#include <array>
 #include <map>
 #include <string>
 #include <string_view>

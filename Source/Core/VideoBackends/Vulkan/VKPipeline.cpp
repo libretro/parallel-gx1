@@ -3,8 +3,6 @@
 
 #include "VideoBackends/Vulkan/VKPipeline.h"
 
-#include <array>
-
 #include <cstring>
 
 #include <retro_atomic.h>

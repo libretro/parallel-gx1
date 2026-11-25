@@ -4,7 +4,6 @@
 #include "Core/IOS/Network/IP/Top.h"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>

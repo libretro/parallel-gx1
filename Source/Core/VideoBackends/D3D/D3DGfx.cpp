@@ -4,7 +4,6 @@
 #include "VideoBackends/D3D/D3DGfx.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstring>
 #include <memory>

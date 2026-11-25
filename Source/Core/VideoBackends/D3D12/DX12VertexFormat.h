@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <d3d12.h>
 
 #include "Common/CommonTypes.h"

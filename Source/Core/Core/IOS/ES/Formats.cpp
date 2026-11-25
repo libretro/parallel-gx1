@@ -3,7 +3,6 @@
 
 #include "Core/IOS/ES/Formats.h"
 
-#include <array>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdlib>

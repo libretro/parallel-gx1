@@ -3,7 +3,6 @@
 
 #include "DiscIO/NFSBlob.h"
 
-#include <array>
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>

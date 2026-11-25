@@ -4,7 +4,6 @@
 #include "Core/IOS/FS/FileSystem.h"
 
 #include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <expected>
 #include <retro_miscellaneous.h>

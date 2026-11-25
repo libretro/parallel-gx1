@@ -4,7 +4,6 @@
 #include "Core/ConfigLoaders/IsSettingSaveable.h"
 
 #include <algorithm>
-#include <array>
 
 #include "Core/Config/WiimoteSettings.h"
 

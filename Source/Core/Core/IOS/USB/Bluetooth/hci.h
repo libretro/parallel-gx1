@@ -82,7 +82,6 @@
 
 #pragma once
 
-#include <array>
 #include <cstdint>
 
 #include "Common/CommonTypes.h"

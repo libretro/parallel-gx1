@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include "VideoBackends/D3D/D3DBase.h"
 #include "VideoCommon/PerfQueryBase.h"
 

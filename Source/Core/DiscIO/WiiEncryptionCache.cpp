@@ -3,7 +3,6 @@
 
 #include "DiscIO/WiiEncryptionCache.h"
 
-#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <limits>

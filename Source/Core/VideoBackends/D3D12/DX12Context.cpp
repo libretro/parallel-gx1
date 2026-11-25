@@ -4,7 +4,6 @@
 #include "VideoBackends/D3D12/DX12Context.h"
 
 #include <algorithm>
-#include <array>
 #include <cstdio>
 #include <cstring>
 #include <dxgi1_6.h>

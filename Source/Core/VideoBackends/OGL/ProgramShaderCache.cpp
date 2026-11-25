@@ -3,7 +3,6 @@
 
 #include "VideoBackends/OGL/ProgramShaderCache.h"
 
-#include <array>
 #include <cstdio>
 #include <memory>
 #include <string>

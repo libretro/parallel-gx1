@@ -3,7 +3,6 @@
 
 #include "Core/PowerPC/Jit64Common/Jit64AsmCommon.h"
 
-#include <array>
 #include <utility>
 
 #include "Common/CPUDetect.h"

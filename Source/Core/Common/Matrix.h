@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <cmath>
 #include <functional>
 #include <type_traits>

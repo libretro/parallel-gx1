@@ -3,7 +3,6 @@
 
 #include "Core/USBUtils.h"
 
-#include <array>
 #include <cwchar>
 #include <functional>
 #include <map>

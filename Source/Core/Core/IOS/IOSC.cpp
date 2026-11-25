@@ -3,7 +3,6 @@
 
 #include "Core/IOS/IOSC.h"
 
-#include <array>
 #include <cinttypes>
 #include <cstddef>
 #include <cstring>

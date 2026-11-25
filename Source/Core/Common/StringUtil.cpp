@@ -3,7 +3,6 @@
 
 #include "Common/StringUtil.h"
 
-#include <array>
 #include <cassert>
 #include <cerrno>
 #include <cinttypes>

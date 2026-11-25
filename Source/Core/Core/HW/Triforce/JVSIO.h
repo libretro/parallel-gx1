@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/CommonTypes.h"
 
 #include "Core/HW/Triforce/IOPorts.h"

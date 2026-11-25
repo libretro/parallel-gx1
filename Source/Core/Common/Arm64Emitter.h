@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <bit>
 #include <cstring>
 #include <type_traits>

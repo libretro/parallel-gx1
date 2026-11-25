@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <array>
 #include <cinttypes>
 #include <memory>
 #include <string>

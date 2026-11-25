@@ -3,7 +3,6 @@
 
 #include "Core/PowerPC/Jit64/Jit.h"
 
-#include <array>
 #include <bit>
 #include <limits>
 

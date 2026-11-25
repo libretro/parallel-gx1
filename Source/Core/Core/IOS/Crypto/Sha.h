@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Core/IOS/Device.h"
 
 namespace IOS::HLE

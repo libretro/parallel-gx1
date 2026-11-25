@@ -4,7 +4,6 @@
 #pragma once
 
 #if defined(__LIBUSB__)
-#include <array>
 #include <string>
 
 #include <retro_atomic.h>

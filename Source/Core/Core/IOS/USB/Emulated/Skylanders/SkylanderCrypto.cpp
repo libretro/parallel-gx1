@@ -3,7 +3,6 @@
 
 #include "Core/IOS/USB/Emulated/Skylanders/SkylanderCrypto.h"
 
-#include <array>
 #include <retro_miscellaneous.h>
 
 #include "Common/BitUtils.h"

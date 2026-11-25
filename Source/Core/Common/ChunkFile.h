@@ -12,7 +12,6 @@
 // - Zero backwards/forwards compatibility
 // - Serialization code for anything complex has to be manually written.
 
-#include <array>
 #include <cstddef>
 #include <cstring>
 #include <string>

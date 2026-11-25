@@ -8,7 +8,6 @@
 
 #include "Core/HW/Memmap.h"
 
-#include <array>
 #include <bit>
 #include <cinttypes>
 #include <cstdlib>

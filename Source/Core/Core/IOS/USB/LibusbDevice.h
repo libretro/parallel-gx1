@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-#include <array>
-
 #include <retro_atomic.h>
 
 #include "Common/CallGate.h"

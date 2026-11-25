@@ -10,7 +10,6 @@
 #include <retro_miscellaneous.h>
 
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <vector>
 

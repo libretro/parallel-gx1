@@ -7,7 +7,6 @@
 
 #include "Core/ARDecrypt.h"
 
-#include <array>
 #include <bit>
 #include <cassert>
 #include <cstdlib>

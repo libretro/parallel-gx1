@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <array>
-
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
 
