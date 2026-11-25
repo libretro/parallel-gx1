@@ -65,14 +65,14 @@ public:
   bool SaveExists() const override
   {
     return !m_files_list.empty() ||
-           (m_has_ids && m_fs->GetMetadata(m_uid, m_gid, m_data_dir + "/banner.bin"));
+           (m_has_ids && m_fs->GetMetadata(m_uid, m_gid, (m_data_dir + "/banner.bin").c_str()));
   }
 
   bool EraseSave() override
   {
     // banner.bin is not in m_files_list, delete separately
     const auto banner_delete_result =
-        m_fs->Delete(IOS::PID_KERNEL, IOS::PID_KERNEL, m_data_dir + "/banner.bin");
+        m_fs->Delete(IOS::PID_KERNEL, IOS::PID_KERNEL, (m_data_dir + "/banner.bin").c_str());
     if (banner_delete_result != FS::ResultCode::Success)
       return false;
 
@@ -83,7 +83,7 @@ public:
         continue;
 
       const auto result =
-          m_fs->Delete(IOS::PID_KERNEL, IOS::PID_KERNEL, m_data_dir + "/" + file.path);
+          m_fs->Delete(IOS::PID_KERNEL, IOS::PID_KERNEL, (m_data_dir + "/" + file.path).c_str());
       if (result != FS::ResultCode::Success)
         return false;
     }
@@ -154,7 +154,7 @@ public:
 
     const std::string banner_file_path = m_data_dir + "/banner.bin";
     const FS::Modes modes = GetFsMode(header.permissions);
-    const auto file = m_fs->CreateAndOpenFile(m_uid, m_gid, banner_file_path, modes);
+    const auto file = m_fs->CreateAndOpenFile(m_uid, m_gid, banner_file_path.c_str(), modes);
     return file && file->Write(header.banner, header.banner_size);
   }
 
@@ -185,7 +185,7 @@ public:
       const std::string path = m_data_dir + '/' + file.path;
       if (file.type == SaveFile::Type::File)
       {
-        const auto raw_file = m_fs->CreateAndOpenFile(m_uid, m_gid, path, modes);
+        const auto raw_file = m_fs->CreateAndOpenFile(m_uid, m_gid, path.c_str(), modes);
         if (!source->ReadFileData(file, &data) || !raw_file ||
             !raw_file->Write(data.data(), data.size()))
         {
@@ -194,11 +194,11 @@ public:
       }
       else if (file.type == SaveFile::Type::Directory)
       {
-        const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(m_uid, m_gid, path);
+        const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(m_uid, m_gid, path.c_str());
         if (meta && meta->is_file)
           return false;
 
-        const FS::ResultCode result = m_fs->CreateDirectory(m_uid, m_gid, path, 0, modes);
+        const FS::ResultCode result = m_fs->CreateDirectory(m_uid, m_gid, path.c_str(), 0, modes);
         if (result != FS::ResultCode::Success)
           return false;
       }
@@ -212,7 +212,7 @@ private:
     if (!m_has_ids)
       return;
 
-    const auto entries = m_fs->ReadDirectory(m_uid, m_gid, dir);
+    const auto entries = m_fs->ReadDirectory(m_uid, m_gid, dir.c_str());
     if (!entries)
       return;
 
@@ -222,7 +222,7 @@ private:
         continue;
 
       const std::string path = dir + '/' + elem;
-      const FS::Result<FS::Metadata> metadata = m_fs->GetMetadata(m_uid, m_gid, path);
+      const FS::Result<FS::Metadata> metadata = m_fs->GetMetadata(m_uid, m_gid, path.c_str());
       if (!metadata)
         return;
 
@@ -243,7 +243,7 @@ private:
 
   void InitTitleUidAndGid()
   {
-    const auto metadata = m_fs->GetMetadata(IOS::PID_KERNEL, IOS::PID_KERNEL, m_data_dir);
+    const auto metadata = m_fs->GetMetadata(IOS::PID_KERNEL, IOS::PID_KERNEL, m_data_dir.c_str());
     if (!metadata)
       return;
     m_uid = metadata->uid;
@@ -263,7 +263,7 @@ private:
 
   u8 GetBinMode(const std::string& path) const
   {
-    if (const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(m_uid, m_gid, path))
+    if (const FS::Result<FS::Metadata> meta = m_fs->GetMetadata(m_uid, m_gid, path.c_str()))
       return GetBinMode(meta->modes);
     return 0;
   }

@@ -34,11 +34,21 @@ bool IsValidFilename(std::string_view filename)
          !std::ranges::any_of(filename, [](char c) { return c == '/'; });
 }
 
-SplitPathResult SplitPathAndBasename(std::string_view path)
+void SplitPathAndBasename(const char* path, SplitPathResult* out)
 {
-  const auto last_separator = path.rfind('/');
-  return {std::string(path.substr(0, std::max<size_t>(1, last_separator))),
-          std::string(path.substr(last_separator + 1))};
+  const char* const last_separator = std::strrchr(path, '/');
+  size_t parent_length = last_separator ? size_t(last_separator - path) : 0;
+  if (parent_length < 1)
+    parent_length = 1;
+  if (parent_length > MaxPathLength)
+    parent_length = MaxPathLength;
+  std::memcpy(out->parent, path, parent_length);
+  out->parent[parent_length] = '\0';
+
+  const char* const file_name = last_separator ? last_separator + 1 : path;
+  const size_t file_name_length = strnlen(file_name, MaxPathLength);
+  std::memcpy(out->file_name, file_name, file_name_length);
+  out->file_name[file_name_length] = '\0';
 }
 
 FileSystem* MakeFileSystem(Location location)
@@ -104,30 +114,35 @@ Result<FileStatus> FileHandle::GetStatus() const
   return m_fs->GetFileStatus(m_fd);
 }
 
-Result<FileHandle> FileSystem::CreateAndOpenFile(Uid uid, Gid gid, const std::string& path,
-                                                 Modes modes)
+Result<FileHandle> FileSystem::CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes)
 {
-  if (Result<FileHandle> file = OpenFile(uid, gid, path.c_str(), Mode::ReadWrite))
+  if (Result<FileHandle> file = OpenFile(uid, gid, path, Mode::ReadWrite))
     return file;
 
   const ResultCode result = CreateFile(uid, gid, path, 0, modes);
   if (result != ResultCode::Success)
     return std::unexpected{result};
 
-  return OpenFile(uid, gid, path.c_str(), Mode::ReadWrite);
+  return OpenFile(uid, gid, path, Mode::ReadWrite);
 }
 
-ResultCode FileSystem::CreateFullPath(Uid uid, Gid gid, const std::string& path,
-                                      FileAttribute attribute, Modes modes)
+ResultCode FileSystem::CreateFullPath(Uid uid, Gid gid, const char* path, FileAttribute attribute,
+                                      Modes modes)
 {
-  std::string::size_type position = 1;
+  const char* separator = path[0] ? path + 1 : path;
   while (true)
   {
-    position = path.find('/', position);
-    if (position == std::string::npos)
+    separator = std::strchr(separator, '/');
+    if (!separator)
       return ResultCode::Success;
 
-    const std::string subpath = path.substr(0, position);
+    // A parent longer than a path can be is not a valid path
+    const size_t length = size_t(separator - path);
+    if (length > MaxPathLength)
+      return ResultCode::Invalid;
+    char subpath[MaxPathLength + 1];
+    std::memcpy(subpath, path, length);
+    subpath[length] = '\0';
     const Result<Metadata> metadata = GetMetadata(uid, gid, subpath);
     if (!metadata && metadata.error() != ResultCode::NotFound)
       return metadata.error();
@@ -141,14 +156,14 @@ ResultCode FileSystem::CreateFullPath(Uid uid, Gid gid, const std::string& path,
         return result;
     }
 
-    ++position;
+    ++separator;
   }
 }
 
 void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
 {
   const auto delete_ = [this](const std::string& directory_path_) {
-    const ResultCode delete_result = Delete(0, 0, directory_path_);
+    const ResultCode delete_result = Delete(0, 0, directory_path_.c_str());
     if (delete_result != ResultCode::Success && delete_result != ResultCode::NotFound)
     {
       ERROR_LOG(IOS_FS, "DoStateRead failed to call Delete for %s: %u", directory_path_.c_str(),
@@ -169,7 +184,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
   else
   {
     // Calling Delete for the root would return Invalid. Let's delete all children instead.
-    auto children = ReadDirectory(0, 0, directory_path);
+    auto children = ReadDirectory(0, 0, directory_path.c_str());
     if (!children)
     {
       ERROR_LOG(IOS_FS, "DoStateRead failed to call ReadDirectory for %s: %u",
@@ -203,7 +218,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
   {
     // UID 0 is used to avoid AccessDenied.
     const ResultCode create_directory_result =
-        CreateDirectory(0, 0, directory_path, metadata.attribute, metadata.modes);
+        CreateDirectory(0, 0, directory_path.c_str(), metadata.attribute, metadata.modes);
     if (create_directory_result != ResultCode::Success)
     {
       ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateDirectory for %s: %u",
@@ -214,8 +229,8 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
   }
 
   // Change the UID and GID from 0 to the intended values.
-  const ResultCode set_metadata_result = SetMetadata(0, directory_path, metadata.uid, metadata.gid,
-                                                     metadata.attribute, metadata.modes);
+  const ResultCode set_metadata_result = SetMetadata(
+      0, directory_path.c_str(), metadata.uid, metadata.gid, metadata.attribute, metadata.modes);
   if (set_metadata_result != ResultCode::Success)
   {
     ERROR_LOG(IOS_FS, "DoStateRead failed to call SetMetadata for %s: %u", directory_path.c_str(),
@@ -242,7 +257,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
     {
       // UID 0 is used to avoid AccessDenied.
       const ResultCode create_file_result =
-          CreateFile(0, 0, child_path, child_metadata.attribute, child_metadata.modes);
+          CreateFile(0, 0, child_path.c_str(), child_metadata.attribute, child_metadata.modes);
       if (create_file_result != ResultCode::Success)
       {
         ERROR_LOG(IOS_FS, "DoStateRead failed to call CreateFile for %s: %u", child_path.c_str(),
@@ -253,7 +268,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
 
       // Change the UID and GID from 0 to the intended values.
       const ResultCode child_metadata_result =
-          SetMetadata(0, child_path, child_metadata.uid, child_metadata.gid,
+          SetMetadata(0, child_path.c_str(), child_metadata.uid, child_metadata.gid,
                       child_metadata.attribute, child_metadata.modes);
       if (child_metadata_result != ResultCode::Success)
       {
@@ -308,7 +323,7 @@ void FileSystem::DoStateRead(PointerWrap& p, const std::string& directory_path)
 
 void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& directory_path)
 {
-  const Result<Metadata> metadata = GetMetadata(0, 0, directory_path);
+  const Result<Metadata> metadata = GetMetadata(0, 0, directory_path.c_str());
   if (!metadata)
   {
     ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u",
@@ -324,7 +339,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
   p.Do(metadata->size);
   p.Do(metadata->fst_index);
 
-  auto children = ReadDirectory(0, 0, directory_path);
+  auto children = ReadDirectory(0, 0, directory_path.c_str());
   if (!children)
   {
     ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call ReadDirectory for %s: %u",
@@ -341,7 +356,7 @@ void FileSystem::DoStateWriteOrMeasure(PointerWrap& p, const std::string& direct
       child_path.push_back('/');
     child_path.append(child_name);
 
-    Result<Metadata> child_metadata = GetMetadata(0, 0, child_path);
+    Result<Metadata> child_metadata = GetMetadata(0, 0, child_path.c_str());
     if (!child_metadata)
     {
       ERROR_LOG(IOS_FS, "DoStateWriteOrMeasure failed to call GetMetadata for %s: %u",

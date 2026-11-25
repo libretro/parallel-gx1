@@ -765,11 +765,11 @@ bool SharedContentMap::WriteEntries() const
   {
     constexpr HLE::FS::Modes modes{HLE::FS::Mode::ReadWrite, HLE::FS::Mode::ReadWrite,
                                    HLE::FS::Mode::None};
-    const auto file = m_fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, modes);
+    const auto file = m_fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path.c_str(), modes);
     if (!file || (m_entry_count && !file->Write(m_entries, m_entry_count)))
       return false;
   }
-  return m_fs->Rename(PID_KERNEL, PID_KERNEL, temp_path, CONTENT_MAP_PATH) ==
+  return m_fs->Rename(PID_KERNEL, PID_KERNEL, temp_path.c_str(), CONTENT_MAP_PATH) ==
          HLE::FS::ResultCode::Success;
 }
 

@@ -29,17 +29,6 @@
 
 namespace IOS::HLE::FS
 {
-std::string FileSystem::BuildFilename(const std::string& wii_path) const
-{
-  ASSERT(!m_root_path.empty());
-
-  if (wii_path.starts_with("/"))
-    return m_root_path + Common::EscapePath(wii_path);
-
-  ASSERT_MSG(IOS_FS, false, "Invalid Wii path '%s' given to BuildFilename()", wii_path.c_str());
-  return m_root_path;
-}
-
 bool FileSystem::BuildFilename(const char* wii_path, char* out, size_t out_size) const
 {
   ASSERT(!m_root_path.empty());
@@ -476,8 +465,9 @@ ResultCode FileSystem::Format(Uid uid)
     return ResultCode::AccessDenied;
   if (m_root_path.empty())
     return ResultCode::AccessDenied;
-  const std::string root = BuildFilename("/");
-  if (!File::DeleteDirRecursively(root) || !File::CreateDir(root))
+  char root[HOST_PATH_SIZE];
+  if (!BuildFilename("/", root, sizeof(root)) || !File::DeleteDirRecursively(root) ||
+      !File::CreateDir(root))
     return ResultCode::UnknownError;
   ResetFst();
   SaveFst();
@@ -486,15 +476,16 @@ ResultCode FileSystem::Format(Uid uid)
   return ResultCode::Success;
 }
 
-ResultCode FileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::string& path,
-                                             FileAttribute attr, Modes modes, bool is_file)
+ResultCode FileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const char* path, FileAttribute attr,
+                                             Modes modes, bool is_file)
 {
   if (!IsValidNonRootPath(path))
     return ResultCode::Invalid;
 
   int depth = 0;
-  for (const char c : path)
+  for (const char* p = path; *p; p++)
   {
+    const char c = *p;
     if (!Common::IsPrintableCharacter(c))
       return ResultCode::Invalid;
     if (c == '/')
@@ -504,10 +495,13 @@ ResultCode FileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::string
   if (!is_file && depth > int(MaxPathDepth))
     return ResultCode::TooManyPathComponents;
 
-  const auto split_path = SplitPathAndBasename(path);
-  const std::string host_path = BuildFilename(path);
+  SplitPathResult split_path;
+  SplitPathAndBasename(path, &split_path);
+  char host_path[HOST_PATH_SIZE];
+  if (!BuildFilename(path, host_path, sizeof(host_path)))
+    return ResultCode::Invalid;
 
-  FstEntry* parent = GetFstEntryForPath(split_path.parent.c_str());
+  FstEntry* parent = GetFstEntryForPath(split_path.parent);
   if (!parent)
     return ResultCode::NotFound;
 
@@ -520,16 +514,16 @@ ResultCode FileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::string
   const bool ok = is_file ? File::CreateEmptyFile(host_path) : File::CreateDir(host_path);
   if (!ok)
   {
-    ERROR_LOG(IOS_FS, "Failed to create file or directory: %s", host_path.c_str());
+    ERROR_LOG(IOS_FS, "Failed to create file or directory: %s", host_path);
     return ResultCode::UnknownError;
   }
 
-  FstEntry* child = GetFstEntryForPath(path.c_str());
+  FstEntry* child = GetFstEntryForPath(path);
   if (!child)
     return ResultCode::UnknownError;
   FreeFstChildren(child);
   std::memset(child, 0, sizeof(*child));
-  SetFstName(child->name, split_path.file_name.c_str(), split_path.file_name.size());
+  SetFstName(child->name, split_path.file_name, std::strlen(split_path.file_name));
   child->data.is_file = is_file;
   child->data.modes = modes;
   child->data.uid = uid;
@@ -539,14 +533,14 @@ ResultCode FileSystem::CreateFileOrDirectory(Uid uid, Gid gid, const std::string
   return ResultCode::Success;
 }
 
-ResultCode FileSystem::CreateFile(Uid uid, Gid gid, const std::string& path, FileAttribute attr,
+ResultCode FileSystem::CreateFile(Uid uid, Gid gid, const char* path, FileAttribute attr,
                                   Modes modes)
 {
   return CreateFileOrDirectory(uid, gid, path, attr, modes, true);
 }
 
-ResultCode FileSystem::CreateDirectory(Uid uid, Gid gid, const std::string& path,
-                                       FileAttribute attr, Modes modes)
+ResultCode FileSystem::CreateDirectory(Uid uid, Gid gid, const char* path, FileAttribute attr,
+                                       Modes modes)
 {
   return CreateFileOrDirectory(uid, gid, path, attr, modes, false);
 }
@@ -573,15 +567,18 @@ bool FileSystem::IsDirectoryInUse(const char* path) const
   return false;
 }
 
-ResultCode FileSystem::Delete(Uid uid, Gid gid, const std::string& path)
+ResultCode FileSystem::Delete(Uid uid, Gid gid, const char* path)
 {
   if (!IsValidNonRootPath(path))
     return ResultCode::Invalid;
 
-  const std::string host_path = BuildFilename(path);
-  const auto split_path = SplitPathAndBasename(path);
+  char host_path[HOST_PATH_SIZE];
+  if (!BuildFilename(path, host_path, sizeof(host_path)))
+    return ResultCode::Invalid;
+  SplitPathResult split_path;
+  SplitPathAndBasename(path, &split_path);
 
-  FstEntry* parent = GetFstEntryForPath(split_path.parent.c_str());
+  FstEntry* parent = GetFstEntryForPath(split_path.parent);
   if (!parent)
     return ResultCode::NotFound;
 
@@ -591,16 +588,16 @@ ResultCode FileSystem::Delete(Uid uid, Gid gid, const std::string& path)
   if (!File::Exists(host_path))
     return ResultCode::NotFound;
 
-  if (File::IsFile(host_path) && !IsFileOpened(path.c_str()))
+  if (File::IsFile(host_path) && !IsFileOpened(path))
     File::Delete(host_path);
-  else if (File::IsDirectory(host_path) && !IsDirectoryInUse(path.c_str()))
+  else if (File::IsDirectory(host_path) && !IsDirectoryInUse(path))
     File::DeleteDirRecursively(host_path);
   else
     return ResultCode::InUse;
 
   for (u32 i = 0; i < parent->child_count; i++)
   {
-    if (!std::strcmp(parent->children[i].name, split_path.file_name.c_str()))
+    if (!std::strcmp(parent->children[i].name, split_path.file_name))
     {
       RemoveFstChild(parent, i);
       break;
@@ -611,43 +608,9 @@ ResultCode FileSystem::Delete(Uid uid, Gid gid, const std::string& path)
   return ResultCode::Success;
 }
 
-ResultCode FileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
-                              const std::string& new_path)
+// Moves the host file or directory, replacing one of the same type at the new path
+static ResultCode RenameHostPath(const char* host_old_path, const char* host_new_path)
 {
-  if (!IsValidNonRootPath(old_path) || !IsValidNonRootPath(new_path))
-    return ResultCode::Invalid;
-
-  const auto split_old_path = SplitPathAndBasename(old_path);
-  const auto split_new_path = SplitPathAndBasename(new_path);
-
-  FstEntry* old_parent = GetFstEntryForPath(split_old_path.parent.c_str());
-  FstEntry* new_parent = GetFstEntryForPath(split_new_path.parent.c_str());
-  if (!old_parent || !new_parent)
-    return ResultCode::NotFound;
-
-  if (!old_parent->CheckPermission(uid, gid, Mode::Write) ||
-      !new_parent->CheckPermission(uid, gid, Mode::Write))
-  {
-    return ResultCode::AccessDenied;
-  }
-
-  FstEntry* entry = GetFstEntryForPath(old_path.c_str());
-  if (!entry)
-    return ResultCode::NotFound;
-
-  // For files, the file name is not allowed to change.
-  if (entry->data.is_file && split_old_path.file_name != split_new_path.file_name)
-    return ResultCode::Invalid;
-
-  if ((!entry->data.is_file && IsDirectoryInUse(old_path.c_str())) ||
-      (entry->data.is_file && IsFileOpened(old_path.c_str())))
-  {
-    return ResultCode::InUse;
-  }
-
-  const std::string host_old_path = BuildFilename(old_path);
-  const std::string host_new_path = BuildFilename(new_path);
-
   // If there is already something of the same type at the new path, delete it.
   if (File::Exists(host_new_path))
   {
@@ -663,25 +626,78 @@ ResultCode FileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
 
   if (!File::Rename(host_old_path, host_new_path))
   {
-    ERROR_LOG(IOS_FS, "Rename %s to %s - failed", host_old_path.c_str(), host_new_path.c_str());
+    ERROR_LOG(IOS_FS, "Rename %s to %s - failed", host_old_path, host_new_path);
     return ResultCode::NotFound;
   }
+  return ResultCode::Success;
+}
 
-  FstEntry* new_entry = GetFstEntryForPath(new_path.c_str());
+ResultCode FileSystem::Rename(Uid uid, Gid gid, const char* old_path, const char* new_path)
+{
+  if (!IsValidNonRootPath(old_path) || !IsValidNonRootPath(new_path))
+    return ResultCode::Invalid;
+
+  SplitPathResult split_old_path;
+  SplitPathAndBasename(old_path, &split_old_path);
+  SplitPathResult split_new_path;
+  SplitPathAndBasename(new_path, &split_new_path);
+
+  FstEntry* old_parent = GetFstEntryForPath(split_old_path.parent);
+  FstEntry* new_parent = GetFstEntryForPath(split_new_path.parent);
+  if (!old_parent || !new_parent)
+    return ResultCode::NotFound;
+
+  if (!old_parent->CheckPermission(uid, gid, Mode::Write) ||
+      !new_parent->CheckPermission(uid, gid, Mode::Write))
+  {
+    return ResultCode::AccessDenied;
+  }
+
+  FstEntry* entry = GetFstEntryForPath(old_path);
+  if (!entry)
+    return ResultCode::NotFound;
+
+  // For files, the file name is not allowed to change.
+  if (entry->data.is_file && std::strcmp(split_old_path.file_name, split_new_path.file_name))
+    return ResultCode::Invalid;
+
+  if ((!entry->data.is_file && IsDirectoryInUse(old_path)) ||
+      (entry->data.is_file && IsFileOpened(old_path)))
+  {
+    return ResultCode::InUse;
+  }
+
+  // Both host paths together are too large for the stack
+  char* const host_old_path = static_cast<char*>(std::malloc(2 * HOST_PATH_SIZE));
+  if (!host_old_path)
+    return ResultCode::UnknownError;
+  char* const host_new_path = host_old_path + HOST_PATH_SIZE;
+  if (!BuildFilename(old_path, host_old_path, HOST_PATH_SIZE) ||
+      !BuildFilename(new_path, host_new_path, HOST_PATH_SIZE))
+  {
+    std::free(host_old_path);
+    return ResultCode::Invalid;
+  }
+  const ResultCode moved = RenameHostPath(host_old_path, host_new_path);
+  std::free(host_old_path);
+  if (moved != ResultCode::Success)
+    return moved;
+
+  FstEntry* new_entry = GetFstEntryForPath(new_path);
   if (!new_entry)
   {
     SaveFst();
     return ResultCode::Success;
   }
-  SetFstName(new_entry->name, split_new_path.file_name.c_str(), split_new_path.file_name.size());
+  SetFstName(new_entry->name, split_new_path.file_name, std::strlen(split_new_path.file_name));
   // Adding the new entry may have moved the array the old parent lives in
-  old_parent = GetFstEntryForPath(split_old_path.parent.c_str());
+  old_parent = GetFstEntryForPath(split_old_path.parent);
 
   // Finally, remove the child from the old parent and move it to the new parent.
   for (u32 i = 0; old_parent && i < old_parent->child_count; i++)
   {
     FstEntry& old_entry = old_parent->children[i];
-    if (std::strcmp(old_entry.name, split_old_path.file_name.c_str()))
+    if (std::strcmp(old_entry.name, split_old_path.file_name))
       continue;
     if (&old_entry == new_entry)
       break;
@@ -702,13 +718,12 @@ ResultCode FileSystem::Rename(Uid uid, Gid gid, const std::string& old_path,
   return ResultCode::Success;
 }
 
-Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid,
-                                                           const std::string& path)
+Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid, const char* path)
 {
   if (!IsValidPath(path))
     return std::unexpected{ResultCode::Invalid};
 
-  const FstEntry* entry = GetFstEntryForPath(path.c_str());
+  const FstEntry* entry = GetFstEntryForPath(path);
   if (!entry)
     return std::unexpected{ResultCode::NotFound};
 
@@ -718,9 +733,11 @@ Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid,
   if (entry->data.is_file)
     return std::unexpected{ResultCode::Invalid};
 
-  const std::string host_path = BuildFilename(path);
+  char host_path[HOST_PATH_SIZE];
+  if (!BuildFilename(path, host_path, sizeof(host_path)))
+    return std::unexpected{ResultCode::Invalid};
   File::FSTEntry host_entry = File::ScanDirectoryTree(host_path, false);
-  FixupDirectoryEntries(&host_entry, path == "/");
+  FixupDirectoryEntries(&host_entry, !std::strcmp(path, "/"));
 
   // Sort files according to their order in the FST tree (issue 10234).
   // The result should look like this:
@@ -779,10 +796,10 @@ Result<std::vector<std::string>> FileSystem::ReadDirectory(Uid uid, Gid gid,
   return output;
 }
 
-Result<Metadata> FileSystem::GetMetadata(Uid uid, Gid gid, const std::string& path)
+Result<Metadata> FileSystem::GetMetadata(Uid uid, Gid gid, const char* path)
 {
   const FstEntry* entry = nullptr;
-  if (path == "/")
+  if (!std::strcmp(path, "/"))
   {
     entry = &m_root_entry;
   }
@@ -791,30 +808,32 @@ Result<Metadata> FileSystem::GetMetadata(Uid uid, Gid gid, const std::string& pa
     if (!IsValidNonRootPath(path))
       return std::unexpected{ResultCode::Invalid};
 
-    const auto split_path = SplitPathAndBasename(path);
-    const FstEntry* parent = GetFstEntryForPath(split_path.parent.c_str());
+    SplitPathResult split_path;
+    SplitPathAndBasename(path, &split_path);
+    const FstEntry* parent = GetFstEntryForPath(split_path.parent);
     if (!parent)
       return std::unexpected{ResultCode::NotFound};
     if (!parent->CheckPermission(uid, gid, Mode::Read))
       return std::unexpected{ResultCode::AccessDenied};
-    entry = GetFstEntryForPath(path.c_str());
+    entry = GetFstEntryForPath(path);
   }
 
   if (!entry)
     return std::unexpected{ResultCode::NotFound};
 
   Metadata metadata = entry->data;
-  metadata.size = File::GetSize(BuildFilename(path));
+  char host_path[HOST_PATH_SIZE];
+  metadata.size = BuildFilename(path, host_path, sizeof(host_path)) ? File::GetSize(host_path) : 0;
   return metadata;
 }
 
-ResultCode FileSystem::SetMetadata(Uid caller_uid, const std::string& path, Uid uid, Gid gid,
+ResultCode FileSystem::SetMetadata(Uid caller_uid, const char* path, Uid uid, Gid gid,
                                    FileAttribute attr, Modes modes)
 {
   if (!IsValidPath(path))
     return ResultCode::Invalid;
 
-  FstEntry* entry = GetFstEntryForPath(path.c_str());
+  FstEntry* entry = GetFstEntryForPath(path);
   if (!entry)
     return ResultCode::NotFound;
 
@@ -823,7 +842,9 @@ ResultCode FileSystem::SetMetadata(Uid caller_uid, const std::string& path, Uid 
   if (caller_uid != 0 && uid != entry->data.uid)
     return ResultCode::AccessDenied;
 
-  const bool is_empty = File::GetSize(BuildFilename(path)) == 0;
+  char host_path[HOST_PATH_SIZE];
+  const bool is_empty =
+      !BuildFilename(path, host_path, sizeof(host_path)) || File::GetSize(host_path) == 0;
   if (entry->data.uid != uid && entry->data.is_file && !is_empty)
     return ResultCode::FileNotEmpty;
 
@@ -871,7 +892,7 @@ Result<NandStats> FileSystem::GetNandStats()
   return stats;
 }
 
-Result<DirectoryStats> FileSystem::GetDirectoryStats(const std::string& wii_path)
+Result<DirectoryStats> FileSystem::GetDirectoryStats(const char* wii_path)
 {
   const auto result = GetExtendedDirectoryStats(wii_path);
   if (!result)
@@ -883,13 +904,15 @@ Result<DirectoryStats> FileSystem::GetDirectoryStats(const std::string& wii_path
   return stats;
 }
 
-Result<ExtendedDirectoryStats> FileSystem::GetExtendedDirectoryStats(const std::string& wii_path)
+Result<ExtendedDirectoryStats> FileSystem::GetExtendedDirectoryStats(const char* wii_path)
 {
   if (!IsValidPath(wii_path))
     return std::unexpected{ResultCode::Invalid};
 
   ExtendedDirectoryStats stats{};
-  std::string path(BuildFilename(wii_path));
+  char path[HOST_PATH_SIZE];
+  if (!BuildFilename(wii_path, path, sizeof(path)))
+    return std::unexpected{ResultCode::Invalid};
   File::FileInfo info(path);
   if (!info.Exists())
   {
@@ -898,7 +921,7 @@ Result<ExtendedDirectoryStats> FileSystem::GetExtendedDirectoryStats(const std::
   if (info.IsDirectory())
   {
     File::FSTEntry parent_dir = File::ScanDirectoryTree(path, true);
-    FixupDirectoryEntries(&parent_dir, wii_path == "/");
+    FixupDirectoryEntries(&parent_dir, !std::strcmp(wii_path, "/"));
 
     // add one for the folder itself
     stats.used_inodes = 1 + parent_dir.size;

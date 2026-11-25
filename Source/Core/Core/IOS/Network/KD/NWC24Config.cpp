@@ -51,8 +51,8 @@ void NWC24Config::WriteConfig() const
 void NWC24Config::WriteConfigToPath(const std::string& path) const
 {
   constexpr FS::Modes public_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite};
-  m_fs->CreateFullPath(PID_KD, PID_KD, path, 0, public_modes);
-  const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, path, public_modes);
+  m_fs->CreateFullPath(PID_KD, PID_KD, path.c_str(), 0, public_modes);
+  const auto file = m_fs->CreateAndOpenFile(PID_KD, PID_KD, path.c_str(), public_modes);
   if (!file || !file->Write(&m_data, 1))
     ERROR_LOG(IOS_WC24, "Failed to open or write WC24 config file at %s", path.c_str());
 }

@@ -78,11 +78,11 @@ static bool CopyNandFile(FS::FileSystem* source_fs, const std::string& source_fi
   if (!source_handle)
     return true;
 
-  dest_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, dest_file, 0,
+  dest_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, dest_file.c_str(), 0,
                           {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
 
   auto dest_handle =
-      dest_fs->CreateAndOpenFile(IOS::PID_KERNEL, IOS::PID_KERNEL, source_file,
+      dest_fs->CreateAndOpenFile(IOS::PID_KERNEL, IOS::PID_KERNEL, source_file.c_str(),
                                  {IOS::HLE::FS::Mode::ReadWrite, IOS::HLE::FS::Mode::ReadWrite,
                                   IOS::HLE::FS::Mode::ReadWrite});
   if (!dest_handle)
@@ -196,14 +196,14 @@ static bool CopySysmenuFilesToFS(FS::FileSystem* fs, const std::string& host_sou
 
     if (entry.isDirectory)
     {
-      fs->CreateDirectory(IOS::SYSMENU_UID, IOS::SYSMENU_GID, nand_path, 0, public_modes);
+      fs->CreateDirectory(IOS::SYSMENU_UID, IOS::SYSMENU_GID, nand_path.c_str(), 0, public_modes);
       if (!CopySysmenuFilesToFS(fs, host_path, nand_path))
         return false;
     }
     else
     {
       // Do not overwrite any existing files.
-      if (fs->GetMetadata(IOS::SYSMENU_UID, IOS::SYSMENU_UID, nand_path).has_value())
+      if (fs->GetMetadata(IOS::SYSMENU_UID, IOS::SYSMENU_UID, nand_path.c_str()).has_value())
         continue;
 
       // written into the NAND from the mapping where the host file has one
@@ -220,8 +220,8 @@ static bool CopySysmenuFilesToFS(FS::FileSystem* fs, const std::string& host_sou
         size = file_data.size();
       }
 
-      const auto nand_file =
-          fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, nand_path, public_modes);
+      const auto nand_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
+                                                   nand_path.c_str(), public_modes);
       if (!nand_file || !nand_file->Write(data, size))
         return false;
     }
@@ -266,7 +266,7 @@ static bool CopySaveBack(u64 title_id, void* context)
 
   // FS won't write the save if the directory doesn't exist
   const std::string title_path = Common::GetTitleDataPath(title_id);
-  configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, title_path + '/', 0,
+  configured_fs->CreateFullPath(IOS::PID_KERNEL, IOS::PID_KERNEL, (title_path + '/').c_str(), 0,
                                 {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::ReadWrite});
 
   WiiSave::Storage* const user_save = WiiSave::MakeNandStorage(configured_fs, title_id);

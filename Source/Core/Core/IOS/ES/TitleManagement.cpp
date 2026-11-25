@@ -34,8 +34,8 @@ static ReturnCode WriteTicket(FS::FileSystem* fs, const ES::TicketReader& ticket
                                                  Common::GetTicketFileName(title_id);
 
   constexpr FS::Modes ticket_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None};
-  fs->CreateFullPath(PID_KERNEL, PID_KERNEL, path, 0, ticket_modes);
-  const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, path, ticket_modes);
+  fs->CreateFullPath(PID_KERNEL, PID_KERNEL, path.c_str(), 0, ticket_modes);
+  const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, path.c_str(), ticket_modes);
   if (!file)
     return FS::ConvertResult(file.error());
 
@@ -522,7 +522,8 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
 
   {
     constexpr FS::Modes content_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None};
-    const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, content_modes);
+    const auto file =
+        fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path.c_str(), content_modes);
     if (!file || !file->Write(decrypted_data, content_info.size))
     {
       ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to write to %s", temp_path.c_str());
@@ -530,10 +531,11 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
     }
   }
 
-  const FS::ResultCode rename_result = fs->Rename(PID_KERNEL, PID_KERNEL, temp_path, content_path);
+  const FS::ResultCode rename_result =
+      fs->Rename(PID_KERNEL, PID_KERNEL, temp_path.c_str(), content_path.c_str());
   if (rename_result != FS::ResultCode::Success)
   {
-    fs->Delete(PID_KERNEL, PID_KERNEL, temp_path);
+    fs->Delete(PID_KERNEL, PID_KERNEL, temp_path.c_str());
     ERROR_LOG(IOS_ES, "ImportContentEnd: Failed to move content to %s", content_path.c_str());
     return FS::ConvertResult(rename_result);
   }
@@ -577,7 +579,7 @@ static bool HasAllRequiredContents(Kernel& ios, const ES::TMDReader& tmd)
     // Note: the import hasn't been finalised yet, so the whole title directory
     // is still in /import, not /title.
     const std::string path = GetImportContentPath(title_id, content.id);
-    if (!ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path).has_value())
+    if (!ios.GetFS()->GetMetadata(PID_KERNEL, PID_KERNEL, path.c_str()).has_value())
       return false;
   }
   return true;
@@ -665,7 +667,7 @@ ReturnCode ESCore::DeleteTitle(u64 title_id)
     return ES_EINVAL;
 
   const std::string title_dir = Common::GetTitlePath(title_id);
-  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, title_dir));
+  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, title_dir.c_str()));
 }
 
 IPCReply ESDevice::DeleteTitle(const IOCtlVRequest& request)
@@ -718,16 +720,16 @@ ReturnCode ESCore::DeleteTicket(const u8* ticket_view)
   else
   {
     // Delete the ticket file if it is now empty.
-    fs->Delete(PID_KERNEL, PID_KERNEL, ticket_path);
+    fs->Delete(PID_KERNEL, PID_KERNEL, ticket_path.c_str());
   }
 
   // Delete the ticket directory if it is now empty.
   const std::string ticket_parent_dir =
       StringFromFormat("/ticket/%08x", static_cast<u32>(title_id >> 32));
   const auto ticket_parent_dir_entries =
-      fs->ReadDirectory(PID_KERNEL, PID_KERNEL, ticket_parent_dir);
+      fs->ReadDirectory(PID_KERNEL, PID_KERNEL, ticket_parent_dir.c_str());
   if (ticket_parent_dir_entries && ticket_parent_dir_entries->empty())
-    fs->Delete(PID_KERNEL, PID_KERNEL, ticket_parent_dir);
+    fs->Delete(PID_KERNEL, PID_KERNEL, ticket_parent_dir.c_str());
 
   return IPC_SUCCESS;
 }
@@ -752,14 +754,14 @@ ReturnCode ESCore::DeleteTitleContent(u64 title_id) const
     return ES_EINVAL;
 
   const std::string content_dir = Common::GetTitleContentPath(title_id);
-  const auto files = m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, content_dir);
+  const auto files = m_ios.GetFS()->ReadDirectory(PID_KERNEL, PID_KERNEL, content_dir.c_str());
   if (!files)
     return FS::ConvertResult(files.error());
 
   for (const std::string& file_name : *files)
   {
     if (file_name.size() == 12 && file_name.compare(8, 4, ".app") == 0)
-      m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, content_dir + '/' + file_name);
+      m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, (content_dir + '/' + file_name).c_str());
   }
 
   return IPC_SUCCESS;
@@ -790,7 +792,7 @@ ReturnCode ESCore::DeleteContent(u64 title_id, u32 content_id) const
 
   const std::string path =
       StringFromFormat("%s/%08x.app", Common::GetTitleContentPath(title_id).c_str(), content_id);
-  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, path));
+  return FS::ConvertResult(m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, path.c_str()));
 }
 
 IPCReply ESDevice::DeleteContent(const IOCtlVRequest& request)
@@ -1029,7 +1031,7 @@ ReturnCode ESCore::DeleteSharedContent(const u8* sha1) const
     return ES_EINVAL;
 
   // Delete the shared content and update the content map.
-  const auto delete_result = m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, content_path);
+  const auto delete_result = m_ios.GetFS()->Delete(PID_KERNEL, PID_KERNEL, content_path.c_str());
   if (delete_result != FS::ResultCode::Success)
     return FS::ConvertResult(delete_result);
 

@@ -829,10 +829,11 @@ IPCReply ESDevice::DIVerify(const IOCtlVRequest& request)
 static ReturnCode WriteTmdForDiVerify(FS::FileSystem* fs, const ES::TMDReader& tmd)
 {
   const std::string temp_path = "/tmp/title.tmd";
-  fs->Delete(PID_KERNEL, PID_KERNEL, temp_path);
+  fs->Delete(PID_KERNEL, PID_KERNEL, temp_path.c_str());
   constexpr FS::Modes internal_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::None};
   {
-    const auto file = fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, internal_modes);
+    const auto file =
+        fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path.c_str(), internal_modes);
     if (!file)
       return FS::ConvertResult(file.error());
     size_t tmd_size;
@@ -844,12 +845,12 @@ static ReturnCode WriteTmdForDiVerify(FS::FileSystem* fs, const ES::TMDReader& t
   const std::string tmd_dir = Common::GetTitleContentPath(tmd.GetTitleId());
   const std::string tmd_path = Common::GetTMDFileName(tmd.GetTitleId());
   constexpr FS::Modes parent_modes{FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read};
-  const auto result = fs->CreateFullPath(PID_KERNEL, PID_KERNEL, tmd_path, 0, parent_modes);
+  const auto result = fs->CreateFullPath(PID_KERNEL, PID_KERNEL, tmd_path.c_str(), 0, parent_modes);
   if (result != FS::ResultCode::Success)
     return FS::ConvertResult(result);
 
-  fs->SetMetadata(PID_KERNEL, tmd_dir, PID_KERNEL, PID_KERNEL, 0, internal_modes);
-  return FS::ConvertResult(fs->Rename(PID_KERNEL, PID_KERNEL, temp_path, tmd_path));
+  fs->SetMetadata(PID_KERNEL, tmd_dir.c_str(), PID_KERNEL, PID_KERNEL, 0, internal_modes);
+  return FS::ConvertResult(fs->Rename(PID_KERNEL, PID_KERNEL, temp_path.c_str(), tmd_path.c_str()));
 }
 
 ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& ticket)
@@ -889,8 +890,8 @@ ReturnCode ESDevice::DIVerify(const ES::TMDReader& tmd, const ES::TicketReader& 
   const std::string data_dir = Common::GetTitleDataPath(tmd.GetTitleId());
   // Might already exist, so we only need to check whether the second operation succeeded.
   constexpr FS::Modes data_dir_modes{FS::Mode::ReadWrite, FS::Mode::None, FS::Mode::None};
-  fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir, 0, data_dir_modes);
-  return FS::ConvertResult(fs->SetMetadata(0, data_dir, kernel.GetUidForPPC(),
+  fs->CreateDirectory(PID_KERNEL, PID_KERNEL, data_dir.c_str(), 0, data_dir_modes);
+  return FS::ConvertResult(fs->SetMetadata(0, data_dir.c_str(), kernel.GetUidForPPC(),
                                            kernel.GetGidForPPC(), 0, data_dir_modes));
 }
 
@@ -1114,7 +1115,7 @@ ReturnCode ESCore::WriteNewCertToStore(const ES::CertReader& cert)
   // Otherwise, write the new cert at the end of the store.
   size_t cert_size = 0;
   const auto store_file =
-      m_ios.GetFS()->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH,
+      m_ios.GetFS()->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, CERT_STORE_PATH.c_str(),
                                        {FS::Mode::ReadWrite, FS::Mode::ReadWrite, FS::Mode::Read});
   if (!store_file || !store_file->Seek(0, FS::SeekMode::End) ||
       !store_file->Write(cert.GetBytes(&cert_size), cert_size))

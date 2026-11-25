@@ -329,7 +329,8 @@ ErrorCode WriteToVFF(const std::string& path, const std::string& filename, FS::F
 
         state.callbacks->m_vff = &*temp;
 
-        Common::ScopeGuard vff_delete_guard{[&] { state.fs->Delete(PID_KD, PID_KD, state.path); }};
+        Common::ScopeGuard vff_delete_guard{
+            [&] { state.fs->Delete(PID_KD, PID_KD, state.path.c_str()); }};
 
         FATFS fatfs{};
         const FRESULT fatfs_mount_error_code = f_mount(&fatfs, "", 0);

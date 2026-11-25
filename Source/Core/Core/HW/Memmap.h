@@ -111,6 +111,8 @@ public:
   // Routines to access physically addressed memory, designed for use by
   // emulated hardware outside the CPU. Use "Device_" prefix.
   std::string GetString(u32 em_address, size_t size = 0);
+  // A fixed size string, potentially null terminated or null padded, into out of size + 1 chars
+  void CopyStringFromEmu(char* out, u32 em_address, size_t size);
 
   // If the specified guest address is within a valid memory region, returns the host address
   // corresponding to it, lent, and stores how many bytes follow it in that region. Otherwise

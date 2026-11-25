@@ -164,18 +164,14 @@ bool IsValidFilename(std::string_view filename);
 
 struct SplitPathResult
 {
-  std::string parent;
-  std::string file_name;
+  char parent[MaxPathLength + 1];
+  char file_name[MaxPathLength + 1];
 };
-inline bool operator==(const SplitPathResult& lhs, const SplitPathResult& rhs)
-{
-  return lhs.parent == rhs.parent && lhs.file_name == rhs.file_name;
-}
 
 /// Split a path into a parent path and the file name. Takes a *valid non-root* path.
 ///
 /// Example: /shared2/sys/SYSCONF => {/shared2/sys, SYSCONF}
-SplitPathResult SplitPathAndBasename(std::string_view path);
+void SplitPathAndBasename(const char* path, SplitPathResult* out);
 
 class FileSystem;
 class FileHandle final
@@ -225,7 +221,7 @@ public:
   /// Get a file descriptor for accessing a file. The FD will be automatically closed after use.
   Result<FileHandle> OpenFile(Uid uid, Gid gid, const char* path, Mode mode);
   /// Create a file if it doesn't exist and open it in read/write mode.
-  Result<FileHandle> CreateAndOpenFile(Uid uid, Gid gid, const std::string& path, Modes modes);
+  Result<FileHandle> CreateAndOpenFile(Uid uid, Gid gid, const char* path, Modes modes);
   /// Close a file descriptor.
   ResultCode Close(Fd fd);
   /// Read `size` bytes from the file descriptor. Returns the number of bytes read.
@@ -239,40 +235,38 @@ public:
   Result<FileStatus> GetFileStatus(Fd fd);
 
   /// Create a file with the specified path and metadata.
-  ResultCode CreateFile(Uid caller_uid, Gid caller_gid, const std::string& path,
-                        FileAttribute attribute, Modes modes);
+  ResultCode CreateFile(Uid caller_uid, Gid caller_gid, const char* path, FileAttribute attribute,
+                        Modes modes);
   /// Create a directory with the specified path and metadata.
-  ResultCode CreateDirectory(Uid caller_uid, Gid caller_gid, const std::string& path,
+  ResultCode CreateDirectory(Uid caller_uid, Gid caller_gid, const char* path,
                              FileAttribute attribute, Modes modes);
 
   /// Create any parent directories for a path with the specified metadata.
   /// Example: "/a/b" to create directory /a; "/a/b/" to create directories /a and /a/b
-  ResultCode CreateFullPath(Uid caller_uid, Gid caller_gid, const std::string& path,
+  ResultCode CreateFullPath(Uid caller_uid, Gid caller_gid, const char* path,
                             FileAttribute attribute, Modes modes);
 
   /// Delete a file or directory with the specified path.
-  ResultCode Delete(Uid caller_uid, Gid caller_gid, const std::string& path);
+  ResultCode Delete(Uid caller_uid, Gid caller_gid, const char* path);
   /// Rename a file or directory with the specified path.
-  ResultCode Rename(Uid caller_uid, Gid caller_gid, const std::string& old_path,
-                    const std::string& new_path);
+  ResultCode Rename(Uid caller_uid, Gid caller_gid, const char* old_path, const char* new_path);
 
   /// List the children of a directory (non-recursively).
-  Result<std::vector<std::string>> ReadDirectory(Uid caller_uid, Gid caller_gid,
-                                                 const std::string& path);
+  Result<std::vector<std::string>> ReadDirectory(Uid caller_uid, Gid caller_gid, const char* path);
 
   /// Get metadata about a file.
-  Result<Metadata> GetMetadata(Uid caller_uid, Gid caller_gid, const std::string& path);
+  Result<Metadata> GetMetadata(Uid caller_uid, Gid caller_gid, const char* path);
   /// Set metadata for a file.
-  ResultCode SetMetadata(Uid caller_uid, const std::string& path, Uid uid, Gid gid,
+  ResultCode SetMetadata(Uid caller_uid, const char* path, Uid uid, Gid gid,
                          FileAttribute attribute, Modes modes);
 
   /// Get usage information about the NAND (block size, cluster and inode counts).
   Result<NandStats> GetNandStats();
   /// Get usage information about a directory (used cluster and inode counts).
-  Result<DirectoryStats> GetDirectoryStats(const std::string& path);
+  Result<DirectoryStats> GetDirectoryStats(const char* path);
 
   /// Like GetDirectoryStats() but not limited to the actual 512 MB NAND limit.
-  Result<ExtendedDirectoryStats> GetExtendedDirectoryStats(const std::string& path);
+  Result<ExtendedDirectoryStats> GetExtendedDirectoryStats(const char* path);
 
 protected:
   void DoStateWriteOrMeasure(PointerWrap& p, const std::string& directory_path);
@@ -338,14 +332,13 @@ private:
   Handle* GetHandleFromFd(Fd fd);
   Fd ConvertHandleToFd(const Handle* handle) const;
 
-  std::string BuildFilename(const std::string& wii_path) const;
   // Writes the host path of wii_path to out; returns false when it does not fit.
   bool BuildFilename(const char* wii_path, char* out, size_t out_size) const;
   int OpenHostFile(const char* host_path);
   void ReleaseHostFile(int index);
 
-  ResultCode CreateFileOrDirectory(Uid uid, Gid gid, const std::string& path,
-                                   FileAttribute attribute, Modes modes, bool is_file);
+  ResultCode CreateFileOrDirectory(Uid uid, Gid gid, const char* path, FileAttribute attribute,
+                                   Modes modes, bool is_file);
   bool IsFileOpened(const char* path) const;
   bool IsDirectoryInUse(const char* path) const;
 

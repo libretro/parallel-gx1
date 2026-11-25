@@ -403,7 +403,7 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
       }
     }
   }
-  fs->Delete(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path);
+  fs->Delete(IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path.c_str());
 
   if (serno.empty() || serno == "000000000")
   {
@@ -429,8 +429,8 @@ bool CBoot::SetupWiiMemory(Core::System& system, IOS::HLE::IOSC::ConsoleType con
   settings_writer.AddSetting("GAME", region_setting.game);
 
   constexpr IOS::HLE::FS::Mode rw_mode = IOS::HLE::FS::Mode::ReadWrite;
-  const auto settings_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
-                                                   settings_file_path, {rw_mode, rw_mode, rw_mode});
+  const auto settings_file = fs->CreateAndOpenFile(
+      IOS::SYSMENU_UID, IOS::SYSMENU_GID, settings_file_path.c_str(), {rw_mode, rw_mode, rw_mode});
   if (!settings_file ||
       !settings_file->Write(settings_writer.GetBytes(), sizeof(Common::SettingsBuffer)))
   {
@@ -509,8 +509,8 @@ static void WriteEmptyPlayRecord()
   const std::string file_path = Common::GetTitleDataPath(Titles::SYSTEM_MENU) + "/play_rec.dat";
   const auto fs = Core::System::GetInstance().GetIOS()->GetFS();
   constexpr IOS::HLE::FS::Mode rw_mode = IOS::HLE::FS::Mode::ReadWrite;
-  const auto playrec_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, file_path,
-                                                  {rw_mode, rw_mode, rw_mode});
+  const auto playrec_file = fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID,
+                                                  file_path.c_str(), {rw_mode, rw_mode, rw_mode});
   if (!playrec_file)
     return;
   std::vector<u8> empty_record(0x80);

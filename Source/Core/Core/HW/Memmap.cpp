@@ -810,6 +810,12 @@ std::string MemoryManager::GetString(u32 em_address, size_t size)
   }
 }
 
+void MemoryManager::CopyStringFromEmu(char* out, u32 em_address, size_t size)
+{
+  CopyFromEmu(out, em_address, size);
+  out[strnlen(out, size)] = '\0';
+}
+
 u8* MemoryManager::GetPointerAndSize(u32 address, size_t* size) const
 {
   // TODO: Should we be masking off more bits here?  Can all devices access

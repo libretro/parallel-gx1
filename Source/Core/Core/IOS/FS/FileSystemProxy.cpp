@@ -730,10 +730,11 @@ IPCReply FSDevice::ReadDirectory(const Handle& handle, const IOCtlVRequest& requ
     file_list_address = 0;
   }
 
-  const std::string directory = memory.GetString(request.in_vectors[0].address, 64);
+  char directory[65];
+  memory.CopyStringFromEmu(directory, request.in_vectors[0].address, 64);
   const Result<std::vector<std::string>> list =
       m_ios.GetFS()->ReadDirectory(handle.uid, handle.gid, directory);
-  LogResult(CodeOf(list), "ReadDirectory(%s)", directory.c_str());
+  LogResult(CodeOf(list), "ReadDirectory(%s)", directory);
   if (!list)
     return GetFSReply(ConvertResult(list.error()));
 
@@ -775,10 +776,11 @@ IPCReply FSDevice::GetAttribute(const Handle& handle, const IOCtlRequest& reques
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  const std::string path = memory.GetString(request.buffer_in, 64);
-  const auto ticks = EstimateFileLookupTicks(path.c_str(), FileLookupMode::Split);
+  char path[65];
+  memory.CopyStringFromEmu(path, request.buffer_in, 64);
+  const auto ticks = EstimateFileLookupTicks(path, FileLookupMode::Split);
   const Result<Metadata> metadata = m_ios.GetFS()->GetMetadata(handle.uid, handle.gid, path);
-  LogResult(CodeOf(metadata), "GetMetadata(%s)", path.c_str());
+  LogResult(CodeOf(metadata), "GetMetadata(%s)", path);
   if (!metadata)
     return GetFSReply(ConvertResult(metadata.error()), ticks);
 
@@ -794,13 +796,13 @@ IPCReply FSDevice::GetAttribute(const Handle& handle, const IOCtlRequest& reques
   return GetFSReply(IPC_SUCCESS, ticks);
 }
 
-FS::ResultCode FSCore::DeleteFile(FS::Uid uid, FS::Gid gid, const std::string& path, Ticks ticks)
+FS::ResultCode FSCore::DeleteFile(FS::Uid uid, FS::Gid gid, const char* path, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
   const ResultCode result = m_ios.GetFS()->Delete(uid, gid, path);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(CodeOf(result), "Delete(%s)", path.c_str());
+  LogResult(CodeOf(result), "Delete(%s)", path);
   return result;
 }
 
@@ -812,20 +814,21 @@ IPCReply FSDevice::DeleteFile(const Handle& handle, const IOCtlRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  const std::string path = memory.GetString(request.buffer_in, 64);
+  char path[65];
+  memory.CopyStringFromEmu(path, request.buffer_in, 64);
   return MakeIPCReply([&](Ticks ticks) {
     return ConvertResult(m_core.DeleteFile(handle.uid, handle.gid, path, ticks));
   });
 }
 
-FS::ResultCode FSCore::RenameFile(FS::Uid uid, FS::Gid gid, const std::string& old_path,
-                                  const std::string& new_path, Ticks ticks)
+FS::ResultCode FSCore::RenameFile(FS::Uid uid, FS::Gid gid, const char* old_path,
+                                  const char* new_path, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
   const ResultCode result = m_ios.GetFS()->Rename(uid, gid, old_path, new_path);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(CodeOf(result), "Rename(%s, %s)", old_path.c_str(), new_path.c_str());
+  LogResult(CodeOf(result), "Rename(%s, %s)", old_path, new_path);
   return result;
 }
 
@@ -837,21 +840,23 @@ IPCReply FSDevice::RenameFile(const Handle& handle, const IOCtlRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  const std::string old_path = memory.GetString(request.buffer_in, 64);
-  const std::string new_path = memory.GetString(request.buffer_in + 64, 64);
+  char old_path[65];
+  memory.CopyStringFromEmu(old_path, request.buffer_in, 64);
+  char new_path[65];
+  memory.CopyStringFromEmu(new_path, request.buffer_in + 64, 64);
   return MakeIPCReply([&](Ticks ticks) {
     return ConvertResult(m_core.RenameFile(handle.uid, handle.gid, old_path, new_path, ticks));
   });
 }
 
-FS::ResultCode FSCore::CreateFile(FS::Uid uid, FS::Gid gid, const std::string& path,
+FS::ResultCode FSCore::CreateFile(FS::Uid uid, FS::Gid gid, const char* path,
                                   FS::FileAttribute attribute, FS::Modes modes, Ticks ticks)
 {
   ticks.Add(IPC_OVERHEAD_TICKS);
 
   const ResultCode result = m_ios.GetFS()->CreateFile(uid, gid, path, attribute, modes);
   ticks.Add(GetSuperblockWriteTbTicks(m_ios.GetVersion()));
-  LogResult(CodeOf(result), "CreateFile(%s)", path.c_str());
+  LogResult(CodeOf(result), "CreateFile(%s)", path);
   return result;
 }
 
@@ -922,9 +927,10 @@ IPCReply FSDevice::GetUsage(const Handle& handle, const IOCtlVRequest& request)
   auto& system = GetSystem();
   auto& memory = system.GetMemory();
 
-  const std::string directory = memory.GetString(request.in_vectors[0].address, 64);
+  char directory[65];
+  memory.CopyStringFromEmu(directory, request.in_vectors[0].address, 64);
   const Result<DirectoryStats> stats = m_ios.GetFS()->GetDirectoryStats(directory);
-  LogResult(CodeOf(stats), "GetDirectoryStats(%s)", directory.c_str());
+  LogResult(CodeOf(stats), "GetDirectoryStats(%s)", directory);
   if (!stats)
     return GetFSReply(ConvertResult(stats.error()));
 

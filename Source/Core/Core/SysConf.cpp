@@ -195,7 +195,7 @@ bool SysConf::Save() const
   const std::string temp_file = "/tmp/SYSCONF";
   constexpr auto rw_mode = IOS::HLE::FS::Mode::ReadWrite;
   {
-    auto file = m_fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, temp_file,
+    auto file = m_fs->CreateAndOpenFile(IOS::SYSMENU_UID, IOS::SYSMENU_GID, temp_file.c_str(),
                                         {rw_mode, rw_mode, rw_mode});
     if (!file || !file->Write(buffer.data(), buffer.size()))
       return false;
@@ -203,7 +203,7 @@ bool SysConf::Save() const
   m_fs->CreateDirectory(IOS::SYSMENU_UID, IOS::SYSMENU_GID, "/shared2/sys", 0,
                         {rw_mode, rw_mode, rw_mode});
   const auto result =
-      m_fs->Rename(IOS::SYSMENU_UID, IOS::SYSMENU_GID, temp_file, "/shared2/sys/SYSCONF");
+      m_fs->Rename(IOS::SYSMENU_UID, IOS::SYSMENU_GID, temp_file.c_str(), "/shared2/sys/SYSCONF");
   return result == IOS::HLE::FS::ResultCode::Success;
 }
 
