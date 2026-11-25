@@ -5,7 +5,6 @@
 
 #include <cstring>
 #include <utility>
-#include <vector>
 
 #include <lrc_hash.h>
 

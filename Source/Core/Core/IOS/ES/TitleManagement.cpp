@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <retro_miscellaneous.h>
 #include <utility>
-#include <vector>
 
 #include <cstdio>
 

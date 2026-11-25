@@ -4,7 +4,6 @@
 #include "Core/IOS/ES/ES.h"
 
 #include <cinttypes>
-#include <vector>
 
 #include "Common/Logging/Log.h"
 #include "Core/HW/Memmap.h"

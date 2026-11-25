@@ -5,7 +5,6 @@
 
 #include <cinttypes>
 #include <cstdio>
-#include <vector>
 
 #include "Common/Logging/Log.h"
 #include "Core/HW/Memmap.h"
@@ -167,6 +166,25 @@ bool WriteTitle(u64 title_id, void* context)
   writer->count++;
   return true;
 }
+
+// Writes 20 byte hashes to the guest's list until it is full
+struct HashListWriter
+{
+  Memory::MemoryManager* memory;
+  u32 address;
+  u32 max_count;
+  u32 count;
+};
+
+bool WriteHash(const u8* sha1, void* context)
+{
+  HashListWriter* const writer = static_cast<HashListWriter*>(context);
+  if (writer->count >= writer->max_count)
+    return false;
+  writer->memory->CopyToEmu(writer->address + writer->count * 20, sha1, 20);
+  writer->count++;
+  return true;
+}
 }  // namespace
 
 IPCReply ESDevice::GetTitleCount(const IOCtlVRequest& request)
@@ -296,12 +314,11 @@ IPCReply ESDevice::GetSharedContents(const IOCtlVRequest& request) const
   if (request.io_vectors[0].size != 20 * max_count)
     return IPCReply(ES_EINVAL);
 
-  const std::vector<ES::Sha1Hash> hashes = m_core.GetSharedContents();
-  const u32 hash_count = static_cast<u32>(hashes.size());
-  const u32 count = hash_count < max_count ? hash_count : max_count;
-  memory.CopyToEmu(request.io_vectors[0].address, hashes.data(), 20 * count);
+  HashListWriter writer = {&memory, request.io_vectors[0].address, max_count, 0};
+  if (max_count)
+    m_core.ForEachSharedContent(WriteHash, &writer);
 
-  INFO_LOG(IOS_ES, "GetSharedContents: %u contents (%u requested)", count, max_count);
+  INFO_LOG(IOS_ES, "GetSharedContents: %u contents (%u requested)", writer.count, max_count);
   return IPCReply(IPC_SUCCESS);
 }
 }  // namespace IOS::HLE

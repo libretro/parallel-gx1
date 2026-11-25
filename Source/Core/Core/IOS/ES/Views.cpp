@@ -6,7 +6,6 @@
 #include <cinttypes>
 #include <cstddef>
 #include <cstdio>
-#include <vector>
 
 #include "Common/Logging/Log.h"
 #include "Core/CommonTitles.h"

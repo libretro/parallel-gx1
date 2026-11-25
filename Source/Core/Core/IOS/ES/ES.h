@@ -110,7 +110,9 @@ public:
   u16 GetStoredContentsCount(const ES::TMDReader& tmd, CheckContentHashes check_content_hashes =
                                                            CheckContentHashes::No) const;
   u32 GetSharedContentsCount() const;
-  std::vector<ES::Sha1Hash> GetSharedContents() const;
+  // Calls visit with each shared content's 20 byte hash; returning false stops the walk
+  typedef bool (*HashVisitor)(const u8* sha1, void* context);
+  void ForEachSharedContent(HashVisitor visit, void* context) const;
 
   // Title contents
   s32 OpenContent(const ES::TMDReader& tmd, u16 content_index, u32 uid, Ticks ticks = {});

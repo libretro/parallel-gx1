@@ -9,7 +9,6 @@
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Device.h"
@@ -85,12 +84,6 @@ struct TMDHeader
 };
 static_assert(sizeof(TMDHeader) == 0x1e4, "TMDHeader has the wrong size");
 static_assert(offsetof(TMDHeader, ios_id) == 0x184);
-
-// A SHA-1 digest, by value
-struct Sha1Hash
-{
-  u8 bytes[20];
-};
 
 struct Content
 {
@@ -309,6 +302,8 @@ class SharedContentMap final
 public:
   explicit SharedContentMap(HLE::FSCore& fs_core);
   ~SharedContentMap();
+  SharedContentMap(const SharedContentMap&) = delete;
+  SharedContentMap& operator=(const SharedContentMap&) = delete;
 
   // False when no shared content has that hash
   // sha1: 20 bytes
@@ -319,7 +314,9 @@ public:
                            u64* ticks);
   std::string AddSharedContent(const u8* sha1);
   bool DeleteSharedContent(const u8* sha1);
-  std::vector<Sha1Hash> GetHashes() const;
+  size_t GetEntryCount() const { return m_entry_count; }
+  // The 20 byte hash of entry index
+  const u8* GetHash(size_t index) const;
 
   u64 GetTicks() const { return m_ticks; }
 
@@ -327,8 +324,13 @@ private:
   bool WriteEntries() const;
 
   struct Entry;
+  // A new entry at the end, or nullptr when out of memory
+  Entry* AddEntry();
   u32 m_last_id = 0;
-  std::vector<Entry> m_entries;
+  // Grown by doubling and kept
+  Entry* m_entries = nullptr;
+  size_t m_entry_count = 0;
+  size_t m_entry_capacity = 0;
   HLE::FS::FileSystem* m_fs;  // not owning: the kernel's FS
   u64 m_ticks = 0;
 };

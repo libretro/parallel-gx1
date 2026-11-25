@@ -6,7 +6,6 @@
 #include <cinttypes>
 #include <cstring>
 #include <string>
-#include <vector>
 
 #include <cstdio>
 
@@ -273,10 +272,14 @@ u32 ESCore::GetSharedContentsCount() const
   return count;
 }
 
-std::vector<ES::Sha1Hash> ESCore::GetSharedContents() const
+void ESCore::ForEachSharedContent(HashVisitor visit, void* context) const
 {
   const ES::SharedContentMap map{m_ios.GetFSCore()};
-  return map.GetHashes();
+  for (size_t i = 0; i < map.GetEntryCount(); i++)
+  {
+    if (!visit(map.GetHash(i), context))
+      return;
+  }
 }
 
 static bool DeleteDirectoriesIfEmpty(FS::FileSystem* fs, const std::string& path)

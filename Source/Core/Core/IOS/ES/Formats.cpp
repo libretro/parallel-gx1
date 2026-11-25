@@ -11,7 +11,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include <cstdio>
 
@@ -639,12 +638,37 @@ SharedContentMap::SharedContentMap(HLE::FSCore& fs_core) : m_fs{fs_core.GetFS()}
     return;
   while (fs_core.Read(fd.Get(), &entry, 1, &m_ticks) == sizeof(entry))
   {
-    m_entries.push_back(entry);
+    Entry* const added = AddEntry();
+    if (!added)
+      break;
+    *added = entry;
     m_last_id++;
   }
 }
 
-SharedContentMap::~SharedContentMap() = default;
+SharedContentMap::~SharedContentMap()
+{
+  std::free(m_entries);
+}
+
+SharedContentMap::Entry* SharedContentMap::AddEntry()
+{
+  if (m_entry_count == m_entry_capacity)
+  {
+    const size_t capacity = m_entry_capacity ? m_entry_capacity * 2 : 16;
+    Entry* const grown = static_cast<Entry*>(std::realloc(m_entries, capacity * sizeof(Entry)));
+    if (!grown)
+      return nullptr;
+    m_entries = grown;
+    m_entry_capacity = capacity;
+  }
+  return &m_entries[m_entry_count++];
+}
+
+const u8* SharedContentMap::GetHash(size_t index) const
+{
+  return m_entries[index].sha1;
+}
 
 bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const u8* sha1, char* out,
                                     size_t out_size, u64* ticks)
@@ -677,11 +701,11 @@ bool SharedContentMap::FindFilename(HLE::FSCore& fs_core, const u8* sha1, char* 
 bool SharedContentMap::GetFilenameFromSHA1(const u8* sha1, std::string* filename) const
 {
   const Entry* it = nullptr;
-  for (const Entry& entry : m_entries)
+  for (size_t i = 0; i < m_entry_count; i++)
   {
-    if (std::memcmp(entry.sha1, sha1, sizeof(entry.sha1)) == 0)
+    if (std::memcmp(m_entries[i].sha1, sha1, sizeof(m_entries[i].sha1)) == 0)
     {
-      it = &entry;
+      it = &m_entries[i];
       break;
     }
   }
@@ -694,22 +718,16 @@ bool SharedContentMap::GetFilenameFromSHA1(const u8* sha1, std::string* filename
   return true;
 }
 
-std::vector<Sha1Hash> SharedContentMap::GetHashes() const
-{
-  std::vector<Sha1Hash> hashes(m_entries.size());
-  for (size_t i = 0; i < m_entries.size(); i++)
-    std::memcpy(hashes[i].bytes, m_entries[i].sha1, sizeof(hashes[i].bytes));
-
-  return hashes;
-}
-
 std::string SharedContentMap::AddSharedContent(const u8* sha1)
 {
   std::string filename;
   if (GetFilenameFromSHA1(sha1, &filename))
     return filename;
 
-  Entry& entry = m_entries.emplace_back();
+  Entry* const added = AddEntry();
+  if (!added)
+    return {};
+  Entry& entry = *added;
   static_assert(sizeof(m_last_id) == 4,
                 "'m_last_id' must be represented by 8 characters when formatted in hexadecimal.");
   static_assert(sizeof(entry.id) == sizeof(m_last_id) * 2,
@@ -730,12 +748,12 @@ std::string SharedContentMap::AddSharedContent(const u8* sha1)
 bool SharedContentMap::DeleteSharedContent(const u8* sha1)
 {
   size_t kept = 0;
-  for (size_t i = 0; i < m_entries.size(); i++)
+  for (size_t i = 0; i < m_entry_count; i++)
   {
     if (std::memcmp(m_entries[i].sha1, sha1, sizeof(m_entries[i].sha1)) != 0)
       m_entries[kept++] = m_entries[i];
   }
-  m_entries.resize(kept);
+  m_entry_count = kept;
   return WriteEntries();
 }
 
@@ -748,7 +766,7 @@ bool SharedContentMap::WriteEntries() const
     constexpr HLE::FS::Modes modes{HLE::FS::Mode::ReadWrite, HLE::FS::Mode::ReadWrite,
                                    HLE::FS::Mode::None};
     const auto file = m_fs->CreateAndOpenFile(PID_KERNEL, PID_KERNEL, temp_path, modes);
-    if (!file || !file->Write(m_entries.data(), m_entries.size()))
+    if (!file || (m_entry_count && !file->Write(m_entries, m_entry_count)))
       return false;
   }
   return m_fs->Rename(PID_KERNEL, PID_KERNEL, temp_path, CONTENT_MAP_PATH) ==
