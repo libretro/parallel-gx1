@@ -5,7 +5,9 @@
 
 #include <cinttypes>
 #include <cstddef>
-#include <vector>
+#include <cstdlib>
+#include <cstring>
+#include <utility>
 
 #include "Common/Align.h"
 #include "Common/CommonTypes.h"
@@ -19,6 +21,31 @@ namespace DiscIO
 {
 DiscScrubber::DiscScrubber() = default;
 
+DiscScrubber::~DiscScrubber()
+{
+  std::free(m_free_table);
+}
+
+DiscScrubber::DiscScrubber(DiscScrubber&& other) noexcept
+    : m_free_table(std::exchange(other.m_free_table, nullptr)),
+      m_cluster_count(std::exchange(other.m_cluster_count, 0)), m_file_size(other.m_file_size),
+      m_has_wii_hashes(other.m_has_wii_hashes), m_is_scrubbing(other.m_is_scrubbing)
+{
+}
+
+DiscScrubber::DiscScrubber(const DiscScrubber& other)
+    : m_file_size(other.m_file_size), m_has_wii_hashes(other.m_has_wii_hashes)
+{
+  if (!other.m_free_table)
+    return;
+  m_free_table = static_cast<u8*>(std::malloc(other.m_cluster_count ? other.m_cluster_count : 1));
+  if (!m_free_table)
+    return;
+  std::memcpy(m_free_table, other.m_free_table, other.m_cluster_count);
+  m_cluster_count = other.m_cluster_count;
+  m_is_scrubbing = other.m_is_scrubbing;
+}
+
 bool DiscScrubber::SetupScrub(const Volume& disc)
 {
   m_file_size = disc.GetDataSize();
@@ -28,7 +55,16 @@ bool DiscScrubber::SetupScrub(const Volume& disc)
   const size_t num_clusters = static_cast<size_t>((m_file_size + CLUSTER_SIZE - 1) / CLUSTER_SIZE);
 
   // Table of free blocks
-  m_free_table.resize(num_clusters, 1);
+  std::free(m_free_table);
+  m_free_table = static_cast<u8*>(std::malloc(num_clusters ? num_clusters : 1));
+  if (!m_free_table)
+  {
+    m_cluster_count = 0;
+    m_is_scrubbing = false;
+    return false;
+  }
+  std::memset(m_free_table, 1, num_clusters);
+  m_cluster_count = num_clusters;
 
   // Fill out table of free blocks
   const bool success = ParseDisc(disc);
@@ -43,7 +79,7 @@ bool DiscScrubber::CanBlockBeScrubbed(u64 offset) const
     return false;
 
   const u64 cluster_index = offset / CLUSTER_SIZE;
-  return cluster_index >= m_free_table.size() || m_free_table[cluster_index];
+  return cluster_index >= m_cluster_count || m_free_table[cluster_index];
 }
 
 void DiscScrubber::MarkAsUsed(u64 offset, u64 size)

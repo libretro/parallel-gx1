@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <vector>
 #include "Common/CommonTypes.h"
 
 namespace File
@@ -25,6 +24,11 @@ class DiscScrubber final
 {
 public:
   DiscScrubber();
+  ~DiscScrubber();
+  DiscScrubber(DiscScrubber&& other) noexcept;
+  // A copy that cannot get its table scrubs nothing
+  DiscScrubber(const DiscScrubber& other);
+  DiscScrubber& operator=(const DiscScrubber&) = delete;
 
   bool SetupScrub(const Volume& disc);
 
@@ -43,7 +47,8 @@ private:
   bool ParsePartitionData(const Volume& disc, const Partition& partition);
   void ParseFileSystemData(u64 partition_data_offset, const FileInfo& directory);
 
-  std::vector<u8> m_free_table;
+  u8* m_free_table = nullptr;  // one byte per cluster, nonzero when free
+  size_t m_cluster_count = 0;
   u64 m_file_size = 0;
   bool m_has_wii_hashes = false;
   bool m_is_scrubbing = false;
