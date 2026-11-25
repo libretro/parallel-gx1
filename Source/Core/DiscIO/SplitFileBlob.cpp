@@ -4,22 +4,13 @@
 #include "DiscIO/SplitFileBlob.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
-
 
 namespace DiscIO
 {
-SplitPlainFileReader::SplitPlainFileReader(std::vector<SingleFile> files)
-    : m_files(std::move(files))
-{
-  m_size = 0;
-  for (const auto& f : m_files)
-    m_size += f.size;
-}
-
 SplitPlainFileReader* SplitPlainFileReader::Create(std::string_view first_file_path)
 {
   constexpr std::string_view part0_iso = ".part0.iso";
@@ -28,10 +19,10 @@ SplitPlainFileReader* SplitPlainFileReader::Create(std::string_view first_file_p
 
   const std::string_view base_path =
       first_file_path.substr(0, first_file_path.size() - part0_iso.size());
-  std::vector<SingleFile> files;
+  SplitPlainFileReader* const reader = new SplitPlainFileReader;
   size_t index = 0;
   u64 offset = 0;
-  while (true)
+  while (index < MAX_FILES)
   {
     char part_name[40];
     snprintf(part_name, sizeof(part_name), ".part%zu.iso", index);
@@ -40,22 +31,36 @@ SplitPlainFileReader* SplitPlainFileReader::Create(std::string_view first_file_p
       break;
     const u64 size = f.GetSize();
     if (size == 0)
+    {
+      DestroyBlobReader(reader);
       return nullptr;
-    files.emplace_back(SingleFile{std::move(f), offset, size});
+    }
+    SingleFile& file = reader->m_files[reader->m_file_count++];
+    file.file = std::move(f);
+    file.offset = offset;
+    file.size = size;
     offset += size;
     ++index;
   }
 
-  if (files.size() < 2)
+  if (reader->m_file_count < 2)
+  {
+    DestroyBlobReader(reader);
     return nullptr;
+  }
 
-  files.shrink_to_fit();
-  return new SplitPlainFileReader(std::move(files));
+  reader->m_size = offset;
+  return reader;
 }
 
 BlobReader* SplitPlainFileReader::CopyReader() const
 {
-  return new SplitPlainFileReader(m_files);
+  SplitPlainFileReader* const reader = new SplitPlainFileReader;
+  for (size_t i = 0; i < m_file_count; i++)
+    reader->m_files[i] = m_files[i];
+  reader->m_file_count = m_file_count;
+  reader->m_size = m_size;
+  return reader;
 }
 
 bool SplitPlainFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
@@ -66,8 +71,9 @@ bool SplitPlainFileReader::Read(u64 offset, u64 nbytes, u8* out_ptr)
   u64 current_offset = offset;
   u64 rest = nbytes;
   u8* out = out_ptr;
-  for (auto& file : m_files)
+  for (size_t i = 0; i < m_file_count; i++)
   {
+    SingleFile& file = m_files[i];
     if (current_offset >= file.offset && current_offset < file.offset + file.size)
     {
       auto& f = file.file;

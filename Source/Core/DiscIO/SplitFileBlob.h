@@ -6,7 +6,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/DirectIOFile.h"
@@ -36,13 +35,15 @@ private:
   struct SingleFile
   {
     File::DirectIOFile file;
-    u64 offset;
-    u64 size;
+    u64 offset = 0;
+    u64 size = 0;
   };
 
-  SplitPlainFileReader(std::vector<SingleFile> m_files);
+  SplitPlainFileReader() = default;
 
-  std::vector<SingleFile> m_files;
+  static constexpr size_t MAX_FILES = 64;
+  SingleFile m_files[MAX_FILES];
+  size_t m_file_count = 0;
   u64 m_size;
 };
 
