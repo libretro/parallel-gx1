@@ -73,8 +73,9 @@ bool WriteGCISavefile(const std::string& filename, const Savefile& savefile)
   if (!file.WriteBytes(&savefile.dir_entry, DENTRY_SIZE))
     return false;
 
-  for (const GCMBlock& block : savefile.blocks)
+  for (u16 i = 0; i < savefile.block_count; i++)
   {
+    const GCMBlock& block = savefile.blocks[i];
     if (!file.WriteBytes(block.m_block, ARRAY_SIZE(block.m_block)))
       return false;
   }

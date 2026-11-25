@@ -3,10 +3,10 @@
 
 #include "Core/HW/GCMemcard/GCMemcard.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <retro_miscellaneous.h>
 #include <utility>
-#include <vector>
 
 #include "Common/Assert.h"
 #include "Common/BitUtils.h"
@@ -120,10 +120,19 @@ GCMemcardErrorCode GCMemcard::Open(const std::string& filename)
 
   const u16 card_size_blocks = card_size_mbits * MBIT_TO_BLOCKS;
   const u16 user_data_blocks = card_size_blocks - MC_FST_BLOCKS;
-  m_data_blocks.reserve(user_data_blocks);
+  std::free(m_data_blocks);
+  m_data_block_count = 0;
+  m_data_blocks = static_cast<GCMBlock*>(
+      std::calloc(user_data_blocks ? user_data_blocks : 1, sizeof(GCMBlock)));
+  if (!m_data_blocks)
+  {
+    error_code.Set(GCMemcardValidityIssues::IO_ERROR);
+    return error_code;
+  }
+  m_data_block_count = user_data_blocks;
   for (u16 i = 0; i < user_data_blocks; ++i)
   {
-    GCMBlock& block = m_data_blocks.emplace_back();
+    GCMBlock& block = m_data_blocks[i];
     if (!file.ReadArray(block.m_block, BLOCK_SIZE))
     {
       error_code.Set(GCMemcardValidityIssues::IO_ERROR);
@@ -429,7 +438,17 @@ GCMemcardErrorCode BlockAlloc::CheckForErrors(u16 size_mbits) const
   return error_code;
 }
 
-GCMemcardGetSaveDataRetVal GCMemcard::GetSaveData(u8 index, std::vector<GCMBlock>& Blocks) const
+Savefile::~Savefile()
+{
+  std::free(blocks);
+}
+
+GCMemcard::~GCMemcard()
+{
+  std::free(m_data_blocks);
+}
+
+GCMemcardGetSaveDataRetVal GCMemcard::GetSaveData(u8 index, Savefile* savefile) const
 {
   if (!m_valid)
     return GCMemcardGetSaveDataRetVal::NOMEMCARD;
@@ -442,12 +461,20 @@ GCMemcardGetSaveDataRetVal GCMemcard::GetSaveData(u8 index, std::vector<GCMBlock
     return GCMemcardGetSaveDataRetVal::FAIL;
   }
 
+  std::free(savefile->blocks);
+  savefile->block_count = 0;
+  savefile->blocks =
+      static_cast<GCMBlock*>(std::malloc((BlockCount ? BlockCount : 1) * sizeof(GCMBlock)));
+  if (!savefile->blocks)
+    return GCMemcardGetSaveDataRetVal::FAIL;
+
   u16 nextBlock = block;
   for (int i = 0; i < BlockCount; ++i)
   {
-    if ((!nextBlock) || (nextBlock == 0xFFFF))
+    // a block outside the card's data blocks ends the chain as a broken one
+    if (nextBlock < MC_FST_BLOCKS || nextBlock - MC_FST_BLOCKS >= m_data_block_count)
       return GCMemcardGetSaveDataRetVal::FAIL;
-    Blocks.push_back(m_data_blocks[nextBlock - MC_FST_BLOCKS]);
+    savefile->blocks[savefile->block_count++] = m_data_blocks[nextBlock - MC_FST_BLOCKS];
     nextBlock = GetActiveBat().GetNextBlock(nextBlock);
   }
   return GCMemcardGetSaveDataRetVal::SUCCESS;
@@ -463,7 +490,7 @@ bool GCMemcard::ExportFile(u8 index, Savefile* savefile) const
                    sizeof(DEntry::UNINITIALIZED_GAMECODE)))
     return false;
 
-  return GetSaveData(index, savefile->blocks) == GCMemcardGetSaveDataRetVal::SUCCESS;
+  return GetSaveData(index, savefile) == GCMemcardGetSaveDataRetVal::SUCCESS;
 }
 
 bool GCMemcard::Format(u8* card_data, const CardFlashId& flash_id, u16 size_mbits, bool shift_jis,

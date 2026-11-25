@@ -6,7 +6,6 @@
 #include <bitset>
 #include <limits>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/NandPaths.h"
@@ -75,12 +74,6 @@ public:
 
 private:
   std::bitset<static_cast<size_t>(GCMemcardValidityIssues::COUNT)> m_errors;
-};
-
-struct GCMemcardAnimationFrameRGBA8
-{
-  std::vector<u32> image_data;
-  u8 delay = 0;
 };
 
 // size of a single memory card block in bytes
@@ -381,8 +374,14 @@ static_assert(std::is_trivially_copyable_v<BlockAlloc>);
 
 struct Savefile
 {
+  Savefile() = default;
+  ~Savefile();
+  Savefile(const Savefile&) = delete;
+  Savefile& operator=(const Savefile&) = delete;
+
   DEntry dir_entry;
-  std::vector<GCMBlock> blocks;
+  GCMBlock* blocks = nullptr;  // block_count of them
+  u16 block_count = 0;
 };
 
 class GCMemcard
@@ -396,7 +395,8 @@ private:
   Header m_header_block;
   Directory m_directory_blocks[2];
   BlockAlloc m_bat_blocks[2];
-  std::vector<GCMBlock> m_data_blocks;
+  GCMBlock* m_data_blocks = nullptr;  // the user data blocks
+  u16 m_data_block_count = 0;
 
   int m_active_directory;
   int m_active_bat;
@@ -406,6 +406,7 @@ private:
 
 public:
   GCMemcard();
+  ~GCMemcard();
   GCMemcard(const GCMemcard&) = delete;
   GCMemcard& operator=(const GCMemcard&) = delete;
 
@@ -426,7 +427,8 @@ public:
   // get file length in blocks
   u16 DEntry_BlockCount(u8 index) const;
 
-  GCMemcardGetSaveDataRetVal GetSaveData(u8 index, std::vector<GCMBlock>& saveBlocks) const;
+  // The save's blocks into savefile, in their chain's order
+  GCMemcardGetSaveDataRetVal GetSaveData(u8 index, Savefile* savefile) const;
 
   // Fetches the savefile at the given directory index, if any.
   bool ExportFile(u8 index, Savefile* savefile) const;
