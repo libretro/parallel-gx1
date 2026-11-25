@@ -264,6 +264,7 @@ struct Uniforms
   float hdr_paper_white_nits;
   float hdr_sdr_white_nits;
 };
+static_assert(sizeof(Uniforms) == PostProcessing::UNIFORM_STAGING_SIZE);
 
 static void SetFloat4(float* out, float x, float y, float z, float w)
 {
@@ -368,7 +369,6 @@ void PostProcessing::DestroyPipelines()
 bool PostProcessing::Initialize(AbstractTextureFormat format)
 {
   m_framebuffer_format = format;
-  m_uniform_staging_buffer.resize(sizeof(Uniforms));
   return CompileShaders() && CompilePipelines();
 }
 
@@ -416,8 +416,7 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
 
   FillUniformBuffer(src, src_tex, MAX(src_layer, 0), g_gfx->GetCurrentFramebuffer()->GetRect(),
                     g_presenter->GetTargetRectangle());
-  g_vertex_manager->UploadUtilityUniforms(m_uniform_staging_buffer.data(),
-                                          static_cast<u32>(m_uniform_staging_buffer.size()));
+  g_vertex_manager->UploadUtilityUniforms(m_uniform_staging_buffer, UNIFORM_STAGING_SIZE);
 
   g_gfx->SetViewportAndScissor(
       g_gfx->ConvertFramebufferRectangle(dst, g_gfx->GetCurrentFramebuffer()));
@@ -440,8 +439,7 @@ void PostProcessing::BlitScreen(const MathUtil::Rectangle<int>& dst,
   g_gfx->SetSamplerState(0, RenderState::GetPointSamplerState());
   g_gfx->SetTexture(0, src_tex);
   FillUniformBuffer(src, src_tex, 0, dst, dst);
-  g_vertex_manager->UploadUtilityUniforms(m_uniform_staging_buffer.data(),
-                                          static_cast<u32>(m_uniform_staging_buffer.size()));
+  g_vertex_manager->UploadUtilityUniforms(m_uniform_staging_buffer, UNIFORM_STAGING_SIZE);
   g_gfx->SetViewportAndScissor(
       g_gfx->ConvertFramebufferRectangle(dst, g_gfx->GetCurrentFramebuffer()));
   g_gfx->SetPipeline(m_screen_pipeline);
@@ -541,6 +539,6 @@ void PostProcessing::FillUniformBuffer(const MathUtil::Rectangle<int>& src,
   // 1.0 is about 80 nits in HDR
   u.hdr_sdr_white_nits = 80.f;
 
-  std::memcpy(m_uniform_staging_buffer.data(), &u, sizeof(u));
+  std::memcpy(m_uniform_staging_buffer, &u, sizeof(u));
 }
 }  // namespace VideoCommon

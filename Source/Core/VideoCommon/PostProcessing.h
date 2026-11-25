@@ -20,6 +20,9 @@ namespace VideoCommon
 class PostProcessing
 {
 public:
+  // The size of the shader's Uniforms block
+  static constexpr u32 UNIFORM_STAGING_SIZE = 136;
+
   PostProcessing();
   ~PostProcessing();
 
@@ -49,7 +52,7 @@ private:
   AbstractPipeline* m_copy_pipeline = nullptr;
   AbstractPipeline* m_correction_pipeline = nullptr;
   AbstractPipeline* m_screen_pipeline = nullptr;
-  std::vector<u8> m_uniform_staging_buffer;
+  u8 m_uniform_staging_buffer[UNIFORM_STAGING_SIZE]{};
 
   AbstractTextureFormat m_framebuffer_format = AbstractTextureFormat::Undefined;
 };
