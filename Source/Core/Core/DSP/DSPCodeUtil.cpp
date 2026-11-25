@@ -3,8 +3,8 @@
 
 #include "Core/DSP/DSPCodeUtil.h"
 
+#include <cstdlib>
 #include <string>
-#include <vector>
 
 #include <cstdio>
 
@@ -52,12 +52,17 @@ bool DumpDSPCode(const u8* code_be, size_t size_in_bytes, u32 crc)
   }
 
   // The disassembler works in native endian
-  std::vector<u16> code(size_in_bytes / 2);
-  for (size_t i = 0; i < code.size(); i++)
+  const size_t code_size = size_in_bytes / 2;
+  u16* const code = static_cast<u16*>(malloc(code_size * sizeof(u16) + 1));
+  if (!code)
+    return false;
+  for (size_t i = 0; i < code_size; i++)
     code[i] = Common::swap16(&code_be[i * 2]);
 
   std::string text;
-  if (!Disassemble(code.data(), code.size(), true, text))
+  const bool disassembled = Disassemble(code, code_size, true, text);
+  free(code);
+  if (!disassembled)
     return false;
 
   return File::WriteStringToFile(text_file, text);
