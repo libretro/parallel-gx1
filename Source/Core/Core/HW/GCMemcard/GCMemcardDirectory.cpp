@@ -827,14 +827,15 @@ void MigrateFromMemcardFile(const std::string& directory_name, ExpansionInterfac
   const std::string ini_memcard = Config::GetMemcardPath(card_slot, region);
   if (File::Exists(ini_memcard))
   {
-    Memcard::GCMemcard memcard;
-    const Memcard::GCMemcardErrorCode error_code = memcard.Open(ini_memcard);
-    if (!error_code.HasCriticalErrors() && memcard.IsValid())
+    // The card's system blocks alone are 40 KiB, too large for the stack
+    Memcard::GCMemcard* const memcard = new Memcard::GCMemcard;
+    const Memcard::GCMemcardErrorCode error_code = memcard->Open(ini_memcard);
+    if (!error_code.HasCriticalErrors() && memcard->IsValid())
     {
       for (u8 i = 0; i < Memcard::DIRLEN; i++)
       {
         Memcard::Savefile savefile;
-        if (!memcard.ExportFile(i, &savefile))
+        if (!memcard->ExportFile(i, &savefile))
           continue;
 
         std::string filepath =
@@ -842,5 +843,6 @@ void MigrateFromMemcardFile(const std::string& directory_name, ExpansionInterfac
         Memcard::WriteGCISavefile(filepath, savefile);
       }
     }
+    delete memcard;
   }
 }
