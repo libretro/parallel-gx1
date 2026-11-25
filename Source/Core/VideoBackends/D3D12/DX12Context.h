@@ -154,13 +154,18 @@ private:
     ComPtr<ID3D12GraphicsCommandList> command_list;
     DescriptorAllocator descriptor_allocator;
     SamplerAllocator sampler_allocator;
-    std::vector<ID3D12Resource*> pending_resources;
+    // Released once the GPU is past this list; the storage is kept for the next use
+    ID3D12Resource** pending_resources = nullptr;
+    u32 num_pending_resources = 0;
+    u32 pending_resources_capacity = 0;
     struct PendingDescriptor
     {
       DescriptorHeapManager* manager;
       u32 index;
     };
-    std::vector<PendingDescriptor> pending_descriptors;
+    PendingDescriptor* pending_descriptors = nullptr;
+    u32 num_pending_descriptors = 0;
+    u32 pending_descriptors_capacity = 0;
     u64 ready_fence_value = 0;
   };
 

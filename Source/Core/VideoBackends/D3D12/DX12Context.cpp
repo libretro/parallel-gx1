@@ -3,6 +3,8 @@
 
 #include "VideoBackends/D3D12/DX12Context.h"
 
+#include <cstdlib>
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -35,6 +37,11 @@ DXContext::~DXContext()
 {
   if (m_fence_event)
     CloseHandle(m_fence_event);
+  for (CommandListResources& res : m_command_lists)
+  {
+    std::free(res.pending_resources);
+    std::free(res.pending_descriptors);
+  }
 }
 
 std::vector<u32> DXContext::GetAAModes()
@@ -394,13 +401,43 @@ void DXContext::ExecuteCommandList(bool wait_for_completion)
 
 void DXContext::DeferResourceDestruction(ID3D12Resource* resource)
 {
+  CommandListResources& res = m_command_lists[m_current_command_list];
+  if (res.num_pending_resources == res.pending_resources_capacity)
+  {
+    const u32 capacity = res.pending_resources_capacity ? res.pending_resources_capacity * 2 : 64;
+    void* const grown = std::realloc(res.pending_resources, capacity * sizeof(ID3D12Resource*));
+    if (!grown)
+    {
+      PanicAlert("Out of memory deferring a resource's destruction");
+      return;
+    }
+    res.pending_resources = static_cast<ID3D12Resource**>(grown);
+    res.pending_resources_capacity = capacity;
+  }
   resource->AddRef();
-  m_command_lists[m_current_command_list].pending_resources.push_back(resource);
+  res.pending_resources[res.num_pending_resources++] = resource;
 }
 
 void DXContext::DeferDescriptorDestruction(DescriptorHeapManager& manager, u32 index)
 {
-  m_command_lists[m_current_command_list].pending_descriptors.push_back({&manager, index});
+  CommandListResources& res = m_command_lists[m_current_command_list];
+  if (res.num_pending_descriptors == res.pending_descriptors_capacity)
+  {
+    const u32 capacity =
+        res.pending_descriptors_capacity ? res.pending_descriptors_capacity * 2 : 64;
+    void* const grown = std::realloc(res.pending_descriptors,
+                                     capacity * sizeof(CommandListResources::PendingDescriptor));
+    if (!grown)
+    {
+      PanicAlert("Out of memory deferring a descriptor's release");
+      return;
+    }
+    res.pending_descriptors = static_cast<CommandListResources::PendingDescriptor*>(grown);
+    res.pending_descriptors_capacity = capacity;
+  }
+  res.pending_descriptors[res.num_pending_descriptors].manager = &manager;
+  res.pending_descriptors[res.num_pending_descriptors].index = index;
+  res.num_pending_descriptors++;
 }
 
 void DXContext::ResetSamplerAllocators()
@@ -418,13 +455,13 @@ void DXContext::RecreateGXRootSignature()
 
 void DXContext::DestroyPendingResources(CommandListResources& cmdlist)
 {
-  for (const auto& dd : cmdlist.pending_descriptors)
-    dd.manager->Free(dd.index);
-  cmdlist.pending_descriptors.clear();
+  for (u32 i = 0; i < cmdlist.num_pending_descriptors; i++)
+    cmdlist.pending_descriptors[i].manager->Free(cmdlist.pending_descriptors[i].index);
+  cmdlist.num_pending_descriptors = 0;
 
-  for (ID3D12Resource* res : cmdlist.pending_resources)
-    res->Release();
-  cmdlist.pending_resources.clear();
+  for (u32 i = 0; i < cmdlist.num_pending_resources; i++)
+    cmdlist.pending_resources[i]->Release();
+  cmdlist.num_pending_resources = 0;
 }
 
 bool FenceValueDone(u64 fence_value)
