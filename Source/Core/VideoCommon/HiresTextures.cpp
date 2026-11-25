@@ -172,14 +172,14 @@ void HiresTexture::Update()
   const std::set<std::string> texture_directories = GetTextureDirectoriesForFirstMatchingGameId(
       File::GetUserPath(D_HIRESTEXTURES_IDX), SConfig::GetInstance().GetGameIDsForTextures());
 
-  constexpr auto extensions = std::to_array<std::string_view>({".png", ".dds"});
+  static constexpr std::string_view extensions[] = {".png", ".dds"};
 
   for (const auto& texture_directory : texture_directories)
   {
     const std::string_view texture_directory_view{texture_directory};
-    const auto texture_paths =
-        Common::DoFileSearch(&texture_directory_view, 1, extensions.data(), extensions.size(),
-                             /*recursive*/ true);
+    const auto texture_paths = Common::DoFileSearch(&texture_directory_view, 1, extensions,
+                                                    sizeof(extensions) / sizeof(extensions[0]),
+                                                    /*recursive*/ true);
 
     bool failed_insert = false;
     for (auto& path : texture_paths)

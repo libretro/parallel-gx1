@@ -686,7 +686,7 @@ bool Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx,
   case JVSIOCommand::FeatureCheck:
   {
     INFO_LOG(SERIALINTERFACE_JVSIO, "FeatureCheck");
-    constexpr auto features = std::to_array<JVSIOFeatureSpec>({
+    static constexpr JVSIOFeatureSpec features[] = {
         {JVSIOFeature::SwitchInput, 1, 16},
         {JVSIOFeature::CoinInput, 2},
         {JVSIOFeature::AnalogInput, 7},
@@ -694,8 +694,8 @@ bool Namco_FCA_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx,
         // {JVSIOFeature::RotaryInput, 2},
         {JVSIOFeature::GeneralPurposeOutput, 6},
         {JVSIOFeature::AnalogOutput, 4},
-    });
-    ctx.response.AddData(features.data(), sizeof(features));
+    };
+    ctx.response.AddData(features, sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
     return Report(report, JVSIOReportCode::Okay);
@@ -748,13 +748,13 @@ bool Sega_837_13551_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
   case JVSIOCommand::FeatureCheck:
   {
     INFO_LOG(SERIALINTERFACE_JVSIO, "FeatureCheck");
-    constexpr auto features = std::to_array<JVSIOFeatureSpec>({
+    static constexpr JVSIOFeatureSpec features[] = {
         {JVSIOFeature::SwitchInput, 2, 13},
         {JVSIOFeature::CoinInput, 2},
         {JVSIOFeature::AnalogInput, 8},
         {JVSIOFeature::GeneralPurposeOutput, 6},
-    });
-    ctx.response.AddData(features.data(), sizeof(features));
+    };
+    ctx.response.AddData(features, sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
     return Report(report, JVSIOReportCode::Okay);
@@ -779,13 +779,13 @@ bool Sega_837_13844_JVSIOBoard::HandleCommand(JVSIOCommand cmd, FrameContext ctx
   case JVSIOCommand::FeatureCheck:
   {
     INFO_LOG(SERIALINTERFACE_JVSIO, "FeatureCheck");
-    constexpr auto features = std::to_array<JVSIOFeatureSpec>({
+    static constexpr JVSIOFeatureSpec features[] = {
         {JVSIOFeature::SwitchInput, 2, 12},
         {JVSIOFeature::CoinInput, 2},
         {JVSIOFeature::AnalogInput, 8},
         {JVSIOFeature::GeneralPurposeOutput, 22},
-    });
-    ctx.response.AddData(features.data(), sizeof(features));
+    };
+    ctx.response.AddData(features, sizeof(features));
     ctx.response.AddData(u8{});  // End code
 
     return Report(report, JVSIOReportCode::Okay);

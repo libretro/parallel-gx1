@@ -503,8 +503,8 @@ std::vector<u8> DHCPPacket::Build() const
   {
     result.insert(result.end(), opt.begin(), opt.end());
   }
-  constexpr auto no_option = std::to_array<u8>({255, 0, 0, 0});
-  result.insert(result.end(), no_option.begin(), no_option.end());
+  static constexpr u8 no_option[] = {255, 0, 0, 0};
+  result.insert(result.end(), no_option, no_option + sizeof(no_option));
 
   return result;
 }

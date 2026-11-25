@@ -223,7 +223,7 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleDHCP(const Common::UDPPacket& pack
   const u8* router_ip_ptr = reinterpret_cast<const u8*>(&m_router_ip);
   const std::vector<u8> ip_part(router_ip_ptr, router_ip_ptr + sizeof(m_router_ip));
 
-  constexpr auto timeout_24h = std::to_array<u8>({0, 1, 0x51, 0x80});
+  static constexpr u8 timeout_24h[] = {0, 1, 0x51, 0x80};
 
   Common::DHCPPacket reply;
   reply.body = Common::DHCPBody(request.transaction_id, m_current_mac, m_current_ip, m_router_ip);
@@ -235,9 +235,9 @@ void CEXIETHERNET::BuiltInBBAInterface::HandleDHCP(const Common::UDPPacket& pack
       reply.AddOption(53, {2}) :  // default, send a suggestion
       reply.AddOption(53, {5});
   reply.AddOption(54, ip_part.data(), ip_part.size());  // dhcp server ip
-  reply.AddOption(51, timeout_24h.data(), timeout_24h.size());  // lease time 24h
-  reply.AddOption(58, timeout_24h.data(), timeout_24h.size());  // renewal time
-  reply.AddOption(59, timeout_24h.data(), timeout_24h.size());  // rebind time
+  reply.AddOption(51, timeout_24h, sizeof(timeout_24h));  // lease time 24h
+  reply.AddOption(58, timeout_24h, sizeof(timeout_24h));  // renewal time
+  reply.AddOption(59, timeout_24h, sizeof(timeout_24h));  // rebind time
   reply.AddOption(1, {255, 255, 255, 0});  // submask
   reply.AddOption(28, {ip_part[0], ip_part[1], ip_part[2], 255});  // broadcast ip
   reply.AddOption(6, ip_part.data(), ip_part.size());  // dns server

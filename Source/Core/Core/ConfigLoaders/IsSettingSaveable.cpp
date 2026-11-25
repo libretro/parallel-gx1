@@ -12,8 +12,8 @@ namespace ConfigLoaders
 {
 bool IsSettingSaveable(const Config::Location& config_location)
 {
-  static constexpr std::array systems_not_saveable = {Config::System::GCPad, Config::System::WiiPad,
-                                                      Config::System::GCKeyboard};
+  static constexpr Config::System systems_not_saveable[] = {
+      Config::System::GCPad, Config::System::WiiPad, Config::System::GCKeyboard};
 
   bool not_saveable = false;
   for (const Config::System system : systems_not_saveable)
