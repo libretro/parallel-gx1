@@ -7,7 +7,6 @@
 
 #include <cstddef>
 #include <utility>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -226,15 +225,19 @@ private:
   struct KeyEntry
   {
     KeyEntry();
-    KeyEntry(ObjectType type_, ObjectSubType subtype_, std::vector<u8>&& data_, u32 owner_mask_);
-    KeyEntry(ObjectType type_, ObjectSubType subtype_, std::vector<u8>&& data_, u32 misc_data_,
-             u32 owner_mask_);
+    // data may be null for size zero bytes
+    KeyEntry(ObjectType type_, ObjectSubType subtype_, const u8* data_, size_t size_,
+             u32 misc_data_, u32 owner_mask_);
     void DoState(PointerWrap& p);
+    // Copies size bytes (an RSA-4096 key at most), or zeroes them when bytes is null
+    void SetData(const u8* bytes, size_t size);
 
     bool in_use = false;
     ObjectType type{};
     ObjectSubType subtype{};
-    std::vector<u8> data;
+    static constexpr size_t MAX_DATA_SIZE = 512;
+    u8 data[MAX_DATA_SIZE] = {};
+    u32 data_size = 0;
     u32 misc_data = 0;
     u32 owner_mask = 0;
   };

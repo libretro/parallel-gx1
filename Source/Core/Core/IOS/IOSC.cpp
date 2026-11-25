@@ -8,7 +8,6 @@
 #include <cstring>
 #include <retro_miscellaneous.h>
 #include <utility>
-#include <vector>
 
 #include <cstdio>
 
@@ -247,7 +246,7 @@ ReturnCode IOSC::DeleteObject(Handle handle, u32 pid)
   if (!entry)
     return IOSC_EINVAL;
   entry->in_use = false;
-  entry->data.clear();
+  entry->data_size = 0;
   return IPC_SUCCESS;
 }
 
@@ -277,7 +276,7 @@ ReturnCode IOSC::ImportSecretKey(Handle dest_handle, const u8* decrypted_key, u3
   if (dest_entry->type != TYPE_SECRET_KEY || dest_entry->subtype != ObjectSubType::AES128)
     return IOSC_INVALID_OBJTYPE;
 
-  dest_entry->data = std::vector<u8>(decrypted_key, decrypted_key + AES128_KEY_SIZE);
+  dest_entry->SetData(decrypted_key, AES128_KEY_SIZE);
   return IPC_SUCCESS;
 }
 
@@ -298,7 +297,7 @@ ReturnCode IOSC::ImportPublicKey(Handle dest_handle, const u8* public_key,
   if (size == 0)
     return IOSC_INVALID_OBJTYPE;
 
-  dest_entry->data.assign(public_key, public_key + size);
+  dest_entry->SetData(public_key, size);
 
   if (dest_entry->subtype == ObjectSubType::RSA2048 ||
       dest_entry->subtype == ObjectSubType::RSA4096)
@@ -335,15 +334,14 @@ ReturnCode IOSC::ComputeSharedKey(Handle dest_handle, Handle private_handle, Han
   u8 point[B233_POINT_SIZE];
   u8 shared_secret[30];
   point[0] = 0x04;
-  std::memcpy(point + 1, public_entry->data.data(), B233_POINT_SIZE - 1);
-  if (b233_ecdh(private_entry->data.data(), point, shared_secret) != 0)
+  std::memcpy(point + 1, public_entry->data, B233_POINT_SIZE - 1);
+  if (b233_ecdh(private_entry->data, point, shared_secret) != 0)
     std::memset(shared_secret, 0, sizeof(shared_secret));
 
   u8 sha1[20];
   SHA1Digest(shared_secret, sizeof(shared_secret), sha1);
 
-  dest_entry->data.resize(AES128_KEY_SIZE);
-  std::memcpy(dest_entry->data.data(), sha1, AES128_KEY_SIZE);
+  dest_entry->SetData(sha1, AES128_KEY_SIZE);
   return IPC_SUCCESS;
 }
 
@@ -359,12 +357,12 @@ ReturnCode IOSC::DecryptEncrypt(bool encrypt, Handle key_handle, u8* iv, const u
   if (entry->type != TYPE_SECRET_KEY || entry->subtype != ObjectSubType::AES128)
     return IOSC_INVALID_OBJTYPE;
 
-  if (entry->data.size() != AES128_KEY_SIZE)
+  if (entry->data_size != AES128_KEY_SIZE)
     return IOSC_FAIL_INTERNAL;
 
   // whole blocks only: a ragged size leaves output and iv as they were
   struct aes_ctx ctx;
-  if (aes_init(&ctx, entry->data.data(), 16) || size % AES_BLOCK_SIZE)
+  if (aes_init(&ctx, entry->data, 16) || size % AES_BLOCK_SIZE)
     return IPC_SUCCESS;
   if (encrypt)
     aes_cbc_encrypt(&ctx, iv, input, output, size);
@@ -432,18 +430,18 @@ ReturnCode IOSC::VerifyPublicKeySign(const u8* sha1, Handle signer_handle, const
   case ObjectSubType::RSA4096:
   {
     const size_t expected_key_size = entry->subtype == ObjectSubType::RSA2048 ? 0x100 : 0x200;
-    ASSERT(entry->data.size() == expected_key_size);
+    ASSERT(entry->data_size == expected_key_size);
     ASSERT(signature_size == expected_key_size);
 
     const u8* const exponent = reinterpret_cast<const u8*>(&entry->misc_data);
-    int ret = rsa_pkcs1_verify(entry->data.data(), entry->data.size(), exponent, 4, RSA_HASH_SHA1,
-                               sha1, 20, signature, signature_size);
+    int ret = rsa_pkcs1_verify(entry->data, entry->data_size, exponent, 4, RSA_HASH_SHA1, sha1, 20,
+                               signature, signature_size);
     if (ret != 0 && m_console_type == ConsoleType::RVT)
     {
       // Some dev signatures do not have proper PKCS#1 padding. Just powmod and check it ends with
       // digest.
       u8 result[0x200];
-      if (RSAPublic(entry->data.data(), entry->data.size(), exponent, signature, result) &&
+      if (RSAPublic(entry->data, entry->data_size, exponent, signature, result) &&
           memcmp(&result[signature_size - 20], sha1, 20) == 0)
       {
         ret = 0;
@@ -460,11 +458,11 @@ ReturnCode IOSC::VerifyPublicKeySign(const u8* sha1, Handle signer_handle, const
   }
   case ObjectSubType::ECC233:
   {
-    ASSERT(entry->data.size() == sizeof(CertECC::public_key));
+    ASSERT(entry->data_size == sizeof(CertECC::public_key));
 
     u8 point[B233_POINT_SIZE];
     point[0] = 0x04;
-    std::memcpy(point + 1, entry->data.data(), B233_POINT_SIZE - 1);
+    std::memcpy(point + 1, entry->data, B233_POINT_SIZE - 1);
     const bool ok = b233_ecdsa_verify(point, sha1, 20, signature, signature + 30) == 0;
     return ok ? IPC_SUCCESS : IOSC_FAIL_CHECKVALUE;
   }
@@ -567,7 +565,7 @@ CertECC IOSC::GetDeviceCertificate() const
 {
   const std::string name = StringFromFormat("NG%08x", GetDeviceId());
   auto cert = MakeBlankEccCert(StringFromFormat("Root-CA%08x-MS%08x", m_ca_id, m_ms_id), name,
-                               m_key_entries[HANDLE_CONSOLE_KEY].data.data(), m_console_key_id);
+                               m_key_entries[HANDLE_CONSOLE_KEY].data, m_console_key_id);
   std::memcpy(cert.signature.sig, m_console_signature, sizeof(cert.signature.sig));
   return cert;
 }
@@ -589,7 +587,7 @@ void IOSC::Sign(u8* sig_out, u8* ap_cert_out, u64 title_id, const u8* data, u32 
   const size_t skip = offsetof(CertECC, signature.issuer);
   u8 ap_cert_digest[20];
   SHA1Digest(reinterpret_cast<const u8*>(&cert) + skip, sizeof(cert) - skip, ap_cert_digest);
-  if (b233_ecdsa_sign(m_key_entries[HANDLE_CONSOLE_KEY].data.data(), ap_cert_digest,
+  if (b233_ecdsa_sign(m_key_entries[HANDLE_CONSOLE_KEY].data, ap_cert_digest,
                       sizeof(ap_cert_digest), cert.signature.sig, cert.signature.sig + 30) != 0)
   {
     std::memset(cert.signature.sig, 0, sizeof(cert.signature.sig));
@@ -613,69 +611,65 @@ void IOSC::LoadDefaultEntries()
   // Dolphin does not use the same "default" values as IOS does, as we do not emulate unblown
   // scenario.
 
-  m_key_entries[HANDLE_CONSOLE_KEY] = {
-      TYPE_SECRET_KEY,
-      ObjectSubType::ECC233,
-      {DEFAULT_PRIVATE_KEY, DEFAULT_PRIVATE_KEY + sizeof(DEFAULT_PRIVATE_KEY)},
-      3};
+  m_key_entries[HANDLE_CONSOLE_KEY] =
+      KeyEntry(TYPE_SECRET_KEY, ObjectSubType::ECC233, DEFAULT_PRIVATE_KEY,
+               sizeof(DEFAULT_PRIVATE_KEY), 0, 3);
   std::memcpy(m_console_signature, DEFAULT_SIGNATURE, sizeof(m_console_signature));
   m_console_key_id = DEFAULT_KEY_ID;
-  m_key_entries[HANDLE_CONSOLE_ID] = {
-      TYPE_DATA, ObjectSubType::Data, {}, DEFAULT_DEVICE_ID, 0xFFFFFFF};
-  m_key_entries[HANDLE_FS_KEY] = {TYPE_SECRET_KEY, ObjectSubType::AES128,
-                                  std::vector<u8>(AES128_KEY_SIZE), 5};
-  m_key_entries[HANDLE_FS_MAC] = {TYPE_SECRET_KEY, ObjectSubType::MAC, std::vector<u8>(20), 5};
+  m_key_entries[HANDLE_CONSOLE_ID] =
+      KeyEntry(TYPE_DATA, ObjectSubType::Data, nullptr, 0, DEFAULT_DEVICE_ID, 0xFFFFFFF);
+  m_key_entries[HANDLE_FS_KEY] =
+      KeyEntry(TYPE_SECRET_KEY, ObjectSubType::AES128, nullptr, AES128_KEY_SIZE, 0, 5);
+  m_key_entries[HANDLE_FS_MAC] = KeyEntry(TYPE_SECRET_KEY, ObjectSubType::MAC, nullptr, 20, 0, 5);
 
   switch (m_console_type)
   {
   case ConsoleType::Retail:
-    m_key_entries[HANDLE_COMMON_KEY] = {TYPE_SECRET_KEY,
-                                        ObjectSubType::AES128,
-                                        {{0xeb, 0xe4, 0x2a, 0x22, 0x5e, 0x85, 0x93, 0xe4, 0x48,
-                                          0xd9, 0xc5, 0x45, 0x73, 0x81, 0xaa, 0xf7}},
-                                        3};
-    m_root_key_entry = {TYPE_PUBLIC_KEY, ObjectSubType::RSA4096,
-                        std::vector<u8>(ROOT_PUBLIC_KEY, ROOT_PUBLIC_KEY + sizeof(ROOT_PUBLIC_KEY)),
-                        Common::swap32(0x00010001), 0};
+  {
+    static const u8 common_key[] = {0xeb, 0xe4, 0x2a, 0x22, 0x5e, 0x85, 0x93, 0xe4,
+                                    0x48, 0xd9, 0xc5, 0x45, 0x73, 0x81, 0xaa, 0xf7};
+    m_key_entries[HANDLE_COMMON_KEY] =
+        KeyEntry(TYPE_SECRET_KEY, ObjectSubType::AES128, common_key, sizeof(common_key), 0, 3);
+    m_root_key_entry = KeyEntry(TYPE_PUBLIC_KEY, ObjectSubType::RSA4096, ROOT_PUBLIC_KEY,
+                                sizeof(ROOT_PUBLIC_KEY), Common::swap32(0x00010001), 0);
     // Retail keyblob are issued by CA00000001. Default to 1 even though IOSC actually defaults
     // to 2.
     m_ms_id = 2;
     m_ca_id = 1;
     break;
+  }
   case ConsoleType::RVT:
-    m_key_entries[HANDLE_COMMON_KEY] = {TYPE_SECRET_KEY,
-                                        ObjectSubType::AES128,
-                                        {{0xa1, 0x60, 0x4a, 0x6a, 0x71, 0x23, 0xb5, 0x29, 0xae,
-                                          0x8b, 0xec, 0x32, 0xc8, 0x16, 0xfc, 0xaa}},
-                                        3};
-    m_root_key_entry = {
-        TYPE_PUBLIC_KEY, ObjectSubType::RSA4096,
-        std::vector<u8>(ROOT_PUBLIC_KEY_DEV, ROOT_PUBLIC_KEY_DEV + sizeof(ROOT_PUBLIC_KEY_DEV)),
-        Common::swap32(0x00010001), 0};
+  {
+    static const u8 common_key[] = {0xa1, 0x60, 0x4a, 0x6a, 0x71, 0x23, 0xb5, 0x29,
+                                    0xae, 0x8b, 0xec, 0x32, 0xc8, 0x16, 0xfc, 0xaa};
+    m_key_entries[HANDLE_COMMON_KEY] =
+        KeyEntry(TYPE_SECRET_KEY, ObjectSubType::AES128, common_key, sizeof(common_key), 0, 3);
+    m_root_key_entry = KeyEntry(TYPE_PUBLIC_KEY, ObjectSubType::RSA4096, ROOT_PUBLIC_KEY_DEV,
+                                sizeof(ROOT_PUBLIC_KEY_DEV), Common::swap32(0x00010001), 0);
     m_ms_id = 3;
     m_ca_id = 2;
     break;
   }
+  }
 
-  m_key_entries[HANDLE_PRNG_KEY] = {TYPE_SECRET_KEY, ObjectSubType::AES128,
-                                    std::vector<u8>(AES128_KEY_SIZE), 3};
+  m_key_entries[HANDLE_PRNG_KEY] =
+      KeyEntry(TYPE_SECRET_KEY, ObjectSubType::AES128, nullptr, AES128_KEY_SIZE, 0, 3);
 
-  m_key_entries[HANDLE_SD_KEY] = {TYPE_SECRET_KEY,
-                                  ObjectSubType::AES128,
-                                  {{0xab, 0x01, 0xb9, 0xd8, 0xe1, 0x62, 0x2b, 0x08, 0xaf, 0xba,
-                                    0xd8, 0x4d, 0xbf, 0xc2, 0xa5, 0x5d}},
-                                  3};
+  static const u8 sd_key[] = {0xab, 0x01, 0xb9, 0xd8, 0xe1, 0x62, 0x2b, 0x08,
+                              0xaf, 0xba, 0xd8, 0x4d, 0xbf, 0xc2, 0xa5, 0x5d};
+  m_key_entries[HANDLE_SD_KEY] =
+      KeyEntry(TYPE_SECRET_KEY, ObjectSubType::AES128, sd_key, sizeof(sd_key), 0, 3);
 
-  m_key_entries[HANDLE_BOOT2_VERSION] = {TYPE_DATA, ObjectSubType::Version, {}, 3};
-  m_key_entries[HANDLE_UNKNOWN_8] = {TYPE_DATA, ObjectSubType::Version, {}, 3};
-  m_key_entries[HANDLE_UNKNOWN_9] = {TYPE_DATA, ObjectSubType::Version, {}, 3};
-  m_key_entries[HANDLE_FS_VERSION] = {TYPE_DATA, ObjectSubType::Version, {}, 3};
+  m_key_entries[HANDLE_BOOT2_VERSION] =
+      KeyEntry(TYPE_DATA, ObjectSubType::Version, nullptr, 0, 0, 3);
+  m_key_entries[HANDLE_UNKNOWN_8] = KeyEntry(TYPE_DATA, ObjectSubType::Version, nullptr, 0, 0, 3);
+  m_key_entries[HANDLE_UNKNOWN_9] = KeyEntry(TYPE_DATA, ObjectSubType::Version, nullptr, 0, 0, 3);
+  m_key_entries[HANDLE_FS_VERSION] = KeyEntry(TYPE_DATA, ObjectSubType::Version, nullptr, 0, 0, 3);
 
-  m_key_entries[HANDLE_NEW_COMMON_KEY] = {TYPE_SECRET_KEY,
-                                          ObjectSubType::AES128,
-                                          {{0x63, 0xb8, 0x2b, 0xb4, 0xf4, 0x61, 0x4e, 0x2e, 0x13,
-                                            0xf2, 0xfe, 0xfb, 0xba, 0x4c, 0x9b, 0x7e}},
-                                          3};
+  static const u8 new_common_key[] = {0x63, 0xb8, 0x2b, 0xb4, 0xf4, 0x61, 0x4e, 0x2e,
+                                      0x13, 0xf2, 0xfe, 0xfb, 0xba, 0x4c, 0x9b, 0x7e};
+  m_key_entries[HANDLE_NEW_COMMON_KEY] = KeyEntry(TYPE_SECRET_KEY, ObjectSubType::AES128,
+                                                  new_common_key, sizeof(new_common_key), 0, 3);
 }
 
 void IOSC::LoadEntries()
@@ -694,32 +688,36 @@ void IOSC::LoadEntries()
     return;
   }
 
-  m_key_entries[HANDLE_CONSOLE_KEY].data = {dump.ng_priv, dump.ng_priv + sizeof(dump.ng_priv)};
+  m_key_entries[HANDLE_CONSOLE_KEY].SetData(dump.ng_priv, sizeof(dump.ng_priv));
   std::memcpy(m_console_signature, dump.ng_sig, sizeof(m_console_signature));
   m_ms_id = Common::swap32(dump.ms_id);
   m_ca_id = Common::swap32(dump.ca_id);
   m_console_key_id = Common::swap32(dump.ng_key_id);
   m_key_entries[HANDLE_CONSOLE_ID].misc_data = Common::swap32(dump.ng_id);
-  m_key_entries[HANDLE_FS_KEY].data = {dump.nand_key, dump.nand_key + sizeof(dump.nand_key)};
-  m_key_entries[HANDLE_FS_MAC].data = {dump.nand_hmac, dump.nand_hmac + sizeof(dump.nand_hmac)};
-  m_key_entries[HANDLE_PRNG_KEY].data = {dump.backup_key,
-                                         dump.backup_key + sizeof(dump.backup_key)};
+  m_key_entries[HANDLE_FS_KEY].SetData(dump.nand_key, sizeof(dump.nand_key));
+  m_key_entries[HANDLE_FS_MAC].SetData(dump.nand_hmac, sizeof(dump.nand_hmac));
+  m_key_entries[HANDLE_PRNG_KEY].SetData(dump.backup_key, sizeof(dump.backup_key));
   m_key_entries[HANDLE_BOOT2_VERSION].misc_data = dump.counters[0].boot2version;
 }
 
 IOSC::KeyEntry::KeyEntry() = default;
 
-IOSC::KeyEntry::KeyEntry(ObjectType type_, ObjectSubType subtype_, std::vector<u8>&& data_,
+IOSC::KeyEntry::KeyEntry(ObjectType type_, ObjectSubType subtype_, const u8* data_, size_t size_,
                          u32 misc_data_, u32 owner_mask_)
-    : in_use(true), type(type_), subtype(subtype_), data(std::move(data_)), misc_data(misc_data_),
-      owner_mask(owner_mask_)
+    : in_use(true), type(type_), subtype(subtype_), misc_data(misc_data_), owner_mask(owner_mask_)
 {
+  SetData(data_, size_);
 }
 
-IOSC::KeyEntry::KeyEntry(ObjectType type_, ObjectSubType subtype_, std::vector<u8>&& data_,
-                         u32 owner_mask_)
-    : KeyEntry(type_, subtype_, std::move(data_), {}, owner_mask_)
+void IOSC::KeyEntry::SetData(const u8* bytes, size_t size)
 {
+  if (size > sizeof(data))
+    size = sizeof(data);
+  if (bytes)
+    std::memcpy(data, bytes, size);
+  else
+    std::memset(data, 0, size);
+  data_size = static_cast<u32>(size);
 }
 
 IOSC::KeyEntry* IOSC::FindFreeEntry()
@@ -778,7 +776,17 @@ void IOSC::KeyEntry::DoState(PointerWrap& p)
   p.Do(in_use);
   p.Do(type);
   p.Do(subtype);
-  p.Do(data);
+  // Same layout as the std::vector this replaced: the byte count, then the bytes.
+  u32 size = data_size;
+  p.Do(size);
+  if (size > sizeof(data))
+  {
+    p.SetMeasureMode();
+    return;
+  }
+  data_size = size;
+  if (size)
+    p.DoArray(data, size);
   p.Do(misc_data);
   p.Do(owner_mask);
 }
