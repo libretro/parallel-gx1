@@ -21,13 +21,16 @@ struct InfinityFigure final
   void Save();
 
   File::IOFile inf_file;
-  std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE> data{};
+  u8 data[INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE]{};
   bool present = false;
   u8 order_added = 255;
 };
 
 // A response owed to the next interrupt transfer, and the transfers waiting for one
-typedef std::array<u8, 32> InfinityQuery;
+struct InfinityQuery
+{
+  u8 bytes[32];
+};
 RETRO_DEQUE_DEFINE(infinity_queries, InfinityQuery);
 RETRO_DEQUE_DEFINE(infinity_waiting, IntrMessage*);
 
@@ -53,8 +56,8 @@ public:
 
 private:
   // takes command
-  void ScheduleTransfer(TransferCommand* command, const std::array<u8, 32>& data,
-                        u64 expected_time_us);
+  // data: 32 bytes
+  void ScheduleTransfer(TransferCommand* command, const u8* data, u64 expected_time_us);
 
   u16 m_vid = 0;
   u16 m_pid = 0;
@@ -99,32 +102,32 @@ public:
   InfinityBase& operator=(const InfinityBase&) = delete;
 
   bool HasFigureBeenAddedRemoved() const;
-  std::array<u8, 32> PopAddedRemovedResponse();
-  void GetBlankResponse(u8 sequence, std::array<u8, 32>& reply_buf);
-  void GetPresentFigures(u8 sequence, std::array<u8, 32>& reply_buf);
-  void GetFigureIdentifier(u8 fig_num, u8 sequence, std::array<u8, 32>& reply_buf);
-  void QueryBlock(u8 fig_num, u8 block, std::array<u8, 32>& reply_buf, u8 sequence);
-  void WriteBlock(u8 fig_num, u8 block, const u8* to_write_buf, std::array<u8, 32>& reply_buf,
-                  u8 sequence);
-  void DescrambleAndSeed(u8* buf, u8 sequence, std::array<u8, 32>& reply_buf);
-  void GetNextAndScramble(u8 sequence, std::array<u8, 32>& reply_buf);
+  void PopAddedRemovedResponse(u8* reply_buf);
+  void GetBlankResponse(u8 sequence, u8* reply_buf);
+  void GetPresentFigures(u8 sequence, u8* reply_buf);
+  void GetFigureIdentifier(u8 fig_num, u8 sequence, u8* reply_buf);
+  void QueryBlock(u8 fig_num, u8 block, u8* reply_buf, u8 sequence);
+  void WriteBlock(u8 fig_num, u8 block, const u8* to_write_buf, u8* reply_buf, u8 sequence);
+  void DescrambleAndSeed(u8* buf, u8 sequence, u8* reply_buf);
+  void GetNextAndScramble(u8 sequence, u8* reply_buf);
   // Returns Infinity Figure name based on data from in_file param
-  std::string LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE>& buf,
-                         File::IOFile in_file, FigureUIPosition position);
+  // buf: INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE bytes
+  std::string LoadFigure(const u8* buf, File::IOFile in_file, FigureUIPosition position);
   std::string FindFigure(u32 character) const;
 
 protected:
-  std::array<InfinityFigure, 9> m_figures;
+  InfinityFigure m_figures[9];
 
 private:
   InfinityFigure& GetFigureByOrder(u8 order_added);
-  std::array<u8, 16> GenerateInfinityFigureKey(const std::vector<u8>& sha1_data);
+  // key: 16 bytes
+  void GenerateInfinityFigureKey(const std::vector<u8>& sha1_data, u8* key);
   FigureBasePosition DeriveFigurePosition(FigureUIPosition position);
   void GenerateSeed(u32 seed);
   u32 GetNext();
   u64 Scramble(u32 num_to_scramble, u32 garbage);
   u32 Descramble(u64 num_to_descramble);
-  u8 GenerateChecksum(const std::array<u8, 32>& data, int num_of_bytes) const;
+  u8 GenerateChecksum(const u8* data, int num_of_bytes) const;
 
   // These 4 variables are state variables used during the seeding and use of the random number
   // generator.

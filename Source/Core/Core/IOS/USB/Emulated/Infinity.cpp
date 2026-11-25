@@ -5,6 +5,7 @@
 
 #include <array>
 #include <bit>
+#include <retro_miscellaneous.h>
 #include <vector>
 
 #include <crypto/crypto.h>
@@ -133,7 +134,7 @@ static const struct
     {"Phineas and Ferb - Tri-State Area Terrain - Customization (Terrain)", 0x3D0945},
     {"Phineas and Ferb - Danville Sky - Customization (Skydome)", 0x3D0946}};
 
-static constexpr std::array<u8, 32> SHA1_CONSTANT = {
+static constexpr u8 SHA1_CONSTANT[32] = {
     0xAF, 0x62, 0xD2, 0xEC, 0x04, 0x91, 0x96, 0x8C, 0xC5, 0x2A, 0x1A, 0x71, 0x65, 0xF8, 0x65, 0xFE,
     0x28, 0x63, 0x29, 0x20, 0x44, 0x69, 0x73, 0x6e, 0x65, 0x79, 0x20, 0x32, 0x30, 0x31, 0x33};
 
@@ -266,8 +267,9 @@ int InfinityUSB::SubmitTransfer(IntrMessage* cmd)
     return IPC_EINVAL;
   }
 
-  std::array<u8, 32> data = {};
-  std::array<u8, 32> response_data = {};
+  u8 data[32] = {};
+  InfinityQuery response = {};
+  u8* const response_data = response.bytes;
   // First call - constant device response
   if (buf[0] == 0x00)
   {
@@ -280,7 +282,9 @@ int InfinityUSB::SubmitTransfer(IntrMessage* cmd)
     // If a new figure has been added or removed, get the updated figure response
     if (infinity_base.HasFigureBeenAddedRemoved())
     {
-      ScheduleTransfer(cmd, infinity_base.PopAddedRemovedResponse(), 1000);
+      u8 added_removed[32];
+      infinity_base.PopAddedRemovedResponse(added_removed);
+      ScheduleTransfer(cmd, added_removed, 1000);
     }
     else if (infinity_queries_empty(&m_queries))
     {
@@ -289,9 +293,9 @@ int InfinityUSB::SubmitTransfer(IntrMessage* cmd)
     }
     else
     {
-      const std::array<u8, 32> query = *infinity_queries_front(&m_queries);
+      const InfinityQuery query = *infinity_queries_front(&m_queries);
       infinity_queries_pop_front(&m_queries);
-      ScheduleTransfer(cmd, query, 1000);
+      ScheduleTransfer(cmd, query.bytes, 1000);
     }
   }
   else if (buf[0] == 0xFF)
@@ -315,8 +319,10 @@ int InfinityUSB::SubmitTransfer(IntrMessage* cmd)
     case 0x80:
     {
       // Activate Base, constant response (might be specific based on device type)
-      response_data = {0xaa, 0x15, 0x00, 0x00, 0x0f, 0x01, 0x00, 0x03, 0x02, 0x09, 0x09, 0x43,
-                       0x20, 0x32, 0x62, 0x36, 0x36, 0x4b, 0x34, 0x99, 0x67, 0x31, 0x93, 0x8c};
+      static const u8 activate_response[24] = {0xaa, 0x15, 0x00, 0x00, 0x0f, 0x01, 0x00, 0x03,
+                                               0x02, 0x09, 0x09, 0x43, 0x20, 0x32, 0x62, 0x36,
+                                               0x36, 0x4b, 0x34, 0x99, 0x67, 0x31, 0x93, 0x8c};
+      std::memcpy(response_data, activate_response, sizeof(activate_response));
       break;
     }
     case 0x81:
@@ -406,11 +412,11 @@ int InfinityUSB::SubmitTransfer(IntrMessage* cmd)
       break;
     }
 
-    memcpy(data.data(), buf, 32);
+    memcpy(data, buf, 32);
     ScheduleTransfer(cmd, data, 500);
     if (infinity_waiting_empty(&m_response_list))
     {
-      infinity_queries_push_back_growing(&m_queries, &response_data);
+      infinity_queries_push_back_growing(&m_queries, &response);
     }
     else
     {
@@ -436,10 +442,9 @@ int InfinityUSB::SubmitTransfer(IsoMessage* cmd)
   return 0;
 }
 
-void InfinityUSB::ScheduleTransfer(TransferCommand* command, const std::array<u8, 32>& data,
-                                   u64 expected_time_us)
+void InfinityUSB::ScheduleTransfer(TransferCommand* command, const u8* data, u64 expected_time_us)
 {
-  command->FillBuffer(data.data(), 32);
+  command->FillBuffer(data, 32);
   command->ScheduleTransferCompletion(32, expected_time_us);
   delete command;
 }
@@ -459,14 +464,13 @@ bool InfinityBase::HasFigureBeenAddedRemoved() const
   return !infinity_queries_empty(&m_figure_added_removed_response);
 }
 
-std::array<u8, 32> InfinityBase::PopAddedRemovedResponse()
+void InfinityBase::PopAddedRemovedResponse(u8* reply_buf)
 {
-  std::array<u8, 32> response = *infinity_queries_front(&m_figure_added_removed_response);
+  std::memcpy(reply_buf, infinity_queries_front(&m_figure_added_removed_response)->bytes, 32);
   infinity_queries_pop_front(&m_figure_added_removed_response);
-  return response;
 }
 
-u8 InfinityBase::GenerateChecksum(const std::array<u8, 32>& data, int num_of_bytes) const
+u8 InfinityBase::GenerateChecksum(const u8* data, int num_of_bytes) const
 {
   int checksum = 0;
   for (int i = 0; i < num_of_bytes; i++)
@@ -476,7 +480,7 @@ u8 InfinityBase::GenerateChecksum(const std::array<u8, 32>& data, int num_of_byt
   return (checksum & 0xFF);
 }
 
-void InfinityBase::GetBlankResponse(u8 sequence, std::array<u8, 32>& reply_buf)
+void InfinityBase::GetBlankResponse(u8 sequence, u8* reply_buf)
 {
   reply_buf[0] = 0xaa;
   reply_buf[1] = 0x01;
@@ -484,10 +488,10 @@ void InfinityBase::GetBlankResponse(u8 sequence, std::array<u8, 32>& reply_buf)
   reply_buf[3] = GenerateChecksum(reply_buf, 3);
 }
 
-void InfinityBase::GetPresentFigures(u8 sequence, std::array<u8, 32>& reply_buf)
+void InfinityBase::GetPresentFigures(u8 sequence, u8* reply_buf)
 {
   int x = 3;
-  for (u8 i = 0; i < m_figures.size(); i++)
+  for (u8 i = 0; i < ARRAY_SIZE(m_figures); i++)
   {
     u8 slot = i == 0 ? 0x10 : (i > 0 && i < 4) ? 0x20 : 0x30;
     if (m_figures[i].present)
@@ -503,7 +507,7 @@ void InfinityBase::GetPresentFigures(u8 sequence, std::array<u8, 32>& reply_buf)
   reply_buf[x] = GenerateChecksum(reply_buf, x);
 }
 
-void InfinityBase::GetFigureIdentifier(u8 fig_num, u8 sequence, std::array<u8, 32>& reply_buf)
+void InfinityBase::GetFigureIdentifier(u8 fig_num, u8 sequence, u8* reply_buf)
 {
 
   InfinityFigure& figure = GetFigureByOrder(fig_num);
@@ -515,12 +519,12 @@ void InfinityBase::GetFigureIdentifier(u8 fig_num, u8 sequence, std::array<u8, 3
 
   if (figure.present)
   {
-    memcpy(&reply_buf[4], figure.data.data(), 7);
+    memcpy(&reply_buf[4], figure.data, 7);
   }
   reply_buf[11] = GenerateChecksum(reply_buf, 11);
 }
 
-void InfinityBase::QueryBlock(u8 fig_num, u8 block, std::array<u8, 32>& reply_buf, u8 sequence)
+void InfinityBase::QueryBlock(u8 fig_num, u8 block, u8* reply_buf, u8 sequence)
 {
 
   InfinityFigure& figure = GetFigureByOrder(fig_num);
@@ -540,13 +544,13 @@ void InfinityBase::QueryBlock(u8 fig_num, u8 block, std::array<u8, 32>& reply_bu
   }
   if (figure.present && file_block < 20)
   {
-    memcpy(&reply_buf[4], figure.data.data() + (16 * file_block), 16);
+    memcpy(&reply_buf[4], figure.data + (16 * file_block), 16);
   }
   reply_buf[20] = GenerateChecksum(reply_buf, 20);
 }
 
-void InfinityBase::WriteBlock(u8 fig_num, u8 block, const u8* to_write_buf,
-                              std::array<u8, 32>& reply_buf, u8 sequence)
+void InfinityBase::WriteBlock(u8 fig_num, u8 block, const u8* to_write_buf, u8* reply_buf,
+                              u8 sequence)
 {
 
   InfinityFigure& figure = GetFigureByOrder(fig_num);
@@ -566,30 +570,29 @@ void InfinityBase::WriteBlock(u8 fig_num, u8 block, const u8* to_write_buf,
   }
   if (figure.present && file_block < 20)
   {
-    memcpy(figure.data.data() + (file_block * 16), to_write_buf, 16);
+    memcpy(figure.data + (file_block * 16), to_write_buf, 16);
     figure.Save();
   }
   reply_buf[4] = GenerateChecksum(reply_buf, 4);
 }
 
-std::string
-InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLOCK_SIZE>& buf,
-                         File::IOFile in_file, FigureUIPosition position)
+std::string InfinityBase::LoadFigure(const u8* buf, File::IOFile in_file, FigureUIPosition position)
 {
   u8 order_added;
 
-  std::vector<u8> sha1_calc = {SHA1_CONSTANT.begin(), SHA1_CONSTANT.end() - 1};
+  std::vector<u8> sha1_calc(SHA1_CONSTANT, SHA1_CONSTANT + sizeof(SHA1_CONSTANT) - 1);
   for (int i = 0; i < 7; i++)
   {
     sha1_calc.push_back(buf[i]);
   }
 
-  std::array<u8, 16> key = GenerateInfinityFigureKey(sha1_calc);
+  u8 key[16];
+  GenerateInfinityFigureKey(sha1_calc, key);
 
   struct aes_ctx ctx;
-  std::array<u8, 16> infinity_decrypted_block = {};
-  aes_init(&ctx, key.data(), key.size());
-  aes_decrypt_block(&ctx, &buf[16], infinity_decrypted_block.data());
+  u8 infinity_decrypted_block[16] = {};
+  aes_init(&ctx, key, sizeof(key));
+  aes_decrypt_block(&ctx, &buf[16], infinity_decrypted_block);
 
   u32 number = u32(infinity_decrypted_block[1]) << 16 | u32(infinity_decrypted_block[2]) << 8 |
                u32(infinity_decrypted_block[3]);
@@ -598,7 +601,7 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
   InfinityFigure& figure = m_figures[static_cast<u8>(position)];
 
   figure.inf_file = std::move(in_file);
-  memcpy(figure.data.data(), buf.data(), figure.data.size());
+  memcpy(figure.data, buf, sizeof(figure.data));
   figure.present = true;
   if (figure.order_added == 255)
   {
@@ -614,9 +617,9 @@ InfinityBase::LoadFigure(const std::array<u8, INFINITY_NUM_BLOCKS * INFINITY_BLO
     return "Unknown Figure";
   }
 
-  std::array<u8, 32> figure_change_response = {0xab, 0x04,        static_cast<u8>(derived_position),
-                                               0x09, order_added, 0x00};
-  figure_change_response[6] = GenerateChecksum(figure_change_response, 6);
+  InfinityQuery figure_change_response = {
+      {0xab, 0x04, static_cast<u8>(derived_position), 0x09, order_added, 0x00}};
+  figure_change_response.bytes[6] = GenerateChecksum(figure_change_response.bytes, 6);
   infinity_queries_push_back_growing(&m_figure_added_removed_response, &figure_change_response);
 
   return FindFigure(number);
@@ -666,7 +669,7 @@ FigureBasePosition InfinityBase::DeriveFigurePosition(FigureUIPosition position)
 
 InfinityFigure& InfinityBase::GetFigureByOrder(u8 order_added)
 {
-  for (u8 i = 0; i < m_figures.size(); i++)
+  for (u8 i = 0; i < ARRAY_SIZE(m_figures); i++)
   {
     if (m_figures[i].order_added == order_added)
     {
@@ -678,13 +681,12 @@ InfinityFigure& InfinityBase::GetFigureByOrder(u8 order_added)
   return m_figures[0];
 }
 
-std::array<u8, 16> InfinityBase::GenerateInfinityFigureKey(const std::vector<u8>& sha1_data)
+void InfinityBase::GenerateInfinityFigureKey(const std::vector<u8>& sha1_data, u8* key)
 {
   u8 digest[20];
   SHA1Digest(sha1_data.data(), sha1_data.size(), digest);
   // Infinity AES keys are the first 16 bytes of the SHA1 Digest, every set of 4 bytes need to be
   // reversed due to endianness
-  std::array<u8, 16> key = {};
   for (int i = 0; i < 4; i++)
   {
     for (int x = 3; x >= 0; x--)
@@ -692,10 +694,9 @@ std::array<u8, 16> InfinityBase::GenerateInfinityFigureKey(const std::vector<u8>
       key[(3 - x) + (i * 4)] = digest[x + (i * 4)];
     }
   }
-  return key;
 }
 
-void InfinityBase::DescrambleAndSeed(u8* buf, u8 sequence, std::array<u8, 32>& reply_buf)
+void InfinityBase::DescrambleAndSeed(u8* buf, u8 sequence, u8* reply_buf)
 {
   u64 value = u64(buf[4]) << 56 | u64(buf[5]) << 48 | u64(buf[6]) << 40 | u64(buf[7]) << 32 |
               u64(buf[8]) << 24 | u64(buf[9]) << 16 | u64(buf[10]) << 8 | u64(buf[11]);
@@ -704,11 +705,14 @@ void InfinityBase::DescrambleAndSeed(u8* buf, u8 sequence, std::array<u8, 32>& r
   GetBlankResponse(sequence, reply_buf);
 }
 
-void InfinityBase::GetNextAndScramble(u8 sequence, std::array<u8, 32>& reply_buf)
+void InfinityBase::GetNextAndScramble(u8 sequence, u8* reply_buf)
 {
   u32 next_random = GetNext();
   u64 scrambled_next_random = Scramble(next_random, 0);
-  reply_buf = {0xAA, 0x09, sequence};
+  std::memset(reply_buf, 0, 32);
+  reply_buf[0] = 0xAA;
+  reply_buf[1] = 0x09;
+  reply_buf[2] = sequence;
   reply_buf[3] = u8((scrambled_next_random >> 56) & 0xFF);
   reply_buf[4] = u8((scrambled_next_random >> 48) & 0xFF);
   reply_buf[5] = u8((scrambled_next_random >> 40) & 0xFF);
@@ -806,6 +810,6 @@ void InfinityFigure::Save()
     return;
 
   inf_file.Seek(0, File::SeekOrigin::Begin);
-  inf_file.WriteBytes(data.data(), 0x40 * 0x05);
+  inf_file.WriteBytes(data, 0x40 * 0x05);
 }
 }  // namespace IOS::HLE::USB

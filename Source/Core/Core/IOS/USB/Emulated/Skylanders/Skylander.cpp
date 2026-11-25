@@ -766,7 +766,7 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
     return IPC_EINVAL;
 
   // Data to be sent back via the control transfer immediately
-  std::array<u8, 64> control_response = {};
+  SkylanderQuery control_response = {{}};
   s32 expected_count = 0;
   u64 expected_time_us = 100;
 
@@ -800,7 +800,7 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       return IPC_EINVAL;
     }
     // Data to be queued to be sent back via the Interrupt Transfer (if needed)
-    std::array<u8, 64> interrupt_response = {};
+    SkylanderQuery interrupt_response = {{}};
 
     // The first byte of the Control Request is always a char for Skylanders
     switch (buf[0])
@@ -824,10 +824,10 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       // Wii U Wireless: 41 01 f4 00 41 00 ed 00 41 01 f4 00 41 00 eb 00 41 01 f3 00 41 00 ed 00
       if (cmd->length == 2)
       {
-        control_response = {buf[0], buf[1]};
-        interrupt_response = {0x41, buf[1], 0xFF, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                              0x00, 0x00,   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                              0x00, 0x00,   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        control_response = {{buf[0], buf[1]}};
+        interrupt_response = {{0x41, buf[1], 0xFF, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x00, 0x00,   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x00, 0x00,   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
         skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         expected_count = 10;
         system.GetSkylanderPortal().Activate();
@@ -850,7 +850,7 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       if (cmd->length == 4)
       {
         system.GetSkylanderPortal().SetLEDs(0x01, buf[1], buf[2], buf[3]);
-        control_response = {0x43, buf[1], buf[2], buf[3]};
+        control_response = {{0x43, buf[1], buf[2], buf[3]}};
         expected_count = 12;
       }
       break;
@@ -869,9 +869,9 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       // For example, 500 milliseconds becomes 0xF4, 0x01
       if (cmd->length == 7)
       {
-        control_response = {buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]};
+        control_response = {{buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]}};
         expected_count = 15;
-        interrupt_response = {buf[0]};
+        interrupt_response = {{buf[0]}};
         skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         system.GetSkylanderPortal().SetLEDs(buf[1], buf[2], buf[3], buf[4]);
       }
@@ -892,7 +892,7 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       // increasing or decreasing the values results in a brighter or dimmer light
       if (cmd->length == 5)
       {
-        control_response = {buf[0], buf[1], buf[2], buf[3], buf[4]};
+        control_response = {{buf[0], buf[1], buf[2], buf[3], buf[4]}};
         expected_count = 13;
 
         u8 side = buf[1];
@@ -910,9 +910,9 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       // Respond with version obtained from Trap Team wired portal
       if (cmd->length == 2)
       {
-        control_response = {buf[0], buf[1]};
+        control_response = {{buf[0], buf[1]}};
         expected_count = 10;
-        interrupt_response = {buf[0], buf[1], 0x00, 0x19};
+        interrupt_response = {{buf[0], buf[1], 0x00, 0x19}};
         skylander_queries_push_back_growing(&m_queries, &interrupt_response);
       }
       break;
@@ -939,9 +939,9 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       {
         const u8 sky_num = buf[1] & 0xF;
         const u8 block = buf[2];
-        system.GetSkylanderPortal().QueryBlock(sky_num, block, interrupt_response.data());
+        system.GetSkylanderPortal().QueryBlock(sky_num, block, interrupt_response.bytes);
         skylander_queries_push_back_growing(&m_queries, &interrupt_response);
-        control_response = {buf[0], buf[1], buf[2]};
+        control_response = {{buf[0], buf[1], buf[2]}};
         expected_count = 11;
       }
       break;
@@ -958,10 +958,10 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       // type.
       if (cmd->length == 2)
       {
-        control_response = {0x52, 0x00};
-        interrupt_response = {0x52, 0x02, 0x1b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        control_response = {{0x52, 0x00}};
+        interrupt_response = {{0x52, 0x02, 0x1b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                               0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
         skylander_queries_push_back_growing(&m_queries, &interrupt_response);
         expected_count = 10;
       }
@@ -1001,7 +1001,7 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       if (cmd->length == 1)
       {
         // The Status interrupt responses are automatically handled via the GetStatus method
-        control_response = {buf[0]};
+        control_response = {{buf[0]}};
         expected_count = 9;
       }
       break;
@@ -1010,7 +1010,7 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
     {
       if (cmd->length == 4)
       {
-        control_response = {buf[0], buf[1], buf[2], buf[3]};
+        control_response = {{buf[0], buf[1], buf[2], buf[3]}};
         expected_count = 12;
       }
       break;
@@ -1040,11 +1040,11 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
       {
         const u8 sky_num = buf[1] & 0xF;
         const u8 block = buf[2];
-        system.GetSkylanderPortal().WriteBlock(sky_num, block, &buf[3], interrupt_response.data());
+        system.GetSkylanderPortal().WriteBlock(sky_num, block, &buf[3], interrupt_response.bytes);
         skylander_queries_push_back_growing(&m_queries, &interrupt_response);
-        control_response = {buf[0],  buf[1],  buf[2],  buf[3],  buf[4],  buf[5],  buf[6],
-                            buf[7],  buf[8],  buf[9],  buf[10], buf[11], buf[12], buf[13],
-                            buf[14], buf[15], buf[16], buf[17], buf[18]};
+        control_response = {{buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8],
+                             buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15], buf[16],
+                             buf[17], buf[18]}};
         expected_count = 27;
       }
       break;
@@ -1058,7 +1058,7 @@ int SkylanderUSB::HandleTransfer(CtrlMessage* cmd)
   if (expected_count == 0)
     return IPC_EINVAL;
 
-  ScheduleTransfer(cmd, control_response, expected_count, expected_time_us);
+  ScheduleTransfer(cmd, control_response.bytes, expected_count, expected_time_us);
   return 0;
 }
 
@@ -1086,7 +1086,7 @@ int SkylanderUSB::HandleTransfer(IntrMessage* cmd)
     ERROR_LOG(IOS_USB, "Skylander command invalid");
     return IPC_EINVAL;
   }
-  std::array<u8, 64> interrupt_response = {};
+  SkylanderQuery interrupt_response = {{}};
   s32 expected_count;
   u64 expected_time_us;
   // Audio requests are 64 bytes long, are the only Interrupt requests longer than 32 bytes,
@@ -1096,12 +1096,12 @@ int SkylanderUSB::HandleTransfer(IntrMessage* cmd)
     /* The portal's speaker: 32 little-endian mono samples, mixed in where the output is now. */
     field_audio_mix_mono_le(FIELD_AUDIO_PORTAL, buf, cmd->length / 2);
 
-    std::array<u8, 64> audio_interrupt_response = {};
-    u8* audio_buf = audio_interrupt_response.data();
+    SkylanderQuery audio_interrupt_response = {};
+    u8* audio_buf = audio_interrupt_response.bytes;
     memcpy(audio_buf, buf, cmd->length);
     expected_time_us = 0;
     expected_count = cmd->length;
-    ScheduleTransfer(cmd, audio_interrupt_response, expected_count, expected_time_us);
+    ScheduleTransfer(cmd, audio_interrupt_response.bytes, expected_count, expected_time_us);
 
     return 0;
   }
@@ -1121,7 +1121,7 @@ int SkylanderUSB::HandleTransfer(IntrMessage* cmd)
     expected_time_us = 2000;
   }
   expected_count = 32;
-  ScheduleTransfer(cmd, interrupt_response, expected_count, expected_time_us);
+  ScheduleTransfer(cmd, interrupt_response.bytes, expected_count, expected_time_us);
   return 0;
 }
 
@@ -1133,10 +1133,10 @@ int SkylanderUSB::HandleTransfer(IsoMessage* cmd)
   return 0;
 }
 
-void SkylanderUSB::ScheduleTransfer(TransferCommand* command, const std::array<u8, 64>& data,
-                                    s32 expected_count, u64 expected_time_us)
+void SkylanderUSB::ScheduleTransfer(TransferCommand* command, const u8* data, s32 expected_count,
+                                    u64 expected_time_us)
 {
-  command->FillBuffer(data.data(), expected_count);
+  command->FillBuffer(data, expected_count);
   command->ScheduleTransferCompletion(expected_count, expected_time_us);
 }
 
@@ -1229,7 +1229,7 @@ void SkylanderPortal::SetLEDs(u8 side, u8 red, u8 green, u8 blue)
   }
 }
 
-std::array<u8, 64> SkylanderPortal::GetStatus()
+SkylanderQuery SkylanderPortal::GetStatus()
 {
 
   u32 status = 0;
@@ -1254,13 +1254,13 @@ std::array<u8, 64> SkylanderPortal::GetStatus()
     status |= s.status;
   }
 
-  std::array<u8, 64> interrupt_response = {0x53,   0x00, 0x00, 0x00, 0x00, m_interrupt_counter++,
-                                           active, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                           0x00,   0x00, 0x00, 0x00, 0x00, 0x00,
-                                           0x00,   0x00, 0x00, 0x00, 0x00, 0x00,
-                                           0x00,   0x00, 0x00, 0x00, 0x00, 0x00,
-                                           0x00,   0x00};
-  memcpy(&interrupt_response[1], &status, sizeof(status));
+  SkylanderQuery interrupt_response = {{0x53,   0x00, 0x00, 0x00, 0x00, m_interrupt_counter++,
+                                        active, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                        0x00,   0x00, 0x00, 0x00, 0x00, 0x00,
+                                        0x00,   0x00, 0x00, 0x00, 0x00, 0x00,
+                                        0x00,   0x00, 0x00, 0x00, 0x00, 0x00,
+                                        0x00,   0x00}};
+  memcpy(&interrupt_response.bytes[1], &status, sizeof(status));
   return interrupt_response;
 }
 

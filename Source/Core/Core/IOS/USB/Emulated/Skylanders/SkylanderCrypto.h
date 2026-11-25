@@ -15,5 +15,6 @@ void ComputeChecksumType1(const u8* data_start, u8* output);
 void ComputeChecksumType2(const u8* data_start, u8* output);
 void ComputeChecksumType3(const u8* data_start, u8* output);
 void ComputeChecksumType6(const u8* data_start, u8* output);
-std::array<u8, 11> ComputeToyCode(u64 code);
+// out: 11 bytes
+void ComputeToyCode(u64 code, u8* out);
 }  // namespace IOS::HLE::USB::SkylanderCrypto

@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstring>
+#include <retro_miscellaneous.h>
 #include <string>
 
 #include <crypto/crypto.h>
@@ -25,94 +26,93 @@ namespace IOS::HLE::USB
 SkylanderFigure::SkylanderFigure(const std::string& file_path)
 {
   m_sky_file = File::IOFile(file_path, "w+b");
-  m_data = {};
+  std::memset(m_data, 0, sizeof(m_data));
 }
 // Generate a AES key without the block filled in
 void SkylanderFigure::GenerateIncompleteHashIn(u8* dest) const
 {
-  std::array<u8, 0x56> hash_in = {};
+  u8 hash_in[0x56] = {};
 
   // copy first 2 blocks into hash
-  GetBlock(0, hash_in.data());
-  GetBlock(1, hash_in.data() + 0x10);
+  GetBlock(0, hash_in);
+  GetBlock(1, hash_in + 0x10);
 
   // Skip 1 byte. Is a block index that needs to be set per block.
 
   // Byte array of ascii string " Copyright (C) 2010 Activision. All Rights Reserved.". The space at
   // the start of the string is intentional
-  static constexpr std::array<u8, 0x35> HASH_CONST = {
+  static constexpr u8 HASH_CONST[0x35] = {
       0x20, 0x43, 0x6F, 0x70, 0x79, 0x72, 0x69, 0x67, 0x68, 0x74, 0x20, 0x28, 0x43, 0x29,
       0x20, 0x32, 0x30, 0x31, 0x30, 0x20, 0x41, 0x63, 0x74, 0x69, 0x76, 0x69, 0x73, 0x69,
       0x6F, 0x6E, 0x2E, 0x20, 0x41, 0x6C, 0x6C, 0x20, 0x52, 0x69, 0x67, 0x68, 0x74, 0x73,
       0x20, 0x52, 0x65, 0x73, 0x65, 0x72, 0x76, 0x65, 0x64, 0x2E, 0x20};
 
-  memcpy(hash_in.data() + 0x21, HASH_CONST.data(), HASH_CONST.size());
+  memcpy(hash_in + 0x21, HASH_CONST, ARRAY_SIZE(HASH_CONST));
 
-  memcpy(dest, hash_in.data(), 0x56);
+  memcpy(dest, hash_in, 0x56);
 }
 void SkylanderFigure::Encrypt(const u8* input)
 {
-  std::array<u8, 0x56> hash_in = {};
+  u8 hash_in[0x56] = {};
 
-  GenerateIncompleteHashIn(hash_in.data());
+  GenerateIncompleteHashIn(hash_in);
 
-  std::array<u8, FIGURE_SIZE> encrypted = {};
+  u8 encrypted[FIGURE_SIZE] = {};
 
-  std::array<u8, BLOCK_SIZE> current_block = {};
+  u8 current_block[BLOCK_SIZE] = {};
 
   // Run for every block
   for (u8 i = 0; i < 64; ++i)
   {
-    memcpy(current_block.data(), input + (i * BLOCK_SIZE), BLOCK_SIZE);
+    memcpy(current_block, input + (i * BLOCK_SIZE), BLOCK_SIZE);
 
     // Skip sector trailer and the first 8 blocks
     if (((i + 1) % 4 == 0) || i < 8)
     {
-      memcpy(encrypted.data() + (i * BLOCK_SIZE), current_block.data(), BLOCK_SIZE);
+      memcpy(encrypted + (i * BLOCK_SIZE), current_block, BLOCK_SIZE);
       continue;
     }
 
     // Block index
     hash_in[0x20] = i;
 
-    std::array<u8, BLOCK_SIZE> hash_out = {};
+    u8 hash_out[BLOCK_SIZE] = {};
 
     MD5_CTX md5;
     MD5_Init(&md5);
-    MD5_Update(&md5, hash_in.data(), 0x56);
-    MD5_Final(hash_out.data(), &md5);
+    MD5_Update(&md5, hash_in, 0x56);
+    MD5_Final(hash_out, &md5);
 
     struct aes_ctx aes;
-    aes_init(&aes, hash_out.data(), 16);
-    aes_encrypt_block(&aes, current_block.data(), encrypted.data() + (i * BLOCK_SIZE));
+    aes_init(&aes, hash_out, 16);
+    aes_encrypt_block(&aes, current_block, encrypted + (i * BLOCK_SIZE));
   }
 
-  memcpy(m_data.data(), encrypted.data(), FIGURE_SIZE);
+  memcpy(m_data, encrypted, FIGURE_SIZE);
 
-  DEBUG_LOG(IOS_USB, "Encrypted skylander data: \n%s",
-            HexDump(encrypted.data(), FIGURE_SIZE).c_str());
+  DEBUG_LOG(IOS_USB, "Encrypted skylander data: \n%s", HexDump(encrypted, FIGURE_SIZE).c_str());
 }
 SkylanderFigure::SkylanderFigure(File::IOFile file)
 {
   m_sky_file = std::move(file);
   m_sky_file.Seek(0, File::SeekOrigin::Begin);
-  m_sky_file.ReadBytes(m_data.data(), m_data.size());
+  m_sky_file.ReadBytes(m_data, ARRAY_SIZE(m_data));
 }
 void SkylanderFigure::Save()
 {
   m_sky_file.Seek(0, File::SeekOrigin::Begin);
-  m_sky_file.WriteBytes(m_data.data(), FIGURE_SIZE);
+  m_sky_file.WriteBytes(m_data, FIGURE_SIZE);
 }
 
 void SkylanderFigure::GetBlock(u8 index, u8* dest) const
 {
-  memcpy(dest, m_data.data() + (index * BLOCK_SIZE), BLOCK_SIZE);
+  memcpy(dest, m_data + (index * BLOCK_SIZE), BLOCK_SIZE);
 }
 
 FigureData SkylanderFigure::GetData() const
 {
-  FigureData figure_data = {.figure_id = Common::BitCastPtr<u16>(m_data.data() + 0x10),
-                            .variant_id = Common::BitCastPtr<u16>(m_data.data() + 0x1C)};
+  FigureData figure_data = {.figure_id = Common::BitCastPtr<u16>(m_data + 0x10),
+                            .variant_id = Common::BitCastPtr<u16>(m_data + 0x1C)};
 
   Type type = Type::Item;
   if (const SkyData* const found =
@@ -124,66 +124,65 @@ FigureData SkylanderFigure::GetData() const
   figure_data.normalized_type = NormalizeSkylanderType(type);
   if (figure_data.normalized_type == Type::Skylander)
   {
-    std::array<u8, FIGURE_SIZE> decrypted = {};
+    u8 decrypted[FIGURE_SIZE] = {};
 
-    DecryptFigure(&decrypted);
+    DecryptFigure(decrypted);
 
     // Area with highest area counter is the newest
     u16 area_offset = ((decrypted[0x89] + 1U) != decrypted[0x249]) ? 0x80 : 0x240;
 
     figure_data.skylander_data = {
-        .money = Common::BitCastPtr<u16>(decrypted.data() + area_offset + 0x3),
-        .hero_level = Common::BitCastPtr<u16>(decrypted.data() + area_offset + 0x5A),
-        .playtime = Common::BitCastPtr<u32>(decrypted.data() + area_offset + 0x5),
-        .last_reset = {.minute = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x60),
-                       .hour = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x61),
-                       .day = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x62),
-                       .month = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x63),
-                       .year = Common::BitCastPtr<u16>(decrypted.data() + area_offset + 0x64)},
-        .last_placed = {.minute = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x50),
-                        .hour = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x51),
-                        .day = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x52),
-                        .month = Common::BitCastPtr<u8>(decrypted.data() + area_offset + 0x53),
-                        .year = Common::BitCastPtr<u16>(decrypted.data() + area_offset + 0x54)}};
+        .money = Common::BitCastPtr<u16>(decrypted + area_offset + 0x3),
+        .hero_level = Common::BitCastPtr<u16>(decrypted + area_offset + 0x5A),
+        .playtime = Common::BitCastPtr<u32>(decrypted + area_offset + 0x5),
+        .last_reset = {.minute = Common::BitCastPtr<u8>(decrypted + area_offset + 0x60),
+                       .hour = Common::BitCastPtr<u8>(decrypted + area_offset + 0x61),
+                       .day = Common::BitCastPtr<u8>(decrypted + area_offset + 0x62),
+                       .month = Common::BitCastPtr<u8>(decrypted + area_offset + 0x63),
+                       .year = Common::BitCastPtr<u16>(decrypted + area_offset + 0x64)},
+        .last_placed = {.minute = Common::BitCastPtr<u8>(decrypted + area_offset + 0x50),
+                        .hour = Common::BitCastPtr<u8>(decrypted + area_offset + 0x51),
+                        .day = Common::BitCastPtr<u8>(decrypted + area_offset + 0x52),
+                        .month = Common::BitCastPtr<u8>(decrypted + area_offset + 0x53),
+                        .year = Common::BitCastPtr<u16>(decrypted + area_offset + 0x54)}};
 
-    figure_data.skylander_data.toy_code =
-        ComputeToyCode(Common::BitCastPtr<u64>(decrypted.data() + 0x14));
+    ComputeToyCode(Common::BitCastPtr<u64>(decrypted + 0x14), figure_data.skylander_data.toy_code);
 
-    std::array<u16, 16> nickname{};
+    u16 nickname[16]{};
 
     // First nickname half
     for (size_t i = 0; i < 8; ++i)
     {
-      nickname[i] = Common::BitCastPtr<u16>(decrypted.data() + area_offset + 0x20 + (i * 2));
+      nickname[i] = Common::BitCastPtr<u16>(decrypted + area_offset + 0x20 + (i * 2));
     }
 
     // Second nickname half
     for (size_t i = 0; i < 8; ++i)
     {
-      nickname[i + 8] = Common::BitCastPtr<u16>(decrypted.data() + area_offset + 0x40 + (i * 2));
+      nickname[i + 8] = Common::BitCastPtr<u16>(decrypted + area_offset + 0x40 + (i * 2));
     }
 
-    figure_data.skylander_data.nickname = nickname;
+    std::memcpy(figure_data.skylander_data.nickname, nickname, sizeof(nickname));
   }
   else if (figure_data.normalized_type == Type::Trophy)
   {
-    std::array<u8, FIGURE_SIZE> decrypted = {};
+    u8 decrypted[FIGURE_SIZE] = {};
 
-    DecryptFigure(&decrypted);
+    DecryptFigure(decrypted);
 
     // Area with highest area counter is the newest
     u16 area_offset = ((decrypted[0x89] + 1U) != decrypted[0x249]) ? 0x80 : 0x240;
 
-    figure_data.trophy_data.unlocked_villains = *(decrypted.data() + area_offset + 0x14);
+    figure_data.trophy_data.unlocked_villains = *(decrypted + area_offset + 0x14);
   }
 
   return figure_data;
 }
 void SkylanderFigure::SetData(FigureData* figure_data)
 {
-  std::array<u8, FIGURE_SIZE> decrypted = {};
+  u8 decrypted[FIGURE_SIZE] = {};
 
-  DecryptFigure(&decrypted);
+  DecryptFigure(decrypted);
 
   if (figure_data->normalized_type == Type::Skylander)
   {
@@ -191,56 +190,45 @@ void SkylanderFigure::SetData(FigureData* figure_data)
     u16 area_offset = (decrypted[0x89] != (decrypted[0x249] + 1U)) ? 0x80 : 0x240;
     u16 other_area_offset = (area_offset == 0x80) ? 0x240 : 0x80;
 
-    memcpy(decrypted.data() + area_offset + 0x3, &figure_data->skylander_data.money, 2);
-    memcpy(decrypted.data() + area_offset + 0x5A, &figure_data->skylander_data.hero_level, 2);
-    memcpy(decrypted.data() + area_offset + 0x5, &figure_data->skylander_data.playtime, 4);
+    memcpy(decrypted + area_offset + 0x3, &figure_data->skylander_data.money, 2);
+    memcpy(decrypted + area_offset + 0x5A, &figure_data->skylander_data.hero_level, 2);
+    memcpy(decrypted + area_offset + 0x5, &figure_data->skylander_data.playtime, 4);
 
     {
-      memcpy(decrypted.data() + area_offset + 0x60, &figure_data->skylander_data.last_reset.minute,
-             1);
-      memcpy(decrypted.data() + area_offset + 0x61, &figure_data->skylander_data.last_reset.hour,
-             1);
-      memcpy(decrypted.data() + area_offset + 0x62, &figure_data->skylander_data.last_reset.day, 1);
-      memcpy(decrypted.data() + area_offset + 0x63, &figure_data->skylander_data.last_reset.month,
-             1);
-      memcpy(decrypted.data() + area_offset + 0x64, &figure_data->skylander_data.last_reset.year,
-             2);
+      memcpy(decrypted + area_offset + 0x60, &figure_data->skylander_data.last_reset.minute, 1);
+      memcpy(decrypted + area_offset + 0x61, &figure_data->skylander_data.last_reset.hour, 1);
+      memcpy(decrypted + area_offset + 0x62, &figure_data->skylander_data.last_reset.day, 1);
+      memcpy(decrypted + area_offset + 0x63, &figure_data->skylander_data.last_reset.month, 1);
+      memcpy(decrypted + area_offset + 0x64, &figure_data->skylander_data.last_reset.year, 2);
     }
 
     {
-      memcpy(decrypted.data() + area_offset + 0x50, &figure_data->skylander_data.last_placed.minute,
-             1);
-      memcpy(decrypted.data() + area_offset + 0x51, &figure_data->skylander_data.last_placed.hour,
-             1);
-      memcpy(decrypted.data() + area_offset + 0x52, &figure_data->skylander_data.last_placed.day,
-             1);
-      memcpy(decrypted.data() + area_offset + 0x53, &figure_data->skylander_data.last_placed.month,
-             1);
-      memcpy(decrypted.data() + area_offset + 0x54, &figure_data->skylander_data.last_placed.year,
-             2);
+      memcpy(decrypted + area_offset + 0x50, &figure_data->skylander_data.last_placed.minute, 1);
+      memcpy(decrypted + area_offset + 0x51, &figure_data->skylander_data.last_placed.hour, 1);
+      memcpy(decrypted + area_offset + 0x52, &figure_data->skylander_data.last_placed.day, 1);
+      memcpy(decrypted + area_offset + 0x53, &figure_data->skylander_data.last_placed.month, 1);
+      memcpy(decrypted + area_offset + 0x54, &figure_data->skylander_data.last_placed.year, 2);
     }
 
     {
       for (size_t i = 0; i < 8; ++i)
       {
-        memcpy(decrypted.data() + area_offset + 0x20 + (i * 2),
-               &figure_data->skylander_data.nickname[i], 0x2);
+        memcpy(decrypted + area_offset + 0x20 + (i * 2), &figure_data->skylander_data.nickname[i],
+               0x2);
       }
 
       for (size_t i = 0; i < 8; ++i)
       {
-        memcpy(decrypted.data() + area_offset + 0x40 + (i * 2),
+        memcpy(decrypted + area_offset + 0x40 + (i * 2),
                &figure_data->skylander_data.nickname[8 + i], 0x2);
       }
     }
 
     {
-      ComputeChecksumType3(decrypted.data() + area_offset + 0x50,
-                           decrypted.data() + area_offset + 0xA);
-      ComputeChecksumType2(decrypted.data() + area_offset + 0x10,
-                           decrypted.data() + area_offset + 0xC);
+      ComputeChecksumType3(decrypted + area_offset + 0x50, decrypted + area_offset + 0xA);
+      ComputeChecksumType2(decrypted + area_offset + 0x10, decrypted + area_offset + 0xC);
       decrypted[area_offset + 9] = decrypted[other_area_offset + 9] + 1;
-      ComputeChecksumType1(decrypted.data() + area_offset, decrypted.data() + area_offset + 0xE);
+      ComputeChecksumType1(decrypted + area_offset, decrypted + area_offset + 0xE);
     }
 
     {
@@ -249,7 +237,7 @@ void SkylanderFigure::SetData(FigureData* figure_data)
 
       decrypted[area_offset + 2] = decrypted[other_area_offset + 2] + 1;
 
-      ComputeChecksumType6(decrypted.data() + area_offset, decrypted.data() + area_offset);
+      ComputeChecksumType6(decrypted + area_offset, decrypted + area_offset);
     }
   }
   else if (figure_data->normalized_type == Type::Trophy)
@@ -258,15 +246,13 @@ void SkylanderFigure::SetData(FigureData* figure_data)
     u16 other_area_offset = (area_offset == 0x80) ? 0x240 : 0x80;
 
     {
-      memcpy(decrypted.data() + area_offset + 0x14, &figure_data->trophy_data.unlocked_villains, 1);
+      memcpy(decrypted + area_offset + 0x14, &figure_data->trophy_data.unlocked_villains, 1);
 
       {
-        ComputeChecksumType3(decrypted.data() + area_offset + 0x50,
-                             decrypted.data() + area_offset + 0xA);
-        ComputeChecksumType2(decrypted.data() + area_offset + 0x10,
-                             decrypted.data() + area_offset + 0xC);
+        ComputeChecksumType3(decrypted + area_offset + 0x50, decrypted + area_offset + 0xA);
+        ComputeChecksumType2(decrypted + area_offset + 0x10, decrypted + area_offset + 0xC);
         decrypted[area_offset + 9] = decrypted[other_area_offset + 9] + 1;
-        ComputeChecksumType1(decrypted.data() + area_offset, decrypted.data() + area_offset + 0xE);
+        ComputeChecksumType1(decrypted + area_offset, decrypted + area_offset + 0xE);
       }
     }
 
@@ -276,34 +262,34 @@ void SkylanderFigure::SetData(FigureData* figure_data)
 
       decrypted[area_offset + 2] = decrypted[other_area_offset + 2] + 1;
 
-      ComputeChecksumType6(decrypted.data() + area_offset, decrypted.data() + area_offset);
+      ComputeChecksumType6(decrypted + area_offset, decrypted + area_offset);
     }
   }
 
   // Encrypt again
-  Encrypt(decrypted.data());
+  Encrypt(decrypted);
 
   Save();
 }
-void SkylanderFigure::DecryptFigure(std::array<u8, FIGURE_SIZE>* dest) const
+void SkylanderFigure::DecryptFigure(u8* dest) const
 {
-  std::array<u8, 0x56> hash_in = {};
+  u8 hash_in[0x56] = {};
 
-  GenerateIncompleteHashIn(hash_in.data());
+  GenerateIncompleteHashIn(hash_in);
 
-  std::array<u8, FIGURE_SIZE> decrypted = {};
+  u8 decrypted[FIGURE_SIZE] = {};
 
-  std::array<u8, BLOCK_SIZE> current_block = {};
+  u8 current_block[BLOCK_SIZE] = {};
 
   // Run for every block
   for (u8 i = 0; i < BLOCK_COUNT; ++i)
   {
-    GetBlock(i, current_block.data());
+    GetBlock(i, current_block);
 
     // Skip sector trailer and the first 8 blocks
     if (((i + 1) % 4 == 0) || i < 8)
     {
-      memcpy(decrypted.data() + (i * BLOCK_SIZE), current_block.data(), BLOCK_SIZE);
+      memcpy(decrypted + (i * BLOCK_SIZE), current_block, BLOCK_SIZE);
       continue;
     }
 
@@ -321,22 +307,21 @@ void SkylanderFigure::DecryptFigure(std::array<u8, FIGURE_SIZE>* dest) const
     // Block index
     hash_in[0x20] = i;
 
-    std::array<u8, BLOCK_SIZE> hash_out = {};
+    u8 hash_out[BLOCK_SIZE] = {};
 
     MD5_CTX md5;
     MD5_Init(&md5);
-    MD5_Update(&md5, hash_in.data(), 0x56);
-    MD5_Final(hash_out.data(), &md5);
+    MD5_Update(&md5, hash_in, 0x56);
+    MD5_Final(hash_out, &md5);
 
     struct aes_ctx aes;
-    aes_init(&aes, hash_out.data(), 16);
-    aes_decrypt_block(&aes, current_block.data(), decrypted.data() + (i * BLOCK_SIZE));
+    aes_init(&aes, hash_out, 16);
+    aes_decrypt_block(&aes, current_block, decrypted + (i * BLOCK_SIZE));
   }
 
-  memcpy(dest->data(), decrypted.data(), FIGURE_SIZE);
+  memcpy(dest, decrypted, FIGURE_SIZE);
 
-  DEBUG_LOG(IOS_USB, "Decrypted skylander data: \n%s",
-            HexDump(decrypted.data(), FIGURE_SIZE).c_str());
+  DEBUG_LOG(IOS_USB, "Decrypted skylander data: \n%s", HexDump(decrypted, FIGURE_SIZE).c_str());
 }
 void SkylanderFigure::Close()
 {
@@ -344,6 +329,6 @@ void SkylanderFigure::Close()
 }
 void SkylanderFigure::SetBlock(u8 block, const u8* buf)
 {
-  memcpy(m_data.data() + (block * BLOCK_SIZE), buf, BLOCK_SIZE);
+  memcpy(m_data + (block * BLOCK_SIZE), buf, BLOCK_SIZE);
 }
 }  // namespace IOS::HLE::USB

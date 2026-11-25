@@ -24,12 +24,12 @@ struct SkylanderDateTime final
 
 struct SkylanderData final
 {
-  std::array<u8, 11> toy_code;
+  u8 toy_code[11];
   u16 money;
   u16 hero_level;
   u32 playtime;
   // Null-terminated UTF-16 string
-  std::array<u16, 0x10> nickname;
+  u16 nickname[0x10];
   SkylanderDateTime last_reset;
   SkylanderDateTime last_placed;
 };
@@ -64,7 +64,8 @@ public:
   void Close();
   void GetBlock(u8 index, u8* dest) const;
   void SetBlock(u8 block, const u8* buf);
-  void DecryptFigure(std::array<u8, FIGURE_SIZE>* dest) const;
+  // dest: FIGURE_SIZE bytes
+  void DecryptFigure(u8* dest) const;
   FigureData GetData() const;
   void SetData(FigureData* data);
 
@@ -74,6 +75,6 @@ private:
   void Encrypt(const u8* input);
 
   File::IOFile m_sky_file;
-  std::array<u8, FIGURE_SIZE> m_data;
+  u8 m_data[FIGURE_SIZE];
 };
 }  // namespace IOS::HLE::USB

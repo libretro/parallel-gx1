@@ -69,7 +69,10 @@ struct SkyData
 // The known figure with this ID and variant, or nullptr
 const SkyData* FindSkylander(u16 figure_id, u16 variant_id);
 // A response the portal owes the next interrupt transfer
-typedef std::array<u8, 64> SkylanderQuery;
+struct SkylanderQuery
+{
+  u8 bytes[64];
+};
 RETRO_DEQUE_DEFINE(skylander_queries, SkylanderQuery);
 
 class SkylanderUSB final : public Device
@@ -91,8 +94,9 @@ public:
   int SubmitTransfer(BulkMessage* message) override;
   int SubmitTransfer(IntrMessage* message) override;
   int SubmitTransfer(IsoMessage* message) override;
-  void ScheduleTransfer(TransferCommand* command, const std::array<u8, 64>& data,
-                        s32 expected_count, u64 expected_time_us);
+  // data: 64 bytes
+  void ScheduleTransfer(TransferCommand* command, const u8* data, s32 expected_count,
+                        u64 expected_time_us);
 
 private:
   // What each SubmitTransfer does with its message, which it frees afterwards
@@ -150,7 +154,7 @@ public:
   bool IsActivated();
   void SetLEDs(u8 side, u8 r, u8 g, u8 b);
 
-  std::array<u8, 64> GetStatus();
+  SkylanderQuery GetStatus();
   void QueryBlock(u8 sky_num, u8 block, u8* reply_buf);
   void WriteBlock(u8 sky_num, u8 block, const u8* to_write_buf, u8* reply_buf);
 
@@ -164,7 +168,7 @@ private:
   SkylanderLEDColor m_color_left = {};
   SkylanderLEDColor m_color_trap = {};
 
-  std::array<Skylander, MAX_SKYLANDERS> skylanders;
+  Skylander skylanders[MAX_SKYLANDERS];
 };
 
 }  // namespace IOS::HLE::USB

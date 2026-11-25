@@ -4,6 +4,7 @@
 #include "Core/IOS/USB/Emulated/Skylanders/SkylanderCrypto.h"
 
 #include <array>
+#include <retro_miscellaneous.h>
 
 #include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
@@ -37,70 +38,68 @@ u16 ComputeCRC16(const u8* data, size_t size)
 }
 void ComputeChecksumType1(const u8* data_start, u8* output)
 {
-  std::array<u8, 0x10> input = {};
-  memcpy(input.data(), data_start, 0x10);
+  u8 input[0x10] = {};
+  memcpy(input, data_start, 0x10);
   input[0xE] = 0x05;
   input[0xF] = 0x00;
-  u16 crc = ComputeCRC16(input.data(), input.size());
+  u16 crc = ComputeCRC16(input, ARRAY_SIZE(input));
   memcpy(output, &crc, 2);
 }
 void ComputeChecksumType2(const u8* data_start, u8* output)
 {
-  std::array<u8, 0x30> input = {};
-  memcpy(input.data(), data_start, 0x20);
-  memcpy(input.data() + 0x20, data_start + 0x30, 0x10);
-  u16 crc = ComputeCRC16(input.data(), input.size());
+  u8 input[0x30] = {};
+  memcpy(input, data_start, 0x20);
+  memcpy(input + 0x20, data_start + 0x30, 0x10);
+  u16 crc = ComputeCRC16(input, ARRAY_SIZE(input));
   memcpy(output, &crc, 2);
 }
 void ComputeChecksumType3(const u8* data_start, u8* output)
 {
-  std::array<u8, 0x110> input = {};
-  memcpy(input.data(), data_start, 0x20);
-  memcpy(input.data() + 0x20, data_start + 0x30, 0x10);
-  u16 crc = ComputeCRC16(input.data(), input.size());
+  u8 input[0x110] = {};
+  memcpy(input, data_start, 0x20);
+  memcpy(input + 0x20, data_start + 0x30, 0x10);
+  u16 crc = ComputeCRC16(input, ARRAY_SIZE(input));
   memcpy(output, &crc, 2);
 }
 
 void ComputeChecksumType6(const u8* data_start, u8* output)
 {
-  std::array<u8, 0x40> input = {};
-  memcpy(input.data(), data_start, 0x20);
-  memcpy(input.data() + 0x20, data_start + 0x30, 0x20);
+  u8 input[0x40] = {};
+  memcpy(input, data_start, 0x20);
+  memcpy(input + 0x20, data_start + 0x30, 0x20);
 
   input[0x0] = 0x06;
   input[0x1] = 0x01;
 
-  u16 crc = ComputeCRC16(input.data(), input.size());
+  u16 crc = ComputeCRC16(input, ARRAY_SIZE(input));
   memcpy(output, &crc, 2);
 }
-std::array<u8, 11> ComputeToyCode(u64 code)
+void ComputeToyCode(u64 code, u8* out)
 {
   if (code == 0)
   {
-    static constexpr std::array<u8, 11> invalid_code_result{
-        static_cast<u8>('N'), static_cast<u8>('/'), static_cast<u8>('A')};
-    return invalid_code_result;
+    static constexpr u8 invalid_code_result[11]{static_cast<u8>('N'), static_cast<u8>('/'),
+                                                static_cast<u8>('A')};
+    std::memcpy(out, invalid_code_result, sizeof(invalid_code_result));
+    return;
   }
 
-  std::array<u8, 10> code_bytes;
-  for (size_t i = 0; i < code_bytes.size(); ++i)
+  u8 code_bytes[10];
+  for (size_t i = 0; i < ARRAY_SIZE(code_bytes); ++i)
   {
     code_bytes[i] = static_cast<u8>(code % 29);
     code /= 29;
   }
 
   static constexpr char lookup_table[] = "23456789BCDFGHJKLMNPQRSTVWXYZ";
-  std::array<u8, 10> code_chars;
-  for (size_t i = 0; i < code_bytes.size(); ++i)
+  u8 code_chars[10];
+  for (size_t i = 0; i < ARRAY_SIZE(code_bytes); ++i)
   {
     code_chars[i] = static_cast<u8>(lookup_table[code_bytes[9 - i]]);
   }
 
-  std::array<u8, 11> result;
-  std::memcpy(&result[0], &code_chars[0], 5);
-  result[5] = static_cast<u8>('-');
-  std::memcpy(&result[6], &code_chars[5], 5);
-
-  return result;
+  std::memcpy(&out[0], &code_chars[0], 5);
+  out[5] = static_cast<u8>('-');
+  std::memcpy(&out[6], &code_chars[5], 5);
 }
 }  // namespace IOS::HLE::USB::SkylanderCrypto
