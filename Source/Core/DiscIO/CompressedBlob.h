@@ -14,7 +14,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/DirectIOFile.h"
@@ -45,6 +44,8 @@ class CompressedBlobReader final : public SectorReader
 public:
   static CompressedBlobReader* Create(File::DirectIOFile file, const std::string& filename);
   ~CompressedBlobReader();
+  CompressedBlobReader(const CompressedBlobReader&) = delete;
+  CompressedBlobReader& operator=(const CompressedBlobReader&) = delete;
 
   const CompressedBlobHeader& GetHeader() const { return m_header; }
 
@@ -68,12 +69,13 @@ private:
   bool ValidateBlockPointers() const;
 
   CompressedBlobHeader m_header = {};
-  std::vector<u64> m_block_pointers = {};
-  std::vector<u32> m_hashes = {};
+  u64* m_block_pointers = nullptr;  // num_blocks of each
+  u32* m_hashes = nullptr;
   u64 m_data_offset = 0;
   File::DirectIOFile m_file = {};
   u64 m_file_size = 0;
-  std::vector<u8> m_zlib_buffer = {};
+  u8* m_zlib_buffer = nullptr;
+  u32 m_zlib_buffer_size = 0;
   void* m_inflate = nullptr;  // libretro-common's rinflate, made once
   std::string m_file_name = {};
   bool m_valid = false;

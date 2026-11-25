@@ -4,12 +4,12 @@
 #include "DiscIO/CompressedBlob.h"
 
 #include <cinttypes>
+#include <cstdlib>
 #include <cstring>
 #include <expected>
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include <encodings/deflate.h>
 
@@ -75,12 +75,13 @@ bool CompressedBlobReader::Initialize()
   }
 
   // cache block pointers and hashes
-  m_block_pointers.resize(m_header.num_blocks);
-  if (!m_file.Read(reinterpret_cast<u8*>(m_block_pointers.data()), m_block_pointers.size() * sizeof(m_block_pointers[0])))
+  m_block_pointers = static_cast<u64*>(std::calloc(m_header.num_blocks, sizeof(u64)));
+  m_hashes = static_cast<u32*>(std::calloc(m_header.num_blocks, sizeof(u32)));
+  if (!m_block_pointers || !m_hashes)
     return false;
-
-  m_hashes.resize(m_header.num_blocks);
-  if (!m_file.Read(reinterpret_cast<u8*>(m_hashes.data()), m_hashes.size() * sizeof(m_hashes[0])))
+  if (!m_file.Read(reinterpret_cast<u8*>(m_block_pointers), m_header.num_blocks * sizeof(u64)))
+    return false;
+  if (!m_file.Read(reinterpret_cast<u8*>(m_hashes), m_header.num_blocks * sizeof(u32)))
     return false;
 
   m_data_offset = header_size;
@@ -89,7 +90,10 @@ bool CompressedBlobReader::Initialize()
   // should be fine.
   // I still add some safety margin.
   const u32 zlib_buffer_size = m_header.block_size + 64;
-  m_zlib_buffer.resize(zlib_buffer_size);
+  m_zlib_buffer = static_cast<u8*>(std::malloc(zlib_buffer_size));
+  if (!m_zlib_buffer)
+    return false;
+  m_zlib_buffer_size = zlib_buffer_size;
   if (!(m_inflate = rinflate_new(15)))
     return false;
 
@@ -116,6 +120,9 @@ CompressedBlobReader* CompressedBlobReader::Create(File::DirectIOFile file,
 CompressedBlobReader::~CompressedBlobReader()
 {
   rinflate_free(m_inflate);
+  std::free(m_zlib_buffer);
+  std::free(m_hashes);
+  std::free(m_block_pointers);
 }
 
 BlobReader* CompressedBlobReader::CopyReader() const
@@ -157,14 +164,14 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   }
   else
   {
-    if (read_size > m_zlib_buffer.size())
+    if (read_size > m_zlib_buffer_size)
     {
       ERROR_LOG(DISCIO, "Compressed block is too large");
       return false;
     }
   }
 
-  if (!m_file.OffsetRead(offset, m_zlib_buffer.data(), read_size))
+  if (!m_file.OffsetRead(offset, m_zlib_buffer, read_size))
   {
     ERROR_LOG(DISCIO, "The disc image \"%s\" is truncated, some of the data is missing.",
               m_file_name.c_str());
@@ -172,7 +179,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
   }
 
   // First, check hash.
-  const u32 block_hash = common_hash_adler32(m_zlib_buffer.data(), read_size);
+  const u32 block_hash = common_hash_adler32(m_zlib_buffer, read_size);
   if (block_hash != m_hashes[block_num])
   {
     ERROR_LOG(DISCIO,
@@ -183,7 +190,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
 
   if (uncompressed)
   {
-    std::memcpy(out_ptr, m_zlib_buffer.data(), m_header.block_size);
+    std::memcpy(out_ptr, m_zlib_buffer, m_header.block_size);
   }
   else
   {
@@ -194,7 +201,7 @@ bool CompressedBlobReader::GetBlock(u64 block_num, u8* out_ptr)
       ERROR_LOG(DISCIO, "Compressed block size is larger than uncompressed block size");
     }
     rinflate_reset(m_inflate, 15);
-    rinflate_set_in(m_inflate, m_zlib_buffer.data(), read_size);
+    rinflate_set_in(m_inflate, m_zlib_buffer, read_size);
     rinflate_set_out(m_inflate, out_ptr, m_header.block_size);
     do
     {
@@ -242,7 +249,7 @@ bool CompressedBlobReader::ValidateBlockPointers() const
     if (uncompressed && size != m_header.block_size)
       continue;
 
-    if (!uncompressed && size > m_zlib_buffer.size())
+    if (!uncompressed && size > m_zlib_buffer_size)
       continue;
 
     valid_pointers++;
