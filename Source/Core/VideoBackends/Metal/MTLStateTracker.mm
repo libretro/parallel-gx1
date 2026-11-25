@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstdlib>
 #include <mutex>
 
 #include "Common/Align.h"
@@ -58,18 +59,25 @@ static NSString* GetName(Metal::StateTracker::UploadBuffer buffer)
 
 // MARK: - UsageTracker
 
+Metal::StateTracker::UsageTracker::~UsageTracker()
+{
+  std::free(m_usage);
+}
+
 bool Metal::StateTracker::UsageTracker::PrepareForAllocation(u64 last_draw, size_t amt)
 {
-  auto removeme = std::ranges::find_if(
-      m_usage, [last_draw](UsageEntry usage) { return usage.drawno > last_draw; });
-  if (removeme != m_usage.begin())
-    m_usage.erase(m_usage.begin(), removeme);
+  // Drop the entries of draws that have completed, oldest first
+  while (m_usage_count && m_usage[m_usage_head].drawno <= last_draw)
+  {
+    m_usage_head = (m_usage_head + 1) & (m_usage_capacity - 1);
+    m_usage_count--;
+  }
 
   bool still_in_use = false;
   const bool needs_wrap = m_pos + amt > m_size;
-  if (!m_usage.empty())
+  if (m_usage_count)
   {
-    size_t used = m_usage.front().pos;
+    size_t used = m_usage[m_usage_head].pos;
     if (needs_wrap)
       still_in_use = used >= m_pos || used < amt;
     else
@@ -87,8 +95,32 @@ size_t Metal::StateTracker::UsageTracker::Allocate(u64 current_draw, size_t amt)
   // Zero bytes is useless anyways, so don't mark usage in that case
   if (!amt)
     return m_pos;
-  if (m_usage.empty() || m_usage.back().drawno != current_draw)
-    m_usage.push_back({current_draw, m_pos});
+  const size_t mask = m_usage_capacity - 1;
+  if (!m_usage_count || m_usage[(m_usage_head + m_usage_count - 1) & mask].drawno != current_draw)
+  {
+    if (m_usage_count == m_usage_capacity)
+    {
+      // Unwrap into a ring twice the size
+      const size_t capacity = m_usage_capacity ? m_usage_capacity * 2 : 64;
+      UsageEntry* const grown = static_cast<UsageEntry*>(std::malloc(capacity * sizeof(UsageEntry)));
+      if (grown)
+      {
+        for (size_t i = 0; i < m_usage_count; i++)
+          grown[i] = m_usage[(m_usage_head + i) & mask];
+        std::free(m_usage);
+        m_usage = grown;
+        m_usage_head = 0;
+        m_usage_capacity = capacity;
+      }
+    }
+    if (m_usage_count < m_usage_capacity)
+    {
+      UsageEntry& entry = m_usage[(m_usage_head + m_usage_count) & (m_usage_capacity - 1)];
+      entry.drawno = current_draw;
+      entry.pos = m_pos;
+      m_usage_count++;
+    }
+  }
   size_t ret = m_pos;
   m_pos += amt;
   return ret;
@@ -96,7 +128,8 @@ size_t Metal::StateTracker::UsageTracker::Allocate(u64 current_draw, size_t amt)
 
 void Metal::StateTracker::UsageTracker::Reset(size_t new_size)
 {
-  m_usage.clear();
+  m_usage_head = 0;
+  m_usage_count = 0;
   m_size = new_size;
   m_pos = 0;
 }

@@ -142,11 +142,19 @@ private:
       u64 drawno;
       size_t pos;
     };
-    std::vector<UsageEntry> m_usage;
+    // Oldest first, in a ring of m_usage_capacity (a power of two) grown by doubling and kept
+    UsageEntry* m_usage = nullptr;
+    size_t m_usage_head = 0;
+    size_t m_usage_count = 0;
+    size_t m_usage_capacity = 0;
     size_t m_size = 0;
     size_t m_pos = 0;
 
   public:
+    UsageTracker() = default;
+    ~UsageTracker();
+    UsageTracker(const UsageTracker&) = delete;
+    UsageTracker& operator=(const UsageTracker&) = delete;
     size_t Size() { return m_size; }
     size_t Pos() { return m_pos; }
     bool PrepareForAllocation(u64 last_draw, size_t amt);
