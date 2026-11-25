@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <bitset>
-
 #include "VideoBackends/D3D12/Common.h"
 #include "VideoCommon/RenderState.h"
 
@@ -42,9 +40,9 @@ private:
 
   D3D12_CPU_DESCRIPTOR_HANDLE m_heap_base_cpu = {};
 
-  static constexpr u32 BITSET_SIZE = 1024;
-  using BitSetType = std::bitset<BITSET_SIZE>;
-  std::vector<BitSetType> m_free_slots = {};
+  // One bit per descriptor, set while it is free
+  u64* m_free_slots = nullptr;
+  u32 m_free_slot_words = 0;
 };
 
 class SamplerHeapManager final

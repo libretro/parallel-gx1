@@ -3,6 +3,7 @@
 
 #include "VideoBackends/D3D12/DescriptorHeapManager.h"
 
+#include <bit>
 #include <cstdlib>
 #include <cstring>
 
@@ -14,7 +15,10 @@
 namespace DX12
 {
 DescriptorHeapManager::DescriptorHeapManager() = default;
-DescriptorHeapManager::~DescriptorHeapManager() = default;
+DescriptorHeapManager::~DescriptorHeapManager()
+{
+  std::free(m_free_slots);
+}
 
 bool DescriptorHeapManager::Create(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type,
                                    u32 num_descriptors)
@@ -31,34 +35,35 @@ bool DescriptorHeapManager::Create(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_T
   m_num_descriptors = num_descriptors;
   m_descriptor_increment_size = device->GetDescriptorHandleIncrementSize(type);
 
-  // Set all slots to unallocated (1)
-  const u32 bitset_count =
-      num_descriptors / BITSET_SIZE + (((num_descriptors % BITSET_SIZE) != 0) ? 1 : 0);
-  m_free_slots.resize(bitset_count);
-  for (BitSetType& bs : m_free_slots)
-    bs.flip();
+  // Set every descriptor's slot to unallocated (1)
+  std::free(m_free_slots);
+  m_free_slot_words = (num_descriptors + 63) / 64;
+  m_free_slots = static_cast<u64*>(std::malloc(m_free_slot_words * sizeof(u64)));
+  if (!m_free_slots)
+  {
+    m_free_slot_words = 0;
+    return false;
+  }
+  for (u32 word = 0; word < m_free_slot_words; word++)
+    m_free_slots[word] = ~u64{0};
+  if (num_descriptors % 64)
+    m_free_slots[m_free_slot_words - 1] = (u64{1} << (num_descriptors % 64)) - 1;
 
   return true;
 }
 
 bool DescriptorHeapManager::Allocate(DescriptorHandle* handle)
 {
-  // Start past the temporary slots, no point in searching those.
-  for (u32 group = 0; group < m_free_slots.size(); group++)
+  // The lowest free descriptor
+  for (u32 word = 0; word < m_free_slot_words; word++)
   {
-    BitSetType& bs = m_free_slots[group];
-    if (bs.none())
+    const u64 free_bits = m_free_slots[word];
+    if (!free_bits)
       continue;
 
-    u32 bit = 0;
-    for (; bit < BITSET_SIZE; bit++)
-    {
-      if (bs[bit])
-        break;
-    }
-
-    u32 index = group * BITSET_SIZE + bit;
-    bs[bit] = false;
+    const u32 bit = static_cast<u32>(std::countr_zero(free_bits));
+    const u32 index = word * 64 + bit;
+    m_free_slots[word] = free_bits & (free_bits - 1);
 
     handle->index = index;
     handle->cpu_handle.ptr = m_heap_base_cpu.ptr + index * m_descriptor_increment_size;
@@ -74,9 +79,7 @@ void DescriptorHeapManager::Free(u32 index)
 {
   ASSERT(index < m_num_descriptors);
 
-  u32 group = index / BITSET_SIZE;
-  u32 bit = index % BITSET_SIZE;
-  m_free_slots[group][bit] = true;
+  m_free_slots[index / 64] |= u64{1} << (index % 64);
 }
 
 void DescriptorHeapManager::Free(const DescriptorHandle& handle)
