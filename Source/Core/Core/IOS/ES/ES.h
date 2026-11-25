@@ -4,7 +4,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Core/IOS/Device.h"
@@ -63,12 +62,27 @@ public:
     IOSC::Handle key_handle = 0;
     struct ContentContext
     {
+      ContentContext() = default;
+      ~ContentContext();
+      ContentContext(const ContentContext&) = delete;
+      ContentContext& operator=(const ContentContext&) = delete;
+      // Back to no content, keeping the buffer's storage
+      void Reset();
+      // size bytes more at the buffer's end, or nullptr when out of memory
+      u8* Append(size_t size);
+
       bool valid = false;
       u32 id = 0;
       u8 iv[16]{};
-      std::vector<u8> buffer;
+      // The content's bytes, grown by doubling and kept
+      u8* buffer = nullptr;
+      size_t buffer_size = 0;
+      size_t buffer_capacity = 0;
     };
     ContentContext content;
+
+    // Back to no import or export, keeping the content buffer's storage
+    void Reset();
   };
 
   struct Context

@@ -9,6 +9,8 @@
 #include <utility>
 
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include <lrc_hash.h>
 
@@ -42,6 +44,45 @@ static ReturnCode WriteTicket(FS::FileSystem* fs, const ES::TicketReader& ticket
   return file->Write(raw_ticket, raw_ticket_size) ? IPC_SUCCESS : ES_EIO;
 }
 
+ESCore::TitleImportExportContext::ContentContext::~ContentContext()
+{
+  std::free(buffer);
+}
+
+void ESCore::TitleImportExportContext::ContentContext::Reset()
+{
+  valid = false;
+  id = 0;
+  std::memset(iv, 0, sizeof(iv));
+  buffer_size = 0;
+}
+
+u8* ESCore::TitleImportExportContext::ContentContext::Append(size_t size)
+{
+  if (size > buffer_capacity - buffer_size)
+  {
+    size_t capacity = buffer_capacity ? buffer_capacity : 0x10000;
+    while (capacity - buffer_size < size)
+      capacity *= 2;
+    u8* const grown = static_cast<u8*>(std::realloc(buffer, capacity));
+    if (!grown)
+      return nullptr;
+    buffer = grown;
+    buffer_capacity = capacity;
+  }
+  u8* const appended = buffer + buffer_size;
+  buffer_size += size;
+  return appended;
+}
+
+void ESCore::TitleImportExportContext::Reset()
+{
+  valid = false;
+  tmd = {};
+  key_handle = 0;
+  content.Reset();
+}
+
 void ESCore::TitleImportExportContext::DoState(PointerWrap& p)
 {
   p.Do(valid);
@@ -50,7 +91,20 @@ void ESCore::TitleImportExportContext::DoState(PointerWrap& p)
   p.Do(content.valid);
   p.Do(content.id);
   p.Do(content.iv);
-  p.Do(content.buffer);
+  // Same layout as the std::vector this replaced: the byte count, then the bytes.
+  u32 size = static_cast<u32>(content.buffer_size);
+  p.Do(size);
+  if (p.IsReadMode())
+  {
+    content.buffer_size = 0;
+    if (size && !content.Append(size))
+    {
+      p.SetMeasureMode();
+      return;
+    }
+  }
+  if (size)
+    p.DoArray(content.buffer, size);
 }
 
 // An IPC input vector's bytes, lent where they lie in guest memory; an empty
@@ -158,7 +212,7 @@ static void ResetTitleImportContext(ESCore::Context* context, IOSC& iosc)
 {
   if (context->title_import_export.key_handle)
     iosc.DeleteObject(context->title_import_export.key_handle, PID_ES);
-  context->title_import_export = {};
+  context->title_import_export.Reset();
 }
 
 ReturnCode ESCore::ImportTmd(Context& context, const u8* tmd_bytes, size_t tmd_size,
@@ -331,7 +385,7 @@ ReturnCode ESCore::ImportContentBegin(Context& context, u64 title_id, u32 conten
                       "another content. Unsupported.");
     return ES_EINVAL;
   }
-  context.title_import_export.content = {};
+  context.title_import_export.content.Reset();
   context.title_import_export.content.id = content_id;
 
   INFO_LOG(IOS_ES, "ImportContentBegin: title %016" PRIx64 ", content ID %08x", (u64)title_id,
@@ -385,8 +439,11 @@ ReturnCode ESCore::ImportContentData(Context& context, u32 content_fd, const u8*
                                      u32 data_size)
 {
   INFO_LOG(IOS_ES, "ImportContentData: content fd %08x, size %u", content_fd, data_size);
-  context.title_import_export.content.buffer.insert(
-      context.title_import_export.content.buffer.end(), data, data + data_size);
+  u8* const appended = context.title_import_export.content.Append(data_size);
+  if (!appended)
+    return ES_EIO;
+  if (data_size)
+    std::memcpy(appended, data, data_size);
   return IPC_SUCCESS;
 }
 
@@ -428,17 +485,20 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
     return ES_EINVAL;
 
   // decrypted in place: the encrypted bytes are not needed after
-  u8* const decrypted_data = context.title_import_export.content.buffer.data();
+  u8* const decrypted_data = context.title_import_export.content.buffer;
+  const size_t decrypted_size = context.title_import_export.content.buffer_size;
   const ReturnCode decrypt_ret = m_ios.GetIOSC().Decrypt(
       context.title_import_export.key_handle, context.title_import_export.content.iv,
-      decrypted_data, context.title_import_export.content.buffer.size(), decrypted_data, PID_ES);
+      decrypted_data, decrypted_size, decrypted_data, PID_ES);
   if (decrypt_ret != IPC_SUCCESS)
     return decrypt_ret;
 
   ES::Content content_info;
   context.title_import_export.tmd.FindContentById(context.title_import_export.content.id,
                                                   &content_info);
-  if (!CheckIfContentHashMatches(decrypted_data, content_info))
+  // The hash covers content_info.size bytes, which all have to have been imported
+  if (decrypted_size < content_info.size ||
+      !CheckIfContentHashMatches(decrypted_data, content_info))
   {
     ERROR_LOG(IOS_ES, "ImportContentEnd: Hash for content %08x doesn't match", content_info.id);
     return ES_HASH_MISMATCH;
@@ -478,7 +538,7 @@ ReturnCode ESCore::ImportContentEnd(Context& context, u32 content_fd)
     return FS::ConvertResult(rename_result);
   }
 
-  context.title_import_export.content = {};
+  context.title_import_export.content.Reset();
   return IPC_SUCCESS;
 }
 
@@ -797,7 +857,7 @@ IPCReply ESDevice::ExportTitleInit(Context& context, const IOCtlVRequest& reques
 
 ReturnCode ESCore::ExportContentBegin(Context& context, u64 title_id, u32 content_id)
 {
-  context.title_import_export.content = {};
+  context.title_import_export.content.Reset();
   if (!context.title_import_export.valid ||
       context.title_import_export.tmd.GetTitleId() != title_id)
   {
@@ -847,7 +907,7 @@ ReturnCode ESCore::ExportContentData(Context& context, u32 content_fd, u8* data,
       data_size == 0)
   {
     CloseContent(content_fd, 0);
-    context.title_import_export = {};
+    context.title_import_export.Reset();
     return ES_EINVAL;
   }
 
