@@ -3,10 +3,7 @@
 
 #include "Core/HW/EXI/EXI_DeviceGecko.h"
 
-#include <memory>
-#include <queue>
 #include <retro_miscellaneous.h>
-#include <vector>
 
 #include <cstdio>
 
@@ -169,10 +166,12 @@ void GeckoSockServer::ClientThread()
       {
         did_nothing = false;
 
-        std::vector<char> packet(pending);
-        retro_spsc_read(&send_fifo, packet.data(), pending);
+        // Sent in the same chunks it is received in; the rest goes next pass
+        char packet[1024];
+        const size_t chunk = pending < sizeof(packet) ? pending : sizeof(packet);
+        retro_spsc_read(&send_fifo, packet, chunk);
 
-        if (net_tcp_send(client, &packet[0], packet.size()) < 0)
+        if (net_tcp_send(client, packet, chunk) < 0)
           client_running.Clear();
       }
     }
