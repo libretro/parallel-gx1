@@ -28,7 +28,7 @@ struct TcpBuffer
   bool used;
   u64 tick;
   u32 seq_id;
-  std::vector<u8> data;
+  Common::NetworkFrame data;
 };
 
 struct StackRef;

@@ -180,6 +180,18 @@ struct DHCPBody
 };
 static_assert(sizeof(DHCPBody) == DHCPBody::SIZE);
 
+// The largest frame built or queued: the BBA's receive buffer
+constexpr std::size_t MAX_FRAME_SIZE = 0x800;
+constexpr std::size_t MAX_IPV4_OPTIONS_SIZE = 40;
+constexpr std::size_t MAX_TCP_OPTIONS_SIZE = 40;
+constexpr std::size_t MAX_DHCP_OPTIONS_SIZE = 312;
+
+struct NetworkFrame
+{
+  u16 size;
+  u8 bytes[MAX_FRAME_SIZE];
+};
+
 struct DHCPPacket
 {
   DHCPPacket();
@@ -189,10 +201,13 @@ struct DHCPPacket
   {
     AddOption(fnc, params.begin(), params.size());
   }
-  std::vector<u8> Build() const;
+  // The packet's size, 0 when it does not fit in capacity
+  size_t Build(u8* out, size_t capacity) const;
 
   DHCPBody body;
-  std::vector<std::vector<u8>> options;
+  // Each option's code, length and bytes, one after the other
+  u8 options[MAX_DHCP_OPTIONS_SIZE];
+  u16 options_size = 0;
 };
 
 // The compiler might add 2 bytes after EthernetHeader to enforce 16-bytes alignment
@@ -201,7 +216,7 @@ struct ARPPacket
 {
   ARPPacket();
   ARPPacket(const MACAddress& destination, const MACAddress& source);
-  std::vector<u8> Build() const;
+  bool Build(NetworkFrame* out) const;
   u16 Size() const;
 
   EthernetHeader eth_header;
@@ -217,15 +232,21 @@ struct TCPPacket
   TCPPacket();
   TCPPacket(const MACAddress& destination, const MACAddress& source, const sockaddr_in& from,
             const sockaddr_in& to, u32 seq, u32 ack, u16 flags);
-  std::vector<u8> Build() const;
+  // False when the packet does not fit in a frame
+  bool Build(NetworkFrame* out) const;
   u16 Size() const;
+  void SetTCPOptions(const u8* bytes, size_t size);
 
   EthernetHeader eth_header;
   IPv4Header ip_header;
   TCPHeader tcp_header;
-  std::vector<u8> ipv4_options;
-  std::vector<u8> tcp_options;
-  std::vector<u8> data;
+  u8 ipv4_options[MAX_IPV4_OPTIONS_SIZE];
+  u8 ipv4_options_size = 0;
+  u8 tcp_options[MAX_TCP_OPTIONS_SIZE];
+  u8 tcp_options_size = 0;
+  // Lent: the payload stays where it is, in the frame parsed or the caller's buffer
+  const u8* data = nullptr;
+  u16 data_size = 0;
 
   static constexpr std::size_t MIN_SIZE = EthernetHeader::SIZE + IPv4Header::SIZE + TCPHeader::SIZE;
 };
@@ -234,16 +255,19 @@ struct UDPPacket
 {
   UDPPacket();
   UDPPacket(const MACAddress& destination, const MACAddress& source, const sockaddr_in& from,
-            const sockaddr_in& to, const std::vector<u8>& payload);
-  std::vector<u8> Build() const;
+            const sockaddr_in& to, const u8* payload, u16 payload_size);
+  bool Build(NetworkFrame* out) const;
   u16 Size() const;
 
   EthernetHeader eth_header;
   IPv4Header ip_header;
   UDPHeader udp_header;
 
-  std::vector<u8> ipv4_options;
-  std::vector<u8> data;
+  u8 ipv4_options[MAX_IPV4_OPTIONS_SIZE];
+  u8 ipv4_options_size = 0;
+  // Lent, as with TCPPacket::data
+  const u8* data = nullptr;
+  u16 data_size = 0;
 
   static constexpr std::size_t MIN_SIZE = EthernetHeader::SIZE + IPv4Header::SIZE + UDPHeader::SIZE;
 };

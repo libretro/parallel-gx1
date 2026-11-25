@@ -445,7 +445,7 @@ private:
     u16 m_ip_frame_id = 0;
     u8 m_queue_read = 0;
     u8 m_queue_write = 0;
-    std::vector<u8> m_queue_data[16];
+    Common::NetworkFrame m_queue_data[16];
 
     // The read thread owns the whole network stack. The CPU thread hands it outgoing frames and
     // start/stop requests through this stack instead of sharing the stack's state.
@@ -459,10 +459,10 @@ private:
       };
       mpsc_stack_node_t link;  // first: the drained chain is cast back
       Kind kind;
-      std::vector<u8> frame;
+      Common::NetworkFrame frame;
     };
     mpsc_stack_t m_requests{};
-    void Post(Request::Kind kind, std::vector<u8> frame = {});
+    void Post(Request::Kind kind, const u8* frame = nullptr, u32 size = 0);
     // Read thread: runs what the CPU thread posted, oldest first.
     void RunRequests();
     void ProcessFrame(const u8* frame, u32 size);
@@ -490,11 +490,14 @@ private:
     Common::Flag m_read_thread_shutdown;
     static void ReadThreadHandler(void* data);
 #endif
-    void WriteToQueue(std::vector<u8> data);
+    // The slot the next queued frame is built in; EndQueueWrite queues it
+    Common::NetworkFrame* BeginQueueWrite() { return &m_queue_data[m_queue_write]; }
+    void EndQueueWrite();
+    void WriteToQueue(const u8* data, u32 size);
     bool WillQueueOverrun() const;
     void PollData(std::size_t* datasize);
     // fills out with the frame to hand the adapter
-    bool TryGetDataFromSocket(StackRef* ref, std::vector<u8>* out);
+    bool TryGetDataFromSocket(StackRef* ref, Common::NetworkFrame* out);
 
     void HandleARP(const Common::ARPPacket& packet);
     void HandleDHCP(const Common::UDPPacket& packet);
