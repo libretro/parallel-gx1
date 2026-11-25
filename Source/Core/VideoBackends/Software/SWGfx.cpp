@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Software/SWGfx.h"
 
+#include <cstdlib>
+
 #include <algorithm>
 
 #include "DolphinLibretro/Common/Globals.h"
@@ -26,7 +28,10 @@ SWGfx::SWGfx()
   g_video_backend_kind = VIDEO_BACKEND_SOFTWARE;
 }
 
-SWGfx::~SWGfx() = default;
+SWGfx::~SWGfx()
+{
+  std::free(m_picture);
+}
 
 bool SWGfx::IsHeadless() const
 {
@@ -110,11 +115,18 @@ void SWGfx::ShowImage(const AbstractTexture* source_texture,
   if (!width || !height)
     return;
 
-  if (m_picture.size() < static_cast<size_t>(width) * height)
-    m_picture.resize(static_cast<size_t>(width) * height);
+  if (m_picture_capacity < static_cast<size_t>(width) * height)
+  {
+    u32* const grown = static_cast<u32*>(
+        std::realloc(m_picture, static_cast<size_t>(width) * height * sizeof(u32)));
+    if (!grown)
+      return;
+    m_picture = grown;
+    m_picture_capacity = static_cast<size_t>(width) * height;
+  }
 
   const u8* src = texture->GetData(0, 0) + (static_cast<size_t>(top) * tex_width + left) * 4;
-  u32* dst = m_picture.data();
+  u32* dst = m_picture;
   for (u32 y = 0; y < height; y++)
   {
     const u8* s = src + static_cast<size_t>(y) * tex_width * 4;
@@ -122,7 +134,7 @@ void SWGfx::ShowImage(const AbstractTexture* source_texture,
       *dst++ = (static_cast<u32>(s[0]) << 16) | (static_cast<u32>(s[1]) << 8) | s[2];
   }
 
-  Libretro::Video::video_cb(m_picture.data(), width, height, width * 4);
+  Libretro::Video::video_cb(m_picture, width, height, width * 4);
 }
 
 void SWGfx::ClearRegion(const MathUtil::Rectangle<int>& target_rc, bool colorEnable,

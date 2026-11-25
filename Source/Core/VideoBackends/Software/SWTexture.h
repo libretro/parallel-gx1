@@ -18,7 +18,7 @@ class SWTexture final : public AbstractTexture
 {
 public:
   explicit SWTexture(const TextureConfig& tex_config);
-  ~SWTexture() = default;
+  ~SWTexture();
 
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
@@ -33,7 +33,10 @@ public:
   u8* GetData(u32 layer, u32 level);
 
 private:
-  std::vector<std::vector<std::vector<u8>>> m_data;
+  // Every layer's levels, one after the other
+  u8* m_data = nullptr;
+  size_t m_layer_size = 0;
+  size_t m_level_offsets[16]{};
 };
 
 class SWStagingTexture final : public AbstractStagingTexture
@@ -56,7 +59,7 @@ public:
   void SetMapStride(size_t stride) { m_map_stride = stride; }
 
 private:
-  std::vector<u8> m_data;
+  u8* m_data = nullptr;
 };
 
 class SWFramebuffer final : public AbstractFramebuffer

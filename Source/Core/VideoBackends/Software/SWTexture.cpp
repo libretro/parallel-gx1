@@ -3,6 +3,8 @@
 
 #include "VideoBackends/Software/SWTexture.h"
 
+#include <cstdlib>
+
 #include <retro_miscellaneous.h>
 
 #include <cstring>
@@ -64,16 +66,19 @@ void SWGfx::ScaleTexture(AbstractFramebuffer* dst_framebuffer,
 
 SWTexture::SWTexture(const TextureConfig& tex_config) : AbstractTexture(tex_config)
 {
-  m_data.resize(tex_config.layers);
-  for (u32 layer = 0; layer < tex_config.layers; layer++)
+  ASSERT(tex_config.levels <= sizeof(m_level_offsets) / sizeof(m_level_offsets[0]));
+  for (u32 level = 0; level < tex_config.levels; level++)
   {
-    m_data[layer].resize(tex_config.levels);
-    for (u32 level = 0; level < tex_config.levels; level++)
-    {
-      m_data[layer][level].resize(MAX(tex_config.width >> level, 1u) *
-                                  MAX(tex_config.height >> level, 1u) * sizeof(Pixel));
-    }
+    m_level_offsets[level] = m_layer_size;
+    m_layer_size +=
+        MAX(tex_config.width >> level, 1u) * MAX(tex_config.height >> level, 1u) * sizeof(Pixel);
   }
+  m_data = static_cast<u8*>(std::calloc(tex_config.layers, m_layer_size));
+}
+
+SWTexture::~SWTexture()
+{
+  std::free(m_data);
 }
 
 void SWTexture::CopyRectangleFromTexture(const AbstractTexture* src,
@@ -104,23 +109,26 @@ void SWTexture::Load(u32 level, u32 width, u32 height, u32 row_length, const u8*
 
 const u8* SWTexture::GetData(u32 layer, u32 level) const
 {
-  return m_data[layer][level].data();
+  return m_data + layer * m_layer_size + m_level_offsets[level];
 }
 
 u8* SWTexture::GetData(u32 layer, u32 level)
 {
-  return m_data[layer][level].data();
+  return m_data + layer * m_layer_size + m_level_offsets[level];
 }
 
 SWStagingTexture::SWStagingTexture(StagingTextureType type, const TextureConfig& config)
     : AbstractStagingTexture(type, config)
 {
-  m_data.resize(m_texel_size * config.width * config.height);
-  m_map_pointer = reinterpret_cast<char*>(m_data.data());
+  m_data = static_cast<u8*>(std::calloc(config.height, m_texel_size * config.width));
+  m_map_pointer = reinterpret_cast<char*>(m_data);
   m_map_stride = m_texel_size * config.width;
 }
 
-SWStagingTexture::~SWStagingTexture() = default;
+SWStagingTexture::~SWStagingTexture()
+{
+  std::free(m_data);
+}
 
 void SWStagingTexture::CopyFromTexture(const AbstractTexture* src,
                                        const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
@@ -129,7 +137,7 @@ void SWStagingTexture::CopyFromTexture(const AbstractTexture* src,
   CopyTextureData(src->GetConfig(),
                   static_cast<const SWTexture*>(src)->GetData(src_layer, src_level), src_rect.left,
                   src_rect.top, src_rect.GetWidth(), src_rect.GetHeight(), src_level, m_config,
-                  m_data.data(), dst_rect.left, dst_rect.top, 0);
+                  m_data, dst_rect.left, dst_rect.top, 0);
   m_needs_flush = true;
 }
 
@@ -137,7 +145,7 @@ void SWStagingTexture::CopyToTexture(const MathUtil::Rectangle<int>& src_rect, A
                                      const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
                                      u32 dst_level)
 {
-  CopyTextureData(m_config, m_data.data(), src_rect.left, src_rect.top, src_rect.GetWidth(),
+  CopyTextureData(m_config, m_data, src_rect.left, src_rect.top, src_rect.GetWidth(),
                   src_rect.GetHeight(), 0, dst->GetConfig(),
                   static_cast<SWTexture*>(dst)->GetData(dst_layer, dst_level), dst_rect.left,
                   dst_rect.top, dst_level);

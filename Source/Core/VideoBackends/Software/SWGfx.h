@@ -56,7 +56,9 @@ public:
   SurfaceInfo GetSurfaceInfo() const;
 
 private:
-  std::vector<u32> m_picture;
+  // The frame handed to the frontend; grown, never shrunk
+  u32* m_picture = nullptr;
+  size_t m_picture_capacity = 0;
 };
 
 }  // namespace SW
