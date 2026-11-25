@@ -284,13 +284,9 @@ bool VolumeWii::HasWiiHashes() const
   return m_has_hashes;
 }
 
-std::vector<Partition> VolumeWii::GetPartitions() const
+Partition VolumeWii::GetPartition(size_t index) const
 {
-  std::vector<Partition> partitions;
-  partitions.reserve(m_partition_count);
-  for (u32 i = 0; i < m_partition_count; i++)
-    partitions.push_back(m_partitions[i].partition);
-  return partitions;
+  return index < m_partition_count ? m_partitions[index].partition : PARTITION_NONE;
 }
 
 Partition VolumeWii::GetGamePartition() const

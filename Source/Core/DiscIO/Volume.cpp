@@ -99,7 +99,8 @@ void Volume::Prefetch(u64 offset, u64 length, const Partition& partition) const
   }
 
 DEFAULTED(bool, HasWiiHashes, (), (), false)
-DEFAULTED(std::vector<Partition>, GetPartitions, (), (), {})
+DEFAULTED(size_t, GetPartitionCount, (), (), 0)
+DEFAULTED(Partition, GetPartition, (size_t index), (index), PARTITION_NONE)
 DEFAULTED(Partition, GetGamePartition, (), (), PARTITION_NONE)
 DEFAULTED(const IOS::ES::TicketReader&, GetTicket, (const Partition& partition), (partition),
           INVALID_TICKET)

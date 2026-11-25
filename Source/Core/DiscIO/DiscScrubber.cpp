@@ -145,14 +145,16 @@ bool DiscScrubber::ReadFromVolume(const Volume& disc, u64 offset, u64& buffer,
 
 bool DiscScrubber::ParseDisc(const Volume& disc)
 {
-  if (disc.GetPartitions().empty())
+  const size_t partition_count = disc.GetPartitionCount();
+  if (partition_count == 0)
     return ParsePartitionData(disc, PARTITION_NONE);
 
   // Mark the header as used - it's mostly 0s anyways
   MarkAsUsed(0, 0x50000);
 
-  for (const Partition& partition : disc.GetPartitions())
+  for (size_t p = 0; p < partition_count; p++)
   {
+    const Partition partition = disc.GetPartition(p);
     u32 tmd_size;
     u64 tmd_offset;
     u32 cert_chain_size;

@@ -81,7 +81,9 @@ public:
   }
 
   bool HasWiiHashes() const;
-  std::vector<Partition> GetPartitions() const;
+  size_t GetPartitionCount() const;
+  // PARTITION_NONE past the last one
+  Partition GetPartition(size_t index) const;
   Partition GetGamePartition() const;
   // False when the volume has no title ID
   bool GetTitleID(u64* title_id) const { return GetTitleID(GetGamePartition(), title_id); }

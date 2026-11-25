@@ -4,8 +4,6 @@
 #include "DiscIO/DiscUtils.h"
 
 #include <string>
-#include <vector>
-
 
 #include "Common/CommonTypes.h"
 #include "Common/MathUtil.h"
@@ -78,30 +76,34 @@ bool GetFSTSize(const Volume& volume, const Partition& partition, u64* fst_size)
   return volume.ReadSwappedAndShifted(0x428, partition, fst_size);
 }
 
-static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition* partitions,
-                                      size_t partition_count);
+static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition& partition,
+                                      u64 biggest_offset);
 
 u64 GetBiggestReferencedOffset(const Volume& volume)
 {
-  std::vector<Partition> partitions = volume.GetPartitions();
+  const u64 disc_header_size = volume.GetVolumeType() == Platform::GameCubeDisc ? 0x460 : 0x50000;
+  u64 biggest_offset = disc_header_size;
 
   // If a partition doesn't seem to contain any valid data, skip it.
   // This can happen when certain programs that create WBFS files scrub the entirety of
   // the Masterpiece partitions in Super Smash Bros. Brawl without removing them from
   // the partition table. https://bugs.dolphin-emu.org/issues/8733
-  size_t kept = 0;
-  for (size_t i = 0; i < partitions.size(); i++)
+  bool any_kept = false;
+  const size_t partition_count = volume.GetPartitionCount();
+  for (size_t i = 0; i < partition_count; i++)
   {
+    const Partition partition = volume.GetPartition(i);
     u32 magic;
-    if (volume.ReadSwapped<u32>(0x18, partitions[i], &magic) && magic == WII_DISC_MAGIC)
-      partitions[kept++] = partitions[i];
+    if (volume.ReadSwapped<u32>(0x18, partition, &magic) && magic == WII_DISC_MAGIC)
+    {
+      biggest_offset = GetBiggestReferencedOffset(volume, partition, biggest_offset);
+      any_kept = true;
+    }
   }
-  partitions.resize(kept);
 
-  if (partitions.empty())
-    partitions.push_back(PARTITION_NONE);
-
-  return GetBiggestReferencedOffset(volume, partitions.data(), partitions.size());
+  if (!any_kept)
+    biggest_offset = GetBiggestReferencedOffset(volume, PARTITION_NONE, biggest_offset);
+  return biggest_offset;
 }
 
 static u64 GetBiggestReferencedOffset(const Volume& volume, const FileInfo& file_info)
@@ -123,49 +125,43 @@ static u64 GetBiggestReferencedOffset(const Volume& volume, const FileInfo& file
   }
 }
 
-static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition* partitions,
-                                      size_t partition_count)
+static u64 GetBiggestReferencedOffset(const Volume& volume, const Partition& partition,
+                                      u64 biggest_offset)
 {
-  const u64 disc_header_size = volume.GetVolumeType() == Platform::GameCubeDisc ? 0x460 : 0x50000;
-  u64 biggest_offset = disc_header_size;
-  for (size_t i = 0; i < partition_count; i++)
+  if (partition != PARTITION_NONE)
   {
-    const Partition& partition = partitions[i];
-    if (partition != PARTITION_NONE)
+    const u64 offset = volume.PartitionOffsetToRawOffset(0x440, partition);
+    if (offset > biggest_offset)
+      biggest_offset = offset;
+  }
+
+  u64 dol_offset;
+  if (GetBootDOLOffset(volume, partition, &dol_offset))
+  {
+    u32 dol_size;
+    if (GetBootDOLSize(volume, partition, dol_offset, &dol_size))
     {
-      const u64 offset = volume.PartitionOffsetToRawOffset(0x440, partition);
+      const u64 offset = volume.PartitionOffsetToRawOffset(dol_offset + dol_size, partition);
       if (offset > biggest_offset)
         biggest_offset = offset;
     }
+  }
 
-    u64 dol_offset;
-    if (GetBootDOLOffset(volume, partition, &dol_offset))
-    {
-      u32 dol_size;
-      if (GetBootDOLSize(volume, partition, dol_offset, &dol_size))
-      {
-        const u64 offset = volume.PartitionOffsetToRawOffset(dol_offset + dol_size, partition);
-        if (offset > biggest_offset)
-        biggest_offset = offset;
-      }
-    }
+  u64 fst_offset, fst_size;
+  if (GetFSTOffset(volume, partition, &fst_offset) && GetFSTSize(volume, partition, &fst_size))
+  {
+    const u64 offset = volume.PartitionOffsetToRawOffset(fst_offset + fst_size, partition);
+    if (offset > biggest_offset)
+      biggest_offset = offset;
+  }
 
-    u64 fst_offset, fst_size;
-    if (GetFSTOffset(volume, partition, &fst_offset) && GetFSTSize(volume, partition, &fst_size))
-    {
-      const u64 offset = volume.PartitionOffsetToRawOffset(fst_offset + fst_size, partition);
-      if (offset > biggest_offset)
-        biggest_offset = offset;
-    }
-
-    const FileSystem* fs = volume.GetFileSystem(partition);
-    if (fs)
-    {
-      const u64 offset_in_partition = GetBiggestReferencedOffset(volume, fs->GetRoot());
-      const u64 offset = volume.PartitionOffsetToRawOffset(offset_in_partition, partition);
-      if (offset > biggest_offset)
-        biggest_offset = offset;
-    }
+  const FileSystem* fs = volume.GetFileSystem(partition);
+  if (fs)
+  {
+    const u64 offset_in_partition = GetBiggestReferencedOffset(volume, fs->GetRoot());
+    const u64 offset = volume.PartitionOffsetToRawOffset(offset_in_partition, partition);
+    if (offset > biggest_offset)
+      biggest_offset = offset;
   }
   return biggest_offset;
 }

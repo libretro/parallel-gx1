@@ -58,7 +58,8 @@ public:
   ~VolumeWii();
   bool Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const;
   bool HasWiiHashes() const;
-  std::vector<Partition> GetPartitions() const;
+  size_t GetPartitionCount() const { return m_partition_count; }
+  Partition GetPartition(size_t index) const;
   Partition GetGamePartition() const;
   bool GetTitleID(const Partition& partition, u64* title_id) const;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition) const;
