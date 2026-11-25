@@ -4,10 +4,10 @@
 #include "Core/WiiUtils.h"
 
 #include <cstddef>
+#include <cstdlib>
 #include <memory>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 #include <cstdio>
 
@@ -80,17 +80,18 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
 
   // Ensure the common key index is correct, as it's checked by IOS.
   IOS::ES::TicketReader ticket = wad.GetTicketWithFixedCommonKey();
-  const std::vector<u8>& cert_chain = wad.GetCertificateChain();
+  size_t cert_chain_size;
+  const u8* const cert_chain = wad.GetCertificateChain(DiscIO::PARTITION_NONE, &cert_chain_size);
   size_t ticket_size;
   const u8* const ticket_bytes = ticket.GetBytes(&ticket_size);
   size_t tmd_size;
   const u8* const tmd_bytes = tmd.GetBytes(&tmd_size);
 
-  if ((ret = es.ImportTicket(ticket_bytes, ticket_size, cert_chain.data(), cert_chain.size(),
+  if ((ret = es.ImportTicket(ticket_bytes, ticket_size, cert_chain, cert_chain_size,
                              IOS::HLE::ESCore::TicketImportType::Unpersonalised,
                              verify_signature)) < 0 ||
-      (ret = es.ImportTitleInit(context, tmd_bytes, tmd_size, cert_chain.data(),
-                                cert_chain.size(), verify_signature)) < 0)
+      (ret = es.ImportTitleInit(context, tmd_bytes, tmd_size, cert_chain, cert_chain_size,
+                                verify_signature)) < 0)
   {
     if (ret != IOS::HLE::IOSC_FAIL_CHECKVALUE)
     {
@@ -102,22 +103,33 @@ static bool ImportWAD(IOS::HLE::Kernel& ios, const DiscIO::VolumeWAD& wad,
 
   bool contents_imported = true;
   const u64 title_id = tmd.GetTitleId();
+  constexpr u64 CHUNK_SIZE = 0x100000;
+  u8* const chunk_buffer = static_cast<u8*>(std::malloc(CHUNK_SIZE));
   for (u16 i = 0; i < tmd.GetNumContents(); ++i)
   {
     IOS::ES::Content content;
     if (!tmd.GetContent(i, &content))
       continue;
-    const std::vector<u8> data = wad.GetContent(content.index);
-
-    if (es.ImportContentBegin(context, title_id, content.id) < 0 ||
-        es.ImportContentData(context, 0, data.data(), static_cast<u32>(data.size())) < 0 ||
-        es.ImportContentEnd(context, 0) < 0)
+    // The content goes to ES a chunk at a time, read through one buffer
+    u64 content_offset = 0;
+    u64 content_size = 0;
+    if (!wad.GetContentLocation(content.index, &content_offset, &content_size))
+      content_size = 0;
+    bool imported = es.ImportContentBegin(context, title_id, content.id) >= 0;
+    for (u64 done = 0; imported && done < content_size; done += CHUNK_SIZE)
+    {
+      const u64 chunk = content_size - done < CHUNK_SIZE ? content_size - done : CHUNK_SIZE;
+      imported = chunk_buffer && wad.Read(content_offset + done, chunk, chunk_buffer) &&
+                 es.ImportContentData(context, 0, chunk_buffer, static_cast<u32>(chunk)) >= 0;
+    }
+    if (!imported || es.ImportContentEnd(context, 0) < 0)
     {
       PanicAlert("WAD installation failed: Could not import content %08x.", content.id);
       contents_imported = false;
       break;
     }
   }
+  std::free(chunk_buffer);
 
   if ((contents_imported && es.ImportTitleDone(context) < 0) ||
       (!contents_imported && es.ImportTitleCancel(context) < 0))

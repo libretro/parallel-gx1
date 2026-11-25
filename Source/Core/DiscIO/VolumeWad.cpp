@@ -3,12 +3,12 @@
 
 #include "DiscIO/VolumeWad.h"
 
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <retro_miscellaneous.h>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include <crypto/crypto.h>
 
@@ -29,11 +29,12 @@ namespace DiscIO
 VolumeWAD::~VolumeWAD()
 {
   DestroyBlobReader(m_reader);
+  std::free(m_cert_chain);
 }
 
 VolumeWAD::VolumeWAD(VolumeWAD&& other) noexcept
     : Volume(VolumeKind::WAD), m_reader(other.m_reader), m_ticket(std::move(other.m_ticket)),
-      m_tmd(std::move(other.m_tmd)), m_cert_chain(std::move(other.m_cert_chain)),
+      m_tmd(std::move(other.m_tmd)), m_cert_chain(std::exchange(other.m_cert_chain, nullptr)),
       m_cert_chain_offset(other.m_cert_chain_offset), m_ticket_offset(other.m_ticket_offset),
       m_tmd_offset(other.m_tmd_offset), m_data_offset(other.m_data_offset),
       m_opening_bnr_offset(other.m_opening_bnr_offset), m_hdr_size(other.m_hdr_size),
@@ -83,8 +84,12 @@ VolumeWAD::VolumeWAD(BlobReader* reader) : Volume(VolumeKind::WAD), m_reader(rea
   if (tmd_bytes)
     Read(m_tmd_offset, m_tmd_size, tmd_bytes);
 
-  m_cert_chain.resize(m_cert_chain_size);
-  Read(m_cert_chain_offset, m_cert_chain_size, m_cert_chain.data());
+  if (m_cert_chain_size)
+  {
+    m_cert_chain = static_cast<u8*>(std::calloc(m_cert_chain_size, 1));
+    if (m_cert_chain)
+      Read(m_cert_chain_offset, m_cert_chain_size, m_cert_chain);
+  }
 }
 
 bool VolumeWAD::Read(u64 offset, u64 length, u8* buffer, const Partition& partition) const
@@ -137,12 +142,13 @@ const IOS::ES::TMDReader& VolumeWAD::GetTMD(const Partition& partition) const
   return m_tmd;
 }
 
-const std::vector<u8>& VolumeWAD::GetCertificateChain(const Partition& partition) const
+const u8* VolumeWAD::GetCertificateChain(const Partition& partition, size_t* size) const
 {
+  *size = m_cert_chain ? m_cert_chain_size : 0;
   return m_cert_chain;
 }
 
-std::vector<u8> VolumeWAD::GetContent(u16 index) const
+bool VolumeWAD::GetContentLocation(u16 index, u64* out_offset, u64* out_size) const
 {
   u64 offset = m_data_offset;
   for (u16 i = 0; i < m_tmd.GetNumContents(); ++i)
@@ -153,14 +159,13 @@ std::vector<u8> VolumeWAD::GetContent(u16 index) const
     const u64 aligned_size = Common::AlignUp(content.size, 0x40);
     if (content.index == index)
     {
-      std::vector<u8> data(aligned_size);
-      if (!m_reader->Read(offset, aligned_size, data.data()))
-        return {};
-      return data;
+      *out_offset = offset;
+      *out_size = aligned_size;
+      return true;
     }
     offset += aligned_size;
   }
-  return {};
+  return false;
 }
 
 bool VolumeWAD::CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,

@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include <lrc_hash.h>
 
@@ -110,6 +109,8 @@ void VolumeWii::LoadPartition(PartitionDetails* details, const Partition& partit
   details->file_system = nullptr;
   details->tmd_read = false;
   details->cert_chain_read = false;
+  details->cert_chain = nullptr;
+  details->cert_chain_size = 0;
 
   // read straight into the reader
   u8* const bytes = details->ticket.ResizeBytes(sizeof(IOS::ES::Ticket));
@@ -162,22 +163,33 @@ const IOS::ES::TMDReader& VolumeWii::GetPartitionTMD(const PartitionDetails& det
   return details.tmd;
 }
 
-const std::vector<u8>& VolumeWii::GetPartitionCertChain(const PartitionDetails& details) const
+const u8* VolumeWii::GetPartitionCertChain(const PartitionDetails& details, size_t* size) const
 {
-  if (details.cert_chain_read)
-    return details.cert_chain;
-  details.cert_chain_read = true;
+  if (!details.cert_chain_read)
+  {
+    details.cert_chain_read = true;
 
-  const u64 offset = details.partition.offset;
-  u32 size;
-  u64 address;
-  if (!m_reader->ReadSwapped<u32>(offset + WII_PARTITION_CERT_CHAIN_SIZE_ADDRESS, &size) ||
-      !ReadSwappedAndShifted(offset + WII_PARTITION_CERT_CHAIN_OFFSET_ADDRESS, PARTITION_NONE,
-                             &address))
-    return details.cert_chain;
-  details.cert_chain.resize(size);
-  if (!m_reader->Read(offset + address, size, details.cert_chain.data()))
-    details.cert_chain.clear();
+    const u64 offset = details.partition.offset;
+    u32 chain_size;
+    u64 address;
+    if (m_reader->ReadSwapped<u32>(offset + WII_PARTITION_CERT_CHAIN_SIZE_ADDRESS, &chain_size) &&
+        ReadSwappedAndShifted(offset + WII_PARTITION_CERT_CHAIN_OFFSET_ADDRESS, PARTITION_NONE,
+                              &address) &&
+        chain_size != 0)
+    {
+      u8* const chain = static_cast<u8*>(std::malloc(chain_size));
+      if (chain && m_reader->Read(offset + address, chain_size, chain))
+      {
+        details.cert_chain = chain;
+        details.cert_chain_size = chain_size;
+      }
+      else
+      {
+        std::free(chain);
+      }
+    }
+  }
+  *size = details.cert_chain_size;
   return details.cert_chain;
 }
 
@@ -191,7 +203,10 @@ const FileSystem& VolumeWii::GetPartitionFileSystem(const PartitionDetails& deta
 VolumeWii::~VolumeWii()
 {
   for (u32 i = 0; i < m_partition_count; i++)
+  {
     delete m_partitions[i].file_system;
+    std::free(m_partitions[i].cert_chain);
+  }
   delete[] m_partitions;
   DestroyBlobReader(m_reader);
 }
@@ -315,10 +330,15 @@ const IOS::ES::TMDReader& VolumeWii::GetTMD(const Partition& partition) const
   return details ? GetPartitionTMD(*details) : INVALID_TMD;
 }
 
-const std::vector<u8>& VolumeWii::GetCertificateChain(const Partition& partition) const
+const u8* VolumeWii::GetCertificateChain(const Partition& partition, size_t* size) const
 {
   const PartitionDetails* const details = FindPartition(partition);
-  return details ? GetPartitionCertChain(*details) : INVALID_CERT_CHAIN;
+  if (!details)
+  {
+    *size = 0;
+    return nullptr;
+  }
+  return GetPartitionCertChain(*details, size);
 }
 
 const FileSystem* VolumeWii::GetFileSystem(const Partition& partition) const

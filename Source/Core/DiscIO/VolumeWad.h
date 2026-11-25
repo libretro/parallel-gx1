@@ -6,7 +6,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Core/IOS/ES/Formats.h"
@@ -38,8 +37,8 @@ public:
   bool GetTitleID(const Partition& partition, u64* title_id) const;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition = PARTITION_NONE) const;
   const IOS::ES::TMDReader& GetTMD(const Partition& partition = PARTITION_NONE) const;
-  const std::vector<u8>& GetCertificateChain(const Partition& partition = PARTITION_NONE) const;
-  std::vector<u8> GetContent(u16 index) const;
+  const u8* GetCertificateChain(const Partition& partition, size_t* size) const;
+  bool GetContentLocation(u16 index, u64* offset, u64* size) const;
   bool CheckContentIntegrity(const IOS::ES::Content& content, const u8* encrypted_data,
                              size_t encrypted_size, const IOS::ES::TicketReader& ticket) const;
   IOS::ES::TicketReader GetTicketWithFixedCommonKey() const;
@@ -67,7 +66,7 @@ private:
   BlobReader* m_reader;  // owned
   IOS::ES::TicketReader m_ticket;
   IOS::ES::TMDReader m_tmd;
-  std::vector<u8> m_cert_chain;
+  u8* m_cert_chain = nullptr;  // m_cert_chain_size bytes when it was read
   u32 m_cert_chain_offset = 0;
   u32 m_ticket_offset = 0;
   u32 m_tmd_offset = 0;

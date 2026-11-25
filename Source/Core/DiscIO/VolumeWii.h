@@ -5,7 +5,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 
@@ -64,7 +63,7 @@ public:
   bool GetTitleID(const Partition& partition, u64* title_id) const;
   const IOS::ES::TicketReader& GetTicket(const Partition& partition) const;
   const IOS::ES::TMDReader& GetTMD(const Partition& partition) const;
-  const std::vector<u8>& GetCertificateChain(const Partition& partition) const;
+  const u8* GetCertificateChain(const Partition& partition, size_t* size) const;
   const FileSystem* GetFileSystem(const Partition& partition) const;
   static u64 OffsetInHashedPartitionToRawOffset(u64 offset, const Partition& partition,
                                                 u64 partition_data_offset);
@@ -117,7 +116,8 @@ private:
     PartitionKey key;
     IOS::ES::TicketReader ticket;
     mutable IOS::ES::TMDReader tmd;
-    mutable std::vector<u8> cert_chain;
+    mutable u8* cert_chain;  // owned, read on first use
+    mutable u32 cert_chain_size;
     mutable FileSystem* file_system;
     mutable bool tmd_read;
     mutable bool cert_chain_read;
@@ -126,7 +126,7 @@ private:
   const PartitionDetails* FindPartition(const Partition& partition) const;
   void LoadPartition(PartitionDetails* details, const Partition& partition);
   const IOS::ES::TMDReader& GetPartitionTMD(const PartitionDetails& details) const;
-  const std::vector<u8>& GetPartitionCertChain(const PartitionDetails& details) const;
+  const u8* GetPartitionCertChain(const PartitionDetails& details, size_t* size) const;
   const FileSystem& GetPartitionFileSystem(const PartitionDetails& details) const;
 
   BlobReader* m_reader;  // owned

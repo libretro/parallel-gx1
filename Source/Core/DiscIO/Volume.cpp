@@ -9,7 +9,6 @@
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
@@ -30,7 +29,6 @@ namespace DiscIO
 {
 const IOS::ES::TicketReader Volume::INVALID_TICKET{};
 const IOS::ES::TMDReader Volume::INVALID_TMD{};
-const std::vector<u8> Volume::INVALID_CERT_CHAIN{};
 
 // f called with the volume as the class it is
 template <typename V, typename F>
@@ -105,9 +103,19 @@ DEFAULTED(Partition, GetGamePartition, (), (), PARTITION_NONE)
 DEFAULTED(const IOS::ES::TicketReader&, GetTicket, (const Partition& partition), (partition),
           INVALID_TICKET)
 DEFAULTED(const IOS::ES::TMDReader&, GetTMD, (const Partition& partition), (partition), INVALID_TMD)
-DEFAULTED(const std::vector<u8>&, GetCertificateChain, (const Partition& partition), (partition),
-          INVALID_CERT_CHAIN)
-DEFAULTED(std::vector<u8>, GetContent, (u16 index), (index), {})
+const u8* Volume::GetCertificateChain(const Partition& partition, size_t* size) const
+{
+  *size = 0;
+  return AsOwnClass(this, [&](auto* v) -> const u8* {
+    using Cls = std::remove_cv_t<std::remove_pointer_t<decltype(v)>>;
+    if constexpr (HAS_OWN(Cls, GetCertificateChain))
+      return v->GetCertificateChain(partition, size);
+    else
+      return nullptr;
+  });
+}
+DEFAULTED(bool, GetContentLocation, (u16 index, u64* offset, u64* size), (index, offset, size),
+          false)
 DEFAULTED(bool, CheckContentIntegrity,
           (const IOS::ES::Content& content, const u8* encrypted_data, size_t encrypted_size,
            const IOS::ES::TicketReader& ticket),
